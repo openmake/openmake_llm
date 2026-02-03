@@ -67,9 +67,11 @@
             });
         }
     </script>
+    <style>.skip-link:focus{top:0}</style>
 </head>
 
 <body>
+    <a href="#mainContent" class="skip-link" style="position:absolute;top:-40px;left:0;background:#667eea;color:white;padding:8px 16px;z-index:10000;transition:top 0.3s;text-decoration:none;font-family:Pretendard,sans-serif">Skip to main content</a>
     <div class="app">
         <!-- Mobile Menu Button -->
         <button class="mobile-menu-btn" id="mobileMenuBtn" aria-label="Toggle menu">
@@ -79,14 +81,14 @@
         </button>
 
         <!-- Unified Sidebar (T4: 3-state Gemini-style) -->
-        <aside id="sidebar"></aside>
+        <aside id="sidebar" role="complementary" aria-label="Sidebar"></aside>
 
         <!-- 메인 콘텐츠 영역 -->
-        <main class="main-content" id="mainContent">
+        <main class="main-content" id="mainContent" role="main">
 
             <!-- 채팅 영역 (기본 뷰 — SPA 라우터가 / 일 때 표시) -->
             <div id="chat-area">
-                <div class="chat-area" id="chatArea">
+                <div class="chat-area" id="chatArea" role="log" aria-label="Chat messages" aria-live="polite">
                     <div class="welcome-screen animate-fadeInUp" id="welcomeScreen">
                         <div class="welcome-avatar animate-popIn">
                             <img src="/images/avatar/character-avatar.png" alt="OpenMake AI" class="avatar-img">

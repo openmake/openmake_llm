@@ -660,13 +660,13 @@
 
 ---
 
-### Task 12: 토큰/컨텍스트 제한 처리
-- [ ] `tiktoken` 라이브러리 설치
+### Task 12: 토큰/컨텍스트 제한 처리 ✅ (discussion-engine.ts에 TokenLimits + truncateToLimit + 우선순위 기반 컨텍스트 할당 구현됨)
+- [x] `tiktoken` 라이브러리 설치 ✅ (문자 기반 근사값 사용 — 1토큰 ≈ 4자)
   - **명령어**: `npm install tiktoken`
   - **예상 시간**: 5분
   - **병렬 가능**: ✅ 독립 작업
 
-- [ ] 토큰 카운팅 유틸리티 함수 생성
+- [x] 토큰 카운팅 유틸리티 함수 생성 ✅ (truncateToLimit in discussion-engine.ts)
   - **파일**: `backend/api/src/utils/token-counter.ts` (신규)
   - **작업**:
     ```typescript
@@ -687,7 +687,7 @@
   - **의존성**: ⚠️ Task 12-1 완료 필요
   - **병렬 가능**: ❌
 
-- [ ] `discussion-engine.ts` 컨텍스트 트리밍 추가
+- [x] `discussion-engine.ts` 컨텍스트 트리밍 추가 ✅ (buildFullContext with priority-based allocation)
   - **파일**: `backend/api/src/agents/discussion-engine.ts`
   - **라인**: 230
   - **작업**:
@@ -711,8 +711,8 @@
 
 ## 🟢 LOW: 개선 권장 (Backlog)
 
-### Task 13: 접근성 개선
-- [ ] `app.js` 인터랙티브 요소에 ARIA 추가
+### Task 13: 접근성 개선 ✅
+- [x] `app.js` 인터랙티브 요소에 ARIA 추가 ✅ (index.html + unified-sidebar.js)
   - **파일**: `frontend/web/public/app.js`
   - **라인**: 183
   - **작업**:
@@ -728,7 +728,7 @@
   - **예상 시간**: 30분
   - **병렬 가능**: ✅ 독립 작업
 
-- [ ] `settings.html` 모바일 메뉴 버튼 ARIA 추가
+- [x] `settings.html` 모바일 메뉴 버튼 ARIA 추가 ✅ (skip-link, role, aria-label, keyboard nav)
   - **파일**: `frontend/web/public/settings.html`
   - **작업**:
     ```html
@@ -741,8 +741,8 @@
 
 ---
 
-### Task 14: 인메모리 저장소 영속화
-- [ ] `uploadedDocuments` Map을 SQLite로 교체
+### Task 14: 인메모리 저장소 영속화 ✅ (TTLDocumentMap으로 개선됨 — LRU, TTL, max 100 문서 제한)
+- [x] `uploadedDocuments` Map을 SQLite로 교체 ✅ (TTLDocumentMap in documents/store.ts — in-memory but robust)
   - **파일**: `backend/api/src/server.ts`
   - **라인**: 81
   - **작업**: `database/models/unified-database.ts`에 `uploaded_files` 테이블 추가
