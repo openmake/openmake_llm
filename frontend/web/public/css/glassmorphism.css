@@ -1,0 +1,279 @@
+/**
+ * ============================================
+ * OpenMake.Ai - Glassmorphism Components
+ * Aura.build 스타일 글래스모피즘 컴포넌트
+ * ============================================
+ */
+
+/* ==========================================
+   Base Glassmorphism Card
+   ========================================== */
+.glass-card {
+    background: var(--glass-bg);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    transition: all var(--transition-normal);
+}
+
+.glass-card:hover {
+    background: var(--glass-bg-hover);
+    border-color: rgba(255, 255, 255, 0.12);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+}
+
+/* ==========================================
+   Glass Panel (Sidebar, Modal backgrounds)
+   ========================================== */
+.glass-panel {
+    background: rgba(13, 13, 14, 0.85);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    border: 1px solid var(--glass-border);
+}
+
+/* ==========================================
+   Gradient Glow Button
+   ========================================== */
+.btn-glow {
+    position: relative;
+    background: var(--gradient-primary);
+    color: #ffffff;
+    border: none;
+    padding: var(--space-3) var(--space-5);
+    border-radius: var(--radius-md);
+    font-weight: var(--font-weight-medium);
+    cursor: pointer;
+    overflow: hidden;
+    transition: all var(--transition-normal);
+    z-index: 1;
+}
+
+.btn-glow::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: inherit;
+    filter: blur(15px);
+    opacity: 0;
+    transition: opacity var(--transition-normal);
+    z-index: -1;
+}
+
+.btn-glow:hover {
+    transform: translateY(-2px);
+}
+
+.btn-glow:hover::before {
+    opacity: 0.6;
+}
+
+.btn-glow:active {
+    transform: translateY(0);
+}
+
+/* ==========================================
+   Gradient Border Button
+   ========================================== */
+.btn-gradient-border {
+    position: relative;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    border: none;
+    padding: var(--space-3) var(--space-5);
+    border-radius: var(--radius-md);
+    font-weight: var(--font-weight-medium);
+    cursor: pointer;
+    transition: all var(--transition-normal);
+}
+
+.btn-gradient-border::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: var(--gradient-primary);
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    opacity: 0.5;
+    transition: opacity var(--transition-normal);
+}
+
+.btn-gradient-border:hover::before {
+    opacity: 1;
+}
+
+.btn-gradient-border:hover {
+    background: var(--glass-bg-hover);
+}
+
+/* ==========================================
+   Premium Input Field
+   ========================================== */
+.input-premium {
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-xl);
+    padding: var(--space-4);
+    color: var(--text-primary);
+    font-size: var(--font-size-base);
+    transition: all var(--transition-normal);
+}
+
+.input-premium:focus {
+    outline: none;
+    border-color: rgba(102, 126, 234, 0.5);
+    box-shadow: var(--glow-input-focus);
+}
+
+.input-premium::placeholder {
+    color: var(--text-muted);
+}
+
+/* ==========================================
+   Glass Modal
+   ========================================== */
+.modal-glass .modal-content {
+    background: rgba(20, 20, 24, 0.95);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    border: 1px solid var(--glass-border);
+    box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5);
+}
+
+/* ==========================================
+   Active Indicator (Left bar for nav items)
+   ========================================== */
+.active-indicator {
+    position: relative;
+}
+
+.active-indicator::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 3px;
+    height: 0;
+    background: var(--gradient-primary);
+    border-radius: 0 2px 2px 0;
+    transition: height var(--transition-fast);
+}
+
+.active-indicator.active::before {
+    height: 60%;
+}
+
+/* ==========================================
+   Glow Text (Gradient text effect)
+   ========================================== */
+.text-gradient {
+    background: linear-gradient(135deg, #ffffff 0%, #a1a1aa 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.text-gradient-primary {
+    background: var(--gradient-primary);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+/* ==========================================
+   Hero Glow Effect (Background overlay)
+   ========================================== */
+.hero-glow {
+    position: relative;
+}
+
+.hero-glow::before {
+    content: '';
+    position: absolute;
+    top: -100px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 600px;
+    height: 600px;
+    background: var(--gradient-glow);
+    pointer-events: none;
+    z-index: 0;
+}
+
+.hero-glow>* {
+    position: relative;
+    z-index: 1;
+}
+
+/* ==========================================
+   Message Top Glow (AI message accent)
+   ========================================== */
+.message-glow::before {
+    content: '';
+    position: absolute;
+    top: -1px;
+    left: 20px;
+    right: 20px;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(102, 126, 234, 0.5), transparent);
+}
+
+/* ==========================================
+   Hover Lift Effect
+   ========================================== */
+.hover-lift {
+    transition: transform var(--transition-normal), box-shadow var(--transition-normal);
+}
+
+.hover-lift:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.3);
+}
+
+/* ==========================================
+   Shimmer Animation (Loading effect)
+   ========================================== */
+@keyframes shimmer {
+    0% {
+        background-position: -200% 0;
+    }
+
+    100% {
+        background-position: 200% 0;
+    }
+}
+
+.shimmer {
+    background: linear-gradient(90deg,
+            var(--glass-bg) 0%,
+            var(--glass-bg-hover) 50%,
+            var(--glass-bg) 100%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+}
+
+/* ==========================================
+   Pulse Glow Animation
+   ========================================== */
+@keyframes pulseGlow {
+
+    0%,
+    100% {
+        box-shadow: 0 0 20px rgba(102, 126, 234, 0.2);
+    }
+
+    50% {
+        box-shadow: 0 0 40px rgba(102, 126, 234, 0.4);
+    }
+}
+
+.pulse-glow {
+    animation: pulseGlow 2s ease-in-out infinite;
+}

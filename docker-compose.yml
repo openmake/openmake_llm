@@ -1,0 +1,66 @@
+# ============================================
+# OpenMake LLM - Docker Compose
+# 현재 아키텍처: Node.js 모놀리스 + PostgreSQL/pgvector
+# ============================================
+
+services:
+  # ============================================
+  # PostgreSQL + pgvector (Database)
+  # ============================================
+  database:
+    build:
+      context: ./services/database
+      dockerfile: Dockerfile
+    container_name: openmake-db
+    restart: unless-stopped
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-openmake_llm}
+      POSTGRES_USER: ${POSTGRES_USER:-openmake}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-openmake_secret_2026}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./services/database/init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-openmake} -d ${POSTGRES_DB:-openmake_llm}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - openmake-net
+
+  # ============================================
+  # Node.js API + Frontend (Monolith)
+  # ============================================
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: openmake-app
+    restart: unless-stopped
+    ports:
+      - "${PORT:-52416}:52416"
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      PORT: 52416
+      DATABASE_URL: postgresql://${POSTGRES_USER:-openmake}:${POSTGRES_PASSWORD:-openmake_secret_2026}@database:5432/${POSTGRES_DB:-openmake_llm}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      OLLAMA_HOST: http://host.docker.internal:11434
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      database:
+        condition: service_healthy
+    networks:
+      - openmake-net
+
+volumes:
+  pgdata:
+    driver: local
+
+networks:
+  openmake-net:
+    driver: bridge

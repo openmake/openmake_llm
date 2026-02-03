@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="ko" data-theme="dark">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>클러스터 대시보드 - OpenMake.Ai</title>
+    <link rel="icon" type="image/png" href="/logo.png">
+
+    <!-- 통합 디자인 시스템 -->
+    <link rel="preconnect" href="https://cdn.jsdelivr.net">
+    <link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css"
+        rel="stylesheet">
+    <link rel="stylesheet" href="/css/design-tokens.css">
+    <link rel="stylesheet" href="/css/components.css">
+    <link rel="stylesheet" href="/css/layout.css">
+    <link rel="stylesheet" href="/css/pages/dashboard.css">
+
+    <style>
+        .cluster-card {
+            background: var(--bg-card);
+            border-radius: var(--radius-lg);
+            padding: var(--space-6);
+            border: 1px solid var(--border-light);
+        }
+
+        .cluster-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: var(--space-4);
+        }
+
+        .cluster-name {
+            font-size: var(--font-size-lg);
+            font-weight: var(--font-weight-semibold);
+        }
+
+        .cluster-url {
+            color: var(--text-muted);
+            font-size: var(--font-size-sm);
+            margin-bottom: var(--space-4);
+            word-break: break-all;
+        }
+
+        .cluster-stats {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: var(--space-3);
+            margin-bottom: var(--space-4);
+        }
+
+        .cluster-stat {
+            background: var(--bg-secondary);
+            padding: var(--space-3);
+            border-radius: var(--radius-md);
+        }
+
+        .cluster-stat-value {
+            font-size: var(--font-size-xl);
+            font-weight: var(--font-weight-bold);
+        }
+
+        .cluster-stat-label {
+            font-size: var(--font-size-xs);
+            color: var(--text-muted);
+        }
+
+        .model-tag {
+            font-size: var(--font-size-xs);
+            background: var(--accent-primary-light);
+            color: var(--accent-primary);
+            padding: var(--space-1) var(--space-2);
+            border-radius: var(--radius-full);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="app-layout">
+        <button class="mobile-menu-btn" onclick="toggleMobileSidebar()"><span></span><span></span><span></span></button>
+        <div class="sidebar-overlay" onclick="toggleMobileSidebar()"></div>
+        <nav class="sidebar" id="sidebar"></nav>
+
+        <div class="main-content">
+            <div class="page-content">
+                <div class="container container-xl">
+                    <header class="page-header">
+                        <div>
+                            <h1 class="page-title page-title-gradient">🖥️ 클러스터 대시보드</h1>
+                            <p class="page-subtitle">Ollama 노드 모니터링</p>
+                        </div>
+                        <div class="page-actions">
+                            <button class="btn btn-primary" onclick="loadClusterStatus()">🔄 새로고침</button>
+                        </div>
+                    </header>
+
+                    <!-- Stats Cards -->
+                    <div class="dashboard-grid" style="margin-bottom: var(--space-8);">
+                        <div class="metric-card card">
+                            <div class="metric-card-value" id="totalNodes">0</div>
+                            <div class="text-muted text-sm">총 노드</div>
+                        </div>
+                        <div class="metric-card card">
+                            <div class="metric-card-value" id="onlineNodes">0</div>
+                            <div class="text-muted text-sm">온라인 노드</div>
+                        </div>
+                        <div class="metric-card card">
+                            <div class="metric-card-value" id="totalModels">0</div>
+                            <div class="text-muted text-sm">사용 가능 모델</div>
+                        </div>
+                        <div class="metric-card card">
+                            <div class="metric-card-value" id="avgLatency">-</div>
+                            <div class="text-muted text-sm">평균 지연시간</div>
+                        </div>
+                    </div>
+
+                    <!-- Nodes Grid -->
+                    <div class="grid-auto" id="nodesGrid">
+                        <div class="empty-state">
+                            <div class="empty-state-icon">🔄</div>
+                            <div class="empty-state-title">노드를 로딩하는 중...</div>
+                            <div class="empty-state-description">클러스터 상태를 가져오고 있습니다.</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/js/components/sidebar.js"></script>
+    <script>
+        const API_BASE = window.location.origin;
+
+        // 인증 체크 (게스트/비로그인 접근 제한)
+        (function checkAuthAccess() {
+            const authToken = localStorage.getItem('authToken');
+            const isGuest = localStorage.getItem('isGuest') === 'true';
+            if (!authToken || isGuest) {
+                alert('이 페이지는 로그인이 필요합니다.');
+                window.location.href = '/login.html';
+            }
+        })();
+
+        async function loadClusterStatus() {
+            try {
+                const res = await fetch(`${API_BASE}/api/cluster/status`);
+                const data = await res.json();
+                renderStats(data);
+                renderNodes(data.nodes || []);
+            } catch (e) {
+                console.error('클러스터 상태 로드 실패:', e);
+                document.getElementById('nodesGrid').innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">⚠️</div>
+                        <div class="empty-state-title">연결 실패</div>
+                        <div class="empty-state-description">클러스터 상태를 가져올 수 없습니다.</div>
+                    </div>
+                `;
+            }
+        }
+
+        function renderStats(data) {
+            const nodes = data.nodes || [];
+            const onlineNodes = nodes.filter(n => n.status === 'online');
+
+            document.getElementById('totalNodes').textContent = nodes.length;
+            document.getElementById('onlineNodes').textContent = onlineNodes.length;
+            document.getElementById('totalModels').textContent = data.stats?.totalModels || 0;
+
+            const latencies = onlineNodes.map(n => n.latency).filter(l => l > 0);
+            if (latencies.length > 0) {
+                const avg = Math.round(latencies.reduce((a, b) => a + b, 0) / latencies.length);
+                document.getElementById('avgLatency').textContent = `${avg}ms`;
+            }
+        }
+
+        function renderNodes(nodes) {
+            const grid = document.getElementById('nodesGrid');
+
+            if (nodes.length === 0) {
+                grid.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">🖥️</div>
+                        <div class="empty-state-title">등록된 노드가 없습니다</div>
+                        <div class="empty-state-description">클러스터에 노드를 추가해주세요.</div>
+                    </div>
+                `;
+                return;
+            }
+
+            grid.innerHTML = nodes.map(node => `
+                <div class="cluster-card">
+                    <div class="cluster-header">
+                        <span class="cluster-name">${node.name || node.id}</span>
+                        <span class="status-badge ${node.status === 'online' ? 'online' : 'offline'}">
+                            <span class="status-dot ${node.status === 'online' ? 'online' : 'offline'}"></span>
+                            ${node.status === 'online' ? '온라인' : '오프라인'}
+                        </span>
+                    </div>
+                    <div class="cluster-url">${node.url}</div>
+                    <div class="cluster-stats">
+                        <div class="cluster-stat">
+                            <div class="cluster-stat-value">${node.latency ? node.latency + 'ms' : '-'}</div>
+                            <div class="cluster-stat-label">지연시간</div>
+                        </div>
+                        <div class="cluster-stat">
+                            <div class="cluster-stat-value">${node.models?.length || 0}</div>
+                            <div class="cluster-stat-label">모델 수</div>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Init
+        loadClusterStatus();
+        let clusterRefreshInterval = setInterval(loadClusterStatus, 30000);
+        window.addEventListener('beforeunload', () => { if (clusterRefreshInterval) clearInterval(clusterRefreshInterval); });
+    </script>
+</body>
+
+</html>

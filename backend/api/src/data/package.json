@@ -1,0 +1,32 @@
+{
+    "name": "openmake-database",
+    "version": "1.0.0",
+    "description": "OpenMake Database Layer",
+    "main": "dist/models/index.js",
+    "types": "dist/models/index.d.ts",
+    "scripts": {
+        "build": "tsc",
+        "dev": "tsc --watch",
+        "test": "jest",
+        "migrate": "node dist/migrations/run.js"
+    },
+    "keywords": [
+        "database",
+        "sqlite",
+        "orm"
+    ],
+    "author": "",
+    "license": "MIT",
+    "dependencies": {
+        "better-sqlite3": "^12.5.0",
+        "bcryptjs": "^3.0.3",
+        "uuid": "^13.0.0"
+    },
+    "devDependencies": {
+        "@types/better-sqlite3": "^7.6.13",
+        "@types/bcryptjs": "^2.4.6",
+        "@types/node": "^20.10.0",
+        "@types/uuid": "^10.0.0",
+        "typescript": "^5.3.2"
+    }
+}

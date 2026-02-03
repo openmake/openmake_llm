@@ -1,0 +1,399 @@
+/* ========================================
+   Light Theme - Cream/Beige Sidebar & Components
+   업로드 디자인 기반 라이트 테마
+   ======================================== */
+
+/* 라이트 테마 사이드바 */
+[data-theme="light"] .sidebar,
+.theme-light .sidebar {
+    background: #FBF8F3 !important;
+    border-right: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+/* 사이드바 로고 컨테이너 - 라이트 */
+[data-theme="light"] .sidebar-logo-container,
+.theme-light .sidebar-logo-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 20px 16px;
+    margin-bottom: 8px;
+}
+
+[data-theme="light"] .sidebar-logo,
+.theme-light .sidebar-logo {
+    width: 70px;
+    height: 70px;
+    object-fit: contain;
+    margin-bottom: 8px;
+    filter: none;
+}
+
+/* 로고 아래 브랜드명 - 라이트 */
+[data-theme="light"] .sidebar-logo-container::after,
+.theme-light .sidebar-logo-container::after {
+    content: 'OpenMake.Ai';
+    font-size: 1rem;
+    font-weight: 700;
+    color: #000000;
+    letter-spacing: 0.5px;
+}
+
+/* 새 대화 버튼 - 라이트 테마 */
+[data-theme="light"] .sidebar-btn.new-chat,
+.theme-light .sidebar-btn.new-chat {
+    background: #FFFFFF;
+    border: 1px solid rgba(0, 0, 0, 0.12);
+    color: #2D2D2D;
+    border-radius: 10px;
+    padding: 12px 20px;
+    font-weight: 500;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+[data-theme="light"] .sidebar-btn.new-chat:hover,
+.theme-light .sidebar-btn.new-chat:hover {
+    background: #F5F5F5;
+    border-color: rgba(0, 0, 0, 0.18);
+}
+
+/* 최근 대화 섹션 - 라이트 */
+[data-theme="light"] .history-label,
+.theme-light .history-label {
+    color: #5A5A5A;
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 8px 16px;
+}
+
+[data-theme="light"] .history-item,
+.theme-light .history-item {
+    color: #4A4A4A;
+    padding: 10px 16px;
+    border-radius: 8px;
+    margin: 2px 8px;
+}
+
+[data-theme="light"] .history-item:hover,
+.theme-light .history-item:hover {
+    background: rgba(0, 0, 0, 0.04);
+    color: #2D2D2D;
+}
+
+/* 메뉴 네비게이션 - 라이트 */
+[data-theme="light"] .sidebar-nav-item,
+.theme-light .sidebar-nav-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    margin: 2px 8px;
+    border-radius: 10px;
+    color: #5A5A5A;
+    text-decoration: none;
+    font-size: 0.9rem;
+    transition: all 0.2s ease;
+}
+
+[data-theme="light"] .sidebar-nav-item:hover,
+.theme-light .sidebar-nav-item:hover {
+    background: rgba(0, 0, 0, 0.04);
+    color: #2D2D2D;
+}
+
+/* 활성 메뉴 - 파란색 배경 */
+[data-theme="light"] .sidebar-nav-item.active,
+.theme-light .sidebar-nav-item.active {
+    background: #4A90D9 !important;
+    color: #FFFFFF !important;
+    font-weight: 500;
+}
+
+[data-theme="light"] .sidebar-nav-item.active .nav-icon,
+.theme-light .sidebar-nav-item.active .nav-icon {
+    color: #FFFFFF !important;
+}
+
+[data-theme="light"] .sidebar-nav-item .nav-icon,
+.theme-light .sidebar-nav-item .nav-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    font-size: 1.1rem;
+    color: #6A6A6A;
+}
+
+/* 사용자 섹션 - 라이트 */
+[data-theme="light"] .user-section,
+.theme-light .user-section {
+    padding: 16px;
+    border-top: 1px solid rgba(0, 0, 0, 0.08);
+    margin-top: auto;
+}
+
+[data-theme="light"] .sidebar-btn#loginBtn,
+.theme-light .sidebar-btn#loginBtn {
+    background: #FFFFFF;
+    border: 1px solid #4A90D9;
+    color: #4A90D9;
+    border-radius: 8px;
+    padding: 10px 16px;
+    font-size: 0.85rem;
+    width: 100%;
+}
+
+/* 사이드바 헤더 - 라이트 */
+[data-theme="light"] .sidebar-header,
+.theme-light .sidebar-header {
+    display: flex;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+[data-theme="light"] .sidebar-toggle,
+[data-theme="light"] .theme-toggle,
+.theme-light .sidebar-toggle,
+.theme-light .theme-toggle {
+    background: transparent;
+    border: none;
+    color: #6A6A6A;
+    padding: 8px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+[data-theme="light"] .sidebar-toggle:hover,
+[data-theme="light"] .theme-toggle:hover,
+.theme-light .sidebar-toggle:hover,
+.theme-light .theme-toggle:hover {
+    background: rgba(0, 0, 0, 0.06);
+    color: #2D2D2D;
+}
+
+/* ========================================
+   메인 콘텐츠 영역 - 라이트 테마
+   ======================================== */
+[data-theme="light"] .main-content,
+.theme-light .main-content {
+    background: #F5F0E8 !important;
+}
+
+[data-theme="light"] .welcome-screen,
+.theme-light .welcome-screen {
+    background: transparent;
+}
+
+[data-theme="light"] .welcome-screen::before,
+.theme-light .welcome-screen::before {
+    display: none;
+}
+
+[data-theme="light"] .welcome-title,
+.theme-light .welcome-title {
+    background: none;
+    -webkit-text-fill-color: #2D2D2D;
+    color: #2D2D2D;
+}
+
+/* ========================================
+   카드 스타일 - 라이트 테마
+   ======================================== */
+[data-theme="light"] .feature-card,
+.theme-light .feature-card {
+    background: #FFFFFF;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+[data-theme="light"] .feature-card:hover,
+.theme-light .feature-card:hover {
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+    transform: translateY(-2px);
+}
+
+/* ========================================
+   입력 컨테이너 - 라이트 테마
+   ======================================== */
+[data-theme="light"] .chat-input-container,
+.theme-light .chat-input-container {
+    background: #FFFFFF;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+[data-theme="light"] .chat-input-container:focus-within,
+.theme-light .chat-input-container:focus-within {
+    border-color: #4A90D9;
+    box-shadow: 0 0 0 3px rgba(74, 144, 217, 0.15);
+}
+
+[data-theme="light"] .input-wrapper textarea,
+.theme-light .input-wrapper textarea {
+    color: #2D2D2D;
+}
+
+[data-theme="light"] .input-wrapper textarea::placeholder,
+.theme-light .input-wrapper textarea::placeholder {
+    color: #8A8A8A;
+}
+
+/* 전송 버튼 - 파란색 */
+[data-theme="light"] .send-btn,
+.theme-light .send-btn {
+    background: #4A90D9;
+    color: #FFFFFF;
+}
+
+[data-theme="light"] .send-btn:hover,
+.theme-light .send-btn:hover {
+    background: #3A7BC8;
+}
+
+/* 액션 버튼 */
+[data-theme="light"] .action-btn,
+.theme-light .action-btn {
+    color: #6A6A6A;
+}
+
+[data-theme="light"] .action-btn:hover,
+.theme-light .action-btn:hover {
+    background: rgba(0, 0, 0, 0.06);
+    color: #2D2D2D;
+}
+
+[data-theme="light"] .action-btn.active,
+.theme-light .action-btn.active {
+    color: #4A90D9;
+    background: rgba(74, 144, 217, 0.12);
+}
+
+/* ========================================
+   토글 스위치 - 파란색
+   ======================================== */
+[data-theme="light"] .toggle-slider,
+.theme-light .toggle-slider {
+    background-color: #D0D0D0 !important;
+}
+
+[data-theme="light"] .toggle-switch input:checked+.toggle-slider,
+.theme-light .toggle-switch input:checked+.toggle-slider {
+    background-color: #4A90D9 !important;
+}
+
+/* ========================================
+   모달 - 라이트 테마
+   ======================================== */
+[data-theme="light"] .modal-content,
+.theme-light .modal-content {
+    background: #FFFFFF;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+[data-theme="light"] .modal-header,
+.theme-light .modal-header {
+    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+[data-theme="light"] .modal-footer,
+.theme-light .modal-footer {
+    border-top: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+/* ========================================
+   버튼 스타일 - 라이트 테마
+   ======================================== */
+[data-theme="light"] .btn,
+.theme-light .btn {
+    background: #F5F5F5;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    color: #4A4A4A;
+}
+
+[data-theme="light"] .btn:hover,
+.theme-light .btn:hover {
+    background: #EBEBEB;
+    border-color: #4A90D9;
+    color: #4A90D9;
+}
+
+[data-theme="light"] .btn.active,
+[data-theme="light"] .btn-primary,
+.theme-light .btn.active,
+.theme-light .btn-primary {
+    background: #4A90D9;
+    border-color: #4A90D9;
+    color: #FFFFFF;
+}
+
+/* ========================================
+   코드 블록 / 터미널 영역 - 베이지색
+   ======================================== */
+[data-theme="light"] .message-content pre,
+[data-theme="light"] .code-block,
+.theme-light .message-content pre,
+.theme-light .code-block {
+    background: #F5F0E6 !important;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    border-radius: 8px;
+}
+
+[data-theme="light"] .message-content code,
+.theme-light .message-content code {
+    background: #EDE8DE;
+    color: #2D2D2D;
+    border-radius: 4px;
+    padding: 2px 6px;
+}
+
+/* ========================================
+   스크롤바 - 라이트 테마
+   ======================================== */
+[data-theme="light"] ::-webkit-scrollbar-thumb,
+.theme-light ::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.15);
+}
+
+[data-theme="light"] ::-webkit-scrollbar-thumb:hover,
+.theme-light ::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 0, 0, 0.25);
+}
+
+/* ========================================
+   채팅 메시지 - 라이트 테마
+   ======================================== */
+[data-theme="light"] .chat-message.user .message-content,
+.theme-light .chat-message.user .message-content {
+    background: #4A90D9;
+    color: #FFFFFF;
+}
+
+[data-theme="light"] .chat-message.assistant .message-content,
+.theme-light .chat-message.assistant .message-content {
+    background: #FFFFFF;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    color: #2D2D2D;
+}
+
+[data-theme="light"] .chat-message.assistant .message-content::before,
+.theme-light .chat-message.assistant .message-content::before {
+    display: none;
+}
+
+/* ========================================
+   연결 상태 - 라이트 테마
+   ======================================== */
+[data-theme="light"] .connection-status,
+.theme-light .connection-status {
+    color: #5A5A5A;
+}
+
+[data-theme="light"] .status-dot,
+.theme-light .status-dot {
+    background: #22C55E;
+}

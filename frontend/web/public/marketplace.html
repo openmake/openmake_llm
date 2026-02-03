@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="ko" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>에이전트 마켓플레이스 - OpenMake.Ai</title>
+    <link rel="icon" type="image/png" href="/logo.png">
+    <link rel="preconnect" href="https://cdn.jsdelivr.net">
+    <link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="/css/design-tokens.css">
+    <link rel="stylesheet" href="/css/components.css">
+    <link rel="stylesheet" href="/css/layout.css">
+    <style>
+        .search-bar { display:flex; gap:var(--space-3); margin-bottom:var(--space-5); flex-wrap:wrap; align-items:center; }
+        .search-bar input { flex:1; min-width:200px; padding:var(--space-3); background:var(--bg-secondary); border:1px solid var(--border-light); border-radius:var(--radius-md); color:var(--text-primary); box-sizing:border-box; }
+        .search-bar select { padding:var(--space-3); background:var(--bg-secondary); border:1px solid var(--border-light); border-radius:var(--radius-md); color:var(--text-primary); }
+        .tabs { display:flex; gap:var(--space-2); margin-bottom:var(--space-5); }
+        .tab { padding:var(--space-2) var(--space-4); background:var(--bg-tertiary); border:1px solid var(--border-light); border-radius:var(--radius-md); cursor:pointer; color:var(--text-secondary); font-weight:var(--font-weight-semibold); }
+        .tab.active { background:var(--accent-primary); color:#fff; border-color:var(--accent-primary); }
+        .agent-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:var(--space-4); }
+        .agent-card { background:var(--bg-card); border:1px solid var(--border-light); border-radius:var(--radius-lg); padding:var(--space-5); cursor:pointer; transition:border-color .2s; display:flex; flex-direction:column; }
+        .agent-card:hover { border-color:var(--accent-primary); }
+        .agent-icon { font-size:2.5rem; margin-bottom:var(--space-3); }
+        .agent-card h3 { margin:0 0 var(--space-2); color:var(--text-primary); }
+        .agent-card .desc { color:var(--text-muted); font-size:var(--font-size-sm); margin-bottom:var(--space-3); flex:1; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+        .agent-footer { display:flex; justify-content:space-between; align-items:center; font-size:var(--font-size-sm); }
+        .stars { color:var(--warning); letter-spacing:1px; }
+        .downloads { color:var(--text-muted); }
+        .badge-cat { background:var(--bg-tertiary); color:var(--text-secondary); padding:2px 8px; border-radius:var(--radius-md); font-size:11px; }
+        .badge-featured { background:var(--warning); color:#000; padding:2px 8px; border-radius:var(--radius-md); font-size:11px; font-weight:var(--font-weight-semibold); }
+        .empty-state { text-align:center; padding:var(--space-8); color:var(--text-muted); }
+        .empty-state h2 { color:var(--text-secondary); margin-bottom:var(--space-3); }
+
+        .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:1000; justify-content:center; align-items:center; }
+        .modal-overlay.open { display:flex; }
+        .modal { background:var(--bg-card); border:1px solid var(--border-light); border-radius:var(--radius-lg); width:90%; max-width:650px; max-height:90vh; overflow-y:auto; padding:var(--space-6); }
+        .modal h2 { margin:0 0 var(--space-3); }
+        .modal-desc { color:var(--text-secondary); line-height:1.7; margin-bottom:var(--space-4); }
+        .detail-meta { display:flex; gap:var(--space-4); flex-wrap:wrap; margin-bottom:var(--space-4); font-size:var(--font-size-sm); color:var(--text-muted); }
+        .modal-actions { display:flex; gap:var(--space-3); justify-content:flex-end; margin-top:var(--space-5); }
+        .modal-actions button { padding:var(--space-2) var(--space-4); border:none; border-radius:var(--radius-md); cursor:pointer; font-weight:var(--font-weight-semibold); }
+        .btn-primary { background:var(--accent-primary); color:#fff; }
+        .btn-secondary { background:var(--bg-tertiary); color:var(--text-primary); border:1px solid var(--border-light)!important; }
+        .btn-danger { background:var(--danger); color:#fff; }
+
+        .reviews-section { margin-top:var(--space-5); border-top:1px solid var(--border-light); padding-top:var(--space-4); }
+        .review-item { padding:var(--space-3) 0; border-bottom:1px solid var(--border-light); }
+        .review-item:last-child { border-bottom:none; }
+        .review-header { display:flex; justify-content:space-between; margin-bottom:var(--space-2); }
+        .review-form { margin-top:var(--space-4); background:var(--bg-secondary); padding:var(--space-4); border-radius:var(--radius-md); }
+        .review-form label { display:block; margin-bottom:var(--space-2); color:var(--text-secondary); font-size:var(--font-size-sm); }
+        .review-form input, .review-form textarea { width:100%; padding:var(--space-2); background:var(--bg-tertiary); border:1px solid var(--border-light); border-radius:var(--radius-md); color:var(--text-primary); box-sizing:border-box; margin-bottom:var(--space-3); }
+        .star-select { font-size:1.5rem; cursor:pointer; }
+        .star-select span { opacity:.3; transition:opacity .2s; }
+        .star-select span.active { opacity:1; color:var(--warning); }
+
+        .toast { position:fixed; bottom:20px; right:20px; padding:var(--space-3) var(--space-5); border-radius:var(--radius-md); color:#fff; z-index:2000; opacity:0; transition:opacity .3s; }
+        .toast.show { opacity:1; } .toast.success { background:var(--success); } .toast.error { background:var(--danger); }
+        .loading { text-align:center; padding:var(--space-6); color:var(--text-muted); }
+    </style>
+</head>
+<body>
+    <div class="layout">
+        <aside class="sidebar" id="sidebar"></aside>
+        <div class="sidebar-overlay" onclick="toggleSidebar()"></div>
+        <main class="main-content">
+            <header class="page-header">
+                <button class="mobile-menu-btn" onclick="toggleMobileSidebar(event)">&#9776;</button>
+                <h1>에이전트 마켓플레이스</h1>
+            </header>
+            <div class="content-area">
+                <div class="tabs">
+                    <button class="tab active" onclick="switchTab('browse',this)">둘러보기</button>
+                    <button class="tab" onclick="switchTab('installed',this)">내 설치</button>
+                </div>
+                <div class="search-bar" id="searchBar">
+                    <input type="text" id="searchInput" placeholder="에이전트 검색...">
+                    <select id="sortBy"><option value="downloads">다운로드순</option><option value="rating">평점순</option><option value="newest">최신순</option></select>
+                </div>
+                <div id="agentList" class="agent-grid"><div class="loading">불러오는 중...</div></div>
+            </div>
+        </main>
+    </div>
+
+    <div class="modal-overlay" id="detailModal">
+        <div class="modal">
+            <div style="font-size:3rem;margin-bottom:var(--space-3)" id="detailIcon"></div>
+            <h2 id="detailTitle"></h2>
+            <div class="detail-meta" id="detailMeta"></div>
+            <div class="modal-desc" id="detailDesc"></div>
+            <div class="modal-actions" id="detailActions"></div>
+            <div class="reviews-section" id="reviewsSection"></div>
+        </div>
+    </div>
+
+    <div id="toast" class="toast"></div>
+
+    <script src="/js/components/sidebar.js"></script>
+    <script>
+        let currentView = 'browse';
+        let currentAgentId = null;
+        let selectedRating = 0;
+
+        function authFetch(url, options = {}) {
+            const token = localStorage.getItem('authToken');
+            const headers = { 'Content-Type': 'application/json', ...(token ? { 'Authorization': 'Bearer ' + token } : {}), ...options.headers };
+            return fetch(url, { ...options, headers }).then(r => r.json());
+        }
+        function showToast(msg, type = 'success') { const t = document.getElementById('toast'); t.textContent = msg; t.className = 'toast ' + type + ' show'; setTimeout(() => t.classList.remove('show'), 3000); }
+        function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+        function starsHtml(avg) { let s = ''; for (let i = 1; i <= 5; i++) s += i <= Math.round(avg) ? '<span style="color:var(--warning)">&#9733;</span>' : '<span style="opacity:.3">&#9733;</span>'; return s; }
+        function numFmt(n) { return (n || 0).toLocaleString(); }
+
+        function switchTab(view, btn) {
+            currentView = view;
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            if (btn) btn.classList.add('active');
+            document.getElementById('searchBar').style.display = view === 'browse' ? '' : 'none';
+            load();
+        }
+
+        async function load() {
+            const el = document.getElementById('agentList');
+            el.innerHTML = '<div class="loading">불러오는 중...</div>';
+            try {
+                let agents;
+                if (currentView === 'installed') {
+                    const res = await authFetch('/api/marketplace/me/installed');
+                    agents = res.data || res || [];
+                } else {
+                    const q = document.getElementById('searchInput').value.trim();
+                    const sort = document.getElementById('sortBy').value;
+                    const url = '/api/marketplace?limit=50&sortBy=' + sort + (q ? '&search=' + encodeURIComponent(q) : '');
+                    const res = await authFetch(url);
+                    agents = res.data || res || [];
+                }
+                if (!agents.length) { el.innerHTML = '<div class="empty-state"><h2>에이전트가 없습니다</h2></div>'; return; }
+                el.innerHTML = agents.map(a => `
+                    <div class="agent-card" onclick="openAgent('${a.id}')">
+                        <div class="agent-icon">${a.icon || '&#129302;'}</div>
+                        <h3>${esc(a.title)}</h3>
+                        <div class="desc">${esc(a.description)}</div>
+                        <div style="margin-bottom:var(--space-3)">${a.category ? '<span class="badge-cat">' + esc(a.category) + '</span>' : ''} ${a.is_featured ? '<span class="badge-featured">추천</span>' : ''}</div>
+                        <div class="agent-footer">
+                            <span class="stars">${starsHtml(a.rating_avg)} <small>${(a.rating_avg || 0).toFixed(1)} (${a.rating_count || 0})</small></span>
+                            <span class="downloads">${numFmt(a.downloads)} 다운로드</span>
+                        </div>
+                    </div>`).join('');
+            } catch (e) { showToast('로드 실패', 'error'); }
+        }
+
+        async function openAgent(id) {
+            currentAgentId = id;
+            document.getElementById('detailModal').classList.add('open');
+            try {
+                const res = await authFetch('/api/marketplace/' + id);
+                const a = res.data || res;
+                document.getElementById('detailIcon').innerHTML = a.icon || '&#129302;';
+                document.getElementById('detailTitle').textContent = a.title;
+                document.getElementById('detailMeta').innerHTML = `
+                    <span>${starsHtml(a.rating_avg)} ${(a.rating_avg||0).toFixed(1)} (${a.rating_count||0})</span>
+                    <span>${numFmt(a.downloads)} 다운로드</span>
+                    ${a.category ? '<span class="badge-cat">' + esc(a.category) + '</span>' : ''}
+                    <span>v${a.version || '1.0.0'}</span>`;
+                document.getElementById('detailDesc').innerHTML = esc(a.long_description || a.description || '설명이 없습니다.');
+                document.getElementById('detailActions').innerHTML = `
+                    <button class="btn-secondary" onclick="closeDetail()">닫기</button>
+                    <button class="btn-primary" onclick="installAgent('${a.id}')">설치</button>
+                    <button class="btn-danger" onclick="uninstallAgent('${a.id}')">삭제</button>`;
+                loadReviews(id);
+            } catch (e) { showToast('로드 실패', 'error'); }
+        }
+
+        function closeDetail() { document.getElementById('detailModal').classList.remove('open'); }
+
+        async function installAgent(id) {
+            try { await authFetch('/api/marketplace/' + id + '/install', { method: 'POST' }); showToast('설치되었습니다'); } catch (e) { showToast('설치 실패', 'error'); }
+        }
+        async function uninstallAgent(id) {
+            try { await authFetch('/api/marketplace/' + id + '/install', { method: 'DELETE' }); showToast('삭제되었습니다'); load(); closeDetail(); } catch (e) { showToast('삭제 실패', 'error'); }
+        }
+
+        async function loadReviews(id) {
+            const sec = document.getElementById('reviewsSection');
+            try {
+                const res = await authFetch('/api/marketplace/' + id + '/reviews?limit=20');
+                const reviews = res.data || res || [];
+                let html = '<h3 style="color:var(--text-secondary);margin-bottom:var(--space-3)">리뷰 (' + reviews.length + ')</h3>';
+                html += reviews.map(r => `
+                    <div class="review-item">
+                        <div class="review-header"><span>${starsHtml(r.rating)} <strong>${esc(r.title)}</strong></span><span style="color:var(--text-muted);font-size:var(--font-size-sm)">${new Date(r.created_at).toLocaleDateString('ko')}</span></div>
+                        <div style="color:var(--text-secondary)">${esc(r.content)}</div>
+                    </div>`).join('');
+                html += `<div class="review-form">
+                    <label>리뷰 작성</label>
+                    <div class="star-select" id="starSelect">${[1,2,3,4,5].map(i => '<span onclick="setRating(' + i + ')" data-v="' + i + '">&#9733;</span>').join('')}</div>
+                    <input type="text" id="reviewTitle" placeholder="리뷰 제목">
+                    <textarea id="reviewContent" rows="3" placeholder="리뷰 내용"></textarea>
+                    <button class="btn-primary" onclick="submitReview()">리뷰 등록</button>
+                </div>`;
+                sec.innerHTML = html;
+            } catch (e) { sec.innerHTML = ''; }
+        }
+
+        function setRating(v) {
+            selectedRating = v;
+            document.querySelectorAll('#starSelect span').forEach(s => { s.classList.toggle('active', parseInt(s.dataset.v) <= v); });
+        }
+
+        async function submitReview() {
+            if (!selectedRating) { showToast('별점을 선택하세요', 'error'); return; }
+            try {
+                await authFetch('/api/marketplace/' + currentAgentId + '/reviews', { method: 'POST', body: JSON.stringify({ rating: selectedRating, title: document.getElementById('reviewTitle').value, content: document.getElementById('reviewContent').value }) });
+                showToast('리뷰가 등록되었습니다');
+                selectedRating = 0;
+                loadReviews(currentAgentId);
+            } catch (e) { showToast('등록 실패', 'error'); }
+        }
+
+        document.getElementById('searchInput').addEventListener('input', debounce(load, 400));
+        document.getElementById('sortBy').addEventListener('change', load);
+        function debounce(fn, ms) { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; }
+
+        load();
+    </script>
+</body>
+</html>

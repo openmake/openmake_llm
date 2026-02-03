@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="ko" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>알림 관리 - OpenMake.Ai</title>
+    <link rel="icon" type="image/png" href="/logo.png">
+    <link rel="preconnect" href="https://cdn.jsdelivr.net">
+    <link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="/css/design-tokens.css">
+    <link rel="stylesheet" href="/css/components.css">
+    <link rel="stylesheet" href="/css/layout.css">
+    <style>
+        .dash-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:var(--space-4); margin-bottom:var(--space-5); }
+        .dash-card { background:var(--bg-card); border:1px solid var(--border-light); border-radius:var(--radius-lg); padding:var(--space-5); }
+        .dash-card h3 { margin:0 0 var(--space-3); color:var(--text-primary); font-size:1rem; }
+        .metric-row { display:flex; justify-content:space-between; padding:var(--space-2) 0; border-bottom:1px solid var(--border-light); font-size:var(--font-size-sm); }
+        .metric-row:last-child { border-bottom:none; }
+        .metric-label { color:var(--text-muted); }
+        .metric-value { color:var(--text-primary); font-weight:var(--font-weight-semibold); }
+        .status-on { color:var(--success); font-weight:var(--font-weight-bold); }
+        .status-off { color:var(--danger); font-weight:var(--font-weight-bold); }
+        .channel-tag { display:inline-block; padding:2px 8px; border-radius:var(--radius-md); font-size:11px; font-weight:var(--font-weight-semibold); background:var(--bg-tertiary); color:var(--text-secondary); margin-right:var(--space-1); }
+        .section-title { font-size:1.1rem; font-weight:var(--font-weight-semibold); color:var(--text-primary); margin:var(--space-5) 0 var(--space-4); }
+        .filter-tabs { display:flex; gap:var(--space-2); margin-bottom:var(--space-4); }
+        .filter-tab { padding:var(--space-2) var(--space-3); background:var(--bg-tertiary); border:1px solid var(--border-light); border-radius:var(--radius-md); cursor:pointer; color:var(--text-secondary); font-size:var(--font-size-sm); }
+        .filter-tab.active { background:var(--accent-primary); color:#fff; border-color:var(--accent-primary); }
+        .alert-list { display:flex; flex-direction:column; gap:var(--space-3); }
+        .alert-item { background:var(--bg-card); border:1px solid var(--border-light); border-radius:var(--radius-lg); padding:var(--space-4); display:flex; gap:var(--space-3); align-items:flex-start; }
+        .alert-item:hover { border-color:var(--accent-primary); }
+        .alert-icon { font-size:1.5rem; flex-shrink:0; }
+        .alert-body { flex:1; min-width:0; }
+        .alert-header { display:flex; gap:var(--space-2); align-items:center; flex-wrap:wrap; margin-bottom:var(--space-1); }
+        .alert-title { font-weight:var(--font-weight-semibold); color:var(--text-primary); font-size:var(--font-size-sm); }
+        .alert-time { font-size:12px; color:var(--text-muted); }
+        .alert-msg { font-size:var(--font-size-sm); color:var(--text-muted); line-height:1.5; }
+        .badge { display:inline-block; padding:2px 8px; border-radius:var(--radius-md); font-size:11px; font-weight:var(--font-weight-semibold); }
+        .badge-info { background:var(--accent-primary); color:#fff; }
+        .badge-warning { background:var(--warning); color:#000; }
+        .badge-critical { background:var(--danger); color:#fff; }
+        .empty-state { text-align:center; padding:var(--space-8); color:var(--text-muted); }
+        .toast { position:fixed; bottom:20px; right:20px; padding:var(--space-3) var(--space-5); border-radius:var(--radius-md); color:#fff; z-index:2000; opacity:0; transition:opacity .3s; }
+        .toast.show { opacity:1; } .toast.success { background:var(--success); } .toast.error { background:var(--danger); }
+    </style>
+</head>
+<body>
+    <div class="layout">
+        <aside class="sidebar" id="sidebar"></aside>
+        <div class="sidebar-overlay" onclick="toggleSidebar()"></div>
+        <main class="main-content">
+            <header class="page-header">
+                <button class="mobile-menu-btn" onclick="toggleMobileSidebar(event)">&#9776;</button>
+                <h1>알림 관리</h1>
+            </header>
+            <div class="content-area">
+                <!-- 시스템 상태 + 임계값 -->
+                <div class="dash-grid">
+                    <div class="dash-card">
+                        <h3>알림 시스템</h3>
+                        <div id="systemStatus">
+                            <div class="metric-row"><span class="metric-label">상태</span><span class="metric-value status-on">활성화</span></div>
+                            <div class="metric-row"><span class="metric-label">채널</span><span class="metric-value"><span class="channel-tag">console</span></span></div>
+                            <div class="metric-row"><span class="metric-label">총 알림</span><span class="metric-value" id="totalAlerts">0</span></div>
+                        </div>
+                    </div>
+                    <div class="dash-card">
+                        <h3>임계값 설정</h3>
+                        <div class="metric-row"><span class="metric-label">할당량 경고</span><span class="metric-value">70%</span></div>
+                        <div class="metric-row"><span class="metric-label">할당량 위험</span><span class="metric-value">90%</span></div>
+                        <div class="metric-row"><span class="metric-label">응답시간 임계</span><span class="metric-value">5,000ms</span></div>
+                        <div class="metric-row"><span class="metric-label">에러율 임계</span><span class="metric-value">10%</span></div>
+                        <div class="metric-row"><span class="metric-label">쿨다운</span><span class="metric-value">15분</span></div>
+                    </div>
+                    <div class="dash-card">
+                        <h3>알림 유형</h3>
+                        <div class="metric-row"><span class="metric-label">할당량 경고</span><span class="metric-value badge badge-warning">warning</span></div>
+                        <div class="metric-row"><span class="metric-label">할당량 위험</span><span class="metric-value badge badge-critical">critical</span></div>
+                        <div class="metric-row"><span class="metric-label">키 소진</span><span class="metric-value badge badge-critical">critical</span></div>
+                        <div class="metric-row"><span class="metric-label">응답시간 급증</span><span class="metric-value badge badge-warning">warning</span></div>
+                        <div class="metric-row"><span class="metric-label">에러율 급증</span><span class="metric-value badge badge-critical">critical</span></div>
+                    </div>
+                </div>
+
+                <!-- 알림 히스토리 -->
+                <h3 class="section-title">알림 히스토리</h3>
+                <div class="filter-tabs" id="filterTabs">
+                    <button class="filter-tab active" data-sev="all">전체</button>
+                    <button class="filter-tab" data-sev="info">정보</button>
+                    <button class="filter-tab" data-sev="warning">경고</button>
+                    <button class="filter-tab" data-sev="critical">위험</button>
+                </div>
+                <div class="alert-list" id="alertList">
+                    <div class="empty-state">
+                        <h2>알림 없음</h2>
+                        <p>아직 발생한 알림이 없습니다. 시스템이 정상 운영 중입니다.</p>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+    <div id="toast" class="toast"></div>
+    <script src="/js/components/sidebar.js"></script>
+    <script>
+        function authFetch(url, opts = {}) {
+            const token = localStorage.getItem('authToken');
+            opts.headers = { ...(opts.headers || {}), 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
+            return fetch(url, opts);
+        }
+        function showToast(msg, type = 'success') {
+            const t = document.getElementById('toast');
+            t.textContent = msg; t.className = `toast ${type} show`;
+            setTimeout(() => t.classList.remove('show'), 2500);
+        }
+        function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+        const SEVERITY_ICONS = { info: 'ℹ️', warning: '⚠️', critical: '🚨' };
+        const SEVERITY_BADGE = { info: 'badge-info', warning: 'badge-warning', critical: 'badge-critical' };
+        const TYPE_LABELS = {
+            quota_warning: '할당량 경고', quota_critical: '할당량 위험', api_error: 'API 오류',
+            system_overload: '시스템 과부하', key_exhausted: '키 소진',
+            response_time_spike: '응답시간 급증', error_rate_spike: '에러율 급증'
+        };
+
+        let allAlerts = [];
+        let currentFilter = 'all';
+
+        // 필터 탭
+        document.getElementById('filterTabs').addEventListener('click', e => {
+            const tab = e.target.closest('.filter-tab');
+            if (!tab) return;
+            document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            currentFilter = tab.dataset.sev;
+            renderAlerts();
+        });
+
+        function renderAlerts() {
+            const filtered = currentFilter === 'all' ? allAlerts : allAlerts.filter(a => a.severity === currentFilter);
+            const el = document.getElementById('alertList');
+            if (filtered.length === 0) {
+                el.innerHTML = '<div class="empty-state"><h2>알림 없음</h2><p>해당 필터에 맞는 알림이 없습니다.</p></div>';
+                return;
+            }
+            el.innerHTML = filtered.map(a => `
+                <div class="alert-item">
+                    <div class="alert-icon">${SEVERITY_ICONS[a.severity] || 'ℹ️'}</div>
+                    <div class="alert-body">
+                        <div class="alert-header">
+                            <span class="badge ${SEVERITY_BADGE[a.severity] || 'badge-info'}">${a.severity}</span>
+                            <span class="alert-title">${esc(a.title || TYPE_LABELS[a.type] || a.type)}</span>
+                            <span class="alert-time">${new Date(a.timestamp).toLocaleString('ko-KR')}</span>
+                        </div>
+                        <div class="alert-msg">${esc(a.message)}</div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // 알림 히스토리는 현재 전용 API가 없으므로 데모 데이터 표시
+        // 향후 GET /api/alerts/history 구현 시 연동
+        allAlerts = [];
+        document.getElementById('totalAlerts').textContent = allAlerts.length;
+        renderAlerts();
+    </script>
+</body>
+</html>

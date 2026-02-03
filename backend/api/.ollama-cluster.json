@@ -1,0 +1,14 @@
+{
+    "name": "openmake-cluster",
+    "discoveryPort": 52415,
+    "dashboardPort": 52416,
+    "heartbeatInterval": 5000,
+    "nodeTimeout": 15000,
+    "nodes": [
+        {
+            "host": "localhost",
+            "port": 11434,
+            "name": "local-ollama"
+        }
+    ]
+}
