@@ -137,11 +137,11 @@
 
     UnifiedSidebar.prototype._renderHTML = function () {
         return '' +
-            '<div class="unified-sidebar" data-state="' + this.state + '">' +
+            '<div class="unified-sidebar" data-state="' + this.state + '" role="navigation" aria-label="Conversation sidebar">' +
                 // Header
                 '<div class="us-header">' +
-                    '<button class="us-toggle-btn" title="\uC0AC\uC774\uB4DC\uBC14 \uD1A0\uAE00">' + ICONS.sidebar + '</button>' +
-                    '<button class="us-theme-btn" title="\uD14C\uB9C8 \uBCC0\uACBD">' + ICONS.sun + ICONS.moon + '</button>' +
+                    '<button class="us-toggle-btn" title="\uC0AC\uC774\uB4DC\uBC14 \uD1A0\uAE00" aria-label="Toggle sidebar">' + ICONS.sidebar + '</button>' +
+                    '<button class="us-theme-btn" title="\uD14C\uB9C8 \uBCC0\uACBD" aria-label="Toggle theme">' + ICONS.sun + ICONS.moon + '</button>' +
                 '</div>' +
                 // Logo
                 '<div class="us-logo">' +
@@ -156,10 +156,10 @@
                 // Search
                 '<div class="us-search">' +
                     ICONS.search +
-                    '<input type="text" class="us-search-input" placeholder="\uB300\uD654 \uAC80\uC0C9..." />' +
+                    '<input type="text" class="us-search-input" placeholder="\uB300\uD654 \uAC80\uC0C9..." aria-label="Search conversations" />' +
                 '</div>' +
                 // Conversations
-                '<div class="us-conversations">' +
+                '<div class="us-conversations" role="list" aria-label="Conversation list">' +
                     '<div class="us-loading"><div class="us-loading-spinner"></div></div>' +
                 '</div>' +
                 // User section
@@ -226,6 +226,25 @@
                 var item = e.target.closest('.us-conv-item');
                 if (item && item.dataset.id) {
                     self._onConversationClick(item.dataset.id);
+                }
+            });
+            // ARIA: 키보드 내비게이션 (Enter/Space → 클릭, Arrow → 이동)
+            convContainer.addEventListener('keydown', function (e) {
+                var item = e.target.closest('.us-conv-item');
+                if (!item) return;
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    if (item.dataset.id) self._onConversationClick(item.dataset.id);
+                } else if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    var next = item.nextElementSibling;
+                    while (next && !next.classList.contains('us-conv-item')) next = next.nextElementSibling;
+                    if (next) next.focus();
+                } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    var prev = item.previousElementSibling;
+                    while (prev && !prev.classList.contains('us-conv-item')) prev = prev.previousElementSibling;
+                    if (prev) prev.focus();
                 }
             });
         }
@@ -410,7 +429,7 @@
                 var id = conv.id || conv._id || conv.conversationId;
                 var title = conv.title || conv.name || '\uC0C8 \uB300\uD654';
                 var isActive = id === self.activeConversationId;
-                html += '<div class="us-conv-item' + (isActive ? ' active' : '') + '" data-id="' + id + '">';
+                html += '<div class="us-conv-item' + (isActive ? ' active' : '') + '" data-id="' + id + '" role="listitem" tabindex="0" aria-label="' + truncate(title, 30) + '"' + (isActive ? ' aria-current="true"' : '') + '>';
                 html += '<span class="us-conv-icon">' + ICONS.chat + '</span>';
                 html += '<span class="us-conv-title">' + truncate(title, 30) + '</span>';
                 html += '</div>';

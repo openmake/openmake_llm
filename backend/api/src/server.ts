@@ -53,6 +53,8 @@ import {
     canvasRouter,
     externalRouter,
     marketplaceRouter,
+    // 🆕 Push 알림 라우트
+    pushRouter,
     // 🆕 모델 정보 라우트
     modelRouter
 } from './routes';
@@ -350,6 +352,7 @@ export class DashboardServer {
         this.app.use('/api/canvas', canvasRouter);            // 🆕 캔버스 API
         this.app.use('/api/external', externalRouter);        // 🆕 외부 연동 API
         this.app.use('/api/marketplace', marketplaceRouter);  // 🆕 마켓플레이스 API
+        this.app.use('/api/push', pushRouter);                 // 🆕 Push 알림 API
 
         // 🆕 Swagger API 문서화
         setupSwaggerRoutes(this.app);

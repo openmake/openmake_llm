@@ -25,3 +25,6 @@ export { default as researchRouter } from './research.routes';
 export { default as canvasRouter } from './canvas.routes';
 export { default as externalRouter } from './external.routes';
 export { default as marketplaceRouter } from './marketplace.routes';
+
+// 🆕 Push 알림 라우트
+export { pushRouter } from './push.routes';

@@ -24,6 +24,7 @@ import researchRouter from '../research.routes';
 import canvasRouter from '../canvas.routes';
 import externalRouter from '../external.routes';
 import marketplaceRouter from '../marketplace.routes';
+import { pushRouter } from '../push.routes';
 
 const v1Router = Router();
 
@@ -44,5 +45,6 @@ v1Router.use('/research', researchRouter);
 v1Router.use('/canvas', canvasRouter);
 v1Router.use('/external', externalRouter);
 v1Router.use('/marketplace', marketplaceRouter);
+v1Router.use('/push', pushRouter);
 
 export default v1Router;

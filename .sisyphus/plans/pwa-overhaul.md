@@ -949,7 +949,7 @@ Wave 5 (Final Verification):
 
 ---
 
-- [ ] 8. Push Notification Foundation (미완료 — web-push 패키지 미설치, push.ts 라우트 미생성)
+- [x] 8. Push Notification Foundation ✅ (web-push 설치, VAPID 키 생성, push.routes.ts 3 엔드포인트)
 
   **What to do**:
   - This is FOUNDATION only — sets up infrastructure, does NOT implement full push notification UX
