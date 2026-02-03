@@ -24,10 +24,10 @@ import { DocumentStore } from '../documents/store';
 import { createDiscussionEngine, DiscussionProgress, DiscussionResult } from '../agents/discussion-engine';
 import { getApiUsageTracker } from '../ollama/api-usage-tracker';
 import { getApiKeyManager } from '../ollama/api-key-manager';
-import { builtInTools } from '../mcp/tools';
 import { ToolDefinition, ChatMessage } from '../ollama/types';
 import { UserTier } from '../data/user-manager';
 import { canUseTool } from '../mcp/tool-tiers';
+import { getUnifiedMCPClient } from '../mcp/unified-client';
 import { UserContext } from '../mcp/user-sandbox';
 
 /**
@@ -353,16 +353,10 @@ export class ChatService {
             currentTurn++;
             console.log(`[ChatService] 🔄 Agent Loop Turn ${currentTurn}/${maxTurns}`);
 
-            // Prepare tools (convert MCP tools to Ollama ToolDefinition format)
-            // MCP uses 'inputSchema', Ollama expects 'parameters' wrapped in 'function'
-            const allowedTools = builtInTools.map(t => ({
-                type: 'function' as const,
-                function: {
-                    name: t.tool.name,
-                    description: t.tool.description,
-                    parameters: t.tool.inputSchema  // inputSchema → parameters 매핑
-                }
-            }));
+            // Prepare tools via ToolRouter (내장+외부 도구 통합, 등급별 필터링)
+            const toolRouter = getUnifiedMCPClient().getToolRouter();
+            const userTier = this.currentUserContext?.tier || 'free';
+            const allowedTools = toolRouter.getOllamaTools(userTier);
 
             // Call Chat API with Thinking Mode support
             const thinkOption = thinkingMode ? (thinkingLevel || 'high') : undefined;
@@ -884,18 +878,14 @@ export class ChatService {
             }
         }
 
-        // 기존 MCP 도구 실행
-        const toolDef = builtInTools.find(t => t.tool.name === toolName);
-        if (!toolDef) {
-            return `Error: Tool '${toolName}' not found`;
-        }
-
+        // 도구 실행 (ToolRouter 경유 — 내장+외부 도구 통합 라우팅)
         try {
-            const result = await toolDef.handler(toolArgs);
+            const toolRouter = getUnifiedMCPClient().getToolRouter();
+            const result = await toolRouter.executeTool(toolName, toolArgs);
             if (result.isError) {
-                return `Error executing properties: ${result.content.map(c => c.text).join('\n')}`;
+                return `Error executing tool: ${result.content.map((c: { text?: string }) => c.text).join('\n')}`;
             }
-            return result.content.map(c => c.text).join('\n');
+            return result.content.map((c: { text?: string }) => c.text).join('\n');
         } catch (e: unknown) {
             const errorMessage = e instanceof Error ? e.message : String(e);
             console.error(`[ChatService] Tool execution failed: ${errorMessage}`);

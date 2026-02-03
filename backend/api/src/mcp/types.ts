@@ -69,3 +69,44 @@ export interface MCPToolDefinition<T extends Record<string, unknown> = Record<st
     tool: MCPTool;
     handler: MCPToolHandler<T>;
 }
+
+// ===== 외부 MCP 서버 관련 타입 =====
+
+/** MCP 서버 전송 방식 */
+export type MCPTransportType = 'stdio' | 'sse' | 'streamable-http';
+
+/** DB에 저장되는 외부 MCP 서버 설정 */
+export interface MCPServerConfig {
+    id: string;
+    name: string;                          // 고유 이름 (네임스페이스로 사용)
+    transport_type: MCPTransportType;
+    command?: string;                      // stdio: 실행 명령어
+    args?: string[];                       // stdio: 명령어 인자
+    env?: Record<string, string>;          // stdio: 환경변수
+    url?: string;                          // sse/http: 서버 URL
+    enabled: boolean;
+    created_at: string;
+    updated_at: string;
+}
+
+/** 외부 서버 연결 상태 */
+export interface MCPConnectionStatus {
+    serverId: string;
+    serverName: string;
+    status: 'disconnected' | 'connecting' | 'connected' | 'error';
+    toolCount: number;
+    lastPing?: string;
+    error?: string;
+}
+
+/** 네임스페이스가 적용된 외부 도구 엔트리 */
+export interface ExternalToolEntry {
+    serverId: string;
+    serverName: string;
+    originalName: string;
+    namespacedName: string;                // "serverName::originalName"
+    tool: MCPTool;
+}
+
+/** 네임스페이스 구분자 상수 */
+export const MCP_NAMESPACE_SEPARATOR = '::';

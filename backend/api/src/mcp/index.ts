@@ -58,8 +58,19 @@ export type {
     MCPResource,
     MCPServerInfo,
     MCPToolHandler,
-    MCPToolDefinition
+    MCPToolDefinition,
+    MCPTransportType,
+    MCPServerConfig,
+    MCPConnectionStatus,
+    ExternalToolEntry
 } from './types';
+
+export { MCP_NAMESPACE_SEPARATOR } from './types';
+
+// 외부 MCP 서버 관련
+export { ExternalMCPClient } from './external-client';
+export { ToolRouter } from './tool-router';
+export { MCPServerRegistry } from './server-registry';
 
 // 도구 등급별 접근 제어
 export {

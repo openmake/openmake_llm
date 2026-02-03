@@ -355,6 +355,26 @@ CREATE TABLE IF NOT EXISTS external_files (
 
 CREATE INDEX IF NOT EXISTS idx_connections_user ON external_connections(user_id);
 CREATE INDEX IF NOT EXISTS idx_connections_service ON external_connections(service_type);
+
+-- ============================================
+-- 🔌 MCP 외부 서버 설정 테이블
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS mcp_servers (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL UNIQUE,
+    transport_type TEXT NOT NULL CHECK(transport_type IN ('stdio', 'sse', 'streamable-http')),
+    command TEXT,
+    args JSONB,
+    env JSONB,
+    url TEXT,
+    enabled BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_mcp_servers_name ON mcp_servers(name);
+CREATE INDEX IF NOT EXISTS idx_mcp_servers_enabled ON mcp_servers(enabled);
 `;
 
 export interface User {
@@ -563,6 +583,23 @@ export interface ExternalFile {
     last_synced?: string;
     cached_content?: string;
     created_at: string;
+}
+
+// ============================================
+// 🔌 MCP 외부 서버 인터페이스
+// ============================================
+
+export interface MCPServerRow {
+    id: string;
+    name: string;
+    transport_type: string;
+    command: string | null;
+    args: string[] | null;
+    env: Record<string, string> | null;
+    url: string | null;
+    enabled: boolean;
+    created_at: string;
+    updated_at: string;
 }
 
 /**
@@ -1508,6 +1545,118 @@ export class UnifiedDatabase {
             [connectionId, externalId]
         );
         return result.rows[0] as ExternalFile | undefined;
+    }
+
+    // ============================================
+    // 🔌 MCP 외부 서버 메서드
+    // ============================================
+
+    async getMcpServers(): Promise<MCPServerRow[]> {
+        const result = await this.pool.query(
+            'SELECT * FROM mcp_servers ORDER BY created_at DESC'
+        );
+        return result.rows.map((row: DbRow) => ({
+            ...row,
+            args: (row.args as string[] | null) || null,
+            env: (row.env as Record<string, string> | null) || null,
+            enabled: !!row.enabled,
+        })) as MCPServerRow[];
+    }
+
+    async getMcpServerById(id: string): Promise<MCPServerRow | null> {
+        const result = await this.pool.query(
+            'SELECT * FROM mcp_servers WHERE id = $1',
+            [id]
+        );
+        const row = result.rows[0] as DbRow | undefined;
+        if (!row) return null;
+
+        return {
+            ...row,
+            args: (row.args as string[] | null) || null,
+            env: (row.env as Record<string, string> | null) || null,
+            enabled: !!row.enabled,
+        } as MCPServerRow;
+    }
+
+    async createMcpServer(server: Omit<MCPServerRow, 'created_at' | 'updated_at'>): Promise<MCPServerRow> {
+        const result = await this.pool.query(
+            `INSERT INTO mcp_servers (id, name, transport_type, command, args, env, url, enabled)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            RETURNING *`,
+            [
+                server.id, server.name, server.transport_type,
+                server.command, server.args ? JSON.stringify(server.args) : null,
+                server.env ? JSON.stringify(server.env) : null,
+                server.url, server.enabled
+            ]
+        );
+        const row = result.rows[0] as DbRow;
+        return {
+            ...row,
+            args: (row.args as string[] | null) || null,
+            env: (row.env as Record<string, string> | null) || null,
+            enabled: !!row.enabled,
+        } as MCPServerRow;
+    }
+
+    async updateMcpServer(id: string, updates: Partial<Pick<MCPServerRow, 'name' | 'transport_type' | 'command' | 'args' | 'env' | 'url' | 'enabled'>>): Promise<MCPServerRow | null> {
+        const sets: string[] = ['updated_at = NOW()'];
+        const params: QueryParam[] = [];
+        let paramIdx = 1;
+
+        if (updates.name !== undefined) {
+            sets.push(`name = $${paramIdx++}`);
+            params.push(updates.name);
+        }
+        if (updates.transport_type !== undefined) {
+            sets.push(`transport_type = $${paramIdx++}`);
+            params.push(updates.transport_type);
+        }
+        if (updates.command !== undefined) {
+            sets.push(`command = $${paramIdx++}`);
+            params.push(updates.command);
+        }
+        if (updates.args !== undefined) {
+            sets.push(`args = $${paramIdx++}`);
+            params.push(updates.args ? JSON.stringify(updates.args) : null);
+        }
+        if (updates.env !== undefined) {
+            sets.push(`env = $${paramIdx++}`);
+            params.push(updates.env ? JSON.stringify(updates.env) : null);
+        }
+        if (updates.url !== undefined) {
+            sets.push(`url = $${paramIdx++}`);
+            params.push(updates.url);
+        }
+        if (updates.enabled !== undefined) {
+            sets.push(`enabled = $${paramIdx++}`);
+            params.push(updates.enabled);
+        }
+
+        params.push(id);
+        const result = await this.pool.query(
+            `UPDATE mcp_servers SET ${sets.join(', ')} WHERE id = $${paramIdx} RETURNING *`,
+            params
+        );
+
+        const row = result.rows[0] as DbRow | undefined;
+        if (!row) return null;
+
+        return {
+            ...row,
+            args: (row.args as string[] | null) || null,
+            env: (row.env as Record<string, string> | null) || null,
+            enabled: !!row.enabled,
+        } as MCPServerRow;
+    }
+
+    async deleteMcpServer(id: string): Promise<boolean> {
+        const result = await this.pool.query(
+            'DELETE FROM mcp_servers WHERE id = $1',
+            [id]
+        );
+        return (result.rowCount || 0) > 0;
     }
 
     // ===== 유틸리티 =====

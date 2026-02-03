@@ -279,10 +279,263 @@
             document.getElementById('terminalCmd').value = '';
         }
 
+        // ============================================
+        // 🔌 외부 MCP 서버 관리
+        // ============================================
+
+        // 외부 서버 섹션 HTML 삽입
+        const pageContent = document.querySelector('.page-mcp-tools .page-content .container');
+        if (pageContent) {
+            const serversSection = document.createElement('div');
+            serversSection.innerHTML = `
+                <section style="margin-top: var(--space-8);">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-6);">
+                        <div>
+                            <h2 style="font-size: var(--font-size-xl); font-weight: var(--font-weight-bold);">🔌 외부 MCP 서버</h2>
+                            <p style="color: var(--text-muted); font-size: var(--font-size-sm); margin-top: var(--space-1);">외부 MCP 서버를 등록하여 추가 도구를 사용할 수 있습니다 (Pro 이상)</p>
+                        </div>
+                        <button id="btnAddServer" onclick="showAddServerForm()" style="padding: var(--space-2) var(--space-4); background: var(--accent-primary); color: white; border: none; border-radius: var(--radius-md); cursor: pointer; font-size: var(--font-size-sm);">+ 서버 추가</button>
+                    </div>
+
+                    <!-- 서버 추가 폼 (숨김) -->
+                    <div id="addServerForm" style="display: none; background: var(--bg-card); border: 1px solid var(--border-light); border-radius: var(--radius-lg); padding: var(--space-6); margin-bottom: var(--space-6);">
+                        <h3 style="margin-bottom: var(--space-4); font-size: var(--font-size-lg);">새 서버 등록</h3>
+                        <div style="display: grid; gap: var(--space-4);">
+                            <div>
+                                <label style="display: block; margin-bottom: var(--space-1); font-size: var(--font-size-sm); font-weight: var(--font-weight-medium);">서버 이름 *</label>
+                                <input id="serverName" type="text" placeholder="예: filesystem, postgres" style="width: 100%; padding: var(--space-2) var(--space-3); background: var(--bg-primary); border: 1px solid var(--border-light); border-radius: var(--radius-md); color: var(--text-primary); font-size: var(--font-size-sm);" />
+                            </div>
+                            <div>
+                                <label style="display: block; margin-bottom: var(--space-1); font-size: var(--font-size-sm); font-weight: var(--font-weight-medium);">전송 방식 *</label>
+                                <select id="serverTransport" onchange="toggleTransportFields()" style="width: 100%; padding: var(--space-2) var(--space-3); background: var(--bg-primary); border: 1px solid var(--border-light); border-radius: var(--radius-md); color: var(--text-primary); font-size: var(--font-size-sm);">
+                                    <option value="stdio">stdio (로컬 프로세스)</option>
+                                    <option value="sse">SSE (Server-Sent Events)</option>
+                                    <option value="streamable-http">Streamable HTTP</option>
+                                </select>
+                            </div>
+                            <div id="stdioFields">
+                                <label style="display: block; margin-bottom: var(--space-1); font-size: var(--font-size-sm); font-weight: var(--font-weight-medium);">명령어 *</label>
+                                <input id="serverCommand" type="text" placeholder="예: npx" style="width: 100%; padding: var(--space-2) var(--space-3); background: var(--bg-primary); border: 1px solid var(--border-light); border-radius: var(--radius-md); color: var(--text-primary); font-size: var(--font-size-sm); margin-bottom: var(--space-2);" />
+                                <label style="display: block; margin-bottom: var(--space-1); font-size: var(--font-size-sm); font-weight: var(--font-weight-medium);">인자 (쉼표 구분)</label>
+                                <input id="serverArgs" type="text" placeholder="예: @modelcontextprotocol/server-filesystem, /tmp" style="width: 100%; padding: var(--space-2) var(--space-3); background: var(--bg-primary); border: 1px solid var(--border-light); border-radius: var(--radius-md); color: var(--text-primary); font-size: var(--font-size-sm);" />
+                            </div>
+                            <div id="urlFields" style="display: none;">
+                                <label style="display: block; margin-bottom: var(--space-1); font-size: var(--font-size-sm); font-weight: var(--font-weight-medium);">서버 URL *</label>
+                                <input id="serverUrl" type="text" placeholder="예: http://localhost:3001/sse" style="width: 100%; padding: var(--space-2) var(--space-3); background: var(--bg-primary); border: 1px solid var(--border-light); border-radius: var(--radius-md); color: var(--text-primary); font-size: var(--font-size-sm);" />
+                            </div>
+                            <div style="display: flex; gap: var(--space-3); justify-content: flex-end;">
+                                <button onclick="hideAddServerForm()" style="padding: var(--space-2) var(--space-4); background: transparent; border: 1px solid var(--border-light); border-radius: var(--radius-md); color: var(--text-muted); cursor: pointer; font-size: var(--font-size-sm);">취소</button>
+                                <button onclick="submitAddServer()" style="padding: var(--space-2) var(--space-4); background: var(--accent-primary); color: white; border: none; border-radius: var(--radius-md); cursor: pointer; font-size: var(--font-size-sm);">등록</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 서버 목록 -->
+                    <div id="serverList" style="display: grid; gap: var(--space-4);"></div>
+                    <div id="noServers" style="text-align: center; color: var(--text-muted); padding: var(--space-8); font-size: var(--font-size-sm);">
+                        등록된 외부 서버가 없습니다. 위 버튼으로 서버를 추가하세요.
+                    </div>
+                </section>
+            `;
+            pageContent.appendChild(serversSection);
+        }
+
+        // 서버 목록 로드
+        async function loadExternalServers() {
+            try {
+                const authToken = localStorage.getItem('authToken');
+                const headers = authToken ? { 'Authorization': 'Bearer ' + authToken } : {};
+                const res = await fetch(API_BASE + '/api/mcp/servers', {
+                    credentials: 'include',
+                    headers: headers
+                });
+                if (!res.ok) return;
+                const raw = await res.json();
+                const data = raw.data || raw;
+                const servers = data.servers || [];
+
+                const listEl = document.getElementById('serverList');
+                const noEl = document.getElementById('noServers');
+                if (!listEl) return;
+
+                if (servers.length === 0) {
+                    listEl.innerHTML = '';
+                    if (noEl) noEl.style.display = 'block';
+                    return;
+                }
+                if (noEl) noEl.style.display = 'none';
+
+                listEl.innerHTML = servers.map(function(s) {
+                    var statusColor = s.connectionStatus === 'connected' ? 'var(--success)' : s.connectionStatus === 'error' ? 'var(--danger, #ff4444)' : 'var(--text-muted)';
+                    var statusLabel = s.connectionStatus === 'connected' ? '🟢 연결됨' : s.connectionStatus === 'error' ? '🔴 오류' : '⚪ 미연결';
+                    return '<div class="tool-card">' +
+                        '<div class="tool-header">' +
+                            '<div>' +
+                                '<span class="tool-name">🔌 ' + escapeForHTML(s.name) + '</span>' +
+                                '<span style="margin-left: var(--space-2); font-size: var(--font-size-xs); color: ' + statusColor + ';">' + statusLabel + '</span>' +
+                            '</div>' +
+                            '<div style="display: flex; gap: var(--space-2);">' +
+                                (s.connectionStatus === 'connected'
+                                    ? '<button onclick="disconnectServer(\'' + s.id + '\')" style="padding: 4px 10px; background: transparent; border: 1px solid var(--border-light); border-radius: var(--radius-sm); color: var(--text-muted); cursor: pointer; font-size: 12px;">연결 해제</button>'
+                                    : '<button onclick="connectServer(\'' + s.id + '\')" style="padding: 4px 10px; background: var(--accent-primary); border: none; border-radius: var(--radius-sm); color: white; cursor: pointer; font-size: 12px;">연결</button>') +
+                                '<button onclick="deleteServer(\'' + s.id + '\')" style="padding: 4px 10px; background: transparent; border: 1px solid var(--danger, #ff4444); border-radius: var(--radius-sm); color: var(--danger, #ff4444); cursor: pointer; font-size: 12px;">삭제</button>' +
+                            '</div>' +
+                        '</div>' +
+                        '<p class="tool-desc">' + escapeForHTML(s.transport_type) + (s.command ? ' — ' + escapeForHTML(s.command) : '') + (s.url ? ' — ' + escapeForHTML(s.url) : '') + '</p>' +
+                        '<div class="tool-meta">' +
+                            '<span>도구: ' + (s.toolCount || 0) + '개</span>' +
+                            (s.connectionError ? '<span style="color: var(--danger, #ff4444);">오류: ' + escapeForHTML(s.connectionError) + '</span>' : '') +
+                        '</div>' +
+                    '</div>';
+                }).join('');
+            } catch (e) {
+                console.error('[MCP] 외부 서버 목록 로드 실패:', e);
+            }
+        }
+
+        function escapeForHTML(str) {
+            if (!str) return '';
+            return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        function showAddServerForm() {
+            var form = document.getElementById('addServerForm');
+            if (form) form.style.display = 'block';
+        }
+
+        function hideAddServerForm() {
+            var form = document.getElementById('addServerForm');
+            if (form) form.style.display = 'none';
+        }
+
+        function toggleTransportFields() {
+            var transport = document.getElementById('serverTransport').value;
+            var stdioFields = document.getElementById('stdioFields');
+            var urlFields = document.getElementById('urlFields');
+            if (stdioFields) stdioFields.style.display = transport === 'stdio' ? 'block' : 'none';
+            if (urlFields) urlFields.style.display = transport !== 'stdio' ? 'block' : 'none';
+        }
+
+        async function submitAddServer() {
+            var name = (document.getElementById('serverName').value || '').trim();
+            var transport = document.getElementById('serverTransport').value;
+            if (!name) { showToast('서버 이름을 입력하세요', 'warning'); return; }
+
+            var body = { name: name, transport_type: transport, enabled: true };
+
+            if (transport === 'stdio') {
+                var cmd = (document.getElementById('serverCommand').value || '').trim();
+                if (!cmd) { showToast('명령어를 입력하세요', 'warning'); return; }
+                body.command = cmd;
+                var argsStr = (document.getElementById('serverArgs').value || '').trim();
+                if (argsStr) body.args = argsStr.split(',').map(function(a) { return a.trim(); });
+            } else {
+                var url = (document.getElementById('serverUrl').value || '').trim();
+                if (!url) { showToast('서버 URL을 입력하세요', 'warning'); return; }
+                body.url = url;
+            }
+
+            try {
+                var authToken = localStorage.getItem('authToken');
+                var headers = { 'Content-Type': 'application/json' };
+                if (authToken) headers['Authorization'] = 'Bearer ' + authToken;
+
+                var res = await fetch(API_BASE + '/api/mcp/servers', {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: headers,
+                    body: JSON.stringify(body)
+                });
+                var raw = await res.json();
+                if (res.ok && raw.success) {
+                    showToast('✅ 서버가 등록되었습니다', 'success');
+                    hideAddServerForm();
+                    loadExternalServers();
+                } else {
+                    var errMsg = (raw.error && raw.error.message) || '서버 등록 실패';
+                    showToast('❌ ' + errMsg, 'warning');
+                }
+            } catch (e) {
+                showToast('❌ 서버 등록 중 오류: ' + e.message, 'warning');
+            }
+        }
+
+        async function connectServer(serverId) {
+            try {
+                var authToken = localStorage.getItem('authToken');
+                var headers = authToken ? { 'Authorization': 'Bearer ' + authToken } : {};
+                var res = await fetch(API_BASE + '/api/mcp/servers/' + serverId + '/connect', {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: headers
+                });
+                if (res.ok) {
+                    showToast('✅ 서버에 연결되었습니다', 'success');
+                    loadExternalServers();
+                } else {
+                    var raw = await res.json();
+                    showToast('❌ 연결 실패: ' + ((raw.error && raw.error.message) || '알 수 없는 오류'), 'warning');
+                }
+            } catch (e) {
+                showToast('❌ 연결 오류: ' + e.message, 'warning');
+            }
+        }
+
+        async function disconnectServer(serverId) {
+            try {
+                var authToken = localStorage.getItem('authToken');
+                var headers = authToken ? { 'Authorization': 'Bearer ' + authToken } : {};
+                var res = await fetch(API_BASE + '/api/mcp/servers/' + serverId + '/disconnect', {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: headers
+                });
+                if (res.ok) {
+                    showToast('✅ 서버 연결이 해제되었습니다', 'success');
+                    loadExternalServers();
+                } else {
+                    showToast('❌ 연결 해제 실패', 'warning');
+                }
+            } catch (e) {
+                showToast('❌ 연결 해제 오류: ' + e.message, 'warning');
+            }
+        }
+
+        async function deleteServer(serverId) {
+            if (!confirm('이 서버를 삭제하시겠습니까?')) return;
+            try {
+                var authToken = localStorage.getItem('authToken');
+                var headers = authToken ? { 'Authorization': 'Bearer ' + authToken } : {};
+                var res = await fetch(API_BASE + '/api/mcp/servers/' + serverId, {
+                    method: 'DELETE',
+                    credentials: 'include',
+                    headers: headers
+                });
+                if (res.ok) {
+                    showToast('✅ 서버가 삭제되었습니다', 'success');
+                    loadExternalServers();
+                } else {
+                    showToast('❌ 삭제 실패', 'warning');
+                }
+            } catch (e) {
+                showToast('❌ 삭제 오류: ' + e.message, 'warning');
+            }
+        }
+
+        // 초기 로드
+        loadExternalServers();
+
             // Expose onclick-referenced functions globally
                 if (typeof executeCommand === 'function') window.executeCommand = executeCommand;
                 if (typeof saveMCPToolSettings === 'function') window.saveMCPToolSettings = saveMCPToolSettings;
                 if (typeof resetMCPToolSettings === 'function') window.resetMCPToolSettings = resetMCPToolSettings;
+                if (typeof showAddServerForm === 'function') window.showAddServerForm = showAddServerForm;
+                if (typeof hideAddServerForm === 'function') window.hideAddServerForm = hideAddServerForm;
+                if (typeof toggleTransportFields === 'function') window.toggleTransportFields = toggleTransportFields;
+                if (typeof submitAddServer === 'function') window.submitAddServer = submitAddServer;
+                if (typeof connectServer === 'function') window.connectServer = connectServer;
+                if (typeof disconnectServer === 'function') window.disconnectServer = disconnectServer;
+                if (typeof deleteServer === 'function') window.deleteServer = deleteServer;
             } catch(e) {
                 console.error('[PageModule:mcp-tools] init error:', e);
             }
@@ -297,6 +550,13 @@
                 try { delete window.executeCommand; } catch(e) {}
                 try { delete window.saveMCPToolSettings; } catch(e) {}
                 try { delete window.resetMCPToolSettings; } catch(e) {}
+                try { delete window.showAddServerForm; } catch(e) {}
+                try { delete window.hideAddServerForm; } catch(e) {}
+                try { delete window.toggleTransportFields; } catch(e) {}
+                try { delete window.submitAddServer; } catch(e) {}
+                try { delete window.connectServer; } catch(e) {}
+                try { delete window.disconnectServer; } catch(e) {}
+                try { delete window.deleteServer; } catch(e) {}
         }
     };
 })();
