@@ -1,0 +1,580 @@
+/**
+ * ============================================
+ * Ollama LLM Dashboard - Design Tokens
+ * 통합 디자인 시스템 v2.0
+ * ============================================
+ * 
+ * 이 파일은 모든 페이지에서 공유되는 디자인 토큰을 정의합니다.
+ * 색상, 타이포그래피, 간격, 그림자, 애니메이션 등을 통일합니다.
+ */
+
+/* ==========================================
+   기본 폰트
+   ========================================== */
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
+
+/* ==========================================
+   CSS 변수 - 다크 테마 (기본)
+   ========================================== */
+:root {
+    /* ------- Primary Accent ------- */
+    --accent-primary: #667eea;
+    /* Aura 스타일 퍼플-블루 */
+    --accent-primary-hover: #5a6fd6;
+    --accent-primary-light: rgba(102, 126, 234, 0.15);
+    --accent-primary-glow: rgba(102, 126, 234, 0.3);
+
+    /* ------- Secondary Accents ------- */
+    --accent-blue: #3b82f6;
+    --accent-blue-light: rgba(59, 130, 246, 0.15);
+    --accent-purple: #764ba2;
+    --accent-purple-light: rgba(118, 75, 162, 0.15);
+    --accent-cyan: #06b6d4;
+    --accent-pink: #f5576c;
+    --accent-orange: #f59e0b;
+
+    /* ------- Aura-inspired Gradient Palette ------- */
+    --gradient-primary: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    --gradient-accent: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    --gradient-subtle: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+    --gradient-glow: radial-gradient(circle at 50% 50%, rgba(102, 126, 234, 0.15) 0%, transparent 70%);
+    --gradient-hero: radial-gradient(ellipse 80% 50% at 50% -20%, rgba(102, 126, 234, 0.15), transparent);
+
+    /* ------- Glassmorphism Effects ------- */
+    --glass-bg: rgba(255, 255, 255, 0.03);
+    --glass-bg-hover: rgba(255, 255, 255, 0.06);
+    --glass-border: rgba(255, 255, 255, 0.08);
+    --glass-blur: blur(20px);
+
+    /* ------- Glow Effects ------- */
+    --glow-primary: 0 0 40px rgba(102, 126, 234, 0.3);
+    --glow-accent: 0 0 30px rgba(245, 87, 108, 0.25);
+    --glow-input-focus: 0 0 0 4px rgba(102, 126, 234, 0.15), 0 0 30px rgba(102, 126, 234, 0.1);
+
+    /* ------- Semantic Colors ------- */
+    --success: #22c55e;
+    --success-light: rgba(34, 197, 94, 0.15);
+    --warning: #f59e0b;
+    --warning-light: rgba(245, 158, 11, 0.15);
+    --danger: #ef4444;
+    --danger-light: rgba(239, 68, 68, 0.15);
+    --info: #3b82f6;
+    --info-light: rgba(59, 130, 246, 0.15);
+
+    /* ------- Background Colors (Dark Theme) ------- */
+    --bg-app: #0d0d0e;
+    --bg-main: #0d0d0e;
+    --bg-sidebar: #131316;
+    --bg-secondary: #1a1a24;
+    --bg-card: #1a1a24;
+    --bg-tertiary: #27272a;
+    --bg-hover: rgba(255, 255, 255, 0.06);
+    --bg-active: rgba(255, 255, 255, 0.1);
+    --bg-overlay: rgba(0, 0, 0, 0.8);
+
+    /* ------- Text Colors ------- */
+    --text-primary: #f0f0f2;
+    --text-secondary: #a1a1aa;
+    --text-muted: #71717a;
+    --text-inverse: #1a1a1c;
+
+    /* ------- Border Colors ------- */
+    --border-light: rgba(255, 255, 255, 0.08);
+    --border-medium: rgba(255, 255, 255, 0.15);
+    --border-strong: rgba(255, 255, 255, 0.25);
+    --border-accent: var(--accent-primary);
+
+    /* ------- Shadow ------- */
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.6);
+    --shadow-xl: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+    --shadow-glow: 0 0 20px var(--accent-primary-glow);
+
+    /* ------- Typography ------- */
+    --font-sans: 'Pretendard', 'Outfit', system-ui, -apple-system, sans-serif;
+    --font-mono: 'Menlo', 'Monaco', 'Cascadia Code', 'Fira Code', monospace;
+
+    --font-size-xs: 0.75rem;
+    /* 12px */
+    --font-size-sm: 0.875rem;
+    /* 14px */
+    --font-size-base: 1rem;
+    /* 16px */
+    --font-size-lg: 1.125rem;
+    /* 18px */
+    --font-size-xl: 1.25rem;
+    /* 20px */
+    --font-size-2xl: 1.5rem;
+    /* 24px */
+    --font-size-3xl: 1.875rem;
+    /* 30px */
+    --font-size-4xl: 2.25rem;
+    /* 36px */
+
+    --font-weight-light: 300;
+    --font-weight-normal: 400;
+    --font-weight-medium: 500;
+    --font-weight-semibold: 600;
+    --font-weight-bold: 700;
+
+    --line-height-tight: 1.25;
+    --line-height-normal: 1.5;
+    --line-height-relaxed: 1.75;
+
+    /* ------- Spacing ------- */
+    --space-0: 0;
+    --space-1: 0.25rem;
+    /* 4px */
+    --space-2: 0.5rem;
+    /* 8px */
+    --space-3: 0.75rem;
+    /* 12px */
+    --space-4: 1rem;
+    /* 16px */
+    --space-5: 1.25rem;
+    /* 20px */
+    --space-6: 1.5rem;
+    /* 24px */
+    --space-8: 2rem;
+    /* 32px */
+    --space-10: 2.5rem;
+    /* 40px */
+    --space-12: 3rem;
+    /* 48px */
+    --space-16: 4rem;
+    /* 64px */
+
+    /* ------- Border Radius ------- */
+    --radius-none: 0;
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 14px;
+    --radius-xl: 20px;
+    --radius-2xl: 28px;
+    --radius-full: 9999px;
+
+    /* ------- Sidebar ------- */
+    --sidebar-width: 260px;
+    --sidebar-collapsed-width: 0;
+
+    /* ------- Transitions ------- */
+    --transition-fast: 150ms ease;
+    --transition-normal: 200ms ease;
+    --transition-slow: 300ms ease;
+    --transition-bounce: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ==========================================
+   CSS 변수 - 라이트 테마 (크림/베이지)
+   ========================================== */
+[data-theme="light"],
+.theme-light {
+    /* ------- Accent Colors (Blue Theme) ------- */
+    --accent-primary: #4A90D9;
+    --accent-primary-hover: #3A7BC8;
+    --accent-primary-light: rgba(74, 144, 217, 0.15);
+    --accent-primary-glow: rgba(74, 144, 217, 0.3);
+
+    /* ------- Gradient ------- */
+    --gradient-primary: linear-gradient(135deg, #4A90D9 0%, #5BA3EC 100%);
+
+    /* ------- Background Colors (Cream/Beige) ------- */
+    --bg-app: #F5F0E8;
+    --bg-main: #F5F0E8;
+    --bg-sidebar: #FBF8F3;
+    --bg-secondary: #EDE8DE;
+    --bg-card: #FFFFFF;
+    --bg-tertiary: #E8E3D9;
+    --bg-hover: rgba(0, 0, 0, 0.04);
+    --bg-active: rgba(74, 144, 217, 0.12);
+    --bg-overlay: rgba(245, 240, 232, 0.95);
+
+    /* ------- Text Colors ------- */
+    --text-primary: #2D2D2D;
+    --text-secondary: #5A5A5A;
+    --text-muted: #8A8A8A;
+    --text-inverse: #F5F0E8;
+
+    /* ------- Border Colors ------- */
+    --border-light: rgba(0, 0, 0, 0.06);
+    --border-medium: rgba(0, 0, 0, 0.12);
+    --border-strong: rgba(0, 0, 0, 0.2);
+
+    /* ------- Glass Effects (Light) ------- */
+    --glass-bg: rgba(255, 255, 255, 0.7);
+    --glass-bg-hover: rgba(255, 255, 255, 0.85);
+    --glass-border: rgba(0, 0, 0, 0.08);
+
+    /* ------- Shadow ------- */
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1);
+    --shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.12);
+    --shadow-xl: 0 25px 50px rgba(0, 0, 0, 0.15);
+
+    /* ------- Glow Effects ------- */
+    --glow-primary: 0 0 20px rgba(74, 144, 217, 0.25);
+    --glow-input-focus: 0 0 0 3px rgba(74, 144, 217, 0.15);
+}
+
+/* ==========================================
+   기본 리셋
+   ========================================== */
+*,
+*::before,
+*::after {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html {
+    font-size: 16px;
+    height: 100%;
+    scroll-behavior: smooth;
+}
+
+body {
+    font-family: var(--font-sans);
+    font-size: var(--font-size-base);
+    font-weight: var(--font-weight-normal);
+    line-height: var(--line-height-normal);
+    color: var(--text-primary);
+    background: var(--bg-app);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    min-height: 100%;
+}
+
+/* ==========================================
+   유틸리티 클래스
+   ========================================== */
+
+/* Text Colors */
+.text-primary {
+    color: var(--text-primary);
+}
+
+.text-secondary {
+    color: var(--text-secondary);
+}
+
+.text-muted {
+    color: var(--text-muted);
+}
+
+.text-success {
+    color: var(--success);
+}
+
+.text-warning {
+    color: var(--warning);
+}
+
+.text-danger {
+    color: var(--danger);
+}
+
+.text-info {
+    color: var(--info);
+}
+
+.text-accent {
+    color: var(--accent-primary);
+}
+
+/* Background Colors */
+.bg-primary {
+    background: var(--bg-app);
+}
+
+.bg-secondary {
+    background: var(--bg-secondary);
+}
+
+.bg-card {
+    background: var(--bg-card);
+}
+
+.bg-accent {
+    background: var(--accent-primary);
+}
+
+/* Font Sizes */
+.text-xs {
+    font-size: var(--font-size-xs);
+}
+
+.text-sm {
+    font-size: var(--font-size-sm);
+}
+
+.text-base {
+    font-size: var(--font-size-base);
+}
+
+.text-lg {
+    font-size: var(--font-size-lg);
+}
+
+.text-xl {
+    font-size: var(--font-size-xl);
+}
+
+.text-2xl {
+    font-size: var(--font-size-2xl);
+}
+
+.text-3xl {
+    font-size: var(--font-size-3xl);
+}
+
+/* Font Weights */
+.font-light {
+    font-weight: var(--font-weight-light);
+}
+
+.font-normal {
+    font-weight: var(--font-weight-normal);
+}
+
+.font-medium {
+    font-weight: var(--font-weight-medium);
+}
+
+.font-semibold {
+    font-weight: var(--font-weight-semibold);
+}
+
+.font-bold {
+    font-weight: var(--font-weight-bold);
+}
+
+/* Spacing */
+.m-0 {
+    margin: 0;
+}
+
+.m-1 {
+    margin: var(--space-1);
+}
+
+.m-2 {
+    margin: var(--space-2);
+}
+
+.m-4 {
+    margin: var(--space-4);
+}
+
+.mt-4 {
+    margin-top: var(--space-4);
+}
+
+.mb-4 {
+    margin-bottom: var(--space-4);
+}
+
+.p-0 {
+    padding: 0;
+}
+
+.p-2 {
+    padding: var(--space-2);
+}
+
+.p-4 {
+    padding: var(--space-4);
+}
+
+.p-6 {
+    padding: var(--space-6);
+}
+
+/* Flexbox */
+.flex {
+    display: flex;
+}
+
+.flex-col {
+    flex-direction: column;
+}
+
+.flex-wrap {
+    flex-wrap: wrap;
+}
+
+.items-center {
+    align-items: center;
+}
+
+.items-start {
+    align-items: flex-start;
+}
+
+.justify-center {
+    justify-content: center;
+}
+
+.justify-between {
+    justify-content: space-between;
+}
+
+.gap-1 {
+    gap: var(--space-1);
+}
+
+.gap-2 {
+    gap: var(--space-2);
+}
+
+.gap-4 {
+    gap: var(--space-4);
+}
+
+/* Grid */
+.grid {
+    display: grid;
+}
+
+.grid-cols-2 {
+    grid-template-columns: repeat(2, 1fr);
+}
+
+.grid-cols-3 {
+    grid-template-columns: repeat(3, 1fr);
+}
+
+.grid-cols-4 {
+    grid-template-columns: repeat(4, 1fr);
+}
+
+/* Border Radius */
+.rounded-sm {
+    border-radius: var(--radius-sm);
+}
+
+.rounded-md {
+    border-radius: var(--radius-md);
+}
+
+.rounded-lg {
+    border-radius: var(--radius-lg);
+}
+
+.rounded-full {
+    border-radius: var(--radius-full);
+}
+
+/* Visibility */
+.hidden {
+    display: none;
+}
+
+.visible {
+    visibility: visible;
+}
+
+.invisible {
+    visibility: hidden;
+}
+
+/* Animation */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes pulse {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.5;
+    }
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.animate-fade-in {
+    animation: fadeIn 0.3s ease;
+}
+
+.animate-slide-up {
+    animation: slideUp 0.3s ease;
+}
+
+.animate-pulse {
+    animation: pulse 2s infinite;
+}
+
+.animate-spin {
+    animation: spin 1s linear infinite;
+}
+
+/* Scrollbar Styling */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--border-medium);
+    border-radius: var(--radius-full);
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--border-strong);
+}
+
+/* Selection */
+::selection {
+    background: var(--accent-primary-light);
+    color: var(--text-primary);
+}
+
+/* Focus Ring */
+:focus-visible {
+    outline: 2px solid var(--accent-primary);
+    outline-offset: 2px;
+}
+
+/* Print */
+@media print {
+    body {
+        background: white;
+        color: black;
+    }
+}

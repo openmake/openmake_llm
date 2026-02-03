@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="ko" data-theme="light">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>OpenMake.Ai</title>
+
+    <!-- PWA 메타 태그 -->
+    <meta name="theme-color" content="#667eea">
+    <meta name="description" content="AI 기반 지능형 채팅 어시스턴트">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="OpenMake.Ai">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="apple-touch-icon" href="/icons/icon-192.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon.png">
+    <meta name="mobile-web-app-capable" content="yes">
+
+    <!-- 한글 최적화 웹폰트 -->
+    <link rel="preconnect" href="https://cdn.jsdelivr.net">
+    <link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css"
+        rel="stylesheet">
+    <!-- Performance: Preload hints -->
+    <link rel="preconnect" href="https://cdnjs.cloudflare.com">
+    <link rel="dns-prefetch" href="https://cdnjs.cloudflare.com">
+    <link rel="preload" href="/css/design-tokens.css" as="style">
+    <link rel="preload" href="/js/spa-router.js" as="script">
+    <link rel="preload" href="/js/modules/auth.js" as="script">
+    <!-- 디자인 시스템 CSS (순서 중요!) -->
+    <link rel="stylesheet" href="css/design-tokens.css">
+    <link rel="stylesheet" href="css/icons.css">
+    <link rel="stylesheet" href="css/glassmorphism.css">
+    <link rel="stylesheet" href="css/animations.css">
+    <link rel="stylesheet" href="css/feature-cards.css">
+    <link rel="stylesheet" href="css/unified-sidebar.css">
+    <link rel="stylesheet" href="css/light-theme.css">
+    <link rel="stylesheet" href="style.css?v=2">
+    <!-- Iconify Icon Web Component -->
+    <script src="https://cdn.jsdelivr.net/npm/iconify-icon@2.1.0/dist/iconify-icon.min.js"></script>
+    <!-- Markdown Parser -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <!-- Code Highlighting -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" media="print" onload="this.media='all'">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <!-- XSS Defense: DOMPurify -->
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.2.4/dist/purify.min.js"></script>
+    <script src="guide_content.js"></script>
+
+    <!-- Service Worker 등록 -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/service-worker.js')
+                    .then(reg => console.log('[PWA] Service Worker 등록 성공'))
+                    .catch(err => console.warn('[PWA] Service Worker 등록 실패:', err));
+            });
+            
+            // Listen for SW update notification
+            navigator.serviceWorker.addEventListener('message', (event) => {
+                if (event.data && event.data.type === 'SW_UPDATED') {
+                    if (typeof showToast === 'function') {
+                        showToast('새 버전이 있습니다. 새로고침해주세요.', 'info');
+                    }
+                }
+            });
+        }
+    </script>
+</head>
+
+<body>
+    <div class="app">
+        <!-- Mobile Menu Button -->
+        <button class="mobile-menu-btn" id="mobileMenuBtn" aria-label="Toggle menu">
+            <span></span>
+            <span></span>
+            <span></span>
+        </button>
+
+        <!-- Unified Sidebar (T4: 3-state Gemini-style) -->
+        <aside id="sidebar"></aside>
+
+        <!-- 메인 콘텐츠 영역 -->
+        <main class="main-content" id="mainContent">
+
+            <!-- 채팅 영역 (기본 뷰 — SPA 라우터가 / 일 때 표시) -->
+            <div id="chat-area">
+                <div class="chat-area" id="chatArea">
+                    <div class="welcome-screen animate-fadeInUp" id="welcomeScreen">
+                        <div class="welcome-avatar animate-popIn">
+                            <img src="/images/avatar/character-avatar.png" alt="OpenMake AI" class="avatar-img">
+                        </div>
+                        <h1 class="welcome-title animate-fadeInUp" style="animation-delay: 0.1s;">오늘도 화이팅!<br>무엇을 도와드릴까요? 😊
+                        </h1>
+                        <p class="welcome-subtitle animate-fadeInUp" style="animation-delay: 0.2s;">AI 어시스턴트가 질문에 답변하고, 문서를
+                            분석하고, 코드를 작성합니다.</p>
+
+                        <!-- 기능 카드 그리드 -->
+                        <div class="feature-cards animate-fadeInUp" style="animation-delay: 0.3s;">
+                            <div class="feature-card" onclick="startFeatureChat('coding')">
+                                <div class="feature-icon">
+                                    <img src="/images/icons/coding-agent.png" alt="코딩">
+                                </div>
+                                <div class="feature-title">코딩 에이전트</div>
+                                <div class="feature-desc">코드 작성 및 디버깅</div>
+                                <button class="feature-btn">시작하기</button>
+                            </div>
+                            <div class="feature-card" onclick="startFeatureChat('document')">
+                                <div class="feature-icon">
+                                    <img src="/images/icons/document-agent.png" alt="문서">
+                                </div>
+                                <div class="feature-title">문서 작성 도우미</div>
+                                <div class="feature-desc">블로그, 보고서 초안 작성</div>
+                                <button class="feature-btn">시작하기</button>
+                            </div>
+                            <div class="feature-card" onclick="startFeatureChat('data')">
+                                <div class="feature-icon">
+                                    <img src="/images/icons/data-analysis.png" alt="데이터">
+                                </div>
+                                <div class="feature-title">데이터 분석</div>
+                                <div class="feature-desc">데이터 시각화 및 인사이트 도출</div>
+                                <button class="feature-btn">시작하기</button>
+                            </div>
+                            <div class="feature-card" onclick="startFeatureChat('chat')">
+                                <div class="feature-icon">
+                                    <img src="/images/icons/chat-agent.png" alt="대화">
+                                </div>
+                                <div class="feature-title">자유 대화</div>
+                                <div class="feature-desc">무엇이든 물어보세요</div>
+                                <button class="feature-btn">시작하기</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="chat-messages" id="chatMessages"></div>
+                </div>
+
+                <div class="input-container">
+                    <div id="agentBadge" style="display: none;"></div>
+                    <div class="chat-input-container">
+                        <div class="attachments" id="attachments" style="display: none;"></div>
+                        <div class="input-wrapper">
+                            <textarea id="chatInput" placeholder="메시지를 입력하세요..." rows="1"
+                                onkeydown="handleKeyDown(event)"></textarea>
+                            <div class="input-actions">
+                                <div class="left-actions">
+                                    <button class="action-btn" onclick="newChat()" title="새 대화 (+)">
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                            stroke-width="2">
+                                            <path d="M12 5v14M5 12h14" />
+                                        </svg>
+                                    </button>
+                                    <button class="action-btn" onclick="showFileUpload()" title="파일 첨부">
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                            stroke-width="2">
+                                            <path
+                                                d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+                                        </svg>
+                                    </button>
+                                    <button class="action-btn" id="webSearchBtn" onclick="toggleWebSearch()" title="웹 검색">
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                            stroke-width="2">
+                                            <circle cx="12" cy="12" r="10" />
+                                            <line x1="2" y1="12" x2="22" y2="12" />
+                                            <path
+                                                d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+                                        </svg>
+                                    </button>
+                                    <button class="action-btn" id="discussionModeBtn" onclick="toggleDiscussionMode()"
+                                        title="멀티 에이전트 토론">
+                                        <iconify-icon icon="lucide:target"></iconify-icon>
+                                    </button>
+                                    <button class="action-btn" id="thinkingModeBtn" onclick="toggleThinkingMode()"
+                                        title="Thinking 모드 (심층 추론)">
+                                        <iconify-icon icon="lucide:brain"></iconify-icon>
+                                    </button>
+                                </div>
+                                <div class="right-actions">
+                                    <div id="connectionStatus" class="connection-status">
+                                        <span class="status-dot"></span>
+                                        <span class="status-text">연결됨</span>
+                                    </div>
+                                    <button class="send-btn" onclick="sendMessage()" id="sendBtn" title="전송 (Enter)">
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                            stroke-width="2">
+                                            <path d="M22 2L11 13M22 2L15 22L11 13L2 9L22 2Z" />
+                                        </svg>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Gemini-Style Tool Picker Bar -->
+                <div class="tool-picker" id="toolPicker">
+                    <div class="tool-picker-scroll">
+                        <button class="tool-pill" onclick="Router.navigate('/canvas.html')" title="캔버스">
+                            <iconify-icon icon="lucide:file-text"></iconify-icon>
+                            <span>캔버스</span>
+                        </button>
+                        <button class="tool-pill" onclick="Router.navigate('/research.html')" title="딥 리서치">
+                            <iconify-icon icon="lucide:flask-conical"></iconify-icon>
+                            <span>딥 리서치</span>
+                        </button>
+                        <button class="tool-pill" onclick="Router.navigate('/mcp-tools.html')" title="MCP 도구">
+                            <iconify-icon icon="lucide:wrench"></iconify-icon>
+                            <span>MCP 도구</span>
+                        </button>
+                        <button class="tool-pill" onclick="Router.navigate('/marketplace.html')" title="마켓플레이스">
+                            <iconify-icon icon="lucide:store"></iconify-icon>
+                            <span>마켓플레이스</span>
+                        </button>
+                        <button class="tool-pill" onclick="Router.navigate('/custom-agents.html')" title="커스텀 에이전트">
+                            <iconify-icon icon="lucide:bot"></iconify-icon>
+                            <span>에이전트</span>
+                        </button>
+                        <button class="tool-pill" onclick="Router.navigate('/memory.html')" title="AI 메모리">
+                            <iconify-icon icon="lucide:brain"></iconify-icon>
+                            <span>메모리</span>
+                        </button>
+                        <button class="tool-pill" onclick="Router.navigate('/history.html')" title="히스토리">
+                            <iconify-icon icon="lucide:scroll-text"></iconify-icon>
+                            <span>히스토리</span>
+                        </button>
+                        <button class="tool-pill" onclick="Router.navigate('/guide.html')" title="사용 가이드">
+                            <iconify-icon icon="lucide:book-open"></iconify-icon>
+                            <span>가이드</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SPA 페이지 콘텐츠 (라우터가 모듈을 주입하는 영역) -->
+            <div id="page-content" style="display: none;"></div>
+
+        </main>
+
+        <!-- 패널/오버레이 컨테이너 (T12에서 활용) -->
+        <div id="panel-container"></div>
+
+        <!-- 모달 레이어 -->
+
+        <!-- 파일 업로드 모달 -->
+        <div class="modal" id="fileModal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3 class="modal-title">📎 파일 첨부</h3>
+                    <button class="modal-close" onclick="closeFileModal()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="upload-area" id="uploadArea" onclick="document.getElementById('fileInput').click()">
+                        <div class="upload-content">
+                            <span class="upload-icon">📁</span>
+                            <p>파일을 드래그하거나 클릭하여 선택</p>
+                            <input type="file" id="fileInput" hidden>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 설정 모달 -->
+        <div class="modal" id="settingsModal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3 class="modal-title">⚙️ 설정</h3>
+                    <button class="modal-close" onclick="closeSettings()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <!-- LLM 모델 설정 -->
+                    <div class="settings-group">
+                        <label class="settings-label">🤖 현재 LLM 모델</label>
+                        <div class="settings-card" id="currentModelInfo">
+                            <div id="activeModelName">로딩 중...</div>
+                        </div>
+                        <div id="availableModelsList">
+                            <div id="modelListContainer" class="btn-group"></div>
+                        </div>
+                    </div>
+
+                    <!-- 테마 설정 -->
+                    <div class="settings-group">
+                        <label class="settings-label">🎨 테마 설정</label>
+                        <div class="btn-group">
+                            <button class="btn" id="theme-light" onclick="setTheme('light')">☀️ 라이트</button>
+                            <button class="btn" id="theme-dark" onclick="setTheme('dark')">🌙 다크</button>
+                            <button class="btn" id="theme-system" onclick="setTheme('system')">💻 시스템</button>
+                        </div>
+                    </div>
+
+                    <!-- MCP 설정 -->
+                    <div class="settings-group">
+                        <label class="settings-label">🔧 MCP 기능 확장</label>
+                        <div class="toggle-list">
+                            <div class="toggle-item">
+                                <div class="toggle-info">
+                                    <span class="toggle-icon">🧠</span>
+                                    <div>
+                                        <div class="toggle-label">Sequential Thinking</div>
+                                        <div class="toggle-desc">단계별 사고 추론 과정을 시각화합니다.</div>
+                                    </div>
+                                </div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="mcpThinking" checked
+                                        onchange="toggleMCPModule('thinking')">
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                            <div class="toggle-item">
+                                <div class="toggle-info">
+                                    <span class="toggle-icon">🌐</span>
+                                    <div>
+                                        <div class="toggle-label">Web Search</div>
+                                        <div class="toggle-desc">실시간 웹 정보를 검색합니다.</div>
+                                    </div>
+                                </div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="mcpWebSearch" onchange="toggleMCPModule('webSearch')">
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                            <div class="toggle-item">
+                                <div class="toggle-info">
+                                    <span class="toggle-icon">📄</span>
+                                    <div>
+                                        <div class="toggle-label">PDF & Document Tools</div>
+                                        <div class="toggle-desc">PDF 분석 및 텍스트 추출 기능입니다.</div>
+                                    </div>
+                                </div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="mcpPDF" checked onchange="toggleMCPModule('pdf')">
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                            <div class="toggle-item">
+                                <div class="toggle-info">
+                                    <span class="toggle-icon">🐙</span>
+                                    <div>
+                                        <div class="toggle-label">GitHub Integration</div>
+                                        <div class="toggle-desc">코드 저장소 및 이슈 관리를 지원합니다.</div>
+                                    </div>
+                                </div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="mcpGithub" onchange="toggleMCPModule('github')">
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 클러스터 상태 -->
+                    <div class="settings-group">
+                        <div class="section-header" onclick="toggleSection('clusterSection')">
+                            <span>🌐 시스템 클러스터 상태</span>
+                            <span class="section-arrow">▼</span>
+                        </div>
+                        <div class="section-content" id="clusterSection">
+                            <div id="nodesList"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn" onclick="resetSettings()">🔄 초기화</button>
+                    <button class="btn btn-primary" onclick="saveSettings()">💾 설정 저장</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 가이드 모달 -->
+        <div class="modal" id="guideModal">
+            <div class="modal-content guide-modal-content">
+                <div class="modal-header">
+                    <h3 class="modal-title" id="guideTitle">📖 사용자 가이드</h3>
+                    <button class="modal-close" onclick="closeGuideModal()">&times;</button>
+                </div>
+                <div class="modal-body" id="guideBody"></div>
+                <div class="modal-footer">
+                    <p id="guideFooter" class="guide-footer-text"></p>
+                </div>
+            </div>
+        </div>
+
+    </div> <!-- app 끝 -->
+
+    <!-- 스크립트 로딩 (순서 중요!) -->
+
+    <!-- 1. 네비게이션 데이터 (라우트 레지스트리) -->
+    <script src="js/nav-items.js"></script>
+
+    <!-- 2. 앱 코어 (채팅 기능 — app.js 모놀리스, 추후 모듈화) -->
+    <script src="app.js?v=8"></script>
+    <script src="js/modules/sanitize.js"></script>
+
+    <!-- 3. SPA 인프라 -->
+    <script src="js/components/unified-sidebar.js"></script>
+    <script src="js/components/offline-indicator.js"></script>
+
+    <script src="js/spa-router.js"></script>
+    <script src="js/components/admin-panel.js"></script>
+    <script src="js/components/install-prompt.js"></script>
+
+    <!-- 4. SPA 초기화 -->
+    <script>
+        // SPA 모드: alert() → showToast() 변환 (auth 경고 등 blocking 방지)
+        (function() {
+            var _origAlert = window.alert;
+            window.alert = function(msg) {
+                if (typeof showToast === 'function') {
+                    showToast(msg, 'warning');
+                } else {
+                    _origAlert.call(window, msg);
+                }
+            };
+        })();
+
+        document.addEventListener('DOMContentLoaded', function () {
+            // 기존 앱 초기화 (채팅, 웹소켓 등)
+            if (typeof initApp === 'function') {
+                initApp();
+            }
+
+            // 통합 사이드바 초기화
+            var sidebarInstance = new UnifiedSidebar('sidebar');
+            sidebarInstance.init();
+            window.sidebar = sidebarInstance;
+
+            // 모바일 메뉴 버튼 연결
+            var mobileMenuBtn = document.getElementById('mobileMenuBtn');
+            if (mobileMenuBtn) {
+                mobileMenuBtn.addEventListener('click', function () {
+                    if (window.sidebar) {
+                        window.sidebar.toggle();
+                    }
+                });
+            }
+
+            // SPA 라우터 시작
+            Router.start();
+
+            // 라우터 네비게이션 시 사이드바 활성 대화 업데이트
+            Router.onAfterNavigate(function (info) {
+                // 채팅 페이지가 아닌 곳으로 이동하면 활성 대화 해제
+                if (info.to !== '/') {
+                    if (window.sidebar) {
+                        window.sidebar.setActiveConversation(null);
+                    }
+                }
+            });
+        });
+    </script>
+</body>
+
+</html>

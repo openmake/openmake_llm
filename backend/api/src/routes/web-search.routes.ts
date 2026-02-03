@@ -1,0 +1,110 @@
+/**
+ * Web Search Routes
+ * 웹 검색 API 라우트
+ * 
+ * - POST /web-search - 웹 검색 + LLM 사실 검증
+ */
+
+import { Router, Request, Response } from 'express';
+import { ClusterManager } from '../cluster/manager';
+import { getConfig } from '../config';
+import { success, internalError, serviceUnavailable } from '../utils/api-response';
+
+const router = Router();
+let clusterManager: ClusterManager;
+
+const envConfig = getConfig();
+
+/**
+ * 클러스터 매니저 참조 설정
+ */
+export function setClusterManager(cluster: ClusterManager): void {
+    clusterManager = cluster;
+}
+
+/**
+ * POST /api/web-search
+ * 웹 검색 API (실제 인터넷 검색 + 사실 검증)
+ */
+router.post('/web-search', async (req: Request, res: Response) => {
+    const { query } = req.body;
+    const requestedModel = req.body.model;
+    const model = (!requestedModel || requestedModel === 'default')
+        ? envConfig.ollamaDefaultModel
+        : requestedModel;
+
+    try {
+        console.log(`[WebSearch] 쿼리: ${query?.substring(0, 50)}... (모델: ${model})`);
+
+        // 1. 실제 웹 검색 수행
+        const { performWebSearch } = await import('../mcp');
+        const searchResults = await performWebSearch(query, { maxResults: 5 });
+
+        console.log(`[WebSearch] ${searchResults.length}개 결과 찾음`);
+
+        // Cloud 모델 처리
+        let client: any;
+        const isCloudModel = model?.toLowerCase().endsWith(':cloud');
+
+        if (isCloudModel) {
+            const { createClient } = await import('../ollama/client');
+            client = createClient({ model });
+            console.log(`[WebSearch] Cloud 클라이언트 생성: ${model}`);
+        } else {
+            const bestNode = clusterManager.getBestNode(model);
+            client = bestNode ? clusterManager.getClient(bestNode.id) : undefined;
+            if (client && model) client.setModel(model);
+        }
+
+         if (!client) {
+             res.status(503).json(serviceUnavailable('사용 가능한 노드가 없습니다'));
+             return;
+         }
+
+        // 2. 검색 결과를 기반으로 LLM에 사실 검증 요청
+        const sourcesContext = searchResults.length > 0
+            ? searchResults.map((r: any, i: number) =>
+                `[출처 ${i + 1}] ${r.title}\n   URL: ${r.url}\n   내용: ${r.snippet || '(내용 없음)'}`
+            ).join('\n\n')
+            : '(검색 결과 없음)';
+
+        const searchPrompt = `다음 질문에 대해 웹 검색 결과를 참고하여 정확하게 답변해주세요.
+
+## 질문
+${query}
+
+## 웹 검색 결과 (${new Date().toLocaleDateString('ko-KR')} 기준)
+${sourcesContext}
+
+## 답변 지침
+1. 검색 결과를 기반으로 최신 정보를 제공하세요
+2. 출처가 있을 경우 [출처 N] 형식으로 인용하세요
+3. 정보가 불확실한 경우 명시하세요
+4. 한국어로 답변하세요
+
+## 답변:`;
+
+        console.log('[WebSearch] LLM에 사실 검증 요청...');
+        const result = await client.generate(searchPrompt, {
+            temperature: 0.3,
+            num_ctx: 8192
+        });
+        const response = result.response;
+
+         console.log('[WebSearch] 응답 완료');
+         res.json(success({
+             answer: response,
+             sources: searchResults.map((r: any) => ({
+                 title: r.title,
+                 url: r.url,
+                 snippet: r.snippet
+             })),
+             searchDate: new Date().toISOString()
+         }));
+     } catch (error) {
+         console.error('[WebSearch] 오류:', error);
+         res.status(500).json(internalError(String(error)));
+    }
+});
+
+export default router;

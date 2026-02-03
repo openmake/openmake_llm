@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="ko" data-theme="dark">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>설정 - OpenMake.Ai</title>
+    <link rel="icon" type="image/png" href="/logo.png">
+
+    <!-- 통합 디자인 시스템 -->
+    <link rel="preconnect" href="https://cdn.jsdelivr.net">
+    <link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css"
+        rel="stylesheet">
+    <link rel="stylesheet" href="/css/design-tokens.css">
+    <link rel="stylesheet" href="/css/components.css">
+    <link rel="stylesheet" href="/css/layout.css">
+
+    <style>
+        .setting-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: var(--space-4) 0;
+            border-bottom: 1px solid var(--border-light);
+        }
+
+        .setting-row:last-child {
+            border-bottom: none;
+        }
+
+        .setting-info h4 {
+            font-size: var(--font-size-base);
+            margin-bottom: var(--space-1);
+        }
+
+        .setting-info p {
+            font-size: var(--font-size-sm);
+            color: var(--text-muted);
+        }
+
+        .toggle {
+            position: relative;
+            display: inline-block;
+            width: 48px;
+            height: 26px;
+        }
+
+        .toggle input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: var(--border-default);
+            border-radius: 26px;
+            transition: 0.4s;
+        }
+
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 20px;
+            width: 20px;
+            left: 3px;
+            bottom: 3px;
+            background: white;
+            border-radius: 50%;
+            transition: 0.4s;
+        }
+
+        .toggle input:checked+.toggle-slider {
+            background: var(--success);
+        }
+
+        .toggle input:checked+.toggle-slider:before {
+            transform: translateX(22px);
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: var(--space-4);
+        }
+
+        .info-item {
+            background: var(--bg-secondary);
+            padding: var(--space-4);
+            border-radius: var(--radius-md);
+        }
+
+        .info-label {
+            font-size: var(--font-size-xs);
+            color: var(--text-muted);
+            text-transform: uppercase;
+            margin-bottom: var(--space-1);
+        }
+
+        .info-value {
+            font-size: var(--font-size-base);
+            font-weight: var(--font-weight-medium);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="app-layout">
+        <button class="mobile-menu-btn" onclick="toggleMobileSidebar()"><span></span><span></span><span></span></button>
+        <div class="sidebar-overlay" onclick="toggleMobileSidebar()"></div>
+        <nav class="sidebar" id="sidebar"></nav>
+
+        <div class="main-content">
+            <div class="page-content">
+                <div class="container container-md">
+                    <header class="page-header">
+                        <div>
+                            <h1 class="page-title page-title-gradient">⚙️ 설정</h1>
+                            <p class="page-subtitle">앱 환경 및 AI 모델 설정</p>
+                        </div>
+                    </header>
+
+                    <div class="card" style="margin-bottom: var(--space-6);">
+                        <div class="card-header"><span class="card-title">🎨 외관</span></div>
+                        <div class="card-body">
+                            <div class="setting-row">
+                                <div class="setting-info">
+                                    <h4>테마</h4>
+                                    <p>앱의 색상 테마를 선택합니다</p>
+                                </div>
+                                <select id="themeSelect" class="form-select" style="width: auto; min-width: 180px;"
+                                    onchange="setTheme(this.value)">
+                                    <option value="dark">다크 모드</option>
+                                    <option value="light">라이트 모드</option>
+                                    <option value="system">시스템 설정</option>
+                                </select>
+                            </div>
+                            <div class="setting-row">
+                                <div class="setting-info">
+                                    <h4>언어</h4>
+                                    <p>인터페이스 언어를 선택합니다</p>
+                                </div>
+                                <select id="langSelect" class="form-select" style="width: auto; min-width: 180px;">
+                                    <option value="ko">한국어</option>
+                                    <option value="en">English</option>
+                                    <option value="ja">日本語</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card" style="margin-bottom: var(--space-6);">
+                        <div class="card-header"><span class="card-title">🤖 AI 모델</span></div>
+                        <div class="card-body">
+                            <div class="setting-row">
+                                <div class="setting-info">
+                                    <h4>기본 모델</h4>
+                                    <p>채팅에 사용할 기본 LLM 모델</p>
+                                </div>
+                                <select id="modelSelect" class="form-select" style="width: auto; min-width: 200px;">
+                                    <option value="default">기본 모델</option>
+                                    <option value="fast">빠른 응답 모델</option>
+                                    <option value="advanced">고급 모델</option>
+                                </select>
+                            </div>
+                            <div class="setting-row">
+                                <div class="setting-info">
+                                    <h4>Sequential Thinking</h4>
+                                    <p>Chain-of-Thought 추론 활성화</p>
+                                </div>
+                                <label class="toggle"><input type="checkbox" checked id="thinkingToggle"><span
+                                        class="toggle-slider"></span></label>
+                            </div>
+                            <div class="setting-row">
+                                <div class="setting-info">
+                                    <h4>웹 검색</h4>
+                                    <p>실시간 웹 검색 기능 활성화</p>
+                                </div>
+                                <label class="toggle"><input type="checkbox" checked id="webSearchToggle"><span
+                                        class="toggle-slider"></span></label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card" style="margin-bottom: var(--space-6);">
+                        <div class="card-header"><span class="card-title">💾 데이터</span></div>
+                        <div class="card-body">
+                            <div class="setting-row">
+                                <div class="setting-info">
+                                    <h4>대화 기록 저장</h4>
+                                    <p>대화 내용을 서버에 저장합니다</p>
+                                </div>
+                                <label class="toggle"><input type="checkbox" checked id="saveHistoryToggle"><span
+                                        class="toggle-slider"></span></label>
+                            </div>
+                            <div style="display: flex; gap: var(--space-3); margin-top: var(--space-4);">
+                                <button class="btn btn-secondary" onclick="exportData()">📥 데이터 내보내기</button>
+                                <button class="btn btn-danger" onclick="clearHistory()">🗑️ 기록 삭제</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card" style="margin-bottom: var(--space-6);">
+                        <div class="card-header"><span class="card-title">ℹ️ 시스템 정보</span></div>
+                        <div class="card-body">
+                            <div class="info-grid">
+                                <div class="info-item">
+                                    <div class="info-label">버전</div>
+                                    <div class="info-value">v1.5.0</div>
+                                </div>
+                                <div class="info-item">
+                                    <div class="info-label">서버 상태</div>
+                                    <div class="info-value" style="color: var(--success);">● 온라인</div>
+                                </div>
+                                <div class="info-item">
+                                    <div class="info-label">활성 노드</div>
+                                    <div class="info-value" id="activeNodes">-</div>
+                                </div>
+                                <div class="info-item">
+                                    <div class="info-label">마지막 업데이트</div>
+                                    <div class="info-value">2026-01-01</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="display: flex; gap: var(--space-3);">
+                        <button class="btn btn-primary" onclick="saveSettings()">💾 설정 저장</button>
+                        <button class="btn btn-secondary" onclick="resetSettings()">↩️ 초기화</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/js/components/sidebar.js"></script>
+    <script>
+        // 관리자 확인 헬퍼
+        function isAdmin() {
+            const savedUser = localStorage.getItem('user');
+            if (!savedUser) return false;
+            try {
+                const user = JSON.parse(savedUser);
+                return user.role === 'admin' || user.role === 'administrator';
+            } catch (e) { return false; }
+        }
+
+        async function loadModels() {
+            const modelSelect = document.getElementById('modelSelect');
+
+            // 🔒 관리자가 아니면 모델 이름 숨김
+            if (!isAdmin()) {
+                modelSelect.innerHTML = '<option value="default">AI Assistant (Premium)</option>';
+                modelSelect.disabled = true;
+                modelSelect.style.cursor = 'default';
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/models');
+                if (response.ok) {
+                    const rawData = await response.json();
+                    const data = rawData.data || rawData;
+                    if (data.models && data.models.length > 0) {
+                        const savedModel = localStorage.getItem('selectedModel');
+                        const defaultModel = data.defaultModel || 'gemini-3-flash-preview:cloud';
+
+                        modelSelect.innerHTML = data.models.map(model => {
+                            const isSelected = savedModel ? model.name === savedModel : model.name === defaultModel;
+                            return `<option value="${model.name}" ${isSelected ? 'selected' : ''}>${model.name} (${model.size ? (model.size / 1024 / 1024 / 1024).toFixed(1) + 'GB' : 'Unknown'})</option>`;
+                        }).join('');
+                    }
+                }
+            } catch (e) {
+                console.error('모델 로드 실패:', e);
+                const savedModel = localStorage.getItem('selectedModel');
+                if (savedModel) modelSelect.innerHTML = `<option value="${savedModel}">${savedModel}</option>`;
+            }
+        }
+
+        async function initSettings() { await loadModels(); loadSettings(); }
+
+        function setTheme(theme) { document.documentElement.setAttribute('data-theme', theme); localStorage.setItem('theme', theme); }
+
+        function saveSettings() {
+            setTheme(document.getElementById('themeSelect').value);
+            localStorage.setItem('selectedModel', document.getElementById('modelSelect').value);
+            const mcpSettings = JSON.parse(localStorage.getItem('mcpSettings') || '{}');
+            mcpSettings.thinking = document.getElementById('thinkingToggle').checked;
+            mcpSettings.webSearch = document.getElementById('webSearchToggle').checked;
+            localStorage.setItem('mcpSettings', JSON.stringify(mcpSettings));
+            localStorage.setItem('generalSettings', JSON.stringify({ lang: document.getElementById('langSelect').value, saveHistory: document.getElementById('saveHistoryToggle').checked }));
+            alert('설정이 저장되었습니다.');
+        }
+
+        function loadSettings() {
+            const theme = localStorage.getItem('theme') || 'dark';
+            document.getElementById('themeSelect').value = theme;
+            setTheme(theme);
+            const selectedModel = localStorage.getItem('selectedModel');
+            if (selectedModel && [...document.getElementById('modelSelect').options].some(o => o.value === selectedModel)) document.getElementById('modelSelect').value = selectedModel;
+            const savedMcp = localStorage.getItem('mcpSettings');
+            if (savedMcp) { const mcp = JSON.parse(savedMcp); document.getElementById('thinkingToggle').checked = mcp.thinking !== false; document.getElementById('webSearchToggle').checked = mcp.webSearch === true; }
+            const savedGeneral = localStorage.getItem('generalSettings');
+            if (savedGeneral) { const general = JSON.parse(savedGeneral); document.getElementById('langSelect').value = general.lang || 'ko'; document.getElementById('saveHistoryToggle').checked = general.saveHistory !== false; }
+        }
+
+        function resetSettings() { if (confirm('모든 설정을 초기화하시겠습니까?')) { localStorage.removeItem('theme'); localStorage.removeItem('selectedModel'); localStorage.removeItem('mcpSettings'); localStorage.removeItem('generalSettings'); location.reload(); } }
+        function exportData() { alert('데이터 내보내기 기능은 준비 중입니다.'); }
+        function clearHistory() { if (confirm('모든 대화 기록을 삭제하시겠습니까?')) alert('대화 기록이 삭제되었습니다.'); }
+
+        initSettings();
+    </script>
+</body>
+
+</html>

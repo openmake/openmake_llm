@@ -1,0 +1,99 @@
+{
+  "daily": {
+    "2026-01-08": {
+      "date": "2026-01-08",
+      "requests": 3,
+      "tokens": 3518,
+      "errors": 0,
+      "avgResponseTime": 13118,
+      "models": {
+        "gemini-3-flash-preview:cloud": 2,
+        "cogito-2.1:671b": 1
+      }
+    },
+    "2026-01-09": {
+      "date": "2026-01-09",
+      "requests": 8,
+      "tokens": 12993,
+      "errors": 0,
+      "avgResponseTime": 16906,
+      "models": {
+        "cogito-2.1:671b": 3,
+        "gemini-3-flash-preview:cloud": 5
+      }
+    },
+    "2026-01-14": {
+      "date": "2026-01-14",
+      "requests": 25,
+      "tokens": 54370,
+      "errors": 0,
+      "avgResponseTime": 18563,
+      "models": {
+        "gemini-3-flash-preview:cloud": 25
+      }
+    },
+    "2026-01-15": {
+      "date": "2026-01-15",
+      "requests": 24,
+      "tokens": 43341,
+      "errors": 0,
+      "avgResponseTime": 19337,
+      "models": {
+        "gemini-3-flash-preview:cloud": 24
+      }
+    },
+    "2026-01-16": {
+      "date": "2026-01-16",
+      "requests": 17,
+      "tokens": 29727,
+      "errors": 0,
+      "avgResponseTime": 15266,
+      "models": {
+        "gemini-3-flash-preview:cloud": 17
+      }
+    }
+  },
+  "lastUpdated": "2026-01-16T22:53:27.630Z",
+  "perKey": {
+    "0918b987": {
+      "keyId": "0918b987",
+      "totalRequests": 10,
+      "weeklyRequests": 5,
+      "hourlyRequests": 1,
+      "lastReset": "2026-01-16",
+      "lastHourReset": 7
+    },
+    "87c261cf": {
+      "keyId": "87c261cf",
+      "totalRequests": 42,
+      "weeklyRequests": 31,
+      "hourlyRequests": 2,
+      "lastReset": "2026-01-15",
+      "lastHourReset": 15
+    },
+    "e90d9bcc": {
+      "keyId": "e90d9bcc",
+      "totalRequests": 1,
+      "weeklyRequests": 1,
+      "hourlyRequests": 1,
+      "lastReset": "2026-01-09",
+      "lastHourReset": 7
+    },
+    "bef62434": {
+      "keyId": "bef62434",
+      "totalRequests": 20,
+      "weeklyRequests": 20,
+      "hourlyRequests": 1,
+      "lastReset": "2026-01-14",
+      "lastHourReset": 23
+    },
+    "ac691dae": {
+      "keyId": "ac691dae",
+      "totalRequests": 3,
+      "weeklyRequests": 3,
+      "hourlyRequests": 2,
+      "lastReset": "2026-01-14",
+      "lastHourReset": 5
+    }
+  }
+}

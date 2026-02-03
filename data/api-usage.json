@@ -1,0 +1,161 @@
+{
+  "daily": {
+    "2026-01-08": {
+      "date": "2026-01-08",
+      "requests": 20,
+      "tokens": 42878,
+      "errors": 0,
+      "avgResponseTime": 16232,
+      "models": {
+        "gemini-3-flash-preview:cloud": 20
+      }
+    },
+    "2026-01-09": {
+      "date": "2026-01-09",
+      "requests": 10,
+      "tokens": 13490,
+      "errors": 0,
+      "avgResponseTime": 16479,
+      "models": {
+        "gemini-3-flash-preview": 3,
+        "cogito-2.1:671b": 1,
+        "gemini-3-flash-preview:cloud": 6
+      }
+    },
+    "2026-01-17": {
+      "date": "2026-01-17",
+      "requests": 1,
+      "tokens": 3001,
+      "errors": 0,
+      "avgResponseTime": 22366,
+      "models": {
+        "gemini-3-flash-preview:cloud": 1
+      }
+    },
+    "2026-01-19": {
+      "date": "2026-01-19",
+      "requests": 25,
+      "tokens": 59436,
+      "errors": 0,
+      "avgResponseTime": 21609,
+      "models": {
+        "gemini-3-flash-preview:cloud": 25
+      }
+    },
+    "2026-01-20": {
+      "date": "2026-01-20",
+      "requests": 8,
+      "tokens": 13106,
+      "errors": 0,
+      "avgResponseTime": 14856,
+      "models": {
+        "gemini-3-flash-preview:cloud": 8
+      }
+    },
+    "2026-01-21": {
+      "date": "2026-01-21",
+      "requests": 8,
+      "tokens": 11742,
+      "errors": 0,
+      "avgResponseTime": 20285,
+      "models": {
+        "gemini-3-flash-preview:cloud": 8
+      }
+    },
+    "2026-01-24": {
+      "date": "2026-01-24",
+      "requests": 2,
+      "tokens": 2674,
+      "errors": 0,
+      "avgResponseTime": 15377,
+      "models": {
+        "gemini-3-flash-preview:cloud": 2
+      }
+    },
+    "2026-01-25": {
+      "date": "2026-01-25",
+      "requests": 2,
+      "tokens": 4942,
+      "errors": 0,
+      "avgResponseTime": 23864,
+      "models": {
+        "gemini-3-flash-preview:cloud": 2
+      }
+    },
+    "2026-01-27": {
+      "date": "2026-01-27",
+      "requests": 8,
+      "tokens": 9514,
+      "errors": 0,
+      "avgResponseTime": 15479,
+      "models": {
+        "gemini-3-flash-preview:cloud": 8
+      }
+    },
+    "2026-01-28": {
+      "date": "2026-01-28",
+      "requests": 2,
+      "tokens": 1718,
+      "errors": 0,
+      "avgResponseTime": 13361,
+      "models": {
+        "gemini-3-flash-preview:cloud": 2
+      }
+    },
+    "2026-01-29": {
+      "date": "2026-01-29",
+      "requests": 1,
+      "tokens": 1367,
+      "errors": 0,
+      "avgResponseTime": 14243,
+      "models": {
+        "gemini-3-flash-preview:cloud": 1
+      }
+    },
+    "2026-01-31": {
+      "date": "2026-01-31",
+      "requests": 2,
+      "tokens": 1433,
+      "errors": 0,
+      "avgResponseTime": 10289,
+      "models": {
+        "gemini-3-flash-preview:cloud": 2
+      }
+    }
+  },
+  "lastUpdated": "2026-01-31T04:30:51.432Z",
+  "perKey": {
+    "0918b987": {
+      "keyId": "0918b987",
+      "totalRequests": 78,
+      "weeklyRequests": 2,
+      "hourlyRequests": 2,
+      "lastReset": "2026-01-31",
+      "lastHourReset": 13
+    },
+    "bef62434": {
+      "keyId": "bef62434",
+      "totalRequests": 2,
+      "weeklyRequests": 2,
+      "hourlyRequests": 1,
+      "lastReset": "2026-01-09",
+      "lastHourReset": 6
+    },
+    "87c261cf": {
+      "keyId": "87c261cf",
+      "totalRequests": 7,
+      "weeklyRequests": 6,
+      "hourlyRequests": 6,
+      "lastReset": "2026-01-27",
+      "lastHourReset": 23
+    },
+    "ac691dae": {
+      "keyId": "ac691dae",
+      "totalRequests": 2,
+      "weeklyRequests": 2,
+      "hourlyRequests": 2,
+      "lastReset": "2026-01-09",
+      "lastHourReset": 6
+    }
+  }
+}

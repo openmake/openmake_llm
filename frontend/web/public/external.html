@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="ko" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>외부 서비스 연동 - OpenMake.Ai</title>
+    <link rel="icon" type="image/png" href="/logo.png">
+    <link rel="preconnect" href="https://cdn.jsdelivr.net">
+    <link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="/css/design-tokens.css">
+    <link rel="stylesheet" href="/css/components.css">
+    <link rel="stylesheet" href="/css/layout.css">
+    <style>
+        .service-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:var(--space-4); }
+        .service-card { background:var(--bg-card); border:1px solid var(--border-light); border-radius:var(--radius-lg); padding:var(--space-6); text-align:center; transition:border-color .2s; position:relative; }
+        .service-card:hover { border-color:var(--accent-primary); }
+        .service-icon { font-size:3rem; margin-bottom:var(--space-3); }
+        .service-card h3 { margin:0 0 var(--space-2); color:var(--text-primary); }
+        .service-card .account { color:var(--text-muted); font-size:var(--font-size-sm); margin-bottom:var(--space-4); }
+        .status-badge { position:absolute; top:var(--space-3); right:var(--space-3); padding:2px 10px; border-radius:var(--radius-md); font-size:11px; font-weight:var(--font-weight-semibold); }
+        .status-on { background:var(--success); color:#fff; }
+        .status-off { background:var(--bg-tertiary); color:var(--text-muted); }
+        .service-actions { display:flex; gap:var(--space-2); justify-content:center; flex-wrap:wrap; }
+        .service-actions button { padding:var(--space-2) var(--space-3); border:none; border-radius:var(--radius-md); cursor:pointer; font-size:var(--font-size-sm); font-weight:var(--font-weight-semibold); }
+        .btn-connect { background:var(--accent-primary); color:#fff; }
+        .btn-disconnect { background:var(--danger); color:#fff; }
+        .btn-files { background:var(--bg-tertiary); color:var(--text-primary); border:1px solid var(--border-light) !important; }
+
+        .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:1000; justify-content:center; align-items:center; }
+        .modal-overlay.open { display:flex; }
+        .modal { background:var(--bg-card); border:1px solid var(--border-light); border-radius:var(--radius-lg); width:90%; max-width:550px; max-height:90vh; overflow-y:auto; padding:var(--space-6); }
+        .modal h2 { margin:0 0 var(--space-4); color:var(--text-primary); }
+        .form-group { margin-bottom:var(--space-4); }
+        .form-group label { display:block; margin-bottom:var(--space-2); color:var(--text-secondary); font-size:var(--font-size-sm); font-weight:var(--font-weight-semibold); }
+        .form-group input { width:100%; padding:var(--space-3); background:var(--bg-secondary); border:1px solid var(--border-light); border-radius:var(--radius-md); color:var(--text-primary); font-size:14px; box-sizing:border-box; }
+        .modal-actions { display:flex; gap:var(--space-3); justify-content:flex-end; margin-top:var(--space-5); }
+        .modal-actions button { padding:var(--space-2) var(--space-4); border:none; border-radius:var(--radius-md); cursor:pointer; font-weight:var(--font-weight-semibold); }
+        .btn-primary { background:var(--accent-primary); color:#fff; }
+        .btn-secondary { background:var(--bg-tertiary); color:var(--text-primary); border:1px solid var(--border-light) !important; }
+
+        .file-list { max-height:400px; overflow-y:auto; }
+        .file-item { display:flex; justify-content:space-between; align-items:center; padding:var(--space-3); border-bottom:1px solid var(--border-light); }
+        .file-item:last-child { border-bottom:none; }
+        .file-name { color:var(--text-primary); font-size:var(--font-size-sm); }
+        .file-meta { color:var(--text-muted); font-size:12px; }
+        .empty-state { text-align:center; padding:var(--space-6); color:var(--text-muted); }
+
+        .toast { position:fixed; bottom:20px; right:20px; padding:var(--space-3) var(--space-5); border-radius:var(--radius-md); color:#fff; z-index:2000; opacity:0; transition:opacity .3s; }
+        .toast.show { opacity:1; } .toast.success { background:var(--success); } .toast.error { background:var(--danger); }
+        .loading { text-align:center; padding:var(--space-6); color:var(--text-muted); }
+    </style>
+</head>
+<body>
+    <div class="layout">
+        <aside class="sidebar" id="sidebar"></aside>
+        <div class="sidebar-overlay" onclick="toggleSidebar()"></div>
+        <main class="main-content">
+            <header class="page-header">
+                <button class="mobile-menu-btn" onclick="toggleMobileSidebar(event)">&#9776;</button>
+                <h1>외부 서비스 연동</h1>
+            </header>
+            <div class="content-area">
+                <div id="serviceGrid" class="service-grid"><div class="loading">불러오는 중...</div></div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Connect Modal -->
+    <div class="modal-overlay" id="connectModal">
+        <div class="modal">
+            <h2 id="connectTitle">서비스 연결</h2>
+            <div class="form-group"><label>액세스 토큰 <span style="color:var(--danger)">*</span></label><input type="text" id="accessToken" placeholder="액세스 토큰을 입력하세요"></div>
+            <div class="form-group"><label>리프레시 토큰</label><input type="text" id="refreshToken" placeholder="(선택사항)"></div>
+            <div class="form-group"><label>계정 이메일</label><input type="text" id="accountEmail" placeholder="(선택사항)"></div>
+            <div class="form-group"><label>계정 이름</label><input type="text" id="accountName" placeholder="(선택사항)"></div>
+            <div class="modal-actions">
+                <button class="btn-secondary" onclick="closeConnect()">취소</button>
+                <button class="btn-primary" onclick="submitConnect()">연결</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Files Modal -->
+    <div class="modal-overlay" id="filesModal">
+        <div class="modal">
+            <h2 id="filesTitle">캐시된 파일</h2>
+            <div id="fileList" class="file-list"><div class="loading">불러오는 중...</div></div>
+            <div class="modal-actions"><button class="btn-secondary" onclick="closeFiles()">닫기</button></div>
+        </div>
+    </div>
+
+    <div id="toast" class="toast"></div>
+
+    <script src="/js/components/sidebar.js"></script>
+    <script>
+        const SERVICES = [
+            { type:'google_drive', label:'Google Drive', icon:'📁' },
+            { type:'notion', label:'Notion', icon:'📓' },
+            { type:'github', label:'GitHub', icon:'🐙' },
+            { type:'slack', label:'Slack', icon:'💬' },
+            { type:'dropbox', label:'Dropbox', icon:'📦' }
+        ];
+        let connections = [];
+        let connectingType = null;
+
+        function authFetch(url, options = {}) {
+            const token = localStorage.getItem('authToken');
+            const headers = { 'Content-Type':'application/json', ...(token ? {'Authorization':'Bearer '+token} : {}), ...options.headers };
+            return fetch(url, { ...options, headers }).then(r => r.json());
+        }
+        function showToast(msg, type = 'success') {
+            const t = document.getElementById('toast');
+            t.textContent = msg; t.className = 'toast ' + type + ' show';
+            setTimeout(() => t.classList.remove('show'), 3000);
+        }
+        function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+
+        function getConnection(serviceType) {
+            return connections.find(c => c.serviceType === serviceType || c.service_type === serviceType);
+        }
+
+        async function loadConnections() {
+            try {
+                const res = await authFetch('/api/external');
+                connections = res.data || res || [];
+                renderServices();
+            } catch (e) { showToast('연결 정보 로드 실패', 'error'); }
+        }
+
+        function renderServices() {
+            document.getElementById('serviceGrid').innerHTML = SERVICES.map(s => {
+                const conn = getConnection(s.type);
+                const isConnected = !!conn;
+                return `
+                <div class="service-card">
+                    <span class="status-badge ${isConnected ? 'status-on' : 'status-off'}">${isConnected ? '연결됨' : '연결 안됨'}</span>
+                    <div class="service-icon">${s.icon}</div>
+                    <h3>${s.label}</h3>
+                    <div class="account">${isConnected ? esc(conn.accountEmail || conn.account_email || conn.accountName || conn.account_name || '연결됨') : '연결되지 않음'}</div>
+                    <div class="service-actions">
+                        ${isConnected
+                            ? `<button class="btn-files" onclick="viewFiles('${conn.id || conn.connectionId}','${s.label}')">파일 보기</button>
+                               <button class="btn-disconnect" onclick="disconnect('${s.type}')">연결 해제</button>`
+                            : `<button class="btn-connect" onclick="openConnect('${s.type}','${s.label}')">연결하기</button>`
+                        }
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        function openConnect(type, label) {
+            connectingType = type;
+            document.getElementById('connectTitle').textContent = label + ' 연결';
+            document.getElementById('accessToken').value = '';
+            document.getElementById('refreshToken').value = '';
+            document.getElementById('accountEmail').value = '';
+            document.getElementById('accountName').value = '';
+            document.getElementById('connectModal').classList.add('open');
+        }
+
+        function closeConnect() { document.getElementById('connectModal').classList.remove('open'); }
+
+        async function submitConnect() {
+            const accessToken = document.getElementById('accessToken').value.trim();
+            if (!accessToken) { showToast('액세스 토큰을 입력하세요', 'error'); return; }
+            const body = {
+                serviceType: connectingType,
+                accessToken,
+                refreshToken: document.getElementById('refreshToken').value.trim() || undefined,
+                accountEmail: document.getElementById('accountEmail').value.trim() || undefined,
+                accountName: document.getElementById('accountName').value.trim() || undefined
+            };
+            try {
+                await authFetch('/api/external', { method:'POST', body:JSON.stringify(body) });
+                showToast('서비스가 연결되었습니다');
+                closeConnect(); loadConnections();
+            } catch (e) { showToast('연결 실패', 'error'); }
+        }
+
+        async function disconnect(serviceType) {
+            if (!confirm('이 서비스 연결을 해제하시겠습니까?')) return;
+            try {
+                await authFetch('/api/external/' + serviceType, { method:'DELETE' });
+                showToast('연결이 해제되었습니다'); loadConnections();
+            } catch (e) { showToast('해제 실패', 'error'); }
+        }
+
+        async function viewFiles(connectionId, label) {
+            document.getElementById('filesTitle').textContent = label + ' - 캐시된 파일';
+            document.getElementById('fileList').innerHTML = '<div class="loading">불러오는 중...</div>';
+            document.getElementById('filesModal').classList.add('open');
+            try {
+                const res = await authFetch('/api/external/' + connectionId + '/files');
+                const files = res.data || res || [];
+                if (!files.length) {
+                    document.getElementById('fileList').innerHTML = '<div class="empty-state">파일이 없습니다</div>';
+                    return;
+                }
+                document.getElementById('fileList').innerHTML = files.map(f => `
+                    <div class="file-item">
+                        <div>
+                            <div class="file-name">${esc(f.name || f.fileName || f.file_name || '-')}</div>
+                            <div class="file-meta">${esc(f.mimeType || f.mime_type || f.type || '')} ${f.size ? formatSize(f.size) : ''}</div>
+                        </div>
+                        <div class="file-meta">${f.modified_at || f.modifiedAt ? new Date(f.modified_at || f.modifiedAt).toLocaleDateString('ko') : ''}</div>
+                    </div>`).join('');
+            } catch (e) { document.getElementById('fileList').innerHTML = '<div class="empty-state">로드 실패</div>'; }
+        }
+
+        function closeFiles() { document.getElementById('filesModal').classList.remove('open'); }
+
+        function formatSize(bytes) {
+            if (!bytes) return '';
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+            return (bytes / 1048576).toFixed(1) + ' MB';
+        }
+
+        loadConnections();
+    </script>
+</body>
+</html>

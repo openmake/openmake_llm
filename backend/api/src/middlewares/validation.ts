@@ -1,0 +1,58 @@
+/**
+ * Zod Validation Middleware
+ */
+import { Request, Response, NextFunction } from 'express';
+import { ZodSchema, ZodError } from 'zod';
+
+/**
+ * Validation middleware factory
+ * Returns 400 with formatted error messages on validation failure
+ */
+export function validate<T>(schema: ZodSchema<T>) {
+    return (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const validated = schema.parse(req.body);
+            req.body = validated; // Replace with validated/transformed data
+            next();
+        } catch (error) {
+            if (error instanceof ZodError) {
+                const messages = error.issues.map((e: any) => 
+                    e.path.length > 0 ? `${e.path.join('.')}: ${e.message}` : e.message
+                );
+                return res.status(400).json({
+                    success: false,
+                    error: 'Validation failed',
+                    details: messages,
+                    timestamp: new Date().toISOString()
+                });
+            }
+            next(error);
+        }
+    };
+}
+
+/**
+ * Validate query parameters
+ */
+export function validateQuery<T>(schema: ZodSchema<T>) {
+    return (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const validated = schema.parse(req.query);
+            req.query = validated as any;
+            next();
+        } catch (error) {
+            if (error instanceof ZodError) {
+                const messages = error.issues.map((e: any) => 
+                    e.path.length > 0 ? `${e.path.join('.')}: ${e.message}` : e.message
+                );
+                return res.status(400).json({
+                    success: false,
+                    error: 'Query validation failed',
+                    details: messages,
+                    timestamp: new Date().toISOString()
+                });
+            }
+            next(error);
+        }
+    };
+}

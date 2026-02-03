@@ -1,0 +1,192 @@
+/**
+ * ============================================
+ * OpenMake.Ai - Icon System
+ * Iconify 기반 SVG 아이콘 시스템
+ * ============================================
+ */
+
+/* ==========================================
+   Icon Base Styles
+   ========================================== */
+.icon,
+iconify-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    vertical-align: middle;
+    line-height: 1;
+    font-size: 20px;
+    width: 20px;
+    height: 20px;
+}
+
+/* Action Button Icons (채팅 입력창 하단 버튼) */
+.action-btn iconify-icon {
+    font-size: 20px;
+    width: 20px;
+    height: 20px;
+}
+
+/* ==========================================
+   Icon Sizes
+   ========================================== */
+.icon-xs,
+iconify-icon.icon-xs {
+    font-size: 14px;
+    width: 14px;
+    height: 14px;
+}
+
+.icon-sm,
+iconify-icon.icon-sm {
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
+}
+
+.icon-md,
+iconify-icon.icon-md {
+    font-size: 20px;
+    width: 20px;
+    height: 20px;
+}
+
+.icon-lg,
+iconify-icon.icon-lg {
+    font-size: 24px;
+    width: 24px;
+    height: 24px;
+}
+
+.icon-xl,
+iconify-icon.icon-xl {
+    font-size: 32px;
+    width: 32px;
+    height: 32px;
+}
+
+.icon-2xl,
+iconify-icon.icon-2xl {
+    font-size: 48px;
+    width: 48px;
+    height: 48px;
+}
+
+/* ==========================================
+   Icon Colors
+   ========================================== */
+.icon-primary {
+    color: var(--accent-primary);
+}
+
+.icon-secondary {
+    color: var(--text-secondary);
+}
+
+.icon-muted {
+    color: var(--text-muted);
+}
+
+.icon-success {
+    color: var(--success);
+}
+
+.icon-warning {
+    color: var(--warning);
+}
+
+.icon-danger {
+    color: var(--danger);
+}
+
+.icon-info {
+    color: var(--info);
+}
+
+/* ==========================================
+   Icon with Gradient
+   ========================================== */
+.icon-gradient {
+    background: var(--gradient-primary);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+/* ==========================================
+   Icon Button (Wrapper for clickable icons)
+   ========================================== */
+.icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-2);
+    border: none;
+    background: transparent;
+    border-radius: var(--radius-md);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.icon-btn:hover {
+    background: var(--glass-bg-hover);
+    color: var(--text-primary);
+}
+
+.icon-btn:active {
+    transform: scale(0.95);
+}
+
+.icon-btn.active,
+.icon-btn:focus-visible {
+    color: var(--accent-primary);
+    background: var(--accent-primary-light);
+}
+
+/* Icon Button with Glow */
+.icon-btn-glow:hover {
+    box-shadow: var(--glow-primary);
+}
+
+/* ==========================================
+   Nav Icon (For sidebar navigation)
+   ========================================== */
+.nav-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    font-size: 18px;
+    flex-shrink: 0;
+    transition: transform var(--transition-fast);
+}
+
+.sidebar-nav-item:hover .nav-icon {
+    transform: scale(1.1);
+}
+
+.sidebar-nav-item.active .nav-icon {
+    color: inherit;
+}
+
+/* ==========================================
+   Icon String Mappings
+   (Legacy emoji to Iconify conversion reference)
+   
+   💬 → lucide:message-circle
+   🤖 → lucide:bot
+   🖥️ → lucide:monitor
+   🔧 → lucide:wrench
+   📜 → lucide:scroll-text
+   📖 → lucide:book-open
+   👥 → lucide:users
+   📊 → lucide:bar-chart-3
+   ⚙️ → lucide:settings
+   🧠 → lucide:brain
+   🌐 → lucide:globe
+   📎 → lucide:paperclip
+   🎯 → lucide:target
+   ➕ → lucide:plus
+   ========================================== */

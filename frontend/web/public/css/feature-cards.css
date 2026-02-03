@@ -1,0 +1,301 @@
+/* ========================================
+   Feature Cards - Welcome Screen (업로드 디자인 기반)
+   ======================================== */
+.welcome-avatar {
+    margin-bottom: 24px;
+}
+
+.welcome-avatar .avatar-img {
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    object-fit: cover;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+}
+
+.feature-cards {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+    max-width: 500px;
+    margin-top: 24px;
+}
+
+.feature-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    padding: 20px 16px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.feature-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+    border-color: var(--accent-primary);
+}
+
+.feature-icon {
+    width: 64px;
+    height: 64px;
+    margin: 0 auto 12px;
+}
+
+.feature-icon img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.feature-title {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+}
+
+.feature-desc {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin-bottom: 12px;
+}
+
+.feature-btn {
+    background: #FFFFFF;
+    border: 1px solid var(--border-medium);
+    border-radius: var(--radius-full);
+    padding: 8px 16px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.feature-btn:hover {
+    background: var(--accent-primary);
+    color: white;
+    border-color: var(--accent-primary);
+}
+
+/* 모바일 반응형 */
+@media (max-width: 480px) {
+    .feature-cards {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
+    }
+
+    .feature-card {
+        padding: 16px 12px;
+    }
+
+    .feature-icon {
+        width: 48px;
+        height: 48px;
+    }
+
+    .feature-title {
+        font-size: 0.85rem;
+    }
+
+    .feature-desc {
+        font-size: 0.75rem;
+    }
+}
+
+/* ========================================
+   Light (Cream/Beige) Theme - 업로드 디자인 기반
+   ======================================== */
+[data-theme="light"],
+.theme-light {
+    /* 크림/베이지 배경 */
+    --bg-app: #F5F0E8;
+    --bg-main: #F5F0E8;
+    --bg-sidebar: #EDE8DE;
+    --bg-secondary: #FFFFFF;
+    --bg-card: #FFFFFF;
+    --bg-tertiary: #F0EBE3;
+    --bg-hover: rgba(0, 0, 0, 0.04);
+    --bg-active: rgba(0, 0, 0, 0.08);
+
+    /* 텍스트 */
+    --text-primary: #333333;
+    --text-secondary: #666666;
+    --text-muted: #999999;
+
+    /* 보더 */
+    --border-light: rgba(0, 0, 0, 0.08);
+    --border-medium: rgba(0, 0, 0, 0.12);
+
+    /* 그림자 */
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1);
+
+    /* 액센트 */
+    --accent-primary: #4CAF50;
+    --accent-primary-hover: #45A049;
+    --accent-primary-light: rgba(76, 175, 80, 0.15);
+}
+
+/* 라이트 테마 Welcome Screen */
+[data-theme="light"] .welcome-screen,
+.theme-light .welcome-screen {
+    background: linear-gradient(180deg, transparent 0%, rgba(245, 240, 232, 0.5) 100%);
+}
+
+[data-theme="light"] .welcome-title,
+.theme-light .welcome-title {
+    background: linear-gradient(135deg, #333333 0%, #666666 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+/* 라이트 테마 사이드바 */
+[data-theme="light"] .sidebar,
+.theme-light .sidebar {
+    background: #EDE8DE;
+    border-right: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+/* 라이트 테마 채팅 입력 */
+[data-theme="light"] .chat-input-container,
+.theme-light .chat-input-container {
+    background: #FFFFFF;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+}
+
+/* 라이트 테마 전송 버튼 (초록색) */
+[data-theme="light"] .send-btn,
+.theme-light .send-btn {
+    background: #4CAF50;
+    color: white;
+}
+
+[data-theme="light"] .send-btn:hover,
+.theme-light .send-btn:hover {
+    background: #45A049;
+    box-shadow: 0 4px 15px rgba(76, 175, 80, 0.3);
+}
+
+/* 라이트 테마 카드 스타일 */
+[data-theme="light"] .feature-card,
+.theme-light .feature-card {
+    background: #FFFFFF;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+[data-theme="light"] .feature-card:hover,
+.theme-light .feature-card:hover {
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.12);
+}
+
+/* 라이트 테마 새 대화 버튼 */
+[data-theme="light"] .sidebar-btn.new-chat,
+.theme-light .sidebar-btn.new-chat {
+    background: #4CAF50;
+    color: white;
+}
+
+[data-theme="light"] .sidebar-btn.new-chat:hover,
+.theme-light .sidebar-btn.new-chat:hover {
+    background: #45A049;
+}
+
+/* ========================================
+   다크 모드 기능 카드 스타일
+   ======================================== */
+[data-theme="dark"] .feature-card,
+.theme-dark .feature-card {
+    background: rgba(40, 40, 50, 0.9);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+}
+
+[data-theme="dark"] .feature-card:hover,
+.theme-dark .feature-card:hover {
+    border-color: rgba(255, 255, 255, 0.2);
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+}
+
+/* 다크 모드 - 아이콘 배경 투명화 */
+[data-theme="dark"] .feature-icon,
+.theme-dark .feature-icon {
+    background: transparent !important;
+}
+
+[data-theme="dark"] .feature-icon img,
+.theme-dark .feature-icon img {
+    background: transparent !important;
+    border-radius: 12px;
+}
+
+/* 다크 모드 - 텍스트 색상 */
+[data-theme="dark"] .feature-title,
+.theme-dark .feature-title {
+    color: #FFFFFF;
+}
+
+[data-theme="dark"] .feature-desc,
+.theme-dark .feature-desc {
+    color: rgba(255, 255, 255, 0.6);
+}
+
+/* 다크 모드 - 버튼 스타일 */
+[data-theme="dark"] .feature-btn,
+.theme-dark .feature-btn {
+    background: rgba(255, 255, 255, 0.95);
+    border: none;
+    color: #1a1a1a !important;
+    font-weight: 500;
+}
+
+[data-theme="dark"] .feature-btn:hover,
+.theme-dark .feature-btn:hover {
+    background: #4A90D9;
+    color: #FFFFFF !important;
+}
+
+/* ========================================
+   라이트 모드 기능 카드 스타일 (투명 아이콘)
+   ======================================== */
+/* 라이트 모드 - 아이콘 배경 투명화 */
+[data-theme="light"] .feature-icon,
+.theme-light .feature-icon {
+    background: transparent !important;
+}
+
+[data-theme="light"] .feature-icon img,
+.theme-light .feature-icon img {
+    background: transparent !important;
+}
+
+/* 라이트 모드 - 텍스트 색상 */
+[data-theme="light"] .feature-title,
+.theme-light .feature-title {
+    color: #2D2D2D;
+}
+
+[data-theme="light"] .feature-desc,
+.theme-light .feature-desc {
+    color: #666666;
+}
+
+/* 라이트 모드 - 버튼 스타일 */
+[data-theme="light"] .feature-btn,
+.theme-light .feature-btn {
+    background: #FFFFFF;
+    border: 1px solid rgba(0, 0, 0, 0.15);
+    color: #333333;
+}
+
+[data-theme="light"] .feature-btn:hover,
+.theme-light .feature-btn:hover {
+    background: #4A90D9;
+    color: #FFFFFF;
+    border-color: #4A90D9;
+}

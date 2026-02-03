@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="ko" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>오프라인 - OpenMake.Ai</title>
+    <meta name="theme-color" content="#667eea">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="OpenMake.Ai">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+            background: #0a0a0f;
+            color: #f0f0f2;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            position: relative;
+            overflow: hidden;
+        }
+        body::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background:
+                radial-gradient(ellipse 80% 50% at 50% -20%, rgba(102,126,234,0.12), transparent),
+                radial-gradient(ellipse 60% 30% at 70% 80%, rgba(118,75,162,0.08), transparent);
+            pointer-events: none;
+        }
+        .container {
+            text-align: center;
+            position: relative;
+            z-index: 1;
+            max-width: 400px;
+        }
+        .icon {
+            font-size: 4rem;
+            margin-bottom: 24px;
+            display: block;
+            animation: pulse 2s ease-in-out infinite;
+        }
+        h1 {
+            font-size: 1.8rem;
+            font-weight: 700;
+            margin-bottom: 12px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        p {
+            color: #a1a1aa;
+            font-size: 1rem;
+            line-height: 1.6;
+            margin-bottom: 32px;
+        }
+        .retry-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 14px 32px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #fff;
+            border: none;
+            border-radius: 12px;
+            font-size: 1rem;
+            font-weight: 600;
+            font-family: inherit;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4,0,0.2,1);
+        }
+        .retry-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 0 30px rgba(102,126,234,0.3);
+        }
+        .retry-btn:active { transform: translateY(0); }
+        .status {
+            margin-top: 24px;
+            font-size: 0.85rem;
+            color: #71717a;
+        }
+        .status-dot {
+            display: inline-block;
+            width: 8px; height: 8px;
+            background: #f59e0b;
+            border-radius: 50%;
+            margin-right: 6px;
+            animation: blink 1.5s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <span class="icon">📡</span>
+        <h1>오프라인 상태입니다</h1>
+        <p>인터넷 연결이 끊어졌습니다.<br>연결이 복구되면 자동으로 다시 시도합니다.</p>
+        <button class="retry-btn" onclick="window.location.reload()">🔄 다시 시도</button>
+        <div class="status">
+            <span class="status-dot"></span>연결 대기 중...
+        </div>
+    </div>
+    <script>
+        window.addEventListener('online', function() {
+            window.location.reload();
+        });
+    </script>
+</body>
+</html>

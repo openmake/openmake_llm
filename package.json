@@ -1,0 +1,51 @@
+{
+    "name": "openmake",
+    "version": "1.0.0",
+    "description": "OpenMake - AI Assistant Platform",
+    "main": "backend/api/dist/server.js",
+    "scripts": {
+        "build": "npm run build:database && npm run build:backend && npm run build:frontend && npm run deploy:frontend",
+        "build:database": "cd database && npm run build",
+        "build:backend": "cd backend/api && npm run build && cd ../core && npm run build",
+        "build:frontend": "cd frontend/web && npm run build",
+        "deploy:frontend": "bash scripts/deploy-frontend.sh",
+        "build:all": "npm run build",
+        "dev": "concurrently \"npm run dev:api\" \"npm run dev:frontend\"",
+        "dev:api": "cd backend/api && npm run dev",
+        "dev:frontend": "cd frontend/web && npm run dev",
+        "start": "node backend/api/dist/server.js",
+        "start:api": "node backend/api/dist/server.js",
+        "start:worker": "node backend/workers/dist/index.js",
+        "test": "jest",
+        "test:unit": "cd tests/unit && jest",
+        "test:integration": "cd tests/integration && jest",
+        "test:e2e": "npx playwright test",
+        "test:e2e:ui": "npx playwright test --ui",
+        "lint": "eslint . --ext .ts,.tsx,.js,.jsx",
+        "clean": "rm -rf */dist **/dist"
+    },
+    "keywords": [
+        "ai",
+        "assistant",
+        "ollama",
+        "llm"
+    ],
+    "author": "",
+    "license": "MIT",
+    "workspaces": [
+        "database",
+        "backend/api",
+        "backend/core",
+        "backend/workers",
+        "frontend/web"
+    ],
+    "devDependencies": {
+        "@playwright/test": "^1.58.0",
+        "@types/node": "^20.10.0",
+        "concurrently": "^8.2.2",
+        "eslint": "^8.0.0",
+        "jest": "^29.7.0",
+        "playwright": "^1.58.0",
+        "typescript": "^5.3.2"
+    }
+}
