@@ -168,7 +168,7 @@ router.get('/', (req: Request, res: Response) => {
      try {
          const sourceId = req.params.id;
          const modifications = req.body;
-         modifications.createdBy = (req as any).user?.userId;
+         modifications.createdBy = String(req.user?.id || '');
 
          const customBuilder = getCustomAgentBuilder();
          const cloned = customBuilder.cloneAgent(sourceId, modifications);
@@ -367,7 +367,7 @@ router.get('/', (req: Request, res: Response) => {
                      description: customAgent.description,
                      keywords: customAgent.keywords,
                      emoji: customAgent.emoji || '🤖',
-                     category: customAgent.category as any
+                     category: customAgent.category
                  };
              }
          }

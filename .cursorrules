@@ -1,0 +1,68 @@
+# OpenMake LLM — Cursor Rules
+
+You are working on OpenMake, an AI Assistant Platform with 96+ industry agents, Ollama Local/Cloud LLM integration, and 4-Pillar prompt engineering.
+
+## Stack
+- Backend: Express v5.2.1 + TypeScript 5.3 + PostgreSQL 16
+- Frontend: Vanilla JavaScript (NO frameworks)
+- Auth: JWT + HttpOnly Cookie + OAuth (Google/GitHub)
+- LLM: Ollama Local (localhost:11434) + Cloud Proxy (ollama.com) with N-key rotation
+- WebSocket: ws@8.18.3
+- Tests: Bun Test (205 tests, 8 suites)
+- Port: 52416
+
+## Rules
+- Never use `as any`, `@ts-ignore`, `@ts-expect-error`
+- Never add React/Vue/Angular to frontend
+- Never change API route paths or response formats
+- Never delete tests to pass builds
+- All DB calls are async (pg Pool)
+- Auth supports both Authorization header AND Cookie
+- Ollama changes must work for BOTH Local and Cloud modes
+- Agent additions require BOTH `industry-agents.json` AND `agents/prompts/` updates
+
+## Commands
+- Dev: `npm run dev`
+- TypeCheck: `cd backend/api && npx tsc --noEmit`
+- Test: `cd backend/api && bun test`
+- DB: `/opt/homebrew/Cellar/postgresql@16/16.11_1/bin/psql -d openmake_llm`
+
+## Chat Flow (Request Pipeline)
+```
+WebSocket → sockets/handler.ts → ChatService.ts
+  → agents/index.ts (smart routing: keyword + LLM)
+  → chat/prompt.ts + chat/context-engineering.ts (4-Pillar prompt)
+  → ollama/client.ts (Local/Cloud routing + API key rotation)
+  → ollama/agent-loop.ts (multi-turn tool calling, max 5)
+  → mcp/tools.ts (web_search, vision_ocr, etc.)
+  → SSE streaming response
+```
+
+## Key Backend Files
+- `services/ChatService.ts` — Core chat orchestrator
+- `services/MemoryService.ts` — Long-term user memory
+- `ollama/client.ts` — Unified LLM client (Local/Cloud)
+- `ollama/agent-loop.ts` — Multi-turn tool calling loop
+- `ollama/api-key-manager.ts` — N-key auto-rotation (OLLAMA_API_KEY_1..N)
+- `chat/context-engineering.ts` — 4-Pillar prompt framework (Role, Constraints, Goal, OutputFormat)
+- `chat/prompt.ts` — System prompt builder (metadata, epistemic gradient, safety guardrails)
+- `chat/model-selector.ts` — Auto model selection (Korean ratio, coding keywords)
+- `agents/index.ts` — Intent-based smart routing (96+ agents)
+- `agents/llm-router.ts` — LLM-based agent selection
+- `agents/industry-agents.json` — 96 industry agent definitions
+- `agents/discussion-engine.ts` — Multi-agent debate
+- `agents/prompts/` — 36+ prompt files across 16 industry categories
+- `mcp/tools.ts` — MCP tools (web_search, web_fetch, vision_ocr, firecrawl, sequential-thinking)
+- `mcp/tool-tiers.ts` — Tool access by UserTier
+- `sockets/handler.ts` — WebSocket message handler
+
+## Skills
+621 Antigravity skills in `.agent/skills/skills/` (SKILL.md format)
+462 Vibeship skills in `.spawner/skills/` (YAML format)
+Use `@skill-name` to reference Antigravity skills.
+
+## Key Directories
+- `backend/api/src/` — Express server (TypeScript)
+- `frontend/web/` — Vanilla JS frontend
+- `ai/` — AI agent/model configs
+- `database/` — Schema, migrations

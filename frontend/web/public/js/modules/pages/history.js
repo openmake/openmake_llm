@@ -101,7 +101,7 @@
                         <span class="session-meta">${formatDate(s.updatedAt || s.createdAt)}</span>
                     </div>
                     <div class="session-meta">
-                        <span>💬 ${s.model || 'Unknown Model'}</span>
+                        <span>💬 ${escapeHtml(s.model || 'Unknown Model')}</span>
                     </div>
                     ${s.preview ? `<div class="session-preview">${escapeHtml(s.preview)}</div>` : ''}
                 </div>

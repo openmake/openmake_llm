@@ -43,7 +43,7 @@ router.post('/web-search', async (req: Request, res: Response) => {
         console.log(`[WebSearch] ${searchResults.length}개 결과 찾음`);
 
         // Cloud 모델 처리
-        let client: any;
+        let client: { setModel: (m: string) => void; generate: (prompt: string, opts?: Record<string, unknown>) => Promise<{ response: string }> } | undefined;
         const isCloudModel = model?.toLowerCase().endsWith(':cloud');
 
         if (isCloudModel) {
@@ -63,7 +63,7 @@ router.post('/web-search', async (req: Request, res: Response) => {
 
         // 2. 검색 결과를 기반으로 LLM에 사실 검증 요청
         const sourcesContext = searchResults.length > 0
-            ? searchResults.map((r: any, i: number) =>
+            ? searchResults.map((r: { title?: string; url?: string; snippet?: string }, i: number) =>
                 `[출처 ${i + 1}] ${r.title}\n   URL: ${r.url}\n   내용: ${r.snippet || '(내용 없음)'}`
             ).join('\n\n')
             : '(검색 결과 없음)';
@@ -94,7 +94,7 @@ ${sourcesContext}
          console.log('[WebSearch] 응답 완료');
          res.json(success({
              answer: response,
-             sources: searchResults.map((r: any) => ({
+             sources: searchResults.map((r: { title?: string; url?: string; snippet?: string }) => ({
                  title: r.title,
                  url: r.url,
                  snippet: r.snippet

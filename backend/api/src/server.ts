@@ -18,8 +18,8 @@
  * @requires ws - WebSocket 서버
  */
 
-import express, { Application, Request, Response } from 'express';
-import { Server as HttpServer, createServer } from 'http';
+import express, { Application, Request, Response, NextFunction } from 'express';
+import { Server as HttpServer, ServerResponse, createServer } from 'http';
 import { WebSocketServer, WebSocket } from 'ws';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -100,16 +100,16 @@ const logLevels = { debug: 0, info: 1, warn: 2, error: 3 };
 const currentLogLevel = logLevels[envConfig.logLevel] || 1;
 
 const log = {
-    debug: (msg: string, ...args: any[]) => {
+    debug: (msg: string, ...args: unknown[]) => {
         if (currentLogLevel <= 0) console.log(`[DEBUG] ${msg}`, ...args);
     },
-    info: (msg: string, ...args: any[]) => {
+    info: (msg: string, ...args: unknown[]) => {
         if (currentLogLevel <= 1) console.log(`[INFO] ${msg}`, ...args);
     },
-    warn: (msg: string, ...args: any[]) => {
+    warn: (msg: string, ...args: unknown[]) => {
         if (currentLogLevel <= 2) console.warn(`[WARN] ${msg}`, ...args);
     },
-    error: (msg: string, ...args: any[]) => {
+    error: (msg: string, ...args: unknown[]) => {
         console.error(`[ERROR] ${msg}`, ...args);
     }
 };
@@ -191,7 +191,7 @@ export class DashboardServer {
             'admin', 'audit', 'external', 'alerts', 'memory', 'settings',
             'password-change', 'history', 'guide'
         ]);
-        this.app.use((req: Request, res: Response, next: any) => {
+        this.app.use((req: Request, res: Response, next: NextFunction) => {
             // .html 요청이면서 SPA 페이지에 해당하는 경우 index.html 서빙
             const match = req.path.match(/^\/([a-z0-9-]+)\.html$/);
             if (match && SPA_PAGES.has(match[1])) {
@@ -210,7 +210,7 @@ export class DashboardServer {
         });
 
         // Static file headers configuration
-        const staticHeaders = (res: any, filePath: string) => {
+        const staticHeaders = (res: ServerResponse, filePath: string) => {
             if (filePath.endsWith('.html')) {
                 res.setHeader('Content-Type', 'text/html; charset=utf-8');
             } else if (filePath.endsWith('.js')) {
@@ -389,7 +389,7 @@ export class DashboardServer {
         });
 
         // 글로벌 에러 핸들러 (JSON 형식 보장)
-        this.app.use((err: any, req: Request, res: Response, next: any) => {
+        this.app.use((err: Error & { code?: string; status?: number }, req: Request, res: Response, next: NextFunction) => {
             console.error('[GlobalError]', err);
 
             // Multer 에러 처리 — api-response 표준 형식
@@ -417,7 +417,7 @@ export class DashboardServer {
      * 
      * @param data - 전송할 데이터 (JSON 직렬화됨)
      */
-    public broadcast(data: any): void {
+    public broadcast(data: Record<string, unknown>): void {
         this.wsHandler.broadcast(data);
     }
 
@@ -508,6 +508,19 @@ if (require.main === module) {
     const port = parseInt(process.env.PORT || '52416', 10);
     const server = new DashboardServer({ port });
 
+    // 전역 예외 핸들러 등록 (프로세스 안정성)
+    process.on('uncaughtException', (err) => {
+        console.error('[FATAL] uncaughtException:', err);
+        // 비정상 상태이므로 graceful shutdown 후 종료
+        server.stop();
+        process.exit(1);
+    });
+
+    process.on('unhandledRejection', (reason, promise) => {
+        console.error('[FATAL] unhandledRejection:', reason);
+        // 로깅만 수행, 즉시 종료하지 않음 (Node.js 기본 동작과 동일)
+    });
+
     server.start()
         .then(() => {
             console.log(`\n✅ OpenMake Dashboard: ${server.url}`);
@@ -518,9 +531,13 @@ if (require.main === module) {
             process.exit(1);
         });
 
-    process.on('SIGINT', () => {
-        console.log('\n👋 서버 종료 중...');
+    // Graceful shutdown: SIGINT (Ctrl+C) + SIGTERM (Docker/K8s)
+    const gracefulShutdown = (signal: string) => {
+        console.log(`\n👋 ${signal} 수신 — 서버 종료 중...`);
         server.stop();
         process.exit(0);
-    });
+    };
+
+    process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+    process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 }

@@ -66,12 +66,14 @@ export class PluginRegistry {
 
             if (existing && handler) {
                 // 기존 훅과 새 훅을 체인으로 연결
-                (this.hooks as any)[hookKey] = async (...args: any[]) => {
-                    const result = await (existing as Function)(...args);
-                    return (handler as Function)(result ?? args[0]);
+                const hookObj = this.hooks as Record<string, ((...args: unknown[]) => Promise<unknown>) | undefined>;
+                hookObj[hookKey] = async (...args: unknown[]) => {
+                    const result = await (existing as (...a: unknown[]) => Promise<unknown>)(...args);
+                    return (handler as (...a: unknown[]) => Promise<unknown>)(result ?? args[0]);
                 };
             } else if (handler) {
-                (this.hooks as any)[hookKey] = handler;
+                const hookObj = this.hooks as Record<string, ((...args: unknown[]) => Promise<unknown>) | undefined>;
+                hookObj[hookKey] = handler as (...args: unknown[]) => Promise<unknown>;
             }
         }
     }

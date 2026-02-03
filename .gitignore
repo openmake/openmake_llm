@@ -29,3 +29,9 @@ coverage/
 
 # Vite
 .vite/
+
+# AI Skills (large repos, installed via npx)
+.gemini/skills/
+.agent/skills/
+.spawner/
+.claude/

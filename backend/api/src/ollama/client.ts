@@ -11,6 +11,7 @@ import {
     ThinkOption,
     FormatOption,
     ToolDefinition,
+    ToolCall,
     EmbedRequest,
     EmbedResponse,
     UsageMetrics,
@@ -84,6 +85,15 @@ export class OllamaClient {
                 const statusCode = error?.response?.status;
                 console.log(`[OllamaClient] ❌ 요청 실패 - 상태 코드: ${statusCode}`);
 
+                // 네트워크 에러 (ETIMEDOUT, ECONNREFUSED 등) 시 재시도
+                const isNetworkError = !statusCode && (
+                    error.code === 'ETIMEDOUT' ||
+                    error.code === 'ECONNREFUSED' ||
+                    error.code === 'ECONNRESET' ||
+                    error.code === 'ENOTFOUND' ||
+                    error.code === 'EAI_AGAIN'
+                );
+
                 // 429, 401, 403 에러 시 API 키 스와핑 시도
                 if (statusCode === 429 || statusCode === 401 || statusCode === 403) {
                     // 재시도 횟수 추적 (키 개수만큼 시도)
@@ -102,6 +112,19 @@ export class OllamaClient {
                     } else {
                         console.log(`[OllamaClient] ⚠️ 모든 키 소진 - switched: ${switched}, retryCount: ${retryCount}/${maxRetries}`);
                     }
+                } else if (isNetworkError && error.config) {
+                    // 네트워크 일시 장애 시 최대 2회 재시도 (지수 백오프)
+                    const retryCount = error.config._retryCount || 0;
+                    const maxNetworkRetries = 2;
+                    if (retryCount < maxNetworkRetries) {
+                        error.config._retryCount = retryCount + 1;
+                        const backoffMs = Math.pow(2, retryCount) * 1000; // 1s, 2s
+                        console.log(`[OllamaClient] 🔄 네트워크 에러(${error.code}) - ${backoffMs}ms 후 재시도 (${retryCount + 1}/${maxNetworkRetries})`);
+                        await new Promise(resolve => setTimeout(resolve, backoffMs));
+                        return this.client.request(error.config);
+                    }
+                    console.log(`[OllamaClient] ⚠️ 네트워크 재시도 소진 (${error.code})`);
+                    this.apiKeyManager.reportFailure(error);
                 } else {
                     this.apiKeyManager.reportFailure(error);
                 }
@@ -321,7 +344,7 @@ export class OllamaClient {
 
         let fullContent = '';
         let fullThinking = '';
-        let toolCalls: any[] = [];
+        let toolCalls: ToolCall[] = [];
         let metrics: UsageMetrics | undefined;
 
         return new Promise((resolve, reject) => {
@@ -473,8 +496,8 @@ export class OllamaClient {
 
             console.log(`[OllamaClient] ✅ Web Search: ${response.data.results?.length || 0}개 결과`);
             return response.data;
-        } catch (error: any) {
-            console.error('[OllamaClient] Web Search 실패:', error.message);
+        } catch (error: unknown) {
+            console.error('[OllamaClient] Web Search 실패:', (error instanceof Error ? error.message : String(error)));
             return { results: [] };
         }
     }
@@ -503,8 +526,8 @@ export class OllamaClient {
 
             console.log(`[OllamaClient] ✅ Web Fetch: "${response.data.title}"`);
             return response.data;
-        } catch (error: any) {
-            console.error('[OllamaClient] Web Fetch 실패:', error.message);
+        } catch (error: unknown) {
+            console.error('[OllamaClient] Web Fetch 실패:', (error instanceof Error ? error.message : String(error)));
             return { title: '', content: '', links: [] };
         }
     }
@@ -532,7 +555,7 @@ export class OllamaClient {
     async runAgentLoop(
         messages: ChatMessage[],
         tools: ToolDefinition[],
-        availableFunctions: Record<string, (...args: any[]) => any>,
+        availableFunctions: Record<string, (args: Record<string, unknown>) => unknown | Promise<unknown>>,
         options?: {
             think?: ThinkOption;
             stream?: boolean;

@@ -10,7 +10,7 @@ export class ConversationModel {
     /**
      * 새 세션 생성
      */
-    static async createSession(userId?: string, title?: string, metadata?: any): Promise<ConversationSession> {
+    static async createSession(userId?: string, title?: string, metadata?: Record<string, unknown> | null): Promise<ConversationSession> {
         const db = getUnifiedDatabase();
         const sessionId = uuidv4();
 

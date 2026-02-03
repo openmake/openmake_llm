@@ -11,10 +11,16 @@
 
 import { Ollama, Message, Tool, ToolCall, ChatResponse } from 'ollama';
 import { ChatMessage, ToolDefinition, ThinkOption, UsageMetrics } from './types';
+
+/** Extended Message with optional thinking field (Ollama Native Thinking) */
+interface MessageWithThinking extends Message { thinking?: string; }
 import { getApiKeyManager } from './api-key-manager';
 import { getConfig } from '../config';
 
 const envConfig = getConfig();
+
+/** Tool execution function type — takes parsed arguments, returns result */
+type ToolFunction = (args: Record<string, unknown>) => unknown | Promise<unknown>;
 
 // Ollama Cloud 호스트
 const OLLAMA_CLOUD_HOST = 'https://ollama.com';
@@ -30,7 +36,7 @@ export interface AgentLoopOptions {
     /** 사용 가능한 도구 정의 */
     tools: ToolDefinition[];
     /** 도구 이름 -> 실행 함수 매핑 */
-    availableFunctions: Record<string, (...args: any[]) => any | Promise<any>>;
+    availableFunctions: Record<string, ToolFunction>;
     /** Thinking 모드 활성화 */
     think?: ThinkOption;
     /** 스트리밍 모드 */
@@ -212,9 +218,9 @@ export async function runAgentLoop(options: AgentLoopOptions): Promise<AgentLoop
 
             for await (const chunk of streamResponse) {
                 // Thinking 처리
-                if ((chunk.message as any)?.thinking) {
-                    thinking += (chunk.message as any).thinking;
-                    onToken('', (chunk.message as any).thinking);
+                if ((chunk.message as MessageWithThinking)?.thinking) {
+                    thinking += (chunk.message as MessageWithThinking).thinking;
+                    onToken('', (chunk.message as MessageWithThinking).thinking!);
                 }
 
                 // Content 처리
@@ -261,7 +267,7 @@ export async function runAgentLoop(options: AgentLoopOptions): Promise<AgentLoop
             } as ChatResponse;
 
             if (thinking) {
-                (response.message as any).thinking = thinking;
+                (response.message as MessageWithThinking).thinking = thinking;
             }
 
         } else {
@@ -287,8 +293,8 @@ export async function runAgentLoop(options: AgentLoopOptions): Promise<AgentLoop
         messages.push(response.message);
 
         // Thinking 로그
-        if ((response.message as any)?.thinking) {
-            console.log(`[AgentLoop] 🧠 Thinking: ${(response.message as any).thinking.substring(0, 100)}...`);
+        if ((response.message as MessageWithThinking)?.thinking) {
+            console.log(`[AgentLoop] 🧠 Thinking: ${(response.message as MessageWithThinking).thinking!.substring(0, 100)}...`);
         }
 
         // Content 로그
@@ -342,11 +348,11 @@ export async function runAgentLoop(options: AgentLoopOptions): Promise<AgentLoop
                     content: resultStr
                 });
 
-            } catch (error: any) {
-                console.error(`[AgentLoop] ❌ 도구 실행 오류: ${error.message}`);
+            } catch (error: unknown) {
+                console.error(`[AgentLoop] ❌ 도구 실행 오류: ${(error instanceof Error ? error.message : String(error))}`);
                 messages.push({
                     role: 'tool',
-                    content: `Error: ${error.message}`
+                    content: `Error: ${(error instanceof Error ? error.message : String(error))}`
                 });
             }
         }
@@ -380,7 +386,7 @@ export async function executeSingleToolCall(
     model: string,
     prompt: string,
     tools: ToolDefinition[],
-    availableFunctions: Record<string, (...args: any[]) => any>,
+    availableFunctions: Record<string, ToolFunction>,
     options?: {
         think?: ThinkOption;
         onToken?: (token: string, thinking?: string) => void;
@@ -405,7 +411,7 @@ export function mcpToolToOllamaTool(mcpTool: {
     tool: {
         name: string;
         description: string;
-        inputSchema: any;
+        inputSchema: Record<string, unknown>;
     };
 }): ToolDefinition {
     return {
@@ -413,7 +419,7 @@ export function mcpToolToOllamaTool(mcpTool: {
         function: {
             name: mcpTool.tool.name,
             description: mcpTool.tool.description,
-            parameters: mcpTool.tool.inputSchema
+            parameters: mcpTool.tool.inputSchema as ToolDefinition['function']['parameters']
         }
     };
 }
@@ -425,7 +431,7 @@ export function mcpToolsToOllamaTools(mcpTools: Array<{
     tool: {
         name: string;
         description: string;
-        inputSchema: any;
+        inputSchema: Record<string, unknown>;
     };
 }>): ToolDefinition[] {
     return mcpTools.map(mcpToolToOllamaTool);

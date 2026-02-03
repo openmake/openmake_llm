@@ -2,7 +2,7 @@
  * Zod Validation Middleware
  */
 import { Request, Response, NextFunction } from 'express';
-import { ZodSchema, ZodError } from 'zod';
+import { ZodSchema, ZodError, ZodIssue } from 'zod';
 
 /**
  * Validation middleware factory
@@ -16,7 +16,7 @@ export function validate<T>(schema: ZodSchema<T>) {
             next();
         } catch (error) {
             if (error instanceof ZodError) {
-                const messages = error.issues.map((e: any) => 
+                const messages = error.issues.map((e: ZodIssue) => 
                     e.path.length > 0 ? `${e.path.join('.')}: ${e.message}` : e.message
                 );
                 return res.status(400).json({
@@ -38,11 +38,11 @@ export function validateQuery<T>(schema: ZodSchema<T>) {
     return (req: Request, res: Response, next: NextFunction) => {
         try {
             const validated = schema.parse(req.query);
-            req.query = validated as any;
+            req.query = validated as typeof req.query;
             next();
         } catch (error) {
             if (error instanceof ZodError) {
-                const messages = error.issues.map((e: any) => 
+                const messages = error.issues.map((e: ZodIssue) => 
                     e.path.length > 0 ? `${e.path.join('.')}: ${e.message}` : e.message
                 );
                 return res.status(400).json({

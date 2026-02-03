@@ -27,18 +27,18 @@ import {
 
 const router = Router();
 let clusterManager: ClusterManager;
-let broadcastFn: (data: any) => void;
+let broadcastFn: (data: Record<string, unknown>) => void;
 
 // 로그 헬퍼
 const envConfig = getConfig();
 const logLevels = { debug: 0, info: 1, warn: 2, error: 3 };
-const currentLogLevel = (logLevels as any)[envConfig.logLevel] || 1;
+const currentLogLevel = (logLevels as Record<string, number>)[envConfig.logLevel] || 1;
 
 const log = {
-    debug: (msg: string, ...args: any[]) => {
+    debug: (msg: string, ...args: unknown[]) => {
         if (currentLogLevel <= 0) console.log(`[DEBUG] ${msg}`, ...args);
     },
-    warn: (msg: string, ...args: any[]) => {
+    warn: (msg: string, ...args: unknown[]) => {
         if (currentLogLevel <= 2) console.warn(`[WARN] ${msg}`, ...args);
     }
 };
@@ -101,7 +101,7 @@ const upload = multer({
 /**
  * 의존성 주입
  */
-export function setDependencies(cluster: ClusterManager, broadcast: (data: any) => void): void {
+export function setDependencies(cluster: ClusterManager, broadcast: (data: Record<string, unknown>) => void): void {
     clusterManager = cluster;
     broadcastFn = broadcast;
 }
@@ -156,13 +156,13 @@ router.post('/upload', upload.single('file'), async (req: Request, res: Response
         });
 
          res.json(success({ docId, filename: doc.filename, type: doc.type, pages: doc.pages, textLength: doc.text.length, preview: doc.text.substring(0, 500) + (doc.text.length > 500 ? '...' : '') }));
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('[Upload] 오류:', error);
 
         broadcastFn?.({
             type: 'document_progress',
             stage: 'error',
-            message: `오류: ${error.message}`,
+            message: `오류: ${(error instanceof Error ? error.message : String(error))}`,
             filename: decodeFilename(req.file?.originalname || '')
         });
 

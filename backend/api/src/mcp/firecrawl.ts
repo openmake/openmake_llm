@@ -65,8 +65,8 @@ async function firecrawlRequest(endpoint: string, data: Record<string, unknown>)
         }
 
         return await response.json();
-    } catch (error: any) {
-        console.error(`[Firecrawl] 요청 실패:`, error.message);
+    } catch (error: unknown) {
+        console.error(`[Firecrawl] 요청 실패:`, (error instanceof Error ? error.message : String(error)));
         throw error;
     }
 }
@@ -135,9 +135,9 @@ export const firecrawlScrapeTool: MCPToolDefinition = {
                 content: [{ type: 'text', text: `📄 **${url}** 스크래핑 완료\n\n${content}` }],
                 isError: false
             };
-        } catch (error: any) {
+        } catch (error: unknown) {
             return {
-                content: [{ type: 'text', text: `❌ 스크래핑 실패: ${error.message}` }],
+                content: [{ type: 'text', text: `❌ 스크래핑 실패: ${(error instanceof Error ? error.message : String(error))}` }],
                 isError: true
             };
         }
@@ -199,7 +199,7 @@ export const firecrawlSearchTool: MCPToolDefinition = {
             let output = `🔍 **"${query}"** 검색 결과 (${result.data?.length || 0}건)\n\n`;
 
             if (result.data && Array.isArray(result.data)) {
-                result.data.forEach((item: any, index: number) => {
+                result.data.forEach((item: { title?: string; url?: string; description?: string; markdown?: string }, index: number) => {
                     output += `### ${index + 1}. ${item.title || '제목 없음'}\n`;
                     output += `🔗 ${item.url}\n`;
                     if (item.description) {
@@ -216,9 +216,9 @@ export const firecrawlSearchTool: MCPToolDefinition = {
                 content: [{ type: 'text', text: output }],
                 isError: false
             };
-        } catch (error: any) {
+        } catch (error: unknown) {
             return {
-                content: [{ type: 'text', text: `❌ 검색 실패: ${error.message}` }],
+                content: [{ type: 'text', text: `❌ 검색 실패: ${(error instanceof Error ? error.message : String(error))}` }],
                 isError: true
             };
         }
@@ -281,9 +281,9 @@ export const firecrawlMapTool: MCPToolDefinition = {
                 content: [{ type: 'text', text: output }],
                 isError: false
             };
-        } catch (error: any) {
+        } catch (error: unknown) {
             return {
-                content: [{ type: 'text', text: `❌ URL 매핑 실패: ${error.message}` }],
+                content: [{ type: 'text', text: `❌ URL 매핑 실패: ${(error instanceof Error ? error.message : String(error))}` }],
                 isError: true
             };
         }
@@ -339,9 +339,9 @@ export const firecrawlCrawlTool: MCPToolDefinition = {
                 }],
                 isError: false
             };
-        } catch (error: any) {
+        } catch (error: unknown) {
             return {
-                content: [{ type: 'text', text: `❌ 크롤링 시작 실패: ${error.message}` }],
+                content: [{ type: 'text', text: `❌ 크롤링 시작 실패: ${(error instanceof Error ? error.message : String(error))}` }],
                 isError: true
             };
         }

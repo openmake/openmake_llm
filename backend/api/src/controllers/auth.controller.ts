@@ -8,6 +8,7 @@
 import { Request, Response, Router } from 'express';
 import { getAuthService } from '../services/AuthService';
 import { getUserManager } from '../data/user-manager';
+import type { OAuthTokenResponse, GoogleUserInfo, GitHubUser, GitHubEmail } from '../auth/types';
 import { requireAuth, requireAdmin, extractToken, blacklistToken, setTokenCookie, clearTokenCookie } from '../auth';
 import { createLogger } from '../utils/logger';
 import { success, badRequest, unauthorized, conflict, internalError, serviceUnavailable } from '../utils/api-response';
@@ -268,7 +269,7 @@ export class AuthController {
                 })
             });
 
-            const tokenData = await tokenRes.json() as any;
+            const tokenData = await tokenRes.json() as OAuthTokenResponse;
             if (!tokenData.access_token) throw new Error('토큰 교환 실패');
 
             // 사용자 정보 가져오기
@@ -276,7 +277,7 @@ export class AuthController {
                 headers: { Authorization: `Bearer ${tokenData.access_token}` }
             });
 
-            const userInfo = await userInfoRes.json() as any;
+            const userInfo = await userInfoRes.json() as GoogleUserInfo;
             if (!userInfo.email) throw new Error('이메일 정보를 가져올 수 없습니다');
 
              const authService = getAuthService();
@@ -326,7 +327,7 @@ export class AuthController {
                 })
             });
 
-            const tokenData = await tokenRes.json() as any;
+            const tokenData = await tokenRes.json() as OAuthTokenResponse;
             if (!tokenData.access_token) throw new Error('토큰 교환 실패');
 
             // 사용자 정보 가져오기
@@ -337,7 +338,7 @@ export class AuthController {
                 }
             });
 
-            const githubUser = await userRes.json() as any;
+            const githubUser = await userRes.json() as GitHubUser;
             let email = githubUser.email;
 
             // 이메일 없으면 별도 API 호출
@@ -348,7 +349,7 @@ export class AuthController {
                         'User-Agent': 'Ollama-Chat'
                     }
                 });
-                const emails = await emailRes.json() as any[];
+                const emails = await emailRes.json() as GitHubEmail[];
                 const primaryEmail = emails.find(e => e.primary);
                 email = primaryEmail?.email || `${githubUser.login}@github.local`;
             }

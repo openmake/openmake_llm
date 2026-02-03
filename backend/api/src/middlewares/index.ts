@@ -27,7 +27,7 @@ export function authMiddleware(required: boolean = true) {
         const authHeader = req.headers.authorization;
 
         // Cookie first (httpOnly), then Authorization header (backward compat)
-        const token = (req as any).cookies?.auth_token ||
+        const token = req.cookies?.auth_token ||
                       (authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : undefined);
 
         if (!token) {
@@ -146,8 +146,8 @@ export function analyticsMiddleware(req: Request, res: Response, next: NextFunct
     const analytics = getAnalyticsSystem();
 
     // 쿼리 기록 (채팅 API)
-    if (req.path.includes('/chat') && (req.body as any)?.message) {
-        analytics.recordQuery((req.body as any).message);
+    if (req.path.includes('/chat') && (req.body as Record<string, unknown>)?.message) {
+        analytics.recordQuery((req.body as Record<string, unknown>).message as string);
     }
 
     next();

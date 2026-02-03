@@ -264,7 +264,7 @@ function showUserStatusBadge(isAuthenticated, isGuest) {
 
     if (isAuthenticated) {
         const user = JSON.parse(localStorage.getItem('user') || '{}');
-        userInfo.innerHTML = `<span style="color: var(--success);">👤 ${user.email || user.username || '사용자'}</span>`;
+        userInfo.innerHTML = `<span style="color: var(--success);">👤 ${escapeHtml(user.email || user.username || '사용자')}</span>`;
         userInfo.style.display = 'block';
     } else if (isGuest) {
         userInfo.innerHTML = `<span style="color: var(--info);">👤 게스트</span>`;
@@ -413,7 +413,6 @@ function connectWebSocket() {
 
         setTimeout(() => {
             if (nodes.length === 0) {
-                console.log('[DEBUG] WebSocket init 없음, REST API로 재시도');
                 fetchClusterInfoFallback();
             }
         }, 1000);
@@ -473,17 +472,11 @@ function updateConnectionStatus(status, text) {
 }
 
 function handleMessage(data) {
-    // 디버그 로그
-    console.log(`[WS] 수신 (${new Date().toLocaleTimeString()}):`, data.type, data);
-
     switch (data.type) {
         case 'init':
-            // 초기 클러스터 정보 수신
-            console.log('[DEBUG] 초기 클러스터 정보:', data.data?.nodes?.length, '개 노드');
             updateClusterInfo(data.data);
             break;
         case 'update':
-            console.log('[DEBUG] 클러스터 업데이트:', data.data?.nodes?.length, '개 노드');
             updateClusterInfo(data.data);
             break;
         case 'token':
@@ -534,26 +527,16 @@ function handleMessage(data) {
 }
 
 function updateClusterInfo(data) {
-    console.log('[DEBUG] updateClusterInfo 호출:', data);
-
-    if (!data) {
-        console.warn('[DEBUG] updateClusterInfo: data가 null/undefined');
-        return;
-    }
+    if (!data) return;
 
     if (data.nodes) {
         nodes = data.nodes;
-        console.log('[DEBUG] nodes 배열 업데이트:', nodes.length, '개');
-        console.log('[DEBUG] nodes 상세:', nodes.map(n => `${n.name}:${n.status}`).join(', '));
-
         updateModelSelect();
         const onlineCount = nodes.filter(n => n.status === 'online').length;
         updateClusterStatus(`${onlineCount} node online`, onlineCount > 0);
 
         // 사이드바 클러스터 정보도 업데이트
         updateSidebarClusterInfo();
-    } else {
-        console.warn('[DEBUG] updateClusterInfo: nodes 속성 없음', Object.keys(data));
     }
 }
 
@@ -598,19 +581,15 @@ function updateClusterStatus(text, online) {
 // REST API 폴백: WebSocket init이 실패했을 때 클러스터 정보 가져오기
 async function fetchClusterInfoFallback() {
     try {
-        console.log('[DEBUG] REST API 폴백 호출: /api/cluster');
         const response = await fetch('/api/cluster', {
             credentials: 'include'  // 🔒 httpOnly 쿠키 포함
         });
         if (response.ok) {
             const data = await response.json();
-            console.log('[DEBUG] REST API 응답:', data);
             updateClusterInfo(data);
-        } else {
-            console.error('[DEBUG] REST API 실패:', response.status);
         }
     } catch (error) {
-        console.error('[DEBUG] REST API 오류:', error);
+        // REST API 폴백 실패 — 무시 (WebSocket이 주 채널)
     }
 }
 
@@ -1420,10 +1399,6 @@ async function loadChatSessions() {
         const userRole = JSON.parse(localStorage.getItem('user') || '{}').role;
         const isAdminUser = userRole === 'admin' || userRole === 'administrator';
 
-        // 🔍 디버그 로그 - 문제 해결 후 제거
-        console.log('[LoadChatSessions] 🔍 DEBUG - authToken:', authToken ? authToken.substring(0, 30) + '...' : 'null');
-        console.log('[LoadChatSessions] 🔍 DEBUG - userRole:', userRole, 'isAdminUser:', isAdminUser);
-
         // URL 파라미터 구성
         const params = new URLSearchParams({ limit: '20' });
 
@@ -1439,8 +1414,6 @@ async function loadChatSessions() {
         }
 
         const headers = authToken ? { 'Authorization': `Bearer ${authToken}` } : {};
-        console.log('[LoadChatSessions] 🔍 DEBUG - Request URL:', `/api/chat/sessions?${params}`);
-        console.log('[LoadChatSessions] 🔍 DEBUG - Headers:', JSON.stringify(headers));
 
          const res = await fetch(`/api/chat/sessions?${params}`, { headers });
          const data = await res.json();

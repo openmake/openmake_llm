@@ -81,10 +81,10 @@ class TokenTracker {
     /**
      * Ollama 응답에서 토큰 정보 추출 및 기록
      */
-    recordFromOllamaResponse(model: string, response: any): void {
+    recordFromOllamaResponse(model: string, response: Record<string, unknown>): void {
         // Ollama 응답에서 토큰 정보 추출
-        const promptTokens = response.prompt_eval_count || 0;
-        const completionTokens = response.eval_count || 0;
+        const promptTokens = (typeof response.prompt_eval_count === 'number' ? response.prompt_eval_count : 0);
+        const completionTokens = (typeof response.eval_count === 'number' ? response.eval_count : 0);
 
         if (promptTokens > 0 || completionTokens > 0) {
             this.recordUsage(model, promptTokens, completionTokens);

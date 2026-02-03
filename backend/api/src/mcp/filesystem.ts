@@ -136,9 +136,9 @@ export const readFileTool: MCPToolDefinition = {
                 content: [{ type: 'text', text: content }],
                 isError: false
             };
-        } catch (error: any) {
+        } catch (error: unknown) {
             return {
-                content: [{ type: 'text', text: `파일 읽기 실패: ${error.message}` }],
+                content: [{ type: 'text', text: `파일 읽기 실패: ${(error instanceof Error ? error.message : String(error))}` }],
                 isError: true
             };
         }
@@ -209,9 +209,9 @@ export const writeFileTool: MCPToolDefinition = {
                 content: [{ type: 'text', text: `파일 저장 완료: ${params.path}` }],
                 isError: false
             };
-        } catch (error: any) {
+        } catch (error: unknown) {
             return {
-                content: [{ type: 'text', text: `파일 쓰기 실패: ${error.message}` }],
+                content: [{ type: 'text', text: `파일 쓰기 실패: ${(error instanceof Error ? error.message : String(error))}` }],
                 isError: true
             };
         }
@@ -272,9 +272,9 @@ export const listDirectoryTool: MCPToolDefinition = {
                 content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
                 isError: false
             };
-        } catch (error: any) {
+        } catch (error: unknown) {
             return {
-                content: [{ type: 'text', text: `디렉토리 조회 실패: ${error.message}` }],
+                content: [{ type: 'text', text: `디렉토리 조회 실패: ${(error instanceof Error ? error.message : String(error))}` }],
                 isError: true
             };
         }
@@ -321,9 +321,9 @@ export const deleteFileTool: MCPToolDefinition = {
                 content: [{ type: 'text', text: `파일 삭제 완료: ${params.path}` }],
                 isError: false
             };
-        } catch (error: any) {
+        } catch (error: unknown) {
             return {
-                content: [{ type: 'text', text: `파일 삭제 실패: ${error.message}` }],
+                content: [{ type: 'text', text: `파일 삭제 실패: ${(error instanceof Error ? error.message : String(error))}` }],
                 isError: true
             };
         }

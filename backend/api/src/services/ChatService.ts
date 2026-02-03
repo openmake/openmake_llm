@@ -25,7 +25,7 @@ import { createDiscussionEngine, DiscussionProgress, DiscussionResult } from '..
 import { getApiUsageTracker } from '../ollama/api-usage-tracker';
 import { getApiKeyManager } from '../ollama/api-key-manager';
 import { builtInTools } from '../mcp/tools';
-import { ToolDefinition } from '../ollama/types';
+import { ToolDefinition, ChatMessage } from '../ollama/types';
 import { UserTier } from '../data/user-manager';
 import { canUseTool } from '../mcp/tool-tiers';
 import { UserContext } from '../mcp/user-sandbox';
@@ -118,7 +118,7 @@ export interface ChatMessageRequest {
     /** 사용자 메시지 내용 */
     message: string;
     /** 대화 히스토리 (선택적) */
-    history?: any[];
+    history?: Array<{ role: string; content: string; images?: string[] }>;
     /** 참조 문서 ID (선택적) */
     docId?: string;
     /** 이미지 데이터 배열 - base64 인코딩 (선택적) */
@@ -223,7 +223,7 @@ export class ChatService {
         req: ChatMessageRequest,
         uploadedDocuments: DocumentStore,
         onToken: (token: string) => void,
-        onAgentSelected?: (agent: any) => void,
+        onAgentSelected?: (agent: { type: string; name: string; emoji?: string; phase?: string; reason?: string; confidence?: number }) => void,
         onDiscussionProgress?: (progress: DiscussionProgress) => void
     ): Promise<string> {
         const { message, history, docId, images, webSearchContext, discussionMode, thinkingMode, thinkingLevel, userId, userRole, userTier } = req;
@@ -314,13 +314,13 @@ export class ChatService {
 
 
         // 🗣️ 6. LLM 호출 (Chat vs Generate) with Agent Loop
-        let metrics: any = {};
+        let metrics: Record<string, unknown> = {};
         const maxTurns = 5;
         let currentTurn = 0;
         let finalResponse = '';
 
         // Prepare initial history
-        let currentHistory: any[] = [];
+        let currentHistory: ChatMessage[] = [];
         if (history && history.length > 0) {
             const combinedSystemPrompt = agentSystemMessage
                 ? `${agentSystemMessage}\n\n---\n\n${promptConfig.systemPrompt}`
@@ -328,8 +328,8 @@ export class ChatService {
 
             currentHistory = [
                 { role: 'system', content: combinedSystemPrompt },
-                ...history.map((h: any) => ({
-                    role: h.role,
+                ...history.map((h) => ({
+                    role: h.role as ChatMessage['role'],
                     content: h.content,
                     images: h.images
                 }))
@@ -378,17 +378,17 @@ export class ChatService {
                     }
                 },
                 {
-                    tools: allowedTools as any[],
+                    tools: allowedTools as ToolDefinition[],
                     think: thinkOption  // 🧠 Ollama Native Thinking
                 }
             );
 
             // Capture metrics (accumulate or last?)
             // Ideally accumulate, but for now take the last one or significant one
-            if (response.metrics) metrics = response.metrics;
+            if (response.metrics) metrics = response.metrics as unknown as Record<string, unknown>;
 
             // Add assistant response to history
-            const assistantMessage = {
+            const assistantMessage: ChatMessage = {
                 role: 'assistant',
                 content: response.content || '',
                 tool_calls: response.tool_calls
@@ -595,7 +595,7 @@ export class ChatService {
                 progress: 2
             });
             
-            for (let i = 0; i < Math.min(allImages.length, 3); i++) { // 최대 3개까지만
+            const imagePromises = allImages.slice(0, 3).map(async (imageBase64, i) => {
                 try {
                     const analysisResponse = await this.client.chat(
                         [
@@ -606,32 +606,34 @@ export class ChatService {
                             {
                                 role: 'user',
                                 content: '이 이미지의 주요 내용을 요약해주세요.',
-                                images: [allImages[i]]
+                                images: [imageBase64]
                             }
                         ],
                         { temperature: 0.2 }
                     );
                     
                     if (analysisResponse.content) {
-                        imageDescriptions.push(analysisResponse.content.substring(0, 500));
                         console.log(`[ChatService] ✅ 이미지 ${i + 1} 분석 완료`);
+                        return analysisResponse.content.substring(0, 500);
                     }
+                    return `[이미지 ${i + 1}: 내용 없음]`;
                 } catch (e) {
                     console.warn(`[ChatService] 이미지 ${i + 1} 분석 실패:`, e);
-                    imageDescriptions.push(`[이미지 ${i + 1}: 분석 실패]`);
+                    return `[이미지 ${i + 1}: 분석 실패]`;
                 }
-            }
+            });
+            imageDescriptions = await Promise.all(imagePromises);
         }
 
         // LLM 호출 래퍼 함수
         const generateResponse = async (systemPrompt: string, userMessage: string): Promise<string> => {
             let response = '';
-            const chatMessages = [
+            const chatMessages: ChatMessage[] = [
                 { role: 'system', content: systemPrompt },
                 { role: 'user', content: userMessage }
             ];
 
-            await this.client.chat(chatMessages as any[], {}, (token) => {
+            await this.client.chat(chatMessages, {}, (token) => {
                 response += token;
             });
 
@@ -801,11 +803,11 @@ export class ChatService {
                 if (imageBase64) {
                     imageData = imageBase64;
                 } else if (imagePath) {
-                    // 파일에서 base64 인코딩
-                    const fs = require('fs');
-                    const path = require('path');
-                    const absolutePath = path.resolve(imagePath);
-                    const fileBuffer = fs.readFileSync(absolutePath);
+                    // 파일에서 base64 인코딩 (비동기)
+                    const { readFile } = await import('fs/promises');
+                    const { resolve: resolvePath } = await import('path');
+                    const absolutePath = resolvePath(imagePath);
+                    const fileBuffer = await readFile(absolutePath);
                     imageData = fileBuffer.toString('base64');
                 } else {
                     return 'Error: image_path 또는 image_base64가 필요합니다.';
@@ -848,10 +850,10 @@ export class ChatService {
                 if (imageBase64) {
                     imageData = imageBase64;
                 } else if (imagePath) {
-                    const fs = require('fs');
-                    const path = require('path');
-                    const absolutePath = path.resolve(imagePath);
-                    const fileBuffer = fs.readFileSync(absolutePath);
+                    const { readFile } = await import('fs/promises');
+                    const { resolve: resolvePath } = await import('path');
+                    const absolutePath = resolvePath(imagePath);
+                    const fileBuffer = await readFile(absolutePath);
                     imageData = fileBuffer.toString('base64');
                 } else {
                     return 'Error: image_path 또는 image_base64가 필요합니다.';

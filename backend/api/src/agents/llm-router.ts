@@ -81,7 +81,7 @@ function formatAgentListForPrompt(summaries: AgentSummary[]): string {
 /**
  * LLM 응답에서 JSON 추출
  */
-function extractJSONFromResponse(response: string): any {
+function extractJSONFromResponse(response: string): Record<string, unknown> | null {
     // JSON 블록 찾기
     const jsonMatch = response.match(/\{[\s\S]*?\}/);
     if (jsonMatch) {
@@ -176,10 +176,10 @@ ${sanitizedMessage}
             console.log(`[LLM Router] 이유: ${parsed.reasoning}`);
 
             return {
-                agentId: parsed.agent_id,
-                confidence: parsed.confidence || 0.85,
-                reasoning: parsed.reasoning || '',
-                alternativeAgents: parsed.alternatives || []
+                agentId: String(parsed.agent_id),
+                confidence: Number(parsed.confidence) || 0.85,
+                reasoning: String(parsed.reasoning || ''),
+                alternativeAgents: Array.isArray(parsed.alternatives) ? parsed.alternatives as string[] : []
             };
         }
 

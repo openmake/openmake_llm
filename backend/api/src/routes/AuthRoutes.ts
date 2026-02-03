@@ -7,13 +7,14 @@
 
 import { Router, Request, Response } from 'express';
 import * as crypto from 'crypto';
-import { getUserManager } from '../data/user-manager';
+import { getUserManager, UserRole } from '../data/user-manager';
 import { generateToken, requireAuth, requireAdmin, extractToken, blacklistToken } from '../auth';
+import type { OAuthTokenResponse, GoogleUserInfo, GitHubUser, GitHubEmail } from '../auth/types';
 
 // 로그 헬퍼
 const log = {
-    info: (msg: string, ...args: any[]) => console.log(`[INFO] ${msg}`, ...args),
-    error: (msg: string, ...args: any[]) => console.error(`[ERROR] ${msg}`, ...args)
+    info: (msg: string, ...args: unknown[]) => console.log(`[INFO] ${msg}`, ...args),
+    error: (msg: string, ...args: unknown[]) => console.error(`[ERROR] ${msg}`, ...args)
 };
 
 // 🔒 OAuth State 저장소 (CSRF 방어용)
@@ -287,7 +288,7 @@ export function createAuthRoutes(port: number): Router {
                 })
             });
 
-            const tokenData = await tokenRes.json() as any;
+            const tokenData = await tokenRes.json() as OAuthTokenResponse;
 
             if (!tokenData.access_token) {
                 throw new Error('토큰 교환 실패');
@@ -297,7 +298,7 @@ export function createAuthRoutes(port: number): Router {
                 headers: { Authorization: `Bearer ${tokenData.access_token}` }
             });
 
-            const userInfo = await userInfoRes.json() as any;
+            const userInfo = await userInfoRes.json() as GoogleUserInfo;
             const email = userInfo.email;
 
              if (!email) {
@@ -370,7 +371,7 @@ export function createAuthRoutes(port: number): Router {
                 })
             });
 
-            const tokenData = await tokenRes.json() as any;
+            const tokenData = await tokenRes.json() as OAuthTokenResponse;
 
             if (!tokenData.access_token) {
                 throw new Error('토큰 교환 실패');
@@ -383,7 +384,7 @@ export function createAuthRoutes(port: number): Router {
                 }
             });
 
-            const githubUser = await userRes.json() as any;
+            const githubUser = await userRes.json() as GitHubUser;
             let email = githubUser.email;
 
             if (!email) {
@@ -393,7 +394,7 @@ export function createAuthRoutes(port: number): Router {
                         'User-Agent': 'Ollama-Chat'
                     }
                 });
-                const emails = await emailRes.json() as any[];
+                const emails = await emailRes.json() as GitHubEmail[];
                 const primaryEmail = emails.find(e => e.primary);
                 email = primaryEmail?.email || `${githubUser.login}@github.local`;
             }
@@ -427,8 +428,8 @@ export function createAdminRoutes(): Router {
     const userManager = getUserManager();
 
     const log = {
-        info: (msg: string, ...args: any[]) => console.log(`[INFO] ${msg}`, ...args),
-        error: (msg: string, ...args: any[]) => console.error(`[ERROR] ${msg}`, ...args)
+        info: (msg: string, ...args: unknown[]) => console.log(`[INFO] ${msg}`, ...args),
+        error: (msg: string, ...args: unknown[]) => console.error(`[ERROR] ${msg}`, ...args)
     };
 
      // 사용자 목록
@@ -438,7 +439,7 @@ export function createAdminRoutes(): Router {
              const result = await userManager.getAllUsers({
                 page: page ? parseInt(page as string) : undefined,
                 limit: limit ? parseInt(limit as string) : undefined,
-                role: role as any,
+                role: role as UserRole,
                 search: search as string
             });
             res.json({ success: true, ...result });

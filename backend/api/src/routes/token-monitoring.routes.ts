@@ -42,9 +42,9 @@ router.get('/keys', (req: Request, res: Response) => {
         }
 
          res.json(success({ totalKeys: status.totalKeys, activeKeyIndex: status.activeKeyIndex + 1, currentFailures: status.failures, lastFailover: status.lastFailover, keys, quota: quotaStatus }));
-     } catch (error: any) {
+     } catch (error: unknown) {
          console.error('[TokenMonitoring] 키 상태 조회 실패:', error);
-         res.status(500).json(internalError(error.message));
+         res.status(500).json(internalError(error instanceof Error ? error.message : String(error)));
      }
  });
 
@@ -70,9 +70,9 @@ router.get('/usage/daily', (req: Request, res: Response) => {
         };
 
          res.json(success(chartData));
-     } catch (error: any) {
+     } catch (error: unknown) {
          console.error('[TokenMonitoring] 일간 통계 조회 실패:', error);
-         res.status(500).json(internalError(error.message));
+         res.status(500).json(internalError(error instanceof Error ? error.message : String(error)));
      }
  });
 
@@ -95,9 +95,9 @@ router.get('/usage/hourly', (req: Request, res: Response) => {
         };
 
          res.json(success(chartData));
-     } catch (error: any) {
+     } catch (error: unknown) {
          console.error('[TokenMonitoring] 시간별 통계 조회 실패:', error);
-         res.status(500).json(internalError(error.message));
+         res.status(500).json(internalError(error instanceof Error ? error.message : String(error)));
      }
  });
 
@@ -111,9 +111,9 @@ router.get('/quota', (req: Request, res: Response) => {
         const quotaStatus = usageTracker.getQuotaStatus();
 
          res.json(success(quotaStatus));
-     } catch (error: any) {
+     } catch (error: unknown) {
          console.error('[TokenMonitoring] 할당량 조회 실패:', error);
-         res.status(500).json(internalError(error.message));
+         res.status(500).json(internalError(error instanceof Error ? error.message : String(error)));
      }
  });
 
@@ -130,9 +130,9 @@ router.get('/summary', (req: Request, res: Response) => {
         const keyStatus = keyManager.getStatus();
 
          res.json(success({ ...summary, keyInfo: { totalKeys: keyStatus.totalKeys, activeKey: keyStatus.activeKeyIndex + 1, failures: keyStatus.failures } }));
-     } catch (error: any) {
+     } catch (error: unknown) {
          console.error('[TokenMonitoring] 요약 조회 실패:', error);
-         res.status(500).json(internalError(error.message));
+         res.status(500).json(internalError(error instanceof Error ? error.message : String(error)));
      }
  });
 
@@ -146,9 +146,9 @@ router.post('/keys/reset', (req: Request, res: Response) => {
         keyManager.reset();
 
          res.json(success({ message: 'API 키 상태가 리셋되었습니다.' }));
-     } catch (error: any) {
+     } catch (error: unknown) {
          console.error('[TokenMonitoring] 키 리셋 실패:', error);
-         res.status(500).json(internalError(error.message));
+         res.status(500).json(internalError(error instanceof Error ? error.message : String(error)));
      }
  });
 
@@ -184,9 +184,9 @@ router.get('/costs', (req: Request, res: Response) => {
         }
 
          res.json(success({ today: { totalCost: parseFloat(totalCost.toFixed(6)), byModel: modelCosts, totalTokens: todayStats.totalTokens, totalRequests: todayStats.totalRequests }, weekly: { totalTokens: weeklyStats.totalTokens, totalRequests: weeklyStats.totalRequests, estimatedCost: parseFloat((weeklyStats.totalTokens * 0.00001).toFixed(6)) }, priceTable: modelPrices }));
-     } catch (error: any) {
+     } catch (error: unknown) {
          console.error('[TokenMonitoring] 비용 조회 실패:', error);
-         res.status(500).json(internalError(error.message));
+         res.status(500).json(internalError(error instanceof Error ? error.message : String(error)));
      }
  });
 

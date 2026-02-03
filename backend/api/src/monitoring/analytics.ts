@@ -249,7 +249,7 @@ export class AnalyticsSystem {
         const modelCosts: { model: string; cost: number; percentage: number }[] = [];
         let totalCost = weeklyCost || 1;
 
-        const todayModels = (summary.today as any).models || {};
+        const todayModels = ((summary.today as unknown as Record<string, unknown>)?.models as Record<string, unknown>) || {};
         for (const [model, count] of Object.entries(todayModels)) {
             const cost = (count as number) * 0.001; // 예시 비용
             modelCosts.push({

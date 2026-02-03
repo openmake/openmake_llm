@@ -5,7 +5,7 @@
 
 import * as bcrypt from 'bcryptjs';
 import * as crypto from 'crypto';
-import { getUnifiedDatabase, getPool } from './unified-database';
+import { getUnifiedDatabase, getPool, User } from './unified-database';
 
 export type UserRole = 'admin' | 'user' | 'guest';
 
@@ -48,8 +48,8 @@ export class UserModel {
             if (!user) return null;
 
             return this.toPublicUser(user);
-        } catch (error: any) {
-            console.error('[UserModel] 사용자 생성 실패:', error.message);
+        } catch (error: unknown) {
+            console.error('[UserModel] 사용자 생성 실패:', (error instanceof Error ? error.message : String(error)));
             return null;
         }
     }
@@ -149,7 +149,7 @@ export class UserModel {
     /**
      * Private: User 객체를 PublicUser로 변환
      */
-    private static toPublicUser(user: any): PublicUser {
+    private static toPublicUser(user: User): PublicUser {
         return {
             id: user.id,
             username: user.username,
