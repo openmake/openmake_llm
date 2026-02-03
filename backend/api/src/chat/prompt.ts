@@ -4,7 +4,7 @@
  * ============================================================
  */
 
-import { ModelOptions, MODEL_PRESETS } from '../ollama/types';
+import { ModelOptions, MODEL_PRESETS, ToolDefinition } from '../ollama/types';
 import {
     createDynamicMetadata
 } from './context-engineering';
@@ -770,11 +770,11 @@ export function getPromptConfig(question: string): {
     };
 }
 
-export function getToolCallingPrompt(tools: any[]): string {
+export function getToolCallingPrompt(tools: ToolDefinition[]): string {
     const toolDefs = tools.map(t => {
         const params = t.function.parameters?.properties
             ? Object.entries(t.function.parameters.properties)
-                .map(([k, v]: [string, any]) => `      - \`${k}\` (${v.type}): ${v.description}`)
+                .map(([k, v]: [string, { type: string; description?: string }]) => `      - \`${k}\` (${v.type}): ${v.description}`)
                 .join('\n')
             : '      (no parameters)';
         const required = t.function.parameters?.required?.join(', ') || 'none';

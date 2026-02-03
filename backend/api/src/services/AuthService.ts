@@ -5,7 +5,7 @@
  * 인증 관련 비즈니스 로직
  */
 
-import { getUserManager } from '../data/user-manager';
+import { getUserManager, PublicUser } from '../data/user-manager';
 import { generateToken } from '../auth';
 import { createLogger } from '../utils/logger';
 
@@ -32,7 +32,7 @@ export interface ChangePasswordRequest {
 export interface AuthResult {
     success: boolean;
     error?: string;
-    user?: any;
+    user?: PublicUser;
     token?: string;
 }
 

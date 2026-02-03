@@ -6,7 +6,7 @@
  */
 
 import { Request, Response, Router } from 'express';
-import { getUserManager } from '../data/user-manager';
+import { getUserManager, UserRole } from '../data/user-manager';
 import { requireAuth, requireAdmin } from '../auth';
 import { createLogger } from '../utils/logger';
 import { success, badRequest, notFound, internalError } from '../utils/api-response';
@@ -59,7 +59,7 @@ export class AdminController {
             const result = await userManager.getAllUsers({
                 page: page ? parseInt(page as string) : undefined,
                 limit: limit ? parseInt(limit as string) : undefined,
-                role: role as any,
+                role: role as UserRole,
                 search: search as string
             });
 

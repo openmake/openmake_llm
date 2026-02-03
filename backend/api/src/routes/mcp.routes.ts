@@ -98,7 +98,7 @@ mcpRouter.put('/settings', optionalAuth, async (req: Request, res: Response) => 
  mcpRouter.get('/tools', optionalAuth, (req: Request, res: Response) => {
      try {
          const mcpClient = getUnifiedMCPClient();
-         const userTier = (req.user as any)?.tier || 'free';
+         const userTier = req.user?.tier || 'free';
 
          const tools = mcpClient.getToolListForUser(userTier);
 
@@ -116,7 +116,7 @@ mcpRouter.put('/settings', optionalAuth, async (req: Request, res: Response) => 
          const { arguments: args = {} } = req.body;
 
          const mcpClient = getUnifiedMCPClient();
-         const user = req.user as any;
+         const user = req.user;
 
          if (!user) {
              res.status(401).json(unauthorized('인증이 필요합니다'));
@@ -125,7 +125,7 @@ mcpRouter.put('/settings', optionalAuth, async (req: Request, res: Response) => 
 
          // 사용자 컨텍스트 구성
          const context = {
-             userId: user.id,
+             userId: user.id ?? 0,
              tier: user.tier || 'free',
              role: user.role || 'user'
          };

@@ -115,12 +115,12 @@ export class SequentialThinkingServer {
                 }]
             };
 
-        } catch (error: any) {
+        } catch (error: unknown) {
             return {
                 isError: true,
                 content: [{
                     type: 'text',
-                    text: `Error: ${error.message}`
+                    text: `Error: ${(error instanceof Error ? error.message : String(error))}`
                 }]
             };
         }

@@ -46,3 +46,35 @@ export interface RegisterResponse {
     user?: PublicUser;
     error?: string;
 }
+
+// OAuth 응답 타입
+export interface OAuthTokenResponse {
+    access_token: string;
+    token_type?: string;
+    scope?: string;
+    refresh_token?: string;
+    expires_in?: number;
+}
+
+export interface GoogleUserInfo {
+    sub: string;
+    email: string;
+    name?: string;
+    picture?: string;
+    email_verified?: boolean;
+}
+
+export interface GitHubUser {
+    id: number;
+    login: string;
+    email?: string;
+    name?: string;
+    avatar_url?: string;
+}
+
+export interface GitHubEmail {
+    email: string;
+    primary: boolean;
+    verified: boolean;
+    visibility?: string | null;
+}

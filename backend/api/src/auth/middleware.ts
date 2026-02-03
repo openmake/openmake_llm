@@ -31,6 +31,7 @@ declare global {
             /** 인증된 사용자 정보 - PublicUser(DB) 또는 AuthUser(JWT) */
             user?: PublicUser | AuthUser;
             token?: string;
+            cookies?: Record<string, string>;
         }
     }
 }

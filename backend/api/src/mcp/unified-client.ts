@@ -6,7 +6,7 @@
 
 import { MCPServer, createMCPServer } from './server';
 import { getSequentialThinkingServer, applySequentialThinking } from './sequential-thinking';
-import { MCPToolDefinition, MCPToolResult } from './types';
+import { MCPToolDefinition, MCPToolResult, MCPRequest, MCPResponse } from './types';
 import { UserTier } from '../data/user-manager';
 import { canUseTool, getToolsForTier } from './tool-tiers';
 import { UserSandbox, UserContext } from './user-sandbox';
@@ -110,7 +110,7 @@ export class UnifiedMCPClient {
     /**
      * 외부 MCP 요청 처리 (SSE 핸들러용)
      */
-    async handleMCPRequest(request: any): Promise<any> {
+    async handleMCPRequest(request: MCPRequest): Promise<MCPResponse> {
         return this.server.handleRequest(request);
     }
 

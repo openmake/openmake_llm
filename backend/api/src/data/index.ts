@@ -5,11 +5,26 @@
 
 export * from './user-manager';
 
+/** Conversation log entry */
+interface ConversationLogEntry {
+    userId?: string;
+    timestamp: string;
+    date: string;
+    [key: string]: unknown;
+}
+
+/** Daily stats entry */
+interface DailyStatsEntry {
+    date: string;
+    total: number;
+    users: number | Set<string>;
+}
+
 // ConversationLogger 전체 구현
 class ConversationLoggerImpl {
-    private conversations: any[] = [];
+    private conversations: ConversationLogEntry[] = [];
 
-    logConversation(message: any) {
+    logConversation(message: Record<string, unknown>) {
         this.conversations.push({
             ...message,
             timestamp: new Date().toISOString(),
@@ -17,23 +32,23 @@ class ConversationLoggerImpl {
         });
     }
 
-    log(userId: string, message: any) {
+    log(userId: string, message: Record<string, unknown>) {
         this.logConversation({ ...message, userId });
     }
 
-    getHistory(userId: string, limit: number = 50): any[] {
+    getHistory(userId: string, limit: number = 50): ConversationLogEntry[] {
         return this.conversations.filter(c => c.userId === userId).slice(-limit);
     }
 
-    getRecentConversations(limit: number = 100): any[] {
+    getRecentConversations(limit: number = 100): ConversationLogEntry[] {
         return this.conversations.slice(-limit);
     }
 
-    getConversationsByDate(date: string): any[] {
+    getConversationsByDate(date: string): ConversationLogEntry[] {
         return this.conversations.filter(c => c.date === date);
     }
 
-    getDailyStats(date?: string): any {
+    getDailyStats(date?: string): DailyStatsEntry | DailyStatsEntry[] {
         if (date) {
             const dayConversations = this.getConversationsByDate(date);
             return {
@@ -43,14 +58,14 @@ class ConversationLoggerImpl {
             };
         }
         // 전체 일별 통계
-        const grouped = this.conversations.reduce((acc: any, c: any) => {
+        const grouped = this.conversations.reduce((acc: Record<string, { date: string; total: number; users: Set<string> }>, c) => {
             const d = c.date || 'unknown';
             if (!acc[d]) acc[d] = { date: d, total: 0, users: new Set() };
             acc[d].total++;
             acc[d].users.add(c.userId || 'anonymous');
             return acc;
         }, {});
-        return Object.values(grouped).map((g: any) => ({ ...g, users: g.users.size }));
+        return Object.values(grouped).map((g) => ({ ...g, users: g.users.size }));
     }
 
     clear(userId?: string) {

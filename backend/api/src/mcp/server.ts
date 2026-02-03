@@ -116,9 +116,19 @@ export class MCPServer {
                     };
 
                 case 'tools/call': {
-                    const toolName = (params as any)?.name;
-                    const toolArgs = (params as any)?.arguments || {};
+                    const toolName = (params as { name?: string; arguments?: Record<string, unknown> })?.name;
+                    const toolArgs = (params as { name?: string; arguments?: Record<string, unknown> })?.arguments || {};
 
+                    if (!toolName) {
+                        return {
+                            jsonrpc: '2.0',
+                            id,
+                            error: {
+                                code: -32602,
+                                message: '도구 이름이 지정되지 않았습니다'
+                            }
+                        };
+                    }
                     const toolDef = this.tools.get(toolName);
                     if (!toolDef) {
                         return {

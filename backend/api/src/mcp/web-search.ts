@@ -40,7 +40,7 @@ export interface ResearchResult {
     summary: string;
     keyFindings: string[];
     sources: SearchResult[];
-    qualityMetrics: any;
+    qualityMetrics: Record<string, unknown>;
 }
 
 /**

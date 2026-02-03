@@ -56,7 +56,7 @@ router.get('/models', requireAdmin, async (req: Request, res: Response) => {
 
             res.json(success({
                 defaultModel,
-                models: models.map((m: any) => ({
+                models: models.map((m: { name: string; size?: number; modified_at?: string; digest?: string }) => ({
                     name: m.name,
                     size: m.size,
                     modified: m.modified_at,

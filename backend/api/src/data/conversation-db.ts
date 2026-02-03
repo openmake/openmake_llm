@@ -21,7 +21,7 @@ export interface ConversationSession {
     title: string;
     created_at: string;
     updated_at: string;
-    metadata?: any;
+    metadata?: Record<string, unknown> | null;
     messages: ConversationMessage[];
 }
 
@@ -35,6 +35,14 @@ export interface ConversationMessage {
     thinking?: string;
 }
 
+/** Options for adding a message */
+interface MessageOptions {
+    model?: string;
+    thinking?: string;
+    tokensUsed?: number;
+    responseTime?: number;
+}
+
 // Internal row types for PostgreSQL mapping
 interface SessionRow {
     id: string;
@@ -43,7 +51,7 @@ interface SessionRow {
     title: string;
     created_at: string;
     updated_at: string;
-    metadata: any | null;
+    metadata: Record<string, unknown> | null;
 }
 
 interface MessageRow {
@@ -76,7 +84,7 @@ class ConversationDB {
         const pool = getPool();
         try {
             await pool.query(`ALTER TABLE conversation_sessions ADD COLUMN IF NOT EXISTS anon_session_id TEXT`);
-        } catch (_e: any) {
+        } catch (_e: unknown) {
             // "duplicate column name" is expected if already exists — ignore
         }
     }
@@ -99,7 +107,14 @@ class ConversationDB {
             if (!fs.existsSync(jsonPath)) return;
 
             const raw = fs.readFileSync(jsonPath, 'utf-8');
-            const sessions: any[] = JSON.parse(raw);
+            const sessions = JSON.parse(raw) as Array<{
+                id: string; userId?: string; anonSessionId?: string;
+                title?: string; created_at?: string; updated_at?: string;
+                metadata?: Record<string, unknown>; messages?: Array<{
+                    role: string; content: string; model?: string;
+                    thinking?: string; timestamp?: string;
+                }>;
+            }>;
             if (!Array.isArray(sessions) || sessions.length === 0) return;
 
             const pool = getPool();
@@ -110,7 +125,7 @@ class ConversationDB {
 
                 // FK 위반 방지: users 테이블의 유효한 ID 목록 조회
                 const userResult = await client.query('SELECT id FROM users');
-                const validUserIds = new Set<string>(userResult.rows.map((r: any) => r.id));
+                const validUserIds = new Set<string>(userResult.rows.map((r) => r.id));
 
                 for (const s of sessions) {
                     await client.query(
@@ -238,7 +253,7 @@ class ConversationDB {
 
     // ===== Public API =====
 
-    async createSession(userId?: string, title?: string, metadata?: any, anonSessionId?: string): Promise<ConversationSession> {
+    async createSession(userId?: string, title?: string, metadata?: Record<string, unknown> | null, anonSessionId?: string): Promise<ConversationSession> {
         const pool = getPool();
         const id = uuidv4();
         const now = new Date().toISOString();
@@ -333,7 +348,7 @@ class ConversationDB {
         return (result.rows as MessageRow[]).map(r => this.rowToMessage(r));
     }
 
-    async addMessage(sessionId: string, role: 'user' | 'assistant' | 'system', content: string, options?: any): Promise<ConversationMessage | null> {
+    async addMessage(sessionId: string, role: 'user' | 'assistant' | 'system', content: string, options?: MessageOptions): Promise<ConversationMessage | null> {
         const pool = getPool();
 
         // Verify session exists
@@ -372,7 +387,7 @@ class ConversationDB {
     }
 
     // saveMessage 별칭 메서드 (server.ts 호환성)
-    async saveMessage(sessionId: string, role: 'user' | 'assistant' | 'system', content: string, options?: any) {
+    async saveMessage(sessionId: string, role: 'user' | 'assistant' | 'system', content: string, options?: MessageOptions) {
         return this.addMessage(sessionId, role, content, options);
     }
 
@@ -424,7 +439,7 @@ export function getConversationDB() {
 }
 
 // 스케줄러 (server.ts에서 require로 사용됨)
-let cleanupTimer: any = null;
+let cleanupTimer: ReturnType<typeof setTimeout> | null = null;
 
 export function startSessionCleanupScheduler(intervalHours: number = 24) {
     if (cleanupTimer) clearInterval(cleanupTimer);

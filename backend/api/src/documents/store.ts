@@ -27,7 +27,7 @@ export interface DocumentStore {
     has(key: string): boolean;
     clear(): void;
     readonly size: number;
-    forEach(callbackfn: (value: DocumentResult, key: string, map: DocumentStore) => void, thisArg?: any): void;
+    forEach(callbackfn: (value: DocumentResult, key: string, map: DocumentStore) => void, thisArg?: unknown): void;
     entries(): IterableIterator<[string, DocumentResult]>;
     keys(): IterableIterator<string>;
     values(): IterableIterator<DocumentResult>;
@@ -123,7 +123,7 @@ class TTLDocumentMap implements DocumentStore {
         return this.store.size;
     }
 
-    forEach(callbackfn: (value: DocumentResult, key: string, map: DocumentStore) => void, thisArg?: any): void {
+    forEach(callbackfn: (value: DocumentResult, key: string, map: DocumentStore) => void, thisArg?: unknown): void {
         for (const [key, stored] of this.store.entries()) {
             callbackfn.call(thisArg, stored.document, key, this);
         }

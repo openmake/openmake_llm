@@ -147,7 +147,7 @@ export class ConnectionPool {
         // 3. 대기열에 추가
         return new Promise((resolve, reject) => {
             const timeout = setTimeout(() => {
-                const idx = this.waitQueue.indexOf(resolve as any);
+                const idx = this.waitQueue.indexOf(resolve as (conn: PooledConnection) => void);
                 if (idx > -1) this.waitQueue.splice(idx, 1);
                 reject(new Error('연결 획득 타임아웃'));
             }, this.config.acquireTimeout);

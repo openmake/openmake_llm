@@ -6,27 +6,28 @@
  */
 
 import * as jwt from 'jsonwebtoken';
+import type { Response } from 'express';
 import { JWTPayload } from './types';
 import { PublicUser, UserRole } from '../data/user-manager';
 import * as crypto from 'crypto';
 import { getTokenBlacklist } from '../data/models/token-blacklist';
 
-// JWT 비밀키 (환경변수 필수, 개발환경에서는 세션별 랜덤 시크릿 생성)
-const generateDevSecret = () => {
-    return `dev-session-${crypto.randomBytes(32).toString('hex')}`;
-};
-
-const JWT_SECRET = process.env.JWT_SECRET || generateDevSecret();
+// JWT 비밀키 (환경변수 필수)
+// 보안: 런타임 시크릿 생성은 수평 확장 시 노드 간 불일치를 유발하므로 제거
+const JWT_SECRET = process.env.JWT_SECRET || '';
 const JWT_EXPIRES_IN = '15m';  // Access token - short lived for security
 const REFRESH_TOKEN_EXPIRES_IN = '7d';  // Refresh token - longer lived
 
-// JWT_SECRET 미설정 경고
-if (!process.env.JWT_SECRET) {
-    console.warn('[Auth] ⚠️ JWT_SECRET 환경변수가 설정되지 않았습니다!');
-    console.warn('[Auth] 개발 환경용 세션 시크릿이 자동 생성되었습니다. 서버 재시작 시 기존 토큰이 무효화됩니다.');
-    console.warn('[Auth] 보안을 위해 .env 파일에 JWT_SECRET을 반드시 설정하세요.');
-    if (process.env.NODE_ENV === 'production') {
-        throw new Error('[Auth] 프로덕션 환경에서는 JWT_SECRET 환경변수가 필수입니다!');
+// JWT_SECRET 미설정 시 모든 환경에서 에러 (테스트 환경 제외)
+if (!JWT_SECRET) {
+    if (process.env.NODE_ENV === 'test') {
+        // 테스트 환경에서는 경고만 (테스트 프레임워크에서 자체 설정)
+        console.warn('[Auth] ⚠️ JWT_SECRET이 설정되지 않았습니다 (테스트 환경)');
+    } else {
+        console.error('[Auth] ❌ JWT_SECRET 환경변수가 설정되지 않았습니다!');
+        console.error('[Auth] .env 파일에 JWT_SECRET을 반드시 설정하세요.');
+        console.error('[Auth] 예: JWT_SECRET=$(openssl rand -hex 32)');
+        throw new Error('[Auth] JWT_SECRET 환경변수가 필수입니다. .env 파일에 설정하세요.');
     }
 }
 
@@ -145,7 +146,7 @@ export { optionalAuth, requireAuth, requireAdmin, requireRole } from './middlewa
 /**
  * 토큰을 httpOnly 쿠키에 설정
  */
-export function setTokenCookie(res: any, token: string): void {
+export function setTokenCookie(res: Response, token: string): void {
     res.cookie('auth_token', token, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
@@ -158,6 +159,6 @@ export function setTokenCookie(res: any, token: string): void {
 /**
  * 토큰 쿠키 삭제
  */
-export function clearTokenCookie(res: any): void {
+export function clearTokenCookie(res: Response): void {
     res.clearCookie('auth_token', { path: '/' });
 }

@@ -5,6 +5,7 @@
 
 import axios from 'axios';
 import { v4 as uuidv4 } from 'uuid';
+import type { Application, Request, Response } from 'express';
 
 // OAuth 프로바이더 설정
 export interface OAuthProviderConfig {
@@ -296,7 +297,7 @@ export class OAuthManager {
                                 'Accept': 'application/json'
                             }
                         });
-                        const primaryEmail = emailResponse.data.find((e: any) => e.primary);
+                        const primaryEmail = emailResponse.data.find((e: { primary?: boolean; email?: string }) => e.primary);
                         email = primaryEmail?.email || '';
                     } catch (e) {
                         console.warn('[OAuth] GitHub 이메일 조회 실패');
@@ -360,20 +361,20 @@ export function getOAuthManager(): OAuthManager {
 /**
  * OAuth 라우트 설정 헬퍼
  */
-export function setupOAuthRoutes(app: any): void {
+export function setupOAuthRoutes(app: Application): void {
     const oauth = getOAuthManager();
 
     // 사용 가능한 프로바이더 목록
-    app.get('/api/auth/providers', (req: any, res: any) => {
+    app.get('/api/auth/providers', (req: Request, res: Response) => {
         res.json({
             providers: oauth.getAvailableProviders()
         });
     });
 
     // 인증 시작
-    app.get('/api/auth/login/:provider', (req: any, res: any) => {
+    app.get('/api/auth/login/:provider', (req: Request, res: Response) => {
         const { provider } = req.params;
-        const returnUrl = req.query.returnUrl;
+        const returnUrl = req.query.returnUrl as string | undefined;
 
         const authUrl = oauth.getAuthorizationUrl(provider, returnUrl);
         if (!authUrl) {
@@ -384,9 +385,11 @@ export function setupOAuthRoutes(app: any): void {
     });
 
     // 콜백 처리
-    app.get('/api/auth/callback/:provider', async (req: any, res: any) => {
+    app.get('/api/auth/callback/:provider', async (req: Request, res: Response) => {
         const { provider } = req.params;
-        const { code, state, error } = req.query;
+        const code = req.query.code as string | undefined;
+        const state = req.query.state as string | undefined;
+        const error = req.query.error as string | undefined;
 
         if (error) {
             return res.redirect(`/login.html?error=${encodeURIComponent(error)}`);

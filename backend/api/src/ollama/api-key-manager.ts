@@ -115,9 +115,10 @@ export class ApiKeyManager {
     /**
      * 요청 실패 시 호출 - 자동 로테이션 처리
      */
-    reportFailure(error?: any): boolean {
+    reportFailure(error?: unknown): boolean {
         this.failureCount++;
-        const errorCode = error?.response?.status || error?.code || 'unknown';
+        const err = error as { response?: { status?: number }; code?: string } | undefined;
+        const errorCode = err?.response?.status || err?.code || 'unknown';
 
         // 현재 키의 실패 기록 업데이트
         const currentFailure = this.keyFailures.get(this.currentKeyIndex) || { count: 0, lastFail: new Date() };

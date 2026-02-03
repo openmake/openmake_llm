@@ -6,7 +6,7 @@
  */
 
 import { Request, Response, Router } from 'express';
-import { getConversationDB } from '../data/conversation-db';
+import { getConversationDB, ConversationSession } from '../data/conversation-db';
 import { optionalAuth } from '../auth';
 import { createLogger } from '../utils/logger';
 import { success, internalError as apiInternalError } from '../utils/api-response';
@@ -45,7 +45,7 @@ export class SessionController {
         // 세션 목록 조회 (사용자 격리 적용)
         this.router.get('/', optionalAuth, async (req: Request, res: Response) => {
             try {
-                const user = (req as any).user;
+                const user = req.user;
                 const anonSessionId = req.query.anonSessionId as string;
                 const viewAll = req.query.viewAll === 'true';
                 const viewMineOnly = req.query.viewMineOnly === 'true';
@@ -54,7 +54,7 @@ export class SessionController {
                 // 🔍 디버그 로그 - 문제 해결 후 제거
                 log.info(`[Chat Sessions] 🔍 DEBUG - user: ${JSON.stringify(user)}, anonSessionId: ${anonSessionId}, viewAll: ${viewAll}, viewMineOnly: ${viewMineOnly}`);
 
-                let sessions: any[];
+                let sessions: ConversationSession[];
                 const isAdminUser = user?.role === 'admin';
 
                 log.info(`[Chat Sessions] 🔍 DEBUG - isAdminUser: ${isAdminUser}, role: ${user?.role}`);
@@ -79,7 +79,7 @@ export class SessionController {
                 }
 
                 // 프론트엔드 호환을 위해 snake_case → camelCase 변환
-                const formattedSessions = sessions.map((s: any) => ({
+                const formattedSessions = sessions.map((s) => ({
                     id: s.id,
                     userId: s.userId,
                     anonSessionId: s.anonSessionId,
@@ -89,7 +89,7 @@ export class SessionController {
                     metadata: s.metadata,
                     messageCount: s.messages?.length || 0,
                     // 🆕 첫 번째 메시지에서 모델 정보 추출 (없으면 기본 모델 표시)
-                    model: s.messages?.[0]?.model || s.model || envConfig.ollamaDefaultModel || 'Ollama'
+                    model: (s.messages?.[0] as unknown as Record<string, unknown>)?.model || (s as unknown as Record<string, unknown>).model || envConfig.ollamaDefaultModel || 'Ollama'
                 }));
 
                 res.json(success({ sessions: formattedSessions }));
@@ -102,11 +102,11 @@ export class SessionController {
         // 새 세션 생성 (anonSessionId 지원)
         this.router.post('/', optionalAuth, async (req: Request, res: Response) => {
             try {
-                const user = (req as any).user;
+                const user = req.user;
                 const { title, model, anonSessionId } = req.body;
 
                 // 로그인 사용자는 userId 사용, 비로그인은 anonSessionId 사용
-                const userId = user?.id || undefined;
+                const userId = user?.id ? String(user.id) : undefined;
                 const anonId = userId ? undefined : anonSessionId;
 
                 const session = await conversationDb.createSession(userId, title, model, anonId);

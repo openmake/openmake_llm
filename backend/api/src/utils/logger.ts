@@ -55,10 +55,10 @@ export const logger = winston.createLogger({
 // 카테고리별 로거 생성
 export function createLogger(category: string) {
     return {
-        debug: (msg: string, meta?: any) => logger.debug(`[${category}] ${msg}`, meta),
-        info: (msg: string, meta?: any) => logger.info(`[${category}] ${msg}`, meta),
-        warn: (msg: string, meta?: any) => logger.warn(`[${category}] ${msg}`, meta),
-        error: (msg: string, meta?: any) => logger.error(`[${category}] ${msg}`, meta)
+        debug: (msg: string, meta?: unknown) => logger.debug(`[${category}] ${msg}`, meta),
+        info: (msg: string, meta?: unknown) => logger.info(`[${category}] ${msg}`, meta),
+        warn: (msg: string, meta?: unknown) => logger.warn(`[${category}] ${msg}`, meta),
+        error: (msg: string, meta?: unknown) => logger.error(`[${category}] ${msg}`, meta)
     };
 }
 

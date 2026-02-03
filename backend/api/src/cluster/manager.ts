@@ -188,9 +188,9 @@ export class ClusterManager extends EventEmitter {
             try {
                 const response = await client.listModels();
                 node.models = response.models.map(m => m.name);
-            } catch (e: any) {
+            } catch (e: unknown) {
                 // 모델 목록 조회 실패 - 로깅
-                console.debug(`[Cluster] ${nodeId} 모델 목록 조회 실패:`, e.message || e);
+                console.debug(`[Cluster] ${nodeId} 모델 목록 조회 실패:`, (e instanceof Error ? e.message : String(e)) || e);
             }
 
             // 레이턴시 측정
@@ -389,9 +389,9 @@ export class ClusterManager extends EventEmitter {
             try {
                 const response = await client.listModels();
                 node.models = response.models.map(m => m.name);
-            } catch (e: any) {
+            } catch (e: unknown) {
                 // 모델 목록 갱신 실패 - 로깅
-                console.debug(`[Cluster] ${nodeId} 모델 갱신 실패:`, e.message || e);
+                console.debug(`[Cluster] ${nodeId} 모델 갱신 실패:`, (e instanceof Error ? e.message : String(e)) || e);
             }
             node.latency = await this.measureLatency(client);
         }

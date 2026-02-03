@@ -56,7 +56,7 @@ export async function extractPdfText(
             console.error = originalError;
             throw innerError;
         }
-    } catch (e: any) {
+    } catch (e: unknown) {
         // 텍스트 추출이 불가능한 경우 (이미지 PDF 등)
         console.log('[PDF] 텍스트 레이어가 없습니다. 이미지 정밀 분석(OCR)을 준비합니다...');
         onProgress?.(createProgressEvent('ocr_prepare', 'OCR 프로세스 준비 중...', filename, 20));
@@ -141,8 +141,8 @@ export async function extractPdfText(
                     // 임시 파일 정리 실패는 무시 - 시스템이 자체 정리
                 }
             }
-        } catch (e: any) {
-            console.error('[PDF/OCR] 프로세스 오류:', e.message);
+        } catch (e: unknown) {
+            console.error('[PDF/OCR] 프로세스 오류:', (e instanceof Error ? e.message : String(e)));
         }
     }
 
@@ -199,7 +199,7 @@ export async function extractImageText(
         onProgress?.(createProgressEvent('image_ocr', '이미지 OCR 분석 시작...', filename, 20));
 
         const result = await Tesseract.recognize(filePath, 'kor+eng', {
-            logger: (m: any) => {
+            logger: (m: { status: string; progress: number }) => {
                 if (m.status === 'recognizing text') {
                     const progress = 20 + Math.round(m.progress * 70);  // 20~90%
                     console.log(`[OCR] 진행률: ${(m.progress * 100).toFixed(0)}%`);
@@ -231,8 +231,8 @@ export async function extractImageText(
                 mime: `image/${path.extname(filePath).slice(1)}`
             }
         };
-    } catch (e: any) {
-        console.error('[OCR] 오류:', e.message);
+    } catch (e: unknown) {
+        console.error('[OCR] 오류:', (e instanceof Error ? e.message : String(e)));
 
         // 이미지 파일인 경우 텍스트 추출에 실패해도 base64 데이터는 지원 (Vision 모델용)
         try {
@@ -248,7 +248,7 @@ export async function extractImageText(
             return {
                 filename,
                 type: 'image',
-                text: `[이미지 파일: ${filename}] OCR 처리 및 파일 읽기 오류: ${e.message}`
+                text: `[이미지 파일: ${filename}] OCR 처리 및 파일 읽기 오류: ${(e instanceof Error ? e.message : String(e))}`
             };
         }
     }
@@ -273,18 +273,18 @@ export async function extractExcelText(
         let allText = '';
         console.log(`[Excel] 시트 ${workbook.worksheets.length}개 처리 중...`);
 
-        workbook.eachSheet((worksheet: any, sheetId: number) => {
+        workbook.eachSheet((worksheet: { name: string; eachRow: (cb: (row: { values: unknown[] | Record<string, unknown> }, rowNumber: number) => void) => void }, sheetId: number) => {
             allText += `\n\n=== 시트: ${worksheet.name} ===\n\n`;
 
-            worksheet.eachRow((row: any, rowNumber: number) => {
+            worksheet.eachRow((row: { values: unknown[] | Record<string, unknown> }, rowNumber: number) => {
                 const rowValues = row.values;
                 if (Array.isArray(rowValues)) {
                     // exceljs row.values is 1-indexed array, with index 0 abandoned
                     const rowText = rowValues
                         .slice(1)
-                        .map((cell: any) => {
-                            if (cell && typeof cell === 'object' && cell.result !== undefined) {
-                                return String(cell.result);
+                        .map((cell: unknown) => {
+                            if (cell && typeof cell === 'object' && 'result' in cell && (cell as { result: unknown }).result !== undefined) {
+                                return String((cell as { result: unknown }).result);
                             }
                             return cell !== undefined && cell !== null ? String(cell) : '';
                         })
@@ -303,12 +303,12 @@ export async function extractExcelText(
             text: allText.trim(),
             info: { sheets: workbook.worksheets.length }
         };
-    } catch (e: any) {
-        console.error('[Excel] 오류:', e.message);
+    } catch (e: unknown) {
+        console.error('[Excel] 오류:', (e instanceof Error ? e.message : String(e)));
         return {
             filename,
             type: 'excel',
-            text: `[Excel 파일: ${filename}] 처리 오류: ${e.message}`
+            text: `[Excel 파일: ${filename}] 처리 오류: ${(e instanceof Error ? e.message : String(e))}`
         };
     }
 }

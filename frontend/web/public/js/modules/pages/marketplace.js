@@ -60,7 +60,7 @@
                 if (!agents.length) { el.innerHTML = '<div class="empty-state"><h2>에이전트가 없습니다</h2></div>'; return; }
                 el.innerHTML = agents.map(a => `
                     <div class="agent-card" onclick="openAgent('${a.id}')">
-                        <div class="agent-icon">${a.icon || '&#129302;'}</div>
+                        <div class="agent-icon">${esc(a.icon) || '&#129302;'}</div>
                         <h3>${esc(a.title)}</h3>
                         <div class="desc">${esc(a.description)}</div>
                         <div style="margin-bottom:var(--space-3)">${a.category ? '<span class="badge-cat">' + esc(a.category) + '</span>' : ''} ${a.is_featured ? '<span class="badge-featured">추천</span>' : ''}</div>
@@ -78,7 +78,7 @@
             try {
                 const res = await authFetch('/api/marketplace/' + id);
                 const a = res.data || res;
-                document.getElementById('detailIcon').innerHTML = a.icon || '&#129302;';
+                document.getElementById('detailIcon').innerHTML = esc(a.icon) || '&#129302;';
                 document.getElementById('detailTitle').textContent = a.title;
                 document.getElementById('detailMeta').innerHTML = `
                     <span>${starsHtml(a.rating_avg)} ${(a.rating_avg||0).toFixed(1)} (${a.rating_count||0})</span>

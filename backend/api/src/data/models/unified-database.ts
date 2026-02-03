@@ -5,6 +5,12 @@
 
 import { Pool, QueryResult } from 'pg';
 
+/** Generic DB query parameter type */
+type QueryParam = string | number | boolean | null | undefined;
+
+/** Generic DB row from pg query result */
+type DbRow = Record<string, unknown>;
+
 // 데이터베이스 스키마 (PostgreSQL)
 const SCHEMA = `
 -- 사용자 테이블
@@ -369,7 +375,7 @@ export interface ConversationSession {
     title: string;
     created_at: string;
     updated_at: string;
-    metadata?: any;
+    metadata?: Record<string, unknown> | null;
 }
 
 export interface ConversationMessage {
@@ -565,19 +571,31 @@ export interface ExternalFile {
 export class UnifiedDatabase {
     private pool: Pool;
 
+    private schemaReady: Promise<void>;
+
     constructor() {
         this.pool = new Pool({
             connectionString: process.env.DATABASE_URL || 'postgresql://localhost:5432/openmake_llm'
         });
 
-        // 스키마 초기화 (비동기)
-        this.initSchema().catch(err => console.error('[UnifiedDB] Schema init failed:', err));
+        // 스키마 초기화 — Promise를 보관하여 초기 쿼리가 스키마 완료를 대기할 수 있도록 함
+        this.schemaReady = this.initSchema().catch(err => {
+            console.error('[UnifiedDB] Schema init failed:', err);
+        }) as Promise<void>;
 
         console.log(`[UnifiedDB] PostgreSQL Pool 초기화 완료`);
     }
 
     private async initSchema(): Promise<void> {
         await this.pool.query(SCHEMA);
+    }
+
+    /**
+     * 스키마 초기화 완료를 보장하는 헬퍼
+     * 외부에서 DB를 사용하기 전에 호출하여 race condition 방지
+     */
+    async ensureReady(): Promise<void> {
+        await this.schemaReady;
     }
 
     /**
@@ -619,7 +637,7 @@ export class UnifiedDatabase {
 
     // ===== 대화 관리 =====
 
-    async createSession(id: string, userId?: string, title?: string, metadata?: any) {
+    async createSession(id: string, userId?: string, title?: string, metadata?: Record<string, unknown> | null) {
         const result = await this.pool.query(
             `INSERT INTO conversation_sessions (id, user_id, title, metadata) VALUES ($1, $2, $3, $4)`,
             [id, userId, title || '새 대화', JSON.stringify(metadata || {})]
@@ -678,7 +696,7 @@ export class UnifiedDatabase {
 
     // ===== API 사용량 관리 =====
 
-    async recordApiUsage(date: string, apiKeyId: string, requests: number, tokens: number, errors: number, avgResponseTime: number, models: any) {
+    async recordApiUsage(date: string, apiKeyId: string, requests: number, tokens: number, errors: number, avgResponseTime: number, models: Record<string, unknown>) {
         const result = await this.pool.query(
             `INSERT INTO api_usage (date, api_key_id, requests, tokens, errors, avg_response_time, models)
             VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -755,7 +773,7 @@ export class UnifiedDatabase {
         userId?: string;
         resourceType?: string;
         resourceId?: string;
-        details?: any;
+        details?: Record<string, unknown>;
         ipAddress?: string;
         userAgent?: string;
     }) {
@@ -825,14 +843,13 @@ export class UnifiedDatabase {
             ]
         );
 
-        // 태그 저장
+        // 태그 저장 (멀티 로우 INSERT로 N+1 쿼리 방지)
         if (params.tags && params.tags.length > 0) {
-            for (const tag of params.tags) {
-                await this.pool.query(
-                    `INSERT INTO memory_tags (memory_id, tag) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
-                    [params.id, tag]
-                );
-            }
+            const tagValues = params.tags.map((_, i) => `($1, $${i + 2})`).join(', ');
+            await this.pool.query(
+                `INSERT INTO memory_tags (memory_id, tag) VALUES ${tagValues} ON CONFLICT DO NOTHING`,
+                [params.id, ...params.tags]
+            );
         }
     }
 
@@ -842,7 +859,7 @@ export class UnifiedDatabase {
         minImportance?: number;
     }): Promise<UserMemory[]> {
         let query = 'SELECT * FROM user_memories WHERE user_id = $1';
-        const params: any[] = [userId];
+        const params: QueryParam[] = [userId];
         let paramIdx = 2;
 
         if (options?.category) {
@@ -874,7 +891,7 @@ export class UnifiedDatabase {
         }
 
         // 키워드 매칭 쿼리
-        const params: any[] = [userId];
+        const params: QueryParam[] = [userId];
         let paramIdx = 2;
         const conditions = keywords.map(kw => {
             const p1 = paramIdx++;
@@ -913,7 +930,7 @@ export class UnifiedDatabase {
 
     async updateMemory(memoryId: string, updates: { value?: string; importance?: number }): Promise<void> {
         const sets: string[] = ['updated_at = NOW()'];
-        const params: any[] = [];
+        const params: QueryParam[] = [];
         let paramIdx = 1;
 
         if (updates.value !== undefined) {
@@ -955,7 +972,7 @@ export class UnifiedDatabase {
 
     async getResearchSession(sessionId: string): Promise<ResearchSession | undefined> {
         const result = await this.pool.query('SELECT * FROM research_sessions WHERE id = $1', [sessionId]);
-        const row = result.rows[0] as any;
+        const row = result.rows[0];
         if (!row) return undefined;
 
         return {
@@ -973,7 +990,7 @@ export class UnifiedDatabase {
         sources?: string[];
     }): Promise<void> {
         const sets: string[] = ['updated_at = NOW()'];
-        const params: any[] = [];
+        const params: QueryParam[] = [];
         let paramIdx = 1;
 
         if (updates.status) {
@@ -1030,7 +1047,7 @@ export class UnifiedDatabase {
             `SELECT * FROM research_steps WHERE session_id = $1 ORDER BY step_number ASC`,
             [sessionId]
         );
-        return result.rows.map((row: any) => ({
+        return result.rows.map((row) => ({
             ...row,
             sources: row.sources || []
         }));
@@ -1041,7 +1058,7 @@ export class UnifiedDatabase {
             `SELECT * FROM research_sessions WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2`,
             [userId, limit]
         );
-        return result.rows.map((row: any) => ({
+        return result.rows.map((row) => ({
             ...row,
             key_findings: row.key_findings || [],
             sources: row.sources || []
@@ -1088,7 +1105,7 @@ export class UnifiedDatabase {
         offset?: number;
     }): Promise<MarketplaceAgent[]> {
         let query = 'SELECT * FROM agent_marketplace WHERE 1=1';
-        const params: any[] = [];
+        const params: QueryParam[] = [];
         let paramIdx = 1;
 
         if (options?.status) {
@@ -1124,7 +1141,7 @@ export class UnifiedDatabase {
         }
 
         const result = await this.pool.query(query, params);
-        return result.rows.map((row: any) => ({
+        return result.rows.map((row) => ({
             ...row,
             tags: row.tags || [],
             is_free: !!row.is_free,
@@ -1135,7 +1152,7 @@ export class UnifiedDatabase {
 
     async getMarketplaceAgent(marketplaceId: string): Promise<MarketplaceAgent | undefined> {
         const result = await this.pool.query('SELECT * FROM agent_marketplace WHERE id = $1', [marketplaceId]);
-        const row = result.rows[0] as any;
+        const row = result.rows[0];
         if (!row) return undefined;
 
         return {
@@ -1187,7 +1204,7 @@ export class UnifiedDatabase {
             ORDER BY i.installed_at DESC`,
             [userId]
         );
-        return result.rows.map((row: any) => ({
+        return result.rows.map((row) => ({
             ...row,
             tags: row.tags || [],
             is_free: !!row.is_free,
@@ -1258,7 +1275,7 @@ export class UnifiedDatabase {
 
     async getCanvasDocument(documentId: string): Promise<CanvasDocument | undefined> {
         const result = await this.pool.query('SELECT * FROM canvas_documents WHERE id = $1', [documentId]);
-        const row = result.rows[0] as any;
+        const row = result.rows[0];
         if (!row) return undefined;
 
         return {
@@ -1288,7 +1305,7 @@ export class UnifiedDatabase {
         }
 
         const sets: string[] = ['updated_at = NOW()'];
-        const params: any[] = [];
+        const params: QueryParam[] = [];
         let paramIdx = 1;
 
         if (updates.title !== undefined) {
@@ -1318,7 +1335,7 @@ export class UnifiedDatabase {
             `SELECT * FROM canvas_documents WHERE user_id = $1 ORDER BY updated_at DESC LIMIT $2`,
             [userId, limit]
         );
-        return result.rows.map((row: any) => ({
+        return result.rows.map((row) => ({
             ...row,
             is_shared: !!row.is_shared
         }));
@@ -1336,7 +1353,7 @@ export class UnifiedDatabase {
             'SELECT * FROM canvas_documents WHERE share_token = $1 AND is_shared = TRUE',
             [shareToken]
         );
-        const row = result.rows[0] as any;
+        const row = result.rows[0];
         if (!row) return undefined;
 
         return {
@@ -1391,7 +1408,7 @@ export class UnifiedDatabase {
             `SELECT * FROM external_connections WHERE user_id = $1 AND is_active = TRUE ORDER BY created_at DESC`,
             [userId]
         );
-        return result.rows.map((row: any) => ({
+        return result.rows.map((row) => ({
             ...row,
             is_active: !!row.is_active,
             metadata: row.metadata || {}
@@ -1400,7 +1417,7 @@ export class UnifiedDatabase {
 
     async getExternalConnection(connectionId: string): Promise<ExternalConnection | undefined> {
         const result = await this.pool.query('SELECT * FROM external_connections WHERE id = $1', [connectionId]);
-        const row = result.rows[0] as any;
+        const row = result.rows[0];
         if (!row) return undefined;
 
         return {
@@ -1415,7 +1432,7 @@ export class UnifiedDatabase {
             'SELECT * FROM external_connections WHERE user_id = $1 AND service_type = $2 AND is_active = TRUE',
             [userId, serviceType]
         );
-        const row = result.rows[0] as any;
+        const row = result.rows[0];
         if (!row) return undefined;
 
         return {
