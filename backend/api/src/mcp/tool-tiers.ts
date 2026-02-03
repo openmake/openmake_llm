@@ -5,6 +5,7 @@
  */
 
 import { UserTier } from '../data/user-manager';
+import { MCP_NAMESPACE_SEPARATOR } from './types';
 
 /**
  * 등급별 허용 도구 목록
@@ -39,6 +40,31 @@ export function canUseTool(tier: UserTier, toolName: string): boolean {
     // 모든 도구 허용
     if (allowedTools.includes('*')) {
         return true;
+    }
+
+    // 외부 도구 (:: 네임스페이스) — free 등급에서는 접근 불가
+    if (toolName.includes(MCP_NAMESPACE_SEPARATOR)) {
+        if (tier === 'free') {
+            return false;
+        }
+        // pro/enterprise: 와일드카드 패턴으로 서버 단위 접근 제어 가능
+        // 예: TOOL_TIERS.pro에 "postgres::*" 추가 가능
+        for (const pattern of allowedTools) {
+            if (pattern.endsWith('*')) {
+                const prefix = pattern.slice(0, -1);
+                if (toolName.startsWith(prefix)) {
+                    return true;
+                }
+            }
+            if (pattern === toolName) {
+                return true;
+            }
+        }
+        // pro 등급: 기본적으로 모든 외부 도구 허용
+        if (tier === 'pro') {
+            return true;
+        }
+        return false;
     }
 
     // 정확한 매칭

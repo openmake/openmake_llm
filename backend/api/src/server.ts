@@ -532,8 +532,19 @@ if (require.main === module) {
         });
 
     // Graceful shutdown: SIGINT (Ctrl+C) + SIGTERM (Docker/K8s)
-    const gracefulShutdown = (signal: string) => {
+    const gracefulShutdown = async (signal: string) => {
         console.log(`\n👋 ${signal} 수신 — 서버 종료 중...`);
+
+        // 외부 MCP 서버 프로세스 정리
+        try {
+            const { getUnifiedMCPClient } = await import('./mcp');
+            const registry = getUnifiedMCPClient().getServerRegistry();
+            await registry.disconnectAll();
+            console.log('[Shutdown] 모든 외부 MCP 서버 연결 해제 완료');
+        } catch (error) {
+            console.error('[Shutdown] 외부 MCP 서버 정리 중 오류:', error);
+        }
+
         server.stop();
         process.exit(0);
     };

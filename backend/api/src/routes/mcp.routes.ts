@@ -7,12 +7,20 @@
  * - POST /terminal - 터미널 명령어 실행 (관리자 전용)
  * - GET /tools - 사용 가능한 도구 목록
  * - POST /tools/:name/execute - 도구 실행
+ * - GET /servers - 외부 MCP 서버 목록 + 연결 상태
+ * - POST /servers - 새 외부 서버 등록 (admin)
+ * - DELETE /servers/:id - 서버 제거 (admin)
+ * - POST /servers/:id/connect - 서버 수동 연결
+ * - POST /servers/:id/disconnect - 서버 수동 연결 해제
+ * - GET /servers/:id/status - 서버 상태 조회
  */
 
 import { Router, Request, Response } from 'express';
 import { getUnifiedMCPClient } from '../mcp';
 import { requireAuth, optionalAuth } from '../auth';
 import { success, badRequest, unauthorized, forbidden, internalError } from '../utils/api-response';
+import { getUnifiedDatabase } from '../data/models/unified-database';
+import type { MCPTransportType } from '../mcp/types';
 
 // 라우터 생성
 export const mcpRouter = Router();
@@ -142,5 +150,202 @@ mcpRouter.put('/settings', optionalAuth, async (req: Request, res: Response) => 
      } catch (error) {
          console.error('[MCP Tools] 실행 실패:', error);
          res.status(500).json(internalError('도구 실행 중 오류가 발생했습니다'));
+     }
+ });
+
+ // ============================================
+ // 🔌 외부 MCP 서버 관리 API
+ // ============================================
+
+ /** 유효한 transport 타입 */
+ const VALID_TRANSPORTS: MCPTransportType[] = ['stdio', 'sse', 'streamable-http'];
+
+ // 외부 서버 목록 + 연결 상태 (GET)
+ mcpRouter.get('/servers', requireAuth, async (req: Request, res: Response) => {
+     try {
+         const db = getUnifiedDatabase();
+         const servers = await db.getMcpServers();
+         const registry = getUnifiedMCPClient().getServerRegistry();
+         const statuses = registry.getAllStatuses();
+
+         // DB 서버 목록에 연결 상태 병합
+         const serversWithStatus = servers.map(server => {
+             const status = statuses.find(s => s.serverId === server.id);
+             return {
+                 ...server,
+                 connectionStatus: status?.status || 'disconnected',
+                 toolCount: status?.toolCount || 0,
+                 lastPing: status?.lastPing || null,
+                 connectionError: status?.error || null,
+             };
+         });
+
+         res.json(success({ servers: serversWithStatus, total: serversWithStatus.length }));
+     } catch (error) {
+         console.error('[MCP Servers] 목록 조회 실패:', error);
+         res.status(500).json(internalError('서버 목록을 불러오는 중 오류가 발생했습니다'));
+     }
+ });
+
+ // 새 외부 서버 등록 (POST) - admin 전용
+ mcpRouter.post('/servers', requireAuth, async (req: Request, res: Response) => {
+     try {
+         if (req.user?.role !== 'admin') {
+             res.status(403).json(forbidden('관리자만 서버를 등록할 수 있습니다'));
+             return;
+         }
+
+         const { name, transport_type, command, args, env, url, enabled } = req.body;
+
+         // 유효성 검사
+         if (!name || typeof name !== 'string') {
+             res.status(400).json(badRequest('서버 이름을 입력하세요'));
+             return;
+         }
+         if (!transport_type || !VALID_TRANSPORTS.includes(transport_type)) {
+             res.status(400).json(badRequest(`유효하지 않은 transport 타입입니다. 허용: ${VALID_TRANSPORTS.join(', ')}`));
+             return;
+         }
+         if (transport_type === 'stdio' && !command) {
+             res.status(400).json(badRequest('stdio transport에는 command가 필요합니다'));
+             return;
+         }
+         if ((transport_type === 'sse' || transport_type === 'streamable-http') && !url) {
+             res.status(400).json(badRequest(`${transport_type} transport에는 url이 필요합니다`));
+             return;
+         }
+
+         const id = `mcp_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+         const config = {
+             id,
+             name: name.trim(),
+             transport_type: transport_type as MCPTransportType,
+             command: command || undefined,
+             args: args || undefined,
+             env: env || undefined,
+             url: url || undefined,
+             enabled: enabled !== false,
+             created_at: new Date().toISOString(),
+             updated_at: new Date().toISOString(),
+         };
+
+         const db = getUnifiedDatabase();
+         const registry = getUnifiedMCPClient().getServerRegistry();
+         const status = await registry.registerServer(config, db);
+
+         res.status(201).json(success({ server: config, connectionStatus: status }));
+     } catch (error) {
+         const msg = error instanceof Error ? error.message : String(error);
+         console.error('[MCP Servers] 등록 실패:', msg);
+
+         // 중복 이름 에러 처리
+         if (msg.includes('unique') || msg.includes('UNIQUE') || msg.includes('duplicate')) {
+             res.status(409).json(badRequest('이미 동일한 이름의 서버가 등록되어 있습니다'));
+         } else {
+             res.status(500).json(internalError('서버 등록 중 오류가 발생했습니다'));
+         }
+     }
+ });
+
+ // 서버 제거 (DELETE) - admin 전용
+ mcpRouter.delete('/servers/:id', requireAuth, async (req: Request, res: Response) => {
+     try {
+         if (req.user?.role !== 'admin') {
+             res.status(403).json(forbidden('관리자만 서버를 삭제할 수 있습니다'));
+             return;
+         }
+
+         const { id } = req.params;
+         const db = getUnifiedDatabase();
+         const registry = getUnifiedMCPClient().getServerRegistry();
+
+         await registry.unregisterServer(id, db);
+         res.json(success({ deleted: true }));
+     } catch (error) {
+         console.error('[MCP Servers] 삭제 실패:', error);
+         res.status(500).json(internalError('서버 삭제 중 오류가 발생했습니다'));
+     }
+ });
+
+ // 서버 수동 연결 (POST)
+ mcpRouter.post('/servers/:id/connect', requireAuth, async (req: Request, res: Response) => {
+     try {
+         const { id } = req.params;
+         const db = getUnifiedDatabase();
+         const server = await db.getMcpServerById(id);
+
+         if (!server) {
+             res.status(404).json(badRequest('서버를 찾을 수 없습니다'));
+             return;
+         }
+
+         const registry = getUnifiedMCPClient().getServerRegistry();
+         await registry.connectServer(id, {
+             id: server.id,
+             name: server.name,
+             transport_type: server.transport_type as MCPTransportType,
+             command: server.command || undefined,
+             args: server.args || undefined,
+             env: server.env || undefined,
+             url: server.url || undefined,
+             enabled: server.enabled,
+             created_at: server.created_at,
+             updated_at: server.updated_at,
+         });
+
+         const status = registry.getServerStatus(id);
+         res.json(success({ status }));
+     } catch (error) {
+         const msg = error instanceof Error ? error.message : String(error);
+         console.error('[MCP Servers] 연결 실패:', msg);
+         res.status(500).json(internalError(`서버 연결 실패: ${msg}`));
+     }
+ });
+
+ // 서버 수동 연결 해제 (POST)
+ mcpRouter.post('/servers/:id/disconnect', requireAuth, async (req: Request, res: Response) => {
+     try {
+         const { id } = req.params;
+         const registry = getUnifiedMCPClient().getServerRegistry();
+         await registry.disconnectServer(id);
+
+         res.json(success({ disconnected: true }));
+     } catch (error) {
+         console.error('[MCP Servers] 연결 해제 실패:', error);
+         res.status(500).json(internalError('서버 연결 해제 중 오류가 발생했습니다'));
+     }
+ });
+
+ // 서버 상태 조회 (GET)
+ mcpRouter.get('/servers/:id/status', requireAuth, async (req: Request, res: Response) => {
+     try {
+         const { id } = req.params;
+         const registry = getUnifiedMCPClient().getServerRegistry();
+         const status = registry.getServerStatus(id);
+
+         if (!status) {
+             // DB에서 서버 존재 확인
+             const db = getUnifiedDatabase();
+             const server = await db.getMcpServerById(id);
+             if (!server) {
+                 res.status(404).json(badRequest('서버를 찾을 수 없습니다'));
+                 return;
+             }
+             // 존재하지만 연결 안 된 상태
+             res.json(success({
+                 status: {
+                     serverId: id,
+                     serverName: server.name,
+                     status: 'disconnected',
+                     toolCount: 0,
+                 }
+             }));
+             return;
+         }
+
+         res.json(success({ status }));
+     } catch (error) {
+         console.error('[MCP Servers] 상태 조회 실패:', error);
+         res.status(500).json(internalError('서버 상태를 조회하는 중 오류가 발생했습니다'));
      }
  });

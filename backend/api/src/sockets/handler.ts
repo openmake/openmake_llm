@@ -153,21 +153,38 @@ export class WebSocketHandler {
                 break;
 
             case 'request_agents': {
-                // 🆕 MCP 도구 목록을 에이전트 형식으로 반환
+                // MCP 도구 목록을 에이전트 형식으로 반환 (내장 + 외부)
                 try {
                     const mcpClient = getUnifiedMCPClient();
-                    const mcpTools = mcpClient.getToolList();
+                    const toolRouter = mcpClient.getToolRouter();
+                    const allTools = toolRouter.getAllTools();
 
-                    const agents = mcpTools.map((toolName: string) => ({
-                        url: `local://${toolName}`,
-                        name: toolName
-                    }));
+                    const agents = allTools.map(tool => {
+                        // 외부 도구: mcp://serverName/toolName
+                        if (toolRouter.isExternalTool(tool.name)) {
+                            const [serverName, ...rest] = tool.name.split('::');
+                            const originalName = rest.join('::');
+                            return {
+                                url: `mcp://${serverName}/${originalName}`,
+                                name: tool.name,
+                                description: tool.description,
+                                external: true,
+                            };
+                        }
+                        // 내장 도구: local://toolName
+                        return {
+                            url: `local://${tool.name}`,
+                            name: tool.name,
+                            description: tool.description,
+                            external: false,
+                        };
+                    });
 
                     ws.send(JSON.stringify({
                         type: 'agents',
                         agents
                     }));
-                    log.debug(`[WS] 에이전트 목록 전송: ${agents.length}개`);
+                    log.debug(`[WS] 에이전트 목록 전송: ${agents.length}개 (내장: ${agents.filter(a => !a.external).length}, 외부: ${agents.filter(a => a.external).length})`);
                 } catch (e: unknown) {
                     log.error('[WS] 에이전트 목록 조회 실패:', (e instanceof Error ? e.message : String(e)));
                 }

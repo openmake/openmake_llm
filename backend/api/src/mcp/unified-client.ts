@@ -10,6 +10,9 @@ import { MCPToolDefinition, MCPToolResult, MCPRequest, MCPResponse } from './typ
 import { UserTier } from '../data/user-manager';
 import { canUseTool, getToolsForTier } from './tool-tiers';
 import { UserSandbox, UserContext } from './user-sandbox';
+import { ToolRouter } from './tool-router';
+import { MCPServerRegistry } from './server-registry';
+import type { UnifiedDatabase } from '../data/models/unified-database';
 
 // MCP 기능 상태
 export interface MCPFeatureState {
@@ -24,9 +27,13 @@ export class UnifiedMCPClient {
         sequentialThinking: false,  // 🆕 기본값 false (사용자가 🧠 버튼으로 활성화)
         webSearch: false
     };
+    private toolRouter: ToolRouter;
+    private serverRegistry: MCPServerRegistry;
 
     constructor() {
         this.server = createMCPServer('ollama-unified-mcp', '1.0.0');
+        this.toolRouter = new ToolRouter();
+        this.serverRegistry = new MCPServerRegistry(this.toolRouter);
         console.log(`[MCP] 통합 MCP 클라이언트 초기화 - ${this.getToolCount()}개 도구 등록됨`);
     }
 
@@ -192,6 +199,32 @@ export class UnifiedMCPClient {
 
         console.log(`[MCP] 🔧 도구 실행: ${toolName} (user: ${context.userId}, tier: ${context.tier})`);
         return this.executeTool(toolName, sandboxedArgs);
+    }
+
+    // ============================================
+    // 🔌 외부 MCP 서버 관련
+    // ============================================
+
+    /**
+     * ToolRouter 인스턴스 반환
+     */
+    getToolRouter(): ToolRouter {
+        return this.toolRouter;
+    }
+
+    /**
+     * MCPServerRegistry 인스턴스 반환
+     */
+    getServerRegistry(): MCPServerRegistry {
+        return this.serverRegistry;
+    }
+
+    /**
+     * DB에서 외부 서버 설정을 로드하고 연결 초기화
+     * 앱 시작 시 한 번 호출
+     */
+    async initializeExternalServers(db: UnifiedDatabase): Promise<void> {
+        await this.serverRegistry.initializeFromDB(db);
     }
 
     /**
