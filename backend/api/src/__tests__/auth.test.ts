@@ -5,7 +5,7 @@
 
 // 테스트용 환경변수 설정 (다른 import 전에 설정)
 process.env.JWT_SECRET = 'test-secret-key-for-testing-purposes-only';
-process.env.DATABASE_URL = process.env.DATABASE_URL || 'postgresql://localhost:5432/openmake_llm';
+process.env.DATABASE_URL = process.env.DATABASE_URL || 'postgresql://openmake:openmake_secret_2026@localhost:5432/openmake_llm';
 
 import {
     generateToken,

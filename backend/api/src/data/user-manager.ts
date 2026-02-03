@@ -161,7 +161,11 @@ class UserManagerImpl {
 
     private async getNextId(): Promise<number> {
         const pool = getPool();
-        const result = await pool.query('SELECT MAX(CAST(id AS INTEGER)) as "maxId" FROM users');
+        // Filter out non-numeric IDs (e.g. 'admin-default-001' from seed data) before CAST
+        const result = await pool.query(
+            `SELECT MAX(CAST(id AS INTEGER)) as "maxId" FROM users WHERE id ~ $1`,
+            ['^\\d+$']
+        );
         return (result.rows[0]?.maxId || 0) + 1;
     }
 
