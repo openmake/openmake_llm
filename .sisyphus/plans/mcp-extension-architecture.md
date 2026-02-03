@@ -92,13 +92,13 @@
 - `backend/api/src/mcp/__tests__/server-registry.test.ts` — 새 테스트
 
 ### Definition of Done
-- [ ] `npx tsc --noEmit` 컴파일 에러 0개 (backend/api 디렉토리)
-- [ ] `npx jest` 기존 6개 테스트 + 새 3개 테스트 모두 PASS
-- [ ] 외부 MCP 서버(stdio) 등록 → 연결 → 도구 목록 조회 → 도구 실행 가능
-- [ ] LLM 대화에서 외부 도구가 자동으로 사용 가능 (ChatService 통합)
-- [ ] `curl /api/mcp/servers` 에서 등록된 서버 목록 반환
-- [ ] 프론트엔드에서 외부 서버 추가/삭제/상태 확인 가능
-- [ ] 앱 종료 시 모든 외부 서버 프로세스 정리됨
+- [x] `npx tsc --noEmit` 컴파일 에러 0개 (backend/api 디렉토리)
+- [x] `npx jest` 기존 6개 테스트 + 새 3개 테스트 모두 PASS
+- [x] 외부 MCP 서버(stdio) 등록 → 연결 → 도구 목록 조회 → 도구 실행 가능
+- [x] LLM 대화에서 외부 도구가 자동으로 사용 가능 (ChatService 통합)
+- [x] `curl /api/mcp/servers` 에서 등록된 서버 목록 반환
+- [x] 프론트엔드에서 외부 서버 추가/삭제/상태 확인 가능
+- [x] 앱 종료 시 모든 외부 서버 프로세스 정리됨
 
 ### Must Have
 - stdio와 SSE/HTTP 두 가지 transport 지원
@@ -221,7 +221,7 @@ Parallel Speedup: ~45% faster than fully sequential
 
 ---
 
-### - [ ] 1. SDK 설치 및 타입 정의 확장
+### - [x] 1. SDK 설치 및 타입 정의 확장
 
 **What to do**:
 - `backend/api/` 디렉토리에서 `npm install @modelcontextprotocol/sdk@^1.25.0 zod` 실행
@@ -325,7 +325,7 @@ Scenario: 새 타입이 TypeScript 컴파일에 포함되는지 확인
 
 ---
 
-### - [ ] 2. Database 스키마 — mcp_servers 테이블
+### - [x] 2. Database 스키마 — mcp_servers 테이블
 
 **What to do**:
 - `backend/api/src/data/models/unified-database.ts`의 `SCHEMA` 상수(line 350-352의 마지막 CREATE INDEX 뒤, 닫는 백틱 직전)에 mcp_servers 테이블 SQL 추가:
@@ -432,7 +432,7 @@ Scenario: TypeScript 컴파일 성공
 
 ---
 
-### - [ ] 3. ExternalMCPClient — SDK Client 래퍼
+### - [x] 3. ExternalMCPClient — SDK Client 래퍼
 
 **What to do**:
 - `backend/api/src/mcp/external-client.ts` 새 파일 생성
@@ -553,7 +553,7 @@ Scenario: ExternalMCPClient 클래스 구조 검증
 
 ---
 
-### - [ ] 4. ToolRouter — 통합 도구 레지스트리
+### - [x] 4. ToolRouter — 통합 도구 레지스트리
 
 **What to do**:
 - `backend/api/src/mcp/tool-router.ts` 새 파일 생성
@@ -633,7 +633,7 @@ export class ToolRouter {
 
 ---
 
-### - [ ] 5. MCPServerRegistry — 서버 연결 관리자
+### - [x] 5. MCPServerRegistry — 서버 연결 관리자
 
 **What to do**:
 - `backend/api/src/mcp/server-registry.ts` 새 파일 생성
@@ -691,7 +691,7 @@ export class MCPServerRegistry {
 
 ---
 
-### - [ ] 6. UnifiedMCPClient 리팩터 — ToolRouter + Registry 통합
+### - [x] 6. UnifiedMCPClient 리팩터 — ToolRouter + Registry 통합
 
 **What to do**:
 - `backend/api/src/mcp/unified-client.ts` 수정:
@@ -742,7 +742,7 @@ export class MCPServerRegistry {
 
 ---
 
-### - [ ] 7. Tool Tier 업데이트 — 외부 도구 접근 제어
+### - [x] 7. Tool Tier 업데이트 — 외부 도구 접근 제어
 
 **What to do**:
 - `backend/api/src/mcp/tool-tiers.ts` 수정:
@@ -785,7 +785,7 @@ export class MCPServerRegistry {
 
 ---
 
-### - [ ] 8. ChatService 통합 — ToolRouter 사용
+### - [x] 8. ChatService 통합 — ToolRouter 사용
 
 **What to do**:
 - `backend/api/src/services/ChatService.ts` 수정:
@@ -831,7 +831,7 @@ export class MCPServerRegistry {
 
 ---
 
-### - [ ] 9. Agent Loop 통합 — 외부 도구 포함
+### - [x] 9. Agent Loop 통합 — 외부 도구 포함
 
 **What to do**:
 - `backend/api/src/ollama/agent-loop.ts` 수정:
@@ -869,7 +869,7 @@ export class MCPServerRegistry {
 
 ---
 
-### - [ ] 10. API Routes — 외부 서버 CRUD 엔드포인트
+### - [x] 10. API Routes — 외부 서버 CRUD 엔드포인트
 
 **What to do**:
 - `backend/api/src/routes/mcp.routes.ts`에 새 엔드포인트 추가:
@@ -926,7 +926,7 @@ Scenario: 서버 CRUD API 응답 확인 (앱 실행 후)
 
 ---
 
-### - [ ] 11. Socket Handler 업데이트 — 외부 도구 에이전트 목록
+### - [x] 11. Socket Handler 업데이트 — 외부 도구 에이전트 목록
 
 **What to do**:
 - `backend/api/src/sockets/handler.ts` 수정:
@@ -962,7 +962,7 @@ Scenario: 서버 CRUD API 응답 확인 (앱 실행 후)
 
 ---
 
-### - [ ] 12. Frontend — 외부 서버 관리 UI
+### - [x] 12. Frontend — 외부 서버 관리 UI
 
 **What to do**:
 - `frontend/web/public/js/modules/pages/mcp-tools.js` 수정:
@@ -1022,7 +1022,7 @@ Scenario: 외부 서버 관리 UI 렌더링 확인
 
 ---
 
-### - [ ] 13. Graceful Shutdown — 프로세스 정리 핸들러
+### - [x] 13. Graceful Shutdown — 프로세스 정리 핸들러
 
 **What to do**:
 - 앱의 메인 서버 파일(Express app 초기화 위치, `this.app.use('/api/mcp', mcpRouter)` line 319 근처 파일)에 shutdown 핸들러 추가:
@@ -1073,7 +1073,7 @@ process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
 ---
 
-### - [ ] 14. 테스트 작성
+### - [x] 14. 테스트 작성
 
 **What to do**:
 - 3개 새 테스트 파일 작성:
