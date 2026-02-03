@@ -201,7 +201,7 @@ Parallel Speedup: ~50% faster than sequential
 
 ### Wave 1: Foundation & Critical Security
 
-- [ ] 1. SQL Injection Fix [CRITICAL]
+- [x] 1. SQL Injection Fix [CRITICAL] ✅ (Phase 5에서 수정됨 — parameterized queries 적용)
 
   **What to do**:
   - Fix string interpolation SQL injection at line 897 in `unified-database.ts`
@@ -259,7 +259,7 @@ Parallel Speedup: ~50% faster than sequential
 
 ---
 
-- [ ] 9. Boolean Conversion Helper
+- [x] 9. Boolean Conversion Helper ✅ (db-helpers.ts 존재)
 
   **What to do**:
   - Create `backend/api/src/utils/db-helpers.ts` with `toBool()` helper
@@ -311,7 +311,7 @@ Parallel Speedup: ~50% faster than sequential
 
 ---
 
-- [ ] 12. Password Policy
+- [x] 12. Password Policy ✅ (min 8자, uppercase, lowercase, number, special char)
 
   **What to do**:
   - Update `backend/api/src/services/AuthService.ts` register method
@@ -372,7 +372,7 @@ Parallel Speedup: ~50% faster than sequential
 
 ### Wave 2: Security Infrastructure
 
-- [ ] 3. SQLite Token Blacklist
+- [x] 3. SQLite Token Blacklist ✅ (PostgreSQL 버전으로 구현됨 — token-blacklist.ts)
 
   **What to do**:
   - Create `backend/api/src/data/models/token-blacklist.ts` with pluggable interface
@@ -441,7 +441,7 @@ Parallel Speedup: ~50% faster than sequential
 
 ---
 
-- [ ] 6. Zod Input Validation Middleware
+- [x] 6. Zod Input Validation Middleware ✅ (schemas/, validation.ts 존재)
 
   **What to do**:
   - Create `backend/api/src/schemas/auth.schema.ts` with Zod schemas:
@@ -509,7 +509,7 @@ Parallel Speedup: ~50% faster than sequential
 
 ---
 
-- [ ] 10. Security Middleware (Helmet)
+- [x] 10. Security Middleware (Helmet) ✅ (server.ts + package.json에 helmet 설치 및 적용됨)
 
   **What to do**:
   - Install helmet: `npm install helmet` in backend/api
@@ -575,7 +575,7 @@ Parallel Speedup: ~50% faster than sequential
 
 ### Wave 3: Type Safety & Error Handling
 
-- [ ] 4. Remove `any` Types from ChatService
+- [x] 4. Remove `any` Types from ChatService ✅ (Phase 5에서 133건→0건 제거)
 
   **What to do**:
   - Create proper interfaces in `backend/api/src/services/ChatService.ts` or separate types file:
@@ -641,7 +641,7 @@ Parallel Speedup: ~50% faster than sequential
 
 ---
 
-- [ ] 5. Unified Error Handler
+- [x] 5. Unified Error Handler ✅ (error-handler.ts 존재, AppError 클래스 포함)
 
   **What to do**:
   - Create `backend/api/src/utils/error-handler.ts`:
@@ -703,7 +703,7 @@ Parallel Speedup: ~50% faster than sequential
 
 ---
 
-- [ ] 7. JWT Token Expiry
+- [x] 7. JWT Token Expiry ✅ (JWT_EXPIRES_IN = '15m' 적용됨)
 
   **What to do**:
   - Update `backend/api/src/auth/index.ts`:
@@ -769,7 +769,7 @@ Parallel Speedup: ~50% faster than sequential
 
 ### Wave 4: Architecture
 
-- [ ] 8. Split server.ts Completely
+- [x] 8. Split server.ts Completely ✅ (554줄로 축소, 라우트 분리 완료)
 
   **What to do**:
   - Create `backend/api/src/routes/admin.routes.ts`:
@@ -847,7 +847,7 @@ Parallel Speedup: ~50% faster than sequential
 
 ---
 
-- [ ] 11. API Versioning
+- [x] 11. API Versioning ✅ (/api/v1 라우트 존재)
 
   **What to do**:
   - Create `backend/api/src/routes/v1/index.ts`:
@@ -913,7 +913,7 @@ Parallel Speedup: ~50% faster than sequential
 
 ---
 
-- [ ] 2. Rate Limiting Consolidation
+- [x] 2. Rate Limiting Consolidation ✅ (server.ts에 rateLimit 0건, middlewares에서 관리)
 
   **What to do**:
   - Review current rate limiting:
@@ -978,7 +978,7 @@ Parallel Speedup: ~50% faster than sequential
 
 ### Wave 5: Testing & Verification
 
-- [ ] 13. Unit Tests
+- [x] 13. Unit Tests ✅ (192 tests, 0 failures — auth, error-handler, mcp 테스트 포함)
 
   **What to do**:
   - Create `backend/api/src/__tests__/ChatService.test.ts`:

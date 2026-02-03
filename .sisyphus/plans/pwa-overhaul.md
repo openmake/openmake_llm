@@ -177,7 +177,7 @@ Wave 5 (Final Verification):
 
 ---
 
-- [ ] 1. Generate PWA Icons from logo.png
+- [x] 1. Generate PWA Icons from logo.png ✅ (10개 아이콘 파일 생성됨)
 
   **What to do**:
   - Create directory `frontend/web/public/icons/`
@@ -261,7 +261,7 @@ Wave 5 (Final Verification):
 
 ---
 
-- [ ] 2. Fix manifest.json
+- [x] 2. Fix manifest.json ✅ (OpenMake.Ai 브랜딩, #667eea 테마)
 
   **What to do**:
   - Update `name` from "Ollama AI Chat" to "OpenMake.Ai"
@@ -353,7 +353,7 @@ Wave 5 (Final Verification):
 
 ---
 
-- [ ] 3. Service Worker Complete Rewrite
+- [x] 3. Service Worker Complete Rewrite ✅ (327줄, openmake- 캐시명, 70+ 자산 캐싱)
 
   **What to do**:
   - Rewrite `frontend/web/public/service-worker.js` with comprehensive caching strategy
@@ -563,7 +563,7 @@ Wave 5 (Final Verification):
 
 ---
 
-- [ ] 4. Create Offline Fallback Page
+- [x] 4. Create Offline Fallback Page ✅ (offline.html 존재)
 
   **What to do**:
   - Create `frontend/web/public/offline.html` — a self-contained offline page
@@ -639,7 +639,7 @@ Wave 5 (Final Verification):
 
 ---
 
-- [ ] 5. PWA Meta Tags Consistency
+- [x] 5. PWA Meta Tags Consistency ✅ (login.html에 SW 등록 + apple-mobile-web-app-capable 추가됨)
 
   **What to do**:
   - **index.html** updates:
@@ -741,7 +741,7 @@ Wave 5 (Final Verification):
 
 ---
 
-- [ ] 6. Offline Support (Indicator + Message Queue + WS Recovery)
+- [x] 6. Offline Support (Indicator + Message Queue + WS Recovery) ✅ (offline-indicator.js 존재)
 
   **What to do**:
   This task adds client-side offline awareness to the app. Three sub-components:
@@ -847,7 +847,7 @@ Wave 5 (Final Verification):
 
 ---
 
-- [ ] 7. Server-side Cache-Control Headers
+- [x] 7. Server-side Cache-Control Headers ✅ (server.ts에 Cache-Control 5건 적용됨)
 
   **What to do**:
   - Modify `backend/api/src/server.ts` to add proper Cache-Control headers in the `express.static` middleware
@@ -949,7 +949,7 @@ Wave 5 (Final Verification):
 
 ---
 
-- [ ] 8. Push Notification Foundation
+- [ ] 8. Push Notification Foundation (미완료 — web-push 패키지 미설치, push.ts 라우트 미생성)
 
   **What to do**:
   - This is FOUNDATION only — sets up infrastructure, does NOT implement full push notification UX
@@ -1044,7 +1044,7 @@ Wave 5 (Final Verification):
 
 ---
 
-- [ ] 9. Performance Optimization
+- [x] 9. Performance Optimization ✅ (preload 3건 적용됨)
 
   **What to do**:
 
@@ -1129,7 +1129,7 @@ Wave 5 (Final Verification):
 
 ---
 
-- [ ] 10. Install Experience (Custom Prompt + iOS Guidance)
+- [x] 10. Install Experience (Custom Prompt + iOS Guidance) ✅ (install-prompt.js 존재)
 
   **What to do**:
 
@@ -1245,7 +1245,7 @@ Wave 5 (Final Verification):
 
 ---
 
-- [ ] 11. Integration Testing & Lighthouse Audit
+- [ ] 11. Integration Testing & Lighthouse Audit (미완료 — 최종 통합 테스트 미실행)
 
   **What to do**:
   - Run comprehensive PWA audit after ALL previous tasks are deployed
