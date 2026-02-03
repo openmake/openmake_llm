@@ -1,0 +1,304 @@
+/**
+ * ============================================
+ * Ollama LLM Dashboard - Dashboard Styles
+ * 관리자 대시보드 페이지 전용 스타일
+ * ============================================
+ */
+
+/* ==========================================
+   대시보드 그리드
+   ========================================== */
+
+.dashboard-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: var(--space-5);
+    margin-bottom: var(--space-8);
+}
+
+/* ==========================================
+   메트릭 카드
+   ========================================== */
+
+.metric-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    padding: var(--space-5);
+}
+
+.metric-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--space-4);
+}
+
+.metric-card-title {
+    font-size: var(--font-size-sm);
+    color: var(--text-muted);
+    font-weight: var(--font-weight-medium);
+}
+
+.metric-card-value {
+    font-size: var(--font-size-3xl);
+    font-weight: var(--font-weight-bold);
+    color: var(--text-primary);
+    margin-bottom: var(--space-2);
+}
+
+.metric-card-change {
+    font-size: var(--font-size-xs);
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+}
+
+.metric-card-change.positive {
+    color: var(--success);
+}
+
+.metric-card-change.negative {
+    color: var(--danger);
+}
+
+/* ==========================================
+   상태 표시
+   ========================================== */
+
+.status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+.status-dot.online {
+    background: var(--success);
+}
+
+.status-dot.offline {
+    background: var(--danger);
+}
+
+.status-dot.warning {
+    background: var(--warning);
+}
+
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-1) var(--space-3);
+    border-radius: var(--radius-full);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-medium);
+}
+
+.status-badge.online {
+    background: var(--success-light);
+    color: var(--success);
+}
+
+.status-badge.offline {
+    background: var(--danger-light);
+    color: var(--danger);
+}
+
+/* ==========================================
+   차트 영역
+   ========================================== */
+
+.chart-container {
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    padding: var(--space-5);
+    margin-bottom: var(--space-5);
+}
+
+.chart-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--space-4);
+}
+
+.chart-title {
+    font-size: var(--font-size-lg);
+    font-weight: var(--font-weight-semibold);
+}
+
+.chart-body {
+    height: 300px;
+}
+
+/* ==========================================
+   테이블 영역
+   ========================================== */
+
+.data-table-container {
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+}
+
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.data-table th,
+.data-table td {
+    padding: var(--space-4);
+    text-align: left;
+    border-bottom: 1px solid var(--border-light);
+}
+
+.data-table th {
+    background: var(--bg-secondary);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.data-table tbody tr:hover {
+    background: var(--bg-hover);
+}
+
+.data-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+/* ==========================================
+   실시간 로그
+   ========================================== */
+
+.log-container {
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    padding: var(--space-4);
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.log-entry {
+    display: flex;
+    gap: var(--space-3);
+    padding: var(--space-2) 0;
+    border-bottom: 1px solid var(--border-light);
+    font-size: var(--font-size-sm);
+    font-family: var(--font-mono);
+}
+
+.log-entry:last-child {
+    border-bottom: none;
+}
+
+.log-time {
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+
+.log-level {
+    font-weight: var(--font-weight-semibold);
+    width: 60px;
+}
+
+.log-level.info {
+    color: var(--info);
+}
+
+.log-level.warn {
+    color: var(--warning);
+}
+
+.log-level.error {
+    color: var(--danger);
+}
+
+.log-message {
+    color: var(--text-secondary);
+    flex: 1;
+}
+
+/* ==========================================
+   API 사용량 차트
+   ========================================== */
+
+.usage-bar {
+    height: 8px;
+    background: var(--bg-secondary);
+    border-radius: var(--radius-full);
+    overflow: hidden;
+    margin-top: var(--space-2);
+}
+
+.usage-bar-fill {
+    height: 100%;
+    border-radius: var(--radius-full);
+    transition: width 0.3s ease;
+}
+
+.usage-bar-fill.normal {
+    background: var(--success);
+}
+
+.usage-bar-fill.warning {
+    background: var(--warning);
+}
+
+.usage-bar-fill.danger {
+    background: var(--danger);
+}
+
+.usage-label {
+    display: flex;
+    justify-content: space-between;
+    font-size: var(--font-size-xs);
+    color: var(--text-muted);
+    margin-top: var(--space-2);
+}
+
+/* ==========================================
+   노드 상태
+   ========================================== */
+
+.node-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: var(--space-4);
+}
+
+.node-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+    padding: var(--space-4);
+}
+
+.node-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--space-3);
+}
+
+.node-name {
+    font-weight: var(--font-weight-semibold);
+}
+
+.node-stats {
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
+}
+
+.node-stats-row {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: var(--space-1);
+}

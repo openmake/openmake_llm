@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="ko" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover">
+    <title>캔버스 문서 편집기 - OpenMake.Ai</title>
+    <link rel="icon" type="image/png" href="/logo.png">
+    <link rel="preconnect" href="https://cdn.jsdelivr.net">
+    <link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="/css/design-tokens.css">
+    <link rel="stylesheet" href="/css/components.css">
+    <link rel="stylesheet" href="/css/layout.css">
+    <style>
+        .toolbar { display:flex; gap:var(--space-3); align-items:center; flex-wrap:wrap; margin-bottom:var(--space-5); }
+        .toolbar .btn-primary { padding:var(--space-2) var(--space-4); background:var(--accent-primary); color:#fff; border:none; border-radius:var(--radius-md); cursor:pointer; font-weight:var(--font-weight-semibold); }
+        .filter-tabs { display:flex; gap:var(--space-2); }
+        .filter-tab { padding:var(--space-2) var(--space-3); background:var(--bg-tertiary); border:1px solid var(--border-light); border-radius:var(--radius-md); cursor:pointer; color:var(--text-secondary); font-size:var(--font-size-sm); }
+        .filter-tab.active { background:var(--accent-primary); color:#fff; border-color:var(--accent-primary); }
+        .doc-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:var(--space-4); }
+        .doc-card { background:var(--bg-card); border:1px solid var(--border-light); border-radius:var(--radius-lg); padding:var(--space-5); cursor:pointer; transition:border-color .2s; }
+        .doc-card:hover { border-color:var(--accent-primary); }
+        .doc-card h3 { margin:0 0 var(--space-2); color:var(--text-primary); }
+        .doc-card .meta { font-size:var(--font-size-sm); color:var(--text-muted); display:flex; gap:var(--space-3); align-items:center; }
+        .badge { display:inline-block; padding:2px 8px; border-radius:var(--radius-md); font-size:11px; font-weight:var(--font-weight-semibold); }
+        .badge-doc { background:var(--accent-primary); color:#fff; }
+        .badge-code { background:var(--success); color:#fff; }
+        .badge-diagram { background:var(--warning); color:#000; }
+        .badge-table { background:var(--danger); color:#fff; }
+        .badge-shared { background:var(--success); color:#fff; margin-left:var(--space-2); }
+        .empty-state { text-align:center; padding:var(--space-8); color:var(--text-muted); }
+        .empty-state h2 { color:var(--text-secondary); margin-bottom:var(--space-3); }
+
+        .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:1000; justify-content:center; align-items:center; }
+        .modal-overlay.open { display:flex; }
+        .modal { background:var(--bg-card); border:1px solid var(--border-light); border-radius:var(--radius-lg); width:90%; max-width:800px; max-height:90vh; overflow-y:auto; padding:var(--space-6); }
+        .modal h2 { margin:0 0 var(--space-4); color:var(--text-primary); }
+        .form-group { margin-bottom:var(--space-4); }
+        .form-group label { display:block; margin-bottom:var(--space-2); color:var(--text-secondary); font-size:var(--font-size-sm); font-weight:var(--font-weight-semibold); }
+        .form-group input, .form-group select, .form-group textarea { width:100%; padding:var(--space-3); background:var(--bg-secondary); border:1px solid var(--border-light); border-radius:var(--radius-md); color:var(--text-primary); font-size:14px; box-sizing:border-box; }
+        .form-group textarea { min-height:300px; font-family:'Pretendard',monospace; resize:vertical; }
+        .form-group textarea.code { font-family:'Courier New',monospace; }
+        .modal-actions { display:flex; gap:var(--space-3); justify-content:flex-end; margin-top:var(--space-5); flex-wrap:wrap; }
+        .modal-actions button { padding:var(--space-2) var(--space-4); border:none; border-radius:var(--radius-md); cursor:pointer; font-weight:var(--font-weight-semibold); }
+        .btn-save { background:var(--accent-primary); color:#fff; }
+        .btn-share { background:var(--success); color:#fff; }
+        .btn-danger { background:var(--danger); color:#fff; }
+        .btn-secondary { background:var(--bg-tertiary); color:var(--text-primary); border:1px solid var(--border-light) !important; }
+
+        .version-list { max-height:300px; overflow-y:auto; }
+        .version-item { padding:var(--space-3); border-bottom:1px solid var(--border-light); }
+        .version-item:last-child { border-bottom:none; }
+        .version-num { font-weight:var(--font-weight-semibold); color:var(--accent-primary); }
+
+        .share-info { background:var(--bg-secondary); padding:var(--space-4); border-radius:var(--radius-md); margin-top:var(--space-3); display:flex; align-items:center; gap:var(--space-3); }
+        .share-info input { flex:1; }
+        .share-info button { white-space:nowrap; }
+
+        .toast { position:fixed; bottom:20px; right:20px; padding:var(--space-3) var(--space-5); border-radius:var(--radius-md); color:#fff; z-index:2000; opacity:0; transition:opacity .3s; }
+        .toast.show { opacity:1; }
+        .toast.success { background:var(--success); }
+        .toast.error { background:var(--danger); }
+        .loading { text-align:center; padding:var(--space-6); color:var(--text-muted); }
+    </style>
+</head>
+<body>
+    <div class="layout">
+        <aside class="sidebar" id="sidebar"></aside>
+        <div class="sidebar-overlay" onclick="toggleSidebar()"></div>
+        <main class="main-content">
+            <header class="page-header">
+                <button class="mobile-menu-btn" onclick="toggleMobileSidebar(event)">&#9776;</button>
+                <h1>캔버스 문서 편집기</h1>
+            </header>
+            <div class="content-area" id="app">
+                <div class="toolbar">
+                    <button class="btn-primary" onclick="openNewDoc()">+ 새 문서</button>
+                    <div class="filter-tabs" id="filterTabs">
+                        <button class="filter-tab active" data-type="all">전체</button>
+                        <button class="filter-tab" data-type="document">문서</button>
+                        <button class="filter-tab" data-type="code">코드</button>
+                        <button class="filter-tab" data-type="diagram">다이어그램</button>
+                        <button class="filter-tab" data-type="table">표</button>
+                    </div>
+                </div>
+                <div id="docList" class="doc-grid"><div class="loading">불러오는 중...</div></div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Editor Modal -->
+    <div class="modal-overlay" id="editorModal">
+        <div class="modal">
+            <h2 id="editorTitle">새 문서</h2>
+            <div class="form-group"><label>제목</label><input type="text" id="docTitle" placeholder="문서 제목"></div>
+            <div class="form-group"><label>유형</label>
+                <select id="docType"><option value="document">문서</option><option value="code">코드</option><option value="diagram">다이어그램</option><option value="table">표</option></select>
+            </div>
+            <div class="form-group" id="langGroup" style="display:none"><label>언어</label>
+                <select id="docLang"><option value="">선택</option><option>javascript</option><option>typescript</option><option>python</option><option>java</option><option>go</option><option>rust</option><option>html</option><option>css</option><option>sql</option><option>bash</option></select>
+            </div>
+            <div class="form-group"><label>내용</label><textarea id="docContent" placeholder="내용을 입력하세요..."></textarea></div>
+            <div id="shareSection" style="display:none"></div>
+            <div class="modal-actions">
+                <button class="btn-secondary" onclick="closeEditor()">취소</button>
+                <button class="btn-secondary" id="btnVersions" style="display:none" onclick="loadVersions()">버전 이력</button>
+                <button class="btn-share" id="btnShare" style="display:none" onclick="toggleShare()">공유</button>
+                <button class="btn-danger" id="btnDelete" style="display:none" onclick="deleteDoc()">삭제</button>
+                <button class="btn-save" onclick="saveDoc()">저장</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Version Modal -->
+    <div class="modal-overlay" id="versionModal">
+        <div class="modal" style="max-width:500px">
+            <h2>버전 이력</h2>
+            <div id="versionList" class="version-list"><div class="loading">불러오는 중...</div></div>
+            <div class="modal-actions"><button class="btn-secondary" onclick="document.getElementById('versionModal').classList.remove('open')">닫기</button></div>
+        </div>
+    </div>
+
+    <div id="toast" class="toast"></div>
+
+    <script src="/js/components/sidebar.js"></script>
+    <script>
+        let allDocs = [];
+        let currentFilter = 'all';
+        let editingDocId = null;
+
+        function authFetch(url, options = {}) {
+            const token = localStorage.getItem('authToken');
+            const headers = { 'Content-Type': 'application/json', ...(token ? { 'Authorization': 'Bearer ' + token } : {}), ...options.headers };
+            return fetch(url, { ...options, headers }).then(r => r.json());
+        }
+
+        function showToast(msg, type = 'success') {
+            const t = document.getElementById('toast');
+            t.textContent = msg; t.className = 'toast ' + type + ' show';
+            setTimeout(() => t.classList.remove('show'), 3000);
+        }
+
+        const typeLabels = { document: '문서', code: '코드', diagram: '다이어그램', table: '표' };
+        const typeBadge = t => `<span class="badge badge-${t}">${typeLabels[t] || t}</span>`;
+
+        async function loadDocs() {
+            try {
+                const res = await authFetch('/api/canvas');
+                allDocs = res.data || res || [];
+                renderDocs();
+            } catch (e) { showToast('문서 로드 실패', 'error'); }
+        }
+
+        function renderDocs() {
+            const filtered = currentFilter === 'all' ? allDocs : allDocs.filter(d => d.doc_type === currentFilter);
+            const el = document.getElementById('docList');
+            if (!filtered.length) {
+                el.innerHTML = '<div class="empty-state"><h2>문서가 없습니다</h2><p>새 문서를 만들어 시작하세요.</p></div>';
+                return;
+            }
+            el.innerHTML = filtered.map(d => `
+                <div class="doc-card" onclick="openDoc('${d.id}')">
+                    <h3>${esc(d.title)}</h3>
+                    <div class="meta">
+                        ${typeBadge(d.doc_type)}
+                        ${d.is_shared ? '<span class="badge badge-shared">공유중</span>' : ''}
+                        <span>${timeAgo(d.updated_at)}</span>
+                    </div>
+                </div>`).join('');
+        }
+
+        function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+        function timeAgo(d) {
+            if (!d) return '';
+            const diff = Date.now() - new Date(d).getTime();
+            const m = Math.floor(diff/60000);
+            if (m < 60) return m + '분 전';
+            const h = Math.floor(m/60);
+            if (h < 24) return h + '시간 전';
+            return Math.floor(h/24) + '일 전';
+        }
+
+        // Filter tabs
+        document.getElementById('filterTabs').addEventListener('click', e => {
+            if (!e.target.classList.contains('filter-tab')) return;
+            document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+            e.target.classList.add('active');
+            currentFilter = e.target.dataset.type;
+            renderDocs();
+        });
+
+        // Editor
+        function openNewDoc() {
+            editingDocId = null;
+            document.getElementById('editorTitle').textContent = '새 문서';
+            document.getElementById('docTitle').value = '';
+            document.getElementById('docType').value = 'document';
+            document.getElementById('docLang').value = '';
+            document.getElementById('docContent').value = '';
+            document.getElementById('docContent').className = '';
+            document.getElementById('btnDelete').style.display = 'none';
+            document.getElementById('btnShare').style.display = 'none';
+            document.getElementById('btnVersions').style.display = 'none';
+            document.getElementById('shareSection').style.display = 'none';
+            document.getElementById('langGroup').style.display = 'none';
+            document.getElementById('editorModal').classList.add('open');
+        }
+
+        async function openDoc(id) {
+            try {
+                const res = await authFetch('/api/canvas/' + id);
+                const doc = res.data || res;
+                editingDocId = doc.id;
+                document.getElementById('editorTitle').textContent = '문서 편집';
+                document.getElementById('docTitle').value = doc.title || '';
+                document.getElementById('docType').value = doc.doc_type || 'document';
+                document.getElementById('docLang').value = doc.language || '';
+                document.getElementById('docContent').value = doc.content || '';
+                document.getElementById('docContent').className = doc.doc_type === 'code' ? 'code' : '';
+                document.getElementById('langGroup').style.display = doc.doc_type === 'code' ? '' : 'none';
+                document.getElementById('btnDelete').style.display = '';
+                document.getElementById('btnShare').style.display = '';
+                document.getElementById('btnVersions').style.display = '';
+                updateShareSection(doc);
+                document.getElementById('editorModal').classList.add('open');
+            } catch (e) { showToast('문서 로드 실패', 'error'); }
+        }
+
+        function updateShareSection(doc) {
+            const sec = document.getElementById('shareSection');
+            if (doc.is_shared && doc.share_token) {
+                const url = location.origin + '/api/canvas/shared/' + doc.share_token;
+                sec.style.display = '';
+                sec.innerHTML = '<div class="share-info"><input type="text" readonly value="' + url + '" id="shareUrl"><button class="btn-secondary" onclick="copyShare()">복사</button><button class="btn-danger" onclick="unshareDoc()">해제</button></div>';
+            } else {
+                sec.style.display = 'none';
+                sec.innerHTML = '';
+            }
+        }
+
+        function copyShare() {
+            const u = document.getElementById('shareUrl');
+            u.select(); navigator.clipboard.writeText(u.value);
+            showToast('링크가 복사되었습니다');
+        }
+
+        function closeEditor() { document.getElementById('editorModal').classList.remove('open'); }
+
+        document.getElementById('docType').addEventListener('change', function() {
+            document.getElementById('langGroup').style.display = this.value === 'code' ? '' : 'none';
+            document.getElementById('docContent').className = this.value === 'code' ? 'code' : '';
+        });
+
+        async function saveDoc() {
+            const title = document.getElementById('docTitle').value.trim();
+            if (!title) { showToast('제목을 입력하세요', 'error'); return; }
+            const body = {
+                title,
+                content: document.getElementById('docContent').value,
+                docType: document.getElementById('docType').value,
+                language: document.getElementById('docLang').value || undefined,
+                changeSummary: editingDocId ? '사용자 편집' : undefined
+            };
+            try {
+                if (editingDocId) {
+                    await authFetch('/api/canvas/' + editingDocId, { method: 'PUT', body: JSON.stringify(body) });
+                    showToast('문서가 저장되었습니다');
+                } else {
+                    await authFetch('/api/canvas', { method: 'POST', body: JSON.stringify(body) });
+                    showToast('문서가 생성되었습니다');
+                }
+                closeEditor(); loadDocs();
+            } catch (e) { showToast('저장 실패', 'error'); }
+        }
+
+        async function deleteDoc() {
+            if (!editingDocId || !confirm('이 문서를 삭제하시겠습니까?')) return;
+            try {
+                await authFetch('/api/canvas/' + editingDocId, { method: 'DELETE' });
+                showToast('문서가 삭제되었습니다'); closeEditor(); loadDocs();
+            } catch (e) { showToast('삭제 실패', 'error'); }
+        }
+
+        async function toggleShare() {
+            if (!editingDocId) return;
+            try {
+                const res = await authFetch('/api/canvas/' + editingDocId + '/share', { method: 'POST' });
+                const doc = res.data || res;
+                updateShareSection(doc);
+                showToast('공유가 시작되었습니다');
+                loadDocs();
+            } catch (e) { showToast('공유 실패', 'error'); }
+        }
+
+        async function unshareDoc() {
+            if (!editingDocId) return;
+            try {
+                await authFetch('/api/canvas/' + editingDocId + '/share', { method: 'DELETE' });
+                document.getElementById('shareSection').style.display = 'none';
+                showToast('공유가 해제되었습니다');
+                loadDocs();
+            } catch (e) { showToast('공유 해제 실패', 'error'); }
+        }
+
+        async function loadVersions() {
+            if (!editingDocId) return;
+            document.getElementById('versionModal').classList.add('open');
+            document.getElementById('versionList').innerHTML = '<div class="loading">불러오는 중...</div>';
+            try {
+                const res = await authFetch('/api/canvas/' + editingDocId + '/versions');
+                const versions = res.data || res || [];
+                if (!versions.length) {
+                    document.getElementById('versionList').innerHTML = '<div class="empty-state"><p>버전 이력이 없습니다.</p></div>';
+                    return;
+                }
+                document.getElementById('versionList').innerHTML = versions.map(v => `
+                    <div class="version-item">
+                        <span class="version-num">v${v.version}</span> &mdash;
+                        <span style="color:var(--text-muted)">${v.change_summary || '변경 사항 없음'}</span>
+                        <br><small style="color:var(--text-muted)">${new Date(v.created_at).toLocaleString('ko')}</small>
+                    </div>`).join('');
+            } catch (e) { document.getElementById('versionList').innerHTML = '<div class="empty-state"><p>로드 실패</p></div>'; }
+        }
+
+        loadDocs();
+    </script>
+</body>
+</html>

@@ -1,0 +1,4 @@
+[test]
+# dist/ 디렉토리의 컴파일된 JS 테스트 제외 (src/ TypeScript 테스트만 실행)
+root = "./src"
+preload = ["./.env.test"]

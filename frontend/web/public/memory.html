@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="ko" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover">
+    <title>AI 메모리 - OpenMake.Ai</title>
+    <link rel="icon" type="image/png" href="/logo.png">
+    <link rel="preconnect" href="https://cdn.jsdelivr.net">
+    <link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="/css/design-tokens.css">
+    <link rel="stylesheet" href="/css/components.css">
+    <link rel="stylesheet" href="/css/layout.css">
+    <style>
+        .toolbar { display:flex; gap:var(--space-3); align-items:center; flex-wrap:wrap; margin-bottom:var(--space-5); }
+        .toolbar input { flex:1; min-width:200px; padding:var(--space-3); background:var(--bg-secondary); border:1px solid var(--border-light); border-radius:var(--radius-md); color:var(--text-primary); box-sizing:border-box; }
+        .toolbar .btn-primary { padding:var(--space-2) var(--space-4); background:var(--accent-primary); color:#fff; border:none; border-radius:var(--radius-md); cursor:pointer; font-weight:var(--font-weight-semibold); white-space:nowrap; }
+        .filter-tabs { display:flex; gap:var(--space-2); margin-bottom:var(--space-5); flex-wrap:wrap; }
+        .filter-tab { padding:var(--space-2) var(--space-3); background:var(--bg-tertiary); border:1px solid var(--border-light); border-radius:var(--radius-md); cursor:pointer; color:var(--text-secondary); font-size:var(--font-size-sm); }
+        .filter-tab.active { background:var(--accent-primary); color:#fff; border-color:var(--accent-primary); }
+        .mem-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:var(--space-4); }
+        .mem-card { background:var(--bg-card); border:1px solid var(--border-light); border-radius:var(--radius-lg); padding:var(--space-5); cursor:pointer; transition:border-color .2s; display:flex; flex-direction:column; }
+        .mem-card:hover { border-color:var(--accent-primary); }
+        .mem-card h3 { margin:0 0 var(--space-2); color:var(--text-primary); font-size:15px; }
+        .mem-card .val-preview { color:var(--text-muted); font-size:var(--font-size-sm); margin-bottom:var(--space-3); flex:1; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; line-height:1.5; }
+        .mem-meta { display:flex; gap:var(--space-2); align-items:center; flex-wrap:wrap; font-size:var(--font-size-sm); }
+        .badge { display:inline-block; padding:2px 8px; border-radius:var(--radius-md); font-size:11px; font-weight:var(--font-weight-semibold); }
+        .badge-preference { background:var(--accent-primary); color:#fff; }
+        .badge-fact { background:var(--success); color:#fff; }
+        .badge-project { background:var(--warning); color:#000; }
+        .badge-relationship { background:#e879f9; color:#fff; }
+        .badge-skill { background:#38bdf8; color:#fff; }
+        .badge-context { background:var(--bg-tertiary); color:var(--text-secondary); }
+        .importance-bar { height:4px; width:60px; background:var(--bg-tertiary); border-radius:2px; overflow:hidden; display:inline-block; vertical-align:middle; }
+        .importance-fill { height:100%; border-radius:2px; }
+        .tag-pills { display:flex; gap:var(--space-1); flex-wrap:wrap; margin-top:var(--space-2); }
+        .tag-pill { padding:1px 6px; background:var(--bg-tertiary); border-radius:var(--radius-md); font-size:10px; color:var(--text-muted); }
+        .empty-state { text-align:center; padding:var(--space-8); color:var(--text-muted); }
+        .empty-state h2 { color:var(--text-secondary); margin-bottom:var(--space-3); }
+
+        .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:1000; justify-content:center; align-items:center; }
+        .modal-overlay.open { display:flex; }
+        .modal { background:var(--bg-card); border:1px solid var(--border-light); border-radius:var(--radius-lg); width:90%; max-width:600px; max-height:90vh; overflow-y:auto; padding:var(--space-6); }
+        .modal h2 { margin:0 0 var(--space-4); color:var(--text-primary); }
+        .form-group { margin-bottom:var(--space-4); }
+        .form-group label { display:block; margin-bottom:var(--space-2); color:var(--text-secondary); font-size:var(--font-size-sm); font-weight:var(--font-weight-semibold); }
+        .form-group input, .form-group select, .form-group textarea { width:100%; padding:var(--space-3); background:var(--bg-secondary); border:1px solid var(--border-light); border-radius:var(--radius-md); color:var(--text-primary); font-size:14px; box-sizing:border-box; }
+        .form-group textarea { min-height:120px; font-family:'Pretendard',sans-serif; resize:vertical; }
+        .range-row { display:flex; align-items:center; gap:var(--space-3); }
+        .range-row input[type=range] { flex:1; }
+        .range-val { min-width:30px; text-align:center; color:var(--accent-primary); font-weight:var(--font-weight-semibold); }
+        .modal-actions { display:flex; gap:var(--space-3); justify-content:flex-end; margin-top:var(--space-5); }
+        .modal-actions button { padding:var(--space-2) var(--space-4); border:none; border-radius:var(--radius-md); cursor:pointer; font-weight:var(--font-weight-semibold); }
+        .btn-save { background:var(--accent-primary); color:#fff; }
+        .btn-secondary { background:var(--bg-tertiary); color:var(--text-primary); border:1px solid var(--border-light) !important; }
+        .btn-danger { background:var(--danger); color:#fff; }
+        .toast { position:fixed; bottom:20px; right:20px; padding:var(--space-3) var(--space-5); border-radius:var(--radius-md); color:#fff; z-index:2000; opacity:0; transition:opacity .3s; }
+        .toast.show { opacity:1; } .toast.success { background:var(--success); } .toast.error { background:var(--danger); }
+        .loading { text-align:center; padding:var(--space-6); color:var(--text-muted); }
+    </style>
+</head>
+<body>
+    <div class="layout">
+        <aside class="sidebar" id="sidebar"></aside>
+        <div class="sidebar-overlay" onclick="toggleSidebar()"></div>
+        <main class="main-content">
+            <header class="page-header">
+                <button class="mobile-menu-btn" onclick="toggleMobileSidebar(event)">&#9776;</button>
+                <h1>AI 메모리</h1>
+            </header>
+            <div class="content-area">
+                <div class="toolbar">
+                    <input type="text" id="searchInput" placeholder="메모리 검색...">
+                    <button class="btn-primary" onclick="openNew()">+ 새 메모리</button>
+                </div>
+                <div class="filter-tabs" id="filterTabs">
+                    <button class="filter-tab active" data-cat="all">전체</button>
+                    <button class="filter-tab" data-cat="preference">선호도</button>
+                    <button class="filter-tab" data-cat="fact">사실</button>
+                    <button class="filter-tab" data-cat="project">프로젝트</button>
+                    <button class="filter-tab" data-cat="relationship">관계</button>
+                    <button class="filter-tab" data-cat="skill">기술</button>
+                    <button class="filter-tab" data-cat="context">맥락</button>
+                </div>
+                <div id="memList" class="mem-grid"><div class="loading">불러오는 중...</div></div>
+            </div>
+        </main>
+    </div>
+
+    <div class="modal-overlay" id="editorModal">
+        <div class="modal">
+            <h2 id="editorTitle">새 메모리</h2>
+            <div class="form-group"><label>카테고리</label>
+                <select id="memCategory">
+                    <option value="preference">선호도</option><option value="fact">사실</option><option value="project">프로젝트</option>
+                    <option value="relationship">관계</option><option value="skill">기술</option><option value="context">맥락</option>
+                </select>
+            </div>
+            <div class="form-group"><label>키</label><input type="text" id="memKey" placeholder="메모리 제목/키"></div>
+            <div class="form-group"><label>값</label><textarea id="memValue" placeholder="메모리 내용..."></textarea></div>
+            <div class="form-group">
+                <label>중요도</label>
+                <div class="range-row">
+                    <input type="range" id="memImportance" min="1" max="10" step="1" value="5">
+                    <span class="range-val" id="impVal">5</span>
+                </div>
+            </div>
+            <div class="form-group"><label>태그 (쉼표 구분)</label><input type="text" id="memTags" placeholder="태그1, 태그2, ..."></div>
+            <div class="modal-actions">
+                <button class="btn-secondary" onclick="closeEditor()">취소</button>
+                <button class="btn-danger" id="btnDelete" style="display:none" onclick="deleteMem()">삭제</button>
+                <button class="btn-save" onclick="saveMem()">저장</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="toast"></div>
+
+    <script src="/js/components/sidebar.js"></script>
+    <script>
+        const CAT_LABELS = { preference:'선호도', fact:'사실', project:'프로젝트', relationship:'관계', skill:'기술', context:'맥락' };
+        let allMems = [];
+        let currentFilter = 'all';
+        let editingId = null;
+        let searchMode = false;
+
+        function authFetch(url, options = {}) {
+            const token = localStorage.getItem('authToken');
+            const headers = { 'Content-Type':'application/json', ...(token ? {'Authorization':'Bearer '+token} : {}), ...options.headers };
+            return fetch(url, { ...options, headers }).then(r => r.json());
+        }
+        function showToast(msg, type = 'success') {
+            const t = document.getElementById('toast');
+            t.textContent = msg; t.className = 'toast ' + type + ' show';
+            setTimeout(() => t.classList.remove('show'), 3000);
+        }
+        function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+
+        function impColor(v) {
+            if (v >= 8) return 'var(--danger)';
+            if (v >= 5) return 'var(--warning)';
+            return 'var(--success)';
+        }
+
+        document.getElementById('memImportance').addEventListener('input', function() {
+            document.getElementById('impVal').textContent = this.value;
+        });
+
+        document.getElementById('filterTabs').addEventListener('click', e => {
+            if (!e.target.classList.contains('filter-tab')) return;
+            document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+            e.target.classList.add('active');
+            currentFilter = e.target.dataset.cat;
+            renderMems();
+        });
+
+        async function loadMems() {
+            try {
+                const res = await authFetch('/api/memory');
+                allMems = res.data || res || [];
+                searchMode = false;
+                renderMems();
+            } catch (e) { showToast('메모리 로드 실패', 'error'); }
+        }
+
+        async function searchMems(q) {
+            if (!q) { loadMems(); return; }
+            try {
+                const res = await authFetch('/api/memory/search?q=' + encodeURIComponent(q));
+                allMems = res.data || res || [];
+                searchMode = true;
+                renderMems();
+            } catch (e) { showToast('검색 실패', 'error'); }
+        }
+
+        function renderMems() {
+            const filtered = currentFilter === 'all' ? allMems : allMems.filter(m => m.category === currentFilter);
+            const el = document.getElementById('memList');
+            if (!filtered.length) {
+                el.innerHTML = '<div class="empty-state"><h2>저장된 메모리가 없습니다</h2><p>AI 메모리를 추가하여 더 나은 대화를 경험하세요.</p></div>';
+                return;
+            }
+            el.innerHTML = filtered.map(m => {
+                const imp = m.importance || 5;
+                const tags = m.tags || [];
+                return `
+                <div class="mem-card" onclick="openMem('${m.id}')">
+                    <h3>${esc(m.key)}</h3>
+                    <div class="val-preview">${esc(m.value)}</div>
+                    <div class="mem-meta">
+                        <span class="badge badge-${m.category}">${CAT_LABELS[m.category] || m.category}</span>
+                        <span class="importance-bar"><span class="importance-fill" style="width:${imp*10}%;background:${impColor(imp)}"></span></span>
+                        <span style="color:var(--text-muted)">${imp}/10</span>
+                    </div>
+                    ${tags.length ? '<div class="tag-pills">' + tags.map(t => '<span class="tag-pill">' + esc(t) + '</span>').join('') + '</div>' : ''}
+                </div>`;
+            }).join('');
+        }
+
+        function openNew() {
+            editingId = null;
+            document.getElementById('editorTitle').textContent = '새 메모리';
+            document.getElementById('memCategory').value = 'preference';
+            document.getElementById('memKey').value = '';
+            document.getElementById('memValue').value = '';
+            document.getElementById('memImportance').value = '5';
+            document.getElementById('impVal').textContent = '5';
+            document.getElementById('memTags').value = '';
+            document.getElementById('btnDelete').style.display = 'none';
+            document.getElementById('editorModal').classList.add('open');
+        }
+
+        function openMem(id) {
+            const m = allMems.find(x => x.id === id) || allMems.find(x => String(x.id) === String(id));
+            if (!m) return;
+            editingId = m.id;
+            document.getElementById('editorTitle').textContent = '메모리 편집';
+            document.getElementById('memCategory').value = m.category || 'preference';
+            document.getElementById('memKey').value = m.key || '';
+            document.getElementById('memValue').value = m.value || '';
+            document.getElementById('memImportance').value = m.importance || 5;
+            document.getElementById('impVal').textContent = m.importance || 5;
+            document.getElementById('memTags').value = (m.tags || []).join(', ');
+            document.getElementById('btnDelete').style.display = '';
+            document.getElementById('editorModal').classList.add('open');
+        }
+
+        function closeEditor() { document.getElementById('editorModal').classList.remove('open'); }
+
+        async function saveMem() {
+            const key = document.getElementById('memKey').value.trim();
+            if (!key) { showToast('키를 입력하세요', 'error'); return; }
+            try {
+                if (editingId) {
+                    await authFetch('/api/memory/' + editingId, { method:'PUT', body:JSON.stringify({
+                        value: document.getElementById('memValue').value,
+                        importance: parseInt(document.getElementById('memImportance').value)
+                    })});
+                    showToast('저장되었습니다');
+                } else {
+                    await authFetch('/api/memory', { method:'POST', body:JSON.stringify({
+                        category: document.getElementById('memCategory').value,
+                        key,
+                        value: document.getElementById('memValue').value,
+                        importance: parseInt(document.getElementById('memImportance').value),
+                        tags: document.getElementById('memTags').value.split(',').map(s => s.trim()).filter(Boolean)
+                    })});
+                    showToast('메모리가 생성되었습니다');
+                }
+                closeEditor(); loadMems();
+            } catch (e) { showToast('저장 실패', 'error'); }
+        }
+
+        async function deleteMem() {
+            if (!editingId || !confirm('이 메모리를 삭제하시겠습니까?')) return;
+            try {
+                await authFetch('/api/memory/' + editingId, { method:'DELETE' });
+                showToast('삭제되었습니다'); closeEditor(); loadMems();
+            } catch (e) { showToast('삭제 실패', 'error'); }
+        }
+
+        function debounce(fn, ms) { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; }
+        document.getElementById('searchInput').addEventListener('input', debounce(function() {
+            searchMems(this.value.trim());
+        }, 400));
+
+        loadMems();
+    </script>
+</body>
+</html>

@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="ko" data-theme="dark">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover">
+    <title>로그인 - OpenMake.Ai</title>
+    <link rel="icon" type="image/png" href="/logo.png">
+
+    <!-- 통합 디자인 시스템 -->
+    <link rel="preconnect" href="https://cdn.jsdelivr.net">
+    <link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css"
+        rel="stylesheet">
+    <link rel="stylesheet" href="/css/design-tokens.css">
+    <link rel="stylesheet" href="/css/glassmorphism.css">
+
+    <!-- PWA 메타 태그 -->
+    <meta name="theme-color" content="#667eea">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="OpenMake.Ai">
+    <meta name="mobile-web-app-capable" content="yes">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="apple-touch-icon" href="/icons/icon-192.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon.png">
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-app);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* 배경 글로우 효과 */
+        body::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background:
+                radial-gradient(ellipse 80% 50% at 50% -20%, rgba(102, 126, 234, 0.15), transparent),
+                radial-gradient(ellipse 60% 30% at 70% 80%, rgba(118, 75, 162, 0.10), transparent),
+                radial-gradient(ellipse 40% 40% at 20% 60%, rgba(102, 126, 234, 0.08), transparent);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .login-container {
+            width: 100%;
+            max-width: 440px;
+            text-align: center;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* 캐릭터 아바타 */
+        .login-avatar {
+            margin-bottom: 24px;
+        }
+
+        .login-avatar img {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            object-fit: cover;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            border: 2px solid var(--glass-border);
+        }
+
+        /* 환영 메시지 */
+        .login-title {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 8px;
+            line-height: 1.4;
+        }
+
+        .login-subtitle {
+            font-size: 1rem;
+            color: var(--text-secondary);
+            margin-bottom: 32px;
+        }
+
+        /* 로그인 카드 - Glassmorphism */
+        .login-card {
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: 20px;
+            padding: 32px 28px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        /* 탭 */
+        .tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 24px;
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            padding: 4px;
+        }
+
+        .tab {
+            flex: 1;
+            padding: 12px 16px;
+            border: none;
+            background: transparent;
+            border-radius: 10px;
+            font-size: 0.95rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .tab.active {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        .tab:hover:not(.active) {
+            color: var(--text-primary);
+        }
+
+        /* 알림 메시지 */
+        .alert {
+            padding: 12px 16px;
+            border-radius: 10px;
+            margin-bottom: 16px;
+            font-size: 0.9rem;
+            text-align: left;
+        }
+
+        .alert-danger {
+            background: rgba(220, 38, 38, 0.15);
+            color: #f87171;
+            border: 1px solid rgba(220, 38, 38, 0.3);
+        }
+
+        .alert-success {
+            background: rgba(5, 150, 105, 0.15);
+            color: #34d399;
+            border: 1px solid rgba(5, 150, 105, 0.3);
+        }
+
+        /* 폼 패널 */
+        .form-panel {
+            display: none;
+        }
+
+        .form-panel.active {
+            display: block;
+        }
+
+        /* 폼 요소 */
+        .form-group {
+            margin-bottom: 20px;
+            text-align: left;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 0.9rem;
+            font-weight: 500;
+            color: var(--text-primary);
+            margin-bottom: 8px;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 14px 16px;
+            border: 1px solid var(--border-medium);
+            border-radius: 12px;
+            font-size: 1rem;
+            color: var(--text-primary);
+            background: var(--bg-secondary);
+            transition: all 0.2s;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: var(--accent-primary);
+            background: var(--bg-tertiary);
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
+        }
+
+        .form-input::placeholder {
+            color: var(--text-muted);
+        }
+
+        .form-hint {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            margin-top: 4px;
+            display: block;
+        }
+
+        /* 버튼 */
+        .btn {
+            width: 100%;
+            padding: 14px 24px;
+            border: none;
+            border-radius: 12px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: var(--gradient-primary);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--glow-primary);
+        }
+
+        .btn-primary:active {
+            transform: translateY(0);
+        }
+
+        .btn-secondary {
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            border: 1px solid var(--border-medium);
+        }
+
+        .btn-secondary:hover {
+            background: var(--bg-tertiary);
+            border-color: var(--accent-primary);
+        }
+
+        /* 구분선 */
+        .divider {
+            display: flex;
+            align-items: center;
+            margin: 24px 0;
+            color: var(--text-muted);
+            font-size: 0.85rem;
+        }
+
+        .divider::before,
+        .divider::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: var(--border-light);
+        }
+
+        .divider span {
+            padding: 0 16px;
+        }
+
+        /* 소셜 로그인 */
+        .social-buttons {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .social-btn {
+            width: 100%;
+            padding: 14px 24px;
+            border: 1px solid var(--border-medium);
+            border-radius: 12px;
+            font-size: 0.95rem;
+            font-weight: 500;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            transition: all 0.2s;
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+        }
+
+        .social-btn:hover {
+            background: var(--bg-tertiary);
+            border-color: var(--accent-primary);
+            transform: translateY(-1px);
+        }
+
+        .social-btn svg {
+            width: 20px;
+            height: 20px;
+        }
+
+        /* 스피너 */
+        .spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            display: inline-block;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* 테마 토글 버튼 */
+        .theme-toggle {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: var(--glass-bg);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--glass-border);
+            border-radius: 50%;
+            width: 44px;
+            height: 44px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            z-index: 100;
+            color: var(--text-primary);
+            font-size: 1.2rem;
+        }
+
+        .theme-toggle:hover {
+            background: var(--bg-hover);
+            transform: scale(1.05);
+        }
+
+        /* 라이트 모드 스타일 */
+        [data-theme="light"] body {
+            background: var(--bg-app);
+        }
+
+        [data-theme="light"] body::before {
+            background:
+                radial-gradient(ellipse 80% 50% at 50% -20%, rgba(102, 126, 234, 0.08), transparent),
+                radial-gradient(ellipse 60% 30% at 70% 80%, rgba(118, 75, 162, 0.05), transparent);
+        }
+
+        [data-theme="light"] .login-card {
+            background: rgba(255, 255, 255, 0.9);
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
+        }
+
+        [data-theme="light"] .login-avatar img {
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+        }
+
+        /* 반응형 */
+        @media (max-width: 480px) {
+            .login-card {
+                padding: 24px 20px;
+            }
+
+            .login-title {
+                font-size: 1.5rem;
+            }
+
+            .login-avatar img {
+                width: 80px;
+                height: 80px;
+            }
+
+            .theme-toggle {
+                top: 10px;
+                right: 10px;
+            }
+        }
+    </style>
+
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/service-worker.js')
+                    .then(reg => console.log('[PWA] SW 등록 성공'))
+                    .catch(err => console.warn('[PWA] SW 등록 실패:', err));
+            });
+        }
+    </script>
+</head>
+
+<body>
+    <!-- 테마 토글 버튼 -->
+    <button class="theme-toggle" onclick="toggleTheme()" title="테마 전환">
+        <span id="themeIcon">🌙</span>
+    </button>
+
+    <div class="login-container">
+        <!-- 캐릭터 아바타 -->
+        <div class="login-avatar">
+            <img src="/images/avatar/character-avatar.png" alt="OpenMake AI">
+        </div>
+
+        <!-- 환영 메시지 -->
+        <h1 class="login-title">안녕하세요! 👋</h1>
+        <p class="login-subtitle">OpenMake.Ai에 로그인하세요</p>
+
+        <!-- 로그인 카드 -->
+        <div class="login-card">
+            <!-- 탭 -->
+            <div class="tabs">
+                <button class="tab active" onclick="switchTab('login')">로그인</button>
+                <button class="tab" onclick="switchTab('register')">회원가입</button>
+            </div>
+
+            <!-- 알림 메시지 -->
+            <div id="errorMessage" class="alert alert-danger" style="display: none;"></div>
+            <div id="successMessage" class="alert alert-success" style="display: none;"></div>
+
+            <!-- 로그인 폼 -->
+            <div id="loginPanel" class="form-panel active">
+                <form id="loginForm" onsubmit="handleLogin(event)">
+                    <div class="form-group">
+                        <label class="form-label" for="loginEmail">이메일</label>
+                        <input type="email" id="loginEmail" class="form-input" placeholder="example@email.com" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="loginPassword">비밀번호</label>
+                        <input type="password" id="loginPassword" class="form-input" placeholder="••••••••" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary" id="loginBtn">
+                        로그인
+                    </button>
+                </form>
+            </div>
+
+            <!-- 회원가입 폼 -->
+            <div id="registerPanel" class="form-panel">
+                <form id="registerForm" onsubmit="handleRegister(event)">
+                    <div class="form-group">
+                        <label class="form-label" for="registerEmail">이메일</label>
+                        <input type="email" id="registerEmail" class="form-input" placeholder="example@email.com"
+                            required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="registerPassword">비밀번호</label>
+                        <input type="password" id="registerPassword" class="form-input" placeholder="••••••••" required
+                            minlength="8">
+                        <span class="form-hint">최소 8자 이상, 대문자 1개, 특수문자 1개 포함</span>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="registerPasswordConfirm">비밀번호 확인</label>
+                        <input type="password" id="registerPasswordConfirm" class="form-input" placeholder="••••••••"
+                            required>
+                    </div>
+                    <button type="submit" class="btn btn-primary" id="registerBtn">
+                        가입하기
+                    </button>
+                </form>
+            </div>
+
+            <!-- 구분선 -->
+            <div class="divider" id="divider1">
+                <span>또는</span>
+            </div>
+
+            <!-- 소셜 로그인 -->
+            <div class="social-buttons" id="socialLoginSection">
+                <button class="social-btn social-btn-google" onclick="loginWithGoogle()">
+                    <svg viewBox="0 0 24 24">
+                        <path fill="#EA4335"
+                            d="M5.27 9.76A7.08 7.08 0 0 1 12 5.5c1.71 0 3.26.61 4.47 1.62L19.9 3.7A11.96 11.96 0 0 0 12 0C7.31 0 3.25 2.69 1.28 6.6l3.99 3.16z" />
+                        <path fill="#34A853"
+                            d="M16.04 18.01A7.01 7.01 0 0 1 12 19.5a7.08 7.08 0 0 1-6.73-4.76l-3.99 3.16A11.96 11.96 0 0 0 12 24c3.27 0 6.18-1.17 8.48-3.05l-4.44-2.94z" />
+                        <path fill="#4A90D9"
+                            d="M20.48 20.95C22.65 18.92 24 15.84 24 12c0-.82-.08-1.54-.22-2.25H12v4.75h6.73c-.3 1.38-1.09 2.53-2.13 3.31l4.48 2.94z" />
+                        <path fill="#FBBC05"
+                            d="M5.27 14.74A7.01 7.01 0 0 1 4.5 12c0-.99.17-1.93.49-2.76l-3.99-3.16A11.96 11.96 0 0 0 0 12c0 1.92.45 3.74 1.28 5.34l3.99-2.6z" />
+                    </svg>
+                    Google로 계속하기
+                </button>
+
+                <button class="social-btn social-btn-github" onclick="loginWithGitHub()">
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                        <path
+                            d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z" />
+                    </svg>
+                    GitHub로 계속하기
+                </button>
+            </div>
+
+            <!-- 구분선 -->
+            <div class="divider">
+                <span>또는</span>
+            </div>
+
+            <!-- 게스트 버튼 -->
+            <button class="btn btn-secondary" onclick="continueAsGuest()">
+                🙋 게스트로 계속하기
+            </button>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = window.location.origin;
+
+        // 저장된 테마 적용
+        function initTheme() {
+            const savedTheme = localStorage.getItem('theme') || 'dark';
+            document.documentElement.setAttribute('data-theme', savedTheme);
+            updateThemeIcon(savedTheme);
+        }
+
+        function toggleTheme() {
+            const currentTheme = document.documentElement.getAttribute('data-theme');
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            document.documentElement.setAttribute('data-theme', newTheme);
+            localStorage.setItem('theme', newTheme);
+            updateThemeIcon(newTheme);
+        }
+
+        function updateThemeIcon(theme) {
+            const icon = document.getElementById('themeIcon');
+            icon.textContent = theme === 'dark' ? '☀️' : '🌙';
+        }
+
+        initTheme();
+
+        // 이미 로그인된 경우 메인 페이지로 이동
+        if (localStorage.getItem('authToken')) {
+            checkAuth();
+        }
+
+        async function checkAuth() {
+            const token = localStorage.getItem('authToken');
+            if (!token) return;
+
+            try {
+                const res = await fetch(`${API_BASE}/api/auth/me`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (res.ok) {
+                    window.location.href = '/';
+                } else {
+                    localStorage.removeItem('authToken');
+                    localStorage.removeItem('user');
+                }
+            } catch (e) {
+                console.error('Auth check failed:', e);
+            }
+        }
+
+        function switchTab(tab) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelector(`.tab:${tab === 'login' ? 'first-child' : 'last-child'}`).classList.add('active');
+
+            document.getElementById('loginPanel').classList.toggle('active', tab === 'login');
+            document.getElementById('registerPanel').classList.toggle('active', tab === 'register');
+
+            hideMessages();
+        }
+
+        function showError(message) {
+            const el = document.getElementById('errorMessage');
+            el.textContent = message;
+            el.style.display = 'block';
+            document.getElementById('successMessage').style.display = 'none';
+        }
+
+        function showSuccess(message) {
+            const el = document.getElementById('successMessage');
+            el.textContent = message;
+            el.style.display = 'block';
+            document.getElementById('errorMessage').style.display = 'none';
+        }
+
+        function hideMessages() {
+            document.getElementById('errorMessage').style.display = 'none';
+            document.getElementById('successMessage').style.display = 'none';
+        }
+
+        function setLoading(btnId, loading) {
+            const btn = document.getElementById(btnId);
+            if (loading) {
+                btn.disabled = true;
+                btn.innerHTML = '<span class="spinner"></span> 처리 중...';
+            } else {
+                btn.disabled = false;
+                btn.innerHTML = btnId === 'loginBtn' ? '로그인' : '가입하기';
+            }
+        }
+
+        async function handleLogin(e) {
+            e.preventDefault();
+            hideMessages();
+
+            const email = document.getElementById('loginEmail').value;
+            const password = document.getElementById('loginPassword').value;
+
+            setLoading('loginBtn', true);
+
+            try {
+                const res = await fetch(`${API_BASE}/api/auth/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password })
+                });
+
+                const data = await res.json();
+
+                if (res.ok && data.success) {
+                    // api-response 표준 형식: data.data.token, data.data.user
+                    const payload = data.data || data;
+                    const token = payload.token;
+                    localStorage.setItem('authToken', token);
+                    localStorage.removeItem('guestMode');
+                    localStorage.removeItem('isGuest');
+                    // JWT에서 사용자 정보 추출하여 저장
+                    if (payload.user) {
+                        localStorage.setItem('user', JSON.stringify(payload.user));
+                    } else {
+                        try {
+                            const base64Url = token.split('.')[1];
+                            const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+                            const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+                                return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+                            }).join(''));
+                            const userData = JSON.parse(jsonPayload);
+                            localStorage.setItem('user', JSON.stringify({
+                                id: userData.userId, email: userData.email, role: userData.role
+                            }));
+                        } catch (e) { console.error('JWT decode error:', e); }
+                    }
+                    showSuccess('로그인 성공! 잠시 후 이동합니다...');
+                    // redirectAfterLogin 지원
+                    const redirectUrl = sessionStorage.getItem('redirectAfterLogin') || '/';
+                    sessionStorage.removeItem('redirectAfterLogin');
+                    setTimeout(() => {
+                        window.location.href = redirectUrl;
+                    }, 800);
+                } else {
+                    // api-response 에러 형식: data.error.message 또는 레거시 data.error (string)
+                    const errorMsg = (data.error && typeof data.error === 'object') ? data.error.message : data.error;
+                    showError(errorMsg || '로그인에 실패했습니다');
+                }
+            } catch (error) {
+                showError('서버 연결에 실패했습니다');
+            } finally {
+                setLoading('loginBtn', false);
+            }
+        }
+
+        async function handleRegister(e) {
+            e.preventDefault();
+            hideMessages();
+
+            const email = document.getElementById('registerEmail').value;
+            const password = document.getElementById('registerPassword').value;
+            const passwordConfirm = document.getElementById('registerPasswordConfirm').value;
+
+            if (password !== passwordConfirm) {
+                showError('비밀번호가 일치하지 않습니다');
+                return;
+            }
+
+            setLoading('registerBtn', true);
+
+            try {
+                const res = await fetch(`${API_BASE}/api/auth/register`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password })
+                });
+
+                const data = await res.json();
+
+                if (res.ok && data.success) {
+                    showSuccess('회원가입 완료! 로그인해주세요.');
+                    setTimeout(() => {
+                        switchTab('login');
+                        document.getElementById('loginEmail').value = email;
+                    }, 1500);
+                } else {
+                    const errorMsg = (data.error && typeof data.error === 'object') ? data.error.message : data.error;
+                    showError(errorMsg || '회원가입에 실패했습니다');
+                }
+            } catch (error) {
+                showError('서버 연결에 실패했습니다');
+            } finally {
+                setLoading('registerBtn', false);
+            }
+        }
+
+        function continueAsGuest() {
+            localStorage.setItem('guestMode', 'true');
+            localStorage.setItem('isGuest', 'true');
+            localStorage.removeItem('authToken');
+            localStorage.removeItem('user');
+            window.location.href = '/';
+        }
+
+        function loginWithGoogle() {
+            window.location.href = `${API_BASE}/api/auth/login/google`;
+        }
+
+        function loginWithGitHub() {
+            window.location.href = `${API_BASE}/api/auth/login/github`;
+        }
+
+        async function checkOAuthProviders() {
+            try {
+                const res = await fetch(`${API_BASE}/api/auth/providers`);
+                const data = await res.json();
+
+                // api-response 표준 형식: data.data.providers
+                const payload = data.data || data;
+                const providers = payload.providers || [];
+                const section = document.getElementById('socialLoginSection');
+                const divider = document.getElementById('divider1');
+
+                if (providers.length === 0) {
+                    section.style.display = 'none';
+                    if (divider) divider.style.display = 'none';
+                } else {
+                    const googleBtn = document.querySelector('.social-btn-google');
+                    const githubBtn = document.querySelector('.social-btn-github');
+
+                    if (googleBtn) {
+                        googleBtn.style.display = providers.includes('google') ? 'flex' : 'none';
+                    }
+                    if (githubBtn) {
+                        githubBtn.style.display = providers.includes('github') ? 'flex' : 'none';
+                    }
+                }
+            } catch (e) {
+                console.warn('OAuth 프로바이더 확인 실패:', e);
+            }
+        }
+
+        checkOAuthProviders();
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const oauthError = urlParams.get('error');
+        if (oauthError) {
+            showError('소셜 로그인 실패: ' + oauthError);
+        }
+    </script>
+</body>
+
+</html>

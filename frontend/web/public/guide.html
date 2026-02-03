@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="ko" data-theme="dark">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover">
+    <title>사용자 가이드 - OpenMake.Ai</title>
+    <link rel="icon" type="image/png" href="/logo.png">
+
+    <!-- 통합 디자인 시스템 -->
+    <link rel="preconnect" href="https://cdn.jsdelivr.net">
+    <link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css"
+        rel="stylesheet">
+    <link rel="stylesheet" href="/css/design-tokens.css">
+    <link rel="stylesheet" href="/css/components.css">
+    <link rel="stylesheet" href="/css/layout.css">
+
+    <style>
+        .guide-content {
+            line-height: 1.8;
+            max-width: 800px;
+        }
+
+        .guide-content h2 {
+            font-size: var(--font-size-2xl);
+            margin: var(--space-10) 0 var(--space-5);
+            padding-bottom: var(--space-2);
+            border-bottom: 1px solid var(--border-light);
+        }
+
+        .guide-content h3 {
+            font-size: var(--font-size-xl);
+            margin: var(--space-8) 0 var(--space-4);
+            color: var(--accent-primary);
+        }
+
+        .guide-content h4 {
+            font-size: var(--font-size-lg);
+            margin: var(--space-5) 0 var(--space-2);
+        }
+
+        .guide-content p {
+            margin-bottom: var(--space-4);
+        }
+
+        .guide-content ul,
+        .guide-content ol {
+            margin-left: var(--space-6);
+            margin-bottom: var(--space-4);
+        }
+
+        .guide-content li {
+            margin-bottom: var(--space-2);
+        }
+
+        .guide-content code {
+            background: var(--bg-card);
+            padding: var(--space-1) var(--space-2);
+            border-radius: var(--radius-sm);
+            font-size: 0.9em;
+        }
+
+        .guide-content pre {
+            background: var(--bg-card);
+            padding: var(--space-5);
+            border-radius: var(--radius-lg);
+            overflow-x: auto;
+            margin: var(--space-5) 0;
+        }
+
+        .guide-content pre code {
+            background: transparent;
+            padding: 0;
+        }
+
+        .guide-content table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: var(--space-5) 0;
+        }
+
+        .guide-content th,
+        .guide-content td {
+            padding: var(--space-3) var(--space-4);
+            text-align: left;
+            border-bottom: 1px solid var(--border-light);
+        }
+
+        .guide-content th {
+            background: var(--bg-card);
+            color: var(--text-muted);
+            font-size: var(--font-size-sm);
+            text-transform: uppercase;
+        }
+
+        .mode-card {
+            background: var(--bg-card);
+            border-radius: var(--radius-lg);
+            padding: var(--space-5);
+            margin-bottom: var(--space-4);
+            border-left: 4px solid var(--accent-primary);
+        }
+
+        .mode-card h4 {
+            margin-top: 0 !important;
+            display: flex;
+            align-items: center;
+            gap: var(--space-2);
+        }
+
+        .mode-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+            gap: var(--space-4);
+            margin: var(--space-5) 0;
+        }
+
+        .tip-box {
+            background: rgba(34, 197, 94, 0.1);
+            border: 1px solid var(--success);
+            border-radius: var(--radius-lg);
+            padding: var(--space-4) var(--space-5);
+            margin: var(--space-5) 0;
+        }
+
+        .tip-box h4 {
+            color: var(--success);
+            margin-top: 0 !important;
+        }
+
+        .warning-box {
+            background: rgba(245, 158, 11, 0.1);
+            border: 1px solid var(--warning);
+            border-radius: var(--radius-lg);
+            padding: var(--space-4) var(--space-5);
+            margin: var(--space-5) 0;
+        }
+
+        .warning-box h4 {
+            color: var(--warning);
+            margin-top: 0 !important;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="app-layout">
+        <button class="mobile-menu-btn" onclick="toggleMobileSidebar()"><span></span><span></span><span></span></button>
+        <div class="sidebar-overlay" onclick="toggleMobileSidebar()"></div>
+        <nav class="sidebar" id="sidebar"></nav>
+
+        <div class="main-content">
+            <div class="page-content">
+                <div class="container container-lg">
+                    <header class="page-header">
+                        <div>
+                            <h1 class="page-title page-title-gradient">📖 OpenMake.Ai 사용자 가이드</h1>
+                            <p class="page-subtitle">버전 1.5.0 · 마지막 업데이트: 2026-01-02</p>
+                        </div>
+                    </header>
+
+                    <div class="guide-content">
+                        <h2>🎯 소개</h2>
+                        <p><strong>OpenMake.Ai</strong>은 다양한 AI 모델을 활용하여 대화, 코드 작성, 문서 분석, 번역 등 다양한 작업을 수행할 수 있는 올인원 AI
+                            어시스턴트입니다.</p>
+
+                        <h2>✏️ 프롬프트 모드 (12종)</h2>
+                        <p>각 모드는 특정 작업에 최적화된 시스템 프롬프트를 사용합니다. 질문 내용에 따라 <strong>자동으로 최적 모드가 선택</strong>됩니다.</p>
+
+                        <h3>🟢 기본 모드</h3>
+                        <div class="mode-grid">
+                            <div class="mode-card">
+                                <h4>🤝 Assistant <span class="badge badge-primary">기본</span></h4>
+                                <p>일반 대화, 질문 답변, 정보 제공</p>
+                            </div>
+                            <div class="mode-card">
+                                <h4>🧠 Reasoning</h4>
+                                <p>복잡한 문제 해결, 수학적/논리적 분석</p>
+                            </div>
+                        </div>
+
+                        <h3>💻 개발 모드</h3>
+                        <div class="mode-grid">
+                            <div class="mode-card">
+                                <h4>👨‍💻 Coder</h4>
+                                <p>프로그래밍, 디버깅, API 개발</p>
+                            </div>
+                            <div class="mode-card">
+                                <h4>🔍 Reviewer</h4>
+                                <p>코드 품질 분석, 보안 취약점 검토</p>
+                            </div>
+                            <div class="mode-card">
+                                <h4>🏗️ Generator</h4>
+                                <p>프로젝트 스캐폴딩, 보일러플레이트 생성</p>
+                            </div>
+                            <div class="mode-card">
+                                <h4>🛡️ Security</h4>
+                                <p>보안 취약점 분석, 방어 전략 수립</p>
+                            </div>
+                        </div>
+
+                        <h3>📝 콘텐츠 모드</h3>
+                        <div class="mode-grid">
+                            <div class="mode-card">
+                                <h4>✍️ Writer</h4>
+                                <p>블로그, 이메일, 보고서 작성</p>
+                            </div>
+                            <div class="mode-card">
+                                <h4>📚 Explainer</h4>
+                                <p>복잡한 개념을 쉽게 설명</p>
+                            </div>
+                            <div class="mode-card">
+                                <h4>🌐 Translator</h4>
+                                <p>다국어 번역, 문화적 맥락 해설</p>
+                            </div>
+                        </div>
+
+                        <h3>🔬 분석 모드</h3>
+                        <div class="mode-grid">
+                            <div class="mode-card">
+                                <h4>🔎 Researcher</h4>
+                                <p>리서치, 데이터 조사, 트렌드 분석</p>
+                            </div>
+                            <div class="mode-card">
+                                <h4>💼 Consultant</h4>
+                                <p>비즈니스 전략, 문제 해결</p>
+                            </div>
+                            <div class="mode-card">
+                                <h4>🤖 Agent</h4>
+                                <p>외부 도구 호출, 자동화 작업</p>
+                            </div>
+                        </div>
+
+                        <h2>🔧 MCP 도구</h2>
+                        <p>외부 서비스와 연동하여 LLM의 능력을 확장합니다.</p>
+                        <table>
+                            <tr>
+                                <th>도구</th>
+                                <th>기능</th>
+                            </tr>
+                            <tr>
+                                <td>🔍 웹 검색</td>
+                                <td>Google/DuckDuckGo/Naver 검색</td>
+                            </tr>
+                            <tr>
+                                <td>🐙 GitHub</td>
+                                <td>레포지토리 검색, 이슈 관리, 코드 조회</td>
+                            </tr>
+                            <tr>
+                                <td>📊 Exa Search</td>
+                                <td>학술/기술 문서 검색</td>
+                            </tr>
+                            <tr>
+                                <td>📄 PDF 분석</td>
+                                <td>문서 요약 및 Q&A</td>
+                            </tr>
+                            <tr>
+                                <td>🖼️ 이미지 분석</td>
+                                <td>Vision 기반 이미지 인식</td>
+                            </tr>
+                        </table>
+
+                        <h2>📄 문서 분석</h2>
+                        <h3>지원 형식</h3>
+                        <ul>
+                            <li>PDF, DOCX, TXT, MD</li>
+                            <li>이미지 (PNG, JPG) - OCR 지원</li>
+                            <li>엑셀 (XLSX) - 데이터 추출</li>
+                        </ul>
+                        <h3>사용 방법</h3>
+                        <ol>
+                            <li>채팅 입력창의 📎 버튼 클릭</li>
+                            <li>파일 업로드 (최대 100MB)</li>
+                            <li>"이 문서 요약해줘" 또는 "3페이지 내용 설명해줘"</li>
+                        </ol>
+
+                        <h2>💡 팁 & 트릭</h2>
+                        <div class="tip-box">
+                            <h4>✅ 효과적인 프롬프트 작성</h4>
+                            <p><strong>좋은 예시:</strong> "TypeScript로 사용자 인증 API를 작성해줘. JWT 토큰을 사용하고 에러 처리를 포함해줘."</p>
+                            <p><strong>나쁜 예시:</strong> "API 만들어줘"</p>
+                        </div>
+                        <div class="warning-box">
+                            <h4>⚠️ 주의사항</h4>
+                            <p>AI의 지식은 2024년 12월까지의 데이터 기반입니다. 최신 정보는 웹 검색 기능을 활용하세요.</p>
+                        </div>
+
+                        <h2>❓ FAQ</h2>
+                        <h4>Q: 어떤 모델을 사용하나요?</h4>
+                        <p>기본적으로 Gemini 3 Flash/Pro를 사용하며, 설정에서 변경할 수 있습니다.</p>
+                        <h4>Q: 대화 내용은 저장되나요?</h4>
+                        <p>로그인 사용자의 대화는 서버에 저장되며 히스토리 메뉴에서 확인할 수 있습니다.</p>
+                        <h4>Q: 파일 업로드 용량 제한은?</h4>
+                        <p>최대 100MB입니다.</p>
+                        <h4>Q: 프롬프트 모드를 수동으로 변경할 수 있나요?</h4>
+                        <p>네, 사이드바의 프롬프트 모드 섹션에서 원하는 모드를 클릭하세요.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/js/components/sidebar.js"></script>
+</body>
+
+</html>

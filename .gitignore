@@ -1,0 +1,72 @@
+# Environment variables
+.env
+.env.local
+.env.*.local
+.env.docker
+
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+build/
+*.tsbuildinfo
+
+# Logs
+*.log
+logs/
+
+# OS files
+**/.DS_Store
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Testing
+coverage/
+.jest-cache/
+
+# Vite
+.vite/
+
+# AI Skills (large repos, installed via npx)
+.gemini/
+.agent/
+.spawner/
+.claude/
+.sisyphus/
+.cursorrules
+.ruff_cache/
+
+# Runtime data (databases, user data, usage stats)
+data/
+!data/.gitkeep
+backend/api/data/
+
+# Legacy backup files
+bak/
+
+# User uploaded files (sensitive user data)
+backend/uploads/
+uploads/
+
+# OCR trained data (large binary, download separately)
+*.traineddata
+
+# Python cache
+__pycache__/
+*.pyc
+
+# IDE workspace files
+*.code-workspace
+
+# Runtime config (auto-generated)
+.ollama-cluster.json
+backend/api/.ollama-cluster.json
+
+# Screenshots (may contain personal info)
+*.png
+!frontend/web/public/**/*.png
