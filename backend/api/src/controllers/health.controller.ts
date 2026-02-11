@@ -7,6 +7,7 @@
 
 import { Request, Response, Router } from 'express';
 import { ClusterManager, getClusterManager } from '../cluster/manager';
+import { success } from '../utils/api-response';
 
 /**
  * 헬스체크 및 서비스 준비 상태 컨트롤러
@@ -42,12 +43,12 @@ export class HealthController {
      * 기본 헬스체크 
      */
     private healthCheck(req: Request, res: Response): void {
-        res.json({
+        res.json(success({
             status: 'healthy',
             timestamp: new Date().toISOString(),
             uptime: process.uptime(),
             version: '1.0.0'
-        });
+        }));
     }
 
     /**
@@ -58,12 +59,12 @@ export class HealthController {
         const stats = this.cluster.getStats();
         const isReady = stats.onlineNodes > 0;
 
-        res.status(isReady ? 200 : 503).json({
+        res.status(isReady ? 200 : 503).json(success({
             ready: isReady,
             onlineNodes: stats.onlineNodes,
             totalNodes: stats.totalNodes,
             timestamp: new Date().toISOString()
-        });
+        }));
     }
 
     /**

@@ -22,14 +22,14 @@ router.get('/metrics', (req: Request, res: Response) => {
          res.json(success({ metrics }));
      } catch (error) {
          console.error('[Agent Active] 오류:', error);
-         res.status(500).json(internalError(String(error)));
+         res.status(500).json(internalError('에이전트 메트릭 조회 실패'));
      }
  });
 
- /**
-  * GET /api/agents/summary
- * 에이전트 성능 요약
- */
+  /**
+   * GET /api/agents/summary
+  * 에이전트 성능 요약
+  */
 router.get('/summary', (req: Request, res: Response) => {
     try {
         const monitor = getAgentMonitor();
@@ -37,14 +37,14 @@ router.get('/summary', (req: Request, res: Response) => {
          res.json(success({ summary }));
      } catch (error) {
          console.error('[Agent Summary] 오류:', error);
-         res.status(500).json(internalError(String(error)));
+         res.status(500).json(internalError('에이전트 메트릭 조회 실패'));
      }
  });
 
- /**
-  * POST /api/agents/reset
- * 에이전트 메트릭 초기화
- */
+  /**
+   * POST /api/agents/reset
+  * 에이전트 메트릭 초기화
+  */
 router.post('/reset', (req: Request, res: Response) => {
     try {
         const monitor = getAgentMonitor();
@@ -52,7 +52,7 @@ router.post('/reset', (req: Request, res: Response) => {
          res.json(success({ message: '에이전트 메트릭 초기화 완료' }));
      } catch (error) {
          console.error('[Agent Reset] 오류:', error);
-         res.status(500).json(internalError(String(error)));
+         res.status(500).json(internalError('에이전트 메트릭 조회 실패'));
      }
  });
 

@@ -9,6 +9,7 @@ import type { MCPToolDefinition } from './types';
 import { builtInTools } from './tools';
 import type { UserTier } from '../data/user-manager';
 import { canUseTool } from './tool-tiers';
+import type { UserContext } from './user-sandbox';
 
 /** 외부 도구 실행기 함수 타입 */
 type ExternalToolExecutor = (name: string, args: Record<string, unknown>) => Promise<MCPToolResult>;
@@ -59,8 +60,13 @@ export class ToolRouter {
         return this.getAllTools().filter(tool => canUseTool(tier, tool.name));
     }
 
-    /** 도구 실행 — 내장이면 직접 handler, 외부면 ExternalMCPClient로 라우팅 */
-    async executeTool(name: string, args: Record<string, unknown>): Promise<MCPToolResult> {
+    /**
+     * 도구 실행 — 내장이면 직접 handler, 외부면 ExternalMCPClient로 라우팅
+     * 
+     * ⚙️ Phase 3: UserContext 전달 추가 (2026-02-07)
+     * 내장 도구 handler에 context를 전달하여, 도구가 사용자 정보를 참조할 수 있도록 합니다.
+     */
+    async executeTool(name: string, args: Record<string, unknown>, context?: UserContext): Promise<MCPToolResult> {
         // 1. 외부 도구 확인 (:: 네임스페이스)
         if (name.includes(MCP_NAMESPACE_SEPARATOR)) {
             const externalEntry = this.externalTools.get(name);
@@ -87,7 +93,7 @@ export class ToolRouter {
         const builtIn = builtInTools.find((def: MCPToolDefinition) => def.tool.name === name);
         if (builtIn) {
             try {
-                return await builtIn.handler(args);
+                return await builtIn.handler(args, context);
             } catch (error) {
                 const message = error instanceof Error ? error.message : String(error);
                 return {

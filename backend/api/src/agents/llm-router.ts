@@ -130,13 +130,17 @@ ${agentList}
   "alternatives": ["대안1 ID", "대안2 ID"]
 }`;
 
+    // 🔧 라우팅 목적으로는 메시지 앞부분만 필요 — 긴 문서 입력은 잘라내기
+    const MAX_ROUTING_INPUT = 10000;
+    const routingInput = message.length > MAX_ROUTING_INPUT ? message.slice(0, MAX_ROUTING_INPUT) : message;
+
     // Sanitize user input before embedding in prompt
-    const validation = validatePromptInput(message);
+    const validation = validatePromptInput(routingInput);
     if (!validation.valid) {
         console.log('[LLM Router] 입력 검증 실패:', validation.error);
         return null;
     }
-    const sanitizedMessage = sanitizePromptInput(message);
+    const sanitizedMessage = sanitizePromptInput(routingInput);
 
     const userPrompt = `<user_message>
 ${sanitizedMessage}

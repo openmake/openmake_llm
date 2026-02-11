@@ -1,128 +1,13 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { exec } from 'child_process';
-import { promisify } from 'util';
 import { MCPToolDefinition, MCPToolResult } from './types';
 
-const execAsync = promisify(exec);
-
-// 파일 읽기 도구
-export const readFileTool: MCPToolDefinition = {
-    tool: {
-        name: 'read_file',
-        description: '파일의 내용을 읽습니다',
-        inputSchema: {
-            type: 'object',
-            properties: {
-                path: {
-                    type: 'string',
-                    description: '읽을 파일의 경로'
-                }
-            },
-            required: ['path']
-        }
-    },
-    handler: async (args): Promise<MCPToolResult> => {
-        try {
-            const filePath = args.path as string;
-            const absolutePath = path.resolve(filePath);
-            const content = fs.readFileSync(absolutePath, 'utf-8');
-            return {
-                content: [{ type: 'text', text: content }]
-            };
-        } catch (error) {
-            return {
-                content: [{ type: 'text', text: `파일 읽기 실패: ${error}` }],
-                isError: true
-            };
-        }
-    }
-};
-
-// 파일 쓰기 도구
-export const writeFileTool: MCPToolDefinition = {
-    tool: {
-        name: 'write_file',
-        description: '파일에 내용을 씁니다',
-        inputSchema: {
-            type: 'object',
-            properties: {
-                path: {
-                    type: 'string',
-                    description: '쓸 파일의 경로'
-                },
-                content: {
-                    type: 'string',
-                    description: '파일에 쓸 내용'
-                }
-            },
-            required: ['path', 'content']
-        }
-    },
-    handler: async (args): Promise<MCPToolResult> => {
-        try {
-            const filePath = args.path as string;
-            const content = args.content as string;
-            const absolutePath = path.resolve(filePath);
-
-            // 디렉토리가 없으면 생성
-            const dir = path.dirname(absolutePath);
-            if (!fs.existsSync(dir)) {
-                fs.mkdirSync(dir, { recursive: true });
-            }
-
-            fs.writeFileSync(absolutePath, content);
-            return {
-                content: [{ type: 'text', text: `파일 저장됨: ${absolutePath}` }]
-            };
-        } catch (error) {
-            return {
-                content: [{ type: 'text', text: `파일 쓰기 실패: ${error}` }],
-                isError: true
-            };
-        }
-    }
-};
-
-// 명령어 실행 도구
-export const runCommandTool: MCPToolDefinition = {
-    tool: {
-        name: 'run_command',
-        description: '셸 명령어를 실행합니다',
-        inputSchema: {
-            type: 'object',
-            properties: {
-                command: {
-                    type: 'string',
-                    description: '실행할 명령어'
-                },
-                cwd: {
-                    type: 'string',
-                    description: '작업 디렉토리 (선택)'
-                }
-            },
-            required: ['command']
-        }
-    },
-    handler: async (args): Promise<MCPToolResult> => {
-        try {
-            const command = args.command as string;
-            const cwd = (args.cwd as string) || process.cwd();
-
-            const { stdout, stderr } = await execAsync(command, { cwd });
-            const output = stdout + (stderr ? `\nSTDERR:\n${stderr}` : '');
-
-            return {
-                content: [{ type: 'text', text: output || '명령 완료 (출력 없음)' }]
-            };
-        } catch (error) {
-            return {
-                content: [{ type: 'text', text: `명령 실행 실패: ${error}` }],
-                isError: true
-            };
-        }
-    }
-};
+// ============================================
+// 🔒 보안 패치 2026-02-07:
+// - run_command: 커맨드 인젝션(RCE) 위험으로 비활성화
+// - read_file/write_file: 샌드박스 미적용 레거시 도구 제거
+//   → mcp/filesystem.ts의 fs_read_file/fs_write_file (UserSandbox 적용) 사용
+// ============================================
 
 // 코드 검색 도구
 export const searchCodeTool: MCPToolDefinition = {
@@ -289,8 +174,8 @@ import { webSearchTools } from './web-search';
 import { firecrawlTools, isFirecrawlConfigured } from './firecrawl';
 
 // 모든 도구 내보내기 (Firecrawl은 API 키가 설정된 경우에만 추가)
+// 🔒 보안 패치 2026-02-07: runCommandTool(RCE), readFileTool/writeFileTool(샌드박스 미적용) 제거
 export const builtInTools: MCPToolDefinition[] = [
-    runCommandTool,
     visionOcrTool,
     analyzeImageTool,
     ...webSearchTools,

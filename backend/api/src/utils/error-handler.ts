@@ -7,7 +7,8 @@
 
 import { Request, Response, NextFunction } from 'express';
 import { createLogger } from './logger';
-import { error as apiError, ErrorCodes, ApiErrorResponse } from './api-response';
+import { error as apiError, badRequest as apiBadRequest, ErrorCodes, ApiErrorResponse } from './api-response';
+import { QuotaExceededError } from '../errors/quota-exceeded.error';
 
 const logger = createLogger('ErrorHandler');
 
@@ -122,26 +123,71 @@ function formatError(err: Error, includeStack: boolean): ApiErrorResponse & { st
 /**
  * Global error handler middleware
  * Must be registered LAST after all routes
+ * 
+ * ⚙️ Phase 3 통합 2026-02-07:
+ *   - MulterError (파일 업로드) 처리 통합
+ *   - QuotaExceededError (API 할당량) 처리 통합
+ *   - server.ts 인라인 핸들러 + middlewares/index.ts globalErrorHandler 제거 → 이 함수로 단일화
+ * 
  * #24 연동: 표준 API 응답 형식 적용
  */
 export function errorHandler(
-    err: Error,
+    err: Error & { code?: string; status?: number; name?: string },
     req: Request,
     res: Response,
     _next: NextFunction
 ): void {
-    // Log error
+    // ── QuotaExceededError → 429 ──
+    if (err instanceof QuotaExceededError) {
+        logger.warn(`Quota exceeded: ${err.message}`, { path: req.path });
+        res.set('Retry-After', String(err.retryAfterSeconds));
+        res.status(429).json(apiError(ErrorCodes.RATE_LIMITED, err.message, {
+            quotaType: err.quotaType,
+            used: err.used,
+            limit: err.limit,
+            retryAfter: err.retryAfterSeconds,
+        }));
+        return;
+    }
+
+    // ── Multer: 파일 크기 초과 → 413 ──
+    if (err.code === 'LIMIT_FILE_SIZE') {
+        logger.warn(`File size limit exceeded: ${req.path}`);
+        res.status(413).json(apiError(ErrorCodes.PAYLOAD_TOO_LARGE, '파일 크기가 너무 큽니다 (최대 100MB)'));
+        return;
+    }
+
+    // ── Multer: 기타 업로드 오류 → 400 ──
+    if (err.name === 'MulterError') {
+        logger.warn(`Multer error: ${err.message}`, { path: req.path });
+        res.status(400).json(apiBadRequest(`업로드 오류: ${err.message}`));
+        return;
+    }
+
+    // ── AppError (커스텀 에러 계층) ──
+    if (err instanceof AppError) {
+        logger.error(`[${req.method}] ${req.path}: ${err.message}`, {
+            stack: err.stack,
+            code: err.code,
+        });
+        // NOTE: Use process.env.NODE_ENV directly (not getConfig()) because
+        // NODE_ENV can change at runtime in test environments
+        const includeStack = process.env.NODE_ENV === 'development';
+        res.status(err.statusCode).json(formatError(err, includeStack));
+        return;
+    }
+
+    // ── 기타 알 수 없는 에러 → 500 ──
     logger.error(`[${req.method}] ${req.path}: ${err.message}`, {
         stack: err.stack,
         body: req.body,
         query: req.query
     });
 
-    // Determine status code
-    const statusCode = err instanceof AppError ? err.statusCode : 500;
+    const statusCode = err.status || 500;
+    // NOTE: Use process.env.NODE_ENV directly (not getConfig()) because
+    // NODE_ENV can change at runtime in test environments
     const includeStack = process.env.NODE_ENV === 'development';
-
-    // Send response
     res.status(statusCode).json(formatError(err, includeStack));
 }
 

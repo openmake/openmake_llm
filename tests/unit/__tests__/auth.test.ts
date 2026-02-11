@@ -15,9 +15,9 @@ import {
     blacklistToken,
     isTokenBlacklisted,
     getBlacklistStats
-} from '../../../infrastructure/security/auth/index';
+} from '../../../backend/api/src/auth/index';
 
-import type { PublicUser } from '../../../infrastructure/security/auth/types';
+import type { PublicUser } from '../../../backend/api/src/auth/types';
 
 const testUser: PublicUser = {
     id: 'user-test-1',

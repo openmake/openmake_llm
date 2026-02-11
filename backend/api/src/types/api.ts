@@ -1,6 +1,10 @@
 /**
  * API 응답 타입 정의
  * 모든 API 응답에 일관된 형식 적용
+ * 
+ * @deprecated Use `utils/api-response.ts` instead.
+ * 이 파일의 타입과 헬퍼 함수는 `utils/api-response.ts`로 대체되었습니다.
+ * 새 코드에서는 `import { success, error, ... } from '../utils/api-response'`를 사용하세요.
  */
 
 /**

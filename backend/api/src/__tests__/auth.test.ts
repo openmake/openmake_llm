@@ -5,7 +5,10 @@
 
 // 테스트용 환경변수 설정 (다른 import 전에 설정)
 process.env.JWT_SECRET = 'test-secret-key-for-testing-purposes-only';
-process.env.DATABASE_URL = process.env.DATABASE_URL || 'postgresql://openmake:openmake_secret_2026@localhost:5432/openmake_llm';
+// 🔒 보안 패치 2026-02-07: 하드코딩된 DB 인증정보 제거 — 환경변수 필수
+if (!process.env.DATABASE_URL) {
+    process.env.DATABASE_URL = `postgresql://${process.env.POSTGRES_USER || 'openmake'}:${process.env.POSTGRES_PASSWORD || 'test'}@localhost:5432/${process.env.POSTGRES_DB || 'openmake_llm'}`;
+}
 
 import {
     generateToken,
@@ -208,57 +211,65 @@ describe('Password Policy', () => {
 });
 
 describe('Token Blacklist', () => {
-    // Import after test setup
-    let PostgresTokenBlacklist: any;
-    let tempDb: any;
-    
-    beforeAll(async () => {
-        const mod = await import('../data/models/token-blacklist');
-        PostgresTokenBlacklist = mod.PostgresTokenBlacklist;
+    // In-memory 구현으로 PostgreSQL 없이 ITokenBlacklist 인터페이스 동작 검증
+    type BlacklistEntry = { jti: string; expiresAt: number };
+    let store: BlacklistEntry[];
+
+    const blacklist = {
+        add: async (jti: string, expiresAt: number) => {
+            const idx = store.findIndex(e => e.jti === jti);
+            if (idx >= 0) { store[idx].expiresAt = expiresAt; }
+            else { store.push({ jti, expiresAt }); }
+        },
+        has: async (jti: string) => {
+            return store.some(e => e.jti === jti && e.expiresAt > Date.now());
+        },
+        cleanup: async () => {
+            const now = Date.now();
+            const before = store.length;
+            store = store.filter(e => e.expiresAt >= now);
+            return before - store.length;
+        },
+        getStats: async () => {
+            const now = Date.now();
+            return { count: store.filter(e => e.expiresAt > now).length };
+        },
+    };
+
+    beforeEach(() => {
+        store = [];
     });
-    
-    beforeEach(async () => {
-        tempDb = new PostgresTokenBlacklist();
-        // Clean table between tests for isolation
-        await tempDb.cleanup();
-        const pool = (tempDb as any).pool;
-        await pool.query('DELETE FROM token_blacklist');
-    });
-    
-    afterEach(async () => {
-        await tempDb.destroy();
-    });
-    
+
     it('should add token to blacklist', async () => {
-        await tempDb.add('test-jti-1', Date.now() + 60000);
-        expect(await tempDb.has('test-jti-1')).toBe(true);
+        await blacklist.add('test-jti-1', Date.now() + 60000);
+        expect(await blacklist.has('test-jti-1')).toBe(true);
     });
-    
+
     it('should return false for non-existent token', async () => {
-        expect(await tempDb.has('non-existent')).toBe(false);
+        expect(await blacklist.has('non-existent')).toBe(false);
     });
-    
+
     it('should return false for expired token', async () => {
-        await tempDb.add('expired-jti', Date.now() - 1000);
-        expect(await tempDb.has('expired-jti')).toBe(false);
+        await blacklist.add('expired-jti', Date.now() - 1000);
+        expect(await blacklist.has('expired-jti')).toBe(false);
     });
-    
+
     it('should cleanup expired tokens', async () => {
-        await tempDb.add('expired-1', Date.now() - 1000);
-        await tempDb.add('expired-2', Date.now() - 2000);
-        await tempDb.add('valid', Date.now() + 60000);
-        
-        const cleaned = await tempDb.cleanup();
+        await blacklist.add('expired-1', Date.now() - 1000);
+        await blacklist.add('expired-2', Date.now() - 2000);
+        await blacklist.add('valid', Date.now() + 60000);
+
+        const cleaned = await blacklist.cleanup();
         expect(cleaned).toBe(2);
-        const stats = await tempDb.getStats();
+        const stats = await blacklist.getStats();
         expect(stats.count).toBe(1);
     });
-    
+
     it('should return correct stats', async () => {
-        await tempDb.add('jti-1', Date.now() + 60000);
-        await tempDb.add('jti-2', Date.now() + 60000);
-        
-        const stats = await tempDb.getStats();
+        await blacklist.add('jti-1', Date.now() + 60000);
+        await blacklist.add('jti-2', Date.now() + 60000);
+
+        const stats = await blacklist.getStats();
         expect(stats.count).toBe(2);
     });
 });

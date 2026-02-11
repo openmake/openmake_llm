@@ -6,10 +6,11 @@
  */
 
 import { DocumentResult } from './index';
+import { getConfig } from '../config/env';
 
 // 문서 TTL 설정 (기본: 1시간)
-const DOCUMENT_TTL_MS = parseInt(process.env.DOCUMENT_TTL_HOURS || '1') * 60 * 60 * 1000;
-const MAX_DOCUMENTS = parseInt(process.env.MAX_UPLOADED_DOCUMENTS || '100');
+const DOCUMENT_TTL_MS = getConfig().documentTtlHours * 60 * 60 * 1000;
+const MAX_DOCUMENTS = getConfig().maxUploadedDocuments;
 
 interface StoredDocument {
     document: DocumentResult;

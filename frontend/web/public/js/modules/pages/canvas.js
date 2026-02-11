@@ -25,9 +25,7 @@
         let editingDocId = null;
 
         function authFetch(url, options = {}) {
-            const token = localStorage.getItem('authToken');
-            const headers = { 'Content-Type': 'application/json', ...(token ? { 'Authorization': 'Bearer ' + token } : {}), ...options.headers };
-            return fetch(url, { ...options, headers }).then(r => r.json());
+            return window.authFetch(url, options).then(r => r.json());
         }
 
         function showToast(msg, type = 'success') {

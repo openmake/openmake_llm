@@ -7,11 +7,12 @@ import { Request, Response, NextFunction } from 'express';
 import rateLimit from 'express-rate-limit';
 import jwt from 'jsonwebtoken';
 import { createLogger } from '../utils/logger';
-import { QuotaExceededError } from '../errors/quota-exceeded.error';
+// QuotaExceededError는 utils/error-handler.ts에서 통합 처리
 import { getConfig } from '../config';
 import { getAnalyticsSystem } from '../monitoring/analytics';
 // AuthUser 타입은 auth/middleware.ts에서 정의됨
 import { AuthUser } from '../auth/middleware';
+import { unauthorized, forbidden, internalError } from '../utils/api-response';
 
 const logger = createLogger('Middleware');
 
@@ -32,16 +33,16 @@ export function authMiddleware(required: boolean = true) {
 
         if (!token) {
             if (required) {
-                return res.status(401).json({ error: '인증이 필요합니다.' });
+                return res.status(401).json(unauthorized('인증이 필요합니다.'));
             }
             return next();
         }
-        const jwtSecret = process.env.JWT_SECRET;
+        const jwtSecret = getConfig().jwtSecret;
 
         // JWT_SECRET 미설정 시 보안 오류
         if (!jwtSecret) {
             logger.error('JWT_SECRET 환경변수가 설정되지 않았습니다!');
-            return res.status(500).json({ error: '서버 인증 설정 오류' });
+            return res.status(500).json(internalError('서버 인증 설정 오류'));
         }
 
         try {
@@ -50,7 +51,7 @@ export function authMiddleware(required: boolean = true) {
             next();
         } catch (error) {
             if (required) {
-                return res.status(401).json({ error: '유효하지 않은 토큰입니다.' });
+                return res.status(401).json(unauthorized('유효하지 않은 토큰입니다.'));
             }
             next();
         }
@@ -63,7 +64,7 @@ export function authMiddleware(required: boolean = true) {
 export function adminMiddleware(req: Request, res: Response, next: NextFunction) {
     const user = req.user;
     if (!user || user.role !== 'admin') {
-        return res.status(403).json({ error: '관리자 권한이 필요합니다.' });
+        return res.status(403).json(forbidden('관리자 권한이 필요합니다.'));
     }
     next();
 }
@@ -154,90 +155,12 @@ export function analyticsMiddleware(req: Request, res: Response, next: NextFunct
 }
 
 // ================================================
-// 공통 에러 핸들러
+// ⚙️ Phase 3: 에러 핸들러 & API 응답 표준화
 // ================================================
-
-/**
- * 글로벌 에러 핸들러
- */
-export function globalErrorHandler(err: Error, req: Request, res: Response, next: NextFunction) {
-    // Handle quota exceeded errors with 429 status
-    if (err instanceof QuotaExceededError) {
-        logger.warn(`Quota exceeded: ${err.message}`);
-        res.set('Retry-After', String(err.retryAfterSeconds));
-        return res.status(429).json({
-            error: 'API 할당량이 초과되었습니다.',
-            quotaType: err.quotaType,
-            used: err.used,
-            limit: err.limit,
-            retryAfter: err.retryAfterSeconds,
-            message: err.message
-        });
-    }
-
-    logger.error('Unhandled error:', err);
-
-    res.status(500).json({
-        error: '서버 오류가 발생했습니다.',
-        message: process.env.NODE_ENV === 'development' ? err.message : undefined
-    });
-}
-
-// ================================================
-// 🔒 API 응답 표준화 헬퍼
-// ================================================
-
-/**
- * 표준 API 응답 인터페이스
- */
-export interface ApiResponse<T = any> {
-    success: boolean;
-    data?: T;
-    error?: string;
-    message?: string;
-    timestamp: string;
-}
-
-/**
- * 성공 응답 생성
- */
-export function successResponse<T>(data: T, message?: string): ApiResponse<T> {
-    return {
-        success: true,
-        data,
-        message,
-        timestamp: new Date().toISOString()
-    };
-}
-
-/**
- * 에러 응답 생성
- */
-export function errorResponse(error: string, statusCode?: number): ApiResponse {
-    return {
-        success: false,
-        error,
-        timestamp: new Date().toISOString()
-    };
-}
-
-/**
- * Express Response 확장 헬퍼
- * 사용법: res.apiSuccess(data) 또는 res.apiError('message', 400)
- */
-export function extendResponse(req: Request, res: Response, next: NextFunction) {
-    // @ts-ignore - Response 확장
-    res.apiSuccess = function<T>(data: T, message?: string) {
-        return this.json(successResponse(data, message));
-    };
-    
-    // @ts-ignore - Response 확장
-    res.apiError = function(error: string, statusCode: number = 500) {
-        return this.status(statusCode).json(errorResponse(error));
-    };
-    
-    next();
-}
+// globalErrorHandler, successResponse, errorResponse, extendResponse 제거됨 (2026-02-07)
+// → 에러 핸들링: utils/error-handler.ts의 errorHandler 단일 사용
+// → API 응답: utils/api-response.ts의 success(), error() 등 단일 사용
+// 하위 호환을 위해 ApiResponse 타입은 utils/api-response.ts에서 가져올 것
 
 // ================================================
 // CORS 미들웨어
@@ -250,7 +173,7 @@ export function extendResponse(req: Request, res: Response, next: NextFunction) 
  * - server.ts의 CORS 설정과 일관성 유지
  */
 export function corsMiddleware(req: Request, res: Response, next: NextFunction) {
-    const allowedOrigins = (process.env.CORS_ORIGINS || 'http://localhost:52416').split(',').map(o => o.trim());
+    const allowedOrigins = getConfig().corsOrigins.split(',').map(o => o.trim());
     const origin = req.headers.origin;
     
     // 🔒 화이트리스트 기반 Origin 검증

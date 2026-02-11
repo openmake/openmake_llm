@@ -255,6 +255,16 @@
     background: #3A7BC8;
 }
 
+[data-theme="light"] .send-btn.abort-mode,
+.theme-light .send-btn.abort-mode {
+    background: #dc2626;
+}
+
+[data-theme="light"] .send-btn.abort-mode:hover,
+.theme-light .send-btn.abort-mode:hover {
+    background: #b91c1c;
+}
+
 /* 액션 버튼 */
 [data-theme="light"] .action-btn,
 .theme-light .action-btn {
@@ -396,4 +406,10 @@
 [data-theme="light"] .status-dot,
 .theme-light .status-dot {
     background: #22C55E;
+}
+
+
+[data-theme="light"] .status-dot.stop,
+.theme-light .status-dot.stop {
+    background: #dc2626;
 }

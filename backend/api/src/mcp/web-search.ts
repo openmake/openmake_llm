@@ -5,10 +5,11 @@
 import { MCPToolDefinition, MCPToolResult } from './types';
 import { createClient } from '../ollama/client';
 import { isFirecrawlConfigured } from './firecrawl';
+import { getConfig } from '../config/env';
 
 // Google API 설정 (환경변수 필수)
-const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY || '';
-const GOOGLE_CSE_ID = process.env.GOOGLE_CSE_ID || '';
+const GOOGLE_API_KEY = getConfig().googleApiKey;
+const GOOGLE_CSE_ID = getConfig().googleCseId;
 
 // API 키 미설정 경고
 if (!GOOGLE_API_KEY || !GOOGLE_CSE_ID) {
@@ -21,6 +22,7 @@ export interface SearchResult {
     title: string;
     url: string;
     snippet: string;
+    fullContent?: string;
     source: string;
     date?: string;
     qualityScore?: number;
@@ -81,8 +83,8 @@ async function searchFirecrawl(query: string, maxResults: number = 5): Promise<S
         return results;
     }
 
-    const FIRECRAWL_API_KEY = process.env.FIRECRAWL_API_KEY;
-    const FIRECRAWL_API_URL = process.env.FIRECRAWL_API_URL || 'https://api.firecrawl.dev/v1';
+    const FIRECRAWL_API_KEY = getConfig().firecrawlApiKey;
+    const FIRECRAWL_API_URL = getConfig().firecrawlApiUrl;
 
     try {
         console.log(`[WebSearch] Firecrawl 검색 시작: "${query}"`);
@@ -390,32 +392,39 @@ async function searchNaverNews(query: string): Promise<SearchResult[]> {
 export async function performWebSearch(query: string, options: { maxResults?: number; globalSearch?: boolean; useOllamaFirst?: boolean; useFirecrawl?: boolean } = {}): Promise<SearchResult[]> {
     const { maxResults = 30, globalSearch = true, useOllamaFirst = true, useFirecrawl = true } = options;
 
-    console.log(`[WebSearch] 쿼리: ${query}`);
-    console.log(`[WebSearch] 검색: "${query}"`);
+    // 고볼륨 모드: maxResults > 15이면 모든 소스에서 병렬 수집 (Deep Research 용)
+    const highVolumeMode = maxResults > 15;
 
-    // 🚀 1단계: Ollama 공식 API 우선 시도
+    console.log(`[WebSearch] 쿼리: ${query} (maxResults: ${maxResults}, highVolume: ${highVolumeMode})`);
+
+    // 🚀 1단계: Ollama 공식 API 우선 시도 (고볼륨이 아닌 경우에만 조기 반환)
+    let earlyOllamaResults: SearchResult[] = [];
     if (useOllamaFirst) {
-        const ollamaResults = await searchOllamaWebSearch(query, Math.min(maxResults, 10));
-        if (ollamaResults.length > 0) {
-            console.log(`[WebSearch] ✅ Ollama API 성공: ${ollamaResults.length}개 결과`);
-            return ollamaResults;
+        earlyOllamaResults = await searchOllamaWebSearch(query, Math.min(maxResults, 10));
+        if (earlyOllamaResults.length > 0 && !highVolumeMode) {
+            console.log(`[WebSearch] ✅ Ollama API 성공: ${earlyOllamaResults.length}개 결과`);
+            return earlyOllamaResults;
         }
-        console.log('[WebSearch] Ollama API 결과 없음, 폴백 검색 시작...');
+        if (earlyOllamaResults.length === 0) {
+            console.log('[WebSearch] Ollama API 결과 없음, 폴백 검색 시작...');
+        }
     }
 
-    // 🔥 2단계: Firecrawl 우선 시도 (API 키가 있는 경우)
+    // 🔥 2단계: Firecrawl 우선 시도 (고볼륨이 아닌 경우에만 조기 반환)
+    let earlyFirecrawlResults: SearchResult[] = [];
     if (useFirecrawl && isFirecrawlConfigured()) {
-        const firecrawlResults = await searchFirecrawl(query, Math.min(maxResults, 10));
-        if (firecrawlResults.length > 0) {
-            console.log(`[WebSearch] 🔥 Firecrawl 성공: ${firecrawlResults.length}개 결과`);
-            // Firecrawl 결과가 충분하면 바로 반환
-            if (firecrawlResults.length >= 5) {
-                return firecrawlResults;
+        const firecrawlLimit = highVolumeMode ? Math.min(maxResults, 20) : Math.min(maxResults, 10);
+        earlyFirecrawlResults = await searchFirecrawl(query, firecrawlLimit);
+        if (earlyFirecrawlResults.length > 0) {
+            console.log(`[WebSearch] 🔥 Firecrawl 성공: ${earlyFirecrawlResults.length}개 결과`);
+            // 고볼륨이 아니고 충분하면 조기 반환
+            if (!highVolumeMode && earlyFirecrawlResults.length >= 5) {
+                return earlyFirecrawlResults;
             }
         }
     }
 
-    // 🔄 3단계: 폴백 - 안정적인 소스에서 병렬 검색 (Firecrawl 포함)
+    // 🔄 3단계: 모든 소스에서 병렬 검색
     const searchPromises: Promise<SearchResult[]>[] = [
         searchGoogle(query, 10, globalSearch),
         searchWikipedia(query),
@@ -424,22 +433,18 @@ export async function performWebSearch(query: string, options: { maxResults?: nu
         searchNaverNews(query)
     ];
 
-    // Firecrawl도 병렬 검색에 포함 (아직 시도하지 않았거나 결과가 부족한 경우)
-    if (useFirecrawl && isFirecrawlConfigured()) {
-        searchPromises.push(searchFirecrawl(query, 5));
-    }
-
     const allSearchResults = await Promise.all(searchPromises);
-    const [googleResults, wikiResults, newsResults, ddgResults, naverResults, firecrawlResults = []] = allSearchResults;
+    const [googleResults, wikiResults, newsResults, ddgResults, naverResults] = allSearchResults;
 
-    // 결과 합치기 (우선순위: Firecrawl > 뉴스 > Google > Wikipedia > DDG > Naver)
+    // 결과 합치기 (우선순위: Firecrawl > Ollama > 뉴스 > Google > Wikipedia > DDG > Naver)
     const allResults = [
-        ...firecrawlResults,  // 🔥 Firecrawl 최우선 (콘텐츠 스크래핑)
-        ...newsResults,       // 뉴스 (최신 사실 정보)
-        ...naverResults,      // 네이버 뉴스 (한국 뉴스)
-        ...googleResults,     // Google 검색
-        ...wikiResults,       // Wikipedia (배경 지식)
-        ...ddgResults         // DuckDuckGo
+        ...earlyFirecrawlResults,  // 🔥 Firecrawl 최우선 (콘텐츠 스크래핑)
+        ...earlyOllamaResults,     // Ollama API 결과
+        ...newsResults,            // 뉴스 (최신 사실 정보)
+        ...naverResults,           // 네이버 뉴스 (한국 뉴스)
+        ...googleResults,          // Google 검색
+        ...wikiResults,            // Wikipedia (배경 지식)
+        ...ddgResults              // DuckDuckGo
     ];
 
     // 중복 제거 (URL 정규화)
@@ -451,7 +456,7 @@ export async function performWebSearch(query: string, options: { maxResults?: nu
         return true;
     });
 
-    console.log(`[WebSearch] 총 ${uniqueResults.length}개 (Firecrawl:${firecrawlResults.length}, Google:${googleResults.length}, Wiki:${wikiResults.length}, News:${newsResults.length}, DDG:${ddgResults.length}, Naver:${naverResults.length})`);
+    console.log(`[WebSearch] 총 ${uniqueResults.length}개 (Firecrawl:${earlyFirecrawlResults.length}, Ollama:${earlyOllamaResults.length}, Google:${googleResults.length}, Wiki:${wikiResults.length}, News:${newsResults.length}, DDG:${ddgResults.length}, Naver:${naverResults.length})`);
 
     return uniqueResults.slice(0, maxResults);
 }

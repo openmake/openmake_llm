@@ -8,6 +8,7 @@
 import { Router, Request, Response } from 'express';
 import { ClusterManager } from '../cluster/manager';
 import { success as apiSuccess, badRequest, internalError } from '../utils/api-response';
+import { asyncHandler } from '../utils/error-handler';
 
 const router = Router();
 
@@ -24,7 +25,7 @@ export function setClusterManager(cluster: ClusterManager): void {
  * 노드 추가
  * POST /api/nodes
  */
-router.post('/', async (req: Request, res: Response) => {
+router.post('/', asyncHandler(async (req: Request, res: Response) => {
     const { host, port, name } = req.body;
 
      if (!host || !port) {
@@ -38,7 +39,7 @@ router.post('/', async (req: Request, res: Response) => {
      } else {
          res.status(500).json(internalError('노드 추가 실패'));
      }
-});
+}));
 
 /**
  * 노드 제거

@@ -7,6 +7,7 @@
 
 import { Request, Response, Router } from 'express';
 import { ClusterManager, getClusterManager } from '../cluster/manager';
+import { success } from '../utils/api-response';
 
 /**
  * Ollama 클러스터 상태 및 노드 관리 컨트롤러
@@ -52,11 +53,11 @@ export class ClusterController {
      * 클러스터 전체 정보 조회
      */
     private getClusterInfo(req: Request, res: Response): void {
-        res.json({
+        res.json(success({
             name: this.cluster.clusterName,
             stats: this.cluster.getStats(),
             nodes: this.cluster.getNodes()
-        });
+        }));
     }
 
     /**
@@ -64,11 +65,11 @@ export class ClusterController {
      * 클러스터 상태 조회
      */
     private getClusterStatus(req: Request, res: Response): void {
-        res.json({
+        res.json(success({
             name: this.cluster.clusterName,
             stats: this.cluster.getStats(),
             nodes: this.cluster.getNodes()
-        });
+        }));
     }
 
     /**
@@ -76,7 +77,7 @@ export class ClusterController {
      * 노드 목록 조회
      */
     private getNodes(req: Request, res: Response): void {
-        res.json(this.cluster.getNodes());
+        res.json(success(this.cluster.getNodes()));
     }
 
     /**
@@ -84,7 +85,7 @@ export class ClusterController {
      * 클러스터 통계 조회
      */
     private getStats(req: Request, res: Response): void {
-        res.json(this.cluster.getStats());
+        res.json(success(this.cluster.getStats()));
     }
 
     /**

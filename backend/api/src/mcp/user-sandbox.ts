@@ -7,9 +7,10 @@
 
 import * as path from 'path';
 import * as fs from 'fs';
+import { getConfig } from '../config/env';
 
 // 사용자 데이터 루트 경로
-const USER_DATA_ROOT = process.env.USER_DATA_PATH || './data/users';
+const USER_DATA_ROOT = getConfig().userDataPath;
 
 /**
  * 사용자별 격리된 작업 환경

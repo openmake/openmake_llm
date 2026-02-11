@@ -464,6 +464,7 @@ body {
     background: var(--accent-primary);
     color: #ffffff;
     padding: 10px;
+    transition: all 0.25s ease;
 }
 
 .send-btn:hover {
@@ -473,6 +474,22 @@ body {
 
 .send-btn:active {
     transform: scale(0.98);
+}
+
+/* Abort mode — send button becomes stop button */
+.send-btn.abort-mode {
+    background: var(--danger, #ef4444);
+    animation: abortPulse 1.5s ease-in-out infinite;
+}
+
+.send-btn.abort-mode:hover {
+    background: var(--danger-hover, #dc2626);
+    box-shadow: 0 0 12px rgba(239, 68, 68, 0.4);
+}
+
+@keyframes abortPulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.3); }
+    50% { box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); }
 }
 
 /* Modals (Fixed position, not affecting layout) */
@@ -1215,26 +1232,37 @@ body {
     gap: 6px;
     font-size: 0.75rem;
     color: var(--text-muted);
+    transition: all 0.2s ease;
+    padding: 4px 8px;
+    border-radius: 6px;
+    user-select: none;
 }
+
 
 .connection-status .status-dot {
     width: 8px;
     height: 8px;
     border-radius: 50%;
     background: var(--success);
-    animation: pulse 2s infinite;
+    animation: statusPulse 2s infinite;
+    transition: background 0.2s ease;
+    flex-shrink: 0;
 }
 
-@keyframes pulse {
+/* Stop state — red dot */
+.connection-status .status-dot.stop {
+    background: var(--danger, #ef4444);
+    animation: stopPulse 1s infinite;
+}
 
-    0%,
-    100% {
-        opacity: 1;
-    }
+@keyframes statusPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
 
-    50% {
-        opacity: 0.5;
-    }
+@keyframes stopPulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.6; transform: scale(1.2); }
 }
 
 /* Left/Right Actions */
@@ -2051,3 +2079,5 @@ main ~ .modal,
 .tool-pill.active iconify-icon {
     color: #fff;
 }
+
+/* Abort button styles removed — abort functionality now reuses .connection-status */

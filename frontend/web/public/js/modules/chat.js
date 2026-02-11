@@ -9,6 +9,67 @@ import { scrollToBottom, escapeHtml, renderMarkdown, showToast } from './ui.js';
 import { authFetch } from './auth.js';
 
 /**
+ * 응답 생성 중단
+ */
+function abortChat() {
+    if (!getState('isGenerating')) return;
+    
+    console.log('[Chat] 응답 생성 중단 요청');
+    sendWsMessage({ type: 'abort' });
+    
+    // UI 상태 업데이트
+    setState('isGenerating', false);
+    hideAbortButton();
+}
+
+/**
+ * 중단 버튼 표시
+ */
+function showAbortButton() {
+    let abortBtn = document.getElementById('abortButton');
+    
+    if (!abortBtn) {
+        // 중단 버튼 생성
+        const inputArea = document.querySelector('.input-area') || document.querySelector('.chat-input-container');
+        if (inputArea) {
+            abortBtn = document.createElement('button');
+            abortBtn.id = 'abortButton';
+            abortBtn.className = 'abort-button';
+            abortBtn.innerHTML = `
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="6" y="6" width="12" height="12" rx="2"/>
+                </svg>
+                <span>중단</span>
+            `;
+            abortBtn.onclick = abortChat;
+            abortBtn.title = '응답 생성 중단';
+            
+            // 전송 버튼 옆에 삽입
+            const sendBtn = document.getElementById('sendButton');
+            if (sendBtn) {
+                sendBtn.parentNode.insertBefore(abortBtn, sendBtn);
+            } else {
+                inputArea.appendChild(abortBtn);
+            }
+        }
+    }
+    
+    if (abortBtn) {
+        abortBtn.style.display = 'flex';
+    }
+}
+
+/**
+ * 중단 버튼 숨기기
+ */
+function hideAbortButton() {
+    const abortBtn = document.getElementById('abortButton');
+    if (abortBtn) {
+        abortBtn.style.display = 'none';
+    }
+}
+
+/**
  * 메시지 전송
  */
 async function sendMessage() {
@@ -40,6 +101,10 @@ async function sendMessage() {
     const assistantDiv = addChatMessage('assistant', '');
     setState('currentAssistantMessage', assistantDiv);
     setState('messageStartTime', Date.now());
+    setState('isGenerating', true);
+    
+    // 중단 버튼 표시
+    showAbortButton();
 
     try {
         // WebSocket으로 메시지 전송
@@ -68,11 +133,20 @@ async function sendMessage() {
             payload.documentId = docContext.docId;
         }
 
+        // 🔐 인증된 사용자 정보를 WebSocket 메시지에 포함
+        const storedUser = localStorage.getItem('user');
+        const parsedUser = storedUser ? JSON.parse(storedUser) : {};
+        if (parsedUser.userId || parsedUser.id) payload.userId = parsedUser.userId || parsedUser.id;
+        if (parsedUser.role) payload.userRole = parsedUser.role;
+        if (parsedUser.tier) payload.userTier = parsedUser.tier;
+
         sendWsMessage(payload);
 
     } catch (error) {
         console.error('[Chat] 전송 오류:', error);
         finishAssistantMessage('오류가 발생했습니다: ' + error.message);
+        setState('isGenerating', false);
+        hideAbortButton();
     }
 
     setState('isSending', false);
@@ -259,6 +333,8 @@ function finishAssistantMessage(errorMessage = null) {
 
     setState('currentAssistantMessage', null);
     setState('messageStartTime', null);
+    setState('isGenerating', false);
+    hideAbortButton();
 }
 
 /**
@@ -343,6 +419,7 @@ window.copyMessage = copyMessage;
 window.regenerateMessage = regenerateMessage;
 window.newChat = newChat;
 window.useSuggestion = useSuggestion;
+window.abortChat = abortChat;
 
 export {
     sendMessage,
@@ -352,5 +429,6 @@ export {
     copyMessage,
     regenerateMessage,
     newChat,
-    useSuggestion
+    useSuggestion,
+    abortChat
 };

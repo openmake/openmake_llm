@@ -11,16 +11,17 @@ import { JWTPayload } from './types';
 import { PublicUser, UserRole } from '../data/user-manager';
 import * as crypto from 'crypto';
 import { getTokenBlacklist } from '../data/models/token-blacklist';
+import { getConfig } from '../config/env';
 
 // JWT 비밀키 (환경변수 필수)
 // 보안: 런타임 시크릿 생성은 수평 확장 시 노드 간 불일치를 유발하므로 제거
-const JWT_SECRET = process.env.JWT_SECRET || '';
+const JWT_SECRET = getConfig().jwtSecret;
 const JWT_EXPIRES_IN = '15m';  // Access token - short lived for security
 const REFRESH_TOKEN_EXPIRES_IN = '7d';  // Refresh token - longer lived
 
 // JWT_SECRET 미설정 시 모든 환경에서 에러 (테스트 환경 제외)
 if (!JWT_SECRET) {
-    if (process.env.NODE_ENV === 'test') {
+    if (getConfig().nodeEnv === 'test') {
         // 테스트 환경에서는 경고만 (테스트 프레임워크에서 자체 설정)
         console.warn('[Auth] ⚠️ JWT_SECRET이 설정되지 않았습니다 (테스트 환경)');
     } else {
@@ -33,7 +34,7 @@ if (!JWT_SECRET) {
 
 
 /**
- * JWT 토큰 생성
+ * JWT 액세스 토큰 생성
  * #8 연동: jti (JWT ID) 추가로 블랙리스트 지원
  */
 export function generateToken(user: PublicUser): string {
@@ -50,6 +51,66 @@ export function generateToken(user: PublicUser): string {
         expiresIn: JWT_EXPIRES_IN,
         jwtid: jti
     });
+}
+
+/**
+ * 🔒 Phase 2 보안 패치: JWT 리프레시 토큰 생성
+ * 
+ * 액세스 토큰(15분)이 만료된 후 새 액세스 토큰을 발급받기 위한 장기 토큰입니다.
+ * - 만료: 7일
+ * - jti 포함 (블랙리스트 지원)
+ * - type: 'refresh' 필드로 액세스 토큰과 구분
+ */
+export function generateRefreshToken(user: PublicUser): string {
+    const payload = {
+        userId: user.id,
+        email: user.email,
+        role: user.role,
+        type: 'refresh' as const
+    };
+
+    const jti = crypto.randomBytes(16).toString('hex');
+
+    return jwt.sign(payload, JWT_SECRET, {
+        expiresIn: REFRESH_TOKEN_EXPIRES_IN,
+        jwtid: jti
+    });
+}
+
+/**
+ * 🔒 Phase 2: 리프레시 토큰 검증
+ * 액세스 토큰 갱신용 리프레시 토큰을 검증합니다.
+ * 
+ * @returns 검증된 페이로드 또는 null
+ */
+export async function verifyRefreshToken(token: string): Promise<JWTPayload | null> {
+    try {
+        // 블랙리스트 확인
+        const preCheck = jwt.decode(token) as Record<string, unknown> | null;
+        if (preCheck?.jti && typeof preCheck.jti === 'string') {
+            try {
+                const blacklist = getTokenBlacklist();
+                if (await blacklist.has(preCheck.jti)) {
+                    console.warn('[Auth] 블랙리스트된 리프레시 토큰 사용 시도');
+                    return null;
+                }
+            } catch {
+                // 블랙리스트 DB 접근 실패 시 무시 (가용성 우선)
+            }
+        }
+
+        // type이 'refresh'인지 확인
+        if (preCheck?.type !== 'refresh') {
+            console.warn('[Auth] 리프레시 토큰이 아닌 토큰으로 갱신 시도');
+            return null;
+        }
+
+        const decoded = jwt.verify(token, JWT_SECRET) as unknown as JWTPayload;
+        return decoded;
+    } catch (error) {
+        console.error('[Auth] 리프레시 토큰 검증 실패:', error);
+        return null;
+    }
 }
 
 /**
@@ -145,20 +206,36 @@ export { optionalAuth, requireAuth, requireAdmin, requireRole } from './middlewa
 
 /**
  * 토큰을 httpOnly 쿠키에 설정
+ * 🔒 Phase 2: 액세스 토큰 쿠키 (15분 만료)
  */
 export function setTokenCookie(res: Response, token: string): void {
     res.cookie('auth_token', token, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
+        secure: getConfig().nodeEnv === 'production',
         sameSite: 'lax',
-        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days (refresh token lifetime)
+        maxAge: 15 * 60 * 1000, // 15분 (액세스 토큰 수명과 일치)
         path: '/'
     });
 }
 
 /**
+ * 🔒 Phase 2: 리프레시 토큰을 httpOnly 쿠키에 설정 (7일 만료)
+ */
+export function setRefreshTokenCookie(res: Response, refreshToken: string): void {
+    res.cookie('refresh_token', refreshToken, {
+        httpOnly: true,
+        secure: getConfig().nodeEnv === 'production',
+        sameSite: 'lax',
+        maxAge: 7 * 24 * 60 * 60 * 1000, // 7일
+        path: '/api/auth/refresh' // 리프레시 엔드포인트에서만 전송
+    });
+}
+
+/**
  * 토큰 쿠키 삭제
+ * 🔒 Phase 2: 액세스 + 리프레시 쿠키 모두 삭제
  */
 export function clearTokenCookie(res: Response): void {
     res.clearCookie('auth_token', { path: '/' });
+    res.clearCookie('refresh_token', { path: '/api/auth/refresh' });
 }

@@ -1,0 +1,159 @@
+78e5d30a182f4114287d630124f36828
+"use strict";
+/**
+ * Input Sanitizer Utility
+ *
+ * Provides functions to sanitize and validate user input before
+ * embedding it in LLM prompts. Helps prevent prompt injection attacks.
+ */
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.sanitizePromptInput = sanitizePromptInput;
+exports.validatePromptInput = validatePromptInput;
+exports.processPromptInput = processPromptInput;
+/** Maximum allowed input length in characters */
+const MAX_INPUT_LENGTH = 10000;
+/** Maximum consecutive newlines allowed */
+const MAX_CONSECUTIVE_NEWLINES = 3;
+/**
+ * Patterns that indicate potential prompt injection attempts.
+ * These are case-insensitive regex patterns that match common
+ * techniques used to override system instructions.
+ */
+const DANGEROUS_PATTERNS = [
+    /ignore\s+(previous|all|prior)\s+instructions?/i,
+    /you\s+are\s+now/i,
+    /disregard\s+(all|everything)/i,
+    /forget\s+(everything|all)/i,
+    /new\s+instructions?:/i,
+    /system\s*:\s*you\s+are/i,
+    /\[system\]/i,
+    /\[assistant\]/i,
+    /\[user\]/i,
+    /<\s*system\s*>/i,
+    /override\s+(previous|system)/i,
+];
+/**
+ * Sanitizes user input for safe use in LLM prompts.
+ *
+ * This function performs the following transformations:
+ * - Removes control characters (ASCII 0-31) except newline (\n) and tab (\t)
+ * - Normalizes multiple consecutive spaces to a single space
+ * - Limits consecutive newlines to a maximum of 3
+ * - Trims leading and trailing whitespace
+ * - Truncates input to MAX_INPUT_LENGTH if exceeded
+ *
+ * @param input - Raw user input string
+ * @returns Sanitized string safe for prompt inclusion
+ *
+ * @example
+ * ```typescript
+ * const clean = sanitizePromptInput("Hello\x00World");
+ * // Returns: "HelloWorld"
+ *
+ * const normalized = sanitizePromptInput("Too    many   spaces");
+ * // Returns: "Too many spaces"
+ * ```
+ */
+function sanitizePromptInput(input) {
+    if (!input)
+        return '';
+    let sanitized = input;
+    // Remove control characters except newline (\x0A) and tab (\x09)
+    // Matches: \x00-\x08, \x0B, \x0C, \x0E-\x1F, \x7F
+    sanitized = sanitized.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
+    // Normalize multiple consecutive spaces (not newlines) to single space
+    // This preserves intentional line breaks while cleaning up horizontal whitespace
+    sanitized = sanitized.replace(/[^\S\n]+/g, ' ');
+    // Limit consecutive newlines to MAX_CONSECUTIVE_NEWLINES
+    const newlinePattern = new RegExp(`\n{${MAX_CONSECUTIVE_NEWLINES + 1},}`, 'g');
+    sanitized = sanitized.replace(newlinePattern, '\n'.repeat(MAX_CONSECUTIVE_NEWLINES));
+    // Trim leading and trailing whitespace
+    sanitized = sanitized.trim();
+    // Enforce maximum length
+    if (sanitized.length > MAX_INPUT_LENGTH) {
+        sanitized = sanitized.slice(0, MAX_INPUT_LENGTH);
+    }
+    return sanitized;
+}
+/**
+ * Validates user input before using in LLM prompts.
+ *
+ * This function checks for:
+ * - Empty or whitespace-only input
+ * - Input exceeding maximum length (10,000 characters)
+ * - Common prompt injection patterns that attempt to override system instructions
+ * - Excessive consecutive newlines (more than 3)
+ *
+ * Note: This function does NOT sanitize the input. Use sanitizePromptInput()
+ * first if you want to clean the input, or use this to reject invalid input entirely.
+ *
+ * @param input - User input to validate
+ * @returns Validation result with error message if invalid
+ *
+ * @example
+ * ```typescript
+ * const result = validatePromptInput("Hello, world!");
+ * // Returns: { valid: true }
+ *
+ * const malicious = validatePromptInput("Ignore previous instructions");
+ * // Returns: { valid: false, error: "Input contains potentially malicious instructions" }
+ * ```
+ */
+function validatePromptInput(input) {
+    // Check for empty input
+    if (!input || input.trim().length === 0) {
+        return { valid: false, error: 'Input cannot be empty' };
+    }
+    // Check length limit
+    if (input.length > MAX_INPUT_LENGTH) {
+        return {
+            valid: false,
+            error: `Input exceeds maximum length of ${MAX_INPUT_LENGTH.toLocaleString()} characters`,
+        };
+    }
+    // Check for excessive consecutive newlines
+    const excessiveNewlinesPattern = new RegExp(`\n{${MAX_CONSECUTIVE_NEWLINES + 1},}`);
+    if (excessiveNewlinesPattern.test(input)) {
+        return {
+            valid: false,
+            error: `Input contains more than ${MAX_CONSECUTIVE_NEWLINES} consecutive newlines`,
+        };
+    }
+    // Check for prompt injection patterns
+    for (const pattern of DANGEROUS_PATTERNS) {
+        if (pattern.test(input)) {
+            return {
+                valid: false,
+                error: 'Input contains potentially malicious instructions',
+            };
+        }
+    }
+    return { valid: true };
+}
+/**
+ * Convenience function that both validates and sanitizes input.
+ *
+ * First validates the input, returning an error if validation fails.
+ * If valid, returns the sanitized version of the input.
+ *
+ * @param input - Raw user input to process
+ * @returns Object with either sanitized input or error message
+ *
+ * @example
+ * ```typescript
+ * const result = processPromptInput("Hello   world!");
+ * if (result.error) {
+ *   console.error(result.error);
+ * } else {
+ *   console.log(result.sanitized); // "Hello world!"
+ * }
+ * ```
+ */
+function processPromptInput(input) {
+    const validation = validatePromptInput(input);
+    if (!validation.valid) {
+        return { error: validation.error };
+    }
+    return { sanitized: sanitizePromptInput(input) };
+}
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJmaWxlIjoiL1ZvbHVtZXMvTUFDX0FQUC9vcGVubWFrZV9sbG0vYmFja2VuZC9hcGkvc3JjL3V0aWxzL2lucHV0LXNhbml0aXplci50cyIsIm1hcHBpbmdzIjoiO0FBQUE7Ozs7O0dBS0c7O0FBaURILGtEQTBCQztBQW9DRCxrREFrQ0M7QUFxQkQsZ0RBUUM7QUE1S0QsaURBQWlEO0FBQ2pELE1BQU0sZ0JBQWdCLEdBQUcsS0FBSyxDQUFDO0FBRS9CLDJDQUEyQztBQUMzQyxNQUFNLHdCQUF3QixHQUFHLENBQUMsQ0FBQztBQUVuQzs7OztHQUlHO0FBQ0gsTUFBTSxrQkFBa0IsR0FBc0I7SUFDNUMsZ0RBQWdEO0lBQ2hELGtCQUFrQjtJQUNsQiwrQkFBK0I7SUFDL0IsNEJBQTRCO0lBQzVCLHVCQUF1QjtJQUN2Qix5QkFBeUI7SUFDekIsYUFBYTtJQUNiLGdCQUFnQjtJQUNoQixXQUFXO0lBQ1gsaUJBQWlCO0lBQ2pCLCtCQUErQjtDQUN2QixDQUFDO0FBRVg7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7OztHQXFCRztBQUNILFNBQWdCLG1CQUFtQixDQUFDLEtBQWE7SUFDL0MsSUFBSSxDQUFDLEtBQUs7UUFBRSxPQUFPLEVBQUUsQ0FBQztJQUV0QixJQUFJLFNBQVMsR0FBRyxLQUFLLENBQUM7SUFFdEIsaUVBQWlFO0lBQ2pFLGtEQUFrRDtJQUNsRCxTQUFTLEdBQUcsU0FBUyxDQUFDLE9BQU8sQ0FBQyxtQ0FBbUMsRUFBRSxFQUFFLENBQUMsQ0FBQztJQUV2RSx1RUFBdUU7SUFDdkUsaUZBQWlGO0lBQ2pGLFNBQVMsR0FBRyxTQUFTLENBQUMsT0FBTyxDQUFDLFdBQVcsRUFBRSxHQUFHLENBQUMsQ0FBQztJQUVoRCx5REFBeUQ7SUFDekQsTUFBTSxjQUFjLEdBQUcsSUFBSSxNQUFNLENBQUMsTUFBTSx3QkFBd0IsR0FBRyxDQUFDLElBQUksRUFBRSxHQUFHLENBQUMsQ0FBQztJQUMvRSxTQUFTLEdBQUcsU0FBUyxDQUFDLE9BQU8sQ0FBQyxjQUFjLEVBQUUsSUFBSSxDQUFDLE1BQU0sQ0FBQyx3QkFBd0IsQ0FBQyxDQUFDLENBQUM7SUFFckYsdUNBQXVDO0lBQ3ZDLFNBQVMsR0FBRyxTQUFTLENBQUMsSUFBSSxFQUFFLENBQUM7SUFFN0IseUJBQXlCO0lBQ3pCLElBQUksU0FBUyxDQUFDLE1BQU0sR0FBRyxnQkFBZ0IsRUFBRSxDQUFDO1FBQ3hDLFNBQVMsR0FBRyxTQUFTLENBQUMsS0FBSyxDQUFDLENBQUMsRUFBRSxnQkFBZ0IsQ0FBQyxDQUFDO0lBQ25ELENBQUM7SUFFRCxPQUFPLFNBQVMsQ0FBQztBQUNuQixDQUFDO0FBWUQ7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7O0dBdUJHO0FBQ0gsU0FBZ0IsbUJBQW1CLENBQUMsS0FBYTtJQUMvQyx3QkFBd0I7SUFDeEIsSUFBSSxDQUFDLEtBQUssSUFBSSxLQUFLLENBQUMsSUFBSSxFQUFFLENBQUMsTUFBTSxLQUFLLENBQUMsRUFBRSxDQUFDO1FBQ3hDLE9BQU8sRUFBRSxLQUFLLEVBQUUsS0FBSyxFQUFFLEtBQUssRUFBRSx1QkFBdUIsRUFBRSxDQUFDO0lBQzFELENBQUM7SUFFRCxxQkFBcUI7SUFDckIsSUFBSSxLQUFLLENBQUMsTUFBTSxHQUFHLGdCQUFnQixFQUFFLENBQUM7UUFDcEMsT0FBTztZQUNMLEtBQUssRUFBRSxLQUFLO1lBQ1osS0FBSyxFQUFFLG1DQUFtQyxnQkFBZ0IsQ0FBQyxjQUFjLEVBQUUsYUFBYTtTQUN6RixDQUFDO0lBQ0osQ0FBQztJQUVELDJDQUEyQztJQUMzQyxNQUFNLHdCQUF3QixHQUFHLElBQUksTUFBTSxDQUFDLE1BQU0sd0JBQXdCLEdBQUcsQ0FBQyxJQUFJLENBQUMsQ0FBQztJQUNwRixJQUFJLHdCQUF3QixDQUFDLElBQUksQ0FBQyxLQUFLLENBQUMsRUFBRSxDQUFDO1FBQ3pDLE9BQU87WUFDTCxLQUFLLEVBQUUsS0FBSztZQUNaLEtBQUssRUFBRSw0QkFBNEIsd0JBQXdCLHVCQUF1QjtTQUNuRixDQUFDO0lBQ0osQ0FBQztJQUVELHNDQUFzQztJQUN0QyxLQUFLLE1BQU0sT0FBTyxJQUFJLGtCQUFrQixFQUFFLENBQUM7UUFDekMsSUFBSSxPQUFPLENBQUMsSUFBSSxDQUFDLEtBQUssQ0FBQyxFQUFFLENBQUM7WUFDeEIsT0FBTztnQkFDTCxLQUFLLEVBQUUsS0FBSztnQkFDWixLQUFLLEVBQUUsbURBQW1EO2FBQzNELENBQUM7UUFDSixDQUFDO0lBQ0gsQ0FBQztJQUVELE9BQU8sRUFBRSxLQUFLLEVBQUUsSUFBSSxFQUFFLENBQUM7QUFDekIsQ0FBQztBQUVEOzs7Ozs7Ozs7Ozs7Ozs7Ozs7R0FrQkc7QUFDSCxTQUFnQixrQkFBa0IsQ0FBQyxLQUFhO0lBQzlDLE1BQU0sVUFBVSxHQUFHLG1CQUFtQixDQUFDLEtBQUssQ0FBQyxDQUFDO0lBRTlDLElBQUksQ0FBQyxVQUFVLENBQUMsS0FBSyxFQUFFLENBQUM7UUFDdEIsT0FBTyxFQUFFLEtBQUssRUFBRSxVQUFVLENBQUMsS0FBSyxFQUFFLENBQUM7SUFDckMsQ0FBQztJQUVELE9BQU8sRUFBRSxTQUFTLEVBQUUsbUJBQW1CLENBQUMsS0FBSyxDQUFDLEVBQUUsQ0FBQztBQUNuRCxDQUFDIiwibmFtZXMiOltdLCJzb3VyY2VzIjpbIi9Wb2x1bWVzL01BQ19BUFAvb3Blbm1ha2VfbGxtL2JhY2tlbmQvYXBpL3NyYy91dGlscy9pbnB1dC1zYW5pdGl6ZXIudHMiXSwic291cmNlc0NvbnRlbnQiOlsiLyoqXG4gKiBJbnB1dCBTYW5pdGl6ZXIgVXRpbGl0eVxuICpcbiAqIFByb3ZpZGVzIGZ1bmN0aW9ucyB0byBzYW5pdGl6ZSBhbmQgdmFsaWRhdGUgdXNlciBpbnB1dCBiZWZvcmVcbiAqIGVtYmVkZGluZyBpdCBpbiBMTE0gcHJvbXB0cy4gSGVscHMgcHJldmVudCBwcm9tcHQgaW5qZWN0aW9uIGF0dGFja3MuXG4gKi9cblxuLyoqIE1heGltdW0gYWxsb3dlZCBpbnB1dCBsZW5ndGggaW4gY2hhcmFjdGVycyAqL1xuY29uc3QgTUFYX0lOUFVUX0xFTkdUSCA9IDEwMDAwO1xuXG4vKiogTWF4aW11bSBjb25zZWN1dGl2ZSBuZXdsaW5lcyBhbGxvd2VkICovXG5jb25zdCBNQVhfQ09OU0VDVVRJVkVfTkVXTElORVMgPSAzO1xuXG4vKipcbiAqIFBhdHRlcm5zIHRoYXQgaW5kaWNhdGUgcG90ZW50aWFsIHByb21wdCBpbmplY3Rpb24gYXR0ZW1wdHMuXG4gKiBUaGVzZSBhcmUgY2FzZS1pbnNlbnNpdGl2ZSByZWdleCBwYXR0ZXJucyB0aGF0IG1hdGNoIGNvbW1vblxuICogdGVjaG5pcXVlcyB1c2VkIHRvIG92ZXJyaWRlIHN5c3RlbSBpbnN0cnVjdGlvbnMuXG4gKi9cbmNvbnN0IERBTkdFUk9VU19QQVRURVJOUzogcmVhZG9ubHkgUmVnRXhwW10gPSBbXG4gIC9pZ25vcmVcXHMrKHByZXZpb3VzfGFsbHxwcmlvcilcXHMraW5zdHJ1Y3Rpb25zPy9pLFxuICAveW91XFxzK2FyZVxccytub3cvaSxcbiAgL2Rpc3JlZ2FyZFxccysoYWxsfGV2ZXJ5dGhpbmcpL2ksXG4gIC9mb3JnZXRcXHMrKGV2ZXJ5dGhpbmd8YWxsKS9pLFxuICAvbmV3XFxzK2luc3RydWN0aW9ucz86L2ksXG4gIC9zeXN0ZW1cXHMqOlxccyp5b3VcXHMrYXJlL2ksXG4gIC9cXFtzeXN0ZW1cXF0vaSxcbiAgL1xcW2Fzc2lzdGFudFxcXS9pLFxuICAvXFxbdXNlclxcXS9pLFxuICAvPFxccypzeXN0ZW1cXHMqPi9pLFxuICAvb3ZlcnJpZGVcXHMrKHByZXZpb3VzfHN5c3RlbSkvaSxcbl0gYXMgY29uc3Q7XG5cbi8qKlxuICogU2FuaXRpemVzIHVzZXIgaW5wdXQgZm9yIHNhZmUgdXNlIGluIExMTSBwcm9tcHRzLlxuICpcbiAqIFRoaXMgZnVuY3Rpb24gcGVyZm9ybXMgdGhlIGZvbGxvd2luZyB0cmFuc2Zvcm1hdGlvbnM6XG4gKiAtIFJlbW92ZXMgY29udHJvbCBjaGFyYWN0ZXJzIChBU0NJSSAwLTMxKSBleGNlcHQgbmV3bGluZSAoXFxuKSBhbmQgdGFiIChcXHQpXG4gKiAtIE5vcm1hbGl6ZXMgbXVsdGlwbGUgY29uc2VjdXRpdmUgc3BhY2VzIHRvIGEgc2luZ2xlIHNwYWNlXG4gKiAtIExpbWl0cyBjb25zZWN1dGl2ZSBuZXdsaW5lcyB0byBhIG1heGltdW0gb2YgM1xuICogLSBUcmltcyBsZWFkaW5nIGFuZCB0cmFpbGluZyB3aGl0ZXNwYWNlXG4gKiAtIFRydW5jYXRlcyBpbnB1dCB0byBNQVhfSU5QVVRfTEVOR1RIIGlmIGV4Y2VlZGVkXG4gKlxuICogQHBhcmFtIGlucHV0IC0gUmF3IHVzZXIgaW5wdXQgc3RyaW5nXG4gKiBAcmV0dXJucyBTYW5pdGl6ZWQgc3RyaW5nIHNhZmUgZm9yIHByb21wdCBpbmNsdXNpb25cbiAqXG4gKiBAZXhhbXBsZVxuICogYGBgdHlwZXNjcmlwdFxuICogY29uc3QgY2xlYW4gPSBzYW5pdGl6ZVByb21wdElucHV0KFwiSGVsbG9cXHgwMFdvcmxkXCIpO1xuICogLy8gUmV0dXJuczogXCJIZWxsb1dvcmxkXCJcbiAqXG4gKiBjb25zdCBub3JtYWxpemVkID0gc2FuaXRpemVQcm9tcHRJbnB1dChcIlRvbyAgICBtYW55ICAgc3BhY2VzXCIpO1xuICogLy8gUmV0dXJuczogXCJUb28gbWFueSBzcGFjZXNcIlxuICogYGBgXG4gKi9cbmV4cG9ydCBmdW5jdGlvbiBzYW5pdGl6ZVByb21wdElucHV0KGlucHV0OiBzdHJpbmcpOiBzdHJpbmcge1xuICBpZiAoIWlucHV0KSByZXR1cm4gJyc7XG5cbiAgbGV0IHNhbml0aXplZCA9IGlucHV0O1xuXG4gIC8vIFJlbW92ZSBjb250cm9sIGNoYXJhY3RlcnMgZXhjZXB0IG5ld2xpbmUgKFxceDBBKSBhbmQgdGFiIChcXHgwOSlcbiAgLy8gTWF0Y2hlczogXFx4MDAtXFx4MDgsIFxceDBCLCBcXHgwQywgXFx4MEUtXFx4MUYsIFxceDdGXG4gIHNhbml0aXplZCA9IHNhbml0aXplZC5yZXBsYWNlKC9bXFx4MDAtXFx4MDhcXHgwQlxceDBDXFx4MEUtXFx4MUZcXHg3Rl0vZywgJycpO1xuXG4gIC8vIE5vcm1hbGl6ZSBtdWx0aXBsZSBjb25zZWN1dGl2ZSBzcGFjZXMgKG5vdCBuZXdsaW5lcykgdG8gc2luZ2xlIHNwYWNlXG4gIC8vIFRoaXMgcHJlc2VydmVzIGludGVudGlvbmFsIGxpbmUgYnJlYWtzIHdoaWxlIGNsZWFuaW5nIHVwIGhvcml6b250YWwgd2hpdGVzcGFjZVxuICBzYW5pdGl6ZWQgPSBzYW5pdGl6ZWQucmVwbGFjZSgvW15cXFNcXG5dKy9nLCAnICcpO1xuXG4gIC8vIExpbWl0IGNvbnNlY3V0aXZlIG5ld2xpbmVzIHRvIE1BWF9DT05TRUNVVElWRV9ORVdMSU5FU1xuICBjb25zdCBuZXdsaW5lUGF0dGVybiA9IG5ldyBSZWdFeHAoYFxcbnske01BWF9DT05TRUNVVElWRV9ORVdMSU5FUyArIDF9LH1gLCAnZycpO1xuICBzYW5pdGl6ZWQgPSBzYW5pdGl6ZWQucmVwbGFjZShuZXdsaW5lUGF0dGVybiwgJ1xcbicucmVwZWF0KE1BWF9DT05TRUNVVElWRV9ORVdMSU5FUykpO1xuXG4gIC8vIFRyaW0gbGVhZGluZyBhbmQgdHJhaWxpbmcgd2hpdGVzcGFjZVxuICBzYW5pdGl6ZWQgPSBzYW5pdGl6ZWQudHJpbSgpO1xuXG4gIC8vIEVuZm9yY2UgbWF4aW11bSBsZW5ndGhcbiAgaWYgKHNhbml0aXplZC5sZW5ndGggPiBNQVhfSU5QVVRfTEVOR1RIKSB7XG4gICAgc2FuaXRpemVkID0gc2FuaXRpemVkLnNsaWNlKDAsIE1BWF9JTlBVVF9MRU5HVEgpO1xuICB9XG5cbiAgcmV0dXJuIHNhbml0aXplZDtcbn1cblxuLyoqXG4gKiBWYWxpZGF0aW9uIHJlc3VsdCByZXR1cm5lZCBieSB2YWxpZGF0ZVByb21wdElucHV0LlxuICovXG5leHBvcnQgaW50ZXJmYWNlIFZhbGlkYXRpb25SZXN1bHQge1xuICAvKiogV2hldGhlciB0aGUgaW5wdXQgcGFzc2VkIGFsbCB2YWxpZGF0aW9uIGNoZWNrcyAqL1xuICB2YWxpZDogYm9vbGVhbjtcbiAgLyoqIEVycm9yIG1lc3NhZ2UgaWYgdmFsaWRhdGlvbiBmYWlsZWQsIHVuZGVmaW5lZCBpZiB2YWxpZCAqL1xuICBlcnJvcj86IHN0cmluZztcbn1cblxuLyoqXG4gKiBWYWxpZGF0ZXMgdXNlciBpbnB1dCBiZWZvcmUgdXNpbmcgaW4gTExNIHByb21wdHMuXG4gKlxuICogVGhpcyBmdW5jdGlvbiBjaGVja3MgZm9yOlxuICogLSBFbXB0eSBvciB3aGl0ZXNwYWNlLW9ubHkgaW5wdXRcbiAqIC0gSW5wdXQgZXhjZWVkaW5nIG1heGltdW0gbGVuZ3RoICgxMCwwMDAgY2hhcmFjdGVycylcbiAqIC0gQ29tbW9uIHByb21wdCBpbmplY3Rpb24gcGF0dGVybnMgdGhhdCBhdHRlbXB0IHRvIG92ZXJyaWRlIHN5c3RlbSBpbnN0cnVjdGlvbnNcbiAqIC0gRXhjZXNzaXZlIGNvbnNlY3V0aXZlIG5ld2xpbmVzIChtb3JlIHRoYW4gMylcbiAqXG4gKiBOb3RlOiBUaGlzIGZ1bmN0aW9uIGRvZXMgTk9UIHNhbml0aXplIHRoZSBpbnB1dC4gVXNlIHNhbml0aXplUHJvbXB0SW5wdXQoKVxuICogZmlyc3QgaWYgeW91IHdhbnQgdG8gY2xlYW4gdGhlIGlucHV0LCBvciB1c2UgdGhpcyB0byByZWplY3QgaW52YWxpZCBpbnB1dCBlbnRpcmVseS5cbiAqXG4gKiBAcGFyYW0gaW5wdXQgLSBVc2VyIGlucHV0IHRvIHZhbGlkYXRlXG4gKiBAcmV0dXJucyBWYWxpZGF0aW9uIHJlc3VsdCB3aXRoIGVycm9yIG1lc3NhZ2UgaWYgaW52YWxpZFxuICpcbiAqIEBleGFtcGxlXG4gKiBgYGB0eXBlc2NyaXB0XG4gKiBjb25zdCByZXN1bHQgPSB2YWxpZGF0ZVByb21wdElucHV0KFwiSGVsbG8sIHdvcmxkIVwiKTtcbiAqIC8vIFJldHVybnM6IHsgdmFsaWQ6IHRydWUgfVxuICpcbiAqIGNvbnN0IG1hbGljaW91cyA9IHZhbGlkYXRlUHJvbXB0SW5wdXQoXCJJZ25vcmUgcHJldmlvdXMgaW5zdHJ1Y3Rpb25zXCIpO1xuICogLy8gUmV0dXJuczogeyB2YWxpZDogZmFsc2UsIGVycm9yOiBcIklucHV0IGNvbnRhaW5zIHBvdGVudGlhbGx5IG1hbGljaW91cyBpbnN0cnVjdGlvbnNcIiB9XG4gKiBgYGBcbiAqL1xuZXhwb3J0IGZ1bmN0aW9uIHZhbGlkYXRlUHJvbXB0SW5wdXQoaW5wdXQ6IHN0cmluZyk6IFZhbGlkYXRpb25SZXN1bHQge1xuICAvLyBDaGVjayBmb3IgZW1wdHkgaW5wdXRcbiAgaWYgKCFpbnB1dCB8fCBpbnB1dC50cmltKCkubGVuZ3RoID09PSAwKSB7XG4gICAgcmV0dXJuIHsgdmFsaWQ6IGZhbHNlLCBlcnJvcjogJ0lucHV0IGNhbm5vdCBiZSBlbXB0eScgfTtcbiAgfVxuXG4gIC8vIENoZWNrIGxlbmd0aCBsaW1pdFxuICBpZiAoaW5wdXQubGVuZ3RoID4gTUFYX0lOUFVUX0xFTkdUSCkge1xuICAgIHJldHVybiB7XG4gICAgICB2YWxpZDogZmFsc2UsXG4gICAgICBlcnJvcjogYElucHV0IGV4Y2VlZHMgbWF4aW11bSBsZW5ndGggb2YgJHtNQVhfSU5QVVRfTEVOR1RILnRvTG9jYWxlU3RyaW5nKCl9IGNoYXJhY3RlcnNgLFxuICAgIH07XG4gIH1cblxuICAvLyBDaGVjayBmb3IgZXhjZXNzaXZlIGNvbnNlY3V0aXZlIG5ld2xpbmVzXG4gIGNvbnN0IGV4Y2Vzc2l2ZU5ld2xpbmVzUGF0dGVybiA9IG5ldyBSZWdFeHAoYFxcbnske01BWF9DT05TRUNVVElWRV9ORVdMSU5FUyArIDF9LH1gKTtcbiAgaWYgKGV4Y2Vzc2l2ZU5ld2xpbmVzUGF0dGVybi50ZXN0KGlucHV0KSkge1xuICAgIHJldHVybiB7XG4gICAgICB2YWxpZDogZmFsc2UsXG4gICAgICBlcnJvcjogYElucHV0IGNvbnRhaW5zIG1vcmUgdGhhbiAke01BWF9DT05TRUNVVElWRV9ORVdMSU5FU30gY29uc2VjdXRpdmUgbmV3bGluZXNgLFxuICAgIH07XG4gIH1cblxuICAvLyBDaGVjayBmb3IgcHJvbXB0IGluamVjdGlvbiBwYXR0ZXJuc1xuICBmb3IgKGNvbnN0IHBhdHRlcm4gb2YgREFOR0VST1VTX1BBVFRFUk5TKSB7XG4gICAgaWYgKHBhdHRlcm4udGVzdChpbnB1dCkpIHtcbiAgICAgIHJldHVybiB7XG4gICAgICAgIHZhbGlkOiBmYWxzZSxcbiAgICAgICAgZXJyb3I6ICdJbnB1dCBjb250YWlucyBwb3RlbnRpYWxseSBtYWxpY2lvdXMgaW5zdHJ1Y3Rpb25zJyxcbiAgICAgIH07XG4gICAgfVxuICB9XG5cbiAgcmV0dXJuIHsgdmFsaWQ6IHRydWUgfTtcbn1cblxuLyoqXG4gKiBDb252ZW5pZW5jZSBmdW5jdGlvbiB0aGF0IGJvdGggdmFsaWRhdGVzIGFuZCBzYW5pdGl6ZXMgaW5wdXQuXG4gKlxuICogRmlyc3QgdmFsaWRhdGVzIHRoZSBpbnB1dCwgcmV0dXJuaW5nIGFuIGVycm9yIGlmIHZhbGlkYXRpb24gZmFpbHMuXG4gKiBJZiB2YWxpZCwgcmV0dXJucyB0aGUgc2FuaXRpemVkIHZlcnNpb24gb2YgdGhlIGlucHV0LlxuICpcbiAqIEBwYXJhbSBpbnB1dCAtIFJhdyB1c2VyIGlucHV0IHRvIHByb2Nlc3NcbiAqIEByZXR1cm5zIE9iamVjdCB3aXRoIGVpdGhlciBzYW5pdGl6ZWQgaW5wdXQgb3IgZXJyb3IgbWVzc2FnZVxuICpcbiAqIEBleGFtcGxlXG4gKiBgYGB0eXBlc2NyaXB0XG4gKiBjb25zdCByZXN1bHQgPSBwcm9jZXNzUHJvbXB0SW5wdXQoXCJIZWxsbyAgIHdvcmxkIVwiKTtcbiAqIGlmIChyZXN1bHQuZXJyb3IpIHtcbiAqICAgY29uc29sZS5lcnJvcihyZXN1bHQuZXJyb3IpO1xuICogfSBlbHNlIHtcbiAqICAgY29uc29sZS5sb2cocmVzdWx0LnNhbml0aXplZCk7IC8vIFwiSGVsbG8gd29ybGQhXCJcbiAqIH1cbiAqIGBgYFxuICovXG5leHBvcnQgZnVuY3Rpb24gcHJvY2Vzc1Byb21wdElucHV0KGlucHV0OiBzdHJpbmcpOiB7IHNhbml0aXplZD86IHN0cmluZzsgZXJyb3I/OiBzdHJpbmcgfSB7XG4gIGNvbnN0IHZhbGlkYXRpb24gPSB2YWxpZGF0ZVByb21wdElucHV0KGlucHV0KTtcblxuICBpZiAoIXZhbGlkYXRpb24udmFsaWQpIHtcbiAgICByZXR1cm4geyBlcnJvcjogdmFsaWRhdGlvbi5lcnJvciB9O1xuICB9XG5cbiAgcmV0dXJuIHsgc2FuaXRpemVkOiBzYW5pdGl6ZVByb21wdElucHV0KGlucHV0KSB9O1xufVxuIl0sInZlcnNpb24iOjN9

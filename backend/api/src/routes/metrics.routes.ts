@@ -310,9 +310,9 @@ router.get('/health', (req: Request, res: Response) => {
         const statusCode = health.status === 'critical' ? 503 :
             health.status === 'degraded' ? 200 : 200;
 
-        res.status(statusCode).json(health);
+        res.status(statusCode).json(success(health));
     } catch (error) {
-        res.status(503).json({ status: 'critical', error: 'Health check failed' });
+        res.status(503).json(serviceUnavailable('Health check failed'));
     }
 });
 

@@ -1,0 +1,38 @@
+c8cd98078ef6e4f03606207fe34f74f8
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.KeyExhaustionError = void 0;
+/**
+ * Error thrown when all API keys are exhausted (rate limited).
+ * Contains information about when keys will reset.
+ */
+class KeyExhaustionError extends Error {
+    constructor(resetTime, totalKeys, keysInCooldown) {
+        const retryAfterSeconds = Math.max(0, Math.ceil((resetTime.getTime() - Date.now()) / 1000));
+        const message = `All API keys exhausted (${keysInCooldown}/${totalKeys} in cooldown). Retry after ${retryAfterSeconds}s`;
+        super(message);
+        this.name = 'KeyExhaustionError';
+        this.resetTime = resetTime;
+        this.retryAfterSeconds = retryAfterSeconds;
+        this.totalKeys = totalKeys;
+        this.keysInCooldown = keysInCooldown;
+    }
+    /**
+     * Get a user-friendly message for display
+     */
+    getDisplayMessage(language = 'ko') {
+        const minutes = Math.ceil(this.retryAfterSeconds / 60);
+        if (language === 'ko') {
+            return `⚠️ 모든 API 키가 일시적으로 사용 불가능합니다.\n` +
+                `약 ${minutes}분 후에 다시 시도해주세요.\n` +
+                `(${this.keysInCooldown}/${this.totalKeys}개 키 쿨다운 중)`;
+        }
+        else {
+            return `⚠️ All API keys are temporarily unavailable.\n` +
+                `Please try again in about ${minutes} minutes.\n` +
+                `(${this.keysInCooldown}/${this.totalKeys} keys in cooldown)`;
+        }
+    }
+}
+exports.KeyExhaustionError = KeyExhaustionError;
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJmaWxlIjoiL1ZvbHVtZXMvTUFDX0FQUC9vcGVubWFrZV9sbG0vYmFja2VuZC9hcGkvc3JjL2Vycm9ycy9rZXktZXhoYXVzdGlvbi5lcnJvci50cyIsIm1hcHBpbmdzIjoiOzs7QUFBQTs7O0dBR0c7QUFDSCxNQUFhLGtCQUFtQixTQUFRLEtBQUs7SUFVekMsWUFBWSxTQUFlLEVBQUUsU0FBaUIsRUFBRSxjQUFzQjtRQUNsRSxNQUFNLGlCQUFpQixHQUFHLElBQUksQ0FBQyxHQUFHLENBQUMsQ0FBQyxFQUFFLElBQUksQ0FBQyxJQUFJLENBQUMsQ0FBQyxTQUFTLENBQUMsT0FBTyxFQUFFLEdBQUcsSUFBSSxDQUFDLEdBQUcsRUFBRSxDQUFDLEdBQUcsSUFBSSxDQUFDLENBQUMsQ0FBQztRQUM1RixNQUFNLE9BQU8sR0FBRywyQkFBMkIsY0FBYyxJQUFJLFNBQVMsOEJBQThCLGlCQUFpQixHQUFHLENBQUM7UUFDekgsS0FBSyxDQUFDLE9BQU8sQ0FBQyxDQUFDO1FBQ2YsSUFBSSxDQUFDLElBQUksR0FBRyxvQkFBb0IsQ0FBQztRQUNqQyxJQUFJLENBQUMsU0FBUyxHQUFHLFNBQVMsQ0FBQztRQUMzQixJQUFJLENBQUMsaUJBQWlCLEdBQUcsaUJBQWlCLENBQUM7UUFDM0MsSUFBSSxDQUFDLFNBQVMsR0FBRyxTQUFTLENBQUM7UUFDM0IsSUFBSSxDQUFDLGNBQWMsR0FBRyxjQUFjLENBQUM7SUFDekMsQ0FBQztJQUVEOztPQUVHO0lBQ0gsaUJBQWlCLENBQUMsV0FBd0IsSUFBSTtRQUMxQyxNQUFNLE9BQU8sR0FBRyxJQUFJLENBQUMsSUFBSSxDQUFDLElBQUksQ0FBQyxpQkFBaUIsR0FBRyxFQUFFLENBQUMsQ0FBQztRQUV2RCxJQUFJLFFBQVEsS0FBSyxJQUFJLEVBQUUsQ0FBQztZQUNwQixPQUFPLGlDQUFpQztnQkFDakMsS0FBSyxPQUFPLG1CQUFtQjtnQkFDL0IsSUFBSSxJQUFJLENBQUMsY0FBYyxJQUFJLElBQUksQ0FBQyxTQUFTLFlBQVksQ0FBQztRQUNqRSxDQUFDO2FBQU0sQ0FBQztZQUNKLE9BQU8sZ0RBQWdEO2dCQUNoRCw2QkFBNkIsT0FBTyxhQUFhO2dCQUNqRCxJQUFJLElBQUksQ0FBQyxjQUFjLElBQUksSUFBSSxDQUFDLFNBQVMsb0JBQW9CLENBQUM7UUFDekUsQ0FBQztJQUNMLENBQUM7Q0FDSjtBQXJDRCxnREFxQ0MiLCJuYW1lcyI6W10sInNvdXJjZXMiOlsiL1ZvbHVtZXMvTUFDX0FQUC9vcGVubWFrZV9sbG0vYmFja2VuZC9hcGkvc3JjL2Vycm9ycy9rZXktZXhoYXVzdGlvbi5lcnJvci50cyJdLCJzb3VyY2VzQ29udGVudCI6WyIvKipcbiAqIEVycm9yIHRocm93biB3aGVuIGFsbCBBUEkga2V5cyBhcmUgZXhoYXVzdGVkIChyYXRlIGxpbWl0ZWQpLlxuICogQ29udGFpbnMgaW5mb3JtYXRpb24gYWJvdXQgd2hlbiBrZXlzIHdpbGwgcmVzZXQuXG4gKi9cbmV4cG9ydCBjbGFzcyBLZXlFeGhhdXN0aW9uRXJyb3IgZXh0ZW5kcyBFcnJvciB7XG4gICAgLyoqIFRpbWVzdGFtcCB3aGVuIHRoZSBuZXh0IGtleSB3aWxsIGJlIGF2YWlsYWJsZSAoZWFybGllc3QgcmVzZXQgdGltZSkgKi9cbiAgICBwdWJsaWMgcmVhZG9ubHkgcmVzZXRUaW1lOiBEYXRlO1xuICAgIC8qKiBTZWNvbmRzIHVudGlsIHRoZSBuZXh0IGtleSBpcyBhdmFpbGFibGUgKi9cbiAgICBwdWJsaWMgcmVhZG9ubHkgcmV0cnlBZnRlclNlY29uZHM6IG51bWJlcjtcbiAgICAvKiogVG90YWwgbnVtYmVyIG9mIEFQSSBrZXlzIGNvbmZpZ3VyZWQgKi9cbiAgICBwdWJsaWMgcmVhZG9ubHkgdG90YWxLZXlzOiBudW1iZXI7XG4gICAgLyoqIE51bWJlciBvZiBrZXlzIGN1cnJlbnRseSBpbiBjb29sZG93biAqL1xuICAgIHB1YmxpYyByZWFkb25seSBrZXlzSW5Db29sZG93bjogbnVtYmVyO1xuXG4gICAgY29uc3RydWN0b3IocmVzZXRUaW1lOiBEYXRlLCB0b3RhbEtleXM6IG51bWJlciwga2V5c0luQ29vbGRvd246IG51bWJlcikge1xuICAgICAgICBjb25zdCByZXRyeUFmdGVyU2Vjb25kcyA9IE1hdGgubWF4KDAsIE1hdGguY2VpbCgocmVzZXRUaW1lLmdldFRpbWUoKSAtIERhdGUubm93KCkpIC8gMTAwMCkpO1xuICAgICAgICBjb25zdCBtZXNzYWdlID0gYEFsbCBBUEkga2V5cyBleGhhdXN0ZWQgKCR7a2V5c0luQ29vbGRvd259LyR7dG90YWxLZXlzfSBpbiBjb29sZG93bikuIFJldHJ5IGFmdGVyICR7cmV0cnlBZnRlclNlY29uZHN9c2A7XG4gICAgICAgIHN1cGVyKG1lc3NhZ2UpO1xuICAgICAgICB0aGlzLm5hbWUgPSAnS2V5RXhoYXVzdGlvbkVycm9yJztcbiAgICAgICAgdGhpcy5yZXNldFRpbWUgPSByZXNldFRpbWU7XG4gICAgICAgIHRoaXMucmV0cnlBZnRlclNlY29uZHMgPSByZXRyeUFmdGVyU2Vjb25kcztcbiAgICAgICAgdGhpcy50b3RhbEtleXMgPSB0b3RhbEtleXM7XG4gICAgICAgIHRoaXMua2V5c0luQ29vbGRvd24gPSBrZXlzSW5Db29sZG93bjtcbiAgICB9XG5cbiAgICAvKipcbiAgICAgKiBHZXQgYSB1c2VyLWZyaWVuZGx5IG1lc3NhZ2UgZm9yIGRpc3BsYXlcbiAgICAgKi9cbiAgICBnZXREaXNwbGF5TWVzc2FnZShsYW5ndWFnZTogJ2tvJyB8ICdlbicgPSAna28nKTogc3RyaW5nIHtcbiAgICAgICAgY29uc3QgbWludXRlcyA9IE1hdGguY2VpbCh0aGlzLnJldHJ5QWZ0ZXJTZWNvbmRzIC8gNjApO1xuICAgICAgICBcbiAgICAgICAgaWYgKGxhbmd1YWdlID09PSAna28nKSB7XG4gICAgICAgICAgICByZXR1cm4gYOKaoO+4jyDrqqjrk6AgQVBJIO2CpOqwgCDsnbzsi5zsoIHsnLzroZwg7IKs7JqpIOu2iOqwgOuKpe2VqeuLiOuLpC5cXG5gICtcbiAgICAgICAgICAgICAgICAgICBg7JW9ICR7bWludXRlc33rtoQg7ZuE7JeQIOuLpOyLnCDsi5zrj4TtlbTso7zshLjsmpQuXFxuYCArXG4gICAgICAgICAgICAgICAgICAgYCgke3RoaXMua2V5c0luQ29vbGRvd259LyR7dGhpcy50b3RhbEtleXN96rCcIO2CpCDsv6jri6TsmrQg7KSRKWA7XG4gICAgICAgIH0gZWxzZSB7XG4gICAgICAgICAgICByZXR1cm4gYOKaoO+4jyBBbGwgQVBJIGtleXMgYXJlIHRlbXBvcmFyaWx5IHVuYXZhaWxhYmxlLlxcbmAgK1xuICAgICAgICAgICAgICAgICAgIGBQbGVhc2UgdHJ5IGFnYWluIGluIGFib3V0ICR7bWludXRlc30gbWludXRlcy5cXG5gICtcbiAgICAgICAgICAgICAgICAgICBgKCR7dGhpcy5rZXlzSW5Db29sZG93bn0vJHt0aGlzLnRvdGFsS2V5c30ga2V5cyBpbiBjb29sZG93bilgO1xuICAgICAgICB9XG4gICAgfVxufVxuIl0sInZlcnNpb24iOjN9

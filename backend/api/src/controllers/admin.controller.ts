@@ -7,6 +7,7 @@
 
 import { Request, Response, Router } from 'express';
 import { getUserManager, UserRole } from '../data/user-manager';
+import { getConversationDB } from '../data/conversation-db';
 import { requireAuth, requireAdmin } from '../auth';
 import { createLogger } from '../utils/logger';
 import { success, badRequest, notFound, internalError } from '../utils/api-response';
@@ -46,6 +47,38 @@ export class AdminController {
         this.router.put('/users/:id', this.updateUser.bind(this));
         this.router.put('/users/:id/role', this.changeUserRole.bind(this));
         this.router.delete('/users/:id', this.deleteUser.bind(this));
+
+        // 관리자용 대화 목록 (모든 사용자 대화 조회)
+        this.router.get('/conversations', this.getConversations.bind(this));
+    }
+
+    /**
+     * GET /api/admin/conversations - 전체 대화 목록 (관리자용)
+     */
+    private async getConversations(req: Request, res: Response): Promise<void> {
+        try {
+            const conversationDb = getConversationDB();
+            const limit = parseInt(req.query.limit as string) || 100;
+
+            const sessions = await conversationDb.getAllSessions(limit);
+
+            // 프론트엔드 호환을 위해 snake_case → camelCase 변환
+            const formattedSessions = sessions.map((s) => ({
+                id: s.id,
+                userId: s.userId,
+                anonSessionId: s.anonSessionId,
+                title: s.title,
+                createdAt: s.created_at,
+                updatedAt: s.updated_at,
+                metadata: s.metadata,
+                messageCount: s.messages?.length || 0
+            }));
+
+            res.json(success({ conversations: formattedSessions }));
+        } catch (error) {
+            log.error('[Admin Conversations] 오류:', error);
+            res.status(500).json(internalError('대화 목록 조회 실패'));
+        }
     }
 
     /**
@@ -66,7 +99,7 @@ export class AdminController {
              res.json(success(result));
          } catch (error) {
              log.error('[Admin Users] 오류:', error);
-             res.status(500).json(internalError(String(error)));
+             res.status(500).json(internalError('사용자 목록 조회 실패'));
          }
     }
 
@@ -80,7 +113,7 @@ export class AdminController {
              res.json(success(stats));
          } catch (error) {
              log.error('[Admin Stats] 오류:', error);
-             res.status(500).json(internalError(String(error)));
+             res.status(500).json(internalError('사용자 통계 조회 실패'));
          }
     }
 
@@ -104,7 +137,7 @@ export class AdminController {
              res.json(success({ user }));
          } catch (error) {
              log.error('[Admin Update User] 오류:', error);
-             res.status(500).json(internalError(String(error)));
+             res.status(500).json(internalError('사용자 정보 수정 실패'));
          }
     }
 
@@ -133,7 +166,7 @@ export class AdminController {
              res.json(success({ user }));
          } catch (error) {
              log.error('[Admin Change Role] 오류:', error);
-             res.status(500).json(internalError(String(error)));
+             res.status(500).json(internalError('사용자 역할 변경 실패'));
          }
     }
 
@@ -162,7 +195,7 @@ export class AdminController {
              res.json(success({ deleted: true }));
          } catch (error) {
              log.error('[Admin Delete User] 오류:', error);
-             res.status(500).json(internalError(String(error)));
+             res.status(500).json(internalError('사용자 삭제 실패'));
          }
      }
 

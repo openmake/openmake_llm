@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport"
-        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+        content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover">
     <title>OpenMake.Ai</title>
 
     <!-- PWA 메타 태그 -->
@@ -34,19 +34,20 @@
     <link rel="stylesheet" href="css/glassmorphism.css">
     <link rel="stylesheet" href="css/animations.css">
     <link rel="stylesheet" href="css/feature-cards.css">
-    <link rel="stylesheet" href="css/unified-sidebar.css">
+    <link rel="stylesheet" href="css/layout.css?v=1">
+    <link rel="stylesheet" href="css/unified-sidebar.css?v=5">
     <link rel="stylesheet" href="css/light-theme.css">
-    <link rel="stylesheet" href="style.css?v=2">
-    <!-- Iconify Icon Web Component -->
-    <script src="https://cdn.jsdelivr.net/npm/iconify-icon@2.1.0/dist/iconify-icon.min.js"></script>
-    <!-- Markdown Parser -->
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <!-- Code Highlighting -->
+    <link rel="stylesheet" href="style.css?v=4">
+    <!-- Iconify Icon Web Component (defer to not block rendering) -->
+    <script src="https://cdn.jsdelivr.net/npm/iconify-icon@2.1.0/dist/iconify-icon.min.js" defer></script>
+    <!-- Markdown Parser (defer) -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js" defer></script>
+    <!-- Code Highlighting (defer) -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" media="print" onload="this.media='all'">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
-    <!-- XSS Defense: DOMPurify -->
-    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.2.4/dist/purify.min.js"></script>
-    <script src="guide_content.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js" defer></script>
+    <!-- XSS Defense: DOMPurify (defer) -->
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.2.4/dist/purify.min.js" defer></script>
+    <script src="guide_content.js" defer></script>
 
     <!-- Service Worker 등록 -->
     <script>
@@ -176,13 +177,17 @@
                                         title="Thinking 모드 (심층 추론)">
                                         <iconify-icon icon="lucide:brain"></iconify-icon>
                                     </button>
+                                    <button class="action-btn" id="deepResearchBtn" onclick="toggleDeepResearch()"
+                                        title="Deep Research (심층 연구)">
+                                        <iconify-icon icon="lucide:flask-conical"></iconify-icon>
+                                    </button>
                                 </div>
                                 <div class="right-actions">
                                     <div id="connectionStatus" class="connection-status">
                                         <span class="status-dot"></span>
                                         <span class="status-text">연결됨</span>
                                     </div>
-                                    <button class="send-btn" onclick="sendMessage()" id="sendBtn" title="전송 (Enter)">
+                                    <button class="send-btn" id="sendBtn" title="전송 (Enter)">
                                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                             stroke-width="2">
                                             <path d="M22 2L11 13M22 2L15 22L11 13L2 9L22 2Z" />
@@ -391,14 +396,14 @@
     <script src="js/nav-items.js"></script>
 
     <!-- 2. 앱 코어 (채팅 기능 — app.js 모놀리스, 추후 모듈화) -->
-    <script src="app.js?v=8"></script>
+    <script src="app.js?v=14"></script>
     <script src="js/modules/sanitize.js"></script>
 
     <!-- 3. SPA 인프라 -->
-    <script src="js/components/unified-sidebar.js"></script>
+    <script src="js/components/unified-sidebar.js?v=5"></script>
     <script src="js/components/offline-indicator.js"></script>
 
-    <script src="js/spa-router.js"></script>
+    <script src="js/spa-router.js?v=2"></script>
     <script src="js/components/admin-panel.js"></script>
     <script src="js/components/install-prompt.js"></script>
 

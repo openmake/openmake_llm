@@ -9,6 +9,7 @@
 import * as bcrypt from 'bcryptjs';
 import { getPool } from './models/unified-database';
 import { Pool } from 'pg';
+import { getConfig } from '../config/env';
 
 // 비밀번호 해싱 라운드 (높을수록 안전하지만 느림)
 const BCRYPT_ROUNDS = 12;
@@ -72,7 +73,7 @@ class UserManagerImpl {
 
     private async ensureAdminUser(): Promise<void> {
         const pool = getPool();
-        const adminEmail = process.env.DEFAULT_ADMIN_EMAIL || 'admin';
+        const adminEmail = getConfig().defaultAdminEmail || 'admin';
 
         // 기존 'admin' 계정이 있고 DEFAULT_ADMIN_EMAIL이 다르면 마이그레이션
         if (adminEmail !== 'admin') {
@@ -87,9 +88,9 @@ class UserManagerImpl {
 
             if (legacyAdmin.rows.length > 0 && existingEmail.rows.length > 0) {
                 // 이메일 사용자가 이미 존재하면: admin 권한 부여 + 비밀번호 갱신, 레거시 admin 삭제
-                const adminPassword = process.env.ADMIN_PASSWORD;
-                if (adminPassword) {
-                    const passwordHash = bcrypt.hashSync(adminPassword, BCRYPT_ROUNDS);
+                const cfgAdminPassword = getConfig().adminPassword;
+                if (cfgAdminPassword) {
+                    const passwordHash = bcrypt.hashSync(cfgAdminPassword, BCRYPT_ROUNDS);
                     await pool.query(
                         'UPDATE users SET role = $1, tier = $2, password_hash = $3, updated_at = $4 WHERE username = $5',
                         ['admin', 'enterprise', passwordHash, new Date().toISOString(), adminEmail]
@@ -100,9 +101,9 @@ class UserManagerImpl {
                 return;
             } else if (legacyAdmin.rows.length > 0) {
                 // 이메일 사용자가 없으면: 레거시 admin의 username을 이메일로 변경
-                const adminPassword = process.env.ADMIN_PASSWORD;
-                if (adminPassword) {
-                    const passwordHash = bcrypt.hashSync(adminPassword, BCRYPT_ROUNDS);
+                const cfgAdminPassword = getConfig().adminPassword;
+                if (cfgAdminPassword) {
+                    const passwordHash = bcrypt.hashSync(cfgAdminPassword, BCRYPT_ROUNDS);
                     await pool.query(
                         'UPDATE users SET username = $1, email = $2, password_hash = $3, updated_at = $4 WHERE username = $5 AND role = $6',
                         [adminEmail, adminEmail, passwordHash, new Date().toISOString(), 'admin', 'admin']
@@ -113,9 +114,9 @@ class UserManagerImpl {
             } else if (existingEmail.rows.length > 0) {
                 // 이메일 사용자만 있으면: admin 역할 부여
                 if (existingEmail.rows[0].role !== 'admin') {
-                    const adminPassword = process.env.ADMIN_PASSWORD;
-                    if (adminPassword) {
-                        const passwordHash = bcrypt.hashSync(adminPassword, BCRYPT_ROUNDS);
+                    const cfgAdminPassword = getConfig().adminPassword;
+                    if (cfgAdminPassword) {
+                        const passwordHash = bcrypt.hashSync(cfgAdminPassword, BCRYPT_ROUNDS);
                         await pool.query(
                             'UPDATE users SET role = $1, tier = $2, password_hash = $3, updated_at = $4 WHERE username = $5',
                             ['admin', 'enterprise', passwordHash, new Date().toISOString(), adminEmail]
@@ -135,11 +136,11 @@ class UserManagerImpl {
         if (result.rows.length > 0) return;
 
         // 🔒 보안 강화: 환경변수 필수화, 기본 비밀번호 제거
-        const adminPassword = process.env.ADMIN_PASSWORD;
-        if (!adminPassword) {
+        const cfgAdminPassword = getConfig().adminPassword;
+        if (!cfgAdminPassword) {
             console.warn('[UserManager] ⚠️ ADMIN_PASSWORD 환경변수가 설정되지 않았습니다!');
             console.warn('[UserManager] 기본 관리자 계정이 생성되지 않습니다. .env 파일에 ADMIN_PASSWORD를 설정하세요.');
-            if (process.env.NODE_ENV === 'production') {
+            if (getConfig().nodeEnv === 'production') {
                 throw new Error('[UserManager] 프로덕션 환경에서는 ADMIN_PASSWORD 환경변수가 필수입니다!');
             }
             // 개발 환경에서만 임시 비밀번호 생성 (랜덤)
@@ -153,7 +154,7 @@ class UserManagerImpl {
         } else {
             await this.createUser({
                 email: adminEmail,
-                password: adminPassword,
+                password: cfgAdminPassword,
                 role: 'admin'
             });
         }

@@ -8,6 +8,7 @@ import { createLogger } from '../utils/logger';
 import { getMemoryService } from '../services/MemoryService';
 import { MemoryCategory } from '../data/models/unified-database';
 import { success, badRequest, internalError } from '../utils/api-response';
+import { asyncHandler } from '../utils/error-handler';
 
 const logger = createLogger('MemoryRoutes');
 const router = Router();
@@ -20,124 +21,99 @@ const router = Router();
  * GET /api/memory
  * 사용자의 모든 메모리 조회
  */
-router.get('/', async (req: Request, res: Response) => {
-    try {
-        const userId = (req.user && 'userId' in req.user ? req.user.userId : req.user?.id?.toString()) || 'anonymous';
-        const category = req.query.category as MemoryCategory | undefined;
-        const limit = parseInt(req.query.limit as string) || 50;
-        const minImportance = parseFloat(req.query.minImportance as string) || undefined;
+router.get('/', asyncHandler(async (req: Request, res: Response) => {
+     const userId = (req.user && 'userId' in req.user ? req.user.userId : req.user?.id?.toString()) || 'anonymous';
+     const category = req.query.category as MemoryCategory | undefined;
+     const limit = parseInt(req.query.limit as string) || 50;
+     const minImportance = parseFloat(req.query.minImportance as string) || undefined;
 
-        const memoryService = getMemoryService();
-        const memories = await memoryService.getUserMemories(userId, {
-            category,
-            limit,
-            minImportance
-        });
+     const memoryService = getMemoryService();
+     const memories = await memoryService.getUserMemories(userId, {
+         category,
+         limit,
+         minImportance
+     });
 
-        res.json(success({ memories, total: memories.length, userId }));
-     } catch (error) {
-         logger.error('메모리 컨텍스트 조회 실패:', error);
-         res.status(500).json(internalError('메모리 컨텍스트 조회 실패'));
-     }
- });
+     res.json(success({ memories, total: memories.length, userId }));
+}));
 
- /**
-  * POST /api/memory
- * 메모리 생성
- */
-router.post('/', async (req: Request, res: Response) => {
-    try {
-        const userId = (req.user && 'userId' in req.user ? req.user.userId : req.user?.id?.toString()) || 'anonymous';
-        const { category, key, value, importance, tags } = req.body;
+  /**
+   * POST /api/memory
+  * 메모리 생성
+  */
+router.post('/', asyncHandler(async (req: Request, res: Response) => {
+     const userId = (req.user && 'userId' in req.user ? req.user.userId : req.user?.id?.toString()) || 'anonymous';
+     const { category, key, value, importance, tags } = req.body;
 
-         if (!category || !key || !value) {
-             return res.status(400).json(badRequest('category, key, value는 필수입니다.'));
-         }
+      if (!category || !key || !value) {
+          return res.status(400).json(badRequest('category, key, value는 필수입니다.'));
+      }
 
-         const validCategories: MemoryCategory[] = ['preference', 'fact', 'project', 'relationship', 'skill', 'context'];
-         if (!validCategories.includes(category)) {
-             return res.status(400).json(badRequest(`category는 다음 중 하나여야 합니다: ${validCategories.join(', ')}`));
-         }
+      const validCategories: MemoryCategory[] = ['preference', 'fact', 'project', 'relationship', 'skill', 'context'];
+      if (!validCategories.includes(category)) {
+          return res.status(400).json(badRequest(`category는 다음 중 하나여야 합니다: ${validCategories.join(', ')}`));
+      }
 
-        const memoryService = getMemoryService();
-        const memoryId = await memoryService.saveMemory(userId, null, {
-            category,
-            key,
-            value,
-            importance: importance || 0.5,
-            tags: tags || []
-        });
+     const memoryService = getMemoryService();
+     const memoryId = await memoryService.saveMemory(userId, null, {
+         category,
+         key,
+         value,
+         importance: importance || 0.5,
+         tags: tags || []
+     });
 
-         res.status(201).json(success({ id: memoryId, message: '메모리가 저장되었습니다.', category, key }));
-     } catch (error) {
-         logger.error('메모리 생성 실패:', error);
-         res.status(500).json(internalError('메모리 생성 실패'));
-     }
- });
+      res.status(201).json(success({ id: memoryId, message: '메모리가 저장되었습니다.', category, key }));
+}));
 
- /**
-  * PUT /api/memory/:id
- * 메모리 수정
- */
-router.put('/:id', async (req: Request, res: Response) => {
-    try {
-        const memoryId = req.params.id;
-        const { value, importance } = req.body;
+  /**
+   * PUT /api/memory/:id
+  * 메모리 수정
+  */
+router.put('/:id', asyncHandler(async (req: Request, res: Response) => {
+     const memoryId = req.params.id;
+     const { value, importance } = req.body;
 
-         if (!value && importance === undefined) {
-             return res.status(400).json(badRequest('value 또는 importance 중 하나는 필수입니다.'));
-         }
+      if (!value && importance === undefined) {
+          return res.status(400).json(badRequest('value 또는 importance 중 하나는 필수입니다.'));
+      }
 
-        const memoryService = getMemoryService();
-        await memoryService.updateMemory(memoryId, { value, importance });
+     const memoryService = getMemoryService();
+     await memoryService.updateMemory(memoryId, { value, importance });
 
-         res.json(success({ message: '메모리가 수정되었습니다.' }));
-     } catch (error) {
-         logger.error('메모리 수정 실패:', error);
-         res.status(500).json(internalError('메모리 수정 실패'));
-     }
- });
+      res.json(success({ message: '메모리가 수정되었습니다.' }));
+}));
 
- /**
-  * DELETE /api/memory/:id
- * 메모리 삭제
- */
-router.delete('/:id', async (req: Request, res: Response) => {
-    try {
-        const memoryId = req.params.id;
+  /**
+   * DELETE /api/memory/:id
+  * 메모리 삭제
+  */
+router.delete('/:id', asyncHandler(async (req: Request, res: Response) => {
+     const memoryId = req.params.id;
 
-        const memoryService = getMemoryService();
-        await memoryService.deleteMemory(memoryId);
+     const memoryService = getMemoryService();
+     await memoryService.deleteMemory(memoryId);
 
-         res.json(success({ message: '메모리가 삭제되었습니다.' }));
-     } catch (error) {
-         logger.error('메모리 삭제 실패:', error);
-         res.status(500).json(internalError('메모리 삭제 실패'));
-     }
- });
+      res.json(success({ message: '메모리가 삭제되었습니다.' }));
+}));
 
- /**
-  * DELETE /api/memory
- * 사용자의 모든 메모리 삭제
- */
-router.delete('/', async (req: Request, res: Response) => {
-    try {
-        const userId = (req.user && 'userId' in req.user ? req.user.userId : req.user?.id?.toString()) || 'anonymous';
-        const confirm = req.query.confirm === 'true';
+  /**
+   * DELETE /api/memory
+  * 사용자의 모든 메모리 삭제
+  */
+router.delete('/', asyncHandler(async (req: Request, res: Response) => {
+     const userId = (req.user && 'userId' in req.user ? req.user.userId : req.user?.id?.toString()) || 'anonymous';
+     const confirm = req.query.confirm === 'true';
 
-         if (!confirm) {
-             return res.status(400).json(badRequest('모든 메모리를 삭제하려면 ?confirm=true 파라미터가 필요합니다.'));
-         }
+      if (!confirm) {
+          return res.status(400).json(badRequest('모든 메모리를 삭제하려면 ?confirm=true 파라미터가 필요합니다.'));
+      }
 
-        const memoryService = getMemoryService();
-        await memoryService.clearUserMemories(userId);
+     const memoryService = getMemoryService();
+     await memoryService.clearUserMemories(userId);
 
-         res.json(success({ message: '모든 메모리가 삭제되었습니다.' }));
-     } catch (error) {
-         logger.error('전체 메모리 삭제 실패:', error);
-         res.status(500).json(internalError('전체 메모리 삭제 실패'));
-     }
- });
+      res.json(success({ message: '모든 메모리가 삭제되었습니다.' }));
+}));
 
  // ================================================
  // 메모리 카테고리 정보

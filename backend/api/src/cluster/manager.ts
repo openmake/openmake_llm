@@ -264,13 +264,47 @@ export class ClusterManager extends EventEmitter {
     }
 
     /**
-     * 노드의 Ollama 클라이언트 가져오기
+     * 노드의 Ollama 클라이언트 가져오기 (싱글톤 — 공유)
+     * 
+     * ⚠️ 주의: 이 클라이언트는 싱글톤이므로 setModel()을 호출하면 
+     * 동시 요청 간 모델이 덮어쓰여질 수 있습니다.
+     * 동시성이 필요한 경우 createScopedClient()를 사용하세요.
      * 
      * @param nodeId - 노드 ID
      * @returns 해당 노드의 OllamaClient 또는 undefined
      */
     getClient(nodeId: string): OllamaClient | undefined {
         return this.clients.get(nodeId);
+    }
+
+    /**
+     * 🔒 Phase 2 보안 패치: 요청 격리된 클라이언트 생성
+     * 
+     * 싱글톤 클라이언트의 설정을 복제하여 독립적인 새 인스턴스를 반환합니다.
+     * 동시 요청 시 setModel() 경쟁 조건을 방지합니다.
+     * 
+     * @param nodeId - 노드 ID
+     * @param model - 이 요청에서 사용할 모델명 (선택)
+     * @returns 격리된 새 OllamaClient 인스턴스 또는 undefined
+     * 
+     * @example
+     * ```typescript
+     * const client = cluster.createScopedClient(bestNode.id, 'gemma:2b');
+     * // client.setModel()은 다른 요청에 영향을 주지 않음
+     * ```
+     */
+    createScopedClient(nodeId: string, model?: string): OllamaClient | undefined {
+        const baseClient = this.clients.get(nodeId);
+        const node = this.nodes.get(nodeId);
+        if (!baseClient || !node) return undefined;
+
+        // 기본 설정으로 새 인스턴스 생성 (TCP 커넥션 풀은 OS 레벨에서 재사용)
+        const scopedClient = createClient({
+            baseUrl: `http://${node.host}:${node.port}`,
+            model: model || baseClient.model,
+        });
+
+        return scopedClient;
     }
 
     /**

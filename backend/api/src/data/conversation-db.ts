@@ -9,10 +9,11 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { getPool } from './models/unified-database';
 import { Pool } from 'pg';
+import { getConfig } from '../config/env';
 
 // 🔒 설정: 환경변수로 조정 가능
-const MAX_SESSIONS = parseInt(process.env.MAX_CONVERSATION_SESSIONS || '1000');
-const SESSION_TTL_DAYS = parseInt(process.env.SESSION_TTL_DAYS || '30');
+const MAX_SESSIONS = getConfig().maxConversationSessions;
+const SESSION_TTL_DAYS = getConfig().sessionTtlDays;
 
 export interface ConversationSession {
     id: string;

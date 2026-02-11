@@ -15,6 +15,7 @@ import { Router, Request, Response } from 'express';
 import { getConfig } from '../config';
 import { requireAdmin } from '../auth';
 import { success, internalError } from '../utils/api-response';
+import { asyncHandler } from '../utils/error-handler';
 
 const router = Router();
 
@@ -40,10 +41,10 @@ router.get('/model', (req: Request, res: Response) => {
  * GET /models
  * LLM 모델 목록 API (관리자 전용)
  */
-router.get('/models', requireAdmin, async (req: Request, res: Response) => {
+router.get('/models', requireAdmin, asyncHandler(async (req: Request, res: Response) => {
     try {
         // Ollama API로 모델 목록 가져오기
-        const ollamaHost = process.env.OLLAMA_HOST || 'http://localhost:11434';
+        const ollamaHost = getConfig().ollamaHost;
         const response = await fetch(`${ollamaHost}/api/tags`);
 
         if (response.ok) {
@@ -76,6 +77,6 @@ router.get('/models', requireAdmin, async (req: Request, res: Response) => {
             warning: '모델 목록을 가져올 수 없습니다'
         }));
     }
-});
+}));
 
 export default router;

@@ -25,6 +25,7 @@ import { createLogger } from '../utils/logger';
 import { getApiKeyManager, ApiKeyManager } from './api-key-manager';
 import { getApiUsageTracker } from './api-usage-tracker';
 import { QuotaExceededError } from '../errors/quota-exceeded.error';
+import { KeyExhaustionError } from '../errors/key-exhaustion.error';
 import { runAgentLoop, AgentLoopOptions, AgentLoopResult } from './agent-loop';
 
 const logger = createLogger('OllamaClient');
@@ -111,6 +112,14 @@ export class OllamaClient {
                         return this.client.request(error.config);
                     } else {
                         console.log(`[OllamaClient] ⚠️ 모든 키 소진 - switched: ${switched}, retryCount: ${retryCount}/${maxRetries}`);
+                        
+                        // 🆕 모든 키가 소진되었을 때 KeyExhaustionError throw
+                        const nextResetTime = this.apiKeyManager.getNextResetTime();
+                        if (nextResetTime) {
+                            const totalKeys = this.apiKeyManager.getTotalKeys();
+                            const keysInCooldown = this.apiKeyManager.getKeysInCooldownCount();
+                            throw new KeyExhaustionError(nextResetTime, totalKeys, keysInCooldown);
+                        }
                     }
                 } else if (isNetworkError && error.config) {
                     // 네트워크 일시 장애 시 최대 2회 재시도 (지수 백오프)
@@ -581,3 +590,42 @@ export class OllamaClient {
 export const createClient = (config?: Partial<OllamaConfig>): OllamaClient => {
     return new OllamaClient(config);
 };
+
+/**
+ * 🆕 특정 인덱스의 키-모델 쌍으로 클라이언트 생성 (A2A용)
+ * @param index API 키 인덱스 (0-based)
+ * @returns 해당 키-모델 쌍으로 구성된 OllamaClient
+ */
+export const createClientForIndex = (index: number): OllamaClient | null => {
+    const keyManager = getApiKeyManager();
+    const pair = keyManager.getKeyModelPair(index);
+    
+    if (!pair) {
+        console.error(`[OllamaClient] ❌ 인덱스 ${index}에 해당하는 키-모델 쌍이 없습니다.`);
+        return null;
+    }
+    
+    console.log(`[OllamaClient] 🎯 인덱스 ${index + 1} 클라이언트 생성: ${pair.model}`);
+    return new OllamaClient({ model: pair.model });
+};
+
+/**
+ * 🆕 모든 키-모델 쌍에 대해 클라이언트 배열 생성 (A2A 병렬 처리용)
+ * @returns OllamaClient 배열
+ */
+export const createAllClients = (): OllamaClient[] => {
+    const keyManager = getApiKeyManager();
+    const pairs = keyManager.getAllKeyModelPairs();
+    
+    console.log(`[OllamaClient] 🚀 ${pairs.length}개 A2A 클라이언트 생성 중...`);
+    
+    const clients = pairs.map(pair => {
+        // 각 클라이언트 생성 전에 해당 인덱스로 키 매니저 설정
+        const client = new OllamaClient({ model: pair.model });
+        return client;
+    });
+    
+    console.log(`[OllamaClient] ✅ ${clients.length}개 A2A 클라이언트 준비 완료`);
+    return clients;
+};
+

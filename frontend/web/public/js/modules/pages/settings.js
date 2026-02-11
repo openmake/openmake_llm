@@ -7,6 +7,7 @@
     window.PageModules = window.PageModules || {};
     var _intervals = [];
     var _timeouts = [];
+    function esc(s) { var d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
 
     var CSS = '' +
         '.page-settings { position: relative; min-height: 100%; }' +
@@ -268,7 +269,7 @@
 
                         modelSelect.innerHTML = data.models.map(model => {
                             const isSelected = savedModel ? model.name === savedModel : model.name === defaultModel;
-                            return '<option value="' + model.name + '" ' + (isSelected ? 'selected' : '') + '>' + model.name + ' (' + (model.size ? (model.size / 1024 / 1024 / 1024).toFixed(1) + 'GB' : 'Unknown') + ')</option>';
+                            return '<option value="' + esc(model.name) + '" ' + (isSelected ? 'selected' : '') + '>' + esc(model.name) + ' (' + (model.size ? (model.size / 1024 / 1024 / 1024).toFixed(1) + 'GB' : 'Unknown') + ')</option>';
                         }).join('');
                     }
                 }

@@ -3,11 +3,8 @@
  * 파일 경로 검증 및 확장자 검증 테스트
  */
 
-// @ts-expect-error - bun:test types are built-in to bun runtime
-import { describe, it, expect, mock } from 'bun:test';
-
-// UserSandbox 모킹 (bun:test 호환)
-mock.module('../mcp/user-sandbox', () => ({
+// UserSandbox 모킹
+jest.mock('../mcp/user-sandbox', () => ({
     UserSandbox: {
         resolvePath: (userId: string | number, filePath: string) => {
             // 기본 동작: 단순 경로 반환 (테스트용)

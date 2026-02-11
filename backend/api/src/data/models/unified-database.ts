@@ -4,6 +4,8 @@
  */
 
 import { Pool, QueryResult } from 'pg';
+import { withTransaction, withRetry, type TransactionClient } from '../retry-wrapper';
+import { getConfig } from '../../config/env';
 
 /** Generic DB query parameter type */
 type QueryParam = string | number | boolean | null | undefined;
@@ -612,7 +614,7 @@ export class UnifiedDatabase {
 
     constructor() {
         this.pool = new Pool({
-            connectionString: process.env.DATABASE_URL || 'postgresql://localhost:5432/openmake_llm'
+            connectionString: getConfig().databaseUrl
         });
 
         // 스키마 초기화 — Promise를 보관하여 초기 쿼리가 스키마 완료를 대기할 수 있도록 함
@@ -624,7 +626,7 @@ export class UnifiedDatabase {
     }
 
     private async initSchema(): Promise<void> {
-        await this.pool.query(SCHEMA);
+        await this.retryQuery(SCHEMA);
     }
 
     /**
@@ -642,10 +644,22 @@ export class UnifiedDatabase {
         return this.pool;
     }
 
+    /**
+     * 재시도 가능한 쿼리 래퍼
+     * 일시적 연결 오류 시 자동 재시도 (지수 백오프)
+     */
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    private retryQuery(text: string, params?: QueryParam[]): Promise<QueryResult<any>> {
+        return withRetry(
+            () => this.pool.query(text, params),
+            { operation: text.substring(0, 50) }
+        );
+    }
+
     // ===== 사용자 관리 =====
 
     async createUser(id: string, username: string, passwordHash: string, email?: string, role: string = 'user') {
-        const result = await this.pool.query(
+        const result = await this.retryQuery(
             `INSERT INTO users (id, username, password_hash, email, role) VALUES ($1, $2, $3, $4, $5)`,
             [id, username, passwordHash, email, role]
         );
@@ -653,29 +667,29 @@ export class UnifiedDatabase {
     }
 
     async getUserByUsername(username: string): Promise<User | undefined> {
-        const result = await this.pool.query('SELECT * FROM users WHERE username = $1', [username]);
+        const result = await this.retryQuery('SELECT * FROM users WHERE username = $1', [username]);
         return result.rows[0] as User | undefined;
     }
 
     async getUserById(id: string): Promise<User | undefined> {
-        const result = await this.pool.query('SELECT * FROM users WHERE id = $1', [id]);
+        const result = await this.retryQuery('SELECT * FROM users WHERE id = $1', [id]);
         return result.rows[0] as User | undefined;
     }
 
     async updateLastLogin(userId: string) {
-        const result = await this.pool.query('UPDATE users SET last_login = NOW() WHERE id = $1', [userId]);
+        const result = await this.retryQuery('UPDATE users SET last_login = NOW() WHERE id = $1', [userId]);
         return result;
     }
 
     async getAllUsers(limit: number = 50): Promise<User[]> {
-        const result = await this.pool.query('SELECT * FROM users ORDER BY created_at DESC LIMIT $1', [limit]);
+        const result = await this.retryQuery('SELECT * FROM users ORDER BY created_at DESC LIMIT $1', [limit]);
         return result.rows as User[];
     }
 
     // ===== 대화 관리 =====
 
     async createSession(id: string, userId?: string, title?: string, metadata?: Record<string, unknown> | null) {
-        const result = await this.pool.query(
+        const result = await this.retryQuery(
             `INSERT INTO conversation_sessions (id, user_id, title, metadata) VALUES ($1, $2, $3, $4)`,
             [id, userId, title || '새 대화', JSON.stringify(metadata || {})]
         );
@@ -689,7 +703,7 @@ export class UnifiedDatabase {
         tokens?: number;
         responseTimeMs?: number;
     }) {
-        const result = await this.pool.query(
+        const result = await this.retryQuery(
             `INSERT INTO conversation_messages 
             (session_id, role, content, model, agent_id, thinking, tokens, response_time_ms)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
@@ -703,7 +717,7 @@ export class UnifiedDatabase {
     }
 
     async getSessionMessages(sessionId: string, limit: number = 100): Promise<ConversationMessage[]> {
-        const result = await this.pool.query(
+        const result = await this.retryQuery(
             `SELECT * FROM conversation_messages WHERE session_id = $1 ORDER BY created_at ASC LIMIT $2`,
             [sessionId, limit]
         );
@@ -711,7 +725,7 @@ export class UnifiedDatabase {
     }
 
     async getUserSessions(userId: string, limit: number = 50): Promise<ConversationSession[]> {
-        const result = await this.pool.query(
+        const result = await this.retryQuery(
             `SELECT * FROM conversation_sessions WHERE user_id = $1 ORDER BY updated_at DESC LIMIT $2`,
             [userId, limit]
         );
@@ -719,7 +733,7 @@ export class UnifiedDatabase {
     }
 
     async getAllSessions(limit: number = 50): Promise<ConversationSession[]> {
-        const result = await this.pool.query(
+        const result = await this.retryQuery(
             `SELECT * FROM conversation_sessions ORDER BY updated_at DESC LIMIT $1`,
             [limit]
         );
@@ -727,14 +741,14 @@ export class UnifiedDatabase {
     }
 
     async deleteSession(sessionId: string) {
-        const result = await this.pool.query('DELETE FROM conversation_sessions WHERE id = $1', [sessionId]);
+        const result = await this.retryQuery('DELETE FROM conversation_sessions WHERE id = $1', [sessionId]);
         return { changes: result.rowCount || 0 };
     }
 
     // ===== API 사용량 관리 =====
 
     async recordApiUsage(date: string, apiKeyId: string, requests: number, tokens: number, errors: number, avgResponseTime: number, models: Record<string, unknown>) {
-        const result = await this.pool.query(
+        const result = await this.retryQuery(
             `INSERT INTO api_usage (date, api_key_id, requests, tokens, errors, avg_response_time, models)
             VALUES ($1, $2, $3, $4, $5, $6, $7)
             ON CONFLICT(date, api_key_id) DO UPDATE SET
@@ -750,7 +764,7 @@ export class UnifiedDatabase {
     }
 
     async getDailyUsage(days: number = 7) {
-        const result = await this.pool.query(
+        const result = await this.retryQuery(
             `SELECT date, SUM(requests) as requests, SUM(tokens) as tokens, SUM(errors) as errors, AVG(avg_response_time) as avg_response_time
             FROM api_usage
             WHERE date >= (CURRENT_DATE - $1 * INTERVAL '1 day')::text
@@ -774,7 +788,7 @@ export class UnifiedDatabase {
         success?: boolean;
         errorMessage?: string;
     }) {
-        const result = await this.pool.query(
+        const result = await this.retryQuery(
             `INSERT INTO agent_usage_logs 
             (user_id, session_id, agent_id, query, response_preview, response_time_ms, tokens_used, success, error_message)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
@@ -790,7 +804,7 @@ export class UnifiedDatabase {
     }
 
     async getAgentStats(agentId: string) {
-        const result = await this.pool.query(
+        const result = await this.retryQuery(
             `SELECT 
                 COUNT(*) as total_requests,
                 SUM(CASE WHEN success = TRUE THEN 1 ELSE 0 END) as successful_requests,
@@ -814,7 +828,7 @@ export class UnifiedDatabase {
         ipAddress?: string;
         userAgent?: string;
     }) {
-        const result = await this.pool.query(
+        const result = await this.retryQuery(
             `INSERT INTO audit_logs 
             (action, user_id, resource_type, resource_id, details, ip_address, user_agent)
             VALUES ($1, $2, $3, $4, $5, $6, $7)`,
@@ -827,7 +841,7 @@ export class UnifiedDatabase {
     }
 
     async getAuditLogs(limit: number = 100) {
-        const result = await this.pool.query(
+        const result = await this.retryQuery(
             `SELECT * FROM audit_logs ORDER BY timestamp DESC LIMIT $1`,
             [limit]
         );
@@ -844,7 +858,7 @@ export class UnifiedDatabase {
         const stats: Record<string, number> = {};
 
         for (const table of tables) {
-            const result = await this.pool.query(`SELECT COUNT(*) as count FROM ${table}`);
+            const result = await this.retryQuery(`SELECT COUNT(*) as count FROM ${table}`);
             stats[table] = parseInt(result.rows[0].count, 10);
         }
 
@@ -865,29 +879,31 @@ export class UnifiedDatabase {
         sourceSessionId?: string;
         tags?: string[];
     }): Promise<void> {
-        await this.pool.query(
-            `INSERT INTO user_memories (id, user_id, category, key, value, importance, source_session_id)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
-            ON CONFLICT(user_id, category, key) DO UPDATE SET
-                value = EXCLUDED.value,
-                importance = CASE WHEN EXCLUDED.importance > user_memories.importance THEN EXCLUDED.importance ELSE user_memories.importance END,
-                updated_at = NOW(),
-                access_count = user_memories.access_count + 1`,
-            [
-                params.id, params.userId, params.category,
-                params.key, params.value, params.importance || 0.5,
-                params.sourceSessionId
-            ]
-        );
-
-        // 태그 저장 (멀티 로우 INSERT로 N+1 쿼리 방지)
-        if (params.tags && params.tags.length > 0) {
-            const tagValues = params.tags.map((_, i) => `($1, $${i + 2})`).join(', ');
-            await this.pool.query(
-                `INSERT INTO memory_tags (memory_id, tag) VALUES ${tagValues} ON CONFLICT DO NOTHING`,
-                [params.id, ...params.tags]
+        await withTransaction(this.pool, async (client) => {
+            await client.query(
+                `INSERT INTO user_memories (id, user_id, category, key, value, importance, source_session_id)
+                VALUES ($1, $2, $3, $4, $5, $6, $7)
+                ON CONFLICT(user_id, category, key) DO UPDATE SET
+                    value = EXCLUDED.value,
+                    importance = CASE WHEN EXCLUDED.importance > user_memories.importance THEN EXCLUDED.importance ELSE user_memories.importance END,
+                    updated_at = NOW(),
+                    access_count = user_memories.access_count + 1`,
+                [
+                    params.id, params.userId, params.category,
+                    params.key, params.value, params.importance || 0.5,
+                    params.sourceSessionId
+                ]
             );
-        }
+
+            // 태그 저장 (멀티 로우 INSERT로 N+1 쿼리 방지)
+            if (params.tags && params.tags.length > 0) {
+                const tagValues = params.tags.map((_, i) => `($1, $${i + 2})`).join(', ');
+                await client.query(
+                    `INSERT INTO memory_tags (memory_id, tag) VALUES ${tagValues} ON CONFLICT DO NOTHING`,
+                    [params.id, ...params.tags]
+                );
+            }
+        });
     }
 
     async getUserMemories(userId: string, options?: {
@@ -915,7 +931,7 @@ export class UnifiedDatabase {
             params.push(options.limit);
         }
 
-        const result = await this.pool.query(query, params);
+        const result = await this.retryQuery(query, params);
         return result.rows as UserMemory[];
     }
 
@@ -948,13 +964,13 @@ export class UnifiedDatabase {
         `;
 
         // access_count 업데이트
-        const result = await this.pool.query(sqlQuery, params);
+        const result = await this.retryQuery(sqlQuery, params);
         const rows = result.rows as UserMemory[];
         
         if (rows.length > 0) {
             const ids = rows.map(m => m.id);
             const idPlaceholders = ids.map((_, i) => `$${i + 1}`).join(',');
-            await this.pool.query(
+            await this.retryQuery(
                 `UPDATE user_memories 
                 SET access_count = access_count + 1, last_accessed = NOW() 
                 WHERE id IN (${idPlaceholders})`,
@@ -980,15 +996,15 @@ export class UnifiedDatabase {
         }
 
         params.push(memoryId);
-        await this.pool.query(`UPDATE user_memories SET ${sets.join(', ')} WHERE id = $${paramIdx}`, params);
+        await this.retryQuery(`UPDATE user_memories SET ${sets.join(', ')} WHERE id = $${paramIdx}`, params);
     }
 
     async deleteMemory(memoryId: string): Promise<void> {
-        await this.pool.query('DELETE FROM user_memories WHERE id = $1', [memoryId]);
+        await this.retryQuery('DELETE FROM user_memories WHERE id = $1', [memoryId]);
     }
 
     async deleteUserMemories(userId: string): Promise<void> {
-        await this.pool.query('DELETE FROM user_memories WHERE user_id = $1', [userId]);
+        await this.retryQuery('DELETE FROM user_memories WHERE user_id = $1', [userId]);
     }
 
     // ============================================
@@ -1001,14 +1017,14 @@ export class UnifiedDatabase {
         topic: string;
         depth?: ResearchDepth;
     }): Promise<void> {
-        await this.pool.query(
+        await this.retryQuery(
             `INSERT INTO research_sessions (id, user_id, topic, depth) VALUES ($1, $2, $3, $4)`,
             [params.id, params.userId, params.topic, params.depth || 'standard']
         );
     }
 
     async getResearchSession(sessionId: string): Promise<ResearchSession | undefined> {
-        const result = await this.pool.query('SELECT * FROM research_sessions WHERE id = $1', [sessionId]);
+        const result = await this.retryQuery('SELECT * FROM research_sessions WHERE id = $1', [sessionId]);
         const row = result.rows[0];
         if (!row) return undefined;
 
@@ -1055,7 +1071,7 @@ export class UnifiedDatabase {
         }
 
         params.push(sessionId);
-        await this.pool.query(`UPDATE research_sessions SET ${sets.join(', ')} WHERE id = $${paramIdx}`, params);
+        await this.retryQuery(`UPDATE research_sessions SET ${sets.join(', ')} WHERE id = $${paramIdx}`, params);
     }
 
     async addResearchStep(params: {
@@ -1067,7 +1083,7 @@ export class UnifiedDatabase {
         sources?: string[];
         status?: string;
     }): Promise<void> {
-        await this.pool.query(
+        await this.retryQuery(
             `INSERT INTO research_steps (session_id, step_number, step_type, query, result, sources, status)
             VALUES ($1, $2, $3, $4, $5, $6, $7)`,
             [
@@ -1080,7 +1096,7 @@ export class UnifiedDatabase {
     }
 
     async getResearchSteps(sessionId: string): Promise<ResearchStep[]> {
-        const result = await this.pool.query(
+        const result = await this.retryQuery(
             `SELECT * FROM research_steps WHERE session_id = $1 ORDER BY step_number ASC`,
             [sessionId]
         );
@@ -1091,7 +1107,7 @@ export class UnifiedDatabase {
     }
 
     async getUserResearchSessions(userId: string, limit: number = 20): Promise<ResearchSession[]> {
-        const result = await this.pool.query(
+        const result = await this.retryQuery(
             `SELECT * FROM research_sessions WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2`,
             [userId, limit]
         );
@@ -1118,7 +1134,7 @@ export class UnifiedDatabase {
         icon?: string;
         price?: number;
     }): Promise<void> {
-        await this.pool.query(
+        await this.retryQuery(
             `INSERT INTO agent_marketplace 
             (id, agent_id, author_id, title, description, long_description, category, tags, icon, price, is_free)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
@@ -1177,7 +1193,7 @@ export class UnifiedDatabase {
             params.push(options.offset);
         }
 
-        const result = await this.pool.query(query, params);
+        const result = await this.retryQuery(query, params);
         return result.rows.map((row) => ({
             ...row,
             tags: row.tags || [],
@@ -1188,7 +1204,7 @@ export class UnifiedDatabase {
     }
 
     async getMarketplaceAgent(marketplaceId: string): Promise<MarketplaceAgent | undefined> {
-        const result = await this.pool.query('SELECT * FROM agent_marketplace WHERE id = $1', [marketplaceId]);
+        const result = await this.retryQuery('SELECT * FROM agent_marketplace WHERE id = $1', [marketplaceId]);
         const row = result.rows[0];
         if (!row) return undefined;
 
@@ -1202,7 +1218,7 @@ export class UnifiedDatabase {
     }
 
     async updateMarketplaceStatus(marketplaceId: string, status: MarketplaceStatus): Promise<void> {
-        await this.pool.query(
+        await this.retryQuery(
             `UPDATE agent_marketplace 
             SET status = $1, updated_at = NOW(),
                 published_at = CASE WHEN $1 = 'approved' THEN NOW() ELSE published_at END
@@ -1212,29 +1228,31 @@ export class UnifiedDatabase {
     }
 
     async installAgent(marketplaceId: string, userId: string): Promise<void> {
-        const result = await this.pool.query(
-            `INSERT INTO agent_installations (marketplace_id, user_id)
-            VALUES ($1, $2) ON CONFLICT DO NOTHING`,
-            [marketplaceId, userId]
-        );
-
-        if ((result.rowCount || 0) > 0) {
-            await this.pool.query(
-                'UPDATE agent_marketplace SET downloads = downloads + 1 WHERE id = $1',
-                [marketplaceId]
+        await withTransaction(this.pool, async (client) => {
+            const result = await client.query(
+                `INSERT INTO agent_installations (marketplace_id, user_id)
+                VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+                [marketplaceId, userId]
             );
-        }
+
+            if ((result.rowCount || 0) > 0) {
+                await client.query(
+                    'UPDATE agent_marketplace SET downloads = downloads + 1 WHERE id = $1',
+                    [marketplaceId]
+                );
+            }
+        });
     }
 
     async uninstallAgent(marketplaceId: string, userId: string): Promise<void> {
-        await this.pool.query(
+        await this.retryQuery(
             'DELETE FROM agent_installations WHERE marketplace_id = $1 AND user_id = $2',
             [marketplaceId, userId]
         );
     }
 
     async getUserInstalledAgents(userId: string): Promise<MarketplaceAgent[]> {
-        const result = await this.pool.query(
+        const result = await this.retryQuery(
             `SELECT m.* FROM agent_marketplace m
             JOIN agent_installations i ON m.id = i.marketplace_id
             WHERE i.user_id = $1
@@ -1258,28 +1276,30 @@ export class UnifiedDatabase {
         title?: string;
         content?: string;
     }): Promise<void> {
-        await this.pool.query(
-            `INSERT INTO agent_reviews (id, marketplace_id, user_id, rating, title, content)
-            VALUES ($1, $2, $3, $4, $5, $6)
-            ON CONFLICT(marketplace_id, user_id) DO UPDATE SET
-                rating = EXCLUDED.rating,
-                title = EXCLUDED.title,
-                content = EXCLUDED.content`,
-            [params.id, params.marketplaceId, params.userId, params.rating, params.title, params.content]
-        );
+        await withTransaction(this.pool, async (client) => {
+            await client.query(
+                `INSERT INTO agent_reviews (id, marketplace_id, user_id, rating, title, content)
+                VALUES ($1, $2, $3, $4, $5, $6)
+                ON CONFLICT(marketplace_id, user_id) DO UPDATE SET
+                    rating = EXCLUDED.rating,
+                    title = EXCLUDED.title,
+                    content = EXCLUDED.content`,
+                [params.id, params.marketplaceId, params.userId, params.rating, params.title, params.content]
+            );
 
-        // 평균 평점 업데이트
-        await this.pool.query(
-            `UPDATE agent_marketplace SET
-                rating_avg = (SELECT AVG(rating) FROM agent_reviews WHERE marketplace_id = $1),
-                rating_count = (SELECT COUNT(*) FROM agent_reviews WHERE marketplace_id = $1)
-            WHERE id = $1`,
-            [params.marketplaceId]
-        );
+            // 평균 평점 업데이트
+            await client.query(
+                `UPDATE agent_marketplace SET
+                    rating_avg = (SELECT AVG(rating) FROM agent_reviews WHERE marketplace_id = $1),
+                    rating_count = (SELECT COUNT(*) FROM agent_reviews WHERE marketplace_id = $1)
+                WHERE id = $1`,
+                [params.marketplaceId]
+            );
+        });
     }
 
     async getAgentReviews(marketplaceId: string, limit: number = 20): Promise<AgentReview[]> {
-        const result = await this.pool.query(
+        const result = await this.retryQuery(
             `SELECT * FROM agent_reviews WHERE marketplace_id = $1 ORDER BY created_at DESC LIMIT $2`,
             [marketplaceId, limit]
         );
@@ -1299,7 +1319,7 @@ export class UnifiedDatabase {
         content?: string;
         language?: string;
     }): Promise<void> {
-        await this.pool.query(
+        await this.retryQuery(
             `INSERT INTO canvas_documents (id, user_id, session_id, title, doc_type, content, language)
             VALUES ($1, $2, $3, $4, $5, $6, $7)`,
             [
@@ -1311,7 +1331,7 @@ export class UnifiedDatabase {
     }
 
     async getCanvasDocument(documentId: string): Promise<CanvasDocument | undefined> {
-        const result = await this.pool.query('SELECT * FROM canvas_documents WHERE id = $1', [documentId]);
+        const result = await this.retryQuery('SELECT * FROM canvas_documents WHERE id = $1', [documentId]);
         const row = result.rows[0];
         if (!row) return undefined;
 
@@ -1327,40 +1347,42 @@ export class UnifiedDatabase {
         changeSummary?: string;
         updatedBy?: string;
     }): Promise<void> {
-        // 버전 히스토리 저장
-        const current = await this.getCanvasDocument(documentId);
-        if (current && updates.content !== undefined && updates.content !== current.content) {
-            await this.pool.query(
-                `INSERT INTO canvas_versions (document_id, version, content, change_summary, created_by)
-                VALUES ($1, $2, $3, $4, $5)`,
-                [
-                    documentId, current.version, current.content || '',
-                    updates.changeSummary || 'Auto-saved version',
-                    updates.updatedBy
-                ]
-            );
-        }
+        await withTransaction(this.pool, async (client) => {
+            // 버전 히스토리 저장
+            const current = await this.getCanvasDocument(documentId);
+            if (current && updates.content !== undefined && updates.content !== current.content) {
+                await client.query(
+                    `INSERT INTO canvas_versions (document_id, version, content, change_summary, created_by)
+                    VALUES ($1, $2, $3, $4, $5)`,
+                    [
+                        documentId, current.version, current.content || '',
+                        updates.changeSummary || 'Auto-saved version',
+                        updates.updatedBy
+                    ]
+                );
+            }
 
-        const sets: string[] = ['updated_at = NOW()'];
-        const params: QueryParam[] = [];
-        let paramIdx = 1;
+            const sets: string[] = ['updated_at = NOW()'];
+            const params: QueryParam[] = [];
+            let paramIdx = 1;
 
-        if (updates.title !== undefined) {
-            sets.push(`title = $${paramIdx++}`);
-            params.push(updates.title);
-        }
-        if (updates.content !== undefined) {
-            sets.push(`content = $${paramIdx++}`);
-            sets.push('version = version + 1');
-            params.push(updates.content);
-        }
+            if (updates.title !== undefined) {
+                sets.push(`title = $${paramIdx++}`);
+                params.push(updates.title);
+            }
+            if (updates.content !== undefined) {
+                sets.push(`content = $${paramIdx++}`);
+                sets.push('version = version + 1');
+                params.push(updates.content);
+            }
 
-        params.push(documentId);
-        await this.pool.query(`UPDATE canvas_documents SET ${sets.join(', ')} WHERE id = $${paramIdx}`, params);
+            params.push(documentId);
+            await client.query(`UPDATE canvas_documents SET ${sets.join(', ')} WHERE id = $${paramIdx}`, params);
+        });
     }
 
     async getCanvasVersions(documentId: string): Promise<CanvasVersion[]> {
-        const result = await this.pool.query(
+        const result = await this.retryQuery(
             `SELECT * FROM canvas_versions WHERE document_id = $1 ORDER BY version DESC`,
             [documentId]
         );
@@ -1368,7 +1390,7 @@ export class UnifiedDatabase {
     }
 
     async getUserCanvasDocuments(userId: string, limit: number = 50): Promise<CanvasDocument[]> {
-        const result = await this.pool.query(
+        const result = await this.retryQuery(
             `SELECT * FROM canvas_documents WHERE user_id = $1 ORDER BY updated_at DESC LIMIT $2`,
             [userId, limit]
         );
@@ -1379,14 +1401,14 @@ export class UnifiedDatabase {
     }
 
     async shareCanvasDocument(documentId: string, shareToken: string): Promise<void> {
-        await this.pool.query(
+        await this.retryQuery(
             `UPDATE canvas_documents SET is_shared = TRUE, share_token = $1, updated_at = NOW() WHERE id = $2`,
             [shareToken, documentId]
         );
     }
 
     async getCanvasDocumentByShareToken(shareToken: string): Promise<CanvasDocument | undefined> {
-        const result = await this.pool.query(
+        const result = await this.retryQuery(
             'SELECT * FROM canvas_documents WHERE share_token = $1 AND is_shared = TRUE',
             [shareToken]
         );
@@ -1400,7 +1422,7 @@ export class UnifiedDatabase {
     }
 
     async deleteCanvasDocument(documentId: string): Promise<void> {
-        await this.pool.query('DELETE FROM canvas_documents WHERE id = $1', [documentId]);
+        await this.retryQuery('DELETE FROM canvas_documents WHERE id = $1', [documentId]);
     }
 
     // ============================================
@@ -1418,7 +1440,7 @@ export class UnifiedDatabase {
         accountName?: string;
         metadata?: Record<string, any>;
     }): Promise<void> {
-        await this.pool.query(
+        await this.retryQuery(
             `INSERT INTO external_connections 
             (id, user_id, service_type, access_token, refresh_token, token_expires_at, account_email, account_name, metadata)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
@@ -1441,7 +1463,7 @@ export class UnifiedDatabase {
     }
 
     async getUserConnections(userId: string): Promise<ExternalConnection[]> {
-        const result = await this.pool.query(
+        const result = await this.retryQuery(
             `SELECT * FROM external_connections WHERE user_id = $1 AND is_active = TRUE ORDER BY created_at DESC`,
             [userId]
         );
@@ -1453,7 +1475,7 @@ export class UnifiedDatabase {
     }
 
     async getExternalConnection(connectionId: string): Promise<ExternalConnection | undefined> {
-        const result = await this.pool.query('SELECT * FROM external_connections WHERE id = $1', [connectionId]);
+        const result = await this.retryQuery('SELECT * FROM external_connections WHERE id = $1', [connectionId]);
         const row = result.rows[0];
         if (!row) return undefined;
 
@@ -1465,7 +1487,7 @@ export class UnifiedDatabase {
     }
 
     async getUserConnectionByService(userId: string, serviceType: ExternalServiceType): Promise<ExternalConnection | undefined> {
-        const result = await this.pool.query(
+        const result = await this.retryQuery(
             'SELECT * FROM external_connections WHERE user_id = $1 AND service_type = $2 AND is_active = TRUE',
             [userId, serviceType]
         );
@@ -1484,7 +1506,7 @@ export class UnifiedDatabase {
         refreshToken?: string;
         expiresAt?: string;
     }): Promise<void> {
-        await this.pool.query(
+        await this.retryQuery(
             `UPDATE external_connections 
             SET access_token = $1, refresh_token = COALESCE($2, refresh_token), token_expires_at = $3, updated_at = NOW()
             WHERE id = $4`,
@@ -1493,7 +1515,7 @@ export class UnifiedDatabase {
     }
 
     async disconnectService(userId: string, serviceType: ExternalServiceType): Promise<void> {
-        await this.pool.query(
+        await this.retryQuery(
             `UPDATE external_connections 
             SET is_active = FALSE, access_token = NULL, refresh_token = NULL, updated_at = NOW()
             WHERE user_id = $1 AND service_type = $2`,
@@ -1512,7 +1534,7 @@ export class UnifiedDatabase {
         webUrl?: string;
         cachedContent?: string;
     }): Promise<void> {
-        await this.pool.query(
+        await this.retryQuery(
             `INSERT INTO external_files 
             (id, connection_id, external_id, file_name, file_type, file_size, web_url, cached_content, last_synced)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
@@ -1532,7 +1554,7 @@ export class UnifiedDatabase {
     }
 
     async getConnectionFiles(connectionId: string, limit: number = 100): Promise<ExternalFile[]> {
-        const result = await this.pool.query(
+        const result = await this.retryQuery(
             `SELECT * FROM external_files WHERE connection_id = $1 ORDER BY last_synced DESC LIMIT $2`,
             [connectionId, limit]
         );
@@ -1540,7 +1562,7 @@ export class UnifiedDatabase {
     }
 
     async getCachedFile(connectionId: string, externalId: string): Promise<ExternalFile | undefined> {
-        const result = await this.pool.query(
+        const result = await this.retryQuery(
             'SELECT * FROM external_files WHERE connection_id = $1 AND external_id = $2',
             [connectionId, externalId]
         );
@@ -1552,7 +1574,7 @@ export class UnifiedDatabase {
     // ============================================
 
     async getMcpServers(): Promise<MCPServerRow[]> {
-        const result = await this.pool.query(
+        const result = await this.retryQuery(
             'SELECT * FROM mcp_servers ORDER BY created_at DESC'
         );
         return result.rows.map((row: DbRow) => ({
@@ -1564,7 +1586,7 @@ export class UnifiedDatabase {
     }
 
     async getMcpServerById(id: string): Promise<MCPServerRow | null> {
-        const result = await this.pool.query(
+        const result = await this.retryQuery(
             'SELECT * FROM mcp_servers WHERE id = $1',
             [id]
         );
@@ -1580,7 +1602,7 @@ export class UnifiedDatabase {
     }
 
     async createMcpServer(server: Omit<MCPServerRow, 'created_at' | 'updated_at'>): Promise<MCPServerRow> {
-        const result = await this.pool.query(
+        const result = await this.retryQuery(
             `INSERT INTO mcp_servers (id, name, transport_type, command, args, env, url, enabled)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             RETURNING *`,
@@ -1635,7 +1657,7 @@ export class UnifiedDatabase {
         }
 
         params.push(id);
-        const result = await this.pool.query(
+        const result = await this.retryQuery(
             `UPDATE mcp_servers SET ${sets.join(', ')} WHERE id = $${paramIdx} RETURNING *`,
             params
         );
@@ -1652,7 +1674,7 @@ export class UnifiedDatabase {
     }
 
     async deleteMcpServer(id: string): Promise<boolean> {
-        const result = await this.pool.query(
+        const result = await this.retryQuery(
             'DELETE FROM mcp_servers WHERE id = $1',
             [id]
         );

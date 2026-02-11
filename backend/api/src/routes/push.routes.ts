@@ -34,7 +34,7 @@ router.get('/vapid-key', (req: Request, res: Response) => {
         res.json(success({ publicKey }));
     } catch (error: unknown) {
         console.error('[Push] VAPID key 조회 실패:', error);
-        res.status(500).json(internalError(error instanceof Error ? error.message : String(error)));
+        res.status(500).json(internalError('Push 처리 실패'));
     }
 });
 
@@ -63,7 +63,7 @@ router.post('/subscribe', (req: Request, res: Response) => {
         res.json(success({ message: 'Push 구독이 등록되었습니다.' }));
     } catch (error: unknown) {
         console.error('[Push] 구독 등록 실패:', error);
-        res.status(500).json(internalError(error instanceof Error ? error.message : String(error)));
+        res.status(500).json(internalError('Push 처리 실패'));
     }
 });
 
@@ -85,7 +85,7 @@ router.post('/unsubscribe', (req: Request, res: Response) => {
         res.json(success({ message: deleted ? 'Push 구독이 해제되었습니다.' : '해당 구독을 찾을 수 없습니다.' }));
     } catch (error: unknown) {
         console.error('[Push] 구독 해제 실패:', error);
-        res.status(500).json(internalError(error instanceof Error ? error.message : String(error)));
+        res.status(500).json(internalError('Push 처리 실패'));
     }
 });
 

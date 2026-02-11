@@ -6,6 +6,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { getApiKeyManager } from './api-key-manager';
+import { getConfig } from '../config/env';
 
 interface UsageRecord {
     date: string;        // YYYY-MM-DD
@@ -100,10 +101,11 @@ interface QuotaStatus {
  * 🆕 환경변수에서 할당량 한계 로드
  */
 function getQuotaLimits(): QuotaLimits {
+    const config = getConfig();
     return {
-        hourlyLimit: parseInt(process.env.OLLAMA_HOURLY_LIMIT || '150', 10),
-        weeklyLimit: parseInt(process.env.OLLAMA_WEEKLY_LIMIT || '2500', 10),
-        monthlyPremiumLimit: parseInt(process.env.OLLAMA_MONTHLY_PREMIUM_LIMIT || '5', 10)
+        hourlyLimit: config.ollamaHourlyLimit,
+        weeklyLimit: config.ollamaWeeklyLimit,
+        monthlyPremiumLimit: config.ollamaMonthlyPremiumLimit
     };
 }
 
@@ -502,8 +504,9 @@ class ApiUsageTracker {
      * 🆕 모든 키의 할당량 상태 조회 (4개 키 지원)
      */
     private getKeysQuotaStatus(): { primary: KeyQuotaStatus; secondary: KeyQuotaStatus } {
-        const key1 = process.env.OLLAMA_API_KEY_1 || process.env.OLLAMA_API_KEY_PRIMARY || '';
-        const key2 = process.env.OLLAMA_API_KEY_2 || process.env.OLLAMA_API_KEY_SECONDARY || '';
+        const cfg = getConfig();
+        const key1 = process.env.OLLAMA_API_KEY_1 || cfg.ollamaApiKeyPrimary;
+        const key2 = process.env.OLLAMA_API_KEY_2 || cfg.ollamaApiKeySecondary;
 
         // ApiKeyManager에서 현재 활성 키 인덱스 확인
         let activeIndex = 0;
