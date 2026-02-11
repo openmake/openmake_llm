@@ -20,6 +20,7 @@ import { getPromptConfig } from '../chat/prompt';
 import { getSequentialThinkingServer, applySequentialThinking } from '../mcp/sequential-thinking';
 import { getGptOssTaskPreset, isGeminiModel, ModelOptions } from '../ollama/types';
 import { selectOptimalModel, adjustOptionsForModel, checkModelCapability, ModelSelection } from '../chat/model-selector';
+import { ExecutionPlan } from '../chat/profile-resolver';
 import { DocumentResult } from '../documents/processor';
 import { DocumentStore } from '../documents/store';
 import { createDiscussionEngine, DiscussionProgress, DiscussionResult } from '../agents/discussion-engine';
@@ -261,7 +262,8 @@ export class ChatService {
         onToken: (token: string) => void,
         onAgentSelected?: (agent: { type: string; name: string; emoji?: string; phase?: string; reason?: string; confidence?: number }) => void,
         onDiscussionProgress?: (progress: DiscussionProgress) => void,
-        onResearchProgress?: (progress: ResearchProgress) => void
+        onResearchProgress?: (progress: ResearchProgress) => void,
+        executionPlan?: ExecutionPlan
     ): Promise<string> {
         const { message, history, docId, images, webSearchContext, discussionMode, deepResearchMode, thinkingMode, thinkingLevel, userId, userRole, userTier, abortSignal } = req;
 
@@ -352,13 +354,29 @@ export class ChatService {
         // ⚙️ 5. 프롬프트 및 옵션 설정 + 🆕 모델 자동 선택
         const promptConfig = getPromptConfig(message);
         
-        // 🆕 질문 유형 기반 모델 자동 선택
+        // §9 Pipeline Profile: brand model이면 프로파일 엔진 사용, 아니면 기존 자동 선택
         const hasImages = (images && images.length > 0) || documentImages.length > 0;
-        const modelSelection = selectOptimalModel(message, hasImages);
-        console.log(`[ChatService] 🎯 모델 자동 선택: ${modelSelection.model} (${modelSelection.reason})`);
+        let modelSelection: ModelSelection;
         
-        // 🆕 선택된 모델로 클라이언트 설정 업데이트
-        this.client.setModel(modelSelection.model);
+        if (executionPlan?.isBrandModel) {
+            // Brand model → 프로파일의 엔진 모델 사용 (자동 선택 바이패스)
+            console.log(`[ChatService] §9 Brand Model: ${executionPlan.requestedModel} → engine=${executionPlan.resolvedEngine}`);
+            this.client.setModel(executionPlan.resolvedEngine);
+            modelSelection = {
+                model: executionPlan.resolvedEngine,
+                options: promptConfig.options || {},
+                reason: `Brand model ${executionPlan.requestedModel} → ${executionPlan.resolvedEngine}`,
+                queryType: 'chat',
+                supportsToolCalling: true,
+                supportsThinking: true,
+                supportsVision: executionPlan.requiredTools.includes('vision'),
+            };
+        } else {
+            // 기존 질문 유형 기반 자동 선택
+            modelSelection = selectOptimalModel(message, hasImages);
+            console.log(`[ChatService] 🎯 모델 자동 선택: ${modelSelection.model} (${modelSelection.reason})`);
+            this.client.setModel(modelSelection.model);
+        }
         
         // 🆕 질문 유형에 맞게 옵션 조정
         let chatOptions = adjustOptionsForModel(
@@ -383,7 +401,8 @@ export class ChatService {
 
         // 🗣️ 6. LLM 호출 (Chat vs Generate) with Agent Loop
         let metrics: Record<string, unknown> = {};
-        const maxTurns = 5;
+        // §9 Pipeline Profile: agentLoopMax 적용 (기본 5)
+        const maxTurns = executionPlan?.agentLoopMax ?? 5;
         let currentTurn = 0;
         let finalResponse = '';
 
@@ -416,28 +435,39 @@ export class ChatService {
             ...(currentImages.length > 0 && { images: currentImages })
         });
 
+        // §9 Pipeline Profile: A2A 전략 결정
+        // - 'always': 항상 A2A 실행
+        // - 'conditional': 기본 A2A 시도 (기존 동작)
+        // - 'off': A2A 건너뛰고 단일 모델만 사용
+        const a2aStrategy = executionPlan?.profile?.a2a ?? 'conditional';
+        const skipA2A = a2aStrategy === 'off';
+
         // 🔀 A2A Multi-Model Parallel Answering (기본 플로우)
         let a2aSucceeded = false;
-        try {
-            checkAborted();
-            console.log('[ChatService] 🔀 A2A 병렬 응답 시작...');
-            const a2aResponse = await this.processA2AParallel(
-                currentHistory,
-                chatOptions,
-                (token) => {
-                    fullResponse += token;
-                    onToken(token);
-                },
-                abortSignal
-            );
-            if (a2aResponse !== null) {
-                finalResponse = a2aResponse;
-                a2aSucceeded = true;
-                console.log('[ChatService] ✅ A2A 병렬 응답 완료');
+        if (!skipA2A) {
+            try {
+                checkAborted();
+                console.log(`[ChatService] 🔀 A2A 병렬 응답 시작... (strategy: ${a2aStrategy})`);
+                const a2aResponse = await this.processA2AParallel(
+                    currentHistory,
+                    chatOptions,
+                    (token) => {
+                        fullResponse += token;
+                        onToken(token);
+                    },
+                    abortSignal
+                );
+                if (a2aResponse !== null) {
+                    finalResponse = a2aResponse;
+                    a2aSucceeded = true;
+                    console.log('[ChatService] ✅ A2A 병렬 응답 완료');
+                }
+            } catch (e) {
+                if (e instanceof Error && e.message === 'ABORTED') throw e;
+                console.warn('[ChatService] ⚠️ A2A 실패, 단일 모델로 폴백:', e instanceof Error ? e.message : e);
             }
-        } catch (e) {
-            if (e instanceof Error && e.message === 'ABORTED') throw e;
-            console.warn('[ChatService] ⚠️ A2A 실패, 단일 모델로 폴백:', e instanceof Error ? e.message : e);
+        } else {
+            console.log('[ChatService] ⏭️ A2A 건너뜀 (strategy: off)');
         }
 
         // 🔄 A2A 실패 시 기존 단일 모델 Agent Loop 폴백
@@ -461,8 +491,12 @@ export class ChatService {
                     allowedTools = toolRouter.getOllamaTools(userTierForTools) as ToolDefinition[];
                 }
 
-                // 🆕 Thinking 모드도 모델 호환성 체크
-                const thinkOption = (thinkingMode && supportsThinking) ? (thinkingLevel || 'high') : undefined;
+                // §9 Pipeline Profile: thinking level 적용 (프로파일 > 사용자 요청)
+                const profileThinking = executionPlan?.thinkingLevel;
+                const effectiveThinking = profileThinking && profileThinking !== 'off'
+                    ? profileThinking
+                    : (thinkingMode ? (thinkingLevel || 'high') : undefined);
+                const thinkOption = (effectiveThinking && supportsThinking) ? effectiveThinking : undefined;
                 
                 const response = await this.client.chat(
                     currentHistory,
@@ -537,8 +571,8 @@ export class ChatService {
                 responseTime: responseTime,
                 model: this.client.model,
                 apiKeyId: currentKey ? currentKey.substring(0, 8) : undefined,
-                // New logic: if available
-                // preciseMetrics: ...
+                // §9 Pipeline Profile ID 추적
+                profileId: executionPlan?.isBrandModel ? executionPlan.requestedModel : undefined,
             });
 
             // 2. Metrics Collector (Real-time Memory)

@@ -50,6 +50,13 @@ async function recoverSessionFromCookie() {
                 localStorage.removeItem('guestMode');
                 localStorage.removeItem('isGuest');
 
+                // 🔒 OAuth 세션 마커: httpOnly 쿠키 기반 인증 표시
+                // spa-router.js의 isAuthenticated()가 이 값을 확인하여 인증 상태 유지
+                if (!localStorage.getItem('authToken')) {
+                    localStorage.setItem('authToken', 'cookie-session');
+                    setState('auth.authToken', 'cookie-session');
+                }
+
                 setState('auth.currentUser', user);
                 setState('auth.isGuestMode', false);
 

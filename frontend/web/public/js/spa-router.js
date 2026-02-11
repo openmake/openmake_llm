@@ -54,9 +54,11 @@
      */
     function isAuthenticated() {
         const authToken = localStorage.getItem('authToken');
+        // OAuth 로그인 시 httpOnly 쿠키만 있고 authToken은 없을 수 있음 -> user 객체 확인
+        const user = localStorage.getItem('user');
         const isGuest = localStorage.getItem('guestMode') === 'true' ||
                         localStorage.getItem('isGuest') === 'true';
-        return !!authToken && !isGuest;
+        return (!!authToken || !!user) && !isGuest;
     }
 
     /**
@@ -478,6 +480,9 @@
         var href = anchor.getAttribute('href');
         if (!href) return;
 
+        // 해시 전용 링크는 브라우저 기본 동작 (페이지 내 스크롤)
+        if (href.charAt(0) === '#') return;
+
         // data-spa-ignore 속성 있으면 무시
         if (anchor.hasAttribute('data-spa-ignore')) return;
 
@@ -505,6 +510,12 @@
      */
     function handlePopstate(event) {
         var path = (event.state && event.state.path) || window.location.pathname;
+        // 해시만 변경된 경우 (같은 페이지 내 앵커 이동) 네비게이션 스킵
+        var currentPath = _currentRoute ? _currentRoute.path : null;
+        if (currentPath && normalizePath(path) === currentPath && window.location.hash) {
+            log('popstate: 해시 변경만 감지 — 스킵:', window.location.hash);
+            return;
+        }
         log('popstate:', path);
         executeNavigation(path, { popstate: true });
     }

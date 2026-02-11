@@ -15,6 +15,7 @@ interface UsageRecord {
     errors: number;
     avgResponseTime: number;
     models: Record<string, number>;  // 모델별 사용량
+    profiles?: Record<string, number>; // §9 프로파일(brand alias)별 사용량
 }
 
 interface HourlyRecord {
@@ -196,6 +197,7 @@ class ApiUsageTracker {
         model?: string;
         error?: boolean;
         apiKeyId?: string;  // 🆕 API 키 식별자
+        profileId?: string; // §9 Pipeline Profile ID (brand model alias)
         promptTokens?: number;
         completionTokens?: number;
         totalDuration?: number;
@@ -231,6 +233,12 @@ class ApiUsageTracker {
         // 모델별 사용량
         if (params.model) {
             record.models[params.model] = (record.models[params.model] || 0) + 1;
+        }
+
+        // §9 프로파일(brand alias)별 사용량
+        if (params.profileId) {
+            if (!record.profiles) record.profiles = {};
+            record.profiles[params.profileId] = (record.profiles[params.profileId] || 0) + 1;
         }
 
         // 시간별 기록

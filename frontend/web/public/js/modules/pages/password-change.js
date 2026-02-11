@@ -30,8 +30,8 @@
         }
         function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 
-        // 로그인 확인
-        if (!localStorage.getItem('authToken')) {
+        // 로그인 확인 (OAuth 쿠키 세션 포함)
+        if (!localStorage.getItem('authToken') && !localStorage.getItem('user')) {
             (typeof showToast === 'function' ? showToast('로그인이 필요합니다.', 'warning') : console.warn('로그인이 필요합니다.'));
             (typeof Router !== 'undefined' && Router.navigate('/'));
         }

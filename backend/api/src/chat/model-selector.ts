@@ -11,6 +11,7 @@
 
 import { getConfig } from '../config/env';
 import { ModelOptions } from '../ollama/types';
+import { isValidBrandModel, getProfiles } from './pipeline-profile';
 
 // ============================================================
 // 질문 유형 정의
@@ -572,6 +573,45 @@ export function adjustOptionsForModel(
     }
 
     return adjustedOptions;
+}
+
+// ============================================================
+// §9 Brand Model Alias 지원
+// ============================================================
+
+/**
+ * Brand model alias를 감지하여 프로파일 기반 ModelSelection을 반환합니다.
+ * Brand model이 아닌 경우 null을 반환합니다.
+ * 
+ * @param requestedModel - 요청된 모델명 (예: "openmake_llm_pro")
+ * @returns ModelSelection 또는 null
+ */
+export function selectModelForProfile(requestedModel: string): ModelSelection | null {
+    if (!isValidBrandModel(requestedModel)) {
+        return null;
+    }
+
+    const profiles = getProfiles();
+    const profile = profiles[requestedModel];
+    if (!profile) return null;
+
+    console.log(`[ModelSelector] §9 Brand Model: ${requestedModel} → engine=${profile.engineModel}`);
+
+    return {
+        model: profile.engineModel,
+        options: {
+            temperature: profile.thinking === 'high' ? 0.3 : profile.thinking === 'off' ? 0.7 : 0.5,
+            num_ctx: profile.contextStrategy === 'full' ? 65536 : 32768,
+        },
+        reason: `Brand model ${profile.displayName} → ${profile.engineModel}`,
+        queryType: profile.promptStrategy === 'force_coder' ? 'code'
+            : profile.promptStrategy === 'force_reasoning' ? 'math'
+            : profile.promptStrategy === 'force_creative' ? 'creative'
+            : 'chat',
+        supportsToolCalling: true,
+        supportsThinking: profile.thinking !== 'off',
+        supportsVision: profile.requiredTools.includes('vision'),
+    };
 }
 
 // ============================================================

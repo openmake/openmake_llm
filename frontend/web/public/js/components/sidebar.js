@@ -10,10 +10,11 @@ class SharedSidebar {
         this.currentPage = window.location.pathname;
     }
 
-    // 인증 상태 확인
+    // 인증 상태 확인 (OAuth 쿠키 세션도 포함)
     isLoggedIn() {
         const authToken = localStorage.getItem('authToken');
-        return !!authToken;
+        const user = localStorage.getItem('user');
+        return !!authToken || !!user;
     }
 
     isGuestMode() {
@@ -241,8 +242,9 @@ function initTheme() {
 function checkPageAccess(restrictedPages = []) {
     const currentPage = window.location.pathname;
     const authToken = localStorage.getItem('authToken');
+    const user = localStorage.getItem('user');
     const isGuest = localStorage.getItem('isGuest') === 'true';
-    const isAuthenticated = authToken && !isGuest;
+    const isAuthenticated = (authToken || user) && !isGuest;
 
     if (restrictedPages.includes(currentPage) && !isAuthenticated) {
         // 제한된 페이지에 비인증 사용자가 접근 시 로그인 페이지로 리디렉션

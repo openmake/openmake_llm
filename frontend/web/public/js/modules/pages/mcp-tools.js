@@ -22,11 +22,12 @@
             try {
                 const API_BASE = window.location.origin;
 
-        // 인증 상태 확인
+        // 인증 상태 확인 (OAuth 쿠키 세션 포함)
         function isAuthenticated() {
             const authToken = localStorage.getItem('authToken');
+            const user = localStorage.getItem('user');
             const isGuest = localStorage.getItem('isGuest') === 'true';
-            return authToken || isGuest;
+            return authToken || user || isGuest;
         }
 
         function isGuestMode() {

@@ -212,19 +212,19 @@
                             <div class="info-grid">
                                 <div class="info-item">
                                     <div class="info-label">버전</div>
-                                    <div class="info-value">v1.5.0</div>
+                                    <div class="info-value" id="sysVersion">로딩...</div>
                                 </div>
                                 <div class="info-item">
                                     <div class="info-label">서버 상태</div>
-                                    <div class="info-value" style="color: var(--success);">● 온라인</div>
+                                    <div class="info-value" id="sysStatus">확인 중...</div>
                                 </div>
                                 <div class="info-item">
                                     <div class="info-label">활성 노드</div>
-                                    <div class="info-value" id="activeNodes">-</div>
+                                    <div class="info-value" id="sysNodes">-</div>
                                 </div>
                                 <div class="info-item">
                                     <div class="info-label">마지막 업데이트</div>
-                                    <div class="info-value">2026-01-01</div>
+                                    <div class="info-value" id="sysLastUpdate">-</div>
                                 </div>
                             </div>
                         </div>
@@ -284,7 +284,32 @@
             }
         }
 
-        async function initSettings() { await loadModels(); loadSettings(); }
+        async function loadSystemInfo() {
+            try {
+                const res = await fetch('/health');
+                if (res.ok) {
+                    const json = await res.json();
+                    const d = json.data || json;
+                    const verEl = document.getElementById('sysVersion');
+                    const statusEl = document.getElementById('sysStatus');
+                    const nodesEl = document.getElementById('sysNodes');
+                    const updateEl = document.getElementById('sysLastUpdate');
+                    if (verEl) verEl.textContent = 'v' + (d.version || '?');
+                    if (statusEl) {
+                        statusEl.textContent = '● ' + (d.status === 'healthy' ? '온라인' : '오프라인');
+                        statusEl.style.color = d.status === 'healthy' ? 'var(--success)' : 'var(--error)';
+                    }
+                    if (nodesEl && d.cluster) {
+                        nodesEl.textContent = d.cluster.onlineNodes + '/' + d.cluster.totalNodes + ' (' + d.cluster.totalModels + ' 모델)';
+                    }
+                    if (updateEl && d.build && d.build.gitDate) {
+                        updateEl.textContent = d.build.gitDate;
+                    }
+                }
+            } catch (e) { console.warn('시스템 정보 로드 실패:', e); }
+        }
+
+        async function initSettings() { await loadModels(); loadSettings(); loadSystemInfo(); }
 
         function setTheme(theme) { document.documentElement.setAttribute('data-theme', theme); localStorage.setItem('theme', theme); }
 

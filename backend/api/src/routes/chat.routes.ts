@@ -26,6 +26,7 @@ import { asyncHandler } from '../utils/error-handler';
 import { optionalAuth } from '../auth';
 import { validate } from '../middlewares/validation';
 import { chatRequestSchema } from '../schemas';
+import { buildExecutionPlan, ExecutionPlan } from '../chat/profile-resolver';
 
 const router = Router();
 let clusterManager: ClusterManager;
@@ -45,13 +46,19 @@ export function setClusterManager(cluster: ClusterManager): void {
 router.post('/', optionalAuth, validate(chatRequestSchema), asyncHandler(async (req: Request, res: Response) => {
      const { message, model, nodeId, history, sessionId, anonSessionId } = req.body;
 
+     // §9 Pipeline Profile: brand model alias → ExecutionPlan 변환
+     const executionPlan: ExecutionPlan = buildExecutionPlan(model || '');
+     const engineModel = executionPlan.resolvedEngine || model;
+     // 외부 응답용 모델명: brand model이면 alias 유지, 아니면 실제 모델명
+     const displayModel = executionPlan.isBrandModel ? executionPlan.requestedModel : undefined;
+
      // 🔒 Phase 2: createScopedClient로 요청별 격리된 클라이언트 사용
      let client;
      if (nodeId && nodeId.length < 10) {
-         client = clusterManager.createScopedClient(nodeId, model);
+         client = clusterManager.createScopedClient(nodeId, engineModel);
      } else {
-         const bestNode = clusterManager.getBestNode(model);
-         client = bestNode ? clusterManager.createScopedClient(bestNode.id, model) : undefined;
+         const bestNode = clusterManager.getBestNode(engineModel);
+         client = bestNode ? clusterManager.createScopedClient(bestNode.id, engineModel) : undefined;
      }
 
      if (!client) {
@@ -73,10 +80,11 @@ router.post('/', optionalAuth, validate(chatRequestSchema), asyncHandler(async (
          console.log(`[Chat] 새 세션 생성: ${currentSessionId}, userId: ${authenticatedUserId || 'null'}, anonSessionId: ${anonSessionId || 'none'}`);
      }
 
-     // 사용자 메시지 저장
-     await conversationDb.addMessage(currentSessionId, 'user', message, { model: client.model });
+     // 사용자 메시지 저장 — 외부에는 brand alias만 노출
+     const maskedModel = displayModel || client.model;
+     await conversationDb.addMessage(currentSessionId, 'user', message, { model: maskedModel });
 
-     // ChatService를 사용하여 메시지 처리
+     // ChatService를 사용하여 메시지 처리 (ExecutionPlan 전달)
      const chatService = new ChatService(client);
      const startTime = Date.now();
 
@@ -87,23 +95,41 @@ router.post('/', optionalAuth, validate(chatRequestSchema), asyncHandler(async (
              docId: req.body.docId,
              images: req.body.images,
              webSearchContext: req.body.webSearchContext,
-             discussionMode: req.body.discussionMode
+             discussionMode: executionPlan.useDiscussion || req.body.discussionMode,
+             thinkingMode: executionPlan.thinkingLevel !== 'off' || req.body.thinkingMode,
+             thinkingLevel: executionPlan.thinkingLevel !== 'off' ? executionPlan.thinkingLevel : req.body.thinkingLevel,
          },
          uploadedDocuments,
-         () => { /* 일반 채팅은 스트리밍 안 함 */ }
+         () => { /* 일반 채팅은 스트리밍 안 함 */ },
+         undefined,
+         undefined,
+         undefined,
+         executionPlan
      );
 
      const endTime = Date.now();
 
-     // AI 응답 저장
+     // AI 응답 저장 — 외부에는 brand alias만 노출
      await conversationDb.addMessage(currentSessionId, 'assistant', response, {
-         model: client.model,
+         model: maskedModel,
          responseTime: endTime - startTime
      });
 
+     // §9 디버그 정보 (x-omk-debug 헤더가 있을 때만 노출)
+     const debugRequested = req.headers['x-omk-debug'] === 'true';
+     const pipelineInfo = debugRequested && executionPlan.isBrandModel ? {
+         profile: executionPlan.requestedModel,
+         engine: executionPlan.resolvedEngine,
+         a2a: executionPlan.useAgentLoop,
+         thinking: executionPlan.thinkingLevel,
+         discussion: executionPlan.useDiscussion,
+     } : undefined;
+
       res.json(success({
           response,
-          sessionId: currentSessionId
+          sessionId: currentSessionId,
+          model: maskedModel,
+          ...(pipelineInfo && { pipeline_info: pipelineInfo }),
       }));
 }));
 

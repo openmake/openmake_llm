@@ -32,6 +32,14 @@ declare global {
             user?: PublicUser | AuthUser;
             token?: string;
             cookies?: Record<string, string>;
+
+            /** API Key 인증 정보 (Phase 2) */
+            authMethod?: 'jwt' | 'api-key';
+            apiKeyId?: string;
+            apiKeyRecord?: import('../data/models/unified-database').UserApiKey;
+
+            /** Request ID (Phase 2) */
+            requestId?: string;
         }
     }
 }

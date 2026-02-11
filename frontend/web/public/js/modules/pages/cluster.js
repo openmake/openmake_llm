@@ -26,8 +26,9 @@
         // 인증 체크 (게스트/비로그인 접근 제한)
         (function checkAuthAccess() {
             const authToken = localStorage.getItem('authToken');
+            const user = localStorage.getItem('user');
             const isGuest = localStorage.getItem('isGuest') === 'true';
-            if (!authToken || isGuest) {
+            if ((!authToken && !user) || isGuest) {
                 (typeof showToast === 'function' ? showToast('이 페이지는 로그인이 필요합니다.', 'warning') : console.warn('이 페이지는 로그인이 필요합니다.'));
                 (typeof Router !== 'undefined' && Router.navigate('/'));
             }

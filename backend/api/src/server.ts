@@ -61,11 +61,14 @@ import {
     // 🆕 Push 알림 라우트
     pushRouter,
     // 🆕 모델 정보 라우트
-    modelRouter
+    modelRouter,
+    // 🆕 Developer Documentation 라우트
+    developerDocsRouter
 } from './routes';
 import { tokenMonitoringRouter } from './routes/token-monitoring.routes';
 import v1Router from './routes/v1';
 import { requestLogger, analyticsMiddleware, generalLimiter, chatLimiter, authLimiter, corsMiddleware } from './middlewares';
+import { requestIdMiddleware } from './middlewares/request-id';
 import { bootstrapServices } from './bootstrap';
 import { getConnectionPool } from './ollama/connection-pool';
 import { getAnalyticsSystem } from './monitoring/analytics';
@@ -197,7 +200,7 @@ export class DashboardServer {
             'canvas', 'research', 'mcp-tools', 'marketplace', 'custom-agents',
             'agent-learning', 'cluster', 'usage', 'analytics', 'admin-metrics',
             'admin', 'audit', 'external', 'alerts', 'memory', 'settings',
-            'password-change', 'history', 'guide'
+            'password-change', 'history', 'guide', 'developer', 'api-keys'
         ]);
         this.app.use((req: Request, res: Response, next: NextFunction) => {
             // .html 요청이면서 SPA 페이지에 해당하는 경우 index.html 서빙
@@ -309,6 +312,7 @@ export class DashboardServer {
         // ============================================
         // 🆕 고도화 미들웨어 및 라우트
         // ============================================
+        this.app.use(requestIdMiddleware);     // Request ID 생성 (추적용)
         this.app.use(requestLogger);           // 요청 로깅
         this.app.use(analyticsMiddleware);     // 분석 데이터 수집
 
@@ -363,6 +367,7 @@ export class DashboardServer {
         this.app.use('/api/external', externalRouter);        // 🆕 외부 연동 API
         this.app.use('/api/marketplace', marketplaceRouter);  // 🆕 마켓플레이스 API
         this.app.use('/api/push', pushRouter);                 // 🆕 Push 알림 API
+        this.app.use('/api/docs', developerDocsRouter);          // 🆕 Developer Documentation API
 
         // 🆕 Swagger API 문서화
         setupSwaggerRoutes(this.app);
