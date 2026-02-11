@@ -192,6 +192,23 @@ export function getProfiles(): Record<string, PipelineProfile> {
             timeBudgetSeconds: 0,
             requiredTools: ['vision'],
         },
+
+        // ── 7. openmake_llm_auto — Smart Auto-Routing ──
+        'openmake_llm_auto': {
+            id: 'openmake_llm_auto',
+            displayName: 'OpenMake LLM Auto',
+            description: '스마트 자동 라우팅 — 질문 유형에 따라 최적 모델 자동 선택 (코딩, 분석, 창작, 비전 등)',
+            engineModel: '__auto__',
+            a2a: 'conditional',
+            thinking: 'medium',
+            discussion: false,
+            promptStrategy: 'auto',
+            agentLoopMax: 5,
+            loopStrategy: 'auto',
+            contextStrategy: 'auto',
+            timeBudgetSeconds: 0,
+            requiredTools: [],
+        },
     };
 }
 

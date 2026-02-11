@@ -196,6 +196,7 @@
                 '<tr><td><span class="param-name">openmake_llm_think</span></td><td>Deep Reasoning</td><td>Math, logic, complex analysis</td></tr>' +
                 '<tr><td><span class="param-name">openmake_llm_code</span></td><td>Code Specialist</td><td>Programming, debugging, refactoring</td></tr>' +
                 '<tr><td><span class="param-name">openmake_llm_vision</span></td><td>Multimodal</td><td>Image analysis, OCR</td></tr>' +
+                '<tr><td><span class="param-name">openmake_llm_auto</span></td><td>Smart Auto-Routing</td><td>Automatically routes to <strong>pro</strong>, <strong>fast</strong>, <strong>think</strong>, <strong>code</strong>, or <strong>vision</strong> based on query type</td></tr>' +
                 '</tbody></table>' +
 
                 // Feature matrix / Capabilities comparison
@@ -212,6 +213,7 @@
                 '<tr><td><span class="param-name">openmake_llm_think</span></td><td>Always</td><td>High</td><td>—</td><td>—</td><td>10</td><td>Unlimited</td></tr>' +
                 '<tr><td><span class="param-name">openmake_llm_code</span></td><td>Conditional</td><td>Medium</td><td>—</td><td>—</td><td>8</td><td>Unlimited</td></tr>' +
                 '<tr><td><span class="param-name">openmake_llm_vision</span></td><td>Conditional</td><td>Medium</td><td>—</td><td>✓</td><td>3</td><td>Unlimited</td></tr>' +
+                '<tr><td><span class="param-name">openmake_llm_auto</span></td><td>Auto (per routed model)</td><td>Auto</td><td>Auto</td><td>Auto</td><td>Auto</td><td>Auto</td></tr>' +
                 '</tbody></table>' +
 
                 '<div class="alert-info" style="margin-top: 1rem; padding: 0.75rem 1rem; border-left: 3px solid #3b82f6; background: rgba(59,130,246,0.08); border-radius: 4px;">' +
