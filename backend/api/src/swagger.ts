@@ -729,7 +729,7 @@ AI 채팅 어시스턴트 API 문서
                                             items: {
                                                 type: 'object',
                                                 properties: {
-                                                    id: { type: 'string', example: 'openmake_llm' },
+                                                    id: { type: 'string', example: 'openmake_llm_auto' },
                                                     object: { type: 'string', example: 'model' },
                                                     name: { type: 'string', example: 'OpenMake LLM' },
                                                     description: { type: 'string' },

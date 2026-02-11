@@ -19,8 +19,8 @@ import { routeToAgent, getAgentSystemMessage, AGENTS } from '../agents';
 import { getPromptConfig } from '../chat/prompt';
 import { getSequentialThinkingServer, applySequentialThinking } from '../mcp/sequential-thinking';
 import { getGptOssTaskPreset, isGeminiModel, ModelOptions } from '../ollama/types';
-import { selectOptimalModel, adjustOptionsForModel, checkModelCapability, ModelSelection } from '../chat/model-selector';
-import { ExecutionPlan } from '../chat/profile-resolver';
+import { selectOptimalModel, adjustOptionsForModel, checkModelCapability, ModelSelection, selectBrandProfileForAutoRouting } from '../chat/model-selector';
+import { ExecutionPlan, buildExecutionPlan } from '../chat/profile-resolver';
 import { DocumentResult } from '../documents/processor';
 import { DocumentStore } from '../documents/store';
 import { createDiscussionEngine, DiscussionProgress, DiscussionResult } from '../agents/discussion-engine';
@@ -358,7 +358,41 @@ export class ChatService {
         const hasImages = (images && images.length > 0) || documentImages.length > 0;
         let modelSelection: ModelSelection;
         
-        if (executionPlan?.isBrandModel) {
+        if (executionPlan?.isBrandModel && executionPlan.resolvedEngine === '__auto__') {
+            // §9 Auto-Routing: 질문 유형에 따라 brand model 프로파일로 라우팅
+            const targetBrandProfile = selectBrandProfileForAutoRouting(message, hasImages);
+            const autoExecutionPlan = buildExecutionPlan(targetBrandProfile);
+            
+            console.log(`[ChatService] 🤖 Auto-Routing: ${executionPlan.requestedModel} → ${targetBrandProfile} (engine=${autoExecutionPlan.resolvedEngine})`);
+            
+            // 선택된 프로파일의 ExecutionPlan을 현재 executionPlan에 덮어쓰기
+            // (이후 코드에서 executionPlan의 agentLoopMax, thinkingLevel, a2a 등을 참조)
+            executionPlan.resolvedEngine = autoExecutionPlan.resolvedEngine;
+            executionPlan.profile = autoExecutionPlan.profile;
+            executionPlan.useAgentLoop = autoExecutionPlan.useAgentLoop;
+            executionPlan.agentLoopMax = autoExecutionPlan.agentLoopMax;
+            executionPlan.loopStrategy = autoExecutionPlan.loopStrategy;
+            executionPlan.thinkingLevel = autoExecutionPlan.thinkingLevel;
+            executionPlan.useDiscussion = autoExecutionPlan.useDiscussion;
+            executionPlan.promptStrategy = autoExecutionPlan.promptStrategy;
+            executionPlan.contextStrategy = autoExecutionPlan.contextStrategy;
+            executionPlan.timeBudgetMs = autoExecutionPlan.timeBudgetMs;
+            executionPlan.requiredTools = autoExecutionPlan.requiredTools;
+            
+            this.client.setModel(autoExecutionPlan.resolvedEngine);
+            modelSelection = {
+                model: autoExecutionPlan.resolvedEngine,
+                options: promptConfig.options || {},
+                reason: `Auto-Routing ${executionPlan.requestedModel} → ${targetBrandProfile} → ${autoExecutionPlan.resolvedEngine}`,
+                queryType: autoExecutionPlan.promptStrategy === 'force_coder' ? 'code'
+                    : autoExecutionPlan.promptStrategy === 'force_reasoning' ? 'math'
+                    : autoExecutionPlan.promptStrategy === 'force_creative' ? 'creative'
+                    : 'chat',
+                supportsToolCalling: true,
+                supportsThinking: autoExecutionPlan.thinkingLevel !== 'off',
+                supportsVision: autoExecutionPlan.requiredTools.includes('vision'),
+            };
+        } else if (executionPlan?.isBrandModel) {
             // Brand model → 프로파일의 엔진 모델 사용 (자동 선택 바이패스)
             console.log(`[ChatService] §9 Brand Model: ${executionPlan.requestedModel} → engine=${executionPlan.resolvedEngine}`);
             this.client.setModel(executionPlan.resolvedEngine);
@@ -372,7 +406,7 @@ export class ChatService {
                 supportsVision: executionPlan.requiredTools.includes('vision'),
             };
         } else {
-            // 기존 질문 유형 기반 자동 선택
+            // 일반 모델 (brand model이 아닌 경우) → 질문 유형 기반 자동 선택
             modelSelection = selectOptimalModel(message, hasImages);
             console.log(`[ChatService] 🎯 모델 자동 선택: ${modelSelection.model} (${modelSelection.reason})`);
             this.client.setModel(modelSelection.model);

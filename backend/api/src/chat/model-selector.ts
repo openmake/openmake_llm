@@ -586,7 +586,7 @@ export function adjustOptionsForModel(
  * @param requestedModel - 요청된 모델명 (예: "openmake_llm_pro")
  * @returns ModelSelection 또는 null
  */
-export function selectModelForProfile(requestedModel: string): ModelSelection | null {
+export function selectModelForProfile(requestedModel: string, query?: string, hasImages?: boolean): ModelSelection | null {
     if (!isValidBrandModel(requestedModel)) {
         return null;
     }
@@ -594,6 +594,36 @@ export function selectModelForProfile(requestedModel: string): ModelSelection | 
     const profiles = getProfiles();
     const profile = profiles[requestedModel];
     if (!profile) return null;
+
+    // __auto__ 엔진: brand model 프로파일 자동 라우팅
+    // 이 함수에서는 brand model 프로파일 ID만 반환 (실제 라우팅은 ChatService에서 buildExecutionPlan 사용)
+    if (profile.engineModel === '__auto__') {
+        const targetProfile = selectBrandProfileForAutoRouting(query || '', hasImages);
+        const targetProfiles = getProfiles();
+        const resolvedProfile = targetProfiles[targetProfile];
+        if (resolvedProfile) {
+            console.log(`[ModelSelector] §9 Auto-Routing: ${requestedModel} → ${targetProfile} (engine=${resolvedProfile.engineModel})`);
+            return {
+                model: resolvedProfile.engineModel,
+                options: {
+                    temperature: resolvedProfile.thinking === 'high' ? 0.3 : resolvedProfile.thinking === 'off' ? 0.7 : 0.5,
+                    num_ctx: resolvedProfile.contextStrategy === 'full' ? 65536 : 32768,
+                },
+                reason: `Auto-Routing → ${resolvedProfile.displayName} → ${resolvedProfile.engineModel}`,
+                queryType: resolvedProfile.promptStrategy === 'force_coder' ? 'code'
+                    : resolvedProfile.promptStrategy === 'force_reasoning' ? 'math'
+                    : resolvedProfile.promptStrategy === 'force_creative' ? 'creative'
+                    : 'chat',
+                supportsToolCalling: true,
+                supportsThinking: resolvedProfile.thinking !== 'off',
+                supportsVision: resolvedProfile.requiredTools.includes('vision'),
+            };
+        }
+        // Fallback: 프로파일을 못 찾으면 기존 자동 선택
+        const autoSelection = selectOptimalModel(query || '', hasImages);
+        console.log(`[ModelSelector] §9 Auto-Routing Fallback: ${requestedModel} → ${autoSelection.model}`);
+        return autoSelection;
+    }
 
     console.log(`[ModelSelector] §9 Brand Model: ${requestedModel} → engine=${profile.engineModel}`);
 
@@ -612,6 +642,78 @@ export function selectModelForProfile(requestedModel: string): ModelSelection | 
         supportsThinking: profile.thinking !== 'off',
         supportsVision: profile.requiredTools.includes('vision'),
     };
+}
+
+// ============================================================
+// §9 Auto-Routing: Brand Model 프로파일 자동 라우팅
+// ============================================================
+
+/**
+ * openmake_llm_auto 사용 시 질문 유형에 따라 적합한 brand model 프로파일 ID를 반환합니다.
+ * 
+ * 내부 엔진 모델이 아닌 brand model 프로파일(openmake_llm_pro, _fast, _think, _code, _vision)로
+ * 라우팅하여 해당 프로파일의 전체 ExecutionPlan(에이전트 루프, thinking, 프롬프트 전략 등)을 적용합니다.
+ * 
+ * 매핑 (5개 대상 모델: pro/fast/think/code/vision):
+ *   code           → openmake_llm_code    (코드 전문)
+ *   math           → openmake_llm_think   (심층 추론)
+ *   creative       → openmake_llm_pro     (프리미엄 창작)
+ *   analysis       → openmake_llm_pro     (복잡한 분석)
+ *   document       → openmake_llm_pro     (문서 분석)
+ *   vision         → openmake_llm_vision  (멀티모달)
+ *   translation    → openmake_llm_pro     (고품질 번역)
+ *   korean         → openmake_llm_pro     (한국어 고품질)
+ *   chat (간단)    → openmake_llm_fast    (빠른 응답)
+ *   chat (복잡)    → openmake_llm_pro     (프리미엄 대화)
+ * 
+ * @param query - 사용자 질문 텍스트
+ * @param hasImages - 이미지 첨부 여부
+ * @returns brand model 프로파일 ID (예: 'openmake_llm_code')
+ */
+export function selectBrandProfileForAutoRouting(query: string, hasImages?: boolean): string {
+    // 이미지가 첨부되면 무조건 vision 프로파일
+    if (hasImages) {
+        console.log('[ModelSelector] §9 Auto-Routing: 이미지 감지 → openmake_llm_vision');
+        return 'openmake_llm_vision';
+    }
+
+    const classification = classifyQuery(query);
+    let targetProfile: string;
+
+    switch (classification.type) {
+        case 'code':
+            targetProfile = 'openmake_llm_code';
+            break;
+        case 'math':
+            targetProfile = 'openmake_llm_think';
+            break;
+        case 'creative':
+        case 'analysis':
+        case 'document':
+            targetProfile = 'openmake_llm_pro';
+            break;
+        case 'vision':
+            targetProfile = 'openmake_llm_vision';
+            break;
+        case 'chat':
+            // 짧은 인사/간단한 질문은 fast, 복잡한 대화는 pro
+            if (classification.confidence < 0.3 && query.length < 50) {
+                targetProfile = 'openmake_llm_fast';
+            } else {
+                targetProfile = 'openmake_llm_pro';
+            }
+            break;
+        case 'translation':
+        case 'korean':
+            targetProfile = 'openmake_llm_pro';
+            break;
+        default:
+            targetProfile = 'openmake_llm_fast';
+            break;
+    }
+
+    console.log(`[ModelSelector] §9 Auto-Routing: ${classification.type} (confidence=${(classification.confidence * 100).toFixed(0)}%) → ${targetProfile}`);
+    return targetProfile;
 }
 
 // ============================================================

@@ -48,7 +48,9 @@ router.post('/', optionalAuth, validate(chatRequestSchema), asyncHandler(async (
 
      // §9 Pipeline Profile: brand model alias → ExecutionPlan 변환
      const executionPlan: ExecutionPlan = buildExecutionPlan(model || '');
-     const engineModel = executionPlan.resolvedEngine || model;
+     // __auto__ 프로파일: 노드 탐색 시 기본 모델 사용 (실제 모델은 ChatService에서 동적 결정)
+     const isAutoRouting = executionPlan.resolvedEngine === '__auto__';
+     const engineModel = isAutoRouting ? '' : (executionPlan.resolvedEngine || model);
      // 외부 응답용 모델명: brand model이면 alias 유지, 아니면 실제 모델명
      const displayModel = executionPlan.isBrandModel ? executionPlan.requestedModel : undefined;
 
