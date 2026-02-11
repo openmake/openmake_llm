@@ -134,24 +134,29 @@
     },
     "2026-02-11": {
       "date": "2026-02-11",
-      "requests": 3,
-      "tokens": 7868,
+      "requests": 21,
+      "tokens": 47712,
       "errors": 0,
-      "avgResponseTime": 31384,
+      "avgResponseTime": 31929,
       "models": {
-        "gemini-3-flash-preview:cloud": 3
+        "gemini-3-flash-preview:cloud": 12,
+        "qwen3:30b-a3b": 2,
+        "gemini-3-pro-preview:cloud": 7
+      },
+      "profiles": {
+        "openmake_llm_auto": 15
       }
     }
   },
-  "lastUpdated": "2026-02-11T04:21:20.027Z",
+  "lastUpdated": "2026-02-11T23:00:33.763Z",
   "perKey": {
     "0918b987": {
       "keyId": "0918b987",
-      "totalRequests": 87,
-      "weeklyRequests": 9,
-      "hourlyRequests": 1,
+      "totalRequests": 103,
+      "weeklyRequests": 25,
+      "hourlyRequests": 3,
       "lastReset": "2026-02-09",
-      "lastHourReset": 13
+      "lastHourReset": 7
     },
     "bef62434": {
       "keyId": "bef62434",
@@ -163,11 +168,11 @@
     },
     "87c261cf": {
       "keyId": "87c261cf",
-      "totalRequests": 7,
-      "weeklyRequests": 6,
-      "hourlyRequests": 6,
-      "lastReset": "2026-01-27",
-      "lastHourReset": 23
+      "totalRequests": 9,
+      "weeklyRequests": 2,
+      "hourlyRequests": 1,
+      "lastReset": "2026-02-11",
+      "lastHourReset": 8
     },
     "ac691dae": {
       "keyId": "ac691dae",
