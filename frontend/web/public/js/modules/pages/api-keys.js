@@ -180,10 +180,10 @@
                     '<div class="s-card-body">' +
                         '<p style="color:var(--text-secondary); margin-bottom:var(--space-4); font-size:var(--font-size-sm);">터미널에서 다음 명령어로 API를 테스트해보세요:</p>' +
                         '<div class="ak-code-block">' +
-                            '<span class="ak-code-keyword">curl</span> -X POST https://api.openmake.ai/api/v1/chat/completions \\<br>' +
+                            '<span class="ak-code-keyword">curl</span> -X POST http://rasplay.tplinkdns.com:52416/api/v1/chat \\<br>' +
                             '&nbsp;&nbsp;-H <span class="ak-code-string">"X-API-Key: YOUR_KEY"</span> \\<br>' +
                             '&nbsp;&nbsp;-H <span class="ak-code-string">"Content-Type: application/json"</span> \\<br>' +
-                            '&nbsp;&nbsp;-d <span class="ak-code-string">\'{"model":"openmake_llm","messages":[{"role":"user","content":"Hello!"}]}\'</span>' +
+                            '&nbsp;&nbsp;-d <span class="ak-code-string">\'{"message":"Hello!","model":"openmake_llm"}\'</span>' +
                         '</div>' +
                         '<div style="margin-top:var(--space-4); text-align:right;">' +
                             '<a href="/developer.html" style="color:var(--accent-primary); text-decoration:none; font-size:var(--font-size-sm); font-weight:var(--font-weight-medium);">📄 전체 API 문서 보기 &rarr;</a>' +

@@ -135,7 +135,7 @@
                 '<li><a href="#intro" class="dev-sidebar-link">Introduction</a></li>' +
                 '<li><a href="#auth" class="dev-sidebar-link">Authentication</a></li>' +
                 '<li><a href="#models" class="dev-sidebar-link">Available Models</a></li>' +
-                '<li><a href="#chat" class="dev-sidebar-link">Chat Completions</a></li>' +
+                '<li><a href="#chat" class="dev-sidebar-link">Chat</a></li>' +
                 '<li><a href="#apikeys" class="dev-sidebar-link">API Keys</a>' +
                     '<ul class="dev-sidebar-sub">' +
                         '<li><a href="#create-key" class="dev-sidebar-link">Create Key</a></li>' +
@@ -159,8 +159,8 @@
                 '<p class="text-lg">Build AI-powered applications with the OpenMake LLM API. Our API is designed to be compatible with standard industry formats, making integration seamless.</p>' +
                 '<div class="intro-card">' +
                 '<h3 class="text-accent">Base URL</h3>' +
-                '<code style="font-size: 1.1em; background: var(--bg-tertiary); padding: var(--space-2) var(--space-4); border-radius: var(--radius-md); display: block; margin-top: var(--space-2);">https://api.openmake.ai/api/v1</code>' +
-                '<p style="margin-top: var(--space-4); font-size: var(--font-size-sm);">All API requests must be made over HTTPS. Calls made over plain HTTP will fail. API requests without authentication will also fail.</p>' +
+                '<code style="font-size: 1.1em; background: var(--bg-tertiary); padding: var(--space-2) var(--space-4); border-radius: var(--radius-md); display: block; margin-top: var(--space-2);">http://rasplay.tplinkdns.com:52416/api/v1</code>' +
+                '<p style="margin-top: var(--space-4); font-size: var(--font-size-sm);">All API requests require authentication. API requests without a valid API key will fail.</p>' +
                 '</div>' +
                 '</section>';
 
@@ -178,9 +178,9 @@
                 '<li style="margin-bottom: 8px;"><strong>Query Parameter:</strong> <code>?api_key=omk_live_...</code></li>' +
                 '</ol>' +
                 
-                getCodeBlock('curl', 'curl https://api.openmake.ai/api/v1/models \\\n  -H "X-API-Key: omk_live_sk_xxxxxxxxxxxxxxxxxxxx"', 
-                             'python', 'import requests\n\nheaders = {"X-API-Key": "omk_live_sk_xxxxxxxxxxxxxxxxxxxx"}\nresponse = requests.get("https://api.openmake.ai/api/v1/models", headers=headers)',
-                             'typescript', 'const response = await fetch("https://api.openmake.ai/api/v1/models", {\n  headers: {\n    "X-API-Key": "omk_live_sk_xxxxxxxxxxxxxxxxxxxx"\n  }\n});') +
+                getCodeBlock('curl', 'curl http://rasplay.tplinkdns.com:52416/api/v1/models \\\n  -H "X-API-Key: omk_live_sk_xxxxxxxxxxxxxxxxxxxx"', 
+                             'python', 'import requests\n\nheaders = {"X-API-Key": "omk_live_sk_xxxxxxxxxxxxxxxxxxxx"}\nresponse = requests.get("http://rasplay.tplinkdns.com:52416/api/v1/models", headers=headers)',
+                             'typescript', 'const response = await fetch("http://rasplay.tplinkdns.com:52416/api/v1/models", {\n  headers: {\n    "X-API-Key": "omk_live_sk_xxxxxxxxxxxxxxxxxxxx"\n  }\n});') +
                 '</section>';
 
             // 3. MODELS
@@ -224,58 +224,57 @@
 
             // 4. CHAT
             content += '<section id="chat" class="dev-section">' +
-                '<h2>Chat Completions</h2>' +
-                '<p><span class="endpoint-badge badge-post">POST</span> <code>/chat/completions</code></p>' +
-                '<p>Creates a model response for the given chat conversation. Fully compatible with OpenAI API format.</p>' +
+                '<h2>Chat</h2>' +
+                '<p><span class="endpoint-badge badge-post">POST</span> <code>/chat</code></p>' +
+                '<p>Creates a model response for the given message. Returns the AI assistant\'s reply along with a session ID for conversation continuity.</p>' +
                 
                 '<h3>Request Body</h3>' +
                 '<table class="param-table">' +
-                '<tr><td style="width: 200px;"><span class="param-name">model</span><span class="param-type">string</span></td><td>Required. ID of the model to use (e.g., <code>openmake_llm</code>).</td></tr>' +
-                '<tr><td><span class="param-name">messages</span><span class="param-type">array</span></td><td>Required. A list of messages comprising the conversation so far. Each message should have a <code>role</code> (system, user, assistant) and <code>content</code>.</td></tr>' +
-                '<tr><td><span class="param-name">temperature</span><span class="param-type">number</span></td><td>Optional. Sampling temperature (0 to 2). Defaults to 1. Higher values like 0.8 will make the output more random, while lower values like 0.2 will make it more focused and deterministic.</td></tr>' +
+                '<tr><td style="width: 200px;"><span class="param-name">message</span><span class="param-type">string</span></td><td>Required. The user\'s message to the AI assistant.</td></tr>' +
+                '<tr><td><span class="param-name">model</span><span class="param-type">string</span></td><td>Required. ID of the model to use (e.g., <code>openmake_llm</code>, <code>openmake_llm_auto</code>).</td></tr>' +
+                '<tr><td><span class="param-name">sessionId</span><span class="param-type">string</span></td><td>Optional. Session ID from a previous response to continue a conversation.</td></tr>' +
+                '<tr><td><span class="param-name">history</span><span class="param-type">array</span></td><td>Optional. Array of previous messages, each with <code>role</code> (<code>user</code>/<code>assistant</code>) and <code>content</code>.</td></tr>' +
+                '</table>' +
+
+                '<h3>Response</h3>' +
+                '<table class="param-table">' +
+                '<tr><td style="width: 200px;"><span class="param-name">response</span><span class="param-type">string</span></td><td>The AI assistant\'s reply.</td></tr>' +
+                '<tr><td><span class="param-name">sessionId</span><span class="param-type">string</span></td><td>Session ID for continuing the conversation.</td></tr>' +
+                '<tr><td><span class="param-name">model</span><span class="param-type">string</span></td><td>The model alias used for the response.</td></tr>' +
                 '</table>' +
 
                 getCodeBlock(
                     'curl', 
-                    'curl https://api.openmake.ai/api/v1/chat/completions \\\n' +
+                    'curl http://rasplay.tplinkdns.com:52416/api/v1/chat \\\n' +
                     '  -H "Content-Type: application/json" \\\n' +
                     '  -H "X-API-Key: omk_live_sk_..." \\\n' +
                     '  -d \'{\n' +
-                    '    "model": "openmake_llm",\n' +
-                    '    "messages": [\n' +
-                    '      {"role": "system", "content": "You are a helpful assistant."},\n' +
-                    '      {"role": "user", "content": "Hello!"}\n' +
-                    '    ]\n' +
+                    '    "message": "Hello!",\n' +
+                    '    "model": "openmake_llm"\n' +
                     '  }\'',
                     'python',
                     'import requests\n\n' +
-                    'url = "https://api.openmake.ai/api/v1/chat/completions"\n' +
+                    'url = "http://rasplay.tplinkdns.com:52416/api/v1/chat"\n' +
                     'headers = {\n' +
                     '    "X-API-Key": "omk_live_sk_...",\n' +
                     '    "Content-Type": "application/json"\n' +
                     '}\n' +
                     'data = {\n' +
-                    '    "model": "openmake_llm",\n' +
-                    '    "messages": [\n' +
-                    '        {"role": "system", "content": "You are a helpful assistant."},\n' +
-                    '        {"role": "user", "content": "Hello!"}\n' +
-                    '    ]\n' +
+                    '    "message": "Hello!",\n' +
+                    '    "model": "openmake_llm"\n' +
                     '}\n' +
                     'response = requests.post(url, headers=headers, json=data)\n' +
                     'print(response.json())',
                     'typescript',
-                    'const response = await fetch("https://api.openmake.ai/api/v1/chat/completions", {\n' +
+                    'const response = await fetch("http://rasplay.tplinkdns.com:52416/api/v1/chat", {\n' +
                     '  method: "POST",\n' +
                     '  headers: {\n' +
                     '    "Content-Type": "application/json",\n' +
                     '    "X-API-Key": "omk_live_sk_..."\n' +
                     '  },\n' +
                     '  body: JSON.stringify({\n' +
-                    '    model: "openmake_llm",\n' +
-                    '    messages: [\n' +
-                    '      {role: "system", content: "You are a helpful assistant."},\n' +
-                    '      {role: "user", content: "Hello!"}\n' +
-                    '    ]\n' +
+                    '    message: "Hello!",\n' +
+                    '    model: "openmake_llm"\n' +
                     '  })\n' +
                     '});\n' +
                     'const data = await response.json();'
@@ -292,16 +291,16 @@
                 '<p>Create a new API key with optional name and expiration.</p>' +
                 getCodeBlock(
                     'curl',
-                    'curl -X POST https://api.openmake.ai/api/v1/api-keys \\\n' +
+                    'curl -X POST http://rasplay.tplinkdns.com:52416/api/v1/api-keys \\\n' +
                     '  -H "X-API-Key: omk_live_sk_..." \\\n' +
                     '  -H "Content-Type: application/json" \\\n' +
                     '  -d \'{"name": "New Service Key"}\'',
                     'python',
-                    'requests.post("https://api.openmake.ai/api/v1/api-keys", \n' +
+                    'requests.post("http://rasplay.tplinkdns.com:52416/api/v1/api-keys", \n' +
                     '    headers={"X-API-Key": "key"}, \n' +
                     '    json={"name": "New Service Key"})',
                     'typescript',
-                    'await fetch("https://api.openmake.ai/api/v1/api-keys", {\n' +
+                    'await fetch("http://rasplay.tplinkdns.com:52416/api/v1/api-keys", {\n' +
                     '  method: "POST",\n' +
                     '  headers: {"X-API-Key": "key", "Content-Type": "application/json"},\n' +
                     '  body: JSON.stringify({name: "New Service Key"})\n' +
@@ -313,9 +312,9 @@
                 '<p>Returns a list of all API keys for the current account.</p>' +
                 getCodeBlock(
                     'curl',
-                    'curl https://api.openmake.ai/api/v1/api-keys \\\n  -H "X-API-Key: omk_live_sk_..."',
-                    'python', 'requests.get("https://api.openmake.ai/api/v1/api-keys", headers=...)',
-                    'typescript', 'fetch("https://api.openmake.ai/api/v1/api-keys", ...)'
+                    'curl http://rasplay.tplinkdns.com:52416/api/v1/api-keys \\\n  -H "X-API-Key: omk_live_sk_..."',
+                    'python', 'requests.get("http://rasplay.tplinkdns.com:52416/api/v1/api-keys", headers=...)',
+                    'typescript', 'fetch("http://rasplay.tplinkdns.com:52416/api/v1/api-keys", ...)'
                 ) +
                 
                 '<h3 id="get-key" style="margin-top:60px;">Get Key Details</h3>' +
@@ -334,9 +333,9 @@
                 '<p>Get current usage statistics for the billing period.</p>' +
                 getCodeBlock(
                     'curl',
-                    'curl https://api.openmake.ai/api/v1/usage \\\n  -H "X-API-Key: omk_live_sk_..."',
-                    'python', 'requests.get("https://api.openmake.ai/api/v1/usage", ...)',
-                    'typescript', 'fetch("https://api.openmake.ai/api/v1/usage", ...)'
+                    'curl http://rasplay.tplinkdns.com:52416/api/v1/usage \\\n  -H "X-API-Key: omk_live_sk_..."',
+                    'python', 'requests.get("http://rasplay.tplinkdns.com:52416/api/v1/usage", ...)',
+                    'typescript', 'fetch("http://rasplay.tplinkdns.com:52416/api/v1/usage", ...)'
                 ) +
                 '</section>';
 

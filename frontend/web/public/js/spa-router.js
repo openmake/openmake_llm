@@ -24,6 +24,9 @@
     let _currentRoute = null;            // 현재 활성 routeConfig
     let _started = false;                // start() 호출 여부
 
+    // 캐시 버스터 — 배포 시 deploy-frontend.sh가 이 값을 업데이트
+    const _moduleVersion = 3;
+
     // ─── 상수 ──────────────────────────────────────────
     const CHAT_PATH = '/';
     const LOGIN_PATH = '/login.html';
@@ -187,7 +190,7 @@
             }
 
             var script = document.createElement('script');
-            script.src = src;
+            script.src = src + '?v=' + _moduleVersion;
             script.async = true;
             script.onload = function () {
                 _loadedModules.add(src);
