@@ -5,6 +5,7 @@
 
 import winston from 'winston';
 import path from 'path';
+import { getConfig } from '../config/env';
 
 const logDir = path.join(__dirname, '../../logs');
 
@@ -29,7 +30,7 @@ const consoleFormat = winston.format.combine(
 
 // 로거 생성
 export const logger = winston.createLogger({
-    level: process.env.LOG_LEVEL || 'info',
+    level: getConfig().logLevel,
     format: customFormat,
     transports: [
         // 콘솔 출력

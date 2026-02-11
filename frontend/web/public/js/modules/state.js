@@ -40,7 +40,8 @@ const AppState = {
 
     // UI
     currentAssistantMessage: null,
-    isSending: false
+    isSending: false,
+    isGenerating: false  // 응답 생성 중 여부 (중단 버튼 표시용)
 };
 
 // 상태 변경 리스너

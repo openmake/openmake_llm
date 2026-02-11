@@ -21,9 +21,7 @@
         init: function() {
             try {
                 function authFetch(url, opts = {}) {
-            const token = localStorage.getItem('authToken');
-            opts.headers = { ...(opts.headers || {}), 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
-            return fetch(url, opts);
+            return window.authFetch(url, opts);
         }
         function showToast(msg, type = 'success') {
             const t = document.getElementById('toast');

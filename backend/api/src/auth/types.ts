@@ -20,32 +20,7 @@ export interface AuthenticatedRequest {
     token?: string;
 }
 
-// 로그인 요청
-export interface LoginRequest {
-    email: string;
-    password: string;
-}
-
-// 회원가입 요청
-export interface RegisterRequest {
-    email: string;
-    password: string;
-}
-
-// 로그인 응답
-export interface LoginResponse {
-    success: boolean;
-    token?: string;
-    user?: PublicUser;
-    error?: string;
-}
-
-// 회원가입 응답
-export interface RegisterResponse {
-    success: boolean;
-    user?: PublicUser;
-    error?: string;
-}
+// Auth request/response types → services/AuthService.ts (RegisterRequest, LoginRequest, AuthResult)
 
 // OAuth 응답 타입
 export interface OAuthTokenResponse {

@@ -4,9 +4,9 @@
     "description": "OpenMake - AI Assistant Platform",
     "main": "backend/api/dist/server.js",
     "scripts": {
-        "build": "npm run build:database && npm run build:backend && npm run build:frontend && npm run deploy:frontend",
-        "build:database": "cd database && npm run build",
-        "build:backend": "cd backend/api && npm run build && cd ../core && npm run build",
+        "build": "npm run build:backend && npm run build:frontend && npm run deploy:frontend",
+        "build:database": "echo 'No separate database build needed'",
+        "build:backend": "cd backend/api && npm run build",
         "build:frontend": "cd frontend/web && npm run build",
         "deploy:frontend": "bash scripts/deploy-frontend.sh",
         "build:all": "npm run build",
@@ -33,9 +33,7 @@
     "author": "",
     "license": "MIT",
     "workspaces": [
-        "database",
         "backend/api",
-        "backend/core",
         "backend/workers",
         "frontend/web"
     ],

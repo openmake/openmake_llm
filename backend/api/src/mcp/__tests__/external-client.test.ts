@@ -3,8 +3,6 @@
  * SDK 연결은 모킹 — 구조 및 상태 관리 검증
  */
 
-// @ts-expect-error - bun:test types are built-in to bun runtime
-import { describe, it, expect } from 'bun:test';
 import { ExternalMCPClient } from '../external-client';
 import type { MCPServerConfig } from '../types';
 

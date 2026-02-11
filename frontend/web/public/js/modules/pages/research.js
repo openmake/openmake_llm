@@ -14,15 +14,7 @@
     var _depthLabels = { quick:'\uBE60\uB978 \uAC80\uC0C9', standard:'\uD45C\uC900', deep:'\uC2EC\uCE35' };
 
     function _authFetch(url, options) {
-        if (window.authFetch) return window.authFetch(url, options);
-        options = options || {};
-        var token = localStorage.getItem('authToken');
-        var headers = Object.assign(
-            { 'Content-Type': 'application/json' },
-            token ? { 'Authorization': 'Bearer ' + token } : {},
-            options.headers || {}
-        );
-        return fetch(url, Object.assign({}, options, { headers: headers })).then(function(r) { return r.json(); });
+        return window.authFetch(url, options || {}).then(function(r) { return r.json(); });
     }
 
     function _showToast(msg, type) {

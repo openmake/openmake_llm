@@ -26,6 +26,46 @@ function initAuth() {
     }
 
     updateAuthUI();
+
+    // 🔒 OAuth 쿠키 기반 세션 복구: localStorage에 사용자 정보가 없으면
+    // httpOnly 쿠키로 인증된 세션이 있는지 서버에 확인
+    if (!getState('auth.currentUser')) {
+        recoverSessionFromCookie();
+    }
+}
+
+/**
+ * 🔒 httpOnly 쿠키 기반 세션 복구
+ * OAuth 로그인 후 리다이렉트 시 localStorage가 비어있는 경우 처리
+ */
+async function recoverSessionFromCookie() {
+    try {
+        const resp = await fetch('/api/auth/me', { credentials: 'include' });
+        if (resp.ok) {
+            const data = await resp.json();
+            const user = data.data?.user || data.user;
+            if (user && user.email) {
+                // 세션 복구 성공
+                localStorage.setItem('user', JSON.stringify(user));
+                localStorage.removeItem('guestMode');
+                localStorage.removeItem('isGuest');
+
+                setState('auth.currentUser', user);
+                setState('auth.isGuestMode', false);
+
+                updateAuthUI();
+
+                // 사이드바 업데이트
+                if (window.sidebar && typeof window.sidebar._updateUserSection === 'function') {
+                    window.sidebar._updateUserSection();
+                }
+
+                console.log('[Auth Module] OAuth 쿠키 세션 복구 성공:', user.email);
+            }
+        }
+    } catch (e) {
+        // 네트워크 오류 — 무시
+    }
 }
 
 /**
@@ -45,11 +85,47 @@ async function authFetch(url, options = {}) {
         headers['Authorization'] = `Bearer ${authToken}`;
     }
 
-    return fetch(url, {
+    const response = await fetch(url, {
         ...options,
         credentials: 'include',  // 🔒 httpOnly 쿠키 자동 포함
         headers
     });
+
+    // 401 인터셉터: 세션 만료 시 로그인 페이지로 리다이렉트
+    if (response.status === 401 && !url.includes('/api/auth/login')) {
+        localStorage.removeItem('authToken');
+        localStorage.removeItem('user');
+        setState('auth.authToken', null);
+        setState('auth.currentUser', null);
+        window.location.href = '/login.html';
+        return response;
+    }
+
+    return response;
+}
+
+/**
+ * 인증된 JSON fetch 요청 (자동 JSON 파싱 + 표준 응답 언래핑)
+ * 페이지 모듈에서 로컬 authFetch 대신 사용
+ * @param {string} url - 요청 URL
+ * @param {object} options - fetch 옵션
+ * @returns {Promise<{ok: boolean, data: any, error: string|null}>}
+ */
+async function authJsonFetch(url, options = {}) {
+    const response = await authFetch(url, options);
+    const json = await response.json();
+
+    // 표준 응답 형식 언래핑: { success, data, error }
+    if (json.success === true) {
+        return { ok: true, data: json.data, error: null };
+    }
+    if (json.success === false) {
+        const msg = json.error?.message || json.error || '요청 실패';
+        return { ok: false, data: null, error: msg };
+    }
+
+    // 비표준 응답 (레거시 호환): 그대로 반환
+    return { ok: response.ok, data: json, error: response.ok ? null : '요청 실패' };
 }
 
 /**
@@ -68,19 +144,26 @@ async function login(email, password) {
 
         const data = await response.json();
 
-        if (response.ok && data.token) {
-            localStorage.setItem('authToken', data.token);
-            localStorage.setItem('user', JSON.stringify(data.user));
+        // Backend wraps in success(): { success, data: { token, user, ... }, meta }
+        const payload = data.data || data;
+        const token = payload.token;
+        const user = payload.user;
+
+        if (response.ok && token) {
+            localStorage.setItem('authToken', token);
+            localStorage.setItem('user', JSON.stringify(user));
             localStorage.removeItem('guestMode');
 
-            setState('auth.authToken', data.token);
-            setState('auth.currentUser', data.user);
+            setState('auth.authToken', token);
+            setState('auth.currentUser', user);
             setState('auth.isGuestMode', false);
 
-            return { success: true, user: data.user };
+            return { success: true, user };
         }
 
-        return { success: false, error: data.error || '로그인 실패' };
+        // Error response: { success: false, error: { code, message } }
+        const errorMsg = data.error?.message || data.error || '로그인 실패';
+        return { success: false, error: errorMsg };
     } catch (error) {
         return { success: false, error: '네트워크 오류' };
     }
@@ -179,6 +262,7 @@ function getCurrentUser() {
 // 전역 노출 (레거시 호환)
 window.initAuth = initAuth;
 window.authFetch = authFetch;
+window.authJsonFetch = authJsonFetch;
 window.login = login;
 window.logout = logout;
 window.enterGuestMode = enterGuestMode;
@@ -190,6 +274,7 @@ window.getCurrentUser = getCurrentUser;
 export {
     initAuth,
     authFetch,
+    authJsonFetch,
     login,
     logout,
     enterGuestMode,

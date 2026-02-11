@@ -1,0 +1,22 @@
+8b5195971f145ac5d3c1ac82b8d81814
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.QuotaExceededError = void 0;
+/**
+ * Error thrown when API quota is exceeded (hourly or weekly).
+ * Should result in HTTP 429 Too Many Requests response.
+ */
+class QuotaExceededError extends Error {
+    constructor(quotaType, used, limit) {
+        const message = `API quota exceeded (${quotaType}): ${used}/${limit} requests used`;
+        super(message);
+        this.name = 'QuotaExceededError';
+        this.quotaType = quotaType;
+        this.used = used;
+        this.limit = limit;
+        // Hourly quota resets faster
+        this.retryAfterSeconds = quotaType === 'hourly' ? 3600 : 86400;
+    }
+}
+exports.QuotaExceededError = QuotaExceededError;
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJmaWxlIjoiL1ZvbHVtZXMvTUFDX0FQUC9vcGVubWFrZV9sbG0vYmFja2VuZC9hcGkvc3JjL2Vycm9ycy9xdW90YS1leGNlZWRlZC5lcnJvci50cyIsIm1hcHBpbmdzIjoiOzs7QUFBQTs7O0dBR0c7QUFDSCxNQUFhLGtCQUFtQixTQUFRLEtBQUs7SUFNekMsWUFBWSxTQUF1QyxFQUFFLElBQVksRUFBRSxLQUFhO1FBQzVFLE1BQU0sT0FBTyxHQUFHLHVCQUF1QixTQUFTLE1BQU0sSUFBSSxJQUFJLEtBQUssZ0JBQWdCLENBQUM7UUFDcEYsS0FBSyxDQUFDLE9BQU8sQ0FBQyxDQUFDO1FBQ2YsSUFBSSxDQUFDLElBQUksR0FBRyxvQkFBb0IsQ0FBQztRQUNqQyxJQUFJLENBQUMsU0FBUyxHQUFHLFNBQVMsQ0FBQztRQUMzQixJQUFJLENBQUMsSUFBSSxHQUFHLElBQUksQ0FBQztRQUNqQixJQUFJLENBQUMsS0FBSyxHQUFHLEtBQUssQ0FBQztRQUNuQiw2QkFBNkI7UUFDN0IsSUFBSSxDQUFDLGlCQUFpQixHQUFHLFNBQVMsS0FBSyxRQUFRLENBQUMsQ0FBQyxDQUFDLElBQUksQ0FBQyxDQUFDLENBQUMsS0FBSyxDQUFDO0lBQ25FLENBQUM7Q0FDSjtBQWhCRCxnREFnQkMiLCJuYW1lcyI6W10sInNvdXJjZXMiOlsiL1ZvbHVtZXMvTUFDX0FQUC9vcGVubWFrZV9sbG0vYmFja2VuZC9hcGkvc3JjL2Vycm9ycy9xdW90YS1leGNlZWRlZC5lcnJvci50cyJdLCJzb3VyY2VzQ29udGVudCI6WyIvKipcbiAqIEVycm9yIHRocm93biB3aGVuIEFQSSBxdW90YSBpcyBleGNlZWRlZCAoaG91cmx5IG9yIHdlZWtseSkuXG4gKiBTaG91bGQgcmVzdWx0IGluIEhUVFAgNDI5IFRvbyBNYW55IFJlcXVlc3RzIHJlc3BvbnNlLlxuICovXG5leHBvcnQgY2xhc3MgUXVvdGFFeGNlZWRlZEVycm9yIGV4dGVuZHMgRXJyb3Ige1xuICAgIHB1YmxpYyByZWFkb25seSBxdW90YVR5cGU6ICdob3VybHknIHwgJ3dlZWtseScgfCAnYm90aCc7XG4gICAgcHVibGljIHJlYWRvbmx5IHVzZWQ6IG51bWJlcjtcbiAgICBwdWJsaWMgcmVhZG9ubHkgbGltaXQ6IG51bWJlcjtcbiAgICBwdWJsaWMgcmVhZG9ubHkgcmV0cnlBZnRlclNlY29uZHM6IG51bWJlcjtcblxuICAgIGNvbnN0cnVjdG9yKHF1b3RhVHlwZTogJ2hvdXJseScgfCAnd2Vla2x5JyB8ICdib3RoJywgdXNlZDogbnVtYmVyLCBsaW1pdDogbnVtYmVyKSB7XG4gICAgICAgIGNvbnN0IG1lc3NhZ2UgPSBgQVBJIHF1b3RhIGV4Y2VlZGVkICgke3F1b3RhVHlwZX0pOiAke3VzZWR9LyR7bGltaXR9IHJlcXVlc3RzIHVzZWRgO1xuICAgICAgICBzdXBlcihtZXNzYWdlKTtcbiAgICAgICAgdGhpcy5uYW1lID0gJ1F1b3RhRXhjZWVkZWRFcnJvcic7XG4gICAgICAgIHRoaXMucXVvdGFUeXBlID0gcXVvdGFUeXBlO1xuICAgICAgICB0aGlzLnVzZWQgPSB1c2VkO1xuICAgICAgICB0aGlzLmxpbWl0ID0gbGltaXQ7XG4gICAgICAgIC8vIEhvdXJseSBxdW90YSByZXNldHMgZmFzdGVyXG4gICAgICAgIHRoaXMucmV0cnlBZnRlclNlY29uZHMgPSBxdW90YVR5cGUgPT09ICdob3VybHknID8gMzYwMCA6IDg2NDAwO1xuICAgIH1cbn1cbiJdLCJ2ZXJzaW9uIjozfQ==

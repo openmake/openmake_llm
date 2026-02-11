@@ -6,6 +6,7 @@
 import * as bcrypt from 'bcryptjs';
 import * as crypto from 'crypto';
 import { getUnifiedDatabase, getPool, User } from './unified-database';
+import { getConfig } from '../../config/env';
 
 export type UserRole = 'admin' | 'user' | 'guest';
 
@@ -169,12 +170,12 @@ export class UserModel {
         const admin = await db.getUserByUsername('admin');
 
         if (!admin) {
-            const defaultPassword = process.env.ADMIN_PASSWORD;
-            const adminEmail = process.env.DEFAULT_ADMIN_EMAIL || 'admin@localhost';
+            const defaultPassword = getConfig().adminPassword;
+            const adminEmail = getConfig().defaultAdminEmail;
 
             // ADMIN_PASSWORD 미설정 시 프로덕션 환경에서 중단, 개발환경에서는 랜덤 비밀번호 생성
             if (!defaultPassword) {
-                if (process.env.NODE_ENV === 'production') {
+                if (getConfig().nodeEnv === 'production') {
                     console.error('[UserModel] ❌ ADMIN_PASSWORD 환경변수가 설정되지 않았습니다!');
                     throw new Error('ADMIN_PASSWORD 환경변수가 필수입니다!');
                 }

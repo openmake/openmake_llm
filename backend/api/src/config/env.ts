@@ -3,32 +3,165 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 export interface EnvConfig {
+    // Node
+    nodeEnv: string;
+
+    // Server
+    port: number;
+    serverHost: string;
+
+    // Database
+    databaseUrl: string;
+
+    // Auth
+    jwtSecret: string;
+    adminPassword: string;
+    defaultAdminEmail: string;
+    adminEmails: string;
+
+    // OAuth
+    googleClientId: string;
+    googleClientSecret: string;
+    githubClientId: string;
+    githubClientSecret: string;
+    oauthRedirectUri: string;
+
+    // CORS
+    corsOrigins: string;
+
+    // Ollama
     ollamaBaseUrl: string;
     ollamaDefaultModel: string;
-    ollamaKoreanModel: string;  // 한국어 특화 모델
+    ollamaKoreanModel: string;
+    ollamaModel: string;
     ollamaTimeout: number;
-    // 로그 레벨
+    ollamaHost: string;
+    ollamaApiKey: string;
+    ollamaApiKeyPrimary: string;
+    ollamaApiKeySecondary: string;
+    ollamaSshKey: string;
+    ollamaModels: string[];  // Per-key models (OLLAMA_MODEL_1, _2, etc.)
+
+    // Rate limits
+    ollamaHourlyLimit: number;
+    ollamaWeeklyLimit: number;
+    ollamaMonthlyPremiumLimit: number;
+
+    // Log
     logLevel: 'debug' | 'info' | 'warn' | 'error';
-    // Gemini 전용 설정
+
+    // Gemini
     geminiThinkEnabled: boolean;
     geminiThinkLevel: 'low' | 'medium' | 'high';
     geminiNumCtx: number;
     geminiEmbeddingModel: string;
     geminiWebSearchEnabled: boolean;
+
+    // External services
+    googleApiKey: string;
+    googleCseId: string;
+    firecrawlApiKey: string;
+    firecrawlApiUrl: string;
+
+    // Documents
+    documentTtlHours: number;
+    maxUploadedDocuments: number;
+
+    // Conversations
+    maxConversationSessions: number;
+    sessionTtlDays: number;
+
+    // User data
+    userDataPath: string;
+
+    // Push notifications (VAPID)
+    vapidPublicKey: string;
+    vapidPrivateKey: string;
+    vapidSubject: string;
+
+    // Swagger
+    swaggerBaseUrl: string;
 }
 
 const DEFAULT_CONFIG: EnvConfig = {
+    // Node
+    nodeEnv: 'development',
+
+    // Server
+    port: 52416,
+    serverHost: '0.0.0.0',
+
+    // Database
+    databaseUrl: 'postgresql://localhost:5432/openmake_llm',
+
+    // Auth
+    jwtSecret: '',
+    adminPassword: '',
+    defaultAdminEmail: 'admin@localhost',
+    adminEmails: '',
+
+    // OAuth
+    googleClientId: '',
+    googleClientSecret: '',
+    githubClientId: '',
+    githubClientSecret: '',
+    oauthRedirectUri: 'http://localhost:52416/api/auth/callback/google',
+
+    // CORS
+    corsOrigins: 'http://localhost:52416',
+
+    // Ollama
     ollamaBaseUrl: 'http://localhost:11434',
     ollamaDefaultModel: 'gemini-3-flash-preview:cloud',
     ollamaKoreanModel: 'gemini-3-flash-preview:cloud',
+    ollamaModel: 'gemini-3-flash-preview:cloud',
     ollamaTimeout: 120000,
+    ollamaHost: 'http://localhost:11434',
+    ollamaApiKey: '',
+    ollamaApiKeyPrimary: '',
+    ollamaApiKeySecondary: '',
+    ollamaSshKey: '',
+    ollamaModels: [],  // Per-key models
+
+    // Rate limits
+    ollamaHourlyLimit: 150,
+    ollamaWeeklyLimit: 2500,
+    ollamaMonthlyPremiumLimit: 5,
+
+    // Log
     logLevel: 'info',
-    // Gemini 전용 설정
+
+    // Gemini
     geminiThinkEnabled: true,
     geminiThinkLevel: 'high' as const,
     geminiNumCtx: 32768,
     geminiEmbeddingModel: 'gemini-3-flash-preview:cloud',
     geminiWebSearchEnabled: true,
+
+    // External services
+    googleApiKey: '',
+    googleCseId: '',
+    firecrawlApiKey: '',
+    firecrawlApiUrl: 'https://api.firecrawl.dev/v1',
+
+    // Documents
+    documentTtlHours: 1,
+    maxUploadedDocuments: 100,
+
+    // Conversations
+    maxConversationSessions: 1000,
+    sessionTtlDays: 30,
+
+    // User data
+    userDataPath: './data/users',
+
+    // VAPID
+    vapidPublicKey: '',
+    vapidPrivateKey: '',
+    vapidSubject: 'mailto:admin@openmake.ai',
+
+    // Swagger
+    swaggerBaseUrl: '',
 };
 
 function parseEnvFile(filePath: string): Record<string, string> {
@@ -103,23 +236,102 @@ export function loadConfig(): EnvConfig {
     // 환경변수 우선순위: process.env > .env 파일 > 기본값
     const fileEnv = parseEnvFile(fs.existsSync(envPath) ? envPath : projectEnvPath);
 
+    const env = (key: string): string | undefined => process.env[key] || fileEnv[key];
+
     return {
-        ollamaBaseUrl: process.env.OLLAMA_BASE_URL || fileEnv.OLLAMA_BASE_URL || DEFAULT_CONFIG.ollamaBaseUrl,
-        ollamaDefaultModel: process.env.OLLAMA_DEFAULT_MODEL || fileEnv.OLLAMA_DEFAULT_MODEL || DEFAULT_CONFIG.ollamaDefaultModel,
-        ollamaKoreanModel: process.env.OLLAMA_KOREAN_MODEL || fileEnv.OLLAMA_KOREAN_MODEL || DEFAULT_CONFIG.ollamaKoreanModel,
-        ollamaTimeout: parseInt(
-            process.env.OLLAMA_TIMEOUT || fileEnv.OLLAMA_TIMEOUT || String(DEFAULT_CONFIG.ollamaTimeout),
-            10
-        ),
-        logLevel: parseLogLevel(
-            process.env.LOG_LEVEL || fileEnv.LOG_LEVEL
-        ),
-        // Gemini 전용 설정
-        geminiThinkEnabled: (process.env.GEMINI_THINK_ENABLED || fileEnv.GEMINI_THINK_ENABLED || 'true') === 'true',
-        geminiThinkLevel: (process.env.GEMINI_THINK_LEVEL || fileEnv.GEMINI_THINK_LEVEL || 'high') as 'low' | 'medium' | 'high',
-        geminiNumCtx: parseInt(process.env.GEMINI_NUM_CTX || fileEnv.GEMINI_NUM_CTX || '32768', 10),
-        geminiEmbeddingModel: process.env.GEMINI_EMBEDDING_MODEL || fileEnv.GEMINI_EMBEDDING_MODEL || 'gemini-3-flash-preview:cloud',
-        geminiWebSearchEnabled: (process.env.GEMINI_WEB_SEARCH_ENABLED || fileEnv.GEMINI_WEB_SEARCH_ENABLED || 'true') === 'true'
+        // Node
+        nodeEnv: env('NODE_ENV') || DEFAULT_CONFIG.nodeEnv,
+
+        // Server
+        port: parseInt(env('PORT') || String(DEFAULT_CONFIG.port), 10),
+        serverHost: env('SERVER_HOST') || DEFAULT_CONFIG.serverHost,
+
+        // Database
+        databaseUrl: env('DATABASE_URL') || DEFAULT_CONFIG.databaseUrl,
+
+        // Auth
+        jwtSecret: env('JWT_SECRET') || DEFAULT_CONFIG.jwtSecret,
+        adminPassword: env('ADMIN_PASSWORD') || DEFAULT_CONFIG.adminPassword,
+        defaultAdminEmail: env('DEFAULT_ADMIN_EMAIL') || DEFAULT_CONFIG.defaultAdminEmail,
+        adminEmails: env('ADMIN_EMAILS') || DEFAULT_CONFIG.adminEmails,
+
+        // OAuth
+        googleClientId: env('GOOGLE_CLIENT_ID') || DEFAULT_CONFIG.googleClientId,
+        googleClientSecret: env('GOOGLE_CLIENT_SECRET') || DEFAULT_CONFIG.googleClientSecret,
+        githubClientId: env('GITHUB_CLIENT_ID') || DEFAULT_CONFIG.githubClientId,
+        githubClientSecret: env('GITHUB_CLIENT_SECRET') || DEFAULT_CONFIG.githubClientSecret,
+        oauthRedirectUri: env('OAUTH_REDIRECT_URI') || DEFAULT_CONFIG.oauthRedirectUri,
+
+        // CORS
+        corsOrigins: env('CORS_ORIGINS') || DEFAULT_CONFIG.corsOrigins,
+
+        // Ollama
+        ollamaBaseUrl: env('OLLAMA_BASE_URL') || DEFAULT_CONFIG.ollamaBaseUrl,
+        ollamaDefaultModel: env('OLLAMA_DEFAULT_MODEL') || DEFAULT_CONFIG.ollamaDefaultModel,
+        ollamaKoreanModel: env('OLLAMA_KOREAN_MODEL') || DEFAULT_CONFIG.ollamaKoreanModel,
+        ollamaModel: env('OLLAMA_MODEL') || DEFAULT_CONFIG.ollamaModel,
+        ollamaTimeout: parseInt(env('OLLAMA_TIMEOUT') || String(DEFAULT_CONFIG.ollamaTimeout), 10),
+        ollamaHost: env('OLLAMA_HOST') || DEFAULT_CONFIG.ollamaHost,
+        ollamaApiKey: env('OLLAMA_API_KEY') || DEFAULT_CONFIG.ollamaApiKey,
+        ollamaApiKeyPrimary: env('OLLAMA_API_KEY_PRIMARY') || DEFAULT_CONFIG.ollamaApiKeyPrimary,
+        ollamaApiKeySecondary: env('OLLAMA_API_KEY_SECONDARY') || DEFAULT_CONFIG.ollamaApiKeySecondary,
+        ollamaSshKey: env('OLLAMA_SSH_KEY') || DEFAULT_CONFIG.ollamaSshKey,
+
+        // Per-key models (OLLAMA_MODEL_1, _2, _3, ... N)
+        ollamaModels: (() => {
+            const models: string[] = [];
+            let index = 1;
+            while (true) {
+                const model = env(`OLLAMA_MODEL_${index}`);
+                if (model && model.trim() !== '') {
+                    models.push(model.trim());
+                    index++;
+                } else {
+                    break;
+                }
+            }
+            return models;
+        })(),
+
+        // Rate limits
+        ollamaHourlyLimit: parseInt(env('OLLAMA_HOURLY_LIMIT') || String(DEFAULT_CONFIG.ollamaHourlyLimit), 10),
+        ollamaWeeklyLimit: parseInt(env('OLLAMA_WEEKLY_LIMIT') || String(DEFAULT_CONFIG.ollamaWeeklyLimit), 10),
+        ollamaMonthlyPremiumLimit: parseInt(env('OLLAMA_MONTHLY_PREMIUM_LIMIT') || String(DEFAULT_CONFIG.ollamaMonthlyPremiumLimit), 10),
+
+        // Log
+        logLevel: parseLogLevel(env('LOG_LEVEL')),
+
+        // Gemini
+        geminiThinkEnabled: (env('GEMINI_THINK_ENABLED') || 'true') === 'true',
+        geminiThinkLevel: (env('GEMINI_THINK_LEVEL') || 'high') as 'low' | 'medium' | 'high',
+        geminiNumCtx: parseInt(env('GEMINI_NUM_CTX') || '32768', 10),
+        geminiEmbeddingModel: env('GEMINI_EMBEDDING_MODEL') || DEFAULT_CONFIG.geminiEmbeddingModel,
+        geminiWebSearchEnabled: (env('GEMINI_WEB_SEARCH_ENABLED') || 'true') === 'true',
+
+        // External services
+        googleApiKey: env('GOOGLE_API_KEY') || DEFAULT_CONFIG.googleApiKey,
+        googleCseId: env('GOOGLE_CSE_ID') || DEFAULT_CONFIG.googleCseId,
+        firecrawlApiKey: env('FIRECRAWL_API_KEY') || DEFAULT_CONFIG.firecrawlApiKey,
+        firecrawlApiUrl: env('FIRECRAWL_API_URL') || DEFAULT_CONFIG.firecrawlApiUrl,
+
+        // Documents
+        documentTtlHours: parseInt(env('DOCUMENT_TTL_HOURS') || String(DEFAULT_CONFIG.documentTtlHours), 10),
+        maxUploadedDocuments: parseInt(env('MAX_UPLOADED_DOCUMENTS') || String(DEFAULT_CONFIG.maxUploadedDocuments), 10),
+
+        // Conversations
+        maxConversationSessions: parseInt(env('MAX_CONVERSATION_SESSIONS') || String(DEFAULT_CONFIG.maxConversationSessions), 10),
+        sessionTtlDays: parseInt(env('SESSION_TTL_DAYS') || String(DEFAULT_CONFIG.sessionTtlDays), 10),
+
+        // User data
+        userDataPath: env('USER_DATA_PATH') || DEFAULT_CONFIG.userDataPath,
+
+        // VAPID
+        vapidPublicKey: env('VAPID_PUBLIC_KEY') || DEFAULT_CONFIG.vapidPublicKey,
+        vapidPrivateKey: env('VAPID_PRIVATE_KEY') || DEFAULT_CONFIG.vapidPrivateKey,
+        vapidSubject: env('VAPID_SUBJECT') || DEFAULT_CONFIG.vapidSubject,
+
+        // Swagger
+        swaggerBaseUrl: env('SWAGGER_BASE_URL') || DEFAULT_CONFIG.swaggerBaseUrl,
     };
 }
 

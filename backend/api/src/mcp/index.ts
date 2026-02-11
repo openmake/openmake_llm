@@ -17,10 +17,9 @@ export {
 
 // MCP Server & Tools
 export { MCPServer, createMCPServer } from './server';
+// 🔒 보안 패치 2026-02-07: readFileTool, writeFileTool, runCommandTool 제거됨
+// 안전한 파일 도구는 ./filesystem에서 fsReadFileTool, fsWriteFileTool로 제공
 export {
-    readFileTool,
-    writeFileTool,
-    runCommandTool,
     searchCodeTool,
     builtInTools
 } from './tools';
@@ -37,6 +36,14 @@ export {
     type SearchResult as WebSearchResult,
     type FactCheckResult
 } from './web-search';
+
+// Deep Research 도구
+export {
+    deepResearchTools,
+    researchTool,
+    getResearchStatusTool,
+    configureResearchTool
+} from './deep-research';
 
 // (Removed GitHub and Exa tools)
 

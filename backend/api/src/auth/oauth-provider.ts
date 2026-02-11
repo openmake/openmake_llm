@@ -4,8 +4,11 @@
  */
 
 import axios from 'axios';
-import { v4 as uuidv4 } from 'uuid';
+import * as crypto from 'crypto';
 import type { Application, Request, Response } from 'express';
+import { getConfig } from '../config/env';
+import { getAuthService } from '../services/AuthService';
+import { setTokenCookie, setRefreshTokenCookie, generateRefreshToken } from '../auth';
 
 // OAuth 프로바이더 설정
 export interface OAuthProviderConfig {
@@ -89,24 +92,26 @@ export class OAuthManager {
      * 환경변수에서 프로바이더 설정 로드
      */
     private loadProvidersFromEnv(): void {
+        const config = getConfig();
+        const baseRedirectUri = config.oauthRedirectUri;
         // Google OAuth
-        if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
+        if (config.googleClientId && config.googleClientSecret) {
             this.registerProvider('google', {
                 ...PROVIDER_CONFIGS.google,
-                clientId: process.env.GOOGLE_CLIENT_ID,
-                clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-                redirectUri: process.env.OAUTH_REDIRECT_URI || 'http://localhost:52416/api/auth/callback/google'
+                clientId: config.googleClientId,
+                clientSecret: config.googleClientSecret,
+                redirectUri: baseRedirectUri
             });
             console.log('[OAuth] Google 프로바이더 등록됨');
         }
 
         // GitHub OAuth
-        if (process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET) {
+        if (config.githubClientId && config.githubClientSecret) {
             this.registerProvider('github', {
                 ...PROVIDER_CONFIGS.github,
-                clientId: process.env.GITHUB_CLIENT_ID,
-                clientSecret: process.env.GITHUB_CLIENT_SECRET,
-                redirectUri: process.env.OAUTH_REDIRECT_URI || 'http://localhost:52416/api/auth/callback/github'
+                clientId: config.githubClientId,
+                clientSecret: config.githubClientSecret,
+                redirectUri: baseRedirectUri.replace('/callback/google', '/callback/github')
             });
             console.log('[OAuth] GitHub 프로바이더 등록됨');
         }
@@ -137,7 +142,7 @@ export class OAuthManager {
         }
 
         // CSRF 방지용 상태 생성
-        const nonce = uuidv4();
+        const nonce = crypto.randomBytes(32).toString('hex');
         const state: OAuthState = {
             nonce,
             provider,
@@ -404,17 +409,23 @@ export function setupOAuthRoutes(app: Application): void {
             return res.redirect('/login.html?error=oauth_failed');
         }
 
-        // TODO: 사용자 생성 또는 조회, JWT 토큰 발급
-        // 현재는 사용자 정보만 반환
-        res.json({
-            success: true,
-            user: {
-                email: userInfo.email,
-                name: userInfo.name,
-                avatar: userInfo.avatar,
-                provider: userInfo.provider
-            }
-        });
+        // 사용자 생성/조회 + JWT 토큰 발급
+        const authService = getAuthService();
+        const authResult = await authService.findOrCreateOAuthUser(
+            userInfo.email,
+            provider as 'google' | 'github'
+        );
+
+        if (!authResult.success || !authResult.token || !authResult.user) {
+            return res.redirect('/login.html?error=auth_failed');
+        }
+
+        // HttpOnly 쿠키에 액세스 + 리프레시 토큰 설정
+        setTokenCookie(res, authResult.token);
+        setRefreshTokenCookie(res, generateRefreshToken(authResult.user));
+
+        // 메인 페이지로 리다이렉트
+        res.redirect('/');
     });
 
     console.log('[OAuth] 라우트 설정 완료');

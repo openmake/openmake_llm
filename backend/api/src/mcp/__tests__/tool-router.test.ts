@@ -2,8 +2,6 @@
  * ToolRouter Unit Tests
  */
 
-// @ts-expect-error - bun:test types are built-in to bun runtime
-import { describe, it, expect, beforeEach } from 'bun:test';
 import { ToolRouter } from '../tool-router';
 import type { MCPTool, MCPToolResult } from '../types';
 import { MCP_NAMESPACE_SEPARATOR } from '../types';
@@ -20,9 +18,12 @@ describe('ToolRouter', () => {
             const tools = router.getAllTools();
             expect(tools.length).toBeGreaterThan(0);
 
-            // builtInTools에 run_command가 있어야 함
+            // 🔒 보안 패치 2026-02-07: run_command 제거됨 — vision_ocr가 남아있어야 함
+            const visionOcr = tools.find(t => t.name === 'vision_ocr');
+            expect(visionOcr).toBeDefined();
+            // run_command는 보안상 제거되어 존재하지 않아야 함
             const runCommand = tools.find(t => t.name === 'run_command');
-            expect(runCommand).toBeDefined();
+            expect(runCommand).toBeUndefined();
         });
 
         it('should include external tools after registration', () => {

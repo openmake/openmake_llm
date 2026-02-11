@@ -7,6 +7,7 @@
     window.PageModules = window.PageModules || {};
     var _intervals = [];
     var _timeouts = [];
+    function esc(s) { var d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
 
     window.PageModules['admin-metrics'] = {
         getHTML: function() {
@@ -87,7 +88,7 @@
                         nodesContainer.innerHTML = nodes.map(node => `
                             <div class="node-card">
                                 <div class="node-header">
-                                    <span class="node-name">${node.name || node.id}</span>
+                                    <span class="node-name">${esc(node.name || node.id)}</span>
                                     <span class="status-dot ${node.status === 'online' ? 'online' : 'offline'}"></span>
                                 </div>
                                 <div class="node-stats">
@@ -128,7 +129,7 @@
                     <div class="key-item ${key.isActive ? 'active' : ''} ${key.failCount > 0 ? 'warning' : ''}">
                         <div>
                             <div style="font-weight: 600; font-size: 0.9rem;">Key ${key.index}</div>
-                            <div style="font-size: 0.8rem; color: var(--text-muted);">${key.keyId}</div>
+                            <div style="font-size: 0.8rem; color: var(--text-muted);">${esc(key.keyId)}</div>
                         </div>
                         <div style="text-align: right;">
                              <span class="badge ${key.isActive ? 'badge-success' : (key.failCount > 0 ? 'badge-warning' : 'badge')}">

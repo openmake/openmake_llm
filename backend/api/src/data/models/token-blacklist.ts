@@ -4,6 +4,7 @@
  */
 
 import { Pool } from 'pg';
+import { getConfig } from '../../config/env';
 
 /**
  * Pluggable Token Blacklist Interface
@@ -25,7 +26,7 @@ export class PostgresTokenBlacklist implements ITokenBlacklist {
     
     constructor() {
         this.pool = new Pool({
-            connectionString: process.env.DATABASE_URL
+            connectionString: getConfig().databaseUrl
         });
         this.startCleanupScheduler();
     }

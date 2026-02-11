@@ -6,14 +6,82 @@
  */
 
 import { Request, Response, Router } from 'express';
+import * as crypto from 'crypto';
 import { getAuthService } from '../services/AuthService';
 import { getUserManager } from '../data/user-manager';
 import type { OAuthTokenResponse, GoogleUserInfo, GitHubUser, GitHubEmail } from '../auth/types';
 import { requireAuth, requireAdmin, extractToken, blacklistToken, setTokenCookie, clearTokenCookie } from '../auth';
 import { createLogger } from '../utils/logger';
 import { success, badRequest, unauthorized, conflict, internalError, serviceUnavailable } from '../utils/api-response';
+import { getConfig } from '../config/env';
+import { validate } from '../middlewares/validation';
+import { loginSchema, registerSchema, changePasswordSchema } from '../schemas';
 
 const log = createLogger('AuthController');
+
+// 🔒 Phase 2 보안 패치 2026-02-07: OAuth State 저장소 (CSRF 방어용)
+// TTL이 있는 Map으로 구현 - 5분 후 자동 만료
+const oauthStates = new Map<string, { provider: string; createdAt: number }>();
+const STATE_TTL_MS = 5 * 60 * 1000; // 5분
+
+// State 정리 스케줄러 (1분마다 만료된 state 제거)
+setInterval(() => {
+    const now = Date.now();
+    for (const [state, data] of oauthStates.entries()) {
+        if (now - data.createdAt > STATE_TTL_MS) {
+            oauthStates.delete(state);
+        }
+    }
+}, 60 * 1000);
+
+/**
+ * 🔒 보안 강화된 OAuth state 생성
+ */
+function generateSecureState(provider: string): string {
+    const state = crypto.randomBytes(32).toString('hex');
+    oauthStates.set(state, { provider, createdAt: Date.now() });
+    return state;
+}
+
+/**
+ * 🔒 OAuth state 검증 및 소비 (일회성)
+ */
+function validateAndConsumeState(state: string | undefined, expectedProvider: string): boolean {
+    if (!state) return false;
+    
+    const data = oauthStates.get(state);
+    if (!data) {
+        log.error(`[OAuth] State not found: ${state?.substring(0, 10)}...`);
+        return false;
+    }
+    
+    // 일회성 사용을 위해 즉시 삭제
+    oauthStates.delete(state);
+    
+    // 만료 체크
+    if (Date.now() - data.createdAt > STATE_TTL_MS) {
+        log.error('[OAuth] State expired');
+        return false;
+    }
+    
+    // Provider 일치 체크
+    if (data.provider !== expectedProvider) {
+        log.error(`[OAuth] Provider mismatch: expected ${expectedProvider}, got ${data.provider}`);
+        return false;
+    }
+    
+    return true;
+}
+
+/**
+ * 요청의 Host/Origin 기반으로 OAuth redirect URI를 동적으로 생성합니다.
+ * localhost 접속 시 localhost URI, 외부 도메인 접속 시 해당 도메인 URI를 반환합니다.
+ */
+function buildRedirectUri(req: Request, provider: 'google' | 'github', serverPort: number): string {
+    const protocol = req.protocol || 'http';
+    const host = req.get('host') || `localhost:${serverPort}`;
+    return `${protocol}://${host}/api/auth/callback/${provider}`;
+}
 
 /**
  * 인증 관련 API 컨트롤러
@@ -46,11 +114,11 @@ export class AuthController {
         const userManager = getUserManager();
 
         // ===== 기본 인증 API =====
-        this.router.post('/register', this.register.bind(this));
-        this.router.post('/login', this.login.bind(this));
+        this.router.post('/register', validate(registerSchema), this.register.bind(this));
+        this.router.post('/login', validate(loginSchema), this.login.bind(this));
         this.router.post('/logout', this.logout.bind(this));
         this.router.get('/me', requireAuth, this.getCurrentUser.bind(this));
-        this.router.put('/password', requireAuth, this.changePassword.bind(this));
+        this.router.put('/password', requireAuth, validate(changePasswordSchema), this.changePassword.bind(this));
 
         // ===== OAuth API =====
         this.router.get('/providers', this.getProviders.bind(this));
@@ -187,16 +255,16 @@ export class AuthController {
      * GET /api/auth/login/google - Google OAuth 시작
      */
     private googleLogin(req: Request, res: Response): void {
-        const clientId = process.env.GOOGLE_CLIENT_ID;
-        const redirectUri = process.env.OAUTH_REDIRECT_URI ||
-            `http://localhost:${this.serverPort}/api/auth/callback/google`;
+        const clientId = getConfig().googleClientId;
+        const redirectUri = buildRedirectUri(req, 'google', this.serverPort);
 
         if (!clientId) {
             res.status(503).json(serviceUnavailable('Google OAuth가 설정되지 않았습니다'));
             return;
         }
 
-        const state = Math.random().toString(36).substring(7) + Date.now();
+        // 🔒 Phase 2 보안 패치: 암호학적으로 안전한 state 생성
+        const state = generateSecureState('google');
         const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
         authUrl.searchParams.set('client_id', clientId);
         authUrl.searchParams.set('redirect_uri', redirectUri);
@@ -206,7 +274,7 @@ export class AuthController {
         authUrl.searchParams.set('access_type', 'offline');
         authUrl.searchParams.set('prompt', 'consent');
 
-        log.info('[OAuth] Google 로그인 리다이렉트');
+        log.info(`[OAuth] Google 로그인 리다이렉트 (redirect_uri: ${redirectUri})`);
         res.redirect(authUrl.toString());
     }
 
@@ -214,16 +282,16 @@ export class AuthController {
      * GET /api/auth/login/github - GitHub OAuth 시작
      */
     private githubLogin(req: Request, res: Response): void {
-        const clientId = process.env.GITHUB_CLIENT_ID;
-        const redirectUri = process.env.OAUTH_REDIRECT_URI ||
-            `http://localhost:${this.serverPort}/api/auth/callback/github`;
+        const clientId = getConfig().githubClientId;
+        const redirectUri = buildRedirectUri(req, 'github', this.serverPort);
 
         if (!clientId) {
             res.status(503).json(serviceUnavailable('GitHub OAuth가 설정되지 않았습니다'));
             return;
         }
 
-        const state = Math.random().toString(36).substring(7) + Date.now();
+        // 🔒 Phase 2 보안 패치: 암호학적으로 안전한 state 생성
+        const state = generateSecureState('github');
         const authUrl = new URL('https://github.com/login/oauth/authorize');
         authUrl.searchParams.set('client_id', clientId);
         authUrl.searchParams.set('redirect_uri', redirectUri);
@@ -238,10 +306,17 @@ export class AuthController {
      * GET /api/auth/callback/google - Google OAuth 콜백
      */
     private async googleCallback(req: Request, res: Response): Promise<void> {
-        const { code, error: oauthError } = req.query;
+        const { code, error: oauthError, state } = req.query;
 
         if (oauthError) {
             res.redirect(`/login.html?error=${encodeURIComponent(String(oauthError))}`);
+            return;
+        }
+
+        // 🔒 Phase 2 CSRF 방어: state 검증
+        if (!validateAndConsumeState(state as string | undefined, 'google')) {
+            log.error('[OAuth] Google callback: Invalid or expired state');
+            res.redirect('/login.html?error=invalid_state');
             return;
         }
 
@@ -251,10 +326,9 @@ export class AuthController {
         }
 
         try {
-            const clientId = process.env.GOOGLE_CLIENT_ID!;
-            const clientSecret = process.env.GOOGLE_CLIENT_SECRET!;
-            const redirectUri = process.env.OAUTH_REDIRECT_URI ||
-                `http://localhost:${this.serverPort}/api/auth/callback/google`;
+            const clientId = getConfig().googleClientId;
+            const clientSecret = getConfig().googleClientSecret;
+            const redirectUri = buildRedirectUri(req, 'google', this.serverPort);
 
             // 토큰 교환
             const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
@@ -289,7 +363,7 @@ export class AuthController {
              res.redirect('/');
         } catch (error) {
             log.error('[OAuth Google Callback] 오류:', error);
-            res.redirect(`/login.html?error=${encodeURIComponent(String(error))}`);
+            res.redirect('/login.html?error=oauth_failed');
         }
     }
 
@@ -297,10 +371,17 @@ export class AuthController {
      * GET /api/auth/callback/github - GitHub OAuth 콜백
      */
     private async githubCallback(req: Request, res: Response): Promise<void> {
-        const { code, error: oauthError } = req.query;
+        const { code, error: oauthError, state } = req.query;
 
         if (oauthError) {
             res.redirect(`/login.html?error=${encodeURIComponent(String(oauthError))}`);
+            return;
+        }
+
+        // 🔒 Phase 2 CSRF 방어: state 검증
+        if (!validateAndConsumeState(state as string | undefined, 'github')) {
+            log.error('[OAuth] GitHub callback: Invalid or expired state');
+            res.redirect('/login.html?error=invalid_state');
             return;
         }
 
@@ -310,8 +391,8 @@ export class AuthController {
         }
 
         try {
-            const clientId = process.env.GITHUB_CLIENT_ID!;
-            const clientSecret = process.env.GITHUB_CLIENT_SECRET!;
+            const clientId = getConfig().githubClientId;
+            const clientSecret = getConfig().githubClientSecret;
 
             // 토큰 교환
             const tokenRes = await fetch('https://github.com/login/oauth/access_token', {
@@ -363,7 +444,7 @@ export class AuthController {
              res.redirect('/');
         } catch (error) {
             log.error('[OAuth GitHub Callback] 오류:', error);
-            res.redirect(`/login.html?error=${encodeURIComponent(String(error))}`);
+            res.redirect('/login.html?error=oauth_failed');
         }
     }
 

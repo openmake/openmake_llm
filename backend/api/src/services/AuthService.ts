@@ -8,6 +8,7 @@
 import { getUserManager, PublicUser } from '../data/user-manager';
 import { generateToken } from '../auth';
 import { createLogger } from '../utils/logger';
+import { getConfig } from '../config/env';
 
 const log = createLogger('AuthService');
 
@@ -159,7 +160,7 @@ export class AuthService {
             const randomPassword = Math.random().toString(36).substring(2, 15);
 
             // 관리자 이메일 목록 확인
-            const adminEmails = (process.env.ADMIN_EMAILS || '')
+            const adminEmails = getConfig().adminEmails
                 .split(',')
                 .map(e => e.toLowerCase().trim())
                 .filter(e => e);
@@ -178,7 +179,7 @@ export class AuthService {
             log.info(`[OAuth] ${provider} 신규 사용자 생성: ${email}`);
         } else {
             // 기존 계정 관리자 승격 체크
-            const adminEmails = (process.env.ADMIN_EMAILS || '')
+            const adminEmails = getConfig().adminEmails
                 .split(',')
                 .map(e => e.toLowerCase().trim())
                 .filter(e => e);
@@ -201,10 +202,11 @@ export class AuthService {
     getAvailableProviders(): string[] {
         const providers: string[] = [];
 
-        if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
+        const config = getConfig();
+        if (config.googleClientId && config.googleClientSecret) {
             providers.push('google');
         }
-        if (process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET) {
+        if (config.githubClientId && config.githubClientSecret) {
             providers.push('github');
         }
 

@@ -18,10 +18,14 @@ import { OllamaClient } from '../ollama/client';
 import { routeToAgent, getAgentSystemMessage, AGENTS } from '../agents';
 import { getPromptConfig } from '../chat/prompt';
 import { getSequentialThinkingServer, applySequentialThinking } from '../mcp/sequential-thinking';
-import { getGptOssTaskPreset, isGeminiModel } from '../ollama/types';
+import { getGptOssTaskPreset, isGeminiModel, ModelOptions } from '../ollama/types';
+import { selectOptimalModel, adjustOptionsForModel, checkModelCapability, ModelSelection } from '../chat/model-selector';
 import { DocumentResult } from '../documents/processor';
 import { DocumentStore } from '../documents/store';
 import { createDiscussionEngine, DiscussionProgress, DiscussionResult } from '../agents/discussion-engine';
+import { DeepResearchService, ResearchProgress } from './DeepResearchService';
+import { getUnifiedDatabase } from '../data/models/unified-database';
+import { v4 as uuidv4 } from 'uuid';
 import { getApiUsageTracker } from '../ollama/api-usage-tracker';
 import { getApiKeyManager } from '../ollama/api-key-manager';
 import { ToolDefinition, ChatMessage } from '../ollama/types';
@@ -29,6 +33,32 @@ import { UserTier } from '../data/user-manager';
 import { canUseTool } from '../mcp/tool-tiers';
 import { getUnifiedMCPClient } from '../mcp/unified-client';
 import { UserContext } from '../mcp/user-sandbox';
+
+// ============================================================
+// A2A Multi-Model Parallel Configuration
+// ============================================================
+
+/** A2A 병렬 응답에 사용할 모델 설정 */
+const A2A_MODELS = {
+    primary: 'gpt-oss:120b-cloud',
+    secondary: 'gemini-3-flash-preview:cloud',
+    synthesizer: 'gemini-3-flash-preview:cloud',
+} as const;
+
+/** A2A 종합 시스템 프롬프트 — 두 모델의 응답을 하나로 합성 */
+const A2A_SYNTHESIS_SYSTEM_PROMPT = [
+    '당신은 두 AI 모델의 응답을 종합하여 최고 품질의 최종 답변을 생성하는 전문가입니다.',
+    '',
+    '## 종합 지침',
+    '1. 각 응답에서 가장 강력하고 정확한 포인트를 식별하세요.',
+    '2. 모순되는 내용이 있으면 더 정확하고 상세한 쪽을 채택하세요.',
+    '3. 양쪽의 보완적 정보를 자연스럽게 결합하세요.',
+    '4. 코드 블록, 마크다운 서식, 구조화된 콘텐츠는 그대로 보존하세요.',
+    '5. 원본 질문과 동일한 언어로 응답하세요.',
+    '',
+    '## 출력 형식',
+    '최종 종합 답변만 출력하세요. "모델 A에 따르면..." 같은 표현은 사용하지 마세요.',
+].join('\n');
 
 /**
  * Chat message structure for conversation history
@@ -92,7 +122,8 @@ export type WebSearchFunction = (
 /**
  * Chat metrics interface - flexible to accommodate various metric types
  */
-export interface ChatMetrics {
+/** Per-message response metadata (distinct from monitoring/metrics.ts ChatMetrics) */
+export interface ChatResponseMeta {
     model?: string;
     tokens?: number;
     duration?: number;
@@ -127,6 +158,8 @@ export interface ChatMessageRequest {
     webSearchContext?: string;
     /** 멀티 에이전트 토론 모드 활성화 여부 */
     discussionMode?: boolean;
+    /** 🔬 Deep Research 모드 활성화 여부 */
+    deepResearchMode?: boolean;
     /** 팔라마 Native Thinking 모드 활성화 여부 */
     thinkingMode?: boolean;
     /** Thinking 레벨 (low/medium/high) */
@@ -137,6 +170,8 @@ export interface ChatMessageRequest {
     userRole?: 'admin' | 'user' | 'guest';
     /** 🆕 사용자 등급 (free/pro/enterprise) - 명시적 지정 시 사용 */
     userTier?: UserTier;
+    /** 🆕 중단 시그널 - 사용자가 응답 생성을 중단할 때 사용 */
+    abortSignal?: AbortSignal;
 }
 
 /**
@@ -217,6 +252,7 @@ export class ChatService {
      * @param onToken - 토큰 스트리밍 콜백
      * @param onAgentSelected - 에이전트 선택 알림 콜백 (선택적)
      * @param onDiscussionProgress - 토론 진행 상황 콜백 (선택적)
+     * @param onResearchProgress - 심층 연구 진행 상황 콜백 (선택적)
      * @returns 최종 응답 문자열
      */
     async processMessage(
@@ -224,9 +260,17 @@ export class ChatService {
         uploadedDocuments: DocumentStore,
         onToken: (token: string) => void,
         onAgentSelected?: (agent: { type: string; name: string; emoji?: string; phase?: string; reason?: string; confidence?: number }) => void,
-        onDiscussionProgress?: (progress: DiscussionProgress) => void
+        onDiscussionProgress?: (progress: DiscussionProgress) => void,
+        onResearchProgress?: (progress: ResearchProgress) => void
     ): Promise<string> {
-        const { message, history, docId, images, webSearchContext, discussionMode, thinkingMode, thinkingLevel, userId, userRole, userTier } = req;
+        const { message, history, docId, images, webSearchContext, discussionMode, deepResearchMode, thinkingMode, thinkingLevel, userId, userRole, userTier, abortSignal } = req;
+
+        // 🆕 중단 체크 헬퍼 함수
+        const checkAborted = () => {
+            if (abortSignal?.aborted) {
+                throw new Error('ABORTED');
+            }
+        };
 
         // 🆕 사용자 컨텍스트 설정 (도구 권한 검증용)
         this.setUserContext(userId || 'guest', userRole, userTier);
@@ -234,6 +278,11 @@ export class ChatService {
         // 🎯 토론 모드 처리
         if (discussionMode) {
             return this.processMessageWithDiscussion(req, uploadedDocuments, onToken, onDiscussionProgress);
+        }
+
+        // 🔬 Deep Research 모드 처리
+        if (deepResearchMode) {
+            return this.processMessageWithDeepResearch(req, onToken, onResearchProgress);
         }
 
         const startTime = Date.now(); // 🆕 응답 시간 추적
@@ -300,9 +349,23 @@ export class ChatService {
         if (webSearchContext) finalEnhancedMessage += webSearchContext;
         finalEnhancedMessage += `\n## USER QUESTION\n${enhancedUserMessage}`;
 
-        // ⚙️ 5. 프롬프트 및 옵션 설정
+        // ⚙️ 5. 프롬프트 및 옵션 설정 + 🆕 모델 자동 선택
         const promptConfig = getPromptConfig(message);
-        let chatOptions = promptConfig.options || {};
+        
+        // 🆕 질문 유형 기반 모델 자동 선택
+        const hasImages = (images && images.length > 0) || documentImages.length > 0;
+        const modelSelection = selectOptimalModel(message, hasImages);
+        console.log(`[ChatService] 🎯 모델 자동 선택: ${modelSelection.model} (${modelSelection.reason})`);
+        
+        // 🆕 선택된 모델로 클라이언트 설정 업데이트
+        this.client.setModel(modelSelection.model);
+        
+        // 🆕 질문 유형에 맞게 옵션 조정
+        let chatOptions = adjustOptionsForModel(
+            modelSelection.model,
+            { ...modelSelection.options, ...(promptConfig.options || {}) },
+            modelSelection.queryType
+        );
 
         if (docId) {
             const docPreset = getGptOssTaskPreset('document');
@@ -310,6 +373,11 @@ export class ChatService {
         }
 
         const currentImages = [...(images || []), ...documentImages];
+
+        // 🆕 모델 호환성 체크 (도구 호출 지원 여부)
+        const supportsTools = checkModelCapability(modelSelection.model, 'toolCalling');
+        const supportsThinking = checkModelCapability(modelSelection.model, 'thinking');
+        console.log(`[ChatService] 📊 모델 기능: tools=${supportsTools}, thinking=${supportsThinking}`);
 
 
 
@@ -348,72 +416,109 @@ export class ChatService {
             ...(currentImages.length > 0 && { images: currentImages })
         });
 
-        // Agent Loop
-        while (currentTurn < maxTurns) {
-            currentTurn++;
-            console.log(`[ChatService] 🔄 Agent Loop Turn ${currentTurn}/${maxTurns}`);
-
-            // Prepare tools via ToolRouter (내장+외부 도구 통합, 등급별 필터링)
-            const toolRouter = getUnifiedMCPClient().getToolRouter();
-            const userTier = this.currentUserContext?.tier || 'free';
-            const allowedTools = toolRouter.getOllamaTools(userTier);
-
-            // Call Chat API with Thinking Mode support
-            const thinkOption = thinkingMode ? (thinkingLevel || 'high') : undefined;
-            const response = await this.client.chat(
+        // 🔀 A2A Multi-Model Parallel Answering (기본 플로우)
+        let a2aSucceeded = false;
+        try {
+            checkAborted();
+            console.log('[ChatService] 🔀 A2A 병렬 응답 시작...');
+            const a2aResponse = await this.processA2AParallel(
                 currentHistory,
                 chatOptions,
                 (token) => {
-                    // Only stream content tokens for the final answer or intermediate thoughts if we want
-                    // For now, simple streaming of content
-                    if (!token.includes('tool_calls')) {
-                        fullResponse += token;
-                        onToken(token);
-                    }
+                    fullResponse += token;
+                    onToken(token);
                 },
-                {
-                    tools: allowedTools as ToolDefinition[],
-                    think: thinkOption  // 🧠 Ollama Native Thinking
-                }
+                abortSignal
             );
+            if (a2aResponse !== null) {
+                finalResponse = a2aResponse;
+                a2aSucceeded = true;
+                console.log('[ChatService] ✅ A2A 병렬 응답 완료');
+            }
+        } catch (e) {
+            if (e instanceof Error && e.message === 'ABORTED') throw e;
+            console.warn('[ChatService] ⚠️ A2A 실패, 단일 모델로 폴백:', e instanceof Error ? e.message : e);
+        }
 
-            // Capture metrics (accumulate or last?)
-            // Ideally accumulate, but for now take the last one or significant one
-            if (response.metrics) metrics = response.metrics as unknown as Record<string, unknown>;
+        // 🔄 A2A 실패 시 기존 단일 모델 Agent Loop 폴백
+        if (!a2aSucceeded) {
+            console.log('[ChatService] 🔄 단일 모델 Agent Loop 폴백');
 
-            // Add assistant response to history
-            const assistantMessage: ChatMessage = {
-                role: 'assistant',
-                content: response.content || '',
-                tool_calls: response.tool_calls
-            };
-            currentHistory.push(assistantMessage);
+            // Agent Loop
+            while (currentTurn < maxTurns) {
+                // 🆕 중단 체크
+                checkAborted();
 
-            // Check for tool calls
-            if (response.tool_calls && response.tool_calls.length > 0) {
-                console.log(`[ChatService] 🛠️ Tool Calls detected: ${response.tool_calls.length}`);
+                currentTurn++;
+                console.log(`[ChatService] 🔄 Agent Loop Turn ${currentTurn}/${maxTurns}`);
 
-                // Execute tools
-                for (const toolCall of response.tool_calls) {
-                    const toolResult = await this.executeToolCall(toolCall);
-
-                    // Add tool result to history
-                    currentHistory.push({
-                        role: 'tool',
-                        content: toolResult, // Result must be string
-                        // Ollama/OpenAI expects 'tool_call_id' reference usually, 
-                        // but Ollama's current implementation might just need role: tool?
-                        // Checking Ollama docs: messages should have 'role': 'tool', 'content': result
-                        // And usually needs to match the function call.
-                        // However, Ollama generic implementation details specifically for 'tool' role:
-                        // "messages": [ ... { "role": "tool", "content": "..." } ]
-                    });
+                // 🆕 모델이 도구를 지원하는 경우에만 도구 전달
+                let allowedTools: ToolDefinition[] = [];
+                if (supportsTools) {
+                    // Prepare tools via ToolRouter (내장+외부 도구 통합, 등급별 필터링)
+                    const toolRouter = getUnifiedMCPClient().getToolRouter();
+                    const userTierForTools = this.currentUserContext?.tier || 'free';
+                    allowedTools = toolRouter.getOllamaTools(userTierForTools) as ToolDefinition[];
                 }
-                // Loop continues to let LLM process the tool result
-            } else {
-                // No tool calls, we are done
-                finalResponse = response.content || '';
-                break;
+
+                // 🆕 Thinking 모드도 모델 호환성 체크
+                const thinkOption = (thinkingMode && supportsThinking) ? (thinkingLevel || 'high') : undefined;
+                
+                const response = await this.client.chat(
+                    currentHistory,
+                    chatOptions,
+                    (token) => {
+                        // Only stream content tokens for the final answer or intermediate thoughts if we want
+                        // For now, simple streaming of content
+                        if (!token.includes('tool_calls')) {
+                            fullResponse += token;
+                            onToken(token);
+                        }
+                    },
+                    {
+                        tools: allowedTools.length > 0 ? allowedTools : undefined,
+                        think: thinkOption  // 🧠 Ollama Native Thinking
+                    }
+                );
+
+                // Capture metrics (accumulate or last?)
+                // Ideally accumulate, but for now take the last one or significant one
+                if (response.metrics) metrics = response.metrics as unknown as Record<string, unknown>;
+
+                // Add assistant response to history
+                const assistantMessage: ChatMessage = {
+                    role: 'assistant',
+                    content: response.content || '',
+                    tool_calls: response.tool_calls
+                };
+                currentHistory.push(assistantMessage);
+
+                // Check for tool calls
+                if (response.tool_calls && response.tool_calls.length > 0) {
+                    console.log(`[ChatService] 🛠️ Tool Calls detected: ${response.tool_calls.length}`);
+
+                    // Execute tools
+                    for (const toolCall of response.tool_calls) {
+                        const toolResult = await this.executeToolCall(toolCall);
+
+                        // Add tool result to history
+                        currentHistory.push({
+                            role: 'tool',
+                            content: toolResult, // Result must be string
+                            // Ollama/OpenAI expects 'tool_call_id' reference usually, 
+                            // but Ollama's current implementation might just need role: tool?
+                            // Checking Ollama docs: messages should have 'role': 'tool', 'content': result
+                            // And usually needs to match the function call.
+                            // However, Ollama generic implementation details specifically for 'tool' role:
+                            // "messages": [ ... { "role": "tool", "content": "..." } ]
+                        });
+                    }
+                    // Loop continues to let LLM process the tool result
+                } else {
+                    // No tool calls, we are done
+                    finalResponse = response.content || '';
+                    break;
+                }
             }
         }
 
@@ -708,6 +813,207 @@ export class ChatService {
     }
 
     /**
+     * 🔬 Deep Research 모드 메시지 처리
+     * 
+     * 심층 연구를 수행하여 주제에 대한 종합 보고서를 생성합니다.
+     * - 주제 분해 → 웹 검색 → LLM 합성 → 반복 루프 → 보고서 생성
+     * 
+     * @param req - 채팅 메시지 요청
+     * @param onToken - 토큰 스트리밍 콜백
+     * @param onProgress - 연구 진행 상황 콜백 (선택적)
+     * @returns 연구 보고서 문자열
+     */
+    async processMessageWithDeepResearch(
+        req: ChatMessageRequest,
+        onToken: (token: string) => void,
+        onProgress?: (progress: ResearchProgress) => void
+    ): Promise<string> {
+        const { message, userId } = req;
+
+        console.log('[ChatService] 🔬 Deep Research 모드 시작');
+
+        // DeepResearchService 인스턴스 생성 (50-100개 소스 심층 조사)
+        const researchService = new DeepResearchService({
+            maxLoops: 5,
+            llmModel: this.client.model,
+            searchApi: 'all',
+            maxSearchResults: 360,
+            language: 'ko',
+            maxTotalSources: 80,
+            scrapeFullContent: true,
+            maxScrapePerLoop: 15,
+            scrapeTimeoutMs: 15000,
+            chunkSize: 10
+        });
+
+        // 세션 ID 생성
+        const sessionId = uuidv4();
+
+        // DB에 리서치 세션 생성 (executeResearch 전에 필수 — FK 제약조건)
+        const db = getUnifiedDatabase();
+        await db.createResearchSession({
+            id: sessionId,
+            userId: userId && userId !== 'guest' && !userId.startsWith('anon-') ? userId : undefined,
+            topic: message,
+            depth: 'deep'
+        });
+
+        // 연구 시작
+        const result = await researchService.executeResearch(
+            sessionId,
+            message,
+            onProgress
+        );
+
+        // 연구 결과를 포맷팅
+        const formattedResponse = this.formatResearchResult(result);
+
+        // 토큰 스트리밍
+        for (const char of formattedResponse) {
+            onToken(char);
+        }
+
+        console.log(`[ChatService] 🔬 Deep Research 완료: ${result.duration}ms, ${result.totalSteps} 단계`);
+
+        return formattedResponse;
+    }
+
+    /**
+     * 🔬 Deep Research 결과 포맷팅
+     */
+    private formatResearchResult(result: { topic: string; summary: string; keyFindings: string[]; sources: Array<{ title: string; url: string }>; totalSteps: number; duration: number }): string {
+        const sections = [
+            `# 🔬 심층 연구 보고서: ${result.topic}`,
+            '',
+            '## 📋 종합 요약',
+            result.summary,
+            '',
+            '## 🔍 주요 발견사항',
+            ...result.keyFindings.map((finding, i) => `${i + 1}. ${finding}`),
+            '',
+            '## 📚 참고 자료',
+            ...result.sources.map((source, i) => `[${i + 1}] [${source.title}](${source.url})`),
+            '',
+            `---`,
+            `*총 ${result.totalSteps}단계 연구, ${result.sources.length}개 소스 분석, ${(result.duration / 1000).toFixed(1)}초 소요*`
+        ];
+
+        return sections.join('\n');
+    }
+
+    // ============================================================
+    // 🔀 A2A Multi-Model Parallel Answering
+    // ============================================================
+
+    /**
+     * A2A 병렬 응답: 두 모델이 동시에 답변 → 종합 모델이 합성
+     * 
+     * @param messages - 전체 대화 히스토리 (system + history + user)
+     * @param chatOptions - 모델 옵션
+     * @param onToken - 종합 결과 스트리밍 콜백
+     * @param abortSignal - 중단 시그널
+     * @returns 종합된 최종 응답 문자열, 또는 null (양쪽 모두 실패 시 → 폴백 트리거)
+     */
+    private async processA2AParallel(
+        messages: ChatMessage[],
+        chatOptions: ModelOptions,
+        onToken: (token: string) => void,
+        abortSignal?: AbortSignal
+    ): Promise<string | null> {
+        const startTime = Date.now();
+
+        // 1. 두 모델용 OllamaClient 생성
+        const clientA = new OllamaClient({ model: A2A_MODELS.primary });
+        const clientB = new OllamaClient({ model: A2A_MODELS.secondary });
+
+        console.log(`[ChatService] 🔀 A2A 병렬 요청: ${A2A_MODELS.primary} + ${A2A_MODELS.secondary}`);
+
+        // 2. 병렬 요청 (스트리밍 없이, 전체 응답 수집)
+        const [resultA, resultB] = await Promise.allSettled([
+            clientA.chat(messages, chatOptions),
+            clientB.chat(messages, chatOptions),
+        ]);
+
+        // 중단 체크
+        if (abortSignal?.aborted) {
+            throw new Error('ABORTED');
+        }
+
+        const responseA = resultA.status === 'fulfilled' ? resultA.value.content : null;
+        const responseB = resultB.status === 'fulfilled' ? resultB.value.content : null;
+        const durationParallel = Date.now() - startTime;
+
+        console.log(`[ChatService] 🔀 A2A 병렬 완료 (${durationParallel}ms): ` +
+            `${A2A_MODELS.primary}=${resultA.status}, ${A2A_MODELS.secondary}=${resultB.status}`);
+
+        // 3. 결과 처리
+        if (!responseA && !responseB) {
+            // 양쪽 모두 실패 → null 반환 (폴백 트리거)
+            console.warn('[ChatService] ⚠️ A2A 양쪽 모두 실패');
+            if (resultA.status === 'rejected') console.warn(`  ${A2A_MODELS.primary}: ${resultA.reason}`);
+            if (resultB.status === 'rejected') console.warn(`  ${A2A_MODELS.secondary}: ${resultB.reason}`);
+            return null;
+        }
+
+        if (!responseA || !responseB) {
+            // 한쪽만 성공 → 성공한 응답 직접 스트리밍
+            const singleResponse = (responseA || responseB) as string;
+            const succeededModel = responseA ? A2A_MODELS.primary : A2A_MODELS.secondary;
+            console.log(`[ChatService] 🔀 A2A 단일 응답 사용: ${succeededModel}`);
+
+            // A2A 표시 헤더 추가
+            const header = `> 🤖 *${succeededModel} 단독 응답*\n\n`;
+            for (const char of header) { onToken(char); }
+            for (const char of singleResponse) { onToken(char); }
+            return header + singleResponse;
+        }
+
+        // 4. 양쪽 모두 성공 → 종합 합성
+        console.log(`[ChatService] 🔀 A2A 종합 합성 시작 (synthesizer: ${A2A_MODELS.synthesizer})`);
+
+        // 원본 사용자 메시지 추출 (마지막 user 메시지)
+        const userMessage = [...messages].reverse().find(m => m.role === 'user')?.content || '';
+
+        const synthesisUserMessage = [
+            `## 원본 질문`,
+            userMessage,
+            '',
+            `## Response A (${A2A_MODELS.primary})`,
+            responseA,
+            '',
+            `## Response B (${A2A_MODELS.secondary})`,
+            responseB,
+            '',
+            '위 두 응답을 종합하여 최고 품질의 최종 답변을 작성해주세요.',
+        ].join('\n');
+
+        const synthesizerClient = new OllamaClient({ model: A2A_MODELS.synthesizer });
+        let fullSynthesis = '';
+
+        // A2A 표시 헤더 스트리밍
+        const header = `> 🔀 *${A2A_MODELS.primary} + ${A2A_MODELS.secondary} A2A 종합 답변*\n\n`;
+        for (const char of header) { onToken(char); }
+
+        // 종합 모델 스트리밍 호출
+        await synthesizerClient.chat(
+            [
+                { role: 'system', content: A2A_SYNTHESIS_SYSTEM_PROMPT },
+                { role: 'user', content: synthesisUserMessage },
+            ],
+            { temperature: 0.3 },
+            (token) => {
+                fullSynthesis += token;
+                onToken(token);
+            }
+        );
+
+        const totalDuration = Date.now() - startTime;
+        console.log(`[ChatService] ✅ A2A 종합 완료: 병렬=${durationParallel}ms, 합성=${totalDuration - durationParallel}ms, 총=${totalDuration}ms`);
+
+        return header + fullSynthesis;
+    }
+
+    /**
      * 단일 MCP 도구 호출을 실행합니다.
      * 
      * 🆕 등급별 권한 검증 적용:
@@ -797,11 +1103,15 @@ export class ChatService {
                 if (imageBase64) {
                     imageData = imageBase64;
                 } else if (imagePath) {
-                    // 파일에서 base64 인코딩 (비동기)
+                    // 🔒 보안 패치 2026-02-07: 경로 탐색 방어 — UserSandbox 검증 적용
+                    const { UserSandbox } = await import('../mcp/user-sandbox');
+                    const userId = this.currentUserContext?.userId || 'guest';
+                    const safePath = UserSandbox.resolvePath(userId, imagePath);
+                    if (!safePath) {
+                        return 'Error: 접근 권한이 없는 경로입니다. 사용자 작업 디렉토리 내 파일만 접근할 수 있습니다.';
+                    }
                     const { readFile } = await import('fs/promises');
-                    const { resolve: resolvePath } = await import('path');
-                    const absolutePath = resolvePath(imagePath);
-                    const fileBuffer = await readFile(absolutePath);
+                    const fileBuffer = await readFile(safePath);
                     imageData = fileBuffer.toString('base64');
                 } else {
                     return 'Error: image_path 또는 image_base64가 필요합니다.';
@@ -844,10 +1154,15 @@ export class ChatService {
                 if (imageBase64) {
                     imageData = imageBase64;
                 } else if (imagePath) {
+                    // 🔒 보안 패치 2026-02-07: 경로 탐색 방어 — UserSandbox 검증 적용
+                    const { UserSandbox } = await import('../mcp/user-sandbox');
+                    const userId = this.currentUserContext?.userId || 'guest';
+                    const safePath = UserSandbox.resolvePath(userId, imagePath);
+                    if (!safePath) {
+                        return 'Error: 접근 권한이 없는 경로입니다. 사용자 작업 디렉토리 내 파일만 접근할 수 있습니다.';
+                    }
                     const { readFile } = await import('fs/promises');
-                    const { resolve: resolvePath } = await import('path');
-                    const absolutePath = resolvePath(imagePath);
-                    const fileBuffer = await readFile(absolutePath);
+                    const fileBuffer = await readFile(safePath);
                     imageData = fileBuffer.toString('base64');
                 } else {
                     return 'Error: image_path 또는 image_base64가 필요합니다.';
@@ -878,10 +1193,11 @@ export class ChatService {
             }
         }
 
+        // ⚙️ Phase 3: 도구 실행 시 UserContext 전달 (2026-02-07)
         // 도구 실행 (ToolRouter 경유 — 내장+외부 도구 통합 라우팅)
         try {
             const toolRouter = getUnifiedMCPClient().getToolRouter();
-            const result = await toolRouter.executeTool(toolName, toolArgs);
+            const result = await toolRouter.executeTool(toolName, toolArgs, this.currentUserContext ?? undefined);
             if (result.isError) {
                 return `Error executing tool: ${result.content.map((c: { text?: string }) => c.text).join('\n')}`;
             }

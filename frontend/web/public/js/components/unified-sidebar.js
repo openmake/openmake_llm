@@ -30,6 +30,7 @@
         plus: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>',
         search: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>',
         settings: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',
+        logout: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>',
         chat: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
         empty: '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>'
     };
@@ -131,6 +132,10 @@
         this._updateUserSection();
 
         console.log(LOG_PREFIX, '\uCD08\uAE30\uD654 \uC644\uB8CC. \uC0C1\uD0DC:', this.state);
+
+        // OAuth 쿠키 세션 복구 대기: recoverSessionFromCookie()가 비동기로 완료되면
+        // 사이드바 사용자 섹션을 다시 업데이트
+        window.dispatchEvent(new Event('sidebarReady'));
     };
 
     // ─── HTML 렌더링 ───────────────────────────────────
@@ -164,6 +169,18 @@
                 '</div>' +
                 // User section
                 '<div class="us-user-section">' +
+                    // Dropdown Menu
+                    '<div class="us-user-menu">' +
+                        '<div class="us-menu-header"></div>' +
+                        '<button class="us-menu-item settings">' +
+                            '<span class="us-menu-icon">' + ICONS.settings + '</span>' +
+                            '<span>\uC124\uC815</span>' + // 설정
+                        '</button>' +
+                        '<button class="us-menu-item logout">' +
+                            '<span class="us-menu-icon">' + ICONS.logout + '</span>' +
+                            '<span>\uB85C\uADF8\uC544\uC6C3</span>' + // 로그아웃
+                        '</button>' +
+                    '</div>' +
                     '<div class="us-user-avatar">?</div>' +
                     '<span class="us-user-name us-label">\uC0AC\uC6A9\uC790</span>' +
                     '<button class="us-settings-btn" title="\uC124\uC815">' + ICONS.settings + '</button>' +
@@ -252,16 +269,21 @@
         // 사용자 아바타/이름 클릭 → 로그인/프로필
         var userAvatar = this.el.querySelector('.us-user-avatar');
         var userName = this.el.querySelector('.us-user-name');
-        var userClickHandler = function () {
+        var userClickHandler = function (e) {
+            e.stopPropagation();
             // getCurrentUser()로 실제 유효한 로그인 상태 확인 (_updateUserSection과 동일 기준)
             var user = typeof window.getCurrentUser === 'function' ? window.getCurrentUser() : null;
             if (!user) {
-                window.location.href = '/login.html';
-            } else if (window.Router) {
-                window.Router.navigate('/settings.html');
-                if (isMobile()) {
-                    self.setState(STATES.HIDDEN);
+                var savedUser = localStorage.getItem('user');
+                if (savedUser) {
+                    try { user = JSON.parse(savedUser); } catch (e) { user = null; }
                 }
+            }
+
+            if (!user) {
+                window.location.href = '/login.html';
+            } else {
+                self._toggleUserMenu();
             }
         };
         if (userAvatar) {
@@ -272,6 +294,47 @@
             userName.style.cursor = 'pointer';
             userName.addEventListener('click', userClickHandler);
         }
+
+        // User Menu Items
+        var menuSettings = this.el.querySelector('.us-menu-item.settings');
+        if (menuSettings) {
+            menuSettings.addEventListener('click', function() {
+                self._closeUserMenu();
+                if (window.Router) {
+                    window.Router.navigate('/settings.html');
+                }
+                if (isMobile()) {
+                    self.setState(STATES.HIDDEN);
+                }
+            });
+        }
+
+        var menuLogout = this.el.querySelector('.us-menu-item.logout');
+        if (menuLogout) {
+            menuLogout.addEventListener('click', function() {
+                self._closeUserMenu();
+                if (typeof window.logout === 'function') {
+                    window.logout();
+                } else {
+                    localStorage.clear();
+                    window.location.href = '/login.html';
+                }
+            });
+        }
+
+        // Close menu on click outside
+        document.addEventListener('click', function(e) {
+            if (!e.target.closest('.us-user-section')) {
+                self._closeUserMenu();
+            }
+        });
+
+        // Close menu on ESC
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                self._closeUserMenu();
+            }
+        });
 
         // 설정 버튼
         var settingsBtn = this.el.querySelector('.us-settings-btn');
@@ -386,7 +449,9 @@
             })
             .then(function (data) {
                 // API 응답 형태에 따라 대화 목록 추출
-                var list = Array.isArray(data) ? data : (data.sessions || data.conversations || data.data || []);
+                // Backend returns: { success: true, data: { sessions: [...] } }
+                var payload = data.data || data;  // Unwrap standardized API response
+                var list = Array.isArray(payload) ? payload : (payload.sessions || payload.conversations || []);
                 self.conversations = list;
                 self._renderConversations(list);
             })
@@ -480,16 +545,44 @@
             item.classList.toggle('active', item.dataset.id === conversationId);
         });
 
-        // 대화 로드
+        // 대화 로드 (app.js에서 window.loadConversation = loadSession 으로 노출)
         if (typeof window.loadConversation === 'function') {
             window.loadConversation(conversationId);
         } else if (window.Router) {
-            window.Router.navigate('/?chat=' + conversationId);
+            window.Router.navigate('/?sessionId=' + conversationId);
         }
 
         // 모바일이면 사이드바 닫기
         if (isMobile()) {
             this.setState(STATES.HIDDEN);
+        }
+    };
+
+    UnifiedSidebar.prototype._toggleUserMenu = function () {
+        var menu = this.el.querySelector('.us-user-menu');
+        if (menu) {
+            menu.classList.toggle('active');
+            if (menu.classList.contains('active')) {
+                // Update email in header
+                var user = typeof window.getCurrentUser === 'function' ? window.getCurrentUser() : null;
+                if (!user) {
+                    var savedUser = localStorage.getItem('user');
+                    if (savedUser) {
+                        try { user = JSON.parse(savedUser); } catch (e) { user = null; }
+                    }
+                }
+                var header = menu.querySelector('.us-menu-header');
+                if (header && user) {
+                    header.textContent = user.email || user.name || 'User';
+                }
+            }
+        }
+    };
+
+    UnifiedSidebar.prototype._closeUserMenu = function () {
+        var menu = this.el.querySelector('.us-user-menu');
+        if (menu) {
+            menu.classList.remove('active');
         }
     };
 
@@ -499,14 +592,24 @@
         var avatar = this.el.querySelector('.us-user-avatar');
         var name = this.el.querySelector('.us-user-name');
 
+        // 사용자 정보 조회: 모듈 함수 → localStorage fallback
         var user = typeof window.getCurrentUser === 'function' ? window.getCurrentUser() : null;
+        if (!user) {
+            var savedUser = localStorage.getItem('user');
+            if (savedUser) {
+                try { user = JSON.parse(savedUser); } catch (e) { user = null; }
+            }
+        }
 
-        if (user) {
+        if (user && user.email) {
             var initial = (user.name || user.email || '?').charAt(0).toUpperCase();
             if (avatar) avatar.textContent = initial;
-            if (name) name.textContent = user.name || user.email || '\uC0AC\uC6A9\uC790';
+            if (name) {
+                name.textContent = user.name || user.email || '\uC0AC\uC6A9\uC790';
+                name.title = user.email || '';
+            }
         } else {
-            var isGuest = localStorage.getItem('guestMode') === 'true';
+            var isGuest = localStorage.getItem('guestMode') === 'true' || localStorage.getItem('isGuest') === 'true';
             if (avatar) avatar.textContent = isGuest ? 'G' : '?';
             if (name) {
                 name.textContent = isGuest ? '\uAC8C\uC2A4\uD2B8' : '\uB85C\uADF8\uC778';

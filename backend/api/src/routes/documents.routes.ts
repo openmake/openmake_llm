@@ -20,10 +20,11 @@ import {
      createSummaryPrompt,
      createQAPrompt,
      ProgressEvent
- } from '../documents';
- import { uploadedDocuments } from '../documents/store';
- import { getConfig } from '../config';
- import { success, badRequest, notFound, internalError, serviceUnavailable } from '../utils/api-response';
+  } from '../documents';
+  import { uploadedDocuments } from '../documents/store';
+  import { getConfig } from '../config';
+  import { success, badRequest, notFound, internalError, serviceUnavailable } from '../utils/api-response';
+  import { asyncHandler } from '../utils/error-handler';
 
 const router = Router();
 let clusterManager: ClusterManager;
@@ -156,130 +157,116 @@ router.post('/upload', upload.single('file'), async (req: Request, res: Response
         });
 
          res.json(success({ docId, filename: doc.filename, type: doc.type, pages: doc.pages, textLength: doc.text.length, preview: doc.text.substring(0, 500) + (doc.text.length > 500 ? '...' : '') }));
-    } catch (error: unknown) {
-        console.error('[Upload] 오류:', error);
+     } catch (error: unknown) {
+         console.error('[Upload] 오류:', error);
 
-        broadcastFn?.({
-            type: 'document_progress',
-            stage: 'error',
-            message: `오류: ${(error instanceof Error ? error.message : String(error))}`,
-            filename: decodeFilename(req.file?.originalname || '')
-        });
+         broadcastFn?.({
+             type: 'document_progress',
+             stage: 'error',
+             message: `오류: ${(error instanceof Error ? error.message : '파일 처리 중 오류가 발생했습니다')}`,
+             filename: decodeFilename(req.file?.originalname || '')
+         });
 
-        if (req.file && req.file.path && fs.existsSync(req.file.path)) {
-            try {
-                fs.unlinkSync(req.file.path);
-            } catch (e) {
-                // 무시
-            }
-        }
+         if (req.file && req.file.path && fs.existsSync(req.file.path)) {
+             try {
+                 fs.unlinkSync(req.file.path);
+             } catch (e) {
+                 // 무시
+             }
+         }
 
-        throw error;
-    }
+         throw error;
+     }
 });
 
 /**
  * POST /api/summarize
  * 문서 요약
  */
-router.post('/summarize', async (req: Request, res: Response) => {
+router.post('/summarize', asyncHandler(async (req: Request, res: Response) => {
      const { docId, model } = req.body;
 
-     try {
-         const doc = uploadedDocuments.get(docId);
-         if (!doc) {
-             res.status(404).json(notFound('문서'));
-             return;
-         }
-
-        console.log(`[Summarize] 문서 요약: ${doc.filename}`);
-
-         const bestNode = clusterManager.getBestNode(model);
-         const client = bestNode ? clusterManager.getClient(bestNode.id) : undefined;
-
-         if (!client) {
-             res.status(503).json(serviceUnavailable('사용 가능한 노드가 없습니다'));
-             return;
-         }
-
-         if (model) client.setModel(model);
-
-         const prompt = createSummaryPrompt(doc);
-        const result = await client.generate(prompt, { temperature: 0.1 });
-        const response = result.response;
-
-        console.log('[Summarize] 요약 완료. JSON 파싱 시도...');
-
-        let parsedSummary;
-        try {
-            const cleanJson = response.replace(/```json/g, '').replace(/```/g, '').trim();
-            parsedSummary = JSON.parse(cleanJson);
-        } catch (e) {
-            console.error('[Summarize] JSON 파싱 실패, 원본 반환', e);
-            parsedSummary = {
-                title: doc.filename,
-                summary: ['(JSON 파싱 실패, 원본 텍스트 표시)'],
-                sections: [{ title: 'Overview', content: response }],
-                raw: response
-            };
-        }
-
-         res.json(success({ summary: parsedSummary }));
-     } catch (error) {
-         console.error('[Summarize] 오류:', error);
-         res.status(500).json(internalError(String(error)));
+     const doc = uploadedDocuments.get(docId);
+     if (!doc) {
+         res.status(404).json(notFound('문서'));
+         return;
      }
- });
 
- /**
-  * POST /api/document/ask
- * 문서 Q&A
- */
-router.post('/document/ask', async (req: Request, res: Response) => {
+    console.log(`[Summarize] 문서 요약: ${doc.filename}`);
+
+      const bestNode = clusterManager.getBestNode(model);
+      const client = bestNode ? clusterManager.createScopedClient(bestNode.id, model) : undefined;
+
+      if (!client) {
+          res.status(503).json(serviceUnavailable('사용 가능한 노드가 없습니다'));
+          return;
+      }
+
+      const prompt = createSummaryPrompt(doc);
+     const result = await client.generate(prompt, { temperature: 0.1 });
+    const response = result.response;
+
+    console.log('[Summarize] 요약 완료. JSON 파싱 시도...');
+
+    let parsedSummary;
+    try {
+        const cleanJson = response.replace(/```json/g, '').replace(/```/g, '').trim();
+        parsedSummary = JSON.parse(cleanJson);
+    } catch (e) {
+        console.error('[Summarize] JSON 파싱 실패, 원본 반환', e);
+        parsedSummary = {
+            title: doc.filename,
+            summary: ['(JSON 파싱 실패, 원본 텍스트 표시)'],
+            sections: [{ title: 'Overview', content: response }],
+            raw: response
+        };
+    }
+
+     res.json(success({ summary: parsedSummary }));
+ }));
+
+  /**
+   * POST /api/document/ask
+  * 문서 Q&A
+  */
+router.post('/document/ask', asyncHandler(async (req: Request, res: Response) => {
      const { docId, question, model } = req.body;
 
-     try {
-         const doc = uploadedDocuments.get(docId);
-         if (!doc) {
-             res.status(404).json(notFound('문서'));
-             return;
-         }
-
-        console.log(`[DocQA] 질문: ${question?.substring(0, 50)}...`);
-
-         const bestNode = clusterManager.getBestNode(model);
-         const client = bestNode ? clusterManager.getClient(bestNode.id) : undefined;
-
-         if (!client) {
-             res.status(503).json(serviceUnavailable('사용 가능한 노드가 없습니다'));
-             return;
-         }
-
-         if (model) client.setModel(model);
-
-         const prompt = createQAPrompt(doc, question);
-        const result = await client.generate(prompt, { temperature: 0.1 });
-        const response = result.response;
-
-        let parsedAnswer;
-        try {
-            const cleanJson = response.replace(/```json/g, '').replace(/```/g, '').trim();
-            parsedAnswer = JSON.parse(cleanJson);
-        } catch (e) {
-            console.error('[DocQA] JSON 파싱 실패', e);
-            parsedAnswer = {
-                answer: response,
-                evidence: "JSON 파싱 실패",
-                raw: response
-            };
-        }
-
-         res.json(success({ answer: parsedAnswer }));
-     } catch (error) {
-         console.error('[DocQA] 오류:', error);
-         res.status(500).json(internalError(String(error)));
+     const doc = uploadedDocuments.get(docId);
+     if (!doc) {
+         res.status(404).json(notFound('문서'));
+         return;
      }
- });
+
+    console.log(`[DocQA] 질문: ${question?.substring(0, 50)}...`);
+
+      const bestNode = clusterManager.getBestNode(model);
+      const client = bestNode ? clusterManager.createScopedClient(bestNode.id, model) : undefined;
+
+      if (!client) {
+          res.status(503).json(serviceUnavailable('사용 가능한 노드가 없습니다'));
+          return;
+      }
+
+      const prompt = createQAPrompt(doc, question);
+    const result = await client.generate(prompt, { temperature: 0.1 });
+    const response = result.response;
+
+    let parsedAnswer;
+    try {
+        const cleanJson = response.replace(/```json/g, '').replace(/```/g, '').trim();
+        parsedAnswer = JSON.parse(cleanJson);
+    } catch (e) {
+        console.error('[DocQA] JSON 파싱 실패', e);
+        parsedAnswer = {
+            answer: response,
+            evidence: "JSON 파싱 실패",
+            raw: response
+        };
+    }
+
+     res.json(success({ answer: parsedAnswer }));
+ }));
 
  /**
   * GET /api/documents

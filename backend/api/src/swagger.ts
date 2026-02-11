@@ -5,6 +5,7 @@
 
 import { Application } from 'express';
 import * as path from 'path';
+import { getConfig } from './config/env';
 
 // OpenAPI 3.0 스펙
 export const openApiSpec = {
@@ -24,7 +25,7 @@ AI 채팅 어시스턴트 API 문서
 대부분의 API는 JWT 토큰 인증이 필요합니다.
 \`Authorization: Bearer <token>\` 헤더를 사용하세요.
         `,
-        version: '1.5.0',
+        version: '1.6.0',
         contact: {
             name: 'API Support',
             email: 'support@example.com'
@@ -32,16 +33,19 @@ AI 채팅 어시스턴트 API 문서
     },
     servers: [
         {
-            url: process.env.SWAGGER_BASE_URL || `http://localhost:${process.env.PORT || 52416}`,
+            url: getConfig().swaggerBaseUrl || `http://localhost:${getConfig().port}`,
             description: '개발 서버'
         }
     ],
     tags: [
+        { name: 'Auth', description: '인증 관련 API' },
         { name: 'Chat', description: '채팅 관련 API' },
         { name: 'Documents', description: '문서 업로드 및 분석' },
-        { name: 'Auth', description: '인증 관련 API' },
+        { name: 'Agents', description: 'AI 에이전트 관련 API' },
+        { name: 'MCP', description: 'MCP 서버 및 도구 관리' },
+        { name: 'Tools', description: '도구 API (웹 검색 등)' },
         { name: 'Cluster', description: '클러스터 관리' },
-        { name: 'System', description: '시스템 정보' }
+        { name: 'System', description: '시스템 정보 및 상태' }
     ],
     paths: {
         '/api/chat': {
@@ -294,6 +298,431 @@ AI 채팅 어시스턴트 API 문서
                                     properties: {
                                         model: { type: 'string' },
                                         provider: { type: 'string' }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        '/api/auth/register': {
+            post: {
+                tags: ['Auth'],
+                summary: '회원가입',
+                description: '새로운 사용자 계정을 생성합니다.',
+                requestBody: {
+                    required: true,
+                    content: {
+                        'application/json': {
+                            schema: {
+                                type: 'object',
+                                required: ['email', 'password'],
+                                properties: {
+                                    email: { type: 'string', format: 'email', description: '이메일 주소' },
+                                    password: { type: 'string', minLength: 8, description: '비밀번호 (8자 이상, 대소문자/숫자/특수문자 포함)' }
+                                }
+                            }
+                        }
+                    }
+                },
+                responses: {
+                    '201': {
+                        description: '회원가입 성공',
+                        content: {
+                            'application/json': {
+                                schema: {
+                                    type: 'object',
+                                    properties: {
+                                        success: { type: 'boolean' },
+                                        user: {
+                                            type: 'object',
+                                            properties: {
+                                                id: { type: 'integer' },
+                                                email: { type: 'string' },
+                                                role: { type: 'string' }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    '400': { description: '잘못된 요청 (유효성 검사 실패)' },
+                    '409': { description: '이미 존재하는 이메일' }
+                }
+            }
+        },
+        '/api/auth/logout': {
+            post: {
+                tags: ['Auth'],
+                summary: '로그아웃',
+                description: '현재 토큰을 무효화하고 로그아웃합니다.',
+                security: [{ bearerAuth: [] }],
+                responses: {
+                    '200': {
+                        description: '로그아웃 성공',
+                        content: {
+                            'application/json': {
+                                schema: {
+                                    type: 'object',
+                                    properties: {
+                                        success: { type: 'boolean' },
+                                        message: { type: 'string' }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    '401': { description: '인증 필요' }
+                }
+            }
+        },
+        '/api/auth/me': {
+            get: {
+                tags: ['Auth'],
+                summary: '현재 사용자 정보',
+                description: '인증된 사용자의 정보를 조회합니다.',
+                security: [{ bearerAuth: [] }],
+                responses: {
+                    '200': {
+                        description: '성공',
+                        content: {
+                            'application/json': {
+                                schema: {
+                                    type: 'object',
+                                    properties: {
+                                        id: { type: 'integer' },
+                                        email: { type: 'string' },
+                                        role: { type: 'string', enum: ['admin', 'user', 'guest'] },
+                                        tier: { type: 'string', enum: ['free', 'pro', 'enterprise'] },
+                                        is_active: { type: 'boolean' },
+                                        created_at: { type: 'string', format: 'date-time' }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    '401': { description: '인증 필요' }
+                }
+            }
+        },
+        '/api/sessions': {
+            get: {
+                tags: ['Chat'],
+                summary: '세션 목록 조회',
+                description: '사용자의 채팅 세션 목록을 조회합니다.',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    {
+                        name: 'limit',
+                        in: 'query',
+                        schema: { type: 'integer', default: 50 },
+                        description: '최대 조회 개수'
+                    },
+                    {
+                        name: 'offset',
+                        in: 'query',
+                        schema: { type: 'integer', default: 0 },
+                        description: '시작 위치'
+                    }
+                ],
+                responses: {
+                    '200': {
+                        description: '성공',
+                        content: {
+                            'application/json': {
+                                schema: {
+                                    type: 'object',
+                                    properties: {
+                                        sessions: {
+                                            type: 'array',
+                                            items: {
+                                                type: 'object',
+                                                properties: {
+                                                    id: { type: 'string' },
+                                                    title: { type: 'string' },
+                                                    created_at: { type: 'string', format: 'date-time' },
+                                                    updated_at: { type: 'string', format: 'date-time' },
+                                                    message_count: { type: 'integer' }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            post: {
+                tags: ['Chat'],
+                summary: '새 세션 생성',
+                description: '새로운 채팅 세션을 생성합니다.',
+                security: [{ bearerAuth: [] }],
+                requestBody: {
+                    content: {
+                        'application/json': {
+                            schema: {
+                                type: 'object',
+                                properties: {
+                                    title: { type: 'string', description: '세션 제목 (선택)' }
+                                }
+                            }
+                        }
+                    }
+                },
+                responses: {
+                    '201': {
+                        description: '세션 생성 성공',
+                        content: {
+                            'application/json': {
+                                schema: {
+                                    type: 'object',
+                                    properties: {
+                                        id: { type: 'string' },
+                                        title: { type: 'string' },
+                                        created_at: { type: 'string', format: 'date-time' }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        '/api/sessions/{sessionId}': {
+            get: {
+                tags: ['Chat'],
+                summary: '세션 상세 조회',
+                description: '특정 채팅 세션의 메시지들을 조회합니다.',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    {
+                        name: 'sessionId',
+                        in: 'path',
+                        required: true,
+                        schema: { type: 'string' },
+                        description: '세션 ID'
+                    }
+                ],
+                responses: {
+                    '200': {
+                        description: '성공',
+                        content: {
+                            'application/json': {
+                                schema: {
+                                    type: 'object',
+                                    properties: {
+                                        session: {
+                                            type: 'object',
+                                            properties: {
+                                                id: { type: 'string' },
+                                                title: { type: 'string' },
+                                                messages: {
+                                                    type: 'array',
+                                                    items: {
+                                                        type: 'object',
+                                                        properties: {
+                                                            role: { type: 'string' },
+                                                            content: { type: 'string' },
+                                                            created_at: { type: 'string', format: 'date-time' }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    '404': { description: '세션을 찾을 수 없음' }
+                }
+            },
+            delete: {
+                tags: ['Chat'],
+                summary: '세션 삭제',
+                description: '특정 채팅 세션을 삭제합니다.',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    {
+                        name: 'sessionId',
+                        in: 'path',
+                        required: true,
+                        schema: { type: 'string' },
+                        description: '세션 ID'
+                    }
+                ],
+                responses: {
+                    '200': { description: '삭제 성공' },
+                    '404': { description: '세션을 찾을 수 없음' }
+                }
+            }
+        },
+        '/api/agents': {
+            get: {
+                tags: ['Agents'],
+                summary: '에이전트 목록',
+                description: '사용 가능한 AI 에이전트 목록을 조회합니다.',
+                responses: {
+                    '200': {
+                        description: '성공',
+                        content: {
+                            'application/json': {
+                                schema: {
+                                    type: 'object',
+                                    properties: {
+                                        agents: {
+                                            type: 'array',
+                                            items: {
+                                                type: 'object',
+                                                properties: {
+                                                    type: { type: 'string' },
+                                                    name: { type: 'string' },
+                                                    emoji: { type: 'string' },
+                                                    description: { type: 'string' }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        '/api/mcp/servers': {
+            get: {
+                tags: ['MCP'],
+                summary: 'MCP 서버 목록',
+                description: '연결된 MCP 서버 목록을 조회합니다.',
+                security: [{ bearerAuth: [] }],
+                responses: {
+                    '200': {
+                        description: '성공',
+                        content: {
+                            'application/json': {
+                                schema: {
+                                    type: 'object',
+                                    properties: {
+                                        servers: {
+                                            type: 'array',
+                                            items: {
+                                                type: 'object',
+                                                properties: {
+                                                    id: { type: 'string' },
+                                                    name: { type: 'string' },
+                                                    status: { type: 'string', enum: ['connected', 'disconnected', 'error'] },
+                                                    toolCount: { type: 'integer' }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        '/api/mcp/tools': {
+            get: {
+                tags: ['MCP'],
+                summary: 'MCP 도구 목록',
+                description: '사용 가능한 MCP 도구 목록을 조회합니다.',
+                security: [{ bearerAuth: [] }],
+                responses: {
+                    '200': {
+                        description: '성공',
+                        content: {
+                            'application/json': {
+                                schema: {
+                                    type: 'object',
+                                    properties: {
+                                        tools: {
+                                            type: 'array',
+                                            items: {
+                                                type: 'object',
+                                                properties: {
+                                                    name: { type: 'string' },
+                                                    description: { type: 'string' },
+                                                    inputSchema: { type: 'object' }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        '/api/web-search': {
+            post: {
+                tags: ['Tools'],
+                summary: '웹 검색',
+                description: '웹 검색을 수행합니다.',
+                security: [{ bearerAuth: [] }],
+                requestBody: {
+                    required: true,
+                    content: {
+                        'application/json': {
+                            schema: {
+                                type: 'object',
+                                required: ['query'],
+                                properties: {
+                                    query: { type: 'string', description: '검색어' },
+                                    maxResults: { type: 'integer', default: 5, description: '최대 결과 수' }
+                                }
+                            }
+                        }
+                    }
+                },
+                responses: {
+                    '200': {
+                        description: '성공',
+                        content: {
+                            'application/json': {
+                                schema: {
+                                    type: 'object',
+                                    properties: {
+                                        results: {
+                                            type: 'array',
+                                            items: {
+                                                type: 'object',
+                                                properties: {
+                                                    title: { type: 'string' },
+                                                    url: { type: 'string' },
+                                                    snippet: { type: 'string' }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        '/api/health': {
+            get: {
+                tags: ['System'],
+                summary: '헬스 체크',
+                description: '서버 상태를 확인합니다.',
+                responses: {
+                    '200': {
+                        description: '서버 정상',
+                        content: {
+                            'application/json': {
+                                schema: {
+                                    type: 'object',
+                                    properties: {
+                                        status: { type: 'string', example: 'ok' },
+                                        timestamp: { type: 'string', format: 'date-time' }
                                     }
                                 }
                             }

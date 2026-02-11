@@ -115,6 +115,16 @@ function handleMessage(data) {
             }
             break;
 
+        case 'aborted':
+            debugLog('[WebSocket] 응답 생성 중단됨');
+            if (typeof finishAssistantMessage === 'function') {
+                finishAssistantMessage('⏹️ 응답 생성이 중단되었습니다.');
+            }
+            if (typeof showToast === 'function') {
+                showToast('응답 생성이 중단되었습니다.', 'info');
+            }
+            break;
+
         case 'agents':
             if (data.agents && typeof renderAgentList === 'function') {
                 renderAgentList(data.agents);

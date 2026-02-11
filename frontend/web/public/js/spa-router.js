@@ -202,6 +202,26 @@
     // ─── 뷰 전환 ──────────────────────────────────────
 
     /**
+     * 페이지 네비게이션 바 HTML 생성
+     * @param {string} pageTitle - 현재 페이지 제목
+     * @returns {string} 네비게이션 바 HTML
+     */
+    function _createBackNavigationHTML(pageTitle) {
+        return [
+            '<nav class="spa-page-nav">',
+            '  <a href="/" class="spa-page-nav-back" title="채팅으로 돌아가기">',
+            '    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">',
+            '      <path d="m15 18-6-6 6-6"/>',
+            '    </svg>',
+            '    <span>채팅으로</span>',
+            '  </a>',
+            '  <span class="spa-page-nav-divider"></span>',
+            '  <h1 class="spa-page-nav-title">' + pageTitle + '</h1>',
+            '</nav>'
+        ].join('\n');
+    }
+
+    /**
      * 채팅 뷰 표시 (홈 라우트)
      */
     function showChatView() {
@@ -365,11 +385,26 @@
                 throw new Error('\uBAA8\uB4C8\uC774 \uB4F1\uB85D\uB418\uC9C0 \uC54A\uC558\uC2B5\uB2C8\uB2E4: window.PageModules.' + targetRoute.moduleName);
             }
 
-            // HTML 주입
+            // HTML 주입 (네비게이션 바 포함)
             var container = document.getElementById('page-content');
             if (container) {
                 if (typeof pageModule.getHTML === 'function') {
-                    container.innerHTML = pageModule.getHTML();
+                    var pageTitle = targetRoute.title || targetRoute.moduleName;
+                    var backNavHTML = _createBackNavigationHTML(pageTitle);
+                    container.innerHTML = backNavHTML + pageModule.getHTML();
+
+                    // 뒤로가기 버튼 이벤트 바인딩
+                    var backButton = container.querySelector('.spa-page-nav-back');
+                    if (backButton) {
+                        backButton.addEventListener('click', function(e) {
+                            e.preventDefault();
+                            if (window.Router && window.Router.navigate) {
+                                window.Router.navigate('/');
+                            } else {
+                                window.location.href = '/';
+                            }
+                        });
+                    }
                 } else {
                     throw new Error('\uBAA8\uB4C8\uC5D0 getHTML() \uD568\uC218\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4: ' + targetRoute.moduleName);
                 }

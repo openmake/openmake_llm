@@ -41,9 +41,11 @@ let webSearchEnabled = false;
 let discussionMode = false;  // 멀티 에이전트 토론 모드
 let thinkingMode = false;    // Ollama Native Thinking 모드 (심층 추론)
 let thinkingLevel = 'high'; // Thinking 레벨: 'low', 'medium', 'high'
+let deepResearchMode = false;  // Deep Research 모드 (심층 연구)
 let thinkingEnabled = true; // Sequential Thinking 기본 활성화
 let attachedFiles = [];
 let messageStartTime = null;
+let isGenerating = false;  // 응답 생성 중 여부 (중단 버튼용)
 
 // 인증 상태
 let currentUser = null;
@@ -91,6 +93,72 @@ function initAuth() {
     }
 
     updateAuthUI();
+
+    // 🔒 OAuth 쿠키 기반 세션 복구: localStorage에 사용자 정보가 없으면
+    // httpOnly 쿠키로 인증된 세션이 있는지 서버에 확인
+    if (!currentUser && !isGuestMode) {
+        recoverSessionFromCookie();
+    } else if (!currentUser && isGuestMode) {
+        // 게스트 모드이지만 OAuth 쿠키 세션이 있을 수 있음 (OAuth 로그인 후 리다이렉트)
+        recoverSessionFromCookie();
+    }
+}
+
+// 🔒 httpOnly 쿠키 기반 세션 복구
+async function recoverSessionFromCookie() {
+    try {
+        const resp = await fetch('/api/auth/me', { credentials: 'include' });
+        if (resp.ok) {
+            const data = await resp.json();
+            const user = data.data?.user || data.user;
+            if (user && user.email) {
+                // 세션 복구 성공: localStorage 업데이트
+                currentUser = user;
+                localStorage.setItem('user', JSON.stringify(user));
+                localStorage.removeItem('guestMode');
+                localStorage.removeItem('isGuest');
+                isGuestMode = false;
+                
+                // 모듈 상태도 동기화 (state.js의 AppState)
+                if (typeof window.setState === 'function') {
+                    window.setState('auth.currentUser', user);
+                    window.setState('auth.isGuestMode', false);
+                }
+                
+                // UI 업데이트
+                updateAuthUI();
+                filterRestrictedMenus();
+                
+                // 사이드바 업데이트: sidebar 인스턴스가 이미 초기화되었으면 refresh()
+                // (비동기 fetch 완료 시점에는 DOMContentLoaded가 이미 끝나 sidebar 존재)
+                if (window.sidebar && typeof window.sidebar.refresh === 'function') {
+                    window.sidebar.refresh();
+                } else {
+                    // sidebar가 아직 없으면 (극히 드문 경우) 직접 DOM 업데이트
+                    const avatar = document.querySelector('.us-user-avatar');
+                    const nameEl = document.querySelector('.us-user-name');
+                    if (avatar) {
+                        avatar.textContent = (user.name || user.email || '?').charAt(0).toUpperCase();
+                    }
+                    if (nameEl) {
+                        nameEl.textContent = user.name || user.email || '사용자';
+                        nameEl.title = user.email || '';
+                    }
+                    // sidebar가 나중에 초기화되면 그때 업데이트하도록 이벤트 대기
+                    window.addEventListener('sidebarReady', function onReady() {
+                        if (window.sidebar && typeof window.sidebar.refresh === 'function') {
+                            window.sidebar.refresh();
+                        }
+                        window.removeEventListener('sidebarReady', onReady);
+                    });
+                }
+                
+                console.log('[Auth] OAuth 쿠키 세션 복구 성공:', user.email);
+            }
+        }
+    } catch (e) {
+        // 네트워크 오류 등 — 무시 (비로그인 상태 유지)
+    }
 }
 
 // 인증된 fetch 요청
@@ -110,6 +178,9 @@ async function authFetch(url, options = {}) {
         headers
     });
 }
+
+// 🔧 전역 노출: UnifiedSidebar 등 외부 컴포넌트에서 인증 fetch 사용 가능
+window.authFetch = authFetch;
 
 // 로그아웃 (🆕 서버 토큰 블랙리스트 연동)
 function logout() {
@@ -203,8 +274,9 @@ function initApp() {
     initMobileSidebar(); // 📱 모바일 사이드바 초기화
 
     // URL 파라미터 체크 (세션 복원)
+    // ?sessionId= 우선, ?chat= fallback (UnifiedSidebar 호환)
     const urlParams = new URLSearchParams(window.location.search);
-    const sessionId = urlParams.get('sessionId');
+    const sessionId = urlParams.get('sessionId') || urlParams.get('chat');
     if (sessionId) {
         // 약간의 지연 후 로드 (초기화 안정성 확보)
         setTimeout(() => loadSession(sessionId), 100);
@@ -237,8 +309,8 @@ function initMobileSidebar() {
 // 게스트/비로그인 메뉴 필터링
 function filterRestrictedMenus() {
     const authToken = localStorage.getItem('authToken');
-    const isGuest = localStorage.getItem('isGuest') === 'true';
-    const isAuthenticated = authToken && !isGuest;
+    const isGuest = localStorage.getItem('guestMode') === 'true' || localStorage.getItem('isGuest') === 'true';
+    const isAuthenticated = (authToken || currentUser) && !isGuest;
 
     // data-require-auth="true" 속성이 있는 메뉴 항목 숨기기
     document.querySelectorAll('[data-require-auth="true"]').forEach(el => {
@@ -489,7 +561,18 @@ function handleMessage(data) {
             renderAgentList(data.agents);
             break;
         case 'error':
-            showError(data.message);
+            // 🆕 API 키 소진 에러 특별 처리
+            if (data.errorType === 'api_keys_exhausted') {
+                showApiKeyExhaustedError(data);
+            } else {
+                showError(data.message);
+            }
+            break;
+        case 'aborted':
+            console.log('[Chat] 응답 생성 중단됨');
+            isGenerating = false;
+            isSending = false;
+            hideAbortButton();
             break;
         case 'cluster_event':
             handleClusterEvent(data.event);
@@ -516,6 +599,15 @@ function handleMessage(data) {
             // 멀티 에이전트 토론 진행 상황
             console.log('[Discussion] 진행:', data.progress);
             showDiscussionProgress(data.progress);
+            break;
+        case 'research_progress':
+            // 🔬 Deep Research 진행 상황
+            console.log('[Research] 진행:', data.progress);
+            showResearchProgress({
+                stage: data.progress?.currentStep || 'running',
+                progress: data.progress?.progress || 0,
+                message: data.progress?.message || '연구 중...'
+            });
             break;
         case 'session_created':
             // 🆕 WebSocket 채팅에서 생성된 새 세션 ID 수신
@@ -556,8 +648,8 @@ function updateSidebarClusterInfo() {
                 `<div style="margin: 4px 0; display: flex; align-items: center; gap: 8px;">
                     <span style="color: ${n.status === 'online' ? '#22c55e' : '#ef4444'}">●</span>
                     <div>
-                        <div style="font-weight: 500;">${n.name || n.id}</div>
-                        <div style="font-size: 12px; color: var(--text-muted);">${n.host}:${n.port}</div>
+                        <div style="font-weight: 500;">${escapeHtml(n.name || n.id)}</div>
+                        <div style="font-size: 12px; color: var(--text-muted);">${escapeHtml(n.host)}:${escapeHtml(String(n.port))}</div>
                     </div>
                 </div>`
             ).join('');
@@ -640,6 +732,71 @@ function handleClusterEvent(event) {
 let currentAssistantMessage = null;
 let isSending = false;  // 중복 전송 방지 플래그
 
+// ========================================
+// 중단 버튼 관리
+// ========================================
+
+/**
+ * 응답 생성 중단
+ */
+function abortChat() {
+    if (!isGenerating) return;
+    
+    console.log('[Chat] 응답 생성 중단 요청');
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'abort' }));
+    }
+    
+    // UI 상태 업데이트
+    isGenerating = false;
+    isSending = false;
+    hideAbortButton();
+    
+    // 현재 메시지에 중단 표시
+    if (currentAssistantMessage) {
+        const content = currentAssistantMessage.querySelector('.message-content');
+        if (content) {
+            const rawText = content.dataset.rawText || content.textContent || '';
+            content.innerHTML = rawText + '<br><span style="color: var(--warning); font-style: italic;">⏹️ 응답이 중단되었습니다.</span>';
+        }
+    }
+    currentAssistantMessage = null;
+}
+
+// SVG 아이콘 상수
+const SEND_ICON_SVG = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13M22 2L15 22L11 13L2 9L22 2Z"/></svg>';
+const STOP_ICON_SVG = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>';
+
+/**
+ * 전송 버튼을 중단 모드로 전환
+ * — 전송 아이콘 → 중단 아이콘, 파란색 → 빨간색
+ */
+function showAbortButton() {
+    const btn = document.getElementById('sendBtn');
+    if (!btn) return;
+
+    btn.classList.add('abort-mode');
+    btn.innerHTML = STOP_ICON_SVG;
+    btn.title = '응답 생성 중단 (Enter)';
+    btn.setAttribute('onclick', '');   // 기존 onclick 제거
+    btn.onclick = abortChat;
+}
+
+/**
+ * 전송 버튼을 원래 전송 모드로 복원
+ * — 중단 아이콘 → 전송 아이콘, 빨간색 → 파란색
+ */
+function hideAbortButton() {
+    const btn = document.getElementById('sendBtn');
+    if (!btn) return;
+
+    btn.classList.remove('abort-mode');
+    btn.innerHTML = SEND_ICON_SVG;
+    btn.title = '전송 (Enter)';
+    btn.setAttribute('onclick', '');
+    btn.onclick = sendMessage;
+}
+
 function sendMessage() {
     // 이미 전송 중이면 무시
     if (isSending) {
@@ -692,9 +849,19 @@ function sendMessage() {
         addChatMessage('user', userMsg);
         addToMemory('user', finalMessage, images);
         currentAssistantMessage = addChatMessage('assistant', '');
+        isGenerating = true;
+        showAbortButton();
 
         // WebSocket 전송 (문서 컨텍스트 포함)
         const anonId = !localStorage.getItem('authToken') ? getOrCreateAnonymousSessionId() : undefined;
+        // 🔐 인증된 사용자 정보를 WebSocket 메시지에 포함
+        const storedUser = localStorage.getItem('user');
+        const parsedUser = storedUser ? JSON.parse(storedUser) : {};
+        const authFields = {
+            userId: parsedUser.userId || parsedUser.id || undefined,
+            userRole: parsedUser.role || undefined,
+            userTier: parsedUser.tier || undefined
+        };
         ws.send(JSON.stringify({
             type: 'chat',
             message: finalMessage,
@@ -705,13 +872,46 @@ function sendMessage() {
             discussionMode: discussionMode,  // 🆕 멀티 에이전트 토론 모드
             thinkingMode: thinkingMode,      // 🆕 Ollama Native Thinking 모드
             thinkingLevel: thinkingMode ? thinkingLevel : undefined,
-            anonSessionId: anonId
+            anonSessionId: anonId,
+            ...authFields
+        }));
+    } else if (deepResearchMode) {
+        // 🔬 Deep Research 모드 (심층 연구) — 웹 검색보다 우선
+        addChatMessage('user', `🔬 [심층 연구] ${message}`);
+        addToMemory('user', message);
+        currentAssistantMessage = addChatMessage('assistant', '');
+        isGenerating = true;
+        showAbortButton();
+        showResearchProgress({ stage: 'starting', message: '심층 연구를 시작합니다...', progress: 0 });
+        
+        const anonId = !localStorage.getItem('authToken') ? getOrCreateAnonymousSessionId() : undefined;
+        // 🔐 인증된 사용자 정보를 WebSocket 메시지에 포함
+        const storedUser2 = localStorage.getItem('user');
+        const parsedUser2 = storedUser2 ? JSON.parse(storedUser2) : {};
+        const authFields2 = {
+            userId: parsedUser2.userId || parsedUser2.id || undefined,
+            userRole: parsedUser2.role || undefined,
+            userTier: parsedUser2.tier || undefined
+        };
+        ws.send(JSON.stringify({
+            type: 'chat',
+            message,
+            model: model || undefined,
+            history: conversationMemory.slice(-MAX_MEMORY_LENGTH),
+            deepResearchMode: true,
+            enableThinking: mcpSettings.thinking,
+            thinkingMode: thinkingMode,
+            thinkingLevel: thinkingMode ? thinkingLevel : undefined,
+            anonSessionId: anonId,
+            ...authFields2
         }));
     } else if (webSearchEnabled && !discussionMode) {
         // 웹 검색 모드 (토론 모드와 동시 사용 불가)
         addChatMessage('user', `🌐 ${message}`);
         addToMemory('user', message);
         currentAssistantMessage = addChatMessage('assistant', '');
+        isGenerating = true;
+        showAbortButton();
         performWebSearch(message, model);
     } else {
         // 일반 채팅 (활성 문서 컨텍스트 자동 포함)
@@ -721,12 +921,22 @@ function sendMessage() {
         addChatMessage('user', displayMessage);
         addToMemory('user', message);
         currentAssistantMessage = addChatMessage('assistant', '');
+        isGenerating = true;
+        showAbortButton();
 
         // Agent Mode 활성화 시 강제로 agent 모드 적용
         const effectivePromptMode = agentModeEnabled ? 'agent' : currentPromptMode;
 
         // 메모리와 함께 메시지 전송 (docId로 문서 컨텍스트 자동 주입)
         const anonId = !localStorage.getItem('authToken') ? getOrCreateAnonymousSessionId() : undefined;
+        // 🔐 인증된 사용자 정보를 WebSocket 메시지에 포함
+        const storedUser3 = localStorage.getItem('user');
+        const parsedUser3 = storedUser3 ? JSON.parse(storedUser3) : {};
+        const authFields3 = {
+            userId: parsedUser3.userId || parsedUser3.id || undefined,
+            userRole: parsedUser3.role || undefined,
+            userTier: parsedUser3.tier || undefined
+        };
         ws.send(JSON.stringify({
             type: 'chat',
             message,
@@ -739,7 +949,8 @@ function sendMessage() {
             discussionMode: discussionMode,  // 멀티 에이전트 토론 모드
             thinkingMode: thinkingMode,      // 🧠 Ollama Native Thinking 모드
             thinkingLevel: thinkingMode ? thinkingLevel : undefined,  // Thinking 레벨
-            anonSessionId: anonId
+            anonSessionId: anonId,
+            ...authFields3
         }));
     }
 
@@ -941,6 +1152,28 @@ function toggleThinkingMode() {
     showToast(thinkingMode ? `🧠 Thinking 모드 활성화 (레벨: ${thinkingLevel})` : '💬 일반 모드로 전환', 'info');
 }
 
+// Deep Research 모드 토글 (심층 연구)
+function toggleDeepResearch() {
+    deepResearchMode = !deepResearchMode;
+    const btn = document.getElementById('deepResearchBtn');
+    if (btn) {
+        btn.classList.toggle('active', deepResearchMode);
+        btn.title = deepResearchMode ? 'Deep Research 모드 활성화' : 'Deep Research (심층 연구)';
+    }
+    
+    // Deep Research 모드일 때 다른 모드 비활성화 (상호 배타적)
+    if (deepResearchMode) {
+        if (discussionMode) {
+            discussionMode = false;
+            const discussionBtn = document.getElementById('discussionModeBtn');
+            if (discussionBtn) discussionBtn.classList.remove('active');
+        }
+        showToast('🔬 Deep Research 모드 활성화\n주제를 입력하면 자동으로 심층 연구를 수행합니다.', 'info');
+    } else {
+        showToast('💬 일반 모드로 전환', 'info');
+    }
+}
+
 // 토론 진행 상황 표시 (채팅창 상단 미니바 스타일)
 function showDiscussionProgress(progress) {
     let progressEl = document.getElementById('discussionProgress');
@@ -1054,6 +1287,148 @@ function showDiscussionProgress(progress) {
             progressEl.style.transition = 'all 0.3s ease';
             setTimeout(() => progressEl.remove(), 300);
         }, 1500);
+    }
+}
+
+// Deep Research 진행 상황 표시 (채팅창 상단 미니바 스타일)
+function showResearchProgress(progress) {
+    let progressEl = document.getElementById('researchProgress');
+
+    if (!progressEl) {
+        progressEl = document.createElement('div');
+        progressEl.id = 'researchProgress';
+        progressEl.innerHTML = `
+            <style>
+                #researchProgress {
+                    margin: 0 auto 10px auto;
+                    max-width: 600px;
+                    background: linear-gradient(135deg, rgba(139, 92, 246, 0.1) 0%, rgba(59, 130, 246, 0.1) 100%);
+                    border: 1px solid rgba(139, 92, 246, 0.3);
+                    border-radius: 20px;
+                    padding: 8px 16px;
+                    box-shadow: 0 4px 12px rgba(139, 92, 246, 0.1);
+                    display: flex;
+                    align-items: center;
+                    gap: 12px;
+                    font-size: 0.85rem;
+                    color: var(--text-primary);
+                    backdrop-filter: blur(8px);
+                    animation: slideUp 0.3s ease-out;
+                }
+                [data-theme="dark"] #researchProgress {
+                    background: linear-gradient(135deg, rgba(139, 92, 246, 0.15) 0%, rgba(59, 130, 246, 0.15) 100%);
+                    border-color: rgba(139, 92, 246, 0.4);
+                }
+                #researchProgress .progress-icon {
+                    font-size: 1.2rem;
+                    animation: researchPulse 2s infinite;
+                }
+                #researchProgress .progress-content {
+                    flex: 1;
+                    display: flex;
+                    flex-direction: column;
+                    gap: 4px;
+                }
+                #researchProgress .progress-header {
+                    font-weight: 600;
+                    display: flex;
+                    justify-content: space-between;
+                    font-size: 0.8rem;
+                    color: #8B5CF6;
+                }
+                #researchProgress .progress-bar-bg {
+                    background: var(--bg-tertiary);
+                    height: 4px;
+                    border-radius: 2px;
+                    overflow: hidden;
+                    width: 100%;
+                }
+                #researchProgress .progress-fill {
+                    background: linear-gradient(90deg, #8B5CF6 0%, #3B82F6 100%);
+                    height: 100%;
+                    width: 0%;
+                    transition: width 0.4s ease;
+                    border-radius: 2px;
+                }
+                #researchProgress .progress-message {
+                    font-size: 0.75rem;
+                    color: var(--text-secondary);
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                }
+                #researchProgress .stage-badge {
+                    font-size: 0.65rem;
+                    padding: 2px 6px;
+                    background: rgba(139, 92, 246, 0.2);
+                    border-radius: 8px;
+                    color: #8B5CF6;
+                    font-weight: 500;
+                }
+                @keyframes researchPulse {
+                    0% { transform: scale(1) rotate(0deg); opacity: 1; }
+                    25% { transform: scale(1.1) rotate(5deg); opacity: 0.9; }
+                    50% { transform: scale(1) rotate(0deg); opacity: 1; }
+                    75% { transform: scale(1.1) rotate(-5deg); opacity: 0.9; }
+                    100% { transform: scale(1) rotate(0deg); opacity: 1; }
+                }
+            </style>
+            <div class="progress-icon">🔬</div>
+            <div class="progress-content">
+            <div class="progress-header">
+                <span>🔬 Deep Research</span>
+                <span class="stage-badge">준비중</span>
+                <span class="progress-percent">0%</span>
+            </div>
+                <div class="progress-bar-bg"><div class="progress-fill"></div></div>
+                <div class="progress-message">심층 연구 시작 중...</div>
+            </div>
+        `;
+
+        // 입력창 컨테이너 최상단에 추가 (입력창 바로 위)
+        const inputContainer = document.querySelector('.input-container');
+        if (inputContainer) {
+            inputContainer.insertBefore(progressEl, inputContainer.firstChild);
+        } else {
+            document.body.appendChild(progressEl); // Fallback
+        }
+    }
+
+    const fillEl = progressEl.querySelector('.progress-fill');
+    const msgEl = progressEl.querySelector('.progress-message');
+    const percentEl = progressEl.querySelector('.progress-percent');
+    const stageEl = progressEl.querySelector('.stage-badge');
+
+    // 스테이지별 표시
+    const stageLabels = {
+        'starting': '시작',
+        '초기화': '초기화',
+        'decompose': '주제 분석',
+        'decomposing': '분석중',
+        'search': '웹 검색',
+        'searching': '검색중',
+        'scrape': '콘텐츠 수집',
+        'synthesize': '정보 합성',
+        'synthesizing': '합성중',
+        'report': '보고서 작성',
+        'generating': '작성중',
+        'complete': '완료',
+        'completed': '완료'
+    };
+
+    if (fillEl) fillEl.style.width = `${progress.progress || 0}%`;
+    if (msgEl) msgEl.textContent = progress.message || '처리 중...';
+    if (percentEl) percentEl.textContent = `${Math.round(progress.progress || 0)}%`;
+    if (stageEl) stageEl.textContent = stageLabels[progress.stage] || progress.stage || '진행중';
+
+    // 완료 시 자동 제거 ('complete' 또는 'completed' 둘 다 처리)
+    if (progress.stage === 'complete' || progress.stage === 'completed') {
+        setTimeout(() => {
+            progressEl.style.opacity = '0';
+            progressEl.style.transform = 'translateY(10px)';
+            progressEl.style.transition = 'all 0.3s ease';
+            setTimeout(() => progressEl.remove(), 300);
+        }, 2000);
     }
 }
 
@@ -1177,6 +1552,139 @@ function showToast(message) {
         toast.style.transition = 'opacity 0.3s';
         setTimeout(() => toast.remove(), 300);
     }, 2000);
+}
+
+// 🆕 API 키 소진 에러 표시 (카운트다운 포함)
+function showApiKeyExhaustedError(data) {
+    // 기존 배너 제거
+    const existingBanner = document.getElementById('apiKeyExhaustedBanner');
+    if (existingBanner) existingBanner.remove();
+
+    // 리셋 시간 계산
+    const resetTime = new Date(data.resetTime);
+    const retryAfterSeconds = data.retryAfter || 300; // 기본 5분
+
+    // 배너 생성
+    const banner = document.createElement('div');
+    banner.id = 'apiKeyExhaustedBanner';
+    banner.innerHTML = `
+        <style>
+            #apiKeyExhaustedBanner {
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+                color: white;
+                padding: 16px 24px;
+                z-index: 10000;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 16px;
+                font-size: 0.95rem;
+                box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
+                animation: slideDown 0.3s ease-out;
+            }
+            #apiKeyExhaustedBanner .banner-icon {
+                font-size: 1.5rem;
+            }
+            #apiKeyExhaustedBanner .banner-content {
+                display: flex;
+                flex-direction: column;
+                gap: 4px;
+            }
+            #apiKeyExhaustedBanner .banner-title {
+                font-weight: 600;
+                font-size: 1rem;
+            }
+            #apiKeyExhaustedBanner .banner-subtitle {
+                font-size: 0.85rem;
+                opacity: 0.9;
+            }
+            #apiKeyExhaustedBanner .countdown {
+                background: rgba(0, 0, 0, 0.2);
+                padding: 8px 16px;
+                border-radius: 8px;
+                font-weight: 600;
+                font-size: 1.1rem;
+                min-width: 80px;
+                text-align: center;
+            }
+            #apiKeyExhaustedBanner .close-btn {
+                background: rgba(255, 255, 255, 0.2);
+                border: none;
+                color: white;
+                padding: 6px 12px;
+                border-radius: 6px;
+                cursor: pointer;
+                font-size: 0.85rem;
+            }
+            #apiKeyExhaustedBanner .close-btn:hover {
+                background: rgba(255, 255, 255, 0.3);
+            }
+            @keyframes slideDown {
+                from { transform: translateY(-100%); opacity: 0; }
+                to { transform: translateY(0); opacity: 1; }
+            }
+        </style>
+        <span class="banner-icon">⚠️</span>
+        <div class="banner-content">
+            <span class="banner-title">모든 API 키가 일시적으로 사용 불가능합니다</span>
+            <span class="banner-subtitle">${data.keysInCooldown}/${data.totalKeys}개 키 쿨다운 중 - 잠시 후 자동으로 복구됩니다</span>
+        </div>
+        <div class="countdown" id="apiKeyCountdown">${formatCountdown(retryAfterSeconds)}</div>
+        <button class="close-btn" onclick="closeApiKeyExhaustedBanner()">닫기</button>
+    `;
+
+    document.body.appendChild(banner);
+
+    // 카운트다운 시작
+    let remainingSeconds = retryAfterSeconds;
+    const countdownEl = document.getElementById('apiKeyCountdown');
+    
+    const countdownInterval = setInterval(() => {
+        remainingSeconds--;
+        if (countdownEl) {
+            countdownEl.textContent = formatCountdown(remainingSeconds);
+        }
+        
+        if (remainingSeconds <= 0) {
+            clearInterval(countdownInterval);
+            closeApiKeyExhaustedBanner();
+            showToast('✅ API 키가 복구되었습니다. 다시 시도해주세요.', 'success');
+        }
+    }, 1000);
+
+    // 배너에 인터벌 ID 저장 (닫을 때 정리용)
+    banner.dataset.intervalId = countdownInterval;
+
+    // 현재 응답 생성 중단
+    isGenerating = false;
+    isSending = false;
+    hideAbortButton();
+}
+
+// 카운트다운 포맷 (분:초)
+function formatCountdown(seconds) {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+}
+
+// API 키 소진 배너 닫기
+function closeApiKeyExhaustedBanner() {
+    const banner = document.getElementById('apiKeyExhaustedBanner');
+    if (banner) {
+        // 카운트다운 인터벌 정리
+        const intervalId = banner.dataset.intervalId;
+        if (intervalId) {
+            clearInterval(parseInt(intervalId));
+        }
+        
+        banner.style.animation = 'slideDown 0.3s ease-out reverse';
+        setTimeout(() => banner.remove(), 300);
+    }
 }
 
 function appendToken(token) {
@@ -1358,6 +1866,8 @@ function finishAssistantMessage() {
     }
     currentAssistantMessage = null;
     isSending = false;  // 전송 완료, 다음 전송 허용
+    isGenerating = false;
+    hideAbortButton();
 
     // 스크롤 하단으로
     setTimeout(scrollToBottom, 100);
@@ -1370,6 +1880,8 @@ function showError(message) {
     }
     currentAssistantMessage = null;
     isSending = false;  // 에러 발생 시에도 다음 전송 허용
+    isGenerating = false;
+    hideAbortButton();
 }
 
 // ========================================
@@ -1526,6 +2038,10 @@ async function loadSession(sessionId) {
         showToast('대화를 불러올 수 없습니다', 'error');
     }
 }
+
+// 🔧 전역 노출: UnifiedSidebar에서 대화 클릭 시 loadSession 호출 가능
+window.loadConversation = loadSession;
+window.loadSession = loadSession;
 
 // 복원된 AI 응답 메시지 추가 (마크다운 렌더링 적용)
 function addRestoredAssistantMessage(content) {
@@ -1952,7 +2468,7 @@ async function performWebSearch(query, model) {
                      const sourcesDiv = document.createElement('div');
                      sourcesDiv.style.cssText = 'margin-top: 12px; padding: 10px; background: #f8f9fa; border-radius: 8px; font-size: 13px;';
                      sourcesDiv.innerHTML = '<b>📚 검색 출처:</b><br>' + payload.sources.map((s, i) =>
-                         `<a href="${s.url}" target="_blank" style="color: #0369a1; display: block; margin-top: 4px;">[${i + 1}] ${s.title || new URL(s.url).hostname}</a>`
+                         `<a href="${escapeHtml(s.url)}" target="_blank" rel="noopener noreferrer" style="color: #0369a1; display: block; margin-top: 4px;">[${i + 1}] ${escapeHtml(s.title || new URL(s.url).hostname)}</a>`
                      ).join('');
                      content.appendChild(sourcesDiv);
                  }
@@ -2011,8 +2527,8 @@ async function showSettings() {
                         <div class="node-status-dot ${n.status === 'online' ? 'online' : 'offline'}"></div>
                         <div class="node-info">
                             <div class="node-name">${escapeHtml(n.name || n.id)}</div>
-                            <div class="node-addr">${n.host}:${n.port}</div>
-                            ${(n.models && n.models.length > 0 && isAdmin()) ? `<div class="node-models">보유 모델: ${n.models.join(', ')}</div>` : ''}
+                            <div class="node-addr">${escapeHtml(n.host)}:${escapeHtml(String(n.port))}</div>
+                            ${(n.models && n.models.length > 0 && isAdmin()) ? `<div class="node-models">보유 모델: ${escapeHtml(n.models.join(', '))}</div>` : ''}
                         </div>
                     </div>`
                 ).join('');
@@ -2070,8 +2586,8 @@ async function loadModelInfo() {
                      // 저장된 모델이 있으면 그것을, 없으면 기본 모델을 활성 상태로 표시
                      const isActive = savedModel ? model.name === savedModel : model.name === defaultModel;
                      return `
-                     <div class="model-badge ${isActive ? 'active' : ''}" onclick="selectModel('${model.name}')">
-                         ${isActive ? '✓ ' : ''}${model.name}
+                     <div class="model-badge ${isActive ? 'active' : ''}" onclick="selectModel('${escapeHtml(model.name)}')">
+                         ${isActive ? '✓ ' : ''}${escapeHtml(model.name)}
                          <span style="font-size: 0.65rem; opacity: 0.7; margin-left: 4px;">(${formatSize(model.size)})</span>
                      </div>
                  `}).join('');
@@ -2646,7 +3162,7 @@ function handleKeyDown(event) {
     }
 }
 
-// 텍스트 영역 자동 높이 조절
+// 텍스트 영역 자동 높이 조절 + 전송 버튼 초기화
 document.addEventListener('DOMContentLoaded', () => {
     const textarea = document.getElementById('chatInput');
     if (textarea) {
@@ -2654,6 +3170,12 @@ document.addEventListener('DOMContentLoaded', () => {
             textarea.style.height = 'auto';
             textarea.style.height = Math.min(textarea.scrollHeight, 200) + 'px';
         });
+    }
+
+    // 전송 버튼 초기 onclick 바인딩 (인라인 onclick 제거됨)
+    const sendBtn = document.getElementById('sendBtn');
+    if (sendBtn) {
+        sendBtn.onclick = sendMessage;
     }
 });
 

@@ -1,5 +1,7 @@
 // MCP (Model Context Protocol) 타입 정의
 
+import type { UserContext } from './user-sandbox';
+
 export interface MCPRequest {
     jsonrpc: '2.0';
     id: string | number;
@@ -63,7 +65,7 @@ export interface MCPServerInfo {
     };
 }
 
-export type MCPToolHandler<T extends Record<string, unknown> = Record<string, unknown>> = (args: T, context?: unknown) => Promise<MCPToolResult>;
+export type MCPToolHandler<T extends Record<string, unknown> = Record<string, unknown>> = (args: T, context?: UserContext) => Promise<MCPToolResult>;
 
 export interface MCPToolDefinition<T extends Record<string, unknown> = Record<string, unknown>> {
     tool: MCPTool;

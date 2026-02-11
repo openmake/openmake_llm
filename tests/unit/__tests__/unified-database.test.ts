@@ -4,7 +4,7 @@
  * 메모리 내 SQLite로 실제 DB 로직을 테스트합니다.
  */
 
-import { UnifiedDatabase } from '../../../database/models/unified-database';
+import { UnifiedDatabase } from '../../../backend/api/src/data/models/unified-database';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';

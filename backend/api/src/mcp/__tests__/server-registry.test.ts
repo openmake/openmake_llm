@@ -3,8 +3,6 @@
  * DB 및 ExternalMCPClient 연결은 모킹 — 레지스트리 관리 로직 검증
  */
 
-// @ts-expect-error - bun:test types are built-in to bun runtime
-import { describe, it, expect, beforeEach } from 'bun:test';
 import { MCPServerRegistry } from '../server-registry';
 import { ToolRouter } from '../tool-router';
 

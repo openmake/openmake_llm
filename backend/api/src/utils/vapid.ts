@@ -1,9 +1,10 @@
 import webPush from 'web-push';
+import { getConfig } from '../config/env';
 
 export function getVapidKeys(): { publicKey: string; privateKey: string; subject: string } {
-    const publicKey = process.env.VAPID_PUBLIC_KEY || '';
-    const privateKey = process.env.VAPID_PRIVATE_KEY || '';
-    const subject = process.env.VAPID_SUBJECT || 'mailto:admin@openmake.ai';
+    const publicKey = getConfig().vapidPublicKey;
+    const privateKey = getConfig().vapidPrivateKey;
+    const subject = getConfig().vapidSubject;
     
     if (publicKey && privateKey) {
         webPush.setVapidDetails(subject, publicKey, privateKey);

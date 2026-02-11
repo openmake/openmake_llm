@@ -5,6 +5,7 @@
 
 import { createLogger } from '../utils/logger';
 import { getApiUsageTracker } from '../ollama/api-usage-tracker';
+import * as os from 'os';
 
 const logger = createLogger('Analytics');
 
@@ -70,9 +71,17 @@ export class AnalyticsSystem {
     private queryLog: { query: string; timestamp: Date }[] = [];
     private sessionLog: { sessionId: string; start: Date; end?: Date; queries: number }[] = [];
     private startTime: Date = new Date();
+    private activeConnectionsGetter: () => number = () => 0;
 
     constructor() {
         logger.info('분석 시스템 초기화됨');
+    }
+
+    /**
+     * 활성 WebSocket 연결 수 게터 설정 (서버에서 주입)
+     */
+    setActiveConnectionsGetter(getter: () => number): void {
+        this.activeConnectionsGetter = getter;
     }
 
     /**
@@ -293,9 +302,9 @@ export class AnalyticsSystem {
             uptime: Math.round(uptime),
             avgResponseTime: summary.today.avgResponseTime,
             errorRate: Math.round(errorRate * 10) / 10,
-            activeConnections: 0, // TODO: 실제 연결 수
+            activeConnections: this.activeConnectionsGetter(),
             memoryUsage,
-            cpuUsage: 0 // TODO: CPU 사용량
+            cpuUsage: Math.round((os.loadavg()[0] / os.cpus().length) * 100)
         };
     }
 

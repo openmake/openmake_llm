@@ -3,6 +3,7 @@
  */
 import { Request, Response, NextFunction } from 'express';
 import { ZodSchema, ZodError, ZodIssue } from 'zod';
+import { badRequest } from '../utils/api-response';
 
 /**
  * Validation middleware factory
@@ -19,12 +20,7 @@ export function validate<T>(schema: ZodSchema<T>) {
                 const messages = error.issues.map((e: ZodIssue) => 
                     e.path.length > 0 ? `${e.path.join('.')}: ${e.message}` : e.message
                 );
-                return res.status(400).json({
-                    success: false,
-                    error: 'Validation failed',
-                    details: messages,
-                    timestamp: new Date().toISOString()
-                });
+                return res.status(400).json(badRequest(messages.join('; ')));
             }
             next(error);
         }
@@ -45,12 +41,7 @@ export function validateQuery<T>(schema: ZodSchema<T>) {
                 const messages = error.issues.map((e: ZodIssue) => 
                     e.path.length > 0 ? `${e.path.join('.')}: ${e.message}` : e.message
                 );
-                return res.status(400).json({
-                    success: false,
-                    error: 'Query validation failed',
-                    details: messages,
-                    timestamp: new Date().toISOString()
-                });
+                return res.status(400).json(badRequest(messages.join('; ')));
             }
             next(error);
         }

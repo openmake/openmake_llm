@@ -1,0 +1,52 @@
+b39e4da0ef9909fb022891ad7d061de2
+"use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.URL = exports.DNS = void 0;
+const md5_js_1 = __importDefault(require("./md5.js"));
+const v35_js_1 = __importStar(require("./v35.js"));
+var v35_js_2 = require("./v35.js");
+Object.defineProperty(exports, "DNS", { enumerable: true, get: function () { return v35_js_2.DNS; } });
+Object.defineProperty(exports, "URL", { enumerable: true, get: function () { return v35_js_2.URL; } });
+function v3(value, namespace, buf, offset) {
+    return (0, v35_js_1.default)(0x30, md5_js_1.default, value, namespace, buf, offset);
+}
+v3.DNS = v35_js_1.DNS;
+v3.URL = v35_js_1.URL;
+exports.default = v3;
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJmaWxlIjoiL1ZvbHVtZXMvTUFDX0FQUC9vcGVubWFrZV9sbG0vbm9kZV9tb2R1bGVzL3V1aWQvZGlzdC1ub2RlL3YzLmpzIiwibWFwcGluZ3MiOiI7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7OztBQUFBLHNEQUEyQjtBQUMzQixtREFBeUM7QUFDekMsbUNBQW9DO0FBQTNCLDZGQUFBLEdBQUcsT0FBQTtBQUFFLDZGQUFBLEdBQUcsT0FBQTtBQUNqQixTQUFTLEVBQUUsQ0FBQyxLQUFLLEVBQUUsU0FBUyxFQUFFLEdBQUcsRUFBRSxNQUFNO0lBQ3JDLE9BQU8sSUFBQSxnQkFBRyxFQUFDLElBQUksRUFBRSxnQkFBRyxFQUFFLEtBQUssRUFBRSxTQUFTLEVBQUUsR0FBRyxFQUFFLE1BQU0sQ0FBQyxDQUFDO0FBQ3pELENBQUM7QUFDRCxFQUFFLENBQUMsR0FBRyxHQUFHLFlBQUcsQ0FBQztBQUNiLEVBQUUsQ0FBQyxHQUFHLEdBQUcsWUFBRyxDQUFDO0FBQ2Isa0JBQWUsRUFBRSxDQUFDIiwibmFtZXMiOltdLCJzb3VyY2VzIjpbIi9Wb2x1bWVzL01BQ19BUFAvb3Blbm1ha2VfbGxtL25vZGVfbW9kdWxlcy91dWlkL2Rpc3Qtbm9kZS92My5qcyJdLCJzb3VyY2VzQ29udGVudCI6WyJpbXBvcnQgbWQ1IGZyb20gJy4vbWQ1LmpzJztcbmltcG9ydCB2MzUsIHsgRE5TLCBVUkwgfSBmcm9tICcuL3YzNS5qcyc7XG5leHBvcnQgeyBETlMsIFVSTCB9IGZyb20gJy4vdjM1LmpzJztcbmZ1bmN0aW9uIHYzKHZhbHVlLCBuYW1lc3BhY2UsIGJ1Ziwgb2Zmc2V0KSB7XG4gICAgcmV0dXJuIHYzNSgweDMwLCBtZDUsIHZhbHVlLCBuYW1lc3BhY2UsIGJ1Ziwgb2Zmc2V0KTtcbn1cbnYzLkROUyA9IEROUztcbnYzLlVSTCA9IFVSTDtcbmV4cG9ydCBkZWZhdWx0IHYzO1xuIl0sInZlcnNpb24iOjN9

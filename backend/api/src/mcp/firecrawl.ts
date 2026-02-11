@@ -5,13 +5,14 @@
  */
 
 import { MCPToolDefinition, MCPToolResult } from './types';
+import { getConfig } from '../config/env';
 
 // ============================================
 // Firecrawl API Client
 // ============================================
 
-const FIRECRAWL_API_KEY = process.env.FIRECRAWL_API_KEY;
-const FIRECRAWL_API_URL = process.env.FIRECRAWL_API_URL || 'https://api.firecrawl.dev/v1';
+const FIRECRAWL_API_KEY = getConfig().firecrawlApiKey || undefined;
+const FIRECRAWL_API_URL = getConfig().firecrawlApiUrl;
 
 interface FirecrawlScrapeOptions {
     formats?: ('markdown' | 'html' | 'rawHtml' | 'links' | 'screenshot')[];

@@ -18,6 +18,11 @@
  * @requires ws - WebSocket 서버
  */
 
+// Load environment variables BEFORE any other imports
+import * as dotenv from 'dotenv';
+import * as pathModule from 'path';
+dotenv.config({ path: pathModule.resolve(__dirname, '../../../.env') });
+
 import express, { Application, Request, Response, NextFunction } from 'express';
 import { Server as HttpServer, ServerResponse, createServer } from 'http';
 import { WebSocketServer, WebSocket } from 'ws';
@@ -60,13 +65,11 @@ import {
 } from './routes';
 import { tokenMonitoringRouter } from './routes/token-monitoring.routes';
 import v1Router from './routes/v1';
-import { requestLogger, analyticsMiddleware, generalLimiter, chatLimiter, authLimiter } from './middlewares';
-import { getCacheSystem } from './cache';
-import { getAnalyticsSystem } from './monitoring/analytics';
-import { getAlertSystem } from './monitoring/alerts';
+import { requestLogger, analyticsMiddleware, generalLimiter, chatLimiter, authLimiter, corsMiddleware } from './middlewares';
+import { bootstrapServices } from './bootstrap';
 import { getConnectionPool } from './ollama/connection-pool';
-import { getAgentLearningSystem } from './agents/learning';
-import { getCustomAgentBuilder } from './agents/custom-builder';
+import { getAnalyticsSystem } from './monitoring/analytics';
+
 
 // 🆕 리팩토링된 컨트롤러 임포트
 import {
@@ -80,7 +83,7 @@ import { uploadedDocuments } from './documents/store';
 import { WebSocketHandler } from './sockets/handler';
 import { RATE_LIMITS, SERVER_CONFIG } from './config/constants';
 import { setupSwaggerRoutes } from './swagger';
-import { internalError as apiInternalError } from './utils/api-response';
+import { errorHandler, notFoundHandler } from './utils/error-handler';
 
 /**
  * 대시보드 서버 초기화 옵션
@@ -164,6 +167,9 @@ export class DashboardServer {
 
         // 메트릭 API에 활성 WebSocket 연결 수 게터 설정
         setMetricsConnections(() => this.wsHandler.connectedClientsCount);
+
+        // 분석 시스템에도 활성 연결 수 게터 주입
+        getAnalyticsSystem().setActiveConnectionsGetter(() => this.wsHandler.connectedClientsCount);
     }
 
     /**
@@ -252,9 +258,31 @@ export class DashboardServer {
 
         // ============================================
         // Security headers via Helmet
+        // 🔒 보안 패치 2026-02-07: CSP 활성화 — XSS 방어
         // ============================================
         this.app.use(helmet({
-            contentSecurityPolicy: false, // API server - not serving HTML
+            contentSecurityPolicy: {
+                directives: {
+                    defaultSrc: ["'self'"],
+                    scriptSrc: ["'self'", "'unsafe-inline'"],       // Vanilla JS inline 스크립트 허용
+                    styleSrc: ["'self'", "'unsafe-inline'"],        // 인라인 스타일 허용
+                    imgSrc: ["'self'", "data:", "blob:", "https:"], // 이미지: data URI, blob, HTTPS
+                    connectSrc: [
+                        "'self'",
+                        "ws://localhost:*",                         // 로컬 WebSocket
+                        "wss://localhost:*",                        // 로컬 WSS
+                        "ws://0.0.0.0:*",                           // Docker 내부
+                        "http://localhost:11434",                    // Ollama Local
+                        "https://ollama.com",                       // Ollama Cloud
+                    ],
+                    fontSrc: ["'self'", "data:"],
+                    objectSrc: ["'none'"],
+                    frameAncestors: ["'none'"],                     // Clickjacking 방어
+                    baseUri: ["'self'"],
+                    formAction: ["'self'"],
+                    upgradeInsecureRequests: [],
+                }
+            },
             crossOriginEmbedderPolicy: false, // For API compatibility
             crossOriginResourcePolicy: { policy: 'cross-origin' } // Allow cross-origin API requests
         }));
@@ -276,21 +304,7 @@ export class DashboardServer {
         // ============================================
         // CORS 설정 (Security 강화)
         // ============================================
-        this.app.use((req, res, next) => {
-            const allowedOrigins = (process.env.CORS_ORIGINS || 'http://localhost:52416').split(',');
-            const origin = req.headers.origin;
-            if (origin && allowedOrigins.includes(origin)) {
-                res.setHeader('Access-Control-Allow-Origin', origin);
-            }
-            res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-            res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-            res.setHeader('Access-Control-Allow-Credentials', 'true');
-            if (req.method === 'OPTIONS') {
-                res.sendStatus(204);
-                return;
-            }
-            next();
-        });
+        this.app.use(corsMiddleware);
 
         // ============================================
         // 🆕 고도화 미들웨어 및 라우트
@@ -320,12 +334,8 @@ export class DashboardServer {
         this.app.use('/api/monitoring', tokenMonitoringRouter);  // 🆕 토큰 모니터링 API
         this.app.use('/api/mcp', mcpRouter);            // 🆕 MCP 설정/도구 API
 
-        // 🆕 서비스 초기화
-        getCacheSystem();          // 캐시 시스템 시작
-        getAnalyticsSystem();      // 분석 시스템 시작
-        getAlertSystem();          // 알림 시스템 시작
-        getAgentLearningSystem();  // 에이전트 학습 시스템 시작
-        getCustomAgentBuilder();   // 커스텀 에이전트 빌더 시작
+        // 🆕 서비스 초기화 (bootstrap.ts로 분리)
+        bootstrapServices();
 
         // ============================================
         // 🆕 리팩토링된 컨트롤러 마운트
@@ -359,6 +369,7 @@ export class DashboardServer {
 
         // ===== 🆕 대화 히스토리 API =====
         this.app.use('/api/chat/sessions', createSessionController());
+        this.app.use('/api/chat/conversations', createSessionController());  // Alias for frontend compatibility
 
         // 🆕 모델 정보 API (model.routes.ts로 분리됨)
         this.app.use('/api', modelRouter);
@@ -391,22 +402,10 @@ export class DashboardServer {
             }
         });
 
-        // 글로벌 에러 핸들러 (JSON 형식 보장)
-        this.app.use((err: Error & { code?: string; status?: number }, req: Request, res: Response, next: NextFunction) => {
-            console.error('[GlobalError]', err);
-
-            // Multer 에러 처리 — api-response 표준 형식
-            if (err.code === 'LIMIT_FILE_SIZE') {
-                const { error: apiError } = require('./utils/api-response');
-                return res.status(413).json(apiError('PAYLOAD_TOO_LARGE', '파일 크기가 너무 큽니다 (최대 100MB)'));
-            }
-            if (err.name === 'MulterError') {
-                const { badRequest: apiBadRequest } = require('./utils/api-response');
-                return res.status(400).json(apiBadRequest(`업로드 오류: ${err.message}`));
-            }
-
-            res.status(err.status || 500).json(apiInternalError(err.message || '서버 내부 오류가 발생했습니다'));
-        });
+        // ⚙️ Phase 3: 글로벌 에러 핸들러 단일화 (utils/error-handler.ts)
+        // MulterError, QuotaExceededError, AppError 모두 통합 처리
+        this.app.use(notFoundHandler);
+        this.app.use(errorHandler);
     }
 
 
@@ -485,7 +484,7 @@ export class DashboardServer {
      * @returns 서버 URL (예: http://localhost:52416)
      */
     get url(): string {
-        const host = process.env.SERVER_HOST || '0.0.0.0';
+        const host = getConfig().serverHost;
         return `http://${host}:${this.port}`;
     }
 }
@@ -508,7 +507,7 @@ export function createDashboardServer(options?: DashboardOptions): DashboardServ
 // Auto-start when executed directly (npm run dev:api)
 // ============================================
 if (require.main === module) {
-    const port = parseInt(process.env.PORT || '52416', 10);
+    const port = getConfig().port;
     const server = new DashboardServer({ port });
 
     // 전역 예외 핸들러 등록 (프로세스 안정성)

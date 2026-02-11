@@ -89,8 +89,9 @@ describe('ChatService Types', () => {
                 customField: 'custom value',
                 anotherField: 123
             };
-            expect((msg as any).customField).toBe('custom value');
-            expect((msg as any).anotherField).toBe(123);
+            // ChatHistoryMessage has index signature [key: string]: unknown
+            expect(msg.customField).toBe('custom value');
+            expect(msg.anotherField).toBe(123);
         });
     });
 
@@ -128,7 +129,8 @@ describe('ChatService Types', () => {
                 type: 'expert',
                 customProp: 'value'
             };
-            expect((info as any).customProp).toBe('value');
+            // AgentSelectionInfo has index signature [key: string]: unknown
+            expect(info.customProp).toBe('value');
         });
     });
 
@@ -152,7 +154,8 @@ describe('ChatService Types', () => {
                 }
             };
             expect(tool.function.name).toBe('calculator');
-            expect((tool.function.arguments as any).a).toBe(1);
+            // ToolCallInfo.function.arguments is Record<string, unknown>
+            expect(tool.function.arguments.a).toBe(1);
         });
 
         it('should handle complex arguments', () => {
@@ -167,8 +170,10 @@ describe('ChatService Types', () => {
                     }
                 }
             };
-            expect((tool.function.arguments as any).nested.deep.value).toBe('test');
-            expect((tool.function.arguments as any).array).toHaveLength(3);
+            // ToolCallInfo.function.arguments is Record<string, unknown>
+            const args = tool.function.arguments as { nested: { deep: { value: string } }; array: number[] };
+            expect(args.nested.deep.value).toBe('test');
+            expect(args.array).toHaveLength(3);
         });
     });
 

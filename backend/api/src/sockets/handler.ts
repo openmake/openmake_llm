@@ -8,6 +8,7 @@ import { uploadedDocuments } from '../documents/store';
 import { selectOptimalModel } from '../chat/model-selector';
 import { createLogger } from '../utils/logger';
 import { QuotaExceededError } from '../errors/quota-exceeded.error';
+import { KeyExhaustionError } from '../errors/key-exhaustion.error';
 import { verifyToken } from '../auth';
 
 const log = createLogger('WebSocketHandler');
@@ -26,6 +27,7 @@ interface WSMessage {
     anonSessionId?: string;
     userId?: string;
     discussionMode?: boolean;
+    deepResearchMode?: boolean;
     thinkingMode?: boolean;
     thinkingLevel?: string;
     userRole?: string;
@@ -33,16 +35,27 @@ interface WSMessage {
     [key: string]: unknown;
 }
 
+/** Extended WebSocket with authentication, abort controller, and heartbeat */
+interface ExtendedWebSocket extends WebSocket {
+    _authenticatedUserId: string | null;
+    _abortController: AbortController | null;
+    /** 🔒 Phase 2: heartbeat alive 플래그 */
+    _isAlive: boolean;
+}
+
 export class WebSocketHandler {
     private wss: WebSocketServer;
     private cluster: ClusterManager;
     private clients: Set<WebSocket> = new Set();
+    /** 🔒 Phase 2: heartbeat 인터벌 타이머 */
+    private heartbeatInterval: ReturnType<typeof setInterval> | null = null;
 
     constructor(wss: WebSocketServer, cluster: ClusterManager) {
         this.wss = wss;
         this.cluster = cluster;
         this.setupConnection();
         this.setupClusterEvents();
+        this.startHeartbeat();
     }
 
     public get connectedClientsCount(): number {
@@ -89,8 +102,12 @@ export class WebSocketHandler {
                 log.warn('[WS] 인증 처리 실패:', e);
             }
 
-            // WebSocket 인스턴스에 인증 정보 저장
-            (ws as WebSocket & { _authenticatedUserId: string | null })._authenticatedUserId = wsAuthUserId;
+            // WebSocket 인스턴스에 인증 정보 및 중단 컨트롤러 저장
+            const extWs = ws as ExtendedWebSocket;
+            extWs._authenticatedUserId = wsAuthUserId;
+            extWs._abortController = null;
+            // 🔒 Phase 2: heartbeat alive 플래그 초기화
+            extWs._isAlive = true;
 
             // 초기 상태 전송
             ws.send(JSON.stringify({
@@ -109,6 +126,18 @@ export class WebSocketHandler {
 
             ws.on('close', () => {
                 this.clients.delete(ws);
+                // 🔒 Phase 2 보안 패치: 연결 종료 시 진행 중인 AI 생성 중단
+                // GPU/CPU 리소스 해제 및 불필요한 토큰 생성 방지
+                if (extWs._abortController) {
+                    extWs._abortController.abort();
+                    extWs._abortController = null;
+                    log.info(`[WS] 클라이언트 연결 종료 → AI 생성 중단: userId=${extWs._authenticatedUserId || 'anonymous'}`);
+                }
+            });
+
+            // 🔒 Phase 2: pong 수신 시 alive 플래그 갱신
+            ws.on('pong', () => {
+                extWs._isAlive = true;
             });
 
             ws.on('message', async (data) => {
@@ -194,6 +223,26 @@ export class WebSocketHandler {
             case 'chat':
                 await this.handleChat(ws, msg);
                 break;
+
+            case 'abort':
+                // 현재 진행 중인 채팅 중단
+                this.handleAbort(ws);
+                break;
+        }
+    }
+
+    /**
+     * 채팅 중단 처리
+     */
+    private handleAbort(ws: WebSocket): void {
+        const extWs = ws as ExtendedWebSocket;
+        if (extWs._abortController) {
+            log.info('[WS] 채팅 중단 요청 수신');
+            extWs._abortController.abort();
+            extWs._abortController = null;
+            ws.send(JSON.stringify({ type: 'aborted', message: '응답 생성이 중단되었습니다.' }));
+        } else {
+            log.debug('[WS] 중단할 진행 중인 채팅 없음');
         }
     }
 
@@ -201,20 +250,36 @@ export class WebSocketHandler {
         const { model, nodeId, history, images, docId, sessionId, anonSessionId } = msg;
         const message = msg.message || '';
 
+        // ExtendedWebSocket 캐스팅
+        const extWs = ws as ExtendedWebSocket;
+
+        // 중단 컨트롤러 생성
+        const abortController = new AbortController();
+        extWs._abortController = abortController;
+
         // 인증된 사용자 ID 우선 사용 (클라이언트가 보낸 userId 대신)
-        const wsAuthUserId = (ws as WebSocket & { _authenticatedUserId: string | null })._authenticatedUserId;
+        const wsAuthUserId = extWs._authenticatedUserId;
 
         try {
+            // 모델 결정 (자동 선택 또는 사용자 지정)
+            let selectedModel = model;
+            if (!model || model === 'default') {
+                const optimalModel = selectOptimalModel(message);
+                selectedModel = optimalModel.model;
+                log.debug(`[Chat] 🎯 자동 모델 선택: ${selectedModel} (${optimalModel.reason})`);
+            }
+
+            // 🔒 Phase 2: createScopedClient로 요청별 격리된 클라이언트 사용
             let client;
             let selectedNode;
 
             if (nodeId) {
-                client = this.cluster.getClient(nodeId);
+                client = this.cluster.createScopedClient(nodeId, selectedModel);
                 selectedNode = nodeId;
             } else {
                 const bestNode = this.cluster.getBestNode(model);
                 if (bestNode) {
-                    client = this.cluster.getClient(bestNode.id);
+                    client = this.cluster.createScopedClient(bestNode.id, selectedModel);
                     selectedNode = bestNode.id;
                 }
             }
@@ -225,18 +290,6 @@ export class WebSocketHandler {
                 log.warn('[Chat] 오류: 사용 가능한 노드 없음');
                 ws.send(JSON.stringify({ type: 'error', message: '사용 가능한 노드가 없습니다' }));
                 return;
-            }
-
-            // 모델 설정 (자동 선택 또는 사용자 지정)
-            let selectedModel = model;
-            if (!model || model === 'default') {
-                const optimalModel = selectOptimalModel(message);
-                selectedModel = optimalModel.model;
-                log.debug(`[Chat] 🎯 자동 모델 선택: ${selectedModel} (${optimalModel.reason})`);
-            }
-
-            if (selectedModel) {
-                client.setModel(selectedModel);
             }
 
             // 시사 관련 질문 감지 및 웹 검색 컨텍스트 구성
@@ -271,7 +324,7 @@ export class WebSocketHandler {
             // 또는 새 대화인 경우 세션 생성
             if (!currentSessionId || currentSessionId.length < 10) { // 노드 ID(짧음)와 구별
                 // 새 세션 생성 — user_id는 인증된 ID만, 비로그인은 anon_session_id로 추적
-                const session = conversationDb.createSession(authenticatedUserId, message.substring(0, 30), undefined, anonSessionId);
+                const session = await conversationDb.createSession(authenticatedUserId, message.substring(0, 30), undefined, anonSessionId);
                 currentSessionId = session.id;
                 log.debug(`[Chat WS] 새 세션 생성: ${currentSessionId}, userId: ${authenticatedUserId || 'null'}, anonSessionId: ${anonSessionId || 'none'}`);
 
@@ -280,11 +333,12 @@ export class WebSocketHandler {
             }
 
             // 2. 사용자 메시지 저장
-            conversationDb.addMessage(currentSessionId, 'user', message, { model: selectedModel });
+            await conversationDb.addMessage(currentSessionId, 'user', message, { model: selectedModel });
 
             // ChatService 인스턴스 생성 및 실행
             const chatService = new ChatService(client);
             const discussionMode = msg.discussionMode === true;
+            const deepResearchMode = msg.deepResearchMode === true;  // 🔬 Deep Research 모드
             const thinkingMode = msg.thinkingMode === true;  // 🧠 Ollama Native Thinking
             const thinkingLevel = (msg.thinkingLevel || 'high') as 'low' | 'medium' | 'high';  // low, medium, high
             const startTime = Date.now();
@@ -299,6 +353,14 @@ export class WebSocketHandler {
             const userTier = msg.userTier as 'free' | 'pro' | 'enterprise' | undefined;
             
             // 🆕 userId, userRole, userTier를 ChatMessageRequest에 포함하여 전달
+            // 토큰 콜백에서 중단 여부 체크
+            const tokenCallback = (token: string) => {
+                if (abortController.signal.aborted) {
+                    throw new Error('ABORTED');
+                }
+                ws.send(JSON.stringify({ type: 'token', token }));
+            };
+
             const fullResponse = await chatService.processMessage(
                 { 
                     message, 
@@ -307,22 +369,26 @@ export class WebSocketHandler {
                     images, 
                     webSearchContext, 
                     discussionMode, 
+                    deepResearchMode,  // 🔬 Deep Research 모드 전달
                     thinkingMode, 
                     thinkingLevel,
                     userId,      // 🆕 사용자 ID 전달 (MemoryService 연동용)
                     userRole,    // 🆕 사용자 역할 전달 (admin → enterprise 권한)
-                    userTier     // 🆕 사용자 등급 전달 (명시적 지정 시)
+                    userTier,    // 🆕 사용자 등급 전달 (명시적 지정 시)
+                    abortSignal: abortController.signal  // 🆕 중단 시그널 전달
                 },
                 uploadedDocuments,
-                (token) => ws.send(JSON.stringify({ type: 'token', token })),
+                tokenCallback,
                 (agent) => ws.send(JSON.stringify({ type: 'agent_selected', agent })),
                 // 토론 진행 상황 콜백
-                (progress) => ws.send(JSON.stringify({ type: 'discussion_progress', progress }))
+                (progress) => ws.send(JSON.stringify({ type: 'discussion_progress', progress })),
+                // 🔬 Deep Research 진행 상황 콜백
+                (progress) => ws.send(JSON.stringify({ type: 'research_progress', progress }))
             );
 
             // 3. AI 응답 저장
             const endTime = Date.now();
-            conversationDb.addMessage(currentSessionId, 'assistant', fullResponse, {
+            await conversationDb.addMessage(currentSessionId, 'assistant', fullResponse, {
                 model: client.model,
                 responseTime: endTime - startTime
             });
@@ -340,6 +406,16 @@ export class WebSocketHandler {
             ws.send(JSON.stringify({ type: 'done' }));
 
         } catch (error: unknown) {
+            // 중단 컨트롤러 정리
+            extWs._abortController = null;
+
+            // 중단된 경우
+            if (error instanceof Error && error.message === 'ABORTED') {
+                log.info('[Chat] 사용자에 의해 중단됨');
+                // aborted 메시지는 handleAbort에서 이미 전송됨
+                return;
+            }
+
             if (error instanceof QuotaExceededError) {
                 log.warn('[Chat] API 할당량 초과:', error.message);
                 ws.send(JSON.stringify({
@@ -348,10 +424,63 @@ export class WebSocketHandler {
                     errorType: 'quota_exceeded',
                     retryAfter: error.retryAfterSeconds
                 }));
+            } else if (error instanceof KeyExhaustionError) {
+                // 🆕 모든 API 키 소진 에러 처리
+                log.warn('[Chat] 모든 API 키 소진:', error.message);
+                ws.send(JSON.stringify({
+                    type: 'error',
+                    message: error.getDisplayMessage('ko'),
+                    errorType: 'api_keys_exhausted',
+                    retryAfter: error.retryAfterSeconds,
+                    resetTime: error.resetTime.toISOString(),
+                    totalKeys: error.totalKeys,
+                    keysInCooldown: error.keysInCooldown
+                }));
             } else {
                 log.error('[Chat] 처리 중 오류:', error);
-                ws.send(JSON.stringify({ type: 'error', message: `처리 중 오류가 발생했습니다: ${error instanceof Error ? error.message : String(error)}` }));
+                // 🔒 Phase 2: 내부 에러 상세 누출 방지 — 제네릭 메시지만 전송
+                ws.send(JSON.stringify({ type: 'error', message: '처리 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.' }));
             }
+        } finally {
+            // 중단 컨트롤러 정리
+            extWs._abortController = null;
+        }
+    }
+
+    /**
+     * 🔒 Phase 2 보안 패치: WebSocket 핑/퐁 하트비트
+     * 30초마다 모든 클라이언트에 ping을 보내고,
+     * 응답이 없는 좀비 연결을 강제 종료합니다.
+     */
+    private startHeartbeat(): void {
+        this.heartbeatInterval = setInterval(() => {
+            for (const ws of this.clients) {
+                const extWs = ws as ExtendedWebSocket;
+                if (!extWs._isAlive) {
+                    // pong 미응답 → 좀비 연결 → 강제 종료
+                    log.info(`[WS] 하트비트 미응답 → 연결 종료: userId=${extWs._authenticatedUserId || 'anonymous'}`);
+                    // 진행 중인 AI 생성도 중단
+                    if (extWs._abortController) {
+                        extWs._abortController.abort();
+                        extWs._abortController = null;
+                    }
+                    this.clients.delete(ws);
+                    ws.terminate();
+                    continue;
+                }
+                extWs._isAlive = false;
+                ws.ping();
+            }
+        }, 30000); // 30초 주기
+    }
+
+    /**
+     * 하트비트 중지 (서버 종료 시 호출)
+     */
+    public stopHeartbeat(): void {
+        if (this.heartbeatInterval) {
+            clearInterval(this.heartbeatInterval);
+            this.heartbeatInterval = null;
         }
     }
 

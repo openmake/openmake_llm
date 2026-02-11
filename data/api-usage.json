@@ -121,17 +121,37 @@
       "models": {
         "gemini-3-flash-preview:cloud": 2
       }
+    },
+    "2026-02-09": {
+      "date": "2026-02-09",
+      "requests": 6,
+      "tokens": 35969,
+      "errors": 0,
+      "avgResponseTime": 22917,
+      "models": {
+        "gemini-3-flash-preview:cloud": 6
+      }
+    },
+    "2026-02-11": {
+      "date": "2026-02-11",
+      "requests": 2,
+      "tokens": 4644,
+      "errors": 0,
+      "avgResponseTime": 32765,
+      "models": {
+        "gemini-3-flash-preview:cloud": 2
+      }
     }
   },
-  "lastUpdated": "2026-01-31T04:30:51.432Z",
+  "lastUpdated": "2026-02-11T02:38:52.812Z",
   "perKey": {
     "0918b987": {
       "keyId": "0918b987",
-      "totalRequests": 78,
-      "weeklyRequests": 2,
+      "totalRequests": 86,
+      "weeklyRequests": 8,
       "hourlyRequests": 2,
-      "lastReset": "2026-01-31",
-      "lastHourReset": 13
+      "lastReset": "2026-02-09",
+      "lastHourReset": 11
     },
     "bef62434": {
       "keyId": "bef62434",

@@ -3,8 +3,9 @@ import { sanitizePromptInput, validatePromptInput, processPromptInput } from '..
 describe('sanitizePromptInput', () => {
   it('should return empty string for falsy input', () => {
     expect(sanitizePromptInput('')).toBe('');
-    expect(sanitizePromptInput(null as any)).toBe('');
-    expect(sanitizePromptInput(undefined as any)).toBe('');
+    // Test edge cases: null/undefined should be handled gracefully at runtime
+    expect(sanitizePromptInput(null as unknown as string)).toBe('');
+    expect(sanitizePromptInput(undefined as unknown as string)).toBe('');
   });
 
   it('should remove control characters except newline and tab', () => {

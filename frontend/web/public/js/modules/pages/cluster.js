@@ -7,6 +7,7 @@
     window.PageModules = window.PageModules || {};
     var _intervals = [];
     var _timeouts = [];
+    function esc(s) { var d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
 
     window.PageModules['cluster'] = {
         getHTML: function() {
@@ -84,13 +85,13 @@
             grid.innerHTML = nodes.map(node => `
                 <div class="cluster-card">
                     <div class="cluster-header">
-                        <span class="cluster-name">${node.name || node.id}</span>
+                        <span class="cluster-name">${esc(node.name || node.id)}</span>
                         <span class="status-badge ${node.status === 'online' ? 'online' : 'offline'}">
                             <span class="status-dot ${node.status === 'online' ? 'online' : 'offline'}"></span>
                             ${node.status === 'online' ? '온라인' : '오프라인'}
                         </span>
                     </div>
-                    <div class="cluster-url">${node.url}</div>
+                    <div class="cluster-url">${esc(node.url)}</div>
                     <div class="cluster-stats">
                         <div class="cluster-stat">
                             <div class="cluster-stat-value">${node.latency ? node.latency + 'ms' : '-'}</div>
