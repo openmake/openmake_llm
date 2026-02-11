@@ -134,24 +134,24 @@
     },
     "2026-02-11": {
       "date": "2026-02-11",
-      "requests": 2,
-      "tokens": 4644,
+      "requests": 3,
+      "tokens": 7868,
       "errors": 0,
-      "avgResponseTime": 32765,
+      "avgResponseTime": 31384,
       "models": {
-        "gemini-3-flash-preview:cloud": 2
+        "gemini-3-flash-preview:cloud": 3
       }
     }
   },
-  "lastUpdated": "2026-02-11T02:38:52.812Z",
+  "lastUpdated": "2026-02-11T04:21:20.027Z",
   "perKey": {
     "0918b987": {
       "keyId": "0918b987",
-      "totalRequests": 86,
-      "weeklyRequests": 8,
-      "hourlyRequests": 2,
+      "totalRequests": 87,
+      "weeklyRequests": 9,
+      "hourlyRequests": 1,
       "lastReset": "2026-02-09",
-      "lastHourReset": 11
+      "lastHourReset": 13
     },
     "bef62434": {
       "keyId": "bef62434",
