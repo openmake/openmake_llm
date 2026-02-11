@@ -377,6 +377,35 @@ CREATE TABLE IF NOT EXISTS mcp_servers (
 
 CREATE INDEX IF NOT EXISTS idx_mcp_servers_name ON mcp_servers(name);
 CREATE INDEX IF NOT EXISTS idx_mcp_servers_enabled ON mcp_servers(enabled);
+
+-- ============================================
+-- 🔑 API Key 관리 테이블
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS user_api_keys (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    key_hash TEXT NOT NULL UNIQUE,
+    key_prefix TEXT NOT NULL DEFAULT 'omk_live_',
+    last_4 TEXT NOT NULL,
+    name TEXT NOT NULL,
+    description TEXT,
+    scopes JSONB DEFAULT '["*"]',
+    allowed_models JSONB DEFAULT '["*"]',
+    rate_limit_tier TEXT NOT NULL DEFAULT 'free' CHECK(rate_limit_tier IN ('free', 'starter', 'standard', 'enterprise')),
+    is_active BOOLEAN DEFAULT TRUE,
+    last_used_at TIMESTAMPTZ,
+    expires_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    total_requests INTEGER DEFAULT 0,
+    total_tokens INTEGER DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_api_keys_user ON user_api_keys(user_id);
+CREATE INDEX IF NOT EXISTS idx_api_keys_hash ON user_api_keys(key_hash);
+CREATE INDEX IF NOT EXISTS idx_api_keys_active ON user_api_keys(user_id, is_active);
+CREATE INDEX IF NOT EXISTS idx_api_keys_tier ON user_api_keys(rate_limit_tier);
 `;
 
 export interface User {
@@ -603,6 +632,65 @@ export interface MCPServerRow {
     created_at: string;
     updated_at: string;
 }
+
+// ============================================
+// 🔑 API Key 관리 인터페이스
+// ============================================
+
+export type ApiKeyTier = 'free' | 'starter' | 'standard' | 'enterprise';
+
+export interface UserApiKey {
+    id: string;
+    user_id: string;
+    key_hash: string;
+    key_prefix: string;
+    last_4: string;
+    name: string;
+    description?: string;
+    scopes: string[];
+    allowed_models: string[];
+    rate_limit_tier: ApiKeyTier;
+    is_active: boolean;
+    last_used_at?: string;
+    expires_at?: string;
+    created_at: string;
+    updated_at: string;
+    total_requests: number;
+    total_tokens: number;
+}
+
+/** API Key 생성 시 반환할 공개 정보 (해시 제외) */
+export interface UserApiKeyPublic {
+    id: string;
+    user_id: string;
+    key_prefix: string;
+    last_4: string;
+    name: string;
+    description?: string;
+    scopes: string[];
+    allowed_models: string[];
+    rate_limit_tier: ApiKeyTier;
+    is_active: boolean;
+    last_used_at?: string;
+    expires_at?: string;
+    created_at: string;
+    updated_at: string;
+    total_requests: number;
+    total_tokens: number;
+}
+
+/** Rate limit tier 설정 */
+export const API_KEY_TIER_LIMITS: Record<ApiKeyTier, {
+    rpm: number;
+    tpm: number;
+    dailyRequests: number;
+    monthlyRequests: number;
+}> = {
+    free: { rpm: 10, tpm: 10_000, dailyRequests: 100, monthlyRequests: 1_000 },
+    starter: { rpm: 30, tpm: 50_000, dailyRequests: 500, monthlyRequests: 10_000 },
+    standard: { rpm: 60, tpm: 100_000, dailyRequests: 3_000, monthlyRequests: 100_000 },
+    enterprise: { rpm: 300, tpm: 1_000_000, dailyRequests: -1, monthlyRequests: -1 }, // -1 = unlimited
+};
 
 /**
  * 통합 데이터베이스 클래스 (PostgreSQL)
@@ -1679,6 +1767,236 @@ export class UnifiedDatabase {
             [id]
         );
         return (result.rowCount || 0) > 0;
+    }
+
+    // ============================================
+    // 🔑 API Key 관리 메서드
+    // ============================================
+
+    async createApiKey(params: {
+        id: string;
+        userId: string;
+        keyHash: string;
+        keyPrefix: string;
+        last4: string;
+        name: string;
+        description?: string;
+        scopes?: string[];
+        allowedModels?: string[];
+        rateLimitTier?: ApiKeyTier;
+        expiresAt?: string;
+    }): Promise<UserApiKey> {
+        const result = await this.retryQuery(
+            `INSERT INTO user_api_keys 
+            (id, user_id, key_hash, key_prefix, last_4, name, description, scopes, allowed_models, rate_limit_tier, expires_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+            RETURNING *`,
+            [
+                params.id, params.userId, params.keyHash, params.keyPrefix, params.last4,
+                params.name, params.description || null,
+                JSON.stringify(params.scopes || ['*']),
+                JSON.stringify(params.allowedModels || ['*']),
+                params.rateLimitTier || 'free',
+                params.expiresAt || null
+            ]
+        );
+        const row = result.rows[0];
+        return {
+            ...row,
+            scopes: row.scopes || ['*'],
+            allowed_models: row.allowed_models || ['*'],
+            is_active: !!row.is_active
+        } as UserApiKey;
+    }
+
+    async getApiKeyByHash(keyHash: string): Promise<UserApiKey | undefined> {
+        const result = await this.retryQuery(
+            'SELECT * FROM user_api_keys WHERE key_hash = $1 AND is_active = TRUE',
+            [keyHash]
+        );
+        const row = result.rows[0];
+        if (!row) return undefined;
+
+        return {
+            ...row,
+            scopes: row.scopes || ['*'],
+            allowed_models: row.allowed_models || ['*'],
+            is_active: !!row.is_active
+        } as UserApiKey;
+    }
+
+    async getApiKeyById(keyId: string): Promise<UserApiKey | undefined> {
+        const result = await this.retryQuery(
+            'SELECT * FROM user_api_keys WHERE id = $1',
+            [keyId]
+        );
+        const row = result.rows[0];
+        if (!row) return undefined;
+
+        return {
+            ...row,
+            scopes: row.scopes || ['*'],
+            allowed_models: row.allowed_models || ['*'],
+            is_active: !!row.is_active
+        } as UserApiKey;
+    }
+
+    async listUserApiKeys(userId: string, options?: {
+        includeInactive?: boolean;
+        limit?: number;
+        offset?: number;
+    }): Promise<UserApiKey[]> {
+        let query = 'SELECT * FROM user_api_keys WHERE user_id = $1';
+        const params: QueryParam[] = [userId];
+        let paramIdx = 2;
+
+        if (!options?.includeInactive) {
+            query += ' AND is_active = TRUE';
+        }
+
+        query += ' ORDER BY created_at DESC';
+
+        if (options?.limit) {
+            query += ` LIMIT $${paramIdx++}`;
+            params.push(options.limit);
+        }
+        if (options?.offset) {
+            query += ` OFFSET $${paramIdx++}`;
+            params.push(options.offset);
+        }
+
+        const result = await this.retryQuery(query, params);
+        return result.rows.map((row) => ({
+            ...row,
+            scopes: row.scopes || ['*'],
+            allowed_models: row.allowed_models || ['*'],
+            is_active: !!row.is_active
+        })) as UserApiKey[];
+    }
+
+    async updateApiKey(keyId: string, updates: {
+        name?: string;
+        description?: string;
+        scopes?: string[];
+        allowedModels?: string[];
+        rateLimitTier?: ApiKeyTier;
+        isActive?: boolean;
+        expiresAt?: string | null;
+    }): Promise<UserApiKey | undefined> {
+        const sets: string[] = ['updated_at = NOW()'];
+        const params: QueryParam[] = [];
+        let paramIdx = 1;
+
+        if (updates.name !== undefined) {
+            sets.push(`name = $${paramIdx++}`);
+            params.push(updates.name);
+        }
+        if (updates.description !== undefined) {
+            sets.push(`description = $${paramIdx++}`);
+            params.push(updates.description);
+        }
+        if (updates.scopes !== undefined) {
+            sets.push(`scopes = $${paramIdx++}`);
+            params.push(JSON.stringify(updates.scopes));
+        }
+        if (updates.allowedModels !== undefined) {
+            sets.push(`allowed_models = $${paramIdx++}`);
+            params.push(JSON.stringify(updates.allowedModels));
+        }
+        if (updates.rateLimitTier !== undefined) {
+            sets.push(`rate_limit_tier = $${paramIdx++}`);
+            params.push(updates.rateLimitTier);
+        }
+        if (updates.isActive !== undefined) {
+            sets.push(`is_active = $${paramIdx++}`);
+            params.push(updates.isActive);
+        }
+        if (updates.expiresAt !== undefined) {
+            sets.push(`expires_at = $${paramIdx++}`);
+            params.push(updates.expiresAt);
+        }
+
+        params.push(keyId);
+        const result = await this.retryQuery(
+            `UPDATE user_api_keys SET ${sets.join(', ')} WHERE id = $${paramIdx} RETURNING *`,
+            params
+        );
+
+        const row = result.rows[0];
+        if (!row) return undefined;
+
+        return {
+            ...row,
+            scopes: row.scopes || ['*'],
+            allowed_models: row.allowed_models || ['*'],
+            is_active: !!row.is_active
+        } as UserApiKey;
+    }
+
+    async deleteApiKey(keyId: string): Promise<boolean> {
+        const result = await this.retryQuery(
+            'DELETE FROM user_api_keys WHERE id = $1',
+            [keyId]
+        );
+        return (result.rowCount || 0) > 0;
+    }
+
+    async rotateApiKey(keyId: string, newKeyHash: string, newLast4: string): Promise<UserApiKey | undefined> {
+        const result = await this.retryQuery(
+            `UPDATE user_api_keys 
+            SET key_hash = $1, last_4 = $2, updated_at = NOW()
+            WHERE id = $3 AND is_active = TRUE
+            RETURNING *`,
+            [newKeyHash, newLast4, keyId]
+        );
+
+        const row = result.rows[0];
+        if (!row) return undefined;
+
+        return {
+            ...row,
+            scopes: row.scopes || ['*'],
+            allowed_models: row.allowed_models || ['*'],
+            is_active: !!row.is_active
+        } as UserApiKey;
+    }
+
+    async recordApiKeyUsage(keyId: string, tokens: number): Promise<void> {
+        await this.retryQuery(
+            `UPDATE user_api_keys 
+            SET total_requests = total_requests + 1, 
+                total_tokens = total_tokens + $1,
+                last_used_at = NOW()
+            WHERE id = $2`,
+            [tokens, keyId]
+        );
+    }
+
+    async getApiKeyUsageStats(keyId: string): Promise<{
+        totalRequests: number;
+        totalTokens: number;
+        lastUsedAt: string | null;
+    } | undefined> {
+        const result = await this.retryQuery(
+            'SELECT total_requests, total_tokens, last_used_at FROM user_api_keys WHERE id = $1',
+            [keyId]
+        );
+        const row = result.rows[0];
+        if (!row) return undefined;
+
+        return {
+            totalRequests: row.total_requests,
+            totalTokens: row.total_tokens,
+            lastUsedAt: row.last_used_at
+        };
+    }
+
+    async countUserApiKeys(userId: string): Promise<number> {
+        const result = await this.retryQuery(
+            'SELECT COUNT(*) as count FROM user_api_keys WHERE user_id = $1 AND is_active = TRUE',
+            [userId]
+        );
+        return parseInt(result.rows[0].count, 10);
     }
 
     // ===== 유틸리티 =====

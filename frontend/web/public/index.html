@@ -421,7 +421,7 @@
             };
         })();
 
-        document.addEventListener('DOMContentLoaded', function () {
+        document.addEventListener('DOMContentLoaded', async function () {
             // 기존 앱 초기화 (채팅, 웹소켓 등)
             if (typeof initApp === 'function') {
                 initApp();
@@ -440,6 +440,20 @@
                         window.sidebar.toggle();
                     }
                 });
+            }
+
+            // 🔒 OAuth 세션 복구 완료 대기 후 라우터 시작
+            // initAuth()에서 설정한 _authRecoveryPromise가 resolve될 때까지 대기
+            // 최대 2초 타임아웃 (네트워크 느린 경우 대비)
+            if (window._authRecoveryPromise) {
+                try {
+                    await Promise.race([
+                        window._authRecoveryPromise,
+                        new Promise(function (resolve) { setTimeout(resolve, 2000); })
+                    ]);
+                } catch (e) {
+                    // 네트워크 오류 — 무시하고 라우터 시작
+                }
             }
 
             // SPA 라우터 시작

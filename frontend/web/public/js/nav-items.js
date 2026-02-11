@@ -22,7 +22,9 @@ const NAV_ITEMS = {
         { href: '/memory.html', icon: '🧠', iconify: 'lucide:brain', label: 'AI 메모리', requireAuth: true },
         { href: '/usage.html', icon: '📈', iconify: 'lucide:bar-chart-2', label: 'API 사용량', requireAuth: true },
         { href: '/agent-learning.html', icon: '🎓', iconify: 'lucide:graduation-cap', label: '에이전트 학습', requireAuth: true },
-        { href: '/guide.html', icon: '📖', iconify: 'lucide:book-open', label: '사용 가이드' }
+        { href: '/guide.html', icon: '📖', iconify: 'lucide:book-open', label: '사용 가이드' },
+        { href: '/api-keys.html', icon: '🔐', iconify: 'lucide:key', label: 'API 키 관리', requireAuth: true },
+        { href: '/developer.html', icon: '📖', iconify: 'lucide:code-2', label: 'API 문서' }
     ],
     admin: [
         { href: '/admin.html', icon: '👥', iconify: 'lucide:users', label: '사용자 관리', requireAuth: true },

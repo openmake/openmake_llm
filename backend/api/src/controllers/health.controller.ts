@@ -6,8 +6,31 @@
  */
 
 import { Request, Response, Router } from 'express';
+import * as fs from 'fs';
+import * as path from 'path';
 import { ClusterManager, getClusterManager } from '../cluster/manager';
 import { success } from '../utils/api-response';
+
+// package.json에서 버전을 한 번만 읽어 캐시
+const pkgJsonPath = path.resolve(__dirname, '../../package.json');
+let _cachedVersion = '1.0.0';
+try {
+    const pkg = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf-8'));
+    _cachedVersion = pkg.version || '1.0.0';
+} catch { /* fallback */ }
+
+// 빌드 정보 파일 (deploy 시 자동 생성됨)
+const buildInfoPath = path.resolve(__dirname, '../build-info.json');
+let _buildInfo: { buildTime: string; gitHash: string; gitDate: string } = {
+    buildTime: new Date().toISOString(),
+    gitHash: 'unknown',
+    gitDate: 'unknown'
+};
+try {
+    if (fs.existsSync(buildInfoPath)) {
+        _buildInfo = JSON.parse(fs.readFileSync(buildInfoPath, 'utf-8'));
+    }
+} catch { /* fallback */ }
 
 /**
  * 헬스체크 및 서비스 준비 상태 컨트롤러
@@ -43,11 +66,19 @@ export class HealthController {
      * 기본 헬스체크 
      */
     private healthCheck(req: Request, res: Response): void {
+        const stats = this.cluster.getStats();
         res.json(success({
             status: 'healthy',
             timestamp: new Date().toISOString(),
             uptime: process.uptime(),
-            version: '1.0.0'
+            version: _cachedVersion,
+            nodeVersion: process.version,
+            cluster: {
+                onlineNodes: stats.onlineNodes,
+                totalNodes: stats.totalNodes,
+                totalModels: stats.totalModels
+            },
+            build: _buildInfo
         }));
     }
 

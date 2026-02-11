@@ -81,6 +81,18 @@ export interface EnvConfig {
 
     // Swagger
     swaggerBaseUrl: string;
+
+    // API Key Service
+    apiKeyPepper: string;
+    apiKeyMaxPerUser: number;
+
+    // Pipeline Profile — Brand Model → Internal Engine Mapping
+    omkEngineLlm: string;
+    omkEnginePro: string;
+    omkEngineFast: string;
+    omkEngineThink: string;
+    omkEngineCode: string;
+    omkEngineVision: string;
 }
 
 const DEFAULT_CONFIG: EnvConfig = {
@@ -162,6 +174,18 @@ const DEFAULT_CONFIG: EnvConfig = {
 
     // Swagger
     swaggerBaseUrl: '',
+
+    // API Key Service
+    apiKeyPepper: '',
+    apiKeyMaxPerUser: 5,
+
+    // Pipeline Profile — Brand Model → Internal Engine Mapping
+    omkEngineLlm: 'gemini-3-flash-preview:cloud',
+    omkEnginePro: 'gemini-3-pro-preview:cloud',
+    omkEngineFast: 'gemini-3-flash-preview:cloud',
+    omkEngineThink: 'gemini-3-pro-preview:cloud',
+    omkEngineCode: 'qwen3:30b-a3b',
+    omkEngineVision: 'gemini-3-flash-preview:cloud',
 };
 
 function parseEnvFile(filePath: string): Record<string, string> {
@@ -332,6 +356,18 @@ export function loadConfig(): EnvConfig {
 
         // Swagger
         swaggerBaseUrl: env('SWAGGER_BASE_URL') || DEFAULT_CONFIG.swaggerBaseUrl,
+
+        // API Key Service
+        apiKeyPepper: env('API_KEY_PEPPER') || DEFAULT_CONFIG.apiKeyPepper,
+        apiKeyMaxPerUser: parseInt(env('API_KEY_MAX_PER_USER') || String(DEFAULT_CONFIG.apiKeyMaxPerUser), 10),
+
+        // Pipeline Profile — Brand Model → Internal Engine Mapping
+        omkEngineLlm: env('OMK_ENGINE_LLM') || DEFAULT_CONFIG.omkEngineLlm,
+        omkEnginePro: env('OMK_ENGINE_PRO') || DEFAULT_CONFIG.omkEnginePro,
+        omkEngineFast: env('OMK_ENGINE_FAST') || DEFAULT_CONFIG.omkEngineFast,
+        omkEngineThink: env('OMK_ENGINE_THINK') || DEFAULT_CONFIG.omkEngineThink,
+        omkEngineCode: env('OMK_ENGINE_CODE') || DEFAULT_CONFIG.omkEngineCode,
+        omkEngineVision: env('OMK_ENGINE_VISION') || DEFAULT_CONFIG.omkEngineVision,
     };
 }
 

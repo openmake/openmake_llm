@@ -45,7 +45,9 @@ AI 채팅 어시스턴트 API 문서
         { name: 'MCP', description: 'MCP 서버 및 도구 관리' },
         { name: 'Tools', description: '도구 API (웹 검색 등)' },
         { name: 'Cluster', description: '클러스터 관리' },
-        { name: 'System', description: '시스템 정보 및 상태' }
+        { name: 'System', description: '시스템 정보 및 상태' },
+        { name: 'API Keys', description: 'API Key 관리 (외부 개발자용)' },
+        { name: 'Models', description: 'Brand Model 목록' }
     ],
     paths: {
         '/api/chat': {
@@ -708,6 +710,154 @@ AI 채팅 어시스턴트 API 문서
                 }
             }
         },
+        '/api/v1/models': {
+            get: {
+                tags: ['Models'],
+                summary: 'Brand Model 목록 조회',
+                description: '사용 가능한 OpenMake LLM brand model 목록을 반환합니다.',
+                responses: {
+                    '200': {
+                        description: '모델 목록',
+                        content: {
+                            'application/json': {
+                                schema: {
+                                    type: 'object',
+                                    properties: {
+                                        object: { type: 'string', example: 'list' },
+                                        data: {
+                                            type: 'array',
+                                            items: {
+                                                type: 'object',
+                                                properties: {
+                                                    id: { type: 'string', example: 'openmake_llm' },
+                                                    object: { type: 'string', example: 'model' },
+                                                    name: { type: 'string', example: 'OpenMake LLM' },
+                                                    description: { type: 'string' },
+                                                    capabilities: { type: 'array', items: { type: 'string' } }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        '/api/v1/api-keys': {
+            post: {
+                tags: ['API Keys'],
+                summary: '새 API Key 생성',
+                description: '새 API Key를 발급합니다. 평문 키는 이 응답에서만 반환됩니다.',
+                security: [{ bearerAuth: [] }],
+                requestBody: {
+                    required: true,
+                    content: {
+                        'application/json': {
+                            schema: {
+                                type: 'object',
+                                required: ['name'],
+                                properties: {
+                                    name: { type: 'string', maxLength: 100, description: 'API Key 이름' },
+                                    description: { type: 'string', maxLength: 500 },
+                                    scopes: { type: 'array', items: { type: 'string' }, default: ['*'] },
+                                    allowed_models: { type: 'array', items: { type: 'string' }, default: ['*'] },
+                                    rate_limit_tier: { type: 'string', enum: ['free', 'starter', 'standard', 'enterprise'] },
+                                    expires_at: { type: 'string', format: 'date-time' }
+                                }
+                            }
+                        }
+                    }
+                },
+                responses: {
+                    '201': { description: 'API Key 생성 성공 (평문 키 포함)' },
+                    '401': { description: '인증 필요' },
+                    '429': { description: '키 한도 초과' }
+                }
+            },
+            get: {
+                tags: ['API Keys'],
+                summary: 'API Key 목록 조회',
+                security: [{ bearerAuth: [] }],
+                responses: {
+                    '200': { description: 'API Key 목록' },
+                    '401': { description: '인증 필요' }
+                }
+            }
+        },
+        '/api/v1/api-keys/{id}': {
+            get: {
+                tags: ['API Keys'],
+                summary: '단일 API Key 상세',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+                responses: {
+                    '200': { description: 'API Key 상세 정보' },
+                    '404': { description: '키를 찾을 수 없음' }
+                }
+            },
+            patch: {
+                tags: ['API Keys'],
+                summary: 'API Key 수정',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+                requestBody: {
+                    content: {
+                        'application/json': {
+                            schema: {
+                                type: 'object',
+                                properties: {
+                                    name: { type: 'string' },
+                                    description: { type: 'string' },
+                                    is_active: { type: 'boolean' },
+                                    rate_limit_tier: { type: 'string', enum: ['free', 'starter', 'standard', 'enterprise'] }
+                                }
+                            }
+                        }
+                    }
+                },
+                responses: {
+                    '200': { description: '수정 성공' },
+                    '404': { description: '키를 찾을 수 없음' }
+                }
+            },
+            delete: {
+                tags: ['API Keys'],
+                summary: 'API Key 삭제',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+                responses: {
+                    '204': { description: '삭제 성공' },
+                    '404': { description: '키를 찾을 수 없음' }
+                }
+            }
+        },
+        '/api/v1/api-keys/{id}/rotate': {
+            post: {
+                tags: ['API Keys'],
+                summary: 'API Key 순환 (rotate)',
+                description: '기존 키를 무효화하고 새 키를 발급합니다.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+                responses: {
+                    '200': { description: '새 평문 키 반환' },
+                    '404': { description: '키를 찾을 수 없음' }
+                }
+            }
+        },
+        '/api/v1/usage': {
+            get: {
+                tags: ['API Keys'],
+                summary: 'API Key 사용량 요약',
+                description: '현재 API Key의 전체 사용량 통계를 반환합니다.',
+                security: [{ apiKeyAuth: [] }],
+                responses: {
+                    '200': { description: '사용량 통계' },
+                    '401': { description: 'API Key 인증 필요' }
+                }
+            }
+        },
         '/api/health': {
             get: {
                 tags: ['System'],
@@ -738,11 +888,18 @@ AI 채팅 어시스턴트 API 문서
                 type: 'http',
                 scheme: 'bearer',
                 bearerFormat: 'JWT'
+            },
+            apiKeyAuth: {
+                type: 'apiKey',
+                in: 'header',
+                name: 'X-API-Key',
+                description: 'API Key (omk_live_...) — X-API-Key 헤더 또는 Authorization: Bearer'
             }
         }
     },
     security: [
-        { bearerAuth: [] }
+        { bearerAuth: [] },
+        { apiKeyAuth: [] }
     ]
 };
 

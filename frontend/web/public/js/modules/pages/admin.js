@@ -22,6 +22,7 @@
             try {
                 const API_BASE = window.location.origin;
         let authToken = localStorage.getItem('authToken');
+        const _userStr = localStorage.getItem('user');
         let currentUser = null;
         let usersPage = 1;
         let convPage = 1;
@@ -29,7 +30,7 @@
         let searchTimeout;
 
         async function checkAuth() {
-             if (!authToken) { (typeof Router !== 'undefined' && Router.navigate('/')); return false; }
+             if (!authToken && !_userStr) { (typeof Router !== 'undefined' && Router.navigate('/')); return false; }
              try {
                  const res = await authFetch('/api/auth/me');
                  const data = await res.json();

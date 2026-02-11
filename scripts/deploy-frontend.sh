@@ -60,3 +60,15 @@ if [ -f "$SW_FILE" ]; then
     fi
     echo -e "${GREEN}✅ Service Worker 캐시 버전 업데이트: ollama-chat-v${TIMESTAMP}${NC}"
 fi
+
+# build-info.json 생성 — 시스템 정보 카드용 (자동 업데이트)
+BUILD_INFO_FILE="$PROJECT_ROOT/backend/api/dist/build-info.json"
+BUILD_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+GIT_HASH="unknown"
+GIT_DATE="unknown"
+if command -v git &> /dev/null && git -C "$PROJECT_ROOT" rev-parse --git-dir &> /dev/null; then
+    GIT_HASH=$(git -C "$PROJECT_ROOT" rev-parse --short HEAD 2>/dev/null || echo "unknown")
+    GIT_DATE=$(git -C "$PROJECT_ROOT" log -1 --format="%cs" 2>/dev/null || echo "unknown")
+fi
+echo "{\"buildTime\":\"${BUILD_TIME}\",\"gitHash\":\"${GIT_HASH}\",\"gitDate\":\"${GIT_DATE}\"}" > "$BUILD_INFO_FILE"
+echo -e "${GREEN}✅ build-info.json 생성: ${BUILD_TIME} (${GIT_HASH})${NC}"

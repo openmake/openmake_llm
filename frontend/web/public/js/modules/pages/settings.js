@@ -205,16 +205,37 @@
 
             '<div class="s-card">' +
                 '<div class="s-card-header">' +
+                    '<span class="s-card-icon">\uD83D\uDD10</span>' +
+                    '<span class="s-card-title">API \uD0A4 \uAD00\uB9AC</span>' +
+                '</div>' +
+                '<div class="s-card-body">' +
+                    '<div class="setting-row">' +
+                        '<div class="setting-info">' +
+                            '<h4>\uC678\uBD80 API \uC5F0\uB3D9</h4>' +
+                            '<p>API \uD0A4\uB97C \uBC1C\uAE09\uD558\uC5EC \uC678\uBD80 \uC11C\uBE44\uC2A4\uC5D0\uC11C OpenMake.AI\uB97C \uC0AC\uC6A9\uD558\uC138\uC694</p>' +
+                        '</div>' +
+                        '<span id="apiKeyCount" style="font-size:var(--font-size-sm); color:var(--text-muted); white-space:nowrap;"></span>' +
+                    '</div>' +
+                    '<div class="s-btn-row">' +
+                        '<a href="/api-keys.html" class="s-btn s-btn-primary" style="text-decoration:none;">\uD83D\uDD11 API \uD0A4 \uAD00\uB9AC</a>' +
+                        '<a href="/developer.html" class="s-btn s-btn-secondary" style="text-decoration:none;">\uD83D\uDCCB API \uBB38\uC11C</a>' +
+                    '</div>' +
+                '</div>' +
+            '</div>' +
+
+            '<div class="s-card">' +
+                '<div class="s-card-header">' +
                     '<span class="s-card-icon">\u2139\uFE0F</span>' +
                     '<span class="s-card-title">\uC2DC\uC2A4\uD15C \uC815\uBCF4</span>' +
                 '</div>' +
                 '<div class="s-card-body">' +
                     '<div class="info-grid">' +
-                        '<div class="info-item"><div class="info-label">\uBC84\uC804</div><div class="info-value">v1.5.0</div></div>' +
-                        '<div class="info-item"><div class="info-label">\uC11C\uBC84 \uC0C1\uD0DC</div><div class="info-value" style="color:var(--success)">\u25CF \uC628\uB77C\uC778</div></div>' +
-                        '<div class="info-item"><div class="info-label">\uD65C\uC131 \uB178\uB4DC</div><div class="info-value" id="activeNodes">-</div></div>' +
-                        '<div class="info-item"><div class="info-label">\uB9C8\uC9C0\uB9C9 \uC5C5\uB370\uC774\uD2B8</div><div class="info-value">2026-01-01</div></div>' +
+                        '<div class="info-item"><div class="info-label">버전</div><div class="info-value" id="sysVersion">로딩...</div></div>' +
+                        '<div class="info-item"><div class="info-label">서버 상태</div><div class="info-value" id="sysStatus">확인 중...</div></div>' +
+                        '<div class="info-item"><div class="info-label">활성 노드</div><div class="info-value" id="sysNodes">-</div></div>' +
+                        '<div class="info-item"><div class="info-label">마지막 업데이트</div><div class="info-value" id="sysLastUpdate">-</div></div>' +
                     '</div>' +
+                '</div>' +
                 '</div>' +
             '</div>' +
 
@@ -280,7 +301,46 @@
             }
         }
 
-        async function initSettings() { await loadModels(); loadSettings(); }
+        async function loadApiKeyCount() {
+            try {
+                var authToken = localStorage.getItem('authToken');
+                var headers = authToken ? { 'Authorization': 'Bearer ' + authToken } : {};
+                var res = await fetch('/api/v1/api-keys', { credentials: 'include', headers: headers });
+                if (res.ok) {
+                    var data = await res.json();
+                    var count = (data.data && data.data.count) || 0;
+                    var el = document.getElementById('apiKeyCount');
+                    if (el) el.textContent = count + '개 활성';
+                }
+            } catch (e) { /* silent */ }
+        }
+
+        async function loadSystemInfo() {
+            try {
+                var res = await fetch('/health');
+                if (res.ok) {
+                    var json = await res.json();
+                    var d = json.data || json;
+                    var verEl = document.getElementById('sysVersion');
+                    var statusEl = document.getElementById('sysStatus');
+                    var nodesEl = document.getElementById('sysNodes');
+                    var updateEl = document.getElementById('sysLastUpdate');
+                    if (verEl) verEl.textContent = 'v' + (d.version || '?');
+                    if (statusEl) {
+                        statusEl.textContent = '● ' + (d.status === 'healthy' ? '온라인' : '오프라인');
+                        statusEl.style.color = d.status === 'healthy' ? 'var(--success)' : 'var(--error)';
+                    }
+                    if (nodesEl && d.cluster) {
+                        nodesEl.textContent = d.cluster.onlineNodes + '/' + d.cluster.totalNodes + ' (' + d.cluster.totalModels + ' 모델)';
+                    }
+                    if (updateEl && d.build && d.build.gitDate) {
+                        updateEl.textContent = d.build.gitDate;
+                    }
+                }
+            } catch (e) { console.warn('시스템 정보 로드 실패:', e); }
+        }
+
+        async function initSettings() { await loadModels(); loadSettings(); loadApiKeyCount(); loadSystemInfo(); }
 
         function setTheme(theme) { document.documentElement.setAttribute('data-theme', theme); localStorage.setItem('theme', theme); }
 

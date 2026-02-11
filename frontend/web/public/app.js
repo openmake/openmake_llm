@@ -96,11 +96,11 @@ function initAuth() {
 
     // 🔒 OAuth 쿠키 기반 세션 복구: localStorage에 사용자 정보가 없으면
     // httpOnly 쿠키로 인증된 세션이 있는지 서버에 확인
-    if (!currentUser && !isGuestMode) {
-        recoverSessionFromCookie();
-    } else if (!currentUser && isGuestMode) {
-        // 게스트 모드이지만 OAuth 쿠키 세션이 있을 수 있음 (OAuth 로그인 후 리다이렉트)
-        recoverSessionFromCookie();
+    // Promise를 전역에 노출하여 Router.start()가 대기 가능
+    if (!currentUser) {
+        window._authRecoveryPromise = recoverSessionFromCookie();
+    } else {
+        window._authRecoveryPromise = Promise.resolve();
     }
 }
 
@@ -118,10 +118,19 @@ async function recoverSessionFromCookie() {
                 localStorage.removeItem('guestMode');
                 localStorage.removeItem('isGuest');
                 isGuestMode = false;
+
+                // 🔒 OAuth 세션 마커: httpOnly 쿠키 기반 인증임을 표시
+                // spa-router.js의 isAuthenticated()가 이 값을 확인하여 인증 상태를 유지
+                // 실제 JWT 토큰이 아니라 마커이므로 보안 위험 없음 (인증은 쿠키로 처리)
+                if (!localStorage.getItem('authToken')) {
+                    authToken = 'cookie-session';
+                    localStorage.setItem('authToken', 'cookie-session');
+                }
                 
                 // 모듈 상태도 동기화 (state.js의 AppState)
                 if (typeof window.setState === 'function') {
                     window.setState('auth.currentUser', user);
+                    window.setState('auth.authToken', localStorage.getItem('authToken'));
                     window.setState('auth.isGuestMode', false);
                 }
                 
