@@ -3,7 +3,7 @@
  * 딥 리서치 세션 관리 API
  */
 
-import { Router, Request, Response } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import { createLogger } from '../utils/logger';
 import { success, badRequest, notFound, internalError } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
@@ -17,6 +17,29 @@ const router = Router();
 
 // All research endpoints require authentication
 router.use(requireAuth);
+
+// 딥 리서치는 Pro 이상의 등급 필요
+router.use((req: Request, res: Response, next: NextFunction): void => {
+    const userTier = (req.user && 'tier' in req.user) ? (req.user as { tier: string }).tier : 'free';
+    const userRole = req.user?.role;
+
+    // admin은 항상 허용
+    if (userRole === 'admin') {
+        next();
+        return;
+    }
+
+    if (userTier === 'free') {
+        res.status(403).json({
+            success: false,
+            error: 'Pro 이상의 등급이 필요합니다',
+            requiredTier: 'pro',
+            currentTier: userTier
+        });
+        return;
+    }
+    next();
+});
 
 // ================================================
 // 리서치 세션 관리

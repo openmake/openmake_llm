@@ -14,6 +14,20 @@ const INITIAL_RECONNECT_DELAY = 1000;
  * WebSocket 연결
  */
 function connectWebSocket() {
+    // 🔒 Phase 3: 기존 연결이 있으면 먼저 닫기 (좀비 연결 방지)
+    const existingWs = getState('ws');
+    if (existingWs) {
+        try {
+            existingWs.onclose = null; // 재연결 트리거 방지
+            existingWs.onerror = null;
+            existingWs.onmessage = null;
+            existingWs.close();
+        } catch (e) {
+            // 이미 닫힌 상태일 수 있음 — 무시
+        }
+        setState('ws', null);
+    }
+
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${protocol}//${window.location.host}`;
 

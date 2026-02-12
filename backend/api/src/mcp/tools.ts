@@ -40,10 +40,31 @@ export const searchCodeTool: MCPToolDefinition = {
             const directory = args.directory as string;
             const extensions = (args.extensions as string[]) || ['.ts', '.js', '.py', '.go'];
 
+            // 🔒 Phase 3 보안 패치: 경로 탐색(LFI) 방지
+            // 허용된 기본 디렉토리(프로젝트 루트) 외부로의 접근을 차단
+            const projectRoot = path.resolve(process.cwd());
+            const resolvedDir = path.resolve(directory);
+
+            if (!resolvedDir.startsWith(projectRoot)) {
+                return {
+                    content: [{
+                        type: 'text',
+                        text: `보안 오류: 프로젝트 디렉토리(${projectRoot}) 외부 경로에는 접근할 수 없습니다.`
+                    }],
+                    isError: true
+                };
+            }
+
             const results: string[] = [];
             const regex = new RegExp(pattern, 'gi');
 
             function searchDir(dir: string): void {
+                // 🔒 심볼릭 링크를 통한 탈출 방지: 실제 경로도 검증
+                const realDir = fs.realpathSync(dir);
+                if (!realDir.startsWith(projectRoot)) {
+                    return;
+                }
+
                 const entries = fs.readdirSync(dir, { withFileTypes: true });
 
                 for (const entry of entries) {
@@ -71,7 +92,7 @@ export const searchCodeTool: MCPToolDefinition = {
                 }
             }
 
-            searchDir(path.resolve(directory));
+            searchDir(resolvedDir);
 
             return {
                 content: [{

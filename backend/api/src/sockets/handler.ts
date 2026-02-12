@@ -10,6 +10,8 @@ import { createLogger } from '../utils/logger';
 import { QuotaExceededError } from '../errors/quota-exceeded.error';
 import { KeyExhaustionError } from '../errors/key-exhaustion.error';
 import { verifyToken } from '../auth';
+import { getUserManager } from '../data/user-manager';
+import { checkChatRateLimit } from '../middlewares/chat-rate-limiter';
 
 const log = createLogger('WebSocketHandler');
 const conversationDb = require('../data/conversation-db').getConversationDB();
@@ -38,6 +40,8 @@ interface WSMessage {
 /** Extended WebSocket with authentication, abort controller, and heartbeat */
 interface ExtendedWebSocket extends WebSocket {
     _authenticatedUserId: string | null;
+    _authenticatedUserRole: 'admin' | 'user' | 'guest';
+    _authenticatedUserTier: 'free' | 'pro' | 'enterprise';
     _abortController: AbortController | null;
     /** 🔒 Phase 2: heartbeat alive 플래그 */
     _isAlive: boolean;
@@ -78,6 +82,8 @@ export class WebSocketHandler {
 
             // WebSocket 연결 인증
             let wsAuthUserId: string | null = null;
+            let wsAuthUserRole: 'admin' | 'user' | 'guest' = 'guest';
+            let wsAuthUserTier: 'free' | 'pro' | 'enterprise' = 'free';
             try {
                 // 1. Cookie에서 auth_token 추출
                 const cookies = req.headers.cookie || '';
@@ -95,6 +101,16 @@ export class WebSocketHandler {
                     const decoded = await verifyToken(token);
                     if (decoded && decoded.userId) {
                         wsAuthUserId = String(decoded.userId);
+                        wsAuthUserRole = (decoded.role as 'admin' | 'user' | 'guest') || 'user';
+                        try {
+                            const userManager = getUserManager();
+                            const wsUser = await userManager.getUserById(decoded.userId);
+                            if (wsUser) {
+                                wsAuthUserTier = wsUser.tier || 'free';
+                            }
+                        } catch (tierErr) {
+                            log.warn('[WS] 사용자 tier 조회 실패, 기본값 사용:', tierErr);
+                        }
                         log.info(`[WS] 인증된 연결: userId=${wsAuthUserId}`);
                     }
                 }
@@ -105,6 +121,8 @@ export class WebSocketHandler {
             // WebSocket 인스턴스에 인증 정보 및 중단 컨트롤러 저장
             const extWs = ws as ExtendedWebSocket;
             extWs._authenticatedUserId = wsAuthUserId;
+            extWs._authenticatedUserRole = wsAuthUserRole;
+            extWs._authenticatedUserTier = wsAuthUserTier;
             extWs._abortController = null;
             // 🔒 Phase 2: heartbeat alive 플래그 초기화
             extWs._isAlive = true;
@@ -343,14 +361,9 @@ export class WebSocketHandler {
             const thinkingLevel = (msg.thinkingLevel || 'high') as 'low' | 'medium' | 'high';  // low, medium, high
             const startTime = Date.now();
 
-            // 🆕 사용자 역할 및 등급 결정
-            // - msg.userRole: 클라이언트에서 전달받은 역할 (인증된 경우)
-            // - 기본값: 'guest'
-            // - admin 역할은 자동으로 enterprise 등급 부여
-            const userRole = wsAuthUserId
-                ? ((msg.userRole as 'admin' | 'user' | 'guest') || 'user')
-                : 'guest';
-            const userTier = msg.userTier as 'free' | 'pro' | 'enterprise' | undefined;
+            // 🆕 사용자 역할 및 등급 결정 (WebSocket 연결 인증 시 서버에서 확정)
+            const userRole = extWs._authenticatedUserRole;
+            const userTier: 'free' | 'pro' | 'enterprise' = extWs._authenticatedUserTier;
             
             // 🆕 userId, userRole, userTier를 ChatMessageRequest에 포함하여 전달
             // 토큰 콜백에서 중단 여부 체크
@@ -360,6 +373,17 @@ export class WebSocketHandler {
                 }
                 ws.send(JSON.stringify({ type: 'token', token }));
             };
+
+            // 채팅 레이트 리밋 체크
+            const rateLimitError = checkChatRateLimit(
+                extWs._authenticatedUserId,
+                userRole,
+                userTier
+            );
+            if (rateLimitError) {
+                ws.send(JSON.stringify({ type: 'error', error: rateLimitError }));
+                return;
+            }
 
             const fullResponse = await chatService.processMessage(
                 { 
@@ -454,22 +478,30 @@ export class WebSocketHandler {
      */
     private startHeartbeat(): void {
         this.heartbeatInterval = setInterval(() => {
+            // 🔒 Phase 3: 순회 중 삭제 방지 — 먼저 좀비 연결을 수집 후 일괄 처리
+            const deadConnections: WebSocket[] = [];
+
             for (const ws of this.clients) {
                 const extWs = ws as ExtendedWebSocket;
                 if (!extWs._isAlive) {
-                    // pong 미응답 → 좀비 연결 → 강제 종료
-                    log.info(`[WS] 하트비트 미응답 → 연결 종료: userId=${extWs._authenticatedUserId || 'anonymous'}`);
-                    // 진행 중인 AI 생성도 중단
-                    if (extWs._abortController) {
-                        extWs._abortController.abort();
-                        extWs._abortController = null;
-                    }
-                    this.clients.delete(ws);
-                    ws.terminate();
-                    continue;
+                    deadConnections.push(ws);
+                } else {
+                    extWs._isAlive = false;
+                    ws.ping();
                 }
-                extWs._isAlive = false;
-                ws.ping();
+            }
+
+            // 수집된 좀비 연결 일괄 종료 (Set 순회 완료 후)
+            for (const ws of deadConnections) {
+                const extWs = ws as ExtendedWebSocket;
+                log.info(`[WS] 하트비트 미응답 → 연결 종료: userId=${extWs._authenticatedUserId || 'anonymous'}`);
+                // 진행 중인 AI 생성도 중단
+                if (extWs._abortController) {
+                    extWs._abortController.abort();
+                    extWs._abortController = null;
+                }
+                this.clients.delete(ws);
+                ws.terminate();
             }
         }, 30000); // 30초 주기
     }

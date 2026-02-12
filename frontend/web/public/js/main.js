@@ -15,13 +15,14 @@
 
 /**
  * 앱 초기화
+ * 🔒 Phase 3: async로 변경하여 initAuth() 완료까지 대기
  */
-function initApp() {
+async function initApp() {
     if (typeof debugLog === 'function') debugLog('[App] 초기화 시작...');
 
-    // 1. 인증 상태 초기화
+    // 1. 인증 상태 초기화 (세션 복구 완료까지 대기)
     if (typeof initAuth === 'function') {
-        initAuth();
+        await initAuth();
     }
 
     // 2. WebSocket 연결

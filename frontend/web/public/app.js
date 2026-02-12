@@ -63,20 +63,13 @@ let activeDocumentContext = null;  // { docId, filename, textLength }
 // 인증 헬퍼 함수
 // ========================================
 
-// 관리자 여부 확인 (모델 이름 표시 권한)
-function isAdmin() {
-    const savedUser = localStorage.getItem('user');
-    if (!savedUser) return false;
-    try {
-        const user = JSON.parse(savedUser);
-        return user.role === 'admin' || user.role === 'administrator';
-    } catch (e) {
-        return false;
-    }
-}
+// 🔒 Phase 3: 중복 isAdmin() 제거 — 아래 265번 줄의 정의 하나만 유지
+// (이전: localStorage 파싱 방식 / 아래: currentUser 변수 직접 참조 방식)
+// currentUser 변수 참조가 더 효율적이고 일관성 있음
 
 // 인증 상태 초기화
-function initAuth() {
+// 🔒 Phase 3 패치: async로 변경하여 세션 복구 완료를 보장 (경쟁 조건 해결)
+async function initAuth() {
     // 🔒 OAuth 토큰은 이제 httpOnly 쿠키로 설정됨 (URL 파라미터 제거)
     // 브라우저가 자동으로 모든 요청에 포함시킴
     
@@ -96,12 +89,12 @@ function initAuth() {
 
     // 🔒 OAuth 쿠키 기반 세션 복구: localStorage에 사용자 정보가 없으면
     // httpOnly 쿠키로 인증된 세션이 있는지 서버에 확인
-    // Promise를 전역에 노출하여 Router.start()가 대기 가능
+    // 🔒 Phase 3: await로 세션 복구 완료까지 대기 (이전: fire-and-forget → race condition)
     if (!currentUser) {
-        window._authRecoveryPromise = recoverSessionFromCookie();
-    } else {
-        window._authRecoveryPromise = Promise.resolve();
+        await recoverSessionFromCookie();
     }
+    // Promise를 전역에 노출하여 Router.start()가 대기 가능 (하위호환)
+    window._authRecoveryPromise = Promise.resolve();
 }
 
 // 🔒 httpOnly 쿠키 기반 세션 복구
@@ -164,7 +157,7 @@ async function recoverSessionFromCookie() {
                 
                 console.log('[Auth] OAuth 쿠키 세션 복구 성공:', user.email);
 
-                // 🆕 익명 세션 이관: OAuth 복구 시에도 이전 게스트 대화를 사용자에게 귀속
+                // 🔒 Phase 3: 통합된 클레이밍 로직 (중복 제거)
                 const anonSessionId = sessionStorage.getItem('anonSessionId');
                 if (anonSessionId) {
                     try {
@@ -174,7 +167,6 @@ async function recoverSessionFromCookie() {
                         });
                         sessionStorage.removeItem('anonSessionId');
                         console.log('[Auth] 익명 세션 이관 완료:', anonSessionId);
-                        // 사이드바 대화 목록 새로고침
                         if (window.sidebar && typeof window.sidebar.refresh === 'function') {
                             window.sidebar.refresh();
                         }
@@ -290,8 +282,9 @@ function renderAgentList(agents) {
 }
 
 // 초기화
-function initApp() {
-    initAuth(); // 인증 상태 초기화
+// 🔒 Phase 3: async로 변경하여 initAuth() 완료까지 대기
+async function initApp() {
+    await initAuth(); // 인증 상태 초기화 (세션 복구 완료까지 대기)
     filterRestrictedMenus(); // 게스트/비로그인 메뉴 필터링
     connectWebSocket();
     const savedTheme = localStorage.getItem('theme') || 'dark';
@@ -785,8 +778,14 @@ function abortChat() {
     if (currentAssistantMessage) {
         const content = currentAssistantMessage.querySelector('.message-content');
         if (content) {
+            // 🔒 Phase 3 보안 패치: innerHTML 대신 안전한 DOM API 사용 (XSS 방지)
+            // rawText를 textContent로 삽입하여 스크립트 주입 차단
             const rawText = content.dataset.rawText || content.textContent || '';
-            content.innerHTML = rawText + '<br><span style="color: var(--warning); font-style: italic;">⏹️ 응답이 중단되었습니다.</span>';
+            content.textContent = rawText;
+            const abortNotice = document.createElement('span');
+            abortNotice.style.cssText = 'color: var(--warning); font-style: italic; display: block; margin-top: 4px;';
+            abortNotice.textContent = '⏹️ 응답이 중단되었습니다.';
+            content.appendChild(abortNotice);
         }
     }
     currentAssistantMessage = null;

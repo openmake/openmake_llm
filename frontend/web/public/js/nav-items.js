@@ -27,12 +27,12 @@ const NAV_ITEMS = {
         { href: '/developer.html', icon: '📖', iconify: 'lucide:code-2', label: 'API 문서' }
     ],
     admin: [
-        { href: '/admin.html', icon: '👥', iconify: 'lucide:users', label: '사용자 관리', requireAuth: true },
-        { href: '/admin-metrics.html', icon: '📊', iconify: 'lucide:bar-chart-3', label: '통합 모니터링', requireAuth: true },
-        { href: '/audit.html', icon: '📋', iconify: 'lucide:clipboard-list', label: '감사 로그', requireAuth: true },
-        { href: '/external.html', icon: '🔗', iconify: 'lucide:link', label: '외부 연동', requireAuth: true },
-        { href: '/analytics.html', icon: '📊', iconify: 'lucide:pie-chart', label: '분석 대시보드', requireAuth: true },
-        { href: '/alerts.html', icon: '🔔', iconify: 'lucide:bell', label: '알림 관리', requireAuth: true },
+        { href: '/admin.html', icon: '👥', iconify: 'lucide:users', label: '사용자 관리', requireAuth: true, requireAdmin: true },
+        { href: '/admin-metrics.html', icon: '📊', iconify: 'lucide:bar-chart-3', label: '통합 모니터링', requireAuth: true, requireAdmin: true },
+        { href: '/audit.html', icon: '📋', iconify: 'lucide:clipboard-list', label: '감사 로그', requireAuth: true, requireAdmin: true },
+        { href: '/external.html', icon: '🔗', iconify: 'lucide:link', label: '외부 연동', requireAuth: true, requireAdmin: true },
+        { href: '/analytics.html', icon: '📊', iconify: 'lucide:pie-chart', label: '분석 대시보드', requireAuth: true, requireAdmin: true },
+        { href: '/alerts.html', icon: '🔔', iconify: 'lucide:bell', label: '알림 관리', requireAuth: true, requireAdmin: true },
         { href: '/password-change.html', icon: '🔑', iconify: 'lucide:key-round', label: '비밀번호 변경', requireAuth: true },
         { href: '/settings.html', icon: '⚙️', iconify: 'lucide:settings', label: '설정' }
     ]

@@ -9,9 +9,13 @@ import { getMemoryService } from '../services/MemoryService';
 import { MemoryCategory } from '../data/models/unified-database';
 import { success, badRequest, internalError } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
+import { requireAuth } from '../auth';
 
 const logger = createLogger('MemoryRoutes');
 const router = Router();
+
+// 모든 메모리 엔드포인트에 인증 필수
+router.use(requireAuth);
 
 // ================================================
 // 메모리 조회
@@ -37,6 +41,13 @@ router.get('/', asyncHandler(async (req: Request, res: Response) => {
      res.json(success({ memories, total: memories.length, userId }));
 }));
 
+// 등급별 메모리 생성 제한
+const MEMORY_LIMITS: Record<string, number> = {
+    free: 50,
+    pro: 500,
+    enterprise: Infinity
+};
+
   /**
    * POST /api/memory
   * 메모리 생성
@@ -47,6 +58,20 @@ router.post('/', asyncHandler(async (req: Request, res: Response) => {
 
       if (!category || !key || !value) {
           return res.status(400).json(badRequest('category, key, value는 필수입니다.'));
+      }
+
+      // 등급별 메모리 생성 수량 제한
+      const userTier = (req.user && 'tier' in req.user) ? (req.user as { tier: string }).tier : 'free';
+      const userRole = req.user?.role || 'guest';
+      const memoryLimit = userRole === 'admin' ? Infinity : (MEMORY_LIMITS[userTier] || MEMORY_LIMITS['free']);
+
+      if (memoryLimit !== Infinity) {
+          const memSvc = getMemoryService();
+          const existing = await memSvc.getUserMemories(userId, { limit: memoryLimit + 1 });
+          if (existing.length >= memoryLimit) {
+              res.status(403).json(badRequest(`메모리 생성 제한 초과 (${userTier}: 최대 ${memoryLimit}개)`));
+              return;
+          }
       }
 
       const validCategories: MemoryCategory[] = ['preference', 'fact', 'project', 'relationship', 'skill', 'context'];

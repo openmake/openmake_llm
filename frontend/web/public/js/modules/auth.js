@@ -7,8 +7,10 @@ import { getState, setState } from './state.js';
 
 /**
  * 인증 상태 초기화
+ * 🔒 Phase 3 패치: async로 변경하여 세션 복구 완료를 보장 (경쟁 조건 해결)
+ * 반환된 Promise는 앱 초기화 시 await 되어야 함
  */
-function initAuth() {
+async function initAuth() {
     const authToken = localStorage.getItem('authToken');
     const isGuestMode = localStorage.getItem('guestMode') === 'true';
 
@@ -29,8 +31,37 @@ function initAuth() {
 
     // 🔒 OAuth 쿠키 기반 세션 복구: localStorage에 사용자 정보가 없으면
     // httpOnly 쿠키로 인증된 세션이 있는지 서버에 확인
+    // 🔒 Phase 3: await로 세션 복구 완료까지 대기 (이전: fire-and-forget → race condition)
     if (!getState('auth.currentUser')) {
-        recoverSessionFromCookie();
+        await recoverSessionFromCookie();
+    }
+}
+
+/**
+ * 🔒 Phase 3: 익명 세션 클레이밍 공용 함수
+ * 로그인/OAuth 복구 시 이전 게스트 대화를 사용자에게 귀속
+ * 4곳에 중복되었던 로직을 이 함수 하나로 통합
+ * @param {string|null} token - Bearer 토큰 (없으면 쿠키 사용)
+ */
+async function claimAnonymousSession(token) {
+    const anonSessionId = sessionStorage.getItem('anonSessionId');
+    if (!anonSessionId) return;
+
+    try {
+        const headers = { 'Content-Type': 'application/json' };
+        if (token) {
+            headers['Authorization'] = `Bearer ${token}`;
+        }
+        await fetch('/api/chat/sessions/claim', {
+            method: 'POST',
+            credentials: 'include',
+            headers,
+            body: JSON.stringify({ anonSessionId })
+        });
+        sessionStorage.removeItem('anonSessionId');
+        console.log('[Auth Module] 익명 세션 이관 완료:', anonSessionId);
+    } catch (claimErr) {
+        console.warn('[Auth Module] 익명 세션 이관 실패 (무시):', claimErr);
     }
 }
 
@@ -69,26 +100,8 @@ async function recoverSessionFromCookie() {
 
                 console.log('[Auth Module] OAuth 쿠키 세션 복구 성공:', user.email);
 
-                // 🆕 익명 세션 이관: OAuth 복구 시에도 이전 게스트 대화를 사용자에게 귀속
-                const anonSessionId = sessionStorage.getItem('anonSessionId');
-                if (anonSessionId) {
-                    try {
-                        const claimToken = getState('auth.authToken');
-                        await fetch('/api/chat/sessions/claim', {
-                            method: 'POST',
-                            credentials: 'include',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                ...(claimToken ? { 'Authorization': `Bearer ${claimToken}` } : {})
-                            },
-                            body: JSON.stringify({ anonSessionId })
-                        });
-                        sessionStorage.removeItem('anonSessionId');
-                        console.log('[Auth Module] 익명 세션 이관 완료:', anonSessionId);
-                    } catch (claimErr) {
-                        console.warn('[Auth Module] 익명 세션 이관 실패 (무시):', claimErr);
-                    }
-                }
+                // 🔒 Phase 3: 통합된 클레이밍 함수 사용
+                await claimAnonymousSession(getState('auth.authToken'));
             }
         }
     } catch (e) {
@@ -186,24 +199,8 @@ async function login(email, password) {
             setState('auth.currentUser', user);
             setState('auth.isGuestMode', false);
 
-            // 🆕 익명 세션 이관: 로그인 전 게스트 대화를 사용자에게 귀속
-            const anonSessionId = sessionStorage.getItem('anonSessionId');
-            if (anonSessionId) {
-                try {
-                    await fetch('/api/chat/sessions/claim', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${token}`
-                        },
-                        body: JSON.stringify({ anonSessionId })
-                    });
-                    sessionStorage.removeItem('anonSessionId');
-                    console.log('[Auth Module] 익명 세션 이관 완료:', anonSessionId);
-                } catch (claimErr) {
-                    console.warn('[Auth Module] 익명 세션 이관 실패 (무시):', claimErr);
-                }
-            }
+            // 🔒 Phase 3: 통합된 클레이밍 함수 사용
+            await claimAnonymousSession(token);
 
             return { success: true, user };
         }
@@ -317,6 +314,7 @@ window.updateAuthUI = updateAuthUI;
 window.isAdmin = isAdmin;
 window.isLoggedIn = isLoggedIn;
 window.getCurrentUser = getCurrentUser;
+window.claimAnonymousSession = claimAnonymousSession;
 
 export {
     initAuth,
@@ -328,5 +326,6 @@ export {
     updateAuthUI,
     isAdmin,
     isLoggedIn,
-    getCurrentUser
+    getCurrentUser,
+    claimAnonymousSession
 };

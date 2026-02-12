@@ -14,9 +14,13 @@ import { ClusterManager } from '../cluster/manager';
 import { getAgentMonitor } from '../agents';
 import * as os from 'os';
 import { success, internalError, serviceUnavailable } from '../utils/api-response';
+import { requireAuth, requireAdmin } from '../auth';
 
 const logger = createLogger('MetricsRoutes');
 const router = Router();
+
+// 시스템 메트릭은 관리자 전용
+router.use(requireAuth, requireAdmin);
 
 // 클러스터 매니저 참조 (서버에서 주입)
 let clusterManager: ClusterManager | null = null;

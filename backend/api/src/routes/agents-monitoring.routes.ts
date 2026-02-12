@@ -8,8 +8,12 @@
 import { Router, Request, Response } from 'express';
 import { getAgentMonitor } from '../agents';
 import { success, notFound, internalError } from '../utils/api-response';
+import { requireAuth, requireAdmin } from '../auth';
 
 const router = Router();
+
+// 에이전트 모니터링은 관리자 전용
+router.use(requireAuth, requireAdmin);
 
 /**
  * GET /api/agents/metrics

@@ -20,56 +20,136 @@ import { loginSchema, registerSchema, changePasswordSchema } from '../schemas';
 const log = createLogger('AuthController');
 
 // 🔒 Phase 2 보안 패치 2026-02-07: OAuth State 저장소 (CSRF 방어용)
-// TTL이 있는 Map으로 구현 - 5분 후 자동 만료
-const oauthStates = new Map<string, { provider: string; createdAt: number }>();
+// 🔒 Phase 3 패치 2026-02-13: 인메모리 Map → DB 저장으로 변경 (클러스터/재시작 안전)
+// PostgreSQL을 사용하여 프로세스 간 공유 가능, 서버 재시작에도 유지됨
 const STATE_TTL_MS = 5 * 60 * 1000; // 5분
 
-// State 정리 스케줄러 (1분마다 만료된 state 제거)
-setInterval(() => {
-    const now = Date.now();
-    for (const [state, data] of oauthStates.entries()) {
-        if (now - data.createdAt > STATE_TTL_MS) {
-            oauthStates.delete(state);
+// 인메모리 폴백: DB 연결 실패 시 임시 사용 (단일 프로세스 한정)
+const oauthStatesFallback = new Map<string, { provider: string; createdAt: number }>();
+
+/**
+ * DB 기반 OAuth state 저장소 헬퍼
+ * conversation_sessions 테이블 대신 별도 임시 테이블을 사용하여 격리
+ * 테이블이 없으면 자동 생성
+ */
+async function ensureOauthStateTable(): Promise<void> {
+    try {
+        const { getPool } = await import('../data/models/unified-database');
+        const pool = getPool();
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS oauth_states (
+                state TEXT PRIMARY KEY,
+                provider TEXT NOT NULL,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            )
+        `);
+    } catch (e) {
+        log.warn('[OAuth] oauth_states 테이블 생성 실패 (폴백 사용):', e);
+    }
+}
+
+// 서버 시작 시 테이블 생성 + 만료 state 정리 스케줄러
+ensureOauthStateTable();
+setInterval(async () => {
+    try {
+        const { getPool } = await import('../data/models/unified-database');
+        const pool = getPool();
+        await pool.query(
+            `DELETE FROM oauth_states WHERE created_at < NOW() - INTERVAL '5 minutes'`
+        );
+    } catch {
+        // DB 연결 실패 시 폴백 정리
+        const now = Date.now();
+        for (const [state, data] of oauthStatesFallback.entries()) {
+            if (now - data.createdAt > STATE_TTL_MS) {
+                oauthStatesFallback.delete(state);
+            }
         }
     }
 }, 60 * 1000);
 
 /**
- * 🔒 보안 강화된 OAuth state 생성
+ * 🔒 보안 강화된 OAuth state 생성 (DB 저장)
  */
-function generateSecureState(provider: string): string {
+async function generateSecureState(provider: string): Promise<string> {
     const state = crypto.randomBytes(32).toString('hex');
-    oauthStates.set(state, { provider, createdAt: Date.now() });
+    try {
+        const { getPool } = await import('../data/models/unified-database');
+        const pool = getPool();
+        await pool.query(
+            'INSERT INTO oauth_states (state, provider) VALUES ($1, $2)',
+            [state, provider]
+        );
+    } catch (e) {
+        log.warn('[OAuth] DB state 저장 실패, 인메모리 폴백 사용:', e);
+        oauthStatesFallback.set(state, { provider, createdAt: Date.now() });
+    }
     return state;
 }
 
 /**
- * 🔒 OAuth state 검증 및 소비 (일회성)
+ * 🔒 OAuth state 검증 및 소비 (일회성, DB 기반)
  */
-function validateAndConsumeState(state: string | undefined, expectedProvider: string): boolean {
+async function validateAndConsumeState(state: string | undefined, expectedProvider: string): Promise<boolean> {
     if (!state) return false;
-    
-    const data = oauthStates.get(state);
+
+    try {
+        const { getPool } = await import('../data/models/unified-database');
+        const pool = getPool();
+        // 일회성: DELETE ... RETURNING으로 조회 + 삭제 원자적 처리
+        const result = await pool.query(
+            'DELETE FROM oauth_states WHERE state = $1 RETURNING provider, created_at',
+            [state]
+        );
+
+        if (result.rows.length === 0) {
+            // DB에 없으면 폴백에서 시도
+            return validateAndConsumeStateFallback(state, expectedProvider);
+        }
+
+        const row = result.rows[0];
+
+        // 만료 체크
+        if (Date.now() - new Date(row.created_at).getTime() > STATE_TTL_MS) {
+            log.error('[OAuth] State expired');
+            return false;
+        }
+
+        // Provider 일치 체크
+        if (row.provider !== expectedProvider) {
+            log.error(`[OAuth] Provider mismatch: expected ${expectedProvider}, got ${row.provider}`);
+            return false;
+        }
+
+        return true;
+    } catch (e) {
+        log.warn('[OAuth] DB state 검증 실패, 인메모리 폴백 사용:', e);
+        return validateAndConsumeStateFallback(state, expectedProvider);
+    }
+}
+
+/**
+ * 인메모리 폴백 state 검증 (DB 장애 시)
+ */
+function validateAndConsumeStateFallback(state: string, expectedProvider: string): boolean {
+    const data = oauthStatesFallback.get(state);
     if (!data) {
         log.error(`[OAuth] State not found: ${state?.substring(0, 10)}...`);
         return false;
     }
-    
-    // 일회성 사용을 위해 즉시 삭제
-    oauthStates.delete(state);
-    
-    // 만료 체크
+
+    oauthStatesFallback.delete(state);
+
     if (Date.now() - data.createdAt > STATE_TTL_MS) {
-        log.error('[OAuth] State expired');
+        log.error('[OAuth] State expired (fallback)');
         return false;
     }
-    
-    // Provider 일치 체크
+
     if (data.provider !== expectedProvider) {
-        log.error(`[OAuth] Provider mismatch: expected ${expectedProvider}, got ${data.provider}`);
+        log.error(`[OAuth] Provider mismatch (fallback): expected ${expectedProvider}, got ${data.provider}`);
         return false;
     }
-    
+
     return true;
 }
 
@@ -254,7 +334,7 @@ export class AuthController {
     /**
      * GET /api/auth/login/google - Google OAuth 시작
      */
-    private googleLogin(req: Request, res: Response): void {
+    private async googleLogin(req: Request, res: Response): Promise<void> {
         const clientId = getConfig().googleClientId;
         const redirectUri = buildRedirectUri(req, 'google', this.serverPort);
 
@@ -264,7 +344,7 @@ export class AuthController {
         }
 
         // 🔒 Phase 2 보안 패치: 암호학적으로 안전한 state 생성
-        const state = generateSecureState('google');
+        const state = await generateSecureState('google');
         const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
         authUrl.searchParams.set('client_id', clientId);
         authUrl.searchParams.set('redirect_uri', redirectUri);
@@ -281,7 +361,7 @@ export class AuthController {
     /**
      * GET /api/auth/login/github - GitHub OAuth 시작
      */
-    private githubLogin(req: Request, res: Response): void {
+    private async githubLogin(req: Request, res: Response): Promise<void> {
         const clientId = getConfig().githubClientId;
         const redirectUri = buildRedirectUri(req, 'github', this.serverPort);
 
@@ -291,7 +371,7 @@ export class AuthController {
         }
 
         // 🔒 Phase 2 보안 패치: 암호학적으로 안전한 state 생성
-        const state = generateSecureState('github');
+        const state = await generateSecureState('github');
         const authUrl = new URL('https://github.com/login/oauth/authorize');
         authUrl.searchParams.set('client_id', clientId);
         authUrl.searchParams.set('redirect_uri', redirectUri);
@@ -313,8 +393,8 @@ export class AuthController {
             return;
         }
 
-        // 🔒 Phase 2 CSRF 방어: state 검증
-        if (!validateAndConsumeState(state as string | undefined, 'google')) {
+        // 🔒 Phase 2 CSRF 방어: state 검증 (Phase 3: DB 기반 비동기)
+        if (!await validateAndConsumeState(state as string | undefined, 'google')) {
             log.error('[OAuth] Google callback: Invalid or expired state');
             res.redirect('/login.html?error=invalid_state');
             return;
@@ -378,8 +458,8 @@ export class AuthController {
             return;
         }
 
-        // 🔒 Phase 2 CSRF 방어: state 검증
-        if (!validateAndConsumeState(state as string | undefined, 'github')) {
+        // 🔒 Phase 2 CSRF 방어: state 검증 (Phase 3: DB 기반 비동기)
+        if (!await validateAndConsumeState(state as string | undefined, 'github')) {
             log.error('[OAuth] GitHub callback: Invalid or expired state');
             res.redirect('/login.html?error=invalid_state');
             return;

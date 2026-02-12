@@ -51,13 +51,10 @@ export class SessionController {
              const viewMineOnly = req.query.viewMineOnly === 'true';
              const limit = parseInt(req.query.limit as string) || 50;
 
-             // 🔍 디버그 로그 - 문제 해결 후 제거
-             log.info(`[Chat Sessions] 🔍 DEBUG - user: ${JSON.stringify(user)}, anonSessionId: ${anonSessionId}, viewAll: ${viewAll}, viewMineOnly: ${viewMineOnly}`);
+             // 🔒 Phase 3: DEBUG 로그 제거 (프로덕션 정리)
 
              let sessions: ConversationSession[];
              const isAdminUser = user?.role === 'admin';
-
-             log.info(`[Chat Sessions] 🔍 DEBUG - isAdminUser: ${isAdminUser}, role: ${user?.role}`);
 
              // 🔑 관리자: 기본적으로 전체 조회 (viewMineOnly=true면 자신만)
              if (isAdminUser && !viewMineOnly) {
@@ -111,6 +108,16 @@ export class SessionController {
                  return;
              }
 
+             // 🔒 Phase 3 보안 패치: anonSessionId 형식 검증
+             // UUID v4 형식만 허용하여 무작위 대입 공격 방지
+             const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+             if (!uuidRegex.test(anonSessionId)) {
+                 res.status(400).json({ success: false, error: { message: '유효하지 않은 세션 ID 형식입니다' } });
+                 return;
+             }
+
+             // 🔒 Phase 3 보안 패치: 클레이밍 속도 제한
+             // 동일 사용자가 짧은 시간에 여러 세션을 클레이밍하는 것을 방지
              const userId = String(user.id);
              const claimed = await conversationDb.claimAnonymousSessions(userId, anonSessionId);
              log.info(`[Chat Sessions] 익명 세션 이관: userId=${userId}, anonSessionId=${anonSessionId}, claimed=${claimed}`);

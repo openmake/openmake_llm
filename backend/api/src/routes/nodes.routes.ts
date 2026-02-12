@@ -9,8 +9,12 @@ import { Router, Request, Response } from 'express';
 import { ClusterManager } from '../cluster/manager';
 import { success as apiSuccess, badRequest, internalError } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
+import { requireAuth, requireAdmin } from '../auth';
 
 const router = Router();
+
+// 클러스터 노드 관리는 관리자 전용
+router.use(requireAuth, requireAdmin);
 
 let clusterRef: ClusterManager;
 

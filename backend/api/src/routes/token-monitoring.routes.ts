@@ -7,8 +7,12 @@ import { Router, Request, Response } from 'express';
 import { getApiKeyManager } from '../ollama/api-key-manager';
 import { getApiUsageTracker } from '../ollama/api-usage-tracker';
 import { success, internalError } from '../utils/api-response';
+import { requireAuth, requireAdmin } from '../auth';
 
 const router = Router();
+
+// 토큰 모니터링은 관리자 전용
+router.use(requireAuth, requireAdmin);
 
 // ================================================
 // API 키 모니터링

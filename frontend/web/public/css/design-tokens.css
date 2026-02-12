@@ -234,6 +234,13 @@ html {
     scroll-behavior: smooth;
 }
 
+/* iOS Safari에서 scroll-behavior: smooth가 동적 레이아웃 변경과 충돌하여 화면 떨림 유발 */
+@supports (-webkit-touch-callout: none) {
+    html {
+        scroll-behavior: auto;
+    }
+}
+
 body {
     font-family: var(--font-sans);
     font-size: var(--font-size-base);
@@ -576,5 +583,50 @@ body {
     body {
         background: white;
         color: black;
+    }
+}
+
+/* ==========================================
+   iOS Safari 모바일 성능 최적화
+   backdrop-filter: blur()는 모바일 Safari에서
+   GPU 리페인트 폭풍을 유발하여 화면 떨림 발생
+   ========================================== */
+@media (max-width: 768px) {
+    /* 모바일에서 backdrop-filter 비활성화 → 불투명 배경으로 대체 */
+    .sidebar,
+    .glass-card,
+    .glass-panel,
+    .modal-glass .modal-content,
+    .chat-input-container,
+    .mobile-overlay,
+    .unified-sidebar.us-hover-expanded {
+        -webkit-backdrop-filter: none !important;
+        backdrop-filter: none !important;
+    }
+
+    /* backdrop-filter 제거 후 불투명도를 높여 시각적 일관성 유지 */
+    .sidebar {
+        background: rgba(13, 13, 14, 0.98) !important;
+    }
+
+    .glass-card {
+        background: var(--bg-card) !important;
+    }
+
+    .glass-panel {
+        background: rgba(13, 13, 14, 0.98) !important;
+    }
+
+    .chat-input-container {
+        background: var(--bg-secondary) !important;
+    }
+
+    .unified-sidebar.us-hover-expanded {
+        background: rgba(13, 13, 14, 0.98) !important;
+    }
+
+    /* main-content::before 배경 글로우도 모바일에서 간소화 */
+    .main-content::before {
+        background: none !important;
     }
 }

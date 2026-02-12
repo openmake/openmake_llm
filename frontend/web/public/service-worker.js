@@ -3,7 +3,7 @@
  * Comprehensive caching with offline support
  */
 
-const CACHE_VERSION = 'openmake-v5';
+const CACHE_VERSION = 'openmake-v6';
 const CDN_CACHE = 'openmake-cdn-v1';
 const IMG_CACHE = 'openmake-img-v1';
 

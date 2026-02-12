@@ -28,6 +28,13 @@ const router = Router();
  * POST /api/canvas
  * 캔버스 문서 생성
  */
+// 등급별 캔버스 생성 제한
+const CANVAS_LIMITS: Record<string, number> = {
+    free: 10,
+    pro: 100,
+    enterprise: Infinity
+};
+
 router.post('/', requireAuth, asyncHandler(async (req: Request, res: Response) => {
     const { title, docType, content, language, sessionId } = req.body;
 
@@ -39,6 +46,24 @@ router.post('/', requireAuth, asyncHandler(async (req: Request, res: Response) =
     const db = getUnifiedDatabase();
     const documentId = uuidv4();
     const userId = String(req.user!.id);
+
+    // 등급별 캔버스 생성 수량 제한
+    const userTier = (req.user && 'tier' in req.user) ? (req.user as { tier: string }).tier : 'free';
+    const userRole = req.user!.role;
+    const canvasLimit = userRole === 'admin' ? Infinity : (CANVAS_LIMITS[userTier] || CANVAS_LIMITS['free']);
+
+    if (canvasLimit !== Infinity) {
+        const pool = getPool();
+        const countResult = await pool.query(
+            'SELECT COUNT(*) as cnt FROM canvas_documents WHERE user_id = $1',
+            [userId]
+        );
+        const currentCount = parseInt(countResult.rows[0].cnt, 10);
+        if (currentCount >= canvasLimit) {
+            res.status(403).json(badRequest(`캔버스 생성 제한 초과 (${userTier}: 최대 ${canvasLimit}개)`));
+            return;
+        }
+    }
 
     await db.createCanvasDocument({
         id: documentId,

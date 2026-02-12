@@ -24,6 +24,7 @@ import { getConfig } from '../config';
 import { success, badRequest, internalError, serviceUnavailable } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
 import { optionalAuth } from '../auth';
+import { chatRateLimiter } from '../middlewares/chat-rate-limiter';
 import { validate } from '../middlewares/validation';
 import { chatRequestSchema } from '../schemas';
 import { buildExecutionPlan, ExecutionPlan } from '../chat/profile-resolver';
@@ -43,7 +44,7 @@ export function setClusterManager(cluster: ClusterManager): void {
  * 일반 채팅 API (non-streaming)
  * 🔒 Phase 2 보안 패치: optionalAuth 미들웨어 적용
  */
-router.post('/', optionalAuth, validate(chatRequestSchema), asyncHandler(async (req: Request, res: Response) => {
+router.post('/', optionalAuth, chatRateLimiter, validate(chatRequestSchema), asyncHandler(async (req: Request, res: Response) => {
      const { message, model, nodeId, history, sessionId, anonSessionId } = req.body;
 
      // §9 Pipeline Profile: brand model alias → ExecutionPlan 변환
@@ -141,7 +142,7 @@ router.post('/', optionalAuth, validate(chatRequestSchema), asyncHandler(async (
  * 🔒 Phase 2 보안 패치: optionalAuth 미들웨어 적용
  * NOTE: SSE 엔드포인트는 asyncHandler로 감싸지 않음 (수동 에러 처리 필요)
  */
-router.post('/stream', optionalAuth, validate(chatRequestSchema), async (req: Request, res: Response) => {
+router.post('/stream', optionalAuth, chatRateLimiter, validate(chatRequestSchema), async (req: Request, res: Response) => {
      const { message, model, nodeId } = req.body;
 
      res.setHeader('Content-Type', 'text/event-stream');

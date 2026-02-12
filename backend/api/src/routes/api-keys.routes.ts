@@ -74,6 +74,24 @@ router.post('/',
 
         const service = getApiKeyService();
 
+        // 등급별 API 키 발급 수량 제한
+        const API_KEY_LIMITS: Record<string, number> = {
+            free: 2,
+            pro: 10,
+            enterprise: 50
+        };
+        const userTier = (req.user && 'tier' in req.user) ? (req.user as { tier: string }).tier : 'free';
+        const userRole = req.user?.role || 'user';
+        const keyLimit = userRole === 'admin' ? Infinity : (API_KEY_LIMITS[userTier] || API_KEY_LIMITS['free']);
+
+        if (keyLimit !== Infinity) {
+            const existingKeys = await service.listKeys(userId);
+            if (existingKeys.length >= keyLimit) {
+                res.status(403).json(forbidden(`API 키 발급 제한 초과 (${userTier}: 최대 ${keyLimit}개)`));
+                return;
+            }
+        }
+
         try {
             const result = await service.createKey({
                 userId,

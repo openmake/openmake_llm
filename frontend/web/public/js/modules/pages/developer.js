@@ -68,7 +68,7 @@
         getHTML: function() {
             var styles = '<style data-spa-style="developer">' +
                 '.dev-layout { display: flex; gap: var(--space-8); position: relative; max-width: 1400px; margin: 0 auto; }' +
-                '.dev-sidebar { width: 260px; position: sticky; top: var(--space-8); height: calc(100vh - 100px); overflow-y: auto; flex-shrink: 0; padding-right: var(--space-4); display: none; }' +
+                '.dev-sidebar { width: 260px; position: sticky; top: var(--space-8); height: calc(100vh - 100px); height: calc(100dvh - 100px); overflow-y: auto; flex-shrink: 0; padding-right: var(--space-4); display: none; -webkit-transform: translate3d(0,0,0); transform: translate3d(0,0,0); }' +
                 '@media (min-width: 900px) { .dev-sidebar { display: block; } }' +
                 '.dev-sidebar::-webkit-scrollbar { width: 4px; }' +
                 '.dev-sidebar-nav { list-style: none; padding: 0; }' +
@@ -434,22 +434,25 @@
             
             if (window.IntersectionObserver && sections.length > 0) {
                 _observer = new IntersectionObserver(function(entries) {
-                    entries.forEach(function(entry) {
-                        if (entry.isIntersecting) {
-                            var id = entry.target.getAttribute('id');
-                            navLinks.forEach(function(link) {
-                                link.classList.remove('active');
-                                if (link.getAttribute('href') === '#' + id) {
-                                    link.classList.add('active');
-                                    // Expand parent submenu if exists
-                                    var parent = link.closest('.dev-sidebar-sub');
-                                    if (parent) {
-                                        var parentLink = parent.parentElement.querySelector('a');
-                                        if (parentLink) parentLink.classList.add('active');
+                    // requestAnimationFrame으로 래핑하여 iOS Safari 레이아웃 스래싱 방지
+                    requestAnimationFrame(function() {
+                        entries.forEach(function(entry) {
+                            if (entry.isIntersecting) {
+                                var id = entry.target.getAttribute('id');
+                                navLinks.forEach(function(link) {
+                                    link.classList.remove('active');
+                                    if (link.getAttribute('href') === '#' + id) {
+                                        link.classList.add('active');
+                                        // Expand parent submenu if exists
+                                        var parent = link.closest('.dev-sidebar-sub');
+                                        if (parent) {
+                                            var parentLink = parent.parentElement.querySelector('a');
+                                            if (parentLink) parentLink.classList.add('active');
+                                        }
                                     }
-                                }
-                            });
-                        }
+                                });
+                            }
+                        });
                     });
                 }, { threshold: 0.2, rootMargin: "-10% 0px -70% 0px" });
                 

@@ -24,6 +24,11 @@
     let _currentRoute = null;            // 현재 활성 routeConfig
     let _started = false;                // start() 호출 여부
 
+    // ─── 무한 리로드 방지 ──────────────────────────────
+    const _RELOAD_GUARD_KEY = '__spa_reload_guard';
+    const _RELOAD_GUARD_WINDOW = 3000; // 3초 이내 동일 경로 리디렉트 감지
+    const _RELOAD_GUARD_MAX = 3;       // 최대 허용 횟수
+
     // 캐시 버스터 — 배포 시 deploy-frontend.sh가 이 값을 업데이트
     const _moduleVersion = 3;
 
@@ -49,6 +54,60 @@
      */
     function log(...args) {
         console.log(LOG_PREFIX, ...args);
+    }
+
+    /**
+     * 무한 리로드 루프 감지
+     * 동일 경로로 짧은 시간 내 반복 리디렉트가 발생하면 true 반환
+     * @param {string} path
+     * @returns {boolean}
+     */
+    function _isReloadLooping(path) {
+        try {
+            var raw = sessionStorage.getItem(_RELOAD_GUARD_KEY);
+            if (!raw) return false;
+            var guard = JSON.parse(raw);
+            if (guard.path !== path) return false;
+            if (Date.now() - guard.ts > _RELOAD_GUARD_WINDOW) return false;
+            return guard.count >= _RELOAD_GUARD_MAX;
+        } catch (e) {
+            return false;
+        }
+    }
+
+    /**
+     * 리로드 카운트 기록
+     * @param {string} path
+     */
+    function _recordReload(path) {
+        try {
+            var raw = sessionStorage.getItem(_RELOAD_GUARD_KEY);
+            var guard = raw ? JSON.parse(raw) : null;
+            if (guard && guard.path === path && Date.now() - guard.ts < _RELOAD_GUARD_WINDOW) {
+                guard.count++;
+                guard.ts = Date.now();
+            } else {
+                guard = { path: path, count: 1, ts: Date.now() };
+            }
+            sessionStorage.setItem(_RELOAD_GUARD_KEY, JSON.stringify(guard));
+        } catch (e) {
+            // sessionStorage 접근 실패 — 무시
+        }
+    }
+
+    /**
+     * 관리자 여부 확인
+     * @returns {boolean}
+     */
+    function isAdminUser() {
+        try {
+            var stored = localStorage.getItem('user');
+            if (!stored) return false;
+            var user = JSON.parse(stored);
+            return user && user.role === 'admin';
+        } catch (e) {
+            return false;
+        }
     }
 
     /**
@@ -307,13 +366,22 @@
         if (!targetRoute && normalizedPath !== CHAT_PATH) {
             warn('\uB4F1\uB85D\uB418\uC9C0 \uC54A\uC740 \uB77C\uC6B0\uD2B8:', normalizedPath);
             // .html 파일이면 레거시 URL일 수 있으므로 풀 페이지 리디렉트
+            // 단, 무한 리로드 방지 가드 적용
             if (normalizedPath.endsWith('.html')) {
-                window.location.href = normalizedPath;
-                return false;
+                if (_isReloadLooping(normalizedPath)) {
+                    warn('무한 리로드 감지! 채팅으로 폴백:', normalizedPath);
+                    normalizedPath = CHAT_PATH;
+                    targetRoute = null;
+                } else {
+                    _recordReload(normalizedPath);
+                    window.location.href = normalizedPath;
+                    return false;
+                }
+            } else {
+                // 그 외 → 채팅으로 리디렉트
+                normalizedPath = CHAT_PATH;
+                targetRoute = null;
             }
-            // 그 외 → 채팅으로 리디렉트
-            normalizedPath = CHAT_PATH;
-            targetRoute = null;
         }
 
         // ─── 인증 가드 ───────────────────────
@@ -321,6 +389,13 @@
             sessionStorage.setItem('redirectAfterLogin', normalizedPath);
             window.location.href = LOGIN_PATH;
             return false;
+        }
+
+        // ─── 관리자 가드 ─────────────────────
+        if (targetRoute && targetRoute.requireAdmin && !isAdminUser()) {
+            warn('관리자 권한 필요, 채팅으로 리디렉트:', normalizedPath);
+            normalizedPath = CHAT_PATH;
+            targetRoute = _routes.get(CHAT_PATH) || null;
         }
 
         // ─── beforeNavigate 훅 ───────────────
@@ -552,6 +627,7 @@
                 moduleFile: '/js/modules/pages/' + moduleName + '.js',
                 cssFiles: [], // 각 모듈이 필요 시 자체 등록
                 requireAuth: !!item.requireAuth,
+                requireAdmin: !!item.requireAdmin,
                 title: item.label || moduleName,
                 icon: item.icon || '',
                 iconify: item.iconify || ''

@@ -6,7 +6,7 @@
  */
 
 import { Request, Response, Router } from 'express';
-import { getUserManager, UserRole } from '../data/user-manager';
+import { getUserManager, UserRole, UserTier } from '../data/user-manager';
 import { getConversationDB } from '../data/conversation-db';
 import { requireAuth, requireAdmin } from '../auth';
 import { createLogger } from '../utils/logger';
@@ -46,6 +46,7 @@ export class AdminController {
         this.router.get('/users/stats', this.getUserStats.bind(this));
         this.router.put('/users/:id', this.updateUser.bind(this));
         this.router.put('/users/:id/role', this.changeUserRole.bind(this));
+        this.router.put('/users/:id/tier', this.changeUserTier.bind(this));
         this.router.delete('/users/:id', this.deleteUser.bind(this));
 
         // 관리자용 대화 목록 (모든 사용자 대화 조회)
@@ -165,9 +166,39 @@ export class AdminController {
              log.info(`사용자 역할 변경: ${user.email} -> ${role}`);
              res.json(success({ user }));
          } catch (error) {
-             log.error('[Admin Change Role] 오류:', error);
-             res.status(500).json(internalError('사용자 역할 변경 실패'));
+              log.error('[Admin Change Role] 오류:', error);
+              res.status(500).json(internalError('사용자 역할 변경 실패'));
          }
+    }
+
+    /**
+     * PUT /api/admin/users/:id/tier - 사용자 등급 변경
+     */
+    private async changeUserTier(req: Request, res: Response): Promise<void> {
+        try {
+            const userManager = getUserManager();
+            const userId = req.params.id;
+            const { tier } = req.body;
+
+            const validTiers: UserTier[] = ['free', 'pro', 'enterprise'];
+            if (!tier || !validTiers.includes(tier as UserTier)) {
+                res.status(400).json(badRequest('유효하지 않은 등급입니다 (free, pro, enterprise)'));
+                return;
+            }
+
+            const user = await userManager.changeTier(userId, tier as UserTier);
+
+            if (!user) {
+                res.status(404).json(notFound('사용자'));
+                return;
+            }
+
+            log.info(`사용자 등급 변경: ${user.email} -> ${tier}`);
+            res.json(success({ user }));
+        } catch (error) {
+            log.error('[Admin Change Tier] 오류:', error);
+            res.status(500).json(internalError('사용자 등급 변경 실패'));
+        }
     }
 
     /**

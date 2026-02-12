@@ -8,8 +8,12 @@
 import { Router, Request, Response } from 'express';
 import { getApiUsageTracker } from '../ollama/api-usage-tracker';
 import { success, internalError } from '../utils/api-response';
+import { requireAuth } from '../auth';
 
 const router = Router();
+
+// API 사용량 조회에 인증 필수
+router.use(requireAuth);
 
 /**
  * API 사용량 통계 요약 조회
