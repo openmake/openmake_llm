@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="frontend/web/public/icons/icon-192x192.png" alt="OpenMake.AI" width="80" />
+  <img src="frontend/web/public/icons/icon-192.png" alt="OpenMake.AI" width="80" />
 </p>
 
 <h1 align="center">OpenMake LLM</h1>
@@ -175,7 +175,7 @@ User Message
 
 - **Node.js** >= 18
 - **PostgreSQL** >= 14
-- **Ollama** ([install](https://ollama.ai))
+- **Ollama** ([install](https://ollama.com))
 
 ### 1. Clone & Install
 
@@ -204,11 +204,8 @@ createdb openmake_llm
 ### 4. Build & Run
 
 ```bash
-# Build backend (TypeScript → JavaScript)
-cd backend/api && npx tsc && cd ../..
-
-# Deploy frontend
-bash scripts/deploy-frontend.sh
+# Build (TypeScript compile + frontend deploy)
+npm run build
 
 # Start server (Cluster mode with Web UI)
 node backend/api/dist/cli.js cluster --port 52416
@@ -252,7 +249,7 @@ node backend/api/dist/cli.js generate "REST API with Express" -l typescript
 | `DATABASE_URL` | PostgreSQL connection string | `postgresql://openmake:...@localhost:5432/openmake_llm` |
 | **Ollama** | | |
 | `OLLAMA_HOST` | Ollama server URL | `http://localhost:11434` |
-| `OLLAMA_MODEL` | Default model | `gemini-3-flash-preview:cloud` |
+| `OLLAMA_MODEL` | Default model | (your preferred model, e.g. `llama3.2`) |
 | `OLLAMA_API_KEY_1..5` | Cloud API keys (rotation) | — |
 | `OLLAMA_MODEL_1..5` | Per-key model assignment (A2A) | — |
 | **Auth** | | |
@@ -379,7 +376,6 @@ openmake_llm/
 │           ├── data/                # Database Layer
 │           │   ├── models/
 │           │   │   └── unified-database.ts  # PostgreSQL abstraction (all domains)
-│           │   ├── migrations/            # Schema migrations
 │           │   └── conversation-db.ts     # Conversation CRUD
 │           ├── mcp/                 # Model Context Protocol
 │           │   ├── server.ts              # MCP server implementation
@@ -588,6 +584,6 @@ This project is licensed under the **MIT License** — see the [LICENSE](LICENSE
 ---
 
 <p align="center">
-  Built with <a href="https://ollama.ai">Ollama</a> &bull;
+  Built with <a href="https://ollama.com">Ollama</a> &bull;
   Powered by open-source LLMs
 </p>
