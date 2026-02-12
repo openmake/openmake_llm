@@ -449,7 +449,17 @@
         var self = this;
         var fetchFn = window.authFetch || window.fetch;
 
-        fetchFn('/api/chat/sessions')
+        // 🆕 비로그인 사용자는 anonSessionId를 전달하여 자신의 대화만 조회
+        var url = '/api/chat/sessions';
+        var authToken = localStorage.getItem('authToken');
+        if (!authToken) {
+            var anonSessionId = sessionStorage.getItem('anonSessionId');
+            if (anonSessionId) {
+                url += '?anonSessionId=' + encodeURIComponent(anonSessionId);
+            }
+        }
+
+        fetchFn(url)
             .then(function (res) {
                 if (!res.ok) throw new Error('HTTP ' + res.status);
                 return res.json();

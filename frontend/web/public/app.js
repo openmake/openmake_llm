@@ -163,6 +163,26 @@ async function recoverSessionFromCookie() {
                 }
                 
                 console.log('[Auth] OAuth 쿠키 세션 복구 성공:', user.email);
+
+                // 🆕 익명 세션 이관: OAuth 복구 시에도 이전 게스트 대화를 사용자에게 귀속
+                const anonSessionId = sessionStorage.getItem('anonSessionId');
+                if (anonSessionId) {
+                    try {
+                        await authFetch('/api/chat/sessions/claim', {
+                            method: 'POST',
+                            body: JSON.stringify({ anonSessionId })
+                        });
+                        sessionStorage.removeItem('anonSessionId');
+                        console.log('[Auth] 익명 세션 이관 완료:', anonSessionId);
+                        // 사이드바 대화 목록 새로고침
+                        if (window.sidebar && typeof window.sidebar.refresh === 'function') {
+                            window.sidebar.refresh();
+                        }
+                        loadChatSessions();
+                    } catch (claimErr) {
+                        console.warn('[Auth] 익명 세션 이관 실패 (무시):', claimErr);
+                    }
+                }
             }
         }
     } catch (e) {

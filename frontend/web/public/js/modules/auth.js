@@ -68,6 +68,27 @@ async function recoverSessionFromCookie() {
                 }
 
                 console.log('[Auth Module] OAuth 쿠키 세션 복구 성공:', user.email);
+
+                // 🆕 익명 세션 이관: OAuth 복구 시에도 이전 게스트 대화를 사용자에게 귀속
+                const anonSessionId = sessionStorage.getItem('anonSessionId');
+                if (anonSessionId) {
+                    try {
+                        const claimToken = getState('auth.authToken');
+                        await fetch('/api/chat/sessions/claim', {
+                            method: 'POST',
+                            credentials: 'include',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                ...(claimToken ? { 'Authorization': `Bearer ${claimToken}` } : {})
+                            },
+                            body: JSON.stringify({ anonSessionId })
+                        });
+                        sessionStorage.removeItem('anonSessionId');
+                        console.log('[Auth Module] 익명 세션 이관 완료:', anonSessionId);
+                    } catch (claimErr) {
+                        console.warn('[Auth Module] 익명 세션 이관 실패 (무시):', claimErr);
+                    }
+                }
             }
         }
     } catch (e) {
@@ -164,6 +185,25 @@ async function login(email, password) {
             setState('auth.authToken', token);
             setState('auth.currentUser', user);
             setState('auth.isGuestMode', false);
+
+            // 🆕 익명 세션 이관: 로그인 전 게스트 대화를 사용자에게 귀속
+            const anonSessionId = sessionStorage.getItem('anonSessionId');
+            if (anonSessionId) {
+                try {
+                    await fetch('/api/chat/sessions/claim', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`
+                        },
+                        body: JSON.stringify({ anonSessionId })
+                    });
+                    sessionStorage.removeItem('anonSessionId');
+                    console.log('[Auth Module] 익명 세션 이관 완료:', anonSessionId);
+                } catch (claimErr) {
+                    console.warn('[Auth Module] 익명 세션 이관 실패 (무시):', claimErr);
+                }
+            }
 
             return { success: true, user };
         }

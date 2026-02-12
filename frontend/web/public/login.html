@@ -651,6 +651,26 @@
                         } catch (e) { console.error('JWT decode error:', e); }
                     }
                     showSuccess('로그인 성공! 잠시 후 이동합니다...');
+
+                    // 🆕 익명 세션 이관: 로그인 전에 게스트로 대화한 내용을 사용자에게 귀속
+                    const anonSessionId = sessionStorage.getItem('anonSessionId');
+                    if (anonSessionId && token) {
+                        try {
+                            await fetch(`${API_BASE}/api/chat/sessions/claim`, {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'Authorization': `Bearer ${token}`
+                                },
+                                body: JSON.stringify({ anonSessionId })
+                            });
+                            sessionStorage.removeItem('anonSessionId');
+                            console.log('[Login] 익명 세션 이관 완료:', anonSessionId);
+                        } catch (claimErr) {
+                            console.warn('[Login] 익명 세션 이관 실패 (무시):', claimErr);
+                        }
+                    }
+
                     // redirectAfterLogin 지원
                     const redirectUrl = sessionStorage.getItem('redirectAfterLogin') || '/';
                     sessionStorage.removeItem('redirectAfterLogin');

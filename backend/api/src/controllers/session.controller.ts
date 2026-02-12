@@ -7,7 +7,7 @@
 
 import { Request, Response, Router } from 'express';
 import { getConversationDB, ConversationSession } from '../data/conversation-db';
-import { optionalAuth } from '../auth';
+import { optionalAuth, requireAuth } from '../auth';
 import { createLogger } from '../utils/logger';
 import { success, internalError } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
@@ -93,6 +93,29 @@ export class SessionController {
              }));
 
              res.json(success({ sessions: formattedSessions }));
+         }));
+
+         // 🆕 익명 세션 이관: 로그인 후 기존 익명 대화를 사용자에게 귀속
+         // ⚠️ /:sessionId 라우트보다 앞에 위치해야 '/claim'이 파라미터로 잡히지 않음
+         this.router.post('/claim', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+             const user = req.user;
+             const { anonSessionId } = req.body;
+
+             if (!user?.id) {
+                 res.status(401).json({ success: false, error: { message: '인증이 필요합니다' } });
+                 return;
+             }
+
+             if (!anonSessionId || typeof anonSessionId !== 'string') {
+                 res.status(400).json({ success: false, error: { message: 'anonSessionId가 필요합니다' } });
+                 return;
+             }
+
+             const userId = String(user.id);
+             const claimed = await conversationDb.claimAnonymousSessions(userId, anonSessionId);
+             log.info(`[Chat Sessions] 익명 세션 이관: userId=${userId}, anonSessionId=${anonSessionId}, claimed=${claimed}`);
+
+             res.json(success({ claimed }));
          }));
 
          // 새 세션 생성 (anonSessionId 지원)

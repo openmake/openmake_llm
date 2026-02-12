@@ -413,6 +413,29 @@ class ConversationDB {
         return (result.rowCount || 0) > 0;
     }
 
+    /**
+     * 익명 세션을 로그인한 사용자에게 이관
+     * anon_session_id로 생성된 세션의 user_id를 업데이트하고 anon_session_id를 제거
+     * @returns 이관된 세션 수
+     */
+    async claimAnonymousSessions(userId: string, anonSessionId: string): Promise<number> {
+        const pool = getPool();
+        const now = new Date().toISOString();
+
+        const result = await pool.query(
+            `UPDATE conversation_sessions
+             SET user_id = $1, anon_session_id = NULL, updated_at = $2
+             WHERE anon_session_id = $3 AND (user_id IS NULL OR user_id = $1)`,
+            [userId, now, anonSessionId]
+        );
+
+        const count = result.rowCount || 0;
+        if (count > 0) {
+            console.log(`[ConversationDB] 🔄 익명 세션 ${count}개를 사용자 ${userId}에게 이관 완료 (anonSessionId: ${anonSessionId})`);
+        }
+        return count;
+    }
+
     async cleanupOldSessions(days: number): Promise<number> {
         const pool = getPool();
         const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
