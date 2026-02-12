@@ -36,3 +36,4 @@ coverage/
 .agent/skills/
 .spawner/
 .claude/
+.jest-cache/
