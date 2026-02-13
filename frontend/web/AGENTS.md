@@ -1,6 +1,7 @@
 # Frontend (Vanilla JS) — AI Skill Guide
 
 > 이 파일은 `frontend/web/` 작업 시 AI 에이전트가 참조하는 스킬 가이드입니다.
+> 모든 `@skill` 참조는 `.claude/skills/` 또는 OpenCode 에 설치된 실제 스킬입니다.
 
 ## Tech Context
 
@@ -16,66 +17,82 @@
 3. 캐시 버스터 (`?v=N`) 사용 시 HTML과 JS 파일 동기화 필수
 4. 인라인 `onclick` 대신 JS에서 동적 바인딩
 
-## Primary Skills (항상 참고)
+## Installed Skills Reference
+
+### Project Skills (`.claude/skills/`)
+
+| Skill | Directory | Domain |
+|-------|-----------|--------|
+| `vanilla-js-frontend` | `.claude/skills/vanilla-js-frontend/` | IIFE 컴포넌트, AppState, sanitizeHTML, SPA 라우터, 디자인 토큰 |
+
+### OpenCode Skills (Built-in & Installed)
+
+| Skill | Domain |
+|-------|--------|
+| `frontend-ui-ux` | 디자인 목업 없이 고품질 UI/UX 구현 |
+| `dev-browser` | 브라우저 자동화 — 네비게이션, 폼 입력, 스크린샷 |
+| `code-review-expert` | 코드 리뷰 — 품질, 보안, 성능, 유지보수성 |
+| `insecure-defaults` | XSS, CSRF 등 프론트엔드 보안 감사 |
+| `verification-before-completion` | 작업 완료 전 빌드/테스트 확인 |
+| `test-driven-development` | TDD Red-Green-Refactor 사이클 |
+| `systematic-debugging` | 버그, 테스트 실패 시 체계적 디버깅 |
+
+## Skill Usage Guide
+
+### Primary Skills (항상 참고)
 
 | Skill | When |
 |-------|------|
-| `@frontend-components-standards` | 재사용 가능 컴포넌트 설계 |
-| `@frontend-css-standards` | CSS 방법론, 토큰, 네이밍 |
-| `@frontend-accessibility-standards` | WCAG 접근성, ARIA, 키보드 |
-| `@frontend-responsive-design-standards` | 반응형, 모바일 퍼스트 |
-| `@frontend-design` | 고품질 UI 인터페이스 |
+| `vanilla-js-frontend` | 컴포넌트 설계, IIFE 패턴, AppState 관리, sanitizeHTML XSS 방어, CSS 디자인 토큰 |
+| `frontend-ui-ux` | UI 디자인 원칙, 타이포그래피, 색상, 반응형, 접근성 |
 
-## JavaScript Skills
+### JavaScript & State
 
 | Skill | When |
 |-------|------|
-| `@modern-javascript-patterns` | ES6+ (async/await, destructuring, spread) |
-| `@javascript-mastery` | JS 33개 핵심 개념 |
-| `@clean-code` | 읽기 좋은 코드 작성 |
-| `@state-management` | 프론트엔드 상태 관리 전략 |
+| `vanilla-js-frontend` | ES6+ 패턴, IIFE 컴포넌트, `window.*` 글로벌 등록, 중앙 AppState (`state.js`) |
 
-## UI/UX Skills
+### UI/UX & Design
 
 | Skill | When |
 |-------|------|
-| `@frontend-design` | UI 디자인 원칙, 타이포그래피, 색상 |
-| `@web-design-guidelines` | 웹 디자인 가이드라인 |
-| `@i18n-localization` | 다국어 지원, 한국어/영어 전환 |
-| `@scroll-experience` | 스크롤 기반 인터랙션 |
-| `@canvas-design` | Canvas/SVG 비주얼 디자인 |
+| `frontend-ui-ux` | UI 디자인, 타이포그래피, 색상 체계, 반응형, 모바일 퍼스트, 접근성 |
+| `vanilla-js-frontend` | CSS 변수 (`design-tokens.css`), glassmorphism, 애니메이션 |
 
-## Testing Skills
+### Testing
 
 | Skill | When |
 |-------|------|
-| `@playwright-testing` | E2E 테스트, 브라우저 자동화 |
-| `@testing-frontend` | 프론트엔드 테스팅 패턴 |
-| `@e2e-testing-patterns` | Playwright/Cypress 패턴 |
-| `@testing-anti-patterns` | 테스트 안티패턴 방지 |
+| `dev-browser` | E2E 테스트, Playwright 브라우저 자동화 |
+| `test-driven-development` | TDD 사이클, 프론트엔드 테스팅 패턴 |
+| `systematic-debugging` | Flaky 테스트, 디버깅 |
 
-## Security Skills
-
-| Skill | When |
-|-------|------|
-| `@frontend-security-coder` | XSS, CSRF 방어 |
-| `@software-security-appsec` | OWASP 프론트엔드 보안 |
-
-## Performance Skills
+### Security
 
 | Skill | When |
 |-------|------|
-| `@web-performance-optimization` | 로딩 속도, Core Web Vitals |
-| `@performance-analysis` | 병목 식별, 프로파일링 |
+| `vanilla-js-frontend` | XSS 방어 (`sanitizeHTML`), innerHTML 안전 사용 |
+| `insecure-defaults` | OWASP 프론트엔드 보안, CSRF 방어 |
+
+### Performance
+
+| Skill | When |
+|-------|------|
+| `vanilla-js-frontend` | 번들 없는 로딩 최적화, 캐시 버스터 동기화 |
 
 ## File → Skill Mapping
 
 | File(s) | Primary Skill |
 |---------|---------------|
-| `public/app.js` | `@modern-javascript-patterns` |
-| `public/style.css` | `@frontend-css-standards` |
-| `public/css/design-tokens.css` | `@frontend-css-standards` |
-| `public/css/light-theme.css` | `@frontend-css-standards` |
-| `public/index.html` | `@frontend-accessibility-standards` |
-| `public/js/components/` | `@frontend-components-standards` |
-| `public/js/components/unified-sidebar.js` | `@frontend-components-standards` |
+| `public/app.js` | `vanilla-js-frontend` |
+| `public/style.css` | `vanilla-js-frontend` |
+| `public/css/design-tokens.css` | `vanilla-js-frontend` |
+| `public/css/light-theme.css` | `vanilla-js-frontend` |
+| `public/index.html` | `frontend-ui-ux` |
+| `public/js/components/` | `vanilla-js-frontend` |
+| `public/js/components/unified-sidebar.js` | `vanilla-js-frontend` |
+| `public/js/modules/sanitize.js` | `vanilla-js-frontend` |
+| `public/js/modules/state.js` | `vanilla-js-frontend` |
+| `public/js/spa-router.js` | `vanilla-js-frontend` |
+| `public/js/modules/pages/*.js` | `vanilla-js-frontend` |
+| `public/service-worker.js` | `vanilla-js-frontend` |

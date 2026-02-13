@@ -19,12 +19,47 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.5.0-blue" alt="Version" />
+  <img src="https://img.shields.io/badge/version-1.5.1-blue" alt="Version" />
   <img src="https://img.shields.io/badge/node-%3E%3D18-green" alt="Node" />
   <img src="https://img.shields.io/badge/license-MIT-yellow" alt="License" />
   <img src="https://img.shields.io/badge/typescript-5.3-blue" alt="TypeScript" />
   <img src="https://img.shields.io/badge/express-5.2-lightgrey" alt="Express" />
 </p>
+
+---
+
+## Codebase Statistics
+
+| Metric | Count |
+|--------|-------|
+| **Backend TypeScript** | 34,598 LOC (121 files) |
+| **Frontend JS + CSS** | 21,891 LOC (42+ files) |
+| **Total** | ~56,489 LOC |
+| **REST API Endpoints** | 112 |
+| **Route Files** | 21 |
+| **Frontend Pages** | 22 (SPA modules) |
+| **HTML Views** | 25 |
+| **CSS Files** | 13 |
+| **UI Components** | 5 |
+| **Test Suites** | 20 (544 tests) |
+| **Dependencies** | 35 prod + 16 dev |
+| **Environment Variables** | 52 |
+| **AI Skills** | 10 project-specific |
+
+### Backend Domains (by LOC)
+
+| Domain | LOC | Files | Key Responsibilities |
+|--------|-----|-------|----------------------|
+| Data/DB | 4,070 | 36 | PostgreSQL raw SQL, UnifiedDatabase, migrations |
+| Routes | 4,005 | 22 | REST API endpoint definitions |
+| MCP | 3,899 | 15 | Model Context Protocol, tool routing, external servers |
+| Services | 3,278 | 5 | ChatService, DeepResearch, Memory, ApiKey, Auth |
+| Ollama | 3,175 | 8 | LLM client, agent loop, A2A multi-model, API key rotation |
+| Chat | 3,076 | 8 | Pipeline profiles, model selector, context engineering |
+| Agents | 2,428 | 7 | Agent definitions, discussion engine, LLM router |
+| Controllers | 1,428 | 7 | Request handlers (auth, admin, cluster, metrics) |
+| Auth | 1,115 | 6 | JWT, OAuth, API key HMAC, scope middleware |
+| Middlewares | 813 | 7 | Rate limiting, validation, request tracking |
 
 ---
 
@@ -744,6 +779,29 @@ openmake_llm/
 | **PWA** | Service Worker + Web App Manifest |
 | **Testing** | Jest + Playwright |
 | **Package Manager** | npm (workspaces) |
+
+---
+
+## AI Development Skills
+
+이 프로젝트는 AI 에이전트(OpenCode/Claude Code 등)가 코드베이스를 정확히 이해하고 작업할 수 있도록 10개의 프로젝트 전용 스킬을 포함합니다.
+
+### Project Skills (`.claude/skills/`)
+
+| Skill | Domain | LOC Coverage |
+|-------|--------|--------------|
+| `llm-app-patterns` | LLM 에이전트, A2A, 프롬프트 체인, 파이프라인 프로파일 | chat/ + ollama/ + agents/ (8,679 LOC) |
+| `postgres-raw-sql` | UnifiedDatabase, 파라미터화 쿼리, 마이그레이션 | data/ (4,070 LOC) |
+| `mcp-integration` | MCP 서버/클라이언트, ToolRouter, 도구 티어 | mcp/ (3,899 LOC) |
+| `auth-security-patterns` | JWT, OAuth 2.0, API Key HMAC-SHA-256 | auth/ + middlewares/ (1,928 LOC) |
+| `typescript-advanced` | 제네릭, 유틸리티 타입, strict 모드 | 전체 backend/ (34,598 LOC) |
+| `vanilla-js-frontend` | IIFE 컴포넌트, AppState, sanitizeHTML, SPA 라우터 | frontend/ (21,891 LOC) |
+| `context-engineering` | 컨텍스트 윈도우 최적화, 토큰 관리 | AI agent workflow |
+| `context-compactor` | 세션 요약, 컴팩션 | AI agent workflow |
+| `context-state-tracker` | 크로스 세션 상태 추적 | AI agent workflow |
+| `memory-manager` | 장기/단기 메모리, 크로스 세션 지식 | AI agent workflow |
+
+> 각 스킬은 `backend/api/AGENTS.md`, `frontend/web/AGENTS.md` 가이드 파일에서 컴포넌트별로 매핑되어 있습니다.
 
 ---
 
