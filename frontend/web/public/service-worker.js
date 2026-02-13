@@ -3,7 +3,7 @@
  * Comprehensive caching with offline support
  */
 
-const CACHE_VERSION = 'openmake-v6';
+const CACHE_VERSION = 'openmake-v7';
 const CDN_CACHE = 'openmake-cdn-v1';
 const IMG_CACHE = 'openmake-img-v1';
 
@@ -169,8 +169,8 @@ self.addEventListener('fetch', (event) => {
         return;
     }
 
-    // Static assets (JS, CSS, etc.) — cache first
-    event.respondWith(cacheFirst(request));
+    // Static assets (JS, CSS, etc.) — stale-while-revalidate for fresh deployments
+    event.respondWith(staleWhileRevalidate(request, CACHE_VERSION, 100));
 });
 
 // ========== Strategies ==========
@@ -270,21 +270,6 @@ async function trimCache(cacheName, maxItems) {
         const toDelete = keys.slice(0, keys.length - maxItems);
         await Promise.all(toDelete.map(key => cache.delete(key)));
     }
-}
-
-// ========== Background Sync ==========
-self.addEventListener('sync', (event) => {
-    if (event.tag === 'sync-messages') {
-        event.waitUntil(syncPendingMessages());
-    }
-});
-
-async function syncPendingMessages() {
-    // Read pending messages from clients via postMessage
-    const clients = await self.clients.matchAll({ type: 'window' });
-    clients.forEach(client => {
-        client.postMessage({ type: 'SYNC_PENDING_MESSAGES' });
-    });
 }
 
 // ========== Push Notifications ==========

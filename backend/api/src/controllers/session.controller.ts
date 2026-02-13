@@ -9,7 +9,7 @@ import { Request, Response, Router } from 'express';
 import { getConversationDB, ConversationSession } from '../data/conversation-db';
 import { optionalAuth, requireAuth } from '../auth';
 import { createLogger } from '../utils/logger';
-import { success, internalError } from '../utils/api-response';
+import { success } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
 import { getConfig } from '../config';
 
@@ -43,11 +43,27 @@ export class SessionController {
         const conversationDb = getConversationDB();
         const envConfig = getConfig();
 
+        const hasSessionAccess = (session: ConversationSession | undefined, req: Request): boolean => {
+            if (req.user?.role === 'admin') {
+                return true;
+            }
+
+            if (!session) {
+                return false;
+            }
+
+            const requestUserId = req.user?.id ? String(req.user.id) : undefined;
+            const requestAnonSessionId = typeof req.query.anonSessionId === 'string'
+                ? req.query.anonSessionId
+                : undefined;
+
+            return session.userId === requestUserId || session.anonSessionId === requestAnonSessionId;
+        };
+
          // 세션 목록 조회 (사용자 격리 적용)
          this.router.get('/', optionalAuth, asyncHandler(async (req: Request, res: Response) => {
              const user = req.user;
              const anonSessionId = req.query.anonSessionId as string;
-             const viewAll = req.query.viewAll === 'true';
              const viewMineOnly = req.query.viewMineOnly === 'true';
              const limit = parseInt(req.query.limit as string) || 50;
 
@@ -85,8 +101,8 @@ export class SessionController {
                  updatedAt: s.updated_at,
                  metadata: s.metadata,
                  messageCount: s.messages?.length || 0,
-                 // 🆕 첫 번째 메시지에서 모델 정보 추출 (없으면 기본 모델 표시)
-                 model: (s.messages?.[0] as unknown as Record<string, unknown>)?.model || (s as unknown as Record<string, unknown>).model || envConfig.ollamaDefaultModel || 'Ollama'
+                 // 🆕 첫 번째 메시지에서 모델 정보 추출 (브랜드 모델명으로 표시)
+                 model: s.messages?.[0]?.model || 'OpenMake LLM Auto'
              }));
 
              res.json(success({ sessions: formattedSessions }));
@@ -150,37 +166,61 @@ export class SessionController {
          }));
 
          // 세션 메시지 조회
-         this.router.get('/:sessionId/messages', asyncHandler(async (req: Request, res: Response) => {
-             const { sessionId } = req.params;
-             const limit = parseInt(req.query.limit as string) || 100;
-             const messages = await conversationDb.getMessages(sessionId, limit);
-             res.json(success({ messages }));
-         }));
+         this.router.get('/:sessionId/messages', optionalAuth, asyncHandler(async (req: Request, res: Response) => {
+              const { sessionId } = req.params;
+              const session = await conversationDb.getSession(sessionId);
+              if (!hasSessionAccess(session, req)) {
+                  res.status(403).json({ success: false, error: { message: '권한이 없습니다' } });
+                  return;
+              }
+
+              const limit = parseInt(req.query.limit as string) || 100;
+              const messages = await conversationDb.getMessages(sessionId, limit);
+              res.json(success({ messages }));
+          }));
 
          // 메시지 저장
-         this.router.post('/:sessionId/messages', asyncHandler(async (req: Request, res: Response) => {
-             const { sessionId } = req.params;
-             const { role, content, model, tokensUsed, responseTime } = req.body;
-             const message = await conversationDb.saveMessage(sessionId, role, content, {
-                 model, tokensUsed, responseTime
-             });
-             res.json(success({ message }));
-         }));
+         this.router.post('/:sessionId/messages', optionalAuth, asyncHandler(async (req: Request, res: Response) => {
+              const { sessionId } = req.params;
+              const session = await conversationDb.getSession(sessionId);
+              if (!hasSessionAccess(session, req)) {
+                  res.status(403).json({ success: false, error: { message: '권한이 없습니다' } });
+                  return;
+              }
+
+              const { role, content, model, tokensUsed, responseTime } = req.body;
+              const message = await conversationDb.saveMessage(sessionId, role, content, {
+                  model, tokensUsed, responseTime
+              });
+              res.json(success({ message }));
+          }));
 
          // 세션 제목 업데이트
-         this.router.patch('/:sessionId', asyncHandler(async (req: Request, res: Response) => {
-             const { sessionId } = req.params;
-             const { title } = req.body;
-             const updated = await conversationDb.updateSessionTitle(sessionId, title);
-             res.json(success({ updated }));
-         }));
+         this.router.patch('/:sessionId', optionalAuth, asyncHandler(async (req: Request, res: Response) => {
+              const { sessionId } = req.params;
+              const session = await conversationDb.getSession(sessionId);
+              if (!hasSessionAccess(session, req)) {
+                  res.status(403).json({ success: false, error: { message: '권한이 없습니다' } });
+                  return;
+              }
+
+              const { title } = req.body;
+              const updated = await conversationDb.updateSessionTitle(sessionId, title);
+              res.json(success({ updated }));
+          }));
 
          // 세션 삭제
-         this.router.delete('/:sessionId', asyncHandler(async (req: Request, res: Response) => {
-             const { sessionId } = req.params;
-             const deleted = await conversationDb.deleteSession(sessionId);
-             res.json(success({ deleted }));
-         }));
+         this.router.delete('/:sessionId', optionalAuth, asyncHandler(async (req: Request, res: Response) => {
+              const { sessionId } = req.params;
+              const session = await conversationDb.getSession(sessionId);
+              if (!hasSessionAccess(session, req)) {
+                  res.status(403).json({ success: false, error: { message: '권한이 없습니다' } });
+                  return;
+              }
+
+              const deleted = await conversationDb.deleteSession(sessionId);
+              res.json(success({ deleted }));
+          }));
 
         log.info('[SessionController] 세션 관리 API 라우트 설정 완료');
     }

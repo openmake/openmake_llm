@@ -5,19 +5,31 @@
 
 import { getState, setState } from './state.js';
 
+const SafeStorage = window.SafeStorage || {
+    getItem(key) {
+        try { return localStorage.getItem(key); } catch (e) { return null; }
+    },
+    setItem(key, value) {
+        try { localStorage.setItem(key, value); } catch (e) {}
+    },
+    removeItem(key) {
+        try { localStorage.removeItem(key); } catch (e) {}
+    }
+};
+
 /**
  * 인증 상태 초기화
  * 🔒 Phase 3 패치: async로 변경하여 세션 복구 완료를 보장 (경쟁 조건 해결)
  * 반환된 Promise는 앱 초기화 시 await 되어야 함
  */
 async function initAuth() {
-    const authToken = localStorage.getItem('authToken');
-    const isGuestMode = localStorage.getItem('guestMode') === 'true';
+    const authToken = SafeStorage.getItem('authToken');
+    const isGuestMode = SafeStorage.getItem('guestMode') === 'true';
 
     setState('auth.authToken', authToken);
     setState('auth.isGuestMode', isGuestMode);
 
-    const savedUser = localStorage.getItem('user');
+    const savedUser = SafeStorage.getItem('user');
     if (savedUser) {
         try {
             const user = JSON.parse(savedUser);
@@ -77,14 +89,14 @@ async function recoverSessionFromCookie() {
             const user = data.data?.user || data.user;
             if (user && user.email) {
                 // 세션 복구 성공
-                localStorage.setItem('user', JSON.stringify(user));
-                localStorage.removeItem('guestMode');
-                localStorage.removeItem('isGuest');
+                SafeStorage.setItem('user', JSON.stringify(user));
+                SafeStorage.removeItem('guestMode');
+                SafeStorage.removeItem('isGuest');
 
                 // 🔒 OAuth 세션 마커: httpOnly 쿠키 기반 인증 표시
                 // spa-router.js의 isAuthenticated()가 이 값을 확인하여 인증 상태 유지
-                if (!localStorage.getItem('authToken')) {
-                    localStorage.setItem('authToken', 'cookie-session');
+                if (!SafeStorage.getItem('authToken')) {
+                    SafeStorage.setItem('authToken', 'cookie-session');
                     setState('auth.authToken', 'cookie-session');
                 }
 
@@ -134,8 +146,8 @@ async function authFetch(url, options = {}) {
 
     // 401 인터셉터: 세션 만료 시 로그인 페이지로 리다이렉트
     if (response.status === 401 && !url.includes('/api/auth/login')) {
-        localStorage.removeItem('authToken');
-        localStorage.removeItem('user');
+        SafeStorage.removeItem('authToken');
+        SafeStorage.removeItem('user');
         setState('auth.authToken', null);
         setState('auth.currentUser', null);
         window.location.href = '/login.html';
@@ -191,9 +203,9 @@ async function login(email, password) {
         const user = payload.user;
 
         if (response.ok && token) {
-            localStorage.setItem('authToken', token);
-            localStorage.setItem('user', JSON.stringify(user));
-            localStorage.removeItem('guestMode');
+            SafeStorage.setItem('authToken', token);
+            SafeStorage.setItem('user', JSON.stringify(user));
+            SafeStorage.removeItem('guestMode');
 
             setState('auth.authToken', token);
             setState('auth.currentUser', user);
@@ -223,9 +235,9 @@ function logout() {
     }).catch(() => {});
 
     // localStorage 정리
-    localStorage.removeItem('authToken');
-    localStorage.removeItem('user');
-    localStorage.removeItem('guestMode');
+    SafeStorage.removeItem('authToken');
+    SafeStorage.removeItem('user');
+    SafeStorage.removeItem('guestMode');
 
     setState('auth.authToken', null);
     setState('auth.currentUser', null);
@@ -238,7 +250,7 @@ function logout() {
  * 게스트 모드로 진입
  */
 function enterGuestMode() {
-    localStorage.setItem('guestMode', 'true');
+    SafeStorage.setItem('guestMode', 'true');
     setState('auth.isGuestMode', true);
     updateAuthUI();
 }

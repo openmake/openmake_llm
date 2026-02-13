@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS users (
     password_hash TEXT NOT NULL,
     email TEXT,
     role TEXT DEFAULT 'user' CHECK(role IN ('admin', 'user', 'guest')),
+    tier TEXT DEFAULT 'free',
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW(),
     last_login TIMESTAMPTZ,
@@ -20,6 +21,7 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE TABLE IF NOT EXISTS conversation_sessions (
     id TEXT PRIMARY KEY,
     user_id TEXT REFERENCES users(id),
+    anon_session_id TEXT,
     title TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW(),
@@ -378,3 +380,75 @@ CREATE INDEX IF NOT EXISTS idx_embeddings_vector ON vector_embeddings
 -- Full-text search indexes
 CREATE INDEX IF NOT EXISTS idx_messages_content_trgm ON conversation_messages USING gin (content gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS idx_memories_value_trgm ON user_memories USING gin (value gin_trgm_ops);
+
+-- ============================================
+-- 🔌 MCP 외부 서버 설정 테이블
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS mcp_servers (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL UNIQUE,
+    transport_type TEXT NOT NULL CHECK(transport_type IN ('stdio', 'sse', 'streamable-http')),
+    command TEXT,
+    args JSONB,
+    env JSONB,
+    url TEXT,
+    enabled BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ============================================
+-- 🔑 API Key 관리 테이블
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS user_api_keys (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    key_hash TEXT NOT NULL UNIQUE,
+    key_prefix TEXT NOT NULL DEFAULT 'omk_live_',
+    last_4 TEXT NOT NULL,
+    name TEXT NOT NULL,
+    description TEXT,
+    scopes JSONB DEFAULT '["*"]',
+    allowed_models JSONB DEFAULT '["*"]',
+    rate_limit_tier TEXT NOT NULL DEFAULT 'free' CHECK(rate_limit_tier IN ('free', 'starter', 'standard', 'enterprise')),
+    is_active BOOLEAN DEFAULT TRUE,
+    last_used_at TIMESTAMPTZ,
+    expires_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    total_requests INTEGER DEFAULT 0,
+    total_tokens INTEGER DEFAULT 0
+);
+
+-- ============================================
+-- 🔒 Token Blacklist 테이블
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS token_blacklist (
+    jti TEXT PRIMARY KEY,
+    expires_at BIGINT NOT NULL,
+    created_at BIGINT DEFAULT (EXTRACT(EPOCH FROM NOW()) * 1000)
+);
+
+-- ============================================
+-- 추가 인덱스 (코드에서 동적 생성되던 것들)
+-- ============================================
+
+-- MCP indexes
+CREATE INDEX IF NOT EXISTS idx_mcp_servers_name ON mcp_servers(name);
+CREATE INDEX IF NOT EXISTS idx_mcp_servers_enabled ON mcp_servers(enabled);
+
+-- API Key indexes
+CREATE INDEX IF NOT EXISTS idx_api_keys_user ON user_api_keys(user_id);
+CREATE INDEX IF NOT EXISTS idx_api_keys_hash ON user_api_keys(key_hash);
+CREATE INDEX IF NOT EXISTS idx_api_keys_active ON user_api_keys(user_id, is_active);
+CREATE INDEX IF NOT EXISTS idx_api_keys_tier ON user_api_keys(rate_limit_tier);
+
+-- Session & Audit indexes (from unified-database.ts)
+CREATE INDEX IF NOT EXISTS idx_sessions_anon ON conversation_sessions(anon_session_id);
+CREATE INDEX IF NOT EXISTS idx_audit_user ON audit_logs(user_id);
+
+-- Token blacklist index
+CREATE INDEX IF NOT EXISTS idx_blacklist_expires ON token_blacklist(expires_at);

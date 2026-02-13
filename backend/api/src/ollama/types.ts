@@ -112,6 +112,7 @@ export interface WebSearchResult {
 
 export interface WebSearchResponse {
     results: WebSearchResult[];
+    error?: string;
 }
 
 export interface WebFetchRequest {

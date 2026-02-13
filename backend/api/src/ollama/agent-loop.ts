@@ -25,6 +25,33 @@ type ToolFunction = (args: Record<string, unknown>) => unknown | Promise<unknown
 // Ollama Cloud 호스트
 const OLLAMA_CLOUD_HOST = 'https://ollama.com';
 
+type OllamaLikeError = {
+    status?: number;
+    statusCode?: number;
+    status_code?: number;
+    response?: { status?: number };
+    error?: { status?: number };
+    message?: string;
+    name?: string;
+};
+
+function getHttpStatus(error: unknown): number | undefined {
+    if (!error || typeof error !== 'object') return undefined;
+    const err = error as OllamaLikeError;
+    return err.status ?? err.statusCode ?? err.status_code ?? err.response?.status ?? err.error?.status;
+}
+
+function isApiKeyExhaustionError(error: unknown): boolean {
+    if (!error || typeof error !== 'object') return false;
+    const err = error as OllamaLikeError;
+    const text = `${err.name || ''} ${err.message || ''}`.toLowerCase();
+    return text.includes('keyexhaustion') || text.includes('api key') && text.includes('exhaust');
+}
+
+function sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 /**
  * Agent Loop 실행 옵션
  */
@@ -183,6 +210,8 @@ export async function runAgentLoop(options: AgentLoopOptions): Promise<AgentLoop
         maxIterations = 10
     } = options;
 
+    void think;
+
     const ollama = createOllamaClient(model);
     const ollamaTools = tools.map(toOllamaTool);
 
@@ -199,94 +228,113 @@ export async function runAgentLoop(options: AgentLoopOptions): Promise<AgentLoop
         console.log(`[AgentLoop] 📍 반복 ${iterations}/${maxIterations}`);
 
         let response: ChatResponse;
+        let requestAttempt = 0;
 
-        if (stream && onToken) {
-            // 스트리밍 모드
-            let content = '';
-            let thinking = '';
-            let toolCalls: ToolCall[] = [];
+        while (true) {
+            try {
+                if (stream && onToken) {
+                    let content = '';
+                    let thinking = '';
+                    let toolCalls: ToolCall[] = [];
 
-            const streamResponse = await ollama.chat({
-                model,
-                messages,
-                tools: ollamaTools,
-                stream: true,
-                options: {
-                    // think 옵션은 model options가 아닌 별도로 처리
-                }
-            });
+                    const streamResponse = await ollama.chat({
+                        model,
+                        messages,
+                        tools: ollamaTools,
+                        stream: true,
+                        options: {
+                        }
+                    });
 
-            for await (const chunk of streamResponse) {
-                // Thinking 처리
-                if ((chunk.message as MessageWithThinking)?.thinking) {
-                    thinking += (chunk.message as MessageWithThinking).thinking;
-                    onToken('', (chunk.message as MessageWithThinking).thinking!);
-                }
+                    for await (const chunk of streamResponse) {
+                        if ((chunk.message as MessageWithThinking)?.thinking) {
+                            thinking += (chunk.message as MessageWithThinking).thinking;
+                            onToken('', (chunk.message as MessageWithThinking).thinking!);
+                        }
 
-                // Content 처리
-                if (chunk.message?.content) {
-                    content += chunk.message.content;
-                    onToken(chunk.message.content);
-                }
+                        if (chunk.message?.content) {
+                            content += chunk.message.content;
+                            onToken(chunk.message.content);
+                        }
 
-                // Tool calls 수집
-                if (chunk.message?.tool_calls) {
-                    toolCalls = chunk.message.tool_calls;
-                }
+                        if (chunk.message?.tool_calls) {
+                            toolCalls = chunk.message.tool_calls;
+                        }
 
-                // 메트릭 수집
-                if (chunk.done) {
+                        if (chunk.done) {
+                            lastMetrics = {
+                                total_duration: chunk.total_duration,
+                                load_duration: chunk.load_duration,
+                                prompt_eval_count: chunk.prompt_eval_count,
+                                prompt_eval_duration: chunk.prompt_eval_duration,
+                                eval_count: chunk.eval_count,
+                                eval_duration: chunk.eval_duration
+                            };
+                        }
+                    }
+
+                    response = {
+                        model,
+                        created_at: new Date(),
+                        message: {
+                            role: 'assistant',
+                            content,
+                            tool_calls: toolCalls.length > 0 ? toolCalls : undefined
+                        },
+                        done: true,
+                        done_reason: toolCalls.length > 0 ? 'tool_calls' : 'stop',
+                        total_duration: lastMetrics?.total_duration,
+                        load_duration: lastMetrics?.load_duration,
+                        prompt_eval_count: lastMetrics?.prompt_eval_count,
+                        prompt_eval_duration: lastMetrics?.prompt_eval_duration,
+                        eval_count: lastMetrics?.eval_count,
+                        eval_duration: lastMetrics?.eval_duration
+                    } as ChatResponse;
+
+                    if (thinking) {
+                        (response.message as MessageWithThinking).thinking = thinking;
+                    }
+                } else {
+                    response = await ollama.chat({
+                        model,
+                        messages,
+                        tools: ollamaTools,
+                        stream: false
+                    });
+
                     lastMetrics = {
-                        total_duration: chunk.total_duration,
-                        load_duration: chunk.load_duration,
-                        prompt_eval_count: chunk.prompt_eval_count,
-                        prompt_eval_duration: chunk.prompt_eval_duration,
-                        eval_count: chunk.eval_count,
-                        eval_duration: chunk.eval_duration
+                        total_duration: response.total_duration,
+                        load_duration: response.load_duration,
+                        prompt_eval_count: response.prompt_eval_count,
+                        prompt_eval_duration: response.prompt_eval_duration,
+                        eval_count: response.eval_count,
+                        eval_duration: response.eval_duration
                     };
                 }
+
+                break;
+            } catch (error: unknown) {
+                const status = getHttpStatus(error);
+                const isPermanent = status === 401 || status === 403 || status === 404 || isApiKeyExhaustionError(error);
+
+                if (isPermanent) {
+                    console.error(`[AgentLoop] ❌ 영구 실패(${status || 'unknown'}): ${(error instanceof Error ? error.message : String(error))}`);
+                    throw error;
+                }
+
+                requestAttempt++;
+                if (requestAttempt >= maxIterations) {
+                    throw error;
+                }
+
+                if (status === 429) {
+                    const backoffMs = Math.min(1000 * Math.pow(2, requestAttempt - 1), 10000);
+                    console.warn(`[AgentLoop] ⚠️ 429 응답 - ${backoffMs}ms 후 재시도 (${requestAttempt}/${maxIterations - 1})`);
+                    await sleep(backoffMs);
+                } else {
+                    console.warn(`[AgentLoop] ⚠️ 요청 실패(${status || 'unknown'}) - 재시도 (${requestAttempt}/${maxIterations - 1})`);
+                }
             }
-
-            // 스트리밍 완료 후 응답 구성
-            response = {
-                model,
-                created_at: new Date(),
-                message: {
-                    role: 'assistant',
-                    content,
-                    tool_calls: toolCalls.length > 0 ? toolCalls : undefined
-                },
-                done: true,
-                done_reason: toolCalls.length > 0 ? 'tool_calls' : 'stop',
-                total_duration: lastMetrics?.total_duration,
-                load_duration: lastMetrics?.load_duration,
-                prompt_eval_count: lastMetrics?.prompt_eval_count,
-                prompt_eval_duration: lastMetrics?.prompt_eval_duration,
-                eval_count: lastMetrics?.eval_count,
-                eval_duration: lastMetrics?.eval_duration
-            } as ChatResponse;
-
-            if (thinking) {
-                (response.message as MessageWithThinking).thinking = thinking;
-            }
-
-        } else {
-            // 비스트리밍 모드
-            response = await ollama.chat({
-                model,
-                messages,
-                tools: ollamaTools,
-                stream: false
-            });
-
-            lastMetrics = {
-                total_duration: response.total_duration,
-                load_duration: response.load_duration,
-                prompt_eval_count: response.prompt_eval_count,
-                prompt_eval_duration: response.prompt_eval_duration,
-                eval_count: response.eval_count,
-                eval_duration: response.eval_duration
-            };
         }
 
         // 응답 메시지를 히스토리에 추가

@@ -7,6 +7,9 @@
 
 import { DocumentResult } from './index';
 import { getConfig } from '../config/env';
+import { createLogger } from '../utils/logger';
+
+const logger = createLogger('DocumentStore');
 
 // 문서 TTL 설정 (기본: 1시간)
 const DOCUMENT_TTL_MS = getConfig().documentTtlHours * 60 * 60 * 1000;
@@ -43,10 +46,18 @@ export interface DocumentStore {
  */
 class TTLDocumentMap implements DocumentStore {
     private store: Map<string, StoredDocument> = new Map();
+    private cleanupTimer: ReturnType<typeof setInterval>;
 
     constructor() {
         // 정리 스케줄러 (10분마다 실행)
-        setInterval(() => this.cleanupExpired(), 10 * 60 * 1000);
+        this.cleanupTimer = setInterval(() => this.cleanupExpired(), 10 * 60 * 1000);
+    }
+
+    /**
+     * 정리 스케줄러 중지 (서버 종료 시)
+     */
+    dispose(): void {
+        clearInterval(this.cleanupTimer);
     }
 
     /**
@@ -64,7 +75,7 @@ class TTLDocumentMap implements DocumentStore {
         }
         
         if (cleanedCount > 0) {
-            console.log(`[DocumentStore] 🧹 만료된 문서 ${cleanedCount}개 정리됨 (현재 ${this.store.size}개)`);
+            logger.info(`[DocumentStore] 🧹 만료된 문서 ${cleanedCount}개 정리됨 (현재 ${this.store.size}개)`);
         }
     }
 
@@ -82,7 +93,7 @@ class TTLDocumentMap implements DocumentStore {
             this.store.delete(id);
         }
         
-        console.log(`[DocumentStore] 🧹 용량 초과로 ${toRemove.length}개 문서 제거됨`);
+        logger.info(`[DocumentStore] 🧹 용량 초과로 ${toRemove.length}개 문서 제거됨`);
     }
 
     // Map 호환 인터페이스 구현
@@ -104,7 +115,7 @@ class TTLDocumentMap implements DocumentStore {
         });
         
         this.enforceMaxDocuments();
-        console.log(`[DocumentStore] 📄 문서 저장: ${key} (총 ${this.store.size}개)`);
+        logger.info(`[DocumentStore] 📄 문서 저장: ${key} (총 ${this.store.size}개)`);
         return this;
     }
 

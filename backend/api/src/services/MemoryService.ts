@@ -30,6 +30,7 @@ export interface MemoryContext {
  */
 export class MemoryService {
     private db = getUnifiedDatabase();
+    private static readonly REGEX_SAFE_INPUT_MAX_LENGTH = 10000;
 
     /**
      * 대화에서 중요 정보를 추출하여 메모리에 저장
@@ -211,8 +212,9 @@ Return ONLY the JSON array, no explanation.`;
 
     private parseExtractionResult(llmResult: string): MemoryExtractionResult[] {
         try {
+            const safeLlmResult = this.limitRegexInput(llmResult);
             // JSON 배열 추출
-            const jsonMatch = llmResult.match(/\[[\s\S]*\]/);
+            const jsonMatch = safeLlmResult.match(/\[[\s\S]*\]/);
             if (!jsonMatch) return [];
 
             const parsed = JSON.parse(jsonMatch[0]);
@@ -234,9 +236,10 @@ Return ONLY the JSON array, no explanation.`;
         }
     }
 
-    private extractByRules(userMessage: string, assistantResponse: string): MemoryExtractionResult[] {
+    private extractByRules(userMessage: string, _assistantResponse: string): MemoryExtractionResult[] {
         const results: MemoryExtractionResult[] = [];
-        const msg = userMessage.toLowerCase();
+        const safeUserMessage = this.limitRegexInput(userMessage);
+        const msg = safeUserMessage.toLowerCase();
 
         // 이름 추출
         const namePatterns = [
@@ -247,7 +250,7 @@ Return ONLY the JSON array, no explanation.`;
             /i am (\w+)/i
         ];
         for (const pattern of namePatterns) {
-            const match = userMessage.match(pattern);
+            const match = safeUserMessage.match(pattern);
             if (match) {
                 results.push({
                     category: 'fact',
@@ -268,7 +271,7 @@ Return ONLY the JSON array, no explanation.`;
             /i'm a (.+?) (?:at|in|for)/i
         ];
         for (const pattern of jobPatterns) {
-            const match = userMessage.match(pattern);
+            const match = safeUserMessage.match(pattern);
             if (match) {
                 results.push({
                     category: 'fact',
@@ -289,7 +292,7 @@ Return ONLY the JSON array, no explanation.`;
                 /i (?:like|love|prefer) (.+)/i
             ];
             for (const pattern of preferPatterns) {
-                const match = userMessage.match(pattern);
+                const match = safeUserMessage.match(pattern);
                 if (match && match[1].length < 50) {
                     results.push({
                         category: 'preference',
@@ -310,7 +313,7 @@ Return ONLY the JSON array, no explanation.`;
                 /(.+?)(?:을|를) 만들고/i
             ];
             for (const pattern of projectPatterns) {
-                const match = userMessage.match(pattern);
+                const match = safeUserMessage.match(pattern);
                 if (match && match[1].length < 100) {
                     results.push({
                         category: 'project',
@@ -340,6 +343,12 @@ Return ONLY the JSON array, no explanation.`;
         }
 
         return Array.from(seen.values());
+    }
+
+    private limitRegexInput(input: string): string {
+        return input.length > MemoryService.REGEX_SAFE_INPUT_MAX_LENGTH
+            ? input.substring(0, MemoryService.REGEX_SAFE_INPUT_MAX_LENGTH)
+            : input;
     }
 }
 

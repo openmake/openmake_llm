@@ -159,7 +159,7 @@
                 '<p class="text-lg">Build AI-powered applications with the OpenMake LLM API. Our API is designed to be compatible with standard industry formats, making integration seamless.</p>' +
                 '<div class="intro-card">' +
                 '<h3 class="text-accent">Base URL</h3>' +
-                '<code style="font-size: 1.1em; background: var(--bg-tertiary); padding: var(--space-2) var(--space-4); border-radius: var(--radius-md); display: block; margin-top: var(--space-2);">${window.location.origin}/api/v1</code>' +
+                '<code style="font-size: 1.1em; background: var(--bg-tertiary); padding: var(--space-2) var(--space-4); border-radius: var(--radius-md); display: block; margin-top: var(--space-2);">' + window.location.origin + '/api/v1</code>' +
                 '<p style="margin-top: var(--space-4); font-size: var(--font-size-sm);">All API requests require authentication. API requests without a valid API key will fail.</p>' +
                 '</div>' +
                 '</section>';
@@ -178,9 +178,9 @@
                 '<li style="margin-bottom: 8px;"><strong>Query Parameter:</strong> <code>?api_key=omk_live_...</code></li>' +
                 '</ol>' +
                 
-                getCodeBlock('curl', 'curl ${window.location.origin}/api/v1/models \\\n  -H "X-API-Key: omk_live_sk_xxxxxxxxxxxxxxxxxxxx"', 
-                             'python', 'import requests\n\nheaders = {"X-API-Key": "omk_live_sk_xxxxxxxxxxxxxxxxxxxx"}\nresponse = requests.get("${window.location.origin}/api/v1/models", headers=headers)',
-                             'typescript', 'const response = await fetch("${window.location.origin}/api/v1/models", {\n  headers: {\n    "X-API-Key": "omk_live_sk_xxxxxxxxxxxxxxxxxxxx"\n  }\n});') +
+                getCodeBlock('curl', 'curl ' + window.location.origin + '/api/v1/models \\\n  -H "X-API-Key: omk_live_sk_xxxxxxxxxxxxxxxxxxxx"', 
+                             'python', 'import requests\n\nheaders = {"X-API-Key": "omk_live_sk_xxxxxxxxxxxxxxxxxxxx"}\nresponse = requests.get("' + window.location.origin + '/api/v1/models", headers=headers)',
+                             'typescript', 'const response = await fetch("' + window.location.origin + '/api/v1/models", {\n  headers: {\n    "X-API-Key": "omk_live_sk_xxxxxxxxxxxxxxxxxxxx"\n  }\n});') +
                 '</section>';
 
             // 3. MODELS
@@ -245,7 +245,7 @@
 
                 getCodeBlock(
                     'curl', 
-                    'curl ${window.location.origin}/api/v1/chat \\\n' +
+                    'curl ' + window.location.origin + '/api/v1/chat \\\n' +
                     '  -H "Content-Type: application/json" \\\n' +
                     '  -H "X-API-Key: omk_live_sk_..." \\\n' +
                     '  -d \'{\n' +
@@ -254,7 +254,7 @@
                     '  }\'',
                     'python',
                     'import requests\n\n' +
-                    'url = "${window.location.origin}/api/v1/chat"\n' +
+                    'url = "' + window.location.origin + '/api/v1/chat"\n' +
                     'headers = {\n' +
                     '    "X-API-Key": "omk_live_sk_...",\n' +
                     '    "Content-Type": "application/json"\n' +
@@ -266,7 +266,7 @@
                     'response = requests.post(url, headers=headers, json=data)\n' +
                     'print(response.json())',
                     'typescript',
-                    'const response = await fetch("${window.location.origin}/api/v1/chat", {\n' +
+                    'const response = await fetch("' + window.location.origin + '/api/v1/chat", {\n' +
                     '  method: "POST",\n' +
                     '  headers: {\n' +
                     '    "Content-Type": "application/json",\n' +
@@ -291,16 +291,16 @@
                 '<p>Create a new API key with optional name and expiration.</p>' +
                 getCodeBlock(
                     'curl',
-                    'curl -X POST ${window.location.origin}/api/v1/api-keys \\\n' +
+                    'curl -X POST ' + window.location.origin + '/api/v1/api-keys \\\n' +
                     '  -H "X-API-Key: omk_live_sk_..." \\\n' +
                     '  -H "Content-Type: application/json" \\\n' +
                     '  -d \'{"name": "New Service Key"}\'',
                     'python',
-                    'requests.post("${window.location.origin}/api/v1/api-keys", \n' +
+                    'requests.post("' + window.location.origin + '/api/v1/api-keys", \n' +
                     '    headers={"X-API-Key": "key"}, \n' +
                     '    json={"name": "New Service Key"})',
                     'typescript',
-                    'await fetch("${window.location.origin}/api/v1/api-keys", {\n' +
+                    'await fetch("' + window.location.origin + '/api/v1/api-keys", {\n' +
                     '  method: "POST",\n' +
                     '  headers: {"X-API-Key": "key", "Content-Type": "application/json"},\n' +
                     '  body: JSON.stringify({name: "New Service Key"})\n' +
@@ -312,9 +312,9 @@
                 '<p>Returns a list of all API keys for the current account.</p>' +
                 getCodeBlock(
                     'curl',
-                    'curl ${window.location.origin}/api/v1/api-keys \\\n  -H "X-API-Key: omk_live_sk_..."',
-                    'python', 'requests.get("${window.location.origin}/api/v1/api-keys", headers=...)',
-                    'typescript', 'fetch("${window.location.origin}/api/v1/api-keys", ...)'
+                    'curl ' + window.location.origin + '/api/v1/api-keys \\\n  -H "X-API-Key: omk_live_sk_..."',
+                    'python', 'requests.get("' + window.location.origin + '/api/v1/api-keys", headers=...)',
+                    'typescript', 'fetch("' + window.location.origin + '/api/v1/api-keys", ...)'
                 ) +
                 
                 '<h3 id="get-key" style="margin-top:60px;">Get Key Details</h3>' +
@@ -333,9 +333,9 @@
                 '<p>Get current usage statistics for the billing period.</p>' +
                 getCodeBlock(
                     'curl',
-                    'curl ${window.location.origin}/api/v1/usage \\\n  -H "X-API-Key: omk_live_sk_..."',
-                    'python', 'requests.get("${window.location.origin}/api/v1/usage", ...)',
-                    'typescript', 'fetch("${window.location.origin}/api/v1/usage", ...)'
+                    'curl ' + window.location.origin + '/api/v1/usage \\\n  -H "X-API-Key: omk_live_sk_..."',
+                    'python', 'requests.get("' + window.location.origin + '/api/v1/usage", ...)',
+                    'typescript', 'fetch("' + window.location.origin + '/api/v1/usage", ...)'
                 ) +
                 '</section>';
 

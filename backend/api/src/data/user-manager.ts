@@ -8,8 +8,10 @@
 
 import * as bcrypt from 'bcryptjs';
 import { getPool } from './models/unified-database';
-import { Pool } from 'pg';
 import { getConfig } from '../config/env';
+import { createLogger } from '../utils/logger';
+
+const logger = createLogger('UserManager');
 
 // 비밀번호 해싱 라운드 (높을수록 안전하지만 느림)
 const BCRYPT_ROUNDS = 12;
@@ -54,7 +56,7 @@ interface UserRow {
  */
 class UserManagerImpl {
     constructor() {
-        this.init().catch(err => console.error('[UserManager] Init failed:', err));
+        this.init().catch(err => logger.error('[UserManager] Init failed:', err));
     }
 
     private async init(): Promise<void> {
@@ -96,7 +98,7 @@ class UserManagerImpl {
                         ['admin', 'enterprise', passwordHash, new Date().toISOString(), adminEmail]
                     );
                     await pool.query('DELETE FROM users WHERE username = $1 AND role = $2', ['admin', 'admin']);
-                    console.log(`[UserManager] ✅ 관리자 권한 이전 완료: admin 삭제, ${adminEmail} → admin 역할`);
+                    logger.info(`[UserManager] ✅ 관리자 권한 이전 완료: admin 삭제, ${adminEmail} → admin 역할`);
                 }
                 return;
             } else if (legacyAdmin.rows.length > 0) {
@@ -108,7 +110,7 @@ class UserManagerImpl {
                         'UPDATE users SET username = $1, email = $2, password_hash = $3, updated_at = $4 WHERE username = $5 AND role = $6',
                         [adminEmail, adminEmail, passwordHash, new Date().toISOString(), 'admin', 'admin']
                     );
-                    console.log(`[UserManager] ✅ 관리자 계정 마이그레이션 완료: admin → ${adminEmail}`);
+                    logger.info(`[UserManager] ✅ 관리자 계정 마이그레이션 완료: admin → ${adminEmail}`);
                 }
                 return;
             } else if (existingEmail.rows.length > 0) {
@@ -121,7 +123,7 @@ class UserManagerImpl {
                             'UPDATE users SET role = $1, tier = $2, password_hash = $3, updated_at = $4 WHERE username = $5',
                             ['admin', 'enterprise', passwordHash, new Date().toISOString(), adminEmail]
                         );
-                        console.log(`[UserManager] ✅ ${adminEmail} 관리자 역할 부여 완료`);
+                        logger.info(`[UserManager] ✅ ${adminEmail} 관리자 역할 부여 완료`);
                     }
                 }
                 return;
@@ -138,14 +140,14 @@ class UserManagerImpl {
         // 🔒 보안 강화: 환경변수 필수화, 기본 비밀번호 제거
         const cfgAdminPassword = getConfig().adminPassword;
         if (!cfgAdminPassword) {
-            console.warn('[UserManager] ⚠️ ADMIN_PASSWORD 환경변수가 설정되지 않았습니다!');
-            console.warn('[UserManager] 기본 관리자 계정이 생성되지 않습니다. .env 파일에 ADMIN_PASSWORD를 설정하세요.');
+            logger.warn('[UserManager] ⚠️ ADMIN_PASSWORD 환경변수가 설정되지 않았습니다!');
+            logger.warn('[UserManager] 기본 관리자 계정이 생성되지 않습니다. .env 파일에 ADMIN_PASSWORD를 설정하세요.');
             if (getConfig().nodeEnv === 'production') {
                 throw new Error('[UserManager] 프로덕션 환경에서는 ADMIN_PASSWORD 환경변수가 필수입니다!');
             }
             // 개발 환경에서만 임시 비밀번호 생성 (랜덤)
             const tempPassword = require('crypto').randomBytes(16).toString('hex');
-            console.warn('[UserManager] 개발 환경: 랜덤 임시 비밀번호가 생성되었습니다. 프로덕션에서는 ADMIN_PASSWORD를 설정하세요.');
+            logger.warn('[UserManager] 개발 환경: 랜덤 임시 비밀번호가 생성되었습니다. 프로덕션에서는 ADMIN_PASSWORD를 설정하세요.');
             await this.createUser({
                 email: adminEmail,
                 password: tempPassword,
@@ -162,12 +164,24 @@ class UserManagerImpl {
 
     private async getNextId(): Promise<number> {
         const pool = getPool();
-        // Filter out non-numeric IDs (e.g. 'admin-default-001' from seed data) before CAST
-        const result = await pool.query(
-            `SELECT MAX(CAST(id AS INTEGER)) as "maxId" FROM users WHERE id ~ $1`,
-            ['^\\d+$']
-        );
-        return (result.rows[0]?.maxId || 0) + 1;
+        // Use pg_advisory_xact_lock to prevent race condition on concurrent user creation
+        const client = await pool.connect();
+        try {
+            await client.query('BEGIN');
+            await client.query('SELECT pg_advisory_xact_lock(1)');
+            const result = await client.query(
+                `SELECT COALESCE(MAX(CAST(id AS INTEGER)), 0) + 1 as next_id FROM users WHERE id ~ $1`,
+                ['^\\d+$']
+            );
+            const nextId = result.rows[0]?.next_id || 1;
+            await client.query('COMMIT');
+            return nextId;
+        } catch (err) {
+            await client.query('ROLLBACK');
+            throw err;
+        } finally {
+            client.release();
+        }
     }
 
     private rowToPublicUser(row: UserRow): PublicUser {
@@ -364,7 +378,6 @@ class UserManagerImpl {
         await pool.query('DELETE FROM canvas_documents WHERE user_id = $1', [uid]);
         await pool.query('DELETE FROM research_sessions WHERE user_id = $1', [uid]);
         await pool.query('DELETE FROM conversation_sessions WHERE user_id = $1', [uid]);
-        await pool.query('DELETE FROM audit_logs WHERE user_id = $1', [uid]);
 
         const result = await pool.query('DELETE FROM users WHERE id = $1', [uid]);
         return (result.rowCount || 0) > 0;

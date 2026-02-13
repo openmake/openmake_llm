@@ -128,6 +128,8 @@
 
             // Expose onclick-referenced functions globally
                 if (typeof toggleVis === 'function') window.toggleVis = toggleVis;
+                if (typeof checkStrength === 'function') window.checkStrength = checkStrength;
+                if (typeof checkMatch === 'function') window.checkMatch = checkMatch;
             } catch(e) {
                 console.error('[PageModule:password-change] init error:', e);
             }
@@ -140,6 +142,8 @@
             _timeouts = [];
             // Remove onclick-exposed globals
                 try { delete window.toggleVis; } catch(e) {}
+                try { delete window.checkStrength; } catch(e) {}
+                try { delete window.checkMatch; } catch(e) {}
         }
     };
 })();

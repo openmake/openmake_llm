@@ -161,12 +161,16 @@
                             <div class="setting-row">
                                 <div class="setting-info">
                                     <h4>기본 모델</h4>
-                                    <p>채팅에 사용할 기본 LLM 모델</p>
+                                    <p>채팅에 사용할 AI 모델을 선택합니다</p>
                                 </div>
                                 <select id="modelSelect" class="form-select" style="width: auto; min-width: 200px;">
-                                    <option value="default">기본 모델</option>
-                                    <option value="fast">빠른 응답 모델</option>
-                                    <option value="advanced">고급 모델</option>
+                                    <option value="openmake_llm_auto">OpenMake LLM Auto</option>
+                                    <option value="openmake_llm">OpenMake LLM</option>
+                                    <option value="openmake_llm_pro">OpenMake LLM Pro</option>
+                                    <option value="openmake_llm_fast">OpenMake LLM Fast</option>
+                                    <option value="openmake_llm_think">OpenMake LLM Think</option>
+                                    <option value="openmake_llm_code">OpenMake LLM Code</option>
+                                    <option value="openmake_llm_vision">OpenMake LLM Vision</option>
                                 </select>
                             </div>
                             <div class="setting-row">
@@ -256,7 +260,7 @@
 
             // 🔒 관리자가 아니면 모델 이름 숨김
             if (!isAdmin()) {
-                modelSelect.innerHTML = '<option value="default">AI Assistant (Premium)</option>';
+                modelSelect.innerHTML = '<option value="openmake_llm_auto">OpenMake LLM Auto</option>';
                 modelSelect.disabled = true;
                 modelSelect.style.cursor = 'default';
                 return;
@@ -269,11 +273,14 @@
                     const data = rawData.data || rawData;
                     if (data.models && data.models.length > 0) {
                         const savedModel = localStorage.getItem('selectedModel');
-                        const defaultModel = data.defaultModel || 'gemini-3-flash-preview:cloud';
+                        const defaultModel = data.defaultModel || 'openmake_llm_auto';
 
                         modelSelect.innerHTML = data.models.map(model => {
-                            const isSelected = savedModel ? model.name === savedModel : model.name === defaultModel;
-                            return `<option value="${model.name}" ${isSelected ? 'selected' : ''}>${model.name} (${model.size ? (model.size / 1024 / 1024 / 1024).toFixed(1) + 'GB' : 'Unknown'})</option>`;
+                            const modelId = model.modelId || model.name;
+                            const displayName = model.name;
+                            const desc = model.description || '';
+                            const isSelected = savedModel ? modelId === savedModel : modelId === defaultModel;
+                            return `<option value="${modelId}" ${isSelected ? 'selected' : ''}>${displayName}${desc ? ' — ' + desc : ''}</option>`;
                         }).join('');
                     }
                 }

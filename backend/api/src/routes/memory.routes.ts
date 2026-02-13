@@ -4,14 +4,12 @@
  */
 
 import { Router, Request, Response } from 'express';
-import { createLogger } from '../utils/logger';
 import { getMemoryService } from '../services/MemoryService';
 import { MemoryCategory } from '../data/models/unified-database';
-import { success, badRequest, internalError } from '../utils/api-response';
+import { success, badRequest, notFound, forbidden } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
 import { requireAuth } from '../auth';
-
-const logger = createLogger('MemoryRoutes');
+import { getPool, getUnifiedDatabase } from '../data/models/unified-database';
 const router = Router();
 
 // 모든 메모리 엔드포인트에 인증 필수
@@ -91,12 +89,38 @@ router.post('/', asyncHandler(async (req: Request, res: Response) => {
       res.status(201).json(success({ id: memoryId, message: '메모리가 저장되었습니다.', category, key }));
 }));
 
+/**
+ * GET /api/memory/search
+ * 메모리 검색 (연관 메모리 조회)
+ */
+router.get('/search', asyncHandler(async (req: Request, res: Response) => {
+    const userId = (req.user && 'userId' in req.user ? req.user.userId : req.user?.id?.toString()) || 'anonymous';
+    const q = req.query.q as string;
+    if (!q || q.trim().length === 0) {
+        return res.status(400).json(badRequest('검색어(q)는 필수입니다'));
+    }
+    const limit = parseInt(req.query.limit as string) || 10;
+    const db = getUnifiedDatabase();
+    const memories = await db.getRelevantMemories(userId, q, limit);
+    res.json(success({ memories, total: memories.length, query: q }));
+}));
+
   /**
    * PUT /api/memory/:id
   * 메모리 수정
   */
 router.put('/:id', asyncHandler(async (req: Request, res: Response) => {
      const memoryId = req.params.id;
+    const userId = (req.user && 'userId' in req.user ? req.user.userId : req.user?.id?.toString()) || 'anonymous';
+    // 소유권 확인
+    const pool = getPool();
+    const ownerCheck = await pool.query('SELECT user_id FROM user_memories WHERE id = $1', [memoryId]);
+    if (ownerCheck.rows.length === 0) {
+        return res.status(404).json(notFound('메모리를 찾을 수 없습니다'));
+    }
+    if (String(ownerCheck.rows[0].user_id) !== userId && req.user?.role !== 'admin') {
+        return res.status(403).json(forbidden('접근 권한이 없습니다'));
+    }
      const { value, importance } = req.body;
 
       if (!value && importance === undefined) {
@@ -115,6 +139,16 @@ router.put('/:id', asyncHandler(async (req: Request, res: Response) => {
   */
 router.delete('/:id', asyncHandler(async (req: Request, res: Response) => {
      const memoryId = req.params.id;
+    const userId = (req.user && 'userId' in req.user ? req.user.userId : req.user?.id?.toString()) || 'anonymous';
+    // 소유권 확인
+    const pool = getPool();
+    const ownerCheck = await pool.query('SELECT user_id FROM user_memories WHERE id = $1', [memoryId]);
+    if (ownerCheck.rows.length === 0) {
+        return res.status(404).json(notFound('메모리를 찾을 수 없습니다'));
+    }
+    if (String(ownerCheck.rows[0].user_id) !== userId && req.user?.role !== 'admin') {
+        return res.status(403).json(forbidden('접근 권한이 없습니다'));
+    }
 
      const memoryService = getMemoryService();
      await memoryService.deleteMemory(memoryId);

@@ -25,17 +25,11 @@
         let hourlyChart = null;
         let dailyChart = null;
 
-        document.addEventListener('DOMContentLoaded', () => {
-            // 1. 초기 로드
-            loadAllData();
+        // 1. 초기 로드
+        loadAllData();
 
-            // 2. 주기적 갱신
-            const interval = (function(fn,ms){var id=setInterval(fn,ms);_intervals.push(id);return id})(loadAllData, 30000); // 30초
-
-            window.addEventListener('beforeunload', () => {
-                clearInterval(interval);
-            });
-        });
+        // 2. 주기적 갱신 (interval tracked in _intervals for cleanup)
+        (function(fn,ms){var id=setInterval(fn,ms);_intervals.push(id);return id})(loadAllData, 30000); // 30초
 
         // 통합 데이터 로드
         async function loadAllData() {

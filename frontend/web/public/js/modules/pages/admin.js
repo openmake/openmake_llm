@@ -20,14 +20,14 @@
 
         init: function() {
             try {
-                const API_BASE = window.location.origin;
         let authToken = localStorage.getItem('authToken');
         const _userStr = localStorage.getItem('user');
         let currentUser = null;
         let usersPage = 1;
         let convPage = 1;
         const pageSize = 20;
-        let searchTimeout;
+        let userSearchTimeout;
+        let convSearchTimeout;
 
         async function checkAuth() {
              if (!authToken && !_userStr) { (typeof Router !== 'undefined' && Router.navigate('/')); return false; }
@@ -52,7 +52,8 @@
         async function authFetch(url, options = {}) {
             return fetch(url, {
                 ...options,
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}`, ...(options.headers || {}) }
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json', ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {}), ...(options.headers || {}) }
             });
         }
 
@@ -174,7 +175,7 @@
 
         function closeModal() { document.getElementById('editUserModal').classList.remove('active'); }
 
-        function debounceSearch() { clearTimeout(searchTimeout); searchTimeout = setTimeout(() => { usersPage = 1; loadUsers(); }, 300); }
+        function debounceSearch() { clearTimeout(userSearchTimeout); userSearchTimeout = setTimeout(() => { usersPage = 1; loadUsers(); }, 300); }
 
          async function loadConversations() {
              const date = document.getElementById('filterDate').value;
@@ -203,7 +204,7 @@
             `).join('');
         }
 
-        function debounceConvSearch() { clearTimeout(searchTimeout); searchTimeout = setTimeout(() => { convPage = 1; loadConversations(); }, 300); }
+        function debounceConvSearch() { clearTimeout(convSearchTimeout); convSearchTimeout = setTimeout(() => { convPage = 1; loadConversations(); }, 300); }
         function exportCSV() { window.open('/api/admin/conversations/export?format=csv', '_blank'); }
 
         function renderPagination(containerId, total, currentPage, onPageChange) {
@@ -212,9 +213,13 @@
             if (totalPages <= 1) { container.innerHTML = ''; return; }
             let html = '';
             for (let i = 1; i <= totalPages; i++) {
-                html += `<button class="btn ${i === currentPage ? 'btn-primary' : 'btn-secondary'} btn-sm" onclick="(${onPageChange.toString()})(${i})">${i}</button>`;
+                html += `<button class="btn ${i === currentPage ? 'btn-primary' : 'btn-secondary'} btn-sm" data-page="${i}">${i}</button>`;
             }
             container.innerHTML = html;
+            container.onclick = function(e) {
+                var btn = e.target.closest('[data-page]');
+                if (btn) onPageChange(parseInt(btn.dataset.page));
+            };
         }
 
         function formatDate(dateStr) {
@@ -243,19 +248,21 @@
             setTimeout(() => toast.remove(), 3000);
         }
 
-        // Init
-        (async () => {
-            if (await checkAuth()) { loadUsers(); loadUserStats(); loadConversations(); }
-        })();
-
             // Expose onclick-referenced functions globally
                 if (typeof switchTab === 'function') window.switchTab = switchTab;
                 if (typeof showAddUserModal === 'function') window.showAddUserModal = showAddUserModal;
-                if (typeof exportCSV === 'function') window.exportCSV = exportCSV;
+                if (typeof exportCSV === 'function') window['exportCSV'] = exportCSV;
                 if (typeof closeModal === 'function') window.closeModal = closeModal;
                 if (typeof saveUser === 'function') window.saveUser = saveUser;
                 if (typeof editUser === 'function') window.editUser = editUser;
                 if (typeof deleteUser === 'function') window.deleteUser = deleteUser;
+                if (typeof debounceSearch === 'function') window.debounceSearch = debounceSearch;
+                if (typeof debounceConvSearch === 'function') window.debounceConvSearch = debounceConvSearch;
+
+        // Init
+        (async () => {
+            if (await checkAuth()) { loadUsers(); loadUserStats(); loadConversations(); }
+        })();
             } catch(e) {
                 console.error('[PageModule:admin] init error:', e);
             }
@@ -269,11 +276,13 @@
             // Remove onclick-exposed globals
                 try { delete window.switchTab; } catch(e) {}
                 try { delete window.showAddUserModal; } catch(e) {}
-                try { delete window.exportCSV; } catch(e) {}
+                try { delete window['exportCSV']; } catch(e) {}
                 try { delete window.closeModal; } catch(e) {}
                 try { delete window.saveUser; } catch(e) {}
                 try { delete window.editUser; } catch(e) {}
                 try { delete window.deleteUser; } catch(e) {}
+                try { delete window.debounceSearch; } catch(e) {}
+                try { delete window.debounceConvSearch; } catch(e) {}
         }
     };
 })();

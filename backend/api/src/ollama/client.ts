@@ -26,7 +26,7 @@ import { getApiKeyManager, ApiKeyManager } from './api-key-manager';
 import { getApiUsageTracker } from './api-usage-tracker';
 import { QuotaExceededError } from '../errors/quota-exceeded.error';
 import { KeyExhaustionError } from '../errors/key-exhaustion.error';
-import { runAgentLoop, AgentLoopOptions, AgentLoopResult } from './agent-loop';
+import { runAgentLoop, AgentLoopResult } from './agent-loop';
 
 const logger = createLogger('OllamaClient');
 
@@ -506,8 +506,11 @@ export class OllamaClient {
             console.log(`[OllamaClient] ✅ Web Search: ${response.data.results?.length || 0}개 결과`);
             return response.data;
         } catch (error: unknown) {
-            console.error('[OllamaClient] Web Search 실패:', (error instanceof Error ? error.message : String(error)));
-            return { results: [] };
+            logger.warn('[OllamaClient] 웹 검색 실패:', error);
+            return {
+                results: [],
+                error: error instanceof Error ? error.message : 'Web search failed'
+            };
         }
     }
 
@@ -628,4 +631,3 @@ export const createAllClients = (): OllamaClient[] => {
     console.log(`[OllamaClient] ✅ ${clients.length}개 A2A 클라이언트 준비 완료`);
     return clients;
 };
-

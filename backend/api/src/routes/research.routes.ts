@@ -5,7 +5,7 @@
 
 import { Router, Request, Response, NextFunction } from 'express';
 import { createLogger } from '../utils/logger';
-import { success, badRequest, notFound, internalError } from '../utils/api-response';
+import { success, badRequest, notFound, forbidden, internalError } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
 import { requireAuth } from '../auth';
 import { getUnifiedDatabase, getPool } from '../data/models/unified-database';
@@ -97,6 +97,11 @@ router.get('/sessions/:sessionId', asyncHandler(async (req: Request, res: Respon
         return res.status(404).json(notFound('리서치 세션을 찾을 수 없습니다.'));
     }
 
+    // 소유권 확인
+    if (String(session.user_id) !== String(req.user!.id) && req.user!.role !== 'admin') {
+        return res.status(403).json(forbidden('접근 권한이 없습니다'));
+    }
+
     const steps = await db.getResearchSteps(sessionId);
 
     res.json(success({ session, steps }));
@@ -115,6 +120,11 @@ router.put('/sessions/:sessionId', asyncHandler(async (req: Request, res: Respon
 
     if (!session) {
         return res.status(404).json(notFound('리서치 세션을 찾을 수 없습니다.'));
+    }
+
+    // 소유권 확인
+    if (String(session.user_id) !== String(req.user!.id) && req.user!.role !== 'admin') {
+        return res.status(403).json(forbidden('접근 권한이 없습니다'));
     }
 
     await db.updateResearchSession(sessionId, {
@@ -149,6 +159,11 @@ router.post('/sessions/:sessionId/steps', asyncHandler(async (req: Request, res:
         return res.status(404).json(notFound('리서치 세션을 찾을 수 없습니다.'));
     }
 
+    // 소유권 확인
+    if (String(session.user_id) !== String(req.user!.id) && req.user!.role !== 'admin') {
+        return res.status(403).json(forbidden('접근 권한이 없습니다'));
+    }
+
     await db.addResearchStep({
         sessionId,
         stepNumber,
@@ -178,6 +193,11 @@ router.get('/sessions/:sessionId/steps', asyncHandler(async (req: Request, res: 
         return res.status(404).json(notFound('리서치 세션을 찾을 수 없습니다.'));
     }
 
+    // 소유권 확인
+    if (String(session.user_id) !== String(req.user!.id) && req.user!.role !== 'admin') {
+        return res.status(403).json(forbidden('접근 권한이 없습니다'));
+    }
+
     const steps = await db.getResearchSteps(sessionId);
 
     res.json(success({ steps, total: steps.length }));
@@ -196,6 +216,11 @@ router.post('/sessions/:sessionId/execute', asyncHandler(async (req: Request, re
 
     if (!session) {
         return res.status(404).json(notFound('리서치 세션을 찾을 수 없습니다.'));
+    }
+
+    // 소유권 확인
+    if (String(session.user_id) !== String(req.user!.id) && req.user!.role !== 'admin') {
+        return res.status(403).json(forbidden('접근 권한이 없습니다'));
     }
 
     if (session.status === 'running') {
@@ -241,6 +266,11 @@ router.delete('/sessions/:sessionId', asyncHandler(async (req: Request, res: Res
 
     if (!session) {
         return res.status(404).json(notFound('리서치 세션을 찾을 수 없습니다.'));
+    }
+
+    // 소유권 확인
+    if (String(session.user_id) !== String(req.user!.id) && req.user!.role !== 'admin') {
+        return res.status(403).json(forbidden('접근 권한이 없습니다'));
     }
 
     const pool = getPool();

@@ -26,14 +26,14 @@
                 link.addEventListener('click', function(e) {
                     if (window.Router && typeof window.Router.navigate === 'function') {
                         e.preventDefault();
-                        window.Router.navigate('admin-metrics');
+                        window.Router.navigate('/admin-metrics.html');
                     }
                 });
             }
 
             // Auto-navigate if SPA router exists
             if (window.Router && typeof window.Router.navigate === 'function') {
-                window.Router.navigate('admin-metrics');
+                window.Router.navigate('/admin-metrics.html');
             }
         },
 

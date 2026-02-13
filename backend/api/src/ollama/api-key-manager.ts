@@ -31,14 +31,41 @@ export class ApiKeyManager {
     private lastFailoverTime: Date | null = null;
     private keyFailures: Map<number, { count: number; lastFail: Date }> = new Map();
 
+    private sanitizeKeys(rawKeys: string[], source: string): string[] {
+        const sanitized: string[] = [];
+        rawKeys.forEach((rawKey, idx) => {
+            if (typeof rawKey !== 'string') {
+                console.warn(`[ApiKeyManager] ⚠️ ${source} key ${idx + 1} 무시됨: 문자열이 아닙니다.`);
+                return;
+            }
+
+            const trimmed = rawKey.trim();
+            if (!trimmed) {
+                console.warn(`[ApiKeyManager] ⚠️ ${source} key ${idx + 1} 무시됨: 비어있거나 공백입니다.`);
+                return;
+            }
+
+            sanitized.push(trimmed);
+        });
+        return sanitized;
+    }
+
     constructor(config?: Partial<ApiKeyConfig>) {
         const envConfig = getConfig();
-        
-        // 🆕 환경변수에서 동적으로 모든 API 키 로드 (OLLAMA_API_KEY_1, _2, _3, ... _N)
-        if (config?.keys && config.keys.length > 0) {
-            this.keys = config.keys.filter(k => k && k.trim() !== '');
-        } else {
-            this.keys = this.loadKeysFromEnv();
+
+        try {
+            if (config?.keys && config.keys.length > 0) {
+                this.keys = this.sanitizeKeys(config.keys, 'config');
+            } else {
+                this.keys = this.loadKeysFromEnv();
+            }
+        } catch (error) {
+            console.warn(`[ApiKeyManager] ⚠️ API 키 초기화 실패, 빈 키 목록으로 진행: ${(error instanceof Error ? error.message : String(error))}`);
+            this.keys = [];
+        }
+
+        if (this.keys.length === 0) {
+            console.warn('[ApiKeyManager] ⚠️ 유효한 API 키가 구성되지 않았습니다. 인증 없이 요청을 시도합니다.');
         }
 
         // 🆕 각 키에 대응하는 모델 로드
@@ -65,16 +92,21 @@ export class ApiKeyManager {
     private loadKeysFromEnv(): string[] {
         const keys: string[] = [];
 
-        // 새로운 형식: OLLAMA_API_KEY_1, _2, _3, ... (무제한)
-        let index = 1;
-        while (true) {
-            const key = process.env[`OLLAMA_API_KEY_${index}`];
-            if (key && key.trim() !== '') {
-                keys.push(key.trim());
-                index++;
-            } else {
-                break;
+        const numberedKeys = Object.entries(process.env)
+            .map(([name, value]) => {
+                const match = /^OLLAMA_API_KEY_(\d+)$/.exec(name);
+                if (!match) return null;
+                return { index: Number.parseInt(match[1], 10), value };
+            })
+            .filter((entry): entry is { index: number; value: string | undefined } => entry !== null)
+            .sort((a, b) => a.index - b.index);
+
+        for (const entry of numberedKeys) {
+            if (typeof entry.value !== 'string' || entry.value.trim() === '') {
+                console.warn(`[ApiKeyManager] ⚠️ env OLLAMA_API_KEY_${entry.index} 무시됨: 비어있거나 공백입니다.`);
+                continue;
             }
+            keys.push(entry.value.trim());
         }
 
         // 레거시 형식 지원 (새 형식에 키가 없을 때만)
@@ -83,8 +115,20 @@ export class ApiKeyManager {
             const primary = cfg.ollamaApiKeyPrimary || cfg.ollamaApiKey;
             const secondary = cfg.ollamaApiKeySecondary;
 
-            if (primary && primary.trim() !== '') keys.push(primary.trim());
-            if (secondary && secondary.trim() !== '') keys.push(secondary.trim());
+            if (typeof primary === 'string') {
+                if (primary.trim() !== '') {
+                    keys.push(primary.trim());
+                } else {
+                    console.warn('[ApiKeyManager] ⚠️ env legacy primary key 무시됨: 비어있거나 공백입니다.');
+                }
+            }
+            if (typeof secondary === 'string') {
+                if (secondary.trim() !== '') {
+                    keys.push(secondary.trim());
+                } else {
+                    console.warn('[ApiKeyManager] ⚠️ env legacy secondary key 무시됨: 비어있거나 공백입니다.');
+                }
+            }
         }
 
         return keys;

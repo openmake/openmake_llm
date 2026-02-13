@@ -105,10 +105,7 @@ export class MetricsController {
      */
     private getModelInfo(req: Request, res: Response): void {
         try {
-            const envConfig = getConfig();
-            const model = envConfig.ollamaDefaultModel || 'gemini-3-flash-preview:cloud';
-
-             res.json(success({ model, provider: 'ollama' }));
+             res.json(success({ model: 'OpenMake LLM Auto', modelId: 'openmake_llm_auto', provider: 'openmake' }));
          } catch (error) {
              log.error('[Model API] 오류:', error);
              res.status(500).json(internalError('모델 정보 조회 실패'));

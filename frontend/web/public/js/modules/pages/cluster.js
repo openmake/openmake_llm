@@ -109,8 +109,7 @@
 
         // Init
         loadClusterStatus();
-        let clusterRefreshInterval = (function(fn,ms){var id=setInterval(fn,ms);_intervals.push(id);return id})(loadClusterStatus, 30000);
-        window.addEventListener('beforeunload', () => { if (clusterRefreshInterval) clearInterval(clusterRefreshInterval); });
+        (function(fn,ms){var id=setInterval(fn,ms);_intervals.push(id);return id})(loadClusterStatus, 30000);
 
             // Expose onclick-referenced functions globally
                 if (typeof loadClusterStatus === 'function') window.loadClusterStatus = loadClusterStatus;

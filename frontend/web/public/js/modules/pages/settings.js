@@ -168,11 +168,15 @@
                 '</div>' +
                 '<div class="s-card-body">' +
                     '<div class="setting-row">' +
-                        '<div class="setting-info"><h4>\uAE30\uBCF8 \uBAA8\uB378</h4><p>\uCC44\uD305\uC5D0 \uC0AC\uC6A9\uD560 \uAE30\uBCF8 LLM \uBAA8\uB378</p></div>' +
+                        '<div class="setting-info"><h4>\uAE30\uBCF8 \uBAA8\uB378</h4><p>\uCC44\uD305\uC5D0 \uC0AC\uC6A9\uD560 AI \uBAA8\uB378\uC744 \uC120\uD0DD\uD569\uB2C8\uB2E4</p></div>' +
                         '<select id="modelSelect" class="s-select">' +
-                            '<option value="default">\uAE30\uBCF8 \uBAA8\uB378</option>' +
-                            '<option value="fast">\uBE60\uB978 \uC751\uB2F5 \uBAA8\uB378</option>' +
-                            '<option value="advanced">\uACE0\uAE09 \uBAA8\uB378</option>' +
+                            '<option value="openmake_llm_auto">OpenMake LLM Auto</option>' +
+                            '<option value="openmake_llm">OpenMake LLM</option>' +
+                            '<option value="openmake_llm_pro">OpenMake LLM Pro</option>' +
+                            '<option value="openmake_llm_fast">OpenMake LLM Fast</option>' +
+                            '<option value="openmake_llm_think">OpenMake LLM Think</option>' +
+                            '<option value="openmake_llm_code">OpenMake LLM Code</option>' +
+                            '<option value="openmake_llm_vision">OpenMake LLM Vision</option>' +
                         '</select>' +
                     '</div>' +
                     '<div class="setting-row">' +
@@ -236,7 +240,6 @@
                         '<div class="info-item"><div class="info-label">마지막 업데이트</div><div class="info-value" id="sysLastUpdate">-</div></div>' +
                     '</div>' +
                 '</div>' +
-                '</div>' +
             '</div>' +
 
             '<div class="s-footer">' +
@@ -271,7 +274,7 @@
 
             // 🔒 관리자가 아니면 모델 이름 숨김
             if (!isAdmin()) {
-                modelSelect.innerHTML = '<option value="default">AI Assistant (Premium)</option>';
+                modelSelect.innerHTML = '<option value="openmake_llm_auto">OpenMake LLM Auto</option>';
                 modelSelect.disabled = true;
                 modelSelect.style.cursor = 'default';
                 return;
@@ -283,20 +286,23 @@
                  });
                  if (response.ok) {
                      const rawData = await response.json();
-                    const data = rawData.data || rawData;
+                    var data = rawData.data || rawData;
                     if (data.models && data.models.length > 0) {
-                        const savedModel = localStorage.getItem('selectedModel');
-                        const defaultModel = data.defaultModel || 'gemini-3-flash-preview:cloud';
+                        var savedModel = localStorage.getItem('selectedModel');
+                        var defaultModel = data.defaultModel || 'openmake_llm_auto';
 
-                        modelSelect.innerHTML = data.models.map(model => {
-                            const isSelected = savedModel ? model.name === savedModel : model.name === defaultModel;
-                            return '<option value="' + esc(model.name) + '" ' + (isSelected ? 'selected' : '') + '>' + esc(model.name) + ' (' + (model.size ? (model.size / 1024 / 1024 / 1024).toFixed(1) + 'GB' : 'Unknown') + ')</option>';
+                        modelSelect.innerHTML = data.models.map(function(model) {
+                            var modelId = model.modelId || model.name;
+                            var displayName = model.name;
+                            var desc = model.description || '';
+                            var isSelected = savedModel ? modelId === savedModel : modelId === defaultModel;
+                            return '<option value="' + esc(modelId) + '" ' + (isSelected ? 'selected' : '') + '>' + esc(displayName) + (desc ? ' — ' + esc(desc) : '') + '</option>';
                         }).join('');
                     }
                 }
             } catch (e) {
                 console.error('모델 로드 실패:', e);
-                const savedModel = localStorage.getItem('selectedModel');
+                var savedModel = localStorage.getItem('selectedModel');
                 if (savedModel) modelSelect.innerHTML = '<option value="' + savedModel + '">' + savedModel + '</option>';
             }
         }

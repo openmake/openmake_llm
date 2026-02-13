@@ -57,29 +57,52 @@ export const searchCodeTool: MCPToolDefinition = {
 
             const results: string[] = [];
             const regex = new RegExp(pattern, 'gi');
+            const MAX_SEARCH_FILES = 1000;
+            let scannedFiles = 0;
 
-            function searchDir(dir: string): void {
+            async function searchDir(dir: string): Promise<void> {
+                if (scannedFiles >= MAX_SEARCH_FILES) {
+                    return;
+                }
+
                 // 🔒 심볼릭 링크를 통한 탈출 방지: 실제 경로도 검증
-                const realDir = fs.realpathSync(dir);
+                let realDir: string;
+                try {
+                    realDir = await fs.promises.realpath(dir);
+                } catch {
+                    return;
+                }
+
                 if (!realDir.startsWith(projectRoot)) {
                     return;
                 }
 
-                const entries = fs.readdirSync(dir, { withFileTypes: true });
+                let entries: fs.Dirent[];
+                try {
+                    entries = await fs.promises.readdir(dir, { withFileTypes: true });
+                } catch {
+                    return;
+                }
 
                 for (const entry of entries) {
+                    if (scannedFiles >= MAX_SEARCH_FILES) {
+                        return;
+                    }
+
                     const fullPath = path.join(dir, entry.name);
 
                     if (entry.isDirectory() && !entry.name.startsWith('.') && entry.name !== 'node_modules') {
-                        searchDir(fullPath);
+                        await searchDir(fullPath);
                     } else if (entry.isFile()) {
                         const ext = path.extname(entry.name);
                         if (extensions.includes(ext)) {
+                            scannedFiles++;
                             try {
-                                const content = fs.readFileSync(fullPath, 'utf-8');
+                                const content = await fs.promises.readFile(fullPath, 'utf-8');
                                 const lines = content.split('\n');
 
                                 lines.forEach((line, index) => {
+                                    regex.lastIndex = 0;
                                     if (regex.test(line)) {
                                         results.push(`${fullPath}:${index + 1}: ${line.trim()}`);
                                     }
@@ -92,7 +115,7 @@ export const searchCodeTool: MCPToolDefinition = {
                 }
             }
 
-            searchDir(resolvedDir);
+            await searchDir(resolvedDir);
 
             return {
                 content: [{

@@ -45,6 +45,15 @@ export interface ResearchResult {
     qualityMetrics: Record<string, unknown>;
 }
 
+function decodeXmlEntities(text: string): string {
+    return text
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&amp;/g, '&')
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'");
+}
+
 /**
  * Ollama 공식 Web Search API (우선 사용)
  */
@@ -230,7 +239,7 @@ async function searchGoogleNews(query: string): Promise<SearchResult[]> {
         const response = await fetch(url);
         if (!response.ok) return results;
 
-        const xml = await response.text();
+        const xml = (await response.text()).replace(/\u0000/g, '');
 
         // RSS item 단위로 파싱 (더 정확한 방법)
         const itemRegex = /<item>([\s\S]*?)<\/item>/g;
@@ -240,35 +249,35 @@ async function searchGoogleNews(query: string): Promise<SearchResult[]> {
         while ((itemMatch = itemRegex.exec(xml)) !== null && count < 10) {
             const itemContent = itemMatch[1];
 
-            // 타이틀 추출 (일반 + CDATA 모두 지원)
-            let title = '';
-            const titleMatch = itemContent.match(/<title>(?:<!\[CDATA\[)?([^\]<]+)(?:\]\]>)?<\/title>/);
-            if (titleMatch) {
-                title = titleMatch[1].replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').trim();
-            }
+            try {
+                // 타이틀 추출 (일반 + CDATA 모두 지원)
+                const titleCdataMatch = itemContent.match(/<title>\s*<!\[CDATA\[([\s\S]*?)\]\]>\s*<\/title>/i);
+                const titlePlainMatch = titleCdataMatch ? null : itemContent.match(/<title>([\s\S]*?)<\/title>/i);
+                const rawTitle = titleCdataMatch?.[1] || titlePlainMatch?.[1] || '';
+                const title = decodeXmlEntities(rawTitle).replace(/<[^>]+>/g, '').trim();
 
-            // 링크 추출
-            let link = '';
-            const linkMatch = itemContent.match(/<link>(https?:\/\/[^<]+)<\/link>/);
-            if (linkMatch) {
-                link = linkMatch[1];
-            }
+                // 링크 추출
+                const linkCdataMatch = itemContent.match(/<link>\s*<!\[CDATA\[([\s\S]*?)\]\]>\s*<\/link>/i);
+                const linkPlainMatch = linkCdataMatch ? null : itemContent.match(/<link>([\s\S]*?)<\/link>/i);
+                const link = (linkCdataMatch?.[1] || linkPlainMatch?.[1] || '').trim();
 
-            // 출처 추출
-            let source = 'news.google.com';
-            const sourceMatch = itemContent.match(/<source[^>]*>([^<]+)<\/source>/);
-            if (sourceMatch) {
-                source = sourceMatch[1];
-            }
+                // 출처 추출
+                const sourceCdataMatch = itemContent.match(/<source[^>]*>\s*<!\[CDATA\[([\s\S]*?)\]\]>\s*<\/source>/i);
+                const sourcePlainMatch = sourceCdataMatch ? null : itemContent.match(/<source[^>]*>([\s\S]*?)<\/source>/i);
+                const rawSource = sourceCdataMatch?.[1] || sourcePlainMatch?.[1] || 'news.google.com';
+                const source = decodeXmlEntities(rawSource).replace(/<[^>]+>/g, '').trim() || 'news.google.com';
 
-            if (title && link) {
-                results.push({
-                    title,
-                    url: link,
-                    snippet: `출처: ${source}`,
-                    source: source
-                });
-                count++;
+                if (title && /^https?:\/\//i.test(link)) {
+                    results.push({
+                        title,
+                        url: link,
+                        snippet: `출처: ${source}`,
+                        source
+                    });
+                    count++;
+                }
+            } catch (itemError) {
+                console.warn('[WebSearch] Google News item 파싱 실패:', itemError);
             }
         }
 

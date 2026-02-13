@@ -258,9 +258,9 @@ export class AnalyticsSystem {
         const modelCosts: { model: string; cost: number; percentage: number }[] = [];
         let totalCost = weeklyCost || 1;
 
-        const todayModels = ((summary.today as unknown as Record<string, unknown>)?.models as Record<string, unknown>) || {};
+        const todayModels = summary.today.modelUsage || {};
         for (const [model, count] of Object.entries(todayModels)) {
-            const cost = (count as number) * 0.001; // 예시 비용
+            const cost = count * 0.001; // 예시 비용
             modelCosts.push({
                 model,
                 cost,

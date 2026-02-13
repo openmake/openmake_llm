@@ -9,6 +9,7 @@ import { getAllAgents, getAgentById, getAgentCategories, getAgentStats } from '.
 import { getAgentLearningSystem } from '../agents/learning';
 import { getCustomAgentBuilder } from '../agents/custom-builder';
 import { success, badRequest, notFound, internalError } from '../utils/api-response';
+import { requireAuth } from '../auth';
 
 const logger = createLogger('AgentRoutes');
 const router = Router();
@@ -66,14 +67,14 @@ router.get('/', (req: Request, res: Response) => {
   });
 
   // ================================================
-  // 커스텀 에이전트 CRUD
+  // 커스텀 에이전트 CRUD (인증 필요)
   // ================================================
 
  /**
   * GET /api/agents/custom/list
   * 커스텀 에이전트 목록
   */
- router.get('/custom/list', (req: Request, res: Response) => {
+ router.get('/custom/list', requireAuth, (req: Request, res: Response) => {
      try {
          const customBuilder = getCustomAgentBuilder();
          res.json(success(customBuilder.getAllCustomAgents()));
@@ -87,7 +88,7 @@ router.get('/', (req: Request, res: Response) => {
   * POST /api/agents/custom
   * 커스텀 에이전트 생성
   */
- router.post('/custom', (req: Request, res: Response) => {
+ router.post('/custom', requireAuth, (req: Request, res: Response) => {
      try {
          const { name, description, systemPrompt, keywords, category, emoji, temperature, maxTokens } = req.body;
 
@@ -119,7 +120,7 @@ router.get('/', (req: Request, res: Response) => {
   * PUT /api/agents/custom/:id
   * 커스텀 에이전트 수정
   */
- router.put('/custom/:id', (req: Request, res: Response) => {
+ router.put('/custom/:id', requireAuth, (req: Request, res: Response) => {
      try {
          const agentId = req.params.id;
          const updates = req.body;
@@ -142,7 +143,7 @@ router.get('/', (req: Request, res: Response) => {
   * DELETE /api/agents/custom/:id
   * 커스텀 에이전트 삭제
   */
- router.delete('/custom/:id', (req: Request, res: Response) => {
+ router.delete('/custom/:id', requireAuth, (req: Request, res: Response) => {
      try {
          const agentId = req.params.id;
 
@@ -164,7 +165,7 @@ router.get('/', (req: Request, res: Response) => {
   * POST /api/agents/custom/clone/:id
   * 기존 에이전트 복제
   */
- router.post('/custom/clone/:id', (req: Request, res: Response) => {
+ router.post('/custom/clone/:id', requireAuth, (req: Request, res: Response) => {
      try {
          const sourceId = req.params.id;
          const modifications = req.body;
@@ -185,6 +186,24 @@ router.get('/', (req: Request, res: Response) => {
  });
 
  // ================================================
+ // 피드백 통계 (/:id 라우트보다 먼저 등록해야 Express 라우트 매칭 충돌 방지)
+ // ================================================
+
+ /**
+  * GET /api/agents/feedback/stats
+  * 전체 피드백 통계
+  */
+ router.get('/feedback/stats', (req: Request, res: Response) => {
+     try {
+         const learningSystem = getAgentLearningSystem();
+         res.json(success(learningSystem.getOverallStats()));
+     } catch (error) {
+         logger.error('피드백 통계 조회 실패:', error);
+         res.status(500).json(internalError('피드백 통계 조회 실패'));
+     }
+ });
+
+ // ================================================
  // 피드백 시스템
  // ================================================
 
@@ -192,7 +211,7 @@ router.get('/', (req: Request, res: Response) => {
   * POST /api/agents/:id/feedback
   * 에이전트 피드백 제출
   */
- router.post('/:id/feedback', (req: Request, res: Response) => {
+ router.post('/:id/feedback', requireAuth, (req: Request, res: Response) => {
      try {
          const agentId = req.params.id;
          const { rating, comment, query, response, tags } = req.body;
@@ -270,20 +289,6 @@ router.get('/', (req: Request, res: Response) => {
      }
  });
 
- /**
-  * GET /api/agents/feedback/stats
-  * 전체 피드백 통계
-  */
- router.get('/feedback/stats', (req: Request, res: Response) => {
-     try {
-         const learningSystem = getAgentLearningSystem();
-         res.json(success(learningSystem.getOverallStats()));
-     } catch (error) {
-         logger.error('피드백 통계 조회 실패:', error);
-         res.status(500).json(internalError('피드백 통계 조회 실패'));
-     }
- });
-
  // ================================================
  // A/B 테스트
  // ================================================
@@ -292,7 +297,7 @@ router.get('/', (req: Request, res: Response) => {
   * POST /api/agents/abtest/start
   * A/B 테스트 시작
   */
- router.post('/abtest/start', (req: Request, res: Response) => {
+ router.post('/abtest/start', requireAuth, (req: Request, res: Response) => {
      try {
          const { agentA, agentB } = req.body;
 

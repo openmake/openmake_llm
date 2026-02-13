@@ -55,8 +55,8 @@
         // MCP 도구 설정 객체
         let mcpToolSettings = { ...authDefaultSettings };
 
-        // 페이지 로드 시 설정 불러오기
-        document.addEventListener('DOMContentLoaded', loadMCPToolSettings);
+        // 페이지 로드 시 설정 불러오기 (init() is called after DOM is ready)
+        loadMCPToolSettings();
 
         function loadMCPToolSettings() {
             // 1. 인증 상태에 따른 기본값 설정
@@ -527,6 +527,7 @@
         loadExternalServers();
 
             // Expose onclick-referenced functions globally
+                if (typeof toggleMCP === 'function') window.toggleMCP = toggleMCP;
                 if (typeof executeCommand === 'function') window.executeCommand = executeCommand;
                 if (typeof saveMCPToolSettings === 'function') window.saveMCPToolSettings = saveMCPToolSettings;
                 if (typeof resetMCPToolSettings === 'function') window.resetMCPToolSettings = resetMCPToolSettings;
@@ -548,6 +549,7 @@
             _timeouts.forEach(function(id) { clearTimeout(id); });
             _timeouts = [];
             // Remove onclick-exposed globals
+                try { delete window.toggleMCP; } catch(e) {}
                 try { delete window.executeCommand; } catch(e) {}
                 try { delete window.saveMCPToolSettings; } catch(e) {}
                 try { delete window.resetMCPToolSettings; } catch(e) {}

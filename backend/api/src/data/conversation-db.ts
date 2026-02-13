@@ -8,8 +8,11 @@ import { v4 as uuidv4 } from 'uuid';
 import * as fs from 'fs';
 import * as path from 'path';
 import { getPool } from './models/unified-database';
-import { Pool } from 'pg';
 import { getConfig } from '../config/env';
+import { createLogger } from '../utils/logger';
+import { withRetry } from './retry-wrapper';
+
+const logger = createLogger('ConversationDB');
 
 // 🔒 설정: 환경변수로 조정 가능
 const MAX_SESSIONS = getConfig().maxConversationSessions;
@@ -68,9 +71,22 @@ interface MessageRow {
     created_at: string;
 }
 
+function isDuplicateKeyError(err: unknown): boolean {
+    if (err instanceof Error && err.message.includes('duplicate key')) {
+        return true;
+    }
+
+    if (typeof err === 'object' && err !== null && 'code' in err) {
+        const code = (err as { code?: unknown }).code;
+        return code === '23505';
+    }
+
+    return false;
+}
+
 class ConversationDB {
     constructor() {
-        this.init().catch(err => console.error('[ConversationDB] Init failed:', err));
+        this.init().catch(err => logger.error('[ConversationDB] Init failed:', err));
     }
 
     private async init(): Promise<void> {
@@ -170,9 +186,9 @@ class ConversationDB {
 
             // Rename to .migrated
             fs.renameSync(jsonPath, jsonPath + '.migrated');
-            console.log(`[ConversationDB] JSON → PostgreSQL 마이그레이션 완료: ${sessions.length}개 세션`);
+            logger.info(`[ConversationDB] JSON → PostgreSQL migration complete: ${sessions.length} sessions`);
         } catch (error) {
-            console.error('[ConversationDB] JSON 마이그레이션 실패 (무시):', error);
+            logger.error('[ConversationDB] JSON migration failed (ignored):', error);
         }
     }
 
@@ -249,7 +265,7 @@ class ConversationDB {
             )
         `, [excess]);
 
-        console.log(`[ConversationDB] 🧹 용량 초과로 ${excess}개 세션 제거됨 (현재 ${MAX_SESSIONS}개)`);
+        logger.info(`[ConversationDB] Cleaned ${excess} sessions (limit: ${MAX_SESSIONS})`);
     }
 
     // ===== Public API =====
@@ -258,19 +274,30 @@ class ConversationDB {
         const pool = getPool();
         const id = uuidv4();
         const now = new Date().toISOString();
+        const resolvedTitle = title || '새 대화';
 
-        await pool.query(`
-            INSERT INTO conversation_sessions (id, user_id, anon_session_id, title, created_at, updated_at, metadata)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
-        `, [
-            id,
-            userId || null,
-            anonSessionId || null,
-            title || '새 대화',
-            now,
-            now,
-            metadata ? JSON.stringify(metadata) : null
-        ]);
+        try {
+            await withRetry(() => pool.query(`
+                INSERT INTO conversation_sessions (id, user_id, anon_session_id, title, created_at, updated_at, metadata)
+                VALUES ($1, $2, $3, $4, $5, $6, $7)
+            `, [
+                id,
+                userId || null,
+                anonSessionId || null,
+                resolvedTitle,
+                now,
+                now,
+                metadata ? JSON.stringify(metadata) : null
+            ]), { operation: 'createSession' });
+        } catch (err: unknown) {
+            if (anonSessionId && isDuplicateKeyError(err)) {
+                const existing = await this.getSessionsByAnonId(anonSessionId, 1);
+                if (existing.length > 0) {
+                    return existing[0];
+                }
+            }
+            throw err;
+        }
 
         await this.enforceMaxSessions();
 
@@ -278,7 +305,7 @@ class ConversationDB {
             id,
             userId: userId || undefined,
             anonSessionId: anonSessionId || undefined,
-            title: title || '새 대화',
+            title: resolvedTitle,
             created_at: now,
             updated_at: now,
             metadata,
@@ -339,11 +366,12 @@ class ConversationDB {
         return this.getSessionsByUserId(userId, limit);
     }
 
-    async getMessages(sessionId: string, limit: number = 100): Promise<ConversationMessage[]> {
+    async getMessages(sessionId: string, limit: number = 200): Promise<ConversationMessage[]> {
+        const safeLimit = Math.min(limit || 200, 1000);
         const pool = getPool();
         const result = await pool.query(
             'SELECT * FROM conversation_messages WHERE session_id = $1 ORDER BY created_at ASC LIMIT $2',
-            [sessionId, limit]
+            [sessionId, safeLimit]
         );
 
         return (result.rows as MessageRow[]).map(r => this.rowToMessage(r));
@@ -358,7 +386,7 @@ class ConversationDB {
 
         const now = new Date().toISOString();
 
-        const result = await pool.query(`
+        const result = await withRetry(() => pool.query(`
             INSERT INTO conversation_messages (session_id, role, content, model, thinking, tokens, response_time_ms, created_at)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             RETURNING id
@@ -371,7 +399,7 @@ class ConversationDB {
             options?.tokensUsed || null,
             options?.responseTime || null,
             now
-        ]);
+        ]), { operation: 'addMessage' });
 
         // Update session's updated_at
         await pool.query('UPDATE conversation_sessions SET updated_at = $1 WHERE id = $2', [now, sessionId]);
@@ -431,7 +459,7 @@ class ConversationDB {
 
         const count = result.rowCount || 0;
         if (count > 0) {
-            console.log(`[ConversationDB] 🔄 익명 세션 ${count}개를 사용자 ${userId}에게 이관 완료 (anonSessionId: ${anonSessionId})`);
+            logger.info(`[ConversationDB] Claimed ${count} anonymous sessions for user ${userId}`);
         }
         return count;
     }
@@ -447,19 +475,21 @@ class ConversationDB {
 
         const count = result.rowCount || 0;
         if (count > 0) {
-            console.log(`[ConversationDB] 🧹 ${count}개 오래된 세션 정리됨 (${days}일 이전)`);
+            logger.info(`[ConversationDB] Cleaned ${count} old sessions (${days} days)`);
         }
         return count;
     }
 }
 
-// 싱글톤 인스턴스
-const db = new ConversationDB();
-
-console.log(`[ConversationDB] 🔒 설정: 최대 세션 ${MAX_SESSIONS}개, TTL ${SESSION_TTL_DAYS}일`);
+// 싱글톤 인스턴스 (lazy initialization)
+let dbInstance: ConversationDB | null = null;
 
 export function getConversationDB() {
-    return db;
+    if (!dbInstance) {
+        dbInstance = new ConversationDB();
+        logger.info(`[ConversationDB] Config: max sessions ${MAX_SESSIONS}, TTL ${SESSION_TTL_DAYS} days`);
+    }
+    return dbInstance;
 }
 
 // 스케줄러 (server.ts에서 require로 사용됨)
@@ -468,16 +498,16 @@ let cleanupTimer: ReturnType<typeof setTimeout> | null = null;
 export function startSessionCleanupScheduler(intervalHours: number = 24) {
     if (cleanupTimer) clearInterval(cleanupTimer);
 
-    console.log(`[ConversationDB] 세션 정리 스케줄러 시작 (주기: ${intervalHours}시간)`);
+    logger.info(`[ConversationDB] Cleanup scheduler started (interval: ${intervalHours}h)`);
 
     cleanupTimer = setInterval(async () => {
         try {
-            const count = await db.cleanupOldSessions(30);
+            const count = await getConversationDB().cleanupOldSessions(30);
             if (count > 0) {
-                console.log(`[ConversationDB] 오래된 세션 ${count}개 정리됨`);
+                logger.info(`[ConversationDB] Cleaned ${count} old sessions`);
             }
         } catch (error) {
-            console.error('[ConversationDB] 세션 정리 중 오류:', error);
+            logger.error('[ConversationDB] Cleanup error:', error);
         }
     }, intervalHours * 60 * 60 * 1000);
 }

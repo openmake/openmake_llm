@@ -79,9 +79,11 @@ export function adminMiddleware(req: Request, res: Response, next: NextFunction)
 export const generalLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15분
     max: 100,
-    message: { error: '요청이 너무 많습니다. 잠시 후 다시 시도하세요.' },
     standardHeaders: true,
-    legacyHeaders: false
+    legacyHeaders: false,
+    handler: (_req, res) => {
+        res.status(429).json({ success: false, error: { message: '요청이 너무 많습니다. 잠시 후 다시 시도하세요.' } });
+    }
 });
 
 /**
@@ -90,8 +92,10 @@ export const generalLimiter = rateLimit({
 export const authLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 10,
-    message: { error: '로그인 시도가 너무 많습니다.' },
-    skipSuccessfulRequests: true
+    skipSuccessfulRequests: true,
+    handler: (_req, res) => {
+        res.status(429).json({ success: false, error: { message: '로그인 시도가 너무 많습니다.' } });
+    }
 });
 
 /**
@@ -100,8 +104,10 @@ export const authLimiter = rateLimit({
 export const chatLimiter = rateLimit({
     windowMs: 60 * 1000, // 1분
     max: 30,
-    message: { error: '채팅 요청이 너무 많습니다.' }
     // keyGenerator removed to use default IP-based handling with proper IPv6 support
+    handler: (_req, res) => {
+        res.status(429).json({ success: false, error: { message: '채팅 요청이 너무 많습니다.' } });
+    }
 });
 
 // ================================================

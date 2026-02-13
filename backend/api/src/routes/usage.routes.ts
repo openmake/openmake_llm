@@ -9,6 +9,9 @@ import { Router, Request, Response } from 'express';
 import { getApiUsageTracker } from '../ollama/api-usage-tracker';
 import { success, internalError } from '../utils/api-response';
 import { requireAuth } from '../auth';
+import { createLogger } from '../utils/logger';
+
+const logger = createLogger('UsageRoutes');
 
 const router = Router();
 
@@ -26,10 +29,10 @@ router.get('/', (req: Request, res: Response) => {
          const uptime = Math.round(process.uptime());
 
          res.json(success({ ...summary, uptime }));
-     } catch (error) {
-          console.error('[Usage API] 오류:', error);
-          res.status(500).json(internalError('API 사용량 조회 실패'));
-      }
+      } catch (error) {
+           logger.error('[Usage API] 오류:', error);
+           res.status(500).json(internalError('API 사용량 조회 실패'));
+       }
 });
 
 /**
@@ -42,10 +45,10 @@ router.get('/daily', (req: Request, res: Response) => {
         const tracker = getApiUsageTracker();
 
          res.json(success({ daily: tracker.getDailyStats(days) }));
-     } catch (error) {
-         console.error('[Usage Daily API] 오류:', error);
-         res.status(500).json(internalError('일간 사용량 조회 실패'));
-     }
+      } catch (error) {
+          logger.error('[Usage Daily API] 오류:', error);
+          res.status(500).json(internalError('일간 사용량 조회 실패'));
+      }
 });
 
 export default router;

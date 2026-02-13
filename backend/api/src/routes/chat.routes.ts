@@ -20,8 +20,7 @@ import { ClusterManager } from '../cluster/manager';
 import { ChatService } from '../services/ChatService';
 import { uploadedDocuments } from '../documents/store';
 import { getConversationDB } from '../data/conversation-db';
-import { getConfig } from '../config';
-import { success, badRequest, internalError, serviceUnavailable } from '../utils/api-response';
+import { success, serviceUnavailable } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
 import { optionalAuth } from '../auth';
 import { chatRateLimiter } from '../middlewares/chat-rate-limiter';
@@ -46,6 +45,11 @@ export function setClusterManager(cluster: ClusterManager): void {
  */
 router.post('/', optionalAuth, chatRateLimiter, validate(chatRequestSchema), asyncHandler(async (req: Request, res: Response) => {
      const { message, model, nodeId, history, sessionId, anonSessionId } = req.body;
+
+     if (!req.user && !req.body.anonSessionId) {
+         res.status(401).json({ success: false, error: { message: '인증이 필요합니다' } });
+         return;
+     }
 
      // §9 Pipeline Profile: brand model alias → ExecutionPlan 변환
      const executionPlan: ExecutionPlan = buildExecutionPlan(model || '');
@@ -143,7 +147,12 @@ router.post('/', optionalAuth, chatRateLimiter, validate(chatRequestSchema), asy
  * NOTE: SSE 엔드포인트는 asyncHandler로 감싸지 않음 (수동 에러 처리 필요)
  */
 router.post('/stream', optionalAuth, chatRateLimiter, validate(chatRequestSchema), async (req: Request, res: Response) => {
-     const { message, model, nodeId } = req.body;
+     const { message, model, nodeId, anonSessionId } = req.body;
+
+     if (!req.user && !anonSessionId) {
+         res.status(401).json({ success: false, error: { message: '인증이 필요합니다' } });
+         return;
+     }
 
      res.setHeader('Content-Type', 'text/event-stream');
      res.setHeader('Cache-Control', 'no-cache');
@@ -165,7 +174,13 @@ router.post('/stream', optionalAuth, chatRateLimiter, validate(chatRequestSchema
              return;
          }
 
+         let aborted = false;
+         req.on('close', () => {
+             aborted = true;
+         });
+
          await client.generate(message, undefined, (token: string) => {
+             if (aborted) return;
              res.write(`data: ${JSON.stringify({ token })}\n\n`);
          });
 

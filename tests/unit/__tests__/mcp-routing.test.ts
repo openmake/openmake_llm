@@ -109,14 +109,14 @@ describe('User Sandbox', () => {
             expect(dataDir).toContain('data');
         });
 
-        it('SQLite DB 경로 생성', () => {
-            const dbPath = UserSandbox.getUserDbPath(testUserId);
+        it('SQLite DB 경로 생성', async () => {
+            const dbPath = await UserSandbox.getUserDbPath(testUserId);
             expect(dbPath).toContain(testUserId);
             expect(dbPath).toContain('user.db');
         });
 
-        it('대화 DB 경로 생성', () => {
-            const dbPath = UserSandbox.getUserConversationDbPath(testUserId);
+        it('대화 DB 경로 생성', async () => {
+            const dbPath = await UserSandbox.getUserConversationDbPath(testUserId);
             expect(dbPath).toContain('conversations.db');
         });
     });

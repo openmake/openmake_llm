@@ -74,7 +74,7 @@
 
             let filtered = allSessions.filter(s => {
                 // 검색 필터 (제목)
-                if (query && !s.title.toLowerCase().includes(query)) return false;
+                if (query && !(s.title || '').toLowerCase().includes(query)) return false;
                 // 날짜 필터
                 if (dateFilter) {
                     const sDate = new Date(s.createdAt).toISOString().split('T')[0];
@@ -111,7 +111,9 @@
 
         function goToSession(id) {
             // 메인 채팅 화면으로 이동하며 세션 ID 전달
-            (typeof Router !== 'undefined' && Router.navigate('/?' + `sessionId=${id}`));
+            // Router.navigate strips query strings via normalizePath, so use sessionStorage
+            sessionStorage.setItem('pendingSessionId', id);
+            (typeof Router !== 'undefined' && Router.navigate('/'));
         }
 
         function formatDate(dateStr) {

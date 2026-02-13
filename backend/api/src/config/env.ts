@@ -225,6 +225,20 @@ function parseLogLevel(value: string | undefined): 'debug' | 'info' | 'warn' | '
     return DEFAULT_CONFIG.logLevel;
 }
 
+function parseGeminiThinkLevel(value: string | undefined): 'low' | 'medium' | 'high' {
+    const level = (value || '').toLowerCase();
+    if (level === 'low' || level === 'medium' || level === 'high') {
+        return level;
+    }
+    return 'high';
+}
+
+function safeParseInt(value: string | undefined, defaultValue: number): number {
+    if (!value) return defaultValue;
+    const parsed = parseInt(value, 10);
+    return isNaN(parsed) ? defaultValue : parsed;
+}
+
 /**
  * 필수 환경 변수 검증
  * 런타임 시작 전에 호출하여 설정 오류를 조기에 발견
@@ -247,6 +261,16 @@ export function validateConfig(config: EnvConfig): void {
         errors.push(`Invalid OLLAMA_TIMEOUT: ${config.ollamaTimeout} (must be between 1-600000ms)`);
     }
 
+    // JWT_SECRET 필수 검증 (프로덕션 환경)
+    if (config.nodeEnv === 'production' && (!config.jwtSecret || config.jwtSecret.length < 32)) {
+        errors.push('JWT_SECRET must be at least 32 characters in production');
+    }
+
+    // API_KEY_PEPPER 검증 (프로덕션 환경에서 API Key 서비스 사용 시)
+    if (config.nodeEnv === 'production' && config.apiKeyPepper === '') {
+        errors.push('API_KEY_PEPPER is required in production for API key hashing security');
+    }
+
     if (errors.length > 0) {
         throw new Error(`Configuration validation failed:\n${errors.join('\n')}`);
     }
@@ -267,7 +291,7 @@ export function loadConfig(): EnvConfig {
         nodeEnv: env('NODE_ENV') || DEFAULT_CONFIG.nodeEnv,
 
         // Server
-        port: parseInt(env('PORT') || String(DEFAULT_CONFIG.port), 10),
+        port: safeParseInt(env('PORT'), DEFAULT_CONFIG.port),
         serverHost: env('SERVER_HOST') || DEFAULT_CONFIG.serverHost,
 
         // Database
@@ -294,7 +318,7 @@ export function loadConfig(): EnvConfig {
         ollamaDefaultModel: env('OLLAMA_DEFAULT_MODEL') || DEFAULT_CONFIG.ollamaDefaultModel,
         ollamaKoreanModel: env('OLLAMA_KOREAN_MODEL') || DEFAULT_CONFIG.ollamaKoreanModel,
         ollamaModel: env('OLLAMA_MODEL') || DEFAULT_CONFIG.ollamaModel,
-        ollamaTimeout: parseInt(env('OLLAMA_TIMEOUT') || String(DEFAULT_CONFIG.ollamaTimeout), 10),
+        ollamaTimeout: safeParseInt(env('OLLAMA_TIMEOUT'), DEFAULT_CONFIG.ollamaTimeout),
         ollamaHost: env('OLLAMA_HOST') || DEFAULT_CONFIG.ollamaHost,
         ollamaApiKey: env('OLLAMA_API_KEY') || DEFAULT_CONFIG.ollamaApiKey,
         ollamaApiKeyPrimary: env('OLLAMA_API_KEY_PRIMARY') || DEFAULT_CONFIG.ollamaApiKeyPrimary,
@@ -318,17 +342,17 @@ export function loadConfig(): EnvConfig {
         })(),
 
         // Rate limits
-        ollamaHourlyLimit: parseInt(env('OLLAMA_HOURLY_LIMIT') || String(DEFAULT_CONFIG.ollamaHourlyLimit), 10),
-        ollamaWeeklyLimit: parseInt(env('OLLAMA_WEEKLY_LIMIT') || String(DEFAULT_CONFIG.ollamaWeeklyLimit), 10),
-        ollamaMonthlyPremiumLimit: parseInt(env('OLLAMA_MONTHLY_PREMIUM_LIMIT') || String(DEFAULT_CONFIG.ollamaMonthlyPremiumLimit), 10),
+        ollamaHourlyLimit: safeParseInt(env('OLLAMA_HOURLY_LIMIT'), DEFAULT_CONFIG.ollamaHourlyLimit),
+        ollamaWeeklyLimit: safeParseInt(env('OLLAMA_WEEKLY_LIMIT'), DEFAULT_CONFIG.ollamaWeeklyLimit),
+        ollamaMonthlyPremiumLimit: safeParseInt(env('OLLAMA_MONTHLY_PREMIUM_LIMIT'), DEFAULT_CONFIG.ollamaMonthlyPremiumLimit),
 
         // Log
         logLevel: parseLogLevel(env('LOG_LEVEL')),
 
         // Gemini
         geminiThinkEnabled: (env('GEMINI_THINK_ENABLED') || 'true') === 'true',
-        geminiThinkLevel: (env('GEMINI_THINK_LEVEL') || 'high') as 'low' | 'medium' | 'high',
-        geminiNumCtx: parseInt(env('GEMINI_NUM_CTX') || '32768', 10),
+        geminiThinkLevel: parseGeminiThinkLevel(env('GEMINI_THINK_LEVEL')),
+        geminiNumCtx: safeParseInt(env('GEMINI_NUM_CTX'), DEFAULT_CONFIG.geminiNumCtx),
         geminiEmbeddingModel: env('GEMINI_EMBEDDING_MODEL') || DEFAULT_CONFIG.geminiEmbeddingModel,
         geminiWebSearchEnabled: (env('GEMINI_WEB_SEARCH_ENABLED') || 'true') === 'true',
 
@@ -339,12 +363,12 @@ export function loadConfig(): EnvConfig {
         firecrawlApiUrl: env('FIRECRAWL_API_URL') || DEFAULT_CONFIG.firecrawlApiUrl,
 
         // Documents
-        documentTtlHours: parseInt(env('DOCUMENT_TTL_HOURS') || String(DEFAULT_CONFIG.documentTtlHours), 10),
-        maxUploadedDocuments: parseInt(env('MAX_UPLOADED_DOCUMENTS') || String(DEFAULT_CONFIG.maxUploadedDocuments), 10),
+        documentTtlHours: safeParseInt(env('DOCUMENT_TTL_HOURS'), DEFAULT_CONFIG.documentTtlHours),
+        maxUploadedDocuments: safeParseInt(env('MAX_UPLOADED_DOCUMENTS'), DEFAULT_CONFIG.maxUploadedDocuments),
 
         // Conversations
-        maxConversationSessions: parseInt(env('MAX_CONVERSATION_SESSIONS') || String(DEFAULT_CONFIG.maxConversationSessions), 10),
-        sessionTtlDays: parseInt(env('SESSION_TTL_DAYS') || String(DEFAULT_CONFIG.sessionTtlDays), 10),
+        maxConversationSessions: safeParseInt(env('MAX_CONVERSATION_SESSIONS'), DEFAULT_CONFIG.maxConversationSessions),
+        sessionTtlDays: safeParseInt(env('SESSION_TTL_DAYS'), DEFAULT_CONFIG.sessionTtlDays),
 
         // User data
         userDataPath: env('USER_DATA_PATH') || DEFAULT_CONFIG.userDataPath,
@@ -359,7 +383,7 @@ export function loadConfig(): EnvConfig {
 
         // API Key Service
         apiKeyPepper: env('API_KEY_PEPPER') || DEFAULT_CONFIG.apiKeyPepper,
-        apiKeyMaxPerUser: parseInt(env('API_KEY_MAX_PER_USER') || String(DEFAULT_CONFIG.apiKeyMaxPerUser), 10),
+        apiKeyMaxPerUser: safeParseInt(env('API_KEY_MAX_PER_USER'), DEFAULT_CONFIG.apiKeyMaxPerUser),
 
         // Pipeline Profile — Brand Model → Internal Engine Mapping
         omkEngineLlm: env('OMK_ENGINE_LLM') || DEFAULT_CONFIG.omkEngineLlm,

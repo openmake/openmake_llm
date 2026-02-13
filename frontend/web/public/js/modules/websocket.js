@@ -31,6 +31,9 @@ function connectWebSocket() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${protocol}//${window.location.host}`;
 
+    // System Messages WebSocket (websocket.js)
+    // Handles: agents list, refresh, heartbeat, connection status.
+    // Chat streaming is handled by a separate WS in app.js.
     const ws = new WebSocket(wsUrl);
     setState('ws', ws);
 
@@ -40,8 +43,8 @@ function connectWebSocket() {
         updateConnectionStatus('connected', '연결됨');
 
         // 초기 데이터 요청
-        sendWsMessage({ type: 'init' });
-        sendWsMessage({ type: 'get_agents' });
+        sendWsMessage({ type: 'refresh' });
+        sendWsMessage({ type: 'request_agents' });
     };
 
     ws.onclose = (event) => {
@@ -215,7 +218,7 @@ window.addEventListener('offline', () => {
 
 // 전역 노출 (레거시 호환)
 window.connectWebSocket = connectWebSocket;
-window.sendWsMessage = sendWsMessage;
+window['sendWsMessage'] = sendWsMessage;
 window.handleMessage = handleMessage;
 window.updateConnectionStatus = updateConnectionStatus;
 window.isConnected = isConnected;

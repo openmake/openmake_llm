@@ -50,7 +50,7 @@ async function ensureOauthStateTable(): Promise<void> {
 
 // 서버 시작 시 테이블 생성 + 만료 state 정리 스케줄러
 ensureOauthStateTable();
-setInterval(async () => {
+const oauthCleanupTimer = setInterval(async () => {
     try {
         const { getPool } = await import('../data/models/unified-database');
         const pool = getPool();
@@ -67,6 +67,13 @@ setInterval(async () => {
         }
     }
 }, 60 * 1000);
+
+/**
+ * OAuth state 정리 스케줄러 중지 (서버 종료 시)
+ */
+export function stopOAuthCleanup(): void {
+    clearInterval(oauthCleanupTimer);
+}
 
 /**
  * 🔒 보안 강화된 OAuth state 생성 (DB 저장)
@@ -271,6 +278,11 @@ export class AuthController {
                  blacklistToken(token);
              }
          }
+         // 쿠키 토큰도 블랙리스트에 추가
+         const cookieToken = req.cookies?.auth_token;
+         if (cookieToken) {
+             blacklistToken(cookieToken);
+         }
          clearTokenCookie(res);
          res.json(success({ message: '로그아웃되었습니다' }));
      }
@@ -393,8 +405,14 @@ export class AuthController {
             return;
         }
 
+        if (!state || typeof state !== 'string') {
+            log.error('[OAuth] Google callback: Missing state parameter');
+            res.status(400).json(badRequest('OAuth state parameter is required'));
+            return;
+        }
+
         // 🔒 Phase 2 CSRF 방어: state 검증 (Phase 3: DB 기반 비동기)
-        if (!await validateAndConsumeState(state as string | undefined, 'google')) {
+        if (!await validateAndConsumeState(state, 'google')) {
             log.error('[OAuth] Google callback: Invalid or expired state');
             res.redirect('/login.html?error=invalid_state');
             return;
@@ -458,8 +476,14 @@ export class AuthController {
             return;
         }
 
+        if (!state || typeof state !== 'string') {
+            log.error('[OAuth] GitHub callback: Missing state parameter');
+            res.status(400).json(badRequest('OAuth state parameter is required'));
+            return;
+        }
+
         // 🔒 Phase 2 CSRF 방어: state 검증 (Phase 3: DB 기반 비동기)
-        if (!await validateAndConsumeState(state as string | undefined, 'github')) {
+        if (!await validateAndConsumeState(state, 'github')) {
             log.error('[OAuth] GitHub callback: Invalid or expired state');
             res.redirect('/login.html?error=invalid_state');
             return;

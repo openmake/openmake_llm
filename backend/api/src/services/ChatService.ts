@@ -551,7 +551,7 @@ export class ChatService {
 
                 // Capture metrics (accumulate or last?)
                 // Ideally accumulate, but for now take the last one or significant one
-                if (response.metrics) metrics = response.metrics as unknown as Record<string, unknown>;
+                if (response.metrics) metrics = { ...response.metrics };
 
                 // Add assistant response to history
                 const assistantMessage: ChatMessage = {

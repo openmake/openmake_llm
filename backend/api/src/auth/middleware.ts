@@ -49,7 +49,7 @@ declare global {
  * 토큰이 있으면 검증하고 사용자 정보를 req.user에 추가
  * 토큰이 없어도 통과 (게스트 허용)
  */
-export async function optionalAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
+export async function optionalAuth(req: Request, _res: Response, next: NextFunction): Promise<void> {
     // Cookie first (httpOnly), then Authorization header (backward compat)
     const authHeader = req.headers.authorization;
     const token = (req.cookies?.auth_token) || extractToken(authHeader);
@@ -81,14 +81,14 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     const token = (req.cookies?.auth_token) || extractToken(authHeader);
 
     if (!token) {
-        res.status(401).json({ error: '인증이 필요합니다' });
+        res.status(401).json({ success: false, error: { message: '인증이 필요합니다' } });
         return;
     }
 
     const payload = await verifyToken(token);
 
     if (!payload) {
-        res.status(401).json({ error: '유효하지 않은 토큰입니다' });
+        res.status(401).json({ success: false, error: { message: '유효하지 않은 토큰입니다' } });
         return;
     }
 
@@ -96,12 +96,12 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     const user = await userManager.getUserById(payload.userId);
 
     if (!user) {
-        res.status(401).json({ error: '사용자를 찾을 수 없습니다' });
+        res.status(401).json({ success: false, error: { message: '사용자를 찾을 수 없습니다' } });
         return;
     }
 
     if (!user.is_active) {
-        res.status(403).json({ error: '비활성화된 계정입니다' });
+        res.status(403).json({ success: false, error: { message: '비활성화된 계정입니다' } });
         return;
     }
 
@@ -116,12 +116,12 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
  */
 export function requireAdmin(req: Request, res: Response, next: NextFunction): void {
     if (!req.user) {
-        res.status(401).json({ error: '인증이 필요합니다' });
+        res.status(401).json({ success: false, error: { message: '인증이 필요합니다' } });
         return;
     }
 
     if (!isAdmin(req.user.role)) {
-        res.status(403).json({ error: '관리자 권한이 필요합니다' });
+        res.status(403).json({ success: false, error: { message: '관리자 권한이 필요합니다' } });
         return;
     }
 
@@ -134,12 +134,12 @@ export function requireAdmin(req: Request, res: Response, next: NextFunction): v
 export function requireRole(role: UserRole) {
     return (req: Request, res: Response, next: NextFunction): void => {
         if (!req.user) {
-            res.status(401).json({ error: '인증이 필요합니다' });
+            res.status(401).json({ success: false, error: { message: '인증이 필요합니다' } });
             return;
         }
 
         if (!hasPermission(req.user.role, role)) {
-            res.status(403).json({ error: `${role} 이상의 권한이 필요합니다` });
+            res.status(403).json({ success: false, error: { message: `${role} 이상의 권한이 필요합니다` } });
             return;
         }
 

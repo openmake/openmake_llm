@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { createLogger } from '../utils/logger';
-import { success, badRequest, notFound, internalError } from '../utils/api-response';
+import { success, badRequest, notFound, forbidden, internalError } from '../utils/api-response';
 import { requireAuth, requireAdmin, optionalAuth } from '../auth';
 import { getUnifiedDatabase } from '../data/models/unified-database';
 import { asyncHandler } from '../utils/error-handler';
@@ -53,6 +53,17 @@ router.post('/', requireAuth, asyncHandler(async (req: Request, res: Response) =
 
   if (!agentId || !title) {
     return res.status(400).json(badRequest('agentId and title are required'));
+  }
+
+  // 에이전트 소유권 확인
+  const { getPool } = await import('../data/models/unified-database');
+  const pool = getPool();
+  const agentCheck = await pool.query(
+      'SELECT created_by FROM custom_agents WHERE id = $1',
+      [agentId]
+  );
+  if (agentCheck.rows.length > 0 && String(agentCheck.rows[0].created_by) !== String(req.user!.id) && req.user!.role !== 'admin') {
+      return res.status(403).json(forbidden('자신의 에이전트만 마켓플레이스에 등록할 수 있습니다'));
   }
 
   const db = getUnifiedDatabase();

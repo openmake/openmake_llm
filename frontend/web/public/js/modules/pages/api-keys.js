@@ -9,7 +9,11 @@
 
     // Helper: API Fetch
     async function apiFetch(url, options) {
-        var authToken = localStorage.getItem('authToken');
+        var authToken = window.SafeStorage
+            ? window.SafeStorage.getItem('authToken')
+            : (function () {
+                try { return localStorage.getItem('authToken'); } catch (e) { return null; }
+            })();
         var headers = { 'Content-Type': 'application/json' };
         if (authToken) headers['Authorization'] = 'Bearer ' + authToken;
         var res = await fetch(url, Object.assign({ credentials: 'include', headers: headers }, options || {}));
@@ -180,7 +184,7 @@
                     '<div class="s-card-body">' +
                         '<p style="color:var(--text-secondary); margin-bottom:var(--space-4); font-size:var(--font-size-sm);">터미널에서 다음 명령어로 API를 테스트해보세요:</p>' +
                         '<div class="ak-code-block">' +
-                            '<span class="ak-code-keyword">curl</span> -X POST ${window.location.origin}/api/v1/chat \\<br>' +
+                            '<span class="ak-code-keyword">curl</span> -X POST ' + window.location.origin + '/api/v1/chat \\<br>' +
                             '&nbsp;&nbsp;-H <span class="ak-code-string">"X-API-Key: YOUR_KEY"</span> \\<br>' +
                             '&nbsp;&nbsp;-H <span class="ak-code-string">"Content-Type: application/json"</span> \\<br>' +
                             '&nbsp;&nbsp;-d <span class="ak-code-string">\'{"message":"Hello!","model":"openmake_llm"}\'</span>' +
@@ -334,9 +338,8 @@
 
         try {
             var btn = document.querySelector('button[onclick="createApiKey()"]');
-            var originalText = btn.textContent;
-            btn.textContent = '생성 중...';
-            btn.disabled = true;
+            var originalText = btn ? btn.textContent : '';
+            if (btn) { btn.textContent = '생성 중...'; btn.disabled = true; }
 
             var res = await apiFetch('/api/v1/api-keys', {
                 method: 'POST',

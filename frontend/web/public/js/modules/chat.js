@@ -111,7 +111,7 @@ async function sendMessage() {
         const payload = {
             type: 'chat',
             message: message,
-            model: document.getElementById('modelSelect')?.value || localStorage.getItem('selectedModel') || 'default',
+            model: document.getElementById('modelSelect')?.value || localStorage.getItem('selectedModel') || 'openmake_llm_auto',
             memory: getState('conversationMemory'),
             webSearch: getState('webSearchEnabled'),
             thinking: getState('thinkingEnabled'),

@@ -3,9 +3,12 @@
  * 통합 데이터베이스 모델 - PostgreSQL 기반
  */
 
-import { Pool, QueryResult } from 'pg';
-import { withTransaction, withRetry, type TransactionClient } from '../retry-wrapper';
+import { Pool, QueryResult, type PoolConfig } from 'pg';
+import { withTransaction, withRetry } from '../retry-wrapper';
 import { getConfig } from '../../config/env';
+import { createLogger } from '../../utils/logger';
+
+const logger = createLogger('UnifiedDB');
 
 /** Generic DB query parameter type */
 type QueryParam = string | number | boolean | null | undefined;
@@ -406,6 +409,8 @@ CREATE INDEX IF NOT EXISTS idx_api_keys_user ON user_api_keys(user_id);
 CREATE INDEX IF NOT EXISTS idx_api_keys_hash ON user_api_keys(key_hash);
 CREATE INDEX IF NOT EXISTS idx_api_keys_active ON user_api_keys(user_id, is_active);
 CREATE INDEX IF NOT EXISTS idx_api_keys_tier ON user_api_keys(rate_limit_tier);
+CREATE INDEX IF NOT EXISTS idx_sessions_anon ON conversation_sessions(anon_session_id);
+CREATE INDEX IF NOT EXISTS idx_audit_user ON audit_logs(user_id);
 `;
 
 export interface User {
@@ -597,7 +602,7 @@ export interface ExternalConnection {
     token_expires_at?: string;
     account_email?: string;
     account_name?: string;
-    metadata?: Record<string, any>;
+    metadata?: Record<string, unknown>;
     is_active: boolean;
     created_at: string;
     updated_at: string;
@@ -701,20 +706,39 @@ export class UnifiedDatabase {
     private schemaReady: Promise<void>;
 
     constructor() {
-        this.pool = new Pool({
-            connectionString: getConfig().databaseUrl
+        const poolConfig: PoolConfig & { idle_timeout: number } = {
+            connectionString: getConfig().databaseUrl,
+            statement_timeout: 30000,
+            idle_timeout: 30000,
+            connectionTimeoutMillis: 10000
+        };
+        this.pool = new Pool(poolConfig);
+
+        // Prevent process crash on idle client error
+        this.pool.on('error', (err) => {
+            logger.error('[UnifiedDB] Pool idle client error:', err);
         });
 
         // 스키마 초기화 — Promise를 보관하여 초기 쿼리가 스키마 완료를 대기할 수 있도록 함
         this.schemaReady = this.initSchema().catch(err => {
-            console.error('[UnifiedDB] Schema init failed:', err);
+            logger.error('[UnifiedDB] Schema init failed:', err);
         }) as Promise<void>;
 
-        console.log(`[UnifiedDB] PostgreSQL Pool 초기화 완료`);
+        logger.info('[UnifiedDB] PostgreSQL Pool initialized');
     }
 
     private async initSchema(): Promise<void> {
         await this.retryQuery(SCHEMA);
+        // Migration: fix agent_usage_logs FK to use SET NULL on delete
+        try {
+            await this.retryQuery(`
+                ALTER TABLE agent_usage_logs DROP CONSTRAINT IF EXISTS agent_usage_logs_session_id_fkey;
+                ALTER TABLE agent_usage_logs ADD CONSTRAINT agent_usage_logs_session_id_fkey
+                    FOREIGN KEY (session_id) REFERENCES conversation_sessions(id) ON DELETE SET NULL;
+            `);
+        } catch (_e: unknown) {
+            // Constraint may already be correct — ignore
+        }
     }
 
     /**
@@ -855,7 +879,7 @@ export class UnifiedDatabase {
         const result = await this.retryQuery(
             `SELECT date, SUM(requests) as requests, SUM(tokens) as tokens, SUM(errors) as errors, AVG(avg_response_time) as avg_response_time
             FROM api_usage
-            WHERE date >= (CURRENT_DATE - $1 * INTERVAL '1 day')::text
+            WHERE date >= to_char(CURRENT_DATE - ($1 || ' days')::interval, 'YYYY-MM-DD')
             GROUP BY date
             ORDER BY date DESC`,
             [days]
@@ -939,15 +963,22 @@ export class UnifiedDatabase {
     // ===== 통계 =====
 
     async getStats() {
-        const tables = ['users', 'conversation_sessions', 'conversation_messages',
-            'api_usage', 'agent_usage_logs', 'agent_feedback',
-            'custom_agents', 'audit_logs', 'alert_history'];
-
         const stats: Record<string, number> = {};
 
-        for (const table of tables) {
-            const result = await this.retryQuery(`SELECT COUNT(*) as count FROM ${table}`);
-            stats[table] = parseInt(result.rows[0].count, 10);
+        const result = await this.retryQuery(`
+            SELECT 'users' as table_name, COUNT(*) as count FROM users
+            UNION ALL SELECT 'conversation_sessions', COUNT(*) FROM conversation_sessions
+            UNION ALL SELECT 'conversation_messages', COUNT(*) FROM conversation_messages
+            UNION ALL SELECT 'api_usage', COUNT(*) FROM api_usage
+            UNION ALL SELECT 'agent_usage_logs', COUNT(*) FROM agent_usage_logs
+            UNION ALL SELECT 'agent_feedback', COUNT(*) FROM agent_feedback
+            UNION ALL SELECT 'custom_agents', COUNT(*) FROM custom_agents
+            UNION ALL SELECT 'audit_logs', COUNT(*) FROM audit_logs
+            UNION ALL SELECT 'alert_history', COUNT(*) FROM alert_history
+        `);
+
+        for (const row of result.rows) {
+            stats[row.table_name] = parseInt(row.count, 10);
         }
 
         return stats;
@@ -1221,11 +1252,12 @@ export class UnifiedDatabase {
         tags?: string[];
         icon?: string;
         price?: number;
-    }): Promise<void> {
-        await this.retryQuery(
+    }): Promise<MarketplaceAgent> {
+        const result = await this.retryQuery(
             `INSERT INTO agent_marketplace 
             (id, agent_id, author_id, title, description, long_description, category, tags, icon, price, is_free)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+            RETURNING *`,
             [
                 params.id, params.agentId, params.authorId, params.title,
                 params.description, params.longDescription, params.category,
@@ -1235,6 +1267,15 @@ export class UnifiedDatabase {
                 (params.price || 0) === 0
             ]
         );
+
+        const row = result.rows[0];
+        return {
+            ...row,
+            tags: row.tags || [],
+            is_free: !!row.is_free,
+            is_featured: !!row.is_featured,
+            is_verified: !!row.is_verified
+        };
     }
 
     async getMarketplaceAgents(options?: {
@@ -1242,6 +1283,7 @@ export class UnifiedDatabase {
         status?: MarketplaceStatus;
         featured?: boolean;
         search?: string;
+        sortBy?: string;
         limit?: number;
         offset?: number;
     }): Promise<MarketplaceAgent[]> {
@@ -1270,11 +1312,21 @@ export class UnifiedDatabase {
             paramIdx++;
         }
 
-        query += ' ORDER BY is_featured DESC, downloads DESC, rating_avg DESC';
+        // sortBy is validated against whitelist in the route layer
+        const sortMap: Record<string, string> = {
+            downloads: 'downloads DESC',
+            rating: 'rating_avg DESC',
+            newest: 'created_at DESC'
+        };
+        const sortClause = (options?.sortBy && sortMap[options.sortBy])
+            ? sortMap[options.sortBy]
+            : 'is_featured DESC, downloads DESC, rating_avg DESC';
+        query += ` ORDER BY ${sortClause}`;
 
-        if (options?.limit) {
+        const effectiveLimit = options?.limit ?? (options?.search ? 100 : undefined);
+        if (effectiveLimit !== undefined) {
             query += ` LIMIT $${paramIdx++}`;
-            params.push(options.limit);
+            params.push(effectiveLimit);
         }
         if (options?.offset) {
             query += ` OFFSET $${paramIdx++}`;
@@ -1333,10 +1385,19 @@ export class UnifiedDatabase {
     }
 
     async uninstallAgent(marketplaceId: string, userId: string): Promise<void> {
-        await this.retryQuery(
-            'DELETE FROM agent_installations WHERE marketplace_id = $1 AND user_id = $2',
-            [marketplaceId, userId]
-        );
+        await withTransaction(this.pool, async (client) => {
+            const result = await client.query(
+                'DELETE FROM agent_installations WHERE marketplace_id = $1 AND user_id = $2',
+                [marketplaceId, userId]
+            );
+
+            if ((result.rowCount || 0) > 0) {
+                await client.query(
+                    'UPDATE agent_marketplace SET downloads = GREATEST(downloads - 1, 0) WHERE id = $1',
+                    [marketplaceId]
+                );
+            }
+        });
     }
 
     async getUserInstalledAgents(userId: string): Promise<MarketplaceAgent[]> {
@@ -1436,8 +1497,13 @@ export class UnifiedDatabase {
         updatedBy?: string;
     }): Promise<void> {
         await withTransaction(this.pool, async (client) => {
-            // 버전 히스토리 저장
-            const current = await this.getCanvasDocument(documentId);
+            // 버전 히스토리 저장 (트랜잭션 내에서 직접 조회 — TOCTOU 방지)
+            const currentResult = await client.query('SELECT * FROM canvas_documents WHERE id = $1', [documentId]);
+            const currentRow = currentResult.rows[0] as (Partial<CanvasDocument> & { is_shared?: unknown }) | undefined;
+            const current = currentRow ? {
+                ...currentRow,
+                is_shared: !!currentRow.is_shared
+            } as CanvasDocument : undefined;
             if (current && updates.content !== undefined && updates.content !== current.content) {
                 await client.query(
                     `INSERT INTO canvas_versions (document_id, version, content, change_summary, created_by)
@@ -1526,7 +1592,7 @@ export class UnifiedDatabase {
         tokenExpiresAt?: string;
         accountEmail?: string;
         accountName?: string;
-        metadata?: Record<string, any>;
+        metadata?: Record<string, unknown>;
     }): Promise<void> {
         await this.retryQuery(
             `INSERT INTO external_connections 
@@ -2003,7 +2069,7 @@ export class UnifiedDatabase {
 
     async close(): Promise<void> {
         await this.pool.end();
-        console.log('[UnifiedDB] 연결 종료');
+        logger.info('[UnifiedDB] Connection closed');
     }
 }
 

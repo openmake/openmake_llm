@@ -1,5 +1,6 @@
 import { WebSocket, WebSocketServer } from 'ws';
 import { IncomingMessage } from 'http';
+import * as crypto from 'crypto';
 import { ClusterManager } from '../cluster/manager';
 import { getUnifiedMCPClient } from '../mcp';
 import { ChatService } from '../services/ChatService';
@@ -14,7 +15,10 @@ import { getUserManager } from '../data/user-manager';
 import { checkChatRateLimit } from '../middlewares/chat-rate-limiter';
 
 const log = createLogger('WebSocketHandler');
-const conversationDb = require('../data/conversation-db').getConversationDB();
+
+function getConversationDb() {
+    return require('../data/conversation-db').getConversationDB();
+}
 
 /** WebSocket incoming message shape */
 interface WSMessage {
@@ -68,11 +72,10 @@ export class WebSocketHandler {
 
     private setupClusterEvents(): void {
         this.cluster.on('event', (event: Record<string, unknown>) => {
-            const message = JSON.stringify({
+            this.broadcast({
                 type: 'cluster_event',
                 event
             });
-            this.broadcast(JSON.parse(message));
         });
     }
 
@@ -160,7 +163,20 @@ export class WebSocketHandler {
 
             ws.on('message', async (data) => {
                 try {
-                    const msg = JSON.parse(data.toString());
+                    const raw = data.toString();
+                    if (raw.length > 1024 * 1024) {
+                        ws.send(JSON.stringify({ type: 'error', message: '메시지가 너무 큽니다' }));
+                        return;
+                    }
+
+                    let msg: WSMessage;
+                    try {
+                        msg = JSON.parse(raw);
+                    } catch {
+                        ws.send(JSON.stringify({ type: 'error', message: '잘못된 메시지 형식입니다' }));
+                        return;
+                    }
+
                     log.debug(`[WS] 메시지 수신: type=${msg.type}`);
                     await this.handleMessage(ws, msg);
                 } catch (e: unknown) {
@@ -170,8 +186,20 @@ export class WebSocketHandler {
         });
     }
 
-    private async handleMessage(ws: WebSocket, msg: WSMessage): Promise<void> {
-        switch (msg.type) {
+    private async handleMessage(ws: WebSocket, msg: unknown): Promise<void> {
+        if (!msg || typeof msg !== 'object' || typeof (msg as { type?: unknown }).type !== 'string') {
+            ws.send(JSON.stringify({ type: 'error', message: '잘못된 메시지 형식입니다' }));
+            return;
+        }
+
+        const typedMsg = msg as WSMessage;
+        const validTypes: WSMessage['type'][] = ['refresh', 'mcp_settings', 'request_agents', 'chat', 'abort'];
+        if (!validTypes.includes(typedMsg.type)) {
+            log.debug(`[WS] 알 수 없는 메시지 타입: ${typedMsg.type}`);
+            return;
+        }
+
+        switch (typedMsg.type) {
             case 'refresh':
                 ws.send(JSON.stringify({
                     type: 'update',
@@ -184,7 +212,7 @@ export class WebSocketHandler {
 
             case 'mcp_settings':
                 // MCP 모듈 설정 즉시 동기화
-                const { settings } = msg;
+                const { settings } = typedMsg;
                 if (settings) {
                     const mcpClientForSettings = getUnifiedMCPClient();
                     await mcpClientForSettings.setFeatureState(settings);
@@ -239,7 +267,7 @@ export class WebSocketHandler {
             }
 
             case 'chat':
-                await this.handleChat(ws, msg);
+                await this.handleChat(ws, typedMsg);
                 break;
 
             case 'abort':
@@ -265,8 +293,13 @@ export class WebSocketHandler {
     }
 
     private async handleChat(ws: WebSocket, msg: WSMessage): Promise<void> {
+        if (typeof msg.message !== 'string' || msg.message.trim() === '') {
+            ws.send(JSON.stringify({ type: 'error', message: '메시지가 필요합니다' }));
+            return;
+        }
+
         const { model, nodeId, history, images, docId, sessionId, anonSessionId } = msg;
-        const message = msg.message || '';
+        const message = msg.message.trim();
 
         // ExtendedWebSocket 캐스팅
         const extWs = ws as ExtendedWebSocket;
@@ -295,7 +328,7 @@ export class WebSocketHandler {
                 client = this.cluster.createScopedClient(nodeId, selectedModel);
                 selectedNode = nodeId;
             } else {
-                const bestNode = this.cluster.getBestNode(model);
+                const bestNode = this.cluster.getBestNode(selectedModel);
                 if (bestNode) {
                     client = this.cluster.createScopedClient(bestNode.id, selectedModel);
                     selectedNode = bestNode.id;
@@ -342,7 +375,7 @@ export class WebSocketHandler {
             // 또는 새 대화인 경우 세션 생성
             if (!currentSessionId || currentSessionId.length < 10) { // 노드 ID(짧음)와 구별
                 // 새 세션 생성 — user_id는 인증된 ID만, 비로그인은 anon_session_id로 추적
-                const session = await conversationDb.createSession(authenticatedUserId, message.substring(0, 30), undefined, anonSessionId);
+                const session = await getConversationDb().createSession(authenticatedUserId, message.substring(0, 30), undefined, anonSessionId);
                 currentSessionId = session.id;
                 log.debug(`[Chat WS] 새 세션 생성: ${currentSessionId}, userId: ${authenticatedUserId || 'null'}, anonSessionId: ${anonSessionId || 'none'}`);
 
@@ -351,7 +384,7 @@ export class WebSocketHandler {
             }
 
             // 2. 사용자 메시지 저장
-            await conversationDb.addMessage(currentSessionId, 'user', message, { model: selectedModel });
+            await getConversationDb().addMessage(currentSessionId, 'user', message, { model: selectedModel });
 
             // ChatService 인스턴스 생성 및 실행
             const chatService = new ChatService(client);
@@ -364,6 +397,9 @@ export class WebSocketHandler {
             // 🆕 사용자 역할 및 등급 결정 (WebSocket 연결 인증 시 서버에서 확정)
             const userRole = extWs._authenticatedUserRole;
             const userTier: 'free' | 'pro' | 'enterprise' = extWs._authenticatedUserTier;
+            const messageId = crypto.randomUUID
+                ? crypto.randomUUID()
+                : `msg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
             
             // 🆕 userId, userRole, userTier를 ChatMessageRequest에 포함하여 전달
             // 토큰 콜백에서 중단 여부 체크
@@ -371,7 +407,7 @@ export class WebSocketHandler {
                 if (abortController.signal.aborted) {
                     throw new Error('ABORTED');
                 }
-                ws.send(JSON.stringify({ type: 'token', token }));
+                ws.send(JSON.stringify({ type: 'token', token, messageId }));
             };
 
             // 채팅 레이트 리밋 체크
@@ -412,7 +448,7 @@ export class WebSocketHandler {
 
             // 3. AI 응답 저장
             const endTime = Date.now();
-            await conversationDb.addMessage(currentSessionId, 'assistant', fullResponse, {
+            await getConversationDb().addMessage(currentSessionId, 'assistant', fullResponse, {
                 model: client.model,
                 responseTime: endTime - startTime
             });
@@ -427,7 +463,7 @@ export class WebSocketHandler {
             }
 
             log.info('[Chat] 생성 완료');
-            ws.send(JSON.stringify({ type: 'done' }));
+            ws.send(JSON.stringify({ type: 'done', messageId }));
 
         } catch (error: unknown) {
             // 중단 컨트롤러 정리
@@ -485,7 +521,7 @@ export class WebSocketHandler {
                 const extWs = ws as ExtendedWebSocket;
                 if (!extWs._isAlive) {
                     deadConnections.push(ws);
-                } else {
+                } else if (ws.readyState === WebSocket.OPEN) {
                     extWs._isAlive = false;
                     ws.ping();
                 }

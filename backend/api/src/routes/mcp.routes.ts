@@ -22,6 +22,9 @@ import { success, badRequest, unauthorized, forbidden, internalError } from '../
 import { asyncHandler } from '../utils/error-handler';
 import { getUnifiedDatabase } from '../data/models/unified-database';
 import type { MCPTransportType } from '../mcp/types';
+import { createLogger } from '../utils/logger';
+
+const logger = createLogger('McpRoutes');
 
 // 라우터 생성
 export const mcpRouter = Router();
@@ -32,10 +35,10 @@ mcpRouter.get('/settings', optionalAuth, (req: Request, res: Response) => {
          const mcpClient = getUnifiedMCPClient();
          const settings = mcpClient.getFeatureState();
          res.json(success({ settings }));
-     } catch (error) {
-         console.error('[MCP Settings] 조회 실패:', error);
-         res.status(500).json(internalError('설정을 불러오는 중 오류가 발생했습니다'));
-     }
+      } catch (error) {
+          logger.error('[MCP Settings] 조회 실패:', error);
+          res.status(500).json(internalError('설정을 불러오는 중 오류가 발생했습니다'));
+      }
 });
 
 // MCP 설정 저장 (PUT) - 비로그인 사용자도 저장 가능 (글로벌 설정)
@@ -75,10 +78,10 @@ mcpRouter.put('/settings', optionalAuth, asyncHandler(async (req: Request, res: 
          const tools = mcpClient.getToolListForUser(userTier);
 
          res.json(success({ tools, tier: userTier, total: tools.length }));
-     } catch (error) {
-         console.error('[MCP Tools] 목록 조회 실패:', error);
-         res.status(500).json(internalError('도구 목록을 불러오는 중 오류가 발생했습니다'));
-     }
+      } catch (error) {
+          logger.error('[MCP Tools] 목록 조회 실패:', error);
+          res.status(500).json(internalError('도구 목록을 불러오는 중 오류가 발생했습니다'));
+      }
  });
 
   // 도구 실행 (POST) - 사용자 컨텍스트 기반 권한 검증

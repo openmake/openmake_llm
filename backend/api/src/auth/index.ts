@@ -19,6 +19,12 @@ const JWT_SECRET = getConfig().jwtSecret;
 const JWT_EXPIRES_IN = '15m';  // Access token - short lived for security
 const REFRESH_TOKEN_EXPIRES_IN = '7d';  // Refresh token - longer lived
 
+function isValidJWTPayload(obj: unknown): obj is JWTPayload {
+    if (!obj || typeof obj !== 'object') return false;
+    const record = obj as Record<string, unknown>;
+    return typeof record.userId === 'string' || typeof record.userId === 'number';
+}
+
 // JWT_SECRET 미설정 시 프로덕션 환경에서는 즉시 종료
 if (!JWT_SECRET) {
     if (getConfig().nodeEnv === 'test') {
@@ -110,7 +116,11 @@ export async function verifyRefreshToken(token: string): Promise<JWTPayload | nu
             return null;
         }
 
-        const decoded = jwt.verify(token, JWT_SECRET) as unknown as JWTPayload;
+        const decoded = jwt.verify(token, JWT_SECRET);
+        if (!isValidJWTPayload(decoded)) {
+            console.warn('[Auth] JWT 페이로드 형식 불일치');
+            return null;
+        }
         return decoded;
     } catch (error) {
         console.error('[Auth] 리프레시 토큰 검증 실패:', error);
@@ -138,7 +148,11 @@ export async function verifyToken(token: string): Promise<JWTPayload | null> {
             }
         }
 
-        const decoded = jwt.verify(token, JWT_SECRET) as unknown as JWTPayload;
+        const decoded = jwt.verify(token, JWT_SECRET);
+        if (!isValidJWTPayload(decoded)) {
+            console.warn('[Auth] JWT 페이로드 형식 불일치');
+            return null;
+        }
         return decoded;
     } catch (error) {
         console.error('[Auth] 토큰 검증 실패:', error);

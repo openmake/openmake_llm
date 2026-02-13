@@ -164,7 +164,7 @@ describe('Auth Middleware', () => {
             
             expect(nextCalled).toBe(false);
             expect(res.statusCode).toBe(401);
-            expect((res.jsonData as { error: string })?.error).toContain('인증이 필요합니다');
+            expect((res.jsonData as { success: boolean; error: { message: string } })?.error?.message).toContain('인증이 필요합니다');
         });
 
         it('should return 401 with invalid token', async () => {
@@ -179,7 +179,7 @@ describe('Auth Middleware', () => {
             
             expect(nextCalled).toBe(false);
             expect(res.statusCode).toBe(401);
-            expect((res.jsonData as { error: string })?.error).toContain('유효하지 않은 토큰');
+            expect((res.jsonData as { success: boolean; error: { message: string } })?.error?.message).toContain('유효하지 않은 토큰');
         });
 
         it('should return 401 for unknown user', async () => {
@@ -194,7 +194,7 @@ describe('Auth Middleware', () => {
             
             expect(nextCalled).toBe(false);
             expect(res.statusCode).toBe(401);
-            expect((res.jsonData as { error: string })?.error).toContain('사용자를 찾을 수 없습니다');
+            expect((res.jsonData as { success: boolean; error: { message: string } })?.error?.message).toContain('사용자를 찾을 수 없습니다');
         });
 
         it('should return 403 for inactive user', async () => {
@@ -209,7 +209,7 @@ describe('Auth Middleware', () => {
             
             expect(nextCalled).toBe(false);
             expect(res.statusCode).toBe(403);
-            expect((res.jsonData as { error: string })?.error).toContain('비활성화된 계정');
+            expect((res.jsonData as { success: boolean; error: { message: string } })?.error?.message).toContain('비활성화된 계정');
         });
 
         it('should pass with valid token', async () => {
@@ -252,7 +252,7 @@ describe('Auth Middleware', () => {
             
             expect(nextCalled).toBe(false);
             expect(res.statusCode).toBe(403);
-            expect((res.jsonData as { error: string })?.error).toContain('관리자 권한');
+            expect((res.jsonData as { success: boolean; error: { message: string } })?.error?.message).toContain('관리자 권한');
         });
 
         it('should pass for admin user', () => {

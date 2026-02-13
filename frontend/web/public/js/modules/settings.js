@@ -148,7 +148,7 @@ async function loadCurrentModel() {
 
         const modelNameEl = document.getElementById('activeModelName');
         if (modelNameEl) {
-            modelNameEl.textContent = data.model || '알 수 없음';
+            modelNameEl.textContent = data.model || 'OpenMake LLM Auto';
         }
     } catch (e) {
         console.error('모델 정보 로드 오류:', e);

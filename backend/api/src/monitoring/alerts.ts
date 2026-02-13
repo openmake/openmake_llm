@@ -3,9 +3,8 @@
  * 할당량 경고, 시스템 이상 감지 알림
  */
 
-import nodemailer from 'nodemailer';
+import nodemailer, { type Transporter } from 'nodemailer';
 import { createLogger } from '../utils/logger';
-import { getConfig } from '../config';
 
 const logger = createLogger('AlertSystem');
 
@@ -64,7 +63,7 @@ interface AlertConfig {
  */
 export class AlertSystem {
     private config: AlertConfig;
-    private transporter: nodemailer.Transporter | null = null;
+    private transporter: Transporter | null = null;
     private lastAlerts: Map<string, Date> = new Map();
     private alertHistory: AlertMessage[] = [];
 

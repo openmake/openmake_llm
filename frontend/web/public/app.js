@@ -299,9 +299,15 @@ async function initApp() {
     // ?sessionId= 우선, ?chat= fallback (UnifiedSidebar 호환)
     const urlParams = new URLSearchParams(window.location.search);
     const sessionId = urlParams.get('sessionId') || urlParams.get('chat');
-    if (sessionId) {
+    // sessionStorage 체크 (history.js goToSession에서 전달 — Router가 query string을 제거하므로)
+    const pendingSessionId = sessionStorage.getItem('pendingSessionId');
+    if (pendingSessionId) {
+        sessionStorage.removeItem('pendingSessionId');
+    }
+    const targetSessionId = sessionId || pendingSessionId;
+    if (targetSessionId) {
         // 약간의 지연 후 로드 (초기화 안정성 확보)
-        setTimeout(() => loadSession(sessionId), 100);
+        setTimeout(() => loadSession(targetSessionId), 100);
     }
 
     // WebSocket 연결 후 자동으로 에이전트 목록 요청됨 (connectWebSocket의 onopen에서 처리)
@@ -482,6 +488,14 @@ let reconnectAttempts = 0;
 const MAX_RECONNECT_ATTEMPTS = 10;
 const INITIAL_RECONNECT_DELAY = 1000;
 
+/**
+ * Chat Streaming WebSocket (app.js)
+ * ─────────────────────────────────
+ * This connection handles real-time chat token streaming (SSE-like).
+ * A separate WebSocket in websocket.js handles system messages
+ * (agents, refresh, heartbeat). Two connections serve distinct
+ * purposes and MUST remain separate to avoid message routing complexity.
+ */
 function connectWebSocket() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${protocol}//${window.location.host}`;
@@ -549,6 +563,12 @@ function connectWebSocket() {
     };
 }
 
+window.addEventListener('beforeunload', () => {
+    if (ws) {
+        ws.close();
+    }
+});
+
 // 연결 상태 UI 업데이트
 function updateConnectionStatus(status, text) {
     const statusEl = document.getElementById('connectionStatus');
@@ -574,10 +594,19 @@ function handleMessage(data) {
             updateClusterInfo(data.data);
             break;
         case 'token':
+            if (data.messageId) {
+                window._lastTokenMessageId = data.messageId;
+            }
             appendToken(data.token);
             break;
         case 'done':
             finishAssistantMessage();
+            break;
+        case 'stats':
+            // MCP stats 데이터 수신 — 상태 저장
+            if (data.stats) {
+                window._mcpStats = data.stats;
+            }
             break;
         case 'agents':
             renderAgentList(data.agents);
@@ -707,15 +736,24 @@ async function fetchClusterInfoFallback() {
     }
 }
 
+// 브랜드 모델 프로파일 정의 (pipeline-profile.ts와 동기화)
+const BRAND_MODELS = [
+    { id: 'openmake_llm_auto', name: 'OpenMake LLM Auto', desc: '자동 라우팅' },
+    { id: 'openmake_llm', name: 'OpenMake LLM', desc: '균형 잡힌 범용' },
+    { id: 'openmake_llm_pro', name: 'OpenMake LLM Pro', desc: '프리미엄 품질' },
+    { id: 'openmake_llm_fast', name: 'OpenMake LLM Fast', desc: '속도 최적화' },
+    { id: 'openmake_llm_think', name: 'OpenMake LLM Think', desc: '심층 추론' },
+    { id: 'openmake_llm_code', name: 'OpenMake LLM Code', desc: '코드 전문' },
+    { id: 'openmake_llm_vision', name: 'OpenMake LLM Vision', desc: '멀티모달' },
+];
+
 function updateModelSelect() {
     const select = document.getElementById('modelSelect');
     if (!select) return;
 
-    const allModels = [...new Set(nodes.flatMap(n => n.models || []))];
-
     // 🔒 관리자가 아니면 모델 이름 숨김
     if (!isAdmin()) {
-        select.innerHTML = '<option value="default">AI Assistant</option>';
+        select.innerHTML = '<option value="openmake_llm_auto">OpenMake LLM Auto</option>';
         select.disabled = true;
         select.style.cursor = 'default';
         return;
@@ -724,26 +762,26 @@ function updateModelSelect() {
     select.disabled = false;
     select.style.cursor = 'pointer';
 
-    if (allModels.length > 0) {
-        const savedModel = localStorage.getItem('selectedModel');
-        // 서버 설정에서 기본 모델 가져오거나 첫 번째 모델 사용
-        const defaultModel = window.__SERVER_CONFIG__?.defaultModel || allModels[0] || '';
+    const savedModel = localStorage.getItem('selectedModel');
+    const defaultModelId = 'openmake_llm_auto';
 
-        select.innerHTML = allModels.map(m => {
-            const isSelected = savedModel ? m === savedModel : (defaultModel ? m.includes(defaultModel) : false);
-            return `<option value="${escapeHtml(m)}" ${isSelected ? 'selected' : ''}>${escapeHtml(m)}</option>`;
-        }).join('');
+    // 브랜드 모델 프로파일로 셀렉트 박스 구성
+    select.innerHTML = BRAND_MODELS.map(m => {
+        const isSelected = savedModel ? m.id === savedModel : m.id === defaultModelId;
+        return `<option value="${escapeHtml(m.id)}" ${isSelected ? 'selected' : ''}>${escapeHtml(m.name)}</option>`;
+    }).join('');
 
-        if (!savedModel && select.value) {
-            localStorage.setItem('selectedModel', select.value);
-        }
-
-        // Change 이벤트 리스너 추가 (중복 방지)
-        select.onchange = function () {
-            localStorage.setItem('selectedModel', this.value);
-            showToast(`🤖 모델 변경됨: ${this.value}`);
-        };
+    if (!savedModel && select.value) {
+        localStorage.setItem('selectedModel', select.value);
     }
+
+    // Change 이벤트 리스너 추가 (중복 방지)
+    select.onchange = function () {
+        localStorage.setItem('selectedModel', this.value);
+        const brandModel = BRAND_MODELS.find(m => m.id === this.value);
+        const displayName = brandModel ? brandModel.name : this.value;
+        showToast(`🤖 모델 변경됨: ${displayName}`);
+    };
 }
 
 function handleClusterEvent(event) {
@@ -847,8 +885,8 @@ function sendMessage() {
     isSending = true;  // 전송 시작
     console.log('[sendMessage] 메시지 전송 시작:', message.substring(0, 50));
 
-    // 모델 선택기가 없으면 기본값 사용 (서버에서 자동 선택)
-    const model = document.getElementById('modelSelect')?.value || 'default';
+    // 모델 선택기가 없으면 기본값 사용 (브랜드 모델 자동 라우팅)
+    const model = document.getElementById('modelSelect')?.value || localStorage.getItem('selectedModel') || 'openmake_llm_auto';
 
     // 환영 화면 숨기기
     const welcomeScreen = document.getElementById('welcomeScreen');
@@ -1956,6 +1994,9 @@ async function loadChatSessions() {
         const headers = authToken ? { 'Authorization': `Bearer ${authToken}` } : {};
 
          const res = await fetch(`/api/chat/sessions?${params}`, { headers });
+         if (!res.ok) {
+             throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+         }
          const data = await res.json();
 
          const payload = data.data || data;
@@ -2013,6 +2054,9 @@ async function createNewSession(title) {
               headers,
               body: JSON.stringify({ title, model, anonSessionId })
           });
+         if (!res.ok) {
+             throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+         }
          const data = await res.json();
          const payload = data.data || data;
          if (data.success) {
@@ -2035,6 +2079,9 @@ async function loadSession(sessionId) {
 
      try {
          const res = await fetch(`/api/chat/sessions/${sessionId}/messages`);
+         if (!res.ok) {
+             throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+         }
          const data = await res.json();
 
          const payload = data.data || data;
@@ -2153,6 +2200,9 @@ async function deleteSession(sessionId) {
 
     try {
         const res = await fetch(`/api/chat/sessions/${sessionId}`, { method: 'DELETE' });
+        if (!res.ok) {
+            throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+        }
         const data = await res.json();
 
         if (data.success) {
@@ -2234,6 +2284,9 @@ async function uploadFile(file) {
               credentials: 'include',  // 🔒 httpOnly 쿠키 포함
               body: formData
           });
+         if (!res.ok) {
+             throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+         }
 
          const data = await res.json();
 
@@ -2252,6 +2305,9 @@ async function uploadFile(file) {
                  try {
                      // 문서 전체 내용을 서버에서 가져옴
                      const docRes = await fetch(`/api/documents/${data.docId}`);
+                     if (!docRes.ok) {
+                         throw new Error(`HTTP ${docRes.status}: ${docRes.statusText}`);
+                     }
                      const docData = await docRes.json();
                      const docPayload = docData.data || docData;
                      if (docPayload.text) {
@@ -2595,7 +2651,7 @@ async function loadModelInfo() {
 
     // 🔒 관리자가 아니면 모델 정보 숨김
     if (!isAdmin()) {
-        activeModelName.textContent = 'AI Assistant (Premium)';
+        activeModelName.textContent = 'OpenMake LLM Auto';
         modelListContainer.innerHTML = '<span style="color: var(--text-muted);">모델 정보는 관리자만 볼 수 있습니다</span>';
         return;
     }
@@ -2604,7 +2660,7 @@ async function loadModelInfo() {
     modelListContainer.innerHTML = '<span style="color: var(--text-muted);">조회 중...</span>';
 
      try {
-          // Ollama 모델 목록 API 호출
+          // 브랜드 모델 프로파일 목록 API 호출
           const response = await fetch('/api/models', {
               credentials: 'include'  // 🔒 httpOnly 쿠키 포함
           });
@@ -2613,31 +2669,41 @@ async function loadModelInfo() {
               const payload = data.data || data;
              console.log('[Settings] 모델 정보:', data);
 
-             // 현재 기본 모델 표시 (서버 응답 우선)
-             const defaultModel = payload.defaultModel || payload.models?.[0]?.name || 'AI Assistant';
-             activeModelName.textContent = defaultModel;
+             // 현재 기본 모델 표시 (브랜드 모델명)
+             const savedModel = localStorage.getItem('selectedModel');
+             const defaultModelId = payload.defaultModel || 'openmake_llm_auto';
 
-             // 설치된 모델 목록 표시
+             // 저장된 모델의 displayName 찾기
+             let activeDisplayName = 'OpenMake LLM Auto';
              if (payload.models && payload.models.length > 0) {
-                 const savedModel = localStorage.getItem('selectedModel');
+                 const activeModel = payload.models.find(m => {
+                     const modelId = m.modelId || m.name;
+                     return savedModel ? modelId === savedModel : modelId === defaultModelId;
+                 });
+                 if (activeModel) activeDisplayName = activeModel.name;
+             }
+             activeModelName.textContent = activeDisplayName;
+
+             // 브랜드 모델 프로파일 목록 표시
+             if (payload.models && payload.models.length > 0) {
                  modelListContainer.innerHTML = payload.models.map(model => {
-                     // 저장된 모델이 있으면 그것을, 없으면 기본 모델을 활성 상태로 표시
-                     const isActive = savedModel ? model.name === savedModel : model.name === defaultModel;
+                     const modelId = model.modelId || model.name;
+                     const displayName = model.name;
+                     const isActive = savedModel ? modelId === savedModel : modelId === defaultModelId;
                      return `
-                     <div class="model-badge ${isActive ? 'active' : ''}" onclick="selectModel('${escapeHtml(model.name)}')">
-                         ${isActive ? '✓ ' : ''}${escapeHtml(model.name)}
-                         <span style="font-size: 0.65rem; opacity: 0.7; margin-left: 4px;">(${formatSize(model.size)})</span>
+                     <div class="model-badge ${isActive ? 'active' : ''}" onclick="selectModel('${escapeHtml(modelId)}')">
+                         ${isActive ? '✓ ' : ''}${escapeHtml(displayName)}
                      </div>
                  `}).join('');
              } else {
-                 modelListContainer.innerHTML = '<span style="color: var(--text-muted);">설치된 모델 없음</span>';
+                 modelListContainer.innerHTML = '<span style="color: var(--text-muted);">사용 가능한 모델 없음</span>';
              }
         } else {
             throw new Error('모델 API 응답 오류');
         }
     } catch (error) {
         console.error('[Settings] 모델 정보 조회 실패:', error);
-        activeModelName.textContent = 'AI Assistant (Premium)';
+        activeModelName.textContent = 'OpenMake LLM Auto';
         modelListContainer.innerHTML = '<span style="color: var(--text-muted);">모델 목록을 가져올 수 없습니다</span>';
     }
 }
@@ -2651,30 +2717,22 @@ function formatSize(bytes) {
     return `${mb.toFixed(0)}MB`;
 }
 
-function selectModel(modelName) {
-    localStorage.setItem('selectedModel', modelName);
+function selectModel(modelId) {
+    localStorage.setItem('selectedModel', modelId);
 
-    // UI 업데이트
-    const badges = document.querySelectorAll('.model-badge');
-    badges.forEach(b => {
-        if (b.textContent.includes(modelName)) {
-            b.classList.add('active');
-            if (!b.textContent.includes('✓')) {
-                // 텍스트 노드만 업데이트하거나 재렌더링 필요
-                loadModelInfo(); // 간단하게 재로드
-            }
-        } else {
-            b.classList.remove('active');
-        }
-    });
+    // UI 전체 재로드 (브랜드 모델 badge 갱신)
+    loadModelInfo();
 
     // 메인 셀렉트 박스도 업데이트
     const select = document.getElementById('modelSelect');
     if (select) {
-        select.value = modelName;
+        select.value = modelId;
     }
 
-    showToast(`🤖 모델 선택됨: ${modelName}`);
+    // 브랜드 모델명으로 toast 표시
+    const brandModel = BRAND_MODELS.find(m => m.id === modelId);
+    const displayName = brandModel ? brandModel.name : modelId;
+    showToast(`🤖 모델 선택됨: ${displayName}`);
 }
 
 // 설정 섹션 토글 (아코디언)

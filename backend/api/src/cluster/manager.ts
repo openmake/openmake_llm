@@ -28,8 +28,7 @@ import {
     ClusterNode,
     ClusterConfig,
     ClusterStats,
-    ClusterEvent,
-    NodeResources
+    ClusterEvent
 } from './types';
 import { loadClusterConfig } from './config';
 import { createClient, OllamaClient } from '../ollama/client';
@@ -68,8 +67,14 @@ export class ClusterManager extends EventEmitter {
     /** 클러스터 설정 */
     private config: ClusterConfig;
     
-    /** 헬스체크 인터벌 타이머 */
-    private healthCheckInterval?: NodeJS.Timeout;
+    /** 헬스체크 타이머 */
+    private healthCheckTimer?: NodeJS.Timeout;
+
+    /** 헬스체크 실행 간격(ms) */
+    private healthCheckIntervalMs: number;
+
+    /** 헬스체크 스케줄러 활성 상태 */
+    private healthCheckActive: boolean = false;
     
     /** 이 매니저 인스턴스의 고유 ID */
     private nodeId: string;
@@ -83,6 +88,7 @@ export class ClusterManager extends EventEmitter {
         super();
         this.config = { ...loadClusterConfig(), ...config };
         this.nodeId = uuidv4();
+        this.healthCheckIntervalMs = this.config.heartbeatInterval;
     }
 
     /**
@@ -131,9 +137,10 @@ export class ClusterManager extends EventEmitter {
      * 헬스체크를 중단하고 모든 노드 및 클라이언트 정보를 정리합니다.
      */
     stop(): void {
-        if (this.healthCheckInterval) {
-            clearInterval(this.healthCheckInterval);
-            this.healthCheckInterval = undefined;
+        this.healthCheckActive = false;
+        if (this.healthCheckTimer) {
+            clearTimeout(this.healthCheckTimer);
+            this.healthCheckTimer = undefined;
         }
         this.nodes.clear();
         this.clients.clear();
@@ -443,15 +450,42 @@ export class ClusterManager extends EventEmitter {
     }
 
     /**
+     * 모든 노드 헬스체크 수행
+     */
+    private async performHealthCheck(): Promise<void> {
+        const nodeIds = Array.from(this.nodes.keys());
+        await Promise.all(nodeIds.map(id => this.updateNodeStatus(id)));
+    }
+
+    /**
+     * 다음 헬스체크 스케줄링
+     */
+    private scheduleNextHealthCheck(): void {
+        if (!this.healthCheckActive) {
+            return;
+        }
+
+        if (this.healthCheckTimer) {
+            clearTimeout(this.healthCheckTimer);
+        }
+
+        this.healthCheckTimer = setTimeout(async () => {
+            try {
+                await this.performHealthCheck();
+            } finally {
+                this.scheduleNextHealthCheck();
+            }
+        }, this.healthCheckIntervalMs);
+    }
+
+    /**
      * 헬스체크 시작
      * 
      * 설정된 간격으로 모든 노드의 상태를 확인하는 인터벌을 시작합니다.
      */
     private startHealthCheck(): void {
-        this.healthCheckInterval = setInterval(async () => {
-            const nodeIds = Array.from(this.nodes.keys());
-            await Promise.all(nodeIds.map(id => this.updateNodeStatus(id)));
-        }, this.config.heartbeatInterval);
+        this.healthCheckActive = true;
+        this.scheduleNextHealthCheck();
     }
 }
 

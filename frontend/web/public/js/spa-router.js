@@ -38,6 +38,19 @@
     const DEFAULT_TITLE = 'OpenMake.AI';
     const LOG_PREFIX = '[Router]';
 
+    // Safe localStorage wrapper for Safari Private Mode
+    const SafeStorage = window.SafeStorage = window.SafeStorage || {
+        getItem: function (key) {
+            try { return localStorage.getItem(key); } catch (e) { return null; }
+        },
+        setItem: function (key, value) {
+            try { localStorage.setItem(key, value); } catch (e) {}
+        },
+        removeItem: function (key) {
+            try { localStorage.removeItem(key); } catch (e) {}
+        }
+    };
+
     // ─── 유틸리티 ──────────────────────────────────────
 
     /**
@@ -101,7 +114,7 @@
      */
     function isAdminUser() {
         try {
-            var stored = localStorage.getItem('user');
+            var stored = SafeStorage.getItem('user');
             if (!stored) return false;
             var user = JSON.parse(stored);
             return user && user.role === 'admin';
@@ -115,11 +128,11 @@
      * @returns {boolean}
      */
     function isAuthenticated() {
-        const authToken = localStorage.getItem('authToken');
+        const authToken = SafeStorage.getItem('authToken');
         // OAuth 로그인 시 httpOnly 쿠키만 있고 authToken은 없을 수 있음 -> user 객체 확인
-        const user = localStorage.getItem('user');
-        const isGuest = localStorage.getItem('guestMode') === 'true' ||
-                        localStorage.getItem('isGuest') === 'true';
+        const user = SafeStorage.getItem('user');
+        const isGuest = SafeStorage.getItem('guestMode') === 'true' ||
+                        SafeStorage.getItem('isGuest') === 'true';
         return (!!authToken || !!user) && !isGuest;
     }
 

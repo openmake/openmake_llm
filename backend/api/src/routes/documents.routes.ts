@@ -23,8 +23,11 @@ import {
   } from '../documents';
   import { uploadedDocuments } from '../documents/store';
   import { getConfig } from '../config';
-  import { success, badRequest, notFound, internalError, serviceUnavailable } from '../utils/api-response';
+  import { success, badRequest, notFound, serviceUnavailable } from '../utils/api-response';
   import { asyncHandler } from '../utils/error-handler';
+  import { createLogger } from '../utils/logger';
+
+const logger = createLogger('DocumentsRoutes');
 
 const router = Router();
 let clusterManager: ClusterManager;
@@ -86,8 +89,8 @@ function decodeFilename(filename: string): string {
 
 // Multer 설정
 const storage = multer.diskStorage({
-    destination: (req, file, cb) => cb(null, uploadDir),
-    filename: (req, file, cb) => {
+    destination: (_req, _file, cb) => cb(null, uploadDir),
+    filename: (_req, file, cb) => {
         const ext = path.extname(file.originalname);
         const uniqueName = `${Date.now()}-${Math.random().toString(36).substring(7)}${ext}`;
         cb(null, uniqueName);
@@ -111,15 +114,15 @@ export function setDependencies(cluster: ClusterManager, broadcast: (data: Recor
  * POST /api/upload
  * 파일 업로드
  */
-router.post('/upload', upload.single('file'), async (req: Request, res: Response) => {
+router.post('/upload', upload.single('file'), asyncHandler(async (req: Request, res: Response) => {
      try {
          if (!req.file) {
              res.status(400).json(badRequest('파일이 없습니다'));
              return;
          }
 
-        const originalFilename = decodeFilename(req.file.originalname);
-        console.log(`[Upload] 파일 업로드: ${originalFilename}`);
+         const originalFilename = decodeFilename(req.file.originalname);
+         logger.info(`[Upload] 파일 업로드: ${originalFilename}`);
 
         // 업로드 시작 알림
         broadcastFn?.({
@@ -130,9 +133,9 @@ router.post('/upload', upload.single('file'), async (req: Request, res: Response
             progress: 5
         });
 
-        // 진행 상태 콜백
-        const onProgress = (event: ProgressEvent) => {
-            console.log(`[Progress] ${event.stage}: ${event.message} (${event.progress || 0}%)`);
+         // 진행 상태 콜백
+         const onProgress = (event: ProgressEvent) => {
+             logger.info(`[Progress] ${event.stage}: ${event.message} (${event.progress || 0}%)`);
             broadcastFn?.({
                 ...event,
                 filename: originalFilename
@@ -145,7 +148,7 @@ router.post('/upload', upload.single('file'), async (req: Request, res: Response
         const docId = `${Date.now()}-${Math.random().toString(36).substring(7)}`;
         uploadedDocuments.set(docId, doc);
 
-        console.log(`[Upload] 텍스트 추출 완료: ${doc.text.length}자`);
+         logger.info(`[Upload] 텍스트 추출 완료: ${doc.text.length}자`);
 
         // 완료 알림
         broadcastFn?.({
@@ -157,8 +160,8 @@ router.post('/upload', upload.single('file'), async (req: Request, res: Response
         });
 
          res.json(success({ docId, filename: doc.filename, type: doc.type, pages: doc.pages, textLength: doc.text.length, preview: doc.text.substring(0, 500) + (doc.text.length > 500 ? '...' : '') }));
-     } catch (error: unknown) {
-         console.error('[Upload] 오류:', error);
+      } catch (error: unknown) {
+          logger.error('[Upload] 오류:', error);
 
          broadcastFn?.({
              type: 'document_progress',
@@ -177,7 +180,7 @@ router.post('/upload', upload.single('file'), async (req: Request, res: Response
 
          throw error;
      }
-});
+}));
 
 /**
  * POST /api/summarize
@@ -192,7 +195,7 @@ router.post('/summarize', asyncHandler(async (req: Request, res: Response) => {
          return;
      }
 
-    console.log(`[Summarize] 문서 요약: ${doc.filename}`);
+     logger.info(`[Summarize] 문서 요약: ${doc.filename}`);
 
       const bestNode = clusterManager.getBestNode(model);
       const client = bestNode ? clusterManager.createScopedClient(bestNode.id, model) : undefined;
@@ -206,14 +209,14 @@ router.post('/summarize', asyncHandler(async (req: Request, res: Response) => {
      const result = await client.generate(prompt, { temperature: 0.1 });
     const response = result.response;
 
-    console.log('[Summarize] 요약 완료. JSON 파싱 시도...');
+     logger.info('[Summarize] 요약 완료. JSON 파싱 시도...');
 
     let parsedSummary;
     try {
         const cleanJson = response.replace(/```json/g, '').replace(/```/g, '').trim();
         parsedSummary = JSON.parse(cleanJson);
-    } catch (e) {
-        console.error('[Summarize] JSON 파싱 실패, 원본 반환', e);
+     } catch (e) {
+         logger.error('[Summarize] JSON 파싱 실패, 원본 반환', e);
         parsedSummary = {
             title: doc.filename,
             summary: ['(JSON 파싱 실패, 원본 텍스트 표시)'],
@@ -238,7 +241,7 @@ router.post('/document/ask', asyncHandler(async (req: Request, res: Response) =>
          return;
      }
 
-    console.log(`[DocQA] 질문: ${question?.substring(0, 50)}...`);
+     logger.info(`[DocQA] 질문: ${question?.substring(0, 50)}...`);
 
       const bestNode = clusterManager.getBestNode(model);
       const client = bestNode ? clusterManager.createScopedClient(bestNode.id, model) : undefined;
@@ -256,8 +259,8 @@ router.post('/document/ask', asyncHandler(async (req: Request, res: Response) =>
     try {
         const cleanJson = response.replace(/```json/g, '').replace(/```/g, '').trim();
         parsedAnswer = JSON.parse(cleanJson);
-    } catch (e) {
-        console.error('[DocQA] JSON 파싱 실패', e);
+     } catch (e) {
+         logger.error('[DocQA] JSON 파싱 실패', e);
         parsedAnswer = {
             answer: response,
             evidence: "JSON 파싱 실패",
@@ -272,7 +275,7 @@ router.post('/document/ask', asyncHandler(async (req: Request, res: Response) =>
   * GET /api/documents
  * 업로드된 문서 목록
  */
-router.get('/documents', (req: Request, res: Response) => {
+router.get('/documents', (_req: Request, res: Response) => {
      const docs = Array.from(uploadedDocuments.entries()).map(([id, doc]) => ({
          id,
          filename: doc.filename,

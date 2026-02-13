@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="ko" data-theme="dark">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover">
+    <title>API 문서 - OpenMake.Ai</title>
+    <link rel="icon" type="image/png" href="/logo.png">
+
+    <!-- 통합 디자인 시스템 -->
+    <link rel="preconnect" href="https://cdn.jsdelivr.net">
+    <link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css"
+        rel="stylesheet">
+    <link rel="stylesheet" href="/css/design-tokens.css">
+    <link rel="stylesheet" href="/css/components.css">
+    <link rel="stylesheet" href="/css/layout.css">
+</head>
+
+<body>
+    <div class="app-layout">
+        <button class="mobile-menu-btn" onclick="toggleMobileSidebar()"><span></span><span></span><span></span></button>
+        <div class="sidebar-overlay" onclick="toggleMobileSidebar()"></div>
+        <nav class="sidebar" id="sidebar"></nav>
+
+        <div class="main-content">
+            <div class="page-content">
+                <div class="container container-lg">
+                    <div id="developer-root">
+                        <div style="text-align:center; padding: 3rem; color: var(--text-muted);">로딩 중...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/js/components/sidebar.js"></script>
+    <script src="/js/modules/pages/developer.js"></script>
+    <script>
+        // developer.js 모듈이 로드된 후 HTML 렌더링 및 초기화
+        (function() {
+            var mod = window.PageModules && window.PageModules['developer'];
+            if (mod) {
+                var root = document.getElementById('developer-root');
+                if (root && typeof mod.getHTML === 'function') {
+                    root.innerHTML = mod.getHTML();
+                }
+                if (typeof mod.init === 'function') {
+                    mod.init();
+                }
+            }
+        })();
+    </script>
+</body>
+
+</html>

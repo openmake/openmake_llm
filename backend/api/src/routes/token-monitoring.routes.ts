@@ -8,6 +8,9 @@ import { getApiKeyManager } from '../ollama/api-key-manager';
 import { getApiUsageTracker } from '../ollama/api-usage-tracker';
 import { success, internalError } from '../utils/api-response';
 import { requireAuth, requireAdmin } from '../auth';
+import { createLogger } from '../utils/logger';
+
+const logger = createLogger('TokenMonitoringRoutes');
 
 const router = Router();
 
@@ -45,11 +48,11 @@ router.get('/keys', (req: Request, res: Response) => {
             });
         }
 
-         res.json(success({ totalKeys: status.totalKeys, activeKeyIndex: status.activeKeyIndex + 1, currentFailures: status.failures, lastFailover: status.lastFailover, keys, quota: quotaStatus }));
-     } catch (error: unknown) {
-         console.error('[TokenMonitoring] 키 상태 조회 실패:', error);
-         res.status(500).json(internalError('API 키 상태 조회 실패'));
-     }
+          res.json(success({ totalKeys: status.totalKeys, activeKeyIndex: status.activeKeyIndex + 1, currentFailures: status.failures, lastFailover: status.lastFailover, keys, quota: quotaStatus }));
+      } catch (error: unknown) {
+          logger.error('[TokenMonitoring] 키 상태 조회 실패:', error);
+          res.status(500).json(internalError('API 키 상태 조회 실패'));
+      }
  });
 
 /**
@@ -73,11 +76,11 @@ router.get('/usage/daily', (req: Request, res: Response) => {
             }
         };
 
-         res.json(success(chartData));
-     } catch (error: unknown) {
-         console.error('[TokenMonitoring] 일간 통계 조회 실패:', error);
-         res.status(500).json(internalError('사용량 통계 조회 실패'));
-     }
+          res.json(success(chartData));
+      } catch (error: unknown) {
+          logger.error('[TokenMonitoring] 일간 통계 조회 실패:', error);
+          res.status(500).json(internalError('사용량 통계 조회 실패'));
+      }
  });
 
 /**
@@ -98,11 +101,11 @@ router.get('/usage/hourly', (req: Request, res: Response) => {
             }
         };
 
-         res.json(success(chartData));
-     } catch (error: unknown) {
-         console.error('[TokenMonitoring] 시간별 통계 조회 실패:', error);
-         res.status(500).json(internalError('사용량 통계 조회 실패'));
-     }
+          res.json(success(chartData));
+      } catch (error: unknown) {
+          logger.error('[TokenMonitoring] 시간별 통계 조회 실패:', error);
+          res.status(500).json(internalError('사용량 통계 조회 실패'));
+      }
  });
 
 /**
@@ -114,11 +117,11 @@ router.get('/quota', (req: Request, res: Response) => {
         const usageTracker = getApiUsageTracker();
         const quotaStatus = usageTracker.getQuotaStatus();
 
-         res.json(success(quotaStatus));
-     } catch (error: unknown) {
-         console.error('[TokenMonitoring] 할당량 조회 실패:', error);
-         res.status(500).json(internalError('할당량 조회 실패'));
-     }
+          res.json(success(quotaStatus));
+      } catch (error: unknown) {
+          logger.error('[TokenMonitoring] 할당량 조회 실패:', error);
+          res.status(500).json(internalError('할당량 조회 실패'));
+      }
  });
 
 /**
@@ -133,11 +136,11 @@ router.get('/summary', (req: Request, res: Response) => {
         const summary = usageTracker.getSummary();
         const keyStatus = keyManager.getStatus();
 
-         res.json(success({ ...summary, keyInfo: { totalKeys: keyStatus.totalKeys, activeKey: keyStatus.activeKeyIndex + 1, failures: keyStatus.failures } }));
-     } catch (error: unknown) {
-         console.error('[TokenMonitoring] 요약 조회 실패:', error);
-         res.status(500).json(internalError('통계 요약 조회 실패'));
-     }
+          res.json(success({ ...summary, keyInfo: { totalKeys: keyStatus.totalKeys, activeKey: keyStatus.activeKeyIndex + 1, failures: keyStatus.failures } }));
+      } catch (error: unknown) {
+          logger.error('[TokenMonitoring] 요약 조회 실패:', error);
+          res.status(500).json(internalError('통계 요약 조회 실패'));
+      }
  });
 
 /**
@@ -149,11 +152,11 @@ router.post('/keys/reset', (req: Request, res: Response) => {
         const keyManager = getApiKeyManager();
         keyManager.reset();
 
-         res.json(success({ message: 'API 키 상태가 리셋되었습니다.' }));
-     } catch (error: unknown) {
-         console.error('[TokenMonitoring] 키 리셋 실패:', error);
-         res.status(500).json(internalError('API 키 리셋 실패'));
-     }
+          res.json(success({ message: 'API 키 상태가 리셋되었습니다.' }));
+      } catch (error: unknown) {
+          logger.error('[TokenMonitoring] 키 리셋 실패:', error);
+          res.status(500).json(internalError('API 키 리셋 실패'));
+      }
  });
 
 /**
@@ -187,11 +190,11 @@ router.get('/costs', (req: Request, res: Response) => {
             totalCost += cost;
         }
 
-         res.json(success({ today: { totalCost: parseFloat(totalCost.toFixed(6)), byModel: modelCosts, totalTokens: todayStats.totalTokens, totalRequests: todayStats.totalRequests }, weekly: { totalTokens: weeklyStats.totalTokens, totalRequests: weeklyStats.totalRequests, estimatedCost: parseFloat((weeklyStats.totalTokens * 0.00001).toFixed(6)) }, priceTable: modelPrices }));
-     } catch (error: unknown) {
-         console.error('[TokenMonitoring] 비용 조회 실패:', error);
-         res.status(500).json(internalError('비용 조회 실패'));
-     }
+          res.json(success({ today: { totalCost: parseFloat(totalCost.toFixed(6)), byModel: modelCosts, totalTokens: todayStats.totalTokens, totalRequests: todayStats.totalRequests }, weekly: { totalTokens: weeklyStats.totalTokens, totalRequests: weeklyStats.totalRequests, estimatedCost: parseFloat((weeklyStats.totalTokens * 0.00001).toFixed(6)) }, priceTable: modelPrices }));
+      } catch (error: unknown) {
+          logger.error('[TokenMonitoring] 비용 조회 실패:', error);
+          res.status(500).json(internalError('비용 조회 실패'));
+      }
  });
 
  export default router;

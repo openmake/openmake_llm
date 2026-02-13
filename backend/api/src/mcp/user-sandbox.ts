@@ -40,7 +40,7 @@ export class UserSandbox {
     /**
      * 사용자 디렉토리 초기화 (존재하지 않으면 생성)
      */
-    static initUserDirs(userId: string | number): void {
+    static async initUserDirs(userId: string | number): Promise<void> {
         const dirs = [
             this.getWorkDir(userId),
             this.getDataDir(userId),
@@ -48,10 +48,7 @@ export class UserSandbox {
         ];
 
         for (const dir of dirs) {
-            if (!fs.existsSync(dir)) {
-                fs.mkdirSync(dir, { recursive: true });
-                console.log(`[UserSandbox] 디렉토리 생성: ${dir}`);
-            }
+            await fs.promises.mkdir(dir, { recursive: true }).catch(() => { });
         }
     }
 
@@ -123,15 +120,21 @@ export class UserSandbox {
     /**
      * 사용자 임시 파일 정리
      */
-    static cleanupTempDir(userId: string | number): void {
+    static async cleanupTempDir(userId: string | number): Promise<void> {
         const tempDir = this.getTempDir(userId);
-        if (fs.existsSync(tempDir)) {
-            const files = fs.readdirSync(tempDir);
+        try {
+            const files = await fs.promises.readdir(tempDir, { withFileTypes: true });
             for (const file of files) {
-                const filePath = path.join(tempDir, file);
-                fs.unlinkSync(filePath);
+                const filePath = path.join(tempDir, file.name);
+                if (file.isDirectory()) {
+                    await fs.promises.rm(filePath, { recursive: true, force: true });
+                } else {
+                    await fs.promises.unlink(filePath);
+                }
             }
             console.log(`[UserSandbox] 임시 파일 정리 완료: ${userId}`);
+        } catch {
+            // 디렉토리가 없거나 접근 불가한 경우 무시
         }
     }
 
@@ -143,60 +146,62 @@ export class UserSandbox {
      * 사용자별 SQLite DB 파일 경로 반환
      * 각 사용자는 독립된 DB를 사용하여 데이터 격리
      */
-    static getUserDbPath(userId: string | number): string {
+    static async getUserDbPath(userId: string | number): Promise<string> {
         // 디렉토리 초기화 (존재하지 않으면 생성)
-        this.initUserDirs(userId);
+        await this.initUserDirs(userId);
         return path.resolve(USER_DATA_ROOT, String(userId), 'data', 'user.db');
     }
 
     /**
      * 사용자별 대화 DB 파일 경로 반환
      */
-    static getUserConversationDbPath(userId: string | number): string {
-        this.initUserDirs(userId);
+    static async getUserConversationDbPath(userId: string | number): Promise<string> {
+        await this.initUserDirs(userId);
         return path.resolve(USER_DATA_ROOT, String(userId), 'data', 'conversations.db');
     }
 
     /**
      * 사용자별 설정 파일 경로 반환
      */
-    static getUserConfigPath(userId: string | number): string {
-        this.initUserDirs(userId);
+    static async getUserConfigPath(userId: string | number): Promise<string> {
+        await this.initUserDirs(userId);
         return path.resolve(USER_DATA_ROOT, String(userId), 'config.json');
     }
 
     /**
      * 사용자 설정 저장
      */
-    static saveUserConfig(userId: string | number, config: Record<string, unknown>): void {
-        const configPath = this.getUserConfigPath(userId);
-        fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf-8');
+    static async saveUserConfig(userId: string | number, config: Record<string, unknown>): Promise<void> {
+        const configPath = await this.getUserConfigPath(userId);
+        await fs.promises.writeFile(configPath, JSON.stringify(config, null, 2), 'utf-8');
         console.log(`[UserSandbox] 설정 저장: ${userId}`);
     }
 
     /**
      * 사용자 설정 로드
      */
-    static loadUserConfig(userId: string | number): Record<string, unknown> {
-        const configPath = this.getUserConfigPath(userId);
-        if (fs.existsSync(configPath)) {
-            const data = fs.readFileSync(configPath, 'utf-8');
-            return JSON.parse(data);
+    static async loadUserConfig(userId: string | number): Promise<Record<string, unknown>> {
+        const configPath = await this.getUserConfigPath(userId);
+        try {
+            const data = await fs.promises.readFile(configPath, 'utf-8');
+            return JSON.parse(data) as Record<string, unknown>;
+        } catch {
+            return {};
         }
-        return {};
     }
 
     /**
      * 사용자 데이터 전체 삭제 (계정 삭제 시)
      */
-    static deleteUserData(userId: string | number): boolean {
+    static async deleteUserData(userId: string | number): Promise<boolean> {
         const userRoot = path.resolve(USER_DATA_ROOT, String(userId));
-        if (fs.existsSync(userRoot)) {
-            fs.rmSync(userRoot, { recursive: true, force: true });
+        try {
+            await fs.promises.rm(userRoot, { recursive: true, force: true });
             console.log(`[UserSandbox] 사용자 데이터 삭제: ${userId}`);
             return true;
+        } catch {
+            return false;
         }
-        return false;
     }
 
     /**

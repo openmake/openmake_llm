@@ -73,9 +73,12 @@ export function chatRateLimiter(req: Request, res: Response, next: NextFunction)
         res.setHeader('X-RateLimit-Remaining', '0');
         res.setHeader('X-RateLimit-Reset', String(Math.ceil(entry.resetAt / 1000)));
         res.status(429).json({
-            error: '일일 채팅 제한을 초과했습니다',
-            limit,
-            retryAfterSeconds: retryAfter
+            success: false,
+            error: {
+                message: '일일 채팅 제한을 초과했습니다',
+                limit,
+                retryAfterSeconds: retryAfter
+            }
         });
         return;
     }

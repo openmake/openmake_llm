@@ -29,20 +29,27 @@ router.get('/', asyncHandler(async (req: Request, res: Response) => {
      const action = req.query.action as string | undefined;
      const userId = req.query.userId as string | undefined;
 
-     const db = getUnifiedDatabase();
-     const allLogs = await db.getAuditLogs(limit);
-     let logs = allLogs;
+     const pool = getPool();
+     const conditions: string[] = [];
+     const params: unknown[] = [];
+     let paramIndex = 1;
 
-     // Filter by action type if specified
      if (action) {
-         logs = logs.filter(log => log.action === action);
+         conditions.push(`action = $${paramIndex++}`);
+         params.push(action);
      }
-
-     // Filter by userId if specified
      if (userId) {
-         logs = logs.filter(log => log.user_id === userId);
+         conditions.push(`user_id = $${paramIndex++}`);
+         params.push(userId);
      }
 
+     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+     const result = await pool.query(
+         `SELECT * FROM audit_logs ${whereClause} ORDER BY created_at DESC LIMIT $${paramIndex}`,
+         [...params, limit]
+     );
+
+     const logs = result.rows;
      res.json(success({ logs, total: logs.length }));
 }));
 
@@ -67,10 +74,13 @@ router.get('/user/:userId', asyncHandler(async (req: Request, res: Response) => 
      const { userId } = req.params;
      const limit = parseInt(req.query.limit as string) || 100;
 
-     const db = getUnifiedDatabase();
-     const allLogs = await db.getAuditLogs(limit);
-     const logs = allLogs.filter(log => log.user_id === userId);
+     const pool = getPool();
+     const result = await pool.query(
+         'SELECT * FROM audit_logs WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2',
+         [userId, limit]
+     );
 
+     const logs = result.rows;
      res.json(success({ logs, total: logs.length, userId }));
 }));
 
