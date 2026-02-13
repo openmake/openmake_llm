@@ -436,6 +436,70 @@ body {
     padding: 8px 0;
 }
 
+/* Chat Input Drag & Drop File Upload */
+.chat-drop-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(102, 126, 234, 0.12);
+    border: 2px dashed rgba(102, 126, 234, 0.6);
+    border-radius: var(--radius-xl);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 0.25s ease, visibility 0.25s ease;
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+}
+
+.chat-drag-active .chat-drop-overlay {
+    opacity: 1;
+    visibility: visible;
+}
+
+.chat-drag-active .chat-input-container {
+    border-color: rgba(102, 126, 234, 0.6);
+    box-shadow:
+        0 0 0 1px rgba(102, 126, 234, 0.3),
+        0 0 30px rgba(102, 126, 234, 0.15),
+        0 20px 40px rgba(0, 0, 0, 0.4);
+}
+
+.chat-drop-overlay-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    color: var(--accent-primary, #667eea);
+    animation: chatDropPulse 1.5s ease-in-out infinite;
+}
+
+.chat-drop-overlay-content svg {
+    stroke: var(--accent-primary, #667eea);
+    filter: drop-shadow(0 0 8px rgba(102, 126, 234, 0.4));
+}
+
+.chat-drop-overlay-content p {
+    font-size: 1rem;
+    font-weight: 600;
+    margin: 0;
+    color: var(--text-primary);
+}
+
+.chat-drop-overlay-content span {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    margin: 0;
+}
+
+@keyframes chatDropPulse {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.03); opacity: 0.85; }
+}
+
 .action-btn,
 .send-btn {
     background: transparent;

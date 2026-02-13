@@ -2385,6 +2385,90 @@ function setupFileInput() {
     }
 }
 
+// 채팅 입력 영역 드래그 앤 드롭 파일 업로드
+function setupChatDropZone() {
+    const inputContainer = document.querySelector('.input-container');
+    if (!inputContainer) return;
+    // 중복 초기화 방지
+    if (inputContainer._chatDropZoneInit) return;
+    inputContainer._chatDropZoneInit = true;
+
+    let dragCounter = 0; // 중첩된 dragenter/dragleave 카운팅
+
+    // 드래그 오버레이 생성
+    let overlay = inputContainer.querySelector('.chat-drop-overlay');
+    if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.className = 'chat-drop-overlay';
+        overlay.innerHTML = `
+            <div class="chat-drop-overlay-content">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                    <polyline points="17 8 12 3 7 8"/>
+                    <line x1="12" y1="3" x2="12" y2="15"/>
+                </svg>
+                <p>파일을 여기에 놓으세요</p>
+                <span>이미지, PDF, 문서 파일 지원</span>
+            </div>
+        `;
+        inputContainer.style.position = 'relative';
+        inputContainer.appendChild(overlay);
+    }
+
+    inputContainer.addEventListener('dragenter', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        // 파일 드래그만 처리 (텍스트 드래그 무시)
+        if (!e.dataTransfer.types.includes('Files')) return;
+        dragCounter++;
+        if (dragCounter === 1) {
+            inputContainer.classList.add('chat-drag-active');
+        }
+    });
+
+    inputContainer.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!e.dataTransfer.types.includes('Files')) return;
+        e.dataTransfer.dropEffect = 'copy';
+    });
+
+    inputContainer.addEventListener('dragleave', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dragCounter--;
+        if (dragCounter <= 0) {
+            dragCounter = 0;
+            inputContainer.classList.remove('chat-drag-active');
+        }
+    });
+
+    inputContainer.addEventListener('drop', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dragCounter = 0;
+        inputContainer.classList.remove('chat-drag-active');
+
+        const files = e.dataTransfer.files;
+        if (!files || files.length === 0) return;
+
+        // 파일 순차 업로드 (모달 없이 직접 업로드)
+        Array.from(files).forEach((file) => {
+            uploadFile(file);
+        });
+    });
+
+    // 페이지 전체 드래그 시 브라우저 기본 동작 방지 (파일 열기 방지)
+    document.addEventListener('dragover', (e) => {
+        e.preventDefault();
+    });
+    document.addEventListener('drop', (e) => {
+        // input-container 안에서의 drop은 위에서 처리됨
+        // 그 외 영역의 drop은 기본 동작만 방지
+        e.preventDefault();
+    });
+}
+
 function renderAttachments() {
     const container = document.getElementById('attachments');
     if (attachedFiles.length === 0) {
@@ -3273,6 +3357,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (sendBtn) {
         sendBtn.onclick = sendMessage;
     }
+
+    // 채팅 입력 영역 드래그 앤 드롭 파일 업로드 초기화
+    setupChatDropZone();
 });
 
 // 마크다운 렌더링 헬퍼

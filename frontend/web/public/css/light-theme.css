@@ -233,6 +233,39 @@
     box-shadow: 0 0 0 3px rgba(74, 144, 217, 0.15);
 }
 
+/* 라이트 테마 - 채팅 드래그 앤 드롭 오버레이 */
+[data-theme="light"] .chat-drop-overlay,
+.theme-light .chat-drop-overlay {
+    background: rgba(74, 144, 217, 0.08);
+    border-color: rgba(74, 144, 217, 0.5);
+}
+
+[data-theme="light"] .chat-drag-active .chat-input-container,
+.theme-light .chat-drag-active .chat-input-container {
+    border-color: rgba(74, 144, 217, 0.6);
+    box-shadow: 0 0 0 3px rgba(74, 144, 217, 0.2), 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+[data-theme="light"] .chat-drop-overlay-content,
+.theme-light .chat-drop-overlay-content {
+    color: #4A90D9;
+}
+
+[data-theme="light"] .chat-drop-overlay-content svg,
+.theme-light .chat-drop-overlay-content svg {
+    stroke: #4A90D9;
+}
+
+[data-theme="light"] .chat-drop-overlay-content p,
+.theme-light .chat-drop-overlay-content p {
+    color: #2D2D2D;
+}
+
+[data-theme="light"] .chat-drop-overlay-content span,
+.theme-light .chat-drop-overlay-content span {
+    color: #8A8A8A;
+}
+
 [data-theme="light"] .input-wrapper textarea,
 .theme-light .input-wrapper textarea {
     color: #2D2D2D;

@@ -99,6 +99,11 @@ function setupEventListeners() {
         });
     }
 
+    // 채팅 입력 영역 드래그 앤 드롭 파일 업로드
+    if (typeof setupChatDropZone === 'function') {
+        setupChatDropZone();
+    }
+
     // 모달 외부 클릭 시 닫기
     document.querySelectorAll('.modal').forEach(modal => {
         modal.addEventListener('click', (e) => {
