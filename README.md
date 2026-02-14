@@ -30,41 +30,6 @@
 
 ---
 
-## Codebase Statistics
-
-| Metric | Count |
-|--------|-------|
-| **Backend TypeScript** | 34,598 LOC (121 files) |
-| **Frontend JS + CSS** | 21,891 LOC (42+ files) |
-| **Total** | ~56,489 LOC |
-| **REST API Endpoints** | 112 |
-| **Route Files** | 21 |
-| **Frontend Pages** | 22 (SPA modules) |
-| **HTML Views** | 25 |
-| **CSS Files** | 13 |
-| **UI Components** | 5 |
-| **Test Suites** | 20 (544 tests) |
-| **Dependencies** | 35 prod + 16 dev |
-| **Environment Variables** | 52 |
-| **AI Skills** | 10 project-specific |
-
-### Backend Domains (by LOC)
-
-| Domain | LOC | Files | Key Responsibilities |
-|--------|-----|-------|----------------------|
-| Data/DB | 4,070 | 36 | PostgreSQL raw SQL, UnifiedDatabase, migrations |
-| Routes | 4,005 | 22 | REST API endpoint definitions |
-| MCP | 3,899 | 15 | Model Context Protocol, tool routing, external servers |
-| Services | 3,278 | 5 | ChatService, DeepResearch, Memory, ApiKey, Auth |
-| Ollama | 3,175 | 8 | LLM client, agent loop, A2A multi-model, API key rotation |
-| Chat | 3,076 | 8 | Pipeline profiles, model selector, context engineering |
-| Agents | 2,428 | 7 | Agent definitions, discussion engine, LLM router |
-| Controllers | 1,428 | 7 | Request handlers (auth, admin, cluster, metrics) |
-| Auth | 1,115 | 6 | JWT, OAuth, API key HMAC, scope middleware |
-| Middlewares | 813 | 7 | Rate limiting, validation, request tracking |
-
----
-
 ## Overview
 
 **OpenMake LLM**은 Ollama 기반의 셀프 호스팅 AI 어시스턴트 플랫폼입니다. 단일 노드부터 분산 클러스터까지 확장 가능하며, 7가지 브랜드 모델 프로파일을 통해 질문 유형에 따른 최적의 AI 응답을 제공합니다.
