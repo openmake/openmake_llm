@@ -191,22 +191,45 @@ export class DashboardServer {
      * @private
      */
     private setupRoutes(): void {
-        // UTF-8 응답 헤더 설정 미들웨어
-        this.app.use((req, res, next) => {
+        this.setupSecurity(this.app);
+        this.setupStaticFiles(this.app);
+        this.setupParsersAndLimiting(this.app);
+        this.setupApiRoutes(this.app);
+        this.setupErrorHandling(this.app);
+    }
+
+    private setupSecurity(app: Application): void {
+        app.use((req, res, next) => {
             res.setHeader('Content-Type', 'application/json; charset=utf-8');
             next();
         });
+    }
 
-        // SPA 라우트 캐치올: 알려진 .html 페이지를 index.html로 리다이렉트
-        // express.static 전에 위치해야 원본 HTML 대신 SPA 셸을 서빙합니다
+    private setupParsersAndLimiting(app: Application): void {
+        app.use('/api/auth/', authLimiter);
+        app.use('/api/chat', chatLimiter);
+        app.use('/api/', (req, res, next) => {
+            if (req.originalUrl.includes('/api/monitoring') || req.originalUrl.includes('/api/metrics')) {
+                return next();
+            }
+            generalLimiter(req, res, next);
+        });
+
+        app.use(corsMiddleware);
+        app.use(requestIdMiddleware);
+        app.use(requestLogger);
+        app.use(analyticsMiddleware);
+    }
+
+    private setupStaticFiles(app: Application): void {
         const SPA_PAGES = new Set([
             'canvas', 'research', 'mcp-tools', 'marketplace', 'custom-agents',
             'agent-learning', 'cluster', 'usage', 'analytics', 'admin-metrics',
             'admin', 'audit', 'external', 'alerts', 'memory', 'settings',
             'password-change', 'history', 'guide', 'developer', 'api-keys'
         ]);
-        this.app.use((req: Request, res: Response, next: NextFunction) => {
-            // .html 요청이면서 SPA 페이지에 해당하는 경우 index.html 서빙
+
+        app.use((req: Request, res: Response, next: NextFunction) => {
             const match = req.path.match(/^\/([a-z0-9-]+)\.html$/);
             if (match && SPA_PAGES.has(match[1])) {
                 const indexPath = path.join(__dirname, 'public', 'index.html');
@@ -223,7 +246,35 @@ export class DashboardServer {
             next();
         });
 
-        // Static file headers configuration
+        app.use(helmet({
+            contentSecurityPolicy: {
+                directives: {
+                    defaultSrc: ["'self'"],
+                    scriptSrc: ["'self'", "'unsafe-inline'"],
+                    styleSrc: ["'self'", "'unsafe-inline'"],
+                    imgSrc: ["'self'", "data:", "blob:", "https:"],
+                    connectSrc: [
+                        "'self'",
+                        "ws:",
+                        "wss:",
+                        "http://localhost:11434",
+                        "https://ollama.com",
+                    ],
+                    fontSrc: ["'self'", "data:"],
+                    objectSrc: ["'none'"],
+                    frameAncestors: ["'none'"],
+                    baseUri: ["'self'"],
+                    formAction: ["'self'"],
+                    upgradeInsecureRequests: [],
+                }
+            },
+            crossOriginEmbedderPolicy: false,
+            crossOriginResourcePolicy: { policy: 'cross-origin' }
+        }));
+
+        app.use(express.json());
+        app.use(cookieParser());
+
         const staticHeaders = (res: ServerResponse, filePath: string) => {
             if (filePath.endsWith('.html')) {
                 res.setHeader('Content-Type', 'text/html; charset=utf-8');
@@ -232,6 +283,7 @@ export class DashboardServer {
             } else if (filePath.endsWith('.css')) {
                 res.setHeader('Content-Type', 'text/css; charset=utf-8');
             }
+
             if (filePath.endsWith('service-worker.js')) {
                 res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
             } else if (filePath.endsWith('.html')) {
@@ -245,88 +297,24 @@ export class DashboardServer {
             }
         };
 
-        // ============================================
-        // Security headers via Helmet (가장 먼저 적용)
-        // 🔒 보안 패치 2026-02-07: CSP 활성화 — XSS 방어
-        // ============================================
-        this.app.use(helmet({
-            contentSecurityPolicy: {
-                directives: {
-                    defaultSrc: ["'self'"],
-                    scriptSrc: ["'self'", "'unsafe-inline'"],       // Vanilla JS inline 스크립트 허용
-                    styleSrc: ["'self'", "'unsafe-inline'"],        // 인라인 스타일 허용
-                    imgSrc: ["'self'", "data:", "blob:", "https:"], // 이미지: data URI, blob, HTTPS
-                    connectSrc: [
-                        "'self'",
-                        "ws:",                                      // WebSocket (same origin)
-                        "wss:",                                     // Secure WebSocket
-                        "http://localhost:11434",                    // Ollama Local
-                        "https://ollama.com",                       // Ollama Cloud
-                    ],
-                    fontSrc: ["'self'", "data:"],
-                    objectSrc: ["'none'"],
-                    frameAncestors: ["'none'"],                     // Clickjacking 방어
-                    baseUri: ["'self'"],
-                    formAction: ["'self'"],
-                    upgradeInsecureRequests: [],
-                }
-            },
-            crossOriginEmbedderPolicy: false, // For API compatibility
-            crossOriginResourcePolicy: { policy: 'cross-origin' } // Allow cross-origin API requests
-        }));
-
-        this.app.use(express.json());
-        this.app.use(cookieParser());
-
-        // 정적 파일 서빙 (Backend Public)
-        this.app.use(express.static(path.join(__dirname, 'public'), {
+        app.use(express.static(path.join(__dirname, 'public'), {
             etag: true,
             lastModified: true,
             setHeaders: staticHeaders
         }));
 
-        // 정적 파일 서빙 (Frontend Public)
         const frontendPath = path.join(__dirname, '../../../frontend/web/public');
-        this.app.use(express.static(frontendPath, {
+        app.use(express.static(frontendPath, {
             etag: true,
             lastModified: true,
             setHeaders: staticHeaders
         }));
+    }
 
-        // ============================================
-        // Rate Limiting 적용 (Security 강화)
-        // ============================================
-        this.app.use('/api/auth/', authLimiter);      // 인증 API: 5req/15분
-        this.app.use('/api/chat', chatLimiter);       // 채팅 API: 30req/분
+    private setupApiRoutes(app: Application): void {
+        app.use('/api/v1', v1Router);
 
-        // 모니터링 API는 Rate Limit 제외
-        this.app.use('/api/', (req, res, next) => {
-            if (req.originalUrl.includes('/api/monitoring') || req.originalUrl.includes('/api/metrics')) {
-                return next();
-            }
-            generalLimiter(req, res, next);
-        });
-
-        // ============================================
-        // CORS 설정 (Security 강화)
-        // ============================================
-        this.app.use(corsMiddleware);
-
-        // ============================================
-        // 🆕 고도화 미들웨어 및 라우트
-        // ============================================
-        this.app.use(requestIdMiddleware);     // Request ID 생성 (추적용)
-        this.app.use(requestLogger);           // 요청 로깅
-        this.app.use(analyticsMiddleware);     // 분석 데이터 수집
-
-        // ============================================
-        // 🆕 API v1 라우터 마운트 (버전 관리)
-        // ============================================
-        // 모든 v1 라우트를 /api/v1 프리픽스로 마운트
-        this.app.use('/api/v1', v1Router);
-
-        // 기존 /api 라우트에 Deprecation 헤더 추가 (하위 호환성)
-        this.app.use('/api', (req, res, next) => {
+        app.use('/api', (req, res, next) => {
             if (!req.path.startsWith('/v1')) {
                 res.set('Deprecation', 'true');
                 res.set('Link', '</api/v1>; rel="successor-version"');
@@ -334,56 +322,45 @@ export class DashboardServer {
             next();
         });
 
-        // 🆕 새로운 라우트 마운트
-        setMetricsCluster(this.cluster);       // 클러스터 참조 설정
-        this.app.use('/api/metrics', metricsRouter);    // 메트릭스 API
-        this.app.use('/api/agents', agentRouter);       // 에이전트 API (확장)
-        this.app.use('/api/monitoring', tokenMonitoringRouter);  // 🆕 토큰 모니터링 API
-        this.app.use('/api/mcp', mcpRouter);            // 🆕 MCP 설정/도구 API
+        setMetricsCluster(this.cluster);
+        app.use('/api/metrics', metricsRouter);
+        app.use('/api/agents', agentRouter);
+        app.use('/api/monitoring', tokenMonitoringRouter);
+        app.use('/api/mcp', mcpRouter);
 
-        // 🆕 서비스 초기화 (bootstrap.ts로 분리)
         bootstrapServices();
 
-        // ============================================
-        // 🆕 리팩토링된 컨트롤러 마운트
-        // ============================================
-        this.app.use('/', createHealthController(this.cluster));              // /health, /ready
-        this.app.use('/api/cluster', createClusterController(this.cluster));  // 클러스터 API
-        this.app.use('/api/auth', createAuthController(this.port));           // 인증/OAuth API
-        this.app.use('/api/admin', createAdminController());                  // 관리자 API
+        app.use('/', createHealthController(this.cluster));
+        app.use('/api/cluster', createClusterController(this.cluster));
+        app.use('/api/auth', createAuthController(this.port));
+        app.use('/api/admin', createAdminController());
 
-        // 🆕 리팩토링된 라우트 마운트
         setChatCluster(this.cluster);
         setDocumentsDeps(this.cluster, this.broadcast.bind(this));
         setWebSearchCluster(this.cluster);
         setNodesCluster(this.cluster);
-        this.app.use('/api/chat', chatRouter);           // 🆕 채팅 API
-        this.app.use('/api', documentsRouter);           // 🆕 문서 API
-        this.app.use('/api', webSearchRouter);           // 🆕 웹 검색 API
-         this.app.use('/api/usage', usageRouter);         // 🆕 사용량 API
-         this.app.use('/api/nodes', nodesRouter);         // 🆕 노드 관리 API
-         this.app.use('/api/agents-monitoring', agentsMonitoringRouter); // 🆕 에이전트 모니터링 API
-         this.app.use('/api/memory', memoryRouter);            // 🆕 메모리 API
-        this.app.use('/api/audit', auditRouter);              // 🆕 감사 로그 API
-        this.app.use('/api/research', researchRouter);        // 🆕 딥 리서치 API
-        this.app.use('/api/canvas', canvasRouter);            // 🆕 캔버스 API
-        this.app.use('/api/external', externalRouter);        // 🆕 외부 연동 API
-        this.app.use('/api/marketplace', marketplaceRouter);  // 🆕 마켓플레이스 API
-        this.app.use('/api/push', pushRouter);                 // 🆕 Push 알림 API
-        this.app.use('/api/docs', developerDocsRouter);          // 🆕 Developer Documentation API
+        app.use('/api/chat', chatRouter);
+        app.use('/api', documentsRouter);
+        app.use('/api', webSearchRouter);
+        app.use('/api/usage', usageRouter);
+        app.use('/api/nodes', nodesRouter);
+        app.use('/api/agents-monitoring', agentsMonitoringRouter);
+        app.use('/api/memory', memoryRouter);
+        app.use('/api/audit', auditRouter);
+        app.use('/api/research', researchRouter);
+        app.use('/api/canvas', canvasRouter);
+        app.use('/api/external', externalRouter);
+        app.use('/api/marketplace', marketplaceRouter);
+        app.use('/api/push', pushRouter);
+        app.use('/api/docs', developerDocsRouter);
 
-        // 🆕 Swagger API 문서화
-        setupSwaggerRoutes(this.app);
+        setupSwaggerRoutes(app);
 
-        // ===== 🆕 대화 히스토리 API =====
-        this.app.use('/api/chat/sessions', createSessionController());
-        this.app.use('/api/chat/conversations', createSessionController());  // Alias for frontend compatibility
+        app.use('/api/chat/sessions', createSessionController());
+        app.use('/api/chat/conversations', createSessionController());
+        app.use('/api', modelRouter);
 
-        // 🆕 모델 정보 API (model.routes.ts로 분리됨)
-        this.app.use('/api', modelRouter);
-
-        // 관리자 페이지
-        this.app.get('/admin', (req: Request, res: Response) => {
+        app.get('/admin', (req: Request, res: Response) => {
             const adminPath = path.join(__dirname, 'public', 'admin.html');
             if (fs.existsSync(adminPath)) {
                 res.sendFile(adminPath);
@@ -392,15 +369,12 @@ export class DashboardServer {
             }
         });
 
-        // 메인 페이지
-        this.app.get('/', (req: Request, res: Response) => {
-            // frontend/web/public에서 index.html 제공
+        app.get('/', (req: Request, res: Response) => {
             const frontendPath = path.join(process.cwd(), '../../frontend/web/public');
             const indexPath = path.join(frontendPath, 'index.html');
             if (fs.existsSync(indexPath)) {
                 res.sendFile(indexPath);
             } else {
-                // 폴백: 기존 경로
                 const fallbackPath = path.join(__dirname, 'public', 'index.html');
                 if (fs.existsSync(fallbackPath)) {
                     res.sendFile(fallbackPath);
@@ -409,11 +383,11 @@ export class DashboardServer {
                 }
             }
         });
+    }
 
-        // ⚙️ Phase 3: 글로벌 에러 핸들러 단일화 (utils/error-handler.ts)
-        // MulterError, QuotaExceededError, AppError 모두 통합 처리
-        this.app.use(notFoundHandler);
-        this.app.use(errorHandler);
+    private setupErrorHandling(app: Application): void {
+        app.use(notFoundHandler);
+        app.use(errorHandler);
     }
 
 

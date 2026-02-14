@@ -1,6 +1,7 @@
 // 환경 설정 로더
 import * as fs from 'fs';
 import * as path from 'path';
+import { envSchema } from './env.schema';
 
 export interface EnvConfig {
     // Node
@@ -217,28 +218,6 @@ function parseEnvFile(filePath: string): Record<string, string> {
     return env;
 }
 
-function parseLogLevel(value: string | undefined): 'debug' | 'info' | 'warn' | 'error' {
-    const level = (value || '').toLowerCase();
-    if (level === 'debug' || level === 'info' || level === 'warn' || level === 'error') {
-        return level;
-    }
-    return DEFAULT_CONFIG.logLevel;
-}
-
-function parseGeminiThinkLevel(value: string | undefined): 'low' | 'medium' | 'high' {
-    const level = (value || '').toLowerCase();
-    if (level === 'low' || level === 'medium' || level === 'high') {
-        return level;
-    }
-    return 'high';
-}
-
-function safeParseInt(value: string | undefined, defaultValue: number): number {
-    if (!value) return defaultValue;
-    const parsed = parseInt(value, 10);
-    return isNaN(parsed) ? defaultValue : parsed;
-}
-
 /**
  * 필수 환경 변수 검증
  * 런타임 시작 전에 호출하여 설정 오류를 조기에 발견
@@ -286,112 +265,177 @@ export function loadConfig(): EnvConfig {
 
     const env = (key: string): string | undefined => process.env[key] || fileEnv[key];
 
+    const ollamaModels: string[] = [];
+    for (let index = 1; index <= 10; index++) {
+        const model = env(`OLLAMA_MODEL_${index}`);
+        if (model && model.trim() !== '') {
+            ollamaModels.push(model.trim());
+        }
+    }
+
+    const parsedResult = envSchema.safeParse({
+        NODE_ENV: env('NODE_ENV'),
+        PORT: env('PORT'),
+        SERVER_HOST: env('SERVER_HOST'),
+        DATABASE_URL: env('DATABASE_URL'),
+        JWT_SECRET: env('JWT_SECRET'),
+        ADMIN_PASSWORD: env('ADMIN_PASSWORD'),
+        DEFAULT_ADMIN_EMAIL: env('DEFAULT_ADMIN_EMAIL'),
+        ADMIN_EMAILS: env('ADMIN_EMAILS'),
+        GOOGLE_CLIENT_ID: env('GOOGLE_CLIENT_ID'),
+        GOOGLE_CLIENT_SECRET: env('GOOGLE_CLIENT_SECRET'),
+        GITHUB_CLIENT_ID: env('GITHUB_CLIENT_ID'),
+        GITHUB_CLIENT_SECRET: env('GITHUB_CLIENT_SECRET'),
+        OAUTH_REDIRECT_URI: env('OAUTH_REDIRECT_URI'),
+        CORS_ORIGINS: env('CORS_ORIGINS'),
+        OLLAMA_BASE_URL: env('OLLAMA_BASE_URL'),
+        OLLAMA_DEFAULT_MODEL: env('OLLAMA_DEFAULT_MODEL'),
+        OLLAMA_KOREAN_MODEL: env('OLLAMA_KOREAN_MODEL'),
+        OLLAMA_MODEL: env('OLLAMA_MODEL'),
+        OLLAMA_TIMEOUT: env('OLLAMA_TIMEOUT'),
+        OLLAMA_HOST: env('OLLAMA_HOST'),
+        OLLAMA_API_KEY: env('OLLAMA_API_KEY'),
+        OLLAMA_API_KEY_PRIMARY: env('OLLAMA_API_KEY_PRIMARY'),
+        OLLAMA_API_KEY_SECONDARY: env('OLLAMA_API_KEY_SECONDARY'),
+        OLLAMA_SSH_KEY: env('OLLAMA_SSH_KEY'),
+        OLLAMA_HOURLY_LIMIT: env('OLLAMA_HOURLY_LIMIT'),
+        OLLAMA_WEEKLY_LIMIT: env('OLLAMA_WEEKLY_LIMIT'),
+        OLLAMA_MONTHLY_PREMIUM_LIMIT: env('OLLAMA_MONTHLY_PREMIUM_LIMIT'),
+        OLLAMA_MODELS: ollamaModels,
+        LOG_LEVEL: env('LOG_LEVEL'),
+        GEMINI_THINK_ENABLED: env('GEMINI_THINK_ENABLED'),
+        GEMINI_THINK_LEVEL: env('GEMINI_THINK_LEVEL'),
+        GEMINI_NUM_CTX: env('GEMINI_NUM_CTX'),
+        GEMINI_EMBEDDING_MODEL: env('GEMINI_EMBEDDING_MODEL'),
+        GEMINI_WEB_SEARCH_ENABLED: env('GEMINI_WEB_SEARCH_ENABLED'),
+        GOOGLE_API_KEY: env('GOOGLE_API_KEY'),
+        GOOGLE_CSE_ID: env('GOOGLE_CSE_ID'),
+        FIRECRAWL_API_KEY: env('FIRECRAWL_API_KEY'),
+        FIRECRAWL_API_URL: env('FIRECRAWL_API_URL'),
+        DOCUMENT_TTL_HOURS: env('DOCUMENT_TTL_HOURS'),
+        MAX_UPLOADED_DOCUMENTS: env('MAX_UPLOADED_DOCUMENTS'),
+        MAX_CONVERSATION_SESSIONS: env('MAX_CONVERSATION_SESSIONS'),
+        SESSION_TTL_DAYS: env('SESSION_TTL_DAYS'),
+        USER_DATA_PATH: env('USER_DATA_PATH'),
+        VAPID_PUBLIC_KEY: env('VAPID_PUBLIC_KEY'),
+        VAPID_PRIVATE_KEY: env('VAPID_PRIVATE_KEY'),
+        VAPID_SUBJECT: env('VAPID_SUBJECT'),
+        SWAGGER_BASE_URL: env('SWAGGER_BASE_URL'),
+        API_KEY_PEPPER: env('API_KEY_PEPPER'),
+        API_KEY_MAX_PER_USER: env('API_KEY_MAX_PER_USER'),
+        OMK_ENGINE_LLM: env('OMK_ENGINE_LLM'),
+        OMK_ENGINE_PRO: env('OMK_ENGINE_PRO'),
+        OMK_ENGINE_FAST: env('OMK_ENGINE_FAST'),
+        OMK_ENGINE_THINK: env('OMK_ENGINE_THINK'),
+        OMK_ENGINE_CODE: env('OMK_ENGINE_CODE'),
+        OMK_ENGINE_VISION: env('OMK_ENGINE_VISION'),
+    });
+
+    if (!parsedResult.success) {
+        const details = parsedResult.error.issues
+            .map((issue) => {
+                const field = issue.path.join('.') || 'root';
+                return `- ${field}: ${issue.message}`;
+            })
+            .join('\n');
+        throw new Error(`Environment configuration validation failed:\n${details}`);
+    }
+
+    const parsed = parsedResult.data;
+
     return {
         // Node
-        nodeEnv: env('NODE_ENV') || DEFAULT_CONFIG.nodeEnv,
+        nodeEnv: parsed.NODE_ENV ?? DEFAULT_CONFIG.nodeEnv,
 
         // Server
-        port: safeParseInt(env('PORT'), DEFAULT_CONFIG.port),
-        serverHost: env('SERVER_HOST') || DEFAULT_CONFIG.serverHost,
+        port: parsed.PORT ?? DEFAULT_CONFIG.port,
+        serverHost: parsed.SERVER_HOST ?? DEFAULT_CONFIG.serverHost,
 
         // Database
-        databaseUrl: env('DATABASE_URL') || DEFAULT_CONFIG.databaseUrl,
+        databaseUrl: parsed.DATABASE_URL ?? DEFAULT_CONFIG.databaseUrl,
 
         // Auth
-        jwtSecret: env('JWT_SECRET') || DEFAULT_CONFIG.jwtSecret,
-        adminPassword: env('ADMIN_PASSWORD') || DEFAULT_CONFIG.adminPassword,
-        defaultAdminEmail: env('DEFAULT_ADMIN_EMAIL') || DEFAULT_CONFIG.defaultAdminEmail,
-        adminEmails: env('ADMIN_EMAILS') || DEFAULT_CONFIG.adminEmails,
+        jwtSecret: parsed.JWT_SECRET ?? DEFAULT_CONFIG.jwtSecret,
+        adminPassword: parsed.ADMIN_PASSWORD ?? DEFAULT_CONFIG.adminPassword,
+        defaultAdminEmail: parsed.DEFAULT_ADMIN_EMAIL ?? DEFAULT_CONFIG.defaultAdminEmail,
+        adminEmails: parsed.ADMIN_EMAILS ?? DEFAULT_CONFIG.adminEmails,
 
         // OAuth
-        googleClientId: env('GOOGLE_CLIENT_ID') || DEFAULT_CONFIG.googleClientId,
-        googleClientSecret: env('GOOGLE_CLIENT_SECRET') || DEFAULT_CONFIG.googleClientSecret,
-        githubClientId: env('GITHUB_CLIENT_ID') || DEFAULT_CONFIG.githubClientId,
-        githubClientSecret: env('GITHUB_CLIENT_SECRET') || DEFAULT_CONFIG.githubClientSecret,
-        oauthRedirectUri: env('OAUTH_REDIRECT_URI') || DEFAULT_CONFIG.oauthRedirectUri,
+        googleClientId: parsed.GOOGLE_CLIENT_ID ?? DEFAULT_CONFIG.googleClientId,
+        googleClientSecret: parsed.GOOGLE_CLIENT_SECRET ?? DEFAULT_CONFIG.googleClientSecret,
+        githubClientId: parsed.GITHUB_CLIENT_ID ?? DEFAULT_CONFIG.githubClientId,
+        githubClientSecret: parsed.GITHUB_CLIENT_SECRET ?? DEFAULT_CONFIG.githubClientSecret,
+        oauthRedirectUri: parsed.OAUTH_REDIRECT_URI ?? DEFAULT_CONFIG.oauthRedirectUri,
 
         // CORS
-        corsOrigins: env('CORS_ORIGINS') || DEFAULT_CONFIG.corsOrigins,
+        corsOrigins: parsed.CORS_ORIGINS ?? DEFAULT_CONFIG.corsOrigins,
 
         // Ollama
-        ollamaBaseUrl: env('OLLAMA_BASE_URL') || DEFAULT_CONFIG.ollamaBaseUrl,
-        ollamaDefaultModel: env('OLLAMA_DEFAULT_MODEL') || DEFAULT_CONFIG.ollamaDefaultModel,
-        ollamaKoreanModel: env('OLLAMA_KOREAN_MODEL') || DEFAULT_CONFIG.ollamaKoreanModel,
-        ollamaModel: env('OLLAMA_MODEL') || DEFAULT_CONFIG.ollamaModel,
-        ollamaTimeout: safeParseInt(env('OLLAMA_TIMEOUT'), DEFAULT_CONFIG.ollamaTimeout),
-        ollamaHost: env('OLLAMA_HOST') || DEFAULT_CONFIG.ollamaHost,
-        ollamaApiKey: env('OLLAMA_API_KEY') || DEFAULT_CONFIG.ollamaApiKey,
-        ollamaApiKeyPrimary: env('OLLAMA_API_KEY_PRIMARY') || DEFAULT_CONFIG.ollamaApiKeyPrimary,
-        ollamaApiKeySecondary: env('OLLAMA_API_KEY_SECONDARY') || DEFAULT_CONFIG.ollamaApiKeySecondary,
-        ollamaSshKey: env('OLLAMA_SSH_KEY') || DEFAULT_CONFIG.ollamaSshKey,
+        ollamaBaseUrl: parsed.OLLAMA_BASE_URL ?? DEFAULT_CONFIG.ollamaBaseUrl,
+        ollamaDefaultModel: parsed.OLLAMA_DEFAULT_MODEL ?? DEFAULT_CONFIG.ollamaDefaultModel,
+        ollamaKoreanModel: parsed.OLLAMA_KOREAN_MODEL ?? DEFAULT_CONFIG.ollamaKoreanModel,
+        ollamaModel: parsed.OLLAMA_MODEL ?? DEFAULT_CONFIG.ollamaModel,
+        ollamaTimeout: parsed.OLLAMA_TIMEOUT ?? DEFAULT_CONFIG.ollamaTimeout,
+        ollamaHost: parsed.OLLAMA_HOST ?? DEFAULT_CONFIG.ollamaHost,
+        ollamaApiKey: parsed.OLLAMA_API_KEY ?? DEFAULT_CONFIG.ollamaApiKey,
+        ollamaApiKeyPrimary: parsed.OLLAMA_API_KEY_PRIMARY ?? DEFAULT_CONFIG.ollamaApiKeyPrimary,
+        ollamaApiKeySecondary: parsed.OLLAMA_API_KEY_SECONDARY ?? DEFAULT_CONFIG.ollamaApiKeySecondary,
+        ollamaSshKey: parsed.OLLAMA_SSH_KEY ?? DEFAULT_CONFIG.ollamaSshKey,
 
         // Per-key models (OLLAMA_MODEL_1, _2, _3, ... N)
-        ollamaModels: (() => {
-            const models: string[] = [];
-            let index = 1;
-            while (true) {
-                const model = env(`OLLAMA_MODEL_${index}`);
-                if (model && model.trim() !== '') {
-                    models.push(model.trim());
-                    index++;
-                } else {
-                    break;
-                }
-            }
-            return models;
-        })(),
+        ollamaModels: parsed.OLLAMA_MODELS ?? DEFAULT_CONFIG.ollamaModels,
 
         // Rate limits
-        ollamaHourlyLimit: safeParseInt(env('OLLAMA_HOURLY_LIMIT'), DEFAULT_CONFIG.ollamaHourlyLimit),
-        ollamaWeeklyLimit: safeParseInt(env('OLLAMA_WEEKLY_LIMIT'), DEFAULT_CONFIG.ollamaWeeklyLimit),
-        ollamaMonthlyPremiumLimit: safeParseInt(env('OLLAMA_MONTHLY_PREMIUM_LIMIT'), DEFAULT_CONFIG.ollamaMonthlyPremiumLimit),
+        ollamaHourlyLimit: parsed.OLLAMA_HOURLY_LIMIT ?? DEFAULT_CONFIG.ollamaHourlyLimit,
+        ollamaWeeklyLimit: parsed.OLLAMA_WEEKLY_LIMIT ?? DEFAULT_CONFIG.ollamaWeeklyLimit,
+        ollamaMonthlyPremiumLimit: parsed.OLLAMA_MONTHLY_PREMIUM_LIMIT ?? DEFAULT_CONFIG.ollamaMonthlyPremiumLimit,
 
         // Log
-        logLevel: parseLogLevel(env('LOG_LEVEL')),
+        logLevel: parsed.LOG_LEVEL ?? DEFAULT_CONFIG.logLevel,
 
         // Gemini
-        geminiThinkEnabled: (env('GEMINI_THINK_ENABLED') || 'true') === 'true',
-        geminiThinkLevel: parseGeminiThinkLevel(env('GEMINI_THINK_LEVEL')),
-        geminiNumCtx: safeParseInt(env('GEMINI_NUM_CTX'), DEFAULT_CONFIG.geminiNumCtx),
-        geminiEmbeddingModel: env('GEMINI_EMBEDDING_MODEL') || DEFAULT_CONFIG.geminiEmbeddingModel,
-        geminiWebSearchEnabled: (env('GEMINI_WEB_SEARCH_ENABLED') || 'true') === 'true',
+        geminiThinkEnabled: parsed.GEMINI_THINK_ENABLED ?? DEFAULT_CONFIG.geminiThinkEnabled,
+        geminiThinkLevel: parsed.GEMINI_THINK_LEVEL ?? DEFAULT_CONFIG.geminiThinkLevel,
+        geminiNumCtx: parsed.GEMINI_NUM_CTX ?? DEFAULT_CONFIG.geminiNumCtx,
+        geminiEmbeddingModel: parsed.GEMINI_EMBEDDING_MODEL ?? DEFAULT_CONFIG.geminiEmbeddingModel,
+        geminiWebSearchEnabled: parsed.GEMINI_WEB_SEARCH_ENABLED ?? DEFAULT_CONFIG.geminiWebSearchEnabled,
 
         // External services
-        googleApiKey: env('GOOGLE_API_KEY') || DEFAULT_CONFIG.googleApiKey,
-        googleCseId: env('GOOGLE_CSE_ID') || DEFAULT_CONFIG.googleCseId,
-        firecrawlApiKey: env('FIRECRAWL_API_KEY') || DEFAULT_CONFIG.firecrawlApiKey,
-        firecrawlApiUrl: env('FIRECRAWL_API_URL') || DEFAULT_CONFIG.firecrawlApiUrl,
+        googleApiKey: parsed.GOOGLE_API_KEY ?? DEFAULT_CONFIG.googleApiKey,
+        googleCseId: parsed.GOOGLE_CSE_ID ?? DEFAULT_CONFIG.googleCseId,
+        firecrawlApiKey: parsed.FIRECRAWL_API_KEY ?? DEFAULT_CONFIG.firecrawlApiKey,
+        firecrawlApiUrl: parsed.FIRECRAWL_API_URL ?? DEFAULT_CONFIG.firecrawlApiUrl,
 
         // Documents
-        documentTtlHours: safeParseInt(env('DOCUMENT_TTL_HOURS'), DEFAULT_CONFIG.documentTtlHours),
-        maxUploadedDocuments: safeParseInt(env('MAX_UPLOADED_DOCUMENTS'), DEFAULT_CONFIG.maxUploadedDocuments),
+        documentTtlHours: parsed.DOCUMENT_TTL_HOURS ?? DEFAULT_CONFIG.documentTtlHours,
+        maxUploadedDocuments: parsed.MAX_UPLOADED_DOCUMENTS ?? DEFAULT_CONFIG.maxUploadedDocuments,
 
         // Conversations
-        maxConversationSessions: safeParseInt(env('MAX_CONVERSATION_SESSIONS'), DEFAULT_CONFIG.maxConversationSessions),
-        sessionTtlDays: safeParseInt(env('SESSION_TTL_DAYS'), DEFAULT_CONFIG.sessionTtlDays),
+        maxConversationSessions: parsed.MAX_CONVERSATION_SESSIONS ?? DEFAULT_CONFIG.maxConversationSessions,
+        sessionTtlDays: parsed.SESSION_TTL_DAYS ?? DEFAULT_CONFIG.sessionTtlDays,
 
         // User data
-        userDataPath: env('USER_DATA_PATH') || DEFAULT_CONFIG.userDataPath,
+        userDataPath: parsed.USER_DATA_PATH ?? DEFAULT_CONFIG.userDataPath,
 
         // VAPID
-        vapidPublicKey: env('VAPID_PUBLIC_KEY') || DEFAULT_CONFIG.vapidPublicKey,
-        vapidPrivateKey: env('VAPID_PRIVATE_KEY') || DEFAULT_CONFIG.vapidPrivateKey,
-        vapidSubject: env('VAPID_SUBJECT') || DEFAULT_CONFIG.vapidSubject,
+        vapidPublicKey: parsed.VAPID_PUBLIC_KEY ?? DEFAULT_CONFIG.vapidPublicKey,
+        vapidPrivateKey: parsed.VAPID_PRIVATE_KEY ?? DEFAULT_CONFIG.vapidPrivateKey,
+        vapidSubject: parsed.VAPID_SUBJECT ?? DEFAULT_CONFIG.vapidSubject,
 
         // Swagger
-        swaggerBaseUrl: env('SWAGGER_BASE_URL') || DEFAULT_CONFIG.swaggerBaseUrl,
+        swaggerBaseUrl: parsed.SWAGGER_BASE_URL ?? DEFAULT_CONFIG.swaggerBaseUrl,
 
         // API Key Service
-        apiKeyPepper: env('API_KEY_PEPPER') || DEFAULT_CONFIG.apiKeyPepper,
-        apiKeyMaxPerUser: safeParseInt(env('API_KEY_MAX_PER_USER'), DEFAULT_CONFIG.apiKeyMaxPerUser),
+        apiKeyPepper: parsed.API_KEY_PEPPER ?? DEFAULT_CONFIG.apiKeyPepper,
+        apiKeyMaxPerUser: parsed.API_KEY_MAX_PER_USER ?? DEFAULT_CONFIG.apiKeyMaxPerUser,
 
         // Pipeline Profile — Brand Model → Internal Engine Mapping
-        omkEngineLlm: env('OMK_ENGINE_LLM') || DEFAULT_CONFIG.omkEngineLlm,
-        omkEnginePro: env('OMK_ENGINE_PRO') || DEFAULT_CONFIG.omkEnginePro,
-        omkEngineFast: env('OMK_ENGINE_FAST') || DEFAULT_CONFIG.omkEngineFast,
-        omkEngineThink: env('OMK_ENGINE_THINK') || DEFAULT_CONFIG.omkEngineThink,
-        omkEngineCode: env('OMK_ENGINE_CODE') || DEFAULT_CONFIG.omkEngineCode,
-        omkEngineVision: env('OMK_ENGINE_VISION') || DEFAULT_CONFIG.omkEngineVision,
+        omkEngineLlm: parsed.OMK_ENGINE_LLM ?? DEFAULT_CONFIG.omkEngineLlm,
+        omkEnginePro: parsed.OMK_ENGINE_PRO ?? DEFAULT_CONFIG.omkEnginePro,
+        omkEngineFast: parsed.OMK_ENGINE_FAST ?? DEFAULT_CONFIG.omkEngineFast,
+        omkEngineThink: parsed.OMK_ENGINE_THINK ?? DEFAULT_CONFIG.omkEngineThink,
+        omkEngineCode: parsed.OMK_ENGINE_CODE ?? DEFAULT_CONFIG.omkEngineCode,
+        omkEngineVision: parsed.OMK_ENGINE_VISION ?? DEFAULT_CONFIG.omkEngineVision,
     };
 }
 

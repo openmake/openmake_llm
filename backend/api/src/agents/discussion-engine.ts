@@ -188,10 +188,13 @@ export function createDiscussionEngine(
     };
     
     /**
-     * 🆕 우선순위 기반 통합 컨텍스트 구성
+     * 🆕 우선순위 기반 통합 컨텍스트 구성 (메모이제이션 적용)
      * 토큰 제한을 고려하여 우선순위가 높은 컨텍스트부터 할당
+     * ⚡ 토론 세션 내에서 config 입력이 불변이므로 첫 호출 결과를 캐싱
      */
+    let _cachedFullContext: string | null = null;
     const buildFullContext = (): string => {
+        if (_cachedFullContext !== null) return _cachedFullContext;
         // 컨텍스트 항목들을 우선순위로 정렬
         const contextItems: Array<{
             priority: number;
@@ -286,7 +289,8 @@ export function createDiscussionEngine(
             console.log(`[Discussion] 📊 컨텍스트 구성: ${parts.length}개 항목, ${totalChars}자 (제한: ${maxTotalChars}자)`);
         }
         
-        return parts.join('\n\n');
+        _cachedFullContext = parts.join('\n\n');
+        return _cachedFullContext;
     };
     
     /**

@@ -86,55 +86,59 @@ interface ABTestResult {
 export class CustomAgentBuilder {
     private customAgents: Map<string, CustomAgentConfig> = new Map();
     private abTests: Map<string, ABTestResult> = new Map();
-    private dataPath: string;
     private promptsDir: string;
 
-    constructor(dataDir: string = './data', promptsDir: string = './src/agents/prompts') {
-        this.dataPath = path.join(dataDir, 'custom-agents.json');
+    constructor(promptsDir: string = './src/agents/prompts') {
         this.promptsDir = promptsDir;
-        this.loadCustomAgents();
+        this.loadFromDB().catch((err: unknown) => logger.error('Failed to load custom agents from DB:', err));
         logger.info('커스텀 에이전트 빌더 초기화됨');
     }
 
     /**
-     * 커스텀 에이전트 로드
+     * DB 풀 가져오기 (require로 순환 참조 방지)
      */
-    private loadCustomAgents(): void {
-        try {
-            if (fs.existsSync(this.dataPath)) {
-                const data = JSON.parse(fs.readFileSync(this.dataPath, 'utf-8'));
-                for (const agent of data.agents || []) {
-                    this.customAgents.set(agent.id, agent);
-                }
-                logger.info(`커스텀 에이전트 ${this.customAgents.size}개 로드됨`);
-            }
-        } catch (error) {
-            logger.warn('커스텀 에이전트 로드 실패:', error);
-        }
+    private getPool() {
+        const { getUnifiedDatabase } = require('../data/models/unified-database');
+        return getUnifiedDatabase().getPool();
     }
 
     /**
-     * 커스텀 에이전트 저장
+     * DB에서 커스텀 에이전트 로드
      */
-    private saveCustomAgents(): void {
+    private async loadFromDB(): Promise<void> {
         try {
-            const dir = path.dirname(this.dataPath);
-            if (!fs.existsSync(dir)) {
-                fs.mkdirSync(dir, { recursive: true });
+            const pool = this.getPool();
+            const result = await pool.query(
+                'SELECT id, name, description, system_prompt, keywords, category, emoji, temperature, max_tokens, created_by, enabled, created_at, updated_at FROM custom_agents'
+            );
+            for (const row of result.rows) {
+                const agent: CustomAgentConfig = {
+                    id: row.id as string,
+                    name: row.name as string,
+                    description: (row.description as string) || '',
+                    systemPrompt: row.system_prompt as string,
+                    keywords: (row.keywords as string[]) || [],
+                    category: (row.category as string) || 'custom',
+                    emoji: (row.emoji as string) || '🤖',
+                    temperature: row.temperature as number | undefined,
+                    maxTokens: row.max_tokens as number | undefined,
+                    createdBy: row.created_by as string | undefined,
+                    createdAt: new Date(row.created_at as string),
+                    updatedAt: new Date(row.updated_at as string),
+                    enabled: row.enabled as boolean
+                };
+                this.customAgents.set(agent.id, agent);
             }
-            fs.writeFileSync(this.dataPath, JSON.stringify({
-                agents: Array.from(this.customAgents.values()),
-                lastUpdated: new Date().toISOString()
-            }, null, 2));
+            logger.info(`커스텀 에이전트 ${this.customAgents.size}개 DB에서 로드됨`);
         } catch (error) {
-            logger.error('커스텀 에이전트 저장 실패:', error);
+            logger.warn('커스텀 에이전트 DB 로드 실패:', error);
         }
     }
 
     /**
      * 새 커스텀 에이전트 생성
      */
-    createAgent(config: {
+    async createAgent(config: {
         name: string;
         description: string;
         systemPrompt: string;
@@ -144,7 +148,7 @@ export class CustomAgentBuilder {
         temperature?: number;
         maxTokens?: number;
         createdBy?: string;
-    }): CustomAgentConfig {
+    }): Promise<CustomAgentConfig> {
         // 고유 ID 생성
         const id = `custom-${sanitizeAgentId(config.name)}-${Date.now()}`;
 
@@ -164,12 +168,25 @@ export class CustomAgentBuilder {
             enabled: true
         };
 
+        // DB에 저장
+        const pool = this.getPool();
+        await pool.query(
+            `INSERT INTO custom_agents (id, name, description, system_prompt, keywords, category, emoji, temperature, max_tokens, created_by, enabled, created_at, updated_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+            [
+                agent.id, agent.name, agent.description, agent.systemPrompt,
+                JSON.stringify(agent.keywords), agent.category, agent.emoji,
+                agent.temperature ?? null, agent.maxTokens ?? null,
+                agent.createdBy ?? null, agent.enabled,
+                agent.createdAt, agent.updatedAt
+            ]
+        );
+
         this.customAgents.set(id, agent);
 
         // 프롬프트 파일도 생성
         this.savePromptFile(id, config.systemPrompt);
 
-        this.saveCustomAgents();
         logger.info(`커스텀 에이전트 생성됨: ${id}`);
 
         return agent;
@@ -178,7 +195,7 @@ export class CustomAgentBuilder {
     /**
      * 기존 에이전트 복제
      */
-    cloneAgent(sourceAgentId: string, modifications: Partial<CustomAgentConfig>): CustomAgentConfig | null {
+    async cloneAgent(sourceAgentId: string, modifications: Partial<CustomAgentConfig>): Promise<CustomAgentConfig | null> {
         // 시스템 에이전트에서 프롬프트 로드
         let sourcePrompt = '';
         const promptPath = path.join(this.promptsDir, `${sanitizeAgentId(sourceAgentId)}.md`);
@@ -208,7 +225,7 @@ export class CustomAgentBuilder {
     /**
      * 에이전트 수정
      */
-    updateAgent(agentId: string, updates: Partial<CustomAgentConfig>): CustomAgentConfig | null {
+    async updateAgent(agentId: string, updates: Partial<CustomAgentConfig>): Promise<CustomAgentConfig | null> {
         const agent = this.customAgents.get(agentId);
         if (!agent) {
             logger.warn(`에이전트 없음: ${agentId}`);
@@ -223,6 +240,59 @@ export class CustomAgentBuilder {
             updatedAt: new Date()
         };
 
+        // 동적 UPDATE 쿼리 빌드
+        const setClauses: string[] = [];
+        const values: (string | number | boolean | null)[] = [];
+        let paramIndex = 1;
+
+        const fieldMap: Record<string, string> = {
+            name: 'name',
+            description: 'description',
+            systemPrompt: 'system_prompt',
+            category: 'category',
+            emoji: 'emoji',
+            enabled: 'enabled'
+        };
+
+        for (const [key, column] of Object.entries(fieldMap)) {
+            if (key in updates) {
+                setClauses.push(`${column} = $${paramIndex}`);
+                values.push(updates[key as keyof CustomAgentConfig] as string | number | boolean | null);
+                paramIndex++;
+            }
+        }
+
+        if (updates.keywords !== undefined) {
+            setClauses.push(`keywords = $${paramIndex}`);
+            values.push(JSON.stringify(updates.keywords));
+            paramIndex++;
+        }
+        if (updates.temperature !== undefined) {
+            setClauses.push(`temperature = $${paramIndex}`);
+            values.push(updates.temperature ?? null);
+            paramIndex++;
+        }
+        if (updates.maxTokens !== undefined) {
+            setClauses.push(`max_tokens = $${paramIndex}`);
+            values.push(updates.maxTokens ?? null);
+            paramIndex++;
+        }
+
+        // always update updated_at
+        setClauses.push(`updated_at = $${paramIndex}`);
+        values.push(updated.updatedAt.toISOString());
+        paramIndex++;
+
+        values.push(agentId);
+
+        if (setClauses.length > 0) {
+            const pool = this.getPool();
+            await pool.query(
+                `UPDATE custom_agents SET ${setClauses.join(', ')} WHERE id = $${paramIndex}`,
+                values
+            );
+        }
+
         this.customAgents.set(agentId, updated);
 
         // 프롬프트 업데이트 시 파일도 갱신
@@ -230,7 +300,6 @@ export class CustomAgentBuilder {
             this.savePromptFile(agentId, updates.systemPrompt);
         }
 
-        this.saveCustomAgents();
         logger.info(`에이전트 업데이트됨: ${agentId}`);
 
         return updated;
@@ -239,10 +308,14 @@ export class CustomAgentBuilder {
     /**
      * 에이전트 삭제
      */
-    deleteAgent(agentId: string): boolean {
+    async deleteAgent(agentId: string): Promise<boolean> {
         if (!this.customAgents.has(agentId)) {
             return false;
         }
+
+        // DB에서 삭제
+        const pool = this.getPool();
+        await pool.query('DELETE FROM custom_agents WHERE id = $1', [agentId]);
 
         this.customAgents.delete(agentId);
 
@@ -254,7 +327,6 @@ export class CustomAgentBuilder {
             fs.unlinkSync(promptPath);
         }
 
-        this.saveCustomAgents();
         logger.info(`에이전트 삭제됨: ${agentId}`);
 
         return true;
