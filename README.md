@@ -9,6 +9,8 @@
 </p>
 
 <p align="center">
+  <a href="http://rasplay.tplinkdns.com:52416"><strong>Live Demo</strong></a> &bull;
+  <a href="#our-story">Our Story</a> &bull;
   <a href="#features">Features</a> &bull;
   <a href="#architecture">Architecture</a> &bull;
   <a href="#quick-start">Quick Start</a> &bull;
@@ -19,7 +21,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.5.1-blue" alt="Version" />
+  <img src="https://img.shields.io/badge/version-1.5.2-blue" alt="Version" />
   <img src="https://img.shields.io/badge/node-%3E%3D18-green" alt="Node" />
   <img src="https://img.shields.io/badge/license-MIT-yellow" alt="License" />
   <img src="https://img.shields.io/badge/typescript-5.3-blue" alt="TypeScript" />
@@ -885,6 +887,74 @@ Access the Admin panel (`/admin`) or use the CLI to manage cluster nodes:
 # View cluster nodes
 node backend/api/dist/cli.js nodes
 ```
+
+---
+
+## Our Story
+
+> **From Raspberry Pi Garage to AI Platform — A Maker's 13-Year Journey**
+
+### The Beginning: RaspberryPi Village (2013)
+
+2013년, 한국의 한 메이커가 [**rasplay.org**](http://rasplay.org) — **산딸기마을(RaspberryPi Village)** 을 열었습니다. Raspberry Pi 보드 하나로 무엇이든 만들 수 있다는 믿음으로 시작된 이 커뮤니티는 GitHub 계정 [`@rasplay`](https://github.com/rasplay)와 함께 성장했습니다.
+
+초기 프로젝트들은 순수한 DIY 정신 그 자체였습니다:
+
+| Year | Project | What it did |
+|------|---------|-------------|
+| 2013 | [RAS_POS_Project](https://github.com/rasplay/RAS_POS_Project) | Raspberry Pi 위에서 돌아가는 POS 시스템 |
+| 2014 | [ESRC_Project](https://github.com/rasplay/ESRC_Project) | 환경 스캐닝 RC Car |
+| 2015 | [Nail_duino_Project](https://github.com/rasplay/Nail_duino_Project) | 손톱 크기의 Arduino Uno 호환 보드 |
+| 2016 | [RAS_HiPi_Project](https://github.com/rasplay/RAS_HiPi_Project) | Raspberry Pi Hi-Fi 오디오 플레이어 |
+| 2017 | [RAS_JoyBOX_Project](https://github.com/rasplay/RAS_JoyBOX_Project) | Raspberry Pi 레트로 게임 에뮬레이터 |
+| 2017 | [PiSnap_Project](https://github.com/rasplay/PiSnap_Project) | Raspberry Pi 교육 플랫폼 |
+| 2017 | [RAS_RC_CAR_Project](https://github.com/rasplay/RAS_RC_CAR_Project) | 멀티 컨트롤러 RC Car v5.0 |
+| 2017 | [Pi_Auto_Setup](https://github.com/rasplay/Pi_Auto_Setup) | 한국 사용자를 위한 Raspbian 자동 설정 스크립트 |
+
+POS 시스템, RC Car, 레트로 게임기, 오디오 플레이어, 교육 플랫폼 — **"보드 하나면 뭐든 된다"** 는 메이커 정신으로 15개의 오픈소스 프로젝트가 태어났습니다.
+
+### The Bridge: OpenMake (2016)
+
+프로젝트가 늘어나면서 체계적인 조직이 필요해졌습니다. 2016년, 산딸기마을의 기술 조직 [**OpenMake**](https://github.com/openmake) (`openmake.cc`)가 탄생했습니다. "산딸기마을 오픈메이크 팀 깃허브" — GitHub 프로필에 적힌 이 한 줄이 두 조직의 관계를 말해줍니다.
+
+```
+rasplay (2013)  ──  커뮤니티, 하드웨어 DIY, 교육
+    │
+    └── openmake (2016)  ──  소프트웨어 개발, 시스템 엔지니어링
+            │
+            └── openmake_llm (2026)  ──  AI 플랫폼
+```
+
+같은 사람(`@riskpw`)이 두 조직 모두의 오너이며, `rasplay.org`와 `openmake.cc`는 처음부터 하나의 프로젝트의 양면이었습니다.
+
+### The Leap: OpenMake LLM (2026)
+
+10년간 하드웨어를 만지며 쌓은 시스템 엔지니어링 역량이 마침내 AI와 만났습니다. Raspberry Pi 위에서 POS를 돌리고, RC Car를 제어하고, 교육 플랫폼을 만들던 그 손이 — 이제 **56,000줄의 TypeScript/JavaScript로 멀티모델 AI 오케스트레이션 플랫폼**을 만들고 있습니다.
+
+**OpenMake LLM**은 처음부터 셀프 호스팅을 목표로 설계되었습니다. 그리고 이 플랫폼은 지금도 산딸기마을의 서버에서 돌아가고 있습니다:
+
+<p align="center">
+  <a href="http://rasplay.tplinkdns.com:52416">
+    <img src="https://img.shields.io/badge/Live_Demo-rasplay.tplinkdns.com:52416-blue?style=for-the-badge" alt="Live Demo" />
+  </a>
+</p>
+
+### Team
+
+| GitHub | Role | Organizations |
+|--------|------|---------------|
+| [@riskpw](https://github.com/riskpw) | Founder / Lead Developer | [rasplay](https://github.com/rasplay), [openmake](https://github.com/openmake) |
+| [@roggyhan](https://github.com/roggyhan) | Member | [rasplay](https://github.com/rasplay), [openmake](https://github.com/openmake) |
+| [@zzeromin](https://github.com/zzeromin) | Member | [rasplay](https://github.com/rasplay) |
+
+### Links
+
+| Resource | URL |
+|----------|-----|
+| **Live Demo** | [rasplay.tplinkdns.com:52416](http://rasplay.tplinkdns.com:52416) |
+| **RaspberryPi Village (rasplay)** | [github.com/rasplay](https://github.com/rasplay) |
+| **OpenMake Team** | [github.com/openmake](https://github.com/openmake) |
+| **OpenMake LLM Repo** | [github.com/openmake/openmake_llm](https://github.com/openmake/openmake_llm) |
 
 ---
 

@@ -117,7 +117,7 @@
                   '<header class="page-header">' +
                     '<div>' +
                       '<h1 class="page-title page-title-gradient">\uD83D\uDCD6 OpenMake.Ai \uC0AC\uC6A9\uC790 \uAC00\uC774\uB4DC</h1>' +
-                      '<p class="page-subtitle">\uBC84\uC804 1.5.0 \u00B7 \uB9C8\uC9C0\uB9C9 \uC5C5\uB370\uC774\uD2B8: 2026-01-02</p>' +
+                      '<p class="page-subtitle">\uBC84\uC804 1.5.2 \u00B7 \uB9C8\uC9C0\uB9C9 \uC5C5\uB370\uC774\uD2B8: 2026-02-14</p>' +
                     '</div>' +
                   '</header>' +
                   '<div class="guide-content">' +
