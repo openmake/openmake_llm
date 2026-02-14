@@ -79,19 +79,40 @@ function formatAgentListForPrompt(summaries: AgentSummary[]): string {
 }
 
 /**
- * LLM 응답에서 JSON 추출
+ * LLM 응답에서 JSON 추출 (greedy + non-greedy 이중 시도)
  */
 function extractJSONFromResponse(response: string): Record<string, unknown> | null {
-    // JSON 블록 찾기
-    const jsonMatch = response.match(/\{[\s\S]*?\}/);
-    if (jsonMatch) {
+    // 1단계: ```json 코드블록 내 JSON 추출 시도
+    const codeBlockMatch = response.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
+    if (codeBlockMatch) {
         try {
-            return JSON.parse(jsonMatch[0]);
+            return JSON.parse(codeBlockMatch[1]);
+        } catch {
+            // 코드블록 내 파싱 실패 시 다음 단계로
+        }
+    }
+
+    // 2단계: Greedy 매칭 (중첩 브레이스 대응 — 가장 바깥 {} 블록)
+    const greedyMatch = response.match(/\{[\s\S]*\}/);
+    if (greedyMatch) {
+        try {
+            return JSON.parse(greedyMatch[0]);
+        } catch {
+            // greedy 실패 시 non-greedy 시도
+        }
+    }
+
+    // 3단계: Non-greedy 폴백 (가장 짧은 {} 블록)
+    const lazyMatch = response.match(/\{[\s\S]*?\}/);
+    if (lazyMatch) {
+        try {
+            return JSON.parse(lazyMatch[0]);
         } catch (e) {
-            console.log('[LLM Router] JSON 파싱 실패, 응답:', response);
+            console.log('[LLM Router] JSON 파싱 실패, 응답:', response.substring(0, 200));
             return null;
         }
     }
+
     return null;
 }
 

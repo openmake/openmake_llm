@@ -5,6 +5,7 @@
  * 인증 관련 비즈니스 로직
  */
 
+import crypto from 'node:crypto';
 import { getUserManager, PublicUser } from '../data/user-manager';
 import { generateToken } from '../auth';
 import { createLogger } from '../utils/logger';
@@ -156,8 +157,8 @@ export class AuthService {
         let publicUser = user ? await this.userManager.getUserById(user.id) : null;
 
         if (!publicUser) {
-            // OAuth 사용자는 랜덤 비밀번호로 생성
-            const randomPassword = Math.random().toString(36).substring(2, 15);
+            // OAuth 사용자는 암호학적으로 안전한 랜덤 비밀번호로 생성
+            const randomPassword = crypto.randomBytes(32).toString('base64url');
 
             // 관리자 이메일 목록 확인
             const adminEmails = getConfig().adminEmails

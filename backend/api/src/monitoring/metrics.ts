@@ -88,9 +88,10 @@ class MetricsCollector extends EventEmitter {
 
         values.push(value);
 
-        // 윈도우 크기 유지
-        if (values.length > this.windowSize) {
-            values.shift();
+        // 윈도우 크기 유지 — batch truncation으로 shift()의 O(n) 반복 방지
+        if (values.length > this.windowSize * 1.5) {
+            const excess = values.length - this.windowSize;
+            values.splice(0, excess);
         }
 
         this.emit('histogram', { name, value, labels });

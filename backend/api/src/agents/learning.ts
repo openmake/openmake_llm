@@ -3,8 +3,7 @@
  * 사용자 피드백 수집, 품질 점수 계산, 프롬프트 최적화 제안
  */
 
-import * as fs from 'fs';
-import * as path from 'path';
+import crypto from 'node:crypto';
 import { createLogger } from '../utils/logger';
 
 const logger = createLogger('AgentLearning');
@@ -55,24 +54,39 @@ interface PromptImprovement {
  */
 export class AgentLearningSystem {
     private feedbacks: AgentFeedback[] = [];
-    private dataPath: string;
 
-    constructor(dataDir: string = './data') {
-        this.dataPath = path.join(dataDir, 'agent-feedback.json');
-        this.loadFeedbacks();
+    constructor() {
+        this.loadFromDB().catch((err: unknown) => logger.error('Failed to load feedbacks from DB:', err));
         logger.info('에이전트 학습 시스템 초기화됨');
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    private getPool(): import('pg').Pool {
+        const { getPool } = require('../data/models/unified-database') as { getPool: () => import('pg').Pool };
+        return getPool();
+    }
+
     /**
-     * 피드백 데이터 로드
+     * DB에서 피드백 데이터 로드
      */
-    private loadFeedbacks(): void {
+    private async loadFromDB(): Promise<void> {
         try {
-            if (fs.existsSync(this.dataPath)) {
-                const data = JSON.parse(fs.readFileSync(this.dataPath, 'utf-8'));
-                this.feedbacks = data.feedbacks || [];
-                logger.info(`피드백 ${this.feedbacks.length}개 로드됨`);
-            }
+            const pool = this.getPool();
+            const result = await pool.query(
+                'SELECT id, agent_id, user_id, rating, comment, query, response, tags, created_at FROM agent_feedback ORDER BY created_at DESC'
+            );
+            this.feedbacks = result.rows.map((row: Record<string, unknown>) => ({
+                feedbackId: row.id as string,
+                agentId: row.agent_id as string,
+                userId: row.user_id as string | undefined,
+                rating: row.rating as 1 | 2 | 3 | 4 | 5,
+                comment: row.comment as string | undefined,
+                query: row.query as string,
+                response: row.response as string,
+                timestamp: new Date(row.created_at as string),
+                tags: row.tags as string[] | undefined,
+            }));
+            logger.info(`피드백 ${this.feedbacks.length}개 로드됨`);
         } catch (error) {
             logger.warn('피드백 데이터 로드 실패:', error);
             this.feedbacks = [];
@@ -80,27 +94,9 @@ export class AgentLearningSystem {
     }
 
     /**
-     * 피드백 데이터 저장
-     */
-    private saveFeedbacks(): void {
-        try {
-            const dir = path.dirname(this.dataPath);
-            if (!fs.existsSync(dir)) {
-                fs.mkdirSync(dir, { recursive: true });
-            }
-            fs.writeFileSync(this.dataPath, JSON.stringify({
-                feedbacks: this.feedbacks,
-                lastUpdated: new Date().toISOString()
-            }, null, 2));
-        } catch (error) {
-            logger.error('피드백 저장 실패:', error);
-        }
-    }
-
-    /**
      * 피드백 수집
      */
-    collectFeedback(params: {
+    async collectFeedback(params: {
         agentId: string;
         userId?: string;
         rating: 1 | 2 | 3 | 4 | 5;
@@ -108,16 +104,35 @@ export class AgentLearningSystem {
         query: string;
         response: string;
         tags?: string[];
-    }): AgentFeedback {
+    }): Promise<AgentFeedback> {
+        const feedbackId = `fb_${crypto.randomBytes(8).toString('hex')}`;
         const feedback: AgentFeedback = {
-            feedbackId: `fb_${Date.now()}_${Math.random().toString(36).substring(7)}`,
+            feedbackId,
             ...params,
             timestamp: new Date()
         };
 
-        this.feedbacks.push(feedback);
-        this.saveFeedbacks();
+        try {
+            const pool = this.getPool();
+            await pool.query(
+                `INSERT INTO agent_feedback (id, agent_id, user_id, rating, comment, query, response, tags)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+                [
+                    feedback.feedbackId,
+                    feedback.agentId,
+                    feedback.userId ?? null,
+                    feedback.rating,
+                    feedback.comment ?? null,
+                    feedback.query,
+                    feedback.response,
+                    feedback.tags ? JSON.stringify(feedback.tags) : null,
+                ]
+            );
+        } catch (error) {
+            logger.error('피드백 DB 저장 실패:', error);
+        }
 
+        this.feedbacks.push(feedback);
         logger.info(`피드백 수집: ${params.agentId} (${params.rating}/5)`);
         return feedback;
     }
