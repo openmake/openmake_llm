@@ -945,7 +945,6 @@ rasplay (2013)  ──  커뮤니티, 하드웨어 DIY, 교육
 |--------|------|---------------|
 | [@riskpw](https://github.com/riskpw) | Founder / Lead Developer | [rasplay](https://github.com/rasplay), [openmake](https://github.com/openmake) |
 | [@roggyhan](https://github.com/roggyhan) | Member | [rasplay](https://github.com/rasplay), [openmake](https://github.com/openmake) |
-| [@zzeromin](https://github.com/zzeromin) | Member | [rasplay](https://github.com/rasplay) |
 
 ### Links
 
