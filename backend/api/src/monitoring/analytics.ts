@@ -73,7 +73,23 @@ export class AnalyticsSystem {
     private startTime: Date = new Date();
     private activeConnectionsGetter: () => number = () => 0;
 
+    // Memory overflow prevention constants
+    private static readonly MAX_QUERY_LOG = 10000;
+    private static readonly MAX_SESSION_LOG = 5000;
+    private static readonly SESSION_CLEANUP_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
+    private sessionCleanupTimer: ReturnType<typeof setInterval> | null = null;
+
     constructor() {
+        // Periodic cleanup of completed sessions to prevent memory overflow
+        this.sessionCleanupTimer = setInterval(() => {
+            this.cleanupCompletedSessions();
+        }, AnalyticsSystem.SESSION_CLEANUP_INTERVAL_MS);
+
+        // Allow process to exit even if timer is still running
+        if (this.sessionCleanupTimer.unref) {
+            this.sessionCleanupTimer.unref();
+        }
+
         logger.info('분석 시스템 초기화됨');
     }
 
@@ -115,9 +131,9 @@ export class AnalyticsSystem {
     recordQuery(query: string): void {
         this.queryLog.push({ query, timestamp: new Date() });
 
-        // 최대 10,000개 유지
-        if (this.queryLog.length > 10000) {
-            this.queryLog.shift();
+        // 최대 MAX_QUERY_LOG개 유지 — splice로 배치 제거 (shift()의 O(n) 반복 방지)
+        if (this.queryLog.length > AnalyticsSystem.MAX_QUERY_LOG * 1.2) {
+            this.queryLog = this.queryLog.slice(-AnalyticsSystem.MAX_QUERY_LOG);
         }
     }
 
@@ -130,6 +146,15 @@ export class AnalyticsSystem {
             start: new Date(),
             queries: 0
         });
+
+        // Cap session log to prevent unbounded growth
+        if (this.sessionLog.length > AnalyticsSystem.MAX_SESSION_LOG * 1.2) {
+            // Remove oldest completed sessions first, keep active ones
+            const active = this.sessionLog.filter(s => !s.end);
+            const completed = this.sessionLog.filter(s => s.end);
+            const keepCompleted = completed.slice(-AnalyticsSystem.MAX_SESSION_LOG + active.length);
+            this.sessionLog = [...keepCompleted, ...active];
+        }
     }
 
     /**
@@ -319,6 +344,37 @@ export class AnalyticsSystem {
             costAnalysis: this.getCostAnalysis(),
             systemHealth: this.getSystemHealth()
         };
+    }
+
+    /**
+     * 완료된 오래된 세션 정리 (메모리 오버플로우 방지)
+     * 24시간 이상 지난 완료 세션을 제거
+     */
+    private cleanupCompletedSessions(): void {
+        const cutoff = Date.now() - 24 * 60 * 60 * 1000; // 24 hours ago
+        const before = this.sessionLog.length;
+
+        this.sessionLog = this.sessionLog.filter(s => {
+            // Keep active sessions (no end time)
+            if (!s.end) return true;
+            // Keep recently completed sessions
+            return s.end.getTime() > cutoff;
+        });
+
+        const removed = before - this.sessionLog.length;
+        if (removed > 0) {
+            logger.debug(`세션 로그 정리: ${removed}개 완료 세션 제거 (${this.sessionLog.length}개 유지)`);
+        }
+    }
+
+    /**
+     * 정리 타이머 중지 (테스트 또는 종료 시)
+     */
+    dispose(): void {
+        if (this.sessionCleanupTimer) {
+            clearInterval(this.sessionCleanupTimer);
+            this.sessionCleanupTimer = null;
+        }
     }
 
     /**

@@ -88,7 +88,7 @@ router.get('/', (req: Request, res: Response) => {
   * POST /api/agents/custom
   * 커스텀 에이전트 생성
   */
- router.post('/custom', requireAuth, (req: Request, res: Response) => {
+ router.post('/custom', requireAuth, async (req: Request, res: Response) => {
      try {
          const { name, description, systemPrompt, keywords, category, emoji, temperature, maxTokens } = req.body;
 
@@ -97,7 +97,7 @@ router.get('/', (req: Request, res: Response) => {
          }
 
         const customBuilder = getCustomAgentBuilder();
-        const agent = customBuilder.createAgent({
+        const agent = await customBuilder.createAgent({
             name,
             description,
             systemPrompt,
@@ -120,13 +120,13 @@ router.get('/', (req: Request, res: Response) => {
   * PUT /api/agents/custom/:id
   * 커스텀 에이전트 수정
   */
- router.put('/custom/:id', requireAuth, (req: Request, res: Response) => {
+ router.put('/custom/:id', requireAuth, async (req: Request, res: Response) => {
      try {
          const agentId = req.params.id;
          const updates = req.body;
 
          const customBuilder = getCustomAgentBuilder();
-         const updated = customBuilder.updateAgent(agentId, updates);
+         const updated = await customBuilder.updateAgent(agentId, updates);
 
          if (!updated) {
              return res.status(404).json(notFound('에이전트'));
@@ -143,12 +143,12 @@ router.get('/', (req: Request, res: Response) => {
   * DELETE /api/agents/custom/:id
   * 커스텀 에이전트 삭제
   */
- router.delete('/custom/:id', requireAuth, (req: Request, res: Response) => {
+ router.delete('/custom/:id', requireAuth, async (req: Request, res: Response) => {
      try {
          const agentId = req.params.id;
 
          const customBuilder = getCustomAgentBuilder();
-         const deleted = customBuilder.deleteAgent(agentId);
+         const deleted = await customBuilder.deleteAgent(agentId);
 
          if (!deleted) {
              return res.status(404).json(notFound('에이전트'));
@@ -165,14 +165,14 @@ router.get('/', (req: Request, res: Response) => {
   * POST /api/agents/custom/clone/:id
   * 기존 에이전트 복제
   */
- router.post('/custom/clone/:id', requireAuth, (req: Request, res: Response) => {
+ router.post('/custom/clone/:id', requireAuth, async (req: Request, res: Response) => {
      try {
          const sourceId = req.params.id;
          const modifications = req.body;
          modifications.createdBy = String(req.user?.id || '');
 
          const customBuilder = getCustomAgentBuilder();
-         const cloned = customBuilder.cloneAgent(sourceId, modifications);
+         const cloned = await customBuilder.cloneAgent(sourceId, modifications);
 
          if (!cloned) {
              return res.status(400).json(badRequest('에이전트 복제 실패'));
@@ -211,7 +211,7 @@ router.get('/', (req: Request, res: Response) => {
   * POST /api/agents/:id/feedback
   * 에이전트 피드백 제출
   */
- router.post('/:id/feedback', requireAuth, (req: Request, res: Response) => {
+ router.post('/:id/feedback', requireAuth, async (req: Request, res: Response) => {
      try {
          const agentId = req.params.id;
          const { rating, comment, query, response, tags } = req.body;
@@ -225,7 +225,7 @@ router.get('/', (req: Request, res: Response) => {
          }
 
         const learningSystem = getAgentLearningSystem();
-        const feedback = learningSystem.collectFeedback({
+        const feedback = await learningSystem.collectFeedback({
             agentId,
             userId: (req.user && 'userId' in req.user ? req.user.userId : req.user?.id?.toString()),
             rating,
