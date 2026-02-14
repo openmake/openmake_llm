@@ -913,6 +913,45 @@ node backend/api/dist/cli.js nodes
 
 POS 시스템, RC Car, 레트로 게임기, 오디오 플레이어, 교육 플랫폼 — **"보드 하나면 뭐든 된다"** 는 메이커 정신으로 15개의 오픈소스 프로젝트가 태어났습니다.
 
+### Community & Recognition
+
+산딸기마을은 단순한 취미 커뮤니티를 넘어 한국 메이커 문화의 거점이 되었습니다.
+
+**Raspberry Pi Foundation 공식 등록**
+
+산딸기마을의 공동제작 프로젝트는 영국 Raspberry Pi Foundation에 **Raspberry Pi JAM of Korea**로 공식 등록되어 운영되었습니다. [공식 Raspberry Pi 포럼](https://forums.raspberrypi.com)에는 2013년 1월부터 29개의 프로젝트 공유 게시물이 남아 있습니다:
+
+- [NaviBOXPi](https://forums.raspberrypi.com/viewtopic.php?t=46752) — Raspberry Pi 네비게이션 시스템 (2013)
+- [Web Server Cluster](https://forums.raspberrypi.com/viewtopic.php?t=53941) — Raspberry Pi 웹 클러스터 (2013)
+- [WordPress Cluster](https://forums.raspberrypi.com/viewtopic.php?t=58517) — 다중 노드 워드프레스 (2013)
+- [Pi\_Snap](https://forums.raspberrypi.com/viewtopic.php?t=150914) — 비주얼 프로그래밍 교육 플랫폼 (2016)
+
+**Pi\_Snap & UC Berkeley Snap!**
+
+[Pi\_Snap](https://github.com/rasplay/PiSnap_Project)은 UC Berkeley의 [Snap!](https://snap.berkeley.edu) 공식 웹사이트에 등록된 교육 플랫폼입니다. Scratch와 유사한 블록 기반 비주얼 프로그래밍으로 Raspberry Pi GPIO 핀을 제어할 수 있어, 비전공자와 학생들이 하드웨어 프로그래밍을 배울 수 있도록 설계되었습니다.
+
+**미디어 & 후원**
+
+| Source | Content |
+|--------|---------|
+| **YTN Science TV** | "추억을 만드는 메이커" — 산딸기마을 공동제작 프로젝트 방영 |
+| **ScienceTimes** (2015) | "1+1=3" 철학 인터뷰 — 7,000+ 구독자 커뮤니티 소개 |
+| **ChosunBiz / 동아일보 / 아시아경제** | KTH 파트너십, ICT Dev Conference, OSCon 2015 보도 |
+| **한국과학창의재단 (KOFAC)** | 공동제작 프로젝트 공식 후원 |
+| **KT Hitel (KTH)** | RAS JoyBOX — 가족용 DIY Raspberry Pi 게임 키트 파트너십 |
+
+**글로벌 커뮤니티**
+
+rasplay.org는 1,001페이지 이상의 튜토리얼, 빌드 로그, 위키 문서를 보유했으며, 한국을 비롯해 미국, 일본, 독일, 인도, 캐나다, 영국, 호주, 러시아, 중국 등 10개국 이상에서 방문자가 접속했습니다. 누적 페이지뷰는 약 193만 회에 달했습니다.
+
+> *"너와 내가 알고 있는 지식을 더하면 2가 아니라 숨겨진 하나가 더해져 3이 된다"* — ScienceTimes 인터뷰 (2015)
+
+**출판**
+
+2013년 10월, *라즈베리 파이 활용백서* (BJ퍼블릭)를 출판했습니다. 마케팅 출신의 비전공자가 쓴 이 책은 "전문가를 위한 개발은 하지 않으며, 일반인들을 위해 개발하자"는 철학을 담고 있습니다.
+
+> 현재 rasplay.org 도메인은 탈취(하이재킹)된 상태입니다. 과거 콘텐츠는 [Wayback Machine](https://web.archive.org/web/2018/https://rasplay.org)에서 확인할 수 있습니다.
+
 ### The Bridge: OpenMake (2016)
 
 프로젝트가 늘어나면서 체계적인 조직이 필요해졌습니다. 2016년, 산딸기마을의 기술 조직 [**OpenMake**](https://github.com/openmake) (`openmake.cc`)가 탄생했습니다. "산딸기마을 오픈메이크 팀 깃허브" — GitHub 프로필에 적힌 이 한 줄이 두 조직의 관계를 말해줍니다.
