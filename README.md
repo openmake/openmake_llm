@@ -69,6 +69,17 @@
 
 **OpenMake LLM**은 Ollama 기반의 셀프 호스팅 AI 어시스턴트 플랫폼입니다. 단일 노드부터 분산 클러스터까지 확장 가능하며, 7가지 브랜드 모델 프로파일을 통해 질문 유형에 따른 최적의 AI 응답을 제공합니다.
 
+<p align="center">
+  <a href="http://rasplay.tplinkdns.com:52416">
+    <img src="https://i.imgur.com/ykLEDlB.png" alt="OpenMake LLM Demo" width="720" />
+  </a>
+</p>
+
+<p align="center">
+  <a href="http://rasplay.tplinkdns.com:52416"><strong>Live Demo</strong></a> &bull;
+  <a href="https://imgur.com/a/WanS3dn">Screenshots</a>
+</p>
+
 ### Why OpenMake LLM?
 
 - **프라이버시**: 모든 데이터가 로컬에서 처리됩니다. 외부 서비스 의존 없이 운영 가능.
