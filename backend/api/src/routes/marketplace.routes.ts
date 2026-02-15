@@ -1,3 +1,29 @@
+/**
+ * ============================================================
+ * Marketplace Routes - 에이전트 마켓플레이스 API 라우트
+ * ============================================================
+ *
+ * 커스텀 에이전트의 마켓플레이스 등록, 검색, 설치/제거,
+ * 리뷰 작성, 관리자 승인/거절 기능을 제공합니다.
+ * 공개 조회는 인증 없이 가능하며, 등록/설치는 인증이 필요합니다.
+ *
+ * @module routes/marketplace.routes
+ * @description
+ * - GET    /api/marketplace                         - 마켓플레이스 에이전트 목록 (공개, 정렬/검색)
+ * - GET    /api/marketplace/me/installed             - 설치된 에이전트 목록 (인증)
+ * - POST   /api/marketplace                         - 에이전트 마켓플레이스 등록 (인증, 소유권 확인)
+ * - GET    /api/marketplace/:marketplaceId           - 에이전트 상세 (공개)
+ * - GET    /api/marketplace/:marketplaceId/reviews   - 에이전트 리뷰 (공개)
+ * - POST   /api/marketplace/:marketplaceId/install   - 에이전트 설치 (인증)
+ * - DELETE /api/marketplace/:marketplaceId/install   - 에이전트 제거 (인증)
+ * - POST   /api/marketplace/:marketplaceId/reviews   - 리뷰 작성 (인증)
+ * - PUT    /api/marketplace/:marketplaceId/status    - 상태 변경 (관리자: approve/reject/suspend)
+ *
+ * @requires requireAuth - JWT 인증 미들웨어
+ * @requires requireAdmin - 관리자 권한 미들웨어
+ * @requires optionalAuth - 선택적 인증 미들웨어
+ * @requires UnifiedDatabase - 마켓플레이스 DB 접근
+ */
 import { Router, Request, Response } from 'express';
 import { createLogger } from '../utils/logger';
 import { success, badRequest, notFound, forbidden, internalError } from '../utils/api-response';

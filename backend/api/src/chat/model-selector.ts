@@ -3,10 +3,27 @@
  * Model Selector - 질문 유형별 자동 모델 라우팅
  * ============================================================
  * 
- * 질문 유형(코딩/분석/창작/비전/한국어 등)에 따라 최적의 Ollama 모델을
- * 자동 선택하고, 각 모델 API 특성에 맞춰 파라미터를 조정합니다.
+ * 사용자 질문을 분석하여 9가지 QueryType으로 분류하고,
+ * 최적의 Ollama 모델 프리셋을 자동 선택합니다.
+ * Brand model alias(openmake_llm_auto)를 통한 스마트 자동 라우팅도 지원합니다.
  * 
  * @module chat/model-selector
+ * @description
+ * - 질문 유형 분류: 정규식 패턴 매칭 + 키워드 가중치 스코어링 알고리즘
+ * - 모델 프리셋 선택: QueryType별 최적 모델 매칭 (우선순위 기반)
+ * - Brand Model 지원: pipeline-profile.ts의 프로파일 기반 ModelSelection 생성
+ * - Auto-Routing: openmake_llm_auto 요청 시 질문 유형에 따라 brand profile 자동 선택
+ * - 모델별 파라미터 조정: 모델 특성에 맞는 temperature, top_p, num_ctx 자동 튜닝
+ * 
+ * 자동 라우팅 알고리즘 흐름:
+ * 1. classifyQuery() - 정규식/키워드로 QueryType 분류 + 신뢰도 계산
+ * 2. selectOptimalModel() - QueryType에 맞는 ModelPreset 선택
+ * 3. selectModelForProfile() - Brand model alias인 경우 프로파일 기반 선택
+ * 4. selectBrandProfileForAutoRouting() - auto 모드 시 brand profile ID 결정
+ * 5. adjustOptionsForModel() - 선택된 모델에 맞게 옵션 미세 조정
+ * 
+ * @see chat/pipeline-profile.ts - 브랜드 모델 프로파일 정의
+ * @see services/ChatService.ts - 최종 모델 선택 결과 소비
  */
 
 import { getConfig } from '../config/env';
@@ -17,6 +34,10 @@ import { isValidBrandModel, getProfiles } from './pipeline-profile';
 // 질문 유형 정의
 // ============================================================
 
+/**
+ * 질문 유형 분류 결과 (9가지)
+ * classifyQuery()가 사용자 질문을 분석하여 이 중 하나로 분류합니다.
+ */
 export type QueryType = 
     | 'code'           // 코딩/개발 관련
     | 'analysis'       // 데이터 분석/논리적 추론
@@ -28,20 +49,39 @@ export type QueryType =
     | 'document'       // 문서 분석/요약
     | 'translation';   // 번역
 
+/**
+ * 질문 분류 결과 인터페이스
+ * classifyQuery()의 반환 타입으로, 분류된 유형과 신뢰도 정보를 포함합니다.
+ */
 export interface QueryClassification {
+    /** 분류된 질문 유형 */
     type: QueryType;
+    /** 분류 신뢰도 (0.0 ~ 1.0, 높을수록 확실) */
     confidence: number;
+    /** 보조 유형 (예: 한국어 비율이 30% 이상이면 'korean') */
     subType?: string;
+    /** 매칭된 패턴/키워드 목록 (최대 5개) */
     matchedPatterns: string[];
 }
 
+/**
+ * 모델 선택 결과 인터페이스
+ * selectOptimalModel() 또는 selectModelForProfile()의 반환 타입입니다.
+ */
 export interface ModelSelection {
+    /** 선택된 모델 ID (예: 'gemini-3-flash-preview:cloud') */
     model: string;
+    /** 모델에 적용할 옵션 (temperature, top_p 등) */
     options: ModelOptions;
+    /** 선택 사유 설명 (한국어) */
     reason: string;
+    /** 분류된 질문 유형 */
     queryType: QueryType;
+    /** 도구 호출(Tool Calling) 지원 여부 */
     supportsToolCalling: boolean;
+    /** 사고(Thinking) 모드 지원 여부 */
     supportsThinking: boolean;
+    /** 비전(이미지 분석) 지원 여부 */
     supportsVision: boolean;
 }
 
@@ -49,20 +89,36 @@ export interface ModelSelection {
 // 모델 프리셋 정의
 // ============================================================
 
+/**
+ * 모델 프리셋 정의 인터페이스
+ * 각 모델의 기본 설정, 기능, 적합한 질문 유형을 정의합니다.
+ */
 interface ModelPreset {
+    /** 모델 표시 이름 (예: 'Gemini 3 Flash') */
     name: string;
-    envKey: string;           // .env 변수명
-    defaultModel: string;     // 기본 모델명
+    /** .env 변수명 (예: 'OLLAMA_MODEL_1') */
+    envKey: string;
+    /** 기본 모델명 (env 미설정 시 사용) */
+    defaultModel: string;
+    /** 모델 기본 옵션 (temperature, top_p 등) */
     options: ModelOptions;
+    /** 모델 기능 플래그 */
     capabilities: {
+        /** 도구 호출 지원 */
         toolCalling: boolean;
+        /** 사고 모드 지원 */
         thinking: boolean;
+        /** 비전(이미지) 지원 */
         vision: boolean;
+        /** 스트리밍 지원 */
         streaming: boolean;
+        /** 최대 컨텍스트 길이 (토큰) */
         contextLength: number;
     };
+    /** 이 모델이 최적인 질문 유형 목록 */
     bestFor: QueryType[];
-    priority: number;         // 우선순위 (낮을수록 높음)
+    /** 선택 우선순위 (낮을수록 높음, 동일 QueryType 내에서 비교) */
+    priority: number;
 }
 
 // 사용 가능한 모델 프리셋
@@ -210,10 +266,18 @@ const MODEL_PRESETS: Record<string, ModelPreset> = {
 // 질문 유형 분류 패턴
 // ============================================================
 
+/**
+ * 질문 유형 분류 패턴 인터페이스
+ * 정규식과 키워드를 조합하여 질문 유형을 판별합니다.
+ */
 interface QueryPattern {
+    /** 분류 대상 질문 유형 */
     type: QueryType;
+    /** 매칭할 정규식 패턴 배열 (매칭 시 weight * 2 점수) */
     patterns: RegExp[];
+    /** 매칭할 키워드 배열 (매칭 시 weight * 1 점수) */
     keywords: string[];
+    /** 가중치 (유형별 중요도 조정, 기본 1.0) */
     weight: number;
 }
 
@@ -349,7 +413,17 @@ const QUERY_PATTERNS: QueryPattern[] = [
 // ============================================================
 
 /**
- * 쿼리를 분석하여 질문 유형을 분류합니다.
+ * 사용자 쿼리를 분석하여 질문 유형을 분류합니다.
+ * 
+ * 분류 알고리즘:
+ * 1. 모든 QueryPattern에 대해 정규식 매칭 (weight * 2 점수) + 키워드 매칭 (weight * 1 점수)
+ * 2. 가장 높은 점수의 유형을 선택 (동점 시 먼저 발견된 유형)
+ * 3. [IMAGE] 메타데이터가 있으면 vision으로 강제 전환
+ * 4. 한국어 비율 30% 이상이면 subType='korean' 추가
+ * 5. 신뢰도 = min(bestScore / 5, 1.0)
+ * 
+ * @param query - 분류할 사용자 질문 텍스트
+ * @returns 분류 결과 (유형, 신뢰도, 매칭된 패턴)
  */
 export function classifyQuery(query: string): QueryClassification {
     const scores: Map<QueryType, { score: number; patterns: string[] }> = new Map();
@@ -425,7 +499,19 @@ export function classifyQuery(query: string): QueryClassification {
 // ============================================================
 
 /**
- * 질문 유형에 따라 최적의 모델을 선택합니다.
+ * 질문 유형에 따라 최적의 모델 프리셋을 선택합니다.
+ * 
+ * 선택 알고리즘:
+ * 1. classifyQuery()로 질문 유형 분류
+ * 2. 이미지 첨부 시 vision으로 강제 전환
+ * 3. MODEL_PRESETS에서 해당 유형의 bestFor에 포함된 프리셋 검색
+ * 4. priority가 가장 낮은(=우선순위 높은) 프리셋 선택
+ * 5. 매칭 실패 시 gemini-flash 폴백
+ * 6. .env에서 실제 모델명 resolve
+ * 
+ * @param query - 사용자 질문 텍스트
+ * @param hasImages - 이미지 첨부 여부 (true면 vision 모델 강제 선택)
+ * @returns 모델 선택 결과 (모델명, 옵션, 사유, 기능 플래그)
  */
 export function selectOptimalModel(query: string, hasImages?: boolean): ModelSelection {
     const config = getConfig();
@@ -479,6 +565,11 @@ export function selectOptimalModel(query: string, hasImages?: boolean): ModelSel
 
 /**
  * 모델이 특정 기능을 지원하는지 확인합니다.
+ * MODEL_PRESETS에서 모델명을 검색하여 해당 기능 플래그를 반환합니다.
+ * 
+ * @param modelName - 확인할 모델명
+ * @param capability - 확인할 기능 ('toolCalling' | 'thinking' | 'vision' | 'streaming')
+ * @returns 해당 기능 지원 여부
  */
 export function checkModelCapability(
     modelName: string, 
@@ -505,7 +596,11 @@ export function checkModelCapability(
 }
 
 /**
- * 모델의 최대 컨텍스트 길이를 반환합니다.
+ * 모델의 최대 컨텍스트 길이(토큰)를 반환합니다.
+ * MODEL_PRESETS에서 검색하며, 미발견 시 기본값 32768을 반환합니다.
+ * 
+ * @param modelName - 확인할 모델명
+ * @returns 최대 컨텍스트 길이 (토큰 단위)
  */
 export function getModelContextLength(modelName: string): number {
     const lowerModel = modelName.toLowerCase();
@@ -526,7 +621,23 @@ export function getModelContextLength(modelName: string): number {
 // ============================================================
 
 /**
- * 특정 모델에 맞게 옵션을 조정합니다.
+ * 특정 모델과 질문 유형에 맞게 모델 옵션을 미세 조정합니다.
+ * 
+ * 모델별 조정:
+ * - Qwen Coder: temperature <= 0.3, repeat_penalty = 1.0
+ * - Kimi: num_ctx >= 65536 (긴 문서 지원)
+ * - Vision 모델: temperature = 0.6
+ * 
+ * 질문 유형별 조정:
+ * - code: temperature <= 0.3 (정확성 우선)
+ * - creative: temperature >= 0.85 (창의성 우선)
+ * - math: temperature = 0.1 (결정적 응답)
+ * - translation: temperature = 0.3, repeat_penalty = 1.2
+ * 
+ * @param modelName - 대상 모델명
+ * @param baseOptions - 기본 모델 옵션
+ * @param queryType - 질문 유형
+ * @returns 조정된 모델 옵션 (원본 불변)
  */
 export function adjustOptionsForModel(
     modelName: string, 
@@ -736,7 +847,9 @@ export function selectOptimalModelLegacy(query: string): { model: string; reason
 // ============================================================
 
 /**
- * 사용 가능한 모든 모델 프리셋 목록 반환
+ * 사용 가능한 모든 모델 프리셋 목록을 반환합니다.
+ * 
+ * @returns 프리셋 ID, 이름, 적합한 질문 유형 배열
  */
 export function getAvailablePresets(): Array<{ id: string; name: string; bestFor: QueryType[] }> {
     return Object.entries(MODEL_PRESETS).map(([id, preset]) => ({
@@ -747,7 +860,11 @@ export function getAvailablePresets(): Array<{ id: string; name: string; bestFor
 }
 
 /**
- * 질문 유형별 추천 모델 반환
+ * 질문 유형별 추천 모델명을 반환합니다.
+ * bestFor 배열의 첫 번째 항목이 일치하는 프리셋의 defaultModel을 반환합니다.
+ * 
+ * @param queryType - 질문 유형
+ * @returns 추천 모델명 (폴백: gemini-flash의 defaultModel)
  */
 export function getRecommendedModel(queryType: QueryType): string {
     for (const preset of Object.values(MODEL_PRESETS)) {

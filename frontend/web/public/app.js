@@ -1,62 +1,104 @@
-// OpenMake.Ai - Premium UI
+/**
+ * OpenMake.Ai - Premium UI (메인 애플리케이션)
+ * ========================================
+ *
+ * 프론트엔드 모놀리스 파일 (~3500줄).
+ * 인증, WebSocket 통신, 채팅 UI, 파일 첨부, 에이전트 배지,
+ * MCP 설정, 테마, 세션 히스토리, 웹 검색, 마크다운 렌더링 등
+ * 애플리케이션의 핵심 기능을 모두 포함합니다.
+ *
+ * @file app.js
+ * @description 메인 SPA 애플리케이션 로직 (Vanilla JS, 프레임워크 없음)
+ *
+ * #6 개선: 모듈 분리 마이그레이션
+ * ----------------------------------------
+ * js/modules/ 아래에 도메인별 모듈이 준비되어 있습니다:
+ *
+ *   state.js     - 중앙 집중 상태 관리 (AppState, getState, setState)
+ *   auth.js      - 인증 로직 (initAuth, authFetch, logout, updateAuthUI)
+ *   ui.js        - UI 유틸리티 (showToast, escapeHtml, scrollToBottom, applyTheme)
+ *   websocket.js - WebSocket 연결 및 메시지 핸들링
+ *   chat.js      - 채팅 기능 (sendMessage, addChatMessage, appendToken)
+ *   settings.js  - 설정 모달 및 MCP/프롬프트 모드
+ *   utils.js     - 포맷팅, 디버그, 파일 유틸리티
+ *   guide.js     - 사용자 가이드 렌더링
+ *   sanitize.js  - XSS 방어 (escapeHTML, sanitizeHTML)
+ *
+ * 마이그레이션 절차:
+ * 1. 각 모듈이 window 객체에 함수를 노출 (현재 완료)
+ * 2. index.html에서 모듈 script 태그 추가 (Phase 2 준비됨)
+ * 3. 이 파일의 해당 섹션을 제거하고 모듈로 대체
+ * 4. 모든 모듈 전환 후 이 파일 삭제
+ *
+ * ========================================
+ */
+
 // ========================================
-//
-// #6 개선: 모듈 분리 마이그레이션
-// ----------------------------------------
-// 이 파일은 모놀리스 구조입니다 (~2800줄).
-// js/modules/ 아래에 도메인별 모듈이 준비되어 있습니다:
-//
-//   state.js     - 중앙 집중 상태 관리 (AppState, getState, setState)
-//   auth.js      - 인증 로직 (initAuth, authFetch, logout, updateAuthUI)
-//   ui.js        - UI 유틸리티 (showToast, escapeHtml, scrollToBottom, applyTheme)
-//   websocket.js - WebSocket 연결 및 메시지 핸들링
-//   chat.js      - 채팅 기능 (sendMessage, addChatMessage, appendToken)
-//   settings.js  - 설정 모달 및 MCP/프롬프트 모드
-//   utils.js     - 포맷팅, 디버그, 파일 유틸리티
-//   guide.js     - 사용자 가이드 렌더링
-//   sanitize.js  - XSS 방어 (escapeHTML, sanitizeHTML)
-//
-// 마이그레이션 절차:
-// 1. 각 모듈이 window 객체에 함수를 노출 (현재 완료)
-// 2. index.html에서 모듈 script 태그 추가 (Phase 2 준비됨)
-// 3. 이 파일의 해당 섹션을 제거하고 모듈로 대체
-// 4. 모든 모듈 전환 후 이 파일 삭제
-//
+// 디버그 설정
 // ========================================
 
 // 🆕 Debug Mode - set to false for production
+/** @type {boolean} 디버그 모드 플래그 - 프로덕션에서는 false */
 const DEBUG_MODE = false;
+
+/**
+ * 디버그 로거 객체
+ * DEBUG_MODE가 true일 때만 log/warn 출력, error는 항상 출력
+ * @namespace debug
+ */
 const debug = {
     log: (...args) => DEBUG_MODE && console.log(...args),
     warn: (...args) => DEBUG_MODE && console.warn(...args),
     error: (...args) => console.error(...args)  // errors always show
 };
 
-// State
+// ========================================
+// 전역 상태 변수
+// ========================================
+
+/** @type {WebSocket|null} 채팅 스트리밍용 WebSocket 연결 */
 let ws = null;
+/** @type {Array<Object>} 클러스터 노드 목록 (Ollama 인스턴스) */
 let nodes = [];
+/** @type {Array<string>} 채팅 입력 히스토리 (로컬) */
 let chatHistory = [];
+/** @type {string|null} 현재 활성 채팅 ID */
 let currentChatId = null;
+/** @type {boolean} 웹 검색 모드 활성화 여부 */
 let webSearchEnabled = false;
+/** @type {boolean} 멀티 에이전트 토론 모드 활성화 여부 */
 let discussionMode = false;  // 멀티 에이전트 토론 모드
+/** @type {boolean} Ollama Native Thinking 모드 (심층 추론) 활성화 여부 */
 let thinkingMode = false;    // Ollama Native Thinking 모드 (심층 추론)
+/** @type {'low'|'medium'|'high'} Thinking 레벨 설정 */
 let thinkingLevel = 'high'; // Thinking 레벨: 'low', 'medium', 'high'
+/** @type {boolean} Deep Research 모드 (심층 연구) 활성화 여부 */
 let deepResearchMode = false;  // Deep Research 모드 (심층 연구)
+/** @type {boolean} Sequential Thinking MCP 도구 활성화 여부 */
 let thinkingEnabled = true; // Sequential Thinking 기본 활성화
+/** @type {Array<Object>} 현재 첨부된 파일 목록 ({filename, base64, isImage, docId, textContent} 등) */
 let attachedFiles = [];
+/** @type {number|null} AI 응답 시작 시간 (응답 소요 시간 측정용, ms) */
 let messageStartTime = null;
+/** @type {boolean} AI 응답 생성 중 여부 (중단 버튼 표시/숨김 제어) */
 let isGenerating = false;  // 응답 생성 중 여부 (중단 버튼용)
 
 // 인증 상태
+/** @type {Object|null} 현재 로그인한 사용자 정보 ({email, role, name, ...}) */
 let currentUser = null;
+/** @type {string|null} JWT 인증 토큰 또는 'cookie-session' 마커 */
 let authToken = null;
+/** @type {boolean} 게스트 모드 활성화 여부 */
 let isGuestMode = false;
 
 // 대화 메모리 (LLM 컨텍스트용)
+/** @type {Array<{role: string, content: string, images?: string[]}>} LLM 컨텍스트용 대화 메모리 배열 */
 let conversationMemory = [];
+/** @type {number} 대화 메모리 최대 항목 수 (초과 시 오래된 항목 제거) */
 const MAX_MEMORY_LENGTH = 20;
 
 // 세션 레벨 문서 컨텍스트 (PDF 업로드 시 저장, 모든 채팅에서 참조)
+/** @type {{docId: string, filename: string, textLength: number}|null} 활성 문서 컨텍스트 (PDF 업로드 시 설정, 모든 채팅에서 자동 참조) */
 let activeDocumentContext = null;  // { docId, filename, textLength }
 
 // ========================================
@@ -67,7 +109,18 @@ let activeDocumentContext = null;  // { docId, filename, textLength }
 // (이전: localStorage 파싱 방식 / 아래: currentUser 변수 직접 참조 방식)
 // currentUser 변수 참조가 더 효율적이고 일관성 있음
 
-// 인증 상태 초기화
+/**
+ * 인증 상태 초기화
+ * 
+ * 실행 순서:
+ * 1. localStorage에서 authToken, guestMode, user 정보 복원
+ * 2. updateAuthUI()로 UI 반영
+ * 3. currentUser가 없으면 recoverSessionFromCookie()로 httpOnly 쿠키 기반 세션 복구
+ * 4. 복구 완료 Promise를 window._authRecoveryPromise에 노출 (Router.start() 대기용)
+ *
+ * @async
+ * @returns {Promise<void>}
+ */
 // 🔒 Phase 3 패치: async로 변경하여 세션 복구 완료를 보장 (경쟁 조건 해결)
 async function initAuth() {
     // 🔒 OAuth 토큰은 이제 httpOnly 쿠키로 설정됨 (URL 파라미터 제거)
@@ -97,7 +150,21 @@ async function initAuth() {
     window._authRecoveryPromise = Promise.resolve();
 }
 
-// 🔒 httpOnly 쿠키 기반 세션 복구
+/**
+ * httpOnly 쿠키 기반 OAuth 세션 복구
+ * 
+ * localStorage에 사용자 정보가 없을 때 호출됨.
+ * 서버의 /api/auth/me 엔드포인트에 쿠키를 포함하여 요청하고,
+ * 유효한 세션이 있으면:
+ * - currentUser 및 localStorage 업데이트
+ * - authToken에 'cookie-session' 마커 설정
+ * - state.js의 AppState 동기화
+ * - UI 업데이트 (사이드바, 아바타 등)
+ * - 익명 세션이 있으면 인증 사용자로 이관 (claim)
+ *
+ * @async
+ * @returns {Promise<void>} 실패 시 조용히 무시 (비로그인 상태 유지)
+ */
 async function recoverSessionFromCookie() {
     try {
         const resp = await fetch('/api/auth/me', { credentials: 'include' });
@@ -182,7 +249,18 @@ async function recoverSessionFromCookie() {
     }
 }
 
-// 인증된 fetch 요청
+/**
+ * 인증 정보를 포함한 fetch 요청 래퍼
+ * 
+ * Authorization 헤더에 JWT 토큰을 추가하고,
+ * credentials: 'include'로 httpOnly 쿠키를 자동 포함합니다.
+ * 모든 인증이 필요한 API 호출에 사용합니다.
+ *
+ * @async
+ * @param {string} url - 요청 URL
+ * @param {RequestInit} [options={}] - fetch 옵션 (headers, method, body 등)
+ * @returns {Promise<Response>} fetch 응답 객체
+ */
 async function authFetch(url, options = {}) {
     const headers = {
         'Content-Type': 'application/json',
@@ -203,7 +281,16 @@ async function authFetch(url, options = {}) {
 // 🔧 전역 노출: UnifiedSidebar 등 외부 컴포넌트에서 인증 fetch 사용 가능
 window.authFetch = authFetch;
 
-// 로그아웃 (🆕 서버 토큰 블랙리스트 연동)
+/**
+ * 로그아웃 처리
+ * 
+ * 1. 서버에 POST /api/auth/logout 요청 (httpOnly 쿠키 포함, 토큰 블랙리스트 등록)
+ * 2. localStorage에서 인증 관련 데이터 제거
+ * 3. 전역 인증 변수 초기화
+ * 4. 로그인 페이지로 리다이렉트
+ *
+ * @returns {void}
+ */
 function logout() {
     // 서버에 로그아웃 요청 (httpOnly 쿠키 포함)
     authFetch('/api/auth/logout', {
@@ -220,7 +307,14 @@ function logout() {
     window.location.href = '/login.html';
 }
 
-// 인증 UI 업데이트
+/**
+ * 인증 상태에 따라 UI 요소를 업데이트
+ * 
+ * currentUser, isGuestMode 상태에 따라
+ * 사용자 정보, 로그인/로그아웃 버튼, 관리자 메뉴 링크의 표시 여부를 제어합니다.
+ *
+ * @returns {void}
+ */
 function updateAuthUI() {
     const userInfo = document.getElementById('userInfo');
     const loginBtn = document.getElementById('loginBtn');
@@ -253,16 +347,34 @@ function updateAuthUI() {
     }
 }
 
-// 권한 체크
+/**
+ * 현재 사용자가 관리자 권한인지 확인
+ * @returns {boolean} admin 역할이면 true
+ */
 function isAdmin() {
     return currentUser?.role === 'admin';
 }
 
+/**
+ * 현재 로그인 상태인지 확인
+ * @returns {boolean} currentUser가 존재하면 true
+ */
 function isLoggedIn() {
     return !!currentUser;
 }
 
+// ========================================
 // 에이전트 목록 렌더링
+// ========================================
+
+/**
+ * WebSocket으로 수신한 에이전트 목록을 DOM에 렌더링
+ * 
+ * 로컬 에이전트(local://)와 원격 에이전트를 아이콘으로 구분하여 표시합니다.
+ *
+ * @param {Array<{url: string, name?: string}>} agents - 에이전트 배열
+ * @returns {void}
+ */
 function renderAgentList(agents) {
     const list = document.getElementById('agentList');
     if (!list) return;
@@ -281,7 +393,27 @@ function renderAgentList(agents) {
     `).join('');
 }
 
-// 초기화
+// ========================================
+// 애플리케이션 초기화
+// ========================================
+
+/**
+ * 애플리케이션 메인 초기화 함수
+ * 
+ * index.html의 onload에서 호출되며, 다음 순서로 초기화합니다:
+ * 1. initAuth() - 인증 상태 초기화 (세션 복구 await)
+ * 2. filterRestrictedMenus() - 권한별 메뉴 필터링
+ * 3. connectWebSocket() - 실시간 스트리밍 연결
+ * 4. applyTheme() - 저장된 테마 적용
+ * 5. loadMCPSettings() - MCP 도구 설정 로드
+ * 6. loadPromptMode() / loadAgentMode() - 프롬프트/에이전트 모드 복원
+ * 7. loadChatSessions() - 사이드바 대화 히스토리 로드
+ * 8. initMobileSidebar() - 모바일 사이드바 초기화
+ * 9. URL 파라미터에서 sessionId 확인하여 대화 복원
+ *
+ * @async
+ * @returns {Promise<void>}
+ */
 // 🔒 Phase 3: async로 변경하여 initAuth() 완료까지 대기
 async function initApp() {
     await initAuth(); // 인증 상태 초기화 (세션 복구 완료까지 대기)
@@ -313,7 +445,14 @@ async function initApp() {
     // WebSocket 연결 후 자동으로 에이전트 목록 요청됨 (connectWebSocket의 onopen에서 처리)
 }
 
-// 📱 모바일 사이드바 초기화 - 앱 로드 시 사이드바 숨기기
+/**
+ * 모바일 사이드바 초기화 - 앱 로드 시 사이드바 숨기기
+ * 
+ * 화면 너비 768px 이하(모바일)에서 사이드바, 메뉴 버튼, 오버레이를
+ * 닫힌 상태로 초기화합니다.
+ *
+ * @returns {void}
+ */
 function initMobileSidebar() {
     if (window.innerWidth <= 768) {
         const sidebar = document.getElementById('sidebar');
@@ -334,7 +473,14 @@ function initMobileSidebar() {
     }
 }
 
-// 게스트/비로그인 메뉴 필터링
+/**
+ * 인증 상태에 따라 제한된 메뉴 항목을 필터링
+ * 
+ * data-require-auth="true" 속성을 가진 메뉴 항목을 비인증 사용자에게 숨기고,
+ * 관리 섹션 레이블과 사용자 상태 배지를 업데이트합니다.
+ *
+ * @returns {void}
+ */
 function filterRestrictedMenus() {
     const authToken = localStorage.getItem('authToken');
     const isGuest = localStorage.getItem('guestMode') === 'true' || localStorage.getItem('isGuest') === 'true';
@@ -357,7 +503,16 @@ function filterRestrictedMenus() {
     showUserStatusBadge(isAuthenticated, isGuest);
 }
 
-// 사용자 상태 배지 표시
+/**
+ * 사용자 상태 배지를 UI에 표시
+ * 
+ * 인증 상태에 따라 "사용자 이메일", "게스트", "비로그인" 배지를
+ * 다른 색상으로 표시합니다.
+ *
+ * @param {boolean} isAuthenticated - 인증된 사용자인지 여부
+ * @param {boolean} isGuest - 게스트 모드인지 여부
+ * @returns {void}
+ */
 function showUserStatusBadge(isAuthenticated, isGuest) {
     const userInfo = document.getElementById('userInfo');
     if (!userInfo) return;
@@ -376,7 +531,15 @@ function showUserStatusBadge(isAuthenticated, isGuest) {
 }
 
 
-// 모바일 사이드바 토글 — UnifiedSidebar 연동
+/**
+ * 모바일 사이드바 토글 - UnifiedSidebar 인스턴스 연동
+ * 
+ * window.sidebar (UnifiedSidebar 인스턴스)의 toggle() 메서드를 호출하고,
+ * 햄버거 아이콘 상태를 동기화합니다.
+ *
+ * @param {Event} [e] - 클릭/터치 이벤트 (preventDefault 처리)
+ * @returns {void}
+ */
 function toggleMobileSidebar(e) {
     if (e) e.preventDefault();
     console.log('[Mobile] toggleMobileSidebar called');
@@ -391,7 +554,15 @@ function toggleMobileSidebar(e) {
     }
 }
 
-// 햄버거 아이콘 상태 동기화 (bars ↔ X)
+/**
+ * 햄버거 메뉴 아이콘 상태를 사이드바 상태와 동기화
+ * 
+ * UnifiedSidebar의 현재 상태(hidden/full/icon)에 따라
+ * 모바일 메뉴 버튼의 active 클래스를 토글합니다.
+ *
+ * @private
+ * @returns {void}
+ */
 function _syncHamburgerIcon() {
     const menuBtn = document.getElementById('mobileMenuBtn');
     if (!menuBtn || !window.sidebar) return;
@@ -416,6 +587,10 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 });
 
+/**
+ * 모바일 사이드바를 닫기 (hidden 상태로 전환)
+ * @returns {void}
+ */
 function closeMobileSidebar() {
     // UnifiedSidebar로 닫기
     if (window.sidebar && typeof window.sidebar.setState === 'function') {
@@ -425,7 +600,13 @@ function closeMobileSidebar() {
     if (menuBtn) menuBtn.classList.remove('active');
 }
 
-// 사이드바 메뉴 클릭 시 모바일에서 자동 닫기
+/**
+ * 사이드바 메뉴 항목 클릭 시 모바일에서 자동으로 사이드바 닫기
+ * 
+ * 화면 너비 768px 이하일 때만 동작합니다.
+ *
+ * @returns {void}
+ */
 function closeSidebarOnMobileNav() {
     if (window.innerWidth <= 768) {
         closeMobileSidebar();
@@ -437,6 +618,14 @@ function closeSidebarOnMobileNav() {
 // Theme Management
 // ========================================
 
+/**
+ * 테마를 HTML 루트 요소에 적용
+ * 
+ * 'system' 테마는 prefers-color-scheme 미디어 쿼리로 자동 감지합니다.
+ *
+ * @param {'dark'|'light'|'system'} theme - 적용할 테마
+ * @returns {void}
+ */
 function applyTheme(theme) {
     if (theme === 'system') {
         const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
@@ -446,6 +635,10 @@ function applyTheme(theme) {
     }
 }
 
+/**
+ * 현재 테마를 dark/light 간 토글
+ * @returns {void}
+ */
 function toggleTheme() {
     const currentTheme = document.documentElement.getAttribute('data-theme');
     const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
@@ -453,6 +646,12 @@ function toggleTheme() {
     applyTheme(newTheme);
 }
 
+/**
+ * 테마를 설정하고 localStorage에 저장, 설정 모달 버튼 상태 업데이트
+ *
+ * @param {'dark'|'light'|'system'} theme - 설정할 테마
+ * @returns {void}
+ */
 function setTheme(theme) {
     localStorage.setItem('theme', theme);
     applyTheme(theme);
@@ -472,8 +671,15 @@ window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e)
 });
 
 // ========================================
-// Suggestion Cards
+// 제안 카드 (Welcome Screen)
 // ========================================
+
+/**
+ * 환영 화면의 제안 카드 텍스트를 채팅 입력창에 채우기
+ *
+ * @param {string} text - 채팅 입력창에 설정할 텍스트
+ * @returns {void}
+ */
 function useSuggestion(text) {
     const input = document.getElementById('chatInput');
     input.value = text;
@@ -483,18 +689,46 @@ function useSuggestion(text) {
     if (welcomeScreen) welcomeScreen.style.display = 'none';
 }
 
-// WebSocket Connection with Auto-Reconnect
+// ========================================
+// WebSocket 연결 및 메시지 처리
+// ========================================
+
+/** @type {number} 현재 재연결 시도 횟수 */
 let reconnectAttempts = 0;
+/** @type {number} 최대 재연결 시도 횟수 */
 const MAX_RECONNECT_ATTEMPTS = 10;
+/** @type {number} 초기 재연결 대기 시간 (ms) - exponential backoff 기준값 */
 const INITIAL_RECONNECT_DELAY = 1000;
 
 /**
- * Chat Streaming WebSocket (app.js)
- * ─────────────────────────────────
- * This connection handles real-time chat token streaming (SSE-like).
- * A separate WebSocket in websocket.js handles system messages
- * (agents, refresh, heartbeat). Two connections serve distinct
- * purposes and MUST remain separate to avoid message routing complexity.
+ * 채팅 스트리밍용 WebSocket 연결 수립
+ *
+ * 이 WebSocket은 실시간 채팅 토큰 스트리밍(SSE 유사)을 처리합니다.
+ * websocket.js의 별도 WebSocket은 시스템 메시지(에이전트, 새로고침, 하트비트)를 처리합니다.
+ * 두 연결은 메시지 라우팅 복잡성을 피하기 위해 분리 유지해야 합니다.
+ *
+ * 재연결 전략 (Exponential Backoff):
+ * - 연결 종료 시 INITIAL_RECONNECT_DELAY * 2^(시도횟수) 만큼 대기 후 재시도
+ * - 최대 MAX_RECONNECT_ATTEMPTS(10)회까지 시도
+ * - 예: 1초 -> 2초 -> 4초 -> 8초 -> 16초 -> ...
+ * - 연결 성공 시 reconnectAttempts를 0으로 리셋
+ * - 최대 시도 초과 시 사용자에게 새로고침 안내
+ *
+ * onopen 동작:
+ * - 에이전트 목록 및 클러스터 정보 요청
+ * - REST API 폴백으로 클러스터 정보 추가 확보 (1초 후 재확인)
+ *
+ * onclose 동작:
+ * - isSending 플래그 리셋 (전송 중 연결 끊김 대비)
+ * - exponential backoff 재연결 스케줄링
+ *
+ * onerror 동작:
+ * - 상태 표시 업데이트, isSending 리셋
+ *
+ * onmessage 동작:
+ * - JSON 파싱 후 handleMessage()에 위임
+ *
+ * @returns {void}
  */
 function connectWebSocket() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -569,7 +803,13 @@ window.addEventListener('beforeunload', () => {
     }
 });
 
-// 연결 상태 UI 업데이트
+/**
+ * WebSocket 연결 상태를 UI에 반영
+ *
+ * @param {'connected'|'disconnected'|'connecting'} status - 연결 상태
+ * @param {string} text - 표시할 텍스트 (예: '연결됨', '연결 끊김')
+ * @returns {void}
+ */
 function updateConnectionStatus(status, text) {
     const statusEl = document.getElementById('connectionStatus');
     if (!statusEl) return;
@@ -585,33 +825,57 @@ function updateConnectionStatus(status, text) {
     if (textEl) textEl.textContent = text;
 }
 
+/**
+ * WebSocket 메시지 타입별 핸들러 (메인 메시지 라우터)
+ *
+ * 수신 가능한 메시지 타입:
+ * - 'init'/'update'         : 클러스터 노드 정보 업데이트
+ * - 'token'                 : AI 응답 토큰 (스트리밍, appendToken으로 실시간 표시)
+ * - 'done'                  : AI 응답 완료 (마크다운 렌더링, 메모리 저장)
+ * - 'stats'                 : MCP 도구 사용 통계
+ * - 'agents'                : 에이전트 목록 갱신
+ * - 'error'                 : 에러 (API 키 소진 시 특별 배너 표시)
+ * - 'aborted'               : 사용자 중단 확인
+ * - 'cluster_event'         : 클러스터 노드 변경 이벤트
+ * - 'document_progress'     : 문서 분석 진행률 (PDF, OCR 등)
+ * - 'mcp_settings_ack'      : MCP 설정 서버 동기화 확인
+ * - 'mcp_settings_update'   : 외부에서 MCP 설정 변경 시 UI 동기화
+ * - 'agent_selected'        : AI가 선택한 에이전트 배지 표시
+ * - 'discussion_progress'   : 멀티 에이전트 토론 진행률
+ * - 'research_progress'     : Deep Research 진행률
+ * - 'session_created'       : 새 채팅 세션 ID 수신
+ *
+ * @param {Object} data - 파싱된 WebSocket 메시지 객체
+ * @param {string} data.type - 메시지 타입 식별자
+ * @returns {void}
+ */
 function handleMessage(data) {
     switch (data.type) {
-        case 'init':
+        case 'init':  // 초기 클러스터 정보
             updateClusterInfo(data.data);
             break;
-        case 'update':
+        case 'update':  // 클러스터 정보 갱신
             updateClusterInfo(data.data);
             break;
-        case 'token':
+        case 'token':  // AI 응답 토큰 (실시간 스트리밍)
             if (data.messageId) {
                 window._lastTokenMessageId = data.messageId;
             }
             appendToken(data.token);
             break;
-        case 'done':
+        case 'done':  // AI 응답 완료 - 마크다운 렌더링 및 메모리 저장 트리거
             finishAssistantMessage();
             break;
-        case 'stats':
+        case 'stats':  // MCP 도구 사용 통계
             // MCP stats 데이터 수신 — 상태 저장
             if (data.stats) {
                 window._mcpStats = data.stats;
             }
             break;
-        case 'agents':
+        case 'agents':  // 에이전트 목록
             renderAgentList(data.agents);
             break;
-        case 'error':
+        case 'error':  // 에러 처리
             // 🆕 API 키 소진 에러 특별 처리
             if (data.errorType === 'api_keys_exhausted') {
                 showApiKeyExhaustedError(data);
@@ -619,39 +883,39 @@ function handleMessage(data) {
                 showError(data.message);
             }
             break;
-        case 'aborted':
+        case 'aborted':  // 사용자 중단 확인
             console.log('[Chat] 응답 생성 중단됨');
             isGenerating = false;
             isSending = false;
             hideAbortButton();
             break;
-        case 'cluster_event':
+        case 'cluster_event':  // 클러스터 노드 변경
             handleClusterEvent(data.event);
             break;
-        case 'document_progress':
+        case 'document_progress':  // 문서 분석 진행률 (업로드, OCR, PDF 파싱 등)
             showDocumentProgress(data);
             break;
-        case 'mcp_settings_ack':
+        case 'mcp_settings_ack':  // MCP 설정 서버 동기화 완료 확인
             // 서버에서 MCP 설정 동기화 완료 확인
             console.log('[MCP] 서버 동기화 완료:', data.settings);
             break;
-        case 'mcp_settings_update':
+        case 'mcp_settings_update':  // 외부에서 MCP 설정 변경 감지
             // 외부(REST API)에서 MCP 설정이 변경됨 - UI 동기화
             console.log('[MCP] 외부 설정 변경 감지:', data.settings);
             syncMCPSettingsFromServer(data.settings);
             showToast('🔄 MCP 설정이 외부에서 변경되었습니다', 'info');
             break;
-        case 'agent_selected':
+        case 'agent_selected':  // AI 에이전트 자동 선택 결과
             // 에이전트 선택 정보 수신
             console.log('[Agent] 선택됨:', data.agent);
             showAgentBadge(data.agent);
             break;
-        case 'discussion_progress':
+        case 'discussion_progress':  // 멀티 에이전트 토론 진행률
             // 멀티 에이전트 토론 진행 상황
             console.log('[Discussion] 진행:', data.progress);
             showDiscussionProgress(data.progress);
             break;
-        case 'research_progress':
+        case 'research_progress':  // Deep Research 진행률
             // 🔬 Deep Research 진행 상황
             console.log('[Research] 진행:', data.progress);
             showResearchProgress({
@@ -660,7 +924,7 @@ function handleMessage(data) {
                 message: data.progress?.message || '연구 중...'
             });
             break;
-        case 'session_created':
+        case 'session_created':  // 새 채팅 세션 생성 알림
             // 🆕 WebSocket 채팅에서 생성된 새 세션 ID 수신
             console.log('[Session] 새 세션 생성:', data.sessionId);
             currentSessionId = data.sessionId;
@@ -669,6 +933,13 @@ function handleMessage(data) {
     }
 }
 
+/**
+ * 클러스터 노드 정보를 전역 상태에 반영하고 UI 업데이트
+ *
+ * @param {Object} data - 클러스터 데이터
+ * @param {Array<Object>} [data.nodes] - 노드 목록 ({id, name, host, port, status, models})
+ * @returns {void}
+ */
 function updateClusterInfo(data) {
     if (!data) return;
 
@@ -683,7 +954,14 @@ function updateClusterInfo(data) {
     }
 }
 
-// 사이드바 클러스터 상태 업데이트
+/**
+ * 사이드바의 클러스터 상태 정보를 갱신
+ * 
+ * 전역 nodes 배열의 데이터를 사이드바의 clusterInfo 텍스트와
+ * nodesList DOM에 반영합니다.
+ *
+ * @returns {void}
+ */
 function updateSidebarClusterInfo() {
     const clusterInfo = document.getElementById('clusterInfo');
     const nodesList = document.getElementById('nodesList');
@@ -710,6 +988,13 @@ function updateSidebarClusterInfo() {
     }
 }
 
+/**
+ * 클러스터 연결 상태 텍스트와 점 색상 업데이트
+ *
+ * @param {string} text - 표시할 상태 텍스트 (예: '2 node online')
+ * @param {boolean} online - 온라인 상태 여부 (점 색상 결정)
+ * @returns {void}
+ */
 function updateClusterStatus(text, online) {
     const statusText = document.getElementById('clusterStatusText');
     const statusDot = document.querySelector('.status-dot');
@@ -721,7 +1006,15 @@ function updateClusterStatus(text, online) {
     }
 }
 
-// REST API 폴백: WebSocket init이 실패했을 때 클러스터 정보 가져오기
+/**
+ * REST API 폴백: WebSocket init 메시지가 도착하지 않을 때 클러스터 정보 가져오기
+ * 
+ * GET /api/cluster 엔드포인트를 호출하여 노드 정보를 업데이트합니다.
+ * WebSocket이 주 채널이므로 실패 시 조용히 무시합니다.
+ *
+ * @async
+ * @returns {Promise<void>}
+ */
 async function fetchClusterInfoFallback() {
     try {
         const response = await fetch('/api/cluster', {
@@ -736,7 +1029,18 @@ async function fetchClusterInfoFallback() {
     }
 }
 
-// 브랜드 모델 프로파일 정의 (pipeline-profile.ts와 동기화)
+// ========================================
+// 브랜드 모델 프로파일
+// ========================================
+
+/**
+ * 브랜드 모델 프로파일 정의
+ * 
+ * backend의 pipeline-profile.ts와 동기화되어야 합니다.
+ * 각 프로파일은 고유한 파이프라인 전략(엔진, A2A, Thinking, Discussion)을 가집니다.
+ *
+ * @type {Array<{id: string, name: string, desc: string}>}
+ */
 const BRAND_MODELS = [
     { id: 'openmake_llm_auto', name: 'OpenMake LLM Auto', desc: '자동 라우팅' },
     { id: 'openmake_llm', name: 'OpenMake LLM', desc: '균형 잡힌 범용' },
@@ -747,6 +1051,14 @@ const BRAND_MODELS = [
     { id: 'openmake_llm_vision', name: 'OpenMake LLM Vision', desc: '멀티모달' },
 ];
 
+/**
+ * 모델 선택 드롭다운(select) UI를 브랜드 모델 프로파일로 업데이트
+ * 
+ * 관리자가 아니면 자동 라우팅(Auto) 모델만 표시하고 선택 불가 처리합니다.
+ * localStorage의 savedModel 값으로 이전 선택을 복원합니다.
+ *
+ * @returns {void}
+ */
 function updateModelSelect() {
     const select = document.getElementById('modelSelect');
     if (!select) return;
@@ -784,12 +1096,23 @@ function updateModelSelect() {
     };
 }
 
+/**
+ * 클러스터 이벤트 수신 시 노드 정보 새로고침 요청
+ *
+ * @param {Object} event - 클러스터 이벤트 데이터
+ * @returns {void}
+ */
 function handleClusterEvent(event) {
     ws.send(JSON.stringify({ type: 'refresh' }));
 }
 
-// 채팅 기능
+// ========================================
+// 채팅 메시지 전송 및 응답 처리
+// ========================================
+
+/** @type {HTMLElement|null} 현재 AI 응답이 렌더링되고 있는 DOM 요소 */
 let currentAssistantMessage = null;
+/** @type {boolean} 메시지 전송 중 여부 (중복 전송 방지 플래그) */
 let isSending = false;  // 중복 전송 방지 플래그
 
 // ========================================
@@ -829,8 +1152,9 @@ function abortChat() {
     currentAssistantMessage = null;
 }
 
-// SVG 아이콘 상수
+/** @type {string} 전송 버튼 SVG 아이콘 (화살표 모양) */
 const SEND_ICON_SVG = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13M22 2L15 22L11 13L2 9L22 2Z"/></svg>';
+/** @type {string} 중단 버튼 SVG 아이콘 (사각형 모양) */
 const STOP_ICON_SVG = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>';
 
 /**
@@ -863,6 +1187,27 @@ function hideAbortButton() {
     btn.onclick = sendMessage;
 }
 
+/**
+ * 사용자 메시지를 WebSocket으로 전송
+ * 
+ * 메시지 전송 흐름:
+ * 1. 중복 전송 방지 (isSending 체크)
+ * 2. 입력값 및 WebSocket 상태 검증
+ * 3. 모델 선택 (브랜드 모델 자동 라우팅 기본값)
+ * 4. 첨부 파일 처리:
+ *    - 이미지: base64 추출하여 멀티모달 전송
+ *    - PDF/문서: 텍스트 컨텍스트를 메시지에 결합
+ * 5. 모드별 분기 처리:
+ *    - 첨부 파일 있음: 문서/이미지 컨텍스트 포함 전송
+ *    - Deep Research 모드: type='chat' + deepResearchMode=true
+ *    - 웹 검색 모드: performWebSearch() REST API 호출
+ *    - 일반 채팅: type='chat' + 프롬프트 모드/에이전트 모드 적용
+ * 6. 인증 정보(userId, userRole, userTier) 포함
+ * 7. 익명 사용자는 anonSessionId 포함
+ * 8. 30초 타임아웃으로 isSending 자동 리셋 (무한 차단 방지)
+ *
+ * @returns {void}
+ */
 function sendMessage() {
     // 이미 전송 중이면 무시
     if (isSending) {
@@ -1037,7 +1382,21 @@ function sendMessage() {
     setTimeout(scrollToBottom, 100);
 }
 
+// ========================================
 // 대화 메모리 관리
+// ========================================
+
+/**
+ * 대화 항목을 LLM 컨텍스트 메모리에 추가
+ * 
+ * MAX_MEMORY_LENGTH * 2 초과 시 오래된 항목을 자동으로 잘라냅니다.
+ * 이 메모리는 WebSocket 메시지의 history 필드로 서버에 전송됩니다.
+ *
+ * @param {'user'|'assistant'} role - 발화자 역할
+ * @param {string} content - 메시지 내용
+ * @param {string[]|null} [images=null] - base64 이미지 배열 (멀티모달용)
+ * @returns {void}
+ */
 function addToMemory(role, content, images = null) {
     const memoryItem = { role, content };
     if (images && images.length > 0) memoryItem.images = images;
@@ -1048,6 +1407,10 @@ function addToMemory(role, content, images = null) {
     }
 }
 
+/**
+ * 대화 메모리 초기화 (새 대화 시작 시 호출)
+ * @returns {void}
+ */
 function clearMemory() {
     conversationMemory = [];
 }
@@ -1056,6 +1419,14 @@ function clearMemory() {
 // 활성 문서 컨텍스트 UI
 // ========================================
 
+/**
+ * 활성 문서 컨텍스트 배지를 채팅 입력 영역에 표시/제거
+ * 
+ * activeDocumentContext가 설정되어 있으면 파일명과 텍스트 길이를 표시하고,
+ * null이면 배지를 제거합니다. 배지에는 닫기(X) 버튼이 포함됩니다.
+ *
+ * @returns {void}
+ */
 function updateActiveDocumentUI() {
     let badge = document.getElementById('activeDocBadge');
 
@@ -1090,6 +1461,10 @@ function updateActiveDocumentUI() {
     }
 }
 
+/**
+ * 활성 문서 컨텍스트를 해제하고 배지 제거
+ * @returns {void}
+ */
 function clearActiveDocument() {
     activeDocumentContext = null;
     updateActiveDocumentUI();
@@ -1100,8 +1475,24 @@ function clearActiveDocument() {
 // ========================================
 // 에이전트 배지 표시
 // ========================================
+
+/** @type {Object|null} 현재 활성 에이전트 정보 ({name, emoji, reason, phase, confidence}) */
 let currentAgent = null;
 
+/**
+ * AI가 선택한 에이전트의 배지를 채팅 영역에 표시
+ * 
+ * 에이전트의 이름, 이모지, 전문 분야, 현재 단계(planning/build/optimization)를
+ * 시각적 배지로 표시합니다. 페이드인 애니메이션과 호버 효과를 포함합니다.
+ *
+ * @param {Object} agent - 에이전트 정보 객체
+ * @param {string} agent.name - 에이전트 이름
+ * @param {string} agent.emoji - 에이전트 이모지
+ * @param {string} agent.reason - 선택 이유 텍스트
+ * @param {'planning'|'build'|'optimization'} agent.phase - 현재 실행 단계
+ * @param {number} agent.confidence - 선택 신뢰도 (0-1)
+ * @returns {void}
+ */
 function showAgentBadge(agent) {
     currentAgent = agent;
 
@@ -1173,6 +1564,10 @@ function showAgentBadge(agent) {
     }
 }
 
+/**
+ * 에이전트 배지를 숨기고 currentAgent를 초기화
+ * @returns {void}
+ */
 function hideAgentBadge() {
     const badgeContainer = document.getElementById('agentBadge');
     if (badgeContainer) {
@@ -1185,7 +1580,14 @@ function hideAgentBadge() {
 // 멀티 에이전트 토론 모드
 // ========================================
 
-// 토론 모드 토글
+/**
+ * 멀티 에이전트 토론 모드 토글
+ * 
+ * 토론 모드와 웹 검색은 상호 배타적입니다.
+ * 토론 모드 활성화 시 웹 검색을 자동 비활성화합니다.
+ *
+ * @returns {void}
+ */
 function toggleDiscussionMode() {
     discussionMode = !discussionMode;
     const btn = document.getElementById('discussionModeBtn');
@@ -1207,7 +1609,13 @@ function toggleDiscussionMode() {
     }
 }
 
-// Thinking 모드 토글 (Ollama Native Thinking)
+/**
+ * Ollama Native Thinking 모드 토글
+ * 
+ * Thinking 모드 활성화 시 현재 thinkingLevel(low/medium/high)을 표시합니다.
+ *
+ * @returns {void}
+ */
 function toggleThinkingMode() {
     thinkingMode = !thinkingMode;
     const btn = document.getElementById('thinkingModeBtn');
@@ -1218,7 +1626,15 @@ function toggleThinkingMode() {
     showToast(thinkingMode ? `🧠 Thinking 모드 활성화 (레벨: ${thinkingLevel})` : '💬 일반 모드로 전환', 'info');
 }
 
-// Deep Research 모드 토글 (심층 연구)
+/**
+ * Deep Research 모드 토글 (심층 연구)
+ * 
+ * Deep Research는 다른 모드(토론)와 상호 배타적입니다.
+ * 활성화 시 토론 모드를 자동 비활성화합니다.
+ * 주제를 입력하면 자율적 다단계 리서치 에이전트가 동작합니다.
+ *
+ * @returns {void}
+ */
 function toggleDeepResearch() {
     deepResearchMode = !deepResearchMode;
     const btn = document.getElementById('deepResearchBtn');
@@ -1240,7 +1656,19 @@ function toggleDeepResearch() {
     }
 }
 
-// 토론 진행 상황 표시 (채팅창 상단 미니바 스타일)
+/**
+ * 멀티 에이전트 토론 진행 상황을 미니바 스타일로 표시
+ * 
+ * 입력창 컨테이너 상단에 프로그레스 바와 메시지를 표시합니다.
+ * 최초 호출 시 DOM 요소를 생성하고, 이후 호출에서는 업데이트만 합니다.
+ * phase가 'complete'이면 1.5초 후 페이드아웃으로 자동 제거됩니다.
+ *
+ * @param {Object} progress - 토론 진행 정보
+ * @param {number} progress.progress - 진행률 (0-100)
+ * @param {string} progress.message - 현재 상태 메시지
+ * @param {string} [progress.phase] - 토론 단계 ('complete' 시 자동 제거)
+ * @returns {void}
+ */
 function showDiscussionProgress(progress) {
     let progressEl = document.getElementById('discussionProgress');
 
@@ -1356,7 +1784,19 @@ function showDiscussionProgress(progress) {
     }
 }
 
-// Deep Research 진행 상황 표시 (채팅창 상단 미니바 스타일)
+/**
+ * Deep Research 진행 상황을 미니바 스타일로 표시
+ * 
+ * 입력창 컨테이너 상단에 단계별 배지, 프로그레스 바, 메시지를 표시합니다.
+ * 단계 라벨: starting, decompose, search, scrape, synthesize, report, complete
+ * 'complete'/'completed' 시 2초 후 페이드아웃으로 자동 제거됩니다.
+ *
+ * @param {Object} progress - 리서치 진행 정보
+ * @param {string} progress.stage - 현재 단계 ('starting'|'decompose'|'search'|'scrape'|'synthesize'|'report'|'complete')
+ * @param {number} progress.progress - 진행률 (0-100)
+ * @param {string} progress.message - 현재 상태 메시지
+ * @returns {void}
+ */
 function showResearchProgress(progress) {
     let progressEl = document.getElementById('researchProgress');
 
@@ -1499,8 +1939,13 @@ function showResearchProgress(progress) {
 }
 
 // ========================================
-// Scroll to bottom
+// 채팅 UI 유틸리티
 // ========================================
+
+/**
+ * 채팅 영역을 최하단으로 스크롤
+ * @returns {void}
+ */
 function scrollToBottom() {
     const chatArea = document.getElementById('chatArea');
     if (chatArea) {
@@ -1508,6 +1953,17 @@ function scrollToBottom() {
     }
 }
 
+/**
+ * 채팅 메시지를 DOM에 추가
+ * 
+ * user 역할: 오른쪽 정렬, escapeHtml 적용, 사용자 아바타
+ * assistant 역할: 왼쪽 정렬, 로딩 스피너 표시, 복사/재생성 액션 버튼 포함
+ * AI 응답 시 messageStartTime을 기록하여 응답 소요 시간을 측정합니다.
+ *
+ * @param {'user'|'assistant'} role - 메시지 발화자 역할
+ * @param {string} content - 메시지 내용 (user: 평문, assistant: 빈 문자열이면 로딩 표시)
+ * @returns {HTMLElement} 생성된 메시지 DOM 요소
+ */
 function addChatMessage(role, content) {
     const container = document.getElementById('chatMessages');
     const timestamp = new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
@@ -1563,7 +2019,12 @@ function addChatMessage(role, content) {
     return div;
 }
 
-// 메시지 복사
+/**
+ * 특정 메시지의 텍스트 내용을 클립보드에 복사
+ *
+ * @param {string} messageId - 복사할 메시지의 DOM ID
+ * @returns {void}
+ */
 function copyMessage(messageId) {
     const msgElement = document.getElementById(messageId);
     if (!msgElement) return;
@@ -1579,7 +2040,14 @@ function copyMessage(messageId) {
     });
 }
 
-// 메시지 재생성
+/**
+ * 마지막 사용자 메시지를 입력창에 복원하고 재전송
+ * 
+ * conversationMemory에서 마지막 user 메시지를 찾아
+ * 입력창에 채운 뒤 sendMessage()를 호출합니다.
+ *
+ * @returns {void}
+ */
 function regenerateMessage() {
     // 마지막 사용자 메시지 찾기
     const lastUserContent = conversationMemory.filter(m => m.role === 'user').pop();
@@ -1590,7 +2058,14 @@ function regenerateMessage() {
     }
 }
 
-// 토스트 알림
+/**
+ * 화면 하단 중앙에 토스트 알림 표시 (2초 후 자동 제거)
+ * 
+ * 기존 토스트가 있으면 제거 후 새로 생성합니다.
+ *
+ * @param {string} message - 표시할 알림 메시지
+ * @returns {void}
+ */
 function showToast(message) {
     const existing = document.querySelector('.toast');
     if (existing) existing.remove();
@@ -1620,7 +2095,26 @@ function showToast(message) {
     }, 2000);
 }
 
-// 🆕 API 키 소진 에러 표시 (카운트다운 포함)
+// ========================================
+// API 키 소진 에러 배너
+// ========================================
+
+/**
+ * API 키 소진 에러 배너를 화면 상단에 표시 (카운트다운 포함)
+ * 
+ * 모든 API 키가 쿨다운 상태일 때 표시되며:
+ * - 빨간색 배너로 키 소진 상태 안내
+ * - 쿨다운 카운트다운 (분:초 형식)
+ * - 카운트다운 완료 시 자동으로 배너 닫기 및 복구 알림
+ * - 응답 생성 중이던 상태를 리셋
+ *
+ * @param {Object} data - API 키 소진 에러 데이터
+ * @param {string} data.resetTime - 리셋 시간 (ISO 문자열)
+ * @param {number} [data.retryAfter=300] - 재시도까지 대기 시간 (초)
+ * @param {number} data.keysInCooldown - 쿨다운 중인 키 수
+ * @param {number} data.totalKeys - 전체 키 수
+ * @returns {void}
+ */
 function showApiKeyExhaustedError(data) {
     // 기존 배너 제거
     const existingBanner = document.getElementById('apiKeyExhaustedBanner');
@@ -1731,14 +2225,22 @@ function showApiKeyExhaustedError(data) {
     hideAbortButton();
 }
 
-// 카운트다운 포맷 (분:초)
+/**
+ * 초를 '분:초' 형식 문자열로 변환
+ *
+ * @param {number} seconds - 남은 초
+ * @returns {string} '분:초' 형식 (예: '4:30')
+ */
 function formatCountdown(seconds) {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
-// API 키 소진 배너 닫기
+/**
+ * API 키 소진 배너를 닫고 카운트다운 인터벌 정리
+ * @returns {void}
+ */
 function closeApiKeyExhaustedBanner() {
     const banner = document.getElementById('apiKeyExhaustedBanner');
     if (banner) {
@@ -1753,6 +2255,18 @@ function closeApiKeyExhaustedBanner() {
     }
 }
 
+/**
+ * AI 응답 토큰을 실시간으로 메시지 영역에 추가 (스트리밍 렌더링)
+ * 
+ * 토큰이 도착할 때마다 rawText에 누적하고, 표시 로직:
+ * 1. [N/N] 패턴 감지: 단계별 사고 과정이면 진행 표시 ("분석 중... (N단계 진행)")
+ * 2. 마지막 단계([N/N] where N=total) 도달 시 해당 부분만 표시
+ * 3. "## 최종 답변" 등 마커 감지 시 해당 부분부터 표시
+ * 4. 일반 응답이면 전체 텍스트 표시
+ *
+ * @param {string} token - 수신한 응답 토큰 (문자열 조각)
+ * @returns {void}
+ */
 function appendToken(token) {
     if (currentAssistantMessage) {
         const content = currentAssistantMessage.querySelector('.message-content');
@@ -1812,6 +2326,23 @@ function appendToken(token) {
     }
 }
 
+/**
+ * AI 응답 완료 처리 (마크다운 렌더링, 메모리 저장, 상태 리셋)
+ * 
+ * 처리 흐름:
+ * 1. rawText에서 단계별 사고 과정과 최종 답변을 분리
+ *    - [N/N] 패턴으로 마지막 단계 감지
+ *    - "## 최종 답변" 등 마커로 최종 답변 위치 감지
+ * 2. 사고 과정이 있으면 details 태그로 접힌 상태로 표시
+ * 3. 최종 답변을 marked.js로 마크다운 렌더링 (window.purifyHTML로 XSS 방어)
+ * 4. hljs로 코드 블록 구문 강조 적용
+ * 5. conversationMemory에 응답 저장
+ * 6. saveMessageToSession()으로 서버에 영속화
+ * 7. 응답 소요 시간 표시 (messageStartTime 기준)
+ * 8. isSending, isGenerating 플래그 리셋, 중단 버튼 숨김
+ *
+ * @returns {void}
+ */
 function finishAssistantMessage() {
     console.log('[finishAssistantMessage] 호출됨, currentAssistantMessage:', !!currentAssistantMessage);
     // 마크다운 렌더링
@@ -1939,6 +2470,12 @@ function finishAssistantMessage() {
     setTimeout(scrollToBottom, 100);
 }
 
+/**
+ * 에러 메시지를 현재 AI 응답 영역에 표시하고 상태 리셋
+ *
+ * @param {string} message - 표시할 에러 메시지
+ * @returns {void}
+ */
 function showError(message) {
     if (currentAssistantMessage) {
         const content = currentAssistantMessage.querySelector('.message-content');
@@ -1954,9 +2491,18 @@ function showError(message) {
 // 🆕 대화 히스토리 (서버 연동)
 // ========================================
 
+/** @type {string|null} 현재 활성 채팅 세션 ID (서버 세션) */
 let currentSessionId = null;
 
-// 🆕 익명 세션 ID 관리 (비로그인 사용자용)
+/**
+ * 익명 사용자용 세션 ID를 생성 또는 반환
+ * 
+ * sessionStorage에 저장되어 브라우저 탭 단위로 유지됩니다.
+ * 로그인하면 이 세션을 인증 사용자로 이관(claim)합니다.
+ * 형식: 'anon-{timestamp}-{random}'
+ *
+ * @returns {string} 익명 세션 ID
+ */
 function getOrCreateAnonymousSessionId() {
     let anonSessionId = sessionStorage.getItem('anonSessionId');
     if (!anonSessionId) {
@@ -1967,7 +2513,18 @@ function getOrCreateAnonymousSessionId() {
     return anonSessionId;
 }
 
-// 세션 목록 로드 (🆕 사용자 격리 적용)
+/**
+ * 사이드바에 채팅 세션 목록을 로드하여 렌더링
+ * 
+ * GET /api/chat/sessions 엔드포인트를 호출합니다.
+ * - 인증 사용자: JWT 토큰으로 본인 세션만 조회
+ * - 비인증 사용자: anonSessionId로 익명 세션 조회
+ * - 관리자: viewAll 옵션으로 전체 세션 조회 가능
+ * 각 세션은 클릭 시 loadSession(), 삭제 시 deleteSession() 호출합니다.
+ *
+ * @async
+ * @returns {Promise<void>}
+ */
 async function loadChatSessions() {
     const historyList = document.getElementById('recentChats');
     if (!historyList) return;
@@ -2020,7 +2577,12 @@ async function loadChatSessions() {
     }
 }
 
-// 시간 포맷팅
+/**
+ * 날짜 문자열을 상대 시간 텍스트로 변환
+ *
+ * @param {string} dateStr - ISO 날짜 문자열
+ * @returns {string} 상대 시간 (예: '방금', '5분 전', '3시간 전', '2일 전', '2025. 2. 15.')
+ */
 function formatTimeAgo(dateStr) {
     const date = new Date(dateStr);
     const now = new Date();
@@ -2036,7 +2598,17 @@ function formatTimeAgo(dateStr) {
     return date.toLocaleDateString('ko-KR');
 }
 
-// 새 세션 생성 (🆕 anonSessionId 지원)
+/**
+ * 새 채팅 세션을 서버에 생성
+ * 
+ * POST /api/chat/sessions 엔드포인트를 호출하고,
+ * 생성된 세션 ID를 currentSessionId에 설정합니다.
+ * 비인증 사용자는 anonSessionId를 포함합니다.
+ *
+ * @async
+ * @param {string} title - 세션 제목 (보통 첫 메시지의 처음 50자)
+ * @returns {Promise<Object|null>} 생성된 세션 객체 또는 실패 시 null
+ */
 async function createNewSession(title) {
     try {
         const model = document.getElementById('modelSelect')?.value || 'default';
@@ -2070,7 +2642,19 @@ async function createNewSession(title) {
     return null;
 }
 
-// 세션 로드 (대화 복원)
+/**
+ * 특정 세션의 대화 내역을 서버에서 로드하여 채팅 영역에 복원
+ * 
+ * 1. 다른 페이지에 있으면 채팅 뷰('/')로 이동
+ * 2. GET /api/chat/sessions/{sessionId}/messages 호출
+ * 3. 채팅 영역 초기화 후 메시지 복원 (assistant는 마크다운 렌더링 적용)
+ * 4. conversationMemory 재구성
+ * 5. 사이드바 활성 상태 업데이트
+ *
+ * @async
+ * @param {string} sessionId - 로드할 세션 ID
+ * @returns {Promise<void>}
+ */
 async function loadSession(sessionId) {
      // 다른 페이지에 있으면 먼저 채팅 뷰로 전환
      if (window.Router && window.location.pathname !== '/') {
@@ -2123,7 +2707,17 @@ async function loadSession(sessionId) {
 window.loadConversation = loadSession;
 window.loadSession = loadSession;
 
-// 복원된 AI 응답 메시지 추가 (마크다운 렌더링 적용)
+/**
+ * 세션 복원 시 AI 응답 메시지를 마크다운 렌더링하여 추가
+ * 
+ * loadSession()에서 호출되며, 저장된 AI 응답을
+ * marked.js + window.purifyHTML로 렌더링하고,
+ * hljs로 코드 블록 구문 강조를 적용합니다.
+ * 복사 버튼만 포함됩니다 (재생성 버튼 없음).
+ *
+ * @param {string} content - AI 응답 원문 (마크다운)
+ * @returns {HTMLElement} 생성된 메시지 DOM 요소
+ */
 function addRestoredAssistantMessage(content) {
     const container = document.getElementById('chatMessages');
     const timestamp = new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
@@ -2173,7 +2767,18 @@ function addRestoredAssistantMessage(content) {
     return div;
 }
 
-// 메시지 저장
+/**
+ * 메시지를 현재 세션에 서버 저장
+ * 
+ * currentSessionId가 없으면 새 세션을 자동 생성합니다.
+ * POST /api/chat/sessions/{sessionId}/messages 엔드포인트를 호출합니다.
+ *
+ * @async
+ * @param {'user'|'assistant'} role - 메시지 발화자 역할
+ * @param {string} content - 메시지 내용
+ * @param {Object} [options={}] - 추가 옵션 (서버 전달)
+ * @returns {Promise<void>}
+ */
 async function saveMessageToSession(role, content, options = {}) {
     if (!currentSessionId) {
         // 첫 메시지인 경우 새 세션 생성
@@ -2194,7 +2799,16 @@ async function saveMessageToSession(role, content, options = {}) {
     }
 }
 
-// 세션 삭제
+/**
+ * 채팅 세션을 서버에서 삭제 (확인 다이얼로그 포함)
+ * 
+ * 삭제 후 현재 세션이었으면 newChat()으로 초기화하고,
+ * 사이드바 히스토리를 새로고침합니다.
+ *
+ * @async
+ * @param {string} sessionId - 삭제할 세션 ID
+ * @returns {Promise<void>}
+ */
 async function deleteSession(sessionId) {
     if (!confirm('이 대화를 삭제하시겠습니까?')) return;
 
@@ -2218,13 +2832,28 @@ async function deleteSession(sessionId) {
     }
 }
 
-// 기존 addToChatHistory 유지 (호환성)
+/**
+ * 사용자 메시지를 서버 세션에 저장 (하위 호환 래퍼)
+ *
+ * @param {string} message - 사용자 메시지
+ * @returns {void}
+ */
 function addToChatHistory(message) {
     // 서버에 메시지 저장
     saveMessageToSession('user', message);
 }
 
-// 새 대화 시작
+/**
+ * 새 대화 시작 - 채팅 영역 초기화
+ * 
+ * 1. 다른 페이지에 있으면 채팅 뷰('/')로 이동
+ * 2. currentSessionId 초기화
+ * 3. 채팅 메시지 영역 비우기, 환영 화면 표시
+ * 4. 첨부 파일 및 대화 메모리 초기화
+ * 5. 사이드바 활성 상태 해제
+ *
+ * @returns {void}
+ */
 function newChat() {
     // 다른 페이지에 있으면 먼저 채팅 뷰로 전환
     if (window.Router && window.location.pathname !== '/') {
@@ -2244,16 +2873,42 @@ function newChat() {
     });
 }
 
-// 파일 업로드
+// ========================================
+// 파일 업로드 및 첨부 관리
+// ========================================
+
+/**
+ * 파일 업로드 모달 열기
+ * @returns {void}
+ */
 function showFileUpload() {
     document.getElementById('fileModal').classList.add('active');
     setupFileInput();
 }
 
+/**
+ * 파일 업로드 모달 닫기
+ * @returns {void}
+ */
 function closeFileModal() {
     document.getElementById('fileModal').classList.remove('active');
 }
 
+/**
+ * 파일을 서버에 업로드하고 첨부 목록에 추가
+ * 
+ * 처리 흐름:
+ * 1. 이미지 파일이면 base64 추출 (멀티모달 전송용)
+ * 2. POST /api/upload로 FormData 전송
+ * 3. PDF 문서이면 GET /api/documents/{docId}로 전체 텍스트 획득
+ *    - 20,000자 초과 시 처음 15,000자 + 마지막 5,000자로 축약
+ * 4. attachedFiles 배열에 추가, renderAttachments() 호출
+ * 5. PDF 문서이면 activeDocumentContext 설정 (세션 레벨 컨텍스트)
+ *
+ * @async
+ * @param {File} file - 업로드할 파일 객체
+ * @returns {Promise<void>}
+ */
 async function uploadFile(file) {
     const formData = new FormData();
     formData.append('file', file);
@@ -2358,6 +3013,13 @@ async function uploadFile(file) {
     setupFileInput();
 }
 
+/**
+ * 파일 입력 요소와 업로드 영역의 이벤트 핸들러 설정
+ * 
+ * fileInput의 change 이벤트와 uploadArea의 드래그 앤 드롭을 바인딩합니다.
+ *
+ * @returns {void}
+ */
 function setupFileInput() {
     const fileInput = document.getElementById('fileInput');
     if (fileInput) {
@@ -2385,7 +3047,16 @@ function setupFileInput() {
     }
 }
 
-// 채팅 입력 영역 드래그 앤 드롭 파일 업로드
+/**
+ * 채팅 입력 영역의 드래그 앤 드롭 파일 업로드 초기화
+ * 
+ * 채팅 input-container에 드래그 오버레이를 추가하고,
+ * 파일 드롭 시 모달 없이 직접 uploadFile()을 호출합니다.
+ * 중복 초기화 방지를 위해 _chatDropZoneInit 플래그를 사용합니다.
+ * 텍스트 드래그는 무시하고 파일 드래그만 처리합니다.
+ *
+ * @returns {void}
+ */
 function setupChatDropZone() {
     const inputContainer = document.querySelector('.input-container');
     if (!inputContainer) return;
@@ -2469,6 +3140,14 @@ function setupChatDropZone() {
     });
 }
 
+/**
+ * 첨부 파일 목록을 DOM에 렌더링
+ * 
+ * 파일 타입별 아이콘(이미지/PDF/텍스트)과 삭제 버튼을 표시합니다.
+ * 첨부 파일이 없으면 컨테이너를 숨깁니다.
+ *
+ * @returns {void}
+ */
 function renderAttachments() {
     const container = document.getElementById('attachments');
     if (attachedFiles.length === 0) {
@@ -2485,16 +3164,43 @@ function renderAttachments() {
     `).join('');
 }
 
+/**
+ * 특정 인덱스의 첨부 파일을 제거
+ *
+ * @param {number} index - 제거할 첨부 파일의 배열 인덱스
+ * @returns {void}
+ */
 function removeAttachment(index) {
     attachedFiles.splice(index, 1);
     renderAttachments();
 }
 
+/**
+ * 모든 첨부 파일을 제거하고 UI 갱신
+ * @returns {void}
+ */
 function clearAttachments() {
     attachedFiles = [];
     renderAttachments();
 }
 
+// ========================================
+// 문서 질의응답 (Document Q&A)
+// ========================================
+
+/**
+ * 업로드된 문서에 대해 질문하고 AI 응답을 표시
+ * 
+ * POST /api/document/ask 엔드포인트를 호출합니다.
+ * 응답이 객체인 경우 answer, summary, evidence, additional_info 필드를
+ * 적절히 포맷팅하여 마크다운으로 렌더링합니다.
+ *
+ * @async
+ * @param {string} docId - 질문 대상 문서 ID
+ * @param {string} question - 사용자 질문
+ * @param {string} model - 사용할 모델 ID
+ * @returns {Promise<void>}
+ */
 async function askDocumentQuestion(docId, question, model) {
     currentAssistantMessage = addChatMessage('assistant', '');
 
@@ -2553,7 +3259,20 @@ async function askDocumentQuestion(docId, question, model) {
     currentAssistantMessage = null;
 }
 
-// 요약 응답 포맷팅 헬퍼
+/**
+ * 요약 응답 객체를 마크다운 문자열로 포맷팅
+ * 
+ * title, category, summary(배열 또는 문자열), sections, implications 필드를
+ * 마크다운 헤딩과 리스트로 변환합니다.
+ *
+ * @param {Object} obj - 요약 응답 객체
+ * @param {string} [obj.title] - 문서 제목
+ * @param {string} [obj.category] - 문서 분류
+ * @param {string|string[]} [obj.summary] - 요약 (문자열 또는 배열)
+ * @param {Array<{title: string, content: string}>} [obj.sections] - 세부 섹션
+ * @param {string} [obj.implications] - 시사점
+ * @returns {string} 포맷팅된 마크다운 문자열
+ */
 function formatSummaryResponse(obj) {
     let result = '';
 
@@ -2590,7 +3309,19 @@ function formatSummaryResponse(obj) {
     return result.trim();
 }
 
-// 웹 검색
+// ========================================
+// 웹 검색 통합
+// ========================================
+
+/**
+ * 웹 검색 모드 토글
+ * 
+ * 웹 검색과 토론 모드는 상호 배타적입니다.
+ * 웹 검색 활성화 시 토론 모드를 자동 비활성화합니다.
+ * mcpSettings.webSearch와 설정 모달 체크박스도 동기화합니다.
+ *
+ * @returns {void}
+ */
 function toggleWebSearch() {
     webSearchEnabled = !webSearchEnabled;
     mcpSettings.webSearch = webSearchEnabled; // 설정 동기화
@@ -2617,6 +3348,18 @@ function toggleWebSearch() {
     }
 }
 
+/**
+ * 웹 검색 실행 및 결과를 채팅 영역에 표시
+ * 
+ * POST /api/web-search 엔드포인트를 호출하고,
+ * AI 생성 답변과 검색 출처 링크를 마크다운으로 렌더링합니다.
+ * Google Custom Search API를 통해 실시간 웹 정보를 가져옵니다.
+ *
+ * @async
+ * @param {string} query - 검색 쿼리
+ * @param {string} model - 사용할 모델 ID
+ * @returns {Promise<void>}
+ */
 async function performWebSearch(query, model) {
     try {
         // 검색 중 표시
@@ -2663,7 +3406,20 @@ async function performWebSearch(query, model) {
     isSending = false;  // 🔒 웹 검색 완료 후 다음 전송 허용
 }
 
-// 설정
+// ========================================
+// 설정 모달
+// ========================================
+
+/**
+ * 설정 모달을 열고 현재 정보를 로드
+ * 
+ * 1. 현재 테마 버튼 활성화 상태 표시
+ * 2. loadModelInfo()로 LLM 모델 정보 로드
+ * 3. GET /api/cluster로 클러스터 노드 정보 조회 및 표시
+ *
+ * @async
+ * @returns {Promise<void>}
+ */
 async function showSettings() {
     document.getElementById('settingsModal').classList.add('active');
 
@@ -2726,7 +3482,16 @@ async function showSettings() {
     }
 }
 
-// LLM 모델 정보 로드
+/**
+ * LLM 모델 프로파일 목록을 서버에서 로드하여 설정 모달에 표시
+ * 
+ * GET /api/models 엔드포인트를 호출합니다.
+ * 관리자가 아니면 모델 정보를 숨기고 'OpenMake LLM Auto'만 표시합니다.
+ * 각 모델 배지 클릭 시 selectModel()이 호출됩니다.
+ *
+ * @async
+ * @returns {Promise<void>}
+ */
 async function loadModelInfo() {
     const activeModelName = document.getElementById('activeModelName');
     const modelListContainer = document.getElementById('modelListContainer');
@@ -2792,7 +3557,12 @@ async function loadModelInfo() {
     }
 }
 
-// 파일 크기 포맷팅
+/**
+ * 바이트 수를 사람이 읽기 쉬운 크기 문자열로 변환
+ *
+ * @param {number} bytes - 바이트 수
+ * @returns {string} 포맷팅된 크기 (예: '1.5GB', '256MB', '?')
+ */
 function formatSize(bytes) {
     if (!bytes) return '?';
     const gb = bytes / (1024 * 1024 * 1024);
@@ -2801,6 +3571,12 @@ function formatSize(bytes) {
     return `${mb.toFixed(0)}MB`;
 }
 
+/**
+ * 모델을 선택하고 localStorage에 저장, UI 갱신
+ *
+ * @param {string} modelId - 선택할 브랜드 모델 ID (예: 'openmake_llm_auto')
+ * @returns {void}
+ */
 function selectModel(modelId) {
     localStorage.setItem('selectedModel', modelId);
 
@@ -2819,7 +3595,12 @@ function selectModel(modelId) {
     showToast(`🤖 모델 선택됨: ${displayName}`);
 }
 
-// 설정 섹션 토글 (아코디언)
+/**
+ * 설정 모달 섹션 아코디언 토글 (접기/펼치기)
+ *
+ * @param {string} sectionId - 토글할 섹션의 DOM ID
+ * @returns {void}
+ */
 function toggleSection(sectionId) {
     const content = document.getElementById(sectionId);
     const arrow = document.getElementById(sectionId + '-arrow');
@@ -2830,13 +3611,26 @@ function toggleSection(sectionId) {
     }
 }
 
+/**
+ * 설정 모달 닫기
+ * @returns {void}
+ */
 function closeSettings() {
     document.getElementById('settingsModal').classList.remove('active');
 }
 
 // ========================================
-// MCP Module Settings
+// MCP 모듈 설정 관리
 // ========================================
+
+/**
+ * MCP(Model Context Protocol) 모듈 설정 상태
+ * 
+ * localStorage에 'mcpSettings' 키로 영속화되며,
+ * WebSocket을 통해 서버와 실시간 동기화됩니다.
+ *
+ * @type {{thinking: boolean, webSearch: boolean, pdf: boolean, github: boolean, exa: boolean}}
+ */
 let mcpSettings = {
     thinking: true,
     webSearch: false,
@@ -2845,7 +3639,14 @@ let mcpSettings = {
     exa: false
 };
 
-// MCP 설정 로드
+/**
+ * localStorage에서 MCP 설정을 로드하고 UI/전역 변수와 동기화
+ * 
+ * 체크박스 상태, thinkingEnabled, webSearchEnabled 변수,
+ * 토글 버튼 상태를 모두 업데이트합니다.
+ *
+ * @returns {void}
+ */
 function loadMCPSettings() {
     const saved = localStorage.getItem('mcpSettings');
     if (saved) {
@@ -2863,7 +3664,10 @@ function loadMCPSettings() {
     updateToggleButtonStates();
 }
 
-// 토글 버튼 상태 업데이트
+/**
+ * Thinking 및 Web Search 토글 버튼의 active 클래스를 현재 상태에 맞게 갱신
+ * @returns {void}
+ */
 function updateToggleButtonStates() {
     const thinkingBtn = document.getElementById('thinkingBtn');
     const webSearchBtn = document.getElementById('webSearchBtn');
@@ -2872,7 +3676,16 @@ function updateToggleButtonStates() {
     if (webSearchBtn) webSearchBtn.classList.toggle('active', webSearchEnabled);
 }
 
-// MCP 모듈 토글 - 즉시 기능 적용 및 서버 동기화
+/**
+ * MCP 모듈을 토글하고 즉시 기능 적용 및 서버 동기화
+ * 
+ * 체크박스 상태를 읽어 mcpSettings에 반영하고,
+ * 연관 전역 변수(thinkingEnabled, webSearchEnabled)를 동기화한 뒤,
+ * WebSocket으로 서버에 설정을 전송합니다.
+ *
+ * @param {'thinking'|'webSearch'|'pdf'|'github'|'exa'} module - 토글할 MCP 모듈 키
+ * @returns {void}
+ */
 function toggleMCPModule(module) {
     // 체크박스의 실제 상태를 가져옴 (onchange는 상태 변경 후 호출됨)
     const checkboxId = `mcp${module.charAt(0).toUpperCase() + module.slice(1)}`;
@@ -2910,7 +3723,14 @@ function toggleMCPModule(module) {
     showToast(`${mcpSettings[module] ? '✅' : '❌'} ${toggleLabels[module]} ${mcpSettings[module] ? '활성화' : '비활성화'}`, mcpSettings[module] ? 'success' : 'info');
 }
 
-// MCP 설정을 서버에 동기화 (WebSocket)
+/**
+ * 현재 MCP 설정을 WebSocket으로 서버에 동기화
+ * 
+ * type='mcp_settings' 메시지로 sequentialThinking, pdfTools, webSearch 설정을 전송합니다.
+ * WebSocket 연결이 없으면 경고 로그를 출력합니다.
+ *
+ * @returns {void}
+ */
 function syncMCPSettingsToServer() {
     if (ws && ws.readyState === WebSocket.OPEN) {
         const serverSettings = {
@@ -2930,7 +3750,19 @@ function syncMCPSettingsToServer() {
     }
 }
 
-// 서버에서 받은 MCP 설정을 UI에 동기화
+/**
+ * 서버에서 수신한 MCP 설정을 로컬 상태와 UI에 동기화
+ * 
+ * 서버 키(sequentialThinking, pdfTools, webSearch)를
+ * 로컬 키(thinking, pdf, webSearch)로 매핑하여 반영합니다.
+ * mcp_settings_update 메시지 수신 시 호출됩니다.
+ *
+ * @param {Object} serverSettings - 서버 MCP 설정 객체
+ * @param {boolean} [serverSettings.sequentialThinking] - Sequential Thinking 활성화
+ * @param {boolean} [serverSettings.pdfTools] - PDF 도구 활성화
+ * @param {boolean} [serverSettings.webSearch] - 웹 검색 활성화
+ * @returns {void}
+ */
 function syncMCPSettingsFromServer(serverSettings) {
     if (!serverSettings) return;
 
@@ -2961,9 +3793,22 @@ function syncMCPSettingsFromServer(serverSettings) {
     console.log('[MCP] UI 설정 동기화 완료:', mcpSettings);
 }
 
-// 프롬프트 모드 설정 - 즉시 적용
+// ========================================
+// 프롬프트 모드 및 Agent 모드
+// ========================================
+
+/** @type {string} 현재 프롬프트 모드 ('auto'|'assistant'|'reasoning'|'coder'|'reviewer'|'explainer'|'generator'|'writer'|'researcher'|'translator'|'consultant'|'security'|'agent') */
 let currentPromptMode = 'auto';
 
+/**
+ * 프롬프트 모드를 설정하고 토스트 알림 표시
+ * 
+ * 프롬프트 모드는 서버에서 시스템 프롬프트 생성 시 사용됩니다.
+ * 'auto' 모드는 질문 유형에 따라 서버가 자동으로 최적 모드를 선택합니다.
+ *
+ * @param {string} mode - 설정할 프롬프트 모드
+ * @returns {void}
+ */
 function setPromptMode(mode) {
     currentPromptMode = mode;
 
@@ -2987,9 +3832,18 @@ function setPromptMode(mode) {
     showToast(`프롬프트 모드: ${modeLabels[mode]} 적용됨`);
 }
 
-// Agent Mode 토글
+/** @type {boolean} Agent Mode 활성화 여부 (활성화 시 프롬프트 모드를 'agent'로 강제 고정) */
 let agentModeEnabled = false;
 
+/**
+ * Agent Mode 토글
+ * 
+ * 활성화 시 프롬프트 모드를 'agent'로 강제 고정하고 select를 비활성화합니다.
+ * 비활성화 시 'auto' 모드로 복귀하고 select를 다시 활성화합니다.
+ * localStorage에 저장하여 새로고침 시에도 유지됩니다.
+ *
+ * @returns {void}
+ */
 function toggleAgentMode() {
     agentModeEnabled = !agentModeEnabled;
 
@@ -3011,6 +3865,10 @@ function toggleAgentMode() {
     showToast(`🤖 Agent Mode ${agentModeEnabled ? '활성화' : '비활성화'}`);
 }
 
+/**
+ * localStorage에서 Agent Mode 상태를 복원하고 UI 동기화
+ * @returns {void}
+ */
 function loadAgentMode() {
     const saved = localStorage.getItem('agentMode');
     if (saved !== null) {
@@ -3031,6 +3889,10 @@ function loadAgentMode() {
     }
 }
 
+/**
+ * localStorage에서 프롬프트 모드를 복원하고 select 동기화
+ * @returns {void}
+ */
 function loadPromptMode() {
     const saved = localStorage.getItem('promptMode');
     if (saved) {
@@ -3044,7 +3906,14 @@ function loadPromptMode() {
 // Settings Save/Reset Functions
 // ========================================
 
-// 설정 저장
+/**
+ * 현재 설정을 localStorage에 저장하고 전역 변수 동기화
+ * 
+ * MCP 설정, 프롬프트 모드, 선택된 모델을 저장하고,
+ * 토글 버튼 상태를 업데이트한 뒤 500ms 후 모달을 닫습니다.
+ *
+ * @returns {void}
+ */
 function saveSettings() {
     // MCP 설정 저장
     localStorage.setItem('mcpSettings', JSON.stringify(mcpSettings));
@@ -3072,7 +3941,14 @@ function saveSettings() {
     }, 500);
 }
 
-// 설정 초기화
+/**
+ * 모든 설정을 기본값으로 초기화 (확인 다이얼로그 포함)
+ * 
+ * MCP 설정, 프롬프트 모드, 테마를 기본값으로 되돌리고
+ * localStorage와 UI를 업데이트합니다.
+ *
+ * @returns {void}
+ */
 function resetSettings() {
     if (!confirm('모든 설정을 기본값으로 초기화하시겠습니까?')) {
         return;
@@ -3108,7 +3984,10 @@ function resetSettings() {
     showToast('🔄 설정 및 테마가 초기화되었습니다');
 }
 
-// 사이드바 토글
+/**
+ * 사이드바 접기/펼치기 토글 (collapsed 클래스)
+ * @returns {void}
+ */
 function toggleSidebar() {
     document.querySelector('.sidebar').classList.toggle('collapsed');
 }
@@ -3116,6 +3995,16 @@ function toggleSidebar() {
 // ========================================
 // User Guide Functions (Manual Automation)
 // ========================================
+/**
+ * 사용자 가이드 모달을 열고 GUIDE_DATA를 기반으로 동적 렌더링
+ * 
+ * GUIDE_DATA(전역 상수)의 sections를 순회하며:
+ * - 'auto_detect' 섹션: 카드 그리드로 표시
+ * - 'commands' 섹션: 명령어 목록으로 표시
+ * - 'prompt_modes' 섹션: 클릭 가능한 태그로 표시
+ *
+ * @returns {void}
+ */
 function showUserGuide() {
     const modal = document.getElementById('guideModal');
     const body = document.getElementById('guideBody');
@@ -3179,23 +4068,47 @@ function showUserGuide() {
     modal.classList.add('active');
 }
 
+/**
+ * 사용자 가이드 모달 닫기
+ * @returns {void}
+ */
 function closeGuideModal() {
     document.getElementById('guideModal').classList.remove('active');
 }
 
+/**
+ * 가이드 모달에서 모드 태그 클릭 시 /mode 명령어를 입력창에 설정
+ *
+ * @param {string} mode - 설정할 프롬프트 모드
+ * @returns {void}
+ */
 function useMode(mode) {
     document.getElementById('chatInput').value = `/mode ${mode}`;
     closeGuideModal();
     document.getElementById('chatInput').focus();
 }
 
-// 구형 로직 호환성 유지 (호출 시 무시하거나 가이드 열기)
+// 구형 로직 호환성 유지용 빈 함수 (레거시 코드에서 호출될 수 있음)
+/** @deprecated 호환성 유지용 빈 함수 */
 function showHelpPopup() { }
+/** @deprecated 호환성 유지용 빈 함수 */
 function hideHelpPopup() { }
+/** @deprecated 호환성 유지용 빈 함수 */
 function hideHelpPopupDelayed() { }
+/** @deprecated 호환성 유지용 빈 함수 */
 function closeHelpPopup() { }
 
-// 명령어 처리
+/**
+ * 슬래시 명령어('/') 처리
+ * 
+ * 지원 명령어:
+ * - /help : 사용자 가이드 모달 열기
+ * - /clear : 새 대화 시작 (채팅 초기화)
+ * - /mode [타입] : 프롬프트 모드 변경 (assistant, reasoning, coder 등)
+ *
+ * @param {string} command - 입력된 명령어 문자열 (슬래시 포함)
+ * @returns {boolean} 명령어가 처리되었으면 true, 아니면 false
+ */
 function handleCommand(command) {
     const cmd = command.toLowerCase().trim();
 
@@ -3226,7 +4139,14 @@ function handleCommand(command) {
     return false;
 }
 
-// /help 명령어로 도움말 메시지 표시
+/**
+ * /help 명령어 실행 시 채팅 영역에 인라인 도움말 메시지 표시
+ * 
+ * 자동 프롬프트 감지 표, 사용 가능한 명령어,
+ * 프롬프트 모드 태그, 사용 예시를 HTML 테이블/리스트로 렌더링합니다.
+ *
+ * @returns {void}
+ */
 function showHelpAndMessage() {
     const welcomeScreen = document.getElementById('welcomeScreen');
     if (welcomeScreen) welcomeScreen.style.display = 'none';
@@ -3306,7 +4226,21 @@ function showHelpAndMessage() {
     scrollToBottom();
 }
 
-// 키보드 이벤트
+// ========================================
+// 키보드 이벤트 처리
+// ========================================
+
+/**
+ * 채팅 입력창의 키보드 이벤트 핸들러
+ * 
+ * - Enter (Shift 없이): 메시지 전송 또는 명령어 실행
+ * - Enter (Shift 포함): 줄바꿈 (기본 동작)
+ * - ESC: 도움말 팝업 닫기
+ * - IME 조합 중(한글 입력 등): Enter 무시 (isComposing/keyCode 229)
+ *
+ * @param {KeyboardEvent} event - 키보드 이벤트 객체
+ * @returns {void}
+ */
 function handleKeyDown(event) {
     const input = document.getElementById('chatInput');
     const value = input.value.trim();
@@ -3362,7 +4296,21 @@ document.addEventListener('DOMContentLoaded', () => {
     setupChatDropZone();
 });
 
-// 마크다운 렌더링 헬퍼
+// ========================================
+// 마크다운 렌더링 및 유틸리티
+// ========================================
+
+/**
+ * 마크다운 텍스트를 DOM 요소에 렌더링
+ * 
+ * marked.js 라이브러리가 로드되어 있으면 마크다운 파싱 후
+ * window.purifyHTML로 XSS 방어 처리한 HTML을 삽입합니다.
+ * 라이브러리가 없거나 파싱 실패 시 평문 텍스트로 표시합니다.
+ *
+ * @param {HTMLElement} element - 렌더링 대상 DOM 요소
+ * @param {string} text - 마크다운 원문
+ * @returns {void}
+ */
 function renderMarkdown(element, text) {
     if (typeof marked !== 'undefined') {
         try {
@@ -3382,7 +4330,15 @@ function renderMarkdown(element, text) {
     }
 }
 
-// 유틸리티
+/**
+ * HTML 특수문자를 이스케이프하여 XSS 방지
+ * 
+ * DOM API를 이용한 안전한 이스케이프 방식:
+ * textContent에 설정하면 브라우저가 자동으로 특수문자를 엔티티로 변환합니다.
+ *
+ * @param {string} str - 이스케이프할 문자열
+ * @returns {string} HTML 이스케이프된 문자열
+ */
 function escapeHtml(str) {
     if (!str) return '';
     const div = document.createElement('div');
@@ -3390,9 +4346,27 @@ function escapeHtml(str) {
     return div.innerHTML;
 }
 
+// ========================================
 // 문서 분석 진행 현황 표시
+// ========================================
+
+/** @type {number|null} 문서 진행률 숨김 타이머 ID */
 let progressHideTimeout = null;
 
+/**
+ * 문서 분석 진행 현황을 채팅 입력 영역 위에 표시
+ * 
+ * 단계별 아이콘(upload, extract, pdf_parse, ocr_*, excel_parse, complete, error)과
+ * 프로그레스 바, 파일명, 메시지를 표시합니다.
+ * 완료/에러 시 3초 후 페이드아웃으로 자동 숨김합니다.
+ *
+ * @param {Object} event - 문서 진행 이벤트 데이터
+ * @param {string} event.stage - 현재 단계 ('upload'|'extract'|'pdf_parse'|'ocr_prepare'|'ocr_convert'|'ocr_recognize'|'ocr_complete'|'excel_parse'|'image_ocr'|'text_read'|'complete'|'error')
+ * @param {number} [event.progress] - 진행률 (0-100)
+ * @param {string} event.message - 현재 상태 메시지
+ * @param {string} [event.filename] - 처리 중인 파일명
+ * @returns {void}
+ */
 function showDocumentProgress(event) {
     let progressContainer = document.getElementById('documentProgress');
 
@@ -3476,7 +4450,13 @@ function showDocumentProgress(event) {
     }
 }
 
-// 파일명 자르기 헬퍼
+/**
+ * 긴 파일명을 최대 길이로 잘라서 '...' 추가 (확장자 보존)
+ *
+ * @param {string} filename - 원본 파일명
+ * @param {number} maxLength - 최대 표시 길이
+ * @returns {string} 잘린 파일명 (예: 'very_long_docu....pdf')
+ */
 function truncateFilename(filename, maxLength) {
     if (!filename || filename.length <= maxLength) return filename;
     const ext = filename.split('.').pop();
@@ -3491,6 +4471,15 @@ function truncateFilename(filename, maxLength) {
 // ========================================
 // 🆕 기능 카드 시작 함수 (Welcome Screen)
 // ========================================
+/**
+ * 환영 화면의 기능 카드 클릭 시 해당 기능의 AI 환영 메시지 표시
+ * 
+ * feature에 따라 코딩, 문서 작성, 데이터 분석, 일반 채팅 중
+ * 적절한 환영 메시지를 표시하고 입력창에 포커스합니다.
+ *
+ * @param {'coding'|'document'|'data'|'chat'} feature - 선택한 기능 타입
+ * @returns {void}
+ */
 function startFeatureChat(feature) {
     const prompts = {
         coding: '안녕하세요! 코딩 에이전트입니다. 코드 작성, 디버깅, 코드 리뷰 등을 도와드립니다. 어떤 코딩 작업을 도와드릴까요?',

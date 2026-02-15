@@ -1,6 +1,12 @@
 /**
- * mcp-tools - SPA Page Module
- * Auto-generated from mcp-tools.html
+ * ============================================
+ * MCP Tools Page - MCP 도구 관리
+ * ============================================
+ * Model Context Protocol 도구의 목록 조회, 실행,
+ * 도구 티어(built-in/external) 분류, 파라미터 설정을
+ * 관리하는 SPA 페이지 모듈입니다.
+ *
+ * @module pages/mcp-tools
  */
 (function() {
     'use strict';

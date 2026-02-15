@@ -1,28 +1,43 @@
 /**
  * ============================================
- * PWA Install Prompt Component
- * 
- * Handles both Chrome/Android (beforeinstallprompt)
- * and iOS Safari (manual guidance).
+ * Install Prompt - PWA 설치 안내 컴포넌트
  * ============================================
+ * Chrome/Android의 beforeinstallprompt 이벤트와
+ * iOS Safari의 수동 안내를 모두 처리합니다.
+ * 7일간 닫기 기억, 로그인 페이지 제외, 30초 후 표시 등
+ * 사용자 경험을 고려한 조건부 표시 로직을 포함합니다.
+ *
+ * @module components/install-prompt
  */
 
 (function () {
     'use strict';
 
+    /** @type {BeforeInstallPromptEvent|null} 지연된 설치 프롬프트 이벤트 */
     var _deferredPrompt = null;
+    /** @type {HTMLElement|null} 배너 DOM 요소 */
     var _bannerEl = null;
+    /** @type {boolean} 배너 표시 상태 */
     var _isShown = false;
+    /** @type {boolean} 앱 설치 완료 상태 */
     var _isInstalled = false;
+    /** @type {boolean} iOS 디바이스 여부 */
     var _isIOS = false;
 
-    // Utility Functions
+    /**
+     * 현재 페이지가 로그인 페이지인지 확인
+     * @returns {boolean} 로그인 페이지 여부
+     */
     function isLoginPage() {
         var pathname = window.location.pathname;
         var hash = window.location.hash;
         return pathname.includes('login') || pathname.includes('auth') || hash.includes('login');
     }
 
+    /**
+     * iOS Safari 환경 감지 (standalone 모드 제외)
+     * @returns {boolean} iOS Safari에서 실행 중인지 여부
+     */
     function detectIOS() {
         var ua = navigator.userAgent;
         var isIOSDevice = /iPhone|iPad|iPod/.test(ua);
@@ -30,6 +45,10 @@
         return isIOSDevice && !isStandalone;
     }
 
+    /**
+     * PWA가 이미 설치되었는지 확인 (standalone/navigator.standalone)
+     * @returns {boolean} 설치 여부
+     */
     function checkIfInstalled() {
         if (window.matchMedia('(display-mode: standalone)').matches) {
             return true;
@@ -40,11 +59,19 @@
         return false;
     }
 
+    /**
+     * 배너 닫기 시간 조회
+     * @returns {number|null} 타임스탬프 또는 null
+     */
     function getDismissedTime() {
         var dismissed = localStorage.getItem('installPromptDismissed');
         return dismissed ? parseInt(dismissed, 10) : null;
     }
 
+    /**
+     * 최근 7일 이내 배너를 닫았는지 확인
+     * @returns {boolean} 7일 이내 닫음 여부
+     */
     function isDismissedRecently() {
         var dismissedTime = getDismissedTime();
         if (!dismissedTime) return false;
@@ -56,7 +83,10 @@
         localStorage.setItem('installPromptDismissed', Date.now().toString());
     }
 
-    // Styles (Injected)
+    /**
+     * 설치 프롬프트 CSS 스타일을 head에 주입
+     * @returns {void}
+     */
     function injectStyles() {
         if (document.getElementById('install-prompt-styles')) return;
 
@@ -248,7 +278,10 @@
         document.head.appendChild(style);
     }
 
-    // Banner Creation
+    /**
+     * 설치 안내 배너 DOM 생성 (iOS/Android 분기)
+     * @returns {HTMLElement} 생성된 배너 요소
+     */
     function createBanner() {
         if (_bannerEl) return _bannerEl;
 
@@ -307,7 +340,10 @@
         return banner;
     }
 
-    // Event Handlers
+    /**
+     * 설치 버튼 클릭 핸들러 - 네이티브 설치 프롬프트 트리거
+     * @returns {void}
+     */
     function handleInstallClick() {
         if (!_deferredPrompt) return;
 
@@ -325,11 +361,20 @@
         });
     }
 
+    /**
+     * 닫기 버튼 클릭 핸들러 - 닫기 기록 저장 후 배너 숨기기
+     * @returns {void}
+     */
     function handleDismiss() {
         setDismissed();
         hide();
     }
 
+    /**
+     * beforeinstallprompt 이벤트 핸들러 - 프롬프트 지연 저장
+     * @param {BeforeInstallPromptEvent} e - 설치 프롬프트 이벤트
+     * @returns {void}
+     */
     function handleBeforeInstallPrompt(e) {
         e.preventDefault();
         _deferredPrompt = e;
@@ -343,7 +388,10 @@
         hide();
     }
 
-    // Public API
+    /**
+     * 설치 안내 배너 표시 (조건 미충족 시 무시)
+     * @returns {void}
+     */
     function show() {
         if (_isShown || _isInstalled || isDismissedRecently() || isLoginPage()) {
             return;
@@ -357,6 +405,10 @@
         _isShown = true;
     }
 
+    /**
+     * 설치 안내 배너 숨기기 (애니메이션 후 DOM 제거)
+     * @returns {void}
+     */
     function hide() {
         if (!_bannerEl) return;
 
@@ -375,7 +427,11 @@
         return _isInstalled;
     }
 
-    // Initialization
+    /**
+     * PWA 설치 프롬프트 컴포넌트 초기화
+     * 스타일 주입, iOS 감지, 이벤트 리스너 등록을 수행합니다.
+     * @returns {void}
+     */
     function init() {
         if (isLoginPage()) {
             return;

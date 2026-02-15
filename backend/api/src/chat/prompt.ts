@@ -1,7 +1,29 @@
 /**
  * ============================================================
- * Gemini 최적화 시스템 프롬프트 (개선된 다중 에이전트 시스템)
+ * System Prompt - 시스템 프롬프트 생성 및 에이전트 역할 페르소나 정의
  * ============================================================
+ * 
+ * 12개 역할별 시스템 프롬프트(PromptType)를 정의하고,
+ * 질문 분석 기반 자동 역할 감지, 프롬프트 캐싱, 사용자 설정 적용 기능을 제공합니다.
+ * 이 모듈은 ChatService의 핵심 입력인 시스템 프롬프트를 생성하는 파이프라인의 최종 단계입니다.
+ * 
+ * @module chat/prompt
+ * @description
+ * - 12개 역할별 시스템 프롬프트 정의 (assistant, reasoning, coder, reviewer, explainer, 
+ *   generator, agent, writer, researcher, translator, consultant, security)
+ * - getEnhancedBasePrompt(): 공통 기반 프롬프트 (지식 기준일, 인식적 구배, 언어 규칙, 안전 가드레일)
+ * - detectPromptType(): 가중치 기반 스코어링으로 질문에 최적화된 역할 자동 감지
+ * - buildSystemPrompt(): 기반 프롬프트 + 역할 프롬프트 조합
+ * - getToolCallingPrompt(): 에이전트용 도구 목록 포맷팅
+ * - PromptCache: TTL 기반 프롬프트 캐싱 (5분, 최대 50개)
+ * - UserPromptConfig: 사용자 커스텀 설정 (temperature, 접두/접미사 등) 적용
+ * 
+ * 프롬프트 생성 파이프라인:
+ * detectPromptType() -> getEnhancedBasePrompt() + SYSTEM_PROMPTS[type] -> buildSystemPrompt()
+ * 
+ * @see chat/context-engineering.ts - 4-Pillar Framework 기반 프롬프트 빌더
+ * @see chat/prompt-enhancer.ts - 사용자 프롬프트 품질 향상
+ * @see services/ChatService.ts - 이 모듈의 출력을 소비하여 LLM에 전달
  */
 
 import { ModelOptions, MODEL_PRESETS, ToolDefinition } from '../ollama/types';
@@ -10,7 +32,18 @@ import {
 } from './context-engineering';
 
 /**
- * 동적 메타데이터를 포함한 확장된 기본 프롬프트 생성
+ * 동적 메타데이터를 포함한 공통 기반 프롬프트를 생성합니다.
+ * 
+ * 모든 역할별 프롬프트에 공통으로 적용되는 기반 규칙을 포함합니다:
+ * 1. 지식 기준 시점 및 환각 방지 (Knowledge Cutoff)
+ * 2. 인식적 구배 (Epistemic Gradient) - 확실성 수준 구분
+ * 3. 언어 및 보안 절대 규칙 (한국어/영어 일관성)
+ * 4. 안전 및 윤리 가드레일 (Jailbreak 방어, PII 보호)
+ * 5. 소프트 인터락 (답변 전 사고 프로세스)
+ * 6. 응답 품질 지침 (서술형 스타일)
+ * 7. 마크다운 형식 지침
+ * 
+ * @returns 공통 기반 시스템 프롬프트 문자열 (metadata + system_rules + instruction 섹션)
  */
 export function getEnhancedBasePrompt(): string {
     const metadata = createDynamicMetadata();
@@ -385,6 +418,10 @@ export const SYSTEM_PROMPTS = {
 // 타입 정의
 // ============================================================
 
+/**
+ * 프롬프트 타입 (12개 역할)
+ * SYSTEM_PROMPTS 객체의 키 타입으로, 사용 가능한 모든 역할을 나타냅니다.
+ */
 export type PromptType = keyof typeof SYSTEM_PROMPTS;
 
 // ============================================================
@@ -419,6 +456,10 @@ export const GEMINI_PARAMS = {
 // 🆕 사용자 설정 가능 옵션 인터페이스
 // ============================================================
 
+/**
+ * 사용자 설정 가능 프롬프트 옵션 인터페이스
+ * buildSystemPromptWithConfig() 및 getPresetWithUserConfig()에서 사용됩니다.
+ */
 export interface UserPromptConfig {
     /** 온도 설정 (0.0-1.0, 높을수록 창의적) */
     temperature?: number;
@@ -428,9 +469,9 @@ export interface UserPromptConfig {
     knowledgeCutoff?: string;
     /** Thinking 모드 강제 활성화/비활성화 */
     enableThinking?: boolean;
-    /** 커스텀 시스템 프롬프트 접두사 */
+    /** 커스텀 시스템 프롬프트 접두사 (프롬프트 맨 앞에 추가) */
     customPrefix?: string;
-    /** 커스텀 시스템 프롬프트 접미사 */
+    /** 커스텀 시스템 프롬프트 접미사 (프롬프트 맨 뒤에 추가) */
     customSuffix?: string;
 }
 
@@ -438,12 +479,26 @@ export interface UserPromptConfig {
 // 🆕 시스템 프롬프트 캐싱 시스템
 // ============================================================
 
+/**
+ * 캐시된 프롬프트 엔트리
+ */
 interface CachedPrompt {
+    /** 캐시된 프롬프트 문자열 */
     prompt: string;
+    /** 캐시 저장 시각 (ms) */
     timestamp: number;
+    /** 캐시 키 해시 */
     hash: string;
 }
 
+/**
+ * 시스템 프롬프트 캐시 클래스
+ * 
+ * TTL 기반 LRU 캐시로, 동일한 프롬프트 유형의 반복 생성을 방지합니다.
+ * TTL: 5분, 최대 크기: 50개 엔트리.
+ * 
+ * @class PromptCache
+ */
 class PromptCache {
     private cache = new Map<string, CachedPrompt>();
     private readonly TTL_MS = 5 * 60 * 1000; // 5분 캐시
@@ -500,6 +555,14 @@ export const promptCache = new PromptCache();
 // 🆕 사용자 설정을 적용한 프롬프트 생성
 // ============================================================
 
+/**
+ * 사용자 설정을 적용한 시스템 프롬프트를 생성합니다.
+ * 캐시된 기본 프롬프트에 사용자 접두/접미사를 추가합니다.
+ * 
+ * @param type - 프롬프트 역할 유형 (기본: 'assistant')
+ * @param config - 사용자 커스텀 설정
+ * @returns 사용자 설정이 적용된 시스템 프롬프트
+ */
 export function buildSystemPromptWithConfig(
     type: PromptType = 'assistant',
     config: UserPromptConfig = {}
@@ -523,6 +586,13 @@ export function buildSystemPromptWithConfig(
     return prompt;
 }
 
+/**
+ * 사용자 설정을 적용한 모델 옵션 프리셋을 반환합니다.
+ * 
+ * @param type - 프롬프트 역할 유형
+ * @param config - 사용자 커스텀 설정 (temperature, maxTokens 오버라이드)
+ * @returns 사용자 설정이 반영된 ModelOptions
+ */
 export function getPresetWithUserConfig(
     type: PromptType,
     config: UserPromptConfig = {}
@@ -540,6 +610,14 @@ export function getPresetWithUserConfig(
 // 프롬프트 유틸리티 함수
 // ============================================================
 
+/**
+ * 시스템 프롬프트를 빌드합니다.
+ * includeBase=true이면 공통 기반 프롬프트(COMMON_BASE_PROMPT) + 역할 프롬프트를 조합합니다.
+ * 
+ * @param type - 프롬프트 역할 유형 (기본: 'assistant')
+ * @param includeBase - 공통 기반 프롬프트 포함 여부 (기본: true)
+ * @returns 조합된 시스템 프롬프트 문자열
+ */
 export function buildSystemPrompt(type: PromptType = 'assistant', includeBase: boolean = true): string {
     if (includeBase) {
         return `${COMMON_BASE_PROMPT}
@@ -551,14 +629,34 @@ ${SYSTEM_PROMPTS[type]}`;
     return SYSTEM_PROMPTS[type];
 }
 
+/**
+ * 기반 프롬프트가 포함된 전체 시스템 프롬프트를 반환합니다.
+ * buildSystemPrompt(type, true)의 단축 함수입니다.
+ * 
+ * @param type - 프롬프트 역할 유형 (기본: 'assistant')
+ * @returns 전체 시스템 프롬프트
+ */
 export function getSystemPrompt(type: PromptType = 'assistant'): string {
     return buildSystemPrompt(type, true);
 }
 
+/**
+ * 역할별 특화 프롬프트만 반환합니다 (기반 프롬프트 미포함).
+ * 
+ * @param type - 프롬프트 역할 유형
+ * @returns 역할 특화 프롬프트 문자열
+ */
 export function getModeSpecificPrompt(type: PromptType): string {
     return SYSTEM_PROMPTS[type];
 }
 
+/**
+ * 프롬프트 역할에 적합한 모델 옵션 프리셋을 반환합니다.
+ * reasoning/researcher/consultant -> GEMINI_REASONING, coder/generator -> GEMINI_CODE 등.
+ * 
+ * @param type - 프롬프트 역할 유형
+ * @returns 역할에 최적화된 ModelOptions
+ */
 export function getPresetForPromptType(type: PromptType): ModelOptions {
     switch (type) {
         case 'reasoning':
@@ -590,10 +688,31 @@ export function getPresetForPromptType(type: PromptType): ModelOptions {
     }
 }
 
+/**
+ * 해당 역할이 Thinking 모드를 사용해야 하는지 판단합니다.
+ * 현재 reasoning, reviewer 역할만 Thinking 모드가 활성화됩니다.
+ * 
+ * @param type - 프롬프트 역할 유형
+ * @returns Thinking 모드 활성화 여부
+ */
 export function shouldUseThinking(type: PromptType): boolean {
     return ['reasoning', 'reviewer'].includes(type);
 }
 
+/**
+ * 사용자 질문을 분석하여 최적의 프롬프트 역할 유형을 감지합니다.
+ * 
+ * 가중치 기반 스코어링 알고리즘 (Weighted Scoring):
+ * 1. 12개 역할별로 정규식 패턴에 가중치를 부여
+ * 2. 각 패턴 매칭 시 해당 weight만큼 점수 누적
+ * 3. 특별 가중치: coder(API/GitHub 의도), researcher(최신 검색), security(취약점) 추가 +2
+ * 4. 최고 점수가 2점 미만이면 기본 'assistant' 반환
+ * 5. security 점수가 3점 이상이면 보안 우선 처리
+ * 6. 동점 시 priority 값으로 우선순위 결정 (security=10, coder=8 등)
+ * 
+ * @param question - 사용자 질문 텍스트
+ * @returns 감지된 프롬프트 역할 유형
+ */
 export function detectPromptType(question: string): PromptType {
     const lowerQ = question.toLowerCase();
 
@@ -755,6 +874,13 @@ export function detectPromptType(question: string): PromptType {
 }
 
 
+/**
+ * 질문에 대한 전체 프롬프트 설정을 한 번에 반환합니다.
+ * detectPromptType() + getSystemPrompt() + getPresetForPromptType() + shouldUseThinking()을 조합합니다.
+ * 
+ * @param question - 사용자 질문 텍스트
+ * @returns 역할 유형, 시스템 프롬프트, 모델 옵션, Thinking 모드 여부
+ */
 export function getPromptConfig(question: string): {
     type: PromptType;
     systemPrompt: string;
@@ -770,6 +896,13 @@ export function getPromptConfig(question: string): {
     };
 }
 
+/**
+ * 에이전트 역할에 도구 목록을 포맷팅하여 시스템 프롬프트를 생성합니다.
+ * agent 역할 프롬프트 + 도구 정의(이름, 설명, 파라미터)를 마크다운 형식으로 조합합니다.
+ * 
+ * @param tools - 사용 가능한 도구 정의 배열
+ * @returns 도구 목록이 포함된 에이전트 시스템 프롬프트
+ */
 export function getToolCallingPrompt(tools: ToolDefinition[]): string {
     const toolDefs = tools.map(t => {
         const params = t.function.parameters?.properties
@@ -784,6 +917,12 @@ export function getToolCallingPrompt(tools: ToolDefinition[]): string {
     return `${SYSTEM_PROMPTS.agent}\n\n## 📦 Available Tools\n\n${toolDefs}`;
 }
 
+/**
+ * 한국어 1.2B 소형 모델용 파라미터를 반환합니다.
+ * 낮은 temperature(0.1)로 일관된 한국어 출력을 보장합니다.
+ * 
+ * @returns 한국어 소형 모델 최적화 옵션
+ */
 export function getKorean1_2BParams(): ModelOptions {
     return {
         ...MODEL_PRESETS.GEMINI_DEFAULT,
@@ -791,6 +930,13 @@ export function getKorean1_2BParams(): ModelOptions {
     };
 }
 
+/**
+ * 반복 퇴화(Degeneration) 방지 파라미터를 적용합니다.
+ * repeat_penalty를 1.5로 설정하여 동일 토큰 반복을 억제합니다.
+ * 
+ * @param baseOptions - 기본 모델 옵션
+ * @returns repeat_penalty가 강화된 모델 옵션
+ */
 export function getAntiDegenerationParams(baseOptions: ModelOptions): ModelOptions {
     return {
         ...baseOptions,
@@ -798,10 +944,21 @@ export function getAntiDegenerationParams(baseOptions: ModelOptions): ModelOptio
     };
 }
 
+/**
+ * 사용 가능한 모든 프롬프트 역할 유형을 배열로 반환합니다.
+ * 
+ * @returns 12개 PromptType 배열
+ */
 export function getAllPromptTypes(): PromptType[] {
     return Object.keys(SYSTEM_PROMPTS) as PromptType[];
 }
 
+/**
+ * 프롬프트 역할 유형의 한국어 설명을 반환합니다.
+ * 
+ * @param type - 프롬프트 역할 유형
+ * @returns 역할에 대한 한국어 설명 문자열
+ */
 export function getPromptTypeDescription(type: PromptType): string {
     const descriptions: Record<PromptType, string> = {
         assistant: '기본 어시스턴트 - 일반 대화 및 질문 답변',

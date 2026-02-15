@@ -1,9 +1,22 @@
 /**
- * API v1 Router
- * Aggregates all v1 routes with /api/v1 prefix
- * 
- * This router provides backward compatibility while establishing
- * a versioned API structure for future versions.
+ * ============================================================
+ * API v1 Router - 버전 1 API 라우트 집계기
+ * ============================================================
+ *
+ * 모든 v1 라우트를 /api/v1 접두사 아래에 마운트합니다.
+ * API Key 인증 사용자를 위한 Rate Limit 미들웨어(TPM, x-ratelimit-* 헤더)를
+ * 전역으로 적용하며, 향후 v2 도입 시 하위 호환을 보장합니다.
+ *
+ * @module routes/v1/index
+ * @description
+ * - GET    /api/v1/models        - 브랜드 모델 목록 조회
+ * - GET    /api/v1/usage         - API Key 전체 사용량 요약
+ * - GET    /api/v1/usage/daily   - API Key 일별 사용량
+ * - /api/v1/chat, /agents, /mcp, /usage, /metrics 등 서브 라우터 마운트
+ *
+ * @requires requireApiKey - API Key 인증 미들웨어
+ * @requires rateLimitHeaders - OpenAI 호환 Rate Limit 헤더
+ * @requires apiKeyTPMLimiter - TPM(Tokens Per Minute) 이중 제한
  */
 import { Router } from 'express';
 

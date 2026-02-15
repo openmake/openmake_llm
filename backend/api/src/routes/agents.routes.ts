@@ -1,6 +1,34 @@
 /**
- * 🆕 에이전트 라우트
- * 에이전트 목록, 커스텀 에이전트, 피드백 API
+ * ============================================================
+ * Agent Routes - AI 에이전트 관리 API 라우트
+ * ============================================================
+ *
+ * 시스템/커스텀 에이전트 CRUD, RLHF 피드백 수집, 품질 분석,
+ * A/B 테스트 등 에이전트 생태계 전반을 관리하는 REST API입니다.
+ *
+ * @module routes/agents.routes
+ * @description
+ * - GET    /api/agents                  - 전체 에이전트 목록 (시스템 + 커스텀)
+ * - GET    /api/agents/categories       - 카테고리별 에이전트
+ * - GET    /api/agents/stats            - 에이전트 통계
+ * - GET    /api/agents/custom/list      - 커스텀 에이전트 목록 (인증)
+ * - POST   /api/agents/custom           - 커스텀 에이전트 생성 (인증)
+ * - PUT    /api/agents/custom/:id       - 커스텀 에이전트 수정 (인증)
+ * - DELETE /api/agents/custom/:id       - 커스텀 에이전트 삭제 (인증)
+ * - POST   /api/agents/custom/clone/:id - 에이전트 복제 (인증)
+ * - GET    /api/agents/feedback/stats   - 전체 피드백 통계
+ * - POST   /api/agents/:id/feedback     - 피드백 제출 (인증)
+ * - GET    /api/agents/:id/quality      - 품질 점수 조회
+ * - GET    /api/agents/:id/failures     - 실패 패턴 분석
+ * - GET    /api/agents/:id/improvements - 프롬프트 개선 제안
+ * - POST   /api/agents/abtest/start     - A/B 테스트 시작 (인증)
+ * - GET    /api/agents/abtest           - A/B 테스트 목록
+ * - GET    /api/agents/abtest/:testId   - A/B 테스트 결과
+ * - GET    /api/agents/:id              - 특정 에이전트 조회
+ *
+ * @requires requireAuth - JWT 인증 미들웨어
+ * @requires AgentLearningSystem - RLHF 기반 학습 시스템
+ * @requires CustomAgentBuilder - 커스텀 에이전트 빌더
  */
 
 import { Router, Request, Response } from 'express';

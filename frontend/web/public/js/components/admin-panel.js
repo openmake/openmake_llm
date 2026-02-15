@@ -1,22 +1,27 @@
 /**
  * ============================================
- * Admin Quick-Access Panel — Slide-out overlay
- * 
- * Provides quick navigation to admin/settings pages
- * without leaving the current context.
- * 
- * Usage:
+ * Admin Panel - 관리자 빠른 접근 패널
+ * ============================================
+ * 현재 컨텍스트를 유지하면서 관리자/설정 페이지로
+ * 빠르게 이동할 수 있는 슬라이드아웃 오버레이 패널입니다.
+ * 관리자 권한에 따라 표시 항목이 필터링됩니다.
+ *
+ * 사용법:
  *   AdminPanel.open();
  *   AdminPanel.close();
  *   AdminPanel.toggle();
- * ============================================
+ *
+ * @module components/admin-panel
  */
 
 (function () {
     'use strict';
 
+    /** @type {boolean} 패널 열림 상태 */
     var _isOpen = false;
+    /** @type {HTMLElement|null} 패널 DOM 요소 */
     var _panelEl = null;
+    /** @type {HTMLElement|null} 배경 오버레이 DOM 요소 */
     var _backdropEl = null;
 
     var ADMIN_ITEMS = [
@@ -32,6 +37,10 @@
         { href: '/password-change.html', icon: 'lucide:key-round', label: '비밀번호 변경', desc: '계정 보안 설정' }
     ];
 
+    /**
+     * 현재 사용자의 관리자 권한 확인
+     * @returns {boolean} admin 역할 여부
+     */
     function isAdmin() {
         try {
             var user = JSON.parse(localStorage.getItem('user') || '{}');
@@ -41,6 +50,10 @@
         }
     }
 
+    /**
+     * 패널과 백드롭 DOM 요소를 생성하고 이벤트를 바인딩
+     * @returns {void}
+     */
     function createPanel() {
         if (_panelEl) return;
 

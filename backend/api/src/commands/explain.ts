@@ -1,3 +1,16 @@
+/**
+ * ============================================================
+ * Explain Command - 코드 설명 CLI 명령
+ * ============================================================
+ *
+ * 지정된 파일의 코드를 LLM에 전달하여 상세 설명을 생성합니다.
+ * 전체 목적, 주요 함수/클래스 설명, 핵심 로직 분석, 패턴 분석을 포함합니다.
+ *
+ * @module commands/explain
+ * @example
+ * node cli.js explain ./src/utils.ts
+ * node cli.js explain ./services/ChatService.ts
+ */
 import * as fs from 'fs';
 import * as path from 'path';
 import chalk from 'chalk';
@@ -6,6 +19,12 @@ import { getSystemPrompt } from '../chat/prompt';
 import { createSpinner } from '../ui/spinner';
 import { formatCodeBlock, detectLanguage } from '../ui/highlight';
 
+/**
+ * 파일의 코드를 LLM으로 분석하여 상세 설명을 생성합니다.
+ * 전체 목적, 주요 함수/클래스, 핵심 로직, 사용 패턴을 스트리밍 출력합니다.
+ * @param client - Ollama 클라이언트 인스턴스
+ * @param filePath - 설명할 파일 경로
+ */
 export async function explainFile(client: OllamaClient, filePath: string): Promise<void> {
     const absolutePath = path.resolve(filePath);
 

@@ -1,9 +1,18 @@
 /**
- * Developer Documentation Routes
- * 
+ * ============================================================
+ * Developer Docs Routes - 개발자 문서 API 라우트
+ * ============================================================
+ *
  * API 문서 콘텐츠를 서버 사이드에서 제공합니다.
- * 마크다운 원문 또는 SPA 리다이렉트를 지원합니다.
- * 
+ * 마크다운 원문 반환, SPA 리다이렉트, Quick Start 가이드 등
+ * 외부 개발자를 위한 문서화 엔드포인트입니다.
+ *
+ * @module routes/developer-docs.routes
+ * @description
+ * - GET /api/docs/developer      - Developer 문서 SPA 리다이렉트 (301)
+ * - GET /api/docs/api-reference   - API Reference 마크다운 원문 (JSON 래핑)
+ * - GET /api/docs/quickstart      - Quick Start 가이드 (인라인 JSON)
+ *
  * @see docs/api/API_KEY_SERVICE_PLAN.md Phase 5
  */
 

@@ -1,25 +1,34 @@
 /**
  * ============================================
- * UnifiedSidebar — Gemini-Style 3-State Sidebar
- *
- * States: full (280px) | icon (64px) | hidden (0px)
- * 대화 목록 전용 사이드바 (네비게이션 메뉴 없음)
+ * UnifiedSidebar - Gemini 스타일 3-State 사이드바
+ * ============================================
+ * full(280px) / icon(64px) / hidden(0px) 세 가지 상태를
+ * 지원하는 대화 목록 전용 사이드바 컴포넌트입니다.
+ * 대화 세션 CRUD, 날짜별 그룹화, 검색, 테마 토글,
+ * 모바일 반응형, 호버 자동 확장을 제공합니다.
  *
  * 의존성:
  *   - window.Router (spa-router.js)
  *   - window.authFetch (auth.js)
  *   - window.isLoggedIn, window.getCurrentUser (auth.js)
- * ============================================
+ *
+ * @module components/unified-sidebar
  */
 
 (function () {
     'use strict';
 
+    /** @enum {string} 사이드바 상태 열거 */
     var STATES = { FULL: 'full', ICON: 'icon', HIDDEN: 'hidden' };
+    /** @type {string} localStorage 키 */
     var LS_KEY = 'sidebar-state';
+    /** @type {number} 호버 확장 대기 시간 (ms) */
     var HOVER_DELAY = 300;
+    /** @type {number} 검색 디바운스 시간 (ms) */
     var SEARCH_DEBOUNCE = 200;
+    /** @type {number} 모바일 판별 기준 너비 (px) */
     var MOBILE_BREAKPOINT = 768;
+    /** @type {string} 콘솔 로그 접두사 */
     var LOG_PREFIX = '[Sidebar]';
 
     // ─── SVG 아이콘 ────────────────────────────────────
@@ -37,10 +46,20 @@
 
     // ─── 유틸리티 ──────────────────────────────────────
 
+    /**
+     * 현재 화면이 모바일 크기인지 판별
+     * @returns {boolean} MOBILE_BREAKPOINT 이하이면 true
+     */
     function isMobile() {
         return window.innerWidth <= MOBILE_BREAKPOINT;
     }
 
+    /**
+     * 문자열을 최대 길이로 자르기
+     * @param {string} str - 원본 문자열
+     * @param {number} max - 최대 길이
+     * @returns {string} 잘린 문자열 (초과 시 '...' 추가)
+     */
     function truncate(str, max) {
         if (!str) return '';
         return str.length > max ? str.substring(0, max) + '...' : str;

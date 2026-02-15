@@ -1,7 +1,25 @@
 /**
- * Agent System - Main Entry Point
- * 96개 산업별 에이전트 라우터 및 시스템 프롬프트 생성
- * 🆕 의도 기반 스마트 라우팅 추가
+ * ============================================================
+ * 에이전트 시스템 - 메인 엔트리포인트 및 통합 라우터
+ * ============================================================
+ *
+ * 96개 산업별 전문가 에이전트의 라우팅, 시스템 프롬프트 생성,
+ * 토론용 에이전트 추천을 담당하는 에이전트 시스템의 핵심 모듈.
+ * LLM 의미론적 라우팅과 키워드 기반 폴백의 2단계 라우팅을 제공한다.
+ *
+ * @module agents/index
+ * @description
+ * - 2단계 에이전트 라우팅: LLM 의미론적 분석 (우선) + 키워드 매칭 (폴백)
+ * - 의도 기반 토픽 분류 시스템 (8개 카테고리: 개발, 비즈니스, 금융, 법률, 의료, 교육, 디자인, 데이터/AI)
+ * - 에이전트 선택 결과 기반 시스템 프롬프트 생성 (카테고리별 프롬프트 파일 로드)
+ * - 토론용 관련 에이전트 추천 (기술/비즈니스 도메인별 보완 에이전트 선택)
+ * - 작업 페이즈 감지 (planning / build / optimization)
+ * - 하위 호환성을 위한 AGENTS 플랫 맵 및 유틸리티 함수
+ *
+ * @see {@link module:agents/llm-router} - LLM 기반 의미론적 라우팅
+ * @see {@link module:agents/monitor} - 에이전트 성능 모니터링
+ * @see {@link module:agents/discussion-engine} - 다중 에이전트 토론 엔진
+ * @see {@link module:chat/pipeline-profile} - 브랜드 모델 프로파일
  */
 
 import * as fs from 'fs';
@@ -56,14 +74,42 @@ AGENTS['general'] = {
 // 🆕 의도 기반 토픽 분류 시스템
 // ========================================
 
+/**
+ * 토픽 카테고리 정의 인터페이스
+ *
+ * 일상 언어의 질문을 전문 에이전트로 매핑하기 위한 카테고리 구조.
+ * 정규식 패턴으로 질문을 분류하고, 관련 에이전트 ID 목록을 제공한다.
+ *
+ * @interface TopicCategory
+ */
 interface TopicCategory {
+    /** 카테고리 표시 이름 (예: '프로그래밍/개발', '금융/투자') */
     name: string;
+    /** 질문 매칭용 정규식 패턴 배열 (하나라도 매칭되면 해당 카테고리) */
     patterns: RegExp[];
+    /** 이 카테고리에 속하는 에이전트 ID 목록 */
     relatedAgents: string[];
+    /** 카테고리 확장 검색용 키워드 */
     expansionKeywords: string[];
 }
 
-// 일상 언어 → 전문 에이전트 매핑 (확장됨 + 실제 에이전트 ID 수정)
+/**
+ * 일상 언어 -> 전문 에이전트 매핑 테이블
+ *
+ * 8개 도메인 카테고리별로 정규식 패턴과 관련 에이전트를 정의한다.
+ * 각 카테고리는 여러 정규식 패턴을 가지며, 매칭된 패턴 수가
+ * 많을수록 해당 카테고리의 관련성이 높다고 판단한다.
+ *
+ * 카테고리 목록:
+ * - 프로그래밍/개발: 앱, 코딩, API, 서버, 프레임워크 관련
+ * - 비즈니스/창업: 사업, 마케팅, 전략, 경영 관련
+ * - 금융/투자: 주식, 부동산, 세금, 자산관리 관련
+ * - 법률/계약: 소송, 계약서, 저작권, 규제 관련
+ * - 의료/건강: 진료, 증상, 다이어트, 정신건강 관련
+ * - 교육/학습: 공부, 시험, 자격증, 면접 관련
+ * - 디자인/크리에이티브: UI/UX, 영상, 글쓰기, 디자인 도구 관련
+ * - 데이터/AI: 분석, 머신러닝, 자동화, 예측 관련
+ */
 const TOPIC_CATEGORIES: TopicCategory[] = [
     {
         name: '프로그래밍/개발',
@@ -167,7 +213,19 @@ const TOPIC_CATEGORIES: TopicCategory[] = [
 ];
 
 /**
- * 🆕 의도 기반 토픽 분석 (개선됨 - 점수 기반 우선순위)
+ * 의도 기반 토픽 분석 (점수 기반 우선순위)
+ *
+ * 사용자 메시지를 TOPIC_CATEGORIES의 정규식 패턴과 대조하여
+ * 매칭되는 카테고리와 관련 에이전트를 추출한다.
+ *
+ * 점수 계산 알고리즘:
+ * - 각 카테고리의 패턴 중 매칭된 수를 점수로 사용
+ * - 점수가 높은 카테고리 순으로 정렬
+ * - 최고 점수 카테고리의 에이전트만 suggestedAgents에 포함
+ * - confidence = min(총 매칭 수 / 3, 1.0)
+ *
+ * @param message - 분석할 사용자 메시지
+ * @returns 매칭된 카테고리명, 추천 에이전트 ID, 신뢰도를 포함한 분석 결과
  */
 function analyzeTopicIntent(message: string): {
     matchedCategories: string[];
@@ -222,8 +280,25 @@ function analyzeTopicIntent(message: string): {
 // ========================================
 
 /**
- * 메시지를 분석하여 가장 적합한 에이전트 선택
- * 🆕 LLM 기반 의미론적 라우팅 + 키워드 폴백
+ * 메시지를 분석하여 가장 적합한 에이전트 선택 (통합 라우터)
+ *
+ * 2단계 라우팅 전략으로 최적의 에이전트를 선택한다:
+ *
+ * 1단계 (LLM 라우팅): routeWithLLM()으로 의미론적 분석 시도
+ *   - 신뢰도 0.3 초과 + 유효한 에이전트 ID이면 즉시 반환
+ *   - 타임아웃 10초, 실패 시 2단계로 폴백
+ *
+ * 2단계 (키워드 라우팅):
+ *   a. 의도 기반 토픽 분석 (analyzeTopicIntent) - 기본 점수 5
+ *   b. 키워드 정밀 매칭 (industry-agents.json 전체 순회)
+ *      - 2글자 이하: 단어 완전 일치만 허용 (오매칭 방지), 점수 +3
+ *      - 3글자 이상: 부분 일치 +2, 완전 일치 보너스 +1
+ *      - 에이전트 이름 포함 +3, ID 포함 +2
+ *   c. 최고 점수 에이전트 선택 (confidence = min(score/10, 1.0))
+ *
+ * @param message - 사용자 입력 메시지
+ * @param useLLM - LLM 라우팅 사용 여부 (기본값: true)
+ * @returns {Promise<AgentSelection>} - 선택된 에이전트 정보 (ID, 카테고리, 페이즈, 신뢰도)
  */
 export async function routeToAgent(message: string, useLLM: boolean = true): Promise<AgentSelection> {
     const lowerMessage = message.toLowerCase();
@@ -352,10 +427,23 @@ export async function routeToAgent(message: string, useLLM: boolean = true): Pro
 }
 
 /**
- * 🆕 토론용 관련 에이전트 추천 (개선됨: LLM 기반 + 컨텍스트 반영)
- * @param message 사용자 메시지
- * @param count 최대 에이전트 수
- * @param context 추가 컨텍스트 (문서 내용 등)
+ * 토론용 관련 에이전트 추천 (LLM 기반 + 컨텍스트 반영)
+ *
+ * 토론 엔진에서 사용할 다양한 관점의 에이전트를 추천한다.
+ * 4단계 에이전트 수집 전략:
+ *
+ * 1. 주요 에이전트: LLM 라우팅으로 선택된 최적 에이전트
+ * 2. 의도 분석 기반: analyzeTopicIntent 결과의 suggestedAgents
+ * 3. 같은 카테고리: 주요 에이전트와 같은 카테고리의 다른 에이전트
+ * 4. 보완적 에이전트: 도메인별 차별화
+ *    - 기술 질문: software-engineer, devops-engineer, ai-ml-engineer 등
+ *    - 비즈니스 질문: business-strategist, financial-analyst 등
+ *    - 혼합/미분류: 다양한 관점 (business, data, project-manager)
+ *
+ * @param message - 사용자 메시지
+ * @param count - 최대 반환 에이전트 수 (기본값: 10, 0이면 전체)
+ * @param context - 추가 컨텍스트 (문서 내용 등, 선택적)
+ * @returns {Promise<Agent[]>} - 추천 에이전트 배열 (중복 제거됨)
  */
 export async function getRelatedAgentsForDiscussion(
     message: string,
@@ -456,7 +544,17 @@ export async function getRelatedAgentsForDiscussion(
 }
 
 /**
- * 메시지에서 작업 페이즈 감지
+ * 메시지에서 작업 페이즈(단계) 감지
+ *
+ * 사용자 메시지의 키워드를 분석하여 현재 작업 단계를 판별한다.
+ * 키워드 우선순위: planning > build > optimization (먼저 매칭된 것 반환)
+ *
+ * - planning: 설계, 계획, 분석, 조사, 어떻게, 방법 등
+ * - build: 구현, 개발, 코딩, 만들어, 해줘 등
+ * - optimization: 최적화, 개선, 리팩토링, 성능 등
+ *
+ * @param message - 사용자 메시지
+ * @returns {AgentPhase} - 감지된 작업 페이즈 (기본값: 'planning')
  */
 function detectPhase(message: string): AgentPhase {
     const lowerMessage = message.toLowerCase();
@@ -488,6 +586,22 @@ function detectPhase(message: string): AgentPhase {
 
 /**
  * 에이전트 선택 결과에 따른 시스템 프롬프트 생성
+ *
+ * 선택된 에이전트의 정보를 기반으로 LLM에 전달할 시스템 프롬프트를 조합한다.
+ * 프롬프트 파일 로드 순서:
+ *
+ * 1. 카테고리별 하위 폴더: prompts/{category}/{agent-id}.md (우선)
+ * 2. 루트 폴더: prompts/{agent-id}.md (폴백 - 하위 호환성)
+ *
+ * 생성되는 프롬프트 구조:
+ * - 역할 정의 (에이전트 이름 + 설명)
+ * - 전문 분야 (키워드 목록)
+ * - 작업 페이즈 (planning/build/optimization)
+ * - 응답 지침 (4가지 기본 규칙)
+ * - 상세 지침 (프롬프트 파일이 있는 경우 추가)
+ *
+ * @param selection - routeToAgent() 결과의 에이전트 선택 정보
+ * @returns {string} - 조합된 시스템 프롬프트 문자열
  */
 export function getAgentSystemMessage(selection: AgentSelection): string {
     const agent = AGENTS[selection.primaryAgent];
@@ -552,6 +666,12 @@ ${agent.keywords.map(k => `- ${k}`).join('\n')}
     return basePrompt;
 }
 
+/**
+ * 작업 페이즈를 한국어 레이블로 변환
+ *
+ * @param phase - 작업 페이즈 (선택적, 기본값: 'planning')
+ * @returns {string} - 한국어 레이블 (기획/분석, 구현/개발, 최적화/개선)
+ */
 function getPhaseLabel(phase?: AgentPhase): string {
     const labels: Record<AgentPhase, string> = {
         planning: '기획/분석',
@@ -561,6 +681,13 @@ function getPhaseLabel(phase?: AgentPhase): string {
     return labels[phase || 'planning'];
 }
 
+/**
+ * 기본 범용 시스템 프롬프트 반환
+ *
+ * 매칭되는 전문 에이전트가 없을 때 사용되는 범용 AI 어시스턴트 프롬프트.
+ *
+ * @returns {string} - 범용 AI 어시스턴트 시스템 프롬프트
+ */
 function getDefaultSystemPrompt(): string {
     return `# 🤖 범용 AI 어시스턴트
 
@@ -579,6 +706,11 @@ function getDefaultSystemPrompt(): string {
 
 /**
  * 전체 에이전트 목록 반환
+ *
+ * AGENTS 플랫 맵의 모든 에이전트를 배열로 반환한다.
+ * 'general' 기본 에이전트를 포함한다.
+ *
+ * @returns {Agent[]} - 전체 에이전트 배열
  */
 export function getAllAgents(): Agent[] {
     return Object.values(AGENTS);
@@ -586,6 +718,10 @@ export function getAllAgents(): Agent[] {
 
 /**
  * 카테고리별 에이전트 목록 반환
+ *
+ * industry-agents.json의 원본 카테고리 구조를 그대로 반환한다.
+ *
+ * @returns {Record<string, AgentCategory>} - 카테고리 ID를 키로 하는 카테고리 맵
  */
 export function getAgentCategories(): Record<string, AgentCategory> {
     return industryData;
@@ -593,6 +729,11 @@ export function getAgentCategories(): Record<string, AgentCategory> {
 
 /**
  * 에이전트 ID로 에이전트 찾기
+ *
+ * AGENTS 플랫 맵에서 해당 ID의 에이전트를 조회한다.
+ *
+ * @param agentId - 조회할 에이전트 ID (예: 'software-engineer')
+ * @returns {Agent | null} - 에이전트 객체, 없으면 null
  */
 export function getAgentById(agentId: string): Agent | null {
     return AGENTS[agentId] || null;
@@ -600,6 +741,10 @@ export function getAgentById(agentId: string): Agent | null {
 
 /**
  * 카테고리별 에이전트 수 통계
+ *
+ * industry-agents.json의 카테고리별 에이전트 수와 전체 합계를 반환한다.
+ *
+ * @returns 총 에이전트 수와 카테고리별 에이전트 수를 포함한 통계 객체
  */
 export function getAgentStats(): { total: number; byCategory: Record<string, number> } {
     const byCategory: Record<string, number> = {};

@@ -1,13 +1,31 @@
 /**
- * API Documentation with Swagger/OpenAPI
- * API 문서 자동 생성 및 Swagger UI 제공
+ * ============================================================
+ * Swagger/OpenAPI - API 문서 자동 생성 및 Swagger UI 제공
+ * ============================================================
+ *
+ * OpenAPI 3.0 스펙을 정의하고 Swagger UI를 통해 인터랙티브 API 문서를 제공합니다.
+ * /api/openapi.json 엔드포인트로 JSON 스펙을, /api-docs로 Swagger UI를 서빙합니다.
+ *
+ * @module swagger
+ * @description 제공하는 라우트:
+ * - GET /api/openapi.json - OpenAPI 3.0 JSON 스펙
+ * - GET /api-docs         - Swagger UI 인터랙티브 문서
+ *
+ * @description 문서화된 API 태그:
+ * - Auth, Chat, Documents, Agents, MCP, Tools, Cluster, System, API Keys, Models
+ *
+ * @requires config/env - 서버 포트 및 Swagger 베이스 URL 설정
  */
 
 import { Application } from 'express';
 import * as path from 'path';
 import { getConfig } from './config/env';
 
-// OpenAPI 3.0 스펙
+/**
+ * OpenAPI 3.0 스펙 객체
+ * 전체 REST API 엔드포인트의 경로, 요청/응답 스키마, 인증 방식을 정의합니다.
+ * /api/openapi.json 엔드포인트에서 JSON으로 서빙됩니다.
+ */
 export const openApiSpec = {
     openapi: '3.0.3',
     info: {
@@ -904,7 +922,9 @@ AI 채팅 어시스턴트 API 문서
 };
 
 /**
- * Swagger UI HTML 생성
+ * Swagger UI HTML 페이지를 생성합니다.
+ * swagger-ui-dist CDN을 사용하여 인터랙티브 API 문서 UI를 렌더링합니다.
+ * @returns Swagger UI가 포함된 완전한 HTML 문자열
  */
 function generateSwaggerHTML(): string {
     return `
@@ -948,7 +968,10 @@ function generateSwaggerHTML(): string {
 }
 
 /**
- * API 문서 라우트 설정
+ * Express 앱에 Swagger API 문서 라우트를 등록합니다.
+ * - GET /api/openapi.json: OpenAPI JSON 스펙 반환
+ * - GET /api-docs: Swagger UI HTML 페이지 반환
+ * @param app - Express Application 인스턴스
  */
 export function setupSwaggerRoutes(app: Application): void {
     // OpenAPI JSON 스펙

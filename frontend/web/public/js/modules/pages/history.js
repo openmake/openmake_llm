@@ -1,6 +1,12 @@
 /**
- * history - SPA Page Module
- * Auto-generated from history.html
+ * ============================================
+ * History Page - 대화 기록 관리
+ * ============================================
+ * 사용자의 과거 대화 세션 목록을 조회하고,
+ * 세션 선택/삭제, 대화 내용 확인, 세션 이어가기 등
+ * 대화 기록 관리 기능을 제공하는 SPA 페이지 모듈입니다.
+ *
+ * @module pages/history
  */
 (function() {
     'use strict';

@@ -1,18 +1,29 @@
 /**
  * ============================================================
- * 컨텍스트 엔지니어링 핵심 모듈
+ * Context Engineering - 4-Pillar Framework 기반 시스템 프롬프트 생성
  * ============================================================
  * 
- * 참조: 차세대 LLM 서비스를 위한 시스템 프롬프트 아키텍처 및 
- *       컨텍스트 엔지니어링 심층 분석 보고서
+ * 차세대 LLM 서비스를 위한 시스템 프롬프트 아키텍처 핵심 모듈입니다.
+ * 4가지 기둥(Role, Constraints, Goal, OutputFormat)을 Builder 패턴으로 조합하여
+ * 구조화된 시스템 프롬프트를 생성합니다.
  * 
- * 핵심 원칙:
- * 1. 4-Pillar Framework (역할, 제약, 목표, 출력형식)
- * 2. XML 태깅 및 구획화
- * 3. 메타데이터 동적 주입
- * 4. 위치 공학 (Position Engineering)
- * 5. 소프트 인터락 (Soft Interlock)
- * 6. 인식적 구배 (Epistemic Gradient)
+ * @module chat/context-engineering
+ * @description
+ * - 4-Pillar Framework: Role(역할), Constraints(제약), Goal(목표), OutputFormat(출력형식)
+ * - XML 태깅 구획화: 각 섹션을 XML 태그로 분리하여 LLM의 지시 준수율 향상
+ * - 메타데이터 동적 주입: 날짜, 지식 기준일, 세션ID, 언어, 모델명 자동 삽입
+ * - 위치 공학 (Position Engineering): 중요 지시를 프롬프트 시작/끝에 배치
+ * - 소프트 인터락 (Soft Interlock): 답변 전 사고 프로세스 강제
+ * - 인식적 구배 (Epistemic Gradient): 확실성/불확실성 수준 명시
+ * - 프롬프트 인젝션 방어: escapeXml()로 사용자 입력 이스케이프
+ * 
+ * 프리셋 프롬프트 빌더:
+ * - buildAssistantPrompt(): 친절한 AI 어시스턴트
+ * - buildCoderPrompt(): 시니어 풀스택 개발자
+ * - buildReasoningPrompt(): 논리적 추론 전문가
+ * 
+ * @see chat/prompt.ts - 이 모듈의 프리셋을 활용하여 최종 시스템 프롬프트 생성
+ * @see chat/prompt-enhancer.ts - 사용자 프롬프트 품질 향상
  */
 
 // ============================================================
@@ -20,63 +31,107 @@
 // ============================================================
 
 /**
- * 4-Pillar Framework 구조
+ * 4-Pillar Framework 프롬프트 구조
+ * 
+ * 시스템 프롬프트의 4가지 핵심 기둥을 정의합니다.
+ * ContextEngineeringBuilder의 build() 메서드가 이 구조를 XML 태깅된 프롬프트로 변환합니다.
  */
 export interface FourPillarPrompt {
-    /** 역할 및 페르소나 */
+    /** Pillar 1: 역할 및 페르소나 정의 - AI의 정체성과 전문성 */
     role: RoleDefinition;
-    /** 제약 조건 */
+    /** Pillar 2: 제약 조건 목록 - 보안, 언어, 형식, 콘텐츠, 행동 규칙 */
     constraints: Constraint[];
-    /** 목표 */
+    /** Pillar 3: 달성 목표 - AI가 수행해야 할 핵심 과업 */
     goal: string;
-    /** 출력 형식 */
+    /** Pillar 4: 출력 형식 - 응답의 구조와 포맷 */
     outputFormat: OutputFormat;
 }
 
+/**
+ * 역할 정의 인터페이스 (Pillar 1)
+ * AI의 페르소나, 전문 분야, 행동 특성, 대화 스타일을 정의합니다.
+ */
 export interface RoleDefinition {
+    /** 페르소나 설명 (예: '15년 경력의 시니어 풀스택 개발자') */
     persona: string;
+    /** 전문 분야 목록 */
     expertise: string[];
+    /** 행동 특성 (예: '에러 핸들링과 엣지 케이스 고려') */
     behavioralTraits?: string[];
+    /** 대화 스타일 */
     toneStyle?: 'formal' | 'casual' | 'professional' | 'friendly';
 }
 
+/**
+ * 제약 조건 인터페이스 (Pillar 2)
+ * 우선순위별로 정렬되어 프롬프트에 삽입됩니다.
+ * critical 규칙은 절대 위반 불가로 표시됩니다.
+ */
 export interface Constraint {
+    /** 규칙 설명 */
     rule: string;
+    /** 우선순위 (critical > high > medium > low) */
     priority: 'critical' | 'high' | 'medium' | 'low';
+    /** 규칙 카테고리 */
     category: 'security' | 'language' | 'format' | 'content' | 'behavior';
 }
 
+/**
+ * 출력 형식 인터페이스 (Pillar 4)
+ * AI 응답의 구조와 포맷을 지정합니다.
+ */
 export interface OutputFormat {
+    /** 출력 타입 */
     type: 'json' | 'markdown' | 'plain' | 'code' | 'table' | 'structured';
+    /** JSON 출력 시 스키마 정의 */
     schema?: object;
+    /** 출력 예시 (Few-shot) */
     examples?: string[];
 }
 
 /**
  * 메타데이터 주입을 위한 컨텍스트
+ * 프롬프트 시작 부분(Primacy Section)에 삽입되어 AI에 현재 상황을 알려줍니다.
  */
 export interface PromptMetadata {
+    /** 현재 날짜 (YYYY-MM-DD) */
     currentDate: string;
+    /** 지식 기준일 (예: '2024-12') */
     knowledgeCutoff: string;
+    /** 세션 ID (대화 추적용) */
     sessionId?: string;
+    /** 사용자 언어 설정 */
     userLanguage: 'ko' | 'en' | 'mixed';
+    /** 요청 타임스탬프 (ISO 8601) */
     requestTimestamp: string;
+    /** 사용 중인 모델명 */
     modelName?: string;
 }
 
 /**
- * RAG 컨텍스트 정보
+ * RAG(Retrieval-Augmented Generation) 컨텍스트 정보
+ * 검색된 참조 문서를 프롬프트에 주입하기 위한 구조체입니다.
  */
 export interface RAGContext {
+    /** 검색된 문서 배열 */
     documents: RAGDocument[];
+    /** 검색에 사용된 쿼리 */
     searchQuery: string;
+    /** 관련도 임계값 (이 값 이상의 문서만 포함) */
     relevanceThreshold: number;
 }
 
+/**
+ * RAG 개별 문서 인터페이스
+ */
 export interface RAGDocument {
+    /** 문서 내용 */
     content: string;
+    /** 문서 출처 (URL 또는 파일명) */
     source: string;
+    /** 문서 날짜 */
     timestamp?: string;
+    /** 관련도 점수 (0.0 ~ 1.0) */
     relevanceScore: number;
 }
 
@@ -157,6 +212,23 @@ export function thinkingSection(): string {
 
 /**
  * 4-Pillar 프롬프트 빌더 클래스
+ * 
+ * Builder 패턴으로 시스템 프롬프트를 단계적으로 구성합니다.
+ * build() 호출 시 위치 공학(Position Engineering)을 적용하여 최종 프롬프트를 생성합니다.
+ * 
+ * 빌드 순서 (위치 공학 적용):
+ * 1. [Primacy] 메타데이터 + 역할 정의 (정체성 확립)
+ * 2. [Context] RAG 문서 + 예시 + 추가 섹션 (사실 기반 지식 주입)
+ * 3. [Recency] 제약 조건 + 출력 형식 + 소프트 인터락 (제어 및 실행)
+ * 
+ * @class ContextEngineeringBuilder
+ * @example
+ * const prompt = new ContextEngineeringBuilder()
+ *   .setRole({ persona: '시니어 개발자', expertise: ['TypeScript'] })
+ *   .addConstraint({ rule: '한국어 답변', priority: 'critical', category: 'language' })
+ *   .setGoal('프로덕션 수준의 코드 제공')
+ *   .setOutputFormat({ type: 'code' })
+ *   .build();
  */
 export class ContextEngineeringBuilder {
     private metadata: PromptMetadata;
@@ -253,10 +325,14 @@ export class ContextEngineeringBuilder {
     }
 
     /**
-     * 최종 프롬프트 빌드
-     * 위치 공학 (Positional Engineering) 적용: 
-     * - 시작(Primacy): 페르소나와 핵심 맥락 배치
-     * - 끝(Recency): 절대 규칙, 출력 형식, 최종 리마인더 배치
+     * 최종 시스템 프롬프트를 빌드합니다.
+     * 
+     * 위치 공학 (Positional Engineering) 적용:
+     * - 시작(Primacy): 메타데이터 + 페르소나 (정체성 확립)
+     * - 중간(Context): RAG 문서 + 예시 + 추가 섹션 (지식 주입)
+     * - 끝(Recency): 제약 조건 + 출력 형식 + 소프트 인터락 + 최종 리마인더
+     * 
+     * @returns 조립된 전체 시스템 프롬프트 문자열
      */
     build(): string {
         const sections: string[] = [];
@@ -612,7 +688,10 @@ export function buildReasoningPrompt(): string {
 }
 
 /**
- * 유틸리티: 동적 메타데이터 생성
+ * 현재 시점의 동적 메타데이터를 생성합니다.
+ * 날짜, 지식 기준일, 세션 ID를 자동으로 설정합니다.
+ * 
+ * @returns 현재 시점 기준의 PromptMetadata 객체
  */
 export function createDynamicMetadata(): PromptMetadata {
     const now = new Date();
@@ -626,7 +705,11 @@ export function createDynamicMetadata(): PromptMetadata {
 }
 
 /**
- * 언어 감지 및 메타데이터 업데이트
+ * 텍스트의 한국어/영어 비율을 분석하여 언어를 감지합니다.
+ * 한국어 70% 초과면 'ko', 30% 미만이면 'en', 그 사이면 'mixed'를 반환합니다.
+ * 
+ * @param text - 언어를 감지할 텍스트
+ * @returns 감지된 언어 코드
  */
 export function detectLanguageForMetadata(text: string): 'ko' | 'en' | 'mixed' {
     const koreanRegex = /[가-힣]/g;

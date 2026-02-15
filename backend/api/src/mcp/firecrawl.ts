@@ -1,7 +1,20 @@
 /**
- * Firecrawl MCP 도구
- * 웹 스크래핑, 검색, URL 매핑을 위한 MCP 도구
- * https://github.com/firecrawl/firecrawl-mcp-server
+ * ============================================================
+ * Firecrawl - 웹 스크래핑/검색/크롤링 MCP 도구
+ * ============================================================
+ *
+ * Firecrawl API를 사용한 웹 스크래핑, 검색, URL 매핑, 크롤링 MCP 도구입니다.
+ * FIRECRAWL_API_KEY 환경변수가 설정된 경우에만 활성화됩니다.
+ *
+ * @module mcp/firecrawl
+ * @description
+ * - firecrawl_scrape: URL에서 웹 콘텐츠를 마크다운/HTML로 스크래핑
+ * - firecrawl_search: 웹 검색 + 선택적 콘텐츠 스크래핑
+ * - firecrawl_map: 웹사이트 URL 구조 매핑
+ * - firecrawl_crawl: 비동기 웹사이트 크롤링 (다중 페이지)
+ *
+ * @see https://github.com/firecrawl/firecrawl-mcp-server
+ * @requires FIRECRAWL_API_KEY - Firecrawl API 인증 키
  */
 
 import { MCPToolDefinition, MCPToolResult } from './types';
@@ -11,9 +24,16 @@ import { getConfig } from '../config/env';
 // Firecrawl API Client
 // ============================================
 
+/** Firecrawl API 인증 키 (환경변수에서 로드) */
 const FIRECRAWL_API_KEY = getConfig().firecrawlApiKey || undefined;
+/** Firecrawl API 기본 URL */
 const FIRECRAWL_API_URL = getConfig().firecrawlApiUrl;
 
+/**
+ * Firecrawl 스크래핑 옵션
+ *
+ * @interface FirecrawlScrapeOptions
+ */
 interface FirecrawlScrapeOptions {
     formats?: ('markdown' | 'html' | 'rawHtml' | 'links' | 'screenshot')[];
     onlyMainContent?: boolean;
@@ -24,23 +44,50 @@ interface FirecrawlScrapeOptions {
     mobile?: boolean;
 }
 
+/**
+ * Firecrawl 검색 옵션
+ *
+ * @interface FirecrawlSearchOptions
+ */
 interface FirecrawlSearchOptions {
+    /** 최대 결과 수 */
     limit?: number;
+    /** 검색 언어 (예: 'ko', 'en') */
     lang?: string;
+    /** 검색 국가 (예: 'kr', 'us') */
     country?: string;
+    /** 검색 결과 페이지 스크래핑 옵션 */
     scrapeOptions?: FirecrawlScrapeOptions;
 }
 
+/**
+ * Firecrawl URL 매핑 옵션
+ *
+ * @interface FirecrawlMapOptions
+ */
 interface FirecrawlMapOptions {
+    /** URL 필터 검색어 */
     search?: string;
+    /** 사이트맵 무시 여부 */
     ignoreSitemap?: boolean;
+    /** 사이트맵만 사용 여부 */
     sitemapOnly?: boolean;
+    /** 서브도메인 포함 여부 */
     includeSubdomains?: boolean;
+    /** 최대 URL 수 */
     limit?: number;
 }
 
 /**
- * Firecrawl API 호출 헬퍼
+ * Firecrawl API HTTP 요청 헬퍼
+ *
+ * POST 요청으로 Firecrawl API 엔드포인트를 호출합니다.
+ * Bearer 토큰 인증을 사용합니다.
+ *
+ * @param endpoint - API 엔드포인트 (예: '/scrape', '/search', '/map', '/crawl')
+ * @param data - 요청 본문 데이터
+ * @returns API 응답 JSON
+ * @throws {Error} API 키 미설정 또는 HTTP 에러 시
  */
 async function firecrawlRequest(endpoint: string, data: Record<string, unknown>): Promise<any> {
     if (!FIRECRAWL_API_KEY) {
@@ -77,7 +124,17 @@ async function firecrawlRequest(endpoint: string, data: Record<string, unknown>)
 // ============================================
 
 /**
- * 웹 페이지 스크래핑 도구
+ * 웹 페이지 스크래핑 MCP 도구 (firecrawl_scrape)
+ *
+ * URL에서 웹 콘텐츠를 마크다운, HTML 등 다양한 형식으로 추출합니다.
+ * onlyMainContent=true(기본)로 네비게이션/푸터를 제외합니다.
+ *
+ * @param args.url - 스크래핑할 URL (필수)
+ * @param args.formats - 출력 형식 배열 (기본값: ['markdown'])
+ * @param args.onlyMainContent - 메인 콘텐츠만 추출 (기본값: true)
+ * @param args.waitFor - 페이지 로딩 대기 시간(ms)
+ * @param args.timeout - 요청 타임아웃(ms, 기본값: 30000)
+ * @returns 스크래핑된 콘텐츠
  */
 export const firecrawlScrapeTool: MCPToolDefinition = {
     tool: {
@@ -146,7 +203,16 @@ export const firecrawlScrapeTool: MCPToolDefinition = {
 };
 
 /**
- * 웹 검색 도구 (Firecrawl)
+ * 웹 검색 MCP 도구 (firecrawl_search)
+ *
+ * Firecrawl API로 웹을 검색하고, 선택적으로 결과 페이지 콘텐츠를 스크래핑합니다.
+ *
+ * @param args.query - 검색 쿼리 (필수)
+ * @param args.limit - 최대 결과 수 (기본값: 5)
+ * @param args.lang - 검색 언어 (기본값: 'ko')
+ * @param args.country - 검색 국가 (기본값: 'kr')
+ * @param args.scrapeContent - 결과 페이지 콘텐츠 스크래핑 여부 (기본값: false)
+ * @returns 검색 결과 목록 (스크래핑 시 마크다운 콘텐츠 포함)
  */
 export const firecrawlSearchTool: MCPToolDefinition = {
     tool: {
@@ -227,7 +293,16 @@ export const firecrawlSearchTool: MCPToolDefinition = {
 };
 
 /**
- * URL 매핑 도구 (사이트 구조 파악)
+ * URL 매핑 MCP 도구 (firecrawl_map)
+ *
+ * 웹사이트의 모든 URL을 매핑하여 사이트 구조를 파악합니다.
+ * 최대 50개 URL을 출력하며, 초과분은 개수만 표시합니다.
+ *
+ * @param args.url - 매핑할 웹사이트 URL (필수)
+ * @param args.search - URL 필터 패턴 (선택적)
+ * @param args.limit - 최대 URL 수 (기본값: 100)
+ * @param args.includeSubdomains - 서브도메인 포함 여부 (기본값: false)
+ * @returns URL 목록
  */
 export const firecrawlMapTool: MCPToolDefinition = {
     tool: {
@@ -292,7 +367,16 @@ export const firecrawlMapTool: MCPToolDefinition = {
 };
 
 /**
- * 크롤링 시작 도구 (비동기)
+ * 크롤링 시작 MCP 도구 (firecrawl_crawl)
+ *
+ * 웹사이트를 비동기로 크롤링하여 여러 페이지의 콘텐츠를 수집합니다.
+ * 작업 ID를 반환하며, firecrawl_check_crawl_status로 진행 상황을 확인합니다.
+ *
+ * @param args.url - 크롤링 시작 URL (필수)
+ * @param args.limit - 최대 크롤링 페이지 수 (기본값: 10)
+ * @param args.maxDepth - 최대 크롤링 깊이 (기본값: 2)
+ * @param args.excludePaths - 제외할 경로 패턴 배열
+ * @returns 작업 ID 및 상태
  */
 export const firecrawlCrawlTool: MCPToolDefinition = {
     tool: {
@@ -353,6 +437,12 @@ export const firecrawlCrawlTool: MCPToolDefinition = {
 // Firecrawl Tools Export
 // ============================================
 
+/**
+ * Firecrawl MCP 도구 배열
+ *
+ * 모든 Firecrawl 도구를 하나의 배열로 내보냅니다.
+ * builtInTools에서 isFirecrawlConfigured() 조건으로 포함 여부를 결정합니다.
+ */
 export const firecrawlTools: MCPToolDefinition[] = [
     firecrawlScrapeTool,
     firecrawlSearchTool,
@@ -362,13 +452,17 @@ export const firecrawlTools: MCPToolDefinition[] = [
 
 /**
  * Firecrawl API 키 설정 여부 확인
+ *
+ * @returns FIRECRAWL_API_KEY 환경변수가 설정되어 있으면 true
  */
 export function isFirecrawlConfigured(): boolean {
     return !!FIRECRAWL_API_KEY;
 }
 
 /**
- * Firecrawl 상태 정보
+ * Firecrawl 서비스 상태 정보 반환
+ *
+ * @returns API 키 설정 여부와 API URL
  */
 export function getFirecrawlStatus(): { configured: boolean; apiUrl: string } {
     return {

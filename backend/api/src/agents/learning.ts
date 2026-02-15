@@ -1,6 +1,22 @@
 /**
- * 🆕 에이전트 학습/피드백 시스템
- * 사용자 피드백 수집, 품질 점수 계산, 프롬프트 최적화 제안
+ * ============================================================
+ * Agent Learning - RLHF 기반 에이전트 학습 및 피드백 시스템
+ * ============================================================
+ * 
+ * 사용자 피드백(1-5점 평점)을 수집하고, 에이전트별 품질 점수를 계산하며,
+ * 실패 패턴 분석과 프롬프트 자동 최적화 제안 기능을 제공합니다.
+ * PostgreSQL의 agent_feedback 테이블에 피드백 데이터를 영속화합니다.
+ * 
+ * @module agents/learning
+ * @description
+ * - 피드백 수집: collectFeedback() - 1-5점 평점 + 코멘트 + 태그
+ * - 품질 점수: calculateQualityScore() - 평균 평점, 트렌드 분석, 강점/약점 파악
+ * - 실패 패턴: analyzeFailurePatterns() - 저평가 피드백에서 공통 실패 유형 추출
+ * - 프롬프트 최적화: suggestPromptImprovements() - 실패 패턴 기반 프롬프트 개선 제안
+ * - 전체 통계: getOverallStats() - 에이전트 순위, 평균 평점 등
+ * 
+ * @see agents/custom-builder.ts - 커스텀 에이전트 관리
+ * @see routes/agents.routes.ts - 피드백 API 엔드포인트
  */
 
 import crypto from 'node:crypto';
@@ -8,7 +24,10 @@ import { createLogger } from '../utils/logger';
 
 const logger = createLogger('AgentLearning');
 
-// 피드백 인터페이스
+/**
+ * 에이전트 피드백 인터페이스
+ * DB의 agent_feedback 테이블 스키마와 매핑됩니다.
+ */
 interface AgentFeedback {
     feedbackId: string;
     agentId: string;
@@ -21,7 +40,10 @@ interface AgentFeedback {
     tags?: string[];
 }
 
-// 실패 패턴 인터페이스
+/**
+ * 실패 패턴 인터페이스
+ * 저평가 피드백에서 추출된 공통 실패 유형을 나타냅니다.
+ */
 interface FailurePattern {
     pattern: string;
     count: number;
@@ -29,7 +51,10 @@ interface FailurePattern {
     suggestedFix?: string;
 }
 
-// 품질 점수 인터페이스
+/**
+ * 에이전트 품질 점수 인터페이스
+ * calculateQualityScore()의 반환 타입입니다.
+ */
 interface AgentQualityScore {
     agentId: string;
     overallScore: number;  // 0-100
@@ -40,7 +65,10 @@ interface AgentQualityScore {
     weaknesses: string[];
 }
 
-// 프롬프트 개선 제안
+/**
+ * 프롬프트 개선 제안 인터페이스
+ * suggestPromptImprovements()의 반환 타입입니다.
+ */
 interface PromptImprovement {
     agentId: string;
     currentPrompt: string;
@@ -50,7 +78,13 @@ interface PromptImprovement {
 }
 
 /**
- * 에이전트 학습 시스템
+ * 에이전트 학습 시스템 클래스
+ * 
+ * RLHF(Reinforcement Learning from Human Feedback) 패턴으로
+ * 에이전트 성능을 추적하고 개선 방향을 제시합니다.
+ * 싱글톤 패턴으로 getAgentLearningSystem()을 통해 접근합니다.
+ * 
+ * @class AgentLearningSystem
  */
 export class AgentLearningSystem {
     private feedbacks: AgentFeedback[] = [];
@@ -363,6 +397,12 @@ export class AgentLearningSystem {
 // 싱글톤 인스턴스
 let learningSystemInstance: AgentLearningSystem | null = null;
 
+/**
+ * AgentLearningSystem 싱글톤 인스턴스를 반환합니다.
+ * 최초 호출 시 인스턴스를 생성하고 DB에서 피드백 데이터를 로드합니다.
+ * 
+ * @returns AgentLearningSystem 싱글톤 인스턴스
+ */
 export function getAgentLearningSystem(): AgentLearningSystem {
     if (!learningSystemInstance) {
         learningSystemInstance = new AgentLearningSystem();

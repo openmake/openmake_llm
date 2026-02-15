@@ -1,3 +1,16 @@
+/**
+ * ============================================================
+ * Generate Command - 코드 생성 CLI 명령
+ * ============================================================
+ *
+ * 자연어 설명을 기반으로 LLM이 코드를 생성하는 CLI 명령입니다.
+ * 스트리밍 출력을 지원하며, 생성된 코드를 파일로 저장할 수 있습니다.
+ *
+ * @module commands/generate
+ * @example
+ * node cli.js generate "Express REST API with TypeScript" -l typescript
+ * node cli.js generate "sorting algorithm" -o sort.py -l python
+ */
 import * as fs from 'fs';
 import * as path from 'path';
 import chalk from 'chalk';
@@ -6,6 +19,13 @@ import { OllamaClient } from '../ollama/client';
 import { getSystemPrompt } from '../chat/prompt';
 import { createSpinner } from '../ui/spinner';
 
+/**
+ * 자연어 설명으로 코드를 생성합니다.
+ * 스트리밍으로 토큰을 출력하고, 파일 저장 옵션을 제공합니다.
+ * @param client - Ollama 클라이언트 인스턴스
+ * @param description - 코드 생성 요구사항 설명
+ * @param options - 생성 옵션 (output: 저장 파일명, language: 프로그래밍 언어)
+ */
 export async function generateCode(
     client: OllamaClient,
     description: string,
@@ -89,6 +109,12 @@ ${description}
     }
 }
 
+/**
+ * 생성된 코드를 파일로 저장합니다.
+ * 마크다운 코드 블록 내의 코드만 추출하여 저장합니다.
+ * @param content - 생성된 코드 (마크다운 코드 블록 포함 가능)
+ * @param filename - 저장할 파일명
+ */
 async function saveToFile(content: string, filename: string): Promise<void> {
     try {
         // 코드 블록에서 코드만 추출

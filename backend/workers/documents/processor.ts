@@ -1,3 +1,29 @@
+/**
+ * ============================================================
+ * Document Processor - 문서 텍스트 추출 프로세서
+ * ============================================================
+ *
+ * 다양한 파일 형식(PDF, 이미지, Excel, 텍스트)에서 텍스트를 추출합니다.
+ * PDF는 pdf-parse 우선 시도 후 OCR(Tesseract.js) 폴백을 지원하며,
+ * 이미지는 한국어+영어 OCR, Excel은 ExcelJS로 시트별 텍스트를 추출합니다.
+ *
+ * @module workers/documents/processor
+ * @description 제공하는 함수:
+ * - extractPdfText()     - PDF 텍스트 추출 (pdf-parse + OCR 폴백)
+ * - extractTextFile()    - 텍스트 파일 읽기
+ * - extractImageText()   - 이미지 OCR 텍스트 추출 (Tesseract.js)
+ * - extractExcelText()   - Excel 시트별 텍스트 추출 (ExcelJS)
+ * - extractBinaryInfo()  - 바이너리 파일 메타정보 반환
+ * - extractDocument()    - 확장자 기반 자동 추출 라우터
+ * - createSummaryPrompt() - 문서 요약 LLM 프롬프트 생성
+ * - createQAPrompt()     - 문서 Q&A LLM 프롬프트 생성
+ *
+ * @requires pdf-parse - PDF 텍스트 레이어 추출
+ * @requires tesseract.js - OCR 엔진 (한국어+영어)
+ * @requires exceljs - Excel 파일 파싱
+ * @requires workers/config/env - Ollama 모델 설정
+ * @requires workers/documents/progress - 진행 상태 콜백
+ */
 import * as fs from 'fs';
 import * as path from 'path';
 import { exec } from 'child_process';
@@ -7,6 +33,14 @@ import { ProgressCallback, createProgressEvent } from './progress';
 
 const execAsync = promisify(exec);
 
+/**
+ * 문서 텍스트 추출 결과 인터페이스
+ * @property filename - 원본 파일명
+ * @property type - 파일 유형 ('pdf' | 'text' | 'image' | 'excel' | 'binary')
+ * @property text - 추출된 텍스트 내용
+ * @property pages - PDF 페이지 수 (PDF인 경우)
+ * @property info - 추가 메타정보 (OCR confidence, base64 등)
+ */
 export interface DocumentResult {
     filename: string;
     type: string;
@@ -16,7 +50,12 @@ export interface DocumentResult {
 }
 
 /**
- * PDF 파일에서 텍스트 추출 (pdf-parse 메인 + OCR 폴백)
+ * PDF 파일에서 텍스트를 추출합니다.
+ * 1차: pdf-parse로 텍스트 레이어 추출을 시도합니다.
+ * 2차: 텍스트가 100자 미만이면 OCR(Tesseract.js + pdftoppm)로 폴백합니다.
+ * @param filePath - PDF 파일 절대 경로
+ * @param onProgress - 진행 상태 콜백 (선택)
+ * @returns 추출된 텍스트와 메타정보
  */
 export async function extractPdfText(
     filePath: string,
@@ -154,7 +193,11 @@ export async function extractPdfText(
 }
 
 /**
- * 텍스트 파일 읽기
+ * 텍스트 기반 파일을 UTF-8로 읽어 반환합니다.
+ * .txt, .md, .json, .csv, .html, 코드 파일 등에 사용됩니다.
+ * @param filePath - 텍스트 파일 절대 경로
+ * @param onProgress - 진행 상태 콜백 (선택)
+ * @returns 파일 내용이 담긴 DocumentResult
  */
 export async function extractTextFile(
     filePath: string,
@@ -172,7 +215,12 @@ export async function extractTextFile(
 }
 
 /**
- * 이미지 파일에서 OCR 텍스트 추출
+ * 이미지 파일에서 OCR로 텍스트를 추출합니다.
+ * Tesseract.js를 사용하여 한국어+영어 인식을 수행합니다.
+ * OCR 실패 시에도 base64 이미지 데이터를 반환하여 Vision 모델에서 활용 가능합니다.
+ * @param filePath - 이미지 파일 절대 경로 (.jpg, .png, .gif 등)
+ * @param onProgress - 진행 상태 콜백 (선택)
+ * @returns OCR 텍스트 및 이미지 메타정보 (confidence, base64)
  */
 export async function extractImageText(
     filePath: string,
@@ -242,7 +290,11 @@ export async function extractImageText(
 }
 
 /**
- * Excel 파일에서 텍스트 추출
+ * Excel 파일에서 시트별 텍스트를 추출합니다.
+ * ExcelJS를 사용하여 모든 시트의 행 데이터를 파이프('|') 구분 텍스트로 변환합니다.
+ * @param filePath - Excel 파일 절대 경로 (.xlsx, .xls 등)
+ * @param onProgress - 진행 상태 콜백 (선택)
+ * @returns 시트별 텍스트가 담긴 DocumentResult
  */
 export async function extractExcelText(
     filePath: string,
@@ -301,7 +353,10 @@ export async function extractExcelText(
 }
 
 /**
- * 바이너리/기타 파일 정보
+ * 바이너리 또는 지원하지 않는 파일의 메타정보를 반환합니다.
+ * 파일 형식, 크기, 수정일 등 기본 정보만 제공합니다.
+ * @param filePath - 파일 절대 경로
+ * @returns 파일 메타정보가 담긴 DocumentResult
  */
 export async function extractBinaryInfo(filePath: string): Promise<DocumentResult> {
     const filename = path.basename(filePath);
@@ -323,7 +378,12 @@ export async function extractBinaryInfo(filePath: string): Promise<DocumentResul
 }
 
 /**
- * 파일 확장자에 따라 텍스트 추출
+ * 파일 확장자에 따라 적절한 추출 함수를 자동 선택하여 텍스트를 추출합니다.
+ * PDF, 이미지(OCR), Excel, 텍스트 파일을 지원하며,
+ * 알 수 없는 확장자는 텍스트 시도 후 바이너리 정보를 반환합니다.
+ * @param filePath - 파일 절대 경로
+ * @param onProgress - 진행 상태 콜백 (선택)
+ * @returns 추출된 텍스트가 담긴 DocumentResult
  */
 export async function extractDocument(
     filePath: string,
@@ -380,7 +440,11 @@ export async function extractDocument(
 }
 
 /**
- * 문서 요약 프롬프트 생성 (JSON 형식)
+ * 문서 요약을 위한 LLM 프롬프트를 생성합니다.
+ * 문서 내용을 최대 30,000자로 잘라 JSON 형식 응답을 요청하는 프롬프트를 구성합니다.
+ * @param document - 추출된 문서 결과
+ * @param language - 응답 언어 (기본값: 'ko')
+ * @returns LLM에 전달할 요약 프롬프트 문자열
  */
 export function createSummaryPrompt(document: DocumentResult, language: string = 'ko'): string {
     const maxLength = 30000;
@@ -419,7 +483,11 @@ Ensure the response is valid JSON. Translate all content to Korean.`;
 }
 
 /**
- * Q&A 프롬프트 생성 (JSON 형식)
+ * 문서 기반 Q&A를 위한 LLM 프롬프트를 생성합니다.
+ * 문서 내용(최대 28,000자)과 사용자 질문을 결합하여 JSON 형식 응답을 요청합니다.
+ * @param document - 추출된 문서 결과
+ * @param question - 사용자 질문
+ * @returns LLM에 전달할 Q&A 프롬프트 문자열
  */
 export function createQAPrompt(document: DocumentResult, question: string): string {
     const maxLength = 28000;

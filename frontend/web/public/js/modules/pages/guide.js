@@ -1,6 +1,16 @@
+/**
+ * ============================================
+ * Guide Page - 사용자 가이드
+ * ============================================
+ * 애플리케이션 사용법, 기능 안내, 단축키, 명령어 목록 등
+ * 사용자 가이드 컨텐츠를 표시하는 SPA 페이지 모듈입니다.
+ *
+ * @module pages/guide
+ */
 (function() {
     'use strict';
     window.PageModules = window.PageModules || {};
+    /** @type {number[]} setInterval ID 배열 (cleanup용) */
     var _intervals = [];
 
     window.PageModules['guide'] = {

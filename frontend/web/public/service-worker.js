@@ -1,10 +1,19 @@
 /**
- * Service Worker for OpenMake.Ai PWA
- * Comprehensive caching with offline support
+ * ============================================
+ * Service Worker - PWA 오프라인 캐싱 및 푸시 알림
+ * ============================================
+ * OpenMake.AI PWA의 서비스 워커로, 정적 자산 캐싱,
+ * CDN/이미지 캐시 전략, 오프라인 폴백, 푸시 알림을 처리합니다.
+ * 캐시 전략: Cache First, Network First, Stale-While-Revalidate.
+ *
+ * @module service-worker
  */
 
+/** @type {string} 정적 자산 캐시 버전 키 */
 const CACHE_VERSION = 'openmake-v7';
+/** @type {string} CDN 리소스 캐시 키 */
 const CDN_CACHE = 'openmake-cdn-v1';
+/** @type {string} 이미지 리소스 캐시 키 */
 const IMG_CACHE = 'openmake-img-v1';
 
 const STATIC_ASSETS = [
@@ -89,8 +98,11 @@ const STATIC_ASSETS = [
     '/icons/favicon.png'
 ];
 
+/** @type {string[]} CDN 호스트 목록 (stale-while-revalidate 전략 적용) */
 const CDN_HOSTS = ['cdn.jsdelivr.net', 'cdnjs.cloudflare.com', 'fonts.googleapis.com', 'fonts.gstatic.com'];
+/** @type {number} CDN 캐시 최대 항목 수 */
 const MAX_CDN_ENTRIES = 50;
+/** @type {number} 이미지 캐시 최대 항목 수 */
 const MAX_IMG_ENTRIES = 100;
 
 // ========== Install ==========
@@ -175,6 +187,11 @@ self.addEventListener('fetch', (event) => {
 
 // ========== Strategies ==========
 
+/**
+ * Cache First 전략 - 캐시 우선 조회, 없으면 네트워크 요청 후 캐시 저장
+ * @param {Request} request - Fetch 요청 객체
+ * @returns {Promise<Response>} 응답 객체
+ */
 async function cacheFirst(request) {
     const cached = await caches.match(request);
     if (cached) return cached;
@@ -191,6 +208,13 @@ async function cacheFirst(request) {
     }
 }
 
+/**
+ * Cache First Lazy 전략 - 캐시 우선 + 지연 캐시 저장 + 자동 트림
+ * @param {Request} request - Fetch 요청 객체
+ * @param {string} cacheName - 캐시 저장소 이름
+ * @param {number} maxItems - 캐시 최대 항목 수
+ * @returns {Promise<Response>} 응답 객체
+ */
 async function cacheFirstLazy(request, cacheName, maxItems) {
     const cached = await caches.match(request);
     if (cached) return cached;
@@ -208,6 +232,11 @@ async function cacheFirstLazy(request, cacheName, maxItems) {
     }
 }
 
+/**
+ * Network First 전략 - 네트워크 우선, 실패 시 캐시/SPA 셸/오프라인 페이지 폴백
+ * @param {Request} request - Fetch 요청 객체
+ * @returns {Promise<Response>} 응답 객체
+ */
 async function networkFirstWithOffline(request) {
     try {
         const response = await fetch(request);
@@ -232,6 +261,13 @@ async function networkFirstWithOffline(request) {
     }
 }
 
+/**
+ * Stale-While-Revalidate 전략 - 캐시된 응답 즉시 반환 + 백그라운드 갱신
+ * @param {Request} request - Fetch 요청 객체
+ * @param {string} cacheName - 캐시 저장소 이름
+ * @param {number} maxItems - 캐시 최대 항목 수
+ * @returns {Promise<Response>} 응답 객체
+ */
 async function staleWhileRevalidate(request, cacheName, maxItems) {
     const cache = await caches.open(cacheName);
     const cached = await cache.match(request);
@@ -249,6 +285,11 @@ async function staleWhileRevalidate(request, cacheName, maxItems) {
     return cached || fetchPromise;
 }
 
+/**
+ * Network Only 전략 - 네트워크 전용 (API 요청 등 실시간 데이터용)
+ * @param {Request} request - Fetch 요청 객체
+ * @returns {Promise<Response>} 응답 객체
+ */
 async function networkOnly(request) {
     try {
         return await fetch(request);
@@ -262,6 +303,12 @@ async function networkOnly(request) {
 
 // ========== Cache Management ==========
 
+/**
+ * 캐시 트림 - 최대 항목 수 초과 시 오래된 항목부터 삭제 (FIFO)
+ * @param {string} cacheName - 캐시 저장소 이름
+ * @param {number} maxItems - 유지할 최대 항목 수
+ * @returns {Promise<void>}
+ */
 async function trimCache(cacheName, maxItems) {
     const cache = await caches.open(cacheName);
     const keys = await cache.keys();

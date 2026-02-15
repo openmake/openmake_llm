@@ -1,6 +1,19 @@
 /**
- * Push Notification API Routes
- * Web Push 구독 관리 엔드포인트
+ * ============================================================
+ * Push Routes - Web Push 알림 API 라우트
+ * ============================================================
+ *
+ * VAPID 기반 Web Push 알림의 공개키 제공, 구독 등록/해제를 관리합니다.
+ * 구독 정보는 현재 인메모리 저장이며, 향후 PostgreSQL 이관 예정입니다.
+ *
+ * @module routes/push.routes
+ * @description
+ * - GET  /api/push/vapid-key     - VAPID 공개키 반환 (인증 불필요)
+ * - POST /api/push/subscribe     - Push 구독 등록 (인증)
+ * - POST /api/push/unsubscribe   - Push 구독 해제 (인증)
+ *
+ * @requires requireAuth - JWT 인증 미들웨어
+ * @requires getVapidKeys - VAPID 키 관리 유틸리티
  */
 import { Router, Request, Response } from 'express';
 import { requireAuth } from '../auth';

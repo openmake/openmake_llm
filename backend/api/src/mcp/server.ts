@@ -78,18 +78,46 @@ export class MCPServer {
         }
     }
 
+    /**
+     * 도구를 서버에 등록합니다.
+     *
+     * 동일한 이름의 도구가 이미 존재하면 덮어씁니다.
+     *
+     * @param toolDef - 등록할 도구 정의 (메타데이터 + 핸들러)
+     */
     registerTool(toolDef: MCPToolDefinition): void {
         this.tools.set(toolDef.tool.name, toolDef);
     }
 
+    /**
+     * 등록된 도구를 제거합니다.
+     *
+     * @param name - 제거할 도구 이름
+     */
     unregisterTool(name: string): void {
         this.tools.delete(name);
     }
 
+    /**
+     * 등록된 모든 도구의 메타데이터 목록을 반환합니다.
+     *
+     * @returns MCPTool 배열 (핸들러 제외, 메타데이터만)
+     */
     getTools(): MCPTool[] {
         return Array.from(this.tools.values()).map(t => t.tool);
     }
 
+    /**
+     * JSON-RPC 2.0 요청을 처리합니다.
+     *
+     * 지원 메서드:
+     * - 'initialize': 서버 정보 및 capabilities 반환
+     * - 'tools/list': 등록된 도구 목록 반환
+     * - 'tools/call': 지정된 도구 실행 (params.name, params.arguments)
+     *
+     * @param request - MCP JSON-RPC 요청
+     * @returns MCP JSON-RPC 응답 (result 또는 error)
+     */
     async handleRequest(request: MCPRequest): Promise<MCPResponse> {
         const { id, method, params } = request;
 
@@ -171,6 +199,13 @@ export class MCPServer {
         }
     }
 
+    /**
+     * STDIO 기반 MCP 서버를 시작합니다.
+     *
+     * stdin에서 JSON-RPC 요청을 한 줄씩 읽고,
+     * handleRequest()로 처리한 후 stdout으로 응답을 출력합니다.
+     * JSON 파싱 에러 시 -32700 에러 응답을 반환합니다.
+     */
     async start(): Promise<void> {
         this.rl = readline.createInterface({
             input: process.stdin,
@@ -199,6 +234,11 @@ export class MCPServer {
         }
     }
 
+    /**
+     * MCP 서버를 중지합니다.
+     *
+     * readline 인터페이스를 닫고 stdin 리스닝을 종료합니다.
+     */
     stop(): void {
         if (this.rl) {
             this.rl.close();
@@ -207,6 +247,13 @@ export class MCPServer {
     }
 }
 
+/**
+ * MCPServer 팩토리 함수
+ *
+ * @param name - 서버 이름 (기본값: MCPServer 생성자 기본값)
+ * @param version - 서버 버전 (기본값: MCPServer 생성자 기본값)
+ * @returns 새 MCPServer 인스턴스
+ */
 export function createMCPServer(name?: string, version?: string): MCPServer {
     return new MCPServer(name, version);
 }

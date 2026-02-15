@@ -1,16 +1,26 @@
 /**
- * API Keys 라우트
- * 
- * REST API for managing user API keys
- * 
- * Endpoints:
- *   POST   /api/v1/api-keys              — 새 API Key 생성
- *   GET    /api/v1/api-keys              — 사용자의 API Key 목록
- *   GET    /api/v1/api-keys/:id          — 단일 API Key 상세
- *   PATCH  /api/v1/api-keys/:id          — API Key 수정
- *   DELETE /api/v1/api-keys/:id          — API Key 삭제
- *   POST   /api/v1/api-keys/:id/rotate   — API Key 순환
- *   GET    /api/v1/api-keys/:id/usage    — API Key 사용량 조회
+ * ============================================================
+ * API Keys Routes - API Key 관리 라우트
+ * ============================================================
+ *
+ * 외부 개발자용 API Key의 발급, 조회, 수정, 삭제, 순환(rotate) 및
+ * 사용량 조회를 담당하는 REST API입니다.
+ * 등급별(free/pro/enterprise) 키 발급 수량을 제한하며,
+ * 평문 키는 생성/순환 시 한 번만 노출됩니다.
+ *
+ * @module routes/api-keys.routes
+ * @description
+ * - POST   /api/v1/api-keys              - 새 API Key 생성 (인증, Zod 검증)
+ * - GET    /api/v1/api-keys              - 사용자의 API Key 목록 (인증)
+ * - GET    /api/v1/api-keys/:id          - 단일 API Key 상세 (인증)
+ * - PATCH  /api/v1/api-keys/:id          - API Key 수정 (인증, Zod 검증)
+ * - DELETE /api/v1/api-keys/:id          - API Key 삭제 (인증)
+ * - POST   /api/v1/api-keys/:id/rotate   - API Key 순환 (인증)
+ * - GET    /api/v1/api-keys/:id/usage    - API Key 사용량 조회 (인증)
+ *
+ * @requires requireAuth - JWT 인증 미들웨어
+ * @requires validate - Zod 스키마 검증 미들웨어
+ * @requires ApiKeyService - API Key 라이프사이클 서비스
  */
 
 import { Router, Request, Response } from 'express';
@@ -26,6 +36,15 @@ const router = Router();
 
 // ===== Validation Schemas =====
 
+/**
+ * API Key 생성 요청 Zod 스키마
+ * @property {string} name - 키 이름 (1~100자, 필수)
+ * @property {string} [description] - 키 설명 (최대 500자)
+ * @property {string[]} [scopes] - 접근 범위 목록
+ * @property {string[]} [allowed_models] - 허용 모델 목록
+ * @property {string} [rate_limit_tier] - Rate Limit 등급 (free/starter/standard/enterprise)
+ * @property {string} [expires_at] - 만료 일시 (ISO 8601 datetime)
+ */
 const createApiKeySchema = z.object({
     name: z.string().min(1).max(100),
     description: z.string().max(500).optional(),
@@ -35,6 +54,16 @@ const createApiKeySchema = z.object({
     expires_at: z.string().datetime().optional(),
 });
 
+/**
+ * API Key 수정 요청 Zod 스키마
+ * @property {string} [name] - 키 이름 (1~100자)
+ * @property {string} [description] - 키 설명 (최대 500자)
+ * @property {string[]} [scopes] - 접근 범위 목록
+ * @property {string[]} [allowed_models] - 허용 모델 목록
+ * @property {string} [rate_limit_tier] - Rate Limit 등급
+ * @property {boolean} [is_active] - 활성화 상태
+ * @property {string|null} [expires_at] - 만료 일시 (null = 무기한)
+ */
 const updateApiKeySchema = z.object({
     name: z.string().min(1).max(100).optional(),
     description: z.string().max(500).optional(),
@@ -47,6 +76,12 @@ const updateApiKeySchema = z.object({
 
 // ===== Helper =====
 
+/**
+ * 요청 객체에서 인증된 사용자 ID를 추출합니다.
+ * JWT 페이로드의 userId 또는 id 필드를 확인합니다.
+ * @param req - Express 요청 객체
+ * @returns 사용자 ID 문자열 또는 null
+ */
 function getUserId(req: Request): string | null {
     if (req.user && 'userId' in req.user) {
         return req.user.userId;

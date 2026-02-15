@@ -1,36 +1,94 @@
 /**
- * API Key Manager with Automatic Multi-Key Rotation
- * 🆕 무제한 API 키 자동 순환 로직 (OLLAMA_API_KEY_1, _2, _3, ... _N)
- * 🆕 A2A 병렬 모델 지원: 각 키별 개별 모델 설정 (OLLAMA_MODEL_1, _2, ... _N)
+ * ============================================================
+ * ApiKeyManager - Cloud API Key 자동 로테이션 관리자
+ * ============================================================
+ *
+ * 다수의 Cloud API 키를 관리하고, 장애 발생 시 자동으로 다음 키로 전환합니다.
+ * A2A 병렬 처리를 위한 키-모델 쌍 매핑도 지원합니다.
+ *
+ * @module ollama/api-key-manager
+ * @description
+ * - 무제한 API 키 동적 로드 (OLLAMA_API_KEY_1, _2, ..., _N 환경변수)
+ * - 429/401/403 에러 시 자동 키 로테이션 (라운드 로빈 + 쿨다운 회피)
+ * - 5분 쿨다운: 실패한 키는 5분간 스킵 후 재시도
+ * - 키-모델 쌍 매핑으로 A2A 병렬 생성 지원
+ * - 레거시 형식 호환 (OLLAMA_API_KEY_PRIMARY, _SECONDARY)
+ *
+ * @description 키 로테이션 알고리즘:
+ * 1. 요청 실패 시 failureCount 증가
+ * 2. failureCount >= maxFailures(2) 또는 인증 에러(401/403/429) 시 즉시 rotateToNextKey() 호출
+ * 3. rotateToNextKey()는 다음 인덱스부터 순회하며 쿨다운(5분) 지난 키를 탐색
+ * 4. 모든 키가 쿨다운 상태이면 가장 빨리 복구되는 키로 전환
+ * 5. 성공 시 failureCount 초기화 및 해당 키의 실패 기록 삭제
  */
 
 import { getConfig } from '../config/env';
 
 /**
- * 키-모델 쌍 인터페이스 (A2A 병렬 처리용)
+ * API 키와 대응 모델의 쌍 (A2A 병렬 처리용)
+ * @interface KeyModelPair
  */
 export interface KeyModelPair {
+    /** API 키 문자열 */
     key: string;
+    /** 이 키에 할당된 모델 이름 */
     model: string;
+    /** 키 인덱스 (0-based) */
     index: number;
 }
 
+/**
+ * ApiKeyManager 초기화 설정
+ * @interface ApiKeyConfig
+ */
 export interface ApiKeyConfig {
+    /** API 키 배열 */
     keys: string[];
-    models?: string[];  // 각 키에 대응하는 모델 배열
+    /** 각 키에 대응하는 모델 배열 (인덱스 매핑) */
+    models?: string[];
+    /** SSH 키 (Ollama SSH 터널링용) */
     sshKey?: string;
 }
 
+/**
+ * Cloud API Key 자동 로테이션 관리자
+ *
+ * 다수의 Cloud API 키를 라운드 로빈 + 쿨다운 회피 방식으로 관리합니다.
+ * 각 키에 개별 모델을 매핑하여 A2A 병렬 생성을 지원합니다.
+ *
+ * 로테이션 알고리즘:
+ * - 연속 실패 2회 또는 인증 에러(401/403/429) → 즉시 다음 키로 전환
+ * - 다음 키 탐색 시 최근 5분 내 실패 기록이 없는 키를 우선 선택
+ * - 성공 시 실패 카운트 및 해당 키의 실패 기록 초기화
+ *
+ * @class ApiKeyManager
+ */
 export class ApiKeyManager {
+    /** 등록된 API 키 배열 */
     private keys: string[] = [];
-    private models: string[] = [];  // 🆕 각 키에 대응하는 모델
+    /** 각 키에 대응하는 모델 이름 배열 (인덱스 매핑) */
+    private models: string[] = [];
+    /** 현재 활성 키의 인덱스 (0-based) */
     private currentKeyIndex = 0;
+    /** SSH 키 (Ollama SSH 터널링용, 선택적) */
     private sshKey: string | undefined;
+    /** 현재 키의 연속 실패 횟수 */
     private failureCount = 0;
-    private readonly maxFailures = 2;  // 더 빠른 스와핑
+    /** 자동 로테이션 트리거 실패 횟수 임계값 (2회 = 빠른 스와핑) */
+    private readonly maxFailures = 2;
+    /** 마지막 키 전환(failover) 시각 */
     private lastFailoverTime: Date | null = null;
+    /** 키별 실패 기록 (인덱스 -> {실패 횟수, 마지막 실패 시각}) — 쿨다운 판단에 사용 */
     private keyFailures: Map<number, { count: number; lastFail: Date }> = new Map();
 
+    /**
+     * 원시 키 배열에서 빈 문자열, 비문자열 등 유효하지 않은 키를 필터링합니다.
+     *
+     * @param rawKeys - 원시 API 키 배열
+     * @param source - 키 출처 설명 (로그용)
+     * @returns 유효한 키만 포함된 배열
+     * @private
+     */
     private sanitizeKeys(rawKeys: string[], source: string): string[] {
         const sanitized: string[] = [];
         rawKeys.forEach((rawKey, idx) => {
@@ -50,6 +108,17 @@ export class ApiKeyManager {
         return sanitized;
     }
 
+    /**
+     * ApiKeyManager 인스턴스를 생성합니다.
+     *
+     * 초기화 순서:
+     * 1. config.keys가 있으면 사용, 없으면 환경변수에서 동적 로드
+     * 2. 각 키에 대응하는 모델 로드 (config.models 또는 환경변수)
+     * 3. SSH 키 로드
+     * 4. 초기화 결과 로그 출력 (키 마스킹 처리)
+     *
+     * @param config - 초기화 설정 (부분 적용 가능, 미지정 시 환경변수에서 자동 로드)
+     */
     constructor(config?: Partial<ApiKeyConfig>) {
         const envConfig = getConfig();
 
@@ -252,7 +321,16 @@ export class ApiKeyManager {
     }
 
     /**
-     * 다음 키로 순환
+     * 다음 사용 가능한 키로 순환합니다.
+     *
+     * 로테이션 알고리즘:
+     * 1. 현재 인덱스 + 1부터 순회 시작 (라운드 로빈)
+     * 2. 각 키의 실패 기록 확인 — 기록 없거나 5분 쿨다운 경과 시 선택
+     * 3. 모든 키가 쿨다운 상태이면 마지막 순회 결과(가장 빨리 쿨다운 끝나는 키)로 전환
+     * 4. 전환 후 failureCount 초기화
+     *
+     * @returns 키 전환 성공 여부 (키가 1개 이하면 false)
+     * @private
      */
     private rotateToNextKey(): boolean {
         if (this.keys.length <= 1) {
@@ -432,9 +510,19 @@ export class ApiKeyManager {
     }
 }
 
-// 싱글톤 인스턴스
+// ============================================
+// 싱글톤 인스턴스 관리
+// ============================================
+
+/** ApiKeyManager 싱글톤 인스턴스 */
 let apiKeyManager: ApiKeyManager | null = null;
 
+/**
+ * ApiKeyManager 싱글톤 인스턴스를 반환합니다.
+ * 최초 호출 시 환경변수에서 키를 로드하여 인스턴스를 생성합니다.
+ *
+ * @returns ApiKeyManager 싱글톤 인스턴스
+ */
 export function getApiKeyManager(): ApiKeyManager {
     if (!apiKeyManager) {
         apiKeyManager = new ApiKeyManager();
@@ -442,6 +530,11 @@ export function getApiKeyManager(): ApiKeyManager {
     return apiKeyManager;
 }
 
+/**
+ * ApiKeyManager 싱글톤 인스턴스를 초기화합니다.
+ * 다음 getApiKeyManager() 호출 시 새 인스턴스가 생성됩니다.
+ * 테스트 또는 설정 변경 시 사용합니다.
+ */
 export function resetApiKeyManager(): void {
     apiKeyManager = null;
 }

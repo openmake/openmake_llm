@@ -1,8 +1,23 @@
 /**
- * Filesystem MCP Server 통합
- * 
- * @modelcontextprotocol/server-filesystem 기반
- * 사용자별 격리된 파일시스템 접근 제공
+ * ============================================================
+ * Filesystem - 샌드박스 기반 파일시스템 MCP 도구
+ * ============================================================
+ *
+ * 사용자별 격리된 파일시스템 접근을 제공하는 MCP 도구 모듈입니다.
+ * UserSandbox를 통해 사용자 디렉토리 외부 접근을 차단합니다.
+ *
+ * @module mcp/filesystem
+ * @description
+ * - fs_read_file: 사용자 샌드박스 내 파일 읽기
+ * - fs_write_file: 사용자 샌드박스 내 파일 쓰기 (확장자 검증)
+ * - fs_list_directory: 사용자 샌드박스 내 디렉토리 목록 조회
+ * - fs_delete_file: 사용자 샌드박스 내 파일 삭제
+ *
+ * @security
+ * - UserSandbox.validatePath()로 경로 탐색(LFI) 공격 방지
+ * - 허용된 파일 확장자만 쓰기 가능 (ALLOWED_EXTENSIONS)
+ * - 금지된 패턴(.env, .ssh, credentials 등) 접근 차단
+ * - 모든 도구는 UserContext 필수 (사용자 인증 확인)
  */
 
 import * as path from 'path';
@@ -10,7 +25,12 @@ import * as fs from 'fs/promises';
 import { UserSandbox, UserContext } from './user-sandbox';
 import { MCPToolDefinition, MCPToolResult, MCPToolHandler } from './types';
 
-// 허용된 파일 확장자
+/**
+ * 허용된 파일 확장자 집합
+ *
+ * fs_write_file에서 쓰기 가능한 확장자를 제한합니다.
+ * 실행 파일(.exe, .bat 등)이나 시스템 파일은 포함되지 않습니다.
+ */
 const ALLOWED_EXTENSIONS = new Set([
     '.txt', '.md', '.json', '.yaml', '.yml', '.xml',
     '.js', '.ts', '.jsx', '.tsx', '.css', '.html',
@@ -19,7 +39,12 @@ const ALLOWED_EXTENSIONS = new Set([
     '.csv', '.log', '.env.example'
 ]);
 
-// 금지된 파일 패턴
+/**
+ * 금지된 파일 경로 패턴
+ *
+ * 보안상 접근을 차단해야 하는 경로 패턴입니다.
+ * node_modules, .git, .env, .ssh, 비밀번호/인증 관련 파일 등을 포함합니다.
+ */
 const FORBIDDEN_PATTERNS = [
     /node_modules/,
     /\.git\//,
@@ -33,6 +58,13 @@ const FORBIDDEN_PATTERNS = [
 
 /**
  * 파일 경로 검증
+ *
+ * UserSandbox.resolvePath()로 경로를 안전한 절대 경로로 변환한 후,
+ * 금지된 패턴과의 매칭을 검사합니다.
+ *
+ * @param userId - 사용자 ID (샌드박스 루트 결정)
+ * @param filePath - 검증할 파일 경로 (상대/절대)
+ * @returns 검증 결과 (valid, resolvedPath, error)
  */
 export function validateFilePath(userId: string | number, filePath: string): {
     valid: boolean;
@@ -67,7 +99,12 @@ export function validateFilePath(userId: string | number, filePath: string): {
 }
 
 /**
- * 파일 확장자 검증
+ * 파일 확장자가 허용 목록에 포함되는지 검증
+ *
+ * 확장자가 없는 파일(예: Makefile)도 허용합니다.
+ *
+ * @param filePath - 확인할 파일 경로
+ * @returns 허용된 확장자이면 true
  */
 export function isAllowedExtension(filePath: string): boolean {
     const ext = path.extname(filePath).toLowerCase();
@@ -75,7 +112,10 @@ export function isAllowedExtension(filePath: string): boolean {
 }
 
 /**
- * 디렉토리 존재 여부 확인 (비동기)
+ * 디렉토리 존재 여부를 비동기로 확인
+ *
+ * @param dirPath - 확인할 디렉토리 경로
+ * @returns 존재하면 true
  */
 async function directoryExists(dirPath: string): Promise<boolean> {
     try {
@@ -91,7 +131,14 @@ async function directoryExists(dirPath: string): Promise<boolean> {
 // ============================================
 
 /**
- * 파일 읽기 도구
+ * 파일 읽기 도구 (fs_read_file)
+ *
+ * 사용자 샌드박스 내에서 파일 내용을 읽어 반환합니다.
+ * UserContext 필수 - 미인증 요청은 거부됩니다.
+ *
+ * @param args.path - 읽을 파일 경로 (상대 경로 권장)
+ * @param args.encoding - 파일 인코딩 (기본값: 'utf-8')
+ * @returns 파일 내용 또는 에러 메시지
  */
 export const readFileTool: MCPToolDefinition = {
     tool: {
@@ -146,7 +193,15 @@ export const readFileTool: MCPToolDefinition = {
 };
 
 /**
- * 파일 쓰기 도구
+ * 파일 쓰기 도구 (fs_write_file)
+ *
+ * 사용자 샌드박스 내에 파일을 생성/수정합니다.
+ * 허용된 확장자만 쓰기 가능하며, 디렉토리가 없으면 자동 생성합니다.
+ *
+ * @param args.path - 쓸 파일 경로 (상대 경로 권장)
+ * @param args.content - 파일에 쓸 내용
+ * @param args.encoding - 파일 인코딩 (기본값: 'utf-8')
+ * @returns 성공/실패 메시지
  */
 export const writeFileTool: MCPToolDefinition = {
     tool: {
@@ -219,7 +274,13 @@ export const writeFileTool: MCPToolDefinition = {
 };
 
 /**
- * 디렉토리 목록 도구
+ * 디렉토리 목록 도구 (fs_list_directory)
+ *
+ * 사용자 샌드박스 내 디렉토리의 항목(파일/하위 디렉토리)을 나열합니다.
+ * 각 항목의 이름, 타입, 파일 크기를 JSON으로 반환합니다.
+ *
+ * @param args.path - 조회할 디렉토리 경로 (기본값: 작업 디렉토리)
+ * @returns 디렉토리 항목 JSON 배열 또는 에러 메시지
  */
 export const listDirectoryTool: MCPToolDefinition = {
     tool: {
@@ -282,7 +343,13 @@ export const listDirectoryTool: MCPToolDefinition = {
 };
 
 /**
- * 파일 삭제 도구
+ * 파일 삭제 도구 (fs_delete_file)
+ *
+ * 사용자 샌드박스 내에서 파일을 삭제합니다.
+ * 디렉토리 삭제는 지원하지 않습니다 (fs.unlink 사용).
+ *
+ * @param args.path - 삭제할 파일 경로
+ * @returns 성공/실패 메시지
  */
 export const deleteFileTool: MCPToolDefinition = {
     tool: {
@@ -334,6 +401,12 @@ export const deleteFileTool: MCPToolDefinition = {
 // 도구 목록 내보내기
 // ============================================
 
+/**
+ * 파일시스템 MCP 도구 배열
+ *
+ * 모든 파일시스템 도구를 하나의 배열로 내보냅니다.
+ * builtInTools에 스프레드 연산자로 추가하여 사용합니다.
+ */
 export const filesystemTools: MCPToolDefinition[] = [
     readFileTool,
     writeFileTool,

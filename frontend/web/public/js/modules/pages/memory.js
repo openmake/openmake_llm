@@ -1,6 +1,12 @@
 /**
- * memory - SPA Page Module
- * Auto-generated from memory.html
+ * ============================================
+ * Memory Page - 장기 기억 관리
+ * ============================================
+ * 사용자별 장기 기억(user memories)의 조회, 삭제를
+ * 관리하는 SPA 페이지 모듈입니다. AI가 대화에서
+ * 자동 추출한 중요 정보를 확인할 수 있습니다.
+ *
+ * @module pages/memory
  */
 (function() {
     'use strict';

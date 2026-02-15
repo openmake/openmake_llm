@@ -1,6 +1,12 @@
 /**
- * settings - SPA Page Module
- * Premium Glassmorphism Redesign v2
+ * ============================================
+ * Settings Page - 사용자 설정 (글래스모피즘 UI)
+ * ============================================
+ * 테마, 모델 선택, MCP 모듈 토글, 프롬프트 모드,
+ * 알림 설정, 계정 관리 등 사용자 설정 전반을
+ * 글래스모피즘 디자인으로 제공하는 SPA 페이지 모듈입니다.
+ *
+ * @module pages/settings
  */
 (function() {
     'use strict';

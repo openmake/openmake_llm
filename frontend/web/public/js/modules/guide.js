@@ -1,12 +1,21 @@
 /**
- * Guide Module
- * 사용자 가이드 모달을 담당합니다.
+ * ============================================
+ * Guide Module - 사용자 가이드 모달 렌더링
+ * ============================================
+ * GUIDE_DATA 전역 객체를 기반으로 사용자 가이드 모달을
+ * 동적으로 생성합니다. 자동 감지 모드, 명령어 목록,
+ * 프롬프트 모드 태그 등 섹션별 렌더링을 처리합니다.
+ *
+ * @module guide
  */
 
 import { closeModal, openModal } from './ui.js';
 
 /**
- * 사용자 가이드 표시
+ * 사용자 가이드 모달을 동적으로 렌더링하여 표시
+ * GUIDE_DATA 전역 객체에서 섹션 데이터를 읽어 HTML을 생성합니다.
+ * auto_detect, commands, prompt_modes 섹션별로 다른 레이아웃을 적용합니다.
+ * @returns {void}
  */
 function showUserGuide() {
     const modal = document.getElementById('guideModal');
@@ -73,14 +82,17 @@ function showUserGuide() {
 
 /**
  * 가이드 모달 닫기
+ * @returns {void}
  */
 function closeGuideModal() {
     closeModal('guideModal');
 }
 
 /**
- * 모드 사용
- * @param {string} mode - 모드 이름
+ * 가이드에서 선택한 모드를 입력창에 /mode 명령어로 설정
+ * 가이드 모달을 닫고 입력창에 포커스합니다.
+ * @param {string} mode - 적용할 프롬프트 모드 이름
+ * @returns {void}
  */
 function useMode(mode) {
     const input = document.getElementById('chatInput');

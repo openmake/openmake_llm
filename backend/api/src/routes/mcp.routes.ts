@@ -1,18 +1,29 @@
 /**
- * MCP Routes
- * MCP (Model Context Protocol) 설정 및 도구 실행 API
- * 
- * - GET /settings - MCP 설정 조회
- * - PUT /settings - MCP 설정 저장
- * - POST /terminal - 터미널 명령어 실행 (관리자 전용)
- * - GET /tools - 사용 가능한 도구 목록
- * - POST /tools/:name/execute - 도구 실행
- * - GET /servers - 외부 MCP 서버 목록 + 연결 상태
- * - POST /servers - 새 외부 서버 등록 (admin)
- * - DELETE /servers/:id - 서버 제거 (admin)
- * - POST /servers/:id/connect - 서버 수동 연결
- * - POST /servers/:id/disconnect - 서버 수동 연결 해제
- * - GET /servers/:id/status - 서버 상태 조회
+ * ============================================================
+ * MCP Routes - Model Context Protocol 관리 API 라우트
+ * ============================================================
+ *
+ * MCP(Model Context Protocol) 설정 관리, 도구 목록 조회/실행,
+ * 외부 MCP 서버 등록/연결/해제 등 MCP 생태계 전반을 관리합니다.
+ * 도구 실행은 사용자 등급(tier) 기반 접근 제어를 적용합니다.
+ *
+ * @module routes/mcp.routes
+ * @description
+ * - GET    /api/mcp/settings              - MCP 설정 조회 (선택적 인증)
+ * - PUT    /api/mcp/settings              - MCP 설정 저장 (선택적 인증)
+ * - POST   /api/mcp/terminal              - 터미널 실행 (비활성화, HTTP 410)
+ * - GET    /api/mcp/tools                 - 사용 가능한 도구 목록 (등급별 필터링)
+ * - POST   /api/mcp/tools/:name/execute   - 도구 실행 (인증, 컨텍스트 기반 권한)
+ * - GET    /api/mcp/servers               - 외부 MCP 서버 목록 + 연결 상태 (인증)
+ * - POST   /api/mcp/servers               - 새 외부 서버 등록 (관리자)
+ * - DELETE /api/mcp/servers/:id           - 서버 제거 (관리자)
+ * - POST   /api/mcp/servers/:id/connect   - 서버 수동 연결 (인증)
+ * - POST   /api/mcp/servers/:id/disconnect - 서버 수동 연결 해제 (인증)
+ * - GET    /api/mcp/servers/:id/status    - 서버 상태 조회 (인증)
+ *
+ * @requires UnifiedMCPClient - MCP 통합 클라이언트
+ * @requires ServerRegistry - MCP 서버 레지스트리
+ * @requires ToolRouter - 내장 + 외부 도구 라우터
  */
 
 import { Router, Request, Response } from 'express';

@@ -1,6 +1,12 @@
 /**
- * audit - SPA Page Module
- * Auto-generated from audit.html
+ * ============================================
+ * Audit Page - 시스템 감사 로그
+ * ============================================
+ * 사용자 활동, API 호출, 인증 이벤트 등 시스템 감사 로그를
+ * 필터링(이벤트 유형, 날짜, 사용자)하여 조회하고
+ * 페이지네이션으로 탐색하는 SPA 페이지 모듈입니다.
+ *
+ * @module pages/audit
  */
 (function() {
     'use strict';

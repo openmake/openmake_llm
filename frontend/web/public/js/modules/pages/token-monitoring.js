@@ -1,6 +1,17 @@
+/**
+ * ============================================
+ * Token Monitoring Page - 토큰 사용량 모니터링
+ * ============================================
+ * API 토큰 사용량 추적 및 시각화 페이지입니다.
+ * admin-metrics 페이지로 리다이렉트하여 통합 대시보드에서
+ * 토큰 모니터링을 제공합니다.
+ *
+ * @module pages/token-monitoring
+ */
 (function() {
     'use strict';
     window.PageModules = window.PageModules || {};
+    /** @type {number[]} setInterval ID 배열 (cleanup용) */
     var _intervals = [];
 
     window.PageModules['token-monitoring'] = {

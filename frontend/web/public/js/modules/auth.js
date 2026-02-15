@@ -1,10 +1,21 @@
 /**
- * Authentication Module
- * 사용자 인증 및 권한 관리를 담당합니다.
+ * ============================================
+ * Authentication - 사용자 인증 및 권한 관리
+ * ============================================
+ * JWT 토큰 및 httpOnly 쿠키 기반 인증을 처리합니다.
+ * OAuth 세션 복구, 게스트 모드, 익명 세션 이관(claiming),
+ * 인증된 API 요청(authFetch) 기능을 제공합니다.
+ *
+ * @module auth
  */
 
 import { getState, setState } from './state.js';
 
+/**
+ * 안전한 localStorage 래퍼
+ * localStorage 접근 시 발생할 수 있는 예외(Safari 프라이빗 모드 등)를 처리합니다.
+ * @type {{getItem: Function, setItem: Function, removeItem: Function}}
+ */
 const SafeStorage = window.SafeStorage || {
     getItem(key) {
         try { return localStorage.getItem(key); } catch (e) { return null; }
@@ -19,8 +30,10 @@ const SafeStorage = window.SafeStorage || {
 
 /**
  * 인증 상태 초기화
- * 🔒 Phase 3 패치: async로 변경하여 세션 복구 완료를 보장 (경쟁 조건 해결)
- * 반환된 Promise는 앱 초기화 시 await 되어야 함
+ * localStorage에서 토큰과 사용자 정보를 복원하고,
+ * 사용자 정보가 없으면 httpOnly 쿠키 기반 세션 복구를 시도합니다.
+ * Phase 3 패치: async로 변경하여 세션 복구 완료를 보장 (경쟁 조건 해결)
+ * @returns {Promise<void>} 세션 복구 완료까지 대기
  */
 async function initAuth() {
     const authToken = SafeStorage.getItem('authToken');
@@ -78,8 +91,11 @@ async function claimAnonymousSession(token) {
 }
 
 /**
- * 🔒 httpOnly 쿠키 기반 세션 복구
- * OAuth 로그인 후 리다이렉트 시 localStorage가 비어있는 경우 처리
+ * httpOnly 쿠키 기반 세션 복구
+ * OAuth 로그인 후 리다이렉트 시 localStorage가 비어있는 경우,
+ * 서버의 /api/auth/me 엔드포인트를 호출하여 세션을 복원합니다.
+ * 복구 성공 시 localStorage와 AppState를 동기화하고 사이드바를 업데이트합니다.
+ * @returns {Promise<void>}
  */
 async function recoverSessionFromCookie() {
     try {
@@ -123,8 +139,11 @@ async function recoverSessionFromCookie() {
 
 /**
  * 인증된 fetch 요청
+ * Authorization 헤더와 httpOnly 쿠키를 자동으로 포함합니다.
+ * 401 응답 시 로그인 페이지로 자동 리다이렉트합니다.
  * @param {string} url - 요청 URL
- * @param {object} options - fetch 옵션
+ * @param {object} [options={}] - fetch 옵션 (headers, method, body 등)
+ * @returns {Promise<Response>} fetch Response 객체
  */
 async function authFetch(url, options = {}) {
     const authToken = getState('auth.authToken');
@@ -182,9 +201,11 @@ async function authJsonFetch(url, options = {}) {
 }
 
 /**
- * 로그인
- * @param {string} email - 이메일
+ * 이메일/비밀번호 로그인
+ * 성공 시 JWT 토큰을 저장하고 익명 세션 이관을 수행합니다.
+ * @param {string} email - 사용자 이메일 주소
  * @param {string} password - 비밀번호
+ * @returns {Promise<{success: boolean, user?: Object, error?: string}>} 로그인 결과
  */
 async function login(email, password) {
     try {
@@ -226,7 +247,10 @@ async function login(email, password) {
 }
 
 /**
- * 로그아웃 (🆕 서버 토큰 블랙리스트 연동)
+ * 로그아웃 처리
+ * 서버에 토큰 블랙리스트 등록을 요청하고 로컬 인증 정보를 정리합니다.
+ * 완료 후 로그인 페이지로 리다이렉트합니다.
+ * @returns {void}
  */
 function logout() {
     // 서버에 로그아웃 요청 (httpOnly 쿠키 포함)
@@ -248,6 +272,8 @@ function logout() {
 
 /**
  * 게스트 모드로 진입
+ * 로그인 없이 제한된 기능을 사용할 수 있도록 설정합니다.
+ * @returns {void}
  */
 function enterGuestMode() {
     SafeStorage.setItem('guestMode', 'true');
@@ -256,7 +282,10 @@ function enterGuestMode() {
 }
 
 /**
- * 인증 UI 업데이트
+ * 인증 상태에 따른 UI 업데이트
+ * 로그인/게스트/비인증 상태에 따라 사용자 정보, 로그인/로그아웃 버튼,
+ * 관리자 링크의 표시 여부를 제어합니다.
+ * @returns {void}
  */
 function updateAuthUI() {
     const currentUser = getState('auth.currentUser');
@@ -295,6 +324,7 @@ function updateAuthUI() {
 
 /**
  * 관리자 권한 확인
+ * @returns {boolean} 현재 사용자가 admin 역할인지 여부
  */
 function isAdmin() {
     const user = getState('auth.currentUser');
@@ -303,6 +333,7 @@ function isAdmin() {
 
 /**
  * 로그인 상태 확인
+ * @returns {boolean} 현재 사용자가 로그인되어 있는지 여부
  */
 function isLoggedIn() {
     return !!getState('auth.currentUser');
@@ -310,6 +341,7 @@ function isLoggedIn() {
 
 /**
  * 현재 사용자 정보 조회
+ * @returns {Object|null} 사용자 객체 (email, role, id 등) 또는 null
  */
 function getCurrentUser() {
     return getState('auth.currentUser');

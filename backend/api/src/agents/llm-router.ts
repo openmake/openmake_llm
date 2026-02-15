@@ -1,6 +1,22 @@
 /**
- * LLM-Based Agent Router
- * 🆕 질문 전체를 LLM으로 분석하여 가장 적합한 에이전트 선택
+ * ============================================================
+ * LLM 기반 에이전트 라우터 - 의미론적 질문 분석 및 에이전트 선택
+ * ============================================================
+ *
+ * 사용자 질문 전체를 LLM으로 분석하여 가장 적합한 전문가 에이전트를
+ * 선택하는 의미론적 라우팅 모듈. 키워드 매칭이 아닌 질문의 맥락과
+ * 숨겨진 의도까지 파악하여 최적의 에이전트를 결정한다.
+ *
+ * @module agents/llm-router
+ * @description
+ * - LLM 기반 의미론적 에이전트 라우팅 (3단계 분석: 의도 -> 도메인 -> 전문성)
+ * - 에이전트 요약 정보 생성 및 LLM 프롬프트 포맷팅
+ * - JSON 응답 파싱 (코드블록 -> greedy -> non-greedy 3단계 추출)
+ * - 타임아웃 기반 폴백 처리 (Promise.race)
+ * - 입력 검증 및 새니타이징 (프롬프트 인젝션 방어)
+ *
+ * @see {@link module:agents/index} - 키워드 폴백 라우팅 및 통합 라우터
+ * @see {@link module:agents/monitor} - 라우팅 성능 모니터링
  */
 
 import { OllamaClient } from '../ollama/client';
@@ -8,25 +24,55 @@ import { sanitizePromptInput, validatePromptInput } from '../utils/input-sanitiz
 import { Agent, AgentCategory } from './types';
 import industryData from './industry-agents.json';
 
-// LLM 라우팅 결과 인터페이스
+/**
+ * LLM 라우팅 결과 인터페이스
+ *
+ * LLM이 분석한 에이전트 선택 결과를 담는 구조체.
+ * 신뢰도와 대안 에이전트 목록을 포함하여 폴백 판단에 활용된다.
+ *
+ * @interface LLMRoutingResult
+ */
 export interface LLMRoutingResult {
+    /** 선택된 에이전트의 고유 ID (예: 'software-engineer') */
     agentId: string;
+    /** LLM이 판단한 선택 신뢰도 (0.0 ~ 1.0, 0.3 미만이면 폴백) */
     confidence: number;
+    /** LLM이 제공한 선택 이유 (한 문장) */
     reasoning: string;
+    /** 대안 에이전트 ID 목록 (최대 2개) */
     alternativeAgents: string[];
 }
 
-// 에이전트 요약 (LLM 프롬프트용)
+/**
+ * 에이전트 요약 정보 (LLM 프롬프트 구성용)
+ *
+ * LLM에게 전달할 에이전트 목록을 간결하게 표현하는 구조체.
+ * industry-agents.json에서 추출하여 카테고리별로 그룹화된다.
+ *
+ * @interface AgentSummary
+ */
 interface AgentSummary {
+    /** 에이전트 고유 ID */
     id: string;
+    /** 에이전트 표시 이름 (한국어) */
     name: string;
+    /** 소속 카테고리명 */
     category: string;
+    /** 에이전트 역할 설명 */
     description: string;
 }
 
-// 전역 OllamaClient (싱글톤)
+/** 전역 OllamaClient 싱글톤 인스턴스 (라우팅 전용) */
 let routerClient: OllamaClient | null = null;
 
+/**
+ * 라우팅 전용 OllamaClient 싱글톤 반환
+ *
+ * 라우팅 요청마다 새 클라이언트를 생성하지 않고 단일 인스턴스를 재사용한다.
+ * 첫 호출 시 lazy initialization으로 생성된다.
+ *
+ * @returns {OllamaClient} - 라우팅 전용 Ollama 클라이언트 인스턴스
+ */
 function getRouterClient(): OllamaClient {
     if (!routerClient) {
         routerClient = new OllamaClient();
@@ -35,7 +81,12 @@ function getRouterClient(): OllamaClient {
 }
 
 /**
- * 모든 에이전트의 간결한 요약 생성
+ * 모든 에이전트의 간결한 요약 목록 생성
+ *
+ * industry-agents.json에서 전체 에이전트를 순회하며
+ * LLM 프롬프트에 포함할 요약 정보를 추출한다.
+ *
+ * @returns {AgentSummary[]} - 전체 에이전트 요약 배열 (카테고리 정보 포함)
  */
 export function getAgentSummaries(): AgentSummary[] {
     const summaries: AgentSummary[] = [];
@@ -55,7 +106,13 @@ export function getAgentSummaries(): AgentSummary[] {
 }
 
 /**
- * 에이전트 목록을 LLM 프롬프트용 문자열로 변환
+ * 에이전트 목록을 LLM 프롬프트용 마크다운 문자열로 변환
+ *
+ * 에이전트를 카테고리별로 그룹화하여 LLM이 이해하기 쉬운
+ * 마크다운 형식으로 포맷팅한다. 각 에이전트는 ID, 이름, 설명을 포함한다.
+ *
+ * @param summaries - 에이전트 요약 배열 (getAgentSummaries() 결과)
+ * @returns {string} - 카테고리별로 그룹화된 마크다운 문자열
  */
 function formatAgentListForPrompt(summaries: AgentSummary[]): string {
     // 카테고리별로 그룹화
@@ -79,7 +136,17 @@ function formatAgentListForPrompt(summaries: AgentSummary[]): string {
 }
 
 /**
- * LLM 응답에서 JSON 추출 (greedy + non-greedy 이중 시도)
+ * LLM 응답에서 JSON 객체 추출 (3단계 파싱 전략)
+ *
+ * LLM 응답은 JSON 외에 설명 텍스트를 포함할 수 있으므로,
+ * 3단계 전략으로 JSON을 추출한다:
+ *
+ * 1단계: ```json 코드블록 내 JSON 추출 시도
+ * 2단계: Greedy 매칭 (가장 바깥 {} 블록 — 중첩 브레이스 대응)
+ * 3단계: Non-greedy 폴백 (가장 짧은 {} 블록)
+ *
+ * @param response - LLM의 원시 응답 문자열
+ * @returns {Record<string, unknown> | null} - 파싱된 JSON 객체, 실패 시 null
  */
 function extractJSONFromResponse(response: string): Record<string, unknown> | null {
     // 1단계: ```json 코드블록 내 JSON 추출 시도
@@ -117,7 +184,22 @@ function extractJSONFromResponse(response: string): Record<string, unknown> | nu
 }
 
 /**
- * LLM 기반 에이전트 라우팅
+ * LLM 기반 에이전트 라우팅 (메인 라우팅 함수)
+ *
+ * 사용자 메시지를 LLM으로 분석하여 최적의 에이전트를 선택한다.
+ * 처리 흐름:
+ *
+ * 1. 입력 전처리: 긴 메시지 잘라내기 (MAX_ROUTING_INPUT=10000자)
+ * 2. 입력 검증: validatePromptInput으로 유효성 검사
+ * 3. 입력 새니타이징: sanitizePromptInput으로 프롬프트 인젝션 방어
+ * 4. LLM 호출: temperature=0.1 (결정적 응답), num_predict=200 (짧은 응답)
+ * 5. 타임아웃 처리: Promise.race로 지정 시간 초과 시 null 반환
+ * 6. 응답 파싱: extractJSONFromResponse로 JSON 추출
+ * 7. 결과 검증: agent_id 존재 여부 확인
+ *
+ * @param message - 사용자 입력 메시지
+ * @param timeout - LLM 응답 대기 타임아웃 (밀리초, 기본값: 5000)
+ * @returns {Promise<LLMRoutingResult | null>} - 라우팅 결과, 실패/타임아웃 시 null
  */
 export async function routeWithLLM(
     message: string,
@@ -219,6 +301,12 @@ ${sanitizedMessage}
 
 /**
  * 에이전트 ID가 유효한지 확인
+ *
+ * industry-agents.json의 전체 에이전트를 순회하여 해당 ID가 존재하는지 검증한다.
+ * 'general' ID는 기본 에이전트로 항상 유효하다.
+ *
+ * @param agentId - 검증할 에이전트 ID
+ * @returns {boolean} - 유효한 에이전트 ID이면 true
  */
 export function isValidAgentId(agentId: string): boolean {
     for (const [, category] of Object.entries(industryData as Record<string, AgentCategory>)) {

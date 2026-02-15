@@ -1,6 +1,12 @@
 /**
- * Main Entry Point
- * 앱 초기화 및 모듈 통합을 담당합니다.
+ * ============================================
+ * Main Entry Point - 앱 초기화 및 모듈 통합
+ * ============================================
+ * 애플리케이션의 메인 진입점으로, 인증/WebSocket/테마/설정 등
+ * 각 모듈의 초기화를 순차적으로 수행하고 이벤트 리스너를 등록합니다.
+ * 전역 함수(initApp, renderAgentList 등)를 window에 노출합니다.
+ *
+ * @module main
  */
 
 // 모듈 임포트 (ES6 모듈 지원 시)
@@ -14,8 +20,8 @@
 // import { handleKeyDown } from './modules/utils.js';
 
 /**
- * 앱 초기화
- * 🔒 Phase 3: async로 변경하여 initAuth() 완료까지 대기
+ * 앱 초기화 - 인증, WebSocket, 테마, 설정을 순차적으로 초기화
+ * @returns {Promise<void>}
  */
 async function initApp() {
     if (typeof debugLog === 'function') debugLog('[App] 초기화 시작...');
@@ -54,7 +60,8 @@ async function initApp() {
 }
 
 /**
- * 이벤트 리스너 설정
+ * 이벤트 리스너 설정 - 텍스트 영역 자동 높이, 파일 드래그앤드롭, 키보드 단축키 등록
+ * @returns {void}
  */
 function setupEventListeners() {
     // 텍스트 영역 자동 높이 조절
@@ -134,8 +141,9 @@ function setupEventListeners() {
 }
 
 /**
- * 에이전트 목록 렌더링
- * @param {Array} agents - 에이전트 목록
+ * 에이전트 목록을 사이드바에 렌더링
+ * @param {Array<{url: string, name?: string}>} agents - 에이전트 목록 (로컬/원격)
+ * @returns {void}
  */
 function renderAgentList(agents) {
     const list = document.getElementById('agentList');
@@ -156,8 +164,10 @@ function renderAgentList(agents) {
 }
 
 /**
- * 클러스터 정보 업데이트
+ * 클러스터 정보 업데이트 - WebSocket으로 수신한 노드 데이터를 상태에 반영
  * @param {Object} data - 클러스터 데이터
+ * @param {Array} [data.nodes] - 노드 목록
+ * @returns {void}
  */
 function updateClusterInfo(data) {
     if (data.nodes) {
@@ -169,7 +179,8 @@ function updateClusterInfo(data) {
 }
 
 /**
- * 사이드바 클러스터 상태 업데이트
+ * 사이드바 클러스터 상태 업데이트 - 노드 목록을 DOM에 렌더링
+ * @returns {void}
  */
 function updateSidebarClusterInfo() {
     const nodes = typeof getState === 'function' ? getState('nodes') : [];
@@ -192,8 +203,10 @@ function updateSidebarClusterInfo() {
 }
 
 /**
- * 클러스터 이벤트 처리
+ * 클러스터 이벤트 처리 - 노드 상태 변경 이벤트 수신 시 사이드바 갱신
  * @param {Object} event - 클러스터 이벤트
+ * @param {string} event.type - 이벤트 유형
+ * @returns {void}
  */
 function handleClusterEvent(event) {
     if (typeof debugLog === 'function') debugLog('[Cluster] 이벤트:', event.type);

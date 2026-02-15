@@ -1,15 +1,17 @@
 /**
  * ============================================
- * SPA Router — History API 기반 클라이언트 사이드 라우터
- *
- * OpenMake.AI Gemini-Style UX Rebuild 용
- * Vanilla JavaScript, 빌드 도구 없음
+ * SPA Router - History API 기반 클라이언트 사이드 라우터
+ * ============================================
+ * OpenMake.AI Gemini-Style UX Rebuild 용 SPA 라우터.
+ * History API를 사용하여 페이지 전환 없이 URL을 변경하고,
+ * 모듈 기반 페이지 로딩, 인증/관리자 가드, CSS 관리를 제공합니다.
  *
  * 사용법:
  *   Router.register('/canvas.html', { ... });
  *   Router.start();
  *   Router.navigate('/canvas.html');
- * ============================================
+ *
+ * @module spa-router
  */
 
 (function () {
@@ -335,7 +337,8 @@
     }
 
     /**
-     * 툴 피커 활성 상태 업데이트
+     * 툴 피커 활성 상태 업데이트 - 현재 경로에 해당하는 pill 버튼에 active 클래스 토글
+     * @param {string} path - 현재 활성 경로
      */
     function updateToolPickerActive(path) {
         var pills = document.querySelectorAll('.tool-pill');

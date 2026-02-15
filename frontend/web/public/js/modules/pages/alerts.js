@@ -1,6 +1,12 @@
 /**
- * alerts - SPA Page Module
- * Auto-generated from alerts.html
+ * ============================================
+ * Alerts Page - 시스템 알림 관리
+ * ============================================
+ * 할당량 경고, API 오류, 시스템 과부하 등 시스템 이벤트
+ * 알림을 심각도(info/warning/critical) 필터링과 함께
+ * 표시하는 SPA 페이지 모듈입니다.
+ *
+ * @module pages/alerts
  */
 (function() {
     'use strict';

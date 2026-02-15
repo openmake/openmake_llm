@@ -1,6 +1,20 @@
 /**
- * 🆕 알림 시스템
- * 할당량 경고, 시스템 이상 감지 알림
+ * ============================================================
+ * Alert System - 시스템 알림 및 경고 관리
+ * ============================================================
+ *
+ * API 할당량 경고, 시스템 이상 감지, 에러율 급증 등의 이벤트를
+ * 콘솔, 이메일, Webhook 채널로 발송하는 알림 시스템입니다.
+ *
+ * @module monitoring/alerts
+ * @description
+ * - 다중 채널 알림 발송 (console, email, webhook)
+ * - 심각도 기반 분류 (info, warning, critical)
+ * - 7가지 알림 타입 (할당량, API 에러, 시스템 과부하, 키 소진, 응답 시간, 에러율)
+ * - 쿨다운 메커니즘으로 중복 알림 방지 (기본 15분)
+ * - 알림 히스토리 보관 (최대 100건)
+ * - Nodemailer 기반 이메일 발송
+ * - 싱글톤 패턴으로 전역 인스턴스 관리
  */
 
 import nodemailer, { type Transporter } from 'nodemailer';
@@ -8,13 +22,13 @@ import { createLogger } from '../utils/logger';
 
 const logger = createLogger('AlertSystem');
 
-// 알림 채널 타입
+/** 알림 발송 채널 타입 */
 type AlertChannel = 'console' | 'email' | 'webhook';
 
-// 알림 심각도
+/** 알림 심각도 레벨 */
 type AlertSeverity = 'info' | 'warning' | 'critical';
 
-// 알림 타입
+/** 알림 이벤트 타입 */
 type AlertType =
     | 'quota_warning'
     | 'quota_critical'
@@ -24,49 +38,98 @@ type AlertType =
     | 'response_time_spike'
     | 'error_rate_spike';
 
-// 알림 메시지 인터페이스
+/**
+ * 알림 메시지 인터페이스
+ *
+ * @interface AlertMessage
+ */
 interface AlertMessage {
+    /** 알림 이벤트 타입 */
     type: AlertType;
+    /** 심각도 레벨 */
     severity: AlertSeverity;
+    /** 알림 제목 */
     title: string;
+    /** 알림 상세 메시지 */
     message: string;
+    /** 추가 데이터 (키ID, 사용률 등) */
     data?: Record<string, any>;
+    /** 알림 발생 시점 */
     timestamp: Date;
 }
 
-// 알림 설정 인터페이스
+/**
+ * 알림 시스템 설정 인터페이스
+ *
+ * @interface AlertConfig
+ */
 interface AlertConfig {
+    /** 알림 시스템 활성화 여부 */
     enabled: boolean;
+    /** 사용할 알림 채널 목록 */
     channels: AlertChannel[];
+    /** 이메일 발송 설정 (SMTP) */
     emailConfig?: {
+        /** SMTP 서버 호스트 */
         host: string;
+        /** SMTP 서버 포트 */
         port: number;
+        /** TLS/SSL 사용 여부 */
         secure: boolean;
+        /** SMTP 인증 정보 */
         auth: {
+            /** SMTP 사용자명 */
             user: string;
+            /** SMTP 비밀번호 */
             pass: string;
         };
+        /** 알림 수신자 이메일 목록 */
         recipients: string[];
     };
+    /** Webhook 발송 URL */
     webhookUrl?: string;
+    /** 알림 발동 임계값 설정 */
     thresholds: {
-        quotaWarningPercent: number;   // 70%
-        quotaCriticalPercent: number;  // 90%
-        responseTimeMs: number;        // 5000ms
-        errorRatePercent: number;      // 10%
+        /** 할당량 경고 임계값 (%, 기본 70%) */
+        quotaWarningPercent: number;
+        /** 할당량 위험 임계값 (%, 기본 90%) */
+        quotaCriticalPercent: number;
+        /** 응답 시간 임계값 (ms, 기본 5000ms) */
+        responseTimeMs: number;
+        /** 에러율 임계값 (%, 기본 10%) */
+        errorRatePercent: number;
     };
-    cooldownMinutes: number;  // 중복 알림 방지 (분)
+    /** 중복 알림 방지 쿨다운 시간 (분, 기본 15분) */
+    cooldownMinutes: number;
 }
 
 /**
  * 알림 시스템 클래스
+ *
+ * 다중 채널(콘솔, 이메일, Webhook)로 알림을 발송하며,
+ * 쿨다운 메커니즘으로 동일 타입/심각도의 중복 알림을 방지합니다.
+ * 알림 히스토리는 최대 100건까지 보관합니다.
+ *
+ * @class AlertSystem
  */
 export class AlertSystem {
+    /** 알림 시스템 설정 */
     private config: AlertConfig;
+    /** Nodemailer 이메일 전송기 */
     private transporter: Transporter | null = null;
+    /** 알림 타입별 마지막 발송 시간 (쿨다운 체크용) */
     private lastAlerts: Map<string, Date> = new Map();
+    /** 알림 히스토리 (최대 100건) */
     private alertHistory: AlertMessage[] = [];
 
+    /**
+     * AlertSystem 인스턴스를 생성합니다.
+     *
+     * 기본값: enabled=true, channels=['console'], cooldown=15분
+     * emailConfig가 제공되면 Nodemailer 전송기를 자동 초기화합니다.
+     *
+     * @param config - 알림 설정 (부분 지정 가능, 미지정 항목은 기본값 사용)
+     */
     constructor(config?: Partial<AlertConfig>) {
         this.config = {
             enabled: config?.enabled ?? true,
@@ -96,7 +159,16 @@ export class AlertSystem {
     }
 
     /**
-     * 알림 발송
+     * 알림을 발송합니다.
+     *
+     * 쿨다운 기간 내 동일 타입/심각도의 알림은 무시됩니다.
+     * 설정된 모든 채널로 순차 발송합니다.
+     *
+     * @param type - 알림 이벤트 타입
+     * @param severity - 심각도 레벨
+     * @param title - 알림 제목
+     * @param message - 알림 상세 메시지
+     * @param data - 추가 데이터 (선택)
      */
     async sendAlert(
         type: AlertType,
@@ -143,7 +215,11 @@ export class AlertSystem {
     }
 
     /**
-     * 채널별 알림 발송
+     * 지정된 채널로 알림을 발송합니다.
+     *
+     * @param channel - 발송 채널 (console/email/webhook)
+     * @param alert - 알림 메시지 객체
+     * @throws 채널 발송 실패 시 에러를 로깅하고 계속 진행
      */
     private async sendToChannel(channel: AlertChannel, alert: AlertMessage): Promise<void> {
         try {
@@ -164,7 +240,11 @@ export class AlertSystem {
     }
 
     /**
-     * 콘솔 알림
+     * 콘솔에 알림을 출력합니다.
+     *
+     * 심각도에 따라 이모지를 다르게 표시합니다.
+     *
+     * @param alert - 알림 메시지 객체
      */
     private sendConsoleAlert(alert: AlertMessage): void {
         const emoji = alert.severity === 'critical' ? '🚨' :
@@ -179,7 +259,12 @@ export class AlertSystem {
     }
 
     /**
-     * 이메일 알림
+     * 이메일로 알림을 발송합니다.
+     *
+     * Nodemailer를 통해 HTML 형식의 알림 이메일을 전송합니다.
+     * 전송기 또는 수신자가 설정되지 않으면 무시합니다.
+     *
+     * @param alert - 알림 메시지 객체
      */
     private async sendEmailAlert(alert: AlertMessage): Promise<void> {
         if (!this.transporter || !this.config.emailConfig?.recipients) return;
@@ -202,7 +287,13 @@ export class AlertSystem {
     }
 
     /**
-     * Webhook 알림
+     * Webhook으로 알림을 발송합니다.
+     *
+     * JSON 페이로드를 POST 요청으로 전송합니다.
+     * webhookUrl이 설정되지 않으면 무시합니다.
+     *
+     * @param alert - 알림 메시지 객체
+     * @throws Webhook 응답이 2xx가 아닌 경우 에러
      */
     private async sendWebhookAlert(alert: AlertMessage): Promise<void> {
         if (!this.config.webhookUrl) return;
@@ -234,7 +325,11 @@ export class AlertSystem {
     // ================================================
 
     /**
-     * 할당량 경고 알림
+     * API 할당량 경고 알림을 발송합니다.
+     *
+     * @param keyId - API 키 식별자
+     * @param usagePercent - 현재 사용률 (%)
+     * @param remaining - 남은 할당량
      */
     async alertQuotaWarning(keyId: string, usagePercent: number, remaining: number): Promise<void> {
         await this.sendAlert(
@@ -247,7 +342,11 @@ export class AlertSystem {
     }
 
     /**
-     * 할당량 위험 알림
+     * API 할당량 위험 알림을 발송합니다 (즉시 조치 필요).
+     *
+     * @param keyId - API 키 식별자
+     * @param usagePercent - 현재 사용률 (%)
+     * @param remaining - 남은 할당량
      */
     async alertQuotaCritical(keyId: string, usagePercent: number, remaining: number): Promise<void> {
         await this.sendAlert(
@@ -260,7 +359,9 @@ export class AlertSystem {
     }
 
     /**
-     * 키 소진 알림
+     * API 키 할당량 소진 알림을 발송합니다.
+     *
+     * @param keyId - 소진된 API 키 식별자
      */
     async alertKeyExhausted(keyId: string): Promise<void> {
         await this.sendAlert(
@@ -273,7 +374,10 @@ export class AlertSystem {
     }
 
     /**
-     * 응답시간 급증 알림
+     * 응답 시간 급증 알림을 발송합니다.
+     *
+     * @param avgResponseTime - 현재 평균 응답 시간 (ms)
+     * @param threshold - 임계값 (ms)
      */
     async alertResponseTimeSpike(avgResponseTime: number, threshold: number): Promise<void> {
         await this.sendAlert(
@@ -286,7 +390,10 @@ export class AlertSystem {
     }
 
     /**
-     * 에러율 급증 알림
+     * 에러율 급증 알림을 발송합니다.
+     *
+     * @param errorRate - 현재 에러율 (%)
+     * @param threshold - 임계값 (%)
      */
     async alertErrorRateSpike(errorRate: number, threshold: number): Promise<void> {
         await this.sendAlert(
@@ -299,14 +406,19 @@ export class AlertSystem {
     }
 
     /**
-     * 알림 히스토리 조회
+     * 알림 히스토리를 조회합니다.
+     *
+     * @param limit - 반환할 최대 알림 수 (기본값: 50)
+     * @returns 최근 알림 메시지 배열
      */
     getAlertHistory(limit: number = 50): AlertMessage[] {
         return this.alertHistory.slice(-limit);
     }
 
     /**
-     * 알림 시스템 상태 조회
+     * 알림 시스템 상태를 조회합니다.
+     *
+     * @returns 활성화 여부, 채널 목록, 히스토리 건수
      */
     getStatus(): { enabled: boolean; channels: AlertChannel[]; historyCount: number } {
         return {
@@ -317,9 +429,16 @@ export class AlertSystem {
     }
 }
 
-// 싱글톤 인스턴스
+/** 싱글톤 인스턴스 */
 let alertSystemInstance: AlertSystem | null = null;
 
+/**
+ * AlertSystem 싱글톤 인스턴스를 반환합니다.
+ *
+ * 최초 호출 시 기본 설정으로 인스턴스를 생성하고, 이후 동일 인스턴스를 재사용합니다.
+ *
+ * @returns AlertSystem 싱글톤 인스턴스
+ */
 export function getAlertSystem(): AlertSystem {
     if (!alertSystemInstance) {
         alertSystemInstance = new AlertSystem();
@@ -327,6 +446,14 @@ export function getAlertSystem(): AlertSystem {
     return alertSystemInstance;
 }
 
+/**
+ * 커스텀 설정으로 새로운 AlertSystem 인스턴스를 생성합니다.
+ *
+ * 싱글톤과 별개로 독립적인 인스턴스가 필요할 때 사용합니다.
+ *
+ * @param config - 알림 설정 (부분 지정 가능)
+ * @returns 새로운 AlertSystem 인스턴스
+ */
 export function createAlertSystem(config?: Partial<AlertConfig>): AlertSystem {
     return new AlertSystem(config);
 }

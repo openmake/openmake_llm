@@ -1,6 +1,25 @@
 /**
- * MCP (Model Context Protocol) 모듈 인덱스
- * 핵심 기능: Sequential Thinking, Web Search, PDF Tools, GitHub, Exa Search
+ * ============================================================
+ * MCP Module Index - Model Context Protocol 배럴 내보내기
+ * ============================================================
+ *
+ * MCP 모듈의 모든 공개 API를 하나의 진입점으로 내보냅니다.
+ * 외부 모듈에서 `import { ... } from './mcp'` 형식으로 사용합니다.
+ *
+ * @module mcp
+ * @description
+ * - Sequential Thinking: 단계별 추론 서버 및 헬퍼
+ * - MCP Server: JSON-RPC 2.0 기반 MCP 서버
+ * - Built-in Tools: 코드 검색, 비전, 웹 검색, Firecrawl
+ * - Web Search: 다중 소스 통합 웹 검색
+ * - Deep Research: 심층 연구 도구
+ * - Unified Client: 통합 MCP 클라이언트 (싱글톤)
+ * - Types: MCP 프로토콜 타입 정의
+ * - External MCP: 외부 서버 클라이언트, 레지스트리
+ * - Tool Router: 내장/외부 도구 통합 라우팅
+ * - Tool Tiers: 등급별 접근 제어
+ * - User Sandbox: 사용자 데이터 격리
+ * - Filesystem: 샌드박스 기반 파일시스템 도구
  */
 
 export {

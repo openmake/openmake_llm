@@ -1,9 +1,20 @@
 /**
- * User Manager
- * backend/api에서 사용하는 UserManager 래퍼
- * 
- * 🔒 보안 강화: bcrypt를 사용한 비밀번호 해싱 적용
- * 📦 PostgreSQL 기반 (unified-database 사용)
+ * ============================================================
+ * User Manager - 사용자 관리 및 인증
+ * ============================================================
+ *
+ * 사용자 계정의 전체 생명주기를 관리합니다.
+ * bcrypt 비밀번호 해싱과 PostgreSQL 기반 영속성을 제공합니다.
+ *
+ * @module data/user-manager
+ * @description
+ * - 사용자 CRUD (생성, 조회, 수정, 삭제)
+ * - bcrypt 기반 비밀번호 해싱 (12 라운드) 및 검증
+ * - 관리자 계정 자동 생성/마이그레이션 (ADMIN_PASSWORD 환경변수)
+ * - 역할 기반 접근 제어 (admin/user/guest)
+ * - MCP 도구 접근 등급 (free/pro/enterprise)
+ * - 사용자 삭제 시 의존 레코드 순서대로 정리 (FK cascade)
+ * - 싱글톤 접근: getUserManager()
  */
 
 import * as bcrypt from 'bcryptjs';
@@ -21,20 +32,39 @@ export type UserRole = 'admin' | 'user' | 'guest';
 // MCP 도구 접근 등급
 export type UserTier = 'free' | 'pro' | 'enterprise';
 
+/**
+ * 외부 노출용 사용자 정보 (password_hash 제외)
+ * @interface PublicUser
+ */
 export interface PublicUser {
+    /** 사용자 고유 식별자 */
     id: string;
+    /** 이메일 주소 (로그인 ID) */
     email: string;
+    /** 사용자 역할 */
     role: UserRole;
+    /** MCP 도구 접근 등급 */
     tier: UserTier;
+    /** 계정 생성 일시 */
     created_at: string;
+    /** 마지막 로그인 일시 */
     last_login?: string;
+    /** 계정 활성화 상태 */
     is_active: boolean;
 }
 
+/**
+ * 사용자 생성 요청 인터페이스
+ * @interface CreateUserInput
+ */
 export interface CreateUserInput {
+    /** 이메일 주소 (username과 동일하게 저장) */
     email: string;
+    /** 평문 비밀번호 (bcrypt로 해싱 후 저장) */
     password: string;
+    /** 사용자 역할 (기본값: 'user') */
     role?: UserRole;
+    /** MCP 접근 등급 (기본값: 'free', admin은 'enterprise') */
     tier?: UserTier;
 }
 
@@ -52,9 +82,20 @@ interface UserRow {
 }
 
 /**
- * PostgreSQL 기반 UserManager
+ * PostgreSQL 기반 사용자 관리 구현체
+ *
+ * @class UserManagerImpl
+ * @description
+ * - 초기화 시 스키마 마이그레이션 (tier 컬럼 추가) 및 관리자 계정 보장
+ * - bcrypt 12라운드 해싱으로 비밀번호 보호
+ * - pg_advisory_xact_lock을 사용한 동시 사용자 생성 race condition 방지
+ * - 사용자 삭제 시 FK 순서에 따른 의존 레코드 정리
  */
 class UserManagerImpl {
+    /**
+     * UserManagerImpl 인스턴스를 생성합니다.
+     * 비동기로 스키마 확인 및 관리자 계정 보장을 수행합니다.
+     */
     constructor() {
         this.init().catch(err => logger.error('[UserManager] Init failed:', err));
     }
@@ -414,8 +455,14 @@ class UserManagerImpl {
     }
 }
 
+/** 싱글톤 인스턴스 */
 let userManagerInstance: UserManagerImpl | null = null;
 
+/**
+ * UserManager 싱글톤 인스턴스를 반환합니다.
+ *
+ * @returns UserManagerImpl 인스턴스
+ */
 export function getUserManager(): UserManagerImpl {
     if (!userManagerInstance) userManagerInstance = new UserManagerImpl();
     return userManagerInstance;

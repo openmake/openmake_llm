@@ -1,13 +1,36 @@
+/**
+ * ============================================
+ * API Keys Page - API 키 관리
+ * ============================================
+ * 외부 서비스 연동을 위한 API 키의 생성, 조회, 재발급(rotate),
+ * 삭제를 관리하는 SPA 페이지 모듈입니다.
+ * 글래스모피즘 UI와 빠른 시작 코드 예제를 제공합니다.
+ *
+ * @module pages/api-keys
+ */
 (function() {
     'use strict';
     window.PageModules = window.PageModules || {};
+    /** @type {number[]} setInterval ID 배열 (cleanup용) */
     var _intervals = [];
+    /** @type {number[]} setTimeout ID 배열 (cleanup용) */
     var _timeouts = [];
 
-    // Helper: Escape HTML
+    /**
+     * HTML 이스케이프 헬퍼
+     * @param {string} s - 이스케이프할 문자열
+     * @returns {string} 이스케이프된 문자열
+     */
     function esc(s) { var d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
 
-    // Helper: API Fetch
+    /**
+     * 인증된 API 요청 헬퍼
+     * Authorization 헤더와 credentials를 자동으로 포함합니다.
+     * @param {string} url - 요청 URL
+     * @param {Object} [options] - fetch 옵션
+     * @returns {Promise<Object>} 파싱된 JSON 응답
+     * @throws {Error} HTTP 오류 시
+     */
     async function apiFetch(url, options) {
         var authToken = window.SafeStorage
             ? window.SafeStorage.getItem('authToken')

@@ -1,27 +1,33 @@
 /**
  * ============================================
- * Offline Indicator Component
- * 
- * 네트워크 연결 상태를 표시하는 고정 배너
- * - 오프라인 상태를 amber/orange 배너로 표시
- * - 2초 debounce로 깜빡임 방지
- * - 온라인 복구 시 즉시 숨김
- * 
- * 의존성: 없음 (순수 vanilla JS)
+ * Offline Indicator - 네트워크 상태 표시 컴포넌트
  * ============================================
+ * 네트워크 연결 상태를 화면 상단 고정 배너로 표시합니다.
+ * 오프라인 시 amber/orange 배너 표시(2초 디바운스),
+ * 온라인 복구 시 즉시 숨김 처리됩니다.
+ * 의존성 없이 순수 Vanilla JS로 구현되었습니다.
+ *
+ * @module components/offline-indicator
  */
 
 (function () {
     'use strict';
 
+    /** @type {string} 콘솔 로그 접두사 */
     var LOG_PREFIX = '[OfflineIndicator]';
-    var DEBOUNCE_DELAY = 2000; // 2초 debounce
+    /** @type {number} 오프라인 배너 표시 디바운스 지연 시간 (ms) */
+    var DEBOUNCE_DELAY = 2000;
+    /** @type {number|null} 디바운스 타이머 ID */
     var debounceTimer = null;
+    /** @type {boolean} 현재 오프라인 상태 */
     var isOfflineState = false;
+    /** @type {HTMLElement|null} 배너 DOM 요소 */
     var bannerEl = null;
 
     /**
-     * 스타일 주입
+     * 오프라인 배너 CSS 스타일을 head에 주입
+     * 중복 주입을 방지합니다.
+     * @returns {void}
      */
     function injectStyles() {
         if (document.getElementById('offline-indicator-styles')) {
@@ -108,7 +114,8 @@
     }
 
     /**
-     * 배너 생성
+     * 오프라인 배너 DOM 요소 생성
+     * @returns {HTMLElement} 생성된 배너 요소
      */
     function createBanner() {
         if (bannerEl) {
@@ -126,7 +133,9 @@
     }
 
     /**
-     * 배너 표시 (debounce 적용)
+     * 오프라인 배너 표시 (DEBOUNCE_DELAY 적용)
+     * 짧은 연결 끊김을 필터링하여 깜빡임을 방지합니다.
+     * @returns {void}
      */
     function show() {
         // 기존 debounce 타이머 취소
@@ -166,7 +175,8 @@
     }
 
     /**
-     * 배너 숨김 (즉시)
+     * 오프라인 배너 즉시 숨김 (디바운스 타이머 취소 후 애니메이션 숨김)
+     * @returns {void}
      */
     function hide() {
         // debounce 타이머 취소
@@ -199,13 +209,16 @@
 
     /**
      * 현재 오프라인 상태 확인
+     * @returns {boolean} 오프라인 상태 여부
      */
     function getIsOffline() {
         return isOfflineState;
     }
 
     /**
-     * 초기화
+     * 오프라인 인디케이터 초기화
+     * 스타일 주입, 배너 생성, 초기 상태 확인, 이벤트 리스너 등록을 수행합니다.
+     * @returns {void}
      */
     function initOfflineIndicator() {
         injectStyles();

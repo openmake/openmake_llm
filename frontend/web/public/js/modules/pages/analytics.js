@@ -1,6 +1,12 @@
 /**
- * analytics - SPA Page Module
- * Auto-generated from analytics.html
+ * ============================================
+ * Analytics Page - 분석 대시보드
+ * ============================================
+ * 시스템 건강 상태, 비용 분석, 피드백 통계, 에이전트 성능,
+ * 피크 시간대, 인기 쿼리 등 종합 분석 데이터를 표시하는
+ * SPA 페이지 모듈입니다. 60초 주기로 자동 갱신됩니다.
+ *
+ * @module pages/analytics
  */
 (function() {
     'use strict';

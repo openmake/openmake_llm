@@ -1,9 +1,22 @@
 /**
- * @file guide_content.js
- * @description LLM 사용자 가이드의 동적 콘텐츠 데이터
+ * ============================================
+ * Guide Content - 사용자 가이드 콘텐츠 데이터
+ * ============================================
+ * LLM 사용자 가이드의 동적 콘텐츠 데이터를 정의합니다.
+ * 자동 프롬프트 감지, 명령어, 프롬프트 모드 등의 가이드 섹션을 포함합니다.
  * 기능 변경 시 이 파일의 내용을 수정하여 매뉴얼을 최신화하십시오.
+ *
+ * @module guide-content
  */
 
+/**
+ * 사용자 가이드 데이터 객체
+ * @type {Object}
+ * @property {string} title - 가이드 제목
+ * @property {string} version - 가이드 버전
+ * @property {Array<Object>} sections - 가이드 섹션 목록
+ * @property {string} footer - 가이드 하단 안내 문구
+ */
 const GUIDE_DATA = {
     title: "OpenMake.Ai 사용자 가이드",
     version: "1.2",

@@ -1,3 +1,16 @@
+/**
+ * ============================================================
+ * Review Command - 코드 리뷰 CLI 명령
+ * ============================================================
+ *
+ * 지정된 파일의 코드를 LLM에 전달하여 코드 리뷰를 수행합니다.
+ * 코드 품질 점수, 문제점, 개선 제안, 장점을 포함한 결과를 출력합니다.
+ *
+ * @module commands/review
+ * @example
+ * node cli.js review ./src/app.ts
+ * node cli.js review ./utils/helper.py
+ */
 import * as fs from 'fs';
 import * as path from 'path';
 import chalk from 'chalk';
@@ -6,6 +19,12 @@ import { getSystemPrompt } from '../chat/prompt';
 import { createSpinner } from '../ui/spinner';
 import { formatCodeBlock, detectLanguage } from '../ui/highlight';
 
+/**
+ * 파일의 코드를 LLM으로 리뷰합니다.
+ * 코드 품질(1-10점), 문제점, 개선 제안, 장점을 스트리밍 출력합니다.
+ * @param client - Ollama 클라이언트 인스턴스
+ * @param filePath - 리뷰할 파일 경로
+ */
 export async function reviewFile(client: OllamaClient, filePath: string): Promise<void> {
     const absolutePath = path.resolve(filePath);
 

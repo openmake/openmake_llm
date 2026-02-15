@@ -1,31 +1,59 @@
 /**
  * ============================================
- * Ollama LLM Dashboard - Shared Sidebar Component
- * 모든 페이지에서 재사용 가능한 사이드바 컴포넌트
+ * SharedSidebar - 레거시 네비게이션 사이드바
  * ============================================
+ * 모든 페이지에서 재사용 가능한 네비게이션 사이드바 컴포넌트입니다.
+ * NAV_ITEMS 설정을 기반으로 메뉴/관리 섹션을 렌더링하고
+ * 인증 상태에 따라 항목을 필터링합니다.
+ * (UnifiedSidebar가 주 사이드바이며, 이 컴포넌트는 레거시 호환용)
+ *
+ * @module components/sidebar
  */
 
+/**
+ * 레거시 공유 사이드바 클래스
+ * @class
+ */
 class SharedSidebar {
+    /**
+     * SharedSidebar 생성자
+     * 현재 페이지 경로를 저장합니다.
+     */
     constructor() {
         this.currentPage = window.location.pathname;
     }
 
-    // 인증 상태 확인 (OAuth 쿠키 세션도 포함)
+    /**
+     * 로그인 상태 확인 (OAuth 쿠키 세션 포함)
+     * @returns {boolean} 로그인 여부
+     */
     isLoggedIn() {
         const authToken = localStorage.getItem('authToken');
         const user = localStorage.getItem('user');
         return !!authToken || !!user;
     }
 
+    /**
+     * 게스트 모드 확인
+     * @returns {boolean} 게스트 모드 여부
+     */
     isGuestMode() {
         return localStorage.getItem('isGuest') === 'true';
     }
 
-    // 인증된 사용자 (로그인 사용자, 게스트 제외)
+    /**
+     * 인증된 사용자 확인 (로그인 사용자, 게스트 제외)
+     * @returns {boolean} 인증 여부
+     */
     isAuthenticated() {
         return this.isLoggedIn() && !this.isGuestMode();
     }
 
+    /**
+     * 인증 상태에 따라 필터링된 네비게이션 항목 반환
+     * NAV_ITEMS 전역이 있으면 사용하고, 없으면 하드코딩된 폴백을 사용합니다.
+     * @returns {Array<{section: string, items: Array}>} 섹션별 메뉴 항목 배열
+     */
     getNavItems() {
         const isAuth = this.isAuthenticated();
 

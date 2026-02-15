@@ -1,6 +1,20 @@
 /**
- * API Usage Tracker
- * 🆕 일간/주간 API 사용량 추적 및 통계
+ * ============================================================
+ * ApiUsageTracker - API 사용량 추적 및 쿼터 관리
+ * ============================================================
+ *
+ * 일간/주간 API 사용량을 파일 기반으로 추적하고,
+ * 할당량(쿼터) 상태를 실시간으로 모니터링합니다.
+ *
+ * @module ollama/api-usage-tracker
+ * @description
+ * - 일간/주간/전체 기간 사용량 통계 (요청 수, 토큰 수, 에러 수, 평균 응답 시간)
+ * - 시간별(hourly) 사용량 세분화 추적
+ * - 모델별/프로파일(brand alias)별 사용량 분류
+ * - 개별 API 키별 사용량 추적 (시간/주간 리셋)
+ * - 할당량 상태 조회 및 경고 레벨 계산 (safe/warning/critical)
+ * - 디바운스 기반 파일 저장 (1초 간격)
+ * - 90일 이상 오래된 데이터 자동 정리
  */
 
 import * as fs from 'fs';
@@ -8,98 +22,187 @@ import * as path from 'path';
 import { getApiKeyManager } from './api-key-manager';
 import { getConfig } from '../config/env';
 
+/**
+ * 일간 사용량 기록
+ * @interface UsageRecord
+ */
 interface UsageRecord {
-    date: string;        // YYYY-MM-DD
-    requests: number;
-    tokens: number;
-    errors: number;
-    avgResponseTime: number;
-    models: Record<string, number>;  // 모델별 사용량
-    profiles?: Record<string, number>; // §9 프로파일(brand alias)별 사용량
-}
-
-interface HourlyRecord {
-    hour: number;        // 0-23
-    requests: number;
-    tokens: number;
-}
-
-interface DailyStats {
+    /** 기록 날짜 (YYYY-MM-DD 형식) */
     date: string;
-    totalRequests: number;
-    totalTokens: number;
-    totalErrors: number;
+    /** 총 요청 횟수 */
+    requests: number;
+    /** 총 사용 토큰 수 */
+    tokens: number;
+    /** 에러 발생 횟수 */
+    errors: number;
+    /** 평균 응답 시간 (밀리초) */
     avgResponseTime: number;
+    /** 모델별 요청 횟수 (모델명 -> 횟수) */
+    models: Record<string, number>;
+    /** Pipeline Profile(brand alias)별 요청 횟수 */
+    profiles?: Record<string, number>;
+}
+
+/**
+ * 시간별 사용량 기록
+ * @interface HourlyRecord
+ */
+interface HourlyRecord {
+    /** 시간 (0-23) */
+    hour: number;
+    /** 해당 시간 요청 횟수 */
+    requests: number;
+    /** 해당 시간 토큰 수 */
+    tokens: number;
+}
+
+/**
+ * 일간 통계 요약
+ * @interface DailyStats
+ */
+interface DailyStats {
+    /** 날짜 (YYYY-MM-DD) */
+    date: string;
+    /** 총 요청 횟수 */
+    totalRequests: number;
+    /** 총 토큰 수 */
+    totalTokens: number;
+    /** 총 에러 수 */
+    totalErrors: number;
+    /** 평균 응답 시간 (밀리초) */
+    avgResponseTime: number;
+    /** 시간별 세분화 데이터 (24개 항목) */
     hourlyBreakdown: HourlyRecord[];
+    /** 모델별 사용량 */
     modelUsage: Record<string, number>;
 }
 
+/**
+ * 주간 통계 요약
+ * @interface WeeklyStats
+ */
 interface WeeklyStats {
+    /** 주간 시작일 (YYYY-MM-DD) */
     weekStart: string;
+    /** 주간 종료일 (YYYY-MM-DD) */
     weekEnd: string;
+    /** 총 요청 횟수 */
     totalRequests: number;
+    /** 총 토큰 수 */
     totalTokens: number;
+    /** 총 에러 수 */
     totalErrors: number;
+    /** 평균 응답 시간 (밀리초) */
     avgResponseTime: number;
+    /** 일별 세분화 데이터 */
     dailyBreakdown: UsageRecord[];
 }
 
+/**
+ * 파일에 저장되는 사용량 데이터 구조
+ * @interface UsageData
+ */
 interface UsageData {
+    /** 일별 사용량 기록 (날짜 -> UsageRecord) */
     daily: Record<string, UsageRecord>;
+    /** 마지막 데이터 갱신 시각 (ISO 8601) */
     lastUpdated: string;
-    // 🆕 키별 사용량 추적
+    /** 개별 API 키별 사용량 통계 (키ID -> KeyUsageStats) */
     perKey?: Record<string, KeyUsageStats>;
 }
 
-// 🆕 개별 API 키 사용량 통계
+/**
+ * 개별 API 키 사용량 통계
+ * @interface KeyUsageStats
+ */
 interface KeyUsageStats {
-    keyId: string;       // 키 식별자 (앞 8자)
+    /** 키 식별자 (앞 8자리) */
+    keyId: string;
+    /** 전체 기간 총 요청 수 */
     totalRequests: number;
+    /** 주간 요청 수 (7일마다 리셋) */
     weeklyRequests: number;
+    /** 시간별 요청 수 (매 시간 리셋) */
     hourlyRequests: number;
-    lastReset: string;   // ISO 날짜
-    lastHourReset: number; // 시간 (0-23)
+    /** 마지막 주간 리셋 날짜 (ISO 날짜) */
+    lastReset: string;
+    /** 마지막 시간 리셋 시각 (0-23) */
+    lastHourReset: number;
 }
 
-// 🆕 API 사용량 한계 설정
+/**
+ * API 사용량 한계 설정
+ * @interface QuotaLimits
+ */
 interface QuotaLimits {
+    /** 시간당 최대 요청 수 */
     hourlyLimit: number;
+    /** 주간 최대 요청 수 */
     weeklyLimit: number;
+    /** 프리미엄 월간 최대 요청 수 */
     monthlyPremiumLimit: number;
 }
 
+/**
+ * 할당량 사용 현황 (개별 기간)
+ * @interface QuotaUsage
+ */
 interface QuotaUsage {
+    /** 사용량 */
     used: number;
+    /** 한계값 */
     limit: number;
+    /** 사용률 (%) */
     percentage: number;
+    /** 남은 횟수 */
     remaining: number;
 }
 
-// 🆕 개별 키 할당량 상태
+/**
+ * 개별 API 키의 할당량 상태
+ * @interface KeyQuotaStatus
+ */
 interface KeyQuotaStatus {
+    /** 키 식별자 (앞 8자리) */
     keyId: string;
+    /** 현재 활성 키 여부 */
     isActive: boolean;
+    /** 시간별 할당량 상태 */
     hourly: QuotaUsage;
+    /** 주간 할당량 상태 */
     weekly: QuotaUsage;
+    /** 할당량 소진 여부 */
     isExhausted: boolean;
 }
 
+/**
+ * 전체 할당량(쿼터) 상태 — 시간별/주간/일간 + 개별 키 상태
+ * @interface QuotaStatus
+ */
 interface QuotaStatus {
+    /** 시간별 할당량 상태 (모든 키 합산) */
     hourly: QuotaUsage;
+    /** 주간 할당량 상태 (모든 키 합산) */
     weekly: QuotaUsage;
+    /** 일간 추정 할당량 상태 */
     daily: QuotaUsage;
+    /** 한계 초과 여부 */
     isOverLimit: boolean;
+    /** 경고 레벨 (safe: <70%, warning: 70-90%, critical: >90%) */
     warningLevel: 'safe' | 'warning' | 'critical';
-    // 🆕 개별 키 상태
+    /** 개별 키 할당량 상태 */
     keys?: {
         primary: KeyQuotaStatus;
         secondary: KeyQuotaStatus;
     };
+    /** 현재 활성 키 ID */
     activeKey?: string;
 }
 
 /**
- * 🆕 환경변수에서 할당량 한계 로드
+ * 환경변수에서 API 할당량 한계 설정을 로드합니다.
+ *
+ * @returns 시간별/주간/월간 프리미엄 한계값
  */
 function getQuotaLimits(): QuotaLimits {
     const config = getConfig();
@@ -111,18 +214,41 @@ function getQuotaLimits(): QuotaLimits {
 }
 
 /**
- * 🆕 API 키 ID 생성 (앞 8자)
+ * API 키의 앞 8자리로 식별자를 생성합니다.
+ *
+ * @param key - API 키 전체 문자열
+ * @returns 키 식별자 (앞 8자리) 또는 'unknown'
  */
 function getKeyId(key: string): string {
     return key ? key.substring(0, 8) : 'unknown';
 }
 
+/**
+ * API 사용량 추적기 클래스
+ *
+ * 파일 기반(JSON)으로 일간/주간/시간별 사용량을 기록하고,
+ * 할당량 상태를 실시간으로 모니터링합니다.
+ * 디바운스(1초)로 빈번한 파일 저장을 최적화합니다.
+ *
+ * @class ApiUsageTracker
+ */
 class ApiUsageTracker {
+    /** 사용량 데이터 JSON 파일 경로 */
     private dataPath: string;
+    /** 메모리 내 사용량 데이터 */
     private data: UsageData;
+    /** 오늘의 시간별 사용량 기록 (24개 슬롯) */
     private todayHourly: HourlyRecord[] = [];
+    /** 파일 저장 디바운스 타이머 */
     private saveDebounceTimer: NodeJS.Timeout | null = null;
 
+    /**
+     * ApiUsageTracker 인스턴스를 생성합니다.
+     *
+     * 기존 데이터 파일을 로드하고 시간별 기록을 초기화합니다.
+     *
+     * @param dataDir - 데이터 파일 저장 디렉토리 경로 (기본값: './data')
+     */
     constructor(dataDir: string = './data') {
         this.dataPath = path.join(dataDir, 'api-usage.json');
         this.data = this.loadData();
@@ -130,6 +256,13 @@ class ApiUsageTracker {
         console.log('[ApiUsageTracker] 초기화됨');
     }
 
+    /**
+     * 파일에서 사용량 데이터를 로드합니다.
+     * 파일이 없거나 파싱 실패 시 빈 데이터를 반환합니다.
+     *
+     * @returns 로드된 UsageData 또는 초기 빈 데이터
+     * @private
+     */
     private loadData(): UsageData {
         try {
             if (fs.existsSync(this.dataPath)) {
@@ -142,6 +275,14 @@ class ApiUsageTracker {
         return { daily: {}, lastUpdated: new Date().toISOString() };
     }
 
+    /**
+     * 사용량 데이터를 파일에 저장합니다 (디바운스 적용).
+     *
+     * 1초 내에 여러 번 호출되면 마지막 호출만 실제로 저장합니다.
+     * 디렉토리가 없으면 자동 생성합니다.
+     *
+     * @private
+     */
     private saveData(): void {
         // 디바운스로 너무 빈번한 저장 방지
         if (this.saveDebounceTimer) {
@@ -161,6 +302,10 @@ class ApiUsageTracker {
         }, 1000);
     }
 
+    /**
+     * 시간별 기록 배열을 24개 슬롯(0~23시)으로 초기화합니다.
+     * @private
+     */
     private initHourlyRecords(): void {
         this.todayHourly = Array.from({ length: 24 }, (_, hour) => ({
             hour,
@@ -169,10 +314,21 @@ class ApiUsageTracker {
         }));
     }
 
+    /**
+     * 오늘 날짜를 YYYY-MM-DD 형식 문자열로 반환합니다.
+     * @returns 오늘 날짜 문자열
+     * @private
+     */
     private getToday(): string {
         return new Date().toISOString().split('T')[0];
     }
 
+    /**
+     * 오늘 날짜의 UsageRecord가 존재하는지 확인하고, 없으면 생성합니다.
+     *
+     * @returns 오늘의 UsageRecord 참조
+     * @private
+     */
     private ensureTodayRecord(): UsageRecord {
         const today = this.getToday();
         if (!this.data.daily[today]) {
@@ -254,7 +410,14 @@ class ApiUsageTracker {
     }
 
     /**
-     * 🆕 개별 API 키 사용량 기록
+     * 개별 API 키의 사용량을 기록합니다.
+     *
+     * 시간 리셋: 현재 시각이 마지막 기록 시각과 다르면 hourlyRequests 초기화
+     * 주간 리셋: 마지막 리셋일로부터 7일 이상 경과 시 weeklyRequests 초기화
+     *
+     * @param keyId - API 키 식별자 (앞 8자리)
+     * @param currentHour - 현재 시각 (0-23)
+     * @private
      */
     private recordKeyUsage(keyId: string, currentHour: number): void {
         if (!this.data.perKey) {
@@ -296,7 +459,11 @@ class ApiUsageTracker {
     }
 
     /**
-     * 🆕 개별 키 할당량 상태 조회
+     * 개별 API 키의 할당량 상태를 조회합니다.
+     *
+     * @param keyId - API 키 식별자 (앞 8자리)
+     * @param isActive - 현재 활성 키 여부
+     * @returns 키별 시간/주간 할당량 상태 및 소진 여부
      */
     getKeyQuotaStatus(keyId: string, isActive: boolean): KeyQuotaStatus {
         const limits = getQuotaLimits();
@@ -350,7 +517,13 @@ class ApiUsageTracker {
     }
 
     /**
-     * 일간 통계 조회 (최근 N일)
+     * 최근 N일간의 일간 통계를 조회합니다.
+     *
+     * 데이터가 없는 날짜는 0으로 채워진 빈 레코드로 반환합니다.
+     * 결과는 오래된 순서(오름차순)로 정렬됩니다.
+     *
+     * @param days - 조회할 일수 (기본값: 7)
+     * @returns 일간 사용량 기록 배열 (오래된 순)
      */
     getDailyStats(days: number = 7): UsageRecord[] {
         const result: UsageRecord[] = [];
@@ -556,7 +729,9 @@ class ApiUsageTracker {
     }
 
     /**
-     * 오래된 데이터 정리 (90일 이상)
+     * 보관 기간이 지난 오래된 데이터를 정리합니다.
+     *
+     * @param retentionDays - 데이터 보관 일수 (기본값: 90일)
      */
     cleanup(retentionDays: number = 90): void {
         const cutoffDate = new Date();
@@ -578,9 +753,19 @@ class ApiUsageTracker {
     }
 }
 
-// 싱글톤 인스턴스
+// ============================================
+// 싱글톤 인스턴스 관리
+// ============================================
+
+/** ApiUsageTracker 싱글톤 인스턴스 */
 let tracker: ApiUsageTracker | null = null;
 
+/**
+ * ApiUsageTracker 싱글톤 인스턴스를 반환합니다.
+ * 최초 호출 시 인스턴스를 생성하고 기존 데이터를 로드합니다.
+ *
+ * @returns ApiUsageTracker 싱글톤 인스턴스
+ */
 export function getApiUsageTracker(): ApiUsageTracker {
     if (!tracker) {
         tracker = new ApiUsageTracker();

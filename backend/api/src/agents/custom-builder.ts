@@ -1,6 +1,22 @@
 /**
- * 🆕 커스텀 에이전트 빌더
- * 사용자 정의 에이전트 생성, 복제, A/B 테스트
+ * ============================================================
+ * Custom Agent Builder - 사용자 정의 에이전트 생성, 복제, A/B 테스트
+ * ============================================================
+ * 
+ * 사용자가 커스텀 에이전트를 생성, 수정, 삭제, 복제할 수 있는 빌더 시스템입니다.
+ * PostgreSQL에 에이전트 설정을 영속화하고, 프롬프트 파일을 디스크에 저장합니다.
+ * A/B 테스트 기능으로 에이전트 성능 비교가 가능합니다.
+ * 
+ * @module agents/custom-builder
+ * @description
+ * - CRUD: createAgent(), updateAgent(), deleteAgent(), getAllCustomAgents()
+ * - 복제: cloneAgent() - 기존 에이전트를 복제하여 수정
+ * - A/B 테스트: startABTest(), recordABTestResult(), completeABTest()
+ * - 보안: sanitizeAgentId()로 경로 순회 공격 방지, validatePathWithinDir()로 디렉토리 이탈 방지
+ * - DB 연동: custom_agents 테이블에 영속화, 시작 시 자동 로드
+ * - 프롬프트 파일: agents/prompts/ 디렉토리에 마크다운 파일로 저장
+ * 
+ * @see agents/index.ts - getEnabledAgentsAsAgents()로 활성 에이전트를 Agent 형식으로 제공
  */
 
 import * as fs from 'fs';
@@ -41,7 +57,10 @@ export function validatePathWithinDir(filePath: string, baseDir: string): void {
 
 const logger = createLogger('CustomAgentBuilder');
 
-// 커스텀 에이전트 설정
+/**
+ * 커스텀 에이전트 설정 인터페이스
+ * DB의 custom_agents 테이블 스키마와 매핑됩니다.
+ */
 interface CustomAgentConfig {
     id: string;
     name: string;
@@ -58,7 +77,10 @@ interface CustomAgentConfig {
     enabled: boolean;
 }
 
-// A/B 테스트 결과
+/**
+ * A/B 테스트 결과 인터페이스
+ * 두 에이전트 간 성능 비교 결과를 저장합니다.
+ */
 interface ABTestResult {
     testId: string;
     agentA: string;
@@ -81,7 +103,12 @@ interface ABTestResult {
 }
 
 /**
- * 커스텀 에이전트 빌더
+ * 커스텀 에이전트 빌더 클래스
+ * 
+ * 사용자 정의 에이전트의 전체 라이프사이클을 관리합니다.
+ * 싱글톤 패턴으로 getCustomAgentBuilder()를 통해 인스턴스에 접근합니다.
+ * 
+ * @class CustomAgentBuilder
  */
 export class CustomAgentBuilder {
     private customAgents: Map<string, CustomAgentConfig> = new Map();
@@ -483,6 +510,12 @@ export class CustomAgentBuilder {
 // 싱글톤 인스턴스
 let builderInstance: CustomAgentBuilder | null = null;
 
+/**
+ * CustomAgentBuilder 싱글톤 인스턴스를 반환합니다.
+ * 최초 호출 시 인스턴스를 생성하고 DB에서 커스텀 에이전트를 로드합니다.
+ * 
+ * @returns CustomAgentBuilder 싱글톤 인스턴스
+ */
 export function getCustomAgentBuilder(): CustomAgentBuilder {
     if (!builderInstance) {
         builderInstance = new CustomAgentBuilder();

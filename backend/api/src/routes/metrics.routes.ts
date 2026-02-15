@@ -1,6 +1,33 @@
 /**
- * 🆕 메트릭스 라우트
- * 시스템 메트릭, 분석. 알림 API
+ * ============================================================
+ * Metrics Routes - 시스템 메트릭 및 모니터링 API 라우트
+ * ============================================================
+ *
+ * 시스템 성능 메트릭, API 사용량, 분석 대시보드, 알림 히스토리,
+ * 캐시 통계, 연결 풀 상태, 헬스 체크 등 운영 모니터링 전반을
+ * 제공합니다. 모든 엔드포인트는 관리자(admin) 전용입니다.
+ *
+ * @module routes/metrics.routes
+ * @description
+ * - GET  /api/metrics               - 시스템 메트릭 (채팅, 시스템, 클러스터, 에이전트, 사용량)
+ * - GET  /api/metrics/metrics       - 상세 시스템 메트릭 (CPU, 메모리, 캐시)
+ * - GET  /api/metrics/usage         - API 사용량 요약
+ * - GET  /api/metrics/usage/daily   - 일별 사용량
+ * - GET  /api/metrics/analytics     - 종합 분석 대시보드
+ * - GET  /api/metrics/analytics/agents   - 에이전트 성능 분석
+ * - GET  /api/metrics/analytics/behavior - 사용자 행동 분석
+ * - GET  /api/metrics/analytics/cost     - 비용 분석
+ * - GET  /api/metrics/alerts        - 알림 히스토리
+ * - GET  /api/metrics/cache/stats   - 캐시 통계
+ * - POST /api/metrics/cache/clear   - 캐시 초기화
+ * - GET  /api/metrics/pool/stats    - 연결 풀 통계
+ * - GET  /api/metrics/health        - 시스템 헬스 체크
+ *
+ * @requires requireAuth - JWT 인증 미들웨어
+ * @requires requireAdmin - 관리자 권한 미들웨어
+ * @requires ApiUsageTracker - API 사용량 추적기
+ * @requires AnalyticsSystem - 분석 시스템
+ * @requires AlertSystem - 알림 시스템
  */
 
 import { Router, Request, Response } from 'express';
