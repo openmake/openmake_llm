@@ -1,7 +1,20 @@
 /**
- * Unified Error Handler
- * Standardized error handling across all routes
- * 
+ * ============================================================
+ * Error Handler - 통합 에러 처리 시스템
+ * ============================================================
+ *
+ * 애플리케이션 전역의 에러를 표준화된 형식으로 처리합니다.
+ * 커스텀 에러 클래스 계층과 Express 에러 미들웨어를 제공합니다.
+ *
+ * @module utils/error-handler
+ * @description
+ * - AppError: 기본 애플리케이션 에러 (상태코드, 운영 에러 여부)
+ * - ValidationError (400), AuthenticationError (401), AuthorizationError (403)
+ * - NotFoundError (404), RateLimitError (429), DatabaseError (500)
+ * - errorHandler: Express 글로벌 에러 미들웨어 (MulterError, QuotaExceeded 통합)
+ * - asyncHandler: async 라우트 핸들러 에러 캐처 래퍼
+ * - notFoundHandler: 404 라우트 핸들러
+ *
  * #24 연동: api-response 표준 형식 사용
  */
 

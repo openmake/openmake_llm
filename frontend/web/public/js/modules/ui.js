@@ -1,13 +1,21 @@
 /**
- * UI Components Module
- * UI 컴포넌트 및 DOM 조작을 담당합니다.
+ * ============================================
+ * UI Components - UI 유틸리티 및 DOM 조작
+ * ============================================
+ * 테마 관리(light/dark/system), 사이드바 토글, 모달 제어,
+ * 토스트 알림, HTML 이스케이프, 마크다운 렌더링 등
+ * 공통 UI 유틸리티 함수를 제공합니다.
+ *
+ * @module ui
  */
 
 import { getState, setState } from './state.js';
 
 /**
  * 테마 적용
- * @param {string} theme - 테마 (light, dark, system)
+ * system 모드인 경우 OS 설정(prefers-color-scheme)을 감지하여 자동 적용합니다.
+ * @param {string} theme - 테마 ('light' | 'dark' | 'system')
+ * @returns {void}
  */
 function applyTheme(theme) {
     if (theme === 'system') {
@@ -19,7 +27,9 @@ function applyTheme(theme) {
 }
 
 /**
- * 테마 토글
+ * 현재 테마를 dark/light 간 토글
+ * localStorage에 설정을 저장합니다.
+ * @returns {void}
  */
 function toggleTheme() {
     const currentTheme = document.documentElement.getAttribute('data-theme');
@@ -29,8 +39,10 @@ function toggleTheme() {
 }
 
 /**
- * 테마 설정
- * @param {string} theme - 테마
+ * 테마 설정 및 버튼 상태 동기화
+ * localStorage에 저장하고 테마를 적용한 후 버튼 활성 상태를 업데이트합니다.
+ * @param {string} theme - 테마 ('light' | 'dark' | 'system')
+ * @returns {void}
  */
 function setTheme(theme) {
     localStorage.setItem('theme', theme);
@@ -39,7 +51,9 @@ function setTheme(theme) {
 }
 
 /**
- * 테마 버튼 상태 업데이트
+ * 테마 선택 버튼의 active 클래스 동기화
+ * @param {string} theme - 현재 활성 테마
+ * @returns {void}
  */
 function updateThemeButtonStates(theme) {
     const buttons = ['theme-light', 'theme-dark', 'theme-system'];
@@ -52,7 +66,8 @@ function updateThemeButtonStates(theme) {
 }
 
 /**
- * 사이드바 토글
+ * 데스크탑 사이드바 접기/펼치기 토글
+ * @returns {void}
  */
 function toggleSidebar() {
     const sidebar = document.getElementById('sidebar');
@@ -62,7 +77,9 @@ function toggleSidebar() {
 }
 
 /**
- * 모바일 사이드바 토글
+ * 모바일 사이드바 열기/닫기 토글
+ * 열기 시 배경 오버레이를 생성하고, 닫기 시 페이드아웃 후 제거합니다.
+ * @returns {void}
  */
 function toggleMobileSidebar() {
     const sidebar = document.getElementById('sidebar');
@@ -92,7 +109,9 @@ function toggleMobileSidebar() {
 
 /**
  * 모달 열기
- * @param {string} modalId - 모달 ID
+ * 대상 요소에 'active' 클래스를 추가합니다.
+ * @param {string} modalId - 열 모달의 DOM ID
+ * @returns {void}
  */
 function openModal(modalId) {
     const modal = document.getElementById(modalId);
@@ -103,7 +122,9 @@ function openModal(modalId) {
 
 /**
  * 모달 닫기
- * @param {string} modalId - 모달 ID
+ * 대상 요소에서 'active' 클래스를 제거합니다.
+ * @param {string} modalId - 닫을 모달의 DOM ID
+ * @returns {void}
  */
 function closeModal(modalId) {
     const modal = document.getElementById(modalId);
@@ -114,6 +135,8 @@ function closeModal(modalId) {
 
 /**
  * 설정 모달 열기
+ * 모달을 열고 현재 모델 설정을 로드합니다.
+ * @returns {void}
  */
 function showSettings() {
     openModal('settingsModal');
@@ -124,6 +147,7 @@ function showSettings() {
 
 /**
  * 설정 모달 닫기
+ * @returns {void}
  */
 function closeSettings() {
     closeModal('settingsModal');
@@ -131,6 +155,7 @@ function closeSettings() {
 
 /**
  * 파일 업로드 모달 열기
+ * @returns {void}
  */
 function showFileUpload() {
     openModal('fileModal');
@@ -138,6 +163,7 @@ function showFileUpload() {
 
 /**
  * 파일 업로드 모달 닫기
+ * @returns {void}
  */
 function closeFileModal() {
     closeModal('fileModal');
@@ -145,8 +171,11 @@ function closeFileModal() {
 
 /**
  * 토스트 알림 표시
- * @param {string} message - 메시지
- * @param {string} type - 타입 (success, error, info)
+ * 화면 하단 중앙에 2초간 표시 후 페이드아웃됩니다.
+ * 기존 토스트가 있으면 제거 후 새로 생성합니다.
+ * @param {string} message - 표시할 메시지 텍스트
+ * @param {string} [type='info'] - 알림 타입 ('success' | 'error' | 'info')
+ * @returns {void}
  */
 function showToast(message, type = 'info') {
     const existing = document.querySelector('.toast');
@@ -185,15 +214,18 @@ function showToast(message, type = 'info') {
 }
 
 /**
- * 에러 표시
- * @param {string} message - 에러 메시지
+ * 에러 토스트 표시 (showToast의 편의 래퍼)
+ * @param {string} message - 에러 메시지 텍스트
+ * @returns {void}
  */
 function showError(message) {
     showToast(message, 'error');
 }
 
 /**
- * 스크롤 맨 아래로
+ * 채팅 영역을 맨 아래로 스크롤
+ * 새 메시지 추가 시 자동 호출됩니다.
+ * @returns {void}
  */
 function scrollToBottom() {
     const chatArea = document.getElementById('chatArea');
@@ -203,8 +235,10 @@ function scrollToBottom() {
 }
 
 /**
- * HTML 이스케이프
- * @param {string} str - 원본 문자열
+ * HTML 특수 문자 이스케이프
+ * DOM 요소의 textContent를 활용한 안전한 이스케이프 처리입니다.
+ * @param {string} str - 이스케이프할 원본 문자열
+ * @returns {string} HTML 엔티티로 이스케이프된 문자열
  */
 function escapeHtml(str) {
     if (!str) return '';
@@ -214,9 +248,13 @@ function escapeHtml(str) {
 }
 
 /**
- * 마크다운 렌더링
- * @param {HTMLElement} element - 대상 요소
- * @param {string} text - 마크다운 텍스트
+ * 마크다운 텍스트를 HTML로 렌더링
+ * marked 라이브러리로 파싱 후 purifyHTML로 XSS 방어 처리합니다.
+ * hljs가 로드되어 있으면 코드 블록 구문 강조도 적용합니다.
+ * marked가 없으면 일반 텍스트로 폴백합니다.
+ * @param {HTMLElement} element - 렌더링 대상 DOM 요소
+ * @param {string} text - 마크다운 원본 텍스트
+ * @returns {void}
  */
 function renderMarkdown(element, text) {
     if (typeof marked !== 'undefined') {

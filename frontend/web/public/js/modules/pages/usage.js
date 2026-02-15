@@ -1,6 +1,12 @@
 /**
- * usage - SPA Page Module
- * Auto-generated from usage.html
+ * ============================================
+ * Usage Page - API 사용량 통계
+ * ============================================
+ * API 요청 수, 토큰 사용량, 에러율, 일별/주별 추이 등
+ * API 사용량 통계를 차트와 테이블로 시각화하는
+ * SPA 페이지 모듈입니다.
+ *
+ * @module pages/usage
  */
 (function() {
     'use strict';

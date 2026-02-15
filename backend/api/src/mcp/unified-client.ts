@@ -1,7 +1,26 @@
 /**
- * 통합 MCP 클라이언트
- * 핵심 MCP 도구를 통합하여 대시보드에서 사용
- * Sequential Thinking, Web Search, PDF Tools
+ * ============================================================
+ * UnifiedMCPClient - 통합 MCP 클라이언트
+ * ============================================================
+ *
+ * 핵심 MCP 도구를 통합하여 대시보드, REST API, WebSocket에서 사용합니다.
+ * MCPServer, ToolRouter, MCPServerRegistry를 하나의 인터페이스로 제공합니다.
+ *
+ * @module mcp/unified-client
+ * @description
+ * - MCP 도구 실행 (내장 + 외부)
+ * - 사용자 등급(tier) 기반 도구 접근 제어
+ * - UserContext 기반 샌드박스 경로 변환
+ * - Sequential Thinking 메시지 적용
+ * - 기능 상태(Feature State) 관리
+ * - 외부 MCP 서버 초기화 (DB 연동)
+ * - 싱글톤 인스턴스 제공
+ *
+ * 계층 구조:
+ * UnifiedMCPClient
+ * ├── MCPServer (내장 도구 JSON-RPC 처리)
+ * ├── ToolRouter (내장 + 외부 도구 통합 라우팅)
+ * └── MCPServerRegistry (외부 서버 연결 관리)
  */
 
 import { MCPServer, createMCPServer } from './server';
@@ -14,22 +33,46 @@ import { ToolRouter } from './tool-router';
 import { MCPServerRegistry } from './server-registry';
 import type { UnifiedDatabase } from '../data/models/unified-database';
 
-// MCP 기능 상태
+/**
+ * MCP 기능 상태 인터페이스
+ *
+ * UI에서 토글 가능한 MCP 기능의 활성화 상태를 나타냅니다.
+ *
+ * @interface MCPFeatureState
+ */
 export interface MCPFeatureState {
+    /** Sequential Thinking 활성화 여부 (기본값: false, UI의 뇌 버튼으로 토글) */
     sequentialThinking: boolean;
+    /** 웹 검색 활성화 여부 */
     webSearch: boolean;
 }
 
-// 통합 MCP 클라이언트
+/**
+ * 통합 MCP 클라이언트
+ *
+ * 애플리케이션 전체에서 MCP 기능을 사용하기 위한 통합 인터페이스입니다.
+ * getUnifiedMCPClient()로 싱글톤 인스턴스를 사용합니다.
+ *
+ * @class UnifiedMCPClient
+ */
 export class UnifiedMCPClient {
+    /** 내장 MCP 서버 (JSON-RPC 도구 처리) */
     private server: MCPServer;
+    /** MCP 기능 토글 상태 */
     private featureState: MCPFeatureState = {
-        sequentialThinking: false,  // 🆕 기본값 false (사용자가 🧠 버튼으로 활성화)
+        sequentialThinking: false,  // 기본값 false (사용자가 UI 버튼으로 활성화)
         webSearch: false
     };
+    /** 내장 + 외부 도구 통합 라우터 */
     private toolRouter: ToolRouter;
+    /** 외부 MCP 서버 연결 관리자 */
     private serverRegistry: MCPServerRegistry;
 
+    /**
+     * UnifiedMCPClient 인스턴스를 생성합니다.
+     *
+     * MCPServer, ToolRouter, MCPServerRegistry를 초기화합니다.
+     */
     constructor() {
         this.server = createMCPServer('ollama-unified-mcp', '1.0.0');
         this.toolRouter = new ToolRouter();
@@ -228,7 +271,15 @@ export class UnifiedMCPClient {
     }
 
     /**
-     * 인자 중 경로를 사용자 샌드박스 경로로 변환
+     * 인자 중 파일 경로를 사용자 샌드박스 경로로 변환
+     *
+     * path, file, directory 등 일반적인 경로 인자명을 감지하여
+     * UserSandbox.resolvePath()로 안전한 절대 경로로 변환합니다.
+     * 경로 탈출 시도 시 __blocked_ 플래그를 설정합니다.
+     *
+     * @param args - 원본 도구 실행 인자
+     * @param userId - 사용자 ID
+     * @returns 샌드박스 경로가 적용된 인자 복사본
      */
     private applySandboxPaths(
         args: Record<string, unknown>,
@@ -255,9 +306,16 @@ export class UnifiedMCPClient {
     }
 }
 
-// 싱글톤 인스턴스
+/** 싱글톤 인스턴스 저장소 */
 let unifiedClient: UnifiedMCPClient | null = null;
 
+/**
+ * UnifiedMCPClient 싱글톤 인스턴스 반환
+ *
+ * 최초 호출 시 인스턴스를 생성하고, 이후에는 동일 인스턴스를 반환합니다.
+ *
+ * @returns UnifiedMCPClient 싱글톤 인스턴스
+ */
 export function getUnifiedMCPClient(): UnifiedMCPClient {
     if (!unifiedClient) {
         unifiedClient = new UnifiedMCPClient();
@@ -265,6 +323,14 @@ export function getUnifiedMCPClient(): UnifiedMCPClient {
     return unifiedClient;
 }
 
+/**
+ * 새 UnifiedMCPClient 인스턴스 생성
+ *
+ * 싱글톤이 아닌 독립 인스턴스가 필요한 경우 사용합니다.
+ * 주로 테스트에서 사용됩니다.
+ *
+ * @returns 새 UnifiedMCPClient 인스턴스
+ */
 export function createUnifiedMCPClient(): UnifiedMCPClient {
     return new UnifiedMCPClient();
 }

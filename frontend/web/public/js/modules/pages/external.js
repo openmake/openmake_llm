@@ -1,6 +1,12 @@
 /**
- * external - SPA Page Module
- * Auto-generated from external.html
+ * ============================================
+ * External Page - 외부 MCP 서버 관리
+ * ============================================
+ * 외부 MCP(Model Context Protocol) 서버의 연결, 관리,
+ * 도구 목록 조회, 서버 등록/제거를 처리하는
+ * SPA 페이지 모듈입니다.
+ *
+ * @module pages/external
  */
 (function() {
     'use strict';

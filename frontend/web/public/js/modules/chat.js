@@ -1,6 +1,12 @@
 /**
- * Chat Module
- * 채팅 기능을 담당합니다.
+ * ============================================
+ * Chat Module - 채팅 메시지 전송 및 렌더링
+ * ============================================
+ * WebSocket 기반 실시간 채팅 메시지 전송, 스트리밍 토큰 수신,
+ * 사용자/AI 메시지 DOM 렌더링, 생각 과정(thinking) 분리,
+ * 마크다운 렌더링, 응답 중단(abort) 기능을 제공합니다.
+ *
+ * @module chat
  */
 
 import { getState, setState, addToMemory } from './state.js';
@@ -9,7 +15,9 @@ import { scrollToBottom, escapeHtml, renderMarkdown, showToast } from './ui.js';
 import { authFetch } from './auth.js';
 
 /**
- * 응답 생성 중단
+ * AI 응답 생성 중단 요청
+ * WebSocket을 통해 서버에 abort 메시지를 전송하고 UI를 업데이트합니다.
+ * @returns {void}
  */
 function abortChat() {
     if (!getState('isGenerating')) return;
@@ -24,6 +32,8 @@ function abortChat() {
 
 /**
  * 중단 버튼 표시
+ * 버튼이 없으면 동적으로 생성하여 전송 버튼 옆에 삽입합니다.
+ * @returns {void}
  */
 function showAbortButton() {
     let abortBtn = document.getElementById('abortButton');
@@ -61,6 +71,7 @@ function showAbortButton() {
 
 /**
  * 중단 버튼 숨기기
+ * @returns {void}
  */
 function hideAbortButton() {
     const abortBtn = document.getElementById('abortButton');
@@ -70,7 +81,10 @@ function hideAbortButton() {
 }
 
 /**
- * 메시지 전송
+ * 사용자 메시지 전송
+ * 입력창 내용과 첨부 파일을 WebSocket을 통해 서버에 전송합니다.
+ * 모델 선택, 웹 검색, 사고 모드, 문서 컨텍스트 등 옵션을 포함합니다.
+ * @returns {Promise<void>}
  */
 async function sendMessage() {
     const input = document.getElementById('chatInput');
@@ -153,9 +167,12 @@ async function sendMessage() {
 }
 
 /**
- * 채팅 메시지 추가
- * @param {string} role - 역할 (user, assistant)
- * @param {string} content - 내용
+ * 채팅 메시지를 DOM에 추가
+ * user 역할은 escapeHtml 처리된 내용을, assistant 역할은 로딩 스피너와
+ * 복사/재생성 액션 버튼이 포함된 메시지를 렌더링합니다.
+ * @param {string} role - 메시지 역할 ('user' | 'assistant')
+ * @param {string} content - 메시지 내용 (빈 문자열이면 로딩 상태 표시)
+ * @returns {HTMLDivElement|null} 생성된 메시지 DOM 요소, 컨테이너 없으면 null
  */
 function addChatMessage(role, content) {
     const container = document.getElementById('chatMessages');
@@ -209,8 +226,12 @@ function addChatMessage(role, content) {
 }
 
 /**
- * 토큰 추가 (스트리밍)
- * @param {string} token - 토큰
+ * 스트리밍 토큰 추가
+ * WebSocket에서 수신된 토큰을 현재 AI 메시지에 누적 합산합니다.
+ * 생각 과정([N/M] 패턴) 감지 시 진행 상태를 표시하고,
+ * 최종 답변 마커 발견 시 최종 답변만 표시합니다.
+ * @param {string} token - 수신된 텍스트 토큰 조각
+ * @returns {void}
  */
 function appendToken(token) {
     const currentMsg = getState('currentAssistantMessage');
@@ -270,7 +291,11 @@ function appendToken(token) {
 }
 
 /**
- * AI 응답 완료
+ * AI 응답 완료 처리
+ * 생각 과정과 최종 답변을 분리하여 마크다운으로 렌더링하고,
+ * 응답 시간을 표시합니다. 에러 메시지가 있으면 에러 스타일로 표시합니다.
+ * @param {string|null} [errorMessage=null] - 에러 메시지 (null이면 정상 완료)
+ * @returns {void}
  */
 function finishAssistantMessage(errorMessage = null) {
     const currentMsg = getState('currentAssistantMessage');
@@ -338,8 +363,10 @@ function finishAssistantMessage(errorMessage = null) {
 }
 
 /**
- * 메시지 복사
- * @param {string} messageId - 메시지 ID
+ * 메시지 내용을 클립보드에 복사
+ * Clipboard API를 사용하며, 성공/실패 시 토스트 알림을 표시합니다.
+ * @param {string} messageId - 복사할 메시지의 DOM ID
+ * @returns {void}
  */
 function copyMessage(messageId) {
     const msgElement = document.getElementById(messageId);
@@ -358,7 +385,9 @@ function copyMessage(messageId) {
 }
 
 /**
- * 메시지 재생성
+ * 마지막 사용자 메시지를 재전송하여 AI 응답 재생성
+ * 대화 메모리에서 마지막 user 메시지를 찾아 입력창에 설정 후 전송합니다.
+ * @returns {void}
  */
 function regenerateMessage() {
     const memory = getState('conversationMemory');
@@ -373,6 +402,9 @@ function regenerateMessage() {
 
 /**
  * 새 대화 시작
+ * 채팅 메시지 영역을 초기화하고, 대화 메모리/세션/파일 컨텍스트를 리셋합니다.
+ * 다른 페이지에 있으면 채팅 뷰(/)로 먼저 이동합니다.
+ * @returns {void}
  */
 function newChat() {
     // 다른 페이지에 있으면 먼저 채팅 뷰로 전환
@@ -404,8 +436,10 @@ function newChat() {
 }
 
 /**
- * 제안 사용
- * @param {string} text - 제안 텍스트
+ * 제안 텍스트를 입력창에 설정
+ * 환영 화면의 제안 버튼 클릭 시 호출됩니다.
+ * @param {string} text - 입력창에 설정할 제안 텍스트
+ * @returns {void}
  */
 function useSuggestion(text) {
     const input = document.getElementById('chatInput');

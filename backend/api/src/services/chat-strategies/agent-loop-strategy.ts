@@ -1,12 +1,54 @@
+/**
+ * ============================================================
+ * AgentLoopStrategy - Multi-turn 도구 호출 루프 전략
+ * ============================================================
+ *
+ * LLM이 도구 호출을 요청하면 해당 도구를 실행하고 결과를 다시 LLM에 전달하는
+ * 반복 루프를 수행합니다. 도구 호출이 없을 때까지 또는 최대 턴 수에 도달할 때까지 반복합니다.
+ *
+ * @module services/chat-strategies/agent-loop-strategy
+ * @description
+ * - DirectStrategy를 내부 빌딩 블록으로 사용하여 각 턴을 실행
+ * - 도구 접근 권한 검사 (UserTier 기반 tool-tiers)
+ * - 내장 도구 직접 처리: web_search, web_fetch, vision_ocr, analyze_image
+ * - 기타 도구는 ToolRouter를 통해 MCP 도구로 실행
+ * - maxTurns 제한으로 무한 루프 방지
+ */
 import type { ToolDefinition } from '../../ollama/types';
 import { canUseTool } from '../../mcp/tool-tiers';
 import { getUnifiedMCPClient } from '../../mcp/unified-client';
 import { DirectStrategy } from './direct-strategy';
 import type { AgentLoopStrategyContext, ChatStrategy, ChatResult } from './types';
 
+/**
+ * Multi-turn 도구 호출 루프 전략
+ *
+ * DirectStrategy로 LLM 호출 → 도구 호출 감지 → 도구 실행 → 결과 전달의
+ * 반복 루프를 관리합니다. A2A 실패 시 폴백 전략으로도 사용됩니다.
+ *
+ * @class AgentLoopStrategy
+ * @implements {ChatStrategy<AgentLoopStrategyContext, ChatResult>}
+ */
 export class AgentLoopStrategy implements ChatStrategy<AgentLoopStrategyContext, ChatResult> {
+    /**
+     * AgentLoopStrategy 인스턴스를 생성합니다.
+     *
+     * @param directStrategy - 각 턴에서 LLM 호출에 사용할 DirectStrategy 인스턴스
+     */
     constructor(private readonly directStrategy: DirectStrategy) {}
 
+    /**
+     * Multi-turn 도구 호출 루프를 실행합니다.
+     *
+     * 실행 흐름:
+     * 1. DirectStrategy로 LLM 호출
+     * 2. tool_calls가 있으면 → 각 도구 실행 → 결과를 히스토리에 추가 → 1로 돌아감
+     * 3. tool_calls가 없으면 → 최종 응답으로 루프 종료
+     * 4. maxTurns 도달 시 → 마지막 응답으로 루프 종료
+     *
+     * @param context - AgentLoop 컨텍스트 (클라이언트, 히스토리, 도구, 최대 턴 수 등)
+     * @returns 최종 응답 텍스트와 메트릭을 포함한 결과
+     */
     async execute(context: AgentLoopStrategyContext): Promise<ChatResult> {
         let metrics: Record<string, unknown> = {};
         let currentTurn = 0;
@@ -18,11 +60,13 @@ export class AgentLoopStrategy implements ChatStrategy<AgentLoopStrategyContext,
             currentTurn++;
             console.log(`[ChatService] 🔄 Agent Loop Turn ${currentTurn}/${context.maxTurns}`);
 
+            // 모델이 도구 호출을 지원하는 경우에만 도구 목록 조회
             let allowedTools: ToolDefinition[] = [];
             if (context.supportsTools) {
                 allowedTools = context.getAllowedTools();
             }
 
+            // Thinking 깊이 결정: ExecutionPlan 프로파일 > 사용자 요청 > 비활성화
             const profileThinking = context.executionPlan?.thinkingLevel;
             const effectiveThinking = profileThinking && profileThinking !== 'off'
                 ? profileThinking
@@ -69,6 +113,22 @@ export class AgentLoopStrategy implements ChatStrategy<AgentLoopStrategyContext,
         };
     }
 
+    /**
+     * 단일 도구 호출을 실행합니다.
+     *
+     * 실행 순서:
+     * 1. 도구 호출 유효성 검사
+     * 2. 사용자 티어 기반 접근 권한 검사
+     * 3. 내장 도구 직접 처리 (web_search, web_fetch, vision_ocr, analyze_image)
+     * 4. 기타 도구는 ToolRouter를 통해 MCP 도구로 실행
+     *
+     * @param context - AgentLoop 컨텍스트 (사용자 컨텍스트, 클라이언트 등)
+     * @param toolCall - LLM이 요청한 도구 호출 정보
+     * @param toolCall.type - 도구 호출 유형
+     * @param toolCall.function.name - 호출할 도구 이름
+     * @param toolCall.function.arguments - 도구 인자
+     * @returns 도구 실행 결과 문자열 (에러 시 Error: 접두사)
+     */
     private async executeToolCall(context: AgentLoopStrategyContext, toolCall: {
         type?: string;
         function: {
@@ -81,6 +141,7 @@ export class AgentLoopStrategy implements ChatStrategy<AgentLoopStrategyContext,
         const toolName = toolCall.function.name;
         const toolArgs = toolCall.function.arguments;
 
+        // 사용자 티어 기반 도구 접근 권한 검사
         if (context.currentUserContext) {
             const userTier = context.currentUserContext.tier;
             if (!canUseTool(userTier, toolName)) {
@@ -97,6 +158,7 @@ export class AgentLoopStrategy implements ChatStrategy<AgentLoopStrategyContext,
 
         console.log(`[ChatService] 🔨 Executing Tool: ${toolName} (tier: ${context.currentUserContext?.tier || 'unknown'})`, toolArgs);
 
+        // 내장 도구 직접 처리: web_search
         if (toolName === 'web_search') {
             try {
                 const query = toolArgs.query as string;
@@ -117,6 +179,7 @@ export class AgentLoopStrategy implements ChatStrategy<AgentLoopStrategyContext,
             }
         }
 
+        // 내장 도구 직접 처리: web_fetch
         if (toolName === 'web_fetch') {
             try {
                 const url = toolArgs.url as string;
@@ -133,6 +196,7 @@ export class AgentLoopStrategy implements ChatStrategy<AgentLoopStrategyContext,
             }
         }
 
+        // 내장 도구 직접 처리: vision_ocr (이미지 텍스트 추출)
         if (toolName === 'vision_ocr') {
             try {
                 const imagePath = toolArgs.image_path as string;
@@ -181,6 +245,7 @@ export class AgentLoopStrategy implements ChatStrategy<AgentLoopStrategyContext,
             }
         }
 
+        // 내장 도구 직접 처리: analyze_image (이미지 분석)
         if (toolName === 'analyze_image') {
             try {
                 const imagePath = toolArgs.image_path as string;
@@ -229,6 +294,7 @@ export class AgentLoopStrategy implements ChatStrategy<AgentLoopStrategyContext,
             }
         }
 
+        // 기타 도구: ToolRouter를 통해 MCP 도구로 실행
         try {
             const toolRouter = getUnifiedMCPClient().getToolRouter();
             const result = await toolRouter.executeTool(toolName, toolArgs, context.currentUserContext ?? undefined);

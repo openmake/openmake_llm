@@ -1,6 +1,18 @@
 /**
- * Unified Database Model
- * 통합 데이터베이스 모델 - PostgreSQL 기반
+ * ============================================================
+ * Unified Database Model - PostgreSQL 통합 데이터베이스 추상화
+ * ============================================================
+ *
+ * 애플리케이션의 모든 데이터 접근을 단일 클래스로 추상화하는 핵심 데이터 레이어입니다.
+ * Repository 패턴을 통해 도메인별 데이터 접근을 분리하며, 싱글톤으로 관리됩니다.
+ *
+ * @module data/models/unified-database
+ * @description
+ * - PostgreSQL Pool 기반 커넥션 관리 (pg 드라이버)
+ * - 서버 시작 시 스키마 자동 생성 (CREATE TABLE IF NOT EXISTS)
+ * - Repository 위임 패턴 (User, Conversation, Memory, Research, ApiKey, Canvas, Marketplace, Audit)
+ * - 재시도 로직 내장 (withRetry 래퍼)
+ * - 싱글톤 접근: getUnifiedDatabase(), getPool()
  */
 
 import { Pool, QueryResult, type PoolConfig } from 'pg';
@@ -22,10 +34,10 @@ import {
 
 const logger = createLogger('UnifiedDB');
 
-/** Generic DB query parameter type */
+/** SQL 쿼리 파라미터 타입 - $1, $2 등의 플레이스홀더에 바인딩되는 값 */
 type QueryParam = string | number | boolean | null | undefined;
 
-/** Generic DB row from pg query result */
+/** PostgreSQL 쿼리 결과 행의 제네릭 타입 */
 type DbRow = Record<string, unknown>;
 
 const SCHEMA_FILE_RELATIVE_PATH = 'services/database/init/002-schema.sql';
@@ -107,37 +119,74 @@ CREATE INDEX IF NOT EXISTS idx_sessions_anon ON conversation_sessions(anon_sessi
 CREATE INDEX IF NOT EXISTS idx_blacklist_expires ON token_blacklist(expires_at);
 `;
 
+/**
+ * 사용자 엔티티 인터페이스
+ * @interface User
+ */
 export interface User {
+    /** 사용자 고유 식별자 (숫자 문자열) */
     id: string;
+    /** 로그인 사용자명 (이메일과 동일) */
     username: string;
+    /** bcrypt 해시된 비밀번호 */
     password_hash: string;
+    /** 이메일 주소 (선택적) */
     email?: string;
+    /** 사용자 역할 - admin: 관리자, user: 일반, guest: 게스트 */
     role: 'admin' | 'user' | 'guest';
+    /** 계정 생성 일시 (ISO 8601) */
     created_at: string;
+    /** 마지막 정보 수정 일시 (ISO 8601) */
     updated_at: string;
+    /** 마지막 로그인 일시 (ISO 8601) */
     last_login?: string;
+    /** 계정 활성화 상태 */
     is_active: boolean;
 }
 
+/**
+ * 대화 세션 엔티티 인터페이스
+ * @interface ConversationSession
+ */
 export interface ConversationSession {
+    /** 세션 고유 식별자 (UUID) */
     id: string;
+    /** 소유 사용자 ID (FK → users.id) */
     user_id?: string;
+    /** 대화 제목 */
     title: string;
+    /** 세션 생성 일시 (ISO 8601) */
     created_at: string;
+    /** 마지막 업데이트 일시 (ISO 8601) */
     updated_at: string;
+    /** 세션 메타데이터 (모델 정보, 설정 등 JSONB) */
     metadata?: Record<string, unknown> | null;
 }
 
+/**
+ * 대화 메시지 엔티티 인터페이스
+ * @interface ConversationMessage
+ */
 export interface ConversationMessage {
+    /** 메시지 고유 식별자 (SERIAL) */
     id: number;
+    /** 소속 세션 ID (FK → conversation_sessions.id) */
     session_id: string;
+    /** 메시지 발화자 역할 */
     role: 'user' | 'assistant' | 'system';
+    /** 메시지 본문 */
     content: string;
+    /** 응답 생성에 사용된 모델명 */
     model?: string;
+    /** 응답 생성에 사용된 에이전트 ID */
     agent_id?: string;
+    /** AI의 사고 과정 (thinking mode 응답) */
     thinking?: string;
+    /** 사용된 토큰 수 */
     tokens?: number;
+    /** 응답 생성 시간 (밀리초) */
     response_time_ms?: number;
+    /** 메시지 생성 일시 (ISO 8601) */
     created_at: string;
 }
 
@@ -147,18 +196,35 @@ export interface ConversationMessage {
 
 export type MemoryCategory = 'preference' | 'fact' | 'project' | 'relationship' | 'skill' | 'context';
 
+/**
+ * 사용자 장기 메모리 엔티티
+ * 대화에서 추출된 중요 정보를 저장하여 향후 대화에 재활용
+ * @interface UserMemory
+ */
 export interface UserMemory {
+    /** 메모리 고유 식별자 (UUID) */
     id: string;
+    /** 소유 사용자 ID */
     user_id: string;
+    /** 메모리 카테고리 (선호도, 사실, 프로젝트 등) */
     category: MemoryCategory;
+    /** 메모리 키 (검색용 요약) */
     key: string;
+    /** 메모리 값 (상세 내용) */
     value: string;
+    /** 중요도 점수 (높을수록 우선 참조) */
     importance: number;
+    /** 참조 횟수 */
     access_count: number;
+    /** 마지막 참조 일시 */
     last_accessed?: string;
+    /** 메모리 추출 원본 세션 ID */
     source_session_id?: string;
+    /** 생성 일시 */
     created_at: string;
+    /** 수정 일시 */
     updated_at: string;
+    /** 만료 일시 (자동 삭제) */
     expires_at?: string;
 }
 
@@ -338,23 +404,45 @@ export interface MCPServerRow {
 
 export type ApiKeyTier = 'free' | 'starter' | 'standard' | 'enterprise';
 
+/**
+ * 사용자 API Key 엔티티
+ * 외부 개발자 API 접근을 위한 키 정보
+ * @interface UserApiKey
+ */
 export interface UserApiKey {
+    /** API Key 고유 식별자 (UUID) */
     id: string;
+    /** 소유 사용자 ID */
     user_id: string;
+    /** HMAC-SHA-256 해시된 키 (DB 저장용, 평문 복원 불가) */
     key_hash: string;
+    /** 키 접두사 (omk_live_) */
     key_prefix: string;
+    /** 키 마지막 4자리 (표시용) */
     last_4: string;
+    /** 키 이름 (사용자 지정) */
     name: string;
+    /** 키 설명 */
     description?: string;
+    /** 허용된 스코프 목록 (예: ["chat:write", "models:read"]) */
     scopes: string[];
+    /** 접근 허용된 모델 목록 */
     allowed_models: string[];
+    /** Rate Limit 등급 (free/starter/standard/enterprise) */
     rate_limit_tier: ApiKeyTier;
+    /** 키 활성화 상태 */
     is_active: boolean;
+    /** 마지막 사용 일시 */
     last_used_at?: string;
+    /** 키 만료 일시 */
     expires_at?: string;
+    /** 생성 일시 */
     created_at: string;
+    /** 수정 일시 */
     updated_at: string;
+    /** 누적 요청 수 */
     total_requests: number;
+    /** 누적 토큰 사용량 */
     total_tokens: number;
 }
 
@@ -393,26 +481,46 @@ export const API_KEY_TIER_LIMITS: Record<ApiKeyTier, {
 
 /**
  * 통합 데이터베이스 클래스 (PostgreSQL)
+ *
+ * 모든 도메인의 데이터 접근을 단일 진입점으로 제공합니다.
+ * 내부적으로 Repository 패턴을 사용하여 각 도메인별 쿼리를 위임합니다.
+ *
+ * @class UnifiedDatabase
+ * @description
+ * - 서버 시작 시 스키마 자동 초기화 (SQL 파일 또는 LEGACY_SCHEMA 폴백)
+ * - pg Pool 기반 커넥션 풀링 (statement_timeout: 30s, idle_timeout: 30s)
+ * - 8개 Repository 위임: User, Conversation, Memory, Research, ApiKey, Canvas, Marketplace, Audit
+ * - withRetry 래퍼를 통한 일시적 연결 오류 자동 재시도
  */
 export class UnifiedDatabase {
+    /** PostgreSQL 커넥션 풀 */
     private pool: Pool;
 
+    /** 스키마 초기화 완료 Promise (외부에서 ensureReady()로 대기 가능) */
     private schemaReady: Promise<void>;
 
+    /** 사용자 데이터 접근 Repository */
     private readonly userRepository: UserRepository;
 
+    /** 대화 세션/메시지 데이터 접근 Repository */
     private readonly conversationRepository: ConversationRepository;
 
+    /** 장기 메모리 데이터 접근 Repository */
     private readonly memoryRepository: MemoryRepository;
 
+    /** 딥 리서치 데이터 접근 Repository */
     private readonly researchRepository: ResearchRepository;
 
+    /** API Key 관리 데이터 접근 Repository */
     private readonly apiKeyRepository: ApiKeyRepository;
 
+    /** 캔버스 문서 데이터 접근 Repository */
     private readonly canvasRepository: CanvasRepository;
 
+    /** 마켓플레이스 데이터 접근 Repository */
     private readonly marketplaceRepository: MarketplaceRepository;
 
+    /** 감사 로그 및 외부 연동 데이터 접근 Repository */
     private readonly auditRepository: AuditRepository;
 
     constructor() {
@@ -993,9 +1101,15 @@ export class UnifiedDatabase {
     }
 }
 
-// 싱글톤 인스턴스
+/** 싱글톤 인스턴스 */
 let dbInstance: UnifiedDatabase | null = null;
 
+/**
+ * UnifiedDatabase 싱글톤 인스턴스를 반환합니다.
+ * 최초 호출 시 인스턴스를 생성하고 스키마를 초기화합니다.
+ *
+ * @returns UnifiedDatabase 싱글톤 인스턴스
+ */
 export function getUnifiedDatabase(): UnifiedDatabase {
     if (!dbInstance) {
         dbInstance = new UnifiedDatabase();
@@ -1010,6 +1124,10 @@ export function getPool(): Pool {
     return getUnifiedDatabase().getPool();
 }
 
+/**
+ * 데이터베이스 커넥션 풀을 종료하고 싱글톤을 해제합니다.
+ * 서버 종료(graceful shutdown) 시 호출합니다.
+ */
 export async function closeDatabase(): Promise<void> {
     if (dbInstance) {
         await dbInstance.close();

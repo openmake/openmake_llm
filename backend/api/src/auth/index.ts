@@ -1,7 +1,19 @@
 /**
- * 인증 모듈
- * JWT 토큰 생성/검증 및 인증 유틸리티
- * 
+ * ============================================================
+ * Auth Module - JWT 토큰 관리 및 인증 유틸리티
+ * ============================================================
+ *
+ * JWT 액세스/리프레시 토큰의 생성, 검증, 블랙리스트 관리를 담당합니다.
+ * HttpOnly 쿠키 기반 토큰 전달과 역할 기반 권한 체크를 제공합니다.
+ *
+ * @module auth
+ * @description
+ * - JWT 액세스 토큰 (15분) / 리프레시 토큰 (7일) 생성
+ * - jti 기반 토큰 블랙리스트 (PostgreSQL 영속)
+ * - HttpOnly + Secure + SameSite 쿠키 설정
+ * - 역할 계층 기반 권한 체크 (admin > user > guest)
+ * - Authorization 헤더 / Cookie 토큰 추출
+ *
  * #8 연동: 토큰 블랙리스트 (PostgreSQL-backed) 통합
  */
 
@@ -19,6 +31,12 @@ const JWT_SECRET = getConfig().jwtSecret;
 const JWT_EXPIRES_IN = '15m';  // Access token - short lived for security
 const REFRESH_TOKEN_EXPIRES_IN = '7d';  // Refresh token - longer lived
 
+/**
+ * 객체가 유효한 JWT 페이로드인지 타입 가드로 검사합니다.
+ *
+ * @param obj - 검사할 객체
+ * @returns JWTPayload 타입 여부
+ */
 function isValidJWTPayload(obj: unknown): obj is JWTPayload {
     if (!obj || typeof obj !== 'object') return false;
     const record = obj as Record<string, unknown>;

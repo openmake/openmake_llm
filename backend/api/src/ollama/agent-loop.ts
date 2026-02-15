@@ -1,46 +1,110 @@
 /**
- * Ollama Cloud Multi-turn Tool Calling Agent Loop
- * 
- * 공식 문서 참고: https://docs.ollama.com/capabilities/tool-calling#multi-turn-tool-calling-agent-loop
- * 
- * 이 모듈은 Ollama의 Tool Calling 기능을 활용한 Agent Loop를 구현합니다.
- * - Multi-turn 대화에서 자동으로 도구를 호출하고 결과를 다시 LLM에 전달
- * - Streaming 지원으로 실시간 응답 가능
- * - 무한 루프 방지를 위한 maxIterations 설정
+ * ============================================================
+ * Agent Loop - Multi-turn Tool Calling 에이전트 루프
+ * ============================================================
+ *
+ * Ollama Tool Calling API를 활용한 다중 턴 에이전트 루프입니다.
+ * LLM이 도구 호출을 요청하면 자동으로 실행하고 결과를 다시 전달하는 사이클을 반복합니다.
+ *
+ * @module ollama/agent-loop
+ * @description
+ * - Multi-turn 도구 호출 루프: LLM -> 도구 호출 -> 결과 전달 -> LLM 반복
+ * - 스트리밍 지원 (SSE를 통한 실시간 토큰 전달)
+ * - Thinking(추론 과정) 표시 지원 (Ollama Native Thinking)
+ * - 무한 루프 방지 (maxIterations 제한, 기본값: 10)
+ * - 에러 내성: 429 에러 시 지수 백오프 재시도, 영구 에러(401/403/404) 시 즉시 중단
+ * - MCP Tool -> Ollama Tool 변환 어댑터 제공
+ *
+ * @description 루프 실행 플로우:
+ * 1. 초기 메시지 목록 + 도구 정의를 LLM에 전송
+ * 2. LLM 응답에 tool_calls가 포함되면:
+ *    a. 각 tool_call의 함수를 availableFunctions에서 찾아 실행
+ *    b. 실행 결과를 tool 역할 메시지로 히스토리에 추가
+ *    c. 다시 LLM에 전송 (2단계 반복)
+ * 3. 종료 조건:
+ *    - tool_calls가 없는 응답 수신 (정상 종료)
+ *    - maxIterations 도달 (강제 종료)
+ *    - 영구 에러 발생 (401/403/404/KeyExhaustion)
+ *
+ * @see https://docs.ollama.com/capabilities/tool-calling#multi-turn-tool-calling-agent-loop
  */
 
 import { Ollama, Message, Tool, ToolCall, ChatResponse } from 'ollama';
 import { ChatMessage, ToolDefinition, ThinkOption, UsageMetrics } from './types';
 
-/** Extended Message with optional thinking field (Ollama Native Thinking) */
-interface MessageWithThinking extends Message { thinking?: string; }
+/**
+ * Thinking 필드를 포함하는 확장 메시지 인터페이스
+ *
+ * Ollama Native Thinking 기능 사용 시 메시지에 thinking 필드가 추가됩니다.
+ *
+ * @interface MessageWithThinking
+ * @extends Message
+ */
+interface MessageWithThinking extends Message {
+    /** 추론 과정 텍스트 (Ollama Native Thinking) */
+    thinking?: string;
+}
 import { getApiKeyManager } from './api-key-manager';
 import { getConfig } from '../config';
 
 const envConfig = getConfig();
 
-/** Tool execution function type — takes parsed arguments, returns result */
+/**
+ * 도구 실행 함수 타입 — 파싱된 인자를 받아 결과를 반환합니다.
+ * @type ToolFunction
+ */
 type ToolFunction = (args: Record<string, unknown>) => unknown | Promise<unknown>;
 
-// Ollama Cloud 호스트
+/** Ollama Cloud API 호스트 URL */
 const OLLAMA_CLOUD_HOST = 'https://ollama.com';
 
+/**
+ * 다양한 에러 객체 형식에서 HTTP 상태 코드를 추출하기 위한 타입
+ *
+ * Ollama SDK, Axios, 기타 HTTP 라이브러리가 서로 다른 에러 형식을 사용하므로
+ * 여러 가능한 필드를 모두 포함합니다.
+ *
+ * @type OllamaLikeError
+ */
 type OllamaLikeError = {
+    /** HTTP 상태 코드 (직접 필드) */
     status?: number;
+    /** HTTP 상태 코드 (camelCase 필드) */
     statusCode?: number;
+    /** HTTP 상태 코드 (snake_case 필드) */
     status_code?: number;
+    /** 응답 객체의 상태 코드 */
     response?: { status?: number };
+    /** 에러 객체의 상태 코드 */
     error?: { status?: number };
+    /** 에러 메시지 */
     message?: string;
+    /** 에러 이름 (예: 'KeyExhaustionError') */
     name?: string;
 };
 
+/**
+ * 다양한 에러 객체 형식에서 HTTP 상태 코드를 추출합니다.
+ *
+ * status, statusCode, status_code, response.status, error.status 순으로 탐색합니다.
+ *
+ * @param error - 에러 객체 (unknown 타입)
+ * @returns HTTP 상태 코드 또는 undefined (추출 불가 시)
+ */
 function getHttpStatus(error: unknown): number | undefined {
     if (!error || typeof error !== 'object') return undefined;
     const err = error as OllamaLikeError;
     return err.status ?? err.statusCode ?? err.status_code ?? err.response?.status ?? err.error?.status;
 }
 
+/**
+ * 에러가 API 키 소진(KeyExhaustion) 에러인지 판별합니다.
+ *
+ * 에러 이름/메시지에서 'keyexhaustion' 또는 'api key' + 'exhaust' 패턴을 검색합니다.
+ *
+ * @param error - 에러 객체 (unknown 타입)
+ * @returns API 키 소진 에러 여부
+ */
 function isApiKeyExhaustionError(error: unknown): boolean {
     if (!error || typeof error !== 'object') return false;
     const err = error as OllamaLikeError;
@@ -48,12 +112,23 @@ function isApiKeyExhaustionError(error: unknown): boolean {
     return text.includes('keyexhaustion') || text.includes('api key') && text.includes('exhaust');
 }
 
+/**
+ * 지정된 시간(밀리초)만큼 대기합니다.
+ *
+ * @param ms - 대기 시간 (밀리초)
+ * @returns 대기 완료 Promise
+ */
 function sleep(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 /**
  * Agent Loop 실행 옵션
+ *
+ * runAgentLoop() 함수에 전달하는 설정 객체입니다.
+ * 모델, 메시지, 도구, 콜백, 반복 제한 등을 포함합니다.
+ *
+ * @interface AgentLoopOptions
  */
 export interface AgentLoopOptions {
     /** 사용할 모델 이름 */
@@ -77,7 +152,12 @@ export interface AgentLoopOptions {
 }
 
 /**
- * Agent Loop 결과
+ * Agent Loop 실행 결과
+ *
+ * 최종 응답 메시지, 전체 대화 히스토리, 실행된 도구 호출 기록,
+ * 성능 메트릭, 반복 횟수를 포함합니다.
+ *
+ * @interface AgentLoopResult
  */
 export interface AgentLoopResult {
     /** 최종 응답 메시지 */
@@ -97,7 +177,12 @@ export interface AgentLoopResult {
 }
 
 /**
- * ChatMessage를 Ollama Message 형식으로 변환
+ * 프로젝트 내부의 ChatMessage를 Ollama SDK의 Message 형식으로 변환합니다.
+ *
+ * images, tool_calls 필드가 있으면 Ollama 형식에 맞게 매핑합니다.
+ *
+ * @param msg - 변환할 ChatMessage 객체
+ * @returns Ollama SDK Message 객체
  */
 function toOllamaMessage(msg: ChatMessage): Message {
     const ollamaMsg: Message = {
@@ -122,7 +207,13 @@ function toOllamaMessage(msg: ChatMessage): Message {
 }
 
 /**
- * Ollama Message를 ChatMessage 형식으로 변환
+ * Ollama SDK의 Message를 프로젝트 내부 ChatMessage 형식으로 변환합니다.
+ *
+ * images, tool_calls 필드가 있으면 프로젝트 내부 형식에 맞게 매핑합니다.
+ * tool_calls의 arguments는 Record<string, unknown>으로 타입 단언합니다.
+ *
+ * @param msg - 변환할 Ollama Message 객체
+ * @returns 프로젝트 내부 ChatMessage 객체
  */
 function fromOllamaMessage(msg: Message): ChatMessage {
     const chatMsg: ChatMessage = {
@@ -149,7 +240,10 @@ function fromOllamaMessage(msg: Message): ChatMessage {
 }
 
 /**
- * ToolDefinition을 Ollama Tool 형식으로 변환
+ * 프로젝트 내부의 ToolDefinition을 Ollama SDK의 Tool 형식으로 변환합니다.
+ *
+ * @param tool - 변환할 ToolDefinition 객체
+ * @returns Ollama SDK Tool 객체
  */
 function toOllamaTool(tool: ToolDefinition): Tool {
     return {
@@ -163,7 +257,14 @@ function toOllamaTool(tool: ToolDefinition): Tool {
 }
 
 /**
- * Ollama 클라이언트 생성 (Cloud 지원)
+ * Ollama SDK 클라이언트 인스턴스를 생성합니다 (Cloud/Local 자동 감지).
+ *
+ * 모델 이름이 ':cloud' 접미사를 가지면 Ollama Cloud 호스트를 사용하고,
+ * 그렇지 않으면 로컬 Ollama 서버를 사용합니다.
+ * ApiKeyManager에서 현재 활성 키의 Authorization 헤더를 가져와 설정합니다.
+ *
+ * @param model - 모델 이름 (`:cloud` 접미사로 Cloud/Local 판별)
+ * @returns 설정된 Ollama SDK 클라이언트 인스턴스
  */
 function createOllamaClient(model: string): Ollama {
     const apiKeyManager = getApiKeyManager();

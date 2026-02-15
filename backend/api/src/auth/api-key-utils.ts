@@ -1,10 +1,18 @@
 /**
- * API Key 유틸리티
- * 
- * HMAC-SHA-256 기반 API Key 생성, 해싱, 검증
- * - 키 형식: omk_live_ + 32 random hex chars (총 ~40자)
- * - 해싱: HMAC-SHA-256 (pepper 기반)
+ * ============================================================
+ * API Key Utilities - API Key 생성/해싱/검증
+ * ============================================================
+ *
+ * 외부 개발자 API 접근을 위한 키 생성, HMAC-SHA-256 해싱,
+ * 타이밍-세이프 검증, 마스킹 유틸리티를 제공합니다.
+ *
+ * @module auth/api-key-utils
+ * @description
+ * - 키 형식: omk_live_ + 64 random hex chars
+ * - 해싱: HMAC-SHA-256 (API_KEY_PEPPER 환경변수 기반)
  * - 비교: crypto.timingSafeEqual (타이밍 공격 방지)
+ * - 마스킹: omk_live_abcd****wxyz (표시용)
+ * - 형식 검증: 접두사 + 최소 16자 hex body
  */
 
 import crypto from 'node:crypto';

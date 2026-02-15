@@ -1,6 +1,26 @@
 /**
- * 토큰 모니터링 API 라우트
- * LiteLLM 스타일의 API 키/토큰 사용량 모니터링
+ * ============================================================
+ * Token Monitoring Routes - 토큰 사용량 모니터링 API 라우트
+ * ============================================================
+ *
+ * LiteLLM 스타일의 API 키 상태 모니터링, 일간/시간별 사용량 추적,
+ * 할당량 관리, 비용 추정 등 토큰 운영 전반을 제공합니다.
+ * 모든 엔드포인트는 관리자(admin) 전용입니다.
+ *
+ * @module routes/token-monitoring.routes
+ * @description
+ * - GET  /api/monitoring/keys        - 모든 API 키 상태 조회
+ * - GET  /api/monitoring/usage/daily  - 일간 사용량 (차트 데이터)
+ * - GET  /api/monitoring/usage/hourly - 시간별 사용량 (오늘)
+ * - GET  /api/monitoring/quota        - 할당량 상태 조회
+ * - GET  /api/monitoring/summary      - 전체 요약 통계
+ * - POST /api/monitoring/keys/reset   - API 키 상태 리셋
+ * - GET  /api/monitoring/costs        - 모델별 비용 추적
+ *
+ * @requires requireAuth - JWT 인증 미들웨어
+ * @requires requireAdmin - 관리자 권한 미들웨어
+ * @requires ApiKeyManager - API 키 매니저
+ * @requires ApiUsageTracker - 사용량 추적기
  */
 
 import { Router, Request, Response } from 'express';

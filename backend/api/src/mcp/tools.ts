@@ -1,3 +1,24 @@
+/**
+ * ============================================================
+ * MCP Tools - 내장 MCP 도구 정의
+ * ============================================================
+ *
+ * MCP 시스템에서 제공하는 내장(built-in) 도구들을 정의합니다.
+ * 코드 검색, 이미지 OCR/분석, 웹 검색, Firecrawl 등의 도구를 포함합니다.
+ *
+ * @module mcp/tools
+ * @description
+ * - search_code: 프로젝트 디렉토리 내 코드 검색 (정규식 기반)
+ * - vision_ocr / analyze_image: 비전 모델 기반 이미지 처리 (ChatService 위임)
+ * - 웹 검색 도구 (web-search.ts에서 가져오기)
+ * - Firecrawl 도구 (firecrawl.ts에서 조건부 가져오기)
+ *
+ * @security
+ * - 2026-02-07 보안 패치: run_command(RCE), read_file/write_file(샌드박스 미적용) 제거
+ * - search_code: 프로젝트 루트 외부 경로 접근 차단 (LFI 방지)
+ * - 심볼릭 링크를 통한 디렉토리 탈출 방지
+ */
+
 import * as fs from 'fs';
 import * as path from 'path';
 import { MCPToolDefinition, MCPToolResult } from './types';
@@ -9,7 +30,20 @@ import { MCPToolDefinition, MCPToolResult } from './types';
 //   → mcp/filesystem.ts의 fs_read_file/fs_write_file (UserSandbox 적용) 사용
 // ============================================
 
-// 코드 검색 도구
+/**
+ * 코드 검색 도구
+ *
+ * 지정된 디렉토리에서 정규식 패턴을 사용하여 코드를 검색합니다.
+ * 프로젝트 루트(process.cwd()) 외부 경로 접근을 차단하며,
+ * 심볼릭 링크를 통한 탈출도 방지합니다.
+ *
+ * @param args.pattern - 검색할 정규식 패턴
+ * @param args.directory - 검색 대상 디렉토리 경로
+ * @param args.extensions - 검색할 파일 확장자 배열 (기본값: ['.ts', '.js', '.py', '.go'])
+ * @returns 매칭된 파일:줄번호:내용 형식의 결과 (최대 50건)
+ *
+ * @security 프로젝트 루트 외부 접근 차단, 심볼릭 링크 탈출 방지, 최대 1000개 파일 스캔 제한
+ */
 export const searchCodeTool: MCPToolDefinition = {
     tool: {
         name: 'search_code',
@@ -140,6 +174,15 @@ export const searchCodeTool: MCPToolDefinition = {
 
 /**
  * 이미지 OCR 도구 - 이미지에서 텍스트 추출
+ *
+ * MCP 도구 형식으로 정의되어 있으나, 실제 OCR 처리는
+ * ChatService에서 비전 모델을 통해 수행됩니다.
+ * 이 핸들러는 MCP 프로토콜 호환성을 위한 스텁(stub)입니다.
+ *
+ * @param args.image_path - 이미지 파일 경로 (절대 또는 상대)
+ * @param args.image_base64 - Base64 인코딩된 이미지 데이터 (image_path 대안)
+ * @param args.language - OCR 대상 언어 코드 (ko, en, ja 등)
+ * @returns 비전 모델 위임 안내 메시지
  */
 export const visionOcrTool: MCPToolDefinition = {
     tool: {
@@ -178,6 +221,14 @@ export const visionOcrTool: MCPToolDefinition = {
 
 /**
  * 이미지 분석 도구 - 이미지 내용 분석 및 설명
+ *
+ * 사진, 다이어그램, 차트 등의 이미지 콘텐츠를 분석합니다.
+ * visionOcrTool과 마찬가지로, 실제 처리는 ChatService의 비전 모델이 담당합니다.
+ *
+ * @param args.image_path - 분석할 이미지 파일 경로
+ * @param args.image_base64 - Base64 인코딩된 이미지 데이터
+ * @param args.question - 이미지에 대한 질문 (선택적)
+ * @returns 비전 모델 위임 안내 메시지
  */
 export const analyzeImageTool: MCPToolDefinition = {
     tool: {
@@ -217,8 +268,20 @@ import { webSearchTools } from './web-search';
 // Firecrawl MCP 도구 가져오기
 import { firecrawlTools, isFirecrawlConfigured } from './firecrawl';
 
-// 모든 도구 내보내기 (Firecrawl은 API 키가 설정된 경우에만 추가)
-// 🔒 보안 패치 2026-02-07: runCommandTool(RCE), readFileTool/writeFileTool(샌드박스 미적용) 제거
+/**
+ * 전체 내장 도구 배열
+ *
+ * ToolRouter와 MCPServer에서 사용하는 모든 내장 도구 목록입니다.
+ * Firecrawl 도구는 FIRECRAWL_API_KEY가 설정된 경우에만 포함됩니다.
+ *
+ * 포함된 도구:
+ * - visionOcrTool: 이미지 OCR (비전 모델 위임)
+ * - analyzeImageTool: 이미지 분석 (비전 모델 위임)
+ * - webSearchTools: 웹 검색, 사실 검증, 웹페이지 추출, 주제 연구
+ * - firecrawlTools: 스크래핑, 검색, URL 매핑, 크롤링 (조건부)
+ *
+ * @security 2026-02-07 보안 패치: runCommandTool(RCE), readFileTool/writeFileTool(샌드박스 미적용) 제거
+ */
 export const builtInTools: MCPToolDefinition[] = [
     visionOcrTool,
     analyzeImageTool,

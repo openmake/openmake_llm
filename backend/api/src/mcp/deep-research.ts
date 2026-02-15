@@ -29,6 +29,15 @@ const logger = createLogger('DeepResearchMCP');
 // 진행 중인 리서치 추적
 // ============================================================
 
+/**
+ * 활성 리서치 세션 맵
+ *
+ * 현재 진행 중인 리서치의 실시간 진행 상황을 메모리에 보관합니다.
+ * 완료 후 5분(300초) 뒤 자동 정리됩니다.
+ *
+ * Key: sessionId (UUID)
+ * Value: { progress: 실시간 진행 상황, startTime: 시작 시각 }
+ */
 const activeResearches = new Map<string, {
     progress: ResearchProgress;
     startTime: number;
@@ -38,12 +47,32 @@ const activeResearches = new Map<string, {
 // research 도구
 // ============================================================
 
+/**
+ * research 도구 입력 인자 타입
+ *
+ * @interface ResearchToolArgs
+ */
 interface ResearchToolArgs extends Record<string, unknown> {
+    /** 연구할 주제 또는 질문 */
     topic: string;
+    /** 연구 깊이: quick(1회), standard(3회), deep(5회) 반복 */
     depth?: 'quick' | 'standard' | 'deep';
+    /** 사용자 ID (DB 세션 연결용, 선택적) */
     userId?: string;
 }
 
+/**
+ * 심층 연구 도구 (research)
+ *
+ * 주제에 대해 웹 검색, LLM 분석, 반복 검증을 수행하여
+ * 종합 보고서를 생성하는 비동기 MCP 도구입니다.
+ * 리서치는 백그라운드에서 실행되며, get_research_status로 진행 상황을 확인합니다.
+ *
+ * @param args.topic - 연구 주제 (필수)
+ * @param args.depth - 연구 깊이: quick(1-2분), standard(3-5분), deep(5-10분)
+ * @param args.userId - 사용자 ID (선택적)
+ * @returns 세션 ID 및 시작 확인 메시지 (JSON)
+ */
 export const researchTool: MCPToolDefinition = {
     tool: {
         name: 'research',
@@ -160,10 +189,26 @@ export const researchTool: MCPToolDefinition = {
 // get_research_status 도구
 // ============================================================
 
+/**
+ * get_research_status 도구 입력 인자 타입
+ *
+ * @interface GetStatusToolArgs
+ */
 interface GetStatusToolArgs extends Record<string, unknown> {
+    /** 조회할 리서치 세션 ID */
     sessionId: string;
 }
 
+/**
+ * 리서치 상태 조회 도구 (get_research_status)
+ *
+ * 진행 중인 리서치의 실시간 진행 상황 또는 완료된 결과를 조회합니다.
+ * activeResearches 맵의 실시간 데이터를 우선 사용하고,
+ * 없으면 DB에서 세션 정보를 가져옵니다.
+ *
+ * @param args.sessionId - 리서치 세션 ID (필수)
+ * @returns 세션 정보, 진행 상황, 최근 스텝, 완료 시 결과 포함 (JSON)
+ */
 export const getResearchStatusTool: MCPToolDefinition = {
     tool: {
         name: 'get_research_status',
@@ -274,14 +319,37 @@ export const getResearchStatusTool: MCPToolDefinition = {
 // configure_research 도구
 // ============================================================
 
+/**
+ * configure_research 도구 입력 인자 타입
+ *
+ * @interface ConfigureToolArgs
+ */
 interface ConfigureToolArgs extends Record<string, unknown> {
+    /** 최대 반복 횟수 (1-10) */
     maxLoops?: number;
+    /** 사용할 LLM 모델명 */
     llmModel?: string;
+    /** 웹 검색 API 선택 */
     searchApi?: 'ollama' | 'firecrawl' | 'google' | 'all';
+    /** 검색 결과 최대 수 (5-50) */
     maxSearchResults?: number;
+    /** 출력 언어 */
     language?: 'ko' | 'en';
 }
 
+/**
+ * 리서치 설정 변경 도구 (configure_research)
+ *
+ * 심층 연구의 글로벌 기본 설정을 변경합니다.
+ * 입력 값의 범위를 검증하고, 유효한 항목만 업데이트합니다.
+ *
+ * @param args.maxLoops - 최대 반복 횟수 (1-10)
+ * @param args.llmModel - LLM 모델명
+ * @param args.searchApi - 검색 API 선택
+ * @param args.maxSearchResults - 최대 검색 결과 수 (5-50)
+ * @param args.language - 출력 언어 (ko/en)
+ * @returns 업데이트된 설정 (JSON)
+ */
 export const configureResearchTool: MCPToolDefinition = {
     tool: {
         name: 'configure_research',
@@ -406,6 +474,14 @@ export const configureResearchTool: MCPToolDefinition = {
 // 도구 배열 export
 // ============================================================
 
+/**
+ * Deep Research MCP 도구 배열
+ *
+ * 심층 연구 관련 전체 도구를 하나의 배열로 내보냅니다.
+ * - research: 리서치 시작
+ * - get_research_status: 진행 상황 조회
+ * - configure_research: 설정 변경
+ */
 export const deepResearchTools: MCPToolDefinition[] = [
     researchTool,
     getResearchStatusTool,

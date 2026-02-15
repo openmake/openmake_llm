@@ -1,8 +1,17 @@
 /**
- * Input Sanitizer Utility
+ * ============================================================
+ * Input Sanitizer - LLM 프롬프트 입력 검증 및 정제 유틸리티
+ * ============================================================
  *
- * Provides functions to sanitize and validate user input before
- * embedding it in LLM prompts. Helps prevent prompt injection attacks.
+ * 사용자 입력을 LLM 프롬프트에 안전하게 포함하기 위한 검증/정제 함수 모음.
+ * 프롬프트 인젝션 공격을 방지하고, 제어 문자 제거, 길이 제한 등을 수행합니다.
+ *
+ * @module utils/input-sanitizer
+ * @description
+ * - 프롬프트 인젝션 패턴 탐지 (시스템 명령 오버라이드 시도 차단)
+ * - 제어 문자 제거 및 공백 정규화
+ * - 최대 입력 길이 제한 (10,000자)
+ * - 검증(validate)과 정제(sanitize)를 분리 또는 통합 처리
  */
 
 /** Maximum allowed input length in characters */

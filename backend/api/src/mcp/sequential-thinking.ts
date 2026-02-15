@@ -1,24 +1,57 @@
 /**
- * Sequential Thinking MCP 서버 통합
- * - 단계별 사고 프로세스를 통한 문제 해결
- * - 생각의 수정, 분기, 재고려 지원
+ * ============================================================
+ * Sequential Thinking - 단계별 추론 체인 MCP 서버
+ * ============================================================
+ *
+ * 복잡한 문제를 단계별 사고 프로세스로 분해하여 해결하는 MCP 도구입니다.
+ * 생각의 수정(revision), 분기(branching), 재고려를 지원합니다.
+ *
+ * @module mcp/sequential-thinking
+ * @description
+ * - ThoughtRecord: 개별 사고 단계 기록
+ * - SequentialThinkingServer: 사고 체인 관리 (싱글톤)
+ * - Zod 기반 입력 검증 (SequentialThinkingInputSchema)
+ * - 분기(branch) 관리: main + 사용자 정의 분기
+ * - 시스템 프롬프트 및 질문 적용 헬퍼
+ *
+ * 사고 프로세스:
+ * 1. 문제 분해 → 2. 단계별 분석 → 3. 가설 생성 → 4. 가설 검증 → 5. 수정/개선 → 6. 결론 도출
  */
 
 import { z } from 'zod';
 
-// 생각 기록 인터페이스
+/**
+ * 개별 사고 단계 기록
+ *
+ * 각 사고 단계의 내용, 번호, 수정/분기 정보를 저장합니다.
+ *
+ * @interface ThoughtRecord
+ */
 export interface ThoughtRecord {
+    /** 현재 생각 번호 (1부터 시작) */
     thoughtNumber: number;
+    /** 예상 총 생각 수 */
     totalThoughts: number;
+    /** 사고 내용 텍스트 */
     thought: string;
+    /** 이전 생각 수정 여부 */
     isRevision: boolean;
+    /** 수정 대상 생각 번호 (isRevision=true일 때) */
     revisesThought?: number;
+    /** 분기 시작점 생각 번호 */
     branchFromThought?: number;
+    /** 분기 식별자 */
     branchId?: string;
+    /** 기록 시각 */
     timestamp: Date;
 }
 
-// 입력 스키마
+/**
+ * Sequential Thinking 입력 검증 스키마 (Zod)
+ *
+ * processThought()에 전달되는 입력을 검증합니다.
+ * 필수 필드: thought, nextThoughtNeeded, thoughtNumber, totalThoughts
+ */
 export const SequentialThinkingInputSchema = z.object({
     thought: z.string().describe("현재 사고 단계"),
     nextThoughtNeeded: z.boolean().describe("추가 사고가 필요한지 여부"),
@@ -31,24 +64,46 @@ export const SequentialThinkingInputSchema = z.object({
     needsMoreThoughts: z.boolean().optional().describe("더 많은 생각이 필요한지")
 });
 
+/** Zod 스키마에서 추론된 입력 타입 */
 export type SequentialThinkingInput = z.infer<typeof SequentialThinkingInputSchema>;
 
-// 출력 인터페이스
+/**
+ * Sequential Thinking 출력 인터페이스
+ *
+ * processThought()의 반환 데이터 구조입니다.
+ *
+ * @interface SequentialThinkingOutput
+ */
 export interface SequentialThinkingOutput {
+    /** 현재 생각 번호 */
     thoughtNumber: number;
+    /** 예상 총 생각 수 */
     totalThoughts: number;
+    /** 추가 사고가 필요한지 여부 */
     nextThoughtNeeded: boolean;
+    /** 모든 분기 식별자 목록 */
     branches: string[];
+    /** 전체 사고 기록 수 */
     thoughtHistoryLength: number;
+    /** 포맷팅된 사고 내용 (프리픽스 + 번호 + 상태 포함) */
     formattedThought: string;
 }
 
 /**
  * Sequential Thinking 서버 클래스
+ *
+ * 사고 체인을 관리하는 핵심 클래스입니다.
+ * 사고 기록 저장, 분기 관리, 포맷팅, 요약 기능을 제공합니다.
+ * getSequentialThinkingServer()로 싱글톤 인스턴스를 사용합니다.
+ *
+ * @class SequentialThinkingServer
  */
 export class SequentialThinkingServer {
+    /** 전체 사고 기록 배열 */
     private thoughtHistory: ThoughtRecord[] = [];
+    /** 분기 식별자 집합 (기본값: 'main') */
     private branches: Set<string> = new Set(['main']);
+    /** 현재 활성 분기 */
     private currentBranch: string = 'main';
 
     constructor() {
@@ -65,7 +120,13 @@ export class SequentialThinkingServer {
     }
 
     /**
-     * 현재 생각 처리
+     * 현재 생각을 처리하고 기록에 추가
+     *
+     * 입력을 Zod 스키마로 검증한 후, 분기 처리 및 기록 저장을 수행합니다.
+     * 포맷팅된 출력을 MCPToolResult 호환 형식으로 반환합니다.
+     *
+     * @param input - 사고 단계 입력 (Zod 검증 대상)
+     * @returns 처리 결과 { isError, content } (JSON 직렬화된 SequentialThinkingOutput)
      */
     processThought(input: SequentialThinkingInput): {
         isError: boolean;
@@ -128,6 +189,12 @@ export class SequentialThinkingServer {
 
     /**
      * 생각을 포맷팅된 문자열로 변환
+     *
+     * 프리픽스, 번호, 상태, 수정/분기 정보를 포함한 표시용 문자열을 생성합니다.
+     *
+     * @param record - 사고 기록
+     * @param nextNeeded - 추가 사고 필요 여부
+     * @returns 포맷팅된 문자열
      */
     private formatThought(record: ThoughtRecord, nextNeeded: boolean): string {
         const prefix = this.getThoughtPrefix(record);
@@ -147,7 +214,12 @@ export class SequentialThinkingServer {
     }
 
     /**
-     * 생각 번호에 따른 프리픽스
+     * 생각 번호에 따른 이모지 프리픽스 반환
+     *
+     * 10개의 이모지를 순환하며 시각적 구분을 제공합니다.
+     *
+     * @param record - 사고 기록
+     * @returns 이모지 + 공백 문자열
      */
     private getThoughtPrefix(record: ThoughtRecord): string {
         const emojis = ['💭', '🤔', '💡', '🔍', '📝', '🎯', '✨', '🧠', '📊', '🔮'];
@@ -156,7 +228,12 @@ export class SequentialThinkingServer {
     }
 
     /**
-     * 전체 사고 과정 요약
+     * 전체 사고 과정을 마크다운 형식으로 요약
+     *
+     * 모든 사고 기록을 순서대로 나열하고,
+     * 총 생각 수와 분기 수를 포함한 요약을 생성합니다.
+     *
+     * @returns 마크다운 형식의 사고 과정 요약 문자열
      */
     getSummary(): string {
         if (this.thoughtHistory.length === 0) {
@@ -176,7 +253,9 @@ export class SequentialThinkingServer {
     }
 
     /**
-     * 현재 상태 가져오기
+     * 현재 서버 상태 반환
+     *
+     * @returns 사고 기록 수, 분기 목록, 현재 활성 분기
      */
     getState(): {
         historyLength: number;
@@ -191,9 +270,16 @@ export class SequentialThinkingServer {
     }
 }
 
-// 싱글톤 인스턴스
+/** 싱글톤 인스턴스 저장소 */
 let thinkingServerInstance: SequentialThinkingServer | null = null;
 
+/**
+ * SequentialThinkingServer 싱글톤 인스턴스 반환
+ *
+ * 최초 호출 시 인스턴스를 생성하고, 이후에는 동일 인스턴스를 반환합니다.
+ *
+ * @returns SequentialThinkingServer 싱글톤 인스턴스
+ */
 export function getSequentialThinkingServer(): SequentialThinkingServer {
     if (!thinkingServerInstance) {
         thinkingServerInstance = new SequentialThinkingServer();
@@ -220,7 +306,14 @@ export const SEQUENTIAL_THINKING_SYSTEM_PROMPT = `
 `;
 
 /**
- * 질문에 Sequential Thinking 프롬프트 적용
+ * 질문에 Sequential Thinking 시스템 프롬프트를 적용
+ *
+ * enableThinking=true일 때, 원본 질문에 단계별 사고 프로세스 안내를 추가합니다.
+ * false이면 원본 질문을 그대로 반환합니다.
+ *
+ * @param question - 원본 사용자 질문
+ * @param enableThinking - Sequential Thinking 적용 여부 (기본값: true)
+ * @returns Sequential Thinking 프롬프트가 적용된 질문 문자열
  */
 export function applySequentialThinking(question: string, enableThinking: boolean = true): string {
     if (!enableThinking) {

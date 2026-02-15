@@ -1,6 +1,12 @@
 /**
- * cluster - SPA Page Module
- * Auto-generated from cluster.html
+ * ============================================
+ * Cluster Page - 분산 노드 관리
+ * ============================================
+ * Ollama 클러스터 노드의 상태(온라인/오프라인), 레이턴시,
+ * 모델 목록을 모니터링하고 노드 추가/제거를 관리하는
+ * SPA 페이지 모듈입니다. 주기적으로 헬스체크를 수행합니다.
+ *
+ * @module pages/cluster
  */
 (function() {
     'use strict';

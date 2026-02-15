@@ -1,13 +1,23 @@
 /**
- * Document Routes
- * 문서 업로드, 요약, Q&A, 관리 API 라우트
- * 
- * - POST /upload - 파일 업로드
- * - POST /summarize - 문서 요약
- * - POST /document/ask - 문서 Q&A
- * - GET /documents - 문서 목록
- * - GET /documents/:docId - 개별 문서 조회
- * - DELETE /documents/:docId - 문서 삭제
+ * ============================================================
+ * Document Routes - 문서 처리 API 라우트
+ * ============================================================
+ *
+ * 파일 업로드(Multer), PDF/이미지 텍스트 추출, LLM 기반 문서 요약,
+ * 문서 Q&A 등 문서 분석 파이프라인을 제공합니다.
+ * WebSocket을 통해 실시간 진행 상태(document_progress)를 브로드캐스트합니다.
+ *
+ * @module routes/documents.routes
+ * @description
+ * - POST   /api/upload           - 파일 업로드 (Multer, 최대 100MB)
+ * - POST   /api/summarize        - 문서 요약 (LLM 기반 JSON 응답)
+ * - POST   /api/document/ask     - 문서 Q&A (LLM 기반 질의응답)
+ * - GET    /api/documents        - 업로드된 문서 목록
+ * - GET    /api/documents/:docId - 개별 문서 조회
+ * - DELETE /api/documents/:docId - 문서 삭제
+ *
+ * @requires ClusterManager - Ollama 클러스터 관리
+ * @requires extractDocument - 문서 텍스트 추출 (PDF, 이미지 OCR)
  */
 
 import { Router, Request, Response } from 'express';

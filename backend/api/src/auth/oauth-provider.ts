@@ -1,6 +1,19 @@
 /**
- * OAuth Provider System
- * Google, GitHub 등 소셜 로그인을 위한 OAuth 2.0 프로바이더 시스템
+ * ============================================================
+ * OAuth Provider System - OAuth 2.0 소셜 로그인
+ * ============================================================
+ *
+ * Google, GitHub 등 외부 OAuth 프로바이더를 통한 소셜 로그인 시스템입니다.
+ * CSRF 방지를 위한 state 파라미터 관리와 프로바이더별 사용자 정보 정규화를 처리합니다.
+ *
+ * @module auth/oauth-provider
+ * @description
+ * - OAuthManager: 프로바이더 등록, 인증 URL 생성, 콜백 처리
+ * - CSRF 방지: 암호학적 nonce 기반 state 생성 및 검증
+ * - 토큰 교환: Authorization Code -> Access Token
+ * - 사용자 정보 조회: Google/GitHub API로 이메일, 이름, 아바타 추출
+ * - 환경변수 기반 자동 프로바이더 등록
+ * - setupOAuthRoutes(): Express 라우트 헬퍼
  */
 
 import axios from 'axios';
@@ -10,7 +23,10 @@ import { getConfig } from '../config/env';
 import { getAuthService } from '../services/AuthService';
 import { setTokenCookie, setRefreshTokenCookie, generateRefreshToken } from '../auth';
 
-// OAuth 프로바이더 설정
+/**
+ * OAuth 프로바이더 설정 인터페이스
+ * @interface OAuthProviderConfig
+ */
 export interface OAuthProviderConfig {
     clientId: string;
     clientSecret: string;
@@ -21,7 +37,10 @@ export interface OAuthProviderConfig {
     redirectUri: string;
 }
 
-// OAuth 사용자 정보
+/**
+ * OAuth 프로바이더에서 받은 정규화된 사용자 정보
+ * @interface OAuthUserInfo
+ */
 export interface OAuthUserInfo {
     provider: string;
     providerId: string;
@@ -60,6 +79,16 @@ const PROVIDER_CONFIGS: Record<string, Omit<OAuthProviderConfig, 'clientId' | 'c
 
 /**
  * OAuth 프로바이더 관리자
+ *
+ * 여러 OAuth 프로바이더(Google, GitHub)를 등록하고 인증 플로우를 관리합니다.
+ * 싱글톤으로 관리되며, 환경변수에서 자동으로 프로바이더를 로드합니다.
+ *
+ * @class OAuthManager
+ * @description
+ * - 프로바이더 등록 및 인증 URL 생성
+ * - CSRF state 생성/검증 (10분 만료, 일회성)
+ * - Authorization Code -> Token 교환
+ * - 프로바이더별 사용자 정보 정규화
  */
 export class OAuthManager {
     private providers: Map<string, OAuthProviderConfig> = new Map();
