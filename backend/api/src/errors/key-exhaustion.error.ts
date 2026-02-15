@@ -1,6 +1,15 @@
 /**
- * Error thrown when all API keys are exhausted (rate limited).
- * Contains information about when keys will reset.
+ * ============================================================
+ * KeyExhaustionError - API 키 소진 에러
+ * ============================================================
+ *
+ * 모든 API 키가 Rate Limit에 의해 소진(exhausted)되었을 때 발생합니다.
+ * 다음 키 사용 가능 시점(resetTime), 재시도 대기 시간(retryAfterSeconds),
+ * 전체 키 수 및 쿨다운 중인 키 수 정보를 포함합니다.
+ *
+ * @module errors/key-exhaustion.error
+ * @throws HTTP 503 또는 WebSocket error 메시지로 클라이언트에 전달
+ * @see api-key-manager.ts - 키 로테이션 및 쿨다운 관리
  */
 export class KeyExhaustionError extends Error {
     /** Timestamp when the next key will be available (earliest reset time) */

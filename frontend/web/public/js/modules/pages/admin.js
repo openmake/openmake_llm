@@ -1,14 +1,26 @@
 /**
- * admin - SPA Page Module
- * Auto-generated from admin.html
+ * ============================================
+ * Admin Page - 관리자 대시보드
+ * ============================================
+ * 사용자 관리(CRUD), 대화 기록 조회/내보내기, 사용 통계 등
+ * 관리자 전용 기능을 제공하는 SPA 페이지 모듈입니다.
+ * 관리자 인증 검증 후 탭 기반 UI로 각 기능에 접근합니다.
+ *
+ * @module pages/admin
  */
 (function() {
     'use strict';
     window.PageModules = window.PageModules || {};
+    /** @type {number[]} setInterval ID 배열 (cleanup용) */
     var _intervals = [];
+    /** @type {number[]} setTimeout ID 배열 (cleanup용) */
     var _timeouts = [];
 
     window.PageModules['admin'] = {
+        /**
+         * 페이지 HTML 문자열 반환
+         * @returns {string} 관리자 대시보드 HTML (스타일 포함)
+         */
         getHTML: function() {
             return '<div class="page-admin">' +
                 '<style data-spa-style="admin">' +
@@ -18,6 +30,10 @@
             '<\/div>';
         },
 
+        /**
+         * 페이지 초기화 - 인증 확인 후 사용자/대화/통계 데이터 로드
+         * @returns {void}
+         */
         init: function() {
             try {
         let authToken = localStorage.getItem('authToken');
@@ -268,6 +284,10 @@
             }
         },
 
+        /**
+         * 페이지 정리 - 인터벌/타임아웃 해제 및 전역 함수 제거
+         * @returns {void}
+         */
         cleanup: function() {
             _intervals.forEach(function(id) { clearInterval(id); });
             _intervals = [];

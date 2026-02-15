@@ -1,6 +1,12 @@
 /**
- * marketplace - SPA Page Module
- * Auto-generated from marketplace.html
+ * ============================================
+ * Marketplace Page - 에이전트 마켓플레이스
+ * ============================================
+ * 커스텀 AI 에이전트를 탐색, 설치, 게시할 수 있는
+ * 마켓플레이스 기능을 제공하는 SPA 페이지 모듈입니다.
+ * 카테고리 필터링과 검색을 지원합니다.
+ *
+ * @module pages/marketplace
  */
 (function() {
     'use strict';

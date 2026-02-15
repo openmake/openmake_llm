@@ -1,8 +1,18 @@
 /**
- * Usage Routes
- * API 사용량 통계 라우트 모듈
- * 
- * @module routes/usage
+ * ============================================================
+ * Usage Routes - API 사용량 통계 라우트
+ * ============================================================
+ *
+ * 인증된 사용자를 대상으로 API 사용량 요약 및 일간 통계를 제공합니다.
+ * ApiUsageTracker의 영구 저장된 통계를 기반으로 응답합니다.
+ *
+ * @module routes/usage.routes
+ * @description
+ * - GET /api/usage       - API 사용량 통계 요약 (인증)
+ * - GET /api/usage/daily - 일간 사용량 조회 (인증, 쿼리: ?days=7)
+ *
+ * @requires requireAuth - JWT 인증 미들웨어
+ * @requires ApiUsageTracker - API 사용량 추적기
  */
 
 import { Router, Request, Response } from 'express';

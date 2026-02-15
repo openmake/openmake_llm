@@ -1,3 +1,25 @@
+/**
+ * ============================================================
+ * OllamaClient - Ollama HTTP 클라이언트
+ * ============================================================
+ *
+ * Ollama API와의 HTTP 통신을 담당하는 핵심 클라이언트 모듈입니다.
+ * Cloud/Local 모델 자동 감지, API Key 자동 로테이션, 스트리밍 지원을 제공합니다.
+ *
+ * @module ollama/client
+ * @description
+ * - Generate/Chat/Embed API 호출 (스트리밍 및 비스트리밍)
+ * - Cloud 모델(:cloud 접미사) 자동 감지 및 호스트 전환
+ * - Axios 인터셉터를 통한 API Key 동적 주입 및 자동 로테이션
+ * - 429/401/403 에러 시 자동 키 스와핑, 네트워크 에러 시 지수 백오프 재시도
+ * - 사용량 쿼터 검사 (QuotaExceededError)
+ * - Web Search/Fetch API, Agent Loop 위임
+ * - A2A 병렬 처리를 위한 인덱스 기반 클라이언트 팩토리
+ *
+ * @requires axios - HTTP 클라이언트
+ * @requires ./api-key-manager - API Key 로테이션 관리
+ * @requires ./api-usage-tracker - 사용량 추적/쿼터 관리
+ */
 import axios, { AxiosInstance } from 'axios';
 import {
     OllamaConfig,
@@ -38,15 +60,53 @@ const DEFAULT_CONFIG: OllamaConfig = {
     timeout: envConfig.ollamaTimeout
 };
 
+/**
+ * Ollama HTTP 클라이언트 클래스
+ *
+ * Ollama API(로컬/클라우드)와의 모든 HTTP 통신을 관리합니다.
+ * Axios 인터셉터를 통해 API Key 자동 주입/로테이션을 처리하며,
+ * 스트리밍/비스트리밍 모드의 Generate/Chat/Embed API를 지원합니다.
+ *
+ * @class OllamaClient
+ *
+ * @example
+ * ```typescript
+ * const client = new OllamaClient({ model: 'gemini-3-flash-preview:cloud' });
+ * const result = await client.chat(
+ *   [{ role: 'user', content: '안녕하세요' }],
+ *   undefined,
+ *   (token) => process.stdout.write(token)
+ * );
+ * ```
+ */
 export class OllamaClient {
+    /** Axios HTTP 클라이언트 인스턴스 (인터셉터 포함) */
     private client: AxiosInstance;
+    /** Ollama 클라이언트 설정 (baseUrl, model, timeout) */
     private config: OllamaConfig;
+    /** 연속 대화를 위한 컨텍스트 토큰 배열 (Generate API용) */
     private context: number[] = [];
+    /** API Key 관리자 인스턴스 (키 로테이션 담당) */
     private apiKeyManager: ApiKeyManager;
 
     // 🆕 Ollama Cloud 호스트 상수
+    /** Ollama Cloud API 호스트 URL */
     private static readonly OLLAMA_CLOUD_HOST = 'https://ollama.com';
 
+    /**
+     * OllamaClient 인스턴스를 생성합니다.
+     *
+     * 초기화 시 다음을 수행합니다:
+     * 1. Cloud 모델(:cloud 접미사) 감지 시 baseUrl을 Ollama Cloud 호스트로 전환
+     * 2. Axios 인스턴스 생성 및 기본 헤더 설정
+     * 3. 요청 인터셉터: 매 요청마다 현재 활성 API Key를 Authorization 헤더에 동적 주입
+     * 4. 응답 인터셉터: 429/401/403 에러 시 API Key 자동 스와핑 후 재시도,
+     *    네트워크 에러(ETIMEDOUT 등) 시 지수 백오프(1s, 2s)로 최대 2회 재시도,
+     *    모든 키 소진 시 KeyExhaustionError throw
+     *
+     * @param config - Ollama 클라이언트 설정 (부분 적용 가능, 미지정 시 환경변수 기본값 사용)
+     * @throws {KeyExhaustionError} 모든 API 키가 소진되어 요청 불가능한 경우
+     */
     constructor(config: Partial<OllamaConfig> = {}) {
         this.config = { ...DEFAULT_CONFIG, ...config };
         this.apiKeyManager = getApiKeyManager();
@@ -143,21 +203,40 @@ export class OllamaClient {
         );
     }
 
+    /**
+     * 현재 설정된 모델 이름을 반환합니다.
+     * @returns 현재 모델 이름
+     */
     get model(): string {
         return this.config.model;
     }
 
     /**
-     * 🆕 모델이 Cloud 모델(:cloud 접미사)인지 확인
+     * 모델이 Cloud 모델(:cloud 접미사)인지 확인합니다.
+     *
+     * @param model - 확인할 모델 이름
+     * @returns Cloud 모델 여부
+     * @private
      */
     private isCloudModel(model: string): boolean {
         return model?.toLowerCase().endsWith(':cloud') ?? false;
     }
 
+    /**
+     * 클라이언트의 기본 모델을 변경합니다.
+     *
+     * @param model - 새로 설정할 모델 이름
+     */
     setModel(model: string): void {
         this.config.model = model;
     }
 
+    /**
+     * Ollama 서버에서 사용 가능한 모델 목록을 조회합니다.
+     *
+     * @returns 모델 목록 응답 (모델 이름, 크기, 수정일 등)
+     * @throws {Error} 서버 연결 실패 시
+     */
     async listModels(): Promise<ListModelsResponse> {
         const response = await this.client.get<ListModelsResponse>('/api/tags');
         return response.data;
@@ -191,6 +270,19 @@ export class OllamaClient {
         }
     }
 
+    /**
+     * 텍스트 생성 API를 호출합니다 (Ollama /api/generate).
+     *
+     * onToken 콜백이 제공되면 스트리밍 모드로 동작하여 토큰 단위로 콜백을 호출합니다.
+     * 사용량 쿼터 검사를 먼저 수행하고, 초과 시 QuotaExceededError를 throw합니다.
+     *
+     * @param prompt - 생성할 텍스트의 프롬프트
+     * @param options - 모델 추론 옵션 (temperature, top_p 등)
+     * @param onToken - 스트리밍 시 토큰 수신 콜백 (미제공 시 비스트리밍 모드)
+     * @param images - Base64 인코딩된 이미지 배열 (Vision 모델용)
+     * @returns 생성된 텍스트와 성능 메트릭
+     * @throws {QuotaExceededError} 시간/주간 사용량 한계 초과 시
+     */
     async generate(
         prompt: string,
         options?: ModelOptions,
@@ -227,6 +319,18 @@ export class OllamaClient {
         };
     }
 
+    /**
+     * 스트리밍 방식으로 텍스트를 생성합니다 (내부 메서드).
+     *
+     * NDJSON 스트림을 파싱하여 토큰 단위로 콜백을 호출하고,
+     * 완료 시 전체 응답과 메트릭을 반환합니다.
+     * 버퍼링 방식으로 줄 단위 파싱을 수행합니다.
+     *
+     * @param request - 텍스트 생성 요청 객체
+     * @param onToken - 토큰 수신 콜백
+     * @returns 전체 응답 텍스트와 성능 메트릭
+     * @private
+     */
     private async streamGenerate(
         request: GenerateRequest,
         onToken: (token: string) => void
@@ -301,7 +405,17 @@ export class OllamaClient {
     }
 
     /**
-     * Enhanced chat with Thinking, Structured Outputs, and Tool Calling support
+     * 채팅 API를 호출합니다 (Ollama /api/chat).
+     *
+     * Thinking(추론 과정 표시), 구조화된 출력(JSON Schema), Tool Calling 등
+     * 고급 기능을 지원합니다. onToken 콜백 제공 시 스트리밍 모드로 동작합니다.
+     *
+     * @param messages - 대화 히스토리 메시지 배열
+     * @param options - 모델 추론 옵션 (temperature, top_p 등)
+     * @param onToken - 스트리밍 시 토큰/Thinking 수신 콜백 (token, thinking?)
+     * @param advancedOptions - 고급 옵션 (think: Thinking 모드, format: 출력 형식, tools: 도구 목록)
+     * @returns 어시스턴트 응답 메시지 및 성능 메트릭
+     * @throws {QuotaExceededError} 사용량 한계 초과 시
      */
     async chat(
         messages: ChatMessage[],
@@ -343,6 +457,20 @@ export class OllamaClient {
         };
     }
 
+    /**
+     * 스트리밍 방식으로 채팅 응답을 생성합니다 (내부 메서드).
+     *
+     * NDJSON 스트림을 파싱하여 Thinking, Content, Tool Calls를 구분 처리합니다:
+     * - thinking 필드가 있으면 추론 과정으로 콜백 호출 (빈 content + thinking)
+     * - content 필드가 있으면 본문 텍스트로 콜백 호출
+     * - tool_calls 필드가 있으면 도구 호출 목록 수집
+     * - done=true 시 메트릭 수집
+     *
+     * @param request - 채팅 요청 객체
+     * @param onToken - 토큰/Thinking 수신 콜백
+     * @returns 어시스턴트 응답 메시지 (content, thinking, tool_calls 포함)
+     * @private
+     */
     private async streamChat(
         request: ChatRequest,
         onToken: (token: string, thinking?: string) => void
@@ -448,7 +576,15 @@ export class OllamaClient {
     }
 
     /**
-     * Generate embeddings for text (Ollama Embeddings API)
+     * 텍스트 임베딩을 생성합니다 (Ollama /api/embed).
+     *
+     * 텍스트를 벡터 공간의 숫자 배열로 변환합니다.
+     * 유사도 검색, 클러스터링 등에 활용됩니다.
+     *
+     * @param input - 임베딩할 텍스트 (단일 문자열 또는 배열)
+     * @param model - 임베딩 모델 이름 (기본값: 'embeddinggemma')
+     * @returns 임베딩 벡터 배열 (입력 개수 x 차원)
+     * @throws {Error} 임베딩 모델 사용 불가 시
      */
     async embed(input: string | string[], model?: string): Promise<number[][]> {
         const request: EmbedRequest = {
@@ -460,6 +596,13 @@ export class OllamaClient {
         return response.data.embeddings;
     }
 
+    /**
+     * Ollama 서버의 가용성을 확인합니다.
+     *
+     * 서버 루트 엔드포인트에 GET 요청을 보내 응답 가능 여부를 판단합니다.
+     *
+     * @returns 서버 사용 가능 여부
+     */
     async isAvailable(): Promise<boolean> {
         try {
             await this.client.get('/');
@@ -469,6 +612,12 @@ export class OllamaClient {
         }
     }
 
+    /**
+     * 연속 대화 컨텍스트를 초기화합니다.
+     *
+     * Generate API의 대화 컨텍스트 토큰 배열을 비웁니다.
+     * 새로운 대화를 시작할 때 호출합니다.
+     */
     clearContext(): void {
         this.context = [];
     }
@@ -590,6 +739,12 @@ export class OllamaClient {
     }
 }
 
+/**
+ * OllamaClient 인스턴스를 생성하는 팩토리 함수
+ *
+ * @param config - Ollama 클라이언트 설정 (부분 적용 가능)
+ * @returns 새 OllamaClient 인스턴스
+ */
 export const createClient = (config?: Partial<OllamaConfig>): OllamaClient => {
     return new OllamaClient(config);
 };

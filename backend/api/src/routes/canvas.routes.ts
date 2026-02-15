@@ -1,16 +1,26 @@
 /**
- * Canvas Routes
- * 캔버스 문서 생성, 조회, 수정, 공유, 버전 관리 API 라우트
- * 
- * - POST / — 문서 생성
- * - GET / — 사용자 문서 목록
- * - GET /shared/:shareToken — 공유 문서 조회 (인증 불필요)
- * - GET /:documentId — 문서 조회
- * - PUT /:documentId — 문서 수정
- * - POST /:documentId/share — 문서 공유
- * - DELETE /:documentId/share — 문서 공유 해제
- * - GET /:documentId/versions — 버전 히스토리
- * - DELETE /:documentId — 문서 삭제
+ * ============================================================
+ * Canvas Routes - 캔버스 문서 관리 API 라우트
+ * ============================================================
+ *
+ * 공유 가능한 문서 캔버스의 CRUD, 공유 토큰 기반 협업,
+ * 버전 관리 기능을 제공합니다. 등급별(free/pro/enterprise)
+ * 캔버스 생성 수량을 제한합니다.
+ *
+ * @module routes/canvas.routes
+ * @description
+ * - POST   /api/canvas                      - 캔버스 문서 생성 (인증, 등급별 제한)
+ * - GET    /api/canvas                      - 사용자 문서 목록 조회 (인증)
+ * - GET    /api/canvas/shared/:shareToken   - 공유 문서 조회 (인증 불필요)
+ * - GET    /api/canvas/:documentId          - 문서 조회 (인증, 소유권 확인)
+ * - PUT    /api/canvas/:documentId          - 문서 수정 (인증, 소유권 확인)
+ * - POST   /api/canvas/:documentId/share    - 문서 공유 토큰 생성 (인증)
+ * - DELETE /api/canvas/:documentId/share    - 문서 공유 해제 (인증)
+ * - GET    /api/canvas/:documentId/versions - 버전 히스토리 조회 (인증)
+ * - DELETE /api/canvas/:documentId          - 문서 삭제 (인증)
+ *
+ * @requires requireAuth - JWT 인증 미들웨어
+ * @requires UnifiedDatabase - 캔버스 문서 DB 접근
  */
 
 import { Router, Request, Response } from 'express';

@@ -1,6 +1,12 @@
 /**
- * password-change - SPA Page Module
- * Auto-generated from password-change.html
+ * ============================================
+ * Password Change Page - 비밀번호 변경
+ * ============================================
+ * 사용자 비밀번호 변경 폼을 제공하는 SPA 페이지 모듈입니다.
+ * 현재 비밀번호 확인, 새 비밀번호 검증(최소 길이, 일치 확인)을
+ * 수행합니다.
+ *
+ * @module pages/password-change
  */
 (function() {
     'use strict';

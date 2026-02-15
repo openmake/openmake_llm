@@ -1,6 +1,22 @@
 /**
- * Audit Log Routes
- * 감사 로그 시스템 API
+ * ============================================================
+ * Audit Routes - 감사 로그 시스템 API 라우트
+ * ============================================================
+ *
+ * 시스템 활동 감사 로그의 조회 및 생성을 담당합니다.
+ * 모든 엔드포인트는 관리자(admin) 전용이며,
+ * 액션 타입별/사용자별 필터링을 지원합니다.
+ *
+ * @module routes/audit.routes
+ * @description
+ * - GET  /api/audit               - 감사 로그 목록 조회 (필터: action, userId, limit)
+ * - GET  /api/audit/actions       - 감사 로그 액션 타입 목록
+ * - GET  /api/audit/user/:userId  - 특정 사용자 감사 로그 조회
+ * - POST /api/audit               - 감사 로그 엔트리 생성
+ *
+ * @requires requireAuth - JWT 인증 미들웨어
+ * @requires requireAdmin - 관리자 권한 미들웨어
+ * @requires UnifiedDatabase - 감사 로그 DB 접근
  */
 
 import { Router, Request, Response } from 'express';

@@ -1,12 +1,24 @@
 /**
- * Profile Resolver — 요청 시 파이프라인 프로파일 해석
+ * ============================================================
+ * Profile Resolver - Brand Model Alias를 ExecutionPlan으로 변환
+ * ============================================================
  * 
- * 외부 API 요청의 `model` 필드를 파이프라인 프로파일로 변환하고,
- * 실행 계획(ExecutionPlan)을 생성합니다.
+ * 외부 API 요청의 model 필드를 파이프라인 프로파일로 변환하고,
+ * ChatService가 소비할 수 있는 실행 계획(ExecutionPlan)을 생성합니다.
+ * Brand model이 아닌 일반 모델은 기본 설정으로 패스스루됩니다.
  * 
- * 실행 계획은 ChatService가 소비하여 각 파이프라인 요소를 적용합니다.
+ * @module chat/profile-resolver
+ * @description
+ * - resolveProfile(): 모델명 -> PipelineProfile 변환 (brand model 아니면 null)
+ * - buildExecutionPlan(): 모델명 -> 완전한 ExecutionPlan 생성 (brand/일반 모두 지원)
+ * - listAvailableModels(): 외부 API용 brand model 목록 반환
  * 
- * @see docs/api/API_KEY_SERVICE_PLAN.md §9
+ * 실행 흐름:
+ * API 요청 (model='openmake_llm_pro') -> resolveProfile() -> buildExecutionPlan() -> ChatService
+ * 
+ * @see chat/pipeline-profile.ts - PipelineProfile 정의
+ * @see services/ChatService.ts - ExecutionPlan 소비자
+ * @see docs/api/API_KEY_SERVICE_PLAN.md 9절
  */
 
 import { PipelineProfile, getProfiles, isValidBrandModel } from './pipeline-profile';
@@ -145,7 +157,10 @@ export function buildExecutionPlan(
 }
 
 /**
- * 모든 사용 가능한 brand model 목록을 외부 API용 형식으로 반환
+ * 모든 사용 가능한 brand model 목록을 외부 API용 형식으로 반환합니다.
+ * 각 모델의 ID, 이름, 설명, 지원 기능(agent, thinking, discussion 등)을 포함합니다.
+ * 
+ * @returns 외부 API 응답용 모델 목록 배열
  */
 export function listAvailableModels(): Array<{
     id: string;

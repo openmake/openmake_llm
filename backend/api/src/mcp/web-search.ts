@@ -1,5 +1,29 @@
 /**
- * 웹 검색 도구 - Ollama API + Firecrawl + Google + DuckDuckGo
+ * ============================================================
+ * Web Search - 다중 소스 웹 검색 통합 도구
+ * ============================================================
+ *
+ * Ollama API, Firecrawl, Google Custom Search, Wikipedia, Google News,
+ * DuckDuckGo, Naver 등 7개 소스에서 웹 검색을 수행하는 MCP 도구입니다.
+ *
+ * @module mcp/web-search
+ * @description
+ * - web_search: 통합 웹 검색 (Ollama 우선, 폴백으로 다중 소스 병렬 검색)
+ * - fact_check: 사실 검증 (검색 결과 기반)
+ * - extract_webpage: 웹페이지 콘텐츠 추출 (HTML → 텍스트)
+ * - research_topic: 주제 연구 (통합 검색 활용)
+ *
+ * 검색 우선순위:
+ * 1. Ollama 공식 Web Search API (최우선)
+ * 2. Firecrawl Search API (콘텐츠 스크래핑 포함)
+ * 3. 다중 소스 병렬 검색 (Google, Wikipedia, Google News, DuckDuckGo, Naver)
+ *
+ * 고볼륨 모드 (maxResults > 15):
+ * - Deep Research에서 사용, 모든 소스에서 병렬 수집
+ * - 조기 반환 없이 최대한 많은 결과 확보
+ *
+ * @requires GOOGLE_API_KEY - Google Custom Search API 키
+ * @requires GOOGLE_CSE_ID - Google Custom Search Engine ID
  */
 
 import { MCPToolDefinition, MCPToolResult } from './types';
@@ -7,8 +31,9 @@ import { createClient } from '../ollama/client';
 import { isFirecrawlConfigured } from './firecrawl';
 import { getConfig } from '../config/env';
 
-// Google API 설정 (환경변수 필수)
+/** Google Custom Search API 키 */
 const GOOGLE_API_KEY = getConfig().googleApiKey;
+/** Google Custom Search Engine ID */
 const GOOGLE_CSE_ID = getConfig().googleCseId;
 
 // API 키 미설정 경고
@@ -17,34 +42,76 @@ if (!GOOGLE_API_KEY || !GOOGLE_CSE_ID) {
     console.warn('[WebSearch] Google 검색 기능이 비활성화됩니다. .env 파일에 설정하세요.');
 }
 
-// 검색 결과 인터페이스
+/**
+ * 검색 결과 인터페이스
+ *
+ * 모든 검색 소스에서 반환되는 통일된 결과 형식입니다.
+ *
+ * @interface SearchResult
+ */
 export interface SearchResult {
+    /** 검색 결과 제목 */
     title: string;
+    /** 결과 URL */
     url: string;
+    /** 결과 스니펫(요약) */
     snippet: string;
+    /** 전체 콘텐츠 (Firecrawl 스크래핑 시) */
     fullContent?: string;
+    /** 검색 소스 도메인 (예: 'google.com', 'wikipedia.org') */
     source: string;
+    /** 게시 날짜 */
     date?: string;
+    /** 품질 점수 (0-1) */
     qualityScore?: number;
+    /** 카테고리 분류 */
     category?: string;
 }
 
+/**
+ * 사실 검증 결과 인터페이스
+ *
+ * @interface FactCheckResult
+ */
 export interface FactCheckResult {
+    /** 검증 대상 주장 */
     claim: string;
+    /** 판정 결과 */
     verdict: string;
+    /** 신뢰도 (0-1) */
     confidence: number;
+    /** 근거 자료 */
     sources: SearchResult[];
+    /** 판정 설명 */
     explanation: string;
 }
 
+/**
+ * 연구 결과 인터페이스
+ *
+ * @interface ResearchResult
+ */
 export interface ResearchResult {
+    /** 연구 주제 */
     topic: string;
+    /** 연구 요약 */
     summary: string;
+    /** 핵심 발견 사항 */
     keyFindings: string[];
+    /** 참고 자료 */
     sources: SearchResult[];
+    /** 품질 메트릭 */
     qualityMetrics: Record<string, unknown>;
 }
 
+/**
+ * XML 엔티티를 일반 문자로 디코딩
+ *
+ * Google News RSS 파싱에서 XML 엔티티를 처리합니다.
+ *
+ * @param text - XML 엔티티가 포함된 문자열
+ * @returns 디코딩된 문자열
+ */
 function decodeXmlEntities(text: string): string {
     return text
         .replace(/&lt;/g, '<')
@@ -55,7 +122,14 @@ function decodeXmlEntities(text: string): string {
 }
 
 /**
- * Ollama 공식 Web Search API (우선 사용)
+ * Ollama 공식 Web Search API 검색 (최우선 소스)
+ *
+ * Ollama 클라우드의 웹 검색 API를 호출합니다.
+ * 가장 먼저 시도되며, 결과가 있으면 다른 소스를 건너뜁니다.
+ *
+ * @param query - 검색 쿼리
+ * @param maxResults - 최대 결과 수 (기본값: 10)
+ * @returns SearchResult 배열 (실패 시 빈 배열)
  */
 async function searchOllamaWebSearch(query: string, maxResults: number = 10): Promise<SearchResult[]> {
     const results: SearchResult[] = [];
@@ -83,7 +157,14 @@ async function searchOllamaWebSearch(query: string, maxResults: number = 10): Pr
 }
 
 /**
- * 🔥 Firecrawl Search API (콘텐츠 스크래핑 포함)
+ * Firecrawl Search API 검색 (콘텐츠 스크래핑 포함)
+ *
+ * Firecrawl API를 사용하여 검색 결과와 함께 페이지 콘텐츠를 스크래핑합니다.
+ * FIRECRAWL_API_KEY가 설정되지 않으면 빈 배열을 반환합니다.
+ *
+ * @param query - 검색 쿼리
+ * @param maxResults - 최대 결과 수 (기본값: 5)
+ * @returns SearchResult 배열 (미설정 또는 실패 시 빈 배열)
  */
 async function searchFirecrawl(query: string, maxResults: number = 5): Promise<SearchResult[]> {
     const results: SearchResult[] = [];
@@ -143,7 +224,15 @@ async function searchFirecrawl(query: string, maxResults: number = 5): Promise<S
 }
 
 /**
- * Google Custom Search (전세계 검색)
+ * Google Custom Search API 검색
+ *
+ * Google Custom Search Engine을 통해 웹 검색을 수행합니다.
+ * globalSearch=false이면 한국어/한국 지역으로 제한합니다.
+ *
+ * @param query - 검색 쿼리
+ * @param maxResults - 최대 결과 수 (기본값: 10, API 제한: 최대 10)
+ * @param globalSearch - 전세계 검색 여부 (기본값: true)
+ * @returns SearchResult 배열 (API 키 미설정 또는 실패 시 빈 배열)
  */
 async function searchGoogle(query: string, maxResults: number = 10, globalSearch: boolean = true): Promise<SearchResult[]> {
     const results: SearchResult[] = [];
@@ -189,7 +278,13 @@ async function searchGoogle(query: string, maxResults: number = 10, globalSearch
 }
 
 /**
- * Wikipedia API 검색 (무료, 안정적)
+ * Wikipedia API 검색 (한국어, 무료, 안정적)
+ *
+ * 한국어 Wikipedia의 검색 API를 사용합니다.
+ * API 키 불필요, 최대 5건 반환.
+ *
+ * @param query - 검색 쿼리
+ * @returns SearchResult 배열 (실패 시 빈 배열)
  */
 async function searchWikipedia(query: string): Promise<SearchResult[]> {
     const results: SearchResult[] = [];
@@ -227,7 +322,14 @@ async function searchWikipedia(query: string): Promise<SearchResult[]> {
 }
 
 /**
- * Google News RSS 검색 (무료, 안정적) - 개선된 파싱
+ * Google News RSS 검색 (한국어, 무료, 안정적)
+ *
+ * Google News의 RSS 피드를 파싱하여 최신 뉴스를 검색합니다.
+ * CDATA 및 일반 XML 태그 모두 지원하는 개선된 파싱 로직을 사용합니다.
+ * 최대 10건 반환.
+ *
+ * @param query - 검색 쿼리
+ * @returns SearchResult 배열 (실패 시 빈 배열)
  */
 async function searchGoogleNews(query: string): Promise<SearchResult[]> {
     const results: SearchResult[] = [];
@@ -290,7 +392,13 @@ async function searchGoogleNews(query: string): Promise<SearchResult[]> {
 }
 
 /**
- * DuckDuckGo Instant Answer API (안정적)
+ * DuckDuckGo Instant Answer API 검색 (API 키 불필요)
+ *
+ * DuckDuckGo의 Instant Answer API를 사용합니다.
+ * Abstract(주요 결과) + Related Topics(관련 주제, 최대 5건)를 반환합니다.
+ *
+ * @param query - 검색 쿼리
+ * @returns SearchResult 배열 (실패 시 빈 배열)
  */
 async function searchDuckDuckGoAPI(query: string): Promise<SearchResult[]> {
     const results: SearchResult[] = [];
@@ -343,7 +451,13 @@ async function searchDuckDuckGoAPI(query: string): Promise<SearchResult[]> {
 }
 
 /**
- * 네이버 실시간 검색어 API (RSS 방식)
+ * 네이버 뉴스 검색 (모바일 페이지 스크래핑)
+ *
+ * 네이버 모바일 뉴스 검색 페이지를 파싱하여 최신 뉴스를 검색합니다.
+ * 한국 뉴스 전용, 최대 5건 반환.
+ *
+ * @param query - 검색 쿼리
+ * @returns SearchResult 배열 (실패 시 빈 배열)
  */
 async function searchNaverNews(query: string): Promise<SearchResult[]> {
     const results: SearchResult[] = [];
@@ -397,6 +511,21 @@ async function searchNaverNews(query: string): Promise<SearchResult[]> {
 }
 /**
  * 통합 웹 검색 (Ollama API 우선, 폴백으로 Firecrawl + 다중 소스)
+ *
+ * 3단계 검색 전략:
+ * 1. Ollama Web Search API (최우선, 고볼륨이 아니면 성공 시 조기 반환)
+ * 2. Firecrawl Search API (콘텐츠 스크래핑 포함, 충분하면 조기 반환)
+ * 3. 다중 소스 병렬 검색 (Google, Wikipedia, News, DuckDuckGo, Naver)
+ *
+ * 결과 우선순위: Firecrawl > Ollama > News > Naver > Google > Wiki > DDG
+ * URL 정규화를 통해 중복을 제거합니다.
+ *
+ * @param query - 검색 쿼리
+ * @param options.maxResults - 최대 결과 수 (기본값: 30)
+ * @param options.globalSearch - 전세계 검색 여부 (기본값: true)
+ * @param options.useOllamaFirst - Ollama API 우선 사용 (기본값: true)
+ * @param options.useFirecrawl - Firecrawl 사용 여부 (기본값: true)
+ * @returns 중복 제거된 SearchResult 배열
  */
 export async function performWebSearch(query: string, options: { maxResults?: number; globalSearch?: boolean; useOllamaFirst?: boolean; useFirecrawl?: boolean } = {}): Promise<SearchResult[]> {
     const { maxResults = 30, globalSearch = true, useOllamaFirst = true, useFirecrawl = true } = options;
@@ -472,7 +601,13 @@ export async function performWebSearch(query: string, options: { maxResults?: nu
 
 
 /**
- * 사실 검증 프롬프트
+ * 사실 검증 프롬프트 생성
+ *
+ * 검색 결과를 포맷팅하여 LLM에게 사실 검증을 요청하는 프롬프트를 생성합니다.
+ *
+ * @param claim - 검증할 주장 또는 질문
+ * @param searchResults - 근거 자료 검색 결과
+ * @returns 포맷팅된 사실 검증 프롬프트 문자열
  */
 export function createFactCheckPrompt(claim: string, searchResults: SearchResult[]): string {
     const sources = searchResults.map((r, i) =>
@@ -489,7 +624,12 @@ ${claim}
 }
 
 /**
- * 웹 검색 도구
+ * 웹 검색 MCP 도구 (web_search)
+ *
+ * performWebSearch()를 호출하여 다중 소스에서 웹 검색을 수행합니다.
+ *
+ * @param args.query - 검색 쿼리 (필수)
+ * @returns 번호가 매겨진 검색 결과 목록
  */
 export const webSearchTool: MCPToolDefinition = {
     tool: {
@@ -522,7 +662,12 @@ export const webSearchTool: MCPToolDefinition = {
 };
 
 /**
- * 사실 검증 도구
+ * 사실 검증 MCP 도구 (fact_check)
+ *
+ * 주장에 대한 검색 결과를 수집하여 사실 검증 자료를 제공합니다.
+ *
+ * @param args.claim - 검증할 주장 (필수)
+ * @returns 검증 근거 검색 결과 목록
  */
 export const factCheckTool: MCPToolDefinition = {
     tool: {
@@ -548,7 +693,13 @@ export const factCheckTool: MCPToolDefinition = {
 };
 
 /**
- * 웹페이지 추출 도구
+ * 웹페이지 콘텐츠 추출 MCP 도구 (extract_webpage)
+ *
+ * URL에서 HTML을 가져와 태그를 제거한 텍스트를 반환합니다.
+ * 최대 3000자까지 추출합니다.
+ *
+ * @param args.url - 추출할 웹페이지 URL (필수)
+ * @returns 태그 제거된 텍스트 콘텐츠 (최대 3000자)
  */
 export const extractWebpageTool: MCPToolDefinition = {
     tool: {
@@ -574,7 +725,12 @@ export const extractWebpageTool: MCPToolDefinition = {
 };
 
 /**
- * 연구 도구
+ * 주제 연구 MCP 도구 (research_topic)
+ *
+ * 주제에 대한 통합 웹 검색을 수행하여 연구 자료를 수집합니다.
+ *
+ * @param args.topic - 연구 주제 (필수)
+ * @returns 검색된 연구 자료 목록
  */
 export const researchTopicTool: MCPToolDefinition = {
     tool: {
@@ -599,7 +755,14 @@ export const researchTopicTool: MCPToolDefinition = {
     }
 };
 
-// 도구 내보내기
+/**
+ * 웹 검색 관련 전체 MCP 도구 배열
+ *
+ * - web_search: 통합 웹 검색
+ * - fact_check: 사실 검증
+ * - extract_webpage: 웹페이지 콘텐츠 추출
+ * - research_topic: 주제 연구
+ */
 export const webSearchTools: MCPToolDefinition[] = [
     webSearchTool,
     factCheckTool,

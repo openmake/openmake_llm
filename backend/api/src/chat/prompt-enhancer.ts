@@ -1,14 +1,21 @@
 /**
  * ============================================================
- * 프롬프트 향상 유틸리티 (mcp-enhance-prompt 스타일)
+ * Prompt Enhancer - 사용자 프롬프트 분석, 품질 평가 및 향상
  * ============================================================
  * 
- * 참조: https://github.com/FelixFoster/mcp-enhance-prompt
+ * 사용자가 입력한 프롬프트를 분석하여 품질 점수를 계산하고,
+ * 최적의 역할 모드를 추천하며, 프롬프트 개선 제안을 제공합니다.
+ * mcp-enhance-prompt 패턴을 참조하여 구현되었습니다.
  * 
- * 기능:
- * 1. 사용자 프롬프트 분석 및 향상
- * 2. 프롬프트 품질 평가
- * 3. 맥락 정보 자동 추가
+ * @module chat/prompt-enhancer
+ * @description
+ * - 프롬프트 컨텍스트 분석: 코드 포함 여부, 질문 형태, 명령 감지, 언어, 복잡도, 주제
+ * - 프롬프트 품질 평가: 명확성, 구체성, 맥락 각 100점 기준 점수 산출
+ * - 프롬프트 향상: 복잡한 요청에 구조화 힌트 추가
+ * - 역할 모드 추천: detectPromptType() 연동으로 최적 PromptType 제안
+ * 
+ * @see chat/prompt.ts - detectPromptType() 함수 참조
+ * @see https://github.com/FelixFoster/mcp-enhance-prompt - 참조 구현
  */
 
 import { PromptType, detectPromptType, getPromptTypeDescription } from './prompt';
@@ -17,29 +24,58 @@ import { PromptType, detectPromptType, getPromptTypeDescription } from './prompt
 // 타입 정의
 // ============================================================
 
+/**
+ * 프롬프트 향상 결과 인터페이스
+ * enhancePrompt()의 반환 타입입니다.
+ */
 export interface EnhancedPrompt {
+    /** 원본 프롬프트 */
     original: string;
+    /** 향상된 프롬프트 (구조화 힌트 등 추가) */
     enhanced: string;
+    /** 추천된 역할 모드 */
     suggestedMode: PromptType;
+    /** 추천 모드의 한국어 설명 */
     modeDescription: string;
+    /** 프롬프트 컨텍스트 분석 결과 */
     context: PromptContext;
+    /** 프롬프트 품질 점수 */
     qualityScore: QualityScore;
 }
 
+/**
+ * 프롬프트 컨텍스트 분석 결과 인터페이스
+ * extractContext()가 프롬프트를 분석하여 반환합니다.
+ */
 export interface PromptContext {
+    /** 코드 블록 또는 프로그래밍 키워드 포함 여부 */
     hasCode: boolean;
+    /** 질문 형태 (물음표, 의문사) 포함 여부 */
     hasQuestion: boolean;
+    /** 명령/요청 (해줘, create 등) 포함 여부 */
     hasCommand: boolean;
+    /** 감지된 언어 */
     language: 'ko' | 'en' | 'mixed';
+    /** 프롬프트 복잡도 (단어 수, 다중 질문, 코드 블록 기준) */
     complexity: 'simple' | 'medium' | 'complex';
+    /** 추출된 주제 (programming, analysis, explanation, generation, 또는 null) */
     topic: string | null;
 }
 
+/**
+ * 프롬프트 품질 점수 인터페이스
+ * evaluatePromptQuality()가 산출하는 3축 품질 점수입니다.
+ */
 export interface QualityScore {
-    overall: number;  // 0-100
+    /** 전체 평균 점수 (0-100) */
+    overall: number;
+    /** 명확성 점수: 길이, 구두점 기반 (0-100) */
     clarity: number;
+    /** 구체성 점수: 구체적 요청, 예시, 형식 지정 기반 (0-100) */
     specificity: number;
+    /** 맥락 점수: 배경 정보, 목적 포함 기반 (0-100) */
     context: number;
+    /** 개선 제안 문자열 배열 */
     suggestions: string[];
 }
 
@@ -174,7 +210,16 @@ export function evaluatePromptQuality(prompt: string): QualityScore {
 // ============================================================
 
 /**
- * 프롬프트 향상 생성
+ * 사용자 프롬프트를 분석하여 향상된 결과를 생성합니다.
+ * 
+ * 처리 단계:
+ * 1. 컨텍스트 분석 (extractContext)
+ * 2. 최적 역할 모드 감지 (detectPromptType)
+ * 3. 품질 점수 평가 (evaluatePromptQuality)
+ * 4. 복잡한 요청에 구조화 힌트 추가
+ * 
+ * @param userPrompt - 사용자 원본 프롬프트
+ * @returns 향상된 프롬프트, 추천 모드, 품질 점수, 개선 제안을 포함한 결과
  */
 export function enhancePrompt(userPrompt: string): EnhancedPrompt {
     const context = extractContext(userPrompt);
@@ -205,7 +250,11 @@ export function enhancePrompt(userPrompt: string): EnhancedPrompt {
 }
 
 /**
- * 맥락 정보 추가
+ * 프롬프트에 맥락 정보 메타데이터를 접두사로 추가합니다.
+ * 
+ * @param prompt - 원본 프롬프트
+ * @param additionalContext - 추가할 맥락 정보 (topic, complexity)
+ * @returns 맥락 정보가 접두사로 추가된 프롬프트
  */
 export function addContext(prompt: string, additionalContext: Partial<PromptContext>): string {
     const contextLines: string[] = [];
@@ -224,7 +273,11 @@ export function addContext(prompt: string, additionalContext: Partial<PromptCont
 }
 
 /**
- * 프롬프트 향상 결과 포맷팅
+ * 프롬프트 향상 결과를 마크다운 형식으로 포맷팅합니다.
+ * 품질 점수 표, 추천 모드, 컨텍스트 요약, 개선 제안을 포함합니다.
+ * 
+ * @param result - enhancePrompt()의 결과
+ * @returns 마크다운 형식의 분석 결과 문자열
  */
 export function formatEnhancementResult(result: EnhancedPrompt): string {
     return `## 프롬프트 분석 결과

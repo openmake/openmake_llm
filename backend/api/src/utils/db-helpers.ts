@@ -1,6 +1,16 @@
 /**
- * Database Helper Utilities
- * Conversion helpers for SQLite data types
+ * ============================================================
+ * Database Helpers - 데이터베이스 타입 변환 유틸리티
+ * ============================================================
+ *
+ * SQLite 데이터 타입과 JavaScript 타입 간의 변환 헬퍼 함수 모음.
+ * boolean/integer 변환, JSON 안전 파싱 등을 제공합니다.
+ *
+ * @module utils/db-helpers
+ * @description
+ * - SQLite integer (0/1) <-> JavaScript boolean 변환
+ * - 데이터베이스 문자열 필드의 안전한 JSON 파싱
+ * - null/undefined 값에 대한 안전한 기본값 처리
  */
 
 /**

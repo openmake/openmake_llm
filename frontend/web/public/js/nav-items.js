@@ -1,14 +1,28 @@
 /**
  * ============================================
- * Shared Navigation Items Data Source
- * 
- * 사이드바 메뉴 항목의 단일 소스 (Single Source of Truth)
- * index.html과 sidebar.js 모두 이 데이터를 사용합니다.
- * 
- * 새 페이지 추가 시 이 파일만 수정하면 됩니다.
+ * Navigation Items - 사이드바 메뉴 데이터 소스
  * ============================================
+ * 사이드바 메뉴 항목의 단일 소스 (Single Source of Truth).
+ * index.html과 sidebar.js 모두 이 데이터를 참조합니다.
+ * 새 페이지 추가 시 이 파일만 수정하면 됩니다.
+ *
+ * @module nav-items
  */
 
+/**
+ * @typedef {Object} NavItem
+ * @property {string} href - 페이지 경로 (예: '/canvas.html')
+ * @property {string} icon - 이모지 아이콘
+ * @property {string} iconify - Iconify 아이콘 식별자
+ * @property {string} label - 메뉴 표시 이름
+ * @property {boolean} [requireAuth] - 인증 필요 여부
+ * @property {boolean} [requireAdmin] - 관리자 권한 필요 여부
+ */
+
+/**
+ * 네비게이션 항목 설정 객체
+ * @type {{ menu: NavItem[], admin: NavItem[] }}
+ */
 const NAV_ITEMS = {
     menu: [
         { href: '/', icon: '💬', iconify: 'lucide:message-circle', label: '채팅' },

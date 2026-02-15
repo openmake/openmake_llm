@@ -1,8 +1,19 @@
 /**
- * Web Search Routes
- * 웹 검색 API 라우트
- * 
- * - POST /web-search - 웹 검색 + LLM 사실 검증
+ * ============================================================
+ * Web Search Routes - 웹 검색 API 라우트
+ * ============================================================
+ *
+ * Google Custom Search를 통한 실시간 웹 검색 후
+ * LLM 기반 사실 검증(fact-checking)을 수행하여 응답합니다.
+ * Cloud 모델과 로컬 모델 모두 지원합니다.
+ *
+ * @module routes/web-search.routes
+ * @description
+ * - POST /api/web-search - 웹 검색 + LLM 사실 검증 (검색 결과, 출처 포함)
+ *
+ * @requires ClusterManager - Ollama 클러스터 관리
+ * @requires performWebSearch - Google Custom Search 실행
+ * @requires OllamaClient - LLM 생성 클라이언트
  */
 
 import { Router, Request, Response } from 'express';

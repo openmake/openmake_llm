@@ -1,6 +1,12 @@
 /**
- * canvas - SPA Page Module
- * Auto-generated from canvas.html
+ * ============================================
+ * Canvas Page - 문서 캔버스
+ * ============================================
+ * 공유 가능한 문서 캔버스 기능을 제공합니다.
+ * 문서 생성/편집/삭제, 버전 관리, 공유 토큰 기반 협업,
+ * AI 지원 컨텐츠 생성을 처리하는 SPA 페이지 모듈입니다.
+ *
+ * @module pages/canvas
  */
 (function() {
     'use strict';

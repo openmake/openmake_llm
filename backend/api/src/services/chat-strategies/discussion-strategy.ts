@@ -1,19 +1,66 @@
+/**
+ * ============================================================
+ * DiscussionStrategy - 멀티 에이전트 토론 전략
+ * ============================================================
+ *
+ * 여러 전문가 에이전트가 사용자 질문에 대해 교차 검토하고
+ * 팩트체킹을 수행하여 고품질의 종합 응답을 생성합니다.
+ *
+ * @module services/chat-strategies/discussion-strategy
+ * @description
+ * - 문서, 대화 이력, 웹검색, 사용자 메모리 등 다중 컨텍스트 통합
+ * - 이미지 분석 및 텍스트 추출 (비전 모델 활용)
+ * - DiscussionEngine을 통한 다중 에이전트 토론 오케스트레이션
+ * - 웹 검색 기반 사실 검증 (팩트체킹)
+ * - 토큰 제한을 고려한 컨텍스트 우선순위 관리
+ */
 import { createDiscussionEngine, type DiscussionResult } from '../../agents/discussion-engine';
 import type { ChatMessage } from '../../ollama/types';
 import type { ChatStrategy, ChatResult, DiscussionStrategyContext } from './types';
 
+/**
+ * 웹 검색 결과 인터페이스 (토론 내부용)
+ * @interface WebSearchResult
+ */
 interface WebSearchResult {
+    /** 검색 결과 제목 */
     title: string;
+    /** 검색 결과 URL */
     url: string;
+    /** 검색 결과 요약 스니펫 */
     snippet?: string;
 }
 
+/**
+ * 멀티 에이전트 토론 전략
+ *
+ * 다중 컨텍스트(문서, 이력, 메모리, 웹검색, 이미지)를 통합한 후
+ * DiscussionEngine을 통해 여러 전문가 에이전트의 토론을 관리합니다.
+ *
+ * @class DiscussionStrategy
+ * @implements {ChatStrategy<DiscussionStrategyContext, ChatResult>}
+ */
 export class DiscussionStrategy implements ChatStrategy<DiscussionStrategyContext, ChatResult> {
+    /**
+     * 멀티 에이전트 토론을 실행합니다.
+     *
+     * 실행 흐름:
+     * 1. 문서 컨텍스트 추출 (텍스트 + 이미지)
+     * 2. 대화 히스토리 및 웹검색 컨텍스트 준비
+     * 3. 사용자 장기 메모리 조회 (MemoryService)
+     * 4. 이미지 분석 (최대 3개, 비전 모델 사용)
+     * 5. DiscussionEngine으로 토론 수행 (교차 검토 + 팩트체킹)
+     * 6. 결과 포맷팅 및 스트리밍 전송
+     *
+     * @param context - 토론 전략 컨텍스트 (요청, 문서, 클라이언트, 진행 콜백)
+     * @returns 포맷팅된 토론 결과 응답
+     */
     async execute(context: DiscussionStrategyContext): Promise<ChatResult> {
         const { message, docId, history, webSearchContext, images, userId } = context.req;
 
         console.log('[ChatService] 🎯 멀티 에이전트 토론 모드 시작');
 
+        // 1단계: 문서 컨텍스트 추출 (텍스트 + 이미지)
         let documentContext = '';
         let documentImages: string[] = [];
 
@@ -40,6 +87,7 @@ export class DiscussionStrategy implements ChatStrategy<DiscussionStrategyContex
             }
         }
 
+        // 2단계: 대화 히스토리 변환
         const conversationHistory = history?.map((h) => ({
             role: h.role as string,
             content: h.content as string,
@@ -53,6 +101,7 @@ export class DiscussionStrategy implements ChatStrategy<DiscussionStrategyContex
             console.log(`[ChatService] 🔍 웹 검색 컨텍스트 적용: ${webSearchContext.length}자`);
         }
 
+        // 3단계: 사용자 장기 메모리 조회 (게스트가 아닌 경우만)
         let userMemoryContext = '';
         if (userId && userId !== 'guest') {
             try {
@@ -69,6 +118,7 @@ export class DiscussionStrategy implements ChatStrategy<DiscussionStrategyContex
             }
         }
 
+        // 4단계: 이미지 분석 (최대 3개, 비전 모델을 통해 텍스트 설명 추출)
         const allImages = [...(images || []), ...documentImages];
         let imageDescriptions: string[] = [];
 
@@ -113,6 +163,8 @@ export class DiscussionStrategy implements ChatStrategy<DiscussionStrategyContex
             imageDescriptions = await Promise.all(imagePromises);
         }
 
+        // 5단계: DiscussionEngine 생성 및 토론 실행
+        /** DiscussionEngine에 주입할 LLM 응답 생성 함수 */
         const generateResponse = async (systemPrompt: string, userMessage: string): Promise<string> => {
             let response = '';
             const chatMessages: ChatMessage[] = [
@@ -158,6 +210,7 @@ export class DiscussionStrategy implements ChatStrategy<DiscussionStrategyContex
             context.onProgress
         );
 
+        // 웹 검색 기반 사실 검증 함수 로드 (선택적)
         let webSearchFn: ((q: string, opts?: { maxResults?: number }) => Promise<WebSearchResult[]>) | undefined;
         try {
             const { performWebSearch } = await import('../../mcp');
@@ -167,9 +220,11 @@ export class DiscussionStrategy implements ChatStrategy<DiscussionStrategyContex
             console.warn('[ChatService] 웹 검색 모듈 로드 실패, 사실 검증 비활성화');
         }
 
+        // 6단계: 토론 실행 및 결과 포맷팅/스트리밍
         const result: DiscussionResult = await discussionEngine.startDiscussion(message, webSearchFn);
         const formattedResponse = context.formatDiscussionResult(result);
 
+        // 포맷팅된 결과를 문자 단위로 스트리밍 전송
         for (const char of formattedResponse) {
             context.onToken(char);
         }

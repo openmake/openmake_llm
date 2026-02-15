@@ -1,14 +1,24 @@
 /**
- * External Routes
- * 외부 서비스 연결 관리 API 라우트
- * 
- * - GET / — 사용자 외부 연결 목록
- * - POST / — 외부 연결 생성/업데이트
- * - GET /:serviceType — 특정 서비스 연결 조회
- * - PUT /:connectionId/tokens — 토큰 갱신
- * - DELETE /:serviceType — 서비스 연결 해제
- * - GET /:connectionId/files — 캐시된 파일 목록
- * - POST /:connectionId/files — 외부 파일 캐시
+ * ============================================================
+ * External Routes - 외부 서비스 연결 관리 API 라우트
+ * ============================================================
+ *
+ * Google Drive, Notion, GitHub, Slack, Dropbox 등 외부 서비스와의
+ * OAuth 연결 관리, 토큰 갱신, 파일 캐시를 제공합니다.
+ * 모든 엔드포인트는 인증이 필요합니다.
+ *
+ * @module routes/external.routes
+ * @description
+ * - GET    /api/external                      - 사용자 외부 연결 목록
+ * - POST   /api/external                      - 외부 연결 생성/업데이트 (ON CONFLICT)
+ * - GET    /api/external/:serviceType         - 특정 서비스 연결 조회
+ * - PUT    /api/external/:connectionId/tokens - 연결 토큰 갱신
+ * - DELETE /api/external/:serviceType         - 서비스 연결 해제
+ * - GET    /api/external/:connectionId/files  - 캐시된 외부 파일 목록
+ * - POST   /api/external/:connectionId/files  - 외부 파일 캐시 저장
+ *
+ * @requires requireAuth - JWT 인증 미들웨어
+ * @requires UnifiedDatabase - 외부 연결 DB 접근
  */
 
 import { Router, Request, Response } from 'express';

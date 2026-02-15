@@ -1,7 +1,19 @@
 /**
- * Conversation DB
- * 대화 세션 및 메시지 관리 (PostgreSQL 구현)
- * UnifiedDatabase의 conversation_sessions / conversation_messages 테이블 사용
+ * ============================================================
+ * Conversation DB - 대화 세션 및 메시지 관리
+ * ============================================================
+ *
+ * 대화 세션과 메시지의 전체 생명주기를 관리하는 데이터 접근 레이어입니다.
+ * PostgreSQL의 conversation_sessions / conversation_messages 테이블을 사용합니다.
+ *
+ * @module data/conversation-db
+ * @description
+ * - 세션 CRUD (생성, 조회, 수정, 삭제)
+ * - 사용자별/익명 세션 격리 조회
+ * - 메시지 저장 및 조회 (N+1 방지 배치 로딩)
+ * - 익명 세션 → 로그인 사용자 이관 (claim)
+ * - JSON → PostgreSQL 원타임 마이그레이션
+ * - 자동 세션 정리 스케줄러 (만료 세션 삭제)
  */
 
 import { v4 as uuidv4 } from 'uuid';
@@ -18,32 +30,62 @@ const logger = createLogger('ConversationDB');
 const MAX_SESSIONS = getConfig().maxConversationSessions;
 const SESSION_TTL_DAYS = getConfig().sessionTtlDays;
 
+/**
+ * 대화 세션 인터페이스 (프론트엔드 호환 camelCase)
+ * @interface ConversationSession
+ */
 export interface ConversationSession {
+    /** 세션 고유 식별자 (UUID) */
     id: string;
+    /** 소유 사용자 ID (로그인 사용자) */
     userId?: string;
-    anonSessionId?: string;  // 비로그인 사용자 세션 식별자
+    /** 비로그인 사용자 세션 식별자 (UUID v4) */
+    anonSessionId?: string;
+    /** 대화 제목 */
     title: string;
+    /** 세션 생성 일시 (ISO 8601) */
     created_at: string;
+    /** 마지막 업데이트 일시 (ISO 8601) */
     updated_at: string;
+    /** 세션 메타데이터 (JSONB) */
     metadata?: Record<string, unknown> | null;
+    /** 세션에 속한 메시지 목록 */
     messages: ConversationMessage[];
 }
 
+/**
+ * 대화 메시지 인터페이스 (프론트엔드 호환 camelCase)
+ * @interface ConversationMessage
+ */
 export interface ConversationMessage {
+    /** 메시지 고유 식별자 */
     id: string;
+    /** 소속 세션 ID */
     sessionId: string;
+    /** 메시지 발화자 역할 */
     role: 'user' | 'assistant' | 'system';
+    /** 메시지 본문 */
     content: string;
+    /** 메시지 생성 일시 (ISO 8601) */
     timestamp: string;
+    /** 응답 생성에 사용된 모델명 */
     model?: string;
+    /** AI의 사고 과정 */
     thinking?: string;
 }
 
-/** Options for adding a message */
+/**
+ * 메시지 저장 시 추가 옵션
+ * @interface MessageOptions
+ */
 interface MessageOptions {
+    /** 사용된 모델명 */
     model?: string;
+    /** AI 사고 과정 텍스트 */
     thinking?: string;
+    /** 사용된 토큰 수 */
     tokensUsed?: number;
+    /** 응답 생성 시간 (밀리초) */
     responseTime?: number;
 }
 
@@ -84,7 +126,24 @@ function isDuplicateKeyError(err: unknown): boolean {
     return false;
 }
 
+/**
+ * 대화 데이터베이스 접근 클래스
+ *
+ * PostgreSQL의 conversation_sessions/conversation_messages 테이블에 대한
+ * CRUD 작업을 제공합니다. 싱글톤으로 관리됩니다.
+ *
+ * @class ConversationDB
+ * @description
+ * - 초기화 시 스키마 마이그레이션 (anon_session_id 컬럼 추가)
+ * - JSON 파일 → PostgreSQL 원타임 데이터 마이그레이션
+ * - 세션 수 제한 (MAX_SESSIONS) 자동 적용
+ * - 배치 메시지 로딩으로 N+1 쿼리 방지
+ */
 class ConversationDB {
+    /**
+     * ConversationDB 인스턴스를 생성합니다.
+     * 초기화 시 스키마 마이그레이션과 JSON 데이터 이관을 비동기로 수행합니다.
+     */
     constructor() {
         this.init().catch(err => logger.error('[ConversationDB] Init failed:', err));
     }
@@ -481,9 +540,14 @@ class ConversationDB {
     }
 }
 
-// 싱글톤 인스턴스 (lazy initialization)
+/** 싱글톤 인스턴스 (lazy initialization) */
 let dbInstance: ConversationDB | null = null;
 
+/**
+ * ConversationDB 싱글톤 인스턴스를 반환합니다.
+ *
+ * @returns ConversationDB 인스턴스
+ */
 export function getConversationDB() {
     if (!dbInstance) {
         dbInstance = new ConversationDB();
@@ -492,9 +556,15 @@ export function getConversationDB() {
     return dbInstance;
 }
 
-// 스케줄러 (server.ts에서 require로 사용됨)
+/** 세션 정리 스케줄러 타이머 */
 let cleanupTimer: ReturnType<typeof setTimeout> | null = null;
 
+/**
+ * 만료 세션 자동 정리 스케줄러를 시작합니다.
+ * 지정된 간격으로 30일 이상 된 세션을 삭제합니다.
+ *
+ * @param intervalHours - 정리 실행 간격 (시간 단위, 기본값: 24)
+ */
 export function startSessionCleanupScheduler(intervalHours: number = 24) {
     if (cleanupTimer) clearInterval(cleanupTimer);
 

@@ -1,6 +1,26 @@
 /**
- * Deep Research Routes
- * 딥 리서치 세션 관리 API
+ * ============================================================
+ * Research Routes - 딥 리서치 세션 관리 API 라우트
+ * ============================================================
+ *
+ * 자율적 다단계 리서치 에이전트의 세션 생성, 스텝 관리,
+ * 비동기 실행, 결과 조회를 담당합니다.
+ * Pro 이상 등급에서만 접근 가능하며, 소유권 기반 접근 제어를 적용합니다.
+ *
+ * @module routes/research.routes
+ * @description
+ * - POST   /api/research/sessions                      - 리서치 세션 생성 (인증)
+ * - GET    /api/research/sessions                      - 세션 목록 조회 (인증)
+ * - GET    /api/research/sessions/:sessionId            - 세션 상세 조회 (스텝 포함)
+ * - PUT    /api/research/sessions/:sessionId            - 세션 업데이트
+ * - POST   /api/research/sessions/:sessionId/steps      - 리서치 스텝 추가
+ * - GET    /api/research/sessions/:sessionId/steps      - 스텝 목록 조회
+ * - POST   /api/research/sessions/:sessionId/execute    - 리서치 비동기 실행 (HTTP 202)
+ * - DELETE /api/research/sessions/:sessionId            - 세션 삭제
+ *
+ * @requires requireAuth - JWT 인증 미들웨어
+ * @requires DeepResearchService - 딥 리서치 실행 서비스
+ * @requires UnifiedDatabase - 리서치 세션/스텝 DB 접근
  */
 
 import { Router, Request, Response, NextFunction } from 'express';

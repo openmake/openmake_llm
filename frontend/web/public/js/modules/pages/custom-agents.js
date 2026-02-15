@@ -1,6 +1,12 @@
 /**
- * custom-agents - SPA Page Module
- * Auto-generated from custom-agents.html
+ * ============================================
+ * Custom Agents Page - 커스텀 에이전트 관리
+ * ============================================
+ * 사용자 정의 AI 에이전트의 생성, 편집, 삭제, 테스트를
+ * 관리하는 SPA 페이지 모듈입니다. 시스템 프롬프트,
+ * 모델 선택, 도구 설정 등 에이전트 구성을 제공합니다.
+ *
+ * @module pages/custom-agents
  */
 (function() {
     'use strict';

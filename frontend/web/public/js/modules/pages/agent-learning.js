@@ -1,6 +1,12 @@
 /**
- * agent-learning - SPA Page Module
- * Auto-generated from agent-learning.html
+ * ============================================
+ * Agent Learning Page - 에이전트 학습 및 RLHF 분석
+ * ============================================
+ * 에이전트별 품질 점수, 실패 패턴, 개선 제안을 표시하고
+ * A/B 테스트 현황과 피드백 통계(평균 평점, 양호 비율)를
+ * 모니터링하는 SPA 페이지 모듈입니다.
+ *
+ * @module pages/agent-learning
  */
 (function() {
     'use strict';

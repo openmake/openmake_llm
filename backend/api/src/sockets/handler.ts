@@ -1,3 +1,40 @@
+/**
+ * ============================================================
+ * WebSocket Handler - 실시간 WebSocket 통신 핸들러
+ * ============================================================
+ *
+ * 실시간 AI 채팅 스트리밍, 클러스터 이벤트 브로드캐스트,
+ * MCP 설정 동기화, 에이전트 목록 제공 등을 담당합니다.
+ * Cookie/Bearer 기반 인증, 핑/퐁 하트비트(좀비 연결 정리),
+ * AbortController 기반 생성 중단을 지원합니다.
+ *
+ * @module sockets/handler
+ * @description 지원하는 WebSocket 메시지 타입:
+ * - 'refresh'        - 클러스터 상태 업데이트 요청
+ * - 'mcp_settings'   - MCP 기능 설정 동기화
+ * - 'request_agents' - MCP 도구 목록 (에이전트 형식) 요청
+ * - 'chat'           - AI 채팅 메시지 (스트리밍 토큰 응답)
+ * - 'abort'          - 진행 중인 채팅 생성 중단
+ *
+ * @description 서버에서 전송하는 메시지 타입:
+ * - 'init'               - 초기 클러스터/MCP 상태
+ * - 'stats'              - MCP 통계
+ * - 'update'             - 클러스터 상태 업데이트
+ * - 'mcp_settings_ack'   - MCP 설정 변경 확인
+ * - 'agents'             - 에이전트(도구) 목록
+ * - 'token'              - AI 응답 스트리밍 토큰
+ * - 'session_created'    - 새 세션 ID 알림
+ * - 'agent_selected'     - 에이전트 선택 알림
+ * - 'discussion_progress'- 토론 진행 상황
+ * - 'research_progress'  - 딥 리서치 진행 상황
+ * - 'done'               - 생성 완료
+ * - 'aborted'            - 생성 중단 확인
+ * - 'error'              - 오류 메시지
+ * - 'cluster_event'      - 클러스터 이벤트
+ *
+ * @requires ChatService - AI 메시지 처리 서비스
+ * @requires ClusterManager - Ollama 클러스터 관리
+ */
 import { WebSocket, WebSocketServer } from 'ws';
 import { IncomingMessage } from 'http';
 import * as crypto from 'crypto';
@@ -16,11 +53,19 @@ import { checkChatRateLimit } from '../middlewares/chat-rate-limiter';
 
 const log = createLogger('WebSocketHandler');
 
+/**
+ * 대화 데이터베이스 인스턴스를 지연 로딩으로 가져옵니다.
+ * 순환 의존성 방지를 위해 require()를 사용합니다.
+ * @returns {ConversationDB} 대화 DB 인스턴스
+ */
 function getConversationDb() {
     return require('../data/conversation-db').getConversationDB();
 }
 
-/** WebSocket incoming message shape */
+/**
+ * WebSocket 수신 메시지 인터페이스
+ * 클라이언트에서 서버로 전송되는 모든 메시지 유형의 통합 타입입니다.
+ */
 interface WSMessage {
     type: string;
     message?: string;
@@ -41,7 +86,10 @@ interface WSMessage {
     [key: string]: unknown;
 }
 
-/** Extended WebSocket with authentication, abort controller, and heartbeat */
+/**
+ * 확장 WebSocket 인터페이스
+ * 인증 정보, 생성 중단 컨트롤러, 하트비트 상태를 포함합니다.
+ */
 interface ExtendedWebSocket extends WebSocket {
     _authenticatedUserId: string | null;
     _authenticatedUserRole: 'admin' | 'user' | 'guest';
@@ -51,13 +99,25 @@ interface ExtendedWebSocket extends WebSocket {
     _isAlive: boolean;
 }
 
+/**
+ * WebSocket 연결 핸들러 클래스
+ * 클라이언트 연결 관리, 메시지 라우팅, AI 채팅 스트리밍,
+ * 하트비트 기반 좀비 연결 정리를 담당합니다.
+ */
 export class WebSocketHandler {
     private wss: WebSocketServer;
     private cluster: ClusterManager;
     private clients: Set<WebSocket> = new Set();
-    /** 🔒 Phase 2: heartbeat 인터벌 타이머 */
+    /** 하트비트 인터벌 타이머 (30초 주기) */
     private heartbeatInterval: ReturnType<typeof setInterval> | null = null;
 
+    /**
+     * WebSocketHandler 생성자
+     * WebSocket 서버와 클러스터 매니저를 연결하고,
+     * 연결 핸들러, 클러스터 이벤트, 하트비트를 초기화합니다.
+     * @param wss - WebSocket 서버 인스턴스
+     * @param cluster - Ollama 클러스터 매니저
+     */
     constructor(wss: WebSocketServer, cluster: ClusterManager) {
         this.wss = wss;
         this.cluster = cluster;
@@ -66,10 +126,18 @@ export class WebSocketHandler {
         this.startHeartbeat();
     }
 
+    /**
+     * 현재 연결된 WebSocket 클라이언트 수를 반환합니다.
+     * @returns 연결된 클라이언트 수
+     */
     public get connectedClientsCount(): number {
         return this.clients.size;
     }
 
+    /**
+     * 클러스터 이벤트 리스너를 설정합니다.
+     * 클러스터에서 발생하는 이벤트를 모든 연결된 클라이언트에 브로드캐스트합니다.
+     */
     private setupClusterEvents(): void {
         this.cluster.on('event', (event: Record<string, unknown>) => {
             this.broadcast({
@@ -79,6 +147,11 @@ export class WebSocketHandler {
         });
     }
 
+    /**
+     * WebSocket 연결 핸들러를 설정합니다.
+     * 새 연결 시 Cookie/Bearer 인증, 초기 상태 전송,
+     * 메시지/종료/pong 이벤트 리스너를 등록합니다.
+     */
     private setupConnection(): void {
         this.wss.on('connection', async (ws: WebSocket, req: IncomingMessage) => {
             this.clients.add(ws);
@@ -186,6 +259,12 @@ export class WebSocketHandler {
         });
     }
 
+    /**
+     * 수신된 WebSocket 메시지를 타입별로 라우팅합니다.
+     * 유효한 타입: 'refresh', 'mcp_settings', 'request_agents', 'chat', 'abort'
+     * @param ws - WebSocket 클라이언트 인스턴스
+     * @param msg - 파싱된 메시지 객체
+     */
     private async handleMessage(ws: WebSocket, msg: unknown): Promise<void> {
         if (!msg || typeof msg !== 'object' || typeof (msg as { type?: unknown }).type !== 'string') {
             ws.send(JSON.stringify({ type: 'error', message: '잘못된 메시지 형식입니다' }));
@@ -292,6 +371,13 @@ export class WebSocketHandler {
         }
     }
 
+    /**
+     * AI 채팅 메시지를 처리합니다.
+     * 모델 선택, 세션 관리, 스트리밍 토큰 전송, 대화 저장,
+     * AbortController 기반 생성 중단을 지원합니다.
+     * @param ws - WebSocket 클라이언트 인스턴스
+     * @param msg - 채팅 메시지 데이터 (message, model, history 등)
+     */
     private async handleChat(ws: WebSocket, msg: WSMessage): Promise<void> {
         if (typeof msg.message !== 'string' || msg.message.trim() === '') {
             ws.send(JSON.stringify({ type: 'error', message: '메시지가 필요합니다' }));
@@ -552,6 +638,11 @@ export class WebSocketHandler {
         }
     }
 
+    /**
+     * 모든 연결된 클라이언트에 메시지를 브로드캐스트합니다.
+     * OPEN 상태인 클라이언트에만 전송합니다.
+     * @param data - 전송할 JSON 직렬화 가능 데이터
+     */
     public broadcast(data: Record<string, unknown>): void {
         const message = JSON.stringify(data);
         for (const client of this.clients) {

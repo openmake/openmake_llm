@@ -1,15 +1,27 @@
 /**
- * Utils Module
- * 공통 유틸리티 함수들을 제공합니다.
+ * ============================================
+ * Utils Module - 공통 유틸리티 함수 모음
+ * ============================================
+ * 디버그 로깅, 파일명/크기/날짜 포맷팅, 디바운스/쓰로틀,
+ * UUID 생성, 키보드 이벤트 핸들링, 슬래시 명령어 처리 등
+ * 애플리케이션 전반에서 사용되는 헬퍼 함수를 제공합니다.
+ *
+ * @module utils
  */
 
-// 디버그 모드 플래그 (프로덕션에서는 false로 설정)
+/**
+ * 디버그 모드 플래그
+ * localhost/127.0.0.1에서는 자동 활성화, 프로덕션에서는 비활성화됩니다.
+ * window.DEBUG_MODE로 수동 오버라이드 가능합니다.
+ * @type {boolean}
+ */
 const DEBUG = window.DEBUG_MODE ?? (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
 
 /**
  * 조건부 디버그 로깅
- * DEBUG가 true일 때만 console.log 출력
- * @param  {...any} args - 로그 인자들
+ * DEBUG 플래그가 true일 때만 console.log를 출력합니다.
+ * @param {...*} args - 콘솔에 출력할 인자들
+ * @returns {void}
  */
 function debugLog(...args) {
     if (DEBUG) {
@@ -19,7 +31,9 @@ function debugLog(...args) {
 
 /**
  * 조건부 디버그 경고
- * @param  {...any} args - 로그 인자들
+ * DEBUG 플래그가 true일 때만 console.warn을 출력합니다.
+ * @param {...*} args - 콘솔에 출력할 인자들
+ * @returns {void}
  */
 function debugWarn(...args) {
     if (DEBUG) {
@@ -28,17 +42,21 @@ function debugWarn(...args) {
 }
 
 /**
- * 조건부 디버그 에러 (에러는 프로덕션에서도 출력)
- * @param  {...any} args - 로그 인자들
+ * 에러 로깅 (프로덕션에서도 항상 출력)
+ * 에러는 DEBUG 플래그와 무관하게 항상 console.error로 출력합니다.
+ * @param {...*} args - 콘솔에 출력할 인자들
+ * @returns {void}
  */
 function debugError(...args) {
     console.error(...args);
 }
 
 /**
- * 파일명 자르기
- * @param {string} filename - 파일명
- * @param {number} maxLength - 최대 길이
+ * 파일명을 최대 길이로 자르기
+ * 확장자는 보존하고 파일명 부분만 잘라서 '...'을 추가합니다.
+ * @param {string} filename - 원본 파일명
+ * @param {number} maxLength - 결과 문자열의 최대 길이
+ * @returns {string} 잘린 파일명 또는 원본 (maxLength 이하인 경우)
  */
 function truncateFilename(filename, maxLength) {
     if (!filename || filename.length <= maxLength) return filename;
@@ -49,8 +67,9 @@ function truncateFilename(filename, maxLength) {
 }
 
 /**
- * 파일 크기 포맷
- * @param {number} bytes - 바이트
+ * 바이트 수를 사람이 읽을 수 있는 파일 크기로 변환
+ * @param {number} bytes - 바이트 크기
+ * @returns {string} 포맷된 파일 크기 (예: '1.5 MB')
  */
 function formatFileSize(bytes) {
     if (bytes === 0) return '0 Bytes';
@@ -61,8 +80,9 @@ function formatFileSize(bytes) {
 }
 
 /**
- * 날짜 포맷
- * @param {Date|string} date - 날짜
+ * 날짜를 한국어 로케일 형식으로 포맷
+ * @param {Date|string} date - Date 객체 또는 ISO 문자열
+ * @returns {string} 포맷된 날짜 문자열 (예: '2026년 2월 15일 오후 3:30')
  */
 function formatDate(date) {
     const d = new Date(date);
@@ -76,8 +96,10 @@ function formatDate(date) {
 }
 
 /**
- * 상대적 시간 표시
- * @param {Date|string} date - 날짜
+ * 상대적 시간 표시 (예: '방금 전', '5분 전', '3일 전')
+ * 7일 초과 시 formatDate로 폴백합니다.
+ * @param {Date|string} date - Date 객체 또는 ISO 문자열
+ * @returns {string} 상대적 시간 문자열
  */
 function relativeTime(date) {
     const now = new Date();
@@ -98,9 +120,11 @@ function relativeTime(date) {
 }
 
 /**
- * 디바운스
- * @param {Function} func - 함수
- * @param {number} wait - 대기 시간 (ms)
+ * 디바운스 - 마지막 호출 후 대기 시간이 지나야 실행
+ * 연속 호출 시 이전 타이머를 취소하고 새로 시작합니다.
+ * @param {Function} func - 실행할 함수
+ * @param {number} wait - 대기 시간 (밀리초)
+ * @returns {Function} 디바운스 적용된 래퍼 함수
  */
 function debounce(func, wait) {
     let timeout;
@@ -115,9 +139,11 @@ function debounce(func, wait) {
 }
 
 /**
- * 쓰로틀
- * @param {Function} func - 함수
- * @param {number} limit - 제한 시간 (ms)
+ * 쓰로틀 - 지정된 간격 내 최대 1회만 실행
+ * 제한 시간 동안 추가 호출을 무시합니다.
+ * @param {Function} func - 실행할 함수
+ * @param {number} limit - 최소 실행 간격 (밀리초)
+ * @returns {Function} 쓰로틀 적용된 래퍼 함수
  */
 function throttle(func, limit) {
     let inThrottle;
@@ -131,7 +157,9 @@ function throttle(func, limit) {
 }
 
 /**
- * UUID 생성
+ * UUID v4 형식의 고유 식별자 생성
+ * Math.random 기반의 간이 구현입니다.
+ * @returns {string} UUID 문자열 (예: 'a1b2c3d4-e5f6-4a7b-8c9d-e0f1a2b3c4d5')
  */
 function generateUUID() {
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
@@ -142,16 +170,22 @@ function generateUUID() {
 }
 
 /**
- * 딥 클론
- * @param {*} obj - 객체
+ * JSON 기반 딥 클론
+ * 함수, undefined, Symbol 등은 복사되지 않습니다.
+ * @param {*} obj - 복사할 객체
+ * @returns {*} 깊은 복사된 새 객체
  */
 function deepClone(obj) {
     return JSON.parse(JSON.stringify(obj));
 }
 
 /**
- * 키보드 이벤트 핸들러
- * @param {KeyboardEvent} event - 키보드 이벤트
+ * 전역 키보드 이벤트 핸들러
+ * Enter: 메시지 전송 (Shift+Enter는 줄바꿈), IME 조합 중 무시
+ * ESC: 활성 모달 닫기
+ * 슬래시(/)로 시작하는 입력은 명령어로 처리합니다.
+ * @param {KeyboardEvent} event - 키보드 이벤트 객체
+ * @returns {void}
  */
 function handleKeyDown(event) {
     const input = document.getElementById('chatInput');
@@ -193,8 +227,10 @@ function handleKeyDown(event) {
 }
 
 /**
- * 명령어 처리
- * @param {string} command - 명령어
+ * 슬래시 명령어 처리
+ * /help: 사용자 가이드 표시, /clear: 새 대화 시작, /mode [name]: 프롬프트 모드 변경
+ * @param {string} command - 슬래시로 시작하는 명령어 문자열
+ * @returns {boolean} 명령어가 처리되었으면 true, 미인식 명령어는 false
  */
 function handleCommand(command) {
     const cmd = command.toLowerCase().trim();

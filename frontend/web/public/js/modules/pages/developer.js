@@ -1,10 +1,26 @@
+/**
+ * ============================================
+ * Developer Page - API 개발자 포털
+ * ============================================
+ * 외부 개발자를 위한 API 문서, 코드 예제, 인증 방법,
+ * Rate Limit 안내, 엔드포인트 목록을 제공하는
+ * SPA 페이지 모듈입니다. 코드 구문 강조를 지원합니다.
+ *
+ * @module pages/developer
+ */
 (function() {
     'use strict';
     window.PageModules = window.PageModules || {};
+    /** @type {number[]} setInterval ID 배열 (cleanup용) */
     var _intervals = [];
+    /** @type {IntersectionObserver|null} 스크롤 관찰자 */
     var _observer = null;
 
-    // Helper to escape HTML for code blocks
+    /**
+     * HTML 이스케이프 헬퍼 (코드 블록용)
+     * @param {string} unsafe - 이스케이프할 문자열
+     * @returns {string} 이스케이프된 문자열
+     */
     function escapeHtml(unsafe) {
         return unsafe
             .replace(/&/g, "&amp;")

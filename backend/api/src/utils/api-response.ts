@@ -1,19 +1,29 @@
 /**
- * API 응답 형식 표준화
- * 
- * 원본: infrastructure/http/api-response.ts (#24 개선)
- * backend/api 빌드 스코프에서 직접 사용하기 위해 배치
- * 
+ * ============================================================
+ * API Response - 표준 API 응답 형식
+ * ============================================================
+ *
+ * 모든 REST API 엔드포인트에서 사용하는 표준화된 응답 생성 헬퍼입니다.
+ * 성공/에러/페이지네이션 응답을 일관된 구조로 제공합니다.
+ *
+ * @module utils/api-response
+ * @description
+ * - success(): 표준 성공 응답 { success: true, data, meta }
+ * - error(): 표준 에러 응답 { success: false, error: { code, message } }
+ * - paginated(): 페이지네이션 포함 응답
+ * - HTTP 상태 코드별 헬퍼: badRequest, unauthorized, forbidden, notFound, conflict, rateLimited, internalError, serviceUnavailable
+ * - ErrorCodes: 사전 정의된 에러 코드 상수
+ *
  * @example
  * ```typescript
  * import { success, error, paginated, notFound } from '../utils/api-response';
- * 
+ *
  * // 성공 응답
  * res.json(success({ user: foundUser }));
- * 
+ *
  * // 에러 응답
  * res.status(404).json(notFound('사용자'));
- * 
+ *
  * // 페이지네이션 응답
  * res.json(paginated(items, { page: 1, pageSize: 20, total: 100 }));
  * ```

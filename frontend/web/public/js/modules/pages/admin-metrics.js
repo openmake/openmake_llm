@@ -1,15 +1,32 @@
 /**
- * admin-metrics - SPA Page Module
- * Auto-generated from admin-metrics.html
+ * ============================================
+ * Admin Metrics Page - 통합 시스템 대시보드
+ * ============================================
+ * 시스템 메트릭(업타임, 메모리, 연결), API 토큰 모니터링,
+ * 할당량 상태, 비용 추적, 시간별/일별 사용량 차트를
+ * Chart.js로 시각화하는 관리자 전용 페이지입니다.
+ *
+ * @module pages/admin-metrics
  */
 (function() {
     'use strict';
     window.PageModules = window.PageModules || {};
+    /** @type {number[]} setInterval ID 배열 (cleanup용) */
     var _intervals = [];
+    /** @type {number[]} setTimeout ID 배열 (cleanup용) */
     var _timeouts = [];
+    /**
+     * HTML 이스케이프 헬퍼
+     * @param {string} s - 이스케이프할 문자열
+     * @returns {string} 이스케이프된 문자열
+     */
     function esc(s) { var d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
 
     window.PageModules['admin-metrics'] = {
+        /**
+         * 페이지 HTML 문자열 반환
+         * @returns {string} 시스템 대시보드 HTML (스타일 + 차트 컨테이너 포함)
+         */
         getHTML: function() {
             return '<div class="page-admin-metrics">' +
                 '<style data-spa-style="admin-metrics">' +
@@ -19,6 +36,10 @@
             '<\/div>';
         },
 
+        /**
+         * 페이지 초기화 - 시스템 메트릭 및 토큰 모니터링 데이터 로드, 30초 자동 갱신 시작
+         * @returns {void}
+         */
         init: function() {
             try {
                 // 전역 차트 인스턴스
@@ -329,6 +350,10 @@
             }
         },
 
+        /**
+         * 페이지 정리 - 인터벌/타임아웃 해제 및 전역 함수 제거
+         * @returns {void}
+         */
         cleanup: function() {
             _intervals.forEach(function(id) { clearInterval(id); });
             _intervals = [];

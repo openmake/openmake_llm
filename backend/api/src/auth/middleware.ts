@@ -1,6 +1,18 @@
 /**
- * 인증 미들웨어
- * Express 요청에 대한 인증 처리
+ * ============================================================
+ * Auth Middleware - Express 인증 미들웨어
+ * ============================================================
+ *
+ * JWT 토큰 기반 인증 미들웨어를 제공합니다.
+ * Cookie → Authorization 헤더 순서로 토큰을 추출하며, DB 조회로 사용자를 확인합니다.
+ *
+ * @module auth/middleware
+ * @description
+ * - optionalAuth: 게스트 허용 (토큰 없어도 통과)
+ * - requireAuth: 인증 필수 (401 반환)
+ * - requireAdmin: 관리자 권한 필수 (403 반환)
+ * - requireRole: 특정 역할 이상 필수 (팩토리 함수)
+ * - Express.Request 타입 확장 (user, token, authMethod, apiKeyRecord, requestId)
  */
 
 import { Request, Response, NextFunction } from 'express';
@@ -10,16 +22,26 @@ import { getUserManager, PublicUser, UserRole } from '../data/user-manager';
 /**
  * JWT 토큰에서 추출된 인증 정보 (미들웨어용)
  * PublicUser보다 간소화된 버전 - JWT 페이로드에서 직접 추출
+ * @interface AuthUser
  */
 export interface AuthUser {
+    /** JWT 페이로드의 userId */
     userId: string;
+    /** 사용자 ID (DB 조회 후 설정) */
     id?: string | number;
+    /** 사용자명 */
     username?: string;
+    /** 이메일 주소 */
     email?: string;
+    /** 사용자 역할 */
     role: UserRole;
+    /** MCP 도구 접근 등급 */
     tier?: 'free' | 'pro' | 'enterprise';
+    /** 계정 활성화 상태 */
     is_active?: boolean;
+    /** 계정 생성 일시 */
     created_at?: string;
+    /** 마지막 로그인 일시 */
     last_login?: string;
 }
 

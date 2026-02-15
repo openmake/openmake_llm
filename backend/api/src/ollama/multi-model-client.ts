@@ -1,17 +1,24 @@
 /**
- * Multi-Model Client Factory for A2A Parallel Execution
- * 
- * 🆕 5개의 API 키를 각각 다른 모델로 병렬 사용하여 A2A 통신 지원
- * 
- * 사용 예시:
+ * ============================================================
+ * MultiModelClientFactory - A2A 병렬 생성 클라이언트 팩토리
+ * ============================================================
+ *
+ * 각 API 키-모델 쌍에 대해 독립적인 HTTP 클라이언트를 생성하고,
+ * 병렬/레이스 방식으로 다중 모델에 동시 요청을 보내는 A2A 핵심 모듈입니다.
+ *
+ * @module ollama/multi-model-client
+ * @description
+ * - 키-모델 쌍별 독립 Axios 클라이언트 생성 (Cloud/Local 자동 감지)
+ * - parallelChat(): 모든 모델에 동시 요청 후 결과 수집
+ * - raceChat(): 가장 빨리 응답한 모델의 결과만 반환
+ * - 모델명/인덱스/라운드 로빈 방식의 클라이언트 검색
+ * - 상태 조회 (클라이언트 수, 모델명, 마스킹된 키)
+ *
+ * @example
  * ```typescript
  * const factory = getMultiModelClientFactory();
- * 
- * // 모든 모델에 병렬 요청
  * const results = await factory.parallelChat(messages);
- * 
- * // 특정 인덱스의 클라이언트 사용
- * const client = factory.getClient(0); // Key 1 + Model 1
+ * const winner = await factory.raceChat(messages);
  * ```
  */
 
@@ -20,43 +27,73 @@ import { getApiKeyManager, KeyModelPair } from './api-key-manager';
 import { getConfig } from '../config/env';
 import { ChatMessage, ChatResponse } from './types';
 
+/** Ollama Cloud API 호스트 URL */
 const OLLAMA_CLOUD_HOST = 'https://ollama.com';
 
 /**
- * A2A 병렬 실행 결과
+ * A2A 병렬 실행 결과 — 개별 모델의 응답 결과
+ * @interface ParallelChatResult
  */
 export interface ParallelChatResult {
+    /** 클라이언트 인덱스 (0-based) */
     index: number;
+    /** 사용된 모델 이름 */
     model: string;
+    /** 요청 성공 여부 */
     success: boolean;
+    /** 성공 시 응답 메시지 */
     response?: ChatMessage;
+    /** 실패 시 에러 메시지 */
     error?: string;
+    /** 요청 소요 시간 (밀리초) */
     duration: number;
 }
 
 /**
- * 개별 모델 클라이언트
+ * 개별 모델 클라이언트 — 키-모델 쌍에 연결된 Axios 인스턴스
+ * @interface ModelClient
  */
 export interface ModelClient {
+    /** 클라이언트 인덱스 (0-based) */
     index: number;
+    /** 할당된 모델 이름 */
     model: string;
+    /** 할당된 API 키 */
     key: string;
+    /** Axios HTTP 클라이언트 인스턴스 */
     axiosInstance: AxiosInstance;
 }
 
 /**
- * Multi-Model Client Factory
- * 각 API 키-모델 쌍에 대해 독립적인 클라이언트 생성 및 병렬 실행 지원
+ * Multi-Model 클라이언트 팩토리 클래스
+ *
+ * ApiKeyManager에서 모든 키-모델 쌍을 가져와 각각에 대해
+ * 독립적인 Axios 클라이언트를 생성합니다.
+ * 병렬 요청(parallelChat), 레이스 요청(raceChat), 개별 요청(chat)을 지원합니다.
+ *
+ * @class MultiModelClientFactory
  */
 export class MultiModelClientFactory {
+    /** 인덱스 -> ModelClient 매핑 (키-모델 쌍별 독립 클라이언트) */
     private clients: Map<number, ModelClient> = new Map();
 
+    /**
+     * MultiModelClientFactory 인스턴스를 생성합니다.
+     * 생성 시 자동으로 모든 키-모델 쌍의 클라이언트를 초기화합니다.
+     */
     constructor() {
         this.initialize();
     }
 
     /**
-     * 모든 키-모델 쌍에 대해 클라이언트 초기화
+     * 모든 키-모델 쌍에 대해 독립 Axios 클라이언트를 초기화합니다.
+     *
+     * 각 키-모델 쌍에 대해:
+     * 1. 모델명의 ':cloud' 접미사로 Cloud/Local 호스트 결정
+     * 2. 개별 API 키를 Authorization 헤더에 설정
+     * 3. 환경변수의 timeout 설정 적용
+     *
+     * @private
      */
     private initialize(): void {
         const keyManager = getApiKeyManager();
@@ -114,7 +151,13 @@ export class MultiModelClientFactory {
     }
 
     /**
-     * 단일 클라이언트로 채팅 요청
+     * 특정 인덱스의 클라이언트로 채팅 요청을 보냅니다.
+     *
+     * @param index - 클라이언트 인덱스 (0-based)
+     * @param messages - 대화 메시지 히스토리
+     * @param options - 요청 옵션 (stream 등)
+     * @returns 어시스턴트 응답 메시지
+     * @throws {Error} 해당 인덱스의 클라이언트가 없는 경우
      */
     async chat(
         index: number,
@@ -292,9 +335,19 @@ export class MultiModelClientFactory {
     }
 }
 
-// 싱글톤 인스턴스
+// ============================================
+// 싱글톤 인스턴스 관리
+// ============================================
+
+/** MultiModelClientFactory 싱글톤 인스턴스 */
 let multiModelClientFactory: MultiModelClientFactory | null = null;
 
+/**
+ * MultiModelClientFactory 싱글톤 인스턴스를 반환합니다.
+ * 최초 호출 시 모든 키-모델 쌍의 클라이언트를 초기화합니다.
+ *
+ * @returns MultiModelClientFactory 싱글톤 인스턴스
+ */
 export function getMultiModelClientFactory(): MultiModelClientFactory {
     if (!multiModelClientFactory) {
         multiModelClientFactory = new MultiModelClientFactory();
@@ -302,6 +355,10 @@ export function getMultiModelClientFactory(): MultiModelClientFactory {
     return multiModelClientFactory;
 }
 
+/**
+ * MultiModelClientFactory 싱글톤 인스턴스를 초기화합니다.
+ * 다음 getMultiModelClientFactory() 호출 시 새 인스턴스가 생성됩니다.
+ */
 export function resetMultiModelClientFactory(): void {
     multiModelClientFactory = null;
 }

@@ -1,12 +1,19 @@
 /**
- * Scope Verification Middleware
- * 
+ * ============================================================
+ * Scope Middleware - API Key Scope 기반 접근 제어
+ * ============================================================
+ *
  * API Key의 scopes 필드를 기반으로 엔드포인트 접근을 제어합니다.
- * 
- * Scope 형식: "resource:action" (예: "chat:write", "models:read", "keys:admin")
- * 와일드카드: "*" (모든 scope 허용)
- * 
- * @see docs/api/API_KEY_SERVICE_PLAN.md §7 Security
+ * JWT 인증 사용자에게는 scope 검증을 스킵합니다.
+ *
+ * @module auth/scope-middleware
+ * @description
+ * - Scope 형식: "resource:action" (예: "chat:write", "models:read")
+ * - 와일드카드: "*" (모든 scope 허용), "resource:*" (리소스 전체 허용)
+ * - requireScope(): 단일 scope 필수 미들웨어
+ * - requireAnyScope(): 복수 scope 중 하나 이상 필수 (OR 조건)
+ *
+ * @see docs/api/API_KEY_SERVICE_PLAN.md
  */
 
 import { Request, Response, NextFunction } from 'express';
