@@ -99,11 +99,13 @@ export function resolveProfile(requestedModel: string): PipelineProfile | null {
 /**
  * 요청 모델명으로부터 완전한 실행 계획을 생성
  * 
+ * Brand model alias를 구체적인 ExecutionPlan으로 매핑합니다.
  * Brand model이면 프로파일 기반으로 실행 계획을 구성하고,
  * 일반 모델이면 기본 설정으로 패스스루합니다.
  * 
- * @param requestedModel - 외부 요청의 model 필드
+ * @param requestedModel - 외부 요청의 model 필드 (예: "openmake_llm_pro" 또는 일반 모델명)
  * @param overrides - 사용자 요청의 오버라이드 파라미터
+ * @returns ExecutionPlan — resolvedEngine, A2A 모드, thinking 수준, 필수 도구 목록 등 실행에 필요한 모든 파라미터를 포함
  */
 export function buildExecutionPlan(
     requestedModel: string,

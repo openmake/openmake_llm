@@ -1,3 +1,14 @@
+/**
+ * @module data/repositories/audit-repository
+ * @description 감사/로깅 및 외부 연동 테이블 데이터 접근 계층
+ *
+ * 에이전트 사용 로그, 시스템 알림, 외부 서비스 연결, MCP 서버 설정 등
+ * 운영/감사 관련 엔티티의 CRUD를 담당합니다.
+ * - 에이전트 사용 로그 기록 (agent_usage_logs)
+ * - 시스템 알림 생성/조회/확인 (system_alerts)
+ * - 외부 서비스 연결/파일 관리 (external_connections, external_files)
+ * - MCP 서버 설정 관리 (mcp_servers)
+ */
 import { BaseRepository, QueryParam } from './base-repository';
 import type { ExternalConnection, ExternalFile, ExternalServiceType, MCPServerRow } from '../models/unified-database';
 

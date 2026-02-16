@@ -325,15 +325,16 @@ export class ContextEngineeringBuilder {
     }
 
     /**
+     * 4-Pillar Framework (Role, Constraints, Goal, OutputFormat)를 기반으로
      * 최종 시스템 프롬프트를 빌드합니다.
      * 
      * Prefix Cache 최적화 (Cloud LLM):
-     * - Phase 1 (STATIC): 역할 → 제약 → 출력형식 → 인터락 → 리마인더
-     *   요청 간 동일한 콘텐츠를 앞에 배치하여 implicit prefix caching 활용
-     * - Phase 2 (DYNAMIC): 메타데이터 → RAG → 예시 → 추가섹션 → 목표
-     *   요청마다 변하는 콘텐츠를 뒤에 배치
+     * - Phase 1 (STATIC): Role → Constraints → OutputFormat → Interlock → Reminder
+     *   요청 간 동일한 정적 섹션을 앞에 배치하여 implicit prefix caching 활용
+     * - Phase 2 (DYNAMIC): Metadata → RAG → Examples → CustomSections → Goal
+     *   요청마다 변하는 동적 섹션을 뒤에 배치
      * 
-     * @returns 조립된 전체 시스템 프롬프트 문자열
+     * @returns 조립된 전체 시스템 프롬프트 문자열 (XML 태깅 구획화 적용)
      */
     build(): string {
         const sections: string[] = [];

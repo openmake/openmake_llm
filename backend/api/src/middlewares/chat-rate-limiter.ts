@@ -1,6 +1,8 @@
 /**
  * 채팅 요청 레이트 리미터
  * 사용자 역할/등급에 따른 일일 채팅 횟수 제한
+ *
+ * Note: In-memory store는 단일 프로세스 한정. 클러스터 환경에서는 Redis 등 외부 저장소 도입 필요
  */
 
 import { Request, Response, NextFunction } from 'express';
@@ -12,6 +14,62 @@ interface RateLimitEntry {
 
 // In-memory store
 const rateLimitStore = new Map<string, RateLimitEntry>();
+const CLEANUP_INTERVAL_MS = 60_000;
+const MAX_ENTRIES = 10000;
+
+function removeExpiredEntries(now: number): void {
+    for (const [key, entry] of rateLimitStore) {
+        if (now >= entry.resetAt) {
+            rateLimitStore.delete(key);
+        }
+    }
+}
+
+function dropOldestEntries(entriesToDrop: number): void {
+    if (entriesToDrop <= 0) {
+        return;
+    }
+
+    let dropped = 0;
+    for (const key of rateLimitStore.keys()) {
+        rateLimitStore.delete(key);
+        dropped++;
+
+        if (dropped >= entriesToDrop) {
+            break;
+        }
+    }
+}
+
+function cleanupRateLimitStore(now: number = Date.now()): void {
+    removeExpiredEntries(now);
+
+    if (rateLimitStore.size <= MAX_ENTRIES) {
+        return;
+    }
+
+    dropOldestEntries(rateLimitStore.size - MAX_ENTRIES);
+}
+
+const chatRateLimitCleanupInterval = setInterval(() => {
+    cleanupRateLimitStore();
+}, CLEANUP_INTERVAL_MS);
+
+if (
+    typeof chatRateLimitCleanupInterval === 'object'
+    && chatRateLimitCleanupInterval !== null
+    && 'unref' in chatRateLimitCleanupInterval
+    && typeof chatRateLimitCleanupInterval.unref === 'function'
+) {
+    chatRateLimitCleanupInterval.unref();
+}
+
+/**
+ * Graceful shutdown 시 채팅 레이트 리미터 cleanup interval을 중지합니다.
+ */
+export function stopChatRateLimitCleanup(): void {
+    clearInterval(chatRateLimitCleanupInterval);
+}
 
 // 역할/등급별 일일 제한
 const DAILY_LIMITS: Record<string, number> = {
@@ -62,6 +120,10 @@ export function chatRateLimiter(req: Request, res: Response, next: NextFunction)
     if (!entry || now >= entry.resetAt) {
         entry = { count: 0, resetAt: getNextMidnightUTC() };
         rateLimitStore.set(key, entry);
+
+        if (rateLimitStore.size > MAX_ENTRIES) {
+            cleanupRateLimitStore(now);
+        }
     }
 
     entry.count++;
@@ -109,6 +171,10 @@ export function checkChatRateLimit(
     if (!entry || now >= entry.resetAt) {
         entry = { count: 0, resetAt: getNextMidnightUTC() };
         rateLimitStore.set(key, entry);
+
+        if (rateLimitStore.size > MAX_ENTRIES) {
+            cleanupRateLimitStore(now);
+        }
     }
 
     entry.count++;

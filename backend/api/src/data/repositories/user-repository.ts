@@ -1,3 +1,13 @@
+/**
+ * @module data/repositories/user-repository
+ * @description `users` 테이블 데이터 접근 계층
+ *
+ * 사용자 계정 엔티티(User)의 CRUD 및 조회를 담당합니다.
+ * - 사용자 생성 (createUser)
+ * - username/ID/email 기반 조회
+ * - 마지막 로그인 갱신, 비밀번호 변경
+ * - 전체 사용자 목록 조회 (관리자용)
+ */
 import type { QueryResult } from 'pg';
 import { BaseRepository } from './base-repository';
 import type { User } from '../models/unified-database';

@@ -1,3 +1,12 @@
+/**
+ * @module data/repositories/canvas-repository
+ * @description `canvas_documents` / `canvas_versions` 테이블 데이터 접근 계층
+ *
+ * 캔버스 문서(CanvasDocument)와 버전(CanvasVersion) 엔티티의 CRUD를 담당합니다.
+ * - 문서 생성/조회/수정/삭제, 사용자별 문서 목록
+ * - 버전 관리 (트랜잭션 기반 버전 생성)
+ * - 공유 토큰 기반 문서 공유/해제
+ */
 import { withTransaction } from '../retry-wrapper';
 import { BaseRepository, QueryParam } from './base-repository';
 import type { CanvasDocType, CanvasDocument, CanvasVersion } from '../models/unified-database';
