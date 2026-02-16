@@ -8,7 +8,7 @@
     <title>OpenMake.Ai</title>
 
     <!-- PWA 메타 태그 -->
-    <meta name="theme-color" content="#667eea">
+    <meta name="theme-color" content="#c061ff">
     <meta name="description" content="AI 기반 지능형 채팅 어시스턴트">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -31,10 +31,11 @@
     <!-- 디자인 시스템 CSS (순서 중요!) -->
     <link rel="stylesheet" href="css/design-tokens.css">
     <link rel="stylesheet" href="css/icons.css">
-    <link rel="stylesheet" href="css/glassmorphism.css">
+    <link rel="stylesheet" href="css/brutalism.css">
     <link rel="stylesheet" href="css/animations.css">
     <link rel="stylesheet" href="css/feature-cards.css">
     <link rel="stylesheet" href="css/layout.css?v=1">
+    <link rel="stylesheet" href="css/components.css?v=1">
     <link rel="stylesheet" href="css/unified-sidebar.css?v=5">
     <link rel="stylesheet" href="css/light-theme.css">
     <link rel="stylesheet" href="style.css?v=5">
@@ -72,7 +73,7 @@
 </head>
 
 <body>
-    <a href="#mainContent" class="skip-link" style="position:absolute;top:-40px;left:0;background:#667eea;color:white;padding:8px 16px;z-index:10000;transition:top 0.3s;text-decoration:none;font-family:Pretendard,sans-serif">Skip to main content</a>
+    <a href="#mainContent" class="skip-link" style="position:absolute;top:-40px;left:0;background:#c061ff;color:white;padding:8px 16px;z-index:10000;transition:top 0.3s;text-decoration:none;font-family:'Space Grotesk',Pretendard,sans-serif;font-weight:700;border:2px solid #000;box-shadow:4px 4px 0 #000">Skip to main content</a>
     <div class="app">
         <!-- Mobile Menu Button -->
         <button class="mobile-menu-btn" id="mobileMenuBtn" aria-label="Toggle menu">
@@ -96,8 +97,7 @@
                         </div>
                         <h1 class="welcome-title animate-fadeInUp" style="animation-delay: 0.1s;">오늘도 화이팅!<br>무엇을 도와드릴까요? 😊
                         </h1>
-                        <p class="welcome-subtitle animate-fadeInUp" style="animation-delay: 0.2s;">AI 어시스턴트가 질문에 답변하고, 문서를
-                            분석하고, 코드를 작성합니다.</p>
+                        <p class="welcome-subtitle animate-fadeInUp" style="animation-delay: 0.2s;">AI 어시스턴트가 질문에 답변하고,<br>문서를 분석하고, 코드를 작성합니다.</p>
 
                         <!-- 기능 카드 그리드 -->
                         <div class="feature-cards animate-fadeInUp" style="animation-delay: 0.3s;">

@@ -28,7 +28,7 @@ const STATIC_ASSETS = [
     '/style.css',
     '/css/design-tokens.css',
     '/css/icons.css',
-    '/css/glassmorphism.css',
+    '/css/brutalism.css',
     '/css/animations.css',
     '/css/feature-cards.css',
     '/css/unified-sidebar.css',

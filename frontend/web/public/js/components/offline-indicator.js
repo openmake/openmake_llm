@@ -43,7 +43,7 @@
                 left: 0;
                 right: 0;
                 z-index: 10000;
-                background: rgba(245, 158, 11, 0.95);
+                background: #f59e0b;
                 color: #1a1a2e;
                 padding: 12px 16px;
                 display: flex;
@@ -51,10 +51,9 @@
                 gap: 12px;
                 font-weight: 500;
                 font-size: 14px;
-                border-bottom: 1px solid rgba(245, 158, 11, 0.5);
-                backdrop-filter: blur(10px);
+                border-bottom: 2px solid #000;
                 border-radius: 0 0 8px 8px;
-                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+                box-shadow: 4px 4px 0 #000;
                 animation: slideDown 0.3s ease-out;
                 transform-origin: top;
             }
@@ -91,10 +90,10 @@
 
             @keyframes pulse {
                 0%, 100% {
-                    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+                    box-shadow: 4px 4px 0 #000;
                 }
                 50% {
-                    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+                    box-shadow: 6px 6px 0 #000;
                 }
             }
 

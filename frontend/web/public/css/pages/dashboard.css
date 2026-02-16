@@ -22,9 +22,10 @@
 
 .metric-card {
     background: var(--bg-card);
-    border: 1px solid var(--border-light);
-    border-radius: var(--radius-lg);
+    border: var(--border-width) solid var(--border-light);
+    border-radius: var(--radius-md);
     padding: var(--space-5);
+    box-shadow: var(--shadow-sm);
 }
 
 .metric-card-header {
@@ -111,10 +112,11 @@
 
 .chart-container {
     background: var(--bg-card);
-    border: 1px solid var(--border-light);
-    border-radius: var(--radius-lg);
+    border: var(--border-width) solid var(--border-light);
+    border-radius: var(--radius-md);
     padding: var(--space-5);
     margin-bottom: var(--space-5);
+    box-shadow: var(--shadow-sm);
 }
 
 .chart-header {
@@ -139,9 +141,10 @@
 
 .data-table-container {
     background: var(--bg-card);
-    border: 1px solid var(--border-light);
-    border-radius: var(--radius-lg);
+    border: var(--border-width) solid var(--border-light);
+    border-radius: var(--radius-md);
     overflow: hidden;
+    box-shadow: var(--shadow-sm);
 }
 
 .data-table {
@@ -153,7 +156,7 @@
 .data-table td {
     padding: var(--space-4);
     text-align: left;
-    border-bottom: 1px solid var(--border-light);
+    border-bottom: var(--border-width) solid var(--border-light);
 }
 
 .data-table th {
@@ -179,11 +182,12 @@
 
 .log-container {
     background: var(--bg-card);
-    border: 1px solid var(--border-light);
-    border-radius: var(--radius-lg);
+    border: var(--border-width) solid var(--border-light);
+    border-radius: var(--radius-md);
     padding: var(--space-4);
     max-height: 400px;
     overflow-y: auto;
+    box-shadow: var(--shadow-sm);
 }
 
 .log-entry {
@@ -193,6 +197,7 @@
     border-bottom: 1px solid var(--border-light);
     font-size: var(--font-size-sm);
     font-family: var(--font-mono);
+    font-weight: var(--font-weight-medium);
 }
 
 .log-entry:last-child {
@@ -233,7 +238,8 @@
 .usage-bar {
     height: 8px;
     background: var(--bg-secondary);
-    border-radius: var(--radius-full);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-light);
     overflow: hidden;
     margin-top: var(--space-2);
 }
@@ -276,9 +282,10 @@
 
 .node-card {
     background: var(--bg-secondary);
-    border: 1px solid var(--border-light);
+    border: var(--border-width) solid var(--border-light);
     border-radius: var(--radius-md);
     padding: var(--space-4);
+    box-shadow: var(--shadow-sm);
 }
 
 .node-header {

@@ -102,10 +102,10 @@
                 '.dev-section p { margin-bottom: var(--space-4); line-height: 1.6; color: var(--text-secondary); }' +
                 
                 '.endpoint-badge { display: inline-block; padding: 2px 8px; border-radius: var(--radius-sm); font-size: var(--font-size-xs); font-weight: bold; margin-right: var(--space-2); text-transform: uppercase; letter-spacing: 0.5px; }' +
-                '.badge-get { background: rgba(34, 197, 94, 0.15); color: #22c55e; border: 1px solid rgba(34, 197, 94, 0.2); }' +
-                '.badge-post { background: rgba(59, 130, 246, 0.15); color: #3b82f6; border: 1px solid rgba(59, 130, 246, 0.2); }' +
-                '.badge-put, .badge-patch { background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.2); }' +
-                '.badge-delete { background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.2); }' +
+                '.badge-get { background: var(--bg-tertiary); color: #22c55e; border: 2px solid #22c55e; }' +
+                '.badge-post { background: var(--bg-tertiary); color: #3b82f6; border: 2px solid #3b82f6; }' +
+                '.badge-put, .badge-patch { background: var(--bg-tertiary); color: #f59e0b; border: 2px solid #f59e0b; }' +
+                '.badge-delete { background: var(--bg-tertiary); color: #ef4444; border: 2px solid #ef4444; }' +
                 
                 '.code-group { border: 1px solid var(--border-light); border-radius: var(--radius-lg); overflow: hidden; margin: var(--space-6) 0; background: #1e1e1e; box-shadow: var(--shadow-md); }' +
                 '.code-tabs { display: flex; background: #252526; border-bottom: 1px solid #333; }' +
@@ -115,9 +115,9 @@
                 '.code-content-wrapper { position: relative; }' +
                 '.code-content { display: none; padding: var(--space-5); overflow-x: auto; font-family: var(--font-mono); font-size: 0.9rem; line-height: 1.5; color: #d4d4d4; }' +
                 '.code-content.active { display: block; }' +
-                '.copy-btn { position: absolute; top: var(--space-2); right: var(--space-2); background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.1); color: #ccc; padding: 4px 10px; border-radius: var(--radius-sm); cursor: pointer; font-size: var(--font-size-xs); opacity: 0; transition: all 0.2s; }' +
+                '.copy-btn { position: absolute; top: var(--space-2); right: var(--space-2); background: var(--bg-tertiary); border: 1px solid var(--border-light); color: #ccc; padding: 4px 10px; border-radius: var(--radius-sm); cursor: pointer; font-size: var(--font-size-xs); opacity: 0; transition: all 0.2s; }' +
                 '.code-group:hover .copy-btn { opacity: 1; }' +
-                '.copy-btn:hover { background: rgba(255,255,255,0.2); color: #fff; }' +
+                '.copy-btn:hover { background: var(--bg-hover); color: #fff; }' +
                 
                 '/* Syntax Highlighting */' +
                 '.tok-key { color: #569cd6; }' +
@@ -232,7 +232,7 @@
                 '<tr><td><span class="param-name">openmake_llm_auto</span></td><td>Auto (per routed model)</td><td>Auto</td><td>Auto</td><td>Auto</td><td>Auto</td><td>Auto</td></tr>' +
                 '</tbody></table>' +
 
-                '<div class="alert-info" style="margin-top: 1rem; padding: 0.75rem 1rem; border-left: 3px solid #3b82f6; background: rgba(59,130,246,0.08); border-radius: 4px;">' +
+                '<div class="alert-info" style="margin-top: 1rem; padding: 0.75rem 1rem; border-left: 3px solid #3b82f6; background: var(--bg-tertiary); border-radius: 4px;">' +
                 '<strong>Note:</strong> Internal engine models are abstracted behind these aliases. ' +
                 'The actual engine may change without notice as we optimize quality and performance. ' +
                 'Always reference models by their <code>openmake_llm_*</code> alias.</div>' +

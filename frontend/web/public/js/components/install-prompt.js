@@ -133,9 +133,8 @@
             }
 
             .install-prompt-content {
-                background: rgba(102, 126, 234, 0.15);
-                border: 1px solid rgba(102, 126, 234, 0.3);
-                backdrop-filter: blur(20px);
+                background: var(--bg-card);
+                border: 2px solid var(--border-light);
                 border-radius: 12px;
                 padding: 16px;
                 max-width: 480px;
@@ -153,7 +152,7 @@
                 flex-shrink: 0;
                 border-radius: 8px;
                 overflow: hidden;
-                background: rgba(102, 126, 234, 0.2);
+                background: var(--bg-tertiary);
             }
 
             .install-prompt-icon img {
@@ -221,13 +220,13 @@
             }
 
             .install-prompt-btn-install {
-                background: linear-gradient(135deg, #667eea, #764ba2);
+                background: var(--accent-primary);
                 color: #ffffff;
             }
 
             .install-prompt-btn-install:hover {
-                transform: translateY(-2px);
-                box-shadow: 0 8px 16px rgba(102, 126, 234, 0.4);
+                transform: translate(-2px, -2px);
+                box-shadow: 4px 4px 0 #000;
             }
 
             .install-prompt-btn-install:active {
@@ -235,14 +234,14 @@
             }
 
             .install-prompt-btn-close {
-                background: rgba(255, 255, 255, 0.1);
+                background: var(--bg-tertiary);
                 color: #ffffff;
                 padding: 8px 10px;
                 min-width: auto;
             }
 
             .install-prompt-btn-close:hover {
-                background: rgba(255, 255, 255, 0.2);
+                background: var(--bg-hover);
             }
 
             @media (max-width: 480px) {

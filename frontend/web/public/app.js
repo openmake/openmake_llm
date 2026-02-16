@@ -1516,16 +1516,16 @@ function showAgentBadge(agent) {
                 align-items: center;
                 gap: 8px;
                 padding: 6px 14px;
-                background: rgba(99, 102, 241, 0.12);
-                border: 1px solid rgba(99, 102, 241, 0.25);
+                background: var(--bg-secondary);
+                border: 2px solid var(--border-light);
                 border-radius: 20px;
                 font-size: 0.85rem;
                 color: var(--text-primary);
-                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+                box-shadow: 2px 2px 0 #000;
                 animation: agentFadeIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
                 transition: all 0.3s ease;
             ">
-                <span style="font-size: 1.1rem; filter: drop-shadow(0 0 2px rgba(0,0,0,0.1));">${agent.emoji}</span>
+                <span style="font-size: 1.1rem; filter: drop-shadow(2px 2px 0 #000);">${agent.emoji}</span>
                 <div style="display: flex; flex-direction: column; line-height: 1.2;">
                     <span style="font-weight: 600; color: var(--accent-primary);">${agent.name}</span>
                     <span style="font-size: 0.7rem; color: var(--text-secondary); opacity: 0.8;">Expertise: ${agent.reason.split('단계로')[0].trim()}</span>
@@ -1549,8 +1549,8 @@ function showAgentBadge(agent) {
                     to { opacity: 1; transform: translateY(0) scale(1); }
                 }
                 .agent-badge:hover {
-                    transform: translateY(-2px);
-                    box-shadow: 0 6px 16px rgba(99, 102, 241, 0.15);
+                    transform: translate(-2px, -2px);
+                    box-shadow: 4px 4px 0 #000;
                     border-color: var(--accent-primary);
                 }
             </style>
@@ -1680,21 +1680,21 @@ function showDiscussionProgress(progress) {
                 #discussionProgress {
                     margin: 0 auto 10px auto;
                     max-width: 600px;
-                    background: rgba(255, 255, 255, 0.9);
-                    border: 1px solid var(--border-medium);
+                    background: var(--bg-card);
+                    border: 2px solid var(--border-light);
                     border-radius: 20px;
                     padding: 8px 16px;
-                    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+                    box-shadow: 2px 2px 0 #000;
                     display: flex;
                     align-items: center;
                     gap: 12px;
                     font-size: 0.85rem;
                     color: var(--text-primary);
-                    backdrop-filter: blur(8px);
+                    backdrop-filter: none;
                     animation: slideUp 0.3s ease-out;
                 }
                 [data-theme="dark"] #discussionProgress {
-                    background: rgba(30, 30, 35, 0.9);
+                    background: var(--bg-card);
                     border-color: var(--border-light);
                 }
                 #discussionProgress .progress-icon {
@@ -1808,22 +1808,22 @@ function showResearchProgress(progress) {
                 #researchProgress {
                     margin: 0 auto 10px auto;
                     max-width: 600px;
-                    background: linear-gradient(135deg, rgba(139, 92, 246, 0.1) 0%, rgba(59, 130, 246, 0.1) 100%);
-                    border: 1px solid rgba(139, 92, 246, 0.3);
+                    background: var(--bg-card);
+                    border: 2px solid var(--border-light);
                     border-radius: 20px;
                     padding: 8px 16px;
-                    box-shadow: 0 4px 12px rgba(139, 92, 246, 0.1);
+                    box-shadow: 2px 2px 0 #000;
                     display: flex;
                     align-items: center;
                     gap: 12px;
                     font-size: 0.85rem;
                     color: var(--text-primary);
-                    backdrop-filter: blur(8px);
+                    backdrop-filter: none;
                     animation: slideUp 0.3s ease-out;
                 }
                 [data-theme="dark"] #researchProgress {
-                    background: linear-gradient(135deg, rgba(139, 92, 246, 0.15) 0%, rgba(59, 130, 246, 0.15) 100%);
-                    border-color: rgba(139, 92, 246, 0.4);
+                    background: var(--bg-card);
+                    border-color: var(--border-light);
                 }
                 #researchProgress .progress-icon {
                     font-size: 1.2rem;
@@ -1850,7 +1850,7 @@ function showResearchProgress(progress) {
                     width: 100%;
                 }
                 #researchProgress .progress-fill {
-                    background: linear-gradient(90deg, #8B5CF6 0%, #3B82F6 100%);
+                    background: var(--accent-primary);
                     height: 100%;
                     width: 0%;
                     transition: width 0.4s ease;
@@ -1866,9 +1866,10 @@ function showResearchProgress(progress) {
                 #researchProgress .stage-badge {
                     font-size: 0.65rem;
                     padding: 2px 6px;
-                    background: rgba(139, 92, 246, 0.2);
+                    background: var(--bg-tertiary);
+                    border: 1px solid var(--border-light);
                     border-radius: 8px;
-                    color: #8B5CF6;
+                    color: var(--accent-primary);
                     font-weight: 500;
                 }
                 @keyframes researchPulse {
@@ -2134,7 +2135,8 @@ function showApiKeyExhaustedError(data) {
                 top: 0;
                 left: 0;
                 right: 0;
-                background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+                background: var(--danger);
+                border-bottom: 2px solid #000;
                 color: white;
                 padding: 16px 24px;
                 z-index: 10000;
@@ -2143,7 +2145,7 @@ function showApiKeyExhaustedError(data) {
                 justify-content: center;
                 gap: 16px;
                 font-size: 0.95rem;
-                box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
+                box-shadow: 0 4px 0 #000;
                 animation: slideDown 0.3s ease-out;
             }
             #apiKeyExhaustedBanner .banner-icon {
@@ -2163,7 +2165,8 @@ function showApiKeyExhaustedError(data) {
                 opacity: 0.9;
             }
             #apiKeyExhaustedBanner .countdown {
-                background: rgba(0, 0, 0, 0.2);
+                background: var(--bg-tertiary);
+                border: 2px solid #000;
                 padding: 8px 16px;
                 border-radius: 8px;
                 font-weight: 600;
@@ -2172,16 +2175,20 @@ function showApiKeyExhaustedError(data) {
                 text-align: center;
             }
             #apiKeyExhaustedBanner .close-btn {
-                background: rgba(255, 255, 255, 0.2);
-                border: none;
+                background: var(--bg-tertiary);
+                border: 2px solid #000;
                 color: white;
                 padding: 6px 12px;
                 border-radius: 6px;
                 cursor: pointer;
                 font-size: 0.85rem;
+                box-shadow: 2px 2px 0 #000;
+                transition: transform 0.1s;
             }
             #apiKeyExhaustedBanner .close-btn:hover {
-                background: rgba(255, 255, 255, 0.3);
+                background: var(--bg-secondary);
+                transform: translate(-1px, -1px);
+                box-shadow: 3px 3px 0 #000;
             }
             @keyframes slideDown {
                 from { transform: translateY(-100%); opacity: 0; }
