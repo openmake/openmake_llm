@@ -251,10 +251,14 @@ async function recoverSessionFromCookie() {
 
 /**
  * 인증 정보를 포함한 fetch 요청 래퍼
- * 
+ *
  * Authorization 헤더에 JWT 토큰을 추가하고,
  * credentials: 'include'로 httpOnly 쿠키를 자동 포함합니다.
  * 모든 인증이 필요한 API 호출에 사용합니다.
+ *
+ * @deprecated 레거시 — 신규 코드에서는 js/modules/auth.js의 authFetch를 사용하세요.
+ * 이 함수는 app.js 로컬 스코프(authToken 변수)에 의존하므로 즉시 제거 불가.
+ * 모듈화 마이그레이션 완료 후 제거 예정.
  *
  * @async
  * @param {string} url - 요청 URL
@@ -1190,6 +1194,10 @@ function hideAbortButton() {
 /**
  * 사용자 메시지를 WebSocket으로 전송
  * 
+ * @deprecated 레거시 — 신규 코드에서는 js/modules/chat.js의 sendMessage를 사용하세요.
+ * 이 함수는 app.js 로컬 스코프(ws, isSending, attachedFiles 등)에 의존하므로 즉시 제거 불가.
+ * 모듈화 마이그레이션 완료 후 제거 예정.
+ *
  * 메시지 전송 흐름:
  * 1. 중복 전송 방지 (isSending 체크)
  * 2. 입력값 및 WebSocket 상태 검증
@@ -1960,6 +1968,10 @@ function scrollToBottom() {
 /**
  * 채팅 메시지를 DOM에 추가
  * 
+ * @deprecated 레거시 — 신규 코드에서는 js/modules/chat.js의 addChatMessage를 사용하세요.
+ * 이 함수는 app.js 로컬 스코프(escapeHtml, messageStartTime 등)에 의존하므로 즉시 제거 불가.
+ * 모듈화 마이그레이션 완료 후 제거 예정.
+ *
  * user 역할: 오른쪽 정렬, escapeHtml 적용, 사용자 아바타
  * assistant 역할: 왼쪽 정렬, 로딩 스피너 표시, 복사/재생성 액션 버튼 포함
  * AI 응답 시 messageStartTime을 기록하여 응답 소요 시간을 측정합니다.

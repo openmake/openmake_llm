@@ -18,6 +18,7 @@
  * @requires ../chat/profile-resolver - Brand Model → ExecutionPlan 변환
  * @requires ../ollama/client - Ollama HTTP 클라이언트
  */
+import { createLogger } from '../utils/logger';
 import { routeToAgent, getAgentSystemMessage, AGENTS } from '../agents';
 import type { DiscussionProgress, DiscussionResult } from '../agents/discussion-engine';
 import { getPromptConfig } from '../chat/prompt';
@@ -34,6 +35,8 @@ import { getGptOssTaskPreset, isGeminiModel, type ChatMessage, type ToolDefiniti
 import { applySequentialThinking } from '../mcp/sequential-thinking';
 import type { ResearchProgress } from './DeepResearchService';
 import { A2AStrategy, AgentLoopStrategy, DeepResearchStrategy, DirectStrategy, DiscussionStrategy } from './chat-strategies';
+
+const logger = createLogger('ChatService');
 
 /**
  * 채팅 히스토리 메시지 인터페이스
@@ -291,7 +294,7 @@ export class ChatService {
             tier,
             role: userRole || 'guest',
         };
-        console.log(`[ChatService] 🔐 사용자 컨텍스트 설정: userId=${userId}, role=${userRole}, tier=${tier}`);
+        logger.info(`사용자 컨텍스트 설정: userId=${userId}, role=${userRole}, tier=${tier}`);
     }
 
     /**
@@ -310,7 +313,7 @@ export class ChatService {
         // enabledTools가 없으면 레거시 호환: 전체 허용 (API 클라이언트 등)
         if (this.currentEnabledTools !== undefined) {
             const filtered = allTools.filter(t => this.currentEnabledTools![t.function.name] === true);
-            console.log(`[ChatService] 🔧 MCP 도구 필터링: ${allTools.length}개 중 ${filtered.length}개 활성화`);
+            logger.debug(`MCP 도구 필터링: ${allTools.length}개 중 ${filtered.length}개 활성화`);
             return filtered;
         }
         return allTools;
@@ -394,7 +397,7 @@ export class ChatService {
         const agentSystemMessage = getAgentSystemMessage(agentSelection);
         const selectedAgent = AGENTS[agentSelection.primaryAgent];
 
-        console.log(`[ChatService] 에이전트: ${selectedAgent.emoji} ${selectedAgent.name}`);
+        logger.info(`에이전트: ${selectedAgent.emoji} ${selectedAgent.name}`);
 
         if (onAgentSelected && selectedAgent) {
             onAgentSelected({
@@ -453,7 +456,7 @@ export class ChatService {
             const targetBrandProfile = await selectBrandProfileForAutoRouting(message, hasImages);
             const autoExecutionPlan = buildExecutionPlan(targetBrandProfile);
 
-            console.log(`[ChatService] 🤖 Auto-Routing: ${executionPlan.requestedModel} → ${targetBrandProfile} (engine=${autoExecutionPlan.resolvedEngine})`);
+            logger.info(`Auto-Routing: ${executionPlan.requestedModel} → ${targetBrandProfile} (engine=${autoExecutionPlan.resolvedEngine})`);
 
             executionPlan.resolvedEngine = autoExecutionPlan.resolvedEngine;
             executionPlan.profile = autoExecutionPlan.profile;
@@ -481,7 +484,7 @@ export class ChatService {
                 supportsVision: autoExecutionPlan.requiredTools.includes('vision'),
             };
         } else if (executionPlan?.isBrandModel) {
-            console.log(`[ChatService] §9 Brand Model: ${executionPlan.requestedModel} → engine=${executionPlan.resolvedEngine}`);
+            logger.info(`Brand Model: ${executionPlan.requestedModel} → engine=${executionPlan.resolvedEngine}`);
             this.client.setModel(executionPlan.resolvedEngine);
             modelSelection = {
                 model: executionPlan.resolvedEngine,
@@ -494,7 +497,7 @@ export class ChatService {
             };
         } else {
             modelSelection = await selectOptimalModel(message, hasImages);
-            console.log(`[ChatService] 🎯 모델 자동 선택: ${modelSelection.model} (${modelSelection.reason})`);
+            logger.info(`모델 자동 선택: ${modelSelection.model} (${modelSelection.reason})`);
             this.client.setModel(modelSelection.model);
         }
 
@@ -513,7 +516,7 @@ export class ChatService {
 
         const supportsTools = checkModelCapability(modelSelection.model, 'toolCalling');
         const supportsThinking = checkModelCapability(modelSelection.model, 'thinking');
-        console.log(`[ChatService] 📊 모델 기능: tools=${supportsTools}, thinking=${supportsThinking}`);
+        logger.debug(`모델 기능: tools=${supportsTools}, thinking=${supportsThinking}`);
 
         const maxTurns = executionPlan?.agentLoopMax ?? 5;
 
@@ -549,10 +552,11 @@ export class ChatService {
         if (!skipA2A) {
             try {
                 checkAborted();
-                console.log(`[ChatService] 🔀 A2A 병렬 응답 시작... (strategy: ${a2aMode})`);
+                logger.info(`A2A 병렬 응답 시작... (strategy: ${a2aMode})`);
                 const a2aResult = await this.a2aStrategy.execute({
                     messages: currentHistory,
                     chatOptions,
+                    queryType: modelSelection.queryType,
                     onToken: streamToken,
                     abortSignal,
                     checkAborted,
@@ -560,18 +564,18 @@ export class ChatService {
 
                 if (a2aResult.succeeded) {
                     a2aSucceeded = true;
-                    console.log('[ChatService] ✅ A2A 병렬 응답 완료');
+                    logger.info('A2A 병렬 응답 완료');
                 }
             } catch (e) {
                 if (e instanceof Error && e.message === 'ABORTED') throw e;
-                console.warn('[ChatService] ⚠️ A2A 실패, 단일 모델로 폴백:', e instanceof Error ? e.message : e);
+                logger.warn('A2A 실패, 단일 모델로 폴백:', e instanceof Error ? e.message : e);
             }
         } else {
-            console.log('[ChatService] ⏭️ A2A 건너뜀 (strategy: off)');
+            logger.info('A2A 건너뜀 (strategy: off)');
         }
 
         if (!a2aSucceeded) {
-            console.log('[ChatService] 🔄 단일 모델 Agent Loop 폴백');
+            logger.info('단일 모델 Agent Loop 폴백');
 
             await this.agentLoopStrategy.execute({
                 client: this.client,
@@ -620,7 +624,7 @@ export class ChatService {
                     metricsCollector.incrementCounter('api_key_usage', 1, { keyId: currentKey.substring(0, 8) });
                 }
             } catch (e) {
-                console.warn('[ChatService] MetricsCollector 기록 실패:', e);
+                logger.warn('MetricsCollector 기록 실패:', e);
             }
 
             try {
@@ -640,10 +644,10 @@ export class ChatService {
 
                 analytics.recordQuery(message);
             } catch (e) {
-                console.warn('[ChatService] AnalyticsSystem 기록 실패:', e);
+                logger.warn('AnalyticsSystem 기록 실패:', e);
             }
         } catch (e) {
-            console.error('[ChatService] 모니터링 데이터 기록 실패:', e);
+            logger.error('모니터링 데이터 기록 실패:', e);
         }
 
         return fullResponse;

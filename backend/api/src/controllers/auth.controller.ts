@@ -28,9 +28,10 @@ const STATE_TTL_MS = 5 * 60 * 1000; // 5분
 const oauthStatesFallback = new Map<string, { provider: string; createdAt: number }>();
 
 /**
- * DB 기반 OAuth state 저장소 헬퍼
- * conversation_sessions 테이블 대신 별도 임시 테이블을 사용하여 격리
- * 테이블이 없으면 자동 생성
+ * DB 기반 OAuth state 저장소 헬퍼 (안전 폴백)
+ * 
+ * 주 DDL은 services/database/init/002-schema.sql에서 관리합니다.
+ * 이 함수는 스키마 마이그레이션 없이 서버를 시작한 경우를 위한 안전 폴백입니다.
  */
 async function ensureOauthStateTable(): Promise<void> {
     try {

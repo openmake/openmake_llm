@@ -29,6 +29,13 @@ const SafeStorage = window.SafeStorage || {
 };
 
 /**
+ * Silent refresh 동시성 가드.
+ * authFetch는 401(로그인/리프레시 요청 제외) 응답을 받으면 /api/auth/refresh를 1회 시도하고,
+ * 성공 시 토큰을 SafeStorage/AppState에 반영한 뒤 원 요청을 1회만 재시도합니다.
+ */
+let isRefreshing = false;
+
+/**
  * 인증 상태 초기화
  * localStorage에서 토큰과 사용자 정보를 복원하고,
  * 사용자 정보가 없으면 httpOnly 쿠키 기반 세션 복구를 시도합니다.
@@ -140,17 +147,21 @@ async function recoverSessionFromCookie() {
 /**
  * 인증된 fetch 요청
  * Authorization 헤더와 httpOnly 쿠키를 자동으로 포함합니다.
- * 401 응답 시 로그인 페이지로 자동 리다이렉트합니다.
+ * 401 응답(로그인/리프레시 제외) 시 Silent Refresh를 먼저 시도한 뒤 실패하면 로그인 페이지로 리다이렉트합니다.
  * @param {string} url - 요청 URL
  * @param {object} [options={}] - fetch 옵션 (headers, method, body 등)
  * @returns {Promise<Response>} fetch Response 객체
  */
 async function authFetch(url, options = {}) {
+    const requestOptions = { ...options };
+    const isRetryAfterRefresh = requestOptions._retryAfterRefresh === true;
+    delete requestOptions._retryAfterRefresh;
+
     const authToken = getState('auth.authToken');
 
     const headers = {
         'Content-Type': 'application/json',
-        ...(options.headers || {})
+        ...(requestOptions.headers || {})
     };
 
     if (authToken) {
@@ -158,13 +169,49 @@ async function authFetch(url, options = {}) {
     }
 
     const response = await fetch(url, {
-        ...options,
+        ...requestOptions,
         credentials: 'include',  // 🔒 httpOnly 쿠키 자동 포함
         headers
     });
 
+    const isLoginRequest = url.includes('/api/auth/login');
+    const isRefreshRequest = url.includes('/api/auth/refresh');
+
     // 401 인터셉터: 세션 만료 시 로그인 페이지로 리다이렉트
-    if (response.status === 401 && !url.includes('/api/auth/login')) {
+    if (response.status === 401 && !isLoginRequest && !isRefreshRequest) {
+        if (!isRetryAfterRefresh) {
+            if (isRefreshing) {
+                while (isRefreshing) {
+                    await new Promise((resolve) => setTimeout(resolve, 50));
+                }
+                return authFetch(url, { ...options, _retryAfterRefresh: true });
+            }
+
+            isRefreshing = true;
+            try {
+                const refreshResponse = await fetch('/api/auth/refresh', {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+
+                if (refreshResponse.ok) {
+                    const refreshData = await refreshResponse.json();
+                    const newToken = refreshData?.data?.token;
+
+                    if (refreshData?.success === true && newToken) {
+                        SafeStorage.setItem('authToken', newToken);
+                        setState('auth.authToken', newToken);
+                        return authFetch(url, { ...options, _retryAfterRefresh: true });
+                    }
+                }
+            } catch (e) {
+                // 네트워크 오류 시 기존 401 리다이렉트 로직으로 폴백
+            } finally {
+                isRefreshing = false;
+            }
+        }
+
         SafeStorage.removeItem('authToken');
         SafeStorage.removeItem('user');
         setState('auth.authToken', null);
