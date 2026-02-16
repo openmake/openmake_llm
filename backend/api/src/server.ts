@@ -199,7 +199,7 @@ export class DashboardServer {
     }
 
     private setupSecurity(app: Application): void {
-        app.use((req, res, next) => {
+        app.use('/api', (req, res, next) => {
             res.setHeader('Content-Type', 'application/json; charset=utf-8');
             next();
         });
@@ -250,8 +250,19 @@ export class DashboardServer {
             contentSecurityPolicy: {
                 directives: {
                     defaultSrc: ["'self'"],
-                    scriptSrc: ["'self'", "'unsafe-inline'"],
-                    styleSrc: ["'self'", "'unsafe-inline'"],
+                    scriptSrc: [
+                        "'self'",
+                        "'unsafe-inline'",
+                        "https://cdn.jsdelivr.net",
+                        "https://cdnjs.cloudflare.com",
+                    ],
+                    styleSrc: [
+                        "'self'",
+                        "'unsafe-inline'",
+                        "https://cdn.jsdelivr.net",
+                        "https://cdnjs.cloudflare.com",
+                        "https://fonts.googleapis.com",
+                    ],
                     imgSrc: ["'self'", "data:", "blob:", "https:"],
                     connectSrc: [
                         "'self'",
@@ -259,8 +270,15 @@ export class DashboardServer {
                         "wss:",
                         "http://localhost:11434",
                         "https://ollama.com",
+                        "https://api.iconify.design",
                     ],
-                    fontSrc: ["'self'", "data:"],
+                    fontSrc: [
+                        "'self'",
+                        "data:",
+                        "https://cdn.jsdelivr.net",
+                        "https://fonts.gstatic.com",
+                    ],
+                    scriptSrcAttr: ["'unsafe-inline'"],
                     objectSrc: ["'none'"],
                     frameAncestors: ["'none'"],
                     baseUri: ["'self'"],
@@ -370,7 +388,7 @@ export class DashboardServer {
         });
 
         app.get('/', (req: Request, res: Response) => {
-            const frontendPath = path.join(process.cwd(), '../../frontend/web/public');
+            const frontendPath = path.join(__dirname, '../../../frontend/web/public');
             const indexPath = path.join(frontendPath, 'index.html');
             if (fs.existsSync(indexPath)) {
                 res.sendFile(indexPath);
