@@ -1,5 +1,46 @@
 # Changelog
 
+## v1.5.4 (2026-02-16)
+
+### Architecture — Chat Handler DRY Abstraction
+
+- **`ChatRequestHandler` class**: Extracted duplicated chat handling logic from 3 places (HTTP sync, HTTP stream, WebSocket) into a single unified handler with 6 static methods: `resolveUserContextFromRequest`, `resolveUserContextFromWebSocket`, `buildPlan`, `createClient`, `ensureSession`, `processChat` (`chat/request-handler.ts` — NEW, ~340 LOC)
+- **HTTP Stream endpoint upgrade**: Previously a "dumb" passthrough (`client.generate()` direct call) — now routed through `ChatService` with full DB logging, Discussion, Deep Research, Agent Loop, and Memory support
+- **Handler refactoring**: `chat.routes.ts` and `sockets/handler.ts` reduced by ~180 LOC combined while preserving all existing behavior (WS abort, heartbeat, rate limiting, web search context)
+
+### Resilience — Circuit Breaker & Node Failover
+
+- **`CircuitBreaker` class**: Full 3-state machine (CLOSED → OPEN → HALF_OPEN) with sliding window failure tracking, configurable thresholds, graceful shutdown (`setTimeout.unref()`), and metrics reporting (`cluster/circuit-breaker.ts` — NEW, ~438 LOC)
+- **`CircuitBreakerRegistry` singleton**: Application-wide circuit breaker management with `getOrCreate()`, `resetAll()`, and `getAll()` for monitoring
+- **`AllNodesFailedError` / `CircuitOpenError`**: Custom error classes following existing `KeyExhaustionError` / `QuotaExceededError` conventions (`errors/` — 2 NEW files)
+- **`ClusterManager.getCandidateNodes()`**: Returns online nodes sorted by latency, filtered by model availability and CircuitBreaker state (OPEN nodes auto-excluded)
+- **`ClusterManager.tryWithFallback<T>()`**: Sequential failover across candidate nodes — each attempt wrapped in CircuitBreaker, throws `AllNodesFailedError` only when all candidates exhausted
+
+### Intelligence — LLM-Based Model Selection
+
+- **`classifyQueryWithLLM()`**: Ollama Structured Output (`format: { type: 'object', properties: { category: { enum: [...] }, confidence: { type: 'number' } } }`) for query classification via Code engine model with 3-second timeout — falls back silently to regex-based `classifyQuery()` on any failure (`chat/model-selector.ts`)
+- **Async conversion**: `selectOptimalModel()`, `selectBrandProfileForAutoRouting()`, `selectModelForProfile()` converted to async; all callers in `ChatService.ts` and `sockets/handler.ts` updated with `await`
+
+### Performance — Prompt Caching Optimization
+
+- **`ContextEngineeringBuilder.build()` reorder**: Static sections (Role → Constraints → OutputFormat → SoftInterlock → FinalReminder) moved to prompt prefix, dynamic sections (Metadata → RAG → Examples → AdditionalSections → Goal) placed after — optimizes for Gemini/Cloud implicit prefix caching (`chat/context-engineering.ts`)
+
+### Security
+
+- **`search_code` path traversal fix**: `process.cwd()` replaced with `UserSandbox.getWorkDir(userId)` with `os.tmpdir()` safe fallback when userId is missing (`mcp/tools.ts`)
+
+### Configuration
+
+- **Code engine model**: Added `OMK_ENGINE_CODE=qwen3-coder-next:cloud` to `.env` for LLM-based query classification
+
+### Stats
+
+- 4 files created, 12 files modified
+- `npm run build` — zero errors
+- 0 regressions
+
+---
+
 ## v1.5.3 (2025-02-15)
 
 ### Security
