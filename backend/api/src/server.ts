@@ -287,7 +287,7 @@ export class DashboardServer {
                     frameAncestors: ["'none'"],
                     baseUri: ["'self'"],
                     formAction: ["'self'"],
-                    upgradeInsecureRequests: [],
+                    upgradeInsecureRequests: null,
                 }
             },
             crossOriginEmbedderPolicy: false,
