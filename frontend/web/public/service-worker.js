@@ -10,7 +10,7 @@
  */
 
 /** @type {string} 정적 자산 캐시 버전 키 */
-const CACHE_VERSION = 'openmake-v7';
+const CACHE_VERSION = 'openmake-v8';
 /** @type {string} CDN 리소스 캐시 키 */
 const CDN_CACHE = 'openmake-cdn-v1';
 /** @type {string} 이미지 리소스 캐시 키 */
