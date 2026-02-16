@@ -501,6 +501,25 @@ class ConversationDB {
     }
 
     /**
+     * 특정 사용자의 모든 대화 세션을 삭제합니다.
+     * CASCADE로 메시지도 함께 삭제됩니다.
+     * @param userId - 사용자 ID
+     * @returns 삭제된 세션 수
+     */
+    async deleteAllSessionsByUserId(userId: string): Promise<number> {
+        const pool = getPool();
+        const result = await pool.query(
+            'DELETE FROM conversation_sessions WHERE user_id = $1',
+            [userId]
+        );
+        const count = result.rowCount || 0;
+        if (count > 0) {
+            logger.info(`[ConversationDB] Deleted all ${count} sessions for user ${userId}`);
+        }
+        return count;
+    }
+
+    /**
      * 익명 세션을 로그인한 사용자에게 이관
      * anon_session_id로 생성된 세션의 user_id를 업데이트하고 anon_session_id를 제거
      * @returns 이관된 세션 수

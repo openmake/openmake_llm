@@ -130,7 +130,13 @@
             'color: var(--text-primary); font-size: var(--font-size-sm); z-index: 9999; opacity: 0;' +
             'transition: all 0.3s ease; pointer-events: none; box-shadow: 6px 6px 0 #000;' +
         '}' +
-        '.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }';
+        '.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }' +
+        /* Tier badge styles */
+        '.tier-badge { display:inline-block; font-size:9px; padding:1px 6px; border-radius:3px; font-weight:700; letter-spacing:0.5px; margin-left:6px; vertical-align:middle; text-transform:uppercase; }' +
+        '.tier-badge-pro { background:linear-gradient(135deg,#6366f1,#8b5cf6); color:#fff; }' +
+        '.tier-badge-enterprise { background:linear-gradient(135deg,#f59e0b,#ef4444); color:#fff; }' +
+        '.mcp-tool-locked { opacity:0.45; pointer-events:none; }' +
+        '.mcp-tool-locked .toggle-slider { cursor:not-allowed !important; }';
 
     var HTML =
         '<div class="settings-container">' +
@@ -155,8 +161,8 @@
                         '</select>' +
                     '</div>' +
                     '<div class="setting-row">' +
-                        '<div class="setting-info"><h4>\uC5B8\uC5B4</h4><p>\uC778\uD130\uD398\uC774\uC2A4 \uC5B8\uC5B4\uB97C \uC120\uD0DD\uD569\uB2C8\uB2E4</p></div>' +
-                        '<select id="langSelect" class="s-select">' +
+                        '<div class="setting-info"><h4>\uC5B8\uC5B4</h4><p>\uC778\uD130\uD398\uC774\uC2A4 \uC5B8\uC5B4\uB97C \uC120\uD0DD\uD569\uB2C8\uB2E4 <span style="font-size:var(--font-size-xs);color:var(--text-muted);opacity:0.7;">(\uC900\uBE44 \uC911)</span></p></div>' +
+                        '<select id="langSelect" class="s-select" disabled style="opacity:0.5;cursor:not-allowed;">' +
                             '<option value="ko">\uD55C\uAD6D\uC5B4</option>' +
                             '<option value="en">English</option>' +
                             '<option value="ja">\u65E5\u672C\u8A9E</option>' +
@@ -191,6 +197,23 @@
                         '<div class="setting-info"><h4>\uC6F9 \uAC80\uC0C9</h4><p>\uC2E4\uC2DC\uAC04 \uC6F9 \uAC80\uC0C9 \uAE30\uB2A5 \uD65C\uC131\uD654</p></div>' +
                         '<label class="toggle"><input type="checkbox" checked id="webSearchToggle"><span class="toggle-slider"></span></label>' +
                     '</div>' +
+                '</div>' +
+            '</div>' +
+
+            '<div class="s-card">' +
+                '<div class="s-card-header">' +
+                    '<span class="s-card-icon">\uD83D\uDD27</span>' +
+                    '<span class="s-card-title">MCP \uB3C4\uAD6C</span>' +
+                '</div>' +
+                '<div class="s-card-body">' +
+                    '<div class="setting-row">' +
+                        '<div class="setting-info"><h4>MCP \uB3C4\uAD6C \uAD00\uB9AC</h4><p>AI\uAC00 \uC0AC\uC6A9\uD560 \uC218 \uC788\uB294 \uC678\uBD80 \uB3C4\uAD6C\uB97C \uAC1C\uBCC4\uC801\uC73C\uB85C \uD65C\uC131\uD654/\uBE44\uD65C\uC131\uD654\uD569\uB2C8\uB2E4</p></div>' +
+                        '<div class="s-btn-row" style="gap:6px;">' +
+                            '<button class="s-btn s-btn-secondary" style="font-size:var(--font-size-xs);padding:4px 10px;" id="mcpEnableAllBtn">\uC804\uCCB4 \uD65C\uC131\uD654</button>' +
+                            '<button class="s-btn s-btn-secondary" style="font-size:var(--font-size-xs);padding:4px 10px;" id="mcpDisableAllBtn">\uC804\uCCB4 \uBE44\uD65C\uC131\uD654</button>' +
+                        '</div>' +
+                    '</div>' +
+                    '<div id="mcpToolToggles"></div>' +
                 '</div>' +
             '</div>' +
 
@@ -321,8 +344,14 @@
                     var count = (data.data && data.data.count) || 0;
                     var el = document.getElementById('apiKeyCount');
                     if (el) el.textContent = count + '개 활성';
+                } else {
+                    var el = document.getElementById('apiKeyCount');
+                    if (el) el.textContent = '로그인 필요';
                 }
-            } catch (e) { /* silent */ }
+            } catch (e) {
+                var el2 = document.getElementById('apiKeyCount');
+                if (el2) el2.textContent = '로그인 필요';
+            }
         }
 
         async function loadSystemInfo() {
@@ -360,7 +389,24 @@
             var mcpSettings = JSON.parse(localStorage.getItem('mcpSettings') || '{}');
             mcpSettings.thinking = document.getElementById('thinkingToggle').checked;
             mcpSettings.webSearch = document.getElementById('webSearchToggle').checked;
+
+            // MCP 도구 토글 상태 수집 — DOM에서 mcpTool_ 프리픽스 체크박스 직접 조회
+            var enabledTools = {};
+            var mcpCheckboxes = document.querySelectorAll('input[id^="mcpTool_"]');
+            mcpCheckboxes.forEach(function(el) {
+                var toolName = el.id.replace('mcpTool_', '');
+                enabledTools[toolName] = el.checked;
+            });
+            mcpSettings.enabledTools = enabledTools;
             localStorage.setItem('mcpSettings', JSON.stringify(mcpSettings));
+
+            // AppState 동기화
+            if (typeof setState === 'function') {
+                setState('thinkingEnabled', mcpSettings.thinking);
+                setState('webSearchEnabled', mcpSettings.webSearch);
+                setState('mcpToolsEnabled', enabledTools);
+            }
+
             localStorage.setItem('generalSettings', JSON.stringify({ lang: document.getElementById('langSelect').value, saveHistory: document.getElementById('saveHistoryToggle').checked }));
             (typeof showToast === 'function' ? showToast('설정이 저장되었습니다.', 'warning') : console.warn('설정이 저장되었습니다.'));
         }
@@ -383,10 +429,201 @@
         }
 
         function resetSettings() { if (confirm('모든 설정을 초기화하시겠습니까?')) { localStorage.removeItem('theme'); localStorage.removeItem('selectedModel'); localStorage.removeItem('mcpSettings'); localStorage.removeItem('generalSettings'); location.reload(); } }
-        function exportData() { (typeof showToast === 'function' ? showToast('데이터 내보내기 기능은 준비 중입니다.', 'warning') : console.warn('데이터 내보내기 기능은 준비 중입니다.')); }
-        function clearHistory() { if (confirm('모든 대화 기록을 삭제하시겠습니까?')) (typeof showToast === 'function' ? showToast('대화 기록이 삭제되었습니다.', 'warning') : console.warn('대화 기록이 삭제되었습니다.')); }
+
+        async function exportData() {
+            try {
+                var authToken = localStorage.getItem('authToken');
+                if (!authToken) {
+                    (typeof showToast === 'function' ? showToast('로그인이 필요합니다.', 'warning') : console.warn('로그인이 필요합니다.'));
+                    return;
+                }
+                var headers = { 'Authorization': 'Bearer ' + authToken };
+                var res = await fetch('/api/chat/sessions?limit=500', { credentials: 'include', headers: headers });
+                if (!res.ok) throw new Error('서버 응답 오류: ' + res.status);
+                var data = await res.json();
+                var payload = data.data || data;
+                var sessions = payload.sessions || [];
+                if (sessions.length === 0) {
+                    (typeof showToast === 'function' ? showToast('내보낼 대화 기록이 없습니다.', 'warning') : console.warn('내보낼 대화 기록이 없습니다.'));
+                    return;
+                }
+                var blob = new Blob([JSON.stringify(sessions, null, 2)], { type: 'application/json' });
+                var url = URL.createObjectURL(blob);
+                var a = document.createElement('a');
+                a.href = url;
+                a.download = 'openmake_chat_export_' + new Date().toISOString().slice(0, 10) + '.json';
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                URL.revokeObjectURL(url);
+                (typeof showToast === 'function' ? showToast(sessions.length + '개 대화가 내보내기되었습니다.', 'success') : console.log('Export complete'));
+            } catch (e) {
+                console.error('데이터 내보내기 실패:', e);
+                (typeof showToast === 'function' ? showToast('데이터 내보내기에 실패했습니다.', 'error') : console.error('데이터 내보내기 실패'));
+            }
+        }
+
+        async function clearHistory() {
+            if (!confirm('모든 대화 기록을 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.')) return;
+            try {
+                var authToken = localStorage.getItem('authToken');
+                if (!authToken) {
+                    (typeof showToast === 'function' ? showToast('로그인이 필요합니다.', 'warning') : console.warn('로그인이 필요합니다.'));
+                    return;
+                }
+                var headers = { 'Authorization': 'Bearer ' + authToken, 'Content-Type': 'application/json' };
+                var res = await fetch('/api/chat/sessions', { method: 'DELETE', credentials: 'include', headers: headers });
+                if (!res.ok) throw new Error('서버 응답 오류: ' + res.status);
+                var data = await res.json();
+                var count = (data.data && data.data.count) || 0;
+                (typeof showToast === 'function' ? showToast(count + '개 대화 기록이 삭제되었습니다.', 'success') : console.log('History cleared'));
+            } catch (e) {
+                console.error('대화 기록 삭제 실패:', e);
+                (typeof showToast === 'function' ? showToast('대화 기록 삭제에 실패했습니다.', 'error') : console.error('대화 기록 삭제 실패'));
+            }
+        }
 
         initSettings();
+
+        // 사용자 등급(tier) 판별 — 백엔드 tool-tiers.ts의 getDefaultTierForRole 동기화
+        function getUserTier() {
+            var isGuest = localStorage.getItem('guestMode') === 'true' ||
+                          localStorage.getItem('isGuest') === 'true' ||
+                          !localStorage.getItem('authToken');
+            if (isGuest) return 'free';
+            var savedUser = localStorage.getItem('user');
+            if (!savedUser) return 'free';
+            try {
+                var user = JSON.parse(savedUser);
+                if (user.role === 'admin' || user.role === 'administrator') return 'enterprise';
+                return user.tier || 'free';
+            } catch(e) { return 'free'; }
+        }
+
+        var TIER_LEVEL = { free: 0, pro: 1, enterprise: 2 };
+        var TIER_LABELS = { pro: 'PRO', enterprise: 'ENTERPRISE' };
+        function canAccessTier(userTier, requiredTier) {
+            return (TIER_LEVEL[userTier] || 0) >= (TIER_LEVEL[requiredTier] || 0);
+        }
+
+        // MCP 도구 토글 UI 렌더링 (등급 기반 접근 제어 포함)
+        (function renderMCPToolToggles() {
+            console.log('[Settings] renderMCPToolToggles 실행');
+            var container = document.getElementById('mcpToolToggles');
+            console.log('[Settings] mcpToolToggles container:', container ? 'found' : 'NOT FOUND');
+            if (!container) return;
+
+            var userTier = getUserTier();
+            console.log('[Settings] 사용자 등급:', userTier);
+
+            // MCP 도구 카탈로그 — 백엔드 builtInTools + tool-tiers 동기화 (minTier 포함)
+            var toolCatalog = [
+                { category: '비전', emoji: '👁️', tools: [
+                    { name: 'vision_ocr', label: '이미지 OCR', description: '이미지에서 텍스트를 추출합니다', minTier: 'free' },
+                    { name: 'analyze_image', label: '이미지 분석', description: '이미지 내용을 분석합니다', minTier: 'free' }
+                ]},
+                { category: '웹 검색', emoji: '🌐', tools: [
+                    { name: 'web_search', label: '웹 검색', description: '실시간 웹 검색을 수행합니다', minTier: 'free' },
+                    { name: 'fact_check', label: '팩트 체크', description: '정보의 사실 여부를 검증합니다', minTier: 'enterprise' },
+                    { name: 'extract_webpage', label: '웹페이지 추출', description: '웹페이지 콘텐츠를 추출합니다', minTier: 'enterprise' },
+                    { name: 'research_topic', label: '주제 연구', description: '주제에 대한 심층 연구를 수행합니다', minTier: 'enterprise' }
+                ]},
+                { category: '추론', emoji: '🧠', tools: [
+                    { name: 'sequential_thinking', label: 'Sequential Thinking', description: '단계별 논리적 추론 체인', minTier: 'pro' }
+                ]},
+                { category: '스크래핑', emoji: '🔥', tools: [
+                    { name: 'firecrawl_scrape', label: 'Firecrawl 스크래핑', description: '웹페이지를 스크래핑합니다', minTier: 'pro' },
+                    { name: 'firecrawl_search', label: 'Firecrawl 검색', description: '웹을 검색합니다', minTier: 'pro' },
+                    { name: 'firecrawl_map', label: 'Firecrawl URL 맵', description: 'URL 구조를 매핑합니다', minTier: 'pro' },
+                    { name: 'firecrawl_crawl', label: 'Firecrawl 크롤링', description: '웹사이트를 크롤링합니다', minTier: 'pro' }
+                ]}
+            ];
+
+            var savedMcp = localStorage.getItem('mcpSettings');
+            var enabledTools = {};
+            if (savedMcp) {
+                try { enabledTools = JSON.parse(savedMcp).enabledTools || {}; } catch(e) {}
+            }
+
+            var html = '';
+            toolCatalog.forEach(function(group) {
+                html += '<div style="margin-top:12px;">' +
+                    '<div style="font-size:var(--font-size-xs);color:var(--text-muted);font-weight:600;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px;">' +
+                        group.emoji + ' ' + group.category +
+                    '</div>';
+                group.tools.forEach(function(tool) {
+                    var accessible = canAccessTier(userTier, tool.minTier);
+                    var isOn = accessible && enabledTools[tool.name] === true;
+                    var lockedClass = accessible ? '' : ' mcp-tool-locked';
+                    var badgeHtml = '';
+                    if (!accessible && TIER_LABELS[tool.minTier]) {
+                        var badgeClass = tool.minTier === 'pro' ? 'tier-badge-pro' : 'tier-badge-enterprise';
+                        badgeHtml = ' <span class="tier-badge ' + badgeClass + '">' + TIER_LABELS[tool.minTier] + '</span>';
+                    }
+                    html += '<div class="setting-row' + lockedClass + '" style="padding:6px 0;">' +
+                        '<div class="setting-info" style="min-width:0;">' +
+                            '<h4 style="font-size:var(--font-size-sm);margin:0;">' + tool.label + badgeHtml + '</h4>' +
+                            '<p style="font-size:var(--font-size-xs);margin:0;opacity:0.7;">' + tool.description + '</p>' +
+                        '</div>' +
+                        '<label class="toggle"><input type="checkbox" id="mcpTool_' + tool.name + '" ' + (isOn ? 'checked' : '') + (accessible ? '' : ' disabled') + '><span class="toggle-slider"></span></label>' +
+                    '</div>';
+                });
+                html += '</div>';
+            });
+            container.innerHTML = html;
+
+            // 개별 도구 토글 이벤트 바인딩 — 접근 가능한 도구만
+            toolCatalog.forEach(function(group) {
+                group.tools.forEach(function(tool) {
+                    if (!canAccessTier(userTier, tool.minTier)) return; // 잠긴 도구는 이벤트 불필요
+                    var el = document.getElementById('mcpTool_' + tool.name);
+                    if (el) {
+                        el.addEventListener('change', function() {
+                            var saved = localStorage.getItem('mcpSettings');
+                            var settings = saved ? JSON.parse(saved) : {};
+                            if (!settings.enabledTools) settings.enabledTools = {};
+                            settings.enabledTools[tool.name] = el.checked;
+                            localStorage.setItem('mcpSettings', JSON.stringify(settings));
+
+                            // app.js 전역 mcpSettings 동기화
+                            if (typeof mcpSettings !== 'undefined') {
+                                if (!mcpSettings.enabledTools) mcpSettings.enabledTools = {};
+                                mcpSettings.enabledTools[tool.name] = el.checked;
+                            }
+
+                            console.log('[Settings] MCP 도구 토글:', tool.name, el.checked ? '활성화' : '비활성화');
+                        });
+                    }
+                });
+            });
+
+            // 전체 활성화/비활성화 버튼 이벤트 — 접근 가능한 도구만 대상
+            function setAllTools(enabled) {
+                var saved = localStorage.getItem('mcpSettings');
+                var settings = saved ? JSON.parse(saved) : {};
+                if (!settings.enabledTools) settings.enabledTools = {};
+                toolCatalog.forEach(function(group) {
+                    group.tools.forEach(function(tool) {
+                        if (!canAccessTier(userTier, tool.minTier)) return; // 잠긴 도구 건너뜀
+                        settings.enabledTools[tool.name] = enabled;
+                        var el = document.getElementById('mcpTool_' + tool.name);
+                        if (el) el.checked = enabled;
+                    });
+                });
+                localStorage.setItem('mcpSettings', JSON.stringify(settings));
+
+                // app.js 전역 mcpSettings 동기화
+                if (typeof mcpSettings !== 'undefined') {
+                    mcpSettings.enabledTools = settings.enabledTools;
+                }
+
+                (typeof showToast === 'function' ? showToast(enabled ? 'MCP 도구 전체 활성화' : 'MCP 도구 전체 비활성화', enabled ? 'success' : 'info') : null);
+            }
+            var enableAllBtn = document.getElementById('mcpEnableAllBtn');
+            var disableAllBtn = document.getElementById('mcpDisableAllBtn');
+            if (enableAllBtn) enableAllBtn.addEventListener('click', function() { setAllTools(true); });
+            if (disableAllBtn) disableAllBtn.addEventListener('click', function() { setAllTools(false); });
+        })();
 
             // Expose onclick-referenced functions globally
                 if (typeof exportData === 'function') window.exportData = exportData;

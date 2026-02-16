@@ -98,6 +98,8 @@ export interface ChatRequestParams {
     thinkingMode?: boolean;
     /** 사고 수준 */
     thinkingLevel?: 'low' | 'medium' | 'high';
+    /** 사용자가 활성화한 MCP 도구 목록 (키: 도구명, 값: 활성화 여부) */
+    enabledTools?: Record<string, boolean>;
     /** 사용자 컨텍스트 */
     userContext: ChatUserContext;
     /** 클러스터 매니저 */
@@ -324,6 +326,7 @@ export class ChatRequestHandler {
             deepResearchMode,
             thinkingMode,
             thinkingLevel,
+            enabledTools,
             userContext,
             clusterManager,
             abortSignal,
@@ -378,6 +381,7 @@ export class ChatRequestHandler {
             userId: userContext.userId,
             userRole: userContext.userRole,
             userTier: userContext.userTier,
+            enabledTools,
             abortSignal,
         };
 

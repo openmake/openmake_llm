@@ -73,6 +73,7 @@ interface WSMessage {
     deepResearchMode?: boolean;
     thinkingMode?: boolean;
     thinkingLevel?: string;
+    enabledTools?: Record<string, boolean>;
     userRole?: string;
     userTier?: 'free' | 'pro' | 'enterprise';
     [key: string]: unknown;
@@ -464,6 +465,7 @@ export class WebSocketHandler {
                 deepResearchMode: msg.deepResearchMode === true,
                 thinkingMode: msg.thinkingMode === true,
                 thinkingLevel: (msg.thinkingLevel || 'high') as 'low' | 'medium' | 'high',
+                enabledTools: msg.enabledTools,
                 userContext,
                 clusterManager: this.cluster,
                 abortSignal: abortController.signal,
