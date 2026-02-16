@@ -1280,6 +1280,7 @@ function sendMessage() {
             history: conversationMemory.slice(-MAX_MEMORY_LENGTH),
             images: images,
             enableThinking: mcpSettings.thinking,
+            enabledTools: mcpSettings.enabledTools || {},
             discussionMode: discussionMode,  // 🆕 멀티 에이전트 토론 모드
             thinkingMode: thinkingMode,      // 🆕 Ollama Native Thinking 모드
             thinkingLevel: thinkingMode ? thinkingLevel : undefined,
@@ -1311,6 +1312,7 @@ function sendMessage() {
             history: conversationMemory.slice(-MAX_MEMORY_LENGTH),
             deepResearchMode: true,
             enableThinking: mcpSettings.thinking,
+            enabledTools: mcpSettings.enabledTools || {},
             thinkingMode: thinkingMode,
             thinkingLevel: thinkingMode ? thinkingLevel : undefined,
             anonSessionId: anonId,
@@ -1357,6 +1359,7 @@ function sendMessage() {
             docId: activeDocumentContext?.docId,  // 활성 문서 ID 포함
             promptMode: effectivePromptMode,
             enableThinking: mcpSettings.thinking,
+            enabledTools: mcpSettings.enabledTools || {},
             discussionMode: discussionMode,  // 멀티 에이전트 토론 모드
             thinkingMode: thinkingMode,      // 🧠 Ollama Native Thinking 모드
             thinkingLevel: thinkingMode ? thinkingLevel : undefined,  // Thinking 레벨
@@ -3643,7 +3646,8 @@ let mcpSettings = {
     webSearch: false,
     pdf: true,
     github: false,
-    exa: false
+    exa: false,
+    enabledTools: {}
 };
 
 /**
@@ -3663,6 +3667,10 @@ function loadMCPSettings() {
             const checkbox = document.getElementById(`mcp${key.charAt(0).toUpperCase() + key.slice(1)}`);
             if (checkbox) checkbox.checked = mcpSettings[key];
         });
+    }
+    // enabledTools 로드 (없으면 빈 객체 = 전체 비활성)
+    if (!mcpSettings.enabledTools || typeof mcpSettings.enabledTools !== 'object') {
+        mcpSettings.enabledTools = {};
     }
     // 기존 토글 버튼과 동기화
     thinkingEnabled = mcpSettings.thinking;
@@ -3967,7 +3975,8 @@ function resetSettings() {
         webSearch: false,
         pdf: true,
         github: false,
-        exa: false
+        exa: false,
+        enabledTools: {}
     };
     currentPromptMode = 'auto';
 

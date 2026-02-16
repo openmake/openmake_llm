@@ -129,6 +129,7 @@ async function sendMessage() {
             memory: getState('conversationMemory'),
             webSearch: getState('webSearchEnabled'),
             thinking: getState('thinkingEnabled'),
+            enabledTools: getState('mcpToolsEnabled') || {},
             sessionId: getState('currentChatId') // 세션 ID 포함
         };
 

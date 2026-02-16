@@ -32,7 +32,7 @@
     const _RELOAD_GUARD_MAX = 3;       // 최대 허용 횟수
 
     // 캐시 버스터 — 배포 시 deploy-frontend.sh가 이 값을 업데이트
-    const _moduleVersion = 3;
+    const _moduleVersion = 11;
 
     // ─── 상수 ──────────────────────────────────────────
     const CHAT_PATH = '/';

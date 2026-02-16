@@ -141,6 +141,19 @@ export class SessionController {
              res.json(success({ claimed }));
          }));
 
+         // 🆕 전체 세션 삭제: 로그인 사용자의 모든 대화 기록 삭제
+         this.router.delete('/', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+             const user = req.user;
+             if (!user?.id) {
+                 res.status(401).json({ success: false, error: { message: '인증이 필요합니다' } });
+                 return;
+             }
+             const userId = String(user.id);
+             const deletedCount = await conversationDb.deleteAllSessionsByUserId(userId);
+             log.info(`[Chat Sessions] 전체 삭제: userId=${userId}, deleted=${deletedCount}`);
+             res.json(success({ deleted: true, count: deletedCount }));
+         }));
+
          // 새 세션 생성 (anonSessionId 지원)
          this.router.post('/', optionalAuth, asyncHandler(async (req: Request, res: Response) => {
              const user = req.user;

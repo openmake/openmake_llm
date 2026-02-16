@@ -31,6 +31,9 @@ const AppState = {
     webSearchEnabled: false,
     thinkingEnabled: true,
 
+    // MCP 도구 활성화 상태 (키: 도구명, 값: boolean — 기본 전체 비활성)
+    mcpToolsEnabled: {},
+
     // 파일
     attachedFiles: [],
     activeDocumentContext: null,

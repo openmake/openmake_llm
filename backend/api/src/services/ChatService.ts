@@ -199,6 +199,8 @@ export interface ChatMessageRequest {
     userRole?: 'admin' | 'user' | 'guest';
     /** 사용자 구독 등급 (도구 접근 티어 결정에 사용) */
     userTier?: UserTier;
+    /** 사용자가 활성화한 MCP 도구 목록 (키: 도구명, 값: 활성화 여부) */
+    enabledTools?: Record<string, boolean>;
     /** 요청 중단 시그널 (SSE 연결 종료 시 사용) */
     abortSignal?: AbortSignal;
 }
@@ -223,6 +225,8 @@ export class ChatService {
     private client: OllamaClient;
     /** 현재 요청의 사용자 컨텍스트 (도구 접근 권한 결정에 사용) */
     private currentUserContext: UserContext | null = null;
+    /** 사용자가 활성화한 MCP 도구 목록 (undefined면 레거시 모드: 전체 허용) */
+    private currentEnabledTools: Record<string, boolean> | undefined = undefined;
 
     /** 단일 LLM 직접 호출 전략 */
     private readonly directStrategy: DirectStrategy;
@@ -300,7 +304,16 @@ export class ChatService {
     private getAllowedTools(): ToolDefinition[] {
         const toolRouter = getUnifiedMCPClient().getToolRouter();
         const userTierForTools = this.currentUserContext?.tier || 'free';
-        return toolRouter.getOllamaTools(userTierForTools) as ToolDefinition[];
+        const allTools = toolRouter.getOllamaTools(userTierForTools) as ToolDefinition[];
+
+        // enabledTools가 전달된 경우, 사용자가 명시적으로 활성화한 도구만 허용
+        // enabledTools가 없으면 레거시 호환: 전체 허용 (API 클라이언트 등)
+        if (this.currentEnabledTools !== undefined) {
+            const filtered = allTools.filter(t => this.currentEnabledTools![t.function.name] === true);
+            console.log(`[ChatService] 🔧 MCP 도구 필터링: ${allTools.length}개 중 ${filtered.length}개 활성화`);
+            return filtered;
+        }
+        return allTools;
     }
 
     /**
@@ -346,6 +359,7 @@ export class ChatService {
             userId,
             userRole,
             userTier,
+            enabledTools,
             abortSignal,
         } = req;
 
@@ -357,6 +371,7 @@ export class ChatService {
         };
 
         this.setUserContext(userId || 'guest', userRole, userTier);
+        this.currentEnabledTools = enabledTools;
 
         // 특수 모드 조기 분기: Discussion 또는 DeepResearch 모드는 별도 전략으로 위임
         if (discussionMode) {

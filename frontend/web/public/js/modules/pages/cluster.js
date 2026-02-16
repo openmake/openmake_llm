@@ -45,7 +45,8 @@
                  const res = await fetch(`${API_BASE}/api/cluster/status`, {
                      credentials: 'include'  // 🔒 httpOnly 쿠키 포함
                  });
-                 const data = await res.json();
+                 const json = await res.json();
+                 const data = json.data || json;
                 renderStats(data);
                 renderNodes(data.nodes || []);
             } catch (e) {
@@ -98,7 +99,7 @@
                             ${node.status === 'online' ? '온라인' : '오프라인'}
                         </span>
                     </div>
-                    <div class="cluster-url">${esc(node.url)}</div>
+                    <div class="cluster-url">${esc(node.host ? ('http://' + node.host + ':' + (node.port || 11434)) : (node.id || ''))}</div>
                     <div class="cluster-stats">
                         <div class="cluster-stat">
                             <div class="cluster-stat-value">${node.latency ? node.latency + 'ms' : '-'}</div>
