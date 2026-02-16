@@ -271,6 +271,10 @@ export class DashboardServer {
                         "http://localhost:11434",
                         "https://ollama.com",
                         "https://api.iconify.design",
+                        "https://cdn.jsdelivr.net",
+                        "https://cdnjs.cloudflare.com",
+                        "https://fonts.googleapis.com",
+                        "https://fonts.gstatic.com",
                     ],
                     fontSrc: [
                         "'self'",
