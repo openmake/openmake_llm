@@ -1,5 +1,30 @@
 # Changelog
 
+## v1.5.6 (2026-02-17)
+
+### New Features
+
+- **OpenAI 호환 Tool Calling 경로**: `/api/chat`, `/api/chat/stream`에서 `tools`, `tool_choice` 입력을 받아 단일 턴 도구 호출 응답(`tool_calls`, `finish_reason`) 반환 지원 (`chat/request-handler.ts`, `routes/chat.routes.ts`, `schemas/chat.schema.ts`)
+- **API Key 경로 보강**: v1 라우터에서 `/usage`, `/usage/daily` API Key 전용 요약/일별 조회 경로 우선 매칭으로 노출 (`routes/v1/index.ts`)
+- **A2A 모델 선택 확장**: QueryType 기반 A2A 모델 조합 선택 및 문서화 강화 (`services/chat-strategies/a2a-strategy.ts`, `types.ts`)
+
+### Improvements
+
+- **레이트 리미터 안정화**: 채팅 레이트 리미터에 만료 엔트리 정리/최대 엔트리 제한/interval unref/종료 훅 추가 (`middlewares/chat-rate-limiter.ts`)
+- **서비스 로깅 일원화**: `ChatService`의 `console.*` 출력 대부분을 구조화 로거로 전환 (`services/ChatService.ts`)
+- **DB/설정 문서 주석 보강**: 리포지토리 계층과 상수 모듈에 목적/책임 주석 추가 (`data/repositories/*.ts`, `config/constants.ts`, `cluster/circuit-breaker.ts`)
+
+### Docs
+
+- **OpenAI 스펙/리뷰 문서 추가**: OpenAI 호환 스키마 문서 및 코드리뷰 리포트 반영 (`openai_openapi.yaml`, `openai_spec.yml`, `docs/CODE_REVIEW_REPORT_2026_02_16.md`)
+
+### Stats
+
+- 30 files changed, 76k+ insertions, 98 deletions
+- 0 regressions reported in this release set
+
+---
+
 ## v1.5.5 (2026-02-16)
 
 ### Bug Fixes
