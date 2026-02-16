@@ -101,8 +101,8 @@
                 '  margin: var(--space-5) 0;' +
                 '}' +
                 '.tip-box {' +
-                '  background: rgba(34, 197, 94, 0.1);' +
-                '  border: 1px solid var(--success);' +
+                '  background: var(--bg-tertiary);' +
+                '  border: 2px solid var(--success);' +
                 '  border-radius: var(--radius-lg);' +
                 '  padding: var(--space-4) var(--space-5);' +
                 '  margin: var(--space-5) 0;' +
@@ -112,8 +112,8 @@
                 '  margin-top: 0 !important;' +
                 '}' +
                 '.warning-box {' +
-                '  background: rgba(245, 158, 11, 0.1);' +
-                '  border: 1px solid var(--warning);' +
+                '  background: var(--bg-tertiary);' +
+                '  border: 2px solid var(--warning);' +
                 '  border-radius: var(--radius-lg);' +
                 '  padding: var(--space-4) var(--space-5);' +
                 '  margin: var(--space-5) 0;' +
