@@ -49,9 +49,7 @@
         '.page-api-keys { position: relative; min-height: 100%; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }' +
         '.page-api-keys::before {' +
             'content: ""; position: fixed; top: 0; left: 0; right: 0; bottom: 0;' +
-            'background: radial-gradient(ellipse 80% 50% at 50% -20%, rgba(102,126,234,0.12), transparent),' +
-                'radial-gradient(ellipse 60% 30% at 70% 80%, rgba(118,75,162,0.08), transparent),' +
-                'radial-gradient(ellipse 40% 40% at 20% 60%, rgba(102,126,234,0.06), transparent);' +
+            'background: var(--bg-app);' +
             'pointer-events: none; z-index: 0;' +
         '}' +
         '.page-api-keys > * { position: relative; z-index: 1; }' +
@@ -59,7 +57,7 @@
         
         // Hero Section
         '.ak-hero { text-align: center; margin-bottom: var(--space-10); }' +
-        '.ak-hero-icon { font-size: 3rem; margin-bottom: var(--space-4); display: block; filter: drop-shadow(0 0 20px rgba(102,126,234,0.3)); }' +
+        '.ak-hero-icon { font-size: 3rem; margin-bottom: var(--space-4); display: block; filter: drop-shadow(2px 2px 0 rgba(0,0,0,0.5)); }' +
         '.ak-hero h1 {' +
             'font-size: var(--font-size-3xl); font-weight: var(--font-weight-bold);' +
             'background: var(--gradient-primary); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;' +
@@ -71,7 +69,7 @@
         '.s-card {' +
             'background: var(--glass-bg); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur);' +
             'border: 1px solid var(--glass-border); border-radius: var(--radius-xl); padding: 0; margin-bottom: var(--space-6);' +
-            'box-shadow: 0 8px 32px rgba(0,0,0,0.2); transition: all 0.3s cubic-bezier(0.4,0,0.2,1); overflow: hidden;' +
+            'box-shadow: 4px 4px 0 #000; transition: all 0.3s cubic-bezier(0.4,0,0.2,1); overflow: hidden;' +
             'animation: ak-slideUp 0.5s ease both;' +
         '}' +
         '.s-card-header {' +
@@ -88,18 +86,18 @@
             'padding: var(--space-3) var(--space-4); color: var(--text-primary); font-size: var(--font-size-base);' +
             'transition: all 0.2s ease;' +
         '}' +
-        '.ak-input:focus { outline: none; border-color: var(--accent-primary); box-shadow: 0 0 0 2px rgba(102,126,234,0.2); }' +
+        '.ak-input:focus { outline: none; border-color: var(--accent-primary); box-shadow: 0 0 0 2px var(--accent-primary); }' +
         '.ak-btn {' +
             'display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2);' +
             'padding: var(--space-3) var(--space-5); border-radius: var(--radius-md); font-weight: var(--font-weight-medium);' +
             'cursor: pointer; transition: all 0.2s ease; border: none; font-size: var(--font-size-sm);' +
         '}' +
-        '.ak-btn-primary { background: var(--gradient-primary); color: white; box-shadow: 0 4px 12px rgba(102,126,234,0.3); }' +
-        '.ak-btn-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(102,126,234,0.4); }' +
-        '.ak-btn-secondary { background: rgba(255,255,255,0.05); color: var(--text-primary); border: 1px solid var(--glass-border); }' +
-        '.ak-btn-secondary:hover { background: rgba(255,255,255,0.1); }' +
-        '.ak-btn-danger { background: rgba(239,68,68,0.1); color: var(--danger); border: 1px solid rgba(239,68,68,0.2); }' +
-        '.ak-btn-danger:hover { background: rgba(239,68,68,0.2); }' +
+        '.ak-btn-primary { background: var(--gradient-primary); color: white; box-shadow: 4px 4px 0 #000; }' +
+        '.ak-btn-primary:hover { transform: translate(-2px, -2px); box-shadow: 6px 6px 0 #000; }' +
+        '.ak-btn-secondary { background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--glass-border); }' +
+        '.ak-btn-secondary:hover { background: var(--bg-hover, #323250); }' +
+        '.ak-btn-danger { background: var(--bg-tertiary); color: var(--danger); border: 2px solid var(--danger); }' +
+        '.ak-btn-danger:hover { background: var(--bg-hover, #323250); }' +
         '.ak-btn-icon { padding: var(--space-2); width: 32px; height: 32px; border-radius: var(--radius-md); }' +
 
         // Key List Items
@@ -108,15 +106,15 @@
             'border-bottom: 1px solid var(--glass-border); transition: background 0.2s ease;' +
         '}' +
         '.ak-key-item:last-child { border-bottom: none; }' +
-        '.ak-key-item:hover { background: rgba(255,255,255,0.02); }' +
+        '.ak-key-item:hover { background: var(--bg-tertiary); }' +
         '.ak-key-header { display: flex; justify-content: space-between; align-items: flex-start; }' +
         '.ak-key-name { font-size: var(--font-size-lg); font-weight: var(--font-weight-bold); color: var(--text-primary); margin-bottom: var(--space-1); }' +
         '.ak-key-meta { display: flex; gap: var(--space-3); font-size: var(--font-size-xs); color: var(--text-secondary); align-items: center; flex-wrap: wrap; }' +
-        '.ak-key-value-row { display: flex; align-items: center; gap: var(--space-3); margin-top: var(--space-3); background: rgba(0,0,0,0.2); padding: var(--space-3); border-radius: var(--radius-md); }' +
+        '.ak-key-value-row { display: flex; align-items: center; gap: var(--space-3); margin-top: var(--space-3); background: var(--bg-tertiary); padding: var(--space-3); border-radius: var(--radius-md); }' +
         '.ak-key-value { font-family: monospace; color: var(--text-primary); font-size: var(--font-size-sm); letter-spacing: 0.5px; }' +
         '.ak-badge { padding: 2px 8px; border-radius: 12px; font-size: 10px; text-transform: uppercase; font-weight: bold; letter-spacing: 0.5px; }' +
-        '.ak-badge-active { background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }' +
-        '.ak-badge-inactive { background: rgba(107, 114, 128, 0.2); color: #9ca3af; border: 1px solid rgba(107, 114, 128, 0.3); }' +
+        '.ak-badge-active { background: var(--bg-tertiary); color: #34d399; border: 1px solid #34d399; }' +
+        '.ak-badge-inactive { background: var(--bg-tertiary); color: #9ca3af; border: 1px solid #9ca3af; }' +
         '.ak-actions { display: flex; gap: var(--space-2); margin-top: var(--space-4); }' +
 
         // Empty State
@@ -136,13 +134,13 @@
         // Modal/Banner for New Key
         '.ak-new-key-overlay {' +
             'position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 9999;' +
-            'background: rgba(0,0,0,0.7); backdrop-filter: blur(5px);' +
+            'background: rgba(0,0,0,0.7);' +
             'display: flex; align-items: center; justify-content: center; padding: var(--space-4);' +
             'animation: ak-fadeIn 0.2s ease both;' +
         '}' +
         '.ak-new-key-modal {' +
             'background: #1f2937; border: 1px solid var(--glass-border); border-radius: var(--radius-xl);' +
-            'width: 100%; max-width: 500px; overflow: hidden; box-shadow: 0 20px 50px rgba(0,0,0,0.5);' +
+            'width: 100%; max-width: 500px; overflow: hidden; box-shadow: 8px 8px 0 #000;' +
             'animation: ak-scaleIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) both;' +
         '}' +
         '.ak-new-key-header { background: var(--gradient-primary); padding: var(--space-5); text-align: center; }' +
@@ -321,7 +319,7 @@
                                 '<div class="ak-key-name">' + esc(key.name) + '</div>' +
                                 '<div class="ak-key-meta">' +
                                     '<span class="ak-badge ' + statusClass + '">' + statusText + '</span>' +
-                                    '<span class="ak-badge ak-badge-inactive" style="background:rgba(102,126,234,0.1); color:var(--accent-primary); border-color:rgba(102,126,234,0.3);">' + esc(tier) + '</span>' +
+                                    '<span class="ak-badge ak-badge-inactive" style="background:var(--bg-tertiary); color:var(--accent-primary); border: 1px solid var(--accent-primary);">' + esc(tier) + '</span>' +
                                     '<span>생성: ' + formatDate(key.created_at) + '</span>' +
                                     (key.last_used_at ? '<span>마지막 사용: ' + formatDate(key.last_used_at) + '</span>' : '') +
                                 '</div>' +

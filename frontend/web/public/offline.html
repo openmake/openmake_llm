@@ -4,15 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover">
     <title>오프라인 - OpenMake.Ai</title>
-    <meta name="theme-color" content="#667eea">
+    <meta name="theme-color" content="#c061ff">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="OpenMake.Ai">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
-            background: #0a0a0f;
+            font-family: 'Space Grotesk', 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+            background: #1a1a2e;
             color: #f0f0f2;
             min-height: 100vh;
             display: flex;
@@ -21,15 +21,6 @@
             padding: 20px;
             position: relative;
             overflow: hidden;
-        }
-        body::before {
-            content: '';
-            position: absolute;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background:
-                radial-gradient(ellipse 80% 50% at 50% -20%, rgba(102,126,234,0.12), transparent),
-                radial-gradient(ellipse 60% 30% at 70% 80%, rgba(118,75,162,0.08), transparent);
-            pointer-events: none;
         }
         .container {
             text-align: center;
@@ -47,10 +38,7 @@
             font-size: 1.8rem;
             font-weight: 700;
             margin-bottom: 12px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            -webkit-background-clip: text;
-            background-clip: text;
-            -webkit-text-fill-color: transparent;
+            color: #c061ff;
         }
         p {
             color: #a1a1aa;
@@ -63,21 +51,22 @@
             align-items: center;
             gap: 8px;
             padding: 14px 32px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: #c061ff;
             color: #fff;
-            border: none;
-            border-radius: 12px;
+            border: 2px solid #000;
+            border-radius: 6px;
             font-size: 1rem;
-            font-weight: 600;
+            font-weight: 700;
             font-family: inherit;
             cursor: pointer;
-            transition: all 0.3s cubic-bezier(0.4,0,0.2,1);
+            box-shadow: 4px 4px 0 #000;
+            transition: transform 0.1s ease, box-shadow 0.1s ease;
         }
         .retry-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 0 30px rgba(102,126,234,0.3);
+            transform: translate(-2px, -2px);
+            box-shadow: 6px 6px 0 #000;
         }
-        .retry-btn:active { transform: translateY(0); }
+        .retry-btn:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 #000; }
         .status {
             margin-top: 24px;
             font-size: 0.85rem;
