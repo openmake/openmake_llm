@@ -32,7 +32,10 @@ import type { ResearchProgress } from '../services/DeepResearchService';
 import { uploadedDocuments } from '../documents/store';
 import { getConversationDB } from '../data/conversation-db';
 import { buildExecutionPlan, type ExecutionPlan } from './profile-resolver';
+import { getPromptConfig } from './prompt';
 import { createLogger } from '../utils/logger';
+import type { ChatMessage, ToolDefinition, ToolCall } from '../ollama/types';
+import { randomBytes } from 'crypto';
 
 const log = createLogger('ChatRequestHandler');
 
@@ -100,6 +103,10 @@ export interface ChatRequestParams {
     thinkingLevel?: 'low' | 'medium' | 'high';
     /** 사용자가 활성화한 MCP 도구 목록 (키: 도구명, 값: 활성화 여부) */
     enabledTools?: Record<string, boolean>;
+    /** OpenAI 호환 도구 정의 배열 (외부 Tool Calling용) */
+    tools?: ToolDefinition[];
+    /** 도구 호출 제어 ("auto"|"none"|"required"|{type:"function",function:{name:string}}) */
+    tool_choice?: 'auto' | 'none' | 'required' | { type: 'function'; function: { name: string } };
     /** 사용자 컨텍스트 */
     userContext: ChatUserContext;
     /** 클러스터 매니저 */
@@ -117,6 +124,24 @@ export interface ChatRequestParams {
 }
 
 /**
+ * OpenAI 호환 tool_call 응답 형식
+ * @interface OpenAIToolCall
+ */
+export interface OpenAIToolCall {
+    /** 도구 호출 고유 ID (예: "call_abc123") */
+    id: string;
+    /** 호출 타입 (현재 "function"만 지원) */
+    type: 'function';
+    /** 호출할 함수 정보 */
+    function: {
+        /** 함수 이름 */
+        name: string;
+        /** 함수 인자 (JSON 문자열) */
+        arguments: string;
+    };
+}
+
+/**
  * processChat() 결과
  */
 export interface ChatResult {
@@ -130,6 +155,10 @@ export interface ChatResult {
     executionPlan: ExecutionPlan;
     /** 응답 소요 시간 (ms) */
     responseTime: number;
+    /** OpenAI 호환 도구 호출 목록 (tools 요청 시에만 포함) */
+    tool_calls?: OpenAIToolCall[];
+    /** 응답 종료 사유 ("stop": 정상 완료, "tool_calls": 도구 호출 대기) */
+    finish_reason?: 'stop' | 'tool_calls';
 }
 
 // ============================================
@@ -327,6 +356,8 @@ export class ChatRequestHandler {
             thinkingMode,
             thinkingLevel,
             enabledTools,
+            tools,
+            tool_choice,
             userContext,
             clusterManager,
             abortSignal,
@@ -357,9 +388,52 @@ export class ChatRequestHandler {
         const maskedModel = displayModel || client.model;
         await ChatRequestHandler.saveUserMessage(currentSessionId, message, maskedModel);
 
+        const startTime = Date.now();
+
+        // ═══════════════════════════════════════════════════════
+        // §10 외부 Tool Calling 경로 — tools 파라미터가 제공된 경우
+        // ChatService를 우회하여 단일 턴 LLM 호출 후 tool_calls 반환
+        // ═══════════════════════════════════════════════════════
+        if (tools && tools.length > 0) {
+            const result = await ChatRequestHandler.processExternalToolCalling({
+                message,
+                history,
+                images,
+                tools,
+                tool_choice,
+                client,
+                onToken,
+                abortSignal,
+            });
+
+            const endTime = Date.now();
+            const responseTime = endTime - startTime;
+
+            // AI 응답 저장 (tool_calls인 경우에도 히스토리에 기록)
+            await ChatRequestHandler.saveAssistantMessage(
+                currentSessionId,
+                result.response,
+                maskedModel,
+                responseTime,
+            );
+
+            return {
+                response: result.response,
+                sessionId: currentSessionId,
+                model: maskedModel,
+                executionPlan: plan,
+                responseTime,
+                tool_calls: result.tool_calls,
+                finish_reason: result.finish_reason,
+            };
+        }
+
+        // ═══════════════════════════════════════════════════════
+        // 기존 경로 — ChatService를 통한 전체 파이프라인
+        // ═══════════════════════════════════════════════════════
+
         // 5. ChatService 호출
         const chatService = new ChatService(client);
-        const startTime = Date.now();
 
         // §9 ExecutionPlan 설정과 사용자 요청을 병합
         const mergedDiscussionMode = plan.useDiscussion || discussionMode;
@@ -412,6 +486,122 @@ export class ChatRequestHandler {
             model: maskedModel,
             executionPlan: plan,
             responseTime,
+            finish_reason: 'stop',
+        };
+    }
+
+    /**
+     * 외부 Tool Calling 처리 — OpenAI 호환 도구 호출 경로
+     *
+     * 외부 개발자가 `tools` 배열을 제공하면, ChatService 파이프라인을 우회하여
+     * 단일 턴 LLM 호출 후 tool_calls를 OpenAI 호환 형식으로 반환합니다.
+     *
+     * 기존 내부 Agent Loop(MCP 도구 실행)과 완전히 독립된 경로입니다.
+     *
+     * @param params - 외부 Tool Calling 파라미터
+     * @returns 응답 텍스트, OpenAI 호환 tool_calls, finish_reason
+     */
+    static async processExternalToolCalling(params: {
+        message: string;
+        history?: Array<{ role: string; content: string; images?: string[]; tool_calls?: Array<{ id: string; type: string; function: { name: string; arguments: string } }>; tool_call_id?: string }>;
+        images?: string[];
+        tools: ToolDefinition[];
+        tool_choice?: 'auto' | 'none' | 'required' | { type: 'function'; function: { name: string } };
+        client: OllamaClient;
+        onToken: (token: string) => void;
+        abortSignal?: AbortSignal;
+    }): Promise<{
+        response: string;
+        tool_calls?: OpenAIToolCall[];
+        finish_reason: 'stop' | 'tool_calls';
+    }> {
+        const { message, history, images, tools, tool_choice, client, onToken, abortSignal } = params;
+
+        // tool_choice가 "none"이면 도구 없이 호출
+        const effectiveTools = tool_choice === 'none' ? undefined : tools;
+
+        // 시스템 프롬프트 구성
+        const promptConfig = getPromptConfig(message);
+
+        // 대화 히스토리 구성 (OpenAI 형식 → Ollama 형식 변환)
+        const messages: ChatMessage[] = [
+            { role: 'system', content: promptConfig.systemPrompt },
+        ];
+
+        if (history && history.length > 0) {
+            for (const h of history) {
+                const msg: ChatMessage = {
+                    role: h.role as ChatMessage['role'],
+                    content: h.content || '',
+                    ...(h.images && { images: h.images }),
+                };
+
+                // assistant의 tool_calls를 Ollama 형식으로 변환
+                if (h.role === 'assistant' && h.tool_calls && h.tool_calls.length > 0) {
+                    msg.tool_calls = h.tool_calls.map(tc => ({
+                        type: 'function' as const,
+                        function: {
+                            name: tc.function.name,
+                            arguments: typeof tc.function.arguments === 'string'
+                                ? JSON.parse(tc.function.arguments) as Record<string, unknown>
+                                : tc.function.arguments as Record<string, unknown>,
+                        },
+                    }));
+                }
+
+                messages.push(msg);
+            }
+        }
+
+        // 현재 사용자 메시지 추가
+        messages.push({
+            role: 'user',
+            content: message,
+            ...(images && images.length > 0 && { images }),
+        });
+
+        // LLM 호출 (단일 턴)
+        let fullContent = '';
+        const llmResponse = await client.chat(
+            messages,
+            promptConfig.options,
+            (token: string) => {
+                // tool_calls JSON 토큰은 스트리밍에서 필터링
+                if (!token.includes('tool_calls')) {
+                    fullContent += token;
+                    onToken(token);
+                }
+            },
+            {
+                tools: effectiveTools,
+            }
+        );
+
+        // Ollama 응답의 tool_calls를 OpenAI 호환 형식으로 변환
+        const ollamaToolCalls = llmResponse.tool_calls;
+        if (ollamaToolCalls && ollamaToolCalls.length > 0) {
+            const openaiToolCalls: OpenAIToolCall[] = ollamaToolCalls.map(tc => ({
+                id: `call_${randomBytes(12).toString('hex')}`,
+                type: 'function' as const,
+                function: {
+                    name: tc.function.name,
+                    arguments: typeof tc.function.arguments === 'string'
+                        ? tc.function.arguments
+                        : JSON.stringify(tc.function.arguments),
+                },
+            }));
+
+            return {
+                response: llmResponse.content || '',
+                tool_calls: openaiToolCalls,
+                finish_reason: 'tool_calls',
+            };
+        }
+
+        // 도구 호출 없음 — 일반 텍스트 응답
+        return {
+            response: llmResponse.content || fullContent,
+            finish_reason: 'stop',
         };
     }
 }

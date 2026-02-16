@@ -423,6 +423,16 @@ CREATE TABLE IF NOT EXISTS user_api_keys (
 );
 
 -- ============================================
+-- 🔒 OAuth State 테이블 (CSRF 방어)
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS oauth_states (
+    state TEXT PRIMARY KEY,
+    provider TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- ============================================
 -- 🔒 Token Blacklist 테이블
 -- ============================================
 
@@ -449,6 +459,9 @@ CREATE INDEX IF NOT EXISTS idx_api_keys_tier ON user_api_keys(rate_limit_tier);
 -- Session & Audit indexes (from unified-database.ts)
 CREATE INDEX IF NOT EXISTS idx_sessions_anon ON conversation_sessions(anon_session_id);
 CREATE INDEX IF NOT EXISTS idx_audit_user ON audit_logs(user_id);
+
+-- OAuth state index (cleanup query)
+CREATE INDEX IF NOT EXISTS idx_oauth_states_created ON oauth_states(created_at);
 
 -- Token blacklist index
 CREATE INDEX IF NOT EXISTS idx_blacklist_expires ON token_blacklist(expires_at);
