@@ -40,10 +40,9 @@ import { IncomingMessage } from 'http';
 import * as crypto from 'crypto';
 import { ClusterManager } from '../cluster/manager';
 import { getUnifiedMCPClient } from '../mcp';
-import { ChatService } from '../services/ChatService';
 import { getConversationLogger } from '../data/index';
-import { uploadedDocuments } from '../documents/store';
 import { selectOptimalModel } from '../chat/model-selector';
+import { ChatRequestHandler, ChatRequestError } from '../chat/request-handler';
 import { createLogger } from '../utils/logger';
 import { QuotaExceededError } from '../errors/quota-exceeded.error';
 import { KeyExhaustionError } from '../errors/key-exhaustion.error';
@@ -53,14 +52,7 @@ import { checkChatRateLimit } from '../middlewares/chat-rate-limiter';
 
 const log = createLogger('WebSocketHandler');
 
-/**
- * 대화 데이터베이스 인스턴스를 지연 로딩으로 가져옵니다.
- * 순환 의존성 방지를 위해 require()를 사용합니다.
- * @returns {ConversationDB} 대화 DB 인스턴스
- */
-function getConversationDb() {
-    return require('../data/conversation-db').getConversationDB();
-}
+// 대화 DB는 ChatRequestHandler 내부에서 getConversationDB()로 접근합니다.
 
 /**
  * WebSocket 수신 메시지 인터페이스
@@ -373,8 +365,8 @@ export class WebSocketHandler {
 
     /**
      * AI 채팅 메시지를 처리합니다.
-     * 모델 선택, 세션 관리, 스트리밍 토큰 전송, 대화 저장,
-     * AbortController 기반 생성 중단을 지원합니다.
+     * ChatRequestHandler를 통해 공통 로직(모델 해석, 세션 관리, DB 저장)을 재사용하고,
+     * WebSocket 고유 기능(abort, 웹 검색 컨텍스트, 진행 콜백)을 추가합니다.
      * @param ws - WebSocket 클라이언트 인스턴스
      * @param msg - 채팅 메시지 데이터 (message, model, history 등)
      */
@@ -394,38 +386,32 @@ export class WebSocketHandler {
         const abortController = new AbortController();
         extWs._abortController = abortController;
 
-        // 인증된 사용자 ID 우선 사용 (클라이언트가 보낸 userId 대신)
-        const wsAuthUserId = extWs._authenticatedUserId;
-
         try {
             // 모델 결정 (자동 선택 또는 사용자 지정)
             let selectedModel = model;
             if (!model || model === 'default') {
-                const optimalModel = selectOptimalModel(message);
+                const optimalModel = await selectOptimalModel(message);
                 selectedModel = optimalModel.model;
                 log.debug(`[Chat] 🎯 자동 모델 선택: ${selectedModel} (${optimalModel.reason})`);
             }
 
-            // 🔒 Phase 2: createScopedClient로 요청별 격리된 클라이언트 사용
-            let client;
-            let selectedNode;
+            // 사용자 컨텍스트 구성 (ChatRequestHandler 통합)
+            const userContext = ChatRequestHandler.resolveUserContextFromWebSocket(
+                extWs._authenticatedUserId,
+                extWs._authenticatedUserRole,
+                extWs._authenticatedUserTier,
+                msg.userId as string | undefined,
+                anonSessionId,
+            );
 
-            if (nodeId) {
-                client = this.cluster.createScopedClient(nodeId, selectedModel);
-                selectedNode = nodeId;
-            } else {
-                const bestNode = this.cluster.getBestNode(selectedModel);
-                if (bestNode) {
-                    client = this.cluster.createScopedClient(bestNode.id, selectedModel);
-                    selectedNode = bestNode.id;
-                }
-            }
-
-            log.debug(`[Chat] 선택된 노드: ${selectedNode || '없음'}`);
-
-            if (!client) {
-                log.warn('[Chat] 오류: 사용 가능한 노드 없음');
-                ws.send(JSON.stringify({ type: 'error', message: '사용 가능한 노드가 없습니다' }));
+            // 채팅 레이트 리밋 체크
+            const rateLimitError = checkChatRateLimit(
+                extWs._authenticatedUserId,
+                userContext.userRole,
+                userContext.userTier,
+            );
+            if (rateLimitError) {
+                ws.send(JSON.stringify({ type: 'error', error: rateLimitError }));
                 return;
             }
 
@@ -448,47 +434,15 @@ export class WebSocketHandler {
                 }
             }
 
-            // 1. 세션 확인 및 생성
-            let currentSessionId = sessionId; // 클라이언트가 보낸 세션 ID 우선 사용
-            
-            // 🔒 인증된 사용자 ID만 FK 제약이 있는 DB 컬럼에 사용
-            // WebSocket 연결 시 검증된 ID 우선, 클라이언트 전송값은 폴백
-            const authenticatedUserId = wsAuthUserId || msg.userId || null;
-            // 메모리/추적 등 비-FK 용도로는 fallback 값 사용
-            const userId = wsAuthUserId || msg.userId || anonSessionId || 'guest';
+            // WS 고유: 세션 생성 시 length < 10 체크 (노드 ID와 구별)
+            const validSessionId = (sessionId && sessionId.length >= 10) ? sessionId : undefined;
 
-            // 클라이언트가 history.html 등에서 세션 ID를 보냈는지 확인
-            // 또는 새 대화인 경우 세션 생성
-            if (!currentSessionId || currentSessionId.length < 10) { // 노드 ID(짧음)와 구별
-                // 새 세션 생성 — user_id는 인증된 ID만, 비로그인은 anon_session_id로 추적
-                const session = await getConversationDb().createSession(authenticatedUserId, message.substring(0, 30), undefined, anonSessionId);
-                currentSessionId = session.id;
-                log.debug(`[Chat WS] 새 세션 생성: ${currentSessionId}, userId: ${authenticatedUserId || 'null'}, anonSessionId: ${anonSessionId || 'none'}`);
-
-                // 클라이언트에 세션 ID 전달
-                ws.send(JSON.stringify({ type: 'session_created', sessionId: currentSessionId }));
-            }
-
-            // 2. 사용자 메시지 저장
-            await getConversationDb().addMessage(currentSessionId, 'user', message, { model: selectedModel });
-
-            // ChatService 인스턴스 생성 및 실행
-            const chatService = new ChatService(client);
-            const discussionMode = msg.discussionMode === true;
-            const deepResearchMode = msg.deepResearchMode === true;  // 🔬 Deep Research 모드
-            const thinkingMode = msg.thinkingMode === true;  // 🧠 Ollama Native Thinking
-            const thinkingLevel = (msg.thinkingLevel || 'high') as 'low' | 'medium' | 'high';  // low, medium, high
-            const startTime = Date.now();
-
-            // 🆕 사용자 역할 및 등급 결정 (WebSocket 연결 인증 시 서버에서 확정)
-            const userRole = extWs._authenticatedUserRole;
-            const userTier: 'free' | 'pro' | 'enterprise' = extWs._authenticatedUserTier;
+            // messageId 생성 (WS 고유: 토큰 스트리밍에 사용)
             const messageId = crypto.randomUUID
                 ? crypto.randomUUID()
                 : `msg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-            
-            // 🆕 userId, userRole, userTier를 ChatMessageRequest에 포함하여 전달
-            // 토큰 콜백에서 중단 여부 체크
+
+            // 토큰 콜백에서 중단 여부 체크 (WS 고유)
             const tokenCallback = (token: string) => {
                 if (abortController.signal.aborted) {
                     throw new Error('ABORTED');
@@ -496,54 +450,39 @@ export class WebSocketHandler {
                 ws.send(JSON.stringify({ type: 'token', token, messageId }));
             };
 
-            // 채팅 레이트 리밋 체크
-            const rateLimitError = checkChatRateLimit(
-                extWs._authenticatedUserId,
-                userRole,
-                userTier
-            );
-            if (rateLimitError) {
-                ws.send(JSON.stringify({ type: 'error', error: rateLimitError }));
-                return;
-            }
-
-            const fullResponse = await chatService.processMessage(
-                { 
-                    message, 
-                    history, 
-                    docId, 
-                    images, 
-                    webSearchContext, 
-                    discussionMode, 
-                    deepResearchMode,  // 🔬 Deep Research 모드 전달
-                    thinkingMode, 
-                    thinkingLevel,
-                    userId,      // 🆕 사용자 ID 전달 (MemoryService 연동용)
-                    userRole,    // 🆕 사용자 역할 전달 (admin → enterprise 권한)
-                    userTier,    // 🆕 사용자 등급 전달 (명시적 지정 시)
-                    abortSignal: abortController.signal  // 🆕 중단 시그널 전달
-                },
-                uploadedDocuments,
-                tokenCallback,
-                (agent) => ws.send(JSON.stringify({ type: 'agent_selected', agent })),
-                // 토론 진행 상황 콜백
-                (progress) => ws.send(JSON.stringify({ type: 'discussion_progress', progress })),
-                // 🔬 Deep Research 진행 상황 콜백
-                (progress) => ws.send(JSON.stringify({ type: 'research_progress', progress }))
-            );
-
-            // 3. AI 응답 저장
-            const endTime = Date.now();
-            await getConversationDb().addMessage(currentSessionId, 'assistant', fullResponse, {
-                model: client.model,
-                responseTime: endTime - startTime
+            // ChatRequestHandler.processChat으로 통합 처리
+            const result = await ChatRequestHandler.processChat({
+                message,
+                model: selectedModel,
+                nodeId,
+                history,
+                images,
+                docId,
+                sessionId: validSessionId,
+                webSearchContext,
+                discussionMode: msg.discussionMode === true,
+                deepResearchMode: msg.deepResearchMode === true,
+                thinkingMode: msg.thinkingMode === true,
+                thinkingLevel: (msg.thinkingLevel || 'high') as 'low' | 'medium' | 'high',
+                userContext,
+                clusterManager: this.cluster,
+                abortSignal: abortController.signal,
+                onToken: tokenCallback,
+                onAgentSelected: (agent) => ws.send(JSON.stringify({ type: 'agent_selected', agent })),
+                onDiscussionProgress: (progress) => ws.send(JSON.stringify({ type: 'discussion_progress', progress })),
+                onResearchProgress: (progress) => ws.send(JSON.stringify({ type: 'research_progress', progress })),
             });
 
-            // 대화 요약 기록 (기존 로거)
+            // WS 고유: 새 세션 생성 알림
+            if (!validSessionId) {
+                ws.send(JSON.stringify({ type: 'session_created', sessionId: result.sessionId }));
+            }
+
+            // 대화 요약 기록 (기존 로거 — WS 고유)
             try {
-                const logger = getConversationLogger();
-                logger.logConversation({ role: 'user', content: message, model: client.model });
-                logger.logConversation({ role: 'assistant', content: fullResponse, model: client.model, response_time_ms: 0 }); // 시간 계산 생략(단순화)
+                const convLogger = getConversationLogger();
+                convLogger.logConversation({ role: 'user', content: message, model: result.model });
+                convLogger.logConversation({ role: 'assistant', content: result.response, model: result.model, response_time_ms: 0 });
             } catch (logError) {
                 log.error('[Chat] 로그 저장 실패:', logError);
             }
@@ -562,7 +501,10 @@ export class WebSocketHandler {
                 return;
             }
 
-            if (error instanceof QuotaExceededError) {
+            if (error instanceof ChatRequestError) {
+                log.warn('[Chat] 요청 처리 에러:', error.message);
+                ws.send(JSON.stringify({ type: 'error', message: error.message }));
+            } else if (error instanceof QuotaExceededError) {
                 log.warn('[Chat] API 할당량 초과:', error.message);
                 ws.send(JSON.stringify({
                     type: 'error',

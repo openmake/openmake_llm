@@ -495,6 +495,97 @@ export function classifyQuery(query: string): QueryClassification {
 }
 
 // ============================================================
+// LLM 기반 질문 분류 함수
+// ============================================================
+
+/**
+ * LLM 기반 질문 분류 (Ollama Structured Output)
+ * 
+ * 코드 엔진 모델을 사용하여 질문을 분류합니다.
+ * 실패 시 정규식 기반 classifyQuery()로 폴백합니다.
+ * 
+ * @param query - 사용자 질문
+ * @returns 분류 결과 (LLM 또는 regex 폴백)
+ */
+async function classifyQueryWithLLM(query: string): Promise<QueryClassification> {
+    // 매우 짧은 쿼리(20자 미만)는 regex로 충분
+    if (query.length < 20) {
+        return classifyQuery(query);
+    }
+
+    try {
+        const config = getConfig();
+        const engineModel = config.omkEngineCode || config.ollamaModel;
+
+        // Ollama에 직접 HTTP 요청 (createClient 없이 경량 호출)
+        const ollamaHost = config.ollamaHost || 'http://localhost:11434';
+        const response = await fetch(`${ollamaHost}/api/chat`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                model: engineModel,
+                messages: [
+                    {
+                        role: 'system',
+                        content: 'You are a query classifier. Classify the user query into exactly one category. Respond ONLY with the JSON object.'
+                    },
+                    {
+                        role: 'user',
+                        content: query
+                    }
+                ],
+                format: {
+                    type: 'object',
+                    properties: {
+                        category: {
+                            type: 'string',
+                            enum: ['code', 'analysis', 'creative', 'vision', 'korean', 'math', 'chat', 'document', 'translation']
+                        },
+                        confidence: {
+                            type: 'number',
+                            description: 'Classification confidence between 0.0 and 1.0'
+                        }
+                    },
+                    required: ['category', 'confidence']
+                },
+                stream: false,
+                options: { temperature: 0, num_predict: 50 }
+            }),
+            signal: AbortSignal.timeout(3000) // 3초 타임아웃
+        });
+
+        if (!response.ok) {
+            throw new Error(`Ollama responded with ${response.status}`);
+        }
+
+        const result = await response.json() as { message?: { content?: string } };
+        const content = result?.message?.content;
+        if (!content) {
+            throw new Error('Empty response from Ollama');
+        }
+
+        const parsed = JSON.parse(content) as { category: string; confidence: number };
+        const validTypes: QueryType[] = ['code', 'analysis', 'creative', 'vision', 'korean', 'math', 'chat', 'document', 'translation'];
+
+        if (!validTypes.includes(parsed.category as QueryType)) {
+            throw new Error(`Invalid category: ${parsed.category}`);
+        }
+
+        console.log(`[ModelSelector] LLM 분류: ${parsed.category} (confidence=${(parsed.confidence * 100).toFixed(0)}%)`);
+
+        return {
+            type: parsed.category as QueryType,
+            confidence: Math.max(0, Math.min(1, parsed.confidence)),
+            matchedPatterns: ['llm-structured-output'],
+        };
+    } catch (error) {
+        // LLM 실패 → regex 폴백 (silent)
+        console.debug(`[ModelSelector] LLM 분류 실패, regex 폴백:`, error instanceof Error ? error.message : String(error));
+        return classifyQuery(query);
+    }
+}
+
+// ============================================================
 // 모델 선택 함수
 // ============================================================
 
@@ -502,7 +593,7 @@ export function classifyQuery(query: string): QueryClassification {
  * 질문 유형에 따라 최적의 모델 프리셋을 선택합니다.
  * 
  * 선택 알고리즘:
- * 1. classifyQuery()로 질문 유형 분류
+ * 1. classifyQueryWithLLM()으로 질문 유형 분류 (LLM 우선, regex 폴백)
  * 2. 이미지 첨부 시 vision으로 강제 전환
  * 3. MODEL_PRESETS에서 해당 유형의 bestFor에 포함된 프리셋 검색
  * 4. priority가 가장 낮은(=우선순위 높은) 프리셋 선택
@@ -513,9 +604,9 @@ export function classifyQuery(query: string): QueryClassification {
  * @param hasImages - 이미지 첨부 여부 (true면 vision 모델 강제 선택)
  * @returns 모델 선택 결과 (모델명, 옵션, 사유, 기능 플래그)
  */
-export function selectOptimalModel(query: string, hasImages?: boolean): ModelSelection {
+export async function selectOptimalModel(query: string, hasImages?: boolean): Promise<ModelSelection> {
     const config = getConfig();
-    const classification = classifyQuery(query);
+    const classification = await classifyQueryWithLLM(query);
 
     // 이미지가 첨부된 경우 비전 모델 강제 선택
     if (hasImages) {
@@ -697,7 +788,7 @@ export function adjustOptionsForModel(
  * @param requestedModel - 요청된 모델명 (예: "openmake_llm_pro")
  * @returns ModelSelection 또는 null
  */
-export function selectModelForProfile(requestedModel: string, query?: string, hasImages?: boolean): ModelSelection | null {
+export async function selectModelForProfile(requestedModel: string, query?: string, hasImages?: boolean): Promise<ModelSelection | null> {
     if (!isValidBrandModel(requestedModel)) {
         return null;
     }
@@ -709,7 +800,7 @@ export function selectModelForProfile(requestedModel: string, query?: string, ha
     // __auto__ 엔진: brand model 프로파일 자동 라우팅
     // 이 함수에서는 brand model 프로파일 ID만 반환 (실제 라우팅은 ChatService에서 buildExecutionPlan 사용)
     if (profile.engineModel === '__auto__') {
-        const targetProfile = selectBrandProfileForAutoRouting(query || '', hasImages);
+        const targetProfile = await selectBrandProfileForAutoRouting(query || '', hasImages);
         const targetProfiles = getProfiles();
         const resolvedProfile = targetProfiles[targetProfile];
         if (resolvedProfile) {
@@ -731,7 +822,7 @@ export function selectModelForProfile(requestedModel: string, query?: string, ha
             };
         }
         // Fallback: 프로파일을 못 찾으면 기존 자동 선택
-        const autoSelection = selectOptimalModel(query || '', hasImages);
+        const autoSelection = await selectOptimalModel(query || '', hasImages);
         console.log(`[ModelSelector] §9 Auto-Routing Fallback: ${requestedModel} → ${autoSelection.model}`);
         return autoSelection;
     }
@@ -781,14 +872,14 @@ export function selectModelForProfile(requestedModel: string, query?: string, ha
  * @param hasImages - 이미지 첨부 여부
  * @returns brand model 프로파일 ID (예: 'openmake_llm_code')
  */
-export function selectBrandProfileForAutoRouting(query: string, hasImages?: boolean): string {
+export async function selectBrandProfileForAutoRouting(query: string, hasImages?: boolean): Promise<string> {
     // 이미지가 첨부되면 무조건 vision 프로파일
     if (hasImages) {
         console.log('[ModelSelector] §9 Auto-Routing: 이미지 감지 → openmake_llm_vision');
         return 'openmake_llm_vision';
     }
 
-    const classification = classifyQuery(query);
+    const classification = await classifyQueryWithLLM(query);
     let targetProfile: string;
 
     switch (classification.type) {
@@ -834,8 +925,8 @@ export function selectBrandProfileForAutoRouting(query: string, hasImages?: bool
 /**
  * @deprecated selectOptimalModel() 사용 권장
  */
-export function selectOptimalModelLegacy(query: string): { model: string; reason: string } {
-    const selection = selectOptimalModel(query);
+export async function selectOptimalModelLegacy(query: string): Promise<{ model: string; reason: string }> {
+    const selection = await selectOptimalModel(query);
     return {
         model: selection.model,
         reason: selection.reason,

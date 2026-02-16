@@ -36,6 +36,7 @@ import {
   import { success, badRequest, notFound, serviceUnavailable } from '../utils/api-response';
   import { asyncHandler } from '../utils/error-handler';
   import { createLogger } from '../utils/logger';
+  import { buildExecutionPlan } from '../chat/profile-resolver';
 
 const logger = createLogger('DocumentsRoutes');
 
@@ -207,8 +208,13 @@ router.post('/summarize', asyncHandler(async (req: Request, res: Response) => {
 
      logger.info(`[Summarize] 문서 요약: ${doc.filename}`);
 
-      const bestNode = clusterManager.getBestNode(model);
-      const client = bestNode ? clusterManager.createScopedClient(bestNode.id, model) : undefined;
+      // §9 Pipeline Profile: brand model alias → 실제 엔진 모델 해석
+      const sumPlan = buildExecutionPlan(model || '');
+      const sumIsAuto = sumPlan.resolvedEngine === '__auto__';
+      const sumEngineModel = sumIsAuto ? '' : (sumPlan.resolvedEngine || model);
+
+      const bestNode = clusterManager.getBestNode(sumEngineModel);
+      const client = bestNode ? clusterManager.createScopedClient(bestNode.id, sumEngineModel) : undefined;
 
       if (!client) {
           res.status(503).json(serviceUnavailable('사용 가능한 노드가 없습니다'));
@@ -253,8 +259,13 @@ router.post('/document/ask', asyncHandler(async (req: Request, res: Response) =>
 
      logger.info(`[DocQA] 질문: ${question?.substring(0, 50)}...`);
 
-      const bestNode = clusterManager.getBestNode(model);
-      const client = bestNode ? clusterManager.createScopedClient(bestNode.id, model) : undefined;
+      // §9 Pipeline Profile: brand model alias → 실제 엔진 모델 해석
+      const qaPlan = buildExecutionPlan(model || '');
+      const qaIsAuto = qaPlan.resolvedEngine === '__auto__';
+      const qaEngineModel = qaIsAuto ? '' : (qaPlan.resolvedEngine || model);
+
+      const bestNode = clusterManager.getBestNode(qaEngineModel);
+      const client = bestNode ? clusterManager.createScopedClient(bestNode.id, qaEngineModel) : undefined;
 
       if (!client) {
           res.status(503).json(serviceUnavailable('사용 가능한 노드가 없습니다'));

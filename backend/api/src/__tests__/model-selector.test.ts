@@ -40,14 +40,14 @@ describe('Model Selector', () => {
     });
 
     describe('selectOptimalModel', () => {
-        test('코딩 질문에 적절한 모델 선택', () => {
-            const result = selectOptimalModel('Python 함수 작성해줘');
+        test('코딩 질문에 적절한 모델 선택', async () => {
+            const result = await selectOptimalModel('Python 함수 작성해줘');
             expect(result.queryType).toBe('code');
             expect(result.supportsToolCalling).toBe(true);
         });
 
-        test('비전 질문에 비전 지원 모델 선택', () => {
-            const result = selectOptimalModel('이미지 분석해줘', true);
+        test('비전 질문에 비전 지원 모델 선택', async () => {
+            const result = await selectOptimalModel('이미지 분석해줘', true);
             expect(result.queryType).toBe('vision');
             expect(result.supportsVision).toBe(true);
         });

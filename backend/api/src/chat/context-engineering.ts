@@ -327,49 +327,61 @@ export class ContextEngineeringBuilder {
     /**
      * 최종 시스템 프롬프트를 빌드합니다.
      * 
-     * 위치 공학 (Positional Engineering) 적용:
-     * - 시작(Primacy): 메타데이터 + 페르소나 (정체성 확립)
-     * - 중간(Context): RAG 문서 + 예시 + 추가 섹션 (지식 주입)
-     * - 끝(Recency): 제약 조건 + 출력 형식 + 소프트 인터락 + 최종 리마인더
+     * Prefix Cache 최적화 (Cloud LLM):
+     * - Phase 1 (STATIC): 역할 → 제약 → 출력형식 → 인터락 → 리마인더
+     *   요청 간 동일한 콘텐츠를 앞에 배치하여 implicit prefix caching 활용
+     * - Phase 2 (DYNAMIC): 메타데이터 → RAG → 예시 → 추가섹션 → 목표
+     *   요청마다 변하는 콘텐츠를 뒤에 배치
      * 
      * @returns 조립된 전체 시스템 프롬프트 문자열
      */
     build(): string {
         const sections: string[] = [];
 
-        // 1. [Primacy Section] 메타데이터 + 역할 정의 (정체성 확립)
-        sections.push(this.buildMetadataSection());
+        // ── Phase 1: STATIC sections (prefix-cacheable) ──
+        // Cloud LLM의 implicit prefix caching을 활용하기 위해
+        // 요청 간 변하지 않는 정적 콘텐츠를 프롬프트 앞부분에 배치
+
+        // 1. [Identity] 역할 정의 — 페르소나 확립
         sections.push(this.buildRoleSection());
 
-        // 2. [Context Section] RAG + 예시 + 도구 (사실 기반 지식 주입)
-        if (this.ragContext) {
-            sections.push(this.buildRAGSection());
-        }
-
-        if (this.examples.length > 0) {
-            sections.push(examplesSection(this.examples));
-        }
-
-        // 추가 동적 섹션 (에이전틱 상태 등)
-        sections.push(...this.additionalSections);
-
-        // 과업 목표 (내부 설정 — 이스케이프 불필요)
-        if (this.pillars.goal) {
-            sections.push(xmlTag('goal', this.pillars.goal, undefined, false));
-        }
-
-        // 3. [Recency Section] 🔒 보안/제약 + 출력 형식 + 소프트 인터락 (제어 및 실행)
-        // 중요도가 높은 규칙들을 마지막에 배치하여 지침 준수율 극대화
+        // 2. [Rules] 제약 조건 — 보안/언어/행동 규칙
         sections.push(this.buildConstraintsSection());
+
+        // 3. [Format] 출력 형식 — 응답 구조 지정
         sections.push(this.buildOutputFormatSection());
 
-        // 소프트 인터락 (Thinking Process)
+        // 4. [Process] 소프트 인터락 — 사고 프로세스 강제
         if (this.enableThinking) {
             sections.push(this.buildSoftInterlockSection());
         }
 
-        // 최종 강조 리마인더 (Double Recency)
+        // 5. [Reinforcement] 최종 리마인더 — Double Recency
         sections.push(this.buildFinalReminder());
+
+        // ── Phase 2: DYNAMIC sections (per-request) ──
+        // 요청마다 변하는 동적 콘텐츠 — 캐시 미스 영역
+
+        // 6. [Context] 메타데이터 — 날짜, 세션, 모델 정보
+        sections.push(this.buildMetadataSection());
+
+        // 7. [Knowledge] RAG 컨텍스트 — 검색된 참조 문서
+        if (this.ragContext) {
+            sections.push(this.buildRAGSection());
+        }
+
+        // 8. [Examples] Few-shot 예시
+        if (this.examples.length > 0) {
+            sections.push(examplesSection(this.examples));
+        }
+
+        // 9. [Agentic] 추가 동적 섹션
+        sections.push(...this.additionalSections);
+
+        // 10. [Task] 과업 목표
+        if (this.pillars.goal) {
+            sections.push(xmlTag('goal', this.pillars.goal, undefined, false));
+        }
 
         return sections.join('\n\n');
     }

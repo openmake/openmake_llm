@@ -435,7 +435,7 @@ export class ChatService {
 
         // 모델 선택 분기: Brand Model auto-routing / Brand Model 직접 매핑 / 일반 자동 선택
         if (executionPlan?.isBrandModel && executionPlan.resolvedEngine === '__auto__') {
-            const targetBrandProfile = selectBrandProfileForAutoRouting(message, hasImages);
+            const targetBrandProfile = await selectBrandProfileForAutoRouting(message, hasImages);
             const autoExecutionPlan = buildExecutionPlan(targetBrandProfile);
 
             console.log(`[ChatService] 🤖 Auto-Routing: ${executionPlan.requestedModel} → ${targetBrandProfile} (engine=${autoExecutionPlan.resolvedEngine})`);
@@ -478,7 +478,7 @@ export class ChatService {
                 supportsVision: executionPlan.requiredTools.includes('vision'),
             };
         } else {
-            modelSelection = selectOptimalModel(message, hasImages);
+            modelSelection = await selectOptimalModel(message, hasImages);
             console.log(`[ChatService] 🎯 모델 자동 선택: ${modelSelection.model} (${modelSelection.reason})`);
             this.client.setModel(modelSelection.model);
         }

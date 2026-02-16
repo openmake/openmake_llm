@@ -20,8 +20,10 @@
  */
 
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import { MCPToolDefinition, MCPToolResult } from './types';
+import { UserSandbox } from './user-sandbox';
 
 // ============================================
 // 🔒 보안 패치 2026-02-07:
@@ -34,7 +36,7 @@ import { MCPToolDefinition, MCPToolResult } from './types';
  * 코드 검색 도구
  *
  * 지정된 디렉토리에서 정규식 패턴을 사용하여 코드를 검색합니다.
- * 프로젝트 루트(process.cwd()) 외부 경로 접근을 차단하며,
+ * 프로젝트 루트(UserSandbox 작업 디렉토리) 외부 경로 접근을 차단하며,
  * 심볼릭 링크를 통한 탈출도 방지합니다.
  *
  * @param args.pattern - 검색할 정규식 패턴
@@ -68,7 +70,7 @@ export const searchCodeTool: MCPToolDefinition = {
             required: ['pattern', 'directory']
         }
     },
-    handler: async (args): Promise<MCPToolResult> => {
+    handler: async (args, context): Promise<MCPToolResult> => {
         try {
             const pattern = args.pattern as string;
             const directory = args.directory as string;
@@ -76,7 +78,10 @@ export const searchCodeTool: MCPToolDefinition = {
 
             // 🔒 Phase 3 보안 패치: 경로 탐색(LFI) 방지
             // 허용된 기본 디렉토리(프로젝트 루트) 외부로의 접근을 차단
-            const projectRoot = path.resolve(process.cwd());
+            const userId = context?.userId;
+            const projectRoot = userId !== undefined
+                ? path.resolve(UserSandbox.getWorkDir(userId))
+                : path.resolve(os.tmpdir());
             const resolvedDir = path.resolve(directory);
 
             if (!resolvedDir.startsWith(projectRoot)) {
