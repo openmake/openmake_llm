@@ -23,6 +23,7 @@ import { getConfig } from '../config';
 import { success, badRequest, internalError, serviceUnavailable } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
 import { createLogger } from '../utils/logger';
+import { buildExecutionPlan } from '../chat/profile-resolver';
 
 const logger = createLogger('WebSearchRoutes');
 
@@ -60,17 +61,22 @@ router.post('/web-search', asyncHandler(async (req: Request, res: Response) => {
 
       logger.info(`[WebSearch] ${searchResults.length}개 결과 찾음`);
 
+      // §9 Pipeline Profile: brand model alias → 실제 엔진 모델 해석
+      const wsPlan = buildExecutionPlan(model || '');
+      const wsIsAuto = wsPlan.resolvedEngine === '__auto__';
+      const wsEngineModel = wsIsAuto ? '' : (wsPlan.resolvedEngine || model);
+
       // Cloud 모델 처리
       let client: OllamaClient | undefined;
-      const isCloudModel = model?.toLowerCase().endsWith(':cloud');
+      const isCloudModel = wsEngineModel?.toLowerCase().endsWith(':cloud');
 
       if (isCloudModel) {
           const { createClient } = await import('../ollama/client');
-          client = createClient({ model });
-           logger.info(`[WebSearch] Cloud 클라이언트 생성: ${model}`);
+          client = createClient({ model: wsEngineModel });
+           logger.info(`[WebSearch] Cloud 클라이언트 생성: ${wsEngineModel}`);
       } else {
-          const bestNode = clusterManager.getBestNode(model);
-          client = bestNode ? clusterManager.createScopedClient(bestNode.id, model) : undefined;
+          const bestNode = clusterManager.getBestNode(wsEngineModel);
+          client = bestNode ? clusterManager.createScopedClient(bestNode.id, wsEngineModel) : undefined;
       }
 
       if (!client) {
