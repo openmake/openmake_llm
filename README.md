@@ -21,7 +21,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.5.5-blue" alt="Version" />
+  <img src="https://img.shields.io/badge/version-1.5.6-blue" alt="Version" />
   <img src="https://img.shields.io/badge/node-%3E%3D18-green" alt="Node" />
   <img src="https://img.shields.io/badge/license-MIT-yellow" alt="License" />
   <img src="https://img.shields.io/badge/typescript-5.3-blue" alt="TypeScript" />
@@ -195,6 +195,16 @@ User Message
 | `openmake_llm_code` | Code | Conditional | Medium | — | 프로그래밍, 디버깅 |
 | `openmake_llm_vision` | Vision | Conditional | Medium | — | 이미지 분석, OCR |
 | `openmake_llm_auto` | *Dynamic* | *Auto* | *Auto* | *Auto* | **자동 라우팅** — 질문에 따라 위 6개 중 최적 선택 |
+
+### Ollama Models in Use
+
+현재 운영 환경에서 사용 중인 `ollama list` 모델:
+
+- `qwen3-vl:235b-cloud`
+- `gpt-oss:120b-cloud`
+- `kimi-k2.5:cloud`
+- `qwen3-coder-next:cloud`
+- `gemini-3-flash-preview:cloud`
 
 ---
 
