@@ -1,11 +1,12 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { ClusterConfig, StaticNode } from './types';
+import { SERVER_CONFIG } from '../config/constants';
 
 const DEFAULT_CONFIG: ClusterConfig = {
     name: 'ollama-cluster',
     discoveryPort: 52415,
-    dashboardPort: 52416,
+    dashboardPort: SERVER_CONFIG.DEFAULT_PORT,
     heartbeatInterval: 5000,
     nodeTimeout: 15000,
     nodes: []

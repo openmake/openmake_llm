@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { SERVER_CONFIG } from './constants';
 
 const nodeEnvSchema = z.enum(['development', 'test', 'production']);
 const logLevelSchema = z.enum(['debug', 'info', 'warn', 'error']);
@@ -31,7 +32,7 @@ export const envSchema = z
     .object({
         // Core
         NODE_ENV: nodeEnvSchema.default('development'),
-        PORT: positiveIntWithDefault(52416),
+        PORT: positiveIntWithDefault(SERVER_CONFIG.DEFAULT_PORT),
         SERVER_HOST: z.string().default('0.0.0.0'),
         DATABASE_URL: z.string().default('postgresql://localhost:5432/openmake_llm'),
 
@@ -48,10 +49,10 @@ export const envSchema = z
         GOOGLE_CLIENT_SECRET: z.string().default(''),
         GITHUB_CLIENT_ID: z.string().default(''),
         GITHUB_CLIENT_SECRET: z.string().default(''),
-        OAUTH_REDIRECT_URI: z.string().default('http://localhost:52416/api/auth/callback/google'),
+        OAUTH_REDIRECT_URI: z.string().default(`http://localhost:${SERVER_CONFIG.DEFAULT_PORT}/api/auth/callback/google`),
 
         // CORS
-        CORS_ORIGINS: z.string().default('http://localhost:52416'),
+        CORS_ORIGINS: z.string().default(`http://localhost:${SERVER_CONFIG.DEFAULT_PORT}`),
 
         // Ollama
         OLLAMA_BASE_URL: z.url().default('http://localhost:11434'),
