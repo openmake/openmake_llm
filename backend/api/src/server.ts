@@ -93,7 +93,7 @@ import { errorHandler, notFoundHandler } from './utils/error-handler';
  * @interface DashboardOptions
  */
 interface DashboardOptions {
-    /** 서버 포트 번호 (기본값: 52416) */
+    /** 서버 포트 번호 (기본값: .env PORT) */
     port?: number;
     /** Ollama 클러스터 매니저 인스턴스 */
     cluster?: ClusterManager;
@@ -132,7 +132,7 @@ const log = {
  * 
  * @class DashboardServer
  * @example
- * const server = new DashboardServer({ port: 52416 });
+ * const server = new DashboardServer({ port: getConfig().port });
  * await server.start();
  * console.log(`Server running at ${server.url}`);
  */
@@ -154,11 +154,11 @@ export class DashboardServer {
      * DashboardServer 인스턴스를 생성합니다.
      * 
      * @param options - 서버 초기화 옵션
-     * @param options.port - 서버 포트 (기본값: 52416)
+     * @param options.port - 서버 포트 (기본값: .env PORT)
      * @param options.cluster - 클러스터 매니저 (기본값: 싱글톤 인스턴스)
      */
     constructor(options?: DashboardOptions) {
-        this.port = options?.port || 52416;
+        this.port = options?.port || getConfig().port;
         this.cluster = options?.cluster || getClusterManager();
 
         this.app = express();
@@ -485,7 +485,7 @@ export class DashboardServer {
 
     /**
      * 서버 접속 URL을 반환합니다.
-     * @returns 서버 URL (예: http://localhost:52416)
+     * @returns 서버 URL (예: http://localhost:{PORT})
      */
     get url(): string {
         const host = getConfig().serverHost;

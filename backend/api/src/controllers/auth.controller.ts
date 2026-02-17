@@ -189,9 +189,9 @@ export class AuthController {
 
     /**
      * AuthController 인스턴스를 생성합니다.
-     * @param serverPort - 서버 포트 번호 (기본값: 52416)
+     * @param serverPort - 서버 포트 번호 (기본값: .env PORT)
      */
-    constructor(serverPort: number = 52416) {
+    constructor(serverPort: number = getConfig().port) {
         this.router = Router();
         this.serverPort = serverPort;
         this.setupRoutes();
@@ -565,7 +565,7 @@ export class AuthController {
 /**
  * AuthController 인스턴스를 생성하는 팩토리 함수
  * 
- * @param serverPort - 서버 포트 번호 (선택적, 기본값: 52416)
+ * @param serverPort - 서버 포트 번호 (선택적, 기본값: .env PORT)
  * @returns 설정된 Express Router
  */
 export function createAuthController(serverPort?: number): Router {
