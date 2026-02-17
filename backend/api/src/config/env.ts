@@ -2,6 +2,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { envSchema } from './env.schema';
+import { SERVER_CONFIG } from './constants';
 
 export interface EnvConfig {
     // Node
@@ -101,7 +102,7 @@ const DEFAULT_CONFIG: EnvConfig = {
     nodeEnv: 'development',
 
     // Server
-    port: 52416,
+    port: SERVER_CONFIG.DEFAULT_PORT,
     serverHost: '0.0.0.0',
 
     // Database
@@ -118,10 +119,10 @@ const DEFAULT_CONFIG: EnvConfig = {
     googleClientSecret: '',
     githubClientId: '',
     githubClientSecret: '',
-    oauthRedirectUri: 'http://localhost:52416/api/auth/callback/google',
+    oauthRedirectUri: `http://localhost:${SERVER_CONFIG.DEFAULT_PORT}/api/auth/callback/google`,
 
     // CORS
-    corsOrigins: 'http://localhost:52416',
+    corsOrigins: `http://localhost:${SERVER_CONFIG.DEFAULT_PORT}`,
 
     // Ollama
     ollamaBaseUrl: 'http://localhost:11434',
