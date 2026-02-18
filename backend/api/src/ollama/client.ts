@@ -222,12 +222,26 @@ export class OllamaClient {
     }
 
     /**
-     * 클라이언트의 기본 모델을 변경합니다.
+     * 클라이언트의 기본 모델을 변경하고, Cloud 모델 전환 시 baseURL을 자동 갱신합니다.
+     *
+     * Auto-routing 등에서 런타임에 모델이 변경될 때,
+     * Cloud 모델이면 OLLAMA_CLOUD_HOST로, 로컬 모델이면 원래 노드 URL로 전환합니다.
      *
      * @param model - 새로 설정할 모델 이름
      */
     setModel(model: string): void {
+        const wasCloud = this.isCloudModel(this.config.model);
+        const isCloud = this.isCloudModel(model);
         this.config.model = model;
+
+        // Cloud ↔ Local 전환 시 baseURL 갱신
+        if (isCloud && !wasCloud) {
+            this.client.defaults.baseURL = OLLAMA_CLOUD_HOST;
+            logger.info(`[setModel] 🌐 Cloud 모델 전환 → ${OLLAMA_CLOUD_HOST} (model: ${model})`);
+        } else if (!isCloud && wasCloud) {
+            this.client.defaults.baseURL = this.config.baseUrl;
+            logger.info(`[setModel] 🏠 Local 모델 전환 → ${this.config.baseUrl} (model: ${model})`);
+        }
     }
 
     /**
