@@ -183,11 +183,11 @@ const DEFAULT_CONFIG: EnvConfig = {
 
     // Pipeline Profile — Brand Model → Internal Engine Mapping
     omkEngineLlm: 'gemini-3-flash-preview:cloud',
-    omkEnginePro: 'gemini-3-pro-preview:cloud',
+    omkEnginePro: 'gemini-3-flash-preview:cloud',
     omkEngineFast: 'gemini-3-flash-preview:cloud',
-    omkEngineThink: 'gemini-3-pro-preview:cloud',
-    omkEngineCode: 'qwen3:30b-a3b',
-    omkEngineVision: 'gemini-3-flash-preview:cloud',
+    omkEngineThink: 'gemini-3-flash-preview:cloud',
+    omkEngineCode: 'glm-5:cloud',
+    omkEngineVision: 'qwen3.5:397b-cloud',
 };
 
 function parseEnvFile(filePath: string): Record<string, string> {
