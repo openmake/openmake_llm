@@ -103,11 +103,11 @@ export const envSchema = z
 
         // Engine mapping
         OMK_ENGINE_LLM: z.string().min(1).default('gemini-3-flash-preview:cloud'),
-        OMK_ENGINE_PRO: z.string().min(1).default('gemini-3-pro-preview:cloud'),
+        OMK_ENGINE_PRO: z.string().min(1).default('gemini-3-flash-preview:cloud'),
         OMK_ENGINE_FAST: z.string().min(1).default('gemini-3-flash-preview:cloud'),
-        OMK_ENGINE_THINK: z.string().min(1).default('gemini-3-pro-preview:cloud'),
-        OMK_ENGINE_CODE: z.string().min(1).default('qwen3:30b-a3b'),
-        OMK_ENGINE_VISION: z.string().min(1).default('gemini-3-flash-preview:cloud'),
+        OMK_ENGINE_THINK: z.string().min(1).default('gemini-3-flash-preview:cloud'),
+OMK_ENGINE_CODE: z.string().min(1).default('glm-5:cloud'),
+  OMK_ENGINE_VISION: z.string().min(1).default('qwen3.5:397b-cloud'),
     })
     .superRefine((data, ctx) => {
         if (data.NODE_ENV !== 'production') {
