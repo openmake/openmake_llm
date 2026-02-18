@@ -84,7 +84,7 @@ import {
 } from './controllers';
 import { uploadedDocuments } from './documents/store';
 import { WebSocketHandler } from './sockets/handler';
-import { RATE_LIMITS, SERVER_CONFIG } from './config/constants';
+import { RATE_LIMITS, SERVER_CONFIG, OLLAMA_CLOUD_HOST } from './config/constants';
 import { setupSwaggerRoutes } from './swagger';
 import { errorHandler, notFoundHandler } from './utils/error-handler';
 
@@ -268,8 +268,8 @@ export class DashboardServer {
                         "'self'",
                         "ws:",
                         "wss:",
-                        "http://localhost:11434",
-                        "https://ollama.com",
+                        getConfig().ollamaBaseUrl,
+                        OLLAMA_CLOUD_HOST,
                         "https://api.iconify.design",
                         "https://cdn.jsdelivr.net",
                         "https://cdnjs.cloudflare.com",

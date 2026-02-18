@@ -518,7 +518,7 @@ async function classifyQueryWithLLM(query: string): Promise<QueryClassification>
         const engineModel = config.omkEngineCode || config.ollamaModel;
 
         // Ollama에 직접 HTTP 요청 (createClient 없이 경량 호출)
-        const ollamaHost = config.ollamaHost || 'http://localhost:11434';
+        const ollamaHost = config.ollamaHost;
         const response = await fetch(`${ollamaHost}/api/chat`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },

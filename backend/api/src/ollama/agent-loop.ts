@@ -46,6 +46,7 @@ interface MessageWithThinking extends Message {
 }
 import { getApiKeyManager } from './api-key-manager';
 import { getConfig } from '../config';
+import { OLLAMA_CLOUD_HOST } from '../config/constants';
 
 const envConfig = getConfig();
 
@@ -55,8 +56,7 @@ const envConfig = getConfig();
  */
 type ToolFunction = (args: Record<string, unknown>) => unknown | Promise<unknown>;
 
-/** Ollama Cloud API 호스트 URL */
-const OLLAMA_CLOUD_HOST = 'https://ollama.com';
+// Ollama Cloud 호스트: constants.ts에서 중앙 관리 (OLLAMA_CLOUD_HOST)
 
 /**
  * 다양한 에러 객체 형식에서 HTTP 상태 코드를 추출하기 위한 타입

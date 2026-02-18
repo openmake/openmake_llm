@@ -43,6 +43,7 @@ import {
     WebFetchResponse
 } from './types';
 import { getConfig } from '../config';
+import { OLLAMA_CLOUD_HOST } from '../config/constants';
 import { createLogger } from '../utils/logger';
 import { getApiKeyManager, ApiKeyManager } from './api-key-manager';
 import { getApiUsageTracker } from './api-usage-tracker';
@@ -89,9 +90,7 @@ export class OllamaClient {
     /** API Key 관리자 인스턴스 (키 로테이션 담당) */
     private apiKeyManager: ApiKeyManager;
 
-    // 🆕 Ollama Cloud 호스트 상수
-    /** Ollama Cloud API 호스트 URL */
-    private static readonly OLLAMA_CLOUD_HOST = 'https://ollama.com';
+    // 🆕 Ollama Cloud 호스트 상수 (constants.ts에서 중앙 관리)
 
     /**
      * OllamaClient 인스턴스를 생성합니다.
@@ -114,7 +113,7 @@ export class OllamaClient {
         // 🆕 모델이 :cloud 접미사를 가지면 Ollama Cloud 호스트 사용
         let baseUrl = this.config.baseUrl;
         if (this.isCloudModel(this.config.model)) {
-            baseUrl = OllamaClient.OLLAMA_CLOUD_HOST;
+            baseUrl = OLLAMA_CLOUD_HOST;
             console.log(`[OllamaClient] 🌐 Cloud 모델 감지 - 호스트: ${baseUrl}`);
         }
 
@@ -641,7 +640,7 @@ export class OllamaClient {
         try {
             // Ollama 공식 API 엔드포인트
             const response = await this.client.post<WebSearchResponse>(
-                'https://ollama.com/api/web_search',
+                `${OLLAMA_CLOUD_HOST}/api/web_search`,
                 request,
                 {
                     baseURL: '', // Override baseURL to use absolute URL
@@ -674,7 +673,7 @@ export class OllamaClient {
 
         try {
             const response = await this.client.post<WebFetchResponse>(
-                'https://ollama.com/api/web_fetch',
+                `${OLLAMA_CLOUD_HOST}/api/web_fetch`,
                 request,
                 {
                     baseURL: '',
