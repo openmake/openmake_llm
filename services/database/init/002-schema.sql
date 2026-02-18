@@ -300,19 +300,46 @@ CREATE TABLE IF NOT EXISTS external_files (
 
 -- ============================================
 -- pgvector 벡터 임베딩 테이블 (NEW)
+-- pgvector 확장 미설치 시 embedding 컬럼을 TEXT로 대체
 -- ============================================
 
-CREATE TABLE IF NOT EXISTS vector_embeddings (
-    id SERIAL PRIMARY KEY,
-    source_type TEXT NOT NULL CHECK(source_type IN ('document', 'memory', 'conversation', 'agent')),
-    source_id TEXT NOT NULL,
-    chunk_index INTEGER DEFAULT 0,
-    chunk_text TEXT NOT NULL,
-    embedding vector(768),
-    metadata JSONB,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
-);
+DO $$ BEGIN
+    -- 테이블이 이미 존재하면 생성 건너뛰기 (vector 타입 해석 시 .so 로딩 오류 방지)
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'vector_embeddings') THEN
+        RAISE NOTICE '[pgvector] vector_embeddings 테이블 이미 존재 — 생성 건너뜀';
+    ELSE
+        -- 새로 생성: pgvector 확장 로드 시도 후 폴백
+        BEGIN
+            EXECUTE 'CREATE EXTENSION IF NOT EXISTS vector';
+            EXECUTE '
+                CREATE TABLE vector_embeddings (
+                    id SERIAL PRIMARY KEY,
+                    source_type TEXT NOT NULL CHECK(source_type IN (''document'', ''memory'', ''conversation'', ''agent'')),
+                    source_id TEXT NOT NULL,
+                    chunk_index INTEGER DEFAULT 0,
+                    chunk_text TEXT NOT NULL,
+                    embedding vector(768),
+                    metadata JSONB,
+                    created_at TIMESTAMPTZ DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ DEFAULT NOW()
+                )';
+            RAISE NOTICE '[pgvector] 확장 로드 완료 — vector(768) 컬럼 사용';
+        EXCEPTION WHEN OTHERS THEN
+            CREATE TABLE vector_embeddings (
+                id SERIAL PRIMARY KEY,
+                source_type TEXT NOT NULL CHECK(source_type IN ('document', 'memory', 'conversation', 'agent')),
+                source_id TEXT NOT NULL,
+                chunk_index INTEGER DEFAULT 0,
+                chunk_text TEXT NOT NULL,
+                embedding TEXT,
+                metadata JSONB,
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                updated_at TIMESTAMPTZ DEFAULT NOW()
+            );
+            RAISE NOTICE '[pgvector] 확장 미설치 — embedding을 TEXT 컬럼으로 대체 (벡터 검색 비활성)';
+        END;
+    END IF;
+END $$;
 
 -- ============================================
 -- Push 구독 테이블
@@ -372,10 +399,18 @@ CREATE INDEX IF NOT EXISTS idx_connections_user ON external_connections(user_id)
 CREATE INDEX IF NOT EXISTS idx_connections_service ON external_connections(service_type);
 CREATE INDEX IF NOT EXISTS idx_ext_files_connection ON external_files(connection_id);
 
--- Vector indexes (pgvector)
+-- Vector indexes (pgvector 확장 필요)
 CREATE INDEX IF NOT EXISTS idx_embeddings_source ON vector_embeddings(source_type, source_id);
-CREATE INDEX IF NOT EXISTS idx_embeddings_vector ON vector_embeddings
-    USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
+DO $$ BEGIN
+    IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'vector') THEN
+        BEGIN
+            EXECUTE 'CREATE INDEX IF NOT EXISTS idx_embeddings_vector ON vector_embeddings USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100)';
+            RAISE NOTICE '[pgvector] ivfflat 인덱스 생성 완료';
+        EXCEPTION WHEN OTHERS THEN
+            RAISE NOTICE '[pgvector] ivfflat 인덱스 생성 실패 (shared library 미설치) — 건너뜀';
+        END;
+    END IF;
+END $$;
 
 -- Full-text search indexes (pg_trgm 확장 필요)
 DO $$ BEGIN
