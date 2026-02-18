@@ -232,6 +232,10 @@ export class DashboardServer {
         app.use((req: Request, res: Response, next: NextFunction) => {
             const match = req.path.match(/^\/([a-z0-9-]+)\.html$/);
             if (match && SPA_PAGES.has(match[1])) {
+                if (match[1] === 'external') {
+                    return next();
+                }
+
                 const indexPath = path.join(__dirname, 'public', 'index.html');
                 if (fs.existsSync(indexPath)) {
                     res.setHeader('Content-Type', 'text/html; charset=utf-8');
@@ -244,6 +248,12 @@ export class DashboardServer {
                 }
             }
             next();
+        });
+
+        app.get('/externel.html', (req: Request, res: Response) => {
+            const queryIndex = req.originalUrl.indexOf('?');
+            const query = queryIndex >= 0 ? req.originalUrl.slice(queryIndex) : '';
+            res.redirect(302, `/external.html${query}`);
         });
 
         app.use(helmet({

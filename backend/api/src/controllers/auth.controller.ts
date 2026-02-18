@@ -173,21 +173,36 @@ function validateAndConsumeStateFallback(state: string, expectedProvider: string
  */
 function buildRedirectUri(req: Request, provider: 'google' | 'github', serverPort: number): string {
     const configuredUri = getConfig().oauthRedirectUri;
+    const requestHost = req.get('host') || `localhost:${serverPort}`;
+    const forwardedProto = req.get('x-forwarded-proto');
+    const requestProtocol = (forwardedProto ? forwardedProto.split(',')[0].trim() : req.protocol) || 'http';
 
-    // OAUTH_REDIRECT_URI가 명시적으로 설정된 경우 (localhost 기본값이 아닌 경우) 우선 사용
-    // provider 부분만 교체하여 Google/GitHub 모두 지원
+    const dynamicRedirectUri = `${requestProtocol}://${requestHost}/api/auth/callback/${provider}`;
+
+    // OAUTH_REDIRECT_URI가 명시적으로 설정된 경우 우선 사용하되,
+    // 현재 요청 Host와 불일치하면 동적 URI를 사용해 redirect_uri_mismatch를 방지합니다.
     if (configuredUri && !configuredUri.includes('localhost')) {
-        const redirectUri = configuredUri.replace(/\/callback\/\w+$/, `/callback/${provider}`);
-        log.info(`[OAuth] Redirect URI (config): ${redirectUri}`);
-        return redirectUri;
+        try {
+            const configured = new URL(configuredUri);
+            if (configured.host === requestHost) {
+                const redirectUri = configuredUri.replace(/\/callback\/\w+$/, `/callback/${provider}`);
+                log.info(`[OAuth] Redirect URI (config): ${redirectUri}`);
+                return redirectUri;
+            }
+
+            log.warn(`[OAuth] OAUTH_REDIRECT_URI host mismatch (configured=${configured.host}, request=${requestHost}), using dynamic URI`);
+            log.info(`[OAuth] Redirect URI (dynamic): ${dynamicRedirectUri}`);
+            return dynamicRedirectUri;
+        } catch {
+            log.warn('[OAuth] Invalid OAUTH_REDIRECT_URI format, using dynamic URI');
+            log.info(`[OAuth] Redirect URI (dynamic): ${dynamicRedirectUri}`);
+            return dynamicRedirectUri;
+        }
     }
 
     // 동적 감지 폴백 (개발 환경 등)
-    const protocol = req.protocol || 'http';
-    const host = req.get('host') || `localhost:${serverPort}`;
-    const redirectUri = `${protocol}://${host}/api/auth/callback/${provider}`;
-    log.info(`[OAuth] Redirect URI (dynamic): ${redirectUri}`);
-    return redirectUri;
+    log.info(`[OAuth] Redirect URI (dynamic): ${dynamicRedirectUri}`);
+    return dynamicRedirectUri;
 }
 
 /**
