@@ -230,7 +230,9 @@ export class ChatRequestHandler {
     static buildPlan(model: string): ExecutionPlanResult {
         const plan = buildExecutionPlan(model || '');
         const isAutoRouting = plan.resolvedEngine === '__auto__';
-        const engineModel = isAutoRouting ? '' : (plan.resolvedEngine || model);
+        // Auto-routing 시 'default'를 전달하여 getBestNode()에서 모델 필터링을 건너뛰도록 함
+        // (실제 모델은 ChatService에서 auto-routing 후 setModel()로 설정됨)
+        const engineModel = isAutoRouting ? 'default' : (plan.resolvedEngine || model);
         const displayModel = plan.isBrandModel ? plan.requestedModel : undefined;
 
         return { plan, isAutoRouting, engineModel, displayModel };
