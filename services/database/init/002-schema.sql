@@ -377,9 +377,15 @@ CREATE INDEX IF NOT EXISTS idx_embeddings_source ON vector_embeddings(source_typ
 CREATE INDEX IF NOT EXISTS idx_embeddings_vector ON vector_embeddings
     USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
 
--- Full-text search indexes
-CREATE INDEX IF NOT EXISTS idx_messages_content_trgm ON conversation_messages USING gin (content gin_trgm_ops);
-CREATE INDEX IF NOT EXISTS idx_memories_value_trgm ON user_memories USING gin (value gin_trgm_ops);
+-- Full-text search indexes (pg_trgm 확장 필요)
+DO $$ BEGIN
+    IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_trgm') THEN
+        EXECUTE 'CREATE INDEX IF NOT EXISTS idx_messages_content_trgm ON conversation_messages USING gin (content gin_trgm_ops)';
+        EXECUTE 'CREATE INDEX IF NOT EXISTS idx_memories_value_trgm ON user_memories USING gin (value gin_trgm_ops)';
+    ELSE
+        RAISE NOTICE 'pg_trgm extension not installed — skipping trigram indexes. Run: CREATE EXTENSION IF NOT EXISTS pg_trgm;';
+    END IF;
+END $$;
 
 -- ============================================
 -- 🔌 MCP 외부 서버 설정 테이블
