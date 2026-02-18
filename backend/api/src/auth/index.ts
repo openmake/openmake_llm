@@ -24,12 +24,11 @@ import { PublicUser, UserRole } from '../data/user-manager';
 import * as crypto from 'crypto';
 import { getTokenBlacklist } from '../data/models/token-blacklist';
 import { getConfig } from '../config/env';
+import { AUTH_CONFIG } from '../config/constants';
 
 // JWT 비밀키 (환경변수 필수)
 // 보안: 런타임 시크릿 생성은 수평 확장 시 노드 간 불일치를 유발하므로 제거
 const JWT_SECRET = getConfig().jwtSecret;
-const JWT_EXPIRES_IN = '15m';  // Access token - short lived for security
-const REFRESH_TOKEN_EXPIRES_IN = '7d';  // Refresh token - longer lived
 
 /**
  * 객체가 유효한 JWT 페이로드인지 타입 가드로 검사합니다.
@@ -77,7 +76,7 @@ export function generateToken(user: PublicUser): string {
     const jti = crypto.randomBytes(16).toString('hex');
 
     return jwt.sign(payload, JWT_SECRET, { 
-        expiresIn: JWT_EXPIRES_IN,
+        expiresIn: AUTH_CONFIG.TOKEN_EXPIRY,
         jwtid: jti
     });
 }
@@ -101,7 +100,7 @@ export function generateRefreshToken(user: PublicUser): string {
     const jti = crypto.randomBytes(16).toString('hex');
 
     return jwt.sign(payload, JWT_SECRET, {
-        expiresIn: REFRESH_TOKEN_EXPIRES_IN,
+        expiresIn: AUTH_CONFIG.REFRESH_TOKEN_EXPIRY,
         jwtid: jti
     });
 }
@@ -191,7 +190,7 @@ export async function blacklistToken(token: string): Promise<boolean> {
         }
         const expiresAt = typeof decoded.exp === 'number' 
             ? decoded.exp * 1000 
-            : Date.now() + 15 * 60 * 1000; // 기본 15분
+            : Date.now() + AUTH_CONFIG.ACCESS_TOKEN_MAX_AGE_MS; // 기본 15분
         
         const blacklist = getTokenBlacklist();
         await blacklist.add(decoded.jti, expiresAt);
@@ -250,7 +249,7 @@ export function setTokenCookie(res: Response, token: string): void {
         httpOnly: true,
         secure: getConfig().nodeEnv === 'production',
         sameSite: 'lax',
-        maxAge: 15 * 60 * 1000, // 15분 (액세스 토큰 수명과 일치)
+        maxAge: AUTH_CONFIG.ACCESS_TOKEN_MAX_AGE_MS, // 15분 (액세스 토큰 수명과 일치)
         path: '/'
     });
 }
@@ -263,7 +262,7 @@ export function setRefreshTokenCookie(res: Response, refreshToken: string): void
         httpOnly: true,
         secure: getConfig().nodeEnv === 'production',
         sameSite: 'lax',
-        maxAge: 7 * 24 * 60 * 60 * 1000, // 7일
+        maxAge: AUTH_CONFIG.REFRESH_TOKEN_MAX_AGE_MS, // 7일
         path: '/api/auth/refresh' // 리프레시 엔드포인트에서만 전송
     });
 }

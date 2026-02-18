@@ -10,10 +10,11 @@ import * as crypto from 'crypto';
 import { getAuthService } from '../services/AuthService';
 import { getUserManager } from '../data/user-manager';
 import type { OAuthTokenResponse, GoogleUserInfo, GitHubUser, GitHubEmail } from '../auth/types';
-import { requireAuth, requireAdmin, extractToken, blacklistToken, setTokenCookie, clearTokenCookie } from '../auth';
+import { requireAuth, requireAdmin, extractToken, blacklistToken, setTokenCookie, clearTokenCookie, setRefreshTokenCookie, generateRefreshToken, generateToken, verifyRefreshToken } from '../auth';
 import { createLogger } from '../utils/logger';
 import { success, badRequest, unauthorized, conflict, internalError, serviceUnavailable } from '../utils/api-response';
 import { getConfig } from '../config/env';
+import { APP_USER_AGENT } from '../config/constants';
 import { validate } from '../middlewares/validation';
 import { loginSchema, registerSchema, changePasswordSchema } from '../schemas';
 
@@ -162,13 +163,31 @@ function validateAndConsumeStateFallback(state: string, expectedProvider: string
 }
 
 /**
- * 요청의 Host/Origin 기반으로 OAuth redirect URI를 동적으로 생성합니다.
- * localhost 접속 시 localhost URI, 외부 도메인 접속 시 해당 도메인 URI를 반환합니다.
+ * OAuth redirect URI를 생성합니다.
+ * 
+ * 우선순위:
+ * 1. OAUTH_REDIRECT_URI 환경변수 (명시적 설정 시) — Google Console 등록 URI와 일치 보장
+ * 2. 요청의 Host/Origin 기반 동적 생성 (폴백)
+ * 
+ * OAUTH_REDIRECT_URI는 Google용으로 설정되어 있어도 provider 부분을 자동 교체합니다.
  */
 function buildRedirectUri(req: Request, provider: 'google' | 'github', serverPort: number): string {
+    const configuredUri = getConfig().oauthRedirectUri;
+
+    // OAUTH_REDIRECT_URI가 명시적으로 설정된 경우 (localhost 기본값이 아닌 경우) 우선 사용
+    // provider 부분만 교체하여 Google/GitHub 모두 지원
+    if (configuredUri && !configuredUri.includes('localhost')) {
+        const redirectUri = configuredUri.replace(/\/callback\/\w+$/, `/callback/${provider}`);
+        log.info(`[OAuth] Redirect URI (config): ${redirectUri}`);
+        return redirectUri;
+    }
+
+    // 동적 감지 폴백 (개발 환경 등)
     const protocol = req.protocol || 'http';
     const host = req.get('host') || `localhost:${serverPort}`;
-    return `${protocol}://${host}/api/auth/callback/${provider}`;
+    const redirectUri = `${protocol}://${host}/api/auth/callback/${provider}`;
+    log.info(`[OAuth] Redirect URI (dynamic): ${redirectUri}`);
+    return redirectUri;
 }
 
 /**
@@ -207,6 +226,9 @@ export class AuthController {
         this.router.post('/logout', this.logout.bind(this));
         this.router.get('/me', requireAuth, this.getCurrentUser.bind(this));
         this.router.put('/password', requireAuth, validate(changePasswordSchema), this.changePassword.bind(this));
+
+        // ===== Token Refresh =====
+        this.router.post('/refresh', this.refresh.bind(this));
 
         // ===== OAuth API =====
         this.router.get('/providers', this.getProviders.bind(this));
@@ -258,6 +280,9 @@ export class AuthController {
 
              if (result.token) {
                  setTokenCookie(res, result.token);
+                 if (result.user) {
+                     setRefreshTokenCookie(res, generateRefreshToken(result.user));
+                 }
              }
              res.json(success(result));
          } catch (error) {
@@ -332,6 +357,55 @@ export class AuthController {
         } catch (error) {
             log.error('[ChangePassword] 오류:', error);
             res.status(500).json(internalError('비밀번호 변경 중 오류가 발생했습니다'));
+        }
+    }
+
+    /**
+     * POST /api/auth/refresh - 토큰 갱신
+     * httpOnly 쿠키의 리프레시 토큰으로 새 액세스 + 리프레시 토큰 발급
+     * 리프레시 토큰 로테이션: 사용된 리프레시 토큰은 블랙리스트 처리
+     */
+    private async refresh(req: Request, res: Response): Promise<void> {
+        const refreshToken = req.cookies?.refresh_token;
+
+        if (!refreshToken) {
+            res.status(401).json(unauthorized('리프레시 토큰이 없습니다'));
+            return;
+        }
+
+        try {
+            const payload = await verifyRefreshToken(refreshToken);
+            if (!payload) {
+                clearTokenCookie(res);
+                res.status(401).json(unauthorized('유효하지 않은 리프레시 토큰입니다'));
+                return;
+            }
+
+            const userManager = getUserManager();
+            const user = await userManager.getUserById(payload.userId);
+
+            if (!user || !user.is_active) {
+                clearTokenCookie(res);
+                res.status(401).json(unauthorized('사용자를 찾을 수 없습니다'));
+                return;
+            }
+
+            // 사용된 리프레시 토큰 블랙리스트 (토큰 로테이션)
+            await blacklistToken(refreshToken);
+
+            // 새 액세스 + 리프레시 토큰 발급
+            const newAccessToken = generateToken(user);
+            const newRefreshToken = generateRefreshToken(user);
+
+            setTokenCookie(res, newAccessToken);
+            setRefreshTokenCookie(res, newRefreshToken);
+
+            log.info(`[Auth] 토큰 갱신 성공: ${user.email}`);
+            res.json(success({ token: newAccessToken, user }));
+        } catch (error) {
+            log.error('[Auth] 토큰 갱신 오류:', error);
+            clearTokenCookie(res);
+            res.status(500).json(internalError('토큰 갱신 중 오류가 발생했습니다'));
         }
     }
 
@@ -456,9 +530,10 @@ export class AuthController {
              const authService = getAuthService();
               const result = await authService.findOrCreateOAuthUser(userInfo.email, 'google');
 
-              if (!result.success || !result.token) throw new Error(result.error || '인증 실패');
+              if (!result.success || !result.token || !result.user) throw new Error(result.error || '인증 실패');
 
              setTokenCookie(res, result.token);
+             setRefreshTokenCookie(res, generateRefreshToken(result.user));
              res.redirect('/');
         } catch (error) {
             log.error('[OAuth Google Callback] 오류:', error);
@@ -520,7 +595,7 @@ export class AuthController {
             const userRes = await fetch('https://api.github.com/user', {
                 headers: {
                     Authorization: `Bearer ${tokenData.access_token}`,
-                    'User-Agent': 'Ollama-Chat'
+                    'User-Agent': APP_USER_AGENT
                 }
             });
 
@@ -532,7 +607,7 @@ export class AuthController {
                 const emailRes = await fetch('https://api.github.com/user/emails', {
                     headers: {
                         Authorization: `Bearer ${tokenData.access_token}`,
-                        'User-Agent': 'Ollama-Chat'
+                        'User-Agent': APP_USER_AGENT
                     }
                 });
                 const emails = await emailRes.json() as GitHubEmail[];
@@ -543,9 +618,10 @@ export class AuthController {
              const authService = getAuthService();
               const result = await authService.findOrCreateOAuthUser(email, 'github');
 
-              if (!result.success || !result.token) throw new Error(result.error || '인증 실패');
+              if (!result.success || !result.token || !result.user) throw new Error(result.error || '인증 실패');
 
              setTokenCookie(res, result.token);
+             setRefreshTokenCookie(res, generateRefreshToken(result.user));
              res.redirect('/');
         } catch (error) {
             log.error('[OAuth GitHub Callback] 오류:', error);

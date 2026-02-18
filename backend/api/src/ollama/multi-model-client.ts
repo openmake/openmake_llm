@@ -25,10 +25,8 @@
 import axios, { AxiosInstance } from 'axios';
 import { getApiKeyManager, KeyModelPair } from './api-key-manager';
 import { getConfig } from '../config/env';
+import { OLLAMA_CLOUD_HOST } from '../config/constants';
 import { ChatMessage, ChatResponse } from './types';
-
-/** Ollama Cloud API 호스트 URL */
-const OLLAMA_CLOUD_HOST = 'https://ollama.com';
 
 /**
  * A2A 병렬 실행 결과 — 개별 모델의 응답 결과
