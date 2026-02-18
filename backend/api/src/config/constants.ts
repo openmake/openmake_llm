@@ -125,6 +125,10 @@ export const AUTH_CONFIG = {
     TOKEN_EXPIRY: '15m',
     /** 리프레시 토큰 만료 시간 - 7일 */
     REFRESH_TOKEN_EXPIRY: '7d',
+    /** 액세스 토큰 쿠키 maxAge (밀리초) - 15분 */
+    ACCESS_TOKEN_MAX_AGE_MS: 15 * 60 * 1000,
+    /** 리프레시 토큰 쿠키 maxAge (밀리초) - 7일 */
+    REFRESH_TOKEN_MAX_AGE_MS: 7 * 24 * 60 * 60 * 1000,
     /** 익명 세션 최대 유지 시간 (밀리초) - 30일 */
     ANON_SESSION_MAX_AGE_MS: 30 * 24 * 60 * 60 * 1000
 } as const;
@@ -165,3 +169,26 @@ export const LOG_LEVELS = {
 } as const;
 
 export type LogLevel = keyof typeof LOG_LEVELS;
+
+// ============================================
+// 외부 서비스 호스트
+// ============================================
+
+/**
+ * Ollama Cloud API 호스트 URL
+ *
+ * :cloud 접미사 모델 사용 시 연결할 Ollama Cloud 서버 주소입니다.
+ * client.ts, agent-loop.ts, multi-model-client.ts에서 공통 참조합니다.
+ */
+export const OLLAMA_CLOUD_HOST = 'https://ollama.com';
+
+// ============================================
+// 애플리케이션 메타 정보
+// ============================================
+
+/**
+ * HTTP 요청 시 사용할 User-Agent 문자열
+ *
+ * GitHub API 등 외부 API 호출 시 식별자로 사용합니다.
+ */
+export const APP_USER_AGENT = 'OpenMake-AI';
