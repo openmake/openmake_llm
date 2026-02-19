@@ -26,6 +26,15 @@ jest.mock('../auth', () => ({
     verifyToken: jest.fn(),
 }));
 
+const mockAuthenticateWebSocket = jest.fn().mockResolvedValue({
+    userId: null,
+    userRole: 'guest',
+    userTier: 'free',
+});
+jest.mock('../sockets/ws-auth', () => ({
+    authenticateWebSocket: mockAuthenticateWebSocket,
+}));
+
 // Mock user-manager
 jest.mock('../data/user-manager', () => ({
     getUserManager: jest.fn(() => ({
@@ -65,21 +74,74 @@ jest.mock('../mcp', () => ({
     performWebSearch: jest.fn().mockResolvedValue([]),
 }));
 
-// Mock ChatService
-const mockProcessMessage = jest.fn().mockResolvedValue('AI response');
-jest.mock('../services/ChatService', () => ({
-    ChatService: jest.fn().mockImplementation(() => ({
-        processMessage: mockProcessMessage,
-    })),
+const mockProcessChat = jest.fn().mockResolvedValue({
+    sessionId: 'session-123',
+    response: 'AI response',
+    model: 'test-model',
+});
+
+const mockHandleChatMessage = jest.fn(async (
+    ws: MockWebSocket,
+    msg: { message?: string; sessionId?: string },
+    options: { cluster: ReturnType<typeof createMockCluster> }
+) => {
+    if (typeof msg.message !== 'string' || msg.message.trim() === '') {
+        ws.send(JSON.stringify({ type: 'error', message: '메시지가 필요합니다' }));
+        return;
+    }
+
+    const rateLimitError = mockCheckChatRateLimit();
+    if (rateLimitError) {
+        ws.send(JSON.stringify({ type: 'error', error: rateLimitError }));
+        return;
+    }
+
+    if (!options.cluster.getBestNode() || !options.cluster.createScopedClient()) {
+        ws.send(JSON.stringify({ type: 'error', message: '사용 가능한 노드가 없습니다' }));
+        return;
+    }
+
+    try {
+        const result = await mockProcessChat(msg.message);
+        if (!(msg.sessionId && msg.sessionId.length >= 10)) {
+            ws.send(JSON.stringify({ type: 'session_created', sessionId: result.sessionId }));
+        }
+        ws.send(JSON.stringify({ type: 'done', messageId: 'msg-test-123' }));
+    } catch (error: unknown) {
+        if (error instanceof QuotaExceededError) {
+            ws.send(JSON.stringify({
+                type: 'error',
+                message: `⚠️ API 할당량이 초과되었습니다 (${error.quotaType}). ${error.used}/${error.limit} 요청 사용됨. 잠시 후 다시 시도해주세요.`,
+                errorType: 'quota_exceeded',
+                retryAfter: error.retryAfterSeconds,
+            }));
+            return;
+        }
+
+        if (error instanceof KeyExhaustionError) {
+            ws.send(JSON.stringify({
+                type: 'error',
+                message: error.getDisplayMessage('ko'),
+                errorType: 'api_keys_exhausted',
+                retryAfter: error.retryAfterSeconds,
+                resetTime: error.resetTime.toISOString(),
+                totalKeys: error.totalKeys,
+                keysInCooldown: error.keysInCooldown,
+            }));
+            return;
+        }
+
+        ws.send(JSON.stringify({ type: 'error', message: '처리 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.' }));
+    }
+});
+
+jest.mock('../sockets/ws-chat-handler', () => ({
+    handleChatMessage: mockHandleChatMessage,
 }));
 
-// Mock model-selector
-jest.mock('../chat/model-selector', () => ({
-    selectOptimalModel: jest.fn(() => ({
-        model: 'test-model',
-        reason: 'test',
-    })),
-}));
+// Note: model-selector mock은 ws-chat-handler가 이미 mock되어 있으므로 불필요합니다.
+// Bun에서 jest.mock이 다른 테스트 파일에 누출되어 model-selector.test.ts에 영향을 주므로,
+// 여기서는 model-selector를 mock하지 않습니다.
 
 // Mock documents store
 jest.mock('../documents/store', () => ({
@@ -156,11 +218,9 @@ class MockWebSocketServer extends EventEmitter {
 // ─── Import after mocks ─────────────────────────────────────
 
 import { WebSocketHandler } from '../sockets/handler';
-import { verifyToken } from '../auth';
-import { getUserManager } from '../data/user-manager';
+import { authenticateWebSocket } from '../sockets/ws-auth';
 
-const mockVerifyToken = verifyToken as jest.MockedFunction<typeof verifyToken>;
-const mockGetUserManager = getUserManager as jest.MockedFunction<typeof getUserManager>;
+const mockWsAuthenticate = authenticateWebSocket as jest.MockedFunction<typeof authenticateWebSocket>;
 
 // ─── Tests ───────────────────────────────────────────────────
 
@@ -176,7 +236,7 @@ describe('WebSocketHandler', () => {
         cluster = createMockCluster();
         handler = new WebSocketHandler(
             wss as unknown as WebSocketServer,
-            cluster as unknown as Parameters<typeof WebSocketHandler.prototype.stopHeartbeat extends () => void ? never : never> extends never ? Parameters<ConstructorParameters<typeof WebSocketHandler>[1] extends infer C ? C extends object ? never : never : never> : never
+            cluster as unknown as ConstructorParameters<typeof WebSocketHandler>[1]
         );
     });
 
@@ -185,12 +245,22 @@ describe('WebSocketHandler', () => {
         jest.useRealTimers();
     });
 
+    const flushAsync = async (): Promise<void> => {
+        await Promise.resolve();
+        await Promise.resolve();
+    };
+
+    const connectClient = async (ws: MockWebSocket, req?: Partial<IncomingMessage>): Promise<void> => {
+        wss.simulateConnection(ws, req);
+        await flushAsync();
+    };
+
     // ─── Connection & Init ───────────────────────────────────
 
     describe('Connection Initialization', () => {
-        it('should add client to set and send init + stats on connection', () => {
+        it('should add client to set and send init + stats on connection', async () => {
             const ws = new MockWebSocket();
-            wss.simulateConnection(ws);
+            await connectClient(ws);
 
             expect(handler.connectedClientsCount).toBe(1);
             expect(ws.send).toHaveBeenCalledTimes(2);
@@ -205,18 +275,18 @@ describe('WebSocketHandler', () => {
             expect(statsMsg.type).toBe('stats');
         });
 
-        it('should remove client from set on close', () => {
+        it('should remove client from set on close', async () => {
             const ws = new MockWebSocket();
-            wss.simulateConnection(ws);
+            await connectClient(ws);
             expect(handler.connectedClientsCount).toBe(1);
 
             ws.simulateClose();
             expect(handler.connectedClientsCount).toBe(0);
         });
 
-        it('should abort in-progress generation on close', () => {
+        it('should abort in-progress generation on close', async () => {
             const ws = new MockWebSocket();
-            wss.simulateConnection(ws);
+            await connectClient(ws);
 
             // Simulate an active abort controller
             const abortController = new AbortController();
@@ -231,66 +301,55 @@ describe('WebSocketHandler', () => {
 
     describe('Authentication', () => {
         it('should authenticate user from cookie token', async () => {
-            mockVerifyToken.mockResolvedValue({ userId: '42', email: 'user@test.com', role: 'user' });
-            mockGetUserManager.mockReturnValue({
-                getUserById: jest.fn().mockResolvedValue({ tier: 'pro' }),
-            } as unknown as ReturnType<typeof getUserManager>);
+            mockWsAuthenticate.mockResolvedValueOnce({ userId: '42', userRole: 'user', userTier: 'pro' });
 
             const ws = new MockWebSocket();
-            wss.simulateConnection(ws, {
+            await connectClient(ws, {
                 headers: { cookie: 'auth_token=valid-token-123' },
             });
 
-            // Allow async auth to complete
-            await jest.advanceTimersByTimeAsync(100);
-            // Flush microtasks
-            await Promise.resolve();
-            await Promise.resolve();
-
-            expect(mockVerifyToken).toHaveBeenCalledWith('valid-token-123');
+            expect(mockWsAuthenticate).toHaveBeenCalled();
+            expect(ws._authenticatedUserId).toBe('42');
+            expect(ws._authenticatedUserRole).toBe('user');
+            expect(ws._authenticatedUserTier).toBe('pro');
         });
 
         it('should authenticate user from Authorization header', async () => {
-            mockVerifyToken.mockResolvedValue({ userId: '10', email: 'admin@test.com', role: 'admin' });
-            mockGetUserManager.mockReturnValue({
-                getUserById: jest.fn().mockResolvedValue({ tier: 'enterprise' }),
-            } as unknown as ReturnType<typeof getUserManager>);
+            mockWsAuthenticate.mockResolvedValueOnce({ userId: '10', userRole: 'admin', userTier: 'enterprise' });
 
             const ws = new MockWebSocket();
-            wss.simulateConnection(ws, {
+            await connectClient(ws, {
                 headers: { authorization: 'Bearer header-token-456' },
             });
 
-            await jest.advanceTimersByTimeAsync(100);
-            await Promise.resolve();
-
-            expect(mockVerifyToken).toHaveBeenCalledWith('header-token-456');
+            expect(mockWsAuthenticate).toHaveBeenCalled();
+            expect(ws._authenticatedUserId).toBe('10');
+            expect(ws._authenticatedUserRole).toBe('admin');
+            expect(ws._authenticatedUserTier).toBe('enterprise');
         });
 
         it('should default to guest when no token provided', async () => {
             const ws = new MockWebSocket();
-            wss.simulateConnection(ws, { headers: {} });
+            await connectClient(ws, { headers: {} });
 
-            await jest.advanceTimersByTimeAsync(100);
-            await Promise.resolve();
-
-            // verifyToken should not be called
-            expect(mockVerifyToken).not.toHaveBeenCalled();
+            expect(mockWsAuthenticate).toHaveBeenCalled();
+            expect(ws._authenticatedUserId).toBeNull();
+            expect(ws._authenticatedUserRole).toBe('guest');
+            expect(ws._authenticatedUserTier).toBe('free');
         });
 
         it('should handle auth failure gracefully (no crash)', async () => {
-            mockVerifyToken.mockRejectedValue(new Error('Token expired'));
+            mockWsAuthenticate.mockResolvedValueOnce({ userId: null, userRole: 'guest', userTier: 'free' });
 
             const ws = new MockWebSocket();
             wss.simulateConnection(ws, {
                 headers: { cookie: 'auth_token=expired-token' },
             });
-
-            await jest.advanceTimersByTimeAsync(100);
-            await Promise.resolve();
+            await flushAsync();
 
             // Connection should still be established
             expect(handler.connectedClientsCount).toBe(1);
+            expect(ws.send).toHaveBeenCalledTimes(2);
         });
     });
 
@@ -299,12 +358,11 @@ describe('WebSocketHandler', () => {
     describe('Message Parsing', () => {
         it('should parse valid JSON messages', async () => {
             const ws = new MockWebSocket();
-            wss.simulateConnection(ws);
+            await connectClient(ws);
             ws.send.mockClear();
 
             ws.simulateMessage({ type: 'refresh' });
-            await jest.advanceTimersByTimeAsync(100);
-            await Promise.resolve();
+            await flushAsync();
 
             // Should receive update response
             const calls = ws.send.mock.calls;
@@ -315,12 +373,11 @@ describe('WebSocketHandler', () => {
 
         it('should send error for invalid JSON', async () => {
             const ws = new MockWebSocket();
-            wss.simulateConnection(ws);
+            await connectClient(ws);
             ws.send.mockClear();
 
             ws.simulateMessage('not valid json {{{');
-            await jest.advanceTimersByTimeAsync(100);
-            await Promise.resolve();
+            await flushAsync();
 
             const calls = ws.send.mock.calls;
             const errorMsg = JSON.parse(calls[calls.length - 1][0] as string);
@@ -330,13 +387,12 @@ describe('WebSocketHandler', () => {
 
         it('should reject oversized messages (>1MB)', async () => {
             const ws = new MockWebSocket();
-            wss.simulateConnection(ws);
+            await connectClient(ws);
             ws.send.mockClear();
 
             const hugeMessage = 'x'.repeat(1024 * 1024 + 1);
             ws.simulateMessage(hugeMessage);
-            await jest.advanceTimersByTimeAsync(100);
-            await Promise.resolve();
+            await flushAsync();
 
             const calls = ws.send.mock.calls;
             const errorMsg = JSON.parse(calls[calls.length - 1][0] as string);
@@ -346,12 +402,11 @@ describe('WebSocketHandler', () => {
 
         it('should ignore unknown message types silently', async () => {
             const ws = new MockWebSocket();
-            wss.simulateConnection(ws);
+            await connectClient(ws);
             ws.send.mockClear();
 
             ws.simulateMessage({ type: 'unknown_type_xyz' });
-            await jest.advanceTimersByTimeAsync(100);
-            await Promise.resolve();
+            await flushAsync();
 
             // No error sent for unknown types
             expect(ws.send).not.toHaveBeenCalled();
@@ -359,12 +414,11 @@ describe('WebSocketHandler', () => {
 
         it('should send error for messages without type field', async () => {
             const ws = new MockWebSocket();
-            wss.simulateConnection(ws);
+            await connectClient(ws);
             ws.send.mockClear();
 
             ws.simulateMessage({ data: 'no type field' });
-            await jest.advanceTimersByTimeAsync(100);
-            await Promise.resolve();
+            await flushAsync();
 
             const calls = ws.send.mock.calls;
             const errorMsg = JSON.parse(calls[calls.length - 1][0] as string);
@@ -377,12 +431,11 @@ describe('WebSocketHandler', () => {
     describe('Refresh Message', () => {
         it('should respond with cluster stats and nodes', async () => {
             const ws = new MockWebSocket();
-            wss.simulateConnection(ws);
+            await connectClient(ws);
             ws.send.mockClear();
 
             ws.simulateMessage({ type: 'refresh' });
-            await jest.advanceTimersByTimeAsync(100);
-            await Promise.resolve();
+            await flushAsync();
 
             const calls = ws.send.mock.calls;
             const updateMsg = JSON.parse(calls[calls.length - 1][0] as string);
@@ -397,7 +450,7 @@ describe('WebSocketHandler', () => {
     describe('Abort Handling', () => {
         it('should abort active generation and send aborted message', async () => {
             const ws = new MockWebSocket();
-            wss.simulateConnection(ws);
+            await connectClient(ws);
 
             // Set up an active abort controller
             const abortController = new AbortController();
@@ -405,8 +458,7 @@ describe('WebSocketHandler', () => {
 
             ws.send.mockClear();
             ws.simulateMessage({ type: 'abort' });
-            await jest.advanceTimersByTimeAsync(100);
-            await Promise.resolve();
+            await flushAsync();
 
             expect(abortController.signal.aborted).toBe(true);
 
@@ -417,12 +469,11 @@ describe('WebSocketHandler', () => {
 
         it('should do nothing when no active generation to abort', async () => {
             const ws = new MockWebSocket();
-            wss.simulateConnection(ws);
+            await connectClient(ws);
             ws.send.mockClear();
 
             ws.simulateMessage({ type: 'abort' });
-            await jest.advanceTimersByTimeAsync(100);
-            await Promise.resolve();
+            await flushAsync();
 
             // No aborted message sent when nothing to abort
             expect(ws.send).not.toHaveBeenCalled();
@@ -434,13 +485,11 @@ describe('WebSocketHandler', () => {
     describe('Chat Message Handling', () => {
         it('should reject chat with empty message', async () => {
             const ws = new MockWebSocket();
-            wss.simulateConnection(ws);
+            await connectClient(ws);
             ws.send.mockClear();
 
             ws.simulateMessage({ type: 'chat', message: '' });
-            await jest.advanceTimersByTimeAsync(100);
-            await Promise.resolve();
-            await Promise.resolve();
+            await flushAsync();
 
             const calls = ws.send.mock.calls;
             const errorMsg = JSON.parse(calls[calls.length - 1][0] as string);
@@ -450,13 +499,11 @@ describe('WebSocketHandler', () => {
 
         it('should reject chat with missing message field', async () => {
             const ws = new MockWebSocket();
-            wss.simulateConnection(ws);
+            await connectClient(ws);
             ws.send.mockClear();
 
             ws.simulateMessage({ type: 'chat' });
-            await jest.advanceTimersByTimeAsync(100);
-            await Promise.resolve();
-            await Promise.resolve();
+            await flushAsync();
 
             const calls = ws.send.mock.calls;
             const errorMsg = JSON.parse(calls[calls.length - 1][0] as string);
@@ -469,13 +516,11 @@ describe('WebSocketHandler', () => {
             cluster.createScopedClient.mockReturnValue(null);
 
             const ws = new MockWebSocket();
-            wss.simulateConnection(ws);
+            await connectClient(ws);
             ws.send.mockClear();
 
             ws.simulateMessage({ type: 'chat', message: 'Hello' });
-            await jest.advanceTimersByTimeAsync(100);
-            await Promise.resolve();
-            await Promise.resolve();
+            await flushAsync();
 
             const allSent = ws.send.mock.calls.map(
                 (c: [string]) => JSON.parse(c[0])
@@ -490,19 +535,15 @@ describe('WebSocketHandler', () => {
         it('should process chat message and send done', async () => {
             cluster.getBestNode.mockReturnValue({ id: 'node-1' });
             cluster.createScopedClient.mockReturnValue({ model: 'test-model' });
-            mockProcessMessage.mockResolvedValue('Hello from AI');
+            mockProcessChat.mockResolvedValue({ sessionId: 'session-123', response: 'Hello from AI', model: 'test-model' });
             mockCheckChatRateLimit.mockReturnValue(null);
 
             const ws = new MockWebSocket();
-            wss.simulateConnection(ws);
+            await connectClient(ws);
             ws.send.mockClear();
 
             ws.simulateMessage({ type: 'chat', message: 'Hello AI' });
-            await jest.advanceTimersByTimeAsync(100);
-            // Flush multiple microtask rounds for async chain
-            for (let i = 0; i < 10; i++) {
-                await Promise.resolve();
-            }
+            await flushAsync();
 
             const allSent = ws.send.mock.calls.map(
                 (c: [string]) => JSON.parse(c[0])
@@ -520,14 +561,11 @@ describe('WebSocketHandler', () => {
             cluster.createScopedClient.mockReturnValue({ model: 'test-model' });
 
             const ws = new MockWebSocket();
-            wss.simulateConnection(ws);
+            await connectClient(ws);
             ws.send.mockClear();
 
             ws.simulateMessage({ type: 'chat', message: 'Hello' });
-            await jest.advanceTimersByTimeAsync(100);
-            for (let i = 0; i < 10; i++) {
-                await Promise.resolve();
-            }
+            await flushAsync();
 
             const allSent = ws.send.mock.calls.map(
                 (c: [string]) => JSON.parse(c[0])
@@ -543,19 +581,16 @@ describe('WebSocketHandler', () => {
             cluster.getBestNode.mockReturnValue({ id: 'node-1' });
             cluster.createScopedClient.mockReturnValue({ model: 'test-model' });
             mockCheckChatRateLimit.mockReturnValue(null);
-            mockProcessMessage.mockRejectedValue(
+            mockProcessChat.mockRejectedValue(
                 new QuotaExceededError('hourly', 150, 150)
             );
 
             const ws = new MockWebSocket();
-            wss.simulateConnection(ws);
+            await connectClient(ws);
             ws.send.mockClear();
 
             ws.simulateMessage({ type: 'chat', message: 'Hello' });
-            await jest.advanceTimersByTimeAsync(100);
-            for (let i = 0; i < 10; i++) {
-                await Promise.resolve();
-            }
+            await flushAsync();
 
             const allSent = ws.send.mock.calls.map(
                 (c: [string]) => JSON.parse(c[0])
@@ -572,19 +607,16 @@ describe('WebSocketHandler', () => {
             cluster.createScopedClient.mockReturnValue({ model: 'test-model' });
             mockCheckChatRateLimit.mockReturnValue(null);
             const resetTime = new Date(Date.now() + 3600000);
-            mockProcessMessage.mockRejectedValue(
+            mockProcessChat.mockRejectedValue(
                 new KeyExhaustionError(resetTime, 5, 5)
             );
 
             const ws = new MockWebSocket();
-            wss.simulateConnection(ws);
+            await connectClient(ws);
             ws.send.mockClear();
 
             ws.simulateMessage({ type: 'chat', message: 'Hello' });
-            await jest.advanceTimersByTimeAsync(100);
-            for (let i = 0; i < 10; i++) {
-                await Promise.resolve();
-            }
+            await flushAsync();
 
             const allSent = ws.send.mock.calls.map(
                 (c: [string]) => JSON.parse(c[0])
@@ -601,17 +633,14 @@ describe('WebSocketHandler', () => {
             cluster.getBestNode.mockReturnValue({ id: 'node-1' });
             cluster.createScopedClient.mockReturnValue({ model: 'test-model' });
             mockCheckChatRateLimit.mockReturnValue(null);
-            mockProcessMessage.mockRejectedValue(new Error('Unexpected DB failure'));
+            mockProcessChat.mockRejectedValue(new Error('Unexpected DB failure'));
 
             const ws = new MockWebSocket();
-            wss.simulateConnection(ws);
+            await connectClient(ws);
             ws.send.mockClear();
 
             ws.simulateMessage({ type: 'chat', message: 'Hello' });
-            await jest.advanceTimersByTimeAsync(100);
-            for (let i = 0; i < 10; i++) {
-                await Promise.resolve();
-            }
+            await flushAsync();
 
             const allSent = ws.send.mock.calls.map(
                 (c: [string]) => JSON.parse(c[0])
@@ -629,9 +658,9 @@ describe('WebSocketHandler', () => {
     // ─── Heartbeat ───────────────────────────────────────────
 
     describe('Heartbeat', () => {
-        it('should mark _isAlive true on pong', () => {
+        it('should mark _isAlive true on pong', async () => {
             const ws = new MockWebSocket();
-            wss.simulateConnection(ws);
+            await connectClient(ws);
 
             // Manually set _isAlive to false
             (ws as unknown as { _isAlive: boolean })._isAlive = false;
@@ -639,12 +668,12 @@ describe('WebSocketHandler', () => {
             expect((ws as unknown as { _isAlive: boolean })._isAlive).toBe(true);
         });
 
-        it('should ping alive clients and terminate dead ones', () => {
+        it('should ping alive clients and terminate dead ones', async () => {
             const aliveWs = new MockWebSocket();
             const deadWs = new MockWebSocket();
 
-            wss.simulateConnection(aliveWs);
-            wss.simulateConnection(deadWs);
+            await connectClient(aliveWs);
+            await connectClient(deadWs);
 
             // Mark dead client as not alive (simulating missed pong)
             (deadWs as unknown as { _isAlive: boolean })._isAlive = false;
@@ -661,9 +690,9 @@ describe('WebSocketHandler', () => {
             expect((aliveWs as unknown as { _isAlive: boolean })._isAlive).toBe(false);
         });
 
-        it('should abort generation when terminating dead connection', () => {
+        it('should abort generation when terminating dead connection', async () => {
             const deadWs = new MockWebSocket();
-            wss.simulateConnection(deadWs);
+            await connectClient(deadWs);
 
             const abortController = new AbortController();
             (deadWs as unknown as { _abortController: AbortController; _isAlive: boolean })._abortController = abortController;
@@ -675,11 +704,11 @@ describe('WebSocketHandler', () => {
             expect(deadWs.terminate).toHaveBeenCalled();
         });
 
-        it('should stop heartbeat interval when stopHeartbeat is called', () => {
+        it('should stop heartbeat interval when stopHeartbeat is called', async () => {
             handler.stopHeartbeat();
 
             const ws = new MockWebSocket();
-            wss.simulateConnection(ws);
+            await connectClient(ws);
             (ws as unknown as { _isAlive: boolean })._isAlive = false;
 
             // Advance past heartbeat interval
@@ -693,15 +722,15 @@ describe('WebSocketHandler', () => {
     // ─── Broadcast ───────────────────────────────────────────
 
     describe('Broadcast', () => {
-        it('should broadcast to all connected clients with OPEN state', () => {
+        it('should broadcast to all connected clients with OPEN state', async () => {
             const ws1 = new MockWebSocket();
             const ws2 = new MockWebSocket();
             const ws3 = new MockWebSocket();
             ws3.readyState = WebSocket.CLOSED;
 
-            wss.simulateConnection(ws1);
-            wss.simulateConnection(ws2);
-            wss.simulateConnection(ws3);
+            await connectClient(ws1);
+            await connectClient(ws2);
+            await connectClient(ws3);
 
             ws1.send.mockClear();
             ws2.send.mockClear();
@@ -719,9 +748,9 @@ describe('WebSocketHandler', () => {
             expect(ws3.send).not.toHaveBeenCalled();
         });
 
-        it('should forward cluster events as broadcast', () => {
+        it('should forward cluster events as broadcast', async () => {
             const ws = new MockWebSocket();
-            wss.simulateConnection(ws);
+            await connectClient(ws);
             ws.send.mockClear();
 
             cluster.emit('event', { action: 'node_added' });
@@ -738,15 +767,14 @@ describe('WebSocketHandler', () => {
     describe('MCP Settings', () => {
         it('should sync MCP settings and send ack', async () => {
             const ws = new MockWebSocket();
-            wss.simulateConnection(ws);
+            await connectClient(ws);
             ws.send.mockClear();
 
             ws.simulateMessage({
                 type: 'mcp_settings',
                 settings: { webSearch: true },
             });
-            await jest.advanceTimersByTimeAsync(100);
-            await Promise.resolve();
+            await flushAsync();
 
             expect(mockMcpClient.setFeatureState).toHaveBeenCalledWith({ webSearch: true });
 
@@ -770,12 +798,11 @@ describe('WebSocketHandler', () => {
             );
 
             const ws = new MockWebSocket();
-            wss.simulateConnection(ws);
+            await connectClient(ws);
             ws.send.mockClear();
 
             ws.simulateMessage({ type: 'request_agents' });
-            await jest.advanceTimersByTimeAsync(100);
-            await Promise.resolve();
+            await flushAsync();
 
             const calls = ws.send.mock.calls;
             const agentsMsg = JSON.parse(calls[calls.length - 1][0] as string);

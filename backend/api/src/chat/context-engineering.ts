@@ -26,185 +26,36 @@
  * @see chat/prompt-enhancer.ts - 사용자 프롬프트 품질 향상
  */
 
-// ============================================================
-// 타입 정의
-// ============================================================
+// Re-export types from context-types
+export type {
+    FourPillarPrompt,
+    RoleDefinition,
+    Constraint,
+    OutputFormat,
+    PromptMetadata,
+    RAGContext,
+    RAGDocument
+} from './context-types';
 
-/**
- * 4-Pillar Framework 프롬프트 구조
- * 
- * 시스템 프롬프트의 4가지 핵심 기둥을 정의합니다.
- * ContextEngineeringBuilder의 build() 메서드가 이 구조를 XML 태깅된 프롬프트로 변환합니다.
- */
-export interface FourPillarPrompt {
-    /** Pillar 1: 역할 및 페르소나 정의 - AI의 정체성과 전문성 */
-    role: RoleDefinition;
-    /** Pillar 2: 제약 조건 목록 - 보안, 언어, 형식, 콘텐츠, 행동 규칙 */
-    constraints: Constraint[];
-    /** Pillar 3: 달성 목표 - AI가 수행해야 할 핵심 과업 */
-    goal: string;
-    /** Pillar 4: 출력 형식 - 응답의 구조와 포맷 */
-    outputFormat: OutputFormat;
-}
+import type {
+    FourPillarPrompt,
+    RoleDefinition,
+    Constraint,
+    OutputFormat,
+    PromptMetadata,
+    RAGContext,
+} from './context-types';
 
-/**
- * 역할 정의 인터페이스 (Pillar 1)
- * AI의 페르소나, 전문 분야, 행동 특성, 대화 스타일을 정의합니다.
- */
-export interface RoleDefinition {
-    /** 페르소나 설명 (예: '15년 경력의 시니어 풀스택 개발자') */
-    persona: string;
-    /** 전문 분야 목록 */
-    expertise: string[];
-    /** 행동 특성 (예: '에러 핸들링과 엣지 케이스 고려') */
-    behavioralTraits?: string[];
-    /** 대화 스타일 */
-    toneStyle?: 'formal' | 'casual' | 'professional' | 'friendly';
-}
+// Re-export XML helpers from context-xml-helpers
+export {
+    xmlTag,
+    systemRulesSection,
+    contextSection,
+    examplesSection,
+    thinkingSection
+} from './context-xml-helpers';
 
-/**
- * 제약 조건 인터페이스 (Pillar 2)
- * 우선순위별로 정렬되어 프롬프트에 삽입됩니다.
- * critical 규칙은 절대 위반 불가로 표시됩니다.
- */
-export interface Constraint {
-    /** 규칙 설명 */
-    rule: string;
-    /** 우선순위 (critical > high > medium > low) */
-    priority: 'critical' | 'high' | 'medium' | 'low';
-    /** 규칙 카테고리 */
-    category: 'security' | 'language' | 'format' | 'content' | 'behavior';
-}
-
-/**
- * 출력 형식 인터페이스 (Pillar 4)
- * AI 응답의 구조와 포맷을 지정합니다.
- */
-export interface OutputFormat {
-    /** 출력 타입 */
-    type: 'json' | 'markdown' | 'plain' | 'code' | 'table' | 'structured';
-    /** JSON 출력 시 스키마 정의 */
-    schema?: object;
-    /** 출력 예시 (Few-shot) */
-    examples?: string[];
-}
-
-/**
- * 메타데이터 주입을 위한 컨텍스트
- * 프롬프트 시작 부분(Primacy Section)에 삽입되어 AI에 현재 상황을 알려줍니다.
- */
-export interface PromptMetadata {
-    /** 현재 날짜 (YYYY-MM-DD) */
-    currentDate: string;
-    /** 지식 기준일 (예: '2024-12') */
-    knowledgeCutoff: string;
-    /** 세션 ID (대화 추적용) */
-    sessionId?: string;
-    /** 사용자 언어 설정 */
-    userLanguage: 'ko' | 'en' | 'mixed';
-    /** 요청 타임스탬프 (ISO 8601) */
-    requestTimestamp: string;
-    /** 사용 중인 모델명 */
-    modelName?: string;
-}
-
-/**
- * RAG(Retrieval-Augmented Generation) 컨텍스트 정보
- * 검색된 참조 문서를 프롬프트에 주입하기 위한 구조체입니다.
- */
-export interface RAGContext {
-    /** 검색된 문서 배열 */
-    documents: RAGDocument[];
-    /** 검색에 사용된 쿼리 */
-    searchQuery: string;
-    /** 관련도 임계값 (이 값 이상의 문서만 포함) */
-    relevanceThreshold: number;
-}
-
-/**
- * RAG 개별 문서 인터페이스
- */
-export interface RAGDocument {
-    /** 문서 내용 */
-    content: string;
-    /** 문서 출처 (URL 또는 파일명) */
-    source: string;
-    /** 문서 날짜 */
-    timestamp?: string;
-    /** 관련도 점수 (0.0 ~ 1.0) */
-    relevanceScore: number;
-}
-
-// ============================================================
-// XML 태그 헬퍼 함수
-// ============================================================
-
-import { escapeXml } from './xml-escape';
-
-/**
- * XML 태그로 콘텐츠 래핑
- * 
- * 🔒 Phase 2 보안 패치 2026-02-07: 프롬프트 인젝션 방어
- * escapeContent=true(기본값)일 때 사용자 입력의 XML 특수문자를 이스케이프하여
- * 프롬프트 인젝션 공격을 방지합니다.
- * 
- * @param tagName - XML 태그 이름
- * @param content - 태그 내부 콘텐츠
- * @param attributes - 태그 속성 (선택)
- * @param escapeContent - 콘텐츠 이스케이프 여부 (기본: true). 
- *        시스템 프롬프트 등 신뢰할 수 있는 내부 콘텐츠는 false로 설정
- */
-export function xmlTag(
-    tagName: string, 
-    content: string, 
-    attributes?: Record<string, string>,
-    escapeContent: boolean = true
-): string {
-    const attrStr = attributes
-        ? ' ' + Object.entries(attributes).map(([k, v]) => `${k}="${v}"`).join(' ')
-        : '';
-    const safeContent = escapeContent ? escapeXml(content) : content;
-    return `<${tagName}${attrStr}>\n${safeContent}\n</${tagName}>`;
-}
-
-/**
- * 시스템 규칙 섹션 생성 (내부 콘텐츠 — 이스케이프 불필요)
- */
-export function systemRulesSection(rules: string[]): string {
-    const content = rules.map((rule, i) => `${i + 1}. ${rule}`).join('\n');
-    return xmlTag('system_rules', content, undefined, false);
-}
-
-/**
- * 컨텍스트 섹션 생성 (RAG 결과 등)
- * 🔒 사용자 입력이 포함될 수 있으므로 이스케이프 적용
- */
-export function contextSection(context: string): string {
-    return xmlTag('context', context);
-}
-
-/**
- * 예시 섹션 생성 (Few-shot, 내부 콘텐츠 — 이스케이프 불필요)
- */
-export function examplesSection(examples: Array<{ input: string; output: string }>): string {
-    const content = examples.map((ex, i) =>
-        `### 예시 ${i + 1}\n입력: ${ex.input}\n출력: ${ex.output}`
-    ).join('\n\n');
-    return xmlTag('examples', content, undefined, false);
-}
-
-/**
- * 사고 과정 섹션 (Soft Interlock)
- */
-export function thinkingSection(): string {
-    return `<thinking>
-[이 섹션에서 문제를 분석하고 답변 전략을 수립하세요]
-1. 문제 분석: 사용자가 무엇을 요구하는가?
-2. 접근 전략: 어떤 방법으로 해결할 것인가?
-3. 안전성 검증: 이 답변이 안전한가?
-4. 출력 계획: 어떤 형식으로 제공할 것인가?
-</thinking>`;
-}
+import { xmlTag, examplesSection } from './context-xml-helpers';
 
 // ============================================================
 // 4-Pillar 프롬프트 빌더

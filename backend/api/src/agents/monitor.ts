@@ -6,18 +6,23 @@
  * 에이전트 요청의 시작/종료를 추적하여 성능 메트릭을 수집하는 모듈.
  * 요청 수, 성공/실패 수, 평균 응답 시간 등을 에이전트 유형별로 집계한다.
  *
+ * metrics는 PostgreSQL에 영속화되며, 인메모리 Map을 write-through 캐시로 사용한다.
+ * activeRequests는 트랜지언트 상태이므로 인메모리에만 유지한다.
+ *
  * @module agents/monitor
  * @description
  * - 에이전트별 요청 수, 성공/실패 수, 평균 응답 시간 추적
  * - 활성 요청(진행 중) 실시간 모니터링
  * - 전체 시스템 요약 통계 제공
  * - 싱글톤 패턴으로 전역 인스턴스 관리
+ * - PostgreSQL write-through 캐시 패턴 (metrics)
  *
  * @see {@link module:agents/index} - 에이전트 라우팅 시 모니터 연동
  * @see {@link module:agents/learning} - RLHF 피드백과 연계한 성능 분석
  */
 
 import { AgentMetrics, ActiveRequest } from './types';
+import { getPool } from '../data/models/unified-database';
 
 /**
  * 에이전트 성능 모니터링 클래스
@@ -25,6 +30,9 @@ import { AgentMetrics, ActiveRequest } from './types';
  * 에이전트 유형별로 요청 메트릭을 수집하고 집계한다.
  * startRequest()로 요청 시작을 기록하고, endRequest()로 완료를 기록하면
  * 자동으로 응답 시간, 성공/실패 카운트가 계산된다.
+ *
+ * metrics는 인메모리 캐시 + PostgreSQL 영속화 (write-through).
+ * activeRequests는 인메모리 전용 (트랜지언트).
  *
  * @class AgentMonitor
  * @example
@@ -34,10 +42,12 @@ import { AgentMetrics, ActiveRequest } from './types';
  * monitor.endRequest(requestId, true); // 성공
  */
 export class AgentMonitor {
-    /** 에이전트 유형별 누적 메트릭 (key: agentType) */
+    /** 에이전트 유형별 누적 메트릭 (key: agentType) — 인메모리 캐시 */
     private metrics: Map<string, AgentMetrics> = new Map();
-    /** 현재 진행 중인 활성 요청 (key: requestId) */
+    /** 현재 진행 중인 활성 요청 (key: requestId) — 인메모리 전용 */
     private activeRequests: Map<string, ActiveRequest> = new Map();
+    /** DB에서 캐시 워밍 완료 여부 */
+    private cacheWarmed: boolean = false;
 
     /**
      * AgentMonitor 생성자
@@ -46,6 +56,55 @@ export class AgentMonitor {
      */
     constructor() {
         this.reset();
+    }
+
+    /**
+     * DB에서 메트릭을 로드하여 인메모리 캐시를 워밍한다.
+     * 최초 접근 시 한 번만 실행된다. fire-and-forget.
+     */
+    private warmCacheFromDB(): void {
+        if (this.cacheWarmed) return;
+        this.cacheWarmed = true;
+
+        getPool().query(
+            'SELECT agent_type, request_count, success_count, failure_count, total_response_time, avg_response_time, updated_at FROM agent_metrics'
+        ).then((result) => {
+            for (const row of result.rows) {
+                // 캐시에 이미 값이 있으면 (현재 세션에서 이미 기록된 것) 스킵
+                if (!this.metrics.has(row.agent_type as string)) {
+                    this.metrics.set(row.agent_type as string, {
+                        requestCount: row.request_count as number,
+                        successCount: row.success_count as number,
+                        failureCount: row.failure_count as number,
+                        totalResponseTime: row.total_response_time as number,
+                        avgResponseTime: row.avg_response_time as number,
+                        lastUsed: row.updated_at ? new Date(row.updated_at as string) : undefined
+                    });
+                }
+            }
+        }).catch(() => {
+            // DB 접근 실패 시 인메모리만 사용 — 서비스 중단 없음
+        });
+    }
+
+    /**
+     * 메트릭을 DB에 비동기 upsert한다. fire-and-forget.
+     */
+    private persistMetricToDB(agentType: string, metric: AgentMetrics): void {
+        getPool().query(
+            `INSERT INTO agent_metrics (agent_type, request_count, success_count, failure_count, total_response_time, avg_response_time, updated_at)
+             VALUES ($1, $2, $3, $4, $5, $6, NOW())
+             ON CONFLICT (agent_type) DO UPDATE SET
+                 request_count = $2,
+                 success_count = $3,
+                 failure_count = $4,
+                 total_response_time = $5,
+                 avg_response_time = $6,
+                 updated_at = NOW()`,
+            [agentType, metric.requestCount, metric.successCount, metric.failureCount, metric.totalResponseTime, metric.avgResponseTime]
+        ).catch(() => {
+            // DB 쓰기 실패 시 무시 — 캐시에는 이미 반영됨
+        });
     }
 
     /**
@@ -59,6 +118,9 @@ export class AgentMonitor {
      * @returns {string} - 생성된 고유 요청 ID (endRequest에서 사용)
      */
     startRequest(agentType: string, message: string): string {
+        // 최초 접근 시 DB에서 캐시 워밍 (fire-and-forget)
+        this.warmCacheFromDB();
+
         const requestId = `${Date.now()}-${Math.random().toString(36).substring(7)}`;
 
         this.activeRequests.set(requestId, {
@@ -91,6 +153,7 @@ export class AgentMonitor {
      *
      * 활성 요청에서 제거하고 응답 시간을 계산하여 메트릭에 반영한다.
      * 평균 응답 시간은 (총 응답 시간) / (성공 + 실패 수)로 계산된다.
+     * 캐시 업데이트 후 DB에 비동기 upsert (fire-and-forget).
      *
      * @param requestId - startRequest()에서 반환된 요청 ID
      * @param success - 요청 성공 여부 (기본값: true)
@@ -111,6 +174,9 @@ export class AgentMonitor {
             metric.totalResponseTime += responseTime;
             metric.avgResponseTime = metric.totalResponseTime /
                 (metric.successCount + metric.failureCount);
+
+            // Write-through: 캐시 업데이트 후 DB에 비동기 영속화
+            this.persistMetricToDB(request.agentType, metric);
         }
 
         this.activeRequests.delete(requestId);
@@ -191,10 +257,16 @@ export class AgentMonitor {
      *
      * 누적된 모든 메트릭 데이터와 활성 요청 목록을 삭제한다.
      * 생성자에서 자동 호출되며, 수동 리셋에도 사용된다.
+     * DB의 agent_metrics 테이블도 비동기로 truncate한다.
      */
     reset(): void {
         this.metrics.clear();
         this.activeRequests.clear();
+
+        // DB도 비동기로 클리어 (fire-and-forget)
+        getPool().query('TRUNCATE TABLE agent_metrics').catch(() => {
+            // DB 클리어 실패 시 무시 — 인메모리는 이미 초기화됨
+        });
     }
 }
 

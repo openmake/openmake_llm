@@ -48,6 +48,8 @@ jest.mock('../data/user-manager', () => ({
 }));
 
 // Mock auth functions
+// 토큰은 looksLikeJWT() 사전 검증(xxx.yyy.zzz 3-part dot 구조)을 통과해야 하므로
+// JWT 형식의 mock 토큰을 사용
 jest.mock('../auth/index', () => ({
     extractToken: (header?: string) => {
         if (!header) return null;
@@ -55,11 +57,14 @@ jest.mock('../auth/index', () => ({
         return header;
     },
     verifyToken: async (token: string) => {
-        if (token === 'valid-user-token') return { userId: 1, email: 'test@example.com', role: 'user' };
-        if (token === 'valid-admin-token') return { userId: 2, email: 'admin@example.com', role: 'admin' };
-        if (token === 'inactive-user-token') return { userId: 3, email: 'inactive@example.com', role: 'user' };
-        if (token === 'unknown-user-token') return { userId: 999, email: 'unknown@example.com', role: 'user' };
+        if (token === 'valid.user.token') return { userId: 1, email: 'test@example.com', role: 'user' };
+        if (token === 'valid.admin.token') return { userId: 2, email: 'admin@example.com', role: 'admin' };
+        if (token === 'inactive.user.token') return { userId: 3, email: 'inactive@example.com', role: 'user' };
+        if (token === 'unknown.user.token') return { userId: 999, email: 'unknown@example.com', role: 'user' };
         return null;
+    },
+    clearTokenCookie: (_res: unknown) => {
+        // no-op in test
     },
     hasPermission: (userRole: string, requiredRole: string) => {
         const roles = ['guest', 'user', 'admin'];
@@ -89,6 +94,12 @@ function createMockResponse(): Response & { jsonData?: unknown; statusCode?: num
         json: function(data: unknown) {
             this.jsonData = data;
             return this as Response;
+        },
+        clearCookie: function() {
+            return this as Response;
+        },
+        cookie: function() {
+            return this as Response;
         }
     };
     return res as Response & { jsonData?: unknown; statusCode?: number };
@@ -110,7 +121,7 @@ describe('Auth Middleware', () => {
 
         it('should set user from Bearer token in header', async () => {
             const req = createMockRequest({
-                headers: { authorization: 'Bearer valid-user-token' }
+                headers: { authorization: 'Bearer valid.user.token' }
             });
             const res = createMockResponse();
             let nextCalled = false;
@@ -125,8 +136,8 @@ describe('Auth Middleware', () => {
 
         it('should prefer cookie over header', async () => {
             const req = createMockRequest({
-                headers: { authorization: 'Bearer invalid-token' },
-                cookies: { auth_token: 'valid-user-token' }
+                headers: { authorization: 'Bearer invalid.bad.token' },
+                cookies: { auth_token: 'valid.user.token' }
             });
             const res = createMockResponse();
             let nextCalled = false;
@@ -140,7 +151,7 @@ describe('Auth Middleware', () => {
 
         it('should pass through with invalid token', async () => {
             const req = createMockRequest({
-                headers: { authorization: 'Bearer invalid-token' }
+                headers: { authorization: 'Bearer invalid.bad.token' }
             });
             const res = createMockResponse();
             let nextCalled = false;
@@ -169,7 +180,7 @@ describe('Auth Middleware', () => {
 
         it('should return 401 with invalid token', async () => {
             const req = createMockRequest({
-                headers: { authorization: 'Bearer invalid-token' }
+                headers: { authorization: 'Bearer invalid.bad.token' }
             });
             const res = createMockResponse();
             let nextCalled = false;
@@ -184,7 +195,7 @@ describe('Auth Middleware', () => {
 
         it('should return 401 for unknown user', async () => {
             const req = createMockRequest({
-                headers: { authorization: 'Bearer unknown-user-token' }
+                headers: { authorization: 'Bearer unknown.user.token' }
             });
             const res = createMockResponse();
             let nextCalled = false;
@@ -199,7 +210,7 @@ describe('Auth Middleware', () => {
 
         it('should return 403 for inactive user', async () => {
             const req = createMockRequest({
-                headers: { authorization: 'Bearer inactive-user-token' }
+                headers: { authorization: 'Bearer inactive.user.token' }
             });
             const res = createMockResponse();
             let nextCalled = false;
@@ -214,7 +225,7 @@ describe('Auth Middleware', () => {
 
         it('should pass with valid token', async () => {
             const req = createMockRequest({
-                headers: { authorization: 'Bearer valid-user-token' }
+                headers: { authorization: 'Bearer valid.user.token' }
             });
             const res = createMockResponse();
             let nextCalled = false;
@@ -224,7 +235,7 @@ describe('Auth Middleware', () => {
             
             expect(nextCalled).toBe(true);
             expect(req.user).toBeDefined();
-            expect(req.token).toBe('valid-user-token');
+            expect(req.token).toBe('valid.user.token');
         });
     });
 

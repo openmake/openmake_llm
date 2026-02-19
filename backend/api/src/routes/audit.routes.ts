@@ -61,7 +61,7 @@ router.get('/', asyncHandler(async (req: Request, res: Response) => {
 
      const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
      const result = await pool.query(
-         `SELECT * FROM audit_logs ${whereClause} ORDER BY created_at DESC LIMIT $${paramIndex}`,
+         `SELECT * FROM audit_logs ${whereClause} ORDER BY timestamp DESC LIMIT $${paramIndex}`,
          [...params, limit]
      );
 
@@ -92,7 +92,7 @@ router.get('/user/:userId', asyncHandler(async (req: Request, res: Response) => 
 
      const pool = getPool();
      const result = await pool.query(
-         'SELECT * FROM audit_logs WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2',
+         'SELECT * FROM audit_logs WHERE user_id = $1 ORDER BY timestamp DESC LIMIT $2',
          [userId, limit]
      );
 

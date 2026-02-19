@@ -52,5 +52,7 @@ const NAV_ITEMS = {
     ]
 };
 
-// 전역 노출
+// 전역 노출 (레거시 호환 — 페이지 모듈, 사이드바 등에서 참조)
 window.NAV_ITEMS = NAV_ITEMS;
+
+export { NAV_ITEMS };
