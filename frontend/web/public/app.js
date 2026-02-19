@@ -140,11 +140,19 @@ async function initAuth() {
 
     updateAuthUI();
 
-    // 🔒 OAuth 쿠키 기반 세션 복구: localStorage에 사용자 정보가 없으면
-    // httpOnly 쿠키로 인증된 세션이 있는지 서버에 확인
-    // 🔒 Phase 3: await로 세션 복구 완료까지 대기 (이전: fire-and-forget → race condition)
-    if (!currentUser) {
+    // 🔒 자동로그인 차단: OAuth 콜백 리턴(?auth=callback) 시에만 쿠키 기반 세션 복구
+    // 일반 페이지 접속 시에는 자동로그인하지 않음 — 사용자가 명시적으로 로그인해야 함
+    const urlParams = new URLSearchParams(window.location.search);
+    const isOAuthCallback = urlParams.get('auth') === 'callback';
+
+    if (isOAuthCallback && !currentUser) {
         await recoverSessionFromCookie();
+        // URL에서 ?auth=callback 파라미터 제거 (깔끔한 URL 유지)
+        urlParams.delete('auth');
+        const cleanUrl = urlParams.toString()
+            ? `${window.location.pathname}?${urlParams.toString()}`
+            : window.location.pathname;
+        window.history.replaceState(null, '', cleanUrl);
     }
     // Promise를 전역에 노출하여 Router.start()가 대기 가능 (하위호환)
     window._authRecoveryPromise = Promise.resolve();
