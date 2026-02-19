@@ -16,8 +16,17 @@
  */
 
 import { Request, Response, NextFunction } from 'express';
-import { extractToken, verifyToken, hasPermission, isAdmin } from './index';
+import { extractToken, verifyToken, hasPermission, isAdmin, clearTokenCookie } from './index';
 import { getUserManager, PublicUser, UserRole } from '../data/user-manager';
+
+/**
+ * JWT 토큰 형식 사전 검증 (header.payload.signature 3-part dot 구조)
+ * jwt.verify() 호출 전에 빠르게 걸러내어 불필요한 에러 로그 방지
+ */
+function looksLikeJWT(token: string): boolean {
+    const parts = token.split('.');
+    return parts.length === 3 && parts.every(p => p.length > 0);
+}
 
 /**
  * JWT 토큰에서 추출된 인증 정보 (미들웨어용)
@@ -71,12 +80,19 @@ declare global {
  * 토큰이 있으면 검증하고 사용자 정보를 req.user에 추가
  * 토큰이 없어도 통과 (게스트 허용)
  */
-export async function optionalAuth(req: Request, _res: Response, next: NextFunction): Promise<void> {
+export async function optionalAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
     // Cookie first (httpOnly), then Authorization header (backward compat)
     const authHeader = req.headers.authorization;
     const token = (req.cookies?.auth_token) || extractToken(authHeader);
 
     if (token) {
+        // 사전 검증: JWT 형식(xxx.yyy.zzz)이 아니면 검증 생략 + 쿠키 클리어
+        if (!looksLikeJWT(token)) {
+            clearTokenCookie(res);
+            next();
+            return;
+        }
+
         const payload = await verifyToken(token);
 
         if (payload) {
@@ -86,6 +102,11 @@ export async function optionalAuth(req: Request, _res: Response, next: NextFunct
             if (user && user.is_active) {
                 req.user = user;
                 req.token = token;
+            }
+        } else {
+            // 검증 실패 (만료/변조) — 잘못된 쿠키 정리
+            if (req.cookies?.auth_token) {
+                clearTokenCookie(res);
             }
         }
     }

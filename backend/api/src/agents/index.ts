@@ -450,13 +450,13 @@ export async function getRelatedAgentsForDiscussion(
     count: number = 10,
     context?: string
 ): Promise<Agent[]> {
-    // 🆕 전체 분석 대상 텍스트 (메시지 + 컨텍스트)
+    // 🆕 토픽 분석에는 컨텍스트 포함 (분류 정확도 향상)
     const fullText = context ? `${message}\n\n컨텍스트: ${context}` : message;
-
     const topicAnalysis = analyzeTopicIntent(fullText);
 
-    // 🆕 LLM 기반 라우팅 사용 (정확도 향상)
-    const selection = await routeToAgent(fullText, true);
+    // 🆕 LLM 라우팅에는 사용자 메시지만 전달 (컨텍스트에 [user]/[assistant] 등
+    //    input-sanitizer가 위험 패턴으로 오탐하는 문자열이 포함될 수 있으므로)
+    const selection = await routeToAgent(message, true);
 
     const result: Agent[] = [];
     const usedIds = new Set<string>();

@@ -1,3 +1,13 @@
+/**
+ * ============================================================
+ * Cluster Config - 클러스터 설정 로더/세이버
+ * ============================================================
+ * 파일/환경변수 기반 클러스터 설정 로딩과 기본 설정 파일 생성을
+ * 담당합니다.
+ *
+ * @module cluster/config
+ */
+
 import * as fs from 'fs';
 import * as path from 'path';
 import { ClusterConfig, StaticNode } from './types';

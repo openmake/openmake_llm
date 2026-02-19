@@ -537,30 +537,12 @@
 
         initTheme();
 
-        // 이미 로그인된 경우 메인 페이지로 이동
-        if (localStorage.getItem('authToken')) {
-            checkAuth();
-        }
-
-        async function checkAuth() {
-            const token = localStorage.getItem('authToken');
-            if (!token) return;
-
-            try {
-                const res = await fetch(`${API_BASE}/api/auth/me`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-
-                if (res.ok) {
-                    window.location.href = '/';
-                } else {
-                    localStorage.removeItem('authToken');
-                    localStorage.removeItem('user');
-                }
-            } catch (e) {
-                console.error('Auth check failed:', e);
-            }
-        }
+        // 🔒 자동로그인 차단: login.html 진입 시 stale 토큰 정리
+        // 이전: authToken이 있으면 /api/auth/me로 자동 리다이렉트 → 제거
+        // 사용자가 로그인 페이지에 도달하면 기존 인증 상태를 초기화
+        localStorage.removeItem('authToken');
+        localStorage.removeItem('user');
+        localStorage.removeItem('guestMode');
 
         function switchTab(tab) {
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));

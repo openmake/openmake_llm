@@ -549,7 +549,7 @@ export class AuthController {
 
              setTokenCookie(res, result.token);
              setRefreshTokenCookie(res, generateRefreshToken(result.user));
-             res.redirect('/');
+             res.redirect('/?auth=callback');
         } catch (error) {
             log.error('[OAuth Google Callback] 오류:', error);
             res.redirect('/login.html?error=oauth_failed');
@@ -637,7 +637,7 @@ export class AuthController {
 
              setTokenCookie(res, result.token);
              setRefreshTokenCookie(res, generateRefreshToken(result.user));
-             res.redirect('/');
+             res.redirect('/?auth=callback');
         } catch (error) {
             log.error('[OAuth GitHub Callback] 오류:', error);
             res.redirect('/login.html?error=oauth_failed');

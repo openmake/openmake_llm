@@ -282,7 +282,7 @@ export function createDiscussionEngine(
         if (conversationHistory && conversationHistory.length > 0) {
             const recentHistory = conversationHistory.slice(-5);
             const historyText = recentHistory
-                .map(h => `[${h.role}]: ${h.content.substring(0, 300)}`)
+                .map(h => `${h.role}: ${h.content.substring(0, 300)}`)
                 .join('\n');
             contextItems.push({
                 priority: priority.conversationHistory,
@@ -406,9 +406,10 @@ export function createDiscussionEngine(
         agent: Agent,
         topic: string,
         previousOpinions: AgentOpinion[]
-    ): Promise<AgentOpinion> {
-        // 🆕 Deep Thinking 모드에 따른 프롬프트 차별화
-        const thinkingInstructions = enableDeepThinking ? `
+    ): Promise<AgentOpinion | null> {
+        try {
+            // 🆕 Deep Thinking 모드에 따른 프롬프트 차별화
+            const thinkingInstructions = enableDeepThinking ? `
 ## 🧠 Deep Thinking 프로세스 (필수)
 분석 전에 반드시 다음 사고 과정을 거쳐야 합니다:
 
@@ -420,14 +421,14 @@ export function createDiscussionEngine(
 
 응답 시작 전 "💭 Thinking:"으로 핵심 고려사항을 먼저 정리하세요.` : '';
 
-        // 🆕 컨텍스트 기반 추가 지침
-        const contextInstructions = buildFullContext() ? `
+            // 🆕 컨텍스트 기반 추가 지침
+            const contextInstructions = buildFullContext() ? `
 ## 📋 참조 컨텍스트
 아래 컨텍스트를 반드시 고려하여 의견을 제시하세요:
 ${buildFullContext()}
 ` : '';
 
-        const systemPrompt = `# ${agent.emoji} ${agent.name}
+            const systemPrompt = `# ${agent.emoji} ${agent.name}
 
 당신은 **${agent.name}** 전문가입니다.
 ${agent.description}
@@ -442,28 +443,33 @@ ${contextInstructions}
 5. ${documentContext ? '**참조 문서의 내용을 분석에 반영하세요.**' : ''}
 6. ${webSearchContext ? '**웹 검색 결과를 근거로 활용하세요.**' : ''}`;
 
-        let contextMessage = `## 토론 주제\n<topic>${sanitizePromptInput(topic)}</topic>\n\n`;
+            let contextMessage = `## 토론 주제\n<topic>${sanitizePromptInput(topic)}</topic>\n\n`;
 
-        if (previousOpinions.length > 0) {
-            contextMessage += `## 이전 전문가 의견\n`;
-            for (const op of previousOpinions) {
-                contextMessage += `\n### ${op.agentEmoji} ${op.agentName}\n${op.opinion}\n`;
+            if (previousOpinions.length > 0) {
+                contextMessage += `## 이전 전문가 의견\n`;
+                for (const op of previousOpinions) {
+                    contextMessage += `\n### ${op.agentEmoji} ${op.agentName}\n${op.opinion}\n`;
+                }
+                contextMessage += `\n---\n\n당신의 전문가 의견을 제시해주세요:`;
+            } else {
+                contextMessage += `\n당신의 전문가 의견을 제시해주세요:`;
             }
-            contextMessage += `\n---\n\n당신의 전문가 의견을 제시해주세요:`;
-        } else {
-            contextMessage += `\n당신의 전문가 의견을 제시해주세요:`;
+
+            const response = await generateResponse(systemPrompt, contextMessage);
+
+            return {
+                agentId: agent.id,
+                agentName: agent.name,
+                agentEmoji: agent.emoji || '🤖',
+                opinion: response,
+                confidence: 0.8,
+                timestamp: new Date()
+            };
+        } catch (error) {
+            const errMsg = error instanceof Error ? error.message : String(error);
+            console.error(`[Discussion] ❌ ${agent.emoji} ${agent.name} 의견 생성 실패: ${errMsg}`);
+            return null;
         }
-
-        const response = await generateResponse(systemPrompt, contextMessage);
-
-        return {
-            agentId: agent.id,
-            agentName: agent.name,
-            agentEmoji: agent.emoji || '🤖',
-            opinion: response,
-            confidence: 0.8,
-            timestamp: new Date()
-        };
     }
 
     /**
@@ -565,8 +571,33 @@ ${contextInstructions}
                     topic,
                     round > 0 ? opinions : []
                 );
-                opinions.push(opinion);
+                if (opinion) {
+                    opinions.push(opinion);
+                }
             }
+        }
+
+        // 2.5. 의견이 하나도 수집되지 않은 경우 조기 종료
+        if (opinions.length === 0) {
+            console.error('[Discussion] ⚠️ 모든 에이전트 의견 생성 실패 — LLM 연결 상태를 확인하세요.');
+            onProgress?.({
+                phase: 'complete',
+                message: 'AI 모델 서버에 연결할 수 없어 토론을 완료하지 못했습니다.',
+                progress: 100
+            });
+            return {
+                discussionSummary: '토론 실패: 모든 전문가 에이전트의 응답 생성에 실패했습니다.',
+                finalAnswer: '⚠️ AI 모델 서버에 연결할 수 없어 토론을 진행할 수 없습니다.\n\n' +
+                    '**가능한 원인:**\n' +
+                    '- Cloud 모델 서버(Ollama Cloud)에 접속할 수 없습니다.\n' +
+                    '- API 키가 만료되었거나 할당량이 초과되었을 수 있습니다.\n' +
+                    '- 네트워크 연결 상태를 확인해주세요.\n\n' +
+                    '잠시 후 다시 시도해주세요.',
+                participants,
+                opinions: [],
+                totalTime: Date.now() - startTime,
+                factChecked: false
+            };
         }
 
         // 3. 교차 검토

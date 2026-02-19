@@ -221,7 +221,27 @@ export class DiscussionStrategy implements ChatStrategy<DiscussionStrategyContex
         }
 
         // 6단계: 토론 실행 및 결과 포맷팅/스트리밍
-        const result: DiscussionResult = await discussionEngine.startDiscussion(message, webSearchFn);
+        let result: DiscussionResult;
+        try {
+            result = await discussionEngine.startDiscussion(message, webSearchFn);
+        } catch (discussionError) {
+            const errMsg = discussionError instanceof Error ? discussionError.message : String(discussionError);
+            console.error(`[ChatService] ❌ 토론 엔진 실행 실패: ${errMsg}`);
+
+            const fallbackResponse = '⚠️ 멀티 에이전트 토론 중 오류가 발생했습니다.\n\n' +
+                '**원인:** AI 모델 서버에 연결할 수 없거나 응답 생성에 실패했습니다.\n\n' +
+                '**해결 방법:**\n' +
+                '- 잠시 후 다시 시도해주세요.\n' +
+                '- 토론 모드를 끄고 일반 모드로 질문해보세요.\n' +
+                '- 문제가 지속되면 관리자에게 문의해주세요.';
+
+            for (const char of fallbackResponse) {
+                context.onToken(char);
+            }
+
+            return { response: fallbackResponse };
+        }
+
         const formattedResponse = context.formatDiscussionResult(result);
 
         // 포맷팅된 결과를 문자 단위로 스트리밍 전송
