@@ -23,6 +23,7 @@
  */
 
 import { getConfig } from '../config/env';
+import { getPool } from '../data/models/unified-database';
 
 /**
  * API 키와 대응 모델의 쌍 (A2A 병렬 처리용)
@@ -80,6 +81,45 @@ export class ApiKeyManager {
     private lastFailoverTime: Date | null = null;
     /** 키별 실패 기록 (인덱스 -> {실패 횟수, 마지막 실패 시각}) — 쿨다운 판단에 사용 */
     private keyFailures: Map<number, { count: number; lastFail: Date }> = new Map();
+
+    /**
+     * Fire-and-forget DB operation — silently falls back to cache-only on failure
+     */
+    private dbWrite(text: string, params: (string | number | null)[]): void {
+        try {
+            getPool().query(text, params).catch(err => {
+                console.warn('[ApiKeyManager] DB write failed (cache-only mode):', err instanceof Error ? err.message : String(err));
+            });
+        } catch (_e) {
+            // getPool() may throw if DB not initialized — silently ignore
+        }
+    }
+
+    /**
+     * Warm keyFailures cache from DB (called once during construction)
+     */
+    private warmCacheFromDb(): void {
+        try {
+            getPool().query('SELECT key_index, fail_count, last_fail_at FROM api_key_failures')
+                .then(result => {
+                    for (const row of result.rows) {
+                        const r = row as { key_index: number; fail_count: number; last_fail_at: string };
+                        this.keyFailures.set(r.key_index, {
+                            count: r.fail_count,
+                            lastFail: new Date(r.last_fail_at)
+                        });
+                    }
+                    if (result.rows.length > 0) {
+                        console.log(`[ApiKeyManager] DB에서 ${result.rows.length}개 실패 기록 캐시 로드 완료`);
+                    }
+                })
+                .catch(err => {
+                    console.warn('[ApiKeyManager] DB 캐시 워밍 실패 (캐시 전용 모드):', err instanceof Error ? err.message : String(err));
+                });
+        } catch (_e) {
+            // getPool() may throw if DB not initialized — silently ignore
+        }
+    }
 
     /**
      * 원시 키 배열에서 빈 문자열, 비문자열 등 유효하지 않은 키를 필터링합니다.
@@ -151,6 +191,9 @@ export class ApiKeyManager {
             const model = this.models[idx] || envConfig.ollamaDefaultModel || 'default';
             console.log(`[ApiKeyManager]   Key ${idx + 1}: ****${key.substring(key.length - 4)} → Model: ${model}`);
         });
+
+        // Warm cache from DB (async, non-blocking)
+        this.warmCacheFromDb();
     }
 
     /**
@@ -291,6 +334,8 @@ export class ApiKeyManager {
         this.failureCount = 0;
         // 현재 키의 실패 기록 초기화
         this.keyFailures.delete(this.currentKeyIndex);
+        // Async DB delete (fire-and-forget)
+        this.dbWrite('DELETE FROM api_key_failures WHERE key_index = $1', [this.currentKeyIndex]);
     }
 
     /**
@@ -306,6 +351,14 @@ export class ApiKeyManager {
         currentFailure.count++;
         currentFailure.lastFail = new Date();
         this.keyFailures.set(this.currentKeyIndex, currentFailure);
+
+        // Async DB upsert (fire-and-forget)
+        this.dbWrite(
+            `INSERT INTO api_key_failures (key_index, fail_count, last_fail_at, updated_at)
+             VALUES ($1, $2, $3, NOW())
+             ON CONFLICT (key_index) DO UPDATE SET fail_count = $2, last_fail_at = $3, updated_at = NOW()`,
+            [this.currentKeyIndex, currentFailure.count, currentFailure.lastFail.toISOString()]
+        );
 
         const masked = this.getCurrentKey().substring(0, 8) + '...';
         console.warn(`[ApiKeyManager] ⚠️ Key ${this.currentKeyIndex + 1} (${masked}) 실패 - 코드: ${errorCode}`);
@@ -376,6 +429,8 @@ export class ApiKeyManager {
         this.failureCount = 0;
         this.lastFailoverTime = null;
         this.keyFailures.clear();
+        // Async DB clear (fire-and-forget)
+        this.dbWrite('DELETE FROM api_key_failures', []);
         console.log(`[ApiKeyManager] 🔄 Key 1으로 리셋됨`);
     }
 

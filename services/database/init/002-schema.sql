@@ -506,3 +506,101 @@ CREATE INDEX IF NOT EXISTS idx_oauth_states_created ON oauth_states(created_at);
 
 -- Token blacklist index
 CREATE INDEX IF NOT EXISTS idx_blacklist_expires ON token_blacklist(expires_at);
+
+-- ============================================
+-- 채팅 레이트 리밋 테이블
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS chat_rate_limits (
+    id SERIAL PRIMARY KEY,
+    user_key TEXT NOT NULL UNIQUE,    -- userId or IP
+    count INTEGER NOT NULL DEFAULT 0,
+    reset_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_chat_rate_limits_user_key ON chat_rate_limits(user_key);
+CREATE INDEX IF NOT EXISTS idx_chat_rate_limits_reset_at ON chat_rate_limits(reset_at);
+
+-- ============================================
+-- 에이전트 성능 메트릭 테이블
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS agent_metrics (
+    agent_type TEXT PRIMARY KEY,
+    request_count INTEGER NOT NULL DEFAULT 0,
+    success_count INTEGER NOT NULL DEFAULT 0,
+    failure_count INTEGER NOT NULL DEFAULT 0,
+    total_response_time DOUBLE PRECISION NOT NULL DEFAULT 0,
+    avg_response_time DOUBLE PRECISION NOT NULL DEFAULT 0,
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ============================================
+-- Push 구독 저장소 테이블 (인메모리 캐시 + DB 영속화)
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS push_subscriptions_store (
+    user_key TEXT PRIMARY KEY,
+    endpoint TEXT NOT NULL,
+    p256dh TEXT NOT NULL,
+    auth_key TEXT NOT NULL,
+    user_id TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ============================================
+-- API Key 실패 추적 테이블 (인메모리 캐시 + DB 영속화)
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS api_key_failures (
+    key_index INTEGER PRIMARY KEY,
+    fail_count INTEGER NOT NULL DEFAULT 0,
+    last_fail_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ============================================
+-- 📄 업로드 문서 저장소 테이블 (write-through cache)
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS uploaded_documents (
+    doc_id TEXT PRIMARY KEY,
+    document JSONB NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    last_accessed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    expires_at TIMESTAMPTZ NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_uploaded_documents_expires ON uploaded_documents(expires_at);
+
+-- ============================================
+-- 📊 토큰 일별 통계 테이블 (write-through cache)
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS token_daily_stats (
+    date_key TEXT PRIMARY KEY,              -- YYYY-MM-DD
+    total_prompt_tokens INTEGER NOT NULL DEFAULT 0,
+    total_completion_tokens INTEGER NOT NULL DEFAULT 0,
+    total_tokens INTEGER NOT NULL DEFAULT 0,
+    request_count INTEGER NOT NULL DEFAULT 0,
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ============================================
+-- 성능 최적화 인덱스 (Phase 2-DBA)
+-- ============================================
+
+-- Critical single-column indexes
+CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
+CREATE INDEX IF NOT EXISTS idx_users_is_active ON users(is_active);
+CREATE INDEX IF NOT EXISTS idx_canvas_share_token ON canvas_documents(share_token);
+CREATE INDEX IF NOT EXISTS idx_sessions_updated_at ON conversation_sessions(updated_at);
+
+-- Composite indexes for common query patterns
+CREATE INDEX IF NOT EXISTS idx_sessions_user_updated ON conversation_sessions(user_id, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_messages_session_created ON conversation_messages(session_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_memories_user_category ON user_memories(user_id, category);
+CREATE INDEX IF NOT EXISTS idx_audit_user_created ON audit_logs(user_id, timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_canvas_user_updated ON canvas_documents(user_id, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_research_user_created ON research_sessions(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_research_steps_session_number ON research_steps(session_id, step_number);
+CREATE INDEX IF NOT EXISTS idx_connections_user_service ON external_connections(user_id, service_type);

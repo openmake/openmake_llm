@@ -96,9 +96,11 @@ export class AgentLoopStrategy implements ChatStrategy<AgentLoopStrategyContext,
                 for (const toolCall of directResult.toolCalls) {
                     const toolResult = await this.executeToolCall(context, toolCall);
 
+                    // Ollama 공식 스펙: tool 결과 메시지에 tool_name 필수
                     context.currentHistory.push({
                         role: 'tool',
                         content: toolResult,
+                        tool_name: toolCall.function?.name,
                     });
                 }
             } else {
