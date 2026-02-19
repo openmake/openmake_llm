@@ -40,7 +40,10 @@ import {
     WebSearchRequest,
     WebSearchResponse,
     WebFetchRequest,
-    WebFetchResponse
+    WebFetchResponse,
+    ShowModelRequest,
+    ShowModelResponse,
+    PsResponse
 } from './types';
 import { getConfig } from '../config';
 import { OLLAMA_CLOUD_HOST } from '../config/constants';
@@ -154,8 +157,9 @@ export class OllamaClient {
                     error.code === 'EAI_AGAIN'
                 );
 
-                // 429, 401, 403 에러 시 API 키 스와핑 시도
-                if (statusCode === 429 || statusCode === 401 || statusCode === 403) {
+                // 429, 401, 403, 502 에러 시 API 키 스와핑 시도
+                // 502: Cloud 모델 게이트웨이 장애 (Ollama 공식 문서)
+                if (statusCode === 429 || statusCode === 401 || statusCode === 403 || statusCode === 502) {
                     // 재시도 횟수 추적 (키 개수만큼 시도)
                     const retryCount = error.config?._retryCount || 0;
                     const maxRetries = this.apiKeyManager.getTotalKeys() - 1;
@@ -192,7 +196,11 @@ export class OllamaClient {
                         return this.client.request(error.config);
                     }
                     console.log(`[OllamaClient] ⚠️ 네트워크 재시도 소진 (${error.code})`);
-                    this.apiKeyManager.reportFailure(error);
+                    // ENOTFOUND/EAI_AGAIN은 호스트(DNS) 레벨 장애 — 키 로테이션 무의미
+                    // 키별 장애(ETIMEDOUT, ECONNREFUSED 등)만 키 교체 트리거
+                    if (error.code !== 'ENOTFOUND' && error.code !== 'EAI_AGAIN') {
+                        this.apiKeyManager.reportFailure(error);
+                    }
                 } else {
                     this.apiKeyManager.reportFailure(error);
                 }
@@ -255,6 +263,32 @@ export class OllamaClient {
         return response.data;
     }
 
+    /**
+     * 모델 상세 정보를 조회합니다 (Ollama POST /api/show).
+     *
+     * 모델의 라이선스, Modelfile, 파라미터, 템플릿, capabilities 등을 반환합니다.
+     *
+     * @param model - 조회할 모델 이름
+     * @param verbose - 상세 모델 정보 포함 여부
+     * @returns 모델 상세 정보
+     */
+    async showModel(model: string, verbose?: boolean): Promise<ShowModelResponse> {
+        const request: ShowModelRequest = { model, ...(verbose && { verbose }) };
+        const response = await this.client.post<ShowModelResponse>('/api/show', request);
+        return response.data;
+    }
+
+    /**
+     * 현재 실행 중인 모델 목록을 조회합니다 (Ollama GET /api/ps).
+     *
+     * 각 모델의 VRAM 사용량, 컨텍스트 길이, 만료 시간 등을 반환합니다.
+     *
+     * @returns 실행 중인 모델 목록
+     */
+    async listRunningModels(): Promise<PsResponse> {
+        const response = await this.client.get<PsResponse>('/api/ps');
+        return response.data;
+    }
 
     /**
      * Check API quota before making a request.
@@ -300,7 +334,13 @@ export class OllamaClient {
         prompt: string,
         options?: ModelOptions,
         onToken?: (token: string) => void,
-        images?: string[]
+        images?: string[],
+        advancedOptions?: {
+            think?: ThinkOption;
+            format?: FormatOption;
+            system?: string;
+            keep_alive?: string | number;
+        }
     ): Promise<{ response: string; metrics?: UsageMetrics }> {
         this.checkQuota();
 
@@ -310,7 +350,11 @@ export class OllamaClient {
             context: this.context,
             stream: !!onToken,
             options,
-            images
+            images,
+            ...(advancedOptions?.think !== undefined && { think: advancedOptions.think }),
+            ...(advancedOptions?.format && { format: advancedOptions.format }),
+            ...(advancedOptions?.system && { system: advancedOptions.system }),
+            ...(advancedOptions?.keep_alive !== undefined && { keep_alive: advancedOptions.keep_alive })
         };
 
         if (onToken) {
@@ -366,10 +410,21 @@ export class OllamaClient {
                 for (const line of lines) {
                     if (line.trim()) {
                         try {
-                            const data: GenerateResponse = JSON.parse(line);
+                            const parsed = JSON.parse(line) as GenerateResponse & { error?: string };
+                            // 스트리밍 중 에러 응답 체크 (Ollama 공식 문서)
+                            if (parsed.error) {
+                                reject(new Error(`Ollama generate stream error: ${parsed.error}`));
+                                return;
+                            }
+                            const data = parsed;
                             if (data.response) {
                                 fullResponse += data.response;
                                 onToken(data.response);
+                            }
+                            // Thinking 필드 처리 (think=true 시)
+                            if (data.thinking) {
+                                fullResponse += data.thinking;
+                                onToken(data.thinking);
                             }
                             if (data.done) {
                                 if (data.context) {
@@ -394,10 +449,19 @@ export class OllamaClient {
             response.data.on('end', () => {
                 if (buffer.trim()) {
                     try {
-                        const data: GenerateResponse = JSON.parse(buffer);
+                        const parsed = JSON.parse(buffer) as GenerateResponse & { error?: string };
+                        if (parsed.error) {
+                            reject(new Error(`Ollama generate stream error: ${parsed.error}`));
+                            return;
+                        }
+                        const data = parsed;
                         if (data.response) {
                             fullResponse += data.response;
                             onToken(data.response);
+                        }
+                        if (data.thinking) {
+                            fullResponse += data.thinking;
+                            onToken(data.thinking);
                         }
                         if (data.done) {
                             metrics = {
@@ -409,7 +473,7 @@ export class OllamaClient {
                                 eval_duration: data.eval_duration
                             };
                         }
-                    } catch (e) { /* ignore */ }
+                    } catch (e) { /* ignore trailing buffer parse errors */ }
                 }
                 resolve({ response: fullResponse, metrics });
             });
@@ -438,6 +502,7 @@ export class OllamaClient {
             think?: ThinkOption;
             format?: FormatOption;
             tools?: ToolDefinition[];
+            keep_alive?: string | number;
         }
     ): Promise<ChatMessage & { metrics?: UsageMetrics }> {
         this.checkQuota();
@@ -449,7 +514,8 @@ export class OllamaClient {
             options,
             ...(advancedOptions?.think !== undefined && { think: advancedOptions.think }),
             ...(advancedOptions?.format && { format: advancedOptions.format }),
-            ...(advancedOptions?.tools && { tools: advancedOptions.tools })
+            ...(advancedOptions?.tools && { tools: advancedOptions.tools }),
+            ...(advancedOptions?.keep_alive !== undefined && { keep_alive: advancedOptions.keep_alive })
         };
 
         if (onToken) {
@@ -509,7 +575,13 @@ export class OllamaClient {
                 for (const line of lines) {
                     if (line.trim()) {
                         try {
-                            const data: ChatResponse = JSON.parse(line);
+                            const parsed = JSON.parse(line) as ChatResponse & { error?: string };
+                            // 스트리밍 중 에러 응답 체크 (Ollama 공식 문서)
+                            if (parsed.error) {
+                                reject(new Error(`Ollama chat stream error: ${parsed.error}`));
+                                return;
+                            }
+                            const data = parsed;
 
                             // Handle thinking trace
                             if (data.message?.thinking) {
@@ -523,9 +595,9 @@ export class OllamaClient {
                                 onToken(data.message.content);
                             }
 
-                            // Handle tool calls
+                            // Handle tool calls (스트리밍 시 누적 — Ollama 공식 스펙)
                             if (data.message?.tool_calls) {
-                                toolCalls = data.message.tool_calls;
+                                toolCalls = [...toolCalls, ...data.message.tool_calls];
                             }
 
                             if (data.done) {
@@ -548,13 +620,18 @@ export class OllamaClient {
             response.data.on('end', () => {
                 if (buffer.trim()) {
                     try {
-                        const data: ChatResponse = JSON.parse(buffer);
+                        const parsed = JSON.parse(buffer) as ChatResponse & { error?: string };
+                        if (parsed.error) {
+                            reject(new Error(`Ollama chat stream error: ${parsed.error}`));
+                            return;
+                        }
+                        const data = parsed;
                         if (data.message?.thinking) fullThinking += data.message.thinking;
                         if (data.message?.content) {
                             fullContent += data.message.content;
                             onToken(data.message.content);
                         }
-                        if (data.message?.tool_calls) toolCalls = data.message.tool_calls;
+                        if (data.message?.tool_calls) toolCalls = [...toolCalls, ...data.message.tool_calls];
                         if (data.done) {
                             metrics = {
                                 total_duration: data.total_duration,
@@ -599,10 +676,21 @@ export class OllamaClient {
      * @returns 임베딩 벡터 배열 (입력 개수 x 차원)
      * @throws {Error} 임베딩 모델 사용 불가 시
      */
-    async embed(input: string | string[], model?: string): Promise<number[][]> {
+    async embed(
+        input: string | string[],
+        model?: string,
+        embedOptions?: {
+            truncate?: boolean;
+            keep_alive?: string | number;
+            options?: ModelOptions;
+        }
+    ): Promise<number[][]> {
         const request: EmbedRequest = {
             model: model || 'embeddinggemma',
-            input
+            input,
+            ...(embedOptions?.truncate !== undefined && { truncate: embedOptions.truncate }),
+            ...(embedOptions?.keep_alive !== undefined && { keep_alive: embedOptions.keep_alive }),
+            ...(embedOptions?.options && { options: embedOptions.options })
         };
 
         const response = await this.client.post<EmbedResponse>('/api/embed', request);

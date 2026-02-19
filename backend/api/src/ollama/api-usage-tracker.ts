@@ -41,6 +41,18 @@ interface UsageRecord {
     models: Record<string, number>;
     /** Pipeline Profile(brand alias)별 요청 횟수 */
     profiles?: Record<string, number>;
+    /** 총 처리 시간 누적 (나노초) — Ollama total_duration */
+    totalDuration?: number;
+    /** 모델 로딩 시간 누적 (나노초) — Ollama load_duration */
+    loadDuration?: number;
+    /** 토큰 생성 시간 누적 (나노초) — Ollama eval_duration */
+    evalDuration?: number;
+    /** 프롬프트 평가 시간 누적 (나노초) — Ollama prompt_eval_duration */
+    promptEvalDuration?: number;
+    /** 프롬프트 토큰 수 누적 */
+    promptTokens?: number;
+    /** 완료 토큰 수 누적 */
+    completionTokens?: number;
 }
 
 /**
@@ -367,13 +379,24 @@ class ApiUsageTracker {
         record.requests++;
         record.tokens += params.tokens || 0;
 
-        // 🆕 상세 메트릭 저장 (UsageRecord에 필드 추가 필요 - 여기서는 기존 구조 활용 또는 확장)
-        // 기존 구조 호환성을 위해 total tokens는 유지하되, 내부적으로 상세 필드를 저장할 공간이 있다면 저장.
-        // 현재 UsageRecord 인터페이스는 간단하므로, 확장하거나 로깅만 수행.
-        // *실제* 구현에서는 UsageRecord 인터페이스 확장이 필요함.
-        if (params.promptTokens || params.completionTokens) {
-            // 확장된 로직: (임시) console log for verification
-            // 추후 UsageRecord 인터페이스 확장을 통해 저장
+        // Ollama duration 메트릭 누적 저장
+        if (params.totalDuration) {
+            record.totalDuration = (record.totalDuration || 0) + params.totalDuration;
+        }
+        if (params.loadDuration) {
+            record.loadDuration = (record.loadDuration || 0) + params.loadDuration;
+        }
+        if (params.evalDuration) {
+            record.evalDuration = (record.evalDuration || 0) + params.evalDuration;
+        }
+        if (params.promptEvalDuration) {
+            record.promptEvalDuration = (record.promptEvalDuration || 0) + params.promptEvalDuration;
+        }
+        if (params.promptTokens) {
+            record.promptTokens = (record.promptTokens || 0) + params.promptTokens;
+        }
+        if (params.completionTokens) {
+            record.completionTokens = (record.completionTokens || 0) + params.completionTokens;
         }
 
         if (params.error) {

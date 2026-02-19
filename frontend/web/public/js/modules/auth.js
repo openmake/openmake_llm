@@ -36,11 +36,65 @@ const SafeStorage = window.SafeStorage || {
 let isRefreshing = false;
 
 /**
+ * stale 인증 데이터 정리
+ * httpOnly 쿠키 만료 후 localStorage에 남은 잔존 데이터를 제거합니다.
+ * @returns {void}
+ */
+function clearStaleAuth() {
+    SafeStorage.removeItem('authToken');
+    SafeStorage.removeItem('user');
+    SafeStorage.removeItem('guestMode');
+    SafeStorage.removeItem('isGuest');
+    setState('auth.authToken', null);
+    setState('auth.currentUser', null);
+    setState('auth.isGuestMode', false);
+}
+
+/**
+ * Silent refresh: 액세스 토큰 만료 시 리프레시 토큰으로 갱신 시도
+ * refresh_token 쿠키(7일, path=/api/auth/refresh)를 사용합니다.
+ * @returns {Promise<boolean>} 갱신 성공 여부
+ */
+async function trySilentRefresh() {
+    try {
+        const resp = await fetch('/api/auth/refresh', {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        if (resp.ok) {
+            const data = await resp.json();
+            const newToken = data?.data?.token;
+            if (data?.success === true && newToken) {
+                SafeStorage.setItem('authToken', newToken);
+                setState('auth.authToken', newToken);
+                return true;
+            }
+        }
+        return false;
+    } catch (e) {
+        return false;
+    }
+}
+
+/**
+ * 서버에서 현재 유저 정보를 조회합니다.
+ * @returns {Promise<Object|null>} 유저 객체 또는 null
+ */
+async function fetchCurrentUser() {
+    const resp = await fetch('/api/auth/me', { credentials: 'include' });
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    const user = data.data?.user || data.user;
+    return (user && user.email) ? user : null;
+}
+
+/**
  * 인증 상태 초기화
- * localStorage에서 토큰과 사용자 정보를 복원하고,
- * 사용자 정보가 없으면 httpOnly 쿠키 기반 세션 복구를 시도합니다.
- * Phase 3 패치: async로 변경하여 세션 복구 완료를 보장 (경쟁 조건 해결)
- * @returns {Promise<void>} 세션 복구 완료까지 대기
+ * localStorage에 유저 데이터가 있으면 서버(/api/auth/me)로 세션 유효성을 검증합니다.
+ * 액세스 토큰(15분) 만료 시 리프레시 토큰(7일)으로 자동 갱신을 시도합니다.
+ * 네트워크 오류 시에는 localStorage를 유지합니다 (PWA 오프라인 지원).
+ * @returns {Promise<void>} 세션 검증 완료까지 대기
  */
 async function initAuth() {
     const authToken = SafeStorage.getItem('authToken');
@@ -50,19 +104,45 @@ async function initAuth() {
     setState('auth.isGuestMode', isGuestMode);
 
     const savedUser = SafeStorage.getItem('user');
+
+    // 🔒 세션 유효성 검증: localStorage에 유저 데이터가 있으면 서버에서 확인
+    // 액세스 토큰 만료 시 리프레시 토큰으로 자동 갱신을 시도합니다
     if (savedUser) {
         try {
-            const user = JSON.parse(savedUser);
-            setState('auth.currentUser', user);
+            // 1차: 현재 액세스 토큰으로 유저 조회
+            let user = await fetchCurrentUser();
+
+            if (!user) {
+                // 2차: 액세스 토큰 만료 → 리프레시 토큰으로 갱신 시도 (7일 유효)
+                const refreshed = await trySilentRefresh();
+                if (refreshed) {
+                    // 갱신 성공 → 새 액세스 토큰으로 재시도
+                    user = await fetchCurrentUser();
+                }
+            }
+
+            if (user) {
+                // ✅ 세션 유효 — 서버의 최신 유저 정보로 갱신
+                SafeStorage.setItem('user', JSON.stringify(user));
+                setState('auth.currentUser', user);
+            } else {
+                // 리프레시까지 실패 → 세션 완전 만료, stale 데이터 정리
+                clearStaleAuth();
+            }
         } catch (e) {
-            setState('auth.currentUser', null);
+            // 네트워크 오류 → 오프라인일 수 있으므로 localStorage 유지 (PWA 지원)
+            try {
+                const user = JSON.parse(savedUser);
+                setState('auth.currentUser', user);
+            } catch (parseErr) {
+                setState('auth.currentUser', null);
+            }
         }
     }
 
     updateAuthUI();
 
-    // 🔒 자동로그인 차단: OAuth 콜백 리턴(?auth=callback) 시에만 쿠키 기반 세션 복구
-    // 일반 페이지 접속 시에는 자동로그인하지 않음 — 사용자가 명시적으로 로그인해야 함
+    // 🔒 OAuth 콜백 리턴(?auth=callback) 시 쿠키 기반 세션 복구
     const urlParams = new URLSearchParams(window.location.search);
     const isOAuthCallback = urlParams.get('auth') === 'callback';
 

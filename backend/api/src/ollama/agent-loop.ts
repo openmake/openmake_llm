@@ -311,8 +311,6 @@ export async function runAgentLoop(options: AgentLoopOptions): Promise<AgentLoop
         maxIterations = 10
     } = options;
 
-    void think;
-
     const ollama = createOllamaClient(model);
     const ollamaTools = tools.map(toOllamaTool);
 
@@ -343,6 +341,7 @@ export async function runAgentLoop(options: AgentLoopOptions): Promise<AgentLoop
                         messages,
                         tools: ollamaTools,
                         stream: true,
+                        think,
                         options: {
                         }
                     });
@@ -359,7 +358,8 @@ export async function runAgentLoop(options: AgentLoopOptions): Promise<AgentLoop
                         }
 
                         if (chunk.message?.tool_calls) {
-                            toolCalls = chunk.message.tool_calls;
+                            // 스트리밍 시 tool_calls 누적 (Ollama 공식: 청크별 누적 필요)
+                            toolCalls = [...toolCalls, ...chunk.message.tool_calls];
                         }
 
                         if (chunk.done) {
@@ -400,7 +400,8 @@ export async function runAgentLoop(options: AgentLoopOptions): Promise<AgentLoop
                         model,
                         messages,
                         tools: ollamaTools,
-                        stream: false
+                        stream: false,
+                        think
                     });
 
                     lastMetrics = {
@@ -491,17 +492,19 @@ export async function runAgentLoop(options: AgentLoopOptions): Promise<AgentLoop
                     result
                 });
 
-                // 도구 결과를 메시지에 추가
+                // 도구 결과를 메시지에 추가 (Ollama 공식 스펙: tool_name 필수)
                 messages.push({
                     role: 'tool',
-                    content: resultStr
+                    content: resultStr,
+                    tool_name: funcName
                 });
 
             } catch (error: unknown) {
                 console.error(`[AgentLoop] ❌ 도구 실행 오류: ${(error instanceof Error ? error.message : String(error))}`);
                 messages.push({
                     role: 'tool',
-                    content: `Error: ${(error instanceof Error ? error.message : String(error))}`
+                    content: `Error: ${(error instanceof Error ? error.message : String(error))}`,
+                    tool_name: funcName
                 });
             }
         }
