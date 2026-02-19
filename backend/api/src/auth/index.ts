@@ -172,7 +172,13 @@ export async function verifyToken(token: string): Promise<JWTPayload | null> {
         }
         return decoded;
     } catch (error) {
-        console.error('[Auth] 토큰 검증 실패:', error);
+        // jwt malformed / expired 등은 정상적 상황 (만료 쿠키) — 스택트레이스 없이 간단 로그
+        const errName = error instanceof Error ? error.name : '';
+        if (errName === 'JsonWebTokenError' || errName === 'TokenExpiredError') {
+            console.warn(`[Auth] 토큰 검증 실패: ${errName} — ${(error as Error).message}`);
+        } else {
+            console.error('[Auth] 토큰 검증 실패:', error);
+        }
         return null;
     }
 }
