@@ -17,7 +17,7 @@
 
 import { Router, Request, Response } from 'express';
 import { ClusterManager } from '../cluster/manager';
-import { success, serviceUnavailable } from '../utils/api-response';
+import { success, serviceUnavailable, unauthorized } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
 import { optionalAuth } from '../auth';
 import { optionalApiKey } from '../middlewares/api-key-auth';
@@ -47,7 +47,7 @@ router.post('/', optionalApiKey, optionalAuth, chatRateLimiter, validate(chatReq
      // 인증 확인 (ChatRequestHandler로 통합)
      const userContext = ChatRequestHandler.resolveUserContextFromRequest(req);
      if (!userContext) {
-         res.status(401).json({ success: false, error: { message: '인증이 필요합니다' } });
+         res.status(401).json(unauthorized('인증이 필요합니다'));
          return;
      }
 
@@ -109,7 +109,7 @@ router.post('/stream', optionalApiKey, optionalAuth, chatRateLimiter, validate(c
      // 인증 확인 (ChatRequestHandler로 통합)
      const userContext = ChatRequestHandler.resolveUserContextFromRequest(req);
      if (!userContext) {
-         res.status(401).json({ success: false, error: { message: '인증이 필요합니다' } });
+         res.status(401).json(unauthorized('인증이 필요합니다'));
          return;
      }
 

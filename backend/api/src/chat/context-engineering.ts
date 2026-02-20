@@ -544,7 +544,7 @@ export function buildReasoningPrompt(): string {
         .setOutputFormat({
             type: 'structured',
             examples: [
-                '<think>\n1단계: 문제 이해\n2단계: 핵심 정보 파악\n3단계: 분석 실행\n4단계: 검증\n</think>\n\n### 결론\n[최종 답변]'
+                '### 결론\n[최종 답변]\n\n---\n\n<think>\n1단계: 문제 이해\n2단계: 핵심 정보 파악\n3단계: 분석 실행\n4단계: 검증\n</think>'
             ]
         })
         .setThinkingEnabled(true)

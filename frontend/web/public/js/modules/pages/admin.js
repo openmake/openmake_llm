@@ -122,11 +122,11 @@
                  document.getElementById('statTotalUsers').textContent = payload.total_users || 0;
                  document.getElementById('statActiveUsers').textContent = payload.active_users || 0;
                  document.getElementById('statAdmins').textContent = payload.admins || 0;
-             } catch (e) { }
+             } catch (e) { console.error('[Admin] 사용자 통계 로드 실패:', e); }
              try {
                  const res = await authFetch('/api/admin/stats');
                  if (res.ok) { const data = await res.json(); const payload2 = data.data || data; document.getElementById('statTodayQueries').textContent = payload2.today_queries || 0; }
-             } catch (e) { }
+             } catch (e) { console.error('[Admin] 관리 통계 로드 실패:', e); }
          }
 
         function showAddUserModal() {
