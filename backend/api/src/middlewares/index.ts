@@ -12,7 +12,7 @@ import { getConfig } from '../config';
 import { getAnalyticsSystem } from '../monitoring/analytics';
 // AuthUser 타입은 auth/middleware.ts에서 정의됨
 import { AuthUser } from '../auth/middleware';
-import { unauthorized, forbidden, internalError } from '../utils/api-response';
+import { unauthorized, forbidden, internalError, rateLimited } from '../utils/api-response';
 
 const logger = createLogger('Middleware');
 
@@ -82,7 +82,7 @@ export const generalLimiter = rateLimit({
     standardHeaders: true,
     legacyHeaders: false,
     handler: (_req, res) => {
-        res.status(429).json({ success: false, error: { message: '요청이 너무 많습니다. 잠시 후 다시 시도하세요.' } });
+        res.status(429).json(rateLimited('요청이 너무 많습니다. 잠시 후 다시 시도하세요.'));
     }
 });
 
@@ -94,7 +94,7 @@ export const authLimiter = rateLimit({
     max: 10,
     skipSuccessfulRequests: true,
     handler: (_req, res) => {
-        res.status(429).json({ success: false, error: { message: '로그인 시도가 너무 많습니다.' } });
+        res.status(429).json(rateLimited('로그인 시도가 너무 많습니다.'));
     }
 });
 
@@ -106,7 +106,7 @@ export const chatLimiter = rateLimit({
     max: 30,
     // keyGenerator removed to use default IP-based handling with proper IPv6 support
     handler: (_req, res) => {
-        res.status(429).json({ success: false, error: { message: '채팅 요청이 너무 많습니다.' } });
+        res.status(429).json(rateLimited('채팅 요청이 너무 많습니다.'));
     }
 });
 

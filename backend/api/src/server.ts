@@ -226,13 +226,17 @@ export class DashboardServer {
             'canvas', 'research', 'mcp-tools', 'marketplace', 'custom-agents',
             'agent-learning', 'cluster', 'usage', 'analytics', 'admin-metrics',
             'admin', 'audit', 'external', 'alerts', 'memory', 'settings',
-            'password-change', 'history', 'guide', 'developer', 'api-keys'
+            'password-change', 'history', 'guide', 'developer', 'api-keys',
+            'token-monitoring'
         ]);
 
         app.use((req: Request, res: Response, next: NextFunction) => {
-            const match = req.path.match(/^\/([a-z0-9-]+)\.html$/);
+            // SPA 라우팅: /{page}.html 또는 /{page} (클린 URL) 모두 index.html로 서빙
+            const htmlMatch = req.path.match(/^\/([a-z0-9-]+)\.html$/);
+            const cleanMatch = req.path.match(/^\/([a-z0-9-]+)$/);
+            const match = htmlMatch || cleanMatch;
             if (match && SPA_PAGES.has(match[1])) {
-                if (match[1] === 'external') {
+                if (match[1] === 'external' && htmlMatch) {
                     return next();
                 }
 

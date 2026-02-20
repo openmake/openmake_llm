@@ -466,13 +466,7 @@
         async function clearHistory() {
             if (!confirm('모든 대화 기록을 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.')) return;
             try {
-                var authToken = localStorage.getItem('authToken');
-                if (!authToken) {
-                    (typeof showToast === 'function' ? showToast('로그인이 필요합니다.', 'warning') : console.warn('로그인이 필요합니다.'));
-                    return;
-                }
-                var headers = { 'Authorization': 'Bearer ' + authToken, 'Content-Type': 'application/json' };
-                var res = await fetch('/api/chat/sessions', { method: 'DELETE', credentials: 'include', headers: headers });
+                var res = await window.authFetch('/api/chat/sessions', { method: 'DELETE' });
                 if (!res.ok) throw new Error('서버 응답 오류: ' + res.status);
                 var data = await res.json();
                 var count = (data.data && data.data.count) || 0;
