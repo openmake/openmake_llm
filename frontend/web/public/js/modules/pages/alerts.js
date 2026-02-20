@@ -80,11 +80,23 @@
             `).join('');
         }
 
-        // 알림 히스토리는 현재 전용 API가 없으므로 데모 데이터 표시
-        // 향후 GET /api/alerts/history 구현 시 연동
-        allAlerts = [];
-        document.getElementById('totalAlerts').textContent = allAlerts.length;
-        renderAlerts();
+        // 알림 히스토리 로드 (admin 전용 — /api/metrics/alerts)
+        async function loadAlerts() {
+            try {
+                var res = await authFetch('/api/metrics/alerts?limit=100');
+                var rawData = await res.json();
+                var data = rawData.data || rawData;
+                allAlerts = Array.isArray(data.history) ? data.history : [];
+                document.getElementById('totalAlerts').textContent = allAlerts.length;
+                renderAlerts();
+            } catch (e) {
+                // 권한 없거나 오류 시 빈 목록 유지 (graceful degradation)
+                allAlerts = [];
+                document.getElementById('totalAlerts').textContent = '0';
+                renderAlerts();
+            }
+        }
+        loadAlerts();
 
             } catch(e) {
                 console.error('[PageModule:alerts] init error:', e);

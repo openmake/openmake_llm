@@ -26,8 +26,8 @@
     <link rel="preconnect" href="https://cdnjs.cloudflare.com">
     <link rel="dns-prefetch" href="https://cdnjs.cloudflare.com">
     <link rel="preload" href="/css/design-tokens.css?v=8" as="style">
-    <link rel="preload" href="/js/spa-router.js" as="script">
-    <link rel="preload" href="/js/modules/auth.js" as="script">
+    <link rel="preload" href="/js/spa-router.js" as="script" crossorigin>
+    <link rel="preload" href="/js/modules/auth.js" as="script" crossorigin>
     <!-- 디자인 시스템 CSS (순서 중요!) -->
     <link rel="stylesheet" href="css/design-tokens.css?v=8">
     <link rel="stylesheet" href="css/icons.css?v=8">
@@ -355,7 +355,7 @@
     </div> <!-- app 끝 -->
 
     <!-- 앱 엔트리 포인트 (ES Module — 모든 모듈을 main.js에서 import 및 초기화) -->
-    <script type="module" src="js/main.js?v=18"></script>
+    <script type="module" src="js/main.js?v=19"></script>
 </body>
 
 </html>

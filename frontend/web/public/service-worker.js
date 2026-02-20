@@ -10,7 +10,7 @@
  */
 
 /** @type {string} 정적 자산 캐시 버전 키 */
-const CACHE_VERSION = 'openmake-v9';
+const CACHE_VERSION = 'openmake-v10';
 /** @type {string} CDN 리소스 캐시 키 */
 const CDN_CACHE = 'openmake-cdn-v1';
 /** @type {string} 이미지 리소스 캐시 키 */
@@ -39,8 +39,7 @@ const STATIC_ASSETS = [
     '/css/pages/dashboard.css',
     '/css/pages/agents.css',
 
-    // JS core (8)
-    '/app.js',
+    // JS core (7)
     '/guide_content.js',
     '/js/spa-router.js',
     '/js/main.js',
@@ -51,28 +50,36 @@ const STATIC_ASSETS = [
     '/js/components/offline-indicator.js',
     '/js/components/install-prompt.js',
 
-    // JS modules (10)
+    // JS modules (16)
     '/js/modules/auth.js',
     '/js/modules/chat.js',
+    '/js/modules/cluster.js',
+    '/js/modules/document.js',
+    '/js/modules/error-handler.js',
+    '/js/modules/file-upload.js',
     '/js/modules/guide.js',
     '/js/modules/index.js',
+    '/js/modules/modes.js',
     '/js/modules/sanitize.js',
+    '/js/modules/session.js',
     '/js/modules/settings.js',
     '/js/modules/state.js',
     '/js/modules/ui.js',
     '/js/modules/utils.js',
     '/js/modules/websocket.js',
 
-    // JS page modules (20)
+    // JS page modules (22)
     '/js/modules/pages/admin-metrics.js',
     '/js/modules/pages/admin.js',
     '/js/modules/pages/agent-learning.js',
     '/js/modules/pages/alerts.js',
     '/js/modules/pages/analytics.js',
+    '/js/modules/pages/api-keys.js',
     '/js/modules/pages/audit.js',
     '/js/modules/pages/canvas.js',
     '/js/modules/pages/cluster.js',
     '/js/modules/pages/custom-agents.js',
+    '/js/modules/pages/developer.js',
     '/js/modules/pages/external.js',
     '/js/modules/pages/guide.js',
     '/js/modules/pages/history.js',

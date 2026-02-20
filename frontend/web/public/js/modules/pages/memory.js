@@ -64,7 +64,8 @@
         async function loadMems() {
             try {
                 const res = await authFetch('/api/memory');
-                allMems = res.data || res || [];
+                allMems = (res.data && res.data.memories) || res.data || [];
+                if (!Array.isArray(allMems)) allMems = [];
                 searchMode = false;
                 renderMems();
             } catch (e) { showToast('메모리 로드 실패', 'error'); }
@@ -74,7 +75,8 @@
             if (!q) { loadMems(); return; }
             try {
                 const res = await authFetch('/api/memory/search?q=' + encodeURIComponent(q));
-                allMems = res.data || res || [];
+                allMems = (res.data && res.data.memories) || res.data || [];
+                if (!Array.isArray(allMems)) allMems = [];
                 searchMode = true;
                 renderMems();
             } catch (e) { showToast('검색 실패', 'error'); }

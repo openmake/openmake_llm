@@ -66,7 +66,7 @@ import {
     sendMessage, addChatMessage, appendToken,
     finishAssistantMessage, copyMessage, regenerateMessage,
     newChat as chatNewChat, useSuggestion, abortChat
-} from './modules/chat.js';
+} from './modules/chat.js?v=19';
 
 // 1-8. 세션 관리 (state, auth 의존)
 import {

@@ -129,6 +129,13 @@ var ICONS = {
             this.state = STATES.HIDDEN;
         }
 
+        // 데스크톱에서 hidden 상태 방어: 데스크톱에서는 toggle이 full↔icon만
+        // 지원하므로 hidden이 저장되어 있으면 full로 복원
+        if (!isMobile() && this.state === STATES.HIDDEN) {
+            this.state = STATES.FULL;
+            localStorage.setItem(LS_KEY, STATES.FULL);
+        }
+
         // HTML 생성
         container.innerHTML = this._renderHTML();
         this.el = container.querySelector('.unified-sidebar');

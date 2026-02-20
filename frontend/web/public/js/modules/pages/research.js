@@ -41,7 +41,7 @@
 
     function _loadSessions() {
         _authFetch('/api/research/sessions').then(function(res) {
-            var sessions = res.data || res || [];
+            var sessions = (res.data && res.data.sessions) || res.data || [];
             var el = document.getElementById('sessionList');
             if (!el) return;
             if (!sessions.length) {
@@ -59,7 +59,8 @@
                     (s.progress > 0 ? '<div class="progress-bar"><div class="progress-fill" style="width:' + s.progress + '%"></div></div>' : '') +
                 '</div>';
             }).join('');
-        }).catch(function() {
+        }).catch(function(e) {
+            console.error('[Research] 세션 로드 실패:', e);
             _showToast('\uC138\uC158 \uB85C\uB4DC \uC2E4\uD328', 'error');
         });
     }
@@ -76,7 +77,8 @@
             if (topicEl) topicEl.value = '';
             _showToast('\uC5F0\uAD6C\uAC00 \uC2DC\uC791\uB418\uC5C8\uC2B5\uB2C8\uB2E4');
             _loadSessions();
-        }).catch(function() {
+        }).catch(function(e) {
+            console.error('[Research] 세션 생성 실패:', e);
             _showToast('\uC0DD\uC131 \uC2E4\uD328', 'error');
         });
     }
@@ -89,9 +91,9 @@
         if (dc) dc.innerHTML = '<div class="loading">\uBD88\uB7EC\uC624\uB294 \uC911...</div>';
 
         _authFetch('/api/research/sessions/' + id).then(function(res) {
-            var s = res.data || res;
+            var s = (res.data && res.data.session) || res.data || res;
             return _authFetch('/api/research/sessions/' + id + '/steps').then(function(stepsRes) {
-                var steps = stepsRes.data || stepsRes || [];
+                var steps = (stepsRes.data && stepsRes.data.steps) || stepsRes.data || [];
                 var dt = document.getElementById('detailTitle');
                 if (dt) dt.textContent = s.topic;
 
@@ -131,7 +133,8 @@
 
                 if (dc) dc.innerHTML = html;
             });
-        }).catch(function() {
+        }).catch(function(e) {
+            console.error('[Research] 세션 상세 로드 실패:', e);
             if (dc) dc.innerHTML = '<div class="empty-state"><p>\uB85C\uB4DC \uC2E4\uD328</p></div>';
         });
     }
@@ -147,7 +150,8 @@
             _showToast('\uC138\uC158\uC774 \uC0AD\uC81C\uB418\uC5C8\uC2B5\uB2C8\uB2E4');
             _closeDetail();
             _loadSessions();
-        }).catch(function() {
+        }).catch(function(e) {
+            console.error('[Research] 세션 삭제 실패:', e);
             _showToast('\uC0AD\uC81C \uC2E4\uD328', 'error');
         });
     }
