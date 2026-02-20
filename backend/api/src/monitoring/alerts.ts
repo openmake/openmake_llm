@@ -250,12 +250,11 @@ export class AlertSystem {
         const emoji = alert.severity === 'critical' ? '🚨' :
             alert.severity === 'warning' ? '⚠️' : 'ℹ️';
 
-        console.log(`\n${emoji} [${alert.severity.toUpperCase()}] ${alert.title}`);
-        console.log(`   ${alert.message}`);
+        logger.info(`\n${emoji} [${alert.severity.toUpperCase()}] ${alert.title}`);
+        logger.info(`   ${alert.message}`);
         if (alert.data) {
-            console.log(`   데이터:`, JSON.stringify(alert.data, null, 2));
+            logger.info(`   데이터:`, JSON.stringify(alert.data, null, 2));
         }
-        console.log();
     }
 
     /**

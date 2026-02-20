@@ -338,8 +338,8 @@ export class ClusterManager extends EventEmitter {
      */
     getBestNode(modelName?: string): ClusterNode | undefined {
         let candidates = this.getOnlineNodes();
-        console.log(`[Cluster] getBestNode 호출 - model: ${modelName}, online nodes: ${candidates.length}`);
-        candidates.forEach(n => console.log(`[Cluster]   - ${n.id}: ${n.status}, models: ${n.models.join(', ')}`));
+        logger.info(`getBestNode 호출 - model: ${modelName}, online nodes: ${candidates.length}`);
+        candidates.forEach(n => logger.info(`  - ${n.id}: ${n.status}, models: ${n.models.join(', ')}`));
 
         // "default"는 특별한 값이므로 모델 필터링을 건너뜀
         if (modelName && modelName !== 'default') {
@@ -350,9 +350,9 @@ export class ClusterManager extends EventEmitter {
                 candidates = candidates.filter(n =>
                     n.models.some(m => m.includes(modelName))
                 );
-                console.log(`[Cluster] 모델 필터링 후 candidates: ${candidates.length} (검색: ${modelName})`);
+                logger.info(`모델 필터링 후 candidates: ${candidates.length} (검색: ${modelName})`);
             } else {
-                console.log(`[Cluster] Cloud 모델 → 노드 필터링 건너뜀 (${modelName})`);
+                logger.info(`Cloud 모델 → 노드 필터링 건너뜀 (${modelName})`);
             }
         }
 

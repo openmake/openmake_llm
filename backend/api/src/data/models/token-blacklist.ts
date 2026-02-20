@@ -5,6 +5,9 @@
 
 import { Pool } from 'pg';
 import { getConfig } from '../../config/env';
+import { createLogger } from '../../utils/logger';
+
+const logger = createLogger('TokenBlacklist');
 
 /**
  * Pluggable Token Blacklist Interface
@@ -42,7 +45,7 @@ export class PostgresTokenBlacklist implements ITokenBlacklist {
         `);
         await this.pool.query('CREATE INDEX IF NOT EXISTS idx_blacklist_expires ON token_blacklist(expires_at)');
         this.initialized = true;
-        console.log('[TokenBlacklist] 📋 PostgreSQL 테이블 초기화됨');
+        logger.info('📋 PostgreSQL 테이블 초기화됨');
     }
     
     async add(jti: string, expiresAt: number): Promise<void> {
@@ -85,10 +88,10 @@ export class PostgresTokenBlacklist implements ITokenBlacklist {
             try {
                 const cleaned = await this.cleanup();
                 if (cleaned > 0) {
-                    console.log(`[TokenBlacklist] 🧹 ${cleaned}개 만료된 토큰 정리됨`);
+                    logger.info(`🧹 ${cleaned}개 만료된 토큰 정리됨`);
                 }
             } catch (err) {
-                console.error('[TokenBlacklist] Cleanup error:', err);
+                logger.error('Cleanup error:', err);
             }
         }, 60 * 60 * 1000);
     }

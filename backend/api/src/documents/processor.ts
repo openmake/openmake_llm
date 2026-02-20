@@ -4,6 +4,9 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import { getConfig } from '../config/env';
 import { ProgressCallback, createProgressEvent } from './progress';
+import { createLogger } from '../utils/logger';
+
+const logger = createLogger('DocumentProcessor');
 
 const execAsync = promisify(exec);
 
@@ -113,14 +116,15 @@ export async function extractPdfText(
                     for (let i = 0; i < maxPages; i++) {
                         const imgPath = path.join(tempDir, imageFiles[i]);
                         const progressPercent = 40 + Math.round((i / maxPages) * 50);  // 40~90%
-                        onProgress?.(createProgressEvent(
-                            'ocr_recognize',
-                            `OCR 분석 중: ${i + 1}/${maxPages} 페이지 (총 ${imageFiles.length}페이지)`,
-                            filename,
-                            progressPercent
-                        ));
-                        const result = await Tesseract.recognize(imgPath, 'kor+eng');
-                        ocrText += `\n--- Page ${i + 1} ---\n${result.data.text}\n`;
+                         logger.info(`OCR 진행률: ${(i / maxPages * 100).toFixed(0)}%`);
+                         onProgress?.(createProgressEvent(
+                             'ocr_recognize',
+                             `OCR 분석 중: ${i + 1}/${maxPages} 페이지 (총 ${imageFiles.length}페이지)`,
+                             filename,
+                             progressPercent
+                         ));
+                         const result = await Tesseract.recognize(imgPath, 'kor+eng');
+                         ocrText += `\n--- Page ${i + 1} ---\n${result.data.text}\n`;
                     }
 
                     if (imageFiles.length > maxPages) {
@@ -202,7 +206,7 @@ export async function extractImageText(
             logger: (m: { status: string; progress: number }) => {
                 if (m.status === 'recognizing text') {
                     const progress = 20 + Math.round(m.progress * 70);  // 20~90%
-                    console.log(`[OCR] 진행률: ${(m.progress * 100).toFixed(0)}%`);
+                    logger.info(`OCR 진행률: ${(m.progress * 100).toFixed(0)}%`);
                     onProgress?.(createProgressEvent(
                         'ocr_recognize',
                         `OCR 분석 중: ${(m.progress * 100).toFixed(0)}%`,
