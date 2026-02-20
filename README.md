@@ -638,7 +638,7 @@ openmake_llm/
 │   │       ├── server.ts              # HTTP server bootstrap
 │   │       └── swagger.ts             # Swagger/OpenAPI config
 │   │
-│   └── workers/                       # Background Workers (npm workspace)
+
 │
 ├── frontend/
 │   └── web/
@@ -802,7 +802,6 @@ This project uses **npm workspaces**:
 ```
 workspaces:
   - backend/api        # Express API server
-  - backend/workers    # Background workers
   - frontend/web       # Web frontend
 ```
 

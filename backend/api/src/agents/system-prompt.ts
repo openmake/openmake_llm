@@ -12,6 +12,9 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { AgentSelection, AgentPhase } from './types';
 import { AGENTS } from './agent-data';
+import { createLogger } from '../utils/logger';
+
+const logger = createLogger('AgentSystem');
 
 // ========================================
 // 시스템 프롬프트 생성
@@ -66,10 +69,10 @@ export function getAgentSystemMessage(selection: AgentSelection): string {
     try {
         if (promptPath && fs.existsSync(promptPath)) {
             customPrompt = fs.readFileSync(promptPath, 'utf-8');
-            console.log(`[Agent System] 프롬프트 로드 성공: ${agent.name} (${promptPath})`);
+            logger.info(`프롬프트 로드 성공: ${agent.name} (${promptPath})`);
         }
     } catch (e) {
-        console.warn(`[Agent System] 프롬프트 로드 실패: ${agent.name}`, e);
+        logger.warn(`프롬프트 로드 실패: ${agent.name}`, e);
     }
 
     // 시스템 프롬프트 조합

@@ -19,6 +19,9 @@ import { canUseTool } from '../../mcp/tool-tiers';
 import { getUnifiedMCPClient } from '../../mcp/unified-client';
 import { DirectStrategy } from './direct-strategy';
 import type { AgentLoopStrategyContext, ChatStrategy, ChatResult } from './types';
+import { createLogger } from '../../utils/logger';
+
+const logger = createLogger('AgentLoopStrategy');
 
 /**
  * Multi-turn 도구 호출 루프 전략
@@ -58,7 +61,7 @@ export class AgentLoopStrategy implements ChatStrategy<AgentLoopStrategyContext,
             context.checkAborted?.();
 
             currentTurn++;
-            console.log(`[ChatService] 🔄 Agent Loop Turn ${currentTurn}/${context.maxTurns}`);
+            logger.info(`🔄 Agent Loop Turn ${currentTurn}/${context.maxTurns}`);
 
             // 모델이 도구 호출을 지원하는 경우에만 도구 목록 조회
             let allowedTools: ToolDefinition[] = [];
@@ -91,7 +94,7 @@ export class AgentLoopStrategy implements ChatStrategy<AgentLoopStrategyContext,
             context.currentHistory.push(directResult.assistantMessage);
 
             if (directResult.toolCalls.length > 0) {
-                console.log(`[ChatService] 🛠️ Tool Calls detected: ${directResult.toolCalls.length}`);
+                logger.info(`🛠️ Tool Calls detected: ${directResult.toolCalls.length}`);
 
                 for (const toolCall of directResult.toolCalls) {
                     const toolResult = await this.executeToolCall(context, toolCall);
@@ -153,12 +156,12 @@ export class AgentLoopStrategy implements ChatStrategy<AgentLoopStrategyContext,
                     enterprise: '엔터프라이즈',
                 }[userTier];
 
-                console.warn(`[ChatService] ⚠️ 도구 접근 거부: ${toolName} (tier: ${userTier})`);
+                logger.warn(`⚠️ 도구 접근 거부: ${toolName} (tier: ${userTier})`);
                 return `🔒 권한 없음: ${tierLabel} 등급에서는 "${toolName}" 도구를 사용할 수 없습니다. 업그레이드가 필요합니다.`;
             }
         }
 
-        console.log(`[ChatService] 🔨 Executing Tool: ${toolName} (tier: ${context.currentUserContext?.tier || 'unknown'})`, toolArgs);
+        logger.info(`🔨 Executing Tool: ${toolName} (tier: ${context.currentUserContext?.tier || 'unknown'})`, toolArgs);
 
         // 내장 도구 직접 처리: web_search
         if (toolName === 'web_search') {
@@ -176,7 +179,7 @@ export class AgentLoopStrategy implements ChatStrategy<AgentLoopStrategyContext,
                 return '검색 결과가 없습니다.';
             } catch (e: unknown) {
                 const errorMessage = e instanceof Error ? e.message : String(e);
-                console.error('[ChatService] web_search 실행 실패:', errorMessage);
+                logger.error('web_search 실행 실패:', errorMessage);
                 return `Error: ${errorMessage}`;
             }
         }
@@ -193,7 +196,7 @@ export class AgentLoopStrategy implements ChatStrategy<AgentLoopStrategyContext,
                 return '페이지 콘텐츠를 가져올 수 없습니다.';
             } catch (e: unknown) {
                 const errorMessage = e instanceof Error ? e.message : String(e);
-                console.error('[ChatService] web_fetch 실행 실패:', errorMessage);
+                logger.error('web_fetch 실행 실패:', errorMessage);
                 return `Error: ${errorMessage}`;
             }
         }
@@ -222,7 +225,7 @@ export class AgentLoopStrategy implements ChatStrategy<AgentLoopStrategyContext,
                     return 'Error: image_path 또는 image_base64가 필요합니다.';
                 }
 
-                console.log('[ChatService] 🔍 Vision OCR 실행 중...');
+                logger.info('🔍 Vision OCR 실행 중...');
 
                 const ocrResponse = await context.client.chat(
                     [
@@ -237,12 +240,12 @@ export class AgentLoopStrategy implements ChatStrategy<AgentLoopStrategyContext,
                 );
 
                 const extractedText = ocrResponse.content || '';
-                console.log(`[ChatService] ✅ OCR 완료: ${extractedText.length}자 추출`);
+                logger.info(`✅ OCR 완료: ${extractedText.length}자 추출`);
 
                 return `📝 OCR 결과:\n\n${extractedText}`;
             } catch (e: unknown) {
                 const errorMessage = e instanceof Error ? e.message : String(e);
-                console.error('[ChatService] vision_ocr 실행 실패:', errorMessage);
+                logger.error('vision_ocr 실행 실패:', errorMessage);
                 return `Error: ${errorMessage}`;
             }
         }
@@ -271,7 +274,7 @@ export class AgentLoopStrategy implements ChatStrategy<AgentLoopStrategyContext,
                     return 'Error: image_path 또는 image_base64가 필요합니다.';
                 }
 
-                console.log('[ChatService] 🖼️ 이미지 분석 실행 중...');
+                logger.info('🖼️ 이미지 분석 실행 중...');
 
                 const analysisResponse = await context.client.chat(
                     [
@@ -286,12 +289,12 @@ export class AgentLoopStrategy implements ChatStrategy<AgentLoopStrategyContext,
                 );
 
                 const analysis = analysisResponse.content || '';
-                console.log('[ChatService] ✅ 이미지 분석 완료');
+                logger.info('✅ 이미지 분석 완료');
 
                 return `🖼️ 이미지 분석 결과:\n\n${analysis}`;
             } catch (e: unknown) {
                 const errorMessage = e instanceof Error ? e.message : String(e);
-                console.error('[ChatService] analyze_image 실행 실패:', errorMessage);
+                logger.error('analyze_image 실행 실패:', errorMessage);
                 return `Error: ${errorMessage}`;
             }
         }
@@ -306,7 +309,7 @@ export class AgentLoopStrategy implements ChatStrategy<AgentLoopStrategyContext,
             return result.content.map((c: { text?: string }) => c.text).join('\n');
         } catch (e: unknown) {
             const errorMessage = e instanceof Error ? e.message : String(e);
-            console.error(`[ChatService] Tool execution failed: ${errorMessage}`);
+            logger.error(`Tool execution failed: ${errorMessage}`);
             return `Error: ${errorMessage}`;
         }
     }

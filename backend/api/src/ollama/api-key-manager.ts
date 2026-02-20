@@ -24,6 +24,9 @@
 
 import { getConfig } from '../config/env';
 import { getPool } from '../data/models/unified-database';
+import { createLogger } from '../utils/logger';
+
+const logger = createLogger('ApiKeyManager');
 
 /**
  * API 키와 대응 모델의 쌍 (A2A 병렬 처리용)
@@ -88,7 +91,7 @@ export class ApiKeyManager {
     private dbWrite(text: string, params: (string | number | null)[]): void {
         try {
             getPool().query(text, params).catch(err => {
-                console.warn('[ApiKeyManager] DB write failed (cache-only mode):', err instanceof Error ? err.message : String(err));
+                logger.warn('DB write failed (cache-only mode):', err instanceof Error ? err.message : String(err));
             });
         } catch (_e) {
             // getPool() may throw if DB not initialized — silently ignore
@@ -110,11 +113,11 @@ export class ApiKeyManager {
                         });
                     }
                     if (result.rows.length > 0) {
-                        console.log(`[ApiKeyManager] DB에서 ${result.rows.length}개 실패 기록 캐시 로드 완료`);
+                        logger.info(`DB에서 ${result.rows.length}개 실패 기록 캐시 로드 완료`);
                     }
                 })
                 .catch(err => {
-                    console.warn('[ApiKeyManager] DB 캐시 워밍 실패 (캐시 전용 모드):', err instanceof Error ? err.message : String(err));
+                    logger.warn('DB 캐시 워밍 실패 (캐시 전용 모드):', err instanceof Error ? err.message : String(err));
                 });
         } catch (_e) {
             // getPool() may throw if DB not initialized — silently ignore
@@ -133,13 +136,13 @@ export class ApiKeyManager {
         const sanitized: string[] = [];
         rawKeys.forEach((rawKey, idx) => {
             if (typeof rawKey !== 'string') {
-                console.warn(`[ApiKeyManager] ⚠️ ${source} key ${idx + 1} 무시됨: 문자열이 아닙니다.`);
+                logger.warn(`⚠️ ${source} key ${idx + 1} 무시됨: 문자열이 아닙니다.`);
                 return;
             }
 
             const trimmed = rawKey.trim();
             if (!trimmed) {
-                console.warn(`[ApiKeyManager] ⚠️ ${source} key ${idx + 1} 무시됨: 비어있거나 공백입니다.`);
+                logger.warn(`⚠️ ${source} key ${idx + 1} 무시됨: 비어있거나 공백입니다.`);
                 return;
             }
 
@@ -169,12 +172,12 @@ export class ApiKeyManager {
                 this.keys = this.loadKeysFromEnv();
             }
         } catch (error) {
-            console.warn(`[ApiKeyManager] ⚠️ API 키 초기화 실패, 빈 키 목록으로 진행: ${(error instanceof Error ? error.message : String(error))}`);
+            logger.warn(`⚠️ API 키 초기화 실패, 빈 키 목록으로 진행: ${(error instanceof Error ? error.message : String(error))}`);
             this.keys = [];
         }
 
         if (this.keys.length === 0) {
-            console.warn('[ApiKeyManager] ⚠️ 유효한 API 키가 구성되지 않았습니다. 인증 없이 요청을 시도합니다.');
+            logger.warn('⚠️ 유효한 API 키가 구성되지 않았습니다. 인증 없이 요청을 시도합니다.');
         }
 
         // 🆕 각 키에 대응하는 모델 로드
@@ -186,10 +189,10 @@ export class ApiKeyManager {
 
         this.sshKey = config?.sshKey || envConfig.ollamaSshKey || undefined;
 
-        console.log(`[ApiKeyManager] 🔑 초기화됨 - ${this.keys.length}개 API 키, ${this.models.length}개 모델 등록`);
+        logger.info(`🔑 초기화됨 - ${this.keys.length}개 API 키, ${this.models.length}개 모델 등록`);
         this.keys.forEach((key, idx) => {
             const model = this.models[idx] || envConfig.ollamaDefaultModel || 'default';
-            console.log(`[ApiKeyManager]   Key ${idx + 1}: ****${key.substring(key.length - 4)} → Model: ${model}`);
+            logger.info(`  Key ${idx + 1}: ****${key.substring(key.length - 4)} → Model: ${model}`);
         });
 
         // Warm cache from DB (async, non-blocking)
@@ -215,7 +218,7 @@ export class ApiKeyManager {
 
         for (const entry of numberedKeys) {
             if (typeof entry.value !== 'string' || entry.value.trim() === '') {
-                console.warn(`[ApiKeyManager] ⚠️ env OLLAMA_API_KEY_${entry.index} 무시됨: 비어있거나 공백입니다.`);
+                logger.warn(`⚠️ env OLLAMA_API_KEY_${entry.index} 무시됨: 비어있거나 공백입니다.`);
                 continue;
             }
             keys.push(entry.value.trim());
@@ -231,14 +234,14 @@ export class ApiKeyManager {
                 if (primary.trim() !== '') {
                     keys.push(primary.trim());
                 } else {
-                    console.warn('[ApiKeyManager] ⚠️ env legacy primary key 무시됨: 비어있거나 공백입니다.');
+                    logger.warn('⚠️ env legacy primary key 무시됨: 비어있거나 공백입니다.');
                 }
             }
             if (typeof secondary === 'string') {
                 if (secondary.trim() !== '') {
                     keys.push(secondary.trim());
                 } else {
-                    console.warn('[ApiKeyManager] ⚠️ env legacy secondary key 무시됨: 비어있거나 공백입니다.');
+                    logger.warn('⚠️ env legacy secondary key 무시됨: 비어있거나 공백입니다.');
                 }
             }
         }
@@ -361,7 +364,7 @@ export class ApiKeyManager {
         );
 
         const masked = this.getCurrentKey().substring(0, 8) + '...';
-        console.warn(`[ApiKeyManager] ⚠️ Key ${this.currentKeyIndex + 1} (${masked}) 실패 - 코드: ${errorCode}`);
+        logger.warn(`⚠️ Key ${this.currentKeyIndex + 1} (${masked}) 실패 - 코드: ${errorCode}`);
 
         // 인증 관련 에러인 경우 즉시 다음 키로 전환
         const isAuthError = errorCode === 401 || errorCode === 403 || errorCode === 429;
@@ -387,7 +390,7 @@ export class ApiKeyManager {
      */
     private rotateToNextKey(): boolean {
         if (this.keys.length <= 1) {
-            console.error(`[ApiKeyManager] ❌ 사용 가능한 다른 키가 없습니다.`);
+            logger.error(`❌ 사용 가능한 다른 키가 없습니다.`);
             return false;
         }
 
@@ -416,7 +419,7 @@ export class ApiKeyManager {
         const previousMasked = this.keys[previousIndex].substring(0, 8) + '...';
         const newMasked = this.getCurrentKey().substring(0, 8) + '...';
         const newModel = this.getCurrentModel();
-        console.log(`[ApiKeyManager] 🔄 키 전환: Key ${previousIndex + 1} (${previousMasked}) → Key ${nextIndex + 1} (${newMasked}) [Model: ${newModel}]`);
+        logger.info(`🔄 키 전환: Key ${previousIndex + 1} (${previousMasked}) → Key ${nextIndex + 1} (${newMasked}) [Model: ${newModel}]`);
 
         return true;
     }
@@ -431,7 +434,7 @@ export class ApiKeyManager {
         this.keyFailures.clear();
         // Async DB clear (fire-and-forget)
         this.dbWrite('DELETE FROM api_key_failures', []);
-        console.log(`[ApiKeyManager] 🔄 Key 1으로 리셋됨`);
+        logger.info(`🔄 Key 1으로 리셋됨`);
     }
 
     /**
@@ -439,14 +442,14 @@ export class ApiKeyManager {
      */
     setKeyIndex(index: number): boolean {
         if (index < 0 || index >= this.keys.length) {
-            console.error(`[ApiKeyManager] ❌ 유효하지 않은 인덱스: ${index}`);
+            logger.error(`❌ 유효하지 않은 인덱스: ${index}`);
             return false;
         }
         this.currentKeyIndex = index;
         this.failureCount = 0;
         const masked = this.getCurrentKey().substring(0, 8) + '...';
         const model = this.getCurrentModel();
-        console.log(`[ApiKeyManager] 🎯 Key ${index + 1} (${masked}) 강제 선택 [Model: ${model}]`);
+        logger.info(`🎯 Key ${index + 1} (${masked}) 강제 선택 [Model: ${model}]`);
         return true;
     }
 

@@ -23,6 +23,9 @@ import { OllamaClient } from '../ollama/client';
 import { sanitizePromptInput, validatePromptInput } from '../utils/input-sanitizer';
 import { Agent, AgentCategory } from './types';
 import industryData from './industry-agents.json';
+import { createLogger } from '../utils/logger';
+
+const logger = createLogger('LLMRouter');
 
 /**
  * LLM 라우팅 결과 인터페이스
@@ -175,7 +178,7 @@ function extractJSONFromResponse(response: string): Record<string, unknown> | nu
         try {
             return JSON.parse(lazyMatch[0]);
         } catch (e) {
-            console.log('[LLM Router] JSON 파싱 실패, 응답:', response.substring(0, 200));
+            logger.info('JSON 파싱 실패, 응답:', response.substring(0, 200));
             return null;
         }
     }
@@ -240,7 +243,7 @@ ${agentList}
     // Sanitize user input before embedding in prompt
     const validation = validatePromptInput(routingInput);
     if (!validation.valid) {
-        console.log('[LLM Router] 입력 검증 실패:', validation.error);
+        logger.info('입력 검증 실패:', validation.error);
         return null;
     }
     const sanitizedMessage = sanitizePromptInput(routingInput);
@@ -272,15 +275,15 @@ ${sanitizedMessage}
         const result = await Promise.race([routingPromise, timeoutPromise]);
 
         if (!result) {
-            console.log('[LLM Router] 타임아웃 - 폴백 사용');
+            logger.info('타임아웃 - 폴백 사용');
             return null;
         }
 
         const parsed = extractJSONFromResponse(result);
 
         if (parsed && parsed.agent_id) {
-            console.log(`[LLM Router] 선택: ${parsed.agent_id} (신뢰도: ${parsed.confidence})`);
-            console.log(`[LLM Router] 이유: ${parsed.reasoning}`);
+            logger.info(`선택: ${parsed.agent_id} (신뢰도: ${parsed.confidence})`);
+            logger.info(`이유: ${parsed.reasoning}`);
 
             return {
                 agentId: String(parsed.agent_id),
@@ -290,11 +293,11 @@ ${sanitizedMessage}
             };
         }
 
-        console.log('[LLM Router] 유효하지 않은 응답 형식');
+        logger.info('유효하지 않은 응답 형식');
         return null;
 
     } catch (error) {
-        console.error('[LLM Router] 오류:', error);
+        logger.error('오류:', error);
         return null;
     }
 }

@@ -6,6 +6,7 @@
 const mockAxiosInstance = {
     get: jest.fn(() => Promise.resolve({ data: {} })),
     post: jest.fn(() => Promise.resolve({ data: {} })),
+    defaults: { baseURL: '', headers: { common: {} } },
     interceptors: {
         request: { use: jest.fn(() => {}) },
         response: { use: jest.fn(() => {}) },

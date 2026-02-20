@@ -26,6 +26,9 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
 import type { MCPServerConfig, MCPConnectionStatus, MCPTool, MCPToolResult } from './types';
+import { createLogger } from '../utils/logger';
+
+const logger = createLogger('ExternalMCP');
 
 /**
  * SDK Tool 타입
@@ -146,12 +149,12 @@ export class ExternalMCPClient {
 
             this.status = 'connected';
             this.lastPing = new Date().toISOString();
-            console.log(`[ExternalMCP] Connected to "${this.config.name}" — ${this.discoveredTools.length} tools discovered`);
+            logger.info(`Connected to "${this.config.name}" — ${this.discoveredTools.length} tools discovered`);
         } catch (error) {
             this.status = 'error';
             this.lastError = error instanceof Error ? error.message : String(error);
             this.discoveredTools = [];
-            console.error(`[ExternalMCP] Failed to connect to "${this.config.name}":`, this.lastError);
+            logger.error(`Failed to connect to "${this.config.name}":`, this.lastError);
             throw error;
         }
     }
@@ -167,14 +170,14 @@ export class ExternalMCPClient {
             try {
                 await this.client.close();
             } catch (error) {
-                console.warn(`[ExternalMCP] Error closing client "${this.config.name}":`, error);
+                logger.warn(`Error closing client "${this.config.name}":`, error);
             }
             this.client = null;
         }
         this.transport = null;
         this.status = 'disconnected';
         this.discoveredTools = [];
-        console.log(`[ExternalMCP] Disconnected from "${this.config.name}"`);
+        logger.info(`Disconnected from "${this.config.name}"`);
     }
 
     /**

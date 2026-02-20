@@ -117,7 +117,7 @@ export class OllamaClient {
         let baseUrl = this.config.baseUrl;
         if (this.isCloudModel(this.config.model)) {
             baseUrl = OLLAMA_CLOUD_HOST;
-            console.log(`[OllamaClient] 🌐 Cloud 모델 감지 - 호스트: ${baseUrl}`);
+            logger.info(`🌐 Cloud 모델 감지 - 호스트: ${baseUrl}`);
         }
 
         this.client = axios.create({
@@ -146,7 +146,7 @@ export class OllamaClient {
             },
             async (error) => {
                 const statusCode = error?.response?.status;
-                console.log(`[OllamaClient] ❌ 요청 실패 - 상태 코드: ${statusCode}`);
+                logger.info(`❌ 요청 실패 - 상태 코드: ${statusCode}`);
 
                 // 네트워크 에러 (ETIMEDOUT, ECONNREFUSED 등) 시 재시도
                 const isNetworkError = !statusCode && (
@@ -164,17 +164,17 @@ export class OllamaClient {
                     const retryCount = error.config?._retryCount || 0;
                     const maxRetries = this.apiKeyManager.getTotalKeys() - 1;
 
-                    console.log(`[OllamaClient] 🔄 API 키 스와핑 시도 중... (${retryCount + 1}/${maxRetries + 1})`);
+                    logger.info(`🔄 API 키 스와핑 시도 중... (${retryCount + 1}/${maxRetries + 1})`);
                     const switched = this.apiKeyManager.reportFailure(error);
 
                     if (switched && error.config && retryCount < maxRetries) {
                         error.config._retryCount = retryCount + 1;
                         const newAuthHeaders = this.apiKeyManager.getAuthHeaders();
                         error.config.headers.Authorization = newAuthHeaders.Authorization;
-                        console.log(`[OllamaClient] ✅ 새 API 키로 재시도 (Key ${this.apiKeyManager.getCurrentKeyIndex() + 1})...`);
+                        logger.info(`✅ 새 API 키로 재시도 (Key ${this.apiKeyManager.getCurrentKeyIndex() + 1})...`);
                         return this.client.request(error.config);
                     } else {
-                        console.log(`[OllamaClient] ⚠️ 모든 키 소진 - switched: ${switched}, retryCount: ${retryCount}/${maxRetries}`);
+                        logger.info(`⚠️ 모든 키 소진 - switched: ${switched}, retryCount: ${retryCount}/${maxRetries}`);
                         
                         // 🆕 모든 키가 소진되었을 때 KeyExhaustionError throw
                         const nextResetTime = this.apiKeyManager.getNextResetTime();
@@ -191,11 +191,11 @@ export class OllamaClient {
                     if (retryCount < maxNetworkRetries) {
                         error.config._retryCount = retryCount + 1;
                         const backoffMs = Math.pow(2, retryCount) * 1000; // 1s, 2s
-                        console.log(`[OllamaClient] 🔄 네트워크 에러(${error.code}) - ${backoffMs}ms 후 재시도 (${retryCount + 1}/${maxNetworkRetries})`);
+                        logger.info(`🔄 네트워크 에러(${error.code}) - ${backoffMs}ms 후 재시도 (${retryCount + 1}/${maxNetworkRetries})`);
                         await new Promise(resolve => setTimeout(resolve, backoffMs));
                         return this.client.request(error.config);
                     }
-                    console.log(`[OllamaClient] ⚠️ 네트워크 재시도 소진 (${error.code})`);
+                    logger.info(`⚠️ 네트워크 재시도 소진 (${error.code})`);
                     // ENOTFOUND/EAI_AGAIN은 호스트(DNS) 레벨 장애 — 키 로테이션 무의미
                     // 키별 장애(ETIMEDOUT, ECONNREFUSED 등)만 키 교체 트리거
                     if (error.code !== 'ENOTFOUND' && error.code !== 'EAI_AGAIN') {
@@ -440,7 +440,7 @@ export class OllamaClient {
                                 };
                             }
                         } catch (e) {
-                            console.error('[OllamaClient] JSON Parse Error:', e);
+                            logger.error('JSON Parse Error:', e);
                         }
                     }
                 }
@@ -611,7 +611,7 @@ export class OllamaClient {
                                 };
                             }
                         } catch (e) {
-                            console.error('[OllamaClient] Chat JSON Parse Error:', e);
+                            logger.error('Chat JSON Parse Error:', e);
                         }
                     }
                 }
@@ -737,7 +737,7 @@ export class OllamaClient {
             max_results: Math.min(maxResults, 10)
         };
 
-        console.log(`[OllamaClient] 🔍 Web Search: "${query}"`);
+        logger.info(`🔍 Web Search: "${query}"`);
 
         try {
             // Ollama 공식 API 엔드포인트
@@ -753,10 +753,10 @@ export class OllamaClient {
                 }
             );
 
-            console.log(`[OllamaClient] ✅ Web Search: ${response.data.results?.length || 0}개 결과`);
+            logger.info(`✅ Web Search: ${response.data.results?.length || 0}개 결과`);
             return response.data;
         } catch (error: unknown) {
-            logger.warn('[OllamaClient] 웹 검색 실패:', error);
+            logger.warn('웹 검색 실패:', error);
             return {
                 results: [],
                 error: error instanceof Error ? error.message : 'Web search failed'
@@ -771,7 +771,7 @@ export class OllamaClient {
     async webFetch(url: string): Promise<WebFetchResponse> {
         const request: WebFetchRequest = { url };
 
-        console.log(`[OllamaClient] 📥 Web Fetch: ${url}`);
+        logger.info(`📥 Web Fetch: ${url}`);
 
         try {
             const response = await this.client.post<WebFetchResponse>(
@@ -786,10 +786,10 @@ export class OllamaClient {
                 }
             );
 
-            console.log(`[OllamaClient] ✅ Web Fetch: "${response.data.title}"`);
+            logger.info(`✅ Web Fetch: "${response.data.title}"`);
             return response.data;
         } catch (error: unknown) {
-            console.error('[OllamaClient] Web Fetch 실패:', (error instanceof Error ? error.message : String(error)));
+            logger.error('Web Fetch 실패:', (error instanceof Error ? error.message : String(error)));
             return { title: '', content: '', links: [] };
         }
     }
@@ -860,11 +860,11 @@ export const createClientForIndex = (index: number): OllamaClient | null => {
     const pair = keyManager.getKeyModelPair(index);
     
     if (!pair) {
-        console.error(`[OllamaClient] ❌ 인덱스 ${index}에 해당하는 키-모델 쌍이 없습니다.`);
+        logger.error(`❌ 인덱스 ${index}에 해당하는 키-모델 쌍이 없습니다.`);
         return null;
     }
     
-    console.log(`[OllamaClient] 🎯 인덱스 ${index + 1} 클라이언트 생성: ${pair.model}`);
+    logger.info(`🎯 인덱스 ${index + 1} 클라이언트 생성: ${pair.model}`);
     return new OllamaClient({ model: pair.model });
 };
 
@@ -876,7 +876,7 @@ export const createAllClients = (): OllamaClient[] => {
     const keyManager = getApiKeyManager();
     const pairs = keyManager.getAllKeyModelPairs();
     
-    console.log(`[OllamaClient] 🚀 ${pairs.length}개 A2A 클라이언트 생성 중...`);
+    logger.info(`🚀 ${pairs.length}개 A2A 클라이언트 생성 중...`);
     
     const clients = pairs.map(pair => {
         // 각 클라이언트 생성 전에 해당 인덱스로 키 매니저 설정
@@ -884,6 +884,6 @@ export const createAllClients = (): OllamaClient[] => {
         return client;
     });
     
-    console.log(`[OllamaClient] ✅ ${clients.length}개 A2A 클라이언트 준비 완료`);
+    logger.info(`✅ ${clients.length}개 A2A 클라이언트 준비 완료`);
     return clients;
 };

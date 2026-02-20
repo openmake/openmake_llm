@@ -22,6 +22,7 @@ import type { Application, Request, Response } from 'express';
 import { getConfig } from '../config/env';
 import { getAuthService } from '../services/AuthService';
 import { setTokenCookie, setRefreshTokenCookie, generateRefreshToken } from '../auth';
+import { createLogger } from '../utils/logger';
 
 /**
  * OAuth 프로바이더 설정 인터페이스
@@ -77,6 +78,8 @@ const PROVIDER_CONFIGS: Record<string, Omit<OAuthProviderConfig, 'clientId' | 'c
     }
 };
 
+const logger = createLogger('OAuth');
+
 /**
  * OAuth 프로바이더 관리자
  *
@@ -113,7 +116,7 @@ export class OAuthManager {
         }
         this.states.clear();
         this.providers.clear();
-        console.log('[OAuth] OAuthManager 리소스 정리 완료');
+        logger.info('OAuthManager 리소스 정리 완료');
     }
 
 
@@ -131,7 +134,7 @@ export class OAuthManager {
                 clientSecret: config.googleClientSecret,
                 redirectUri: baseRedirectUri
             });
-            console.log('[OAuth] Google 프로바이더 등록됨');
+            logger.info('Google 프로바이더 등록됨');
         }
 
         // GitHub OAuth
@@ -142,7 +145,7 @@ export class OAuthManager {
                 clientSecret: config.githubClientSecret,
                 redirectUri: baseRedirectUri.replace('/callback/google', '/callback/github')
             });
-            console.log('[OAuth] GitHub 프로바이더 등록됨');
+            logger.info('GitHub 프로바이더 등록됨');
         }
     }
 
@@ -166,7 +169,7 @@ export class OAuthManager {
     getAuthorizationUrl(provider: string, returnUrl?: string): string | null {
         const config = this.providers.get(provider);
         if (!config) {
-            console.error(`[OAuth] 알 수 없는 프로바이더: ${provider}`);
+            logger.error(`알 수 없는 프로바이더: ${provider}`);
             return null;
         }
 
@@ -209,7 +212,7 @@ export class OAuthManager {
         // 상태 검증
         const storedState = this.states.get(state);
         if (!storedState || storedState.provider !== provider) {
-            console.error('[OAuth] 잘못된 state 또는 provider');
+            logger.error('잘못된 state 또는 provider');
             return null;
         }
 
@@ -218,7 +221,7 @@ export class OAuthManager {
 
         // 만료 체크
         if (Date.now() - storedState.createdAt.getTime() > this.stateExpiry) {
-            console.error('[OAuth] 만료된 state');
+            logger.error('만료된 state');
             return null;
         }
 
@@ -234,7 +237,7 @@ export class OAuthManager {
             const userInfo = await this.fetchUserInfo(provider, config, tokenResponse);
             return userInfo;
         } catch (error) {
-            console.error('[OAuth] 콜백 처리 오류:', error);
+            logger.error('콜백 처리 오류:', error);
             return null;
         }
     }
@@ -280,7 +283,7 @@ export class OAuthManager {
                 expiresIn: data.expires_in
             };
         } catch (error) {
-            console.error('[OAuth] 토큰 교환 실패:', error);
+            logger.error('토큰 교환 실패:', error);
             return null;
         }
     }
@@ -334,7 +337,7 @@ export class OAuthManager {
                         const primaryEmail = emailResponse.data.find((e: { primary?: boolean; email?: string }) => e.primary);
                         email = primaryEmail?.email || '';
                     } catch (e) {
-                        console.warn('[OAuth] GitHub 이메일 조회 실패');
+                        logger.warn('GitHub 이메일 조회 실패');
                     }
                 }
 
@@ -364,7 +367,7 @@ export class OAuthManager {
 
             return userInfo;
         } catch (error) {
-            console.error('[OAuth] 사용자 정보 조회 실패:', error);
+            logger.error('사용자 정보 조회 실패:', error);
             return null;
         }
     }
@@ -454,8 +457,8 @@ export function setupOAuthRoutes(app: Application): void {
         setRefreshTokenCookie(res, generateRefreshToken(authResult.user));
 
         // 메인 페이지로 리다이렉트
-        res.redirect('/');
-    });
+         res.redirect('/');
+     });
 
-    console.log('[OAuth] 라우트 설정 완료');
-}
+     logger.info('라우트 설정 완료');
+ }

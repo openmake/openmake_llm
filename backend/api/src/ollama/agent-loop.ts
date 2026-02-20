@@ -31,6 +31,7 @@
 
 import { Ollama, Message, Tool, ToolCall, ChatResponse } from 'ollama';
 import { ChatMessage, ToolDefinition, ThinkOption, UsageMetrics } from './types';
+import { createLogger } from '../utils/logger';
 
 /**
  * Thinking 필드를 포함하는 확장 메시지 인터페이스
@@ -49,6 +50,7 @@ import { getConfig } from '../config';
 import { OLLAMA_CLOUD_HOST } from '../config/constants';
 
 const envConfig = getConfig();
+const logger = createLogger('AgentLoop');
 
 /**
  * 도구 실행 함수 타입 — 파싱된 인자를 받아 결과를 반환합니다.
@@ -277,7 +279,7 @@ function createOllamaClient(model: string): Ollama {
         headers: apiKeyManager.getAuthHeaders()
     });
 
-    console.log(`[AgentLoop] 🌐 Ollama 클라이언트 생성 - 호스트: ${host}, 모델: ${model}`);
+    logger.info(`🌐 Ollama 클라이언트 생성 - 호스트: ${host}, 모델: ${model}`);
 
     return ollama;
 }
@@ -320,11 +322,11 @@ export async function runAgentLoop(options: AgentLoopOptions): Promise<AgentLoop
     let iterations = 0;
     let lastMetrics: UsageMetrics | undefined;
 
-    console.log(`[AgentLoop] 🚀 Agent Loop 시작 - 모델: ${model}, 도구: ${tools.length}개`);
+    logger.info(`🚀 Agent Loop 시작 - 모델: ${model}, 도구: ${tools.length}개`);
 
     while (iterations < maxIterations) {
         iterations++;
-        console.log(`[AgentLoop] 📍 반복 ${iterations}/${maxIterations}`);
+        logger.info(`📍 반복 ${iterations}/${maxIterations}`);
 
         let response: ChatResponse;
         let requestAttempt = 0;
@@ -419,10 +421,10 @@ export async function runAgentLoop(options: AgentLoopOptions): Promise<AgentLoop
                 const status = getHttpStatus(error);
                 const isPermanent = status === 401 || status === 403 || status === 404 || isApiKeyExhaustionError(error);
 
-                if (isPermanent) {
-                    console.error(`[AgentLoop] ❌ 영구 실패(${status || 'unknown'}): ${(error instanceof Error ? error.message : String(error))}`);
-                    throw error;
-                }
+                 if (isPermanent) {
+                     logger.error(`❌ 영구 실패(${status || 'unknown'}): ${(error instanceof Error ? error.message : String(error))}`);
+                     throw error;
+                 }
 
                 requestAttempt++;
                 if (requestAttempt >= maxIterations) {
@@ -431,11 +433,11 @@ export async function runAgentLoop(options: AgentLoopOptions): Promise<AgentLoop
 
                 if (status === 429) {
                     const backoffMs = Math.min(1000 * Math.pow(2, requestAttempt - 1), 10000);
-                    console.warn(`[AgentLoop] ⚠️ 429 응답 - ${backoffMs}ms 후 재시도 (${requestAttempt}/${maxIterations - 1})`);
+                    logger.warn(`⚠️ 429 응답 - ${backoffMs}ms 후 재시도 (${requestAttempt}/${maxIterations - 1})`);
                     await sleep(backoffMs);
-                } else {
-                    console.warn(`[AgentLoop] ⚠️ 요청 실패(${status || 'unknown'}) - 재시도 (${requestAttempt}/${maxIterations - 1})`);
-                }
+                 } else {
+                     logger.warn(`⚠️ 요청 실패(${status || 'unknown'}) - 재시도 (${requestAttempt}/${maxIterations - 1})`);
+                 }
             }
         }
 
@@ -443,42 +445,42 @@ export async function runAgentLoop(options: AgentLoopOptions): Promise<AgentLoop
         messages.push(response.message);
 
         // Thinking 로그
-        if ((response.message as MessageWithThinking)?.thinking) {
-            console.log(`[AgentLoop] 🧠 Thinking: ${(response.message as MessageWithThinking).thinking!.substring(0, 100)}...`);
-        }
+         if ((response.message as MessageWithThinking)?.thinking) {
+             logger.info(`🧠 Thinking: ${(response.message as MessageWithThinking).thinking!.substring(0, 100)}...`);
+         }
 
         // Content 로그
-        if (response.message.content) {
-            console.log(`[AgentLoop] 💬 Content: ${response.message.content.substring(0, 100)}...`);
-        }
+         if (response.message.content) {
+             logger.info(`💬 Content: ${response.message.content.substring(0, 100)}...`);
+         }
 
         // Tool calls 확인
         const responsToolCalls = response.message.tool_calls ?? [];
 
-        if (responsToolCalls.length === 0) {
-            // 도구 호출 없음 - 루프 종료
-            console.log(`[AgentLoop] ✅ 도구 호출 없음 - 루프 종료`);
-            break;
-        }
+         if (responsToolCalls.length === 0) {
+             // 도구 호출 없음 - 루프 종료
+             logger.info(`✅ 도구 호출 없음 - 루프 종료`);
+             break;
+         }
 
         // 도구 호출 처리
         for (const toolCall of responsToolCalls) {
             const funcName = toolCall.function.name;
             const funcArgs = toolCall.function.arguments;
 
-            console.log(`[AgentLoop] 🔧 도구 호출: ${funcName}(${JSON.stringify(funcArgs)})`);
+             logger.info(`🔧 도구 호출: ${funcName}(${JSON.stringify(funcArgs)})`);
 
-            if (!(funcName in availableFunctions)) {
-                console.warn(`[AgentLoop] ⚠️ 알 수 없는 도구: ${funcName}`);
-                continue;
-            }
+             if (!(funcName in availableFunctions)) {
+                 logger.warn(`⚠️ 알 수 없는 도구: ${funcName}`);
+                 continue;
+             }
 
             try {
                 // 도구 실행
                 const result = await availableFunctions[funcName](funcArgs);
                 const resultStr = typeof result === 'string' ? result : JSON.stringify(result);
 
-                console.log(`[AgentLoop] 📤 도구 결과: ${resultStr.substring(0, 100)}...`);
+                 logger.info(`📤 도구 결과: ${resultStr.substring(0, 100)}...`);
 
                 // 콜백 호출
                 if (onToolCall) {
@@ -499,9 +501,9 @@ export async function runAgentLoop(options: AgentLoopOptions): Promise<AgentLoop
                     tool_name: funcName
                 });
 
-            } catch (error: unknown) {
-                console.error(`[AgentLoop] ❌ 도구 실행 오류: ${(error instanceof Error ? error.message : String(error))}`);
-                messages.push({
+             } catch (error: unknown) {
+                 logger.error(`❌ 도구 실행 오류: ${(error instanceof Error ? error.message : String(error))}`);
+                 messages.push({
                     role: 'tool',
                     content: `Error: ${(error instanceof Error ? error.message : String(error))}`,
                     tool_name: funcName
@@ -510,15 +512,15 @@ export async function runAgentLoop(options: AgentLoopOptions): Promise<AgentLoop
         }
     }
 
-    if (iterations >= maxIterations) {
-        console.warn(`[AgentLoop] ⚠️ 최대 반복 횟수(${maxIterations}) 도달`);
-    }
+     if (iterations >= maxIterations) {
+         logger.warn(`⚠️ 최대 반복 횟수(${maxIterations}) 도달`);
+     }
 
     // 최종 결과 구성
     const lastMessage = messages[messages.length - 1];
     const history = messages.map(fromOllamaMessage);
 
-    console.log(`[AgentLoop] 🏁 Agent Loop 완료 - 반복: ${iterations}, 도구 호출: ${toolCallsExecuted.length}개`);
+    logger.info(`🏁 Agent Loop 완료 - 반복: ${iterations}, 도구 호출: ${toolCallsExecuted.length}개`);
 
     return {
         message: fromOllamaMessage(lastMessage),

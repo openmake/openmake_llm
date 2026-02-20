@@ -22,7 +22,7 @@
  * detectPromptType() -> getEnhancedBasePrompt() + SYSTEM_PROMPTS[type] -> buildSystemPrompt()
  * 
  * @see chat/context-engineering.ts - 4-Pillar Framework 기반 프롬프트 빌더
- * @see chat/prompt-enhancer.ts - 사용자 프롬프트 품질 향상
+
  * @see services/ChatService.ts - 이 모듈의 출력을 소비하여 LLM에 전달
  */
 

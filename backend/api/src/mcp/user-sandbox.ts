@@ -35,9 +35,11 @@
 import * as path from 'path';
 import * as fs from 'fs';
 import { getConfig } from '../config/env';
+import { createLogger } from '../utils/logger';
 
 /** 사용자 데이터 루트 경로 (config에서 로드) */
 const USER_DATA_ROOT = getConfig().userDataPath;
+const logger = createLogger('UserSandbox');
 
 /**
  * 사용자별 격리된 작업 환경 관리 클래스
@@ -131,7 +133,7 @@ export class UserSandbox {
         const isSubPath = resolvedPathWithSep.startsWith(userRootWithSep);
 
         if (!isExactMatch && !isSubPath) {
-            console.warn(`[UserSandbox] ⚠️ 경로 접근 거부: ${resolvedPath} (사용자: ${userId})`);
+            logger.warn(`⚠️ 경로 접근 거부: ${resolvedPath} (사용자: ${userId})`);
             return false;
         }
 
@@ -199,7 +201,7 @@ export class UserSandbox {
                     await fs.promises.unlink(filePath);
                 }
             }
-            console.log(`[UserSandbox] 임시 파일 정리 완료: ${userId}`);
+            logger.info(`임시 파일 정리 완료: ${userId}`);
         } catch {
             // 디렉토리가 없거나 접근 불가한 경우 무시
         }
@@ -255,7 +257,7 @@ export class UserSandbox {
     static async saveUserConfig(userId: string | number, config: Record<string, unknown>): Promise<void> {
         const configPath = await this.getUserConfigPath(userId);
         await fs.promises.writeFile(configPath, JSON.stringify(config, null, 2), 'utf-8');
-        console.log(`[UserSandbox] 설정 저장: ${userId}`);
+        logger.info(`설정 저장: ${userId}`);
     }
 
     /**
@@ -288,7 +290,7 @@ export class UserSandbox {
         const userRoot = path.resolve(USER_DATA_ROOT, String(userId));
         try {
             await fs.promises.rm(userRoot, { recursive: true, force: true });
-            console.log(`[UserSandbox] 사용자 데이터 삭제: ${userId}`);
+            logger.info(`사용자 데이터 삭제: ${userId}`);
             return true;
         } catch {
             return false;

@@ -22,6 +22,7 @@ import { Request, Response, NextFunction } from 'express';
 import { createLogger } from './logger';
 import { error as apiError, badRequest as apiBadRequest, ErrorCodes, ApiErrorResponse } from './api-response';
 import { QuotaExceededError } from '../errors/quota-exceeded.error';
+import { KeyExhaustionError } from '../errors/key-exhaustion.error';
 
 const logger = createLogger('ErrorHandler');
 
@@ -159,6 +160,20 @@ export function errorHandler(
             used: err.used,
             limit: err.limit,
             retryAfter: err.retryAfterSeconds,
+        }));
+        return;
+    }
+
+    // ── KeyExhaustionError → 503 ──
+    if (err instanceof KeyExhaustionError) {
+        logger.warn(`All API keys exhausted: ${err.message}`, { path: req.path });
+        res.set('Retry-After', String(err.retryAfterSeconds));
+        res.status(503).json(apiError(ErrorCodes.SERVICE_UNAVAILABLE, err.getDisplayMessage('ko'), {
+            errorType: 'api_keys_exhausted',
+            retryAfter: err.retryAfterSeconds,
+            resetTime: err.resetTime.toISOString(),
+            totalKeys: err.totalKeys,
+            keysInCooldown: err.keysInCooldown,
         }));
         return;
     }

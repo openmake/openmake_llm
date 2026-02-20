@@ -10,6 +10,9 @@
  */
 
 import type { DiscussionConfig, ContextPriority, TokenLimits } from './discussion-types';
+import { createLogger } from '../utils/logger';
+
+const logger = createLogger('Discussion');
 
 // 토큰 → 문자 변환 (근사값)
 export const tokensToChars = (tokens: number): number => tokens * 4;
@@ -176,7 +179,7 @@ export function createContextBuilder(config: DiscussionConfig): {
                 if (remaining > 100) { // 최소 100자는 있어야 추가
                     parts.push(`## ${item.label}\n${truncated.substring(0, remaining)}...`);
                 }
-                console.log(`[Discussion] ⚠️ 토큰 제한 도달, ${item.label} 일부 생략`);
+                logger.info(`⚠️ 토큰 제한 도달, ${item.label} 일부 생략`);
                 break;
             }
             
@@ -185,7 +188,7 @@ export function createContextBuilder(config: DiscussionConfig): {
         }
         
         if (parts.length > 0) {
-            console.log(`[Discussion] 📊 컨텍스트 구성: ${parts.length}개 항목, ${totalChars}자 (제한: ${maxTotalChars}자)`);
+            logger.info(`📊 컨텍스트 구성: ${parts.length}개 항목, ${totalChars}자 (제한: ${maxTotalChars}자)`);
         }
         
         _cachedFullContext = parts.join('\n\n');

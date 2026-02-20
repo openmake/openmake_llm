@@ -24,11 +24,11 @@ const STATIC_ASSETS = [
     '/manifest.json',
     '/logo.png',
 
-    // CSS (13)
+    // CSS (12)
     '/style.css',
     '/css/design-tokens.css',
     '/css/icons.css',
-    '/css/brutalism.css',
+
     '/css/animations.css',
     '/css/feature-cards.css',
     '/css/unified-sidebar.css',
@@ -68,7 +68,7 @@ const STATIC_ASSETS = [
     '/js/modules/utils.js',
     '/js/modules/websocket.js',
 
-    // JS page modules (22)
+    // JS page modules (21)
     '/js/modules/pages/admin-metrics.js',
     '/js/modules/pages/admin.js',
     '/js/modules/pages/agent-learning.js',
@@ -89,7 +89,7 @@ const STATIC_ASSETS = [
     '/js/modules/pages/password-change.js',
     '/js/modules/pages/research.js',
     '/js/modules/pages/settings.js',
-    '/js/modules/pages/token-monitoring.js',
+
     '/js/modules/pages/usage.js',
 
     // Icons (10)

@@ -20,6 +20,9 @@
 import { Application } from 'express';
 import * as path from 'path';
 import { getConfig } from './config/env';
+import { createLogger } from './utils/logger';
+
+const logger = createLogger('Swagger');
 
 /**
  * OpenAPI 3.0 스펙 객체
@@ -984,5 +987,5 @@ export function setupSwaggerRoutes(app: Application): void {
         res.send(generateSwaggerHTML());
     });
 
-    console.log('[Swagger] API 문서 라우트 설정 완료: /api-docs');
+    logger.info('API 문서 라우트 설정 완료: /api-docs');
 }

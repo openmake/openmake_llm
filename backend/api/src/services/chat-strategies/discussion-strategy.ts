@@ -17,6 +17,9 @@
 import { createDiscussionEngine, type DiscussionResult } from '../../agents/discussion-engine';
 import type { ChatMessage } from '../../ollama/types';
 import type { ChatStrategy, ChatResult, DiscussionStrategyContext } from './types';
+import { createLogger } from '../../utils/logger';
+
+const logger = createLogger('DiscussionStrategy');
 
 /**
  * 웹 검색 결과 인터페이스 (토론 내부용)
@@ -58,7 +61,7 @@ export class DiscussionStrategy implements ChatStrategy<DiscussionStrategyContex
     async execute(context: DiscussionStrategyContext): Promise<ChatResult> {
         const { message, docId, history, webSearchContext, images, userId } = context.req;
 
-        console.log('[ChatService] 🎯 멀티 에이전트 토론 모드 시작');
+        logger.info('🎯 멀티 에이전트 토론 모드 시작');
 
         // 1단계: 문서 컨텍스트 추출 (텍스트 + 이미지)
         let documentContext = '';
@@ -78,11 +81,11 @@ export class DiscussionStrategy implements ChatStrategy<DiscussionStrategyContex
                 documentContext = `📚 문서: ${doc.filename} (${doc.type})\n` +
                     `길이: ${doc.text.length}자\n\n${docText}`;
 
-                console.log(`[ChatService] 📄 문서 컨텍스트 적용: ${doc.filename} (${docText.length}자)`);
+                logger.info(`📄 문서 컨텍스트 적용: ${doc.filename} (${docText.length}자)`);
 
                 if (['image', 'pdf'].includes(doc.type) && doc.info?.base64) {
                     documentImages.push(doc.info.base64);
-                    console.log('[ChatService] 🖼️ 문서 이미지 데이터 추출됨');
+                    logger.info('🖼️ 문서 이미지 데이터 추출됨');
                 }
             }
         }
@@ -94,11 +97,11 @@ export class DiscussionStrategy implements ChatStrategy<DiscussionStrategyContex
         })) || [];
 
         if (conversationHistory.length > 0) {
-            console.log(`[ChatService] 💬 대화 히스토리 적용: ${conversationHistory.length}개 메시지`);
+            logger.info(`💬 대화 히스토리 적용: ${conversationHistory.length}개 메시지`);
         }
 
         if (webSearchContext) {
-            console.log(`[ChatService] 🔍 웹 검색 컨텍스트 적용: ${webSearchContext.length}자`);
+            logger.info(`🔍 웹 검색 컨텍스트 적용: ${webSearchContext.length}자`);
         }
 
         // 3단계: 사용자 장기 메모리 조회 (게스트가 아닌 경우만)
@@ -111,10 +114,10 @@ export class DiscussionStrategy implements ChatStrategy<DiscussionStrategyContex
 
                 if (memoryResult.contextString) {
                     userMemoryContext = memoryResult.contextString;
-                    console.log(`[ChatService] 💾 사용자 메모리 컨텍스트 적용: ${memoryResult.memories.length}개 기억, ${userMemoryContext.length}자`);
+                    logger.info(`💾 사용자 메모리 컨텍스트 적용: ${memoryResult.memories.length}개 기억, ${userMemoryContext.length}자`);
                 }
             } catch (e) {
-                console.warn('[ChatService] MemoryService 로드 실패:', e);
+                logger.warn('MemoryService 로드 실패:', e);
             }
         }
 
@@ -123,7 +126,7 @@ export class DiscussionStrategy implements ChatStrategy<DiscussionStrategyContex
         let imageDescriptions: string[] = [];
 
         if (allImages.length > 0) {
-            console.log(`[ChatService] 🖼️ ${allImages.length}개 이미지 분석 시작...`);
+            logger.info(`🖼️ ${allImages.length}개 이미지 분석 시작...`);
 
             context.onProgress?.({
                 phase: 'selecting',
@@ -149,13 +152,13 @@ export class DiscussionStrategy implements ChatStrategy<DiscussionStrategyContex
                     );
 
                     if (analysisResponse.content) {
-                        console.log(`[ChatService] ✅ 이미지 ${i + 1} 분석 완료`);
+                        logger.info(`✅ 이미지 ${i + 1} 분석 완료`);
                         return analysisResponse.content.substring(0, 500);
                     }
 
                     return `[이미지 ${i + 1}: 내용 없음]`;
                 } catch (e) {
-                    console.warn(`[ChatService] 이미지 ${i + 1} 분석 실패:`, e);
+                    logger.warn(`이미지 ${i + 1} 분석 실패:`, e);
                     return `[이미지 ${i + 1}: 분석 실패]`;
                 }
             });
@@ -215,9 +218,9 @@ export class DiscussionStrategy implements ChatStrategy<DiscussionStrategyContex
         try {
             const { performWebSearch } = await import('../../mcp');
             webSearchFn = performWebSearch;
-            console.log('[ChatService] 🔍 웹 검색 사실 검증 활성화');
+            logger.info('🔍 웹 검색 사실 검증 활성화');
         } catch (e) {
-            console.warn('[ChatService] 웹 검색 모듈 로드 실패, 사실 검증 비활성화');
+            logger.warn('웹 검색 모듈 로드 실패, 사실 검증 비활성화');
         }
 
         // 6단계: 토론 실행 및 결과 포맷팅/스트리밍
@@ -226,7 +229,7 @@ export class DiscussionStrategy implements ChatStrategy<DiscussionStrategyContex
             result = await discussionEngine.startDiscussion(message, webSearchFn);
         } catch (discussionError) {
             const errMsg = discussionError instanceof Error ? discussionError.message : String(discussionError);
-            console.error(`[ChatService] ❌ 토론 엔진 실행 실패: ${errMsg}`);
+            logger.error(`❌ 토론 엔진 실행 실패: ${errMsg}`);
 
             const fallbackResponse = '⚠️ 멀티 에이전트 토론 중 오류가 발생했습니다.\n\n' +
                 '**원인:** AI 모델 서버에 연결할 수 없거나 응답 생성에 실패했습니다.\n\n' +
@@ -249,13 +252,13 @@ export class DiscussionStrategy implements ChatStrategy<DiscussionStrategyContex
             context.onToken(char);
         }
 
-        console.log(`[ChatService] 🎯 토론 완료: ${result.totalTime}ms, 참여자: ${result.participants.length}명`);
-        console.log('[ChatService] 📊 컨텍스트 사용 현황:');
-        console.log(`   - 문서: ${documentContext ? '✓' : '✗'} (${documentContext.length}자)`);
-        console.log(`   - 히스토리: ${conversationHistory.length}개 메시지`);
-        console.log(`   - 메모리: ${userMemoryContext ? '✓' : '✗'} (${userMemoryContext.length}자)`);
-        console.log(`   - 웹검색: ${webSearchContext ? '✓' : '✗'}`);
-        console.log(`   - 이미지: ${imageDescriptions.length}개 분석됨`);
+        logger.info(`🎯 토론 완료: ${result.totalTime}ms, 참여자: ${result.participants.length}명`);
+        logger.info('📊 컨텍스트 사용 현황:');
+        logger.info(`   - 문서: ${documentContext ? '✓' : '✗'} (${documentContext.length}자)`);
+        logger.info(`   - 히스토리: ${conversationHistory.length}개 메시지`);
+        logger.info(`   - 메모리: ${userMemoryContext ? '✓' : '✗'} (${userMemoryContext.length}자)`);
+        logger.info(`   - 웹검색: ${webSearchContext ? '✓' : '✗'}`);
+        logger.info(`   - 이미지: ${imageDescriptions.length}개 분석됨`);
 
         return { response: formattedResponse };
     }

@@ -18,6 +18,9 @@ import {
 import { AGENTS, industryData, getAgentById } from './agent-data';
 import { analyzeTopicIntent } from './topic-analyzer';
 import { routeWithLLM, isValidAgentId } from './llm-router';
+import { createLogger } from '../utils/logger';
+
+const logger = createLogger('AgentRouter');
 
 // ========================================
 // 에이전트 라우팅 (개선됨)
@@ -51,7 +54,7 @@ export async function routeToAgent(message: string, useLLM: boolean = true): Pro
     // 디버그: AGENTS 맵 상태 확인
     const agentCount = Object.keys(AGENTS).length;
     const categoryCount = Object.keys(industryData).length;
-    console.log(`[Agent Router] 메시지: "${message.substring(0, 50)}..." | 등록된 에이전트: ${agentCount}개, 카테고리: ${categoryCount}개`);
+    logger.info(`메시지: "${message.substring(0, 50)}..." | 등록된 에이전트: ${agentCount}개, 카테고리: ${categoryCount}개`);
 
     // 🆕 LLM 기반 라우팅 시도 (우선순위 1) - 개선됨: 신뢰도 조건 완화
     if (useLLM) {
@@ -60,7 +63,7 @@ export async function routeToAgent(message: string, useLLM: boolean = true): Pro
             if (llmResult && llmResult.confidence > 0.3 && isValidAgentId(llmResult.agentId)) {
                 const agent = getAgentById(llmResult.agentId);
                 if (agent) {
-                    console.log(`[Agent Router] ✅ LLM 라우팅 성공: ${agent.name} (신뢰도: ${llmResult.confidence})`);
+                    logger.info(`✅ LLM 라우팅 성공: ${agent.name} (신뢰도: ${llmResult.confidence})`);
                     return {
                         primaryAgent: agent.id,
                         category: agent.category || 'general',
@@ -72,13 +75,13 @@ export async function routeToAgent(message: string, useLLM: boolean = true): Pro
                 }
             }
         } catch (error) {
-            console.log('[Agent Router] LLM 라우팅 실패, 키워드 폴백 사용');
+            logger.info('LLM 라우팅 실패, 키워드 폴백 사용');
         }
     }
 
     // 🆕 1단계: 의도 기반 토픽 분석
     const topicAnalysis = analyzeTopicIntent(message);
-    console.log(`[Agent Router] 토픽 분석: ${topicAnalysis.matchedCategories.join(', ') || '없음'} (신뢰도: ${topicAnalysis.confidence})`);
+    logger.info(`토픽 분석: ${topicAnalysis.matchedCategories.join(', ') || '없음'} (신뢰도: ${topicAnalysis.confidence})`);
 
     let bestMatch: AgentSelection = {
         primaryAgent: 'general',
@@ -162,9 +165,9 @@ export async function routeToAgent(message: string, useLLM: boolean = true): Pro
     }
 
     // 디버그: 최종 선택 결과
-    console.log(`[Agent Router] 선택: ${bestMatch.primaryAgent} (점수: ${highestScore}, 신뢰도: ${bestMatch.confidence})`);
+    logger.info(`선택: ${bestMatch.primaryAgent} (점수: ${highestScore}, 신뢰도: ${bestMatch.confidence})`);
     if (bestMatch.matchedKeywords && bestMatch.matchedKeywords.length > 0) {
-        console.log(`[Agent Router] 매칭 키워드: ${bestMatch.matchedKeywords.join(', ')}`);
+        logger.info(`매칭 키워드: ${bestMatch.matchedKeywords.join(', ')}`);
     }
 
     return bestMatch;

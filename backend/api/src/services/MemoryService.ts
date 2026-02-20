@@ -11,6 +11,9 @@
 
 import { v4 as uuidv4 } from 'uuid';
 import { getUnifiedDatabase, UserMemory, MemoryCategory } from '../data/models/unified-database';
+import { createLogger } from '../utils/logger';
+
+const logger = createLogger('MemoryService');
 
 export interface MemoryExtractionResult {
     category: MemoryCategory;
@@ -52,7 +55,7 @@ export class MemoryService {
                 const parsed = this.parseExtractionResult(llmResult);
                 extracted.push(...parsed);
             } catch (e) {
-                console.error('[MemoryService] LLM 추출 실패:', e);
+                logger.error('LLM 추출 실패:', e);
             }
         }
 
@@ -231,7 +234,7 @@ Return ONLY the JSON array, no explanation.`;
                 tags: Array.isArray(item.tags) ? item.tags.slice(0, 5) : []
             }));
         } catch (e) {
-            console.error('[MemoryService] JSON 파싱 실패:', e);
+            logger.error('JSON 파싱 실패:', e);
             return [];
         }
     }

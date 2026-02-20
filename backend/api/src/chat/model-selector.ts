@@ -29,6 +29,9 @@
 import { getConfig } from '../config/env';
 import { ModelOptions } from '../ollama/types';
 import { isValidBrandModel, getProfiles } from './pipeline-profile';
+import { createLogger } from '../utils/logger';
+
+const logger = createLogger('ModelSelector');
 
 // Re-export types from model-selector-types
 export type { QueryType, QueryClassification, ModelSelection } from './model-selector-types';
@@ -294,7 +297,7 @@ async function classifyQueryWithLLM(query: string): Promise<QueryClassification>
             throw new Error(`Invalid category: ${parsed.category}`);
         }
 
-        console.log(`[ModelSelector] LLM 분류: ${parsed.category} (confidence=${(parsed.confidence * 100).toFixed(0)}%)`);
+        logger.info(`LLM 분류: ${parsed.category} (confidence=${(parsed.confidence * 100).toFixed(0)}%)`);
 
         return {
             type: parsed.category as QueryType,
@@ -303,7 +306,7 @@ async function classifyQueryWithLLM(query: string): Promise<QueryClassification>
         };
     } catch (error) {
         // LLM 실패 → regex 폴백 (silent)
-        console.debug(`[ModelSelector] LLM 분류 실패, regex 폴백:`, error instanceof Error ? error.message : String(error));
+        logger.debug(`LLM 분류 실패, regex 폴백:`, error instanceof Error ? error.message : String(error));
         return _classifyQuery(query);
     }
 }
@@ -336,8 +339,7 @@ export async function selectOptimalModel(query: string, hasImages?: boolean): Pr
         classification.type = 'vision';
     }
 
-    console.log(`[ModelSelector] 질문 유형: ${classification.type} (신뢰도: ${(classification.confidence * 100).toFixed(0)}%)`);
-    console.log(`[ModelSelector] 매칭 패턴: ${classification.matchedPatterns.join(', ')}`);
+    logger.info(`질문 유형: ${classification.type} (신뢰도: ${(classification.confidence * 100).toFixed(0)}%)`);
 
     // 질문 유형에 맞는 최적 모델 찾기
     let selectedPreset: ModelPreset | null = null;
@@ -360,7 +362,7 @@ export async function selectOptimalModel(query: string, hasImages?: boolean): Pr
     // .env에서 실제 모델명 가져오기 (기본 모델 사용)
     const actualModel = config.ollamaDefaultModel || selectedPreset.defaultModel;
 
-    console.log(`[ModelSelector] 선택된 모델: ${selectedPreset.name} (${actualModel})`);
+    logger.info(`선택된 모델: ${selectedPreset.name} (${actualModel})`);
 
     return {
         model: actualModel,
@@ -527,7 +529,7 @@ export async function selectModelForProfile(requestedModel: string, query?: stri
         const targetProfiles = getProfiles();
         const resolvedProfile = targetProfiles[targetProfile];
         if (resolvedProfile) {
-            console.log(`[ModelSelector] §9 Auto-Routing: ${requestedModel} → ${targetProfile} (engine=${resolvedProfile.engineModel})`);
+            logger.info(`§9 Auto-Routing: ${requestedModel} → ${targetProfile} (engine=${resolvedProfile.engineModel})`);
             return {
                 model: resolvedProfile.engineModel,
                 options: {
@@ -546,11 +548,11 @@ export async function selectModelForProfile(requestedModel: string, query?: stri
         }
         // Fallback: 프로파일을 못 찾으면 기존 자동 선택
         const autoSelection = await selectOptimalModel(query || '', hasImages);
-        console.log(`[ModelSelector] §9 Auto-Routing Fallback: ${requestedModel} → ${autoSelection.model}`);
+        logger.info(`§9 Auto-Routing Fallback: ${requestedModel} → ${autoSelection.model}`);
         return autoSelection;
     }
 
-    console.log(`[ModelSelector] §9 Brand Model: ${requestedModel} → engine=${profile.engineModel}`);
+    logger.info(`§9 Brand Model: ${requestedModel} → engine=${profile.engineModel}`);
 
     return {
         model: profile.engineModel,
@@ -598,7 +600,7 @@ export async function selectModelForProfile(requestedModel: string, query?: stri
 export async function selectBrandProfileForAutoRouting(query: string, hasImages?: boolean): Promise<string> {
     // 이미지가 첨부되면 무조건 vision 프로파일
     if (hasImages) {
-        console.log('[ModelSelector] §9 Auto-Routing: 이미지 감지 → openmake_llm_vision');
+        logger.info('§9 Auto-Routing: 이미지 감지 → openmake_llm_vision');
         return 'openmake_llm_vision';
     }
 
@@ -637,7 +639,7 @@ export async function selectBrandProfileForAutoRouting(query: string, hasImages?
             break;
     }
 
-    console.log(`[ModelSelector] §9 Auto-Routing: ${classification.type} (confidence=${(classification.confidence * 100).toFixed(0)}%) → ${targetProfile}`);
+    logger.info(`§9 Auto-Routing: ${classification.type} (confidence=${(classification.confidence * 100).toFixed(0)}%) → ${targetProfile}`);
     return targetProfile;
 }
 

@@ -21,6 +21,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { getApiKeyManager } from './api-key-manager';
 import { getConfig } from '../config/env';
+import { createLogger } from '../utils/logger';
 
 /**
  * 일간 사용량 기록
@@ -245,14 +246,16 @@ function getKeyId(key: string): string {
  * @class ApiUsageTracker
  */
 class ApiUsageTracker {
-    /** 사용량 데이터 JSON 파일 경로 */
-    private dataPath: string;
-    /** 메모리 내 사용량 데이터 */
-    private data: UsageData;
-    /** 오늘의 시간별 사용량 기록 (24개 슬롯) */
-    private todayHourly: HourlyRecord[] = [];
-    /** 파일 저장 디바운스 타이머 */
-    private saveDebounceTimer: NodeJS.Timeout | null = null;
+     /** 사용량 데이터 JSON 파일 경로 */
+     private dataPath: string;
+     /** 메모리 내 사용량 데이터 */
+     private data: UsageData;
+     /** 오늘의 시간별 사용량 기록 (24개 슬롯) */
+     private todayHourly: HourlyRecord[] = [];
+     /** 파일 저장 디바운스 타이머 */
+     private saveDebounceTimer: NodeJS.Timeout | null = null;
+     /** 로거 인스턴스 */
+     private logger = createLogger('ApiUsageTracker');
 
     /**
      * ApiUsageTracker 인스턴스를 생성합니다.
@@ -261,12 +264,12 @@ class ApiUsageTracker {
      *
      * @param dataDir - 데이터 파일 저장 디렉토리 경로 (기본값: './data')
      */
-    constructor(dataDir: string = './data') {
-        this.dataPath = path.join(dataDir, 'api-usage.json');
-        this.data = this.loadData();
-        this.initHourlyRecords();
-        console.log('[ApiUsageTracker] 초기화됨');
-    }
+     constructor(dataDir: string = './data') {
+         this.dataPath = path.join(dataDir, 'api-usage.json');
+         this.data = this.loadData();
+         this.initHourlyRecords();
+         this.logger.info('초기화됨');
+     }
 
     /**
      * 파일에서 사용량 데이터를 로드합니다.
@@ -275,17 +278,17 @@ class ApiUsageTracker {
      * @returns 로드된 UsageData 또는 초기 빈 데이터
      * @private
      */
-    private loadData(): UsageData {
-        try {
-            if (fs.existsSync(this.dataPath)) {
-                const content = fs.readFileSync(this.dataPath, 'utf-8');
-                return JSON.parse(content);
-            }
-        } catch (error) {
-            console.error('[ApiUsageTracker] 데이터 로드 실패:', error);
-        }
-        return { daily: {}, lastUpdated: new Date().toISOString() };
-    }
+     private loadData(): UsageData {
+         try {
+             if (fs.existsSync(this.dataPath)) {
+                 const content = fs.readFileSync(this.dataPath, 'utf-8');
+                 return JSON.parse(content);
+             }
+         } catch (error) {
+             this.logger.error('데이터 로드 실패:', error);
+         }
+         return { daily: {}, lastUpdated: new Date().toISOString() };
+     }
 
     /**
      * 사용량 데이터를 파일에 저장합니다 (디바운스 적용).
@@ -295,24 +298,24 @@ class ApiUsageTracker {
      *
      * @private
      */
-    private saveData(): void {
-        // 디바운스로 너무 빈번한 저장 방지
-        if (this.saveDebounceTimer) {
-            clearTimeout(this.saveDebounceTimer);
-        }
-        this.saveDebounceTimer = setTimeout(() => {
-            try {
-                const dir = path.dirname(this.dataPath);
-                if (!fs.existsSync(dir)) {
-                    fs.mkdirSync(dir, { recursive: true });
-                }
-                this.data.lastUpdated = new Date().toISOString();
-                fs.writeFileSync(this.dataPath, JSON.stringify(this.data, null, 2));
-            } catch (error) {
-                console.error('[ApiUsageTracker] 데이터 저장 실패:', error);
-            }
-        }, 1000);
-    }
+     private saveData(): void {
+         // 디바운스로 너무 빈번한 저장 방지
+         if (this.saveDebounceTimer) {
+             clearTimeout(this.saveDebounceTimer);
+         }
+         this.saveDebounceTimer = setTimeout(() => {
+             try {
+                 const dir = path.dirname(this.dataPath);
+                 if (!fs.existsSync(dir)) {
+                     fs.mkdirSync(dir, { recursive: true });
+                 }
+                 this.data.lastUpdated = new Date().toISOString();
+                 fs.writeFileSync(this.dataPath, JSON.stringify(this.data, null, 2));
+             } catch (error) {
+                 this.logger.error('데이터 저장 실패:', error);
+             }
+         }, 1000);
+     }
 
     /**
      * 시간별 기록 배열을 24개 슬롯(0~23시)으로 초기화합니다.
@@ -769,10 +772,10 @@ class ApiUsageTracker {
             }
         }
 
-        if (cleaned > 0) {
-            console.log(`[ApiUsageTracker] ${cleaned}일치 오래된 데이터 정리됨`);
-            this.saveData();
-        }
+         if (cleaned > 0) {
+             this.logger.info(`${cleaned}일치 오래된 데이터 정리됨`);
+             this.saveData();
+         }
     }
 }
 

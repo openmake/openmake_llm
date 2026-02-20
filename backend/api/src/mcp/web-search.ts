@@ -30,16 +30,19 @@ import { MCPToolDefinition, MCPToolResult } from './types';
 import { createClient } from '../ollama/client';
 import { isFirecrawlConfigured } from './firecrawl';
 import { getConfig } from '../config/env';
+import { createLogger } from '../utils/logger';
 
 /** Google Custom Search API 키 */
 const GOOGLE_API_KEY = getConfig().googleApiKey;
 /** Google Custom Search Engine ID */
 const GOOGLE_CSE_ID = getConfig().googleCseId;
+/** Logger instance */
+const logger = createLogger('WebSearch');
 
 // API 키 미설정 경고
 if (!GOOGLE_API_KEY || !GOOGLE_CSE_ID) {
-    console.warn('[WebSearch] ⚠️ GOOGLE_API_KEY 또는 GOOGLE_CSE_ID가 설정되지 않았습니다.');
-    console.warn('[WebSearch] Google 검색 기능이 비활성화됩니다. .env 파일에 설정하세요.');
+    logger.warn('⚠️ GOOGLE_API_KEY 또는 GOOGLE_CSE_ID가 설정되지 않았습니다.');
+    logger.warn('Google 검색 기능이 비활성화됩니다. .env 파일에 설정하세요.');
 }
 
 /**
@@ -147,10 +150,10 @@ async function searchOllamaWebSearch(query: string, maxResults: number = 10): Pr
                     source: 'ollama.com'
                 });
             }
-            console.log(`[WebSearch] Ollama API: ${results.length}개`);
+            logger.info(`Ollama API: ${results.length}개`);
         }
     } catch (e) {
-        console.error('[WebSearch] Ollama API 실패:', e);
+        logger.error('Ollama API 실패:', e);
     }
 
     return results;
@@ -177,7 +180,7 @@ async function searchFirecrawl(query: string, maxResults: number = 5): Promise<S
     const FIRECRAWL_API_URL = getConfig().firecrawlApiUrl;
 
     try {
-        console.log(`[WebSearch] Firecrawl 검색 시작: "${query}"`);
+        logger.info(`Firecrawl 검색 시작: "${query}"`);
 
         const response = await fetch(`${FIRECRAWL_API_URL}/search`, {
             method: 'POST',
@@ -199,7 +202,7 @@ async function searchFirecrawl(query: string, maxResults: number = 5): Promise<S
 
         if (!response.ok) {
             const errorText = await response.text();
-            console.error(`[WebSearch] Firecrawl API 오류 (${response.status}): ${errorText}`);
+            logger.error(`Firecrawl API 오류 (${response.status}): ${errorText}`);
             return results;
         }
 
@@ -215,9 +218,9 @@ async function searchFirecrawl(query: string, maxResults: number = 5): Promise<S
                 });
             }
         }
-        console.log(`[WebSearch] 🔥 Firecrawl: ${results.length}개`);
+        logger.info(`🔥 Firecrawl: ${results.length}개`);
     } catch (e) {
-        console.error('[WebSearch] Firecrawl 실패:', e);
+        logger.error('Firecrawl 실패:', e);
     }
 
     return results;
@@ -253,7 +256,7 @@ async function searchGoogle(query: string, maxResults: number = 10, globalSearch
         const response = await fetch(url);
 
         if (!response.ok) {
-            console.error(`[WebSearch] Google API 오류: ${response.status}`);
+            logger.error(`Google API 오류: ${response.status}`);
             return results;
         }
 
@@ -269,9 +272,9 @@ async function searchGoogle(query: string, maxResults: number = 10, globalSearch
                 });
             }
         }
-        console.log(`[WebSearch] Google: ${results.length}개`);
+        logger.info(`Google: ${results.length}개`);
     } catch (e) {
-        console.error('[WebSearch] Google 실패:', e);
+        logger.error('Google 실패:', e);
     }
 
     return results;
@@ -313,9 +316,9 @@ async function searchWikipedia(query: string): Promise<SearchResult[]> {
             }
         }
 
-        console.log(`[WebSearch] Wikipedia: ${results.length}개`);
+        logger.info(`Wikipedia: ${results.length}개`);
     } catch (e) {
-        console.error('[WebSearch] Wikipedia 실패:', e);
+        logger.error('Wikipedia 실패:', e);
     }
 
     return results;
@@ -379,13 +382,13 @@ async function searchGoogleNews(query: string): Promise<SearchResult[]> {
                     count++;
                 }
             } catch (itemError) {
-                console.warn('[WebSearch] Google News item 파싱 실패:', itemError);
+                logger.warn('Google News item 파싱 실패:', itemError);
             }
         }
 
-        console.log(`[WebSearch] Google News: ${results.length}개`);
+        logger.info(`Google News: ${results.length}개`);
     } catch (e) {
-        console.error('[WebSearch] Google News 실패:', e);
+        logger.error('Google News 실패:', e);
     }
 
     return results;
@@ -442,9 +445,9 @@ async function searchDuckDuckGoAPI(query: string): Promise<SearchResult[]> {
             }
         }
 
-        console.log(`[WebSearch] DuckDuckGo API: ${results.length}개`);
+        logger.info(`DuckDuckGo API: ${results.length}개`);
     } catch (e) {
-        console.error('[WebSearch] DuckDuckGo API 실패:', e);
+        logger.error('DuckDuckGo API 실패:', e);
     }
 
     return results;
@@ -502,9 +505,9 @@ async function searchNaverNews(query: string): Promise<SearchResult[]> {
             }
         }
 
-        console.log(`[WebSearch] 네이버 뉴스: ${results.length}개`);
+        logger.info(`네이버 뉴스: ${results.length}개`);
     } catch (e) {
-        console.error('[WebSearch] 네이버 뉴스 실패:', e);
+        logger.error('네이버 뉴스 실패:', e);
     }
 
     return results;
@@ -533,18 +536,18 @@ export async function performWebSearch(query: string, options: { maxResults?: nu
     // 고볼륨 모드: maxResults > 15이면 모든 소스에서 병렬 수집 (Deep Research 용)
     const highVolumeMode = maxResults > 15;
 
-    console.log(`[WebSearch] 쿼리: ${query} (maxResults: ${maxResults}, highVolume: ${highVolumeMode})`);
+    logger.info(`쿼리: ${query} (maxResults: ${maxResults}, highVolume: ${highVolumeMode})`);
 
     // 🚀 1단계: Ollama 공식 API 우선 시도 (고볼륨이 아닌 경우에만 조기 반환)
     let earlyOllamaResults: SearchResult[] = [];
     if (useOllamaFirst) {
         earlyOllamaResults = await searchOllamaWebSearch(query, Math.min(maxResults, 10));
         if (earlyOllamaResults.length > 0 && !highVolumeMode) {
-            console.log(`[WebSearch] ✅ Ollama API 성공: ${earlyOllamaResults.length}개 결과`);
+            logger.info(`✅ Ollama API 성공: ${earlyOllamaResults.length}개 결과`);
             return earlyOllamaResults;
         }
         if (earlyOllamaResults.length === 0) {
-            console.log('[WebSearch] Ollama API 결과 없음, 폴백 검색 시작...');
+            logger.info('Ollama API 결과 없음, 폴백 검색 시작...');
         }
     }
 
@@ -554,7 +557,7 @@ export async function performWebSearch(query: string, options: { maxResults?: nu
         const firecrawlLimit = highVolumeMode ? Math.min(maxResults, 20) : Math.min(maxResults, 10);
         earlyFirecrawlResults = await searchFirecrawl(query, firecrawlLimit);
         if (earlyFirecrawlResults.length > 0) {
-            console.log(`[WebSearch] 🔥 Firecrawl 성공: ${earlyFirecrawlResults.length}개 결과`);
+            logger.info(`🔥 Firecrawl 성공: ${earlyFirecrawlResults.length}개 결과`);
             // 고볼륨이 아니고 충분하면 조기 반환
             if (!highVolumeMode && earlyFirecrawlResults.length >= 5) {
                 return earlyFirecrawlResults;
@@ -594,7 +597,7 @@ export async function performWebSearch(query: string, options: { maxResults?: nu
         return true;
     });
 
-    console.log(`[WebSearch] 총 ${uniqueResults.length}개 (Firecrawl:${earlyFirecrawlResults.length}, Ollama:${earlyOllamaResults.length}, Google:${googleResults.length}, Wiki:${wikiResults.length}, News:${newsResults.length}, DDG:${ddgResults.length}, Naver:${naverResults.length})`);
+    logger.info(`총 ${uniqueResults.length}개 (Firecrawl:${earlyFirecrawlResults.length}, Ollama:${earlyOllamaResults.length}, Google:${googleResults.length}, Wiki:${wikiResults.length}, News:${newsResults.length}, DDG:${ddgResults.length}, Naver:${naverResults.length})`);
 
     return uniqueResults.slice(0, maxResults);
 }
