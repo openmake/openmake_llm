@@ -19,6 +19,9 @@
 
 import { MCPToolDefinition, MCPToolResult } from './types';
 import { getConfig } from '../config/env';
+import { createLogger } from '../utils/logger';
+
+const logger = createLogger('Firecrawl');
 
 // ============================================
 // Firecrawl API Client
@@ -95,7 +98,7 @@ async function firecrawlRequest(endpoint: string, data: Record<string, unknown>)
     }
 
     const url = `${FIRECRAWL_API_URL}${endpoint}`;
-    console.log(`[Firecrawl] 요청: ${endpoint}`);
+    logger.info(`요청: ${endpoint}`);
 
     try {
         const response = await fetch(url, {
@@ -114,7 +117,7 @@ async function firecrawlRequest(endpoint: string, data: Record<string, unknown>)
 
         return await response.json();
     } catch (error: unknown) {
-        console.error(`[Firecrawl] 요청 실패:`, (error instanceof Error ? error.message : String(error)));
+        logger.error(`요청 실패:`, (error instanceof Error ? error.message : String(error)));
         throw error;
     }
 }

@@ -31,6 +31,9 @@ import { routeToAgent, getAgentById, AGENTS, Agent, AgentSelection, getRelatedAg
 import { sanitizePromptInput, validatePromptInput } from '../utils/input-sanitizer';
 import type { DiscussionConfig, DiscussionProgress, AgentOpinion, DiscussionResult } from './discussion-types';
 import { createContextBuilder } from './discussion-context';
+import { createLogger } from '../utils/logger';
+
+const logger = createLogger('Discussion');
 
 // Re-export all types so consumers importing from discussion-engine don't break
 export type { DiscussionProgress, AgentOpinion, DiscussionResult, ContextPriority, TokenLimits, DiscussionConfig } from './discussion-types';
@@ -75,7 +78,7 @@ export function createDiscussionEngine(
      * 🆕 개선된 전문가 에이전트 선택 (의도 기반 + 컨텍스트 반영)
      */
     async function selectExpertAgents(topic: string): Promise<Agent[]> {
-        console.log(`[Discussion] 토론 주제: "${topic.substring(0, 50)}..."`);
+        logger.info(`토론 주제: "${topic.substring(0, 50)}..."`);
 
         // 🆕 컨텍스트를 포함하여 더 정확한 에이전트 선택
         const fullContext = buildFullContext();
@@ -84,9 +87,9 @@ export function createDiscussionEngine(
         // 🆕 컨텍스트를 전달하여 에이전트 선택 정확도 향상
         const experts = await getRelatedAgentsForDiscussion(topic, agentLimit, fullContext);
 
-        console.log(`[Discussion] 선택된 전문가: ${experts.map(e => `${e.emoji} ${e.name}`).join(', ')}`);
+        logger.info(`선택된 전문가: ${experts.map(e => `${e.emoji} ${e.name}`).join(', ')}`);
         if (fullContext) {
-            console.log(`[Discussion] 컨텍스트 적용됨 (${fullContext.length}자)`);
+            logger.info(`컨텍스트 적용됨 (${fullContext.length}자)`);
         }
 
         // 최소 2명 보장
@@ -173,7 +176,7 @@ ${contextInstructions}
             };
         } catch (error) {
             const errMsg = error instanceof Error ? error.message : String(error);
-            console.error(`[Discussion] ❌ ${agent.emoji} ${agent.name} 의견 생성 실패: ${errMsg}`);
+            logger.error(`❌ ${agent.emoji} ${agent.name} 의견 생성 실패: ${errMsg}`);
             return null;
         }
     }
@@ -285,7 +288,7 @@ ${contextInstructions}
 
         // 2.5. 의견이 하나도 수집되지 않은 경우 조기 종료
         if (opinions.length === 0) {
-            console.error('[Discussion] ⚠️ 모든 에이전트 의견 생성 실패 — LLM 연결 상태를 확인하세요.');
+            logger.error('⚠️ 모든 에이전트 의견 생성 실패 — LLM 연결 상태를 확인하세요.');
             onProgress?.({
                 phase: 'complete',
                 message: 'AI 모델 서버에 연결할 수 없어 토론을 완료하지 못했습니다.',
@@ -331,7 +334,7 @@ ${contextInstructions}
                 await webSearchFn(topic);
                 factChecked = true;
             } catch (e) {
-                console.warn('[Discussion] 사실 검증 실패:', e);
+                logger.warn('사실 검증 실패:', e);
             }
         }
 

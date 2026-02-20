@@ -32,6 +32,9 @@ import { UserSandbox, UserContext } from './user-sandbox';
 import { ToolRouter } from './tool-router';
 import { MCPServerRegistry } from './server-registry';
 import type { UnifiedDatabase } from '../data/models/unified-database';
+import { createLogger } from '../utils/logger';
+
+const logger = createLogger('MCP');
 
 /**
  * MCP 기능 상태 인터페이스
@@ -77,7 +80,7 @@ export class UnifiedMCPClient {
         this.server = createMCPServer('ollama-unified-mcp', '1.0.0');
         this.toolRouter = new ToolRouter();
         this.serverRegistry = new MCPServerRegistry(this.toolRouter);
-        console.log(`[MCP] 통합 MCP 클라이언트 초기화 - ${this.getToolCount()}개 도구 등록됨`);
+        logger.info(`통합 MCP 클라이언트 초기화 - ${this.getToolCount()}개 도구 등록됨`);
     }
 
     /**
@@ -85,7 +88,7 @@ export class UnifiedMCPClient {
      */
     async setFeatureState(state: Partial<MCPFeatureState>): Promise<void> {
         this.featureState = { ...this.featureState, ...state };
-        console.log(`[MCP] 기능 상태 업데이트:`, this.featureState);
+        logger.info(`기능 상태 업데이트:`, this.featureState);
     }
 
     /**
@@ -185,7 +188,7 @@ export class UnifiedMCPClient {
         if (this.featureState.sequentialThinking) {
             getSequentialThinkingServer().reset();
         }
-        console.log('[MCP] 상태 초기화 완료');
+        logger.info('상태 초기화 완료');
     }
 
     /**
@@ -230,7 +233,7 @@ export class UnifiedMCPClient {
     ): Promise<MCPToolResult> {
         // 권한 검증
         if (!canUseTool(context.tier, toolName)) {
-            console.warn(`[MCP] ⚠️ 도구 접근 거부: ${toolName} (tier: ${context.tier})`);
+            logger.warn(`⚠️ 도구 접근 거부: ${toolName} (tier: ${context.tier})`);
             return {
                 content: [{ type: 'text', text: `권한 없음: ${context.tier} 등급에서는 ${toolName} 도구를 사용할 수 없습니다.` }],
                 isError: true
@@ -240,7 +243,7 @@ export class UnifiedMCPClient {
         // 파일 경로 인자가 있으면 샌드박스 경로로 변환
         const sandboxedArgs = this.applySandboxPaths(args, context.userId);
 
-        console.log(`[MCP] 🔧 도구 실행: ${toolName} (user: ${context.userId}, tier: ${context.tier})`);
+        logger.info(`🔧 도구 실행: ${toolName} (user: ${context.userId}, tier: ${context.tier})`);
         return this.executeTool(toolName, sandboxedArgs);
     }
 
