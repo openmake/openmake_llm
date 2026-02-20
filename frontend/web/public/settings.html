@@ -119,6 +119,17 @@
         <div class="main-content">
             <div class="page-content">
                 <div class="container container-md">
+                    <nav class="spa-page-nav">
+                        <a href="/" class="spa-page-nav-back" id="backToChat" title="채팅으로 돌아가기">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="m15 18-6-6 6-6"/>
+                            </svg>
+                            <span>채팅으로</span>
+                        </a>
+                        <span class="spa-page-nav-divider"></span>
+                        <h1 class="spa-page-nav-title">설정</h1>
+                    </nav>
+
                     <header class="page-header">
                         <div>
                             <h1 class="page-title page-title-gradient">⚙️ 설정</h1>
@@ -206,6 +217,22 @@
                             <div style="display: flex; gap: var(--space-3); margin-top: var(--space-4);">
                                 <button class="btn btn-secondary" onclick="exportData()">📥 데이터 내보내기</button>
                                 <button class="btn btn-danger" onclick="clearHistory()">🗑️ 기록 삭제</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card" id="accountCard" style="margin-bottom: var(--space-6); display: none;">
+                        <div class="card-header"><span class="card-title">👤 계정 관리</span></div>
+                        <div class="card-body">
+                            <div class="setting-row">
+                                <div class="setting-info">
+                                    <h4>계정 설정</h4>
+                                    <p>비밀번호 변경 및 사용자 관리</p>
+                                </div>
+                            </div>
+                            <div style="display: flex; gap: var(--space-3); margin-top: var(--space-4);">
+                                <a href="/password-change.html" class="btn btn-primary" style="text-decoration:none;">🔑 비밀번호 변경</a>
+                                <a href="/admin.html" class="btn btn-secondary" id="adminLink" style="text-decoration:none; display:none;">👥 사용자 관리</a>
                             </div>
                         </div>
                     </div>
@@ -316,7 +343,17 @@
             } catch (e) { console.warn('시스템 정보 로드 실패:', e); }
         }
 
-        async function initSettings() { await loadModels(); loadSettings(); loadSystemInfo(); }
+        function initAccountCard() {
+            var accountCard = document.getElementById('accountCard');
+            var adminLink = document.getElementById('adminLink');
+            var loggedIn = !!localStorage.getItem('authToken');
+            if (loggedIn && accountCard) {
+                accountCard.style.display = '';
+                if (isAdmin() && adminLink) adminLink.style.display = '';
+            }
+        }
+
+        async function initSettings() { await loadModels(); loadSettings(); loadSystemInfo(); initAccountCard(); }
 
         function setTheme(theme) { document.documentElement.setAttribute('data-theme', theme); localStorage.setItem('theme', theme); }
 

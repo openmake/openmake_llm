@@ -16,13 +16,7 @@
     function esc(s) { var d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
 
     var CSS = '' +
-        '.page-settings { position: relative; min-height: 100%; }' +
-        '.page-settings::before {' +
-            'content: ""; position: fixed; top: 0; left: 0; right: 0; bottom: 0;' +
-            'background: var(--bg-app);' +
-            'pointer-events: none; z-index: 0;' +
-        '}' +
-        '.page-settings > * { position: relative; z-index: 1; }' +
+        '.page-settings { position: relative; min-height: 100%; background: var(--bg-app); }' +
         '.settings-container { max-width: 680px; margin: 0 auto; padding: var(--space-8) var(--space-6); }' +
         '.settings-hero { text-align: center; margin-bottom: var(--space-10); }' +
         '.settings-hero-icon { font-size: 3rem; margin-bottom: var(--space-4); display: block; filter: drop-shadow(2px 2px 0 rgba(0,0,0,0.5)); }' +
@@ -254,6 +248,25 @@
                 '</div>' +
             '</div>' +
 
+            '<div class="s-card" id="accountCard" style="display:none;">' +
+                '<div class="s-card-header">' +
+                    '<span class="s-card-icon">\uD83D\uDC64</span>' +
+                    '<span class="s-card-title">\uACC4\uC815 \uAD00\uB9AC</span>' +
+                '</div>' +
+                '<div class="s-card-body">' +
+                    '<div class="setting-row">' +
+                        '<div class="setting-info">' +
+                            '<h4>\uACC4\uC815 \uC124\uC815</h4>' +
+                            '<p>\uBE44\uBC00\uBC88\uD638 \uBCC0\uACBD \uBC0F \uC0AC\uC6A9\uC790 \uAD00\uB9AC</p>' +
+                        '</div>' +
+                    '</div>' +
+                    '<div class="s-btn-row">' +
+                        '<a href="/password-change.html" class="s-btn s-btn-primary" style="text-decoration:none;">\uD83D\uDD11 \uBE44\uBC00\uBC88\uD638 \uBCC0\uACBD</a>' +
+                        '<a href="/admin.html" class="s-btn s-btn-secondary" id="adminLink" style="text-decoration:none;display:none;">\uD83D\uDC65 \uC0AC\uC6A9\uC790 \uAD00\uB9AC</a>' +
+                    '</div>' +
+                '</div>' +
+            '</div>' +
+
             '<div class="s-card">' +
                 '<div class="s-card-header">' +
                     '<span class="s-card-icon">\u2139\uFE0F</span>' +
@@ -478,6 +491,17 @@
         }
 
         initSettings();
+
+        // 계정 관리 카드 표시 (로그인 시에만)
+        (function initAccountCard() {
+            var accountCard = document.getElementById('accountCard');
+            var adminLink = document.getElementById('adminLink');
+            var loggedIn = !!localStorage.getItem('authToken');
+            if (loggedIn && accountCard) {
+                accountCard.style.display = '';
+                if (isAdmin() && adminLink) adminLink.style.display = '';
+            }
+        })();
 
         // 사용자 등급(tier) 판별 — 백엔드 tool-tiers.ts의 getDefaultTierForRole 동기화
         function getUserTier() {

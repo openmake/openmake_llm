@@ -808,6 +808,8 @@
     border: var(--border-width, 2px) solid var(--border-light);
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-sm);
+    position: relative;
+    z-index: 2;
 }
 
 .spa-page-nav-back {
