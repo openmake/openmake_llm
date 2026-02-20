@@ -789,6 +789,27 @@ body {
     transform: translate(-1px, -1px);
 }
 
+.feedback-divider {
+    width: 1px;
+    height: 16px;
+    background: var(--border-light);
+    margin: 0 4px;
+}
+
+.feedback-btn {
+    padding: 6px 8px;
+}
+
+.feedback-btn.feedback-active {
+    background: var(--accent-primary);
+    color: white;
+    border-color: var(--accent-primary);
+}
+
+.feedback-btn.feedback-active svg {
+    fill: currentColor;
+}
+
 /* Loading Spinner */
 .loading-spinner {
     display: inline-block;

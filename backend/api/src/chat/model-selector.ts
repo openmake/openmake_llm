@@ -30,6 +30,7 @@ import { getConfig } from '../config/env';
 import { ModelOptions } from '../ollama/types';
 import { isValidBrandModel, getProfiles } from './pipeline-profile';
 import { createLogger } from '../utils/logger';
+import { applyCostTierCeiling, getDefaultCostTier } from './cost-tier';
 
 const logger = createLogger('ModelSelector');
 
@@ -80,12 +81,20 @@ interface ModelPreset {
 }
 
 // 사용 가능한 모델 프리셋
-const MODEL_PRESETS: Record<string, ModelPreset> = {
+export function getModelPresets(): Record<string, ModelPreset> {
+    const config = getConfig();
+    // 테스트 환경 등에서 config 값이 없을 때를 위한 폴백
+    const engineFast = config.omkEngineFast || 'gemini-3-flash-preview:cloud';
+    const engineLlm = config.omkEngineLlm || 'gpt-oss:120b-cloud';
+    const enginePro = config.omkEnginePro || 'kimi-k2.5:cloud';
+    const engineCode = config.omkEngineCode || 'glm-5:cloud';
+    const engineVision = config.omkEngineVision || 'qwen3.5:397b-cloud';
+    return {
     // Gemini 3 Flash - 범용/코딩/분석
     'gemini-flash': {
         name: 'Gemini 3 Flash',
         envKey: 'OLLAMA_MODEL_1',
-        defaultModel: 'gemini-3-flash-preview:cloud',
+        defaultModel: engineFast,
         options: {
             temperature: 0.7,
             top_p: 0.9,
@@ -108,7 +117,7 @@ const MODEL_PRESETS: Record<string, ModelPreset> = {
     'gpt-oss': {
         name: 'GPT-OSS 120B',
         envKey: 'OLLAMA_MODEL_2',
-        defaultModel: 'gpt-oss:120b-cloud',
+        defaultModel: engineLlm,
         options: {
             temperature: 0.8,
             top_p: 0.95,
@@ -131,7 +140,7 @@ const MODEL_PRESETS: Record<string, ModelPreset> = {
     'kimi': {
         name: 'Kimi K2.5',
         envKey: 'OLLAMA_MODEL_3',
-        defaultModel: 'kimi-k2.5:cloud',
+        defaultModel: enginePro,
         options: {
             temperature: 0.5,
             top_p: 0.85,
@@ -154,7 +163,7 @@ const MODEL_PRESETS: Record<string, ModelPreset> = {
     'qwen-coder': {
         name: 'Qwen3 Coder Next',
         envKey: 'OLLAMA_MODEL_4',
-        defaultModel: 'qwen3-coder-next:cloud',
+        defaultModel: engineCode,
         options: {
             temperature: 0.2,
             top_p: 0.8,
@@ -177,7 +186,7 @@ const MODEL_PRESETS: Record<string, ModelPreset> = {
     'qwen-vl': {
         name: 'Qwen3 VL 235B',
         envKey: 'OLLAMA_MODEL_5',
-        defaultModel: 'qwen3-vl:235b-cloud',
+        defaultModel: engineVision,
         options: {
             temperature: 0.6,
             top_p: 0.9,
@@ -200,7 +209,7 @@ const MODEL_PRESETS: Record<string, ModelPreset> = {
     'math-reasoning': {
         name: 'Math Reasoning',
         envKey: 'OLLAMA_DEFAULT_MODEL',
-        defaultModel: 'gemini-3-flash-preview:cloud',
+        defaultModel: engineFast,
         options: {
             temperature: 0.2,
             top_p: 0.8,
@@ -218,98 +227,10 @@ const MODEL_PRESETS: Record<string, ModelPreset> = {
         bestFor: ['math'],
         priority: 1,
     },
-};
-
-// ============================================================
-// LLM 기반 질문 분류 함수
-// ============================================================
-
-/**
- * LLM 기반 질문 분류 (Ollama Structured Output)
- * 
- * 코드 엔진 모델을 사용하여 질문을 분류합니다.
- * 실패 시 정규식 기반 classifyQuery()로 폴백합니다.
- * 
- * @param query - 사용자 질문
- * @returns 분류 결과 (LLM 또는 regex 폴백)
- */
-async function classifyQueryWithLLM(query: string): Promise<QueryClassification> {
-    // 매우 짧은 쿼리(20자 미만)는 regex로 충분
-    if (query.length < 20) {
-        return _classifyQuery(query);
-    }
-
-    try {
-        const config = getConfig();
-        const engineModel = config.omkEngineCode || config.ollamaModel;
-
-        // Ollama에 직접 HTTP 요청 (createClient 없이 경량 호출)
-        const ollamaHost = config.ollamaHost;
-        const response = await fetch(`${ollamaHost}/api/chat`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                model: engineModel,
-                messages: [
-                    {
-                        role: 'system',
-                        content: 'You are a query classifier. Classify the user query into exactly one category. Respond ONLY with the JSON object.'
-                    },
-                    {
-                        role: 'user',
-                        content: query
-                    }
-                ],
-                format: {
-                    type: 'object',
-                    properties: {
-                        category: {
-                            type: 'string',
-                            enum: ['code', 'analysis', 'creative', 'vision', 'korean', 'math', 'chat', 'document', 'translation']
-                        },
-                        confidence: {
-                            type: 'number',
-                            description: 'Classification confidence between 0.0 and 1.0'
-                        }
-                    },
-                    required: ['category', 'confidence']
-                },
-                stream: false,
-                options: { temperature: 0, num_predict: 50 }
-            }),
-            signal: AbortSignal.timeout(3000) // 3초 타임아웃
-        });
-
-        if (!response.ok) {
-            throw new Error(`Ollama responded with ${response.status}`);
-        }
-
-        const result = await response.json() as { message?: { content?: string } };
-        const content = result?.message?.content;
-        if (!content) {
-            throw new Error('Empty response from Ollama');
-        }
-
-        const parsed = JSON.parse(content) as { category: string; confidence: number };
-        const validTypes: QueryType[] = ['code', 'analysis', 'creative', 'vision', 'korean', 'math', 'chat', 'document', 'translation'];
-
-        if (!validTypes.includes(parsed.category as QueryType)) {
-            throw new Error(`Invalid category: ${parsed.category}`);
-        }
-
-        logger.info(`LLM 분류: ${parsed.category} (confidence=${(parsed.confidence * 100).toFixed(0)}%)`);
-
-        return {
-            type: parsed.category as QueryType,
-            confidence: Math.max(0, Math.min(1, parsed.confidence)),
-            matchedPatterns: ['llm-structured-output'],
-        };
-    } catch (error) {
-        // LLM 실패 → regex 폴백 (silent)
-        logger.debug(`LLM 분류 실패, regex 폴백:`, error instanceof Error ? error.message : String(error));
-        return _classifyQuery(query);
-    }
+    };
 }
+
+
 
 // ============================================================
 // 모델 선택 함수
@@ -319,7 +240,7 @@ async function classifyQueryWithLLM(query: string): Promise<QueryClassification>
  * 질문 유형에 따라 최적의 모델 프리셋을 선택합니다.
  * 
  * 선택 알고리즘:
- * 1. classifyQueryWithLLM()으로 질문 유형 분류 (LLM 우선, regex 폴백)
+ * 1. classifyQuery()로 질문 유형 분류 (정규식 + 키워드 스코어링)
  * 2. 이미지 첨부 시 vision으로 강제 전환
  * 3. MODEL_PRESETS에서 해당 유형의 bestFor에 포함된 프리셋 검색
  * 4. priority가 가장 낮은(=우선순위 높은) 프리셋 선택
@@ -332,7 +253,7 @@ async function classifyQueryWithLLM(query: string): Promise<QueryClassification>
  */
 export async function selectOptimalModel(query: string, hasImages?: boolean): Promise<ModelSelection> {
     const config = getConfig();
-    const classification = await classifyQueryWithLLM(query);
+    const classification = _classifyQuery(query);
 
     // 이미지가 첨부된 경우 비전 모델 강제 선택
     if (hasImages) {
@@ -345,7 +266,7 @@ export async function selectOptimalModel(query: string, hasImages?: boolean): Pr
     let selectedPreset: ModelPreset | null = null;
     let lowestPriority = Infinity;
 
-    for (const [, preset] of Object.entries(MODEL_PRESETS)) {
+    for (const [, preset] of Object.entries(getModelPresets())) {
         if (preset.bestFor.includes(classification.type)) {
             if (preset.priority < lowestPriority) {
                 lowestPriority = preset.priority;
@@ -356,11 +277,12 @@ export async function selectOptimalModel(query: string, hasImages?: boolean): Pr
 
     // 폴백: Gemini Flash (기본)
     if (!selectedPreset) {
-        selectedPreset = MODEL_PRESETS['gemini-flash'];
+        selectedPreset = getModelPresets()['gemini-flash'];
     }
 
-    // .env에서 실제 모델명 가져오기 (기본 모델 사용)
-    const actualModel = config.ollamaDefaultModel || selectedPreset.defaultModel;
+    // 실제 모델명 해석: 분류로 선택된 프리셋 모델을 우선 사용하고,
+    // 프리셋이 비어 있는 비정상 케이스에서만 OLLAMA_DEFAULT_MODEL로 폴백
+    const actualModel = selectedPreset.defaultModel || config.ollamaDefaultModel;
 
     logger.info(`선택된 모델: ${selectedPreset.name} (${actualModel})`);
 
@@ -394,7 +316,7 @@ export function checkModelCapability(
     const lowerModel = modelName.toLowerCase();
 
     // 모델명으로 프리셋 찾기
-    for (const preset of Object.values(MODEL_PRESETS)) {
+    for (const preset of Object.values(getModelPresets())) {
         if (preset.defaultModel.toLowerCase().includes(lowerModel) || 
             lowerModel.includes(preset.defaultModel.split(':')[0].toLowerCase())) {
             return preset.capabilities[capability];
@@ -421,7 +343,7 @@ export function checkModelCapability(
 export function getModelContextLength(modelName: string): number {
     const lowerModel = modelName.toLowerCase();
 
-    for (const preset of Object.values(MODEL_PRESETS)) {
+    for (const preset of Object.values(getModelPresets())) {
         if (preset.defaultModel.toLowerCase().includes(lowerModel) ||
             lowerModel.includes(preset.defaultModel.split(':')[0].toLowerCase())) {
             return preset.capabilities.contextLength;
@@ -604,7 +526,7 @@ export async function selectBrandProfileForAutoRouting(query: string, hasImages?
         return 'openmake_llm_vision';
     }
 
-    const classification = await classifyQueryWithLLM(query);
+    const classification = _classifyQuery(query);
     let targetProfile: string;
 
     switch (classification.type) {
@@ -639,6 +561,16 @@ export async function selectBrandProfileForAutoRouting(query: string, hasImages?
             break;
     }
 
+    // P2-1: Cost tier ceiling
+    const maxTier = getDefaultCostTier();
+    if (maxTier !== 'premium') {
+        const originalProfile = targetProfile;
+        targetProfile = applyCostTierCeiling(targetProfile, maxTier, classification.type);
+        if (targetProfile !== originalProfile) {
+            logger.info(`§9 Cost-Tier: ${originalProfile} → ${targetProfile} (ceiling=${maxTier})`);
+        }
+    }
+
     logger.info(`§9 Auto-Routing: ${classification.type} (confidence=${(classification.confidence * 100).toFixed(0)}%) → ${targetProfile}`);
     return targetProfile;
 }
@@ -668,7 +600,7 @@ export async function selectOptimalModelLegacy(query: string): Promise<{ model: 
  * @returns 프리셋 ID, 이름, 적합한 질문 유형 배열
  */
 export function getAvailablePresets(): Array<{ id: string; name: string; bestFor: QueryType[] }> {
-    return Object.entries(MODEL_PRESETS).map(([id, preset]) => ({
+    return Object.entries(getModelPresets()).map(([id, preset]) => ({
         id,
         name: preset.name,
         bestFor: preset.bestFor,
@@ -683,10 +615,10 @@ export function getAvailablePresets(): Array<{ id: string; name: string; bestFor
  * @returns 추천 모델명 (폴백: gemini-flash의 defaultModel)
  */
 export function getRecommendedModel(queryType: QueryType): string {
-    for (const preset of Object.values(MODEL_PRESETS)) {
+    for (const preset of Object.values(getModelPresets())) {
         if (preset.bestFor[0] === queryType) {
             return preset.defaultModel;
         }
     }
-    return MODEL_PRESETS['gemini-flash'].defaultModel;
+    return getModelPresets()['gemini-flash'].defaultModel;
 }

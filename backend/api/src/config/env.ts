@@ -104,6 +104,14 @@ export interface EnvConfig {
     omkEngineThink: string;
     omkEngineCode: string;
     omkEngineVision: string;
+
+    // Pipeline Profile — Cost Tier & Domain Routing (P2)
+    omkCostTierDefault: string;
+    omkDomainCode: string;
+    omkDomainMath: string;
+    omkDomainCreative: string;
+    omkDomainAnalysis: string;
+    omkDomainGeneral: string;
 }
 
 const DEFAULT_CONFIG: EnvConfig = {
@@ -197,6 +205,14 @@ const DEFAULT_CONFIG: EnvConfig = {
     omkEngineThink: 'gemini-3-flash-preview:cloud',
     omkEngineCode: 'glm-5:cloud',
     omkEngineVision: 'qwen3.5:397b-cloud',
+
+    // Pipeline Profile — Cost Tier & Domain Routing (P2)
+    omkCostTierDefault: 'premium',
+    omkDomainCode: '',
+    omkDomainMath: '',
+    omkDomainCreative: '',
+    omkDomainAnalysis: '',
+    omkDomainGeneral: '',
 };
 
 function parseEnvFile(filePath: string): Record<string, string> {
@@ -339,6 +355,14 @@ export function loadConfig(): EnvConfig {
         OMK_ENGINE_THINK: env('OMK_ENGINE_THINK'),
         OMK_ENGINE_CODE: env('OMK_ENGINE_CODE'),
         OMK_ENGINE_VISION: env('OMK_ENGINE_VISION'),
+
+        // P2: Cost Tier & Domain Routing
+        OMK_COST_TIER_DEFAULT: env('OMK_COST_TIER_DEFAULT'),
+        OMK_DOMAIN_CODE: env('OMK_DOMAIN_CODE'),
+        OMK_DOMAIN_MATH: env('OMK_DOMAIN_MATH'),
+        OMK_DOMAIN_CREATIVE: env('OMK_DOMAIN_CREATIVE'),
+        OMK_DOMAIN_ANALYSIS: env('OMK_DOMAIN_ANALYSIS'),
+        OMK_DOMAIN_GENERAL: env('OMK_DOMAIN_GENERAL'),
     });
 
     if (!parsedResult.success) {
@@ -446,6 +470,14 @@ export function loadConfig(): EnvConfig {
         omkEngineThink: parsed.OMK_ENGINE_THINK ?? DEFAULT_CONFIG.omkEngineThink,
         omkEngineCode: parsed.OMK_ENGINE_CODE ?? DEFAULT_CONFIG.omkEngineCode,
         omkEngineVision: parsed.OMK_ENGINE_VISION ?? DEFAULT_CONFIG.omkEngineVision,
+
+        // Pipeline Profile — Cost Tier & Domain Routing (P2)
+        omkCostTierDefault: parsed.OMK_COST_TIER_DEFAULT ?? DEFAULT_CONFIG.omkCostTierDefault,
+        omkDomainCode: parsed.OMK_DOMAIN_CODE ?? DEFAULT_CONFIG.omkDomainCode,
+        omkDomainMath: parsed.OMK_DOMAIN_MATH ?? DEFAULT_CONFIG.omkDomainMath,
+        omkDomainCreative: parsed.OMK_DOMAIN_CREATIVE ?? DEFAULT_CONFIG.omkDomainCreative,
+        omkDomainAnalysis: parsed.OMK_DOMAIN_ANALYSIS ?? DEFAULT_CONFIG.omkDomainAnalysis,
+        omkDomainGeneral: parsed.OMK_DOMAIN_GENERAL ?? DEFAULT_CONFIG.omkDomainGeneral,
     };
 }
 

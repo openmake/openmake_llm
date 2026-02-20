@@ -42,6 +42,8 @@ const QUERY_PATTERNS: QueryPattern[] = [
             /\.(js|ts|py|java|cpp|c|go|rs|rb|php|swift|kt)\b/i,
             /\b(react|vue|angular|node|express|django|flask|spring)\b/i,
             /\b(useState|useEffect|component|props|state)\b/i,
+            /\b(SELECT|INSERT|UPDATE|DELETE|JOIN|WHERE|FROM)\b/,  // SQL
+            /at\s+\w+\s+\(.*:\d+:\d+\)/,  // 에러 스택 트레이스
         ],
         keywords: [
             '코드', '코딩', '프로그래밍', '개발', '함수', '클래스', '버그', '에러', 
@@ -49,7 +51,8 @@ const QUERY_PATTERNS: QueryPattern[] = [
             'code', 'function', 'class', 'debug', 'error', 'implement',
             '리팩토링', '최적화', '알고리즘', '자료구조', '라이브러리', '프레임워크',
             'react', 'vue', 'angular', 'python', 'javascript', 'typescript',
-            '컴포넌트', 'component', 'useState', 'useEffect', '훅', 'hook'
+            '컴포넌트', 'component', 'useState', 'useEffect', '훅', 'hook',
+            'docker', 'kubernetes', 'k8s', 'ci/cd', 'deploy', 'pipeline', 'devops', 'git', 'sql', 'database', 'query'
         ],
         weight: 1.2,  // 코드 가중치 상향
     },
@@ -59,11 +62,14 @@ const QUERY_PATTERNS: QueryPattern[] = [
             /\b(분석|분석해|analyze|analysis)\b/i,
             /\b(통계|데이터|차트|그래프|추세|패턴)\b/i,
             /\b(비교|장단점|pros|cons|compare)\b/i,
+            /\b(어떻게\s*생각|왜\s*그런|이유가|원인이)\b/,
+            /\b(why|reason|cause|impact|effect|how\s+does)\b/i,
         ],
         keywords: [
             '분석', '분석해', '통계', '데이터', '인사이트', '추세', '패턴',
             '비교', '장단점', '평가', '검토', '조사', '리서치',
-            'analyze', 'analysis', 'statistics', 'data', 'compare', 'evaluate'
+            'analyze', 'analysis', 'statistics', 'data', 'compare', 'evaluate',
+            '원인', '영향', 'impact', 'effect', 'reason', 'why', 'how does'
         ],
         weight: 0.9,
     },
@@ -74,11 +80,13 @@ const QUERY_PATTERNS: QueryPattern[] = [
             /\b(작성|써|만들)\b.*\b(이야기|스토리|시나리오|소설|시)\b/i,
             /\b(아이디어|브레인스토밍|창의|상상)\b/i,
             /\b(creative|storytelling|fiction)\b/i,
+            /\b(write|compose|draft|create)\b.*\b(poem|story|email|letter|essay|blog)\b/i,
         ],
         keywords: [
             '글쓰기', '이야기', '스토리', '소설', '시나리오',
             '카피', '광고문구', '슬로건', '아이디어', '브레인스토밍',
-            'creative', 'story', 'brainstorm', 'imagine', '상상', '창작'
+            'creative', 'story', 'brainstorm', 'imagine', '상상', '창작',
+            '편지', '에세이', '블로그', 'letter', 'essay', 'blog', 'poem', 'compose'
         ],
         weight: 0.75,  // 가중치 하향 (다른 유형 우선)
     },
@@ -100,13 +108,15 @@ const QUERY_PATTERNS: QueryPattern[] = [
         type: 'math',
         patterns: [
             /\b(계산|수학|math|calculate|equation)\b/i,
-            /[\d\+\-\*\/\^\=]+/,           // 수식 패턴
+            /\d+\s*[\+\-\*\/\^]\s*\d+/,    // 수식 패턴 (연산자 사이에 숫자 요구)
             /\b(미적분|미분|적분|행렬|선형대수|통계)\b/i,
+            /\b(증명|proof|theorem|lemma|공리)\b/i,
         ],
         keywords: [
             '계산', '수학', '공식', '방정식', '미적분', '미분', '적분',
             '행렬', '선형대수', '확률', '통계', '기하', '삼각함수',
-            'math', 'calculate', 'equation', 'formula', 'integral', 'derivative'
+            'math', 'calculate', 'equation', 'formula', 'integral', 'derivative',
+            '증명', 'proof', 'theorem', 'lemma'
         ],
         weight: 0.95,
     },
@@ -235,7 +245,7 @@ export function classifyQuery(query: string): QueryClassification {
     }
 
     // 신뢰도 계산 (0~1)
-    const confidence = Math.min(bestScore / 5, 1.0);
+    const confidence = Math.min(bestScore / 4, 1.0);
 
     return {
         type: bestType,
