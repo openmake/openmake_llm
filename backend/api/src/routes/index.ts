@@ -40,3 +40,6 @@ export { default as apiKeysRouter } from './api-keys.routes';
 
 // 🆕 Developer Documentation 라우트
 export { default as developerDocsRouter } from './developer-docs.routes';
+
+// 🆕 Chat Feedback 라우트
+export { default as chatFeedbackRouter } from './chat-feedback.routes';

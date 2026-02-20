@@ -24,6 +24,7 @@ import type { DiscussionProgress } from '../agents/discussion-engine';
 import { getPromptConfig } from '../chat/prompt';
 import { selectOptimalModel, adjustOptionsForModel, checkModelCapability, type ModelSelection, selectBrandProfileForAutoRouting } from '../chat/model-selector';
 import { type ExecutionPlan, buildExecutionPlan } from '../chat/profile-resolver';
+import { assessComplexity } from '../chat/complexity-assessor';
 import type { DocumentStore } from '../documents/store';
 import type { UserTier } from '../data/user-manager';
 import type { UserContext } from '../mcp/user-sandbox';
@@ -35,6 +36,9 @@ import type { ResearchProgress } from './DeepResearchService';
 import { A2AStrategy, AgentLoopStrategy, DeepResearchStrategy, DirectStrategy, DiscussionStrategy } from './chat-strategies';
 import { formatResearchResult, formatDiscussionResult } from './chat-service-formatters';
 import { recordChatMetrics } from './chat-service-metrics';
+import { preRequestCheck, postResponseCheck } from '../chat/security-hooks';
+import { createRoutingLogEntry, logRoutingDecision } from '../chat/routing-logger';
+import { applyDomainEngineOverride } from '../chat/domain-router';
 import type { ChatMessageRequest } from './chat-service-types';
 
 // Re-export all types so consumers importing from ChatService don't break
@@ -219,6 +223,18 @@ export class ChatService {
         this.setUserContext(userId || 'guest', userRole, userTier);
         this.currentEnabledTools = enabledTools;
 
+        // ── 보안 사전 검사 ──
+        const securityPreCheck = preRequestCheck(message || '');
+        if (!securityPreCheck.passed) {
+            const blockViolations = securityPreCheck.violations.filter(v => v.severity === 'block');
+            if (blockViolations.length > 0) {
+                logger.warn(`보안 차단: ${blockViolations.map(v => v.detail).join(', ')}`);
+                return '죄송합니다. 해당 요청은 보안 정책에 의해 처리할 수 없습니다. 다른 방식으로 질문해 주세요.';
+            }
+            // warn-level violations: log but continue
+            logger.warn(`보안 경고: ${securityPreCheck.violations.map(v => v.detail).join(', ')}`);
+        }
+
         // 특수 모드 조기 분기: Discussion 또는 DeepResearch 모드는 별도 전략으로 위임
         if (discussionMode) {
             return this.processMessageWithDiscussion(req, uploadedDocuments, onToken, onDiscussionProgress);
@@ -229,6 +245,19 @@ export class ChatService {
         }
 
         const startTime = Date.now();
+
+        // ── 라우팅 결정 로그 초기화 ──
+        const routingLog = createRoutingLogEntry({
+            queryFeatures: {
+                queryType: 'pending',
+                confidence: 0,
+                hasImages: (images && images.length > 0) || false,
+                queryLength: (message || '').length,
+                isBrandModel: !!executionPlan?.isBrandModel,
+                brandProfile: executionPlan?.requestedModel,
+            },
+        });
+
         let fullResponse = '';
 
         const streamToken = (token: string) => {
@@ -313,15 +342,28 @@ export class ChatService {
             executionPlan.timeBudgetMs = autoExecutionPlan.timeBudgetMs;
             executionPlan.requiredTools = autoExecutionPlan.requiredTools;
 
+            // P2-2: Domain engine override (auto-routing only)
+            const resolvedQueryType: import('../chat/model-selector-types').QueryType =
+                autoExecutionPlan.promptStrategy === 'force_coder' ? 'code'
+                : autoExecutionPlan.promptStrategy === 'force_reasoning' ? 'math'
+                : autoExecutionPlan.promptStrategy === 'force_creative' ? 'creative'
+                : 'chat';
+
+            const domainResult = applyDomainEngineOverride(
+                autoExecutionPlan.resolvedEngine, resolvedQueryType
+            );
+            if (domainResult.overridden) {
+                autoExecutionPlan.resolvedEngine = domainResult.engine;
+                executionPlan.resolvedEngine = domainResult.engine;
+                logger.info(`P2-2 Domain: ${domainResult.domain} → ${domainResult.engine}`);
+            }
+
             this.client.setModel(autoExecutionPlan.resolvedEngine);
             modelSelection = {
                 model: autoExecutionPlan.resolvedEngine,
                 options: promptConfig.options || {},
-                reason: `Auto-Routing ${executionPlan.requestedModel} → ${targetBrandProfile} → ${autoExecutionPlan.resolvedEngine}`,
-                queryType: autoExecutionPlan.promptStrategy === 'force_coder' ? 'code'
-                    : autoExecutionPlan.promptStrategy === 'force_reasoning' ? 'math'
-                        : autoExecutionPlan.promptStrategy === 'force_creative' ? 'creative'
-                            : 'chat',
+                reason: `Auto-Routing ${executionPlan.requestedModel} → ${targetBrandProfile} → ${autoExecutionPlan.resolvedEngine}${domainResult.overridden ? ` (domain=${domainResult.domain})` : ''}`,
+                queryType: resolvedQueryType,
                 supportsToolCalling: true,
                 supportsThinking: autoExecutionPlan.thinkingLevel !== 'off',
                 supportsVision: autoExecutionPlan.requiredTools.includes('vision'),
@@ -343,6 +385,12 @@ export class ChatService {
             logger.info(`모델 자동 선택: ${modelSelection.model} (${modelSelection.reason})`);
             this.client.setModel(modelSelection.model);
         }
+
+        // ── 라우팅 결정 로그 갱신 ──
+        routingLog.queryFeatures.queryType = modelSelection.queryType;
+        routingLog.modelUsed = modelSelection.model;
+        routingLog.routeDecision.strategy = executionPlan?.profile?.a2a === 'off' ? 'agent-loop' : 'a2a';
+        routingLog.routeDecision.a2aMode = executionPlan?.profile?.a2a ?? 'conditional';
 
         let chatOptions = adjustOptionsForModel(
             modelSelection.model,
@@ -389,7 +437,23 @@ export class ChatService {
 
         // A2A(Agent-to-Agent) 병렬 생성 전략 결정: off면 건너뛰고 AgentLoop으로 직행
         const a2aMode = executionPlan?.profile?.a2a ?? 'conditional';
-        const skipA2A = a2aMode === 'off';
+        let skipA2A = a2aMode === 'off';
+
+        // P1-2: 'always' 모드에 대한 복잡도 기반 게이팅
+        if (!skipA2A && a2aMode === 'always') {
+            const complexity = assessComplexity({
+                query: message || '',
+                classification: { type: modelSelection.queryType, confidence: routingLog.queryFeatures.confidence || 0.5, matchedPatterns: [] },
+                hasImages: (images && images.length > 0) || false,
+                hasDocuments: !!docId,
+                historyLength: history?.length ?? 0,
+            });
+            if (complexity.shouldSkipA2A) {
+                skipA2A = true;
+                routingLog.routeDecision.complexityScore = complexity.score;
+                routingLog.routeDecision.complexitySignals = complexity.signals;
+            }
+        }
 
         let a2aSucceeded = false;
         if (!skipA2A) {
@@ -447,6 +511,23 @@ export class ChatService {
             agentSelection,
             executionPlan,
         });
+
+        // ── 보안 사후 검사 + 라우팅 로그 완료 ──
+        const securityPostCheck = postResponseCheck(fullResponse);
+        if (!securityPostCheck.passed) {
+            logger.warn(`응답 보안 경고: ${securityPostCheck.violations.map(v => v.detail).join(', ')}`);
+        }
+
+        routingLog.latencyMs = Date.now() - startTime;
+        routingLog.securityFlags = {
+            preCheckPassed: securityPreCheck.passed,
+            postCheckPassed: securityPostCheck.passed,
+            violations: [
+                ...securityPreCheck.violations.map(v => `pre:${v.type}`),
+                ...securityPostCheck.violations.map(v => `post:${v.type}`),
+            ],
+        };
+        logRoutingDecision(routingLog);
 
         return fullResponse;
     }

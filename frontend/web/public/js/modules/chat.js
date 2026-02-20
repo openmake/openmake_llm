@@ -214,6 +214,17 @@ function addChatMessage(role, content) {
                         </svg>
                         재생성
                     </button>
+                    <span class="feedback-divider"></span>
+                    <button class="message-action-btn feedback-btn" data-feedback="thumbs_up" data-msg-id="${messageId}" title="좋아요">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/>
+                        </svg>
+                    </button>
+                    <button class="message-action-btn feedback-btn" data-feedback="thumbs_down" data-msg-id="${messageId}" title="별로예요">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17"/>
+                        </svg>
+                    </button>
                 </div>
                 <div class="message-time" id="${messageId}-time">${timestamp}</div>
             </div>
@@ -309,11 +320,16 @@ function appendToken(token) {
  * 생각 과정과 최종 답변을 분리하여 마크다운으로 렌더링하고,
  * 응답 시간을 표시합니다. 에러 메시지가 있으면 에러 스타일로 표시합니다.
  * @param {string|null} [errorMessage=null] - 에러 메시지 (null이면 정상 완료)
+ * @param {string|null} [serverMessageId=null] - 서버에서 생성한 메시지 ID (피드백 연동용)
  * @returns {void}
  */
-function finishAssistantMessage(errorMessage = null) {
+function finishAssistantMessage(errorMessage = null, serverMessageId = null) {
     const currentMsg = getState('currentAssistantMessage');
     if (!currentMsg) return;
+
+    if (serverMessageId) {
+        currentMsg.dataset.serverMessageId = serverMessageId;
+    }
 
     const content = currentMsg.querySelector('.message-content');
     if (!content) return;
@@ -454,10 +470,54 @@ function regenerateMessage() {
     const lastUserContent = memory.filter(m => m.role === 'user').pop();
 
     if (lastUserContent) {
+        // 마지막 AI 메시지에 대한 regenerate 피드백 전송
+        var messages = document.querySelectorAll('.chat-message.assistant');
+        var lastAssistant = messages[messages.length - 1];
+        if (lastAssistant && lastAssistant.id) {
+            sendFeedback(lastAssistant.id, 'regenerate');
+        }
+
         const input = document.getElementById('chatInput');
         input.value = lastUserContent.content;
         sendMessage();
     }
+}
+
+/**
+ * 사용자 피드백을 서버에 전송
+ * @param {string} msgElementId - 메시지 DOM 요소 ID
+ * @param {string} signal - 피드백 유형 ('thumbs_up' | 'thumbs_down' | 'regenerate')
+ * @returns {void}
+ */
+function sendFeedback(msgElementId, signal) {
+    var msgElement = document.getElementById(msgElementId);
+    var serverMsgId = msgElement ? msgElement.dataset.serverMessageId : null;
+    var sessionId = getState('currentChatId');
+
+    // 시각적 피드백 — 선택된 버튼 활성화
+    if (msgElement && signal !== 'regenerate') {
+        var feedbackBtns = msgElement.querySelectorAll('.feedback-btn');
+        feedbackBtns.forEach(function(btn) {
+            btn.classList.remove('feedback-active');
+        });
+        var activeBtn = msgElement.querySelector('[data-feedback="' + signal + '"]');
+        if (activeBtn) {
+            activeBtn.classList.add('feedback-active');
+        }
+    }
+
+    // 서버 전송 (fire-and-forget)
+    authFetch('/api/chat/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            messageId: serverMsgId || msgElementId,
+            sessionId: sessionId || 'anonymous',
+            signal: signal
+        })
+    }).catch(function(err) {
+        console.error('[Feedback] 전송 실패:', err);
+    });
 }
 
 /**
@@ -509,7 +569,20 @@ function useSuggestion(text) {
     }
 }
 
+// 피드백 버튼 이벤트 위임
+document.addEventListener('click', function(e) {
+    var feedbackBtn = e.target.closest('.feedback-btn');
+    if (!feedbackBtn) return;
+
+    var signal = feedbackBtn.dataset.feedback;
+    var msgId = feedbackBtn.dataset.msgId;
+    if (signal && msgId) {
+        sendFeedback(msgId, signal);
+    }
+});
+
 // 전역 노출 (레거시 호환)
+window.sendFeedback = sendFeedback;
 window.sendMessage = sendMessage;
 window.addChatMessage = addChatMessage;
 window.appendToken = appendToken;
@@ -527,6 +600,7 @@ export {
     finishAssistantMessage,
     copyMessage,
     regenerateMessage,
+    sendFeedback,
     newChat,
     useSuggestion,
     abortChat

@@ -63,7 +63,9 @@ import {
     // 🆕 모델 정보 라우트
     modelRouter,
     // 🆕 Developer Documentation 라우트
-    developerDocsRouter
+    developerDocsRouter,
+    // 🆕 Chat Feedback 라우트
+    chatFeedbackRouter
 } from './routes';
 import { tokenMonitoringRouter } from './routes/token-monitoring.routes';
 import v1Router from './routes/v1';
@@ -375,6 +377,8 @@ export class DashboardServer {
         setDocumentsDeps(this.cluster, this.broadcast.bind(this));
         setWebSearchCluster(this.cluster);
         setNodesCluster(this.cluster);
+        // 🆕 /api/chat/feedback 는 /api/chat 보다 먼저 마운트해야 Express가 올바르게 매칭
+        app.use('/api/chat/feedback', chatFeedbackRouter);
         app.use('/api/chat', chatRouter);
         app.use('/api', documentsRouter);
         app.use('/api', webSearchRouter);
