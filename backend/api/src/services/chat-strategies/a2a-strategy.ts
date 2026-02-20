@@ -16,6 +16,8 @@
 import { OllamaClient } from '../../ollama/client';
 import type { ChatStrategy, A2AStrategyContext, A2AStrategyResult } from './types';
 import { createLogger } from '../../utils/logger';
+import { getConfig } from '../../config/env';
+import { logA2AModelSelection } from '../../chat/routing-logger';
 
 const logger = createLogger('A2AStrategy');
 
@@ -34,67 +36,67 @@ interface A2AModelSelection {
 
 /**
  * QueryType 미지정 또는 매핑 없는 유형에 대한 기본 A2A 모델 조합
- * @constant
+ * env.ts의 OMK_ENGINE_* 설정에서 런타임에 모델명을 resolve합니다.
  */
-const DEFAULT_A2A_MODELS: A2AModelSelection = {
-    primary: 'gpt-oss:120b-cloud',
-    secondary: 'gemini-3-flash-preview:cloud',
-    synthesizer: 'gemini-3-flash-preview:cloud',
-};
+function getDefaultA2AModels(): A2AModelSelection {
+    const config = getConfig();
+    return {
+        primary: config.omkEngineLlm,
+        secondary: config.omkEngineFast,
+        synthesizer: config.omkEngineFast,
+    };
+}
 
 /**
  * 질문 유형(QueryType)에 따라 최적의 A2A 모델 조합을 선택합니다.
  *
- * ollama list에서 확인된 모델만 사용:
- * - gemini-3-flash-preview:cloud (범용 Fast)
- * - gpt-oss:120b-cloud (대형 범용)
- * - qwen3-coder-next:cloud (코드 특화)
- * - kimi-k2.5:cloud (범용)
- * - qwen3-vl:235b-cloud (비전 특화)
+ * env.ts의 OMK_ENGINE_* 설정에서 런타임에 모델명을 resolve합니다.
  *
  * @param queryType - 사용자 질문 유형 (code/math/creative/analysis/chat/vision 등)
  * @returns 최적의 A2A 모델 조합 (primary + secondary + synthesizer)
  */
 function resolveA2AModels(queryType?: string): A2AModelSelection {
+    const config = getConfig();
+
     switch (queryType) {
         case 'code':
             return {
-                primary: 'qwen3-coder-next:cloud',
-                secondary: 'gpt-oss:120b-cloud',
-                synthesizer: 'gemini-3-flash-preview:cloud',
+                primary: config.omkEngineCode,
+                secondary: config.omkEngineLlm,
+                synthesizer: config.omkEngineFast,
             };
         case 'math':
             return {
-                primary: 'gpt-oss:120b-cloud',
-                secondary: 'kimi-k2.5:cloud',
-                synthesizer: 'gemini-3-flash-preview:cloud',
+                primary: config.omkEngineLlm,
+                secondary: config.omkEnginePro,
+                synthesizer: config.omkEngineFast,
             };
         case 'creative':
             return {
-                primary: 'gpt-oss:120b-cloud',
-                secondary: 'kimi-k2.5:cloud',
-                synthesizer: 'gemini-3-flash-preview:cloud',
+                primary: config.omkEngineLlm,
+                secondary: config.omkEnginePro,
+                synthesizer: config.omkEngineFast,
             };
         case 'analysis':
             return {
-                primary: 'gpt-oss:120b-cloud',
-                secondary: 'qwen3-coder-next:cloud',
-                synthesizer: 'gemini-3-flash-preview:cloud',
+                primary: config.omkEngineLlm,
+                secondary: config.omkEngineCode,
+                synthesizer: config.omkEngineFast,
             };
         case 'chat':
             return {
-                primary: 'gemini-3-flash-preview:cloud',
-                secondary: 'gpt-oss:120b-cloud',
-                synthesizer: 'gemini-3-flash-preview:cloud',
+                primary: config.omkEngineFast,
+                secondary: config.omkEngineLlm,
+                synthesizer: config.omkEngineFast,
             };
         case 'vision':
             return {
-                primary: 'qwen3-vl:235b-cloud',
-                secondary: 'gpt-oss:120b-cloud',
-                synthesizer: 'gemini-3-flash-preview:cloud',
+                primary: config.omkEngineVision,
+                secondary: config.omkEngineLlm,
+                synthesizer: config.omkEngineFast,
             };
         default:
-            return DEFAULT_A2A_MODELS;
+            return getDefaultA2AModels();
     }
 }
 
@@ -140,6 +142,7 @@ export class A2AStrategy implements ChatStrategy<A2AStrategyContext, A2AStrategy
     async execute(context: A2AStrategyContext): Promise<A2AStrategyResult> {
         const startTime = Date.now();
         const models = resolveA2AModels(context.queryType);
+        logA2AModelSelection(context.queryType || 'default', models.primary, models.secondary, models.synthesizer);
 
         const clientA = new OllamaClient({ model: models.primary });
         const clientB = new OllamaClient({ model: models.secondary });

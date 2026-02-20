@@ -142,7 +142,7 @@ function handleMessage(data) {
 
         case 'done':
             if (typeof finishAssistantMessage === 'function') {
-                finishAssistantMessage();
+                finishAssistantMessage(null, data.messageId || null);
             }
             break;
 

@@ -118,6 +118,14 @@ export const envSchema = z
         OMK_ENGINE_THINK: z.string().min(1).default('gemini-3-flash-preview:cloud'),
 OMK_ENGINE_CODE: z.string().min(1).default('glm-5:cloud'),
   OMK_ENGINE_VISION: z.string().min(1).default('qwen3.5:397b-cloud'),
+
+        // P2: Cost Tier & Domain Routing
+        OMK_COST_TIER_DEFAULT: z.enum(['economy', 'standard', 'premium']).default('premium'),
+        OMK_DOMAIN_CODE: z.string().default(''),
+        OMK_DOMAIN_MATH: z.string().default(''),
+        OMK_DOMAIN_CREATIVE: z.string().default(''),
+        OMK_DOMAIN_ANALYSIS: z.string().default(''),
+        OMK_DOMAIN_GENERAL: z.string().default(''),
     })
     .superRefine((data, ctx) => {
         if (data.NODE_ENV !== 'production') {

@@ -1,4 +1,5 @@
 import { classifyQuery, selectOptimalModel, checkModelCapability } from '../chat/model-selector';
+import { resetConfig } from '../config/env';
 
 describe('Model Selector', () => {
     describe('classifyQuery', () => {
@@ -51,6 +52,36 @@ describe('Model Selector', () => {
             expect(result.queryType).toBe('vision');
             expect(result.supportsVision).toBe(true);
         });
+
+        test('프리셋 모델을 우선 선택하고 OLLAMA_DEFAULT_MODEL로 강제되지 않음', async () => {
+            const prevFast = process.env.OMK_ENGINE_FAST;
+            const prevDefault = process.env.OLLAMA_DEFAULT_MODEL;
+
+            try {
+                process.env.OMK_ENGINE_FAST = 'kimi-k2.5:cloud';
+                process.env.OLLAMA_DEFAULT_MODEL = 'gemini-3-flash-preview:cloud';
+                resetConfig();
+
+                const result = await selectOptimalModel('안녕');
+
+                expect(result.queryType).toBe('chat');
+                expect(result.model).toBe('kimi-k2.5:cloud');
+            } finally {
+                if (prevFast === undefined) {
+                    delete process.env.OMK_ENGINE_FAST;
+                } else {
+                    process.env.OMK_ENGINE_FAST = prevFast;
+                }
+
+                if (prevDefault === undefined) {
+                    delete process.env.OLLAMA_DEFAULT_MODEL;
+                } else {
+                    process.env.OLLAMA_DEFAULT_MODEL = prevDefault;
+                }
+
+                resetConfig();
+            }
+        });
     });
 
     describe('checkModelCapability', () => {
@@ -60,7 +91,7 @@ describe('Model Selector', () => {
         });
 
         test('Qwen Coder 모델 비전 미지원 확인', () => {
-            expect(checkModelCapability('qwen3-coder-next:cloud', 'vision')).toBe(false);
+            expect(checkModelCapability('glm-5:cloud', 'vision')).toBe(false);
         });
     });
 });

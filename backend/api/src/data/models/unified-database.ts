@@ -182,6 +182,20 @@ CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
 CREATE INDEX IF NOT EXISTS idx_sessions_updated_at ON conversation_sessions(updated_at);
 CREATE INDEX IF NOT EXISTS idx_sessions_user_updated ON conversation_sessions(user_id, updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_messages_session_created ON conversation_messages(session_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS message_feedback (
+    id SERIAL PRIMARY KEY,
+    message_id TEXT NOT NULL,
+    session_id TEXT NOT NULL,
+    user_id TEXT,
+    signal TEXT NOT NULL CHECK (signal IN ('thumbs_up', 'thumbs_down', 'regenerate')),
+    routing_metadata JSONB,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_feedback_message ON message_feedback(message_id);
+CREATE INDEX IF NOT EXISTS idx_feedback_session ON message_feedback(session_id);
+CREATE INDEX IF NOT EXISTS idx_feedback_signal ON message_feedback(signal);
+CREATE INDEX IF NOT EXISTS idx_feedback_created ON message_feedback(created_at);
 `;
 
 /**
