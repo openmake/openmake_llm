@@ -1,7 +1,8 @@
 /**
  * ============================================
  * OpenMake.Ai - Animation System
- * Aura.build 스타일 마이크로 애니메이션
+ * Neo Brutalism 2.0 Refactor
+ * No blurred glows, crisp transitions
  * ============================================
  */
 
@@ -175,7 +176,7 @@
     }
 }
 
-/* Pulse & Glow Animations */
+/* Pulse & Glow Animations - Updated to Hard Shadows */
 @keyframes pulse {
 
     0%,
@@ -201,16 +202,14 @@
 }
 
 @keyframes glowPulse {
-
+    /* Hard shadow pulse instead of blur */
     0%,
     100% {
-        box-shadow: 0 0 5px var(--accent-primary),
-            0 0 10px rgba(102, 126, 234, 0.3);
+        box-shadow: 2px 2px 0 var(--accent-primary);
     }
 
     50% {
-        box-shadow: 0 0 15px var(--accent-primary),
-            0 0 30px rgba(102, 126, 234, 0.5);
+        box-shadow: 6px 6px 0 var(--accent-primary);
     }
 }
 
@@ -303,14 +302,18 @@
     }
 }
 
-/* Skeleton Loading */
+/* Skeleton Loading - Solid colors */
 @keyframes shimmer {
     0% {
-        background-position: -200% 0;
+        background-color: var(--bg-tertiary);
     }
 
+    50% {
+        background-color: var(--bg-secondary);
+    }
+    
     100% {
-        background-position: 200% 0;
+        background-color: var(--bg-tertiary);
     }
 }
 
@@ -342,7 +345,7 @@
     }
 }
 
-/* Gradient Flow */
+/* Gradient Flow - Removed/Solidified */
 @keyframes gradientFlow {
     0% {
         background-position: 0% 50%;
@@ -357,7 +360,7 @@
     }
 }
 
-/* Border Glow */
+/* Border Glow - Hard color transition */
 @keyframes borderGlow {
 
     0%,
@@ -449,13 +452,11 @@
    Skeleton Loading Components
    ========================================== */
 .skeleton {
-    background: linear-gradient(90deg,
-            var(--bg-tertiary) 25%,
-            var(--bg-secondary) 50%,
-            var(--bg-tertiary) 75%);
-    background-size: 200% 100%;
-    animation: shimmer 1.5s ease-in-out infinite;
+    /* Removed linear-gradient shimmer */
+    background: var(--bg-tertiary);
+    animation: skeletonPulse 1.5s ease-in-out infinite;
     border-radius: var(--radius-sm);
+    border: var(--border-width, 2px) solid transparent;
 }
 
 .skeleton-text {
@@ -494,6 +495,7 @@
     background: var(--accent-primary);
     border-radius: 50%;
     animation: thinkingDot 1.4s ease-in-out infinite;
+    border: 1px solid #000;
 }
 
 .thinking-indicator .dot:nth-child(1) {
@@ -514,9 +516,11 @@
     align-items: center;
     gap: 6px;
     padding: 12px 16px;
-    background: var(--glass-bg);
+    background: var(--bg-card);
     border-radius: var(--radius-lg);
-    backdrop-filter: blur(10px);
+    backdrop-filter: none;
+    border: var(--border-width, 2px) solid var(--border-light);
+    box-shadow: var(--shadow-sm);
 }
 
 .typing-indicator .dot {
@@ -565,8 +569,8 @@
 }
 
 .hover-lift:hover {
-    transform: translateY(-2px);
-    box-shadow: var(--shadow-lg);
+    transform: translate(-2px, -2px);
+    box-shadow: var(--shadow-md);
 }
 
 .hover-scale {
@@ -582,7 +586,7 @@
 }
 
 .hover-glow:hover {
-    box-shadow: var(--glow-primary);
+    box-shadow: 4px 4px 0 var(--accent-primary);
 }
 
 /* ==========================================

@@ -745,7 +745,9 @@ describe('Integration Tests', () => {
         expect(result).toContain('source2.md');
     });
 
-    it('should preserve order: metadata -> role -> goal -> constraints -> output -> instruction -> reminder', () => {
+    it('should preserve order: role -> constraints -> output -> reminder -> metadata -> goal (prefix-caching optimized)', () => {
+        // Phase 1 리팩토링: 정적 섹션(role, constraints, output, reminder)을 앞에,
+        // 동적 섹션(metadata, goal)을 뒤에 배치하여 Cloud LLM prefix caching 활용
         const builder = new ContextEngineeringBuilder();
         const result = builder
             .setRole({
@@ -761,20 +763,21 @@ describe('Integration Tests', () => {
             .setOutputFormat({ type: 'markdown' })
             .build();
 
-        const metadataIndex = result.indexOf('<metadata>');
         const roleIndex = result.indexOf('<role>');
-        const goalIndex = result.indexOf('<goal>');
         const constraintsIndex = result.indexOf('<constraints>');
         const outputIndex = result.indexOf('<output_format>');
-        const instructionIndex = result.indexOf('<instruction>');
         const reminderIndex = result.indexOf('<final_reminder>');
+        const metadataIndex = result.indexOf('<metadata>');
+        const goalIndex = result.indexOf('<goal>');
 
-        expect(metadataIndex).toBeLessThan(roleIndex);
-        expect(roleIndex).toBeLessThan(goalIndex);
-        expect(goalIndex).toBeLessThan(constraintsIndex);
+        // Phase 1: Static sections first (prefix-cacheable)
+        expect(roleIndex).toBeLessThan(constraintsIndex);
         expect(constraintsIndex).toBeLessThan(outputIndex);
-        expect(outputIndex).toBeLessThan(instructionIndex);
-        expect(instructionIndex).toBeLessThan(reminderIndex);
+        expect(outputIndex).toBeLessThan(reminderIndex);
+
+        // Phase 2: Dynamic sections after static (per-request)
+        expect(reminderIndex).toBeLessThan(metadataIndex);
+        expect(metadataIndex).toBeLessThan(goalIndex);
     });
 
     it('should handle prompt injection attempts in user input', () => {

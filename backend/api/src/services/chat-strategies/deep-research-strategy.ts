@@ -17,6 +17,9 @@ import { v4 as uuidv4 } from 'uuid';
 import { getUnifiedDatabase } from '../../data/models/unified-database';
 import { DeepResearchService } from '../DeepResearchService';
 import type { ChatStrategy, ChatResult, DeepResearchStrategyContext } from './types';
+import { createLogger } from '../../utils/logger';
+
+const logger = createLogger('DeepResearchStrategy');
 
 /**
  * 심층 연구 오케스트레이션 전략
@@ -43,7 +46,7 @@ export class DeepResearchStrategy implements ChatStrategy<DeepResearchStrategyCo
     async execute(context: DeepResearchStrategyContext): Promise<ChatResult> {
         const { message, userId } = context.req;
 
-        console.log('[ChatService] 🔬 Deep Research 모드 시작');
+        logger.info('🔬 Deep Research 모드 시작');
 
         // 연구 서비스 생성: 최대 5 루프, 한국어, 풀 스크래핑 활성화
         const researchService = new DeepResearchService({
@@ -79,7 +82,7 @@ export class DeepResearchStrategy implements ChatStrategy<DeepResearchStrategyCo
             context.onToken(char);
         }
 
-        console.log(`[ChatService] 🔬 Deep Research 완료: ${result.duration}ms, ${result.totalSteps} 단계`);
+        logger.info(`🔬 Deep Research 완료: ${result.duration}ms, ${result.totalSteps} 단계`);
 
         return { response: formattedResponse };
     }

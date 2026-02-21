@@ -32,6 +32,7 @@
  */
 
 import { getConfig } from '../config/env';
+import type { CostTier } from './cost-tier';
 
 // ============================================
 // 파이프라인 프로파일 인터페이스
@@ -126,6 +127,9 @@ export interface PipelineProfile {
 
     /** 10. 필수 도구 (없으면 빈 배열) */
     requiredTools: string[];
+
+    /** 11. 비용 티어 (P2-1) */
+    costTier: CostTier;
 }
 
 // ============================================
@@ -164,6 +168,7 @@ export function getProfiles(): Record<string, PipelineProfile> {
             contextStrategy: 'auto',
             timeBudgetSeconds: 0,
             requiredTools: [],
+            costTier: 'standard',
         },
 
         // ── 2. openmake_llm_pro — Premium Quality ──
@@ -181,6 +186,7 @@ export function getProfiles(): Record<string, PipelineProfile> {
             contextStrategy: 'full',
             timeBudgetSeconds: 0,
             requiredTools: [],
+            costTier: 'premium',
         },
 
         // ── 3. openmake_llm_fast — Speed Optimized ──
@@ -198,6 +204,7 @@ export function getProfiles(): Record<string, PipelineProfile> {
             contextStrategy: 'lite',
             timeBudgetSeconds: 3,
             requiredTools: [],
+            costTier: 'economy',
         },
 
         // ── 4. openmake_llm_think — Deep Reasoning ──
@@ -215,6 +222,7 @@ export function getProfiles(): Record<string, PipelineProfile> {
             contextStrategy: 'full',
             timeBudgetSeconds: 0,
             requiredTools: [],
+            costTier: 'premium',
         },
 
         // ── 5. openmake_llm_code — Code Specialist ──
@@ -232,6 +240,7 @@ export function getProfiles(): Record<string, PipelineProfile> {
             contextStrategy: 'full',
             timeBudgetSeconds: 0,
             requiredTools: [],
+            costTier: 'standard',
         },
 
         // ── 6. openmake_llm_vision — Multimodal / Vision ──
@@ -249,6 +258,7 @@ export function getProfiles(): Record<string, PipelineProfile> {
             contextStrategy: 'auto',
             timeBudgetSeconds: 0,
             requiredTools: ['vision'],
+            costTier: 'premium',
         },
 
         // ── 7. openmake_llm_auto — Smart Auto-Routing ──
@@ -266,6 +276,7 @@ export function getProfiles(): Record<string, PipelineProfile> {
             contextStrategy: 'auto',
             timeBudgetSeconds: 0,
             requiredTools: [],
+            costTier: 'standard',
         },
     };
 }

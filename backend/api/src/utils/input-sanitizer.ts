@@ -32,9 +32,11 @@ const DANGEROUS_PATTERNS: readonly RegExp[] = [
   /forget\s+(everything|all)/i,
   /new\s+instructions?:/i,
   /system\s*:\s*you\s+are/i,
-  /\[system\]/i,
-  /\[assistant\]/i,
-  /\[user\]/i,
+  // 🆕 역할 태그 패턴: 줄 시작 또는 공백 뒤에 오는 경우만 매칭
+  // (내부 컨텍스트의 "user:", "assistant:" 등과 구분)
+  /(?:^|\n)\s*\[system\]/i,
+  /(?:^|\n)\s*\[assistant\]/i,
+  /(?:^|\n)\s*\[user\]/i,
   /<\s*system\s*>/i,
   /override\s+(previous|system)/i,
 ] as const;

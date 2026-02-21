@@ -117,6 +117,85 @@ CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON conversation_sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_anon ON conversation_sessions(anon_session_id);
 CREATE INDEX IF NOT EXISTS idx_blacklist_expires ON token_blacklist(expires_at);
+
+CREATE TABLE IF NOT EXISTS chat_rate_limits (
+    id SERIAL PRIMARY KEY,
+    user_key TEXT NOT NULL UNIQUE,
+    count INTEGER NOT NULL DEFAULT 0,
+    reset_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_chat_rate_limits_user_key ON chat_rate_limits(user_key);
+CREATE INDEX IF NOT EXISTS idx_chat_rate_limits_reset_at ON chat_rate_limits(reset_at);
+
+CREATE TABLE IF NOT EXISTS agent_metrics (
+    agent_type TEXT PRIMARY KEY,
+    request_count INTEGER NOT NULL DEFAULT 0,
+    success_count INTEGER NOT NULL DEFAULT 0,
+    failure_count INTEGER NOT NULL DEFAULT 0,
+    total_response_time DOUBLE PRECISION NOT NULL DEFAULT 0,
+    avg_response_time DOUBLE PRECISION NOT NULL DEFAULT 0,
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS push_subscriptions_store (
+    user_key TEXT PRIMARY KEY,
+    endpoint TEXT NOT NULL,
+    p256dh TEXT NOT NULL,
+    auth_key TEXT NOT NULL,
+    user_id TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS api_key_failures (
+    key_index INTEGER PRIMARY KEY,
+    fail_count INTEGER NOT NULL DEFAULT 0,
+    last_fail_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS uploaded_documents (
+    doc_id TEXT PRIMARY KEY,
+    document JSONB NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    last_accessed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    expires_at TIMESTAMPTZ NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_uploaded_documents_expires ON uploaded_documents(expires_at);
+
+CREATE TABLE IF NOT EXISTS token_daily_stats (
+    date_key TEXT PRIMARY KEY,
+    total_prompt_tokens INTEGER NOT NULL DEFAULT 0,
+    total_completion_tokens INTEGER NOT NULL DEFAULT 0,
+    total_tokens INTEGER NOT NULL DEFAULT 0,
+    request_count INTEGER NOT NULL DEFAULT 0,
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS oauth_states (
+    state TEXT PRIMARY KEY,
+    provider TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
+CREATE INDEX IF NOT EXISTS idx_sessions_updated_at ON conversation_sessions(updated_at);
+CREATE INDEX IF NOT EXISTS idx_sessions_user_updated ON conversation_sessions(user_id, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_messages_session_created ON conversation_messages(session_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS message_feedback (
+    id SERIAL PRIMARY KEY,
+    message_id TEXT NOT NULL,
+    session_id TEXT NOT NULL,
+    user_id TEXT,
+    signal TEXT NOT NULL CHECK (signal IN ('thumbs_up', 'thumbs_down', 'regenerate')),
+    routing_metadata JSONB,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_feedback_message ON message_feedback(message_id);
+CREATE INDEX IF NOT EXISTS idx_feedback_session ON message_feedback(session_id);
+CREATE INDEX IF NOT EXISTS idx_feedback_signal ON message_feedback(signal);
+CREATE INDEX IF NOT EXISTS idx_feedback_created ON message_feedback(created_at);
 `;
 
 /**

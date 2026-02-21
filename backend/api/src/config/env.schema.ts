@@ -1,4 +1,15 @@
+/**
+ * ============================================================
+ * Environment Schema - Zod 기반 환경 변수 스키마
+ * ============================================================
+ * 환경 변수 타입 강제, 기본값 주입, 프로덕션 추가 제약 검증을
+ * 위한 스키마를 정의합니다.
+ *
+ * @module config/env.schema
+ */
+
 import { z } from 'zod';
+import { SERVER_CONFIG } from './constants';
 
 const nodeEnvSchema = z.enum(['development', 'test', 'production']);
 const logLevelSchema = z.enum(['debug', 'info', 'warn', 'error']);
@@ -31,7 +42,7 @@ export const envSchema = z
     .object({
         // Core
         NODE_ENV: nodeEnvSchema.default('development'),
-        PORT: positiveIntWithDefault(52416),
+        PORT: positiveIntWithDefault(SERVER_CONFIG.DEFAULT_PORT),
         SERVER_HOST: z.string().default('0.0.0.0'),
         DATABASE_URL: z.string().default('postgresql://localhost:5432/openmake_llm'),
 
@@ -48,10 +59,10 @@ export const envSchema = z
         GOOGLE_CLIENT_SECRET: z.string().default(''),
         GITHUB_CLIENT_ID: z.string().default(''),
         GITHUB_CLIENT_SECRET: z.string().default(''),
-        OAUTH_REDIRECT_URI: z.string().default('http://localhost:52416/api/auth/callback/google'),
+        OAUTH_REDIRECT_URI: z.string().default(`http://localhost:${SERVER_CONFIG.DEFAULT_PORT}/api/auth/callback/google`),
 
         // CORS
-        CORS_ORIGINS: z.string().default('http://localhost:52416'),
+        CORS_ORIGINS: z.string().default(`http://localhost:${SERVER_CONFIG.DEFAULT_PORT}`),
 
         // Ollama
         OLLAMA_BASE_URL: z.url().default('http://localhost:11434'),
@@ -102,11 +113,19 @@ export const envSchema = z
 
         // Engine mapping
         OMK_ENGINE_LLM: z.string().min(1).default('gemini-3-flash-preview:cloud'),
-        OMK_ENGINE_PRO: z.string().min(1).default('gemini-3-pro-preview:cloud'),
+        OMK_ENGINE_PRO: z.string().min(1).default('gemini-3-flash-preview:cloud'),
         OMK_ENGINE_FAST: z.string().min(1).default('gemini-3-flash-preview:cloud'),
-        OMK_ENGINE_THINK: z.string().min(1).default('gemini-3-pro-preview:cloud'),
-        OMK_ENGINE_CODE: z.string().min(1).default('qwen3:30b-a3b'),
-        OMK_ENGINE_VISION: z.string().min(1).default('gemini-3-flash-preview:cloud'),
+        OMK_ENGINE_THINK: z.string().min(1).default('gemini-3-flash-preview:cloud'),
+OMK_ENGINE_CODE: z.string().min(1).default('glm-5:cloud'),
+  OMK_ENGINE_VISION: z.string().min(1).default('qwen3.5:397b-cloud'),
+
+        // P2: Cost Tier & Domain Routing
+        OMK_COST_TIER_DEFAULT: z.enum(['economy', 'standard', 'premium']).default('premium'),
+        OMK_DOMAIN_CODE: z.string().default(''),
+        OMK_DOMAIN_MATH: z.string().default(''),
+        OMK_DOMAIN_CREATIVE: z.string().default(''),
+        OMK_DOMAIN_ANALYSIS: z.string().default(''),
+        OMK_DOMAIN_GENERAL: z.string().default(''),
     })
     .superRefine((data, ctx) => {
         if (data.NODE_ENV !== 'production') {

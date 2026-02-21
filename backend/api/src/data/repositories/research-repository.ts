@@ -1,3 +1,12 @@
+/**
+ * @module data/repositories/research-repository
+ * @description `research_sessions` / `research_steps` 테이블 데이터 접근 계층
+ *
+ * 심층 연구 세션(ResearchSession)과 연구 단계(ResearchStep) 엔티티의 CRUD를 담당합니다.
+ * - 연구 세션 생성/조회/갱신, 사용자별 세션 목록
+ * - 연구 단계 기록 (주제 분해, 검색, 분석 등)
+ * - 연구 상태(진행중/완료/실패) 관리
+ */
 import { BaseRepository, QueryParam } from './base-repository';
 import type { ResearchDepth, ResearchSession, ResearchStatus, ResearchStep } from '../models/unified-database';
 

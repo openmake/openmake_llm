@@ -1,3 +1,13 @@
+/**
+ * ============================================================
+ * Plugin Registry - 플러그인/커맨드/툴 레지스트리
+ * ============================================================
+ * 로드된 플러그인의 메타데이터와 노출 기능(명령어, 도구, 훅)을
+ * 중앙에서 등록/조회/해제합니다.
+ *
+ * @module plugins/registry
+ */
+
 import { Plugin, PluginCommand, PluginTool, PluginHooks } from './types';
 
 export class PluginRegistry {

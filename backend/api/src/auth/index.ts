@@ -24,12 +24,13 @@ import { PublicUser, UserRole } from '../data/user-manager';
 import * as crypto from 'crypto';
 import { getTokenBlacklist } from '../data/models/token-blacklist';
 import { getConfig } from '../config/env';
+import { AUTH_CONFIG } from '../config/constants';
+import { createLogger } from '../utils/logger';
 
 // JWT 비밀키 (환경변수 필수)
 // 보안: 런타임 시크릿 생성은 수평 확장 시 노드 간 불일치를 유발하므로 제거
 const JWT_SECRET = getConfig().jwtSecret;
-const JWT_EXPIRES_IN = '15m';  // Access token - short lived for security
-const REFRESH_TOKEN_EXPIRES_IN = '7d';  // Refresh token - longer lived
+const logger = createLogger('Auth');
 
 /**
  * 객체가 유효한 JWT 페이로드인지 타입 가드로 검사합니다.
@@ -47,16 +48,16 @@ function isValidJWTPayload(obj: unknown): obj is JWTPayload {
 if (!JWT_SECRET) {
     if (getConfig().nodeEnv === 'test') {
         // 테스트 환경에서는 경고만 (테스트 프레임워크에서 자체 설정)
-        console.warn('[Auth] ⚠️ JWT_SECRET이 설정되지 않았습니다 (테스트 환경)');
+        logger.warn('⚠️ JWT_SECRET이 설정되지 않았습니다 (테스트 환경)');
     } else if (getConfig().nodeEnv === 'production') {
-        console.error('[Auth] ❌ JWT_SECRET 환경변수가 설정되지 않았습니다!');
-        console.error('[Auth] 프로덕션 환경에서는 JWT_SECRET이 필수입니다.');
-        console.error('[Auth] 생성 방법: openssl rand -hex 32');
+        logger.error('❌ JWT_SECRET 환경변수가 설정되지 않았습니다!');
+        logger.error('프로덕션 환경에서는 JWT_SECRET이 필수입니다.');
+        logger.error('생성 방법: openssl rand -hex 32');
         process.exit(1);
     } else {
-        console.error('[Auth] ❌ JWT_SECRET 환경변수가 설정되지 않았습니다!');
-        console.error('[Auth] .env 파일에 JWT_SECRET을 반드시 설정하세요.');
-        console.error('[Auth] 생성 방법: openssl rand -hex 32');
+        logger.error('❌ JWT_SECRET 환경변수가 설정되지 않았습니다!');
+        logger.error('.env 파일에 JWT_SECRET을 반드시 설정하세요.');
+        logger.error('생성 방법: openssl rand -hex 32');
         throw new Error('[Auth] JWT_SECRET 환경변수가 필수입니다. .env 파일에 설정하세요.');
     }
 }
@@ -77,7 +78,7 @@ export function generateToken(user: PublicUser): string {
     const jti = crypto.randomBytes(16).toString('hex');
 
     return jwt.sign(payload, JWT_SECRET, { 
-        expiresIn: JWT_EXPIRES_IN,
+        expiresIn: AUTH_CONFIG.TOKEN_EXPIRY,
         jwtid: jti
     });
 }
@@ -101,7 +102,7 @@ export function generateRefreshToken(user: PublicUser): string {
     const jti = crypto.randomBytes(16).toString('hex');
 
     return jwt.sign(payload, JWT_SECRET, {
-        expiresIn: REFRESH_TOKEN_EXPIRES_IN,
+        expiresIn: AUTH_CONFIG.REFRESH_TOKEN_EXPIRY,
         jwtid: jti
     });
 }
@@ -115,35 +116,35 @@ export function generateRefreshToken(user: PublicUser): string {
 export async function verifyRefreshToken(token: string): Promise<JWTPayload | null> {
     try {
         // 블랙리스트 확인
-        const preCheck = jwt.decode(token) as Record<string, unknown> | null;
-        if (preCheck?.jti && typeof preCheck.jti === 'string') {
-            try {
-                const blacklist = getTokenBlacklist();
-                if (await blacklist.has(preCheck.jti)) {
-                    console.warn('[Auth] 블랙리스트된 리프레시 토큰 사용 시도');
-                    return null;
-                }
-            } catch {
-                // 블랙리스트 DB 접근 실패 시 무시 (가용성 우선)
-            }
-        }
+         const preCheck = jwt.decode(token) as Record<string, unknown> | null;
+         if (preCheck?.jti && typeof preCheck.jti === 'string') {
+             try {
+                 const blacklist = getTokenBlacklist();
+                 if (await blacklist.has(preCheck.jti)) {
+                     logger.warn('블랙리스트된 리프레시 토큰 사용 시도');
+                     return null;
+                 }
+             } catch {
+                 // 블랙리스트 DB 접근 실패 시 무시 (가용성 우선)
+             }
+         }
 
-        // type이 'refresh'인지 확인
-        if (preCheck?.type !== 'refresh') {
-            console.warn('[Auth] 리프레시 토큰이 아닌 토큰으로 갱신 시도');
-            return null;
-        }
+         // type이 'refresh'인지 확인
+         if (preCheck?.type !== 'refresh') {
+             logger.warn('리프레시 토큰이 아닌 토큰으로 갱신 시도');
+             return null;
+         }
 
-        const decoded = jwt.verify(token, JWT_SECRET);
-        if (!isValidJWTPayload(decoded)) {
-            console.warn('[Auth] JWT 페이로드 형식 불일치');
-            return null;
-        }
-        return decoded;
-    } catch (error) {
-        console.error('[Auth] 리프레시 토큰 검증 실패:', error);
-        return null;
-    }
+         const decoded = jwt.verify(token, JWT_SECRET);
+         if (!isValidJWTPayload(decoded)) {
+             logger.warn('JWT 페이로드 형식 불일치');
+             return null;
+         }
+         return decoded;
+     } catch (error) {
+         logger.error('리프레시 토큰 검증 실패:', error);
+         return null;
+     }
 }
 
 /**
@@ -153,29 +154,35 @@ export async function verifyRefreshToken(token: string): Promise<JWTPayload | nu
 export async function verifyToken(token: string): Promise<JWTPayload | null> {
     try {
         // 블랙리스트 확인 (jti 기반)
-        const preCheck = jwt.decode(token) as Record<string, unknown> | null;
-        if (preCheck?.jti && typeof preCheck.jti === 'string') {
-            try {
-                const blacklist = getTokenBlacklist();
-                if (await blacklist.has(preCheck.jti)) {
-                    console.warn('[Auth] 블랙리스트된 토큰 사용 시도');
-                    return null;
-                }
-            } catch {
-                // 블랙리스트 DB 접근 실패 시 무시 (가용성 우선)
-            }
-        }
+         const preCheck = jwt.decode(token) as Record<string, unknown> | null;
+         if (preCheck?.jti && typeof preCheck.jti === 'string') {
+             try {
+                 const blacklist = getTokenBlacklist();
+                 if (await blacklist.has(preCheck.jti)) {
+                     logger.warn('블랙리스트된 토큰 사용 시도');
+                     return null;
+                 }
+             } catch {
+                 // 블랙리스트 DB 접근 실패 시 무시 (가용성 우선)
+             }
+         }
 
-        const decoded = jwt.verify(token, JWT_SECRET);
-        if (!isValidJWTPayload(decoded)) {
-            console.warn('[Auth] JWT 페이로드 형식 불일치');
-            return null;
-        }
-        return decoded;
-    } catch (error) {
-        console.error('[Auth] 토큰 검증 실패:', error);
-        return null;
-    }
+         const decoded = jwt.verify(token, JWT_SECRET);
+         if (!isValidJWTPayload(decoded)) {
+             logger.warn('JWT 페이로드 형식 불일치');
+             return null;
+         }
+         return decoded;
+     } catch (error) {
+         // jwt malformed / expired 등은 정상적 상황 (만료 쿠키) — 스택트레이스 없이 간단 로그
+         const errName = error instanceof Error ? error.name : '';
+         if (errName === 'JsonWebTokenError' || errName === 'TokenExpiredError') {
+             logger.warn(`토큰 검증 실패: ${errName} — ${(error as Error).message}`);
+         } else {
+             logger.error('토큰 검증 실패:', error);
+         }
+         return null;
+     }
 }
 
 /**
@@ -191,16 +198,16 @@ export async function blacklistToken(token: string): Promise<boolean> {
         }
         const expiresAt = typeof decoded.exp === 'number' 
             ? decoded.exp * 1000 
-            : Date.now() + 15 * 60 * 1000; // 기본 15분
+            : Date.now() + AUTH_CONFIG.ACCESS_TOKEN_MAX_AGE_MS; // 기본 15분
         
         const blacklist = getTokenBlacklist();
-        await blacklist.add(decoded.jti, expiresAt);
-        console.log(`[Auth] 🚫 토큰 블랙리스트 추가: ${decoded.jti.substring(0, 8)}...`);
-        return true;
-    } catch (error) {
-        console.error('[Auth] 토큰 블랙리스트 추가 실패:', error);
-        return false;
-    }
+         await blacklist.add(decoded.jti, expiresAt);
+         logger.info(`🚫 토큰 블랙리스트 추가: ${decoded.jti.substring(0, 8)}...`);
+         return true;
+     } catch (error) {
+         logger.error('토큰 블랙리스트 추가 실패:', error);
+         return false;
+     }
 }
 
 /**
@@ -250,7 +257,7 @@ export function setTokenCookie(res: Response, token: string): void {
         httpOnly: true,
         secure: getConfig().nodeEnv === 'production',
         sameSite: 'lax',
-        maxAge: 15 * 60 * 1000, // 15분 (액세스 토큰 수명과 일치)
+        maxAge: AUTH_CONFIG.ACCESS_TOKEN_MAX_AGE_MS, // 15분 (액세스 토큰 수명과 일치)
         path: '/'
     });
 }
@@ -263,7 +270,7 @@ export function setRefreshTokenCookie(res: Response, refreshToken: string): void
         httpOnly: true,
         secure: getConfig().nodeEnv === 'production',
         sameSite: 'lax',
-        maxAge: 7 * 24 * 60 * 60 * 1000, // 7일
+        maxAge: AUTH_CONFIG.REFRESH_TOKEN_MAX_AGE_MS, // 7일
         path: '/api/auth/refresh' // 리프레시 엔드포인트에서만 전송
     });
 }

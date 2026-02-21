@@ -15,24 +15,21 @@
  * @module components/unified-sidebar
  */
 
-(function () {
-    'use strict';
+/** @enum {string} 사이드바 상태 열거 */
+var STATES = { FULL: 'full', ICON: 'icon', HIDDEN: 'hidden' };
+/** @type {string} localStorage 키 */
+var LS_KEY = 'sidebar-state';
+/** @type {number} 호버 확장 대기 시간 (ms) */
+var HOVER_DELAY = 300;
+/** @type {number} 검색 디바운스 시간 (ms) */
+var SEARCH_DEBOUNCE = 200;
+/** @type {number} 모바일 판별 기준 너비 (px) */
+var MOBILE_BREAKPOINT = 768;
+/** @type {string} 콘솔 로그 접두사 */
+var LOG_PREFIX = '[Sidebar]';
 
-    /** @enum {string} 사이드바 상태 열거 */
-    var STATES = { FULL: 'full', ICON: 'icon', HIDDEN: 'hidden' };
-    /** @type {string} localStorage 키 */
-    var LS_KEY = 'sidebar-state';
-    /** @type {number} 호버 확장 대기 시간 (ms) */
-    var HOVER_DELAY = 300;
-    /** @type {number} 검색 디바운스 시간 (ms) */
-    var SEARCH_DEBOUNCE = 200;
-    /** @type {number} 모바일 판별 기준 너비 (px) */
-    var MOBILE_BREAKPOINT = 768;
-    /** @type {string} 콘솔 로그 접두사 */
-    var LOG_PREFIX = '[Sidebar]';
-
-    // ─── SVG 아이콘 ────────────────────────────────────
-    var ICONS = {
+// ─── SVG 아이콘 ────────────────────────────────────
+var ICONS = {
         sidebar: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg>',
         sun: '<svg class="sun" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>',
         moon: '<svg class="moon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>',
@@ -130,6 +127,13 @@
         // 모바일이면 hidden
         if (isMobile()) {
             this.state = STATES.HIDDEN;
+        }
+
+        // 데스크톱에서 hidden 상태 방어: 데스크톱에서는 toggle이 full↔icon만
+        // 지원하므로 hidden이 저장되어 있으면 full로 복원
+        if (!isMobile() && this.state === STATES.HIDDEN) {
+            this.state = STATES.FULL;
+            localStorage.setItem(LS_KEY, STATES.FULL);
         }
 
         // HTML 생성
@@ -709,8 +713,8 @@
         clearTimeout(this._searchTimer);
     };
 
-    // ─── 전역 노출 ────────────────────────────────────
+// ─── 전역 노출 ────────────────────────────────────
 
-    window.UnifiedSidebar = UnifiedSidebar;
+window.UnifiedSidebar = UnifiedSidebar;
 
-})();
+export { UnifiedSidebar };

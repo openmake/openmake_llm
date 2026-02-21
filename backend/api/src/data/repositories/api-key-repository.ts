@@ -1,3 +1,12 @@
+/**
+ * @module data/repositories/api-key-repository
+ * @description `user_api_keys` / `api_usage` 테이블 데이터 접근 계층
+ *
+ * 외부 개발자용 API Key(UserApiKey) 엔티티와 사용량 통계의 CRUD를 담당합니다.
+ * - API Key 생성/조회/삭제/로테이션
+ * - 일별 사용량 기록 (UPSERT — 요청 수, 토큰, 에러, 평균 응답 시간)
+ * - 키 해시 기반 인증 조회, 사용자별 키 목록
+ */
 import { BaseRepository, QueryParam } from './base-repository';
 import type { ApiKeyTier, UserApiKey } from '../models/unified-database';
 

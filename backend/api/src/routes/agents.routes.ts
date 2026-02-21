@@ -113,6 +113,20 @@ router.get('/', (req: Request, res: Response) => {
  });
 
  /**
+  * GET /api/agents/custom
+  * 커스텀 에이전트 목록 (프론트엔드 호환 alias — /custom/list와 동일)
+  */
+ router.get('/custom', requireAuth, (req: Request, res: Response) => {
+     try {
+         const customBuilder = getCustomAgentBuilder();
+         res.json(success(customBuilder.getAllCustomAgents()));
+     } catch (error) {
+         logger.error('커스텀 에이전트 목록 조회 실패:', error);
+         res.status(500).json(internalError('커스텀 에이전트 목록 조회 실패'));
+     }
+ });
+
+ /**
   * POST /api/agents/custom
   * 커스텀 에이전트 생성
   */

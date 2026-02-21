@@ -16,18 +16,10 @@
     function esc(s) { var d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
 
     var CSS = '' +
-        '.page-settings { position: relative; min-height: 100%; }' +
-        '.page-settings::before {' +
-            'content: ""; position: fixed; top: 0; left: 0; right: 0; bottom: 0;' +
-            'background: radial-gradient(ellipse 80% 50% at 50% -20%, rgba(102,126,234,0.12), transparent),' +
-                'radial-gradient(ellipse 60% 30% at 70% 80%, rgba(118,75,162,0.08), transparent),' +
-                'radial-gradient(ellipse 40% 40% at 20% 60%, rgba(102,126,234,0.06), transparent);' +
-            'pointer-events: none; z-index: 0;' +
-        '}' +
-        '.page-settings > * { position: relative; z-index: 1; }' +
+        '.page-settings { position: relative; min-height: 100%; background: var(--bg-app); }' +
         '.settings-container { max-width: 680px; margin: 0 auto; padding: var(--space-8) var(--space-6); }' +
         '.settings-hero { text-align: center; margin-bottom: var(--space-10); }' +
-        '.settings-hero-icon { font-size: 3rem; margin-bottom: var(--space-4); display: block; filter: drop-shadow(0 0 20px rgba(102,126,234,0.3)); }' +
+        '.settings-hero-icon { font-size: 3rem; margin-bottom: var(--space-4); display: block; filter: drop-shadow(2px 2px 0 rgba(0,0,0,0.5)); }' +
         '.settings-hero h1 {' +
             'font-size: var(--font-size-3xl); font-weight: var(--font-weight-bold);' +
             'background: var(--gradient-primary); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;' +
@@ -37,28 +29,28 @@
         '.s-card {' +
             'background: var(--glass-bg); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur);' +
             'border: 1px solid var(--glass-border); border-radius: var(--radius-xl); padding: 0; margin-bottom: var(--space-6);' +
-            'box-shadow: 0 8px 32px rgba(0,0,0,0.2); transition: all 0.3s cubic-bezier(0.4,0,0.2,1); overflow: hidden;' +
+            'box-shadow: 4px 4px 0 #000; transition: all 0.3s cubic-bezier(0.4,0,0.2,1); overflow: hidden;' +
             'animation: s-slideUp 0.5s ease both;' +
         '}' +
         '.s-card:nth-child(2) { animation-delay: 0.05s; }' +
         '.s-card:nth-child(3) { animation-delay: 0.1s; }' +
         '.s-card:nth-child(4) { animation-delay: 0.15s; }' +
         '.s-card:nth-child(5) { animation-delay: 0.2s; }' +
-        '.s-card:hover { border-color: rgba(255,255,255,0.12); box-shadow: 0 12px 40px rgba(0,0,0,0.3); transform: translateY(-2px); }' +
+        '.s-card:hover { border-color: var(--border-medium); box-shadow: 6px 6px 0 #000; transform: translate(-2px, -2px); }' +
         '.s-card-header {' +
             'display: flex; align-items: center; gap: var(--space-3); padding: var(--space-5) var(--space-6);' +
             'border-bottom: 1px solid var(--glass-border); position: relative;' +
         '}' +
         '.s-card-header::after {' +
             'content: ""; position: absolute; bottom: -1px; left: var(--space-6); right: var(--space-6); height: 1px;' +
-            'background: linear-gradient(90deg, transparent, rgba(102,126,234,0.3), transparent);' +
+            'background: var(--accent-primary);' +
         '}' +
         '.s-card-icon { font-size: 1.3rem; }' +
         '.s-card-title { font-size: var(--font-size-lg); font-weight: var(--font-weight-semibold); color: var(--text-primary); }' +
         '.s-card-body { padding: var(--space-4) var(--space-6) var(--space-6); }' +
         '.setting-row {' +
             'display: flex; justify-content: space-between; align-items: center;' +
-            'padding: var(--space-4) 0; border-bottom: 1px solid rgba(255,255,255,0.04); gap: var(--space-4);' +
+            'padding: var(--space-4) 0; border-bottom: 1px solid var(--border-light); gap: var(--space-4);' +
         '}' +
         '.setting-row:last-child { border-bottom: none; }' +
         '.setting-info { flex: 1; min-width: 0; }' +
@@ -72,7 +64,7 @@
             "background-image: url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23a1a1aa' d='M6 8L1 3h10z'/%3E%3C/svg%3E\");" +
             'background-repeat: no-repeat; background-position: right 12px center; flex-shrink: 0;' +
         '}' +
-        '.s-select:focus { outline: none; border-color: rgba(102,126,234,0.5); box-shadow: var(--glow-input-focus); }' +
+        '.s-select:focus { outline: none; border-color: var(--accent-primary); box-shadow: var(--glow-input-focus); }' +
         '.s-select:hover { border-color: var(--border-medium); }' +
         '.s-select option { background: var(--bg-secondary); color: var(--text-primary); }' +
         '.toggle { position: relative; display: inline-block; width: 48px; height: 26px; flex-shrink: 0; }' +
@@ -85,14 +77,14 @@
             'position: absolute; content: ""; height: 20px; width: 20px; left: 3px; bottom: 3px;' +
             'background: white; border-radius: 50%; transition: all 0.3s cubic-bezier(0.4,0,0.2,1); box-shadow: var(--shadow-sm);' +
         '}' +
-        '.toggle input:checked + .toggle-slider { background: var(--accent-primary); box-shadow: 0 0 12px rgba(102,126,234,0.4); }' +
+        '.toggle input:checked + .toggle-slider { background: var(--accent-primary); box-shadow: 2px 2px 0 #000; }' +
         '.toggle input:checked + .toggle-slider:before { transform: translateX(22px); }' +
         '.info-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--space-3); }' +
         '.info-item {' +
             'background: var(--glass-bg); border: 1px solid var(--glass-border); padding: var(--space-4);' +
             'border-radius: var(--radius-lg); transition: all var(--transition-normal);' +
         '}' +
-        '.info-item:hover { background: var(--glass-bg-hover); border-color: rgba(255,255,255,0.12); transform: translateY(-2px); }' +
+        '.info-item:hover { background: var(--glass-bg-hover); border-color: var(--border-medium); transform: translate(-2px, -2px); box-shadow: 4px 4px 0 #000; }' +
         '.info-label { font-size: var(--font-size-xs); color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: var(--space-2); }' +
         '.info-value { font-size: var(--font-size-lg); font-weight: var(--font-weight-semibold); color: var(--text-primary); }' +
         '.s-btn-row { display: flex; gap: var(--space-3); margin-top: var(--space-4); }' +
@@ -102,12 +94,12 @@
             'font-family: inherit; cursor: pointer; transition: all 0.3s cubic-bezier(0.4,0,0.2,1); border: none; position: relative; overflow: hidden;' +
         '}' +
         '.s-btn-primary { background: var(--gradient-primary); color: #ffffff; }' +
-        '.s-btn-primary:hover { transform: translateY(-2px); box-shadow: 0 0 30px rgba(102,126,234,0.3); }' +
+        '.s-btn-primary:hover { transform: translate(-2px, -2px); box-shadow: 6px 6px 0 #000; }' +
         '.s-btn-primary:active { transform: translateY(0); }' +
         '.s-btn-secondary { background: var(--glass-bg); border: 1px solid var(--glass-border); color: var(--text-secondary); }' +
         '.s-btn-secondary:hover { background: var(--glass-bg-hover); color: var(--text-primary); border-color: var(--border-medium); }' +
-        '.s-btn-danger { background: var(--glass-bg); border: 1px solid rgba(239,68,68,0.2); color: var(--danger); }' +
-        '.s-btn-danger:hover { background: var(--danger-light); border-color: rgba(239,68,68,0.4); }' +
+        '.s-btn-danger { background: var(--glass-bg); border: 2px solid var(--danger); color: var(--danger); }' +
+        '.s-btn-danger:hover { background: var(--bg-hover, #323250); border-color: var(--danger); }' +
         '.s-footer { display: flex; gap: var(--space-3); padding-top: var(--space-4); animation: s-slideUp 0.5s ease 0.25s both; }' +
         '@keyframes s-slideUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }' +
         '@media (max-width: 768px) {' +
@@ -127,12 +119,18 @@
         '@media (max-width: 400px) { .info-grid { grid-template-columns: 1fr; } }' +
         '.toast {' +
             'position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(100px);' +
-            'background: var(--glass-bg); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur);' +
+            'background: var(--glass-bg);' +
             'border: 1px solid var(--glass-border); border-radius: var(--radius-lg); padding: var(--space-3) var(--space-5);' +
             'color: var(--text-primary); font-size: var(--font-size-sm); z-index: 9999; opacity: 0;' +
-            'transition: all 0.3s ease; pointer-events: none; box-shadow: 0 8px 32px rgba(0,0,0,0.3);' +
+            'transition: all 0.3s ease; pointer-events: none; box-shadow: 6px 6px 0 #000;' +
         '}' +
-        '.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }';
+        '.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }' +
+        /* Tier badge styles */
+        '.tier-badge { display:inline-block; font-size:9px; padding:1px 6px; border-radius:3px; font-weight:700; letter-spacing:0.5px; margin-left:6px; vertical-align:middle; text-transform:uppercase; }' +
+        '.tier-badge-pro { background:linear-gradient(135deg,#6366f1,#8b5cf6); color:#fff; }' +
+        '.tier-badge-enterprise { background:linear-gradient(135deg,#f59e0b,#ef4444); color:#fff; }' +
+        '.mcp-tool-locked { opacity:0.45; pointer-events:none; }' +
+        '.mcp-tool-locked .toggle-slider { cursor:not-allowed !important; }';
 
     var HTML =
         '<div class="settings-container">' +
@@ -157,8 +155,8 @@
                         '</select>' +
                     '</div>' +
                     '<div class="setting-row">' +
-                        '<div class="setting-info"><h4>\uC5B8\uC5B4</h4><p>\uC778\uD130\uD398\uC774\uC2A4 \uC5B8\uC5B4\uB97C \uC120\uD0DD\uD569\uB2C8\uB2E4</p></div>' +
-                        '<select id="langSelect" class="s-select">' +
+                        '<div class="setting-info"><h4>\uC5B8\uC5B4</h4><p>\uC778\uD130\uD398\uC774\uC2A4 \uC5B8\uC5B4\uB97C \uC120\uD0DD\uD569\uB2C8\uB2E4 <span style="font-size:var(--font-size-xs);color:var(--text-muted);opacity:0.7;">(\uC900\uBE44 \uC911)</span></p></div>' +
+                        '<select id="langSelect" class="s-select" disabled style="opacity:0.5;cursor:not-allowed;">' +
                             '<option value="ko">\uD55C\uAD6D\uC5B4</option>' +
                             '<option value="en">English</option>' +
                             '<option value="ja">\u65E5\u672C\u8A9E</option>' +
@@ -198,6 +196,23 @@
 
             '<div class="s-card">' +
                 '<div class="s-card-header">' +
+                    '<span class="s-card-icon">\uD83D\uDD27</span>' +
+                    '<span class="s-card-title">MCP \uB3C4\uAD6C</span>' +
+                '</div>' +
+                '<div class="s-card-body">' +
+                    '<div class="setting-row">' +
+                        '<div class="setting-info"><h4>MCP \uB3C4\uAD6C \uAD00\uB9AC</h4><p>AI\uAC00 \uC0AC\uC6A9\uD560 \uC218 \uC788\uB294 \uC678\uBD80 \uB3C4\uAD6C\uB97C \uAC1C\uBCC4\uC801\uC73C\uB85C \uD65C\uC131\uD654/\uBE44\uD65C\uC131\uD654\uD569\uB2C8\uB2E4</p></div>' +
+                        '<div class="s-btn-row" style="gap:6px;">' +
+                            '<button class="s-btn s-btn-secondary" style="font-size:var(--font-size-xs);padding:4px 10px;" id="mcpEnableAllBtn">\uC804\uCCB4 \uD65C\uC131\uD654</button>' +
+                            '<button class="s-btn s-btn-secondary" style="font-size:var(--font-size-xs);padding:4px 10px;" id="mcpDisableAllBtn">\uC804\uCCB4 \uBE44\uD65C\uC131\uD654</button>' +
+                        '</div>' +
+                    '</div>' +
+                    '<div id="mcpToolToggles"></div>' +
+                '</div>' +
+            '</div>' +
+
+            '<div class="s-card">' +
+                '<div class="s-card-header">' +
                     '<span class="s-card-icon">\uD83D\uDCBE</span>' +
                     '<span class="s-card-title">\uB370\uC774\uD130</span>' +
                 '</div>' +
@@ -229,6 +244,25 @@
                     '<div class="s-btn-row">' +
                         '<a href="/api-keys.html" class="s-btn s-btn-primary" style="text-decoration:none;">\uD83D\uDD11 API \uD0A4 \uAD00\uB9AC</a>' +
                         '<a href="/developer.html" class="s-btn s-btn-secondary" style="text-decoration:none;">\uD83D\uDCCB API \uBB38\uC11C</a>' +
+                    '</div>' +
+                '</div>' +
+            '</div>' +
+
+            '<div class="s-card" id="accountCard" style="display:none;">' +
+                '<div class="s-card-header">' +
+                    '<span class="s-card-icon">\uD83D\uDC64</span>' +
+                    '<span class="s-card-title">\uACC4\uC815 \uAD00\uB9AC</span>' +
+                '</div>' +
+                '<div class="s-card-body">' +
+                    '<div class="setting-row">' +
+                        '<div class="setting-info">' +
+                            '<h4>\uACC4\uC815 \uC124\uC815</h4>' +
+                            '<p>\uBE44\uBC00\uBC88\uD638 \uBCC0\uACBD \uBC0F \uC0AC\uC6A9\uC790 \uAD00\uB9AC</p>' +
+                        '</div>' +
+                    '</div>' +
+                    '<div class="s-btn-row">' +
+                        '<a href="/password-change.html" class="s-btn s-btn-primary" style="text-decoration:none;">\uD83D\uDD11 \uBE44\uBC00\uBC88\uD638 \uBCC0\uACBD</a>' +
+                        '<a href="/admin.html" class="s-btn s-btn-secondary" id="adminLink" style="text-decoration:none;display:none;">\uD83D\uDC65 \uC0AC\uC6A9\uC790 \uAD00\uB9AC</a>' +
                     '</div>' +
                 '</div>' +
             '</div>' +
@@ -323,8 +357,14 @@
                     var count = (data.data && data.data.count) || 0;
                     var el = document.getElementById('apiKeyCount');
                     if (el) el.textContent = count + '개 활성';
+                } else {
+                    var el = document.getElementById('apiKeyCount');
+                    if (el) el.textContent = '로그인 필요';
                 }
-            } catch (e) { /* silent */ }
+            } catch (e) {
+                var el2 = document.getElementById('apiKeyCount');
+                if (el2) el2.textContent = '로그인 필요';
+            }
         }
 
         async function loadSystemInfo() {
@@ -362,7 +402,24 @@
             var mcpSettings = JSON.parse(localStorage.getItem('mcpSettings') || '{}');
             mcpSettings.thinking = document.getElementById('thinkingToggle').checked;
             mcpSettings.webSearch = document.getElementById('webSearchToggle').checked;
+
+            // MCP 도구 토글 상태 수집 — DOM에서 mcpTool_ 프리픽스 체크박스 직접 조회
+            var enabledTools = {};
+            var mcpCheckboxes = document.querySelectorAll('input[id^="mcpTool_"]');
+            mcpCheckboxes.forEach(function(el) {
+                var toolName = el.id.replace('mcpTool_', '');
+                enabledTools[toolName] = el.checked;
+            });
+            mcpSettings.enabledTools = enabledTools;
             localStorage.setItem('mcpSettings', JSON.stringify(mcpSettings));
+
+            // AppState 동기화
+            if (typeof setState === 'function') {
+                setState('thinkingEnabled', mcpSettings.thinking);
+                setState('webSearchEnabled', mcpSettings.webSearch);
+                setState('mcpToolsEnabled', enabledTools);
+            }
+
             localStorage.setItem('generalSettings', JSON.stringify({ lang: document.getElementById('langSelect').value, saveHistory: document.getElementById('saveHistoryToggle').checked }));
             (typeof showToast === 'function' ? showToast('설정이 저장되었습니다.', 'warning') : console.warn('설정이 저장되었습니다.'));
         }
@@ -385,10 +442,206 @@
         }
 
         function resetSettings() { if (confirm('모든 설정을 초기화하시겠습니까?')) { localStorage.removeItem('theme'); localStorage.removeItem('selectedModel'); localStorage.removeItem('mcpSettings'); localStorage.removeItem('generalSettings'); location.reload(); } }
-        function exportData() { (typeof showToast === 'function' ? showToast('데이터 내보내기 기능은 준비 중입니다.', 'warning') : console.warn('데이터 내보내기 기능은 준비 중입니다.')); }
-        function clearHistory() { if (confirm('모든 대화 기록을 삭제하시겠습니까?')) (typeof showToast === 'function' ? showToast('대화 기록이 삭제되었습니다.', 'warning') : console.warn('대화 기록이 삭제되었습니다.')); }
+
+        async function exportData() {
+            try {
+                var authToken = localStorage.getItem('authToken');
+                if (!authToken) {
+                    (typeof showToast === 'function' ? showToast('로그인이 필요합니다.', 'warning') : console.warn('로그인이 필요합니다.'));
+                    return;
+                }
+                var headers = { 'Authorization': 'Bearer ' + authToken };
+                var res = await fetch('/api/chat/sessions?limit=500', { credentials: 'include', headers: headers });
+                if (!res.ok) throw new Error('서버 응답 오류: ' + res.status);
+                var data = await res.json();
+                var payload = data.data || data;
+                var sessions = payload.sessions || [];
+                if (sessions.length === 0) {
+                    (typeof showToast === 'function' ? showToast('내보낼 대화 기록이 없습니다.', 'warning') : console.warn('내보낼 대화 기록이 없습니다.'));
+                    return;
+                }
+                var blob = new Blob([JSON.stringify(sessions, null, 2)], { type: 'application/json' });
+                var url = URL.createObjectURL(blob);
+                var a = document.createElement('a');
+                a.href = url;
+                a.download = 'openmake_chat_export_' + new Date().toISOString().slice(0, 10) + '.json';
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                URL.revokeObjectURL(url);
+                (typeof showToast === 'function' ? showToast(sessions.length + '개 대화가 내보내기되었습니다.', 'success') : console.log('Export complete'));
+            } catch (e) {
+                console.error('데이터 내보내기 실패:', e);
+                (typeof showToast === 'function' ? showToast('데이터 내보내기에 실패했습니다.', 'error') : console.error('데이터 내보내기 실패'));
+            }
+        }
+
+        async function clearHistory() {
+            if (!confirm('모든 대화 기록을 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.')) return;
+            try {
+                var res = await window.authFetch('/api/chat/sessions', { method: 'DELETE' });
+                if (!res.ok) throw new Error('서버 응답 오류: ' + res.status);
+                var data = await res.json();
+                var count = (data.data && data.data.count) || 0;
+                (typeof showToast === 'function' ? showToast(count + '개 대화 기록이 삭제되었습니다.', 'success') : console.log('History cleared'));
+            } catch (e) {
+                console.error('대화 기록 삭제 실패:', e);
+                (typeof showToast === 'function' ? showToast('대화 기록 삭제에 실패했습니다.', 'error') : console.error('대화 기록 삭제 실패'));
+            }
+        }
 
         initSettings();
+
+        // 계정 관리 카드 표시 (로그인 시에만)
+        (function initAccountCard() {
+            var accountCard = document.getElementById('accountCard');
+            var adminLink = document.getElementById('adminLink');
+            var loggedIn = !!localStorage.getItem('authToken');
+            if (loggedIn && accountCard) {
+                accountCard.style.display = '';
+                if (isAdmin() && adminLink) adminLink.style.display = '';
+            }
+        })();
+
+        // 사용자 등급(tier) 판별 — 백엔드 tool-tiers.ts의 getDefaultTierForRole 동기화
+        function getUserTier() {
+            var isGuest = localStorage.getItem('guestMode') === 'true' ||
+                          localStorage.getItem('isGuest') === 'true' ||
+                          !localStorage.getItem('authToken');
+            if (isGuest) return 'free';
+            var savedUser = localStorage.getItem('user');
+            if (!savedUser) return 'free';
+            try {
+                var user = JSON.parse(savedUser);
+                if (user.role === 'admin' || user.role === 'administrator') return 'enterprise';
+                return user.tier || 'free';
+            } catch(e) { return 'free'; }
+        }
+
+        var TIER_LEVEL = { free: 0, pro: 1, enterprise: 2 };
+        var TIER_LABELS = { pro: 'PRO', enterprise: 'ENTERPRISE' };
+        function canAccessTier(userTier, requiredTier) {
+            return (TIER_LEVEL[userTier] || 0) >= (TIER_LEVEL[requiredTier] || 0);
+        }
+
+        // MCP 도구 토글 UI 렌더링 (등급 기반 접근 제어 포함)
+        (function renderMCPToolToggles() {
+            console.log('[Settings] renderMCPToolToggles 실행');
+            var container = document.getElementById('mcpToolToggles');
+            console.log('[Settings] mcpToolToggles container:', container ? 'found' : 'NOT FOUND');
+            if (!container) return;
+
+            var userTier = getUserTier();
+            console.log('[Settings] 사용자 등급:', userTier);
+
+            // MCP 도구 카탈로그 — 백엔드 builtInTools + tool-tiers 동기화 (minTier 포함)
+            var toolCatalog = [
+                { category: '비전', emoji: '👁️', tools: [
+                    { name: 'vision_ocr', label: '이미지 OCR', description: '이미지에서 텍스트를 추출합니다', minTier: 'free' },
+                    { name: 'analyze_image', label: '이미지 분석', description: '이미지 내용을 분석합니다', minTier: 'free' }
+                ]},
+                { category: '웹 검색', emoji: '🌐', tools: [
+                    { name: 'web_search', label: '웹 검색', description: '실시간 웹 검색을 수행합니다', minTier: 'free' },
+                    { name: 'fact_check', label: '팩트 체크', description: '정보의 사실 여부를 검증합니다', minTier: 'enterprise' },
+                    { name: 'extract_webpage', label: '웹페이지 추출', description: '웹페이지 콘텐츠를 추출합니다', minTier: 'enterprise' },
+                    { name: 'research_topic', label: '주제 연구', description: '주제에 대한 심층 연구를 수행합니다', minTier: 'enterprise' }
+                ]},
+                { category: '추론', emoji: '🧠', tools: [
+                    { name: 'sequential_thinking', label: 'Sequential Thinking', description: '단계별 논리적 추론 체인', minTier: 'pro' }
+                ]},
+                { category: '스크래핑', emoji: '🔥', tools: [
+                    { name: 'firecrawl_scrape', label: 'Firecrawl 스크래핑', description: '웹페이지를 스크래핑합니다', minTier: 'pro' },
+                    { name: 'firecrawl_search', label: 'Firecrawl 검색', description: '웹을 검색합니다', minTier: 'pro' },
+                    { name: 'firecrawl_map', label: 'Firecrawl URL 맵', description: 'URL 구조를 매핑합니다', minTier: 'pro' },
+                    { name: 'firecrawl_crawl', label: 'Firecrawl 크롤링', description: '웹사이트를 크롤링합니다', minTier: 'pro' }
+                ]}
+            ];
+
+            var savedMcp = localStorage.getItem('mcpSettings');
+            var enabledTools = {};
+            if (savedMcp) {
+                try { enabledTools = JSON.parse(savedMcp).enabledTools || {}; } catch(e) {}
+            }
+
+            var html = '';
+            toolCatalog.forEach(function(group) {
+                html += '<div style="margin-top:12px;">' +
+                    '<div style="font-size:var(--font-size-xs);color:var(--text-muted);font-weight:600;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px;">' +
+                        group.emoji + ' ' + group.category +
+                    '</div>';
+                group.tools.forEach(function(tool) {
+                    var accessible = canAccessTier(userTier, tool.minTier);
+                    var isOn = accessible && enabledTools[tool.name] === true;
+                    var lockedClass = accessible ? '' : ' mcp-tool-locked';
+                    var badgeHtml = '';
+                    if (!accessible && TIER_LABELS[tool.minTier]) {
+                        var badgeClass = tool.minTier === 'pro' ? 'tier-badge-pro' : 'tier-badge-enterprise';
+                        badgeHtml = ' <span class="tier-badge ' + badgeClass + '">' + TIER_LABELS[tool.minTier] + '</span>';
+                    }
+                    html += '<div class="setting-row' + lockedClass + '" style="padding:6px 0;">' +
+                        '<div class="setting-info" style="min-width:0;">' +
+                            '<h4 style="font-size:var(--font-size-sm);margin:0;">' + tool.label + badgeHtml + '</h4>' +
+                            '<p style="font-size:var(--font-size-xs);margin:0;opacity:0.7;">' + tool.description + '</p>' +
+                        '</div>' +
+                        '<label class="toggle"><input type="checkbox" id="mcpTool_' + tool.name + '" ' + (isOn ? 'checked' : '') + (accessible ? '' : ' disabled') + '><span class="toggle-slider"></span></label>' +
+                    '</div>';
+                });
+                html += '</div>';
+            });
+            container.innerHTML = html;
+
+            // 개별 도구 토글 이벤트 바인딩 — 접근 가능한 도구만
+            toolCatalog.forEach(function(group) {
+                group.tools.forEach(function(tool) {
+                    if (!canAccessTier(userTier, tool.minTier)) return; // 잠긴 도구는 이벤트 불필요
+                    var el = document.getElementById('mcpTool_' + tool.name);
+                    if (el) {
+                        el.addEventListener('change', function() {
+                            var saved = localStorage.getItem('mcpSettings');
+                            var settings = saved ? JSON.parse(saved) : {};
+                            if (!settings.enabledTools) settings.enabledTools = {};
+                            settings.enabledTools[tool.name] = el.checked;
+                            localStorage.setItem('mcpSettings', JSON.stringify(settings));
+
+                            // app.js 전역 mcpSettings 동기화
+                            if (typeof mcpSettings !== 'undefined') {
+                                if (!mcpSettings.enabledTools) mcpSettings.enabledTools = {};
+                                mcpSettings.enabledTools[tool.name] = el.checked;
+                            }
+
+                            console.log('[Settings] MCP 도구 토글:', tool.name, el.checked ? '활성화' : '비활성화');
+                        });
+                    }
+                });
+            });
+
+            // 전체 활성화/비활성화 버튼 이벤트 — 접근 가능한 도구만 대상
+            function setAllTools(enabled) {
+                var saved = localStorage.getItem('mcpSettings');
+                var settings = saved ? JSON.parse(saved) : {};
+                if (!settings.enabledTools) settings.enabledTools = {};
+                toolCatalog.forEach(function(group) {
+                    group.tools.forEach(function(tool) {
+                        if (!canAccessTier(userTier, tool.minTier)) return; // 잠긴 도구 건너뜀
+                        settings.enabledTools[tool.name] = enabled;
+                        var el = document.getElementById('mcpTool_' + tool.name);
+                        if (el) el.checked = enabled;
+                    });
+                });
+                localStorage.setItem('mcpSettings', JSON.stringify(settings));
+
+                // app.js 전역 mcpSettings 동기화
+                if (typeof mcpSettings !== 'undefined') {
+                    mcpSettings.enabledTools = settings.enabledTools;
+                }
+
+                (typeof showToast === 'function' ? showToast(enabled ? 'MCP 도구 전체 활성화' : 'MCP 도구 전체 비활성화', enabled ? 'success' : 'info') : null);
+            }
+            var enableAllBtn = document.getElementById('mcpEnableAllBtn');
+            var disableAllBtn = document.getElementById('mcpDisableAllBtn');
+            if (enableAllBtn) enableAllBtn.addEventListener('click', function() { setAllTools(true); });
+            if (disableAllBtn) disableAllBtn.addEventListener('click', function() { setAllTools(false); });
+        })();
 
             // Expose onclick-referenced functions globally
                 if (typeof exportData === 'function') window.exportData = exportData;

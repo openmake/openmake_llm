@@ -25,10 +25,11 @@
 import axios, { AxiosInstance } from 'axios';
 import { getApiKeyManager, KeyModelPair } from './api-key-manager';
 import { getConfig } from '../config/env';
+import { OLLAMA_CLOUD_HOST } from '../config/constants';
 import { ChatMessage, ChatResponse } from './types';
+import { createLogger } from '../utils/logger';
 
-/** Ollama Cloud API 호스트 URL */
-const OLLAMA_CLOUD_HOST = 'https://ollama.com';
+const logger = createLogger('MultiModelClient');
 
 /**
  * A2A 병렬 실행 결과 — 개별 모델의 응답 결과
@@ -100,7 +101,7 @@ export class MultiModelClientFactory {
         const pairs = keyManager.getAllKeyModelPairs();
         const envConfig = getConfig();
 
-        console.log(`[MultiModelClientFactory] 🚀 ${pairs.length}개 모델 클라이언트 초기화 중...`);
+        logger.info(`🚀 ${pairs.length}개 모델 클라이언트 초기화 중...`);
 
         pairs.forEach((pair: KeyModelPair) => {
             const isCloudModel = pair.model?.toLowerCase().endsWith(':cloud') ?? false;
@@ -123,10 +124,10 @@ export class MultiModelClientFactory {
             });
 
             const maskedKey = pair.key.substring(0, 8) + '...';
-            console.log(`[MultiModelClientFactory]   Client ${pair.index + 1}: ${pair.model} (${maskedKey})`);
+            logger.info(`  Client ${pair.index + 1}: ${pair.model} (${maskedKey})`);
         });
 
-        console.log(`[MultiModelClientFactory] ✅ ${this.clients.size}개 클라이언트 준비 완료`);
+        logger.info(`✅ ${this.clients.size}개 클라이언트 준비 완료`);
     }
 
     /**
@@ -191,7 +192,7 @@ export class MultiModelClientFactory {
         const targetIndices = options?.indices ?? Array.from(this.clients.keys());
         const timeout = options?.timeout ?? getConfig().ollamaTimeout;
 
-        console.log(`[MultiModelClientFactory] 🔄 ${targetIndices.length}개 모델에 병렬 요청 시작...`);
+        logger.info(`🔄 ${targetIndices.length}개 모델에 병렬 요청 시작...`);
 
         const promises = targetIndices.map(async (index) => {
             const client = this.clients.get(index);
@@ -220,7 +221,7 @@ export class MultiModelClientFactory {
                 ]);
 
                 const duration = Date.now() - startTime;
-                console.log(`[MultiModelClientFactory] ✅ Model ${index + 1} (${client.model}): ${duration}ms`);
+                logger.info(`✅ Model ${index + 1} (${client.model}): ${duration}ms`);
 
                 return {
                     index,
@@ -232,7 +233,7 @@ export class MultiModelClientFactory {
             } catch (error) {
                 const duration = Date.now() - startTime;
                 const errorMessage = error instanceof Error ? error.message : String(error);
-                console.error(`[MultiModelClientFactory] ❌ Model ${index + 1} (${client.model}): ${errorMessage}`);
+                logger.error(`❌ Model ${index + 1} (${client.model}): ${errorMessage}`);
 
                 return {
                     index,
@@ -247,7 +248,7 @@ export class MultiModelClientFactory {
         const results = await Promise.all(promises);
         
         const successCount = results.filter(r => r.success).length;
-        console.log(`[MultiModelClientFactory] 📊 병렬 요청 완료: ${successCount}/${results.length} 성공`);
+        logger.info(`📊 병렬 요청 완료: ${successCount}/${results.length} 성공`);
 
         return results;
     }
@@ -261,7 +262,7 @@ export class MultiModelClientFactory {
     ): Promise<ParallelChatResult> {
         const targetIndices = options?.indices ?? Array.from(this.clients.keys());
 
-        console.log(`[MultiModelClientFactory] 🏁 ${targetIndices.length}개 모델 레이스 시작...`);
+        logger.info(`🏁 ${targetIndices.length}개 모델 레이스 시작...`);
 
         const promises = targetIndices.map(async (index) => {
             const client = this.clients.get(index);
@@ -286,7 +287,7 @@ export class MultiModelClientFactory {
         });
 
         const result = await Promise.race(promises);
-        console.log(`[MultiModelClientFactory] 🏆 레이스 우승: Model ${result.index + 1} (${result.model}) - ${result.duration}ms`);
+        logger.info(`🏆 레이스 우승: Model ${result.index + 1} (${result.model}) - ${result.duration}ms`);
 
         return result;
     }

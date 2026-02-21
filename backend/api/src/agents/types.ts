@@ -5,6 +5,9 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { createLogger } from '../utils/logger';
+
+const logger = createLogger('Agents');
 
 // 에이전트 페이즈 (작업 단계)
 export type AgentPhase = 'planning' | 'build' | 'optimization';
@@ -73,7 +76,7 @@ export function getIndustryAgentsData(): IndustryAgentsData {
         cachedIndustryData = JSON.parse(jsonContent) as IndustryAgentsData;
         return cachedIndustryData;
     } catch (e) {
-        console.error('[Agents] Failed to load industry-agents.json:', e);
+        logger.error('Failed to load industry-agents.json:', e);
         return {};
     }
 }

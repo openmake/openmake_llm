@@ -13,10 +13,10 @@
     <link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css"
         rel="stylesheet">
     <link rel="stylesheet" href="/css/design-tokens.css">
-    <link rel="stylesheet" href="/css/glassmorphism.css">
+
 
     <!-- PWA 메타 태그 -->
-    <meta name="theme-color" content="#667eea">
+    <meta name="theme-color" content="#c061ff">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="OpenMake.Ai">
@@ -37,11 +37,10 @@
             background: var(--bg-app);
             min-height: 100vh;
             display: flex;
-            align-items: center;
             justify-content: center;
             padding: 20px;
             position: relative;
-            overflow: hidden;
+            overflow-y: auto;
         }
 
         /* 배경 글로우 효과 */
@@ -52,10 +51,7 @@
             left: 0;
             right: 0;
             bottom: 0;
-            background:
-                radial-gradient(ellipse 80% 50% at 50% -20%, rgba(102, 126, 234, 0.15), transparent),
-                radial-gradient(ellipse 60% 30% at 70% 80%, rgba(118, 75, 162, 0.10), transparent),
-                radial-gradient(ellipse 40% 40% at 20% 60%, rgba(102, 126, 234, 0.08), transparent);
+            background: none;
             pointer-events: none;
             z-index: 0;
         }
@@ -66,6 +62,7 @@
             text-align: center;
             position: relative;
             z-index: 1;
+            margin: auto 0;
         }
 
         /* 캐릭터 아바타 */
@@ -78,8 +75,8 @@
             height: 100px;
             border-radius: 50%;
             object-fit: cover;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-            border: 2px solid var(--glass-border);
+            box-shadow: 4px 4px 0 #000;
+            border: 2px solid var(--border-light);
         }
 
         /* 환영 메시지 */
@@ -97,15 +94,13 @@
             margin-bottom: 32px;
         }
 
-        /* 로그인 카드 - Glassmorphism */
+        /* 로그인 카드 - Neo Brutalism 2.0 */
         .login-card {
-            background: var(--glass-bg);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            border: 1px solid var(--glass-border);
-            border-radius: 20px;
+            background: var(--bg-card);
+            border: 2px solid var(--border-light);
+            border-radius: 8px;
             padding: 32px 28px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            box-shadow: 6px 6px 0 #000;
         }
 
         /* 탭 */
@@ -134,7 +129,7 @@
         .tab.active {
             background: var(--bg-tertiary);
             color: var(--text-primary);
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+            box-shadow: 2px 2px 0 #000;
         }
 
         .tab:hover:not(.active) {
@@ -333,9 +328,8 @@
             position: fixed;
             top: 20px;
             right: 20px;
-            background: var(--glass-bg);
-            backdrop-filter: blur(10px);
-            border: 1px solid var(--glass-border);
+            background: var(--bg-card);
+            border: 2px solid var(--border-light);
             border-radius: 50%;
             width: 44px;
             height: 44px;
@@ -360,18 +354,17 @@
         }
 
         [data-theme="light"] body::before {
-            background:
-                radial-gradient(ellipse 80% 50% at 50% -20%, rgba(102, 126, 234, 0.08), transparent),
-                radial-gradient(ellipse 60% 30% at 70% 80%, rgba(118, 75, 162, 0.05), transparent);
+            background: none;
         }
 
         [data-theme="light"] .login-card {
-            background: rgba(255, 255, 255, 0.9);
-            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
+            background: #ffffff;
+            border: 2px solid #1a1a2e;
+            box-shadow: 4px 4px 0 #1a1a2e;
         }
 
         [data-theme="light"] .login-avatar img {
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            box-shadow: 4px 4px 0 #1a1a2e;
         }
 
         /* 반응형 */
@@ -544,30 +537,12 @@
 
         initTheme();
 
-        // 이미 로그인된 경우 메인 페이지로 이동
-        if (localStorage.getItem('authToken')) {
-            checkAuth();
-        }
-
-        async function checkAuth() {
-            const token = localStorage.getItem('authToken');
-            if (!token) return;
-
-            try {
-                const res = await fetch(`${API_BASE}/api/auth/me`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-
-                if (res.ok) {
-                    window.location.href = '/';
-                } else {
-                    localStorage.removeItem('authToken');
-                    localStorage.removeItem('user');
-                }
-            } catch (e) {
-                console.error('Auth check failed:', e);
-            }
-        }
+        // 🔒 자동로그인 차단: login.html 진입 시 stale 토큰 정리
+        // 이전: authToken이 있으면 /api/auth/me로 자동 리다이렉트 → 제거
+        // 사용자가 로그인 페이지에 도달하면 기존 인증 상태를 초기화
+        localStorage.removeItem('authToken');
+        localStorage.removeItem('user');
+        localStorage.removeItem('guestMode');
 
         function switchTab(tab) {
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));

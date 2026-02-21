@@ -9,7 +9,7 @@ import { Request, Response, Router } from 'express';
 import { getConversationDB, ConversationSession } from '../data/conversation-db';
 import { optionalAuth, requireAuth } from '../auth';
 import { createLogger } from '../utils/logger';
-import { success } from '../utils/api-response';
+import { success, unauthorized, badRequest, forbidden } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
 import { getConfig } from '../config';
 
@@ -115,12 +115,12 @@ export class SessionController {
              const { anonSessionId } = req.body;
 
              if (!user?.id) {
-                 res.status(401).json({ success: false, error: { message: '인증이 필요합니다' } });
+                 res.status(401).json(unauthorized('인증이 필요합니다'));
                  return;
              }
 
              if (!anonSessionId || typeof anonSessionId !== 'string') {
-                 res.status(400).json({ success: false, error: { message: 'anonSessionId가 필요합니다' } });
+                 res.status(400).json(badRequest('anonSessionId가 필요합니다'));
                  return;
              }
 
@@ -128,7 +128,7 @@ export class SessionController {
              // UUID v4 형식만 허용하여 무작위 대입 공격 방지
              const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
              if (!uuidRegex.test(anonSessionId)) {
-                 res.status(400).json({ success: false, error: { message: '유효하지 않은 세션 ID 형식입니다' } });
+                 res.status(400).json(badRequest('유효하지 않은 세션 ID 형식입니다'));
                  return;
              }
 
@@ -139,6 +139,19 @@ export class SessionController {
              log.info(`[Chat Sessions] 익명 세션 이관: userId=${userId}, anonSessionId=${anonSessionId}, claimed=${claimed}`);
 
              res.json(success({ claimed }));
+         }));
+
+         // 🆕 전체 세션 삭제: 로그인 사용자의 모든 대화 기록 삭제
+         this.router.delete('/', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+             const user = req.user;
+             if (!user?.id) {
+                 res.status(401).json(unauthorized('인증이 필요합니다'));
+                 return;
+             }
+             const userId = String(user.id);
+             const deletedCount = await conversationDb.deleteAllSessionsByUserId(userId);
+             log.info(`[Chat Sessions] 전체 삭제: userId=${userId}, deleted=${deletedCount}`);
+             res.json(success({ deleted: true, count: deletedCount }));
          }));
 
          // 새 세션 생성 (anonSessionId 지원)
@@ -170,7 +183,7 @@ export class SessionController {
               const { sessionId } = req.params;
               const session = await conversationDb.getSession(sessionId);
               if (!hasSessionAccess(session, req)) {
-                  res.status(403).json({ success: false, error: { message: '권한이 없습니다' } });
+                  res.status(403).json(forbidden('권한이 없습니다'));
                   return;
               }
 
@@ -184,7 +197,7 @@ export class SessionController {
               const { sessionId } = req.params;
               const session = await conversationDb.getSession(sessionId);
               if (!hasSessionAccess(session, req)) {
-                  res.status(403).json({ success: false, error: { message: '권한이 없습니다' } });
+                  res.status(403).json(forbidden('권한이 없습니다'));
                   return;
               }
 
@@ -200,7 +213,7 @@ export class SessionController {
               const { sessionId } = req.params;
               const session = await conversationDb.getSession(sessionId);
               if (!hasSessionAccess(session, req)) {
-                  res.status(403).json({ success: false, error: { message: '권한이 없습니다' } });
+                  res.status(403).json(forbidden('권한이 없습니다'));
                   return;
               }
 
@@ -214,7 +227,7 @@ export class SessionController {
               const { sessionId } = req.params;
               const session = await conversationDb.getSession(sessionId);
               if (!hasSessionAccess(session, req)) {
-                  res.status(403).json({ success: false, error: { message: '권한이 없습니다' } });
+                  res.status(403).json(forbidden('권한이 없습니다'));
                   return;
               }
 

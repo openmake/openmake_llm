@@ -121,7 +121,7 @@ iconify-icon.icon-2xl {
     align-items: center;
     justify-content: center;
     padding: var(--space-2);
-    border: none;
+    border: 1px solid transparent;
     background: transparent;
     border-radius: var(--radius-md);
     color: var(--text-secondary);
@@ -130,23 +130,29 @@ iconify-icon.icon-2xl {
 }
 
 .icon-btn:hover {
-    background: var(--glass-bg-hover);
+    background: var(--bg-hover);
     color: var(--text-primary);
+    border-color: var(--border-light);
+    box-shadow: var(--shadow-sm);
+    transform: translate(-2px, -2px);
 }
 
 .icon-btn:active {
-    transform: scale(0.95);
+    transform: translate(1px, 1px);
+    box-shadow: none;
 }
 
 .icon-btn.active,
 .icon-btn:focus-visible {
     color: var(--accent-primary);
     background: var(--accent-primary-light);
+    border-color: var(--accent-primary);
+    box-shadow: var(--shadow-sm);
 }
 
-/* Icon Button with Glow */
+/* Icon Button with Glow (Replaced with hard shadow) */
 .icon-btn-glow:hover {
-    box-shadow: var(--glow-primary);
+    box-shadow: var(--shadow-md);
 }
 
 /* ==========================================

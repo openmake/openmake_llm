@@ -1,5 +1,59 @@
 # Changelog
 
+## v1.5.6 (2026-02-17)
+
+### New Features
+
+- **OpenAI 호환 Tool Calling 경로**: `/api/chat`, `/api/chat/stream`에서 `tools`, `tool_choice` 입력을 받아 단일 턴 도구 호출 응답(`tool_calls`, `finish_reason`) 반환 지원 (`chat/request-handler.ts`, `routes/chat.routes.ts`, `schemas/chat.schema.ts`)
+- **API Key 경로 보강**: v1 라우터에서 `/usage`, `/usage/daily` API Key 전용 요약/일별 조회 경로 우선 매칭으로 노출 (`routes/v1/index.ts`)
+- **A2A 모델 선택 확장**: QueryType 기반 A2A 모델 조합 선택 및 문서화 강화 (`services/chat-strategies/a2a-strategy.ts`, `types.ts`)
+
+### Improvements
+
+- **레이트 리미터 안정화**: 채팅 레이트 리미터에 만료 엔트리 정리/최대 엔트리 제한/interval unref/종료 훅 추가 (`middlewares/chat-rate-limiter.ts`)
+- **서비스 로깅 일원화**: `ChatService`의 `console.*` 출력 대부분을 구조화 로거로 전환 (`services/ChatService.ts`)
+- **DB/설정 문서 주석 보강**: 리포지토리 계층과 상수 모듈에 목적/책임 주석 추가 (`data/repositories/*.ts`, `config/constants.ts`, `cluster/circuit-breaker.ts`)
+
+### Docs
+
+- **OpenAI 스펙/리뷰 문서 추가**: OpenAI 호환 스키마 문서 및 코드리뷰 리포트 반영 (`openai_openapi.yaml`, `openai_spec.yml`, `docs/CODE_REVIEW_REPORT_2026_02_16.md`)
+
+### Stats
+
+- 30 files changed, 76k+ insertions, 98 deletions
+- 0 regressions reported in this release set
+
+---
+
+## v1.5.5 (2026-02-16)
+
+### Bug Fixes
+
+- **설정 페이지**: Light 테마에서 흰색 텍스트/흰색 배경으로 텍스트가 보이지 않던 문제 수정 (`style.css`)
+- **설정 페이지**: 대화 기록 삭제 기능 구현 — DB `deleteAllSessionsByUserId()` + REST API `DELETE /api/sessions` + 프론트엔드 연동 (`conversation-db.ts`, `session.controller.ts`, `settings.js`)
+- **설정 페이지**: 데이터 내보내기 버튼 클릭 시 JSON 파일 다운로드 구현 (`settings.js`)
+- **설정 페이지**: API 키 카운트 비로그인 시 에러 대신 폴백 메시지 표시 (`settings.js`)
+- **login.html**: 작은 뷰포트에서 하단 콘텐츠가 잘리던 문제 수정 — `overflow-y: auto` 적용 (`login.html`)
+- **감사 로그**: `checkAdmin()` API 호출이 리디렉트를 유발하던 버그 수정 — `localStorage` 기반 권한 검증으로 전환 (`audit.js`)
+- **클러스터 페이지**: API 응답 `data.data` 이중 래핑 미처리 및 `node.url` 대신 `host:port` 표시 수정 (`cluster.js`)
+- **통합 모니터링**: `fetch()` → `window.authFetch()` 전환으로 인증 오류 해결 (`admin-metrics.js`)
+- **통합 모니터링**: SPA 모드에서 Chart.js 미로딩 문제 수정 — 동적 스크립트 로딩 구현 (`admin-metrics.js`)
+- **통합 모니터링**: API 실패 시 `TypeError: Cannot read properties of undefined` 방지 (`admin-metrics.js`)
+
+### New Features
+
+- **MCP 도구 토글 UI**: 설정 페이지에서 11개 MCP 도구를 4개 카테고리별로 활성화/비활성화 가능 — `localStorage` 저장 (`settings.js`)
+- **enabledTools 백엔드 연동**: WebSocket 메시지 → `ChatRequestParams` → `ChatService.getAllowedTools()` 필터링 파이프라인 구현 (`handler.ts`, `request-handler.ts`, `ChatService.ts`)
+- **티어별 MCP 접근 제어**: Free(3개), Pro(8개), Enterprise(11개) 도구 차등 적용 — 잠금 아이콘 및 업그레이드 안내 (`settings.js`)
+- **티어 배지 UI**: PRO(보라색), ENTERPRISE(주황-빨간 그라디언트) 배지 표시 (`settings.js`)
+
+### Stats
+
+- 17 files changed, 529 insertions(+), 65 deletions(-)
+- 0 regressions
+
+---
+
 ## v1.5.4 (2026-02-16)
 
 ### Architecture — Chat Handler DRY Abstraction

@@ -10,7 +10,8 @@
     height: 100px;
     border-radius: 50%;
     object-fit: cover;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+    box-shadow: var(--shadow-md);
+    border: var(--border-width) solid var(--border-light);
 }
 
 .feature-cards {
@@ -23,17 +24,18 @@
 
 .feature-card {
     background: var(--bg-card);
-    border: 1px solid var(--border-light);
+    border: var(--border-width) solid var(--border-light);
     border-radius: var(--radius-lg);
     padding: 20px 16px;
     text-align: center;
     cursor: pointer;
-    transition: all 0.3s ease;
+    transition: all 0.2s cubic-bezier(0.2, 0, 0, 1);
+    box-shadow: var(--shadow-sm);
 }
 
 .feature-card:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+    transform: translate(-2px, -2px);
+    box-shadow: var(--shadow-lg);
     border-color: var(--accent-primary);
 }
 
@@ -41,6 +43,12 @@
     width: 64px;
     height: 64px;
     margin: 0 auto 12px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .feature-icon img {
@@ -51,7 +59,7 @@
 
 .feature-title {
     font-size: 0.95rem;
-    font-weight: 600;
+    font-weight: 700;
     color: var(--text-primary);
     margin-bottom: 4px;
 }
@@ -60,24 +68,28 @@
     font-size: 0.8rem;
     color: var(--text-muted);
     margin-bottom: 12px;
+    font-weight: 500;
 }
 
 .feature-btn {
-    background: #FFFFFF;
-    border: 1px solid var(--border-medium);
+    background: var(--bg-card);
+    border: var(--border-width) solid var(--border-medium);
     border-radius: var(--radius-full);
     padding: 8px 16px;
     font-size: 0.8rem;
-    font-weight: 500;
+    font-weight: 700;
     color: var(--text-primary);
     cursor: pointer;
-    transition: all 0.2s;
+    transition: all 0.2s cubic-bezier(0.2, 0, 0, 1);
+    box-shadow: var(--shadow-sm);
 }
 
 .feature-btn:hover {
     background: var(--accent-primary);
     color: white;
-    border-color: var(--accent-primary);
+    border-color: var(--border-strong);
+    box-shadow: var(--shadow-md);
+    transform: translate(-2px, -2px);
 }
 
 /* 모바일 반응형 */
@@ -117,81 +129,83 @@
     --bg-secondary: #FFFFFF;
     --bg-card: #FFFFFF;
     --bg-tertiary: #F0EBE3;
-    --bg-hover: rgba(0, 0, 0, 0.04);
-    --bg-active: rgba(0, 0, 0, 0.08);
+    --bg-hover: #e8e3db;
+    --bg-active: #ddd8d0;
 
     /* 텍스트 */
     --text-primary: #333333;
     --text-secondary: #666666;
     --text-muted: #999999;
 
-    /* 보더 */
-    --border-light: rgba(0, 0, 0, 0.08);
-    --border-medium: rgba(0, 0, 0, 0.12);
+    /* 보더 — Neo Brutalism 2.0 */
+    --border-light: #d1d1d1;
+    --border-medium: #1a1a2e;
 
-    /* 그림자 */
-    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
-    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1);
+    /* 그림자 — hard offset, no blur */
+    --shadow-sm: 2px 2px 0 #1a1a2e;
+    --shadow-md: 4px 4px 0 #1a1a2e;
 
-    /* 액센트 */
-    --accent-primary: #4CAF50;
-    --accent-primary-hover: #45A049;
-    --accent-primary-light: rgba(76, 175, 80, 0.15);
+    /* 액센트 — Neo Brutalism purple */
+    --accent-primary: #7c3aed;
+    --accent-primary-hover: #6d28d9;
+    --accent-primary-light: #ede9fe;
 }
 
 /* 라이트 테마 Welcome Screen */
 [data-theme="light"] .welcome-screen,
 .theme-light .welcome-screen {
-    background: linear-gradient(180deg, transparent 0%, rgba(245, 240, 232, 0.5) 100%);
+    background: var(--bg-main);
 }
 
 [data-theme="light"] .welcome-title,
 .theme-light .welcome-title {
-    background: linear-gradient(135deg, #333333 0%, #666666 100%);
-    -webkit-background-clip: text;
-    background-clip: text;
-    -webkit-text-fill-color: transparent;
+    color: var(--text-primary);
 }
 
 /* 라이트 테마 사이드바 */
 [data-theme="light"] .sidebar,
 .theme-light .sidebar {
-    background: #EDE8DE;
-    border-right: 1px solid rgba(0, 0, 0, 0.08);
+    background: var(--bg-sidebar);
+    border-right: var(--border-width) solid var(--border-light);
 }
 
 /* 라이트 테마 채팅 입력 */
 [data-theme="light"] .chat-input-container,
 .theme-light .chat-input-container {
-    background: #FFFFFF;
-    border: 1px solid rgba(0, 0, 0, 0.1);
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    background: var(--bg-card);
+    border: var(--border-width) solid var(--border-medium);
+    box-shadow: var(--shadow-md);
 }
 
 /* 라이트 테마 전송 버튼 (초록색) */
 [data-theme="light"] .send-btn,
 .theme-light .send-btn {
-    background: #4CAF50;
+    background: var(--accent-primary);
     color: white;
+    border: var(--border-width) solid var(--border-strong);
+    box-shadow: var(--shadow-sm);
 }
 
 [data-theme="light"] .send-btn:hover,
 .theme-light .send-btn:hover {
-    background: #45A049;
-    box-shadow: 0 4px 15px rgba(76, 175, 80, 0.3);
+    background: var(--accent-primary-hover);
+    box-shadow: var(--shadow-md);
+    transform: translate(-2px, -2px);
 }
 
 /* 라이트 테마 카드 스타일 */
 [data-theme="light"] .feature-card,
 .theme-light .feature-card {
-    background: #FFFFFF;
-    border: 1px solid rgba(0, 0, 0, 0.08);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    background: var(--bg-card);
+    border: var(--border-width) solid var(--border-light);
+    box-shadow: var(--shadow-sm);
 }
 
 [data-theme="light"] .feature-card:hover,
 .theme-light .feature-card:hover {
-    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.12);
+    box-shadow: var(--shadow-lg);
+    transform: translate(-2px, -2px);
+    border-color: var(--border-strong);
 }
 
 /* 라이트 테마 새 대화 버튼 */
@@ -211,21 +225,24 @@
    ======================================== */
 [data-theme="dark"] .feature-card,
 .theme-dark .feature-card {
-    background: rgba(40, 40, 50, 0.9);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: var(--bg-card);
+    border: var(--border-width) solid var(--border-light);
     border-radius: 16px;
+    box-shadow: var(--shadow-sm);
 }
 
 [data-theme="dark"] .feature-card:hover,
 .theme-dark .feature-card:hover {
-    border-color: rgba(255, 255, 255, 0.2);
-    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+    border-color: var(--accent-primary);
+    box-shadow: var(--shadow-lg);
+    transform: translate(-2px, -2px);
 }
 
-/* 다크 모드 - 아이콘 배경 투명화 */
+/* 다크 모드 - 아이콘 배경 */
 [data-theme="dark"] .feature-icon,
 .theme-dark .feature-icon {
-    background: transparent !important;
+    background: var(--bg-secondary) !important;
+    border: 1px solid var(--border-light);
 }
 
 [data-theme="dark"] .feature-icon img,
@@ -242,31 +259,36 @@
 
 [data-theme="dark"] .feature-desc,
 .theme-dark .feature-desc {
-    color: rgba(255, 255, 255, 0.6);
+    color: var(--text-secondary);
 }
 
 /* 다크 모드 - 버튼 스타일 */
 [data-theme="dark"] .feature-btn,
 .theme-dark .feature-btn {
-    background: rgba(255, 255, 255, 0.95);
-    border: none;
-    color: #1a1a1a !important;
-    font-weight: 500;
+    background: var(--bg-secondary);
+    border: var(--border-width) solid var(--border-medium);
+    color: var(--text-primary) !important;
+    font-weight: 700;
+    box-shadow: var(--shadow-sm);
 }
 
 [data-theme="dark"] .feature-btn:hover,
 .theme-dark .feature-btn:hover {
-    background: #4A90D9;
+    background: var(--accent-primary);
     color: #FFFFFF !important;
+    border-color: var(--border-strong);
+    box-shadow: var(--shadow-md);
+    transform: translate(-2px, -2px);
 }
 
 /* ========================================
-   라이트 모드 기능 카드 스타일 (투명 아이콘)
+   라이트 모드 기능 카드 스타일 (투명 아이콘 제거)
    ======================================== */
-/* 라이트 모드 - 아이콘 배경 투명화 */
+/* 라이트 모드 - 아이콘 배경 */
 [data-theme="light"] .feature-icon,
 .theme-light .feature-icon {
-    background: transparent !important;
+    background: var(--bg-secondary) !important;
+    border: 1px solid var(--border-light);
 }
 
 [data-theme="light"] .feature-icon img,
@@ -277,25 +299,28 @@
 /* 라이트 모드 - 텍스트 색상 */
 [data-theme="light"] .feature-title,
 .theme-light .feature-title {
-    color: #2D2D2D;
+    color: var(--text-primary);
 }
 
 [data-theme="light"] .feature-desc,
 .theme-light .feature-desc {
-    color: #666666;
+    color: var(--text-secondary);
 }
 
 /* 라이트 모드 - 버튼 스타일 */
 [data-theme="light"] .feature-btn,
 .theme-light .feature-btn {
-    background: #FFFFFF;
-    border: 1px solid rgba(0, 0, 0, 0.15);
-    color: #333333;
+    background: var(--bg-card);
+    border: var(--border-width) solid var(--border-medium);
+    color: var(--text-primary);
+    box-shadow: var(--shadow-sm);
 }
 
 [data-theme="light"] .feature-btn:hover,
 .theme-light .feature-btn:hover {
-    background: #4A90D9;
+    background: var(--accent-primary);
     color: #FFFFFF;
-    border-color: #4A90D9;
+    border-color: var(--border-strong);
+    box-shadow: var(--shadow-md);
+    transform: translate(-2px, -2px);
 }

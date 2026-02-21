@@ -27,9 +27,19 @@ const AppState = {
     conversationMemory: [],
     MAX_MEMORY_LENGTH: 20,
 
+    // 세션
+    currentSessionId: null,
+
     // 기능 플래그
     webSearchEnabled: false,
     thinkingEnabled: true,
+    discussionMode: false,
+    thinkingMode: false,
+    thinkingLevel: 'high',
+    deepResearchMode: false,
+
+    // MCP 도구 활성화 상태 (키: 도구명, 값: boolean — 기본 전체 비활성)
+    mcpToolsEnabled: {},
 
     // 파일
     attachedFiles: [],

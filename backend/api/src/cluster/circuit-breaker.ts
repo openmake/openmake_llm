@@ -12,6 +12,21 @@
  * - OPEN: 즉시 거부 (CircuitOpenError). resetTimeout 경과 후 → HALF_OPEN
  * - HALF_OPEN: 프로브 요청 허용. 실패 시 → OPEN, 연속 성공 시 → CLOSED
  *
+ * 상태 전이 다이어그램:
+ * ```
+ *                 [failure >= threshold]
+ *   ┌────────┐ ───────────────────────► ┌────────┐
+ *   │ CLOSED │                          │  OPEN  │
+ *   └────────┘ ◄─── [success streak] ── └────┬───┘
+ *       ▲                                    │
+ *       │         [resetTimeout elapsed]     │
+ *       │              ┌───────────┐         │
+ *       └── [success]──┤ HALF_OPEN │◄────────┘
+ *           [failure]──►   (probe) │
+ *              │        └───────────┘
+ *              └──────────► OPEN
+ * ```
+ *
  * @module cluster/circuit-breaker
  * @see errors/circuit-open.error.ts - CircuitOpenError
  * @see cluster/manager.ts - ClusterManager에서 노드별 서킷 브레이커 사용

@@ -1,3 +1,12 @@
+/**
+ * @module data/repositories/memory-repository
+ * @description `user_memories` / `memory_tags` 테이블 데이터 접근 계층
+ *
+ * 사용자별 장기 기억(UserMemory) 엔티티의 CRUD를 담당합니다.
+ * - 메모리 생성 (UPSERT — 동일 key 존재 시 중요도 비교 후 갱신)
+ * - 카테고리/태그 기반 검색, 관련 메모리 조회
+ * - 접근 횟수 추적, 만료된 메모리 정리
+ */
 import { withTransaction } from '../retry-wrapper';
 import { BaseRepository, QueryParam } from './base-repository';
 import type { MemoryCategory, UserMemory } from '../models/unified-database';
