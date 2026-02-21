@@ -110,7 +110,9 @@ function sendWsMessage(data) {
 /**
  * WebSocket 수신 메시지 핸들러
  * 메시지 타입에 따라 적절한 처리 함수를 호출합니다.
- * 지원 타입: init, cluster_event, token, done, error, aborted, agents, progress, session_created
+ * 지원 타입: init, stats, update, cluster_event, token, done, error, aborted, agents,
+ *            mcp_settings_ack, agent_selected, discussion_progress, research_progress,
+ *            progress, session_created
  * @param {Object} data - 파싱된 수신 메시지 객체
  * @param {string} data.type - 메시지 타입 식별자
  * @returns {void}
@@ -140,16 +142,23 @@ function handleMessage(data) {
 
         case 'done':
             if (typeof finishAssistantMessage === 'function') {
-                finishAssistantMessage();
+                finishAssistantMessage(null, data.messageId || null);
             }
             break;
 
-        case 'error':
-            console.error('[Server] 오류:', data.error);
+        case 'error': {
+            // 백엔드는 대부분 data.message로 에러를 전송하고, 레이트 리밋만 data.error 사용
+            var errorMsg = data.message || data.error || '알 수 없는 오류가 발생했습니다';
+            console.error('[Server] 오류:', errorMsg);
             if (typeof showError === 'function') {
-                showError(data.error);
+                showError(errorMsg);
+            }
+            // 진행 중인 AI 응답이 있으면 에러 메시지로 종료 (UI 고착 방지)
+            if (typeof finishAssistantMessage === 'function') {
+                finishAssistantMessage(errorMsg);
             }
             break;
+        }
 
         case 'aborted':
             debugLog('[WebSocket] 응답 생성 중단됨');
@@ -177,6 +186,49 @@ function handleMessage(data) {
             if (data.sessionId) {
                 debugLog('[WebSocket] 세션 생성됨:', data.sessionId);
                 setState('currentChatId', data.sessionId);
+            }
+            break;
+
+        case 'stats':
+            debugLog('[WebSocket] MCP 통계 수신:', data.stats);
+            break;
+
+        case 'update':
+            if (data.data) {
+                setState('nodes', data.data.nodes);
+                if (typeof updateClusterInfo === 'function') {
+                    updateClusterInfo(data.data);
+                }
+            }
+            break;
+
+        case 'mcp_settings_ack':
+            if (typeof showToast === 'function') {
+                showToast(
+                    data.success ? 'MCP 설정이 저장되었습니다.' : 'MCP 설정 저장 실패',
+                    data.success ? 'success' : 'error'
+                );
+            }
+            break;
+
+        case 'agent_selected':
+            debugLog('[WebSocket] 에이전트 선택:', data.agent);
+            if (typeof showAgentBadge === 'function') {
+                showAgentBadge(data.agent);
+            }
+            break;
+
+        case 'discussion_progress':
+            debugLog('[WebSocket] 토론 진행:', data.progress);
+            if (typeof showDiscussionProgress === 'function') {
+                showDiscussionProgress(data.progress);
+            }
+            break;
+
+        case 'research_progress':
+            debugLog('[WebSocket] 리서치 진행:', data.progress);
+            if (typeof showResearchProgress === 'function') {
+                showResearchProgress(data.progress);
             }
             break;
 

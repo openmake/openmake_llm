@@ -8,7 +8,7 @@
     <title>OpenMake.Ai</title>
 
     <!-- PWA 메타 태그 -->
-    <meta name="theme-color" content="#667eea">
+    <meta name="theme-color" content="#c061ff">
     <meta name="description" content="AI 기반 지능형 채팅 어시스턴트">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -25,19 +25,20 @@
     <!-- Performance: Preload hints -->
     <link rel="preconnect" href="https://cdnjs.cloudflare.com">
     <link rel="dns-prefetch" href="https://cdnjs.cloudflare.com">
-    <link rel="preload" href="/css/design-tokens.css" as="style">
-    <link rel="preload" href="/js/spa-router.js" as="script">
-    <link rel="preload" href="/js/modules/auth.js" as="script">
+    <link rel="preload" href="/css/design-tokens.css?v=8" as="style">
+    <link rel="preload" href="/js/spa-router.js" as="script" crossorigin>
+    <link rel="preload" href="/js/modules/auth.js" as="script" crossorigin>
     <!-- 디자인 시스템 CSS (순서 중요!) -->
-    <link rel="stylesheet" href="css/design-tokens.css">
-    <link rel="stylesheet" href="css/icons.css">
-    <link rel="stylesheet" href="css/glassmorphism.css">
-    <link rel="stylesheet" href="css/animations.css">
-    <link rel="stylesheet" href="css/feature-cards.css">
-    <link rel="stylesheet" href="css/layout.css?v=1">
-    <link rel="stylesheet" href="css/unified-sidebar.css?v=5">
-    <link rel="stylesheet" href="css/light-theme.css">
-    <link rel="stylesheet" href="style.css?v=5">
+    <link rel="stylesheet" href="css/design-tokens.css?v=8">
+    <link rel="stylesheet" href="css/icons.css?v=8">
+
+    <link rel="stylesheet" href="css/animations.css?v=8">
+    <link rel="stylesheet" href="css/feature-cards.css?v=8">
+    <link rel="stylesheet" href="css/layout.css?v=8">
+    <link rel="stylesheet" href="css/components.css?v=8">
+    <link rel="stylesheet" href="css/unified-sidebar.css?v=8">
+    <link rel="stylesheet" href="css/light-theme.css?v=8">
+    <link rel="stylesheet" href="style.css?v=9">
     <!-- Iconify Icon Web Component (defer to not block rendering) -->
     <script src="https://cdn.jsdelivr.net/npm/iconify-icon@2.1.0/dist/iconify-icon.min.js" defer></script>
     <!-- Markdown Parser (defer) -->
@@ -72,7 +73,7 @@
 </head>
 
 <body>
-    <a href="#mainContent" class="skip-link" style="position:absolute;top:-40px;left:0;background:#667eea;color:white;padding:8px 16px;z-index:10000;transition:top 0.3s;text-decoration:none;font-family:Pretendard,sans-serif">Skip to main content</a>
+    <a href="#mainContent" class="skip-link" style="position:absolute;top:-40px;left:0;background:#c061ff;color:white;padding:8px 16px;z-index:10000;transition:top 0.3s;text-decoration:none;font-family:'Space Grotesk',Pretendard,sans-serif;font-weight:700;border:2px solid #000;box-shadow:4px 4px 0 #000">Skip to main content</a>
     <div class="app">
         <!-- Mobile Menu Button -->
         <button class="mobile-menu-btn" id="mobileMenuBtn" aria-label="Toggle menu">
@@ -96,8 +97,7 @@
                         </div>
                         <h1 class="welcome-title animate-fadeInUp" style="animation-delay: 0.1s;">오늘도 화이팅!<br>무엇을 도와드릴까요? 😊
                         </h1>
-                        <p class="welcome-subtitle animate-fadeInUp" style="animation-delay: 0.2s;">AI 어시스턴트가 질문에 답변하고, 문서를
-                            분석하고, 코드를 작성합니다.</p>
+                        <p class="welcome-subtitle animate-fadeInUp" style="animation-delay: 0.2s;">AI 어시스턴트가 질문에 답변하고,<br>문서를 분석하고, 코드를 작성합니다.</p>
 
                         <!-- 기능 카드 그리드 -->
                         <div class="feature-cards animate-fadeInUp" style="animation-delay: 0.3s;">
@@ -354,86 +354,8 @@
 
     </div> <!-- app 끝 -->
 
-    <!-- 스크립트 로딩 (순서 중요!) -->
-
-    <!-- 1. 네비게이션 데이터 (라우트 레지스트리) -->
-    <script src="js/nav-items.js"></script>
-
-    <!-- 2. 앱 코어 (채팅 기능 — app.js 모놀리스, 추후 모듈화) -->
-    <script src="app.js?v=15"></script>
-    <script src="js/modules/sanitize.js"></script>
-
-    <!-- 3. SPA 인프라 -->
-    <script src="js/components/unified-sidebar.js?v=5"></script>
-    <script src="js/components/offline-indicator.js"></script>
-
-    <script src="js/spa-router.js?v=4"></script>
-    <script src="js/components/admin-panel.js"></script>
-    <script src="js/components/install-prompt.js"></script>
-
-    <!-- 4. SPA 초기화 -->
-    <script>
-        // SPA 모드: alert() → showToast() 변환 (auth 경고 등 blocking 방지)
-        (function() {
-            var _origAlert = window.alert;
-            window.alert = function(msg) {
-                if (typeof showToast === 'function') {
-                    showToast(msg, 'warning');
-                } else {
-                    _origAlert.call(window, msg);
-                }
-            };
-        })();
-
-        document.addEventListener('DOMContentLoaded', async function () {
-            // 기존 앱 초기화 (채팅, 웹소켓 등)
-            if (typeof initApp === 'function') {
-                initApp();
-            }
-
-            // 통합 사이드바 초기화
-            var sidebarInstance = new UnifiedSidebar('sidebar');
-            sidebarInstance.init();
-            window.sidebar = sidebarInstance;
-
-            // 모바일 메뉴 버튼 연결
-            var mobileMenuBtn = document.getElementById('mobileMenuBtn');
-            if (mobileMenuBtn) {
-                mobileMenuBtn.addEventListener('click', function () {
-                    if (window.sidebar) {
-                        window.sidebar.toggle();
-                    }
-                });
-            }
-
-            // 🔒 OAuth 세션 복구 완료 대기 후 라우터 시작
-            // initAuth()에서 설정한 _authRecoveryPromise가 resolve될 때까지 대기
-            // 최대 2초 타임아웃 (네트워크 느린 경우 대비)
-            if (window._authRecoveryPromise) {
-                try {
-                    await Promise.race([
-                        window._authRecoveryPromise,
-                        new Promise(function (resolve) { setTimeout(resolve, 2000); })
-                    ]);
-                } catch (e) {
-                    // 네트워크 오류 — 무시하고 라우터 시작
-                }
-            }
-
-            // SPA 라우터 시작
-            Router.start();
-
-            // 라우터 네비게이션 시 사이드바 활성 대화 업데이트
-            Router.onAfterNavigate(function (info) {
-                // 채팅 페이지가 아닌 곳으로 이동하면 활성 대화 해제
-                if (info.to !== '/') {
-                    if (window.sidebar) {
-                        window.sidebar.setActiveConversation(null);
-                    }
-                }
-            });
-        });
-    </script>
+    <!-- 앱 엔트리 포인트 (ES Module — 모든 모듈을 main.js에서 import 및 초기화) -->
+    <script type="module" src="js/main.js?v=19"></script>
 </body>
 
 </html>

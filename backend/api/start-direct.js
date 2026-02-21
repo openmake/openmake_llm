@@ -6,16 +6,17 @@
  */
 
 const path = require('path');
-const PORT = process.env.PORT || 52416;
+
+// 환경 변수 로드 (PORT 읽기 전에 먼저 로드)
+require('dotenv').config({ path: path.join(__dirname, '../../.env') });
+
+const PORT = process.env.PORT;
 
 console.log('🚀 OpenMake Direct Server Launcher');
 console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 console.log(`📁 Working Directory: ${__dirname}`);
-console.log(`📦 Port: ${PORT}`);
+console.log(`📦 Port: ${PORT || '(default from config)'}`);
 console.log('');
-
-// 환경 변수 로드
-require('dotenv').config({ path: path.join(__dirname, '../../.env') });
 
 // Dashboard 서버 직접 시작
 async function startServer() {
@@ -33,9 +34,10 @@ async function startServer() {
         console.log('✅ Dashboard module loaded');
         console.log('🎯 Creating dashboard server...');
 
-        const dashboard = serverModule.createDashboardServer({
-            port: parseInt(PORT)
-        });
+        const portNum = PORT ? parseInt(PORT, 10) : undefined;
+        const dashboard = serverModule.createDashboardServer(
+            portNum ? { port: portNum } : undefined
+        );
 
         console.log('🚀 Starting server...');
         await dashboard.start();

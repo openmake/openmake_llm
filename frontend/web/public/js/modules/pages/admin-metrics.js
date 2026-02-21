@@ -46,6 +46,17 @@
         let hourlyChart = null;
         let dailyChart = null;
 
+        function loadChartJs() {
+            return new Promise(function(resolve, reject) {
+                if (typeof Chart !== 'undefined') { resolve(); return; }
+                var script = document.createElement('script');
+                script.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js';
+                script.onload = resolve;
+                script.onerror = function() { console.warn('Chart.js 로드 실패'); resolve(); };
+                document.head.appendChild(script);
+            });
+        }
+
         // 1. 초기 로드
         loadAllData();
 
@@ -69,9 +80,7 @@
         // --- System Metrics Logic ---
          async function loadSystemMetrics() {
              try {
-                 const response = await fetch('/api/metrics', {
-                     credentials: 'include'  // 🔒 httpOnly 쿠키 포함
-                 });
+                 const response = await window.authFetch('/api/metrics');
                  const rawData = await response.json();
                 // api-response 표준 형식: rawData.data 안에 실제 데이터
                 const data = rawData.data || rawData;
@@ -120,6 +129,7 @@
 
         // --- Token Monitoring Logic ---
         async function loadMonitoringData() {
+            await loadChartJs();
             await Promise.all([
                 loadKeyStatus(),
                 loadQuotaStatus(),
@@ -133,13 +143,15 @@
         // API 키 상태
          async function loadKeyStatus() {
              try {
-                 const res = await fetch('/api/monitoring/keys', {
-                     credentials: 'include'  // 🔒 httpOnly 쿠키 포함
-                 });
+                 const res = await window.authFetch('/api/monitoring/keys');
                  const rawData = await res.json();
                 const data = rawData.data || rawData;
 
                 const container = document.getElementById('keyStatusContainer');
+                if (!data || !data.keys) {
+                    container.innerHTML = '<p class="text-muted">API 키 정보를 불러올 수 없습니다.</p>';
+                    return;
+                }
                 container.innerHTML = data.keys.map(key => `
                     <div class="key-item ${key.isActive ? 'active' : ''} ${key.failCount > 0 ? 'warning' : ''}">
                         <div>
@@ -159,11 +171,10 @@
          // 할당량 상태
          async function loadQuotaStatus() {
              try {
-                 const res = await fetch('/api/monitoring/quota', {
-                     credentials: 'include'  // 🔒 httpOnly 쿠키 포함
-                 });
+                 const res = await window.authFetch('/api/monitoring/quota');
                  const rawData = await res.json();
                 const data = rawData.data || rawData;
+                if (!data || !data.hourly) { return; }
 
                 const container = document.getElementById('quotaSection');
 
@@ -189,8 +200,10 @@
 
                 // 경고 배지
                 const badge = document.getElementById('quotaWarningBadge');
-                badge.className = `badge ${data.warningLevel === 'safe' ? 'badge-success' : data.warningLevel === 'warning' ? 'badge-warning' : 'badge-danger'}`;
-                badge.textContent = data.warningLevel === 'safe' ? '정상' : (data.warningLevel === 'warning' ? '주의' : '위험');
+                if (badge) {
+                    badge.className = `badge ${data.warningLevel === 'safe' ? 'badge-success' : data.warningLevel === 'warning' ? 'badge-warning' : 'badge-danger'}`;
+                    badge.textContent = data.warningLevel === 'safe' ? '정상' : (data.warningLevel === 'warning' ? '주의' : '위험');
+                }
 
             } catch (e) { console.error(e); }
         }
@@ -198,11 +211,10 @@
          // 통계 요약 (오늘)
          async function loadSummary() {
              try {
-                 const res = await fetch('/api/monitoring/summary', {
-                     credentials: 'include'  // 🔒 httpOnly 쿠키 포함
-                 });
+                 const res = await window.authFetch('/api/monitoring/summary');
                  const rawData = await res.json();
                 const data = rawData.data || rawData;
+                if (!data || !data.today) { return; }
 
                 document.getElementById('todayRequests').textContent = data.today.totalRequests.toLocaleString();
                 document.getElementById('todayTokens').textContent = `${formatTokens(data.today.totalTokens)} 토큰`;
@@ -212,11 +224,10 @@
          // 비용
          async function loadCosts() {
              try {
-                 const res = await fetch('/api/monitoring/costs', {
-                     credentials: 'include'  // 🔒 httpOnly 쿠키 포함
-                 });
+                 const res = await window.authFetch('/api/monitoring/costs');
                 const rawData = await res.json();
                 const data = rawData.data || rawData;
+                if (!data || !data.today) { return; }
 
                 document.getElementById('todayCost').textContent = data.today.totalCost.toFixed(4);
                 document.getElementById('costDetails').textContent =
@@ -227,11 +238,10 @@
          // 시간별 차트
          async function loadHourlyChart() {
              try {
-                 const res = await fetch('/api/monitoring/usage/hourly', {
-                     credentials: 'include'  // 🔒 httpOnly 쿠키 포함
-                 });
+                 const res = await window.authFetch('/api/monitoring/usage/hourly');
                  const rawData = await res.json();
                 const data = rawData.data || rawData;
+                if (typeof Chart === 'undefined' || !data || !data.labels) { return; }
                 const ctx = document.getElementById('hourlyChart').getContext('2d');
 
                 if (hourlyChart) hourlyChart.destroy();
@@ -257,11 +267,10 @@
          // 일간 차트
          async function loadDailyChart() {
              try {
-                 const res = await fetch('/api/monitoring/usage/daily?days=7', {
-                     credentials: 'include'  // 🔒 httpOnly 쿠키 포함
-                 });
+                 const res = await window.authFetch('/api/monitoring/usage/daily?days=7');
                  const rawData = await res.json();
                 const data = rawData.data || rawData;
+                if (typeof Chart === 'undefined' || !data || !data.labels) { return; }
                 const ctx = document.getElementById('dailyChart').getContext('2d');
 
                 if (dailyChart) dailyChart.destroy();
@@ -320,10 +329,7 @@
          async function resetKeys() {
              if (!confirm('모든 API 키 상태를 초기화하시겠습니까?')) return;
              try {
-                 await fetch('/api/monitoring/keys/reset', {
-                     method: 'POST',
-                     credentials: 'include'  // 🔒 httpOnly 쿠키 포함
-                 });
+                 await window.authFetch('/api/monitoring/keys/reset', { method: 'POST' });
                 (typeof showToast === 'function' ? showToast('초기화되었습니다.', 'warning') : console.warn('초기화되었습니다.'));
                 loadKeyStatus();
             } catch (e) { (typeof showToast === 'function' ? showToast('실패: ' + e.message, 'warning') : console.warn('실패: ' + e.message)); }

@@ -235,7 +235,7 @@ function toggleMobileSidebar(e) {
     toggleSidebar();
 }
 
-// 로그아웃 (🆕 서버 토큰 블랙리스트 연동)
+// 로그아웃 (🆕 서버 토큰 블랙리스트 연동 + AppState 정리)
 function logout() {
      // 서버에 로그아웃 요청 (httpOnly 쿠키 포함)
      fetch('/api/auth/logout', {
@@ -243,10 +243,19 @@ function logout() {
          credentials: 'include'  // 🔒 httpOnly 쿠키 포함
      }).catch(() => {});
 
+    // localStorage 정리
     localStorage.removeItem('authToken');
     localStorage.removeItem('user');
     localStorage.removeItem('isGuest');
     localStorage.removeItem('guestMode');
+
+    // AppState 정리 — stale UI 방지 (auth.js의 logout과 동일)
+    if (typeof window.setState === 'function') {
+        window.setState('auth.authToken', null);
+        window.setState('auth.currentUser', null);
+        window.setState('auth.isGuestMode', false);
+    }
+
     window.location.href = '/login.html';
 }
 

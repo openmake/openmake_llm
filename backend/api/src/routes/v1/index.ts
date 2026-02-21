@@ -53,42 +53,8 @@ const v1Router = Router();
 v1Router.use(rateLimitHeaders);     // OpenAI 호환 x-ratelimit-* 헤더
 v1Router.use(apiKeyTPMLimiter);     // TPM 이중 제한
 
-// Mount all routes under v1
-v1Router.use('/chat', chatRouter);
-v1Router.use('/agents', agentRouter);
-v1Router.use('/mcp', mcpRouter);
-v1Router.use('/usage', usageRouter);
-v1Router.use('/metrics', metricsRouter);
-v1Router.use('/documents', documentsRouter);
-v1Router.use('/search', webSearchRouter);
-v1Router.use('/nodes', nodesRouter);
-v1Router.use('/monitoring', tokenMonitoringRouter);
-v1Router.use('/agents-monitoring', agentsMonitoringRouter);
-v1Router.use('/memory', memoryRouter);
-v1Router.use('/audit', auditRouter);
-v1Router.use('/research', researchRouter);
-v1Router.use('/canvas', canvasRouter);
-v1Router.use('/external', externalRouter);
-v1Router.use('/marketplace', marketplaceRouter);
-v1Router.use('/push', pushRouter);
-v1Router.use('/api-keys', apiKeysRouter);
-
-// §9 Brand Model 목록 (외부 API Key 사용자용)
-v1Router.get('/models', (_req, res) => {
-    const models = listAvailableModels();
-    res.json(success({
-        object: 'list',
-        data: models.map(m => ({
-            id: m.id,
-            object: 'model',
-            name: m.name,
-            description: m.description,
-            capabilities: m.capabilities,
-        })),
-    }));
-});
-
 // ── 외부 API Key 사용자용 사용량 엔드포인트 ──
+// NOTE: usageRouter보다 먼저 등록해야 Express가 API Key 핸들러를 우선 매칭함
 
 /**
  * GET /api/v1/usage — API Key 전체 사용량 요약
@@ -136,8 +102,6 @@ v1Router.get('/usage/daily', requireApiKey, asyncHandler(async (req, res) => {
     const service = getApiKeyService();
     const stats = await service.getUsageStats(keyId, keyRecord.user_id);
 
-    // 현재 DB에는 일별 분리 통계가 없으므로 전체 통계를 반환하고
-    // 향후 daily breakdown 테이블 추가 시 확장 예정
     res.json(success({
         period: `last_${days}_days`,
         usage: {
@@ -150,5 +114,40 @@ v1Router.get('/usage/daily', requireApiKey, asyncHandler(async (req, res) => {
         },
     }));
 }));
+
+// Mount all routes under v1
+v1Router.use('/chat', chatRouter);
+v1Router.use('/agents', agentRouter);
+v1Router.use('/mcp', mcpRouter);
+v1Router.use('/usage', usageRouter);
+v1Router.use('/metrics', metricsRouter);
+v1Router.use('/documents', documentsRouter);
+v1Router.use('/search', webSearchRouter);
+v1Router.use('/nodes', nodesRouter);
+v1Router.use('/monitoring', tokenMonitoringRouter);
+v1Router.use('/agents-monitoring', agentsMonitoringRouter);
+v1Router.use('/memory', memoryRouter);
+v1Router.use('/audit', auditRouter);
+v1Router.use('/research', researchRouter);
+v1Router.use('/canvas', canvasRouter);
+v1Router.use('/external', externalRouter);
+v1Router.use('/marketplace', marketplaceRouter);
+v1Router.use('/push', pushRouter);
+v1Router.use('/api-keys', apiKeysRouter);
+
+// §9 Brand Model 목록 (외부 API Key 사용자용)
+v1Router.get('/models', (_req, res) => {
+    const models = listAvailableModels();
+    res.json(success({
+        object: 'list',
+        data: models.map(m => ({
+            id: m.id,
+            object: 'model',
+            name: m.name,
+            description: m.description,
+            capabilities: m.capabilities,
+        })),
+    }));
+});
 
 export default v1Router;

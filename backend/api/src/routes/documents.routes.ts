@@ -44,17 +44,13 @@ const router = Router();
 let clusterManager: ClusterManager;
 let broadcastFn: (data: Record<string, unknown>) => void;
 
-// 로그 헬퍼
-const envConfig = getConfig();
-const logLevels = { debug: 0, info: 1, warn: 2, error: 3 };
-const currentLogLevel = (logLevels as Record<string, number>)[envConfig.logLevel] || 1;
-
+// 로그 헬퍼 (Winston logger 위임)
 const log = {
     debug: (msg: string, ...args: unknown[]) => {
-        if (currentLogLevel <= 0) console.log(`[DEBUG] ${msg}`, ...args);
+        logger.debug(msg, ...args);
     },
     warn: (msg: string, ...args: unknown[]) => {
-        if (currentLogLevel <= 2) console.warn(`[WARN] ${msg}`, ...args);
+        logger.warn(msg, ...args);
     }
 };
 

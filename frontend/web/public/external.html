@@ -48,6 +48,12 @@
         .toast { position:fixed; bottom:20px; right:20px; padding:var(--space-3) var(--space-5); border-radius:var(--radius-md); color:#fff; z-index:2000; opacity:0; transition:opacity .3s; }
         .toast.show { opacity:1; } .toast.success { background:var(--success); } .toast.error { background:var(--danger); }
         .loading { text-align:center; padding:var(--space-6); color:var(--text-muted); }
+
+        .coming-soon-notice { background:var(--bg-tertiary); border:1px solid var(--border-light); border-radius:var(--radius-lg); padding:var(--space-4) var(--space-5); margin-bottom:var(--space-5); display:flex; align-items:center; gap:var(--space-3); color:var(--text-secondary); font-size:var(--font-size-sm); line-height:1.6; }
+        .coming-soon-notice .notice-icon { font-size:1.5rem; flex-shrink:0; }
+        .service-card.coming-soon { opacity:0.6; pointer-events:none; }
+        .status-coming-soon { background:var(--bg-tertiary); color:var(--text-muted); border:1px solid var(--border-light); }
+        .btn-coming-soon { background:var(--bg-tertiary); color:var(--text-muted); cursor:not-allowed; border:1px solid var(--border-light) !important; }
     </style>
 </head>
 <body>
@@ -60,6 +66,10 @@
                 <h1>외부 서비스 연동</h1>
             </header>
             <div class="content-area">
+                <div class="coming-soon-notice">
+                    <span class="notice-icon">🚧</span>
+                    <div><strong>개발 예정 기능</strong><br>외부 서비스 연동(OAuth 인증, 파일 동기화)은 현재 준비 중입니다. 향후 업데이트에서 지원될 예정입니다.</div>
+                </div>
                 <div id="serviceGrid" class="service-grid"><div class="loading">불러오는 중...</div></div>
             </div>
         </main>
@@ -129,20 +139,14 @@
 
         function renderServices() {
             document.getElementById('serviceGrid').innerHTML = SERVICES.map(s => {
-                const conn = getConnection(s.type);
-                const isConnected = !!conn;
                 return `
-                <div class="service-card">
-                    <span class="status-badge ${isConnected ? 'status-on' : 'status-off'}">${isConnected ? '연결됨' : '연결 안됨'}</span>
+                <div class="service-card coming-soon">
+                    <span class="status-badge status-coming-soon">준비 중</span>
                     <div class="service-icon">${s.icon}</div>
                     <h3>${s.label}</h3>
-                    <div class="account">${isConnected ? esc(conn.accountEmail || conn.account_email || conn.accountName || conn.account_name || '연결됨') : '연결되지 않음'}</div>
+                    <div class="account">향후 지원 예정</div>
                     <div class="service-actions">
-                        ${isConnected
-                            ? `<button class="btn-files" onclick="viewFiles('${conn.id || conn.connectionId}','${s.label}')">파일 보기</button>
-                               <button class="btn-disconnect" onclick="disconnect('${s.type}')">연결 해제</button>`
-                            : `<button class="btn-connect" onclick="openConnect('${s.type}','${s.label}')">연결하기</button>`
-                        }
+                        <button class="btn-coming-soon" disabled>준비 중</button>
                     </div>
                 </div>`;
             }).join('');
@@ -216,7 +220,7 @@
             return (bytes / 1048576).toFixed(1) + ' MB';
         }
 
-        loadConnections();
+        renderServices();
     </script>
 </body>
 </html>

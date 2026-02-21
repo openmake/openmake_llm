@@ -1,3 +1,13 @@
+/**
+ * ============================================================
+ * CLI Chat Session - 터미널 대화 세션 오케스트레이션
+ * ============================================================
+ * 대화형 CLI 루프, 명령 처리(clear/help/exit), 모델 호출 및
+ * 스트리밍 출력 로직을 제공합니다.
+ *
+ * @module chat/index
+ */
+
 import inquirer from 'inquirer';
 import chalk from 'chalk';
 import { OllamaClient } from '../ollama/client';

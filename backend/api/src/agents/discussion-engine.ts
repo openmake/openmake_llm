@@ -29,141 +29,14 @@
 
 import { routeToAgent, getAgentById, AGENTS, Agent, AgentSelection, getRelatedAgentsForDiscussion } from './index';
 import { sanitizePromptInput, validatePromptInput } from '../utils/input-sanitizer';
+import type { DiscussionConfig, DiscussionProgress, AgentOpinion, DiscussionResult } from './discussion-types';
+import { createContextBuilder } from './discussion-context';
+import { createLogger } from '../utils/logger';
 
-// ========================================
-// 타입 정의
-// ========================================
+const logger = createLogger('Discussion');
 
-/**
- * 토론 진행 상황 인터페이스
- * onProgress 콜백으로 전달되어 실시간 진행률을 클라이언트에 알립니다.
- */
-export interface DiscussionProgress {
-    /** 현재 단계 (선택 -> 토론 -> 검토 -> 합성 -> 완료) */
-    phase: 'selecting' | 'discussing' | 'reviewing' | 'synthesizing' | 'complete';
-    /** 현재 의견을 제시 중인 에이전트명 */
-    currentAgent?: string;
-    /** 현재 에이전트 이모지 */
-    agentEmoji?: string;
-    /** 진행 상황 메시지 (한국어) */
-    message: string;
-    /** 전체 진행률 (0-100) */
-    progress: number;
-    /** 현재 라운드 번호 (1-based) */
-    roundNumber?: number;
-    /** 총 라운드 수 */
-    totalRounds?: number;
-}
-
-/**
- * 에이전트 의견 인터페이스
- * 각 전문가 에이전트가 생성한 개별 의견을 담습니다.
- */
-export interface AgentOpinion {
-    /** 에이전트 고유 ID */
-    agentId: string;
-    /** 에이전트 표시 이름 */
-    agentName: string;
-    /** 에이전트 이모지 아이콘 */
-    agentEmoji: string;
-    /** 에이전트가 생성한 의견 텍스트 */
-    opinion: string;
-    /** 의견의 신뢰도 (0.0-1.0) */
-    confidence: number;
-    /** 의견 생성 시각 */
-    timestamp: Date;
-}
-
-/**
- * 토론 결과 인터페이스
- * startDiscussion()의 최종 반환값입니다.
- */
-export interface DiscussionResult {
-    /** 토론 요약 메시지 (참여 인원, 라운드 수 등) */
-    discussionSummary: string;
-    /** 최종 합성된 답변 텍스트 */
-    finalAnswer: string;
-    /** 참여한 에이전트 이름 배열 */
-    participants: string[];
-    /** 모든 에이전트의 개별 의견 배열 */
-    opinions: AgentOpinion[];
-    /** 전체 토론 소요 시간 (ms) */
-    totalTime: number;
-    /** 웹 검색 사실 검증 수행 여부 */
-    factChecked?: boolean;
-}
-
-/**
- * 🆕 컨텍스트 우선순위 설정
- * 토큰 제한 시 우선순위가 높은 컨텍스트가 더 많은 토큰을 할당받음
- */
-export interface ContextPriority {
-    /** 사용자 메모리 (개인화) - 기본 1순위 */
-    userMemory: number;
-    /** 대화 히스토리 (맥락 유지) - 기본 2순위 */
-    conversationHistory: number;
-    /** 문서 컨텍스트 (참조 자료) - 기본 3순위 */
-    document: number;
-    /** 웹 검색 결과 (사실 검증) - 기본 4순위 */
-    webSearch: number;
-    /** 이미지 컨텍스트 (시각 자료) - 기본 5순위 */
-    image: number;
-}
-
-/**
- * 🆕 토큰 제한 설정
- */
-export interface TokenLimits {
-    /** 전체 컨텍스트 최대 토큰 (기본: 8000) */
-    maxTotalTokens: number;
-    /** 문서 컨텍스트 최대 토큰 (기본: 3000) */
-    maxDocumentTokens: number;
-    /** 대화 히스토리 최대 토큰 (기본: 2000) */
-    maxHistoryTokens: number;
-    /** 웹 검색 최대 토큰 (기본: 1500) */
-    maxWebSearchTokens: number;
-    /** 사용자 메모리 최대 토큰 (기본: 1000) */
-    maxMemoryTokens: number;
-    /** 이미지 설명 최대 토큰 (기본: 500) */
-    maxImageDescriptionTokens: number;
-}
-
-export interface DiscussionConfig {
-    maxAgents?: number;
-    maxRounds?: number;
-    enableCrossReview?: boolean;
-    enableFactCheck?: boolean;
-    /** 🆕 Deep Thinking 모드 활성화 */
-    enableDeepThinking?: boolean;
-    
-    // ========================================
-    // 🆕 컨텍스트 엔지니어링 필드
-    // ========================================
-    /** 업로드된 문서 컨텍스트 (PDF, 이미지 등에서 추출된 텍스트) */
-    documentContext?: string;
-    /** 대화 히스토리 (이전 대화 맥락 유지) */
-    conversationHistory?: Array<{ role: string; content: string }>;
-    /** 사용자 메모리 컨텍스트 (장기 기억, 선호도 등) */
-    userMemoryContext?: string;
-    /** 웹 검색 결과 컨텍스트 */
-    webSearchContext?: string;
-    
-    // ========================================
-    // 🆕 이미지 컨텍스트 (비전 모델 지원)
-    // ========================================
-    /** 이미지 base64 데이터 배열 */
-    imageContexts?: string[];
-    /** 이미지 분석 결과 (비전 모델이 미리 분석한 텍스트 설명) */
-    imageDescriptions?: string[];
-    
-    // ========================================
-    // 🆕 컨텍스트 우선순위 및 토큰 제한
-    // ========================================
-    /** 컨텍스트 우선순위 설정 */
-    contextPriority?: Partial<ContextPriority>;
-    /** 토큰 제한 설정 */
-    tokenLimits?: Partial<TokenLimits>;
-}
+// Re-export all types so consumers importing from discussion-engine don't break
+export type { DiscussionProgress, AgentOpinion, DiscussionResult, ContextPriority, TokenLimits, DiscussionConfig } from './discussion-types';
 
 // ========================================
 // Discussion Engine
@@ -193,183 +66,19 @@ export function createDiscussionEngine(
         enableDeepThinking = true,  // 🆕 기본 Deep Thinking 활성화
         // 🆕 컨텍스트 엔지니어링 필드 추출
         documentContext,
-        conversationHistory,
-        userMemoryContext,
         webSearchContext,
-        // 🆕 이미지 컨텍스트
-        imageContexts,
-        imageDescriptions,
-        // 🆕 우선순위 및 토큰 제한
-        contextPriority,
-        tokenLimits
     } = config;
     
-    // ========================================
-    // 🆕 컨텍스트 우선순위 기본값
-    // ========================================
-    const defaultPriority: ContextPriority = {
-        userMemory: 1,        // 최우선: 개인화
-        conversationHistory: 2,  // 맥락 유지
-        document: 3,          // 참조 자료
-        webSearch: 4,         // 사실 검증
-        image: 5              // 시각 자료
-    };
-    
-    const priority: ContextPriority = {
-        ...defaultPriority,
-        ...contextPriority
-    };
-    
-    // ========================================
-    // 🆕 토큰 제한 기본값 (대략적인 문자 수 기준, 1토큰 ≈ 4자)
-    // ========================================
-    const defaultLimits: TokenLimits = {
-        maxTotalTokens: 8000,
-        maxDocumentTokens: 3000,
-        maxHistoryTokens: 2000,
-        maxWebSearchTokens: 1500,
-        maxMemoryTokens: 1000,
-        maxImageDescriptionTokens: 500
-    };
-    
-    const limits: TokenLimits = {
-        ...defaultLimits,
-        ...tokenLimits
-    };
-    
-    // 토큰 → 문자 변환 (근사값)
-    const tokensToChars = (tokens: number) => tokens * 4;
-    
-    /**
-     * 🆕 문자열을 토큰 제한에 맞게 자르기
-     */
-    const truncateToLimit = (text: string, maxTokens: number): string => {
-        const maxChars = tokensToChars(maxTokens);
-        if (text.length <= maxChars) return text;
-        
-        // 앞부분과 뒷부분을 유지하며 중간 생략
-        const half = Math.floor(maxChars / 2);
-        return `${text.substring(0, half)}\n\n... [중간 ${text.length - maxChars}자 생략] ...\n\n${text.substring(text.length - half)}`;
-    };
-    
-    /**
-     * 🆕 우선순위 기반 통합 컨텍스트 구성 (메모이제이션 적용)
-     * 토큰 제한을 고려하여 우선순위가 높은 컨텍스트부터 할당
-     * ⚡ 토론 세션 내에서 config 입력이 불변이므로 첫 호출 결과를 캐싱
-     */
-    let _cachedFullContext: string | null = null;
-    const buildFullContext = (): string => {
-        if (_cachedFullContext !== null) return _cachedFullContext;
-        // 컨텍스트 항목들을 우선순위로 정렬
-        const contextItems: Array<{
-            priority: number;
-            label: string;
-            content: string;
-            maxTokens: number;
-        }> = [];
-        
-        // 1. 사용자 메모리 (최우선)
-        if (userMemoryContext) {
-            contextItems.push({
-                priority: priority.userMemory,
-                label: '💾 사용자 선호도/기억',
-                content: userMemoryContext,
-                maxTokens: limits.maxMemoryTokens
-            });
-        }
-        
-        // 2. 대화 히스토리
-        if (conversationHistory && conversationHistory.length > 0) {
-            const recentHistory = conversationHistory.slice(-5);
-            const historyText = recentHistory
-                .map(h => `[${h.role}]: ${h.content.substring(0, 300)}`)
-                .join('\n');
-            contextItems.push({
-                priority: priority.conversationHistory,
-                label: '💬 이전 대화 맥락',
-                content: historyText,
-                maxTokens: limits.maxHistoryTokens
-            });
-        }
-        
-        // 3. 문서 컨텍스트
-        if (documentContext) {
-            contextItems.push({
-                priority: priority.document,
-                label: '📄 참조 문서',
-                content: documentContext,
-                maxTokens: limits.maxDocumentTokens
-            });
-        }
-        
-        // 4. 웹 검색 결과
-        if (webSearchContext) {
-            contextItems.push({
-                priority: priority.webSearch,
-                label: '🔍 웹 검색 결과',
-                content: webSearchContext,
-                maxTokens: limits.maxWebSearchTokens
-            });
-        }
-        
-        // 5. 이미지 설명 (비전 모델 분석 결과)
-        if (imageDescriptions && imageDescriptions.length > 0) {
-            const imageText = imageDescriptions
-                .map((desc, i) => `[이미지 ${i + 1}]: ${desc}`)
-                .join('\n');
-            contextItems.push({
-                priority: priority.image,
-                label: '🖼️ 이미지 분석 결과',
-                content: imageText,
-                maxTokens: limits.maxImageDescriptionTokens
-            });
-        }
-        
-        // 우선순위 순으로 정렬
-        contextItems.sort((a, b) => a.priority - b.priority);
-        
-        // 토큰 제한 내에서 컨텍스트 구성
-        const parts: string[] = [];
-        let totalChars = 0;
-        const maxTotalChars = tokensToChars(limits.maxTotalTokens);
-        
-        for (const item of contextItems) {
-            const truncated = truncateToLimit(item.content, item.maxTokens);
-            
-            // 전체 제한 체크
-            if (totalChars + truncated.length > maxTotalChars) {
-                const remaining = maxTotalChars - totalChars;
-                if (remaining > 100) { // 최소 100자는 있어야 추가
-                    parts.push(`## ${item.label}\n${truncated.substring(0, remaining)}...`);
-                }
-                console.log(`[Discussion] ⚠️ 토큰 제한 도달, ${item.label} 일부 생략`);
-                break;
-            }
-            
-            parts.push(`## ${item.label}\n${truncated}`);
-            totalChars += truncated.length;
-        }
-        
-        if (parts.length > 0) {
-            console.log(`[Discussion] 📊 컨텍스트 구성: ${parts.length}개 항목, ${totalChars}자 (제한: ${maxTotalChars}자)`);
-        }
-        
-        _cachedFullContext = parts.join('\n\n');
-        return _cachedFullContext;
-    };
-    
-    /**
-     * 🆕 이미지 base64 데이터 반환 (비전 모델용)
-     */
-    const getImageContexts = (): string[] => {
-        return imageContexts || [];
-    };
+    // 🆕 컨텍스트 빌더 생성 (우선순위, 토큰 제한, 메모이제이션 포함)
+    const contextBuilder = createContextBuilder(config);
+    const buildFullContext = contextBuilder.buildFullContext;
+    const getImageContexts = contextBuilder.getImageContexts;
 
     /**
      * 🆕 개선된 전문가 에이전트 선택 (의도 기반 + 컨텍스트 반영)
      */
     async function selectExpertAgents(topic: string): Promise<Agent[]> {
-        console.log(`[Discussion] 토론 주제: "${topic.substring(0, 50)}..."`);
+        logger.info(`토론 주제: "${topic.substring(0, 50)}..."`);
 
         // 🆕 컨텍스트를 포함하여 더 정확한 에이전트 선택
         const fullContext = buildFullContext();
@@ -378,9 +87,9 @@ export function createDiscussionEngine(
         // 🆕 컨텍스트를 전달하여 에이전트 선택 정확도 향상
         const experts = await getRelatedAgentsForDiscussion(topic, agentLimit, fullContext);
 
-        console.log(`[Discussion] 선택된 전문가: ${experts.map(e => `${e.emoji} ${e.name}`).join(', ')}`);
+        logger.info(`선택된 전문가: ${experts.map(e => `${e.emoji} ${e.name}`).join(', ')}`);
         if (fullContext) {
-            console.log(`[Discussion] 컨텍스트 적용됨 (${fullContext.length}자)`);
+            logger.info(`컨텍스트 적용됨 (${fullContext.length}자)`);
         }
 
         // 최소 2명 보장
@@ -406,9 +115,10 @@ export function createDiscussionEngine(
         agent: Agent,
         topic: string,
         previousOpinions: AgentOpinion[]
-    ): Promise<AgentOpinion> {
-        // 🆕 Deep Thinking 모드에 따른 프롬프트 차별화
-        const thinkingInstructions = enableDeepThinking ? `
+    ): Promise<AgentOpinion | null> {
+        try {
+            // 🆕 Deep Thinking 모드에 따른 프롬프트 차별화
+            const thinkingInstructions = enableDeepThinking ? `
 ## 🧠 Deep Thinking 프로세스 (필수)
 분석 전에 반드시 다음 사고 과정을 거쳐야 합니다:
 
@@ -420,14 +130,14 @@ export function createDiscussionEngine(
 
 응답 시작 전 "💭 Thinking:"으로 핵심 고려사항을 먼저 정리하세요.` : '';
 
-        // 🆕 컨텍스트 기반 추가 지침
-        const contextInstructions = buildFullContext() ? `
+            // 🆕 컨텍스트 기반 추가 지침
+            const contextInstructions = buildFullContext() ? `
 ## 📋 참조 컨텍스트
 아래 컨텍스트를 반드시 고려하여 의견을 제시하세요:
 ${buildFullContext()}
 ` : '';
 
-        const systemPrompt = `# ${agent.emoji} ${agent.name}
+            const systemPrompt = `# ${agent.emoji} ${agent.name}
 
 당신은 **${agent.name}** 전문가입니다.
 ${agent.description}
@@ -442,28 +152,33 @@ ${contextInstructions}
 5. ${documentContext ? '**참조 문서의 내용을 분석에 반영하세요.**' : ''}
 6. ${webSearchContext ? '**웹 검색 결과를 근거로 활용하세요.**' : ''}`;
 
-        let contextMessage = `## 토론 주제\n<topic>${sanitizePromptInput(topic)}</topic>\n\n`;
+            let contextMessage = `## 토론 주제\n<topic>${sanitizePromptInput(topic)}</topic>\n\n`;
 
-        if (previousOpinions.length > 0) {
-            contextMessage += `## 이전 전문가 의견\n`;
-            for (const op of previousOpinions) {
-                contextMessage += `\n### ${op.agentEmoji} ${op.agentName}\n${op.opinion}\n`;
+            if (previousOpinions.length > 0) {
+                contextMessage += `## 이전 전문가 의견\n`;
+                for (const op of previousOpinions) {
+                    contextMessage += `\n### ${op.agentEmoji} ${op.agentName}\n${op.opinion}\n`;
+                }
+                contextMessage += `\n---\n\n당신의 전문가 의견을 제시해주세요:`;
+            } else {
+                contextMessage += `\n당신의 전문가 의견을 제시해주세요:`;
             }
-            contextMessage += `\n---\n\n당신의 전문가 의견을 제시해주세요:`;
-        } else {
-            contextMessage += `\n당신의 전문가 의견을 제시해주세요:`;
+
+            const response = await generateResponse(systemPrompt, contextMessage);
+
+            return {
+                agentId: agent.id,
+                agentName: agent.name,
+                agentEmoji: agent.emoji || '🤖',
+                opinion: response,
+                confidence: 0.8,
+                timestamp: new Date()
+            };
+        } catch (error) {
+            const errMsg = error instanceof Error ? error.message : String(error);
+            logger.error(`❌ ${agent.emoji} ${agent.name} 의견 생성 실패: ${errMsg}`);
+            return null;
         }
-
-        const response = await generateResponse(systemPrompt, contextMessage);
-
-        return {
-            agentId: agent.id,
-            agentName: agent.name,
-            agentEmoji: agent.emoji || '🤖',
-            opinion: response,
-            confidence: 0.8,
-            timestamp: new Date()
-        };
     }
 
     /**
@@ -565,8 +280,33 @@ ${contextInstructions}
                     topic,
                     round > 0 ? opinions : []
                 );
-                opinions.push(opinion);
+                if (opinion) {
+                    opinions.push(opinion);
+                }
             }
+        }
+
+        // 2.5. 의견이 하나도 수집되지 않은 경우 조기 종료
+        if (opinions.length === 0) {
+            logger.error('⚠️ 모든 에이전트 의견 생성 실패 — LLM 연결 상태를 확인하세요.');
+            onProgress?.({
+                phase: 'complete',
+                message: 'AI 모델 서버에 연결할 수 없어 토론을 완료하지 못했습니다.',
+                progress: 100
+            });
+            return {
+                discussionSummary: '토론 실패: 모든 전문가 에이전트의 응답 생성에 실패했습니다.',
+                finalAnswer: '⚠️ AI 모델 서버에 연결할 수 없어 토론을 진행할 수 없습니다.\n\n' +
+                    '**가능한 원인:**\n' +
+                    '- Cloud 모델 서버(Ollama Cloud)에 접속할 수 없습니다.\n' +
+                    '- API 키가 만료되었거나 할당량이 초과되었을 수 있습니다.\n' +
+                    '- 네트워크 연결 상태를 확인해주세요.\n\n' +
+                    '잠시 후 다시 시도해주세요.',
+                participants,
+                opinions: [],
+                totalTime: Date.now() - startTime,
+                factChecked: false
+            };
         }
 
         // 3. 교차 검토
@@ -594,7 +334,7 @@ ${contextInstructions}
                 await webSearchFn(topic);
                 factChecked = true;
             } catch (e) {
-                console.warn('[Discussion] 사실 검증 실패:', e);
+                logger.warn('사실 검증 실패:', e);
             }
         }
 

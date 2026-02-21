@@ -37,6 +37,9 @@ import { builtInTools } from './tools';
 import type { UserTier } from '../data/user-manager';
 import { canUseTool } from './tool-tiers';
 import type { UserContext } from './user-sandbox';
+import { createLogger } from '../utils/logger';
+
+const logger = createLogger('ToolRouter');
 
 /**
  * 외부 도구 실행기 함수 타입
@@ -242,7 +245,7 @@ export class ToolRouter {
             this.externalTools.set(namespacedName, entry);
         }
 
-        console.log(`[ToolRouter] Registered ${tools.length} tools from "${serverName}" (serverId: ${serverId})`);
+        logger.info(`Registered ${tools.length} tools from "${serverName}" (serverId: ${serverId})`);
     }
 
     /**
@@ -268,7 +271,7 @@ export class ToolRouter {
         this.externalExecutors.delete(serverId);
 
         if (keysToRemove.length > 0) {
-            console.log(`[ToolRouter] Unregistered ${keysToRemove.length} tools for serverId: ${serverId}`);
+            logger.info(`Unregistered ${keysToRemove.length} tools for serverId: ${serverId}`);
         }
     }
 

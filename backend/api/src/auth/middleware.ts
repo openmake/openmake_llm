@@ -16,8 +16,18 @@
  */
 
 import { Request, Response, NextFunction } from 'express';
-import { extractToken, verifyToken, hasPermission, isAdmin } from './index';
+import { extractToken, verifyToken, hasPermission, isAdmin, clearTokenCookie } from './index';
 import { getUserManager, PublicUser, UserRole } from '../data/user-manager';
+import { unauthorized, forbidden } from '../utils/api-response';
+
+/**
+ * JWT 토큰 형식 사전 검증 (header.payload.signature 3-part dot 구조)
+ * jwt.verify() 호출 전에 빠르게 걸러내어 불필요한 에러 로그 방지
+ */
+function looksLikeJWT(token: string): boolean {
+    const parts = token.split('.');
+    return parts.length === 3 && parts.every(p => p.length > 0);
+}
 
 /**
  * JWT 토큰에서 추출된 인증 정보 (미들웨어용)
@@ -71,12 +81,19 @@ declare global {
  * 토큰이 있으면 검증하고 사용자 정보를 req.user에 추가
  * 토큰이 없어도 통과 (게스트 허용)
  */
-export async function optionalAuth(req: Request, _res: Response, next: NextFunction): Promise<void> {
+export async function optionalAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
     // Cookie first (httpOnly), then Authorization header (backward compat)
     const authHeader = req.headers.authorization;
     const token = (req.cookies?.auth_token) || extractToken(authHeader);
 
     if (token) {
+        // 사전 검증: JWT 형식(xxx.yyy.zzz)이 아니면 검증 생략 + 쿠키 클리어
+        if (!looksLikeJWT(token)) {
+            clearTokenCookie(res);
+            next();
+            return;
+        }
+
         const payload = await verifyToken(token);
 
         if (payload) {
@@ -86,6 +103,11 @@ export async function optionalAuth(req: Request, _res: Response, next: NextFunct
             if (user && user.is_active) {
                 req.user = user;
                 req.token = token;
+            }
+        } else {
+            // 검증 실패 (만료/변조) — 잘못된 쿠키 정리
+            if (req.cookies?.auth_token) {
+                clearTokenCookie(res);
             }
         }
     }
@@ -103,14 +125,14 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     const token = (req.cookies?.auth_token) || extractToken(authHeader);
 
     if (!token) {
-        res.status(401).json({ success: false, error: { message: '인증이 필요합니다' } });
+        res.status(401).json(unauthorized('인증이 필요합니다'));
         return;
     }
 
     const payload = await verifyToken(token);
 
     if (!payload) {
-        res.status(401).json({ success: false, error: { message: '유효하지 않은 토큰입니다' } });
+        res.status(401).json(unauthorized('유효하지 않은 토큰입니다'));
         return;
     }
 
@@ -118,12 +140,12 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     const user = await userManager.getUserById(payload.userId);
 
     if (!user) {
-        res.status(401).json({ success: false, error: { message: '사용자를 찾을 수 없습니다' } });
+        res.status(401).json(unauthorized('사용자를 찾을 수 없습니다'));
         return;
     }
 
     if (!user.is_active) {
-        res.status(403).json({ success: false, error: { message: '비활성화된 계정입니다' } });
+        res.status(403).json(forbidden('비활성화된 계정입니다'));
         return;
     }
 
@@ -138,12 +160,12 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
  */
 export function requireAdmin(req: Request, res: Response, next: NextFunction): void {
     if (!req.user) {
-        res.status(401).json({ success: false, error: { message: '인증이 필요합니다' } });
+        res.status(401).json(unauthorized('인증이 필요합니다'));
         return;
     }
 
     if (!isAdmin(req.user.role)) {
-        res.status(403).json({ success: false, error: { message: '관리자 권한이 필요합니다' } });
+        res.status(403).json(forbidden('관리자 권한이 필요합니다'));
         return;
     }
 
@@ -156,12 +178,12 @@ export function requireAdmin(req: Request, res: Response, next: NextFunction): v
 export function requireRole(role: UserRole) {
     return (req: Request, res: Response, next: NextFunction): void => {
         if (!req.user) {
-            res.status(401).json({ success: false, error: { message: '인증이 필요합니다' } });
+            res.status(401).json(unauthorized('인증이 필요합니다'));
             return;
         }
 
         if (!hasPermission(req.user.role, role)) {
-            res.status(403).json({ success: false, error: { message: `${role} 이상의 권한이 필요합니다` } });
+            res.status(403).json(forbidden(`${role} 이상의 권한이 필요합니다`));
             return;
         }
 

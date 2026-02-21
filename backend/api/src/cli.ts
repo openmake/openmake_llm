@@ -1,5 +1,15 @@
 #!/usr/bin/env node
 
+/**
+ * ============================================================
+ * CLI Entry - OpenMake 명령행 인터페이스
+ * ============================================================
+ * 채팅/코드리뷰/코드생성/설명/클러스터/MCP/플러그인 관리 명령을
+ * Commander 기반으로 등록하고 실행합니다.
+ *
+ * @module cli
+ */
+
 // 환경 변수 로드 (최상단에서 실행)
 import * as dotenv from 'dotenv';
 import * as path from 'path';
@@ -43,8 +53,7 @@ const program = new Command();
 program
     .name('ollama-coder')
     .description('AI 어시스턴트 - Ollama LLM 백엔드')
-    .version(VERSION)
-    .option('-p, --port <port>', '대시보드 포트 (클러스터 모드 시작)');
+    .version(VERSION);
 
 // chat 명령어
 program
@@ -225,7 +234,7 @@ program
 program
     .command('cluster')
     .description('클러스터 모드 시작 (대시보드 포함)')
-    .option('-p, --port <port>', '대시보드 포트', '52416')
+    .option('-p, --port <port>', '대시보드 포트', String(envConfig.port))
     .action(async (options) => {
         showBanner(VERSION);
         console.log(chalk.cyan('\n🔮 OpenMake 클러스터 시작 중...\n'));
@@ -349,40 +358,7 @@ program
 
 // 기본 명령 (인수 없이 실행 시)
 program
-    .action(async (options) => {
-        if (options.port) {
-            showBanner(VERSION);
-            console.log(chalk.cyan('\n🔮 OpenMake 클러스터 시작 중... (포트 지정됨)\n'));
-
-            const { createDashboardServer } = await import('./dashboard');
-            const dashboard = createDashboardServer({ port: parseInt(options.port) });
-
-            const spinner = createSpinner('노드 연결 중...');
-            spinner.start();
-
-            try {
-                await dashboard.start();
-                spinner.succeed('클러스터 시작됨');
-
-                console.log(chalk.green(`\n✅ 대시보드: ${chalk.underline(dashboard.url)}`));
-                console.log(chalk.gray('\n종료하려면 Ctrl+C를 누르세요\n'));
-
-                // 종료 처리
-                process.on('SIGINT', () => {
-                    console.log(chalk.yellow('\n\n👋 클러스터 종료 중...'));
-                    dashboard.stop();
-                    process.exit(0);
-                });
-            } catch (error) {
-                spinner.fail('클러스터 시작 실패');
-                if (error instanceof Error) {
-                    console.log(chalk.red(`\n❌ 오류: ${error.message}\n`));
-                }
-                process.exit(1);
-            }
-            return;
-        }
-
+    .action(async () => {
         showBanner(VERSION);
         program.help();
     });

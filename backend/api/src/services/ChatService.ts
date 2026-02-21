@@ -18,190 +18,42 @@
  * @requires ../chat/profile-resolver - Brand Model → ExecutionPlan 변환
  * @requires ../ollama/client - Ollama HTTP 클라이언트
  */
+import { createLogger } from '../utils/logger';
 import { routeToAgent, getAgentSystemMessage, AGENTS } from '../agents';
-import type { DiscussionProgress, DiscussionResult } from '../agents/discussion-engine';
+import type { DiscussionProgress } from '../agents/discussion-engine';
 import { getPromptConfig } from '../chat/prompt';
 import { selectOptimalModel, adjustOptionsForModel, checkModelCapability, type ModelSelection, selectBrandProfileForAutoRouting } from '../chat/model-selector';
 import { type ExecutionPlan, buildExecutionPlan } from '../chat/profile-resolver';
+import { assessComplexity } from '../chat/complexity-assessor';
 import type { DocumentStore } from '../documents/store';
 import type { UserTier } from '../data/user-manager';
 import type { UserContext } from '../mcp/user-sandbox';
 import { getUnifiedMCPClient } from '../mcp/unified-client';
-import { getApiKeyManager } from '../ollama/api-key-manager';
-import { getApiUsageTracker } from '../ollama/api-usage-tracker';
 import { OllamaClient } from '../ollama/client';
 import { getGptOssTaskPreset, isGeminiModel, type ChatMessage, type ToolDefinition } from '../ollama/types';
 import { applySequentialThinking } from '../mcp/sequential-thinking';
 import type { ResearchProgress } from './DeepResearchService';
 import { A2AStrategy, AgentLoopStrategy, DeepResearchStrategy, DirectStrategy, DiscussionStrategy } from './chat-strategies';
+import { formatResearchResult, formatDiscussionResult } from './chat-service-formatters';
+import { recordChatMetrics } from './chat-service-metrics';
+import { preRequestCheck, postResponseCheck } from '../chat/security-hooks';
+import { createRoutingLogEntry, logRoutingDecision } from '../chat/routing-logger';
+import { applyDomainEngineOverride } from '../chat/domain-router';
+import type { ChatMessageRequest } from './chat-service-types';
 
-/**
- * 채팅 히스토리 메시지 인터페이스
- *
- * 대화 이력에 포함되는 단일 메시지의 구조를 정의합니다.
- * user/assistant/system/tool 역할을 지원하며, 이미지 및 도구 호출 정보를 포함할 수 있습니다.
- *
- * @interface ChatHistoryMessage
- */
-export interface ChatHistoryMessage {
-    /** 메시지 발신자 역할 (user: 사용자, assistant: AI, system: 시스템, tool: 도구 실행 결과) */
-    role: 'user' | 'assistant' | 'system' | 'tool';
-    /** 메시지 본문 텍스트 */
-    content: string;
-    /** Base64 인코딩된 이미지 데이터 배열 (비전 모델용) */
-    images?: string[];
-    /** LLM이 요청한 도구 호출 목록 */
-    tool_calls?: Array<{
-        /** 도구 호출 유형 (기본: 'function') */
-        type?: string;
-        /** 호출할 함수 정보 */
-        function: {
-            /** 함수 이름 */
-            name: string;
-            /** 함수 인자 (객체 또는 JSON 문자열) */
-            arguments: Record<string, unknown> | string;
-        };
-    }>;
-    /** 추가 메타데이터를 위한 인덱스 시그니처 */
-    [key: string]: unknown;
-}
+// Re-export all types so consumers importing from ChatService don't break
+export type {
+    ChatHistoryMessage,
+    AgentSelectionInfo,
+    ToolCallInfo,
+    WebSearchResult,
+    WebSearchFunction,
+    ChatResponseMeta,
+    ChatServiceConfig,
+    ChatMessageRequest,
+} from './chat-service-types';
 
-/**
- * 에이전트 선택 결과 정보
- *
- * 사용자 메시지 분석 후 선택된 에이전트의 상세 정보를 담습니다.
- *
- * @interface AgentSelectionInfo
- */
-export interface AgentSelectionInfo {
-    /** 에이전트 유형 식별자 (예: 'code', 'math', 'creative') */
-    type?: string;
-    /** 에이전트 표시 이름 */
-    name?: string;
-    /** 에이전트 이모지 아이콘 */
-    emoji?: string;
-    /** 현재 처리 단계 (예: 'planning', 'executing') */
-    phase?: string;
-    /** 에이전트 선택 사유 */
-    reason?: string;
-    /** 에이전트 선택 신뢰도 (0.0 ~ 1.0) */
-    confidence?: number;
-    /** 추가 메타데이터를 위한 인덱스 시그니처 */
-    [key: string]: unknown;
-}
-
-/**
- * 도구 호출 정보 인터페이스
- *
- * LLM이 요청한 단일 도구 호출의 구조를 정의합니다.
- *
- * @interface ToolCallInfo
- */
-export interface ToolCallInfo {
-    /** 도구 호출 유형 */
-    type?: string;
-    /** 호출할 함수 상세 정보 */
-    function: {
-        /** 함수 이름 */
-        name: string;
-        /** 함수 인자 객체 */
-        arguments: Record<string, unknown>;
-    };
-}
-
-/**
- * 웹 검색 결과 인터페이스
- * @interface WebSearchResult
- */
-export interface WebSearchResult {
-    /** 검색 결과 제목 */
-    title: string;
-    /** 검색 결과 URL */
-    url: string;
-    /** 검색 결과 요약 스니펫 */
-    snippet?: string;
-}
-
-/**
- * 웹 검색 함수 타입
- *
- * 쿼리 문자열을 받아 웹 검색 결과 배열을 반환하는 비동기 함수입니다.
- *
- * @param query - 검색 쿼리 문자열
- * @param options - 검색 옵션
- * @param options.maxResults - 최대 결과 수
- * @returns 웹 검색 결과 배열
- */
-export type WebSearchFunction = (
-    query: string,
-    options?: { maxResults?: number }
-) => Promise<WebSearchResult[]>;
-
-/**
- * 채팅 응답 메타데이터 인터페이스
- *
- * 채팅 응답에 첨부되는 부가 정보 (모델명, 토큰 수, 소요 시간 등)를 담습니다.
- *
- * @interface ChatResponseMeta
- */
-export interface ChatResponseMeta {
-    /** 사용된 모델 이름 */
-    model?: string;
-    /** 생성된 토큰 수 */
-    tokens?: number;
-    /** 응답 생성 소요 시간 (밀리초) */
-    duration?: number;
-    /** 추가 메타데이터를 위한 인덱스 시그니처 */
-    [key: string]: unknown;
-}
-
-/**
- * ChatService 설정 인터페이스
- * @interface ChatServiceConfig
- */
-export interface ChatServiceConfig {
-    /** Ollama 클라이언트 인스턴스 */
-    client: OllamaClient;
-    /** 사용할 모델 이름 */
-    model: string;
-}
-
-/**
- * 채팅 메시지 요청 인터페이스
- *
- * ChatService.processMessage()에 전달되는 요청 객체의 구조를 정의합니다.
- * 사용자 메시지, 대화 이력, 문서/이미지 컨텍스트, 실행 모드 옵션 등을 포함합니다.
- *
- * @interface ChatMessageRequest
- */
-export interface ChatMessageRequest {
-    /** 사용자 입력 메시지 */
-    message: string;
-    /** 이전 대화 히스토리 배열 */
-    history?: Array<{ role: string; content: string; images?: string[] }>;
-    /** 참조할 업로드 문서 ID */
-    docId?: string;
-    /** Base64 인코딩된 이미지 데이터 배열 */
-    images?: string[];
-    /** 웹 검색 결과 컨텍스트 문자열 */
-    webSearchContext?: string;
-    /** 멀티 에이전트 토론 모드 활성화 여부 */
-    discussionMode?: boolean;
-    /** 심층 연구 모드 활성화 여부 */
-    deepResearchMode?: boolean;
-    /** Sequential Thinking 모드 활성화 여부 */
-    thinkingMode?: boolean;
-    /** Thinking 깊이 수준 */
-    thinkingLevel?: 'low' | 'medium' | 'high';
-    /** 요청한 사용자의 ID */
-    userId?: string;
-    /** 사용자 역할 (접근 권한 결정에 사용) */
-    userRole?: 'admin' | 'user' | 'guest';
-    /** 사용자 구독 등급 (도구 접근 티어 결정에 사용) */
-    userTier?: UserTier;
-    /** 요청 중단 시그널 (SSE 연결 종료 시 사용) */
-    abortSignal?: AbortSignal;
-}
+const logger = createLogger('ChatService');
 
 /**
  * 중앙 채팅 오케스트레이션 서비스
@@ -223,6 +75,8 @@ export class ChatService {
     private client: OllamaClient;
     /** 현재 요청의 사용자 컨텍스트 (도구 접근 권한 결정에 사용) */
     private currentUserContext: UserContext | null = null;
+    /** 사용자가 활성화한 MCP 도구 목록 (undefined면 레거시 모드: 전체 허용) */
+    private currentEnabledTools: Record<string, boolean> | undefined = undefined;
 
     /** 단일 LLM 직접 호출 전략 */
     private readonly directStrategy: DirectStrategy;
@@ -287,7 +141,7 @@ export class ChatService {
             tier,
             role: userRole || 'guest',
         };
-        console.log(`[ChatService] 🔐 사용자 컨텍스트 설정: userId=${userId}, role=${userRole}, tier=${tier}`);
+        logger.info(`사용자 컨텍스트 설정: userId=${userId}, role=${userRole}, tier=${tier}`);
     }
 
     /**
@@ -300,7 +154,16 @@ export class ChatService {
     private getAllowedTools(): ToolDefinition[] {
         const toolRouter = getUnifiedMCPClient().getToolRouter();
         const userTierForTools = this.currentUserContext?.tier || 'free';
-        return toolRouter.getOllamaTools(userTierForTools) as ToolDefinition[];
+        const allTools = toolRouter.getOllamaTools(userTierForTools) as ToolDefinition[];
+
+        // enabledTools가 전달된 경우, 사용자가 명시적으로 활성화한 도구만 허용
+        // enabledTools가 없으면 레거시 호환: 전체 허용 (API 클라이언트 등)
+        if (this.currentEnabledTools !== undefined) {
+            const filtered = allTools.filter(t => this.currentEnabledTools![t.function.name] === true);
+            logger.debug(`MCP 도구 필터링: ${allTools.length}개 중 ${filtered.length}개 활성화`);
+            return filtered;
+        }
+        return allTools;
     }
 
     /**
@@ -346,6 +209,7 @@ export class ChatService {
             userId,
             userRole,
             userTier,
+            enabledTools,
             abortSignal,
         } = req;
 
@@ -357,6 +221,19 @@ export class ChatService {
         };
 
         this.setUserContext(userId || 'guest', userRole, userTier);
+        this.currentEnabledTools = enabledTools;
+
+        // ── 보안 사전 검사 ──
+        const securityPreCheck = preRequestCheck(message || '');
+        if (!securityPreCheck.passed) {
+            const blockViolations = securityPreCheck.violations.filter(v => v.severity === 'block');
+            if (blockViolations.length > 0) {
+                logger.warn(`보안 차단: ${blockViolations.map(v => v.detail).join(', ')}`);
+                return '죄송합니다. 해당 요청은 보안 정책에 의해 처리할 수 없습니다. 다른 방식으로 질문해 주세요.';
+            }
+            // warn-level violations: log but continue
+            logger.warn(`보안 경고: ${securityPreCheck.violations.map(v => v.detail).join(', ')}`);
+        }
 
         // 특수 모드 조기 분기: Discussion 또는 DeepResearch 모드는 별도 전략으로 위임
         if (discussionMode) {
@@ -368,6 +245,19 @@ export class ChatService {
         }
 
         const startTime = Date.now();
+
+        // ── 라우팅 결정 로그 초기화 ──
+        const routingLog = createRoutingLogEntry({
+            queryFeatures: {
+                queryType: 'pending',
+                confidence: 0,
+                hasImages: (images && images.length > 0) || false,
+                queryLength: (message || '').length,
+                isBrandModel: !!executionPlan?.isBrandModel,
+                brandProfile: executionPlan?.requestedModel,
+            },
+        });
+
         let fullResponse = '';
 
         const streamToken = (token: string) => {
@@ -379,7 +269,7 @@ export class ChatService {
         const agentSystemMessage = getAgentSystemMessage(agentSelection);
         const selectedAgent = AGENTS[agentSelection.primaryAgent];
 
-        console.log(`[ChatService] 에이전트: ${selectedAgent.emoji} ${selectedAgent.name}`);
+        logger.info(`에이전트: ${selectedAgent.emoji} ${selectedAgent.name}`);
 
         if (onAgentSelected && selectedAgent) {
             onAgentSelected({
@@ -438,7 +328,7 @@ export class ChatService {
             const targetBrandProfile = await selectBrandProfileForAutoRouting(message, hasImages);
             const autoExecutionPlan = buildExecutionPlan(targetBrandProfile);
 
-            console.log(`[ChatService] 🤖 Auto-Routing: ${executionPlan.requestedModel} → ${targetBrandProfile} (engine=${autoExecutionPlan.resolvedEngine})`);
+            logger.info(`Auto-Routing: ${executionPlan.requestedModel} → ${targetBrandProfile} (engine=${autoExecutionPlan.resolvedEngine})`);
 
             executionPlan.resolvedEngine = autoExecutionPlan.resolvedEngine;
             executionPlan.profile = autoExecutionPlan.profile;
@@ -452,21 +342,34 @@ export class ChatService {
             executionPlan.timeBudgetMs = autoExecutionPlan.timeBudgetMs;
             executionPlan.requiredTools = autoExecutionPlan.requiredTools;
 
+            // P2-2: Domain engine override (auto-routing only)
+            const resolvedQueryType: import('../chat/model-selector-types').QueryType =
+                autoExecutionPlan.promptStrategy === 'force_coder' ? 'code'
+                : autoExecutionPlan.promptStrategy === 'force_reasoning' ? 'math'
+                : autoExecutionPlan.promptStrategy === 'force_creative' ? 'creative'
+                : 'chat';
+
+            const domainResult = applyDomainEngineOverride(
+                autoExecutionPlan.resolvedEngine, resolvedQueryType
+            );
+            if (domainResult.overridden) {
+                autoExecutionPlan.resolvedEngine = domainResult.engine;
+                executionPlan.resolvedEngine = domainResult.engine;
+                logger.info(`P2-2 Domain: ${domainResult.domain} → ${domainResult.engine}`);
+            }
+
             this.client.setModel(autoExecutionPlan.resolvedEngine);
             modelSelection = {
                 model: autoExecutionPlan.resolvedEngine,
                 options: promptConfig.options || {},
-                reason: `Auto-Routing ${executionPlan.requestedModel} → ${targetBrandProfile} → ${autoExecutionPlan.resolvedEngine}`,
-                queryType: autoExecutionPlan.promptStrategy === 'force_coder' ? 'code'
-                    : autoExecutionPlan.promptStrategy === 'force_reasoning' ? 'math'
-                        : autoExecutionPlan.promptStrategy === 'force_creative' ? 'creative'
-                            : 'chat',
+                reason: `Auto-Routing ${executionPlan.requestedModel} → ${targetBrandProfile} → ${autoExecutionPlan.resolvedEngine}${domainResult.overridden ? ` (domain=${domainResult.domain})` : ''}`,
+                queryType: resolvedQueryType,
                 supportsToolCalling: true,
                 supportsThinking: autoExecutionPlan.thinkingLevel !== 'off',
                 supportsVision: autoExecutionPlan.requiredTools.includes('vision'),
             };
         } else if (executionPlan?.isBrandModel) {
-            console.log(`[ChatService] §9 Brand Model: ${executionPlan.requestedModel} → engine=${executionPlan.resolvedEngine}`);
+            logger.info(`Brand Model: ${executionPlan.requestedModel} → engine=${executionPlan.resolvedEngine}`);
             this.client.setModel(executionPlan.resolvedEngine);
             modelSelection = {
                 model: executionPlan.resolvedEngine,
@@ -479,9 +382,15 @@ export class ChatService {
             };
         } else {
             modelSelection = await selectOptimalModel(message, hasImages);
-            console.log(`[ChatService] 🎯 모델 자동 선택: ${modelSelection.model} (${modelSelection.reason})`);
+            logger.info(`모델 자동 선택: ${modelSelection.model} (${modelSelection.reason})`);
             this.client.setModel(modelSelection.model);
         }
+
+        // ── 라우팅 결정 로그 갱신 ──
+        routingLog.queryFeatures.queryType = modelSelection.queryType;
+        routingLog.modelUsed = modelSelection.model;
+        routingLog.routeDecision.strategy = executionPlan?.profile?.a2a === 'off' ? 'agent-loop' : 'a2a';
+        routingLog.routeDecision.a2aMode = executionPlan?.profile?.a2a ?? 'conditional';
 
         let chatOptions = adjustOptionsForModel(
             modelSelection.model,
@@ -498,7 +407,7 @@ export class ChatService {
 
         const supportsTools = checkModelCapability(modelSelection.model, 'toolCalling');
         const supportsThinking = checkModelCapability(modelSelection.model, 'thinking');
-        console.log(`[ChatService] 📊 모델 기능: tools=${supportsTools}, thinking=${supportsThinking}`);
+        logger.debug(`모델 기능: tools=${supportsTools}, thinking=${supportsThinking}`);
 
         const maxTurns = executionPlan?.agentLoopMax ?? 5;
 
@@ -528,16 +437,33 @@ export class ChatService {
 
         // A2A(Agent-to-Agent) 병렬 생성 전략 결정: off면 건너뛰고 AgentLoop으로 직행
         const a2aMode = executionPlan?.profile?.a2a ?? 'conditional';
-        const skipA2A = a2aMode === 'off';
+        let skipA2A = a2aMode === 'off';
+
+        // P1-2: 'always' 모드에 대한 복잡도 기반 게이팅
+        if (!skipA2A && a2aMode === 'always') {
+            const complexity = assessComplexity({
+                query: message || '',
+                classification: { type: modelSelection.queryType, confidence: routingLog.queryFeatures.confidence || 0.5, matchedPatterns: [] },
+                hasImages: (images && images.length > 0) || false,
+                hasDocuments: !!docId,
+                historyLength: history?.length ?? 0,
+            });
+            if (complexity.shouldSkipA2A) {
+                skipA2A = true;
+                routingLog.routeDecision.complexityScore = complexity.score;
+                routingLog.routeDecision.complexitySignals = complexity.signals;
+            }
+        }
 
         let a2aSucceeded = false;
         if (!skipA2A) {
             try {
                 checkAborted();
-                console.log(`[ChatService] 🔀 A2A 병렬 응답 시작... (strategy: ${a2aMode})`);
+                logger.info(`A2A 병렬 응답 시작... (strategy: ${a2aMode})`);
                 const a2aResult = await this.a2aStrategy.execute({
                     messages: currentHistory,
                     chatOptions,
+                    queryType: modelSelection.queryType,
                     onToken: streamToken,
                     abortSignal,
                     checkAborted,
@@ -545,18 +471,18 @@ export class ChatService {
 
                 if (a2aResult.succeeded) {
                     a2aSucceeded = true;
-                    console.log('[ChatService] ✅ A2A 병렬 응답 완료');
+                    logger.info('A2A 병렬 응답 완료');
                 }
             } catch (e) {
                 if (e instanceof Error && e.message === 'ABORTED') throw e;
-                console.warn('[ChatService] ⚠️ A2A 실패, 단일 모델로 폴백:', e instanceof Error ? e.message : e);
+                logger.warn('A2A 실패, 단일 모델로 폴백:', e instanceof Error ? e.message : e);
             }
         } else {
-            console.log('[ChatService] ⏭️ A2A 건너뜀 (strategy: off)');
+            logger.info('A2A 건너뜀 (strategy: off)');
         }
 
         if (!a2aSucceeded) {
-            console.log('[ChatService] 🔄 단일 모델 Agent Loop 폴백');
+            logger.info('단일 모델 Agent Loop 폴백');
 
             await this.agentLoopStrategy.execute({
                 client: this.client,
@@ -576,60 +502,32 @@ export class ChatService {
             });
         }
 
-        // 사용량 추적 및 모니터링 메트릭 기록 (실패해도 응답 반환에 영향 없음)
-        try {
-            const usageTracker = getApiUsageTracker();
-            const keyManager = getApiKeyManager();
-            const currentKey = keyManager.getCurrentKey();
+        recordChatMetrics({
+            fullResponse,
+            startTime,
+            message,
+            model: this.client.model,
+            selectedAgent,
+            agentSelection,
+            executionPlan,
+        });
 
-            const responseTime = Date.now() - startTime;
-            const tokenCount = fullResponse.length;
-
-            usageTracker.recordRequest({
-                tokens: tokenCount,
-                responseTime,
-                model: this.client.model,
-                apiKeyId: currentKey ? currentKey.substring(0, 8) : undefined,
-                profileId: executionPlan?.isBrandModel ? executionPlan.requestedModel : undefined,
-            });
-
-            try {
-                const { getMetrics } = require('../monitoring/metrics');
-                const metricsCollector = getMetrics();
-
-                metricsCollector.incrementCounter('chat_requests_total', 1, { model: this.client.model });
-                metricsCollector.recordResponseTime(responseTime, this.client.model);
-                metricsCollector.recordTokenUsage(tokenCount, this.client.model);
-
-                if (currentKey) {
-                    metricsCollector.incrementCounter('api_key_usage', 1, { keyId: currentKey.substring(0, 8) });
-                }
-            } catch (e) {
-                console.warn('[ChatService] MetricsCollector 기록 실패:', e);
-            }
-
-            try {
-                const { getAnalyticsSystem } = require('../monitoring/analytics');
-                const analytics = getAnalyticsSystem();
-
-                const agentName = selectedAgent ? selectedAgent.name : 'General Chat';
-                const agentId = agentSelection?.primaryAgent || 'general';
-
-                analytics.recordAgentRequest(
-                    agentId,
-                    agentName,
-                    responseTime,
-                    true,
-                    tokenCount
-                );
-
-                analytics.recordQuery(message);
-            } catch (e) {
-                console.warn('[ChatService] AnalyticsSystem 기록 실패:', e);
-            }
-        } catch (e) {
-            console.error('[ChatService] 모니터링 데이터 기록 실패:', e);
+        // ── 보안 사후 검사 + 라우팅 로그 완료 ──
+        const securityPostCheck = postResponseCheck(fullResponse);
+        if (!securityPostCheck.passed) {
+            logger.warn(`응답 보안 경고: ${securityPostCheck.violations.map(v => v.detail).join(', ')}`);
         }
+
+        routingLog.latencyMs = Date.now() - startTime;
+        routingLog.securityFlags = {
+            preCheckPassed: securityPreCheck.passed,
+            postCheckPassed: securityPostCheck.passed,
+            violations: [
+                ...securityPreCheck.violations.map(v => `pre:${v.type}`),
+                ...securityPostCheck.violations.map(v => `post:${v.type}`),
+            ],
+        };
+        logRoutingDecision(routingLog);
 
         return fullResponse;
     }
@@ -657,7 +555,7 @@ export class ChatService {
             uploadedDocuments,
             client: this.client,
             onProgress,
-            formatDiscussionResult: (discussionResult) => this.formatDiscussionResult(discussionResult),
+            formatDiscussionResult: (discussionResult) => formatDiscussionResult(discussionResult),
             onToken,
         });
 
@@ -684,82 +582,10 @@ export class ChatService {
             req,
             client: this.client,
             onProgress,
-            formatResearchResult: (researchResult) => this.formatResearchResult(researchResult),
+            formatResearchResult: (researchResult) => formatResearchResult(researchResult),
             onToken,
         });
 
         return result.response;
-    }
-
-    /**
-     * 심층 연구 결과를 마크다운 형식으로 포맷팅합니다.
-     *
-     * 종합 요약, 주요 발견사항, 참고 자료를 구조화된 마크다운으로 변환합니다.
-     *
-     * @param result - 연구 결과 객체
-     * @param result.topic - 연구 주제
-     * @param result.summary - 종합 요약
-     * @param result.keyFindings - 주요 발견사항 목록
-     * @param result.sources - 참고 자료 (제목 + URL)
-     * @param result.totalSteps - 총 연구 단계 수
-     * @param result.duration - 총 소요 시간 (밀리초)
-     * @returns 마크다운 형식의 연구 보고서 문자열
-     */
-    private formatResearchResult(result: {
-        topic: string;
-        summary: string;
-        keyFindings: string[];
-        sources: Array<{ title: string; url: string }>;
-        totalSteps: number;
-        duration: number;
-    }): string {
-        const sections = [
-            `# 🔬 심층 연구 보고서: ${result.topic}`,
-            '',
-            '## 📋 종합 요약',
-            result.summary,
-            '',
-            '## 🔍 주요 발견사항',
-            ...result.keyFindings.map((finding, i) => `${i + 1}. ${finding}`),
-            '',
-            '## 📚 참고 자료',
-            ...result.sources.map((source, i) => `[${i + 1}] [${source.title}](${source.url})`),
-            '',
-            '---',
-            `*총 ${result.totalSteps}단계 연구, ${result.sources.length}개 소스 분석, ${(result.duration / 1000).toFixed(1)}초 소요*`,
-        ];
-
-        return sections.join('\n');
-    }
-
-    /**
-     * 멀티 에이전트 토론 결과를 마크다운 형식으로 포맷팅합니다.
-     *
-     * 각 전문가별 분석 의견과 종합 답변을 구조화된 마크다운으로 변환합니다.
-     *
-     * @param result - 토론 결과 객체 (전문가 의견, 최종 답변, 토론 요약 포함)
-     * @returns 마크다운 형식의 토론 결과 문자열
-     */
-    private formatDiscussionResult(result: DiscussionResult): string {
-        let formatted = '';
-
-        formatted += '## 🎯 멀티 에이전트 토론 결과\n\n';
-        formatted += `> ${result.discussionSummary}\n\n`;
-        formatted += '---\n\n';
-
-        formatted += '## 📋 전문가별 분석\n\n';
-
-        for (const opinion of result.opinions) {
-            formatted += `### ${opinion.agentEmoji} ${opinion.agentName}\n\n`;
-            formatted += `> 💭 **Thinking**: ${opinion.agentName} 관점에서 분석 중...\n\n`;
-            formatted += `${opinion.opinion}\n\n`;
-            formatted += '---\n\n';
-        }
-
-        formatted += '<details open>\n<summary>💡 <strong>종합 답변</strong> (전문가 의견 종합)</summary>\n\n';
-        formatted += result.finalAnswer;
-        formatted += '\n\n</details>';
-
-        return formatted;
     }
 }

@@ -1,3 +1,12 @@
+/**
+ * @module data/repositories/marketplace-repository
+ * @description `agent_marketplace` / `agent_reviews` 테이블 데이터 접근 계층
+ *
+ * 에이전트 마켓플레이스(MarketplaceAgent)와 리뷰(AgentReview) 엔티티의 CRUD를 담당합니다.
+ * - 에이전트 게시/조회/상태 변경 (pending/approved/rejected)
+ * - 리뷰 작성/조회, 설치 횟수 증가
+ * - 카테고리/태그 기반 검색, 인기순/최신순 정렬
+ */
 import { withTransaction } from '../retry-wrapper';
 import { BaseRepository, QueryParam } from './base-repository';
 import type { AgentReview, MarketplaceAgent, MarketplaceStatus } from '../models/unified-database';

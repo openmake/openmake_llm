@@ -17,9 +17,10 @@
 
 import { Router, Request, Response } from 'express';
 import { ClusterManager } from '../cluster/manager';
-import { success, serviceUnavailable } from '../utils/api-response';
+import { success, serviceUnavailable, unauthorized } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
 import { optionalAuth } from '../auth';
+import { optionalApiKey } from '../middlewares/api-key-auth';
 import { chatRateLimiter } from '../middlewares/chat-rate-limiter';
 import { validate } from '../middlewares/validation';
 import { chatRequestSchema } from '../schemas';
@@ -40,13 +41,13 @@ export function setClusterManager(cluster: ClusterManager): void {
  * 일반 채팅 API (non-streaming)
  * 🔒 Phase 2 보안 패치: optionalAuth 미들웨어 적용
  */
-router.post('/', optionalAuth, chatRateLimiter, validate(chatRequestSchema), asyncHandler(async (req: Request, res: Response) => {
-     const { message, model, nodeId, history, sessionId } = req.body;
+router.post('/', optionalApiKey, optionalAuth, chatRateLimiter, validate(chatRequestSchema), asyncHandler(async (req: Request, res: Response) => {
+     const { message, model, nodeId, history, sessionId, tools, tool_choice } = req.body;
 
      // 인증 확인 (ChatRequestHandler로 통합)
      const userContext = ChatRequestHandler.resolveUserContextFromRequest(req);
      if (!userContext) {
-         res.status(401).json({ success: false, error: { message: '인증이 필요합니다' } });
+         res.status(401).json(unauthorized('인증이 필요합니다'));
          return;
      }
 
@@ -60,6 +61,8 @@ router.post('/', optionalAuth, chatRateLimiter, validate(chatRequestSchema), asy
              docId: req.body.docId,
              images: req.body.images,
              webSearchContext: req.body.webSearchContext,
+             tools,
+             tool_choice,
              userContext,
              clusterManager,
              onToken: () => { /* 일반 채팅은 스트리밍 안 함 */ },
@@ -75,10 +78,13 @@ router.post('/', optionalAuth, chatRateLimiter, validate(chatRequestSchema), asy
              discussion: result.executionPlan.useDiscussion,
          } : undefined;
 
+         // §10 OpenAI 호환 tool_calls 응답
          res.json(success({
              response: result.response,
              sessionId: result.sessionId,
              model: result.model,
+             ...(result.tool_calls && { tool_calls: result.tool_calls }),
+             ...(result.finish_reason && { finish_reason: result.finish_reason }),
              ...(pipelineInfo && { pipeline_info: pipelineInfo }),
          }));
      } catch (error) {
@@ -97,13 +103,13 @@ router.post('/', optionalAuth, chatRateLimiter, validate(chatRequestSchema), asy
  * ✅ ChatService 경유: DB 로깅, Discussion, Deep Research, Agent Loop, Memory 지원
  * NOTE: SSE 엔드포인트는 asyncHandler로 감싸지 않음 (수동 에러 처리 필요)
  */
-router.post('/stream', optionalAuth, chatRateLimiter, validate(chatRequestSchema), async (req: Request, res: Response) => {
-     const { message, model, nodeId, sessionId } = req.body;
+router.post('/stream', optionalApiKey, optionalAuth, chatRateLimiter, validate(chatRequestSchema), async (req: Request, res: Response) => {
+     const { message, model, nodeId, sessionId, tools, tool_choice } = req.body;
 
      // 인증 확인 (ChatRequestHandler로 통합)
      const userContext = ChatRequestHandler.resolveUserContextFromRequest(req);
      if (!userContext) {
-         res.status(401).json({ success: false, error: { message: '인증이 필요합니다' } });
+         res.status(401).json(unauthorized('인증이 필요합니다'));
          return;
      }
 
@@ -133,6 +139,8 @@ router.post('/stream', optionalAuth, chatRateLimiter, validate(chatRequestSchema
              deepResearchMode: req.body.deepResearchMode,
              thinkingMode: req.body.thinkingMode,
              thinkingLevel: req.body.thinkingLevel,
+             tools,
+             tool_choice,
              userContext,
              clusterManager,
              abortSignal: abortController.signal,
@@ -143,9 +151,13 @@ router.post('/stream', optionalAuth, chatRateLimiter, validate(chatRequestSchema
          });
 
          if (!aborted) {
+             // §10 tool_calls가 있으면 스트리밍 이벤트로 전송
+             if (result.tool_calls) {
+                 res.write(`data: ${JSON.stringify({ tool_calls: result.tool_calls, finish_reason: result.finish_reason })}\n\n`);
+             }
              // 세션 ID와 완료 이벤트 전송
              res.write(`data: ${JSON.stringify({ sessionId: result.sessionId })}\n\n`);
-             res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
+             res.write(`data: ${JSON.stringify({ done: true, finish_reason: result.finish_reason || 'stop' })}\n\n`);
          }
          res.end();
      } catch (error) {

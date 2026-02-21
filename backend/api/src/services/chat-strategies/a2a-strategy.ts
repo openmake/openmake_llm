@@ -15,19 +15,90 @@
  */
 import { OllamaClient } from '../../ollama/client';
 import type { ChatStrategy, A2AStrategyContext, A2AStrategyResult } from './types';
+import { createLogger } from '../../utils/logger';
+import { getConfig } from '../../config/env';
+import { logA2AModelSelection } from '../../chat/routing-logger';
+
+const logger = createLogger('A2AStrategy');
 
 /**
- * A2A 병렬 생성에 사용할 모델 설정
- * @constant
+ * A2A 모델 조합 타입
+ * resolveA2AModels()가 반환하는 primary/secondary/synthesizer 모델 세트
  */
-const A2A_MODELS = {
+interface A2AModelSelection {
     /** 1차 응답 생성 모델 */
-    primary: 'gpt-oss:120b-cloud',
+    primary: string;
     /** 2차 응답 생성 모델 */
-    secondary: 'gemini-3-flash-preview:cloud',
+    secondary: string;
     /** 두 응답을 종합하는 합성 모델 */
-    synthesizer: 'gemini-3-flash-preview:cloud',
-} as const;
+    synthesizer: string;
+}
+
+/**
+ * QueryType 미지정 또는 매핑 없는 유형에 대한 기본 A2A 모델 조합
+ * env.ts의 OMK_ENGINE_* 설정에서 런타임에 모델명을 resolve합니다.
+ */
+function getDefaultA2AModels(): A2AModelSelection {
+    const config = getConfig();
+    return {
+        primary: config.omkEngineLlm,
+        secondary: config.omkEngineFast,
+        synthesizer: config.omkEngineFast,
+    };
+}
+
+/**
+ * 질문 유형(QueryType)에 따라 최적의 A2A 모델 조합을 선택합니다.
+ *
+ * env.ts의 OMK_ENGINE_* 설정에서 런타임에 모델명을 resolve합니다.
+ *
+ * @param queryType - 사용자 질문 유형 (code/math/creative/analysis/chat/vision 등)
+ * @returns 최적의 A2A 모델 조합 (primary + secondary + synthesizer)
+ */
+function resolveA2AModels(queryType?: string): A2AModelSelection {
+    const config = getConfig();
+
+    switch (queryType) {
+        case 'code':
+            return {
+                primary: config.omkEngineCode,
+                secondary: config.omkEngineLlm,
+                synthesizer: config.omkEngineFast,
+            };
+        case 'math':
+            return {
+                primary: config.omkEngineLlm,
+                secondary: config.omkEnginePro,
+                synthesizer: config.omkEngineFast,
+            };
+        case 'creative':
+            return {
+                primary: config.omkEngineLlm,
+                secondary: config.omkEnginePro,
+                synthesizer: config.omkEngineFast,
+            };
+        case 'analysis':
+            return {
+                primary: config.omkEngineLlm,
+                secondary: config.omkEngineCode,
+                synthesizer: config.omkEngineFast,
+            };
+        case 'chat':
+            return {
+                primary: config.omkEngineFast,
+                secondary: config.omkEngineLlm,
+                synthesizer: config.omkEngineFast,
+            };
+        case 'vision':
+            return {
+                primary: config.omkEngineVision,
+                secondary: config.omkEngineLlm,
+                synthesizer: config.omkEngineFast,
+            };
+        default:
+            return getDefaultA2AModels();
+    }
+}
 
 /** A2A 합성 모델에 전달되는 시스템 프롬프트 */
 const A2A_SYNTHESIS_SYSTEM_PROMPT = [
@@ -70,11 +141,13 @@ export class A2AStrategy implements ChatStrategy<A2AStrategyContext, A2AStrategy
      */
     async execute(context: A2AStrategyContext): Promise<A2AStrategyResult> {
         const startTime = Date.now();
+        const models = resolveA2AModels(context.queryType);
+        logA2AModelSelection(context.queryType || 'default', models.primary, models.secondary, models.synthesizer);
 
-        const clientA = new OllamaClient({ model: A2A_MODELS.primary });
-        const clientB = new OllamaClient({ model: A2A_MODELS.secondary });
+        const clientA = new OllamaClient({ model: models.primary });
+        const clientB = new OllamaClient({ model: models.secondary });
 
-        console.log(`[ChatService] 🔀 A2A 병렬 요청: ${A2A_MODELS.primary} + ${A2A_MODELS.secondary}`);
+        logger.info(`🔀 A2A 병렬 요청 (queryType=${context.queryType ?? 'default'}): ${models.primary} + ${models.secondary}`);
 
         // 두 모델에 동시에 요청 (한쪽이 실패해도 다른 쪽 결과를 활용)
         const [resultA, resultB] = await Promise.allSettled([
@@ -91,22 +164,22 @@ export class A2AStrategy implements ChatStrategy<A2AStrategyContext, A2AStrategy
         const responseB = resultB.status === 'fulfilled' ? resultB.value.content : null;
         const durationParallel = Date.now() - startTime;
 
-        console.log(`[ChatService] 🔀 A2A 병렬 완료 (${durationParallel}ms): ` +
-            `${A2A_MODELS.primary}=${resultA.status}, ${A2A_MODELS.secondary}=${resultB.status}`);
+        logger.info(`🔀 A2A 병렬 완료 (${durationParallel}ms): ` +
+            `${models.primary}=${resultA.status}, ${models.secondary}=${resultB.status}`);
 
         // 양쪽 모두 실패: succeeded=false를 반환하여 AgentLoop 폴백 트리거
         if (!responseA && !responseB) {
-            console.warn('[ChatService] ⚠️ A2A 양쪽 모두 실패');
-            if (resultA.status === 'rejected') console.warn(`  ${A2A_MODELS.primary}: ${resultA.reason}`);
-            if (resultB.status === 'rejected') console.warn(`  ${A2A_MODELS.secondary}: ${resultB.reason}`);
+            logger.warn('⚠️ A2A 양쪽 모두 실패');
+            if (resultA.status === 'rejected') logger.warn(`  ${models.primary}: ${resultA.reason}`);
+            if (resultB.status === 'rejected') logger.warn(`  ${models.secondary}: ${resultB.reason}`);
             return { response: '', succeeded: false };
         }
 
         // 한쪽만 성공: 성공한 모델의 응답을 단독 사용
         if (!responseA || !responseB) {
             const singleResponse = (responseA || responseB) as string;
-            const succeededModel = responseA ? A2A_MODELS.primary : A2A_MODELS.secondary;
-            console.log(`[ChatService] 🔀 A2A 단일 응답 사용: ${succeededModel}`);
+            const succeededModel = responseA ? models.primary : models.secondary;
+            logger.info(`🔀 A2A 단일 응답 사용: ${succeededModel}`);
 
             const header = `> 🤖 *${succeededModel} 단독 응답*\n\n`;
             for (const char of header) {
@@ -123,7 +196,7 @@ export class A2AStrategy implements ChatStrategy<A2AStrategyContext, A2AStrategy
         }
 
         // 양쪽 모두 성공: Synthesizer 모델이 두 응답을 종합하여 최종 답변 생성
-        console.log(`[ChatService] 🔀 A2A 종합 합성 시작 (synthesizer: ${A2A_MODELS.synthesizer})`);
+        logger.info(`🔀 A2A 종합 합성 시작 (synthesizer: ${models.synthesizer})`);
 
         // 원본 사용자 질문을 메시지 이력에서 역순 탐색하여 추출
         const userMessage = [...context.messages].reverse().find((m) => m.role === 'user')?.content || '';
@@ -132,19 +205,19 @@ export class A2AStrategy implements ChatStrategy<A2AStrategyContext, A2AStrategy
             '## 원본 질문',
             userMessage,
             '',
-            `## Response A (${A2A_MODELS.primary})`,
+            `## Response A (${models.primary})`,
             responseA,
             '',
-            `## Response B (${A2A_MODELS.secondary})`,
+            `## Response B (${models.secondary})`,
             responseB,
             '',
             '위 두 응답을 종합하여 최고 품질의 최종 답변을 작성해주세요.',
         ].join('\n');
 
-        const synthesizerClient = new OllamaClient({ model: A2A_MODELS.synthesizer });
+        const synthesizerClient = new OllamaClient({ model: models.synthesizer });
         let fullSynthesis = '';
 
-        const header = `> 🔀 *${A2A_MODELS.primary} + ${A2A_MODELS.secondary} A2A 종합 답변*\n\n`;
+        const header = `> 🔀 *${models.primary} + ${models.secondary} A2A 종합 답변*\n\n`;
         for (const char of header) {
             context.onToken(char);
         }
@@ -162,7 +235,7 @@ export class A2AStrategy implements ChatStrategy<A2AStrategyContext, A2AStrategy
         );
 
         const totalDuration = Date.now() - startTime;
-        console.log(`[ChatService] ✅ A2A 종합 완료: 병렬=${durationParallel}ms, 합성=${totalDuration - durationParallel}ms, 총=${totalDuration}ms`);
+        logger.info(`✅ A2A 종합 완료: 병렬=${durationParallel}ms, 합성=${totalDuration - durationParallel}ms, 총=${totalDuration}ms`);
 
         return {
             response: header + fullSynthesis,

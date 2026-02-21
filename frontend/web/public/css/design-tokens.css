@@ -1,99 +1,112 @@
 /**
  * ============================================
- * Ollama LLM Dashboard - Design Tokens
- * 통합 디자인 시스템 v2.0
+ * OpenMake.Ai - Design Tokens
+ * Neo Brutalism 2.0 디자인 시스템
  * ============================================
  * 
- * 이 파일은 모든 페이지에서 공유되는 디자인 토큰을 정의합니다.
- * 색상, 타이포그래피, 간격, 그림자, 애니메이션 등을 통일합니다.
+ * Hard shadows, solid borders, vibrant accents.
+ * No gradients, no blur, no glass effects.
+ * Dark: deep navy (#1a1a2e) + purple accent (#c061ff)
+ * Light: warm paper (#fdfbf7) + deep purple accent (#7c3aed)
  */
 
 /* ==========================================
    기본 폰트
    ========================================== */
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 
 /* ==========================================
    CSS 변수 - 다크 테마 (기본)
    ========================================== */
 :root {
-    /* ------- Primary Accent ------- */
-    --accent-primary: #667eea;
-    /* Aura 스타일 퍼플-블루 */
-    --accent-primary-hover: #5a6fd6;
-    --accent-primary-light: rgba(102, 126, 234, 0.15);
-    --accent-primary-glow: rgba(102, 126, 234, 0.3);
+    /* ------- Primary Accent (Vibrant Purple) ------- */
+    --accent-primary: #c061ff;
+    --accent-primary-hover: #a855f7;
+    --accent-primary-light: rgba(192, 97, 255, 0.15);
+    --accent-primary-glow: rgba(192, 97, 255, 0.25);
 
-    /* ------- Secondary Accents ------- */
-    --accent-blue: #3b82f6;
-    --accent-blue-light: rgba(59, 130, 246, 0.15);
-    --accent-purple: #764ba2;
-    --accent-purple-light: rgba(118, 75, 162, 0.15);
-    --accent-cyan: #06b6d4;
-    --accent-pink: #f5576c;
-    --accent-orange: #f59e0b;
+    /* ------- Secondary Accents (High Saturation) ------- */
+    --accent-blue: #4cc9f0;
+    --accent-blue-light: rgba(76, 201, 240, 0.15);
+    --accent-purple: #bd52eb;
+    --accent-purple-light: rgba(189, 82, 235, 0.15);
+    --accent-cyan: #06d6a0;
+    --accent-pink: #ff6b6b;
+    --accent-orange: #ff9f1c;
 
-    /* ------- Aura-inspired Gradient Palette ------- */
-    --gradient-primary: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    --gradient-accent: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-    --gradient-subtle: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
-    --gradient-glow: radial-gradient(circle at 50% 50%, rgba(102, 126, 234, 0.15) 0%, transparent 70%);
-    --gradient-hero: radial-gradient(ellipse 80% 50% at 50% -20%, rgba(102, 126, 234, 0.15), transparent);
+    /* ------- Solid Fills (No gradients in brutalism) ------- */
+    --gradient-primary: #c061ff;
+    --gradient-accent: #ff6b6b;
+    --gradient-subtle: rgba(192, 97, 255, 0.08);
+    --gradient-glow: none;
+    --gradient-hero: none;
 
-    /* ------- Glassmorphism Effects ------- */
-    --glass-bg: rgba(255, 255, 255, 0.03);
-    --glass-bg-hover: rgba(255, 255, 255, 0.06);
-    --glass-border: rgba(255, 255, 255, 0.08);
-    --glass-blur: blur(20px);
+    /* ------- Brutal Surface (replaces glassmorphism) ------- */
+    --glass-bg: var(--bg-secondary);
+    --glass-bg-hover: var(--bg-tertiary);
+    --glass-border: var(--border-medium);
+    --glass-blur: none;
 
-    /* ------- Glow Effects ------- */
-    --glow-primary: 0 0 40px rgba(102, 126, 234, 0.3);
-    --glow-accent: 0 0 30px rgba(245, 87, 108, 0.25);
-    --glow-input-focus: 0 0 0 4px rgba(102, 126, 234, 0.15), 0 0 30px rgba(102, 126, 234, 0.1);
+    /* ------- Hard Shadows (replaces glow effects) ------- */
+    --glow-primary: 4px 4px 0 rgba(192, 97, 255, 0.4);
+    --glow-accent: 4px 4px 0 rgba(255, 107, 107, 0.4);
+    --glow-input-focus: 0 0 0 3px rgba(192, 97, 255, 0.2);
 
-    /* ------- Semantic Colors ------- */
-    --success: #22c55e;
-    --success-light: rgba(34, 197, 94, 0.15);
-    --warning: #f59e0b;
-    --warning-light: rgba(245, 158, 11, 0.15);
-    --danger: #ef4444;
-    --danger-light: rgba(239, 68, 68, 0.15);
-    --info: #3b82f6;
-    --info-light: rgba(59, 130, 246, 0.15);
+    /* ------- Semantic Colors (Bright, Brutalist) ------- */
+    --success: #a3e635;
+    --success-light: rgba(163, 230, 53, 0.15);
+    --warning: #facc15;
+    --warning-light: rgba(250, 204, 21, 0.15);
+    --danger: #f87171;
+    --danger-light: rgba(248, 113, 113, 0.15);
+    --info: #4cc9f0;
+    --info-light: rgba(76, 201, 240, 0.15);
 
-    /* ------- Background Colors (Dark Theme) ------- */
-    --bg-app: #0d0d0e;
-    --bg-main: #0d0d0e;
-    --bg-sidebar: #131316;
-    --bg-secondary: #1a1a24;
-    --bg-card: #1a1a24;
-    --bg-tertiary: #27272a;
-    --bg-hover: rgba(255, 255, 255, 0.06);
-    --bg-active: rgba(255, 255, 255, 0.1);
-    --bg-overlay: rgba(0, 0, 0, 0.8);
+    /* ------- Background Colors (Dark Theme — Deep Saturated Navy) ------- */
+    --bg-app: #1a1a2e;
+    --bg-main: #1a1a2e;
+    --bg-sidebar: #12122a;
+    --bg-secondary: #252547;
+    --bg-card: #252547;
+    --bg-tertiary: #2f2f5a;
+    --bg-hover: rgba(255, 255, 255, 0.08);
+    --bg-active: rgba(192, 97, 255, 0.15);
+    --bg-overlay: rgba(10, 10, 20, 0.9);
 
     /* ------- Text Colors ------- */
     --text-primary: #f0f0f2;
-    --text-secondary: #a1a1aa;
-    --text-muted: #71717a;
-    --text-inverse: #1a1a1c;
+    --text-secondary: #b0b0c0;
+    --text-muted: #7878a0;
+    --text-inverse: #1a1a2e;
 
-    /* ------- Border Colors ------- */
-    --border-light: rgba(255, 255, 255, 0.08);
-    --border-medium: rgba(255, 255, 255, 0.15);
-    --border-strong: rgba(255, 255, 255, 0.25);
+    /* ------- Border Colors (Solid, Visible) ------- */
+    --border-light: #3d3d6b;
+    --border-medium: #4d4d7a;
+    --border-strong: #6060a0;
     --border-accent: var(--accent-primary);
 
-    /* ------- Shadow ------- */
-    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
-    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
-    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.6);
-    --shadow-xl: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
-    --shadow-glow: 0 0 20px var(--accent-primary-glow);
+    /* ------- Neo Brutalism Border System ------- */
+    --border-width: 2px;
+    --border-width-thick: 3px;
+    --border-color: #000000;
+
+    /* ------- Shadow (Hard Offset — No Blur) ------- */
+    --shadow-sm: 2px 2px 0 #000;
+    --shadow-md: 4px 4px 0 #000;
+    --shadow-lg: 6px 6px 0 #000;
+    --shadow-xl: 8px 8px 0 #000;
+    --shadow-glow: 4px 4px 0 #000;
+
+    /* ------- Neo Brutalism Shadow System ------- */
+    --shadow-brutal-sm: 2px 2px 0 #000;
+    --shadow-brutal: 4px 4px 0 #000;
+    --shadow-brutal-lg: 6px 6px 0 #000;
+    --shadow-brutal-hover: 6px 6px 0 #000;
+    --shadow-brutal-active: 1px 1px 0 #000;
 
     /* ------- Typography ------- */
-    --font-sans: 'Pretendard', 'Outfit', system-ui, -apple-system, sans-serif;
-    --font-mono: 'Menlo', 'Monaco', 'Cascadia Code', 'Fira Code', monospace;
+    --font-sans: 'Space Grotesk', 'Pretendard', system-ui, -apple-system, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji';
+    --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
 
     --font-size-xs: 0.75rem;
     /* 12px */
@@ -145,23 +158,23 @@
     --space-16: 4rem;
     /* 64px */
 
-    /* ------- Border Radius ------- */
+    /* ------- Border Radius (Minimal — Brutalist) ------- */
     --radius-none: 0;
-    --radius-sm: 6px;
-    --radius-md: 10px;
-    --radius-lg: 14px;
-    --radius-xl: 20px;
-    --radius-2xl: 28px;
+    --radius-sm: 4px;
+    --radius-md: 6px;
+    --radius-lg: 8px;
+    --radius-xl: 8px;
+    --radius-2xl: 10px;
     --radius-full: 9999px;
 
     /* ------- Sidebar ------- */
     --sidebar-width: 260px;
     --sidebar-collapsed-width: 0;
 
-    /* ------- Transitions ------- */
-    --transition-fast: 150ms ease;
-    --transition-normal: 200ms ease;
-    --transition-slow: 300ms ease;
+    /* ------- Transitions (Snappy) ------- */
+    --transition-fast: 100ms ease;
+    --transition-normal: 150ms ease;
+    --transition-slow: 200ms ease;
     --transition-bounce: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -170,51 +183,60 @@
    ========================================== */
 [data-theme="light"],
 .theme-light {
-    /* ------- Accent Colors (Blue Theme) ------- */
-    --accent-primary: #4A90D9;
-    --accent-primary-hover: #3A7BC8;
-    --accent-primary-light: rgba(74, 144, 217, 0.15);
-    --accent-primary-glow: rgba(74, 144, 217, 0.3);
+    /* ===== NEO BRUTALISM 2.0 — LIGHT THEME ===== */
 
-    /* ------- Gradient ------- */
-    --gradient-primary: linear-gradient(135deg, #4A90D9 0%, #5BA3EC 100%);
+    /* ------- Accent Colors (Deep Purple) ------- */
+    --accent-primary: #7c3aed;
+    --accent-primary-hover: #6d28d9;
+    --accent-primary-light: rgba(124, 58, 237, 0.12);
+    --accent-primary-glow: rgba(124, 58, 237, 0.25);
 
-    /* ------- Background Colors (Cream/Beige) ------- */
-    --bg-app: #F5F0E8;
-    --bg-main: #F5F0E8;
-    --bg-sidebar: #FBF8F3;
-    --bg-secondary: #EDE8DE;
-    --bg-card: #FFFFFF;
-    --bg-tertiary: #E8E3D9;
+    /* ------- Solid Fill ------- */
+    --gradient-primary: #7c3aed;
+
+    /* ------- Background Colors (Warm Paper) ------- */
+    --bg-app: #fdfbf7;
+    --bg-main: #fdfbf7;
+    --bg-sidebar: #f5f0e8;
+    --bg-secondary: #f0ebe0;
+    --bg-card: #ffffff;
+    --bg-tertiary: #e8e3d9;
     --bg-hover: rgba(0, 0, 0, 0.04);
-    --bg-active: rgba(74, 144, 217, 0.12);
-    --bg-overlay: rgba(245, 240, 232, 0.95);
+    --bg-active: rgba(124, 58, 237, 0.1);
+    --bg-overlay: rgba(253, 251, 247, 0.95);
 
     /* ------- Text Colors ------- */
-    --text-primary: #2D2D2D;
-    --text-secondary: #5A5A5A;
-    --text-muted: #8A8A8A;
-    --text-inverse: #F5F0E8;
+    --text-primary: #1a1a2e;
+    --text-secondary: #4a4a6a;
+    --text-muted: #7878a0;
+    --text-inverse: #fdfbf7;
 
-    /* ------- Border Colors ------- */
-    --border-light: rgba(0, 0, 0, 0.06);
-    --border-medium: rgba(0, 0, 0, 0.12);
-    --border-strong: rgba(0, 0, 0, 0.2);
+    /* ------- Border Colors (Solid, Visible) ------- */
+    --border-light: #c8c8c8;
+    --border-medium: #1a1a2e;
+    --border-strong: #000000;
+    --border-color: #000000;
 
-    /* ------- Glass Effects (Light) ------- */
-    --glass-bg: rgba(255, 255, 255, 0.7);
-    --glass-bg-hover: rgba(255, 255, 255, 0.85);
-    --glass-border: rgba(0, 0, 0, 0.08);
+    /* ------- Brutal Surface (Solid) ------- */
+    --glass-bg: #ffffff;
+    --glass-bg-hover: #f5f0e8;
+    --glass-border: #1a1a2e;
 
-    /* ------- Shadow ------- */
-    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
-    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1);
-    --shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.12);
-    --shadow-xl: 0 25px 50px rgba(0, 0, 0, 0.15);
+    /* ------- Shadow (Hard Offset — Dark Navy) ------- */
+    --shadow-sm: 2px 2px 0 #1a1a2e;
+    --shadow-md: 4px 4px 0 #1a1a2e;
+    --shadow-lg: 6px 6px 0 #1a1a2e;
+    --shadow-xl: 8px 8px 0 #1a1a2e;
+    --shadow-glow: 4px 4px 0 #1a1a2e;
+    --shadow-brutal: 4px 4px 0 #1a1a2e;
+    --shadow-brutal-sm: 2px 2px 0 #1a1a2e;
+    --shadow-brutal-lg: 6px 6px 0 #1a1a2e;
+    --shadow-brutal-hover: 6px 6px 0 #1a1a2e;
+    --shadow-brutal-active: 1px 1px 0 #1a1a2e;
 
-    /* ------- Glow Effects ------- */
-    --glow-primary: 0 0 20px rgba(74, 144, 217, 0.25);
-    --glow-input-focus: 0 0 0 3px rgba(74, 144, 217, 0.15);
+    /* ------- Hard Shadows (replaces glows) ------- */
+    --glow-primary: 4px 4px 0 rgba(124, 58, 237, 0.4);
+    --glow-input-focus: 0 0 0 3px rgba(124, 58, 237, 0.15);
 }
 
 /* ==========================================
@@ -251,6 +273,8 @@ body {
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     min-height: 100%;
+    word-break: keep-all; /* CJK(한글) 단어 단위 줄바꿈 */
+    overflow-wrap: break-word; /* 긴 영문/URL 줄바꿈 보장 */
 }
 
 /* ==========================================
@@ -587,45 +611,26 @@ body {
 }
 
 /* ==========================================
-   iOS Safari 모바일 성능 최적화
-   backdrop-filter: blur()는 모바일 Safari에서
-   GPU 리페인트 폭풍을 유발하여 화면 떨림 발생
+   모바일 최적화
+   Neo Brutalism에서는 backdrop-filter 미사용
+   모바일에서 solid 배경으로 일관성 유지
    ========================================== */
 @media (max-width: 768px) {
-    /* 모바일에서 backdrop-filter 비활성화 → 불투명 배경으로 대체 */
     .sidebar,
     .glass-card,
     .glass-panel,
-    .modal-glass .modal-content,
-    .chat-input-container,
-    .mobile-overlay,
     .unified-sidebar.us-hover-expanded {
-        -webkit-backdrop-filter: none !important;
-        backdrop-filter: none !important;
-    }
-
-    /* backdrop-filter 제거 후 불투명도를 높여 시각적 일관성 유지 */
-    .sidebar {
-        background: rgba(13, 13, 14, 0.98) !important;
+        background: var(--bg-sidebar) !important;
     }
 
     .glass-card {
         background: var(--bg-card) !important;
     }
 
-    .glass-panel {
-        background: rgba(13, 13, 14, 0.98) !important;
-    }
-
     .chat-input-container {
         background: var(--bg-secondary) !important;
     }
 
-    .unified-sidebar.us-hover-expanded {
-        background: rgba(13, 13, 14, 0.98) !important;
-    }
-
-    /* main-content::before 배경 글로우도 모바일에서 간소화 */
     .main-content::before {
         background: none !important;
     }

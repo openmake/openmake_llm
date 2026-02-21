@@ -24,6 +24,9 @@ import { ExternalMCPClient } from './external-client';
 import { ToolRouter } from './tool-router';
 import type { MCPServerConfig, MCPConnectionStatus } from './types';
 import type { UnifiedDatabase, MCPServerRow } from '../data/models/unified-database';
+import { createLogger } from '../utils/logger';
+
+const logger = createLogger('MCPRegistry');
 
 /**
  * DB 행(MCPServerRow) → MCPServerConfig 변환
@@ -84,7 +87,7 @@ export class MCPServerRegistry {
             const servers = await db.getMcpServers();
             const enabledServers = servers.filter(s => s.enabled);
 
-            console.log(`[MCPRegistry] Found ${enabledServers.length} enabled MCP servers in DB`);
+            logger.info(`Found ${enabledServers.length} enabled MCP servers in DB`);
 
             for (const server of enabledServers) {
                 const config = rowToConfig(server);
@@ -92,12 +95,12 @@ export class MCPServerRegistry {
                     await this.connectServer(config.id, config);
                 } catch (error) {
                     const msg = error instanceof Error ? error.message : String(error);
-                    console.error(`[MCPRegistry] Failed to connect "${config.name}" during init:`, msg);
+                    logger.error(`Failed to connect "${config.name}" during init:`, msg);
                     // 초기화 실패는 전체를 중단하지 않음
                 }
             }
         } catch (error) {
-            console.error('[MCPRegistry] Failed to initialize from DB:', error);
+            logger.error('Failed to initialize from DB:', error);
         }
     }
 
@@ -206,7 +209,7 @@ export class MCPServerRegistry {
      */
     async disconnectAll(): Promise<void> {
         const serverIds = [...this.connections.keys()];
-        console.log(`[MCPRegistry] Disconnecting all ${serverIds.length} external servers...`);
+        logger.info(`Disconnecting all ${serverIds.length} external servers...`);
 
         const results = await Promise.allSettled(
             serverIds.map(id => this.disconnectServer(id))
@@ -214,10 +217,10 @@ export class MCPServerRegistry {
 
         const failures = results.filter(r => r.status === 'rejected');
         if (failures.length > 0) {
-            console.warn(`[MCPRegistry] ${failures.length} server(s) failed to disconnect cleanly`);
+            logger.warn(`${failures.length} server(s) failed to disconnect cleanly`);
         }
 
-        console.log('[MCPRegistry] All external servers disconnected');
+        logger.info('All external servers disconnected');
     }
 
     /**

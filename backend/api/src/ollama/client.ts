@@ -40,9 +40,13 @@ import {
     WebSearchRequest,
     WebSearchResponse,
     WebFetchRequest,
-    WebFetchResponse
+    WebFetchResponse,
+    ShowModelRequest,
+    ShowModelResponse,
+    PsResponse
 } from './types';
 import { getConfig } from '../config';
+import { OLLAMA_CLOUD_HOST } from '../config/constants';
 import { createLogger } from '../utils/logger';
 import { getApiKeyManager, ApiKeyManager } from './api-key-manager';
 import { getApiUsageTracker } from './api-usage-tracker';
@@ -89,9 +93,7 @@ export class OllamaClient {
     /** API Key 관리자 인스턴스 (키 로테이션 담당) */
     private apiKeyManager: ApiKeyManager;
 
-    // 🆕 Ollama Cloud 호스트 상수
-    /** Ollama Cloud API 호스트 URL */
-    private static readonly OLLAMA_CLOUD_HOST = 'https://ollama.com';
+    // 🆕 Ollama Cloud 호스트 상수 (constants.ts에서 중앙 관리)
 
     /**
      * OllamaClient 인스턴스를 생성합니다.
@@ -114,8 +116,8 @@ export class OllamaClient {
         // 🆕 모델이 :cloud 접미사를 가지면 Ollama Cloud 호스트 사용
         let baseUrl = this.config.baseUrl;
         if (this.isCloudModel(this.config.model)) {
-            baseUrl = OllamaClient.OLLAMA_CLOUD_HOST;
-            console.log(`[OllamaClient] 🌐 Cloud 모델 감지 - 호스트: ${baseUrl}`);
+            baseUrl = OLLAMA_CLOUD_HOST;
+            logger.info(`🌐 Cloud 모델 감지 - 호스트: ${baseUrl}`);
         }
 
         this.client = axios.create({
@@ -144,7 +146,7 @@ export class OllamaClient {
             },
             async (error) => {
                 const statusCode = error?.response?.status;
-                console.log(`[OllamaClient] ❌ 요청 실패 - 상태 코드: ${statusCode}`);
+                logger.info(`❌ 요청 실패 - 상태 코드: ${statusCode}`);
 
                 // 네트워크 에러 (ETIMEDOUT, ECONNREFUSED 등) 시 재시도
                 const isNetworkError = !statusCode && (
@@ -155,23 +157,24 @@ export class OllamaClient {
                     error.code === 'EAI_AGAIN'
                 );
 
-                // 429, 401, 403 에러 시 API 키 스와핑 시도
-                if (statusCode === 429 || statusCode === 401 || statusCode === 403) {
+                // 429, 401, 403, 502 에러 시 API 키 스와핑 시도
+                // 502: Cloud 모델 게이트웨이 장애 (Ollama 공식 문서)
+                if (statusCode === 429 || statusCode === 401 || statusCode === 403 || statusCode === 502) {
                     // 재시도 횟수 추적 (키 개수만큼 시도)
                     const retryCount = error.config?._retryCount || 0;
                     const maxRetries = this.apiKeyManager.getTotalKeys() - 1;
 
-                    console.log(`[OllamaClient] 🔄 API 키 스와핑 시도 중... (${retryCount + 1}/${maxRetries + 1})`);
+                    logger.info(`🔄 API 키 스와핑 시도 중... (${retryCount + 1}/${maxRetries + 1})`);
                     const switched = this.apiKeyManager.reportFailure(error);
 
                     if (switched && error.config && retryCount < maxRetries) {
                         error.config._retryCount = retryCount + 1;
                         const newAuthHeaders = this.apiKeyManager.getAuthHeaders();
                         error.config.headers.Authorization = newAuthHeaders.Authorization;
-                        console.log(`[OllamaClient] ✅ 새 API 키로 재시도 (Key ${this.apiKeyManager.getCurrentKeyIndex() + 1})...`);
+                        logger.info(`✅ 새 API 키로 재시도 (Key ${this.apiKeyManager.getCurrentKeyIndex() + 1})...`);
                         return this.client.request(error.config);
                     } else {
-                        console.log(`[OllamaClient] ⚠️ 모든 키 소진 - switched: ${switched}, retryCount: ${retryCount}/${maxRetries}`);
+                        logger.info(`⚠️ 모든 키 소진 - switched: ${switched}, retryCount: ${retryCount}/${maxRetries}`);
                         
                         // 🆕 모든 키가 소진되었을 때 KeyExhaustionError throw
                         const nextResetTime = this.apiKeyManager.getNextResetTime();
@@ -188,12 +191,16 @@ export class OllamaClient {
                     if (retryCount < maxNetworkRetries) {
                         error.config._retryCount = retryCount + 1;
                         const backoffMs = Math.pow(2, retryCount) * 1000; // 1s, 2s
-                        console.log(`[OllamaClient] 🔄 네트워크 에러(${error.code}) - ${backoffMs}ms 후 재시도 (${retryCount + 1}/${maxNetworkRetries})`);
+                        logger.info(`🔄 네트워크 에러(${error.code}) - ${backoffMs}ms 후 재시도 (${retryCount + 1}/${maxNetworkRetries})`);
                         await new Promise(resolve => setTimeout(resolve, backoffMs));
                         return this.client.request(error.config);
                     }
-                    console.log(`[OllamaClient] ⚠️ 네트워크 재시도 소진 (${error.code})`);
-                    this.apiKeyManager.reportFailure(error);
+                    logger.info(`⚠️ 네트워크 재시도 소진 (${error.code})`);
+                    // ENOTFOUND/EAI_AGAIN은 호스트(DNS) 레벨 장애 — 키 로테이션 무의미
+                    // 키별 장애(ETIMEDOUT, ECONNREFUSED 등)만 키 교체 트리거
+                    if (error.code !== 'ENOTFOUND' && error.code !== 'EAI_AGAIN') {
+                        this.apiKeyManager.reportFailure(error);
+                    }
                 } else {
                     this.apiKeyManager.reportFailure(error);
                 }
@@ -223,12 +230,26 @@ export class OllamaClient {
     }
 
     /**
-     * 클라이언트의 기본 모델을 변경합니다.
+     * 클라이언트의 기본 모델을 변경하고, Cloud 모델 전환 시 baseURL을 자동 갱신합니다.
+     *
+     * Auto-routing 등에서 런타임에 모델이 변경될 때,
+     * Cloud 모델이면 OLLAMA_CLOUD_HOST로, 로컬 모델이면 원래 노드 URL로 전환합니다.
      *
      * @param model - 새로 설정할 모델 이름
      */
     setModel(model: string): void {
+        const wasCloud = this.isCloudModel(this.config.model);
+        const isCloud = this.isCloudModel(model);
         this.config.model = model;
+
+        // Cloud ↔ Local 전환 시 baseURL 갱신
+        if (isCloud && !wasCloud) {
+            this.client.defaults.baseURL = OLLAMA_CLOUD_HOST;
+            logger.info(`[setModel] 🌐 Cloud 모델 전환 → ${OLLAMA_CLOUD_HOST} (model: ${model})`);
+        } else if (!isCloud && wasCloud) {
+            this.client.defaults.baseURL = this.config.baseUrl;
+            logger.info(`[setModel] 🏠 Local 모델 전환 → ${this.config.baseUrl} (model: ${model})`);
+        }
     }
 
     /**
@@ -242,6 +263,32 @@ export class OllamaClient {
         return response.data;
     }
 
+    /**
+     * 모델 상세 정보를 조회합니다 (Ollama POST /api/show).
+     *
+     * 모델의 라이선스, Modelfile, 파라미터, 템플릿, capabilities 등을 반환합니다.
+     *
+     * @param model - 조회할 모델 이름
+     * @param verbose - 상세 모델 정보 포함 여부
+     * @returns 모델 상세 정보
+     */
+    async showModel(model: string, verbose?: boolean): Promise<ShowModelResponse> {
+        const request: ShowModelRequest = { model, ...(verbose && { verbose }) };
+        const response = await this.client.post<ShowModelResponse>('/api/show', request);
+        return response.data;
+    }
+
+    /**
+     * 현재 실행 중인 모델 목록을 조회합니다 (Ollama GET /api/ps).
+     *
+     * 각 모델의 VRAM 사용량, 컨텍스트 길이, 만료 시간 등을 반환합니다.
+     *
+     * @returns 실행 중인 모델 목록
+     */
+    async listRunningModels(): Promise<PsResponse> {
+        const response = await this.client.get<PsResponse>('/api/ps');
+        return response.data;
+    }
 
     /**
      * Check API quota before making a request.
@@ -287,7 +334,13 @@ export class OllamaClient {
         prompt: string,
         options?: ModelOptions,
         onToken?: (token: string) => void,
-        images?: string[]
+        images?: string[],
+        advancedOptions?: {
+            think?: ThinkOption;
+            format?: FormatOption;
+            system?: string;
+            keep_alive?: string | number;
+        }
     ): Promise<{ response: string; metrics?: UsageMetrics }> {
         this.checkQuota();
 
@@ -297,7 +350,11 @@ export class OllamaClient {
             context: this.context,
             stream: !!onToken,
             options,
-            images
+            images,
+            ...(advancedOptions?.think !== undefined && { think: advancedOptions.think }),
+            ...(advancedOptions?.format && { format: advancedOptions.format }),
+            ...(advancedOptions?.system && { system: advancedOptions.system }),
+            ...(advancedOptions?.keep_alive !== undefined && { keep_alive: advancedOptions.keep_alive })
         };
 
         if (onToken) {
@@ -353,10 +410,21 @@ export class OllamaClient {
                 for (const line of lines) {
                     if (line.trim()) {
                         try {
-                            const data: GenerateResponse = JSON.parse(line);
+                            const parsed = JSON.parse(line) as GenerateResponse & { error?: string };
+                            // 스트리밍 중 에러 응답 체크 (Ollama 공식 문서)
+                            if (parsed.error) {
+                                reject(new Error(`Ollama generate stream error: ${parsed.error}`));
+                                return;
+                            }
+                            const data = parsed;
                             if (data.response) {
                                 fullResponse += data.response;
                                 onToken(data.response);
+                            }
+                            // Thinking 필드 처리 (think=true 시)
+                            if (data.thinking) {
+                                fullResponse += data.thinking;
+                                onToken(data.thinking);
                             }
                             if (data.done) {
                                 if (data.context) {
@@ -372,7 +440,7 @@ export class OllamaClient {
                                 };
                             }
                         } catch (e) {
-                            console.error('[OllamaClient] JSON Parse Error:', e);
+                            logger.error('JSON Parse Error:', e);
                         }
                     }
                 }
@@ -381,10 +449,19 @@ export class OllamaClient {
             response.data.on('end', () => {
                 if (buffer.trim()) {
                     try {
-                        const data: GenerateResponse = JSON.parse(buffer);
+                        const parsed = JSON.parse(buffer) as GenerateResponse & { error?: string };
+                        if (parsed.error) {
+                            reject(new Error(`Ollama generate stream error: ${parsed.error}`));
+                            return;
+                        }
+                        const data = parsed;
                         if (data.response) {
                             fullResponse += data.response;
                             onToken(data.response);
+                        }
+                        if (data.thinking) {
+                            fullResponse += data.thinking;
+                            onToken(data.thinking);
                         }
                         if (data.done) {
                             metrics = {
@@ -396,7 +473,7 @@ export class OllamaClient {
                                 eval_duration: data.eval_duration
                             };
                         }
-                    } catch (e) { /* ignore */ }
+                    } catch (e) { /* ignore trailing buffer parse errors */ }
                 }
                 resolve({ response: fullResponse, metrics });
             });
@@ -425,6 +502,7 @@ export class OllamaClient {
             think?: ThinkOption;
             format?: FormatOption;
             tools?: ToolDefinition[];
+            keep_alive?: string | number;
         }
     ): Promise<ChatMessage & { metrics?: UsageMetrics }> {
         this.checkQuota();
@@ -436,7 +514,8 @@ export class OllamaClient {
             options,
             ...(advancedOptions?.think !== undefined && { think: advancedOptions.think }),
             ...(advancedOptions?.format && { format: advancedOptions.format }),
-            ...(advancedOptions?.tools && { tools: advancedOptions.tools })
+            ...(advancedOptions?.tools && { tools: advancedOptions.tools }),
+            ...(advancedOptions?.keep_alive !== undefined && { keep_alive: advancedOptions.keep_alive })
         };
 
         if (onToken) {
@@ -496,7 +575,13 @@ export class OllamaClient {
                 for (const line of lines) {
                     if (line.trim()) {
                         try {
-                            const data: ChatResponse = JSON.parse(line);
+                            const parsed = JSON.parse(line) as ChatResponse & { error?: string };
+                            // 스트리밍 중 에러 응답 체크 (Ollama 공식 문서)
+                            if (parsed.error) {
+                                reject(new Error(`Ollama chat stream error: ${parsed.error}`));
+                                return;
+                            }
+                            const data = parsed;
 
                             // Handle thinking trace
                             if (data.message?.thinking) {
@@ -510,9 +595,9 @@ export class OllamaClient {
                                 onToken(data.message.content);
                             }
 
-                            // Handle tool calls
+                            // Handle tool calls (스트리밍 시 누적 — Ollama 공식 스펙)
                             if (data.message?.tool_calls) {
-                                toolCalls = data.message.tool_calls;
+                                toolCalls = [...toolCalls, ...data.message.tool_calls];
                             }
 
                             if (data.done) {
@@ -526,7 +611,7 @@ export class OllamaClient {
                                 };
                             }
                         } catch (e) {
-                            console.error('[OllamaClient] Chat JSON Parse Error:', e);
+                            logger.error('Chat JSON Parse Error:', e);
                         }
                     }
                 }
@@ -535,13 +620,18 @@ export class OllamaClient {
             response.data.on('end', () => {
                 if (buffer.trim()) {
                     try {
-                        const data: ChatResponse = JSON.parse(buffer);
+                        const parsed = JSON.parse(buffer) as ChatResponse & { error?: string };
+                        if (parsed.error) {
+                            reject(new Error(`Ollama chat stream error: ${parsed.error}`));
+                            return;
+                        }
+                        const data = parsed;
                         if (data.message?.thinking) fullThinking += data.message.thinking;
                         if (data.message?.content) {
                             fullContent += data.message.content;
                             onToken(data.message.content);
                         }
-                        if (data.message?.tool_calls) toolCalls = data.message.tool_calls;
+                        if (data.message?.tool_calls) toolCalls = [...toolCalls, ...data.message.tool_calls];
                         if (data.done) {
                             metrics = {
                                 total_duration: data.total_duration,
@@ -586,10 +676,21 @@ export class OllamaClient {
      * @returns 임베딩 벡터 배열 (입력 개수 x 차원)
      * @throws {Error} 임베딩 모델 사용 불가 시
      */
-    async embed(input: string | string[], model?: string): Promise<number[][]> {
+    async embed(
+        input: string | string[],
+        model?: string,
+        embedOptions?: {
+            truncate?: boolean;
+            keep_alive?: string | number;
+            options?: ModelOptions;
+        }
+    ): Promise<number[][]> {
         const request: EmbedRequest = {
             model: model || 'embeddinggemma',
-            input
+            input,
+            ...(embedOptions?.truncate !== undefined && { truncate: embedOptions.truncate }),
+            ...(embedOptions?.keep_alive !== undefined && { keep_alive: embedOptions.keep_alive }),
+            ...(embedOptions?.options && { options: embedOptions.options })
         };
 
         const response = await this.client.post<EmbedResponse>('/api/embed', request);
@@ -636,12 +737,12 @@ export class OllamaClient {
             max_results: Math.min(maxResults, 10)
         };
 
-        console.log(`[OllamaClient] 🔍 Web Search: "${query}"`);
+        logger.info(`🔍 Web Search: "${query}"`);
 
         try {
             // Ollama 공식 API 엔드포인트
             const response = await this.client.post<WebSearchResponse>(
-                'https://ollama.com/api/web_search',
+                `${OLLAMA_CLOUD_HOST}/api/web_search`,
                 request,
                 {
                     baseURL: '', // Override baseURL to use absolute URL
@@ -652,10 +753,10 @@ export class OllamaClient {
                 }
             );
 
-            console.log(`[OllamaClient] ✅ Web Search: ${response.data.results?.length || 0}개 결과`);
+            logger.info(`✅ Web Search: ${response.data.results?.length || 0}개 결과`);
             return response.data;
         } catch (error: unknown) {
-            logger.warn('[OllamaClient] 웹 검색 실패:', error);
+            logger.warn('웹 검색 실패:', error);
             return {
                 results: [],
                 error: error instanceof Error ? error.message : 'Web search failed'
@@ -670,11 +771,11 @@ export class OllamaClient {
     async webFetch(url: string): Promise<WebFetchResponse> {
         const request: WebFetchRequest = { url };
 
-        console.log(`[OllamaClient] 📥 Web Fetch: ${url}`);
+        logger.info(`📥 Web Fetch: ${url}`);
 
         try {
             const response = await this.client.post<WebFetchResponse>(
-                'https://ollama.com/api/web_fetch',
+                `${OLLAMA_CLOUD_HOST}/api/web_fetch`,
                 request,
                 {
                     baseURL: '',
@@ -685,10 +786,10 @@ export class OllamaClient {
                 }
             );
 
-            console.log(`[OllamaClient] ✅ Web Fetch: "${response.data.title}"`);
+            logger.info(`✅ Web Fetch: "${response.data.title}"`);
             return response.data;
         } catch (error: unknown) {
-            console.error('[OllamaClient] Web Fetch 실패:', (error instanceof Error ? error.message : String(error)));
+            logger.error('Web Fetch 실패:', (error instanceof Error ? error.message : String(error)));
             return { title: '', content: '', links: [] };
         }
     }
@@ -759,11 +860,11 @@ export const createClientForIndex = (index: number): OllamaClient | null => {
     const pair = keyManager.getKeyModelPair(index);
     
     if (!pair) {
-        console.error(`[OllamaClient] ❌ 인덱스 ${index}에 해당하는 키-모델 쌍이 없습니다.`);
+        logger.error(`❌ 인덱스 ${index}에 해당하는 키-모델 쌍이 없습니다.`);
         return null;
     }
     
-    console.log(`[OllamaClient] 🎯 인덱스 ${index + 1} 클라이언트 생성: ${pair.model}`);
+    logger.info(`🎯 인덱스 ${index + 1} 클라이언트 생성: ${pair.model}`);
     return new OllamaClient({ model: pair.model });
 };
 
@@ -775,7 +876,7 @@ export const createAllClients = (): OllamaClient[] => {
     const keyManager = getApiKeyManager();
     const pairs = keyManager.getAllKeyModelPairs();
     
-    console.log(`[OllamaClient] 🚀 ${pairs.length}개 A2A 클라이언트 생성 중...`);
+    logger.info(`🚀 ${pairs.length}개 A2A 클라이언트 생성 중...`);
     
     const clients = pairs.map(pair => {
         // 각 클라이언트 생성 전에 해당 인덱스로 키 매니저 설정
@@ -783,6 +884,6 @@ export const createAllClients = (): OllamaClient[] => {
         return client;
     });
     
-    console.log(`[OllamaClient] ✅ ${clients.length}개 A2A 클라이언트 준비 완료`);
+    logger.info(`✅ ${clients.length}개 A2A 클라이언트 준비 완료`);
     return clients;
 };

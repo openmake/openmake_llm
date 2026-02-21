@@ -263,27 +263,10 @@
         }
 
         async function executeCommand() {
-            const cmd = document.getElementById('terminalCmd').value.trim();
-            if (!cmd) return;
             const output = document.getElementById('terminalOutput');
-            output.textContent += `\n$ ${cmd}\n실행 중...\n`;
-            try {
-                 const res = await fetch(`${API_BASE}/api/mcp/terminal`, {
-                     method: 'POST',
-                     credentials: 'include',  // 🔒 httpOnly 쿠키 포함
-                     headers: { 'Content-Type': 'application/json' },
-                     body: JSON.stringify({ command: cmd })
-                 });
-                const rawData = await res.json();
-                const data = rawData.data || rawData;
-                if (rawData.success) { output.textContent += data.stdout || '(출력 없음)\n'; }
-                else { 
-                    const errorMsg = (rawData.error && typeof rawData.error === 'object') ? rawData.error.message : (data.error || data.stderr);
-                    output.textContent += `오류: ${errorMsg}\n`; 
-                }
-            } catch (e) { output.textContent += `연결 오류: ${e.message}\n`; }
-            output.scrollTop = output.scrollHeight;
-            document.getElementById('terminalCmd').value = '';
+            if (output) output.textContent += '\n터미널 기능은 보안상의 이유로 비활성화되었습니다.\n';
+            const cmdInput = document.getElementById('terminalCmd');
+            if (cmdInput) { cmdInput.value = ''; cmdInput.disabled = true; cmdInput.placeholder = '보안상 비활성화됨'; }
         }
 
         // ============================================
@@ -356,7 +339,7 @@
                     credentials: 'include',
                     headers: headers
                 });
-                if (!res.ok) return;
+                if (!res.ok) { showToast('도구 목록 로드 실패', 'error'); return; }
                 const raw = await res.json();
                 const data = raw.data || raw;
                 const servers = data.servers || [];

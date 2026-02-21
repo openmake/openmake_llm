@@ -17,79 +17,30 @@ import { getUnifiedDatabase } from '../data/models/unified-database';
 import { createLogger } from '../utils/logger';
 import { v4 as uuidv4 } from 'uuid';
 
+import {
+    ResearchConfig,
+    ResearchProgress,
+    ResearchResult,
+    SubTopic,
+    SynthesisResult,
+    globalConfig,
+    setGlobalConfig
+} from './deep-research-types';
+
+import {
+    deduplicateSources,
+    normalizeUrl,
+    clampImportance,
+    buildFallbackSubTopics,
+    chunkArray,
+    extractBulletLikeFindings,
+    getLoopProgressRange
+} from './deep-research-utils';
+
+// Re-export types so consumers don't break
+export type { ResearchConfig, ResearchProgress, ResearchResult };
+
 const logger = createLogger('DeepResearchService');
-
-// ============================================================
-// 타입 정의
-// ============================================================
-
-/** 리서치 설정 */
-export interface ResearchConfig {
-    maxLoops: number;            // 최대 반복 횟수 (기본: 5)
-    llmModel: string;            // 사용할 LLM 모델
-    searchApi: 'ollama' | 'firecrawl' | 'google' | 'all'; // 검색 API
-    maxSearchResults: number;    // 검색 결과 예산 (기본: 360)
-    language: 'ko' | 'en';       // 출력 언어
-    maxTotalSources: number;     // 목표 고유 소스 수 (기본: 80)
-    scrapeFullContent: boolean;  // Firecrawl로 풀 콘텐츠 스크래핑 여부 (기본: true)
-    maxScrapePerLoop: number;    // 루프당 최대 스크래핑 수 (기본: 15)
-    scrapeTimeoutMs: number;     // 개별 스크래핑 타임아웃 (기본: 15000)
-    chunkSize: number;           // 중간 요약용 청크 사이즈 (기본: 10)
-}
-
-/** 리서치 진행 상황 */
-export interface ResearchProgress {
-    sessionId: string;
-    status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
-    currentLoop: number;
-    totalLoops: number;
-    currentStep: string;
-    progress: number; // 0-100
-    message: string;
-}
-
-/** 리서치 결과 */
-export interface ResearchResult {
-    sessionId: string;
-    topic: string;
-    summary: string;
-    keyFindings: string[];
-    sources: SearchResult[];
-    totalSteps: number;
-    duration: number; // ms
-}
-
-/** 서브 토픽 */
-interface SubTopic {
-    title: string;
-    searchQueries: string[];
-    importance: number; // 1-5
-}
-
-interface SynthesisResult {
-    summary: string;
-    keyPoints: string[];
-}
-
-// ============================================================
-// 기본 설정
-// ============================================================
-
-const DEFAULT_CONFIG: ResearchConfig = {
-    maxLoops: 5,
-    llmModel: 'gemma3:4b',
-    searchApi: 'all',
-    maxSearchResults: 360,
-    language: 'ko',
-    maxTotalSources: 80,
-    scrapeFullContent: true,
-    maxScrapePerLoop: 15,
-    scrapeTimeoutMs: 15000,
-    chunkSize: 10
-};
-
-// 전역 설정 (configure로 변경 가능)
-let globalConfig: ResearchConfig = { ...DEFAULT_CONFIG };
 
 // ============================================================
 // DeepResearchService 클래스
@@ -136,7 +87,7 @@ export class DeepResearchService {
 
             for (let loop = 0; loop < this.config.maxLoops; loop++) {
                 const loopNumber = loop + 1;
-                const loopRange = this.getLoopProgressRange(loop);
+                const loopRange = getLoopProgressRange(loop, this.config.maxLoops);
 
                 this.reportProgress(
                     onProgress,
@@ -235,7 +186,7 @@ export class DeepResearchService {
                 }
             }
 
-            const finalSources = this.deduplicateSources(Array.from(sourceMap.values()));
+            const finalSources = deduplicateSources(Array.from(sourceMap.values()));
 
             // 3단계: 최종 보고서 생성 (85-100%)
             this.reportProgress(onProgress, sessionId, 'running', this.config.maxLoops, this.config.maxLoops, 'report', 85, '최종 보고서 생성 중...');
@@ -347,14 +298,14 @@ Required format:
                     return {
                         title: item.title,
                         searchQueries: uniqueQueries.slice(0, 3),
-                        importance: this.clampImportance(item.importance)
+                        importance: clampImportance(item.importance)
                     } satisfies SubTopic;
                 })
                 .filter((item): item is SubTopic => item !== null)
                 .sort((a, b) => b.importance - a.importance)
                 .slice(0, 15);
 
-            const finalSubTopics = normalized.length >= 8 ? normalized : this.buildFallbackSubTopics(topic);
+            const finalSubTopics = normalized.length >= 8 ? normalized : buildFallbackSubTopics(topic);
 
             const db = getUnifiedDatabase();
             await db.addResearchStep({
@@ -369,7 +320,7 @@ Required format:
             return finalSubTopics;
         } catch (error) {
             logger.error(`[DeepResearch] 주제 분해 실패: ${error instanceof Error ? error.message : String(error)}`);
-            return this.buildFallbackSubTopics(topic);
+            return buildFallbackSubTopics(topic);
         }
     }
 
@@ -413,7 +364,7 @@ Required format:
                             continue;
                         }
 
-                        const normalizedUrl = this.normalizeUrl(result.url);
+                        const normalizedUrl = normalizeUrl(result.url);
                         if (seenUrls.has(normalizedUrl)) {
                             continue;
                         }
@@ -476,7 +427,7 @@ Required format:
                 if (!source.url) {
                     return false;
                 }
-                const normalizedUrl = this.normalizeUrl(source.url);
+                const normalizedUrl = normalizeUrl(source.url);
                 return !scrapedUrls.has(normalizedUrl);
             })
             .slice(0, this.config.maxScrapePerLoop);
@@ -494,7 +445,7 @@ Required format:
 
             const settled = await Promise.allSettled(
                 batch.map(async source => {
-                    const normalizedUrl = this.normalizeUrl(source.url);
+                    const normalizedUrl = normalizeUrl(source.url);
                     try {
                         const markdown = await this.scrapeSingleUrl(source.url);
                         if (markdown && markdown.trim().length > 0) {
@@ -592,15 +543,15 @@ Required format:
             return { summary: '수집된 소스가 없습니다.', keyPoints: [] };
         }
 
-        const uniqueResults = this.deduplicateSources(searchResults);
-        const chunks = this.chunkArray(uniqueResults, this.config.chunkSize);
+        const uniqueResults = deduplicateSources(searchResults);
+        const chunks = chunkArray(uniqueResults, this.config.chunkSize);
         const chunkSummaries: string[] = [];
 
         for (let chunkIndex = 0; chunkIndex < chunks.length; chunkIndex++) {
             const chunk = chunks[chunkIndex];
             const chunkContext = chunk
                 .map(source => {
-                    const sourceIndex = uniqueResults.findIndex(item => this.normalizeUrl(item.url) === this.normalizeUrl(source.url)) + 1;
+                    const sourceIndex = uniqueResults.findIndex(item => normalizeUrl(item.url) === normalizeUrl(source.url)) + 1;
                     const content = source.fullContent?.trim().length
                         ? source.fullContent
                         : source.snippet;
@@ -667,7 +618,7 @@ ${chunkSummaries.map((summary, index) => `### Chunk ${index + 1}\n${summary}`).j
             ], { temperature: 0.4 });
 
             const mergedSummary = response.content.trim();
-            const keyPoints = this.extractBulletLikeFindings(mergedSummary);
+            const keyPoints = extractBulletLikeFindings(mergedSummary);
 
             await db.addResearchStep({
                 sessionId,
@@ -736,7 +687,7 @@ Question: Is more exploration needed? Answer only "yes" or "no".`;
         sessionId: string
     ): Promise<{ summary: string; keyFindings: string[] }> {
         const db = getUnifiedDatabase();
-        const uniqueSources = this.deduplicateSources(sources);
+        const uniqueSources = deduplicateSources(sources);
 
         const sourceList = uniqueSources
             .map((source, index) => `[${index + 1}] ${source.title} - ${source.url}`)
@@ -815,7 +766,7 @@ Keep these section headers:
                     .map(line => line.trim())
                     .filter(line => /^\d+\./.test(line))
                     .map(line => line.replace(/^\d+\.\s*/, '').trim())
-                : this.extractBulletLikeFindings(summary);
+                : extractBulletLikeFindings(summary);
 
             await db.addResearchStep({
                 sessionId,
@@ -831,21 +782,6 @@ Keep these section headers:
             logger.error(`[DeepResearch] 보고서 생성 실패: ${error instanceof Error ? error.message : String(error)}`);
             return { summary: '보고서 생성 실패', keyFindings: [] };
         }
-    }
-
-    /**
-     * 중복 소스 제거
-     */
-    private deduplicateSources(sources: SearchResult[]): SearchResult[] {
-        const seen = new Set<string>();
-        return sources.filter(source => {
-            const normalizedUrl = this.normalizeUrl(source.url);
-            if (seen.has(normalizedUrl)) {
-                return false;
-            }
-            seen.add(normalizedUrl);
-            return true;
-        });
     }
 
     /**
@@ -892,111 +828,6 @@ Keep these section headers:
             this.abortController = null;
         }
     }
-
-    private normalizeUrl(url: string): string {
-        return url
-            .trim()
-            .replace(/\/$/, '')
-            .replace(/^https?:\/\//, '')
-            .toLowerCase();
-    }
-
-    private clampImportance(value: number | undefined): number {
-        if (typeof value !== 'number' || Number.isNaN(value)) {
-            return 3;
-        }
-        return Math.max(1, Math.min(5, Math.round(value)));
-    }
-
-    private buildFallbackSubTopics(topic: string): SubTopic[] {
-        return [
-            {
-                title: `${topic} 개요 및 정의`,
-                searchQueries: [`${topic} 개요`, `${topic} 정의`, `${topic} 배경`],
-                importance: 5
-            },
-            {
-                title: `${topic} 최신 동향`,
-                searchQueries: [`${topic} 최신 동향`, `${topic} 2025 트렌드`, `${topic} recent updates`],
-                importance: 5
-            },
-            {
-                title: `${topic} 기술/구조 분석`,
-                searchQueries: [`${topic} 구조`, `${topic} architecture`, `${topic} technical analysis`],
-                importance: 4
-            },
-            {
-                title: `${topic} 시장 및 산업 영향`,
-                searchQueries: [`${topic} 시장 규모`, `${topic} 산업 영향`, `${topic} market report`],
-                importance: 4
-            },
-            {
-                title: `${topic} 주요 사례`,
-                searchQueries: [`${topic} 사례`, `${topic} case study`, `${topic} 성공 사례`],
-                importance: 4
-            },
-            {
-                title: `${topic} 리스크와 한계`,
-                searchQueries: [`${topic} 한계`, `${topic} 리스크`, `${topic} 문제점`],
-                importance: 3
-            },
-            {
-                title: `${topic} 규제 및 정책`,
-                searchQueries: [`${topic} 규제`, `${topic} 정책`, `${topic} 법률`],
-                importance: 3
-            },
-            {
-                title: `${topic} 향후 전망`,
-                searchQueries: [`${topic} 전망`, `${topic} future outlook`, `${topic} 예측`],
-                importance: 3
-            }
-        ];
-    }
-
-    private chunkArray<T>(items: T[], chunkSize: number): T[][] {
-        const safeChunkSize = Math.max(1, chunkSize);
-        const chunks: T[][] = [];
-        for (let i = 0; i < items.length; i += safeChunkSize) {
-            chunks.push(items.slice(i, i + safeChunkSize));
-        }
-        return chunks;
-    }
-
-    private extractBulletLikeFindings(text: string): string[] {
-        return text
-            .split('\n')
-            .map(line => line.trim())
-            .filter(line => line.startsWith('- ') || /^\d+\./.test(line))
-            .map(line => line.replace(/^[-\d.\s]+/, '').trim())
-            .filter(line => line.length > 0)
-            .slice(0, 20);
-    }
-
-    private getLoopProgressRange(loopIndex: number): {
-        searchStart: number;
-        searchEnd: number;
-        scrapeStart: number;
-        scrapeEnd: number;
-        synthStart: number;
-        synthesizeStart: number;
-        synthesizeEnd: number;
-    } {
-        const loopSpan = 80 / this.config.maxLoops;
-        const loopBase = 5 + (loopIndex * loopSpan);
-        const searchEnd = loopBase + (loopSpan / 3);
-        const scrapeEnd = loopBase + ((loopSpan / 3) * 2);
-        const synthEnd = loopBase + loopSpan;
-
-        return {
-            searchStart: loopBase,
-            searchEnd,
-            scrapeStart: searchEnd,
-            scrapeEnd,
-            synthStart: scrapeEnd,
-            synthesizeStart: scrapeEnd,
-            synthesizeEnd: synthEnd
-        };
-    }
 }
 
 // ============================================================
@@ -1014,9 +845,10 @@ export function getResearchConfig(): ResearchConfig {
  * 전역 설정 업데이트
  */
 export function configureResearch(config: Partial<ResearchConfig>): ResearchConfig {
-    globalConfig = { ...globalConfig, ...config };
-    logger.info(`[DeepResearch] 설정 업데이트: ${JSON.stringify(globalConfig)}`);
-    return { ...globalConfig };
+    const updated = { ...globalConfig, ...config };
+    setGlobalConfig(updated);
+    logger.info(`[DeepResearch] 설정 업데이트: ${JSON.stringify(updated)}`);
+    return { ...updated };
 }
 
 /**
