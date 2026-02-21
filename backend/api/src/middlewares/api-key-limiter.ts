@@ -10,7 +10,7 @@
  * @see docs/api/API_KEY_SERVICE_PLAN.md §4 Rate Limiting
  */
 
-import rateLimit from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { Request, Response, NextFunction } from 'express';
 import { API_KEY_TIER_LIMITS, ApiKeyTier } from '../data/models/unified-database';
 import { error as apiError, ErrorCodes } from '../utils/api-response';
@@ -47,7 +47,7 @@ export const apiKeyRateLimiter = rateLimit({
         if (req.apiKeyId) {
             return `apikey:${req.apiKeyId}`;
         }
-        return `ip:${req.ip || 'unknown'}`;
+        return `ip:${ipKeyGenerator(req.ip || 'unknown')}`;
     },
 
     // 표준 RateLimit 헤더 사용

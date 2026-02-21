@@ -1,3 +1,12 @@
+/**
+ * @module data/repositories/conversation-repository
+ * @description `conversation_sessions` / `conversation_messages` 테이블 데이터 접근 계층
+ *
+ * 대화 세션과 메시지 엔티티의 CRUD를 담당합니다.
+ * - 세션 생성/조회/삭제, 사용자별 세션 목록
+ * - 메시지 추가/조회, 세션별 메시지 히스토리
+ * - 세션 제목/메타데이터 갱신
+ */
 import type { QueryResult } from 'pg';
 import { BaseRepository } from './base-repository';
 import type { ConversationMessage, ConversationSession } from '../models/unified-database';

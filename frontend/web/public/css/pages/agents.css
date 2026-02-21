@@ -11,17 +11,23 @@
 
 .agent-card {
     background: var(--bg-card);
-    border: 1px solid var(--border-light);
-    border-radius: var(--radius-lg);
+    border: var(--border-width) solid var(--border-light);
+    border-radius: var(--radius-md);
     padding: var(--space-5);
-    transition: all 0.3s ease;
+    box-shadow: var(--shadow-sm);
+    transition: transform var(--transition-fast), box-shadow var(--transition-fast), border-color var(--transition-fast);
     cursor: pointer;
 }
 
 .agent-card:hover {
     border-color: var(--accent-primary);
-    box-shadow: 0 4px 20px var(--accent-primary-light);
-    transform: translateY(-2px);
+    box-shadow: var(--shadow-brutal-hover);
+    transform: translate(-2px, -2px);
+}
+
+.agent-card:active {
+    transform: translate(1px, 1px);
+    box-shadow: var(--shadow-brutal-active);
 }
 
 .agent-header {
@@ -66,9 +72,10 @@
     font-size: var(--font-size-xs);
     padding: var(--space-1) var(--space-2);
     background: var(--bg-secondary);
-    border: 1px solid var(--border-light);
+    border: var(--border-width) solid var(--border-light);
     border-radius: var(--radius-sm);
     color: var(--text-muted);
+    font-weight: var(--font-weight-medium);
 }
 
 .agent-grid {
@@ -91,7 +98,7 @@
     gap: var(--space-3);
     margin-bottom: var(--space-5);
     padding-bottom: var(--space-3);
-    border-bottom: 1px solid var(--border-light);
+    border-bottom: var(--border-width) solid var(--border-light);
 }
 
 .category-icon {
@@ -180,7 +187,7 @@
 }
 
 .role-special {
-    background: linear-gradient(135deg, #f59e0b, #ec4899);
+    background: var(--accent-orange);
 }
 
 /* ==========================================

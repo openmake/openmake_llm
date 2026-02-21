@@ -26,11 +26,32 @@ jest.mock('pg', () => ({
     },
 }));
 
-jest.mock('../config/env', () => ({
-    getConfig: () => ({ databaseUrl: 'postgresql://localhost:5432/test_db' }),
-    loadConfig: () => ({ databaseUrl: 'postgresql://localhost:5432/test_db' }),
-    validateConfig: () => {},
-}));
+jest.mock('../config/env', () => {
+    // Bun에서 jest.mock은 다른 테스트 파일에도 누출될 수 있으므로,
+    // 다른 모듈(client.ts, user-sandbox.ts, model-selector.ts 등)이
+    // 모듈 레벨에서 getConfig()를 호출할 때 필요한 필드를 모두 포함해야 합니다.
+    const mockConfig = {
+        databaseUrl: 'postgresql://localhost:5432/test_db',
+        jwtSecret: 'test-secret-key-for-testing-purposes-only',
+        nodeEnv: 'test',
+        // ollama/client.ts 모듈 레벨 DEFAULT_CONFIG에 필요
+        ollamaBaseUrl: 'http://localhost:11434',
+        ollamaDefaultModel: 'gemini-3-flash-preview:cloud',
+        ollamaTimeout: 120000,
+        ollamaHost: 'http://localhost:11434',
+        ollamaModel: 'gemini-3-flash-preview:cloud',
+        // mcp/user-sandbox.ts 모듈 레벨 USER_DATA_ROOT에 필요
+        userDataPath: './data/users',
+        // model-selector.ts 에서 참조하는 추가 필드
+        omkEngineCode: 'qwen3-coder-next:cloud',
+    };
+    return {
+        getConfig: () => mockConfig,
+        loadConfig: () => mockConfig,
+        validateConfig: () => {},
+        resetConfig: () => {},
+    };
+});
 
 jest.mock('../utils/logger', () => ({
     createLogger: () => ({

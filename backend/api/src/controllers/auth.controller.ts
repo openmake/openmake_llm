@@ -10,10 +10,11 @@ import * as crypto from 'crypto';
 import { getAuthService } from '../services/AuthService';
 import { getUserManager } from '../data/user-manager';
 import type { OAuthTokenResponse, GoogleUserInfo, GitHubUser, GitHubEmail } from '../auth/types';
-import { requireAuth, requireAdmin, extractToken, blacklistToken, setTokenCookie, clearTokenCookie } from '../auth';
+import { requireAuth, requireAdmin, extractToken, blacklistToken, setTokenCookie, clearTokenCookie, setRefreshTokenCookie, generateRefreshToken, generateToken, verifyRefreshToken } from '../auth';
 import { createLogger } from '../utils/logger';
 import { success, badRequest, unauthorized, conflict, internalError, serviceUnavailable } from '../utils/api-response';
 import { getConfig } from '../config/env';
+import { APP_USER_AGENT } from '../config/constants';
 import { validate } from '../middlewares/validation';
 import { loginSchema, registerSchema, changePasswordSchema } from '../schemas';
 
@@ -28,9 +29,10 @@ const STATE_TTL_MS = 5 * 60 * 1000; // 5분
 const oauthStatesFallback = new Map<string, { provider: string; createdAt: number }>();
 
 /**
- * DB 기반 OAuth state 저장소 헬퍼
- * conversation_sessions 테이블 대신 별도 임시 테이블을 사용하여 격리
- * 테이블이 없으면 자동 생성
+ * DB 기반 OAuth state 저장소 헬퍼 (안전 폴백)
+ * 
+ * 주 DDL은 services/database/init/002-schema.sql에서 관리합니다.
+ * 이 함수는 스키마 마이그레이션 없이 서버를 시작한 경우를 위한 안전 폴백입니다.
  */
 async function ensureOauthStateTable(): Promise<void> {
     try {
@@ -161,13 +163,46 @@ function validateAndConsumeStateFallback(state: string, expectedProvider: string
 }
 
 /**
- * 요청의 Host/Origin 기반으로 OAuth redirect URI를 동적으로 생성합니다.
- * localhost 접속 시 localhost URI, 외부 도메인 접속 시 해당 도메인 URI를 반환합니다.
+ * OAuth redirect URI를 생성합니다.
+ * 
+ * 우선순위:
+ * 1. OAUTH_REDIRECT_URI 환경변수 (명시적 설정 시) — Google Console 등록 URI와 일치 보장
+ * 2. 요청의 Host/Origin 기반 동적 생성 (폴백)
+ * 
+ * OAUTH_REDIRECT_URI는 Google용으로 설정되어 있어도 provider 부분을 자동 교체합니다.
  */
 function buildRedirectUri(req: Request, provider: 'google' | 'github', serverPort: number): string {
-    const protocol = req.protocol || 'http';
-    const host = req.get('host') || `localhost:${serverPort}`;
-    return `${protocol}://${host}/api/auth/callback/${provider}`;
+    const configuredUri = getConfig().oauthRedirectUri;
+    const requestHost = req.get('host') || `localhost:${serverPort}`;
+    const forwardedProto = req.get('x-forwarded-proto');
+    const requestProtocol = (forwardedProto ? forwardedProto.split(',')[0].trim() : req.protocol) || 'http';
+
+    const dynamicRedirectUri = `${requestProtocol}://${requestHost}/api/auth/callback/${provider}`;
+
+    // OAUTH_REDIRECT_URI가 명시적으로 설정된 경우 우선 사용하되,
+    // 현재 요청 Host와 불일치하면 동적 URI를 사용해 redirect_uri_mismatch를 방지합니다.
+    if (configuredUri && !configuredUri.includes('localhost')) {
+        try {
+            const configured = new URL(configuredUri);
+            if (configured.host === requestHost) {
+                const redirectUri = configuredUri.replace(/\/callback\/\w+$/, `/callback/${provider}`);
+                log.info(`[OAuth] Redirect URI (config): ${redirectUri}`);
+                return redirectUri;
+            }
+
+            log.warn(`[OAuth] OAUTH_REDIRECT_URI host mismatch (configured=${configured.host}, request=${requestHost}), using dynamic URI`);
+            log.info(`[OAuth] Redirect URI (dynamic): ${dynamicRedirectUri}`);
+            return dynamicRedirectUri;
+        } catch {
+            log.warn('[OAuth] Invalid OAUTH_REDIRECT_URI format, using dynamic URI');
+            log.info(`[OAuth] Redirect URI (dynamic): ${dynamicRedirectUri}`);
+            return dynamicRedirectUri;
+        }
+    }
+
+    // 동적 감지 폴백 (개발 환경 등)
+    log.info(`[OAuth] Redirect URI (dynamic): ${dynamicRedirectUri}`);
+    return dynamicRedirectUri;
 }
 
 /**
@@ -188,9 +223,9 @@ export class AuthController {
 
     /**
      * AuthController 인스턴스를 생성합니다.
-     * @param serverPort - 서버 포트 번호 (기본값: 52416)
+     * @param serverPort - 서버 포트 번호 (기본값: .env PORT)
      */
-    constructor(serverPort: number = 52416) {
+    constructor(serverPort: number = getConfig().port) {
         this.router = Router();
         this.serverPort = serverPort;
         this.setupRoutes();
@@ -206,6 +241,9 @@ export class AuthController {
         this.router.post('/logout', this.logout.bind(this));
         this.router.get('/me', requireAuth, this.getCurrentUser.bind(this));
         this.router.put('/password', requireAuth, validate(changePasswordSchema), this.changePassword.bind(this));
+
+        // ===== Token Refresh =====
+        this.router.post('/refresh', this.refresh.bind(this));
 
         // ===== OAuth API =====
         this.router.get('/providers', this.getProviders.bind(this));
@@ -257,6 +295,9 @@ export class AuthController {
 
              if (result.token) {
                  setTokenCookie(res, result.token);
+                 if (result.user) {
+                     setRefreshTokenCookie(res, generateRefreshToken(result.user));
+                 }
              }
              res.json(success(result));
          } catch (error) {
@@ -331,6 +372,55 @@ export class AuthController {
         } catch (error) {
             log.error('[ChangePassword] 오류:', error);
             res.status(500).json(internalError('비밀번호 변경 중 오류가 발생했습니다'));
+        }
+    }
+
+    /**
+     * POST /api/auth/refresh - 토큰 갱신
+     * httpOnly 쿠키의 리프레시 토큰으로 새 액세스 + 리프레시 토큰 발급
+     * 리프레시 토큰 로테이션: 사용된 리프레시 토큰은 블랙리스트 처리
+     */
+    private async refresh(req: Request, res: Response): Promise<void> {
+        const refreshToken = req.cookies?.refresh_token;
+
+        if (!refreshToken) {
+            res.status(401).json(unauthorized('리프레시 토큰이 없습니다'));
+            return;
+        }
+
+        try {
+            const payload = await verifyRefreshToken(refreshToken);
+            if (!payload) {
+                clearTokenCookie(res);
+                res.status(401).json(unauthorized('유효하지 않은 리프레시 토큰입니다'));
+                return;
+            }
+
+            const userManager = getUserManager();
+            const user = await userManager.getUserById(payload.userId);
+
+            if (!user || !user.is_active) {
+                clearTokenCookie(res);
+                res.status(401).json(unauthorized('사용자를 찾을 수 없습니다'));
+                return;
+            }
+
+            // 사용된 리프레시 토큰 블랙리스트 (토큰 로테이션)
+            await blacklistToken(refreshToken);
+
+            // 새 액세스 + 리프레시 토큰 발급
+            const newAccessToken = generateToken(user);
+            const newRefreshToken = generateRefreshToken(user);
+
+            setTokenCookie(res, newAccessToken);
+            setRefreshTokenCookie(res, newRefreshToken);
+
+            log.info(`[Auth] 토큰 갱신 성공: ${user.email}`);
+            res.json(success({ token: newAccessToken, user }));
+        } catch (error) {
+            log.error('[Auth] 토큰 갱신 오류:', error);
+            clearTokenCookie(res);
+            res.status(500).json(internalError('토큰 갱신 중 오류가 발생했습니다'));
         }
     }
 
@@ -455,10 +545,11 @@ export class AuthController {
              const authService = getAuthService();
               const result = await authService.findOrCreateOAuthUser(userInfo.email, 'google');
 
-              if (!result.success || !result.token) throw new Error(result.error || '인증 실패');
+              if (!result.success || !result.token || !result.user) throw new Error(result.error || '인증 실패');
 
              setTokenCookie(res, result.token);
-             res.redirect('/');
+             setRefreshTokenCookie(res, generateRefreshToken(result.user));
+             res.redirect('/?auth=callback');
         } catch (error) {
             log.error('[OAuth Google Callback] 오류:', error);
             res.redirect('/login.html?error=oauth_failed');
@@ -519,7 +610,7 @@ export class AuthController {
             const userRes = await fetch('https://api.github.com/user', {
                 headers: {
                     Authorization: `Bearer ${tokenData.access_token}`,
-                    'User-Agent': 'Ollama-Chat'
+                    'User-Agent': APP_USER_AGENT
                 }
             });
 
@@ -531,7 +622,7 @@ export class AuthController {
                 const emailRes = await fetch('https://api.github.com/user/emails', {
                     headers: {
                         Authorization: `Bearer ${tokenData.access_token}`,
-                        'User-Agent': 'Ollama-Chat'
+                        'User-Agent': APP_USER_AGENT
                     }
                 });
                 const emails = await emailRes.json() as GitHubEmail[];
@@ -542,10 +633,11 @@ export class AuthController {
              const authService = getAuthService();
               const result = await authService.findOrCreateOAuthUser(email, 'github');
 
-              if (!result.success || !result.token) throw new Error(result.error || '인증 실패');
+              if (!result.success || !result.token || !result.user) throw new Error(result.error || '인증 실패');
 
              setTokenCookie(res, result.token);
-             res.redirect('/');
+             setRefreshTokenCookie(res, generateRefreshToken(result.user));
+             res.redirect('/?auth=callback');
         } catch (error) {
             log.error('[OAuth GitHub Callback] 오류:', error);
             res.redirect('/login.html?error=oauth_failed');
@@ -564,7 +656,7 @@ export class AuthController {
 /**
  * AuthController 인스턴스를 생성하는 팩토리 함수
  * 
- * @param serverPort - 서버 포트 번호 (선택적, 기본값: 52416)
+ * @param serverPort - 서버 포트 번호 (선택적, 기본값: .env PORT)
  * @returns 설정된 Express Router
  */
 export function createAuthController(serverPort?: number): Router {

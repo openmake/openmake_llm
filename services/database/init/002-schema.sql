@@ -300,19 +300,46 @@ CREATE TABLE IF NOT EXISTS external_files (
 
 -- ============================================
 -- pgvector 벡터 임베딩 테이블 (NEW)
+-- pgvector 확장 미설치 시 embedding 컬럼을 TEXT로 대체
 -- ============================================
 
-CREATE TABLE IF NOT EXISTS vector_embeddings (
-    id SERIAL PRIMARY KEY,
-    source_type TEXT NOT NULL CHECK(source_type IN ('document', 'memory', 'conversation', 'agent')),
-    source_id TEXT NOT NULL,
-    chunk_index INTEGER DEFAULT 0,
-    chunk_text TEXT NOT NULL,
-    embedding vector(768),
-    metadata JSONB,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
-);
+DO $$ BEGIN
+    -- 테이블이 이미 존재하면 생성 건너뛰기 (vector 타입 해석 시 .so 로딩 오류 방지)
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'vector_embeddings') THEN
+        RAISE NOTICE '[pgvector] vector_embeddings 테이블 이미 존재 — 생성 건너뜀';
+    ELSE
+        -- 새로 생성: pgvector 확장 로드 시도 후 폴백
+        BEGIN
+            EXECUTE 'CREATE EXTENSION IF NOT EXISTS vector';
+            EXECUTE '
+                CREATE TABLE vector_embeddings (
+                    id SERIAL PRIMARY KEY,
+                    source_type TEXT NOT NULL CHECK(source_type IN (''document'', ''memory'', ''conversation'', ''agent'')),
+                    source_id TEXT NOT NULL,
+                    chunk_index INTEGER DEFAULT 0,
+                    chunk_text TEXT NOT NULL,
+                    embedding vector(768),
+                    metadata JSONB,
+                    created_at TIMESTAMPTZ DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ DEFAULT NOW()
+                )';
+            RAISE NOTICE '[pgvector] 확장 로드 완료 — vector(768) 컬럼 사용';
+        EXCEPTION WHEN OTHERS THEN
+            CREATE TABLE vector_embeddings (
+                id SERIAL PRIMARY KEY,
+                source_type TEXT NOT NULL CHECK(source_type IN ('document', 'memory', 'conversation', 'agent')),
+                source_id TEXT NOT NULL,
+                chunk_index INTEGER DEFAULT 0,
+                chunk_text TEXT NOT NULL,
+                embedding TEXT,
+                metadata JSONB,
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                updated_at TIMESTAMPTZ DEFAULT NOW()
+            );
+            RAISE NOTICE '[pgvector] 확장 미설치 — embedding을 TEXT 컬럼으로 대체 (벡터 검색 비활성)';
+        END;
+    END IF;
+END $$;
 
 -- ============================================
 -- Push 구독 테이블
@@ -372,14 +399,28 @@ CREATE INDEX IF NOT EXISTS idx_connections_user ON external_connections(user_id)
 CREATE INDEX IF NOT EXISTS idx_connections_service ON external_connections(service_type);
 CREATE INDEX IF NOT EXISTS idx_ext_files_connection ON external_files(connection_id);
 
--- Vector indexes (pgvector)
+-- Vector indexes (pgvector 확장 필요)
 CREATE INDEX IF NOT EXISTS idx_embeddings_source ON vector_embeddings(source_type, source_id);
-CREATE INDEX IF NOT EXISTS idx_embeddings_vector ON vector_embeddings
-    USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
+DO $$ BEGIN
+    IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'vector') THEN
+        BEGIN
+            EXECUTE 'CREATE INDEX IF NOT EXISTS idx_embeddings_vector ON vector_embeddings USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100)';
+            RAISE NOTICE '[pgvector] ivfflat 인덱스 생성 완료';
+        EXCEPTION WHEN OTHERS THEN
+            RAISE NOTICE '[pgvector] ivfflat 인덱스 생성 실패 (shared library 미설치) — 건너뜀';
+        END;
+    END IF;
+END $$;
 
--- Full-text search indexes
-CREATE INDEX IF NOT EXISTS idx_messages_content_trgm ON conversation_messages USING gin (content gin_trgm_ops);
-CREATE INDEX IF NOT EXISTS idx_memories_value_trgm ON user_memories USING gin (value gin_trgm_ops);
+-- Full-text search indexes (pg_trgm 확장 필요)
+DO $$ BEGIN
+    IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_trgm') THEN
+        EXECUTE 'CREATE INDEX IF NOT EXISTS idx_messages_content_trgm ON conversation_messages USING gin (content gin_trgm_ops)';
+        EXECUTE 'CREATE INDEX IF NOT EXISTS idx_memories_value_trgm ON user_memories USING gin (value gin_trgm_ops)';
+    ELSE
+        RAISE NOTICE 'pg_trgm extension not installed — skipping trigram indexes. Run: CREATE EXTENSION IF NOT EXISTS pg_trgm;';
+    END IF;
+END $$;
 
 -- ============================================
 -- 🔌 MCP 외부 서버 설정 테이블
@@ -423,6 +464,16 @@ CREATE TABLE IF NOT EXISTS user_api_keys (
 );
 
 -- ============================================
+-- 🔒 OAuth State 테이블 (CSRF 방어)
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS oauth_states (
+    state TEXT PRIMARY KEY,
+    provider TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- ============================================
 -- 🔒 Token Blacklist 테이블
 -- ============================================
 
@@ -450,5 +501,106 @@ CREATE INDEX IF NOT EXISTS idx_api_keys_tier ON user_api_keys(rate_limit_tier);
 CREATE INDEX IF NOT EXISTS idx_sessions_anon ON conversation_sessions(anon_session_id);
 CREATE INDEX IF NOT EXISTS idx_audit_user ON audit_logs(user_id);
 
+-- OAuth state index (cleanup query)
+CREATE INDEX IF NOT EXISTS idx_oauth_states_created ON oauth_states(created_at);
+
 -- Token blacklist index
 CREATE INDEX IF NOT EXISTS idx_blacklist_expires ON token_blacklist(expires_at);
+
+-- ============================================
+-- 채팅 레이트 리밋 테이블
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS chat_rate_limits (
+    id SERIAL PRIMARY KEY,
+    user_key TEXT NOT NULL UNIQUE,    -- userId or IP
+    count INTEGER NOT NULL DEFAULT 0,
+    reset_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_chat_rate_limits_user_key ON chat_rate_limits(user_key);
+CREATE INDEX IF NOT EXISTS idx_chat_rate_limits_reset_at ON chat_rate_limits(reset_at);
+
+-- ============================================
+-- 에이전트 성능 메트릭 테이블
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS agent_metrics (
+    agent_type TEXT PRIMARY KEY,
+    request_count INTEGER NOT NULL DEFAULT 0,
+    success_count INTEGER NOT NULL DEFAULT 0,
+    failure_count INTEGER NOT NULL DEFAULT 0,
+    total_response_time DOUBLE PRECISION NOT NULL DEFAULT 0,
+    avg_response_time DOUBLE PRECISION NOT NULL DEFAULT 0,
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ============================================
+-- Push 구독 저장소 테이블 (인메모리 캐시 + DB 영속화)
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS push_subscriptions_store (
+    user_key TEXT PRIMARY KEY,
+    endpoint TEXT NOT NULL,
+    p256dh TEXT NOT NULL,
+    auth_key TEXT NOT NULL,
+    user_id TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ============================================
+-- API Key 실패 추적 테이블 (인메모리 캐시 + DB 영속화)
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS api_key_failures (
+    key_index INTEGER PRIMARY KEY,
+    fail_count INTEGER NOT NULL DEFAULT 0,
+    last_fail_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ============================================
+-- 📄 업로드 문서 저장소 테이블 (write-through cache)
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS uploaded_documents (
+    doc_id TEXT PRIMARY KEY,
+    document JSONB NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    last_accessed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    expires_at TIMESTAMPTZ NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_uploaded_documents_expires ON uploaded_documents(expires_at);
+
+-- ============================================
+-- 📊 토큰 일별 통계 테이블 (write-through cache)
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS token_daily_stats (
+    date_key TEXT PRIMARY KEY,              -- YYYY-MM-DD
+    total_prompt_tokens INTEGER NOT NULL DEFAULT 0,
+    total_completion_tokens INTEGER NOT NULL DEFAULT 0,
+    total_tokens INTEGER NOT NULL DEFAULT 0,
+    request_count INTEGER NOT NULL DEFAULT 0,
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ============================================
+-- 성능 최적화 인덱스 (Phase 2-DBA)
+-- ============================================
+
+-- Critical single-column indexes
+CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
+CREATE INDEX IF NOT EXISTS idx_users_is_active ON users(is_active);
+CREATE INDEX IF NOT EXISTS idx_canvas_share_token ON canvas_documents(share_token);
+CREATE INDEX IF NOT EXISTS idx_sessions_updated_at ON conversation_sessions(updated_at);
+
+-- Composite indexes for common query patterns
+CREATE INDEX IF NOT EXISTS idx_sessions_user_updated ON conversation_sessions(user_id, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_messages_session_created ON conversation_messages(session_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_memories_user_category ON user_memories(user_id, category);
+CREATE INDEX IF NOT EXISTS idx_audit_user_created ON audit_logs(user_id, timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_canvas_user_updated ON canvas_documents(user_id, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_research_user_created ON research_sessions(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_research_steps_session_number ON research_steps(session_id, step_number);
+CREATE INDEX IF NOT EXISTS idx_connections_user_service ON external_connections(user_id, service_type);

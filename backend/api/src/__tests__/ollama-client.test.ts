@@ -6,6 +6,7 @@
 const mockAxiosInstance = {
     get: jest.fn(() => Promise.resolve({ data: {} })),
     post: jest.fn(() => Promise.resolve({ data: {} })),
+    defaults: { baseURL: '', headers: { common: {} } },
     interceptors: {
         request: { use: jest.fn(() => {}) },
         response: { use: jest.fn(() => {}) },
@@ -19,11 +20,15 @@ jest.mock('axios', () => ({
 }));
 
 // Mock config
+// jwtSecret と nodeEnv を含める: bun test ではモジュール分離が不完全なため、
+// auth/index.ts がこの mock された config を参照する可能性がある
 jest.mock('../config', () => ({
     getConfig: () => ({
         ollamaBaseUrl: 'http://localhost:11434',
         ollamaDefaultModel: 'llama3',
         ollamaTimeout: 120000,
+        jwtSecret: 'test-secret-key-for-testing-purposes-only',
+        nodeEnv: 'test',
     }),
 }));
 

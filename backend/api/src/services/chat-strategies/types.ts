@@ -85,6 +85,8 @@ export interface A2AStrategyContext extends ChatContext {
     messages: ChatMessage[];
     /** 모델 옵션 (temperature, top_p 등) */
     chatOptions: ModelOptions;
+    /** 질문 유형 (A2A 모델 조합 동적 선택용, 하위 호환 위해 optional) */
+    queryType?: string;
 }
 
 /**

@@ -1,6 +1,0 @@
-{
-    "name": "openmake-workers",
-    "version": "1.0.0",
-    "private": true,
-    "description": "OpenMake Background Workers"
-}

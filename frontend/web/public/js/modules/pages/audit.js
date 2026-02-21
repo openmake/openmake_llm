@@ -49,18 +49,16 @@
             return '<span class="badge ' + cls + '">' + esc(action) + '</span>';
         }
 
-        async function checkAdmin() {
+        function checkAdmin() {
             try {
-                const res = await authFetch('/api/auth/me');
-                const user = res.data || res;
-                if (!user || user.role !== 'admin') {
-                    (typeof showToast === 'function' ? showToast('관리자 권한이 필요합니다.', 'warning') : console.warn('관리자 권한이 필요합니다.'));
-                    (typeof Router !== 'undefined' && Router.navigate('/'));
+                var savedUser = localStorage.getItem('user');
+                if (!savedUser) return false;
+                var user = JSON.parse(savedUser);
+                if (!user || (user.role !== 'admin' && user.role !== 'administrator')) {
                     return false;
                 }
                 return true;
             } catch (e) {
-                (typeof Router !== 'undefined' && Router.navigate('/'));
                 return false;
             }
         }
@@ -87,7 +85,8 @@
         async function loadActions() {
             try {
                 const res = await authFetch('/api/audit/actions');
-                actionTypes = res.data || res || [];
+                var rawActions = res.data || res;
+                actionTypes = Array.isArray(rawActions) ? rawActions : [];
                 const sel = document.getElementById('filterAction');
                 if (sel) {
                     actionTypes.forEach(a => {
@@ -110,7 +109,8 @@
             body.innerHTML = '<tr><td colspan="5"><div class="loading">불러오는 중...</div></td></tr>';
             try {
                 const res = await authFetch(url);
-                logs = res.data || res || [];
+                var rawLogs = res.data || res;
+                logs = Array.isArray(rawLogs) ? rawLogs : [];
                 document.getElementById('logCount').textContent = '총 ' + logs.length + '건';
                 if (!logs.length) {
                     body.innerHTML = '<tr><td colspan="5"><div class="empty-state"><h2>감사 로그가 없습니다</h2></div></td></tr>';
@@ -128,7 +128,12 @@
                         <td>${esc(l.ip_address || l.ip || '-')}</td>
                     </tr>`;
                 }).join('');
-            } catch (e) { showToast('로드 실패', 'error'); }
+            } catch (e) {
+                var countEl = document.getElementById('logCount');
+                if (countEl) countEl.textContent = '';
+                body.innerHTML = '<tr><td colspan="5"><div class="empty-state"><h2>로그를 불러올 수 없습니다</h2></div></td></tr>';
+                showToast('로드 실패', 'error');
+            }
         }
 
         function openDetail(idx) {
@@ -147,13 +152,14 @@
 
         function closeDetail() { document.getElementById('detailModal').classList.remove('open'); }
 
-        checkAdmin().then(ok => {
-            if (ok) {
-                renderApp();
-                loadActions();
-                loadLogs();
-            }
-        });
+        if (checkAdmin()) {
+            renderApp();
+            loadActions();
+            loadLogs();
+        } else {
+            showToast('관리자 권한이 필요합니다.', 'warning');
+            if (typeof Router !== 'undefined') Router.navigate('/');
+        }
 
             // Expose onclick-referenced functions globally
                 if (typeof closeDetail === 'function') window.closeDetail = closeDetail;

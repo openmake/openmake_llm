@@ -63,7 +63,9 @@ import {
     // 🆕 모델 정보 라우트
     modelRouter,
     // 🆕 Developer Documentation 라우트
-    developerDocsRouter
+    developerDocsRouter,
+    // 🆕 Chat Feedback 라우트
+    chatFeedbackRouter
 } from './routes';
 import { tokenMonitoringRouter } from './routes/token-monitoring.routes';
 import v1Router from './routes/v1';
@@ -84,7 +86,7 @@ import {
 } from './controllers';
 import { uploadedDocuments } from './documents/store';
 import { WebSocketHandler } from './sockets/handler';
-import { RATE_LIMITS, SERVER_CONFIG } from './config/constants';
+import { RATE_LIMITS, SERVER_CONFIG, OLLAMA_CLOUD_HOST } from './config/constants';
 import { setupSwaggerRoutes } from './swagger';
 import { errorHandler, notFoundHandler } from './utils/error-handler';
 
@@ -93,7 +95,7 @@ import { errorHandler, notFoundHandler } from './utils/error-handler';
  * @interface DashboardOptions
  */
 interface DashboardOptions {
-    /** 서버 포트 번호 (기본값: 52416) */
+    /** 서버 포트 번호 (기본값: .env PORT) */
     port?: number;
     /** Ollama 클러스터 매니저 인스턴스 */
     cluster?: ClusterManager;
@@ -132,7 +134,7 @@ const log = {
  * 
  * @class DashboardServer
  * @example
- * const server = new DashboardServer({ port: 52416 });
+ * const server = new DashboardServer({ port: getConfig().port });
  * await server.start();
  * console.log(`Server running at ${server.url}`);
  */
@@ -154,11 +156,11 @@ export class DashboardServer {
      * DashboardServer 인스턴스를 생성합니다.
      * 
      * @param options - 서버 초기화 옵션
-     * @param options.port - 서버 포트 (기본값: 52416)
+     * @param options.port - 서버 포트 (기본값: .env PORT)
      * @param options.cluster - 클러스터 매니저 (기본값: 싱글톤 인스턴스)
      */
     constructor(options?: DashboardOptions) {
-        this.port = options?.port || 52416;
+        this.port = options?.port || getConfig().port;
         this.cluster = options?.cluster || getClusterManager();
 
         this.app = express();
@@ -226,12 +228,20 @@ export class DashboardServer {
             'canvas', 'research', 'mcp-tools', 'marketplace', 'custom-agents',
             'agent-learning', 'cluster', 'usage', 'analytics', 'admin-metrics',
             'admin', 'audit', 'external', 'alerts', 'memory', 'settings',
-            'password-change', 'history', 'guide', 'developer', 'api-keys'
+            'password-change', 'history', 'guide', 'developer', 'api-keys',
+            'token-monitoring'
         ]);
 
         app.use((req: Request, res: Response, next: NextFunction) => {
-            const match = req.path.match(/^\/([a-z0-9-]+)\.html$/);
+            // SPA 라우팅: /{page}.html 또는 /{page} (클린 URL) 모두 index.html로 서빙
+            const htmlMatch = req.path.match(/^\/([a-z0-9-]+)\.html$/);
+            const cleanMatch = req.path.match(/^\/([a-z0-9-]+)$/);
+            const match = htmlMatch || cleanMatch;
             if (match && SPA_PAGES.has(match[1])) {
+                if (match[1] === 'external' && htmlMatch) {
+                    return next();
+                }
+
                 const indexPath = path.join(__dirname, 'public', 'index.html');
                 if (fs.existsSync(indexPath)) {
                     res.setHeader('Content-Type', 'text/html; charset=utf-8');
@@ -244,6 +254,12 @@ export class DashboardServer {
                 }
             }
             next();
+        });
+
+        app.get('/externel.html', (req: Request, res: Response) => {
+            const queryIndex = req.originalUrl.indexOf('?');
+            const query = queryIndex >= 0 ? req.originalUrl.slice(queryIndex) : '';
+            res.redirect(302, `/external.html${query}`);
         });
 
         app.use(helmet({
@@ -268,8 +284,8 @@ export class DashboardServer {
                         "'self'",
                         "ws:",
                         "wss:",
-                        "http://localhost:11434",
-                        "https://ollama.com",
+                        getConfig().ollamaBaseUrl,
+                        OLLAMA_CLOUD_HOST,
                         "https://api.iconify.design",
                         "https://cdn.jsdelivr.net",
                         "https://cdnjs.cloudflare.com",
@@ -361,6 +377,8 @@ export class DashboardServer {
         setDocumentsDeps(this.cluster, this.broadcast.bind(this));
         setWebSearchCluster(this.cluster);
         setNodesCluster(this.cluster);
+        // 🆕 /api/chat/feedback 는 /api/chat 보다 먼저 마운트해야 Express가 올바르게 매칭
+        app.use('/api/chat/feedback', chatFeedbackRouter);
         app.use('/api/chat', chatRouter);
         app.use('/api', documentsRouter);
         app.use('/api', webSearchRouter);
@@ -485,7 +503,7 @@ export class DashboardServer {
 
     /**
      * 서버 접속 URL을 반환합니다.
-     * @returns 서버 URL (예: http://localhost:52416)
+     * @returns 서버 URL (예: http://localhost:{PORT})
      */
     get url(): string {
         const host = getConfig().serverHost;

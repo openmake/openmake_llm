@@ -7,6 +7,9 @@ import * as bcrypt from 'bcryptjs';
 import * as crypto from 'crypto';
 import { getUnifiedDatabase, getPool, User } from './unified-database';
 import { getConfig } from '../../config/env';
+import { createLogger } from '../../utils/logger';
+
+const logger = createLogger('UserModel');
 
 export type UserRole = 'admin' | 'user' | 'guest';
 
@@ -50,7 +53,7 @@ export class UserModel {
 
             return this.toPublicUser(user);
         } catch (error: unknown) {
-            console.error('[UserModel] 사용자 생성 실패:', (error instanceof Error ? error.message : String(error)));
+            logger.error('사용자 생성 실패:', (error instanceof Error ? error.message : String(error)));
             return null;
         }
     }
@@ -67,7 +70,7 @@ export class UserModel {
         }
 
         if (!user.is_active) {
-            console.log('[UserModel] 비활성화된 계정:', username);
+            logger.info('비활성화된 계정:', username);
             return null;
         }
 
@@ -123,7 +126,7 @@ export class UserModel {
 
             return (result.rowCount || 0) > 0;
         } catch (error) {
-            console.error('[UserModel] 비밀번호 변경 실패:', error);
+            logger.error('비밀번호 변경 실패:', error);
             return false;
         }
     }
@@ -142,7 +145,7 @@ export class UserModel {
 
             return (result.rowCount || 0) > 0;
         } catch (error) {
-            console.error('[UserModel] 활성화 상태 변경 실패:', error);
+            logger.error('활성화 상태 변경 실패:', error);
             return false;
         }
     }
@@ -176,10 +179,10 @@ export class UserModel {
             // ADMIN_PASSWORD 미설정 시 프로덕션 환경에서 중단, 개발환경에서는 랜덤 비밀번호 생성
             if (!defaultPassword) {
                 if (getConfig().nodeEnv === 'production') {
-                    console.error('[UserModel] ❌ ADMIN_PASSWORD 환경변수가 설정되지 않았습니다!');
+                    logger.error('ADMIN_PASSWORD 환경변수가 설정되지 않았습니다!');
                     throw new Error('ADMIN_PASSWORD 환경변수가 필수입니다!');
                 }
-                console.warn('[UserModel] ⚠️ 개발 환경: 랜덤 비밀번호 생성');
+                logger.warn('개발 환경: 랜덤 비밀번호 생성');
             }
 
             // 개발환경에서는 랜덤 비밀번호 생성 (32 bytes = 256 bit entropy)
@@ -193,9 +196,9 @@ export class UserModel {
                 role: 'admin'
             });
 
-            console.log('[UserModel] 기본 관리자 계정 생성 완료: admin');
+            logger.info('기본 관리자 계정 생성 완료: admin');
             if (!defaultPassword) {
-                console.warn('[UserModel] ⚠️ 개발환경: 랜덤 admin 비밀번호가 생성되었습니다. 프로덕션에서는 ADMIN_PASSWORD 환경변수를 설정하세요!');
+                logger.warn('개발환경: 랜덤 admin 비밀번호가 생성되었습니다. 프로덕션에서는 ADMIN_PASSWORD 환경변수를 설정하세요!');
             }
         }
     }
