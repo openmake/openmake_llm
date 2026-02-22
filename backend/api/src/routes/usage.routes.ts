@@ -17,11 +17,9 @@
 
 import { Router, Request, Response } from 'express';
 import { getApiUsageTracker } from '../ollama/api-usage-tracker';
-import { success, internalError } from '../utils/api-response';
+import { success } from '../utils/api-response';
 import { requireAuth } from '../auth';
-import { createLogger } from '../utils/logger';
-
-const logger = createLogger('UsageRoutes');
+import { asyncHandler } from '../utils/error-handler';
 
 const router = Router();
 
@@ -32,33 +30,23 @@ router.use(requireAuth);
  * API 사용량 통계 요약 조회
  * GET /api/usage
  */
-router.get('/', (req: Request, res: Response) => {
-    try {
-         const tracker = getApiUsageTracker();
-         const summary = tracker.getSummary();
-         const uptime = Math.round(process.uptime());
+router.get('/', asyncHandler(async (req: Request, res: Response) => {
+    const tracker = getApiUsageTracker();
+    const summary = tracker.getSummary();
+    const uptime = Math.round(process.uptime());
 
-         res.json(success({ ...summary, uptime }));
-      } catch (error) {
-           logger.error('[Usage API] 오류:', error);
-           res.status(500).json(internalError('API 사용량 조회 실패'));
-       }
-});
+    res.json(success({ ...summary, uptime }));
+}));
 
 /**
  * API 사용량 일간 통계 조회
  * GET /api/usage/daily?days=7
  */
-router.get('/daily', (req: Request, res: Response) => {
-    try {
-        const days = parseInt(req.query.days as string) || 7;
-        const tracker = getApiUsageTracker();
+router.get('/daily', asyncHandler(async (req: Request, res: Response) => {
+    const days = parseInt(req.query.days as string) || 7;
+    const tracker = getApiUsageTracker();
 
-         res.json(success({ daily: tracker.getDailyStats(days) }));
-      } catch (error) {
-          logger.error('[Usage Daily API] 오류:', error);
-          res.status(500).json(internalError('일간 사용량 조회 실패'));
-      }
-});
+    res.json(success({ daily: tracker.getDailyStats(days) }));
+}));
 
 export default router;

@@ -43,6 +43,7 @@ export class AdminController {
         this.router.use(requireAdmin);
 
         this.router.get('/users', this.getUsers.bind(this));
+        this.router.post('/users', this.createUser.bind(this));
         this.router.get('/users/stats', this.getUserStats.bind(this));
         this.router.put('/users/:id', this.updateUser.bind(this));
         this.router.put('/users/:id/role', this.changeUserRole.bind(this));
@@ -79,6 +80,40 @@ export class AdminController {
         } catch (error) {
             log.error('[Admin Conversations] 오류:', error);
             res.status(500).json(internalError('대화 목록 조회 실패'));
+        }
+    }
+
+
+    /**
+     * POST /api/admin/users - 새 사용자 생성 (관리자)
+     */
+    private async createUser(req: Request, res: Response): Promise<void> {
+        try {
+            const userManager = getUserManager();
+            const { email, password, role } = req.body as { email?: string; password?: string; role?: string };
+
+            if (!email || !email.includes('@')) {
+                res.status(400).json(badRequest('유효한 이메일을 입력하세요'));
+                return;
+            }
+            if (!password || password.length < 6) {
+                res.status(400).json(badRequest('비밀번호는 6자 이상이어야 합니다'));
+                return;
+            }
+            const validRoles = ['admin', 'user', 'guest'];
+            const userRole = validRoles.includes(role ?? '') ? (role as 'admin' | 'user' | 'guest') : 'user';
+
+            const newUser = await userManager.createUser({ email, password, role: userRole });
+            if (!newUser) {
+                res.status(409).json(badRequest('이미 사용 중인 이메일입니다'));
+                return;
+            }
+
+            log.info(`관리자가 사용자 생성: ${newUser.email} (${userRole})`);
+            res.status(201).json(success({ user: newUser }));
+        } catch (error) {
+            log.error('[Admin Create User] 오류:', error);
+            res.status(500).json(internalError('사용자 생성 실패'));
         }
     }
 
