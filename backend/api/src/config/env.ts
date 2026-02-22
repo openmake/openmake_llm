@@ -73,6 +73,7 @@ export interface EnvConfig {
     googleCseId: string;
     firecrawlApiKey: string;
     firecrawlApiUrl: string;
+    githubToken: string;
 
     // Documents
     documentTtlHours: number;
@@ -174,6 +175,7 @@ const DEFAULT_CONFIG: EnvConfig = {
     googleCseId: '',
     firecrawlApiKey: '',
     firecrawlApiUrl: 'https://api.firecrawl.dev/v1',
+    githubToken: '',
 
     // Documents
     documentTtlHours: 1,
@@ -338,6 +340,7 @@ export function loadConfig(): EnvConfig {
         GOOGLE_CSE_ID: env('GOOGLE_CSE_ID'),
         FIRECRAWL_API_KEY: env('FIRECRAWL_API_KEY'),
         FIRECRAWL_API_URL: env('FIRECRAWL_API_URL'),
+        GITHUB_TOKEN: env('GITHUB_TOKEN'),
         DOCUMENT_TTL_HOURS: env('DOCUMENT_TTL_HOURS'),
         MAX_UPLOADED_DOCUMENTS: env('MAX_UPLOADED_DOCUMENTS'),
         MAX_CONVERSATION_SESSIONS: env('MAX_CONVERSATION_SESSIONS'),
@@ -439,6 +442,7 @@ export function loadConfig(): EnvConfig {
         googleCseId: parsed.GOOGLE_CSE_ID ?? DEFAULT_CONFIG.googleCseId,
         firecrawlApiKey: parsed.FIRECRAWL_API_KEY ?? DEFAULT_CONFIG.firecrawlApiKey,
         firecrawlApiUrl: parsed.FIRECRAWL_API_URL ?? DEFAULT_CONFIG.firecrawlApiUrl,
+        githubToken: parsed.GITHUB_TOKEN ?? DEFAULT_CONFIG.githubToken,
 
         // Documents
         documentTtlHours: parsed.DOCUMENT_TTL_HOURS ?? DEFAULT_CONFIG.documentTtlHours,

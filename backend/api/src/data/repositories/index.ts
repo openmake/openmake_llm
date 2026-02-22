@@ -8,3 +8,4 @@ export { CanvasRepository } from './canvas-repository';
 export { MarketplaceRepository } from './marketplace-repository';
 export { AuditRepository } from './audit-repository';
 export { FeedbackRepository } from './feedback-repository';
+export { SkillRepository } from './skill-repository';

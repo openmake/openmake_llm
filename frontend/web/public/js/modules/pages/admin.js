@@ -129,9 +129,9 @@
                         const res = await authFetch('/api/admin/users/stats');
                         const stats = await res.json();
                         const payload = stats.data || stats;
-                        document.getElementById('statTotalUsers').textContent = payload.total_users || 0;
-                        document.getElementById('statActiveUsers').textContent = payload.active_users || 0;
-                        document.getElementById('statAdmins').textContent = payload.admins || 0;
+                        document.getElementById('statTotalUsers').textContent = payload.totalUsers || 0;
+                        document.getElementById('statActiveUsers').textContent = payload.activeUsers || 0;
+                        document.getElementById('statAdmins').textContent = payload.adminCount || 0;
                     } catch (e) { console.error('[Admin] 사용자 통계 로드 실패:', e); }
                     try {
                         const res = await authFetch('/api/admin/stats');
@@ -180,7 +180,7 @@
                             showToast('사용자 정보가 수정되었습니다', 'success');
                         } else {
                             if (!password || password.length < 6) { showToast('비밀번호는 6자 이상이어야 합니다', 'error'); return; }
-                            const res = await authFetch('/api/auth/register', { method: 'POST', body: JSON.stringify({ email, password }) });
+                            const res = await authFetch('/api/admin/users', { method: 'POST', body: JSON.stringify({ email, password, role }) });
                             if (!res.ok) { const d = await res.json(); throw new Error((d.error && typeof d.error === 'object' ? d.error.message : d.error) || '추가 실패'); }
                             showToast('사용자가 추가되었습니다', 'success');
                         }

@@ -10,3 +10,8 @@
  */
 export * from './auth.schema';
 export * from './chat.schema';
+export * from './skills.schema';
+export * from './agents.schema';
+export * from './canvas.schema';
+export * from './memory.schema';
+export * from './research.schema';

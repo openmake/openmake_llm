@@ -9,7 +9,7 @@
  * @module __tests__/chat-feedback
  */
 
-import { describe, it, expect, beforeEach } from 'bun:test';
+// Jest globals (describe, it, expect, beforeEach) are available automatically
 import { FeedbackRepository, FeedbackRecord, FeedbackStats } from '../data/repositories/feedback-repository';
 import { Pool } from 'pg';
 

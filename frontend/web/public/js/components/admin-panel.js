@@ -31,7 +31,9 @@ var ADMIN_ITEMS = [
     { href: '/alerts.html', icon: 'lucide:bell', label: '알림 관리', desc: '시스템 알림 설정', admin: true },
     { href: '/cluster.html', icon: 'lucide:monitor', label: '클러스터', desc: '노드 상태 관리', admin: true },
     { href: '/usage.html', icon: 'lucide:bar-chart-2', label: 'API 사용량', desc: '토큰 및 요청 통계' },
-    { href: '/password-change.html', icon: 'lucide:key-round', label: '비밀번호 변경', desc: '계정 보안 설정' }
+    { href: '/password-change.html', icon: 'lucide:key-round', label: '비밀번호 변경', desc: '계정 보안 설정' },
+    { href: '/skill-library.html', icon: 'lucide:package', label: '스킬 라이브러리', desc: '에이전트 스킬 검색 및 관리', admin: true },
+    { href: '/marketplace.html', icon: 'lucide:store', label: '마켓플레이스', desc: '에이전트 마켓플레이스' }
 ];
 
 /**

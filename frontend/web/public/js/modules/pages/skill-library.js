@@ -26,31 +26,420 @@
         total: 0
     };
 
+    function getPageHTML() {
+        return `
+<style data-spa-style="skill-library">
+    .sl-page {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        overflow: hidden;
+    }
+    .sl-header {
+        padding: var(--space-5, 1.25rem) var(--space-5, 1.25rem) 0;
+        flex-shrink: 0;
+    }
+    .sl-header h1 {
+        font-size: 1.5rem;
+        font-weight: 600;
+        color: var(--text-primary, #fff);
+        margin: 0 0 var(--space-2, 0.5rem);
+        display: flex;
+        align-items: center;
+        gap: var(--space-2, 0.5rem);
+    }
+    .sl-header p {
+        color: var(--text-secondary, #94a3b8);
+        margin-bottom: var(--space-3, 0.75rem);
+        font-size: 0.875rem;
+    }
+    /* Tabs */
+    .sl-tabs {
+        display: flex;
+        gap: 0;
+        border-bottom: 1px solid var(--border-color, #2d3748);
+        margin-bottom: 0;
+    }
+    .sl-tab {
+        padding: 0.75rem 1.25rem;
+        cursor: pointer;
+        color: var(--text-secondary, #a0aec0);
+        border: none;
+        border-bottom: 2px solid transparent;
+        background: transparent;
+        font-weight: 500;
+        font-size: 0.9rem;
+        transition: color 0.15s, border-color 0.15s;
+    }
+    .sl-tab:hover { color: var(--text-primary, #fff); }
+    .sl-tab.active {
+        color: var(--accent-primary, #3b82f6);
+        border-bottom-color: var(--accent-primary, #3b82f6);
+    }
+    /* Tab panes */
+    .sl-tab-content {
+        flex: 1;
+        overflow-y: auto;
+        padding: var(--space-5, 1.25rem);
+    }
+    .sl-pane { display: none; }
+    .sl-pane.active { display: block; }
+    /* Toolbar row */
+    .sl-toolbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: var(--space-3, 0.75rem);
+        margin-bottom: var(--space-4, 1rem);
+    }
+    .sl-search-group {
+        display: flex;
+        gap: var(--space-2, 0.5rem);
+        flex: 1;
+        max-width: 600px;
+        flex-wrap: wrap;
+    }
+    .sl-input-wrap {
+        position: relative;
+        display: flex;
+        align-items: center;
+        flex: 1;
+    }
+    .sl-input-icon {
+        position: absolute;
+        left: 0.75rem;
+        color: var(--text-secondary, #94a3b8);
+        pointer-events: none;
+        font-size: 0.875rem;
+    }
+    .sl-input {
+        width: 100%;
+        padding: 0.5rem 0.75rem 0.5rem 2.2rem;
+        background: var(--bg-secondary, #1e293b);
+        border: 1px solid var(--border-light, #334155);
+        border-radius: var(--radius-md, 6px);
+        color: var(--text-primary, #fff);
+        font-size: 0.875rem;
+        box-sizing: border-box;
+    }
+    .sl-input::placeholder { color: var(--text-muted, #64748b); }
+    .sl-input:focus { outline: none; border-color: var(--accent-primary, #3b82f6); }
+    .sl-select {
+        padding: 0.5rem 0.75rem;
+        background: var(--bg-secondary, #1e293b);
+        border: 1px solid var(--border-light, #334155);
+        border-radius: var(--radius-md, 6px);
+        color: var(--text-primary, #fff);
+        font-size: 0.875rem;
+    }
+    .sl-select:focus { outline: none; border-color: var(--accent-primary, #3b82f6); }
+    /* Buttons */
+    .sl-btn {
+        padding: 0.5rem 1rem;
+        border-radius: var(--radius-md, 6px);
+        font-size: 0.875rem;
+        font-weight: 500;
+        cursor: pointer;
+        border: none;
+        display: inline-flex;
+        align-items: center;
+        gap: var(--space-2, 0.5rem);
+        transition: opacity 0.15s;
+    }
+    .sl-btn:hover { opacity: 0.85; }
+    .sl-btn-primary { background: var(--accent-primary, #3b82f6); color: #fff; }
+    .sl-btn-outline { background: transparent; color: var(--text-secondary, #94a3b8); border: 1px solid var(--border-light, #334155); }
+    .sl-btn-outline:hover { color: var(--text-primary, #fff); border-color: var(--text-secondary, #94a3b8); }
+    .sl-btn-sm { padding: 0.35rem 0.75rem; font-size: 0.8rem; }
+    /* Grids */
+    .skill-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 1.25rem;
+    }
+    /* Cards */
+    .skill-card {
+        background-color: var(--bg-card, #1e293b);
+        border: 1px solid var(--border-color, #334155);
+        border-radius: 0.5rem;
+        padding: 1.25rem;
+        transition: border-color 0.2s, transform 0.2s;
+        display: flex;
+        flex-direction: column;
+    }
+    .skill-card:hover {
+        border-color: var(--accent-primary, #3b82f6);
+        transform: translateY(-2px);
+    }
+    .skill-card-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 0.5rem;
+    }
+    .skill-card-badge {
+        font-size: 0.75rem;
+        padding: 0.2rem 0.5rem;
+        border-radius: 1rem;
+        background: rgba(59,130,246,0.1);
+        color: var(--accent-primary, #3b82f6);
+        border: 1px solid rgba(59,130,246,0.2);
+        display: inline-block;
+    }
+    .skill-card-menu {
+        position: relative;
+    }
+    .skill-card-menu-btn {
+        background: transparent;
+        border: none;
+        color: var(--text-secondary, #94a3b8);
+        cursor: pointer;
+        padding: 0.2rem 0.4rem;
+        border-radius: 4px;
+        font-size: 1.1rem;
+        line-height: 1;
+    }
+    .skill-card-menu-btn:hover { background: var(--bg-tertiary, #2d3748); }
+    .skill-card-dropdown {
+        display: none;
+        position: absolute;
+        right: 0;
+        top: 100%;
+        background: var(--bg-card, #1e293b);
+        border: 1px solid var(--border-color, #334155);
+        border-radius: var(--radius-md, 6px);
+        min-width: 160px;
+        z-index: 100;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+    }
+    .skill-card-dropdown.open { display: block; }
+    .skill-card-dropdown a {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem 0.75rem;
+        color: var(--text-primary, #fff);
+        text-decoration: none;
+        font-size: 0.875rem;
+    }
+    .skill-card-dropdown a:hover { background: var(--bg-tertiary, #2d3748); }
+    .skill-card-dropdown a.danger { color: #f87171; }
+    .skill-card-dropdown hr {
+        margin: 0.25rem 0;
+        border: none;
+        border-top: 1px solid var(--border-color, #334155);
+    }
+    .skill-card-title {
+        font-size: 1rem;
+        font-weight: 600;
+        color: var(--text-primary, #fff);
+        margin-bottom: 0.4rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .skill-card-desc {
+        color: var(--text-secondary, #94a3b8);
+        font-size: 0.8rem;
+        line-height: 1.5;
+        flex-grow: 1;
+        display: -webkit-box;
+        -webkit-line-clamp: 3;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        margin-bottom: 0.75rem;
+    }
+    .skill-card-footer {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-top: 1px solid var(--border-color, #334155);
+        padding-top: 0.75rem;
+        margin-top: auto;
+    }
+    .skill-card-footer small { color: var(--text-muted, #64748b); font-size: 0.75rem; }
+    .sl-badge {
+        font-size: 0.7rem;
+        padding: 0.15rem 0.5rem;
+        border-radius: 1rem;
+        border: 1px solid;
+    }
+    .sl-badge-success { background: rgba(34,197,94,0.1); color: #4ade80; border-color: rgba(34,197,94,0.25); }
+    .sl-badge-secondary { background: rgba(148,163,184,0.1); color: #94a3b8; border-color: rgba(148,163,184,0.2); }
+    /* Marketplace banner */
+    .sl-mp-banner {
+        display: flex;
+        align-items: flex-start;
+        gap: 1rem;
+        padding: 1rem 1.25rem;
+        background: var(--bg-secondary, #1e293b);
+        border: 1px solid rgba(59,130,246,0.25);
+        border-radius: 0.5rem;
+        margin-bottom: 1.25rem;
+    }
+    .sl-mp-banner-icon { font-size: 2rem; color: var(--accent-primary, #3b82f6); }
+    .sl-mp-banner h5 { margin: 0 0 0.25rem; color: var(--text-primary, #fff); font-size: 0.95rem; }
+    .sl-mp-banner p { margin: 0; color: var(--text-secondary, #94a3b8); font-size: 0.8rem; }
+    /* MP search toolbar */
+    .sl-mp-search {
+        display: flex;
+        gap: var(--space-2, 0.5rem);
+        margin-bottom: 1.25rem;
+        max-width: 600px;
+    }
+    .sl-mp-search .sl-input-wrap { flex: 1; }
+    /* MP card action buttons */
+    .skill-card-actions {
+        display: flex;
+        gap: 0.5rem;
+        border-top: 1px solid var(--border-color, #334155);
+        padding-top: 0.75rem;
+        margin-top: auto;
+    }
+    /* Pagination */
+    .sl-pagination {
+        display: flex;
+        justify-content: center;
+        gap: 0.25rem;
+        margin-top: 1.25rem;
+        flex-wrap: wrap;
+    }
+    .sl-page-btn {
+        padding: 0.35rem 0.65rem;
+        background: var(--bg-secondary, #1e293b);
+        border: 1px solid var(--border-color, #334155);
+        border-radius: var(--radius-md, 6px);
+        color: var(--text-secondary, #94a3b8);
+        cursor: pointer;
+        font-size: 0.8rem;
+    }
+    .sl-page-btn:hover { border-color: var(--accent-primary, #3b82f6); color: var(--text-primary, #fff); }
+    .sl-page-btn.active { background: var(--accent-primary, #3b82f6); border-color: var(--accent-primary, #3b82f6); color: #fff; }
+    .sl-page-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    /* Loading / Empty states */
+    .sl-loading {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        padding: 3rem;
+        width: 100%;
+        color: var(--text-secondary, #94a3b8);
+    }
+    .sl-empty {
+        text-align: center;
+        padding: 3rem;
+        color: var(--text-secondary, #94a3b8);
+        width: 100%;
+        font-size: 0.9rem;
+    }
+    .sl-error {
+        padding: 1rem 1.25rem;
+        background: rgba(248,113,113,0.1);
+        border: 1px solid rgba(248,113,113,0.25);
+        border-radius: 0.5rem;
+        color: #f87171;
+        font-size: 0.875rem;
+        width: 100%;
+        box-sizing: border-box;
+    }
+    /* Spinner */
+    @keyframes sl-spin { to { transform: rotate(360deg); } }
+    .sl-spinner {
+        width: 1.5rem; height: 1.5rem;
+        border: 2px solid var(--border-color, #334155);
+        border-top-color: var(--accent-primary, #3b82f6);
+        border-radius: 50%;
+        animation: sl-spin 0.7s linear infinite;
+        margin: auto;
+    }
+</style>
+<div class="sl-page" id="skill-library-root">
+    <div class="sl-header">
+        <h1>
+            <span class="iconify" data-icon="lucide:package"></span>
+            스킬 라이브러리
+        </h1>
+        <p>로컬에 설치된 에이전트 스킬을 관리하거나 마켓플레이스에서 새로운 스킬을 가져옵니다.</p>
+        <div class="sl-tabs" role="tablist">
+            <button class="sl-tab active" data-sl-tab="local" role="tab" aria-selected="true">내 스킬</button>
+            <button class="sl-tab" data-sl-tab="marketplace" role="tab" aria-selected="false">SkillsMP 마켓플레이스</button>
+        </div>
+    </div>
+
+    <div class="sl-tab-content">
+        <!-- 로컬 스킬 탭 -->
+        <div class="sl-pane active" id="sl-pane-local" role="tabpanel">
+            <div class="sl-toolbar">
+                <div class="sl-search-group">
+                    <div class="sl-input-wrap">
+                        <span class="sl-input-icon iconify" data-icon="lucide:search"></span>
+                        <input type="text" id="localSearchInput" class="sl-input" placeholder="스킬 검색...">
+                    </div>
+                    <select id="localCategoryFilter" class="sl-select">
+                        <option value="">모든 카테고리</option>
+                    </select>
+                    <select id="localSortSelect" class="sl-select">
+                        <option value="newest">최신순</option>
+                        <option value="updated">업데이트순</option>
+                        <option value="name">이름순</option>
+                        <option value="category">카테고리순</option>
+                    </select>
+                </div>
+                <button class="sl-btn sl-btn-primary" id="btnNewSkill">
+                    <span class="iconify" data-icon="lucide:plus"></span> 새 스킬 등록
+                </button>
+            </div>
+
+            <div id="localSkillsGrid" class="skill-grid">
+                <div class="sl-loading"><div class="sl-spinner"></div></div>
+            </div>
+            <div id="localPagination" class="sl-pagination"></div>
+        </div>
+
+        <!-- 마켓플레이스 탭 -->
+        <div class="sl-pane" id="sl-pane-marketplace" role="tabpanel">
+            <div class="sl-mp-banner">
+                <div class="sl-mp-banner-icon">
+                    <span class="iconify" data-icon="lucide:globe"></span>
+                </div>
+                <div>
+                    <h5>SkillsMP 오픈소스 생태계 연동</h5>
+                    <p>전 세계 개발자가 공유하는 26만 개 이상의 오픈소스 에이전트 스킬 포맷(SKILL.md)을 검색하고 로컬 환경으로 즉시 가져올 수 있습니다.</p>
+                </div>
+            </div>
+
+            <div class="sl-mp-search">
+                <div class="sl-input-wrap">
+                    <span class="sl-input-icon iconify" data-icon="lucide:search"></span>
+                    <input type="text" id="mpSearchInput" class="sl-input"
+                        placeholder="마켓플레이스 검색 (예: react, python, 분석)...">
+                </div>
+                <button class="sl-btn sl-btn-primary" id="mpSearchBtn">검색</button>
+            </div>
+
+            <div id="mpSkillsGrid" class="skill-grid">
+                <div class="sl-empty">검색어를 입력하고 버튼을 눌러 스킬을 찾아보세요.</div>
+            </div>
+            <div id="mpPagination" class="sl-pagination"></div>
+        </div>
+    </div>
+</div>`;
+    }
+
     window.PageModules['skill-library'] = {
         getHTML: function () {
-            return '<div id="skill-library-root"><div class="text-center p-5"><div class="spinner-border text-primary" role="status"></div></div></div>';
+            return getPageHTML();
         },
 
         init: async function () {
             try {
-                // 1. HTML 마크업 로드
-                const res = await fetch('/skill-library.html');
-                if (!res.ok) throw new Error('HTML 로드 실패');
-                const html = await res.text();
-
-                const root = document.getElementById('skill-library-root');
-                if (root) {
-                    root.innerHTML = html;
-
-                    // 2. 초기화 작업
-                    this.setupEventListeners();
-                    await this.loadLocalCategories();
-                    await this.loadLocalSkills();
-                }
+                this.setupTabs();
+                this.setupEventListeners();
+                await this.loadLocalCategories();
+                await this.loadLocalSkills();
             } catch (e) {
                 console.error('Skill Library init error:', e);
-                const root = document.getElementById('skill-library-root');
-                if (root) root.innerHTML = '<div class="alert alert-danger m-4">스킬 라이브러리를 블러오지 못했습니다.</div>';
             }
 
             // 모달 오픈 이벤트 리스너 추가 (custom-agents 연동)
@@ -61,31 +450,67 @@
         cleanup: function () {
             window.removeEventListener('open-skill-editor', this.onOpenSkillEditor);
             window.removeEventListener('edit-local-skill', this.onEditLocalSkill);
+
+            // Cleanup globals
+            ['sl_openNewSkill', 'sl_editSkill', 'sl_deleteSkill', 'sl_exportSkill',
+             'sl_importSkill', 'sl_viewMpSkill', 'sl_changeLocalPage', 'sl_changeMpPage'].forEach(key => {
+                try { delete window[key]; } catch (e) {}
+            });
+
+            // Close any open dropdowns
+            document.querySelectorAll('.skill-card-dropdown.open').forEach(el => el.classList.remove('open'));
+        },
+
+        setupTabs: function () {
+            document.querySelectorAll('.sl-tab').forEach(tab => {
+                tab.addEventListener('click', function () {
+                    const target = this.dataset.slTab;
+                    // Update tab buttons
+                    document.querySelectorAll('.sl-tab').forEach(t => {
+                        t.classList.toggle('active', t.dataset.slTab === target);
+                        t.setAttribute('aria-selected', t.dataset.slTab === target ? 'true' : 'false');
+                    });
+                    // Update panes
+                    document.querySelectorAll('.sl-pane').forEach(p => {
+                        p.classList.toggle('active', p.id === 'sl-pane-' + target);
+                    });
+                });
+            });
         },
 
         onOpenSkillEditor: function () {
-            // custom-agents의 함수 호출
-            if (window.btnNewSkill) {
-                document.getElementById('btnNewSkill')?.click();
-            }
+            document.getElementById('btnNewSkill')?.click();
         },
 
         onEditLocalSkill: function (e) {
             const id = e.detail?.id;
-            if (id && typeof window.editSkill === 'function') {
-                window.editSkill(id);
+            if (id && typeof window.sl_editSkill === 'function') {
+                window.sl_editSkill(id);
             }
         },
 
         setupEventListeners: function () {
             const self = this;
 
+            // New skill button
+            document.getElementById('btnNewSkill')?.addEventListener('click', () => {
+                self.openNewSkillModal();
+            });
+
             // 로컬 스킬 탭 검색/필터
-            document.getElementById('localSearchInput')?.addEventListener('input', window.debounce((e) => {
-                localFilters.search = e.target.value;
-                localFilters.page = 1;
-                self.loadLocalSkills();
-            }, 500));
+            const localSearch = document.getElementById('localSearchInput');
+            if (localSearch) {
+                const debouncedSearch = window.debounce ? window.debounce(function (e) {
+                    localFilters.search = e.target.value;
+                    localFilters.page = 1;
+                    self.loadLocalSkills();
+                }, 500) : function (e) {
+                    localFilters.search = e.target.value;
+                    localFilters.page = 1;
+                    self.loadLocalSkills();
+                };
+                localSearch.addEventListener('input', debouncedSearch);
+            }
 
             document.getElementById('localCategoryFilter')?.addEventListener('change', (e) => {
                 localFilters.category = e.target.value;
@@ -114,7 +539,14 @@
                 }
             });
 
-            // 글로벌 함수 노출 (HTML onclick 연동)
+            // Global dropdown close on outside click
+            document.addEventListener('click', function slDropdownClose(e) {
+                if (!e.target.closest('.skill-card-menu')) {
+                    document.querySelectorAll('.skill-card-dropdown.open').forEach(d => d.classList.remove('open'));
+                }
+            });
+
+            // 글로벌 함수 노출
             window.sl_openNewSkill = this.openNewSkillModal.bind(this);
             window.sl_editSkill = this.editLocalSkill.bind(this);
             window.sl_deleteSkill = this.deleteLocalSkill.bind(this);
@@ -155,7 +587,7 @@
             const grid = document.getElementById('localSkillsGrid');
             if (!grid) return;
 
-            grid.innerHTML = '<div class="text-center p-5 w-100"><div class="spinner-border text-primary" role="status"></div></div>';
+            grid.innerHTML = '<div class="sl-loading"><div class="sl-spinner"></div></div>';
 
             try {
                 const offset = (localFilters.page - 1) * localFilters.limit;
@@ -180,7 +612,7 @@
 
             } catch (error) {
                 console.error(error);
-                grid.innerHTML = `<div class="alert alert-danger w-100">${window.escapeHtml(error.message)}</div>`;
+                grid.innerHTML = `<div class="sl-error">${window.escapeHtml ? window.escapeHtml(error.message) : error.message}</div>`;
             }
         },
 
@@ -189,31 +621,40 @@
             if (!grid) return;
 
             if (localSkills.length === 0) {
-                grid.innerHTML = '<div class="text-center p-5 text-secondary w-100">조회된 스킬이 없습니다. 새 스킬을 등록하거나 마켓플레이스에서 가져와보세요.</div>';
+                grid.innerHTML = '<div class="sl-empty">조회된 스킬이 없습니다. 새 스킬을 등록하거나 마켓플레이스에서 가져와보세요.</div>';
                 return;
             }
 
+            const esc = window.escapeHtml || (s => s);
+
             grid.innerHTML = localSkills.map(skill => `
                 <div class="skill-card">
-                    <div class="d-flex justify-content-between align-items-start mb-2">
-                        <span class="skill-card-badge">${window.escapeHtml(skill.category || 'general')}</span>
-                        <div class="dropdown">
-                            <button class="btn btn-sm btn-icon text-secondary" type="button" data-bs-toggle="dropdown">
-                                <span class="iconify" data-icon="lucide:more-vertical"></span>
-                            </button>
-                            <ul class="dropdown-menu dropdown-menu-end bg-surface border-secondary">
-                                <li><a class="dropdown-item text-white" href="#" onclick="sl_editSkill('${skill.id}')"><span class="iconify me-2" data-icon="lucide:edit-2"></span>수정</a></li>
-                                <li><a class="dropdown-item text-white" href="#" onclick="sl_exportSkill('${skill.id}')"><span class="iconify me-2" data-icon="lucide:download"></span>다운로드 (.SKILL)</a></li>
-                                <li><hr class="dropdown-divider border-secondary"></li>
-                                <li><a class="dropdown-item text-danger" href="#" onclick="sl_deleteSkill('${skill.id}')"><span class="iconify me-2" data-icon="lucide:trash-2"></span>삭제</a></li>
-                            </ul>
+                    <div class="skill-card-top">
+                        <span class="skill-card-badge">${esc(skill.category || 'general')}</span>
+                        <div class="skill-card-menu">
+                            <button class="skill-card-menu-btn" title="더 보기"
+                                onclick="(function(btn){btn.nextElementSibling.classList.toggle('open');event.stopPropagation();})(this)">⋯</button>
+                            <div class="skill-card-dropdown">
+                                <a href="#" onclick="sl_editSkill('${esc(skill.id)}');return false;">
+                                    <span class="iconify" data-icon="lucide:edit-2"></span> 수정
+                                </a>
+                                <a href="#" onclick="sl_exportSkill('${esc(skill.id)}');return false;">
+                                    <span class="iconify" data-icon="lucide:download"></span> 다운로드 (.SKILL)
+                                </a>
+                                <hr>
+                                <a href="#" class="danger" onclick="sl_deleteSkill('${esc(skill.id)}');return false;">
+                                    <span class="iconify" data-icon="lucide:trash-2"></span> 삭제
+                                </a>
+                            </div>
                         </div>
                     </div>
-                    <h3 class="skill-card-title" title="${window.escapeHtml(skill.name)}">${window.escapeHtml(skill.name)}</h3>
-                    <p class="skill-card-desc" title="${window.escapeHtml(skill.description || '')}">${window.escapeHtml(skill.description || '설명이 없습니다.')}</p>
+                    <h3 class="skill-card-title" title="${esc(skill.name)}">${esc(skill.name)}</h3>
+                    <p class="skill-card-desc" title="${esc(skill.description || '')}">${esc(skill.description || '설명이 없습니다.')}</p>
                     <div class="skill-card-footer">
-                        <small class="text-secondary opacity-75">${new Date(skill.createdAt).toLocaleDateString()}</small>
-                        ${skill.isPublic ? '<span class="badge bg-success-subtle border border-success-subtle text-success rounded-pill px-2">Public</span>' : '<span class="badge bg-secondary-subtle border border-secondary-subtle text-light rounded-pill px-2"><span class="iconify me-1" data-icon="lucide:lock" style="font-size:10px"></span>Private</span>'}
+                        <small>${new Date(skill.createdAt).toLocaleDateString()}</small>
+                        ${skill.isPublic
+                            ? '<span class="sl-badge sl-badge-success">Public</span>'
+                            : '<span class="sl-badge sl-badge-secondary"><span class="iconify" data-icon="lucide:lock" style="font-size:10px;vertical-align:middle"></span> Private</span>'}
                     </div>
                 </div>
             `).join('');
@@ -224,11 +665,11 @@
             if (!grid) return;
 
             if (!mpFilters.query) {
-                grid.innerHTML = '<div class="text-center p-5 w-100 text-secondary">검색어를 입력하고 버튼을 눌러 스킬을 찾아보세요.</div>';
+                grid.innerHTML = '<div class="sl-empty">검색어를 입력하고 버튼을 눌러 스킬을 찾아보세요.</div>';
                 return;
             }
 
-            grid.innerHTML = '<div class="text-center p-5 w-100"><div class="spinner-border text-primary" role="status"></div><p class="mt-3 text-secondary">마켓플레이스 연동 중...</p></div>';
+            grid.innerHTML = '<div class="sl-loading"><div class="sl-spinner"></div><span style="margin-left:0.75rem">마켓플레이스 연동 중...</span></div>';
 
             try {
                 const offset = (mpFilters.page - 1) * mpFilters.limit;
@@ -251,7 +692,8 @@
 
             } catch (error) {
                 console.error(error);
-                grid.innerHTML = `<div class="alert alert-danger w-100">${window.escapeHtml(error.message)}</div>`;
+                const esc = window.escapeHtml || (s => s);
+                grid.innerHTML = `<div class="sl-error">${esc(error.message)}</div>`;
             }
         },
 
@@ -260,29 +702,32 @@
             if (!grid) return;
 
             if (mpSkills.length === 0) {
-                grid.innerHTML = '<div class="text-center p-5 text-secondary w-100">검색 결과가 없습니다.</div>';
+                grid.innerHTML = '<div class="sl-empty">검색 결과가 없습니다.</div>';
                 return;
             }
 
+            const esc = window.escapeHtml || (s => s);
+
             grid.innerHTML = mpSkills.map(skill => {
-                const idParams = window.escapeHtml(JSON.stringify({ repo: skill.repo, path: skill.path }));
+                const idParams = esc(JSON.stringify({ repo: skill.repo, path: skill.path }));
                 return `
                 <div class="skill-card">
-                    <div class="d-flex justify-content-between align-items-start mb-2">
-                        <span class="skill-card-badge bg-primary-subtle text-primary border-primary">${window.escapeHtml(skill.category || 'general')}</span>
+                    <div class="skill-card-top">
+                        <span class="skill-card-badge" style="background:rgba(59,130,246,0.15);color:var(--accent-primary,#3b82f6)">${esc(skill.category || 'general')}</span>
                     </div>
-                    <h3 class="skill-card-title text-truncate" title="${window.escapeHtml(skill.name)}">${window.escapeHtml(skill.name)}</h3>
-                    <p class="skill-card-desc mb-2" title="${window.escapeHtml(skill.description || '')}">${window.escapeHtml(skill.description || '설명이 없습니다.')}</p>
-                    <small class="text-secondary d-flex align-items-center gap-1 mb-3 text-truncate" title="${window.escapeHtml(skill.repo)}"><span class="iconify" data-icon="lucide:github"></span> ${window.escapeHtml(skill.repo)}</small>
-                    
-                    <div class="skill-card-footer mt-auto pt-3 border-top border-secondary d-flex gap-2">
-                        <button class="btn btn-sm btn-outline-secondary flex-grow-1" onclick='sl_viewMpSkill(${idParams})'>미리보기</button>
-                        <button class="btn btn-sm btn-primary flex-grow-1 d-flex align-items-center justify-content-center gap-1" onclick='sl_importSkill(${idParams}, event)'>
+                    <h3 class="skill-card-title" title="${esc(skill.name)}">${esc(skill.name)}</h3>
+                    <p class="skill-card-desc" title="${esc(skill.description || '')}">${esc(skill.description || '설명이 없습니다.')}</p>
+                    <small style="color:var(--text-muted,#64748b);font-size:0.75rem;display:flex;align-items:center;gap:0.25rem;margin-bottom:0.75rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(skill.repo)}">
+                        <span class="iconify" data-icon="lucide:github"></span> ${esc(skill.repo)}
+                    </small>
+                    <div class="skill-card-actions">
+                        <button class="sl-btn sl-btn-outline sl-btn-sm" style="flex:1" onclick='sl_viewMpSkill(${idParams})'>미리보기</button>
+                        <button class="sl-btn sl-btn-primary sl-btn-sm" style="flex:1" onclick='sl_importSkill(${idParams}, event)'>
                             <span class="iconify" data-icon="lucide:download-cloud"></span> 설치
                         </button>
                     </div>
-                </div>
-            `}).join('');
+                </div>`;
+            }).join('');
         },
 
         importMpSkill: async function (paramsStr, event) {
@@ -291,7 +736,7 @@
                 let orgHtml = '';
                 if (btn) {
                     orgHtml = btn.innerHTML;
-                    btn.innerHTML = '<span class="spinner-border spinner-border-sm mr-1"></span> 설치 중...';
+                    btn.innerHTML = '<div class="sl-spinner" style="width:1rem;height:1rem;display:inline-block"></div> 설치 중...';
                     btn.disabled = true;
                 }
 
@@ -311,13 +756,13 @@
                 }
 
                 if (response.ok && data.success) {
-                    window.showToast('마켓플레이스 스킬을 로컬에 저장했습니다.', 'success');
+                    if (window.showToast) window.showToast('마켓플레이스 스킬을 로컬에 저장했습니다.', 'success');
                     this.loadLocalSkills();
                 } else {
-                    window.showToast(data.message || '알 수 없는 오류', 'error');
+                    if (window.showToast) window.showToast(data.message || '알 수 없는 오류', 'error');
                 }
             } catch (err) {
-                window.showToast('스킬 임포트 실패: ' + err.message, 'error');
+                if (window.showToast) window.showToast('스킬 임포트 실패: ' + err.message, 'error');
             }
         },
 
@@ -328,40 +773,36 @@
                 if (res.ok && data.success) {
                     alert(`[SKILL.md 미리보기]\n\nName: ${data.data.parsed.name}\nCategory: ${data.data.parsed.category}\n\n${data.data.parsed.content.substring(0, 300)}...`);
                 } else {
-                    window.showToast('조회 실패: ' + data.message, 'error');
+                    if (window.showToast) window.showToast('조회 실패: ' + data.message, 'error');
                 }
             } catch (e) {
-                window.showToast('조회 실패: ' + e.message, 'error');
+                if (window.showToast) window.showToast('조회 실패: ' + e.message, 'error');
             }
         },
 
         openNewSkillModal: function () {
             // 커스텀 에이전트 메뉴로 이동
-            const navLink = document.querySelector('[data-route="custom-agents"]');
-            if (navLink) {
-                if (window.Router && window.Router.navigate) {
-                    window.Router.navigate('/custom-agents.html');
-                } else {
-                    navLink.click();
-                }
-                setTimeout(() => {
-                    window.dispatchEvent(new CustomEvent('open-skill-editor'));
-                }, 400);
+            if (window.Router && window.Router.navigate) {
+                window.Router.navigate('/custom-agents.html');
+            } else {
+                const navLink = document.querySelector('[data-route="custom-agents"]');
+                if (navLink) navLink.click();
             }
+            setTimeout(() => {
+                window.dispatchEvent(new CustomEvent('open-skill-editor'));
+            }, 400);
         },
 
         editLocalSkill: function (id) {
-            const navLink = document.querySelector('[data-route="custom-agents"]');
-            if (navLink) {
-                if (window.Router && window.Router.navigate) {
-                    window.Router.navigate('/custom-agents.html');
-                } else {
-                    navLink.click();
-                }
-                setTimeout(() => {
-                    window.dispatchEvent(new CustomEvent('edit-local-skill', { detail: { id } }));
-                }, 400);
+            if (window.Router && window.Router.navigate) {
+                window.Router.navigate('/custom-agents.html');
+            } else {
+                const navLink = document.querySelector('[data-route="custom-agents"]');
+                if (navLink) navLink.click();
             }
+            setTimeout(() => {
+                window.dispatchEvent(new CustomEvent('edit-local-skill', { detail: { id } }));
+            }, 400);
         },
 
         exportSkill: function (id) {
@@ -374,14 +815,14 @@
                 const res = await window.authFetch(`/api/agents/skills/${id}`, { method: 'DELETE' });
                 const data = await res.json();
                 if (res.ok && data.success) {
-                    window.showToast('스킬이 삭제되었습니다.', 'success');
+                    if (window.showToast) window.showToast('스킬이 삭제되었습니다.', 'success');
                     this.loadLocalSkills();
                     this.loadLocalCategories();
                 } else {
-                    window.showToast('삭제 실패: ' + data.message, 'error');
+                    if (window.showToast) window.showToast('삭제 실패: ' + data.message, 'error');
                 }
             } catch (e) {
-                window.showToast('오류 발생: ' + e.message, 'error');
+                if (window.showToast) window.showToast('오류 발생: ' + e.message, 'error');
             }
         },
 
@@ -395,18 +836,16 @@
                 return;
             }
 
-            let html = '<ul class="pagination pagination-sm">';
-            html += `<li class="page-item ${currentPage === 1 ? 'disabled' : ''}"><a class="page-link bg-surface border-secondary text-white" href="#" onclick="${changeFnName}(${currentPage - 1}); return false;">이전</a></li>`;
-
             const startPage = Math.max(1, currentPage - 2);
             const endPage = Math.min(totalPages, startPage + 4);
 
+            let html = `<button class="sl-page-btn" ${currentPage === 1 ? 'disabled' : ''} onclick="window.${changeFnName}(${currentPage - 1})">이전</button>`;
+
             for (let i = startPage; i <= endPage; i++) {
-                html += `<li class="page-item ${i === currentPage ? 'active' : ''}"><a class="page-link ${i === currentPage ? 'bg-primary border-primary text-white' : 'bg-surface border-secondary text-white'}" href="#" onclick="${changeFnName}(${i}); return false;">${i}</a></li>`;
+                html += `<button class="sl-page-btn ${i === currentPage ? 'active' : ''}" onclick="window.${changeFnName}(${i})">${i}</button>`;
             }
 
-            html += `<li class="page-item ${currentPage === totalPages ? 'disabled' : ''}"><a class="page-link bg-surface border-secondary text-white" href="#" onclick="${changeFnName}(${currentPage + 1}); return false;">다음</a></li>`;
-            html += '</ul>';
+            html += `<button class="sl-page-btn" ${currentPage === totalPages ? 'disabled' : ''} onclick="window.${changeFnName}(${currentPage + 1})">다음</button>`;
 
             container.innerHTML = html;
         }

@@ -97,6 +97,7 @@ export const envSchema = z
         GOOGLE_CSE_ID: z.string().default(''),
         FIRECRAWL_API_KEY: z.string().default(''),
         FIRECRAWL_API_URL: z.url().default('https://api.firecrawl.dev/v1'),
+        GITHUB_TOKEN: z.string().default(''),
         VAPID_PUBLIC_KEY: z.string().default(''),
         VAPID_PRIVATE_KEY: z.string().default(''),
         VAPID_SUBJECT: z.string().default('mailto:admin@openmake.ai'),
