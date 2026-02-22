@@ -109,6 +109,8 @@ export interface ChatRequestParams {
     tool_choice?: 'auto' | 'none' | 'required' | { type: 'function'; function: { name: string } };
     /** 사용자 컨텍스트 */
     userContext: ChatUserContext;
+    /** API Key 인증 요청 시 키 ID */
+    apiKeyId?: string;
     /** 클러스터 매니저 */
     clusterManager: ClusterManager;
     /** 요청 중단 시그널 */
@@ -455,6 +457,7 @@ export class ChatRequestHandler {
             thinkingMode: mergedThinkingMode,
             thinkingLevel: mergedThinkingLevel,
             userId: userContext.userId,
+            apiKeyId: params.apiKeyId,
             userRole: userContext.userRole,
             userTier: userContext.userTier,
             enabledTools,

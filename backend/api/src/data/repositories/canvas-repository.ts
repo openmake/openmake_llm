@@ -94,10 +94,10 @@ export class CanvasRepository extends BaseRepository {
         });
     }
 
-    async getCanvasVersions(documentId: string): Promise<CanvasVersion[]> {
+    async getCanvasVersions(documentId: string, limit: number = 100): Promise<CanvasVersion[]> {
         const result = await this.query<CanvasVersion>(
-            'SELECT * FROM canvas_versions WHERE document_id = $1 ORDER BY version DESC',
-            [documentId]
+            'SELECT * FROM canvas_versions WHERE document_id = $1 ORDER BY version DESC LIMIT $2',
+            [documentId, limit]
         );
         return result.rows as CanvasVersion[];
     }

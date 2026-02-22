@@ -12,6 +12,7 @@ import { createLogger } from '../utils/logger';
 import { getApiKeyManager } from '../ollama/api-key-manager';
 import { getApiUsageTracker } from '../ollama/api-usage-tracker';
 import type { ExecutionPlan } from '../chat/profile-resolver';
+import { recordTokenUsage } from '../middlewares/rate-limit-headers';
 
 const logger = createLogger('ChatService');
 
@@ -35,11 +36,12 @@ export function recordChatMetrics(params: {
     startTime: number;
     message: string;
     model: string;
+    apiKeyId?: string;
     selectedAgent: { name: string };
     agentSelection: { primaryAgent: string };
     executionPlan?: ExecutionPlan;
 }): void {
-    const { fullResponse, startTime, message, model, selectedAgent, agentSelection, executionPlan } = params;
+    const { fullResponse, startTime, message, model, apiKeyId, selectedAgent, agentSelection, executionPlan } = params;
 
     // 사용량 추적 및 모니터링 메트릭 기록 (실패해도 응답 반환에 영향 없음)
     try {
@@ -49,6 +51,10 @@ export function recordChatMetrics(params: {
 
         const responseTime = Date.now() - startTime;
         const tokenCount = fullResponse.length;
+
+        if (apiKeyId) {
+            recordTokenUsage(apiKeyId, tokenCount);
+        }
 
         usageTracker.recordRequest({
             tokens: tokenCount,

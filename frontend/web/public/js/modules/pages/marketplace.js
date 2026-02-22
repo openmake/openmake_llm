@@ -63,7 +63,7 @@
                 }
                 if (!agents.length) { el.innerHTML = '<div class="empty-state"><h2>에이전트가 없습니다</h2></div>'; return; }
                 el.innerHTML = agents.map(a => `
-                    <div class="agent-card" onclick="openAgent('${a.id}')">
+                    <div class="agent-card" data-agent-id="${esc(a.id)}">
                         <div class="agent-icon">${esc(a.icon) || '&#129302;'}</div>
                         <h3>${esc(a.title)}</h3>
                         <div class="desc">${esc(a.description)}</div>
@@ -73,6 +73,10 @@
                             <span class="downloads">${numFmt(a.downloads)} 다운로드</span>
                         </div>
                     </div>`).join('');
+                el.onclick = function(e) {
+                    var card = e.target.closest('[data-agent-id]');
+                    if (card) { openAgent(card.dataset.agentId); }
+};
             } catch (e) { showToast('로드 실패', 'error'); }
         }
 
@@ -91,9 +95,17 @@
                     <span>v${a.version || '1.0.0'}</span>`;
                 document.getElementById('detailDesc').innerHTML = esc(a.long_description || a.description || '설명이 없습니다.');
                 document.getElementById('detailActions').innerHTML = `
-                    <button class="btn-secondary" onclick="closeDetail()">닫기</button>
-                    <button class="btn-primary" onclick="installAgent('${a.id}')">설치</button>
-                    <button class="btn-danger" onclick="uninstallAgent('${a.id}')">삭제</button>`;
+                    <button class="btn-secondary" data-action="close">닫기</button>
+                    <button class="btn-primary" data-action="install">설치</button>
+                    <button class="btn-danger" data-action="uninstall">삭제</button>`;
+                document.getElementById('detailActions').onclick = function(e) {
+                    var btn = e.target.closest('[data-action]');
+                    if (!btn) return;
+                    var action = btn.dataset.action;
+                    if (action === 'close') { closeDetail(); }
+                    else if (action === 'install') { installAgent(currentAgentId); }
+                    else if (action === 'uninstall') { uninstallAgent(currentAgentId); }
+};
                 loadReviews(id);
             } catch (e) { showToast('로드 실패', 'error'); }
         }

@@ -97,7 +97,15 @@ class UserManagerImpl {
      * 비동기로 스키마 확인 및 관리자 계정 보장을 수행합니다.
      */
     constructor() {
-        this.init().catch(err => logger.error('[UserManager] Init failed:', err));
+        this.initReady = this.init().catch(err => { logger.error('[UserManager] Init failed:', err); });
+    }
+
+    /** 스키마 초기화 완료 Promise (race condition 방지) */
+    private initReady: Promise<void>;
+
+    /** 초기화 완료 대기 */
+    async ensureReady(): Promise<void> {
+        await this.initReady;
     }
 
     private async init(): Promise<void> {
@@ -133,7 +141,7 @@ class UserManagerImpl {
                 // 이메일 사용자가 이미 존재하면: admin 권한 부여 + 비밀번호 갱신, 레거시 admin 삭제
                 const cfgAdminPassword = getConfig().adminPassword;
                 if (cfgAdminPassword) {
-                    const passwordHash = bcrypt.hashSync(cfgAdminPassword, BCRYPT_ROUNDS);
+                    const passwordHash = await bcrypt.hash(cfgAdminPassword, BCRYPT_ROUNDS);
                     await pool.query(
                         'UPDATE users SET role = $1, tier = $2, password_hash = $3, updated_at = $4 WHERE username = $5',
                         ['admin', 'enterprise', passwordHash, new Date().toISOString(), adminEmail]
@@ -146,7 +154,7 @@ class UserManagerImpl {
                 // 이메일 사용자가 없으면: 레거시 admin의 username을 이메일로 변경
                 const cfgAdminPassword = getConfig().adminPassword;
                 if (cfgAdminPassword) {
-                    const passwordHash = bcrypt.hashSync(cfgAdminPassword, BCRYPT_ROUNDS);
+                    const passwordHash = await bcrypt.hash(cfgAdminPassword, BCRYPT_ROUNDS);
                     await pool.query(
                         'UPDATE users SET username = $1, email = $2, password_hash = $3, updated_at = $4 WHERE username = $5 AND role = $6',
                         [adminEmail, adminEmail, passwordHash, new Date().toISOString(), 'admin', 'admin']
@@ -159,7 +167,7 @@ class UserManagerImpl {
                 if (existingEmail.rows[0].role !== 'admin') {
                     const cfgAdminPassword = getConfig().adminPassword;
                     if (cfgAdminPassword) {
-                        const passwordHash = bcrypt.hashSync(cfgAdminPassword, BCRYPT_ROUNDS);
+                        const passwordHash = await bcrypt.hash(cfgAdminPassword, BCRYPT_ROUNDS);
                         await pool.query(
                             'UPDATE users SET role = $1, tier = $2, password_hash = $3, updated_at = $4 WHERE username = $5',
                             ['admin', 'enterprise', passwordHash, new Date().toISOString(), adminEmail]
@@ -249,7 +257,7 @@ class UserManagerImpl {
         const tier = input.tier || (input.role === 'admin' ? 'enterprise' : 'free');
 
         // 🔒 bcrypt로 비밀번호 해싱
-        const passwordHash = bcrypt.hashSync(input.password, BCRYPT_ROUNDS);
+        const passwordHash = await bcrypt.hash(input.password, BCRYPT_ROUNDS);
         const now = new Date().toISOString();
         const role = input.role || 'user';
 
@@ -271,7 +279,7 @@ class UserManagerImpl {
         if (!row) return null;
 
         // 🔒 bcrypt로 비밀번호 비교 (해시 비교)
-        if (!bcrypt.compareSync(password, row.password_hash)) return null;
+        if (!(await bcrypt.compare(password, row.password_hash))) return null;
 
         // last_login 업데이트
         const now = new Date().toISOString();
@@ -343,7 +351,7 @@ class UserManagerImpl {
     async changePassword(userId: string, newPassword: string): Promise<boolean> {
         const pool = getPool();
         // 🔒 새 비밀번호도 해싱하여 저장
-        const passwordHash = bcrypt.hashSync(newPassword, BCRYPT_ROUNDS);
+        const passwordHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
         const result = await pool.query(
             'UPDATE users SET password_hash = $1, updated_at = $2 WHERE id = $3',
             [passwordHash, new Date().toISOString(), userId]
@@ -397,25 +405,9 @@ class UserManagerImpl {
     async deleteUser(userId: string): Promise<boolean> {
         const pool = getPool();
         const uid = userId;
-        const userResult = await pool.query('SELECT * FROM users WHERE id = $1', [uid]);
-        const row = userResult.rows[0] as UserRow | undefined;
-        if (!row) return false;
-
-        if (row.role === 'admin') {
-            const countResult = await pool.query('SELECT COUNT(*) as cnt FROM users WHERE role = \'admin\'');
-            if (parseInt(countResult.rows[0].cnt, 10) <= 1) return false;
-        }
-
-        // 의존 레코드를 FK 순서대로 삭제 (ON DELETE CASCADE가 없는 테이블들)
-        // canvas_documents → conversation_sessions 순서 주의 (canvas가 session FK 참조)
-        await pool.query('DELETE FROM agent_installations WHERE user_id = $1', [uid]);
-        await pool.query('DELETE FROM agent_reviews WHERE user_id = $1', [uid]);
-        await pool.query(
-            'DELETE FROM agent_marketplace WHERE author_id = $1', [uid]
-        );
-        await pool.query('DELETE FROM agent_feedback WHERE user_id = $1', [uid]);
-        await pool.query('DELETE FROM agent_usage_logs WHERE user_id = $1', [uid]);
-        await pool.query('UPDATE custom_agents SET created_by = NULL WHERE created_by = $1', [uid]);
+        await pool.query('DELETE FROM external_connections WHERE user_id = $1', [uid]);
+        await pool.query('DELETE FROM user_api_keys WHERE user_id = $1', [uid]); // DBA-BUG-R4-002
+        await pool.query('DELETE FROM message_feedback WHERE user_id = $1', [uid]);
         await pool.query('DELETE FROM canvas_documents WHERE user_id = $1', [uid]);
         await pool.query('DELETE FROM research_sessions WHERE user_id = $1', [uid]);
         await pool.query('DELETE FROM conversation_sessions WHERE user_id = $1', [uid]);

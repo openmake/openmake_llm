@@ -1,3 +1,4 @@
+```sql
 -- ============================================
 -- OpenMake.Ai - Database Schema
 -- Migrated from SQLite to PostgreSQL + pgvector
@@ -20,7 +21,7 @@ CREATE TABLE IF NOT EXISTS users (
 -- 대화 세션 테이블
 CREATE TABLE IF NOT EXISTS conversation_sessions (
     id TEXT PRIMARY KEY,
-    user_id TEXT REFERENCES users(id),
+    user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
     anon_session_id TEXT,
     title TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -45,7 +46,7 @@ CREATE TABLE IF NOT EXISTS conversation_messages (
 -- API 사용량 테이블
 CREATE TABLE IF NOT EXISTS api_usage (
     id SERIAL PRIMARY KEY,
-    date TEXT NOT NULL,
+    date DATE NOT NULL,
     api_key_id TEXT,
     requests INTEGER DEFAULT 0,
     tokens INTEGER DEFAULT 0,
@@ -61,8 +62,8 @@ CREATE TABLE IF NOT EXISTS api_usage (
 CREATE TABLE IF NOT EXISTS agent_usage_logs (
     id SERIAL PRIMARY KEY,
     timestamp TIMESTAMPTZ DEFAULT NOW(),
-    user_id TEXT REFERENCES users(id),
-    session_id TEXT REFERENCES conversation_sessions(id),
+    user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+    session_id TEXT REFERENCES conversation_sessions(id) ON DELETE SET NULL,
     agent_id TEXT NOT NULL,
     query TEXT,
     response_preview TEXT,
@@ -76,7 +77,7 @@ CREATE TABLE IF NOT EXISTS agent_usage_logs (
 CREATE TABLE IF NOT EXISTS agent_feedback (
     id TEXT PRIMARY KEY,
     agent_id TEXT NOT NULL,
-    user_id TEXT REFERENCES users(id),
+    user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
     rating INTEGER NOT NULL CHECK (rating >= 1 AND rating <= 5),
     comment TEXT,
     query TEXT,
@@ -96,7 +97,7 @@ CREATE TABLE IF NOT EXISTS custom_agents (
     emoji TEXT DEFAULT '🤖',
     temperature REAL,
     max_tokens INTEGER,
-    created_by TEXT REFERENCES users(id),
+    created_by TEXT REFERENCES users(id) ON DELETE CASCADE,
     enabled BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
@@ -162,7 +163,7 @@ CREATE TABLE IF NOT EXISTS memory_tags (
 
 CREATE TABLE IF NOT EXISTS research_sessions (
     id TEXT PRIMARY KEY,
-    user_id TEXT REFERENCES users(id),
+    user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
     topic TEXT NOT NULL,
     status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'running', 'completed', 'failed', 'cancelled')),
     depth TEXT DEFAULT 'standard' CHECK(depth IN ('quick', 'standard', 'deep')),
@@ -194,7 +195,7 @@ CREATE TABLE IF NOT EXISTS research_steps (
 CREATE TABLE IF NOT EXISTS agent_marketplace (
     id TEXT PRIMARY KEY,
     agent_id TEXT NOT NULL REFERENCES custom_agents(id),
-    author_id TEXT NOT NULL REFERENCES users(id),
+    author_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     title TEXT NOT NULL,
     description TEXT,
     long_description TEXT,
@@ -218,7 +219,7 @@ CREATE TABLE IF NOT EXISTS agent_marketplace (
 CREATE TABLE IF NOT EXISTS agent_reviews (
     id TEXT PRIMARY KEY,
     marketplace_id TEXT NOT NULL REFERENCES agent_marketplace(id) ON DELETE CASCADE,
-    user_id TEXT NOT NULL REFERENCES users(id),
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     rating INTEGER NOT NULL CHECK(rating >= 1 AND rating <= 5),
     title TEXT,
     content TEXT,
@@ -230,7 +231,7 @@ CREATE TABLE IF NOT EXISTS agent_reviews (
 CREATE TABLE IF NOT EXISTS agent_installations (
     id SERIAL PRIMARY KEY,
     marketplace_id TEXT NOT NULL REFERENCES agent_marketplace(id),
-    user_id TEXT NOT NULL REFERENCES users(id),
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     installed_at TIMESTAMPTZ DEFAULT NOW(),
     UNIQUE(marketplace_id, user_id)
 );
@@ -241,8 +242,8 @@ CREATE TABLE IF NOT EXISTS agent_installations (
 
 CREATE TABLE IF NOT EXISTS canvas_documents (
     id TEXT PRIMARY KEY,
-    user_id TEXT NOT NULL REFERENCES users(id),
-    session_id TEXT REFERENCES conversation_sessions(id),
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    session_id TEXT REFERENCES conversation_sessions(id) ON DELETE SET NULL,
     title TEXT NOT NULL,
     doc_type TEXT DEFAULT 'document' CHECK(doc_type IN ('document', 'code', 'diagram', 'table')),
     content TEXT,
@@ -353,6 +354,23 @@ CREATE TABLE IF NOT EXISTS push_subscriptions (
     auth TEXT NOT NULL,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- 사용자 메시지 피드백 테이블
+CREATE TABLE IF NOT EXISTS message_feedback (
+    id SERIAL PRIMARY KEY,
+    user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+    session_id TEXT NOT NULL REFERENCES conversation_sessions(id) ON DELETE CASCADE,
+    message_id INTEGER NOT NULL REFERENCES conversation_messages(id) ON DELETE CASCADE,
+    rating INTEGER NOT NULL CHECK (rating >= 1 AND rating <= 5),
+    feedback_text TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_message_feedback_user ON message_feedback(user_id);
+CREATE INDEX IF NOT EXISTS idx_message_feedback_session ON message_feedback(session_id);
+CREATE INDEX IF NOT EXISTS idx_message_feedback_message ON message_feedback(message_id);
+CREATE INDEX IF NOT EXISTS idx_message_feedback_rating ON message_feedback(rating);
+CREATE INDEX IF NOT EXISTS idx_message_feedback_created ON message_feedback(created_at);
 
 -- ============================================
 -- 인덱스
@@ -498,7 +516,8 @@ CREATE INDEX IF NOT EXISTS idx_api_keys_active ON user_api_keys(user_id, is_acti
 CREATE INDEX IF NOT EXISTS idx_api_keys_tier ON user_api_keys(rate_limit_tier);
 
 -- Session & Audit indexes (from unified-database.ts)
-CREATE INDEX IF NOT EXISTS idx_sessions_anon ON conversation_sessions(anon_session_id);
+DROP INDEX IF EXISTS idx_sessions_anon;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_sessions_anon ON conversation_sessions(anon_session_id);
 CREATE INDEX IF NOT EXISTS idx_audit_user ON audit_logs(user_id);
 
 -- OAuth state index (cleanup query)

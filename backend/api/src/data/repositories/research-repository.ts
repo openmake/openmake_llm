@@ -98,10 +98,10 @@ export class ResearchRepository extends BaseRepository {
         );
     }
 
-    async getResearchSteps(sessionId: string): Promise<ResearchStep[]> {
+    async getResearchSteps(sessionId: string, limit: number = 100): Promise<ResearchStep[]> {
         const result = await this.query<ResearchStep>(
-            'SELECT * FROM research_steps WHERE session_id = $1 ORDER BY step_number ASC',
-            [sessionId]
+            'SELECT * FROM research_steps WHERE session_id = $1 ORDER BY step_number ASC LIMIT $2',
+            [sessionId, limit]
         );
         return result.rows.map((row) => ({
             ...row,

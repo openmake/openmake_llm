@@ -294,8 +294,19 @@ router.delete('/sessions/:sessionId', asyncHandler(async (req: Request, res: Res
     }
 
     const pool = getPool();
-    await pool.query('DELETE FROM research_steps WHERE session_id = $1', [sessionId]);
-    await pool.query('DELETE FROM research_sessions WHERE id = $1', [sessionId]);
+    const client = await pool.connect();
+
+    try {
+        await client.query('BEGIN');
+        await client.query('DELETE FROM research_steps WHERE session_id = $1', [sessionId]);
+        await client.query('DELETE FROM research_sessions WHERE id = $1', [sessionId]);
+        await client.query('COMMIT');
+    } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+    } finally {
+        client.release();
+    }
 
     res.json(success({ message: '리서치 세션이 삭제되었습니다.' }));
 }));

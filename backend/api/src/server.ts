@@ -31,7 +31,8 @@ import * as fs from 'fs';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import { ClusterManager, getClusterManager } from './cluster/manager';
-import { startSessionCleanupScheduler } from './data/conversation-db';
+import { startSessionCleanupScheduler, getConversationDB } from './data/conversation-db';
+import { startDbRetention } from './data/db-retention';
 
 // 🆕 고도화 모듈 임포트
 import {
@@ -65,7 +66,9 @@ import {
     // 🆕 Developer Documentation 라우트
     developerDocsRouter,
     // 🆕 Chat Feedback 라우트
-    chatFeedbackRouter
+    chatFeedbackRouter,
+    // 🆕 API Key 관리 라우트
+    apiKeysRouter
 } from './routes';
 import { tokenMonitoringRouter } from './routes/token-monitoring.routes';
 import v1Router from './routes/v1';
@@ -393,6 +396,7 @@ export class DashboardServer {
         app.use('/api/marketplace', marketplaceRouter);
         app.use('/api/push', pushRouter);
         app.use('/api/docs', developerDocsRouter);
+        app.use('/api/api-keys', apiKeysRouter);
 
         setupSwaggerRoutes(app);
 
@@ -460,8 +464,24 @@ export class DashboardServer {
         // 클러스터 시작
         await this.cluster.start();
 
+        // ConversationDB / UserManager 초기화 완료 보장 (race condition 방지)
+        // 스키마 마이그레이션이 완료되기 전에 API 요청을 처리하지 않도록 대기
+        try {
+            const { getUserManager } = await import('./data/user-manager');
+            await Promise.all([
+                getConversationDB().ensureReady(),
+                getUserManager().ensureReady()
+            ]);
+            console.log('[Server] DB 초기화 완료');
+        } catch (err) {
+            console.error('[Server] DB 초기화 실패 (서버는 계속 시작):', err);
+        }
+
         // 세션 자동 정리 스케줄러 시작 (24시간마다 30일 이상 된 세션 정리)
         startSessionCleanupScheduler(24);
+
+        // DB 데이터 보존 정리 스케줄러 시작 (만료 문서, 토큰, OAuth state 정리)
+        startDbRetention();
 
         return new Promise((resolve, reject) => {
             // HTTP 서버 오류 핸들러
@@ -497,6 +517,7 @@ export class DashboardServer {
      */
     stop(): void {
         this.cluster.stop();
+        this.wsHandler.stopHeartbeat();
         this.wss.close();
         this.server.close();
     }
@@ -567,6 +588,51 @@ if (require.main === module) {
             console.log('[Shutdown] 모든 외부 MCP 서버 연결 해제 완료');
         } catch (error) {
             console.error('[Shutdown] 외부 MCP 서버 정리 중 오류:', error);
+        }
+
+        // DB 커넥션 풀 정상 종료
+        try {
+            const { closeDatabase } = await import('./data/models/unified-database');
+            await closeDatabase();
+            console.log('[Shutdown] DB 커넥션 풀 종료 완료');
+        } catch (error) {
+            console.error('[Shutdown] DB 커넥션 풀 종료 중 오류:', error);
+        }
+
+        // OAuth state 정리 타이머 중지
+        try {
+            const { stopOAuthCleanup } = await import('./controllers/auth.controller');
+            stopOAuthCleanup();
+            console.log('[Shutdown] OAuth 정리 타이머 중지 완료');
+        } catch (error) {
+            console.error('[Shutdown] OAuth 정리 타이머 중지 중 오류:', error);
+        }
+
+        // Analytics 타이머 중지
+        try {
+            const { getAnalyticsSystem } = await import('./monitoring/analytics');
+            getAnalyticsSystem().dispose();
+            console.log('[Shutdown] Analytics 타이머 중지 완료');
+        } catch (error) {
+            console.error('[Shutdown] Analytics 타이머 중지 중 오류:', error);
+        }
+
+        // 세션 정리 스케줄러 중지
+        try {
+            const { stopSessionCleanupScheduler } = await import('./data/conversation-db');
+            stopSessionCleanupScheduler();
+            console.log('[Shutdown] 세션 정리 스케줄러 중지 완료');
+        } catch (error) {
+            console.error('[Shutdown] 세션 정리 스케줄러 중지 중 오류:', error);
+        }
+
+        // TokenBlacklist 타이머 정리
+        try {
+            const { resetTokenBlacklist } = await import('./data/models/token-blacklist');
+            resetTokenBlacklist();
+            console.log('[Shutdown] TokenBlacklist 타이머 중지 완료');
+        } catch (error) {
+            console.error('[Shutdown] TokenBlacklist 타이머 중지 중 오류:', error);
         }
 
         server.stop();

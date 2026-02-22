@@ -507,6 +507,7 @@ export class ChatService {
             startTime,
             message,
             model: this.client.model,
+            apiKeyId: req.apiKeyId,
             selectedAgent,
             agentSelection,
             executionPlan,

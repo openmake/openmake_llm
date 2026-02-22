@@ -123,7 +123,7 @@ class SharedSidebar {
             const user = JSON.parse(localStorage.getItem('user') || '{}');
             return `
                 <div class="user-status">
-                    <span class="user-badge logged-in">👤 ${user.username || '사용자'}</span>
+                    <span class="user-badge logged-in">👤 ${(function(s){var d=document.createElement('div');d.textContent=s||'사용자';return d.innerHTML;})(user.username)}</span>
                 </div>
             `;
         } else if (isGuest) {

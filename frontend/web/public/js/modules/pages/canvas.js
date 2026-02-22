@@ -60,14 +60,18 @@
                 return;
             }
             el.innerHTML = filtered.map(d => `
-                <div class="doc-card" onclick="openDoc('${d.id}')">
+                <div class="doc-card" data-doc-id="${d.id}">
                     <h3>${esc(d.title)}</h3>
                     <div class="meta">
                         ${typeBadge(d.doc_type)}
-                        ${d.is_shared ? '<span class="badge badge-shared">공유중</span>' : ''}
+                        ${d.is_shared ? '<span class="badge badge-shared">\uACF5\uC720\uC911</span>' : ''}
                         <span>${timeAgo(d.updated_at)}</span>
                     </div>
                 </div>`).join('');
+            el.onclick = function(e) {
+                var card = e.target.closest('[data-doc-id]');
+                if (card) { openDoc(card.dataset.docId); }
+            };
         }
 
         function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }

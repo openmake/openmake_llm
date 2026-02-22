@@ -603,10 +603,10 @@ export class UnifiedDatabase {
     private readonly auditRepository: AuditRepository;
 
     constructor() {
-        const poolConfig: PoolConfig & { idle_timeout: number } = {
+        const poolConfig: PoolConfig = {
             connectionString: getConfig().databaseUrl,
             statement_timeout: 30000,
-            idle_timeout: 30000,
+            idleTimeoutMillis: 30000,
             connectionTimeoutMillis: 10000
         };
         this.pool = new Pool(poolConfig);

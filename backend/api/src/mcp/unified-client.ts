@@ -241,7 +241,17 @@ export class UnifiedMCPClient {
         }
 
         // 파일 경로 인자가 있으면 샌드박스 경로로 변환
-        const sandboxedArgs = this.applySandboxPaths(args, context.userId);
+        let sandboxedArgs: Record<string, unknown>;
+        try {
+            sandboxedArgs = this.applySandboxPaths(args, context.userId);
+        } catch (error) {
+            const message = error instanceof Error ? error.message : '샌드박스 경로 검증 실패';
+            logger.warn(`⚠️ 도구 실행 차단: ${toolName} (user: ${context.userId}) - ${message}`);
+            return {
+                content: [{ type: 'text', text: message }],
+                isError: true
+            };
+        }
 
         logger.info(`🔧 도구 실행: ${toolName} (user: ${context.userId}, tier: ${context.tier})`);
         return this.executeTool(toolName, sandboxedArgs);
@@ -278,7 +288,7 @@ export class UnifiedMCPClient {
      *
      * path, file, directory 등 일반적인 경로 인자명을 감지하여
      * UserSandbox.resolvePath()로 안전한 절대 경로로 변환합니다.
-     * 경로 탈출 시도 시 __blocked_ 플래그를 설정합니다.
+     * 경로 탈출 시도 시 즉시 에러를 발생시켜 도구 실행을 차단합니다.
      *
      * @param args - 원본 도구 실행 인자
      * @param userId - 사용자 ID
@@ -299,8 +309,8 @@ export class UnifiedMCPClient {
                 if (safePath) {
                     result[key] = safePath;
                 } else {
-                    // 경로 탈출 시도 시 빈 결과 반환하도록 표시
-                    result[`__blocked_${key}`] = true;
+                    delete result[key];
+                    throw new Error(`차단된 경로 인자: ${key}`);
                 }
             }
         }
