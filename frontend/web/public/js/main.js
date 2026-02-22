@@ -137,9 +137,9 @@ import { show as installShow, hide as installHide, isInstalled } from './compone
 // ============================================
 // 2. SPA 모드: alert() → showToast() 변환 (blocking alert 방지)
 // ============================================
-(function() {
+(function () {
     var _origAlert = window.alert;
-    window.alert = function(msg) {
+    window.alert = function (msg) {
         if (typeof showToast === 'function') {
             showToast(msg, 'warning');
         } else {
@@ -188,9 +188,9 @@ function initMobileSidebar() {
  * @returns {void}
  */
 function filterRestrictedMenus() {
-    const authToken = localStorage.getItem('authToken');
+    const authToken = SafeStorage.getItem('authToken');
     const currentUser = getCurrentUser();
-    const isGuest = localStorage.getItem('guestMode') === 'true' || localStorage.getItem('isGuest') === 'true';
+    const isGuest = SafeStorage.getItem('guestMode') === 'true' || SafeStorage.getItem('isGuest') === 'true';
     const isAuthenticated = (authToken || currentUser) && !isGuest;
 
     // data-require-auth="true" 속성이 있는 메뉴 항목 숨기기
@@ -225,7 +225,8 @@ function showUserStatusBadge(isAuthenticated, isGuest) {
     if (!userInfo) return;
 
     if (isAuthenticated) {
-        const user = JSON.parse(localStorage.getItem('user') || '{}');
+        const SS = window.SafeStorage || { getItem: function(k) { try { return localStorage.getItem(k); } catch(e) { return null; } } };
+        const user = JSON.parse(SS.getItem('user') || '{}');
         userInfo.innerHTML = `<span style="color: var(--success);">👤 ${escapeHtml(user.email || user.username || '사용자')}</span>`;
         userInfo.style.display = 'block';
     } else if (isGuest) {

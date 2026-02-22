@@ -43,10 +43,10 @@ const SafeStorage = window.SafeStorage = window.SafeStorage || {
         try { return localStorage.getItem(key); } catch (e) { return null; }
     },
     setItem: function (key, value) {
-        try { localStorage.setItem(key, value); } catch (e) {}
+        try { localStorage.setItem(key, value); } catch (e) { }
     },
     removeItem: function (key) {
-        try { localStorage.removeItem(key); } catch (e) {}
+        try { localStorage.removeItem(key); } catch (e) { }
     }
 };
 
@@ -131,7 +131,7 @@ function isAuthenticated() {
     // OAuth 로그인 시 httpOnly 쿠키만 있고 authToken은 없을 수 있음 -> user 객체 확인
     const user = SafeStorage.getItem('user');
     const isGuest = SafeStorage.getItem('guestMode') === 'true' ||
-                    SafeStorage.getItem('isGuest') === 'true';
+        SafeStorage.getItem('isGuest') === 'true';
     return (!!authToken || !!user) && !isGuest;
 }
 
@@ -191,13 +191,32 @@ function showLoading() {
 function showError(message) {
     const container = document.getElementById('page-content');
     if (!container) return;
-    container.innerHTML = `
-        <div class="spa-error">
-            <h2>\uD398\uC774\uC9C0 \uB85C\uB4DC \uC2E4\uD328</h2>
-            <p>${message}</p>
-            <button onclick="Router.navigate('/')">\uCC44\uD305\uC73C\uB85C \uB3CC\uC544\uAC00\uAE30</button>
-        </div>
-    `;
+
+    // BUG-019 수정: innerHTML에 직접 message를 삽입하면 XSS 위험.
+    // DOM API로 안전하게 구성합니다.
+    const wrapper = document.createElement('div');
+    wrapper.className = 'spa-error';
+
+    const heading = document.createElement('h2');
+    heading.textContent = '\ud398\uc774\uc9c0 \ub85c\ub4dc \uc2e4\ud328';
+
+    const para = document.createElement('p');
+    para.textContent = message; // textContent는 HTML을 이스케이프합니다.
+
+    const btn = document.createElement('button');
+    btn.textContent = '\ucc44\ud305\uc73c\ub85c \ub3cc\uc544\uac00\uae30';
+    btn.addEventListener('click', function () {
+        if (window.Router && window.Router.navigate) {
+            window.Router.navigate('/');
+        }
+    });
+
+    wrapper.appendChild(heading);
+    wrapper.appendChild(para);
+    wrapper.appendChild(btn);
+
+    container.innerHTML = '';
+    container.appendChild(wrapper);
     container.style.display = '';
 }
 
@@ -489,7 +508,7 @@ async function executeNavigation(path, options) {
                 // 뒤로가기 버튼 이벤트 바인딩
                 var backButton = container.querySelector('.spa-page-nav-back');
                 if (backButton) {
-                    backButton.addEventListener('click', function(e) {
+                    backButton.addEventListener('click', function (e) {
                         e.preventDefault();
                         if (window.Router && window.Router.navigate) {
                             window.Router.navigate('/');

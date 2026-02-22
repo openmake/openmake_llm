@@ -72,10 +72,9 @@ export class MemoryRepository extends BaseRepository {
 
         query += ' ORDER BY importance DESC, updated_at DESC';
 
-        if (options?.limit) {
-            query += ` LIMIT $${paramIdx++}`;
-            params.push(options.limit);
-        }
+        const limit = options?.limit ?? 100;
+        query += ` LIMIT $${paramIdx++}`;
+        params.push(limit);
 
         const result = await this.query<UserMemory>(query, params);
         return result.rows as UserMemory[];

@@ -40,8 +40,9 @@ async function loadChatSessions() {
     if (!historyList) return;
 
     try {
-        const authToken = localStorage.getItem('authToken');
-        const userRole = JSON.parse(localStorage.getItem('user') || '{}').role;
+        const authToken = (window.SafeStorage ? window.SafeStorage.getItem('authToken') : localStorage.getItem('authToken'));
+        const userStr = (window.SafeStorage ? window.SafeStorage.getItem('user') : localStorage.getItem('user')) || '{}';
+        const userRole = JSON.parse(userStr).role;
         const isAdminUser = userRole === 'admin' || userRole === 'administrator';
 
         const params = new URLSearchParams({ limit: '20' });
@@ -67,15 +68,20 @@ async function loadChatSessions() {
         const payload = data.data || data;
         if (data.success && payload.sessions && payload.sessions.length > 0) {
             historyList.innerHTML = payload.sessions.map(session => `
-                <div class="history-item ${session.id === currentSessionId ? 'active' : ''}" 
+                <div class="history-item ${session.id === currentSessionId ? 'active' : ''}"
                      data-session-id="${session.id}"
-                     onclick="loadSession('${session.id}')"
-                     title="${escapeHtml(session.title || '새 대화')}">
-                    <span class="history-title">${escapeHtml((session.title || '새 대화').substring(0, 25))}${(session.title?.length > 25) ? '...' : ''}</span>
+                     title="${escapeHtml(session.title || '\uC0C8 \uB300\uD654')}">
+                    <span class="history-title">${escapeHtml((session.title || '\uC0C8 \uB300\uD654').substring(0, 25))}${(session.title?.length > 25) ? '...' : ''}</span>
                     <span class="history-meta">${formatTimeAgo(session.updatedAt || session.createdAt)}</span>
-                    <button class="history-delete" onclick="event.stopPropagation(); deleteSession('${session.id}')" title="삭제">✕</button>
+                    <button class="history-delete" data-delete-session="${session.id}" title="\uC0AD\uC81C">\u2715</button>
                 </div>
             `).join('');
+            historyList.onclick = function(e) {
+                var delBtn = e.target.closest('[data-delete-session]');
+                if (delBtn) { e.stopPropagation(); deleteSession(delBtn.dataset.deleteSession); return; }
+                var item = e.target.closest('[data-session-id]');
+                if (item) { loadSession(item.dataset.sessionId); }
+            };
         } else {
             historyList.innerHTML = '<div class="history-empty">대화 기록이 없습니다</div>';
         }
@@ -114,7 +120,7 @@ function formatTimeAgo(dateStr) {
 async function createNewSession(title) {
     try {
         const model = document.getElementById('modelSelect')?.value || 'default';
-        const authToken = localStorage.getItem('authToken');
+        const authToken = (window.SafeStorage ? window.SafeStorage.getItem('authToken') : localStorage.getItem('authToken'));
         const anonSessionId = !authToken ? getOrCreateAnonymousSessionId() : undefined;
 
         const headers = {
@@ -218,8 +224,10 @@ function addRestoredAssistantMessage(content) {
             renderedContent = window.purifyHTML(marked.parse(content));
         } catch (e) {
             console.warn('마크다운 파싱 실패:', e);
-            renderedContent = content.replace(/\n/g, '<br>');
+            renderedContent = escapeHtml(content).replace(/\n/g, '<br>');
         }
+    } else {
+        renderedContent = escapeHtml(content).replace(/\n/g, '<br>');
     }
 
     div.innerHTML = `

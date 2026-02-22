@@ -11,7 +11,6 @@ import { ChatRequestHandler, ChatRequestError } from '../chat/request-handler';
 import { QuotaExceededError } from '../errors/quota-exceeded.error';
 import { KeyExhaustionError } from '../errors/key-exhaustion.error';
 import { checkChatRateLimit } from '../middlewares/chat-rate-limiter';
-import { getConversationLogger } from '../data/index';
 import { createLogger } from '../utils/logger';
 import { WSMessage, ExtendedWebSocket } from './ws-types';
 
@@ -133,15 +132,6 @@ export async function handleChatMessage(
         // WS 고유: 새 세션 생성 알림
         if (!validSessionId) {
             ws.send(JSON.stringify({ type: 'session_created', sessionId: result.sessionId }));
-        }
-
-        // 대화 요약 기록 (기존 로거 — WS 고유)
-        try {
-            const convLogger = getConversationLogger();
-            convLogger.logConversation({ role: 'user', content: message, model: result.model });
-            convLogger.logConversation({ role: 'assistant', content: result.response, model: result.model, response_time_ms: 0 });
-        } catch (logError) {
-            log.error('[Chat] 로그 저장 실패:', logError);
         }
 
         log.info('[Chat] 생성 완료');

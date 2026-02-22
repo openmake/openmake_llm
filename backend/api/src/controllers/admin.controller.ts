@@ -97,11 +97,11 @@ export class AdminController {
                 search: search as string
             });
 
-             res.json(success(result));
-         } catch (error) {
-             log.error('[Admin Users] 오류:', error);
-             res.status(500).json(internalError('사용자 목록 조회 실패'));
-         }
+            res.json(success(result));
+        } catch (error) {
+            log.error('[Admin Users] 오류:', error);
+            res.status(500).json(internalError('사용자 목록 조회 실패'));
+        }
     }
 
     /**
@@ -111,11 +111,11 @@ export class AdminController {
         try {
             const userManager = getUserManager();
             const stats = await userManager.getStats();
-             res.json(success(stats));
-         } catch (error) {
-             log.error('[Admin Stats] 오류:', error);
-             res.status(500).json(internalError('사용자 통계 조회 실패'));
-         }
+            res.json(success(stats));
+        } catch (error) {
+            log.error('[Admin Stats] 오류:', error);
+            res.status(500).json(internalError('사용자 통계 조회 실패'));
+        }
     }
 
     /**
@@ -129,17 +129,17 @@ export class AdminController {
 
             const user = await userManager.updateUser(userId, { email, role, is_active });
 
-             if (!user) {
-                 res.status(404).json(notFound('사용자'));
-                 return;
-             }
+            if (!user) {
+                res.status(404).json(notFound('사용자'));
+                return;
+            }
 
-             log.info(`사용자 정보 수정: ${user.email}`);
-             res.json(success({ user }));
-         } catch (error) {
-             log.error('[Admin Update User] 오류:', error);
-             res.status(500).json(internalError('사용자 정보 수정 실패'));
-         }
+            log.info(`사용자 정보 수정: ${user.email}`);
+            res.json(success({ user }));
+        } catch (error) {
+            log.error('[Admin Update User] 오류:', error);
+            res.status(500).json(internalError('사용자 정보 수정 실패'));
+        }
     }
 
     /**
@@ -151,24 +151,24 @@ export class AdminController {
             const userId = req.params.id;
             const { role } = req.body;
 
-             if (!['admin', 'user', 'guest'].includes(role)) {
-                 res.status(400).json(badRequest('유효하지 않은 역할입니다'));
-                 return;
-             }
+            if (!['admin', 'user', 'guest'].includes(role)) {
+                res.status(400).json(badRequest('유효하지 않은 역할입니다'));
+                return;
+            }
 
-             const user = await userManager.changeRole(userId, role);
+            const user = await userManager.changeRole(userId, role);
 
-             if (!user) {
-                 res.status(404).json(notFound('사용자'));
-                 return;
-             }
+            if (!user) {
+                res.status(404).json(notFound('사용자'));
+                return;
+            }
 
-             log.info(`사용자 역할 변경: ${user.email} -> ${role}`);
-             res.json(success({ user }));
-         } catch (error) {
-              log.error('[Admin Change Role] 오류:', error);
-              res.status(500).json(internalError('사용자 역할 변경 실패'));
-         }
+            log.info(`사용자 역할 변경: ${user.email} -> ${role}`);
+            res.json(success({ user }));
+        } catch (error) {
+            log.error('[Admin Change Role] 오류:', error);
+            res.status(500).json(internalError('사용자 역할 변경 실패'));
+        }
     }
 
     /**
@@ -209,32 +209,32 @@ export class AdminController {
             const userManager = getUserManager();
             const userId = req.params.id;
 
-             // 자기 자신 삭제 방지
-             const currentUserId = 'userId' in req.user! ? req.user!.userId : req.user!.id;
-             if (userId === currentUserId || userId === String(currentUserId)) {
-                 res.status(400).json(badRequest('자기 자신은 삭제할 수 없습니다'));
-                 return;
-             }
+            // 자기 자신 삭제 방지 (BUG-R3-006: String()으로 통일하여 타입 불일치 해소)
+            const currentUserId = String('userId' in req.user! ? req.user!.userId : req.user!.id);
+            if (String(userId) === currentUserId) {
+                res.status(400).json(badRequest('자기 자신은 삭제할 수 없습니다'));
+                return;
+            }
 
-             const deleteSuccess = await userManager.deleteUser(userId);
+            const deleteSuccess = await userManager.deleteUser(userId);
 
-             if (!deleteSuccess) {
-                 res.status(400).json(badRequest('삭제할 수 없습니다 (마지막 관리자이거나 존재하지 않음)'));
-                 return;
-             }
+            if (!deleteSuccess) {
+                res.status(400).json(badRequest('삭제할 수 없습니다 (마지막 관리자이거나 존재하지 않음)'));
+                return;
+            }
 
-             log.info(`사용자 삭제: ID ${userId}`);
-             res.json(success({ deleted: true }));
-         } catch (error) {
-             log.error('[Admin Delete User] 오류:', error);
-             res.status(500).json(internalError('사용자 삭제 실패'));
-         }
-     }
+            log.info(`사용자 삭제: ID ${userId}`);
+            res.json(success({ deleted: true }));
+        } catch (error) {
+            log.error('[Admin Delete User] 오류:', error);
+            res.status(500).json(internalError('사용자 삭제 실패'));
+        }
+    }
 
-     /**
-      * Express 라우터를 반환합니다.
-     * @returns 설정된 Router 인스턴스
-     */
+    /**
+     * Express 라우터를 반환합니다.
+    * @returns 설정된 Router 인스턴스
+    */
     getRouter(): Router {
         return this.router;
     }

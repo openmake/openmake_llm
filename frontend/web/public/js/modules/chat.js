@@ -14,6 +14,13 @@ import { sendWsMessage } from './websocket.js';
 import { scrollToBottom, escapeHtml, renderMarkdown, showToast } from './ui.js';
 import { authFetch } from './auth.js';
 
+// BUG-R3-005: SafeStorage 래퍼 — Safari Private Mode 등에서 localStorage 예외 방지
+const SS = window.SafeStorage || {
+    getItem: (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } },
+    setItem: (k, v) => { try { localStorage.setItem(k, v); } catch (e) { } },
+    removeItem: (k) => { try { localStorage.removeItem(k); } catch (e) { } }
+};
+
 /**
  * AI 응답 생성 중단 요청
  * WebSocket을 통해 서버에 abort 메시지를 전송하고 UI를 업데이트합니다.
@@ -21,10 +28,10 @@ import { authFetch } from './auth.js';
  */
 function abortChat() {
     if (!getState('isGenerating')) return;
-    
+
     console.log('[Chat] 응답 생성 중단 요청');
     sendWsMessage({ type: 'abort' });
-    
+
     // UI 상태 업데이트
     setState('isGenerating', false);
     hideAbortButton();
@@ -37,7 +44,7 @@ function abortChat() {
  */
 function showAbortButton() {
     let abortBtn = document.getElementById('abortButton');
-    
+
     if (!abortBtn) {
         // 중단 버튼 생성
         const inputArea = document.querySelector('.input-area') || document.querySelector('.chat-input-container');
@@ -53,7 +60,7 @@ function showAbortButton() {
             `;
             abortBtn.onclick = abortChat;
             abortBtn.title = '응답 생성 중단';
-            
+
             // 전송 버튼 옆에 삽입
             const sendBtn = document.getElementById('sendButton');
             if (sendBtn) {
@@ -63,7 +70,7 @@ function showAbortButton() {
             }
         }
     }
-    
+
     if (abortBtn) {
         abortBtn.style.display = 'flex';
     }
@@ -116,7 +123,7 @@ async function sendMessage() {
     setState('currentAssistantMessage', assistantDiv);
     setState('messageStartTime', Date.now());
     setState('isGenerating', true);
-    
+
     // 중단 버튼 표시
     showAbortButton();
 
@@ -125,7 +132,7 @@ async function sendMessage() {
         const payload = {
             type: 'chat',
             message: message,
-            model: document.getElementById('modelSelect')?.value || localStorage.getItem('selectedModel') || 'openmake_llm_auto',
+            model: document.getElementById('modelSelect')?.value || SS.getItem('selectedModel') || 'openmake_llm_auto',
             history: getState('conversationMemory'),
             webSearch: getState('webSearchEnabled'),
             thinkingMode: getState('thinkingEnabled'),
@@ -149,7 +156,7 @@ async function sendMessage() {
         }
 
         // 🔐 인증된 사용자 정보를 WebSocket 메시지에 포함
-        const storedUser = localStorage.getItem('user');
+        const storedUser = SS.getItem('user');
         const parsedUser = storedUser ? JSON.parse(storedUser) : {};
         if (parsedUser.userId || parsedUser.id) payload.userId = parsedUser.userId || parsedUser.id;
         if (parsedUser.role) payload.userRole = parsedUser.role;
@@ -497,7 +504,7 @@ function sendFeedback(msgElementId, signal) {
     // 시각적 피드백 — 선택된 버튼 활성화
     if (msgElement && signal !== 'regenerate') {
         var feedbackBtns = msgElement.querySelectorAll('.feedback-btn');
-        feedbackBtns.forEach(function(btn) {
+        feedbackBtns.forEach(function (btn) {
             btn.classList.remove('feedback-active');
         });
         var activeBtn = msgElement.querySelector('[data-feedback="' + signal + '"]');
@@ -515,7 +522,7 @@ function sendFeedback(msgElementId, signal) {
             sessionId: sessionId || 'anonymous',
             signal: signal
         })
-    }).catch(function(err) {
+    }).catch(function (err) {
         console.error('[Feedback] 전송 실패:', err);
     });
 }
@@ -570,7 +577,7 @@ function useSuggestion(text) {
 }
 
 // 피드백 버튼 이벤트 위임
-document.addEventListener('click', function(e) {
+document.addEventListener('click', function (e) {
     var feedbackBtn = e.target.closest('.feedback-btn');
     if (!feedbackBtn) return;
 

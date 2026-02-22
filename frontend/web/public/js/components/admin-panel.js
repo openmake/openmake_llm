@@ -40,7 +40,8 @@ var ADMIN_ITEMS = [
  */
 function isAdmin() {
     try {
-        var user = JSON.parse(localStorage.getItem('user') || '{}');
+        var SS = window.SafeStorage || { getItem: function(k) { try { return localStorage.getItem(k); } catch(e) { return null; } } };
+        var user = JSON.parse(SS.getItem('user') || '{}');
         return user.role === 'admin' || user.role === 'administrator';
     } catch (e) {
         return false;
