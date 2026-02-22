@@ -13,6 +13,13 @@ import { getState, setState } from './state.js';
 import { authFetch } from './auth.js';
 import { showToast } from './ui.js';
 
+// BUG-R3-004: SafeStorage 래퍼 — Safari Private Mode 등에서 localStorage 예외 방지
+const SS = window.SafeStorage || {
+    getItem: (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } },
+    setItem: (k, v) => { try { localStorage.setItem(k, v); } catch (e) { } },
+    removeItem: (k) => { try { localStorage.removeItem(k); } catch (e) { } }
+};
+
 /**
  * MCP 도구 마스터 목록 — 백엔드의 builtInTools + tool-tiers와 동기화
  * 카테고리별로 그룹화하여 설정 UI에서 사용합니다.
@@ -62,7 +69,7 @@ var MCP_TOOL_CATALOG = [
  * @returns {void}
  */
 function loadMCPSettings() {
-    const saved = localStorage.getItem('mcpSettings');
+    const saved = SS.getItem('mcpSettings');
     if (saved) {
         try {
             var settings = JSON.parse(saved);
@@ -95,7 +102,7 @@ function saveMCPSettings() {
         webSearch: getState('webSearchEnabled'),
         enabledTools: getState('mcpToolsEnabled') || {}
     };
-    localStorage.setItem('mcpSettings', JSON.stringify(settings));
+    SS.setItem('mcpSettings', JSON.stringify(settings));
 }
 
 /**
@@ -119,11 +126,14 @@ function toggleMCPModule(module) {
             break;
 
         case 'pdf':
-            // PDF 모듈은 항상 활성화
-            break;
+            // PDF 모듈은 서버 사이드 처리 — 클라이언트 토글 없음, 상태 변경 불필요
+            return; // saveMCPSettings() 호출도 생략
 
         case 'github':
-            // GitHub 모듈 토글
+            // GitHub 모듈 토글 (agentMode와 같은 방식으로 상태 저장)
+            const githubEnabled = !getState('githubEnabled');
+            setState('githubEnabled', githubEnabled);
+            updateToggleUI('mcpGithub', githubEnabled);
             break;
     }
 
@@ -174,7 +184,7 @@ function toggleWebSearch() {
  * @returns {void}
  */
 function loadPromptMode() {
-    const saved = localStorage.getItem('promptMode');
+    const saved = SS.getItem('promptMode');
     if (saved) {
         setState('promptMode', saved);
     }
@@ -187,7 +197,7 @@ function loadPromptMode() {
  */
 function setPromptMode(mode) {
     setState('promptMode', mode);
-    localStorage.setItem('promptMode', mode);
+    SS.setItem('promptMode', mode);
 }
 
 /**
@@ -195,7 +205,7 @@ function setPromptMode(mode) {
  * @returns {void}
  */
 function loadAgentMode() {
-    const saved = localStorage.getItem('agentMode');
+    const saved = SS.getItem('agentMode');
     setState('agentMode', saved === 'true');
 }
 
@@ -207,7 +217,7 @@ function loadAgentMode() {
 function toggleAgentMode() {
     const enabled = !getState('agentMode');
     setState('agentMode', enabled);
-    localStorage.setItem('agentMode', enabled.toString());
+    SS.setItem('agentMode', enabled.toString());
 }
 
 /**
@@ -244,9 +254,9 @@ function saveSettings() {
  * @returns {void}
  */
 function resetSettings() {
-    localStorage.removeItem('mcpSettings');
-    localStorage.removeItem('promptMode');
-    localStorage.removeItem('agentMode');
+    SS.removeItem('mcpSettings');
+    SS.removeItem('promptMode');
+    SS.removeItem('agentMode');
 
     setState('thinkingEnabled', true);
     setState('webSearchEnabled', false);
@@ -255,7 +265,7 @@ function resetSettings() {
     setState('agentMode', false);
 
     // 테마는 다크로 초기화
-    localStorage.setItem('theme', 'dark');
+    SS.setItem('theme', 'dark');
     if (typeof applyTheme === 'function') {
         applyTheme('dark');
     }
@@ -288,8 +298,8 @@ function toggleMCPTool(toolName) {
  */
 function setAllMCPTools(enabled) {
     var updated = {};
-    MCP_TOOL_CATALOG.forEach(function(group) {
-        group.tools.forEach(function(tool) {
+    MCP_TOOL_CATALOG.forEach(function (group) {
+        group.tools.forEach(function (tool) {
             updated[tool.name] = enabled;
         });
     });
@@ -314,8 +324,8 @@ function getEnabledTools() {
  */
 function updateMCPToolTogglesUI() {
     var enabled = getState('mcpToolsEnabled') || {};
-    MCP_TOOL_CATALOG.forEach(function(group) {
-        group.tools.forEach(function(tool) {
+    MCP_TOOL_CATALOG.forEach(function (group) {
+        group.tools.forEach(function (tool) {
             var toggle = document.getElementById('mcpTool_' + tool.name);
             if (toggle) {
                 toggle.checked = enabled[tool.name] === true;

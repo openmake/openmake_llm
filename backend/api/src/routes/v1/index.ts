@@ -40,18 +40,25 @@ import marketplaceRouter from '../marketplace.routes';
 import { pushRouter } from '../push.routes';
 import apiKeysRouter from '../api-keys.routes';
 import { listAvailableModels } from '../../chat/profile-resolver';
-import { success } from '../../utils/api-response';
+import { success, unauthorized } from '../../utils/api-response';
 import { requireApiKey } from '../../middlewares/api-key-auth';
 import { rateLimitHeaders } from '../../middlewares/rate-limit-headers';
-import { apiKeyTPMLimiter } from '../../middlewares/api-key-limiter';
+import { apiKeyRateLimiter, apiKeyTPMLimiter } from '../../middlewares/api-key-limiter';
 import { asyncHandler } from '../../utils/error-handler';
 import { getApiKeyService } from '../../services/ApiKeyService';
 
 const v1Router = Router();
 
 // §4 Rate Limit 미들웨어 — API Key 인증 요청에만 동작 (비인증 자동 스킵)
-v1Router.use(rateLimitHeaders);     // OpenAI 호환 x-ratelimit-* 헤더
-v1Router.use(apiKeyTPMLimiter);     // TPM 이중 제한
+// 전역 API 인증 미들웨어
+v1Router.use(requireApiKey);
+
+// API 키 기반 RPM 제한 (인증 이후에 적용되어 키 단위 카운트 보장)
+v1Router.use(apiKeyRateLimiter);
+
+// API 키 기반 TPM 제한 (인증 이후에 적용해야 사용자별 토큰 소비를 추적 가능)
+// BUG-R4-001: requireApiKey 아래로 평가 순서 변경
+v1Router.use(apiKeyTPMLimiter);
 
 // ── 외부 API Key 사용자용 사용량 엔드포인트 ──
 // NOTE: usageRouter보다 먼저 등록해야 Express가 API Key 핸들러를 우선 매칭함
@@ -65,7 +72,7 @@ v1Router.get('/usage', requireApiKey, asyncHandler(async (req, res) => {
     const keyRecord = req.apiKeyRecord;
 
     if (!keyId || !keyRecord) {
-        res.status(401).json(success({ error: 'API Key required' }));
+        res.status(401).json(unauthorized('API Key required'));
         return;
     }
 
@@ -94,7 +101,7 @@ v1Router.get('/usage/daily', requireApiKey, asyncHandler(async (req, res) => {
     const keyRecord = req.apiKeyRecord;
 
     if (!keyId || !keyRecord) {
-        res.status(401).json(success({ error: 'API Key required' }));
+        res.status(401).json(unauthorized('API Key required'));
         return;
     }
 

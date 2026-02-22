@@ -66,14 +66,17 @@ export class DeepResearchService {
     ): Promise<ResearchResult> {
         const startTime = Date.now();
         const db = getUnifiedDatabase();
+        this.abortController = new AbortController();
 
         logger.info(`[DeepResearch] 시작: ${topic} (세션: ${sessionId})`);
 
         try {
+            this.throwIfAborted();
             await db.updateResearchSession(sessionId, { status: 'running', progress: 0 });
             this.reportProgress(onProgress, sessionId, 'running', 0, this.config.maxLoops, '초기화', 0, '리서치를 시작합니다...');
 
             // 1단계: 주제 분해 (0-5%)
+            this.throwIfAborted();
             this.reportProgress(onProgress, sessionId, 'running', 0, this.config.maxLoops, 'decompose', 2, '주제를 분석 중...');
             const subTopics = await this.decomposeTopics(topic, sessionId);
             await db.updateResearchSession(sessionId, { progress: 5 });
@@ -86,6 +89,7 @@ export class DeepResearchService {
             const allFindings: string[] = [];
 
             for (let loop = 0; loop < this.config.maxLoops; loop++) {
+                this.throwIfAborted();
                 const loopNumber = loop + 1;
                 const loopRange = getLoopProgressRange(loop, this.config.maxLoops);
 
@@ -107,6 +111,7 @@ export class DeepResearchService {
                     sourceMap,
                     seenUrls
                 );
+                this.throwIfAborted();
 
                 const uniqueSources = Array.from(sourceMap.values());
                 this.reportProgress(
@@ -140,6 +145,7 @@ export class DeepResearchService {
                     loopRange.scrapeStart,
                     loopRange.scrapeEnd
                 );
+                this.throwIfAborted();
 
                 const sourcesAfterScrape = Array.from(sourceMap.values());
 
@@ -156,6 +162,7 @@ export class DeepResearchService {
 
                 const synthesis = await this.synthesizeFindings(topic, sourcesAfterScrape, sessionId, loopNumber);
                 allFindings.push(synthesis.summary);
+                this.throwIfAborted();
 
                 this.reportProgress(
                     onProgress,
@@ -178,6 +185,7 @@ export class DeepResearchService {
 
                 // 마지막 루프가 아니면 추가 필요 여부 판단
                 if (loop < this.config.maxLoops - 1) {
+                    this.throwIfAborted();
                     const needsMore = await this.checkNeedsMoreInfo(topic, allFindings, sourcesAfterScrape.length);
                     if (!needsMore) {
                         logger.info(`[DeepResearch] 루프 ${loopNumber}에서 충분한 정보 수집. 조기 종료.`);
@@ -189,6 +197,7 @@ export class DeepResearchService {
             const finalSources = deduplicateSources(Array.from(sourceMap.values()));
 
             // 3단계: 최종 보고서 생성 (85-100%)
+            this.throwIfAborted();
             this.reportProgress(onProgress, sessionId, 'running', this.config.maxLoops, this.config.maxLoops, 'report', 85, '최종 보고서 생성 중...');
             const report = await this.generateReport(topic, allFindings, finalSources, subTopics, sessionId);
 
@@ -215,6 +224,15 @@ export class DeepResearchService {
                 duration
             };
         } catch (error) {
+            if (error instanceof Error && error.message === 'RESEARCH_ABORTED') {
+                await db.updateResearchSession(sessionId, {
+                    status: 'cancelled',
+                    summary: '리서치가 취소되었습니다.'
+                });
+                this.reportProgress(onProgress, sessionId, 'cancelled', 0, this.config.maxLoops, 'cancelled', 0, '리서치가 취소되었습니다.');
+                throw error;
+            }
+
             const errorMessage = error instanceof Error ? error.message : String(error);
             logger.error(`[DeepResearch] 실패: ${errorMessage}`);
 
@@ -226,6 +244,8 @@ export class DeepResearchService {
             this.reportProgress(onProgress, sessionId, 'failed', 0, this.config.maxLoops, 'error', 0, `오류: ${errorMessage}`);
 
             throw error;
+        } finally {
+            this.abortController = null;
         }
     }
 
@@ -233,6 +253,7 @@ export class DeepResearchService {
      * 주제를 서브 토픽으로 분해
      */
     private async decomposeTopics(topic: string, sessionId: string): Promise<SubTopic[]> {
+        this.throwIfAborted();
         const prompt = this.config.language === 'ko'
             ? `다음 주제를 심층 연구하기 위해 8-15개의 서브 토픽을 생성하세요.
 주제: ${topic}
@@ -271,6 +292,7 @@ Required format:
             const response = await this.client.chat([
                 { role: 'user', content: prompt }
             ], { temperature: 0.3 });
+            this.throwIfAborted();
 
             const jsonMatch = response.content.match(/\[[\s\S]*\]/);
             if (!jsonMatch) {
@@ -334,6 +356,7 @@ Required format:
         sourceMap: Map<string, SearchResult>,
         seenUrls: Set<string>
     ): Promise<SearchResult[]> {
+        this.throwIfAborted();
         const db = getUnifiedDatabase();
         const discoveredResults: SearchResult[] = [];
 
@@ -350,7 +373,9 @@ Required format:
         let stepIndex = 0;
 
         for (const subTopic of subTopics) {
+            this.throwIfAborted();
             for (const query of subTopic.searchQueries) {
+                this.throwIfAborted();
                 try {
                     const results = await performWebSearch(query, {
                         maxResults: resultsPerQuery,
@@ -413,6 +438,7 @@ Required format:
         progressStart: number,
         progressEnd: number
     ): Promise<void> {
+        this.throwIfAborted();
         if (!this.config.scrapeFullContent) {
             return;
         }
@@ -441,6 +467,7 @@ Required format:
         let finished = 0;
 
         for (let i = 0; i < scrapeCandidates.length; i += 5) {
+            this.throwIfAborted();
             const batch = scrapeCandidates.slice(i, i + 5);
 
             const settled = await Promise.allSettled(
@@ -491,6 +518,7 @@ Required format:
      * 단일 URL 스크래핑
      */
     private async scrapeSingleUrl(url: string): Promise<string> {
+        this.throwIfAborted();
         const { firecrawlApiUrl, firecrawlApiKey } = getConfig();
 
         if (!firecrawlApiKey) {
@@ -498,6 +526,14 @@ Required format:
         }
 
         const controller = new AbortController();
+        const globalAbortSignal = this.abortController?.signal;
+        const forwardAbort = () => controller.abort();
+        if (globalAbortSignal) {
+            if (globalAbortSignal.aborted) {
+                throw new Error('RESEARCH_ABORTED');
+            }
+            globalAbortSignal.addEventListener('abort', forwardAbort);
+        }
         const timeoutHandle = setTimeout(() => controller.abort(), this.config.scrapeTimeoutMs + 1000);
 
         try {
@@ -524,6 +560,9 @@ Required format:
             const payload = await response.json() as { data?: { markdown?: string } };
             return payload.data?.markdown ?? '';
         } finally {
+            if (globalAbortSignal) {
+                globalAbortSignal.removeEventListener('abort', forwardAbort);
+            }
             clearTimeout(timeoutHandle);
         }
     }
@@ -537,6 +576,7 @@ Required format:
         sessionId: string,
         loopNumber: number
     ): Promise<SynthesisResult> {
+        this.throwIfAborted();
         const db = getUnifiedDatabase();
 
         if (searchResults.length === 0) {
@@ -548,6 +588,7 @@ Required format:
         const chunkSummaries: string[] = [];
 
         for (let chunkIndex = 0; chunkIndex < chunks.length; chunkIndex++) {
+            this.throwIfAborted();
             const chunk = chunks[chunkIndex];
             const chunkContext = chunk
                 .map(source => {
@@ -585,6 +626,7 @@ ${chunkContext}`;
                 const response = await this.client.chat([
                     { role: 'user', content: chunkPrompt }
                 ], { temperature: 0.35 });
+                this.throwIfAborted();
                 chunkSummaries.push(response.content.trim());
             } catch (error) {
                 logger.error(`[DeepResearch] 청크 요약 실패 (${chunkIndex + 1}/${chunks.length}): ${error instanceof Error ? error.message : String(error)}`);
@@ -616,6 +658,7 @@ ${chunkSummaries.map((summary, index) => `### Chunk ${index + 1}\n${summary}`).j
             const response = await this.client.chat([
                 { role: 'user', content: mergedPrompt }
             ], { temperature: 0.4 });
+            this.throwIfAborted();
 
             const mergedSummary = response.content.trim();
             const keyPoints = extractBulletLikeFindings(mergedSummary);
@@ -644,6 +687,7 @@ ${chunkSummaries.map((summary, index) => `### Chunk ${index + 1}\n${summary}`).j
         currentFindings: string[],
         sourceCount: number
     ): Promise<boolean> {
+        this.throwIfAborted();
         if (sourceCount < 50) {
             return true;
         }
@@ -668,6 +712,7 @@ Question: Is more exploration needed? Answer only "yes" or "no".`;
             const response = await this.client.chat([
                 { role: 'user', content: prompt }
             ], { temperature: 0.1 });
+            this.throwIfAborted();
 
             return response.content.toLowerCase().includes('yes');
         } catch (error) {
@@ -686,6 +731,7 @@ Question: Is more exploration needed? Answer only "yes" or "no".`;
         subTopics: SubTopic[],
         sessionId: string
     ): Promise<{ summary: string; keyFindings: string[] }> {
+        this.throwIfAborted();
         const db = getUnifiedDatabase();
         const uniqueSources = deduplicateSources(sources);
 
@@ -753,6 +799,7 @@ Keep these section headers:
             const response = await this.client.chat([
                 { role: 'user', content: prompt }
             ], { temperature: 0.35 });
+            this.throwIfAborted();
 
             const content = response.content;
 
@@ -823,9 +870,12 @@ Keep these section headers:
      * 리서치 취소
      */
     cancel(): void {
-        if (this.abortController) {
-            this.abortController.abort();
-            this.abortController = null;
+        this.abortController?.abort();
+    }
+
+    private throwIfAborted(): void {
+        if (this.abortController?.signal.aborted) {
+            throw new Error('RESEARCH_ABORTED');
         }
     }
 }

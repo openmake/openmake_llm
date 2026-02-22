@@ -21,10 +21,10 @@ const SafeStorage = window.SafeStorage || {
         try { return localStorage.getItem(key); } catch (e) { return null; }
     },
     setItem(key, value) {
-        try { localStorage.setItem(key, value); } catch (e) {}
+        try { localStorage.setItem(key, value); } catch (e) { }
     },
     removeItem(key) {
-        try { localStorage.removeItem(key); } catch (e) {}
+        try { localStorage.removeItem(key); } catch (e) { }
     }
 };
 
@@ -391,7 +391,7 @@ function logout() {
     // 서버에 로그아웃 요청 (httpOnly 쿠키 포함)
     authFetch('/api/auth/logout', {
         method: 'POST'
-    }).catch(() => {});
+    }).catch(() => { });
 
     // localStorage 정리
     SafeStorage.removeItem('authToken');
@@ -494,6 +494,8 @@ window.isAdmin = isAdmin;
 window.isLoggedIn = isLoggedIn;
 window.getCurrentUser = getCurrentUser;
 window.claimAnonymousSession = claimAnonymousSession;
+// SafeStorage 전역 노출 — pages/ 모듈들이 localStorage 직접 접근 대신 사용
+window.SafeStorage = SafeStorage;
 
 export {
     initAuth,

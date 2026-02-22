@@ -170,6 +170,8 @@ export interface ChatMessageRequest {
     thinkingLevel?: 'low' | 'medium' | 'high';
     /** 요청한 사용자의 ID */
     userId?: string;
+    /** API Key 인증 요청 시 키 ID */
+    apiKeyId?: string;
     /** 사용자 역할 (접근 권한 결정에 사용) */
     userRole?: 'admin' | 'user' | 'guest';
     /** 사용자 구독 등급 (도구 접근 티어 결정에 사용) */
