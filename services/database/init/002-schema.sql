@@ -1,4 +1,4 @@
-```sql
+-- ============================================
 -- ============================================
 -- OpenMake.Ai - Database Schema
 -- Migrated from SQLite to PostgreSQL + pgvector
@@ -623,3 +623,38 @@ CREATE INDEX IF NOT EXISTS idx_canvas_user_updated ON canvas_documents(user_id, 
 CREATE INDEX IF NOT EXISTS idx_research_user_created ON research_sessions(user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_research_steps_session_number ON research_steps(session_id, step_number);
 CREATE INDEX IF NOT EXISTS idx_connections_user_service ON external_connections(user_id, service_type);
+
+-- ============================================
+-- 🎯 Agent Skills 시스템 테이블
+-- ============================================
+
+-- 에이전트 스킬 정의 테이블
+CREATE TABLE IF NOT EXISTS agent_skills (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    description TEXT,
+    content TEXT NOT NULL,
+    category TEXT DEFAULT 'general',
+    is_public BOOLEAN DEFAULT FALSE,
+    created_by TEXT REFERENCES users(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    source_repo TEXT,
+    source_path TEXT
+);
+
+-- 에이전트-스킬 연결 테이블
+CREATE TABLE IF NOT EXISTS agent_skill_assignments (
+    agent_id TEXT NOT NULL,
+    skill_id TEXT NOT NULL REFERENCES agent_skills(id) ON DELETE CASCADE,
+    priority INTEGER DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    PRIMARY KEY (agent_id, skill_id)
+);
+
+-- Agent Skills 인덱스
+CREATE INDEX IF NOT EXISTS idx_agent_skills_created_by ON agent_skills(created_by);
+CREATE INDEX IF NOT EXISTS idx_agent_skills_category ON agent_skills(category);
+CREATE INDEX IF NOT EXISTS idx_agent_skills_public ON agent_skills(is_public);
+CREATE INDEX IF NOT EXISTS idx_skill_assignments_agent ON agent_skill_assignments(agent_id);
+CREATE INDEX IF NOT EXISTS idx_skill_assignments_skill ON agent_skill_assignments(skill_id);

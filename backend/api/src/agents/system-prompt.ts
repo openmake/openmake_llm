@@ -4,6 +4,7 @@
  * ============================================================
  *
  * 에이전트 선택 결과에 따른 시스템 프롬프트를 생성한다.
+ * 커스텀 에이전트에 연결된 스킬을 비동기적으로 주입한다.
  *
  * @module agents/system-prompt
  */
@@ -13,6 +14,7 @@ import * as path from 'path';
 import { AgentSelection, AgentPhase } from './types';
 import { AGENTS } from './agent-data';
 import { createLogger } from '../utils/logger';
+import { getSkillManager } from './skill-manager';
 
 const logger = createLogger('AgentSystem');
 
@@ -35,11 +37,12 @@ const logger = createLogger('AgentSystem');
  * - 작업 페이즈 (planning/build/optimization)
  * - 응답 지침 (4가지 기본 규칙)
  * - 상세 지침 (프롬프트 파일이 있는 경우 추가)
+ * - 스킬 블록 (연결된 스킬이 있는 경우 추가)
  *
  * @param selection - routeToAgent() 결과의 에이전트 선택 정보
- * @returns {string} - 조합된 시스템 프롬프트 문자열
+ * @returns {Promise<string>} - 조합된 시스템 프롬프트 문자열
  */
-export function getAgentSystemMessage(selection: AgentSelection): string {
+export async function getAgentSystemMessage(selection: AgentSelection): Promise<string> {
     const agent = AGENTS[selection.primaryAgent];
     if (!agent) {
         return getDefaultSystemPrompt();
@@ -95,11 +98,22 @@ ${agent.keywords.map(k => `- ${k}`).join('\n')}
 4. 한국어로 친절하고 전문적으로 응답합니다.
 `;
 
-    if (customPrompt) {
-        return `${basePrompt}\n\n## 상세 지침\n${customPrompt}`;
+    let result = customPrompt
+        ? `${basePrompt}\n\n## 상세 지침\n${customPrompt}`
+        : basePrompt;
+
+    // 스킬 주입: 에이전트 ID로 연결된 스킬 내용을 추가
+    try {
+        const skillPrompt = await getSkillManager().buildSkillPrompt(agent.id);
+        if (skillPrompt) {
+            result += skillPrompt;
+            logger.info(`스킬 주입됨: ${agent.name} (${agent.id})`);
+        }
+    } catch (e) {
+        logger.warn(`스킬 주입 실패: ${agent.name}`, e);
     }
 
-    return basePrompt;
+    return result;
 }
 
 /**

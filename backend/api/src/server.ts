@@ -68,7 +68,9 @@ import {
     // 🆕 Chat Feedback 라우트
     chatFeedbackRouter,
     // 🆕 API Key 관리 라우트
-    apiKeysRouter
+    apiKeysRouter,
+    // 🆕 Skills Marketplace 라우트
+    skillsMarketplaceRouter
 } from './routes';
 import { tokenMonitoringRouter } from './routes/token-monitoring.routes';
 import v1Router from './routes/v1';
@@ -232,7 +234,7 @@ export class DashboardServer {
             'agent-learning', 'cluster', 'usage', 'analytics', 'admin-metrics',
             'admin', 'audit', 'external', 'alerts', 'memory', 'settings',
             'password-change', 'history', 'guide', 'developer', 'api-keys',
-            'token-monitoring'
+            'token-monitoring', 'skill-library'
         ]);
 
         app.use((req: Request, res: Response, next: NextFunction) => {
@@ -394,6 +396,7 @@ export class DashboardServer {
         app.use('/api/canvas', canvasRouter);
         app.use('/api/external', externalRouter);
         app.use('/api/marketplace', marketplaceRouter);
+        app.use('/api/skills-marketplace', skillsMarketplaceRouter);
         app.use('/api/push', pushRouter);
         app.use('/api/docs', developerDocsRouter);
         app.use('/api/api-keys', apiKeysRouter);
