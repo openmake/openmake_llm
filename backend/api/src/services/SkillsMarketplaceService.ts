@@ -1,6 +1,88 @@
+import { getConfig } from '../config/env';
+
 import { createLogger } from '../utils/logger';
 
 const logger = createLogger('SkillsMarketplaceService');
+
+// ============================================
+// GitHub API Response Types
+// ============================================
+
+interface GitHubRepository {
+    full_name: string;
+    name: string;
+    description: string | null;
+    stargazers_count: number;
+    updated_at: string;
+    html_url: string;
+}
+
+interface GitHubSearchItem {
+    name: string;
+    path: string;
+    html_url: string;
+    repository: GitHubRepository;
+}
+
+interface GitHubSearchResponse {
+    total_count: number;
+    incomplete_results: boolean;
+    items: GitHubSearchItem[];
+}
+
+// ============================================
+// TTL Cache for GitHub Search
+// ============================================
+
+interface CacheEntry<T> {
+    data: T;
+    expiresAt: number;
+}
+
+class GitHubSearchCache {
+    private cache = new Map<string, CacheEntry<SkillsmpSearchResult>>();
+    private ttlMs: number;
+
+    constructor(ttlSeconds: number = 300) { // Default: 5 minutes
+        this.ttlMs = ttlSeconds * 1000;
+    }
+
+    private generateKey(options: SkillsmpSearchOptions): string {
+        return `${options.query || ''}:${options.category || ''}:${options.sort || 'stars'}:${options.limit || 20}`;
+    }
+
+    get(options: SkillsmpSearchOptions): SkillsmpSearchResult | null {
+        const key = this.generateKey(options);
+        const entry = this.cache.get(key);
+
+        if (!entry) {
+            return null;
+        }
+
+        if (Date.now() > entry.expiresAt) {
+            this.cache.delete(key);
+            return null;
+        }
+
+        logger.debug(`Cache HIT for: ${key}`);
+        return entry.data;
+    }
+
+    set(options: SkillsmpSearchOptions, data: SkillsmpSearchResult): void {
+        const key = this.generateKey(options);
+        this.cache.set(key, {
+            data,
+            expiresAt: Date.now() + this.ttlMs
+        });
+        logger.debug(`Cache SET for: ${key}`);
+    }
+
+    clear(): void {
+        this.cache.clear();
+    }
+}
+
+const githubSearchCache = new GitHubSearchCache(300); // 5 minutes TTL
 
 export interface SkillsmpSearchOptions {
     query: string;
@@ -37,17 +119,24 @@ export class SkillsMarketplaceService {
      */
     async searchSkills(options: SkillsmpSearchOptions): Promise<SkillsmpSearchResult> {
         try {
+            // Check cache first
+            const cached = githubSearchCache.get(options);
+            if (cached) {
+                return cached;
+            }
+
             const limit = options.limit || 20;
             const q = `filename:SKILL.md ${options.query || ''} in:path,file`;
-            let url = `https://api.github.com/search/code?q=${encodeURIComponent(q)}&per_page=${limit}`;
+            const url = `https://api.github.com/search/code?q=${encodeURIComponent(q)}&per_page=${limit}`;
 
             const headers: Record<string, string> = {
                 'Accept': 'application/vnd.github.v3+json',
                 'User-Agent': 'OpenMake-Skills-Marketplace'
             };
 
-            if (process.env.GITHUB_TOKEN) {
-                headers['Authorization'] = `token ${process.env.GITHUB_TOKEN}`;
+            const githubToken = getConfig().githubToken;
+            if (githubToken) {
+                headers['Authorization'] = `token ${githubToken}`;
             }
 
             const response = await fetch(url, { headers });
@@ -56,27 +145,32 @@ export class SkillsMarketplaceService {
                 throw new Error(`GitHub API error: ${response.status}`);
             }
 
-            const data = await response.json() as any;
+            const data = await response.json() as GitHubSearchResponse;
 
             // 파싱
             const items = data.items || [];
-            const skills: SkillsmpSkill[] = items.map((item: any) => ({
+            const skills: SkillsmpSkill[] = items.map((item: GitHubSearchItem) => ({
                 id: `${item.repository.full_name}:${item.path}`,
                 name: item.repository.name,
                 description: item.repository.description || 'No description provided.',
                 repo: item.repository.full_name,
                 path: item.path,
-                stars: 0, // Code search endpoint doesn't return stars directly unfortunately, defaulting to 0
+                stars: item.repository.stargazers_count || 0,
                 category: options.category || 'general',
-                updatedAt: new Date().toISOString(), // Fallback
+                updatedAt: item.repository.updated_at || new Date().toISOString(),
                 url: item.html_url
             }));
 
-            return {
+            const result: SkillsmpSearchResult = {
                 skills,
                 total: data.total_count || 0,
                 query: options.query || ''
             };
+
+            // Store in cache
+            githubSearchCache.set(options, result);
+
+            return result;
         } catch (error) {
             logger.error('Failed to search marketplace skills', error);
             throw error;
@@ -96,8 +190,9 @@ export class SkillsMarketplaceService {
             'User-Agent': 'OpenMake-Skills-Marketplace'
         };
 
-        if (process.env.GITHUB_TOKEN) {
-            headers['Authorization'] = `token ${process.env.GITHUB_TOKEN}`;
+        const githubToken = getConfig().githubToken;
+        if (githubToken) {
+            headers['Authorization'] = `token ${githubToken}`;
         }
 
         const response = await fetch(url, { headers });

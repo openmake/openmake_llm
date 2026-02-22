@@ -19,11 +19,9 @@
 
 import { Router, Request, Response } from 'express';
 import { getAgentMonitor } from '../agents';
-import { success, notFound, internalError } from '../utils/api-response';
+import { success } from '../utils/api-response';
 import { requireAuth, requireAdmin } from '../auth';
-import { createLogger } from '../utils/logger';
-
-const logger = createLogger('AgentsMonitoringRoutes');
+import { asyncHandler } from '../utils/error-handler';
 
 const router = Router();
 
@@ -34,45 +32,30 @@ router.use(requireAuth, requireAdmin);
  * GET /api/agents/metrics
  * 전체 에이전트 메트릭 조회
  */
-router.get('/metrics', (req: Request, res: Response) => {
-    try {
-        const monitor = getAgentMonitor();
-        const metrics = monitor.getAllMetrics();
-         res.json(success({ metrics }));
-      } catch (error) {
-          logger.error('[Agent Active] 오류:', error);
-          res.status(500).json(internalError('에이전트 메트릭 조회 실패'));
-      }
- });
+router.get('/metrics', asyncHandler(async (req: Request, res: Response) => {
+    const monitor = getAgentMonitor();
+    const metrics = monitor.getAllMetrics();
+    res.json(success({ metrics }));
+}));
 
-  /**
-   * GET /api/agents/summary
-  * 에이전트 성능 요약
-  */
-router.get('/summary', (req: Request, res: Response) => {
-    try {
-        const monitor = getAgentMonitor();
-        const summary = monitor.getSummary();
-         res.json(success({ summary }));
-      } catch (error) {
-          logger.error('[Agent Summary] 오류:', error);
-          res.status(500).json(internalError('에이전트 메트릭 조회 실패'));
-      }
- });
+/**
+ * GET /api/agents/summary
+ * 에이전트 성능 요약
+ */
+router.get('/summary', asyncHandler(async (req: Request, res: Response) => {
+    const monitor = getAgentMonitor();
+    const summary = monitor.getSummary();
+    res.json(success({ summary }));
+}));
 
-  /**
-   * POST /api/agents/reset
-  * 에이전트 메트릭 초기화
-  */
-router.post('/reset', (req: Request, res: Response) => {
-    try {
-        const monitor = getAgentMonitor();
-        monitor.reset();
-         res.json(success({ message: '에이전트 메트릭 초기화 완료' }));
-      } catch (error) {
-          logger.error('[Agent Reset] 오류:', error);
-          res.status(500).json(internalError('에이전트 메트릭 조회 실패'));
-      }
- });
+/**
+ * POST /api/agents/reset
+ * 에이전트 메트릭 초기화
+ */
+router.post('/reset', asyncHandler(async (req: Request, res: Response) => {
+    const monitor = getAgentMonitor();
+    monitor.reset();
+    res.json(success({ message: '에이전트 메트릭 초기화 완료' }));
+}));
 
- export default router;
+export default router;

@@ -21,6 +21,7 @@ import { getVapidKeys } from '../utils/vapid';
 import { success, badRequest, internalError } from '../utils/api-response';
 import { createLogger } from '../utils/logger';
 import { getPool } from '../data/models/unified-database';
+import { asyncHandler } from '../utils/error-handler';
 
 const logger = createLogger('PushRoutes');
 
@@ -70,87 +71,72 @@ async function warmCacheIfNeeded(): Promise<void> {
  * GET /api/push/vapid-key
  * VAPID 공개키 반환
  */
-router.get('/vapid-key', (req: Request, res: Response) => {
-    try {
-        const { publicKey } = getVapidKeys();
-        if (!publicKey) {
-            return res.status(503).json(internalError('VAPID keys not configured'));
-        }
-        res.json(success({ publicKey }));
-     } catch (error: unknown) {
-         logger.error('[Push] VAPID key 조회 실패:', error);
-         res.status(500).json(internalError('Push 처리 실패'));
-     }
-});
+router.get('/vapid-key', asyncHandler(async (req: Request, res: Response) => {
+    const { publicKey } = getVapidKeys();
+    if (!publicKey) {
+        return res.status(503).json(internalError('VAPID keys not configured'));
+    }
+    res.json(success({ publicKey }));
+}));
 
 /**
  * POST /api/push/subscribe
  * Push 구독 등록
  */
-router.post('/subscribe', requireAuth, async (req: Request, res: Response) => {
-    try {
-        await warmCacheIfNeeded();
-        const { endpoint, keys, userId } = req.body;
-        
-        if (!endpoint || !keys?.p256dh || !keys?.auth) {
-            return res.status(400).json(badRequest('endpoint, keys.p256dh, keys.auth are required'));
-        }
-        
-        const subscription: PushSubscription = {
-            endpoint,
-            keys: { p256dh: keys.p256dh, auth: keys.auth },
-            userId,
-            createdAt: new Date()
-        };
-        
-         // Write to cache
-         pushSubscriptions.set(endpoint, subscription);
-         logger.info(`[Push] 구독 등록: ${endpoint.substring(0, 50)}... (총 ${pushSubscriptions.size}개)`);
+router.post('/subscribe', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+    await warmCacheIfNeeded();
+    const { endpoint, keys, userId } = req.body;
+    
+    if (!endpoint || !keys?.p256dh || !keys?.auth) {
+        return res.status(400).json(badRequest('endpoint, keys.p256dh, keys.auth are required'));
+    }
+    
+    const subscription: PushSubscription = {
+        endpoint,
+        keys: { p256dh: keys.p256dh, auth: keys.auth },
+        userId,
+        createdAt: new Date()
+    };
+    
+    // Write to cache
+    pushSubscriptions.set(endpoint, subscription);
+    logger.info(`[Push] 구독 등록: ${endpoint.substring(0, 50)}... (총 ${pushSubscriptions.size}개)`);
 
-         // Async DB insert (fire-and-forget)
-         getPool().query(
-             `INSERT INTO push_subscriptions_store (user_key, endpoint, p256dh, auth_key, user_id, created_at)
-              VALUES ($1, $2, $3, $4, $5, $6)
-              ON CONFLICT (user_key) DO UPDATE SET endpoint = $2, p256dh = $3, auth_key = $4, user_id = $5`,
-             [endpoint, endpoint, keys.p256dh, keys.auth, userId || null, subscription.createdAt.toISOString()]
-         ).catch(err => logger.error('[Push] DB 구독 저장 실패:', err));
-        
-        res.json(success({ message: 'Push 구독이 등록되었습니다.' }));
-     } catch (error: unknown) {
-         logger.error('[Push] 구독 등록 실패:', error);
-         res.status(500).json(internalError('Push 처리 실패'));
-     }
- });
+    // Async DB insert (fire-and-forget)
+    getPool().query(
+        `INSERT INTO push_subscriptions_store (user_key, endpoint, p256dh, auth_key, user_id, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT (user_key) DO UPDATE SET endpoint = $2, p256dh = $3, auth_key = $4, user_id = $5`,
+        [endpoint, endpoint, keys.p256dh, keys.auth, userId || null, subscription.createdAt.toISOString()]
+    ).catch(err => logger.error('[Push] DB 구독 저장 실패:', err));
+    
+    res.json(success({ message: 'Push 구독이 등록되었습니다.' }));
+}));
 
- /**
-  * POST /api/push/unsubscribe
-  * Push 구독 해제
-  */
- router.post('/unsubscribe', requireAuth, async (req: Request, res: Response) => {
-     try {
-         await warmCacheIfNeeded();
-         const { endpoint } = req.body;
-         
-         if (!endpoint) {
-             return res.status(400).json(badRequest('endpoint is required'));
-         }
-         
-         // Delete from cache
-         const deleted = pushSubscriptions.delete(endpoint);
-         logger.info(`[Push] 구독 해제: ${deleted ? '성공' : '없음'} (총 ${pushSubscriptions.size}개)`);
+/**
+ * POST /api/push/unsubscribe
+ * Push 구독 해제
+ */
+router.post('/unsubscribe', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+    await warmCacheIfNeeded();
+    const { endpoint } = req.body;
+    
+    if (!endpoint) {
+        return res.status(400).json(badRequest('endpoint is required'));
+    }
+    
+    // Delete from cache
+    const deleted = pushSubscriptions.delete(endpoint);
+    logger.info(`[Push] 구독 해제: ${deleted ? '성공' : '없음'} (총 ${pushSubscriptions.size}개)`);
 
-         // Async DB delete (fire-and-forget)
-         getPool().query(
-             'DELETE FROM push_subscriptions_store WHERE user_key = $1',
-             [endpoint]
-         ).catch(err => logger.error('[Push] DB 구독 삭제 실패:', err));
-        
-        res.json(success({ message: deleted ? 'Push 구독이 해제되었습니다.' : '해당 구독을 찾을 수 없습니다.' }));
-     } catch (error: unknown) {
-         logger.error('[Push] 구독 해제 실패:', error);
-         res.status(500).json(internalError('Push 처리 실패'));
-     }
- });
+    // Async DB delete (fire-and-forget)
+    getPool().query(
+        'DELETE FROM push_subscriptions_store WHERE user_key = $1',
+        [endpoint]
+    ).catch(err => logger.error('[Push] DB 구독 삭제 실패:', err));
+    
+    res.json(success({ message: deleted ? 'Push 구독이 해제되었습니다.' : '해당 구독을 찾을 수 없습니다.' }));
+}));
 
 export default router;
 export { router as pushRouter };
