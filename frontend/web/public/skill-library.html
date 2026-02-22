@@ -1,0 +1,201 @@
+<div class="page-content skill-library-page h-100 p-0 overflow-hidden d-flex flex-column">
+    <div class="content-header p-4 pb-0 flex-shrink-0">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h1 class="h3 mb-0 text-white d-flex align-items-center gap-2">
+                <span class="iconify" data-icon="lucide:package"></span>
+                스킬 라이브러리
+            </h1>
+        </div>
+        <p class="text-secondary mb-3">로컬에 설치된 에이전트 스킬을 관리하거나 마켓플레이스에서 새로운 스킬을 가져옵니다.</p>
+
+        <!-- 탭 네비게이션 -->
+        <ul class="nav nav-tabs custom-tabs" id="skillTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="local-skills-tab" data-bs-toggle="tab"
+                    data-bs-target="#local-skills-pane" type="button" role="tab">내 스킬</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="marketplace-tab" data-bs-toggle="tab" data-bs-target="#marketplace-pane"
+                    type="button" role="tab">SkillsMP 마켓플레이스</button>
+            </li>
+        </ul>
+    </div>
+
+    <div class="tab-content flex-grow-1 overflow-auto p-4" id="skillTabContent">
+        <!-- 로컬 스킬 탭 -->
+        <div class="tab-pane fade show active h-100" id="local-skills-pane" role="tabpanel">
+            <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+                <div class="d-flex gap-2 flex-grow-1 max-w-600">
+                    <div class="input-group">
+                        <span class="input-group-text bg-surface border-secondary text-secondary">
+                            <span class="iconify" data-icon="lucide:search"></span>
+                        </span>
+                        <input type="text" id="localSearchInput"
+                            class="form-control bg-surface border-secondary text-white" placeholder="스킬 검색...">
+                    </div>
+                    <select id="localCategoryFilter" class="form-select bg-surface border-secondary text-white w-auto">
+                        <option value="">모든 카테고리</option>
+                    </select>
+                    <select id="localSortSelect" class="form-select bg-surface border-secondary text-white w-auto">
+                        <option value="newest">최신순</option>
+                        <option value="updated">업데이트순</option>
+                        <option value="name">이름순</option>
+                        <option value="category">카테고리순</option>
+                    </select>
+                </div>
+                <button class="btn btn-primary d-flex align-items-center gap-2" onclick="window.sl_openNewSkill()">
+                    <span class="iconify" data-icon="lucide:plus"></span> 새 스킬 등록
+                </button>
+            </div>
+
+            <div id="localSkillsGrid" class="skill-grid">
+                <!-- 스킬 카드 동적 렌더링 영역 -->
+                <div class="text-center p-5 w-100">
+                    <div class="spinner-border text-primary" role="status"></div>
+                </div>
+            </div>
+
+            <div id="localPagination" class="d-flex justify-content-center mt-4"></div>
+        </div>
+
+        <!-- 마켓플레이스 탭 -->
+        <div class="tab-pane fade h-100" id="marketplace-pane" role="tabpanel">
+            <div
+                class="marketplace-banner mb-4 p-4 rounded bg-surface border border-primary-subtle d-flex align-items-start gap-4">
+                <div class="fs-1 text-primary">
+                    <span class="iconify" data-icon="lucide:globe"></span>
+                </div>
+                <div>
+                    <h5 class="text-white mb-2">SkillsMP 오픈소스 생태계 연동</h5>
+                    <p class="text-secondary mb-0">전 세계 개발자가 공유하는 26만 개 이상의 오픈소스 에이전트 스킬 포맷(SKILL.md)을 검색하고 로컬 환경으로 즉시
+                        가져올 수 있습니다.</p>
+                </div>
+            </div>
+
+            <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+                <div class="d-flex gap-2 flex-grow-1 max-w-600">
+                    <div class="input-group">
+                        <span class="input-group-text bg-surface border-secondary text-secondary">
+                            <span class="iconify" data-icon="lucide:search"></span>
+                        </span>
+                        <input type="text" id="mpSearchInput"
+                            class="form-control bg-surface border-secondary text-white"
+                            placeholder="마켓플레이스 검색 (예: react, python, 분석)...">
+                        <button class="btn btn-primary" id="mpSearchBtn">검색</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="mpSkillsGrid" class="skill-grid">
+                <!-- 마켓플레이스 검색 결과 렌더링 영역 -->
+                <div class="text-center p-5 w-100 text-secondary">
+                    검색어를 입력하고 버튼을 눌러 스킬을 찾아보세요.
+                </div>
+            </div>
+
+            <div id="mpPagination" class="d-flex justify-content-center mt-4"></div>
+        </div>
+    </div>
+</div>
+
+<style data-spa-style="skill-library">
+    /* 커스텀 탭 스타일 overriding */
+    .custom-tabs {
+        border-bottom: 1px solid var(--border-color, #2d3748);
+    }
+
+    .custom-tabs .nav-link {
+        color: var(--text-secondary, #a0aec0);
+        border: none;
+        border-bottom: 2px solid transparent;
+        padding: 0.75rem 1rem;
+        font-weight: 500;
+    }
+
+    .custom-tabs .nav-link:hover {
+        color: var(--text-primary, #ffffff);
+        border-color: transparent;
+    }
+
+    .custom-tabs .nav-link.active {
+        color: var(--primary-color, #3b82f6);
+        background: transparent;
+        border-color: var(--primary-color, #3b82f6);
+    }
+
+    .skill-library-page .max-w-600 {
+        max-width: 600px;
+    }
+
+    .skill-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 1.5rem;
+    }
+
+    .skill-card {
+        background-color: var(--surface-color, #1e293b);
+        border: 1px solid var(--border-color, #334155);
+        border-radius: 0.5rem;
+        padding: 1.5rem;
+        transition: all 0.2s ease-in-out;
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+    }
+
+    .skill-card:hover {
+        border-color: var(--primary-color, #3b82f6);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        transform: translateY(-2px);
+    }
+
+    .skill-card-badge {
+        font-size: 0.75rem;
+        padding: 0.25rem 0.5rem;
+        border-radius: 1rem;
+        background-color: rgba(59, 130, 246, 0.1);
+        color: var(--primary-color, #3b82f6);
+        border: 1px solid rgba(59, 130, 246, 0.2);
+        display: inline-block;
+    }
+
+    .skill-card-title {
+        font-size: 1.125rem;
+        font-weight: 600;
+        color: var(--text-primary, #ffffff);
+        margin-bottom: 0.5rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .skill-card-desc {
+        color: var(--text-secondary, #94a3b8);
+        font-size: 0.875rem;
+        line-height: 1.5;
+        flex-grow: 1;
+        display: -webkit-box;
+        -webkit-line-clamp: 3;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        margin-bottom: 1rem;
+    }
+
+    .skill-card-footer {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-top: 1px solid var(--border-color, #334155);
+        padding-top: 1rem;
+        margin-top: auto;
+    }
+
+    .skill-stars {
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+        color: #facc15;
+        font-size: 0.875rem;
+    }
+</style>
