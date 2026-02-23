@@ -123,6 +123,8 @@ export interface ChatRequestParams {
     onDiscussionProgress?: (progress: DiscussionProgress) => void;
     /** 딥 리서치 진행 콜백 */
     onResearchProgress?: (progress: ResearchProgress) => void;
+    /** 스킬 활성화 콜백 - 에이전트에 주입된 스킬 이름 목록 */
+    onSkillsActivated?: (skillNames: string[]) => void;
 }
 
 /**
@@ -369,6 +371,7 @@ export class ChatRequestHandler {
             onAgentSelected,
             onDiscussionProgress,
             onResearchProgress,
+            onSkillsActivated,
         } = params;
 
         // 1. ExecutionPlan 해석
@@ -472,6 +475,7 @@ export class ChatRequestHandler {
             onDiscussionProgress,
             onResearchProgress,
             plan,
+            onSkillsActivated,
         );
 
         const endTime = Date.now();

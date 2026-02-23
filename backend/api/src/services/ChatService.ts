@@ -194,7 +194,8 @@ export class ChatService {
         onAgentSelected?: (agent: { type: string; name: string; emoji?: string; phase?: string; reason?: string; confidence?: number }) => void,
         onDiscussionProgress?: (progress: DiscussionProgress) => void,
         onResearchProgress?: (progress: ResearchProgress) => void,
-        executionPlan?: ExecutionPlan
+        executionPlan?: ExecutionPlan,
+        onSkillsActivated?: (skillNames: string[]) => void
     ): Promise<string> {
         const {
             message,
@@ -266,11 +267,9 @@ export class ChatService {
         };
 
         const agentSelection = await routeToAgent(message || '');
-        const agentSystemMessage = await getAgentSystemMessage(agentSelection, userId || undefined);
+        const { prompt: agentSystemMessage, skillNames } = await getAgentSystemMessage(agentSelection, userId || undefined);
         const selectedAgent = AGENTS[agentSelection.primaryAgent];
-
         logger.info(`에이전트: ${selectedAgent.emoji} ${selectedAgent.name}`);
-
         if (onAgentSelected && selectedAgent) {
             onAgentSelected({
                 type: agentSelection.primaryAgent,
@@ -280,6 +279,10 @@ export class ChatService {
                 reason: agentSelection.reason || '',
                 confidence: agentSelection.confidence || 0.5,
             });
+        }
+
+        if (onSkillsActivated && skillNames.length > 0) {
+            onSkillsActivated(skillNames);
         }
 
         // 문서 컨텍스트 구성: 업로드된 문서의 텍스트와 이미지를 추출

@@ -218,6 +218,11 @@ function handleMessage(data) {
             }
             break;
 
+        case 'skills_activated':
+            debugLog('[WebSocket] 스킬 활성화:', data.skillNames);
+            setState('activeSkillNames', Array.isArray(data.skillNames) ? data.skillNames : []);
+            break;
+
         case 'discussion_progress':
             debugLog('[WebSocket] 토론 진행:', data.progress);
             if (typeof showDiscussionProgress === 'function') {

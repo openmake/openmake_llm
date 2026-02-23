@@ -439,6 +439,24 @@ function finishAssistantMessage(errorMessage = null, serverMessageId = null) {
         }
     }
 
+    // 스킬 attribution: 해당 응답 메시지에 어떤 스킬로 생성되었는지 표시
+    const activeSkillNames = getState('activeSkillNames');
+    if (!errorMessage && activeSkillNames && activeSkillNames.length > 0) {
+        const wrapper = currentMsg.querySelector('.message-wrapper');
+        const timeEl = currentMsg.querySelector('.message-time');
+        if (wrapper && timeEl) {
+            function escSkill(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+            const chips = activeSkillNames.map(function(n) {
+                return '<span class="attribution-chip">' + escSkill(n) + '</span>';
+            }).join('');
+            const attrEl = document.createElement('div');
+            attrEl.className = 'message-attribution';
+            attrEl.innerHTML = '<span class="attribution-label">✶ 스킬 적용</span><div class="attribution-chips">' + chips + '</div>';
+            wrapper.insertBefore(attrEl, timeEl);
+        }
+        setState('activeSkillNames', null);
+    }
+
     setState('currentAssistantMessage', null);
     setState('messageStartTime', null);
     setState('isGenerating', false);
@@ -553,6 +571,9 @@ function newChat() {
     setState('currentChatId', null);
     setState('attachedFiles', []);
     setState('activeDocumentContext', null);
+
+    // 새 대화 시작 시 활성 스킬 상태 초기화
+    setState('activeSkillNames', null);
 
     // 입력창 초기화
     const input = document.getElementById('chatInput');
