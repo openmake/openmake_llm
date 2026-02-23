@@ -433,10 +433,15 @@ END $$;
 -- Full-text search indexes (pg_trgm 확장 필요)
 DO $$ BEGIN
     IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_trgm') THEN
-        EXECUTE 'CREATE INDEX IF NOT EXISTS idx_messages_content_trgm ON conversation_messages USING gin (content gin_trgm_ops)';
-        EXECUTE 'CREATE INDEX IF NOT EXISTS idx_memories_value_trgm ON user_memories USING gin (value gin_trgm_ops)';
+        BEGIN
+            EXECUTE 'CREATE INDEX IF NOT EXISTS idx_messages_content_trgm ON conversation_messages USING gin (content gin_trgm_ops)';
+            EXECUTE 'CREATE INDEX IF NOT EXISTS idx_memories_value_trgm ON user_memories USING gin (value gin_trgm_ops)';
+            RAISE NOTICE '[pg_trgm] 트라이그램 인덱스 생성 완료';
+        EXCEPTION WHEN OTHERS THEN
+            RAISE NOTICE '[pg_trgm] 인덱스 생성 실패 (shared library 문제) — 건너뜀: %', SQLERRM;
+        END;
     ELSE
-        RAISE NOTICE 'pg_trgm extension not installed — skipping trigram indexes. Run: CREATE EXTENSION IF NOT EXISTS pg_trgm;';
+        RAISE NOTICE '[pg_trgm] 확장 미설치 — 트라이그램 인덱스 건너뜀. Run: CREATE EXTENSION IF NOT EXISTS pg_trgm;';
     END IF;
 END $$;
 
@@ -516,8 +521,24 @@ CREATE INDEX IF NOT EXISTS idx_api_keys_active ON user_api_keys(user_id, is_acti
 CREATE INDEX IF NOT EXISTS idx_api_keys_tier ON user_api_keys(rate_limit_tier);
 
 -- Session & Audit indexes (from unified-database.ts)
+-- Remove duplicate anon_session_id rows before creating unique index (keep the most recent row per value)
+-- NOTE: id column is TEXT; use updated_at for ordering to avoid lexicographic comparison issues
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM conversation_sessions WHERE anon_session_id IS NOT NULL GROUP BY anon_session_id HAVING COUNT(*) > 1) THEN
+        DELETE FROM conversation_sessions cs
+        WHERE anon_session_id IS NOT NULL
+          AND ctid NOT IN (
+            SELECT DISTINCT ON (anon_session_id) ctid
+            FROM conversation_sessions
+            WHERE anon_session_id IS NOT NULL
+            ORDER BY anon_session_id, updated_at DESC NULLS LAST
+          );
+        RAISE NOTICE '[schema] 중복 anon_session_id 로우 정리 완료';
+    END IF;
+END $$;
 DROP INDEX IF EXISTS idx_sessions_anon;
-CREATE UNIQUE INDEX IF NOT EXISTS idx_sessions_anon ON conversation_sessions(anon_session_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_sessions_anon ON conversation_sessions(anon_session_id) WHERE anon_session_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_audit_user ON audit_logs(user_id);
 
 -- OAuth state index (cleanup query)

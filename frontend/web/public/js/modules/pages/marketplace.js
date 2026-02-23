@@ -161,6 +161,13 @@
         function debounce(fn, ms) { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; }
 
         load();
+        // 모달 오버레이 클릭 시 닫기 (내부 .modal 클릭 제외)
+        var detailModal = document.getElementById('detailModal');
+        if (detailModal) {
+            detailModal.addEventListener('click', function(e) {
+                if (e.target === detailModal) { closeDetail(); }
+            });
+        }
 
             // Expose onclick-referenced functions globally
                 if (typeof switchTab === 'function') window.marketplaceSwitchTab = switchTab;
