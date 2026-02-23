@@ -65,15 +65,26 @@ export class AdminController {
             const page = Math.max(1, parseInt(req.query.page as string) || 1);
             const limit = Math.min(parseInt(req.query.limit as string) || 20, 100);
             const offset = (page - 1) * limit;
-            const date = req.query.date as string | undefined;
+            const startDate = req.query.startDate as string | undefined;
+            const endDate = req.query.endDate as string | undefined;
+            const date = req.query.date as string | undefined; // Legacy single date support
             const role = req.query.role as string | undefined;
             const search = req.query.search as string | undefined;
 
             const conditions: string[] = [];
             const params: unknown[] = [];
             let paramIdx = 1;
-
-            if (date) {
+            // Date range filter (startDate/endDate takes precedence)
+            if (startDate) {
+                conditions.push(`cm.created_at::date >= $${paramIdx++}`);
+                params.push(startDate);
+            }
+            if (endDate) {
+                conditions.push(`cm.created_at::date <= $${paramIdx++}`);
+                params.push(endDate);
+            }
+            // Legacy single date filter (fallback if no range provided)
+            if (!startDate && !endDate && date) {
                 conditions.push(`cm.created_at::date = $${paramIdx++}`);
                 params.push(date);
             }
