@@ -90,7 +90,7 @@ router.post('/import',
     requireAuth,
     validate(importSkillSchema),
     asyncHandler(async (req: Request, res: Response) => {
-        const userId = (req as Request & { user?: { id: string } }).user?.id;
+        const userId = (req.user && 'userId' in req.user ? (req.user as { userId: string }).userId : req.user?.id?.toString());
         const { repo, path, name, category } = req.body as {
             repo: string;
             path: string;

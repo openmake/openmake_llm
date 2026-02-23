@@ -60,7 +60,7 @@ router.get('/categories', requireAuth, asyncHandler(async (req: Request, res: Re
  * Query params: search, category, isPublic, sortBy, limit, offset
  */
 router.get('/', requireAuth, validateQuery(searchSkillsQuerySchema), asyncHandler(async (req: Request, res: Response) => {
-    const userId = req.user?.id?.toString();
+    const userId = (req.user && 'userId' in req.user ? (req.user as { userId: string }).userId : req.user?.id?.toString());
     const { search, category, isPublic, sortBy, limit, offset } = req.query as {
         search?: string;
         category?: string;
@@ -92,7 +92,7 @@ router.get('/', requireAuth, validateQuery(searchSkillsQuerySchema), asyncHandle
  * 스킬 생성
  */
 router.post('/', requireAuth, validate(createSkillSchema), asyncHandler(async (req: Request, res: Response) => {
-    const userId = req.user?.id?.toString();
+    const userId = (req.user && 'userId' in req.user ? (req.user as { userId: string }).userId : req.user?.id?.toString());
     const { name, description, content, category, isPublic } = req.body;
 
     const skill = await getSkillManager().createSkill({
@@ -116,7 +116,7 @@ router.post('/', requireAuth, validate(createSkillSchema), asyncHandler(async (r
  * 현재 로그인 사용자의 개인 할당 스킬 목록
  */
 router.get('/user-assigned', requireAuth, asyncHandler(async (req: Request, res: Response) => {
-    const userId = req.user?.id?.toString();
+    const userId = (req.user && 'userId' in req.user ? (req.user as { userId: string }).userId : req.user?.id?.toString());
     if (!userId) {
         res.status(401).json({ success: false, error: { code: 'UNAUTHORIZED', message: '인증 필요' } });
         return;
@@ -131,7 +131,7 @@ router.get('/user-assigned', requireAuth, asyncHandler(async (req: Request, res:
  */
 router.post('/:skillId/user-assign', requireAuth, asyncHandler(async (req: Request, res: Response) => {
     const { skillId } = req.params;
-    const userId = req.user?.id?.toString();
+    const userId = (req.user && 'userId' in req.user ? (req.user as { userId: string }).userId : req.user?.id?.toString());
     if (!userId) {
         res.status(401).json({ success: false, error: { code: 'UNAUTHORIZED', message: '인증 필요' } });
         return;
@@ -155,7 +155,7 @@ router.post('/:skillId/user-assign', requireAuth, asyncHandler(async (req: Reque
  */
 router.delete('/:skillId/user-assign', requireAuth, asyncHandler(async (req: Request, res: Response) => {
     const { skillId } = req.params;
-    const userId = req.user?.id?.toString();
+    const userId = (req.user && 'userId' in req.user ? (req.user as { userId: string }).userId : req.user?.id?.toString());
     if (!userId) {
         res.status(401).json({ success: false, error: { code: 'UNAUTHORIZED', message: '인증 필요' } });
         return;
@@ -172,7 +172,7 @@ router.delete('/:skillId/user-assign', requireAuth, asyncHandler(async (req: Req
  */
 router.put('/:skillId', requireAuth, validate(updateSkillSchema), asyncHandler(async (req: Request, res: Response) => {
     const { skillId } = req.params;
-    const userId = req.user?.id?.toString();
+    const userId = (req.user && 'userId' in req.user ? (req.user as { userId: string }).userId : req.user?.id?.toString());
 
     // 소유권 검증: 본인이 만든 스킬만 수정 가능
     const owner = await getSkillManager().getSkillOwner(skillId);
@@ -203,7 +203,7 @@ router.put('/:skillId', requireAuth, validate(updateSkillSchema), asyncHandler(a
  */
 router.delete('/:skillId', requireAuth, asyncHandler(async (req: Request, res: Response) => {
     const { skillId } = req.params;
-    const userId = req.user?.id?.toString();
+    const userId = (req.user && 'userId' in req.user ? (req.user as { userId: string }).userId : req.user?.id?.toString());
 
     // 소유권 검증: 본인이 만든 스킬만 삭제 가능
     const owner = await getSkillManager().getSkillOwner(skillId);
