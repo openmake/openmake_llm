@@ -18,6 +18,7 @@
  */
 
 import nodemailer, { type Transporter } from 'nodemailer';
+import type { Pool } from 'pg';
 import { createLogger } from '../utils/logger';
 
 const logger = createLogger('AlertSystem');
@@ -121,6 +122,8 @@ export class AlertSystem {
     private lastAlerts: Map<string, Date> = new Map();
     /** 알림 히스토리 (최대 100건) */
     private alertHistory: AlertMessage[] = [];
+    /** PostgreSQL Pool (alert_history DB 영속화용) */
+    private pool: Pool | null = null;
 
     /**
      * AlertSystem 인스턴스를 생성합니다.
@@ -156,6 +159,16 @@ export class AlertSystem {
         }
 
         logger.info('알림 시스템 초기화됨', { channels: this.config.channels });
+    }
+
+    /**
+     * PostgreSQL Pool을 주입하여 alert_history 테이블에 영속화를 활성화합니다.
+     *
+     * @param pool - pg Pool 인스턴스
+     */
+    setPool(pool: Pool): void {
+        this.pool = pool;
+        logger.info('AlertSystem: DB 영속화 활성화됨');
     }
 
     /**
@@ -203,6 +216,15 @@ export class AlertSystem {
         this.alertHistory.push(alert);
         if (this.alertHistory.length > 100) {
             this.alertHistory.shift();
+        }
+
+        // DB 영속화 (pool이 주입된 경우)
+        if (this.pool) {
+            this.pool.query(
+                'INSERT INTO alert_history (type, severity, title, message, data) VALUES ($1, $2, $3, $4, $5)',
+                [alert.type, alert.severity, alert.title, alert.message,
+                 alert.data !== undefined ? JSON.stringify(alert.data) : null]
+            ).catch((err: Error) => logger.error('[AlertSystem] alert_history DB 저장 실패:', err));
         }
 
         // 마지막 알림 시간 기록
