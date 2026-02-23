@@ -59,7 +59,7 @@ CREATE TABLE IF NOT EXISTS users (
 
 CREATE TABLE IF NOT EXISTS conversation_sessions (
     id TEXT PRIMARY KEY,
-    user_id TEXT REFERENCES users(id),
+    user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
     anon_session_id TEXT,
     title TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -82,7 +82,7 @@ CREATE TABLE IF NOT EXISTS conversation_messages (
 
 CREATE TABLE IF NOT EXISTS api_usage (
     id SERIAL PRIMARY KEY,
-    date TEXT NOT NULL,
+    date DATE NOT NULL,
     api_key_id TEXT,
     requests INTEGER DEFAULT 0,
     tokens INTEGER DEFAULT 0,
@@ -94,6 +94,7 @@ CREATE TABLE IF NOT EXISTS api_usage (
     UNIQUE(date, api_key_id)
 );
 
+-- [P3 LEGACY] push_subscriptions: 레거시 테이블. 활성 푸시 구독은 push_subscriptions_store 사용. 사용자 삭제 시 cleanup용 DELETE만 존재.
 CREATE TABLE IF NOT EXISTS push_subscriptions (
     id SERIAL PRIMARY KEY,
     user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
@@ -163,6 +164,7 @@ CREATE TABLE IF NOT EXISTS uploaded_documents (
 );
 CREATE INDEX IF NOT EXISTS idx_uploaded_documents_expires ON uploaded_documents(expires_at);
 
+-- [P3 UNUSED] token_daily_stats: 미사용 테이블. ApiUsageTracker가 현재 인메모리 전용으로 동작. 미래 DB 용 write-through 시 활성화 예정.
 CREATE TABLE IF NOT EXISTS token_daily_stats (
     date_key TEXT PRIMARY KEY,
     total_prompt_tokens INTEGER NOT NULL DEFAULT 0,
@@ -196,6 +198,290 @@ CREATE INDEX IF NOT EXISTS idx_feedback_message ON message_feedback(message_id);
 CREATE INDEX IF NOT EXISTS idx_feedback_session ON message_feedback(session_id);
 CREATE INDEX IF NOT EXISTS idx_feedback_signal ON message_feedback(signal);
 CREATE INDEX IF NOT EXISTS idx_feedback_created ON message_feedback(created_at);
+
+CREATE TABLE IF NOT EXISTS agent_usage_logs (
+    id SERIAL PRIMARY KEY,
+    timestamp TIMESTAMPTZ DEFAULT NOW(),
+    user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+    session_id TEXT REFERENCES conversation_sessions(id) ON DELETE SET NULL,
+    agent_id TEXT NOT NULL,
+    query TEXT,
+    response_preview TEXT,
+    response_time_ms INTEGER,
+    tokens_used INTEGER,
+    success BOOLEAN DEFAULT TRUE,
+    error_message TEXT
+);
+
+CREATE TABLE IF NOT EXISTS agent_feedback (
+    id TEXT PRIMARY KEY,
+    agent_id TEXT NOT NULL,
+    user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+    rating INTEGER NOT NULL CHECK (rating >= 1 AND rating <= 5),
+    comment TEXT,
+    query TEXT,
+    response TEXT,
+    tags JSONB,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS custom_agents (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    description TEXT,
+    system_prompt TEXT NOT NULL,
+    keywords JSONB,
+    category TEXT,
+    emoji TEXT DEFAULT '\uD83E\uDD16',
+    temperature REAL,
+    max_tokens INTEGER,
+    created_by TEXT REFERENCES users(id) ON DELETE CASCADE,
+    enabled BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS audit_logs (
+    id SERIAL PRIMARY KEY,
+    timestamp TIMESTAMPTZ DEFAULT NOW(),
+    action TEXT NOT NULL,
+    user_id TEXT,
+    resource_type TEXT,
+    resource_id TEXT,
+    details JSONB,
+    ip_address TEXT,
+    user_agent TEXT
+);
+
+CREATE TABLE IF NOT EXISTS alert_history (
+    id SERIAL PRIMARY KEY,
+    type TEXT NOT NULL,
+    severity TEXT NOT NULL,
+    title TEXT NOT NULL,
+    message TEXT,
+    data JSONB,
+    acknowledged BOOLEAN DEFAULT FALSE,
+    acknowledged_by TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    acknowledged_at TIMESTAMPTZ
+);
+
+CREATE TABLE IF NOT EXISTS user_memories (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    category TEXT NOT NULL CHECK(category IN ('preference', 'fact', 'project', 'relationship', 'skill', 'context')),
+    key TEXT NOT NULL,
+    value TEXT NOT NULL,
+    importance REAL DEFAULT 0.5,
+    access_count INTEGER DEFAULT 0,
+    last_accessed TIMESTAMPTZ,
+    source_session_id TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    expires_at TIMESTAMPTZ,
+    UNIQUE(user_id, category, key)
+);
+
+CREATE TABLE IF NOT EXISTS memory_tags (
+    id SERIAL PRIMARY KEY,
+    memory_id TEXT NOT NULL REFERENCES user_memories(id) ON DELETE CASCADE,
+    tag TEXT NOT NULL,
+    UNIQUE(memory_id, tag)
+);
+
+CREATE TABLE IF NOT EXISTS research_sessions (
+    id TEXT PRIMARY KEY,
+    user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
+    topic TEXT NOT NULL,
+    status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'running', 'completed', 'failed', 'cancelled')),
+    depth TEXT DEFAULT 'standard' CHECK(depth IN ('quick', 'standard', 'deep')),
+    progress INTEGER DEFAULT 0,
+    summary TEXT,
+    key_findings JSONB,
+    sources JSONB,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    completed_at TIMESTAMPTZ
+);
+
+CREATE TABLE IF NOT EXISTS research_steps (
+    id SERIAL PRIMARY KEY,
+    session_id TEXT NOT NULL REFERENCES research_sessions(id) ON DELETE CASCADE,
+    step_number INTEGER NOT NULL,
+    step_type TEXT NOT NULL,
+    query TEXT,
+    result TEXT,
+    sources JSONB,
+    status TEXT DEFAULT 'pending',
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS agent_marketplace (
+    id TEXT PRIMARY KEY,
+    agent_id TEXT NOT NULL REFERENCES custom_agents(id),
+    author_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    description TEXT,
+    long_description TEXT,
+    category TEXT,
+    tags JSONB,
+    icon TEXT DEFAULT '🤖',
+    price REAL DEFAULT 0,
+    is_free BOOLEAN DEFAULT TRUE,
+    is_featured BOOLEAN DEFAULT FALSE,
+    is_verified BOOLEAN DEFAULT FALSE,
+    downloads INTEGER DEFAULT 0,
+    rating_avg REAL DEFAULT 0,
+    rating_count INTEGER DEFAULT 0,
+    version TEXT DEFAULT '1.0.0',
+    status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'approved', 'rejected', 'suspended')),
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    published_at TIMESTAMPTZ
+);
+
+CREATE TABLE IF NOT EXISTS agent_reviews (
+    id TEXT PRIMARY KEY,
+    marketplace_id TEXT NOT NULL REFERENCES agent_marketplace(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    rating INTEGER NOT NULL CHECK(rating >= 1 AND rating <= 5),
+    title TEXT,
+    content TEXT,
+    helpful_count INTEGER DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(marketplace_id, user_id)
+);
+
+CREATE TABLE IF NOT EXISTS agent_installations (
+    id SERIAL PRIMARY KEY,
+    marketplace_id TEXT NOT NULL REFERENCES agent_marketplace(id),
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    installed_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(marketplace_id, user_id)
+);
+
+CREATE TABLE IF NOT EXISTS canvas_documents (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    session_id TEXT REFERENCES conversation_sessions(id) ON DELETE SET NULL,
+    title TEXT NOT NULL,
+    doc_type TEXT DEFAULT 'document' CHECK(doc_type IN ('document', 'code', 'diagram', 'table')),
+    content TEXT,
+    language TEXT,
+    version INTEGER DEFAULT 1,
+    is_shared BOOLEAN DEFAULT FALSE,
+    share_token TEXT UNIQUE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS canvas_versions (
+    id SERIAL PRIMARY KEY,
+    document_id TEXT NOT NULL REFERENCES canvas_documents(id) ON DELETE CASCADE,
+    version INTEGER NOT NULL,
+    content TEXT NOT NULL,
+    change_summary TEXT,
+    created_by TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS external_connections (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    service_type TEXT NOT NULL CHECK(service_type IN ('google_drive', 'notion', 'github', 'slack', 'dropbox')),
+    access_token TEXT,
+    refresh_token TEXT,
+    token_expires_at TIMESTAMPTZ,
+    account_email TEXT,
+    account_name TEXT,
+    metadata JSONB,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(user_id, service_type)
+);
+
+CREATE TABLE IF NOT EXISTS external_files (
+    id TEXT PRIMARY KEY,
+    connection_id TEXT NOT NULL REFERENCES external_connections(id) ON DELETE CASCADE,
+    external_id TEXT NOT NULL,
+    file_name TEXT NOT NULL,
+    file_type TEXT,
+    file_size INTEGER,
+    web_url TEXT,
+    last_synced TIMESTAMPTZ,
+    cached_content TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(connection_id, external_id)
+);
+
+-- [P3 UNUSED] vector_embeddings: 미사용 테이블. 현재 TS 코드에서 미사용. pgvector 기반 단어 검색 구현 시 활성화 예정. embedding TEXT 폴백 버전.
+CREATE TABLE IF NOT EXISTS vector_embeddings (
+    id SERIAL PRIMARY KEY,
+    source_type TEXT NOT NULL CHECK(source_type IN ('document', 'memory', 'conversation', 'agent')),
+    source_id TEXT NOT NULL,
+    chunk_index INTEGER DEFAULT 0,
+    chunk_text TEXT NOT NULL,
+    embedding TEXT,
+    metadata JSONB,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS mcp_servers (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL UNIQUE,
+    transport_type TEXT NOT NULL CHECK(transport_type IN ('stdio', 'sse', 'streamable-http')),
+    command TEXT,
+    args JSONB,
+    env JSONB,
+    url TEXT,
+    enabled BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS user_api_keys (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    key_hash TEXT NOT NULL UNIQUE,
+    key_prefix TEXT NOT NULL DEFAULT 'omk_live_',
+    last_4 TEXT NOT NULL,
+    name TEXT NOT NULL,
+    description TEXT,
+    scopes JSONB DEFAULT '["*"]',
+    allowed_models JSONB DEFAULT '["*"]',
+    rate_limit_tier TEXT NOT NULL DEFAULT 'free' CHECK(rate_limit_tier IN ('free', 'starter', 'standard', 'enterprise')),
+    is_active BOOLEAN DEFAULT TRUE,
+    last_used_at TIMESTAMPTZ,
+    expires_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    total_requests INTEGER DEFAULT 0,
+    total_tokens INTEGER DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS agent_skills (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    description TEXT,
+    content TEXT NOT NULL,
+    category TEXT DEFAULT 'general',
+    is_public BOOLEAN DEFAULT FALSE,
+    created_by TEXT REFERENCES users(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    source_repo TEXT,
+    source_path TEXT
+);
+
+CREATE TABLE IF NOT EXISTS agent_skill_assignments (
+    agent_id TEXT NOT NULL,
+    skill_id TEXT NOT NULL REFERENCES agent_skills(id) ON DELETE CASCADE,
+    priority INTEGER DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    PRIMARY KEY (agent_id, skill_id)
+);
 `;
 
 /**

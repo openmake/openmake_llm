@@ -355,22 +355,21 @@ CREATE TABLE IF NOT EXISTS push_subscriptions (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 사용자 메시지 피드백 테이블
+-- 사용자 메시지 피드백 테이블 (signal 기반 — thumbs_up / thumbs_down / regenerate)
 CREATE TABLE IF NOT EXISTS message_feedback (
     id SERIAL PRIMARY KEY,
-    user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
-    session_id TEXT NOT NULL REFERENCES conversation_sessions(id) ON DELETE CASCADE,
-    message_id INTEGER NOT NULL REFERENCES conversation_messages(id) ON DELETE CASCADE,
-    rating INTEGER NOT NULL CHECK (rating >= 1 AND rating <= 5),
-    feedback_text TEXT,
+    message_id TEXT NOT NULL,
+    session_id TEXT NOT NULL,
+    user_id TEXT,
+    signal TEXT NOT NULL CHECK (signal IN ('thumbs_up', 'thumbs_down', 'regenerate')),
+    routing_metadata JSONB,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_message_feedback_user ON message_feedback(user_id);
-CREATE INDEX IF NOT EXISTS idx_message_feedback_session ON message_feedback(session_id);
-CREATE INDEX IF NOT EXISTS idx_message_feedback_message ON message_feedback(message_id);
-CREATE INDEX IF NOT EXISTS idx_message_feedback_rating ON message_feedback(rating);
-CREATE INDEX IF NOT EXISTS idx_message_feedback_created ON message_feedback(created_at);
+CREATE INDEX IF NOT EXISTS idx_feedback_message ON message_feedback(message_id);
+CREATE INDEX IF NOT EXISTS idx_feedback_session ON message_feedback(session_id);
+CREATE INDEX IF NOT EXISTS idx_feedback_signal  ON message_feedback(signal);
+CREATE INDEX IF NOT EXISTS idx_feedback_created ON message_feedback(created_at);
 
 -- ============================================
 -- 인덱스
@@ -679,3 +678,107 @@ CREATE INDEX IF NOT EXISTS idx_agent_skills_category ON agent_skills(category);
 CREATE INDEX IF NOT EXISTS idx_agent_skills_public ON agent_skills(is_public);
 CREATE INDEX IF NOT EXISTS idx_skill_assignments_agent ON agent_skill_assignments(agent_id);
 CREATE INDEX IF NOT EXISTS idx_skill_assignments_skill ON agent_skill_assignments(skill_id);
+
+
+-- ============================================
+-- 🔄 마이그레이션: message_feedback 스키마 업그레이드
+-- rating 기반 구버전 → signal 기반 신버전으로 자동 마이그레이션
+-- 신규 설치는 위의 CREATE TABLE IF NOT EXISTS가 함
+-- ============================================
+DO $$ BEGIN
+    -- rating 컴럼이 존재하면 구버전 스키마 → 마이그레이션 수행
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name  = 'message_feedback'
+          AND column_name = 'rating'
+    ) THEN
+        -- 1. FK 제약 제거 (message_id INTEGER FK, session_id FK)
+        ALTER TABLE message_feedback DROP CONSTRAINT IF EXISTS message_feedback_message_id_fkey;
+        ALTER TABLE message_feedback DROP CONSTRAINT IF EXISTS message_feedback_session_id_fkey;
+
+        -- 2. 구버전 컴럼 제거
+        ALTER TABLE message_feedback DROP COLUMN IF EXISTS rating;
+        ALTER TABLE message_feedback DROP COLUMN IF EXISTS feedback_text;
+
+        -- 3. message_id 타입 변경: INTEGER → TEXT
+        ALTER TABLE message_feedback ALTER COLUMN message_id TYPE TEXT USING message_id::TEXT;
+
+        -- 4. 신규 컴럼 추가 (signal)
+        ALTER TABLE message_feedback ADD COLUMN IF NOT EXISTS signal TEXT NOT NULL DEFAULT 'thumbs_up';
+        ALTER TABLE message_feedback ALTER COLUMN signal DROP DEFAULT;
+
+        -- 5. 신규 컴럼 추가 (routing_metadata)
+        ALTER TABLE message_feedback ADD COLUMN IF NOT EXISTS routing_metadata JSONB;
+
+        -- 6. signal CHECK 제약 추가
+        BEGIN
+            ALTER TABLE message_feedback ADD CONSTRAINT message_feedback_signal_check
+                CHECK (signal IN ('thumbs_up', 'thumbs_down', 'regenerate'));
+        EXCEPTION WHEN duplicate_object THEN NULL;
+        END;
+
+        -- 7. 구버전 인덱스 제거
+        DROP INDEX IF EXISTS idx_message_feedback_rating;
+        DROP INDEX IF EXISTS idx_message_feedback_message;
+        DROP INDEX IF EXISTS idx_message_feedback_session;
+        DROP INDEX IF EXISTS idx_message_feedback_user;
+        DROP INDEX IF EXISTS idx_message_feedback_created;
+
+        -- 8. 신규 인덱스 생성
+        CREATE INDEX IF NOT EXISTS idx_feedback_message ON message_feedback(message_id);
+        CREATE INDEX IF NOT EXISTS idx_feedback_session ON message_feedback(session_id);
+        CREATE INDEX IF NOT EXISTS idx_feedback_signal  ON message_feedback(signal);
+        CREATE INDEX IF NOT EXISTS idx_feedback_created ON message_feedback(created_at);
+
+        RAISE NOTICE '[migration] message_feedback: rating 기반 → signal 기반 스키마 마이그레이션 완료';
+    END IF;
+END $$;
+
+-- ============================================
+-- P4 마이그레이션: api_usage.date TEXT → DATE
+-- 기존 DB에 date 컬럼이 TEXT 타입이면 DATE로 변환
+-- ============================================
+DO $$ BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name  = 'api_usage'
+          AND column_name = 'date'
+          AND data_type   = 'text'
+    ) THEN
+        ALTER TABLE api_usage ALTER COLUMN date TYPE DATE USING date::DATE;
+        RAISE NOTICE '[migration] api_usage.date: TEXT → DATE 변환 완료';
+    END IF;
+END $$;
+
+-- ============================================
+-- P4 마이그레이션: conversation_sessions.user_id FK → ON DELETE CASCADE
+-- 기존 FK가 NO ACTION이면 CASCADE로 재생성
+-- ============================================
+DO $$
+DECLARE
+    v_constraint TEXT;
+    v_delete_rule TEXT;
+BEGIN
+    SELECT tc.constraint_name, rc.delete_rule
+      INTO v_constraint, v_delete_rule
+      FROM information_schema.table_constraints  tc
+      JOIN information_schema.key_column_usage   kcu ON tc.constraint_name = kcu.constraint_name
+      JOIN information_schema.referential_constraints rc ON tc.constraint_name = rc.constraint_name
+     WHERE tc.table_schema = 'public'
+       AND tc.table_name   = 'conversation_sessions'
+       AND kcu.column_name = 'user_id'
+       AND tc.constraint_type = 'FOREIGN KEY'
+     LIMIT 1;
+
+    IF v_constraint IS NOT NULL AND v_delete_rule <> 'CASCADE' THEN
+        EXECUTE 'ALTER TABLE conversation_sessions DROP CONSTRAINT ' || quote_ident(v_constraint);
+        ALTER TABLE conversation_sessions
+            ADD CONSTRAINT conversation_sessions_user_id_fkey
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
+        RAISE NOTICE '[migration] conversation_sessions.user_id FK: ON DELETE CASCADE 추가 완료';
+    ELSE
+        RAISE NOTICE '[migration] conversation_sessions.user_id FK: 이미 CASCADE 또는 FK 없음 — 건너뜀';
+    END IF;
+END $$;
