@@ -26,8 +26,8 @@
     <link rel="preconnect" href="https://cdnjs.cloudflare.com">
     <link rel="dns-prefetch" href="https://cdnjs.cloudflare.com">
     <link rel="preload" href="/css/design-tokens.css?v=8" as="style">
-    <link rel="preload" href="/js/spa-router.js" as="script" crossorigin>
-    <link rel="preload" href="/js/modules/auth.js" as="script" crossorigin>
+    <link rel="modulepreload" href="/js/spa-router.js" crossorigin>
+    <link rel="modulepreload" href="/js/modules/auth.js" crossorigin>
     <!-- 디자인 시스템 CSS (순서 중요!) -->
     <link rel="stylesheet" href="css/design-tokens.css?v=8">
     <link rel="stylesheet" href="css/icons.css?v=8">
@@ -36,7 +36,7 @@
     <link rel="stylesheet" href="css/feature-cards.css?v=8">
     <link rel="stylesheet" href="css/layout.css?v=8">
     <link rel="stylesheet" href="css/components.css?v=8">
-    <link rel="stylesheet" href="css/unified-sidebar.css?v=8">
+     <link rel="stylesheet" href="css/unified-sidebar.css?v=9">
     <link rel="stylesheet" href="css/light-theme.css?v=8">
     <link rel="stylesheet" href="style.css?v=9">
     <!-- Iconify Icon Web Component (defer to not block rendering) -->
@@ -365,7 +365,7 @@
     </div> <!-- app 끝 -->
 
     <!-- 앱 엔트리 포인트 (ES Module — 모든 모듈을 main.js에서 import 및 초기화) -->
-    <script type="module" src="js/main.js?v=20"></script>
+    <script type="module" src="js/main.js?v=22"></script>
 </body>
 
 </html>

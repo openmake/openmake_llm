@@ -157,6 +157,8 @@ UnifiedSidebar.prototype.init = function () {
     // 이벤트 바인딩
     this._bindEvents();
 
+
+
     // 대화 목록 로드
     this.loadConversations();
 
@@ -169,6 +171,7 @@ UnifiedSidebar.prototype.init = function () {
     // 사이드바 사용자 섹션을 다시 업데이트
     window.dispatchEvent(new Event('sidebarReady'));
 };
+
 
 // ─── HTML 렌더링 ───────────────────────────────────
 
@@ -190,6 +193,7 @@ UnifiedSidebar.prototype._renderHTML = function () {
         ICONS.plus +
         '<span class="us-label">\uC0C8 \uB300\uD654</span>' +
         '</button>' +
+
         // Search
         '<div class="us-search">' +
         ICONS.search +
@@ -256,6 +260,9 @@ UnifiedSidebar.prototype._bindEvents = function () {
             }
         });
     }
+
+
+
 
     // 검색
     var searchInput = this.el.querySelector('.us-search-input');
