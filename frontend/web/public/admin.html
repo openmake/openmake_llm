@@ -18,61 +18,179 @@
     <link rel="stylesheet" href="/css/pages/dashboard.css">
 
     <style>
-        /* Admin-specific styles */
+        /* ==========================================
+           Admin Dashboard — Page-specific Styles
+           ========================================== */
+
+        /* Stats grid: 4 columns fixed, responsive fallback */
+        .admin-stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: var(--space-4);
+            margin-bottom: var(--space-6);
+        }
+
+        .admin-stats-grid .metric-card {
+            text-align: center;
+            padding: var(--space-4) var(--space-3);
+        }
+
+        .admin-stats-grid .metric-card-value {
+            font-size: var(--font-size-2xl);
+        }
+
+        /* Tabs: fit-content width */
+        .admin-tabs {
+            margin-bottom: var(--space-6);
+            width: fit-content;
+        }
+
+        /* Panel visibility */
+        .panel { display: none; }
+        .panel.active { display: block; }
+
+        /* Search/filter bar inside cards */
+        .admin-filter-bar {
+            margin-bottom: var(--space-4);
+        }
+
+        .admin-filter-bar .form-select,
+        .admin-filter-bar .form-input[type="date"] {
+            width: auto;
+        }
+
+        .admin-filter-bar .form-input {
+            max-width: 300px;
+        }
+
+        /* Embedded table: no double border */
+        .admin-table-wrap {
+            overflow-x: auto;
+            border: none;
+            border-radius: 0;
+            box-shadow: none;
+        }
+
+        /* Conversation content truncation */
+        .conv-content-cell {
+            max-width: 400px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        /* Pagination ellipsis and info */
+        .admin-pg-ellipsis {
+            display: inline-flex;
+            align-items: center;
+            padding: 0 var(--space-2);
+            color: var(--text-muted);
+            font-size: var(--font-size-sm);
+            user-select: none;
+        }
+        .admin-pg-info {
+            display: inline-flex;
+            align-items: center;
+            padding: 0 var(--space-3);
+            font-size: var(--font-size-xs);
+            color: var(--text-muted);
+            font-weight: var(--font-weight-medium);
+        }
+
+                /* Pagination row */
+        .admin-pagination {
+            display: flex;
+            justify-content: center;
+            gap: var(--space-2);
+            margin-top: var(--space-4);
+        }
+
+        /* Role/status badges — design token colors */
         .badge-admin {
-            background: rgba(239, 68, 68, 0.2);
-            color: #f87171;
+            background: var(--danger-light);
+            color: var(--danger);
         }
-
         .badge-user {
-            background: rgba(34, 197, 94, 0.2);
-            color: #4ade80;
+            background: var(--success-light);
+            color: var(--success);
         }
-
         .badge-guest {
-            background: rgba(156, 163, 175, 0.2);
-            color: #9ca3af;
+            background: rgba(156, 163, 175, 0.15);
+            color: var(--text-muted);
         }
-
         .badge-active {
             background: var(--success-light);
             color: var(--success);
         }
-
         .badge-inactive {
             background: var(--danger-light);
             color: var(--danger);
         }
 
+        /* Toast notification */
         .toast {
             position: fixed;
-            bottom: 20px;
-            right: 20px;
-            padding: 12px 20px;
+            bottom: var(--space-5);
+            right: var(--space-5);
+            padding: var(--space-3) var(--space-5);
             border-radius: var(--radius-md);
+            border: var(--border-width) solid var(--border-strong);
             color: white;
             font-size: var(--font-size-sm);
+            font-weight: var(--font-weight-semibold);
             z-index: 1001;
+            box-shadow: var(--shadow-md);
             animation: slideIn 0.3s ease;
         }
 
-        .toast.success {
-            background: var(--success);
-        }
-
-        .toast.error {
-            background: var(--danger);
-        }
-
+        .toast.success { background: var(--success); color: var(--text-inverse); }
+        .toast.error { background: var(--danger); }
         @keyframes slideIn {
-            from {
-                transform: translateX(100%);
-                opacity: 0;
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        /* Responsive — tablet */
+        @media (max-width: 1024px) {
+            .admin-stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        /* Responsive — mobile */
+        @media (max-width: 768px) {
+            .admin-stats-grid {
+                grid-template-columns: 1fr 1fr;
+                gap: var(--space-3);
             }
 
-            to {
-                transform: translateX(0);
-                opacity: 1;
+            .admin-stats-grid .metric-card-value {
+                font-size: var(--font-size-xl);
+            }
+
+            .admin-tabs {
+                width: 100%;
+            }
+
+            .admin-tabs .tab {
+                font-size: var(--font-size-xs);
+                padding: var(--space-2) var(--space-3);
+            }
+
+            .admin-filter-bar {
+                flex-direction: column;
+            }
+
+            .admin-filter-bar .form-select,
+            .admin-filter-bar .form-input {
+                width: 100%;
+                max-width: none;
+            }
+
+            .data-table th,
+            .data-table td {
+                padding: var(--space-2) var(--space-3);
+                font-size: var(--font-size-xs);
             }
         }
     </style>
@@ -86,7 +204,7 @@
 
         <div class="main-content">
             <div class="page-content">
-                <div class="container container-xl">
+                <div class="container container-lg">
                     <header class="page-header">
                         <div>
                             <h1 class="page-title page-title-gradient">👥 관리자 대시보드</h1>
@@ -97,14 +215,14 @@
                         </div>
                     </header>
 
-                    <div class="tabs" style="margin-bottom: var(--space-6); width: fit-content;">
+                    <div class="tabs admin-tabs">
                         <button class="tab active" onclick="switchTab('users')">👥 사용자 관리</button>
                         <button class="tab" onclick="switchTab('conversations')">💬 대화 기록</button>
                         <button class="tab" onclick="switchTab('stats')">📊 통계</button>
                     </div>
 
                     <!-- Stats Cards -->
-                    <div class="dashboard-grid" style="margin-bottom: var(--space-8);">
+                    <div class="admin-stats-grid">
                         <div class="metric-card card">
                             <div class="metric-card-value" id="statTotalUsers">0</div>
                             <div class="text-muted text-sm">총 사용자</div>
@@ -130,17 +248,17 @@
                                 <span class="card-title">사용자 목록</span>
                                 <button class="btn btn-primary btn-sm" onclick="showAddUserModal()">+ 사용자 추가</button>
                             </div>
-                            <div class="search-bar" style="margin-bottom: var(--space-4);">
-                                <select id="filterRole" class="form-select" style="width: auto;" onchange="loadUsers()">
+                            <div class="search-bar admin-filter-bar">
+                                <select id="filterRole" class="form-select" onchange="loadUsers()">
                                     <option value="">모든 역할</option>
                                     <option value="admin">관리자</option>
                                     <option value="user">일반 사용자</option>
                                     <option value="guest">게스트</option>
                                 </select>
-                                <input type="text" id="filterSearch" class="form-input" style="max-width: 300px;"
+                                <input type="text" id="filterSearch" class="form-input"
                                     placeholder="이메일 검색..." onkeyup="debounceSearch()">
                             </div>
-                            <div class="table-container" style="border: none;">
+                            <div class="table-container admin-table-wrap">
                                 <table class="data-table">
                                     <thead>
                                         <tr>
@@ -156,30 +274,30 @@
                                     <tbody id="usersList"></tbody>
                                 </table>
                             </div>
-                            <div class="pagination flex justify-center gap-2 mt-4" id="usersPagination"></div>
+                            <div class="admin-pagination" id="usersPagination"></div>
                         </div>
                     </div>
 
                     <!-- Conversations Panel -->
-                    <div id="conversationsPanel" class="panel" style="display: none;">
+                    <div id="conversationsPanel" class="panel">
                         <div class="card">
                             <div class="card-header">
                                 <span class="card-title">대화 기록</span>
                                 <button class="btn btn-secondary btn-sm" onclick="exportCSV()">📥 CSV 내보내기</button>
                             </div>
-                            <div class="search-bar" style="margin-bottom: var(--space-4);">
-                                <input type="date" id="filterDate" class="form-input" style="width: auto;"
+                            <div class="search-bar admin-filter-bar">
+                                <input type="date" id="filterDate" class="form-input"
                                     onchange="loadConversations()">
-                                <select id="filterConvRole" class="form-select" style="width: auto;"
+                                <select id="filterConvRole" class="form-select"
                                     onchange="loadConversations()">
                                     <option value="">모든 역할</option>
                                     <option value="user">사용자만</option>
                                     <option value="assistant">AI 응답만</option>
                                 </select>
-                                <input type="text" id="filterConvSearch" class="form-input" style="max-width: 300px;"
+                                <input type="text" id="filterConvSearch" class="form-input"
                                     placeholder="검색어..." onkeyup="debounceConvSearch()">
                             </div>
-                            <div class="table-container" style="border: none;">
+                            <div class="table-container admin-table-wrap">
                                 <table class="data-table">
                                     <thead>
                                         <tr>
@@ -192,12 +310,12 @@
                                     <tbody id="conversationsList"></tbody>
                                 </table>
                             </div>
-                            <div class="pagination flex justify-center gap-2 mt-4" id="convPagination"></div>
+                            <div class="admin-pagination" id="convPagination"></div>
                         </div>
                     </div>
 
                     <!-- Stats Panel -->
-                    <div id="statsPanel" class="panel" style="display: none;">
+                    <div id="statsPanel" class="panel">
                         <div class="card">
                             <div class="card-header">
                                 <span class="card-title">시스템 통계</span>
@@ -291,9 +409,9 @@
 
         function switchTab(tab) {
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.panel').forEach(p => p.style.display = 'none');
+            document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
             document.querySelector(`[onclick="switchTab('${tab}')"]`).classList.add('active');
-            document.getElementById(`${tab}Panel`).style.display = 'block';
+            document.getElementById(`${tab}Panel`).classList.add('active');
         }
 
         async function loadUsers() {
@@ -430,7 +548,7 @@
                 <tr>
                     <td>${formatDateTime(c.created_at)}</td>
                     <td><span class="badge ${c.role === 'user' ? 'badge-user' : 'badge-info'}">${c.role}</span></td>
-                    <td style="max-width:400px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(c.content?.substring(0, 100) || '')}</td>
+                    <td class="conv-content-cell">${escapeHtml(c.content?.substring(0, 100) || '')}</td>
                     <td class="text-muted text-sm">${c.model || '-'}</td>
                 </tr>
             `).join('');
@@ -439,15 +557,57 @@
         function debounceConvSearch() { clearTimeout(searchTimeout); searchTimeout = setTimeout(() => { convPage = 1; loadConversations(); }, 300); }
         function exportCSV() { window.open('/api/admin/conversations/export?format=csv', '_blank'); }
 
+        // --- pagination callback registry (avoids function.toString() hack) ---
+        const _pgCb = {};
+
         function renderPagination(containerId, total, currentPage, onPageChange) {
             const totalPages = Math.ceil(total / pageSize);
             const container = document.getElementById(containerId);
+            if (!container) return;
             if (totalPages <= 1) { container.innerHTML = ''; return; }
+            _pgCb[containerId] = onPageChange;
+
+            const delta = 2;
+            const start = Math.max(1, currentPage - delta);
+            const end   = Math.min(totalPages, currentPage + delta);
             let html = '';
-            for (let i = 1; i <= totalPages; i++) {
-                html += `<button class="btn ${i === currentPage ? 'btn-primary' : 'btn-secondary'} btn-sm" onclick="(${onPageChange.toString()})(${i})">${i}</button>`;
+
+            // 이전
+            html += '<button class="btn btn-secondary btn-sm"' +
+                (currentPage === 1 ? ' disabled' : '') +
+                ' onclick="_pg(' + JSON.stringify(containerId) + ',' + (currentPage - 1) + ')">‹</button>';
+
+            // 첫 페이지 + 앞 줄임표
+            if (start > 1) {
+                html += '<button class="btn btn-secondary btn-sm" onclick="_pg(' + JSON.stringify(containerId) + ',1)">1</button>';
+                if (start > 2) html += '<span class="admin-pg-ellipsis">…</span>';
             }
+
+            // 윈도우 페이지 번호
+            for (let i = start; i <= end; i++) {
+                html += '<button class="btn ' + (i === currentPage ? 'btn-primary' : 'btn-secondary') +
+                    ' btn-sm" onclick="_pg(' + JSON.stringify(containerId) + ',' + i + ')">' + i + '</button>';
+            }
+
+            // 끝 페이지 + 뒤 줄임표
+            if (end < totalPages) {
+                if (end < totalPages - 1) html += '<span class="admin-pg-ellipsis">…</span>';
+                html += '<button class="btn btn-secondary btn-sm" onclick="_pg(' + JSON.stringify(containerId) + ',' + totalPages + ')">' + totalPages + '</button>';
+            }
+
+            // 다음
+            html += '<button class="btn btn-secondary btn-sm"' +
+                (currentPage === totalPages ? ' disabled' : '') +
+                ' onclick="_pg(' + JSON.stringify(containerId) + ',' + (currentPage + 1) + ')">›</button>';
+
+            // 페이지 정보
+            html += '<span class="admin-pg-info">' + currentPage + ' / ' + totalPages + '</span>';
+
             container.innerHTML = html;
+        }
+
+        function _pg(containerId, page) {
+            if (_pgCb[containerId]) _pgCb[containerId](page);
         }
 
         function formatDate(dateStr) {

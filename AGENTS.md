@@ -250,3 +250,85 @@ color: #333;                    /* ❌ NEVER */
 | `backend/api/src/auth/` | JWT/OAuth/API Key — security core |
 | `backend/api/src/middlewares/` | Auth/rate-limit middleware — ordering sensitive |
 | `frontend/web/public/js/modules/sanitize.js` | XSS defense core |
+
+
+## Obsidian 문서 저장 지침 (iCloud)
+
+개발 세션 완료 후 문서를 iCloud Obsidian에 저장할 때 아래 지침을 따른다.
+
+### Vault 경로
+
+```
+~/Library/Mobile Documents/iCloud~md~obsidian/Documents/Obsidian Vault/OpenMake_LLM/
+```
+
+### 폴더 구조
+
+| 폴더 | 용도 |
+|------|------|
+| `00_핵심_허브/` | MOC, 전체 개요, 리팩토링 맵 |
+| `01_세션_인덱스/` | 세션 히스토리 인덱스 (날짜별/기능별) |
+| `02_리뷰/` | 코드 리뷰 결과 |
+| `03_계획_로드맵/` | 로드맵, 계획 문서 |
+| `04_테스트_QA/` | 테스트 결과, QA 보고서 |
+| `05_인증_API_통합/` | 인증/API 관련 문서 |
+| `06_AI_MCP_스킬/` | AI, MCP, 스킬 관련 문서 |
+| `07_아키텍처_분석/` | 아키텍처 분석, 설계 문서 |
+| `08_구현_보고서/` | **구현 완료 보고서 (주 저장 위치)** |
+| `09_운영/` | 운영, 배포, 모니터링 문서 |
+| `99_미분류/` | 분류 미정 임시 문서 |
+
+### 파일 네이밍 규칙
+
+```
+OpenMake_LLM_{제목(한글 또는 영문, 공백은 _)}_{YYYY-MM-DD}_{HHmmss}.md
+```
+
+**예시:**
+```
+OpenMake_LLM_에러로그_전수수정_및_미구현_엔드포인트_완성_2026-02-23_191142.md
+OpenMake_LLM_프론트엔드_스킬라이브러리_버그_수정_및_안정화_2026-02-23_042915.md
+```
+
+타임스탬프는 `date +"%Y-%m-%d_%H%M%S"` 로 생성.
+
+### 문서 구조 템플릿
+
+```markdown
+# OpenMake LLM - {제목} ({YYYY-MM-DD})
+
+## 개요
+{작업 배경, 트리거, 범위, 최종 검증 결과 한 줄 요약}
+
+---
+
+## 1. {주요 섹션}
+...
+
+## 2. 수정 내용 상세
+...
+
+## 3. 최종 검증 결과
+- tsc --noEmit: 0 errors ✅
+- npm run build: 성공 ✅
+- 서버 재시작 후 에러: 0건 ✅
+
+## 4. 수정된 파일 목록
+...
+
+## 5. 남은 과제
+...
+
+---
+
+## 태그
+#openmake_llm #{카테고리} #{날짜}
+```
+
+### 저장 절차
+
+1. `date +"%Y-%m-%d_%H%M%S"` 로 타임스탬프 획득
+2. 작업 내용에 맞는 폴더 선택 (주로 `08_구현_보고서/`)
+3. 위 네이밍 규칙으로 파일명 생성
+4. 위 템플릿 구조로 문서 작성
+5. `mcp_write` 로 저장 후 `ls` 로 파일 존재 확인

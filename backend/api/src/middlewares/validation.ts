@@ -30,11 +30,18 @@ export function validate<T>(schema: ZodSchema<T>) {
 /**
  * Validate query parameters
  */
-export function validateQuery<T>(schema: ZodSchema<T>) {
+export function validateQuery<T extends object>(schema: ZodSchema<T>) {
     return (req: Request, res: Response, next: NextFunction) => {
         try {
             const validated = schema.parse(req.query);
-            req.query = validated as typeof req.query;
+            // Express v5 (router package): req.query is a read-only getter on IncomingMessage.
+            // Object.defineProperty fails when the property is non-configurable.
+            // Solution: mutate the query object in-place so the getter keeps working.
+            const currentQuery = req.query as Record<string, unknown>;
+            for (const key of Object.keys(currentQuery)) {
+                delete currentQuery[key];
+            }
+            Object.assign(currentQuery, validated);
             next();
         } catch (error) {
             if (error instanceof ZodError) {

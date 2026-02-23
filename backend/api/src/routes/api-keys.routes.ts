@@ -10,13 +10,17 @@
  *
  * @module routes/api-keys.routes
  * @description
- * - POST   /api/v1/api-keys              - 새 API Key 생성 (인증, Zod 검증)
- * - GET    /api/v1/api-keys              - 사용자의 API Key 목록 (인증)
- * - GET    /api/v1/api-keys/:id          - 단일 API Key 상세 (인증)
- * - PATCH  /api/v1/api-keys/:id          - API Key 수정 (인증, Zod 검증)
- * - DELETE /api/v1/api-keys/:id          - API Key 삭제 (인증)
- * - POST   /api/v1/api-keys/:id/rotate   - API Key 순환 (인증)
- * - GET    /api/v1/api-keys/:id/usage    - API Key 사용량 조회 (인증)
+ * 이 라우터는 두 경로에 마운트됩니다:
+ *   - /api/api-keys       — JWT 인증 (requireAuth, 브라우저 유저)
+ *   - /api/v1/api-keys    — API Key 인증 (requireApiKey via v1 router)
+ *
+ * - POST   /api-keys              - 새 API Key 생성 (인증, Zod 검증)
+ * - GET    /api-keys              - 사용자의 API Key 목록 (인증)
+ * - GET    /api-keys/:id          - 단일 API Key 상세 (인증)
+ * - PATCH  /api-keys/:id          - API Key 수정 (인증, Zod 검증)
+ * - DELETE /api-keys/:id          - API Key 삭제 (인증)
+ * - POST   /api-keys/:id/rotate   - API Key 순환 (인증)
+ * - GET    /api-keys/:id/usage    - API Key 사용량 조회 (인증)
  *
  * @requires requireAuth - JWT 인증 미들웨어
  * @requires validate - Zod 스키마 검증 미들웨어

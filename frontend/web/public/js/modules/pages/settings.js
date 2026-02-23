@@ -352,7 +352,7 @@
                     try {
                         var authToken = safeStorage.getItem('authToken');
                         var headers = authToken ? { 'Authorization': 'Bearer ' + authToken } : {};
-                        var res = await fetch('/api/v1/api-keys', { credentials: 'include', headers: headers });
+                        var res = await fetch('/api/api-keys', { credentials: 'include', headers: headers });
                         if (res.ok) {
                             var data = await res.json();
                             var count = (data.data && data.data.count) || 0;

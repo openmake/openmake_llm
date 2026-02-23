@@ -266,7 +266,7 @@ export class ChatService {
         };
 
         const agentSelection = await routeToAgent(message || '');
-        const agentSystemMessage = await getAgentSystemMessage(agentSelection);
+        const agentSystemMessage = await getAgentSystemMessage(agentSelection, userId || undefined);
         const selectedAgent = AGENTS[agentSelection.primaryAgent];
 
         logger.info(`에이전트: ${selectedAgent.emoji} ${selectedAgent.name}`);

@@ -307,30 +307,29 @@
                 '<p>Create a new API key with optional name and expiration.</p>' +
                 getCodeBlock(
                     'curl',
-                    'curl -X POST ' + window.location.origin + '/api/v1/api-keys \\\n' +
-                    '  -H "X-API-Key: omk_live_sk_..." \\\n' +
+                    'curl -X POST ' + window.location.origin + '/api/api-keys \\\n' +
+                    '  -H "Authorization: Bearer <jwt_token>" \\\n' +
                     '  -H "Content-Type: application/json" \\\n' +
                     '  -d \'{"name": "New Service Key"}\'',
                     'python',
-                    'requests.post("' + window.location.origin + '/api/v1/api-keys", \n' +
-                    '    headers={"X-API-Key": "key"}, \n' +
+                    'requests.post("' + window.location.origin + '/api/api-keys", \n' +
+                    '    headers={"Authorization": "Bearer <jwt_token>"}, \n' +
                     '    json={"name": "New Service Key"})',
                     'typescript',
-                    'await fetch("' + window.location.origin + '/api/v1/api-keys", {\n' +
+                    'await fetch("' + window.location.origin + '/api/api-keys", {\n' +
                     '  method: "POST",\n' +
-                    '  headers: {"X-API-Key": "key", "Content-Type": "application/json"},\n' +
+                    '  headers: {"Authorization": "Bearer <jwt_token>", "Content-Type": "application/json"},\n' +
                     '  body: JSON.stringify({name: "New Service Key"})\n' +
                     '})'
                 ) +
-
                 '<h3 id="list-keys" style="margin-top:60px;">List Keys</h3>' +
                 '<p><span class="endpoint-badge badge-get">GET</span> <code>/api-keys</code></p>' +
                 '<p>Returns a list of all API keys for the current account.</p>' +
                 getCodeBlock(
                     'curl',
-                    'curl ' + window.location.origin + '/api/v1/api-keys \\\n  -H "X-API-Key: omk_live_sk_..."',
-                    'python', 'requests.get("' + window.location.origin + '/api/v1/api-keys", headers=...)',
-                    'typescript', 'fetch("' + window.location.origin + '/api/v1/api-keys", ...)'
+                    'curl ' + window.location.origin + '/api/api-keys \\\n  -H "Authorization: Bearer <jwt_token>"',
+                    'python', 'requests.get("' + window.location.origin + '/api/api-keys", headers={"Authorization": "Bearer <jwt_token>"})',
+                    'typescript', 'fetch("' + window.location.origin + '/api/api-keys", {headers: {"Authorization": "Bearer <jwt_token>"}})'
                 ) +
                 
                 '<h3 id="get-key" style="margin-top:60px;">Get Key Details</h3>' +

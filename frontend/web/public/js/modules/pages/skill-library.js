@@ -9,6 +9,7 @@
 
     let localSkills = [];
     let mpSkills = [];
+    let userAssignedIds = new Set(); // 사용자 개인 할당 스킬 ID 집합
 
     let localFilters = {
         search: '',
@@ -453,7 +454,8 @@
 
             // Cleanup globals
             ['sl_openNewSkill', 'sl_editSkill', 'sl_deleteSkill', 'sl_exportSkill',
-             'sl_importSkill', 'sl_viewMpSkill', 'sl_changeLocalPage', 'sl_changeMpPage'].forEach(key => {
+             'sl_importSkill', 'sl_viewMpSkill', 'sl_changeLocalPage', 'sl_changeMpPage',
+             'sl_toggleUserSkill'].forEach(key => {
                 try { delete window[key]; } catch (e) {}
             });
 
@@ -555,6 +557,7 @@
             window.sl_viewMpSkill = this.viewMpSkillDetail.bind(this);
             window.sl_changeLocalPage = (p) => { localFilters.page = p; self.loadLocalSkills(); };
             window.sl_changeMpPage = (p) => { mpFilters.page = p; self.loadMpSkills(); };
+            window.sl_toggleUserSkill = this.toggleUserSkill.bind(this);
         },
 
         loadLocalCategories: async function () {
@@ -599,10 +602,22 @@
                     offset: offset
                 });
 
-                const response = await window.authFetch(`/api/agents/skills?${queryParams.toString()}`);
+                // 스킬 목록과 개인 할당 목록 병렬 로드
+                const [response, assignedRes] = await Promise.all([
+                    window.authFetch(`/api/agents/skills?${queryParams.toString()}`),
+                    window.authFetch('/api/agents/skills/user-assigned')
+                ]);
                 const data = await response.json();
 
                 if (!response.ok || !data.success) throw new Error(data.message || '스킬 로드 실패');
+
+                // 개인 할당 ID 집합 갱신
+                if (assignedRes.ok) {
+                    const assignedData = await assignedRes.json();
+                    if (assignedData.success && Array.isArray(assignedData.data)) {
+                        userAssignedIds = new Set(assignedData.data.map(s => s.id));
+                    }
+                }
 
                 localSkills = data.data.skills || [];
                 localFilters.total = data.data.total || 0;
@@ -627,14 +642,23 @@
 
             const esc = window.escapeHtml || (s => s);
 
-            grid.innerHTML = localSkills.map(skill => `
+            grid.innerHTML = localSkills.map(skill => {
+                const isUserAssigned = userAssignedIds.has(skill.id);
+                const userBadge = isUserAssigned
+                    ? '<span class="sl-badge" style="background:rgba(168,85,247,0.12);color:#c084fc;border-color:rgba(168,85,247,0.25);margin-left:0.4rem" title="나에게만 적용된 스킬">👤 나만</span>'
+                    : '';
+                const toggleLabel = isUserAssigned ? '👤 나만 적용 해제' : '👤 나만 적용';
+                return `
                 <div class="skill-card">
                     <div class="skill-card-top">
-                        <span class="skill-card-badge">${esc(skill.category || 'general')}</span>
+                        <span class="skill-card-badge">${esc(skill.category || 'general')}${userBadge}</span>
                         <div class="skill-card-menu">
                             <button class="skill-card-menu-btn" title="더 보기"
                                 onclick="(function(btn){btn.nextElementSibling.classList.toggle('open');event.stopPropagation();})(this)">⋯</button>
                             <div class="skill-card-dropdown">
+                                <a href="#" onclick="sl_toggleUserSkill('${esc(skill.id)}', ${isUserAssigned});return false;">
+                                    <span class="iconify" data-icon="lucide:user"></span> ${toggleLabel}
+                                </a>
                                 <a href="#" onclick="sl_editSkill('${esc(skill.id)}');return false;">
                                     <span class="iconify" data-icon="lucide:edit-2"></span> 수정
                                 </a>
@@ -656,8 +680,8 @@
                             ? '<span class="sl-badge sl-badge-success">Public</span>'
                             : '<span class="sl-badge sl-badge-secondary"><span class="iconify" data-icon="lucide:lock" style="font-size:10px;vertical-align:middle"></span> Private</span>'}
                     </div>
-                </div>
-            `).join('');
+                </div>`;
+            }).join('');
         },
 
         loadMpSkills: async function () {
@@ -680,18 +704,29 @@
                 });
 
                 const response = await window.authFetch(`/api/skills-marketplace/search?${queryParams.toString()}`);
-                const data = await response.json();
+                const data = await response.json().catch(() => ({}));
 
-                if (!response.ok || !data.success) throw new Error(data.message || '마켓플레이스 검색 실패');
+                // GITHUB_TOKEN 미설정: 503 + 특정 코드 처리
+                if (response.status === 503 || (data.error && data.error.code === 'GITHUB_TOKEN_NOT_CONFIGURED')) {
+                    grid.innerHTML = `<div class="sl-error" style="text-align:center;padding:2rem">
+                        <div style="font-size:2rem;margin-bottom:0.75rem">⚙️</div>
+                        <div style="font-weight:600;margin-bottom:0.5rem">GitHub 연동 미설정</div>
+                        <div style="font-size:0.875rem;opacity:0.8">관리자에게 GITHUB_TOKEN 환경변수 설정을 요청하세요.<br>설정 후 스킬마켓플레이스를 이용할 수 있습니다.</div>
+                    </div>`;
+                    return;
+                }
 
+                // 서버 에러 메시지 추출 (다양한 응답 포맷 대응)
+                if (!response.ok || !data.success) {
+                    const errMsg = data.error?.message || data.message || `서버 오류 (HTTP ${response.status})`;
+                    throw new Error(errMsg);
+                }
                 mpSkills = data.data.skills || [];
                 mpFilters.total = data.data.total || 0;
-
                 this.renderMpSkills();
                 this.renderPagination('mpPagination', mpFilters.page, mpFilters.total, mpFilters.limit, 'sl_changeMpPage');
-
             } catch (error) {
-                console.error(error);
+                console.error('[SkillLibrary] 마켓플레이스 검색 오류:', error);
                 const esc = window.escapeHtml || (s => s);
                 grid.innerHTML = `<div class="sl-error">${esc(error.message)}</div>`;
             }
@@ -756,13 +791,35 @@
                 }
 
                 if (response.ok && data.success) {
-                    if (window.showToast) window.showToast('마켓플레이스 스킬을 로컬에 저장했습니다.', 'success');
+                    if (window.showToast) window.showToast('스킬이 설치되어 모든 에이전트에 자동 적용됩니다.', 'success');
                     this.loadLocalSkills();
                 } else {
                     if (window.showToast) window.showToast(data.message || '알 수 없는 오류', 'error');
                 }
             } catch (err) {
                 if (window.showToast) window.showToast('스킬 임포트 실패: ' + err.message, 'error');
+            }
+        },
+
+        toggleUserSkill: async function (skillId, currentlyAssigned) {
+            try {
+                const method = currentlyAssigned ? 'DELETE' : 'POST';
+                const res = await window.authFetch(`/api/agents/skills/${skillId}/user-assign`, { method });
+                const data = await res.json();
+                if (res.ok && data.success) {
+                    if (currentlyAssigned) {
+                        userAssignedIds.delete(skillId);
+                        if (window.showToast) window.showToast('개인 스킬 적용이 해제되었습니다.', 'success');
+                    } else {
+                        userAssignedIds.add(skillId);
+                        if (window.showToast) window.showToast('이 스킬이 나에게만 적용됩니다.', 'success');
+                    }
+                    this.renderLocalSkills();
+                } else {
+                    if (window.showToast) window.showToast(data.message || data.error?.message || '오류 발생', 'error');
+                }
+            } catch (e) {
+                if (window.showToast) window.showToast('오류 발생: ' + e.message, 'error');
             }
         },
 

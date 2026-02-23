@@ -169,6 +169,14 @@ export class DashboardServer {
             console.error('[Server] DB 초기화 실패 (서버는 계속 시작):', err);
         }
 
+        // 에이전트 스킬 자동 시딩 (17개 산업 분야 에이전트 전문 지침 DB 등록)
+        try {
+            const { seedAgentSkills } = await import('./agents/skill-seeder');
+            seedAgentSkills().catch((err: unknown) => console.error('[Server] 스킬 시딩 실패:', err));
+        } catch (err) {
+            console.error('[Server] 스킬 시더 로드 실패:', err);
+        }
+
         // 세션 자동 정리 스케줄러 시작 (24시간마다 30일 이상 된 세션 정리)
         startSessionCleanupScheduler(24);
 
@@ -268,7 +276,7 @@ if (require.main === module) {
             process.exit(1);
         });
 
-    // Graceful shutdown: SIGINT (Ctrl+C) + SIGTERM (Docker/K8s)
+    // Graceful shutdown: SIGINT (Ctrl+C) + SIGTERM
     const gracefulShutdown = async (signal: string) => {
         console.log(`\n👋 ${signal} 수신 — 서버 종료 중...`);
 
