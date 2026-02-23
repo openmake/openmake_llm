@@ -26,7 +26,7 @@ import {
     mcpRouter,
     usageRouter,
     nodesRouter,
-    setClusterManager as setNodesCluster,
+    setNodesCluster,
     agentsMonitoringRouter,
     memoryRouter,
     auditRouter,
@@ -61,14 +61,39 @@ export function setupApiRoutes(
     cluster: ClusterManager,
     broadcast: (data: Record<string, unknown>) => void
 ): void {
+    // Silence browser favicon / apple-touch-icon requests to avoid 404 log noise
+    app.get('/favicon.ico', (_req: Request, res: Response) => res.status(204).end());
+    app.get('/apple-touch-icon.png', (_req: Request, res: Response) => res.status(204).end());
+    app.get('/apple-touch-icon-precomposed.png', (_req: Request, res: Response) => res.status(204).end());
+    app.get('/robots.txt', (_req: Request, res: Response) => {
+        res.type('text/plain').send('User-agent: *\nDisallow: /api/\n');
+    });
+
+    // /api/health — 전용 헬스체크 엔드포인트 (로그 노이즈 방지)
+    app.get('/api/health', (_req: Request, res: Response) => {
+        res.json({ status: 'ok', timestamp: new Date().toISOString(), uptime: process.uptime() });
+    });
+
+    // /api/status — 미니 헬스체크 (모니터링 호환)
+    app.get('/api/status', (_req: Request, res: Response) => {
+        res.json({ status: 'ok', timestamp: new Date().toISOString(), uptime: process.uptime() });
+    });
+
     // V1 API 마운트
     app.use('/api/v1', v1Router);
 
-    // Deprecation 경고
+    // Deprecation 경고 (외부 API Key 사용자에게만 표시 — 내부 SPA 요청 제외)
     app.use('/api', (req, res, next) => {
         if (!req.path.startsWith('/v1')) {
-            res.set('Deprecation', 'true');
-            res.set('Link', '</api/v1>; rel="successor-version"');
+            const xApiKey = req.headers['x-api-key'];
+            const authHeader = req.headers.authorization;
+            const isExternalApiCall =
+                (typeof xApiKey === 'string' && xApiKey.startsWith('omk_live_')) ||
+                (typeof authHeader === 'string' && authHeader.startsWith('Bearer omk_live_'));
+            if (isExternalApiCall) {
+                res.set('Deprecation', 'true');
+                res.set('Link', '</api/v1>; rel="successor-version"');
+            }
         }
         next();
     });
@@ -87,6 +112,16 @@ export function setupApiRoutes(
     // 부트스트랩 서비스 초기화
     bootstrapServices();
 
+    // Guest 세션 엔드포인트 — 로그인 불필요, 임시 식별자 발급
+    // 프론트엔드 구버전 호환 (POST /api/auth/guest, /login/guest, /register/guest)
+    const guestHandler = (_req: Request, res: Response) => {
+        const anonId = `anon_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+        res.json({ success: true, data: { guestId: anonId, role: 'guest' }, meta: { timestamp: new Date().toISOString() } });
+    };
+    app.post('/api/auth/guest', guestHandler);
+    app.post('/api/auth/login/guest', guestHandler);
+    app.post('/api/auth/register/guest', guestHandler);
+
     // 컨트롤러 라우트
     app.use('/', createHealthController(cluster));
     app.use('/api/cluster', createClusterController(cluster));
@@ -98,7 +133,10 @@ export function setupApiRoutes(
     setDocumentsDeps(cluster, broadcast);
     setWebSearchCluster(cluster);
     setNodesCluster(cluster);
-
+    // 🆕 세션/대화 라우트 — /api/chat 보다 먼저 마운트 (Express 라우팅 명시성 보장)
+    const sessionController = createSessionController();
+    app.use('/api/chat/sessions', sessionController);
+    app.use('/api/chat/conversations', sessionController);
     // 🆕 /api/chat/feedback 는 /api/chat 보다 먼저 마운트해야 Express가 올바르게 매칭
     app.use('/api/chat/feedback', chatFeedbackRouter);
     app.use('/api/chat', chatRouter);
@@ -121,13 +159,8 @@ export function setupApiRoutes(
     // Swagger 설정
     setupSwaggerRoutes(app);
 
-    // 세션/대화 라우트
-    app.use('/api/chat/sessions', createSessionController());
-    app.use('/api/chat/conversations', createSessionController());
-
     // 모델 라우트 (가장 마지막 - Catch-all)
     app.use('/api', modelRouter);
-
     // 관리자 페이지
     app.get('/admin', (_req: Request, res: Response) => {
         const adminPath = path.join(__dirname, '../public', 'admin.html');

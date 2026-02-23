@@ -107,6 +107,65 @@ router.post('/', requireAuth, validate(createSkillSchema), asyncHandler(async (r
     res.status(201).json(success(skill));
 }));
 
+// ================================================
+// 사용자 개인 스킬 할당
+// ================================================
+
+/**
+ * GET /api/agents/skills/user-assigned
+ * 현재 로그인 사용자의 개인 할당 스킬 목록
+ */
+router.get('/user-assigned', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+    const userId = req.user?.id?.toString();
+    if (!userId) {
+        res.status(401).json({ success: false, error: { code: 'UNAUTHORIZED', message: '인증 필요' } });
+        return;
+    }
+    const skills = await getSkillManager().getUserSkills(userId);
+    res.json(success(skills));
+}));
+
+/**
+ * POST /api/agents/skills/:skillId/user-assign
+ * 개인 스킬 할당 (사용자 스코프)
+ */
+router.post('/:skillId/user-assign', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+    const { skillId } = req.params;
+    const userId = req.user?.id?.toString();
+    if (!userId) {
+        res.status(401).json({ success: false, error: { code: 'UNAUTHORIZED', message: '인증 필요' } });
+        return;
+    }
+
+    const skill = await getSkillManager().getSkillById(skillId);
+    if (!skill) {
+        res.status(404).json(notFound('스킬'));
+        return;
+    }
+
+    const priority: number = typeof req.body?.priority === 'number' ? req.body.priority : 0;
+    await getSkillManager().assignSkillToUser(userId, skillId, priority);
+    logger.info(`개인 스킬 할당: userId=${userId}, skillId=${skillId}`);
+    res.json(success({ assigned: true, skillId, userId }));
+}));
+
+/**
+ * DELETE /api/agents/skills/:skillId/user-assign
+ * 개인 스킬 할당 해제
+ */
+router.delete('/:skillId/user-assign', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+    const { skillId } = req.params;
+    const userId = req.user?.id?.toString();
+    if (!userId) {
+        res.status(401).json({ success: false, error: { code: 'UNAUTHORIZED', message: '인증 필요' } });
+        return;
+    }
+
+    await getSkillManager().removeSkillFromUser(userId, skillId);
+    logger.info(`개인 스킬 할당 해제: userId=${userId}, skillId=${skillId}`);
+    res.json(success({ unassigned: true, skillId, userId }));
+}));
+
 /**
  * PUT /api/agents/skills/:skillId
  * 스킬 수정 (소유권 검증 포함)

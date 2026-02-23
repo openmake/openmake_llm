@@ -247,29 +247,50 @@ class UserManagerImpl {
 
     async createUser(input: CreateUserInput): Promise<PublicUser | null> {
         const pool = getPool();
-
-        // 중복 username 체크
+        // 중복 username 취크 (fast path)
         const existing = await pool.query('SELECT id FROM users WHERE username = $1', [input.email]);
         if (existing.rows.length > 0) return null;
-
-        const id = await this.getNextId();
-        // admin 역할은 자동으로 enterprise tier
+        // 티어 및 롤 계산
         const tier = input.tier || (input.role === 'admin' ? 'enterprise' : 'free');
-
-        // 🔒 bcrypt로 비밀번호 해싱
+        const role = input.role || 'user';
+        // bcrypt 해시는 lock 바깥에서 수행 (시간소요 작업)
         const passwordHash = await bcrypt.hash(input.password, BCRYPT_ROUNDS);
         const now = new Date().toISOString();
-        const role = input.role || 'user';
+        // 트랜잭션 하나로: advisory lock 획득 + id 계산 + INSERT (레이스 컨디션 방지)
+        const client = await pool.connect();
+        try {
+            await client.query('BEGIN');
+            await client.query('SELECT pg_advisory_xact_lock(1)');
 
-        await pool.query(
-            `INSERT INTO users (id, username, password_hash, email, role, tier, is_active, created_at, updated_at)
-             VALUES ($1, $2, $3, $4, $5, $6, TRUE, $7, $8)`,
-            [String(id), input.email, passwordHash, input.email, role, tier, now, now]
-        );
+            // lock 내에서 중복 재확인
+            const dupCheck = await client.query('SELECT id FROM users WHERE username = $1', [input.email]);
+            if (dupCheck.rows.length > 0) {
+                await client.query('ROLLBACK');
+                return null;
+            }
 
-        const result = await pool.query('SELECT * FROM users WHERE id = $1', [String(id)]);
-        const row = result.rows[0] as UserRow | undefined;
-        return row ? this.rowToPublicUser(row) : null;
+            const idResult = await client.query(
+                `SELECT COALESCE(MAX(CAST(id AS INTEGER)), 0) + 1 as next_id FROM users WHERE id ~ $1`,
+                ['^\\d+$']
+            );
+            const id = String(idResult.rows[0]?.next_id || 1);
+
+            await client.query(
+                `INSERT INTO users (id, username, password_hash, email, role, tier, is_active, created_at, updated_at)
+                 VALUES ($1, $2, $3, $4, $5, $6, TRUE, $7, $8)`,
+                [id, input.email, passwordHash, input.email, role, tier, now, now]
+            );
+            await client.query('COMMIT');
+
+            const result = await pool.query('SELECT * FROM users WHERE id = $1', [id]);
+            const row = result.rows[0] as UserRow | undefined;
+            return row ? this.rowToPublicUser(row) : null;
+        } catch (err) {
+            await client.query('ROLLBACK');
+            throw err;
+        } finally {
+            client.release();
+        }
     }
 
     async authenticate(email: string, password: string): Promise<PublicUser | null> {
@@ -404,16 +425,53 @@ class UserManagerImpl {
 
     async deleteUser(userId: string): Promise<boolean> {
         const pool = getPool();
-        const uid = userId;
-        await pool.query('DELETE FROM external_connections WHERE user_id = $1', [uid]);
-        await pool.query('DELETE FROM user_api_keys WHERE user_id = $1', [uid]); // DBA-BUG-R4-002
-        await pool.query('DELETE FROM message_feedback WHERE user_id = $1', [uid]);
-        await pool.query('DELETE FROM canvas_documents WHERE user_id = $1', [uid]);
-        await pool.query('DELETE FROM research_sessions WHERE user_id = $1', [uid]);
-        await pool.query('DELETE FROM conversation_sessions WHERE user_id = $1', [uid]);
+        const client = await pool.connect();
+        try {
+            await client.query('BEGIN');
 
-        const result = await pool.query('DELETE FROM users WHERE id = $1', [uid]);
-        return (result.rowCount || 0) > 0;
+            // ── 1. 마켓플레이스 종속 레코드 정리 (FK CASCADE 미설정 테이블) ──
+            // agent_installations.marketplace_id → agent_marketplace(id): ON DELETE 기본값(RESTRICT)
+            // agent_marketplace.agent_id → custom_agents(id): ON DELETE 기본값(RESTRICT)
+            // 타 사용자의 설치/리뷰 레코드가 남아 있으면 CASCADE 삭제 시 FK 위반 발생
+            await client.query(
+                `DELETE FROM agent_installations WHERE marketplace_id IN
+                 (SELECT id FROM agent_marketplace WHERE author_id = $1)`,
+                [userId]
+            );
+            await client.query(
+                `DELETE FROM agent_reviews WHERE marketplace_id IN
+                 (SELECT id FROM agent_marketplace WHERE author_id = $1)`,
+                [userId]
+            );
+            await client.query('DELETE FROM agent_marketplace WHERE author_id = $1', [userId]);
+
+            // ── 2. 커스텀 에이전트 및 스킬 정리 ──
+            await client.query('DELETE FROM custom_agents WHERE created_by = $1', [userId]);
+            await client.query('DELETE FROM agent_skills WHERE created_by = $1', [userId]);
+
+            // ── 3. 사용자 데이터 정리 ──
+            await client.query('DELETE FROM user_memories WHERE user_id = $1', [userId]);
+            await client.query('DELETE FROM push_subscriptions WHERE user_id = $1', [userId]);
+            await client.query('DELETE FROM external_connections WHERE user_id = $1', [userId]);
+            await client.query('DELETE FROM user_api_keys WHERE user_id = $1', [userId]);
+            await client.query('DELETE FROM message_feedback WHERE user_id = $1', [userId]);
+            await client.query('DELETE FROM canvas_documents WHERE user_id = $1', [userId]);
+            await client.query('DELETE FROM research_sessions WHERE user_id = $1', [userId]);
+            await client.query('DELETE FROM conversation_sessions WHERE user_id = $1', [userId]);
+
+            // ── 4. 사용자 삭제 ──
+            const result = await client.query('DELETE FROM users WHERE id = $1', [userId]);
+            const deleted = (result.rowCount || 0) > 0;
+
+            await client.query('COMMIT');
+            return deleted;
+        } catch (err) {
+            await client.query('ROLLBACK');
+            logger.error(`[UserManager] 사용자 삭제 실패 (userId=${userId}):`, err);
+            throw err;
+        } finally {
+            client.release();
+        }
     }
 
     async getStats() {

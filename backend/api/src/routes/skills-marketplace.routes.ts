@@ -22,7 +22,7 @@ const router = Router();
 router.get('/search',
     requireAuth,
     validateQuery(searchMarketplaceQuerySchema),
-    asyncHandler(async (req: Request, res: Response) => {
+    async (req: Request, res: Response) => {
         const { query, category, sort, limit, offset } = req.query as {
             query?: string;
             category?: string;
@@ -31,17 +31,31 @@ router.get('/search',
             offset?: number;
         };
 
-        const service = getSkillsMarketplaceService();
-        const result = await service.searchSkills({
-            query: query || '',
-            category,
-            sort,
-            limit: limit || 20,
-            offset: offset || 0
-        });
-
-        res.json(success(result));
-    })
+        try {
+            const service = getSkillsMarketplaceService();
+            const result = await service.searchSkills({
+                query: query || '',
+                category,
+                sort,
+                limit: limit || 20,
+                offset: offset || 0
+            });
+            res.json(success(result));
+        } catch (error) {
+            if (error instanceof Error && error.message === 'GITHUB_TOKEN_NOT_CONFIGURED') {
+                res.status(503).json({
+                    success: false,
+                    error: {
+                        code: 'GITHUB_TOKEN_NOT_CONFIGURED',
+                        message: 'GitHub 연동이 설정되지 않았습니다. 관리자에게 GITHUB_TOKEN 환경변수 설정을 요청하세요.'
+                    }
+                });
+                return;
+            }
+            logger.error('Skills marketplace search failed:', error);
+            res.status(500).json(internalError('스킬 검색에 실패했습니다.'));
+        }
+    }
 );
 
 /**
@@ -100,7 +114,12 @@ router.post('/import',
             createdBy: userId
         });
 
-        res.status(201).json(success(newSkill));
+        // 마켓플레이스 스킬은 '__global__' 가상 에이전트에 자동 할당
+        // 모든 에이전트 채팅에서 즉시 사용 가능 (수동 연결 불필요)
+        await skillManager.assignSkillToAgent('__global__', newSkill.id, 0);
+        logger.info(`마켓플레이스 스킬 설치 완료: ${newSkill.id} - __global__ 자동 할당`);
+
+        res.status(201).json(success({ ...newSkill, autoAssigned: true }));
     })
 );
 

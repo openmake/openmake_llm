@@ -48,6 +48,7 @@ backend/api/data/
 
 # Legacy backup files
 bak/
+backup/
 
 # User uploaded files (sensitive user data)
 backend/uploads/

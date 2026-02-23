@@ -110,6 +110,25 @@ router.post('/custom', requireAuth, asyncHandler(async (req: Request, res: Respo
 }));
 
 /**
+ * POST /api/agents/custom/:id/clone
+ * 기존 에이전트 복제 (프론튴엔드 호환 경로 — /custom/clone/:id 와 동일)
+ */
+router.post('/custom/:id/clone', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+    const sourceId = req.params.id;
+    const modifications = typeof req.body === 'object' && req.body !== null ? { ...(req.body as Record<string, unknown>) } : {};
+    modifications['createdBy'] = String(req.user?.id || '');
+
+    const customBuilder = getCustomAgentBuilder();
+    const cloned = await customBuilder.cloneAgent(sourceId, modifications);
+
+    if (!cloned) {
+        return res.status(400).json(badRequest('에이전트 복제 실패'));
+    }
+
+    res.status(201).json(success(cloned));
+}));
+
+/**
  * PUT /api/agents/custom/:id
  * 커스텀 에이전트 수정
  */

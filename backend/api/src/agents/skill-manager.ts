@@ -64,7 +64,8 @@ export class SkillManager {
             this.initPromise = this.doInit();
         }
         await this.initPromise;
-        return this.repo!;
+        if (!this.repo) throw new Error('SkillRepository initialization failed');
+        return this.repo;
     }
 
     private async doInit(): Promise<void> {
@@ -147,14 +148,40 @@ export class SkillManager {
         logger.info(`스킬 연결 해제: 에이전트=${agentId}, 스킬=${skillId}`);
     }
 
-    async getSkillsForAgent(agentId: string): Promise<AgentSkill[]> {
+    async getSkillsForAgent(agentId: string, userId?: string): Promise<AgentSkill[]> {
         const repo = await this.ensureInitialized();
-        return repo.getSkillsForAgent(agentId);
+        return repo.getSkillsForAgent(agentId, userId);
     }
 
-    async getSkillIdsForAgent(agentId: string): Promise<string[]> {
+    async getSkillIdsForAgent(agentId: string, userId?: string): Promise<string[]> {
         const repo = await this.ensureInitialized();
-        return repo.getSkillIdsForAgent(agentId);
+        return repo.getSkillIdsForAgent(agentId, userId);
+    }
+
+    // ------------------------------------------------
+    // 사용자 개인 스킬
+    // ------------------------------------------------
+
+    async assignSkillToUser(userId: string, skillId: string, priority: number = 0): Promise<void> {
+        const repo = await this.ensureInitialized();
+        await repo.assignSkillToUser(userId, skillId, priority);
+        logger.info(`개인 스킬 할당: 사용자=${userId}, 스킬=${skillId}`);
+    }
+
+    async removeSkillFromUser(userId: string, skillId: string): Promise<void> {
+        const repo = await this.ensureInitialized();
+        await repo.removeSkillFromUser(userId, skillId);
+        logger.info(`개인 스킬 할당 해제: 사용자=${userId}, 스킬=${skillId}`);
+    }
+
+    async getUserSkills(userId: string): Promise<AgentSkill[]> {
+        const repo = await this.ensureInitialized();
+        return repo.getUserSkills(userId);
+    }
+
+    async getUserSkillIds(userId: string): Promise<string[]> {
+        const repo = await this.ensureInitialized();
+        return repo.getUserSkillIds(userId);
     }
 
     // ------------------------------------------------
@@ -165,22 +192,21 @@ export class SkillManager {
      * 에이전트 스킬 프롬프트 블록 생성
      * 시스템 프롬프트에 추가할 스킬 내용 문자열을 반환합니다.
      * `<skill_context>` 경계 태그로 격리하여 프롬프트 인젝션을 완화합니다.
+     * userId가 주어지면 개인 할당 스킬도 포함합니다.
      */
-    async buildSkillPrompt(agentId: string): Promise<string> {
-        const skills = await this.getSkillsForAgent(agentId);
+    async buildSkillPrompt(agentId: string, userId?: string): Promise<string> {
+        const skills = await this.getSkillsForAgent(agentId, userId);
         if (skills.length === 0) return '';
-
         const skillBlocks = skills
             .map(s => {
-                // 스킬 내용 길이 제한 (프롬프트 인젝션 완화)
                 const content = s.content.length > MAX_SKILL_CONTENT_LENGTH
                     ? s.content.slice(0, MAX_SKILL_CONTENT_LENGTH) + '\n... (truncated)'
                     : s.content;
-                return `<skill_context name="${s.name}">\n${content}\n</skill_context>`;
+                const safeName = s.name.replace(/[<>"&]/g, '');
+                return `<skill_context name="${safeName}">\n${content}\n</skill_context>`;
             })
             .join('\n\n');
-
-        return `\n\n## 적용된 스킬\n${skillBlocks}`;
+        return `\n\n## \uc801\uc6a9\ub41c \uc2a4\ud0ac\n${skillBlocks}`;
     }
 }
 

@@ -124,20 +124,19 @@ export class SkillsMarketplaceService {
             if (cached) {
                 return cached;
             }
-
+            const githubToken = getConfig().githubToken;
+            if (!githubToken) {
+                logger.warn('GITHUB_TOKEN is not configured — cannot search Skills Marketplace');
+                throw new Error('GITHUB_TOKEN_NOT_CONFIGURED');
+            }
             const limit = options.limit || 20;
             const q = `filename:SKILL.md ${options.query || ''} in:path,file`;
             const url = `https://api.github.com/search/code?q=${encodeURIComponent(q)}&per_page=${limit}`;
-
             const headers: Record<string, string> = {
                 'Accept': 'application/vnd.github.v3+json',
-                'User-Agent': 'OpenMake-Skills-Marketplace'
+                'User-Agent': 'OpenMake-Skills-Marketplace',
+                'Authorization': `token ${githubToken}`
             };
-
-            const githubToken = getConfig().githubToken;
-            if (githubToken) {
-                headers['Authorization'] = `token ${githubToken}`;
-            }
 
             const response = await fetch(url, { headers });
             if (!response.ok) {
@@ -172,11 +171,14 @@ export class SkillsMarketplaceService {
 
             return result;
         } catch (error) {
+            // GITHUB_TOKEN_NOT_CONFIGURED is an expected config issue, not a runtime error
+            if (error instanceof Error && error.message === 'GITHUB_TOKEN_NOT_CONFIGURED') {
+                throw error;
+            }
             logger.error('Failed to search marketplace skills', error);
             throw error;
         }
     }
-
     /**
      * GitHub raw URL에서 SKILL.md 내용 직접 로드
      */
@@ -204,35 +206,62 @@ export class SkillsMarketplaceService {
     }
 
     /**
-     * SKILL.md 내용 파싱 (휴리스틱)
+     * SKILL.md 내용 파싱 (openmake_llm 자동 호환 적용)
+     *
+     * 지원하는 content 시작 h2 헤더:
+     *   ## Instructions, ## Workflow, ## Rules, ## Usage, ## Guide,
+     *   ## How to, ## Overview, ## Details, ## Implementation, ## Examples, ## Steps
+     *
+     * 커테고리 추출:
+     *   **Category**: X, category: X, **category**: X 등 다양한 형식 지원
+     *
+     * 이름 정제:
+     *   h1 제목에서 선행 에모지 제거 후 텍스트 추출
      */
     parseSkillMd(content: string): { name: string; description: string; content: string; category: string } {
+        const CONTENT_HEADERS = /^##\s+(instructions?|workflow|rules?|usage|guide|how\s+to|overview|details?|implementation|examples?|steps?|description|skill\s+guide|when\s+to\s+use)/i;
         const lines = content.split('\n');
         let name = 'Uncategorized Skill';
         let description = '';
         let category = 'general';
         let mainContentStartIdx = 0;
-
         for (let i = 0; i < lines.length; i++) {
             const line = lines[i].trim();
+            // h1 제목 추출: 선행 에모지/특수문자 제거
             if (line.startsWith('# ') && name === 'Uncategorized Skill') {
-                name = line.substring(2).trim();
-            } else if (line.startsWith('> ')) {
-                description = description ? `${description} ${line.substring(2).trim()}` : line.substring(2).trim();
-            } else if (line.toLowerCase().startsWith('**category**:') || line.toLowerCase().startsWith('category:')) {
-                category = line.split(':')[1].trim();
-            } else if (line.toLowerCase().includes('## instructions')) {
+                const rawTitle = line.substring(2).trim();
+                // 선행 이모티콘 유니코드 제거
+                name = rawTitle.replace(/^[\uD800-\uDBFF][\uDC00-\uDFFF][\s]*/g, '').trim() || rawTitle;
+                continue;
+            }
+
+            // blockquote 설명 추출
+            if (line.startsWith('> ')) {
+                const descLine = line.substring(2).trim();
+                description = description ? `${description} ${descLine}` : descLine;
+                continue;
+            }
+
+            // 카테고리 추출: **Category**: X 및 category: X 형식 모두 지원
+            const categoryMatch = line.match(/^\*{0,2}category\*{0,2}\s*:\s*(.+)$/i);
+            if (categoryMatch) {
+                const rawCat = categoryMatch[1].replace(/\*+/g, '').trim().toLowerCase();
+                if (rawCat) category = rawCat;
+                continue;
+            }
+
+            // content 시작 h2 헤더 감지
+            if (CONTENT_HEADERS.test(line)) {
                 mainContentStartIdx = i + 1;
                 break;
             }
         }
 
         const parsedContent = lines.slice(mainContentStartIdx).join('\n').trim();
-
         return {
             name,
             description: description || 'No description found in SKILL.md',
-            content: parsedContent || content, // ## Instructions 블록이 없으면 전체 반환
+            content: parsedContent || content,
             category
         };
     }
