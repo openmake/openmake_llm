@@ -688,7 +688,7 @@
                 ]);
                 const data = await response.json();
 
-                if (!response.ok || !data.success) throw new Error(data.message || '스킬 로드 실패');
+                if (!response.ok || !data.success) throw new Error(data.error?.message || data.message || '스킬 로드 실패');
 
                 // 개인 할당 ID 집합 갱신
                 if (assignedRes.ok) {
@@ -873,7 +873,7 @@
                     if (window.showToast) window.showToast('스킬이 설치되어 모든 에이전트에 자동 적용됩니다.', 'success');
                     this.loadLocalSkills();
                 } else {
-                    if (window.showToast) window.showToast(data.message || '알 수 없는 오류', 'error');
+                    if (window.showToast) window.showToast(data.error?.message || data.message || '알 수 없는 오류', 'error');
                 }
             } catch (err) {
                 if (window.showToast) window.showToast('스킬 임포트 실패: ' + err.message, 'error');
@@ -895,7 +895,7 @@
                     }
                     this.renderLocalSkills();
                 } else {
-                    if (window.showToast) window.showToast(data.message || data.error?.message || '오류 발생', 'error');
+                    if (window.showToast) window.showToast(data.error?.message || data.message || '오류 발생', 'error');
                 }
             } catch (e) {
                 if (window.showToast) window.showToast('오류 발생: ' + e.message, 'error');
@@ -909,7 +909,7 @@
                 if (res.ok && data.success) {
                     alert(`[SKILL.md 미리보기]\n\nName: ${data.data.parsed.name}\nCategory: ${data.data.parsed.category}\n\n${data.data.parsed.content.substring(0, 300)}...`);
                 } else {
-                    if (window.showToast) window.showToast('조회 실패: ' + data.message, 'error');
+                    if (window.showToast) window.showToast('조회 실패: ' + (data.error?.message || data.message || '알 수 없는 오류'), 'error');
                 }
             } catch (e) {
                 if (window.showToast) window.showToast('조회 실패: ' + e.message, 'error');
@@ -937,7 +937,7 @@
                     this.loadLocalSkills();
                     this.loadLocalCategories();
                 } else {
-                    if (window.showToast) window.showToast('삭제 실패: ' + data.message, 'error');
+                    if (window.showToast) window.showToast('삭제 실패: ' + (data.error?.message || data.message || '알 수 없는 오류'), 'error');
                 }
             } catch (e) {
                 if (window.showToast) window.showToast('오류 발생: ' + e.message, 'error');
@@ -1017,7 +1017,7 @@
                     this.loadLocalSkills();
                     this.loadLocalCategories();
                 } else {
-                    if (window.showToast) window.showToast('저장 실패: ' + (data.message || '알 수 없는 오류'), 'error');
+                    if (window.showToast) window.showToast('저장 실패: ' + (data.error?.message || data.message || '알 수 없는 오류'), 'error');
                 }
             } catch (e) {
                 if (window.showToast) window.showToast('오류: ' + e.message, 'error');
