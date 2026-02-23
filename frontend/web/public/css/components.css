@@ -717,3 +717,46 @@
     max-width: 400px;
     margin: 0 auto;
 }
+
+/* ============================================================
+ * Message Attribution — 메시지 버블 스킬 attribution
+ * 스킬이 적용된 응답 메시지 하단에 어떤 스킬로 생성되었는지 표시
+ * ============================================================ */
+
+.message-attribution {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 0 2px 0;
+    margin-top: 8px;
+    border-top: 1px solid var(--border-light);
+    animation: fadeIn 0.3s ease-out;
+}
+
+.attribution-label {
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.attribution-chips {
+    display: flex;
+    gap: 5px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.attribution-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    background: var(--accent-primary-light, rgba(99,102,241,0.08));
+    border: 1.5px solid var(--accent-primary);
+    border-radius: 10px;
+    font-size: 0.65rem;
+    font-weight: 600;
+    color: var(--accent-primary);
+    white-space: nowrap;
+}

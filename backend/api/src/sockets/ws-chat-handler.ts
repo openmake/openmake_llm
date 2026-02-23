@@ -127,6 +127,7 @@ export async function handleChatMessage(
             onAgentSelected: (agent) => ws.send(JSON.stringify({ type: 'agent_selected', agent })),
             onDiscussionProgress: (progress) => ws.send(JSON.stringify({ type: 'discussion_progress', progress })),
             onResearchProgress: (progress) => ws.send(JSON.stringify({ type: 'research_progress', progress })),
+            onSkillsActivated: (skillNames) => ws.send(JSON.stringify({ type: 'skills_activated', skillNames })),
         });
 
         // WS 고유: 새 세션 생성 알림
