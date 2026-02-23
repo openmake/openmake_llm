@@ -185,6 +185,7 @@
         }
 
         async function cloneAgent(id) {
+            if (!confirm('이 에이전트를 복제하시겠습니까?')) return;
             try {
                 await authFetch('/api/agents/custom/' + id + '/clone', { method:'POST' });
                 showToast('복제되었습니다'); loadAgents();

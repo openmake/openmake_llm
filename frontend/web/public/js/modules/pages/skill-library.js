@@ -10,6 +10,7 @@
     let localSkills = [];
     let mpSkills = [];
     let userAssignedIds = new Set(); // 사용자 개인 할당 스킬 ID 집합
+    let editingSkillId = null; // 현재 편집 중인 스킬 ID (null = 새 스킬)
 
     let localFilters = {
         search: '',
@@ -354,6 +355,47 @@
         animation: sl-spin 0.7s linear infinite;
         margin: auto;
     }
+    /* 인라인 스킬 편집 모달 */
+    .sl-modal-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.6);
+        z-index: 1000;
+        align-items: center;
+        justify-content: center;
+    }
+    .sl-modal-overlay.open { display: flex; }
+    .sl-modal {
+        background: var(--bg-card, #1e293b);
+        border: 1px solid var(--border-light, #334155);
+        border-radius: var(--radius-lg, 12px);
+        padding: 1.75rem;
+        width: min(660px, 95vw);
+        max-height: 90vh;
+        overflow-y: auto;
+    }
+    .sl-modal h2 { margin: 0 0 1.25rem; font-size: 1.1rem; font-weight: 600; color: var(--text-primary, #fff); }
+    .sl-modal .sl-form-group { margin-bottom: 1rem; }
+    .sl-modal .sl-form-label { display: block; font-size: 0.82rem; font-weight: 500; color: var(--text-secondary, #94a3b8); margin-bottom: 0.4rem; }
+    .sl-modal .sl-form-input,
+    .sl-modal .sl-form-textarea,
+    .sl-modal .sl-form-select {
+        width: 100%; background: var(--bg-secondary, #0f172a);
+        border: 1px solid var(--border-color, #334155);
+        border-radius: var(--radius-md, 6px);
+        padding: 0.5rem 0.75rem;
+        color: var(--text-primary, #fff);
+        font-size: 0.875rem;
+        box-sizing: border-box;
+    }
+    .sl-modal .sl-form-textarea { resize: vertical; }
+    .sl-modal .sl-form-textarea.mono { font-family: monospace; font-size: 0.82rem; }
+    .sl-modal-actions {
+        display: flex; gap: 0.75rem; justify-content: flex-end;
+        margin-top: 1.25rem; padding-top: 1rem;
+        border-top: 1px solid var(--border-color, #334155);
+    }
 </style>
 <div class="sl-page" id="skill-library-root">
     <div class="sl-header">
@@ -425,6 +467,41 @@
             <div id="mpPagination" class="sl-pagination"></div>
         </div>
     </div>
+    <!-- 인라인 스킬 편집 모달 -->
+    <div class="sl-modal-overlay" id="slSkillModal">
+        <div class="sl-modal">
+            <h2 id="slSkillModalTitle">스킬 편집</h2>
+            <div class="sl-form-group">
+                <label class="sl-form-label">스킬 이름 *</label>
+                <input type="text" id="slSkillName" class="sl-form-input" placeholder="스킬 이름">
+            </div>
+            <div class="sl-form-group">
+                <label class="sl-form-label">설명</label>
+                <textarea id="slSkillDesc" class="sl-form-textarea" rows="2" placeholder="스킬 설명..."></textarea>
+            </div>
+            <div class="sl-form-group">
+                <label class="sl-form-label">카테고리</label>
+                <select id="slSkillCategory" class="sl-form-select">
+                    <option value="general">일반</option>
+                    <option value="coding">코딩</option>
+                    <option value="writing">글쓰기</option>
+                    <option value="analysis">분석</option>
+                    <option value="creative">창작</option>
+                    <option value="education">교육</option>
+                    <option value="business">비즈니스</option>
+                    <option value="science">과학</option>
+                </select>
+            </div>
+            <div class="sl-form-group">
+                <label class="sl-form-label">스킬 내용 (시스템 프롬프트에 주입될 텍스트)</label>
+                <textarea id="slSkillContent" class="sl-form-textarea mono" rows="12" placeholder="스킬 내용을 입력하세요..."></textarea>
+            </div>
+            <div class="sl-modal-actions">
+                <button class="sl-btn sl-btn-secondary" onclick="sl_closeSkillModal()">취소</button>
+                <button class="sl-btn sl-btn-primary" onclick="sl_saveSkill()">저장</button>
+            </div>
+        </div>
+    </div>
 </div>`;
     }
 
@@ -455,7 +532,7 @@
             // Cleanup globals
             ['sl_openNewSkill', 'sl_editSkill', 'sl_deleteSkill', 'sl_exportSkill',
              'sl_importSkill', 'sl_viewMpSkill', 'sl_changeLocalPage', 'sl_changeMpPage',
-             'sl_toggleUserSkill'].forEach(key => {
+             'sl_toggleUserSkill', 'sl_saveSkill', 'sl_closeSkillModal'].forEach(key => {
                 try { delete window[key]; } catch (e) {}
             });
 
@@ -558,6 +635,8 @@
             window.sl_changeLocalPage = (p) => { localFilters.page = p; self.loadLocalSkills(); };
             window.sl_changeMpPage = (p) => { mpFilters.page = p; self.loadMpSkills(); };
             window.sl_toggleUserSkill = this.toggleUserSkill.bind(this);
+            window.sl_saveSkill = this.saveSkillFromModal.bind(this);
+            window.sl_closeSkillModal = this.closeSkillModal.bind(this);
         },
 
         loadLocalCategories: async function () {
@@ -838,28 +917,10 @@
         },
 
         openNewSkillModal: function () {
-            // 커스텀 에이전트 메뉴로 이동
-            if (window.Router && window.Router.navigate) {
-                window.Router.navigate('/custom-agents.html');
-            } else {
-                const navLink = document.querySelector('[data-route="custom-agents"]');
-                if (navLink) navLink.click();
-            }
-            setTimeout(() => {
-                window.dispatchEvent(new CustomEvent('open-skill-editor'));
-            }, 400);
+            this.openSkillModal(null);
         },
-
         editLocalSkill: function (id) {
-            if (window.Router && window.Router.navigate) {
-                window.Router.navigate('/custom-agents.html');
-            } else {
-                const navLink = document.querySelector('[data-route="custom-agents"]');
-                if (navLink) navLink.click();
-            }
-            setTimeout(() => {
-                window.dispatchEvent(new CustomEvent('edit-local-skill', { detail: { id } }));
-            }, 400);
+            this.openSkillModal(id);
         },
 
         exportSkill: function (id) {
@@ -881,6 +942,92 @@
             } catch (e) {
                 if (window.showToast) window.showToast('오류 발생: ' + e.message, 'error');
             }
+        },
+
+        // -------------------------------------------------------
+        // 인라인 스킬 편집 모달
+        // -------------------------------------------------------
+
+        /**
+         * 스킬 편집 모달 오픈 (id=null 이면 새 스킬 등록)
+         */
+        openSkillModal: function (id) {
+            editingSkillId = id || null;
+            const modal = document.getElementById('slSkillModal');
+            if (!modal) return;
+            const titleEl = document.getElementById('slSkillModalTitle');
+            if (id) {
+                titleEl.textContent = '스킬 편집';
+                const skill = localSkills.find(function (s) { return s.id === id; });
+                if (skill) {
+                    document.getElementById('slSkillName').value = skill.name || '';
+                    document.getElementById('slSkillDesc').value = skill.description || '';
+                    document.getElementById('slSkillCategory').value = skill.category || 'general';
+                    document.getElementById('slSkillContent').value = skill.content || '';
+                    modal.classList.add('open');
+                } else {
+                    // localSkills에 없으면 빈 폼으로 오픈
+                    document.getElementById('slSkillName').value = '';
+                    document.getElementById('slSkillDesc').value = '';
+                    document.getElementById('slSkillCategory').value = 'general';
+                    document.getElementById('slSkillContent').value = '';
+                    modal.classList.add('open');
+                }
+            } else {
+                titleEl.textContent = '새 스킬 등록';
+                document.getElementById('slSkillName').value = '';
+                document.getElementById('slSkillDesc').value = '';
+                document.getElementById('slSkillCategory').value = 'general';
+                document.getElementById('slSkillContent').value = '';
+                modal.classList.add('open');
+            }
+        },
+
+        saveSkillFromModal: async function () {
+            const name = (document.getElementById('slSkillName').value || '').trim();
+            if (!name) {
+                if (window.showToast) window.showToast('스킬 이름을 입력하세요', 'error');
+                return;
+            }
+            const body = {
+                name: name,
+                description: (document.getElementById('slSkillDesc').value || '').trim(),
+                category: document.getElementById('slSkillCategory').value || 'general',
+                content: (document.getElementById('slSkillContent').value || '').trim(),
+            };
+            try {
+                let res;
+                if (editingSkillId) {
+                    res = await window.authFetch('/api/agents/skills/' + editingSkillId, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(body)
+                    });
+                } else {
+                    res = await window.authFetch('/api/agents/skills', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(body)
+                    });
+                }
+                const data = await res.json();
+                if (res.ok && data.success) {
+                    if (window.showToast) window.showToast(editingSkillId ? '스킬이 저장되었습니다.' : '새 스킬이 등록되었습니다.', 'success');
+                    this.closeSkillModal();
+                    this.loadLocalSkills();
+                    this.loadLocalCategories();
+                } else {
+                    if (window.showToast) window.showToast('저장 실패: ' + (data.message || '알 수 없는 오류'), 'error');
+                }
+            } catch (e) {
+                if (window.showToast) window.showToast('오류: ' + e.message, 'error');
+            }
+        },
+
+        closeSkillModal: function () {
+            const modal = document.getElementById('slSkillModal');
+            if (modal) modal.classList.remove('open');
+            editingSkillId = null;
         },
 
         renderPagination: function (containerId, currentPage, totalItems, limit, changeFnName) {

@@ -613,6 +613,7 @@ window.toggleDeepResearch = toggleDeepResearch;
 window.showDiscussionProgress = showDiscussionProgress;
 window.showResearchProgress = showResearchProgress;
 
+
 // 클러스터
 window.BRAND_MODELS = BRAND_MODELS;
 window.updateClusterInfo = updateClusterInfo;

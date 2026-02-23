@@ -35,13 +35,14 @@ const logger = createLogger('AgentSystem');
  *
  * @param selection - routeToAgent() 결과의 에이전트 선택 정보
  * @param userId - 사용자 ID (개인 스킬 포함 여부 결정)
- * @returns {Promise<string>} - 조합된 시스템 프롬프트 문자열
+ * @returns {Promise<{ prompt: string; skillNames: string[] }>} - 조합된 프롬프트와 활성 스킬 이름 목록
  */
-export async function getAgentSystemMessage(selection: AgentSelection, userId?: string): Promise<string> {
+export async function getAgentSystemMessage(selection: AgentSelection, userId?: string): Promise<{ prompt: string; skillNames: string[] }> {
     const agent = AGENTS[selection.primaryAgent];
     if (!agent) {
-        return getDefaultSystemPrompt();
+        return { prompt: getDefaultSystemPrompt(), skillNames: [] };
     }
+
 
     // 시스템 프롬프트 기본 구조 생성
     const basePrompt = `# ${agent.emoji} ${agent.name}
@@ -61,12 +62,17 @@ ${agent.keywords.map(k => `- ${k}`).join('\n')}
 
     // 1. DB 스킬 주입 시도 (최우선 - skill-seeder로 자동 등록된 전문 지침)
     let hasDbSkills = false;
+    const skillNames: string[] = [];
     try {
-        const skillPrompt = await getSkillManager().buildSkillPrompt(agent.id, userId);
-        if (skillPrompt) {
-            result += skillPrompt;
-            hasDbSkills = true;
-            logger.info(`DB 스킬 주입됨: ${agent.name} (${agent.id})`);
+        const skills = await getSkillManager().getSkillsForAgent(agent.id, userId);
+        if (skills.length > 0) {
+            for (const s of skills) skillNames.push(s.name);
+            const skillPrompt = await getSkillManager().buildSkillPrompt(agent.id, userId);
+            if (skillPrompt) {
+                result += skillPrompt;
+                hasDbSkills = true;
+                logger.info(`DB 스킬 주입됨: ${agent.name} (${agent.id}) [${skillNames.join(', ')}]`);
+            }
         }
     } catch (e) {
         logger.warn(`DB 스킬 주입 실패: ${agent.name}`, e);
@@ -103,7 +109,7 @@ ${agent.keywords.map(k => `- ${k}`).join('\n')}
             logger.warn(`파일 프롬프트 로드 실패: ${agent.name}`, e);
         }
     }
-    return result;
+    return { prompt: result, skillNames };
 }
 
 /**

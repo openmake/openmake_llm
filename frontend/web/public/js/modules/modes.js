@@ -252,15 +252,13 @@ function showResearchProgress(progress) {
             setTimeout(() => progressEl.remove(), 300);
         }, 2000);
     }
-}
 
-// 전역 노출 (레거시 호환)
+// 전역 노옥 (레거시 호환)
 window.toggleDiscussionMode = toggleDiscussionMode;
 window.toggleThinkingMode = toggleThinkingMode;
 window.toggleDeepResearch = toggleDeepResearch;
 window.showDiscussionProgress = showDiscussionProgress;
 window.showResearchProgress = showResearchProgress;
-
 export {
     toggleDiscussionMode,
     toggleThinkingMode,
