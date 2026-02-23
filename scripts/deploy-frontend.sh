@@ -54,9 +54,9 @@ if [ -f "$SW_FILE" ]; then
     # 타임스탬프 기반 캐시 버전 업데이트
     TIMESTAMP=$(date +%s)
     if [[ "$OSTYPE" == "darwin"* ]]; then
-        sed -i '' "s/const CACHE_NAME = '.*'/const CACHE_NAME = 'ollama-chat-v${TIMESTAMP}'/" "$SW_FILE"
+        sed -i '' "s/const CACHE_VERSION = '.*'/const CACHE_VERSION = 'openmake-v${TIMESTAMP}'/" "$SW_FILE"
     else
-        sed -i "s/const CACHE_NAME = '.*'/const CACHE_NAME = 'ollama-chat-v${TIMESTAMP}'/" "$SW_FILE"
+        sed -i "s/const CACHE_VERSION = '.*'/const CACHE_VERSION = 'openmake-v${TIMESTAMP}'/" "$SW_FILE"
     fi
     echo -e "${GREEN}✅ Service Worker 캐시 버전 업데이트: ollama-chat-v${TIMESTAMP}${NC}"
 fi
