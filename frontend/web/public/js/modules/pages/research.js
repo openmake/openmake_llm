@@ -210,8 +210,8 @@
                 '</header>' +
                 '<div class="content-area">' +
                     '<div class="new-research">' +
-                        '<div class="form-group" style="flex:3"><label>\uC5F0\uAD6C \uC8FC\uC81C</label><input type="text" id="topic" placeholder="\uC5F0\uAD6C\uD558\uACE0 \uC2F6\uC740 \uC8FC\uC81C\uB97C \uC785\uB825\uD558\uC138\uC694..."></div>' +
-                        '<div class="form-group" style="flex:1"><label>\uAE4A\uC774</label>' +
+                        '<div class="form-group" style="flex:3"><label for="topic">\uC5F0\uAD6C \uC8FC\uC81C</label><input type="text" id="topic" placeholder="\uC5F0\uAD6C\uD558\uACE0 \uC2F6\uC740 \uC8FC\uC81C\uB97C \uC785\uB825\uD558\uC138\uC694..."></div>' +
+                        '<div class="form-group" style="flex:1"><label for="depth">\uAE4A\uC774</label>' +
                             '<select id="depth"><option value="quick">\uBE60\uB978 \uAC80\uC0C9</option><option value="standard" selected>\uD45C\uC900</option><option value="deep">\uC2EC\uCE35</option></select>' +
                         '</div>' +
                         '<button class="btn-primary" id="btnStartResearch">\uC5F0\uAD6C \uC2DC\uC791</button>' +

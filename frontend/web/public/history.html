@@ -114,11 +114,11 @@
                     </header>
 
                     <div class="search-bar" style="margin-bottom: var(--space-6);">
-                        <input type="date" id="filterDate" class="form-input" style="width: auto;"
+                        <input type="date" id="filterDate" class="form-input" style="width: auto;" aria-label="날짜 필터"
                             onchange="loadSessions()">
-                        <input type="text" id="searchQuery" class="form-input" style="max-width: 300px;"
+                        <input type="text" id="searchQuery" class="form-input" style="max-width: 300px;" aria-label="검색어 입력"
                             placeholder="검색어 입력..." onkeyup="debounceSearch()">
-                        <select id="sortOrder" class="form-select" style="width: auto;" onchange="loadSessions()">
+                        <select id="sortOrder" class="form-select" style="width: auto;" aria-label="정렬 순서" onchange="loadSessions()">
                             <option value="desc">최신순</option>
                             <option value="asc">오래된순</option>
                         </select>
