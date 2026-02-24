@@ -56,7 +56,7 @@ const logger = createLogger('ClusterManager');
  * const cluster = new ClusterManager({ heartbeatInterval: 30000 });
  * cluster.on('event', (event) => {
  *   if (event.type === 'node:offline') {
- *     console.warn(`노드 오프라인: ${event.nodeId}`);
+ *     logger.warn(`노드 오프라인: ${event.nodeId}`);
  *   }
  * });
  * await cluster.start();
@@ -123,7 +123,7 @@ export class ClusterManager extends EventEmitter {
      * ```typescript
      * const cluster = getClusterManager();
      * await cluster.start();
-     * console.log('클러스터 시작됨:', cluster.getStats());
+     * logger.info('클러스터 시작됨:', cluster.getStats());
      * ```
      */
     async start(): Promise<void> {
@@ -166,7 +166,7 @@ export class ClusterManager extends EventEmitter {
      * ```typescript
      * const node = await cluster.addNode('192.168.1.100', 11434, 'gpu-server');
      * if (node) {
-     *   console.log(`노드 추가됨: ${node.name} (${node.status})`);
+     *   logger.info(`노드 추가됨: ${node.name} (${node.status})`);
      * }
      * ```
      */
@@ -332,7 +332,7 @@ export class ClusterManager extends EventEmitter {
      * ```typescript
      * const node = cluster.getBestNode('gemma:2b');
      * if (node) {
-     *   console.log(`최적 노드: ${node.name}, 레이턴시: ${node.latency}ms`);
+     *   logger.info(`최적 노드: ${node.name}, 레이턴시: ${node.latency}ms`);
      * }
      * ```
      */
@@ -453,8 +453,8 @@ export class ClusterManager extends EventEmitter {
      * @example
      * ```typescript
      * const stats = cluster.getStats();
-     * console.log(`전체 노드: ${stats.totalNodes}, 온라인: ${stats.onlineNodes}`);
-     * console.log(`사용 가능한 모델: ${stats.uniqueModels.join(', ')}`);
+     * logger.info(`전체 노드: ${stats.totalNodes}, 온라인: ${stats.onlineNodes}`);
+     * logger.info(`사용 가능한 모델: ${stats.uniqueModels.join(', ')}`);
      * ```
      */
     getStats(): ClusterStats {

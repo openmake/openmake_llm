@@ -141,6 +141,15 @@ export class MemoryRepository extends BaseRepository {
         await this.query(`UPDATE user_memories SET ${sets.join(', ')} WHERE id = $${paramIdx}`, params);
     }
 
+    async getOwnerUserId(memoryId: string): Promise<string | null> {
+        const result = await this.query<{ user_id: string }>(
+            'SELECT user_id FROM user_memories WHERE id = $1',
+            [memoryId]
+        );
+
+        return result.rows[0]?.user_id ?? null;
+    }
+
     async deleteMemory(memoryId: string): Promise<void> {
         await this.query('DELETE FROM user_memories WHERE id = $1', [memoryId]);
     }

@@ -122,7 +122,7 @@
                         if (header && !document.getElementById('authStatus')) {
                             const notice = document.createElement('div');
                             notice.id = 'authStatus';
-                            notice.style.cssText = 'margin-top: var(--space-3); padding: var(--space-3) var(--space-4); background: var(--warning); color: #000; border-radius: var(--radius-md); font-size: var(--font-size-sm);';
+                            notice.style.cssText = 'margin-top: var(--space-3); padding: var(--space-3) var(--space-4); background: var(--warning); color: var(--text-inverse); border-radius: var(--radius-md); font-size: var(--font-size-sm);';
                             notice.textContent = statusText;
                             header.appendChild(notice);
                         }

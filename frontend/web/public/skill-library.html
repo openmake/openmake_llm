@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="ko" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover">
+    <title>스킬 라이브러리 - OpenMake.Ai</title>
+    <link rel="icon" type="image/png" href="/logo.png">
+    <link rel="preconnect" href="https://cdn.jsdelivr.net">
+    <link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="/css/design-tokens.css">
+    <link rel="stylesheet" href="/css/components.css">
+    <link rel="stylesheet" href="/css/layout.css">
+    <style>
+        .toolbar { display:flex; gap:var(--space-3); align-items:center; flex-wrap:wrap; margin-bottom:var(--space-5); }
+        .toolbar input { flex:1; min-width:200px; padding:var(--space-3); background:var(--bg-secondary); border:1px solid var(--border-light); border-radius:var(--radius-md); color:var(--text-primary); box-sizing:border-box; }
+        .toolbar .btn-primary { padding:var(--space-2) var(--space-4); background:var(--accent-primary); color:#fff; border:none; border-radius:var(--radius-md); cursor:pointer; font-weight:var(--font-weight-semibold); white-space:nowrap; }
+        .filter-tabs { display:flex; gap:var(--space-2); margin-bottom:var(--space-5); flex-wrap:wrap; }
+        .filter-tab { padding:var(--space-2) var(--space-3); background:var(--bg-tertiary); border:1px solid var(--border-light); border-radius:var(--radius-md); cursor:pointer; color:var(--text-secondary); font-size:var(--font-size-sm); }
+        .filter-tab.active { background:var(--accent-primary); color:#fff; border-color:var(--accent-primary); }
+        .skill-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:var(--space-4); }
+        .skill-card { background:var(--bg-card); border:1px solid var(--border-light); border-radius:var(--radius-lg); padding:var(--space-5); transition:border-color .2s; }
+        .skill-card:hover { border-color:var(--accent-primary); }
+        .skill-card h3 { margin:0 0 var(--space-2); color:var(--text-primary); font-size:15px; }
+        .skill-card .skill-desc { color:var(--text-muted); font-size:var(--font-size-sm); margin-bottom:var(--space-3); display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
+        .skill-meta { display:flex; gap:var(--space-2); align-items:center; flex-wrap:wrap; font-size:var(--font-size-sm); }
+        .badge { display:inline-block; padding:2px 8px; border-radius:var(--radius-md); font-size:11px; font-weight:var(--font-weight-semibold); }
+        .badge-cat { background:var(--bg-tertiary); color:var(--text-secondary); }
+        .badge-public { background:var(--success); color:#fff; }
+        .badge-private { background:var(--bg-tertiary); color:var(--text-muted); }
+        .skill-actions { display:flex; gap:var(--space-2); margin-top:var(--space-3); }
+        .skill-actions button { padding:var(--space-1) var(--space-3); border:1px solid var(--border-light); border-radius:var(--radius-md); cursor:pointer; font-size:var(--font-size-sm); background:var(--bg-tertiary); color:var(--text-primary); }
+        .skill-actions button:hover { border-color:var(--accent-primary); }
+        .empty-state { text-align:center; padding:var(--space-8); color:var(--text-muted); }
+        .empty-state h2 { color:var(--text-secondary); margin-bottom:var(--space-3); }
+        .loading { text-align:center; padding:var(--space-6); color:var(--text-muted); }
+        .toast { position:fixed; bottom:20px; right:20px; padding:var(--space-3) var(--space-5); border-radius:var(--radius-md); color:#fff; z-index:2000; opacity:0; transition:opacity .3s; }
+        .toast.show { opacity:1; } .toast.success { background:var(--success); } .toast.error { background:var(--danger); }
+    </style>
+</head>
+<body>
+    <div class="layout">
+        <aside class="sidebar" id="sidebar"></aside>
+        <div class="sidebar-overlay" onclick="toggleSidebar()"></div>
+        <main class="main-content">
+            <header class="page-header">
+                <button class="mobile-menu-btn" onclick="toggleMobileSidebar(event)">&#9776;</button>
+                <h1>📦 스킬 라이브러리</h1>
+            </header>
+            <div class="content-area">
+                <div class="toolbar">
+                    <input type="text" id="searchInput" placeholder="스킬 검색...">
+                    <button class="btn-primary" onclick="openCreateModal()">+ 새 스킬</button>
+                </div>
+                <div class="filter-tabs" id="filterTabs">
+                    <button class="filter-tab active" data-cat="">전체</button>
+                </div>
+                <div id="skillGrid" class="skill-grid">
+                    <div class="loading">불러오는 중...</div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <div id="toast" class="toast"></div>
+
+    <script src="/js/components/sidebar.js"></script>
+    <script>
+        function authFetch(url, opts = {}) {
+            const headers = { 'Content-Type':'application/json', ...opts.headers };
+            return fetch(url, { ...opts, headers, credentials: 'include' }).then(r => r.json());
+        }
+        function showToast(msg, type = 'success') {
+            const t = document.getElementById('toast');
+            t.textContent = msg; t.className = 'toast ' + type + ' show';
+            setTimeout(() => t.classList.remove('show'), 3000);
+        }
+        function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+
+        let skills = [];
+        let categories = [];
+        let currentFilter = '';
+
+        async function loadCategories() {
+            try {
+                const res = await authFetch('/api/agents/skills/categories');
+                categories = res.data || [];
+                const tabs = document.getElementById('filterTabs');
+                tabs.innerHTML = '<button class="filter-tab active" data-cat="">전체</button>' +
+                    categories.map(c => '<button class="filter-tab" data-cat="' + esc(c) + '">' + esc(c) + '</button>').join('');
+            } catch(e) { /* ignore */ }
+        }
+
+        async function loadSkills() {
+            const params = new URLSearchParams();
+            const search = document.getElementById('searchInput').value.trim();
+            if (search) params.set('q', search);
+            if (currentFilter) params.set('category', currentFilter);
+            try {
+                const res = await authFetch('/api/agents/skills?' + params.toString());
+                skills = res.data || [];
+                renderSkills();
+            } catch(e) {
+                document.getElementById('skillGrid').innerHTML = '<div class="empty-state"><h2>로드 실패</h2></div>';
+            }
+        }
+
+        function renderSkills() {
+            const el = document.getElementById('skillGrid');
+            if (!skills.length) {
+                el.innerHTML = '<div class="empty-state"><h2>스킬이 없습니다</h2><p>새 스킬을 추가하거나 검색어를 변경해보세요.</p></div>';
+                return;
+            }
+            el.innerHTML = skills.map(s => `
+                <div class="skill-card">
+                    <h3>${esc(s.name)}</h3>
+                    <div class="skill-desc">${esc(s.description || '')}</div>
+                    <div class="skill-meta">
+                        <span class="badge badge-cat">${esc(s.category || 'general')}</span>
+                        <span class="badge ${s.is_public ? 'badge-public' : 'badge-private'}">${s.is_public ? '공개' : '비공개'}</span>
+                    </div>
+                    <div class="skill-actions">
+                        <button onclick="exportSkill('${s.id}')">📤 내보내기</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function exportSkill(id) {
+            try {
+                const res = await authFetch('/api/agents/skills/' + id + '/export');
+                const data = res.data || res;
+                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url; a.download = 'skill-' + id + '.json'; a.click();
+                URL.revokeObjectURL(url);
+                showToast('스킬이 내보내기되었습니다.');
+            } catch(e) { showToast('내보내기 실패', 'error'); }
+        }
+
+        function openCreateModal() { showToast('스킬 생성은 SPA 뷰에서 지원됩니다.'); }
+
+        document.getElementById('filterTabs').addEventListener('click', e => {
+            if (!e.target.classList.contains('filter-tab')) return;
+            document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+            e.target.classList.add('active');
+            currentFilter = e.target.dataset.cat;
+            loadSkills();
+        });
+
+        function debounce(fn, ms) { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; }
+        document.getElementById('searchInput').addEventListener('input', debounce(function() { loadSkills(); }, 400));
+
+        loadCategories();
+        loadSkills();
+    </script>
+</body>
+</html>

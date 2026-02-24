@@ -226,7 +226,7 @@
         font-size: 0.875rem;
     }
     .skill-card-dropdown a:hover { background: var(--bg-tertiary, #2d3748); }
-    .skill-card-dropdown a.danger { color: #f87171; }
+    .skill-card-dropdown a.danger { color: var(--danger); }
     .skill-card-dropdown hr {
         margin: 0.25rem 0;
         border: none;
@@ -706,7 +706,8 @@
 
             } catch (error) {
                 console.error(error);
-                grid.innerHTML = `<div class="sl-error">${window.escapeHtml ? window.escapeHtml(error.message) : error.message}</div>`;
+                const esc = window.escapeHtml || (s => s);
+                grid.innerHTML = `<div class="sl-error">${esc(error.message)}</div>`;
             }
         },
 
@@ -724,7 +725,7 @@
             grid.innerHTML = localSkills.map(skill => {
                 const isUserAssigned = userAssignedIds.has(skill.id);
                 const userBadge = isUserAssigned
-                    ? '<span class="sl-badge" style="background:rgba(168,85,247,0.12);color:#c084fc;border-color:rgba(168,85,247,0.25);margin-left:0.4rem" title="나에게만 적용된 스킬">👤 나만</span>'
+                    ? '<span class="sl-badge" style="background:rgba(168,85,247,0.12);color:var(--accent-primary);border-color:rgba(168,85,247,0.25);margin-left:0.4rem" title="나에게만 적용된 스킬">👤 나만</span>'
                     : '';
                 const toggleLabel = isUserAssigned ? '👤 나만 적용 해제' : '👤 나만 적용';
                 return `

@@ -18,7 +18,7 @@
 
 import { Router, Request, Response } from 'express';
 import { ClusterManager } from '../cluster/manager';
-import { success as apiSuccess, badRequest, internalError } from '../utils/api-response';
+import { success, badRequest, internalError } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
 import { requireAuth, requireAdmin } from '../auth';
 import { validate } from '../middlewares/validation';
@@ -47,7 +47,7 @@ router.post('/', validate(addClusterNodeSchema), asyncHandler(async (req: Reques
 
      const node = await clusterRef.addNode(host, port, name);
      if (node) {
-         res.json(apiSuccess(node));
+         res.json(success(node));
      } else {
          res.status(500).json(internalError('노드 추가 실패'));
      }
@@ -57,10 +57,10 @@ router.post('/', validate(addClusterNodeSchema), asyncHandler(async (req: Reques
  * 노드 제거
  * DELETE /api/nodes/:nodeId
  */
-router.delete('/:nodeId', (req: Request, res: Response) => {
+router.delete('/:nodeId', asyncHandler(async (req: Request, res: Response) => {
      const { nodeId } = req.params;
      const deleted = clusterRef.removeNode(decodeURIComponent(nodeId));
-     res.json(apiSuccess({ deleted }));
- });
+     res.json(success({ deleted }));
+ }));
 
 export default router;

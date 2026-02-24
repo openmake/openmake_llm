@@ -29,7 +29,7 @@ import { success, badRequest, notFound, internalError, forbidden } from '../util
 import { asyncHandler } from '../utils/error-handler';
 import { requireAuth } from '../auth';
 import { validate } from '../middlewares/validation';
-import { getUnifiedDatabase, getPool } from '../data/models/unified-database';
+import { getUnifiedDatabase } from '../data/models/unified-database';
 import { v4 as uuidv4 } from 'uuid';
 import { createCanvasSchema, updateCanvasSchema } from '../schemas/canvas.schema';
 
@@ -65,14 +65,9 @@ router.post('/', requireAuth, validate(createCanvasSchema), asyncHandler(async (
     const canvasLimit = userRole === 'admin' ? Infinity : (CANVAS_LIMITS[userTier] || CANVAS_LIMITS['free']);
 
     if (canvasLimit !== Infinity) {
-        const pool = getPool();
-        const countResult = await pool.query(
-            'SELECT COUNT(*) as cnt FROM canvas_documents WHERE user_id = $1',
-            [userId]
-        );
-        const currentCount = parseInt(countResult.rows[0].cnt, 10);
+        const currentCount = await db.countCanvasByUser(userId);
         if (currentCount >= canvasLimit) {
-            res.status(403).json(badRequest(`캔버스 생성 제한 초과 (${userTier}: 최대 ${canvasLimit}개)`));
+            res.status(403).json(forbidden(`캔버스 생성 제한 초과 (${userTier}: 최대 ${canvasLimit}개)`));
             return;
         }
     }
@@ -222,12 +217,7 @@ router.delete('/:documentId/share', requireAuth, asyncHandler(async (req: Reques
         return;
     }
 
-    // unshareCanvasDocument doesn't exist on UnifiedDatabase — use direct SQL
-    const pool = getPool();
-    await pool.query(
-        'UPDATE canvas_documents SET is_shared = false, share_token = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = $1',
-        [documentId]
-    );
+    await db.unshareCanvasDocument(documentId);
 
     const unshared = await db.getCanvasDocument(documentId);
 

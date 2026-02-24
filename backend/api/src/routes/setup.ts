@@ -46,6 +46,7 @@ import { createClusterController, createHealthController, createAuthController, 
 import { ClusterManager } from '../cluster/manager';
 import { bootstrapServices } from '../bootstrap';
 import { getConfig } from '../config';
+import { success } from '../utils/api-response';
 
 
 
@@ -70,11 +71,13 @@ export function setupApiRoutes(
     });
 
     // /api/health — 전용 헬스체크 엔드포인트 (로그 노이즈 방지)
+    // NOTE: Intentionally returns lightweight raw JSON for external health probes.
     app.get('/api/health', (_req: Request, res: Response) => {
         res.json({ status: 'ok', timestamp: new Date().toISOString(), uptime: process.uptime() });
     });
 
     // /api/status — 미니 헬스체크 (모니터링 호환)
+    // NOTE: Intentionally returns lightweight raw JSON for monitoring compatibility.
     app.get('/api/status', (_req: Request, res: Response) => {
         res.json({ status: 'ok', timestamp: new Date().toISOString(), uptime: process.uptime() });
     });
@@ -116,7 +119,7 @@ export function setupApiRoutes(
     // 프론트엔드 구버전 호환 (POST /api/auth/guest, /login/guest, /register/guest)
     const guestHandler = (_req: Request, res: Response) => {
         const anonId = `anon_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
-        res.json({ success: true, data: { guestId: anonId, role: 'guest' }, meta: { timestamp: new Date().toISOString() } });
+        res.json(success({ guestId: anonId, role: 'guest' }));
     };
     app.post('/api/auth/guest', guestHandler);
     app.post('/api/auth/login/guest', guestHandler);

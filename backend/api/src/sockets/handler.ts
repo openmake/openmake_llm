@@ -418,6 +418,10 @@ export class WebSocketHandler {
                 ws.terminate();
             }
         }, 30000); // 30초 주기
+        // Allow process to exit during tests — don't hold event loop
+        if (this.heartbeatInterval && typeof this.heartbeatInterval === 'object' && 'unref' in this.heartbeatInterval) {
+            (this.heartbeatInterval as NodeJS.Timeout).unref();
+        }
     }
 
     private getClientIp(req: IncomingMessage): string {

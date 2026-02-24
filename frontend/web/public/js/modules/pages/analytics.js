@@ -91,9 +91,9 @@
                 <thead><tr><th>에이전트</th><th>요청 수</th><th>평균 응답</th><th>성공률</th></tr></thead>
                 <tbody>${rows.map(r => `<tr>
                     <td>${esc(r.agentId || r.name || '-')}</td>
-                    <td>${fmtNum(r.totalRequests || r.requests || 0)}</td>
-                    <td>${Math.round(r.avgResponseTime || 0)}ms</td>
-                    <td>${(r.successRate || 0).toFixed(1)}%</td>
+                    <td>${esc(fmtNum(r.totalRequests || r.requests || 0))}</td>
+                    <td>${esc(Math.round(r.avgResponseTime || 0) + 'ms')}</td>
+                    <td>${esc((r.successRate || 0).toFixed(1) + '%')}</td>
                 </tr>`).join('')}</tbody>
             </table>`;
         }

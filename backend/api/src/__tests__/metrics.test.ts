@@ -244,7 +244,7 @@ describe('MetricsCollector', () => {
 
         test('timestamp는 ISO 8601 형식', () => {
             const all = metrics.getAllMetrics();
-            expect(() => new Date(all.timestamp)).not.toThrow();
+            expect(() => new Date(all.timestamp as string)).not.toThrow();
         });
     });
 

@@ -3,6 +3,9 @@ import { OllamaClient, createClient } from '../ollama/client';
 import { ChatMessage, ModelOptions, ListModelsResponse, ModelInfo, UsageMetrics } from '../ollama/types';
 import { ClusterNode } from './types';
 import { getConfig } from '../config';
+import { createLogger } from '../utils/logger';
+
+const logger = createLogger('MultiNodeClient');
 
 type LoadBalanceStrategy = 'round-robin' | 'least-latency' | 'random';
 
@@ -98,7 +101,7 @@ export class MultiNodeClient {
                 client.setModel(model);
                 return await client.generate(prompt, options, onToken);
             } catch (e) {
-                console.warn(`노드 ${node.name} 오류, 재시도 중...`);
+                logger.warn(`노드 ${node.name} 오류, 재시도 중...`);
                 // 다음 노드 시도
             }
         }
@@ -134,7 +137,7 @@ export class MultiNodeClient {
                 client.setModel(model);
                 return await client.chat(messages, options, onToken);
             } catch (e) {
-                console.warn(`노드 ${node.name} 오류, 재시도 중...`);
+                logger.warn(`노드 ${node.name} 오류, 재시도 중...`);
             }
         }
 
