@@ -25,7 +25,7 @@
 
 import { MCPServer, createMCPServer } from './server';
 import { getSequentialThinkingServer, applySequentialThinking } from './sequential-thinking';
-import { MCPToolDefinition, MCPToolResult, MCPRequest, MCPResponse } from './types';
+import { MCPToolResult, MCPRequest, MCPResponse } from './types';
 import { UserTier } from '../data/user-manager';
 import { canUseTool, getToolsForTier } from './tool-tiers';
 import { UserSandbox, UserContext } from './user-sandbox';

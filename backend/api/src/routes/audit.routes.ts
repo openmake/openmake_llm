@@ -21,7 +21,7 @@
 
 import { Router, Request, Response } from 'express';
 import { createLogger } from '../utils/logger';
-import { success, badRequest, internalError } from '../utils/api-response';
+import { success } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
 import { validate } from '../middlewares/validation';
 import { createAuditSchema } from '../schemas/audit.schema';
@@ -44,8 +44,8 @@ router.use(requireAuth, requireAdmin);
  * 감사 로그 목록 조회 (관리자 전용)
  */
 router.get('/', asyncHandler(async (req: Request, res: Response) => {
-     const limit = parseInt(req.query.limit as string) || 100;
-     const offset = parseInt(req.query.offset as string) || 0;
+     const limit = parseInt(req.query.limit as string, 10) || 100;
+     const offset = parseInt(req.query.offset as string, 10) || 0;
      const startDate = req.query.startDate as string | undefined;
      const endDate = req.query.endDate as string | undefined;
      const action = req.query.action as string | undefined;
@@ -78,7 +78,7 @@ router.get('/actions', asyncHandler(async (req: Request, res: Response) => {
  */
 router.get('/user/:userId', asyncHandler(async (req: Request, res: Response) => {
      const { userId } = req.params;
-     const limit = parseInt(req.query.limit as string) || 100;
+     const limit = parseInt(req.query.limit as string, 10) || 100;
      const { logs, total } = await auditService.getAuditLogs({ userId, limit });
      res.json(success({ logs, total, userId }));
 }));

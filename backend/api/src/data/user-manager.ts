@@ -211,28 +211,6 @@ class UserManagerImpl {
         }
     }
 
-    private async getNextId(): Promise<number> {
-        const pool = getPool();
-        // Use pg_advisory_xact_lock to prevent race condition on concurrent user creation
-        const client = await pool.connect();
-        try {
-            await client.query('BEGIN');
-            await client.query('SELECT pg_advisory_xact_lock(1)');
-            const result = await client.query(
-                `SELECT COALESCE(MAX(CAST(id AS INTEGER)), 0) + 1 as next_id FROM users WHERE id ~ $1`,
-                ['^\\d+$']
-            );
-            const nextId = result.rows[0]?.next_id || 1;
-            await client.query('COMMIT');
-            return nextId;
-        } catch (err) {
-            await client.query('ROLLBACK');
-            throw err;
-        } finally {
-            client.release();
-        }
-    }
-
     private rowToPublicUser(row: UserRow): PublicUser {
         return {
             id: row.id,

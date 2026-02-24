@@ -12,7 +12,6 @@
 
 import {
     Agent,
-    AgentCategory,
     IndustryAgentsData,
     getIndustryAgentsData
 } from './types';

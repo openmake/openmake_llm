@@ -32,7 +32,6 @@ import {
      ProgressEvent
   } from '../documents';
   import { uploadedDocuments } from '../documents/store';
-  import { getConfig } from '../config';
   import { success, badRequest, notFound, serviceUnavailable } from '../utils/api-response';
   import { asyncHandler } from '../utils/error-handler';
   import { createLogger } from '../utils/logger';
@@ -294,7 +293,7 @@ router.post('/document/ask', validate(documentAskSchema), asyncHandler(async (re
   * GET /api/documents
  * 업로드된 문서 목록
  */
-router.get('/documents', (_req: Request, res: Response) => {
+router.get('/documents', asyncHandler(async (_req: Request, res: Response) => {
      const docs = Array.from(uploadedDocuments.entries()).map(([id, doc]) => ({
          id,
          filename: doc.filename,
@@ -303,13 +302,13 @@ router.get('/documents', (_req: Request, res: Response) => {
          textLength: doc.text.length
      }));
      res.json(success(docs));
- });
+ }));
 
 /**
  * GET /api/documents/:docId
  * 개별 문서 조회
  */
-router.get('/documents/:docId', (req: Request, res: Response) => {
+router.get('/documents/:docId', asyncHandler(async (req: Request, res: Response) => {
      const { docId } = req.params;
      const doc = uploadedDocuments.get(docId);
 
@@ -319,16 +318,16 @@ router.get('/documents/:docId', (req: Request, res: Response) => {
      }
 
      res.json(success({ id: docId, filename: doc.filename, type: doc.type, pages: doc.pages, textLength: doc.text.length, text: doc.text, info: doc.info }));
-});
+}));
 
 /**
  * DELETE /api/documents/:docId
  * 문서 삭제
  */
-router.delete('/documents/:docId', (req: Request, res: Response) => {
+router.delete('/documents/:docId', asyncHandler(async (req: Request, res: Response) => {
      const { docId } = req.params;
      const deleted = uploadedDocuments.delete(docId);
      res.json(success({ deleted }));
- });
+ }));
 
 export default router;

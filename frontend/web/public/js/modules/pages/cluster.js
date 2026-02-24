@@ -27,7 +27,7 @@
 
         init: function () {
             try {
-                const API_BASE = window.location.origin;
+
                 // SafeStorage 래퍼 — Safari Private Mode 등에서 localStorage 예외 방지
                 const SS = window.SafeStorage || { getItem: function (k) { try { return localStorage.getItem(k); } catch (e) { return null; } }, setItem: function (k, v) { try { localStorage.setItem(k, v); } catch (e) { } }, removeItem: function (k) { try { localStorage.removeItem(k); } catch (e) { } } };
 
@@ -43,9 +43,10 @@
 
                 async function loadClusterStatus() {
                     try {
-                        const res = await fetch(`${API_BASE}/api/cluster/status`, {
+                        const res = await fetch('/api/cluster/status', {
                             credentials: 'include'  // 🔒 httpOnly 쿠키 포함
                         });
+                        if (!res.ok) throw new Error('서버 응답 오류: ' + res.status);
                         const json = await res.json();
                         const data = json.data || json;
                         renderStats(data);
