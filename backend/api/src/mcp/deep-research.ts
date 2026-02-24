@@ -15,7 +15,6 @@ import { MCPToolDefinition, MCPToolResult } from './types';
 import { getUnifiedDatabase } from '../data/models/unified-database';
 import {
     createDeepResearchService,
-    getResearchConfig,
     configureResearch as configureResearchGlobal,
     ResearchConfig,
     ResearchProgress
@@ -46,20 +45,6 @@ const activeResearches = new Map<string, {
 // ============================================================
 // research 도구
 // ============================================================
-
-/**
- * research 도구 입력 인자 타입
- *
- * @interface ResearchToolArgs
- */
-interface ResearchToolArgs extends Record<string, unknown> {
-    /** 연구할 주제 또는 질문 */
-    topic: string;
-    /** 연구 깊이: quick(1회), standard(3회), deep(5회) 반복 */
-    depth?: 'quick' | 'standard' | 'deep';
-    /** 사용자 ID (DB 세션 연결용, 선택적) */
-    userId?: string;
-}
 
 /**
  * 심층 연구 도구 (research)
@@ -190,16 +175,6 @@ export const researchTool: MCPToolDefinition = {
 // ============================================================
 
 /**
- * get_research_status 도구 입력 인자 타입
- *
- * @interface GetStatusToolArgs
- */
-interface GetStatusToolArgs extends Record<string, unknown> {
-    /** 조회할 리서치 세션 ID */
-    sessionId: string;
-}
-
-/**
  * 리서치 상태 조회 도구 (get_research_status)
  *
  * 진행 중인 리서치의 실시간 진행 상황 또는 완료된 결과를 조회합니다.
@@ -318,24 +293,6 @@ export const getResearchStatusTool: MCPToolDefinition = {
 // ============================================================
 // configure_research 도구
 // ============================================================
-
-/**
- * configure_research 도구 입력 인자 타입
- *
- * @interface ConfigureToolArgs
- */
-interface ConfigureToolArgs extends Record<string, unknown> {
-    /** 최대 반복 횟수 (1-10) */
-    maxLoops?: number;
-    /** 사용할 LLM 모델명 */
-    llmModel?: string;
-    /** 웹 검색 API 선택 */
-    searchApi?: 'ollama' | 'firecrawl' | 'google' | 'all';
-    /** 검색 결과 최대 수 (5-50) */
-    maxSearchResults?: number;
-    /** 출력 언어 */
-    language?: 'ko' | 'en';
-}
 
 /**
  * 리서치 설정 변경 도구 (configure_research)

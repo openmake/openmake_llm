@@ -38,9 +38,6 @@ const logger = createLogger('UnifiedDB');
 /** SQL 쿼리 파라미터 타입 - $1, $2 등의 플레이스홀더에 바인딩되는 값 */
 type QueryParam = string | number | boolean | null | undefined;
 
-/** PostgreSQL 쿼리 결과 행의 제네릭 타입 */
-type DbRow = Record<string, unknown>;
-
 const SCHEMA_FILE_RELATIVE_PATH = 'services/database/init/002-schema.sql';
 
 // Source of truth policy:

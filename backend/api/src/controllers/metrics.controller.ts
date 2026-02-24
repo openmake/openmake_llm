@@ -9,7 +9,6 @@ import { Request, Response, Router } from 'express';
 import { ClusterManager, getClusterManager } from '../cluster/manager';
 import { getAgentMonitor } from '../agents';
 import { getApiUsageTracker } from '../ollama/api-usage-tracker';
-import { getConfig } from '../config';
 import { createLogger } from '../utils/logger';
 import { success, internalError } from '../utils/api-response';
 

@@ -10,7 +10,7 @@ import * as crypto from 'crypto';
 import { getAuthService } from '../services/AuthService';
 import { getUserManager } from '../data/user-manager';
 import type { OAuthTokenResponse, GoogleUserInfo, GitHubUser, GitHubEmail } from '../auth/types';
-import { requireAuth, requireAdmin, extractToken, blacklistToken, setTokenCookie, clearTokenCookie, setRefreshTokenCookie, generateRefreshToken, generateToken, verifyRefreshToken } from '../auth';
+import { requireAuth, extractToken, blacklistToken, setTokenCookie, clearTokenCookie, setRefreshTokenCookie, generateRefreshToken, generateToken, verifyRefreshToken } from '../auth';
 import { createLogger } from '../utils/logger';
 import { success, badRequest, unauthorized, conflict, internalError, serviceUnavailable } from '../utils/api-response';
 import { getConfig } from '../config/env';
@@ -247,9 +247,6 @@ export class AuthController {
     }
 
     private setupRoutes(): void {
-        const authService = getAuthService();
-        const userManager = getUserManager();
-
         // ===== 기본 인증 API =====
         this.router.post('/register', validate(registerSchema), this.register.bind(this));
         this.router.post('/login', validate(loginSchema), this.login.bind(this));

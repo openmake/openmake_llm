@@ -34,7 +34,7 @@ import { getConversationDB } from '../data/conversation-db';
 import { buildExecutionPlan, type ExecutionPlan } from './profile-resolver';
 import { getPromptConfig } from './prompt';
 import { createLogger } from '../utils/logger';
-import type { ChatMessage, ToolDefinition, ToolCall } from '../ollama/types';
+import type { ChatMessage, ToolDefinition } from '../ollama/types';
 import { randomBytes } from 'crypto';
 
 const log = createLogger('ChatRequestHandler');
@@ -524,7 +524,7 @@ export class ChatRequestHandler {
         tool_calls?: OpenAIToolCall[];
         finish_reason: 'stop' | 'tool_calls';
     }> {
-        const { message, history, images, tools, tool_choice, client, onToken, abortSignal } = params;
+        const { message, history, images, tools, tool_choice, client, onToken, abortSignal: _abortSignal } = params;
 
         // tool_choice가 "none"이면 도구 없이 호출
         const effectiveTools = tool_choice === 'none' ? undefined : tools;

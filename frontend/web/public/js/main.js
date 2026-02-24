@@ -122,10 +122,10 @@ import { showUserGuide, closeGuideModal, useMode } from './modules/guide.js';
 import './modules/sanitize.js';
 
 // 1-15. 네비게이션 데이터
-import { NAV_ITEMS } from './nav-items.js';
+import { NAV_ITEMS } from './nav-items.js?v=3';
 
 // 1-16. SPA 라우터
-import { Router, SafeStorage } from './spa-router.js';
+import { Router, SafeStorage } from './spa-router.js?v=16';
 
 // 1-17. 컴포넌트 (사이드바, 관리자 패널, 오프라인 인디케이터, 설치 프롬프트)
 import { UnifiedSidebar } from './components/unified-sidebar.js?v=2';

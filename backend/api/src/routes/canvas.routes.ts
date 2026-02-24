@@ -25,7 +25,7 @@
 
 import { Router, Request, Response } from 'express';
 import { createLogger } from '../utils/logger';
-import { success, badRequest, notFound, internalError, forbidden } from '../utils/api-response';
+import { success, badRequest, notFound, forbidden } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
 import { requireAuth } from '../auth';
 import { validate } from '../middlewares/validation';
@@ -95,7 +95,7 @@ router.post('/', requireAuth, validate(createCanvasSchema), asyncHandler(async (
 router.get('/', requireAuth, asyncHandler(async (req: Request, res: Response) => {
     const db = getUnifiedDatabase();
     const userId = String(req.user!.id);
-    const limit = parseInt(req.query.limit as string) || 50;
+    const limit = parseInt(req.query.limit as string, 10) || 50;
 
     const documents = await db.getUserCanvasDocuments(userId, limit);
 

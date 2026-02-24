@@ -57,7 +57,7 @@ ${description}
     try {
         let firstToken = true;
 
-        const response = await client.chat(
+        await client.chat(
             [
                 { role: 'system', content: getSystemPrompt('generator') },
                 { role: 'user', content: prompt }

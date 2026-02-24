@@ -25,13 +25,13 @@
 
 import { Router, Request, Response, NextFunction } from 'express';
 import { createLogger } from '../utils/logger';
-import { success, badRequest, notFound, forbidden, internalError } from '../utils/api-response';
+import { success, badRequest, notFound, forbidden } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
 import { requireAuth } from '../auth';
 import { validate } from '../middlewares/validation';
 import { getUnifiedDatabase } from '../data/models/unified-database';
 import { v4 as uuidv4 } from 'uuid';
-import { createDeepResearchService, ResearchProgress } from '../services/DeepResearchService';
+import { createDeepResearchService } from '../services/DeepResearchService';
 import {
     createResearchSessionSchema,
     addResearchStepSchema,
@@ -97,7 +97,7 @@ router.post('/sessions', validate(createResearchSessionSchema), asyncHandler(asy
  * 사용자의 리서치 세션 목록 조회
  */
 router.get('/sessions', asyncHandler(async (req: Request, res: Response) => {
-    const limit = parseInt(req.query.limit as string) || 20;
+    const limit = parseInt(req.query.limit as string, 10) || 20;
 
     const db = getUnifiedDatabase();
     const sessions = await db.getUserResearchSessions(String(req.user!.id), limit);
