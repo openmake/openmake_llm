@@ -350,9 +350,7 @@
 
                 async function loadApiKeyCount() {
                     try {
-                        var authToken = safeStorage.getItem('authToken');
-                        var headers = authToken ? { 'Authorization': 'Bearer ' + authToken } : {};
-                        var res = await fetch('/api/api-keys', { credentials: 'include', headers: headers });
+                        var res = await fetch('/api/api-keys', { credentials: 'include' });
                         if (res.ok) {
                             var data = await res.json();
                             var count = (data.data && data.data.count) || 0;
@@ -446,13 +444,7 @@
 
                 async function exportData() {
                     try {
-                        var authToken = safeStorage.getItem('authToken');
-                        if (!authToken) {
-                            (typeof showToast === 'function' ? showToast('로그인이 필요합니다.', 'warning') : console.warn('로그인이 필요합니다.'));
-                            return;
-                        }
-                        var headers = { 'Authorization': 'Bearer ' + authToken };
-                        var res = await fetch('/api/chat/sessions?limit=500', { credentials: 'include', headers: headers });
+                        var res = await fetch('/api/chat/sessions?limit=500', { credentials: 'include' });
                         if (!res.ok) throw new Error('서버 응답 오류: ' + res.status);
                         var data = await res.json();
                         var payload = data.data || data;
@@ -497,7 +489,7 @@
                 (function initAccountCard() {
                     var accountCard = document.getElementById('accountCard');
                     var adminLink = document.getElementById('adminLink');
-                    var loggedIn = !!safeStorage.getItem('authToken');
+                    var loggedIn = !!(safeStorage.getItem('user') || (typeof getState === 'function' && getState('auth.user')));
                     if (loggedIn && accountCard) {
                         accountCard.style.display = '';
                         if (isAdmin() && adminLink) adminLink.style.display = '';
@@ -508,7 +500,7 @@
                 function getUserTier() {
                     var isGuest = safeStorage.getItem('guestMode') === 'true' ||
                         safeStorage.getItem('isGuest') === 'true' ||
-                        !safeStorage.getItem('authToken');
+                        !safeStorage.getItem('user');
                     if (isGuest) return 'free';
                     var savedUser = safeStorage.getItem('user');
                     if (!savedUser) return 'free';

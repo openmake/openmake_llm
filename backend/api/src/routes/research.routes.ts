@@ -28,9 +28,16 @@ import { createLogger } from '../utils/logger';
 import { success, badRequest, notFound, forbidden, internalError } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
 import { requireAuth } from '../auth';
+import { validate } from '../middlewares/validation';
 import { getUnifiedDatabase, getPool } from '../data/models/unified-database';
 import { v4 as uuidv4 } from 'uuid';
 import { createDeepResearchService, ResearchProgress } from '../services/DeepResearchService';
+import {
+    createResearchSessionSchema,
+    addResearchStepSchema,
+    updateResearchSessionSchema,
+    executeResearchSchema
+} from '../schemas/research.schema';
 
 const logger = createLogger('ResearchRoutes');
 const router = Router();
@@ -69,7 +76,7 @@ router.use((req: Request, res: Response, next: NextFunction): void => {
  * POST /api/research/sessions
  * 리서치 세션 생성
  */
-router.post('/sessions', asyncHandler(async (req: Request, res: Response) => {
+router.post('/sessions', validate(createResearchSessionSchema), asyncHandler(async (req: Request, res: Response) => {
     const { topic, depth } = req.body;
 
     if (!topic) {
@@ -131,7 +138,7 @@ router.get('/sessions/:sessionId', asyncHandler(async (req: Request, res: Respon
  * PUT /api/research/sessions/:sessionId
  * 리서치 세션 업데이트
  */
-router.put('/sessions/:sessionId', asyncHandler(async (req: Request, res: Response) => {
+router.put('/sessions/:sessionId', validate(updateResearchSessionSchema), asyncHandler(async (req: Request, res: Response) => {
     const { sessionId } = req.params;
     const { status, progress, summary, keyFindings, sources } = req.body;
 
@@ -164,7 +171,7 @@ router.put('/sessions/:sessionId', asyncHandler(async (req: Request, res: Respon
  * POST /api/research/sessions/:sessionId/steps
  * 리서치 스텝 추가
  */
-router.post('/sessions/:sessionId/steps', asyncHandler(async (req: Request, res: Response) => {
+router.post('/sessions/:sessionId/steps', validate(addResearchStepSchema), asyncHandler(async (req: Request, res: Response) => {
     const { sessionId } = req.params;
     const { stepNumber, stepType, query, result, sources, status } = req.body;
 
@@ -227,7 +234,7 @@ router.get('/sessions/:sessionId/steps', asyncHandler(async (req: Request, res: 
  * POST /api/research/sessions/:sessionId/execute
  * 리서치 실행 (비동기)
  */
-router.post('/sessions/:sessionId/execute', asyncHandler(async (req: Request, res: Response) => {
+router.post('/sessions/:sessionId/execute', validate(executeResearchSchema), asyncHandler(async (req: Request, res: Response) => {
     const { sessionId } = req.params;
     const { maxLoops } = req.body;
 
@@ -278,7 +285,7 @@ router.post('/sessions/:sessionId/execute', asyncHandler(async (req: Request, re
  * DELETE /api/research/sessions/:sessionId
  * 리서치 세션 삭제
  */
-router.delete('/sessions/:sessionId', asyncHandler(async (req: Request, res: Response) => {
+router.delete('/sessions/:sessionId', requireAuth, asyncHandler(async (req: Request, res: Response) => {
     const { sessionId } = req.params;
 
     const db = getUnifiedDatabase();

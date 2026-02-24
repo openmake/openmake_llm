@@ -28,9 +28,8 @@ class SharedSidebar {
      * @returns {boolean} 로그인 여부
      */
     isLoggedIn() {
-        const authToken = localStorage.getItem('authToken');
         const user = localStorage.getItem('user');
-        return !!authToken || !!user;
+        return !!(user && user !== '{}' && user !== 'null');
     }
 
     /**
@@ -278,10 +277,9 @@ function initTheme() {
 // 페이지 접근 권한 체크 (제한된 페이지용)
 function checkPageAccess(restrictedPages = []) {
     const currentPage = window.location.pathname;
-    const authToken = localStorage.getItem('authToken');
     const user = localStorage.getItem('user');
     const isGuest = localStorage.getItem('isGuest') === 'true';
-    const isAuthenticated = (authToken || user) && !isGuest;
+    const isAuthenticated = !!(user && user !== '{}' && user !== 'null') && !isGuest;
 
     if (restrictedPages.includes(currentPage) && !isAuthenticated) {
         // 제한된 페이지에 비인증 사용자가 접근 시 로그인 페이지로 리디렉션

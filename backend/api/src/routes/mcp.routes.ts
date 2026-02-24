@@ -34,6 +34,8 @@ import { asyncHandler } from '../utils/error-handler';
 import { getUnifiedDatabase } from '../data/models/unified-database';
 import type { MCPTransportType } from '../mcp/types';
 import { createLogger } from '../utils/logger';
+import { validate } from '../middlewares/validation';
+import { mcpToolExecuteSchema, mcpServerCreateSchema } from '../schemas/mcp.schema';
 
 const logger = createLogger('McpRoutes');
 
@@ -96,7 +98,7 @@ mcpRouter.put('/settings', optionalAuth, asyncHandler(async (req: Request, res: 
  });
 
   // 도구 실행 (POST) - 사용자 컨텍스트 기반 권한 검증
-  mcpRouter.post('/tools/:name/execute', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+  mcpRouter.post('/tools/:name/execute', requireAuth, validate(mcpToolExecuteSchema), asyncHandler(async (req: Request, res: Response) => {
       const { name } = req.params;
       const { arguments: args = {} } = req.body;
 
@@ -129,8 +131,6 @@ mcpRouter.put('/settings', optionalAuth, asyncHandler(async (req: Request, res: 
  // 🔌 외부 MCP 서버 관리 API
  // ============================================
 
- /** 유효한 transport 타입 */
- const VALID_TRANSPORTS: MCPTransportType[] = ['stdio', 'sse', 'streamable-http'];
 
   // 외부 서버 목록 + 연결 상태 (GET)
   mcpRouter.get('/servers', requireAuth, asyncHandler(async (req: Request, res: Response) => {
@@ -155,32 +155,21 @@ mcpRouter.put('/settings', optionalAuth, asyncHandler(async (req: Request, res: 
   }));
 
   // 새 외부 서버 등록 (POST) - admin 전용
-  mcpRouter.post('/servers', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+  mcpRouter.post('/servers', requireAuth, validate(mcpServerCreateSchema), asyncHandler(async (req: Request, res: Response) => {
       if (req.user?.role !== 'admin') {
           res.status(403).json(forbidden('관리자만 서버를 등록할 수 있습니다'));
           return;
       }
 
-      const { name, transport_type, command, args, env, url, enabled } = req.body;
-
-      // 유효성 검사
-      if (!name || typeof name !== 'string') {
-          res.status(400).json(badRequest('서버 이름을 입력하세요'));
-          return;
-      }
-      if (!transport_type || !VALID_TRANSPORTS.includes(transport_type)) {
-          res.status(400).json(badRequest(`유효하지 않은 transport 타입입니다. 허용: ${VALID_TRANSPORTS.join(', ')}`));
-          return;
-      }
-      if (transport_type === 'stdio' && !command) {
-          res.status(400).json(badRequest('stdio transport에는 command가 필요합니다'));
-          return;
-      }
-      if ((transport_type === 'sse' || transport_type === 'streamable-http') && !url) {
-          res.status(400).json(badRequest(`${transport_type} transport에는 url이 필요합니다`));
-          return;
-      }
-
+      const { name, transport_type, command, args, env, url, enabled } = req.body as {
+          name: string;
+          transport_type: 'stdio' | 'sse' | 'streamable-http';
+          command?: string;
+          args?: string[];
+          env?: Record<string, string>;
+          url?: string;
+          enabled?: boolean;
+      };
       const id = `mcp_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
       const config = {
           id,

@@ -27,7 +27,9 @@ import { MemoryCategory } from '../data/models/unified-database';
 import { success, badRequest, notFound, forbidden } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
 import { requireAuth } from '../auth';
+import { validate } from '../middlewares/validation';
 import { getPool, getUnifiedDatabase } from '../data/models/unified-database';
+import { createMemorySchema, updateMemorySchema } from '../schemas/memory.schema';
 const router = Router();
 
 // 모든 메모리 엔드포인트에 인증 필수
@@ -68,7 +70,7 @@ const MEMORY_LIMITS: Record<string, number> = {
    * POST /api/memory
   * 메모리 생성
   */
-router.post('/', asyncHandler(async (req: Request, res: Response) => {
+router.post('/', validate(createMemorySchema), asyncHandler(async (req: Request, res: Response) => {
      const userId = (req.user && 'userId' in req.user ? req.user.userId : req.user?.id?.toString()) || 'anonymous';
      const { category, key, value, importance, tags } = req.body;
 
@@ -127,7 +129,7 @@ router.get('/search', asyncHandler(async (req: Request, res: Response) => {
    * PUT /api/memory/:id
   * 메모리 수정
   */
-router.put('/:id', asyncHandler(async (req: Request, res: Response) => {
+router.put('/:id', validate(updateMemorySchema), asyncHandler(async (req: Request, res: Response) => {
      const memoryId = req.params.id;
     const userId = (req.user && 'userId' in req.user ? req.user.userId : req.user?.id?.toString()) || 'anonymous';
     // 소유권 확인
@@ -155,7 +157,7 @@ router.put('/:id', asyncHandler(async (req: Request, res: Response) => {
    * DELETE /api/memory/:id
   * 메모리 삭제
   */
-router.delete('/:id', asyncHandler(async (req: Request, res: Response) => {
+router.delete('/:id', requireAuth, asyncHandler(async (req: Request, res: Response) => {
      const memoryId = req.params.id;
     const userId = (req.user && 'userId' in req.user ? req.user.userId : req.user?.id?.toString()) || 'anonymous';
     // 소유권 확인
@@ -178,7 +180,7 @@ router.delete('/:id', asyncHandler(async (req: Request, res: Response) => {
    * DELETE /api/memory
   * 사용자의 모든 메모리 삭제
   */
-router.delete('/', asyncHandler(async (req: Request, res: Response) => {
+router.delete('/', requireAuth, asyncHandler(async (req: Request, res: Response) => {
      const userId = (req.user && 'userId' in req.user ? req.user.userId : req.user?.id?.toString()) || 'anonymous';
      const confirm = req.query.confirm === 'true';
 

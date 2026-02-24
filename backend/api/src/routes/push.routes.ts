@@ -22,6 +22,8 @@ import { success, badRequest, internalError } from '../utils/api-response';
 import { createLogger } from '../utils/logger';
 import { getPool } from '../data/models/unified-database';
 import { asyncHandler } from '../utils/error-handler';
+import { validate } from '../middlewares/validation';
+import { pushSubscribeSchema, pushUnsubscribeSchema } from '../schemas/push.schema';
 
 const logger = createLogger('PushRoutes');
 
@@ -83,13 +85,13 @@ router.get('/vapid-key', asyncHandler(async (req: Request, res: Response) => {
  * POST /api/push/subscribe
  * Push 구독 등록
  */
-router.post('/subscribe', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+router.post('/subscribe', requireAuth, validate(pushSubscribeSchema), asyncHandler(async (req: Request, res: Response) => {
     await warmCacheIfNeeded();
-    const { endpoint, keys, userId } = req.body;
-    
-    if (!endpoint || !keys?.p256dh || !keys?.auth) {
-        return res.status(400).json(badRequest('endpoint, keys.p256dh, keys.auth are required'));
-    }
+    const { endpoint, keys, userId } = req.body as {
+        endpoint: string;
+        keys: { p256dh: string; auth: string };
+        userId?: string;
+    };
     
     const subscription: PushSubscription = {
         endpoint,
@@ -117,13 +119,9 @@ router.post('/subscribe', requireAuth, asyncHandler(async (req: Request, res: Re
  * POST /api/push/unsubscribe
  * Push 구독 해제
  */
-router.post('/unsubscribe', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+router.post('/unsubscribe', requireAuth, validate(pushUnsubscribeSchema), asyncHandler(async (req: Request, res: Response) => {
     await warmCacheIfNeeded();
-    const { endpoint } = req.body;
-    
-    if (!endpoint) {
-        return res.status(400).json(badRequest('endpoint is required'));
-    }
+    const { endpoint } = req.body as { endpoint: string };
     
     // Delete from cache
     const deleted = pushSubscriptions.delete(endpoint);

@@ -891,6 +891,8 @@ export class UnifiedDatabase {
     constructor() {
         const poolConfig: PoolConfig = {
             connectionString: getConfig().databaseUrl,
+            max: 20,
+            min: 5,
             statement_timeout: 30000,
             idleTimeoutMillis: 30000,
             connectionTimeoutMillis: 10000

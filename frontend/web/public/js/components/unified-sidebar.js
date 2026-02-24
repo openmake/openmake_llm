@@ -493,8 +493,9 @@ UnifiedSidebar.prototype.loadConversations = function () {
 
     // 🆕 비로그인 사용자는 anonSessionId를 전달하여 자신의 대화만 조회
     var url = '/api/chat/sessions';
-    var authToken = localStorage.getItem('authToken');
-    if (!authToken) {
+    var _userStr = (window.SafeStorage ? window.SafeStorage.getItem('user') : localStorage.getItem('user'));
+    var _hasUser = !!(_userStr && _userStr !== '{}');
+    if (!_hasUser) {
         var anonSessionId = sessionStorage.getItem('anonSessionId');
         if (anonSessionId) {
             url += '?anonSessionId=' + encodeURIComponent(anonSessionId);

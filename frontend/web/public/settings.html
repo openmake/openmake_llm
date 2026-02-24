@@ -346,7 +346,8 @@
         function initAccountCard() {
             var accountCard = document.getElementById('accountCard');
             var adminLink = document.getElementById('adminLink');
-            var loggedIn = !!localStorage.getItem('authToken');
+            var savedUser = localStorage.getItem('user');
+            var loggedIn = !!savedUser && savedUser !== '{}' && savedUser !== 'null';
             if (loggedIn && accountCard) {
                 accountCard.style.display = '';
                 if (isAdmin() && adminLink) adminLink.style.display = '';

@@ -127,12 +127,10 @@ function isAdminUser() {
  * @returns {boolean}
  */
 function isAuthenticated() {
-    const authToken = SafeStorage.getItem('authToken');
-    // OAuth 로그인 시 httpOnly 쿠키만 있고 authToken은 없을 수 있음 -> user 객체 확인
     const user = SafeStorage.getItem('user');
     const isGuest = SafeStorage.getItem('guestMode') === 'true' ||
         SafeStorage.getItem('isGuest') === 'true';
-    return (!!authToken || !!user) && !isGuest;
+    return !!user && user !== '{}' && user !== 'null' && !isGuest;
 }
 
 /**

@@ -32,6 +32,7 @@ import {
     updateSkillSchema,
     searchSkillsQuerySchema,
 } from '../schemas/skills.schema';
+import { assignSkillSchema } from '../schemas/agents.schema';
 
 const logger = createLogger('SkillsRoutes');
 const router = Router();
@@ -129,7 +130,7 @@ router.get('/user-assigned', requireAuth, asyncHandler(async (req: Request, res:
  * POST /api/agents/skills/:skillId/user-assign
  * 개인 스킬 할당 (사용자 스코프)
  */
-router.post('/:skillId/user-assign', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+router.post('/:skillId/user-assign', requireAuth, validate(assignSkillSchema), asyncHandler(async (req: Request, res: Response) => {
     const { skillId } = req.params;
     const userId = (req.user && 'userId' in req.user ? (req.user as { userId: string }).userId : req.user?.id?.toString());
     if (!userId) {

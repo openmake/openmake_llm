@@ -66,7 +66,7 @@ async function trySilentRefresh() {
             const data = await resp.json();
             const newToken = data?.data?.token;
             if (data?.success === true && newToken) {
-                SafeStorage.setItem('authToken', newToken);
+                // authToken은 httpOnly 쿠키로 처리됩니다 — localStorage 저장 안함
                 setState('auth.authToken', newToken);
                 return true;
             }
@@ -97,10 +97,8 @@ async function fetchCurrentUser() {
  * @returns {Promise<void>} 세션 검증 완료까지 대기
  */
 async function initAuth() {
-    const authToken = SafeStorage.getItem('authToken');
     const isGuestMode = SafeStorage.getItem('guestMode') === 'true';
 
-    setState('auth.authToken', authToken);
     setState('auth.isGuestMode', isGuestMode);
 
     const savedUser = SafeStorage.getItem('user');
@@ -204,13 +202,6 @@ async function recoverSessionFromCookie() {
                 SafeStorage.removeItem('guestMode');
                 SafeStorage.removeItem('isGuest');
 
-                // 🔒 OAuth 세션 마커: httpOnly 쿠키 기반 인증 표시
-                // spa-router.js의 isAuthenticated()가 이 값을 확인하여 인증 상태 유지
-                if (!SafeStorage.getItem('authToken')) {
-                    SafeStorage.setItem('authToken', 'cookie-session');
-                    setState('auth.authToken', 'cookie-session');
-                }
-
                 setState('auth.currentUser', user);
                 setState('auth.isGuestMode', false);
 
@@ -224,7 +215,7 @@ async function recoverSessionFromCookie() {
                 console.log('[Auth Module] OAuth 쿠키 세션 복구 성공:', user.email);
 
                 // 🔒 Phase 3: 통합된 클레이밍 함수 사용
-                await claimAnonymousSession(getState('auth.authToken'));
+                await claimAnonymousSession(null);
             }
         }
     } catch (e) {
@@ -252,7 +243,7 @@ async function authFetch(url, options = {}) {
         ...(requestOptions.headers || {})
     };
 
-    if (authToken) {
+    if (authToken && authToken !== 'cookie-session') {
         headers['Authorization'] = `Bearer ${authToken}`;
     }
 
@@ -288,7 +279,7 @@ async function authFetch(url, options = {}) {
                     const newToken = refreshData?.data?.token;
 
                     if (refreshData?.success === true && newToken) {
-                        SafeStorage.setItem('authToken', newToken);
+                        // authToken은 httpOnly 쿠키로 처리됩니다 — localStorage 저장 안함
                         setState('auth.authToken', newToken);
                         return authFetch(url, { ...options, _retryAfterRefresh: true });
                     }
@@ -359,7 +350,7 @@ async function login(email, password) {
         const user = payload.user;
 
         if (response.ok && token) {
-            SafeStorage.setItem('authToken', token);
+            // authToken은 httpOnly 쿠키로 처리됩니다 — localStorage 저장 안함
             SafeStorage.setItem('user', JSON.stringify(user));
             SafeStorage.removeItem('guestMode');
 

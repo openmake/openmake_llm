@@ -28,8 +28,10 @@ import { createLogger } from '../utils/logger';
 import { success, badRequest, notFound, internalError, forbidden } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
 import { requireAuth } from '../auth';
+import { validate } from '../middlewares/validation';
 import { getUnifiedDatabase, getPool } from '../data/models/unified-database';
 import { v4 as uuidv4 } from 'uuid';
+import { createCanvasSchema, updateCanvasSchema } from '../schemas/canvas.schema';
 
 const logger = createLogger('CanvasRoutes');
 const router = Router();
@@ -45,7 +47,7 @@ const CANVAS_LIMITS: Record<string, number> = {
     enterprise: Infinity
 };
 
-router.post('/', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+router.post('/', requireAuth, validate(createCanvasSchema), asyncHandler(async (req: Request, res: Response) => {
     const { title, docType, content, language, sessionId } = req.body;
 
     if (!title) {
@@ -147,7 +149,7 @@ router.get('/:documentId', requireAuth, asyncHandler(async (req: Request, res: R
  * PUT /api/canvas/:documentId
  * 캔버스 문서 수정
  */
-router.put('/:documentId', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+router.put('/:documentId', requireAuth, validate(updateCanvasSchema), asyncHandler(async (req: Request, res: Response) => {
     const { documentId } = req.params;
     const { title, content, changeSummary } = req.body;
     const db = getUnifiedDatabase();

@@ -9,6 +9,7 @@
  * @module schemas/chat.schema
  */
 import { z } from 'zod';
+import { secureOptionalTextSchema, secureTextSchema } from './security.schema';
 
 /**
  * OpenAI 호환 tool_call 스키마 (히스토리 메시지 내 assistant의 tool_calls)
@@ -17,11 +18,11 @@ import { z } from 'zod';
  * @property {object} function - 호출할 함수 정보
  */
 const toolCallInMessageSchema = z.object({
-    id: z.string(),
+    id: secureTextSchema({ minLength: 1, maxLength: 200, fieldName: 'tool_call.id', allowNewLines: false, detectMaliciousPatterns: false }),
     type: z.literal('function'),
     function: z.object({
-        name: z.string(),
-        arguments: z.string(),
+        name: secureTextSchema({ minLength: 1, maxLength: 128, fieldName: 'tool_call.function.name', allowNewLines: false, detectMaliciousPatterns: false }),
+        arguments: secureTextSchema({ maxLength: 200000, fieldName: 'tool_call.function.arguments', allowHtmlLikeContent: true, detectMaliciousPatterns: false }),
     }),
 });
 
@@ -34,9 +35,9 @@ const toolCallInMessageSchema = z.object({
  */
 const chatMessageSchema = z.object({
     role: z.enum(['user', 'assistant', 'system', 'tool']),
-    content: z.string().or(z.null()).optional().default(''),
+    content: secureTextSchema({ maxLength: 100000, fieldName: 'content', allowHtmlLikeContent: true, detectMaliciousPatterns: false }).or(z.null()).optional().default(''),
     tool_calls: z.array(toolCallInMessageSchema).optional(),
-    tool_call_id: z.string().optional(),
+    tool_call_id: secureOptionalTextSchema({ maxLength: 200, fieldName: 'tool_call_id', allowNewLines: false, detectMaliciousPatterns: false }),
 });
 
 /**
@@ -58,8 +59,8 @@ const functionParametersSchema = z.object({
 const toolDefinitionSchema = z.object({
     type: z.literal('function'),
     function: z.object({
-        name: z.string().min(1).max(64),
-        description: z.string().optional(),
+        name: secureTextSchema({ minLength: 1, maxLength: 64, fieldName: 'function.name', allowNewLines: false, detectMaliciousPatterns: false }),
+        description: secureOptionalTextSchema({ maxLength: 5000, fieldName: 'function.description', allowHtmlLikeContent: true, detectMaliciousPatterns: false }),
         parameters: functionParametersSchema.optional(),
         strict: z.boolean().optional(),
     }),
@@ -77,7 +78,7 @@ const toolChoiceSchema = z.union([
     z.object({
         type: z.literal('function'),
         function: z.object({
-            name: z.string(),
+            name: secureTextSchema({ minLength: 1, maxLength: 64, fieldName: 'tool_choice.function.name', allowNewLines: false, detectMaliciousPatterns: false }),
         }),
     }),
 ]);
@@ -100,13 +101,13 @@ const toolChoiceSchema = z.union([
  * @property {string|object} [tool_choice] - 도구 호출 제어 ("auto"|"none"|"required"|{...})
  */
 export const chatRequestSchema = z.object({
-    message: z.string().min(1, '메시지를 입력하세요').max(100000),
+    message: secureTextSchema({ minLength: 1, maxLength: 100000, fieldName: 'message', allowHtmlLikeContent: true, detectMaliciousPatterns: false }),
     history: z.array(chatMessageSchema).optional(),
-    model: z.string().optional(),
-    nodeId: z.string().optional(),
-    sessionId: z.string().optional(),
-    anonSessionId: z.string().optional(),
-    docId: z.string().optional(),
+    model: secureOptionalTextSchema({ maxLength: 200, fieldName: 'model', allowNewLines: false, detectMaliciousPatterns: false }),
+    nodeId: secureOptionalTextSchema({ maxLength: 200, fieldName: 'nodeId', allowNewLines: false, detectMaliciousPatterns: false }),
+    sessionId: secureOptionalTextSchema({ maxLength: 500, fieldName: 'sessionId', allowNewLines: false, detectMaliciousPatterns: false }),
+    anonSessionId: secureOptionalTextSchema({ maxLength: 500, fieldName: 'anonSessionId', allowNewLines: false, detectMaliciousPatterns: false }),
+    docId: secureOptionalTextSchema({ maxLength: 500, fieldName: 'docId', allowNewLines: false, detectMaliciousPatterns: false }),
     images: z.array(z.string()).optional(),
     discussionMode: z.boolean().optional(),
     thinkingMode: z.boolean().optional(),

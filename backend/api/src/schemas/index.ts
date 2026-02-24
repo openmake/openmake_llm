@@ -15,3 +15,14 @@ export * from './agents.schema';
 export * from './canvas.schema';
 export * from './memory.schema';
 export * from './research.schema';
+
+export * from './marketplace.schema';
+export * from './external.schema';
+export * from './documents.schema';
+export * from './web-search.schema';
+export * from './push.schema';
+export * from './mcp.schema';
+export * from './nodes.schema';
+export * from './chat-feedback.schema';
+export * from './audit.schema';
+export * from './security.schema';

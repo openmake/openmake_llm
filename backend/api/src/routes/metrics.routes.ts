@@ -247,7 +247,7 @@ router.get('/cache/stats', asyncHandler(async (req: Request, res: Response) => {
  * POST /api/cache/clear
  * 캐시 초기화
  */
-router.post('/cache/clear', asyncHandler(async (req: Request, res: Response) => {
+router.post('/cache/clear', requireAdmin, asyncHandler(async (req: Request, res: Response) => {
     const cache = getCacheSystem();
     cache.clear();
     res.json(success({ message: '캐시가 초기화되었습니다.' }));

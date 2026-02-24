@@ -41,10 +41,15 @@ import { ClusterManager } from '../cluster/manager';
 import { getUnifiedMCPClient } from '../mcp';
 import { createLogger } from '../utils/logger';
 import { WSMessage, ExtendedWebSocket } from './ws-types';
-import { authenticateWebSocket } from './ws-auth';
+import { authenticateWebSocket, refreshWebSocketAuthentication } from './ws-auth';
 import { handleChatMessage } from './ws-chat-handler';
 
 const log = createLogger('WebSocketHandler');
+const WS_MAX_CONNECTIONS_PER_USER = 5;
+const WS_CONNECTION_RATE_WINDOW_MS = 60 * 1000;
+const WS_CONNECTION_RATE_MAX_PER_IP = 30;
+const WS_CONNECTION_RATE_MAX_PER_USER = 15;
+const WS_AUTH_EXPIRY_WARNING_WINDOW_MS = 2 * 60 * 1000;
 
 // 대화 DB는 ChatRequestHandler 내부에서 getConversationDB()로 접근합니다.
 
@@ -57,6 +62,9 @@ export class WebSocketHandler {
     private wss: WebSocketServer;
     private cluster: ClusterManager;
     private clients: Set<WebSocket> = new Set();
+    private userConnections: Map<string, Set<WebSocket>> = new Map();
+    private ipConnectionAttempts: Map<string, number[]> = new Map();
+    private userConnectionAttempts: Map<string, number[]> = new Map();
     /** 하트비트 인터벌 타이머 (30초 주기) */
     private heartbeatInterval: ReturnType<typeof setInterval> | null = null;
 
@@ -103,19 +111,58 @@ export class WebSocketHandler {
      */
     private setupConnection(): void {
         this.wss.on('connection', async (ws: WebSocket, req: IncomingMessage) => {
-            this.clients.add(ws);
-
             // WebSocket 연결 인증
             const auth = await authenticateWebSocket(req, log);
 
-            // WebSocket 인스턴스에 인증 정보 및 중단 컨트롤러 저장
             const extWs = ws as ExtendedWebSocket;
+            const clientIp = this.getClientIp(req);
+
+            if (this.isRateLimited(this.ipConnectionAttempts, clientIp, WS_CONNECTION_RATE_MAX_PER_IP)) {
+                ws.send(JSON.stringify({ type: 'error', message: '연결 요청이 너무 많습니다. 잠시 후 다시 시도해주세요.' }));
+                ws.close(1008, 'connection_rate_limited');
+                return;
+            }
+
+            if (auth.userId && this.isRateLimited(this.userConnectionAttempts, auth.userId, WS_CONNECTION_RATE_MAX_PER_USER)) {
+                ws.send(JSON.stringify({ type: 'error', message: '사용자 연결 요청 한도를 초과했습니다. 잠시 후 다시 시도해주세요.' }));
+                ws.close(1008, 'user_connection_rate_limited');
+                return;
+            }
+
+            if (auth.userId && this.getActiveConnectionsForUser(auth.userId) >= WS_MAX_CONNECTIONS_PER_USER) {
+                ws.send(JSON.stringify({ type: 'error', message: '동시 WebSocket 세션 한도를 초과했습니다. 기존 세션을 종료 후 다시 시도해주세요.' }));
+                ws.close(1008, 'connection_limit_exceeded');
+                return;
+            }
+
+            this.clients.add(ws);
+
+            // WebSocket 인스턴스에 인증 정보 및 중단 컨트롤러 저장
             extWs._authenticatedUserId = auth.userId;
             extWs._authenticatedUserRole = auth.userRole;
             extWs._authenticatedUserTier = auth.userTier;
             extWs._abortController = null;
             // 🔒 Phase 2: heartbeat alive 플래그 초기화
             extWs._isAlive = true;
+            extWs._authTokenExpiresAtMs = auth.tokenExpiresAtMs;
+            extWs._authTokenIssuedAtMs = auth.tokenIssuedAtMs;
+            extWs._authTokenJti = auth.tokenJti;
+            extWs._authTokenFingerprint = auth.tokenFingerprint;
+            extWs._authMethod = auth.authMethod;
+            extWs._clientIp = clientIp;
+            extWs._connectedAtMs = Date.now();
+            extWs._lastActivityAtMs = Date.now();
+            extWs._messageCount = 0;
+            extWs._lastExpiryWarningAtMs = 0;
+
+            this.registerUserConnection(extWs);
+
+            if (this.isTokenExpired(extWs)) {
+                ws.send(JSON.stringify({ type: 'error', message: '인증 토큰이 만료되었습니다. 다시 로그인해주세요.' }));
+                this.unregisterConnection(ws);
+                ws.close(1008, 'token_expired');
+                return;
+            }
 
             // 초기 상태 전송
             ws.send(JSON.stringify({
@@ -133,7 +180,7 @@ export class WebSocketHandler {
             ws.send(JSON.stringify({ type: 'stats', stats }));
 
             ws.on('close', () => {
-                this.clients.delete(ws);
+                this.unregisterConnection(ws);
                 // 🔒 Phase 2 보안 패치: 연결 종료 시 진행 중인 AI 생성 중단
                 // GPU/CPU 리소스 해제 및 불필요한 토큰 생성 방지
                 if (extWs._abortController) {
@@ -146,10 +193,15 @@ export class WebSocketHandler {
             // 🔒 Phase 2: pong 수신 시 alive 플래그 갱신
             ws.on('pong', () => {
                 extWs._isAlive = true;
+                this.touchActivity(extWs);
             });
 
             ws.on('message', async (data) => {
                 try {
+                    if (!this.validateSessionOnMessage(ws)) {
+                        return;
+                    }
+
                     const raw = data.toString();
                     if (raw.length > 1024 * 1024) {
                         ws.send(JSON.stringify({ type: 'error', message: '메시지가 너무 큽니다' }));
@@ -165,6 +217,8 @@ export class WebSocketHandler {
                     }
 
                     log.debug(`[WS] 메시지 수신: type=${msg.type}`);
+                    this.touchActivity(extWs);
+                    extWs._messageCount = (extWs._messageCount || 0) + 1;
                     await this.handleMessage(ws, msg);
                 } catch (e: unknown) {
                     log.error('[WS] 메시지 처리 오류:', (e instanceof Error ? e.message : String(e)) || e);
@@ -194,6 +248,7 @@ export class WebSocketHandler {
 
         switch (typedMsg.type) {
             case 'refresh':
+                await this.handleRefresh(ws, typedMsg);
                 ws.send(JSON.stringify({
                     type: 'update',
                     data: {
@@ -270,6 +325,39 @@ export class WebSocketHandler {
         }
     }
 
+    private async handleRefresh(ws: WebSocket, msg: WSMessage): Promise<void> {
+        const extWs = ws as ExtendedWebSocket;
+        const refreshToken = typeof msg.authToken === 'string' ? msg.authToken : null;
+        if (!refreshToken) {
+            return;
+        }
+
+        const refreshed = await refreshWebSocketAuthentication(refreshToken, log);
+        if (!refreshed.userId) {
+            ws.send(JSON.stringify({ type: 'error', message: '인증 갱신에 실패했습니다. 다시 로그인해주세요.' }));
+            this.unregisterConnection(ws);
+            ws.close(1008, 'refresh_auth_failed');
+            return;
+        }
+
+        if (extWs._authenticatedUserId && extWs._authenticatedUserId !== refreshed.userId) {
+            ws.send(JSON.stringify({ type: 'error', message: '다른 사용자 토큰으로 세션 갱신은 허용되지 않습니다.' }));
+            this.unregisterConnection(ws);
+            ws.close(1008, 'user_mismatch');
+            return;
+        }
+
+        extWs._authenticatedUserId = refreshed.userId;
+        extWs._authenticatedUserRole = refreshed.userRole;
+        extWs._authenticatedUserTier = refreshed.userTier;
+        extWs._authTokenExpiresAtMs = refreshed.tokenExpiresAtMs;
+        extWs._authTokenIssuedAtMs = refreshed.tokenIssuedAtMs;
+        extWs._authTokenJti = refreshed.tokenJti;
+        extWs._authTokenFingerprint = refreshed.tokenFingerprint;
+        extWs._authMethod = refreshed.authMethod;
+        this.touchActivity(extWs);
+    }
+
     /**
      * 채팅 중단 처리
      */
@@ -309,7 +397,7 @@ export class WebSocketHandler {
 
             for (const ws of this.clients) {
                 const extWs = ws as ExtendedWebSocket;
-                if (!extWs._isAlive) {
+                if (!extWs._isAlive || this.isTokenExpired(extWs)) {
                     deadConnections.push(ws);
                 } else if (ws.readyState === WebSocket.OPEN) {
                     extWs._isAlive = false;
@@ -326,10 +414,104 @@ export class WebSocketHandler {
                     extWs._abortController.abort();
                     extWs._abortController = null;
                 }
-                this.clients.delete(ws);
+                this.unregisterConnection(ws);
                 ws.terminate();
             }
         }, 30000); // 30초 주기
+    }
+
+    private getClientIp(req: IncomingMessage): string {
+        const xForwardedFor = req.headers['x-forwarded-for'];
+        if (typeof xForwardedFor === 'string' && xForwardedFor.length > 0) {
+            return xForwardedFor.split(',')[0].trim();
+        }
+        if (Array.isArray(xForwardedFor) && xForwardedFor.length > 0) {
+            return xForwardedFor[0];
+        }
+        return req.socket?.remoteAddress || 'unknown';
+    }
+
+    private cleanupOldAttempts(map: Map<string, number[]>, key: string): number[] {
+        const now = Date.now();
+        const attempts = map.get(key) || [];
+        const filtered = attempts.filter(ts => now - ts <= WS_CONNECTION_RATE_WINDOW_MS);
+        map.set(key, filtered);
+        return filtered;
+    }
+
+    private isRateLimited(map: Map<string, number[]>, key: string, maxAttempts: number): boolean {
+        const attempts = this.cleanupOldAttempts(map, key);
+        attempts.push(Date.now());
+        map.set(key, attempts);
+        return attempts.length > maxAttempts;
+    }
+
+    private getActiveConnectionsForUser(userId: string): number {
+        const connections = this.userConnections.get(userId);
+        return connections ? connections.size : 0;
+    }
+
+    private registerUserConnection(extWs: ExtendedWebSocket): void {
+        const userId = extWs._authenticatedUserId;
+        if (!userId) {
+            return;
+        }
+        const existing = this.userConnections.get(userId) || new Set<WebSocket>();
+        existing.add(extWs);
+        this.userConnections.set(userId, existing);
+    }
+
+    private unregisterConnection(ws: WebSocket): void {
+        this.clients.delete(ws);
+        const extWs = ws as ExtendedWebSocket;
+        const userId = extWs._authenticatedUserId;
+        if (!userId) {
+            return;
+        }
+        const existing = this.userConnections.get(userId);
+        if (!existing) {
+            return;
+        }
+        existing.delete(ws);
+        if (existing.size === 0) {
+            this.userConnections.delete(userId);
+        }
+    }
+
+    private touchActivity(extWs: ExtendedWebSocket): void {
+        extWs._lastActivityAtMs = Date.now();
+    }
+
+    private isTokenExpired(extWs: ExtendedWebSocket): boolean {
+        if (!extWs._authTokenExpiresAtMs) {
+            return false;
+        }
+        return extWs._authTokenExpiresAtMs <= Date.now();
+    }
+
+    private validateSessionOnMessage(ws: WebSocket): boolean {
+        const extWs = ws as ExtendedWebSocket;
+
+        if (this.isTokenExpired(extWs)) {
+            ws.send(JSON.stringify({ type: 'error', message: '인증 토큰이 만료되었습니다. 다시 로그인해주세요.' }));
+            this.unregisterConnection(ws);
+            ws.close(1008, 'token_expired');
+            return false;
+        }
+
+        if (extWs._authTokenExpiresAtMs) {
+            const now = Date.now();
+            const remainingMs = extWs._authTokenExpiresAtMs - now;
+            if (remainingMs > 0 && remainingMs <= WS_AUTH_EXPIRY_WARNING_WINDOW_MS) {
+                const warnedAt = extWs._lastExpiryWarningAtMs || 0;
+                if (now - warnedAt > 60 * 1000) {
+                    ws.send(JSON.stringify({ type: 'error', message: '인증 토큰이 곧 만료됩니다. refresh 메시지로 토큰을 갱신하세요.' }));
+                    extWs._lastExpiryWarningAtMs = now;
+                }
+            }
+        }
+
+        return true;
     }
 
     /**

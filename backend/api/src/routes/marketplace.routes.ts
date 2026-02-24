@@ -31,12 +31,12 @@ import { requireAuth, requireAdmin, optionalAuth } from '../auth';
 import { getUnifiedDatabase } from '../data/models/unified-database';
 import { asyncHandler } from '../utils/error-handler';
 import { v4 as uuidv4 } from 'uuid';
+import { validate } from '../middlewares/validation';
+import { createMarketplaceListingSchema, createReviewSchema, marketplaceStatusUpdateSchema } from '../schemas/marketplace.schema';
 
 const logger = createLogger('MarketplaceRoutes');
 const router = Router();
 
-type MarketplaceStatus = 'pending' | 'approved' | 'rejected' | 'suspended';
-const VALID_STATUSES: MarketplaceStatus[] = ['pending', 'approved', 'rejected', 'suspended'];
 const VALID_SORT_BY = ['downloads', 'rating', 'newest'] as const;
 
 // ─── Public / Optional Auth ──────────────────────────────────────────────────
@@ -74,12 +74,8 @@ router.get('/me/installed', requireAuth, asyncHandler(async (req: Request, res: 
 }));
 
 // POST / — Publish agent to marketplace
-router.post('/', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+router.post('/', requireAuth, validate(createMarketplaceListingSchema), asyncHandler(async (req: Request, res: Response) => {
   const { agentId, title, description, longDescription, category, tags, icon, price } = req.body;
-
-  if (!agentId || !title) {
-    return res.status(400).json(badRequest('agentId and title are required'));
-  }
 
   // 에이전트 소유권 확인
   const { getPool } = await import('../data/models/unified-database');
@@ -152,25 +148,16 @@ router.delete('/:marketplaceId/install', requireAuth, asyncHandler(async (req: R
 }));
 
 // POST /:marketplaceId/reviews — Add review
-router.post('/:marketplaceId/reviews', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+router.post('/:marketplaceId/reviews', requireAuth, validate(createReviewSchema), asyncHandler(async (req: Request, res: Response) => {
   const { marketplaceId } = req.params;
   const { rating, title, content } = req.body;
-
-  if (rating === undefined || rating === null) {
-    return res.status(400).json(badRequest('rating is required'));
-  }
-
-  const numRating = Number(rating);
-  if (!Number.isInteger(numRating) || numRating < 1 || numRating > 5) {
-    return res.status(400).json(badRequest('rating must be an integer between 1 and 5'));
-  }
 
   const db = getUnifiedDatabase();
   const result = await db.addAgentReview({
     id: uuidv4(),
     marketplaceId,
     userId: String(req.user!.id),
-    rating: numRating,
+    rating,
     title,
     content,
   });
@@ -180,16 +167,12 @@ router.post('/:marketplaceId/reviews', requireAuth, asyncHandler(async (req: Req
 // ─── Admin ───────────────────────────────────────────────────────────────────
 
 // PUT /:marketplaceId/status — Update marketplace status (approve/reject/suspend)
-router.put('/:marketplaceId/status', requireAdmin, asyncHandler(async (req: Request, res: Response) => {
+router.put('/:marketplaceId/status', requireAdmin, validate(marketplaceStatusUpdateSchema), asyncHandler(async (req: Request, res: Response) => {
   const { marketplaceId } = req.params;
   const { status } = req.body;
 
-  if (!status || !VALID_STATUSES.includes(status as MarketplaceStatus)) {
-    return res.status(400).json(badRequest(`Invalid status. Must be one of: ${VALID_STATUSES.join(', ')}`));
-  }
-
   const db = getUnifiedDatabase();
-  const result = await db.updateMarketplaceStatus(marketplaceId, status as MarketplaceStatus);
+  const result = await db.updateMarketplaceStatus(marketplaceId, status);
   res.json(success(result));
 }));
 

@@ -52,7 +52,7 @@ router.get('/summary', asyncHandler(async (req: Request, res: Response) => {
  * POST /api/agents/reset
  * 에이전트 메트릭 초기화
  */
-router.post('/reset', asyncHandler(async (req: Request, res: Response) => {
+router.post('/reset', requireAdmin, asyncHandler(async (req: Request, res: Response) => {
     const monitor = getAgentMonitor();
     monitor.reset();
     res.json(success({ message: '에이전트 메트릭 초기화 완료' }));

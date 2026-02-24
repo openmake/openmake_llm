@@ -188,10 +188,9 @@ function initMobileSidebar() {
  * @returns {void}
  */
 function filterRestrictedMenus() {
-    const authToken = SafeStorage.getItem('authToken');
     const currentUser = getCurrentUser();
     const isGuest = SafeStorage.getItem('guestMode') === 'true' || SafeStorage.getItem('isGuest') === 'true';
-    const isAuthenticated = (authToken || currentUser) && !isGuest;
+    const isAuthenticated = !!currentUser && !isGuest;
 
     // data-require-auth="true" 속성이 있는 메뉴 항목 숨기기
     document.querySelectorAll('[data-require-auth="true"]').forEach(el => {

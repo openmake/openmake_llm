@@ -39,7 +39,7 @@
                 const SS = window.SafeStorage || { getItem: function (k) { try { return localStorage.getItem(k); } catch (e) { return null; } }, setItem: function (k, v) { try { localStorage.setItem(k, v); } catch (e) { } }, removeItem: function (k) { try { localStorage.removeItem(k); } catch (e) { } } };
 
                 // 로그인 확인 (OAuth 쿠키 세션 포함)
-                if (!SS.getItem('authToken') && !SS.getItem('user')) {
+                if (!SS.getItem('user')) {
                     (typeof showToast === 'function' ? showToast('로그인이 필요합니다.', 'warning') : console.warn('로그인이 필요합니다.'));
                     (typeof Router !== 'undefined' && Router.navigate('/'));
                 }

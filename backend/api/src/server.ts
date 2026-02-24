@@ -29,6 +29,7 @@ import { WebSocketServer } from 'ws';
 import { ClusterManager, getClusterManager } from './cluster/manager';
 import { startSessionCleanupScheduler, getConversationDB } from './data/conversation-db';
 import { startDbRetention } from './data/db-retention';
+import { startPeriodicCleanup } from './utils/token-cleanup';
 import { setActiveConnectionsGetter as setMetricsConnections } from './routes/metrics.routes';
 import { WebSocketHandler } from './sockets/handler';
 import { getAnalyticsSystem } from './monitoring/analytics';
@@ -182,6 +183,9 @@ export class DashboardServer {
 
         // DB 데이터 보존 정리 스케줄러 시작 (만료 문서, 토큰, OAuth state 정리)
         startDbRetention();
+
+        // 토큰 블랙리스트/레이트리밋 만료 데이터 주기 정리 스케줄러 시작
+        startPeriodicCleanup();
 
         return new Promise((resolve, reject) => {
             // HTTP 서버 오류 핸들러
