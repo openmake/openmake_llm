@@ -22,7 +22,7 @@
 
 import { Router, Request, Response } from 'express';
 import { createLogger } from '../utils/logger';
-import { success, notFound, forbidden } from '../utils/api-response';
+import { success, notFound, forbidden, unauthorized } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
 import { getSkillManager } from '../agents/skill-manager';
 import { requireAuth } from '../auth';
@@ -119,7 +119,7 @@ router.post('/', requireAuth, validate(createSkillSchema), asyncHandler(async (r
 router.get('/user-assigned', requireAuth, asyncHandler(async (req: Request, res: Response) => {
     const userId = (req.user && 'userId' in req.user ? (req.user as { userId: string }).userId : req.user?.id?.toString());
     if (!userId) {
-        res.status(401).json({ success: false, error: { code: 'UNAUTHORIZED', message: '인증 필요' } });
+        res.status(401).json(unauthorized('인증 필요'));
         return;
     }
     const skills = await getSkillManager().getUserSkills(userId);
@@ -134,7 +134,7 @@ router.post('/:skillId/user-assign', requireAuth, validate(assignSkillSchema), a
     const { skillId } = req.params;
     const userId = (req.user && 'userId' in req.user ? (req.user as { userId: string }).userId : req.user?.id?.toString());
     if (!userId) {
-        res.status(401).json({ success: false, error: { code: 'UNAUTHORIZED', message: '인증 필요' } });
+        res.status(401).json(unauthorized('인증 필요'));
         return;
     }
 
@@ -158,7 +158,7 @@ router.delete('/:skillId/user-assign', requireAuth, asyncHandler(async (req: Req
     const { skillId } = req.params;
     const userId = (req.user && 'userId' in req.user ? (req.user as { userId: string }).userId : req.user?.id?.toString());
     if (!userId) {
-        res.status(401).json({ success: false, error: { code: 'UNAUTHORIZED', message: '인증 필요' } });
+        res.status(401).json(unauthorized('인증 필요'));
         return;
     }
 

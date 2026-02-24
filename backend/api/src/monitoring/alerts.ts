@@ -54,7 +54,7 @@ interface AlertMessage {
     /** 알림 상세 메시지 */
     message: string;
     /** 추가 데이터 (키ID, 사용률 등) */
-    data?: Record<string, any>;
+    data?: Record<string, unknown>;
     /** 알림 발생 시점 */
     timestamp: Date;
 }
@@ -188,7 +188,7 @@ export class AlertSystem {
         severity: AlertSeverity,
         title: string,
         message: string,
-        data?: Record<string, any>
+        data?: Record<string, unknown>
     ): Promise<void> {
         if (!this.config.enabled) return;
 

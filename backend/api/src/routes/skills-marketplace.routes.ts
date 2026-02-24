@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { createLogger } from '../utils/logger';
-import { success, badRequest, internalError } from '../utils/api-response';
+import { success, internalError, serviceUnavailable } from '../utils/api-response';
 import { requireAuth } from '../auth';
 import { asyncHandler } from '../utils/error-handler';
 import { validateQuery, validate } from '../middlewares/validation';
@@ -22,7 +22,7 @@ const router = Router();
 router.get('/search',
     requireAuth,
     validateQuery(searchMarketplaceQuerySchema),
-    async (req: Request, res: Response) => {
+    asyncHandler(async (req: Request, res: Response) => {
         const { query, category, sort, limit, offset } = req.query as {
             query?: string;
             category?: string;
@@ -43,19 +43,13 @@ router.get('/search',
             res.json(success(result));
         } catch (error) {
             if (error instanceof Error && error.message === 'GITHUB_TOKEN_NOT_CONFIGURED') {
-                res.status(503).json({
-                    success: false,
-                    error: {
-                        code: 'GITHUB_TOKEN_NOT_CONFIGURED',
-                        message: 'GitHub 연동이 설정되지 않았습니다. 관리자에게 GITHUB_TOKEN 환경변수 설정을 요청하세요.'
-                    }
-                });
+                res.status(503).json(serviceUnavailable('GitHub 연동이 설정되지 않았습니다. 관리자에게 GITHUB_TOKEN 환경변수 설정을 요청하세요.'));
                 return;
             }
             logger.error('Skills marketplace search failed:', error);
             res.status(500).json(internalError('스킬 검색에 실패했습니다.'));
         }
-    }
+    })
 );
 
 /**

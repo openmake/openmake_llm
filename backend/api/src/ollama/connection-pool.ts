@@ -290,6 +290,10 @@ export class ConnectionPool {
         this.healthCheckTimer = setInterval(() => {
             this.performHealthCheck();
         }, this.config.healthCheckInterval);
+        // unref() - 타이머가 프로세스 종료를 막지 않도록 설정
+        if (this.healthCheckTimer && typeof this.healthCheckTimer === 'object' && 'unref' in this.healthCheckTimer) {
+            (this.healthCheckTimer as NodeJS.Timeout).unref();
+        }
     }
 
     /**

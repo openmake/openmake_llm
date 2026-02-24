@@ -644,6 +644,20 @@ CREATE INDEX IF NOT EXISTS idx_research_user_created ON research_sessions(user_i
 CREATE INDEX IF NOT EXISTS idx_research_steps_session_number ON research_steps(session_id, step_number);
 CREATE INDEX IF NOT EXISTS idx_connections_user_service ON external_connections(user_id, service_type);
 
+-- Phase 3-DBA: Additional index coverage for tables missing indexes
+-- custom_agents: queried by created_by (marketplace ownership check)
+CREATE INDEX IF NOT EXISTS idx_custom_agents_created_by ON custom_agents(created_by);
+CREATE INDEX IF NOT EXISTS idx_custom_agents_enabled ON custom_agents(enabled);
+
+-- push_subscriptions_store: queried by user_id for subscription lookup
+CREATE INDEX IF NOT EXISTS idx_push_subs_user_id ON push_subscriptions_store(user_id);
+
+-- alert_history: queried by type, severity, and created_at for dashboard filtering
+CREATE INDEX IF NOT EXISTS idx_alert_history_type ON alert_history(type);
+CREATE INDEX IF NOT EXISTS idx_alert_history_severity ON alert_history(severity);
+CREATE INDEX IF NOT EXISTS idx_alert_history_created ON alert_history(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_alert_history_ack ON alert_history(acknowledged);
+
 -- ============================================
 -- 🎯 Agent Skills 시스템 테이블
 -- ============================================
@@ -783,19 +797,7 @@ BEGIN
     END IF;
 END $$;
 
--- [D1] vector_embeddings: unified-database.ts와 동기화 (pgvector 기반 의미 검색 구현 시 활성화)
+-- [D1 NO-OP] vector_embeddings는 상단 pgvector-aware DO 블록(307-343)에서 이미 처리됨
 DO $$ BEGIN
-    IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'vector_embeddings') THEN
-        CREATE TABLE vector_embeddings (
-            id TEXT PRIMARY KEY,
-            source_type TEXT,
-            source_id TEXT,
-            content TEXT,
-            embedding TEXT,
-            created_at TIMESTAMPTZ DEFAULT NOW()
-        );
-        RAISE NOTICE '[schema] vector_embeddings 테이블 생성 완료';
-    ELSE
-        RAISE NOTICE '[schema] vector_embeddings 테이블 이미 존재 — 건너맸';
-    END IF;
+    RAISE NOTICE '[schema] D1 vector_embeddings block skipped (already managed by pgvector-aware initializer)';
 END $$;

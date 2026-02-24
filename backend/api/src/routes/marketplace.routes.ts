@@ -77,18 +77,14 @@ router.get('/me/installed', requireAuth, asyncHandler(async (req: Request, res: 
 router.post('/', requireAuth, validate(createMarketplaceListingSchema), asyncHandler(async (req: Request, res: Response) => {
   const { agentId, title, description, longDescription, category, tags, icon, price } = req.body;
 
+  const db = getUnifiedDatabase();
+
   // 에이전트 소유권 확인
-  const { getPool } = await import('../data/models/unified-database');
-  const pool = getPool();
-  const agentCheck = await pool.query(
-      'SELECT created_by FROM custom_agents WHERE id = $1',
-      [agentId]
-  );
-  if (agentCheck.rows.length > 0 && String(agentCheck.rows[0].created_by) !== String(req.user!.id) && req.user!.role !== 'admin') {
+  const createdBy = await db.getCustomAgentCreator(agentId);
+  if (createdBy !== null && String(createdBy) !== String(req.user!.id) && req.user!.role !== 'admin') {
       return res.status(403).json(forbidden('자신의 에이전트만 마켓플레이스에 등록할 수 있습니다'));
   }
 
-  const db = getUnifiedDatabase();
   const result = await db.publishToMarketplace({
     id: uuidv4(),
     agentId,

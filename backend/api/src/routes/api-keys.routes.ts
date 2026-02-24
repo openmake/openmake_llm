@@ -32,7 +32,7 @@ import { z } from 'zod';
 import { requireAuth } from '../auth';
 import { validate } from '../middlewares/validation';
 import { asyncHandler } from '../utils/error-handler';
-import { success, notFound, badRequest, forbidden } from '../utils/api-response';
+import { success, notFound, badRequest, forbidden, unauthorized, rateLimited } from '../utils/api-response';
 import { getApiKeyService, ApiKeyError } from '../services/ApiKeyService';
 import type { ApiKeyTier } from '../data/models/unified-database';
 
@@ -107,7 +107,7 @@ router.post('/',
     asyncHandler(async (req: Request, res: Response) => {
         const userId = getUserId(req);
         if (!userId) {
-            res.status(401).json(forbidden('User ID not found.'));
+            res.status(401).json(unauthorized('User ID not found.'));
             return;
         }
 
@@ -155,7 +155,7 @@ router.post('/',
             }));
         } catch (err) {
             if (err instanceof ApiKeyError && err.code === 'KEY_LIMIT_EXCEEDED') {
-                res.status(429).json(badRequest(err.message));
+                res.status(429).json(rateLimited(err.message));
                 return;
             }
             throw err;
@@ -171,7 +171,7 @@ router.get('/',
     asyncHandler(async (req: Request, res: Response) => {
         const userId = getUserId(req);
         if (!userId) {
-            res.status(401).json(forbidden('User ID not found.'));
+            res.status(401).json(unauthorized('User ID not found.'));
             return;
         }
 
@@ -194,7 +194,7 @@ router.get('/:id',
     asyncHandler(async (req: Request, res: Response) => {
         const userId = getUserId(req);
         if (!userId) {
-            res.status(401).json(forbidden('User ID not found.'));
+            res.status(401).json(unauthorized('User ID not found.'));
             return;
         }
 
@@ -219,7 +219,7 @@ router.patch('/:id',
     asyncHandler(async (req: Request, res: Response) => {
         const userId = getUserId(req);
         if (!userId) {
-            res.status(401).json(forbidden('User ID not found.'));
+            res.status(401).json(unauthorized('User ID not found.'));
             return;
         }
 
@@ -251,7 +251,7 @@ router.delete('/:id',
     asyncHandler(async (req: Request, res: Response) => {
         const userId = getUserId(req);
         if (!userId) {
-            res.status(401).json(forbidden('User ID not found.'));
+            res.status(401).json(unauthorized('User ID not found.'));
             return;
         }
 
@@ -275,7 +275,7 @@ router.post('/:id/rotate',
     asyncHandler(async (req: Request, res: Response) => {
         const userId = getUserId(req);
         if (!userId) {
-            res.status(401).json(forbidden('User ID not found.'));
+            res.status(401).json(unauthorized('User ID not found.'));
             return;
         }
 
@@ -312,7 +312,7 @@ router.get('/:id/usage',
     asyncHandler(async (req: Request, res: Response) => {
         const userId = getUserId(req);
         if (!userId) {
-            res.status(401).json(forbidden('User ID not found.'));
+            res.status(401).json(unauthorized('User ID not found.'));
             return;
         }
 

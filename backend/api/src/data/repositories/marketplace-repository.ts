@@ -12,6 +12,15 @@ import { BaseRepository, QueryParam } from './base-repository';
 import type { AgentReview, MarketplaceAgent, MarketplaceStatus } from '../models/unified-database';
 
 export class MarketplaceRepository extends BaseRepository {
+    async getCustomAgentCreator(agentId: string): Promise<string | null> {
+        const result = await this.query<{ created_by: string }>(
+            'SELECT created_by FROM custom_agents WHERE id = $1',
+            [agentId]
+        );
+
+        return result.rows[0]?.created_by ?? null;
+    }
+
     async publishToMarketplace(params: {
         id: string;
         agentId: string;

@@ -97,7 +97,7 @@
                     <h3>${esc(m.key)}</h3>
                     <div class="val-preview">${esc(m.value)}</div>
                     <div class="mem-meta">
-                        <span class="badge badge-${m.category}">${CAT_LABELS[m.category] || m.category}</span>
+                        <span class="badge badge-${m.category}">${CAT_LABELS[m.category] || esc(m.category)}</span>
                         <span class="importance-bar"><span class="importance-fill" style="width:${imp*10}%;background:${impColor(imp)}"></span></span>
                         <span style="color:var(--text-muted)">${imp}/10</span>
                     </div>

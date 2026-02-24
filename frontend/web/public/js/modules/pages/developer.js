@@ -102,10 +102,10 @@
                 '.dev-section p { margin-bottom: var(--space-4); line-height: 1.6; color: var(--text-secondary); }' +
                 
                 '.endpoint-badge { display: inline-block; padding: 2px 8px; border-radius: var(--radius-sm); font-size: var(--font-size-xs); font-weight: bold; margin-right: var(--space-2); text-transform: uppercase; letter-spacing: 0.5px; }' +
-                '.badge-get { background: var(--bg-tertiary); color: #22c55e; border: 2px solid #22c55e; }' +
-                '.badge-post { background: var(--bg-tertiary); color: #3b82f6; border: 2px solid #3b82f6; }' +
-                '.badge-put, .badge-patch { background: var(--bg-tertiary); color: #f59e0b; border: 2px solid #f59e0b; }' +
-                '.badge-delete { background: var(--bg-tertiary); color: #ef4444; border: 2px solid #ef4444; }' +
+                '.badge-get { background: var(--bg-tertiary); color: var(--success); border: 2px solid var(--success); }' +
+                '.badge-post { background: var(--bg-tertiary); color: var(--info); border: 2px solid var(--info); }' +
+                '.badge-put, .badge-patch { background: var(--bg-tertiary); color: var(--warning); border: 2px solid var(--warning); }' +
+                '.badge-delete { background: var(--bg-tertiary); color: var(--danger); border: 2px solid var(--danger); }' +
                 
                 '.code-group { border: 1px solid var(--border-light); border-radius: var(--radius-lg); overflow: hidden; margin: var(--space-6) 0; background: #1e1e1e; box-shadow: var(--shadow-md); }' +
                 '.code-tabs { display: flex; background: #252526; border-bottom: 1px solid #333; }' +
@@ -232,7 +232,7 @@
                 '<tr><td><span class="param-name">openmake_llm_auto</span></td><td>Auto (per routed model)</td><td>Auto</td><td>Auto</td><td>Auto</td><td>Auto</td><td>Auto</td></tr>' +
                 '</tbody></table>' +
 
-                '<div class="alert-info" style="margin-top: 1rem; padding: 0.75rem 1rem; border-left: 3px solid #3b82f6; background: var(--bg-tertiary); border-radius: 4px;">' +
+                '<div class="alert-info" style="margin-top: 1rem; padding: 0.75rem 1rem; border-left: 3px solid var(--info); background: var(--bg-tertiary); border-radius: 4px;">' +
                 '<strong>Note:</strong> Internal engine models are abstracted behind these aliases. ' +
                 'The actual engine may change without notice as we optimize quality and performance. ' +
                 'Always reference models by their <code>openmake_llm_*</code> alias.</div>' +

@@ -23,5 +23,8 @@ module.exports = {
     },
     setupFilesAfterEnv: [],
     testTimeout: 10000,
-    verbose: true
+    verbose: true,
+    // Worker 메모리 제한 + 강제 종료 — worker leak 경고 해소
+    workerIdleMemoryLimit: '512MB',
+    forceExit: true
 };

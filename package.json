@@ -21,7 +21,8 @@
         "test:e2e": "npx playwright test",
         "test:e2e:ui": "npx playwright test --ui",
         "lint": "eslint . --ext .ts,.tsx,.js,.jsx",
-        "clean": "rm -rf */dist **/dist"
+        "clean": "rm -rf */dist **/dist",
+        "check:schema-drift": "bash scripts/check-schema-drift.sh"
     },
     "keywords": [
         "ai",

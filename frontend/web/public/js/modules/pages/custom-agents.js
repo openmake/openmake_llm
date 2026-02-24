@@ -85,7 +85,7 @@
                     <h3>${esc(a.name)}</h3>
                     <div class="desc">${esc(a.description)}</div>
                     <div class="agent-meta">
-                        <span class="badge badge-cat">${CAT_LABELS[a.category] || a.category || '일반'}</span>
+                        <span class="badge badge-cat">${CAT_LABELS[a.category] || esc(a.category) || '일반'}</span>
                         <span class="badge ${a.enabled !== false ? 'badge-on' : 'badge-off'}">${a.enabled !== false ? '활성' : '비활성'}</span>
                         <span class="temp-label">온도 ${a.temperature != null ? a.temperature : '0.7'}</span>
                     </div>

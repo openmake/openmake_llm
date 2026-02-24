@@ -310,7 +310,7 @@ class MetricsCollector extends EventEmitter {
      *
      * @returns 전체 메트릭 덤프 객체
      */
-    getAllMetrics(): Record<string, any> {
+    getAllMetrics(): Record<string, unknown> {
         return {
             counters: Object.fromEntries(this.counters),
             gauges: Object.fromEntries(this.gauges),

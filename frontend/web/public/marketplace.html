@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="ko" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover">
+    <title>마켓플레이스 - OpenMake.Ai</title>
+    <link rel="icon" type="image/png" href="/logo.png">
+    <link rel="preconnect" href="https://cdn.jsdelivr.net">
+    <link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="/css/design-tokens.css">
+    <link rel="stylesheet" href="/css/components.css">
+    <link rel="stylesheet" href="/css/layout.css">
+    <style>
+        .search-toolbar { display:flex; gap:var(--space-3); align-items:center; flex-wrap:wrap; margin-bottom:var(--space-5); }
+        .search-toolbar input { flex:1; min-width:200px; padding:var(--space-3); background:var(--bg-secondary); border:1px solid var(--border-light); border-radius:var(--radius-md); color:var(--text-primary); box-sizing:border-box; }
+        .search-toolbar select { padding:var(--space-3); background:var(--bg-secondary); border:1px solid var(--border-light); border-radius:var(--radius-md); color:var(--text-primary); }
+        .agent-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:var(--space-4); }
+        .agent-card { background:var(--bg-card); border:1px solid var(--border-light); border-radius:var(--radius-lg); padding:var(--space-5); cursor:pointer; transition:border-color .2s; }
+        .agent-card:hover { border-color:var(--accent-primary); }
+        .agent-card .card-header { display:flex; align-items:center; gap:var(--space-3); margin-bottom:var(--space-3); }
+        .agent-card .card-icon { font-size:2rem; }
+        .agent-card .card-title { font-size:1rem; font-weight:var(--font-weight-semibold); color:var(--text-primary); }
+        .agent-card .card-desc { font-size:var(--font-size-sm); color:var(--text-muted); margin-bottom:var(--space-3); display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
+        .agent-card .card-meta { display:flex; gap:var(--space-3); align-items:center; font-size:var(--font-size-sm); color:var(--text-muted); }
+        .badge-category { display:inline-block; padding:2px 8px; border-radius:var(--radius-md); font-size:11px; font-weight:var(--font-weight-semibold); background:var(--bg-tertiary); color:var(--text-secondary); }
+        .badge-featured { background:var(--warning); color:#000; }
+        .empty-state { text-align:center; padding:var(--space-8); color:var(--text-muted); }
+        .empty-state h2 { color:var(--text-secondary); margin-bottom:var(--space-3); }
+        .loading { text-align:center; padding:var(--space-6); color:var(--text-muted); }
+    </style>
+</head>
+<body>
+    <div class="layout">
+        <aside class="sidebar" id="sidebar"></aside>
+        <div class="sidebar-overlay" onclick="toggleSidebar()"></div>
+        <main class="main-content">
+            <header class="page-header">
+                <button class="mobile-menu-btn" onclick="toggleMobileSidebar(event)">&#9776;</button>
+                <h1>🏪 마켓플레이스</h1>
+            </header>
+            <div class="content-area">
+                <div class="search-toolbar">
+                    <input type="text" id="searchInput" placeholder="에이전트 검색...">
+                    <select id="categoryFilter">
+                        <option value="">전체 카테고리</option>
+                        <option value="coding">코딩</option>
+                        <option value="writing">글쓰기</option>
+                        <option value="analysis">분석</option>
+                        <option value="creative">창작</option>
+                    </select>
+                </div>
+                <div id="agentGrid" class="agent-grid">
+                    <div class="loading">불러오는 중...</div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="/js/components/sidebar.js"></script>
+    <script>
+        function authFetch(url, opts = {}) {
+            const headers = { 'Content-Type':'application/json', ...opts.headers };
+            return fetch(url, { ...opts, headers, credentials: 'include' }).then(r => r.json());
+        }
+        function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+
+        let agents = [];
+
+        async function loadAgents(search, category) {
+            const params = new URLSearchParams();
+            if (search) params.set('search', search);
+            if (category) params.set('category', category);
+            params.set('status', 'approved');
+            try {
+                const res = await authFetch('/api/marketplace?' + params.toString());
+                agents = res.data || [];
+                renderAgents();
+            } catch (e) {
+                document.getElementById('agentGrid').innerHTML = '<div class="empty-state"><h2>로드 실패</h2><p>마켓플레이스 데이터를 불러올 수 없습니다.</p></div>';
+            }
+        }
+
+        function renderAgents() {
+            const el = document.getElementById('agentGrid');
+            if (!agents.length) {
+                el.innerHTML = '<div class="empty-state"><h2>에이전트가 없습니다</h2><p>아직 등록된 에이전트가 없습니다.</p></div>';
+                return;
+            }
+            el.innerHTML = agents.map(a => `
+                <div class="agent-card">
+                    <div class="card-header">
+                        <span class="card-icon">${esc(a.icon || '🤖')}</span>
+                        <span class="card-title">${esc(a.title)}</span>
+                    </div>
+                    <div class="card-desc">${esc(a.description || '')}</div>
+                    <div class="card-meta">
+                        ${a.category ? '<span class="badge-category">' + esc(a.category) + '</span>' : ''}
+                        ${a.is_featured ? '<span class="badge-category badge-featured">⭐ Featured</span>' : ''}
+                        <span>⬇️ ${a.downloads || 0}</span>
+                        <span>⭐ ${a.rating_avg ? a.rating_avg.toFixed(1) : '-'}</span>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function debounce(fn, ms) { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; }
+        document.getElementById('searchInput').addEventListener('input', debounce(function() {
+            loadAgents(this.value.trim(), document.getElementById('categoryFilter').value);
+        }, 400));
+        document.getElementById('categoryFilter').addEventListener('change', function() {
+            loadAgents(document.getElementById('searchInput').value.trim(), this.value);
+        });
+
+        loadAgents();
+    </script>
+</body>
+</html>

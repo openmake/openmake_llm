@@ -29,7 +29,7 @@ import { success, badRequest, notFound, forbidden, internalError } from '../util
 import { asyncHandler } from '../utils/error-handler';
 import { requireAuth } from '../auth';
 import { validate } from '../middlewares/validation';
-import { getUnifiedDatabase, getPool } from '../data/models/unified-database';
+import { getUnifiedDatabase } from '../data/models/unified-database';
 import { v4 as uuidv4 } from 'uuid';
 import { createDeepResearchService, ResearchProgress } from '../services/DeepResearchService';
 import {
@@ -57,12 +57,7 @@ router.use((req: Request, res: Response, next: NextFunction): void => {
     }
 
     if (userTier === 'free') {
-        res.status(403).json({
-            success: false,
-            error: 'Pro 이상의 등급이 필요합니다',
-            requiredTier: 'pro',
-            currentTier: userTier
-        });
+        res.status(403).json(forbidden('Pro 이상의 등급이 필요합니다'));
         return;
     }
     next();
@@ -300,20 +295,7 @@ router.delete('/sessions/:sessionId', requireAuth, asyncHandler(async (req: Requ
         return res.status(403).json(forbidden('접근 권한이 없습니다'));
     }
 
-    const pool = getPool();
-    const client = await pool.connect();
-
-    try {
-        await client.query('BEGIN');
-        await client.query('DELETE FROM research_steps WHERE session_id = $1', [sessionId]);
-        await client.query('DELETE FROM research_sessions WHERE id = $1', [sessionId]);
-        await client.query('COMMIT');
-    } catch (error) {
-        await client.query('ROLLBACK');
-        throw error;
-    } finally {
-        client.release();
-    }
+    await db.deleteResearchSession(sessionId);
 
     res.json(success({ message: '리서치 세션이 삭제되었습니다.' }));
 }));

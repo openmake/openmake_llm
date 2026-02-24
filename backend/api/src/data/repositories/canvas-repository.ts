@@ -12,6 +12,15 @@ import { BaseRepository, QueryParam } from './base-repository';
 import type { CanvasDocType, CanvasDocument, CanvasVersion } from '../models/unified-database';
 
 export class CanvasRepository extends BaseRepository {
+    async countByUser(userId: string): Promise<number> {
+        const result = await this.query<{ cnt: string }>(
+            'SELECT COUNT(*)::text as cnt FROM canvas_documents WHERE user_id = $1',
+            [userId]
+        );
+
+        return parseInt(result.rows[0]?.cnt || '0', 10);
+    }
+
     async createCanvasDocument(params: {
         id: string;
         userId: string;
@@ -117,6 +126,13 @@ export class CanvasRepository extends BaseRepository {
         await this.query(
             'UPDATE canvas_documents SET is_shared = TRUE, share_token = $1, updated_at = NOW() WHERE id = $2',
             [shareToken, documentId]
+        );
+    }
+
+    async unshare(documentId: string): Promise<void> {
+        await this.query(
+            'UPDATE canvas_documents SET is_shared = FALSE, share_token = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = $1',
+            [documentId]
         );
     }
 

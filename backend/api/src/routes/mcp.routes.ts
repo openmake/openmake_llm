@@ -29,7 +29,7 @@
 import { Router, Request, Response } from 'express';
 import { getUnifiedMCPClient } from '../mcp';
 import { requireAuth, optionalAuth } from '../auth';
-import { success, badRequest, unauthorized, forbidden, internalError } from '../utils/api-response';
+import { success, badRequest, unauthorized, forbidden, notFound, internalError } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
 import { getUnifiedDatabase } from '../data/models/unified-database';
 import type { MCPTransportType } from '../mcp/types';
@@ -213,7 +213,7 @@ mcpRouter.put('/settings', optionalAuth, asyncHandler(async (req: Request, res: 
       const server = await db.getMcpServerById(id);
 
       if (!server) {
-          res.status(404).json(badRequest('서버를 찾을 수 없습니다'));
+          res.status(404).json(notFound('서버'));
           return;
       }
 
@@ -255,7 +255,7 @@ mcpRouter.put('/settings', optionalAuth, asyncHandler(async (req: Request, res: 
           const db = getUnifiedDatabase();
           const server = await db.getMcpServerById(id);
           if (!server) {
-              res.status(404).json(badRequest('서버를 찾을 수 없습니다'));
+              res.status(404).json(notFound('서버'));
               return;
           }
           // 존재하지만 연결 안 된 상태
