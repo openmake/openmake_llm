@@ -782,3 +782,20 @@ BEGIN
         RAISE NOTICE '[migration] conversation_sessions.user_id FK: 이미 CASCADE 또는 FK 없음 — 건너뜀';
     END IF;
 END $$;
+
+-- [D1] vector_embeddings: unified-database.ts와 동기화 (pgvector 기반 의미 검색 구현 시 활성화)
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'vector_embeddings') THEN
+        CREATE TABLE vector_embeddings (
+            id TEXT PRIMARY KEY,
+            source_type TEXT,
+            source_id TEXT,
+            content TEXT,
+            embedding TEXT,
+            created_at TIMESTAMPTZ DEFAULT NOW()
+        );
+        RAISE NOTICE '[schema] vector_embeddings 테이블 생성 완료';
+    ELSE
+        RAISE NOTICE '[schema] vector_embeddings 테이블 이미 존재 — 건너맸';
+    END IF;
+END $$;

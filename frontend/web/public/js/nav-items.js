@@ -49,6 +49,7 @@ const NAV_ITEMS = {
         { href: '/analytics.html', icon: '📊', iconify: 'lucide:pie-chart', label: '분석 대시보드', requireAuth: true, requireAdmin: true },
         { href: '/alerts.html', icon: '🔔', iconify: 'lucide:bell', label: '알림 관리', requireAuth: true, requireAdmin: true },
         { href: '/password-change.html', icon: '🔑', iconify: 'lucide:key-round', label: '비밀번호 변경', requireAuth: true },
+        { href: '/token-monitoring.html', icon: '🗝️', iconify: 'lucide:key-square', label: 'API 토큰 모니터링', requireAuth: true, requireAdmin: true }
         { href: '/settings.html', icon: '⚙️', iconify: 'lucide:settings', label: '설정' }
     ]
 };
