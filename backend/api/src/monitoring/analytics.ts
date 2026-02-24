@@ -20,6 +20,7 @@ import { createLogger } from '../utils/logger';
 import { getApiUsageTracker } from '../ollama/api-usage-tracker';
 import * as os from 'os';
 
+import { AGENTS } from '../agents/agent-data';
 const logger = createLogger('Analytics');
 
 /**
@@ -297,7 +298,7 @@ export class AnalyticsSystem {
         for (const [agentId, stats] of this.agentStats.entries()) {
             performances.push({
                 agentId,
-                agentName: agentId, // TODO: 실제 이름으로 매핑
+                agentName: AGENTS[agentId]?.name ?? agentId,
                 totalRequests: stats.requests,
                 avgResponseTime: stats.requests > 0
                     ? Math.round(stats.totalResponseTime / stats.requests)
