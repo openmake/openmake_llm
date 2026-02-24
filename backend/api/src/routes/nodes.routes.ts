@@ -21,6 +21,8 @@ import { ClusterManager } from '../cluster/manager';
 import { success as apiSuccess, badRequest, internalError } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
 import { requireAuth, requireAdmin } from '../auth';
+import { validate } from '../middlewares/validation';
+import { addClusterNodeSchema } from '../schemas/nodes.schema';
 
 const router = Router();
 
@@ -40,13 +42,8 @@ export function setClusterManager(cluster: ClusterManager): void {
  * 노드 추가
  * POST /api/nodes
  */
-router.post('/', asyncHandler(async (req: Request, res: Response) => {
-    const { host, port, name } = req.body;
-
-     if (!host || !port) {
-         res.status(400).json(badRequest('host와 port가 필요합니다'));
-         return;
-     }
+router.post('/', validate(addClusterNodeSchema), asyncHandler(async (req: Request, res: Response) => {
+    const { host, port, name } = req.body as { host: string; port: number; name?: string };
 
      const node = await clusterRef.addNode(host, port, name);
      if (node) {

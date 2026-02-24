@@ -34,10 +34,9 @@
 
                 // 인증 체크
                 (function checkAuthAccess() {
-                    const authToken = SS.getItem('authToken');
                     const user = SS.getItem('user');
                     const isGuest = SS.getItem('isGuest') === 'true';
-                    if ((!authToken && !user) || isGuest) {
+                    if (!user || isGuest) {
                         (typeof showToast === 'function' ? showToast('이 페이지는 로그인이 필요합니다.', 'warning') : console.warn('이 페이지는 로그인이 필요합니다.'));
                         (typeof Router !== 'undefined' && Router.navigate('/'));
                     }
@@ -51,13 +50,8 @@
                     }
 
                     try {
-                        // 🔑 인증 헤더 추가 (관리자/사용자 인증 전달)
-                        const authToken = SS.getItem('authToken');
-                        const headers = authToken ? { 'Authorization': `Bearer ${authToken}` } : {};
-
                         const res = await fetch('/api/chat/sessions?limit=100', {
-                            credentials: 'include',  // 🔒 httpOnly 쿠키 포함
-                            headers
+                            credentials: 'include'  // 하이퍼투글 쿠키 기반 인증
                         });
                         const data = await res.json();
                         const payload = data.data || data;

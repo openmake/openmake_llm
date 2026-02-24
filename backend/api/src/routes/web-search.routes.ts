@@ -20,10 +20,13 @@ import { Router, Request, Response } from 'express';
 import { ClusterManager } from '../cluster/manager';
 import { OllamaClient } from '../ollama/client';
 import { getConfig } from '../config';
-import { success, badRequest, internalError, serviceUnavailable } from '../utils/api-response';
+import { success, internalError, serviceUnavailable } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
 import { createLogger } from '../utils/logger';
 import { buildExecutionPlan } from '../chat/profile-resolver';
+import { requireAuth } from '../auth';
+import { validate } from '../middlewares/validation';
+import { webSearchSchema } from '../schemas/web-search.schema';
 
 const logger = createLogger('WebSearchRoutes');
 
@@ -43,12 +46,8 @@ export function setClusterManager(cluster: ClusterManager): void {
  * POST /api/web-search
  * 웹 검색 API (실제 인터넷 검색 + 사실 검증)
  */
-router.post('/web-search', asyncHandler(async (req: Request, res: Response) => {
-     const { query } = req.body;
-     if (!query || typeof query !== 'string' || query.trim().length === 0) {
-         return res.status(400).json(badRequest('query는 필수입니다'));
-     }
-     const requestedModel = req.body.model;
+router.post('/web-search', requireAuth, validate(webSearchSchema), asyncHandler(async (req: Request, res: Response) => {
+     const { query, model: requestedModel } = req.body as { query: string; model?: string };
      const model = (!requestedModel || requestedModel === 'default')
          ? envConfig.ollamaDefaultModel
          : requestedModel;

@@ -33,10 +33,9 @@
 
                 // 인증 체크 (게스트/비로그인 접근 제한)
                 (function checkAuthAccess() {
-                    const authToken = SS.getItem('authToken');
                     const user = SS.getItem('user');
                     const isGuest = SS.getItem('isGuest') === 'true';
-                    if ((!authToken && !user) || isGuest) {
+                    if (!user || isGuest) {
                         (typeof showToast === 'function' ? showToast('이 페이지는 로그인이 필요합니다.', 'warning') : console.warn('이 페이지는 로그인이 필요합니다.'));
                         (typeof Router !== 'undefined' && Router.navigate('/'));
                     }

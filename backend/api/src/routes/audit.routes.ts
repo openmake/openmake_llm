@@ -23,6 +23,8 @@ import { Router, Request, Response } from 'express';
 import { createLogger } from '../utils/logger';
 import { success, badRequest, internalError } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
+import { validate } from '../middlewares/validation';
+import { createAuditSchema } from '../schemas/audit.schema';
 import { requireAuth, requireAdmin } from '../auth';
 import { getUnifiedDatabase, getPool } from '../data/models/unified-database';
 
@@ -108,12 +110,8 @@ router.get('/user/:userId', asyncHandler(async (req: Request, res: Response) => 
  * POST /api/audit
  * 감사 로그 엔트리 생성 (관리자 전용)
  */
-router.post('/', asyncHandler(async (req: Request, res: Response) => {
+router.post('/', validate(createAuditSchema), asyncHandler(async (req: Request, res: Response) => {
      const { action, resourceType, resourceId, details } = req.body;
-
-     if (!action) {
-         return res.status(400).json(badRequest('action은 필수입니다.'));
-     }
 
      const db = getUnifiedDatabase();
      await db.logAudit({

@@ -244,9 +244,9 @@
 
         // 인증 상태 확인
         function isAuthenticated() {
-            const authToken = localStorage.getItem('authToken');
+            const user = localStorage.getItem('user');
             const isGuest = localStorage.getItem('isGuest') === 'true';
-            return authToken || isGuest;
+            return !!user || isGuest;
         }
 
         function isGuestMode() {
@@ -343,10 +343,7 @@
 
         async function fetchServerSettings() {
             try {
-                const authToken = localStorage.getItem('authToken');
-                const headers = authToken ? { 'Authorization': `Bearer ${authToken}` } : {};
-
-                const res = await fetch(`${API_BASE}/api/mcp/settings`, { headers });
+                const res = await fetch(`${API_BASE}/api/mcp/settings`, { credentials: 'include' });
                 if (res.ok) {
                     const rawData = await res.json();
                     const data = rawData.data || rawData;
@@ -413,15 +410,14 @@
 
             // 2. 서버에 동기화 (모든 사용자 - 글로벌 설정)
             try {
-                const authToken = localStorage.getItem('authToken');
                 const headers = {
-                    'Content-Type': 'application/json',
-                    ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {})
+                    'Content-Type': 'application/json'
                 };
 
                 const res = await fetch(`${API_BASE}/api/mcp/settings`, {
                     method: 'PUT',
                     headers,
+                    credentials: 'include',
                     body: JSON.stringify({
                         sequentialThinking: mcpToolSettings.thinking,
                         webSearch: mcpToolSettings.webSearch,

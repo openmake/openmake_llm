@@ -19,6 +19,15 @@ import { success, badRequest, notFound, internalError } from '../utils/api-respo
 import { asyncHandler } from '../utils/error-handler';
 import { getSkillManager } from '../agents/skill-manager';
 import { requireAuth } from '../auth';
+import { validate } from '../middlewares/validation';
+import {
+    createAgentSchema,
+    updateAgentSchema,
+    cloneAgentSchema,
+    agentFeedbackSchema,
+    abTestStartSchema,
+    assignSkillSchema
+} from '../schemas/agents.schema';
 
 const logger = createLogger('AgentRoutes');
 const router = Router();
@@ -86,12 +95,8 @@ router.get('/custom', requireAuth, asyncHandler(async (req: Request, res: Respon
  * POST /api/agents/custom
  * 커스텀 에이전트 생성
  */
-router.post('/custom', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+router.post('/custom', requireAuth, validate(createAgentSchema), asyncHandler(async (req: Request, res: Response) => {
     const { name, description, systemPrompt, keywords, category, emoji, temperature, maxTokens } = req.body;
-
-    if (!name || !description || !systemPrompt) {
-        return res.status(400).json(badRequest('name, description, systemPrompt는 필수입니다.'));
-    }
 
     const customBuilder = getCustomAgentBuilder();
     const agent = await customBuilder.createAgent({
@@ -113,7 +118,7 @@ router.post('/custom', requireAuth, asyncHandler(async (req: Request, res: Respo
  * POST /api/agents/custom/:id/clone
  * 기존 에이전트 복제 (프론튴엔드 호환 경로 — /custom/clone/:id 와 동일)
  */
-router.post('/custom/:id/clone', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+router.post('/custom/:id/clone', requireAuth, validate(cloneAgentSchema), asyncHandler(async (req: Request, res: Response) => {
     const sourceId = req.params.id;
     const modifications = typeof req.body === 'object' && req.body !== null ? { ...(req.body as Record<string, unknown>) } : {};
     modifications['createdBy'] = String(req.user?.id || '');
@@ -132,7 +137,7 @@ router.post('/custom/:id/clone', requireAuth, asyncHandler(async (req: Request, 
  * PUT /api/agents/custom/:id
  * 커스텀 에이전트 수정
  */
-router.put('/custom/:id', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+router.put('/custom/:id', requireAuth, validate(updateAgentSchema), asyncHandler(async (req: Request, res: Response) => {
     const agentId = req.params.id;
     const updates = req.body;
 
@@ -167,7 +172,7 @@ router.delete('/custom/:id', requireAuth, asyncHandler(async (req: Request, res:
  * POST /api/agents/custom/clone/:id
  * 기존 에이전트 복제
  */
-router.post('/custom/clone/:id', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+router.post('/custom/clone/:id', requireAuth, validate(cloneAgentSchema), asyncHandler(async (req: Request, res: Response) => {
     const sourceId = req.params.id;
     const modifications = req.body;
     modifications.createdBy = String(req.user?.id || '');
@@ -203,17 +208,9 @@ router.get('/feedback/stats', asyncHandler(async (req: Request, res: Response) =
  * POST /api/agents/:id/feedback
  * 에이전트 피드백 제출
  */
-router.post('/:id/feedback', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+router.post('/:id/feedback', requireAuth, validate(agentFeedbackSchema), asyncHandler(async (req: Request, res: Response) => {
     const agentId = req.params.id;
     const { rating, comment, query, response, tags } = req.body;
-
-    if (!rating || rating < 1 || rating > 5) {
-        return res.status(400).json(badRequest('rating은 1-5 사이의 값이어야 합니다.'));
-    }
-
-    if (!query || !response) {
-        return res.status(400).json(badRequest('query와 response는 필수입니다.'));
-    }
 
     const learningSystem = getAgentLearningSystem();
     const feedback = await learningSystem.collectFeedback({
@@ -269,12 +266,8 @@ router.get('/:id/improvements', asyncHandler(async (req: Request, res: Response)
  * POST /api/agents/abtest/start
  * A/B 테스트 시작
  */
-router.post('/abtest/start', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+router.post('/abtest/start', requireAuth, validate(abTestStartSchema), asyncHandler(async (req: Request, res: Response) => {
     const { agentA, agentB } = req.body;
-
-    if (!agentA || !agentB) {
-        return res.status(400).json(badRequest('agentA와 agentB는 필수입니다.'));
-    }
 
     const customBuilder = getCustomAgentBuilder();
     const test = customBuilder.startABTest(agentA, agentB);
@@ -327,9 +320,9 @@ router.get('/:agentId/skills', requireAuth, asyncHandler(async (req: Request, re
  * POST /api/agents/:agentId/skills/:skillId
  * 에이전트에 스킬 연결
  */
-router.post('/:agentId/skills/:skillId', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+router.post('/:agentId/skills/:skillId', requireAuth, validate(assignSkillSchema), asyncHandler(async (req: Request, res: Response) => {
     const { agentId, skillId } = req.params;
-    const priority = Number((req.body as { priority?: number }).priority ?? 0);
+    const priority = Number(req.body.priority ?? 0);
     await getSkillManager().assignSkillToAgent(agentId, skillId, priority);
     res.json(success({ assigned: true }));
 }));

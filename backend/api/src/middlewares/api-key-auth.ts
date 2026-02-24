@@ -38,10 +38,14 @@ function extractApiKey(req: Request): string | undefined {
         }
     }
 
-    // 3. 쿼리 파라미터 (GET 요청만)
+    // 3. 쿼리 파라미터 (GET 요청만) — DEPRECATED: X-API-Key 헤더 사용 권장
     if (req.method === 'GET' && req.query.api_key) {
         const queryKey = req.query.api_key as string;
         if (queryKey.startsWith(API_KEY_PREFIX)) {
+            logger.warn('[DEPRECATED] api_key query parameter is deprecated. Use X-API-Key header instead.', {
+                path: req.path,
+                ip: req.ip
+            });
             return queryKey;
         }
     }

@@ -38,7 +38,7 @@
             try {
                 // SafeStorage 래퍼 — Safari Private Mode 등에서 localStorage 예외 방지
                 const SS = window.SafeStorage || { getItem: function (k) { try { return localStorage.getItem(k); } catch (e) { return null; } }, setItem: function (k, v) { try { localStorage.setItem(k, v); } catch (e) { } }, removeItem: function (k) { try { localStorage.removeItem(k); } catch (e) { } } };
-                let authToken = SS.getItem('authToken');
+                // authToken은 httpOnly 쿠키로 관리됩니다 — localStorage에서 읽지 않음
                 const _userStr = SS.getItem('user');
                 let currentUser = null;
                 let usersPage = 1;
@@ -48,7 +48,7 @@
                 let convSearchTimeout;
 
                 async function checkAuth() {
-                    if (!authToken && !_userStr) { (typeof Router !== 'undefined' && Router.navigate('/')); return false; }
+                    if (!_userStr) { (typeof Router !== 'undefined' && Router.navigate('/')); return false; }
                     try {
                         const res = await authFetch('/api/auth/me');
                         const data = await res.json();
@@ -71,7 +71,8 @@
                     return fetch(url, {
                         ...options,
                         credentials: 'include',
-                        headers: { 'Content-Type': 'application/json', ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {}), ...(options.headers || {}) }
+                        // 인증은 credentials: 'include' 쿠키로 처리 — Bearer 헤더 불필요
+                        headers: { 'Content-Type': 'application/json', ...(options.headers || {}) }
                     });
                 }
 
