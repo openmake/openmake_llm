@@ -147,7 +147,7 @@ export interface PipelineProfile {
  * @example
  * const profiles = getProfiles();
  * const proProfile = profiles['openmake_llm_pro'];
- * console.log(proProfile.engineModel); // config.omkEnginePro 값
+ * logger.info(proProfile.engineModel); // config.omkEnginePro 값
  */
 export function getProfiles(): Record<string, PipelineProfile> {
     const config = getConfig();

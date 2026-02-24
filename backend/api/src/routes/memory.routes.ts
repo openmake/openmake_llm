@@ -28,7 +28,7 @@ import { success, badRequest, notFound, forbidden } from '../utils/api-response'
 import { asyncHandler } from '../utils/error-handler';
 import { requireAuth } from '../auth';
 import { validate } from '../middlewares/validation';
-import { getPool, getUnifiedDatabase } from '../data/models/unified-database';
+import { getUnifiedDatabase } from '../data/models/unified-database';
 import { createMemorySchema, updateMemorySchema } from '../schemas/memory.schema';
 const router = Router();
 
@@ -87,7 +87,7 @@ router.post('/', validate(createMemorySchema), asyncHandler(async (req: Request,
           const memSvc = getMemoryService();
           const existing = await memSvc.getUserMemories(userId, { limit: memoryLimit + 1 });
           if (existing.length >= memoryLimit) {
-              res.status(403).json(badRequest(`메모리 생성 제한 초과 (${userTier}: 최대 ${memoryLimit}개)`));
+              res.status(403).json(forbidden(`메모리 생성 제한 초과 (${userTier}: 최대 ${memoryLimit}개)`));
               return;
           }
       }
@@ -132,13 +132,13 @@ router.get('/search', asyncHandler(async (req: Request, res: Response) => {
 router.put('/:id', validate(updateMemorySchema), asyncHandler(async (req: Request, res: Response) => {
      const memoryId = req.params.id;
     const userId = (req.user && 'userId' in req.user ? req.user.userId : req.user?.id?.toString()) || 'anonymous';
+    const db = getUnifiedDatabase();
     // 소유권 확인
-    const pool = getPool();
-    const ownerCheck = await pool.query('SELECT user_id FROM user_memories WHERE id = $1', [memoryId]);
-    if (ownerCheck.rows.length === 0) {
+    const ownerUserId = await db.getMemoryOwner(memoryId);
+    if (ownerUserId === null) {
         return res.status(404).json(notFound('메모리를 찾을 수 없습니다'));
     }
-    if (String(ownerCheck.rows[0].user_id) !== userId && req.user?.role !== 'admin') {
+    if (String(ownerUserId) !== userId && req.user?.role !== 'admin') {
         return res.status(403).json(forbidden('접근 권한이 없습니다'));
     }
      const { value, importance } = req.body;
@@ -160,13 +160,13 @@ router.put('/:id', validate(updateMemorySchema), asyncHandler(async (req: Reques
 router.delete('/:id', requireAuth, asyncHandler(async (req: Request, res: Response) => {
      const memoryId = req.params.id;
     const userId = (req.user && 'userId' in req.user ? req.user.userId : req.user?.id?.toString()) || 'anonymous';
+    const db = getUnifiedDatabase();
     // 소유권 확인
-    const pool = getPool();
-    const ownerCheck = await pool.query('SELECT user_id FROM user_memories WHERE id = $1', [memoryId]);
-    if (ownerCheck.rows.length === 0) {
+    const ownerUserId = await db.getMemoryOwner(memoryId);
+    if (ownerUserId === null) {
         return res.status(404).json(notFound('메모리를 찾을 수 없습니다'));
     }
-    if (String(ownerCheck.rows[0].user_id) !== userId && req.user?.role !== 'admin') {
+    if (String(ownerUserId) !== userId && req.user?.role !== 'admin') {
         return res.status(403).json(forbidden('접근 권한이 없습니다'));
     }
 

@@ -119,7 +119,7 @@
                                     <span class="status-dot ${node.status === 'online' ? 'online' : 'offline'}"></span>
                                 </div>
                                 <div class="node-stats">
-                                    <span class="text-muted">${node.latency ? node.latency + 'ms' : '-'}</span>
+                                    <span class="text-muted">${node.latency ? esc(node.latency + 'ms') : '-'}</span>
                                 </div>
                             </div>
                         `).join('');

@@ -74,13 +74,15 @@ module.exports = {
         '!**/node_modules/**',
         '!**/dist/**'
     ],
-    
     // 타임아웃
     testTimeout: 30000,
-    
-    // 상세 출력
     verbose: true,
+    // Worker 메모리 제한 — 유휴 워커가 지정 메모리를 초과하면 자동 재시작
+    // Jest 29+ 기능, worker leak 경고 해소
+    workerIdleMemoryLimit: '512MB',
     
+    // 모든 테스트 완료 후 강제 종료 — 정리되지 않은 타이머/핸들 대응
+    forceExit: true,
     // 캐시 디렉토리
     cacheDirectory: '<rootDir>/.jest-cache'
 };

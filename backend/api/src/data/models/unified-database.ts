@@ -43,7 +43,10 @@ type DbRow = Record<string, unknown>;
 
 const SCHEMA_FILE_RELATIVE_PATH = 'services/database/init/002-schema.sql';
 
-// Fallback schema for packaged/deployed environments where the SQL file is unavailable.
+// Source of truth policy:
+// 1) services/database/init/002-schema.sql is canonical for schema evolution.
+// 2) LEGACY_SCHEMA is fallback-only for packaged/deployed environments where file access fails.
+// 3) Keep LEGACY_SCHEMA aligned with core CREATE TABLE definitions and essential lookup indexes.
 const LEGACY_SCHEMA = `
 CREATE TABLE IF NOT EXISTS users (
     id TEXT PRIMARY KEY,
@@ -117,7 +120,7 @@ CREATE INDEX IF NOT EXISTS idx_usage_date ON api_usage(date);
 CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON conversation_sessions(user_id);
-CREATE INDEX IF NOT EXISTS idx_sessions_anon ON conversation_sessions(anon_session_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_sessions_anon ON conversation_sessions(anon_session_id) WHERE anon_session_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_blacklist_expires ON token_blacklist(expires_at);
 
 CREATE TABLE IF NOT EXISTS chat_rate_limits (
@@ -483,6 +486,54 @@ CREATE TABLE IF NOT EXISTS agent_skill_assignments (
     created_at TIMESTAMPTZ DEFAULT NOW(),
     PRIMARY KEY (agent_id, skill_id)
 );
+
+CREATE INDEX IF NOT EXISTS idx_agent_logs_agent ON agent_usage_logs(agent_id);
+CREATE INDEX IF NOT EXISTS idx_agent_logs_time ON agent_usage_logs(timestamp);
+CREATE INDEX IF NOT EXISTS idx_feedback_agent ON agent_feedback(agent_id);
+CREATE INDEX IF NOT EXISTS idx_audit_action ON audit_logs(action);
+CREATE INDEX IF NOT EXISTS idx_audit_time ON audit_logs(timestamp);
+CREATE INDEX IF NOT EXISTS idx_audit_user ON audit_logs(user_id);
+
+CREATE INDEX IF NOT EXISTS idx_memories_user ON user_memories(user_id);
+CREATE INDEX IF NOT EXISTS idx_memories_category ON user_memories(category);
+CREATE INDEX IF NOT EXISTS idx_memories_importance ON user_memories(importance DESC);
+CREATE INDEX IF NOT EXISTS idx_memory_tags_memory ON memory_tags(memory_id);
+
+CREATE INDEX IF NOT EXISTS idx_research_user ON research_sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_research_status ON research_sessions(status);
+CREATE INDEX IF NOT EXISTS idx_research_steps_session ON research_steps(session_id);
+
+CREATE INDEX IF NOT EXISTS idx_marketplace_category ON agent_marketplace(category);
+CREATE INDEX IF NOT EXISTS idx_marketplace_downloads ON agent_marketplace(downloads DESC);
+CREATE INDEX IF NOT EXISTS idx_marketplace_status ON agent_marketplace(status);
+CREATE INDEX IF NOT EXISTS idx_reviews_marketplace ON agent_reviews(marketplace_id);
+CREATE INDEX IF NOT EXISTS idx_installations_user ON agent_installations(user_id);
+
+CREATE INDEX IF NOT EXISTS idx_canvas_user ON canvas_documents(user_id);
+CREATE INDEX IF NOT EXISTS idx_canvas_session ON canvas_documents(session_id);
+CREATE INDEX IF NOT EXISTS idx_canvas_versions_doc ON canvas_versions(document_id);
+
+CREATE INDEX IF NOT EXISTS idx_connections_user ON external_connections(user_id);
+CREATE INDEX IF NOT EXISTS idx_connections_service ON external_connections(service_type);
+CREATE INDEX IF NOT EXISTS idx_ext_files_connection ON external_files(connection_id);
+
+CREATE INDEX IF NOT EXISTS idx_embeddings_source ON vector_embeddings(source_type, source_id);
+
+CREATE INDEX IF NOT EXISTS idx_mcp_servers_name ON mcp_servers(name);
+CREATE INDEX IF NOT EXISTS idx_mcp_servers_enabled ON mcp_servers(enabled);
+
+CREATE INDEX IF NOT EXISTS idx_api_keys_user ON user_api_keys(user_id);
+CREATE INDEX IF NOT EXISTS idx_api_keys_hash ON user_api_keys(key_hash);
+CREATE INDEX IF NOT EXISTS idx_api_keys_active ON user_api_keys(user_id, is_active);
+CREATE INDEX IF NOT EXISTS idx_api_keys_tier ON user_api_keys(rate_limit_tier);
+
+CREATE INDEX IF NOT EXISTS idx_oauth_states_created ON oauth_states(created_at);
+
+CREATE INDEX IF NOT EXISTS idx_agent_skills_created_by ON agent_skills(created_by);
+CREATE INDEX IF NOT EXISTS idx_agent_skills_category ON agent_skills(category);
+CREATE INDEX IF NOT EXISTS idx_agent_skills_public ON agent_skills(is_public);
+CREATE INDEX IF NOT EXISTS idx_skill_assignments_agent ON agent_skill_assignments(agent_id);
+CREATE INDEX IF NOT EXISTS idx_skill_assignments_skill ON agent_skill_assignments(skill_id);
 `;
 
 /**
@@ -1143,6 +1194,10 @@ export class UnifiedDatabase {
         return this.memoryRepository.deleteUserMemories(userId);
     }
 
+    async getMemoryOwner(memoryId: string): Promise<string | null> {
+        return this.memoryRepository.getOwnerUserId(memoryId);
+    }
+
     // ============================================
     // 🔍 Deep Research 메서드
     // ============================================
@@ -1188,6 +1243,10 @@ export class UnifiedDatabase {
 
     async getUserResearchSessions(userId: string, limit: number = 20): Promise<ResearchSession[]> {
         return this.researchRepository.getUserResearchSessions(userId, limit);
+    }
+
+    async deleteResearchSession(sessionId: string): Promise<void> {
+        return this.researchRepository.deleteSessionWithSteps(sessionId);
     }
 
     // ============================================
@@ -1256,6 +1315,10 @@ export class UnifiedDatabase {
         return this.marketplaceRepository.getAgentReviews(marketplaceId, limit);
     }
 
+    async getCustomAgentCreator(agentId: string): Promise<string | null> {
+        return this.marketplaceRepository.getCustomAgentCreator(agentId);
+    }
+
     // ============================================
     // 📝 Canvas 메서드
     // ============================================
@@ -1293,8 +1356,16 @@ export class UnifiedDatabase {
         return this.canvasRepository.getUserCanvasDocuments(userId, limit);
     }
 
+    async countCanvasByUser(userId: string): Promise<number> {
+        return this.canvasRepository.countByUser(userId);
+    }
+
     async shareCanvasDocument(documentId: string, shareToken: string): Promise<void> {
         return this.canvasRepository.shareCanvasDocument(documentId, shareToken);
+    }
+
+    async unshareCanvasDocument(documentId: string): Promise<void> {
+        return this.canvasRepository.unshare(documentId);
     }
 
     async getCanvasDocumentByShareToken(shareToken: string): Promise<CanvasDocument | undefined> {

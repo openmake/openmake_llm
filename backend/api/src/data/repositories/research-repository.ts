@@ -120,4 +120,20 @@ export class ResearchRepository extends BaseRepository {
             sources: row.sources || []
         }));
     }
+
+    async deleteSessionWithSteps(sessionId: string): Promise<void> {
+        const client = await this.pool.connect();
+
+        try {
+            await client.query('BEGIN');
+            await client.query('DELETE FROM research_steps WHERE session_id = $1', [sessionId]);
+            await client.query('DELETE FROM research_sessions WHERE id = $1', [sessionId]);
+            await client.query('COMMIT');
+        } catch (error) {
+            await client.query('ROLLBACK');
+            throw error;
+        } finally {
+            client.release();
+        }
+    }
 }
