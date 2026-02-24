@@ -175,13 +175,14 @@ export class MarketplaceRepository extends BaseRepository {
         });
     }
 
-    async getUserInstalledAgents(userId: string): Promise<MarketplaceAgent[]> {
+    async getUserInstalledAgents(userId: string, limit: number = 200): Promise<MarketplaceAgent[]> {
         const result = await this.query<MarketplaceAgent>(
             `SELECT m.* FROM agent_marketplace m
             JOIN agent_installations i ON m.id = i.marketplace_id
             WHERE i.user_id = $1
-            ORDER BY i.installed_at DESC`,
-            [userId]
+            ORDER BY i.installed_at DESC
+            LIMIT $2`,
+            [userId, limit]
         );
         return result.rows.map((row) => ({
             ...row,

@@ -373,7 +373,7 @@
     <script src="/js/components/sidebar.js"></script>
     <script>
         const API_BASE = window.location.origin;
-        let authToken = localStorage.getItem('authToken');
+        // authToken은 httpOnly 쿠키로 관리 — localStorage 의존 제거
         let currentUser = null;
         let usersPage = 1;
         let convPage = 1;
@@ -381,7 +381,8 @@
         let searchTimeout;
 
         async function checkAuth() {
-             if (!authToken) { window.location.href = '/login.html'; return false; }
+             const user = localStorage.getItem('user');
+             if (!user) { window.location.href = '/login.html'; return false; }
              try {
                  const res = await authFetch('/api/auth/me');
                  const data = await res.json();
@@ -403,7 +404,8 @@
         async function authFetch(url, options = {}) {
             return fetch(url, {
                 ...options,
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}`, ...(options.headers || {}) }
+                headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+                credentials: 'include'
             });
         }
 

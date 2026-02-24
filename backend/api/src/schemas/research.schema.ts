@@ -9,6 +9,7 @@
  * @module schemas/research.schema
  */
 import { z } from 'zod';
+import { secureOptionalTextSchema, secureTextSchema } from './security.schema';
 
 /**
  * 리서치 세션 생성 스키마
@@ -16,7 +17,7 @@ import { z } from 'zod';
  * @property {string} [depth] - 리서치 깊이 (basic/deep/comprehensive, 기본값: deep)
  */
 export const createResearchSessionSchema = z.object({
-    topic: z.string().min(1, '리서치 주제를 입력하세요').max(500),
+    topic: secureTextSchema({ minLength: 1, maxLength: 500, fieldName: 'topic', detectMaliciousPatterns: false }),
     depth: z.enum(['basic', 'deep', 'comprehensive']).optional().default('deep')
 });
 
@@ -32,8 +33,8 @@ export const createResearchSessionSchema = z.object({
 export const addResearchStepSchema = z.object({
     stepNumber: z.number().int().positive('스텝 번호는 양수여야 합니다'),
     stepType: z.enum(['search', 'analysis', 'synthesis']),
-    query: z.string().max(1000).optional(),
-    result: z.string().max(50000).optional(),
+    query: secureOptionalTextSchema({ maxLength: 1000, fieldName: 'query', detectMaliciousPatterns: false }),
+    result: secureOptionalTextSchema({ maxLength: 50000, fieldName: 'result', allowHtmlLikeContent: true, detectMaliciousPatterns: false }),
     sources: z.array(z.string().url()).optional(),
     status: z.enum(['pending', 'completed', 'failed']).optional().default('pending')
 });
@@ -44,8 +45,8 @@ export const addResearchStepSchema = z.object({
 export const updateResearchSessionSchema = z.object({
     status: z.enum(['pending', 'in_progress', 'completed', 'failed']).optional(),
     progress: z.number().min(0).max(100).optional(),
-    summary: z.string().max(10000).optional(),
-    keyFindings: z.array(z.string()).optional(),
+    summary: secureOptionalTextSchema({ maxLength: 10000, fieldName: 'summary', allowHtmlLikeContent: true, detectMaliciousPatterns: false }),
+    keyFindings: z.array(secureTextSchema({ maxLength: 1000, fieldName: 'keyFindings', detectMaliciousPatterns: false })).optional(),
     sources: z.array(z.string().url()).optional()
 });
 

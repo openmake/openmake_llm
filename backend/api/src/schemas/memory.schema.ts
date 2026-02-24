@@ -9,6 +9,7 @@
  * @module schemas/memory.schema
  */
 import { z } from 'zod';
+import { secureTextSchema, secureOptionalTextSchema } from './security.schema';
 
 /**
  * 메모리 생성 스키마
@@ -19,9 +20,25 @@ import { z } from 'zod';
  * @property {string[]} [tags] - 태그 배열
  */
 export const createMemorySchema = z.object({
-    category: z.string().min(1, '카테고리를 입력하세요').max(50),
-    key: z.string().min(1, '키를 입력하세요').max(200),
-    value: z.string().min(1, '값을 입력하세요').max(10000),
+    category: secureTextSchema({
+        minLength: 1,
+        maxLength: 50,
+        allowNewLines: false,
+        fieldName: '카테고리',
+    }),
+    key: secureTextSchema({
+        minLength: 1,
+        maxLength: 200,
+        allowNewLines: false,
+        fieldName: '키',
+    }),
+    value: secureTextSchema({
+        minLength: 1,
+        maxLength: 10000,
+        allowNewLines: true,
+        fieldName: '값',
+        allowHtmlLikeContent: true,
+    }),
     importance: z.number().min(0).max(10).optional().default(5),
     tags: z.array(z.string().max(30)).optional()
 });
@@ -30,7 +47,13 @@ export const createMemorySchema = z.object({
  * 메모리 수정 스키마
  */
 export const updateMemorySchema = z.object({
-    value: z.string().min(1, '값을 입력하세요').max(10000).optional(),
+    value: secureOptionalTextSchema({
+        minLength: 1,
+        maxLength: 10000,
+        allowNewLines: true,
+        fieldName: '값',
+        allowHtmlLikeContent: true,
+    }),
     importance: z.number().min(0).max(10).optional()
 });
 

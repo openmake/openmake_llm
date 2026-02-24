@@ -32,10 +32,9 @@
 
                 // 인증 상태 확인 (OAuth 쿠키 세션 포함)
                 function isAuthenticated() {
-                    const authToken = SS.getItem('authToken');
                     const user = SS.getItem('user');
-                    const isGuest = SS.getItem('isGuest') === 'true';
-                    return authToken || user || isGuest;
+                    const isGuest = SS.getItem('guestMode') === 'true';
+                    return !!user || isGuest;
                 }
 
                 function isGuestMode() {
@@ -132,12 +131,9 @@
 
                 async function fetchServerSettings() {
                     try {
-                        const authToken = SS.getItem('authToken');
-                        const headers = authToken ? { 'Authorization': `Bearer ${authToken}` } : {};
-
+                        // 인증은 credentials: 'include' 쿠키로 처리 — localStorage authToken Bearer 헤더 불필요
                         const res = await fetch(`${API_BASE}/api/mcp/settings`, {
-                            credentials: 'include',  // 🔒 httpOnly 쿠키 포함
-                            headers
+                            credentials: 'include'  // httpOnly 쿠키 포함
                         });
                         if (res.ok) {
                             const rawData = await res.json();
@@ -205,10 +201,8 @@
 
                     // 2. 서버에 동기화 (모든 사용자 - 글로벌 설정)
                     try {
-                        const authToken = SS.getItem('authToken');
                         const headers = {
-                            'Content-Type': 'application/json',
-                            ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {})
+                            'Content-Type': 'application/json'
                         };
 
                         const res = await fetch(`${API_BASE}/api/mcp/settings`, {
@@ -335,11 +329,8 @@
                 // 서버 목록 로드
                 async function loadExternalServers() {
                     try {
-                        const authToken = SS.getItem('authToken');
-                        const headers = authToken ? { 'Authorization': 'Bearer ' + authToken } : {};
                         const res = await fetch(API_BASE + '/api/mcp/servers', {
-                            credentials: 'include',
-                            headers: headers
+                            credentials: 'include'
                         });
                         if (!res.ok) { showToast('도구 목록 로드 실패', 'error'); return; }
                         const raw = await res.json();
@@ -428,9 +419,7 @@
                     }
 
                     try {
-                        var authToken = SS.getItem('authToken');
                         var headers = { 'Content-Type': 'application/json' };
-                        if (authToken) headers['Authorization'] = 'Bearer ' + authToken;
 
                         var res = await fetch(API_BASE + '/api/mcp/servers', {
                             method: 'POST',
@@ -454,12 +443,9 @@
 
                 async function connectServer(serverId) {
                     try {
-                        var authToken = SS.getItem('authToken');
-                        var headers = authToken ? { 'Authorization': 'Bearer ' + authToken } : {};
                         var res = await fetch(API_BASE + '/api/mcp/servers/' + serverId + '/connect', {
                             method: 'POST',
-                            credentials: 'include',
-                            headers: headers
+                            credentials: 'include'
                         });
                         if (res.ok) {
                             showToast('✅ 서버에 연결되었습니다', 'success');
@@ -475,12 +461,9 @@
 
                 async function disconnectServer(serverId) {
                     try {
-                        var authToken = SS.getItem('authToken');
-                        var headers = authToken ? { 'Authorization': 'Bearer ' + authToken } : {};
                         var res = await fetch(API_BASE + '/api/mcp/servers/' + serverId + '/disconnect', {
                             method: 'POST',
-                            credentials: 'include',
-                            headers: headers
+                            credentials: 'include'
                         });
                         if (res.ok) {
                             showToast('✅ 서버 연결이 해제되었습니다', 'success');
@@ -496,12 +479,9 @@
                 async function deleteServer(serverId) {
                     if (!confirm('이 서버를 삭제하시겠습니까?')) return;
                     try {
-                        var authToken = SS.getItem('authToken');
-                        var headers = authToken ? { 'Authorization': 'Bearer ' + authToken } : {};
                         var res = await fetch(API_BASE + '/api/mcp/servers/' + serverId, {
                             method: 'DELETE',
-                            credentials: 'include',
-                            headers: headers
+                            credentials: 'include'
                         });
                         if (res.ok) {
                             showToast('✅ 서버가 삭제되었습니다', 'success');

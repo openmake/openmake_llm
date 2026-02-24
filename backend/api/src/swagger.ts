@@ -17,10 +17,11 @@
  * @requires config/env - 서버 포트 및 Swagger 베이스 URL 설정
  */
 
-import { Application } from 'express';
+import { Application, Request, Response, NextFunction } from 'express';
 import * as path from 'path';
 import { getConfig } from './config/env';
 import { createLogger } from './utils/logger';
+import { requireAuth, requireAdmin } from './auth';
 
 const logger = createLogger('Swagger');
 
@@ -977,15 +978,19 @@ function generateSwaggerHTML(): string {
  * @param app - Express Application 인스턴스
  */
 export function setupSwaggerRoutes(app: Application): void {
+    const isProduction = process.env.NODE_ENV === 'production';
+
+    // production에서는 관리자만 접근 가능, development에서는 무인증 공개
+    const swaggerGuard = isProduction
+        ? [requireAuth, requireAdmin]
+        : [(_req: Request, _res: Response, next: NextFunction) => next()];
     // OpenAPI JSON 스펙
-    app.get('/api/openapi.json', (req, res) => {
+    app.get('/api/openapi.json', ...swaggerGuard, (_req: Request, res: Response) => {
         res.json(openApiSpec);
     });
-
     // Swagger UI
-    app.get('/api-docs', (req, res) => {
+    app.get('/api-docs', ...swaggerGuard, (_req: Request, res: Response) => {
         res.send(generateSwaggerHTML());
     });
-
     logger.info('API 문서 라우트 설정 완료: /api-docs');
 }

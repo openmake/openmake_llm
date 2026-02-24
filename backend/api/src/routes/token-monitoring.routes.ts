@@ -142,7 +142,7 @@ router.get('/summary', asyncHandler(async (req: Request, res: Response) => {
  * POST /api/monitoring/keys/reset
  * API 키 상태 리셋 (관리자용)
  */
-router.post('/keys/reset', asyncHandler(async (req: Request, res: Response) => {
+router.post('/keys/reset', requireAdmin, asyncHandler(async (req: Request, res: Response) => {
     const keyManager = getApiKeyManager();
     keyManager.reset();
     res.json(success({ message: 'API 키 상태가 리셋되었습니다.' }));

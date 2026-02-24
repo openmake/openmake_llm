@@ -40,4 +40,14 @@ export interface ExtendedWebSocket extends WebSocket {
     _abortController: AbortController | null;
     /** 🔒 Phase 2: heartbeat alive 플래그 */
     _isAlive: boolean;
+    _authTokenExpiresAtMs?: number | null;
+    _authTokenIssuedAtMs?: number | null;
+    _authTokenJti?: string | null;
+    _authTokenFingerprint?: string | null;
+    _authMethod?: 'cookie' | 'bearer' | 'none';
+    _clientIp?: string;
+    _connectedAtMs?: number;
+    _lastActivityAtMs?: number;
+    _messageCount?: number;
+    _lastExpiryWarningAtMs?: number;
 }

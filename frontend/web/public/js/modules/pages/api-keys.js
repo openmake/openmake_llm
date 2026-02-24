@@ -25,21 +25,15 @@
 
     /**
      * 인증된 API 요청 헬퍼
-     * Authorization 헤더와 credentials를 자동으로 포함합니다.
+     * window.authFetch(쿠키 기반 인증)를 사용합니다.
      * @param {string} url - 요청 URL
      * @param {Object} [options] - fetch 옵션
      * @returns {Promise<Object>} 파싱된 JSON 응답
      * @throws {Error} HTTP 오류 시
      */
     async function apiFetch(url, options) {
-        var authToken = window.SafeStorage
-            ? window.SafeStorage.getItem('authToken')
-            : (function () {
-                try { return localStorage.getItem('authToken'); } catch (e) { return null; }
-            })();
-        var headers = { 'Content-Type': 'application/json' };
-        if (authToken) headers['Authorization'] = 'Bearer ' + authToken;
-        var res = await fetch(url, Object.assign({ credentials: 'include', headers: headers }, options || {}));
+        var fetchFn = window.authFetch || fetch;
+        var res = await fetchFn(url, Object.assign({ credentials: 'include' }, options || {}));
         if (!res.ok) { var err = await res.json().catch(function() { return {}; }); throw new Error(err.error || err.message || 'API 오류'); }
         return res.json();
     }

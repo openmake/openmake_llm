@@ -606,7 +606,6 @@
                     // api-response 표준 형식: data.data.token, data.data.user
                     const payload = data.data || data;
                     const token = payload.token;
-                    localStorage.setItem('authToken', token);
                     localStorage.removeItem('guestMode');
                     localStorage.removeItem('isGuest');
                     // JWT에서 사용자 정보 추출하여 저장

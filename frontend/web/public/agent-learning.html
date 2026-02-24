@@ -95,9 +95,8 @@
     <script src="/js/components/sidebar.js"></script>
     <script>
         function authFetch(url, opts = {}) {
-            const token = localStorage.getItem('authToken');
-            opts.headers = { ...(opts.headers || {}), 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
-            return fetch(url, opts);
+            opts.headers = { ...(opts.headers || {}), 'Content-Type': 'application/json' };
+            return fetch(url, { ...opts, credentials: 'include' });
         }
         function showToast(msg, type = 'success') {
             const t = document.getElementById('toast');

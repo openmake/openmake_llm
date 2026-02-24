@@ -40,25 +40,23 @@ async function loadChatSessions() {
     if (!historyList) return;
 
     try {
-        const authToken = (window.SafeStorage ? window.SafeStorage.getItem('authToken') : localStorage.getItem('authToken'));
+        // user객체로 로그인 여부를 판단 — authToken은 httpOnly 쿠키로 관리됩니다
         const userStr = (window.SafeStorage ? window.SafeStorage.getItem('user') : localStorage.getItem('user')) || '{}';
         const userRole = JSON.parse(userStr).role;
         const isAdminUser = userRole === 'admin' || userRole === 'administrator';
+        const hasUser = !!(userStr && userStr !== '{}');
 
         const params = new URLSearchParams({ limit: '20' });
 
-        if (!authToken) {
+        if (!hasUser) {
             params.append('anonSessionId', getOrCreateAnonymousSessionId());
         }
-
         const viewAllCheckbox = document.getElementById('viewAllSessions');
         if (isAdminUser && viewAllCheckbox?.checked) {
             params.append('viewAll', 'true');
         }
 
-        const headers = authToken ? { 'Authorization': `Bearer ${authToken}` } : {};
-
-        const res = await fetch(`/api/chat/sessions?${params}`, { headers });
+        const res = await fetch(`/api/chat/sessions?${params}`, { credentials: 'include' });
         if (!res.ok) {
             throw new Error(`HTTP ${res.status}: ${res.statusText}`);
         }
@@ -120,13 +118,12 @@ function formatTimeAgo(dateStr) {
 async function createNewSession(title) {
     try {
         const model = document.getElementById('modelSelect')?.value || 'default';
-        const authToken = (window.SafeStorage ? window.SafeStorage.getItem('authToken') : localStorage.getItem('authToken'));
-        const anonSessionId = !authToken ? getOrCreateAnonymousSessionId() : undefined;
+        // user객체로 로그인 여부를 판단 — authToken은 httpOnly 쿠키로 관리됩니다
+        const userStr = (window.SafeStorage ? window.SafeStorage.getItem('user') : localStorage.getItem('user'));
+        const anonSessionId = !userStr ? getOrCreateAnonymousSessionId() : undefined;
 
-        const headers = {
-            'Content-Type': 'application/json',
-            ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {})
-        };
+        const headers = { 'Content-Type': 'application/json' };
+
 
         const res = await fetch('/api/chat/sessions', {
             method: 'POST',

@@ -36,7 +36,9 @@ import {
   import { success, badRequest, notFound, serviceUnavailable } from '../utils/api-response';
   import { asyncHandler } from '../utils/error-handler';
   import { createLogger } from '../utils/logger';
-  import { buildExecutionPlan } from '../chat/profile-resolver';
+import { buildExecutionPlan } from '../chat/profile-resolver';
+  import { validate, validateUploadContentType, validateFileUploadSecurity } from '../middlewares/validation';
+  import { summarizeDocumentSchema, documentAskSchema } from '../schemas/documents.schema';
 
 const logger = createLogger('DocumentsRoutes');
 
@@ -121,7 +123,7 @@ export function setDependencies(cluster: ClusterManager, broadcast: (data: Recor
  * POST /api/upload
  * 파일 업로드
  */
-router.post('/upload', upload.single('file'), asyncHandler(async (req: Request, res: Response) => {
+router.post('/upload', validateUploadContentType(100 * 1024 * 1024), upload.single('file'), validateFileUploadSecurity(), asyncHandler(async (req: Request, res: Response) => {
      try {
          if (!req.file) {
              res.status(400).json(badRequest('파일이 없습니다'));
@@ -193,7 +195,7 @@ router.post('/upload', upload.single('file'), asyncHandler(async (req: Request, 
  * POST /api/summarize
  * 문서 요약
  */
-router.post('/summarize', asyncHandler(async (req: Request, res: Response) => {
+router.post('/summarize', validate(summarizeDocumentSchema), asyncHandler(async (req: Request, res: Response) => {
      const { docId, model } = req.body;
 
      const doc = uploadedDocuments.get(docId);
@@ -244,7 +246,7 @@ router.post('/summarize', asyncHandler(async (req: Request, res: Response) => {
    * POST /api/document/ask
   * 문서 Q&A
   */
-router.post('/document/ask', asyncHandler(async (req: Request, res: Response) => {
+router.post('/document/ask', validate(documentAskSchema), asyncHandler(async (req: Request, res: Response) => {
      const { docId, question, model } = req.body;
 
      const doc = uploadedDocuments.get(docId);
