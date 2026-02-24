@@ -26,7 +26,7 @@
  */
 import { Router, Request, Response } from 'express';
 import { createLogger } from '../utils/logger';
-import { success, badRequest, notFound, forbidden, internalError } from '../utils/api-response';
+import { success, badRequest, notFound, forbidden } from '../utils/api-response';
 import { requireAuth, requireAdmin, optionalAuth } from '../auth';
 import { getUnifiedDatabase } from '../data/models/unified-database';
 import { asyncHandler } from '../utils/error-handler';

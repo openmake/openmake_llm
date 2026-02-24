@@ -221,7 +221,7 @@ export async function extractImageText(
         logger.info(`[OCR] 추출 완료: ${text.length}자`);
         onProgress?.(createProgressEvent('ocr_complete', `OCR 추출 완료: ${text.length}자`, filename, 95));
 
-        const stats = fs.statSync(filePath);
+        fs.statSync(filePath);
         const buffer = fs.readFileSync(filePath);
         const base64 = buffer.toString('base64');
 

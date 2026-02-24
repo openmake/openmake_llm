@@ -20,8 +20,10 @@ import { getApiUsageTracker } from '../ollama/api-usage-tracker';
 import { success } from '../utils/api-response';
 import { requireAuth } from '../auth';
 import { asyncHandler } from '../utils/error-handler';
+import { createLogger } from '../utils/logger';
 
 const router = Router();
+const logger = createLogger('UsageRoutes');
 
 // API 사용량 조회에 인증 필수
 router.use(requireAuth);
@@ -43,7 +45,7 @@ router.get('/', asyncHandler(async (req: Request, res: Response) => {
  * GET /api/usage/daily?days=7
  */
 router.get('/daily', asyncHandler(async (req: Request, res: Response) => {
-    const days = parseInt(req.query.days as string) || 7;
+    const days = parseInt(req.query.days as string, 10) || 7;
     const tracker = getApiUsageTracker();
 
     res.json(success({ daily: tracker.getDailyStats(days) }));

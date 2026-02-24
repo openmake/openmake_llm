@@ -18,7 +18,7 @@
 import { Router, Request, Response } from 'express';
 import { requireAuth } from '../auth';
 import { getVapidKeys } from '../utils/vapid';
-import { success, badRequest, serviceUnavailable } from '../utils/api-response';
+import { success, serviceUnavailable } from '../utils/api-response';
 import { createLogger } from '../utils/logger';
 import { asyncHandler } from '../utils/error-handler';
 import { validate } from '../middlewares/validation';

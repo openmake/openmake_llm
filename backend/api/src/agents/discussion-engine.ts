@@ -27,8 +27,8 @@
  * @see agents/llm-router.ts - LLM 기반 에이전트 선택
  */
 
-import { routeToAgent, getAgentById, AGENTS, Agent, AgentSelection, getRelatedAgentsForDiscussion } from './index';
-import { sanitizePromptInput, validatePromptInput } from '../utils/input-sanitizer';
+import { getAgentById, Agent, getRelatedAgentsForDiscussion } from './index';
+import { sanitizePromptInput } from '../utils/input-sanitizer';
 import type { DiscussionConfig, DiscussionProgress, AgentOpinion, DiscussionResult } from './discussion-types';
 import { createContextBuilder } from './discussion-context';
 import { createLogger } from '../utils/logger';
@@ -72,7 +72,6 @@ export function createDiscussionEngine(
     // 🆕 컨텍스트 빌더 생성 (우선순위, 토큰 제한, 메모이제이션 포함)
     const contextBuilder = createContextBuilder(config);
     const buildFullContext = contextBuilder.buildFullContext;
-    const getImageContexts = contextBuilder.getImageContexts;
 
     /**
      * 🆕 개선된 전문가 에이전트 선택 (의도 기반 + 컨텍스트 반영)

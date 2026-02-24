@@ -26,7 +26,7 @@
 
         init: function () {
             try {
-                const API_BASE = window.location.origin;
+
                 // SafeStorage 래퍼 — Safari Private Mode 등에서 localStorage 예외 방지
                 const SS = window.SafeStorage || { getItem: function (k) { try { return localStorage.getItem(k); } catch (e) { return null; } }, setItem: function (k, v) { try { localStorage.setItem(k, v); } catch (e) { } }, removeItem: function (k) { try { localStorage.removeItem(k); } catch (e) { } } };
 
@@ -132,7 +132,7 @@
                 async function fetchServerSettings() {
                     try {
                         // 인증은 credentials: 'include' 쿠키로 처리 — localStorage authToken Bearer 헤더 불필요
-                        const res = await fetch(`${API_BASE}/api/mcp/settings`, {
+                        const res = await fetch('/api/mcp/settings', {
                             credentials: 'include'  // httpOnly 쿠키 포함
                         });
                         if (res.ok) {
@@ -151,7 +151,7 @@
                         }
                     } catch (e) {
                         console.log('[MCP] 서버 설정 불러오기 실패 (오프라인 모드):', e.message);
-                    }
+                        showToast('MCP 설정을 불러올 수 없습니다 (오프라인 모드)', 'warning');
                 }
 
                 function updateToggleUI() {
@@ -205,7 +205,7 @@
                             'Content-Type': 'application/json'
                         };
 
-                        const res = await fetch(`${API_BASE}/api/mcp/settings`, {
+                        const res = await fetch('/api/mcp/settings', {
                             method: 'PUT',
                             credentials: 'include',  // 🔒 httpOnly 쿠키 포함
                             headers,
@@ -329,7 +329,7 @@
                 // 서버 목록 로드
                 async function loadExternalServers() {
                     try {
-                        const res = await fetch(API_BASE + '/api/mcp/servers', {
+                        const res = await fetch('/api/mcp/servers', {
                             credentials: 'include'
                         });
                         if (!res.ok) { showToast('도구 목록 로드 실패', 'error'); return; }
@@ -373,7 +373,7 @@
                         }).join('');
                     } catch (e) {
                         console.error('[MCP] 외부 서버 목록 로드 실패:', e);
-                    }
+                        showToast('외부 서버 목록을 불러올 수 없습니다', 'error');
                 }
 
                 function escapeForHTML(str) {
@@ -421,7 +421,7 @@
                     try {
                         var headers = { 'Content-Type': 'application/json' };
 
-                        var res = await fetch(API_BASE + '/api/mcp/servers', {
+                        var res = await fetch('/api/mcp/servers', {
                             method: 'POST',
                             credentials: 'include',
                             headers: headers,
@@ -443,7 +443,7 @@
 
                 async function connectServer(serverId) {
                     try {
-                        var res = await fetch(API_BASE + '/api/mcp/servers/' + serverId + '/connect', {
+                        var res = await fetch('/api/mcp/servers/' + serverId + '/connect', {
                             method: 'POST',
                             credentials: 'include'
                         });
@@ -461,7 +461,7 @@
 
                 async function disconnectServer(serverId) {
                     try {
-                        var res = await fetch(API_BASE + '/api/mcp/servers/' + serverId + '/disconnect', {
+                        var res = await fetch('/api/mcp/servers/' + serverId + '/disconnect', {
                             method: 'POST',
                             credentials: 'include'
                         });
@@ -479,7 +479,7 @@
                 async function deleteServer(serverId) {
                     if (!confirm('이 서버를 삭제하시겠습니까?')) return;
                     try {
-                        var res = await fetch(API_BASE + '/api/mcp/servers/' + serverId, {
+                        var res = await fetch('/api/mcp/servers/' + serverId, {
                             method: 'DELETE',
                             credentials: 'include'
                         });

@@ -23,7 +23,7 @@
 
 import { Router, Request, Response } from 'express';
 import { createLogger } from '../utils/logger';
-import { success, badRequest, notFound, internalError, forbidden } from '../utils/api-response';
+import { success, badRequest, notFound, forbidden } from '../utils/api-response';
 import { requireAuth } from '../auth';
 import { asyncHandler } from '../utils/error-handler';
 import { getUnifiedDatabase, ExternalServiceType } from '../data/models/unified-database';

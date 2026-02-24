@@ -29,7 +29,7 @@ const _RELOAD_GUARD_WINDOW = 3000; // 3초 이내 동일 경로 리디렉트 감
 const _RELOAD_GUARD_MAX = 3;       // 최대 허용 횟수
 
 // 캐시 버스터 — 배포 시 deploy-frontend.sh가 이 값을 업데이트
-const _moduleVersion = 12;
+const _moduleVersion = 16;
 
 // ─── 상수 ──────────────────────────────────────────
 const CHAT_PATH = '/';
@@ -386,6 +386,15 @@ async function executeNavigation(path, options) {
     var previousRoute = _currentRoute;
     var targetRoute = _routes.get(normalizedPath);
 
+    // 클린 URL 지원: /skill-library → /skill-library.html 자동 변환
+    if (!targetRoute && normalizedPath !== CHAT_PATH && !normalizedPath.endsWith('.html')) {
+        var htmlPath = normalizedPath + '.html';
+        var htmlRoute = _routes.get(htmlPath);
+        if (htmlRoute) {
+            normalizedPath = htmlPath;
+            targetRoute = htmlRoute;
+        }
+    }
     // login.html은 항상 풀 페이지 리디렉트
     if (normalizedPath === LOGIN_PATH) {
         window.location.href = LOGIN_PATH;
@@ -655,7 +664,7 @@ function registerFromNavItems() {
         Router.register(path, {
             moduleName: moduleName,
             moduleFile: '/js/modules/pages/' + moduleName + '.js',
-            cssFiles: [], // 각 모듈이 필요 시 자체 등록
+            cssFiles: item.cssFiles || [], // nav-items.js에서 cssFiles 배열 지정 가능
             requireAuth: !!item.requireAuth,
             requireAdmin: !!item.requireAdmin,
             title: item.label || moduleName,

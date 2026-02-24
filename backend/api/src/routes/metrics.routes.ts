@@ -40,7 +40,7 @@ import { getConnectionPool } from '../ollama/connection-pool';
 import { ClusterManager } from '../cluster/manager';
 import { getAgentMonitor } from '../agents';
 import * as os from 'os';
-import { success, internalError, serviceUnavailable } from '../utils/api-response';
+import { success } from '../utils/api-response';
 import { requireAuth, requireAdmin } from '../auth';
 import { asyncHandler } from '../utils/error-handler';
 
@@ -172,7 +172,7 @@ router.get('/usage', asyncHandler(async (req: Request, res: Response) => {
  */
 router.get('/usage/daily', asyncHandler(async (req: Request, res: Response) => {
     const tracker = getApiUsageTracker();
-    const days = parseInt(req.query.days as string) || 7;
+    const days = parseInt(req.query.days as string, 10) || 7;
     res.json(success(tracker.getDailyStats(days)));
 }));
 
@@ -226,7 +226,7 @@ router.get('/analytics/cost', asyncHandler(async (req: Request, res: Response) =
  */
 router.get('/alerts', asyncHandler(async (req: Request, res: Response) => {
     const alerts = getAlertSystem();
-    const limit = parseInt(req.query.limit as string) || 50;
+    const limit = parseInt(req.query.limit as string, 10) || 50;
     res.json(success({ status: alerts.getStatus(), history: alerts.getAlertHistory(limit) }));
 }));
 

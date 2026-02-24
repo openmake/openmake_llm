@@ -42,7 +42,6 @@ import type { QueryType, ModelSelection } from './model-selector-types';
 export { classifyQuery } from './query-classifier';
 // Import classifyQuery for internal use (via separate name to avoid conflict)
 import { classifyQuery as _classifyQuery } from './query-classifier';
-import type { QueryClassification } from './model-selector-types';
 
 // ============================================================
 // 모델 프리셋 정의

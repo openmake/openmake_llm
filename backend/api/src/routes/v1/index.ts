@@ -42,7 +42,6 @@ import apiKeysRouter from '../api-keys.routes';
 import { listAvailableModels } from '../../chat/profile-resolver';
 import { success, unauthorized } from '../../utils/api-response';
 import { requireApiKey } from '../../middlewares/api-key-auth';
-import { rateLimitHeaders } from '../../middlewares/rate-limit-headers';
 import { apiKeyRateLimiter, apiKeyTPMLimiter } from '../../middlewares/api-key-limiter';
 import { asyncHandler } from '../../utils/error-handler';
 import { getApiKeyService } from '../../services/ApiKeyService';
@@ -143,7 +142,7 @@ v1Router.use('/push', pushRouter);
 v1Router.use('/api-keys', apiKeysRouter);
 
 // §9 Brand Model 목록 (외부 API Key 사용자용)
-v1Router.get('/models', (_req, res) => {
+v1Router.get('/models', asyncHandler(async (_req, res) => {
     const models = listAvailableModels();
     res.json(success({
         object: 'list',
@@ -155,6 +154,6 @@ v1Router.get('/models', (_req, res) => {
             capabilities: m.capabilities,
         })),
     }));
-});
+}));
 
 export default v1Router;

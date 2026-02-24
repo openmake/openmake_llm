@@ -19,7 +19,6 @@ import {
 import { getSystemPrompt } from './prompt';
 import { showCompactBanner, showModelInfo, showDivider } from '../ui/banner';
 import { createSpinner } from '../ui/spinner';
-import { getConfig } from '../config';
 import { createLogger } from '../utils/logger';
 
 const logger = createLogger('ChatModule');

@@ -349,6 +349,7 @@ export const authLimiter = createAdvancedRateLimiter({
     windowMs: 15 * 60 * 1000,
     ipLimit: 10,
     endpointRules: [
+        { path: /^GET:\/api\/auth\/providers(?:\/|$)/, limit: 500 }, // 공개 설정 엔드포인트 — 높은 한도
         { path: /^POST:\/api\/auth\/login(?:\/|$)/, limit: 8 },
         { path: /^POST:\/api\/auth\/register(?:\/|$)/, limit: 6 },
     ],

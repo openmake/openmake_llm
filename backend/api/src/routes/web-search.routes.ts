@@ -20,7 +20,7 @@ import { Router, Request, Response } from 'express';
 import { ClusterManager } from '../cluster/manager';
 import { OllamaClient } from '../ollama/client';
 import { getConfig } from '../config';
-import { success, internalError, serviceUnavailable } from '../utils/api-response';
+import { success, serviceUnavailable } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
 import { createLogger } from '../utils/logger';
 import { buildExecutionPlan } from '../chat/profile-resolver';

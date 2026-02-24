@@ -25,8 +25,10 @@ import { chatRateLimiter } from '../middlewares/chat-rate-limiter';
 import { validate } from '../middlewares/validation';
 import { chatRequestSchema } from '../schemas';
 import { ChatRequestHandler, ChatRequestError } from '../chat/request-handler';
+import { createLogger } from '../utils/logger';
 
 const router = Router();
+const logger = createLogger('ChatRoutes');
 let clusterManager: ClusterManager;
 
 /**

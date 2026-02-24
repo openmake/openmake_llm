@@ -33,7 +33,7 @@ const NAV_ITEMS = {
         { href: '/research.html', icon: '🔬', iconify: 'lucide:flask-conical', label: '딥 리서치', requireAuth: true },
         { href: '/marketplace.html', icon: '🏪', iconify: 'lucide:store', label: '마켓플레이스', requireAuth: true },
         { href: '/custom-agents.html', icon: '🤖', iconify: 'lucide:bot', label: '커스텀 에이전트', requireAuth: true },
-        { href: '/skill-library.html', icon: '📦', iconify: 'lucide:package', label: '스킬 라이브러리', requireAuth: true },
+        { href: '/skill-library.html', icon: '📦', iconify: 'lucide:package', label: '스킬 라이브러리', requireAuth: true, cssFiles: ['/css/skill-library.css'] },
         { href: '/memory.html', icon: '🧠', iconify: 'lucide:brain', label: 'AI 메모리', requireAuth: true },
         { href: '/usage.html', icon: '📈', iconify: 'lucide:bar-chart-2', label: 'API 사용량', requireAuth: true },
         { href: '/agent-learning.html', icon: '🎓', iconify: 'lucide:graduation-cap', label: '에이전트 학습', requireAuth: true },
@@ -50,7 +50,7 @@ const NAV_ITEMS = {
         { href: '/alerts.html', icon: '🔔', iconify: 'lucide:bell', label: '알림 관리', requireAuth: true, requireAdmin: true },
         { href: '/password-change.html', icon: '🔑', iconify: 'lucide:key-round', label: '비밀번호 변경', requireAuth: true },
         { href: '/token-monitoring.html', icon: '🗝️', iconify: 'lucide:key-square', label: 'API 토큰 모니터링', requireAuth: true, requireAdmin: true },
-        { href: '/settings.html', icon: '⚙️', iconify: 'lucide:settings', label: '설정' }
+        { href: '/settings.html', icon: '⚙️', iconify: 'lucide:settings', label: '설정', cssFiles: ['/css/settings.css'] }
     ]
 };
 

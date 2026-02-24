@@ -22,8 +22,10 @@ import { getAgentMonitor } from '../agents';
 import { success } from '../utils/api-response';
 import { requireAuth, requireAdmin } from '../auth';
 import { asyncHandler } from '../utils/error-handler';
+import { createLogger } from '../utils/logger';
 
 const router = Router();
+const logger = createLogger('AgentsMonitoringRoutes');
 
 // 에이전트 모니터링은 관리자 전용
 router.use(requireAuth, requireAdmin);

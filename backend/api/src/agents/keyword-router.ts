@@ -11,7 +11,6 @@
  */
 
 import {
-    Agent,
     AgentSelection,
     AgentPhase
 } from './types';

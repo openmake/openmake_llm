@@ -18,7 +18,6 @@
  */
 
 import { Application, Request, Response, NextFunction } from 'express';
-import * as path from 'path';
 import { getConfig } from './config/env';
 import { createLogger } from './utils/logger';
 import { requireAuth, requireAdmin } from './auth';

@@ -15,7 +15,7 @@ import { createLogger } from '../utils/logger';
 import { getAllAgents, getAgentById, getAgentCategories, getAgentStats } from '../agents';
 import { getAgentLearningSystem } from '../agents/learning';
 import { getCustomAgentBuilder } from '../agents/custom-builder';
-import { success, badRequest, notFound, internalError } from '../utils/api-response';
+import { success, badRequest, notFound } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
 import { getSkillManager } from '../agents/skill-manager';
 import { requireAuth } from '../auth';

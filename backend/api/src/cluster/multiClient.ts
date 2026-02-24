@@ -1,5 +1,5 @@
 import { ClusterManager, getClusterManager } from './manager';
-import { OllamaClient, createClient } from '../ollama/client';
+import { createClient } from '../ollama/client';
 import { ChatMessage, ModelOptions, ListModelsResponse, ModelInfo, UsageMetrics } from '../ollama/types';
 import { ClusterNode } from './types';
 import { getConfig } from '../config';

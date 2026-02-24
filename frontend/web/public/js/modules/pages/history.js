@@ -26,7 +26,7 @@
 
         init: function () {
             try {
-                const API_BASE = window.location.origin;
+
                 let allSessions = [];
                 let searchTimeout;
                 // SafeStorage 래퍼 — Safari Private Mode 등에서 localStorage 예외 방지
@@ -53,6 +53,7 @@
                         const res = await fetch('/api/chat/sessions?limit=100', {
                             credentials: 'include'  // 하이퍼투글 쿠키 기반 인증
                         });
+                        if (!res.ok) throw new Error('서버 응답 오류: ' + res.status);
                         const data = await res.json();
                         const payload = data.data || data;
 

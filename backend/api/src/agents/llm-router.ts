@@ -21,7 +21,7 @@
 
 import { OllamaClient } from '../ollama/client';
 import { sanitizePromptInput, validatePromptInput } from '../utils/input-sanitizer';
-import { Agent, AgentCategory } from './types';
+import { AgentCategory } from './types';
 import industryData from './industry-agents.json';
 import { createLogger } from '../utils/logger';
 
@@ -94,7 +94,7 @@ function getRouterClient(): OllamaClient {
 export function getAgentSummaries(): AgentSummary[] {
     const summaries: AgentSummary[] = [];
 
-    for (const [categoryId, category] of Object.entries(industryData as Record<string, AgentCategory>)) {
+    for (const [, category] of Object.entries(industryData as Record<string, AgentCategory>)) {
         for (const agent of category.agents) {
             summaries.push({
                 id: agent.id,

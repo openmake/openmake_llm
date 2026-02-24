@@ -26,7 +26,7 @@
 import { Router, Request, Response } from 'express';
 import { getApiKeyManager } from '../ollama/api-key-manager';
 import { getApiUsageTracker } from '../ollama/api-usage-tracker';
-import { success, internalError } from '../utils/api-response';
+import { success } from '../utils/api-response';
 import { requireAuth, requireAdmin } from '../auth';
 import { asyncHandler } from '../utils/error-handler';
 import { createLogger } from '../utils/logger';
@@ -77,7 +77,7 @@ router.get('/keys', asyncHandler(async (req: Request, res: Response) => {
  */
 router.get('/usage/daily', asyncHandler(async (req: Request, res: Response) => {
     const usageTracker = getApiUsageTracker();
-    const days = parseInt(req.query.days as string) || 7;
+    const days = parseInt(req.query.days as string, 10) || 7;
     const dailyStats = usageTracker.getDailyStats(days);
 
     // 차트 데이터 형식으로 변환

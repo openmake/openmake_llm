@@ -30,7 +30,9 @@ import { requireAuth } from '../auth';
 import { validate } from '../middlewares/validation';
 import { getUnifiedDatabase } from '../data/models/unified-database';
 import { createMemorySchema, updateMemorySchema } from '../schemas/memory.schema';
+import { createLogger } from '../utils/logger';
 const router = Router();
+const logger = createLogger('MemoryRoutes');
 
 // 모든 메모리 엔드포인트에 인증 필수
 router.use(requireAuth);
@@ -46,7 +48,7 @@ router.use(requireAuth);
 router.get('/', asyncHandler(async (req: Request, res: Response) => {
      const userId = (req.user && 'userId' in req.user ? req.user.userId : req.user?.id?.toString()) || 'anonymous';
      const category = req.query.category as MemoryCategory | undefined;
-     const limit = parseInt(req.query.limit as string) || 50;
+     const limit = parseInt(req.query.limit as string, 10) || 50;
      const minImportance = parseFloat(req.query.minImportance as string) || undefined;
 
      const memoryService = getMemoryService();
@@ -119,7 +121,7 @@ router.get('/search', asyncHandler(async (req: Request, res: Response) => {
     if (!q || q.trim().length === 0) {
         return res.status(400).json(badRequest('검색어(q)는 필수입니다'));
     }
-    const limit = parseInt(req.query.limit as string) || 10;
+    const limit = parseInt(req.query.limit as string, 10) || 10;
     const db = getUnifiedDatabase();
     const memories = await db.getRelevantMemories(userId, q, limit);
     res.json(success({ memories, total: memories.length, query: q }));
