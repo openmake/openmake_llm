@@ -249,13 +249,13 @@
                                 <button class="btn btn-primary btn-sm" onclick="showAddUserModal()">+ 사용자 추가</button>
                             </div>
                             <div class="search-bar admin-filter-bar">
-                                <select id="filterRole" class="form-select" onchange="loadUsers()">
+                                <select id="filterRole" class="form-select" aria-label="역할 필터" onchange="loadUsers()">
                                     <option value="">모든 역할</option>
                                     <option value="admin">관리자</option>
                                     <option value="user">일반 사용자</option>
                                     <option value="guest">게스트</option>
                                 </select>
-                                <input type="text" id="filterSearch" class="form-input"
+                                <input type="text" id="filterSearch" class="form-input" aria-label="이메일 검색"
                                     placeholder="이메일 검색..." onkeyup="debounceSearch()">
                             </div>
                             <div class="table-container admin-table-wrap">
@@ -340,15 +340,15 @@
             <div class="modal-body">
                 <input type="hidden" id="editUserId">
                 <div class="form-group">
-                    <label class="form-label">이메일</label>
+                    <label class="form-label" for="editEmail">이메일</label>
                     <input type="email" id="editEmail" class="form-input">
                 </div>
                 <div class="form-group">
-                    <label class="form-label">비밀번호 (변경 시에만 입력)</label>
+                    <label class="form-label" for="editPassword">비밀번호 (변경 시에만 입력)</label>
                     <input type="password" id="editPassword" class="form-input" placeholder="새 비밀번호">
                 </div>
                 <div class="form-group">
-                    <label class="form-label">역할</label>
+                    <label class="form-label" for="editRole">역할</label>
                     <select id="editRole" class="form-select">
                         <option value="user">일반 사용자</option>
                         <option value="admin">관리자</option>
@@ -356,7 +356,7 @@
                     </select>
                 </div>
                 <div class="form-group">
-                    <label class="form-label">상태</label>
+                    <label class="form-label" for="editActive">상태</label>
                     <select id="editActive" class="form-select">
                         <option value="1">활성</option>
                         <option value="0">비활성</option>

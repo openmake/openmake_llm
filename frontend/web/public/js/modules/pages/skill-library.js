@@ -105,15 +105,15 @@
         <div class="sl-modal">
             <h2 id="slSkillModalTitle">스킬 편집</h2>
             <div class="sl-form-group">
-                <label class="sl-form-label">스킬 이름 *</label>
+                <label class="sl-form-label" for="slSkillName">스킬 이름 *</label>
                 <input type="text" id="slSkillName" class="sl-form-input" placeholder="스킬 이름">
             </div>
             <div class="sl-form-group">
-                <label class="sl-form-label">설명</label>
+                <label class="sl-form-label" for="slSkillDesc">설명</label>
                 <textarea id="slSkillDesc" class="sl-form-textarea" rows="2" placeholder="스킬 설명..."></textarea>
             </div>
             <div class="sl-form-group">
-                <label class="sl-form-label">카테고리</label>
+                <label class="sl-form-label" for="slSkillCategory">카테고리</label>
                 <select id="slSkillCategory" class="sl-form-select">
                     <option value="general">일반</option>
                     <option value="coding">코딩</option>
@@ -126,7 +126,7 @@
                 </select>
             </div>
             <div class="sl-form-group">
-                <label class="sl-form-label">스킬 내용 (시스템 프롬프트에 주입될 텍스트)</label>
+                <label class="sl-form-label" for="slSkillContent">스킬 내용 (시스템 프롬프트에 주입될 텍스트)</label>
                 <textarea id="slSkillContent" class="sl-form-textarea mono" rows="12" placeholder="스킬 내용을 입력하세요..."></textarea>
             </div>
             <div class="sl-modal-actions">

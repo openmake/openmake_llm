@@ -1,0 +1,163 @@
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/password-change.html:60: [Missing name] <input type="password" id="currentPw" required placeholder="현재 비밀번호 입력">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/password-change.html:67: [Missing name] <input type="password" id="newPw" required placeholder="새 비밀번호 입력" oninput="checkStrength()">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/password-change.html:82: [Missing name] <input type="password" id="confirmPw" required placeholder="새 비밀번호 다시 입력" oninput="checkMatch()">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/index.html:155: [Missing name] <textarea id="chatInput" placeholder="메시지를 입력하세요..." rows="1" onkeydown="handleKeyDown(event)">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/index.html:237: [Missing name] <input type="file" id="fileInput" hidden>
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/index.html:286: [Missing name] <input type="checkbox" id="mcpThinking" checked onchange="toggleMCPModule('thinking')">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/index.html:300: [Missing name] <input type="checkbox" id="mcpWebSearch" onchange="toggleMCPModule('webSearch')">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/index.html:313: [Missing name] <input type="checkbox" id="mcpPDF" checked onchange="toggleMCPModule('pdf')">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/index.html:326: [Missing name] <input type="checkbox" id="mcpGithub" onchange="toggleMCPModule('github')">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/admin.html:252: [Missing name] <select id="filterRole" class="form-select" onchange="loadUsers()">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/admin.html:258: [Missing name] <input type="text" id="filterSearch" class="form-input" placeholder="이메일 검색..." onkeyup="debounceSearch()">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/admin.html:289: [Missing name] <input type="date" id="filterDate" class="form-input" onchange="loadConversations()">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/admin.html:291: [Missing name] <select id="filterConvRole" class="form-select" onchange="loadConversations()">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/admin.html:297: [Missing name] <input type="text" id="filterConvSearch" class="form-input" placeholder="검색어..." onkeyup="debounceConvSearch()">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/admin.html:341: [Missing name] <input type="hidden" id="editUserId">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/admin.html:344: [Missing name] <input type="email" id="editEmail" class="form-input">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/admin.html:348: [Missing name] <input type="password" id="editPassword" class="form-input" placeholder="새 비밀번호">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/admin.html:352: [Missing name] <select id="editRole" class="form-select">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/admin.html:360: [Missing name] <select id="editActive" class="form-select">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/external.html:82: [Missing name] <input type="text" id="accessToken" placeholder="액세스 토큰을 입력하세요">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/external.html:83: [Missing name] <input type="text" id="refreshToken" placeholder="(선택사항)">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/external.html:84: [Missing name] <input type="text" id="accountEmail" placeholder="(선택사항)">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/external.html:85: [Missing name] <input type="text" id="accountName" placeholder="(선택사항)">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/research.html:70: [Missing name] <input type="text" id="topic" placeholder="연구하고 싶은 주제를 입력하세요...">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/research.html:72: [Missing name] <select id="depth">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/login.html:436: [Missing name] <input type="email" id="loginEmail" class="form-input" placeholder="example@email.com" required>
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/login.html:440: [Missing name] <input type="password" id="loginPassword" class="form-input" placeholder="••••••••" required>
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/login.html:453: [Missing name] <input type="email" id="registerEmail" class="form-input" placeholder="example@email.com" required>
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/login.html:458: [Missing name] <input type="password" id="registerPassword" class="form-input" placeholder="••••••••" required minlength="8">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/login.html:464: [Missing name] <input type="password" id="registerPasswordConfirm" class="form-input" placeholder="••••••••" required>
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/agent-learning.html:67: [Missing name] <select id="agentSelect">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/marketplace.html:43: [Missing name] <input type="text" id="searchInput" placeholder="에이전트 검색...">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/marketplace.html:44: [Missing name] <select id="categoryFilter">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/history.html:117: [Missing name] <input type="date" id="filterDate" class="form-input" style="width: auto;" onchange="loadSessions()">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/history.html:119: [Missing name] <input type="text" id="searchQuery" class="form-input" style="max-width: 300px;" placeholder="검색어 입력..." onkeyup="debounceSearch()">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/history.html:121: [Missing name] <select id="sortOrder" class="form-select" style="width: auto;" onchange="loadSessions()">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/memory.html:72: [Missing name] <input type="text" id="searchInput" placeholder="메모리 검색...">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/memory.html:93: [Missing name] <select id="memCategory">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/memory.html:98: [Missing name] <input type="text" id="memKey" placeholder="메모리 제목/키">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/memory.html:99: [Missing name] <textarea id="memValue" placeholder="메모리 내용...">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/memory.html:103: [Missing name] <input type="range" id="memImportance" min="1" max="10" step="1" value="5">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/memory.html:107: [Missing name] <input type="text" id="memTags" placeholder="태그1, 태그2, ...">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/mcp-tools.html:137: [Missing id and name] <input type="checkbox" checked onchange="toggleMCP('thinking', this.checked)">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/mcp-tools.html:148: [Missing id and name] <input type="checkbox" checked onchange="toggleMCP('webSearch', this.checked)">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/mcp-tools.html:160: [Missing id and name] <input type="checkbox" checked onchange="toggleMCP('vision', this.checked)">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/mcp-tools.html:171: [Missing id and name] <input type="checkbox" onchange="toggleMCP('terminal', this.checked)">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/mcp-tools.html:182: [Missing id and name] <input type="checkbox" onchange="toggleMCP('firecrawl', this.checked)">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/mcp-tools.html:194: [Missing id and name] <input type="checkbox" checked disabled>
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/mcp-tools.html:204: [Missing id and name] <input type="checkbox" checked disabled>
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/mcp-tools.html:218: [Missing name] <input type="text" id="terminalCmd" class="form-input" style="flex: 1;" placeholder="명령어 입력 (예: ls -la, git status)" onkeydown="if(event.key==='Enter') executeCommand()">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/api-keys.html:75: [Missing name] <input type="text" id="keyName" placeholder="예: 프로덕션 서버">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/api-keys.html:76: [Missing name] <input type="text" id="keyDesc" placeholder="키 용도 설명 (선택)">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/api-keys.html:79: [Missing name] <select id="keyTier">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/skill-library.html:51: [Missing name] <input type="text" id="searchInput" placeholder="스킬 검색...">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/settings.html:148: [Missing name] <select id="themeSelect" class="form-select" style="width: auto; min-width: 180px;" onchange="setTheme(this.value)">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/settings.html:160: [Missing name] <select id="langSelect" class="form-select" style="width: auto; min-width: 180px;">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/settings.html:177: [Missing name] <select id="modelSelect" class="form-select" style="width: auto; min-width: 200px;">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/settings.html:192: [Missing name] <input type="checkbox" checked id="thinkingToggle">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/settings.html:200: [Missing name] <input type="checkbox" checked id="webSearchToggle">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/settings.html:214: [Missing name] <input type="checkbox" checked id="saveHistoryToggle">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/audit.html:122: [Missing name] <select id="filterAction">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/audit.html:123: [Missing name] <input type="text" id="filterUser" placeholder="사용자 ID">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/audit.html:125: [Missing name] <select id="filterLimit">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/canvas.html:94: [Missing name] <input type="text" id="docTitle" placeholder="문서 제목">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/canvas.html:96: [Missing name] <select id="docType">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/canvas.html:99: [Missing name] <select id="docLang">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/canvas.html:101: [Missing name] <textarea id="docContent" placeholder="내용을 입력하세요...">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/canvas.html:232: [Missing name] <input type="text" readonly value="' + url + '" id="shareUrl">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/custom-agents.html:88: [Missing name] <input type="text" id="agentName" placeholder="에이전트 이름">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/custom-agents.html:89: [Missing name] <textarea id="agentDesc" rows="3" placeholder="에이전트 설명...">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/custom-agents.html:90: [Missing name] <textarea id="agentPrompt" class="mono" placeholder="시스템 프롬프트를 입력하세요...">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/custom-agents.html:91: [Missing name] <input type="text" id="agentKeywords" placeholder="키워드1, 키워드2, ...">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/custom-agents.html:94: [Missing name] <select id="agentCategory">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/custom-agents.html:100: [Missing name] <input type="number" id="agentMaxTokens" value="4096" min="1" max="128000">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/custom-agents.html:105: [Missing name] <input type="range" id="agentTemp" min="0" max="2" step="0.1" value="0.7">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/custom-agents.html:111: [Missing name] <input type="checkbox" id="agentEnabled" checked>
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/js/components/unified-sidebar.js:200: [Missing id and name] <input type="text" class="us-search-input" placeholder="\uB300\uD654 \uAC80\uC0C9..." aria-label="Search conversations" />
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/js/modules/pages/skill-library.js:53: [Missing name] <input type="text" id="localSearchInput" class="sl-input" placeholder="스킬 검색...">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/js/modules/pages/skill-library.js:55: [Missing name] <select id="localCategoryFilter" class="sl-select">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/js/modules/pages/skill-library.js:58: [Missing name] <select id="localSortSelect" class="sl-select">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/js/modules/pages/skill-library.js:91: [Missing name] <input type="text" id="mpSearchInput" class="sl-input" placeholder="마켓플레이스 검색 (예: react, python, 분석)...">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/js/modules/pages/skill-library.js:109: [Missing name] <input type="text" id="slSkillName" class="sl-form-input" placeholder="스킬 이름">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/js/modules/pages/skill-library.js:113: [Missing name] <textarea id="slSkillDesc" class="sl-form-textarea" rows="2" placeholder="스킬 설명...">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/js/modules/pages/skill-library.js:117: [Missing name] <select id="slSkillCategory" class="sl-form-select">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/js/modules/pages/skill-library.js:130: [Missing name] <textarea id="slSkillContent" class="sl-form-textarea mono" rows="12" placeholder="스킬 내용을 입력하세요...">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/js/modules/pages/agent-learning.js:23: [Missing name] <select id=\"agentSelect\">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/js/modules/pages/agent-learning.js:140: [Missing name] <select id="abtestAgentA" style="width:100%;padding:var(--space-2) var(--space-3);background:var(--bg-secondary);border:1px solid var(--border-light);border-radius:var(--radius-md);color:var(--text-primary);font-size:14px">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/js/modules/pages/agent-learning.js:146: [Missing name] <select id="abtestAgentB" style="width:100%;padding:var(--space-2) var(--space-3);background:var(--bg-secondary);border:1px solid var(--border-light);border-radius:var(--radius-md);color:var(--text-primary);font-size:14px">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/js/modules/pages/mcp-tools.js:23: [Missing id and name] <input type=\"checkbox\" checked\n onchange=\"toggleMCP('thinking', this.checked)\">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/js/modules/pages/mcp-tools.js:23: [Missing id and name] <input type=\"checkbox\" checked\n onchange=\"toggleMCP('webSearch', this.checked)\">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/js/modules/pages/mcp-tools.js:23: [Missing id and name] <input type=\"checkbox\" checked\n onchange=\"toggleMCP('vision', this.checked)\">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/js/modules/pages/mcp-tools.js:23: [Missing id and name] <input type=\"checkbox\"\n onchange=\"toggleMCP('terminal', this.checked)\">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/js/modules/pages/mcp-tools.js:23: [Missing id and name] <input type=\"checkbox\"\n onchange=\"toggleMCP('firecrawl', this.checked)\">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/js/modules/pages/mcp-tools.js:23: [Missing id and name] <input type=\"checkbox\" checked disabled>
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/js/modules/pages/mcp-tools.js:23: [Missing id and name] <input type=\"checkbox\" checked disabled>
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/js/modules/pages/mcp-tools.js:23: [Missing name] <input type=\"text\" id=\"terminalCmd\" class=\"form-input\" style=\"flex: 1;\"\n placeholder=\"명령어 입력 (예: ls -la, git status)\"\n onkeydown=\"if(event.key==='Enter') executeCommand()\">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/js/modules/pages/mcp-tools.js:292: [Missing name] <input id="serverName" type="text" placeholder="예: filesystem, postgres" style="width: 100%; padding: var(--space-2) var(--space-3); background: var(--bg-primary); border: 1px solid var(--border-light); border-radius: var(--radius-md); color: var(--text-primary); font-size: var(--font-size-sm);" />
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/js/modules/pages/mcp-tools.js:296: [Missing name] <select id="serverTransport" onchange="toggleTransportFields()" style="width: 100%; padding: var(--space-2) var(--space-3); background: var(--bg-primary); border: 1px solid var(--border-light); border-radius: var(--radius-md); color: var(--text-primary); font-size: var(--font-size-sm);">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/js/modules/pages/mcp-tools.js:304: [Missing name] <input id="serverCommand" type="text" placeholder="예: npx" style="width: 100%; padding: var(--space-2) var(--space-3); background: var(--bg-primary); border: 1px solid var(--border-light); border-radius: var(--radius-md); color: var(--text-primary); font-size: var(--font-size-sm); margin-bottom: var(--space-2);" />
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/js/modules/pages/mcp-tools.js:306: [Missing name] <input id="serverArgs" type="text" placeholder="예: @modelcontextprotocol/server-filesystem, /tmp" style="width: 100%; padding: var(--space-2) var(--space-3); background: var(--bg-primary); border: 1px solid var(--border-light); border-radius: var(--radius-md); color: var(--text-primary); font-size: var(--font-size-sm);" />
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/js/modules/pages/mcp-tools.js:310: [Missing name] <input id="serverUrl" type="text" placeholder="예: http://localhost:3001/sse" style="width: 100%; padding: var(--space-2) var(--space-3); background: var(--bg-primary); border: 1px solid var(--border-light); border-radius: var(--radius-md); color: var(--text-primary); font-size: var(--font-size-sm);" />
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/js/modules/pages/research.js:213: [Missing name] <input type="text" id="topic" placeholder="\uC5F0\uAD6C\uD558\uACE0 \uC2F6\uC740 \uC8FC\uC81C\uB97C \uC785\uB825\uD558\uC138\uC694...">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/js/modules/pages/research.js:215: [Missing name] <select id="depth">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/js/modules/pages/memory.js:23: [Missing name] <input type=\"text\" id=\"searchInput\" placeholder=\"메모리 검색...\">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/js/modules/pages/memory.js:23: [Missing name] <select id=\"memCategory\">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/js/modules/pages/memory.js:23: [Missing name] <input type=\"text\" id=\"memKey\" placeholder=\"메모리 제목/키\">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/js/modules/pages/memory.js:23: [Missing name] <textarea id=\"memValue\" placeholder=\"메모리 내용...\">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/js/modules/pages/memory.js:23: [Missing name] <input type=\"range\" id=\"memImportance\" min=\"1\" max=\"10\" step=\"1\" value=\"5\">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/js/modules/pages/memory.js:23: [Missing name] <input type=\"text\" id=\"memTags\" placeholder=\"태그1, 태그2, ...\">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/js/modules/pages/audit.js:71: [Missing name] <select id="filterAction">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/js/modules/pages/audit.js:72: [Missing name] <input type="text" id="filterUser" placeholder="사용자 ID">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/js/modules/pages/audit.js:74: [Missing name] <select id="filterLimit">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/js/modules/pages/external.js:24: [Missing name] <input type=\"text\" id=\"accessToken\" placeholder=\"액세스 토큰을 입력하세요\">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/js/modules/pages/external.js:24: [Missing name] <input type=\"text\" id=\"refreshToken\" placeholder=\"(선택사항)\">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/js/modules/pages/external.js:24: [Missing name] <input type=\"text\" id=\"accountEmail\" placeholder=\"(선택사항)\">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/js/modules/pages/external.js:24: [Missing name] <input type=\"text\" id=\"accountName\" placeholder=\"(선택사항)\">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/js/modules/pages/history.js:23: [Missing name] <input type=\"date\" id=\"filterDate\" class=\"form-input\" style=\"width: auto;\"\n onchange=\"loadSessions()\">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/js/modules/pages/history.js:23: [Missing name] <input type=\"text\" id=\"searchQuery\" class=\"form-input\" style=\"max-width: 300px;\"\n placeholder=\"검색어 입력...\" onkeyup=\"debounceSearch()\">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/js/modules/pages/history.js:23: [Missing name] <select id=\"sortOrder\" class=\"form-select\" style=\"width: auto;\" onchange=\"loadSessions()\">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/js/modules/pages/canvas.js:23: [Missing name] <input type=\"text\" id=\"docTitle\" placeholder=\"문서 제목\">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/js/modules/pages/canvas.js:23: [Missing name] <select id=\"docType\">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/js/modules/pages/canvas.js:23: [Missing name] <select id=\"docLang\">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/js/modules/pages/canvas.js:23: [Missing name] <textarea id=\"docContent\" placeholder=\"내용을 입력하세요...\">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/js/modules/pages/canvas.js:139: [Missing name] <input type="text" readonly value="' + url + '" id="shareUrl">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/js/modules/pages/admin.js:29: [Missing name] <select id=\"filterRole\" class=\"form-select\" style=\"width: auto;\" onchange=\"loadUsers()\">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/js/modules/pages/admin.js:29: [Missing name] <input type=\"text\" id=\"filterSearch\" class=\"form-input\" style=\"max-width: 300px;\"\n placeholder=\"이메일 검색...\" onkeyup=\"debounceSearch()\">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/js/modules/pages/admin.js:29: [Missing name] <input type=\"date\" id=\"filterStartDate\" class=\"form-input\" style=\"width: auto;\"\n onchange=\"loadConversations()\">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/js/modules/pages/admin.js:29: [Missing name] <input type=\"date\" id=\"filterEndDate\" class=\"form-input\" style=\"width: auto;\"\n onchange=\"loadConversations()\">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/js/modules/pages/admin.js:29: [Missing name] <select id=\"filterConvRole\" class=\"form-select\" style=\"width: auto;\"\n onchange=\"loadConversations()\">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/js/modules/pages/admin.js:29: [Missing name] <input type=\"text\" id=\"filterConvSearch\" class=\"form-input\" style=\"max-width: 300px;\"\n placeholder=\"검색어...\" onkeyup=\"debounceConvSearch()\">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/js/modules/pages/admin.js:29: [Missing name] <input type=\"hidden\" id=\"editUserId\">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/js/modules/pages/admin.js:29: [Missing name] <input type=\"email\" id=\"editEmail\" class=\"form-input\">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/js/modules/pages/admin.js:29: [Missing name] <input type=\"password\" id=\"editPassword\" class=\"form-input\" placeholder=\"새 비밀번호\">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/js/modules/pages/admin.js:29: [Missing name] <select id=\"editRole\" class=\"form-select\">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/js/modules/pages/admin.js:29: [Missing name] <select id=\"editActive\" class=\"form-select\">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/js/modules/pages/password-change.js:23: [Missing name] <input type=\"password\" id=\"currentPw\" required placeholder=\"현재 비밀번호 입력\">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/js/modules/pages/password-change.js:23: [Missing name] <input type=\"password\" id=\"newPw\" required placeholder=\"새 비밀번호 입력\" oninput=\"checkStrength()\">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/js/modules/pages/password-change.js:23: [Missing name] <input type=\"password\" id=\"confirmPw\" required placeholder=\"새 비밀번호 다시 입력\" oninput=\"checkMatch()\">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/js/modules/pages/marketplace.js:23: [Missing name] <input type=\"text\" id=\"searchInput\" placeholder=\"에이전트 검색...\">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/js/modules/pages/marketplace.js:23: [Missing name] <select id=\"sortBy\">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/js/modules/pages/marketplace.js:136: [Missing name] <input type="text" id="reviewTitle" placeholder="리뷰 제목">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/js/modules/pages/marketplace.js:137: [Missing name] <textarea id="reviewContent" rows="3" placeholder="리뷰 내용">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/js/modules/pages/settings.js:36: [Missing name] <select id="themeSelect" class="s-select" onchange="setTheme(this.value)">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/js/modules/pages/settings.js:44: [Missing name] <select id="langSelect" class="s-select" disabled style="opacity:0.5;cursor:not-allowed;">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/js/modules/pages/settings.js:61: [Missing name] <select id="modelSelect" class="s-select">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/js/modules/pages/settings.js:73: [Missing name] <input type="checkbox" checked id="thinkingToggle">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/js/modules/pages/settings.js:77: [Missing name] <input type="checkbox" checked id="webSearchToggle">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/js/modules/pages/settings.js:107: [Missing name] <input type="checkbox" checked id="saveHistoryToggle">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/js/modules/pages/settings.js:476: [Missing name] <input type="checkbox" id="mcpTool_' + tool.name + '" ' + (isOn ? 'checked' : '') + (accessible ? '' : ' disabled') + '>
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/js/modules/pages/custom-agents.js:25: [Missing name] <input type=\"text\" id=\"agentName\" placeholder=\"에이전트 이름\">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/js/modules/pages/custom-agents.js:25: [Missing name] <textarea id=\"agentDesc\" rows=\"3\" placeholder=\"에이전트 설명...\">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/js/modules/pages/custom-agents.js:25: [Missing name] <textarea id=\"agentPrompt\" class=\"mono\" placeholder=\"시스템 프롬프트를 입력하세요...\">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/js/modules/pages/custom-agents.js:25: [Missing name] <input type=\"text\" id=\"agentKeywords\" placeholder=\"키워드1, 키워드2, ...\">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/js/modules/pages/custom-agents.js:25: [Missing name] <select id=\"agentCategory\">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/js/modules/pages/custom-agents.js:25: [Missing name] <input type=\"number\" id=\"agentMaxTokens\" value=\"4096\" min=\"1\" max=\"128000\">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/js/modules/pages/custom-agents.js:25: [Missing name] <input type=\"range\" id=\"agentTemp\" min=\"0\" max=\"2\" step=\"0.1\" value=\"0.7\">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/js/modules/pages/custom-agents.js:25: [Missing name] <input type=\"checkbox\" id=\"agentEnabled\" checked>
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/js/modules/pages/custom-agents.js:25: [Missing name] <input type=\"text\" id=\"skillName\" placeholder=\"스킬 이름\">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/js/modules/pages/custom-agents.js:25: [Missing name] <input type=\"text\" id=\"skillDesc\" placeholder=\"스킬 설명\">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/js/modules/pages/custom-agents.js:25: [Missing name] <select id=\"skillCategory\">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/js/modules/pages/custom-agents.js:25: [Missing name] <textarea id=\"skillContent\" class=\"mono\" rows=\"8\" placeholder=\"스킬 내용을 입력하세요...\">
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/js/modules/pages/custom-agents.js:329: [Missing name] <input type="checkbox" id="sk-${esc(s.id)}" data-skill-id="${esc(s.id)}" ${assignedIds.includes(s.id) ? 'checked' : ''}>
+/Volumes/MAC_APP/openmake_llm/frontend/web/public/js/modules/pages/api-keys.js:177: [Missing name] <input type="text" id="newKeyName" class="ak-input" placeholder="키 이름 (예: 개발용, 프로덕션)" onkeyup="if(event.key===\'Enter\') createApiKey()">

@@ -72,10 +72,10 @@
     <div class="modal-overlay" id="createModal">
         <div class="modal">
             <h2>새 API 키 생성</h2>
-            <div class="form-group"><label>키 이름</label><input type="text" id="keyName" placeholder="예: 프로덕션 서버"></div>
-            <div class="form-group"><label>설명</label><input type="text" id="keyDesc" placeholder="키 용도 설명 (선택)"></div>
+            <div class="form-group"><label for="keyName">키 이름</label><input type="text" id="keyName" placeholder="예: 프로덕션 서버"></div>
+            <div class="form-group"><label for="keyDesc">설명</label><input type="text" id="keyDesc" placeholder="키 용도 설명 (선택)"></div>
             <div class="form-group">
-                <label>Rate Limit 등급</label>
+                <label for="keyTier">Rate Limit 등급</label>
                 <select id="keyTier">
                     <option value="free">Free (10 RPM)</option>
                     <option value="starter">Starter (30 RPM)</option>

@@ -79,10 +79,10 @@
     <div class="modal-overlay" id="connectModal">
         <div class="modal">
             <h2 id="connectTitle">서비스 연결</h2>
-            <div class="form-group"><label>액세스 토큰 <span style="color:var(--danger)">*</span></label><input type="text" id="accessToken" placeholder="액세스 토큰을 입력하세요"></div>
-            <div class="form-group"><label>리프레시 토큰</label><input type="text" id="refreshToken" placeholder="(선택사항)"></div>
-            <div class="form-group"><label>계정 이메일</label><input type="text" id="accountEmail" placeholder="(선택사항)"></div>
-            <div class="form-group"><label>계정 이름</label><input type="text" id="accountName" placeholder="(선택사항)"></div>
+            <div class="form-group"><label for="accessToken">액세스 토큰 <span style="color:var(--danger)">*</span></label><input type="text" id="accessToken" placeholder="액세스 토큰을 입력하세요"></div>
+            <div class="form-group"><label for="refreshToken">리프레시 토큰</label><input type="text" id="refreshToken" placeholder="(선택사항)"></div>
+            <div class="form-group"><label for="accountEmail">계정 이메일</label><input type="text" id="accountEmail" placeholder="(선택사항)"></div>
+            <div class="form-group"><label for="accountName">계정 이름</label><input type="text" id="accountName" placeholder="(선택사항)"></div>
             <div class="modal-actions">
                 <button class="btn-secondary" onclick="closeConnect()">취소</button>
                 <button class="btn-primary" onclick="submitConnect()">연결</button>

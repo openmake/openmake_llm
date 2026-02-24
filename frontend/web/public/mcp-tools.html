@@ -134,7 +134,7 @@
                         <div class="tool-card">
                             <div class="tool-header">
                                 <span class="tool-name">🧠 Sequential Thinking</span>
-                                <label class="tool-toggle"><input type="checkbox" checked
+                                <label class="tool-toggle"><input type="checkbox" id="mcpToggleThinking" name="mcpToggleThinking" checked
                                         onchange="toggleMCP('thinking', this.checked)"><span
                                         class="toggle-slider"></span></label>
                             </div>
@@ -145,7 +145,7 @@
                         <div class="tool-card">
                             <div class="tool-header">
                                 <span class="tool-name">🌐 Web Search</span>
-                                <label class="tool-toggle"><input type="checkbox" checked
+                                <label class="tool-toggle"><input type="checkbox" id="mcpToggleWebSearch" name="mcpToggleWebSearch" checked
                                         onchange="toggleMCP('webSearch', this.checked)"><span
                                         class="toggle-slider"></span></label>
                             </div>
@@ -157,7 +157,7 @@
                         <div class="tool-card">
                             <div class="tool-header">
                                 <span class="tool-name">👁️ Vision Tools</span>
-                                <label class="tool-toggle"><input type="checkbox" checked
+                                <label class="tool-toggle"><input type="checkbox" id="mcpToggleVision" name="mcpToggleVision" checked
                                         onchange="toggleMCP('vision', this.checked)"><span
                                         class="toggle-slider"></span></label>
                             </div>
@@ -168,7 +168,7 @@
                         <div class="tool-card">
                             <div class="tool-header">
                                 <span class="tool-name">💻 Terminal</span>
-                                <label class="tool-toggle"><input type="checkbox"
+                                <label class="tool-toggle"><input type="checkbox" id="mcpToggleTerminal" name="mcpToggleTerminal"
                                         onchange="toggleMCP('terminal', this.checked)"><span
                                         class="toggle-slider"></span></label>
                             </div>
@@ -179,7 +179,7 @@
                         <div class="tool-card">
                             <div class="tool-header">
                                 <span class="tool-name">🔥 Firecrawl</span>
-                                <label class="tool-toggle"><input type="checkbox"
+                                <label class="tool-toggle"><input type="checkbox" id="mcpToggleFirecrawl" name="mcpToggleFirecrawl"
                                         onchange="toggleMCP('firecrawl', this.checked)"><span
                                         class="toggle-slider"></span></label>
                             </div>
@@ -191,7 +191,7 @@
                         <div class="tool-card">
                             <div class="tool-header">
                                 <span class="tool-name">🔐 등급별 도구 접근</span>
-                                <label class="tool-toggle"><input type="checkbox" checked disabled><span
+                                <label class="tool-toggle"><input type="checkbox" id="toolTierAccess" checked disabled><span
                                         class="toggle-slider"></span></label>
                             </div>
                             <p class="tool-desc">사용자 등급(Free/Pro/Enterprise)에 따라 사용 가능한 도구를 자동 필터링합니다.</p>
@@ -201,7 +201,7 @@
                         <div class="tool-card">
                             <div class="tool-header">
                                 <span class="tool-name">📁 사용자 데이터 격리</span>
-                                <label class="tool-toggle"><input type="checkbox" checked disabled><span
+                                <label class="tool-toggle"><input type="checkbox" id="toolDataIsolation" checked disabled><span
                                         class="toggle-slider"></span></label>
                             </div>
                             <p class="tool-desc">사용자별 독립된 작업 디렉토리, SQLite DB, 설정 파일을 제공하여 데이터를 안전하게 격리합니다.</p>

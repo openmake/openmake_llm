@@ -91,14 +91,14 @@
     <div class="modal-overlay" id="editorModal">
         <div class="modal">
             <h2 id="editorTitle">새 문서</h2>
-            <div class="form-group"><label>제목</label><input type="text" id="docTitle" placeholder="문서 제목"></div>
-            <div class="form-group"><label>유형</label>
+            <div class="form-group"><label for="docTitle">제목</label><input type="text" id="docTitle" placeholder="문서 제목"></div>
+            <div class="form-group"><label for="docType">유형</label>
                 <select id="docType"><option value="document">문서</option><option value="code">코드</option><option value="diagram">다이어그램</option><option value="table">표</option></select>
             </div>
-            <div class="form-group" id="langGroup" style="display:none"><label>언어</label>
+            <div class="form-group" id="langGroup" style="display:none"><label for="docLang">언어</label>
                 <select id="docLang"><option value="">선택</option><option>javascript</option><option>typescript</option><option>python</option><option>java</option><option>go</option><option>rust</option><option>html</option><option>css</option><option>sql</option><option>bash</option></select>
             </div>
-            <div class="form-group"><label>내용</label><textarea id="docContent" placeholder="내용을 입력하세요..."></textarea></div>
+            <div class="form-group"><label for="docContent">내용</label><textarea id="docContent" placeholder="내용을 입력하세요..."></textarea></div>
             <div id="shareSection" style="display:none"></div>
             <div class="modal-actions">
                 <button class="btn-secondary" onclick="closeEditor()">취소</button>

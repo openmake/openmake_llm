@@ -152,8 +152,8 @@
                     <div class="chat-input-container">
                         <div class="attachments" id="attachments" style="display: none;"></div>
                         <div class="input-wrapper">
-                            <textarea id="chatInput" placeholder="메시지를 입력하세요..." rows="1"
-                                onkeydown="handleKeyDown(event)"></textarea>
+                            <textarea id="chatInput" name="chatInput" placeholder="메시지를 입력하세요..." rows="1"
+                                aria-label="메시지 입력" onkeydown="handleKeyDown(event)"></textarea>
                             <div class="input-actions">
                                 <div class="left-actions">
                                     <button class="action-btn" onclick="newChat()" title="새 대화 (+)">
@@ -234,7 +234,7 @@
                         <div class="upload-content">
                             <span class="upload-icon">📁</span>
                             <p>파일을 드래그하거나 클릭하여 선택</p>
-                            <input type="file" id="fileInput" hidden>
+                            <input type="file" id="fileInput" name="fileInput" aria-label="파일 선택" hidden>
                         </div>
                     </div>
                 </div>
@@ -251,7 +251,7 @@
                 <div class="modal-body">
                     <!-- LLM 모델 설정 -->
                     <div class="settings-group">
-                        <label class="settings-label">🤖 현재 LLM 모델</label>
+                        <span class="settings-label">🤖 현재 LLM 모델</span>
                         <div class="settings-card" id="currentModelInfo">
                             <div id="activeModelName">로딩 중...</div>
                         </div>
@@ -262,7 +262,7 @@
 
                     <!-- 테마 설정 -->
                     <div class="settings-group">
-                        <label class="settings-label">🎨 테마 설정</label>
+                        <span class="settings-label">🎨 테마 설정</span>
                         <div class="btn-group">
                             <button class="btn" id="theme-light" onclick="setTheme('light')">☀️ 라이트</button>
                             <button class="btn" id="theme-dark" onclick="setTheme('dark')">🌙 다크</button>
@@ -272,7 +272,7 @@
 
                     <!-- MCP 설정 -->
                     <div class="settings-group">
-                        <label class="settings-label">🔧 MCP 기능 확장</label>
+                        <span class="settings-label">🔧 MCP 기능 확장</span>
                         <div class="toggle-list">
                             <div class="toggle-item">
                                 <div class="toggle-info">

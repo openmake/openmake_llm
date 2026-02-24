@@ -347,8 +347,9 @@ export const generalLimiter = createAdvancedRateLimiter({
  */
 export const authLimiter = createAdvancedRateLimiter({
     windowMs: 15 * 60 * 1000,
-    ipLimit: 10,
+    ipLimit: 500, // SPA가 페이지 이동마다 /auth/me + /auth/providers 호출 — 개별 엔드포인트 제한이 실제 방어선
     endpointRules: [
+        { path: /^GET:\/api\/auth\/me(?:\/|$)/, limit: 200 }, // 세션 확인 — 비용 낮음
         { path: /^GET:\/api\/auth\/providers(?:\/|$)/, limit: 500 }, // 공개 설정 엔드포인트 — 높은 한도
         { path: /^POST:\/api\/auth\/login(?:\/|$)/, limit: 8 },
         { path: /^POST:\/api\/auth\/register(?:\/|$)/, limit: 6 },

@@ -537,12 +537,29 @@
 
         initTheme();
 
-        // 🔒 자동로그인 차단: login.html 진입 시 stale 토큰 정리
-        // 이전: authToken이 있으면 /api/auth/me로 자동 리다이렉트 → 제거
-        // 사용자가 로그인 페이지에 도달하면 기존 인증 상태를 초기화
-        localStorage.removeItem('authToken');
-        localStorage.removeItem('user');
-        localStorage.removeItem('guestMode');
+        // 🔒 로그인 상태 확인: 이미 인증되었으면 홈으로 리다이렉트
+        // httpOnly 쿠키로 인증 상태 확인 후 localStorage 정리 여부 결정
+        (async function checkAuthAndRedirect() {
+            try {
+                const res = await fetch('/api/auth/me', { credentials: 'include' });
+                if (res.ok) {
+                    const data = await res.json();
+                    const user = data.data?.user || data.user;
+                    if (user && user.email) {
+                        // 이미 로그인됨 → 홈으로 이동
+                        console.log('[Login] 이미 인증됨, 홈으로 리다이렉트:', user.email);
+                        window.location.href = '/';
+                        return;
+                    }
+                }
+            } catch (e) {
+                // 네트워크 오류 — 무시
+            }
+            // 인증 안 됨 → stale localStorage 정리
+            localStorage.removeItem('authToken');
+            localStorage.removeItem('user');
+            localStorage.removeItem('guestMode');
+        })();
 
         function switchTab(tab) {
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -728,21 +745,29 @@
 
         async function checkOAuthProviders() {
             try {
+                console.log('[Login] OAuth 프로바이더 확인 시작...');
                 const res = await fetch(`${API_BASE}/api/auth/providers`);
                 const data = await res.json();
+                console.log('[Login] OAuth 프로바이더 응답:', data);
 
                 // api-response 표준 형식: data.data.providers
                 const payload = data.data || data;
                 const providers = payload.providers || [];
+                console.log('[Login] 활성 프로바이더:', providers);
+
                 const section = document.getElementById('socialLoginSection');
                 const divider = document.getElementById('divider1');
 
                 if (providers.length === 0) {
+                    console.log('[Login] 프로바이더 없음 - 섹션 숨김');
                     section.style.display = 'none';
                     if (divider) divider.style.display = 'none';
                 } else {
                     const googleBtn = document.querySelector('.social-btn-google');
                     const githubBtn = document.querySelector('.social-btn-github');
+
+                    console.log('[Login] Google 버튼 요소:', googleBtn);
+                    console.log('[Login] Google 포함 여부:', providers.includes('google'));
 
                     if (googleBtn) {
                         googleBtn.style.display = providers.includes('google') ? 'flex' : 'none';
@@ -752,7 +777,7 @@
                     }
                 }
             } catch (e) {
-                console.warn('OAuth 프로바이더 확인 실패:', e);
+                console.error('[Login] OAuth 프로바이더 확인 실패:', e);
             }
         }
 

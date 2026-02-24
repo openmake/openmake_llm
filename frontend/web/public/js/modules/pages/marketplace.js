@@ -131,7 +131,7 @@
                         <div style="color:var(--text-secondary)">${esc(r.content)}</div>
                     </div>`).join('');
                 html += `<div class="review-form">
-                    <label>리뷰 작성</label>
+                    <span class="review-form-label">리뷰 작성</span>
                     <div class="star-select" id="starSelect">${[1,2,3,4,5].map(i => '<span onclick="setRating(' + i + ')" data-v="' + i + '">&#9733;</span>').join('')}</div>
                     <input type="text" id="reviewTitle" placeholder="리뷰 제목">
                     <textarea id="reviewContent" rows="3" placeholder="리뷰 내용"></textarea>

@@ -197,7 +197,7 @@ UnifiedSidebar.prototype._renderHTML = function () {
         // Search
         '<div class="us-search">' +
         ICONS.search +
-        '<input type="text" class="us-search-input" placeholder="\uB300\uD654 \uAC80\uC0C9..." aria-label="Search conversations" />' +
+        '<input type="text" id="sidebarSearch" name="sidebarSearch" class="us-search-input" placeholder="\uB300\uD654 \uAC80\uC0C9..." aria-label="Search conversations" />' +
         '</div>' +
         // Conversations
         '<div class="us-conversations" role="list" aria-label="Conversation list">' +
