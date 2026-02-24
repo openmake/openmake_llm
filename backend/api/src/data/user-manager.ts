@@ -451,7 +451,7 @@ class UserManagerImpl {
 
             // ── 3. 사용자 데이터 정리 ──
             await client.query('DELETE FROM user_memories WHERE user_id = $1', [userId]);
-            await client.query('DELETE FROM push_subscriptions WHERE user_id = $1', [userId]);
+
             await client.query('DELETE FROM external_connections WHERE user_id = $1', [userId]);
             await client.query('DELETE FROM user_api_keys WHERE user_id = $1', [userId]);
             await client.query('DELETE FROM message_feedback WHERE user_id = $1', [userId]);

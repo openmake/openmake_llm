@@ -47,3 +47,6 @@ export { default as chatFeedbackRouter } from './chat-feedback.routes';
 
 // 🆕 Skills Marketplace 라우트
 export { default as skillsMarketplaceRouter } from './skills-marketplace.routes';
+
+// 🆕 Token Monitoring 라우트
+export { tokenMonitoringRouter } from './token-monitoring.routes';

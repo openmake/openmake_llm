@@ -26,6 +26,7 @@ import {
     AuditRepository,
     CanvasRepository,
     ConversationRepository,
+    ExternalRepository,
     MarketplaceRepository,
     MemoryRepository,
     ResearchRepository,
@@ -854,7 +855,7 @@ export const API_KEY_TIER_LIMITS: Record<ApiKeyTier, {
  * @description
  * - 서버 시작 시 스키마 자동 초기화 (SQL 파일 또는 LEGACY_SCHEMA 폴백)
  * - pg Pool 기반 커넥션 풀링 (statement_timeout: 30s, idle_timeout: 30s)
- * - 8개 Repository 위임: User, Conversation, Memory, Research, ApiKey, Canvas, Marketplace, Audit
+ * - 9개 Repository 위임: User, Conversation, Memory, Research, ApiKey, Canvas, Marketplace, Audit, External
  * - withRetry 래퍼를 통한 일시적 연결 오류 자동 재시도
  */
 export class UnifiedDatabase {
@@ -885,8 +886,11 @@ export class UnifiedDatabase {
     /** 마켓플레이스 데이터 접근 Repository */
     private readonly marketplaceRepository: MarketplaceRepository;
 
-    /** 감사 로그 및 외부 연동 데이터 접근 Repository */
+    /** 감사 로그 데이터 접근 Repository */
     private readonly auditRepository: AuditRepository;
+
+    /** 외부 연동 및 MCP 서버 데이터 접근 Repository */
+    private readonly externalRepository: ExternalRepository;
 
     constructor() {
         const poolConfig: PoolConfig = {
@@ -917,6 +921,7 @@ export class UnifiedDatabase {
         this.canvasRepository = new CanvasRepository(this.pool);
         this.marketplaceRepository = new MarketplaceRepository(this.pool);
         this.auditRepository = new AuditRepository(this.pool);
+        this.externalRepository = new ExternalRepository(this.pool);
 
         logger.info('[UnifiedDB] PostgreSQL Pool initialized');
     }
@@ -1315,19 +1320,19 @@ export class UnifiedDatabase {
         accountName?: string;
         metadata?: Record<string, unknown>;
     }): Promise<void> {
-        return this.auditRepository.createExternalConnection(params);
+        return this.externalRepository.createExternalConnection(params);
     }
 
     async getUserConnections(userId: string): Promise<ExternalConnection[]> {
-        return this.auditRepository.getUserConnections(userId);
+        return this.externalRepository.getUserConnections(userId);
     }
 
     async getExternalConnection(connectionId: string): Promise<ExternalConnection | undefined> {
-        return this.auditRepository.getExternalConnection(connectionId);
+        return this.externalRepository.getExternalConnection(connectionId);
     }
 
     async getUserConnectionByService(userId: string, serviceType: ExternalServiceType): Promise<ExternalConnection | undefined> {
-        return this.auditRepository.getUserConnectionByService(userId, serviceType);
+        return this.externalRepository.getUserConnectionByService(userId, serviceType);
     }
 
     async updateConnectionTokens(connectionId: string, tokens: {
@@ -1335,11 +1340,11 @@ export class UnifiedDatabase {
         refreshToken?: string;
         expiresAt?: string;
     }): Promise<void> {
-        return this.auditRepository.updateConnectionTokens(connectionId, tokens);
+        return this.externalRepository.updateConnectionTokens(connectionId, tokens);
     }
 
     async disconnectService(userId: string, serviceType: ExternalServiceType): Promise<void> {
-        return this.auditRepository.disconnectService(userId, serviceType);
+        return this.externalRepository.disconnectService(userId, serviceType);
     }
 
     // 외부 파일 캐시
@@ -1353,15 +1358,15 @@ export class UnifiedDatabase {
         webUrl?: string;
         cachedContent?: string;
     }): Promise<void> {
-        return this.auditRepository.cacheExternalFile(params);
+        return this.externalRepository.cacheExternalFile(params);
     }
 
     async getConnectionFiles(connectionId: string, limit: number = 100): Promise<ExternalFile[]> {
-        return this.auditRepository.getConnectionFiles(connectionId, limit);
+        return this.externalRepository.getConnectionFiles(connectionId, limit);
     }
 
     async getCachedFile(connectionId: string, externalId: string): Promise<ExternalFile | undefined> {
-        return this.auditRepository.getCachedFile(connectionId, externalId);
+        return this.externalRepository.getCachedFile(connectionId, externalId);
     }
 
     // ============================================
@@ -1369,23 +1374,23 @@ export class UnifiedDatabase {
     // ============================================
 
     async getMcpServers(): Promise<MCPServerRow[]> {
-        return this.auditRepository.getMcpServers();
+        return this.externalRepository.getMcpServers();
     }
 
     async getMcpServerById(id: string): Promise<MCPServerRow | null> {
-        return this.auditRepository.getMcpServerById(id);
+        return this.externalRepository.getMcpServerById(id);
     }
 
     async createMcpServer(server: Omit<MCPServerRow, 'created_at' | 'updated_at'>): Promise<MCPServerRow> {
-        return this.auditRepository.createMcpServer(server);
+        return this.externalRepository.createMcpServer(server);
     }
 
     async updateMcpServer(id: string, updates: Partial<Pick<MCPServerRow, 'name' | 'transport_type' | 'command' | 'args' | 'env' | 'url' | 'enabled'>>): Promise<MCPServerRow | null> {
-        return this.auditRepository.updateMcpServer(id, updates);
+        return this.externalRepository.updateMcpServer(id, updates);
     }
 
     async deleteMcpServer(id: string): Promise<boolean> {
-        return this.auditRepository.deleteMcpServer(id);
+        return this.externalRepository.deleteMcpServer(id);
     }
 
     // ============================================

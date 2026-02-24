@@ -2,19 +2,19 @@
  * ============================================================
  * Agent Learning - RLHF 기반 에이전트 학습 및 피드백 시스템
  * ============================================================
- * 
+ *
  * 사용자 피드백(1-5점 평점)을 수집하고, 에이전트별 품질 점수를 계산하며,
  * 실패 패턴 분석과 프롬프트 자동 최적화 제안 기능을 제공합니다.
- * PostgreSQL의 agent_feedback 테이블에 피드백 데이터를 영속화합니다.
- * 
+ * 피드백은 인메모리 배열에 저장하며, DB에도 비동기로 영속화합니다.
+ *
  * @module agents/learning
  * @description
- * - 피드백 수집: collectFeedback() - 1-5점 평점 + 코멘트 + 태그
+ * - 피드백 수집: collectFeedback() - 1-5점 평점 + 코멘트 + 태그 (async, DB 저장 포함)
  * - 품질 점수: calculateQualityScore() - 평균 평점, 트렌드 분석, 강점/약점 파악
  * - 실패 패턴: analyzeFailurePatterns() - 저평가 피드백에서 공통 실패 유형 추출
  * - 프롬프트 최적화: suggestPromptImprovements() - 실패 패턴 기반 프롬프트 개선 제안
  * - 전체 통계: getOverallStats() - 에이전트 순위, 평균 평점 등
- * 
+ *
  * @see agents/custom-builder.ts - 커스텀 에이전트 관리
  * @see routes/agents.routes.ts - 피드백 API 엔드포인트
  */
@@ -26,7 +26,6 @@ const logger = createLogger('AgentLearning');
 
 /**
  * 에이전트 피드백 인터페이스
- * DB의 agent_feedback 테이블 스키마와 매핑됩니다.
  */
 interface AgentFeedback {
     feedbackId: string;
@@ -42,7 +41,6 @@ interface AgentFeedback {
 
 /**
  * 실패 패턴 인터페이스
- * 저평가 피드백에서 추출된 공통 실패 유형을 나타냅니다.
  */
 interface FailurePattern {
     pattern: string;
@@ -53,12 +51,11 @@ interface FailurePattern {
 
 /**
  * 에이전트 품질 점수 인터페이스
- * calculateQualityScore()의 반환 타입입니다.
  */
 interface AgentQualityScore {
     agentId: string;
-    overallScore: number;  // 0-100
-    avgRating: number;     // 1-5
+    overallScore: number;
+    avgRating: number;
     totalFeedbacks: number;
     recentTrend: 'improving' | 'stable' | 'declining';
     strengths: string[];
@@ -67,7 +64,6 @@ interface AgentQualityScore {
 
 /**
  * 프롬프트 개선 제안 인터페이스
- * suggestPromptImprovements()의 반환 타입입니다.
  */
 interface PromptImprovement {
     agentId: string;
@@ -79,18 +75,16 @@ interface PromptImprovement {
 
 /**
  * 에이전트 학습 시스템 클래스
- * 
- * RLHF(Reinforcement Learning from Human Feedback) 패턴으로
- * 에이전트 성능을 추적하고 개선 방향을 제시합니다.
+ *
  * 싱글톤 패턴으로 getAgentLearningSystem()을 통해 접근합니다.
- * 
+ * 피드백은 인메모리 배열에 저장하고 DB에도 비동기로 영속화합니다.
+ *
  * @class AgentLearningSystem
  */
 export class AgentLearningSystem {
     private feedbacks: AgentFeedback[] = [];
 
     constructor() {
-        this.loadFromDB().catch((err: unknown) => logger.error('Failed to load feedbacks from DB:', err));
         logger.info('에이전트 학습 시스템 초기화됨');
     }
 
@@ -101,34 +95,8 @@ export class AgentLearningSystem {
     }
 
     /**
-     * DB에서 피드백 데이터 로드
-     */
-    private async loadFromDB(): Promise<void> {
-        try {
-            const pool = this.getPool();
-            const result = await pool.query(
-                'SELECT id, agent_id, user_id, rating, comment, query, response, tags, created_at FROM agent_feedback ORDER BY created_at DESC'
-            );
-            this.feedbacks = result.rows.map((row: Record<string, unknown>) => ({
-                feedbackId: row.id as string,
-                agentId: row.agent_id as string,
-                userId: row.user_id as string | undefined,
-                rating: row.rating as 1 | 2 | 3 | 4 | 5,
-                comment: row.comment as string | undefined,
-                query: row.query as string,
-                response: row.response as string,
-                timestamp: new Date(row.created_at as string),
-                tags: row.tags as string[] | undefined,
-            }));
-            logger.info(`피드백 ${this.feedbacks.length}개 로드됨`);
-        } catch (error) {
-            logger.warn('피드백 데이터 로드 실패:', error);
-            this.feedbacks = [];
-        }
-    }
-
-    /**
-     * 피드백 수집
+     * 피드백 수집 (async — DB 영속화 포함)
+     * 로컬 배열에 즉시 저장하고 DB에도 비동기로 저장합니다.
      */
     async collectFeedback(params: {
         agentId: string;
@@ -146,6 +114,10 @@ export class AgentLearningSystem {
             timestamp: new Date()
         };
 
+        // 로컬 배열에 즉시 저장
+        this.feedbacks.push(feedback);
+
+        // DB에 비동기 영속화 (실패해도 로컬은 유지)
         try {
             const pool = this.getPool();
             await pool.query(
@@ -163,19 +135,20 @@ export class AgentLearningSystem {
                 ]
             );
         } catch (error) {
-            logger.error('피드백 DB 저장 실패:', error);
+            logger.error('피드백 DB 저장 실패 (로컬 배열은 유지됨):', error);
         }
 
-        this.feedbacks.push(feedback);
         logger.info(`피드백 수집: ${params.agentId} (${params.rating}/5)`);
         return feedback;
     }
 
     /**
-     * 에이전트 품질 점수 계산
+     * 에이전트 품질 점수 계산 (동기 — 인메모리 배열 기반)
      */
     calculateQualityScore(agentId: string): AgentQualityScore {
-        const agentFeedbacks = this.feedbacks.filter(f => f.agentId === agentId);
+        const agentFeedbacks = this.feedbacks
+            .filter(f => f.agentId === agentId)
+            .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
 
         if (agentFeedbacks.length === 0) {
             return {
@@ -189,45 +162,47 @@ export class AgentLearningSystem {
             };
         }
 
-        // 평균 평점 계산
-        const avgRating = agentFeedbacks.reduce((sum, f) => sum + f.rating, 0) / agentFeedbacks.length;
-
-        // 전체 점수 (100점 기준)
+        const avgRating = agentFeedbacks.reduce((sum, feedback) => sum + feedback.rating, 0) / agentFeedbacks.length;
         const overallScore = Math.round(avgRating * 20);
 
-        // 최근 트렌드 분석 (최근 10개 vs 이전 10개)
-        const sorted = [...agentFeedbacks].sort((a, b) =>
-            new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-        );
-
         let recentTrend: 'improving' | 'stable' | 'declining' = 'stable';
-        if (sorted.length >= 10) {
-            const recent = sorted.slice(0, 5).reduce((sum, f) => sum + f.rating, 0) / 5;
-            const previous = sorted.slice(5, 10).reduce((sum, f) => sum + f.rating, 0) / 5;
+        if (agentFeedbacks.length >= 10) {
+            const recent = agentFeedbacks.slice(0, 5).reduce((sum, f) => sum + f.rating, 0) / 5;
+            const previous = agentFeedbacks.slice(5, 10).reduce((sum, f) => sum + f.rating, 0) / 5;
 
-            if (recent > previous + 0.3) recentTrend = 'improving';
-            else if (recent < previous - 0.3) recentTrend = 'declining';
+            if (recent > previous + 0.3) {
+                recentTrend = 'improving';
+            } else if (recent < previous - 0.3) {
+                recentTrend = 'declining';
+            }
         }
 
-        // 강점/약점 분석 (태그 기반)
         const strengths: string[] = [];
         const weaknesses: string[] = [];
-
         const tagCounts: Map<string, { good: number; bad: number }> = new Map();
+
         for (const feedback of agentFeedbacks) {
-            if (feedback.tags) {
-                for (const tag of feedback.tags) {
-                    const current = tagCounts.get(tag) || { good: 0, bad: 0 };
-                    if (feedback.rating >= 4) current.good++;
-                    else if (feedback.rating <= 2) current.bad++;
-                    tagCounts.set(tag, current);
+            if (!feedback.tags) {
+                continue;
+            }
+
+            for (const tag of feedback.tags) {
+                const current = tagCounts.get(tag) || { good: 0, bad: 0 };
+                if (feedback.rating >= 4) {
+                    current.good++;
+                } else if (feedback.rating <= 2) {
+                    current.bad++;
                 }
+                tagCounts.set(tag, current);
             }
         }
 
         for (const [tag, counts] of tagCounts.entries()) {
-            if (counts.good > counts.bad * 2) strengths.push(tag);
-            else if (counts.bad > counts.good * 2) weaknesses.push(tag);
+            if (counts.good > counts.bad * 2) {
+                strengths.push(tag);
+            } else if (counts.bad > counts.good * 2) {
+                weaknesses.push(tag);
+            }
         }
 
         return {
@@ -242,7 +217,7 @@ export class AgentLearningSystem {
     }
 
     /**
-     * 실패 패턴 분석
+     * 실패 패턴 분석 (동기 — 인메모리 배열 기반)
      */
     analyzeFailurePatterns(agentId: string): FailurePattern[] {
         const lowRatedFeedbacks = this.feedbacks.filter(
@@ -253,10 +228,7 @@ export class AgentLearningSystem {
             return [];
         }
 
-        // 간단한 패턴 분석 (실제로는 더 복잡한 NLP 필요)
         const patterns: Map<string, { count: number; examples: string[] }> = new Map();
-
-        // 일반적인 실패 유형
         const patternTypes = [
             { pattern: '정보 부족', keywords: ['모르', '없', '정보', '부족'] },
             { pattern: '잘못된 응답', keywords: ['틀리', '오류', '잘못', '아님'] },
@@ -266,17 +238,19 @@ export class AgentLearningSystem {
         ];
 
         for (const feedback of lowRatedFeedbacks) {
-            const combined = (feedback.query + ' ' + feedback.response + ' ' + (feedback.comment || '')).toLowerCase();
+            const combined = `${feedback.query} ${feedback.response} ${feedback.comment || ''}`.toLowerCase();
 
             for (const type of patternTypes) {
-                if (type.keywords.some(kw => combined.includes(kw))) {
-                    const existing = patterns.get(type.pattern) || { count: 0, examples: [] };
-                    existing.count++;
-                    if (existing.examples.length < 3) {
-                        existing.examples.push(feedback.query.substring(0, 100));
-                    }
-                    patterns.set(type.pattern, existing);
+                if (!type.keywords.some(keyword => combined.includes(keyword))) {
+                    continue;
                 }
+
+                const existing = patterns.get(type.pattern) || { count: 0, examples: [] };
+                existing.count++;
+                if (existing.examples.length < 3) {
+                    existing.examples.push(feedback.query.substring(0, 100));
+                }
+                patterns.set(type.pattern, existing);
             }
         }
 
@@ -290,7 +264,7 @@ export class AgentLearningSystem {
     }
 
     /**
-     * 프롬프트 자동 최적화 제안
+     * 프롬프트 자동 최적화 제안 (async — 내부에서 동기 메서드 호출)
      */
     suggestPromptImprovements(agentId: string, currentPrompt: string): PromptImprovement {
         const failurePatterns = this.analyzeFailurePatterns(agentId);
@@ -300,7 +274,6 @@ export class AgentLearningSystem {
         const suggestedRemovals: string[] = [];
         let reasoning = '';
 
-        // 실패 패턴 기반 개선
         for (const pattern of failurePatterns.slice(0, 3)) {
             switch (pattern.pattern) {
                 case '정보 부족':
@@ -318,12 +291,13 @@ export class AgentLearningSystem {
                 case '관련성 부족':
                     suggestedAdditions.push('질문의 핵심을 먼저 파악하고 직접적으로 답변');
                     break;
+                default:
+                    break;
             }
         }
 
-        // 약점 기반 개선
         for (const weakness of qualityScore.weaknesses) {
-            if (!suggestedAdditions.some(s => s.includes(weakness))) {
+            if (!suggestedAdditions.some(suggestion => suggestion.includes(weakness))) {
                 suggestedAdditions.push(`${weakness} 관련 지침 강화 필요`);
             }
         }
@@ -346,20 +320,20 @@ export class AgentLearningSystem {
     }
 
     /**
-     * 에이전트별 피드백 조회
+     * 에이전트별 피드백 조회 (동기 — 인메모리 배열 기반)
      */
     getFeedbacks(agentId?: string, limit: number = 50): AgentFeedback[] {
-        let filtered = agentId
+        const filtered = agentId
             ? this.feedbacks.filter(f => f.agentId === agentId)
-            : this.feedbacks;
+            : [...this.feedbacks];
 
         return filtered
-            .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+            .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
             .slice(0, limit);
     }
 
     /**
-     * 전체 통계 조회
+     * 전체 통계 조회 (동기 — 인메모리 배열 기반)
      */
     getOverallStats(): {
         totalFeedbacks: number;
@@ -367,7 +341,9 @@ export class AgentLearningSystem {
         topAgents: { agentId: string; score: number }[];
         worstAgents: { agentId: string; score: number }[];
     } {
-        if (this.feedbacks.length === 0) {
+        const totalFeedbacks = this.feedbacks.length;
+
+        if (totalFeedbacks === 0) {
             return {
                 totalFeedbacks: 0,
                 avgRating: 0,
@@ -376,20 +352,28 @@ export class AgentLearningSystem {
             };
         }
 
-        const avgRating = this.feedbacks.reduce((sum, f) => sum + f.rating, 0) / this.feedbacks.length;
+        const avgRating = this.feedbacks.reduce((sum, f) => sum + f.rating, 0) / totalFeedbacks;
 
-        // 에이전트별 점수
-        const agentIds = [...new Set(this.feedbacks.map(f => f.agentId))];
-        const agentScores = agentIds.map(id => ({
-            agentId: id,
-            score: this.calculateQualityScore(id).overallScore
-        })).sort((a, b) => b.score - a.score);
+        // 에이전트별 평균 점수 계산
+        const agentMap: Map<string, number[]> = new Map();
+        for (const f of this.feedbacks) {
+            const ratings = agentMap.get(f.agentId) || [];
+            ratings.push(f.rating);
+            agentMap.set(f.agentId, ratings);
+        }
+
+        const agentScores = Array.from(agentMap.entries())
+            .map(([agentId, ratings]) => ({
+                agentId,
+                score: Math.round((ratings.reduce((sum, r) => sum + r, 0) / ratings.length) * 20)
+            }))
+            .sort((a, b) => b.score - a.score);
 
         return {
-            totalFeedbacks: this.feedbacks.length,
+            totalFeedbacks,
             avgRating: Math.round(avgRating * 10) / 10,
             topAgents: agentScores.slice(0, 5),
-            worstAgents: agentScores.slice(-5).reverse()
+            worstAgents: [...agentScores].reverse().slice(0, 5)
         };
     }
 }
@@ -399,8 +383,7 @@ let learningSystemInstance: AgentLearningSystem | null = null;
 
 /**
  * AgentLearningSystem 싱글톤 인스턴스를 반환합니다.
- * 최초 호출 시 인스턴스를 생성하고 DB에서 피드백 데이터를 로드합니다.
- * 
+ *
  * @returns AgentLearningSystem 싱글톤 인스턴스
  */
 export function getAgentLearningSystem(): AgentLearningSystem {

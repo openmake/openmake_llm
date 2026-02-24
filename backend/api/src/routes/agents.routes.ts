@@ -168,24 +168,7 @@ router.delete('/custom/:id', requireAuth, asyncHandler(async (req: Request, res:
     res.json(success({ message: '에이전트가 삭제되었습니다.' }));
 }));
 
-/**
- * POST /api/agents/custom/clone/:id
- * 기존 에이전트 복제
- */
-router.post('/custom/clone/:id', requireAuth, validate(cloneAgentSchema), asyncHandler(async (req: Request, res: Response) => {
-    const sourceId = req.params.id;
-    const modifications = req.body;
-    modifications.createdBy = String(req.user?.id || '');
 
-    const customBuilder = getCustomAgentBuilder();
-    const cloned = await customBuilder.cloneAgent(sourceId, modifications);
-
-    if (!cloned) {
-        return res.status(400).json(badRequest('에이전트 복제 실패'));
-    }
-
-    res.status(201).json(success(cloned));
-}));
 
 // ================================================
 // 피드백 통계 (/:id 라우트보다 먼저 등록해야 Express 라우트 매칭 충돌 방지)
