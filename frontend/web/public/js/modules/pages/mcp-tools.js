@@ -288,11 +288,11 @@
                         <h3 style="margin-bottom: var(--space-4); font-size: var(--font-size-lg);">새 서버 등록</h3>
                         <div style="display: grid; gap: var(--space-4);">
                             <div>
-                                <label style="display: block; margin-bottom: var(--space-1); font-size: var(--font-size-sm); font-weight: var(--font-weight-medium);">서버 이름 *</label>
+                                <label for="serverName" style="display: block; margin-bottom: var(--space-1); font-size: var(--font-size-sm); font-weight: var(--font-weight-medium);">서버 이름 *</label>
                                 <input id="serverName" type="text" placeholder="예: filesystem, postgres" style="width: 100%; padding: var(--space-2) var(--space-3); background: var(--bg-primary); border: 1px solid var(--border-light); border-radius: var(--radius-md); color: var(--text-primary); font-size: var(--font-size-sm);" />
                             </div>
                             <div>
-                                <label style="display: block; margin-bottom: var(--space-1); font-size: var(--font-size-sm); font-weight: var(--font-weight-medium);">전송 방식 *</label>
+                                <label for="serverTransport" style="display: block; margin-bottom: var(--space-1); font-size: var(--font-size-sm); font-weight: var(--font-weight-medium);">전송 방식 *</label>
                                 <select id="serverTransport" onchange="toggleTransportFields()" style="width: 100%; padding: var(--space-2) var(--space-3); background: var(--bg-primary); border: 1px solid var(--border-light); border-radius: var(--radius-md); color: var(--text-primary); font-size: var(--font-size-sm);">
                                     <option value="stdio">stdio (로컬 프로세스)</option>
                                     <option value="sse">SSE (Server-Sent Events)</option>
@@ -300,13 +300,13 @@
                                 </select>
                             </div>
                             <div id="stdioFields">
-                                <label style="display: block; margin-bottom: var(--space-1); font-size: var(--font-size-sm); font-weight: var(--font-weight-medium);">명령어 *</label>
+                                <label for="serverCommand" style="display: block; margin-bottom: var(--space-1); font-size: var(--font-size-sm); font-weight: var(--font-weight-medium);">명령어 *</label>
                                 <input id="serverCommand" type="text" placeholder="예: npx" style="width: 100%; padding: var(--space-2) var(--space-3); background: var(--bg-primary); border: 1px solid var(--border-light); border-radius: var(--radius-md); color: var(--text-primary); font-size: var(--font-size-sm); margin-bottom: var(--space-2);" />
-                                <label style="display: block; margin-bottom: var(--space-1); font-size: var(--font-size-sm); font-weight: var(--font-weight-medium);">인자 (쉼표 구분)</label>
+                                <label for="serverArgs" style="display: block; margin-bottom: var(--space-1); font-size: var(--font-size-sm); font-weight: var(--font-weight-medium);">인자 (쉼표 구분)</label>
                                 <input id="serverArgs" type="text" placeholder="예: @modelcontextprotocol/server-filesystem, /tmp" style="width: 100%; padding: var(--space-2) var(--space-3); background: var(--bg-primary); border: 1px solid var(--border-light); border-radius: var(--radius-md); color: var(--text-primary); font-size: var(--font-size-sm);" />
                             </div>
                             <div id="urlFields" style="display: none;">
-                                <label style="display: block; margin-bottom: var(--space-1); font-size: var(--font-size-sm); font-weight: var(--font-weight-medium);">서버 URL *</label>
+                                <label for="serverUrl" style="display: block; margin-bottom: var(--space-1); font-size: var(--font-size-sm); font-weight: var(--font-weight-medium);">서버 URL *</label>
                                 <input id="serverUrl" type="text" placeholder="예: http://localhost:3001/sse" style="width: 100%; padding: var(--space-2) var(--space-3); background: var(--bg-primary); border: 1px solid var(--border-light); border-radius: var(--radius-md); color: var(--text-primary); font-size: var(--font-size-sm);" />
                             </div>
                             <div style="display: flex; gap: var(--space-3); justify-content: flex-end;">

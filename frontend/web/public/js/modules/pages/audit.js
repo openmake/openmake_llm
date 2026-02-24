@@ -68,9 +68,9 @@
                 function renderApp() {
                     document.getElementById('app').innerHTML = `
                 <div class="filter-bar">
-                    <div class="fg"><label>액션</label><select id="filterAction"><option value="">전체</option></select></div>
-                    <div class="fg"><label>사용자 ID</label><input type="text" id="filterUser" placeholder="사용자 ID"></div>
-                    <div class="fg"><label>개수</label>
+                    <div class="fg"><label for="filterAction">액션</label><select id="filterAction"><option value="">전체</option></select></div>
+                    <div class="fg"><label for="filterUser">사용자 ID</label><input type="text" id="filterUser" placeholder="사용자 ID"></div>
+                    <div class="fg"><label for="filterLimit">개수</label>
                         <select id="filterLimit"><option value="50">50개</option><option value="100" selected>100개</option><option value="200">200개</option><option value="500">500개</option></select>
                     </div>
                     <button class="btn-primary" onclick="loadLogs()">조회</button>

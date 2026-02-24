@@ -136,13 +136,13 @@
                 <h3 style="margin:0 0 var(--space-3);color:var(--text-primary);font-size:1rem">새 A/B 테스트 시작</h3>
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-3);margin-bottom:var(--space-3)">
                     <div>
-                        <label style="display:block;font-size:var(--font-size-sm);color:var(--text-muted);margin-bottom:4px">Agent A</label>
+                        <label for="abtestAgentA" style="display:block;font-size:var(--font-size-sm);color:var(--text-muted);margin-bottom:4px">Agent A</label>
                         <select id="abtestAgentA" style="width:100%;padding:var(--space-2) var(--space-3);background:var(--bg-secondary);border:1px solid var(--border-light);border-radius:var(--radius-md);color:var(--text-primary);font-size:14px">
                             <option value="">에이전트 선택</option>${options}
                         </select>
                     </div>
                     <div>
-                        <label style="display:block;font-size:var(--font-size-sm);color:var(--text-muted);margin-bottom:4px">Agent B</label>
+                        <label for="abtestAgentB" style="display:block;font-size:var(--font-size-sm);color:var(--text-muted);margin-bottom:4px">Agent B</label>
                         <select id="abtestAgentB" style="width:100%;padding:var(--space-2) var(--space-3);background:var(--bg-secondary);border:1px solid var(--border-light);border-radius:var(--radius-md);color:var(--text-primary);font-size:14px">
                             <option value="">에이전트 선택</option>${options}
                         </select>

@@ -82,25 +82,25 @@
         <div class="modal">
             <h2 id="editorTitle">새 에이전트</h2>
             <div class="form-group">
-                <label>이모지</label>
+                <span class="form-label-text">이모지</span>
                 <div class="emoji-picker" id="emojiPicker"></div>
             </div>
-            <div class="form-group"><label>에이전트 이름</label><input type="text" id="agentName" placeholder="에이전트 이름"></div>
-            <div class="form-group"><label>설명</label><textarea id="agentDesc" rows="3" placeholder="에이전트 설명..."></textarea></div>
-            <div class="form-group"><label>시스템 프롬프트</label><textarea id="agentPrompt" class="mono" placeholder="시스템 프롬프트를 입력하세요..."></textarea></div>
-            <div class="form-group"><label>키워드 (쉼표 구분)</label><input type="text" id="agentKeywords" placeholder="키워드1, 키워드2, ..."></div>
+            <div class="form-group"><label for="agentName">에이전트 이름</label><input type="text" id="agentName" placeholder="에이전트 이름"></div>
+            <div class="form-group"><label for="agentDesc">설명</label><textarea id="agentDesc" rows="3" placeholder="에이전트 설명..."></textarea></div>
+            <div class="form-group"><label for="agentPrompt">시스템 프롬프트</label><textarea id="agentPrompt" class="mono" placeholder="시스템 프롬프트를 입력하세요..."></textarea></div>
+            <div class="form-group"><label for="agentKeywords">키워드 (쉼표 구분)</label><input type="text" id="agentKeywords" placeholder="키워드1, 키워드2, ..."></div>
             <div class="form-row">
-                <div class="form-group"><label>카테고리</label>
+                <div class="form-group"><label for="agentCategory">카테고리</label>
                     <select id="agentCategory">
                         <option value="general">일반</option><option value="coding">코딩</option><option value="writing">글쓰기</option>
                         <option value="analysis">분석</option><option value="creative">창작</option><option value="education">교육</option>
                         <option value="business">비즈니스</option><option value="science">과학</option>
                     </select>
                 </div>
-                <div class="form-group"><label>최대 토큰</label><input type="number" id="agentMaxTokens" value="4096" min="1" max="128000"></div>
+                <div class="form-group"><label for="agentMaxTokens">최대 토큰</label><input type="number" id="agentMaxTokens" value="4096" min="1" max="128000"></div>
             </div>
             <div class="form-group">
-                <label>온도</label>
+                <label for="agentTemp">온도</label>
                 <div class="range-row">
                     <input type="range" id="agentTemp" min="0" max="2" step="0.1" value="0.7">
                     <span class="range-val" id="tempVal">0.7</span>

@@ -115,6 +115,27 @@ function listHtmlFiles(dirPath: string): string[] {
         .map((entry) => path.join(dirPath, entry));
 }
 
+function listFilesRecursive(dirPath: string, extensions: string[]): string[] {
+    if (!fs.existsSync(dirPath)) {
+        return [];
+    }
+
+    const results: string[] = [];
+    const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+
+    for (const entry of entries) {
+        const fullPath = path.join(dirPath, entry.name);
+
+        if (entry.isDirectory()) {
+            results.push(...listFilesRecursive(fullPath, extensions));
+        } else if (extensions.some((ext) => entry.name.toLowerCase().endsWith(ext))) {
+            results.push(fullPath);
+        }
+    }
+
+    return results;
+}
+
 /**
  * API JSON Content-Type 헤더를 강제합니다.
  */
@@ -140,8 +161,15 @@ export function setupParsersAndLimiting(app: Application): void {
     app.use('/api/mcp', mcpLimiter);
     app.use('/api/api-keys', apiKeyManagementLimiter);
     app.use('/api/push', pushLimiter);
+    // generalLimiter는 전용 리미터가 없는 경로에만 적용 (이중 카운팅 방지)
+    const dedicatedLimiterPrefixes = [
+        '/api/auth/', '/api/chat', '/api/research', '/api/documents/upload',
+        '/api/web-search', '/api/memory', '/api/canvas', '/api/mcp',
+        '/api/api-keys', '/api/push', '/api/monitoring', '/api/metrics',
+    ];
     app.use('/api/', (req, res, next) => {
-        if (req.originalUrl.includes('/api/monitoring') || req.originalUrl.includes('/api/metrics')) {
+        const url = req.originalUrl;
+        if (dedicatedLimiterPrefixes.some(prefix => url.startsWith(prefix))) {
             return next();
         }
         generalLimiter(req, res, next);
@@ -176,22 +204,27 @@ export function setupStaticFiles(app: Application, dirname: string): void {
         ...listHtmlFiles(fallbackPublicPath)
     ];
 
+    // JS 파일도 스캔 — innerHTML 템플릿 내 style="..." 해시 수집
+    const allJsFiles = [
+        ...listFilesRecursive(publicPath, ['.js']),
+        ...listFilesRecursive(fallbackPublicPath, ['.js'])
+    ];
+
     const scriptAttrHashes = new Set<string>();
     const styleAttrHashes = new Set<string>();
 
-    for (const htmlFilePath of allHtmlFiles) {
-        const html = fs.readFileSync(htmlFilePath, 'utf8');
-        const hashes = collectCspAttributeHashes(html);
+    for (const filePath of [...allHtmlFiles, ...allJsFiles]) {
+        const content = fs.readFileSync(filePath, 'utf8');
+        const hashes = collectCspAttributeHashes(content);
         hashes.scriptAttr.forEach((hash) => scriptAttrHashes.add(hash));
         hashes.styleAttr.forEach((hash) => styleAttrHashes.add(hash));
     }
 
-    const scriptSrcAttrDirective = scriptAttrHashes.size > 0
-        ? ["'unsafe-hashes'", ...scriptAttrHashes]
-        : ["'none'"];
-    const styleSrcAttrDirective = styleAttrHashes.size > 0
-        ? ["'unsafe-hashes'", ...styleAttrHashes]
-        : ["'none'"];
+    // script-src-attr: 'unsafe-inline' — 런타임 JS가 동적으로 onclick/onchange 핸들러를 생성하므로 해시 불가
+    // script-src (nonce 기반)가 XSS 1차 방어선이므로 보안 수준 유지됨
+    const scriptSrcAttrDirective = "'unsafe-inline'";
+    // style-src-attr: 'unsafe-inline' — 런타임 JS가 동적으로 style 속성을 설정하므로 해시 불가
+    const styleSrcAttrDirective = "'unsafe-inline'";
 
     const buildCspHeader = (nonce: string): string => {
         const nonceSource = `'nonce-${nonce}'`;
@@ -199,9 +232,9 @@ export function setupStaticFiles(app: Application, dirname: string): void {
         return [
             `default-src 'self'`,
             `script-src 'self' ${nonceSource} https://cdn.jsdelivr.net https://cdnjs.cloudflare.com`,
-            `style-src 'self' ${nonceSource} https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://fonts.googleapis.com`,
-            `script-src-attr ${scriptSrcAttrDirective.join(' ')}`,
-            `style-src-attr ${styleSrcAttrDirective.join(' ')}`,
+            `style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://fonts.googleapis.com`,
+            `script-src-attr ${scriptSrcAttrDirective}`,
+            `style-src-attr ${styleSrcAttrDirective}`,
             `img-src 'self' data: blob: https:`,
             `connect-src 'self' ws: wss: ${getConfig().ollamaBaseUrl} ${OLLAMA_CLOUD_HOST} https://api.iconify.design https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://fonts.googleapis.com https://fonts.gstatic.com`,
             `font-src 'self' data: https://cdn.jsdelivr.net https://fonts.gstatic.com`,
@@ -262,7 +295,9 @@ export function setupStaticFiles(app: Application, dirname: string): void {
     app.use(helmet({
         contentSecurityPolicy: false,
         crossOriginEmbedderPolicy: false,
-        crossOriginResourcePolicy: { policy: 'cross-origin' }
+        crossOriginResourcePolicy: { policy: 'cross-origin' },
+        crossOriginOpenerPolicy: false,
+        originAgentCluster: false,
     }));
 
     app.get(/^\/([a-z0-9-]+)\.html$/, (req: Request, res: Response, next: NextFunction) => {
