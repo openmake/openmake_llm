@@ -83,7 +83,7 @@
                 // --- System Metrics Logic ---
                 async function loadSystemMetrics() {
                     try {
-                        const response = await window.authFetch('/api/metrics');
+                        const response = await window.authFetch(API_ENDPOINTS.METRICS);
                         const rawData = await response.json();
                         // api-response 표준 형식: rawData.data 안에 실제 데이터
                         const data = rawData.data || rawData;
@@ -146,7 +146,7 @@
                 // API 키 상태
                 async function loadKeyStatus() {
                     try {
-                        const res = await window.authFetch('/api/monitoring/keys');
+                        const res = await window.authFetch(API_ENDPOINTS.MONITORING_KEYS);
                         const rawData = await res.json();
                         const data = rawData.data || rawData;
 
@@ -174,7 +174,7 @@
                 // 할당량 상태
                 async function loadQuotaStatus() {
                     try {
-                        const res = await window.authFetch('/api/monitoring/quota');
+                        const res = await window.authFetch(API_ENDPOINTS.MONITORING_QUOTA);
                         const rawData = await res.json();
                         const data = rawData.data || rawData;
                         if (!data || !data.hourly) { return; }
@@ -214,7 +214,7 @@
                 // 통계 요약 (오늘)
                 async function loadSummary() {
                     try {
-                        const res = await window.authFetch('/api/monitoring/summary');
+                        const res = await window.authFetch(API_ENDPOINTS.MONITORING_SUMMARY);
                         const rawData = await res.json();
                         const data = rawData.data || rawData;
                         if (!data || !data.today) { return; }
@@ -227,7 +227,7 @@
                 // 비용
                 async function loadCosts() {
                     try {
-                        const res = await window.authFetch('/api/monitoring/costs');
+                        const res = await window.authFetch(API_ENDPOINTS.MONITORING_COSTS);
                         const rawData = await res.json();
                         const data = rawData.data || rawData;
                         if (!data || !data.today) { return; }
@@ -241,7 +241,7 @@
                 // 시간별 차트
                 async function loadHourlyChart() {
                     try {
-                        const res = await window.authFetch('/api/monitoring/usage/hourly');
+                        const res = await window.authFetch(API_ENDPOINTS.MONITORING_USAGE_HOURLY);
                         const rawData = await res.json();
                         const data = rawData.data || rawData;
                         if (typeof Chart === 'undefined' || !data || !data.labels) { return; }
@@ -270,7 +270,7 @@
                 // 일간 차트
                 async function loadDailyChart() {
                     try {
-                        const res = await window.authFetch('/api/monitoring/usage/daily?days=7');
+                        const res = await window.authFetch(API_ENDPOINTS.MONITORING_USAGE_DAILY + '?days=7');
                         const rawData = await res.json();
                         const data = rawData.data || rawData;
                         if (typeof Chart === 'undefined' || !data || !data.labels) { return; }
@@ -332,7 +332,7 @@
                 async function resetKeys() {
                     if (!confirm('모든 API 키 상태를 초기화하시겠습니까?')) return;
                     try {
-                        await window.authFetch('/api/monitoring/keys/reset', { method: 'POST' });
+                        await window.authFetch(API_ENDPOINTS.MONITORING_KEYS_RESET, { method: 'POST' });
                         (typeof showToast === 'function' ? showToast('초기화되었습니다.', 'warning') : console.warn('초기화되었습니다.'));
                         loadKeyStatus();
                     } catch (e) { (typeof showToast === 'function' ? showToast('실패: ' + e.message, 'warning') : console.warn('실패: ' + e.message)); }

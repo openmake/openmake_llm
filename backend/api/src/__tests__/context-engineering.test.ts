@@ -462,15 +462,15 @@ describe('buildAssistantPrompt', () => {
         expect(result.length).toBeGreaterThan(0);
     });
 
-    it('should contain Korean role persona', () => {
+    it('should contain role persona (default=en)', () => {
         const result = buildAssistantPrompt();
-        expect(result).toContain('친절하고 똑똑한 AI 어시스턴트');
+        expect(result).toContain('Friendly and intelligent AI assistant');
     });
 
-    it('should contain assistant expertise', () => {
+    it('should contain assistant expertise (default=en)', () => {
         const result = buildAssistantPrompt();
-        expect(result).toContain('일반 지식');
-        expect(result).toContain('문제 해결');
+        expect(result).toContain('General knowledge');
+        expect(result).toContain('Problem solving');
     });
 
     it('should contain language constraints', () => {
@@ -513,9 +513,9 @@ describe('buildCoderPrompt', () => {
         expect(result).toContain('Python');
     });
 
-    it('should contain senior developer persona', () => {
+    it('should contain senior developer persona (default=en)', () => {
         const result = buildCoderPrompt();
-        expect(result).toContain('시니어 풀스택 개발자');
+        expect(result).toContain('Senior full-stack developer');
     });
 
     it('should contain security constraints', () => {
@@ -523,9 +523,9 @@ describe('buildCoderPrompt', () => {
         expect(result).toContain('OWASP');
     });
 
-    it('should contain production code requirement', () => {
+    it('should contain production code requirement (default=en)', () => {
         const result = buildCoderPrompt();
-        expect(result).toContain('프로덕션');
+        expect(result).toContain('production');
     });
 
     it('should contain framework expertise', () => {
@@ -546,10 +546,10 @@ describe('buildReasoningPrompt', () => {
         expect(result.length).toBeGreaterThan(0);
     });
 
-    it('should contain reasoning expertise', () => {
+    it('should contain reasoning expertise (default=en)', () => {
         const result = buildReasoningPrompt();
-        expect(result).toContain('논리적 분석');
-        expect(result).toContain('추론');
+        expect(result).toContain('logical analysis');
+        expect(result).toContain('reasoning');
     });
 
     it('should contain chain of thought requirement', () => {
@@ -557,9 +557,9 @@ describe('buildReasoningPrompt', () => {
         expect(result).toContain('Chain of Thought');
     });
 
-    it('should contain step-by-step approach', () => {
+    it('should contain step-by-step approach (default=en)', () => {
         const result = buildReasoningPrompt();
-        expect(result).toContain('단계별');
+        expect(result).toContain('step by step');
     });
 
     it('should have instruction section enabled', () => {

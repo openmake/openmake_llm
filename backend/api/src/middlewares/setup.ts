@@ -341,9 +341,7 @@ export function setupStaticFiles(app: Application, dirname: string): void {
             res.setHeader('Content-Type', 'text/css; charset=utf-8');
         }
 
-        if (filePath.endsWith('service-worker.js')) {
-            res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-        } else if (filePath.endsWith('.html')) {
+        if (filePath.endsWith('.html')) {
             res.setHeader('Cache-Control', 'no-cache');
         } else if (filePath.endsWith('.js') || filePath.endsWith('.css')) {
             res.setHeader('Cache-Control', 'public, max-age=604800, stale-while-revalidate=86400');

@@ -19,6 +19,7 @@ import { DeepResearchService } from '../DeepResearchService';
 import type { ChatStrategy, ChatResult, DeepResearchStrategyContext } from './types';
 import { createLogger } from '../../utils/logger';
 import { detectLanguage } from '../../chat/language-policy';
+import { LLM_TIMEOUTS } from '../../config/timeouts';
 
 const logger = createLogger('DeepResearchStrategy');
 
@@ -59,7 +60,7 @@ export class DeepResearchStrategy implements ChatStrategy<DeepResearchStrategyCo
             maxTotalSources: 80,
             scrapeFullContent: true,
             maxScrapePerLoop: 15,
-            scrapeTimeoutMs: 15000,
+            scrapeTimeoutMs: LLM_TIMEOUTS.SCRAPE_TIMEOUT_MS,
             chunkSize: 10,
         });
 

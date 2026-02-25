@@ -121,9 +121,9 @@
         async function loadData() {
             try {
                 const [usageRes, metricsRes, feedbackRes] = await Promise.all([
-                    authFetch('/api/usage'),
-                    authFetch('/api/agents-monitoring/metrics'),
-                    authFetch('/api/agents/feedback/stats')
+                    authFetch(API_ENDPOINTS.USAGE),
+                    authFetch(API_ENDPOINTS.AGENTS_MONITORING_METRICS),
+                    authFetch(API_ENDPOINTS.AGENTS_FEEDBACK_STATS)
                 ]);
                 const usage = await usageRes.json();
                 const metrics = await metricsRes.json();

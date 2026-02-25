@@ -52,12 +52,12 @@
             try {
                 let agents;
                 if (currentView === 'installed') {
-                    const res = await authFetch('/api/marketplace/me/installed');
+                    const res = await authFetch(API_ENDPOINTS.MARKETPLACE_ME_INSTALLED);
                     agents = res.data || res || [];
                 } else {
                     const q = document.getElementById('searchInput').value.trim();
                     const sort = document.getElementById('sortBy').value;
-                    const url = '/api/marketplace?limit=50&sortBy=' + sort + (q ? '&search=' + encodeURIComponent(q) : '');
+                    const url = API_ENDPOINTS.MARKETPLACE + '?limit=50&sortBy=' + sort + (q ? '&search=' + encodeURIComponent(q) : '');
                     const res = await authFetch(url);
                     agents = res.data || res || [];
                 }
@@ -84,7 +84,7 @@
             currentAgentId = id;
             document.getElementById('detailModal').classList.add('open');
             try {
-                const res = await authFetch('/api/marketplace/' + id);
+                const res = await authFetch(API_ENDPOINTS.MARKETPLACE + '/' + id);
                 const a = res.data || res;
                 document.getElementById('detailIcon').innerHTML = esc(a.icon) || '&#129302;';
                 document.getElementById('detailTitle').textContent = a.title;
@@ -113,16 +113,16 @@
         function closeDetail() { document.getElementById('detailModal').classList.remove('open'); }
 
         async function installAgent(id) {
-            try { await authFetch('/api/marketplace/' + id + '/install', { method: 'POST' }); showToast('설치되었습니다'); } catch (e) { showToast('설치 실패', 'error'); }
+            try { await authFetch(API_ENDPOINTS.MARKETPLACE + '/' + id + '/install', { method: 'POST' }); showToast('설치되었습니다'); } catch (e) { showToast('설치 실패', 'error'); }
         }
         async function uninstallAgent(id) {
-            try { await authFetch('/api/marketplace/' + id + '/install', { method: 'DELETE' }); showToast('삭제되었습니다'); load(); closeDetail(); } catch (e) { showToast('삭제 실패', 'error'); }
+            try { await authFetch(API_ENDPOINTS.MARKETPLACE + '/' + id + '/install', { method: 'DELETE' }); showToast('삭제되었습니다'); load(); closeDetail(); } catch (e) { showToast('삭제 실패', 'error'); }
         }
 
         async function loadReviews(id) {
             const sec = document.getElementById('reviewsSection');
             try {
-                const res = await authFetch('/api/marketplace/' + id + '/reviews?limit=20');
+                const res = await authFetch(API_ENDPOINTS.MARKETPLACE + '/' + id + '/reviews?limit=20');
                 const reviews = res.data || res || [];
                 let html = '<h3 style="color:var(--text-secondary);margin-bottom:var(--space-3)">리뷰 (' + reviews.length + ')</h3>';
                 html += reviews.map(r => `
@@ -149,7 +149,7 @@
         async function submitReview() {
             if (!selectedRating) { showToast('별점을 선택하세요', 'error'); return; }
             try {
-                await authFetch('/api/marketplace/' + currentAgentId + '/reviews', { method: 'POST', body: JSON.stringify({ rating: selectedRating, title: document.getElementById('reviewTitle').value, content: document.getElementById('reviewContent').value }) });
+                await authFetch(API_ENDPOINTS.MARKETPLACE + '/' + currentAgentId + '/reviews', { method: 'POST', body: JSON.stringify({ rating: selectedRating, title: document.getElementById('reviewTitle').value, content: document.getElementById('reviewContent').value }) });
                 showToast('리뷰가 등록되었습니다');
                 selectedRating = 0;
                 loadReviews(currentAgentId);

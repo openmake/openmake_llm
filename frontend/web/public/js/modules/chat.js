@@ -112,7 +112,11 @@ async function sendMessage() {
 
     // 사용자 메시지 추가
     addChatMessage('user', message);
-    addToMemory('user', message);
+    // saveHistory 설정이 활성화된 경우에만 메모리에 저장
+    const generalSettingsForHistory = JSON.parse(SS.getItem('generalSettings') || '{}');
+    if (generalSettingsForHistory.saveHistory !== false) {
+        addToMemory('user', message);
+    }
 
     // 입력창 초기화
     input.value = '';
@@ -136,9 +140,18 @@ async function sendMessage() {
             history: getState('conversationMemory'),
             webSearch: getState('webSearchEnabled'),
             thinkingMode: getState('thinkingEnabled'),
+            thinkingLevel: getState('thinkingLevel') || 'high',
+            discussionMode: getState('discussionMode') || false,
+            deepResearchMode: getState('deepResearchMode') || false,
             enabledTools: getState('mcpToolsEnabled') || {},
             sessionId: getState('currentChatId') // 세션 ID 포함
         };
+
+        // 🌐 사용자 언어 설정을 WebSocket 메시지에 포함
+        const generalSettings = JSON.parse(SS.getItem('generalSettings') || '{}');
+        if (generalSettings.lang) {
+            payload.language = generalSettings.lang;
+        }
 
         // 파일이 첨부된 경우
         if (attachedFiles.length > 0) {
@@ -425,8 +438,11 @@ function finishAssistantMessage(errorMessage = null, serverMessageId = null) {
             renderMarkdown(content, finalAnswer);
         }
 
-        // 메모리에 추가
-        addToMemory('assistant', rawText);
+        // saveHistory 설정이 활성화된 경우에만 메모리에 추가
+        const gSettings = JSON.parse(SS.getItem('generalSettings') || '{}');
+        if (gSettings.saveHistory !== false) {
+            addToMemory('assistant', rawText);
+        }
     }
 
     // 응답 시간 표시
@@ -532,7 +548,7 @@ function sendFeedback(msgElementId, signal) {
     }
 
     // 서버 전송 (fire-and-forget)
-    authFetch('/api/chat/feedback', {
+    authFetch(API_ENDPOINTS.CHAT_FEEDBACK, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

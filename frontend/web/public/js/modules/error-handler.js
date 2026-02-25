@@ -164,7 +164,7 @@ async function performWebSearch(query, model) {
             content.innerHTML = '<span class="loading-spinner"></span> 웹에서 검색 중...';
         }
 
-        const res = await fetch('/api/web-search', {
+        const res = await fetch(API_ENDPOINTS.WEB_SEARCH, {
             method: 'POST',
             credentials: 'include',
             headers: { 'Content-Type': 'application/json' },
@@ -220,7 +220,6 @@ function syncMCPSettingsToServer() {
             settings: serverSettings
         }));
 
-        console.log('[MCP] 서버에 설정 동기화:', serverSettings);
     } else {
         console.warn('[MCP] WebSocket 연결 없음, 서버 동기화 실패');
     }
@@ -256,7 +255,6 @@ function syncMCPSettingsFromServer(serverSettings) {
     setState('thinkingEnabled', mcpSettings.thinking);
     setState('webSearchEnabled', mcpSettings.webSearch);
 
-    console.log('[MCP] UI 설정 동기화 완료:', mcpSettings);
 }
 
 // 레거시 빈 함수 (호환성 유지용)

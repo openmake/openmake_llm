@@ -60,7 +60,6 @@ function clearActiveDocument() {
     setState('activeDocumentContext', null);
     updateActiveDocumentUI();
     showToast('📄 문서 컨텍스트가 해제되었습니다', 'info');
-    console.log('[Document] 활성 문서 컨텍스트 해제');
 }
 
 /**
@@ -75,7 +74,7 @@ async function askDocumentQuestion(docId, question, model) {
     const currentAssistantMessage = getState('currentAssistantMessage');
 
     try {
-        const res = await fetch('/api/document/ask', {
+        const res = await fetch(API_ENDPOINTS.DOCUMENT_ASK, {
             method: 'POST',
             credentials: 'include',
             headers: { 'Content-Type': 'application/json' },

@@ -7,6 +7,7 @@
         content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover">
     <title>로그인 - OpenMake.Ai</title>
     <link rel="icon" type="image/png" href="/logo.png">
+    <meta name="theme-color" content="#c061ff">
 
     <!-- 통합 디자인 시스템 -->
     <link rel="preconnect" href="https://cdn.jsdelivr.net">
@@ -15,15 +16,7 @@
     <link rel="stylesheet" href="/css/design-tokens.css">
 
 
-    <!-- PWA 메타 태그 -->
-    <meta name="theme-color" content="#c061ff">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="OpenMake.Ai">
-    <meta name="mobile-web-app-capable" content="yes">
-    <link rel="manifest" href="/manifest.json">
-    <link rel="apple-touch-icon" href="/icons/icon-192.png">
-    <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon.png">
+
 
     <style>
         * {
@@ -389,15 +382,7 @@
         }
     </style>
 
-    <script>
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/service-worker.js')
-                    .then(reg => console.log('[PWA] SW 등록 성공'))
-                    .catch(err => console.warn('[PWA] SW 등록 실패:', err));
-            });
-        }
-    </script>
+
 </head>
 
 <body>

@@ -65,6 +65,13 @@ jest.mock('../chat/routing-logger', () => ({
     logA2AModelSelection: jest.fn(),
 }));
 
+jest.mock('../chat/language-policy', () => ({
+    resolvePromptLocale: (lang: string) => {
+        const map: Record<string, string> = { ko: 'ko', en: 'en', ja: 'ja', zh: 'zh', es: 'es', de: 'de' };
+        return map[lang] || 'en';
+    },
+}));
+
 // ============================================
 // Imports (after mocks)
 // ============================================
@@ -137,7 +144,7 @@ describe('A2AStrategy', () => {
 
             const result = await strategy.execute(makeContext());
 
-            expect(result.response).toContain('A2A 종합 답변');
+            expect(result.response).toContain('A2A Synthesized Answer');
             expect(result.response).toContain('Final synthesized answer');
         });
 
@@ -241,7 +248,7 @@ describe('A2AStrategy', () => {
 
             const result = await strategy.execute(makeContext());
 
-            expect(result.response).toContain('단독 응답');
+            expect(result.response).toContain('Solo Response');
         });
 
         it('onToken으로 헤더와 응답이 스트리밍된다', async () => {

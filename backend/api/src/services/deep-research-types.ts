@@ -9,6 +9,7 @@
  */
 
 import type { SearchResult } from '../mcp/web-search';
+import { LLM_TIMEOUTS } from '../config/timeouts';
 
 // ============================================================
 // 타입 정의
@@ -75,7 +76,7 @@ export const DEFAULT_CONFIG: ResearchConfig = {
     maxTotalSources: 80,
     scrapeFullContent: true,
     maxScrapePerLoop: 15,
-    scrapeTimeoutMs: 15000,
+    scrapeTimeoutMs: LLM_TIMEOUTS.SCRAPE_TIMEOUT_MS,
     chunkSize: 10
 };
 

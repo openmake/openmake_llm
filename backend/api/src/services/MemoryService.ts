@@ -12,6 +12,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { getUnifiedDatabase, UserMemory, MemoryCategory } from '../data/models/unified-database';
 import { createLogger } from '../utils/logger';
+import { CAPACITY, TRUNCATION } from '../config/runtime-limits';
 
 const logger = createLogger('MemoryService');
 
@@ -33,7 +34,7 @@ export interface MemoryContext {
  */
 export class MemoryService {
     private db = getUnifiedDatabase();
-    private static readonly REGEX_SAFE_INPUT_MAX_LENGTH = 10000;
+    private static readonly REGEX_SAFE_INPUT_MAX_LENGTH = CAPACITY.REGEX_SAFE_INPUT_MAX_LENGTH;
 
     /**
      * 대화에서 중요 정보를 추출하여 메모리에 저장
@@ -228,10 +229,10 @@ Return ONLY the JSON array, no explanation.`;
                 ['preference', 'fact', 'project', 'relationship', 'skill', 'context'].includes(item.category)
             ).map(item => ({
                 category: item.category as MemoryCategory,
-                key: String(item.key).slice(0, 100),
-                value: String(item.value).slice(0, 1000),
+                key: String(item.key).slice(0, TRUNCATION.MEMORY_KEY_MAX),
+                value: String(item.value).slice(0, TRUNCATION.MEMORY_VALUE_MAX),
                 importance: Math.min(1, Math.max(0.1, Number(item.importance) || 0.5)),
-                tags: Array.isArray(item.tags) ? item.tags.slice(0, 5) : []
+                tags: Array.isArray(item.tags) ? item.tags.slice(0, TRUNCATION.MEMORY_MAX_TAGS) : []
             }));
         } catch (e) {
             logger.error('JSON 파싱 실패:', e);

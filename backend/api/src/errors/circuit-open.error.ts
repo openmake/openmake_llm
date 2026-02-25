@@ -49,7 +49,9 @@ export class CircuitOpenError extends Error {
             ja: `⚠️ ノード '${name}' が一時的に利用できません。\n約${sec}秒後に自動的にリトライします。`,
             zh: `⚠️ 节点 '${name}' 暂时不可用。\n将在约${sec}秒后自动重试。`,
             es: `⚠️ El nodo '${name}' no está disponible temporalmente.\nSe reintentará automáticamente en unos ${sec} segundos.`,
-            de: `⚠️ Knoten '${name}' ist vorübergehend nicht verfügbar.\nAutomatischer Wiederversuch in etwa ${sec} Sekunden.`
+            de: `⚠️ Knoten '${name}' ist vorübergehend nicht verfügbar.\nAutomatischer Wiederversuch in etwa ${sec} Sekunden.`,
+            fr: `⚠️ Le nœud '${name}' est temporairement indisponible.
+Nouvelle tentative automatique dans environ ${sec} secondes.`,
         };
         return messages[language] || messages['en']!;
     }

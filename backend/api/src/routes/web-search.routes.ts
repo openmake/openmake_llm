@@ -27,6 +27,7 @@ import { buildExecutionPlan } from '../chat/profile-resolver';
 import { requireAuth } from '../auth';
 import { validate } from '../middlewares/validation';
 import { webSearchSchema } from '../schemas/web-search.schema';
+import { CAPACITY } from '../config/runtime-limits';
 
 const logger = createLogger('WebSearchRoutes');
 
@@ -109,7 +110,7 @@ ${sourcesContext}
       logger.info('[WebSearch] LLM에 사실 검증 요청...');
      const result = await client.generate(searchPrompt, {
          temperature: 0.3,
-          num_ctx: 65536  // Ollama 공식 권장: 웹 검색/에이전트 시 최소 64K 토큰
+          num_ctx: CAPACITY.WEB_SEARCH_NUM_CTX  // Ollama 공식 권장: 웹 검색/에이전트 시 최소 64K 토큰
      });
      const response = result.response;
 

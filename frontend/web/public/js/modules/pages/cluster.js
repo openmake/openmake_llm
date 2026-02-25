@@ -43,7 +43,7 @@
 
                 async function loadClusterStatus() {
                     try {
-                        const res = await fetch('/api/cluster/status', {
+                        const res = await fetch(API_ENDPOINTS.CLUSTER_STATUS, {
                             credentials: 'include'  // 🔒 httpOnly 쿠키 포함
                         });
                         if (!res.ok) throw new Error('서버 응답 오류: ' + res.status);
