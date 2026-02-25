@@ -39,15 +39,16 @@ export class AllNodesFailedError extends Error {
     /**
      * 사용자 친화적 메시지 반환
      */
-    getDisplayMessage(language: 'ko' | 'en' = 'ko'): string {
-        if (language === 'ko') {
-            return `⚠️ 모델 '${this.model}'을(를) 처리할 수 있는 노드가 없습니다.\n` +
-                   `시도된 노드: ${this.attemptedNodes.length}개\n` +
-                   `잠시 후 다시 시도해주세요.`;
-        } else {
-            return `⚠️ No available nodes for model '${this.model}'.\n` +
-                   `Attempted nodes: ${this.attemptedNodes.length}\n` +
-                   `Please try again later.`;
-        }
+    getDisplayMessage(language: string = 'en'): string {
+        const nodes = this.attemptedNodes.length;
+        const messages: Record<string, string> = {
+            ko: `⚠️ 모델 '${this.model}'을(를) 처리할 수 있는 노드가 없습니다.\n시도된 노드: ${nodes}개\n잠시 후 다시 시도해주세요.`,
+            en: `⚠️ No available nodes for model '${this.model}'.\nAttempted nodes: ${nodes}\nPlease try again later.`,
+            ja: `⚠️ モデル '${this.model}' を処理できるノードがありません。\n試行ノード数: ${nodes}\nしばらくしてからもう一度お試しください。`,
+            zh: `⚠️ 没有可用节点处理模型 '${this.model}'。\n已尝试节点: ${nodes}\n请稍后重试。`,
+            es: `⚠️ No hay nodos disponibles para el modelo '${this.model}'.\nNodos intentados: ${nodes}\nPor favor, inténtelo de nuevo más tarde.`,
+            de: `⚠️ Keine verfügbaren Knoten für Modell '${this.model}'.\nVersuchte Knoten: ${nodes}\nBitte versuchen Sie es später erneut.`
+        };
+        return messages[language] || messages['en']!;
     }
 }

@@ -337,12 +337,12 @@ export class PromptCache {
     private readonly TTL_MS = 5 * 60 * 1000; // 5분 캐시
     private readonly MAX_SIZE = 50;
 
-    private computeHash(type: PromptType, includeBase: boolean): string {
-        return `${type}:${includeBase}`;
+    private computeHash(type: PromptType, includeBase: boolean, language: string = 'en'): string {
+        return `${type}:${includeBase}:${language}`;
     }
 
-    get(type: PromptType, includeBase: boolean): string | null {
-        const hash = this.computeHash(type, includeBase);
+    get(type: PromptType, includeBase: boolean, language: string = 'en'): string | null {
+        const hash = this.computeHash(type, includeBase, language);
         const cached = this.cache.get(hash);
 
         if (!cached) return null;
@@ -356,8 +356,8 @@ export class PromptCache {
         return cached.prompt;
     }
 
-    set(type: PromptType, includeBase: boolean, prompt: string): void {
-        const hash = this.computeHash(type, includeBase);
+    set(type: PromptType, includeBase: boolean, prompt: string, language: string = 'en'): void {
+        const hash = this.computeHash(type, includeBase, language);
 
         // 캐시 크기 제한
         if (this.cache.size >= this.MAX_SIZE) {
