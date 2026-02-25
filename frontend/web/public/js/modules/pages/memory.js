@@ -63,7 +63,7 @@
 
         async function loadMems() {
             try {
-                const res = await authFetch('/api/memory');
+                const res = await authFetch(API_ENDPOINTS.MEMORY);
                 allMems = (res.data && res.data.memories) || res.data || [];
                 if (!Array.isArray(allMems)) allMems = [];
                 searchMode = false;
@@ -74,7 +74,7 @@
         async function searchMems(q) {
             if (!q) { loadMems(); return; }
             try {
-                const res = await authFetch('/api/memory/search?q=' + encodeURIComponent(q));
+                const res = await authFetch(API_ENDPOINTS.MEMORY_SEARCH + '?q=' + encodeURIComponent(q));
                 allMems = (res.data && res.data.memories) || res.data || [];
                 if (!Array.isArray(allMems)) allMems = [];
                 searchMode = true;
@@ -141,13 +141,13 @@
             if (!key) { showToast('키를 입력하세요', 'error'); return; }
             try {
                 if (editingId) {
-                    await authFetch('/api/memory/' + editingId, { method:'PUT', body:JSON.stringify({
+                    await authFetch(API_ENDPOINTS.MEMORY + '/' + editingId, { method:'PUT', body:JSON.stringify({
                         value: document.getElementById('memValue').value,
                         importance: parseInt(document.getElementById('memImportance').value)
                     })});
                     showToast('저장되었습니다');
                 } else {
-                    await authFetch('/api/memory', { method:'POST', body:JSON.stringify({
+                    await authFetch(API_ENDPOINTS.MEMORY, { method:'POST', body:JSON.stringify({
                         category: document.getElementById('memCategory').value,
                         key,
                         value: document.getElementById('memValue').value,
@@ -163,7 +163,7 @@
         async function deleteMem() {
             if (!editingId || !confirm('이 메모리를 삭제하시겠습니까?')) return;
             try {
-                await authFetch('/api/memory/' + editingId, { method:'DELETE' });
+                await authFetch(API_ENDPOINTS.MEMORY + '/' + editingId, { method:'DELETE' });
                 showToast('삭제되었습니다'); closeEditor(); loadMems();
             } catch (e) { showToast('삭제 실패', 'error'); }
         }

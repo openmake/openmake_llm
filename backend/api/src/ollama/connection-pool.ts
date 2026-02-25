@@ -23,6 +23,7 @@ import * as http from 'http';
 import * as https from 'https';
 import { createLogger } from '../utils/logger';
 import { getConfig } from '../config';
+import { CONNECTION_POOL_TIMEOUTS } from '../config/timeouts';
 
 const logger = createLogger('ConnectionPool');
 
@@ -123,9 +124,9 @@ export class ConnectionPool {
         this.config = {
             maxSize: config?.maxSize || 10,
             minSize: config?.minSize || 2,
-            maxIdleTime: config?.maxIdleTime || 60000,  // 1분
-            acquireTimeout: config?.acquireTimeout || 5000,
-            healthCheckInterval: config?.healthCheckInterval || 30000
+            maxIdleTime: config?.maxIdleTime || CONNECTION_POOL_TIMEOUTS.MAX_IDLE_TIME_MS,  // 1분
+            acquireTimeout: config?.acquireTimeout || CONNECTION_POOL_TIMEOUTS.ACQUIRE_TIMEOUT_MS,
+            healthCheckInterval: config?.healthCheckInterval || CONNECTION_POOL_TIMEOUTS.HEALTH_CHECK_INTERVAL_MS
         };
 
         // 최소 연결 수 만큼 미리 생성
@@ -166,7 +167,7 @@ export class ConnectionPool {
 
         const client = axios.create({
             baseURL: baseUrl,
-            timeout: 120000,
+            timeout: getConfig().ollamaTimeout,
             headers: {
                 'Content-Type': 'application/json'
             },
@@ -323,7 +324,7 @@ export class ConnectionPool {
             // 연결 상태 확인 (유휴 연결만)
             if (!conn.inUse) {
                 try {
-                    await conn.client.get('/api/tags', { timeout: 5000 });
+                    await conn.client.get('/api/tags', { timeout: CONNECTION_POOL_TIMEOUTS.HEALTH_CHECK_TIMEOUT_MS });
                 } catch (error) {
                     logger.warn(`연결 불량: ${id}`);
                     toRemove.push(id);

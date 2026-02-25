@@ -44,7 +44,10 @@ export class KeyExhaustionError extends Error {
             ja: `⚠️ すべてのAPIキーが一時的に利用できません。\n約${minutes}分後に再度お試しください。\n(${cd}個のキーがクールダウン中)`,
             zh: `⚠️ 所有API密钥暂时不可用。\n请在约${minutes}分钟后重试。\n(${cd}个密钥冷却中)`,
             es: `⚠️ Todas las claves API no están disponibles temporalmente.\nPor favor, inténtelo en unos ${minutes} minutos.\n(${cd} claves en enfriamiento)`,
-            de: `⚠️ Alle API-Schlüssel sind vorübergehend nicht verfügbar.\nBitte versuchen Sie es in etwa ${minutes} Minuten erneut.\n(${cd} Schlüssel im Cooldown)`
+            de: `⚠️ Alle API-Schlüssel sind vorübergehend nicht verfügbar.\nBitte versuchen Sie es in etwa ${minutes} Minuten erneut.\n(${cd} Schlüssel im Cooldown)`,
+            fr: `⚠️ Toutes les clés API sont temporairement indisponibles.
+Veuillez réessayer dans environ ${minutes} minutes.
+(${cd} clés en période de refroidissement)`,
         };
         return messages[language] || messages['en']!;
     }

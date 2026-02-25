@@ -1,4 +1,5 @@
 import { getConfig } from '../config/env';
+import { GITHUB_API } from '../config/external-services';
 
 import { createLogger } from '../utils/logger';
 
@@ -131,7 +132,7 @@ export class SkillsMarketplaceService {
             }
             const limit = options.limit || 20;
             const q = `filename:SKILL.md ${options.query || ''} in:path,file`;
-            const url = `https://api.github.com/search/code?q=${encodeURIComponent(q)}&per_page=${limit}`;
+            const url = `${GITHUB_API.SEARCH_CODE}?q=${encodeURIComponent(q)}&per_page=${limit}`;
             const headers: Record<string, string> = {
                 'Accept': 'application/vnd.github.v3+json',
                 'User-Agent': 'OpenMake-Skills-Marketplace',
@@ -185,7 +186,7 @@ export class SkillsMarketplaceService {
     async getSkillContent(repo: string, path: string): Promise<string> {
         // 보통 파일들은 main/master 둘 중 하나의 엔드포인트를 쓰며 여기선 main 기반이나 리디렉션 처리
         // 더 안전하게는 api.github.com/repos/:repo/contents/:path 조회 가능
-        const url = `https://api.github.com/repos/${repo}/contents/${path}`;
+        const url = `${GITHUB_API.REPO_CONTENTS}/${repo}/contents/${path}`;
 
         const headers: Record<string, string> = {
             'Accept': 'application/vnd.github.v3.raw',

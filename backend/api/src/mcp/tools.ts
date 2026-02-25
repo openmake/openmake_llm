@@ -24,6 +24,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { MCPToolDefinition, MCPToolResult } from './types';
 import { UserSandbox } from './user-sandbox';
+import { CAPACITY } from '../config/runtime-limits';
 
 // ============================================
 // 🔒 보안 패치 2026-02-07:
@@ -96,7 +97,7 @@ export const searchCodeTool: MCPToolDefinition = {
 
             const results: string[] = [];
             const regex = new RegExp(pattern, 'gi');
-            const MAX_SEARCH_FILES = 1000;
+            const MAX_SEARCH_FILES = CAPACITY.MCP_MAX_SEARCH_FILES;
             let scannedFiles = 0;
 
             async function searchDir(dir: string): Promise<void> {

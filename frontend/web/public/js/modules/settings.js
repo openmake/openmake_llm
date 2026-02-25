@@ -226,7 +226,7 @@ function toggleAgentMode() {
  */
 async function loadCurrentModel() {
     try {
-        const response = await authFetch('/api/model');
+        const response = await authFetch(API_ENDPOINTS.MODEL);
         const data = await response.json();
 
         const modelNameEl = document.getElementById('activeModelName');

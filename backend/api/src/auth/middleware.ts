@@ -90,7 +90,7 @@ export async function optionalAuth(req: Request, res: Response, next: NextFuncti
     const token = cookieToken || extractToken(authHeader);
 
     // 🔍 DEBUG: 쿠키 수신 상태 로깅 (인증 문제 디버깅용)
-    if (req.path.includes('/chat/sessions')) {
+    if (req.path?.includes('/chat/sessions')) {
         log.info(`[optionalAuth] path=${req.path} hasCookie=${!!cookieToken} hasHeader=${!!authHeader} hasToken=${!!token}`);
     }
     if (token) {

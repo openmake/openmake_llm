@@ -337,7 +337,7 @@
                 <h3 class="modal-title" id="editModalTitle">사용자 편집</h3>
                 <button class="modal-close" onclick="closeModal()">×</button>
             </div>
-            <div class="modal-body">
+            <form class="modal-body" onsubmit="event.preventDefault()">
                 <input type="hidden" id="editUserId">
                 <div class="form-group">
                     <label class="form-label" for="editEmail">이메일</label>
@@ -362,7 +362,7 @@
                         <option value="0">비활성</option>
                     </select>
                 </div>
-            </div>
+            </form>
             <div class="modal-footer">
                 <button class="btn btn-secondary" onclick="closeModal()">취소</button>
                 <button class="btn btn-primary" onclick="saveUser()">저장</button>
@@ -441,8 +441,8 @@
                     <td>${formatDate(u.created_at)}</td>
                     <td>${u.last_login ? formatDate(u.last_login) : '-'}</td>
                     <td class="flex gap-2">
-                        <button class="btn btn-secondary btn-sm" onclick="editUser('${u.id}')">편집</button>
-                        ${u.id !== currentUser.id ? `<button class="btn btn-danger btn-sm" onclick="deleteUser('${u.id}')">삭제</button>` : ''}
+                        <button class="btn btn-secondary btn-sm" onclick="setTimeout(function(){editUser('${u.id}')},0)">편집</button>
+                        ${u.id !== currentUser.id ? `<button class="btn btn-danger btn-sm" onclick="setTimeout(function(){deleteUser('${u.id}')},0)">삭제</button>` : ''}
                     </td>
                 </tr>
             `).join('');

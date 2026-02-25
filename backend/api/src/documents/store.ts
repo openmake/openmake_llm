@@ -12,6 +12,7 @@ import { getConfig } from '../config/env';
 import { createLogger } from '../utils/logger';
 import { getPool } from '../data/models/unified-database';
 import type { Pool } from 'pg';
+import { CLEANUP_INTERVALS } from '../config/timeouts';
 
 const logger = createLogger('DocumentStore');
 
@@ -174,7 +175,7 @@ class TTLDocumentMap implements DocumentStore {
 
     constructor() {
         // 정리 스케줄러 (10분마다 실행)
-        this.cleanupTimer = setInterval(() => this.cleanupExpired(), 10 * 60 * 1000);
+        this.cleanupTimer = setInterval(() => this.cleanupExpired(), CLEANUP_INTERVALS.DOCUMENT_STORE_MS);
         // unref() - 타이머가 프로세스 종료를 막지 않도록 설정
         if (this.cleanupTimer && typeof this.cleanupTimer === 'object' && 'unref' in this.cleanupTimer) {
             (this.cleanupTimer as NodeJS.Timeout).unref();

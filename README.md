@@ -78,7 +78,7 @@
 | **Cluster Management** | 노드 헬스체크/로드밸런싱/레이턴시 모니터링 |
 | **API Key Service** | API Key 발급/회전/사용량/Rate Limit 관리 |
 | **OAuth & RBAC** | Google/GitHub OAuth + JWT 역할 제어 |
-| **PWA Support** | 오프라인 캐시, 설치, 푸시 알림 |
+| **Responsive Web** | 반응형 UI — 모바일/태블릿/데스크톱 자동 레이아웃 |
 | **Web Search** | 웹 검색 결과를 AI 컨텍스트로 주입 |
 | **Document Analysis** | PDF/OCR 기반 문서 분석 |
 | **Canvas** | 문서 공유/버전 이력 기반 협업 |

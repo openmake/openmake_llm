@@ -40,11 +40,28 @@
         '</select>' +
         '</div>' +
         '<div class="setting-row">' +
-        '<div class="setting-info"><h4>\uC5B8\uC5B4</h4><p>\uC778\uD130\uD398\uC774\uC2A4 \uC5B8\uC5B4\uB97C \uC120\uD0DD\uD569\uB2C8\uB2E4 <span style="font-size:var(--font-size-xs);color:var(--text-muted);opacity:0.7;">(\uC900\uBE44 \uC911)</span></p></div>' +
-        '<select id="langSelect" class="s-select" disabled style="opacity:0.5;cursor:not-allowed;">' +
+        '<div class="setting-info"><h4>\uC5B8\uC5B4</h4><p>AI \uC751\uB2F5 \uBC0F \uC778\uD130\uD398\uC774\uC2A4 \uC5B8\uC5B4\uB97C \uC120\uD0DD\uD569\uB2C8\uB2E4</p></div>' +
+        '<select id="langSelect" class="s-select">' +
         '<option value="ko">\uD55C\uAD6D\uC5B4</option>' +
         '<option value="en">English</option>' +
         '<option value="ja">\u65E5\u672C\u8A9E</option>' +
+        '<option value="zh">\u4E2D\u6587(\u7B80\u4F53)</option>' +
+        '<option value="es">Espa\u00F1ol</option>' +
+        '<option value="fr">Fran\u00E7ais</option>' +
+        '<option value="de">Deutsch</option>' +
+        '<option value="pt">Portugu\u00EAs</option>' +
+        '<option value="ru">\u0420\u0443\u0441\u0441\u043A\u0438\u0439</option>' +
+        '<option value="ar">\u0627\u0644\u0639\u0631\u0628\u064A\u0629</option>' +
+        '<option value="hi">\u0939\u093F\u0928\u094D\u0926\u0940</option>' +
+        '<option value="it">Italiano</option>' +
+        '<option value="nl">Nederlands</option>' +
+        '<option value="sv">Svenska</option>' +
+        '<option value="da">Dansk</option>' +
+        '<option value="no">Norsk</option>' +
+        '<option value="fi">Suomi</option>' +
+        '<option value="th">\u0E44\u0E17\u0E22</option>' +
+        '<option value="vi">Ti\u1EBFng Vi\u1EC7t</option>' +
+        '<option value="tr">T\u00FCrk\u00E7e</option>' +
         '</select>' +
         '</div>' +
         '</div>' +
@@ -206,7 +223,7 @@
                     }
 
                     try {
-                        const response = await fetch('/api/models', {
+                        const response = await fetch(API_ENDPOINTS.MODELS, {
                             credentials: 'include'  // 🔒 httpOnly 쿠키 포함
                         });
                         if (response.ok) {
@@ -234,20 +251,25 @@
                 }
 
                 async function loadApiKeyCount() {
+                    var el = document.getElementById('apiKeyCount');
+                    if (!el) return;
+                    // 미인증 상태에서는 401 fetch를 방지
+                    var savedUser = safeStorage.getItem('user');
+                    if (!savedUser || savedUser === '{}' || savedUser === 'null') {
+                        el.textContent = '';
+                        return;
+                    }
                     try {
-                        var res = await fetch('/api/api-keys', { credentials: 'include' });
+                        var res = await fetch(API_ENDPOINTS.API_KEYS, { credentials: 'include' });
                         if (res.ok) {
                             var data = await res.json();
                             var count = (data.data && data.data.count) || 0;
-                            var el = document.getElementById('apiKeyCount');
-                            if (el) el.textContent = count + '개 활성';
+                            el.textContent = count + '\uAC1C \uD65C\uC131';
                         } else {
-                            var el = document.getElementById('apiKeyCount');
-                            if (el) el.textContent = '로그인 필요';
+                            el.textContent = '\uB85C\uADF8\uC778 \uD544\uC694';
                         }
                     } catch (e) {
-                        var el2 = document.getElementById('apiKeyCount');
-                        if (el2) el2.textContent = '로그인 필요';
+                        el.textContent = '\uB85C\uADF8\uC778 \uD544\uC694';
                     }
                 }
 
@@ -333,7 +355,7 @@
 
                 async function exportData() {
                     try {
-                        var res = await fetch('/api/chat/sessions?limit=500', { credentials: 'include' });
+                        var res = await fetch(API_ENDPOINTS.CHAT_SESSIONS + '?limit=500', { credentials: 'include' });
                         if (!res.ok) throw new Error('서버 응답 오류: ' + res.status);
                         var data = await res.json();
                         var payload = data.data || data;
@@ -361,7 +383,7 @@
                 async function clearHistory() {
                     if (!confirm('모든 대화 기록을 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.')) return;
                     try {
-                        var res = await window.authFetch('/api/chat/sessions', { method: 'DELETE' });
+                        var res = await window.authFetch(API_ENDPOINTS.CHAT_SESSIONS, { method: 'DELETE' });
                         if (!res.ok) throw new Error('서버 응답 오류: ' + res.status);
                         var data = await res.json();
                         var count = (data.data && data.data.count) || 0;
@@ -408,13 +430,10 @@
 
                 // MCP 도구 토글 UI 렌더링 (등급 기반 접근 제어 포함)
                 (function renderMCPToolToggles() {
-                    console.log('[Settings] renderMCPToolToggles 실행');
                     var container = document.getElementById('mcpToolToggles');
-                    console.log('[Settings] mcpToolToggles container:', container ? 'found' : 'NOT FOUND');
                     if (!container) return;
 
                     var userTier = getUserTier();
-                    console.log('[Settings] 사용자 등급:', userTier);
 
                     // MCP 도구 카탈로그 — 백엔드 builtInTools + tool-tiers 동기화 (minTier 포함)
                     var toolCatalog = [
@@ -499,7 +518,6 @@
                                         mcpSettings.enabledTools[tool.name] = el.checked;
                                     }
 
-                                    console.log('[Settings] MCP 도구 토글:', tool.name, el.checked ? '활성화' : '비활성화');
                                 });
                             }
                         });

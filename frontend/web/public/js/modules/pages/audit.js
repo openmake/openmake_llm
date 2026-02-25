@@ -86,7 +86,7 @@
 
                 async function loadActions() {
                     try {
-                        const res = await authFetch('/api/audit/actions');
+                        const res = await authFetch(API_ENDPOINTS.AUDIT_ACTIONS);
                         var rawActions = res.data || res;
                         actionTypes = Array.isArray(rawActions) ? rawActions : [];
                         const sel = document.getElementById('filterAction');
@@ -104,7 +104,7 @@
                     const action = document.getElementById('filterAction').value;
                     const userId = document.getElementById('filterUser').value.trim();
                     const limit = document.getElementById('filterLimit').value;
-                    let url = '/api/audit?limit=' + limit;
+                    let url = API_ENDPOINTS.AUDIT + '?limit=' + limit;
                     if (action) url += '&action=' + encodeURIComponent(action);
                     if (userId) url += '&userId=' + encodeURIComponent(userId);
                     const body = document.getElementById('logBody');

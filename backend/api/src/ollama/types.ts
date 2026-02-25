@@ -14,6 +14,8 @@
  * - 헬퍼 함수 (Thinking 활성화 판단, 모델 프리셋 선택)
  */
 
+import { MODEL_CONTEXT_DEFAULTS } from '../config/runtime-limits';
+
 /**
  * Ollama 클라이언트 기본 설정
  * @interface OllamaConfig
@@ -604,28 +606,28 @@ export const MODEL_PRESETS = {
         temperature: 0.7,
         top_p: 0.9,
         top_k: 40,
-        num_ctx: 32768,
+        num_ctx: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
         repeat_penalty: 1.1,
     },
     GEMINI_REASONING: {
         temperature: 0.3,
         top_p: 0.85,
         top_k: 20,
-        num_ctx: 32768,
+        num_ctx: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
         repeat_penalty: 1.05,
     },
     GEMINI_CREATIVE: {
         temperature: 0.9,
         top_p: 0.95,
         top_k: 50,
-        num_ctx: 32768,
+        num_ctx: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
         repeat_penalty: 1.2,
     },
     GEMINI_CODE: {
         temperature: 0.2,
         top_p: 0.8,
         top_k: 10,
-        num_ctx: 32768,
+        num_ctx: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
         repeat_penalty: 1.0,
     },
     GPT_OSS_LOW_REASONING: {
@@ -633,8 +635,8 @@ export const MODEL_PRESETS = {
         top_p: 0.85,
         top_k: 30,
         repeat_penalty: 1.1,
-        num_ctx: 16384,
-        num_predict: 4096
+        num_ctx: MODEL_CONTEXT_DEFAULTS.LOW_NUM_CTX,
+        num_predict: MODEL_CONTEXT_DEFAULTS.LOW_NUM_PREDICT
     } as ModelOptions,
 
     GPT_OSS_MEDIUM_REASONING: {
@@ -642,8 +644,8 @@ export const MODEL_PRESETS = {
         top_p: 0.9,
         top_k: 40,
         repeat_penalty: 1.1,
-        num_ctx: 32768,
-        num_predict: 8192
+        num_ctx: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
+        num_predict: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_PREDICT
     } as ModelOptions,
 
     GPT_OSS_HIGH_REASONING: {
@@ -651,8 +653,8 @@ export const MODEL_PRESETS = {
         top_p: 0.95,
         top_k: 50,
         repeat_penalty: 1.15,
-        num_ctx: 32768,
-        num_predict: 8192
+        num_ctx: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
+        num_predict: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_PREDICT
     } as ModelOptions,
 
     GPT_OSS_CODE: {
@@ -660,8 +662,8 @@ export const MODEL_PRESETS = {
         top_p: 0.8,
         top_k: 20,
         repeat_penalty: 1.2,
-        num_ctx: 32768,
-        num_predict: 8192
+        num_ctx: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
+        num_predict: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_PREDICT
     } as ModelOptions,
 
     GPT_OSS_DOCUMENT: {
@@ -669,8 +671,8 @@ export const MODEL_PRESETS = {
         top_p: 0.85,
         top_k: 25,
         repeat_penalty: 1.15,
-        num_ctx: 32768,
-        num_predict: 8192
+        num_ctx: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
+        num_predict: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_PREDICT
     } as ModelOptions,
 
     GPT_OSS_JSON: {
@@ -678,8 +680,8 @@ export const MODEL_PRESETS = {
         top_p: 0.75,
         top_k: 15,
         repeat_penalty: 1.15,
-        num_ctx: 32768,
-        num_predict: 8192,
+        num_ctx: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
+        num_predict: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_PREDICT,
         mirostat: 1,
         mirostat_tau: 2.5,
         mirostat_eta: 0.05

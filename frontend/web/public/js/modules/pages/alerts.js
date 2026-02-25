@@ -83,7 +83,7 @@
         // 알림 히스토리 로드 (admin 전용 — /api/metrics/alerts)
         async function loadAlerts() {
             try {
-                var res = await authFetch('/api/metrics/alerts?limit=100');
+                var res = await authFetch(API_ENDPOINTS.METRICS_ALERTS + '?limit=100');
                 var rawData = await res.json();
                 var data = rawData.data || rawData;
                 allAlerts = Array.isArray(data.history) ? data.history : [];

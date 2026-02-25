@@ -36,16 +36,12 @@ module.exports = {
     
     // 제외 패턴
     // Playwright 테스트는 npx playwright test로 실행
-    // auth.test.ts, unified-database.test.ts in tests/unit/: 아키텍처 변경(SQLite→PostgreSQL)으로 stale
-    // → 최신 버전은 backend/api/src/__tests__/ 에 존재
     testPathIgnorePatterns: [
         '/node_modules/',
         '\\.d\\.ts$',
         '/dist/',
         '/build/',
         '/tests/e2e/',
-        'tests/unit/__tests__/auth\\.test\\.ts$',
-        'tests/unit/__tests__/unified-database\\.test\\.ts$'
     ],
     
     // 모듈 해석에서 dist 폴더 제외 (소스 .ts와 컴파일된 .d.ts 간 타입 충돌 방지)

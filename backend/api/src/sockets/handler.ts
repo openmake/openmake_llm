@@ -42,6 +42,7 @@ import { getUnifiedMCPClient } from '../mcp';
 import { createLogger } from '../utils/logger';
 import { WSMessage, ExtendedWebSocket } from './ws-types';
 import { authenticateWebSocket, refreshWebSocketAuthentication } from './ws-auth';
+import { WEBSOCKET_TIMEOUTS } from '../config/timeouts';
 import { handleChatMessage } from './ws-chat-handler';
 
 const log = createLogger('WebSocketHandler');
@@ -417,7 +418,7 @@ export class WebSocketHandler {
                 this.unregisterConnection(ws);
                 ws.terminate();
             }
-        }, 30000); // 30초 주기
+        }, WEBSOCKET_TIMEOUTS.HEARTBEAT_INTERVAL_MS); // 30초 주기
         // Allow process to exit during tests — don't hold event loop
         if (this.heartbeatInterval && typeof this.heartbeatInterval === 'object' && 'unref' in this.heartbeatInterval) {
             (this.heartbeatInterval as NodeJS.Timeout).unref();
@@ -509,7 +510,7 @@ export class WebSocketHandler {
             if (remainingMs > 0 && remainingMs <= WS_AUTH_EXPIRY_WARNING_WINDOW_MS) {
                 const warnedAt = extWs._lastExpiryWarningAtMs || 0;
                 if (now - warnedAt > 60 * 1000) {
-                    ws.send(JSON.stringify({ type: 'error', message: '인증 토큰이 곧 만료됩니다. refresh 메시지로 토큰을 갱신하세요.' }));
+                    ws.send(JSON.stringify({ type: 'token_warning', message: '인증 토큰이 곧 만료됩니다. refresh 메시지로 토큰을 갱신하세요.' }));
                     extWs._lastExpiryWarningAtMs = now;
                 }
             }

@@ -66,7 +66,7 @@ import {
     sendMessage, addChatMessage, appendToken,
     finishAssistantMessage, copyMessage, regenerateMessage,
     newChat as chatNewChat, useSuggestion, abortChat
-} from './modules/chat.js?v=19';
+} from './modules/chat.js?v=20';
 
 // 1-8. 세션 관리 (state, auth 의존)
 import {
@@ -127,11 +127,10 @@ import { NAV_ITEMS } from './nav-items.js?v=3';
 // 1-16. SPA 라우터
 import { Router, SafeStorage } from './spa-router.js?v=16';
 
-// 1-17. 컴포넌트 (사이드바, 관리자 패널, 오프라인 인디케이터, 설치 프롬프트)
+// 1-17. 컴포넌트 (사이드바, 관리자 패널)
 import { UnifiedSidebar } from './components/unified-sidebar.js?v=2';
 import { AdminPanel } from './components/admin-panel.js';
-import { show as offlineShow, hide as offlineHide, isOffline as offlineIsOffline } from './components/offline-indicator.js';
-import { show as installShow, hide as installHide, isInstalled } from './components/install-prompt.js';
+
 
 
 // ============================================

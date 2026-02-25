@@ -40,7 +40,7 @@
     }
 
     function _loadSessions() {
-        _authFetch('/api/research/sessions').then(function(res) {
+        _authFetch(API_ENDPOINTS.RESEARCH_SESSIONS).then(function(res) {
             var sessions = (res.data && res.data.sessions) || res.data || [];
             var el = document.getElementById('sessionList');
             if (!el) return;
@@ -70,7 +70,7 @@
         var topic = topicEl ? topicEl.value.trim() : '';
         if (!topic) { _showToast('\uC8FC\uC81C\uB97C \uC785\uB825\uD558\uC138\uC694', 'error'); return; }
         var depthEl = document.getElementById('depth');
-        _authFetch('/api/research/sessions', {
+        _authFetch(API_ENDPOINTS.RESEARCH_SESSIONS, {
             method: 'POST',
             body: JSON.stringify({ topic: topic, depth: depthEl ? depthEl.value : 'standard' })
         }).then(function() {
@@ -90,9 +90,9 @@
         var dc = document.getElementById('detailContent');
         if (dc) dc.innerHTML = '<div class="loading">\uBD88\uB7EC\uC624\uB294 \uC911...</div>';
 
-        _authFetch('/api/research/sessions/' + id).then(function(res) {
+        _authFetch(API_ENDPOINTS.RESEARCH_SESSIONS + '/' + id).then(function(res) {
             var s = (res.data && res.data.session) || res.data || res;
-            return _authFetch('/api/research/sessions/' + id + '/steps').then(function(stepsRes) {
+            return _authFetch(API_ENDPOINTS.RESEARCH_SESSIONS + '/' + id + '/steps').then(function(stepsRes) {
                 var steps = (stepsRes.data && stepsRes.data.steps) || stepsRes.data || [];
                 var dt = document.getElementById('detailTitle');
                 if (dt) dt.textContent = s.topic;
@@ -146,7 +146,7 @@
 
     function _deleteSession() {
         if (!_currentSessionId || !confirm('\uC774 \uC5F0\uAD6C \uC138\uC158\uC744 \uC0AD\uC81C\uD558\uC2DC\uACA0\uC2B5\uB2C8\uAE4C?')) return;
-        _authFetch('/api/research/sessions/' + _currentSessionId, { method: 'DELETE' }).then(function() {
+        _authFetch(API_ENDPOINTS.RESEARCH_SESSIONS + '/' + _currentSessionId, { method: 'DELETE' }).then(function() {
             _showToast('\uC138\uC158\uC774 \uC0AD\uC81C\uB418\uC5C8\uC2B5\uB2C8\uB2E4');
             _closeDetail();
             _loadSessions();
