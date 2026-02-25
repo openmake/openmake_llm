@@ -6,6 +6,18 @@ import { getConfig } from '../config/env';
 import { ProgressCallback, createProgressEvent } from './progress';
 import { createLogger } from '../utils/logger';
 
+/** ISO 639-1 코드를 영어 언어명으로 변환 (LLM 프롬프트용) */
+const LANGUAGE_NAMES: Record<string, string> = {
+    ko: 'Korean', en: 'English', ja: 'Japanese', zh: 'Chinese',
+    es: 'Spanish', fr: 'French', de: 'German', pt: 'Portuguese',
+    ru: 'Russian', ar: 'Arabic', hi: 'Hindi', it: 'Italian',
+    nl: 'Dutch', sv: 'Swedish', da: 'Danish', no: 'Norwegian',
+    fi: 'Finnish', th: 'Thai', vi: 'Vietnamese', tr: 'Turkish'
+};
+
+function getLanguageName(code: string): string {
+    return LANGUAGE_NAMES[code] || LANGUAGE_NAMES['en']!;
+}
 const logger = createLogger('DocumentProcessor');
 
 const execAsync = promisify(exec);
@@ -332,7 +344,7 @@ export async function extractBinaryInfo(filePath: string): Promise<DocumentResul
 
 파일 형식: ${ext || '(확장자 없음)'}
 파일 크기: ${(stats.size / 1024).toFixed(1)} KB
-수정일: ${stats.mtime.toLocaleString('ko-KR')}
+수정일: ${stats.mtime.toLocaleString()}
 
 ⚠️ 이 파일 형식은 텍스트 추출을 지원하지 않습니다.
 지원되는 형식: PDF, TXT, MD, 이미지(OCR), Excel, CSV, JSON, HTML, 코드 파일`
@@ -399,7 +411,7 @@ export async function extractDocument(
 /**
  * 문서 요약 프롬프트 생성 (JSON 형식)
  */
-export function createSummaryPrompt(document: DocumentResult, language: string = 'ko'): string {
+export function createSummaryPrompt(document: DocumentResult, language: string = 'en'): string {
     const maxLength = 30000;
     let text = document.text;
     if (text.length > maxLength) {
@@ -432,13 +444,13 @@ Response Format (JSON):
   "implications": "Implications or conclusion"
 }
 
-Ensure the response is valid JSON. Translate all content to Korean.`;
+Ensure the response is valid JSON. Translate all content to ${getLanguageName(language)}.`;
 }
 
 /**
  * Q&A 프롬프트 생성 (JSON 형식)
  */
-export function createQAPrompt(document: DocumentResult, question: string): string {
+export function createQAPrompt(document: DocumentResult, question: string, language: string = 'en'): string {
     const maxLength = 28000;
     let text = document.text;
     if (text.length > maxLength) {
@@ -466,5 +478,5 @@ Response Format (JSON):
   "additional_info": "Any additional context or limitations (optional)"
 }
 
-Ensure the response is valid JSON. Translate all content to Korean. If the answer cannot be found in the document, state that clearly in the "answer" field.`;
+Ensure the response is valid JSON. Translate all content to ${getLanguageName(language)}. If the answer cannot be found in the document, state that clearly in the "answer" field.`;
 }

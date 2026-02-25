@@ -36,7 +36,12 @@ import { getPromptConfig } from './prompt';
 import { createLogger } from '../utils/logger';
 import type { ChatMessage, ToolDefinition } from '../ollama/types';
 import { randomBytes } from 'crypto';
-
+import { 
+    determineLanguagePolicy,
+    type SupportedLanguageCode,
+    type LanguagePolicyDecision
+} from './language-policy';
+import { getConfig } from '../config/env';
 const log = createLogger('ChatRequestHandler');
 
 // ============================================
@@ -526,11 +531,31 @@ export class ChatRequestHandler {
     }> {
         const { message, history, images, tools, tool_choice, client, onToken, abortSignal: _abortSignal } = params;
 
+        // 언어 정책 결정
+        const config = getConfig();
+        let detectedLanguage: string = 'en'; // default fallback
+
+        if (config.enableDynamicResponseLanguage) {
+            try {
+                const languagePolicy = determineLanguagePolicy(message, {
+                    defaultLanguage: config.defaultResponseLanguage,
+                    enableDynamicResponse: config.enableDynamicResponseLanguage,
+                    minConfidenceThreshold: config.languageDetectionMinConfidence,
+                    shortTextThreshold: 20,
+                    fallbackLanguage: config.languageFallbackLanguage,
+                    supportedLanguages: ['ko', 'en', 'ja', 'zh', 'es', 'fr', 'de', 'pt', 'ru', 'ar', 'hi', 'it', 'nl', 'sv', 'da', 'no', 'fi', 'th', 'vi', 'tr']
+                });
+                detectedLanguage = languagePolicy.resolvedLanguage;
+            } catch (error) {
+                console.warn('언어 감지 실패, 기본 언어 사용:', error);
+            }
+        }
+
         // tool_choice가 "none"이면 도구 없이 호출
         const effectiveTools = tool_choice === 'none' ? undefined : tools;
 
         // 시스템 프롬프트 구성
-        const promptConfig = getPromptConfig(message);
+        const promptConfig = getPromptConfig(message, detectedLanguage);
 
         // 대화 히스토리 구성 (OpenAI 형식 → Ollama 형식 변환)
         const messages: ChatMessage[] = [

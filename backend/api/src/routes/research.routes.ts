@@ -32,6 +32,7 @@ import { validate } from '../middlewares/validation';
 import { getUnifiedDatabase } from '../data/models/unified-database';
 import { v4 as uuidv4 } from 'uuid';
 import { createDeepResearchService } from '../services/DeepResearchService';
+import { detectLanguage } from '../chat/language-policy';
 import {
     createResearchSessionSchema,
     addResearchStepSchema,
@@ -257,7 +258,8 @@ router.post('/sessions/:sessionId/execute', validate(executeResearchSchema), asy
     const loops = maxLoops || (session.depth === 'quick' ? 1 : session.depth === 'standard' ? 3 : 5);
 
     // 서비스 생성 및 비동기 실행
-    const service = createDeepResearchService({ maxLoops: loops });
+    const language = detectLanguage(session.topic).language;
+    const service = createDeepResearchService({ maxLoops: loops, language });
 
     // 백그라운드 실행 (응답은 즉시 반환)
     service.executeResearch(sessionId, session.topic).catch((error) => {

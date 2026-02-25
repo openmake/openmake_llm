@@ -95,14 +95,14 @@ router.post('/web-search', requireAuth, validate(webSearchSchema), asyncHandler(
 ## 질문
 ${query}
 
-## 웹 검색 결과 (${new Date().toLocaleDateString('ko-KR')} 기준)
+## 웹 검색 결과 (${new Date().toLocaleDateString()} 기준)
 ${sourcesContext}
 
 ## 답변 지침
 1. 검색 결과를 기반으로 최신 정보를 제공하세요
 2. 출처가 있을 경우 [출처 N] 형식으로 인용하세요
 3. 정보가 불확실한 경우 명시하세요
-4. 한국어로 답변하세요
+4. 사용자가 사용한 언어로 친절하고 이해하기 쉽게 답변하세요
 
 ## 답변:`;
 

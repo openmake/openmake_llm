@@ -13,6 +13,35 @@ import { KeyExhaustionError } from '../errors/key-exhaustion.error';
 import { checkChatRateLimit } from '../middlewares/chat-rate-limiter';
 import { createLogger } from '../utils/logger';
 import { WSMessage, ExtendedWebSocket } from './ws-types';
+import { detectLanguage, type SupportedLanguageCode } from '../chat/language-policy';
+
+// 다국어 시사 키워드 맵
+const CURRENT_EVENTS_KEYWORDS: Record<string, string[]> = {
+    ko: ['대통령', '총리', '장관', '현재', '지금', '오늘', '최근', '뉴스', '선거', '정치', '국회', '정부', '탄핵', '취임'],
+    en: ['president', 'prime minister', 'minister', 'current', 'today', 'recent', 'news', 'election', 'politics', 'parliament', 'government', 'impeach', 'inaugur'],
+    ja: ['大統領', '首相', '大臣', '現在', '今日', '最近', 'ニュース', '選挙', '政治', '国会', '政府'],
+    zh: ['总统', '总理', '部长', '现在', '今天', '最近', '新闻', '选举', '政治', '国会', '政府'],
+};
+
+// 다국어 웹 검색 컨텍스트 템플릿
+const WEB_SEARCH_TEMPLATES: Record<string, { header: string; instruction: string; sourceLabel: string; contentLabel: string; locale: string }> = {
+    ko: { header: '웹 검색 결과', instruction: '다음은 최신 웹 검색 결과입니다. 이 정보를 우선적으로 참고하여 답변하세요:', sourceLabel: '출처', contentLabel: '내용', locale: 'ko-KR' },
+    en: { header: 'Web Search Results', instruction: 'Below are the latest web search results. Please prioritize this information in your response:', sourceLabel: 'Source', contentLabel: 'Content', locale: 'en-US' },
+    ja: { header: 'ウェブ検索結果', instruction: '以下は最新のウェブ検索結果です。回答の際にこの情報を優先的に参考にしてください:', sourceLabel: '出典', contentLabel: '内容', locale: 'ja-JP' },
+    zh: { header: '网络搜索结果', instruction: '以下是最新的网络搜索结果，请优先参考这些信息进行回答:', sourceLabel: '来源', contentLabel: '内容', locale: 'zh-CN' },
+};
+
+// 다국어 에러 메시지 템플릿
+const WS_ERROR_MESSAGES: Record<string, { quotaExceeded: string; genericError: string }> = {
+    ko: { quotaExceeded: 'API 할당량이 초과되었습니다', genericError: '처리 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.' },
+    en: { quotaExceeded: 'API quota exceeded', genericError: 'An error occurred while processing. Please try again later.' },
+    ja: { quotaExceeded: 'API割り当て量を超過しました', genericError: '処理中にエラーが発生しました。しばらくしてからもう一度お試しください。' },
+    zh: { quotaExceeded: 'API配额已超出', genericError: '处理过程中发生错误，请稍后重试。' },
+};
+
+function getLocalizedTemplate<T>(map: Record<string, T>, lang: string): T {
+    return map[lang] || map['en'] || Object.values(map)[0];
+}
 
 /**
  * AI 채팅 메시지를 처리합니다.
@@ -36,6 +65,10 @@ export async function handleChatMessage(
 
     const { model, nodeId, history, images, docId, sessionId, anonSessionId } = msg;
     const message = msg.message.trim();
+
+    // 사용자 언어 감지 (에러 핸들링에서도 사용하므로 try 외부에 선언)
+    const detectedLang = detectLanguage(message);
+    const userLang = detectedLang.language;
 
     // 중단 컨트롤러 생성
     const abortController = new AbortController();
@@ -70,9 +103,11 @@ export async function handleChatMessage(
             return;
         }
 
-        // 시사 관련 질문 감지 및 웹 검색 컨텍스트 구성
-        const currentEventsKeywords = ['대통령', '총리', '장관', '현재', '지금', '오늘', '최근', '뉴스', '선거', '정치', '국회', '정부', '탄핵', '취임'];
-        const isCurrentEventsQuery = currentEventsKeywords.some(keyword => message?.includes(keyword));
+        // 시사 관련 질문 감지 — 다국어 키워드 매칭
+        // 시사 관련 질문 감지 — 다국어 키워드 매칭
+        const langKeywords = getLocalizedTemplate(CURRENT_EVENTS_KEYWORDS, userLang);
+        const allKeywords = [...langKeywords, ...(CURRENT_EVENTS_KEYWORDS['en'] || [])];
+        const isCurrentEventsQuery = allKeywords.some(keyword => message?.toLowerCase().includes(keyword.toLowerCase()));
         let webSearchContext = '';
 
         if (isCurrentEventsQuery) {
@@ -80,9 +115,10 @@ export async function handleChatMessage(
                 const { performWebSearch } = await import('../mcp');
                 const searchResults = await performWebSearch(message, { maxResults: 5 });
                 if (searchResults.length > 0) {
-                    webSearchContext = `\n\n## 🔍 웹 검색 결과 (${new Date().toLocaleDateString('ko-KR')} 기준)\n` +
-                        `다음은 최신 웹 검색 결과입니다. 이 정보를 우선적으로 참고하여 답변하세요:\n\n` +
-                        searchResults.map((r: { title?: string; url?: string; snippet?: string }, i: number) => `[출처 ${i + 1}] ${r.title}\n   URL: ${r.url}\n${r.snippet ? `   내용: ${r.snippet}\n` : ''}`).join('\n') + '\n';
+                    const tpl = getLocalizedTemplate(WEB_SEARCH_TEMPLATES, userLang);
+                    webSearchContext = `\n\n## \uD83D\uDD0D ${tpl.header} (${new Date().toLocaleDateString(tpl.locale)} )\n` +
+                        `${tpl.instruction}\n\n` +
+                        searchResults.map((r: { title?: string; url?: string; snippet?: string }, i: number) => `[${tpl.sourceLabel} ${i + 1}] ${r.title}\n   URL: ${r.url}\n${r.snippet ? `   ${tpl.contentLabel}: ${r.snippet}\n` : ''}`).join('\n') + '\n';
                 }
             } catch (e) {
                 log.error('[Chat] 웹 검색 실패:', e);
@@ -156,7 +192,7 @@ export async function handleChatMessage(
             log.warn('[Chat] API 할당량 초과:', error.message);
             ws.send(JSON.stringify({
                 type: 'error',
-                message: `⚠️ API 할당량이 초과되었습니다 (${error.quotaType}). ${error.used}/${error.limit} 요청 사용됨. 잠시 후 다시 시도해주세요.`,
+                message: `⚠️ ${getLocalizedTemplate(WS_ERROR_MESSAGES, userLang).quotaExceeded} (${error.quotaType}). ${error.used}/${error.limit}.`,
                 errorType: 'quota_exceeded',
                 retryAfter: error.retryAfterSeconds
             }));
@@ -165,7 +201,7 @@ export async function handleChatMessage(
             log.warn('[Chat] 모든 API 키 소진:', error.message);
             ws.send(JSON.stringify({
                 type: 'error',
-                message: error.getDisplayMessage('ko'),
+                message: error.getDisplayMessage(userLang),
                 errorType: 'api_keys_exhausted',
                 retryAfter: error.retryAfterSeconds,
                 resetTime: error.resetTime.toISOString(),
@@ -175,7 +211,7 @@ export async function handleChatMessage(
         } else {
             log.error('[Chat] 처리 중 오류:', error);
             // 🔒 Phase 2: 내부 에러 상세 누출 방지 — 제네릭 메시지만 전송
-            ws.send(JSON.stringify({ type: 'error', message: '처리 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.' }));
+            ws.send(JSON.stringify({ type: 'error', message: getLocalizedTemplate(WS_ERROR_MESSAGES, userLang).genericError }));
         }
     } finally {
         // 중단 컨트롤러 정리

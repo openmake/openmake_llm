@@ -12,6 +12,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { envSchema } from './env.schema';
 import { SERVER_CONFIG } from './constants';
+import type { SupportedLanguageCode } from '../chat/language-policy';
 
 export interface EnvConfig {
     // Node
@@ -113,6 +114,12 @@ export interface EnvConfig {
     omkDomainCreative: string;
     omkDomainAnalysis: string;
     omkDomainGeneral: string;
+
+    // Language Policy
+    enableDynamicResponseLanguage: boolean;
+    defaultResponseLanguage: SupportedLanguageCode;
+    languageDetectionMinConfidence: number;
+    languageFallbackLanguage: SupportedLanguageCode;
 }
 
 const DEFAULT_CONFIG: EnvConfig = {
@@ -215,6 +222,12 @@ const DEFAULT_CONFIG: EnvConfig = {
     omkDomainCreative: '',
     omkDomainAnalysis: '',
     omkDomainGeneral: '',
+
+    // Language Policy
+    enableDynamicResponseLanguage: false,
+    defaultResponseLanguage: 'ko',
+    languageDetectionMinConfidence: 0.7,
+    languageFallbackLanguage: 'en',
 };
 
 function parseEnvFile(filePath: string): Record<string, string> {
@@ -366,6 +379,12 @@ export function loadConfig(): EnvConfig {
         OMK_DOMAIN_CREATIVE: env('OMK_DOMAIN_CREATIVE'),
         OMK_DOMAIN_ANALYSIS: env('OMK_DOMAIN_ANALYSIS'),
         OMK_DOMAIN_GENERAL: env('OMK_DOMAIN_GENERAL'),
+
+        // Language Policy
+        ENABLE_DYNAMIC_RESPONSE_LANGUAGE: env('ENABLE_DYNAMIC_RESPONSE_LANGUAGE'),
+        DEFAULT_RESPONSE_LANGUAGE: env('DEFAULT_RESPONSE_LANGUAGE'),
+        LANGUAGE_DETECTION_MIN_CONFIDENCE: env('LANGUAGE_DETECTION_MIN_CONFIDENCE'),
+        LANGUAGE_FALLBACK_LANGUAGE: env('LANGUAGE_FALLBACK_LANGUAGE'),
     });
 
     if (!parsedResult.success) {
@@ -482,6 +501,12 @@ export function loadConfig(): EnvConfig {
         omkDomainCreative: parsed.OMK_DOMAIN_CREATIVE ?? DEFAULT_CONFIG.omkDomainCreative,
         omkDomainAnalysis: parsed.OMK_DOMAIN_ANALYSIS ?? DEFAULT_CONFIG.omkDomainAnalysis,
         omkDomainGeneral: parsed.OMK_DOMAIN_GENERAL ?? DEFAULT_CONFIG.omkDomainGeneral,
+
+        // Language Policy
+        enableDynamicResponseLanguage: parsed.ENABLE_DYNAMIC_RESPONSE_LANGUAGE ?? DEFAULT_CONFIG.enableDynamicResponseLanguage,
+        defaultResponseLanguage: parsed.DEFAULT_RESPONSE_LANGUAGE ?? DEFAULT_CONFIG.defaultResponseLanguage,
+        languageDetectionMinConfidence: parsed.LANGUAGE_DETECTION_MIN_CONFIDENCE ?? DEFAULT_CONFIG.languageDetectionMinConfidence,
+        languageFallbackLanguage: parsed.LANGUAGE_FALLBACK_LANGUAGE ?? DEFAULT_CONFIG.languageFallbackLanguage,
     };
 }
 

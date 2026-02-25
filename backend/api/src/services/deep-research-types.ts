@@ -20,7 +20,7 @@ export interface ResearchConfig {
     llmModel: string;            // 사용할 LLM 모델
     searchApi: 'ollama' | 'firecrawl' | 'google' | 'all'; // 검색 API
     maxSearchResults: number;    // 검색 결과 예산 (기본: 360)
-    language: 'ko' | 'en';       // 출력 언어
+    language: string;              // 출력 언어 (ISO 639-1 코드, 예: 'ko', 'en', 'ja')
     maxTotalSources: number;     // 목표 고유 소스 수 (기본: 80)
     scrapeFullContent: boolean;  // Firecrawl로 풀 콘텐츠 스크래핑 여부 (기본: true)
     maxScrapePerLoop: number;    // 루프당 최대 스크래핑 수 (기본: 15)
@@ -71,7 +71,7 @@ export const DEFAULT_CONFIG: ResearchConfig = {
     llmModel: 'gemma3:4b',
     searchApi: 'all',
     maxSearchResults: 360,
-    language: 'ko',
+    language: 'en',
     maxTotalSources: 80,
     scrapeFullContent: true,
     maxScrapePerLoop: 15,

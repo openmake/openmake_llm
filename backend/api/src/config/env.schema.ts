@@ -11,6 +11,12 @@
 import { z } from 'zod';
 import { SERVER_CONFIG } from './constants';
 
+// Language configuration types
+const supportedLanguageSchema = z.enum([
+    'ko', 'en', 'ja', 'zh', 'es', 'fr', 'de', 'pt', 'ru', 'ar',
+    'hi', 'it', 'nl', 'sv', 'da', 'no', 'fi', 'th', 'vi', 'tr'
+]);
+
 const nodeEnvSchema = z.enum(['development', 'test', 'production']);
 const logLevelSchema = z.enum(['debug', 'info', 'warn', 'error']);
 const geminiThinkLevelSchema = z.enum(['low', 'medium', 'high']);
@@ -127,6 +133,12 @@ OMK_ENGINE_CODE: z.string().min(1).default('glm-5:cloud'),
         OMK_DOMAIN_CREATIVE: z.string().default(''),
         OMK_DOMAIN_ANALYSIS: z.string().default(''),
         OMK_DOMAIN_GENERAL: z.string().default(''),
+
+        // Language Policy
+        ENABLE_DYNAMIC_RESPONSE_LANGUAGE: booleanFromString(false),
+        DEFAULT_RESPONSE_LANGUAGE: supportedLanguageSchema.default('ko'),
+        LANGUAGE_DETECTION_MIN_CONFIDENCE: z.coerce.number().min(0).max(1).default(0.7),
+        LANGUAGE_FALLBACK_LANGUAGE: supportedLanguageSchema.default('en'),
     })
     .superRefine((data, ctx) => {
         if (data.NODE_ENV !== 'production') {

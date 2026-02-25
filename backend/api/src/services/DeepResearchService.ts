@@ -43,6 +43,225 @@ export type { ResearchConfig, ResearchProgress, ResearchResult };
 const logger = createLogger('DeepResearchService');
 
 // ============================================================
+// 다국어 프롬프트 매핑 (ko/en/ja/zh/es/de)
+// ============================================================
+
+/** 섹션 헤더 다국어 매핑 */
+const SECTION_HEADERS: Record<string, { summary: string; findings: string; analysis: string; references: string }> = {
+    ko: { summary: '종합 요약', findings: '주요 발견사항', analysis: '상세 분석', references: '참고 자료' },
+    en: { summary: 'Executive Summary', findings: 'Key Findings', analysis: 'Detailed Analysis', references: 'References' },
+    ja: { summary: '総合概要', findings: '主な発見', analysis: '詳細分析', references: '参考資料' },
+    zh: { summary: '综合摘要', findings: '主要发现', analysis: '详细分析', references: '参考资料' },
+    es: { summary: 'Resumen Ejecutivo', findings: 'Hallazgos Clave', analysis: 'Análisis Detallado', references: 'Referencias' },
+    de: { summary: 'Zusammenfassung', findings: 'Wichtige Erkenntnisse', analysis: 'Detailanalyse', references: 'Referenzen' },
+};
+
+function getSectionHeaders(lang: string) {
+    return SECTION_HEADERS[lang] || SECTION_HEADERS['en']!;
+}
+
+/** 주제 분해 프롬프트 */
+function getDecomposePrompt(lang: string, topic: string): string {
+    const prompts: Record<string, string> = {
+        ko: `다음 주제를 심층 연구하기 위해 8-15개의 서브 토픽을 생성하세요.\n주제: ${topic}\n\n요구사항:\n1) 각 서브 토픽마다 서로 다른 관점의 검색어 2-3개를 만드세요.\n2) 중요도는 1-5 정수로 부여하세요.\n3) JSON 배열만 출력하세요. 설명 문장 금지.\n\n반드시 다음 형식:\n[\n  {\n    "title": "서브 토픽 제목",\n    "searchQueries": ["검색어 1", "검색어 2", "검색어 3"],\n    "importance": 5\n  }\n]`,
+        ja: `次のトピックを深く研究するために8-15個のサブトピックを生成してください。\nトピック: ${topic}\n\n要件:\n1) 各サブトピックに異なる観点の検索クエリ2-3個を含めてください。\n2) 重要度は1-5の整数で。\n3) JSON配列のみ出力。説明文は不要。\n\n必ず次の形式で:\n[\n  {\n    "title": "サブトピック名",\n    "searchQueries": ["クエリ1", "クエリ2", "クエリ3"],\n    "importance": 5\n  }\n]`,
+        zh: `为以下主题生成8-15个子主题进行深入研究。\n主题: ${topic}\n\n要求:\n1) 每个子主题包含2-3个不同角度的搜索查询。\n2) 重要性为1-5的整数。\n3) 仅输出JSON数组，禁止说明文字。\n\n必须使用以下格式:\n[\n  {\n    "title": "子主题标题",\n    "searchQueries": ["查询1", "查询2", "查询3"],\n    "importance": 5\n  }\n]`,
+        es: `Genera 8-15 subtemas para investigar en profundidad el siguiente tema.\nTema: ${topic}\n\nRequisitos:\n1) Cada subtema debe incluir 2-3 consultas de búsqueda diversas.\n2) La importancia debe ser un entero de 1-5.\n3) Solo genera un array JSON, sin texto adicional.\n\nFormato requerido:\n[\n  {\n    "title": "Título del subtema",\n    "searchQueries": ["consulta 1", "consulta 2", "consulta 3"],\n    "importance": 5\n  }\n]`,
+        de: `Erstelle 8-15 Unterthemen für eine Tiefenrecherche zum folgenden Thema.\nThema: ${topic}\n\nAnforderungen:\n1) Jedes Unterthema muss 2-3 verschiedene Suchanfragen enthalten.\n2) Wichtigkeit als Ganzzahl von 1-5.\n3) Nur JSON-Array ausgeben, kein zusätzlicher Text.\n\nErforderliches Format:\n[\n  {\n    "title": "Unterthema-Titel",\n    "searchQueries": ["Anfrage 1", "Anfrage 2", "Anfrage 3"],\n    "importance": 5\n  }\n]`,
+    };
+    return prompts[lang] || `Generate 8-15 subtopics for deep research on this topic.\nTopic: ${topic}\n\nRequirements:\n1) Each subtopic must include 2-3 diverse search queries.\n2) importance must be an integer from 1-5.\n3) Output JSON array only with no additional text.\n\nRequired format:\n[\n  {\n    "title": "Subtopic title",\n    "searchQueries": ["query 1", "query 2", "query 3"],\n    "importance": 5\n  }\n]`;
+}
+
+/** 청크 요약 프롬프트 */
+function getChunkSummaryPrompt(lang: string, topic: string, chunkIndex: number, totalChunks: number, chunkContext: string): string {
+    const header = `(${chunkIndex + 1}/${totalChunks})`;
+    const prompts: Record<string, string> = {
+        ko: `다음은 "${topic}" 연구용 소스 청크${header}입니다.\n\n요구사항:\n1) 800-1200 단어로 중간 요약을 작성하세요.\n2) 핵심 주장마다 반드시 [출처 N] 형식의 인용을 포함하세요.\n3) 불확실한 정보는 단정하지 말고 출처 근거 중심으로 작성하세요.\n\n소스:\n${chunkContext}`,
+        ja: `以下は「${topic}」研究用のソースチャンク${header}です。\n\n要件:\n1) 800-1200語で中間要約を作成してください。\n2) 主要な主張には必ず[出典 N]形式の引用を含めてください。\n3) 不確実な情報は断定せず、エビデンスベースで記述してください。\n\nソース:\n${chunkContext}`,
+        zh: `以下是“${topic}”研究用源块${header}。\n\n要求:\n1) 用800-1200字编写中间摘要。\n2) 关键论点必须包含[来源 N]格式的引用。\n3) 不确定的信息不要下定论，以证据为基础。\n\n源:\n${chunkContext}`,
+        es: `Este es un fragmento de fuentes ${header} para la investigación sobre "${topic}".\n\nRequisitos:\n1) Escribe un resumen intermedio de 800-1200 palabras.\n2) Incluye citas en formato [Fuente N] para afirmaciones clave.\n3) Mantén un lenguaje basado en evidencias.\n\nFuentes:\n${chunkContext}`,
+        de: `Dies ist ein Quellen-Chunk ${header} für die Recherche über "${topic}".\n\nAnforderungen:\n1) Schreiben Sie eine Zwischenzusammenfassung von 800-1200 Wörtern.\n2) Fügen Sie Zitate im Format [Quelle N] für Kernaussagen ein.\n3) Bleiben Sie evidenzbasiert.\n\nQuellen:\n${chunkContext}`,
+    };
+    return prompts[lang] || `This is a source chunk ${header} for research on "${topic}".\n\nRequirements:\n1) Write an intermediate summary in 800-1200 words.\n2) Include citations in [Source N] format for key claims.\n3) Keep evidence-driven language and avoid unsupported certainty.\n\nSources:\n${chunkContext}`;
+}
+
+/** 청크 병합 프롬프트 */
+function getMergePrompt(lang: string, topic: string, chunkSummaries: string[]): string {
+    const summaryText = chunkSummaries.map((s, i) => `### Chunk ${i + 1}\n${s}`).join('\n\n');
+    const prompts: Record<string, string> = {
+        ko: `다음은 "${topic}" 연구의 중간 요약들입니다.\n\n요구사항:\n1) 모든 중간 요약을 통합해 2000-3000 단어의 종합 합성문을 작성하세요.\n2) 핵심 주장마다 [출처 N] 형식의 인용을 반드시 포함하세요.\n3) 반복을 줄이고, 주제별 구조를 명확히 정리하세요.\n\n중간 요약:\n${summaryText}`,
+        ja: `以下は「${topic}」研究の中間要約です。\n\n要件:\n1) すべての中間要約を統合し2000-3000語の総合合成を作成してください。\n2) 主要な主張に[出典 N]形式の引用を含めてください。\n3) 重複を減らし、テーマ別に明確に構成してください。\n\n中間要約:\n${summaryText}`,
+        zh: `以下是“${topic}”研究的中间摘要。\n\n要求:\n1) 合并所有中间摘要，写成2000-3000字的综合分析。\n2) 关键论点必须包含[来源 N]格式的引用。\n3) 减少重复，按主题清晰组织。\n\n中间摘要:\n${summaryText}`,
+        es: `A continuación se presentan los resúmenes intermedios de la investigación sobre "${topic}".\n\nRequisitos:\n1) Fusiona todos los resúmenes en una síntesis de 2000-3000 palabras.\n2) Incluye citas en formato [Fuente N] para afirmaciones clave.\n3) Reduce la repetición y presenta una estructura temática clara.\n\nResúmenes intermedios:\n${summaryText}`,
+        de: `Nachfolgend die Zwischenzusammenfassungen der Recherche über "${topic}".\n\nAnforderungen:\n1) Vereinige alle Zusammenfassungen zu einer 2000-3000 Wörter umfassenden Synthese.\n2) Füge Zitate im Format [Quelle N] für Kernaussagen ein.\n3) Reduziere Wiederholungen und präsentiere eine klare thematische Struktur.\n\nZwischenzusammenfassungen:\n${summaryText}`,
+    };
+    return prompts[lang] || `Below are intermediate summaries for research on "${topic}".\n\nRequirements:\n1) Merge all summaries into a 2000-3000 word synthesis.\n2) Keep inline citations in [Source N] format for key claims.\n3) Reduce repetition and present a clear thematic structure.\n\nIntermediate summaries:\n${summaryText}`;
+}
+
+/** 추가 탐색 필요 여부 판단 프롬프트 */
+function getNeedMorePrompt(lang: string, topic: string, currentFindings: string[], sourceCount: number): string {
+    const findings = currentFindings.join('\n\n---\n\n');
+    const prompts: Record<string, string> = {
+        ko: `"${topic}" 연구에서 현재까지 수집된 합성 결과는 아래와 같습니다.\n\n${findings}\n\n현재 고유 소스 수: ${sourceCount}\n\n질문: 아직 추가 탐색이 필요한가요? "yes" 또는 "no"로만 답하세요.`,
+        ja: `「${topic}」研究で現在までに収集された合成結果は以下の通りです。\n\n${findings}\n\n現在のユニークソース数: ${sourceCount}\n\n質問: さらなる探索が必要ですか？ "yes" または "no" でのみ答えてください。`,
+        zh: `“${topic}”研究中目前收集的合成结果如下。\n\n${findings}\n\n当前独立来源数: ${sourceCount}\n\n问题: 还需要更多探索吗？请仅回答 "yes" 或 "no"。`,
+        es: `Los resultados de síntesis recopilados hasta ahora para la investigación sobre "${topic}" son los siguientes.\n\n${findings}\n\nFuentes únicas actuales: ${sourceCount}\n\nPregunta: ¿Se necesita más exploración? Responde solo "yes" o "no".`,
+        de: `Die bisherigen Synthese-Ergebnisse der Recherche über "${topic}" sind wie folgt.\n\n${findings}\n\nAktuelle eindeutige Quellen: ${sourceCount}\n\nFrage: Ist weitere Erkundung erforderlich? Antworten Sie nur mit "yes" oder "no".`,
+    };
+    return prompts[lang] || `The following synthesis has been collected for research on "${topic}".\n\n${findings}\n\nCurrent unique source count: ${sourceCount}\n\nQuestion: Is more exploration needed? Answer only "yes" or "no".`;
+}
+
+/** 최종 보고서 생성 프롬프트 */
+function getReportPrompt(lang: string, topic: string, subTopicGuide: string, findings: string[], sourceList: string): string {
+    const h = getSectionHeaders(lang);
+    const findingsText = findings.join('\n\n---\n\n');
+    const prompts: Record<string, string> = {
+        ko: `"${topic}"에 대한 심층 연구 최종 보고서를 작성하세요.\n\n절대 축약하지 마세요. 충분히 상세하게 작성하세요. 모든 출처를 인용하세요.\n\n출력 요구사항:\n1) 종합 요약: 500-800 단어\n2) 주요 발견사항: 10-20개 번호 목록, 각 항목은 2-3문장\n3) 상세 분석: 아래 서브 토픽 구조를 기반으로 총 3000-5000 단어\n4) 참고 자료: 모든 고유 소스를 번호 목록으로 작성 ([N] Title - URL)\n5) 본문 모든 핵심 주장에 [출처 N] 형태의 인라인 인용 포함\n\n서브 토픽 구조:\n${subTopicGuide}\n\n중간 합성 결과:\n${findingsText}\n\n전체 소스 목록:\n${sourceList}\n\n다음 섹션 헤더를 유지하세요:\n## ${h.summary}\n## ${h.findings}\n## ${h.analysis}\n## ${h.references}`,
+        ja: `「${topic}」についての深層研究最終報告書を作成してください。\n\n絶対に省略しないでください。十分に詳細に記述してください。\n\n出力要件:\n1) 総合概要: 500-800語\n2) 主な発見: 10-20項目の番号付きリスト、各項目2-3文\n3) 詳細分析: サブトピック構造に基づき合計3000-5000語\n4) 参考資料: 全ユニークソースを番号付きリストで\n5) 本文の全ての主要主張に[出典 N]形式のインライン引用を含む\n\nサブトピック構造:\n${subTopicGuide}\n\n中間合成結果:\n${findingsText}\n\n全ソースリスト:\n${sourceList}\n\n次のセクションヘッダーを維持してください:\n## ${h.summary}\n## ${h.findings}\n## ${h.analysis}\n## ${h.references}`,
+        zh: `请撰写关于“${topic}”的深度研究最终报告。\n\n不要缩写。充分详细地写。引用所有来源。\n\n输出要求:\n1) 综合摘要: 500-800字\n2) 主要发现: 10-20个编号项目，每项2-3句\n3) 详细分析: 基于子主题结构共计3000-5000字\n4) 参考资料: 所有独立来源编号列表\n5) 正文中所有关键论点包含[来源 N]形式的内联引用\n\n子主题结构:\n${subTopicGuide}\n\n中间合成结果:\n${findingsText}\n\n全部来源列表:\n${sourceList}\n\n请保持以下章节标题:\n## ${h.summary}\n## ${h.findings}\n## ${h.analysis}\n## ${h.references}`,
+        es: `Escribe un informe final de investigación profunda sobre "${topic}".\n\nNo abrevies. Escribe con todo detalle. Cita todas las fuentes.\n\nRequisitos de salida:\n1) Resumen ejecutivo: 500-800 palabras\n2) Hallazgos clave: 10-20 ítems numerados, 2-3 oraciones cada uno\n3) Análisis detallado: 3000-5000 palabras basado en subtemas\n4) Referencias: todas las fuentes como lista numerada\n5) Citas en línea [Fuente N] para todas las afirmaciones\n\nEstructura de subtemas:\n${subTopicGuide}\n\nSíntesis intermedia:\n${findingsText}\n\nLista completa de fuentes:\n${sourceList}\n\nMantén estos encabezados:\n## ${h.summary}\n## ${h.findings}\n## ${h.analysis}\n## ${h.references}`,
+        de: `Erstellen Sie einen abschließenden Tiefenrecherche-Bericht über "${topic}".\n\nNicht kürzen. Ausführlich schreiben. Alle Quellen zitieren.\n\nAusgabeanforderungen:\n1) Zusammenfassung: 500-800 Wörter\n2) Wichtige Erkenntnisse: 10-20 nummerierte Punkte, je 2-3 Sätze\n3) Detailanalyse: 3000-5000 Wörter basierend auf Unterthemen\n4) Referenzen: alle Quellen als nummerierte Liste\n5) Inline-Zitate [Quelle N] für alle Kernaussagen\n\nUnterthemen-Struktur:\n${subTopicGuide}\n\nZwischensynthese:\n${findingsText}\n\nVollständige Quellenliste:\n${sourceList}\n\nBehalten Sie diese Abschnittsüberschriften bei:\n## ${h.summary}\n## ${h.findings}\n## ${h.analysis}\n## ${h.references}`,
+    };
+    return prompts[lang] || `Write a final deep-research report on "${topic}".\n\nDo not abbreviate. Write with full detail. Cite all sources.\n\nOutput requirements:\n1) Executive Summary: 500-800 words\n2) Key findings: 10-20 numbered findings, each 2-3 sentences\n3) Detailed analysis: 3000-5000 words total, structured by the subtopics below\n4) References: all unique sources as numbered list ([N] Title - URL)\n5) Inline citations in [Source N] format for all core claims\n\nSubtopic structure:\n${subTopicGuide}\n\nIntermediate synthesis:\n${findingsText}\n\nFull source list:\n${sourceList}\n\nKeep these section headers:\n## ${h.summary}\n## ${h.findings}\n## ${h.analysis}\n## ${h.references}`;
+}
+
+/** 리서치 진행/에러 메시지 다국어 매핑 */
+const RESEARCH_MESSAGES: Record<string, Record<string, string>> = {
+    init: {
+        ko: '리서치를 시작합니다...',
+        en: 'Starting research...',
+        ja: 'リサーチを開始します...',
+        zh: '开始研究...',
+        es: 'Iniciando investigación...',
+        de: 'Recherche wird gestartet...',
+    },
+    analyzing: {
+        ko: '주제를 분석 중...',
+        en: 'Analyzing topic...',
+        ja: 'トピックを分析中...',
+        zh: '正在分析主题...',
+        es: 'Analizando tema...',
+        de: 'Thema wird analysiert...',
+    },
+    subtopicsComplete: {
+        ko: '{count}개 서브 토픽 추출 완료',
+        en: '{count} subtopics extracted',
+        ja: '{count}個のサブトピック抽出完了',
+        zh: '已提取{count}个子主题',
+        es: '{count} subtemas extraídos',
+        de: '{count} Unterthemen extrahiert',
+    },
+    loopSearching: {
+        ko: '루프 {loop}: 웹 검색 중...',
+        en: 'Loop {loop}: Searching web...',
+        ja: 'ループ {loop}: ウェブ検索中...',
+        zh: '循环 {loop}: 正在搜索网页...',
+        es: 'Bucle {loop}: Buscando en la web...',
+        de: 'Schleife {loop}: Websuche...',
+    },
+    loopSearchComplete: {
+        ko: '루프 {loop}: 검색 완료 ({newCount}개 신규, 누적 {totalCount}/{maxSources} 소스)',
+        en: 'Loop {loop}: Search complete ({newCount} new, {totalCount}/{maxSources} total sources)',
+        ja: 'ループ {loop}: 検索完了 (新規{newCount}件, 累計{totalCount}/{maxSources}ソース)',
+        zh: '循环 {loop}: 搜索完成 (新增{newCount}个, 累计{totalCount}/{maxSources}个来源)',
+        es: 'Bucle {loop}: Búsqueda completa ({newCount} nuevas, {totalCount}/{maxSources} fuentes totales)',
+        de: 'Schleife {loop}: Suche abgeschlossen ({newCount} neue, {totalCount}/{maxSources} Quellen gesamt)',
+    },
+    loopScraping: {
+        ko: '루프 {loop}: Firecrawl 스크래핑 준비 ({scrapedCount}/{maxSources} 소스)',
+        en: 'Loop {loop}: Preparing Firecrawl scraping ({scrapedCount}/{maxSources} sources)',
+        ja: 'ループ {loop}: Firecrawlスクレイピング準備 ({scrapedCount}/{maxSources}ソース)',
+        zh: '循环 {loop}: 准备Firecrawl抓取 ({scrapedCount}/{maxSources}来源)',
+        es: 'Bucle {loop}: Preparando scraping Firecrawl ({scrapedCount}/{maxSources} fuentes)',
+        de: 'Schleife {loop}: Firecrawl-Scraping vorbereiten ({scrapedCount}/{maxSources} Quellen)',
+    },
+    loopSynthesizing: {
+        ko: '루프 {loop}: 정보 합성 중...',
+        en: 'Loop {loop}: Synthesizing information...',
+        ja: 'ループ {loop}: 情報を合成中...',
+        zh: '循环 {loop}: 正在合成信息...',
+        es: 'Bucle {loop}: Sintetizando información...',
+        de: 'Schleife {loop}: Informationen werden zusammengefasst...',
+    },
+    loopSynthComplete: {
+        ko: '루프 {loop}: 합성 완료 ({sourceCount}개 소스 반영)',
+        en: 'Loop {loop}: Synthesis complete ({sourceCount} sources reflected)',
+        ja: 'ループ {loop}: 合成完了 ({sourceCount}ソース反映)',
+        zh: '循环 {loop}: 合成完成 (反映{sourceCount}个来源)',
+        es: 'Bucle {loop}: Síntesis completa ({sourceCount} fuentes reflejadas)',
+        de: 'Schleife {loop}: Synthese abgeschlossen ({sourceCount} Quellen berücksichtigt)',
+    },
+    generatingReport: {
+        ko: '최종 보고서 생성 중...',
+        en: 'Generating final report...',
+        ja: '最終レポートを生成中...',
+        zh: '正在生成最终报告...',
+        es: 'Generando informe final...',
+        de: 'Abschlussbericht wird erstellt...',
+    },
+    completed: {
+        ko: '리서치 완료!',
+        en: 'Research complete!',
+        ja: 'リサーチ完了！',
+        zh: '研究完成！',
+        es: '¡Investigación completa!',
+        de: 'Recherche abgeschlossen!',
+    },
+    cancelled: {
+        ko: '리서치가 취소되었습니다.',
+        en: 'Research has been cancelled.',
+        ja: 'リサーチがキャンセルされました。',
+        zh: '研究已取消。',
+        es: 'La investigación ha sido cancelada.',
+        de: 'Recherche wurde abgebrochen.',
+    },
+    noSources: {
+        ko: '수집된 소스가 없습니다.',
+        en: 'No sources collected.',
+        ja: '収集されたソースがありません。',
+        zh: '没有收集到来源。',
+        es: 'No se recopilaron fuentes.',
+        de: 'Keine Quellen gesammelt.',
+    },
+    synthesisFailed: {
+        ko: '합성 실패',
+        en: 'Synthesis failed',
+        ja: '合成失敗',
+        zh: '合成失败',
+        es: 'Síntesis fallida',
+        de: 'Synthese fehlgeschlagen',
+    },
+    reportFailed: {
+        ko: '보고서 생성 실패',
+        en: 'Report generation failed',
+        ja: 'レポート生成失敗',
+        zh: '报告生成失败',
+        es: 'Error al generar informe',
+        de: 'Berichterstellung fehlgeschlagen',
+    },
+    subtopicParseFailed: {
+        ko: '서브 토픽 JSON 파싱 실패',
+        en: 'Subtopic JSON parsing failed',
+        ja: 'サブトピックJSONパース失敗',
+        zh: '子主题JSON解析失败',
+        es: 'Error al analizar JSON de subtemas',
+        de: 'Unterthemen-JSON-Parsing fehlgeschlagen',
+    },
+};
+
+function getResearchMessage(key: string, lang: string, vars?: Record<string, string | number>): string {
+    const messages = RESEARCH_MESSAGES[key];
+    if (!messages) return key;
+    let msg = messages[lang] || messages['en'] || key;
+    if (vars) {
+        for (const [k, v] of Object.entries(vars)) {
+            msg = msg.replace(`{${k}}`, String(v));
+        }
+    }
+    return msg;
+}
+
+// ============================================================
 // DeepResearchService 클래스
 // ============================================================
 
@@ -73,14 +292,23 @@ export class DeepResearchService {
         try {
             this.throwIfAborted();
             await db.updateResearchSession(sessionId, { status: 'running', progress: 0 });
-            this.reportProgress(onProgress, sessionId, 'running', 0, this.config.maxLoops, '초기화', 0, '리서치를 시작합니다...');
+            this.reportProgress(onProgress, sessionId, 'running', 0, this.config.maxLoops, '초기화', 0, getResearchMessage('init', this.config.language));
 
             // 1단계: 주제 분해 (0-5%)
             this.throwIfAborted();
-            this.reportProgress(onProgress, sessionId, 'running', 0, this.config.maxLoops, 'decompose', 2, '주제를 분석 중...');
+            this.reportProgress(onProgress, sessionId, 'running', 0, this.config.maxLoops, 'decompose', 2, getResearchMessage('analyzing', this.config.language));
             const subTopics = await this.decomposeTopics(topic, sessionId);
             await db.updateResearchSession(sessionId, { progress: 5 });
-            this.reportProgress(onProgress, sessionId, 'running', 0, this.config.maxLoops, 'decompose', 5, `${subTopics.length}개 서브 토픽 추출 완료`);
+            this.reportProgress(
+                onProgress,
+                sessionId,
+                'running',
+                0,
+                this.config.maxLoops,
+                'decompose',
+                5,
+                getResearchMessage('subtopicsComplete', this.config.language, { count: subTopics.length })
+            );
 
             // 2단계: 반복 리서치 루프 (5-85%)
             const sourceMap = new Map<string, SearchResult>();
@@ -101,7 +329,7 @@ export class DeepResearchService {
                     this.config.maxLoops,
                     'search',
                     loopRange.searchStart,
-                    `루프 ${loopNumber}: 웹 검색 중...`
+                    getResearchMessage('loopSearching', this.config.language, { loop: loopNumber })
                 );
 
                 const newlyDiscovered = await this.searchSubTopics(
@@ -122,7 +350,12 @@ export class DeepResearchService {
                     this.config.maxLoops,
                     'search',
                     loopRange.searchEnd,
-                    `루프 ${loopNumber}: 검색 완료 (${newlyDiscovered.length}개 신규, 누적 ${uniqueSources.length}/${this.config.maxTotalSources} 소스)`
+                    getResearchMessage('loopSearchComplete', this.config.language, {
+                        loop: loopNumber,
+                        newCount: newlyDiscovered.length,
+                        totalCount: uniqueSources.length,
+                        maxSources: this.config.maxTotalSources
+                    })
                 );
 
                 this.reportProgress(
@@ -133,7 +366,11 @@ export class DeepResearchService {
                     this.config.maxLoops,
                     'scrape',
                     loopRange.scrapeStart,
-                    `루프 ${loopNumber}: Firecrawl 스크래핑 준비 (${scrapedUrls.size}/${this.config.maxTotalSources} 소스)`
+                    getResearchMessage('loopScraping', this.config.language, {
+                        loop: loopNumber,
+                        scrapedCount: scrapedUrls.size,
+                        maxSources: this.config.maxTotalSources
+                    })
                 );
 
                 await this.scrapeSources(
@@ -157,7 +394,7 @@ export class DeepResearchService {
                     this.config.maxLoops,
                     'synthesize',
                     loopRange.synthesizeStart,
-                    `루프 ${loopNumber}: 정보 합성 중...`
+                    getResearchMessage('loopSynthesizing', this.config.language, { loop: loopNumber })
                 );
 
                 const synthesis = await this.synthesizeFindings(topic, sourcesAfterScrape, sessionId, loopNumber);
@@ -172,7 +409,10 @@ export class DeepResearchService {
                     this.config.maxLoops,
                     'synthesize',
                     loopRange.synthesizeEnd,
-                    `루프 ${loopNumber}: 합성 완료 (${sourcesAfterScrape.length}개 소스 반영)`
+                    getResearchMessage('loopSynthComplete', this.config.language, {
+                        loop: loopNumber,
+                        sourceCount: sourcesAfterScrape.length
+                    })
                 );
 
                 await db.updateResearchSession(sessionId, { progress: Math.round(loopRange.synthesizeEnd) });
@@ -198,7 +438,7 @@ export class DeepResearchService {
 
             // 3단계: 최종 보고서 생성 (85-100%)
             this.throwIfAborted();
-            this.reportProgress(onProgress, sessionId, 'running', this.config.maxLoops, this.config.maxLoops, 'report', 85, '최종 보고서 생성 중...');
+            this.reportProgress(onProgress, sessionId, 'running', this.config.maxLoops, this.config.maxLoops, 'report', 85, getResearchMessage('generatingReport', this.config.language));
             const report = await this.generateReport(topic, allFindings, finalSources, subTopics, sessionId);
 
             await db.updateResearchSession(sessionId, {
@@ -209,7 +449,7 @@ export class DeepResearchService {
                 sources: finalSources.map(source => source.url)
             });
 
-            this.reportProgress(onProgress, sessionId, 'completed', this.config.maxLoops, this.config.maxLoops, 'completed', 100, '리서치 완료!');
+            this.reportProgress(onProgress, sessionId, 'completed', this.config.maxLoops, this.config.maxLoops, 'completed', 100, getResearchMessage('completed', this.config.language));
 
             const duration = Date.now() - startTime;
             logger.info(`[DeepResearch] 완료: ${topic} (${duration}ms)`);
@@ -229,7 +469,7 @@ export class DeepResearchService {
                     status: 'cancelled',
                     summary: '리서치가 취소되었습니다.'
                 });
-                this.reportProgress(onProgress, sessionId, 'cancelled', 0, this.config.maxLoops, 'cancelled', 0, '리서치가 취소되었습니다.');
+                this.reportProgress(onProgress, sessionId, 'cancelled', 0, this.config.maxLoops, 'cancelled', 0, getResearchMessage('cancelled', this.config.language));
                 throw error;
             }
 
@@ -254,39 +494,7 @@ export class DeepResearchService {
      */
     private async decomposeTopics(topic: string, sessionId: string): Promise<SubTopic[]> {
         this.throwIfAborted();
-        const prompt = this.config.language === 'ko'
-            ? `다음 주제를 심층 연구하기 위해 8-15개의 서브 토픽을 생성하세요.
-주제: ${topic}
-
-요구사항:
-1) 각 서브 토픽마다 서로 다른 관점의 검색어 2-3개를 만드세요.
-2) 중요도는 1-5 정수로 부여하세요.
-3) JSON 배열만 출력하세요. 설명 문장 금지.
-
-반드시 다음 형식:
-[
-  {
-    "title": "서브 토픽 제목",
-    "searchQueries": ["검색어 1", "검색어 2", "검색어 3"],
-    "importance": 5
-  }
-]`
-            : `Generate 8-15 subtopics for deep research on this topic.
-Topic: ${topic}
-
-Requirements:
-1) Each subtopic must include 2-3 diverse search queries.
-2) importance must be an integer from 1-5.
-3) Output JSON array only with no additional text.
-
-Required format:
-[
-  {
-    "title": "Subtopic title",
-    "searchQueries": ["query 1", "query 2", "query 3"],
-    "importance": 5
-  }
-]`;
+        const prompt = getDecomposePrompt(this.config.language, topic);
 
         try {
             const response = await this.client.chat([
@@ -296,7 +504,7 @@ Required format:
 
             const jsonMatch = response.content.match(/\[[\s\S]*\]/);
             if (!jsonMatch) {
-                throw new Error('서브 토픽 JSON 파싱 실패');
+                throw new Error(getResearchMessage('subtopicParseFailed', this.config.language));
             }
 
             const parsed = JSON.parse(jsonMatch[0]) as Array<{ title?: string; searchQueries?: string[]; importance?: number; searchQuery?: string }>;
@@ -580,7 +788,7 @@ Required format:
         const db = getUnifiedDatabase();
 
         if (searchResults.length === 0) {
-            return { summary: '수집된 소스가 없습니다.', keyPoints: [] };
+            return { summary: getResearchMessage('noSources', this.config.language), keyPoints: [] };
         }
 
         const uniqueResults = deduplicateSources(searchResults);
@@ -602,25 +810,7 @@ Required format:
                 })
                 .join('\n\n');
 
-            const chunkPrompt = this.config.language === 'ko'
-                ? `다음은 "${topic}" 연구용 소스 청크(${chunkIndex + 1}/${chunks.length})입니다.
-
-요구사항:
-1) 800-1200 단어로 중간 요약을 작성하세요.
-2) 핵심 주장마다 반드시 [출처 N] 형식의 인용을 포함하세요.
-3) 불확실한 정보는 단정하지 말고 출처 근거 중심으로 작성하세요.
-
-소스:
-${chunkContext}`
-                : `This is a source chunk (${chunkIndex + 1}/${chunks.length}) for research on "${topic}".
-
-Requirements:
-1) Write an intermediate summary in 800-1200 words.
-2) Include citations in [출처 N] format for key claims.
-3) Keep evidence-driven language and avoid unsupported certainty.
-
-Sources:
-${chunkContext}`;
+            const chunkPrompt = getChunkSummaryPrompt(this.config.language, topic, chunkIndex, chunks.length, chunkContext);
 
             try {
                 const response = await this.client.chat([
@@ -634,25 +824,7 @@ ${chunkContext}`;
             }
         }
 
-        const mergedPrompt = this.config.language === 'ko'
-            ? `다음은 "${topic}" 연구의 중간 요약들입니다.
-
-요구사항:
-1) 모든 중간 요약을 통합해 2000-3000 단어의 종합 합성문을 작성하세요.
-2) 핵심 주장마다 [출처 N] 형식의 인용을 반드시 포함하세요.
-3) 반복을 줄이고, 주제별 구조를 명확히 정리하세요.
-
-중간 요약:
-${chunkSummaries.map((summary, index) => `### 청크 ${index + 1}\n${summary}`).join('\n\n')}`
-            : `Below are intermediate summaries for research on "${topic}".
-
-Requirements:
-1) Merge all summaries into a 2000-3000 word synthesis.
-2) Keep inline citations in [출처 N] format for key claims.
-3) Reduce repetition and present a clear thematic structure.
-
-Intermediate summaries:
-${chunkSummaries.map((summary, index) => `### Chunk ${index + 1}\n${summary}`).join('\n\n')}`;
+        const mergedPrompt = getMergePrompt(this.config.language, topic, chunkSummaries);
 
         try {
             const response = await this.client.chat([
@@ -675,7 +847,7 @@ ${chunkSummaries.map((summary, index) => `### Chunk ${index + 1}\n${summary}`).j
             return { summary: mergedSummary, keyPoints };
         } catch (error) {
             logger.error(`[DeepResearch] 합성 실패: ${error instanceof Error ? error.message : String(error)}`);
-            return { summary: '합성 실패', keyPoints: [] };
+            return { summary: getResearchMessage('synthesisFailed', this.config.language), keyPoints: [] };
         }
     }
 
@@ -692,21 +864,7 @@ ${chunkSummaries.map((summary, index) => `### Chunk ${index + 1}\n${summary}`).j
             return true;
         }
 
-        const prompt = this.config.language === 'ko'
-            ? `"${topic}" 연구에서 현재까지 수집된 합성 결과는 아래와 같습니다.
-
-${currentFindings.join('\n\n---\n\n')}
-
-현재 고유 소스 수: ${sourceCount}
-
-질문: 아직 추가 탐색이 필요한가요? "yes" 또는 "no"로만 답하세요.`
-            : `The following synthesis has been collected for research on "${topic}".
-
-${currentFindings.join('\n\n---\n\n')}
-
-Current unique source count: ${sourceCount}
-
-Question: Is more exploration needed? Answer only "yes" or "no".`;
+        const prompt = getNeedMorePrompt(this.config.language, topic, currentFindings, sourceCount);
 
         try {
             const response = await this.client.chat([
@@ -743,57 +901,7 @@ Question: Is more exploration needed? Answer only "yes" or "no".`;
             .map((subTopic, index) => `${index + 1}. ${subTopic.title}`)
             .join('\n');
 
-        const prompt = this.config.language === 'ko'
-            ? `"${topic}"에 대한 심층 연구 최종 보고서를 작성하세요.
-
-절대 축약하지 마세요. 충분히 상세하게 작성하세요. 모든 출처를 인용하세요.
-
-출력 요구사항:
-1) 종합 요약: 500-800 단어
-2) 주요 발견사항: 10-20개 번호 목록, 각 항목은 2-3문장
-3) 상세 분석: 아래 서브 토픽 구조를 기반으로 총 3000-5000 단어
-4) 참고 자료: 모든 고유 소스를 번호 목록으로 작성 ([N] Title - URL)
-5) 본문 모든 핵심 주장에 [출처 N] 형태의 인라인 인용 포함
-
-서브 토픽 구조:
-${subTopicGuide}
-
-중간 합성 결과:
-${findings.join('\n\n---\n\n')}
-
-전체 소스 목록:
-${sourceList}
-
-다음 섹션 헤더를 유지하세요:
-## 종합 요약
-## 주요 발견사항
-## 상세 분석
-## 참고 자료`
-            : `Write a final deep-research report on "${topic}".
-
-Do not abbreviate. Write with full detail. Cite all sources.
-
-Output requirements:
-1) Comprehensive summary: 500-800 words
-2) Key findings: 10-20 numbered findings, each 2-3 sentences
-3) Detailed analysis: 3000-5000 words total, structured by the subtopics below
-4) References: all unique sources as numbered list ([N] Title - URL)
-5) Inline citations in [출처 N] format for all core claims
-
-Subtopic structure:
-${subTopicGuide}
-
-Intermediate synthesis:
-${findings.join('\n\n---\n\n')}
-
-Full source list:
-${sourceList}
-
-Keep these section headers:
-## 종합 요약
-## 주요 발견사항
-## 상세 분석
-## 참고 자료`;
+        const prompt = getReportPrompt(this.config.language, topic, subTopicGuide, findings, sourceList);
 
         try {
             const response = await this.client.chat([
@@ -803,10 +911,13 @@ Keep these section headers:
 
             const content = response.content;
 
-            const summaryMatch = content.match(/##\s*종합 요약\s*\n([\s\S]*?)(?=##|$)/i);
+            // Build regex matching all language variants for section headers
+            const allSummaryHeaders = Object.values(SECTION_HEADERS).map(h => h.summary).join('|');
+            const allFindingsHeaders = Object.values(SECTION_HEADERS).map(h => h.findings).join('|');
+            const summaryMatch = content.match(new RegExp(`##\s*(?:${allSummaryHeaders})\s*\n([\s\S]*?)(?=##|$)`, 'i'));
             const summary = summaryMatch ? summaryMatch[1].trim() : content;
 
-            const findingsMatch = content.match(/##\s*주요 발견사항\s*\n([\s\S]*?)(?=##|$)/i);
+            const findingsMatch = content.match(new RegExp(`##\s*(?:${allFindingsHeaders})\s*\n([\s\S]*?)(?=##|$)`, 'i'));
             const keyFindings = findingsMatch
                 ? findingsMatch[1]
                     .split('\n')
@@ -827,7 +938,7 @@ Keep these section headers:
             return { summary, keyFindings };
         } catch (error) {
             logger.error(`[DeepResearch] 보고서 생성 실패: ${error instanceof Error ? error.message : String(error)}`);
-            return { summary: '보고서 생성 실패', keyFindings: [] };
+            return { summary: getResearchMessage('reportFailed', this.config.language), keyFindings: [] };
         }
     }
 

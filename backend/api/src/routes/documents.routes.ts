@@ -36,6 +36,7 @@ import {
   import { asyncHandler } from '../utils/error-handler';
   import { createLogger } from '../utils/logger';
 import { buildExecutionPlan } from '../chat/profile-resolver';
+import { detectLanguage } from '../chat/language-policy';
   import { validate, validateUploadContentType, validateFileUploadSecurity } from '../middlewares/validation';
   import { summarizeDocumentSchema, documentAskSchema } from '../schemas/documents.schema';
 
@@ -218,7 +219,10 @@ router.post('/summarize', validate(summarizeDocumentSchema), asyncHandler(async 
           return;
       }
 
-      const prompt = createSummaryPrompt(doc);
+      // 사용자 언어 감지: Accept-Language 헤더 또는 문서 텍스트 기반
+      const acceptLang = (req.headers['accept-language'] || '').substring(0, 2).toLowerCase();
+      const docLang = ['ko','en','ja','zh','es','fr','de','pt','ru'].includes(acceptLang) ? acceptLang : detectLanguage(doc.text.substring(0, 500)).language;
+      const prompt = createSummaryPrompt(doc, docLang);
      const result = await client.generate(prompt, { temperature: 0.1 });
     const response = result.response;
 
@@ -269,7 +273,9 @@ router.post('/document/ask', validate(documentAskSchema), asyncHandler(async (re
           return;
       }
 
-      const prompt = createQAPrompt(doc, question);
+      // 사용자 언어 감지: 질문 텍스트 기반
+      const questionLang = detectLanguage(question).language;
+      const prompt = createQAPrompt(doc, question, questionLang);
     const result = await client.generate(prompt, { temperature: 0.1 });
     const response = result.response;
 
