@@ -24,6 +24,8 @@ import { sanitizePromptInput, validatePromptInput } from '../utils/input-sanitiz
 import { AgentCategory } from './types';
 import industryData from './industry-agents.json';
 import { createLogger } from '../utils/logger';
+import { CAPACITY } from '../config/runtime-limits';
+import { LLM_TIMEOUTS } from '../config/timeouts';
 
 const logger = createLogger('LLMRouter');
 
@@ -206,7 +208,7 @@ function extractJSONFromResponse(response: string): Record<string, unknown> | nu
  */
 export async function routeWithLLM(
     message: string,
-    timeout: number = 5000
+    timeout: number = LLM_TIMEOUTS.ROUTING_TIMEOUT_MS
 ): Promise<LLMRoutingResult | null> {
     const client = getRouterClient();
     const summaries = getAgentSummaries();
@@ -237,7 +239,7 @@ ${agentList}
 }`;
 
     // 🔧 라우팅 목적으로는 메시지 앞부분만 필요 — 긴 문서 입력은 잘라내기
-    const MAX_ROUTING_INPUT = 10000;
+    const MAX_ROUTING_INPUT = CAPACITY.ROUTING_INPUT_MAX_CHARS;
     const routingInput = message.length > MAX_ROUTING_INPUT ? message.slice(0, MAX_ROUTING_INPUT) : message;
 
     // Sanitize user input before embedding in prompt

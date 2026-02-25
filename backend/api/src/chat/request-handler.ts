@@ -116,6 +116,8 @@ export interface ChatRequestParams {
     userContext: ChatUserContext;
     /** API Key 인증 요청 시 키 ID */
     apiKeyId?: string;
+    /** 사용자가 설정에서 선택한 선호 언어 (language-policy userPreference) */
+    userLanguagePreference?: string;
     /** 클러스터 매니저 */
     clusterManager: ClusterManager;
     /** 요청 중단 시그널 */
@@ -377,6 +379,7 @@ export class ChatRequestHandler {
             onDiscussionProgress,
             onResearchProgress,
             onSkillsActivated,
+            userLanguagePreference,
         } = params;
 
         // 1. ExecutionPlan 해석
@@ -470,6 +473,7 @@ export class ChatRequestHandler {
             userTier: userContext.userTier,
             enabledTools,
             abortSignal,
+            userLanguagePreference,
         };
 
         const response = await chatService.processMessage(
@@ -531,24 +535,23 @@ export class ChatRequestHandler {
     }> {
         const { message, history, images, tools, tool_choice, client, onToken, abortSignal: _abortSignal } = params;
 
-        // 언어 정책 결정
+        // 언어 정책 결정 (메시지 기반 감지 — 외부 Tool Calling 경로는 userLanguagePreference 없음)
         const config = getConfig();
         let detectedLanguage: string = 'en'; // default fallback
 
-        if (config.enableDynamicResponseLanguage) {
-            try {
-                const languagePolicy = determineLanguagePolicy(message, {
-                    defaultLanguage: config.defaultResponseLanguage,
-                    enableDynamicResponse: config.enableDynamicResponseLanguage,
-                    minConfidenceThreshold: config.languageDetectionMinConfidence,
-                    shortTextThreshold: 20,
-                    fallbackLanguage: config.languageFallbackLanguage,
-                    supportedLanguages: ['ko', 'en', 'ja', 'zh', 'es', 'fr', 'de', 'pt', 'ru', 'ar', 'hi', 'it', 'nl', 'sv', 'da', 'no', 'fi', 'th', 'vi', 'tr']
-                });
-                detectedLanguage = languagePolicy.resolvedLanguage;
-            } catch (error) {
-                console.warn('언어 감지 실패, 기본 언어 사용:', error);
-            }
+        // 메시지 기반 언어 감지 항상 수행 (외부 API 요청은 사용자 설정 없으므로 메시지에서 감지)
+        try {
+            const languagePolicy = determineLanguagePolicy(message, {
+                defaultLanguage: config.defaultResponseLanguage,
+                enableDynamicResponse: true,
+                minConfidenceThreshold: config.languageDetectionMinConfidence,
+                shortTextThreshold: 20,
+                fallbackLanguage: config.languageFallbackLanguage,
+                supportedLanguages: ['ko', 'en', 'ja', 'zh', 'es', 'fr', 'de', 'pt', 'ru', 'ar', 'hi', 'it', 'nl', 'sv', 'da', 'no', 'fi', 'th', 'vi', 'tr']
+            });
+            detectedLanguage = languagePolicy.resolvedLanguage;
+        } catch (error) {
+            console.warn('언어 감지 실패, 기본 언어 사용:', error);
         }
 
         // tool_choice가 "none"이면 도구 없이 호출

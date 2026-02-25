@@ -21,6 +21,9 @@ const CURRENT_EVENTS_KEYWORDS: Record<string, string[]> = {
     en: ['president', 'prime minister', 'minister', 'current', 'today', 'recent', 'news', 'election', 'politics', 'parliament', 'government', 'impeach', 'inaugur'],
     ja: ['大統領', '首相', '大臣', '現在', '今日', '最近', 'ニュース', '選挙', '政治', '国会', '政府'],
     zh: ['总统', '总理', '部长', '现在', '今天', '最近', '新闻', '选举', '政治', '国会', '政府'],
+    es: ['presidente', 'primer ministro', 'ministro', 'actual', 'hoy', 'reciente', 'noticias', 'elecciones', 'política', 'parlamento', 'gobierno', 'destitución', 'investidura'],
+    de: ['Präsident', 'Premierminister', 'Minister', 'aktuell', 'heute', 'neulich', 'Nachrichten', 'Wahl', 'Politik', 'Parlament', 'Regierung', 'Amtsenthebung', 'Amtseinführung'],
+    fr: ['président', 'premier ministre', 'ministre', 'actuel', 'aujourd\'hui', 'récent', 'actualités', 'élections', 'politique', 'parlement', 'gouvernement', 'destitution', 'investiture'],
 };
 
 // 다국어 웹 검색 컨텍스트 템플릿
@@ -29,6 +32,9 @@ const WEB_SEARCH_TEMPLATES: Record<string, { header: string; instruction: string
     en: { header: 'Web Search Results', instruction: 'Below are the latest web search results. Please prioritize this information in your response:', sourceLabel: 'Source', contentLabel: 'Content', locale: 'en-US' },
     ja: { header: 'ウェブ検索結果', instruction: '以下は最新のウェブ検索結果です。回答の際にこの情報を優先的に参考にしてください:', sourceLabel: '出典', contentLabel: '内容', locale: 'ja-JP' },
     zh: { header: '网络搜索结果', instruction: '以下是最新的网络搜索结果，请优先参考这些信息进行回答:', sourceLabel: '来源', contentLabel: '内容', locale: 'zh-CN' },
+    es: { header: 'Resultados de búsqueda web', instruction: 'A continuación se muestran los resultados más recientes de búsqueda web. Por favor, priorice esta información en su respuesta:', sourceLabel: 'Fuente', contentLabel: 'Contenido', locale: 'es-ES' },
+    de: { header: 'Websuchergebnisse', instruction: 'Nachfolgend finden Sie die neuesten Websuchergebnisse. Bitte berücksichtigen Sie diese Informationen vorrangig in Ihrer Antwort:', sourceLabel: 'Quelle', contentLabel: 'Inhalt', locale: 'de-DE' },
+    fr: { header: 'Résultats de recherche web', instruction: 'Voici les résultats les plus récents de la recherche web. Veuillez donner la priorité à ces informations dans votre réponse :', sourceLabel: 'Source', contentLabel: 'Contenu', locale: 'fr-FR' },
 };
 
 // 다국어 에러 메시지 템플릿
@@ -37,6 +43,9 @@ const WS_ERROR_MESSAGES: Record<string, { quotaExceeded: string; genericError: s
     en: { quotaExceeded: 'API quota exceeded', genericError: 'An error occurred while processing. Please try again later.' },
     ja: { quotaExceeded: 'API割り当て量を超過しました', genericError: '処理中にエラーが発生しました。しばらくしてからもう一度お試しください。' },
     zh: { quotaExceeded: 'API配额已超出', genericError: '处理过程中发生错误，请稍后重试。' },
+    es: { quotaExceeded: 'Se ha superado la cuota de API', genericError: 'Se produjo un error durante el procesamiento. Por favor, inténtelo de nuevo más tarde.' },
+    de: { quotaExceeded: 'API-Kontingent überschritten', genericError: 'Bei der Verarbeitung ist ein Fehler aufgetreten. Bitte versuchen Sie es später erneut.' },
+    fr: { quotaExceeded: 'Quota d\'API dépassé', genericError: 'Une erreur est survenue lors du traitement. Veuillez réessayer ultérieurement.' },
 };
 
 function getLocalizedTemplate<T>(map: Record<string, T>, lang: string): T {
@@ -66,9 +75,10 @@ export async function handleChatMessage(
     const { model, nodeId, history, images, docId, sessionId, anonSessionId } = msg;
     const message = msg.message.trim();
 
-    // 사용자 언어 감지 (에러 핸들링에서도 사용하므로 try 외부에 선언)
+    // 사용자 언어 감지 — 설정에서 선택한 언어를 우선, 없으면 메시지 기반 자동 감지
+    const userLangPreference = (typeof msg.language === 'string' && msg.language.trim()) ? msg.language.trim() as SupportedLanguageCode : undefined;
     const detectedLang = detectLanguage(message);
-    const userLang = detectedLang.language;
+    const userLang = userLangPreference || detectedLang.language;
 
     // 중단 컨트롤러 생성
     const abortController = new AbortController();
@@ -103,17 +113,17 @@ export async function handleChatMessage(
             return;
         }
 
-        // 시사 관련 질문 감지 — 다국어 키워드 매칭
-        // 시사 관련 질문 감지 — 다국어 키워드 매칭
+        // 웹 검색: 사용자가 명시적으로 활성화했거나, 시사 관련 질문이 감지된 경우 수행
         const langKeywords = getLocalizedTemplate(CURRENT_EVENTS_KEYWORDS, userLang);
         const allKeywords = [...langKeywords, ...(CURRENT_EVENTS_KEYWORDS['en'] || [])];
         const isCurrentEventsQuery = allKeywords.some(keyword => message?.toLowerCase().includes(keyword.toLowerCase()));
+        const userWebSearchEnabled = msg.webSearch === true;
         let webSearchContext = '';
 
-        if (isCurrentEventsQuery) {
+        if (userWebSearchEnabled || isCurrentEventsQuery) {
             try {
                 const { performWebSearch } = await import('../mcp');
-                const searchResults = await performWebSearch(message, { maxResults: 5 });
+                const searchResults = await performWebSearch(message, { maxResults: 5, language: userLang });
                 if (searchResults.length > 0) {
                     const tpl = getLocalizedTemplate(WEB_SEARCH_TEMPLATES, userLang);
                     webSearchContext = `\n\n## \uD83D\uDD0D ${tpl.header} (${new Date().toLocaleDateString(tpl.locale)} )\n` +
@@ -156,6 +166,7 @@ export async function handleChatMessage(
             thinkingMode: msg.thinkingMode === true,
             thinkingLevel: (msg.thinkingLevel || 'high') as 'low' | 'medium' | 'high',
             enabledTools: msg.enabledTools,
+            userLanguagePreference: userLangPreference,
             userContext,
             clusterManager: cluster,
             abortSignal: abortController.signal,

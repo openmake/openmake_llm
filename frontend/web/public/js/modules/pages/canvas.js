@@ -46,7 +46,7 @@
 
         async function loadDocs() {
             try {
-                const res = await authFetch('/api/canvas');
+                const res = await authFetch(API_ENDPOINTS.CANVAS);
                 allDocs = res.data || res || [];
                 renderDocs();
             } catch (e) { showToast('문서 로드 실패', 'error'); }
@@ -113,7 +113,7 @@
 
         async function openDoc(id) {
             try {
-                const res = await authFetch('/api/canvas/' + id);
+                const res = await authFetch(API_ENDPOINTS.CANVAS + '/' + id);
                 const doc = res.data || res;
                 editingDocId = doc.id;
                 document.getElementById('editorTitle').textContent = '문서 편집';
@@ -134,7 +134,7 @@
         function updateShareSection(doc) {
             const sec = document.getElementById('shareSection');
             if (doc.is_shared && doc.share_token) {
-                const url = location.origin + '/api/canvas/shared/' + doc.share_token;
+                const url = location.origin + API_ENDPOINTS.CANVAS_SHARED + '/' + doc.share_token;
                 sec.style.display = '';
                 sec.innerHTML = '<div class="share-info"><input type="text" readonly value="' + url + '" id="shareUrl"><button class="btn-secondary" onclick="copyShare()">복사</button><button class="btn-danger" onclick="unshareDoc()">해제</button></div>';
             } else {
@@ -168,10 +168,10 @@
             };
             try {
                 if (editingDocId) {
-                    await authFetch('/api/canvas/' + editingDocId, { method: 'PUT', body: JSON.stringify(body) });
+                    await authFetch(API_ENDPOINTS.CANVAS + '/' + editingDocId, { method: 'PUT', body: JSON.stringify(body) });
                     showToast('문서가 저장되었습니다');
                 } else {
-                    await authFetch('/api/canvas', { method: 'POST', body: JSON.stringify(body) });
+                    await authFetch(API_ENDPOINTS.CANVAS, { method: 'POST', body: JSON.stringify(body) });
                     showToast('문서가 생성되었습니다');
                 }
                 closeEditor(); loadDocs();
@@ -181,7 +181,7 @@
         async function deleteDoc() {
             if (!editingDocId || !confirm('이 문서를 삭제하시겠습니까?')) return;
             try {
-                await authFetch('/api/canvas/' + editingDocId, { method: 'DELETE' });
+                await authFetch(API_ENDPOINTS.CANVAS + '/' + editingDocId, { method: 'DELETE' });
                 showToast('문서가 삭제되었습니다'); closeEditor(); loadDocs();
             } catch (e) { showToast('삭제 실패', 'error'); }
         }
@@ -189,7 +189,7 @@
         async function toggleShare() {
             if (!editingDocId) return;
             try {
-                const res = await authFetch('/api/canvas/' + editingDocId + '/share', { method: 'POST' });
+                const res = await authFetch(API_ENDPOINTS.CANVAS + '/' + editingDocId + '/share', { method: 'POST' });
                 const doc = res.data || res;
                 updateShareSection(doc);
                 showToast('공유가 시작되었습니다');
@@ -200,7 +200,7 @@
         async function unshareDoc() {
             if (!editingDocId) return;
             try {
-                await authFetch('/api/canvas/' + editingDocId + '/share', { method: 'DELETE' });
+                await authFetch(API_ENDPOINTS.CANVAS + '/' + editingDocId + '/share', { method: 'DELETE' });
                 document.getElementById('shareSection').style.display = 'none';
                 showToast('공유가 해제되었습니다');
                 loadDocs();
@@ -212,7 +212,7 @@
             document.getElementById('versionModal').classList.add('open');
             document.getElementById('versionList').innerHTML = '<div class="loading">불러오는 중...</div>';
             try {
-                const res = await authFetch('/api/canvas/' + editingDocId + '/versions');
+                const res = await authFetch(API_ENDPOINTS.CANVAS + '/' + editingDocId + '/versions');
                 const versions = res.data || res || [];
                 if (!versions.length) {
                     document.getElementById('versionList').innerHTML = '<div class="empty-state"><p>버전 이력이 없습니다.</p></div>';

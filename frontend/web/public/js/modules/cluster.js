@@ -101,7 +101,7 @@ function updateClusterStatus(text, online) {
  */
 async function fetchClusterInfoFallback() {
     try {
-        const response = await fetch('/api/cluster', {
+        const response = await fetch(API_ENDPOINTS.CLUSTER, {
             credentials: 'include'
         });
         if (response.ok) {
@@ -233,7 +233,7 @@ async function loadModelInfo() {
     modelListContainer.innerHTML = '<span style="color: var(--text-muted);">조회 중...</span>';
 
     try {
-        const response = await fetch('/api/models', { credentials: 'include' });
+        const response = await fetch(API_ENDPOINTS.MODELS, { credentials: 'include' });
         if (response.ok) {
             const data = await response.json();
             const payload = data.data || data;

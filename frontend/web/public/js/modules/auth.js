@@ -57,7 +57,7 @@ function clearStaleAuth() {
  */
 async function trySilentRefresh() {
     try {
-        const resp = await fetch('/api/auth/refresh', {
+        const resp = await fetch(API_ENDPOINTS.AUTH_REFRESH, {
             method: 'POST',
             credentials: 'include',
             headers: { 'Content-Type': 'application/json' }
@@ -82,7 +82,7 @@ async function trySilentRefresh() {
  * @returns {Promise<Object|null>} 유저 객체 또는 null
  */
 async function fetchCurrentUser() {
-    const resp = await fetch('/api/auth/me', { credentials: 'include' });
+    const resp = await fetch(API_ENDPOINTS.AUTH_ME, { credentials: 'include' });
     if (!resp.ok) return null;
     const data = await resp.json();
     const user = data.data?.user || data.user;
@@ -170,7 +170,7 @@ async function claimAnonymousSession(token) {
         if (token) {
             headers['Authorization'] = `Bearer ${token}`;
         }
-        await fetch('/api/chat/sessions/claim', {
+        await fetch(API_ENDPOINTS.CHAT_SESSIONS_CLAIM, {
             method: 'POST',
             credentials: 'include',
             headers,
@@ -192,7 +192,7 @@ async function claimAnonymousSession(token) {
  */
 async function recoverSessionFromCookie() {
     try {
-        const resp = await fetch('/api/auth/me', { credentials: 'include' });
+        const resp = await fetch(API_ENDPOINTS.AUTH_ME, { credentials: 'include' });
         if (resp.ok) {
             const data = await resp.json();
             const user = data.data?.user || data.user;
@@ -253,8 +253,8 @@ async function authFetch(url, options = {}) {
         headers
     });
 
-    const isLoginRequest = url.includes('/api/auth/login');
-    const isRefreshRequest = url.includes('/api/auth/refresh');
+    const isLoginRequest = url.includes(API_ENDPOINTS.AUTH_LOGIN);
+    const isRefreshRequest = url.includes(API_ENDPOINTS.AUTH_REFRESH);
 
     // 401 인터셉터: 세션 만료 시 로그인 페이지로 리다이렉트
     if (response.status === 401 && !isLoginRequest && !isRefreshRequest) {
@@ -268,7 +268,7 @@ async function authFetch(url, options = {}) {
 
             isRefreshing = true;
             try {
-                const refreshResponse = await fetch('/api/auth/refresh', {
+                const refreshResponse = await fetch(API_ENDPOINTS.AUTH_REFRESH, {
                     method: 'POST',
                     credentials: 'include',
                     headers: { 'Content-Type': 'application/json' }
@@ -335,7 +335,7 @@ async function authJsonFetch(url, options = {}) {
  */
 async function login(email, password) {
     try {
-        const response = await fetch('/api/auth/login', {
+        const response = await fetch(API_ENDPOINTS.AUTH_LOGIN, {
             method: 'POST',
             credentials: 'include',  // 🔒 httpOnly 쿠키 포함
             headers: { 'Content-Type': 'application/json' },
@@ -380,7 +380,7 @@ async function login(email, password) {
  */
 function logout() {
     // 서버에 로그아웃 요청 (httpOnly 쿠키 포함)
-    authFetch('/api/auth/logout', {
+    authFetch(API_ENDPOINTS.AUTH_LOGOUT, {
         method: 'POST'
     }).catch(() => { });
 
@@ -485,6 +485,7 @@ window.isAdmin = isAdmin;
 window.isLoggedIn = isLoggedIn;
 window.getCurrentUser = getCurrentUser;
 window.claimAnonymousSession = claimAnonymousSession;
+window.trySilentRefresh = trySilentRefresh;
 // SafeStorage 전역 노출 — pages/ 모듈들이 localStorage 직접 접근 대신 사용
 window.SafeStorage = SafeStorage;
 
@@ -499,5 +500,6 @@ export {
     isAdmin,
     isLoggedIn,
     getCurrentUser,
-    claimAnonymousSession
+    claimAnonymousSession,
+    trySilentRefresh
 };

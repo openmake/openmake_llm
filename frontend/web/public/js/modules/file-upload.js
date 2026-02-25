@@ -47,7 +47,7 @@ async function uploadFile(file) {
             });
         }
 
-        const res = await fetch('/api/upload', {
+        const res = await fetch(API_ENDPOINTS.UPLOAD, {
             method: 'POST',
             credentials: 'include',
             body: formData
@@ -71,7 +71,7 @@ async function uploadFile(file) {
             // PDF 문서인 경우 전체 텍스트를 가져와서 저장
             if (!data.isImage && data.docId) {
                 try {
-                    const docRes = await fetch(`/api/documents/${data.docId}`);
+                    const docRes = await fetch(`${API_ENDPOINTS.DOCUMENTS}/${data.docId}`);
                     if (!docRes.ok) {
                         throw new Error(`HTTP ${docRes.status}: ${docRes.statusText}`);
                     }

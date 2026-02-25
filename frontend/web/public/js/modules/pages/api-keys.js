@@ -282,7 +282,7 @@
         wrapper.innerHTML = '<div style="padding:var(--space-8); text-align:center; color:var(--text-secondary);">\u23F3 키 목록을 불러오는 중...</div>';
 
         try {
-            var res = await apiFetch('/api/api-keys');
+            var res = await apiFetch(API_ENDPOINTS.API_KEYS);
             var keys = (res.data && res.data.api_keys) || [];
 
             if (keys.length === 0) {
@@ -356,7 +356,7 @@
             var originalText = btn ? btn.textContent : '';
             if (btn) { btn.textContent = '생성 중...'; btn.disabled = true; }
 
-            var res = await apiFetch('/api/api-keys', {
+            var res = await apiFetch(API_ENDPOINTS.API_KEYS, {
                 method: 'POST',
                 body: JSON.stringify({ name: name })
             });
@@ -385,7 +385,7 @@
         if (!confirm('정말로 이 API 키를 삭제하시겠습니까?\n이 작업은 되돌릴 수 없으며, 이 키를 사용하는 모든 서비스가 중단됩니다.')) return;
 
         try {
-            await apiFetch('/api/api-keys/' + id, { method: 'DELETE' });
+            await apiFetch(API_ENDPOINTS.API_KEYS + '/' + id, { method: 'DELETE' });
             if (window.showToast) window.showToast('API 키가 삭제되었습니다.', 'success');
             loadApiKeys();
         } catch (e) {
@@ -398,7 +398,7 @@
         if (!confirm('이 키를 재발급(Rotate) 하시겠습니까?\n기존 키는 즉시 무효화되며, 새로운 키가 발급됩니다.')) return;
 
         try {
-            var res = await apiFetch('/api/api-keys/' + id + '/rotate', { method: 'POST' });
+            var res = await apiFetch(API_ENDPOINTS.API_KEYS + '/' + id + '/rotate', { method: 'POST' });
             
             // Show new key modal
             var fullKey = res.data.key;

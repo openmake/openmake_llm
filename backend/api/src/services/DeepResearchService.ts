@@ -15,6 +15,7 @@ import { isFirecrawlConfigured } from '../mcp/firecrawl';
 import { getConfig } from '../config/env';
 import { getUnifiedDatabase } from '../data/models/unified-database';
 import { createLogger } from '../utils/logger';
+import { CAPACITY, TRUNCATION } from '../config/runtime-limits';
 import { v4 as uuidv4 } from 'uuid';
 
 import {
@@ -54,6 +55,7 @@ const SECTION_HEADERS: Record<string, { summary: string; findings: string; analy
     zh: { summary: '综合摘要', findings: '主要发现', analysis: '详细分析', references: '参考资料' },
     es: { summary: 'Resumen Ejecutivo', findings: 'Hallazgos Clave', analysis: 'Análisis Detallado', references: 'Referencias' },
     de: { summary: 'Zusammenfassung', findings: 'Wichtige Erkenntnisse', analysis: 'Detailanalyse', references: 'Referenzen' },
+    fr: { summary: 'Résumé exécutif', findings: 'Découvertes clés', analysis: 'Analyse détaillée', references: 'Références' },
 };
 
 function getSectionHeaders(lang: string) {
@@ -68,6 +70,7 @@ function getDecomposePrompt(lang: string, topic: string): string {
         zh: `为以下主题生成8-15个子主题进行深入研究。\n主题: ${topic}\n\n要求:\n1) 每个子主题包含2-3个不同角度的搜索查询。\n2) 重要性为1-5的整数。\n3) 仅输出JSON数组，禁止说明文字。\n\n必须使用以下格式:\n[\n  {\n    "title": "子主题标题",\n    "searchQueries": ["查询1", "查询2", "查询3"],\n    "importance": 5\n  }\n]`,
         es: `Genera 8-15 subtemas para investigar en profundidad el siguiente tema.\nTema: ${topic}\n\nRequisitos:\n1) Cada subtema debe incluir 2-3 consultas de búsqueda diversas.\n2) La importancia debe ser un entero de 1-5.\n3) Solo genera un array JSON, sin texto adicional.\n\nFormato requerido:\n[\n  {\n    "title": "Título del subtema",\n    "searchQueries": ["consulta 1", "consulta 2", "consulta 3"],\n    "importance": 5\n  }\n]`,
         de: `Erstelle 8-15 Unterthemen für eine Tiefenrecherche zum folgenden Thema.\nThema: ${topic}\n\nAnforderungen:\n1) Jedes Unterthema muss 2-3 verschiedene Suchanfragen enthalten.\n2) Wichtigkeit als Ganzzahl von 1-5.\n3) Nur JSON-Array ausgeben, kein zusätzlicher Text.\n\nErforderliches Format:\n[\n  {\n    "title": "Unterthema-Titel",\n    "searchQueries": ["Anfrage 1", "Anfrage 2", "Anfrage 3"],\n    "importance": 5\n  }\n]`,
+        fr: `Générez 8 à 15 sous-thèmes pour une recherche approfondie sur le sujet suivant.\nSujet : ${topic}\n\nExigences :\n1) Chaque sous-thème doit inclure 2-3 requêtes de recherche variées.\n2) L'importance doit être un entier de 1 à 5.\n3) Produisez uniquement un tableau JSON, sans texte supplémentaire.\n\nFormat requis :\n[\n  {\n    \"title\": \"Titre du sous-thème\",\n    \"searchQueries\": [\"requête 1\", \"requête 2\", \"requête 3\"],\n    \"importance\": 5\n  }\n]`,
     };
     return prompts[lang] || `Generate 8-15 subtopics for deep research on this topic.\nTopic: ${topic}\n\nRequirements:\n1) Each subtopic must include 2-3 diverse search queries.\n2) importance must be an integer from 1-5.\n3) Output JSON array only with no additional text.\n\nRequired format:\n[\n  {\n    "title": "Subtopic title",\n    "searchQueries": ["query 1", "query 2", "query 3"],\n    "importance": 5\n  }\n]`;
 }
@@ -81,6 +84,7 @@ function getChunkSummaryPrompt(lang: string, topic: string, chunkIndex: number, 
         zh: `以下是“${topic}”研究用源块${header}。\n\n要求:\n1) 用800-1200字编写中间摘要。\n2) 关键论点必须包含[来源 N]格式的引用。\n3) 不确定的信息不要下定论，以证据为基础。\n\n源:\n${chunkContext}`,
         es: `Este es un fragmento de fuentes ${header} para la investigación sobre "${topic}".\n\nRequisitos:\n1) Escribe un resumen intermedio de 800-1200 palabras.\n2) Incluye citas en formato [Fuente N] para afirmaciones clave.\n3) Mantén un lenguaje basado en evidencias.\n\nFuentes:\n${chunkContext}`,
         de: `Dies ist ein Quellen-Chunk ${header} für die Recherche über "${topic}".\n\nAnforderungen:\n1) Schreiben Sie eine Zwischenzusammenfassung von 800-1200 Wörtern.\n2) Fügen Sie Zitate im Format [Quelle N] für Kernaussagen ein.\n3) Bleiben Sie evidenzbasiert.\n\nQuellen:\n${chunkContext}`,
+        fr: `Ceci est un bloc de sources ${header} pour la recherche sur \"${topic}\".\n\nExigences :\n1) Rédigez un résumé intermédiaire de 800-1200 mots.\n2) Incluez des citations au format [Source N] pour les affirmations clés.\n3) Restez fondé sur les preuves.\n\nSources :\n${chunkContext}`,
     };
     return prompts[lang] || `This is a source chunk ${header} for research on "${topic}".\n\nRequirements:\n1) Write an intermediate summary in 800-1200 words.\n2) Include citations in [Source N] format for key claims.\n3) Keep evidence-driven language and avoid unsupported certainty.\n\nSources:\n${chunkContext}`;
 }
@@ -94,6 +98,7 @@ function getMergePrompt(lang: string, topic: string, chunkSummaries: string[]): 
         zh: `以下是“${topic}”研究的中间摘要。\n\n要求:\n1) 合并所有中间摘要，写成2000-3000字的综合分析。\n2) 关键论点必须包含[来源 N]格式的引用。\n3) 减少重复，按主题清晰组织。\n\n中间摘要:\n${summaryText}`,
         es: `A continuación se presentan los resúmenes intermedios de la investigación sobre "${topic}".\n\nRequisitos:\n1) Fusiona todos los resúmenes en una síntesis de 2000-3000 palabras.\n2) Incluye citas en formato [Fuente N] para afirmaciones clave.\n3) Reduce la repetición y presenta una estructura temática clara.\n\nResúmenes intermedios:\n${summaryText}`,
         de: `Nachfolgend die Zwischenzusammenfassungen der Recherche über "${topic}".\n\nAnforderungen:\n1) Vereinige alle Zusammenfassungen zu einer 2000-3000 Wörter umfassenden Synthese.\n2) Füge Zitate im Format [Quelle N] für Kernaussagen ein.\n3) Reduziere Wiederholungen und präsentiere eine klare thematische Struktur.\n\nZwischenzusammenfassungen:\n${summaryText}`,
+        fr: `Voici les résumés intermédiaires de la recherche sur \"${topic}\".\n\nExigences :\n1) Fusionnez tous les résumés en une synthèse de 2000-3000 mots.\n2) Incluez des citations au format [Source N] pour les affirmations clés.\n3) Réduisez les répétitions et présentez une structure thématique claire.\n\nRésumés intermédiaires :\n${summaryText}`,
     };
     return prompts[lang] || `Below are intermediate summaries for research on "${topic}".\n\nRequirements:\n1) Merge all summaries into a 2000-3000 word synthesis.\n2) Keep inline citations in [Source N] format for key claims.\n3) Reduce repetition and present a clear thematic structure.\n\nIntermediate summaries:\n${summaryText}`;
 }
@@ -107,6 +112,7 @@ function getNeedMorePrompt(lang: string, topic: string, currentFindings: string[
         zh: `“${topic}”研究中目前收集的合成结果如下。\n\n${findings}\n\n当前独立来源数: ${sourceCount}\n\n问题: 还需要更多探索吗？请仅回答 "yes" 或 "no"。`,
         es: `Los resultados de síntesis recopilados hasta ahora para la investigación sobre "${topic}" son los siguientes.\n\n${findings}\n\nFuentes únicas actuales: ${sourceCount}\n\nPregunta: ¿Se necesita más exploración? Responde solo "yes" o "no".`,
         de: `Die bisherigen Synthese-Ergebnisse der Recherche über "${topic}" sind wie folgt.\n\n${findings}\n\nAktuelle eindeutige Quellen: ${sourceCount}\n\nFrage: Ist weitere Erkundung erforderlich? Antworten Sie nur mit "yes" oder "no".`,
+        fr: `Les résultats de synthèse recueillis jusqu'à présent pour la recherche sur \"${topic}\" sont les suivants.\n\n${findings}\n\nSources uniques actuelles : ${sourceCount}\n\nQuestion : Une exploration supplémentaire est-elle nécessaire ? Répondez uniquement par \"yes\" ou \"no\".`,
     };
     return prompts[lang] || `The following synthesis has been collected for research on "${topic}".\n\n${findings}\n\nCurrent unique source count: ${sourceCount}\n\nQuestion: Is more exploration needed? Answer only "yes" or "no".`;
 }
@@ -121,6 +127,7 @@ function getReportPrompt(lang: string, topic: string, subTopicGuide: string, fin
         zh: `请撰写关于“${topic}”的深度研究最终报告。\n\n不要缩写。充分详细地写。引用所有来源。\n\n输出要求:\n1) 综合摘要: 500-800字\n2) 主要发现: 10-20个编号项目，每项2-3句\n3) 详细分析: 基于子主题结构共计3000-5000字\n4) 参考资料: 所有独立来源编号列表\n5) 正文中所有关键论点包含[来源 N]形式的内联引用\n\n子主题结构:\n${subTopicGuide}\n\n中间合成结果:\n${findingsText}\n\n全部来源列表:\n${sourceList}\n\n请保持以下章节标题:\n## ${h.summary}\n## ${h.findings}\n## ${h.analysis}\n## ${h.references}`,
         es: `Escribe un informe final de investigación profunda sobre "${topic}".\n\nNo abrevies. Escribe con todo detalle. Cita todas las fuentes.\n\nRequisitos de salida:\n1) Resumen ejecutivo: 500-800 palabras\n2) Hallazgos clave: 10-20 ítems numerados, 2-3 oraciones cada uno\n3) Análisis detallado: 3000-5000 palabras basado en subtemas\n4) Referencias: todas las fuentes como lista numerada\n5) Citas en línea [Fuente N] para todas las afirmaciones\n\nEstructura de subtemas:\n${subTopicGuide}\n\nSíntesis intermedia:\n${findingsText}\n\nLista completa de fuentes:\n${sourceList}\n\nMantén estos encabezados:\n## ${h.summary}\n## ${h.findings}\n## ${h.analysis}\n## ${h.references}`,
         de: `Erstellen Sie einen abschließenden Tiefenrecherche-Bericht über "${topic}".\n\nNicht kürzen. Ausführlich schreiben. Alle Quellen zitieren.\n\nAusgabeanforderungen:\n1) Zusammenfassung: 500-800 Wörter\n2) Wichtige Erkenntnisse: 10-20 nummerierte Punkte, je 2-3 Sätze\n3) Detailanalyse: 3000-5000 Wörter basierend auf Unterthemen\n4) Referenzen: alle Quellen als nummerierte Liste\n5) Inline-Zitate [Quelle N] für alle Kernaussagen\n\nUnterthemen-Struktur:\n${subTopicGuide}\n\nZwischensynthese:\n${findingsText}\n\nVollständige Quellenliste:\n${sourceList}\n\nBehalten Sie diese Abschnittsüberschriften bei:\n## ${h.summary}\n## ${h.findings}\n## ${h.analysis}\n## ${h.references}`,
+        fr: `Rédigez un rapport final de recherche approfondie sur \"${topic}\".\n\nNe pas abréger. Écrivez en détail. Citez toutes les sources.\n\nExigences de sortie :\n1) Résumé exécutif : 500-800 mots\n2) Découvertes clés : 10-20 éléments numérotés, 2-3 phrases chacun\n3) Analyse détaillée : 3000-5000 mots basés sur les sous-thèmes\n4) Références : toutes les sources en liste numérotée\n5) Citations en ligne [Source N] pour toutes les affirmations clés\n\nStructure des sous-thèmes :\n${subTopicGuide}\n\nSynthèse intermédiaire :\n${findingsText}\n\nListe complète des sources :\n${sourceList}\n\nConservez ces en-têtes de section :\n## ${h.summary}\n## ${h.findings}\n## ${h.analysis}\n## ${h.references}`,
     };
     return prompts[lang] || `Write a final deep-research report on "${topic}".\n\nDo not abbreviate. Write with full detail. Cite all sources.\n\nOutput requirements:\n1) Executive Summary: 500-800 words\n2) Key findings: 10-20 numbered findings, each 2-3 sentences\n3) Detailed analysis: 3000-5000 words total, structured by the subtopics below\n4) References: all unique sources as numbered list ([N] Title - URL)\n5) Inline citations in [Source N] format for all core claims\n\nSubtopic structure:\n${subTopicGuide}\n\nIntermediate synthesis:\n${findingsText}\n\nFull source list:\n${sourceList}\n\nKeep these section headers:\n## ${h.summary}\n## ${h.findings}\n## ${h.analysis}\n## ${h.references}`;
 }
@@ -134,6 +141,7 @@ const RESEARCH_MESSAGES: Record<string, Record<string, string>> = {
         zh: '开始研究...',
         es: 'Iniciando investigación...',
         de: 'Recherche wird gestartet...',
+        fr: 'Démarrage de la recherche...',
     },
     analyzing: {
         ko: '주제를 분석 중...',
@@ -142,6 +150,7 @@ const RESEARCH_MESSAGES: Record<string, Record<string, string>> = {
         zh: '正在分析主题...',
         es: 'Analizando tema...',
         de: 'Thema wird analysiert...',
+        fr: 'Analyse du sujet en cours...',
     },
     subtopicsComplete: {
         ko: '{count}개 서브 토픽 추출 완료',
@@ -150,6 +159,7 @@ const RESEARCH_MESSAGES: Record<string, Record<string, string>> = {
         zh: '已提取{count}个子主题',
         es: '{count} subtemas extraídos',
         de: '{count} Unterthemen extrahiert',
+        fr: '{count} sous-thèmes extraits',
     },
     loopSearching: {
         ko: '루프 {loop}: 웹 검색 중...',
@@ -158,6 +168,7 @@ const RESEARCH_MESSAGES: Record<string, Record<string, string>> = {
         zh: '循环 {loop}: 正在搜索网页...',
         es: 'Bucle {loop}: Buscando en la web...',
         de: 'Schleife {loop}: Websuche...',
+        fr: 'Boucle {loop} : Recherche web en cours...',
     },
     loopSearchComplete: {
         ko: '루프 {loop}: 검색 완료 ({newCount}개 신규, 누적 {totalCount}/{maxSources} 소스)',
@@ -166,6 +177,7 @@ const RESEARCH_MESSAGES: Record<string, Record<string, string>> = {
         zh: '循环 {loop}: 搜索完成 (新增{newCount}个, 累计{totalCount}/{maxSources}个来源)',
         es: 'Bucle {loop}: Búsqueda completa ({newCount} nuevas, {totalCount}/{maxSources} fuentes totales)',
         de: 'Schleife {loop}: Suche abgeschlossen ({newCount} neue, {totalCount}/{maxSources} Quellen gesamt)',
+        fr: 'Boucle {loop} : Recherche terminée ({newCount} nouvelles, {totalCount}/{maxSources} sources au total)',
     },
     loopScraping: {
         ko: '루프 {loop}: Firecrawl 스크래핑 준비 ({scrapedCount}/{maxSources} 소스)',
@@ -174,6 +186,7 @@ const RESEARCH_MESSAGES: Record<string, Record<string, string>> = {
         zh: '循环 {loop}: 准备Firecrawl抓取 ({scrapedCount}/{maxSources}来源)',
         es: 'Bucle {loop}: Preparando scraping Firecrawl ({scrapedCount}/{maxSources} fuentes)',
         de: 'Schleife {loop}: Firecrawl-Scraping vorbereiten ({scrapedCount}/{maxSources} Quellen)',
+        fr: 'Boucle {loop} : Préparation du scraping Firecrawl ({scrapedCount}/{maxSources} sources)',
     },
     loopSynthesizing: {
         ko: '루프 {loop}: 정보 합성 중...',
@@ -182,6 +195,7 @@ const RESEARCH_MESSAGES: Record<string, Record<string, string>> = {
         zh: '循环 {loop}: 正在合成信息...',
         es: 'Bucle {loop}: Sintetizando información...',
         de: 'Schleife {loop}: Informationen werden zusammengefasst...',
+        fr: 'Boucle {loop} : Synthèse des informations en cours...',
     },
     loopSynthComplete: {
         ko: '루프 {loop}: 합성 완료 ({sourceCount}개 소스 반영)',
@@ -190,6 +204,7 @@ const RESEARCH_MESSAGES: Record<string, Record<string, string>> = {
         zh: '循环 {loop}: 合成完成 (反映{sourceCount}个来源)',
         es: 'Bucle {loop}: Síntesis completa ({sourceCount} fuentes reflejadas)',
         de: 'Schleife {loop}: Synthese abgeschlossen ({sourceCount} Quellen berücksichtigt)',
+        fr: 'Boucle {loop} : Synthèse terminée ({sourceCount} sources prises en compte)',
     },
     generatingReport: {
         ko: '최종 보고서 생성 중...',
@@ -198,6 +213,7 @@ const RESEARCH_MESSAGES: Record<string, Record<string, string>> = {
         zh: '正在生成最终报告...',
         es: 'Generando informe final...',
         de: 'Abschlussbericht wird erstellt...',
+        fr: 'Génération du rapport final en cours...',
     },
     completed: {
         ko: '리서치 완료!',
@@ -206,6 +222,7 @@ const RESEARCH_MESSAGES: Record<string, Record<string, string>> = {
         zh: '研究完成！',
         es: '¡Investigación completa!',
         de: 'Recherche abgeschlossen!',
+        fr: 'Recherche terminée !',
     },
     cancelled: {
         ko: '리서치가 취소되었습니다.',
@@ -214,6 +231,7 @@ const RESEARCH_MESSAGES: Record<string, Record<string, string>> = {
         zh: '研究已取消。',
         es: 'La investigación ha sido cancelada.',
         de: 'Recherche wurde abgebrochen.',
+        fr: 'La recherche a été annulée.',
     },
     noSources: {
         ko: '수집된 소스가 없습니다.',
@@ -222,6 +240,7 @@ const RESEARCH_MESSAGES: Record<string, Record<string, string>> = {
         zh: '没有收集到来源。',
         es: 'No se recopilaron fuentes.',
         de: 'Keine Quellen gesammelt.',
+        fr: 'Aucune source collectée.',
     },
     synthesisFailed: {
         ko: '합성 실패',
@@ -230,6 +249,7 @@ const RESEARCH_MESSAGES: Record<string, Record<string, string>> = {
         zh: '合成失败',
         es: 'Síntesis fallida',
         de: 'Synthese fehlgeschlagen',
+        fr: 'Échec de la synthèse',
     },
     reportFailed: {
         ko: '보고서 생성 실패',
@@ -238,6 +258,7 @@ const RESEARCH_MESSAGES: Record<string, Record<string, string>> = {
         zh: '报告生成失败',
         es: 'Error al generar informe',
         de: 'Berichterstellung fehlgeschlagen',
+        fr: 'Échec de la génération du rapport',
     },
     subtopicParseFailed: {
         ko: '서브 토픽 JSON 파싱 실패',
@@ -246,10 +267,11 @@ const RESEARCH_MESSAGES: Record<string, Record<string, string>> = {
         zh: '子主题JSON解析失败',
         es: 'Error al analizar JSON de subtemas',
         de: 'Unterthemen-JSON-Parsing fehlgeschlagen',
+        fr: 'Échec de l\'analyse JSON des sous-thèmes',
     },
 };
 
-function getResearchMessage(key: string, lang: string, vars?: Record<string, string | number>): string {
+export function getResearchMessage(key: string, lang: string, vars?: Record<string, string | number>): string {
     const messages = RESEARCH_MESSAGES[key];
     if (!messages) return key;
     let msg = messages[lang] || messages['en'] || key;
@@ -527,13 +549,13 @@ export class DeepResearchService {
 
                     return {
                         title: item.title,
-                        searchQueries: uniqueQueries.slice(0, 3),
+                        searchQueries: uniqueQueries.slice(0, CAPACITY.RESEARCH_MAX_SEARCH_QUERIES),
                         importance: clampImportance(item.importance)
                     } satisfies SubTopic;
                 })
                 .filter((item): item is SubTopic => item !== null)
                 .sort((a, b) => b.importance - a.importance)
-                .slice(0, 15);
+                .slice(0, CAPACITY.RESEARCH_MAX_TOTAL_SOURCES);
 
             const finalSubTopics = normalized.length >= 8 ? normalized : buildFallbackSubTopics(topic);
 
@@ -588,7 +610,8 @@ export class DeepResearchService {
                     const results = await performWebSearch(query, {
                         maxResults: resultsPerQuery,
                         useOllamaFirst: this.config.searchApi === 'ollama' || this.config.searchApi === 'all',
-                        useFirecrawl: this.config.searchApi === 'firecrawl' || this.config.searchApi === 'all'
+                        useFirecrawl: this.config.searchApi === 'firecrawl' || this.config.searchApi === 'all',
+                        language: this.config.language
                     });
 
                     const uniqueForQuery: SearchResult[] = [];
@@ -618,7 +641,7 @@ export class DeepResearchService {
                         stepType: 'search',
                         query,
                         result: `${results.length}개 검색, ${uniqueForQuery.length}개 신규 확보`,
-                        sources: uniqueForQuery.slice(0, 10).map(item => item.url),
+                        sources: uniqueForQuery.slice(0, CAPACITY.RESEARCH_MAX_SOURCES_PER_QUERY).map(item => item.url),
                         status: 'completed'
                     });
 
@@ -804,7 +827,7 @@ export class DeepResearchService {
                     const content = source.fullContent?.trim().length
                         ? source.fullContent
                         : source.snippet;
-                    const compactContent = content.length > 5000 ? `${content.slice(0, 5000)}\n...(중략)` : content;
+                    const compactContent = content.length > TRUNCATION.RESEARCH_CONTENT_MAX ? `${content.slice(0, TRUNCATION.RESEARCH_CONTENT_MAX)}\n...(중략)` : content;
 
                     return `[출처 ${sourceIndex}] ${source.title}\nURL: ${source.url}\n내용:\n${compactContent}`;
                 })
@@ -840,7 +863,7 @@ export class DeepResearchService {
                 stepNumber: loopNumber * 100 + 100,
                 stepType: 'synthesize',
                 query: `루프 ${loopNumber} 합성`,
-                result: mergedSummary.slice(0, 4000),
+                result: mergedSummary.slice(0, TRUNCATION.RESEARCH_SUMMARY_MAX),
                 status: 'completed'
             });
 
@@ -931,7 +954,7 @@ export class DeepResearchService {
                 stepNumber: 999,
                 stepType: 'report',
                 query: '최종 보고서 생성',
-                result: summary.slice(0, 4000),
+                result: summary.slice(0, TRUNCATION.RESEARCH_SUMMARY_MAX),
                 status: 'completed'
             });
 

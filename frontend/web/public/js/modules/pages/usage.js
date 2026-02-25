@@ -81,8 +81,8 @@
         async function loadData() {
             try {
                 const [usageRes, dailyRes] = await Promise.all([
-                    authFetch('/api/usage'),
-                    authFetch('/api/usage/daily?days=14')
+                    authFetch(API_ENDPOINTS.USAGE),
+                    authFetch(API_ENDPOINTS.USAGE_DAILY + '?days=14')
                 ]);
                 const usage = await usageRes.json();
                 const daily = await dailyRes.json();

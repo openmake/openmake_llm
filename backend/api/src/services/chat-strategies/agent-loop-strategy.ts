@@ -20,6 +20,7 @@ import { getUnifiedMCPClient } from '../../mcp/unified-client';
 import { DirectStrategy } from './direct-strategy';
 import type { AgentLoopStrategyContext, ChatStrategy, ChatResult } from './types';
 import { createLogger } from '../../utils/logger';
+import { TRUNCATION } from '../../config/runtime-limits';
 
 const logger = createLogger('AgentLoopStrategy');
 
@@ -172,7 +173,7 @@ export class AgentLoopStrategy implements ChatStrategy<AgentLoopStrategyContext,
 
                 if (response.results && response.results.length > 0) {
                     const formatted = response.results.map((r, i) =>
-                        `[${i + 1}] ${r.title}\n    ${r.url}\n    ${r.content?.substring(0, 200) || ''}...`
+                        `[${i + 1}] ${r.title}\n    ${r.url}\n    ${r.content?.substring(0, TRUNCATION.WEB_SNIPPET_MAX) || ''}...`
                     ).join('\n\n');
                     return `🔍 웹 검색 결과 (${response.results.length}개):\n\n${formatted}`;
                 }
@@ -191,7 +192,7 @@ export class AgentLoopStrategy implements ChatStrategy<AgentLoopStrategyContext,
                 const response = await context.client.webFetch(url);
 
                 if (response.content) {
-                    return `📥 웹페이지: ${response.title}\n\n${response.content.substring(0, 3000)}`;
+                    return `📥 웹페이지: ${response.title}\n\n${response.content.substring(0, TRUNCATION.WEB_CONTENT_MAX)}`;
                 }
                 return '페이지 콘텐츠를 가져올 수 없습니다.';
             } catch (e: unknown) {

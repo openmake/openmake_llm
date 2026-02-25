@@ -5,6 +5,7 @@ import { promisify } from 'util';
 import { getConfig } from '../config/env';
 import { ProgressCallback, createProgressEvent } from './progress';
 import { createLogger } from '../utils/logger';
+import { DOCUMENT_PROCESSING } from '../config/runtime-limits';
 
 /** ISO 639-1 코드를 영어 언어명으로 변환 (LLM 프롬프트용) */
 const LANGUAGE_NAMES: Record<string, string> = {
@@ -105,7 +106,7 @@ export async function extractPdfText(
                 } else {
                     // pdftoppm 없으면 sips 사용 (첫 페이지만 - 폴백)
                     logger.info(`[PDF/OCR] pdftoppm을 찾을 수 없어 sips 폴백 (첫 페이지만 추출됩니다. 'brew install poppler'로 pdftoppm 설치 권장)`);
-                    await execAsync(`sips -s format png --resampleHeightWidthMax 3000 "${filePath}" --out "${tempDir}"`);
+                    await execAsync(`sips -s format png --resampleHeightWidthMax ${DOCUMENT_PROCESSING.IMAGE_RESAMPLE_MAX} "${filePath}" --out "${tempDir}"`);
                 }
 
                 const imageFiles = fs.readdirSync(tempDir)
@@ -412,7 +413,7 @@ export async function extractDocument(
  * 문서 요약 프롬프트 생성 (JSON 형식)
  */
 export function createSummaryPrompt(document: DocumentResult, language: string = 'en'): string {
-    const maxLength = 30000;
+    const maxLength = DOCUMENT_PROCESSING.MAX_TEXT_LENGTH;
     let text = document.text;
     if (text.length > maxLength) {
         text = text.substring(0, maxLength) + '\n\n[... 문서의 나머지 부분 생략 ...]';
@@ -451,7 +452,7 @@ Ensure the response is valid JSON. Translate all content to ${getLanguageName(la
  * Q&A 프롬프트 생성 (JSON 형식)
  */
 export function createQAPrompt(document: DocumentResult, question: string, language: string = 'en'): string {
-    const maxLength = 28000;
+    const maxLength = DOCUMENT_PROCESSING.MAX_SUMMARY_TEXT_LENGTH;
     let text = document.text;
     if (text.length > maxLength) {
         text = text.substring(0, maxLength) + '\n\n[... 문서의 나머지 부분 생략 ...]';

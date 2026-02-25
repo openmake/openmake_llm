@@ -274,7 +274,7 @@
 
         loadLocalCategories: async function () {
             try {
-                const response = await window.authFetch('/api/agents/skills/categories');
+                const response = await window.authFetch(API_ENDPOINTS.AGENTS_SKILLS + '/categories');
                 const data = await response.json();
                 if (response.ok && data.success) {
                     const select = document.getElementById('localCategoryFilter');
@@ -316,8 +316,8 @@
 
                 // 스킬 목록과 개인 할당 목록 병렬 로드
                 const [response, assignedRes] = await Promise.all([
-                    window.authFetch(`/api/agents/skills?${queryParams.toString()}`),
-                    window.authFetch('/api/agents/skills/user-assigned')
+                    window.authFetch(`${API_ENDPOINTS.AGENTS_SKILLS}?${queryParams.toString()}`),
+                    window.authFetch(API_ENDPOINTS.AGENTS_SKILLS + '/user-assigned')
                 ]);
                 const data = await response.json();
 
@@ -418,7 +418,7 @@
                     offset: offset
                 });
 
-                const response = await window.authFetch(`/api/skills-marketplace/search?${queryParams.toString()}`);
+                const response = await window.authFetch(`${API_ENDPOINTS.SKILLS_MARKETPLACE_SEARCH}?${queryParams.toString()}`);
                 const data = await response.json().catch(() => ({}));
 
                 // GITHUB_TOKEN 미설정: 503 + 특정 코드 처리
@@ -490,7 +490,7 @@
                     btn.disabled = true;
                 }
 
-                const response = await window.authFetch('/api/skills-marketplace/import', {
+                const response = await window.authFetch(API_ENDPOINTS.SKILLS_MARKETPLACE_IMPORT, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -519,7 +519,7 @@
         toggleUserSkill: async function (skillId, currentlyAssigned) {
             try {
                 const method = currentlyAssigned ? 'DELETE' : 'POST';
-                const res = await window.authFetch(`/api/agents/skills/${skillId}/user-assign`, { method });
+                const res = await window.authFetch(`${API_ENDPOINTS.AGENTS_SKILLS}/${skillId}/user-assign`, { method });
                 const data = await res.json();
                 if (res.ok && data.success) {
                     if (currentlyAssigned) {
@@ -540,7 +540,7 @@
 
         viewMpSkillDetail: async function (paramsStr) {
             try {
-                const res = await window.authFetch(`/api/skills-marketplace/detail?repo=${encodeURIComponent(paramsStr.repo)}&path=${encodeURIComponent(paramsStr.path)}`);
+                const res = await window.authFetch(`${API_ENDPOINTS.SKILLS_MARKETPLACE_DETAIL}?repo=${encodeURIComponent(paramsStr.repo)}&path=${encodeURIComponent(paramsStr.path)}`);
                 const data = await res.json();
                 if (res.ok && data.success) {
                     alert(`[SKILL.md 미리보기]\n\nName: ${data.data.parsed.name}\nCategory: ${data.data.parsed.category}\n\n${data.data.parsed.content.substring(0, 300)}...`);
@@ -560,13 +560,13 @@
         },
 
         exportSkill: function (id) {
-            window.location.href = `/api/agents/skills/${id}/export`;
+            window.location.href = `${API_ENDPOINTS.AGENTS_SKILLS}/${id}/export`;
         },
 
         deleteLocalSkill: async function (id) {
             if (!confirm('정말 이 스킬을 삭제하시겠습니까? 연결된 에이전트에서도 제거됩니다.')) return;
             try {
-                const res = await window.authFetch(`/api/agents/skills/${id}`, { method: 'DELETE' });
+                const res = await window.authFetch(`${API_ENDPOINTS.AGENTS_SKILLS}/${id}`, { method: 'DELETE' });
                 const data = await res.json();
                 if (res.ok && data.success) {
                     if (window.showToast) window.showToast('스킬이 삭제되었습니다.', 'success');
@@ -634,13 +634,13 @@
             try {
                 let res;
                 if (editingSkillId) {
-                    res = await window.authFetch('/api/agents/skills/' + editingSkillId, {
+                    res = await window.authFetch(API_ENDPOINTS.AGENTS_SKILLS + '/' + editingSkillId, {
                         method: 'PUT',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(body)
                     });
                 } else {
-                    res = await window.authFetch('/api/agents/skills', {
+                    res = await window.authFetch(API_ENDPOINTS.AGENTS_SKILLS, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(body)

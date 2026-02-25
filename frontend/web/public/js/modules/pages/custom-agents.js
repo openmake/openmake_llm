@@ -67,7 +67,7 @@
 
         async function loadAgents() {
             try {
-                const res = await authFetch('/api/agents/custom');
+                const res = await authFetch(API_ENDPOINTS.AGENTS_CUSTOM);
                 agents = res.data || res || [];
                 renderAgents();
             } catch (e) { showToast('에이전트 로드 실패', 'error'); }
@@ -158,10 +158,10 @@
             };
             try {
                 if (editingId) {
-                    await authFetch('/api/agents/custom/' + editingId, { method:'PUT', body:JSON.stringify(body) });
+                    await authFetch(API_ENDPOINTS.AGENTS_CUSTOM + '/' + editingId, { method:'PUT', body:JSON.stringify(body) });
                     showToast('저장되었습니다');
                 } else {
-                    await authFetch('/api/agents/custom', { method:'POST', body:JSON.stringify(body) });
+                    await authFetch(API_ENDPOINTS.AGENTS_CUSTOM, { method:'POST', body:JSON.stringify(body) });
                     showToast('에이전트가 생성되었습니다');
                 }
                 closeEditor(); loadAgents();
@@ -171,7 +171,7 @@
         async function deleteAgent() {
             if (!editingId || !confirm('이 에이전트를 삭제하시겠습니까?')) return;
             try {
-                await authFetch('/api/agents/custom/' + editingId, { method:'DELETE' });
+                await authFetch(API_ENDPOINTS.AGENTS_CUSTOM + '/' + editingId, { method:'DELETE' });
                 showToast('삭제되었습니다'); closeEditor(); loadAgents();
             } catch (e) { showToast('삭제 실패', 'error'); }
         }
@@ -179,7 +179,7 @@
         async function confirmDelete(id) {
             if (!confirm('이 에이전트를 삭제하시겠습니까?')) return;
             try {
-                await authFetch('/api/agents/custom/' + id, { method:'DELETE' });
+                await authFetch(API_ENDPOINTS.AGENTS_CUSTOM + '/' + id, { method:'DELETE' });
                 showToast('삭제되었습니다'); loadAgents();
             } catch (e) { showToast('삭제 실패', 'error'); }
         }
@@ -187,7 +187,7 @@
         async function cloneAgent(id) {
             if (!confirm('이 에이전트를 복제하시겠습니까?')) return;
             try {
-                await authFetch('/api/agents/custom/' + id + '/clone', { method:'POST' });
+                await authFetch(API_ENDPOINTS.AGENTS_CUSTOM + '/' + id + '/clone', { method:'POST' });
                 showToast('복제되었습니다'); loadAgents();
             } catch (e) { showToast('복제 실패', 'error'); }
         }
@@ -196,7 +196,7 @@
 
         async function loadSkills() {
             try {
-                const res = await authFetch('/api/agents/skills');
+                const res = await authFetch(API_ENDPOINTS.AGENTS_SKILLS);
                 skills = res.data || [];
                 renderSkills();
             } catch (e) {
@@ -270,10 +270,10 @@
             };
             try {
                 if (editingSkillId) {
-                    await authFetch('/api/agents/skills/' + editingSkillId, { method:'PUT', body:JSON.stringify(body) });
+                    await authFetch(API_ENDPOINTS.AGENTS_SKILLS + '/' + editingSkillId, { method:'PUT', body:JSON.stringify(body) });
                     showToast('스킬이 저장되었습니다');
                 } else {
-                    await authFetch('/api/agents/skills', { method:'POST', body:JSON.stringify(body) });
+                    await authFetch(API_ENDPOINTS.AGENTS_SKILLS, { method:'POST', body:JSON.stringify(body) });
                     showToast('스킬이 생성되었습니다');
                 }
                 closeSkillModal();
@@ -284,7 +284,7 @@
         async function deleteSkill() {
             if (!editingSkillId || !confirm('이 스킬을 삭제하시겠습니까?')) return;
             try {
-                await authFetch('/api/agents/skills/' + editingSkillId, { method:'DELETE' });
+                await authFetch(API_ENDPOINTS.AGENTS_SKILLS + '/' + editingSkillId, { method:'DELETE' });
                 showToast('스킬이 삭제되었습니다');
                 closeSkillModal();
                 loadSkills();
@@ -293,7 +293,7 @@
 
         async function loadAgentSkills(agentId) {
             try {
-                const res = await authFetch('/api/agents/' + agentId + '/skills');
+                const res = await authFetch(API_ENDPOINTS.AGENTS + '/' + agentId + '/skills');
                 const assigned = res.data || [];
                 return assigned.map(s => s.id);
             } catch (e) {
@@ -305,9 +305,9 @@
         async function toggleAgentSkill(agentId, skillId, assign) {
             try {
                 if (assign) {
-                    await authFetch('/api/agents/' + agentId + '/skills/' + skillId, { method:'POST' });
+                    await authFetch(API_ENDPOINTS.AGENTS + '/' + agentId + '/skills/' + skillId, { method:'POST' });
                 } else {
-                    await authFetch('/api/agents/' + agentId + '/skills/' + skillId, { method:'DELETE' });
+                    await authFetch(API_ENDPOINTS.AGENTS + '/' + agentId + '/skills/' + skillId, { method:'DELETE' });
                 }
             } catch (e) {
                 showToast('스킬 변경 실패', 'error');

@@ -7,16 +7,9 @@
         content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover, interactive-widget=resizes-content">
     <title>OpenMake.Ai</title>
 
-    <!-- PWA 메타 태그 -->
     <meta name="theme-color" content="#c061ff">
     <meta name="description" content="AI 기반 지능형 채팅 어시스턴트">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="OpenMake.Ai">
-    <link rel="manifest" href="/manifest.json">
-    <link rel="apple-touch-icon" href="/icons/icon-192.png">
     <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon.png">
-    <meta name="mobile-web-app-capable" content="yes">
 
     <!-- 한글 최적화 웹폰트 -->
     <link rel="preconnect" href="https://cdn.jsdelivr.net">
@@ -51,25 +44,7 @@
     <script src="https://cdn.jsdelivr.net/npm/dompurify@3.2.4/dist/purify.min.js" defer></script>
     <script src="guide_content.js" defer></script>
 
-    <!-- Service Worker 등록 -->
-    <script>
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/service-worker.js')
-                    .then(reg => console.log('[PWA] Service Worker 등록 성공'))
-                    .catch(err => console.warn('[PWA] Service Worker 등록 실패:', err));
-            });
 
-            // Listen for SW update notification
-            navigator.serviceWorker.addEventListener('message', (event) => {
-                if (event.data && event.data.type === 'SW_UPDATED') {
-                    if (typeof showToast === 'function') {
-                        showToast('새 버전이 있습니다. 새로고침해주세요.', 'info');
-                    }
-                }
-            });
-        }
-    </script>
     <style>
         .skip-link:focus {
             top: 0
@@ -365,7 +340,11 @@
     </div> <!-- app 끝 -->
 
     <!-- 앱 엔트리 포인트 (ES Module — 모든 모듈을 main.js에서 import 및 초기화) -->
-    <script type="module" src="js/main.js?v=24"></script>
+    <!-- API 중앙 관리 (IIFE 페이지 모듈에서 window.API_ENDPOINTS 참조용) -->
+    <script src="js/modules/api-endpoints.js?v=16"></script>
+    <script src="js/modules/api-client.js?v=16"></script>
+
+    <script type="module" src="js/main.js?v=25"></script>
 </body>
 
 </html>

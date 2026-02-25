@@ -28,6 +28,7 @@ import { assessComplexity } from '../chat/complexity-assessor';
 import type { DocumentStore } from '../documents/store';
 import type { UserTier } from '../data/user-manager';
 import type { UserContext } from '../mcp/user-sandbox';
+import { CONTEXT_LIMITS } from '../config/runtime-limits';
 import { getUnifiedMCPClient } from '../mcp/unified-client';
 import { OllamaClient } from '../ollama/client';
 import { getGptOssTaskPreset, isGeminiModel, type ChatMessage, type ToolDefinition } from '../ollama/types';
@@ -218,6 +219,7 @@ export class ChatService {
             userTier,
             enabledTools,
             abortSignal,
+            userLanguagePreference,
         } = req;
 
         // SSE 연결 종료 시 처리를 조기 중단하기 위한 헬퍼
@@ -246,17 +248,18 @@ export class ChatService {
         const config = getConfig();
         let languagePolicy: LanguagePolicyDecision | undefined;
         
-        if (config.enableDynamicResponseLanguage) {
+        // 언어 정책은 항상 결정 — 사용자 명시 선택 > 메시지 자동 감지 > 기본 언어 폴백
+        {
             try {
                 languagePolicy = determineLanguagePolicy(message || '', {
                     defaultLanguage: config.defaultResponseLanguage,
-                    enableDynamicResponse: config.enableDynamicResponseLanguage,
+                    enableDynamicResponse: true,
                     minConfidenceThreshold: config.languageDetectionMinConfidence,
                     shortTextThreshold: 20,
                     fallbackLanguage: config.languageFallbackLanguage,
                     supportedLanguages: ['ko', 'en', 'ja', 'zh', 'es', 'fr', 'de', 'pt', 'ru', 'ar', 'hi', 'it', 'nl', 'sv', 'da', 'no', 'fi', 'th', 'vi', 'tr']
-                });
-                logger.info(`언어 정책 결정: ${languagePolicy.resolvedLanguage} (신뢰도: ${languagePolicy.detection.confidence.toFixed(2)})`);
+                }, userLanguagePreference as SupportedLanguageCode | undefined);
+                logger.info(`언어 정책 결정: ${languagePolicy.resolvedLanguage} (${userLanguagePreference ? '사용자 설정' : '자동 감지'}, 신뢰도: ${languagePolicy.detection.confidence.toFixed(2)})`);
             } catch (error) {
                 logger.warn('언어 감지 실패, 기본 언어 사용:', error);
                 // Fallback to default behavior
@@ -319,7 +322,7 @@ export class ChatService {
             const doc = uploadedDocuments.get(docId);
             if (doc) {
                 let docText = doc.text || '';
-                const maxChars = isGeminiModel(this.client.model) ? 100000 : 30000;
+                const maxChars = isGeminiModel(this.client.model) ? CONTEXT_LIMITS.GEMINI_MAX_CONTEXT_CHARS : CONTEXT_LIMITS.DEFAULT_MAX_CONTEXT_CHARS;
 
                 if (docText.length > maxChars) {
                     const half = Math.floor(maxChars / 2);
@@ -496,6 +499,7 @@ export class ChatService {
                     onToken: streamToken,
                     abortSignal,
                     checkAborted,
+                    userLanguage: languagePolicy?.resolvedLanguage || 'en',
                 });
 
                 if (a2aResult.succeeded) {

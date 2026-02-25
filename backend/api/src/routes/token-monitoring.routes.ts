@@ -30,6 +30,7 @@ import { success } from '../utils/api-response';
 import { requireAuth, requireAdmin } from '../auth';
 import { asyncHandler } from '../utils/error-handler';
 import { createLogger } from '../utils/logger';
+import { MODEL_PRICING, TOKEN_COST } from '../config/pricing';
 
 const logger = createLogger('TokenMonitoringRoutes');
 
@@ -158,12 +159,7 @@ router.get('/costs', asyncHandler(async (req: Request, res: Response) => {
     const weeklyStats = usageTracker.getWeeklyStats();
 
     // 모델별 가격 (Ollama Cloud 기준 - 예상치)
-    const modelPrices: Record<string, { input: number; output: number }> = {
-        'gemini-3-flash-preview:cloud': { input: 0.00001, output: 0.00002 },
-        'gemini-3-pro-preview:cloud': { input: 0.00005, output: 0.0001 },
-        'gpt-oss:120b': { input: 0.0001, output: 0.0002 },
-        'default': { input: 0.00001, output: 0.00002 }
-    };
+    const modelPrices = MODEL_PRICING;
 
     // 모델별 비용 계산
     const modelCosts: Record<string, number> = {};
@@ -178,7 +174,7 @@ router.get('/costs', asyncHandler(async (req: Request, res: Response) => {
         totalCost += cost;
     }
 
-    res.json(success({ today: { totalCost: parseFloat(totalCost.toFixed(6)), byModel: modelCosts, totalTokens: todayStats.totalTokens, totalRequests: todayStats.totalRequests }, weekly: { totalTokens: weeklyStats.totalTokens, totalRequests: weeklyStats.totalRequests, estimatedCost: parseFloat((weeklyStats.totalTokens * 0.00001).toFixed(6)) }, priceTable: modelPrices }));
+    res.json(success({ today: { totalCost: parseFloat(totalCost.toFixed(6)), byModel: modelCosts, totalTokens: todayStats.totalTokens, totalRequests: todayStats.totalRequests }, weekly: { totalTokens: weeklyStats.totalTokens, totalRequests: weeklyStats.totalRequests, estimatedCost: parseFloat((weeklyStats.totalTokens * TOKEN_COST.WEEKLY_ESTIMATE_COST_PER_TOKEN).toFixed(6)) }, priceTable: modelPrices }));
 }));
 
 export default router;

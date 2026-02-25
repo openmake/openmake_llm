@@ -18,6 +18,7 @@ import { AGENTS, industryData, getAgentById } from './agent-data';
 import { analyzeTopicIntent } from './topic-analyzer';
 import { routeWithLLM, isValidAgentId } from './llm-router';
 import { createLogger } from '../utils/logger';
+import { LLM_TIMEOUTS } from '../config/timeouts';
 
 const logger = createLogger('AgentRouter');
 
@@ -58,7 +59,7 @@ export async function routeToAgent(message: string, useLLM: boolean = true): Pro
     // 🆕 LLM 기반 라우팅 시도 (우선순위 1) - 개선됨: 신뢰도 조건 완화
     if (useLLM) {
         try {
-            const llmResult = await routeWithLLM(message, 10000); // 타임아웃 10초로 증가
+            const llmResult = await routeWithLLM(message, LLM_TIMEOUTS.KEYWORD_ROUTING_TIMEOUT_MS); // 타임아웃 10초로 증가
             if (llmResult && llmResult.confidence > 0.3 && isValidAgentId(llmResult.agentId)) {
                 const agent = getAgentById(llmResult.agentId);
                 if (agent) {

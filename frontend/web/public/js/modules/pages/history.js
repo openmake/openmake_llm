@@ -50,7 +50,7 @@
                     }
 
                     try {
-                        const res = await fetch('/api/chat/sessions?limit=100', {
+                        const res = await fetch(API_ENDPOINTS.CHAT_SESSIONS + '?limit=100', {
                             credentials: 'include'  // 하이퍼투글 쿠키 기반 인증
                         });
                         if (!res.ok) throw new Error('서버 응답 오류: ' + res.status);

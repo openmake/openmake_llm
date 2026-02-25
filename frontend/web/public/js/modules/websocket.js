@@ -146,6 +146,27 @@ function handleMessage(data) {
             }
             break;
 
+        case 'token_warning':
+            // 토큰 만료 임박 경고 — 자동 갱신 시도 (진행 중인 AI 응답에 영향 없음)
+            debugWarn('[WebSocket] 토큰 만료 임박, 자동 갱신 시도...');
+            if (typeof window.trySilentRefresh === 'function') {
+                window.trySilentRefresh().then(function(refreshed) {
+                    if (refreshed) {
+                        var newToken = getState('auth.authToken');
+                        if (newToken) {
+                            sendWsMessage({ type: 'refresh', authToken: newToken });
+                            debugLog('[WebSocket] 토큰 자동 갱신 성공, WebSocket 세션 갱신 완료');
+                        }
+                    } else {
+                        debugWarn('[WebSocket] 토큰 자동 갱신 실패 — 곧 재로그인이 필요합니다');
+                        if (typeof showToast === 'function') {
+                            showToast('인증이 곧 만료됩니다. 페이지를 새로고침하거나 다시 로그인하세요.', 'warning');
+                        }
+                    }
+                });
+            }
+            break;
+
         case 'error': {
             // 백엔드는 대부분 data.message로 에러를 전송하고, 레이트 리밋만 data.error 사용
             var errorMsg = data.message || data.error || '알 수 없는 오류가 발생했습니다';

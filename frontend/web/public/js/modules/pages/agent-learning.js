@@ -156,7 +156,7 @@
                 if (!agentA || !agentB) { showToast('두 에이전트를 모두 선택하세요', 'error'); return; }
                 if (agentA === agentB) { showToast('다른 에이전트를 선택하세요', 'error'); return; }
                 try {
-                    const res = await authFetch('/api/agents/abtest/start', {
+                    const res = await authFetch(API_ENDPOINTS.AGENTS_ABTEST_START, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ agentA, agentB })
@@ -175,9 +175,9 @@
         async function loadData() {
             try {
                 const [agentsRes, statsRes, abtestRes] = await Promise.all([
-                    authFetch('/api/agents'),
-                    authFetch('/api/agents/feedback/stats'),
-                    authFetch('/api/agents/abtest')
+                    authFetch(API_ENDPOINTS.AGENTS),
+                    authFetch(API_ENDPOINTS.AGENTS_FEEDBACK_STATS),
+                    authFetch(API_ENDPOINTS.AGENTS_ABTEST)
                 ]);
                 const agents = await agentsRes.json();
                 const stats = await statsRes.json();

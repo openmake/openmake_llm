@@ -23,6 +23,7 @@
  * 5. adjustOptionsForModel() - 선택된 모델에 맞게 옵션 미세 조정
  * 
  * @see chat/pipeline-profile.ts - 브랜드 모델 프로파일 정의
+ * @see chat/pipeline-profile.ts - 브랜드 모델 프로파일 정의
  * @see services/ChatService.ts - 최종 모델 선택 결과 소비
  */
 
@@ -30,6 +31,8 @@ import { getConfig } from '../config/env';
 import { ModelOptions } from '../ollama/types';
 import { isValidBrandModel, getProfiles } from './pipeline-profile';
 import { createLogger } from '../utils/logger';
+import { ENGINE_FALLBACKS } from '../config/model-defaults';
+import { MODEL_CONTEXT_DEFAULTS } from '../config/runtime-limits';
 import { applyCostTierCeiling, getDefaultCostTier } from './cost-tier';
 
 const logger = createLogger('ModelSelector');
@@ -83,11 +86,11 @@ interface ModelPreset {
 export function getModelPresets(): Record<string, ModelPreset> {
     const config = getConfig();
     // 테스트 환경 등에서 config 값이 없을 때를 위한 폴백
-    const engineFast = config.omkEngineFast || 'gemini-3-flash-preview:cloud';
-    const engineLlm = config.omkEngineLlm || 'gpt-oss:120b-cloud';
-    const enginePro = config.omkEnginePro || 'kimi-k2.5:cloud';
-    const engineCode = config.omkEngineCode || 'glm-5:cloud';
-    const engineVision = config.omkEngineVision || 'qwen3.5:397b-cloud';
+    const engineFast = config.omkEngineFast || ENGINE_FALLBACKS.FAST;
+    const engineLlm = config.omkEngineLlm || ENGINE_FALLBACKS.LLM;
+    const enginePro = config.omkEnginePro || ENGINE_FALLBACKS.PRO;
+    const engineCode = config.omkEngineCode || ENGINE_FALLBACKS.CODE;
+    const engineVision = config.omkEngineVision || ENGINE_FALLBACKS.VISION;
     return {
     // Gemini 3 Flash - 범용/코딩/분석
     'gemini-flash': {
@@ -98,7 +101,7 @@ export function getModelPresets(): Record<string, ModelPreset> {
             temperature: 0.7,
             top_p: 0.9,
             top_k: 40,
-            num_ctx: 32768,
+            num_ctx: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
             repeat_penalty: 1.1,
         },
         capabilities: {
@@ -106,7 +109,7 @@ export function getModelPresets(): Record<string, ModelPreset> {
             thinking: true,
             vision: true,
             streaming: true,
-            contextLength: 32768,
+            contextLength: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
         },
         bestFor: ['code', 'analysis', 'chat', 'korean', 'document'],
         priority: 1,
@@ -121,7 +124,7 @@ export function getModelPresets(): Record<string, ModelPreset> {
             temperature: 0.8,
             top_p: 0.95,
             top_k: 50,
-            num_ctx: 32768,
+            num_ctx: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
             repeat_penalty: 1.15,
         },
         capabilities: {
@@ -129,7 +132,7 @@ export function getModelPresets(): Record<string, ModelPreset> {
             thinking: true,
             vision: false,
             streaming: true,
-            contextLength: 32768,
+            contextLength: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
         },
         bestFor: ['creative', 'analysis', 'document'],
         priority: 2,
@@ -167,7 +170,7 @@ export function getModelPresets(): Record<string, ModelPreset> {
             temperature: 0.2,
             top_p: 0.8,
             top_k: 20,
-            num_ctx: 32768,
+            num_ctx: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
             repeat_penalty: 1.0,
         },
         capabilities: {
@@ -175,7 +178,7 @@ export function getModelPresets(): Record<string, ModelPreset> {
             thinking: true,
             vision: false,
             streaming: true,
-            contextLength: 32768,
+            contextLength: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
         },
         bestFor: ['code'],
         priority: 1,  // 코딩에 최우선
@@ -190,7 +193,7 @@ export function getModelPresets(): Record<string, ModelPreset> {
             temperature: 0.6,
             top_p: 0.9,
             top_k: 40,
-            num_ctx: 32768,
+            num_ctx: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
             repeat_penalty: 1.1,
         },
         capabilities: {
@@ -198,7 +201,7 @@ export function getModelPresets(): Record<string, ModelPreset> {
             thinking: true,
             vision: true,
             streaming: true,
-            contextLength: 32768,
+            contextLength: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
         },
         bestFor: ['vision'],
         priority: 1,  // 비전에 최우선
@@ -213,7 +216,7 @@ export function getModelPresets(): Record<string, ModelPreset> {
             temperature: 0.2,
             top_p: 0.8,
             top_k: 15,
-            num_ctx: 32768,
+            num_ctx: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
             repeat_penalty: 1.0,
         },
         capabilities: {
@@ -221,7 +224,7 @@ export function getModelPresets(): Record<string, ModelPreset> {
             thinking: true,
             vision: true,
             streaming: true,
-            contextLength: 32768,
+            contextLength: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
         },
         bestFor: ['math'],
         priority: 1,
@@ -350,7 +353,7 @@ export function getModelContextLength(modelName: string): number {
     }
 
     // 기본값
-    return 32768;
+    return MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX;
 }
 
 // ============================================================
@@ -392,7 +395,7 @@ export function adjustOptionsForModel(
 
     // Kimi: 긴 문서에 적합한 설정
     if (lowerModel.includes('kimi')) {
-        adjustedOptions.num_ctx = Math.max(adjustedOptions.num_ctx || 32768, 65536);
+        adjustedOptions.num_ctx = Math.max(adjustedOptions.num_ctx || MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX, MODEL_CONTEXT_DEFAULTS.EXTENDED_NUM_CTX);
     }
 
     // Vision 모델: 이미지 분석에 적합한 설정
@@ -455,7 +458,7 @@ export async function selectModelForProfile(requestedModel: string, query?: stri
                 model: resolvedProfile.engineModel,
                 options: {
                     temperature: resolvedProfile.thinking === 'high' ? 0.3 : resolvedProfile.thinking === 'off' ? 0.7 : 0.5,
-                    num_ctx: resolvedProfile.contextStrategy === 'full' ? 65536 : 32768,
+                    num_ctx: resolvedProfile.contextStrategy === 'full' ? MODEL_CONTEXT_DEFAULTS.EXTENDED_NUM_CTX : MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
                 },
                 reason: `Auto-Routing → ${resolvedProfile.displayName} → ${resolvedProfile.engineModel}`,
                 queryType: resolvedProfile.promptStrategy === 'force_coder' ? 'code'
@@ -479,7 +482,7 @@ export async function selectModelForProfile(requestedModel: string, query?: stri
         model: profile.engineModel,
         options: {
             temperature: profile.thinking === 'high' ? 0.3 : profile.thinking === 'off' ? 0.7 : 0.5,
-            num_ctx: profile.contextStrategy === 'full' ? 65536 : 32768,
+            num_ctx: profile.contextStrategy === 'full' ? MODEL_CONTEXT_DEFAULTS.EXTENDED_NUM_CTX : MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
         },
         reason: `Brand model ${profile.displayName} → ${profile.engineModel}`,
         queryType: profile.promptStrategy === 'force_coder' ? 'code'

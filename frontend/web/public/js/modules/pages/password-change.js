@@ -110,7 +110,7 @@
                     btn.textContent = '변경 중...';
 
                     try {
-                        const res = await authFetch('/api/auth/password', {
+                        const res = await authFetch(API_ENDPOINTS.AUTH_PASSWORD, {
                             method: 'PUT',
                             body: JSON.stringify({
                                 currentPassword: document.getElementById('currentPw').value,

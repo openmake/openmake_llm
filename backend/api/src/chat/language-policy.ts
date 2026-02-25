@@ -475,8 +475,72 @@ export function getLanguageTemplate(language: SupportedLanguageCode): LanguageRe
  * 언어 정책을 기반으로 프롬프트용 언어 지시문 생성
  */
 export function generateLanguageInstructions(policy: LanguagePolicyDecision): string {
-    const template = getLanguageTemplate(policy.resolvedLanguage);
-    
-    return `**언어 규칙**: ${template.languageRule}
-**형식 지침**: ${template.formatGuidance}`;
+    const lang = policy.resolvedLanguage;
+    const displayName = LANGUAGE_DISPLAY_NAMES[lang] || lang;
+    const template = getLanguageTemplate(lang);
+
+    const enforcementBlocks: Record<PromptLocaleCode, (dn: string, rule: string) => string> = {
+        ko: (dn, rule) => `**[필수] 응답 언어: ${dn}**\n${rule}\n- 다른 언어로 응답하지 마세요. 기술 용어만 원어 병기 허용.`,
+        en: (dn, rule) => `**[REQUIRED] Response Language: ${dn}**\n${rule}\n- Do NOT respond in any other language. Only technical terms may use original language in parentheses.`,
+        ja: (dn, rule) => `**[必須] 応答言語: ${dn}**\n${rule}\n- 他の言語で応答しないでください。技術用語のみ原語併記を許可します。`,
+        zh: (dn, rule) => `**[必须] 响应语言: ${dn}**\n${rule}\n- 请勿使用其他语言回答。仅允许技术术语使用原语言括号标注。`,
+        es: (dn, rule) => `**[OBLIGATORIO] Idioma de respuesta: ${dn}**\n${rule}\n- NO responda en otro idioma. Solo los términos técnicos pueden usar el idioma original entre paréntesis.`,
+        de: (dn, rule) => `**[PFLICHT] Antwortsprache: ${dn}**\n${rule}\n- Antworten Sie NICHT in einer anderen Sprache. Nur Fachbegriffe dürfen in Klammern in der Originalsprache angegeben werden.`,
+        fr: (dn, rule) => `**[OBLIGATOIRE] Langue de réponse : ${dn}**\n${rule}\n- NE répondez PAS dans une autre langue. Seuls les termes techniques peuvent utiliser la langue d'origine entre parenthèses.`
+    };
+
+    const locale = resolvePromptLocale(lang);
+    const builder = enforcementBlocks[locale];
+    return builder(displayName, template.languageRule);
 }
+
+export type PromptLocaleCode = 'ko' | 'en' | 'ja' | 'zh' | 'es' | 'de' | 'fr';
+
+export const PRIMARY_PROMPT_LOCALES: PromptLocaleCode[] = ['ko', 'en', 'ja', 'zh', 'es', 'de', 'fr'];
+
+export function resolvePromptLocale(lang: string): PromptLocaleCode {
+    const normalized = (lang || 'en').toLowerCase().split('-')[0];
+    if (PRIMARY_PROMPT_LOCALES.includes(normalized as PromptLocaleCode)) {
+        return normalized as PromptLocaleCode;
+    }
+
+    const languageMap: Record<string, PromptLocaleCode> = {
+        pt: 'es',
+        it: 'es',
+        nl: 'de',
+        sv: 'en',
+        da: 'en',
+        no: 'en',
+        fi: 'en',
+        ru: 'en',
+        ar: 'en',
+        hi: 'en',
+        th: 'en',
+        vi: 'en',
+        tr: 'en'
+    };
+    return languageMap[normalized] || 'en';
+}
+
+export const LANGUAGE_DISPLAY_NAMES: Record<SupportedLanguageCode, string> = {
+    ko: '한국어',
+    en: 'English',
+    ja: '日本語',
+    zh: '中文',
+    es: 'Español',
+    fr: 'Français',
+    de: 'Deutsch',
+    pt: 'Português',
+    ru: 'Русский',
+    ar: 'العربية',
+    hi: 'हिंदी',
+    it: 'Italiano',
+    nl: 'Nederlands',
+    sv: 'Svenska',
+    da: 'Dansk',
+    no: 'Norsk',
+    fi: 'Suomi',
+    th: 'ภาษาไทย',
+    vi: 'Tiếng Việt',
+    tr: 'Türkçe'
+};

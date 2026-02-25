@@ -234,9 +234,8 @@ describe('Language Policy System', () => {
             };
 
             const instructions = generateLanguageInstructions(policy);
-            expect(instructions).toContain('언어 규칙');
-            expect(instructions).toContain('형식 지침');
             expect(instructions).toContain('한국어');
+            expect(instructions).toContain('필수');
         });
 
         test('영어 정책에서 지시문 생성', () => {
@@ -255,8 +254,8 @@ describe('Language Policy System', () => {
             };
 
             const instructions = generateLanguageInstructions(policy);
-            expect(instructions).toContain('**언어 규칙**');
-            expect(instructions).toContain('**형식 지침**');
+            expect(instructions).toContain('REQUIRED');
+            expect(instructions).toContain('Response Language');
             expect(instructions).toContain('English');
         });
 

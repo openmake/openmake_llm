@@ -36,12 +36,19 @@ jest.mock('../utils/input-sanitizer', () => ({
     validatePromptInput: jest.fn().mockReturnValue({ valid: true })
 }));
 
+jest.mock('../chat/language-policy', () => ({
+    resolvePromptLocale: (lang: string) => {
+        const map: Record<string, string> = { ko: 'ko', en: 'en', ja: 'ja', zh: 'zh', es: 'es', de: 'de' };
+        return map[lang] || 'en';
+    },
+}));
+
 // ============================================================
 // Import after mocks
 // ============================================================
 
 import { createDiscussionEngine } from '../agents/discussion-engine';
-import type { DiscussionConfig, DiscussionProgress } from '../agents/discussion-engine';
+import type { DiscussionProgress } from '../agents/discussion-engine';
 
 // ============================================================
 // 공통 픽스처
@@ -245,7 +252,7 @@ describe('startDiscussion() - opinions 0개 시 조기 종료', () => {
         const result = await engine.startDiscussion('주제');
 
         expect(result.opinions).toHaveLength(0);
-        expect(result.finalAnswer).toContain('AI 모델 서버');
+        expect(result.finalAnswer).toContain('AI model server');
         expect(result.factChecked).toBe(false);
         expect(result.participants).toHaveLength(2);
     });

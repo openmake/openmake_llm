@@ -39,6 +39,7 @@ import { buildExecutionPlan } from '../chat/profile-resolver';
 import { detectLanguage } from '../chat/language-policy';
   import { validate, validateUploadContentType, validateFileUploadSecurity } from '../middlewares/validation';
   import { summarizeDocumentSchema, documentAskSchema } from '../schemas/documents.schema';
+import { FILE_LIMITS } from '../config/constants';
 
 const logger = createLogger('DocumentsRoutes');
 
@@ -108,7 +109,7 @@ const storage = multer.diskStorage({
 
 const upload = multer({
     storage,
-    limits: { fileSize: 100 * 1024 * 1024 } // 100MB 제한
+    limits: { fileSize: FILE_LIMITS.MAX_SIZE_BYTES } // 100MB 제한
 });
 
 /**
@@ -123,7 +124,7 @@ export function setDependencies(cluster: ClusterManager, broadcast: (data: Recor
  * POST /api/upload
  * 파일 업로드
  */
-router.post('/upload', validateUploadContentType(100 * 1024 * 1024), upload.single('file'), validateFileUploadSecurity(), asyncHandler(async (req: Request, res: Response) => {
+router.post('/upload', validateUploadContentType(FILE_LIMITS.MAX_SIZE_BYTES), upload.single('file'), validateFileUploadSecurity(), asyncHandler(async (req: Request, res: Response) => {
      try {
          if (!req.file) {
              res.status(400).json(badRequest('파일이 없습니다'));

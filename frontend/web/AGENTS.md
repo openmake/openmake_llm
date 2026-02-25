@@ -95,4 +95,3 @@
 | `public/js/modules/state.js` | `vanilla-js-frontend` |
 | `public/js/spa-router.js` | `vanilla-js-frontend` |
 | `public/js/modules/pages/*.js` | `vanilla-js-frontend` |
-| `public/service-worker.js` | `vanilla-js-frontend` |

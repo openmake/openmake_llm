@@ -21,7 +21,7 @@ import { getSkillManager } from './skill-manager';
 import { getLanguageTemplate, type SupportedLanguageCode } from '../chat/language-policy';
 const logger = createLogger('AgentSystem');
 
-type PromptLanguageCode = 'ko' | 'en' | 'ja' | 'zh' | 'es' | 'de';
+type PromptLanguageCode = 'ko' | 'en' | 'ja' | 'zh' | 'es' | 'de' | 'fr';
 
 interface AgentPromptTemplate {
     role: string;
@@ -104,6 +104,18 @@ const AGENT_PROMPT_TEMPLATES: Record<PromptLanguageCode, AgentPromptTemplate> = 
             'Stellen Sie bei Bedarf Ruckfragen, um Anforderungen zu klaren.'
         ],
         detailGuidance: 'Detaillierte Hinweise'
+    },
+    fr: {
+        role: 'Rôle',
+        expertIs: 'Vous êtes un expert en **{agent}**.',
+        workingOn: 'Vous travaillez actuellement dans la phase **{phase}**.',
+        guidelines: 'Directives de réponse',
+        guidelineItems: [
+            'Fournissez des réponses précises et pratiques dans votre domaine d\'expertise.',
+            'Expliquez avec des exemples concrets lorsque c\'est utile.',
+            'Si nécessaire, posez des questions de suivi pour clarifier les exigences.'
+        ],
+        detailGuidance: 'Instructions détaillées'
     }
 };
 
@@ -155,12 +167,20 @@ Sie sind ein allgemeiner KI-Assistent, der bei Fragen aus vielen Bereichen helfe
 1. Geben Sie genaue und hilfreiche Antworten.
 2. Geben Sie ehrlich zu, wenn Sie etwas nicht wissen.
 3. Antworten Sie hoflich in der vom Nutzer verwendeten Sprache.
+`,
+    fr: `# 🤖 Assistant IA général
+Vous êtes un assistant IA général capable d'aider sur des questions de nombreux domaines.
+
+## Directives de réponse
+1. Fournissez des réponses précises et utiles.
+2. Reconnaissez honnêtement ce que vous ne savez pas.
+3. Répondez poliment dans la langue utilisée par l'utilisateur.
 `
 };
 
 function resolvePromptLanguage(languageCode: string): PromptLanguageCode {
     const normalized = (languageCode || 'en').toLowerCase().split('-')[0];
-    if (normalized === 'ko' || normalized === 'en' || normalized === 'ja' || normalized === 'zh' || normalized === 'es' || normalized === 'de') {
+    if (normalized === 'ko' || normalized === 'en' || normalized === 'ja' || normalized === 'zh' || normalized === 'es' || normalized === 'de' || normalized === 'fr') {
         return normalized;
     }
     return 'en';
@@ -304,7 +324,12 @@ export function getPhaseLabel(phase?: AgentPhase, languageCode: string = 'ko'): 
             planning: 'Planung/Analyse',
             build: 'Implementierung/Entwicklung',
             optimization: 'Optimierung/Verbesserung'
-        }
+        },
+        fr: {
+            planning: 'Planification/Analyse',
+            build: 'Implémentation/Développement',
+            optimization: 'Optimisation/Amélioration'
+        },
     };
     return labels[promptLanguage][phase || 'planning'];
 }

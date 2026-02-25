@@ -165,7 +165,6 @@ UnifiedSidebar.prototype.init = function () {
     // 사용자 정보 업데이트
     this._updateUserSection();
 
-    console.log(LOG_PREFIX, '\uCD08\uAE30\uD654 \uC644\uB8CC. \uC0C1\uD0DC:', this.state);
 
     // OAuth 쿠키 세션 복구 대기: recoverSessionFromCookie()가 비동기로 완료되면
     // 사이드바 사용자 섹션을 다시 업데이트
@@ -472,7 +471,6 @@ UnifiedSidebar.prototype.setState = function (newState) {
         localStorage.setItem(LS_KEY, newState);
     }
 
-    console.log(LOG_PREFIX, '\uC0C1\uD0DC \uBCC0\uACBD:', oldState, '\u2192', newState);
 };
 
 UnifiedSidebar.prototype.toggle = function () {
@@ -492,7 +490,7 @@ UnifiedSidebar.prototype.loadConversations = function () {
     var fetchFn = window.authFetch || window.fetch;
 
     // 🆕 비로그인 사용자는 anonSessionId를 전달하여 자신의 대화만 조회
-    var url = '/api/chat/sessions';
+    var url = API_ENDPOINTS.CHAT_SESSIONS;
     var _userStr = (window.SafeStorage ? window.SafeStorage.getItem('user') : localStorage.getItem('user'));
     var _hasUser = !!(_userStr && _userStr !== '{}');
     if (!_hasUser) {

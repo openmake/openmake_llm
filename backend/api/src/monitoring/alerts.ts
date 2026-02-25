@@ -20,6 +20,7 @@
 import nodemailer, { type Transporter } from 'nodemailer';
 import type { Pool } from 'pg';
 import { createLogger } from '../utils/logger';
+import { ALERT_THRESHOLDS } from '../config/timeouts';
 
 const logger = createLogger('AlertSystem');
 
@@ -140,7 +141,7 @@ export class AlertSystem {
             thresholds: {
                 quotaWarningPercent: config?.thresholds?.quotaWarningPercent ?? 70,
                 quotaCriticalPercent: config?.thresholds?.quotaCriticalPercent ?? 90,
-                responseTimeMs: config?.thresholds?.responseTimeMs ?? 5000,
+                responseTimeMs: config?.thresholds?.responseTimeMs ?? ALERT_THRESHOLDS.RESPONSE_TIME_MS,
                 errorRatePercent: config?.thresholds?.errorRatePercent ?? 10
             },
             cooldownMinutes: config?.cooldownMinutes ?? 15,

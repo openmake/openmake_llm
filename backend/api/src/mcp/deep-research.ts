@@ -16,12 +16,15 @@ import { getUnifiedDatabase } from '../data/models/unified-database';
 import {
     createDeepResearchService,
     configureResearch as configureResearchGlobal,
+    getResearchMessage,
     ResearchConfig,
     ResearchProgress
 } from '../services/DeepResearchService';
 import { v4 as uuidv4 } from 'uuid';
 import { createLogger } from '../utils/logger';
 import { detectLanguage } from '../chat/language-policy';
+import { CLEANUP_INTERVALS } from '../config/timeouts';
+import { getSearchLocale } from '../i18n/search-locale';
 
 const logger = createLogger('DeepResearchMCP');
 
@@ -81,7 +84,7 @@ export const researchTool: MCPToolDefinition = {
                 },
                 language: {
                     type: 'string',
-                    enum: ['ko', 'en', 'ja', 'zh', 'es', 'de'],
+                    enum: ['ko', 'en', 'ja', 'zh', 'es', 'de', 'fr'],
                     description: '출력 언어 (미지정 시 topic에서 자동 감지)'
                 }
             },
@@ -120,7 +123,7 @@ export const researchTool: MCPToolDefinition = {
                     totalLoops: depth === 'quick' ? 1 : depth === 'standard' ? 3 : 5,
                     currentStep: 'starting',
                     progress: 0,
-                    message: language === 'ko' ? '리서치를 시작합니다...' : language === 'ja' ? 'リサーチを開始します...' : language === 'zh' ? '开始研究...' : language === 'es' ? 'Iniciando investigación...' : language === 'de' ? 'Recherche wird gestartet...' : 'Starting research...'
+                    message: getResearchMessage('init', language)
                 },
                 startTime: Date.now()
             });
@@ -140,7 +143,7 @@ export const researchTool: MCPToolDefinition = {
             }).then((result) => {
                 logger.info(`[DeepResearch MCP] 완료: ${sessionId}`);
                 // 완료 후 일정 시간 후 정리
-                setTimeout(() => activeResearches.delete(sessionId), 300000); // 5분 후 정리
+                setTimeout(() => activeResearches.delete(sessionId), CLEANUP_INTERVALS.RESEARCH_SESSION_MS); // 5분 후 정리
             }).catch((error) => {
                 logger.error(`[DeepResearch MCP] 실패: ${error}`);
             });
@@ -341,7 +344,7 @@ export const configureResearchTool: MCPToolDefinition = {
                 },
                 language: {
                     type: 'string',
-                    enum: ['ko', 'en', 'ja', 'zh', 'es', 'de'],
+                    enum: ['ko', 'en', 'ja', 'zh', 'es', 'de', 'fr'],
                     description: '출력 언어'
                 }
             }

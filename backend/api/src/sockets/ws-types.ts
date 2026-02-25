@@ -20,12 +20,16 @@ export interface WSMessage {
     anonSessionId?: string;
     userId?: string;
     discussionMode?: boolean;
+    /** 사용자가 웹 검색을 명시적으로 활성화했는지 여부 */
+    webSearch?: boolean;
     deepResearchMode?: boolean;
     thinkingMode?: boolean;
     thinkingLevel?: string;
     enabledTools?: Record<string, boolean>;
     userRole?: string;
     userTier?: 'free' | 'pro' | 'enterprise';
+    /** 사용자 선호 언어 (설정 페이지에서 선택) */
+    language?: string;
     [key: string]: unknown;
 }
 

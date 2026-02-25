@@ -180,4 +180,6 @@ export interface ChatMessageRequest {
     enabledTools?: Record<string, boolean>;
     /** 요청 중단 시그널 (SSE 연결 종료 시 사용) */
     abortSignal?: AbortSignal;
+    /** 사용자가 설정에서 선택한 선호 언어 (language-policy userPreference) */
+    userLanguagePreference?: string;
 }

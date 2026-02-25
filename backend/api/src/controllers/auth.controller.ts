@@ -15,6 +15,7 @@ import { createLogger } from '../utils/logger';
 import { success, badRequest, unauthorized, conflict, internalError, serviceUnavailable } from '../utils/api-response';
 import { getConfig } from '../config/env';
 import { APP_USER_AGENT } from '../config/constants';
+import { GOOGLE_OAUTH, GITHUB_OAUTH, GITHUB_API } from '../config/external-services';
 import { validate } from '../middlewares/validation';
 import { loginSchema, registerSchema, changePasswordSchema } from '../schemas';
 
@@ -459,7 +460,7 @@ export class AuthController {
 
         // 🔒 Phase 2 보안 패치: 암호학적으로 안전한 state 생성
         const state = await generateSecureState('google');
-        const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
+        const authUrl = new URL(GOOGLE_OAUTH.AUTH_URL);
         authUrl.searchParams.set('client_id', clientId);
         authUrl.searchParams.set('redirect_uri', redirectUri);
         authUrl.searchParams.set('response_type', 'code');
@@ -486,7 +487,7 @@ export class AuthController {
 
         // 🔒 Phase 2 보안 패치: 암호학적으로 안전한 state 생성
         const state = await generateSecureState('github');
-        const authUrl = new URL('https://github.com/login/oauth/authorize');
+        const authUrl = new URL(GITHUB_OAUTH.AUTH_URL);
         authUrl.searchParams.set('client_id', clientId);
         authUrl.searchParams.set('redirect_uri', redirectUri);
         authUrl.searchParams.set('scope', 'read:user user:email');
@@ -531,7 +532,7 @@ export class AuthController {
             const redirectUri = buildRedirectUri(req, 'google', this.serverPort);
 
             // 토큰 교환
-            const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+            const tokenRes = await fetch(GOOGLE_OAUTH.TOKEN_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                 body: new URLSearchParams({
@@ -547,7 +548,7 @@ export class AuthController {
             if (!tokenData.access_token) throw new Error('토큰 교환 실패');
 
             // 사용자 정보 가져오기
-            const userInfoRes = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+            const userInfoRes = await fetch(GOOGLE_OAUTH.USERINFO_URL, {
                 headers: { Authorization: `Bearer ${tokenData.access_token}` }
             });
 
@@ -602,7 +603,7 @@ export class AuthController {
             const clientSecret = getConfig().githubClientSecret;
 
             // 토큰 교환
-            const tokenRes = await fetch('https://github.com/login/oauth/access_token', {
+            const tokenRes = await fetch(GITHUB_OAUTH.TOKEN_URL, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -619,7 +620,7 @@ export class AuthController {
             if (!tokenData.access_token) throw new Error('토큰 교환 실패');
 
             // 사용자 정보 가져오기
-            const userRes = await fetch('https://api.github.com/user', {
+            const userRes = await fetch(GITHUB_API.USER_INFO, {
                 headers: {
                     Authorization: `Bearer ${tokenData.access_token}`,
                     'User-Agent': APP_USER_AGENT
@@ -631,7 +632,7 @@ export class AuthController {
 
             // 이메일 없으면 별도 API 호출
             if (!email) {
-                const emailRes = await fetch('https://api.github.com/user/emails', {
+                const emailRes = await fetch(GITHUB_API.USER_EMAILS, {
                     headers: {
                         Authorization: `Bearer ${tokenData.access_token}`,
                         'User-Agent': APP_USER_AGENT

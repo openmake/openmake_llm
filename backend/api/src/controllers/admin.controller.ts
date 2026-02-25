@@ -11,6 +11,7 @@ import { getPool } from '../data/models/unified-database';
 import { requireAuth, requireAdmin } from '../auth';
 import { createLogger } from '../utils/logger';
 import { success, badRequest, notFound, internalError } from '../utils/api-response';
+import { CAPACITY } from '../config/runtime-limits';
 
 const log = createLogger('AdminController');
 
@@ -191,7 +192,7 @@ export class AdminController {
                  LEFT JOIN conversation_sessions cs ON cs.id = cm.session_id
                  LEFT JOIN users u ON u.id = cs.user_id
                  ORDER BY cm.created_at DESC
-                 LIMIT 10000`
+                 LIMIT ${CAPACITY.ADMIN_EXPORT_LIMIT}`
             );
 
             if (format === 'csv') {

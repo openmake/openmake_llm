@@ -48,18 +48,7 @@ FILE_COUNT=$(find "$DEST_DIR" -type f | wc -l | tr -d ' ')
 echo ""
 echo -e "${GREEN}✅ 프론트엔드 배포 완료! ($FILE_COUNT 파일)${NC}"
 
-# Service Worker 캐시 버전 자동 업데이트
-SW_FILE="$DEST_DIR/service-worker.js"
-if [ -f "$SW_FILE" ]; then
-    # 타임스탬프 기반 캐시 버전 업데이트
-    TIMESTAMP=$(date +%s)
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-        sed -i '' "s/const CACHE_VERSION = '.*'/const CACHE_VERSION = 'openmake-v${TIMESTAMP}'/" "$SW_FILE"
-    else
-        sed -i "s/const CACHE_VERSION = '.*'/const CACHE_VERSION = 'openmake-v${TIMESTAMP}'/" "$SW_FILE"
-    fi
-    echo -e "${GREEN}✅ Service Worker 캐시 버전 업데이트: ollama-chat-v${TIMESTAMP}${NC}"
-fi
+
 
 # build-info.json 생성 — 시스템 정보 카드용 (자동 업데이트)
 BUILD_INFO_FILE="$PROJECT_ROOT/backend/api/dist/build-info.json"

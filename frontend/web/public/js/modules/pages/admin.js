@@ -50,7 +50,7 @@
                 async function checkAuth() {
                     if (!_userStr) { (typeof Router !== 'undefined' && Router.navigate('/')); return false; }
                     try {
-                        const res = await authFetch('/api/auth/me');
+                        const res = await authFetch(API_ENDPOINTS.AUTH_ME);
                         const data = await res.json();
                         const payload = data.data || data;
                         if (!res.ok || !payload.user) throw new Error('인증 실패');
@@ -88,7 +88,7 @@
                     const search = document.getElementById('filterSearch').value;
                     try {
                         const params = new URLSearchParams({ page: usersPage, limit: pageSize, ...(role && { role }), ...(search && { search }) });
-                        const res = await authFetch(`/api/admin/users?${params}`);
+                        const res = await authFetch(`${API_ENDPOINTS.ADMIN_USERS}?${params}`);
                         const data = await res.json();
                         const payload = data.data || data;
                         renderUsers(payload.users || []);
@@ -118,16 +118,17 @@
                         if (!btn) return;
                         var action = btn.dataset.action;
                         var userId = btn.dataset.userId;
-                        if (action === 'edit') { editUser(userId); }
-                        else if (action === 'delete') { deleteUser(userId); }
-};
+                        // setTimeout으로 비동기 API 호출을 클릭 이벤트에서 분리 (Violation 방지)
+                        if (action === 'edit') { setTimeout(function() { editUser(userId); }, 0); }
+                        else if (action === 'delete') { setTimeout(function() { deleteUser(userId); }, 0); }
+                    };
                 }
 
                 function getRoleName(role) { return { admin: '관리자', user: '사용자', guest: '게스트' }[role] || role; }
 
                 async function loadUserStats() {
                     try {
-                        const res = await authFetch('/api/admin/users/stats');
+                        const res = await authFetch(API_ENDPOINTS.ADMIN_USERS_STATS);
                         const stats = await res.json();
                         const payload = stats.data || stats;
                         document.getElementById('statTotalUsers').textContent = payload.totalUsers || 0;
@@ -135,7 +136,7 @@
                         document.getElementById('statAdmins').textContent = payload.adminCount || 0;
                     } catch (e) { console.error('[Admin] 사용자 통계 로드 실패:', e); }
                     try {
-                        const res = await authFetch('/api/admin/stats');
+                        const res = await authFetch(API_ENDPOINTS.ADMIN_STATS);
                         if (res.ok) { const data = await res.json(); const payload2 = data.data || data; document.getElementById('statTodayQueries').textContent = payload2.today_queries || 0; }
                     } catch (e) { console.error('[Admin] 관리 통계 로드 실패:', e); }
                 }
@@ -152,7 +153,7 @@
 
                 async function editUser(id) {
                     try {
-                        const res = await authFetch(`/api/admin/users?search=`);
+                        const res = await authFetch(`${API_ENDPOINTS.ADMIN_USERS}?search=`);
                         const data = await res.json();
                         const payload = data.data || data;
                         const user = (payload.users || []).find(u => u.id === id);
@@ -176,12 +177,12 @@
                     if (!email) { showToast('이메일을 입력하세요', 'error'); return; }
                     try {
                         if (id) {
-                            const res = await authFetch(`/api/admin/users/${id}`, { method: 'PUT', body: JSON.stringify({ email, role, is_active }) });
+                            const res = await authFetch(`${API_ENDPOINTS.ADMIN_USERS}/${id}`, { method: 'PUT', body: JSON.stringify({ email, role, is_active }) });
                             if (!res.ok) { const d = await res.json(); throw new Error((d.error && typeof d.error === 'object' ? d.error.message : d.error) || '수정 실패'); }
                             showToast('사용자 정보가 수정되었습니다', 'success');
                         } else {
                             if (!password || password.length < 6) { showToast('비밀번호는 6자 이상이어야 합니다', 'error'); return; }
-                            const res = await authFetch('/api/admin/users', { method: 'POST', body: JSON.stringify({ email, password, role }) });
+                            const res = await authFetch(API_ENDPOINTS.ADMIN_USERS, { method: 'POST', body: JSON.stringify({ email, password, role }) });
                             if (!res.ok) { const d = await res.json(); throw new Error((d.error && typeof d.error === 'object' ? d.error.message : d.error) || '추가 실패'); }
                             showToast('사용자가 추가되었습니다', 'success');
                         }
@@ -192,7 +193,7 @@
                 async function deleteUser(id) {
                     if (!confirm('정말 이 사용자를 삭제하시겠습니까?')) return;
                     try {
-                        const res = await authFetch(`/api/admin/users/${id}`, { method: 'DELETE' });
+                        const res = await authFetch(`${API_ENDPOINTS.ADMIN_USERS}/${id}`, { method: 'DELETE' });
                         const data = await res.json();
                         if (res.ok) { showToast('사용자가 삭제되었습니다', 'success'); loadUsers(); loadUserStats(); }
                         else {
@@ -213,7 +214,7 @@
                     const search = document.getElementById('filterConvSearch').value;
                     try {
                         const params = new URLSearchParams({ page: convPage, limit: pageSize, ...(startDate && { startDate }), ...(endDate && { endDate }), ...(role && { role }), ...(search && { search }) });
-                        const res = await authFetch(`/api/admin/conversations?${params}`);
+                        const res = await authFetch(`${API_ENDPOINTS.ADMIN_CONVERSATIONS}?${params}`);
                         const data = await res.json();
                         const payload = data.data || data;
                         renderConversations(payload.conversations || []);
@@ -236,7 +237,7 @@
                 }
 
                 function debounceConvSearch() { clearTimeout(convSearchTimeout); convSearchTimeout = setTimeout(() => { convPage = 1; loadConversations(); }, 300); }
-                function exportCSV() { window.open('/api/admin/conversations/export?format=csv', '_blank'); }
+                function exportCSV() { window.open(API_ENDPOINTS.ADMIN_CONVERSATIONS_EXPORT + '?format=csv', '_blank'); }
 
                 function renderPagination(containerId, total, currentPage, onPageChange) {
                     const totalPages = Math.ceil(total / pageSize);

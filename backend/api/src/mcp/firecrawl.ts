@@ -20,6 +20,8 @@
 import { MCPToolDefinition, MCPToolResult } from './types';
 import { getConfig } from '../config/env';
 import { createLogger } from '../utils/logger';
+import { TRUNCATION } from '../config/runtime-limits';
+import { LLM_TIMEOUTS } from '../config/timeouts';
 
 const logger = createLogger('Firecrawl');
 
@@ -165,7 +167,7 @@ export const firecrawlScrapeTool: MCPToolDefinition = {
                 },
                 timeout: {
                     type: 'number',
-                    description: '요청 타임아웃(ms). 기본값: 30000'
+                    description: `요청 타임아웃(ms). 기본값: ${LLM_TIMEOUTS.FIRECRAWL_TIMEOUT_MS}`
                 }
             },
             required: ['url']
@@ -178,7 +180,7 @@ export const firecrawlScrapeTool: MCPToolDefinition = {
                 formats: (args.formats as FirecrawlScrapeOptions['formats']) || ['markdown'],
                 onlyMainContent: args.onlyMainContent !== false,
                 waitFor: args.waitFor as number,
-                timeout: (args.timeout as number) || 30000
+                timeout: (args.timeout as number) || LLM_TIMEOUTS.FIRECRAWL_TIMEOUT_MS
             };
 
             const result = await firecrawlRequest('/scrape', { url, ...options });
@@ -253,8 +255,8 @@ export const firecrawlSearchTool: MCPToolDefinition = {
             const query = args.query as string;
             const options: FirecrawlSearchOptions = {
                 limit: (args.limit as number) || 5,
-                lang: (args.lang as string) || 'ko',
-                country: (args.country as string) || 'kr'
+                lang: (args.lang as string) || 'en',
+                country: (args.country as string) || 'us'
             };
 
             if (args.scrapeContent) {
@@ -276,7 +278,7 @@ export const firecrawlSearchTool: MCPToolDefinition = {
                         output += `${item.description}\n`;
                     }
                     if (item.markdown) {
-                        output += `\n---\n${item.markdown.substring(0, 1000)}${item.markdown.length > 1000 ? '...' : ''}\n`;
+                        output += `\n---\n${item.markdown.substring(0, TRUNCATION.FIRECRAWL_CONTENT_MAX)}${item.markdown.length > TRUNCATION.FIRECRAWL_CONTENT_MAX ? '...' : ''}\n`;
                     }
                     output += '\n';
                 });
@@ -348,7 +350,7 @@ export const firecrawlMapTool: MCPToolDefinition = {
             const urls = result.links || result.data || [];
             let output = `🗺️ **${url}** URL 매핑 결과 (${urls.length}개 발견)\n\n`;
 
-            urls.slice(0, 50).forEach((link: string, index: number) => {
+            urls.slice(0, TRUNCATION.FIRECRAWL_MAX_URLS).forEach((link: string, index: number) => {
                 output += `${index + 1}. ${link}\n`;
             });
 

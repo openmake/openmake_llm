@@ -237,7 +237,7 @@ function toggleMobileSidebar(e) {
 // 로그아웃 (🆕 서버 토큰 블랙리스트 연동 + AppState 정리)
 function logout() {
      // 서버에 로그아웃 요청 (httpOnly 쿠키 포함)
-     fetch('/api/auth/logout', {
+     fetch(API_ENDPOINTS.AUTH_LOGOUT, {
          method: 'POST',
          credentials: 'include'  // 🔒 httpOnly 쿠키 포함
      }).catch(() => {});

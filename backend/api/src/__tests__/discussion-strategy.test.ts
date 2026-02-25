@@ -46,6 +46,13 @@ jest.mock('../mcp', () => ({
     performWebSearch: mockPerformWebSearch,
 }));
 
+jest.mock('../chat/language-policy', () => ({
+    resolvePromptLocale: (lang: string) => {
+        const map: Record<string, string> = { ko: 'ko', en: 'en', ja: 'ja', zh: 'zh', es: 'es', de: 'de' };
+        return map[lang] || 'en';
+    },
+}));
+
 // ─────────────────────────────────────────────
 // Mock 참조 획득
 // ─────────────────────────────────────────────
@@ -224,7 +231,7 @@ describe('DiscussionStrategy', () => {
             await strategy.execute(ctx);
 
             const opts = mockCreateDiscussionEngine.mock.calls[0]?.[1] as Record<string, unknown>;
-            expect(opts?.documentContext).toContain('[중간 생략]');
+            expect(opts?.documentContext).toContain('[middle omitted]');
         });
     });
 
@@ -376,6 +383,19 @@ describe('DiscussionStrategy', () => {
             );
         });
 
+        test('userLanguagePreference를 userLanguage로 전달한다', async () => {
+            const ctx = makeContext({
+                req: makeReq({ userLanguagePreference: 'ko' }),
+            });
+            await strategy.execute(ctx);
+
+            expect(mockCreateDiscussionEngine).toHaveBeenCalledWith(
+                expect.any(Function),
+                expect.objectContaining({ userLanguage: 'ko' }),
+                undefined
+            );
+        });
+
         test('onProgress를 DiscussionEngine에 전달한다', async () => {
             const mockOnProgress = jest.fn();
             const ctx = makeContext({ onProgress: mockOnProgress });
@@ -418,7 +438,7 @@ describe('DiscussionStrategy', () => {
             const ctx = makeContext();
             const result = await strategy.execute(ctx);
 
-            expect(result.response).toContain('⚠️ 멀티 에이전트 토론 중 오류가 발생했습니다');
+            expect(result.response).toContain('⚠️ An error occurred during multi-agent discussion.');
         });
 
         test('fallback 응답을 문자 단위로 스트리밍한다', async () => {
@@ -429,7 +449,7 @@ describe('DiscussionStrategy', () => {
             });
             await strategy.execute(ctx);
 
-            expect(tokens.join('')).toContain('⚠️ 멀티 에이전트 토론 중 오류가 발생했습니다');
+            expect(tokens.join('')).toContain('⚠️ An error occurred during multi-agent discussion.');
         });
 
         test('fallback 시 formatDiscussionResult를 호출하지 않는다', async () => {
