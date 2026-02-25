@@ -56,6 +56,13 @@ export {
 } from './context-xml-helpers';
 
 import { xmlTag, examplesSection } from './context-xml-helpers';
+import { 
+    generateLanguageInstructions,
+    determineLanguagePolicy,
+    getLanguageTemplate,
+    type SupportedLanguageCode,
+    type LanguagePolicyDecision
+} from './language-policy';
 
 // ============================================================
 // 4-Pillar 프롬프트 빌더
@@ -76,7 +83,7 @@ import { xmlTag, examplesSection } from './context-xml-helpers';
  * @example
  * const prompt = new ContextEngineeringBuilder()
  *   .setRole({ persona: '시니어 개발자', expertise: ['TypeScript'] })
- *   .addConstraint({ rule: '한국어 답변', priority: 'critical', category: 'language' })
+ *   .addConstraint({ rule: '사용자 언어에 맞춰 답변', priority: 'critical', category: 'language' })
  *   .setGoal('프로덕션 수준의 코드 제공')
  *   .setOutputFormat({ type: 'code' })
  *   .build();
@@ -95,7 +102,7 @@ export class ContextEngineeringBuilder {
         this.metadata = {
             currentDate: now.toISOString().split('T')[0],
             knowledgeCutoff: '2024-12',
-            userLanguage: 'ko',
+            userLanguage: 'en',
             requestTimestamp: now.toISOString()
         };
     }
@@ -242,10 +249,14 @@ export class ContextEngineeringBuilder {
      * 메타데이터 섹션 생성
      */
     private buildMetadataSection(): string {
+        const languageInstructions = this.metadata.languagePolicy
+            ? generateLanguageInstructions(this.metadata.languagePolicy)
+            : getLanguageTemplate(this.metadata.userLanguage).languageRule;
+        
         return `<metadata>
 현재 날짜: ${this.metadata.currentDate}
 지식 기준일: ${this.metadata.knowledgeCutoff}
-응답 언어: ${this.metadata.userLanguage === 'ko' ? '한국어' : '영어'}
+응답 언어: ${languageInstructions}
 ${this.metadata.modelName ? `모델: ${this.metadata.modelName}` : ''}
 </metadata>`;
     }
@@ -272,11 +283,31 @@ ${expertise}
 ${traits ? `## 행동 특성\n${traits}` : ''}
 
 ## 대화 스타일
-${role.toneStyle === 'formal' ? '격식체 사용' :
-                role.toneStyle === 'casual' ? '반말체, 친근한 어조' :
-                    role.toneStyle === 'professional' ? '전문적이고 객관적인 어조' :
-                        '친근하고 편안한 어조'}
+${this.getToneStyleDescription(role.toneStyle)}
 </role>`;
+    }
+
+    /**
+     * 톤 스타일을 사용자 언어에 맞는 설명으로 변환
+     */
+    private getToneStyleDescription(toneStyle: string | undefined): string {
+        const lang = this.metadata.userLanguage || 'en';
+        const toneMap: Record<string, Record<string, string>> = {
+            ko: { formal: '격식체 사용', casual: '반말체, 친근한 어조', professional: '전문적이고 객관적인 어조', friendly: '친근하고 편안한 어조' },
+            ja: { formal: '敵語を使用', casual: 'カジュアルで親しみやすい口調', professional: '専門的で客観的な口調', friendly: '親しみやすくリラックスした口調' },
+            zh: { formal: '使用正式语体', casual: '休闲友好的语气', professional: '专业客观的语气', friendly: '亲切随和的语气' },
+            es: { formal: 'Tono formal y respetuoso', casual: 'Tono casual y amigable', professional: 'Tono profesional y objetivo', friendly: 'Tono amigable y relajado' },
+            fr: { formal: 'Ton formel et respectueux', casual: 'Ton décontracté et amical', professional: 'Ton professionnel et objectif', friendly: 'Ton amical et détendu' },
+            de: { formal: 'Formeller und respektvoller Ton', casual: 'Lockerer und freundlicher Ton', professional: 'Professioneller und sachlicher Ton', friendly: 'Freundlicher und entspannter Ton' },
+        };
+        const defaultTone: Record<string, string> = {
+            formal: 'Use formal and respectful tone',
+            casual: 'Use casual and friendly tone',
+            professional: 'Use professional and objective tone',
+            friendly: 'Use friendly and relaxed tone'
+        };
+        const langTones = toneMap[lang] || defaultTone;
+        return langTones[toneStyle || 'friendly'] || defaultTone[toneStyle || 'friendly'] || defaultTone['friendly']!;
     }
 
     /**
@@ -408,10 +439,14 @@ ${outputFormat.examples?.length ? `### 출력 예시\n${outputFormat.examples.jo
      * 최종 강조 규칙 (위치 공학: 끝에 반복)
      */
     private buildFinalReminder(): string {
+        const languageRule = this.metadata.languagePolicy
+            ? generateLanguageInstructions(this.metadata.languagePolicy)
+            : getLanguageTemplate(this.metadata.userLanguage).languageRule;
+        
         return `<final_reminder>
 ## 🎯 최종 확인 사항 (반드시 준수)
 
-1. **언어 규칙**: ${this.metadata.userLanguage === 'ko' ? '한국어로 답변 (언어 혼용 금지)' : '영어로 답변'}
+1. **언어 규칙**: ${languageRule}
 2. **환각 금지**: 불확실한 정보는 명시적으로 표현
 3. **구조화**: 복잡한 답변은 헤더와 목록으로 정리
 4. **완전성**: 질문에 대한 완전한 답변 제공
@@ -428,7 +463,7 @@ ${outputFormat.examples?.length ? `### 출력 예시\n${outputFormat.examples.jo
 /**
  * 기본 어시스턴트 프롬프트 빌더
  */
-export function buildAssistantPrompt(): string {
+export function buildAssistantPrompt(userLanguage: SupportedLanguageCode = 'en'): string {
     return new ContextEngineeringBuilder()
         .setRole({
             persona: '친절하고 똑똑한 AI 어시스턴트',
@@ -441,12 +476,7 @@ export function buildAssistantPrompt(): string {
             toneStyle: 'friendly'
         })
         .addConstraint({
-            rule: '한국어 질문에는 반드시 한국어로 답변',
-            priority: 'critical',
-            category: 'language'
-        })
-        .addConstraint({
-            rule: '언어 혼용(Code Switching) 절대 금지',
+            rule: getLanguageTemplate(userLanguage).languageRule,
             priority: 'critical',
             category: 'language'
         })
@@ -468,7 +498,7 @@ export function buildAssistantPrompt(): string {
 /**
  * 코딩 전문가 프롬프트 빌더
  */
-export function buildCoderPrompt(): string {
+export function buildCoderPrompt(userLanguage: SupportedLanguageCode = 'en'): string {
     return new ContextEngineeringBuilder()
         .setRole({
             persona: '15년 경력의 시니어 풀스택 개발자',
@@ -486,7 +516,7 @@ export function buildCoderPrompt(): string {
             toneStyle: 'professional'
         })
         .addConstraint({
-            rule: '모든 설명과 주석은 한국어로 작성',
+            rule: getLanguageTemplate(userLanguage).languageRule,
             priority: 'critical',
             category: 'language'
         })
@@ -513,7 +543,7 @@ export function buildCoderPrompt(): string {
 /**
  * 추론 전문가 프롬프트 빌더
  */
-export function buildReasoningPrompt(): string {
+export function buildReasoningPrompt(userLanguage: SupportedLanguageCode = 'en'): string {
     return new ContextEngineeringBuilder()
         .setRole({
             persona: '논리적 분석 및 추론 전문가',
@@ -531,7 +561,7 @@ export function buildReasoningPrompt(): string {
             toneStyle: 'professional'
         })
         .addConstraint({
-            rule: '모든 추론과 답변은 한국어로 작성',
+            rule: getLanguageTemplate(userLanguage).languageRule,
             priority: 'critical',
             category: 'language'
         })
@@ -552,45 +582,29 @@ export function buildReasoningPrompt(): string {
 }
 
 /**
- * 현재 시점의 동적 메타데이터를 생성합니다.
- * 날짜, 지식 기준일, 세션 ID를 자동으로 설정합니다.
- * 
- * @returns 현재 시점 기준의 PromptMetadata 객체
+ * 동적 메타데이터 생성 (언어 정책 통합)
  */
-export function createDynamicMetadata(): PromptMetadata {
+export function createDynamicMetadata(
+    query: string,
+    userPreference?: SupportedLanguageCode
+): PromptMetadata {
     const now = new Date();
+    const detectedLanguage = determineLanguagePolicy(query, { 
+        defaultLanguage: userPreference || 'en',
+        enableDynamicResponse: true,
+        minConfidenceThreshold: 0.7,
+        shortTextThreshold: 20,
+        fallbackLanguage: 'en',
+        supportedLanguages: ['ko', 'en', 'ja', 'zh', 'es', 'fr', 'de', 'pt', 'ru', 'ar', 'hi', 'it', 'nl', 'sv', 'da', 'no', 'fi', 'th', 'vi', 'tr']
+    });
+    
     return {
         currentDate: now.toISOString().split('T')[0],
         knowledgeCutoff: '2024-12',
-        userLanguage: 'ko',
-        requestTimestamp: now.toISOString(),
-        sessionId: `session_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`
+        userLanguage: detectedLanguage.resolvedLanguage,
+        requestTimestamp: now.toISOString()
     };
 }
 
-/**
- * 텍스트의 한국어/영어 비율을 분석하여 언어를 감지합니다.
- * 한국어 70% 초과면 'ko', 30% 미만이면 'en', 그 사이면 'mixed'를 반환합니다.
- * 
- * @param text - 언어를 감지할 텍스트
- * @returns 감지된 언어 코드
- */
-export function detectLanguageForMetadata(text: string): 'ko' | 'en' | 'mixed' {
-    const koreanRegex = /[가-힣]/g;
-    const englishRegex = /[a-zA-Z]/g;
 
-    const koreanMatches = (text.match(koreanRegex) || []).length;
-    const englishMatches = (text.match(englishRegex) || []).length;
-
-    const total = koreanMatches + englishMatches;
-    if (total === 0) return 'en';
-
-    const koreanRatio = koreanMatches / total;
-
-    if (koreanRatio > 0.7) return 'ko';
-    if (koreanRatio < 0.3) return 'en';
-    return 'mixed';
-}
-
-// 기본 내보내기
 export default ContextEngineeringBuilder;

@@ -180,7 +180,10 @@ export function errorHandler(
     if (err instanceof KeyExhaustionError) {
         logger.warn(`All API keys exhausted: ${err.message}`, { path: req.path });
         res.set('Retry-After', String(err.retryAfterSeconds));
-        res.status(503).json(apiError(ErrorCodes.SERVICE_UNAVAILABLE, err.getDisplayMessage('ko'), {
+        const acceptLangHeader = req.headers['accept-language']?.substring(0, 2).toLowerCase() || 'en';
+        const supportedErrorLangs = ['ko', 'en', 'ja', 'zh', 'es', 'de'];
+        const errorLang = supportedErrorLangs.includes(acceptLangHeader) ? acceptLangHeader : 'en';
+        res.status(503).json(apiError(ErrorCodes.SERVICE_UNAVAILABLE, err.getDisplayMessage(errorLang), {
             errorType: 'api_keys_exhausted',
             retryAfter: err.retryAfterSeconds,
             resetTime: err.resetTime.toISOString(),

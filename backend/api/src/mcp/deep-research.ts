@@ -21,6 +21,7 @@ import {
 } from '../services/DeepResearchService';
 import { v4 as uuidv4 } from 'uuid';
 import { createLogger } from '../utils/logger';
+import { detectLanguage } from '../chat/language-policy';
 
 const logger = createLogger('DeepResearchMCP');
 
@@ -77,6 +78,11 @@ export const researchTool: MCPToolDefinition = {
                 userId: {
                     type: 'string',
                     description: '사용자 ID (선택사항)'
+                },
+                language: {
+                    type: 'string',
+                    enum: ['ko', 'en', 'ja', 'zh', 'es', 'de'],
+                    description: '출력 언어 (미지정 시 topic에서 자동 감지)'
                 }
             },
             required: ['topic']
@@ -86,6 +92,8 @@ export const researchTool: MCPToolDefinition = {
         const topic = args.topic as string;
         const depth = (args.depth as 'quick' | 'standard' | 'deep') || 'standard';
         const userId = (args.userId as string) || 'anonymous';
+        const requestedLanguage = args.language as string | undefined;
+        const language = requestedLanguage || detectLanguage(topic).language;
 
         logger.info(`[DeepResearch MCP] 리서치 시작: ${topic} (depth: ${depth})`);
 
@@ -112,7 +120,7 @@ export const researchTool: MCPToolDefinition = {
                     totalLoops: depth === 'quick' ? 1 : depth === 'standard' ? 3 : 5,
                     currentStep: 'starting',
                     progress: 0,
-                    message: '리서치를 시작합니다...'
+                    message: language === 'ko' ? '리서치를 시작합니다...' : language === 'ja' ? 'リサーチを開始します...' : language === 'zh' ? '开始研究...' : language === 'es' ? 'Iniciando investigación...' : language === 'de' ? 'Recherche wird gestartet...' : 'Starting research...'
                 },
                 startTime: Date.now()
             });
@@ -121,7 +129,7 @@ export const researchTool: MCPToolDefinition = {
             const maxLoops = depth === 'quick' ? 1 : depth === 'standard' ? 3 : 5;
 
             // 비동기로 리서치 실행 (블로킹하지 않음)
-            const service = createDeepResearchService({ maxLoops });
+            const service = createDeepResearchService({ maxLoops, language });
             
             // 백그라운드 실행
             service.executeResearch(sessionId, topic, (progress) => {
@@ -304,7 +312,7 @@ export const getResearchStatusTool: MCPToolDefinition = {
  * @param args.llmModel - LLM 모델명
  * @param args.searchApi - 검색 API 선택
  * @param args.maxSearchResults - 최대 검색 결과 수 (5-50)
- * @param args.language - 출력 언어 (ko/en)
+ * @param args.language - 출력 언어 (ko/en/ja/zh/es/de)
  * @returns 업데이트된 설정 (JSON)
  */
 export const configureResearchTool: MCPToolDefinition = {
@@ -333,7 +341,7 @@ export const configureResearchTool: MCPToolDefinition = {
                 },
                 language: {
                     type: 'string',
-                    enum: ['ko', 'en'],
+                    enum: ['ko', 'en', 'ja', 'zh', 'es', 'de'],
                     description: '출력 언어'
                 }
             }
@@ -346,7 +354,7 @@ export const configureResearchTool: MCPToolDefinition = {
             const llmModel = args.llmModel as string | undefined;
             const searchApi = args.searchApi as 'ollama' | 'firecrawl' | 'google' | 'all' | undefined;
             const maxSearchResults = args.maxSearchResults as number | undefined;
-            const language = args.language as 'ko' | 'en' | undefined;
+            const language = args.language as string | undefined;
 
             // 값 검증
             const updates: Partial<ResearchConfig> = {};

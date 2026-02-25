@@ -87,7 +87,10 @@ export interface PromptMetadata {
     /** 세션 ID (대화 추적용) */
     sessionId?: string;
     /** 사용자 언어 설정 */
-    userLanguage: 'ko' | 'en' | 'mixed';
+    /** 사용자 언어 설정 */
+    userLanguage: import('./language-policy').SupportedLanguageCode;
+    /** 언어 정책 결정 결과 (선택적) */
+    languagePolicy?: import('./language-policy').LanguagePolicyDecision;
     /** 요청 타임스탬프 (ISO 8601) */
     requestTimestamp: string;
     /** 사용 중인 모델명 */

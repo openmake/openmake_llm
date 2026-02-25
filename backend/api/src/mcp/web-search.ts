@@ -617,7 +617,7 @@ export function createFactCheckPrompt(claim: string, searchResults: SearchResult
         `[${i + 1}] ${r.title}\n   ${r.url}\n   ${r.snippet}`
     ).join('\n\n');
 
-    return `## 웹 검색 결과 (${new Date().toLocaleDateString('ko-KR')})
+    return `## Web Search Results (${new Date().toLocaleDateString()})
 ${sources || '검색 결과 없음'}
 
 ## 질문

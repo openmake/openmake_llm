@@ -37,6 +37,12 @@ import { A2AStrategy, AgentLoopStrategy, DeepResearchStrategy, DirectStrategy, D
 import { formatResearchResult, formatDiscussionResult } from './chat-service-formatters';
 import { recordChatMetrics } from './chat-service-metrics';
 import { preRequestCheck, postResponseCheck } from '../chat/security-hooks';
+import { 
+    determineLanguagePolicy,
+    type SupportedLanguageCode,
+    type LanguagePolicyDecision
+} from '../chat/language-policy';
+import { getConfig } from '../config/env';
 import { createRoutingLogEntry, logRoutingDecision } from '../chat/routing-logger';
 import { applyDomainEngineOverride } from '../chat/domain-router';
 import type { ChatMessageRequest } from './chat-service-types';
@@ -236,6 +242,26 @@ export class ChatService {
             logger.warn(`보안 경고: ${securityPreCheck.violations.map(v => v.detail).join(', ')}`);
         }
 
+        // ── 언어 정책 결정 ──
+        const config = getConfig();
+        let languagePolicy: LanguagePolicyDecision | undefined;
+        
+        if (config.enableDynamicResponseLanguage) {
+            try {
+                languagePolicy = determineLanguagePolicy(message || '', {
+                    defaultLanguage: config.defaultResponseLanguage,
+                    enableDynamicResponse: config.enableDynamicResponseLanguage,
+                    minConfidenceThreshold: config.languageDetectionMinConfidence,
+                    shortTextThreshold: 20,
+                    fallbackLanguage: config.languageFallbackLanguage,
+                    supportedLanguages: ['ko', 'en', 'ja', 'zh', 'es', 'fr', 'de', 'pt', 'ru', 'ar', 'hi', 'it', 'nl', 'sv', 'da', 'no', 'fi', 'th', 'vi', 'tr']
+                });
+                logger.info(`언어 정책 결정: ${languagePolicy.resolvedLanguage} (신뢰도: ${languagePolicy.detection.confidence.toFixed(2)})`);
+            } catch (error) {
+                logger.warn('언어 감지 실패, 기본 언어 사용:', error);
+                // Fallback to default behavior
+            }
+        }
         // 특수 모드 조기 분기: Discussion 또는 DeepResearch 모드는 별도 전략으로 위임
         if (discussionMode) {
             return this.processMessageWithDiscussion(req, uploadedDocuments, onToken, onDiscussionProgress);
@@ -267,7 +293,7 @@ export class ChatService {
         };
 
         const agentSelection = await routeToAgent(message || '');
-        const { prompt: agentSystemMessage, skillNames } = await getAgentSystemMessage(agentSelection, userId || undefined);
+            const { prompt: agentSystemMessage, skillNames } = await getAgentSystemMessage(agentSelection, userId || undefined, languagePolicy?.resolvedLanguage || 'en');
         const selectedAgent = AGENTS[agentSelection.primaryAgent];
         logger.info(`에이전트: ${selectedAgent.emoji} ${selectedAgent.name}`);
         if (onAgentSelected && selectedAgent) {
@@ -321,7 +347,7 @@ export class ChatService {
         if (webSearchContext) finalEnhancedMessage += webSearchContext;
         finalEnhancedMessage += `\n## USER QUESTION\n${enhancedUserMessage}`;
 
-        const promptConfig = getPromptConfig(message);
+        const promptConfig = getPromptConfig(message, languagePolicy?.resolvedLanguage);
 
         const hasImages = (images && images.length > 0) || documentImages.length > 0;
         let modelSelection: ModelSelection;

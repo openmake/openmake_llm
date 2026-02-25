@@ -361,10 +361,12 @@
                     ? '<span class="sl-badge" style="background:rgba(168,85,247,0.12);color:var(--accent-primary);border-color:rgba(168,85,247,0.25);margin-left:0.4rem" title="나에게만 적용된 스킬">👤 나만</span>'
                     : '';
                 const toggleLabel = isUserAssigned ? '👤 나만 적용 해제' : '👤 나만 적용';
+                const isSystemSkill = !skill.createdBy;
+                const systemBadge = isSystemSkill ? '<span class="sl-badge" style="background:rgba(59,130,246,0.12);color:var(--info-color,#3b82f6);border-color:rgba(59,130,246,0.25);margin-left:0.4rem" title="시스템 스킬">🔒 시스템</span>' : '';
                 return `
                 <div class="skill-card">
                     <div class="skill-card-top">
-                        <span class="skill-card-badge">${esc(skill.category || 'general')}${userBadge}</span>
+                        <span class="skill-card-badge">${esc(skill.category || 'general')}${userBadge}${systemBadge}</span>
                         <div class="skill-card-menu">
                             <button class="skill-card-menu-btn" title="더 보기"
                                 onclick="(function(btn){btn.nextElementSibling.classList.toggle('open');event.stopPropagation();})(this)">⋯</button>
@@ -372,7 +374,7 @@
                                 <a href="#" onclick="sl_toggleUserSkill('${esc(skill.id)}', ${isUserAssigned});return false;">
                                     <span class="iconify" data-icon="lucide:user"></span> ${toggleLabel}
                                 </a>
-                                <a href="#" onclick="sl_editSkill('${esc(skill.id)}');return false;">
+                                ${!isSystemSkill ? `<a href="#" onclick="sl_editSkill('${esc(skill.id)}');return false;">
                                     <span class="iconify" data-icon="lucide:edit-2"></span> 수정
                                 </a>
                                 <a href="#" onclick="sl_exportSkill('${esc(skill.id)}');return false;">
@@ -381,7 +383,7 @@
                                 <hr>
                                 <a href="#" class="danger" onclick="sl_deleteSkill('${esc(skill.id)}');return false;">
                                     <span class="iconify" data-icon="lucide:trash-2"></span> 삭제
-                                </a>
+                                </a>` : ''}
                             </div>
                         </div>
                     </div>
