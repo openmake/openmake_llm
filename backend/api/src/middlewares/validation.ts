@@ -32,10 +32,10 @@ const DEFAULT_SECURITY_OPTIONS: Required<SecurityValidationOptions> = {
 };
 
 const DEFAULT_FILE_OPTIONS: Required<FileUploadValidationOptions> = {
-    allowedMimeTypes: ['application/pdf', 'image/png', 'image/jpeg', 'image/gif', 'image/webp'],
-    allowedExtensions: ['.pdf', '.png', '.jpg', '.jpeg', '.gif', '.webp'],
-    blockedExtensions: ['.exe', '.dll', '.bat', '.cmd', '.sh', '.ps1', '.js', '.ts', '.php', '.py', '.rb', '.jar'],
-    maxFileSizeBytes: 100 * 1024 * 1024,
+    allowedMimeTypes: [],   // 빈 배열 = 모든 MIME 타입 허용
+    allowedExtensions: [],  // 빈 배열 = 모든 확장자 허용
+    blockedExtensions: ['.exe', '.dll', '.bat', '.cmd', '.ps1'],  // 실행 파일만 차단
+    maxFileSizeBytes: 300 * 1024 * 1024,  // 300MB
 };
 
 function getContentLength(req: Request): number | null {
@@ -275,11 +275,13 @@ export function validateFileUploadSecurity(options: FileUploadValidationOptions 
             return res.status(400).json(badRequest('허용되지 않는 파일 확장자입니다'));
         }
 
-        if (!allowedExt.has(extension)) {
+        // allowedExt가 비어있으면 모든 확장자 허용
+        if (allowedExt.size > 0 && !allowedExt.has(extension)) {
             return res.status(400).json(badRequest('지원되지 않는 파일 확장자입니다'));
         }
 
-        if (!allowedMime.has(mime)) {
+        // allowedMime가 비어있으면 모든 MIME 타입 허용
+        if (allowedMime.size > 0 && !allowedMime.has(mime)) {
             return res.status(400).json(badRequest('지원되지 않는 파일 MIME 타입입니다'));
         }
 
@@ -292,13 +294,17 @@ export function validateFileUploadSecurity(options: FileUploadValidationOptions 
             return res.status(400).json(badRequest('파일명에서 악성 패턴이 감지되었습니다'));
         }
 
-        try {
-            const header = readFileHeader(req.file.path);
-            if (!isAllowedMagicNumber(header, extension)) {
-                return res.status(400).json(badRequest('파일 시그니처 검증에 실패했습니다'));
+        // magic number 검증: 알려진 타입(.pdf, .png, .jpg, .gif, .webp)에만 적용
+        const knownMagicTypes = new Set(['.pdf', '.png', '.jpg', '.jpeg', '.gif', '.webp']);
+        if (knownMagicTypes.has(extension)) {
+            try {
+                const header = readFileHeader(req.file.path);
+                if (!isAllowedMagicNumber(header, extension)) {
+                    return res.status(400).json(badRequest('파일 시그니처 검증에 실패했습니다'));
+                }
+            } catch {
+                return res.status(400).json(badRequest('파일 무결성 검증에 실패했습니다'));
             }
-        } catch {
-            return res.status(400).json(badRequest('파일 무결성 검증에 실패했습니다'));
         }
 
         next();

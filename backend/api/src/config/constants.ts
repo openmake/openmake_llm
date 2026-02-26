@@ -20,13 +20,13 @@
  */
 export const FILE_LIMITS = {
     /** 최대 파일 크기 (MB) */
-    MAX_SIZE_MB: 100,
+    MAX_SIZE_MB: 300,
     /** 최대 파일 크기 (Bytes) */
-    MAX_SIZE_BYTES: 100 * 1024 * 1024,
-    /** 허용되는 문서 확장자 */
-    ALLOWED_DOCUMENT_EXTENSIONS: ['.pdf', '.txt', '.doc', '.docx', '.md'],
-    /** 허용되는 이미지 확장자 */
-    ALLOWED_IMAGE_EXTENSIONS: ['.jpg', '.jpeg', '.png', '.gif', '.webp']
+    MAX_SIZE_BYTES: 300 * 1024 * 1024,
+    /** 허용되는 문서 확장자 (참고용 — 실제 업로드 제한은 validation.ts에서 관리) */
+    ALLOWED_DOCUMENT_EXTENSIONS: ['.pdf', '.txt', '.doc', '.docx', '.md', '.csv', '.xlsx', '.xls', '.pptx', '.hwp', '.hwpx', '.json', '.xml', '.yaml', '.yml', '.log', '.rtf', '.odt'],
+    /** 허용되는 이미지 확장자 (참고용 — 실제 업로드 제한은 validation.ts에서 관리) */
+    ALLOWED_IMAGE_EXTENSIONS: ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg', '.bmp', '.tiff', '.ico']
 } as const;
 
 // ============================================
