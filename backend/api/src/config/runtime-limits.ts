@@ -170,3 +170,29 @@ export const MODEL_CONTEXT_DEFAULTS = {
     /** 저사양 모델 num_predict */
     LOW_NUM_PREDICT: 4096,
 } as const;
+
+// ============================================
+// RAG (Retrieval-Augmented Generation) 설정
+// ============================================
+
+/**
+ * RAG 파이프라인에서 사용하는 청킹/임베딩/검색 설정
+ */
+export const RAG_CONFIG = {
+    /** 문서 청크 크기 (문자 수) */
+    CHUNK_SIZE: 1000,
+    /** 청크 간 오버랩 (문자 수) */
+    CHUNK_OVERLAP: 200,
+    /** 검색 시 반환할 최대 청크 수 */
+    TOP_K: 5,
+    /** 관련도 임계값 (0.0~1.0, 이 값 이상만 반환) */
+    RELEVANCE_THRESHOLD: 0.3,
+    /** 임베딩 모델 이름 (Ollama) */
+    EMBEDDING_MODEL: 'nomic-embed-text',
+    /** 임베딩 벡터 차원 수 (vector_embeddings 테이블과 일치해야 함) */
+    EMBEDDING_DIMENSIONS: 768,
+    /** 배치 임베딩 최대 입력 수 (벤치마크 결과: 64가 52.4 chunks/s로 최적) */
+    EMBEDDING_BATCH_SIZE: 64,
+    /** RAG 컨텍스트에 주입할 최대 문자 수 */
+    MAX_CONTEXT_CHARS: 4000,
+} as const;

@@ -144,6 +144,7 @@ async function sendMessage() {
             discussionMode: getState('discussionMode') || false,
             deepResearchMode: getState('deepResearchMode') || false,
             enabledTools: getState('mcpToolsEnabled') || {},
+            ragEnabled: getState('ragEnabled') || false,
             sessionId: getState('currentChatId') // 세션 ID 포함
         };
 
@@ -471,6 +472,36 @@ function finishAssistantMessage(errorMessage = null, serverMessageId = null) {
             wrapper.insertBefore(attrEl, timeEl);
         }
         setState('activeSkillNames', null);
+    }
+
+    // RAG 출처 표시: 검색된 참조 문서 출처 카드
+    const ragSources = getState('ragSources');
+    if (!errorMessage && ragSources && ragSources.length > 0) {
+        const wrapper = currentMsg.querySelector('.message-wrapper');
+        const timeElForRag = currentMsg.querySelector('.message-time');
+        if (wrapper && timeElForRag) {
+            function escRag(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+            const sourceCards = ragSources.map(function(src) {
+                const pct = (src.relevanceScore * 100).toFixed(0);
+                const barColor = src.relevanceScore >= 0.8 ? 'var(--success)' : src.relevanceScore >= 0.5 ? 'var(--warning)' : 'var(--text-muted)';
+                return '<div class="rag-source-card">' +
+                    '<div class="rag-source-header">' +
+                        '<span class="rag-source-icon">📄</span>' +
+                        '<span class="rag-source-name">' + escRag(src.source) + '</span>' +
+                        '<span class="rag-source-score" style="--bar-color:' + barColor + ';--bar-width:' + pct + '%">' + pct + '%</span>' +
+                    '</div>' +
+                    '<div class="rag-source-snippet">' + escRag(src.snippet) + '</div>' +
+                '</div>';
+            }).join('');
+            const ragEl = document.createElement('div');
+            ragEl.className = 'rag-sources-container';
+            ragEl.innerHTML = '<details class="rag-sources-details">' +
+                '<summary class="rag-sources-summary">📖 참조 문서 (' + ragSources.length + ')</summary>' +
+                '<div class="rag-sources-list">' + sourceCards + '</div>' +
+            '</details>';
+            wrapper.insertBefore(ragEl, timeElForRag);
+        }
+        setState('ragSources', null);
     }
 
     setState('currentAssistantMessage', null);

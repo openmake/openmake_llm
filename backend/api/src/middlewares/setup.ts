@@ -154,7 +154,7 @@ export function setupParsersAndLimiting(app: Application): void {
     app.use('/api/auth/', authLimiter);
     app.use('/api/chat', chatLimiter);
     app.use('/api/research', researchLimiter);
-    app.use('/api/documents/upload', uploadLimiter);
+    app.use('/api/upload', uploadLimiter);
     app.use('/api/web-search', webSearchLimiter);
     app.use('/api/memory', memoryLimiter);
     app.use('/api/canvas', canvasLimiter);
@@ -163,7 +163,7 @@ export function setupParsersAndLimiting(app: Application): void {
     app.use('/api/push', pushLimiter);
     // generalLimiter는 전용 리미터가 없는 경로에만 적용 (이중 카운팅 방지)
     const dedicatedLimiterPrefixes = [
-        '/api/auth/', '/api/chat', '/api/research', '/api/documents/upload',
+        '/api/auth/', '/api/chat', '/api/research', '/api/upload',
         '/api/web-search', '/api/memory', '/api/canvas', '/api/mcp',
         '/api/api-keys', '/api/push', '/api/monitoring', '/api/metrics',
     ];

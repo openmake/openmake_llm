@@ -93,6 +93,10 @@
         '<div class="setting-info"><h4>\uC6F9 \uAC80\uC0C9</h4><p>\uC2E4\uC2DC\uAC04 \uC6F9 \uAC80\uC0C9 \uAE30\uB2A5 \uD65C\uC131\uD654</p></div>' +
         '<label class="toggle"><input type="checkbox" checked id="webSearchToggle"><span class="toggle-slider"></span></label>' +
         '</div>' +
+        '<div class="setting-row">' +
+        '<div class="setting-info"><h4>RAG (문서 기반 응답)</h4><p>업로드 문서에서 관련 정보를 검색하여 응답에 활용</p></div>' +
+        '<label class="toggle"><input type="checkbox" id="ragToggle"><span class="toggle-slider"></span></label>' +
+        '</div>' +
         '</div>' +
         '</div>' +
 
@@ -312,6 +316,7 @@
                     var mcpSettings = JSON.parse(safeStorage.getItem('mcpSettings') || '{}');
                     mcpSettings.thinking = document.getElementById('thinkingToggle').checked;
                     mcpSettings.webSearch = document.getElementById('webSearchToggle').checked;
+                    mcpSettings.rag = document.getElementById('ragToggle') ? document.getElementById('ragToggle').checked : false;
 
                     // MCP 도구 토글 상태 수집 — DOM에서 mcpTool_ 프리픽스 체크박스 직접 조회
                     var enabledTools = {};
@@ -328,6 +333,7 @@
                         setState('thinkingEnabled', mcpSettings.thinking);
                         setState('webSearchEnabled', mcpSettings.webSearch);
                         setState('mcpToolsEnabled', enabledTools);
+                        setState('ragEnabled', mcpSettings.rag);
                     }
 
                     safeStorage.setItem('generalSettings', JSON.stringify({ lang: document.getElementById('langSelect').value, saveHistory: document.getElementById('saveHistoryToggle').checked }));
@@ -346,7 +352,7 @@
                         }
                     }
                     var savedMcp = safeStorage.getItem('mcpSettings');
-                    if (savedMcp) { var mcp = JSON.parse(savedMcp); document.getElementById('thinkingToggle').checked = mcp.thinking !== false; document.getElementById('webSearchToggle').checked = mcp.webSearch === true; }
+                    if (savedMcp) { var mcp = JSON.parse(savedMcp); document.getElementById('thinkingToggle').checked = mcp.thinking !== false; document.getElementById('webSearchToggle').checked = mcp.webSearch === true; var ragEl = document.getElementById('ragToggle'); if (ragEl) { ragEl.checked = mcp.rag === true; } }
                     var savedGeneral = safeStorage.getItem('generalSettings');
                     if (savedGeneral) { var general = JSON.parse(savedGeneral); document.getElementById('langSelect').value = general.lang || 'ko'; document.getElementById('saveHistoryToggle').checked = general.saveHistory !== false; }
                 }

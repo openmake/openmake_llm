@@ -17,6 +17,7 @@ import v1Router from './v1';
 import { tokenMonitoringRouter } from './token-monitoring.routes';
 import { default as chatRouter, setClusterManager as setChatCluster } from './chat.routes';
 import { default as documentsRouter, setDependencies as setDocumentsDeps } from './documents.routes';
+import ragRouter from './rag.routes';
 import { default as webSearchRouter, setClusterManager as setWebSearchCluster } from './web-search.routes';
 import {
     metricsRouter,
@@ -158,6 +159,7 @@ export function setupApiRoutes(
     app.use('/api/push', pushRouter);
     app.use('/api/docs', developerDocsRouter);
     app.use('/api/api-keys', apiKeysRouter);
+    app.use('/api/rag', ragRouter);
 
     // Swagger 설정
     setupSwaggerRoutes(app);

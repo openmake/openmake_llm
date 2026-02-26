@@ -40,6 +40,7 @@ import { detectLanguage } from '../chat/language-policy';
   import { validate, validateUploadContentType, validateFileUploadSecurity } from '../middlewares/validation';
   import { summarizeDocumentSchema, documentAskSchema } from '../schemas/documents.schema';
 import { FILE_LIMITS } from '../config/constants';
+import { getRAGService } from '../services/RAGService';
 
 const logger = createLogger('DocumentsRoutes');
 
@@ -168,6 +169,28 @@ router.post('/upload', validateUploadContentType(FILE_LIMITS.MAX_SIZE_BYTES), up
             filename: originalFilename,
             progress: 100
         });
+
+        // RAG: 문서 임베딩 (fire-and-forget, 업로드 응답을 차단하지 않음)
+        if (doc.text && doc.text.length > 0) {
+            const userId = (req.user && 'userId' in req.user ? req.user.userId : req.user?.id?.toString()) as string | undefined;
+            getRAGService().embedDocument({
+                docId,
+                text: doc.text,
+                filename: originalFilename,
+                userId,
+            }).then(result => {
+                logger.info(`[RAG] 문서 임베딩 완료: ${result.embeddedChunks}/${result.totalChunks}개 청크 (${result.durationMs}ms)`);
+                broadcastFn?.({
+                    type: 'document_progress',
+                    stage: 'rag_complete',
+                    message: `RAG 임베딩 완료: ${result.embeddedChunks}개 청크 저장됨`,
+                    filename: originalFilename,
+                    progress: 100
+                });
+            }).catch(ragError => {
+                logger.warn('[RAG] 문서 임베딩 실패 (무시):', ragError);
+            });
+        }
 
          res.json(success({ docId, filename: doc.filename, type: doc.type, pages: doc.pages, textLength: doc.text.length, preview: doc.text.substring(0, 500) + (doc.text.length > 500 ? '...' : '') }));
       } catch (error: unknown) {
