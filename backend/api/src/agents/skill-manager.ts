@@ -148,9 +148,9 @@ export class SkillManager {
         logger.info(`스킬 연결 해제: 에이전트=${agentId}, 스킬=${skillId}`);
     }
 
-    async getSkillsForAgent(agentId: string, userId?: string): Promise<AgentSkill[]> {
+    async getSkillsForAgent(agentId: string, userId?: string, agentCategory?: string): Promise<AgentSkill[]> {
         const repo = await this.ensureInitialized();
-        return repo.getSkillsForAgent(agentId, userId);
+        return repo.getSkillsForAgent(agentId, userId, agentCategory);
     }
 
     async getSkillIdsForAgent(agentId: string, userId?: string): Promise<string[]> {
@@ -194,8 +194,8 @@ export class SkillManager {
      * `<skill_context>` 경계 태그로 격리하여 프롬프트 인젝션을 완화합니다.
      * userId가 주어지면 개인 할당 스킬도 포함합니다.
      */
-    async buildSkillPrompt(agentId: string, userId?: string): Promise<string> {
-        const skills = await this.getSkillsForAgent(agentId, userId);
+    async buildSkillPrompt(agentId: string, userId?: string, agentCategory?: string): Promise<string> {
+        const skills = await this.getSkillsForAgent(agentId, userId, agentCategory);
         if (skills.length === 0) return '';
         const skillBlocks = skills
             .map(s => {

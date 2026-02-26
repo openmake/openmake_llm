@@ -139,17 +139,44 @@
                             const rawData = await res.json();
                             const data = rawData.data || rawData;
                             if (data.settings) {
-                                // 서버 설정을 로컬에 매핑
-                                if (data.settings.sequentialThinking !== undefined) mcpToolSettings.thinking = data.settings.sequentialThinking;
-                                if (data.settings.webSearch !== undefined) mcpToolSettings.webSearch = data.settings.webSearch;
-                                if (data.settings.vision !== undefined) mcpToolSettings.vision = data.settings.vision;
-                                if (data.settings.terminal !== undefined) mcpToolSettings.terminal = data.settings.terminal;
-
-                                updateToggleUI();
+                                // localStorage에 저장된 사용자 설정이 있으면 그것이 source of truth
+                                // 서버는 동기화 대상이지, 덮어쓰기 대상이 아님
+                                const saved = SS.getItem('mcpSettings');
+                                if (saved) {
+                                    // localStorage에 사용자 설정이 있으면 서버에 PUSH 동기화
+                                    syncSettingsToServer();
+                                } else {
+                                    // localStorage에 설정이 없을 때만 서버 값 사용 (최초 접속)
+                                    if (data.settings.sequentialThinking !== undefined) mcpToolSettings.thinking = data.settings.sequentialThinking;
+                                    if (data.settings.webSearch !== undefined) mcpToolSettings.webSearch = data.settings.webSearch;
+                                    if (data.settings.vision !== undefined) mcpToolSettings.vision = data.settings.vision;
+                                    if (data.settings.terminal !== undefined) mcpToolSettings.terminal = data.settings.terminal;
+                                    updateToggleUI();
+                                }
                             }
                         }
                     } catch (e) {
                         showToast('MCP 설정을 불러올 수 없습니다 (오프라인 모드)', 'warning');
+                    }
+                }
+
+                // localStorage 설정을 서버에 동기화 (클라이언트 → 서버 방향)
+                async function syncSettingsToServer() {
+                    try {
+                        await fetch(API_ENDPOINTS.MCP_SETTINGS, {
+                            method: 'PUT',
+                            credentials: 'include',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                sequentialThinking: mcpToolSettings.thinking,
+                                webSearch: mcpToolSettings.webSearch,
+                                vision: mcpToolSettings.vision,
+                                terminal: mcpToolSettings.terminal
+                            })
+                        });
+                    } catch (e) {
+                        // 동기화 실패는 무시 (로컨이 source of truth)
+                    }
                 }
 
                 function updateToggleUI() {
@@ -370,6 +397,7 @@
                     } catch (e) {
                         console.error('[MCP] 외부 서버 목록 로드 실패:', e);
                         showToast('외부 서버 목록을 불러올 수 없습니다', 'error');
+                    }
                 }
 
                 function escapeForHTML(str) {

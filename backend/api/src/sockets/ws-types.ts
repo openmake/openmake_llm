@@ -28,6 +28,8 @@ export interface WSMessage {
     enabledTools?: Record<string, boolean>;
     /** 사용자가 RAG (문서 기반 응답)를 활성화했는지 여부 */
     ragEnabled?: boolean;
+    /** 첨부 파일 목록 */
+    files?: Array<{ id: string; name: string; type: string }>;
     userRole?: string;
     userTier?: 'free' | 'pro' | 'enterprise';
     /** 사용자 선호 언어 (설정 페이지에서 선택) */

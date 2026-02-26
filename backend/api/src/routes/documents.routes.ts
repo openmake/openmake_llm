@@ -110,7 +110,7 @@ const storage = multer.diskStorage({
 
 const upload = multer({
     storage,
-    limits: { fileSize: FILE_LIMITS.MAX_SIZE_BYTES } // 100MB 제한
+    limits: { fileSize: FILE_LIMITS.MAX_SIZE_BYTES } // 300MB 제한
 });
 
 /**
