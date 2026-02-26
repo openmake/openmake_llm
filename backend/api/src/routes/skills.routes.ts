@@ -175,17 +175,14 @@ router.put('/:skillId', requireAuth, validate(updateSkillSchema), asyncHandler(a
     const { skillId } = req.params;
     const userId = (req.user && 'userId' in req.user ? (req.user as { userId: string }).userId : req.user?.id?.toString());
 
-    // 소유권 검증: 본인이 만든 스킬만 수정 가능 (시스템 스킬은 수정 불가)
+    // 소유권 검증: 본인이 만든 스킬 또는 시스템 스킬 수정 가능
     const skill = await getSkillManager().getSkillById(skillId);
     if (!skill) {
         res.status(404).json(notFound('스킬'));
         return;
     }
-    if (!skill.createdBy) {
-        res.status(403).json(forbidden('시스템 스킬은 수정할 수 없습니다'));
-        return;
-    }
-    if (skill.createdBy !== userId) {
+    // 시스템 스킬(createdBy=null)은 누구나 수정 가능, 사용자 스킬은 소유자만 수정 가능
+    if (skill.createdBy && skill.createdBy !== userId) {
         res.status(403).json(forbidden('이 스킬을 수정할 권한이 없습니다'));
         return;
     }
@@ -210,17 +207,14 @@ router.delete('/:skillId', requireAuth, asyncHandler(async (req: Request, res: R
     const { skillId } = req.params;
     const userId = (req.user && 'userId' in req.user ? (req.user as { userId: string }).userId : req.user?.id?.toString());
 
-    // 소유권 검증: 본인이 만든 스킬만 삭제 가능 (시스템 스킬은 삭제 불가)
+    // 소유권 검증: 본인이 만든 스킬 또는 시스템 스킬 삭제 가능
     const skill = await getSkillManager().getSkillById(skillId);
     if (!skill) {
         res.status(404).json(notFound('스킬'));
         return;
     }
-    if (!skill.createdBy) {
-        res.status(403).json(forbidden('시스템 스킬은 삭제할 수 없습니다'));
-        return;
-    }
-    if (skill.createdBy !== userId) {
+    // 시스템 스킬(createdBy=null)은 누구나 삭제 가능, 사용자 스킬은 소유자만 삭제 가능
+    if (skill.createdBy && skill.createdBy !== userId) {
         res.status(403).json(forbidden('이 스킬을 삭제할 권한이 없습니다'));
         return;
     }

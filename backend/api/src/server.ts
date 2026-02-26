@@ -178,6 +178,14 @@ export class DashboardServer {
             console.error('[Server] 스킬 시더 로드 실패:', err);
         }
 
+        // 유틸리티 스킬 자동 시딩 (40개 실용 유틸리티 스킬 DB 등록)
+        try {
+            const { seedUtilitySkills } = await import('./agents/utility-skills-seeder');
+            seedUtilitySkills().catch((err: unknown) => console.error('[Server] 유틸리티 스킬 시딩 실패:', err));
+        } catch (err) {
+            console.error('[Server] 유틸리티 스킬 시더 로드 실패:', err);
+        }
+
         // 세션 자동 정리 스케줄러 시작 (24시간마다 30일 이상 된 세션 정리)
         startSessionCleanupScheduler(24);
 

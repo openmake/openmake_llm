@@ -139,6 +139,9 @@ OMK_ENGINE_CODE: z.string().min(1).default('glm-5:cloud'),
         DEFAULT_RESPONSE_LANGUAGE: supportedLanguageSchema.default('ko'),
         LANGUAGE_DETECTION_MIN_CONFIDENCE: z.coerce.number().min(0).max(1).default(0.7),
         LANGUAGE_FALLBACK_LANGUAGE: supportedLanguageSchema.default('en'),
+
+        // Cookie Security (HTTPS 없이 production 운영 시 false)
+        COOKIE_SECURE: booleanFromString(false),
     })
     .superRefine((data, ctx) => {
         if (data.NODE_ENV !== 'production') {

@@ -108,6 +108,8 @@ export interface ChatRequestParams {
     thinkingLevel?: 'low' | 'medium' | 'high';
     /** 사용자가 활성화한 MCP 도구 목록 (키: 도구명, 값: 활성화 여부) */
     enabledTools?: Record<string, boolean>;
+    /** RAG (문서 기반 응답) 활성화 여부 */
+    ragEnabled?: boolean;
     /** OpenAI 호환 도구 정의 배열 (외부 Tool Calling용) */
     tools?: ToolDefinition[];
     /** 도구 호출 제어 ("auto"|"none"|"required"|{type:"function",function:{name:string}}) */
@@ -132,6 +134,8 @@ export interface ChatRequestParams {
     onResearchProgress?: (progress: ResearchProgress) => void;
     /** 스킬 활성화 콜백 - 에이전트에 주입된 스킬 이름 목록 */
     onSkillsActivated?: (skillNames: string[]) => void;
+    /** RAG 출처 정보 콜백 - 검색된 문서 출처/관련도/스니펫 전달 */
+    onRAGSources?: (sources: Array<{ source: string; relevanceScore: number; snippet: string }>) => void;
 }
 
 /**
@@ -369,6 +373,7 @@ export class ChatRequestHandler {
             thinkingMode,
             thinkingLevel,
             enabledTools,
+            ragEnabled,
             tools,
             tool_choice,
             userContext,
@@ -379,6 +384,7 @@ export class ChatRequestHandler {
             onDiscussionProgress,
             onResearchProgress,
             onSkillsActivated,
+            onRAGSources,
             userLanguagePreference,
         } = params;
 
@@ -472,6 +478,7 @@ export class ChatRequestHandler {
             userRole: userContext.userRole,
             userTier: userContext.userTier,
             enabledTools,
+            ragEnabled,
             abortSignal,
             userLanguagePreference,
         };
@@ -485,6 +492,7 @@ export class ChatRequestHandler {
             onResearchProgress,
             plan,
             onSkillsActivated,
+            onRAGSources,
         );
 
         const endTime = Date.now();

@@ -212,7 +212,8 @@ function syncMCPSettingsToServer() {
         const serverSettings = {
             sequentialThinking: mcpSettings.thinking,
             pdfTools: mcpSettings.pdf,
-            webSearch: mcpSettings.webSearch
+            webSearch: mcpSettings.webSearch,
+            rag: mcpSettings.rag
         };
 
         ws.send(JSON.stringify({
@@ -237,7 +238,8 @@ function syncMCPSettingsFromServer(serverSettings) {
     const settingsMap = {
         sequentialThinking: 'thinking',
         pdfTools: 'pdf',
-        webSearch: 'webSearch'
+        webSearch: 'webSearch',
+        rag: 'rag'
     };
 
     for (const [serverKey, localKey] of Object.entries(settingsMap)) {
@@ -254,6 +256,7 @@ function syncMCPSettingsFromServer(serverSettings) {
 
     setState('thinkingEnabled', mcpSettings.thinking);
     setState('webSearchEnabled', mcpSettings.webSearch);
+    setState('ragEnabled', mcpSettings.rag);
 
 }
 

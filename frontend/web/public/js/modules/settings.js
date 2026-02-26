@@ -75,6 +75,7 @@ function loadMCPSettings() {
             var settings = JSON.parse(saved);
             setState('thinkingEnabled', settings.thinking !== false);
             setState('webSearchEnabled', settings.webSearch === true);
+            setState('ragEnabled', settings.rag === true);
 
             // MCP 도구 활성화 상태 로드 (기본: 전체 비활성)
             if (settings.enabledTools && typeof settings.enabledTools === 'object') {
@@ -100,6 +101,7 @@ function saveMCPSettings() {
     var settings = {
         thinking: getState('thinkingEnabled'),
         webSearch: getState('webSearchEnabled'),
+        rag: getState('ragEnabled'),
         enabledTools: getState('mcpToolsEnabled') || {}
     };
     SS.setItem('mcpSettings', JSON.stringify(settings));
@@ -135,6 +137,12 @@ function toggleMCPModule(module) {
             setState('githubEnabled', githubEnabled);
             updateToggleUI('mcpGithub', githubEnabled);
             break;
+
+        case 'rag':
+            const ragEnabled = !getState('ragEnabled');
+            setState('ragEnabled', ragEnabled);
+            updateToggleUI('ragToggleBtn', ragEnabled);
+            break;
     }
 
     saveMCPSettings();
@@ -160,6 +168,12 @@ function updateToggleUI(id, enabled) {
 function updateMCPToggleUI() {
     updateToggleUI('mcpThinking', getState('thinkingEnabled'));
     updateToggleUI('mcpWebSearch', getState('webSearchEnabled'));
+
+    // RAG 버튼은 checkbox가 아닌 action-btn이므로 classList로 동기화
+    const ragBtn = document.getElementById('ragToggleBtn');
+    if (ragBtn) {
+        ragBtn.classList.toggle('active', getState('ragEnabled'));
+    }
 }
 
 /**
@@ -176,6 +190,23 @@ function toggleWebSearch() {
     }
 
     const status = getState('webSearchEnabled') ? '웹 검색 활성화' : '웹 검색 비활성화';
+    showToast(status);
+}
+
+/**
+ * RAG (문서 기반 응답) 토글 (빠른 접근 버튼용)
+ * 토글 후 버튼 active 클래스와 토스트 알림을 표시합니다.
+ * @returns {void}
+ */
+function toggleRAG() {
+    toggleMCPModule('rag');
+
+    const btn = document.getElementById('ragToggleBtn');
+    if (btn) {
+        btn.classList.toggle('active', getState('ragEnabled'));
+    }
+
+    const status = getState('ragEnabled') ? 'RAG 활성화 (문서 기반 응답)' : 'RAG 비활성화';
     showToast(status);
 }
 
@@ -361,6 +392,7 @@ window.loadMCPSettings = loadMCPSettings;
 window.saveMCPSettings = saveMCPSettings;
 window.toggleMCPModule = toggleMCPModule;
 window.toggleWebSearch = toggleWebSearch;
+window.toggleRAG = toggleRAG;
 window.toggleMCPTool = toggleMCPTool;
 window.setAllMCPTools = setAllMCPTools;
 window.getEnabledTools = getEnabledTools;
@@ -381,6 +413,7 @@ export {
     saveMCPSettings,
     toggleMCPModule,
     toggleWebSearch,
+    toggleRAG,
     toggleMCPTool,
     setAllMCPTools,
     getEnabledTools,

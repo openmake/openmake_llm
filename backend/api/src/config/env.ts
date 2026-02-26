@@ -99,6 +99,9 @@ export interface EnvConfig {
     apiKeyPepper: string;
     apiKeyMaxPerUser: number;
 
+    // Cookie Security (HTTPS 없이 production 운영 시 false로 설정)
+    cookieSecure: boolean;
+
     // Pipeline Profile — Brand Model → Internal Engine Mapping
     omkEngineLlm: string;
     omkEnginePro: string;
@@ -206,6 +209,9 @@ const DEFAULT_CONFIG: EnvConfig = {
     // API Key Service
     apiKeyPepper: '',
     apiKeyMaxPerUser: 5,
+
+    // Cookie Security
+    cookieSecure: false,
 
     // Pipeline Profile — Brand Model → Internal Engine Mapping
     omkEngineLlm: 'gemini-3-flash-preview:cloud',
@@ -385,6 +391,9 @@ export function loadConfig(): EnvConfig {
         DEFAULT_RESPONSE_LANGUAGE: env('DEFAULT_RESPONSE_LANGUAGE'),
         LANGUAGE_DETECTION_MIN_CONFIDENCE: env('LANGUAGE_DETECTION_MIN_CONFIDENCE'),
         LANGUAGE_FALLBACK_LANGUAGE: env('LANGUAGE_FALLBACK_LANGUAGE'),
+
+        // Cookie Security
+        COOKIE_SECURE: env('COOKIE_SECURE'),
     });
 
     if (!parsedResult.success) {
@@ -507,6 +516,9 @@ export function loadConfig(): EnvConfig {
         defaultResponseLanguage: parsed.DEFAULT_RESPONSE_LANGUAGE ?? DEFAULT_CONFIG.defaultResponseLanguage,
         languageDetectionMinConfidence: parsed.LANGUAGE_DETECTION_MIN_CONFIDENCE ?? DEFAULT_CONFIG.languageDetectionMinConfidence,
         languageFallbackLanguage: parsed.LANGUAGE_FALLBACK_LANGUAGE ?? DEFAULT_CONFIG.languageFallbackLanguage,
+
+        // Cookie Security
+        cookieSecure: parsed.COOKIE_SECURE ?? DEFAULT_CONFIG.cookieSecure,
     };
 }
 

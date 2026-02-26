@@ -11,13 +11,9 @@
     <meta name="description" content="AI 기반 지능형 채팅 어시스턴트">
     <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon.png">
 
-    <!-- 한글 최적화 웹폰트 -->
-    <link rel="preconnect" href="https://cdn.jsdelivr.net">
-    <link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css"
-        rel="stylesheet">
+    <!-- 한글 최적화 웹폰트 (self-hosted) -->
+    <link href="vendor/pretendard/pretendard.css" rel="stylesheet">
     <!-- Performance: Preload hints -->
-    <link rel="preconnect" href="https://cdnjs.cloudflare.com">
-    <link rel="dns-prefetch" href="https://cdnjs.cloudflare.com">
     <link rel="preload" href="/css/design-tokens.css?v=8" as="style">
     <link rel="modulepreload" href="/js/spa-router.js?v=16" crossorigin>
     <link rel="modulepreload" href="/js/modules/auth.js" crossorigin>
@@ -32,16 +28,16 @@
      <link rel="stylesheet" href="css/unified-sidebar.css?v=9">
     <link rel="stylesheet" href="css/light-theme.css?v=8">
     <link rel="stylesheet" href="style.css?v=9">
-    <!-- Iconify Icon Web Component (defer to not block rendering) -->
-    <script src="https://cdn.jsdelivr.net/npm/iconify-icon@2.1.0/dist/iconify-icon.min.js" defer></script>
-    <!-- Markdown Parser (defer) -->
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js" defer></script>
-    <!-- Code Highlighting (defer) -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css"
+    <!-- Iconify Icon Web Component (self-hosted, defer) -->
+    <script src="vendor/iconify-icon.min.js" defer></script>
+    <!-- Markdown Parser (self-hosted, defer) -->
+    <script src="vendor/marked.min.js" defer></script>
+    <!-- Code Highlighting (self-hosted, defer) -->
+    <link rel="stylesheet" href="vendor/hljs/github-dark.min.css"
         media="print" onload="this.media='all'">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js" defer></script>
-    <!-- XSS Defense: DOMPurify (defer) -->
-    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.2.4/dist/purify.min.js" defer></script>
+    <script src="vendor/hljs/highlight.min.js" defer></script>
+    <!-- XSS Defense: DOMPurify (self-hosted, defer) -->
+    <script src="vendor/purify.min.js" defer></script>
     <script src="guide_content.js" defer></script>
 
 
@@ -165,6 +161,10 @@
                                     <button class="action-btn" id="deepResearchBtn" onclick="toggleDeepResearch()"
                                         title="Deep Research (심층 연구)">
                                         <iconify-icon icon="lucide:flask-conical"></iconify-icon>
+                                    </button>
+                                    <button class="action-btn" id="ragToggleBtn" onclick="toggleRAG()"
+                                        title="RAG (문서 기반 응답)">
+                                        <iconify-icon icon="lucide:book-open-text"></iconify-icon>
                                     </button>
                                 </div>
                                 <div class="right-actions">

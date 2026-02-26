@@ -54,7 +54,7 @@ import {
 import {
     MCP_TOOL_CATALOG,
     loadMCPSettings, saveMCPSettings,
-    toggleMCPModule, toggleWebSearch, toggleMCPTool,
+    toggleMCPModule, toggleWebSearch, toggleRAG, toggleMCPTool,
     setAllMCPTools, getEnabledTools, updateMCPToolTogglesUI,
     loadPromptMode, setPromptMode,
     loadAgentMode, toggleAgentMode,
@@ -561,6 +561,7 @@ window.loadMCPSettings = loadMCPSettings;
 window.saveMCPSettings = saveMCPSettings;
 window.toggleMCPModule = toggleMCPModule;
 window.toggleWebSearch = toggleWebSearch;
+window.toggleRAG = toggleRAG;
 window.toggleMCPTool = toggleMCPTool;
 window.setAllMCPTools = setAllMCPTools;
 window.getEnabledTools = getEnabledTools;
