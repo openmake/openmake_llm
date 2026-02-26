@@ -244,6 +244,11 @@ function handleMessage(data) {
             setState('activeSkillNames', Array.isArray(data.skillNames) ? data.skillNames : []);
             break;
 
+        case 'rag_sources':
+            debugLog('[WebSocket] RAG 출처 수신:', data.sources);
+            setState('ragSources', Array.isArray(data.sources) ? data.sources : null);
+            break;
+
         case 'discussion_progress':
             debugLog('[WebSocket] 토론 진행:', data.progress);
             if (typeof showDiscussionProgress === 'function') {

@@ -166,6 +166,7 @@ export async function handleChatMessage(
             thinkingMode: msg.thinkingMode === true,
             thinkingLevel: (msg.thinkingLevel || 'high') as 'low' | 'medium' | 'high',
             enabledTools: msg.enabledTools,
+            ragEnabled: msg.ragEnabled === true,
             userLanguagePreference: userLangPreference,
             userContext,
             clusterManager: cluster,
@@ -175,6 +176,7 @@ export async function handleChatMessage(
             onDiscussionProgress: (progress) => ws.send(JSON.stringify({ type: 'discussion_progress', progress })),
             onResearchProgress: (progress) => ws.send(JSON.stringify({ type: 'research_progress', progress })),
             onSkillsActivated: (skillNames) => ws.send(JSON.stringify({ type: 'skills_activated', skillNames })),
+            onRAGSources: (sources) => ws.send(JSON.stringify({ type: 'rag_sources', sources })),
         });
 
         // WS 고유: 새 세션 생성 알림

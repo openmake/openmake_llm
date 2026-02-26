@@ -47,6 +47,7 @@ import { getConfig } from '../config/env';
 import { createRoutingLogEntry, logRoutingDecision } from '../chat/routing-logger';
 import { applyDomainEngineOverride } from '../chat/domain-router';
 import type { ChatMessageRequest } from './chat-service-types';
+import { getRAGService } from './RAGService';
 
 // Re-export all types so consumers importing from ChatService don't break
 export type {
@@ -202,7 +203,8 @@ export class ChatService {
         onDiscussionProgress?: (progress: DiscussionProgress) => void,
         onResearchProgress?: (progress: ResearchProgress) => void,
         executionPlan?: ExecutionPlan,
-        onSkillsActivated?: (skillNames: string[]) => void
+        onSkillsActivated?: (skillNames: string[]) => void,
+        onRAGSources?: (sources: Array<{ source: string; relevanceScore: number; snippet: string }>) => void
     ): Promise<string> {
         const {
             message,
@@ -218,6 +220,7 @@ export class ChatService {
             userRole,
             userTier,
             enabledTools,
+            ragEnabled,
             abortSignal,
             userLanguagePreference,
         } = req;
@@ -343,10 +346,47 @@ export class ChatService {
             }
         }
 
+        // ── RAG 컨텍스트 검색 및 주입 (사용자가 RAG 활성화 시에만) ──
+        let ragContextStr = '';
+        if (ragEnabled) {
+            try {
+                const ragService = getRAGService();
+                const ragContext = await ragService.getRAGContextForChat(
+                    message || '',
+                    userId,
+                    docId || undefined,
+                );
+                if (ragContext && ragContext.documents.length > 0) {
+                    ragContextStr = '## \uD83D\uDD0D RAG CONTEXT (Retrieved Documents)\n';
+                    for (const doc of ragContext.documents) {
+                        ragContextStr += `### Source: ${doc.source} (relevance: ${doc.relevanceScore.toFixed(2)})\n`;
+                        ragContextStr += `${doc.content}\n\n`;
+                    }
+                    ragContextStr += '---\n\n';
+                    logger.info(`RAG 컨텍스트 주입: ${ragContext.documents.length}개 문서, 쿼리="${ragContext.searchQuery.substring(0, 50)}..."`);
+
+                    // RAG 출처 정보를 프론트엔드에 전달
+                    if (onRAGSources) {
+                        const snippetMaxLen = 200;
+                        onRAGSources(ragContext.documents.map(doc => ({
+                            source: doc.source,
+                            relevanceScore: doc.relevanceScore,
+                            snippet: doc.content.length > snippetMaxLen
+                                ? doc.content.substring(0, snippetMaxLen) + '...'
+                                : doc.content,
+                        })));
+                    }
+                }
+            } catch (ragError) {
+                logger.warn('RAG 컨텍스트 검색 실패 (무시하고 계속):', ragError);
+            }
+        }
+
         const enhancedUserMessage = applySequentialThinking(message, thinkingMode === true);
 
         let finalEnhancedMessage = '';
         if (documentContext) finalEnhancedMessage += documentContext;
+        if (ragContextStr) finalEnhancedMessage += ragContextStr;
         if (webSearchContext) finalEnhancedMessage += webSearchContext;
         finalEnhancedMessage += `\n## USER QUESTION\n${enhancedUserMessage}`;
 

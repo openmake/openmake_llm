@@ -123,6 +123,20 @@
                     <option value="education">교육</option>
                     <option value="business">비즈니스</option>
                     <option value="science">과학</option>
+                    <option value="technology">기술/IT</option>
+                    <option value="finance">금융</option>
+                    <option value="healthcare">의료/건강</option>
+                    <option value="legal">법률</option>
+                    <option value="engineering">엔지니어링</option>
+                    <option value="media">미디어</option>
+                    <option value="government">공공/정부</option>
+                    <option value="real-estate">부동산</option>
+                    <option value="energy">에너지/환경</option>
+                    <option value="logistics">물류/운송</option>
+                    <option value="hospitality">관광/서비스</option>
+                    <option value="agriculture">농업/식품</option>
+                    <option value="productivity">생산성</option>
+                    <option value="communication">커뮤니케이션</option>
                 </select>
             </div>
             <div class="sl-form-group">
@@ -265,8 +279,16 @@
             window.sl_exportSkill = this.exportSkill.bind(this);
             window.sl_importSkill = this.importMpSkill.bind(this);
             window.sl_viewMpSkill = this.viewMpSkillDetail.bind(this);
-            window.sl_changeLocalPage = (p) => { localFilters.page = p; self.loadLocalSkills(); };
-            window.sl_changeMpPage = (p) => { mpFilters.page = p; self.loadMpSkills(); };
+            window.sl_changeLocalPage = (p) => {
+                const maxPage = Math.ceil(localFilters.total / localFilters.limit) || 1;
+                localFilters.page = Math.min(Math.max(1, p), maxPage);
+                self.loadLocalSkills();
+            };
+            window.sl_changeMpPage = (p) => {
+                const maxPage = Math.ceil(mpFilters.total / mpFilters.limit) || 1;
+                mpFilters.page = Math.min(Math.max(1, p), maxPage);
+                self.loadMpSkills();
+            };
             window.sl_toggleUserSkill = this.toggleUserSkill.bind(this);
             window.sl_saveSkill = this.saveSkillFromModal.bind(this);
             window.sl_closeSkillModal = this.closeSkillModal.bind(this);
@@ -334,6 +356,14 @@
                 localSkills = data.data.skills || [];
                 localFilters.total = data.data.total || 0;
 
+                // 현재 페이지가 실제 데이터 페이지를 초과하면 마지막 페이지로 자동 이동
+                const maxPage = Math.ceil(localFilters.total / localFilters.limit) || 1;
+                if (localFilters.page > maxPage) {
+                    localFilters.page = maxPage;
+                    this.loadLocalSkills();
+                    return;
+                }
+
                 this.renderLocalSkills();
                 this.renderPagination('localPagination', localFilters.page, localFilters.total, localFilters.limit, 'sl_changeLocalPage');
 
@@ -374,7 +404,7 @@
                                 <a href="#" onclick="sl_toggleUserSkill('${esc(skill.id)}', ${isUserAssigned});return false;">
                                     <span class="iconify" data-icon="lucide:user"></span> ${toggleLabel}
                                 </a>
-                                ${!isSystemSkill ? `<a href="#" onclick="sl_editSkill('${esc(skill.id)}');return false;">
+                                <a href="#" onclick="sl_editSkill('${esc(skill.id)}');return false;">
                                     <span class="iconify" data-icon="lucide:edit-2"></span> 수정
                                 </a>
                                 <a href="#" onclick="sl_exportSkill('${esc(skill.id)}');return false;">
@@ -383,7 +413,7 @@
                                 <hr>
                                 <a href="#" class="danger" onclick="sl_deleteSkill('${esc(skill.id)}');return false;">
                                     <span class="iconify" data-icon="lucide:trash-2"></span> 삭제
-                                </a>` : ''}
+                                </a>
                             </div>
                         </div>
                     </div>
@@ -438,6 +468,15 @@
                 }
                 mpSkills = data.data.skills || [];
                 mpFilters.total = data.data.total || 0;
+
+                // 현재 페이지가 실제 데이터 페이지를 초과하면 마지막 페이지로 자동 이동
+                const maxPage = Math.ceil(mpFilters.total / mpFilters.limit) || 1;
+                if (mpFilters.page > maxPage) {
+                    mpFilters.page = maxPage;
+                    this.loadMpSkills();
+                    return;
+                }
+
                 this.renderMpSkills();
                 this.renderPagination('mpPagination', mpFilters.page, mpFilters.total, mpFilters.limit, 'sl_changeMpPage');
             } catch (error) {
@@ -676,16 +715,19 @@
                 return;
             }
 
-            const startPage = Math.max(1, currentPage - 2);
+            // 현재 페이지를 유효 범위로 클램핑
+            const safePage = Math.min(Math.max(1, currentPage), totalPages);
+
+            const startPage = Math.max(1, safePage - 2);
             const endPage = Math.min(totalPages, startPage + 4);
 
-            let html = `<button class="sl-page-btn" ${currentPage === 1 ? 'disabled' : ''} onclick="window.${changeFnName}(${currentPage - 1})">이전</button>`;
+            let html = `<button class="sl-page-btn" ${safePage === 1 ? 'disabled' : ''} onclick="window.${changeFnName}(${safePage - 1})">이전</button>`;
 
             for (let i = startPage; i <= endPage; i++) {
-                html += `<button class="sl-page-btn ${i === currentPage ? 'active' : ''}" onclick="window.${changeFnName}(${i})">${i}</button>`;
+                html += `<button class="sl-page-btn ${i === safePage ? 'active' : ''}" onclick="window.${changeFnName}(${i})">${i}</button>`;
             }
 
-            html += `<button class="sl-page-btn" ${currentPage === totalPages ? 'disabled' : ''} onclick="window.${changeFnName}(${currentPage + 1})">다음</button>`;
+            html += `<button class="sl-page-btn" ${safePage === totalPages ? 'disabled' : ''} onclick="window.${changeFnName}(${safePage + 1})">다음</button>`;
 
             container.innerHTML = html;
         }
