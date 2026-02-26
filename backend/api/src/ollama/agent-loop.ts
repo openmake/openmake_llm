@@ -30,7 +30,7 @@
  */
 
 import { Ollama, Message, Tool, ToolCall, ChatResponse } from 'ollama';
-import { ChatMessage, ToolDefinition, ThinkOption, UsageMetrics } from './types';
+import { ChatMessage, ToolDefinition, ThinkOption, UsageMetrics, normalizeThinkOption } from './types';
 import { createLogger } from '../utils/logger';
 
 /**
@@ -306,12 +306,16 @@ export async function runAgentLoop(options: AgentLoopOptions): Promise<AgentLoop
         messages: initialMessages,
         tools,
         availableFunctions,
-        think = true,
+        think: rawThink = true,
         stream = false,
         onToken,
         onToolCall,
         maxIterations = 10
     } = options;
+
+    // GPT-OSS 모델은 think: true/false를 무시함 → 문자열 레벨로 자동 변환
+    // @see https://docs.ollama.com/capabilities/thinking
+    const think = normalizeThinkOption(rawThink, model);
 
     const ollama = createOllamaClient(model);
     const ollamaTools = tools.map(toOllamaTool);

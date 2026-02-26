@@ -43,7 +43,8 @@ import {
     WebFetchResponse,
     ShowModelRequest,
     ShowModelResponse,
-    PsResponse
+    PsResponse,
+    normalizeThinkOption
 } from './types';
 import { getConfig } from '../config';
 import { OLLAMA_CLOUD_HOST } from '../config/constants';
@@ -118,6 +119,13 @@ export class OllamaClient {
         if (this.isCloudModel(this.config.model)) {
             baseUrl = OLLAMA_CLOUD_HOST;
             logger.info(`🌐 Cloud 모델 감지 - 호스트: ${baseUrl}`);
+
+            // 🆕 Cloud 모델에 매핑된 API 키로 자동 동기화 (Deep Research 등 새 클라이언트 생성 시)
+            const targetKeyIndex = this.apiKeyManager.findKeyIndexForModel(this.config.model);
+            if (targetKeyIndex !== -1 && targetKeyIndex !== this.apiKeyManager.getCurrentKeyIndex()) {
+                this.apiKeyManager.setKeyIndex(targetKeyIndex);
+                logger.info(`[constructor] 🔑 모델-키 동기화: ${this.config.model} → Key ${targetKeyIndex + 1}`);
+            }
         }
 
         this.client = axios.create({
@@ -365,7 +373,7 @@ export class OllamaClient {
             stream: !!onToken,
             options,
             images,
-            ...(advancedOptions?.think !== undefined && { think: advancedOptions.think }),
+            ...(advancedOptions?.think !== undefined && { think: normalizeThinkOption(advancedOptions.think, this.config.model) }),
             ...(advancedOptions?.format && { format: advancedOptions.format }),
             ...(advancedOptions?.system && { system: advancedOptions.system }),
             ...(advancedOptions?.keep_alive !== undefined && { keep_alive: advancedOptions.keep_alive })
@@ -526,7 +534,7 @@ export class OllamaClient {
             messages,
             stream: !!onToken,
             options,
-            ...(advancedOptions?.think !== undefined && { think: advancedOptions.think }),
+            ...(advancedOptions?.think !== undefined && { think: normalizeThinkOption(advancedOptions.think, this.config.model) }),
             ...(advancedOptions?.format && { format: advancedOptions.format }),
             ...(advancedOptions?.tools && { tools: advancedOptions.tools }),
             ...(advancedOptions?.keep_alive !== undefined && { keep_alive: advancedOptions.keep_alive })
