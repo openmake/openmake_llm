@@ -454,6 +454,22 @@ export class ApiKeyManager {
     }
 
     /**
+     * 모델 이름으로 해당 키 인덱스를 탐색합니다.
+     * 키-모델 매핑에서 정확히 일치하는 키를 찾아 인덱스를 반환합니다.
+     * 일치하는 키가 없으면 -1을 반환합니다.
+     *
+     * @param model - 탐색할 모델 이름
+     * @returns 매핑된 키 인덱스 (0-based), 없으면 -1
+     */
+    findKeyIndexForModel(model: string): number {
+        const idx = this.models.indexOf(model);
+        if (idx !== -1 && idx < this.keys.length) {
+            return idx;
+        }
+        return -1;
+    }
+
+    /**
      * 🆕 모든 키가 쿨다운 상태인지 확인하고, 가장 빨리 사용 가능한 시간 반환
      * @returns null if at least one key is available, or the earliest reset time if all keys are in cooldown
      */

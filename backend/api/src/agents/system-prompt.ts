@@ -238,10 +238,10 @@ ${applyPromptPlaceholders(promptTemplate.workingOn, { phase: getPhaseLabel(selec
     let hasDbSkills = false;
     const skillNames: string[] = [];
     try {
-        const skills = await getSkillManager().getSkillsForAgent(agent.id, userId);
+        const skills = await getSkillManager().getSkillsForAgent(agent.id, userId, agent.category);
         if (skills.length > 0) {
             for (const s of skills) skillNames.push(s.name);
-            const skillPrompt = await getSkillManager().buildSkillPrompt(agent.id, userId);
+            const skillPrompt = await getSkillManager().buildSkillPrompt(agent.id, userId, agent.category);
             if (skillPrompt) {
                 result += skillPrompt;
                 hasDbSkills = true;

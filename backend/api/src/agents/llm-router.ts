@@ -283,19 +283,28 @@ ${sanitizedMessage}
 
         const parsed = extractJSONFromResponse(result);
 
-        if (parsed && parsed.agent_id) {
-            logger.info(`선택: ${parsed.agent_id} (신뢰도: ${parsed.confidence})`);
-            logger.info(`이유: ${parsed.reasoning}`);
+        // LLM 응답에서 agent_id 필드를 유연하게 탐색 (모델별 응답 형식 차이 대응)
+        if (parsed) {
+            const agentId = parsed.agent_id || parsed.agentId || parsed.agent || parsed.id;
 
-            return {
-                agentId: String(parsed.agent_id),
-                confidence: Number(parsed.confidence) || 0.85,
-                reasoning: String(parsed.reasoning || ''),
-                alternativeAgents: Array.isArray(parsed.alternatives) ? parsed.alternatives as string[] : []
-            };
+            if (agentId) {
+                const agentIdStr = String(agentId);
+                logger.info(`선택: ${agentIdStr} (신뢰도: ${parsed.confidence})`);
+                logger.info(`이유: ${parsed.reasoning}`);
+
+                return {
+                    agentId: agentIdStr,
+                    confidence: Number(parsed.confidence || parsed.score) || 0.85,
+                    reasoning: String(parsed.reasoning || parsed.reason || ''),
+                    alternativeAgents: Array.isArray(parsed.alternatives) ? parsed.alternatives as string[] : []
+                };
+            }
+
+            logger.info(`유효하지 않은 응답 형식 - 파싱된 키: ${Object.keys(parsed).join(', ')}`);
+        } else {
+            logger.info('응답 JSON 파싱 실패');
         }
 
-        logger.info('유효하지 않은 응답 형식');
         return null;
 
     } catch (error) {

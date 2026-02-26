@@ -67,13 +67,24 @@ export async function handleChatMessage(
 ): Promise<void> {
     const { cluster, extWs, logger: log } = options;
 
-    if (typeof msg.message !== 'string' || msg.message.trim() === '') {
+    const hasFiles = Array.isArray(msg.files) && msg.files.length > 0;
+    const hasImages = Array.isArray(msg.images) && msg.images.length > 0;
+    const hasDoc = typeof msg.docId === 'string' && msg.docId.trim() !== '';
+    const hasMessage = typeof msg.message === 'string' && msg.message.trim() !== '';
+
+    if (!hasMessage && !hasFiles && !hasImages && !hasDoc) {
         ws.send(JSON.stringify({ type: 'error', message: '메시지가 필요합니다' }));
         return;
     }
 
+    // 파일만 첨부하고 메시지가 없는 경우 기본 메시지 자동 생성
+    if (!hasMessage) {
+        const fileNames = msg.files?.map(f => f.name).join(', ') || '첨부 파일';
+        msg.message = `첨부된 파일을 분석해주세요: ${fileNames}`;
+    }
+
     const { model, nodeId, history, images, docId, sessionId, anonSessionId } = msg;
-    const message = msg.message.trim();
+    const message = (msg.message ?? '').trim();
 
     // 사용자 언어 감지 — 설정에서 선택한 언어를 우선, 없으면 메시지 기반 자동 감지
     const userLangPreference = (typeof msg.language === 'string' && msg.language.trim()) ? msg.language.trim() as SupportedLanguageCode : undefined;

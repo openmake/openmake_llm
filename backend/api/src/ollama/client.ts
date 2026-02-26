@@ -157,9 +157,10 @@ export class OllamaClient {
                     error.code === 'EAI_AGAIN'
                 );
 
-                // 429, 401, 403, 502 에러 시 API 키 스와핑 시도
+                // 429, 401, 403, 400, 502 에러 시 API 키 스와핑 시도
+                // 400: 모델-키 불일치 또는 잘못된 요청 (Cloud 키 스와핑 후 발생 가능)
                 // 502: Cloud 모델 게이트웨이 장애 (Ollama 공식 문서)
-                if (statusCode === 429 || statusCode === 401 || statusCode === 403 || statusCode === 502) {
+                if (statusCode === 429 || statusCode === 401 || statusCode === 403 || statusCode === 400 || statusCode === 502) {
                     // 재시도 횟수 추적 (키 개수만큼 시도)
                     const retryCount = error.config?._retryCount || 0;
                     const maxRetries = this.apiKeyManager.getTotalKeys() - 1;
@@ -234,6 +235,7 @@ export class OllamaClient {
      *
      * Auto-routing 등에서 런타임에 모델이 변경될 때,
      * Cloud 모델이면 OLLAMA_CLOUD_HOST로, 로컬 모델이면 원래 노드 URL로 전환합니다.
+     * 또한 모델에 매핑된 API 키가 있으면 자동으로 해당 키로 전환합니다.
      *
      * @param model - 새로 설정할 모델 이름
      */
@@ -249,6 +251,18 @@ export class OllamaClient {
         } else if (!isCloud && wasCloud) {
             this.client.defaults.baseURL = this.config.baseUrl;
             logger.info(`[setModel] 🏠 Local 모델 전환 → ${this.config.baseUrl} (model: ${model})`);
+        }
+
+        // Cloud 모델인 경우 해당 모델에 매핑된 API 키로 자동 전환
+        if (isCloud) {
+            const targetKeyIndex = this.apiKeyManager.findKeyIndexForModel(model);
+            if (targetKeyIndex !== -1 && targetKeyIndex !== this.apiKeyManager.getCurrentKeyIndex()) {
+                this.apiKeyManager.setKeyIndex(targetKeyIndex);
+                // Authorization 헤더 즉시 갱신
+                const newHeaders = this.apiKeyManager.getAuthHeaders();
+                this.client.defaults.headers.common['Authorization'] = newHeaders.Authorization;
+                logger.info(`[setModel] 🔑 모델-키 동기화: ${model} → Key ${targetKeyIndex + 1}`);
+            }
         }
     }
 
