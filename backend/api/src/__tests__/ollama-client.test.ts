@@ -51,10 +51,11 @@ jest.mock('../ollama/api-key-manager', () => ({
         getCurrentKeyIndex: () => 0,
         getCurrentKey: () => 'test-key',
         getTotalKeys: () => 1,
+        findKeyIndexForModel: () => -1,
+        setKeyIndex: () => {},
     }),
     ApiKeyManager: class {},
 }));
-
 // Mock api-usage-tracker
 jest.mock('../ollama/api-usage-tracker', () => ({
     getApiUsageTracker: () => ({

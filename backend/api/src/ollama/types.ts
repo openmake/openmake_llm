@@ -744,6 +744,35 @@ export function getGptOssTaskPreset(taskType: 'code' | 'document' | 'json' | 'ch
     }
 }
 
+/**
+ * GPT-OSS 모델의 think 옵션을 정규화합니다.
+ *
+ * Ollama 공식 문서에 따르면 GPT-OSS는 think: true/false를 무시하고
+ * 반드시 'low' | 'medium' | 'high' 문자열 레벨만 허용합니다.
+ * 이 함수는 boolean true가 전달되었을 때 자동으로 'medium'으로 변환하고,
+ * false는 undefined(비활성화)로 변환합니다.
+ *
+ * 비 GPT-OSS 모델에서는 원본 값을 그대로 반환합니다.
+ *
+ * @param think - 원본 ThinkOption 값
+ * @param model - 현재 사용 중인 모델 이름
+ * @returns 정규화된 ThinkOption 또는 undefined (비활성화 시)
+ * @see https://docs.ollama.com/capabilities/thinking
+ */
+export function normalizeThinkOption(think: ThinkOption | undefined, model: string): ThinkOption | undefined {
+    if (think === undefined) return undefined;
+
+    const isGptOss = model?.toLowerCase().startsWith('gpt-oss');
+    if (!isGptOss) return think;
+
+    // GPT-OSS: boolean → 문자열 레벨 변환
+    if (think === true) return 'medium';
+    if (think === false) return undefined;
+
+    // 이미 문자열 레벨 ('low' | 'medium' | 'high') — 그대로 반환
+    return think;
+}
+
 
 
 

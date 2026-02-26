@@ -30,7 +30,7 @@ export const ENGINE_FALLBACKS = {
     /** 비전 엔진 폴백 */
     VISION: 'qwen3.5:397b-cloud',
     /** 사고(Think) 엔진 폴백 */
-    THINK: 'gemini-3-flash-preview:cloud',
+    THINK: 'gpt-oss:120b-cloud',
 } as const;
 
 /**
