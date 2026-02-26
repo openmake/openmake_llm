@@ -166,7 +166,7 @@ async function sendMessage() {
         // 문서 컨텍스트가 있는 경우
         const docContext = getState('activeDocumentContext');
         if (docContext) {
-            payload.documentId = docContext.docId;
+            payload.docId = docContext.docId;
         }
 
         // 🔐 인증된 사용자 정보를 WebSocket 메시지에 포함

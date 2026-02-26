@@ -41,6 +41,7 @@ import {
     validateFileUploadSecurity
 } from '../middlewares/validation';
 import { detectMaliciousPatterns } from '../schemas/security.schema';
+import { FILE_LIMITS } from '../config/constants';
 
 // ============================================================
 // 헬퍼 함수
@@ -453,10 +454,12 @@ describe('validateFileUploadSecurity()', () => {
         expect(res.status).toHaveBeenCalledWith(400);
     });
 
-    test('허용되지 않는 확장자(.txt) → 400', () => {
-        const middleware = validateFileUploadSecurity();
+    test('허용되지 않는 확장자(.zip) → 400', () => {
+        const middleware = validateFileUploadSecurity({
+            allowedExtensions: [...FILE_LIMITS.ALLOWED_DOCUMENT_EXTENSIONS, ...FILE_LIMITS.ALLOWED_IMAGE_EXTENSIONS]
+        });
         const req = makeMockReq({
-            file: makeFile({ originalname: 'readme.txt', mimetype: 'text/plain' })
+            file: makeFile({ originalname: 'archive.zip', mimetype: 'application/zip' })
         });
         const res = makeMockRes();
         const next = jest.fn();
@@ -467,7 +470,9 @@ describe('validateFileUploadSecurity()', () => {
     });
 
     test('허용되지 않는 MIME 타입 → 400', () => {
-        const middleware = validateFileUploadSecurity();
+        const middleware = validateFileUploadSecurity({
+            allowedMimeTypes: [...FILE_LIMITS.ALLOWED_DOCUMENT_MIME_TYPES, ...FILE_LIMITS.ALLOWED_IMAGE_MIME_TYPES]
+        });
         const req = makeMockReq({
             file: makeFile({ originalname: 'file.pdf', mimetype: 'text/html' })
         });
