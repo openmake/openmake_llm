@@ -129,7 +129,7 @@ function dbCleanupExpired(): void {
  * Called fire-and-forget from get(); the current get() returns undefined,
  * but the next get() will find the document in cache.
  */
-function dbWarmCache(docId: string, cache: Map<string, StoredDocument>): void {
+function dbWarmCache(docId: string, cache: Map<string, StoredDocument>, deletedKeys?: Set<string>): void {
     const pool = safeGetPool();
     if (!pool) return;
 
@@ -140,6 +140,8 @@ function dbWarmCache(docId: string, cache: Map<string, StoredDocument>): void {
         if (result.rows.length === 0) return;
         const row = result.rows[0] as { document: DocumentResult; created_at: string; last_accessed_at: string };
 
+        // Skip re-caching if this key was recently deleted (race condition prevention)
+        if (deletedKeys?.has(docId)) return;
         // Only warm if still absent from cache (avoid overwriting a fresher entry)
         if (!cache.has(docId)) {
             const doc: DocumentResult = typeof row.document === 'string'
@@ -172,6 +174,8 @@ function dbWarmCache(docId: string, cache: Map<string, StoredDocument>): void {
 class TTLDocumentMap implements DocumentStore {
     private store: Map<string, StoredDocument> = new Map();
     private cleanupTimer: ReturnType<typeof setInterval>;
+    /** 삭제된 docId 집합 — dbWarmCache 재캐싱 방지 (race condition prevention) */
+    private deletedKeys: Set<string> = new Set();
 
     constructor() {
         // 정리 스케줄러 (10분마다 실행)
@@ -234,7 +238,7 @@ class TTLDocumentMap implements DocumentStore {
         const stored = this.store.get(key);
         if (!stored) {
             // Cache miss — fire async DB read to warm cache for next call
-            dbWarmCache(key, this.store);
+            dbWarmCache(key, this.store, this.deletedKeys);
             return undefined;
         }
         
@@ -246,6 +250,7 @@ class TTLDocumentMap implements DocumentStore {
     }
 
     set(key: string, value: DocumentResult): this {
+        this.deletedKeys.delete(key); // 재업로드 시 삭제 목록에서 제거
         const now = Date.now();
         this.store.set(key, {
             document: value,
@@ -262,6 +267,7 @@ class TTLDocumentMap implements DocumentStore {
     }
 
     delete(key: string): boolean {
+        this.deletedKeys.add(key);
         const result = this.store.delete(key);
         // DB에서도 삭제 (fire-and-forget)
         dbDeleteDocument(key);
@@ -273,6 +279,10 @@ class TTLDocumentMap implements DocumentStore {
     }
 
     clear(): void {
+        // 모든 키를 삭제 목록에 등록하여 dbWarmCache 재캐싱 방지
+        for (const key of this.store.keys()) {
+            this.deletedKeys.add(key);
+        }
         this.store.clear();
         // DB에서도 전체 삭제 (fire-and-forget)
         dbDeleteAllDocuments();

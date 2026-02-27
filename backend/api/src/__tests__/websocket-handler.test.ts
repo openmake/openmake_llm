@@ -776,7 +776,7 @@ describe('WebSocketHandler', () => {
             });
             await flushAsync();
 
-            expect(mockMcpClient.setFeatureState).toHaveBeenCalledWith({ webSearch: true });
+            expect(mockMcpClient.setFeatureState).toHaveBeenCalledWith({ webSearch: true }, null);
 
             const calls = ws.send.mock.calls;
             const ackMsg = JSON.parse(calls[calls.length - 1][0] as string);

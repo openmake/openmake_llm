@@ -470,6 +470,70 @@ export class ApiKeyManager {
     }
 
     /**
+     * 동일 모델에 매핑된 대체 키 인덱스를 찾습니다.
+     * 현재 인덱스를 제외하고 동일 모델명을 가진 다음 키를 탐색합니다.
+     * 1:1 매핑 구조에서는 항상 -1을 반환합니다 (같은 모델의 다른 키가 없으므로).
+     *
+     * @param currentIndex - 현재 사용 중인 키 인덱스
+     * @param model - 대체 키를 찾을 모델명
+     * @returns 대체 키 인덱스 (없으면 -1)
+     */
+    findAlternateKeyForModel(currentIndex: number, model: string): number {
+        const defaultModel = getConfig().ollamaDefaultModel;
+        for (let i = 0; i < this.keys.length; i++) {
+            if (i === currentIndex) continue;
+            const keyModel = this.models[i] || defaultModel;
+            if (keyModel === model) {
+                // 쿨다운 상태가 아닌 키만 선택
+                const failureRecord = this.keyFailures.get(i);
+                if (!failureRecord || (Date.now() - failureRecord.lastFail.getTime() > 5 * 60 * 1000)) {
+                    return i;
+                }
+            }
+        }
+        return -1;
+    }
+
+    /**
+     * 특정 키 인덱스의 실패를 기록합니다 (싱글톤 로테이션 트리거 없이).
+     * Per-instance key binding에서 사용됩니다.
+     *
+     * @param keyIndex - 실패한 키 인덱스
+     * @param error - 에러 정보
+     */
+    recordKeyFailure(keyIndex: number, error?: unknown): void {
+        if (keyIndex < 0 || keyIndex >= this.keys.length) return;
+
+        const err = error as { response?: { status?: number }; code?: string } | undefined;
+        const errorCode = err?.response?.status || err?.code || 'unknown';
+
+        const currentFailure = this.keyFailures.get(keyIndex) || { count: 0, lastFail: new Date() };
+        currentFailure.count++;
+        currentFailure.lastFail = new Date();
+        this.keyFailures.set(keyIndex, currentFailure);
+
+        this.dbWrite(
+            `INSERT INTO api_key_failures (key_index, fail_count, last_fail_at, updated_at)
+             VALUES ($1, $2, $3, NOW())
+             ON CONFLICT (key_index) DO UPDATE SET fail_count = $2, last_fail_at = $3, updated_at = NOW()`,
+            [keyIndex, currentFailure.count, currentFailure.lastFail.toISOString()]
+        );
+
+        const masked = (this.keys[keyIndex] || '').substring(0, 8) + '...';
+        logger.warn(`⚠️ Key ${keyIndex + 1} (${masked}) 실패 기록 - 코드: ${errorCode}`);
+    }
+
+    /**
+     * 특정 키 인덱스의 성공을 기록합니다 (per-instance용).
+     * @param keyIndex - 성공한 키 인덱스
+     */
+    recordKeySuccess(keyIndex: number): void {
+        if (keyIndex < 0 || keyIndex >= this.keys.length) return;
+        this.keyFailures.delete(keyIndex);
+        this.dbWrite('DELETE FROM api_key_failures WHERE key_index = $1', [keyIndex]);
+    }
+
+    /**
      * 🆕 모든 키가 쿨다운 상태인지 확인하고, 가장 빨리 사용 가능한 시간 반환
      * @returns null if at least one key is available, or the earliest reset time if all keys are in cooldown
      */

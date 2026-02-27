@@ -457,11 +457,13 @@ export class ChatRequestHandler {
         const chatService = new ChatService(client);
 
         // §9 ExecutionPlan 설정과 사용자 요청을 병합
-        const mergedDiscussionMode = plan.useDiscussion || discussionMode;
-        const mergedThinkingMode = plan.thinkingLevel !== 'off' || thinkingMode;
-        const mergedThinkingLevel = plan.thinkingLevel !== 'off'
-            ? plan.thinkingLevel as 'low' | 'medium' | 'high'
-            : thinkingLevel;
+        // 토론 모드: 사용자 명시적 토글(discussionMode)만 반영.
+        // 프로파일의 discussion 기본값은 사용자가 직접 켜지 않는 한 적용하지 않는다.
+        const mergedDiscussionMode = discussionMode === true;
+        // Thinking 모드: 사용자 명시적 토글(thinkingMode)만 반영.
+        // 프로파일의 thinking 기본값은 사용자가 직접 켜지 않는 한 적용하지 않는다.
+        const mergedThinkingMode = thinkingMode === true;
+        const mergedThinkingLevel = thinkingMode ? (thinkingLevel || 'high') : undefined;
 
         const chatRequest: ChatMessageRequest = {
             message,

@@ -243,6 +243,13 @@ export class RAGService {
     }
 
     /**
+     * 모든 문서의 임베딩을 일괄 삭제합니다.
+     */
+    async deleteAllDocumentEmbeddings(): Promise<number> {
+        return this.vectorRepo.deleteBySourceType('document');
+    }
+
+    /**
      * 특정 문서에 임베딩이 존재하는지 확인합니다.
      */
     async hasDocumentEmbeddings(docId: string): Promise<boolean> {
