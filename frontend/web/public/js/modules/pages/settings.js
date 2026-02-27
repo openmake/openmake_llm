@@ -40,9 +40,10 @@
         '</select>' +
         '</div>' +
         '<div class="setting-row">' +
-        '<div class="setting-info"><h4>\uC5B8\uC5B4</h4><p>AI \uC751\uB2F5 \uBC0F \uC778\uD130\uD398\uC774\uC2A4 \uC5B8\uC5B4\uB97C \uC120\uD0DD\uD569\uB2C8\uB2E4</p></div>' +
-        '<select id="langSelect" class="s-select">' +
-        '<option value="ko">\uD55C\uAD6D\uC5B4</option>' +
+        '<div class="setting-info"><h4>\uC5B8\uC5B4</h4><p>AI \uC751\uB2F5 \uC5B8\uC5B4\uB97C \uC120\uD0DD\uD569\uB2C8\uB2E4. \uC790\uB3D9 \uAC10\uC9C0 \uC2DC \uC0AC\uC6A9\uC790 \uBA54\uC2DC\uC9C0 \uC5B8\uC5B4\uB85C \uC751\uB2F5\uD569\uB2C8\uB2E4.</p></div>' +
+'<select id="langSelect" class="s-select">' +
+'<option value="">\uD83C\uDF10 \uC790\uB3D9 \uAC10\uC9C0 (Auto-detect)</option>' +
+'<option value="ko">\uD55C\uAD6D\uC5B4</option>' +
         '<option value="en">English</option>' +
         '<option value="ja">\u65E5\u672C\u8A9E</option>' +
         '<option value="zh">\u4E2D\u6587(\u7B80\u4F53)</option>' +
@@ -354,7 +355,7 @@
                     var savedMcp = safeStorage.getItem('mcpSettings');
                     if (savedMcp) { var mcp = JSON.parse(savedMcp); document.getElementById('thinkingToggle').checked = mcp.thinking !== false; document.getElementById('webSearchToggle').checked = mcp.webSearch === true; var ragEl = document.getElementById('ragToggle'); if (ragEl) { ragEl.checked = mcp.rag === true; } }
                     var savedGeneral = safeStorage.getItem('generalSettings');
-                    if (savedGeneral) { var general = JSON.parse(savedGeneral); document.getElementById('langSelect').value = general.lang || 'ko'; document.getElementById('saveHistoryToggle').checked = general.saveHistory !== false; }
+                    if (savedGeneral) { var general = JSON.parse(savedGeneral); document.getElementById('langSelect').value = general.lang || ''; document.getElementById('saveHistoryToggle').checked = general.saveHistory !== false; }
                 }
 
                 function resetSettings() { if (confirm('모든 설정을 초기화하시겠습니까?')) { safeStorage.removeItem('theme'); safeStorage.removeItem('selectedModel'); safeStorage.removeItem('mcpSettings'); safeStorage.removeItem('generalSettings'); location.reload(); } }
