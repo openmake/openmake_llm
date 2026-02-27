@@ -47,7 +47,6 @@ export const TOOL_TIERS: Record<UserTier, string[]> = {
         'vision_ocr',
         'analyze_image',
         'firecrawl_*',          // Firecrawl 관련 모든 도구
-        'sequential_thinking',  // Sequential Thinking
     ],
     enterprise: [
         '*',                    // 모든 도구 허용

@@ -9,8 +9,7 @@
  *
  * @module routes/mcp.routes
  * @description
- * - GET    /api/mcp/settings              - MCP 설정 조회 (선택적 인증)
- * - PUT    /api/mcp/settings              - MCP 설정 저장 (선택적 인증)
+ * - POST   /api/mcp/terminal              - 터미널 실행 (비활성화, HTTP 410)
  * - POST   /api/mcp/terminal              - 터미널 실행 (비활성화, HTTP 410)
  * - GET    /api/mcp/tools                 - 사용 가능한 도구 목록 (등급별 필터링)
  * - POST   /api/mcp/tools/:name/execute   - 도구 실행 (인증, 컨텍스트 기반 권한)
@@ -42,36 +41,7 @@ const logger = createLogger('McpRoutes');
 // 라우터 생성
 export const mcpRouter = Router();
 
-// MCP 설정 조회 (GET) - 비로그인 사용자도 조회 가능
-mcpRouter.get('/settings', optionalAuth, (req: Request, res: Response) => {
-     try {
-         const mcpClient = getUnifiedMCPClient();
-         const settings = mcpClient.getFeatureState(req.user?.id);
-         res.json(success({ settings }));
-      } catch (error) {
-          logger.error('[MCP Settings] 조회 실패:', error);
-          res.status(500).json(internalError('설정을 불러오는 중 오류가 발생했습니다'));
-      }
-});
-
-// MCP 설정 저장 (PUT) - 비로그인 사용자도 저장 가능 (글로벌 설정)
-mcpRouter.put('/settings', optionalAuth, asyncHandler(async (req: Request, res: Response) => {
-    const newSettings = req.body;
-
-     // 유효성 검사 (간단)
-     if (!newSettings || typeof newSettings !== 'object') {
-         res.status(400).json(badRequest('유효하지 않은 설정 데이터입니다'));
-         return;
-     }
-
-     const mcpClient = getUnifiedMCPClient();
-     await mcpClient.setFeatureState(newSettings, req.user?.id);
-
-     // 변경된 설정 반환
-     const updatedSettings = mcpClient.getFeatureState(req.user?.id);
-     res.json(success({ settings: updatedSettings }));
- }));
-
+ // 🔒 보안 패치 2026-02-07: 터미널 명령어 실행 엔드포인트 비활성화 (RCE 위험)
  // 🔒 보안 패치 2026-02-07: 터미널 명령어 실행 엔드포인트 비활성화 (RCE 위험)
  // runCommandTool이 제거되었으므로 이 엔드포인트도 비활성화
  mcpRouter.post('/terminal', requireAuth, (_req: Request, res: Response) => {

@@ -10,4 +10,4 @@
 4. **Security**: SQL Injection, XSS 등 보안 취약점을 사전에 방지하는 코드를 작성합니다.
 
 ## 도구 활용
-- 필요한 경우 `search_code`, `read_file` 등의 도구를 적극적으로 요청하여 기존 코드베이스를 파악합니다.
+- 필요한 경우 `fs_read_file`, `web_search` 등의 도구를 적극적으로 요청하여 기존 코드베이스를 파악합니다.
