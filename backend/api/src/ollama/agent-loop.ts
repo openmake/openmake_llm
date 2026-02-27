@@ -270,7 +270,8 @@ function toOllamaTool(tool: ToolDefinition): Tool {
  */
 function createOllamaClient(model: string): Ollama {
     const apiKeyManager = getApiKeyManager();
-    const isCloud = model?.toLowerCase().endsWith(':cloud');
+    const lowerModel = model?.toLowerCase() ?? '';
+    const isCloud = lowerModel.endsWith(':cloud') || lowerModel.endsWith('-cloud');
 
     const host = isCloud ? OLLAMA_CLOUD_HOST : envConfig.ollamaBaseUrl;
 

@@ -68,7 +68,8 @@ router.post('/web-search', requireAuth, validate(webSearchSchema), asyncHandler(
 
       // Cloud 모델 처리
       let client: OllamaClient | undefined;
-      const isCloudModel = wsEngineModel?.toLowerCase().endsWith(':cloud');
+      const lowerEngineModel = wsEngineModel?.toLowerCase() ?? '';
+      const isCloudModel = lowerEngineModel.endsWith(':cloud') || lowerEngineModel.endsWith('-cloud');
 
       if (isCloudModel) {
           const { createClient } = await import('../ollama/client');

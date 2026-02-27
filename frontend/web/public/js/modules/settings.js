@@ -169,11 +169,6 @@ function updateMCPToggleUI() {
     updateToggleUI('mcpThinking', getState('thinkingEnabled'));
     updateToggleUI('mcpWebSearch', getState('webSearchEnabled'));
 
-    // RAG 버튼은 checkbox가 아닌 action-btn이므로 classList로 동기화
-    const ragBtn = document.getElementById('ragToggleBtn');
-    if (ragBtn) {
-        ragBtn.classList.toggle('active', getState('ragEnabled'));
-    }
 }
 
 /**
@@ -193,22 +188,6 @@ function toggleWebSearch() {
     showToast(status);
 }
 
-/**
- * RAG (문서 기반 응답) 토글 (빠른 접근 버튼용)
- * 토글 후 버튼 active 클래스와 토스트 알림을 표시합니다.
- * @returns {void}
- */
-function toggleRAG() {
-    toggleMCPModule('rag');
-
-    const btn = document.getElementById('ragToggleBtn');
-    if (btn) {
-        btn.classList.toggle('active', getState('ragEnabled'));
-    }
-
-    const status = getState('ragEnabled') ? 'RAG 활성화 (문서 기반 응답)' : 'RAG 비활성화';
-    showToast(status);
-}
 
 /**
  * localStorage에서 프롬프트 모드를 로드하여 AppState에 반영
@@ -392,7 +371,6 @@ window.loadMCPSettings = loadMCPSettings;
 window.saveMCPSettings = saveMCPSettings;
 window.toggleMCPModule = toggleMCPModule;
 window.toggleWebSearch = toggleWebSearch;
-window.toggleRAG = toggleRAG;
 window.toggleMCPTool = toggleMCPTool;
 window.setAllMCPTools = setAllMCPTools;
 window.getEnabledTools = getEnabledTools;
@@ -413,7 +391,6 @@ export {
     saveMCPSettings,
     toggleMCPModule,
     toggleWebSearch,
-    toggleRAG,
     toggleMCPTool,
     setAllMCPTools,
     getEnabledTools,

@@ -61,11 +61,10 @@ export interface MCPFeatureState {
 export class UnifiedMCPClient {
     /** 내장 MCP 서버 (JSON-RPC 도구 처리) */
     private server: MCPServer;
-    /** MCP 기능 토글 상태 */
-    private featureState: MCPFeatureState = {
-        sequentialThinking: false,  // 기본값 false (사용자가 UI 버튼으로 활성화)
-        webSearch: false
-    };
+    /** MCP 기능 토글 상태 (유저별 관리) */
+    private featureState: Map<string, MCPFeatureState> = new Map();
+    /** 유저 ID가 없는 경우 글로벌 키 */
+    private static readonly GLOBAL_KEY = '__global__';
     /** 내장 + 외부 도구 통합 라우터 */
     private toolRouter: ToolRouter;
     /** 외부 MCP 서버 연결 관리자 */
@@ -84,18 +83,26 @@ export class UnifiedMCPClient {
     }
 
     /**
-     * 기능 상태 설정
+     * 기능 상태 설정 (유저별)
+     * @param state - 변경할 기능 상태 (partial merge)
+     * @param userId - 사용자 ID (미지정 시 글로벌 상태)
      */
-    async setFeatureState(state: Partial<MCPFeatureState>): Promise<void> {
-        this.featureState = { ...this.featureState, ...state };
-        logger.info(`기능 상태 업데이트:`, this.featureState);
+    async setFeatureState(state: Partial<MCPFeatureState>, userId?: string | number | null): Promise<void> {
+        const key = userId != null ? String(userId) : UnifiedMCPClient.GLOBAL_KEY;
+        const current = this.featureState.get(key) ?? { sequentialThinking: false, webSearch: false };
+        const updated = { ...current, ...state };
+        this.featureState.set(key, updated);
+        logger.info(`기능 상태 업데이트 (${key}):`, updated);
     }
 
     /**
-     * 현재 기능 상태 조회
+     * 현재 기능 상태 조회 (유저별)
+     * @param userId - 사용자 ID (미지정 시 글로벌 상태)
      */
-    getFeatureState(): MCPFeatureState {
-        return { ...this.featureState };
+    getFeatureState(userId?: string | number | null): MCPFeatureState {
+        const key = userId != null ? String(userId) : UnifiedMCPClient.GLOBAL_KEY;
+        const state = this.featureState.get(key) ?? { sequentialThinking: false, webSearch: false };
+        return { ...state };
     }
 
     /**
@@ -167,40 +174,31 @@ export class UnifiedMCPClient {
         return this.server.handleRequest(request);
     }
 
-    /**
-     * 메시지에 MCP 기능 적용
-     */
-    enhanceMessage(message: string): string {
-        let enhanced = message;
-
-        // Sequential Thinking 적용
-        if (this.featureState.sequentialThinking) {
-            enhanced = applySequentialThinking(enhanced, true);
-        }
-
-        return enhanced;
-    }
 
     /**
      * 상태 초기화
      */
     reset(): void {
-        if (this.featureState.sequentialThinking) {
-            getSequentialThinkingServer().reset();
+        for (const state of this.featureState.values()) {
+            if (state.sequentialThinking) {
+                getSequentialThinkingServer().reset();
+                break;
+            }
         }
         logger.info('상태 초기화 완료');
     }
 
     /**
      * 통계 조회
+     * @param userId - 사용자 ID (미지정 시 글로벌 상태)
      */
-    getStats(): {
+    getStats(userId?: string | number | null): {
         tools: number;
         features: MCPFeatureState;
     } {
         return {
             tools: this.getToolCount(),
-            features: this.getFeatureState()
+            features: this.getFeatureState(userId)
         };
     }
 
