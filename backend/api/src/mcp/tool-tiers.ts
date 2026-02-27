@@ -46,7 +46,6 @@ export const TOOL_TIERS: Record<UserTier, string[]> = {
         'web_search',
         'vision_ocr',
         'analyze_image',
-        'run_command',          // 명령어 실행
         'firecrawl_*',          // Firecrawl 관련 모든 도구
         'sequential_thinking',  // Sequential Thinking
     ],

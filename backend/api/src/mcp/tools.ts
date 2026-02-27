@@ -28,7 +28,6 @@ import { CAPACITY } from '../config/runtime-limits';
 
 // ============================================
 // 🔒 보안 패치 2026-02-07:
-// - run_command: 커맨드 인젝션(RCE) 위험으로 비활성화
 // - read_file/write_file: 샌드박스 미적용 레거시 도구 제거
 //   → mcp/filesystem.ts의 fs_read_file/fs_write_file (UserSandbox 적용) 사용
 // ============================================
