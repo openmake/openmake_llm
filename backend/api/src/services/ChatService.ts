@@ -269,6 +269,10 @@ export class ChatService {
             }
         }
         // 특수 모드 조기 분기: Discussion 또는 DeepResearch 모드는 별도 전략으로 위임
+        // languagePolicy.resolvedLanguage를 req에 반영하여 감지된 언어가 전략에 전달되도록 함
+        if (languagePolicy?.resolvedLanguage) {
+            req.userLanguagePreference = languagePolicy.resolvedLanguage;
+        }
         if (discussionMode) {
             return this.processMessageWithDiscussion(req, uploadedDocuments, onToken, onDiscussionProgress);
         }

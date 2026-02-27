@@ -89,8 +89,8 @@ describe('ToolRouter', () => {
 
     describe('executeTool', () => {
         it('should execute a built-in tool', async () => {
-            // run_command is a built-in tool
-            const result = await router.executeTool('run_command', { command: 'echo hello' });
+            // web_search is a built-in tool
+            const result = await router.executeTool('web_search', { query: 'test' });
             expect(result).toBeDefined();
             expect(result.content).toBeDefined();
             expect(result.content.length).toBeGreaterThan(0);
@@ -192,7 +192,7 @@ describe('ToolRouter', () => {
     describe('isExternalTool', () => {
         it('should identify external tools by namespace separator', () => {
             expect(router.isExternalTool(`server${MCP_NAMESPACE_SEPARATOR}tool`)).toBe(true);
-            expect(router.isExternalTool('run_command')).toBe(false);
+            expect(router.isExternalTool('web_search')).toBe(false);
         });
     });
 });

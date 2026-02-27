@@ -11,12 +11,11 @@ describe('Tool Tiers', () => {
             expect(TOOL_TIERS.free).toContain('web_search');
             expect(TOOL_TIERS.free).toContain('vision_ocr');
             expect(TOOL_TIERS.free).toContain('analyze_image');
-            expect(TOOL_TIERS.free).not.toContain('run_command');
+            expect(TOOL_TIERS.free).not.toContain('sequential_thinking');
         });
 
         it('should define pro tier with more tools', () => {
             expect(TOOL_TIERS.pro).toContain('web_search');
-            expect(TOOL_TIERS.pro).toContain('run_command');
             expect(TOOL_TIERS.pro).toContain('firecrawl_*');
             expect(TOOL_TIERS.pro).toContain('sequential_thinking');
         });
@@ -40,8 +39,8 @@ describe('Tool Tiers', () => {
                 expect(canUseTool('free', 'analyze_image')).toBe(true);
             });
 
-            it('should deny run_command', () => {
-                expect(canUseTool('free', 'run_command')).toBe(false);
+            it('should deny sequential_thinking', () => {
+                expect(canUseTool('free', 'sequential_thinking')).toBe(false);
             });
 
             it('should deny firecrawl tools', () => {
@@ -59,17 +58,13 @@ describe('Tool Tiers', () => {
                 expect(canUseTool('pro', 'vision_ocr')).toBe(true);
             });
 
-            it('should allow run_command', () => {
-                expect(canUseTool('pro', 'run_command')).toBe(true);
+            it('should allow sequential_thinking', () => {
+                expect(canUseTool('pro', 'sequential_thinking')).toBe(true);
             });
 
             it('should allow firecrawl tools via wildcard', () => {
                 expect(canUseTool('pro', 'firecrawl_scrape')).toBe(true);
                 expect(canUseTool('pro', 'firecrawl_search')).toBe(true);
-            });
-
-            it('should allow sequential_thinking', () => {
-                expect(canUseTool('pro', 'sequential_thinking')).toBe(true);
             });
 
             it('should allow external tools by default', () => {
@@ -82,7 +77,7 @@ describe('Tool Tiers', () => {
         describe('enterprise tier', () => {
             it('should allow all tools via wildcard', () => {
                 expect(canUseTool('enterprise', 'web_search')).toBe(true);
-                expect(canUseTool('enterprise', 'run_command')).toBe(true);
+                expect(canUseTool('enterprise', 'firecrawl_scrape')).toBe(true);
                 expect(canUseTool('enterprise', 'any_tool')).toBe(true);
                 expect(canUseTool('enterprise', 'postgres::query')).toBe(true);
             });
@@ -94,7 +89,6 @@ describe('Tool Tiers', () => {
             'web_search',
             'vision_ocr',
             'analyze_image',
-            'run_command',
             'firecrawl_scrape',
             'sequential_thinking',
             'postgres::query'
@@ -106,7 +100,7 @@ describe('Tool Tiers', () => {
             expect(tools).toContain('web_search');
             expect(tools).toContain('vision_ocr');
             expect(tools).toContain('analyze_image');
-            expect(tools).not.toContain('run_command');
+            expect(tools).not.toContain('sequential_thinking');
             expect(tools).not.toContain('firecrawl_scrape');
             expect(tools).not.toContain('postgres::query');
         });
@@ -115,7 +109,6 @@ describe('Tool Tiers', () => {
             const tools = getToolsForTier('pro', allTools);
             
             expect(tools).toContain('web_search');
-            expect(tools).toContain('run_command');
             expect(tools).toContain('firecrawl_scrape');
             expect(tools).toContain('sequential_thinking');
             expect(tools).toContain('postgres::query');
