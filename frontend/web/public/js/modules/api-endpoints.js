@@ -64,7 +64,6 @@ const API_ENDPOINTS = Object.freeze({
     CANVAS_SHARED: '/api/canvas/shared',
 
     // ── MCP ───────────────────────────────────────
-    MCP_SETTINGS: '/api/mcp/settings',
     MCP_SERVERS: '/api/mcp/servers',   // + /:serverId, /:serverId/connect, /:serverId/disconnect
 
     // ── External Integrations ─────────────────────

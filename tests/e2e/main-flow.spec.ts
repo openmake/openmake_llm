@@ -68,12 +68,10 @@ test.describe('클러스터 API', () => {
 });
 
 test.describe('MCP API', () => {
-    test('MCP 설정 조회 (GET /api/mcp/settings)', async ({ request }) => {
+    test('MCP 설정 조회 라우트 제거됨 (GET /api/mcp/settings → 404)', async ({ request }) => {
         const response = await request.get('/api/mcp/settings');
-        expect(response.status()).toBe(200);
-
-        const body = await response.json();
-        expect(body.settings).toBeDefined();
+        // MCPFeatureState dead code 제거로 GET /api/mcp/settings 라우트 삭제됨
+        expect(response.status()).toBe(404);
     });
 
     test('MCP 도구 목록 조회 (GET /api/mcp/tools)', async ({ request }) => {
