@@ -345,7 +345,8 @@ export class ClusterManager extends EventEmitter {
         if (modelName && modelName !== 'default') {
             // Cloud 모델(`:cloud` 접미사)은 OllamaClient가 자동으로 Cloud API로 라우팅
             // → 로컬 노드에 해당 모델이 설치되어 있을 필요 없음 → 필터링 건너뜀
-            const isCloudModel = modelName.toLowerCase().endsWith(':cloud');
+            const lowerModel = modelName.toLowerCase();
+            const isCloudModel = lowerModel.endsWith(':cloud') || lowerModel.endsWith('-cloud');
             if (!isCloudModel) {
                 candidates = candidates.filter(n =>
                     n.models.some(m => m.includes(modelName))
@@ -381,7 +382,8 @@ export class ClusterManager extends EventEmitter {
         let candidates = this.getOnlineNodes();
 
         if (modelName && modelName !== 'default') {
-            const isCloudModel = modelName.toLowerCase().endsWith(':cloud');
+            const lowerModel = modelName.toLowerCase();
+            const isCloudModel = lowerModel.endsWith(':cloud') || lowerModel.endsWith('-cloud');
             if (!isCloudModel) {
                 candidates = candidates.filter(n =>
                     n.models.some(m => m.includes(modelName))

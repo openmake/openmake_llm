@@ -46,7 +46,7 @@ export const mcpRouter = Router();
 mcpRouter.get('/settings', optionalAuth, (req: Request, res: Response) => {
      try {
          const mcpClient = getUnifiedMCPClient();
-         const settings = mcpClient.getFeatureState();
+         const settings = mcpClient.getFeatureState(req.user?.id);
          res.json(success({ settings }));
       } catch (error) {
           logger.error('[MCP Settings] 조회 실패:', error);
@@ -65,10 +65,10 @@ mcpRouter.put('/settings', optionalAuth, asyncHandler(async (req: Request, res: 
      }
 
      const mcpClient = getUnifiedMCPClient();
-     await mcpClient.setFeatureState(newSettings);
+     await mcpClient.setFeatureState(newSettings, req.user?.id);
 
      // 변경된 설정 반환
-     const updatedSettings = mcpClient.getFeatureState();
+     const updatedSettings = mcpClient.getFeatureState(req.user?.id);
      res.json(success({ settings: updatedSettings }));
  }));
 

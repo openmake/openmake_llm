@@ -104,7 +104,8 @@ export class MultiModelClientFactory {
         logger.info(`🚀 ${pairs.length}개 모델 클라이언트 초기화 중...`);
 
         pairs.forEach((pair: KeyModelPair) => {
-            const isCloudModel = pair.model?.toLowerCase().endsWith(':cloud') ?? false;
+            const lowerModel = pair.model?.toLowerCase() ?? '';
+            const isCloudModel = lowerModel.endsWith(':cloud') || lowerModel.endsWith('-cloud');
             const baseUrl = isCloudModel ? OLLAMA_CLOUD_HOST : envConfig.ollamaBaseUrl;
 
             const axiosInstance = axios.create({

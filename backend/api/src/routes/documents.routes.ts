@@ -15,6 +15,7 @@
  * - GET    /api/documents        - 업로드된 문서 목록
  * - GET    /api/documents/:docId - 개별 문서 조회
  * - DELETE /api/documents/:docId - 문서 삭제
+ * - DELETE /api/documents        - 전체 문서 일괄 삭제
  *
  * @requires ClusterManager - Ollama 클러스터 관리
  * @requires extractDocument - 문서 텍스트 추출 (PDF, 이미지 OCR)
@@ -336,6 +337,29 @@ router.get('/documents', asyncHandler(async (_req: Request, res: Response) => {
  }));
 
 /**
+ * DELETE /api/documents
+ * 업로드된 전체 문서 일괄 삭제
+ */
+router.delete('/documents', asyncHandler(async (_req: Request, res: Response) => {
+    const docCount = uploadedDocuments.size;
+
+    // RAG 벡터 임베딩 전체 삭제
+    let embeddingsDeleted = 0;
+    try {
+        embeddingsDeleted = await getRAGService().deleteAllDocumentEmbeddings();
+        logger.info(`[Documents] 전체 문서 임베딩 삭제: ${embeddingsDeleted}개`);
+    } catch (error) {
+        logger.error('[Documents] 전체 문서 임베딩 삭제 실패:', error);
+    }
+
+    // 문서 저장소 전체 삭제 (인메모리 + DB)
+    uploadedDocuments.clear();
+
+    logger.info(`[Documents] 전체 문서 삭제: ${docCount}개 문서, ${embeddingsDeleted}개 임베딩`);
+    res.json(success({ deletedDocuments: docCount, deletedEmbeddings: embeddingsDeleted }));
+}));
+
+/**
  * GET /api/documents/:docId
  * 개별 문서 조회
  */
@@ -358,7 +382,19 @@ router.get('/documents/:docId', asyncHandler(async (req: Request, res: Response)
 router.delete('/documents/:docId', asyncHandler(async (req: Request, res: Response) => {
      const { docId } = req.params;
      const deleted = uploadedDocuments.delete(docId);
-     res.json(success({ deleted }));
+
+     // RAG 벡터 임베딩도 함께 삭제
+     let embeddingsDeleted = 0;
+     if (deleted) {
+         try {
+             embeddingsDeleted = await getRAGService().deleteDocumentEmbeddings(docId);
+             logger.info(`[RAG] 문서 임베딩 삭제: ${docId} → ${embeddingsDeleted}개 청크`);
+         } catch (error) {
+             logger.error(`[RAG] 문서 임베딩 삭제 실패 (${docId}):`, error);
+         }
+     }
+
+     res.json(success({ deleted, embeddingsDeleted }));
  }));
 
 export default router;

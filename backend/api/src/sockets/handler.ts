@@ -177,7 +177,7 @@ export class WebSocketHandler {
 
             // 초기 데이터 전송 (MCP)
             const mcpClient = getUnifiedMCPClient();
-            const stats = mcpClient.getStats();
+            const stats = mcpClient.getStats(extWs._authenticatedUserId);
             ws.send(JSON.stringify({ type: 'stats', stats }));
 
             ws.on('close', () => {
@@ -264,14 +264,15 @@ export class WebSocketHandler {
                 const { settings } = typedMsg;
                 if (settings) {
                     const mcpClientForSettings = getUnifiedMCPClient();
-                    await mcpClientForSettings.setFeatureState(settings);
+                    const settingsUserId = (ws as ExtendedWebSocket)._authenticatedUserId;
+                    await mcpClientForSettings.setFeatureState(settings, settingsUserId);
                     log.info('MCP 설정 동기화 완료:', JSON.stringify(settings));
 
                     // 클라이언트에 확인 메시지 전송
                     ws.send(JSON.stringify({
                         type: 'mcp_settings_ack',
                         success: true,
-                        settings: mcpClientForSettings.getFeatureState()
+                        settings: mcpClientForSettings.getFeatureState(settingsUserId)
                     }));
                 }
                 break;

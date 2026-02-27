@@ -31,6 +31,7 @@ const NAV_ITEMS = {
         { href: '/history.html', icon: '📜', iconify: 'lucide:scroll-text', label: '히스토리', requireAuth: true },
         { href: '/canvas.html', icon: '📄', iconify: 'lucide:file-text', label: '캔버스', requireAuth: true },
         { href: '/research.html', icon: '🔬', iconify: 'lucide:flask-conical', label: '딥 리서치', requireAuth: true },
+        { href: '/documents.html', icon: '📑', iconify: 'lucide:file-search', label: '문서 관리', requireAuth: true },
         { href: '/marketplace.html', icon: '🏪', iconify: 'lucide:store', label: '마켓플레이스', requireAuth: true },
         { href: '/custom-agents.html', icon: '🤖', iconify: 'lucide:bot', label: '커스텀 에이전트', requireAuth: true },
         { href: '/skill-library.html', icon: '📦', iconify: 'lucide:package', label: '스킬 라이브러리', requireAuth: true, cssFiles: ['/css/skill-library.css'] },
