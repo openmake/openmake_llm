@@ -12,7 +12,7 @@
  * - 사용자 등급(tier) 기반 도구 접근 제어
  * - UserContext 기반 샌드박스 경로 변환
  * - Sequential Thinking 메시지 적용
- * - 기능 상태(Feature State) 관리
+ * - 외부 MCP 서버 초기화 (DB 연동)
  * - 외부 MCP 서버 초기화 (DB 연동)
  * - 싱글톤 인스턴스 제공
  *
@@ -24,7 +24,7 @@
  */
 
 import { MCPServer, createMCPServer } from './server';
-import { getSequentialThinkingServer, applySequentialThinking } from './sequential-thinking';
+import { applySequentialThinking } from './sequential-thinking';
 import { MCPToolResult, MCPRequest, MCPResponse } from './types';
 import { UserTier } from '../data/user-manager';
 import { canUseTool, getToolsForTier } from './tool-tiers';
@@ -37,18 +37,13 @@ import { createLogger } from '../utils/logger';
 const logger = createLogger('MCP');
 
 /**
- * MCP 기능 상태 인터페이스
+ * 통합 MCP 클라이언트
  *
- * UI에서 토글 가능한 MCP 기능의 활성화 상태를 나타냅니다.
+ * 애플리케이션 전체에서 MCP 기능을 사용하기 위한 통합 인터페이스입니다.
+ * getUnifiedMCPClient()로 싱글톤 인스턴스를 사용합니다.
  *
- * @interface MCPFeatureState
+ * @class UnifiedMCPClient
  */
-export interface MCPFeatureState {
-    /** Sequential Thinking 활성화 여부 (기본값: false, UI의 뇌 버튼으로 토글) */
-    sequentialThinking: boolean;
-    /** 웹 검색 활성화 여부 */
-    webSearch: boolean;
-}
 
 /**
  * 통합 MCP 클라이언트
@@ -61,10 +56,7 @@ export interface MCPFeatureState {
 export class UnifiedMCPClient {
     /** 내장 MCP 서버 (JSON-RPC 도구 처리) */
     private server: MCPServer;
-    /** MCP 기능 토글 상태 (유저별 관리) */
-    private featureState: Map<string, MCPFeatureState> = new Map();
-    /** 유저 ID가 없는 경우 글로벌 키 */
-    private static readonly GLOBAL_KEY = '__global__';
+    /** 내장 + 외부 도구 통합 라우터 */
     /** 내장 + 외부 도구 통합 라우터 */
     private toolRouter: ToolRouter;
     /** 외부 MCP 서버 연결 관리자 */
@@ -83,27 +75,8 @@ export class UnifiedMCPClient {
     }
 
     /**
-     * 기능 상태 설정 (유저별)
-     * @param state - 변경할 기능 상태 (partial merge)
-     * @param userId - 사용자 ID (미지정 시 글로벌 상태)
+     * 등록된 도구 수 조회
      */
-    async setFeatureState(state: Partial<MCPFeatureState>, userId?: string | number | null): Promise<void> {
-        const key = userId != null ? String(userId) : UnifiedMCPClient.GLOBAL_KEY;
-        const current = this.featureState.get(key) ?? { sequentialThinking: false, webSearch: false };
-        const updated = { ...current, ...state };
-        this.featureState.set(key, updated);
-        logger.info(`기능 상태 업데이트 (${key}):`, updated);
-    }
-
-    /**
-     * 현재 기능 상태 조회 (유저별)
-     * @param userId - 사용자 ID (미지정 시 글로벌 상태)
-     */
-    getFeatureState(userId?: string | number | null): MCPFeatureState {
-        const key = userId != null ? String(userId) : UnifiedMCPClient.GLOBAL_KEY;
-        const state = this.featureState.get(key) ?? { sequentialThinking: false, webSearch: false };
-        return { ...state };
-    }
 
     /**
      * 등록된 도구 수 조회
@@ -179,26 +152,15 @@ export class UnifiedMCPClient {
      * 상태 초기화
      */
     reset(): void {
-        for (const state of this.featureState.values()) {
-            if (state.sequentialThinking) {
-                getSequentialThinkingServer().reset();
-                break;
-            }
-        }
         logger.info('상태 초기화 완료');
     }
 
     /**
      * 통계 조회
-     * @param userId - 사용자 ID (미지정 시 글로벌 상태)
      */
-    getStats(userId?: string | number | null): {
-        tools: number;
-        features: MCPFeatureState;
-    } {
+    getStats(): { tools: number } {
         return {
-            tools: this.getToolCount(),
-            features: this.getFeatureState(userId)
+            tools: this.getToolCount()
         };
     }
 

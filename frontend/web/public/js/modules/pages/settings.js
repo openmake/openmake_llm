@@ -459,11 +459,6 @@
                             ]
                         },
                         {
-                            category: '추론', emoji: '🧠', tools: [
-                                { name: 'sequential_thinking', label: 'Sequential Thinking', description: '단계별 논리적 추론 체인', minTier: 'pro' }
-                            ]
-                        },
-                        {
                             category: '스크래핑', emoji: '🔥', tools: [
                                 { name: 'firecrawl_scrape', label: 'Firecrawl 스크래핑', description: '웹페이지를 스크래핑합니다', minTier: 'pro' },
                                 { name: 'firecrawl_search', label: 'Firecrawl 검색', description: '웹을 검색합니다', minTier: 'pro' },

@@ -45,13 +45,6 @@ var MCP_TOOL_CATALOG = [
         ]
     },
     {
-        category: '추론',
-        emoji: '🧠',
-        tools: [
-            { name: 'sequential_thinking', label: 'Sequential Thinking', description: '단계별 논리적 추론 체인' }
-        ]
-    },
-    {
         category: '스크래핑',
         emoji: '🔥',
         tools: [

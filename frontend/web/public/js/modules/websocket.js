@@ -111,7 +111,7 @@ function sendWsMessage(data) {
  * WebSocket 수신 메시지 핸들러
  * 메시지 타입에 따라 적절한 처리 함수를 호출합니다.
  * 지원 타입: init, stats, update, cluster_event, token, done, error, aborted, agents,
- *            mcp_settings_ack, agent_selected, discussion_progress, research_progress,
+ *            agent_selected, discussion_progress, research_progress,
  *            progress, session_created
  * @param {Object} data - 파싱된 수신 메시지 객체
  * @param {string} data.type - 메시지 타입 식별자
@@ -223,14 +223,6 @@ function handleMessage(data) {
             }
             break;
 
-        case 'mcp_settings_ack':
-            if (typeof showToast === 'function') {
-                showToast(
-                    data.success ? 'MCP 설정이 저장되었습니다.' : 'MCP 설정 저장 실패',
-                    data.success ? 'success' : 'error'
-                );
-            }
-            break;
 
         case 'agent_selected':
             debugLog('[WebSocket] 에이전트 선택:', data.agent);

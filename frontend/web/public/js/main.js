@@ -109,7 +109,6 @@ import {
 import {
     startFeatureChat, handleCommand,
     showHelpAndMessage, performWebSearch,
-    syncMCPSettingsToServer, syncMCPSettingsFromServer,
     showHelpPopup, hideHelpPopup,
     hideHelpPopupDelayed, closeHelpPopup
 } from './modules/error-handler.js';
@@ -637,8 +636,6 @@ window.startFeatureChat = startFeatureChat;
 window.handleCommand = handleCommand;
 window.showHelpAndMessage = showHelpAndMessage;
 window.performWebSearch = performWebSearch;
-window.syncMCPSettingsToServer = syncMCPSettingsToServer;
-window.syncMCPSettingsFromServer = syncMCPSettingsFromServer;
 window.useMode = useMode;
 window.showHelpPopup = showHelpPopup;
 window.hideHelpPopup = hideHelpPopup;

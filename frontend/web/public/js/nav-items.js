@@ -27,7 +27,6 @@ const NAV_ITEMS = {
     menu: [
         { href: '/', icon: '💬', iconify: 'lucide:message-circle', label: '채팅' },
         { href: '/cluster.html', icon: '🖥️', iconify: 'lucide:monitor', label: '클러스터', requireAuth: true },
-        { href: '/mcp-tools.html', icon: '🔧', iconify: 'lucide:wrench', label: 'MCP 도구' },
         { href: '/history.html', icon: '📜', iconify: 'lucide:scroll-text', label: '히스토리', requireAuth: true },
         { href: '/canvas.html', icon: '📄', iconify: 'lucide:file-text', label: '캔버스', requireAuth: true },
         { href: '/research.html', icon: '🔬', iconify: 'lucide:flask-conical', label: '딥 리서치', requireAuth: true },

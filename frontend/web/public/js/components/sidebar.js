@@ -62,7 +62,6 @@ class SharedSidebar {
         const menuItems = navData ? navData.menu.map(item => ({ ...item })) : [
             { href: '/', icon: '💬', label: '채팅' },
             { href: '/cluster.html', icon: '🖥️', label: '클러스터', requireAuth: true },
-            { href: '/mcp-tools.html', icon: '🔧', label: 'MCP 도구' },
             { href: '/history.html', icon: '📜', label: '대화 히스토리', requireAuth: true },
             { href: '/canvas.html', icon: '📄', label: '캔버스', requireAuth: true },
             { href: '/research.html', icon: '🔬', label: '딥 리서치', requireAuth: true },

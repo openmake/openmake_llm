@@ -11,7 +11,7 @@
  * @module sockets/handler
  * @description 지원하는 WebSocket 메시지 타입:
  * - 'refresh'        - 클러스터 상태 업데이트 요청
- * - 'mcp_settings'   - MCP 기능 설정 동기화
+ * - 'request_agents' - MCP 도구 목록 (에이전트 형식) 요청
  * - 'request_agents' - MCP 도구 목록 (에이전트 형식) 요청
  * - 'chat'           - AI 채팅 메시지 (스트리밍 토큰 응답)
  * - 'abort'          - 진행 중인 채팅 생성 중단
@@ -20,7 +20,7 @@
  * - 'init'               - 초기 클러스터/MCP 상태
  * - 'stats'              - MCP 통계
  * - 'update'             - 클러스터 상태 업데이트
- * - 'mcp_settings_ack'   - MCP 설정 변경 확인
+ * - 'agents'             - 에이전트(도구) 목록
  * - 'agents'             - 에이전트(도구) 목록
  * - 'token'              - AI 응답 스트리밍 토큰
  * - 'session_created'    - 새 세션 ID 알림
@@ -177,7 +177,7 @@ export class WebSocketHandler {
 
             // 초기 데이터 전송 (MCP)
             const mcpClient = getUnifiedMCPClient();
-            const stats = mcpClient.getStats(extWs._authenticatedUserId);
+            const stats = mcpClient.getStats();
             ws.send(JSON.stringify({ type: 'stats', stats }));
 
             ws.on('close', () => {
@@ -230,7 +230,7 @@ export class WebSocketHandler {
 
     /**
      * 수신된 WebSocket 메시지를 타입별로 라우팅합니다.
-     * 유효한 타입: 'refresh', 'mcp_settings', 'request_agents', 'chat', 'abort'
+     * 유효한 타입: 'refresh', 'request_agents', 'chat', 'abort'
      * @param ws - WebSocket 클라이언트 인스턴스
      * @param msg - 파싱된 메시지 객체
      */
@@ -241,7 +241,7 @@ export class WebSocketHandler {
         }
 
         const typedMsg = msg as WSMessage;
-        const validTypes: WSMessage['type'][] = ['refresh', 'mcp_settings', 'request_agents', 'chat', 'abort'];
+        const validTypes: WSMessage['type'][] = ['refresh', 'request_agents', 'chat', 'abort'];
         if (!validTypes.includes(typedMsg.type)) {
             log.debug(`[WS] 알 수 없는 메시지 타입: ${typedMsg.type}`);
             return;
@@ -257,24 +257,6 @@ export class WebSocketHandler {
                         nodes: this.cluster.getNodes()
                     }
                 }));
-                break;
-
-            case 'mcp_settings':
-                // MCP 모듈 설정 즉시 동기화
-                const { settings } = typedMsg;
-                if (settings) {
-                    const mcpClientForSettings = getUnifiedMCPClient();
-                    const settingsUserId = (ws as ExtendedWebSocket)._authenticatedUserId;
-                    await mcpClientForSettings.setFeatureState(settings, settingsUserId);
-                    log.info('MCP 설정 동기화 완료:', JSON.stringify(settings));
-
-                    // 클라이언트에 확인 메시지 전송
-                    ws.send(JSON.stringify({
-                        type: 'mcp_settings_ack',
-                        success: true,
-                        settings: mcpClientForSettings.getFeatureState(settingsUserId)
-                    }));
-                }
                 break;
 
             case 'request_agents': {
