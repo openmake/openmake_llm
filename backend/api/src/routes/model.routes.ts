@@ -17,6 +17,7 @@ import { success } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
 import { getProfiles } from '../chat/pipeline-profile';
 import { createLogger } from '../utils/logger';
+import { DEFAULT_AUTO_MODEL } from '../config/constants';
 
 const router = Router();
 const logger = createLogger('ModelRoutes');
@@ -29,7 +30,7 @@ const logger = createLogger('ModelRoutes');
 router.get('/model', asyncHandler(async (req: Request, res: Response) => {
     res.json(success({
         model: 'OpenMake LLM Auto',
-        modelId: 'openmake_llm_auto',
+        modelId: DEFAULT_AUTO_MODEL,
         provider: 'openmake'
     }));
 }));
@@ -41,7 +42,7 @@ router.get('/model', asyncHandler(async (req: Request, res: Response) => {
  */
 router.get('/models', asyncHandler(async (req: Request, res: Response) => {
     const profiles = getProfiles();
-    const defaultModelId = 'openmake_llm_auto';
+    const defaultModelId = DEFAULT_AUTO_MODEL;
 
     const models = Object.values(profiles).map(profile => ({
         name: profile.displayName,

@@ -44,15 +44,12 @@ export interface EnvConfig {
     // Ollama
     ollamaBaseUrl: string;
     ollamaDefaultModel: string;
-    ollamaKoreanModel: string;
-    ollamaModel: string;
     ollamaTimeout: number;
-    ollamaHost: string;
     ollamaApiKey: string;
     ollamaApiKeyPrimary: string;
     ollamaApiKeySecondary: string;
     ollamaSshKey: string;
-    ollamaModels: string[];  // Per-key models (OLLAMA_MODEL_1, _2, etc.)
+    ollamaModels: string[];  // Per-key models — 로그 표시용 (OLLAMA_MODEL_1, _2, etc.)
 
     // Rate limits
     ollamaHourlyLimit: number;
@@ -66,7 +63,6 @@ export interface EnvConfig {
     geminiThinkEnabled: boolean;
     geminiThinkLevel: 'low' | 'medium' | 'high';
     geminiNumCtx: number;
-    geminiEmbeddingModel: string;
     geminiWebSearchEnabled: boolean;
 
     // External services
@@ -155,15 +151,12 @@ const DEFAULT_CONFIG: EnvConfig = {
     // Ollama
     ollamaBaseUrl: 'http://localhost:11434',
     ollamaDefaultModel: 'gemini-3-flash-preview:cloud',
-    ollamaKoreanModel: 'gemini-3-flash-preview:cloud',
-    ollamaModel: 'gemini-3-flash-preview:cloud',
     ollamaTimeout: 120000,
-    ollamaHost: 'http://localhost:11434',
     ollamaApiKey: '',
     ollamaApiKeyPrimary: '',
     ollamaApiKeySecondary: '',
     ollamaSshKey: '',
-    ollamaModels: [],  // Per-key models
+    ollamaModels: [],  // Per-key models — 로그 표시용
 
     // Rate limits
     ollamaHourlyLimit: 150,
@@ -177,7 +170,6 @@ const DEFAULT_CONFIG: EnvConfig = {
     geminiThinkEnabled: true,
     geminiThinkLevel: 'high' as const,
     geminiNumCtx: 32768,
-    geminiEmbeddingModel: 'gemini-3-flash-preview:cloud',
     geminiWebSearchEnabled: true,
 
     // External services
@@ -337,10 +329,7 @@ export function loadConfig(): EnvConfig {
         CORS_ORIGINS: env('CORS_ORIGINS'),
         OLLAMA_BASE_URL: env('OLLAMA_BASE_URL'),
         OLLAMA_DEFAULT_MODEL: env('OLLAMA_DEFAULT_MODEL'),
-        OLLAMA_KOREAN_MODEL: env('OLLAMA_KOREAN_MODEL'),
-        OLLAMA_MODEL: env('OLLAMA_MODEL'),
         OLLAMA_TIMEOUT: env('OLLAMA_TIMEOUT'),
-        OLLAMA_HOST: env('OLLAMA_HOST'),
         OLLAMA_API_KEY: env('OLLAMA_API_KEY'),
         OLLAMA_API_KEY_PRIMARY: env('OLLAMA_API_KEY_PRIMARY'),
         OLLAMA_API_KEY_SECONDARY: env('OLLAMA_API_KEY_SECONDARY'),
@@ -353,7 +342,6 @@ export function loadConfig(): EnvConfig {
         GEMINI_THINK_ENABLED: env('GEMINI_THINK_ENABLED'),
         GEMINI_THINK_LEVEL: env('GEMINI_THINK_LEVEL'),
         GEMINI_NUM_CTX: env('GEMINI_NUM_CTX'),
-        GEMINI_EMBEDDING_MODEL: env('GEMINI_EMBEDDING_MODEL'),
         GEMINI_WEB_SEARCH_ENABLED: env('GEMINI_WEB_SEARCH_ENABLED'),
         GOOGLE_API_KEY: env('GOOGLE_API_KEY'),
         GOOGLE_CSE_ID: env('GOOGLE_CSE_ID'),
@@ -438,16 +426,13 @@ export function loadConfig(): EnvConfig {
         // Ollama
         ollamaBaseUrl: parsed.OLLAMA_BASE_URL ?? DEFAULT_CONFIG.ollamaBaseUrl,
         ollamaDefaultModel: parsed.OLLAMA_DEFAULT_MODEL ?? DEFAULT_CONFIG.ollamaDefaultModel,
-        ollamaKoreanModel: parsed.OLLAMA_KOREAN_MODEL ?? DEFAULT_CONFIG.ollamaKoreanModel,
-        ollamaModel: parsed.OLLAMA_MODEL ?? DEFAULT_CONFIG.ollamaModel,
         ollamaTimeout: parsed.OLLAMA_TIMEOUT ?? DEFAULT_CONFIG.ollamaTimeout,
-        ollamaHost: parsed.OLLAMA_HOST ?? DEFAULT_CONFIG.ollamaHost,
         ollamaApiKey: parsed.OLLAMA_API_KEY ?? DEFAULT_CONFIG.ollamaApiKey,
         ollamaApiKeyPrimary: parsed.OLLAMA_API_KEY_PRIMARY ?? DEFAULT_CONFIG.ollamaApiKeyPrimary,
         ollamaApiKeySecondary: parsed.OLLAMA_API_KEY_SECONDARY ?? DEFAULT_CONFIG.ollamaApiKeySecondary,
         ollamaSshKey: parsed.OLLAMA_SSH_KEY ?? DEFAULT_CONFIG.ollamaSshKey,
 
-        // Per-key models (OLLAMA_MODEL_1, _2, _3, ... N)
+        // Per-key models — 로그 표시용 (OLLAMA_MODEL_1, _2, _3, ... N)
         ollamaModels: parsed.OLLAMA_MODELS ?? DEFAULT_CONFIG.ollamaModels,
 
         // Rate limits
@@ -462,7 +447,6 @@ export function loadConfig(): EnvConfig {
         geminiThinkEnabled: parsed.GEMINI_THINK_ENABLED ?? DEFAULT_CONFIG.geminiThinkEnabled,
         geminiThinkLevel: parsed.GEMINI_THINK_LEVEL ?? DEFAULT_CONFIG.geminiThinkLevel,
         geminiNumCtx: parsed.GEMINI_NUM_CTX ?? DEFAULT_CONFIG.geminiNumCtx,
-        geminiEmbeddingModel: parsed.GEMINI_EMBEDDING_MODEL ?? DEFAULT_CONFIG.geminiEmbeddingModel,
         geminiWebSearchEnabled: parsed.GEMINI_WEB_SEARCH_ENABLED ?? DEFAULT_CONFIG.geminiWebSearchEnabled,
 
         // External services

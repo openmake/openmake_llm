@@ -12,13 +12,10 @@
 import { getState, setState } from './state.js';
 import { authFetch } from './auth.js';
 import { showToast } from './ui.js';
+import { STORAGE_KEY_MCP_SETTINGS, STORAGE_KEY_PROMPT_MODE, STORAGE_KEY_AGENT_MODE } from './constants.js';
 
-// BUG-R3-004: SafeStorage 래퍼 — Safari Private Mode 등에서 localStorage 예외 방지
-const SS = window.SafeStorage || {
-    getItem: (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } },
-    setItem: (k, v) => { try { localStorage.setItem(k, v); } catch (e) { } },
-    removeItem: (k) => { try { localStorage.removeItem(k); } catch (e) { } }
-};
+// SafeStorage 래퍼 — safe-storage.js에서 전역 등록됨
+const SS = window.SafeStorage;
 
 /**
  * MCP 도구 마스터 목록 — 백엔드의 builtInTools + tool-tiers와 동기화
@@ -62,7 +59,7 @@ var MCP_TOOL_CATALOG = [
  * @returns {void}
  */
 function loadMCPSettings() {
-    const saved = SS.getItem('mcpSettings');
+    const saved = SS.getItem(STORAGE_KEY_MCP_SETTINGS);
     if (saved) {
         try {
             var settings = JSON.parse(saved);
@@ -97,7 +94,7 @@ function saveMCPSettings() {
         rag: getState('ragEnabled'),
         enabledTools: getState('mcpToolsEnabled') || {}
     };
-    SS.setItem('mcpSettings', JSON.stringify(settings));
+    SS.setItem(STORAGE_KEY_MCP_SETTINGS, JSON.stringify(settings));
 }
 
 /**
@@ -187,7 +184,7 @@ function toggleWebSearch() {
  * @returns {void}
  */
 function loadPromptMode() {
-    const saved = SS.getItem('promptMode');
+    const saved = SS.getItem(STORAGE_KEY_PROMPT_MODE);
     if (saved) {
         setState('promptMode', saved);
     }
@@ -200,7 +197,7 @@ function loadPromptMode() {
  */
 function setPromptMode(mode) {
     setState('promptMode', mode);
-    SS.setItem('promptMode', mode);
+    SS.setItem(STORAGE_KEY_PROMPT_MODE, mode);
 }
 
 /**
@@ -208,7 +205,7 @@ function setPromptMode(mode) {
  * @returns {void}
  */
 function loadAgentMode() {
-    const saved = SS.getItem('agentMode');
+    const saved = SS.getItem(STORAGE_KEY_AGENT_MODE);
     setState('agentMode', saved === 'true');
 }
 
@@ -220,7 +217,7 @@ function loadAgentMode() {
 function toggleAgentMode() {
     const enabled = !getState('agentMode');
     setState('agentMode', enabled);
-    SS.setItem('agentMode', enabled.toString());
+    SS.setItem(STORAGE_KEY_AGENT_MODE, enabled.toString());
 }
 
 /**
@@ -257,9 +254,9 @@ function saveSettings() {
  * @returns {void}
  */
 function resetSettings() {
-    SS.removeItem('mcpSettings');
-    SS.removeItem('promptMode');
-    SS.removeItem('agentMode');
+    SS.removeItem(STORAGE_KEY_MCP_SETTINGS);
+    SS.removeItem(STORAGE_KEY_PROMPT_MODE);
+    SS.removeItem(STORAGE_KEY_AGENT_MODE);
 
     setState('thinkingEnabled', true);
     setState('webSearchEnabled', false);

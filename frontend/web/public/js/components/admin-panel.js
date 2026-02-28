@@ -14,6 +14,8 @@
  * @module components/admin-panel
  */
 
+var SK = window.STORAGE_KEYS || {};
+
 /** @type {boolean} 패널 열림 상태 */
 var _isOpen = false;
 /** @type {HTMLElement|null} 패널 DOM 요소 */
@@ -42,8 +44,8 @@ var ADMIN_ITEMS = [
  */
 function isAdmin() {
     try {
-        var SS = window.SafeStorage || { getItem: function(k) { try { return localStorage.getItem(k); } catch(e) { return null; } } };
-        var user = JSON.parse(SS.getItem('user') || '{}');
+        var SS = window.SafeStorage;
+        var user = JSON.parse(SS.getItem(SK.USER || 'user') || '{}');
         return user.role === 'admin' || user.role === 'administrator';
     } catch (e) {
         return false;

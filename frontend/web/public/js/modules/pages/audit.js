@@ -10,6 +10,7 @@
  */
 (function () {
     'use strict';
+    var SK = window.STORAGE_KEYS || {};
     window.PageModules = window.PageModules || {};
     var _intervals = [];
     var _timeouts = [];
@@ -51,9 +52,9 @@
 
                 function checkAdmin() {
                     try {
-                        // SafeStorage 래퍼 — Safari Private Mode 등에서 localStorage 예외 방지
-                        var SS = window.SafeStorage || { getItem: function (k) { try { return localStorage.getItem(k); } catch (e) { return null; } } };
-                        var savedUser = SS.getItem('user');
+                        // SafeStorage 래퍼 — safe-storage.js에서 전역 등록됨
+                        var SS = window.SafeStorage;
+                        var savedUser = SS.getItem(SK.USER || 'user');
                         if (!savedUser) return false;
                         var user = JSON.parse(savedUser);
                         if (!user || (user.role !== 'admin' && user.role !== 'administrator')) {

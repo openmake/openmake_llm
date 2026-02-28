@@ -14,6 +14,7 @@ import { getState, setState, addToMemory, clearMemory } from './state.js';
 import { escapeHtml, scrollToBottom, showToast } from './ui.js';
 import { addChatMessage } from './chat.js';
 import { clearAttachments } from './file-upload.js';
+import { STORAGE_KEY_USER } from './constants.js';
 
 /**
  * 익명 사용자용 세션 ID를 생성 또는 반환
@@ -41,7 +42,7 @@ async function loadChatSessions() {
 
     try {
         // user객체로 로그인 여부를 판단 — authToken은 httpOnly 쿠키로 관리됩니다
-        const userStr = (window.SafeStorage ? window.SafeStorage.getItem('user') : localStorage.getItem('user')) || '{}';
+        const userStr = (window.SafeStorage ? window.SafeStorage.getItem(STORAGE_KEY_USER) : localStorage.getItem(STORAGE_KEY_USER)) || '{}';
         const userRole = JSON.parse(userStr).role;
         const isAdminUser = userRole === 'admin' || userRole === 'administrator';
         const hasUser = !!(userStr && userStr !== '{}');
@@ -119,7 +120,7 @@ async function createNewSession(title) {
     try {
         const model = document.getElementById('modelSelect')?.value || 'default';
         // user객체로 로그인 여부를 판단 — authToken은 httpOnly 쿠키로 관리됩니다
-        const userStr = (window.SafeStorage ? window.SafeStorage.getItem('user') : localStorage.getItem('user'));
+        const userStr = (window.SafeStorage ? window.SafeStorage.getItem(STORAGE_KEY_USER) : localStorage.getItem(STORAGE_KEY_USER));
         const anonSessionId = !userStr ? getOrCreateAnonymousSessionId() : undefined;
 
         const headers = { 'Content-Type': 'application/json' };
