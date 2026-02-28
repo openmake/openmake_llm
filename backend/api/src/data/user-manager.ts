@@ -433,7 +433,6 @@ class UserManagerImpl {
             await client.query('DELETE FROM external_connections WHERE user_id = $1', [userId]);
             await client.query('DELETE FROM user_api_keys WHERE user_id = $1', [userId]);
             await client.query('DELETE FROM message_feedback WHERE user_id = $1', [userId]);
-            await client.query('DELETE FROM canvas_documents WHERE user_id = $1', [userId]);
             await client.query('DELETE FROM research_sessions WHERE user_id = $1', [userId]);
             await client.query('DELETE FROM conversation_sessions WHERE user_id = $1', [userId]);
 

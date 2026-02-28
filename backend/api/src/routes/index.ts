@@ -29,7 +29,6 @@ export { memoryRouter } from './memory.routes';
 // 🆕 신규 도메인 라우트
 export { default as auditRouter } from './audit.routes';
 export { default as researchRouter } from './research.routes';
-export { default as canvasRouter } from './canvas.routes';
 export { default as externalRouter } from './external.routes';
 export { default as marketplaceRouter } from './marketplace.routes';
 

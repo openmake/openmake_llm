@@ -32,7 +32,6 @@ import {
     memoryRouter,
     auditRouter,
     researchRouter,
-    canvasRouter,
     externalRouter,
     marketplaceRouter,
     pushRouter,
@@ -152,7 +151,6 @@ export function setupApiRoutes(
     app.use('/api/memory', memoryRouter);
     app.use('/api/audit', auditRouter);
     app.use('/api/research', researchRouter);
-    app.use('/api/canvas', canvasRouter);
     app.use('/api/external', externalRouter);
     app.use('/api/marketplace', marketplaceRouter);
     app.use('/api/skills-marketplace', skillsMarketplaceRouter);

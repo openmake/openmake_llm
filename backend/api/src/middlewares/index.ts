@@ -425,19 +425,6 @@ export const memoryLimiter = createAdvancedRateLimiter({
     message: '메모리 요청이 너무 많습니다. 잠시 후 다시 시도하세요.',
 });
 
-/**
- * Canvas API 레이트 리미터 (협업 문서 공유)
- */
-export const canvasLimiter = createAdvancedRateLimiter({
-    windowMs: 15 * 60 * 1000,
-    ipLimit: 30,
-    userLimit: 60,
-    endpointRules: [
-        { path: /^POST:.*\/canvas(?:\/|$)/, limit: 20 },
-        { path: /^PUT:.*\/canvas(?:\/|$)/, limit: 20 },
-    ],
-    message: 'Canvas 요청이 너무 많습니다. 잠시 후 다시 시도하세요.',
-});
 
 /**
  * MCP 레이트 리미터 (MCP 도구 호출 — AI 비용 높음)
