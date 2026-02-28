@@ -434,6 +434,12 @@
             <div id="registerPanel" class="form-panel">
                 <form id="registerForm" onsubmit="handleRegister(event)">
                     <div class="form-group">
+                        <label class="form-label" for="registerUsername">사용자명</label>
+                        <input type="text" id="registerUsername" class="form-input" placeholder="홍길동" required
+                            minlength="3" maxlength="50">
+                        <span class="form-hint">3~50자, 다른 사용자에게 표시됩니다</span>
+                    </div>
+                    <div class="form-group">
                         <label class="form-label" for="registerEmail">이메일</label>
                         <input type="email" id="registerEmail" class="form-input" placeholder="example@email.com"
                             required>
@@ -675,9 +681,15 @@
             e.preventDefault();
             hideMessages();
 
+            const username = document.getElementById('registerUsername').value.trim();
             const email = document.getElementById('registerEmail').value;
             const password = document.getElementById('registerPassword').value;
             const passwordConfirm = document.getElementById('registerPasswordConfirm').value;
+
+            if (!username || username.length < 3) {
+                showError('사용자명은 3자 이상이어야 합니다');
+                return;
+            }
 
             if (password !== passwordConfirm) {
                 showError('비밀번호가 일치하지 않습니다');
@@ -690,7 +702,7 @@
                 const res = await fetch(`${API_BASE}/api/auth/register`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email, password })
+                    body: JSON.stringify({ username, email, password })
                 });
 
                 const data = await res.json();

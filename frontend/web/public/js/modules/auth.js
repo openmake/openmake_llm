@@ -547,6 +547,70 @@ function getCurrentUser() {
     return getState('auth.currentUser');
 }
 
+/**
+ * 사용자 등급 변경 (셀프 서비스)
+ * PUT /api/auth/tier 호출 후 AppState + localStorage 동기화
+ * @param {string} tier - 변경할 등급 ('free' | 'pro' | 'enterprise')
+ * @returns {Promise<boolean>} 성공 여부
+ */
+async function changeTier(tier) {
+    const validTiers = ['free', 'pro', 'enterprise'];
+    if (!validTiers.includes(tier)) {
+        if (typeof showToast === 'function') showToast('유효하지 않은 등급입니다', 'error');
+        return false;
+    }
+
+    try {
+        const res = await authFetch('/api/auth/tier', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tier })
+        });
+
+        if (!res || !res.ok) {
+            const data = res ? await res.json().catch(() => ({})) : {};
+            if (typeof showToast === 'function') showToast(data.error || '등급 변경 실패', 'error');
+            return false;
+        }
+
+        const data = await res.json();
+        const updatedUser = data.data?.user || data.user;
+
+        if (updatedUser) {
+            // AppState 업데이트
+            setState('auth.currentUser', updatedUser);
+            // localStorage 업데이트
+            SafeStorage.setItem(STORAGE_KEY_USER, JSON.stringify(updatedUser));
+        } else {
+            // 서버가 user 객체를 반환하지 않은 경우 로컬만 업데이트
+            const currentUser = getState('auth.currentUser');
+            if (currentUser) {
+                const patched = { ...currentUser, tier };
+                setState('auth.currentUser', patched);
+                SafeStorage.setItem(STORAGE_KEY_USER, JSON.stringify(patched));
+            }
+        }
+
+        // 사이드바 티어 배지 갱신
+        if (typeof window.updateSidebarTierBadge === 'function') {
+            window.updateSidebarTierBadge();
+        }
+
+        // 설정 페이지 티어 UI 갱신 (설정 페이지에 있을 때만)
+        if (typeof window.refreshTierUI === 'function') {
+            window.refreshTierUI();
+        }
+
+        const tierLabels = { free: 'Free', pro: 'Pro', enterprise: 'Enterprise' };
+        if (typeof showToast === 'function') showToast(tierLabels[tier] + ' 플랜으로 변경되었습니다', 'success');
+        return true;
+    } catch (error) {
+        console.error('[Auth] 등급 변경 오류:', error);
+        if (typeof showToast === 'function') showToast('등급 변경 중 오류가 발생했습니다', 'error');
+        return false;
+    }
+}
+
 // 전역 노출 (레거시 호환)
 window.initAuth = initAuth;
 window.authFetch = authFetch;
@@ -560,6 +624,7 @@ window.isLoggedIn = isLoggedIn;
 window.getCurrentUser = getCurrentUser;
 window.claimAnonymousSession = claimAnonymousSession;
 window.trySilentRefresh = trySilentRefresh;
+window.changeTier = changeTier;
 // SafeStorage는 safe-storage.js에서 전역 등록됨 — 여기서 중복 등록 불필요
 
 export {
@@ -574,5 +639,6 @@ export {
     isLoggedIn,
     getCurrentUser,
     claimAnonymousSession,
-    trySilentRefresh
+    trySilentRefresh,
+    changeTier
 };
