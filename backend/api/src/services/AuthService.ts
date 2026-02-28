@@ -14,6 +14,7 @@ import { getConfig } from '../config/env';
 const log = createLogger('AuthService');
 
 export interface RegisterRequest {
+    username?: string;
     email: string;
     password: string;
     role?: 'admin' | 'user' | 'guest';
@@ -75,7 +76,7 @@ export class AuthService {
      * 회원가입
      */
     async register(data: RegisterRequest): Promise<AuthResult> {
-        const { email, password, role } = data;
+        const { username, email, password, role } = data;
 
         // 유효성 검사
         if (!email || !password) {
@@ -92,7 +93,7 @@ export class AuthService {
             return { success: false, error: '유효한 이메일 주소를 입력하세요' };
         }
 
-        const user = await this.userManager.createUser({ email, password, role });
+        const user = await this.userManager.createUser({ username, email, password, role });
 
         if (!user) {
             return { success: false, error: '이미 등록된 이메일입니다' };

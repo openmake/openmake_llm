@@ -39,6 +39,8 @@ export type UserTier = 'free' | 'pro' | 'enterprise';
 export interface PublicUser {
     /** 사용자 고유 식별자 */
     id: string;
+    /** 사용자명 (표시명) */
+    username?: string;
     /** 이메일 주소 (로그인 ID) */
     email: string;
     /** 사용자 역할 */
@@ -58,6 +60,8 @@ export interface PublicUser {
  * @interface CreateUserInput
  */
 export interface CreateUserInput {
+    /** 사용자명 (표시명, 없으면 email 사용) */
+    username?: string;
     /** 이메일 주소 (username과 동일하게 저장) */
     email: string;
     /** 평문 비밀번호 (bcrypt로 해싱 후 저장) */
@@ -214,7 +218,8 @@ class UserManagerImpl {
     private rowToPublicUser(row: UserRow): PublicUser {
         return {
             id: row.id,
-            email: row.username,
+            username: row.username,
+            email: row.email || row.username,
             role: row.role as UserRole,
             tier: (row.tier || 'free') as UserTier,
             is_active: !!row.is_active,
@@ -225,10 +230,9 @@ class UserManagerImpl {
 
     async createUser(input: CreateUserInput): Promise<PublicUser | null> {
         const pool = getPool();
-        // 중복 username 취크 (fast path)
-        const existing = await pool.query('SELECT id FROM users WHERE username = $1', [input.email]);
+        // 중복 체크 (email 기반, fast path)
+        const existing = await pool.query('SELECT id FROM users WHERE email = $1 OR username = $1', [input.email]);
         if (existing.rows.length > 0) return null;
-        // 티어 및 롤 계산
         const tier = input.tier || (input.role === 'admin' ? 'enterprise' : 'free');
         const role = input.role || 'user';
         // bcrypt 해시는 lock 바깥에서 수행 (시간소요 작업)
@@ -241,7 +245,7 @@ class UserManagerImpl {
             await client.query('SELECT pg_advisory_xact_lock(1)');
 
             // lock 내에서 중복 재확인
-            const dupCheck = await client.query('SELECT id FROM users WHERE username = $1', [input.email]);
+            const dupCheck = await pool.query('SELECT id FROM users WHERE email = $1 OR username = $1', [input.email]);
             if (dupCheck.rows.length > 0) {
                 await client.query('ROLLBACK');
                 return null;
@@ -253,10 +257,11 @@ class UserManagerImpl {
             );
             const id = String(idResult.rows[0]?.next_id || 1);
 
+            const displayName = input.username || input.email;
             await client.query(
                 `INSERT INTO users (id, username, password_hash, email, role, tier, is_active, created_at, updated_at)
                  VALUES ($1, $2, $3, $4, $5, $6, TRUE, $7, $8)`,
-                [id, input.email, passwordHash, input.email, role, tier, now, now]
+                [id, displayName, passwordHash, input.email, role, tier, now, now]
             );
             await client.query('COMMIT');
 
@@ -273,7 +278,7 @@ class UserManagerImpl {
 
     async authenticate(email: string, password: string): Promise<PublicUser | null> {
         const pool = getPool();
-        const result = await pool.query('SELECT * FROM users WHERE username = $1 AND is_active = TRUE', [email]);
+        const result = await pool.query('SELECT * FROM users WHERE (email = $1 OR username = $1) AND is_active = TRUE', [email]);
         const row = result.rows[0] as UserRow | undefined;
         if (!row) return null;
 
@@ -319,7 +324,8 @@ class UserManagerImpl {
             params.push(options.role);
         }
         if (options?.search) {
-            conditions.push(`LOWER(username) LIKE $${paramIdx++}`);
+            conditions.push(`(LOWER(username) LIKE $${paramIdx} OR LOWER(COALESCE(email, '')) LIKE $${paramIdx})`);
+            paramIdx++;
             params.push(`%${options.search.toLowerCase()}%`);
         }
 

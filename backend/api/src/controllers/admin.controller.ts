@@ -225,7 +225,7 @@ export class AdminController {
     private async createUser(req: Request, res: Response): Promise<void> {
         try {
             const userManager = getUserManager();
-            const { email, password, role } = req.body as { email?: string; password?: string; role?: string };
+            const { username, email, password, role } = req.body as { username?: string; email?: string; password?: string; role?: string };
 
             if (!email || !email.includes('@')) {
                 res.status(400).json(badRequest('유효한 이메일을 입력하세요'));
@@ -238,7 +238,7 @@ export class AdminController {
             const validRoles = ['admin', 'user', 'guest'];
             const userRole = validRoles.includes(role ?? '') ? (role as 'admin' | 'user' | 'guest') : 'user';
 
-            const newUser = await userManager.createUser({ email, password, role: userRole });
+            const newUser = await userManager.createUser({ username, email, password, role: userRole });
             if (!newUser) {
                 res.status(409).json(badRequest('이미 사용 중인 이메일입니다'));
                 return;
