@@ -224,6 +224,7 @@ UnifiedSidebar.prototype._renderHTML = function () {
         '</div>' +
         '<div class="us-user-avatar">?</div>' +
         '<span class="us-user-name us-label">\uC0AC\uC6A9\uC790</span>' +
+        '<span class="us-tier-badge" id="sidebarTierBadge"></span>' +
         '<button class="us-settings-btn" title="\uC124\uC815">' + ICONS.settings + '</button>' +
         '</div>' +
         '</div>';
@@ -693,6 +694,33 @@ UnifiedSidebar.prototype._updateUserSection = function () {
             name.title = isGuest ? '\uD074\uB9AD\uD558\uC5EC \uB85C\uADF8\uC778' : '\uD074\uB9AD\uD558\uC5EC \uB85C\uADF8\uC778';
         }
     }
+    // 티어 배지 업데이트
+    this._updateTierBadge(user);
+};
+
+UnifiedSidebar.prototype._updateTierBadge = function (user) {
+    var badge = this.el.querySelector('#sidebarTierBadge');
+    if (!badge) return;
+
+    var tier = 'free';
+    if (user) {
+        if (user.role === 'admin' || user.role === 'administrator') {
+            tier = 'enterprise';
+        } else {
+            tier = user.tier || 'free';
+        }
+    }
+
+    var labels = { free: 'FREE', pro: 'PRO', enterprise: 'ENTERPRISE' };
+    var colors = {
+        free: 'var(--text-muted)',
+        pro: 'var(--accent-primary)',
+        enterprise: 'var(--accent-orange)'
+    };
+
+    badge.textContent = labels[tier] || 'FREE';
+    badge.style.cssText = 'font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;letter-spacing:0.5px;' +
+        'background:' + (colors[tier] || colors.free) + ';color:var(--bg-primary);margin-left:4px;';
 };
 
 // ─── 테마 토글 ─────────────────────────────────────
@@ -753,5 +781,16 @@ UnifiedSidebar.prototype.destroy = function () {
 // ─── 전역 노출 ────────────────────────────────────
 
 window.UnifiedSidebar = UnifiedSidebar;
+
+// 전역 티어 배지 업데이트 헬퍼 (auth.js에서 호출)
+window.updateSidebarTierBadge = function () {
+    if (window.sidebar && typeof window.sidebar._updateTierBadge === 'function') {
+        var user = typeof window.getCurrentUser === 'function' ? window.getCurrentUser() : null;
+        if (!user) {
+            try { user = JSON.parse(localStorage.getItem('user') || 'null'); } catch (e) { user = null; }
+        }
+        window.sidebar._updateTierBadge(user);
+    }
+};
 
 export { UnifiedSidebar };

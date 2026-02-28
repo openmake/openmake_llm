@@ -6,6 +6,7 @@
 
 import {
     detectLanguage,
+    detectLatinSubLanguage,
     determineLanguagePolicy,
     getLanguageTemplate,
     generateLanguageInstructions,
@@ -13,7 +14,6 @@ import {
     type LanguagePolicyConfig,
     type LanguagePolicyDecision
 } from '../chat/language-policy';
-
 describe('Language Policy System', () => {
     
     // ============================================================
@@ -41,19 +41,19 @@ describe('Language Policy System', () => {
 
         test('중국어 텍스트 감지', () => {
             const result = detectLanguage('你好，你怎么样？');
-            expect(result.language).toBe('en'); // Chinese detection falls back to English
-            expect(result.confidence).toBeGreaterThan(0.3); // Lower threshold for fallback
+            expect(result.language).toBe('zh'); // 비라틴 문자 우선 감지로 중국어 정상 판별
+            expect(result.confidence).toBeGreaterThan(0.5);
         });
 
         test('스페인어 텍스트 감지 (라틴 문자)', () => {
             const result = detectLanguage('Hola, ¿cómo estás? Me llamo María');
-            // 라틴 문자이므로 영어로 분류되거나 낮은 신뢰도를 가질 수 있음
-            expect(['en', 'es']).toContain(result.language);
+            expect(result.language).toBe('es'); // ¿ 마커로 스페인어 감지
+            expect(result.confidence).toBeGreaterThan(0.7);
         });
 
         test('프랑스어 텍스트 감지 (라틴 문자)', () => {
             const result = detectLanguage('Bonjour, comment allez-vous? Je suis très content');
-            expect(['en', 'fr']).toContain(result.language);
+            expect(result.language).toBe('fr'); // è/ê 발음 기호 + 기능어로 프랑스어 감지
         });
 
         test('혼합 언어 텍스트 - 한국어 우세', () => {
@@ -89,6 +89,36 @@ describe('Language Policy System', () => {
             expect(result.processedLength).toBeLessThanOrEqual(result.textLength);
         });
     });
+
+        test('독일어 텍스트 감지 (고유 문자 ß)', () => {
+            const result = detectLanguage('Wie geht es Ihnen? Das Wetter ist großartig');
+            expect(result.language).toBe('de'); // ß 마커로 독일어 감지
+        });
+
+        test('포르투갈어 텍스트 감지 (고유 문자 ã/õ)', () => {
+            const result = detectLanguage('Olá, como você está? A situação está boa');
+            expect(result.language).toBe('pt'); // ã 마커로 포르투갈어 감지
+        });
+
+        test('독일어 텍스트 감지 (기능어 기반, 발음 기호 없음)', () => {
+            const result = detectLanguage('Wie ist das Wetter heute? Ich bin sehr froh');
+            expect(result.language).toBe('de'); // 'das', 'ist', 'ich' 기능어로 감지
+        });
+
+        test('순수 ASCII 영어 텍스트', () => {
+            const result = detectLanguage('The weather is very nice today, I am happy');
+            expect(result.language).toBe('en'); // 발음 기호 없는 순수 영어
+        });
+
+        test('짧은 중국어 텍스트 감지 (비라틴 우선 감지)', () => {
+            const result = detectLanguage('你好');
+            expect(result.language).toBe('zh'); // 짧아도 비라틴 문자 우선 감지
+        });
+
+        test('짧은 일본어 텍스트 감지 (비라틴 우선 감지)', () => {
+            const result = detectLanguage('こんにちは');
+            expect(result.language).toBe('ja'); // 짧아도 비라틴 문자 우선 감지
+        });
 
     // ============================================================
     // 언어 템플릿 (Language Templates) 테스트
@@ -423,7 +453,7 @@ describe('Language Policy System', () => {
 
             // 중국어 사용자  
             const zhPolicy = determineLanguagePolicy('我有一个编程问题', config);
-            expect(zhPolicy.resolvedLanguage).toBe('en'); // Chinese detection falls back to English
+            expect(zhPolicy.resolvedLanguage).toBe('zh'); // 비라틴 문자 우선 감지로 정상 판별
         });
 
         test('시스템 기본값 폴백 시나리오', () => {
@@ -440,6 +470,51 @@ describe('Language Policy System', () => {
             const policy = determineLanguagePolicy('Hello world', config);
             expect(policy.resolvedLanguage).toBe('ko');
             expect(policy.reason).toBe('system_default');
+        });
+    });
+
+    // ============================================================
+    // Latin 하위 언어 감지 (detectLatinSubLanguage) 테스트
+    // ============================================================
+    describe('detectLatinSubLanguage', () => {
+        test('¿¡ 마커로 스페인어 감지', () => {
+            expect(detectLatinSubLanguage('¿Cómo está el clima hoy?')).toBe('es');
+        });
+
+        test('ß 마커로 독일어 감지', () => {
+            expect(detectLatinSubLanguage('Die Straße ist groß')).toBe('de');
+        });
+
+        test('ã/õ 마커로 포르투갈어 감지', () => {
+            expect(detectLatinSubLanguage('A situação não é boa')).toBe('pt');
+        });
+
+        test('ơ/ư/đ 마커로 베트남어 감지', () => {
+            expect(detectLatinSubLanguage('Xin chào, bạn khỏe không? Tôi đang ở đây')).toBe('vi');
+        });
+
+        test('ş/ğ 마커로 터키어 감지', () => {
+            expect(detectLatinSubLanguage('Teşekkür ederim, merhaba günaydın')).toBe('tr');
+        });
+
+        test('발음 기호로 프랑스어 감지 (ç/ê)', () => {
+            expect(detectLatinSubLanguage('Le garçon a mangé la crêpe')).toBe('fr');
+        });
+
+        test('기능어로 독일어 감지 (발음 기호 없음)', () => {
+            expect(detectLatinSubLanguage('Wie ist das Wetter heute in der Stadt')).toBe('de');
+        });
+
+        test('기능어로 프랑스어 감지 (발음 기호 없음)', () => {
+            expect(detectLatinSubLanguage('Je suis dans une maison avec vous pour le moment')).toBe('fr');
+        });
+
+        test('발음 기호/기능어 없는 영어 기본값', () => {
+            expect(detectLatinSubLanguage('Hello how are you today')).toBe('en');
+        });
+
+        test('이탈리아어 발음 기호 감지 (à/è)', () => {
+            expect(detectLatinSubLanguage('La città è molto bella')).toBe('it');
         });
     });
 });

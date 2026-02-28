@@ -340,6 +340,10 @@
             <form class="modal-body" onsubmit="event.preventDefault()">
                 <input type="hidden" id="editUserId">
                 <div class="form-group">
+                    <label class="form-label" for="editUsername">사용자명</label>
+                    <input type="text" id="editUsername" class="form-input" placeholder="홍길동" minlength="3" maxlength="50">
+                </div>
+                <div class="form-group">
                     <label class="form-label" for="editEmail">이메일</label>
                     <input type="email" id="editEmail" class="form-input">
                 </div>
@@ -468,6 +472,7 @@
         function showAddUserModal() {
             document.getElementById('editModalTitle').textContent = '새 사용자 추가';
             document.getElementById('editUserId').value = '';
+            document.getElementById('editUsername').value = '';
             document.getElementById('editEmail').value = '';
             document.getElementById('editPassword').value = '';
             document.getElementById('editRole').value = 'user';
@@ -484,6 +489,7 @@
                  if (!user) { showToast('사용자를 찾을 수 없습니다', 'error'); return; }
                 document.getElementById('editModalTitle').textContent = '사용자 편집';
                 document.getElementById('editUserId').value = user.id;
+                document.getElementById('editUsername').value = user.username || '';
                 document.getElementById('editEmail').value = user.email;
                 document.getElementById('editPassword').value = '';
                 document.getElementById('editRole').value = user.role;
@@ -494,6 +500,7 @@
 
         async function saveUser() {
             const id = document.getElementById('editUserId').value;
+            const username = document.getElementById('editUsername').value.trim();
             const email = document.getElementById('editEmail').value;
             const password = document.getElementById('editPassword').value;
             const role = document.getElementById('editRole').value;
@@ -504,8 +511,9 @@
                     await authFetch(`/api/admin/users/${id}`, { method: 'PUT', body: JSON.stringify({ email, role, is_active }) });
                     showToast('사용자 정보가 수정되었습니다', 'success');
                 } else {
-                    if (!password || password.length < 6) { showToast('비밀번호는 6자 이상이어야 합니다', 'error'); return; }
-                    await authFetch('/api/auth/register', { method: 'POST', body: JSON.stringify({ email, password }) });
+                    if (!username || username.length < 3) { showToast('사용자명은 3자 이상이어야 합니다', 'error'); return; }
+                    if (!password || password.length < 8) { showToast('비밀번호는 8자 이상이어야 합니다', 'error'); return; }
+                    await authFetch('/api/auth/register', { method: 'POST', body: JSON.stringify({ username, email, password, role }) });
                     showToast('사용자가 추가되었습니다', 'success');
                 }
                 closeModal(); loadUsers(); loadUserStats();

@@ -310,19 +310,149 @@ export const LANGUAGE_PATTERNS = {
     hi: /[\u0900-\u097f]/g,         // 데바나가리 (힌디어)
     th: /[\u0e00-\u0e7f]/g,         // 태국어
     ru: /[\u0400-\u04ff]/g,         // 키릴 문자 (러시아어)
-    // 라틴 알파벳 기반 언어들은 별도 처리
+    // 라틴 알파벳 기반 언어들은 별도 처리 (detectLatinSubLanguage에서 세분화)
     latin: /[a-zA-ZÀ-ÿ]/g          // 라틴 알파벳 + 확장 문자
 };
 
 /**
+ * 라틴 문자 기반 하위 언어 감지
+ * 
+ * 3단계 감지:
+ *   1. 고유 문자 마커 (¿¡ñ → es, ß → de, ãõ → pt 등) — 즉시 판별
+ *   2. 발음 기호(diacritical) 점수 비교 — 최고 점수 언어 선택
+ *   3. 고빈도 기능어(function word) 매칭 — 발음 기호 없는 텍스트용
+ *   4. 기본값: 'en' (영어는 일반적으로 발음 기호 없음)
+ */
+export function detectLatinSubLanguage(text: string): SupportedLanguageCode {
+    const lowerText = text.toLowerCase();
+
+    // ── Phase 1: 고유 문자 마커 (100% 확정 신호) ──
+    if (/[¿¡]/.test(lowerText)) return 'es';         // ¿ ¡ → 스페인어에만 존재
+    if (/ß/.test(lowerText)) return 'de';            // ß → 독일어에만 존재
+    if (/[ãõ]/i.test(lowerText)) return 'pt';        // ã õ → 포르투갈어 강신호
+    if (/[ơưđ]/.test(lowerText)) return 'vi';        // ơ ư đ → 베트남어 고유
+    if (/[şğ]/.test(lowerText)) return 'tr';         // ş ğ → 터키어 고유
+    if (/[œæ]/.test(lowerText)) return 'fr';         // œ æ → 프랑스어 강신호
+    if (/[øå]/.test(lowerText)) {                    // ø → 덴마크/노르웨이, å → 스칸디나비아
+        if (/ø/.test(lowerText)) return 'da';        // ø는 덴마크어/노르웨이어 (덴마크 우선)
+        return 'sv';                                  // å만 → 스웨덴어
+    }
+
+    // ── Phase 2+3 통합: 발음 기호 + 기능어 종합 점수 ──
+    // 발음 기호(고유 3점, 공유 1점) + 기능어(1점)를 합산하여 최고 점수 언어 선택.
+    // 이렇게 하면 diacritic 동점 시 기능어가 tiebreaker 역할.
+    const diacriticRules: Array<{ lang: SupportedLanguageCode; unique: RegExp | null; shared: RegExp | null }> = [
+        { lang: 'fr', unique: /[êëîïûùÇ]/gi, shared: /[çàèô]/gi },
+        { lang: 'it', unique: /[ìò]/gi, shared: /[àèù]/gi },
+        { lang: 'de', unique: /[äöüÄÖÜ]/gi, shared: null },
+        { lang: 'es', unique: /[ñÑ]/gi, shared: /[áéíóú]/gi },
+        { lang: 'pt', unique: null, shared: /[áéíóúâêô]/gi },
+        { lang: 'tr', unique: /[ıİ]/gi, shared: /[çöü]/gi },
+        { lang: 'sv', unique: /[åÅ]/gi, shared: /[äö]/gi },
+        { lang: 'fi', unique: null, shared: /[äö]/gi },
+        { lang: 'nl', unique: null, shared: /[ëïéè]/gi },
+    ];
+
+    const wordSignatures: Array<{ lang: SupportedLanguageCode; words: string[] }> = [
+        { lang: 'de', words: ['der', 'die', 'das', 'und', 'nicht', 'ich', 'wir', 'sie', 'ist', 'ein', 'eine', 'auch', 'auf', 'wie'] },
+        { lang: 'fr', words: ['je', 'nous', 'vous', 'dans', 'avec', 'les', 'des', 'une', 'pour', 'est', 'pas', 'sur', 'mais', 'cette'] },
+        { lang: 'es', words: ['el', 'los', 'las', 'una', 'por', 'para', 'pero', 'como', 'muy', 'esta', 'esto', 'son', 'tiene'] },
+        { lang: 'pt', words: ['os', 'uma', 'por', 'para', 'mas', 'muito', 'com', 'mais', 'tem', 'seu', 'sua', 'isso'] },
+        { lang: 'it', words: ['il', 'gli', 'una', 'che', 'per', 'con', 'non', 'sono', 'questo', 'questa', 'anche', 'molto'] },
+        { lang: 'nl', words: ['het', 'een', 'van', 'met', 'maar', 'niet', 'ook', 'voor', 'nog', 'wel', 'deze', 'zijn'] },
+    ];
+
+    // 단어 분리 및 정리
+    const words = lowerText.split(/\s+/).filter(w => w.length > 0);
+    const cleanWords = words.map(w => w.replace(/[^a-zA-ZÀ-ÿ]/g, '')).filter(w => w.length > 0);
+
+    // 각 언어별 종합 점수 계산
+    let bestLang: SupportedLanguageCode = 'en';
+    let bestScore = 0;
+
+    // diacritic 점수 Map 구성
+    const langScores = new Map<SupportedLanguageCode, number>();
+
+    for (const { lang, unique, shared } of diacriticRules) {
+        let score = 0;
+        if (unique) {
+            const uMatches = lowerText.match(unique);
+            score += (uMatches?.length ?? 0) * 3;
+        }
+        if (shared) {
+            const sMatches = lowerText.match(shared);
+            score += (sMatches?.length ?? 0);
+        }
+        langScores.set(lang, score);
+    }
+
+    // 기능어 점수 추가
+    for (const { lang, words: langWords } of wordSignatures) {
+        let wordScore = 0;
+        for (const cw of cleanWords) {
+            if (langWords.includes(cw)) wordScore++;
+        }
+        const current = langScores.get(lang) ?? 0;
+        langScores.set(lang, current + wordScore);
+    }
+
+    // 최고 점수 언어 선택
+    for (const [lang, score] of langScores) {
+        if (score > bestScore) {
+            bestScore = score;
+            bestLang = lang;
+        }
+    }
+
+    // 최소 1점 이상이어야 신뢰 (발음 기호 1개 또는 기능어 1개)
+    if (bestScore > 0) return bestLang;
+
+    // 기본값 — 발음 기호도 기능어도 없으면 영어
+    return 'en';
+}
+/**
  * 고급 언어 감지 함수 (기존 detectLanguageForMetadata 대체)
+ * 
+ * 감지 우선순위:
+ *   1. 비라틴 문자 감지 (짧은 텍스트도 포함 — CJK 등 짧은 텍스트가 의미 있음)
+ *   2. 빈 텍스트/너무 짧은 Latin 텍스트 폴백
+ *   3. 라틴 하위 언어 감지 (detectLatinSubLanguage)
  */
 export function detectLanguage(text: string): LanguageDetectionResult {
     const originalLength = text.length;
     const processedText = preprocessTextForLanguageDetection(text);
     const processedLength = processedText.length;
-    
-    // 빈 텍스트 또는 너무 짧은 텍스트 처리
+
+    // ── 1단계: 비라틴 문자 언어 우선 감지 (짧은 텍스트도 포함) ──
+    // CJK/아랍어/힌디어 등은 짧은 텍스트(2~3자)도 의미 있으므로 길이 제한 없이 감지
+    if (processedLength > 0) {
+        const nonLatinResults = [
+            { lang: 'ko' as const, matches: processedText.match(LANGUAGE_PATTERNS.ko) },
+            { lang: 'ja' as const, matches: processedText.match(LANGUAGE_PATTERNS.ja) },
+            { lang: 'zh' as const, matches: processedText.match(LANGUAGE_PATTERNS.zh) },
+            { lang: 'ar' as const, matches: processedText.match(LANGUAGE_PATTERNS.ar) },
+            { lang: 'hi' as const, matches: processedText.match(LANGUAGE_PATTERNS.hi) },
+            { lang: 'th' as const, matches: processedText.match(LANGUAGE_PATTERNS.th) },
+            { lang: 'ru' as const, matches: processedText.match(LANGUAGE_PATTERNS.ru) }
+        ];
+
+        for (const { lang, matches } of nonLatinResults) {
+            if (matches && matches.length > 0) {
+                const ratio = matches.length / processedLength;
+                if (ratio > 0.3) { // 30% 이상이면 해당 언어로 판단
+                    return {
+                        language: lang,
+                        confidence: Math.min(ratio * 2, 1.0),
+                        method: 'regex',
+                        textLength: originalLength,
+                        processedLength
+                    };
+                }
+            }
+        }
+    }
+
+    // ── 2단계: 빈 텍스트 또는 너무 짧은 Latin 텍스트 폴백 ──
     if (processedLength < DEFAULT_LANGUAGE_POLICY.shortTextThreshold) {
         return {
             language: DEFAULT_LANGUAGE_POLICY.fallbackLanguage,
@@ -332,35 +462,8 @@ export function detectLanguage(text: string): LanguageDetectionResult {
             processedLength
         };
     }
-    
-    // 비라틴 문자 언어 우선 감지
-    const nonLatinResults = [
-        { lang: 'ko' as const, matches: processedText.match(LANGUAGE_PATTERNS.ko) },
-        { lang: 'ja' as const, matches: processedText.match(LANGUAGE_PATTERNS.ja) },
-        { lang: 'zh' as const, matches: processedText.match(LANGUAGE_PATTERNS.zh) },
-        { lang: 'ar' as const, matches: processedText.match(LANGUAGE_PATTERNS.ar) },
-        { lang: 'hi' as const, matches: processedText.match(LANGUAGE_PATTERNS.hi) },
-        { lang: 'th' as const, matches: processedText.match(LANGUAGE_PATTERNS.th) },
-        { lang: 'ru' as const, matches: processedText.match(LANGUAGE_PATTERNS.ru) }
-    ];
-    
-    // 비라틴 문자 언어 체크
-    for (const { lang, matches } of nonLatinResults) {
-        if (matches && matches.length > 0) {
-            const ratio = matches.length / processedLength;
-            if (ratio > 0.3) { // 30% 이상이면 해당 언어로 판단
-                return {
-                    language: lang,
-                    confidence: Math.min(ratio * 2, 1.0), // 최대 1.0으로 제한
-                    method: 'regex',
-                    textLength: originalLength,
-                    processedLength
-                };
-            }
-        }
-    }
-    
-    // 라틴 알파벳 기반 언어 처리 (기존 로직 유지 + 확장)
+
+    // ── 3단계: 라틴 알파벳 기반 언어 처리 ──
     const latinMatches = processedText.match(LANGUAGE_PATTERNS.latin);
     if (!latinMatches || latinMatches.length === 0) {
         return {
@@ -371,12 +474,12 @@ export function detectLanguage(text: string): LanguageDetectionResult {
             processedLength
         };
     }
-    
-    // 기존 한국어-영어 비율 로직 (하위 호환성)
+
+    // 한국어 비율 체크 (한국어-라틴 혼합 텍스트 처리)
     const koreanMatches = processedText.match(LANGUAGE_PATTERNS.ko) || [];
     const total = koreanMatches.length + latinMatches.length;
     const koreanRatio = koreanMatches.length / total;
-    
+
     if (koreanRatio > 0.7) {
         return {
             language: 'ko',
@@ -386,10 +489,11 @@ export function detectLanguage(text: string): LanguageDetectionResult {
             processedLength
         };
     } else if (koreanRatio < 0.1) {
-        // 라틴 문자만 있는 경우 영어로 분류 (개선 가능)
+        // 라틴 문자 주도 → 하위 언어 감지로 세분화
+        const detectedLang = detectLatinSubLanguage(processedText);
         return {
-            language: 'en',
-            confidence: 0.8,
+            language: detectedLang,
+            confidence: detectedLang === 'en' ? 0.8 : 0.75,
             method: 'regex',
             textLength: originalLength,
             processedLength

@@ -17,7 +17,7 @@ import { getConfig } from '../config/env';
 import { APP_USER_AGENT } from '../config/constants';
 import { GOOGLE_OAUTH, GITHUB_OAUTH, GITHUB_API } from '../config/external-services';
 import { validate } from '../middlewares/validation';
-import { loginSchema, registerSchema, changePasswordSchema } from '../schemas';
+import { loginSchema, registerSchema, changePasswordSchema, tierChangeSchema } from '../schemas';
 
 const log = createLogger('AuthController');
 
@@ -254,6 +254,7 @@ export class AuthController {
         this.router.post('/logout', this.logout.bind(this));
         this.router.get('/me', requireAuth, this.getCurrentUser.bind(this));
         this.router.put('/password', requireAuth, validate(changePasswordSchema), this.changePassword.bind(this));
+        this.router.put('/tier', requireAuth, validate(tierChangeSchema), this.changeTier.bind(this));
 
         // ===== Token Refresh =====
         this.router.post('/refresh', this.refresh.bind(this));
@@ -385,6 +386,35 @@ export class AuthController {
         } catch (error) {
             log.error('[ChangePassword] 오류:', error);
             res.status(500).json(internalError('비밀번호 변경 중 오류가 발생했습니다'));
+        }
+    }
+
+    /**
+     * PUT /api/auth/tier - 사용자 등급 변경 (셀프 서비스)
+     * 인증된 사용자가 자신의 등급을 free/pro/enterprise로 변경합니다.
+     */
+    private async changeTier(req: Request, res: Response): Promise<void> {
+        try {
+            const user = req.user;
+            if (!user?.id) {
+                res.status(401).json(unauthorized('인증 정보가 불완전합니다'));
+                return;
+            }
+
+            const { tier } = req.body;
+            const userManager = getUserManager();
+            const updated = await userManager.changeTier(String(user.id), tier);
+
+            if (!updated) {
+                res.status(404).json(badRequest('사용자를 찾을 수 없습니다'));
+                return;
+            }
+
+            log.info(`사용자 등급 변경: ${updated.email} -> ${tier}`);
+            res.json(success({ user: updated }));
+        } catch (error) {
+            log.error('[ChangeTier] 오류:', error);
+            res.status(500).json(internalError('등급 변경 중 오류가 발생했습니다'));
         }
     }
 

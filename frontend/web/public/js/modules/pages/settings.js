@@ -122,6 +122,16 @@
 
         '<div class="s-card">' +
         '<div class="s-card-header">' +
+        '<span class="s-card-icon">\u2B50</span>' +
+        '<span class="s-card-title">\uAD6C\uB3C5 \uD50C\uB79C</span>' +
+        '</div>' +
+        '<div class="s-card-body">' +
+        '<div id="tierPlanCards" class="tier-plan-container"></div>' +
+        '</div>' +
+        '</div>' +
+
+        '<div class="s-card">' +
+        '<div class="s-card-header">' +
         '<span class="s-card-icon">\uD83D\uDCBE</span>' +
         '<span class="s-card-title">\uB370\uC774\uD130</span>' +
         '</div>' +
@@ -438,7 +448,7 @@
                 }
 
                 // MCP 도구 토글 UI 렌더링 (등급 기반 접근 제어 포함)
-                (function renderMCPToolToggles() {
+                function renderMCPToolToggles() {
                     var container = document.getElementById('mcpToolToggles');
                     if (!container) return;
 
@@ -553,7 +563,68 @@
                     var disableAllBtn = document.getElementById('mcpDisableAllBtn');
                     if (enableAllBtn) enableAllBtn.addEventListener('click', function () { setAllTools(true); });
                     if (disableAllBtn) disableAllBtn.addEventListener('click', function () { setAllTools(false); });
-                })();
+                }
+
+                function renderTierPlanCards() {
+                    var container = document.getElementById('tierPlanCards');
+                    if (!container) return;
+
+                    var userTier = getUserTier();
+                    var plans = [
+                        {
+                            tier: 'free', name: 'Free', price: '무료', icon: '🆓',
+                            features: ['기본 AI 채팅', '웹 검색', '이미지 분석/OCR']
+                        },
+                        {
+                            tier: 'pro', name: 'Pro', price: 'PRO', icon: '⚡',
+                            features: ['Free 전체 기능', 'Firecrawl 스크래핑 (4종)', '외부 MCP 도구 연동']
+                        },
+                        {
+                            tier: 'enterprise', name: 'Enterprise', price: 'ENTERPRISE', icon: '🏢',
+                            features: ['Pro 전체 기능', '팩트 체크 / 웹페이지 추출', '주제 연구 / 모든 도구 접근']
+                        }
+                    ];
+
+                    var html = '';
+                    plans.forEach(function(plan) {
+                        var isCurrent = userTier === plan.tier;
+                        var cardClass = isCurrent ? 'tier-plan-card tier-plan-current' : 'tier-plan-card';
+
+                        var buttonHtml = '';
+                        if (isCurrent) {
+                            buttonHtml = '<button class="tier-plan-btn tier-plan-btn-current">\u2713 \uD604\uC7AC \uD50C\uB79C</button>';
+                        } else {
+                            var isUpgrade = TIER_LEVEL[plan.tier] > TIER_LEVEL[userTier];
+                            var btnClass = isUpgrade ? 'tier-plan-btn tier-plan-btn-upgrade' : 'tier-plan-btn tier-plan-btn-downgrade';
+                            var btnText = isUpgrade ? '\u2B06 \uC5C5\uADF8\uB808\uC774\uB4DC' : '\u2B07 \uB2E4\uC6B4\uADF8\uB808\uC774\uB4DC';
+                            buttonHtml = '<button class="' + btnClass + '" onclick="window.changeTier(\'' + plan.tier + '\')">' + btnText + '</button>';
+                        }
+
+                        var featuresHtml = '<ul class="tier-plan-features">';
+                        plan.features.forEach(function(f) {
+                            featuresHtml += '<li>' + esc(f) + '</li>';
+                        });
+                        featuresHtml += '</ul>';
+
+                        html += '<div class="' + cardClass + '">' +
+                            '<div class="tier-plan-icon">' + plan.icon + '</div>' +
+                            '<div class="tier-plan-name">' + esc(plan.name) + '</div>' +
+                            '<div class="tier-plan-price">' + esc(plan.price) + '</div>' +
+                            featuresHtml +
+                            buttonHtml +
+                            '</div>';
+                    });
+
+                    container.innerHTML = html;
+                }
+
+                renderMCPToolToggles();
+                renderTierPlanCards();
+
+                window.refreshTierUI = function() {
+                    renderTierPlanCards();
+                    renderMCPToolToggles();
+                };
 
                 // Expose onclick-referenced functions globally
                 if (typeof exportData === 'function') window.exportData = exportData;
@@ -577,6 +648,7 @@
             try { delete window.saveSettings; } catch (e) { }
             try { delete window.resetSettings; } catch (e) { }
             try { delete window.setTheme; } catch (e) { }
+            try { delete window.refreshTierUI; } catch (e) { }
         }
     };
 })();

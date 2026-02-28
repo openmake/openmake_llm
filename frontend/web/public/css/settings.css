@@ -386,6 +386,120 @@
     color: var(--text-inverse);
 }
 
+/* ==================== Tier Plan Cards ==================== */
+.tier-plan-container {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--space-4);
+    margin-top: var(--space-2);
+}
+
+.tier-plan-card {
+    background: var(--bg-secondary);
+    border: 2px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: var(--space-5);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.tier-plan-card:hover {
+    border-color: var(--accent-primary);
+}
+
+.tier-plan-current {
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 0 1px var(--accent-primary), 0 4px 12px rgba(var(--accent-primary-rgb, 99, 102, 241), 0.15);
+    position: relative;
+}
+
+.tier-plan-icon {
+    font-size: 2rem;
+    margin-bottom: var(--space-2);
+}
+
+.tier-plan-name {
+    font-size: var(--font-size-lg);
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: var(--space-1);
+}
+
+.tier-plan-price {
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    color: var(--text-muted);
+    margin-bottom: var(--space-3);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.tier-plan-features {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 var(--space-4) 0;
+    width: 100%;
+    flex: 1;
+}
+
+.tier-plan-features li {
+    font-size: var(--font-size-xs);
+    color: var(--text-secondary);
+    padding: var(--space-1) 0;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.tier-plan-features li:last-child {
+    border-bottom: none;
+}
+
+.tier-plan-features li::before {
+    content: '\2713 ';
+    color: var(--accent-success);
+    font-weight: 700;
+    margin-right: 4px;
+}
+
+.tier-plan-btn {
+    width: 100%;
+    padding: var(--space-2) var(--space-4);
+    border: none;
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s, opacity 0.2s;
+}
+
+.tier-plan-btn-upgrade {
+    background: var(--accent-primary);
+    color: var(--text-inverse, #fff);
+}
+
+.tier-plan-btn-upgrade:hover {
+    opacity: 0.85;
+}
+
+.tier-plan-btn-downgrade {
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+}
+
+.tier-plan-btn-downgrade:hover {
+    opacity: 0.75;
+}
+
+.tier-plan-btn-current {
+    background: transparent;
+    border: 2px solid var(--accent-primary);
+    color: var(--accent-primary);
+    cursor: default;
+}
+
+
 /* ==================== MCP Tool Locked State ==================== */
 .mcp-tool-locked {
     opacity: 0.45;
@@ -442,6 +556,10 @@
         flex: 1;
         justify-content: center;
         min-width: 0;
+    }
+
+    .tier-plan-container {
+        grid-template-columns: 1fr;
     }
 
     .s-footer {
