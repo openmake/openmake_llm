@@ -263,7 +263,7 @@ function toOllamaTool(tool: ToolDefinition): Tool {
  *
  * 모델 이름이 ':cloud' 접미사를 가지면 Ollama Cloud 호스트를 사용하고,
  * 그렇지 않으면 로컬 Ollama 서버를 사용합니다.
- * ApiKeyManager에서 현재 활성 키의 Authorization 헤더를 가져와 설정합니다.
+ * 키풀에서 라운드로빈으로 다음 사용 가능한 키를 할당합니다.
  *
  * @param model - 모델 이름 (`:cloud` 접미사로 Cloud/Local 판별)
  * @returns 설정된 Ollama SDK 클라이언트 인스턴스
@@ -275,12 +275,18 @@ function createOllamaClient(model: string): Ollama {
 
     const host = isCloud ? OLLAMA_CLOUD_HOST : envConfig.ollamaBaseUrl;
 
+    // 키풀에서 라운드로빈으로 다음 가용 키 할당 (모델 무관)
+    const keyIndex = apiKeyManager.getNextAvailableKey();
+    const headers = keyIndex !== -1
+        ? apiKeyManager.getAuthHeadersForIndex(keyIndex)
+        : apiKeyManager.getAuthHeaders();
+
     const ollama = new Ollama({
         host,
-        headers: apiKeyManager.getAuthHeaders()
+        headers
     });
 
-    logger.info(`🌐 Ollama 클라이언트 생성 - 호스트: ${host}, 모델: ${model}`);
+    logger.info(`🌐 Ollama 클라이언트 생성 - 호스트: ${host}, 모델: ${model}, Key: ${keyIndex !== -1 ? keyIndex + 1 : 'default'}`);
 
     return ollama;
 }

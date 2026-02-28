@@ -138,28 +138,6 @@ export function getModelPresets(): Record<string, ModelPreset> {
         priority: 2,
     },
 
-    // Kimi K2.5 - 긴 컨텍스트/문서 분석
-    'kimi': {
-        name: 'Kimi K2.5',
-        envKey: 'OLLAMA_MODEL_3',
-        defaultModel: enginePro,
-        options: {
-            temperature: 0.5,
-            top_p: 0.85,
-            top_k: 30,
-            num_ctx: 65536,
-            repeat_penalty: 1.1,
-        },
-        capabilities: {
-            toolCalling: true,
-            thinking: true,
-            vision: false,
-            streaming: true,
-            contextLength: 65536,
-        },
-        bestFor: ['document', 'analysis', 'translation'],
-        priority: 3,
-    },
 
     // Qwen3 Coder Next - 코딩 특화
     'qwen-coder': {
@@ -393,10 +371,6 @@ export function adjustOptionsForModel(
         adjustedOptions.repeat_penalty = 1.0;
     }
 
-    // Kimi: 긴 문서에 적합한 설정
-    if (lowerModel.includes('kimi')) {
-        adjustedOptions.num_ctx = Math.max(adjustedOptions.num_ctx || MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX, MODEL_CONTEXT_DEFAULTS.EXTENDED_NUM_CTX);
-    }
 
     // Vision 모델: 이미지 분석에 적합한 설정
     if (lowerModel.includes('vl') || lowerModel.includes('vision')) {

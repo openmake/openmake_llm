@@ -10,6 +10,7 @@
  */
 (function () {
     'use strict';
+    var SK = window.STORAGE_KEYS || {};
     window.PageModules = window.PageModules || {};
     /** @type {number[]} setInterval ID 배열 (cleanup용) */
     var _intervals = [];
@@ -36,10 +37,10 @@
          */
         init: function () {
             try {
-                // SafeStorage 래퍼 — Safari Private Mode 등에서 localStorage 예외 방지
-                const SS = window.SafeStorage || { getItem: function (k) { try { return localStorage.getItem(k); } catch (e) { return null; } }, setItem: function (k, v) { try { localStorage.setItem(k, v); } catch (e) { } }, removeItem: function (k) { try { localStorage.removeItem(k); } catch (e) { } } };
+                // SafeStorage 래퍼 — safe-storage.js에서 전역 등록됨
+                const SS = window.SafeStorage;
                 // authToken은 httpOnly 쿠키로 관리됩니다 — localStorage에서 읽지 않음
-                const _userStr = SS.getItem('user');
+                const _userStr = SS.getItem(SK.USER || 'user');
                 let currentUser = null;
                 let usersPage = 1;
                 let convPage = 1;

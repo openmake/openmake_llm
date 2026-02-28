@@ -51,6 +51,9 @@ jest.mock('../utils/logger', () => ({
 jest.mock('../ollama/api-key-manager', () => ({
     getApiKeyManager: () => ({
         getAuthHeaders: () => ({ Authorization: 'Bearer test-key' }),
+        getAuthHeadersForIndex: () => ({ Authorization: 'Bearer test-key' }),
+        getNextAvailableKey: () => 0,
+        getKeyByIndex: () => 'test-key',
         reportSuccess: jest.fn(),
         reportFailure: jest.fn(() => false),
     }),

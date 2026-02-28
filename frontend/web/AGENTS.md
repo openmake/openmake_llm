@@ -95,3 +95,39 @@
 | `public/js/modules/state.js` | `vanilla-js-frontend` |
 | `public/js/spa-router.js` | `vanilla-js-frontend` |
 | `public/js/modules/pages/*.js` | `vanilla-js-frontend` |
+
+---
+
+## MCP 토글 시스템 (프론트엔드 찡임 범위)
+
+> 전체 MCP 아키텍처 도해는 `backend/api/AGENTS.md` → "MCP 통합 아키텍처" 섹션 참조.
+
+### 프론트엔드 MCP 관련 파일
+
+| 파일 | 역할 |
+|------|------|
+| `js/modules/settings.js` | `MCP_TOOL_CATALOG` 정의, `loadMCPSettings`, `saveMCPSettings`, `toggleMCPModule` |
+| `js/modules/pages/settings.js` | 설정 전용 페이지 `toolCatalog` (백엔드 `builtInTools`와 동기화 필수) |
+| `js/modules/state.js` | `thinkingEnabled`, `webSearchEnabled`, `ragEnabled`, `mcpToolsEnabled` 상태 |
+| `js/modules/modes.js` | 채팅 입력창 토글 버튼 (🧠 🌐 🎯 🔬) → AppState 직접 토글 |
+| `js/modules/chat.js` | `sendMessage()` — AppState → WebSocket 페이로드 조립 |
+| `js/modules/websocket.js` | WebSocket 연결 관리, 수신 메시지 라우팅 |
+| `js/settings-standalone.js` | `settings.html` 전용 독립 JS (인라인 스크립트에서 추출) |
+
+### 토글 상태 키 맵핑
+
+| AppState 키 | localStorage 키 | 채팅 입력창 버튼 | WS 페이로드 키 |
+|-------------|-----------------|------------------|-----------------|
+| `thinkingEnabled` | `mcpSettings.thinking` | 🧠 `thinkingModeBtn` | `thinkingMode` |
+| `webSearchEnabled` | `mcpSettings.webSearch` | 🌐 `webSearchBtn` | `webSearch` |
+| `ragEnabled` | `mcpSettings.rag` | (설정 페이지만) | `ragEnabled` |
+| `discussionMode` | (비저장) | 🎯 `discussionModeBtn` | `discussionMode` |
+| `deepResearchMode` | (비저장) | 🔬 `deepResearchBtn` | `deepResearchMode` |
+| `mcpToolsEnabled` | `mcpSettings.enabledTools` | (설정 페이지만) | `enabledTools` |
+
+### 수정 시 주의사항
+
+1. **도구 목록 변경 시 2곳 동시 수정** — `settings.js`의 `MCP_TOOL_CATALOG`과 `pages/settings.js`의 `toolCatalog` 동기화 필수
+2. **상태 키 `thinkingEnabled` 단일 사용** — `thinkingMode` 키는 삭제됨. 설정과 채팅 모두 `thinkingEnabled` 사용
+3. **localStorage `mcpSettings` 단일 키** — MCP 토글 상태 저장에 이 키만 사용 (키 충돌 방지)
+4. **WS 페이로드 `thinkingMode` 키는 유지** — 백엔드가 이 이름을 기대하므로 변경 금지. 값만 `thinkingEnabled`에서 읽음

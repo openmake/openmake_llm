@@ -24,7 +24,7 @@ export const ENGINE_FALLBACKS = {
     /** 기본 LLM 엔진 폴백 */
     LLM: 'gpt-oss:120b-cloud',
     /** 고급 분석 엔진 폴백 */
-    PRO: 'kimi-k2.5:cloud',
+    PRO: 'qwen3.5:397b-cloud',
     /** 코딩 엔진 폴백 */
     CODE: 'glm-5:cloud',
     /** 비전 엔진 폴백 */
@@ -47,12 +47,6 @@ export const MODEL_CAPABILITY_PRESETS: Readonly<Record<string, ModelCapabilities
         streaming: true,
     },
     'gpt-oss': {
-        toolCalling: true,
-        thinking: true,
-        vision: false,
-        streaming: true,
-    },
-    'kimi': {
         toolCalling: true,
         thinking: true,
         vision: false,

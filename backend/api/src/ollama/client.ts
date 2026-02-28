@@ -116,19 +116,18 @@ export class OllamaClient {
         this.config = { ...DEFAULT_CONFIG, ...config };
         this.apiKeyManager = getApiKeyManager();
 
-        // 🆕 Per-instance key binding: 모델에 매핑된 키 인덱스를 인스턴스에 고정
-        // 싱글톤의 currentKeyIndex를 변경하지 않아 A2A 병렬 경합을 방지합니다
+        // 🆕 Per-instance key binding: 키풀에서 라운드로빈으로 키를 할당합니다
+        // 모델과 무관하게 사용 가능한 다음 키를 선택하여 A2A 병렬 경합을 방지합니다
         let baseUrl = this.config.baseUrl;
         if (this.isCloudModel(this.config.model)) {
             baseUrl = OLLAMA_CLOUD_HOST;
             logger.info(`🌐 Cloud 모델 감지 - 호스트: ${baseUrl}`);
-
-            const targetKeyIndex = this.apiKeyManager.findKeyIndexForModel(this.config.model);
-            this.boundKeyIndex = targetKeyIndex !== -1 ? targetKeyIndex : this.apiKeyManager.getCurrentKeyIndex();
-            logger.info(`[constructor] 🔑 모델-키 바인딩: ${this.config.model} → Key ${this.boundKeyIndex + 1}`);
-        } else {
-            this.boundKeyIndex = this.apiKeyManager.getCurrentKeyIndex();
         }
+
+        // 키풀에서 라운드로빈으로 다음 가용 키 할당 (모델 무관)
+        const poolKeyIndex = this.apiKeyManager.getNextAvailableKey();
+        this.boundKeyIndex = poolKeyIndex !== -1 ? poolKeyIndex : this.apiKeyManager.getCurrentKeyIndex();
+        logger.info(`[constructor] 🔑 키풀 할당: ${this.config.model} → Key ${this.boundKeyIndex + 1}`);
 
         this.client = axios.create({
             baseURL: baseUrl,
@@ -174,23 +173,21 @@ export class OllamaClient {
                     // 🆕 Per-instance 실패 기록 (싱글톤 로테이션 트리거하지 않음)
                     this.apiKeyManager.recordKeyFailure(this.boundKeyIndex, error);
 
-                    // 🆕 동일 모델에 매핑된 대체 키만 탐색 (크로스 모델 로테이션 방지)
+                    // 🆕 키풀에서 다음 사용 가능한 키로 전환 (모델 무관)
                     const retryCount = error.config?._retryCount || 0;
-                    const alternateKeyIndex = this.apiKeyManager.findAlternateKeyForModel(
-                        this.boundKeyIndex, this.config.model
-                    );
+                    const alternateKeyIndex = this.apiKeyManager.getNextAvailableKey(this.boundKeyIndex);
 
                     if (alternateKeyIndex !== -1 && error.config && retryCount < 3) {
-                        // 동일 모델의 대체 키로 전환
+                        // 키풀의 다음 가용 키로 전환
                         this.boundKeyIndex = alternateKeyIndex;
                         error.config._retryCount = retryCount + 1;
                         const newAuthHeaders = this.apiKeyManager.getAuthHeadersForIndex(this.boundKeyIndex);
                         error.config.headers.Authorization = newAuthHeaders.Authorization;
-                        logger.info(`✅ 동일 모델 대체 키로 재시도 (Key ${this.boundKeyIndex + 1})...`);
+                        logger.info(`✅ 키풀 폴백 재시도 (Key ${this.boundKeyIndex + 1})...`);
                         return this.client.request(error.config);
                     } else {
-                        // 동일 모델의 대체 키 없음 — 에러 전파
-                        logger.info(`⚠️ 모델 ${this.config.model}에 사용 가능한 대체 키 없음 (boundKey: ${this.boundKeyIndex + 1})`);
+                        // 모든 키 소진 — 에러 전파
+                        logger.info(`⚠️ 키풀 소진 - 사용 가능한 키 없음 (boundKey: ${this.boundKeyIndex + 1})`);
 
                         const nextResetTime = this.apiKeyManager.getNextResetTime();
                         if (nextResetTime) {
@@ -268,19 +265,9 @@ export class OllamaClient {
             logger.info(`[setModel] 🏠 Local 모델 전환 → ${this.config.baseUrl} (model: ${model})`);
         }
 
-        // 🆕 Per-instance 키 재바인딩 (싱글톤 변경 없이 인스턴스 키만 재바인딩)
-        if (isCloud) {
-            const targetKeyIndex = this.apiKeyManager.findKeyIndexForModel(model);
-            if (targetKeyIndex !== -1) {
-                this.boundKeyIndex = targetKeyIndex;
-                const newHeaders = this.apiKeyManager.getAuthHeadersForIndex(this.boundKeyIndex);
-                this.client.defaults.headers.common['Authorization'] = newHeaders.Authorization || '';
-                logger.info(`[setModel] 🔑 모델-키 바인딩: ${model} → Key ${this.boundKeyIndex + 1}`);
-            }
-        } else {
-            // 로컬 모델: 기본 키 인덱스 유지
-            this.boundKeyIndex = this.apiKeyManager.getCurrentKeyIndex();
-        }
+        // 키 재바인딩 제거: 모델 변경 시 키는 유지 (동일 제공자이므로 모든 키가 모든 모델에 접근 가능)
+        // boundKeyIndex는 constructor에서 할당된 값을 그대로 유지합니다
+        logger.info(`[setModel] 모델 변경: ${model} (키 유지: Key ${this.boundKeyIndex + 1})`);
     }
 
     /**
@@ -779,7 +766,7 @@ export class OllamaClient {
                     baseURL: '', // Override baseURL to use absolute URL
                     headers: {
                         'Content-Type': 'application/json',
-                        ...this.apiKeyManager.getAuthHeaders()
+                        ...this.apiKeyManager.getAuthHeadersForIndex(this.boundKeyIndex)
                     }
                 }
             );
@@ -812,7 +799,7 @@ export class OllamaClient {
                     baseURL: '',
                     headers: {
                         'Content-Type': 'application/json',
-                        ...this.apiKeyManager.getAuthHeaders()
+                        ...this.apiKeyManager.getAuthHeadersForIndex(this.boundKeyIndex)
                     }
                 }
             );
@@ -881,40 +868,5 @@ export const createClient = (config?: Partial<OllamaConfig>): OllamaClient => {
     return new OllamaClient(config);
 };
 
-/**
- * 🆕 특정 인덱스의 키-모델 쌍으로 클라이언트 생성 (A2A용)
- * @param index API 키 인덱스 (0-based)
- * @returns 해당 키-모델 쌍으로 구성된 OllamaClient
- */
-export const createClientForIndex = (index: number): OllamaClient | null => {
-    const keyManager = getApiKeyManager();
-    const pair = keyManager.getKeyModelPair(index);
-    
-    if (!pair) {
-        logger.error(`❌ 인덱스 ${index}에 해당하는 키-모델 쌍이 없습니다.`);
-        return null;
-    }
-    
-    logger.info(`🎯 인덱스 ${index + 1} 클라이언트 생성: ${pair.model}`);
-    return new OllamaClient({ model: pair.model });
-};
-
-/**
- * 🆕 모든 키-모델 쌍에 대해 클라이언트 배열 생성 (A2A 병렬 처리용)
- * @returns OllamaClient 배열
- */
-export const createAllClients = (): OllamaClient[] => {
-    const keyManager = getApiKeyManager();
-    const pairs = keyManager.getAllKeyModelPairs();
-    
-    logger.info(`🚀 ${pairs.length}개 A2A 클라이언트 생성 중...`);
-    
-    const clients = pairs.map(pair => {
-        // 각 클라이언트 생성 전에 해당 인덱스로 키 매니저 설정
-        const client = new OllamaClient({ model: pair.model });
-        return client;
-    });
-    
-    logger.info(`✅ ${clients.length}개 A2A 클라이언트 준비 완료`);
-    return clients;
-};
+// createClientForIndex(), createAllClients() 제거됨
+// → OllamaClient constructor가 getNextAvailableKey()로 키풀에서 자동 할당하므로 불필요

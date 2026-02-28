@@ -14,6 +14,8 @@
  * @module spa-router
  */
 
+import { STORAGE_KEY_USER, STORAGE_KEY_GUEST_MODE, STORAGE_KEY_IS_GUEST } from './modules/constants.js';
+
 // ─── 내부 상태 ─────────────────────────────────────
 const _routes = new Map();           // path → routeConfig
 const _loadedModules = new Set();    // 이미 로드된 모듈 파일
@@ -37,18 +39,8 @@ const LOGIN_PATH = '/login.html';
 const DEFAULT_TITLE = 'OpenMake.AI';
 const LOG_PREFIX = '[Router]';
 
-// Safe localStorage wrapper for Safari Private Mode
-const SafeStorage = window.SafeStorage = window.SafeStorage || {
-    getItem: function (key) {
-        try { return localStorage.getItem(key); } catch (e) { return null; }
-    },
-    setItem: function (key, value) {
-        try { localStorage.setItem(key, value); } catch (e) { }
-    },
-    removeItem: function (key) {
-        try { localStorage.removeItem(key); } catch (e) { }
-    }
-};
+// SafeStorage 래퍼 — safe-storage.js에서 전역 등록됨
+const SafeStorage = window.SafeStorage;
 
 // ─── 유틸리티 ──────────────────────────────────────
 
@@ -113,7 +105,7 @@ function _recordReload(path) {
  */
 function isAdminUser() {
     try {
-        var stored = SafeStorage.getItem('user');
+        var stored = SafeStorage.getItem(STORAGE_KEY_USER);
         if (!stored) return false;
         var user = JSON.parse(stored);
         return user && user.role === 'admin';
@@ -127,9 +119,9 @@ function isAdminUser() {
  * @returns {boolean}
  */
 function isAuthenticated() {
-    const user = SafeStorage.getItem('user');
-    const isGuest = SafeStorage.getItem('guestMode') === 'true' ||
-        SafeStorage.getItem('isGuest') === 'true';
+    const user = SafeStorage.getItem(STORAGE_KEY_USER);
+    const isGuest = SafeStorage.getItem(STORAGE_KEY_GUEST_MODE) === 'true' ||
+        SafeStorage.getItem(STORAGE_KEY_IS_GUEST) === 'true';
     return !!user && user !== '{}' && user !== 'null' && !isGuest;
 }
 

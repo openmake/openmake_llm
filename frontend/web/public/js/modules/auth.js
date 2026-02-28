@@ -10,23 +10,15 @@
  */
 
 import { getState, setState } from './state.js';
+import { STORAGE_KEY_AUTH_TOKEN, STORAGE_KEY_USER, STORAGE_KEY_GUEST_MODE, STORAGE_KEY_IS_GUEST } from './constants.js';
 
 /**
  * 안전한 localStorage 래퍼
  * localStorage 접근 시 발생할 수 있는 예외(Safari 프라이빗 모드 등)를 처리합니다.
  * @type {{getItem: Function, setItem: Function, removeItem: Function}}
  */
-const SafeStorage = window.SafeStorage || {
-    getItem(key) {
-        try { return localStorage.getItem(key); } catch (e) { return null; }
-    },
-    setItem(key, value) {
-        try { localStorage.setItem(key, value); } catch (e) { }
-    },
-    removeItem(key) {
-        try { localStorage.removeItem(key); } catch (e) { }
-    }
-};
+// SafeStorage 래퍼 — safe-storage.js에서 전역 등록됨
+const SafeStorage = window.SafeStorage;
 
 /**
  * Silent refresh 동시성 가드.
@@ -55,10 +47,10 @@ let refreshPromise = null;
  * @returns {void}
  */
 function clearStaleAuth() {
-    SafeStorage.removeItem('authToken');
-    SafeStorage.removeItem('user');
-    SafeStorage.removeItem('guestMode');
-    SafeStorage.removeItem('isGuest');
+    SafeStorage.removeItem(STORAGE_KEY_AUTH_TOKEN);
+    SafeStorage.removeItem(STORAGE_KEY_USER);
+    SafeStorage.removeItem(STORAGE_KEY_GUEST_MODE);
+    SafeStorage.removeItem(STORAGE_KEY_IS_GUEST);
     setState('auth.authToken', null);
     setState('auth.currentUser', null);
     setState('auth.isGuestMode', false);
@@ -155,11 +147,11 @@ async function fetchCurrentUser() {
  * @returns {Promise<void>} 세션 검증 완료까지 대기
  */
 async function initAuth() {
-    const isGuestMode = SafeStorage.getItem('guestMode') === 'true';
+    const isGuestMode = SafeStorage.getItem(STORAGE_KEY_GUEST_MODE) === 'true';
 
     setState('auth.isGuestMode', isGuestMode);
 
-    const savedUser = SafeStorage.getItem('user');
+    const savedUser = SafeStorage.getItem(STORAGE_KEY_USER);
 
     // 🔒 세션 유효성 검증: localStorage에 유저 데이터가 있으면 서버에서 확인
     // 액세스 토큰 만료 시 리프레시 토큰으로 자동 갱신을 시도합니다
@@ -259,9 +251,9 @@ async function recoverSessionFromCookie() {
             const user = data.data?.user || data.user;
             if (user && user.email) {
                 // 세션 복구 성공
-                SafeStorage.setItem('user', JSON.stringify(user));
-                SafeStorage.removeItem('guestMode');
-                SafeStorage.removeItem('isGuest');
+                SafeStorage.setItem(STORAGE_KEY_USER, JSON.stringify(user));
+                SafeStorage.removeItem(STORAGE_KEY_GUEST_MODE);
+                SafeStorage.removeItem(STORAGE_KEY_IS_GUEST);
 
                 setState('auth.currentUser', user);
                 setState('auth.isGuestMode', false);
@@ -366,8 +358,8 @@ async function authFetch(url, options = {}) {
             }
         }
 
-        SafeStorage.removeItem('authToken');
-        SafeStorage.removeItem('user');
+        SafeStorage.removeItem(STORAGE_KEY_AUTH_TOKEN);
+        SafeStorage.removeItem(STORAGE_KEY_USER);
         setState('auth.authToken', null);
         setState('auth.currentUser', null);
         window.location.href = '/login.html';
@@ -426,8 +418,8 @@ async function login(email, password) {
 
         if (response.ok && token) {
             // authToken은 httpOnly 쿠키로 처리됩니다 — localStorage 저장 안함
-            SafeStorage.setItem('user', JSON.stringify(user));
-            SafeStorage.removeItem('guestMode');
+            SafeStorage.setItem(STORAGE_KEY_USER, JSON.stringify(user));
+            SafeStorage.removeItem(STORAGE_KEY_GUEST_MODE);
 
             setState('auth.authToken', token);
             scheduleProactiveRefresh(token);
@@ -467,9 +459,9 @@ function logout() {
     }
 
     // localStorage 정리
-    SafeStorage.removeItem('authToken');
-    SafeStorage.removeItem('user');
-    SafeStorage.removeItem('guestMode');
+    SafeStorage.removeItem(STORAGE_KEY_AUTH_TOKEN);
+    SafeStorage.removeItem(STORAGE_KEY_USER);
+    SafeStorage.removeItem(STORAGE_KEY_GUEST_MODE);
 
     setState('auth.authToken', null);
     setState('auth.currentUser', null);
@@ -568,8 +560,7 @@ window.isLoggedIn = isLoggedIn;
 window.getCurrentUser = getCurrentUser;
 window.claimAnonymousSession = claimAnonymousSession;
 window.trySilentRefresh = trySilentRefresh;
-// SafeStorage 전역 노출 — pages/ 모듈들이 localStorage 직접 접근 대신 사용
-window.SafeStorage = SafeStorage;
+// SafeStorage는 safe-storage.js에서 전역 등록됨 — 여기서 중복 등록 불필요
 
 export {
     initAuth,

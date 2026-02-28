@@ -10,6 +10,7 @@
  */
 (function () {
     'use strict';
+    var SK = window.STORAGE_KEYS || {};
     window.PageModules = window.PageModules || {};
     var _intervals = [];
     var _timeouts = [];
@@ -29,13 +30,13 @@
 
                 let allSessions = [];
                 let searchTimeout;
-                // SafeStorage 래퍼 — Safari Private Mode 등에서 localStorage 예외 방지
-                const SS = window.SafeStorage || { getItem: function (k) { try { return localStorage.getItem(k); } catch (e) { return null; } }, setItem: function (k, v) { try { localStorage.setItem(k, v); } catch (e) { } }, removeItem: function (k) { try { localStorage.removeItem(k); } catch (e) { } } };
+                // SafeStorage 래퍼 — safe-storage.js에서 전역 등록됨
+                const SS = window.SafeStorage;
 
                 // 인증 체크
                 (function checkAuthAccess() {
-                    const user = SS.getItem('user');
-                    const isGuest = SS.getItem('isGuest') === 'true';
+                    const user = SS.getItem(SK.USER || 'user');
+                    const isGuest = SS.getItem(SK.IS_GUEST || 'isGuest') === 'true';
                     if (!user || isGuest) {
                         (typeof showToast === 'function' ? showToast('이 페이지는 로그인이 필요합니다.', 'warning') : console.warn('이 페이지는 로그인이 필요합니다.'));
                         (typeof Router !== 'undefined' && Router.navigate('/'));

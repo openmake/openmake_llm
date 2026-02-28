@@ -16,22 +16,14 @@
 (function () {
     'use strict';
 
-    // ─── SafeStorage wrapper (Safari Private Mode 호환) ───
-    var safeStorage = window.SafeStorage || {
-        getItem: function (key) {
-            try { return localStorage.getItem(key); } catch (e) { return null; }
-        },
-        setItem: function (key, value) {
-            try { localStorage.setItem(key, value); } catch (e) { /* Safari Private Mode */ }
-        },
-        removeItem: function (key) {
-            try { localStorage.removeItem(key); } catch (e) { /* Safari Private Mode */ }
-        }
-    };
+    // SafeStorage 래퍼 — safe-storage.js에서 전역 등록됨
+    var safeStorage = window.SafeStorage;
+    var AUTO_MODEL = window.DEFAULT_AUTO_MODEL || 'openmake_llm_auto';
+    var SK = window.STORAGE_KEYS || {};
 
     // ─── 관리자 확인 헬퍼 ───
     function isAdmin() {
-        var savedUser = safeStorage.getItem('user');
+        var savedUser = safeStorage.getItem(SK.USER || 'user');
         if (!savedUser) return false;
         try {
             var user = JSON.parse(savedUser);
@@ -46,7 +38,7 @@
 
         // 관리자가 아니면 모델 이름 숨김
         if (!isAdmin()) {
-            modelSelect.innerHTML = '<option value="openmake_llm_auto">OpenMake LLM Auto</option>';
+            modelSelect.innerHTML = '<option value="' + AUTO_MODEL + '">OpenMake LLM Auto</option>';
             modelSelect.disabled = true;
             modelSelect.style.cursor = 'default';
             return;
@@ -58,8 +50,8 @@
                 var rawData = await response.json();
                 var data = rawData.data || rawData;
                 if (data.models && data.models.length > 0) {
-                    var savedModel = safeStorage.getItem('selectedModel');
-                    var defaultModel = data.defaultModel || 'openmake_llm_auto';
+                    var savedModel = safeStorage.getItem(SK.SELECTED_MODEL || 'selectedModel');
+                    var defaultModel = data.defaultModel || AUTO_MODEL;
 
                     modelSelect.innerHTML = data.models.map(function (model) {
                         var modelId = model.modelId || model.name;
@@ -73,7 +65,7 @@
             }
         } catch (e) {
             console.error('모델 로드 실패:', e);
-            var savedModel = safeStorage.getItem('selectedModel');
+            var savedModel = safeStorage.getItem(SK.SELECTED_MODEL || 'selectedModel');
             if (savedModel) {
                 modelSelect.innerHTML = '<option value="' + savedModel + '">' + savedModel + '</option>';
             }
@@ -112,7 +104,7 @@
     function initAccountCard() {
         var accountCard = document.getElementById('accountCard');
         var adminLink = document.getElementById('adminLink');
-        var savedUser = safeStorage.getItem('user');
+        var savedUser = safeStorage.getItem(SK.USER || 'user');
         var loggedIn = !!savedUser && savedUser !== '{}' && savedUser !== 'null';
         if (loggedIn && accountCard) {
             accountCard.style.display = '';
@@ -137,18 +129,18 @@
         var saveHistoryToggle = document.getElementById('saveHistoryToggle');
 
         if (themeSelect) setTheme(themeSelect.value);
-        if (modelSelect) safeStorage.setItem('selectedModel', modelSelect.value);
+        if (modelSelect) safeStorage.setItem(SK.SELECTED_MODEL || 'selectedModel', modelSelect.value);
 
         // mcpSettings: read-merge-write 패턴으로 enabledTools 등 기존 필드 보존
-        var mcpSettings = JSON.parse(safeStorage.getItem('mcpSettings') || '{}');
+        var mcpSettings = JSON.parse(safeStorage.getItem(SK.MCP_SETTINGS || 'mcpSettings') || '{}');
         if (thinkingToggle) mcpSettings.thinking = thinkingToggle.checked;
         if (webSearchToggle) mcpSettings.webSearch = webSearchToggle.checked;
         if (ragToggle) mcpSettings.rag = ragToggle.checked;
         // enabledTools는 read-merge-write로 자동 보존됨
-        safeStorage.setItem('mcpSettings', JSON.stringify(mcpSettings));
+        safeStorage.setItem(SK.MCP_SETTINGS || 'mcpSettings', JSON.stringify(mcpSettings));
 
         if (langSelect && saveHistoryToggle) {
-            safeStorage.setItem('generalSettings', JSON.stringify({
+            safeStorage.setItem(SK.GENERAL_SETTINGS || 'generalSettings', JSON.stringify({
                 lang: langSelect.value,
                 saveHistory: saveHistoryToggle.checked
             }));
@@ -159,14 +151,14 @@
 
     // ─── 설정 로드 (mcpSettings 스키마: modules/pages/settings.js 동기화) ───
     function loadSettings() {
-        var theme = safeStorage.getItem('theme') || 'dark';
+        var theme = safeStorage.getItem(SK.THEME || 'theme') || 'dark';
         var themeSelect = document.getElementById('themeSelect');
         if (themeSelect) {
             themeSelect.value = theme;
         }
         setTheme(theme);
 
-        var selectedModel = safeStorage.getItem('selectedModel');
+        var selectedModel = safeStorage.getItem(SK.SELECTED_MODEL || 'selectedModel');
         if (selectedModel) {
             var modelSelect = document.getElementById('modelSelect');
             if (modelSelect) {
@@ -180,7 +172,7 @@
             }
         }
 
-        var savedMcp = safeStorage.getItem('mcpSettings');
+        var savedMcp = safeStorage.getItem(SK.MCP_SETTINGS || 'mcpSettings');
         if (savedMcp) {
             try {
                 var mcp = JSON.parse(savedMcp);
@@ -195,7 +187,7 @@
             }
         }
 
-        var savedGeneral = safeStorage.getItem('generalSettings');
+        var savedGeneral = safeStorage.getItem(SK.GENERAL_SETTINGS || 'generalSettings');
         if (savedGeneral) {
             try {
                 var general = JSON.parse(savedGeneral);
@@ -212,10 +204,10 @@
     // ─── 설정 초기화 ───
     function resetSettings() {
         if (confirm('모든 설정을 초기화하시겠습니까?')) {
-            safeStorage.removeItem('theme');
-            safeStorage.removeItem('selectedModel');
-            safeStorage.removeItem('mcpSettings');
-            safeStorage.removeItem('generalSettings');
+            safeStorage.removeItem(SK.THEME || 'theme');
+            safeStorage.removeItem(SK.SELECTED_MODEL || 'selectedModel');
+            safeStorage.removeItem(SK.MCP_SETTINGS || 'mcpSettings');
+            safeStorage.removeItem(SK.GENERAL_SETTINGS || 'generalSettings');
             location.reload();
         }
     }

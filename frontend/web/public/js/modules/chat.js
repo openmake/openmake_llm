@@ -13,13 +13,10 @@ import { getState, setState, addToMemory } from './state.js';
 import { sendWsMessage } from './websocket.js';
 import { scrollToBottom, escapeHtml, renderMarkdown, showToast } from './ui.js';
 import { authFetch } from './auth.js';
+import { DEFAULT_AUTO_MODEL, STORAGE_KEY_GENERAL_SETTINGS, STORAGE_KEY_SELECTED_MODEL, STORAGE_KEY_USER } from './constants.js';
 
-// BUG-R3-005: SafeStorage 래퍼 — Safari Private Mode 등에서 localStorage 예외 방지
-const SS = window.SafeStorage || {
-    getItem: (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } },
-    setItem: (k, v) => { try { localStorage.setItem(k, v); } catch (e) { } },
-    removeItem: (k) => { try { localStorage.removeItem(k); } catch (e) { } }
-};
+// SafeStorage 래퍼 — safe-storage.js에서 전역 등록됨
+const SS = window.SafeStorage;
 
 /**
  * AI 응답 생성 중단 요청
@@ -113,7 +110,7 @@ async function sendMessage() {
     // 사용자 메시지 추가
     addChatMessage('user', message);
     // saveHistory 설정이 활성화된 경우에만 메모리에 저장
-    const generalSettingsForHistory = JSON.parse(SS.getItem('generalSettings') || '{}');
+    const generalSettingsForHistory = JSON.parse(SS.getItem(STORAGE_KEY_GENERAL_SETTINGS) || '{}');
     if (generalSettingsForHistory.saveHistory !== false) {
         addToMemory('user', message);
     }
@@ -136,7 +133,7 @@ async function sendMessage() {
         const payload = {
             type: 'chat',
             message: message,
-            model: document.getElementById('modelSelect')?.value || SS.getItem('selectedModel') || 'openmake_llm_auto',
+            model: document.getElementById('modelSelect')?.value || SS.getItem(STORAGE_KEY_SELECTED_MODEL) || DEFAULT_AUTO_MODEL,
             history: getState('conversationMemory'),
             webSearch: getState('webSearchEnabled'),
             thinkingMode: getState('thinkingEnabled'),
@@ -149,7 +146,7 @@ async function sendMessage() {
         };
 
         // 🌐 사용자 언어 설정을 WebSocket 메시지에 포함
-        const generalSettings = JSON.parse(SS.getItem('generalSettings') || '{}');
+        const generalSettings = JSON.parse(SS.getItem(STORAGE_KEY_GENERAL_SETTINGS) || '{}');
         if (generalSettings.lang) {
             payload.language = generalSettings.lang;
         }
@@ -170,7 +167,7 @@ async function sendMessage() {
         }
 
         // 🔐 인증된 사용자 정보를 WebSocket 메시지에 포함
-        const storedUser = SS.getItem('user');
+        const storedUser = SS.getItem(STORAGE_KEY_USER);
         const parsedUser = storedUser ? JSON.parse(storedUser) : {};
         if (parsedUser.userId || parsedUser.id) payload.userId = parsedUser.userId || parsedUser.id;
         if (parsedUser.role) payload.userRole = parsedUser.role;
@@ -440,7 +437,7 @@ function finishAssistantMessage(errorMessage = null, serverMessageId = null) {
         }
 
         // saveHistory 설정이 활성화된 경우에만 메모리에 추가
-        const gSettings = JSON.parse(SS.getItem('generalSettings') || '{}');
+        const gSettings = JSON.parse(SS.getItem(STORAGE_KEY_GENERAL_SETTINGS) || '{}');
         if (gSettings.saveHistory !== false) {
             addToMemory('assistant', rawText);
         }
