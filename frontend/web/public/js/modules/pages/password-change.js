@@ -10,6 +10,7 @@
  */
 (function () {
     'use strict';
+    var SK = window.STORAGE_KEYS || {};
     window.PageModules = window.PageModules || {};
     var _intervals = [];
     var _timeouts = [];
@@ -35,11 +36,11 @@
                     setTimeout(() => t.classList.remove('show'), 2500);
                 }
                 function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
-                // SafeStorage 래퍼 — Safari Private Mode 등에서 localStorage 예외 방지
-                const SS = window.SafeStorage || { getItem: function (k) { try { return localStorage.getItem(k); } catch (e) { return null; } }, setItem: function (k, v) { try { localStorage.setItem(k, v); } catch (e) { } }, removeItem: function (k) { try { localStorage.removeItem(k); } catch (e) { } } };
+                // SafeStorage 래퍼 — safe-storage.js에서 전역 등록됨
+                const SS = window.SafeStorage;
 
                 // 로그인 확인 (OAuth 쿠키 세션 포함)
-                if (!SS.getItem('user')) {
+                if (!SS.getItem(SK.USER || 'user')) {
                     (typeof showToast === 'function' ? showToast('로그인이 필요합니다.', 'warning') : console.warn('로그인이 필요합니다.'));
                     (typeof Router !== 'undefined' && Router.navigate('/'));
                 }

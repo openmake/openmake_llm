@@ -226,18 +226,28 @@ export function setupStaticFiles(app: Application, dirname: string): void {
     // style-src-attr: 'unsafe-inline' — 런타임 JS가 동적으로 style 속성을 설정하므로 해시 불가
     const styleSrcAttrDirective = "'unsafe-inline'";
 
+    // CSP 허용 CDN 도메인 목록 — 추가/삭제 시 이 배열만 수정
+    const CDN_DOMAINS = [
+        'https://cdn.jsdelivr.net',
+        'https://cdnjs.cloudflare.com',
+        'https://fonts.googleapis.com',
+        'https://fonts.gstatic.com',
+        'https://api.iconify.design',
+    ] as const;
+    const cdnList = CDN_DOMAINS.join(' ');
+
     const buildCspHeader = (nonce: string): string => {
         const nonceSource = `'nonce-${nonce}'`;
 
         return [
             `default-src 'self'`,
-            `script-src 'self' ${nonceSource} https://cdn.jsdelivr.net https://cdnjs.cloudflare.com`,
-            `style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://fonts.googleapis.com`,
+            `script-src 'self' ${nonceSource} ${CDN_DOMAINS[0]} ${CDN_DOMAINS[1]}`,
+            `style-src 'self' 'unsafe-inline' ${CDN_DOMAINS[0]} ${CDN_DOMAINS[1]} ${CDN_DOMAINS[2]}`,
             `script-src-attr ${scriptSrcAttrDirective}`,
             `style-src-attr ${styleSrcAttrDirective}`,
             `img-src 'self' data: blob: https:`,
-            `connect-src 'self' ws: wss: ${getConfig().ollamaBaseUrl} ${OLLAMA_CLOUD_HOST} https://api.iconify.design https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://fonts.googleapis.com https://fonts.gstatic.com`,
-            `font-src 'self' data: https://cdn.jsdelivr.net https://fonts.gstatic.com`,
+            `connect-src 'self' ws: wss: ${getConfig().ollamaBaseUrl} ${OLLAMA_CLOUD_HOST} ${cdnList}`,
+            `font-src 'self' data: ${CDN_DOMAINS[0]} ${CDN_DOMAINS[3]}`,
             `object-src 'none'`,
             `frame-ancestors 'none'`,
             `base-uri 'self'`,

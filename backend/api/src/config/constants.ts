@@ -84,7 +84,7 @@ export const AUTH_CONFIG = {
  * Ollama Cloud API 호스트 URL
  *
  * :cloud 접미사 모델 사용 시 연결할 Ollama Cloud 서버 주소입니다.
- * client.ts, agent-loop.ts, multi-model-client.ts에서 공통 참조합니다.
+ * client.ts, agent-loop.ts에서 공통 참조합니다.
  */
 export const OLLAMA_CLOUD_HOST = 'https://ollama.com';
 
@@ -98,3 +98,15 @@ export const OLLAMA_CLOUD_HOST = 'https://ollama.com';
  * GitHub API 등 외부 API 호출 시 식별자로 사용합니다.
  */
 export const APP_USER_AGENT = 'OpenMake-AI';
+
+// ============================================
+// 모델 선택
+// ============================================
+
+/**
+ * 자동 모델 선택 프로파일 ID
+ *
+ * 사용자가 모델을 명시하지 않았을 때 사용되는 기본 프로파일 ID입니다.
+ * pipeline-profile, cost-tier, model.routes 등에서 공통 참조합니다.
+ */
+export const DEFAULT_AUTO_MODEL = 'openmake_llm_auto';

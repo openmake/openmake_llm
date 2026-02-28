@@ -92,7 +92,8 @@ describe('ApiKeyManager', () => {
             const manager = new ApiKeyManager({ keys: ['key1', '   ', '', 'key2'] });
 
             expect(manager.getTotalKeys()).toBe(2);
-            expect(manager.getAllKeyModelPairs().map(pair => pair.key)).toEqual(['key1', 'key2']);
+            expect(manager.getKeyByIndex(0)).toBe('key1');
+            expect(manager.getKeyByIndex(1)).toBe('key2');
         });
 
         test('config.models와 매핑됨', () => {
@@ -103,7 +104,7 @@ describe('ApiKeyManager', () => {
             });
 
             expect(manager.getCurrentModel()).toBe('model-a');
-            expect(manager.getKeyModelPair(1)).toEqual({ key: 'key2', model: 'model-b', index: 1 });
+            expect(manager.getKeyByIndex(1)).toBe('key2');
             expect(manager.getSshKey()).toBe('test-ssh-key');
         });
     });
@@ -153,29 +154,7 @@ describe('ApiKeyManager', () => {
         });
     });
 
-    describe('getKeyModelPair / getAllKeyModelPairs', () => {
-        test('범위 밖 인덱스는 null 반환', () => {
-            const manager = new ApiKeyManager({ keys: ['k1'] });
-
-            expect(manager.getKeyModelPair(-1)).toBeNull();
-            expect(manager.getKeyModelPair(1)).toBeNull();
-        });
-
-        test('유효 인덱스는 { key, model, index } 반환', () => {
-            const manager = new ApiKeyManager({ keys: ['k1'], models: ['m1'] });
-
-            expect(manager.getKeyModelPair(0)).toEqual({ key: 'k1', model: 'm1', index: 0 });
-        });
-
-        test('getAllKeyModelPairs는 전체 배열 반환', () => {
-            const manager = new ApiKeyManager({ keys: ['k1', 'k2'], models: ['m1'] });
-
-            expect(manager.getAllKeyModelPairs()).toEqual([
-                { key: 'k1', model: 'm1', index: 0 },
-                { key: 'k2', model: 'llama3', index: 1 },
-            ]);
-        });
-    });
+    // getKeyModelPair / getAllKeyModelPairs 테스트 제거됨 (메서드 제거됨 → getNextAvailableKey로 대체)
 
     describe('getAuthHeaders / getAuthHeadersForIndex', () => {
         test('키 없으면 빈 객체', () => {
@@ -398,7 +377,9 @@ describe('ApiKeyManager', () => {
 
             const manager = new ApiKeyManager();
 
-            expect(manager.getAllKeyModelPairs().map(pair => pair.key)).toEqual(['test-key-1', 'test-key-2']);
+            expect(manager.getTotalKeys()).toBe(2);
+            expect(manager.getKeyByIndex(0)).toBe('test-key-1');
+            expect(manager.getKeyByIndex(1)).toBe('test-key-2');
         });
 
         test('숫자 순서 정렬됨', () => {
@@ -408,7 +389,10 @@ describe('ApiKeyManager', () => {
 
             const manager = new ApiKeyManager();
 
-            expect(manager.getAllKeyModelPairs().map(pair => pair.key)).toEqual(['key-1', 'key-2', 'key-10']);
+            expect(manager.getTotalKeys()).toBe(3);
+            expect(manager.getKeyByIndex(0)).toBe('key-1');
+            expect(manager.getKeyByIndex(1)).toBe('key-2');
+            expect(manager.getKeyByIndex(2)).toBe('key-10');
         });
 
         test('빈 값 무시됨', () => {
@@ -418,7 +402,72 @@ describe('ApiKeyManager', () => {
 
             const manager = new ApiKeyManager();
 
-            expect(manager.getAllKeyModelPairs().map(pair => pair.key)).toEqual(['valid-key']);
+            expect(manager.getTotalKeys()).toBe(1);
+            expect(manager.getKeyByIndex(0)).toBe('valid-key');
+        });
+    });
+
+    describe('getNextAvailableKey (키풀 라운드로빈)', () => {
+        test('키 없으면 -1 반환', () => {
+            const manager = new ApiKeyManager({ keys: [] });
+            expect(manager.getNextAvailableKey()).toBe(-1);
+        });
+
+        test('첣 호출: 인덱스 0 반환', () => {
+            const manager = new ApiKeyManager({ keys: ['k1', 'k2', 'k3'] });
+            expect(manager.getNextAvailableKey()).toBe(0);
+        });
+
+        test('연속 호출 시 라운드로빈 순환', () => {
+            const manager = new ApiKeyManager({ keys: ['k1', 'k2', 'k3'] });
+            expect(manager.getNextAvailableKey()).toBe(0);
+            expect(manager.getNextAvailableKey()).toBe(1);
+            expect(manager.getNextAvailableKey()).toBe(2);
+            expect(manager.getNextAvailableKey()).toBe(0); // 다시 처음으로
+        });
+
+        test('excludeIndex 지정 시 해당 인덱스 건너뜀', () => {
+            const manager = new ApiKeyManager({ keys: ['k1', 'k2', 'k3'] });
+            // 0번을 먼저 소비하고
+            expect(manager.getNextAvailableKey()).toBe(0);
+            // 1번을 제외하면 2번 반환
+            expect(manager.getNextAvailableKey(1)).toBe(2);
+        });
+
+        test('쿨다운 중인 키 건너뜀', () => {
+            const manager = new ApiKeyManager({ keys: ['k1', 'k2', 'k3'] });
+            // k1(인덱스 0) 실패 기록
+            manager.recordKeyFailure(0, { response: { status: 429 } });
+            // 0번 건너뛰고 1번 반환
+            expect(manager.getNextAvailableKey()).toBe(1);
+        });
+
+        test('모든 키 쿨다운이면 -1 반환', () => {
+            const manager = new ApiKeyManager({ keys: ['k1', 'k2'] });
+            manager.recordKeyFailure(0, { response: { status: 429 } });
+            manager.recordKeyFailure(1, { response: { status: 429 } });
+            expect(manager.getNextAvailableKey()).toBe(-1);
+        });
+
+        test('excludeIndex + 쿨다운 조합', () => {
+            const manager = new ApiKeyManager({ keys: ['k1', 'k2', 'k3'] });
+            // k1(0) 쿨다운, k2(1) 제외 → k3(2) 반환
+            manager.recordKeyFailure(0, { response: { status: 429 } });
+            expect(manager.getNextAvailableKey(1)).toBe(2);
+        });
+    });
+
+    describe('getKeyByIndex', () => {
+        test('유효 인덱스는 키 문자열 반환', () => {
+            const manager = new ApiKeyManager({ keys: ['key-a', 'key-b'] });
+            expect(manager.getKeyByIndex(0)).toBe('key-a');
+            expect(manager.getKeyByIndex(1)).toBe('key-b');
+        });
+
+        test('범위 밖 인덱스는 빈 문자열 반환', () => {
+            const manager = new ApiKeyManager({ keys: ['key-a'] });
+            expect(manager.getKeyByIndex(-1)).toBe('');
+            expect(manager.getKeyByIndex(1)).toBe('');
         });
     });
 });

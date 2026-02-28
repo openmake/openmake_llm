@@ -12,6 +12,7 @@
 
 import { getState, setState } from './state.js';
 import { showToast } from './ui.js';
+import { saveMCPSettings } from './settings.js';
 
 /**
  * 멀티 에이전트 토론 모드 토글
@@ -47,9 +48,10 @@ function toggleDiscussionMode() {
  * @returns {void}
  */
 function toggleThinkingMode() {
-    const current = getState('thinkingMode');
+    const current = getState('thinkingEnabled');
     const newValue = !current;
-    setState('thinkingMode', newValue);
+    setState('thinkingEnabled', newValue);
+    saveMCPSettings();
 
     const thinkingLevel = getState('thinkingLevel') || 'high';
     const btn = document.getElementById('thinkingModeBtn');

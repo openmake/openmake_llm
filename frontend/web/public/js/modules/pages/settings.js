@@ -10,6 +10,8 @@
  */
 (function () {
     'use strict';
+    var AUTO_MODEL = window.DEFAULT_AUTO_MODEL || 'openmake_llm_auto';
+    var SK = window.STORAGE_KEYS || {};
     window.PageModules = window.PageModules || {};
     var _intervals = [];
     var _timeouts = [];
@@ -77,7 +79,7 @@
         '<div class="setting-row">' +
         '<div class="setting-info"><h4>\uAE30\uBCF8 \uBAA8\uB378</h4><p>\uCC44\uD305\uC5D0 \uC0AC\uC6A9\uD560 AI \uBAA8\uB378\uC744 \uC120\uD0DD\uD569\uB2C8\uB2E4</p></div>' +
         '<select id="modelSelect" class="s-select">' +
-        '<option value="openmake_llm_auto">OpenMake LLM Auto</option>' +
+        '<option value="' + AUTO_MODEL + '">OpenMake LLM Auto</option>' +
         '<option value="openmake_llm">OpenMake LLM</option>' +
         '<option value="openmake_llm_pro">OpenMake LLM Pro</option>' +
         '<option value="openmake_llm_fast">OpenMake LLM Fast</option>' +
@@ -205,10 +207,10 @@
 
         init: function () {
             try {
-                var safeStorage = window.SafeStorage || localStorage;
+                var safeStorage = window.SafeStorage;
                 // 관리자 확인 헬퍼
                 function isAdmin() {
-                    const savedUser = safeStorage.getItem('user');
+                    const savedUser = safeStorage.getItem(SK.USER || 'user');
                     if (!savedUser) return false;
                     try {
                         const user = JSON.parse(savedUser);
@@ -221,7 +223,7 @@
 
                     // 🔒 관리자가 아니면 모델 이름 숨김
                     if (!isAdmin()) {
-                        modelSelect.innerHTML = '<option value="openmake_llm_auto">OpenMake LLM Auto</option>';
+                        modelSelect.innerHTML = '<option value="' + AUTO_MODEL + '">OpenMake LLM Auto</option>';
                         modelSelect.disabled = true;
                         modelSelect.style.cursor = 'default';
                         return;
@@ -235,8 +237,8 @@
                             const rawData = await response.json();
                             var data = rawData.data || rawData;
                             if (data.models && data.models.length > 0) {
-                                var savedModel = safeStorage.getItem('selectedModel');
-                                var defaultModel = data.defaultModel || 'openmake_llm_auto';
+                                var savedModel = safeStorage.getItem(SK.SELECTED_MODEL || 'selectedModel');
+                                var defaultModel = data.defaultModel || AUTO_MODEL;
 
                                 modelSelect.innerHTML = data.models.map(function (model) {
                                     var modelId = model.modelId || model.name;
@@ -249,8 +251,8 @@
                         }
                     } catch (e) {
                         console.error('모델 로드 실패:', e);
-                        modelSelect.innerHTML = '<option value="openmake_llm_auto">OpenMake LLM Auto (로드 실패)</option>';
-                        var savedModel = safeStorage.getItem('selectedModel');
+                        modelSelect.innerHTML = '<option value="' + AUTO_MODEL + '">OpenMake LLM Auto (로드 실패)</option>';
+                        var savedModel = safeStorage.getItem(SK.SELECTED_MODEL || 'selectedModel');
                         if (savedModel) modelSelect.innerHTML = '<option value="' + savedModel + '">' + savedModel + ' (오프라인)</option>';
                     }
                 }
@@ -259,7 +261,7 @@
                     var el = document.getElementById('apiKeyCount');
                     if (!el) return;
                     // 미인증 상태에서는 401 fetch를 방지
-                    var savedUser = safeStorage.getItem('user');
+                    var savedUser = safeStorage.getItem(SK.USER || 'user');
                     if (!savedUser || savedUser === '{}' || savedUser === 'null') {
                         el.textContent = '';
                         return;
@@ -313,8 +315,8 @@
 
                 function saveSettings() {
                     setTheme(document.getElementById('themeSelect').value);
-                    safeStorage.setItem('selectedModel', document.getElementById('modelSelect').value);
-                    var mcpSettings = JSON.parse(safeStorage.getItem('mcpSettings') || '{}');
+                    safeStorage.setItem(SK.SELECTED_MODEL || 'selectedModel', document.getElementById('modelSelect').value);
+                    var mcpSettings = JSON.parse(safeStorage.getItem(SK.MCP_SETTINGS || 'mcpSettings') || '{}');
                     mcpSettings.thinking = document.getElementById('thinkingToggle').checked;
                     mcpSettings.webSearch = document.getElementById('webSearchToggle').checked;
                     mcpSettings.rag = document.getElementById('ragToggle') ? document.getElementById('ragToggle').checked : false;
@@ -327,7 +329,7 @@
                         enabledTools[toolName] = el.checked;
                     });
                     mcpSettings.enabledTools = enabledTools;
-                    safeStorage.setItem('mcpSettings', JSON.stringify(mcpSettings));
+                    safeStorage.setItem(SK.MCP_SETTINGS || 'mcpSettings', JSON.stringify(mcpSettings));
 
                     // AppState 동기화
                     if (typeof setState === 'function') {
@@ -337,28 +339,28 @@
                         setState('ragEnabled', mcpSettings.rag);
                     }
 
-                    safeStorage.setItem('generalSettings', JSON.stringify({ lang: document.getElementById('langSelect').value, saveHistory: document.getElementById('saveHistoryToggle').checked }));
+                    safeStorage.setItem(SK.GENERAL_SETTINGS || 'generalSettings', JSON.stringify({ lang: document.getElementById('langSelect').value, saveHistory: document.getElementById('saveHistoryToggle').checked }));
                     (typeof showToast === 'function' ? showToast('설정이 저장되었습니다.', 'warning') : console.warn('설정이 저장되었습니다.'));
                 }
 
                 function loadSettings() {
-                    var theme = safeStorage.getItem('theme') || 'dark';
+                    var theme = safeStorage.getItem(SK.THEME || 'theme') || 'dark';
                     document.getElementById('themeSelect').value = theme;
                     setTheme(theme);
-                    var selectedModel = safeStorage.getItem('selectedModel');
+                    var selectedModel = safeStorage.getItem(SK.SELECTED_MODEL || 'selectedModel');
                     if (selectedModel) {
                         var opts = document.getElementById('modelSelect').options;
                         for (var i = 0; i < opts.length; i++) {
                             if (opts[i].value === selectedModel) { document.getElementById('modelSelect').value = selectedModel; break; }
                         }
                     }
-                    var savedMcp = safeStorage.getItem('mcpSettings');
+                    var savedMcp = safeStorage.getItem(SK.MCP_SETTINGS || 'mcpSettings');
                     if (savedMcp) { var mcp = JSON.parse(savedMcp); document.getElementById('thinkingToggle').checked = mcp.thinking !== false; document.getElementById('webSearchToggle').checked = mcp.webSearch === true; var ragEl = document.getElementById('ragToggle'); if (ragEl) { ragEl.checked = mcp.rag === true; } }
-                    var savedGeneral = safeStorage.getItem('generalSettings');
+                    var savedGeneral = safeStorage.getItem(SK.GENERAL_SETTINGS || 'generalSettings');
                     if (savedGeneral) { var general = JSON.parse(savedGeneral); document.getElementById('langSelect').value = general.lang || ''; document.getElementById('saveHistoryToggle').checked = general.saveHistory !== false; }
                 }
 
-                function resetSettings() { if (confirm('모든 설정을 초기화하시겠습니까?')) { safeStorage.removeItem('theme'); safeStorage.removeItem('selectedModel'); safeStorage.removeItem('mcpSettings'); safeStorage.removeItem('generalSettings'); location.reload(); } }
+                function resetSettings() { if (confirm('모든 설정을 초기화하시겠습니까?')) { safeStorage.removeItem(SK.THEME || 'theme'); safeStorage.removeItem(SK.SELECTED_MODEL || 'selectedModel'); safeStorage.removeItem(SK.MCP_SETTINGS || 'mcpSettings'); safeStorage.removeItem(SK.GENERAL_SETTINGS || 'generalSettings'); location.reload(); } }
 
                 async function exportData() {
                     try {
@@ -407,7 +409,7 @@
                 (function initAccountCard() {
                     var accountCard = document.getElementById('accountCard');
                     var adminLink = document.getElementById('adminLink');
-                    var loggedIn = !!(safeStorage.getItem('user') || (typeof getState === 'function' && getState('auth.user')));
+                    var loggedIn = !!(safeStorage.getItem(SK.USER || 'user') || (typeof getState === 'function' && getState('auth.user')));
                     if (loggedIn && accountCard) {
                         accountCard.style.display = '';
                         if (isAdmin() && adminLink) adminLink.style.display = '';
@@ -416,11 +418,11 @@
 
                 // 사용자 등급(tier) 판별 — 백엔드 tool-tiers.ts의 getDefaultTierForRole 동기화
                 function getUserTier() {
-                    var isGuest = safeStorage.getItem('guestMode') === 'true' ||
-                        safeStorage.getItem('isGuest') === 'true' ||
-                        !safeStorage.getItem('user');
+                    var isGuest = safeStorage.getItem(SK.GUEST_MODE || 'guestMode') === 'true' ||
+                        safeStorage.getItem(SK.IS_GUEST || 'isGuest') === 'true' ||
+                        !safeStorage.getItem(SK.USER || 'user');
                     if (isGuest) return 'free';
-                    var savedUser = safeStorage.getItem('user');
+                    var savedUser = safeStorage.getItem(SK.USER || 'user');
                     if (!savedUser) return 'free';
                     try {
                         var user = JSON.parse(savedUser);
@@ -468,7 +470,7 @@
                         }
                     ];
 
-                    var savedMcp = safeStorage.getItem('mcpSettings');
+                    var savedMcp = safeStorage.getItem(SK.MCP_SETTINGS || 'mcpSettings');
                     var enabledTools = {};
                     if (savedMcp) {
                         try { enabledTools = JSON.parse(savedMcp).enabledTools || {}; } catch (e) { }
@@ -508,11 +510,11 @@
                             var el = document.getElementById('mcpTool_' + tool.name);
                             if (el) {
                                 el.addEventListener('change', function () {
-                                    var saved = safeStorage.getItem('mcpSettings');
+                                    var saved = safeStorage.getItem(SK.MCP_SETTINGS || 'mcpSettings');
                                     var settings = saved ? JSON.parse(saved) : {};
                                     if (!settings.enabledTools) settings.enabledTools = {};
                                     settings.enabledTools[tool.name] = el.checked;
-                                    safeStorage.setItem('mcpSettings', JSON.stringify(settings));
+                                    safeStorage.setItem(SK.MCP_SETTINGS || 'mcpSettings', JSON.stringify(settings));
 
                                     // app.js 전역 mcpSettings 동기화
                                     if (typeof mcpSettings !== 'undefined') {
@@ -527,7 +529,7 @@
 
                     // 전체 활성화/비활성화 버튼 이벤트 — 접근 가능한 도구만 대상
                     function setAllTools(enabled) {
-                        var saved = safeStorage.getItem('mcpSettings');
+                        var saved = safeStorage.getItem(SK.MCP_SETTINGS || 'mcpSettings');
                         var settings = saved ? JSON.parse(saved) : {};
                         if (!settings.enabledTools) settings.enabledTools = {};
                         toolCatalog.forEach(function (group) {

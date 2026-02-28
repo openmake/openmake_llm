@@ -17,7 +17,7 @@ jest.mock('../config/env', () => ({
         // Engine 매핑 (selectBrandProfileForAutoRouting 내부 사용)
         omkEngineFast: 'gemini-3-flash-preview:cloud',
         omkEngineLlm: 'gpt-oss:120b-cloud',
-        omkEnginePro: 'kimi-k2.5:cloud',
+        omkEnginePro: 'qwen3.5:397b-cloud',
         omkEngineCode: 'glm-5:cloud',
         omkEngineVision: 'qwen3.5:397b-cloud',
         // Domain 엔진 (비활성 — 이 테스트에서는 domain override 미사용)

@@ -15,6 +15,9 @@
 // 1. ES Module Imports (의존성 순서)
 // ============================================
 
+// 0. SafeStorage 전역 초기화 (모든 모듈보다 먼저 로드)
+import './modules/safe-storage.js';
+import { STORAGE_KEY_GUEST_MODE, STORAGE_KEY_IS_GUEST, STORAGE_KEY_USER, STORAGE_KEY_THEME } from './modules/constants.js';
 // 1-1. 상태 관리 (최우선)
 import { AppState, getState, setState, subscribe, addToMemory, clearMemory } from './modules/state.js';
 
@@ -187,7 +190,7 @@ function initMobileSidebar() {
  */
 function filterRestrictedMenus() {
     const currentUser = getCurrentUser();
-    const isGuest = SafeStorage.getItem('guestMode') === 'true' || SafeStorage.getItem('isGuest') === 'true';
+    const isGuest = SafeStorage.getItem(STORAGE_KEY_GUEST_MODE) === 'true' || SafeStorage.getItem(STORAGE_KEY_IS_GUEST) === 'true';
     const isAuthenticated = !!currentUser && !isGuest;
 
     // data-require-auth="true" 속성이 있는 메뉴 항목 숨기기
@@ -222,8 +225,8 @@ function showUserStatusBadge(isAuthenticated, isGuest) {
     if (!userInfo) return;
 
     if (isAuthenticated) {
-        const SS = window.SafeStorage || { getItem: function(k) { try { return localStorage.getItem(k); } catch(e) { return null; } } };
-        const user = JSON.parse(SS.getItem('user') || '{}');
+        const SS = window.SafeStorage;
+        const user = JSON.parse(SS.getItem(STORAGE_KEY_USER) || '{}');
         userInfo.innerHTML = `<span style="color: var(--success);">👤 ${escapeHtml(user.email || user.username || '사용자')}</span>`;
         userInfo.style.display = 'block';
     } else if (isGuest) {
@@ -419,7 +422,7 @@ async function initApp() {
     connectWebSocket();
 
     // 4. 테마 적용
-    const savedTheme = localStorage.getItem('theme') || 'dark';
+    const savedTheme = localStorage.getItem(STORAGE_KEY_THEME) || 'dark';
     applyTheme(savedTheme);
 
     // 5. 설정 로드

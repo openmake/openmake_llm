@@ -10,6 +10,7 @@
  */
 
 import { getState, setState } from './state.js';
+import { STORAGE_KEY_THEME } from './constants.js';
 
 /**
  * 테마 적용
@@ -283,7 +284,7 @@ function renderMarkdown(element, text) {
 
 // 시스템 테마 변경 감지
 window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
-    if (localStorage.getItem('theme') === 'system') {
+    if (localStorage.getItem(STORAGE_KEY_THEME) === 'system') {
         applyTheme('system');
     }
 });

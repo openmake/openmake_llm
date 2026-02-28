@@ -73,12 +73,9 @@ export const envSchema = z
         // Ollama
         OLLAMA_BASE_URL: z.url().default('http://localhost:11434'),
         OLLAMA_DEFAULT_MODEL: z.string().min(1).default('gemini-3-flash-preview:cloud'),
-        OLLAMA_KOREAN_MODEL: z.string().min(1).default('gemini-3-flash-preview:cloud'),
-        OLLAMA_MODEL: z.string().min(1).default('gemini-3-flash-preview:cloud'),
         OLLAMA_TIMEOUT: positiveIntWithDefault(120000).refine((value) => value <= 600000, {
             message: 'OLLAMA_TIMEOUT must be between 1 and 600000 milliseconds',
         }),
-        OLLAMA_HOST: z.string().default('http://localhost:11434'),
         OLLAMA_API_KEY: z.string().default(''),
         OLLAMA_API_KEY_PRIMARY: z.string().default(''),
         OLLAMA_API_KEY_SECONDARY: z.string().default(''),
@@ -95,7 +92,6 @@ export const envSchema = z
         GEMINI_THINK_ENABLED: booleanFromString(true),
         GEMINI_THINK_LEVEL: geminiThinkLevelSchema.default('high'),
         GEMINI_NUM_CTX: positiveIntWithDefault(32768),
-        GEMINI_EMBEDDING_MODEL: z.string().min(1).default('gemini-3-flash-preview:cloud'),
         GEMINI_WEB_SEARCH_ENABLED: booleanFromString(true),
 
         // External

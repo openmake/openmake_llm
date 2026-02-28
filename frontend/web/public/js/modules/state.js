@@ -34,7 +34,6 @@ const AppState = {
     webSearchEnabled: false,
     thinkingEnabled: true,
     discussionMode: false,
-    thinkingMode: false,
     thinkingLevel: 'high',
     deepResearchMode: false,
     ragEnabled: false,

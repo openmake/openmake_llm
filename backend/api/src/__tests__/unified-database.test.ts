@@ -38,8 +38,7 @@ jest.mock('../config/env', () => {
         ollamaBaseUrl: 'http://localhost:11434',
         ollamaDefaultModel: 'gemini-3-flash-preview:cloud',
         ollamaTimeout: 120000,
-        ollamaHost: 'http://localhost:11434',
-        ollamaModel: 'gemini-3-flash-preview:cloud',
+        // ollamaHost, ollamaModel 제거됨 (dead 필드 정리 완료)
         // mcp/user-sandbox.ts 모듈 레벨 USER_DATA_ROOT에 필요
         userDataPath: './data/users',
         // model-selector.ts 에서 참조하는 추가 필드

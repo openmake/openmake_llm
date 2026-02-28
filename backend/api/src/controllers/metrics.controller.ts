@@ -11,6 +11,7 @@ import { getAgentMonitor } from '../agents';
 import { getApiUsageTracker } from '../ollama/api-usage-tracker';
 import { createLogger } from '../utils/logger';
 import { success, internalError } from '../utils/api-response';
+import { DEFAULT_AUTO_MODEL } from '../config/constants';
 
 const log = createLogger('MetricsController');
 
@@ -132,7 +133,7 @@ export class MetricsController {
      */
     private getModelInfo(req: Request, res: Response): void {
         try {
-             res.json(success({ model: 'OpenMake LLM Auto', modelId: 'openmake_llm_auto', provider: 'openmake' }));
+             res.json(success({ model: 'OpenMake LLM Auto', modelId: DEFAULT_AUTO_MODEL, provider: 'openmake' }));
          } catch (error) {
              log.error('[Model API] 오류:', error);
              res.status(500).json(internalError('모델 정보 조회 실패'));
