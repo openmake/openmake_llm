@@ -27,7 +27,6 @@ import {
     uploadLimiter,
     webSearchLimiter,
     memoryLimiter,
-    canvasLimiter,
     mcpLimiter,
     apiKeyManagementLimiter,
     pushLimiter,
@@ -157,14 +156,13 @@ export function setupParsersAndLimiting(app: Application): void {
     app.use('/api/upload', uploadLimiter);
     app.use('/api/web-search', webSearchLimiter);
     app.use('/api/memory', memoryLimiter);
-    app.use('/api/canvas', canvasLimiter);
     app.use('/api/mcp', mcpLimiter);
     app.use('/api/api-keys', apiKeyManagementLimiter);
     app.use('/api/push', pushLimiter);
     // generalLimiter는 전용 리미터가 없는 경로에만 적용 (이중 카운팅 방지)
     const dedicatedLimiterPrefixes = [
         '/api/auth/', '/api/chat', '/api/research', '/api/upload',
-        '/api/web-search', '/api/memory', '/api/canvas', '/api/mcp',
+        '/api/web-search', '/api/memory', '/api/mcp',
         '/api/api-keys', '/api/push', '/api/monitoring', '/api/metrics',
     ];
     app.use('/api/', (req, res, next) => {
@@ -189,7 +187,7 @@ export function setupParsersAndLimiting(app: Application): void {
  */
 export function setupStaticFiles(app: Application, dirname: string): void {
     const SPA_PAGES = new Set([
-        'canvas', 'research', 'marketplace', 'custom-agents',
+        'research', 'marketplace', 'custom-agents',
         'agent-learning', 'cluster', 'usage', 'analytics', 'admin-metrics',
         'admin', 'audit', 'external', 'alerts', 'memory', 'settings',
         'password-change', 'history', 'guide', 'developer', 'api-keys',

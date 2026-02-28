@@ -7,9 +7,9 @@
  * 모듈 기반 페이지 로딩, 인증/관리자 가드, CSS 관리를 제공합니다.
  *
  * 사용법:
- *   Router.register('/canvas.html', { ... });
+ *   Router.register('/research.html', { ... });
  *   Router.start();
- *   Router.navigate('/canvas.html');
+ *   Router.navigate('/research.html');
  *
  * @module spa-router
  */
@@ -650,7 +650,7 @@ function registerFromNavItems() {
         if (!item.href || item.href === '/' || item.href === LOGIN_PATH) return;
 
         var path = item.href;
-        // moduleName: '/canvas.html' → 'canvas'
+        // moduleName: '/research.html' → 'research'
         var moduleName = path.replace(/^\//, '').replace(/\.html$/, '');
 
         Router.register(path, {
@@ -674,7 +674,7 @@ var Router = {
 
     /**
      * 라우트 등록
-     * @param {string} path - URL 경로 (예: '/canvas.html')
+     * @param {string} path - URL 경로 (예: '/research.html')
      * @param {object} config - 라우트 설정
      * @param {string} config.moduleName - PageModules 키
      * @param {string} config.moduleFile - 모듈 JS 파일 경로

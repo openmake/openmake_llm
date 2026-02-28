@@ -59,9 +59,6 @@ const API_ENDPOINTS = Object.freeze({
     // ── Research ──────────────────────────────────
     RESEARCH_SESSIONS: '/api/research/sessions',   // + /:id, /:id/steps
 
-    // ── Canvas ────────────────────────────────────
-    CANVAS: '/api/canvas',             // + /:id, /:id/share, /:id/versions
-    CANVAS_SHARED: '/api/canvas/shared',
 
     // ── MCP ───────────────────────────────────────
     MCP_SERVERS: '/api/mcp/servers',   // + /:serverId, /:serverId/connect, /:serverId/disconnect

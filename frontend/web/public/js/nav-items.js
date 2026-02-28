@@ -11,7 +11,7 @@
 
 /**
  * @typedef {Object} NavItem
- * @property {string} href - 페이지 경로 (예: '/canvas.html')
+ * @property {string} href - 페이지 경로 (예: '/research.html')
  * @property {string} icon - 이모지 아이콘
  * @property {string} iconify - Iconify 아이콘 식별자
  * @property {string} label - 메뉴 표시 이름
@@ -28,7 +28,6 @@ const NAV_ITEMS = {
         { href: '/', icon: '💬', iconify: 'lucide:message-circle', label: '채팅' },
         { href: '/cluster.html', icon: '🖥️', iconify: 'lucide:monitor', label: '클러스터', requireAuth: true },
         { href: '/history.html', icon: '📜', iconify: 'lucide:scroll-text', label: '히스토리', requireAuth: true },
-        { href: '/canvas.html', icon: '📄', iconify: 'lucide:file-text', label: '캔버스', requireAuth: true },
         { href: '/research.html', icon: '🔬', iconify: 'lucide:flask-conical', label: '딥 리서치', requireAuth: true },
         { href: '/documents.html', icon: '📑', iconify: 'lucide:file-search', label: '문서 관리', requireAuth: true },
         { href: '/marketplace.html', icon: '🏪', iconify: 'lucide:store', label: '마켓플레이스', requireAuth: true },

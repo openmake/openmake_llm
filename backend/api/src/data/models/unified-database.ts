@@ -10,7 +10,7 @@
  * @description
  * - PostgreSQL Pool 기반 커넥션 관리 (pg 드라이버)
  * - 서버 시작 시 스키마 자동 생성 (CREATE TABLE IF NOT EXISTS)
- * - Repository 위임 패턴 (User, Conversation, Memory, Research, ApiKey, Canvas, Marketplace, Audit)
+ * - Repository 위임 패턴 (User, Conversation, Memory, Research, ApiKey, Marketplace, Audit)
  * - 재시도 로직 내장 (withRetry 래퍼)
  * - 싱글톤 접근: getUnifiedDatabase(), getPool()
  */
@@ -24,7 +24,6 @@ import { createLogger } from '../../utils/logger';
 import {
     ApiKeyRepository,
     AuditRepository,
-    CanvasRepository,
     ConversationRepository,
     ExternalRepository,
     MarketplaceRepository,
@@ -361,30 +360,6 @@ CREATE TABLE IF NOT EXISTS agent_installations (
     UNIQUE(marketplace_id, user_id)
 );
 
-CREATE TABLE IF NOT EXISTS canvas_documents (
-    id TEXT PRIMARY KEY,
-    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    session_id TEXT REFERENCES conversation_sessions(id) ON DELETE SET NULL,
-    title TEXT NOT NULL,
-    doc_type TEXT DEFAULT 'document' CHECK(doc_type IN ('document', 'code', 'diagram', 'table')),
-    content TEXT,
-    language TEXT,
-    version INTEGER DEFAULT 1,
-    is_shared BOOLEAN DEFAULT FALSE,
-    share_token TEXT UNIQUE,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS canvas_versions (
-    id SERIAL PRIMARY KEY,
-    document_id TEXT NOT NULL REFERENCES canvas_documents(id) ON DELETE CASCADE,
-    version INTEGER NOT NULL,
-    content TEXT NOT NULL,
-    change_summary TEXT,
-    created_by TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
 
 CREATE TABLE IF NOT EXISTS external_connections (
     id TEXT PRIMARY KEY,
@@ -506,9 +481,6 @@ CREATE INDEX IF NOT EXISTS idx_marketplace_status ON agent_marketplace(status);
 CREATE INDEX IF NOT EXISTS idx_reviews_marketplace ON agent_reviews(marketplace_id);
 CREATE INDEX IF NOT EXISTS idx_installations_user ON agent_installations(user_id);
 
-CREATE INDEX IF NOT EXISTS idx_canvas_user ON canvas_documents(user_id);
-CREATE INDEX IF NOT EXISTS idx_canvas_session ON canvas_documents(session_id);
-CREATE INDEX IF NOT EXISTS idx_canvas_versions_doc ON canvas_versions(document_id);
 
 CREATE INDEX IF NOT EXISTS idx_connections_user ON external_connections(user_id);
 CREATE INDEX IF NOT EXISTS idx_connections_service ON external_connections(service_type);
@@ -730,36 +702,6 @@ export interface AgentInstallation {
     installed_at: string;
 }
 
-// ============================================
-// 📝 Canvas 인터페이스
-// ============================================
-
-export type CanvasDocType = 'document' | 'code' | 'diagram' | 'table';
-
-export interface CanvasDocument {
-    id: string;
-    user_id: string;
-    session_id?: string;
-    title: string;
-    doc_type: CanvasDocType;
-    content?: string;
-    language?: string;
-    version: number;
-    is_shared: boolean;
-    share_token?: string;
-    created_at: string;
-    updated_at: string;
-}
-
-export interface CanvasVersion {
-    id: number;
-    document_id: string;
-    version: number;
-    content: string;
-    change_summary?: string;
-    created_by?: string;
-    created_at: string;
-}
 
 // ============================================
 // 🔗 외부 서비스 통합 인터페이스
@@ -903,7 +845,7 @@ export const API_KEY_TIER_LIMITS: Record<ApiKeyTier, {
  * @description
  * - 서버 시작 시 스키마 자동 초기화 (SQL 파일 또는 LEGACY_SCHEMA 폴백)
  * - pg Pool 기반 커넥션 풀링 (statement_timeout: 30s, idle_timeout: 30s)
- * - 9개 Repository 위임: User, Conversation, Memory, Research, ApiKey, Canvas, Marketplace, Audit, External
+ * - 8개 Repository 위임: User, Conversation, Memory, Research, ApiKey, Marketplace, Audit, External
  * - withRetry 래퍼를 통한 일시적 연결 오류 자동 재시도
  */
 export class UnifiedDatabase {
@@ -928,8 +870,6 @@ export class UnifiedDatabase {
     /** API Key 관리 데이터 접근 Repository */
     private readonly apiKeyRepository: ApiKeyRepository;
 
-    /** 캔버스 문서 데이터 접근 Repository */
-    private readonly canvasRepository: CanvasRepository;
 
     /** 마켓플레이스 데이터 접근 Repository */
     private readonly marketplaceRepository: MarketplaceRepository;
@@ -966,7 +906,6 @@ export class UnifiedDatabase {
         this.memoryRepository = new MemoryRepository(this.pool);
         this.researchRepository = new ResearchRepository(this.pool);
         this.apiKeyRepository = new ApiKeyRepository(this.pool);
-        this.canvasRepository = new CanvasRepository(this.pool);
         this.marketplaceRepository = new MarketplaceRepository(this.pool);
         this.auditRepository = new AuditRepository(this.pool);
         this.externalRepository = new ExternalRepository(this.pool);
@@ -1316,62 +1255,6 @@ export class UnifiedDatabase {
         return this.marketplaceRepository.getCustomAgentCreator(agentId);
     }
 
-    // ============================================
-    // 📝 Canvas 메서드
-    // ============================================
-
-    async createCanvasDocument(params: {
-        id: string;
-        userId: string;
-        sessionId?: string;
-        title: string;
-        docType?: CanvasDocType;
-        content?: string;
-        language?: string;
-    }): Promise<void> {
-        return this.canvasRepository.createCanvasDocument(params);
-    }
-
-    async getCanvasDocument(documentId: string): Promise<CanvasDocument | undefined> {
-        return this.canvasRepository.getCanvasDocument(documentId);
-    }
-
-    async updateCanvasDocument(documentId: string, updates: {
-        title?: string;
-        content?: string;
-        changeSummary?: string;
-        updatedBy?: string;
-    }): Promise<void> {
-        return this.canvasRepository.updateCanvasDocument(documentId, updates);
-    }
-
-    async getCanvasVersions(documentId: string): Promise<CanvasVersion[]> {
-        return this.canvasRepository.getCanvasVersions(documentId);
-    }
-
-    async getUserCanvasDocuments(userId: string, limit: number = 50): Promise<CanvasDocument[]> {
-        return this.canvasRepository.getUserCanvasDocuments(userId, limit);
-    }
-
-    async countCanvasByUser(userId: string): Promise<number> {
-        return this.canvasRepository.countByUser(userId);
-    }
-
-    async shareCanvasDocument(documentId: string, shareToken: string): Promise<void> {
-        return this.canvasRepository.shareCanvasDocument(documentId, shareToken);
-    }
-
-    async unshareCanvasDocument(documentId: string): Promise<void> {
-        return this.canvasRepository.unshare(documentId);
-    }
-
-    async getCanvasDocumentByShareToken(shareToken: string): Promise<CanvasDocument | undefined> {
-        return this.canvasRepository.getCanvasDocumentByShareToken(shareToken);
-    }
-
-    async deleteCanvasDocument(documentId: string): Promise<void> {
-        return this.canvasRepository.deleteCanvasDocument(documentId);
-    }
 
     // ============================================
     // 🔗 외부 서비스 통합 메서드

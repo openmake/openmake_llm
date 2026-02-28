@@ -4,7 +4,6 @@ export { ConversationRepository } from './conversation-repository';
 export { MemoryRepository } from './memory-repository';
 export { ResearchRepository } from './research-repository';
 export { ApiKeyRepository } from './api-key-repository';
-export { CanvasRepository } from './canvas-repository';
 export { MarketplaceRepository } from './marketplace-repository';
 export { AuditRepository } from './audit-repository';
 export { ExternalRepository } from './external-repository';
