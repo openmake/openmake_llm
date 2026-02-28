@@ -63,7 +63,6 @@ class SharedSidebar {
             { href: '/', icon: '💬', label: '채팅' },
             { href: '/cluster.html', icon: '🖥️', label: '클러스터', requireAuth: true },
             { href: '/history.html', icon: '📜', label: '대화 히스토리', requireAuth: true },
-            { href: '/canvas.html', icon: '📄', label: '캔버스', requireAuth: true },
             { href: '/research.html', icon: '🔬', label: '딥 리서치', requireAuth: true },
             { href: '/marketplace.html', icon: '🏪', label: '마켓플레이스', requireAuth: true },
             { href: '/custom-agents.html', icon: '🤖', label: '커스텀 에이전트', requireAuth: true },

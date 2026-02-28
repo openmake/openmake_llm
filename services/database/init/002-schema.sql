@@ -237,35 +237,6 @@ CREATE TABLE IF NOT EXISTS agent_installations (
 );
 
 -- ============================================
--- Canvas 협업 도구 테이블
--- ============================================
-
-CREATE TABLE IF NOT EXISTS canvas_documents (
-    id TEXT PRIMARY KEY,
-    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    session_id TEXT REFERENCES conversation_sessions(id) ON DELETE SET NULL,
-    title TEXT NOT NULL,
-    doc_type TEXT DEFAULT 'document' CHECK(doc_type IN ('document', 'code', 'diagram', 'table')),
-    content TEXT,
-    language TEXT,
-    version INTEGER DEFAULT 1,
-    is_shared BOOLEAN DEFAULT FALSE,
-    share_token TEXT UNIQUE,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS canvas_versions (
-    id SERIAL PRIMARY KEY,
-    document_id TEXT NOT NULL REFERENCES canvas_documents(id) ON DELETE CASCADE,
-    version INTEGER NOT NULL,
-    content TEXT NOT NULL,
-    change_summary TEXT,
-    created_by TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- ============================================
 -- 외부 서비스 통합 테이블
 -- ============================================
 
@@ -406,10 +377,6 @@ CREATE INDEX IF NOT EXISTS idx_marketplace_status ON agent_marketplace(status);
 CREATE INDEX IF NOT EXISTS idx_reviews_marketplace ON agent_reviews(marketplace_id);
 CREATE INDEX IF NOT EXISTS idx_installations_user ON agent_installations(user_id);
 
--- Canvas indexes
-CREATE INDEX IF NOT EXISTS idx_canvas_user ON canvas_documents(user_id);
-CREATE INDEX IF NOT EXISTS idx_canvas_session ON canvas_documents(session_id);
-CREATE INDEX IF NOT EXISTS idx_canvas_versions_doc ON canvas_versions(document_id);
 
 -- External indexes
 CREATE INDEX IF NOT EXISTS idx_connections_user ON external_connections(user_id);
@@ -631,7 +598,6 @@ CREATE TABLE IF NOT EXISTS token_daily_stats (
 -- Critical single-column indexes
 CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
 CREATE INDEX IF NOT EXISTS idx_users_is_active ON users(is_active);
-CREATE INDEX IF NOT EXISTS idx_canvas_share_token ON canvas_documents(share_token);
 CREATE INDEX IF NOT EXISTS idx_sessions_updated_at ON conversation_sessions(updated_at);
 
 -- Composite indexes for common query patterns
@@ -639,7 +605,6 @@ CREATE INDEX IF NOT EXISTS idx_sessions_user_updated ON conversation_sessions(us
 CREATE INDEX IF NOT EXISTS idx_messages_session_created ON conversation_messages(session_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_memories_user_category ON user_memories(user_id, category);
 CREATE INDEX IF NOT EXISTS idx_audit_user_created ON audit_logs(user_id, timestamp DESC);
-CREATE INDEX IF NOT EXISTS idx_canvas_user_updated ON canvas_documents(user_id, updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_research_user_created ON research_sessions(user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_research_steps_session_number ON research_steps(session_id, step_number);
 CREATE INDEX IF NOT EXISTS idx_connections_user_service ON external_connections(user_id, service_type);
