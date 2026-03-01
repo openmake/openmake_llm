@@ -14,12 +14,12 @@ import { analyzeTopicIntent } from './topic-analyzer';
 import { routeToAgent } from './keyword-router';
 
 /**
- * 토론용 관련 에이전트 추천 (LLM 기반 + 컨텍스트 반영)
+ * 토론용 관련 에이전트 추천 (토픽+키워드 라우팅 + 컨텍스트 반영)
  *
  * 토론 엔진에서 사용할 다양한 관점의 에이전트를 추천한다.
  * 4단계 에이전트 수집 전략:
  *
- * 1. 주요 에이전트: LLM 라우팅으로 선택된 최적 에이전트
+ * 1. 주요 에이전트: 토픽+키워드 라우팅으로 선택된 최적 에이전트
  * 2. 의도 분석 기반: analyzeTopicIntent 결과의 suggestedAgents
  * 3. 같은 카테고리: 주요 에이전트와 같은 카테고리의 다른 에이전트
  * 4. 보완적 에이전트: 도메인별 차별화
@@ -41,14 +41,13 @@ export async function getRelatedAgentsForDiscussion(
     const fullText = context ? `${message}\n\n컨텍스트: ${context}` : message;
     const topicAnalysis = analyzeTopicIntent(fullText);
 
-    // 🆕 LLM 라우팅에는 사용자 메시지만 전달 (컨텍스트에 [user]/[assistant] 등
-    //    input-sanitizer가 위험 패턴으로 오탐하는 문자열이 포함될 수 있으므로)
-    const selection = await routeToAgent(message, true);
+    // 토픽+키워드 라우팅으로 주요 에이전트 선택
+    const selection = await routeToAgent(message);
 
     const result: Agent[] = [];
     const usedIds = new Set<string>();
 
-    // 1. 주요 에이전트 추가 (LLM 선택 우선)
+    // 1. 주요 에이전트 추가 (토픽+키워드 라우팅 선택 우선)
     const primaryAgent = getAgentById(selection.primaryAgent);
     if (primaryAgent && primaryAgent.id !== 'general') {
         result.push(primaryAgent);
