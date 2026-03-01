@@ -35,7 +35,6 @@ import { memoryRouter } from '../memory.routes';
 import auditRouter from '../audit.routes';
 import researchRouter from '../research.routes';
 import externalRouter from '../external.routes';
-import marketplaceRouter from '../marketplace.routes';
 import { pushRouter } from '../push.routes';
 import apiKeysRouter from '../api-keys.routes';
 import { listAvailableModels } from '../../chat/profile-resolver';
@@ -135,7 +134,6 @@ v1Router.use('/memory', memoryRouter);
 v1Router.use('/audit', auditRouter);
 v1Router.use('/research', researchRouter);
 v1Router.use('/external', externalRouter);
-v1Router.use('/marketplace', marketplaceRouter);
 v1Router.use('/push', pushRouter);
 v1Router.use('/api-keys', apiKeysRouter);
 

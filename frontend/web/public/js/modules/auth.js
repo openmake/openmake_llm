@@ -601,6 +601,14 @@ async function changeTier(tier) {
             window.refreshTierUI();
         }
 
+        // 레거시 사이드바 메뉴 티어별 갱신 (SharedSidebar가 있으면 재렌더링)
+        if (document.getElementById('sidebar') && typeof window.SharedSidebar === 'function') {
+            try { new window.SharedSidebar().render('sidebar'); } catch (e) { /* ignore */ }
+        }
+
+        // 관리자 패널 메뉴도 티어 변경에 맞게 갱신
+        // AdminPanel.open()에서 항상 buildPanelHTML()을 재호출하므로 다음 열기 시 자동 반영됨
+
         const tierLabels = { free: 'Free', pro: 'Pro', enterprise: 'Enterprise' };
         if (typeof showToast === 'function') showToast(tierLabels[tier] + ' 플랜으로 변경되었습니다', 'success');
         return true;

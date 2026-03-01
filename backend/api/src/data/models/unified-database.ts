@@ -10,7 +10,7 @@
  * @description
  * - PostgreSQL Pool 기반 커넥션 관리 (pg 드라이버)
  * - 서버 시작 시 스키마 자동 생성 (CREATE TABLE IF NOT EXISTS)
- * - Repository 위임 패턴 (User, Conversation, Memory, Research, ApiKey, Marketplace, Audit)
+ * - Repository 위임 패턴 (User, Conversation, Memory, Research, ApiKey, Audit)
  * - 재시도 로직 내장 (withRetry 래퍼)
  * - 싱글톤 접근: getUnifiedDatabase(), getPool()
  */
@@ -26,7 +26,6 @@ import {
     AuditRepository,
     ConversationRepository,
     ExternalRepository,
-    MarketplaceRepository,
     MemoryRepository,
     ResearchRepository,
     UserRepository
@@ -316,51 +315,6 @@ CREATE TABLE IF NOT EXISTS research_steps (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS agent_marketplace (
-    id TEXT PRIMARY KEY,
-    agent_id TEXT NOT NULL REFERENCES custom_agents(id),
-    author_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    title TEXT NOT NULL,
-    description TEXT,
-    long_description TEXT,
-    category TEXT,
-    tags JSONB,
-    icon TEXT DEFAULT '🤖',
-    price REAL DEFAULT 0,
-    is_free BOOLEAN DEFAULT TRUE,
-    is_featured BOOLEAN DEFAULT FALSE,
-    is_verified BOOLEAN DEFAULT FALSE,
-    downloads INTEGER DEFAULT 0,
-    rating_avg REAL DEFAULT 0,
-    rating_count INTEGER DEFAULT 0,
-    version TEXT DEFAULT '1.0.0',
-    status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'approved', 'rejected', 'suspended')),
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW(),
-    published_at TIMESTAMPTZ
-);
-
-CREATE TABLE IF NOT EXISTS agent_reviews (
-    id TEXT PRIMARY KEY,
-    marketplace_id TEXT NOT NULL REFERENCES agent_marketplace(id) ON DELETE CASCADE,
-    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    rating INTEGER NOT NULL CHECK(rating >= 1 AND rating <= 5),
-    title TEXT,
-    content TEXT,
-    helpful_count INTEGER DEFAULT 0,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    UNIQUE(marketplace_id, user_id)
-);
-
-CREATE TABLE IF NOT EXISTS agent_installations (
-    id SERIAL PRIMARY KEY,
-    marketplace_id TEXT NOT NULL REFERENCES agent_marketplace(id),
-    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    installed_at TIMESTAMPTZ DEFAULT NOW(),
-    UNIQUE(marketplace_id, user_id)
-);
-
-
 CREATE TABLE IF NOT EXISTS external_connections (
     id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -474,13 +428,6 @@ CREATE INDEX IF NOT EXISTS idx_memory_tags_memory ON memory_tags(memory_id);
 CREATE INDEX IF NOT EXISTS idx_research_user ON research_sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_research_status ON research_sessions(status);
 CREATE INDEX IF NOT EXISTS idx_research_steps_session ON research_steps(session_id);
-
-CREATE INDEX IF NOT EXISTS idx_marketplace_category ON agent_marketplace(category);
-CREATE INDEX IF NOT EXISTS idx_marketplace_downloads ON agent_marketplace(downloads DESC);
-CREATE INDEX IF NOT EXISTS idx_marketplace_status ON agent_marketplace(status);
-CREATE INDEX IF NOT EXISTS idx_reviews_marketplace ON agent_reviews(marketplace_id);
-CREATE INDEX IF NOT EXISTS idx_installations_user ON agent_installations(user_id);
-
 
 CREATE INDEX IF NOT EXISTS idx_connections_user ON external_connections(user_id);
 CREATE INDEX IF NOT EXISTS idx_connections_service ON external_connections(service_type);
@@ -655,55 +602,6 @@ export interface ResearchStep {
 }
 
 // ============================================
-// 🏪 마켓플레이스 인터페이스
-// ============================================
-
-export type MarketplaceStatus = 'pending' | 'approved' | 'rejected' | 'suspended';
-
-export interface MarketplaceAgent {
-    id: string;
-    agent_id: string;
-    author_id: string;
-    title: string;
-    description?: string;
-    long_description?: string;
-    category?: string;
-    tags?: string[];
-    icon: string;
-    price: number;
-    is_free: boolean;
-    is_featured: boolean;
-    is_verified: boolean;
-    downloads: number;
-    rating_avg: number;
-    rating_count: number;
-    version: string;
-    status: MarketplaceStatus;
-    created_at: string;
-    updated_at: string;
-    published_at?: string;
-}
-
-export interface AgentReview {
-    id: string;
-    marketplace_id: string;
-    user_id: string;
-    rating: number;
-    title?: string;
-    content?: string;
-    helpful_count: number;
-    created_at: string;
-}
-
-export interface AgentInstallation {
-    id: number;
-    marketplace_id: string;
-    user_id: string;
-    installed_at: string;
-}
-
-
-// ============================================
 // 🔗 외부 서비스 통합 인터페이스
 // ============================================
 
@@ -845,7 +743,7 @@ export const API_KEY_TIER_LIMITS: Record<ApiKeyTier, {
  * @description
  * - 서버 시작 시 스키마 자동 초기화 (SQL 파일 또는 LEGACY_SCHEMA 폴백)
  * - pg Pool 기반 커넥션 풀링 (statement_timeout: 30s, idle_timeout: 30s)
- * - 8개 Repository 위임: User, Conversation, Memory, Research, ApiKey, Marketplace, Audit, External
+ * - 7개 Repository 위임: User, Conversation, Memory, Research, ApiKey, Audit, External
  * - withRetry 래퍼를 통한 일시적 연결 오류 자동 재시도
  */
 export class UnifiedDatabase {
@@ -869,10 +767,6 @@ export class UnifiedDatabase {
 
     /** API Key 관리 데이터 접근 Repository */
     private readonly apiKeyRepository: ApiKeyRepository;
-
-
-    /** 마켓플레이스 데이터 접근 Repository */
-    private readonly marketplaceRepository: MarketplaceRepository;
 
     /** 감사 로그 데이터 접근 Repository */
     private readonly auditRepository: AuditRepository;
@@ -906,7 +800,6 @@ export class UnifiedDatabase {
         this.memoryRepository = new MemoryRepository(this.pool);
         this.researchRepository = new ResearchRepository(this.pool);
         this.apiKeyRepository = new ApiKeyRepository(this.pool);
-        this.marketplaceRepository = new MarketplaceRepository(this.pool);
         this.auditRepository = new AuditRepository(this.pool);
         this.externalRepository = new ExternalRepository(this.pool);
 
@@ -1184,77 +1077,6 @@ export class UnifiedDatabase {
     async deleteResearchSession(sessionId: string): Promise<void> {
         return this.researchRepository.deleteSessionWithSteps(sessionId);
     }
-
-    // ============================================
-    // 🏪 마켓플레이스 메서드
-    // ============================================
-
-    async publishToMarketplace(params: {
-        id: string;
-        agentId: string;
-        authorId: string;
-        title: string;
-        description?: string;
-        longDescription?: string;
-        category?: string;
-        tags?: string[];
-        icon?: string;
-        price?: number;
-    }): Promise<MarketplaceAgent> {
-        return this.marketplaceRepository.publishToMarketplace(params);
-    }
-
-    async getMarketplaceAgents(options?: {
-        category?: string;
-        status?: MarketplaceStatus;
-        featured?: boolean;
-        search?: string;
-        sortBy?: string;
-        limit?: number;
-        offset?: number;
-    }): Promise<MarketplaceAgent[]> {
-        return this.marketplaceRepository.getMarketplaceAgents(options);
-    }
-
-    async getMarketplaceAgent(marketplaceId: string): Promise<MarketplaceAgent | undefined> {
-        return this.marketplaceRepository.getMarketplaceAgent(marketplaceId);
-    }
-
-    async updateMarketplaceStatus(marketplaceId: string, status: MarketplaceStatus): Promise<void> {
-        return this.marketplaceRepository.updateMarketplaceStatus(marketplaceId, status);
-    }
-
-    async installAgent(marketplaceId: string, userId: string): Promise<void> {
-        return this.marketplaceRepository.installAgent(marketplaceId, userId);
-    }
-
-    async uninstallAgent(marketplaceId: string, userId: string): Promise<void> {
-        return this.marketplaceRepository.uninstallAgent(marketplaceId, userId);
-    }
-
-    async getUserInstalledAgents(userId: string): Promise<MarketplaceAgent[]> {
-        return this.marketplaceRepository.getUserInstalledAgents(userId);
-    }
-
-    async addAgentReview(params: {
-        id: string;
-        marketplaceId: string;
-        userId: string;
-        rating: number;
-        title?: string;
-        content?: string;
-    }): Promise<void> {
-        return this.marketplaceRepository.addAgentReview(params);
-    }
-
-    async getAgentReviews(marketplaceId: string, limit: number = 20): Promise<AgentReview[]> {
-        return this.marketplaceRepository.getAgentReviews(marketplaceId, limit);
-    }
-
-    async getCustomAgentCreator(agentId: string): Promise<string | null> {
-        return this.marketplaceRepository.getCustomAgentCreator(agentId);
-    }
-
 
     // ============================================
     // 🔗 외부 서비스 통합 메서드

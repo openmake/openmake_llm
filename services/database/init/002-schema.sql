@@ -187,55 +187,6 @@ CREATE TABLE IF NOT EXISTS research_steps (
     status TEXT DEFAULT 'pending',
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
-
--- ============================================
--- 마켓플레이스 테이블
--- ============================================
-
-CREATE TABLE IF NOT EXISTS agent_marketplace (
-    id TEXT PRIMARY KEY,
-    agent_id TEXT NOT NULL REFERENCES custom_agents(id),
-    author_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    title TEXT NOT NULL,
-    description TEXT,
-    long_description TEXT,
-    category TEXT,
-    tags JSONB,
-    icon TEXT DEFAULT '🤖',
-    price REAL DEFAULT 0,
-    is_free BOOLEAN DEFAULT TRUE,
-    is_featured BOOLEAN DEFAULT FALSE,
-    is_verified BOOLEAN DEFAULT FALSE,
-    downloads INTEGER DEFAULT 0,
-    rating_avg REAL DEFAULT 0,
-    rating_count INTEGER DEFAULT 0,
-    version TEXT DEFAULT '1.0.0',
-    status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'approved', 'rejected', 'suspended')),
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW(),
-    published_at TIMESTAMPTZ
-);
-
-CREATE TABLE IF NOT EXISTS agent_reviews (
-    id TEXT PRIMARY KEY,
-    marketplace_id TEXT NOT NULL REFERENCES agent_marketplace(id) ON DELETE CASCADE,
-    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    rating INTEGER NOT NULL CHECK(rating >= 1 AND rating <= 5),
-    title TEXT,
-    content TEXT,
-    helpful_count INTEGER DEFAULT 0,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    UNIQUE(marketplace_id, user_id)
-);
-
-CREATE TABLE IF NOT EXISTS agent_installations (
-    id SERIAL PRIMARY KEY,
-    marketplace_id TEXT NOT NULL REFERENCES agent_marketplace(id),
-    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    installed_at TIMESTAMPTZ DEFAULT NOW(),
-    UNIQUE(marketplace_id, user_id)
-);
-
 -- ============================================
 -- 외부 서비스 통합 테이블
 -- ============================================
@@ -369,13 +320,6 @@ CREATE INDEX IF NOT EXISTS idx_memory_tags_memory ON memory_tags(memory_id);
 CREATE INDEX IF NOT EXISTS idx_research_user ON research_sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_research_status ON research_sessions(status);
 CREATE INDEX IF NOT EXISTS idx_research_steps_session ON research_steps(session_id);
-
--- Marketplace indexes
-CREATE INDEX IF NOT EXISTS idx_marketplace_category ON agent_marketplace(category);
-CREATE INDEX IF NOT EXISTS idx_marketplace_downloads ON agent_marketplace(downloads DESC);
-CREATE INDEX IF NOT EXISTS idx_marketplace_status ON agent_marketplace(status);
-CREATE INDEX IF NOT EXISTS idx_reviews_marketplace ON agent_reviews(marketplace_id);
-CREATE INDEX IF NOT EXISTS idx_installations_user ON agent_installations(user_id);
 
 
 -- External indexes
@@ -610,7 +554,7 @@ CREATE INDEX IF NOT EXISTS idx_research_steps_session_number ON research_steps(s
 CREATE INDEX IF NOT EXISTS idx_connections_user_service ON external_connections(user_id, service_type);
 
 -- Phase 3-DBA: Additional index coverage for tables missing indexes
--- custom_agents: queried by created_by (marketplace ownership check)
+-- custom_agents: queried by created_by
 CREATE INDEX IF NOT EXISTS idx_custom_agents_created_by ON custom_agents(created_by);
 CREATE INDEX IF NOT EXISTS idx_custom_agents_enabled ON custom_agents(enabled);
 
