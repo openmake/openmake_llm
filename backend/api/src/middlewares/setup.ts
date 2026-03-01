@@ -356,7 +356,9 @@ export function setupStaticFiles(app: Application, dirname: string): void {
         if (filePath.endsWith('.html')) {
             res.setHeader('Cache-Control', 'no-cache');
         } else if (filePath.endsWith('.js') || filePath.endsWith('.css')) {
-            res.setHeader('Cache-Control', 'public, max-age=604800, stale-while-revalidate=86400');
+            // no-cache = 항상 서버에 revalidate (etag/lastModified로 304 응답)
+            // ES Module import 경로에 캐시 버스터가 없으므로 max-age 사용 시 stale 버전 제공 위험
+            res.setHeader('Cache-Control', 'no-cache');
         } else if (/\.(png|jpg|jpeg|svg|gif|webp|ico)$/i.test(filePath)) {
             res.setHeader('Cache-Control', 'public, max-age=2592000');
         } else if (filePath.endsWith('.json')) {
