@@ -413,27 +413,11 @@ class UserManagerImpl {
         try {
             await client.query('BEGIN');
 
-            // ── 1. 마켓플레이스 종속 레코드 정리 (FK CASCADE 미설정 테이블) ──
-            // agent_installations.marketplace_id → agent_marketplace(id): ON DELETE 기본값(RESTRICT)
-            // agent_marketplace.agent_id → custom_agents(id): ON DELETE 기본값(RESTRICT)
-            // 타 사용자의 설치/리뷰 레코드가 남아 있으면 CASCADE 삭제 시 FK 위반 발생
-            await client.query(
-                `DELETE FROM agent_installations WHERE marketplace_id IN
-                 (SELECT id FROM agent_marketplace WHERE author_id = $1)`,
-                [userId]
-            );
-            await client.query(
-                `DELETE FROM agent_reviews WHERE marketplace_id IN
-                 (SELECT id FROM agent_marketplace WHERE author_id = $1)`,
-                [userId]
-            );
-            await client.query('DELETE FROM agent_marketplace WHERE author_id = $1', [userId]);
-
-            // ── 2. 커스텀 에이전트 및 스킬 정리 ──
+            // ── 1. 커스텀 에이전트 및 스킬 정리 ──
             await client.query('DELETE FROM custom_agents WHERE created_by = $1', [userId]);
             await client.query('DELETE FROM agent_skills WHERE created_by = $1', [userId]);
 
-            // ── 3. 사용자 데이터 정리 ──
+            // ── 2. 사용자 데이터 정리 ──
             await client.query('DELETE FROM user_memories WHERE user_id = $1', [userId]);
 
             await client.query('DELETE FROM external_connections WHERE user_id = $1', [userId]);
@@ -442,7 +426,7 @@ class UserManagerImpl {
             await client.query('DELETE FROM research_sessions WHERE user_id = $1', [userId]);
             await client.query('DELETE FROM conversation_sessions WHERE user_id = $1', [userId]);
 
-            // ── 4. 사용자 삭제 ──
+            // ── 3. 사용자 삭제 ──
             const result = await client.query('DELETE FROM users WHERE id = $1', [userId]);
             const deleted = (result.rowCount || 0) > 0;
 
