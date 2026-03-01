@@ -15,7 +15,6 @@ export * from './agents.schema';
 export * from './memory.schema';
 export * from './research.schema';
 
-export * from './marketplace.schema';
 export * from './external.schema';
 export * from './documents.schema';
 export * from './web-search.schema';

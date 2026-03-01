@@ -1,6 +1,6 @@
 /**
  * =========================================================================
- * Skill Library - 스킬 라이브러리 및 마켓플레이스 연동 모듈 (SPA PageModule)
+ * Skill Library - 스킬 라이브러리 모듈 (SPA PageModule)
  * =========================================================================
  */
 (function () {
@@ -8,7 +8,6 @@
     window.PageModules = window.PageModules || {};
 
     let localSkills = [];
-    let mpSkills = [];
     let userAssignedIds = new Set(); // 사용자 개인 할당 스킬 ID 집합
     let editingSkillId = null; // 현재 편집 중인 스킬 ID (null = 새 스킬)
 
@@ -16,13 +15,6 @@
         search: '',
         category: '',
         sortBy: 'newest',
-        page: 1,
-        limit: 12,
-        total: 0
-    };
-
-    let mpFilters = {
-        query: '',
         page: 1,
         limit: 12,
         total: 0
@@ -36,10 +28,9 @@
             <span class="iconify" data-icon="lucide:package"></span>
             스킬 라이브러리
         </h1>
-        <p>로컬에 설치된 에이전트 스킬을 관리하거나 마켓플레이스에서 새로운 스킬을 가져옵니다.</p>
+        <p>로컬에 설치된 에이전트 스킬을 관리합니다.</p>
         <div class="sl-tabs" role="tablist">
             <button class="sl-tab active" data-sl-tab="local" role="tab" aria-selected="true">내 스킬</button>
-            <button class="sl-tab" data-sl-tab="marketplace" role="tab" aria-selected="false">SkillsMP 마켓플레이스</button>
         </div>
     </div>
 
@@ -71,33 +62,6 @@
                 <div class="sl-loading"><div class="sl-spinner"></div></div>
             </div>
             <div id="localPagination" class="sl-pagination"></div>
-        </div>
-
-        <!-- 마켓플레이스 탭 -->
-        <div class="sl-pane" id="sl-pane-marketplace" role="tabpanel">
-            <div class="sl-mp-banner">
-                <div class="sl-mp-banner-icon">
-                    <span class="iconify" data-icon="lucide:globe"></span>
-                </div>
-                <div>
-                    <h5>SkillsMP 오픈소스 생태계 연동</h5>
-                    <p>전 세계 개발자가 공유하는 26만 개 이상의 오픈소스 에이전트 스킬 포맷(SKILL.md)을 검색하고 로컬 환경으로 즉시 가져올 수 있습니다.</p>
-                </div>
-            </div>
-
-            <div class="sl-mp-search">
-                <div class="sl-input-wrap">
-                    <span class="sl-input-icon iconify" data-icon="lucide:search"></span>
-                    <input type="text" id="mpSearchInput" class="sl-input"
-                        placeholder="마켓플레이스 검색 (예: react, python, 분석)...">
-                </div>
-                <button class="sl-btn sl-btn-primary" id="mpSearchBtn">검색</button>
-            </div>
-
-            <div id="mpSkillsGrid" class="skill-grid">
-                <div class="sl-empty">검색어를 입력하고 버튼을 눌러 스킬을 찾아보세요.</div>
-            </div>
-            <div id="mpPagination" class="sl-pagination"></div>
         </div>
     </div>
     <!-- 인라인 스킬 편집 모달 -->
@@ -178,8 +142,7 @@
 
             // Cleanup globals
             ['sl_openNewSkill', 'sl_editSkill', 'sl_deleteSkill', 'sl_exportSkill',
-             'sl_importSkill', 'sl_viewMpSkill', 'sl_changeLocalPage', 'sl_changeMpPage',
-             'sl_toggleUserSkill', 'sl_saveSkill', 'sl_closeSkillModal'].forEach(key => {
+             'sl_changeLocalPage', 'sl_toggleUserSkill', 'sl_saveSkill', 'sl_closeSkillModal'].forEach(key => {
                 try { delete window[key]; } catch (e) {}
             });
 
@@ -250,21 +213,6 @@
                 self.loadLocalSkills();
             });
 
-            // 마켓플레이스 검색
-            document.getElementById('mpSearchBtn')?.addEventListener('click', () => {
-                mpFilters.query = document.getElementById('mpSearchInput')?.value || '';
-                mpFilters.page = 1;
-                self.loadMpSkills();
-            });
-
-            document.getElementById('mpSearchInput')?.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') {
-                    mpFilters.query = e.target.value;
-                    mpFilters.page = 1;
-                    self.loadMpSkills();
-                }
-            });
-
             // Global dropdown close on outside click
             document.addEventListener('click', function slDropdownClose(e) {
                 if (!e.target.closest('.skill-card-menu')) {
@@ -277,17 +225,10 @@
             window.sl_editSkill = this.editLocalSkill.bind(this);
             window.sl_deleteSkill = this.deleteLocalSkill.bind(this);
             window.sl_exportSkill = this.exportSkill.bind(this);
-            window.sl_importSkill = this.importMpSkill.bind(this);
-            window.sl_viewMpSkill = this.viewMpSkillDetail.bind(this);
             window.sl_changeLocalPage = (p) => {
                 const maxPage = Math.ceil(localFilters.total / localFilters.limit) || 1;
                 localFilters.page = Math.min(Math.max(1, p), maxPage);
                 self.loadLocalSkills();
-            };
-            window.sl_changeMpPage = (p) => {
-                const maxPage = Math.ceil(mpFilters.total / mpFilters.limit) || 1;
-                mpFilters.page = Math.min(Math.max(1, p), maxPage);
-                self.loadMpSkills();
             };
             window.sl_toggleUserSkill = this.toggleUserSkill.bind(this);
             window.sl_saveSkill = this.saveSkillFromModal.bind(this);
@@ -379,7 +320,7 @@
             if (!grid) return;
 
             if (localSkills.length === 0) {
-                grid.innerHTML = '<div class="sl-empty">조회된 스킬이 없습니다. 새 스킬을 등록하거나 마켓플레이스에서 가져와보세요.</div>';
+                grid.innerHTML = '<div class="sl-empty">조회된 스킬이 없습니다. 새 스킬을 등록해보세요.</div>';
                 return;
             }
 
@@ -429,131 +370,6 @@
             }).join('');
         },
 
-        loadMpSkills: async function () {
-            const grid = document.getElementById('mpSkillsGrid');
-            if (!grid) return;
-
-            if (!mpFilters.query) {
-                grid.innerHTML = '<div class="sl-empty">검색어를 입력하고 버튼을 눌러 스킬을 찾아보세요.</div>';
-                return;
-            }
-
-            grid.innerHTML = '<div class="sl-loading"><div class="sl-spinner"></div><span style="margin-left:0.75rem">마켓플레이스 연동 중...</span></div>';
-
-            try {
-                const offset = (mpFilters.page - 1) * mpFilters.limit;
-                const queryParams = new URLSearchParams({
-                    query: mpFilters.query,
-                    limit: mpFilters.limit,
-                    offset: offset
-                });
-
-                const response = await window.authFetch(`${API_ENDPOINTS.SKILLS_MARKETPLACE_SEARCH}?${queryParams.toString()}`);
-                const data = await response.json().catch(() => ({}));
-
-                // GITHUB_TOKEN 미설정: 503 + 특정 코드 처리
-                if (response.status === 503 || (data.error && data.error.code === 'GITHUB_TOKEN_NOT_CONFIGURED')) {
-                    grid.innerHTML = `<div class="sl-error" style="text-align:center;padding:2rem">
-                        <div style="font-size:2rem;margin-bottom:0.75rem">⚙️</div>
-                        <div style="font-weight:600;margin-bottom:0.5rem">GitHub 연동 미설정</div>
-                        <div style="font-size:0.875rem;opacity:0.8">관리자에게 GITHUB_TOKEN 환경변수 설정을 요청하세요.<br>설정 후 스킬마켓플레이스를 이용할 수 있습니다.</div>
-                    </div>`;
-                    return;
-                }
-
-                // 서버 에러 메시지 추출 (다양한 응답 포맷 대응)
-                if (!response.ok || !data.success) {
-                    const errMsg = data.error?.message || data.message || `서버 오류 (HTTP ${response.status})`;
-                    throw new Error(errMsg);
-                }
-                mpSkills = data.data.skills || [];
-                mpFilters.total = data.data.total || 0;
-
-                // 현재 페이지가 실제 데이터 페이지를 초과하면 마지막 페이지로 자동 이동
-                const maxPage = Math.ceil(mpFilters.total / mpFilters.limit) || 1;
-                if (mpFilters.page > maxPage) {
-                    mpFilters.page = maxPage;
-                    this.loadMpSkills();
-                    return;
-                }
-
-                this.renderMpSkills();
-                this.renderPagination('mpPagination', mpFilters.page, mpFilters.total, mpFilters.limit, 'sl_changeMpPage');
-            } catch (error) {
-                console.error('[SkillLibrary] 마켓플레이스 검색 오류:', error);
-                const esc = window.escapeHtml || (s => s);
-                grid.innerHTML = `<div class="sl-error">${esc(error.message)}</div>`;
-            }
-        },
-
-        renderMpSkills: function () {
-            const grid = document.getElementById('mpSkillsGrid');
-            if (!grid) return;
-
-            if (mpSkills.length === 0) {
-                grid.innerHTML = '<div class="sl-empty">검색 결과가 없습니다.</div>';
-                return;
-            }
-
-            const esc = window.escapeHtml || (s => s);
-
-            grid.innerHTML = mpSkills.map(skill => {
-                const idParams = esc(JSON.stringify({ repo: skill.repo, path: skill.path }));
-                return `
-                <div class="skill-card">
-                    <div class="skill-card-top">
-                        <span class="skill-card-badge" style="background:rgba(59,130,246,0.15);color:var(--accent-primary,#3b82f6)">${esc(skill.category || 'general')}</span>
-                    </div>
-                    <h3 class="skill-card-title" title="${esc(skill.name)}">${esc(skill.name)}</h3>
-                    <p class="skill-card-desc" title="${esc(skill.description || '')}">${esc(skill.description || '설명이 없습니다.')}</p>
-                    <small style="color:var(--text-muted,#64748b);font-size:0.75rem;display:flex;align-items:center;gap:0.25rem;margin-bottom:0.75rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(skill.repo)}">
-                        <span class="iconify" data-icon="lucide:github"></span> ${esc(skill.repo)}
-                    </small>
-                    <div class="skill-card-actions">
-                        <button class="sl-btn sl-btn-outline sl-btn-sm" style="flex:1" onclick='sl_viewMpSkill(${idParams})'>미리보기</button>
-                        <button class="sl-btn sl-btn-primary sl-btn-sm" style="flex:1" onclick='sl_importSkill(${idParams}, event)'>
-                            <span class="iconify" data-icon="lucide:download-cloud"></span> 설치
-                        </button>
-                    </div>
-                </div>`;
-            }).join('');
-        },
-
-        importMpSkill: async function (paramsStr, event) {
-            try {
-                const btn = event ? event.currentTarget : null;
-                let orgHtml = '';
-                if (btn) {
-                    orgHtml = btn.innerHTML;
-                    btn.innerHTML = '<div class="sl-spinner" style="width:1rem;height:1rem;display:inline-block"></div> 설치 중...';
-                    btn.disabled = true;
-                }
-
-                const response = await window.authFetch(API_ENDPOINTS.SKILLS_MARKETPLACE_IMPORT, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        repo: paramsStr.repo,
-                        path: paramsStr.path
-                    })
-                });
-
-                const data = await response.json();
-                if (btn) {
-                    btn.innerHTML = orgHtml;
-                    btn.disabled = false;
-                }
-
-                if (response.ok && data.success) {
-                    if (window.showToast) window.showToast('스킬이 설치되어 모든 에이전트에 자동 적용됩니다.', 'success');
-                    this.loadLocalSkills();
-                } else {
-                    if (window.showToast) window.showToast(data.error?.message || data.message || '알 수 없는 오류', 'error');
-                }
-            } catch (err) {
-                if (window.showToast) window.showToast('스킬 임포트 실패: ' + err.message, 'error');
-            }
-        },
 
         toggleUserSkill: async function (skillId, currentlyAssigned) {
             try {
@@ -574,20 +390,6 @@
                 }
             } catch (e) {
                 if (window.showToast) window.showToast('오류 발생: ' + e.message, 'error');
-            }
-        },
-
-        viewMpSkillDetail: async function (paramsStr) {
-            try {
-                const res = await window.authFetch(`${API_ENDPOINTS.SKILLS_MARKETPLACE_DETAIL}?repo=${encodeURIComponent(paramsStr.repo)}&path=${encodeURIComponent(paramsStr.path)}`);
-                const data = await res.json();
-                if (res.ok && data.success) {
-                    alert(`[SKILL.md 미리보기]\n\nName: ${data.data.parsed.name}\nCategory: ${data.data.parsed.category}\n\n${data.data.parsed.content.substring(0, 300)}...`);
-                } else {
-                    if (window.showToast) window.showToast('조회 실패: ' + (data.error?.message || data.message || '알 수 없는 오류'), 'error');
-                }
-            } catch (e) {
-                if (window.showToast) window.showToast('조회 실패: ' + e.message, 'error');
             }
         },
 

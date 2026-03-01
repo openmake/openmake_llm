@@ -47,11 +47,6 @@ const API_ENDPOINTS = Object.freeze({
     AGENTS_ABTEST_START: '/api/agents/abtest/start',
     AGENTS_MONITORING_METRICS: '/api/agents-monitoring/metrics',
 
-    // ── Skills Marketplace ────────────────────────
-    SKILLS_MARKETPLACE_SEARCH: '/api/skills-marketplace/search',
-    SKILLS_MARKETPLACE_DETAIL: '/api/skills-marketplace/detail',
-    SKILLS_MARKETPLACE_IMPORT: '/api/skills-marketplace/import',
-
     // ── Memory ────────────────────────────────────
     MEMORY: '/api/memory',
     MEMORY_SEARCH: '/api/memory/search',
@@ -98,10 +93,6 @@ const API_ENDPOINTS = Object.freeze({
     ADMIN_STATS: '/api/admin/stats',
     ADMIN_CONVERSATIONS: '/api/admin/conversations',
     ADMIN_CONVERSATIONS_EXPORT: '/api/admin/conversations/export',
-
-    // ── Marketplace (Agent) ───────────────────────
-    MARKETPLACE: '/api/marketplace',   // + /:id, /:id/install, /:id/reviews
-    MARKETPLACE_ME_INSTALLED: '/api/marketplace/me/installed',
 
     // ── Web Search ────────────────────────────────
     WEB_SEARCH: '/api/web-search',

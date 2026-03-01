@@ -14,7 +14,6 @@
 
 /**
  * GitHub API 관련 URL
- * SkillsMarketplaceService.ts에서 참조
  */
 export const GITHUB_API = {
     /** GitHub 코드 검색 API */

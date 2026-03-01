@@ -33,13 +33,11 @@ import {
     auditRouter,
     researchRouter,
     externalRouter,
-    marketplaceRouter,
     pushRouter,
     modelRouter,
     developerDocsRouter,
     chatFeedbackRouter,
-    apiKeysRouter,
-    skillsMarketplaceRouter
+    apiKeysRouter
 } from './index';
 import { setupSwaggerRoutes } from '../swagger';
 import { createClusterController, createHealthController, createAuthController, createAdminController, createSessionController } from '../controllers';
@@ -152,8 +150,6 @@ export function setupApiRoutes(
     app.use('/api/audit', auditRouter);
     app.use('/api/research', researchRouter);
     app.use('/api/external', externalRouter);
-    app.use('/api/marketplace', marketplaceRouter);
-    app.use('/api/skills-marketplace', skillsMarketplaceRouter);
     app.use('/api/push', pushRouter);
     app.use('/api/docs', developerDocsRouter);
     app.use('/api/api-keys', apiKeysRouter);

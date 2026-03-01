@@ -429,6 +429,31 @@ async function executeNavigation(path, options) {
         targetRoute = _routes.get(CHAT_PATH) || null;
     }
 
+    // ─── 티어 가드 ─────────────────────
+    if (targetRoute && targetRoute.minTier) {
+        var TIER_LEVEL = { free: 0, pro: 1, enterprise: 2 };
+        var userTier = (function () {
+            try {
+                var SK = window.STORAGE_KEYS || {};
+                var SS = window.SafeStorage || window.localStorage;
+                var isGuest = SS.getItem(SK.GUEST_MODE || 'guestMode') === 'true' ||
+                    SS.getItem(SK.IS_GUEST || 'isGuest') === 'true' ||
+                    !SS.getItem(SK.USER || 'user');
+                if (isGuest) return 'free';
+                var savedUser = SS.getItem(SK.USER || 'user');
+                if (!savedUser) return 'free';
+                var user = JSON.parse(savedUser);
+                if (user.role === 'admin' || user.role === 'administrator') return 'enterprise';
+                return user.tier || 'free';
+            } catch (e) { return 'free'; }
+        })();
+        if ((TIER_LEVEL[userTier] || 0) < (TIER_LEVEL[targetRoute.minTier] || 0)) {
+            warn('티어 권한 부족, 채팅으로 리디렉트:', normalizedPath, '(필요:', targetRoute.minTier, '/ 현재:', userTier, ')');
+            normalizedPath = CHAT_PATH;
+            targetRoute = _routes.get(CHAT_PATH) || null;
+        }
+    }
+
     // ─── beforeNavigate 훅 ───────────────
     var navInfo = {
         from: previousRoute ? previousRoute.path : (window.location.pathname),
@@ -656,13 +681,13 @@ function registerFromNavItems() {
         Router.register(path, {
             moduleName: moduleName,
             moduleFile: '/js/modules/pages/' + moduleName + '.js',
-            cssFiles: item.cssFiles || [], // nav-items.js에서 cssFiles 배열 지정 가능
+            cssFiles: item.cssFiles || [],
             requireAuth: !!item.requireAuth,
             requireAdmin: !!item.requireAdmin,
+            minTier: item.minTier || null,
             title: item.label || moduleName,
             icon: item.icon || '',
             iconify: item.iconify || ''
-        });
     });
 
     log('\uB77C\uC6B0\uD2B8 \uC790\uB3D9 \uB4F1\uB85D \uC644\uB8CC:', _routes.size, '\uAC1C');

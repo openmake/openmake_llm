@@ -30,7 +30,6 @@ export { memoryRouter } from './memory.routes';
 export { default as auditRouter } from './audit.routes';
 export { default as researchRouter } from './research.routes';
 export { default as externalRouter } from './external.routes';
-export { default as marketplaceRouter } from './marketplace.routes';
 
 // 🆕 Push 알림 라우트
 export { pushRouter } from './push.routes';
@@ -43,9 +42,6 @@ export { default as developerDocsRouter } from './developer-docs.routes';
 
 // 🆕 Chat Feedback 라우트
 export { default as chatFeedbackRouter } from './chat-feedback.routes';
-
-// 🆕 Skills Marketplace 라우트
-export { default as skillsMarketplaceRouter } from './skills-marketplace.routes';
 
 // 🆕 Token Monitoring 라우트
 export { tokenMonitoringRouter } from './token-monitoring.routes';
