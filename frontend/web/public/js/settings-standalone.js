@@ -134,9 +134,12 @@
         // mcpSettings: read-merge-write 패턴으로 enabledTools 등 기존 필드 보존
         var mcpSettings = JSON.parse(safeStorage.getItem(SK.MCP_SETTINGS || 'mcpSettings') || '{}');
         if (thinkingToggle) mcpSettings.thinking = thinkingToggle.checked;
-        if (webSearchToggle) mcpSettings.webSearch = webSearchToggle.checked;
+        var webSearchChecked = webSearchToggle ? webSearchToggle.checked : false;
+        mcpSettings.webSearch = webSearchChecked;
         if (ragToggle) mcpSettings.rag = ragToggle.checked;
-        // enabledTools는 read-merge-write로 자동 보존됨
+        // 양방향 동기화: webSearchToggle ↔ enabledTools.web_search
+        if (!mcpSettings.enabledTools) mcpSettings.enabledTools = {};
+        mcpSettings.enabledTools.web_search = webSearchChecked;
         safeStorage.setItem(SK.MCP_SETTINGS || 'mcpSettings', JSON.stringify(mcpSettings));
 
         if (langSelect && saveHistoryToggle) {
@@ -180,7 +183,9 @@
                 var webSearchEl = document.getElementById('webSearchToggle');
                 var ragEl = document.getElementById('ragToggle');
                 if (thinkingEl) thinkingEl.checked = mcp.thinking !== false;
-                if (webSearchEl) webSearchEl.checked = mcp.webSearch === true;
+                // 양방향 동기화: enabledTools.web_search 우선, 레거시 webSearch 폴백
+                var webSearchOn = (mcp.enabledTools && mcp.enabledTools.web_search === true) || mcp.webSearch === true;
+                if (webSearchEl) webSearchEl.checked = webSearchOn;
                 if (ragEl) ragEl.checked = mcp.rag === true;
             } catch (e) {
                 console.warn('mcpSettings 파싱 실패:', e);

@@ -119,7 +119,7 @@
 | AppState 키 | localStorage 키 | 채팅 입력창 버튼 | WS 페이로드 키 |
 |-------------|-----------------|------------------|-----------------|
 | `thinkingEnabled` | `mcpSettings.thinking` | 🧠 `thinkingModeBtn` | `thinkingMode` |
-| `webSearchEnabled` | `mcpSettings.webSearch` | 🌐 `webSearchBtn` | `webSearch` |
+| `webSearchEnabled` | `mcpSettings.webSearch` + `mcpSettings.enabledTools.web_search` | 🌐 `webSearchBtn` | `webSearch` |
 | `ragEnabled` | `mcpSettings.rag` | (설정 페이지만) | `ragEnabled` |
 | `discussionMode` | (비저장) | 🎯 `discussionModeBtn` | `discussionMode` |
 | `deepResearchMode` | (비저장) | 🔬 `deepResearchBtn` | `deepResearchMode` |
@@ -131,3 +131,4 @@
 2. **상태 키 `thinkingEnabled` 단일 사용** — `thinkingMode` 키는 삭제됨. 설정과 채팅 모두 `thinkingEnabled` 사용
 3. **localStorage `mcpSettings` 단일 키** — MCP 토글 상태 저장에 이 키만 사용 (키 충돌 방지)
 4. **WS 페이로드 `thinkingMode` 키는 유지** — 백엔드가 이 이름을 기대하므로 변경 금지. 값만 `thinkingEnabled`에서 읽음
+5. **🌐 웹 검색 양방향 동기화** — `webSearchEnabled`와 `mcpToolsEnabled.web_search`는 `syncWebSearchState()` 함수로 양방향 동기화됨. 어느 한쪽을 변경하면 다른 쪽도 자동 반영. 채팅 🌐 버튼, 설정 페이지 웹검색 토글, MCP 도구 목록의 `web_search` 토글 모두 동일한 상태를 공유

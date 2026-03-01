@@ -54,8 +54,25 @@ var MCP_TOOL_CATALOG = [
 ];
 
 /**
+ * webSearchEnabled ↔ mcpToolsEnabled.web_search 양방향 동기화
+ * 어느 한쪽이 변경되면 다른 쪽도 동일한 값으로 맞춥니다.
+ * @param {boolean} enabled - 웹 검색 활성화 여부
+ * @returns {void}
+ */
+function syncWebSearchState(enabled) {
+    setState('webSearchEnabled', enabled);
+    var current = getState('mcpToolsEnabled') || {};
+    if (current.web_search !== enabled) {
+        var updated = Object.assign({}, current);
+        updated.web_search = enabled;
+        setState('mcpToolsEnabled', updated);
+    }
+}
+
+/**
  * localStorage에서 MCP 설정을 로드하여 AppState와 UI에 반영
  * thinking, webSearch 토글 상태 및 개별 도구 활성화 상태를 복원합니다.
+ * 레거시 마이그레이션: webSearch 플래그를 enabledTools.web_search로 통합합니다.
  * @returns {void}
  */
 function loadMCPSettings() {
@@ -64,7 +81,6 @@ function loadMCPSettings() {
         try {
             var settings = JSON.parse(saved);
             setState('thinkingEnabled', settings.thinking !== false);
-            setState('webSearchEnabled', settings.webSearch === true);
             setState('ragEnabled', settings.rag === true);
 
             // MCP 도구 활성화 상태 로드 (기본: 전체 비활성)
@@ -73,6 +89,18 @@ function loadMCPSettings() {
             } else {
                 setState('mcpToolsEnabled', {});
             }
+
+            // 레거시 마이그레이션: webSearch → enabledTools.web_search 통합
+            var enabledTools = getState('mcpToolsEnabled') || {};
+            if (settings.webSearch === true && enabledTools.web_search !== true) {
+                var migrated = Object.assign({}, enabledTools);
+                migrated.web_search = true;
+                setState('mcpToolsEnabled', migrated);
+            }
+
+            // 양방향 동기화: enabledTools.web_search → webSearchEnabled
+            var finalTools = getState('mcpToolsEnabled') || {};
+            setState('webSearchEnabled', finalTools.web_search === true);
 
             // UI 동기화
             updateMCPToggleUI();
@@ -113,8 +141,9 @@ function toggleMCPModule(module) {
 
         case 'webSearch':
             const webSearchEnabled = !getState('webSearchEnabled');
-            setState('webSearchEnabled', webSearchEnabled);
+            syncWebSearchState(webSearchEnabled);
             updateToggleUI('mcpWebSearch', webSearchEnabled);
+            updateMCPToolTogglesUI();
             break;
 
         case 'pdf':
@@ -285,6 +314,15 @@ function toggleMCPTool(toolName) {
     var updated = Object.assign({}, current);
     updated[toolName] = !updated[toolName];
     setState('mcpToolsEnabled', updated);
+
+    // web_search 토글 시 webSearchEnabled와 양방향 동기화
+    if (toolName === 'web_search') {
+        setState('webSearchEnabled', updated.web_search === true);
+        updateToggleUI('mcpWebSearch', updated.web_search === true);
+        var btn = document.getElementById('webSearchBtn');
+        if (btn) btn.classList.toggle('active', updated.web_search === true);
+    }
+
     saveMCPSettings();
 
     var status = updated[toolName] ? '활성화' : '비활성화';
@@ -304,6 +342,11 @@ function setAllMCPTools(enabled) {
         });
     });
     setState('mcpToolsEnabled', updated);
+    // web_search 포함 시 webSearchEnabled도 동기화
+    syncWebSearchState(updated.web_search === true);
+    updateToggleUI('mcpWebSearch', updated.web_search === true);
+    var btn = document.getElementById('webSearchBtn');
+    if (btn) btn.classList.toggle('active', updated.web_search === true);
     saveMCPSettings();
     updateMCPToolTogglesUI();
 
@@ -366,6 +409,7 @@ window.setAllMCPTools = setAllMCPTools;
 window.getEnabledTools = getEnabledTools;
 window.updateMCPToolTogglesUI = updateMCPToolTogglesUI;
 window.MCP_TOOL_CATALOG = MCP_TOOL_CATALOG;
+window.syncWebSearchState = syncWebSearchState;
 window.loadPromptMode = loadPromptMode;
 window.setPromptMode = setPromptMode;
 window.loadAgentMode = loadAgentMode;
@@ -379,6 +423,7 @@ export {
     MCP_TOOL_CATALOG,
     loadMCPSettings,
     saveMCPSettings,
+    syncWebSearchState,
     toggleMCPModule,
     toggleWebSearch,
     toggleMCPTool,

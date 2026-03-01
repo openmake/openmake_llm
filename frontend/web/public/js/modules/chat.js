@@ -135,7 +135,7 @@ async function sendMessage() {
             message: message,
             model: document.getElementById('modelSelect')?.value || SS.getItem(STORAGE_KEY_SELECTED_MODEL) || DEFAULT_AUTO_MODEL,
             history: getState('conversationMemory'),
-            webSearch: getState('webSearchEnabled'),
+            webSearch: getState('webSearchEnabled') || (getState('mcpToolsEnabled') || {}).web_search === true,
             thinkingMode: getState('thinkingEnabled'),
             thinkingLevel: getState('thinkingLevel') || 'high',
             discussionMode: getState('discussionMode') || false,
