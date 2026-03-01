@@ -115,8 +115,8 @@
 
     <div id="toast" class="toast"></div>
 
-    <script src="/js/components/sidebar.js"></script>
-    <script>
+    <script type="module" src="/js/components/sidebar.js"></script>
+    <script type="module">
         const CAT_LABELS = { preference:'선호도', fact:'사실', project:'프로젝트', relationship:'관계', skill:'기술', context:'맥락' };
         let allMems = [];
         let currentFilter = 'all';
@@ -263,6 +263,12 @@
         }, 400));
 
         loadMems();
+
+        window.openNew = openNew;
+        window.closeEditor = closeEditor;
+        window.deleteMem = deleteMem;
+        window.saveMem = saveMem;
+        window.openMem = openMem;
     </script>
 </body>
 </html>

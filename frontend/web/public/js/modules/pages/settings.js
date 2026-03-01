@@ -8,13 +8,12 @@
  *
  * @module pages/settings
  */
-(function () {
-    'use strict';
+'use strict';
     var AUTO_MODEL = window.DEFAULT_AUTO_MODEL || 'openmake_llm_auto';
     var SK = window.STORAGE_KEYS || {};
     window.PageModules = window.PageModules || {};
-    var _intervals = [];
-    var _timeouts = [];
+    let _intervals = [];
+    let _timeouts = [];
     function esc(s) { var d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
 
     // CSS moved to external file: /css/settings.css (CSP compliance)
@@ -87,18 +86,6 @@
         '<option value="openmake_llm_code">OpenMake LLM Code</option>' +
         '<option value="openmake_llm_vision">OpenMake LLM Vision</option>' +
         '</select>' +
-        '</div>' +
-        '<div class="setting-row">' +
-        '<div class="setting-info"><h4>Sequential Thinking</h4><p>Chain-of-Thought \uCD94\uB860 \uD65C\uC131\uD654</p></div>' +
-        '<label class="toggle"><input type="checkbox" checked id="thinkingToggle"><span class="toggle-slider"></span></label>' +
-        '</div>' +
-        '<div class="setting-row">' +
-        '<div class="setting-info"><h4>\uC6F9 \uAC80\uC0C9</h4><p>\uC2E4\uC2DC\uAC04 \uC6F9 \uAC80\uC0C9 \uAE30\uB2A5 \uD65C\uC131\uD654</p></div>' +
-        '<label class="toggle"><input type="checkbox" checked id="webSearchToggle"><span class="toggle-slider"></span></label>' +
-        '</div>' +
-        '<div class="setting-row">' +
-        '<div class="setting-info"><h4>RAG (문서 기반 응답)</h4><p>업로드 문서에서 관련 정보를 검색하여 응답에 활용</p></div>' +
-        '<label class="toggle"><input type="checkbox" id="ragToggle"><span class="toggle-slider"></span></label>' +
         '</div>' +
         '</div>' +
         '</div>' +
@@ -326,33 +313,10 @@
                 function saveSettings() {
                     setTheme(document.getElementById('themeSelect').value);
                     safeStorage.setItem(SK.SELECTED_MODEL || 'selectedModel', document.getElementById('modelSelect').value);
-                    var mcpSettings = JSON.parse(safeStorage.getItem(SK.MCP_SETTINGS || 'mcpSettings') || '{}');
-                    mcpSettings.thinking = document.getElementById('thinkingToggle').checked;
-                    var webSearchChecked = document.getElementById('webSearchToggle').checked;
-                    mcpSettings.webSearch = webSearchChecked;
-                    mcpSettings.rag = document.getElementById('ragToggle') ? document.getElementById('ragToggle').checked : false;
 
-                    // MCP 도구 토글 상태 수집 — DOM에서 mcpTool_ 프리픽스 체크박스 직접 조회
-                    var enabledTools = {};
-                    var mcpCheckboxes = document.querySelectorAll('input[id^="mcpTool_"]');
-                    mcpCheckboxes.forEach(function (el) {
-                        var toolName = el.id.replace('mcpTool_', '');
-                        enabledTools[toolName] = el.checked;
-                    });
-
-                    // 양방향 동기화: webSearchToggle ↔ enabledTools.web_search
-                    enabledTools.web_search = webSearchChecked;
-
-                    mcpSettings.enabledTools = enabledTools;
-                    safeStorage.setItem(SK.MCP_SETTINGS || 'mcpSettings', JSON.stringify(mcpSettings));
-
-                    // AppState 동기화
-                    if (typeof setState === 'function') {
-                        setState('thinkingEnabled', mcpSettings.thinking);
-                        setState('webSearchEnabled', webSearchChecked);
-                        setState('mcpToolsEnabled', enabledTools);
-                        setState('ragEnabled', mcpSettings.rag);
-                    }
+                    // MCP 도구 설정은 toggleMCPTool/setAllMCPTools에서 이미 실시간 저장됨
+                    // 명시적 저장 호출
+                    if (typeof window.saveMCPSettings === 'function') window.saveMCPSettings();
 
                     safeStorage.setItem(SK.GENERAL_SETTINGS || 'generalSettings', JSON.stringify({ lang: document.getElementById('langSelect').value, saveHistory: document.getElementById('saveHistoryToggle').checked }));
                     (typeof showToast === 'function' ? showToast('설정이 저장되었습니다.', 'warning') : console.warn('설정이 저장되었습니다.'));
@@ -369,19 +333,9 @@
                             if (opts[i].value === selectedModel) { document.getElementById('modelSelect').value = selectedModel; break; }
                         }
                     }
-                    var savedMcp = safeStorage.getItem(SK.MCP_SETTINGS || 'mcpSettings');
-                    if (savedMcp) {
-                        var mcp = JSON.parse(savedMcp);
-                        document.getElementById('thinkingToggle').checked = mcp.thinking !== false;
-                        // 양방향 동기화: enabledTools.web_search 우선, 레거시 webSearch 폴백
-                        var webSearchOn = (mcp.enabledTools && mcp.enabledTools.web_search === true) || mcp.webSearch === true;
-                        document.getElementById('webSearchToggle').checked = webSearchOn;
-                        // mcpTool_web_search 토글도 동기화
-                        var mcpToolWebSearch = document.getElementById('mcpTool_web_search');
-                        if (mcpToolWebSearch) mcpToolWebSearch.checked = webSearchOn;
-                        var ragEl = document.getElementById('ragToggle');
-                        if (ragEl) { ragEl.checked = mcp.rag === true; }
-                    }
+                    // MCP 설정은 loadMCPSettings()에서 통합 관리
+                    if (typeof window.loadMCPSettings === 'function') window.loadMCPSettings();
+
                     var savedGeneral = safeStorage.getItem(SK.GENERAL_SETTINGS || 'generalSettings');
                     if (savedGeneral) { var general = JSON.parse(savedGeneral); document.getElementById('langSelect').value = general.lang || ''; document.getElementById('saveHistoryToggle').checked = general.saveHistory !== false; }
                 }
@@ -470,31 +424,8 @@
 
                     var userTier = getUserTier();
 
-                    // MCP 도구 카탈로그 — 백엔드 builtInTools + tool-tiers 동기화 (minTier 포함)
-                    var toolCatalog = [
-                        {
-                            category: '비전', emoji: '👁️', tools: [
-                                { name: 'vision_ocr', label: '이미지 OCR', description: '이미지에서 텍스트를 추출합니다', minTier: 'free' },
-                                { name: 'analyze_image', label: '이미지 분석', description: '이미지 내용을 분석합니다', minTier: 'free' }
-                            ]
-                        },
-                        {
-                            category: '웹 검색', emoji: '🌐', tools: [
-                                { name: 'web_search', label: '웹 검색', description: '실시간 웹 검색을 수행합니다', minTier: 'free' },
-                                { name: 'fact_check', label: '팩트 체크', description: '정보의 사실 여부를 검증합니다', minTier: 'enterprise' },
-                                { name: 'extract_webpage', label: '웹페이지 추출', description: '웹페이지 콘텐츠를 추출합니다', minTier: 'enterprise' },
-                                { name: 'research_topic', label: '주제 연구', description: '주제에 대한 심층 연구를 수행합니다', minTier: 'enterprise' }
-                            ]
-                        },
-                        {
-                            category: '스크래핑', emoji: '🔥', tools: [
-                                { name: 'firecrawl_scrape', label: 'Firecrawl 스크래핑', description: '웹페이지를 스크래핑합니다', minTier: 'pro' },
-                                { name: 'firecrawl_search', label: 'Firecrawl 검색', description: '웹을 검색합니다', minTier: 'pro' },
-                                { name: 'firecrawl_map', label: 'Firecrawl URL 맵', description: 'URL 구조를 매핑합니다', minTier: 'pro' },
-                                { name: 'firecrawl_crawl', label: 'Firecrawl 크롤링', description: '웹사이트를 크롤링합니다', minTier: 'pro' }
-                            ]
-                        }
-                    ];
+                    // MCP 도구 카탈로그 — settings.js 통합 카탈로그 사용
+                    var toolCatalog = window.MCP_TOOL_CATALOG;
 
                     var savedMcp = safeStorage.getItem(SK.MCP_SETTINGS || 'mcpSettings');
                     var enabledTools = {};
@@ -536,18 +467,10 @@
                             var el = document.getElementById('mcpTool_' + tool.name);
                             if (el) {
                                 el.addEventListener('change', function () {
-                                    var saved = safeStorage.getItem(SK.MCP_SETTINGS || 'mcpSettings');
-                                    var settings = saved ? JSON.parse(saved) : {};
-                                    if (!settings.enabledTools) settings.enabledTools = {};
-                                    settings.enabledTools[tool.name] = el.checked;
-                                    safeStorage.setItem(SK.MCP_SETTINGS || 'mcpSettings', JSON.stringify(settings));
-
-                                    // app.js 전역 mcpSettings 동기화
-                                    if (typeof mcpSettings !== 'undefined') {
-                                        if (!mcpSettings.enabledTools) mcpSettings.enabledTools = {};
-                                        mcpSettings.enabledTools[tool.name] = el.checked;
+                                    var currentTools = window.getEnabledTools();
+                                    if ((currentTools[tool.name] === true) !== el.checked) {
+                                        window.toggleMCPTool(tool.name);
                                     }
-
                                 });
                             }
                         });
@@ -555,25 +478,9 @@
 
                     // 전체 활성화/비활성화 버튼 이벤트 — 접근 가능한 도구만 대상
                     function setAllTools(enabled) {
-                        var saved = safeStorage.getItem(SK.MCP_SETTINGS || 'mcpSettings');
-                        var settings = saved ? JSON.parse(saved) : {};
-                        if (!settings.enabledTools) settings.enabledTools = {};
-                        toolCatalog.forEach(function (group) {
-                            group.tools.forEach(function (tool) {
-                                if (!canAccessTier(userTier, tool.minTier)) return; // 잠긴 도구 건너뜀
-                                settings.enabledTools[tool.name] = enabled;
-                                var el = document.getElementById('mcpTool_' + tool.name);
-                                if (el) el.checked = enabled;
-                            });
-                        });
-                        safeStorage.setItem('mcpSettings', JSON.stringify(settings));
-
-                        // app.js 전역 mcpSettings 동기화
-                        if (typeof mcpSettings !== 'undefined') {
-                            mcpSettings.enabledTools = settings.enabledTools;
-                        }
-
-                        (typeof showToast === 'function' ? showToast(enabled ? 'MCP 도구 전체 활성화' : 'MCP 도구 전체 비활성화', enabled ? 'success' : 'info') : null);
+                        window.setAllMCPTools(enabled);
+                        // Re-render to reflect changes
+                        renderMCPToolToggles();
                     }
                     var enableAllBtn = document.getElementById('mcpEnableAllBtn');
                     var disableAllBtn = document.getElementById('mcpDisableAllBtn');
@@ -667,4 +574,6 @@
             try { delete window.refreshTierUI; } catch (e) { }
         }
     };
-})();
+
+const { getHTML, init, cleanup } = window.PageModules['settings'];
+export default { getHTML, init, cleanup };

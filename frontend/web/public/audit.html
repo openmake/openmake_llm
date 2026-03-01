@@ -74,8 +74,8 @@
 
     <div id="toast" class="toast"></div>
 
-    <script src="/js/components/sidebar.js"></script>
-    <script>
+    <script type="module" src="/js/components/sidebar.js"></script>
+    <script type="module">
         let logs = [];
         let actionTypes = [];
 
@@ -205,6 +205,10 @@
                 loadLogs();
             }
         });
+
+        window.closeDetail = closeDetail;
+        window.loadLogs = loadLogs;
+        window.openDetail = openDetail;
     </script>
 </body>
 </html>

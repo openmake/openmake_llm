@@ -98,8 +98,8 @@
 
     <div id="toast" class="toast"></div>
 
-    <script src="/js/components/sidebar.js"></script>
-    <script>
+    <script type="module" src="/js/components/sidebar.js"></script>
+    <script type="module">
         function authFetch(url, opts = {}) {
             const headers = { 'Content-Type':'application/json', ...opts.headers };
             return fetch(url, { ...opts, headers, credentials: 'include' }).then(r => r.json());
@@ -207,6 +207,12 @@
         }
 
         loadKeys();
+
+        window.openCreateKey = openCreateKey;
+        window.closeCreateKey = closeCreateKey;
+        window.createKey = createKey;
+        window.rotateKey = rotateKey;
+        window.deleteKey = deleteKey;
     </script>
 </body>
 </html>

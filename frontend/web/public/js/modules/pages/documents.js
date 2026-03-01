@@ -7,12 +7,11 @@
  *
  * @module pages/documents
  */
-(function() {
-    'use strict';
+'use strict';
     window.PageModules = window.PageModules || {};
 
     // Module-scoped state
-    var _intervals = [];
+    let _intervals = [];
     var _listeners = [];
     var _currentDocId = null;
 
@@ -457,4 +456,6 @@
             _currentDocId = null;
         }
     };
-})();
+
+const { getHTML, init, cleanup } = window.PageModules['documents'];
+export default { getHTML, init, cleanup };

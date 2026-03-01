@@ -8,12 +8,11 @@
  *
  * @module pages/audit
  */
-(function () {
-    'use strict';
+'use strict';
     var SK = window.STORAGE_KEYS || {};
     window.PageModules = window.PageModules || {};
-    var _intervals = [];
-    var _timeouts = [];
+    let _intervals = [];
+    let _timeouts = [];
 
     window.PageModules['audit'] = {
         getHTML: function () {
@@ -184,4 +183,6 @@
             try { delete window.openDetail; } catch (e) { }
         }
     };
-})();
+
+const { getHTML, init, cleanup } = window.PageModules['audit'];
+export default { getHTML, init, cleanup };

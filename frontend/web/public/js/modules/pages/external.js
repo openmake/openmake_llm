@@ -8,11 +8,10 @@
  *
  * @module pages/external
  */
-(function() {
-    'use strict';
+'use strict';
     window.PageModules = window.PageModules || {};
-    var _intervals = [];
-    var _timeouts = [];
+    let _intervals = [];
+    let _timeouts = [];
 
     window.PageModules['external'] = {
         getHTML: function() {
@@ -170,4 +169,6 @@
                 try { delete window.openConnect; } catch(e) {}
         }
     };
-})();
+
+const { getHTML, init, cleanup } = window.PageModules['external'];
+export default { getHTML, init, cleanup };

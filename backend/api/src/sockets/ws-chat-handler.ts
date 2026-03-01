@@ -131,7 +131,9 @@ export async function handleChatMessage(
         const userWebSearchEnabled = msg.webSearch === true;
         let webSearchContext = '';
 
-        if (userWebSearchEnabled || isCurrentEventsQuery) {
+        // MCP 도구 토글에서 web_search가 비활성화된 경우 pre-chat 웹 검색도 차단
+        const mcpWebSearchAllowed = msg.enabledTools === undefined || msg.enabledTools?.web_search === true;
+        if (mcpWebSearchAllowed && (userWebSearchEnabled || isCurrentEventsQuery)) {
             try {
                 const { performWebSearch } = await import('../mcp');
                 const searchResults = await performWebSearch(message, { maxResults: 5, language: userLang });
