@@ -12,7 +12,7 @@
 
 import { getState, setState } from './state.js';
 import { showToast } from './ui.js';
-import { saveMCPSettings } from './settings.js';
+import { saveMCPSettings, syncWebSearchState, updateMCPToolTogglesUI } from './settings.js';
 
 /**
  * 멀티 에이전트 토론 모드 토글
@@ -32,15 +32,16 @@ function toggleDiscussionMode() {
 
     // 토론 모드와 웹 검색은 동시 사용 불가
     if (newValue && getState('webSearchEnabled')) {
-        setState('webSearchEnabled', false);
+        syncWebSearchState(false);
+        updateMCPToolTogglesUI();
         const webSearchBtn = document.getElementById('webSearchBtn');
         if (webSearchBtn) {
             webSearchBtn.classList.remove('active');
         }
+        saveMCPSettings();
         showToast('🎯 멀티 에이전트 토론 모드 활성화 (웹 검색 비활성화됨)', 'info');
     } else {
         showToast(newValue ? '🎯 멀티 에이전트 토론 모드 활성화' : '💬 일반 모드로 전환', 'info');
-    }
 }
 
 /**
