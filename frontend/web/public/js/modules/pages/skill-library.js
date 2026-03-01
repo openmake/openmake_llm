@@ -3,8 +3,7 @@
  * Skill Library - 스킬 라이브러리 모듈 (SPA PageModule)
  * =========================================================================
  */
-(function () {
-    'use strict';
+'use strict';
     window.PageModules = window.PageModules || {};
 
     let localSkills = [];
@@ -534,4 +533,6 @@
             container.innerHTML = html;
         }
     };
-})();
+
+const { getHTML, init, cleanup } = window.PageModules['skill-library'];
+export default { getHTML, init, cleanup };

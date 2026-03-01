@@ -8,23 +8,21 @@
  *
  * @module pages/analytics
  */
-(function() {
-    'use strict';
+'use strict';
     window.PageModules = window.PageModules || {};
-    var _intervals = [];
-    var _timeouts = [];
+    let _intervals = [];
+    let _timeouts = [];
 
-    window.PageModules['analytics'] = {
-        getHTML: function() {
+    function getHTML() {
             return '<div class="page-analytics">' +
                 '<style data-spa-style="analytics">' +
                 ".dash-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:var(--space-4); margin-bottom:var(--space-5); }\n        .dash-card { background:var(--bg-card); border:1px solid var(--border-light); border-radius:var(--radius-lg); padding:var(--space-5); }\n        .dash-card h3 { margin:0 0 var(--space-3); color:var(--text-primary); font-size:1rem; }\n        .health-badge { display:inline-block; padding:var(--space-1) var(--space-3); border-radius:var(--radius-md); font-size:var(--font-size-sm); font-weight:var(--font-weight-bold); }\n        .health-healthy { background:var(--success); color:#fff; }\n        .health-degraded { background:var(--warning); color:#000; }\n        .health-critical { background:var(--danger); color:#fff; }\n        .metric-row { display:flex; justify-content:space-between; padding:var(--space-2) 0; border-bottom:1px solid var(--border-light); font-size:var(--font-size-sm); }\n        .metric-row:last-child { border-bottom:none; }\n        .metric-label { color:var(--text-muted); }\n        .metric-value { color:var(--text-primary); font-weight:var(--font-weight-semibold); }\n        .section-title { font-size:1.1rem; font-weight:var(--font-weight-semibold); color:var(--text-primary); margin:var(--space-5) 0 var(--space-4); }\n        .data-table { width:100%; border-collapse:collapse; background:var(--bg-card); border:1px solid var(--border-light); border-radius:var(--radius-lg); overflow:hidden; }\n        .data-table th, .data-table td { padding:var(--space-3) var(--space-4); text-align:left; border-bottom:1px solid var(--border-light); font-size:var(--font-size-sm); }\n        .data-table th { background:var(--bg-tertiary); color:var(--text-secondary); font-weight:var(--font-weight-semibold); }\n        .data-table td { color:var(--text-primary); }\n        .data-table tr:last-child td { border-bottom:none; }\n        .cost-big { font-size:1.8rem; font-weight:var(--font-weight-bold); color:var(--accent-primary); }\n        .cost-label { font-size:var(--font-size-sm); color:var(--text-muted); margin-top:var(--space-1); }\n        .peak-bar { height:8px; background:var(--bg-tertiary); border-radius:4px; overflow:hidden; margin-top:var(--space-1); }\n        .peak-fill { height:100%; background:var(--accent-primary); border-radius:4px; }\n        .refresh-info { font-size:var(--font-size-sm); color:var(--text-muted); text-align:right; margin-bottom:var(--space-3); }\n        .empty-state { text-align:center; padding:var(--space-8); color:var(--text-muted); }\n        .loading { text-align:center; padding:var(--space-6); color:var(--text-muted); }\n        .toast { position:fixed; bottom:20px; right:20px; padding:var(--space-3) var(--space-5); border-radius:var(--radius-md); color:#fff; z-index:2000; opacity:0; transition:opacity .3s; }\n        .toast.show { opacity:1; } .toast.success { background:var(--success); } .toast.error { background:var(--danger); }" +
                 '<\/style>' +
                 "<header class=\"page-header\">\n                <button class=\"mobile-menu-btn\" onclick=\"toggleMobileSidebar(event)\">&#9776;</button>\n                <h1>분석 대시보드</h1>\n            </header>\n            <div class=\"content-area\">\n                <div class=\"refresh-info\" id=\"refreshInfo\">마지막 업데이트: -</div>\n\n                <!-- 시스템 건강 + 비용 -->\n                <div class=\"dash-grid\">\n                    <div class=\"dash-card\">\n                        <h3>시스템 상태</h3>\n                        <div id=\"healthSection\"><div class=\"loading\">로딩 중...</div></div>\n                    </div>\n                    <div class=\"dash-card\">\n                        <h3>비용 분석</h3>\n                        <div id=\"costSection\"><div class=\"loading\">로딩 중...</div></div>\n                    </div>\n                    <div class=\"dash-card\">\n                        <h3>피드백 통계</h3>\n                        <div id=\"feedbackSection\"><div class=\"loading\">로딩 중...</div></div>\n                    </div>\n                </div>\n\n                <!-- 에이전트 성능 -->\n                <h3 class=\"section-title\">에이전트 성능</h3>\n                <div id=\"agentTable\"><div class=\"loading\">로딩 중...</div></div>\n\n                <!-- 사용자 행동 -->\n                <h3 class=\"section-title\">사용자 행동 분석</h3>\n                <div class=\"dash-grid\">\n                    <div class=\"dash-card\">\n                        <h3>피크 시간대</h3>\n                        <div id=\"peakHours\"><div class=\"loading\">로딩 중...</div></div>\n                    </div>\n                    <div class=\"dash-card\">\n                        <h3>인기 쿼리</h3>\n                        <div id=\"topQueries\"><div class=\"loading\">로딩 중...</div></div>\n                    </div>\n                </div>\n            </div>\n\n<div id=\"toast\" class=\"toast\"></div>" +
             '<\/div>';
-        },
+    }
 
-        init: function() {
+    function init() {
             try {
                 function authFetch(url, opts = {}) {
             return window.authFetch(url, opts);
@@ -153,13 +151,15 @@
             } catch(e) {
                 console.error('[PageModule:analytics] init error:', e);
             }
-        },
+    }
 
-        cleanup: function() {
+    function cleanup() {
             _intervals.forEach(function(id) { clearInterval(id); });
             _intervals = [];
             _timeouts.forEach(function(id) { clearTimeout(id); });
             _timeouts = [];
-        }
-    };
-})();
+    }
+
+    const pageModule = { getHTML, init, cleanup };
+    window.PageModules['analytics'] = pageModule;
+    export default pageModule;

@@ -8,12 +8,11 @@
  *
  * @module pages/password-change
  */
-(function () {
-    'use strict';
+'use strict';
     var SK = window.STORAGE_KEYS || {};
     window.PageModules = window.PageModules || {};
-    var _intervals = [];
-    var _timeouts = [];
+    let _intervals = [];
+    let _timeouts = [];
 
     window.PageModules['password-change'] = {
         getHTML: function () {
@@ -155,4 +154,6 @@
             try { delete window.checkMatch; } catch (e) { }
         }
     };
-})();
+
+const { getHTML, init, cleanup } = window.PageModules['password-change'];
+export default { getHTML, init, cleanup };

@@ -113,9 +113,9 @@
 
     <div id="docToast" class="toast"></div>
 
-    <script src="/js/components/sidebar.js"></script>
-    <script src="/js/modules/api-endpoints.js"></script>
-    <script>
+    <script type="module" src="/js/components/sidebar.js"></script>
+    <script type="module" src="/js/modules/api-endpoints.js"></script>
+    <script type="module">
         function authFetch(url, options) {
             options = options || {};
             var headers = Object.assign({ 'Content-Type': 'application/json' }, options.headers || {});
@@ -346,6 +346,11 @@
         })();
 
         loadDocuments();
+
+        window.viewDocDetail = viewDocDetail;
+        window.closeDocDetail = closeDocDetail;
+        window.confirmDeleteDoc = confirmDeleteDoc;
+        window.deleteCurrentDoc = deleteCurrentDoc;
     </script>
 </body>
 </html>

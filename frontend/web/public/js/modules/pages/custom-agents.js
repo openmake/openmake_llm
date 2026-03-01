@@ -10,11 +10,10 @@
  *
  * @module pages/custom-agents
  */
-(function() {
-    'use strict';
+'use strict';
     window.PageModules = window.PageModules || {};
-    var _intervals = [];
-    var _timeouts = [];
+    let _intervals = [];
+    let _timeouts = [];
 
     window.PageModules['custom-agents'] = {
         getHTML: function() {
@@ -379,4 +378,6 @@
                 try { delete window.openSkillsPanel; } catch(e) {}
         }
     };
-})();
+
+const { getHTML, init, cleanup } = window.PageModules['custom-agents'];
+export default { getHTML, init, cleanup };

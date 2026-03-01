@@ -336,9 +336,9 @@
     </div> <!-- app 끝 -->
 
     <!-- 앱 엔트리 포인트 (ES Module — 모든 모듈을 main.js에서 import 및 초기화) -->
-    <!-- API 중앙 관리 (IIFE 페이지 모듈에서 window.API_ENDPOINTS 참조용) -->
-    <script src="js/modules/api-endpoints.js?v=16"></script>
-    <script src="js/modules/api-client.js?v=16"></script>
+    <!-- API 중앙 관리 (ES Module — window.API_ENDPOINTS / window.ApiClient 전역 노출) -->
+    <script type="module" src="js/modules/api-endpoints.js?v=16"></script>
+    <script type="module" src="js/modules/api-client.js?v=16"></script>
 
     <script type="module" src="js/main.js?v=26"></script>
 </body>

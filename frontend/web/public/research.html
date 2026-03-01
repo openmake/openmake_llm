@@ -91,8 +91,8 @@
 
     <div id="toast" class="toast"></div>
 
-    <script src="/js/components/sidebar.js"></script>
-    <script>
+    <script type="module" src="/js/components/sidebar.js"></script>
+    <script type="module">
         function authFetch(url, options = {}) {
             const headers = { 'Content-Type': 'application/json', ...options.headers };
             return fetch(url, { ...options, headers, credentials: 'include' }).then(r => r.json());
@@ -189,6 +189,11 @@
 
         document.getElementById('topic').addEventListener('keydown', e => { if (e.key === 'Enter') createSession(); });
         loadSessions();
+
+        window.createSession = createSession;
+        window.closeDetail = closeDetail;
+        window.deleteSession = deleteSession;
+        window.openSession = openSession;
     </script>
 </body>
 </html>

@@ -255,7 +255,9 @@ export function setupStaticFiles(app: Application, dirname: string): void {
 
     const readHtmlForResponse = (filePath: string, res: Response): string => {
         const html = fs.readFileSync(filePath, 'utf8');
-        return injectNonceIntoHtml(html, getNonce(res));
+        const nonce = getNonce(res);
+        res.setHeader('Content-Security-Policy', buildCspHeader(nonce));
+        return injectNonceIntoHtml(html, nonce);
     };
 
     const getIndexPath = (): string | null => resolveFilePath([
@@ -268,10 +270,12 @@ export function setupStaticFiles(app: Application, dirname: string): void {
         path.join(fallbackPublicPath, filename)
     ]);
 
+    // CSP 논스 생성 (모든 요청) — CSP 헤더는 HTML 응답에서만 설정
     app.use((_req: Request, res: Response, next: NextFunction) => {
         const locals = res.locals as CspLocals;
         locals.cspNonce = createNonce();
-        res.setHeader('Content-Security-Policy', buildCspHeader(locals.cspNonce));
+        // CSP 헤더는 HTML 응답 시에만 설정 (readHtmlForResponse, /{page}.html, / 등)
+        // 정적 JS/CSS 파일에 CSP 헤더를 설정하면 브라우저 호환성 문제 발생 가능
         next();
     });
 

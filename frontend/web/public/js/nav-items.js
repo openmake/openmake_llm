@@ -51,7 +51,7 @@ const NAV_ITEMS = {
         { href: '/token-monitoring.html', icon: '🗝️', iconify: 'lucide:key-square', label: 'API 토큰 모니터링', requireAuth: true, requireAdmin: true },
         { href: '/settings.html', icon: '⚙️', iconify: 'lucide:settings', label: '설정', cssFiles: ['/css/settings.css'] }
     ]
-];
+};
 
 // 전역 노출 (레거시 호환 — 페이지 모듈, 사이드바 등에서 참조)
 window.NAV_ITEMS = NAV_ITEMS;

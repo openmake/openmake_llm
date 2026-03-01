@@ -8,13 +8,12 @@
  *
  * @module pages/developer
  */
-(function() {
-    'use strict';
+'use strict';
     window.PageModules = window.PageModules || {};
     /** @type {number[]} setInterval ID 배열 (cleanup용) */
-    var _intervals = [];
+    let _intervals = [];
     /** @type {IntersectionObserver|null} 스크롤 관찰자 */
-    var _observer = null;
+    let _observer = null;
 
     /**
      * HTML 이스케이프 헬퍼 (코드 블록용)
@@ -486,4 +485,6 @@
             }
         }
     };
-})();
+
+const { getHTML, init, cleanup } = window.PageModules['developer'];
+export default { getHTML, init, cleanup };

@@ -92,8 +92,8 @@
         </main>
     </div>
     <div id="toast" class="toast"></div>
-    <script src="/js/components/sidebar.js"></script>
-    <script>
+    <script type="module" src="/js/components/sidebar.js"></script>
+    <script type="module">
         function authFetch(url, opts = {}) {
             opts.headers = { ...(opts.headers || {}), 'Content-Type': 'application/json' };
             return fetch(url, { ...opts, credentials: 'include' });

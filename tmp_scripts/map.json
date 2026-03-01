@@ -1,0 +1,102 @@
+[
+  {
+    "file": "frontend/web/public/password-change.html",
+    "lineNum": 97,
+    "filename": "tmp_scripts/script_0.js"
+  },
+  {
+    "file": "frontend/web/public/admin.html",
+    "lineNum": 378,
+    "filename": "tmp_scripts/script_1.js"
+  },
+  {
+    "file": "frontend/web/public/external.html",
+    "lineNum": 105,
+    "filename": "tmp_scripts/script_2.js"
+  },
+  {
+    "file": "frontend/web/public/research.html",
+    "lineNum": 95,
+    "filename": "tmp_scripts/script_3.js"
+  },
+  {
+    "file": "frontend/web/public/documents.html",
+    "lineNum": 118,
+    "filename": "tmp_scripts/script_4.js"
+  },
+  {
+    "file": "frontend/web/public/cluster.html",
+    "lineNum": 133,
+    "filename": "tmp_scripts/script_5.js"
+  },
+  {
+    "file": "frontend/web/public/login.html",
+    "lineNum": 506,
+    "filename": "tmp_scripts/script_6.js"
+  },
+  {
+    "file": "frontend/web/public/token-monitoring.html",
+    "lineNum": 7,
+    "filename": "tmp_scripts/script_7.js"
+  },
+  {
+    "file": "frontend/web/public/agent-learning.html",
+    "lineNum": 96,
+    "filename": "tmp_scripts/script_8.js"
+  },
+  {
+    "file": "frontend/web/public/history.html",
+    "lineNum": 139,
+    "filename": "tmp_scripts/script_9.js"
+  },
+  {
+    "file": "frontend/web/public/admin-metrics.html",
+    "lineNum": 273,
+    "filename": "tmp_scripts/script_10.js"
+  },
+  {
+    "file": "frontend/web/public/memory.html",
+    "lineNum": 119,
+    "filename": "tmp_scripts/script_11.js"
+  },
+  {
+    "file": "frontend/web/public/analytics.html",
+    "lineNum": 91,
+    "filename": "tmp_scripts/script_12.js"
+  },
+  {
+    "file": "frontend/web/public/api-keys.html",
+    "lineNum": 102,
+    "filename": "tmp_scripts/script_13.js"
+  },
+  {
+    "file": "frontend/web/public/skill-library.html",
+    "lineNum": 67,
+    "filename": "tmp_scripts/script_14.js"
+  },
+  {
+    "file": "frontend/web/public/audit.html",
+    "lineNum": 78,
+    "filename": "tmp_scripts/script_15.js"
+  },
+  {
+    "file": "frontend/web/public/developer.html",
+    "lineNum": 38,
+    "filename": "tmp_scripts/script_16.js"
+  },
+  {
+    "file": "frontend/web/public/usage.html",
+    "lineNum": 65,
+    "filename": "tmp_scripts/script_17.js"
+  },
+  {
+    "file": "frontend/web/public/alerts.html",
+    "lineNum": 103,
+    "filename": "tmp_scripts/script_18.js"
+  },
+  {
+    "file": "frontend/web/public/custom-agents.html",
+    "lineNum": 126,
+    "filename": "tmp_scripts/script_19.js"
+  }
+]

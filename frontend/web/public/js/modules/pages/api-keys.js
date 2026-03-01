@@ -8,13 +8,12 @@
  *
  * @module pages/api-keys
  */
-(function() {
-    'use strict';
+'use strict';
     window.PageModules = window.PageModules || {};
     /** @type {number[]} setInterval ID 배열 (cleanup용) */
-    var _intervals = [];
+    let _intervals = [];
     /** @type {number[]} setTimeout ID 배열 (cleanup용) */
-    var _timeouts = [];
+    let _timeouts = [];
 
     /**
      * HTML 이스케이프 헬퍼
@@ -457,4 +456,5 @@
         }
     }
 
-})();
+const { getHTML, init, cleanup } = window.PageModules['api-keys'];
+export default { getHTML, init, cleanup };

@@ -129,8 +129,8 @@
         </div>
     </div>
 
-    <script src="/js/components/sidebar.js"></script>
-    <script>
+    <script type="module" src="/js/components/sidebar.js"></script>
+    <script type="module">
         const API_BASE = window.location.origin;
 
         // 인증 체크 (게스트/비로그인 접근 제한)
@@ -218,6 +218,8 @@
         loadClusterStatus();
         let clusterRefreshInterval = setInterval(loadClusterStatus, 30000);
         window.addEventListener('beforeunload', () => { if (clusterRefreshInterval) clearInterval(clusterRefreshInterval); });
+
+        window.loadClusterStatus = loadClusterStatus;
     </script>
 </body>
 

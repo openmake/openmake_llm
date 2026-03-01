@@ -374,8 +374,8 @@
         </div>
     </div>
 
-    <script src="/js/components/sidebar.js"></script>
-    <script>
+    <script type="module" src="/js/components/sidebar.js"></script>
+    <script type="module">
         const API_BASE = window.location.origin;
         // authToken은 httpOnly 쿠키로 관리 — localStorage 의존 제거
         let currentUser = null;
@@ -650,6 +650,19 @@
         (async () => {
             if (await checkAuth()) { loadUsers(); loadUserStats(); loadConversations(); }
         })();
+
+        window.switchTab = switchTab;
+        window.showAddUserModal = showAddUserModal;
+        window.closeModal = closeModal;
+        window.saveUser = saveUser;
+        window.editUser = editUser;
+        window.deleteUser = deleteUser;
+        window.loadUsers = loadUsers;
+        window.debounceSearch = debounceSearch;
+        window.loadConversations = loadConversations;
+        window.debounceConvSearch = debounceConvSearch;
+        window.exportCSV = exportCSV;
+        window._pg = _pg;
     </script>
 </body>
 

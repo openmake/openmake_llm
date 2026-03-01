@@ -8,12 +8,11 @@
  *
  * @module pages/history
  */
-(function () {
-    'use strict';
+'use strict';
     var SK = window.STORAGE_KEYS || {};
     window.PageModules = window.PageModules || {};
-    var _intervals = [];
-    var _timeouts = [];
+    let _intervals = [];
+    let _timeouts = [];
 
     window.PageModules['history'] = {
         getHTML: function () {
@@ -180,4 +179,6 @@
             try { delete window.goToSession; } catch (e) { }
         }
     };
-})();
+
+const { getHTML, init, cleanup } = window.PageModules['history'];
+export default { getHTML, init, cleanup };

@@ -122,8 +122,8 @@
 
     <div id="toast" class="toast"></div>
 
-    <script src="/js/components/sidebar.js"></script>
-    <script>
+    <script type="module" src="/js/components/sidebar.js"></script>
+    <script type="module">
         const EMOJIS = ['🤖','🧠','💡','📝','🎨','🔬','📊','🛠️','💻','🎯','🔍','📚','✨','🌟','🎓','💼','🏗️','⚡','🔮','🧪'];
         const CAT_LABELS = { general:'일반', coding:'코딩', writing:'글쓰기', analysis:'분석', creative:'창작', education:'교육', business:'비즈니스', science:'과학' };
         let agents = [];
@@ -280,6 +280,14 @@
         }
 
         loadAgents();
+
+        window.openNew = openNew;
+        window.openAgent = openAgent;
+        window.closeEditor = closeEditor;
+        window.saveAgent = saveAgent;
+        window.deleteAgent = deleteAgent;
+        window.confirmDelete = confirmDelete;
+        window.cloneAgent = cloneAgent;
     </script>
 </body>
 </html>
