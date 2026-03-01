@@ -24,13 +24,10 @@ OpenMake LLM is a privacy-first AI platform based on multi-model orchestration t
 
 ## 📸 System Screenshots
 
-> See the images located in the `usermanual` directory for detailed guide and setup screens.
+> Below are some screenshots of the system settings and configuration.
 
-![Main UI](usermanual/main_ui.png)
-![System Settings & Model Management](usermanual/settings_ui.png)
-![Multi-Agent & MCP Tools Screen](usermanual/agent_tools.png)
-
-*(Please check the `usermanual` directory in the repository for more diverse screenshots from the real production environment.)*
+![System Settings - Full Page](settings-full-page.png)
+![System Settings - Tier Cards](settings-tier-cards.png)
 
 ---
 
