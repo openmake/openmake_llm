@@ -64,9 +64,11 @@ export class AgentLoopStrategy implements ChatStrategy<AgentLoopStrategyContext,
             currentTurn++;
             logger.info(`🔄 Agent Loop Turn ${currentTurn}/${context.maxTurns}`);
 
-            // 모델이 도구 호출을 지원하는 경우에만 도구 목록 조회
+            // 모델이 도구 호출을 지원하고, a2a='off' 프로파일이 아닌 경우에만 도구 목록 조회
+            // Fast 프로파일(a2a='off')은 속도 최적화를 위해 도구 호출 비활성화
             let allowedTools: ToolDefinition[] = [];
-            if (context.supportsTools) {
+            const profileA2A = context.executionPlan?.profile?.a2a;
+            if (context.supportsTools && profileA2A !== 'off') {
                 allowedTools = context.getAllowedTools();
             }
 

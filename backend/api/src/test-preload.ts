@@ -17,6 +17,9 @@ process.env.OLLAMA_HOST = process.env.OLLAMA_HOST || 'http://localhost:11434';
 process.env.OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
 process.env.DATABASE_URL = process.env.DATABASE_URL || 'postgresql://openmake:openmake_secret_2026@127.0.0.1:5432/openmake_llm';
 
+// Firecrawl 테스트용 API 키 (테스트 환경에서 firecrawl.ts 모듈 로드 시 필요)
+process.env.FIRECRAWL_API_KEY = process.env.FIRECRAWL_API_KEY || 'fc-test-api-key-for-testing';
+
 // config 모듈을 미리 로드하여 싱글톤 캐시에 올바른 값 저장
 // 이후 auth/index.ts 등이 getConfig()를 호출할 때 캐시된 값 사용
 import { getConfig, resetConfig } from './config/env';

@@ -4,8 +4,8 @@
  * ============================================================
  *
  * 2단계 라우팅 전략으로 최적의 에이전트를 선택한다:
- * 1단계: LLM 의미론적 분석 (우선)
- * 2단계: 키워드 기반 매칭 (폴백)
+ * 1단계: 의도 기반 토픽 분석 (analyzeTopicIntent)
+ * 2단계: 향상된 키워드 매칭 (TF-IDF + 동의어 + 카테고리 가중치)
  *
  * @module agents/keyword-router
  */
@@ -15,15 +15,14 @@ import {
     AgentPhase
 } from './types';
 import { AGENTS, industryData, getAgentById } from './agent-data';
-import { analyzeTopicIntent } from './topic-analyzer';
-import { routeWithLLM, isValidAgentId } from './llm-router';
+import { analyzeTopicIntent, TOPIC_CATEGORIES } from './topic-analyzer';
 import { createLogger } from '../utils/logger';
-import { LLM_TIMEOUTS } from '../config/timeouts';
+import { getEnhancedKeywords, getKeywordIDF, getSynonyms, getCategoryWeight } from './enhanced-keywords';
 
 const logger = createLogger('AgentRouter');
 
 // ========================================
-// 에이전트 라우팅 (개선됨)
+// 에이전트 라우팅 (2단계: 토픽 분석 + 키워드 매칭)
 // ========================================
 
 /**
@@ -31,55 +30,38 @@ const logger = createLogger('AgentRouter');
  *
  * 2단계 라우팅 전략으로 최적의 에이전트를 선택한다:
  *
- * 1단계 (LLM 라우팅): routeWithLLM()으로 의미론적 분석 시도
- *   - 신뢰도 0.3 초과 + 유효한 에이전트 ID이면 즉시 반환
- *   - 타임아웃 10초, 실패 시 2단계로 폴백
+ * 1단계 (토픽 분석): analyzeTopicIntent()로 의도 기반 분류
+ *   - 8개 도메인 카테고리의 정규식 패턴 매칭
+ *   - 매칭된 카테고리의 모든 에이전트에 CATEGORY_BOOST 부여
  *
- * 2단계 (키워드 라우팅):
- *   a. 의도 기반 토픽 분석 (analyzeTopicIntent) - 기본 점수 5
- *   b. 키워드 정밀 매칭 (industry-agents.json 전체 순회)
- *      - 2글자 이하: 단어 완전 일치만 허용 (오매칭 방지), 점수 +3
- *      - 3글자 이상: 부분 일치 +2, 완전 일치 보너스 +1
- *      - 에이전트 이름 포함 +3, ID 포함 +2
- *   c. 최고 점수 에이전트 선택 (confidence = min(score/10, 1.0))
+ * 2단계 (향상된 키워드 매칭):
+ *   - 기존 키워드 + 스킬 기반 확장 키워드 + 동의어 확장
+ *   - TF-IDF 가중치: 희귀 키워드는 높은 점수, 공통 키워드는 낮은 점수
+ *   - 카테고리별 가중치: technology 1.2, healthcare/legal 1.1 등
+ *   - 최고 점수 에이전트 선택 (confidence = min(score/10, 1.0))
  *
  * @param message - 사용자 입력 메시지
- * @param useLLM - LLM 라우팅 사용 여부 (기본값: true)
  * @returns {Promise<AgentSelection>} - 선택된 에이전트 정보 (ID, 카테고리, 페이즈, 신뢰도)
  */
-export async function routeToAgent(message: string, useLLM: boolean = true): Promise<AgentSelection> {
+export async function routeToAgent(message: string): Promise<AgentSelection> {
     const lowerMessage = message.toLowerCase();
     const words = lowerMessage.split(/\s+/);
+
+    // 동의어 확장: 쿼리 단어의 동의어를 미리 수집
+    const expandedQueryTerms = new Set<string>(words);
+    for (const word of words) {
+        const synonyms = getSynonyms(word);
+        for (const syn of synonyms) {
+            expandedQueryTerms.add(syn.toLowerCase());
+        }
+    }
 
     // 디버그: AGENTS 맵 상태 확인
     const agentCount = Object.keys(AGENTS).length;
     const categoryCount = Object.keys(industryData).length;
     logger.info(`메시지: "${message.substring(0, 50)}..." | 등록된 에이전트: ${agentCount}개, 카테고리: ${categoryCount}개`);
 
-    // 🆕 LLM 기반 라우팅 시도 (우선순위 1) - 개선됨: 신뢰도 조건 완화
-    if (useLLM) {
-        try {
-            const llmResult = await routeWithLLM(message, LLM_TIMEOUTS.KEYWORD_ROUTING_TIMEOUT_MS); // 타임아웃 10초로 증가
-            if (llmResult && llmResult.confidence > 0.3 && isValidAgentId(llmResult.agentId)) {
-                const agent = getAgentById(llmResult.agentId);
-                if (agent) {
-                    logger.info(`✅ LLM 라우팅 성공: ${agent.name} (신뢰도: ${llmResult.confidence})`);
-                    return {
-                        primaryAgent: agent.id,
-                        category: agent.category || 'general',
-                        phase: detectPhase(message),
-                        reason: `${agent.name} - LLM 분석: ${llmResult.reasoning}`,
-                        confidence: llmResult.confidence,
-                        matchedKeywords: []
-                    };
-                }
-            }
-        } catch (error) {
-            logger.info('LLM 라우팅 실패, 키워드 폴백 사용');
-        }
-    }
-
-    // 🆕 1단계: 의도 기반 토픽 분석
+    // 1단계: 의도 기반 토픽 분석
     const topicAnalysis = analyzeTopicIntent(message);
     logger.info(`토픽 분석: ${topicAnalysis.matchedCategories.join(', ') || '없음'} (신뢰도: ${topicAnalysis.confidence})`);
 
@@ -94,60 +76,69 @@ export async function routeToAgent(message: string, useLLM: boolean = true): Pro
 
     let highestScore = 0;
 
-    // 🆕 의도 분석 결과로 우선 검색
-    if (topicAnalysis.suggestedAgents.length > 0) {
-        const intentAgent = getAgentById(topicAnalysis.suggestedAgents[0]);
-        if (intentAgent) {
-            highestScore = 5; // 의도 매칭 기본 점수
-            bestMatch = {
-                primaryAgent: intentAgent.id,
-                category: intentAgent.category || 'general',
-                phase: detectPhase(message),
-                reason: `${intentAgent.name} - ${topicAnalysis.matchedCategories[0]} 토픽 매칭`,
-                confidence: Math.max(0.5, topicAnalysis.confidence),
-                matchedKeywords: topicAnalysis.matchedCategories
-            };
+    // 🆕 의도 분석 결과로 카테고리 부스트 세트 구성
+    // 매칭된 모든 카테고리의 에이전트에게 동일 부스트를 부여하여
+    // Layer 2 키워드가 카테고리 내 세부 에이전트를 구분하도록 한다
+    const categoryBoostAgents = new Set<string>();
+    for (const category of TOPIC_CATEGORIES) {
+        if (topicAnalysis.matchedCategories.includes(category.name)) {
+            for (const agentId of category.relatedAgents) {
+                categoryBoostAgents.add(agentId);
+            }
         }
     }
+    const CATEGORY_BOOST = 3;
 
-    // 2단계: 키워드 기반 정밀 매칭 (더 높은 점수 시 덮어씀)
+    // 2단계: 향상된 키워드 매칭 (TF-IDF + 동의어 + 카테고리 가중치)
+    // PRIMARY (에이전트 고유 키워드) = 전체 가중치, EXPANDED (카테고리 어휘) = 0.3x 감쇄
+    const EXPANDED_DAMPING = 0.3;
+
     for (const [categoryId, category] of Object.entries(industryData)) {
-        for (const agent of category.agents) {
-            let score = 0;
-            const matchedKeywords: string[] = [];
+        const categoryWeight = getCategoryWeight(categoryId);
 
-            // 키워드 매칭 (🆕 최소 길이 체크로 오매칭 방지)
-            for (const keyword of agent.keywords) {
+        for (const agent of category.agents) {
+            let score = categoryBoostAgents.has(agent.id) ? CATEGORY_BOOST : 0;
+            const matchedKeywords: string[] = [];
+            const enhancedKws = getEnhancedKeywords(agent.id);
+
+            // 에이전트 고유 키워드 세트 (대소문자 정규화)
+            const primaryKeywordSet = new Set<string>(
+                agent.keywords.map(k => k.toLowerCase())
+            );
+
+            for (const keyword of enhancedKws) {
                 const keywordLower = keyword.toLowerCase();
+                const idf = getKeywordIDF(keyword);
+                const isPrimary = primaryKeywordSet.has(keywordLower);
+                const tierMultiplier = isPrimary ? 1.0 : EXPANDED_DAMPING;
+                let matched = false;
 
                 // 2글자 이하 키워드는 단어 완전 일치만 허용 (오매칭 방지)
                 if (keywordLower.length <= 2) {
-                    if (words.includes(keywordLower)) {
-                        score += 3;
-                        matchedKeywords.push(keyword);
+                    if (expandedQueryTerms.has(keywordLower)) {
+                        score += 3 * idf * categoryWeight * tierMultiplier;
+                        matched = true;
                     }
                 } else {
                     // 3글자 이상은 부분 일치 허용
                     if (lowerMessage.includes(keywordLower)) {
-                        score += 2;
-                        matchedKeywords.push(keyword);
+                        score += 2 * idf * categoryWeight * tierMultiplier;
+                        matched = true;
+                    }
+                    // 동의어 확장 매칭 (직접 매칭 안 됐을 때)
+                    if (!matched && expandedQueryTerms.has(keywordLower)) {
+                        score += 1.5 * idf * categoryWeight * tierMultiplier;
+                        matched = true;
                     }
                     // 단어 완전 일치 보너스
-                    if (words.includes(keywordLower)) {
-                        score += 1;
+                    if (matched && words.includes(keywordLower)) {
+                        score += 1 * idf * categoryWeight * tierMultiplier;
                     }
                 }
-            }
 
-            // 에이전트 이름 포함 시 보너스
-            if (lowerMessage.includes(agent.name.toLowerCase())) {
-                score += 3;
-                matchedKeywords.push(agent.name);
-            }
-
-            // 에이전트 ID 포함 시 보너스
-            if (lowerMessage.includes(agent.id.replace(/-/g, ' '))) {
-                score += 2;
+                if (matched) {
+                    matchedKeywords.push(keyword);
+                }
             }
 
             if (score > highestScore) {
@@ -156,7 +147,7 @@ export async function routeToAgent(message: string, useLLM: boolean = true): Pro
                     primaryAgent: agent.id,
                     category: categoryId,
                     phase: detectPhase(message),
-                    reason: `${agent.name} - ${matchedKeywords.slice(0, 3).join(', ')} 키워드 매칭`,
+                    reason: `${agent.name} - ${matchedKeywords.slice(0, 5).join(', ')} 키워드 매칭`,
                     confidence: Math.min(score / 10, 1.0),
                     matchedKeywords
                 };
@@ -165,9 +156,9 @@ export async function routeToAgent(message: string, useLLM: boolean = true): Pro
     }
 
     // 디버그: 최종 선택 결과
-    logger.info(`선택: ${bestMatch.primaryAgent} (점수: ${highestScore}, 신뢰도: ${bestMatch.confidence})`);
+    logger.info(`선택: ${bestMatch.primaryAgent} (점수: ${highestScore.toFixed(2)}, 신뢰도: ${bestMatch.confidence})`);
     if (bestMatch.matchedKeywords && bestMatch.matchedKeywords.length > 0) {
-        logger.info(`매칭 키워드: ${bestMatch.matchedKeywords.join(', ')}`);
+        logger.info(`매칭 키워드: ${bestMatch.matchedKeywords.slice(0, 10).join(', ')}`);
     }
 
     return bestMatch;

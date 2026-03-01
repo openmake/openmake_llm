@@ -330,7 +330,7 @@ describe('AgentLoopStrategy', () => {
             mockDirectExecute.mockResolvedValueOnce(makeDirectResult('Done'));
 
             const ctx = makeContext({ checkAborted: undefined });
-            await expect(strategy.execute(ctx)).resolves.not.toThrow();
+            await expect(strategy.execute(ctx)).resolves.toBeDefined();
         });
     });
 
