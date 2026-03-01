@@ -12,6 +12,7 @@
 import { OllamaClient, createClient } from '../ollama/client';
 import { performWebSearch, SearchResult } from '../mcp/web-search';
 import { isFirecrawlConfigured } from '../mcp/firecrawl';
+import { firecrawlPost } from '../utils/firecrawl-client';
 import { getConfig } from '../config/env';
 import { getUnifiedDatabase } from '../data/models/unified-database';
 import { createLogger } from '../utils/logger';
@@ -756,6 +757,7 @@ export class DeepResearchService {
             throw new Error('FIRECRAWL_API_KEY 환경변수가 설정되지 않았습니다.');
         }
 
+        // Abort signal 결합: 글로벌 연구 중단 + 개별 타임아웃
         const controller = new AbortController();
         const globalAbortSignal = this.abortController?.signal;
         const forwardAbort = () => controller.abort();
@@ -768,27 +770,19 @@ export class DeepResearchService {
         const timeoutHandle = setTimeout(() => controller.abort(), this.config.scrapeTimeoutMs + 1000);
 
         try {
-            const response = await fetch(`${firecrawlApiUrl}/scrape`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${firecrawlApiKey}`
-                },
-                body: JSON.stringify({
+            const payload = await firecrawlPost({
+                apiUrl: firecrawlApiUrl,
+                apiKey: firecrawlApiKey,
+                endpoint: '/scrape',
+                data: {
                     url,
                     formats: ['markdown'],
                     onlyMainContent: true,
                     timeout: this.config.scrapeTimeoutMs
-                }),
+                },
                 signal: controller.signal
-            });
+            }) as { data?: { markdown?: string } };
 
-            if (!response.ok) {
-                const errorText = await response.text();
-                throw new Error(`Firecrawl /scrape 오류 (${response.status}): ${errorText}`);
-            }
-
-            const payload = await response.json() as { data?: { markdown?: string } };
             return payload.data?.markdown ?? '';
         } finally {
             if (globalAbortSignal) {

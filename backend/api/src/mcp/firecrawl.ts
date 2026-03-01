@@ -19,11 +19,10 @@
 
 import { MCPToolDefinition, MCPToolResult } from './types';
 import { getConfig } from '../config/env';
-import { createLogger } from '../utils/logger';
 import { TRUNCATION } from '../config/runtime-limits';
 import { LLM_TIMEOUTS } from '../config/timeouts';
+import { firecrawlPost } from '../utils/firecrawl-client';
 
-const logger = createLogger('Firecrawl');
 
 // ============================================
 // Firecrawl API Client
@@ -35,10 +34,33 @@ const FIRECRAWL_API_KEY = getConfig().firecrawlApiKey || undefined;
 const FIRECRAWL_API_URL = getConfig().firecrawlApiUrl;
 
 /**
- * Firecrawl 스크래핑 옵션
+ * Firecrawl API HTTP 요청 헬퍼 (공유 클라이언트 래퍼)
  *
- * @interface FirecrawlScrapeOptions
+ * 내부적으로 utils/firecrawl-client.ts의 firecrawlPost()를 호출합니다.
+ *
+ * @param endpoint - API 엔드포인트 (예: '/scrape', '/search', '/map', '/crawl')
+ * @param data - 요청 본문 데이터
+ * @returns API 응답 JSON
+ * @throws {Error} API 키 미설정 또는 HTTP 에러 시
  */
+async function firecrawlRequest(endpoint: string, data: Record<string, unknown>): Promise<FirecrawlResponse> {
+    if (!FIRECRAWL_API_KEY) {
+        throw new Error('FIRECRAWL_API_KEY 환경변수가 설정되지 않았습니다.');
+    }
+
+    return firecrawlPost({
+        apiUrl: FIRECRAWL_API_URL,
+        apiKey: FIRECRAWL_API_KEY,
+        endpoint,
+        data
+    }) as Promise<FirecrawlResponse>;
+}
+
+// ============================================
+// Firecrawl API Type Definitions
+// ============================================
+
+/** Firecrawl 스크래핑 옵션 */
 interface FirecrawlScrapeOptions {
     formats?: ('markdown' | 'html' | 'rawHtml' | 'links' | 'screenshot')[];
     onlyMainContent?: boolean;
@@ -49,79 +71,35 @@ interface FirecrawlScrapeOptions {
     mobile?: boolean;
 }
 
-/**
- * Firecrawl 검색 옵션
- *
- * @interface FirecrawlSearchOptions
- */
+/** Firecrawl 검색 옵션 */
 interface FirecrawlSearchOptions {
-    /** 최대 결과 수 */
     limit?: number;
-    /** 검색 언어 (예: 'ko', 'en') */
     lang?: string;
-    /** 검색 국가 (예: 'kr', 'us') */
     country?: string;
-    /** 검색 결과 페이지 스크래핑 옵션 */
     scrapeOptions?: FirecrawlScrapeOptions;
 }
 
-/**
- * Firecrawl URL 매핑 옵션
- *
- * @interface FirecrawlMapOptions
- */
+/** Firecrawl URL 매핑 옵션 */
 interface FirecrawlMapOptions {
-    /** URL 필터 검색어 */
     search?: string;
-    /** 사이트맵 무시 여부 */
     ignoreSitemap?: boolean;
-    /** 사이트맵만 사용 여부 */
     sitemapOnly?: boolean;
-    /** 서브도메인 포함 여부 */
     includeSubdomains?: boolean;
-    /** 최대 URL 수 */
     limit?: number;
 }
 
-/**
- * Firecrawl API HTTP 요청 헬퍼
- *
- * POST 요청으로 Firecrawl API 엔드포인트를 호출합니다.
- * Bearer 토큰 인증을 사용합니다.
- *
- * @param endpoint - API 엔드포인트 (예: '/scrape', '/search', '/map', '/crawl')
- * @param data - 요청 본문 데이터
- * @returns API 응답 JSON
- * @throws {Error} API 키 미설정 또는 HTTP 에러 시
- */
-async function firecrawlRequest(endpoint: string, data: Record<string, unknown>): Promise<any> {
-    if (!FIRECRAWL_API_KEY) {
-        throw new Error('FIRECRAWL_API_KEY 환경변수가 설정되지 않았습니다.');
-    }
-
-    const url = `${FIRECRAWL_API_URL}${endpoint}`;
-    logger.info(`요청: ${endpoint}`);
-
-    try {
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${FIRECRAWL_API_KEY}`
-            },
-            body: JSON.stringify(data)
-        });
-
-        if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`Firecrawl API 오류 (${response.status}): ${errorText}`);
-        }
-
-        return await response.json();
-    } catch (error: unknown) {
-        logger.error(`요청 실패:`, (error instanceof Error ? error.message : String(error)));
-        throw error;
-    }
+/** Firecrawl API 응답 타입 (result 캐스팅용) */
+interface FirecrawlResponse {
+    data?: {
+        markdown?: string;
+        html?: string;
+        [key: string]: unknown;
+    };
+    links?: string[];
+    id?: string;
+    jobId?: string;
+    status?: string;
+    [key: string]: unknown;
 }
 
 // ============================================
@@ -347,7 +325,7 @@ export const firecrawlMapTool: MCPToolDefinition = {
 
             const result = await firecrawlRequest('/map', { url, ...options });
 
-            const urls = result.links || result.data || [];
+            const urls: string[] = (result.links || result.data || []) as string[];
             let output = `🗺️ **${url}** URL 매핑 결과 (${urls.length}개 발견)\n\n`;
 
             urls.slice(0, TRUNCATION.FIRECRAWL_MAX_URLS).forEach((link: string, index: number) => {

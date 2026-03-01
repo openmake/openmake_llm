@@ -45,6 +45,8 @@ import type { QueryType, ModelSelection } from './model-selector-types';
 export { classifyQuery } from './query-classifier';
 // Import classifyQuery for internal use (via separate name to avoid conflict)
 import { classifyQuery as _classifyQuery } from './query-classifier';
+// Import LLM classifier for Auto-Routing (Phase D)
+import { classifyWithLLM, getConfidenceThreshold } from './llm-classifier';
 
 // ============================================================
 // 모델 프리셋 정의
@@ -502,10 +504,34 @@ export async function selectBrandProfileForAutoRouting(query: string, hasImages?
         return 'openmake_llm_vision';
     }
 
-    const classification = _classifyQuery(query);
+    // ── Phase D: LLM 분류기 우선 시도, 실패 시 regex fallback ──
+    let classifiedType: import('./model-selector-types').QueryType;
+    let classifiedConfidence: number;
+    let classifierSource: 'llm' | 'cache' | 'semantic-cache' | 'regex' = 'regex';
+
+    const llmResult = await classifyWithLLM(query);
+    if (llmResult && llmResult.confidence >= getConfidenceThreshold()) {
+        // LLM 분류 성공 + 신뢰도 충분
+        classifiedType = llmResult.type;
+        classifiedConfidence = llmResult.confidence;
+        classifierSource = llmResult.source === 'cache' ? 'cache' : llmResult.source === 'semantic-cache' ? 'semantic-cache' : 'llm';
+        logger.info(`§9 LLM 분류: ${classifiedType} (${(classifiedConfidence * 100).toFixed(0)}%) [source=${classifierSource}]`);
+    } else {
+        // LLM 분류 실패 또는 신뢰도 부족 → regex fallback
+        const regexClassification = _classifyQuery(query);
+        classifiedType = regexClassification.type;
+        classifiedConfidence = regexClassification.confidence;
+        classifierSource = 'regex';
+        if (llmResult) {
+            logger.info(`§9 LLM 신뢰도 부족 (${(llmResult.confidence * 100).toFixed(0)}% < ${(getConfidenceThreshold() * 100).toFixed(0)}%) → regex fallback: ${classifiedType}`);
+        } else {
+            logger.info(`§9 LLM 분류 실패 → regex fallback: ${classifiedType}`);
+        }
+    }
+
     let targetProfile: string;
 
-    switch (classification.type) {
+    switch (classifiedType) {
         case 'code':
             targetProfile = 'openmake_llm_code';
             break;
@@ -522,7 +548,7 @@ export async function selectBrandProfileForAutoRouting(query: string, hasImages?
             break;
         case 'chat':
             // 짧은 인사/간단한 질문은 fast, 복잡한 대화는 pro
-            if (classification.confidence < 0.3 && query.length < 50) {
+            if (classifiedConfidence < 0.3 && query.length < 50) {
                 targetProfile = 'openmake_llm_fast';
             } else {
                 targetProfile = 'openmake_llm_pro';
@@ -541,13 +567,13 @@ export async function selectBrandProfileForAutoRouting(query: string, hasImages?
     const maxTier = getDefaultCostTier();
     if (maxTier !== 'premium') {
         const originalProfile = targetProfile;
-        targetProfile = applyCostTierCeiling(targetProfile, maxTier, classification.type);
+        targetProfile = applyCostTierCeiling(targetProfile, maxTier, classifiedType);
         if (targetProfile !== originalProfile) {
             logger.info(`§9 Cost-Tier: ${originalProfile} → ${targetProfile} (ceiling=${maxTier})`);
         }
     }
 
-    logger.info(`§9 Auto-Routing: ${classification.type} (confidence=${(classification.confidence * 100).toFixed(0)}%) → ${targetProfile}`);
+    logger.info(`§9 Auto-Routing: ${classifiedType} (confidence=${(classifiedConfidence * 100).toFixed(0)}%, source=${classifierSource}) → ${targetProfile}`);
     return targetProfile;
 }
 

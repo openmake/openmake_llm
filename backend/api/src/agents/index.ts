@@ -5,18 +5,18 @@
  *
  * 96개 산업별 전문가 에이전트의 라우팅, 시스템 프롬프트 생성,
  * 토론용 에이전트 추천을 담당하는 에이전트 시스템의 핵심 모듈.
- * LLM 의미론적 라우팅과 키워드 기반 폴백의 2단계 라우팅을 제공한다.
+ * 2단계 라우팅을 제공한다: 의도 기반 토픽 분석 + 키워드 매칭.
  *
  * @module agents/index
  * @description
- * - 2단계 에이전트 라우팅: LLM 의미론적 분석 (우선) + 키워드 매칭 (폴백)
+ * - 2단계 에이전트 라우팅: 의도 기반 토픽 분석 (1단계) + 키워드 매칭 (2단계)
  * - 의도 기반 토픽 분류 시스템 (8개 카테고리: 개발, 비즈니스, 금융, 법률, 의료, 교육, 디자인, 데이터/AI)
  * - 에이전트 선택 결과 기반 시스템 프롬프트 생성 (카테고리별 프롬프트 파일 로드)
  * - 토론용 관련 에이전트 추천 (기술/비즈니스 도메인별 보완 에이전트 선택)
  * - 작업 페이즈 감지 (planning / build / optimization)
  * - 하위 호환성을 위한 AGENTS 플랫 맵 및 유틸리티 함수
  *
- * @see {@link module:agents/llm-router} - LLM 기반 의미론적 라우팅
+ * @see {@link module:agents/topic-analyzer} - 의도 기반 토픽 분류
  * @see {@link module:agents/monitor} - 에이전트 성능 모니터링
  * @see {@link module:agents/discussion-engine} - 다중 에이전트 토론 엔진
  * @see {@link module:chat/pipeline-profile} - 브랜드 모델 프로파일

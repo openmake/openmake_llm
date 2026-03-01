@@ -85,6 +85,8 @@ export class ChatService {
     private currentUserContext: UserContext | null = null;
     /** 사용자가 활성화한 MCP 도구 목록 (undefined면 레거시 모드: 전체 허용) */
     private currentEnabledTools: Record<string, boolean> | undefined = undefined;
+    /** 현재 실행 계획 (requiredTools 강제 포함에 사용) */
+    private currentExecutionPlan: ExecutionPlan | undefined = undefined;
 
     /** 단일 LLM 직접 호출 전략 */
     private readonly directStrategy: DirectStrategy;
@@ -156,6 +158,7 @@ export class ChatService {
      * 현재 사용자 등급에 허용된 MCP 도구 목록을 조회합니다.
      *
      * ToolRouter를 통해 사용자 티어에 맞는 도구만 필터링하여 반환합니다.
+     * 프로파일의 requiredTools에 명시된 도구는 사용자 토글과 무관하게 강제 포함됩니다.
      *
      * @returns 사용 가능한 도구 정의 배열
      */
@@ -168,6 +171,23 @@ export class ChatService {
         // enabledTools가 없으면 레거시 호환: 전체 허용 (API 클라이언트 등)
         if (this.currentEnabledTools !== undefined) {
             const filtered = allTools.filter(t => this.currentEnabledTools![t.function.name] === true);
+
+            // requiredTools 강제 포함: 프로파일이 요구하는 도구는 사용자 토글과 무관하게 포함
+            // 예: Vision 프로파일은 vision 도구가 항상 필요함
+            const requiredTools = this.currentExecutionPlan?.requiredTools;
+            if (requiredTools && requiredTools.length > 0) {
+                for (const reqToolName of requiredTools) {
+                    const alreadyIncluded = filtered.some(t => t.function.name.includes(reqToolName));
+                    if (!alreadyIncluded) {
+                        const requiredTool = allTools.find(t => t.function.name.includes(reqToolName));
+                        if (requiredTool) {
+                            filtered.push(requiredTool);
+                            logger.info(`requiredTools 강제 포함: ${requiredTool.function.name}`);
+                        }
+                    }
+                }
+            }
+
             logger.debug(`MCP 도구 필터링: ${allTools.length}개 중 ${filtered.length}개 활성화`);
             return filtered;
         }
@@ -234,6 +254,7 @@ export class ChatService {
 
         this.setUserContext(userId || 'guest', userRole, userTier);
         this.currentEnabledTools = enabledTools;
+        this.currentExecutionPlan = executionPlan;
 
         // ── 보안 사전 검사 ──
         const securityPreCheck = preRequestCheck(message || '');
@@ -515,8 +536,9 @@ export class ChatService {
         const a2aMode = executionPlan?.profile?.a2a ?? 'conditional';
         let skipA2A = a2aMode === 'off';
 
-        // P1-2: 'always' 모드에 대한 복잡도 기반 게이팅
-        if (!skipA2A && a2aMode === 'always') {
+        // P1-2: 'conditional' 모드에 대한 복잡도 기반 게이팅 (단순 쿼리 → A2A 스킵)
+        // 'always' 모드는 복잡도 무관하게 항상 A2A 실행
+        if (!skipA2A && a2aMode === 'conditional') {
             const complexity = assessComplexity({
                 query: message || '',
                 classification: { type: modelSelection.queryType, confidence: routingLog.queryFeatures.confidence || 0.5, matchedPatterns: [] },
