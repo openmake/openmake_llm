@@ -328,7 +328,8 @@
                     safeStorage.setItem(SK.SELECTED_MODEL || 'selectedModel', document.getElementById('modelSelect').value);
                     var mcpSettings = JSON.parse(safeStorage.getItem(SK.MCP_SETTINGS || 'mcpSettings') || '{}');
                     mcpSettings.thinking = document.getElementById('thinkingToggle').checked;
-                    mcpSettings.webSearch = document.getElementById('webSearchToggle').checked;
+                    var webSearchChecked = document.getElementById('webSearchToggle').checked;
+                    mcpSettings.webSearch = webSearchChecked;
                     mcpSettings.rag = document.getElementById('ragToggle') ? document.getElementById('ragToggle').checked : false;
 
                     // MCP 도구 토글 상태 수집 — DOM에서 mcpTool_ 프리픽스 체크박스 직접 조회
@@ -338,13 +339,17 @@
                         var toolName = el.id.replace('mcpTool_', '');
                         enabledTools[toolName] = el.checked;
                     });
+
+                    // 양방향 동기화: webSearchToggle ↔ enabledTools.web_search
+                    enabledTools.web_search = webSearchChecked;
+
                     mcpSettings.enabledTools = enabledTools;
                     safeStorage.setItem(SK.MCP_SETTINGS || 'mcpSettings', JSON.stringify(mcpSettings));
 
                     // AppState 동기화
                     if (typeof setState === 'function') {
                         setState('thinkingEnabled', mcpSettings.thinking);
-                        setState('webSearchEnabled', mcpSettings.webSearch);
+                        setState('webSearchEnabled', webSearchChecked);
                         setState('mcpToolsEnabled', enabledTools);
                         setState('ragEnabled', mcpSettings.rag);
                     }
@@ -365,7 +370,18 @@
                         }
                     }
                     var savedMcp = safeStorage.getItem(SK.MCP_SETTINGS || 'mcpSettings');
-                    if (savedMcp) { var mcp = JSON.parse(savedMcp); document.getElementById('thinkingToggle').checked = mcp.thinking !== false; document.getElementById('webSearchToggle').checked = mcp.webSearch === true; var ragEl = document.getElementById('ragToggle'); if (ragEl) { ragEl.checked = mcp.rag === true; } }
+                    if (savedMcp) {
+                        var mcp = JSON.parse(savedMcp);
+                        document.getElementById('thinkingToggle').checked = mcp.thinking !== false;
+                        // 양방향 동기화: enabledTools.web_search 우선, 레거시 webSearch 폴백
+                        var webSearchOn = (mcp.enabledTools && mcp.enabledTools.web_search === true) || mcp.webSearch === true;
+                        document.getElementById('webSearchToggle').checked = webSearchOn;
+                        // mcpTool_web_search 토글도 동기화
+                        var mcpToolWebSearch = document.getElementById('mcpTool_web_search');
+                        if (mcpToolWebSearch) mcpToolWebSearch.checked = webSearchOn;
+                        var ragEl = document.getElementById('ragToggle');
+                        if (ragEl) { ragEl.checked = mcp.rag === true; }
+                    }
                     var savedGeneral = safeStorage.getItem(SK.GENERAL_SETTINGS || 'generalSettings');
                     if (savedGeneral) { var general = JSON.parse(savedGeneral); document.getElementById('langSelect').value = general.lang || ''; document.getElementById('saveHistoryToggle').checked = general.saveHistory !== false; }
                 }
