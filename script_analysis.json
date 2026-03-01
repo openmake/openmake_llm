@@ -1,0 +1,436 @@
+[
+  {
+    "file": "frontend/web/public/password-change.html",
+    "lineNum": 97,
+    "topLevelDecls": [
+      "function authFetch",
+      "function showToast",
+      "function esc",
+      "function toggleVis",
+      "const rules",
+      "function checkStrength",
+      "function checkMatch"
+    ],
+    "customGlobals": [
+      "opts",
+      "type"
+    ]
+  },
+  {
+    "file": "frontend/web/public/admin.html",
+    "lineNum": 378,
+    "topLevelDecls": [
+      "const API_BASE",
+      "let currentUser",
+      "let usersPage",
+      "let convPage",
+      "const pageSize",
+      "let searchTimeout",
+      "function checkAuth",
+      "function authFetch",
+      "function switchTab",
+      "function loadUsers",
+      "function renderUsers",
+      "function getRoleName",
+      "function loadUserStats",
+      "function showAddUserModal",
+      "function editUser",
+      "function saveUser",
+      "function deleteUser",
+      "function closeModal",
+      "function debounceSearch",
+      "function loadConversations",
+      "function renderConversations",
+      "function debounceConvSearch",
+      "function exportCSV",
+      "const _pgCb",
+      "function renderPagination",
+      "function _pg",
+      "function formatDate",
+      "function formatDateTime",
+      "function escapeHtml",
+      "function showToast"
+    ],
+    "customGlobals": [
+      "options",
+      "type"
+    ]
+  },
+  {
+    "file": "frontend/web/public/external.html",
+    "lineNum": 105,
+    "topLevelDecls": [
+      "const SERVICES",
+      "let connections",
+      "let connectingType",
+      "function authFetch",
+      "function showToast",
+      "function esc",
+      "function getConnection",
+      "function loadConnections",
+      "function renderServices",
+      "function openConnect",
+      "function closeConnect",
+      "function submitConnect",
+      "function disconnect",
+      "function viewFiles",
+      "function closeFiles",
+      "function formatSize"
+    ],
+    "customGlobals": [
+      "options",
+      "type"
+    ]
+  },
+  {
+    "file": "frontend/web/public/research.html",
+    "lineNum": 95,
+    "topLevelDecls": [
+      "function authFetch",
+      "function showToast",
+      "function esc",
+      "const statusLabels",
+      "const depthLabels",
+      "let currentSessionId",
+      "function loadSessions",
+      "function createSession",
+      "function openSession",
+      "function closeDetail",
+      "function deleteSession"
+    ],
+    "customGlobals": [
+      "options",
+      "type"
+    ]
+  },
+  {
+    "file": "frontend/web/public/documents.html",
+    "lineNum": 118,
+    "topLevelDecls": [
+      "function authFetch",
+      "function showToast",
+      "function esc",
+      "var currentDocId",
+      "function formatFileSize",
+      "function getDocIcon",
+      "function loadDocuments",
+      "function renderStats",
+      "function uploadDocument",
+      "function viewDocDetail",
+      "function closeDocDetail",
+      "function confirmDeleteDoc",
+      "function deleteCurrentDoc",
+      "function performDelete"
+    ],
+    "customGlobals": [
+      "API_ENDPOINTS"
+    ]
+  },
+  {
+    "file": "frontend/web/public/cluster.html",
+    "lineNum": 133,
+    "topLevelDecls": [
+      "const API_BASE",
+      "function loadClusterStatus",
+      "function renderStats",
+      "function renderNodes",
+      "let clusterRefreshInterval"
+    ],
+    "customGlobals": []
+  },
+  {
+    "file": "frontend/web/public/login.html",
+    "lineNum": 506,
+    "topLevelDecls": [
+      "const API_BASE",
+      "function initTheme",
+      "function toggleTheme",
+      "function updateThemeIcon",
+      "function switchTab",
+      "function showError",
+      "function showSuccess",
+      "function hideMessages",
+      "function setLoading",
+      "function handleLogin",
+      "function handleRegister",
+      "function continueAsGuest",
+      "function loginWithGoogle",
+      "function loginWithGitHub",
+      "function checkOAuthProviders",
+      "const urlParams",
+      "const oauthError"
+    ],
+    "customGlobals": [
+      "claimErr"
+    ]
+  },
+  {
+    "file": "frontend/web/public/token-monitoring.html",
+    "lineNum": 7,
+    "topLevelDecls": [],
+    "customGlobals": []
+  },
+  {
+    "file": "frontend/web/public/agent-learning.html",
+    "lineNum": 96,
+    "topLevelDecls": [
+      "function authFetch",
+      "function showToast",
+      "function esc",
+      "function fmtNum",
+      "const agentSelect",
+      "function getScoreClass",
+      "function loadAgentDetail",
+      "function renderABTests",
+      "function loadData"
+    ],
+    "customGlobals": [
+      "opts",
+      "type",
+      "qualityRes",
+      "failureRes",
+      "improvRes",
+      "agentsRes",
+      "statsRes",
+      "abtestRes"
+    ]
+  },
+  {
+    "file": "frontend/web/public/history.html",
+    "lineNum": 139,
+    "topLevelDecls": [
+      "const API_BASE",
+      "let allSessions",
+      "let searchTimeout",
+      "function loadSessions",
+      "function renderSessions",
+      "function goToSession",
+      "function formatDate",
+      "function escapeHtml",
+      "function debounceSearch",
+      "function exportHistory"
+    ],
+    "customGlobals": []
+  },
+  {
+    "file": "frontend/web/public/admin-metrics.html",
+    "lineNum": 273,
+    "topLevelDecls": [
+      "let hourlyChart",
+      "let dailyChart",
+      "function loadAllData",
+      "function updateTime",
+      "function loadSystemMetrics",
+      "function loadMonitoringData",
+      "function loadKeyStatus",
+      "function loadQuotaStatus",
+      "function loadSummary",
+      "function loadCosts",
+      "function loadHourlyChart",
+      "function loadDailyChart",
+      "function getChartOptions",
+      "function resetKeys",
+      "function getProgressClass",
+      "function formatTokens"
+    ],
+    "customGlobals": [
+      "Chart"
+    ]
+  },
+  {
+    "file": "frontend/web/public/memory.html",
+    "lineNum": 119,
+    "topLevelDecls": [
+      "const CAT_LABELS",
+      "let allMems",
+      "let currentFilter",
+      "let editingId",
+      "let searchMode",
+      "function authFetch",
+      "function showToast",
+      "function esc",
+      "function impColor",
+      "function loadMems",
+      "function searchMems",
+      "function renderMems",
+      "function openNew",
+      "function openMem",
+      "function closeEditor",
+      "function saveMem",
+      "function deleteMem",
+      "function debounce"
+    ],
+    "customGlobals": [
+      "options",
+      "type",
+      "a"
+    ]
+  },
+  {
+    "file": "frontend/web/public/analytics.html",
+    "lineNum": 91,
+    "topLevelDecls": [
+      "function authFetch",
+      "function showToast",
+      "function esc",
+      "function fmtNum",
+      "function renderHealth",
+      "function renderCost",
+      "function renderFeedback",
+      "function renderAgentTable",
+      "function renderPeakHours",
+      "function renderTopQueries",
+      "function loadData"
+    ],
+    "customGlobals": [
+      "opts",
+      "type",
+      "v",
+      "usageRes",
+      "metricsRes",
+      "feedbackRes"
+    ]
+  },
+  {
+    "file": "frontend/web/public/api-keys.html",
+    "lineNum": 102,
+    "topLevelDecls": [
+      "function authFetch",
+      "function showToast",
+      "function esc",
+      "function fmtDate",
+      "let keys",
+      "function loadKeys",
+      "function renderKeys",
+      "function openCreateKey",
+      "function closeCreateKey",
+      "function createKey",
+      "function rotateKey",
+      "function deleteKey"
+    ],
+    "customGlobals": [
+      "opts",
+      "type"
+    ]
+  },
+  {
+    "file": "frontend/web/public/skill-library.html",
+    "lineNum": 67,
+    "topLevelDecls": [
+      "function authFetch",
+      "function showToast",
+      "function esc",
+      "let skills",
+      "let categories",
+      "let currentFilter",
+      "function loadCategories",
+      "function loadSkills",
+      "function renderSkills",
+      "function exportSkill",
+      "function openCreateModal",
+      "function debounce"
+    ],
+    "customGlobals": [
+      "opts",
+      "type",
+      "a"
+    ]
+  },
+  {
+    "file": "frontend/web/public/audit.html",
+    "lineNum": 78,
+    "topLevelDecls": [
+      "let logs",
+      "let actionTypes",
+      "function authFetch",
+      "function showToast",
+      "function esc",
+      "function actionBadge",
+      "function checkAdmin",
+      "function renderApp",
+      "function loadActions",
+      "function loadLogs",
+      "function openDetail",
+      "function closeDetail"
+    ],
+    "customGlobals": [
+      "options",
+      "type"
+    ]
+  },
+  {
+    "file": "frontend/web/public/developer.html",
+    "lineNum": 38,
+    "topLevelDecls": [],
+    "customGlobals": []
+  },
+  {
+    "file": "frontend/web/public/usage.html",
+    "lineNum": 65,
+    "topLevelDecls": [
+      "function authFetch",
+      "function showToast",
+      "function esc",
+      "function fmtNum",
+      "function fmtMs",
+      "let usageData",
+      "let currentPeriod",
+      "function renderStats",
+      "function renderDaily",
+      "function loadData"
+    ],
+    "customGlobals": [
+      "opts",
+      "type",
+      "usageRes",
+      "dailyRes"
+    ]
+  },
+  {
+    "file": "frontend/web/public/alerts.html",
+    "lineNum": 103,
+    "topLevelDecls": [
+      "function authFetch",
+      "function showToast",
+      "function esc",
+      "const SEVERITY_ICONS",
+      "const SEVERITY_BADGE",
+      "const TYPE_LABELS",
+      "let allAlerts",
+      "let currentFilter",
+      "function renderAlerts"
+    ],
+    "customGlobals": [
+      "opts",
+      "type"
+    ]
+  },
+  {
+    "file": "frontend/web/public/custom-agents.html",
+    "lineNum": 126,
+    "topLevelDecls": [
+      "const EMOJIS",
+      "const CAT_LABELS",
+      "let agents",
+      "let editingId",
+      "let selectedEmoji",
+      "function authFetch",
+      "function showToast",
+      "function esc",
+      "function initEmojiPicker",
+      "function loadAgents",
+      "function renderAgents",
+      "function openNew",
+      "function openAgent",
+      "function closeEditor",
+      "function saveAgent",
+      "function deleteAgent",
+      "function confirmDelete",
+      "function cloneAgent"
+    ],
+    "customGlobals": [
+      "options",
+      "type"
+    ]
+  }
+]

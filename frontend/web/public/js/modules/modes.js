@@ -24,6 +24,12 @@ function toggleDiscussionMode() {
     const newValue = !current;
     setState('discussionMode', newValue);
 
+    // enabledTools 동기화
+    var currentTools = (typeof getState === 'function' ? getState('mcpToolsEnabled') : null) || {};
+    var updatedTools = Object.assign({}, currentTools);
+    updatedTools.discussion_mode = newValue;
+    setState('mcpToolsEnabled', updatedTools);
+
     const btn = document.getElementById('discussionModeBtn');
     if (btn) {
         btn.classList.toggle('active', newValue);
@@ -38,10 +44,12 @@ function toggleDiscussionMode() {
         if (webSearchBtn) {
             webSearchBtn.classList.remove('active');
         }
-        saveMCPSettings();
         showToast('🎯 멀티 에이전트 토론 모드 활성화 (웹 검색 비활성화됨)', 'info');
     } else {
         showToast(newValue ? '🎯 멀티 에이전트 토론 모드 활성화' : '💬 일반 모드로 전환', 'info');
+    }
+    saveMCPSettings();
+    updateMCPToolTogglesUI();
 }
 
 /**
@@ -52,7 +60,15 @@ function toggleThinkingMode() {
     const current = getState('thinkingEnabled');
     const newValue = !current;
     setState('thinkingEnabled', newValue);
+
+    // enabledTools 동기화
+    var currentTools = (typeof getState === 'function' ? getState('mcpToolsEnabled') : null) || {};
+    var updatedTools = Object.assign({}, currentTools);
+    updatedTools.sequential_thinking = newValue;
+    setState('mcpToolsEnabled', updatedTools);
+
     saveMCPSettings();
+    updateMCPToolTogglesUI();
 
     const thinkingLevel = getState('thinkingLevel') || 'high';
     const btn = document.getElementById('thinkingModeBtn');
@@ -72,6 +88,12 @@ function toggleDeepResearch() {
     const newValue = !current;
     setState('deepResearchMode', newValue);
 
+    // enabledTools 동기화
+    var currentTools = (typeof getState === 'function' ? getState('mcpToolsEnabled') : null) || {};
+    var updatedTools = Object.assign({}, currentTools);
+    updatedTools.deep_research = newValue;
+    setState('mcpToolsEnabled', updatedTools);
+
     const btn = document.getElementById('deepResearchBtn');
     if (btn) {
         btn.classList.toggle('active', newValue);
@@ -82,6 +104,8 @@ function toggleDeepResearch() {
     if (newValue) {
         if (getState('discussionMode')) {
             setState('discussionMode', false);
+            updatedTools.discussion_mode = false;
+            setState('mcpToolsEnabled', updatedTools);
             const discussionBtn = document.getElementById('discussionModeBtn');
             if (discussionBtn) discussionBtn.classList.remove('active');
         }
@@ -89,6 +113,8 @@ function toggleDeepResearch() {
     } else {
         showToast('💬 일반 모드로 전환', 'info');
     }
+    saveMCPSettings();
+    updateMCPToolTogglesUI();
 }
 
 /**

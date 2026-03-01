@@ -135,8 +135,8 @@
         </div>
     </div>
 
-    <script src="/js/components/sidebar.js"></script>
-    <script>
+    <script type="module" src="/js/components/sidebar.js"></script>
+    <script type="module">
         const API_BASE = window.location.origin;
         let allSessions = [];
         let searchTimeout;
@@ -258,6 +258,11 @@
         }
 
         loadSessions();
+
+        window.exportHistory = exportHistory;
+        window.loadSessions = loadSessions;
+        window.debounceSearch = debounceSearch;
+        window.goToSession = goToSession;
     </script>
 </body>
 

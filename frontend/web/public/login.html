@@ -503,7 +503,7 @@
         </div>
     </div>
 
-    <script>
+    <script type="module">
         const API_BASE = window.location.origin;
 
         // 저장된 테마 적용
@@ -785,6 +785,14 @@
         if (oauthError) {
             showError('소셜 로그인 실패: ' + oauthError);
         }
+
+        window.switchTab = switchTab;
+        window.handleLogin = handleLogin;
+        window.handleRegister = handleRegister;
+        window.continueAsGuest = continueAsGuest;
+        window.loginWithGoogle = loginWithGoogle;
+        window.loginWithGitHub = loginWithGitHub;
+        window.toggleTheme = toggleTheme;
     </script>
 </body>
 

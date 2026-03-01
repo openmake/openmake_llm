@@ -8,12 +8,10 @@
  *
  * @module pages/token-monitoring
  */
-(function() {
-    'use strict';
+'use strict';
     window.PageModules = window.PageModules || {};
 
-    window.PageModules['token-monitoring'] = {
-        getHTML: function() {
+function getHTML() {
             return '<div class="page-token-monitoring">' +
                 '<style data-spa-style="token-monitoring">' +
                 ".redirect-container { display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:40vh; text-align:center; }\n" +
@@ -35,9 +33,9 @@
                     '</div>' +
                 '</div>' +
             '<\/div>';
-        },
+}
 
-        init: function() {
+function init() {
             try {
                 // 자동 리디렉트 (SPA 라우터 사용)
                 if (window.Router && typeof Router.navigate === 'function') {
@@ -48,10 +46,12 @@
             } catch(e) {
                 console.error('[PageModule:token-monitoring] init error:', e);
             }
-        },
+}
 
-        cleanup: function() {
+function cleanup() {
             // 리디렉트 전용 모듈 — 정리할 자원 없음
-        }
-    };
-})();
+}
+
+const pageModule = { getHTML, init, cleanup };
+window.PageModules['token-monitoring'] = pageModule;
+export default pageModule;

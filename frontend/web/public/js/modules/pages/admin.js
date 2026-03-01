@@ -8,14 +8,13 @@
  *
  * @module pages/admin
  */
-(function () {
-    'use strict';
+'use strict';
     var SK = window.STORAGE_KEYS || {};
     window.PageModules = window.PageModules || {};
     /** @type {number[]} setInterval ID 배열 (cleanup용) */
-    var _intervals = [];
+    let _intervals = [];
     /** @type {number[]} setTimeout ID 배열 (cleanup용) */
-    var _timeouts = [];
+    let _timeouts = [];
 
     window.PageModules['admin'] = {
         /**
@@ -362,4 +361,6 @@
             try { delete window.loadUsers; } catch (e) { }
         }
     };
-})();
+
+const { getHTML, init, cleanup } = window.PageModules['admin'];
+export default { getHTML, init, cleanup };

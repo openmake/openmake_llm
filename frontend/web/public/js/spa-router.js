@@ -18,7 +18,7 @@ import { STORAGE_KEY_USER, STORAGE_KEY_GUEST_MODE, STORAGE_KEY_IS_GUEST } from '
 
 // ─── 내부 상태 ─────────────────────────────────────
 const _routes = new Map();           // path → routeConfig
-const _loadedModules = new Set();    // 이미 로드된 모듈 파일
+const _loadedModules = new Map();    // path → module default export (ES Module 캐시)
 const _beforeHooks = [];             // onBeforeNavigate 콜백
 const _afterHooks = [];              // onAfterNavigate 콜백
 
@@ -255,33 +255,29 @@ function removeModuleCSS(moduleName) {
     });
 }
 
-// ─── 스크립트 동적 로딩 ────────────────────────────
+// ─── ES Module 동적 로딩 ────────────────────────────
 
 /**
- * <script> 태그 주입으로 모듈 파일 로드
- * @param {string} src - 스크립트 파일 경로
- * @returns {Promise<void>}
+ * ES Module dynamic import()로 페이지 모듈 로드
+ * @param {string} src - 모듈 파일 경로
+ * @returns {Promise<object>} 모듈의 default export ({ getHTML, init, cleanup })
  */
-function loadScript(src) {
-    return new Promise(function (resolve, reject) {
-        // 이미 로드됨
-        if (_loadedModules.has(src)) {
-            return resolve();
-        }
+async function loadModule(src) {
+    // 이미 로드됨 → 캐시된 모듈 반환
+    if (_loadedModules.has(src)) {
+        return _loadedModules.get(src);
+    }
 
-        var script = document.createElement('script');
-        script.src = src + '?v=' + _moduleVersion;
-        script.async = true;
-        script.onload = function () {
-            _loadedModules.add(src);
-            log('\uBAA8\uB4C8 \uB85C\uB4DC \uC644\uB8CC:', src);
-            resolve();
-        };
-        script.onerror = function () {
-            reject(new Error('\uBAA8\uB4C8 \uD30C\uC77C \uB85C\uB4DC \uC2E4\uD328: ' + src));
-        };
-        document.body.appendChild(script);
-    });
+    try {
+        var moduleUrl = src + '?v=' + _moduleVersion;
+        var mod = await import(moduleUrl);
+        var pageModule = mod.default || mod;
+        _loadedModules.set(src, pageModule);
+        log('모듈 로드 완료:', src);
+        return pageModule;
+    } catch (e) {
+        throw new Error('모듈 파일 로드 실패: ' + src + ' — ' + e.message);
+    }
 }
 
 // ─── 뷰 전환 ──────────────────────────────────────
@@ -474,12 +470,13 @@ async function executeNavigation(path, options) {
 
     // ─── 현재 모듈 정리 ──────────────────
     if (_currentRoute && _currentRoute.moduleName) {
-        var currentModule = window.PageModules && window.PageModules[_currentRoute.moduleName];
+        var currentModule = _loadedModules.get(_currentRoute.moduleFile)
+            || (window.PageModules && window.PageModules[_currentRoute.moduleName]);
         if (currentModule && typeof currentModule.cleanup === 'function') {
             try {
                 currentModule.cleanup();
             } catch (e) {
-                warn('\uBAA8\uB4C8 cleanup \uC624\uB958:', _currentRoute.moduleName, e);
+                warn('모듈 cleanup 오류:', _currentRoute.moduleName, e);
             }
         }
         // 이전 모듈 CSS 제거
@@ -510,15 +507,18 @@ async function executeNavigation(path, options) {
     showLoading();
 
     try {
-        // 모듈 파일 로드 (캐시 확인 포함)
-        if (targetRoute.moduleFile && !_loadedModules.has(targetRoute.moduleFile)) {
-            await loadScript(targetRoute.moduleFile);
+        // ES Module 동적 로드 (import() 캐시 포함)
+        var pageModule;
+        if (targetRoute.moduleFile) {
+            pageModule = await loadModule(targetRoute.moduleFile);
         }
 
-        // 모듈 참조 획득
-        var pageModule = window.PageModules && window.PageModules[targetRoute.moduleName];
+        // fallback: window.PageModules에서 참조 (레거시 호환)
         if (!pageModule) {
-            throw new Error('\uBAA8\uB4C8\uC774 \uB4F1\uB85D\uB418\uC9C0 \uC54A\uC558\uC2B5\uB2C8\uB2E4: window.PageModules.' + targetRoute.moduleName);
+            pageModule = window.PageModules && window.PageModules[targetRoute.moduleName];
+        }
+        if (!pageModule) {
+            throw new Error('모듈이 등록되지 않았습니다: ' + targetRoute.moduleName);
         }
 
         // HTML 주입 (네비게이션 바 포함)
@@ -688,8 +688,8 @@ function registerFromNavItems() {
             title: item.label || moduleName,
             icon: item.icon || '',
             iconify: item.iconify || ''
+        });
     });
-
     log('\uB77C\uC6B0\uD2B8 \uC790\uB3D9 \uB4F1\uB85D \uC644\uB8CC:', _routes.size, '\uAC1C');
 }
 

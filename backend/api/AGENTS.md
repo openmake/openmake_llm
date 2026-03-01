@@ -149,10 +149,10 @@
 │       enabledTools: getState('mcpToolsEnabled')                  │    │
 │                                                                  │    │
 │  modes.js ─── 채팅 입력창 토글 버튼 ───────────────────────┐     │    │
-│       🧠 toggleThinkingMode()  → thinkingEnabled          │     │    │
-│       🌐 toggleWebSearch()     → webSearchEnabled          │     │    │
-│       🎯 toggleDiscussionMode()→ discussionMode            │     │    │
-│       🔬 toggleDeepResearch()  → deepResearchMode          │     │    │
+│       🧠 toggleThinkingMode()  → thinkingEnabled + enabledTools │    │
+│       🌐 toggleWebSearch()     → webSearchEnabled + enabledTools│    │
+│       🎯 toggleDiscussionMode()→ discussionMode + enabledTools  │    │
+│       🔬 toggleDeepResearch()  → deepResearchMode + enabledTools│    │
 └────────────────────────────────────────────────────────────┘─────┘────┘
                               │ WebSocket
                               ▼
@@ -161,7 +161,7 @@
 │                                                                       │
 │  sockets/ws-chat-handler.ts ─── handleChatMessage()                   │
 │       │  msg.thinkingMode → ChatRequestHandler                        │
-│       │  msg.webSearch    → 웹 검색 실행 (performWebSearch)            │
+│       │  msg.webSearch    → pre-chat 웹 검색 (enabledTools.web_search 게이트)│
 │       │  msg.enabledTools → ChatService.currentEnabledTools           │
 │       │  msg.ragEnabled   → RAG 컨텍스트 검색                         │
 │       │  msg.language     → 사용자 언어 감지 (detectLanguage)          │
@@ -188,16 +188,16 @@
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
-### 도구 정의 — 4개 소스 (동기화 필수)
+### 도구 정의 — 3개 소스 (동기화 필수)
 
-MCP 도구를 추가/수정할 때 아래 4곳을 **반드시 동시에** 수정해야 합니다.
+MCP 도구를 추가/수정할 때 아래 3곳을 **반드시 동시에** 수정해야 합니다.
+`pages/settings.js`는 `window.MCP_TOOL_CATALOG`을 참조하므로 별도 수정 불필요.
 
 | # | 위치 | 역할 | 파일 |
 |---|------|------|------|
 | 1 | Backend 도구 정의 | `MCPToolDefinition` 배열 (핸들러 포함) | `mcp/tools.ts` → `builtInTools` |
 | 2 | Backend 티어 제어 | 등급별 접근 허용 목록 | `mcp/tool-tiers.ts` → `TOOL_TIERS` |
-| 3 | Frontend 설정 UI (메인) | 채팅 설정 패널 도구 목록 | `js/modules/settings.js` → `MCP_TOOL_CATALOG` |
-| 4 | Frontend 설정 UI (단독) | 설정 전용 페이지 도구 목록 | `js/modules/pages/settings.js` → `toolCatalog` |
+| 3 | Frontend 설정 UI | 마스터 도구 카탈로그 (6카테고리 15도구) | `js/modules/settings.js` → `MCP_TOOL_CATALOG` |
 
 #### 현재 등록된 내장 도구 (10개)
 
@@ -221,19 +221,24 @@ MCP 도구를 추가/수정할 때 아래 4곳을 **반드시 동시에** 수정
 
 ```
 [사용자 조작]
-  설정 페이지:  toggleMCPModule('thinking') → setState('thinkingEnabled') → saveMCPSettings()
-  채팅 입력창:  🧠 버튼 → toggleThinkingMode() → setState('thinkingEnabled')
-  채팅 입력창:  🌐 버튼 → toggleWebSearch()    → setState('webSearchEnabled') → saveMCPSettings()
+  설정 페이지:  toggleMCPTool('sequential_thinking') → enabledTools + AppState + 채팅 버튼 동기화
+  채팅 입력창:  🧠 버튼 → toggleThinkingMode() → thinkingEnabled + enabledTools + saveMCPSettings()
+  채팅 입력창:  🌐 버튼 → toggleWebSearch()    → webSearchEnabled + enabledTools + saveMCPSettings()
+  채팅 입력창:  🎯 버튼 → toggleDiscussionMode() → discussionMode + enabledTools + saveMCPSettings()
+  채팅 입력창:  🔬 버튼 → toggleDeepResearch()   → deepResearchMode + enabledTools + saveMCPSettings()
 
 [저장소]
   localStorage 'mcpSettings' = {
-    thinking: boolean,      ← thinkingEnabled
-    webSearch: boolean,     ← webSearchEnabled
-    rag: boolean,           ← ragEnabled
-    enabledTools: {         ← mcpToolsEnabled
-      vision_ocr: true,
+    thinking: boolean,      ← enabledTools.sequential_thinking (레거시 호환)
+    webSearch: boolean,     ← enabledTools.web_search (레거시 호환)
+    rag: boolean,           ← enabledTools.rag (레거시 호환)
+    enabledTools: {         ← mcpToolsEnabled (단일 진실 소스)
+      sequential_thinking: true,
+      discussion_mode: false,
+      deep_research: false,
       web_search: false,
-      firecrawl_scrape: true,
+      rag: false,
+      vision_ocr: false,
       ...
     }
   }
@@ -243,13 +248,15 @@ MCP 도구를 추가/수정할 때 아래 4곳을 **반드시 동시에** 수정
     thinkingMode:  getState('thinkingEnabled'),   // Boolean
     webSearch:     getState('webSearchEnabled'),   // Boolean
     ragEnabled:    getState('ragEnabled'),         // Boolean
+    discussionMode: getState('discussionMode'),    // Boolean
+    deepResearchMode: getState('deepResearchMode'),// Boolean
     enabledTools:  getState('mcpToolsEnabled'),    // {toolName: boolean}
     language:      generalSettings.lang || null,   // 사용자 명시 언어
   }
 
 [백엔드 수신]  ws-chat-handler.ts
   msg.thinkingMode  → ChatRequestHandler.processChat({ thinkingMode })
-  msg.webSearch     → performWebSearch() 실행 여부
+  msg.webSearch     → pre-chat performWebSearch() (enabledTools.web_search 게이트)
   msg.enabledTools  → ChatService.getAllowedTools(tier, enabledTools)
   msg.ragEnabled    → RAG 컨텍스트 검색 여부
   msg.language      → userLangPreference || detectLanguage(message)

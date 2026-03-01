@@ -8,13 +8,12 @@
  *
  * @module pages/admin-metrics
  */
-(function () {
-    'use strict';
+'use strict';
     window.PageModules = window.PageModules || {};
     /** @type {number[]} setInterval ID 배열 (cleanup용) */
-    var _intervals = [];
+    let _intervals = [];
     /** @type {number[]} setTimeout ID 배열 (cleanup용) */
-    var _timeouts = [];
+    let _timeouts = [];
     /**
      * HTML 이스케이프 헬퍼
      * @param {string} s - 이스케이프할 문자열
@@ -373,4 +372,6 @@
             try { delete window.resetKeys; } catch (e) { }
         }
     };
-})();
+
+const { getHTML, init, cleanup } = window.PageModules['admin-metrics'];
+export default { getHTML, init, cleanup };
