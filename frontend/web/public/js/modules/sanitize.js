@@ -40,7 +40,16 @@ const ALLOWED_TAGS = new Set([
     'blockquote', 'pre', 'code', 'span', 'div',
     'table', 'thead', 'tbody', 'tr', 'th', 'td',
     'a', 'img', 'hr', 'sup', 'sub',
-    'details', 'summary'
+    'details', 'summary',
+    // SVG (Mermaid 다이어그램 렌더링)
+    'svg', 'g', 'path', 'rect', 'circle', 'line', 'polyline', 'polygon',
+    'text', 'tspan', 'defs', 'clippath', 'marker', 'foreignobject', 'use',
+    'title', 'desc', 'style',
+    // Math (KaTeX 수식 렌더링)
+    'math', 'semantics', 'annotation', 'mrow', 'mi', 'mo', 'mn',
+    'msup', 'msub', 'mfrac', 'mover', 'munder', 'mspace',
+    'mtable', 'mtr', 'mtd', 'msqrt', 'mroot', 'mtext', 'merror',
+    'mpadded', 'mphantom'
 ]);
 
 /**
@@ -54,9 +63,29 @@ const ALLOWED_ATTRIBUTES = {
     'td': ['colspan', 'rowspan'],
     'th': ['colspan', 'rowspan'],
     'code': ['class'],    // for syntax highlighting
-    'span': ['class'],
+    'span': ['class', 'style', 'aria-hidden'],  // KaTeX uses style + aria-hidden
     'pre': ['class'],
-    'div': ['class'],
+    'div': ['class', 'style'],  // KaTeX block containers
+    // SVG attributes (Mermaid)
+    'svg': ['viewBox', 'width', 'height', 'class', 'xmlns', 'style', 'aria-roledescription', 'role', 'id'],
+    'g': ['transform', 'class', 'id', 'clip-path'],
+    'path': ['d', 'fill', 'stroke', 'stroke-width', 'class', 'id', 'style', 'marker-end', 'marker-start'],
+    'rect': ['x', 'y', 'width', 'height', 'rx', 'ry', 'fill', 'stroke', 'class', 'style'],
+    'circle': ['cx', 'cy', 'r', 'fill', 'stroke', 'class'],
+    'line': ['x1', 'y1', 'x2', 'y2', 'stroke', 'stroke-width', 'class', 'marker-end'],
+    'polyline': ['points', 'fill', 'stroke', 'stroke-width', 'class'],
+    'polygon': ['points', 'fill', 'stroke', 'class'],
+    'text': ['x', 'y', 'text-anchor', 'dominant-baseline', 'class', 'style', 'font-size', 'fill', 'dy'],
+    'tspan': ['x', 'y', 'dy', 'class'],
+    'clippath': ['id'],
+    'marker': ['id', 'viewBox', 'refX', 'refY', 'markerWidth', 'markerHeight', 'orient'],
+    'foreignobject': ['x', 'y', 'width', 'height'],
+    'use': ['href', 'xlink:href', 'x', 'y'],
+    'style': [],
+    'defs': [],
+    // Math attributes (KaTeX)
+    'math': ['xmlns'],
+    'annotation': ['encoding'],
 };
 
 /**
@@ -166,14 +195,27 @@ function purifyHTML(html) {
                 'blockquote', 'pre', 'code', 'span', 'div',
                 'table', 'thead', 'tbody', 'tr', 'th', 'td',
                 'a', 'img', 'hr', 'sup', 'sub',
-                'details', 'summary'
+                'details', 'summary',
+                'svg', 'g', 'path', 'rect', 'circle', 'line', 'polyline', 'polygon',
+                'text', 'tspan', 'defs', 'clippath', 'marker', 'foreignobject', 'use',
+                'title', 'desc', 'style',
+                'math', 'semantics', 'annotation', 'mrow', 'mi', 'mo', 'mn',
+                'msup', 'msub', 'mfrac', 'mover', 'munder', 'mspace',
+                'mtable', 'mtr', 'mtd', 'msqrt', 'mroot', 'mtext', 'merror',
+                'mpadded', 'mphantom'
             ],
             ALLOWED_ATTR: [
                 'href', 'title', 'target', 'rel',
                 'src', 'alt', 'width', 'height',
-                'colspan', 'rowspan', 'class'
+                'colspan', 'rowspan', 'class',
+                'viewBox', 'xmlns', 'role', 'aria-roledescription',
+                'transform', 'clip-path', 'd', 'fill', 'stroke', 'stroke-width',
+                'marker-end', 'marker-start', 'x', 'y', 'rx', 'ry', 'cx', 'cy', 'r',
+                'x1', 'y1', 'x2', 'y2', 'points', 'text-anchor', 'dominant-baseline',
+                'font-size', 'dy', 'refX', 'refY', 'markerWidth', 'markerHeight', 'orient',
+                'encoding', 'aria-hidden', 'style'
             ],
-            FORBID_ATTR: ['style', 'onerror', 'onload', 'onclick', 'onmouseover'],
+            FORBID_ATTR: ['onerror', 'onload', 'onclick', 'onmouseover'],
             ADD_ATTR: ['target'],
             ALLOW_DATA_ATTR: false
         });

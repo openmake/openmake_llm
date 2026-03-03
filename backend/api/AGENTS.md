@@ -19,6 +19,7 @@
 2. DB 호출 모두 `async/await` (pg Pool)
 3. 기존 라우트 경로와 응답 포맷 변경 금지
 4. `infrastructure/security/auth/` 수정 금지
+5. Docker/컨테이너화(Dockerfile, docker-compose, .dockerignore) 관련 개발 계획, 제안, 구현 금지 — 프로젝트 방침으로 영구 제외
 
 ## Installed Skills Reference
 

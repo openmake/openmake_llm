@@ -223,7 +223,7 @@ CREATE TABLE IF NOT EXISTS external_files (
 
 -- ============================================
 -- pgvector 벡터 임베딩 테이블 (NEW)
--- pgvector 확장 미설치 시 embedding 컬럼을 TEXT로 대체
+-- pgvector는 필수 의존성 (미설치 시 예외 발생)
 -- ============================================
 
 DO $$ BEGIN
@@ -231,9 +231,7 @@ DO $$ BEGIN
     IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'vector_embeddings') THEN
         RAISE NOTICE '[pgvector] vector_embeddings 테이블 이미 존재 — 생성 건너뜀';
     ELSE
-        -- 새로 생성: pgvector 확장 로드 시도 후 폴백
-        BEGIN
-            EXECUTE 'CREATE EXTENSION IF NOT EXISTS vector';
+        IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'vector') THEN
             EXECUTE '
                 CREATE TABLE vector_embeddings (
                     id SERIAL PRIMARY KEY,
@@ -246,21 +244,10 @@ DO $$ BEGIN
                     created_at TIMESTAMPTZ DEFAULT NOW(),
                     updated_at TIMESTAMPTZ DEFAULT NOW()
                 )';
-            RAISE NOTICE '[pgvector] 확장 로드 완료 — vector(768) 컬럼 사용';
-        EXCEPTION WHEN OTHERS THEN
-            CREATE TABLE vector_embeddings (
-                id SERIAL PRIMARY KEY,
-                source_type TEXT NOT NULL CHECK(source_type IN ('document', 'memory', 'conversation', 'agent')),
-                source_id TEXT NOT NULL,
-                chunk_index INTEGER DEFAULT 0,
-                content TEXT NOT NULL,
-                embedding TEXT,
-                metadata JSONB,
-                created_at TIMESTAMPTZ DEFAULT NOW(),
-                updated_at TIMESTAMPTZ DEFAULT NOW()
-            );
-            RAISE NOTICE '[pgvector] 확장 미설치 — embedding을 TEXT 컬럼으로 대체 (벡터 검색 비활성)';
-        END;
+            RAISE NOTICE '[pgvector] 확장 확인 완료 — vector(768) 컬럼 사용';
+        ELSE
+            RAISE EXCEPTION '[pgvector] extension "vector" is required. Install pgvector first: CREATE EXTENSION IF NOT EXISTS vector;';
+        END IF;
     END IF;
 END $$;
 

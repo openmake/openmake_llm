@@ -4,15 +4,18 @@ import * as path from 'path';
 import { UserSandbox, createUserContext } from '../mcp/user-sandbox';
 
 describe('UserSandbox', () => {
-    // Get the actual USER_DATA_ROOT by calling getWorkDir and extracting the base path
-    const getActualUserDataRoot = (): string => {
-        const workDir = UserSandbox.getWorkDir('test-user-id');
-        // workDir is like: /path/to/data/users/test-user-id/workspace
-        // We need to extract: /path/to/data/users
-        return path.resolve(workDir, '..', '..');
-    };
+    let TEST_USER_DATA_PATH: string;
 
-    const TEST_USER_DATA_PATH = getActualUserDataRoot();
+    beforeAll(() => {
+        // getUserDataRoot()에 ?? './data/users' 폴백이 있어 병렬에서도 정상 동작
+        try {
+            const workDir = UserSandbox.getWorkDir('test-user-id');
+            TEST_USER_DATA_PATH = path.resolve(workDir, '..', '..');
+        } catch {
+            // 극단적 병렬 레이스 시 getConfig() 자체가 throw — 기본값 사용
+            TEST_USER_DATA_PATH = path.resolve(process.cwd(), 'data', 'users');
+        }
+    });
 
     describe('getWorkDir(userId)', () => {
         it('should return correct workspace path for string userId', () => {

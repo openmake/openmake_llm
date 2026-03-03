@@ -295,6 +295,11 @@ export class DeepResearchService {
 
     constructor(config?: Partial<ResearchConfig>) {
         this.config = { ...globalConfig, ...config };
+        // 기본 llmModel이 비어있으면 환경 설정(OMK_ENGINE_FAST)에서 resolve
+        if (!this.config.llmModel) {
+            this.config.llmModel = getConfig().omkEngineFast;
+            logger.info(`[DeepResearch] llmModel 미지정 → ${this.config.llmModel} (OMK_ENGINE_FAST)`);
+        }
         this.client = createClient({ model: this.config.llmModel });
     }
 

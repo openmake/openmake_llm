@@ -59,7 +59,7 @@ jest.mock('../chat/language-policy', () => ({
 
 import { createDiscussionEngine } from '../agents/discussion-engine';
 
-const mockCreateDiscussionEngine = jest.mocked(createDiscussionEngine);
+const mockCreateDiscussionEngine = createDiscussionEngine as jest.MockedFunction<typeof createDiscussionEngine>;
 
 // ─────────────────────────────────────────────
 // Helpers
