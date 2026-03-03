@@ -592,6 +592,8 @@ export class OllamaClient {
 
                 for (const line of lines) {
                     if (line.trim()) {
+                        // Stream 취소 시그널 (ABORTED) — JSON 파싱 대상이 아님
+                        if (line.trim() === 'ABORTED') continue;
                         try {
                             const parsed = JSON.parse(line) as ChatResponse & { error?: string };
                             // 스트리밍 중 에러 응답 체크 (Ollama 공식 문서)

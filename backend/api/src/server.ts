@@ -154,6 +154,17 @@ export class DashboardServer {
      * @throws {Error} 포트가 이미 사용 중인 경우 (EADDRINUSE)
      */
     async start(): Promise<void> {
+        // OTel SDK 초기화 (환경변수로 비활성화 가능)
+        try {
+            const { initTelemetry } = await import('./observability/otel');
+            const sdk = initTelemetry();
+            if (sdk) {
+                console.log('[Server] OpenTelemetry 초기화 완료 (샘플링: 10%)');
+            }
+        } catch (err) {
+            console.error('[Server] OpenTelemetry 초기화 실패 (서버는 계속 시작):', err);
+        }
+
         // 클러스터 시작
         await this.cluster.start();
 
@@ -240,6 +251,15 @@ export class DashboardServer {
         this.wsHandler.stopHeartbeat();
         this.wss.close();
         this.server.close();
+
+        void (async () => {
+            try {
+                const { shutdownTelemetry } = await import('./observability/otel');
+                await shutdownTelemetry();
+            } catch (err) {
+                console.error('[Server] OpenTelemetry 종료 중 오류:', err);
+            }
+        })();
     }
 
     /**

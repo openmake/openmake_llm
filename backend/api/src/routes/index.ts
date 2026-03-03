@@ -45,3 +45,6 @@ export { default as chatFeedbackRouter } from './chat-feedback.routes';
 
 // 🆕 Token Monitoring 라우트
 export { tokenMonitoringRouter } from './token-monitoring.routes';
+
+// 🆕 Knowledge Base 라우트
+export { default as kbRouter } from './kb.routes';

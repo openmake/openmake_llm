@@ -1,0 +1,86 @@
+# ==============================================================
+# GitHub Actions CI Pipeline — scripts/ci-test.sh 미러링
+# ==============================================================
+# 3 게이트: Bun Test → TypeScript Build → ESLint
+# Docker 사용 없음 (프로젝트 방침 영구 제외)
+# ==============================================================
+
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_ENV: test
+  JWT_SECRET: ci-test-secret-for-testing-only
+
+jobs:
+  ci:
+    name: CI Gate (Test → Build → Lint)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install backend dependencies
+        run: npm ci
+        working-directory: backend/api
+
+      # ─── Gate 1: Bun Test ───
+      # agent-loop.test.ts 제외 (Ollama 실제 연결 시도로 CI에서 hang 발생)
+      # 각 파일을 개별 bun test 프로세스로 실행하여 mock 격리 보장
+      - name: "Gate 1: Bun Test (per-file isolation)"
+        working-directory: backend/api
+        run: |
+          TEST_FAILED=0
+          TEST_PASSED=0
+          TEST_ERRORS=""
+          CI_EXCLUDE="agent-loop.test.ts"
+
+          for f in src/__tests__/*.test.ts; do
+            fname=$(basename "$f")
+            case "$fname" in $CI_EXCLUDE) continue ;; esac
+            if timeout 30 bun test --timeout 15000 "$f" > /dev/null 2>&1; then
+              TEST_PASSED=$((TEST_PASSED + 1))
+            else
+              TEST_FAILED=$((TEST_FAILED + 1))
+              TEST_ERRORS="$TEST_ERRORS $fname"
+            fi
+          done
+
+          echo "✅ $TEST_PASSED passed, ❌ $TEST_FAILED failed"
+          if [ $TEST_FAILED -gt 0 ]; then
+            echo "실패 파일:$TEST_ERRORS"
+            exit 1
+          fi
+
+      # ─── Gate 2: TypeScript Build ───
+      - name: "Gate 2: TypeScript Build"
+        run: npm run build
+
+      # ─── Gate 3: ESLint ───
+      - name: "Gate 3: ESLint"
+        run: npm run lint

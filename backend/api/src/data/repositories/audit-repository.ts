@@ -38,7 +38,21 @@ export class AuditRepository extends BaseRepository {
         );
     }
 
-    async getAgentStats(agentId: string) {
+    /**
+     * 에이전트 사용 통계를 반환합니다.
+     * @param agentId - 에이전트 ID
+     * @param userId - (선택) 특정 사용자의 사용 통계만 필터링
+     */
+    async getAgentStats(agentId: string, userId?: string) {
+        const conditions = ['agent_id = $1'];
+        const params: (string | number | boolean | null | undefined)[] = [agentId];
+
+        if (userId) {
+            conditions.push('user_id = $2');
+            params.push(userId);
+        }
+
+        const whereClause = conditions.join(' AND ');
         const result = await this.query(
             `SELECT 
                 COUNT(*) as total_requests,
@@ -46,8 +60,8 @@ export class AuditRepository extends BaseRepository {
                 AVG(response_time_ms) as avg_response_time,
                 AVG(tokens_used) as avg_tokens
             FROM agent_usage_logs
-            WHERE agent_id = $1`,
-            [agentId]
+            WHERE ${whereClause}`,
+            params
         );
         return result.rows[0];
     }
@@ -77,7 +91,19 @@ export class AuditRepository extends BaseRepository {
         );
     }
 
-    async getAuditLogs(limit: number = 100) {
+    /**
+     * 감사 로그 목록을 반환합니다.
+     * @param limit - 최대 반환 건수 (기본값: 100)
+     * @param userId - (선택) 특정 사용자의 로그만 필터링
+     */
+    async getAuditLogs(limit: number = 100, userId?: string) {
+        if (userId) {
+            const result = await this.query(
+                'SELECT * FROM audit_logs WHERE user_id = $1 ORDER BY timestamp DESC LIMIT $2',
+                [userId, limit]
+            );
+            return result.rows;
+        }
         const result = await this.query('SELECT * FROM audit_logs ORDER BY timestamp DESC LIMIT $1', [limit]);
         return result.rows;
     }
