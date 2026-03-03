@@ -1,0 +1,579 @@
+/**
+ * ============================================
+ * Settings Page Styles (CSP-compliant external CSS)
+ * ============================================
+ * Extracted from settings.js to comply with Content Security Policy.
+ * These styles were previously injected via inline <style> tags.
+ */
+
+/* ==================== Page Layout ==================== */
+.page-settings {
+    position: relative;
+    min-height: 100%;
+    background: var(--bg-app);
+}
+
+.settings-container {
+    max-width: 680px;
+    margin: 0 auto;
+    padding: var(--space-8) var(--space-6);
+}
+
+/* ==================== Hero Section ==================== */
+.settings-hero {
+    text-align: center;
+    margin-bottom: var(--space-10);
+}
+
+.settings-hero-icon {
+    font-size: 3rem;
+    margin-bottom: var(--space-4);
+    display: block;
+    filter: drop-shadow(2px 2px 0 rgba(0, 0, 0, 0.5));
+}
+
+.settings-hero h1 {
+    font-size: var(--font-size-3xl);
+    font-weight: var(--font-weight-bold);
+    background: var(--gradient-primary);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: var(--space-2);
+    letter-spacing: -0.02em;
+}
+
+.settings-hero p {
+    color: var(--text-secondary);
+    font-size: var(--font-size-base);
+}
+
+/* ==================== Settings Card ==================== */
+.s-card {
+    background: var(--glass-bg);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-xl);
+    padding: 0;
+    margin-bottom: var(--space-6);
+    box-shadow: var(--shadow-brutal);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    overflow: hidden;
+    animation: s-slideUp 0.5s ease both;
+}
+
+.s-card:nth-child(2) { animation-delay: 0.05s; }
+.s-card:nth-child(3) { animation-delay: 0.1s; }
+.s-card:nth-child(4) { animation-delay: 0.15s; }
+.s-card:nth-child(5) { animation-delay: 0.2s; }
+
+.s-card:hover {
+    border-color: var(--border-medium);
+    box-shadow: var(--shadow-brutal-lg);
+    transform: translate(-2px, -2px);
+}
+
+.s-card-header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-5) var(--space-6);
+    border-bottom: 1px solid var(--glass-border);
+    position: relative;
+}
+
+.s-card-header::after {
+    content: "";
+    position: absolute;
+    bottom: -1px;
+    left: var(--space-6);
+    right: var(--space-6);
+    height: 1px;
+    background: var(--accent-primary);
+}
+
+.s-card-icon {
+    font-size: 1.3rem;
+}
+
+.s-card-title {
+    font-size: var(--font-size-lg);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-primary);
+}
+
+.s-card-body {
+    padding: var(--space-4) var(--space-6) var(--space-6);
+}
+
+/* ==================== Setting Row ==================== */
+.setting-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--space-4) 0;
+    border-bottom: 1px solid var(--border-light);
+    gap: var(--space-4);
+}
+
+.setting-row:last-child {
+    border-bottom: none;
+}
+
+.setting-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.setting-info h4 {
+    font-size: var(--font-size-base);
+    font-weight: var(--font-weight-medium);
+    color: var(--text-primary);
+    margin-bottom: 2px;
+}
+
+.setting-info p {
+    font-size: var(--font-size-sm);
+    color: var(--text-muted);
+    line-height: 1.4;
+}
+
+/* ==================== Select Dropdown ==================== */
+.s-select {
+    appearance: none;
+    -webkit-appearance: none;
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-md);
+    padding: var(--space-2) var(--space-8) var(--space-2) var(--space-3);
+    color: var(--text-primary);
+    font-size: var(--font-size-sm);
+    font-family: inherit;
+    cursor: pointer;
+    min-width: 160px;
+    transition: all var(--transition-normal);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23a1a1aa' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    flex-shrink: 0;
+}
+
+.s-select:focus {
+    outline: none;
+    border-color: var(--accent-primary);
+    box-shadow: var(--glow-input-focus);
+}
+
+.s-select:hover {
+    border-color: var(--border-medium);
+}
+
+.s-select option {
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+}
+
+/* ==================== Toggle Switch ==================== */
+.toggle {
+    position: relative;
+    display: inline-block;
+    width: 48px;
+    height: 26px;
+    flex-shrink: 0;
+}
+
+.toggle input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: var(--bg-tertiary);
+    border-radius: 26px;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.toggle-slider:before {
+    position: absolute;
+    content: "";
+    height: 20px;
+    width: 20px;
+    left: 3px;
+    bottom: 3px;
+    background: white;
+    border-radius: 50%;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: var(--shadow-sm);
+}
+
+.toggle input:checked + .toggle-slider {
+    background: var(--accent-primary);
+    box-shadow: var(--shadow-brutal-sm);
+}
+
+.toggle input:checked + .toggle-slider:before {
+    transform: translateX(22px);
+}
+
+/* ==================== Info Grid ==================== */
+.info-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-3);
+}
+
+.info-item {
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    padding: var(--space-4);
+    border-radius: var(--radius-lg);
+    transition: all var(--transition-normal);
+}
+
+.info-item:hover {
+    background: var(--glass-bg-hover);
+    border-color: var(--border-medium);
+    transform: translate(-2px, -2px);
+    box-shadow: var(--shadow-brutal);
+}
+
+.info-label {
+    font-size: var(--font-size-xs);
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: var(--space-2);
+}
+
+.info-value {
+    font-size: var(--font-size-lg);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-primary);
+}
+
+/* ==================== Buttons ==================== */
+.s-btn-row {
+    display: flex;
+    gap: var(--space-3);
+    margin-top: var(--space-4);
+}
+
+.s-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-3) var(--space-5);
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    border: none;
+    position: relative;
+    overflow: hidden;
+}
+
+.s-btn-primary {
+    background: var(--gradient-primary);
+    color: var(--text-primary);
+}
+
+.s-btn-primary:hover {
+    transform: translate(-2px, -2px);
+    box-shadow: var(--shadow-brutal-lg);
+}
+
+.s-btn-primary:active {
+    transform: translateY(0);
+}
+
+.s-btn-secondary {
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    color: var(--text-secondary);
+}
+
+.s-btn-secondary:hover {
+    background: var(--glass-bg-hover);
+    color: var(--text-primary);
+    border-color: var(--border-medium);
+}
+
+.s-btn-danger {
+    background: var(--glass-bg);
+    border: 2px solid var(--danger);
+    color: var(--danger);
+}
+
+.s-btn-danger:hover {
+    background: var(--bg-hover, #323250);
+    border-color: var(--danger);
+}
+
+/* ==================== Footer ==================== */
+.s-footer {
+    display: flex;
+    gap: var(--space-3);
+    padding-top: var(--space-4);
+    animation: s-slideUp 0.5s ease 0.25s both;
+}
+
+/* ==================== Animation ==================== */
+@keyframes s-slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(16px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* ==================== Toast ==================== */
+.toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(100px);
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-3) var(--space-5);
+    color: var(--text-primary);
+    font-size: var(--font-size-sm);
+    z-index: 9999;
+    opacity: 0;
+    transition: all 0.3s ease;
+    pointer-events: none;
+    box-shadow: var(--shadow-brutal-lg);
+}
+
+.toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}
+
+/* ==================== Tier Badge ==================== */
+.tier-badge {
+    display: inline-block;
+    font-size: 9px;
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    margin-left: 6px;
+    vertical-align: middle;
+    text-transform: uppercase;
+}
+
+.tier-badge-pro {
+    background: var(--accent-primary);
+    color: var(--text-primary);
+}
+
+.tier-badge-enterprise {
+    background: var(--accent-orange);
+    color: var(--text-inverse);
+}
+
+/* ==================== Tier Plan Cards ==================== */
+.tier-plan-container {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--space-4);
+    margin-top: var(--space-2);
+}
+
+.tier-plan-card {
+    background: var(--bg-secondary);
+    border: 2px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: var(--space-5);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.tier-plan-card:hover {
+    border-color: var(--accent-primary);
+}
+
+.tier-plan-current {
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 0 1px var(--accent-primary), 0 4px 12px rgba(var(--accent-primary-rgb, 99, 102, 241), 0.15);
+    position: relative;
+}
+
+.tier-plan-icon {
+    font-size: 2rem;
+    margin-bottom: var(--space-2);
+}
+
+.tier-plan-name {
+    font-size: var(--font-size-lg);
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: var(--space-1);
+}
+
+.tier-plan-price {
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    color: var(--text-muted);
+    margin-bottom: var(--space-3);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.tier-plan-features {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 var(--space-4) 0;
+    width: 100%;
+    flex: 1;
+}
+
+.tier-plan-features li {
+    font-size: var(--font-size-xs);
+    color: var(--text-secondary);
+    padding: var(--space-1) 0;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.tier-plan-features li:last-child {
+    border-bottom: none;
+}
+
+.tier-plan-features li::before {
+    content: '\2713 ';
+    color: var(--accent-success);
+    font-weight: 700;
+    margin-right: 4px;
+}
+
+.tier-plan-btn {
+    width: 100%;
+    padding: var(--space-2) var(--space-4);
+    border: none;
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s, opacity 0.2s;
+}
+
+.tier-plan-btn-upgrade {
+    background: var(--accent-primary);
+    color: var(--text-inverse, #fff);
+}
+
+.tier-plan-btn-upgrade:hover {
+    opacity: 0.85;
+}
+
+.tier-plan-btn-downgrade {
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+}
+
+.tier-plan-btn-downgrade:hover {
+    opacity: 0.75;
+}
+
+.tier-plan-btn-current {
+    background: transparent;
+    border: 2px solid var(--accent-primary);
+    color: var(--accent-primary);
+    cursor: default;
+}
+
+
+/* ==================== MCP Tool Locked State ==================== */
+.mcp-tool-locked {
+    opacity: 0.45;
+    pointer-events: none;
+}
+
+.mcp-tool-locked .toggle-slider {
+    cursor: not-allowed !important;
+}
+
+/* ==================== Responsive ==================== */
+@media (max-width: 768px) {
+    .settings-container {
+        padding: var(--space-6) var(--space-4);
+    }
+
+    .settings-hero {
+        margin-bottom: var(--space-6);
+    }
+
+    .settings-hero h1 {
+        font-size: var(--font-size-2xl);
+    }
+
+    .s-card-header {
+        padding: var(--space-4) var(--space-5);
+    }
+
+    .s-card-body {
+        padding: var(--space-3) var(--space-5) var(--space-5);
+    }
+
+    .setting-row {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: var(--space-3);
+    }
+
+    .s-select {
+        width: 100%;
+        min-width: unset;
+    }
+
+    .info-grid {
+        grid-template-columns: 1fr 1fr;
+        gap: var(--space-3);
+    }
+
+    .s-btn-row {
+        flex-wrap: wrap;
+    }
+
+    .s-btn {
+        flex: 1;
+        justify-content: center;
+        min-width: 0;
+    }
+
+    .tier-plan-container {
+        grid-template-columns: 1fr;
+    }
+
+    .s-footer {
+        flex-wrap: wrap;
+    }
+
+    .s-footer .s-btn {
+        flex: 1;
+        justify-content: center;
+    }
+}
+
+@media (max-width: 400px) {
+    .info-grid {
+        grid-template-columns: 1fr;
+    }
+}

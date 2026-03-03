@@ -17,10 +17,11 @@
  * @requires config/env - 서버 포트 및 Swagger 베이스 URL 설정
  */
 
-import { Application } from 'express';
-import * as path from 'path';
+import { Application, Request, Response, NextFunction } from 'express';
 import { getConfig } from './config/env';
 import { createLogger } from './utils/logger';
+import { requireAuth, requireAdmin } from './auth';
+import { SWAGGER_CDN } from './config/external-services';
 
 const logger = createLogger('Swagger');
 
@@ -932,12 +933,12 @@ AI 채팅 어시스턴트 API 문서
 function generateSwaggerHTML(): string {
     return `
 <!DOCTYPE html>
-<html lang="ko">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>OpenMake.Ai API Documentation</title>
-    <link rel="stylesheet" type="text/css" href="https://unpkg.com/swagger-ui-dist@5.11.0/swagger-ui.css">
+    <link rel="stylesheet" type="text/css" href="${SWAGGER_CDN.CSS_URL}">
     <style>
         body { margin: 0; background: #1a1a1a; }
         .swagger-ui { max-width: 1400px; margin: 0 auto; }
@@ -948,7 +949,7 @@ function generateSwaggerHTML(): string {
 </head>
 <body>
     <div id="swagger-ui"></div>
-    <script src="https://unpkg.com/swagger-ui-dist@5.11.0/swagger-ui-bundle.js"></script>
+    <script src="${SWAGGER_CDN.BUNDLE_JS_URL}"></script>
     <script>
         window.onload = function() {
             SwaggerUIBundle({
@@ -977,15 +978,19 @@ function generateSwaggerHTML(): string {
  * @param app - Express Application 인스턴스
  */
 export function setupSwaggerRoutes(app: Application): void {
+    const isProduction = process.env.NODE_ENV === 'production';
+
+    // production에서는 관리자만 접근 가능, development에서는 무인증 공개
+    const swaggerGuard = isProduction
+        ? [requireAuth, requireAdmin]
+        : [(_req: Request, _res: Response, next: NextFunction) => next()];
     // OpenAPI JSON 스펙
-    app.get('/api/openapi.json', (req, res) => {
+    app.get('/api/openapi.json', ...swaggerGuard, (_req: Request, res: Response) => {
         res.json(openApiSpec);
     });
-
     // Swagger UI
-    app.get('/api-docs', (req, res) => {
+    app.get('/api-docs', ...swaggerGuard, (_req: Request, res: Response) => {
         res.send(generateSwaggerHTML());
     });
-
     logger.info('API 문서 라우트 설정 완료: /api-docs');
 }

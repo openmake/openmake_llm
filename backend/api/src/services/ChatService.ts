@@ -28,6 +28,7 @@ import { assessComplexity } from '../chat/complexity-assessor';
 import type { DocumentStore } from '../documents/store';
 import type { UserTier } from '../data/user-manager';
 import type { UserContext } from '../mcp/user-sandbox';
+import { CONTEXT_LIMITS } from '../config/runtime-limits';
 import { getUnifiedMCPClient } from '../mcp/unified-client';
 import { OllamaClient } from '../ollama/client';
 import { getGptOssTaskPreset, isGeminiModel, type ChatMessage, type ToolDefinition } from '../ollama/types';
@@ -37,9 +38,16 @@ import { A2AStrategy, AgentLoopStrategy, DeepResearchStrategy, DirectStrategy, D
 import { formatResearchResult, formatDiscussionResult } from './chat-service-formatters';
 import { recordChatMetrics } from './chat-service-metrics';
 import { preRequestCheck, postResponseCheck } from '../chat/security-hooks';
+import { 
+    determineLanguagePolicy,
+    type SupportedLanguageCode,
+    type LanguagePolicyDecision
+} from '../chat/language-policy';
+import { getConfig } from '../config/env';
 import { createRoutingLogEntry, logRoutingDecision } from '../chat/routing-logger';
 import { applyDomainEngineOverride } from '../chat/domain-router';
 import type { ChatMessageRequest } from './chat-service-types';
+import { getRAGService } from './RAGService';
 
 // Re-export all types so consumers importing from ChatService don't break
 export type {
@@ -77,6 +85,8 @@ export class ChatService {
     private currentUserContext: UserContext | null = null;
     /** 사용자가 활성화한 MCP 도구 목록 (undefined면 레거시 모드: 전체 허용) */
     private currentEnabledTools: Record<string, boolean> | undefined = undefined;
+    /** 현재 실행 계획 (requiredTools 강제 포함에 사용) */
+    private currentExecutionPlan: ExecutionPlan | undefined = undefined;
 
     /** 단일 LLM 직접 호출 전략 */
     private readonly directStrategy: DirectStrategy;
@@ -148,6 +158,7 @@ export class ChatService {
      * 현재 사용자 등급에 허용된 MCP 도구 목록을 조회합니다.
      *
      * ToolRouter를 통해 사용자 티어에 맞는 도구만 필터링하여 반환합니다.
+     * 프로파일의 requiredTools에 명시된 도구는 사용자 토글과 무관하게 강제 포함됩니다.
      *
      * @returns 사용 가능한 도구 정의 배열
      */
@@ -160,6 +171,23 @@ export class ChatService {
         // enabledTools가 없으면 레거시 호환: 전체 허용 (API 클라이언트 등)
         if (this.currentEnabledTools !== undefined) {
             const filtered = allTools.filter(t => this.currentEnabledTools![t.function.name] === true);
+
+            // requiredTools 강제 포함: 프로파일이 요구하는 도구는 사용자 토글과 무관하게 포함
+            // 예: Vision 프로파일은 vision 도구가 항상 필요함
+            const requiredTools = this.currentExecutionPlan?.requiredTools;
+            if (requiredTools && requiredTools.length > 0) {
+                for (const reqToolName of requiredTools) {
+                    const alreadyIncluded = filtered.some(t => t.function.name.includes(reqToolName));
+                    if (!alreadyIncluded) {
+                        const requiredTool = allTools.find(t => t.function.name.includes(reqToolName));
+                        if (requiredTool) {
+                            filtered.push(requiredTool);
+                            logger.info(`requiredTools 강제 포함: ${requiredTool.function.name}`);
+                        }
+                    }
+                }
+            }
+
             logger.debug(`MCP 도구 필터링: ${allTools.length}개 중 ${filtered.length}개 활성화`);
             return filtered;
         }
@@ -194,7 +222,9 @@ export class ChatService {
         onAgentSelected?: (agent: { type: string; name: string; emoji?: string; phase?: string; reason?: string; confidence?: number }) => void,
         onDiscussionProgress?: (progress: DiscussionProgress) => void,
         onResearchProgress?: (progress: ResearchProgress) => void,
-        executionPlan?: ExecutionPlan
+        executionPlan?: ExecutionPlan,
+        onSkillsActivated?: (skillNames: string[]) => void,
+        onRAGSources?: (sources: Array<{ source: string; relevanceScore: number; snippet: string }>) => void
     ): Promise<string> {
         const {
             message,
@@ -210,7 +240,9 @@ export class ChatService {
             userRole,
             userTier,
             enabledTools,
+            ragEnabled,
             abortSignal,
+            userLanguagePreference,
         } = req;
 
         // SSE 연결 종료 시 처리를 조기 중단하기 위한 헬퍼
@@ -222,6 +254,7 @@ export class ChatService {
 
         this.setUserContext(userId || 'guest', userRole, userTier);
         this.currentEnabledTools = enabledTools;
+        this.currentExecutionPlan = executionPlan;
 
         // ── 보안 사전 검사 ──
         const securityPreCheck = preRequestCheck(message || '');
@@ -235,7 +268,32 @@ export class ChatService {
             logger.warn(`보안 경고: ${securityPreCheck.violations.map(v => v.detail).join(', ')}`);
         }
 
+        // ── 언어 정책 결정 ──
+        const config = getConfig();
+        let languagePolicy: LanguagePolicyDecision | undefined;
+        
+        // 언어 정책은 항상 결정 — 사용자 명시 선택 > 메시지 자동 감지 > 기본 언어 폴백
+        {
+            try {
+                languagePolicy = determineLanguagePolicy(message || '', {
+                    defaultLanguage: config.defaultResponseLanguage,
+                    enableDynamicResponse: true,
+                    minConfidenceThreshold: config.languageDetectionMinConfidence,
+                    shortTextThreshold: 20,
+                    fallbackLanguage: config.languageFallbackLanguage,
+                    supportedLanguages: ['ko', 'en', 'ja', 'zh', 'es', 'fr', 'de', 'pt', 'ru', 'ar', 'hi', 'it', 'nl', 'sv', 'da', 'no', 'fi', 'th', 'vi', 'tr']
+                }, userLanguagePreference as SupportedLanguageCode | undefined);
+                logger.info(`언어 정책 결정: ${languagePolicy.resolvedLanguage} (${userLanguagePreference ? '사용자 설정' : '자동 감지'}, 신뢰도: ${languagePolicy.detection.confidence.toFixed(2)})`);
+            } catch (error) {
+                logger.warn('언어 감지 실패, 기본 언어 사용:', error);
+                // Fallback to default behavior
+            }
+        }
         // 특수 모드 조기 분기: Discussion 또는 DeepResearch 모드는 별도 전략으로 위임
+        // languagePolicy.resolvedLanguage를 req에 반영하여 감지된 언어가 전략에 전달되도록 함
+        if (languagePolicy?.resolvedLanguage) {
+            req.userLanguagePreference = languagePolicy.resolvedLanguage;
+        }
         if (discussionMode) {
             return this.processMessageWithDiscussion(req, uploadedDocuments, onToken, onDiscussionProgress);
         }
@@ -266,11 +324,9 @@ export class ChatService {
         };
 
         const agentSelection = await routeToAgent(message || '');
-        const agentSystemMessage = getAgentSystemMessage(agentSelection);
+            const { prompt: agentSystemMessage, skillNames } = await getAgentSystemMessage(agentSelection, userId || undefined, languagePolicy?.resolvedLanguage || 'en');
         const selectedAgent = AGENTS[agentSelection.primaryAgent];
-
         logger.info(`에이전트: ${selectedAgent.emoji} ${selectedAgent.name}`);
-
         if (onAgentSelected && selectedAgent) {
             onAgentSelected({
                 type: agentSelection.primaryAgent,
@@ -282,6 +338,10 @@ export class ChatService {
             });
         }
 
+        if (onSkillsActivated && skillNames.length > 0) {
+            onSkillsActivated(skillNames);
+        }
+
         // 문서 컨텍스트 구성: 업로드된 문서의 텍스트와 이미지를 추출
         let documentContext = '';
         let documentImages: string[] = [];
@@ -290,7 +350,7 @@ export class ChatService {
             const doc = uploadedDocuments.get(docId);
             if (doc) {
                 let docText = doc.text || '';
-                const maxChars = isGeminiModel(this.client.model) ? 100000 : 30000;
+                const maxChars = isGeminiModel(this.client.model) ? CONTEXT_LIMITS.GEMINI_MAX_CONTEXT_CHARS : CONTEXT_LIMITS.DEFAULT_MAX_CONTEXT_CHARS;
 
                 if (docText.length > maxChars) {
                     const half = Math.floor(maxChars / 2);
@@ -311,14 +371,51 @@ export class ChatService {
             }
         }
 
+        // ── RAG 컨텍스트 검색 및 주입 (사용자가 RAG 활성화 시에만) ──
+        let ragContextStr = '';
+        if (ragEnabled) {
+            try {
+                const ragService = getRAGService();
+                const ragContext = await ragService.getRAGContextForChat(
+                    message || '',
+                    userId,
+                    docId || undefined,
+                );
+                if (ragContext && ragContext.documents.length > 0) {
+                    ragContextStr = '## \uD83D\uDD0D RAG CONTEXT (Retrieved Documents)\n';
+                    for (const doc of ragContext.documents) {
+                        ragContextStr += `### Source: ${doc.source} (relevance: ${doc.relevanceScore.toFixed(2)})\n`;
+                        ragContextStr += `${doc.content}\n\n`;
+                    }
+                    ragContextStr += '---\n\n';
+                    logger.info(`RAG 컨텍스트 주입: ${ragContext.documents.length}개 문서, 쿼리="${ragContext.searchQuery.substring(0, 50)}..."`);
+
+                    // RAG 출처 정보를 프론트엔드에 전달
+                    if (onRAGSources) {
+                        const snippetMaxLen = 200;
+                        onRAGSources(ragContext.documents.map(doc => ({
+                            source: doc.source,
+                            relevanceScore: doc.relevanceScore,
+                            snippet: doc.content.length > snippetMaxLen
+                                ? doc.content.substring(0, snippetMaxLen) + '...'
+                                : doc.content,
+                        })));
+                    }
+                }
+            } catch (ragError) {
+                logger.warn('RAG 컨텍스트 검색 실패 (무시하고 계속):', ragError);
+            }
+        }
+
         const enhancedUserMessage = applySequentialThinking(message, thinkingMode === true);
 
         let finalEnhancedMessage = '';
         if (documentContext) finalEnhancedMessage += documentContext;
+        if (ragContextStr) finalEnhancedMessage += ragContextStr;
         if (webSearchContext) finalEnhancedMessage += webSearchContext;
         finalEnhancedMessage += `\n## USER QUESTION\n${enhancedUserMessage}`;
 
-        const promptConfig = getPromptConfig(message);
+        const promptConfig = getPromptConfig(message, languagePolicy?.resolvedLanguage);
 
         const hasImages = (images && images.length > 0) || documentImages.length > 0;
         let modelSelection: ModelSelection;
@@ -439,8 +536,9 @@ export class ChatService {
         const a2aMode = executionPlan?.profile?.a2a ?? 'conditional';
         let skipA2A = a2aMode === 'off';
 
-        // P1-2: 'always' 모드에 대한 복잡도 기반 게이팅
-        if (!skipA2A && a2aMode === 'always') {
+        // P1-2: 'conditional' 모드에 대한 복잡도 기반 게이팅 (단순 쿼리 → A2A 스킵)
+        // 'always' 모드는 복잡도 무관하게 항상 A2A 실행
+        if (!skipA2A && a2aMode === 'conditional') {
             const complexity = assessComplexity({
                 query: message || '',
                 classification: { type: modelSelection.queryType, confidence: routingLog.queryFeatures.confidence || 0.5, matchedPatterns: [] },
@@ -467,6 +565,7 @@ export class ChatService {
                     onToken: streamToken,
                     abortSignal,
                     checkAborted,
+                    userLanguage: languagePolicy?.resolvedLanguage || 'en',
                 });
 
                 if (a2aResult.succeeded) {
@@ -507,6 +606,7 @@ export class ChatService {
             startTime,
             message,
             model: this.client.model,
+            apiKeyId: req.apiKeyId,
             selectedAgent,
             agentSelection,
             executionPlan,

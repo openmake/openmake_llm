@@ -98,10 +98,10 @@ export class ResearchRepository extends BaseRepository {
         );
     }
 
-    async getResearchSteps(sessionId: string): Promise<ResearchStep[]> {
+    async getResearchSteps(sessionId: string, limit: number = 100): Promise<ResearchStep[]> {
         const result = await this.query<ResearchStep>(
-            'SELECT * FROM research_steps WHERE session_id = $1 ORDER BY step_number ASC',
-            [sessionId]
+            'SELECT * FROM research_steps WHERE session_id = $1 ORDER BY step_number ASC LIMIT $2',
+            [sessionId, limit]
         );
         return result.rows.map((row) => ({
             ...row,
@@ -119,5 +119,21 @@ export class ResearchRepository extends BaseRepository {
             key_findings: row.key_findings || [],
             sources: row.sources || []
         }));
+    }
+
+    async deleteSessionWithSteps(sessionId: string): Promise<void> {
+        const client = await this.pool.connect();
+
+        try {
+            await client.query('BEGIN');
+            await client.query('DELETE FROM research_steps WHERE session_id = $1', [sessionId]);
+            await client.query('DELETE FROM research_sessions WHERE id = $1', [sessionId]);
+            await client.query('COMMIT');
+        } catch (error) {
+            await client.query('ROLLBACK');
+            throw error;
+        } finally {
+            client.release();
+        }
     }
 }

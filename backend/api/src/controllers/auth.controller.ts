@@ -10,13 +10,14 @@ import * as crypto from 'crypto';
 import { getAuthService } from '../services/AuthService';
 import { getUserManager } from '../data/user-manager';
 import type { OAuthTokenResponse, GoogleUserInfo, GitHubUser, GitHubEmail } from '../auth/types';
-import { requireAuth, requireAdmin, extractToken, blacklistToken, setTokenCookie, clearTokenCookie, setRefreshTokenCookie, generateRefreshToken, generateToken, verifyRefreshToken } from '../auth';
+import { requireAuth, extractToken, blacklistToken, setTokenCookie, clearTokenCookie, setRefreshTokenCookie, generateRefreshToken, generateToken, verifyRefreshToken } from '../auth';
 import { createLogger } from '../utils/logger';
 import { success, badRequest, unauthorized, conflict, internalError, serviceUnavailable } from '../utils/api-response';
 import { getConfig } from '../config/env';
 import { APP_USER_AGENT } from '../config/constants';
+import { GOOGLE_OAUTH, GITHUB_OAUTH, GITHUB_API } from '../config/external-services';
 import { validate } from '../middlewares/validation';
-import { loginSchema, registerSchema, changePasswordSchema } from '../schemas';
+import { loginSchema, registerSchema, changePasswordSchema, tierChangeSchema } from '../schemas';
 
 const log = createLogger('AuthController');
 
@@ -52,23 +53,38 @@ async function ensureOauthStateTable(): Promise<void> {
 
 // 서버 시작 시 테이블 생성 + 만료 state 정리 스케줄러
 ensureOauthStateTable();
-const oauthCleanupTimer = setInterval(async () => {
-    try {
-        const { getPool } = await import('../data/models/unified-database');
-        const pool = getPool();
-        await pool.query(
-            `DELETE FROM oauth_states WHERE created_at < NOW() - INTERVAL '5 minutes'`
-        );
-    } catch {
-        // DB 연결 실패 시 폴백 정리
-        const now = Date.now();
-        for (const [state, data] of oauthStatesFallback.entries()) {
-            if (now - data.createdAt > STATE_TTL_MS) {
-                oauthStatesFallback.delete(state);
-            }
-        }
+let oauthCleanupInFlight = false;
+const oauthCleanupTimer = setInterval(() => {
+    if (oauthCleanupInFlight) {
+        return;
     }
+
+    oauthCleanupInFlight = true;
+
+    void (async () => {
+        try {
+            const { getPool } = await import('../data/models/unified-database');
+            const pool = getPool();
+            await pool.query(
+                `DELETE FROM oauth_states WHERE created_at < NOW() - INTERVAL '5 minutes'`
+            );
+        } catch {
+            // DB 연결 실패 시 폴백 정리
+            const now = Date.now();
+            for (const [state, data] of oauthStatesFallback.entries()) {
+                if (now - data.createdAt > STATE_TTL_MS) {
+                    oauthStatesFallback.delete(state);
+                }
+            }
+        } finally {
+            oauthCleanupInFlight = false;
+        }
+    })();
 }, 60 * 1000);
+// BUG-R3-002: unref() - 타이머가 프로세스 종료를 막지 않도록 설정
+if ((oauthCleanupTimer as NodeJS.Timeout & { unref?: () => void }).unref) {
+    (oauthCleanupTimer as NodeJS.Timeout & { unref: () => void }).unref();
+}
 
 /**
  * OAuth state 정리 스케줄러 중지 (서버 종료 시)
@@ -232,15 +248,13 @@ export class AuthController {
     }
 
     private setupRoutes(): void {
-        const authService = getAuthService();
-        const userManager = getUserManager();
-
         // ===== 기본 인증 API =====
         this.router.post('/register', validate(registerSchema), this.register.bind(this));
         this.router.post('/login', validate(loginSchema), this.login.bind(this));
         this.router.post('/logout', this.logout.bind(this));
         this.router.get('/me', requireAuth, this.getCurrentUser.bind(this));
         this.router.put('/password', requireAuth, validate(changePasswordSchema), this.changePassword.bind(this));
+        this.router.put('/tier', requireAuth, validate(tierChangeSchema), this.changeTier.bind(this));
 
         // ===== Token Refresh =====
         this.router.post('/refresh', this.refresh.bind(this));
@@ -265,7 +279,7 @@ export class AuthController {
             if (!result.success) {
                 const isConflict = result.error?.includes('이미 등록된');
                 res.status(isConflict ? 409 : 400).json(
-                    isConflict 
+                    isConflict
                         ? conflict(result.error || '이미 등록된 사용자입니다')
                         : badRequest(result.error || '회원가입 요청이 올바르지 않습니다')
                 );
@@ -279,54 +293,54 @@ export class AuthController {
         }
     }
 
-     /**
-      * POST /api/auth/login - 로그인
-      * #24 연동: 표준 API 응답 형식
-      */
-     private async login(req: Request, res: Response): Promise<void> {
-         try {
-             const authService = getAuthService();
-              const result = await authService.login(req.body);
+    /**
+     * POST /api/auth/login - 로그인
+     * #24 연동: 표준 API 응답 형식
+     */
+    private async login(req: Request, res: Response): Promise<void> {
+        try {
+            const authService = getAuthService();
+            const result = await authService.login(req.body);
 
-              if (!result.success) {
-                 res.status(401).json(unauthorized(result.error || '로그인에 실패했습니다'));
-                 return;
-             }
+            if (!result.success) {
+                res.status(401).json(unauthorized(result.error || '로그인에 실패했습니다'));
+                return;
+            }
 
-             if (result.token) {
-                 setTokenCookie(res, result.token);
-                 if (result.user) {
-                     setRefreshTokenCookie(res, generateRefreshToken(result.user));
-                 }
-             }
-             res.json(success(result));
-         } catch (error) {
-             log.error('[Login] 오류:', error);
-             res.status(500).json(internalError('로그인 처리 중 오류가 발생했습니다'));
-         }
-     }
+            if (result.token) {
+                setTokenCookie(res, result.token);
+                if (result.user) {
+                    setRefreshTokenCookie(res, generateRefreshToken(result.user));
+                }
+            }
+            res.json(success(result));
+        } catch (error) {
+            log.error('[Login] 오류:', error);
+            res.status(500).json(internalError('로그인 처리 중 오류가 발생했습니다'));
+        }
+    }
 
-     /**
-      * POST /api/auth/logout - 로그아웃
-      * #8 연동: 토큰 블랙리스트에 추가하여 재사용 방지
-      * #24 연동: 표준 API 응답 형식
-      */
-     private logout(req: Request, res: Response): void {
-         const authHeader = req.headers.authorization;
-         if (authHeader) {
-             const token = extractToken(authHeader);
-             if (token) {
-                 blacklistToken(token);
-             }
-         }
-         // 쿠키 토큰도 블랙리스트에 추가
-         const cookieToken = req.cookies?.auth_token;
-         if (cookieToken) {
-             blacklistToken(cookieToken);
-         }
-         clearTokenCookie(res);
-         res.json(success({ message: '로그아웃되었습니다' }));
-     }
+    /**
+     * POST /api/auth/logout - 로그아웃
+     * #8 연동: 토큰 블랙리스트에 추가하여 재사용 방지
+     * #24 연동: 표준 API 응답 형식
+     */
+    private logout(req: Request, res: Response): void {
+        const authHeader = req.headers.authorization;
+        if (authHeader) {
+            const token = extractToken(authHeader);
+            if (token) {
+                blacklistToken(token);
+            }
+        }
+        // 쿠키 토큰도 블랙리스트에 추가
+        const cookieToken = req.cookies?.auth_token;
+        if (cookieToken) {
+            blacklistToken(cookieToken);
+        }
+        clearTokenCookie(res);
+        res.json(success({ message: '로그아웃되었습니다' }));
+    }
 
     /**
      * GET /api/auth/me - 현재 사용자 정보
@@ -344,7 +358,7 @@ export class AuthController {
         try {
             const authService = getAuthService();
             const { currentPassword, newPassword } = req.body;
-            
+
             const user = req.user;
             if (!user?.id || !user?.email) {
                 res.status(401).json(unauthorized('인증 정보가 불완전합니다'));
@@ -361,7 +375,7 @@ export class AuthController {
             if (!result.success) {
                 const isAuthFail = result.error?.includes('현재 비밀번호');
                 res.status(isAuthFail ? 401 : 400).json(
-                    isAuthFail 
+                    isAuthFail
                         ? unauthorized(result.error || '현재 비밀번호가 일치하지 않습니다')
                         : badRequest(result.error || '비밀번호 변경 요청이 올바르지 않습니다')
                 );
@@ -372,6 +386,35 @@ export class AuthController {
         } catch (error) {
             log.error('[ChangePassword] 오류:', error);
             res.status(500).json(internalError('비밀번호 변경 중 오류가 발생했습니다'));
+        }
+    }
+
+    /**
+     * PUT /api/auth/tier - 사용자 등급 변경 (셀프 서비스)
+     * 인증된 사용자가 자신의 등급을 free/pro/enterprise로 변경합니다.
+     */
+    private async changeTier(req: Request, res: Response): Promise<void> {
+        try {
+            const user = req.user;
+            if (!user?.id) {
+                res.status(401).json(unauthorized('인증 정보가 불완전합니다'));
+                return;
+            }
+
+            const { tier } = req.body;
+            const userManager = getUserManager();
+            const updated = await userManager.changeTier(String(user.id), tier);
+
+            if (!updated) {
+                res.status(404).json(badRequest('사용자를 찾을 수 없습니다'));
+                return;
+            }
+
+            log.info(`사용자 등급 변경: ${updated.email} -> ${tier}`);
+            res.json(success({ user: updated }));
+        } catch (error) {
+            log.error('[ChangeTier] 오류:', error);
+            res.status(500).json(internalError('등급 변경 중 오류가 발생했습니다'));
         }
     }
 
@@ -447,7 +490,7 @@ export class AuthController {
 
         // 🔒 Phase 2 보안 패치: 암호학적으로 안전한 state 생성
         const state = await generateSecureState('google');
-        const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
+        const authUrl = new URL(GOOGLE_OAUTH.AUTH_URL);
         authUrl.searchParams.set('client_id', clientId);
         authUrl.searchParams.set('redirect_uri', redirectUri);
         authUrl.searchParams.set('response_type', 'code');
@@ -474,7 +517,7 @@ export class AuthController {
 
         // 🔒 Phase 2 보안 패치: 암호학적으로 안전한 state 생성
         const state = await generateSecureState('github');
-        const authUrl = new URL('https://github.com/login/oauth/authorize');
+        const authUrl = new URL(GITHUB_OAUTH.AUTH_URL);
         authUrl.searchParams.set('client_id', clientId);
         authUrl.searchParams.set('redirect_uri', redirectUri);
         authUrl.searchParams.set('scope', 'read:user user:email');
@@ -519,7 +562,7 @@ export class AuthController {
             const redirectUri = buildRedirectUri(req, 'google', this.serverPort);
 
             // 토큰 교환
-            const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+            const tokenRes = await fetch(GOOGLE_OAUTH.TOKEN_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                 body: new URLSearchParams({
@@ -535,21 +578,21 @@ export class AuthController {
             if (!tokenData.access_token) throw new Error('토큰 교환 실패');
 
             // 사용자 정보 가져오기
-            const userInfoRes = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+            const userInfoRes = await fetch(GOOGLE_OAUTH.USERINFO_URL, {
                 headers: { Authorization: `Bearer ${tokenData.access_token}` }
             });
 
             const userInfo = await userInfoRes.json() as GoogleUserInfo;
             if (!userInfo.email) throw new Error('이메일 정보를 가져올 수 없습니다');
 
-             const authService = getAuthService();
-              const result = await authService.findOrCreateOAuthUser(userInfo.email, 'google');
+            const authService = getAuthService();
+            const result = await authService.findOrCreateOAuthUser(userInfo.email, 'google');
 
-              if (!result.success || !result.token || !result.user) throw new Error(result.error || '인증 실패');
+            if (!result.success || !result.token || !result.user) throw new Error(result.error || '인증 실패');
 
-             setTokenCookie(res, result.token);
-             setRefreshTokenCookie(res, generateRefreshToken(result.user));
-             res.redirect('/?auth=callback');
+            setTokenCookie(res, result.token);
+            setRefreshTokenCookie(res, generateRefreshToken(result.user));
+            res.redirect('/?auth=callback');
         } catch (error) {
             log.error('[OAuth Google Callback] 오류:', error);
             res.redirect('/login.html?error=oauth_failed');
@@ -590,7 +633,7 @@ export class AuthController {
             const clientSecret = getConfig().githubClientSecret;
 
             // 토큰 교환
-            const tokenRes = await fetch('https://github.com/login/oauth/access_token', {
+            const tokenRes = await fetch(GITHUB_OAUTH.TOKEN_URL, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -607,7 +650,7 @@ export class AuthController {
             if (!tokenData.access_token) throw new Error('토큰 교환 실패');
 
             // 사용자 정보 가져오기
-            const userRes = await fetch('https://api.github.com/user', {
+            const userRes = await fetch(GITHUB_API.USER_INFO, {
                 headers: {
                     Authorization: `Bearer ${tokenData.access_token}`,
                     'User-Agent': APP_USER_AGENT
@@ -619,7 +662,7 @@ export class AuthController {
 
             // 이메일 없으면 별도 API 호출
             if (!email) {
-                const emailRes = await fetch('https://api.github.com/user/emails', {
+                const emailRes = await fetch(GITHUB_API.USER_EMAILS, {
                     headers: {
                         Authorization: `Bearer ${tokenData.access_token}`,
                         'User-Agent': APP_USER_AGENT
@@ -627,17 +670,24 @@ export class AuthController {
                 });
                 const emails = await emailRes.json() as GitHubEmail[];
                 const primaryEmail = emails.find(e => e.primary);
-                email = primaryEmail?.email || `${githubUser.login}@github.local`;
+                // BUG-R3-003: 가짜 @github.local 도메인 대신 이메일 비공개 사용자는 로그인 거부
+                // primary 이메일이 없으면 OAuth 프로필에서 public 이메일 사용, 그것도 없으면 거부
+                if (!primaryEmail?.email) {
+                    log.warn(`[OAuth GitHub] 이메일 비공개 사용자 로그인 거부: login=${githubUser.login}`);
+                    res.redirect('/login.html?error=email_required');
+                    return;
+                }
+                email = primaryEmail.email;
             }
 
-             const authService = getAuthService();
-              const result = await authService.findOrCreateOAuthUser(email, 'github');
+            const authService = getAuthService();
+            const result = await authService.findOrCreateOAuthUser(email, 'github');
 
-              if (!result.success || !result.token || !result.user) throw new Error(result.error || '인증 실패');
+            if (!result.success || !result.token || !result.user) throw new Error(result.error || '인증 실패');
 
-             setTokenCookie(res, result.token);
-             setRefreshTokenCookie(res, generateRefreshToken(result.user));
-             res.redirect('/?auth=callback');
+            setTokenCookie(res, result.token);
+            setRefreshTokenCookie(res, generateRefreshToken(result.user));
+            res.redirect('/?auth=callback');
         } catch (error) {
             log.error('[OAuth GitHub Callback] 오류:', error);
             res.redirect('/login.html?error=oauth_failed');

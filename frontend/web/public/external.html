@@ -79,10 +79,10 @@
     <div class="modal-overlay" id="connectModal">
         <div class="modal">
             <h2 id="connectTitle">서비스 연결</h2>
-            <div class="form-group"><label>액세스 토큰 <span style="color:var(--danger)">*</span></label><input type="text" id="accessToken" placeholder="액세스 토큰을 입력하세요"></div>
-            <div class="form-group"><label>리프레시 토큰</label><input type="text" id="refreshToken" placeholder="(선택사항)"></div>
-            <div class="form-group"><label>계정 이메일</label><input type="text" id="accountEmail" placeholder="(선택사항)"></div>
-            <div class="form-group"><label>계정 이름</label><input type="text" id="accountName" placeholder="(선택사항)"></div>
+            <div class="form-group"><label for="accessToken">액세스 토큰 <span style="color:var(--danger)">*</span></label><input type="text" id="accessToken" placeholder="액세스 토큰을 입력하세요"></div>
+            <div class="form-group"><label for="refreshToken">리프레시 토큰</label><input type="text" id="refreshToken" placeholder="(선택사항)"></div>
+            <div class="form-group"><label for="accountEmail">계정 이메일</label><input type="text" id="accountEmail" placeholder="(선택사항)"></div>
+            <div class="form-group"><label for="accountName">계정 이름</label><input type="text" id="accountName" placeholder="(선택사항)"></div>
             <div class="modal-actions">
                 <button class="btn-secondary" onclick="closeConnect()">취소</button>
                 <button class="btn-primary" onclick="submitConnect()">연결</button>
@@ -101,8 +101,8 @@
 
     <div id="toast" class="toast"></div>
 
-    <script src="/js/components/sidebar.js"></script>
-    <script>
+    <script type="module" src="/js/components/sidebar.js"></script>
+    <script type="module">
         const SERVICES = [
             { type:'google_drive', label:'Google Drive', icon:'📁' },
             { type:'notion', label:'Notion', icon:'📓' },
@@ -114,9 +114,8 @@
         let connectingType = null;
 
         function authFetch(url, options = {}) {
-            const token = localStorage.getItem('authToken');
-            const headers = { 'Content-Type':'application/json', ...(token ? {'Authorization':'Bearer '+token} : {}), ...options.headers };
-            return fetch(url, { ...options, headers }).then(r => r.json());
+            const headers = { 'Content-Type':'application/json', ...options.headers };
+            return fetch(url, { ...options, headers, credentials: 'include' }).then(r => r.json());
         }
         function showToast(msg, type = 'success') {
             const t = document.getElementById('toast');
@@ -221,6 +220,10 @@
         }
 
         renderServices();
+
+        window.closeConnect = closeConnect;
+        window.submitConnect = submitConnect;
+        window.closeFiles = closeFiles;
     </script>
 </body>
 </html>

@@ -10,23 +10,15 @@
  */
 
 import { getState, setState } from './state.js';
+import { STORAGE_KEY_AUTH_TOKEN, STORAGE_KEY_USER, STORAGE_KEY_GUEST_MODE, STORAGE_KEY_IS_GUEST } from './constants.js';
 
 /**
  * 안전한 localStorage 래퍼
  * localStorage 접근 시 발생할 수 있는 예외(Safari 프라이빗 모드 등)를 처리합니다.
  * @type {{getItem: Function, setItem: Function, removeItem: Function}}
  */
-const SafeStorage = window.SafeStorage || {
-    getItem(key) {
-        try { return localStorage.getItem(key); } catch (e) { return null; }
-    },
-    setItem(key, value) {
-        try { localStorage.setItem(key, value); } catch (e) {}
-    },
-    removeItem(key) {
-        try { localStorage.removeItem(key); } catch (e) {}
-    }
-};
+// SafeStorage 래퍼 — safe-storage.js에서 전역 등록됨
+const SafeStorage = window.SafeStorage;
 
 /**
  * Silent refresh 동시성 가드.
@@ -36,15 +28,29 @@ const SafeStorage = window.SafeStorage || {
 let isRefreshing = false;
 
 /**
+ * Proactive refresh 타이머 ID.
+ * 토큰 만료 전에 미리 갱신하여 401 burst를 방지합니다.
+ * @type {number|null}
+ */
+let refreshTimer = null;
+
+/**
+ * 동시 401 대기열.
+ * 리프레시 진행 중 추가 401 요청은 이 Promise를 공유합니다.
+ * @type {Promise<boolean>|null}
+ */
+let refreshPromise = null;
+
+/**
  * stale 인증 데이터 정리
  * httpOnly 쿠키 만료 후 localStorage에 남은 잔존 데이터를 제거합니다.
  * @returns {void}
  */
 function clearStaleAuth() {
-    SafeStorage.removeItem('authToken');
-    SafeStorage.removeItem('user');
-    SafeStorage.removeItem('guestMode');
-    SafeStorage.removeItem('isGuest');
+    SafeStorage.removeItem(STORAGE_KEY_AUTH_TOKEN);
+    SafeStorage.removeItem(STORAGE_KEY_USER);
+    SafeStorage.removeItem(STORAGE_KEY_GUEST_MODE);
+    SafeStorage.removeItem(STORAGE_KEY_IS_GUEST);
     setState('auth.authToken', null);
     setState('auth.currentUser', null);
     setState('auth.isGuestMode', false);
@@ -57,7 +63,7 @@ function clearStaleAuth() {
  */
 async function trySilentRefresh() {
     try {
-        const resp = await fetch('/api/auth/refresh', {
+        const resp = await fetch(API_ENDPOINTS.AUTH_REFRESH, {
             method: 'POST',
             credentials: 'include',
             headers: { 'Content-Type': 'application/json' }
@@ -66,8 +72,9 @@ async function trySilentRefresh() {
             const data = await resp.json();
             const newToken = data?.data?.token;
             if (data?.success === true && newToken) {
-                SafeStorage.setItem('authToken', newToken);
+                // authToken은 httpOnly 쿠키로 처리됩니다 — localStorage 저장 안함
                 setState('auth.authToken', newToken);
+                scheduleProactiveRefresh(newToken);
                 return true;
             }
         }
@@ -78,11 +85,54 @@ async function trySilentRefresh() {
 }
 
 /**
+ * JWT payload에서 exp 클레임을 추출하여 만료 전에 자동 갱신을 예약합니다.
+ * TTL의 80% 시점(예: 15분 토큰 → 12분 후)에 리프레시를 실행합니다.
+ * @param {string} token - JWT 액세스 토큰
+ * @returns {void}
+ */
+function scheduleProactiveRefresh(token) {
+    if (refreshTimer) {
+        clearTimeout(refreshTimer);
+        refreshTimer = null;
+    }
+    if (!token || token === 'cookie-session') return;
+
+    try {
+        // JWT payload 디코딩 (base64url → JSON)
+        const parts = token.split('.');
+        if (parts.length !== 3) return;
+        const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+        const exp = payload.exp; // UNIX timestamp (seconds)
+        if (!exp) return;
+
+        const now = Math.floor(Date.now() / 1000);
+        const ttl = exp - now; // seconds until expiry
+        if (ttl <= 30) return; // 30초 이하면 예약 불필요
+
+        // TTL의 80% 시점에 갱신 (최소 30초 후)
+        const refreshInMs = Math.max(ttl * 0.8, 30) * 1000;
+
+        refreshTimer = setTimeout(async () => {
+            refreshTimer = null;
+            // 로그아웃 상태면 무시
+            if (!getState('auth.currentUser')) return;
+            const success = await trySilentRefresh();
+            if (!success) {
+                // 갱신 실패 — 다음 authFetch 401 인터셉터에 위임
+                console.warn('[Auth] Proactive refresh 실패 — 401 인터셉터로 폴백');
+            }
+        }, refreshInMs);
+    } catch (e) {
+        // JWT 디코딩 실패 — 무시 (서버가 비표준 토큰을 반환할 수 있음)
+    }
+}
+
+/**
  * 서버에서 현재 유저 정보를 조회합니다.
  * @returns {Promise<Object|null>} 유저 객체 또는 null
  */
 async function fetchCurrentUser() {
-    const resp = await fetch('/api/auth/me', { credentials: 'include' });
+    const resp = await fetch(API_ENDPOINTS.AUTH_ME, { credentials: 'include' });
     if (!resp.ok) return null;
     const data = await resp.json();
     const user = data.data?.user || data.user;
@@ -97,13 +147,11 @@ async function fetchCurrentUser() {
  * @returns {Promise<void>} 세션 검증 완료까지 대기
  */
 async function initAuth() {
-    const authToken = SafeStorage.getItem('authToken');
-    const isGuestMode = SafeStorage.getItem('guestMode') === 'true';
+    const isGuestMode = SafeStorage.getItem(STORAGE_KEY_GUEST_MODE) === 'true';
 
-    setState('auth.authToken', authToken);
     setState('auth.isGuestMode', isGuestMode);
 
-    const savedUser = SafeStorage.getItem('user');
+    const savedUser = SafeStorage.getItem(STORAGE_KEY_USER);
 
     // 🔒 세션 유효성 검증: localStorage에 유저 데이터가 있으면 서버에서 확인
     // 액세스 토큰 만료 시 리프레시 토큰으로 자동 갱신을 시도합니다
@@ -125,6 +173,9 @@ async function initAuth() {
                 // ✅ 세션 유효 — 서버의 최신 유저 정보로 갱신
                 SafeStorage.setItem('user', JSON.stringify(user));
                 setState('auth.currentUser', user);
+                // 토큰이 유효하면 proactive refresh 예약
+                const currentToken = getState('auth.authToken');
+                if (currentToken) scheduleProactiveRefresh(currentToken);
             } else {
                 // 리프레시까지 실패 → 세션 완전 만료, stale 데이터 정리
                 clearStaleAuth();
@@ -172,7 +223,7 @@ async function claimAnonymousSession(token) {
         if (token) {
             headers['Authorization'] = `Bearer ${token}`;
         }
-        await fetch('/api/chat/sessions/claim', {
+        await fetch(API_ENDPOINTS.CHAT_SESSIONS_CLAIM, {
             method: 'POST',
             credentials: 'include',
             headers,
@@ -194,22 +245,15 @@ async function claimAnonymousSession(token) {
  */
 async function recoverSessionFromCookie() {
     try {
-        const resp = await fetch('/api/auth/me', { credentials: 'include' });
+        const resp = await fetch(API_ENDPOINTS.AUTH_ME, { credentials: 'include' });
         if (resp.ok) {
             const data = await resp.json();
             const user = data.data?.user || data.user;
             if (user && user.email) {
                 // 세션 복구 성공
-                SafeStorage.setItem('user', JSON.stringify(user));
-                SafeStorage.removeItem('guestMode');
-                SafeStorage.removeItem('isGuest');
-
-                // 🔒 OAuth 세션 마커: httpOnly 쿠키 기반 인증 표시
-                // spa-router.js의 isAuthenticated()가 이 값을 확인하여 인증 상태 유지
-                if (!SafeStorage.getItem('authToken')) {
-                    SafeStorage.setItem('authToken', 'cookie-session');
-                    setState('auth.authToken', 'cookie-session');
-                }
+                SafeStorage.setItem(STORAGE_KEY_USER, JSON.stringify(user));
+                SafeStorage.removeItem(STORAGE_KEY_GUEST_MODE);
+                SafeStorage.removeItem(STORAGE_KEY_IS_GUEST);
 
                 setState('auth.currentUser', user);
                 setState('auth.isGuestMode', false);
@@ -224,7 +268,10 @@ async function recoverSessionFromCookie() {
                 console.log('[Auth Module] OAuth 쿠키 세션 복구 성공:', user.email);
 
                 // 🔒 Phase 3: 통합된 클레이밍 함수 사용
-                await claimAnonymousSession(getState('auth.authToken'));
+                await claimAnonymousSession(null);
+                // Proactive refresh 예약 (토큰이 있으면)
+                const currentToken = getState('auth.authToken');
+                if (currentToken) scheduleProactiveRefresh(currentToken);
             }
         }
     } catch (e) {
@@ -252,7 +299,7 @@ async function authFetch(url, options = {}) {
         ...(requestOptions.headers || {})
     };
 
-    if (authToken) {
+    if (authToken && authToken !== 'cookie-session') {
         headers['Authorization'] = `Bearer ${authToken}`;
     }
 
@@ -262,46 +309,57 @@ async function authFetch(url, options = {}) {
         headers
     });
 
-    const isLoginRequest = url.includes('/api/auth/login');
-    const isRefreshRequest = url.includes('/api/auth/refresh');
+    const isLoginRequest = url.includes(API_ENDPOINTS.AUTH_LOGIN);
+    const isRefreshRequest = url.includes(API_ENDPOINTS.AUTH_REFRESH);
 
     // 401 인터셉터: 세션 만료 시 로그인 페이지로 리다이렉트
     if (response.status === 401 && !isLoginRequest && !isRefreshRequest) {
         if (!isRetryAfterRefresh) {
-            if (isRefreshing) {
-                while (isRefreshing) {
-                    await new Promise((resolve) => setTimeout(resolve, 50));
+            // 리프레시 진행 중이면 공유 Promise 대기 (busy-wait 대신)
+            if (refreshPromise) {
+                const success = await refreshPromise;
+                if (success) {
+                    return authFetch(url, { ...options, _retryAfterRefresh: true });
                 }
-                return authFetch(url, { ...options, _retryAfterRefresh: true });
-            }
+            } else {
+                // 첫 번째 401 요청이 리프레시를 담당
+                refreshPromise = (async () => {
+                    isRefreshing = true;
+                    try {
+                        const refreshResponse = await fetch(API_ENDPOINTS.AUTH_REFRESH, {
+                            method: 'POST',
+                            credentials: 'include',
+                            headers: { 'Content-Type': 'application/json' }
+                        });
 
-            isRefreshing = true;
-            try {
-                const refreshResponse = await fetch('/api/auth/refresh', {
-                    method: 'POST',
-                    credentials: 'include',
-                    headers: { 'Content-Type': 'application/json' }
-                });
+                        if (refreshResponse.ok) {
+                            const refreshData = await refreshResponse.json();
+                            const newToken = refreshData?.data?.token;
 
-                if (refreshResponse.ok) {
-                    const refreshData = await refreshResponse.json();
-                    const newToken = refreshData?.data?.token;
-
-                    if (refreshData?.success === true && newToken) {
-                        SafeStorage.setItem('authToken', newToken);
-                        setState('auth.authToken', newToken);
-                        return authFetch(url, { ...options, _retryAfterRefresh: true });
+                            if (refreshData?.success === true && newToken) {
+                                setState('auth.authToken', newToken);
+                                scheduleProactiveRefresh(newToken);
+                                return true;
+                            }
+                        }
+                        return false;
+                    } catch (e) {
+                        return false;
+                    } finally {
+                        isRefreshing = false;
+                        refreshPromise = null;
                     }
+                })();
+
+                const success = await refreshPromise;
+                if (success) {
+                    return authFetch(url, { ...options, _retryAfterRefresh: true });
                 }
-            } catch (e) {
-                // 네트워크 오류 시 기존 401 리다이렉트 로직으로 폴백
-            } finally {
-                isRefreshing = false;
             }
         }
 
-        SafeStorage.removeItem('authToken');
-        SafeStorage.removeItem('user');
+        SafeStorage.removeItem(STORAGE_KEY_AUTH_TOKEN);
+        SafeStorage.removeItem(STORAGE_KEY_USER);
         setState('auth.authToken', null);
         setState('auth.currentUser', null);
         window.location.href = '/login.html';
@@ -344,7 +402,7 @@ async function authJsonFetch(url, options = {}) {
  */
 async function login(email, password) {
     try {
-        const response = await fetch('/api/auth/login', {
+        const response = await fetch(API_ENDPOINTS.AUTH_LOGIN, {
             method: 'POST',
             credentials: 'include',  // 🔒 httpOnly 쿠키 포함
             headers: { 'Content-Type': 'application/json' },
@@ -359,11 +417,12 @@ async function login(email, password) {
         const user = payload.user;
 
         if (response.ok && token) {
-            SafeStorage.setItem('authToken', token);
-            SafeStorage.setItem('user', JSON.stringify(user));
-            SafeStorage.removeItem('guestMode');
+            // authToken은 httpOnly 쿠키로 처리됩니다 — localStorage 저장 안함
+            SafeStorage.setItem(STORAGE_KEY_USER, JSON.stringify(user));
+            SafeStorage.removeItem(STORAGE_KEY_GUEST_MODE);
 
             setState('auth.authToken', token);
+            scheduleProactiveRefresh(token);
             setState('auth.currentUser', user);
             setState('auth.isGuestMode', false);
 
@@ -389,14 +448,20 @@ async function login(email, password) {
  */
 function logout() {
     // 서버에 로그아웃 요청 (httpOnly 쿠키 포함)
-    authFetch('/api/auth/logout', {
+    authFetch(API_ENDPOINTS.AUTH_LOGOUT, {
         method: 'POST'
-    }).catch(() => {});
+    }).catch(() => { });
+
+    // Proactive refresh 타이머 해제
+    if (refreshTimer) {
+        clearTimeout(refreshTimer);
+        refreshTimer = null;
+    }
 
     // localStorage 정리
-    SafeStorage.removeItem('authToken');
-    SafeStorage.removeItem('user');
-    SafeStorage.removeItem('guestMode');
+    SafeStorage.removeItem(STORAGE_KEY_AUTH_TOKEN);
+    SafeStorage.removeItem(STORAGE_KEY_USER);
+    SafeStorage.removeItem(STORAGE_KEY_GUEST_MODE);
 
     setState('auth.authToken', null);
     setState('auth.currentUser', null);
@@ -482,6 +547,78 @@ function getCurrentUser() {
     return getState('auth.currentUser');
 }
 
+/**
+ * 사용자 등급 변경 (셀프 서비스)
+ * PUT /api/auth/tier 호출 후 AppState + localStorage 동기화
+ * @param {string} tier - 변경할 등급 ('free' | 'pro' | 'enterprise')
+ * @returns {Promise<boolean>} 성공 여부
+ */
+async function changeTier(tier) {
+    const validTiers = ['free', 'pro', 'enterprise'];
+    if (!validTiers.includes(tier)) {
+        if (typeof showToast === 'function') showToast('유효하지 않은 등급입니다', 'error');
+        return false;
+    }
+
+    try {
+        const res = await authFetch('/api/auth/tier', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tier })
+        });
+
+        if (!res || !res.ok) {
+            const data = res ? await res.json().catch(() => ({})) : {};
+            if (typeof showToast === 'function') showToast(data.error || '등급 변경 실패', 'error');
+            return false;
+        }
+
+        const data = await res.json();
+        const updatedUser = data.data?.user || data.user;
+
+        if (updatedUser) {
+            // AppState 업데이트
+            setState('auth.currentUser', updatedUser);
+            // localStorage 업데이트
+            SafeStorage.setItem(STORAGE_KEY_USER, JSON.stringify(updatedUser));
+        } else {
+            // 서버가 user 객체를 반환하지 않은 경우 로컬만 업데이트
+            const currentUser = getState('auth.currentUser');
+            if (currentUser) {
+                const patched = { ...currentUser, tier };
+                setState('auth.currentUser', patched);
+                SafeStorage.setItem(STORAGE_KEY_USER, JSON.stringify(patched));
+            }
+        }
+
+        // 사이드바 티어 배지 갱신
+        if (typeof window.updateSidebarTierBadge === 'function') {
+            window.updateSidebarTierBadge();
+        }
+
+        // 설정 페이지 티어 UI 갱신 (설정 페이지에 있을 때만)
+        if (typeof window.refreshTierUI === 'function') {
+            window.refreshTierUI();
+        }
+
+        // 레거시 사이드바 메뉴 티어별 갱신 (SharedSidebar가 있으면 재렌더링)
+        if (document.getElementById('sidebar') && typeof window.SharedSidebar === 'function') {
+            try { new window.SharedSidebar().render('sidebar'); } catch (e) { /* ignore */ }
+        }
+
+        // 관리자 패널 메뉴도 티어 변경에 맞게 갱신
+        // AdminPanel.open()에서 항상 buildPanelHTML()을 재호출하므로 다음 열기 시 자동 반영됨
+
+        const tierLabels = { free: 'Free', pro: 'Pro', enterprise: 'Enterprise' };
+        if (typeof showToast === 'function') showToast(tierLabels[tier] + ' 플랜으로 변경되었습니다', 'success');
+        return true;
+    } catch (error) {
+        console.error('[Auth] 등급 변경 오류:', error);
+        if (typeof showToast === 'function') showToast('등급 변경 중 오류가 발생했습니다', 'error');
+        return false;
+    }
+}
+
 // 전역 노출 (레거시 호환)
 window.initAuth = initAuth;
 window.authFetch = authFetch;
@@ -494,6 +631,9 @@ window.isAdmin = isAdmin;
 window.isLoggedIn = isLoggedIn;
 window.getCurrentUser = getCurrentUser;
 window.claimAnonymousSession = claimAnonymousSession;
+window.trySilentRefresh = trySilentRefresh;
+window.changeTier = changeTier;
+// SafeStorage는 safe-storage.js에서 전역 등록됨 — 여기서 중복 등록 불필요
 
 export {
     initAuth,
@@ -506,5 +646,7 @@ export {
     isAdmin,
     isLoggedIn,
     getCurrentUser,
-    claimAnonymousSession
+    claimAnonymousSession,
+    trySilentRefresh,
+    changeTier
 };

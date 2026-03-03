@@ -14,6 +14,8 @@
  * - 헬퍼 함수 (Thinking 활성화 판단, 모델 프리셋 선택)
  */
 
+import { MODEL_CONTEXT_DEFAULTS } from '../config/runtime-limits';
+
 /**
  * Ollama 클라이언트 기본 설정
  * @interface OllamaConfig
@@ -604,28 +606,28 @@ export const MODEL_PRESETS = {
         temperature: 0.7,
         top_p: 0.9,
         top_k: 40,
-        num_ctx: 32768,
+        num_ctx: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
         repeat_penalty: 1.1,
     },
     GEMINI_REASONING: {
         temperature: 0.3,
         top_p: 0.85,
         top_k: 20,
-        num_ctx: 32768,
+        num_ctx: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
         repeat_penalty: 1.05,
     },
     GEMINI_CREATIVE: {
         temperature: 0.9,
         top_p: 0.95,
         top_k: 50,
-        num_ctx: 32768,
+        num_ctx: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
         repeat_penalty: 1.2,
     },
     GEMINI_CODE: {
         temperature: 0.2,
         top_p: 0.8,
         top_k: 10,
-        num_ctx: 32768,
+        num_ctx: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
         repeat_penalty: 1.0,
     },
     GPT_OSS_LOW_REASONING: {
@@ -633,8 +635,8 @@ export const MODEL_PRESETS = {
         top_p: 0.85,
         top_k: 30,
         repeat_penalty: 1.1,
-        num_ctx: 16384,
-        num_predict: 4096
+        num_ctx: MODEL_CONTEXT_DEFAULTS.LOW_NUM_CTX,
+        num_predict: MODEL_CONTEXT_DEFAULTS.LOW_NUM_PREDICT
     } as ModelOptions,
 
     GPT_OSS_MEDIUM_REASONING: {
@@ -642,8 +644,8 @@ export const MODEL_PRESETS = {
         top_p: 0.9,
         top_k: 40,
         repeat_penalty: 1.1,
-        num_ctx: 32768,
-        num_predict: 8192
+        num_ctx: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
+        num_predict: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_PREDICT
     } as ModelOptions,
 
     GPT_OSS_HIGH_REASONING: {
@@ -651,8 +653,8 @@ export const MODEL_PRESETS = {
         top_p: 0.95,
         top_k: 50,
         repeat_penalty: 1.15,
-        num_ctx: 32768,
-        num_predict: 8192
+        num_ctx: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
+        num_predict: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_PREDICT
     } as ModelOptions,
 
     GPT_OSS_CODE: {
@@ -660,8 +662,8 @@ export const MODEL_PRESETS = {
         top_p: 0.8,
         top_k: 20,
         repeat_penalty: 1.2,
-        num_ctx: 32768,
-        num_predict: 8192
+        num_ctx: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
+        num_predict: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_PREDICT
     } as ModelOptions,
 
     GPT_OSS_DOCUMENT: {
@@ -669,8 +671,8 @@ export const MODEL_PRESETS = {
         top_p: 0.85,
         top_k: 25,
         repeat_penalty: 1.15,
-        num_ctx: 32768,
-        num_predict: 8192
+        num_ctx: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
+        num_predict: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_PREDICT
     } as ModelOptions,
 
     GPT_OSS_JSON: {
@@ -678,8 +680,8 @@ export const MODEL_PRESETS = {
         top_p: 0.75,
         top_k: 15,
         repeat_penalty: 1.15,
-        num_ctx: 32768,
-        num_predict: 8192,
+        num_ctx: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
+        num_predict: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_PREDICT,
         mirostat: 1,
         mirostat_tau: 2.5,
         mirostat_eta: 0.05
@@ -740,6 +742,35 @@ export function getGptOssTaskPreset(taskType: 'code' | 'document' | 'json' | 'ch
         case 'json': return MODEL_PRESETS.GPT_OSS_JSON;
         default: return MODEL_PRESETS.GPT_OSS_MEDIUM_REASONING;
     }
+}
+
+/**
+ * GPT-OSS 모델의 think 옵션을 정규화합니다.
+ *
+ * Ollama 공식 문서에 따르면 GPT-OSS는 think: true/false를 무시하고
+ * 반드시 'low' | 'medium' | 'high' 문자열 레벨만 허용합니다.
+ * 이 함수는 boolean true가 전달되었을 때 자동으로 'medium'으로 변환하고,
+ * false는 undefined(비활성화)로 변환합니다.
+ *
+ * 비 GPT-OSS 모델에서는 원본 값을 그대로 반환합니다.
+ *
+ * @param think - 원본 ThinkOption 값
+ * @param model - 현재 사용 중인 모델 이름
+ * @returns 정규화된 ThinkOption 또는 undefined (비활성화 시)
+ * @see https://docs.ollama.com/capabilities/thinking
+ */
+export function normalizeThinkOption(think: ThinkOption | undefined, model: string): ThinkOption | undefined {
+    if (think === undefined) return undefined;
+
+    const isGptOss = model?.toLowerCase().startsWith('gpt-oss');
+    if (!isGptOss) return think;
+
+    // GPT-OSS: boolean → 문자열 레벨 변환
+    if (think === true) return 'medium';
+    if (think === false) return undefined;
+
+    // 이미 문자열 레벨 ('low' | 'medium' | 'high') — 그대로 반환
+    return think;
 }
 
 

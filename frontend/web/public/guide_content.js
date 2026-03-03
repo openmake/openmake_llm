@@ -57,6 +57,9 @@ const GUIDE_DATA = {
     footer: "OpenMake.Ai은 지속적으로 업데이트됩니다. 새로운 기능은 이 가이드에서 확인하실 수 있습니다."
 };
 
+// ES Module 환경에서도 접근 가능하도록 전역 등록
+window.GUIDE_DATA = GUIDE_DATA;
+
 if (typeof module !== 'undefined') {
     module.exports = GUIDE_DATA;
 }

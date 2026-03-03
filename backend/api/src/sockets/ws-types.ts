@@ -20,12 +20,20 @@ export interface WSMessage {
     anonSessionId?: string;
     userId?: string;
     discussionMode?: boolean;
+    /** 사용자가 웹 검색을 명시적으로 활성화했는지 여부 */
+    webSearch?: boolean;
     deepResearchMode?: boolean;
     thinkingMode?: boolean;
     thinkingLevel?: string;
     enabledTools?: Record<string, boolean>;
+    /** 사용자가 RAG (문서 기반 응답)를 활성화했는지 여부 */
+    ragEnabled?: boolean;
+    /** 첨부 파일 목록 */
+    files?: Array<{ id: string; name: string; type: string }>;
     userRole?: string;
     userTier?: 'free' | 'pro' | 'enterprise';
+    /** 사용자 선호 언어 (설정 페이지에서 선택) */
+    language?: string;
     [key: string]: unknown;
 }
 
@@ -40,4 +48,14 @@ export interface ExtendedWebSocket extends WebSocket {
     _abortController: AbortController | null;
     /** 🔒 Phase 2: heartbeat alive 플래그 */
     _isAlive: boolean;
+    _authTokenExpiresAtMs?: number | null;
+    _authTokenIssuedAtMs?: number | null;
+    _authTokenJti?: string | null;
+    _authTokenFingerprint?: string | null;
+    _authMethod?: 'cookie' | 'bearer' | 'none';
+    _clientIp?: string;
+    _connectedAtMs?: number;
+    _lastActivityAtMs?: number;
+    _messageCount?: number;
+    _lastExpiryWarningAtMs?: number;
 }

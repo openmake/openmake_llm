@@ -21,9 +21,11 @@
 
 import { OllamaClient } from '../ollama/client';
 import { sanitizePromptInput, validatePromptInput } from '../utils/input-sanitizer';
-import { Agent, AgentCategory } from './types';
+import { AgentCategory } from './types';
 import industryData from './industry-agents.json';
 import { createLogger } from '../utils/logger';
+import { CAPACITY } from '../config/runtime-limits';
+import { LLM_TIMEOUTS } from '../config/timeouts';
 
 const logger = createLogger('LLMRouter');
 
@@ -94,7 +96,7 @@ function getRouterClient(): OllamaClient {
 export function getAgentSummaries(): AgentSummary[] {
     const summaries: AgentSummary[] = [];
 
-    for (const [categoryId, category] of Object.entries(industryData as Record<string, AgentCategory>)) {
+    for (const [, category] of Object.entries(industryData as Record<string, AgentCategory>)) {
         for (const agent of category.agents) {
             summaries.push({
                 id: agent.id,
@@ -206,7 +208,7 @@ function extractJSONFromResponse(response: string): Record<string, unknown> | nu
  */
 export async function routeWithLLM(
     message: string,
-    timeout: number = 5000
+    timeout: number = LLM_TIMEOUTS.ROUTING_TIMEOUT_MS
 ): Promise<LLMRoutingResult | null> {
     const client = getRouterClient();
     const summaries = getAgentSummaries();
@@ -237,7 +239,7 @@ ${agentList}
 }`;
 
     // 🔧 라우팅 목적으로는 메시지 앞부분만 필요 — 긴 문서 입력은 잘라내기
-    const MAX_ROUTING_INPUT = 10000;
+    const MAX_ROUTING_INPUT = CAPACITY.ROUTING_INPUT_MAX_CHARS;
     const routingInput = message.length > MAX_ROUTING_INPUT ? message.slice(0, MAX_ROUTING_INPUT) : message;
 
     // Sanitize user input before embedding in prompt
@@ -281,19 +283,28 @@ ${sanitizedMessage}
 
         const parsed = extractJSONFromResponse(result);
 
-        if (parsed && parsed.agent_id) {
-            logger.info(`선택: ${parsed.agent_id} (신뢰도: ${parsed.confidence})`);
-            logger.info(`이유: ${parsed.reasoning}`);
+        // LLM 응답에서 agent_id 필드를 유연하게 탐색 (모델별 응답 형식 차이 대응)
+        if (parsed) {
+            const agentId = parsed.agent_id || parsed.agentId || parsed.agent || parsed.id;
 
-            return {
-                agentId: String(parsed.agent_id),
-                confidence: Number(parsed.confidence) || 0.85,
-                reasoning: String(parsed.reasoning || ''),
-                alternativeAgents: Array.isArray(parsed.alternatives) ? parsed.alternatives as string[] : []
-            };
+            if (agentId) {
+                const agentIdStr = String(agentId);
+                logger.info(`선택: ${agentIdStr} (신뢰도: ${parsed.confidence})`);
+                logger.info(`이유: ${parsed.reasoning}`);
+
+                return {
+                    agentId: agentIdStr,
+                    confidence: Number(parsed.confidence || parsed.score) || 0.85,
+                    reasoning: String(parsed.reasoning || parsed.reason || ''),
+                    alternativeAgents: Array.isArray(parsed.alternatives) ? parsed.alternatives as string[] : []
+                };
+            }
+
+            logger.info(`유효하지 않은 응답 형식 - 파싱된 키: ${Object.keys(parsed).join(', ')}`);
+        } else {
+            logger.info('응답 JSON 파싱 실패');
         }
 
-        logger.info('유효하지 않은 응답 형식');
         return null;
 
     } catch (error) {

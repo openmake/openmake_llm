@@ -8,7 +8,7 @@
  *
  * @module mcp
  * @description
- * - Sequential Thinking: 단계별 추론 서버 및 헬퍼
+ * - Sequential Thinking: 단계별 추론 프롬프트 인젝션
  * - MCP Server: JSON-RPC 2.0 기반 MCP 서버
  * - Built-in Tools: 코드 검색, 비전, 웹 검색, Firecrawl
  * - Web Search: 다중 소스 통합 웹 검색
@@ -23,14 +23,8 @@
  */
 
 export {
-    SequentialThinkingServer,
-    getSequentialThinkingServer,
     applySequentialThinking,
-    SEQUENTIAL_THINKING_SYSTEM_PROMPT,
-    SequentialThinkingInputSchema,
-    type SequentialThinkingInput,
-    type SequentialThinkingOutput,
-    type ThoughtRecord
+    SEQUENTIAL_THINKING_SYSTEM_PROMPT
 } from './sequential-thinking';
 
 
@@ -39,7 +33,6 @@ export { MCPServer, createMCPServer } from './server';
 // 🔒 보안 패치 2026-02-07: readFileTool, writeFileTool, runCommandTool 제거됨
 // 안전한 파일 도구는 ./filesystem에서 fsReadFileTool, fsWriteFileTool로 제공
 export {
-    searchCodeTool,
     builtInTools
 } from './tools';
 
@@ -70,8 +63,7 @@ export {
 export {
     UnifiedMCPClient,
     getUnifiedMCPClient,
-    createUnifiedMCPClient,
-    type MCPFeatureState
+    createUnifiedMCPClient
 } from './unified-client';
 
 export type {
