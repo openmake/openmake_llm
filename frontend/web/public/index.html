@@ -7,27 +7,16 @@
         content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover, interactive-widget=resizes-content">
     <title>OpenMake.Ai</title>
 
-    <!-- PWA 메타 태그 -->
     <meta name="theme-color" content="#c061ff">
     <meta name="description" content="AI 기반 지능형 채팅 어시스턴트">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="OpenMake.Ai">
-    <link rel="manifest" href="/manifest.json">
-    <link rel="apple-touch-icon" href="/icons/icon-192.png">
     <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon.png">
-    <meta name="mobile-web-app-capable" content="yes">
 
-    <!-- 한글 최적화 웹폰트 -->
-    <link rel="preconnect" href="https://cdn.jsdelivr.net">
-    <link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css"
-        rel="stylesheet">
+    <!-- 한글 최적화 웹폰트 (self-hosted) -->
+    <link href="vendor/pretendard/pretendard.css" rel="stylesheet">
     <!-- Performance: Preload hints -->
-    <link rel="preconnect" href="https://cdnjs.cloudflare.com">
-    <link rel="dns-prefetch" href="https://cdnjs.cloudflare.com">
     <link rel="preload" href="/css/design-tokens.css?v=8" as="style">
-    <link rel="preload" href="/js/spa-router.js" as="script" crossorigin>
-    <link rel="preload" href="/js/modules/auth.js" as="script" crossorigin>
+    <link rel="modulepreload" href="/js/spa-router.js?v=16" crossorigin>
+    <link rel="modulepreload" href="/js/modules/auth.js" crossorigin>
     <!-- 디자인 시스템 CSS (순서 중요!) -->
     <link rel="stylesheet" href="css/design-tokens.css?v=8">
     <link rel="stylesheet" href="css/icons.css?v=8">
@@ -36,44 +25,33 @@
     <link rel="stylesheet" href="css/feature-cards.css?v=8">
     <link rel="stylesheet" href="css/layout.css?v=8">
     <link rel="stylesheet" href="css/components.css?v=8">
-    <link rel="stylesheet" href="css/unified-sidebar.css?v=8">
+     <link rel="stylesheet" href="css/unified-sidebar.css?v=9">
     <link rel="stylesheet" href="css/light-theme.css?v=8">
     <link rel="stylesheet" href="style.css?v=9">
-    <!-- Iconify Icon Web Component (defer to not block rendering) -->
-    <script src="https://cdn.jsdelivr.net/npm/iconify-icon@2.1.0/dist/iconify-icon.min.js" defer></script>
-    <!-- Markdown Parser (defer) -->
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js" defer></script>
-    <!-- Code Highlighting (defer) -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" media="print" onload="this.media='all'">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js" defer></script>
-    <!-- XSS Defense: DOMPurify (defer) -->
-    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.2.4/dist/purify.min.js" defer></script>
+    <!-- Iconify Icon Web Component (self-hosted, defer) -->
+    <script src="vendor/iconify-icon.min.js" defer></script>
+    <!-- Markdown Parser (self-hosted, defer) -->
+    <script src="vendor/marked.min.js" defer></script>
+    <!-- Code Highlighting (self-hosted, defer) -->
+    <link rel="stylesheet" href="vendor/hljs/github-dark.min.css"
+        media="print" onload="this.media='all'">
+    <script src="vendor/hljs/highlight.min.js" defer></script>
+    <!-- XSS Defense: DOMPurify (self-hosted, defer) -->
+    <script src="vendor/purify.min.js" defer></script>
     <script src="guide_content.js" defer></script>
 
-    <!-- Service Worker 등록 -->
-    <script>
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/service-worker.js')
-                    .then(reg => console.log('[PWA] Service Worker 등록 성공'))
-                    .catch(err => console.warn('[PWA] Service Worker 등록 실패:', err));
-            });
-            
-            // Listen for SW update notification
-            navigator.serviceWorker.addEventListener('message', (event) => {
-                if (event.data && event.data.type === 'SW_UPDATED') {
-                    if (typeof showToast === 'function') {
-                        showToast('새 버전이 있습니다. 새로고침해주세요.', 'info');
-                    }
-                }
-            });
+
+    <style>
+        .skip-link:focus {
+            top: 0
         }
-    </script>
-    <style>.skip-link:focus{top:0}</style>
+    </style>
 </head>
 
 <body>
-    <a href="#mainContent" class="skip-link" style="position:absolute;top:-40px;left:0;background:#c061ff;color:white;padding:8px 16px;z-index:10000;transition:top 0.3s;text-decoration:none;font-family:'Space Grotesk',Pretendard,sans-serif;font-weight:700;border:2px solid #000;box-shadow:4px 4px 0 #000">Skip to main content</a>
+    <a href="#mainContent" class="skip-link"
+        style="position:absolute;top:-40px;left:0;background:#c061ff;color:white;padding:8px 16px;z-index:10000;transition:top 0.3s;text-decoration:none;font-family:'Space Grotesk',Pretendard,sans-serif;font-weight:700;border:2px solid #000;box-shadow:4px 4px 0 #000">Skip
+        to main content</a>
     <div class="app">
         <!-- Mobile Menu Button -->
         <button class="mobile-menu-btn" id="mobileMenuBtn" aria-label="Toggle menu">
@@ -95,9 +73,11 @@
                         <div class="welcome-avatar animate-popIn">
                             <img src="/images/avatar/character-avatar.png" alt="OpenMake AI" class="avatar-img">
                         </div>
-                        <h1 class="welcome-title animate-fadeInUp" style="animation-delay: 0.1s;">오늘도 화이팅!<br>무엇을 도와드릴까요? 😊
+                        <h1 class="welcome-title animate-fadeInUp" style="animation-delay: 0.1s;">오늘도 화이팅!<br>무엇을
+                            도와드릴까요? 😊
                         </h1>
-                        <p class="welcome-subtitle animate-fadeInUp" style="animation-delay: 0.2s;">AI 어시스턴트가 질문에 답변하고,<br>문서를 분석하고, 코드를 작성합니다.</p>
+                        <p class="welcome-subtitle animate-fadeInUp" style="animation-delay: 0.2s;">AI 어시스턴트가 질문에
+                            답변하고,<br>문서를 분석하고, 코드를 작성합니다.</p>
 
                         <!-- 기능 카드 그리드 -->
                         <div class="feature-cards animate-fadeInUp" style="animation-delay: 0.3s;">
@@ -143,26 +123,27 @@
                     <div class="chat-input-container">
                         <div class="attachments" id="attachments" style="display: none;"></div>
                         <div class="input-wrapper">
-                            <textarea id="chatInput" placeholder="메시지를 입력하세요..." rows="1"
-                                onkeydown="handleKeyDown(event)"></textarea>
+                            <textarea id="chatInput" name="chatInput" placeholder="메시지를 입력하세요..." rows="1"
+                                aria-label="메시지 입력" onkeydown="handleKeyDown(event)"></textarea>
                             <div class="input-actions">
                                 <div class="left-actions">
                                     <button class="action-btn" onclick="newChat()" title="새 대화 (+)">
-                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                            stroke-width="2">
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+                                            stroke="currentColor" stroke-width="2">
                                             <path d="M12 5v14M5 12h14" />
                                         </svg>
                                     </button>
                                     <button class="action-btn" onclick="showFileUpload()" title="파일 첨부">
-                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                            stroke-width="2">
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+                                            stroke="currentColor" stroke-width="2">
                                             <path
                                                 d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
                                         </svg>
                                     </button>
-                                    <button class="action-btn" id="webSearchBtn" onclick="toggleWebSearch()" title="웹 검색">
-                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                            stroke-width="2">
+                                    <button class="action-btn" id="webSearchBtn" onclick="toggleWebSearch()"
+                                        title="웹 검색">
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+                                            stroke="currentColor" stroke-width="2">
                                             <circle cx="12" cy="12" r="10" />
                                             <line x1="2" y1="12" x2="22" y2="12" />
                                             <path
@@ -188,8 +169,8 @@
                                         <span class="status-text">연결됨</span>
                                     </div>
                                     <button class="send-btn" id="sendBtn" title="전송 (Enter)">
-                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                            stroke-width="2">
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+                                            stroke="currentColor" stroke-width="2">
                                             <path d="M22 2L11 13M22 2L15 22L11 13L2 9L22 2Z" />
                                         </svg>
                                     </button>
@@ -224,7 +205,7 @@
                         <div class="upload-content">
                             <span class="upload-icon">📁</span>
                             <p>파일을 드래그하거나 클릭하여 선택</p>
-                            <input type="file" id="fileInput" hidden>
+                            <input type="file" id="fileInput" name="fileInput" aria-label="파일 선택" hidden>
                         </div>
                     </div>
                 </div>
@@ -241,7 +222,7 @@
                 <div class="modal-body">
                     <!-- LLM 모델 설정 -->
                     <div class="settings-group">
-                        <label class="settings-label">🤖 현재 LLM 모델</label>
+                        <span class="settings-label">🤖 현재 LLM 모델</span>
                         <div class="settings-card" id="currentModelInfo">
                             <div id="activeModelName">로딩 중...</div>
                         </div>
@@ -252,7 +233,7 @@
 
                     <!-- 테마 설정 -->
                     <div class="settings-group">
-                        <label class="settings-label">🎨 테마 설정</label>
+                        <span class="settings-label">🎨 테마 설정</span>
                         <div class="btn-group">
                             <button class="btn" id="theme-light" onclick="setTheme('light')">☀️ 라이트</button>
                             <button class="btn" id="theme-dark" onclick="setTheme('dark')">🌙 다크</button>
@@ -262,7 +243,7 @@
 
                     <!-- MCP 설정 -->
                     <div class="settings-group">
-                        <label class="settings-label">🔧 MCP 기능 확장</label>
+                        <span class="settings-label">🔧 MCP 기능 확장</span>
                         <div class="toggle-list">
                             <div class="toggle-item">
                                 <div class="toggle-info">
@@ -355,7 +336,11 @@
     </div> <!-- app 끝 -->
 
     <!-- 앱 엔트리 포인트 (ES Module — 모든 모듈을 main.js에서 import 및 초기화) -->
-    <script type="module" src="js/main.js?v=19"></script>
+    <!-- API 중앙 관리 (ES Module — window.API_ENDPOINTS / window.ApiClient 전역 노출) -->
+    <script type="module" src="js/modules/api-endpoints.js?v=16"></script>
+    <script type="module" src="js/modules/api-client.js?v=16"></script>
+
+    <script type="module" src="js/main.js?v=26"></script>
 </body>
 
 </html>

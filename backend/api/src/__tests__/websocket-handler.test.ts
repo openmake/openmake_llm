@@ -65,8 +65,6 @@ const mockToolRouter = {
 };
 const mockMcpClient = {
     getStats: jest.fn(() => ({ tools: 0 })),
-    setFeatureState: jest.fn(),
-    getFeatureState: jest.fn(() => ({})),
     getToolRouter: jest.fn(() => mockToolRouter),
 };
 jest.mock('../mcp', () => ({
@@ -762,28 +760,6 @@ describe('WebSocketHandler', () => {
         });
     });
 
-    // ─── MCP Settings ────────────────────────────────────────
-
-    describe('MCP Settings', () => {
-        it('should sync MCP settings and send ack', async () => {
-            const ws = new MockWebSocket();
-            await connectClient(ws);
-            ws.send.mockClear();
-
-            ws.simulateMessage({
-                type: 'mcp_settings',
-                settings: { webSearch: true },
-            });
-            await flushAsync();
-
-            expect(mockMcpClient.setFeatureState).toHaveBeenCalledWith({ webSearch: true });
-
-            const calls = ws.send.mock.calls;
-            const ackMsg = JSON.parse(calls[calls.length - 1][0] as string);
-            expect(ackMsg.type).toBe('mcp_settings_ack');
-            expect(ackMsg.success).toBe(true);
-        });
-    });
 
     // ─── Request Agents ──────────────────────────────────────
 

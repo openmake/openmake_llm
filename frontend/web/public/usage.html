@@ -61,11 +61,11 @@
         </main>
     </div>
     <div id="toast" class="toast"></div>
-    <script src="/js/components/sidebar.js"></script>
-    <script>
+    <script type="module" src="/js/components/sidebar.js"></script>
+    <script type="module">
         function authFetch(url, opts = {}) {
-            const token = localStorage.getItem('authToken');
-            opts.headers = { ...(opts.headers || {}), 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
+            opts.headers = { ...(opts.headers || {}), 'Content-Type': 'application/json' };
+            opts.credentials = 'include';
             return fetch(url, opts);
         }
         function showToast(msg, type = 'success') {

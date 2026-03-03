@@ -1,0 +1,650 @@
+/**
+ * ============================================================
+ * Language Policy - 다국어 응답 정책 관리
+ * ============================================================
+ * 
+ * OpenMake LLM의 언어 감지, 응답 언어 결정, 다국어 템플릿 관리를 
+ * 중앙에서 담당하는 언어 정책 시스템입니다.
+ * 
+ * 기존 한국어 강제 시스템을 사용자 언어 기반 동적 응답으로 전환하며,
+ * 언어 감지 정확도와 문화적 적절성을 보장합니다.
+ * 
+ * @module chat/language-policy
+ */
+
+// ============================================================
+// 타입 정의
+// ============================================================
+
+/**
+ * 지원되는 언어 코드 (ISO 639-1 기반)
+ */
+export type SupportedLanguageCode = 
+    | 'ko'  // 한국어
+    | 'en'  // 영어
+    | 'ja'  // 일본어
+    | 'zh'  // 중국어 (간체)
+    | 'es'  // 스페인어
+    | 'fr'  // 프랑스어
+    | 'de'  // 독일어
+    | 'pt'  // 포르투갈어
+    | 'ru'  // 러시아어
+    | 'ar'  // 아랍어
+    | 'hi'  // 힌디어
+    | 'it'  // 이탈리아어
+    | 'nl'  // 네덜란드어
+    | 'sv'  // 스웨덴어
+    | 'da'  // 덴마크어
+    | 'no'  // 노르웨이어
+    | 'fi'  // 핀란드어
+    | 'th'  // 태국어
+    | 'vi'  // 베트남어
+    | 'tr'  // 터키어;
+
+/**
+ * 언어 감지 결과
+ */
+export interface LanguageDetectionResult {
+    /** 감지된 언어 코드 */
+    language: SupportedLanguageCode;
+    /** 감지 신뢰도 (0.0 ~ 1.0) */
+    confidence: number;
+    /** 감지 방법 */
+    method: 'regex' | 'statistical' | 'fallback' | 'user_setting';
+    /** 원본 텍스트 길이 */
+    textLength: number;
+    /** 처리된 텍스트 길이 (코드블록/URL 제거 후) */
+    processedLength: number;
+}
+
+/**
+ * 언어 정책 결정 결과
+ */
+export interface LanguagePolicyDecision {
+    /** 요청된 언어 (사용자 입력에서 감지된 언어) */
+    requestedLanguage: SupportedLanguageCode;
+    /** 최종 결정된 응답 언어 */
+    resolvedLanguage: SupportedLanguageCode;
+    /** 정책 적용 이유 */
+    reason: 'exact_match' | 'fallback_applied' | 'user_preference' | 'system_default';
+    /** 폴백이 적용되었는지 여부 */
+    fallbackApplied: boolean;
+    /** 언어 감지 결과 */
+    detection: LanguageDetectionResult;
+    /** 사용자 설정 언어 (있는 경우) */
+    userPreference?: SupportedLanguageCode;
+}
+
+/**
+ * 언어별 응답 템플릿 설정
+ */
+export interface LanguageResponseTemplate {
+    /** 언어 규칙 지시문 */
+    languageRule: string;
+    /** 형식 지침 */
+    formatGuidance: string;
+    /** 문화적 톤 조정 */
+    culturalTone: 'formal' | 'polite' | 'casual' | 'respectful';
+    /** 날짜/시간 형식 */
+    dateFormat: string;
+    /** 숫자 형식 */
+    numberFormat: string;
+}
+
+/**
+ * 언어 정책 설정
+ */
+export interface LanguagePolicyConfig {
+    /** 기본 응답 언어 */
+    defaultLanguage: SupportedLanguageCode;
+    /** 동적 언어 응답 활성화 여부 */
+    enableDynamicResponse: boolean;
+    /** 언어 감지 최소 신뢰도 임계값 */
+    minConfidenceThreshold: number;
+    /** 짧은 텍스트 최소 길이 (이하는 폴백) */
+    shortTextThreshold: number;
+    /** 폴백 언어 */
+    fallbackLanguage: SupportedLanguageCode;
+    /** 지원 언어 목록 */
+    supportedLanguages: SupportedLanguageCode[];
+}
+
+// ============================================================
+// 언어별 템플릿 데이터
+// ============================================================
+
+/**
+ * 언어별 응답 템플릿 매핑
+ */
+export const LANGUAGE_TEMPLATES: Record<SupportedLanguageCode, LanguageResponseTemplate> = {
+    ko: {
+        languageRule: '한국어로 응답 (언어 혼용 금지)',
+        formatGuidance: '정중하고 전문적인 어투를 사용합니다. 존댓말을 사용합니다.',
+        culturalTone: 'polite',
+        dateFormat: 'YYYY년 M월 D일',
+        numberFormat: '1,234,567'
+    },
+    en: {
+        languageRule: 'Respond in English (no code-switching)',
+        formatGuidance: 'Use clear, professional tone. Be concise and helpful.',
+        culturalTone: 'formal',
+        dateFormat: 'MMMM D, YYYY',
+        numberFormat: '1,234,567'
+    },
+    ja: {
+        languageRule: '日本語で回答してください（言語混用禁止）',
+        formatGuidance: '丁寧語を使用し、敬語を適切に使い分けます。',
+        culturalTone: 'respectful',
+        dateFormat: 'YYYY年M月D日',
+        numberFormat: '1,234,567'
+    },
+    zh: {
+        languageRule: '请用中文回答（禁止语言混用）',
+        formatGuidance: '使用简洁、专业的表达方式。保持礼貌和正式的语调。',
+        culturalTone: 'formal',
+        dateFormat: 'YYYY年M月D日',
+        numberFormat: '1,234,567'
+    },
+    es: {
+        languageRule: 'Responde en español (sin mezcla de idiomas)',
+        formatGuidance: 'Use un tono profesional y cortés. Sea claro y útil.',
+        culturalTone: 'polite',
+        dateFormat: 'D de MMMM de YYYY',
+        numberFormat: '1.234.567'
+    },
+    fr: {
+        languageRule: 'Répondez en français (pas de mélange de langues)',
+        formatGuidance: 'Utilisez un ton professionnel et poli. Soyez clair et utile.',
+        culturalTone: 'formal',
+        dateFormat: 'D MMMM YYYY',
+        numberFormat: '1 234 567'
+    },
+    de: {
+        languageRule: 'Antworten Sie auf Deutsch (keine Sprachmischung)',
+        formatGuidance: 'Verwenden Sie einen professionellen und höflichen Ton. Seien Sie klar und hilfreich.',
+        culturalTone: 'formal',
+        dateFormat: 'D. MMMM YYYY',
+        numberFormat: '1.234.567'
+    },
+    pt: {
+        languageRule: 'Responda em português (sem mistura de idiomas)',
+        formatGuidance: 'Use um tom profissional e cortês. Seja claro e útil.',
+        culturalTone: 'polite',
+        dateFormat: 'D de MMMM de YYYY',
+        numberFormat: '1.234.567'
+    },
+    ru: {
+        languageRule: 'Отвечайте на русском языке (без смешения языков)',
+        formatGuidance: 'Используйте профессиональный и вежливый тон. Будьте ясными и полезными.',
+        culturalTone: 'formal',
+        dateFormat: 'D MMMM YYYY г.',
+        numberFormat: '1 234 567'
+    },
+    ar: {
+        languageRule: 'أجب باللغة العربية (بدون خلط اللغات)',
+        formatGuidance: 'استخدم نبرة مهنية ومهذبة. كن واضحاً ومفيداً.',
+        culturalTone: 'respectful',
+        dateFormat: 'D MMMM YYYY',
+        numberFormat: '١٬٢٣٤٬٥٦٧'
+    },
+    hi: {
+        languageRule: 'हिंदी में उत्तर दें (भाषा मिश्रण नहीं)',
+        formatGuidance: 'पेशेवर और विनम्र टोन का उपयोग करें। स्पष्ट और सहायक बनें।',
+        culturalTone: 'respectful',
+        dateFormat: 'D MMMM YYYY',
+        numberFormat: '12,34,567'
+    },
+    it: {
+        languageRule: 'Rispondi in italiano (nessun mixing linguistico)',
+        formatGuidance: 'Usa un tono professionale e cortese. Sii chiaro e utile.',
+        culturalTone: 'polite',
+        dateFormat: 'D MMMM YYYY',
+        numberFormat: '1.234.567'
+    },
+    nl: {
+        languageRule: 'Antwoord in het Nederlands (geen taalmixen)',
+        formatGuidance: 'Gebruik een professionele en beleefde toon. Wees duidelijk en behulpzaam.',
+        culturalTone: 'formal',
+        dateFormat: 'D MMMM YYYY',
+        numberFormat: '1.234.567'
+    },
+    sv: {
+        languageRule: 'Svara på svenska (ingen språkblandning)',
+        formatGuidance: 'Använd en professionell och artig ton. Var tydlig och hjälpsam.',
+        culturalTone: 'formal',
+        dateFormat: 'D MMMM YYYY',
+        numberFormat: '1 234 567'
+    },
+    da: {
+        languageRule: 'Svar på dansk (ingen sprogblanding)',
+        formatGuidance: 'Brug en professionel og høflig tone. Vær klar og hjælpsom.',
+        culturalTone: 'formal',
+        dateFormat: 'D. MMMM YYYY',
+        numberFormat: '1.234.567'
+    },
+    no: {
+        languageRule: 'Svar på norsk (ingen språkblanding)',
+        formatGuidance: 'Bruk en profesjonell og høflig tone. Vær tydelig og hjelpsom.',
+        culturalTone: 'formal',
+        dateFormat: 'D. MMMM YYYY',
+        numberFormat: '1 234 567'
+    },
+    fi: {
+        languageRule: 'Vastaa suomeksi (ei kielten sekoittamista)',
+        formatGuidance: 'Käytä ammattimaista ja kohteliasta sävyä. Ole selkeä ja avulias.',
+        culturalTone: 'formal',
+        dateFormat: 'D. MMMM YYYY',
+        numberFormat: '1 234 567'
+    },
+    th: {
+        languageRule: 'ตอบเป็นภาษาไทย (ไม่ผสมภาษา)',
+        formatGuidance: 'ใช้น้ำเสียงที่สุภาพและเป็นมืออาชีพ เป็นประโยชน์และชัดเจน',
+        culturalTone: 'respectful',
+        dateFormat: 'D MMMM YYYY',
+        numberFormat: '1,234,567'
+    },
+    vi: {
+        languageRule: 'Trả lời bằng tiếng Việt (không trộn ngôn ngữ)',
+        formatGuidance: 'Sử dụng giọng điệu chuyên nghiệp và lịch sự. Hãy rõ ràng và hữu ích.',
+        culturalTone: 'polite',
+        dateFormat: 'Ngày D tháng M năm YYYY',
+        numberFormat: '1.234.567'
+    },
+    tr: {
+        languageRule: 'Türkçe cevap verin (dil karıştırma yok)',
+        formatGuidance: 'Profesyonel ve kibar bir ton kullanın. Net ve yardımcı olun.',
+        culturalTone: 'polite',
+        dateFormat: 'D MMMM YYYY',
+        numberFormat: '1.234.567'
+    }
+};
+
+/**
+ * 기본 언어 정책 설정
+ */
+export const DEFAULT_LANGUAGE_POLICY: LanguagePolicyConfig = {
+    defaultLanguage: 'ko',
+    enableDynamicResponse: false, // Feature flag로 제어
+    minConfidenceThreshold: 0.7,
+    shortTextThreshold: 10,
+    fallbackLanguage: 'en',
+    supportedLanguages: [
+        'ko', 'en', 'ja', 'zh', 'es', 'fr', 'de', 'pt', 'ru', 
+        'ar', 'hi', 'it', 'nl', 'sv', 'da', 'no', 'fi', 'th', 'vi', 'tr'
+    ]
+};
+
+// ============================================================
+// 언어 감지 및 정책 결정 함수
+// ============================================================
+
+/**
+ * 텍스트에서 코드블록과 URL을 제거하여 순수 자연어 텍스트만 추출
+ */
+export function preprocessTextForLanguageDetection(text: string): string {
+    return text
+        // 코드블록 제거 (```code```, `inline code`)
+        .replace(/```[\s\S]*?```/g, '')
+        .replace(/`[^`]*`/g, '')
+        // URL 제거
+        .replace(/https?:\/\/[^\s]+/g, '')
+        // 이메일 제거
+        .replace(/\S+@\S+\.\S+/g, '')
+        // 숫자만 있는 부분 제거
+        .replace(/^\d+$/gm, '')
+        // 특수문자만 있는 라인 제거
+        .replace(/^[^\w\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af]+$/gm, '')
+        // 여러 공백을 하나로
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+/**
+ * 언어별 문자 패턴 정의
+ */
+export const LANGUAGE_PATTERNS = {
+    ko: /[\uac00-\ud7af]/g,          // 한글
+    ja: /[\u3040-\u309f\u30a0-\u30ff]/g, // 히라가나, 가타카나
+    zh: /[\u4e00-\u9fff]/g,         // 중국어 한자
+    ar: /[\u0600-\u06ff]/g,         // 아랍어
+    hi: /[\u0900-\u097f]/g,         // 데바나가리 (힌디어)
+    th: /[\u0e00-\u0e7f]/g,         // 태국어
+    ru: /[\u0400-\u04ff]/g,         // 키릴 문자 (러시아어)
+    // 라틴 알파벳 기반 언어들은 별도 처리 (detectLatinSubLanguage에서 세분화)
+    latin: /[a-zA-ZÀ-ÿ]/g          // 라틴 알파벳 + 확장 문자
+};
+
+/**
+ * 라틴 문자 기반 하위 언어 감지
+ * 
+ * 3단계 감지:
+ *   1. 고유 문자 마커 (¿¡ñ → es, ß → de, ãõ → pt 등) — 즉시 판별
+ *   2. 발음 기호(diacritical) 점수 비교 — 최고 점수 언어 선택
+ *   3. 고빈도 기능어(function word) 매칭 — 발음 기호 없는 텍스트용
+ *   4. 기본값: 'en' (영어는 일반적으로 발음 기호 없음)
+ */
+export function detectLatinSubLanguage(text: string): SupportedLanguageCode {
+    const lowerText = text.toLowerCase();
+
+    // ── Phase 1: 고유 문자 마커 (100% 확정 신호) ──
+    if (/[¿¡]/.test(lowerText)) return 'es';         // ¿ ¡ → 스페인어에만 존재
+    if (/ß/.test(lowerText)) return 'de';            // ß → 독일어에만 존재
+    if (/[ãõ]/i.test(lowerText)) return 'pt';        // ã õ → 포르투갈어 강신호
+    if (/[ơưđ]/.test(lowerText)) return 'vi';        // ơ ư đ → 베트남어 고유
+    if (/[şğ]/.test(lowerText)) return 'tr';         // ş ğ → 터키어 고유
+    if (/[œæ]/.test(lowerText)) return 'fr';         // œ æ → 프랑스어 강신호
+    if (/[øå]/.test(lowerText)) {                    // ø → 덴마크/노르웨이, å → 스칸디나비아
+        if (/ø/.test(lowerText)) return 'da';        // ø는 덴마크어/노르웨이어 (덴마크 우선)
+        return 'sv';                                  // å만 → 스웨덴어
+    }
+
+    // ── Phase 2+3 통합: 발음 기호 + 기능어 종합 점수 ──
+    // 발음 기호(고유 3점, 공유 1점) + 기능어(1점)를 합산하여 최고 점수 언어 선택.
+    // 이렇게 하면 diacritic 동점 시 기능어가 tiebreaker 역할.
+    const diacriticRules: Array<{ lang: SupportedLanguageCode; unique: RegExp | null; shared: RegExp | null }> = [
+        { lang: 'fr', unique: /[êëîïûùÇ]/gi, shared: /[çàèô]/gi },
+        { lang: 'it', unique: /[ìò]/gi, shared: /[àèù]/gi },
+        { lang: 'de', unique: /[äöüÄÖÜ]/gi, shared: null },
+        { lang: 'es', unique: /[ñÑ]/gi, shared: /[áéíóú]/gi },
+        { lang: 'pt', unique: null, shared: /[áéíóúâêô]/gi },
+        { lang: 'tr', unique: /[ıİ]/gi, shared: /[çöü]/gi },
+        { lang: 'sv', unique: /[åÅ]/gi, shared: /[äö]/gi },
+        { lang: 'fi', unique: null, shared: /[äö]/gi },
+        { lang: 'nl', unique: null, shared: /[ëïéè]/gi },
+    ];
+
+    const wordSignatures: Array<{ lang: SupportedLanguageCode; words: string[] }> = [
+        { lang: 'de', words: ['der', 'die', 'das', 'und', 'nicht', 'ich', 'wir', 'sie', 'ist', 'ein', 'eine', 'auch', 'auf', 'wie'] },
+        { lang: 'fr', words: ['je', 'nous', 'vous', 'dans', 'avec', 'les', 'des', 'une', 'pour', 'est', 'pas', 'sur', 'mais', 'cette'] },
+        { lang: 'es', words: ['el', 'los', 'las', 'una', 'por', 'para', 'pero', 'como', 'muy', 'esta', 'esto', 'son', 'tiene'] },
+        { lang: 'pt', words: ['os', 'uma', 'por', 'para', 'mas', 'muito', 'com', 'mais', 'tem', 'seu', 'sua', 'isso'] },
+        { lang: 'it', words: ['il', 'gli', 'una', 'che', 'per', 'con', 'non', 'sono', 'questo', 'questa', 'anche', 'molto'] },
+        { lang: 'nl', words: ['het', 'een', 'van', 'met', 'maar', 'niet', 'ook', 'voor', 'nog', 'wel', 'deze', 'zijn'] },
+    ];
+
+    // 단어 분리 및 정리
+    const words = lowerText.split(/\s+/).filter(w => w.length > 0);
+    const cleanWords = words.map(w => w.replace(/[^a-zA-ZÀ-ÿ]/g, '')).filter(w => w.length > 0);
+
+    // 각 언어별 종합 점수 계산
+    let bestLang: SupportedLanguageCode = 'en';
+    let bestScore = 0;
+
+    // diacritic 점수 Map 구성
+    const langScores = new Map<SupportedLanguageCode, number>();
+
+    for (const { lang, unique, shared } of diacriticRules) {
+        let score = 0;
+        if (unique) {
+            const uMatches = lowerText.match(unique);
+            score += (uMatches?.length ?? 0) * 3;
+        }
+        if (shared) {
+            const sMatches = lowerText.match(shared);
+            score += (sMatches?.length ?? 0);
+        }
+        langScores.set(lang, score);
+    }
+
+    // 기능어 점수 추가
+    for (const { lang, words: langWords } of wordSignatures) {
+        let wordScore = 0;
+        for (const cw of cleanWords) {
+            if (langWords.includes(cw)) wordScore++;
+        }
+        const current = langScores.get(lang) ?? 0;
+        langScores.set(lang, current + wordScore);
+    }
+
+    // 최고 점수 언어 선택
+    for (const [lang, score] of langScores) {
+        if (score > bestScore) {
+            bestScore = score;
+            bestLang = lang;
+        }
+    }
+
+    // 최소 1점 이상이어야 신뢰 (발음 기호 1개 또는 기능어 1개)
+    if (bestScore > 0) return bestLang;
+
+    // 기본값 — 발음 기호도 기능어도 없으면 영어
+    return 'en';
+}
+/**
+ * 고급 언어 감지 함수 (기존 detectLanguageForMetadata 대체)
+ * 
+ * 감지 우선순위:
+ *   1. 비라틴 문자 감지 (짧은 텍스트도 포함 — CJK 등 짧은 텍스트가 의미 있음)
+ *   2. 빈 텍스트/너무 짧은 Latin 텍스트 폴백
+ *   3. 라틴 하위 언어 감지 (detectLatinSubLanguage)
+ */
+export function detectLanguage(text: string): LanguageDetectionResult {
+    const originalLength = text.length;
+    const processedText = preprocessTextForLanguageDetection(text);
+    const processedLength = processedText.length;
+
+    // ── 1단계: 비라틴 문자 언어 우선 감지 (짧은 텍스트도 포함) ──
+    // CJK/아랍어/힌디어 등은 짧은 텍스트(2~3자)도 의미 있으므로 길이 제한 없이 감지
+    if (processedLength > 0) {
+        const nonLatinResults = [
+            { lang: 'ko' as const, matches: processedText.match(LANGUAGE_PATTERNS.ko) },
+            { lang: 'ja' as const, matches: processedText.match(LANGUAGE_PATTERNS.ja) },
+            { lang: 'zh' as const, matches: processedText.match(LANGUAGE_PATTERNS.zh) },
+            { lang: 'ar' as const, matches: processedText.match(LANGUAGE_PATTERNS.ar) },
+            { lang: 'hi' as const, matches: processedText.match(LANGUAGE_PATTERNS.hi) },
+            { lang: 'th' as const, matches: processedText.match(LANGUAGE_PATTERNS.th) },
+            { lang: 'ru' as const, matches: processedText.match(LANGUAGE_PATTERNS.ru) }
+        ];
+
+        for (const { lang, matches } of nonLatinResults) {
+            if (matches && matches.length > 0) {
+                const ratio = matches.length / processedLength;
+                if (ratio > 0.3) { // 30% 이상이면 해당 언어로 판단
+                    return {
+                        language: lang,
+                        confidence: Math.min(ratio * 2, 1.0),
+                        method: 'regex',
+                        textLength: originalLength,
+                        processedLength
+                    };
+                }
+            }
+        }
+    }
+
+    // ── 2단계: 빈 텍스트 또는 너무 짧은 Latin 텍스트 폴백 ──
+    if (processedLength < DEFAULT_LANGUAGE_POLICY.shortTextThreshold) {
+        return {
+            language: DEFAULT_LANGUAGE_POLICY.fallbackLanguage,
+            confidence: 0.5,
+            method: 'fallback',
+            textLength: originalLength,
+            processedLength
+        };
+    }
+
+    // ── 3단계: 라틴 알파벳 기반 언어 처리 ──
+    const latinMatches = processedText.match(LANGUAGE_PATTERNS.latin);
+    if (!latinMatches || latinMatches.length === 0) {
+        return {
+            language: DEFAULT_LANGUAGE_POLICY.fallbackLanguage,
+            confidence: 0.5,
+            method: 'fallback',
+            textLength: originalLength,
+            processedLength
+        };
+    }
+
+    // 한국어 비율 체크 (한국어-라틴 혼합 텍스트 처리)
+    const koreanMatches = processedText.match(LANGUAGE_PATTERNS.ko) || [];
+    const total = koreanMatches.length + latinMatches.length;
+    const koreanRatio = koreanMatches.length / total;
+
+    if (koreanRatio > 0.7) {
+        return {
+            language: 'ko',
+            confidence: koreanRatio,
+            method: 'regex',
+            textLength: originalLength,
+            processedLength
+        };
+    } else if (koreanRatio < 0.1) {
+        // 라틴 문자 주도 → 하위 언어 감지로 세분화
+        const detectedLang = detectLatinSubLanguage(processedText);
+        return {
+            language: detectedLang,
+            confidence: detectedLang === 'en' ? 0.8 : 0.75,
+            method: 'regex',
+            textLength: originalLength,
+            processedLength
+        };
+    } else {
+        // 혼합 텍스트의 경우 한국어 우선
+        return {
+            language: 'ko',
+            confidence: 0.6,
+            method: 'regex',
+            textLength: originalLength,
+            processedLength
+        };
+    }
+}
+
+/**
+ * 언어 정책 결정 함수
+ */
+export function determineLanguagePolicy(
+    text: string,
+    config: LanguagePolicyConfig = DEFAULT_LANGUAGE_POLICY,
+    userPreference?: SupportedLanguageCode
+): LanguagePolicyDecision {
+    const detection = detectLanguage(text);
+    
+    // 동적 응답이 비활성화된 경우 기본 언어 사용
+    if (!config.enableDynamicResponse) {
+        return {
+            requestedLanguage: detection.language,
+            resolvedLanguage: config.defaultLanguage,
+            reason: 'system_default',
+            fallbackApplied: true,
+            detection,
+            userPreference
+        };
+    }
+    
+    // 사용자 설정 언어가 있는 경우 우선 적용
+    if (userPreference && config.supportedLanguages.includes(userPreference)) {
+        return {
+            requestedLanguage: detection.language,
+            resolvedLanguage: userPreference,
+            reason: 'user_preference',
+            fallbackApplied: false,
+            detection,
+            userPreference
+        };
+    }
+    
+    // 감지된 언어가 지원되고 신뢰도가 충분한 경우
+    if (config.supportedLanguages.includes(detection.language) && 
+        detection.confidence >= config.minConfidenceThreshold) {
+        return {
+            requestedLanguage: detection.language,
+            resolvedLanguage: detection.language,
+            reason: 'exact_match',
+            fallbackApplied: false,
+            detection,
+            userPreference
+        };
+    }
+    
+    // 폴백 언어 적용
+    return {
+        requestedLanguage: detection.language,
+        resolvedLanguage: config.fallbackLanguage,
+        reason: 'fallback_applied',
+        fallbackApplied: true,
+        detection,
+        userPreference
+    };
+}
+
+/**
+ * 언어별 응답 템플릿 가져오기
+ */
+export function getLanguageTemplate(language: SupportedLanguageCode): LanguageResponseTemplate {
+    return LANGUAGE_TEMPLATES[language] || LANGUAGE_TEMPLATES.en;
+}
+
+/**
+ * 언어 정책을 기반으로 프롬프트용 언어 지시문 생성
+ */
+export function generateLanguageInstructions(policy: LanguagePolicyDecision): string {
+    const lang = policy.resolvedLanguage;
+    const displayName = LANGUAGE_DISPLAY_NAMES[lang] || lang;
+    const template = getLanguageTemplate(lang);
+
+    const enforcementBlocks: Record<PromptLocaleCode, (dn: string, rule: string) => string> = {
+        ko: (dn, rule) => `**[필수] 응답 언어: ${dn}**\n${rule}\n- 다른 언어로 응답하지 마세요. 기술 용어만 원어 병기 허용.`,
+        en: (dn, rule) => `**[REQUIRED] Response Language: ${dn}**\n${rule}\n- Do NOT respond in any other language. Only technical terms may use original language in parentheses.`,
+        ja: (dn, rule) => `**[必須] 応答言語: ${dn}**\n${rule}\n- 他の言語で応答しないでください。技術用語のみ原語併記を許可します。`,
+        zh: (dn, rule) => `**[必须] 响应语言: ${dn}**\n${rule}\n- 请勿使用其他语言回答。仅允许技术术语使用原语言括号标注。`,
+        es: (dn, rule) => `**[OBLIGATORIO] Idioma de respuesta: ${dn}**\n${rule}\n- NO responda en otro idioma. Solo los términos técnicos pueden usar el idioma original entre paréntesis.`,
+        de: (dn, rule) => `**[PFLICHT] Antwortsprache: ${dn}**\n${rule}\n- Antworten Sie NICHT in einer anderen Sprache. Nur Fachbegriffe dürfen in Klammern in der Originalsprache angegeben werden.`,
+        fr: (dn, rule) => `**[OBLIGATOIRE] Langue de réponse : ${dn}**\n${rule}\n- NE répondez PAS dans une autre langue. Seuls les termes techniques peuvent utiliser la langue d'origine entre parenthèses.`
+    };
+
+    const locale = resolvePromptLocale(lang);
+    const builder = enforcementBlocks[locale];
+    return builder(displayName, template.languageRule);
+}
+
+export type PromptLocaleCode = 'ko' | 'en' | 'ja' | 'zh' | 'es' | 'de' | 'fr';
+
+export const PRIMARY_PROMPT_LOCALES: PromptLocaleCode[] = ['ko', 'en', 'ja', 'zh', 'es', 'de', 'fr'];
+
+export function resolvePromptLocale(lang: string): PromptLocaleCode {
+    const normalized = (lang || 'en').toLowerCase().split('-')[0];
+    if (PRIMARY_PROMPT_LOCALES.includes(normalized as PromptLocaleCode)) {
+        return normalized as PromptLocaleCode;
+    }
+
+    const languageMap: Record<string, PromptLocaleCode> = {
+        pt: 'es',
+        it: 'es',
+        nl: 'de',
+        sv: 'en',
+        da: 'en',
+        no: 'en',
+        fi: 'en',
+        ru: 'en',
+        ar: 'en',
+        hi: 'en',
+        th: 'en',
+        vi: 'en',
+        tr: 'en'
+    };
+    return languageMap[normalized] || 'en';
+}
+
+export const LANGUAGE_DISPLAY_NAMES: Record<SupportedLanguageCode, string> = {
+    ko: '한국어',
+    en: 'English',
+    ja: '日本語',
+    zh: '中文',
+    es: 'Español',
+    fr: 'Français',
+    de: 'Deutsch',
+    pt: 'Português',
+    ru: 'Русский',
+    ar: 'العربية',
+    hi: 'हिंदी',
+    it: 'Italiano',
+    nl: 'Nederlands',
+    sv: 'Svenska',
+    da: 'Dansk',
+    no: 'Norsk',
+    fi: 'Suomi',
+    th: 'ภาษาไทย',
+    vi: 'Tiếng Việt',
+    tr: 'Türkçe'
+};

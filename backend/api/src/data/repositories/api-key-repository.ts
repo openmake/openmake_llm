@@ -14,7 +14,7 @@ export class ApiKeyRepository extends BaseRepository {
     async recordApiUsage(date: string, apiKeyId: string, requests: number, tokens: number, errors: number, avgResponseTime: number, models: Record<string, unknown>) {
         return this.query(
             `INSERT INTO api_usage (date, api_key_id, requests, tokens, errors, avg_response_time, models)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            VALUES ($1::date, $2, $3, $4, $5, $6, $7)
             ON CONFLICT(date, api_key_id) DO UPDATE SET
                 requests = api_usage.requests + EXCLUDED.requests,
                 tokens = api_usage.tokens + EXCLUDED.tokens,
@@ -30,7 +30,7 @@ export class ApiKeyRepository extends BaseRepository {
         const result = await this.query(
             `SELECT date, SUM(requests) as requests, SUM(tokens) as tokens, SUM(errors) as errors, AVG(avg_response_time) as avg_response_time
             FROM api_usage
-            WHERE date >= to_char(CURRENT_DATE - ($1 || ' days')::interval, 'YYYY-MM-DD')
+            WHERE date >= (CURRENT_DATE - $1::integer)
             GROUP BY date
             ORDER BY date DESC`,
             [days]

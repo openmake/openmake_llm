@@ -87,6 +87,8 @@ export interface A2AStrategyContext extends ChatContext {
     chatOptions: ModelOptions;
     /** 질문 유형 (A2A 모델 조합 동적 선택용, 하위 호환 위해 optional) */
     queryType?: string;
+    /** 사용자 언어 (A2A 합성 프롬프트 다국어화용, language-policy에서 결정) */
+    userLanguage?: string;
 }
 
 /**

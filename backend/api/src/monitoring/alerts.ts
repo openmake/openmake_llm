@@ -18,7 +18,9 @@
  */
 
 import nodemailer, { type Transporter } from 'nodemailer';
+import type { Pool } from 'pg';
 import { createLogger } from '../utils/logger';
+import { ALERT_THRESHOLDS } from '../config/timeouts';
 
 const logger = createLogger('AlertSystem');
 
@@ -53,7 +55,7 @@ interface AlertMessage {
     /** 알림 상세 메시지 */
     message: string;
     /** 추가 데이터 (키ID, 사용률 등) */
-    data?: Record<string, any>;
+    data?: Record<string, unknown>;
     /** 알림 발생 시점 */
     timestamp: Date;
 }
@@ -121,6 +123,8 @@ export class AlertSystem {
     private lastAlerts: Map<string, Date> = new Map();
     /** 알림 히스토리 (최대 100건) */
     private alertHistory: AlertMessage[] = [];
+    /** PostgreSQL Pool (alert_history DB 영속화용) */
+    private pool: Pool | null = null;
 
     /**
      * AlertSystem 인스턴스를 생성합니다.
@@ -137,7 +141,7 @@ export class AlertSystem {
             thresholds: {
                 quotaWarningPercent: config?.thresholds?.quotaWarningPercent ?? 70,
                 quotaCriticalPercent: config?.thresholds?.quotaCriticalPercent ?? 90,
-                responseTimeMs: config?.thresholds?.responseTimeMs ?? 5000,
+                responseTimeMs: config?.thresholds?.responseTimeMs ?? ALERT_THRESHOLDS.RESPONSE_TIME_MS,
                 errorRatePercent: config?.thresholds?.errorRatePercent ?? 10
             },
             cooldownMinutes: config?.cooldownMinutes ?? 15,
@@ -159,6 +163,16 @@ export class AlertSystem {
     }
 
     /**
+     * PostgreSQL Pool을 주입하여 alert_history 테이블에 영속화를 활성화합니다.
+     *
+     * @param pool - pg Pool 인스턴스
+     */
+    setPool(pool: Pool): void {
+        this.pool = pool;
+        logger.info('AlertSystem: DB 영속화 활성화됨');
+    }
+
+    /**
      * 알림을 발송합니다.
      *
      * 쿨다운 기간 내 동일 타입/심각도의 알림은 무시됩니다.
@@ -175,7 +189,7 @@ export class AlertSystem {
         severity: AlertSeverity,
         title: string,
         message: string,
-        data?: Record<string, any>
+        data?: Record<string, unknown>
     ): Promise<void> {
         if (!this.config.enabled) return;
 
@@ -203,6 +217,15 @@ export class AlertSystem {
         this.alertHistory.push(alert);
         if (this.alertHistory.length > 100) {
             this.alertHistory.shift();
+        }
+
+        // DB 영속화 (pool이 주입된 경우)
+        if (this.pool) {
+            this.pool.query(
+                'INSERT INTO alert_history (type, severity, title, message, data) VALUES ($1, $2, $3, $4, $5)',
+                [alert.type, alert.severity, alert.title, alert.message,
+                 alert.data !== undefined ? JSON.stringify(alert.data) : null]
+            ).catch((err: Error) => logger.error('[AlertSystem] alert_history DB 저장 실패:', err));
         }
 
         // 마지막 알림 시간 기록

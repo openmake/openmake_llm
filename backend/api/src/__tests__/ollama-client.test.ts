@@ -46,15 +46,22 @@ jest.mock('../utils/logger', () => ({
 jest.mock('../ollama/api-key-manager', () => ({
     getApiKeyManager: () => ({
         getAuthHeaders: () => ({}),
+        getAuthHeadersForIndex: () => ({}),
         reportSuccess: () => {},
         reportFailure: () => false,
+        recordKeySuccess: () => {},
+        recordKeyFailure: () => {},
         getCurrentKeyIndex: () => 0,
         getCurrentKey: () => 'test-key',
         getTotalKeys: () => 1,
+        getNextAvailableKey: () => 0,
+        getKeyByIndex: () => 'test-key',
+        getNextResetTime: () => null,
+        getKeysInCooldownCount: () => 0,
+        setKeyIndex: () => {},
     }),
     ApiKeyManager: class {},
 }));
-
 // Mock api-usage-tracker
 jest.mock('../ollama/api-usage-tracker', () => ({
     getApiUsageTracker: () => ({

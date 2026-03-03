@@ -17,7 +17,7 @@ import chalk from 'chalk';
 import { OllamaClient } from '../ollama/client';
 import { getSystemPrompt } from '../chat/prompt';
 import { createSpinner } from '../ui/spinner';
-import { formatCodeBlock, detectLanguage } from '../ui/highlight';
+import { detectLanguage } from '../ui/highlight';
 
 /**
  * 파일의 코드를 LLM으로 리뷰합니다.

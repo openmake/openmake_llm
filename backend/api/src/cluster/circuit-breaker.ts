@@ -34,6 +34,7 @@
 
 import { CircuitOpenError } from '../errors/circuit-open.error';
 import { createLogger } from '../utils/logger';
+import { CIRCUIT_BREAKER_DEFAULTS } from '../config/timeouts';
 
 const logger = createLogger('CircuitBreaker');
 
@@ -76,10 +77,10 @@ export interface CircuitBreakerMetrics {
 
 /** 기본 서킷 브레이커 설정 */
 const DEFAULT_CONFIG: CircuitBreakerConfig = {
-    failureThreshold: 5,
-    resetTimeout: 30000,
-    halfOpenMaxAttempts: 2,
-    monitorWindow: 60000,
+    failureThreshold: CIRCUIT_BREAKER_DEFAULTS.FAILURE_THRESHOLD,
+    resetTimeout: CIRCUIT_BREAKER_DEFAULTS.RESET_TIMEOUT_MS,
+    halfOpenMaxAttempts: CIRCUIT_BREAKER_DEFAULTS.HALF_OPEN_MAX_ATTEMPTS,
+    monitorWindow: CIRCUIT_BREAKER_DEFAULTS.MONITOR_WINDOW_MS,
 };
 
 /**

@@ -19,7 +19,9 @@ import {
 import { getSystemPrompt } from './prompt';
 import { showCompactBanner, showModelInfo, showDivider } from '../ui/banner';
 import { createSpinner } from '../ui/spinner';
-import { getConfig } from '../config';
+import { createLogger } from '../utils/logger';
+
+const logger = createLogger('ChatModule');
 
 export interface ChatOptions {
     model?: string;
@@ -55,11 +57,11 @@ export class ChatSession {
         showModelInfo(this.client.model);
 
         // Gemini 모드 표시
-        console.log(chalk.magenta(`  🎯  Mode: Gemini Optimized`));
+        logger.info(chalk.magenta(`  🎯  Mode: Gemini Optimized`));
 
         showDivider();
 
-        console.log(chalk.gray('채팅을 시작합니다. "exit" 또는 "quit"을 입력하면 종료됩니다.\n'));
+        logger.info(chalk.gray('채팅을 시작합니다. "exit" 또는 "quit"을 입력하면 종료됩니다.\n'));
 
         await this.loop();
     }
@@ -80,13 +82,13 @@ export class ChatSession {
             if (!trimmed) continue;
 
             if (['exit', 'quit', 'q', '종료'].includes(trimmed.toLowerCase())) {
-                console.log(chalk.yellow('\n👋 채팅을 종료합니다.'));
+                logger.info(chalk.yellow('\n👋 채팅을 종료합니다.'));
                 break;
             }
 
             if (trimmed.toLowerCase() === 'clear') {
                 this.clearHistory();
-                console.log(chalk.cyan('💬 대화 기록이 초기화되었습니다.\n'));
+                logger.info(chalk.cyan('💬 대화 기록이 초기화되었습니다.\n'));
                 continue;
             }
 
@@ -123,9 +125,9 @@ export class ChatSession {
 
             if (firstToken) {
                 spinner.stop();
-                console.log(chalk.cyan('\n🤖 AI: ') + response.content);
+                logger.info(chalk.cyan('\n🤖 AI: ') + response.content);
             } else {
-                console.log('\n');
+                logger.info('\n');
             }
 
             this.messages.push(response);
@@ -134,10 +136,10 @@ export class ChatSession {
 
             if (error instanceof Error) {
                 if (error.message.includes('ECONNREFUSED')) {
-                    console.log(chalk.red('\n❌ Ollama 서버에 연결할 수 없습니다.'));
-                    console.log(chalk.yellow('   ollama serve 명령으로 서버를 시작하세요.\n'));
+                    logger.info(chalk.red('\n❌ Ollama 서버에 연결할 수 없습니다.'));
+                    logger.info(chalk.yellow('   ollama serve 명령으로 서버를 시작하세요.\n'));
                 } else {
-                    console.log(chalk.red(`\n❌ 오류: ${error.message}\n`));
+                    logger.info(chalk.red(`\n❌ 오류: ${error.message}\n`));
                 }
             }
 
@@ -155,12 +157,12 @@ export class ChatSession {
     }
 
     private showHelp(): void {
-        console.log(chalk.cyan('\n📖 도움말'));
+        logger.info(chalk.cyan('\n📖 도움말'));
         showDivider();
-        console.log(chalk.white('  clear  ') + chalk.gray('- 대화 기록 초기화'));
-        console.log(chalk.white('  help   ') + chalk.gray('- 도움말 표시'));
-        console.log(chalk.white('  exit   ') + chalk.gray('- 채팅 종료'));
-        console.log('');
+        logger.info(chalk.white('  clear  ') + chalk.gray('- 대화 기록 초기화'));
+        logger.info(chalk.white('  help   ') + chalk.gray('- 도움말 표시'));
+        logger.info(chalk.white('  exit   ') + chalk.gray('- 채팅 종료'));
+        logger.info('');
     }
 }
 

@@ -8,13 +8,12 @@
  *
  * @module pages/developer
  */
-(function() {
-    'use strict';
+'use strict';
     window.PageModules = window.PageModules || {};
     /** @type {number[]} setInterval ID 배열 (cleanup용) */
-    var _intervals = [];
+    let _intervals = [];
     /** @type {IntersectionObserver|null} 스크롤 관찰자 */
-    var _observer = null;
+    let _observer = null;
 
     /**
      * HTML 이스케이프 헬퍼 (코드 블록용)
@@ -102,10 +101,10 @@
                 '.dev-section p { margin-bottom: var(--space-4); line-height: 1.6; color: var(--text-secondary); }' +
                 
                 '.endpoint-badge { display: inline-block; padding: 2px 8px; border-radius: var(--radius-sm); font-size: var(--font-size-xs); font-weight: bold; margin-right: var(--space-2); text-transform: uppercase; letter-spacing: 0.5px; }' +
-                '.badge-get { background: var(--bg-tertiary); color: #22c55e; border: 2px solid #22c55e; }' +
-                '.badge-post { background: var(--bg-tertiary); color: #3b82f6; border: 2px solid #3b82f6; }' +
-                '.badge-put, .badge-patch { background: var(--bg-tertiary); color: #f59e0b; border: 2px solid #f59e0b; }' +
-                '.badge-delete { background: var(--bg-tertiary); color: #ef4444; border: 2px solid #ef4444; }' +
+                '.badge-get { background: var(--bg-tertiary); color: var(--success); border: 2px solid var(--success); }' +
+                '.badge-post { background: var(--bg-tertiary); color: var(--info); border: 2px solid var(--info); }' +
+                '.badge-put, .badge-patch { background: var(--bg-tertiary); color: var(--warning); border: 2px solid var(--warning); }' +
+                '.badge-delete { background: var(--bg-tertiary); color: var(--danger); border: 2px solid var(--danger); }' +
                 
                 '.code-group { border: 1px solid var(--border-light); border-radius: var(--radius-lg); overflow: hidden; margin: var(--space-6) 0; background: #1e1e1e; box-shadow: var(--shadow-md); }' +
                 '.code-tabs { display: flex; background: #252526; border-bottom: 1px solid #333; }' +
@@ -232,7 +231,7 @@
                 '<tr><td><span class="param-name">openmake_llm_auto</span></td><td>Auto (per routed model)</td><td>Auto</td><td>Auto</td><td>Auto</td><td>Auto</td><td>Auto</td></tr>' +
                 '</tbody></table>' +
 
-                '<div class="alert-info" style="margin-top: 1rem; padding: 0.75rem 1rem; border-left: 3px solid #3b82f6; background: var(--bg-tertiary); border-radius: 4px;">' +
+                '<div class="alert-info" style="margin-top: 1rem; padding: 0.75rem 1rem; border-left: 3px solid var(--info); background: var(--bg-tertiary); border-radius: 4px;">' +
                 '<strong>Note:</strong> Internal engine models are abstracted behind these aliases. ' +
                 'The actual engine may change without notice as we optimize quality and performance. ' +
                 'Always reference models by their <code>openmake_llm_*</code> alias.</div>' +
@@ -307,30 +306,29 @@
                 '<p>Create a new API key with optional name and expiration.</p>' +
                 getCodeBlock(
                     'curl',
-                    'curl -X POST ' + window.location.origin + '/api/v1/api-keys \\\n' +
-                    '  -H "X-API-Key: omk_live_sk_..." \\\n' +
+                    'curl -X POST ' + window.location.origin + '/api/api-keys \\\n' +
+                    '  -H "Authorization: Bearer <jwt_token>" \\\n' +
                     '  -H "Content-Type: application/json" \\\n' +
                     '  -d \'{"name": "New Service Key"}\'',
                     'python',
-                    'requests.post("' + window.location.origin + '/api/v1/api-keys", \n' +
-                    '    headers={"X-API-Key": "key"}, \n' +
+                    'requests.post("' + window.location.origin + '/api/api-keys", \n' +
+                    '    headers={"Authorization": "Bearer <jwt_token>"}, \n' +
                     '    json={"name": "New Service Key"})',
                     'typescript',
-                    'await fetch("' + window.location.origin + '/api/v1/api-keys", {\n' +
+                    'await fetch("' + window.location.origin + '/api/api-keys", {\n' +
                     '  method: "POST",\n' +
-                    '  headers: {"X-API-Key": "key", "Content-Type": "application/json"},\n' +
+                    '  headers: {"Authorization": "Bearer <jwt_token>", "Content-Type": "application/json"},\n' +
                     '  body: JSON.stringify({name: "New Service Key"})\n' +
                     '})'
                 ) +
-
                 '<h3 id="list-keys" style="margin-top:60px;">List Keys</h3>' +
                 '<p><span class="endpoint-badge badge-get">GET</span> <code>/api-keys</code></p>' +
                 '<p>Returns a list of all API keys for the current account.</p>' +
                 getCodeBlock(
                     'curl',
-                    'curl ' + window.location.origin + '/api/v1/api-keys \\\n  -H "X-API-Key: omk_live_sk_..."',
-                    'python', 'requests.get("' + window.location.origin + '/api/v1/api-keys", headers=...)',
-                    'typescript', 'fetch("' + window.location.origin + '/api/v1/api-keys", ...)'
+                    'curl ' + window.location.origin + '/api/api-keys \\\n  -H "Authorization: Bearer <jwt_token>"',
+                    'python', 'requests.get("' + window.location.origin + '/api/api-keys", headers={"Authorization": "Bearer <jwt_token>"})',
+                    'typescript', 'fetch("' + window.location.origin + '/api/api-keys", {headers: {"Authorization": "Bearer <jwt_token>"}})'
                 ) +
                 
                 '<h3 id="get-key" style="margin-top:60px;">Get Key Details</h3>' +
@@ -487,4 +485,6 @@
             }
         }
     };
-})();
+
+const { getHTML, init, cleanup } = window.PageModules['developer'];
+export default { getHTML, init, cleanup };

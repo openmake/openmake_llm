@@ -11,6 +11,7 @@
 
 import type { DiscussionConfig, ContextPriority, TokenLimits } from './discussion-types';
 import { createLogger } from '../utils/logger';
+import { DISCUSSION_TOKEN_BUDGET } from '../config/runtime-limits';
 
 const logger = createLogger('Discussion');
 
@@ -76,11 +77,11 @@ export function createContextBuilder(config: DiscussionConfig): {
     // 🆕 토큰 제한 기본값 (대략적인 문자 수 기준, 1토큰 ≈ 4자)
     // ========================================
     const defaultLimits: TokenLimits = {
-        maxTotalTokens: 8000,
-        maxDocumentTokens: 3000,
-        maxHistoryTokens: 2000,
-        maxWebSearchTokens: 1500,
-        maxMemoryTokens: 1000,
+        maxTotalTokens: DISCUSSION_TOKEN_BUDGET.COMPACT.maxTotalTokens,
+        maxDocumentTokens: DISCUSSION_TOKEN_BUDGET.COMPACT.maxDocumentTokens,
+        maxHistoryTokens: DISCUSSION_TOKEN_BUDGET.COMPACT.maxHistoryTokens,
+        maxWebSearchTokens: DISCUSSION_TOKEN_BUDGET.COMPACT.maxWebSearchTokens,
+        maxMemoryTokens: DISCUSSION_TOKEN_BUDGET.COMPACT.maxMemoryTokens,
         maxImageDescriptionTokens: 500
     };
     

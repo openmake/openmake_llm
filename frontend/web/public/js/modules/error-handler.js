@@ -3,7 +3,7 @@
  * Error Handler - 에러 처리, 기능 카드, 도움말
  * ============================================
  * 기능 카드 시작, 인라인 도움말, 슬래시 명령어 처리,
- * 웹 검색 실행, MCP 설정 서버 동기화를 담당합니다.
+ * 기능 카드 시작, 인라인 도움말, 슬래시 명령어 처리,
  *
  * app.js에서 추출됨 (L4148-4539, L3393-3437, L3769-3829)
  *
@@ -164,7 +164,7 @@ async function performWebSearch(query, model) {
             content.innerHTML = '<span class="loading-spinner"></span> 웹에서 검색 중...';
         }
 
-        const res = await fetch('/api/web-search', {
+        const res = await fetch(API_ENDPOINTS.WEB_SEARCH, {
             method: 'POST',
             credentials: 'include',
             headers: { 'Content-Type': 'application/json' },
@@ -200,64 +200,6 @@ async function performWebSearch(query, model) {
     setState('isSending', false);
 }
 
-/**
- * 현재 MCP 설정을 WebSocket으로 서버에 동기화
- * @returns {void}
- */
-function syncMCPSettingsToServer() {
-    const ws = getState('ws');
-    if (ws && ws.readyState === WebSocket.OPEN) {
-        // mcpSettings는 settings.js의 전역 변수를 window에서 참조
-        const mcpSettings = window.mcpSettings || {};
-        const serverSettings = {
-            sequentialThinking: mcpSettings.thinking,
-            pdfTools: mcpSettings.pdf,
-            webSearch: mcpSettings.webSearch
-        };
-
-        ws.send(JSON.stringify({
-            type: 'mcp_settings',
-            settings: serverSettings
-        }));
-
-        console.log('[MCP] 서버에 설정 동기화:', serverSettings);
-    } else {
-        console.warn('[MCP] WebSocket 연결 없음, 서버 동기화 실패');
-    }
-}
-
-/**
- * 서버에서 수신한 MCP 설정을 로컬 상태와 UI에 동기화
- * @param {Object} serverSettings - 서버 MCP 설정 객체
- * @returns {void}
- */
-function syncMCPSettingsFromServer(serverSettings) {
-    if (!serverSettings) return;
-
-    const mcpSettings = window.mcpSettings || {};
-    const settingsMap = {
-        sequentialThinking: 'thinking',
-        pdfTools: 'pdf',
-        webSearch: 'webSearch'
-    };
-
-    for (const [serverKey, localKey] of Object.entries(settingsMap)) {
-        if (serverKey in serverSettings) {
-            mcpSettings[localKey] = serverSettings[serverKey];
-
-            const checkboxId = `mcp${localKey.charAt(0).toUpperCase() + localKey.slice(1)}`;
-            const checkbox = document.getElementById(checkboxId);
-            if (checkbox) {
-                checkbox.checked = serverSettings[serverKey];
-            }
-        }
-    }
-
-    setState('thinkingEnabled', mcpSettings.thinking);
-    setState('webSearchEnabled', mcpSettings.webSearch);
-
-    console.log('[MCP] UI 설정 동기화 완료:', mcpSettings);
-}
 
 // 레거시 빈 함수 (호환성 유지용)
 /** @deprecated 호환성 유지용 빈 함수 */
@@ -274,8 +216,6 @@ window.startFeatureChat = startFeatureChat;
 window.handleCommand = handleCommand;
 window.showHelpAndMessage = showHelpAndMessage;
 window.performWebSearch = performWebSearch;
-window.syncMCPSettingsToServer = syncMCPSettingsToServer;
-window.syncMCPSettingsFromServer = syncMCPSettingsFromServer;
 window.showHelpPopup = showHelpPopup;
 window.hideHelpPopup = hideHelpPopup;
 window.hideHelpPopupDelayed = hideHelpPopupDelayed;
@@ -286,8 +226,6 @@ export {
     handleCommand,
     showHelpAndMessage,
     performWebSearch,
-    syncMCPSettingsToServer,
-    syncMCPSettingsFromServer,
     showHelpPopup,
     hideHelpPopup,
     hideHelpPopupDelayed,

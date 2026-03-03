@@ -15,6 +15,7 @@
  * - GET    /api/documents        - 업로드된 문서 목록
  * - GET    /api/documents/:docId - 개별 문서 조회
  * - DELETE /api/documents/:docId - 문서 삭제
+ * - DELETE /api/documents        - 전체 문서 일괄 삭제
  *
  * @requires ClusterManager - Ollama 클러스터 관리
  * @requires extractDocument - 문서 텍스트 추출 (PDF, 이미지 OCR)
@@ -32,11 +33,16 @@ import {
      ProgressEvent
   } from '../documents';
   import { uploadedDocuments } from '../documents/store';
-  import { getConfig } from '../config';
   import { success, badRequest, notFound, serviceUnavailable } from '../utils/api-response';
   import { asyncHandler } from '../utils/error-handler';
   import { createLogger } from '../utils/logger';
-  import { buildExecutionPlan } from '../chat/profile-resolver';
+import { buildExecutionPlan } from '../chat/profile-resolver';
+import { detectLanguage } from '../chat/language-policy';
+  import { validate, validateUploadContentType, validateFileUploadSecurity } from '../middlewares/validation';
+  import { summarizeDocumentSchema, documentAskSchema } from '../schemas/documents.schema';
+import { FILE_LIMITS } from '../config/constants';
+import { getRAGService } from '../services/RAGService';
+import { optionalAuth } from '../auth';
 
 const logger = createLogger('DocumentsRoutes');
 
@@ -106,7 +112,7 @@ const storage = multer.diskStorage({
 
 const upload = multer({
     storage,
-    limits: { fileSize: 100 * 1024 * 1024 } // 100MB 제한
+    limits: { fileSize: FILE_LIMITS.MAX_SIZE_BYTES } // 300MB 제한
 });
 
 /**
@@ -121,7 +127,7 @@ export function setDependencies(cluster: ClusterManager, broadcast: (data: Recor
  * POST /api/upload
  * 파일 업로드
  */
-router.post('/upload', upload.single('file'), asyncHandler(async (req: Request, res: Response) => {
+router.post('/upload', optionalAuth, validateUploadContentType(FILE_LIMITS.MAX_SIZE_BYTES), upload.single('file'), validateFileUploadSecurity(), asyncHandler(async (req: Request, res: Response) => {
      try {
          if (!req.file) {
              res.status(400).json(badRequest('파일이 없습니다'));
@@ -166,6 +172,28 @@ router.post('/upload', upload.single('file'), asyncHandler(async (req: Request, 
             progress: 100
         });
 
+        // RAG: 문서 임베딩 (fire-and-forget, 업로드 응답을 차단하지 않음)
+        if (doc.text && doc.text.length > 0) {
+            const userId = (req.user && 'userId' in req.user ? req.user.userId : req.user?.id?.toString()) as string | undefined;
+            getRAGService().embedDocument({
+                docId,
+                text: doc.text,
+                filename: originalFilename,
+                userId,
+            }).then(result => {
+                logger.info(`[RAG] 문서 임베딩 완료: ${result.embeddedChunks}/${result.totalChunks}개 청크 (${result.durationMs}ms)`);
+                broadcastFn?.({
+                    type: 'document_progress',
+                    stage: 'rag_complete',
+                    message: `RAG 임베딩 완료: ${result.embeddedChunks}개 청크 저장됨`,
+                    filename: originalFilename,
+                    progress: 100
+                });
+            }).catch(ragError => {
+                logger.warn('[RAG] 문서 임베딩 실패 (무시):', ragError);
+            });
+        }
+
          res.json(success({ docId, filename: doc.filename, type: doc.type, pages: doc.pages, textLength: doc.text.length, preview: doc.text.substring(0, 500) + (doc.text.length > 500 ? '...' : '') }));
       } catch (error: unknown) {
           logger.error('[Upload] 오류:', error);
@@ -193,7 +221,7 @@ router.post('/upload', upload.single('file'), asyncHandler(async (req: Request, 
  * POST /api/summarize
  * 문서 요약
  */
-router.post('/summarize', asyncHandler(async (req: Request, res: Response) => {
+router.post('/summarize', validate(summarizeDocumentSchema), asyncHandler(async (req: Request, res: Response) => {
      const { docId, model } = req.body;
 
      const doc = uploadedDocuments.get(docId);
@@ -217,7 +245,10 @@ router.post('/summarize', asyncHandler(async (req: Request, res: Response) => {
           return;
       }
 
-      const prompt = createSummaryPrompt(doc);
+      // 사용자 언어 감지: Accept-Language 헤더 또는 문서 텍스트 기반
+      const acceptLang = (req.headers['accept-language'] || '').substring(0, 2).toLowerCase();
+      const docLang = ['ko','en','ja','zh','es','fr','de','pt','ru'].includes(acceptLang) ? acceptLang : detectLanguage(doc.text.substring(0, 500)).language;
+      const prompt = createSummaryPrompt(doc, docLang);
      const result = await client.generate(prompt, { temperature: 0.1 });
     const response = result.response;
 
@@ -244,7 +275,7 @@ router.post('/summarize', asyncHandler(async (req: Request, res: Response) => {
    * POST /api/document/ask
   * 문서 Q&A
   */
-router.post('/document/ask', asyncHandler(async (req: Request, res: Response) => {
+router.post('/document/ask', validate(documentAskSchema), asyncHandler(async (req: Request, res: Response) => {
      const { docId, question, model } = req.body;
 
      const doc = uploadedDocuments.get(docId);
@@ -268,7 +299,9 @@ router.post('/document/ask', asyncHandler(async (req: Request, res: Response) =>
           return;
       }
 
-      const prompt = createQAPrompt(doc, question);
+      // 사용자 언어 감지: 질문 텍스트 기반
+      const questionLang = detectLanguage(question).language;
+      const prompt = createQAPrompt(doc, question, questionLang);
     const result = await client.generate(prompt, { temperature: 0.1 });
     const response = result.response;
 
@@ -292,7 +325,7 @@ router.post('/document/ask', asyncHandler(async (req: Request, res: Response) =>
   * GET /api/documents
  * 업로드된 문서 목록
  */
-router.get('/documents', (_req: Request, res: Response) => {
+router.get('/documents', asyncHandler(async (_req: Request, res: Response) => {
      const docs = Array.from(uploadedDocuments.entries()).map(([id, doc]) => ({
          id,
          filename: doc.filename,
@@ -301,13 +334,36 @@ router.get('/documents', (_req: Request, res: Response) => {
          textLength: doc.text.length
      }));
      res.json(success(docs));
- });
+ }));
+
+/**
+ * DELETE /api/documents
+ * 업로드된 전체 문서 일괄 삭제
+ */
+router.delete('/documents', asyncHandler(async (_req: Request, res: Response) => {
+    const docCount = uploadedDocuments.size;
+
+    // RAG 벡터 임베딩 전체 삭제
+    let embeddingsDeleted = 0;
+    try {
+        embeddingsDeleted = await getRAGService().deleteAllDocumentEmbeddings();
+        logger.info(`[Documents] 전체 문서 임베딩 삭제: ${embeddingsDeleted}개`);
+    } catch (error) {
+        logger.error('[Documents] 전체 문서 임베딩 삭제 실패:', error);
+    }
+
+    // 문서 저장소 전체 삭제 (인메모리 + DB)
+    uploadedDocuments.clear();
+
+    logger.info(`[Documents] 전체 문서 삭제: ${docCount}개 문서, ${embeddingsDeleted}개 임베딩`);
+    res.json(success({ deletedDocuments: docCount, deletedEmbeddings: embeddingsDeleted }));
+}));
 
 /**
  * GET /api/documents/:docId
  * 개별 문서 조회
  */
-router.get('/documents/:docId', (req: Request, res: Response) => {
+router.get('/documents/:docId', asyncHandler(async (req: Request, res: Response) => {
      const { docId } = req.params;
      const doc = uploadedDocuments.get(docId);
 
@@ -317,16 +373,28 @@ router.get('/documents/:docId', (req: Request, res: Response) => {
      }
 
      res.json(success({ id: docId, filename: doc.filename, type: doc.type, pages: doc.pages, textLength: doc.text.length, text: doc.text, info: doc.info }));
-});
+}));
 
 /**
  * DELETE /api/documents/:docId
  * 문서 삭제
  */
-router.delete('/documents/:docId', (req: Request, res: Response) => {
+router.delete('/documents/:docId', asyncHandler(async (req: Request, res: Response) => {
      const { docId } = req.params;
      const deleted = uploadedDocuments.delete(docId);
-     res.json(success({ deleted }));
- });
+
+     // RAG 벡터 임베딩도 함께 삭제
+     let embeddingsDeleted = 0;
+     if (deleted) {
+         try {
+             embeddingsDeleted = await getRAGService().deleteDocumentEmbeddings(docId);
+             logger.info(`[RAG] 문서 임베딩 삭제: ${docId} → ${embeddingsDeleted}개 청크`);
+         } catch (error) {
+             logger.error(`[RAG] 문서 임베딩 삭제 실패 (${docId}):`, error);
+         }
+     }
+
+     res.json(success({ deleted, embeddingsDeleted }));
+ }));
 
 export default router;

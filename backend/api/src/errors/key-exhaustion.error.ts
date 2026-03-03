@@ -35,17 +35,20 @@ export class KeyExhaustionError extends Error {
     /**
      * Get a user-friendly message for display
      */
-    getDisplayMessage(language: 'ko' | 'en' = 'ko'): string {
+    getDisplayMessage(language: string = 'en'): string {
         const minutes = Math.ceil(this.retryAfterSeconds / 60);
-        
-        if (language === 'ko') {
-            return `⚠️ 모든 API 키가 일시적으로 사용 불가능합니다.\n` +
-                   `약 ${minutes}분 후에 다시 시도해주세요.\n` +
-                   `(${this.keysInCooldown}/${this.totalKeys}개 키 쿨다운 중)`;
-        } else {
-            return `⚠️ All API keys are temporarily unavailable.\n` +
-                   `Please try again in about ${minutes} minutes.\n` +
-                   `(${this.keysInCooldown}/${this.totalKeys} keys in cooldown)`;
-        }
+        const cd = `${this.keysInCooldown}/${this.totalKeys}`;
+        const messages: Record<string, string> = {
+            ko: `⚠️ 모든 API 키가 일시적으로 사용 불가능합니다.\n약 ${minutes}분 후에 다시 시도해주세요.\n(${cd}개 키 쿨다운 중)`,
+            en: `⚠️ All API keys are temporarily unavailable.\nPlease try again in about ${minutes} minutes.\n(${cd} keys in cooldown)`,
+            ja: `⚠️ すべてのAPIキーが一時的に利用できません。\n約${minutes}分後に再度お試しください。\n(${cd}個のキーがクールダウン中)`,
+            zh: `⚠️ 所有API密钥暂时不可用。\n请在约${minutes}分钟后重试。\n(${cd}个密钥冷却中)`,
+            es: `⚠️ Todas las claves API no están disponibles temporalmente.\nPor favor, inténtelo en unos ${minutes} minutos.\n(${cd} claves en enfriamiento)`,
+            de: `⚠️ Alle API-Schlüssel sind vorübergehend nicht verfügbar.\nBitte versuchen Sie es in etwa ${minutes} Minuten erneut.\n(${cd} Schlüssel im Cooldown)`,
+            fr: `⚠️ Toutes les clés API sont temporairement indisponibles.
+Veuillez réessayer dans environ ${minutes} minutes.
+(${cd} clés en période de refroidissement)`,
+        };
+        return messages[language] || messages['en']!;
     }
 }

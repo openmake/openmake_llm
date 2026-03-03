@@ -43,7 +43,8 @@ import {
     WebFetchResponse,
     ShowModelRequest,
     ShowModelResponse,
-    PsResponse
+    PsResponse,
+    normalizeThinkOption
 } from './types';
 import { getConfig } from '../config';
 import { OLLAMA_CLOUD_HOST } from '../config/constants';
@@ -92,6 +93,8 @@ export class OllamaClient {
     private context: number[] = [];
     /** API Key 관리자 인스턴스 (키 로테이션 담당) */
     private apiKeyManager: ApiKeyManager;
+    /** 🆕 Per-instance bound key index (A2A 싱글톤 경합 방지) */
+    private boundKeyIndex: number;
 
     // 🆕 Ollama Cloud 호스트 상수 (constants.ts에서 중앙 관리)
 
@@ -113,25 +116,31 @@ export class OllamaClient {
         this.config = { ...DEFAULT_CONFIG, ...config };
         this.apiKeyManager = getApiKeyManager();
 
-        // 🆕 모델이 :cloud 접미사를 가지면 Ollama Cloud 호스트 사용
+        // 🆕 Per-instance key binding: 키풀에서 라운드로빈으로 키를 할당합니다
+        // 모델과 무관하게 사용 가능한 다음 키를 선택하여 A2A 병렬 경합을 방지합니다
         let baseUrl = this.config.baseUrl;
         if (this.isCloudModel(this.config.model)) {
             baseUrl = OLLAMA_CLOUD_HOST;
             logger.info(`🌐 Cloud 모델 감지 - 호스트: ${baseUrl}`);
         }
 
+        // 키풀에서 라운드로빈으로 다음 가용 키 할당 (모델 무관)
+        const poolKeyIndex = this.apiKeyManager.getNextAvailableKey();
+        this.boundKeyIndex = poolKeyIndex !== -1 ? poolKeyIndex : this.apiKeyManager.getCurrentKeyIndex();
+        logger.info(`[constructor] 🔑 키풀 할당: ${this.config.model} → Key ${this.boundKeyIndex + 1}`);
+
         this.client = axios.create({
             baseURL: baseUrl,
             timeout: this.config.timeout,
             headers: {
                 'Content-Type': 'application/json',
-                ...this.apiKeyManager.getAuthHeaders()
+                ...this.apiKeyManager.getAuthHeadersForIndex(this.boundKeyIndex)
             }
         });
 
-        // 🆕 요청 인터셉터: 동적 API 키 주입
+        // 🆕 요청 인터셉터: per-instance bound key 주입 (싱글톤 currentKeyIndex 의존 제거)
         this.client.interceptors.request.use((config) => {
-            const authHeaders = this.apiKeyManager.getAuthHeaders();
+            const authHeaders = this.apiKeyManager.getAuthHeadersForIndex(this.boundKeyIndex);
             if (authHeaders.Authorization) {
                 config.headers.Authorization = authHeaders.Authorization;
             }
@@ -141,7 +150,7 @@ export class OllamaClient {
         // 🆕 응답 인터셉터: 실패 시 폴백 처리 (모든 API 키 순환 시도)
         this.client.interceptors.response.use(
             (response) => {
-                this.apiKeyManager.reportSuccess();
+                this.apiKeyManager.recordKeySuccess(this.boundKeyIndex);
                 return response;
             },
             async (error) => {
@@ -157,26 +166,29 @@ export class OllamaClient {
                     error.code === 'EAI_AGAIN'
                 );
 
-                // 429, 401, 403, 502 에러 시 API 키 스와핑 시도
+                // 429, 401, 403, 400, 502 에러 시 API 키 스와핑 시도
+                // 400: 모델-키 불일치 또는 잘못된 요청 (Cloud 키 스와핑 후 발생 가능)
                 // 502: Cloud 모델 게이트웨이 장애 (Ollama 공식 문서)
-                if (statusCode === 429 || statusCode === 401 || statusCode === 403 || statusCode === 502) {
-                    // 재시도 횟수 추적 (키 개수만큼 시도)
+                if (statusCode === 429 || statusCode === 401 || statusCode === 403 || statusCode === 400 || statusCode === 502) {
+                    // 🆕 Per-instance 실패 기록 (싱글톤 로테이션 트리거하지 않음)
+                    this.apiKeyManager.recordKeyFailure(this.boundKeyIndex, error);
+
+                    // 🆕 키풀에서 다음 사용 가능한 키로 전환 (모델 무관)
                     const retryCount = error.config?._retryCount || 0;
-                    const maxRetries = this.apiKeyManager.getTotalKeys() - 1;
+                    const alternateKeyIndex = this.apiKeyManager.getNextAvailableKey(this.boundKeyIndex);
 
-                    logger.info(`🔄 API 키 스와핑 시도 중... (${retryCount + 1}/${maxRetries + 1})`);
-                    const switched = this.apiKeyManager.reportFailure(error);
-
-                    if (switched && error.config && retryCount < maxRetries) {
+                    if (alternateKeyIndex !== -1 && error.config && retryCount < 3) {
+                        // 키풀의 다음 가용 키로 전환
+                        this.boundKeyIndex = alternateKeyIndex;
                         error.config._retryCount = retryCount + 1;
-                        const newAuthHeaders = this.apiKeyManager.getAuthHeaders();
+                        const newAuthHeaders = this.apiKeyManager.getAuthHeadersForIndex(this.boundKeyIndex);
                         error.config.headers.Authorization = newAuthHeaders.Authorization;
-                        logger.info(`✅ 새 API 키로 재시도 (Key ${this.apiKeyManager.getCurrentKeyIndex() + 1})...`);
+                        logger.info(`✅ 키풀 폴백 재시도 (Key ${this.boundKeyIndex + 1})...`);
                         return this.client.request(error.config);
                     } else {
-                        logger.info(`⚠️ 모든 키 소진 - switched: ${switched}, retryCount: ${retryCount}/${maxRetries}`);
-                        
-                        // 🆕 모든 키가 소진되었을 때 KeyExhaustionError throw
+                        // 모든 키 소진 — 에러 전파
+                        logger.info(`⚠️ 키풀 소진 - 사용 가능한 키 없음 (boundKey: ${this.boundKeyIndex + 1})`);
+
                         const nextResetTime = this.apiKeyManager.getNextResetTime();
                         if (nextResetTime) {
                             const totalKeys = this.apiKeyManager.getTotalKeys();
@@ -199,10 +211,10 @@ export class OllamaClient {
                     // ENOTFOUND/EAI_AGAIN은 호스트(DNS) 레벨 장애 — 키 로테이션 무의미
                     // 키별 장애(ETIMEDOUT, ECONNREFUSED 등)만 키 교체 트리거
                     if (error.code !== 'ENOTFOUND' && error.code !== 'EAI_AGAIN') {
-                        this.apiKeyManager.reportFailure(error);
+                        this.apiKeyManager.recordKeyFailure(this.boundKeyIndex, error);
                     }
                 } else {
-                    this.apiKeyManager.reportFailure(error);
+                    this.apiKeyManager.recordKeyFailure(this.boundKeyIndex, error);
                 }
 
                 throw error;
@@ -226,7 +238,8 @@ export class OllamaClient {
      * @private
      */
     private isCloudModel(model: string): boolean {
-        return model?.toLowerCase().endsWith(':cloud') ?? false;
+        const lower = model?.toLowerCase() ?? '';
+        return lower.endsWith(':cloud') || lower.endsWith('-cloud');
     }
 
     /**
@@ -234,6 +247,7 @@ export class OllamaClient {
      *
      * Auto-routing 등에서 런타임에 모델이 변경될 때,
      * Cloud 모델이면 OLLAMA_CLOUD_HOST로, 로컬 모델이면 원래 노드 URL로 전환합니다.
+     * 또한 모델에 매핑된 API 키가 있으면 자동으로 해당 키로 전환합니다.
      *
      * @param model - 새로 설정할 모델 이름
      */
@@ -250,6 +264,10 @@ export class OllamaClient {
             this.client.defaults.baseURL = this.config.baseUrl;
             logger.info(`[setModel] 🏠 Local 모델 전환 → ${this.config.baseUrl} (model: ${model})`);
         }
+
+        // 키 재바인딩 제거: 모델 변경 시 키는 유지 (동일 제공자이므로 모든 키가 모든 모델에 접근 가능)
+        // boundKeyIndex는 constructor에서 할당된 값을 그대로 유지합니다
+        logger.info(`[setModel] 모델 변경: ${model} (키 유지: Key ${this.boundKeyIndex + 1})`);
     }
 
     /**
@@ -351,7 +369,7 @@ export class OllamaClient {
             stream: !!onToken,
             options,
             images,
-            ...(advancedOptions?.think !== undefined && { think: advancedOptions.think }),
+            ...(advancedOptions?.think !== undefined && { think: normalizeThinkOption(advancedOptions.think, this.config.model) }),
             ...(advancedOptions?.format && { format: advancedOptions.format }),
             ...(advancedOptions?.system && { system: advancedOptions.system }),
             ...(advancedOptions?.keep_alive !== undefined && { keep_alive: advancedOptions.keep_alive })
@@ -512,7 +530,7 @@ export class OllamaClient {
             messages,
             stream: !!onToken,
             options,
-            ...(advancedOptions?.think !== undefined && { think: advancedOptions.think }),
+            ...(advancedOptions?.think !== undefined && { think: normalizeThinkOption(advancedOptions.think, this.config.model) }),
             ...(advancedOptions?.format && { format: advancedOptions.format }),
             ...(advancedOptions?.tools && { tools: advancedOptions.tools }),
             ...(advancedOptions?.keep_alive !== undefined && { keep_alive: advancedOptions.keep_alive })
@@ -748,7 +766,7 @@ export class OllamaClient {
                     baseURL: '', // Override baseURL to use absolute URL
                     headers: {
                         'Content-Type': 'application/json',
-                        ...this.apiKeyManager.getAuthHeaders()
+                        ...this.apiKeyManager.getAuthHeadersForIndex(this.boundKeyIndex)
                     }
                 }
             );
@@ -781,7 +799,7 @@ export class OllamaClient {
                     baseURL: '',
                     headers: {
                         'Content-Type': 'application/json',
-                        ...this.apiKeyManager.getAuthHeaders()
+                        ...this.apiKeyManager.getAuthHeadersForIndex(this.boundKeyIndex)
                     }
                 }
             );
@@ -850,40 +868,5 @@ export const createClient = (config?: Partial<OllamaConfig>): OllamaClient => {
     return new OllamaClient(config);
 };
 
-/**
- * 🆕 특정 인덱스의 키-모델 쌍으로 클라이언트 생성 (A2A용)
- * @param index API 키 인덱스 (0-based)
- * @returns 해당 키-모델 쌍으로 구성된 OllamaClient
- */
-export const createClientForIndex = (index: number): OllamaClient | null => {
-    const keyManager = getApiKeyManager();
-    const pair = keyManager.getKeyModelPair(index);
-    
-    if (!pair) {
-        logger.error(`❌ 인덱스 ${index}에 해당하는 키-모델 쌍이 없습니다.`);
-        return null;
-    }
-    
-    logger.info(`🎯 인덱스 ${index + 1} 클라이언트 생성: ${pair.model}`);
-    return new OllamaClient({ model: pair.model });
-};
-
-/**
- * 🆕 모든 키-모델 쌍에 대해 클라이언트 배열 생성 (A2A 병렬 처리용)
- * @returns OllamaClient 배열
- */
-export const createAllClients = (): OllamaClient[] => {
-    const keyManager = getApiKeyManager();
-    const pairs = keyManager.getAllKeyModelPairs();
-    
-    logger.info(`🚀 ${pairs.length}개 A2A 클라이언트 생성 중...`);
-    
-    const clients = pairs.map(pair => {
-        // 각 클라이언트 생성 전에 해당 인덱스로 키 매니저 설정
-        const client = new OllamaClient({ model: pair.model });
-        return client;
-    });
-    
-    logger.info(`✅ ${clients.length}개 A2A 클라이언트 준비 완료`);
-    return clients;
-};
+// createClientForIndex(), createAllClients() 제거됨
+// → OllamaClient constructor가 getNextAvailableKey()로 키풀에서 자동 할당하므로 불필요

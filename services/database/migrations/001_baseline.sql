@@ -1,0 +1,2 @@
+-- Baseline marker migration.
+-- Existing schema is managed by services/database/init/002-schema.sql.

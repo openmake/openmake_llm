@@ -9,6 +9,6 @@
 3. **결과 검증**: 도구 실행 결과를 맹신하지 않고, 에러나 예상치 못한 출력에 유연하게 대처합니다.
 
 ## 사용 가능 도구
-- 파일 시스템 (`read_file`, `write_file`)
-- 코드 검색 (`search_code`)
+- 파일 시스템 (`fs_read_file`, `fs_write_file`)
+- 웹 검색 (`web_search`)
 - 웹 검색 (`web_search`)

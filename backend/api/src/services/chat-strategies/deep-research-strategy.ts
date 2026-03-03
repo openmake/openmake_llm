@@ -18,6 +18,8 @@ import { getUnifiedDatabase } from '../../data/models/unified-database';
 import { DeepResearchService } from '../DeepResearchService';
 import type { ChatStrategy, ChatResult, DeepResearchStrategyContext } from './types';
 import { createLogger } from '../../utils/logger';
+import { detectLanguage } from '../../chat/language-policy';
+import { LLM_TIMEOUTS } from '../../config/timeouts';
 
 const logger = createLogger('DeepResearchStrategy');
 
@@ -48,17 +50,17 @@ export class DeepResearchStrategy implements ChatStrategy<DeepResearchStrategyCo
 
         logger.info('🔬 Deep Research 모드 시작');
 
-        // 연구 서비스 생성: 최대 5 루프, 한국어, 풀 스크래핑 활성화
+        // 사용자 메시지에서 언어 감지 후 연구 서비스 생성
         const researchService = new DeepResearchService({
             maxLoops: 5,
             llmModel: context.client.model,
             searchApi: 'all',
             maxSearchResults: 360,
-            language: 'ko',
+            language: detectLanguage(message).language,
             maxTotalSources: 80,
             scrapeFullContent: true,
             maxScrapePerLoop: 15,
-            scrapeTimeoutMs: 15000,
+            scrapeTimeoutMs: LLM_TIMEOUTS.SCRAPE_TIMEOUT_MS,
             chunkSize: 10,
         });
 

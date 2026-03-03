@@ -30,6 +30,8 @@ export interface TopicCategory {
     relatedAgents: string[];
     /** 카테고리 확장 검색용 키워드 */
     expansionKeywords: string[];
+    /** 제외 패턴: 이 패턴이 매칭되면 해당 카테고리 점수를 차감 (오분류 방지) */
+    excludePatterns?: RegExp[];
 }
 
 /**
@@ -53,15 +55,22 @@ export const TOPIC_CATEGORIES: TopicCategory[] = [
     {
         name: '프로그래밍/개발',
         patterns: [
-            /앱|어플|애플리케이션|홈페이지|웹사이트|웹페이지|사이트|코드|코딩|프로그램|개발|버그|오류|에러/i,
-            /만들어|개발해|구현해|짜줘|코딩해/i,
+            // C1 수정: '개발'을 복합 패턴으로 교체하여 '사업 개발' 등과 분리
+            /앱|어플|애플리케이션|홈페이지|웹사이트|웹페이지|사이트|코드|코딩|프로그램|버그|오류|에러|개발자/i,
+            /소프트웨어\s*개발|앱\s*개발|웹\s*개발|시스템\s*개발|프로그램\s*개발|프론트\s*개발|백엔드\s*개발|서버\s*개발|게임\s*개발/i,
+            // C2 수정: '만들어'를 제거하고 명확한 프로그래밍 동사만 유지
+            /개발해|구현해|짜줘|코딩해/i,
             /api|서버|데이터베이스|db|백엔드|프론트|클라이언트/i,
-            /자바|파이썬|python|javascript|타입스크립트|리액트|react|vue|앵귤러|노드|node/i,
-            /크롤러|크롤링|스크래핑|자동화|봇|함수|클래스|변수/i
+            /자바|파이썬|python|javascript|타입스크립트|리액트|react|vue|앵귈러|노드|node/i,
+            /크롤러|크롤링|스크래핑|봇|함수|클래스|변수/i
         ],
-        // 실제 ID: software-engineer, frontend-developer, backend-developer, devops-engineer, mobile-developer
+        // C4 수정: 비즈니스 컨텍스트가 감지되면 점수 차감
+        excludePatterns: [
+            /사업\s*개발|비즈니스\s*개발|사업을\s*개발|상품\s*개발|서비스\s*개발/i,
+            /창업|사업계획|경영|마케팅|투자자|스타트업|매출|수익/i
+        ],
         relatedAgents: ['software-engineer', 'frontend-developer', 'backend-developer', 'devops-engineer', 'mobile-developer'],
-        expansionKeywords: ['개발', '코딩', 'API', '서버', '데이터베이스', '프로그래밍']
+        expansionKeywords: ['코딩', 'API', '서버', '데이터베이스', '프로그래밍']
     },
     {
         name: '비즈니스/창업',
@@ -183,8 +192,21 @@ export function analyzeTopicIntent(message: string): {
         }
 
         if (matchCount > 0) {
-            // 점수 = 매칭된 패턴 수 (더 많은 패턴이 매칭되면 더 관련성 높음)
-            categoryScores.push({ category, score: matchCount, matchCount });
+            // C4 수정: 제외 패턴이 매칭되면 점수 차감
+            let excludePenalty = 0;
+            if (category.excludePatterns) {
+                for (const excludePattern of category.excludePatterns) {
+                    if (excludePattern.test(message)) {
+                        excludePenalty++;
+                    }
+                }
+            }
+
+            // 제외 패널티를 적용한 최종 점수 (최소 0)
+            const adjustedScore = Math.max(0, matchCount - excludePenalty);
+            if (adjustedScore > 0) {
+                categoryScores.push({ category, score: adjustedScore, matchCount: adjustedScore });
+            }
         }
     }
 

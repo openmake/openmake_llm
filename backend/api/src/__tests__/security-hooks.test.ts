@@ -9,7 +9,7 @@
  * @module __tests__/security-hooks
  */
 
-import { describe, it, expect } from 'bun:test';
+// Jest globals (describe, it, expect) are available automatically
 import {
     preRequestCheck,
     postResponseCheck,

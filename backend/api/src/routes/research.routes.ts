@@ -25,12 +25,20 @@
 
 import { Router, Request, Response, NextFunction } from 'express';
 import { createLogger } from '../utils/logger';
-import { success, badRequest, notFound, forbidden, internalError } from '../utils/api-response';
+import { success, badRequest, notFound, forbidden } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
 import { requireAuth } from '../auth';
-import { getUnifiedDatabase, getPool } from '../data/models/unified-database';
+import { validate } from '../middlewares/validation';
+import { getUnifiedDatabase } from '../data/models/unified-database';
 import { v4 as uuidv4 } from 'uuid';
-import { createDeepResearchService, ResearchProgress } from '../services/DeepResearchService';
+import { createDeepResearchService } from '../services/DeepResearchService';
+import { detectLanguage } from '../chat/language-policy';
+import {
+    createResearchSessionSchema,
+    addResearchStepSchema,
+    updateResearchSessionSchema,
+    executeResearchSchema
+} from '../schemas/research.schema';
 
 const logger = createLogger('ResearchRoutes');
 const router = Router();
@@ -50,12 +58,7 @@ router.use((req: Request, res: Response, next: NextFunction): void => {
     }
 
     if (userTier === 'free') {
-        res.status(403).json({
-            success: false,
-            error: 'Pro 이상의 등급이 필요합니다',
-            requiredTier: 'pro',
-            currentTier: userTier
-        });
+        res.status(403).json(forbidden('Pro 이상의 등급이 필요합니다'));
         return;
     }
     next();
@@ -69,7 +72,7 @@ router.use((req: Request, res: Response, next: NextFunction): void => {
  * POST /api/research/sessions
  * 리서치 세션 생성
  */
-router.post('/sessions', asyncHandler(async (req: Request, res: Response) => {
+router.post('/sessions', validate(createResearchSessionSchema), asyncHandler(async (req: Request, res: Response) => {
     const { topic, depth } = req.body;
 
     if (!topic) {
@@ -95,7 +98,7 @@ router.post('/sessions', asyncHandler(async (req: Request, res: Response) => {
  * 사용자의 리서치 세션 목록 조회
  */
 router.get('/sessions', asyncHandler(async (req: Request, res: Response) => {
-    const limit = parseInt(req.query.limit as string) || 20;
+    const limit = parseInt(req.query.limit as string, 10) || 20;
 
     const db = getUnifiedDatabase();
     const sessions = await db.getUserResearchSessions(String(req.user!.id), limit);
@@ -131,7 +134,7 @@ router.get('/sessions/:sessionId', asyncHandler(async (req: Request, res: Respon
  * PUT /api/research/sessions/:sessionId
  * 리서치 세션 업데이트
  */
-router.put('/sessions/:sessionId', asyncHandler(async (req: Request, res: Response) => {
+router.put('/sessions/:sessionId', validate(updateResearchSessionSchema), asyncHandler(async (req: Request, res: Response) => {
     const { sessionId } = req.params;
     const { status, progress, summary, keyFindings, sources } = req.body;
 
@@ -164,7 +167,7 @@ router.put('/sessions/:sessionId', asyncHandler(async (req: Request, res: Respon
  * POST /api/research/sessions/:sessionId/steps
  * 리서치 스텝 추가
  */
-router.post('/sessions/:sessionId/steps', asyncHandler(async (req: Request, res: Response) => {
+router.post('/sessions/:sessionId/steps', validate(addResearchStepSchema), asyncHandler(async (req: Request, res: Response) => {
     const { sessionId } = req.params;
     const { stepNumber, stepType, query, result, sources, status } = req.body;
 
@@ -227,7 +230,7 @@ router.get('/sessions/:sessionId/steps', asyncHandler(async (req: Request, res: 
  * POST /api/research/sessions/:sessionId/execute
  * 리서치 실행 (비동기)
  */
-router.post('/sessions/:sessionId/execute', asyncHandler(async (req: Request, res: Response) => {
+router.post('/sessions/:sessionId/execute', validate(executeResearchSchema), asyncHandler(async (req: Request, res: Response) => {
     const { sessionId } = req.params;
     const { maxLoops } = req.body;
 
@@ -255,7 +258,8 @@ router.post('/sessions/:sessionId/execute', asyncHandler(async (req: Request, re
     const loops = maxLoops || (session.depth === 'quick' ? 1 : session.depth === 'standard' ? 3 : 5);
 
     // 서비스 생성 및 비동기 실행
-    const service = createDeepResearchService({ maxLoops: loops });
+    const language = detectLanguage(session.topic).language;
+    const service = createDeepResearchService({ maxLoops: loops, language });
 
     // 백그라운드 실행 (응답은 즉시 반환)
     service.executeResearch(sessionId, session.topic).catch((error) => {
@@ -278,7 +282,7 @@ router.post('/sessions/:sessionId/execute', asyncHandler(async (req: Request, re
  * DELETE /api/research/sessions/:sessionId
  * 리서치 세션 삭제
  */
-router.delete('/sessions/:sessionId', asyncHandler(async (req: Request, res: Response) => {
+router.delete('/sessions/:sessionId', requireAuth, asyncHandler(async (req: Request, res: Response) => {
     const { sessionId } = req.params;
 
     const db = getUnifiedDatabase();
@@ -293,9 +297,7 @@ router.delete('/sessions/:sessionId', asyncHandler(async (req: Request, res: Res
         return res.status(403).json(forbidden('접근 권한이 없습니다'));
     }
 
-    const pool = getPool();
-    await pool.query('DELETE FROM research_steps WHERE session_id = $1', [sessionId]);
-    await pool.query('DELETE FROM research_sessions WHERE id = $1', [sessionId]);
+    await db.deleteResearchSession(sessionId);
 
     res.json(success({ message: '리서치 세션이 삭제되었습니다.' }));
 }));

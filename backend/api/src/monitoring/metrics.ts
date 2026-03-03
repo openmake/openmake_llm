@@ -17,6 +17,7 @@
  */
 
 import { EventEmitter } from 'events';
+import { CAPACITY } from '../config/runtime-limits';
 
 /**
  * 개별 메트릭 데이터 포인트 인터페이스
@@ -116,7 +117,7 @@ class MetricsCollector extends EventEmitter {
     /** 서버 시작 시간 */
     private startTime: Date = new Date();
     /** 히스토그램 슬라이딩 윈도우 최대 샘플 수 */
-    private windowSize: number = 1000;  // 최대 샘플 수
+    private windowSize: number = CAPACITY.METRICS_WINDOW_SIZE;  // 최대 샘플 수
 
     constructor() {
         super();
@@ -310,7 +311,7 @@ class MetricsCollector extends EventEmitter {
      *
      * @returns 전체 메트릭 덤프 객체
      */
-    getAllMetrics(): Record<string, any> {
+    getAllMetrics(): Record<string, unknown> {
         return {
             counters: Object.fromEntries(this.counters),
             gauges: Object.fromEntries(this.gauges),

@@ -63,7 +63,7 @@
 
                 <!-- 에이전트 선택 -->
                 <div class="selector-bar">
-                    <label>에이전트 선택:</label>
+                    <label for="agentSelect">에이전트 선택:</label>
                     <select id="agentSelect"><option value="">에이전트를 선택하세요</option></select>
                 </div>
 
@@ -92,12 +92,11 @@
         </main>
     </div>
     <div id="toast" class="toast"></div>
-    <script src="/js/components/sidebar.js"></script>
-    <script>
+    <script type="module" src="/js/components/sidebar.js"></script>
+    <script type="module">
         function authFetch(url, opts = {}) {
-            const token = localStorage.getItem('authToken');
-            opts.headers = { ...(opts.headers || {}), 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
-            return fetch(url, opts);
+            opts.headers = { ...(opts.headers || {}), 'Content-Type': 'application/json' };
+            return fetch(url, { ...opts, credentials: 'include' });
         }
         function showToast(msg, type = 'success') {
             const t = document.getElementById('toast');

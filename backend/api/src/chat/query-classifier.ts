@@ -160,12 +160,18 @@ const QUERY_PATTERNS: QueryPattern[] = [
         patterns: [
             /\b(안녕|하이|헬로|hello|hi|hey)\b/i,
             /\?$/,  // 질문 형태
+            /\b(추천|추천해|추천해줘|알려줘|설명해줘|도와줘|도움)\b/i,
+            /\b(어떤\s*게\s*좋|뭐가\s*좋|뭘\s*쓸|뭐\s*쓰|어떻게\s*해)\b/i,
+            /\b(recommend|suggest|help|advice)\b/i,
         ],
         keywords: [
             '안녕', '하이', '헬로', '뭐해', '어때', '알려줘', '설명해',
-            'hello', 'hi', 'hey', 'what', 'how', 'tell me'
+            '추천', '추천해줘', '도와줘', '도움', '부탁', '궁금', '질문',
+            '어떤 게 좋아', '뭐가 좋아', '어떻게 해', '가르쳐', '알고 싶',
+            'hello', 'hi', 'hey', 'what', 'how', 'tell me',
+            'recommend', 'suggest', 'help', 'advice', 'please'
         ],
-        weight: 0.5,
+        weight: 0.6,  // 일반 대화 가중치 (폴백 korean 0.1보다 높게)
     },
 ];
 

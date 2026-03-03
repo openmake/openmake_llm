@@ -39,6 +39,8 @@ export type UserTier = 'free' | 'pro' | 'enterprise';
 export interface PublicUser {
     /** 사용자 고유 식별자 */
     id: string;
+    /** 사용자명 (표시명) */
+    username?: string;
     /** 이메일 주소 (로그인 ID) */
     email: string;
     /** 사용자 역할 */
@@ -58,6 +60,8 @@ export interface PublicUser {
  * @interface CreateUserInput
  */
 export interface CreateUserInput {
+    /** 사용자명 (표시명, 없으면 email 사용) */
+    username?: string;
     /** 이메일 주소 (username과 동일하게 저장) */
     email: string;
     /** 평문 비밀번호 (bcrypt로 해싱 후 저장) */
@@ -97,7 +101,15 @@ class UserManagerImpl {
      * 비동기로 스키마 확인 및 관리자 계정 보장을 수행합니다.
      */
     constructor() {
-        this.init().catch(err => logger.error('[UserManager] Init failed:', err));
+        this.initReady = this.init().catch(err => { logger.error('[UserManager] Init failed:', err); });
+    }
+
+    /** 스키마 초기화 완료 Promise (race condition 방지) */
+    private initReady: Promise<void>;
+
+    /** 초기화 완료 대기 */
+    async ensureReady(): Promise<void> {
+        await this.initReady;
     }
 
     private async init(): Promise<void> {
@@ -133,7 +145,7 @@ class UserManagerImpl {
                 // 이메일 사용자가 이미 존재하면: admin 권한 부여 + 비밀번호 갱신, 레거시 admin 삭제
                 const cfgAdminPassword = getConfig().adminPassword;
                 if (cfgAdminPassword) {
-                    const passwordHash = bcrypt.hashSync(cfgAdminPassword, BCRYPT_ROUNDS);
+                    const passwordHash = await bcrypt.hash(cfgAdminPassword, BCRYPT_ROUNDS);
                     await pool.query(
                         'UPDATE users SET role = $1, tier = $2, password_hash = $3, updated_at = $4 WHERE username = $5',
                         ['admin', 'enterprise', passwordHash, new Date().toISOString(), adminEmail]
@@ -146,7 +158,7 @@ class UserManagerImpl {
                 // 이메일 사용자가 없으면: 레거시 admin의 username을 이메일로 변경
                 const cfgAdminPassword = getConfig().adminPassword;
                 if (cfgAdminPassword) {
-                    const passwordHash = bcrypt.hashSync(cfgAdminPassword, BCRYPT_ROUNDS);
+                    const passwordHash = await bcrypt.hash(cfgAdminPassword, BCRYPT_ROUNDS);
                     await pool.query(
                         'UPDATE users SET username = $1, email = $2, password_hash = $3, updated_at = $4 WHERE username = $5 AND role = $6',
                         [adminEmail, adminEmail, passwordHash, new Date().toISOString(), 'admin', 'admin']
@@ -159,7 +171,7 @@ class UserManagerImpl {
                 if (existingEmail.rows[0].role !== 'admin') {
                     const cfgAdminPassword = getConfig().adminPassword;
                     if (cfgAdminPassword) {
-                        const passwordHash = bcrypt.hashSync(cfgAdminPassword, BCRYPT_ROUNDS);
+                        const passwordHash = await bcrypt.hash(cfgAdminPassword, BCRYPT_ROUNDS);
                         await pool.query(
                             'UPDATE users SET role = $1, tier = $2, password_hash = $3, updated_at = $4 WHERE username = $5',
                             ['admin', 'enterprise', passwordHash, new Date().toISOString(), adminEmail]
@@ -203,32 +215,11 @@ class UserManagerImpl {
         }
     }
 
-    private async getNextId(): Promise<number> {
-        const pool = getPool();
-        // Use pg_advisory_xact_lock to prevent race condition on concurrent user creation
-        const client = await pool.connect();
-        try {
-            await client.query('BEGIN');
-            await client.query('SELECT pg_advisory_xact_lock(1)');
-            const result = await client.query(
-                `SELECT COALESCE(MAX(CAST(id AS INTEGER)), 0) + 1 as next_id FROM users WHERE id ~ $1`,
-                ['^\\d+$']
-            );
-            const nextId = result.rows[0]?.next_id || 1;
-            await client.query('COMMIT');
-            return nextId;
-        } catch (err) {
-            await client.query('ROLLBACK');
-            throw err;
-        } finally {
-            client.release();
-        }
-    }
-
     private rowToPublicUser(row: UserRow): PublicUser {
         return {
             id: row.id,
-            email: row.username,
+            username: row.username,
+            email: row.email || row.username,
             role: row.role as UserRole,
             tier: (row.tier || 'free') as UserTier,
             is_active: !!row.is_active,
@@ -239,39 +230,60 @@ class UserManagerImpl {
 
     async createUser(input: CreateUserInput): Promise<PublicUser | null> {
         const pool = getPool();
-
-        // 중복 username 체크
-        const existing = await pool.query('SELECT id FROM users WHERE username = $1', [input.email]);
+        // 중복 체크 (email 기반, fast path)
+        const existing = await pool.query('SELECT id FROM users WHERE email = $1 OR username = $1', [input.email]);
         if (existing.rows.length > 0) return null;
-
-        const id = await this.getNextId();
-        // admin 역할은 자동으로 enterprise tier
         const tier = input.tier || (input.role === 'admin' ? 'enterprise' : 'free');
-
-        // 🔒 bcrypt로 비밀번호 해싱
-        const passwordHash = bcrypt.hashSync(input.password, BCRYPT_ROUNDS);
-        const now = new Date().toISOString();
         const role = input.role || 'user';
+        // bcrypt 해시는 lock 바깥에서 수행 (시간소요 작업)
+        const passwordHash = await bcrypt.hash(input.password, BCRYPT_ROUNDS);
+        const now = new Date().toISOString();
+        // 트랜잭션 하나로: advisory lock 획득 + id 계산 + INSERT (레이스 컨디션 방지)
+        const client = await pool.connect();
+        try {
+            await client.query('BEGIN');
+            await client.query('SELECT pg_advisory_xact_lock(1)');
 
-        await pool.query(
-            `INSERT INTO users (id, username, password_hash, email, role, tier, is_active, created_at, updated_at)
-             VALUES ($1, $2, $3, $4, $5, $6, TRUE, $7, $8)`,
-            [String(id), input.email, passwordHash, input.email, role, tier, now, now]
-        );
+            // lock 내에서 중복 재확인
+            const dupCheck = await pool.query('SELECT id FROM users WHERE email = $1 OR username = $1', [input.email]);
+            if (dupCheck.rows.length > 0) {
+                await client.query('ROLLBACK');
+                return null;
+            }
 
-        const result = await pool.query('SELECT * FROM users WHERE id = $1', [String(id)]);
-        const row = result.rows[0] as UserRow | undefined;
-        return row ? this.rowToPublicUser(row) : null;
+            const idResult = await client.query(
+                `SELECT COALESCE(MAX(CAST(id AS INTEGER)), 0) + 1 as next_id FROM users WHERE id ~ $1`,
+                ['^\\d+$']
+            );
+            const id = String(idResult.rows[0]?.next_id || 1);
+
+            const displayName = input.username || input.email;
+            await client.query(
+                `INSERT INTO users (id, username, password_hash, email, role, tier, is_active, created_at, updated_at)
+                 VALUES ($1, $2, $3, $4, $5, $6, TRUE, $7, $8)`,
+                [id, displayName, passwordHash, input.email, role, tier, now, now]
+            );
+            await client.query('COMMIT');
+
+            const result = await pool.query('SELECT * FROM users WHERE id = $1', [id]);
+            const row = result.rows[0] as UserRow | undefined;
+            return row ? this.rowToPublicUser(row) : null;
+        } catch (err) {
+            await client.query('ROLLBACK');
+            throw err;
+        } finally {
+            client.release();
+        }
     }
 
     async authenticate(email: string, password: string): Promise<PublicUser | null> {
         const pool = getPool();
-        const result = await pool.query('SELECT * FROM users WHERE username = $1 AND is_active = TRUE', [email]);
+        const result = await pool.query('SELECT * FROM users WHERE (email = $1 OR username = $1) AND is_active = TRUE', [email]);
         const row = result.rows[0] as UserRow | undefined;
         if (!row) return null;
 
         // 🔒 bcrypt로 비밀번호 비교 (해시 비교)
-        if (!bcrypt.compareSync(password, row.password_hash)) return null;
+        if (!(await bcrypt.compare(password, row.password_hash))) return null;
 
         // last_login 업데이트
         const now = new Date().toISOString();
@@ -312,7 +324,8 @@ class UserManagerImpl {
             params.push(options.role);
         }
         if (options?.search) {
-            conditions.push(`LOWER(username) LIKE $${paramIdx++}`);
+            conditions.push(`(LOWER(username) LIKE $${paramIdx} OR LOWER(COALESCE(email, '')) LIKE $${paramIdx})`);
+            paramIdx++;
             params.push(`%${options.search.toLowerCase()}%`);
         }
 
@@ -343,7 +356,7 @@ class UserManagerImpl {
     async changePassword(userId: string, newPassword: string): Promise<boolean> {
         const pool = getPool();
         // 🔒 새 비밀번호도 해싱하여 저장
-        const passwordHash = bcrypt.hashSync(newPassword, BCRYPT_ROUNDS);
+        const passwordHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
         const result = await pool.query(
             'UPDATE users SET password_hash = $1, updated_at = $2 WHERE id = $3',
             [passwordHash, new Date().toISOString(), userId]
@@ -396,32 +409,36 @@ class UserManagerImpl {
 
     async deleteUser(userId: string): Promise<boolean> {
         const pool = getPool();
-        const uid = userId;
-        const userResult = await pool.query('SELECT * FROM users WHERE id = $1', [uid]);
-        const row = userResult.rows[0] as UserRow | undefined;
-        if (!row) return false;
+        const client = await pool.connect();
+        try {
+            await client.query('BEGIN');
 
-        if (row.role === 'admin') {
-            const countResult = await pool.query('SELECT COUNT(*) as cnt FROM users WHERE role = \'admin\'');
-            if (parseInt(countResult.rows[0].cnt, 10) <= 1) return false;
+            // ── 1. 커스텀 에이전트 및 스킬 정리 ──
+            await client.query('DELETE FROM custom_agents WHERE created_by = $1', [userId]);
+            await client.query('DELETE FROM agent_skills WHERE created_by = $1', [userId]);
+
+            // ── 2. 사용자 데이터 정리 ──
+            await client.query('DELETE FROM user_memories WHERE user_id = $1', [userId]);
+
+            await client.query('DELETE FROM external_connections WHERE user_id = $1', [userId]);
+            await client.query('DELETE FROM user_api_keys WHERE user_id = $1', [userId]);
+            await client.query('DELETE FROM message_feedback WHERE user_id = $1', [userId]);
+            await client.query('DELETE FROM research_sessions WHERE user_id = $1', [userId]);
+            await client.query('DELETE FROM conversation_sessions WHERE user_id = $1', [userId]);
+
+            // ── 3. 사용자 삭제 ──
+            const result = await client.query('DELETE FROM users WHERE id = $1', [userId]);
+            const deleted = (result.rowCount || 0) > 0;
+
+            await client.query('COMMIT');
+            return deleted;
+        } catch (err) {
+            await client.query('ROLLBACK');
+            logger.error(`[UserManager] 사용자 삭제 실패 (userId=${userId}):`, err);
+            throw err;
+        } finally {
+            client.release();
         }
-
-        // 의존 레코드를 FK 순서대로 삭제 (ON DELETE CASCADE가 없는 테이블들)
-        // canvas_documents → conversation_sessions 순서 주의 (canvas가 session FK 참조)
-        await pool.query('DELETE FROM agent_installations WHERE user_id = $1', [uid]);
-        await pool.query('DELETE FROM agent_reviews WHERE user_id = $1', [uid]);
-        await pool.query(
-            'DELETE FROM agent_marketplace WHERE author_id = $1', [uid]
-        );
-        await pool.query('DELETE FROM agent_feedback WHERE user_id = $1', [uid]);
-        await pool.query('DELETE FROM agent_usage_logs WHERE user_id = $1', [uid]);
-        await pool.query('UPDATE custom_agents SET created_by = NULL WHERE created_by = $1', [uid]);
-        await pool.query('DELETE FROM canvas_documents WHERE user_id = $1', [uid]);
-        await pool.query('DELETE FROM research_sessions WHERE user_id = $1', [uid]);
-        await pool.query('DELETE FROM conversation_sessions WHERE user_id = $1', [uid]);
-
-        const result = await pool.query('DELETE FROM users WHERE id = $1', [uid]);
-        return (result.rowCount || 0) > 0;
     }
 
     async getStats() {

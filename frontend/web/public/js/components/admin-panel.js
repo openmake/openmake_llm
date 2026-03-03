@@ -14,6 +14,8 @@
  * @module components/admin-panel
  */
 
+var SK = window.STORAGE_KEYS || {};
+
 /** @type {boolean} 패널 열림 상태 */
 var _isOpen = false;
 /** @type {HTMLElement|null} 패널 DOM 요소 */
@@ -23,15 +25,16 @@ var _backdropEl = null;
 
 var ADMIN_ITEMS = [
     { href: '/settings.html', icon: 'lucide:settings', label: '설정', desc: '앱 환경 및 AI 모델 설정' },
-    { href: '/admin.html', icon: 'lucide:users', label: '사용자 관리', desc: '사용자 및 대화 관리', admin: true },
-    { href: '/admin-metrics.html', icon: 'lucide:bar-chart-3', label: '통합 모니터링', desc: '시스템 성능 대시보드', admin: true },
-    { href: '/audit.html', icon: 'lucide:clipboard-list', label: '감사 로그', desc: '시스템 활동 기록', admin: true },
-    { href: '/analytics.html', icon: 'lucide:pie-chart', label: '분석 대시보드', desc: '사용 패턴 분석', admin: true },
-    { href: '/external.html', icon: 'lucide:link', label: '외부 연동', desc: 'Google Drive, Notion 등', admin: true },
-    { href: '/alerts.html', icon: 'lucide:bell', label: '알림 관리', desc: '시스템 알림 설정', admin: true },
-    { href: '/cluster.html', icon: 'lucide:monitor', label: '클러스터', desc: '노드 상태 관리', admin: true },
     { href: '/usage.html', icon: 'lucide:bar-chart-2', label: 'API 사용량', desc: '토큰 및 요청 통계' },
-    { href: '/password-change.html', icon: 'lucide:key-round', label: '비밀번호 변경', desc: '계정 보안 설정' }
+    { href: '/password-change.html', icon: 'lucide:key-round', label: '비밀번호 변경', desc: '계정 보안 설정' },
+    { href: '/skill-library.html', icon: 'lucide:package', label: '스킬 라이브러리', desc: '에이전트 스킬 검색 및 관리', minTier: 'pro' },
+    { href: '/external.html', icon: 'lucide:link', label: '외부 연동', desc: 'Google Drive, Notion 등', minTier: 'pro' },
+    { href: '/audit.html', icon: 'lucide:clipboard-list', label: '감사 로그', desc: '시스템 활동 기록', minTier: 'enterprise' },
+    { href: '/analytics.html', icon: 'lucide:pie-chart', label: '분석 대시보드', desc: '사용 패턴 분석', minTier: 'enterprise' },
+    { href: '/alerts.html', icon: 'lucide:bell', label: '알림 관리', desc: '시스템 알림 설정', minTier: 'enterprise' },
+    { href: '/cluster.html', icon: 'lucide:monitor', label: '클러스터', desc: '노드 상태 관리', minTier: 'enterprise' },
+    { href: '/admin.html', icon: 'lucide:users', label: '사용자 관리', desc: '사용자 및 대화 관리', admin: true },
+    { href: '/admin-metrics.html', icon: 'lucide:bar-chart-3', label: '통합 모니터링', desc: '시스템 성능 대시보드', admin: true }
 ];
 
 /**
@@ -40,11 +43,35 @@ var ADMIN_ITEMS = [
  */
 function isAdmin() {
     try {
-        var user = JSON.parse(localStorage.getItem('user') || '{}');
+        var SS = window.SafeStorage;
+        var user = JSON.parse(SS.getItem(SK.USER || 'user') || '{}');
         return user.role === 'admin' || user.role === 'administrator';
     } catch (e) {
         return false;
     }
+}
+
+/** 현재 사용자 티어 반환 ('free' | 'pro' | 'enterprise') */
+function getUserTier() {
+    var SS = window.SafeStorage || window.localStorage;
+    var isGuest = SS.getItem(SK.GUEST_MODE || 'guestMode') === 'true' ||
+        SS.getItem(SK.IS_GUEST || 'isGuest') === 'true' ||
+        !SS.getItem(SK.USER || 'user');
+    if (isGuest) return 'free';
+    var savedUser = SS.getItem(SK.USER || 'user');
+    if (!savedUser) return 'free';
+    try {
+        var user = JSON.parse(savedUser);
+        if (user.role === 'admin' || user.role === 'administrator') return 'enterprise';
+        return user.tier || 'free';
+    } catch (e) { return 'free'; }
+}
+
+var TIER_LEVEL = { free: 0, pro: 1, enterprise: 2 };
+
+/** 사용자 티어가 요구 티어 이상인지 확인 */
+function canAccessTier(userTier, requiredTier) {
+    return (TIER_LEVEL[userTier] || 0) >= (TIER_LEVEL[requiredTier] || 0);
 }
 
 /**
@@ -94,8 +121,11 @@ function createPanel() {
 
 function buildPanelHTML() {
     var admin = isAdmin();
+    var userTier = getUserTier();
     var items = ADMIN_ITEMS.filter(function (item) {
-        return !item.admin || admin;
+        var adminOk = !item.admin || admin;
+        var tierOk = !item.minTier || canAccessTier(userTier, item.minTier);
+        return adminOk && tierOk;
     });
 
     var html = '<div class="admin-panel-header">' +

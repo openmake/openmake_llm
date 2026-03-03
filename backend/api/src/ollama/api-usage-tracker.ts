@@ -744,7 +744,7 @@ class ApiUsageTracker {
     /**
      * 경고 레벨 계산
      */
-    private calculateWarningLevel(hourlyUsage: number, weeklyUsage: number, limits: QuotaLimits): 'safe' | 'warning' | 'critical' {
+    private _calculateWarningLevel(hourlyUsage: number, weeklyUsage: number, limits: QuotaLimits): 'safe' | 'warning' | 'critical' {
         const hourlyPercentage = (hourlyUsage / limits.hourlyLimit) * 100;
         const weeklyPercentage = (weeklyUsage / limits.weeklyLimit) * 100;
         const maxPercentage = Math.max(hourlyPercentage, weeklyPercentage);

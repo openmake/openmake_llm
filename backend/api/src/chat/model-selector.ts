@@ -23,6 +23,7 @@
  * 5. adjustOptionsForModel() - 선택된 모델에 맞게 옵션 미세 조정
  * 
  * @see chat/pipeline-profile.ts - 브랜드 모델 프로파일 정의
+ * @see chat/pipeline-profile.ts - 브랜드 모델 프로파일 정의
  * @see services/ChatService.ts - 최종 모델 선택 결과 소비
  */
 
@@ -30,6 +31,8 @@ import { getConfig } from '../config/env';
 import { ModelOptions } from '../ollama/types';
 import { isValidBrandModel, getProfiles } from './pipeline-profile';
 import { createLogger } from '../utils/logger';
+import { ENGINE_FALLBACKS } from '../config/model-defaults';
+import { MODEL_CONTEXT_DEFAULTS } from '../config/runtime-limits';
 import { applyCostTierCeiling, getDefaultCostTier } from './cost-tier';
 
 const logger = createLogger('ModelSelector');
@@ -42,7 +45,8 @@ import type { QueryType, ModelSelection } from './model-selector-types';
 export { classifyQuery } from './query-classifier';
 // Import classifyQuery for internal use (via separate name to avoid conflict)
 import { classifyQuery as _classifyQuery } from './query-classifier';
-import type { QueryClassification } from './model-selector-types';
+// Import LLM classifier for Auto-Routing (Phase D)
+import { classifyWithLLM, getConfidenceThreshold } from './llm-classifier';
 
 // ============================================================
 // 모델 프리셋 정의
@@ -84,11 +88,11 @@ interface ModelPreset {
 export function getModelPresets(): Record<string, ModelPreset> {
     const config = getConfig();
     // 테스트 환경 등에서 config 값이 없을 때를 위한 폴백
-    const engineFast = config.omkEngineFast || 'gemini-3-flash-preview:cloud';
-    const engineLlm = config.omkEngineLlm || 'gpt-oss:120b-cloud';
-    const enginePro = config.omkEnginePro || 'kimi-k2.5:cloud';
-    const engineCode = config.omkEngineCode || 'glm-5:cloud';
-    const engineVision = config.omkEngineVision || 'qwen3.5:397b-cloud';
+    const engineFast = config.omkEngineFast || ENGINE_FALLBACKS.FAST;
+    const engineLlm = config.omkEngineLlm || ENGINE_FALLBACKS.LLM;
+    const enginePro = config.omkEnginePro || ENGINE_FALLBACKS.PRO;
+    const engineCode = config.omkEngineCode || ENGINE_FALLBACKS.CODE;
+    const engineVision = config.omkEngineVision || ENGINE_FALLBACKS.VISION;
     return {
     // Gemini 3 Flash - 범용/코딩/분석
     'gemini-flash': {
@@ -99,7 +103,7 @@ export function getModelPresets(): Record<string, ModelPreset> {
             temperature: 0.7,
             top_p: 0.9,
             top_k: 40,
-            num_ctx: 32768,
+            num_ctx: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
             repeat_penalty: 1.1,
         },
         capabilities: {
@@ -107,7 +111,7 @@ export function getModelPresets(): Record<string, ModelPreset> {
             thinking: true,
             vision: true,
             streaming: true,
-            contextLength: 32768,
+            contextLength: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
         },
         bestFor: ['code', 'analysis', 'chat', 'korean', 'document'],
         priority: 1,
@@ -122,7 +126,7 @@ export function getModelPresets(): Record<string, ModelPreset> {
             temperature: 0.8,
             top_p: 0.95,
             top_k: 50,
-            num_ctx: 32768,
+            num_ctx: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
             repeat_penalty: 1.15,
         },
         capabilities: {
@@ -130,34 +134,12 @@ export function getModelPresets(): Record<string, ModelPreset> {
             thinking: true,
             vision: false,
             streaming: true,
-            contextLength: 32768,
+            contextLength: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
         },
         bestFor: ['creative', 'analysis', 'document'],
         priority: 2,
     },
 
-    // Kimi K2.5 - 긴 컨텍스트/문서 분석
-    'kimi': {
-        name: 'Kimi K2.5',
-        envKey: 'OLLAMA_MODEL_3',
-        defaultModel: enginePro,
-        options: {
-            temperature: 0.5,
-            top_p: 0.85,
-            top_k: 30,
-            num_ctx: 65536,
-            repeat_penalty: 1.1,
-        },
-        capabilities: {
-            toolCalling: true,
-            thinking: true,
-            vision: false,
-            streaming: true,
-            contextLength: 65536,
-        },
-        bestFor: ['document', 'analysis', 'translation'],
-        priority: 3,
-    },
 
     // Qwen3 Coder Next - 코딩 특화
     'qwen-coder': {
@@ -168,7 +150,7 @@ export function getModelPresets(): Record<string, ModelPreset> {
             temperature: 0.2,
             top_p: 0.8,
             top_k: 20,
-            num_ctx: 32768,
+            num_ctx: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
             repeat_penalty: 1.0,
         },
         capabilities: {
@@ -176,7 +158,7 @@ export function getModelPresets(): Record<string, ModelPreset> {
             thinking: true,
             vision: false,
             streaming: true,
-            contextLength: 32768,
+            contextLength: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
         },
         bestFor: ['code'],
         priority: 1,  // 코딩에 최우선
@@ -191,7 +173,7 @@ export function getModelPresets(): Record<string, ModelPreset> {
             temperature: 0.6,
             top_p: 0.9,
             top_k: 40,
-            num_ctx: 32768,
+            num_ctx: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
             repeat_penalty: 1.1,
         },
         capabilities: {
@@ -199,7 +181,7 @@ export function getModelPresets(): Record<string, ModelPreset> {
             thinking: true,
             vision: true,
             streaming: true,
-            contextLength: 32768,
+            contextLength: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
         },
         bestFor: ['vision'],
         priority: 1,  // 비전에 최우선
@@ -214,7 +196,7 @@ export function getModelPresets(): Record<string, ModelPreset> {
             temperature: 0.2,
             top_p: 0.8,
             top_k: 15,
-            num_ctx: 32768,
+            num_ctx: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
             repeat_penalty: 1.0,
         },
         capabilities: {
@@ -222,7 +204,7 @@ export function getModelPresets(): Record<string, ModelPreset> {
             thinking: true,
             vision: true,
             streaming: true,
-            contextLength: 32768,
+            contextLength: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
         },
         bestFor: ['math'],
         priority: 1,
@@ -351,7 +333,7 @@ export function getModelContextLength(modelName: string): number {
     }
 
     // 기본값
-    return 32768;
+    return MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX;
 }
 
 // ============================================================
@@ -391,10 +373,6 @@ export function adjustOptionsForModel(
         adjustedOptions.repeat_penalty = 1.0;
     }
 
-    // Kimi: 긴 문서에 적합한 설정
-    if (lowerModel.includes('kimi')) {
-        adjustedOptions.num_ctx = Math.max(adjustedOptions.num_ctx || 32768, 65536);
-    }
 
     // Vision 모델: 이미지 분석에 적합한 설정
     if (lowerModel.includes('vl') || lowerModel.includes('vision')) {
@@ -456,7 +434,7 @@ export async function selectModelForProfile(requestedModel: string, query?: stri
                 model: resolvedProfile.engineModel,
                 options: {
                     temperature: resolvedProfile.thinking === 'high' ? 0.3 : resolvedProfile.thinking === 'off' ? 0.7 : 0.5,
-                    num_ctx: resolvedProfile.contextStrategy === 'full' ? 65536 : 32768,
+                    num_ctx: resolvedProfile.contextStrategy === 'full' ? MODEL_CONTEXT_DEFAULTS.EXTENDED_NUM_CTX : MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
                 },
                 reason: `Auto-Routing → ${resolvedProfile.displayName} → ${resolvedProfile.engineModel}`,
                 queryType: resolvedProfile.promptStrategy === 'force_coder' ? 'code'
@@ -480,7 +458,7 @@ export async function selectModelForProfile(requestedModel: string, query?: stri
         model: profile.engineModel,
         options: {
             temperature: profile.thinking === 'high' ? 0.3 : profile.thinking === 'off' ? 0.7 : 0.5,
-            num_ctx: profile.contextStrategy === 'full' ? 65536 : 32768,
+            num_ctx: profile.contextStrategy === 'full' ? MODEL_CONTEXT_DEFAULTS.EXTENDED_NUM_CTX : MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
         },
         reason: `Brand model ${profile.displayName} → ${profile.engineModel}`,
         queryType: profile.promptStrategy === 'force_coder' ? 'code'
@@ -526,10 +504,34 @@ export async function selectBrandProfileForAutoRouting(query: string, hasImages?
         return 'openmake_llm_vision';
     }
 
-    const classification = _classifyQuery(query);
+    // ── Phase D: LLM 분류기 우선 시도, 실패 시 regex fallback ──
+    let classifiedType: import('./model-selector-types').QueryType;
+    let classifiedConfidence: number;
+    let classifierSource: 'llm' | 'cache' | 'semantic-cache' | 'regex' = 'regex';
+
+    const llmResult = await classifyWithLLM(query);
+    if (llmResult && llmResult.confidence >= getConfidenceThreshold()) {
+        // LLM 분류 성공 + 신뢰도 충분
+        classifiedType = llmResult.type;
+        classifiedConfidence = llmResult.confidence;
+        classifierSource = llmResult.source === 'cache' ? 'cache' : llmResult.source === 'semantic-cache' ? 'semantic-cache' : 'llm';
+        logger.info(`§9 LLM 분류: ${classifiedType} (${(classifiedConfidence * 100).toFixed(0)}%) [source=${classifierSource}]`);
+    } else {
+        // LLM 분류 실패 또는 신뢰도 부족 → regex fallback
+        const regexClassification = _classifyQuery(query);
+        classifiedType = regexClassification.type;
+        classifiedConfidence = regexClassification.confidence;
+        classifierSource = 'regex';
+        if (llmResult) {
+            logger.info(`§9 LLM 신뢰도 부족 (${(llmResult.confidence * 100).toFixed(0)}% < ${(getConfidenceThreshold() * 100).toFixed(0)}%) → regex fallback: ${classifiedType}`);
+        } else {
+            logger.info(`§9 LLM 분류 실패 → regex fallback: ${classifiedType}`);
+        }
+    }
+
     let targetProfile: string;
 
-    switch (classification.type) {
+    switch (classifiedType) {
         case 'code':
             targetProfile = 'openmake_llm_code';
             break;
@@ -546,7 +548,7 @@ export async function selectBrandProfileForAutoRouting(query: string, hasImages?
             break;
         case 'chat':
             // 짧은 인사/간단한 질문은 fast, 복잡한 대화는 pro
-            if (classification.confidence < 0.3 && query.length < 50) {
+            if (classifiedConfidence < 0.3 && query.length < 50) {
                 targetProfile = 'openmake_llm_fast';
             } else {
                 targetProfile = 'openmake_llm_pro';
@@ -565,13 +567,13 @@ export async function selectBrandProfileForAutoRouting(query: string, hasImages?
     const maxTier = getDefaultCostTier();
     if (maxTier !== 'premium') {
         const originalProfile = targetProfile;
-        targetProfile = applyCostTierCeiling(targetProfile, maxTier, classification.type);
+        targetProfile = applyCostTierCeiling(targetProfile, maxTier, classifiedType);
         if (targetProfile !== originalProfile) {
             logger.info(`§9 Cost-Tier: ${originalProfile} → ${targetProfile} (ceiling=${maxTier})`);
         }
     }
 
-    logger.info(`§9 Auto-Routing: ${classification.type} (confidence=${(classification.confidence * 100).toFixed(0)}%) → ${targetProfile}`);
+    logger.info(`§9 Auto-Routing: ${classifiedType} (confidence=${(classifiedConfidence * 100).toFixed(0)}%, source=${classifierSource}) → ${targetProfile}`);
     return targetProfile;
 }
 

@@ -35,7 +35,7 @@ export interface ApiErrorResponse {
     success: false;
     error: string;
     code?: string;
-    details?: Record<string, any>;
+    details?: Record<string, unknown>;
 }
 
 /**

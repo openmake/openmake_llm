@@ -38,7 +38,7 @@ import { startChat } from './chat';
 import { reviewFile } from './commands/review';
 import { generateCode } from './commands/generate';
 import { explainFile } from './commands/explain';
-import { showBanner, showDivider } from './ui/banner';
+import { showBanner } from './ui/banner';
 import { createSpinner } from './ui/spinner';
 import { createMCPServer } from './mcp/server';
 import { createPluginLoader } from './plugins/loader';

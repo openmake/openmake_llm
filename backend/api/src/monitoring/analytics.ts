@@ -20,6 +20,10 @@ import { createLogger } from '../utils/logger';
 import { getApiUsageTracker } from '../ollama/api-usage-tracker';
 import * as os from 'os';
 
+import { AGENTS } from '../agents/agent-data';
+import { CAPACITY } from '../config/runtime-limits';
+import { CLEANUP_INTERVALS, ALERT_THRESHOLDS } from '../config/timeouts';
+import { TOKEN_COST } from '../config/pricing';
 const logger = createLogger('Analytics');
 
 /**
@@ -154,11 +158,11 @@ export class AnalyticsSystem {
     private activeConnectionsGetter: () => number = () => 0;
 
     /** 쿼리 로그 최대 보관 수 */
-    private static readonly MAX_QUERY_LOG = 10000;
+    private static readonly MAX_QUERY_LOG = CAPACITY.ANALYTICS_MAX_QUERY_LOG;
     /** 세션 로그 최대 보관 수 */
-    private static readonly MAX_SESSION_LOG = 5000;
+    private static readonly MAX_SESSION_LOG = CAPACITY.ANALYTICS_MAX_SESSION_LOG;
     /** 세션 정리 주기 (1시간) */
-    private static readonly SESSION_CLEANUP_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
+    private static readonly SESSION_CLEANUP_INTERVAL_MS = CLEANUP_INTERVALS.ANALYTICS_SESSION_MS;
     /** 세션 정리 타이머 핸들 */
     private sessionCleanupTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -297,7 +301,7 @@ export class AnalyticsSystem {
         for (const [agentId, stats] of this.agentStats.entries()) {
             performances.push({
                 agentId,
-                agentName: agentId, // TODO: 실제 이름으로 매핑
+                agentName: AGENTS[agentId]?.name ?? agentId,
                 totalRequests: stats.requests,
                 avgResponseTime: stats.requests > 0
                     ? Math.round(stats.totalResponseTime / stats.requests)
@@ -399,7 +403,7 @@ export class AnalyticsSystem {
         const summary = tracker.getSummary();
 
         // 토큰당 비용 추정 (예시: $0.001 per 1000 tokens)
-        const costPerToken = 0.000001;
+        const costPerToken = TOKEN_COST.DEFAULT_COST_PER_TOKEN;
 
         const dailyTokens = summary.today.totalTokens;
         const weeklyTokens = summary.weekly.totalTokens;
@@ -449,7 +453,7 @@ export class AnalyticsSystem {
 
         let status: 'healthy' | 'degraded' | 'critical' = 'healthy';
         if (errorRate > 10) status = 'critical';
-        else if (errorRate > 5 || summary.today.avgResponseTime > 5000) status = 'degraded';
+        else if (errorRate > ALERT_THRESHOLDS.ERROR_RATE_DEGRADED_PERCENT || summary.today.avgResponseTime > ALERT_THRESHOLDS.RESPONSE_TIME_MS) status = 'degraded';
 
         // 메모리 사용량
         const memUsage = process.memoryUsage();
@@ -488,7 +492,7 @@ export class AnalyticsSystem {
      * 24시간 이상 지난 완료 세션을 제거
      */
     private cleanupCompletedSessions(): void {
-        const cutoff = Date.now() - 24 * 60 * 60 * 1000; // 24 hours ago
+        const cutoff = Date.now() - ALERT_THRESHOLDS.ANALYTICS_24H_MS; // 24 hours ago
         const before = this.sessionLog.length;
 
         this.sessionLog = this.sessionLog.filter(s => {

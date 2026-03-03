@@ -14,6 +14,7 @@ import { getState, setState, addToMemory, clearMemory } from './state.js';
 import { escapeHtml, scrollToBottom, showToast } from './ui.js';
 import { addChatMessage } from './chat.js';
 import { clearAttachments } from './file-upload.js';
+import { STORAGE_KEY_USER } from './constants.js';
 
 /**
  * 익명 사용자용 세션 ID를 생성 또는 반환
@@ -40,24 +41,23 @@ async function loadChatSessions() {
     if (!historyList) return;
 
     try {
-        const authToken = localStorage.getItem('authToken');
-        const userRole = JSON.parse(localStorage.getItem('user') || '{}').role;
+        // user객체로 로그인 여부를 판단 — authToken은 httpOnly 쿠키로 관리됩니다
+        const userStr = (window.SafeStorage ? window.SafeStorage.getItem(STORAGE_KEY_USER) : localStorage.getItem(STORAGE_KEY_USER)) || '{}';
+        const userRole = JSON.parse(userStr).role;
         const isAdminUser = userRole === 'admin' || userRole === 'administrator';
+        const hasUser = !!(userStr && userStr !== '{}');
 
         const params = new URLSearchParams({ limit: '20' });
 
-        if (!authToken) {
+        if (!hasUser) {
             params.append('anonSessionId', getOrCreateAnonymousSessionId());
         }
-
         const viewAllCheckbox = document.getElementById('viewAllSessions');
         if (isAdminUser && viewAllCheckbox?.checked) {
             params.append('viewAll', 'true');
         }
 
-        const headers = authToken ? { 'Authorization': `Bearer ${authToken}` } : {};
-
-        const res = await fetch(`/api/chat/sessions?${params}`, { headers });
+        const res = await fetch(`${API_ENDPOINTS.CHAT_SESSIONS}?${params}`, { credentials: 'include' });
         if (!res.ok) {
             throw new Error(`HTTP ${res.status}: ${res.statusText}`);
         }
@@ -67,15 +67,20 @@ async function loadChatSessions() {
         const payload = data.data || data;
         if (data.success && payload.sessions && payload.sessions.length > 0) {
             historyList.innerHTML = payload.sessions.map(session => `
-                <div class="history-item ${session.id === currentSessionId ? 'active' : ''}" 
+                <div class="history-item ${session.id === currentSessionId ? 'active' : ''}"
                      data-session-id="${session.id}"
-                     onclick="loadSession('${session.id}')"
-                     title="${escapeHtml(session.title || '새 대화')}">
-                    <span class="history-title">${escapeHtml((session.title || '새 대화').substring(0, 25))}${(session.title?.length > 25) ? '...' : ''}</span>
+                     title="${escapeHtml(session.title || '\uC0C8 \uB300\uD654')}">
+                    <span class="history-title">${escapeHtml((session.title || '\uC0C8 \uB300\uD654').substring(0, 25))}${(session.title?.length > 25) ? '...' : ''}</span>
                     <span class="history-meta">${formatTimeAgo(session.updatedAt || session.createdAt)}</span>
-                    <button class="history-delete" onclick="event.stopPropagation(); deleteSession('${session.id}')" title="삭제">✕</button>
+                    <button class="history-delete" data-delete-session="${session.id}" title="\uC0AD\uC81C">\u2715</button>
                 </div>
             `).join('');
+            historyList.onclick = function(e) {
+                var delBtn = e.target.closest('[data-delete-session]');
+                if (delBtn) { e.stopPropagation(); deleteSession(delBtn.dataset.deleteSession); return; }
+                var item = e.target.closest('[data-session-id]');
+                if (item) { loadSession(item.dataset.sessionId); }
+            };
         } else {
             historyList.innerHTML = '<div class="history-empty">대화 기록이 없습니다</div>';
         }
@@ -114,15 +119,14 @@ function formatTimeAgo(dateStr) {
 async function createNewSession(title) {
     try {
         const model = document.getElementById('modelSelect')?.value || 'default';
-        const authToken = localStorage.getItem('authToken');
-        const anonSessionId = !authToken ? getOrCreateAnonymousSessionId() : undefined;
+        // user객체로 로그인 여부를 판단 — authToken은 httpOnly 쿠키로 관리됩니다
+        const userStr = (window.SafeStorage ? window.SafeStorage.getItem(STORAGE_KEY_USER) : localStorage.getItem(STORAGE_KEY_USER));
+        const anonSessionId = !userStr ? getOrCreateAnonymousSessionId() : undefined;
 
-        const headers = {
-            'Content-Type': 'application/json',
-            ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {})
-        };
+        const headers = { 'Content-Type': 'application/json' };
 
-        const res = await fetch('/api/chat/sessions', {
+
+        const res = await fetch(API_ENDPOINTS.CHAT_SESSIONS, {
             method: 'POST',
             credentials: 'include',
             headers,
@@ -157,7 +161,7 @@ async function loadSession(sessionId) {
     }
 
     try {
-        const res = await fetch(`/api/chat/sessions/${sessionId}/messages`);
+        const res = await fetch(`${API_ENDPOINTS.CHAT_SESSIONS}/${sessionId}/messages`);
         if (!res.ok) {
             throw new Error(`HTTP ${res.status}: ${res.statusText}`);
         }
@@ -218,8 +222,10 @@ function addRestoredAssistantMessage(content) {
             renderedContent = window.purifyHTML(marked.parse(content));
         } catch (e) {
             console.warn('마크다운 파싱 실패:', e);
-            renderedContent = content.replace(/\n/g, '<br>');
+            renderedContent = escapeHtml(content).replace(/\n/g, '<br>');
         }
+    } else {
+        renderedContent = escapeHtml(content).replace(/\n/g, '<br>');
     }
 
     div.innerHTML = `
@@ -269,7 +275,7 @@ async function saveMessageToSession(role, content, options = {}) {
 
     if (currentSessionId) {
         try {
-            await fetch(`/api/chat/sessions/${currentSessionId}/messages`, {
+            await fetch(`${API_ENDPOINTS.CHAT_SESSIONS}/${currentSessionId}/messages`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ role, content, ...options })
@@ -290,7 +296,7 @@ async function deleteSession(sessionId) {
     if (!confirm('이 대화를 삭제하시겠습니까?')) return;
 
     try {
-        const res = await fetch(`/api/chat/sessions/${sessionId}`, { method: 'DELETE' });
+        const res = await fetch(`${API_ENDPOINTS.CHAT_SESSIONS}/${sessionId}`, { method: 'DELETE' });
         if (!res.ok) {
             throw new Error(`HTTP ${res.status}: ${res.statusText}`);
         }

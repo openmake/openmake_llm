@@ -1,4 +1,4 @@
-import { describe, test, expect } from 'bun:test';
+// Jest globals (describe, test, expect) are available automatically
 import { assessComplexity, A2A_SKIP_THRESHOLD } from '../chat/complexity-assessor';
 import type { ComplexityContext } from '../chat/complexity-assessor';
 

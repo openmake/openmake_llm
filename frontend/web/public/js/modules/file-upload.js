@@ -47,7 +47,7 @@ async function uploadFile(file) {
             });
         }
 
-        const res = await fetch('/api/upload', {
+        const res = await fetch(API_ENDPOINTS.UPLOAD, {
             method: 'POST',
             credentials: 'include',
             body: formData
@@ -71,7 +71,7 @@ async function uploadFile(file) {
             // PDF 문서인 경우 전체 텍스트를 가져와서 저장
             if (!data.isImage && data.docId) {
                 try {
-                    const docRes = await fetch(`/api/documents/${data.docId}`);
+                    const docRes = await fetch(`${API_ENDPOINTS.DOCUMENTS}/${data.docId}`);
                     if (!docRes.ok) {
                         throw new Error(`HTTP ${docRes.status}: ${docRes.statusText}`);
                     }
@@ -259,22 +259,74 @@ function renderAttachments() {
 }
 
 /**
- * 특정 인덱스의 첨부 파일을 제거
- * @param {number} index - 제거할 첨부 파일의 배열 인덱스
- * @returns {void}
+ * 서버에서 업로드된 문서를 삭제 (벡터 임베딩 포함)
+ * @async
+ * @param {string} docId - 삭제할 문서 ID
+ * @returns {Promise<boolean>} 삭제 성공 여부
  */
-function removeAttachment(index) {
+async function deleteDocument(docId) {
+    try {
+        const res = await fetch(`${API_ENDPOINTS.DOCUMENTS}/${docId}`, {
+            method: 'DELETE',
+            credentials: 'include'
+        });
+        if (!res.ok) {
+            throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+        }
+        const data = await res.json();
+        const payload = data.data || data;
+        if (payload.deleted) {
+            console.log(`[Upload] 문서 삭제 완료: ${docId} (임베딩 ${payload.embeddingsDeleted || 0}개)`);
+            return true;
+        }
+        return false;
+    } catch (e) {
+        console.error('[Upload] 문서 삭제 실패:', e);
+        return false;
+    }
+}
+
+/**
+ * 특정 인덱스의 첨부 파일을 제거 (서버 문서도 함께 삭제)
+ * @async
+ * @param {number} index - 제거할 첨부 파일의 배열 인덱스
+ * @returns {Promise<void>}
+ */
+async function removeAttachment(index) {
     const attachedFiles = getState('attachedFiles') || [];
+    const file = attachedFiles[index];
+
+    // 서버에 업로드된 문서(docId 있음)이면 서버에서도 삭제
+    if (file && file.docId) {
+        await deleteDocument(file.docId);
+
+        // 활성 문서 컨텍스트가 삭제된 문서이면 해제
+        const activeDoc = getState('activeDocumentContext');
+        if (activeDoc && activeDoc.docId === file.docId) {
+            setState('activeDocumentContext', null);
+            updateActiveDocumentUI();
+        }
+    }
+
     attachedFiles.splice(index, 1);
     setState('attachedFiles', attachedFiles);
     renderAttachments();
 }
 
 /**
- * 모든 첨부 파일을 제거하고 UI 갱신
- * @returns {void}
+ * 모든 첨부 파일을 제거하고 UI 갱신 (서버 문서도 함께 삭제)
+ * @async
+ * @returns {Promise<void>}
  */
-function clearAttachments() {
+async function clearAttachments() {
+    const attachedFiles = getState('attachedFiles') || [];
+
+    // 서버에 업로드된 문서들 병렬 삭제
+    const deletePromises = attachedFiles
+        .filter(f => f.docId)
+        .map(f => deleteDocument(f.docId));
+    await Promise.allSettled(deletePromises);
+
     setState('attachedFiles', []);
     renderAttachments();
 }
@@ -286,6 +338,7 @@ window.setupChatDropZone = setupChatDropZone;
 window.renderAttachments = renderAttachments;
 window.removeAttachment = removeAttachment;
 window.clearAttachments = clearAttachments;
+window.deleteDocument = deleteDocument;
 
 export {
     uploadFile,
@@ -293,5 +346,6 @@ export {
     setupChatDropZone,
     renderAttachments,
     removeAttachment,
-    clearAttachments
+    clearAttachments,
+    deleteDocument
 };

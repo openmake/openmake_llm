@@ -17,8 +17,8 @@
     <link rel="stylesheet" href="/css/layout.css">
     <link rel="stylesheet" href="/css/pages/dashboard.css">
 
-    <!-- Chart.js -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <!-- Chart.js (Local Bundle) -->
+    <script src="/js/vendor/chart.umd.min.js"></script>
 
     <style>
         /* 토큰 모니터링 전용 스타일 추가 */
@@ -268,9 +268,9 @@
     </div>
 
     <!-- Sidebar Component -->
-    <script src="/js/components/sidebar.js"></script>
+    <script type="module" src="/js/components/sidebar.js"></script>
 
-    <script>
+    <script type="module">
         // 전역 차트 인스턴스
         let hourlyChart = null;
         let dailyChart = null;
@@ -559,6 +559,9 @@
             if (tokens >= 1000) return (tokens / 1000).toFixed(1) + 'K';
             return tokens.toString();
         }
+
+        window.loadAllData = loadAllData;
+        window.resetKeys = resetKeys;
     </script>
 </body>
 

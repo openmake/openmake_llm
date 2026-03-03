@@ -255,7 +255,7 @@ export { optionalAuth, requireAuth, requireAdmin, requireRole } from './middlewa
 export function setTokenCookie(res: Response, token: string): void {
     res.cookie('auth_token', token, {
         httpOnly: true,
-        secure: getConfig().nodeEnv === 'production',
+        secure: getConfig().cookieSecure,
         sameSite: 'lax',
         maxAge: AUTH_CONFIG.ACCESS_TOKEN_MAX_AGE_MS, // 15분 (액세스 토큰 수명과 일치)
         path: '/'
@@ -268,7 +268,7 @@ export function setTokenCookie(res: Response, token: string): void {
 export function setRefreshTokenCookie(res: Response, refreshToken: string): void {
     res.cookie('refresh_token', refreshToken, {
         httpOnly: true,
-        secure: getConfig().nodeEnv === 'production',
+        secure: getConfig().cookieSecure,
         sameSite: 'lax',
         maxAge: AUTH_CONFIG.REFRESH_TOKEN_MAX_AGE_MS, // 7일
         path: '/api/auth/refresh' // 리프레시 엔드포인트에서만 전송

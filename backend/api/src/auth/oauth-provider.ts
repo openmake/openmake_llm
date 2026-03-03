@@ -23,6 +23,7 @@ import { getConfig } from '../config/env';
 import { getAuthService } from '../services/AuthService';
 import { setTokenCookie, setRefreshTokenCookie, generateRefreshToken } from '../auth';
 import { createLogger } from '../utils/logger';
+import { GOOGLE_OAUTH, GITHUB_OAUTH, GITHUB_API } from '../config/external-services';
 
 /**
  * OAuth 프로바이더 설정 인터페이스
@@ -65,15 +66,15 @@ interface OAuthState {
 // 프로바이더별 설정
 const PROVIDER_CONFIGS: Record<string, Omit<OAuthProviderConfig, 'clientId' | 'clientSecret' | 'redirectUri'>> = {
     google: {
-        authorizationUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
-        tokenUrl: 'https://oauth2.googleapis.com/token',
-        userInfoUrl: 'https://www.googleapis.com/oauth2/v2/userinfo',
+        authorizationUrl: GOOGLE_OAUTH.AUTH_URL,
+        tokenUrl: GOOGLE_OAUTH.TOKEN_URL,
+        userInfoUrl: GOOGLE_OAUTH.USERINFO_URL,
         scopes: ['openid', 'email', 'profile']
     },
     github: {
-        authorizationUrl: 'https://github.com/login/oauth/authorize',
-        tokenUrl: 'https://github.com/login/oauth/access_token',
-        userInfoUrl: 'https://api.github.com/user',
+        authorizationUrl: GITHUB_OAUTH.AUTH_URL,
+        tokenUrl: GITHUB_OAUTH.TOKEN_URL,
+        userInfoUrl: GITHUB_API.USER_INFO,
         scopes: ['read:user', 'user:email']
     }
 };
@@ -328,7 +329,7 @@ export class OAuthManager {
                 let email = data.email;
                 if (!email) {
                     try {
-                        const emailResponse = await axios.get('https://api.github.com/user/emails', {
+                        const emailResponse = await axios.get(GITHUB_API.USER_EMAILS, {
                             headers: {
                                 'Authorization': `Bearer ${tokens.accessToken}`,
                                 'Accept': 'application/json'

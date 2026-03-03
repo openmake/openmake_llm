@@ -26,7 +26,8 @@ import { getAnalyticsSystem } from './monitoring/analytics';
 import { getAlertSystem } from './monitoring/alerts';
 import { getAgentLearningSystem } from './agents/learning';
 import { getCustomAgentBuilder } from './agents/custom-builder';
-import { startDbRetention } from './data/db-retention';
+import { getSkillManager } from './agents/skill-manager';
+import { getPool } from './data/models/unified-database';
 
 /**
  * 모든 싱글톤 서비스를 초기화합니다.
@@ -35,8 +36,8 @@ import { startDbRetention } from './data/db-retention';
 export function bootstrapServices(): void {
     getCacheSystem();          // 캐시 시스템 시작
     getAnalyticsSystem();      // 분석 시스템 시작
-    getAlertSystem();          // 알림 시스템 시작
+    getAlertSystem().setPool(getPool()); // alert_history DB 영속화 활성화
     getAgentLearningSystem();  // 에이전트 학습 시스템 시작
     getCustomAgentBuilder();   // 커스텀 에이전트 빌더 시작
-    startDbRetention();        // DB 데이터 보존 정리 스케줄러 시작
+    getSkillManager();          // 스킬 매니저 시작
 }

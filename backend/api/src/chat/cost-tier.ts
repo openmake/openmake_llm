@@ -15,6 +15,7 @@
 
 import type { QueryType } from './model-selector-types';
 import { getConfig } from '../config/env';
+import { DEFAULT_AUTO_MODEL } from '../config/constants';
 
 // ============================================================
 // 비용 티어 타입 및 상수
@@ -38,7 +39,7 @@ export const PROFILE_COST_TIERS: Record<string, CostTier> = {
     openmake_llm_pro: 'premium',
     openmake_llm_think: 'premium',
     openmake_llm_vision: 'premium',
-    openmake_llm_auto: 'standard',
+    [DEFAULT_AUTO_MODEL]: 'standard',
 };
 
 // ============================================================

@@ -40,15 +40,19 @@ export class CircuitOpenError extends Error {
     /**
      * 사용자 친화적 메시지 반환
      */
-    getDisplayMessage(language: 'ko' | 'en' = 'ko'): string {
-        const retryInSeconds = Math.max(0, Math.ceil((this.nextRetryAt - Date.now()) / 1000));
-
-        if (language === 'ko') {
-            return `⚠️ 노드 '${this.circuitName}'이(가) 일시적으로 사용 불가능합니다.\n` +
-                   `약 ${retryInSeconds}초 후에 자동으로 재시도됩니다.`;
-        } else {
-            return `⚠️ Node '${this.circuitName}' is temporarily unavailable.\n` +
-                   `Will automatically retry in about ${retryInSeconds} seconds.`;
-        }
+    getDisplayMessage(language: string = 'en'): string {
+        const sec = Math.max(0, Math.ceil((this.nextRetryAt - Date.now()) / 1000));
+        const name = this.circuitName;
+        const messages: Record<string, string> = {
+            ko: `⚠️ 노드 '${name}'이(가) 일시적으로 사용 불가능합니다.\n약 ${sec}초 후에 자동으로 재시도됩니다.`,
+            en: `⚠️ Node '${name}' is temporarily unavailable.\nWill automatically retry in about ${sec} seconds.`,
+            ja: `⚠️ ノード '${name}' が一時的に利用できません。\n約${sec}秒後に自動的にリトライします。`,
+            zh: `⚠️ 节点 '${name}' 暂时不可用。\n将在约${sec}秒后自动重试。`,
+            es: `⚠️ El nodo '${name}' no está disponible temporalmente.\nSe reintentará automáticamente en unos ${sec} segundos.`,
+            de: `⚠️ Knoten '${name}' ist vorübergehend nicht verfügbar.\nAutomatischer Wiederversuch in etwa ${sec} Sekunden.`,
+            fr: `⚠️ Le nœud '${name}' est temporairement indisponible.
+Nouvelle tentative automatique dans environ ${sec} secondes.`,
+        };
+        return messages[language] || messages['en']!;
     }
 }

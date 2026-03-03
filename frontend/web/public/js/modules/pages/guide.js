@@ -7,14 +7,12 @@
  *
  * @module pages/guide
  */
-(function() {
-    'use strict';
+'use strict';
     window.PageModules = window.PageModules || {};
     /** @type {number[]} setInterval ID 배열 (cleanup용) */
-    var _intervals = [];
+    let _intervals = [];
 
-    window.PageModules['guide'] = {
-        getHTML: function() {
+    function getHTML() {
             return '<div class="page-guide">' +
                 '<style data-spa-style="guide">' +
                 '.guide-content {' +
@@ -267,15 +265,17 @@
                   '</div>' +
                 '</div>' +
               '</div>';
-        },
+    }
 
-        init: function() {
+    function init() {
             // \uAC00\uC774\uB4DC \uD398\uC774\uC9C0\uB294 \uC815\uC801 \uCF58\uD150\uCE20\uC774\uBBC0\uB85C \uCD08\uAE30\uD654 \uB85C\uC9C1 \uC5C6\uC74C
-        },
+    }
 
-        cleanup: function() {
+    function cleanup() {
             _intervals.forEach(function(id) { clearInterval(id); });
             _intervals = [];
-        }
-    };
-})();
+    }
+
+    const pageModule = { getHTML, init, cleanup };
+    window.PageModules['guide'] = pageModule;
+    export default pageModule;

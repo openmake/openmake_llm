@@ -31,6 +31,8 @@ import { createClient } from '../ollama/client';
 import { isFirecrawlConfigured } from './firecrawl';
 import { getConfig } from '../config/env';
 import { createLogger } from '../utils/logger';
+import { CAPACITY, TRUNCATION } from '../config/runtime-limits';
+import { getSearchLocale } from '../i18n/search-locale';
 
 /** Google Custom Search API 키 */
 const GOOGLE_API_KEY = getConfig().googleApiKey;
@@ -169,7 +171,7 @@ async function searchOllamaWebSearch(query: string, maxResults: number = 10): Pr
  * @param maxResults - 최대 결과 수 (기본값: 5)
  * @returns SearchResult 배열 (미설정 또는 실패 시 빈 배열)
  */
-async function searchFirecrawl(query: string, maxResults: number = 5): Promise<SearchResult[]> {
+async function searchFirecrawl(query: string, maxResults: number = 5, language: string = 'en'): Promise<SearchResult[]> {
     const results: SearchResult[] = [];
 
     if (!isFirecrawlConfigured()) {
@@ -191,8 +193,8 @@ async function searchFirecrawl(query: string, maxResults: number = 5): Promise<S
             body: JSON.stringify({
                 query,
                 limit: maxResults,
-                lang: 'ko',
-                country: 'kr',
+                lang: getSearchLocale(language).lang,
+                country: getSearchLocale(language).country,
                 scrapeOptions: {
                     formats: ['markdown'],
                     onlyMainContent: true
@@ -213,7 +215,7 @@ async function searchFirecrawl(query: string, maxResults: number = 5): Promise<S
                 results.push({
                     title: item.title || '',
                     url: item.url || '',
-                    snippet: item.description || item.markdown?.substring(0, 200) || '',
+                    snippet: item.description || item.markdown?.substring(0, TRUNCATION.WEB_SNIPPET_MAX) || '',
                     source: 'firecrawl.dev'
                 });
             }
@@ -237,7 +239,7 @@ async function searchFirecrawl(query: string, maxResults: number = 5): Promise<S
  * @param globalSearch - 전세계 검색 여부 (기본값: true)
  * @returns SearchResult 배열 (API 키 미설정 또는 실패 시 빈 배열)
  */
-async function searchGoogle(query: string, maxResults: number = 10, globalSearch: boolean = true): Promise<SearchResult[]> {
+async function searchGoogle(query: string, maxResults: number = 10, globalSearch: boolean = true, language: string = 'en'): Promise<SearchResult[]> {
     const results: SearchResult[] = [];
 
     if (!GOOGLE_API_KEY || !GOOGLE_CSE_ID) {
@@ -250,7 +252,7 @@ async function searchGoogle(query: string, maxResults: number = 10, globalSearch
         let url = `https://www.googleapis.com/customsearch/v1?key=${GOOGLE_API_KEY}&cx=${GOOGLE_CSE_ID}&q=${encodeURIComponent(query)}&num=${Math.min(maxResults, 10)}`;
 
         if (!globalSearch) {
-            url += '&gl=kr&lr=lang_ko';
+            url += getSearchLocale(language).googleParams;
         }
 
         const response = await fetch(url);
@@ -289,12 +291,13 @@ async function searchGoogle(query: string, maxResults: number = 10, globalSearch
  * @param query - 검색 쿼리
  * @returns SearchResult 배열 (실패 시 빈 배열)
  */
-async function searchWikipedia(query: string): Promise<SearchResult[]> {
+async function searchWikipedia(query: string, language: string = 'en'): Promise<SearchResult[]> {
     const results: SearchResult[] = [];
 
     try {
         // Wikipedia 검색 API
-        const url = `https://ko.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&format=json&srlimit=5&origin=*`;
+        const wikiDomain = getSearchLocale(language).wikiDomain;
+        const url = `https://${wikiDomain}.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&format=json&srlimit=5&origin=*`;
 
         const response = await fetch(url);
         if (!response.ok) return results;
@@ -309,7 +312,7 @@ async function searchWikipedia(query: string): Promise<SearchResult[]> {
             for (const item of data.query.search) {
                 results.push({
                     title: item.title,
-                    url: `https://ko.wikipedia.org/wiki/${encodeURIComponent(item.title)}`,
+                    url: `https://${wikiDomain}.wikipedia.org/wiki/${encodeURIComponent(item.title)}`,
                     snippet: item.snippet.replace(/<[^>]+>/g, ''),
                     source: 'wikipedia.org'
                 });
@@ -334,12 +337,13 @@ async function searchWikipedia(query: string): Promise<SearchResult[]> {
  * @param query - 검색 쿼리
  * @returns SearchResult 배열 (실패 시 빈 배열)
  */
-async function searchGoogleNews(query: string): Promise<SearchResult[]> {
+async function searchGoogleNews(query: string, language: string = 'en'): Promise<SearchResult[]> {
     const results: SearchResult[] = [];
 
     try {
         // Google News RSS
-        const url = `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=ko&gl=KR&ceid=KR:ko`;
+        const newsParams = getSearchLocale(language).newsParams;
+        const url = `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&${newsParams}`;
 
         const response = await fetch(url);
         if (!response.ok) return results;
@@ -433,7 +437,7 @@ async function searchDuckDuckGoAPI(query: string): Promise<SearchResult[]> {
 
         // Related Topics
         if (data.RelatedTopics) {
-            for (const topic of data.RelatedTopics.slice(0, 5)) {
+            for (const topic of data.RelatedTopics.slice(0, CAPACITY.DDG_MAX_RELATED_TOPICS)) {
                 if (topic.Text && topic.FirstURL) {
                     results.push({
                         title: topic.Text.split(' - ')[0] || topic.Text.substring(0, 80),
@@ -530,8 +534,8 @@ async function searchNaverNews(query: string): Promise<SearchResult[]> {
  * @param options.useFirecrawl - Firecrawl 사용 여부 (기본값: true)
  * @returns 중복 제거된 SearchResult 배열
  */
-export async function performWebSearch(query: string, options: { maxResults?: number; globalSearch?: boolean; useOllamaFirst?: boolean; useFirecrawl?: boolean } = {}): Promise<SearchResult[]> {
-    const { maxResults = 30, globalSearch = true, useOllamaFirst = true, useFirecrawl = true } = options;
+export async function performWebSearch(query: string, options: { maxResults?: number; globalSearch?: boolean; useOllamaFirst?: boolean; useFirecrawl?: boolean; language?: string } = {}): Promise<SearchResult[]> {
+    const { maxResults = 30, globalSearch = true, useOllamaFirst = true, useFirecrawl = true, language = 'en' } = options;
 
     // 고볼륨 모드: maxResults > 15이면 모든 소스에서 병렬 수집 (Deep Research 용)
     const highVolumeMode = maxResults > 15;
@@ -555,7 +559,7 @@ export async function performWebSearch(query: string, options: { maxResults?: nu
     let earlyFirecrawlResults: SearchResult[] = [];
     if (useFirecrawl && isFirecrawlConfigured()) {
         const firecrawlLimit = highVolumeMode ? Math.min(maxResults, 20) : Math.min(maxResults, 10);
-        earlyFirecrawlResults = await searchFirecrawl(query, firecrawlLimit);
+        earlyFirecrawlResults = await searchFirecrawl(query, firecrawlLimit, language);
         if (earlyFirecrawlResults.length > 0) {
             logger.info(`🔥 Firecrawl 성공: ${earlyFirecrawlResults.length}개 결과`);
             // 고볼륨이 아니고 충분하면 조기 반환
@@ -567,22 +571,26 @@ export async function performWebSearch(query: string, options: { maxResults?: nu
 
     // 🔄 3단계: 모든 소스에서 병렬 검색
     const searchPromises: Promise<SearchResult[]>[] = [
-        searchGoogle(query, 10, globalSearch),
-        searchWikipedia(query),
-        searchGoogleNews(query),
+        searchGoogle(query, 10, globalSearch, language),
+        searchWikipedia(query, language),
+        searchGoogleNews(query, language),
         searchDuckDuckGoAPI(query),
-        searchNaverNews(query)
+        ...(language === 'ko' ? [searchNaverNews(query)] : [])
     ];
 
     const allSearchResults = await Promise.all(searchPromises);
-    const [googleResults, wikiResults, newsResults, ddgResults, naverResults] = allSearchResults;
+    const googleResults = allSearchResults[0] || [];
+    const wikiResults = allSearchResults[1] || [];
+    const newsResults = allSearchResults[2] || [];
+    const ddgResults = allSearchResults[3] || [];
+    const naverResults = allSearchResults[4] || [];
 
-    // 결과 합치기 (우선순위: Firecrawl > Ollama > 뉴스 > Google > Wikipedia > DDG > Naver)
+    // 결과 합치기 (우선순위: Firecrawl > Ollama > 뉴스 > Naver > Google > Wikipedia > DDG)
     const allResults = [
         ...earlyFirecrawlResults,  // 🔥 Firecrawl 최우선 (콘텐츠 스크래핑)
         ...earlyOllamaResults,     // Ollama API 결과
         ...newsResults,            // 뉴스 (최신 사실 정보)
-        ...naverResults,           // 네이버 뉴스 (한국 뉴스)
+        ...naverResults,           // 네이버 뉴스 (한국어만)
         ...googleResults,          // Google 검색
         ...wikiResults,            // Wikipedia (배경 지식)
         ...ddgResults              // DuckDuckGo
@@ -617,7 +625,7 @@ export function createFactCheckPrompt(claim: string, searchResults: SearchResult
         `[${i + 1}] ${r.title}\n   ${r.url}\n   ${r.snippet}`
     ).join('\n\n');
 
-    return `## 웹 검색 결과 (${new Date().toLocaleDateString('ko-KR')})
+    return `## Web Search Results (${new Date().toLocaleDateString()})
 ${sources || '검색 결과 없음'}
 
 ## 질문
@@ -719,7 +727,7 @@ export const extractWebpageTool: MCPToolDefinition = {
         try {
             const response = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
             const html = await response.text();
-            const content = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().substring(0, 3000);
+            const content = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().substring(0, TRUNCATION.WEB_CONTENT_MAX);
             return { content: [{ type: 'text', text: content }] };
         } catch (e) {
             return { content: [{ type: 'text', text: `오류: ${e}` }], isError: true };

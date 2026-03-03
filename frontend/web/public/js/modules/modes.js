@@ -12,6 +12,7 @@
 
 import { getState, setState } from './state.js';
 import { showToast } from './ui.js';
+import { saveMCPSettings, syncWebSearchState, updateMCPToolTogglesUI } from './settings.js';
 
 /**
  * 멀티 에이전트 토론 모드 토글
@@ -23,6 +24,12 @@ function toggleDiscussionMode() {
     const newValue = !current;
     setState('discussionMode', newValue);
 
+    // enabledTools 동기화
+    var currentTools = (typeof getState === 'function' ? getState('mcpToolsEnabled') : null) || {};
+    var updatedTools = Object.assign({}, currentTools);
+    updatedTools.discussion_mode = newValue;
+    setState('mcpToolsEnabled', updatedTools);
+
     const btn = document.getElementById('discussionModeBtn');
     if (btn) {
         btn.classList.toggle('active', newValue);
@@ -31,7 +38,8 @@ function toggleDiscussionMode() {
 
     // 토론 모드와 웹 검색은 동시 사용 불가
     if (newValue && getState('webSearchEnabled')) {
-        setState('webSearchEnabled', false);
+        syncWebSearchState(false);
+        updateMCPToolTogglesUI();
         const webSearchBtn = document.getElementById('webSearchBtn');
         if (webSearchBtn) {
             webSearchBtn.classList.remove('active');
@@ -40,6 +48,8 @@ function toggleDiscussionMode() {
     } else {
         showToast(newValue ? '🎯 멀티 에이전트 토론 모드 활성화' : '💬 일반 모드로 전환', 'info');
     }
+    saveMCPSettings();
+    updateMCPToolTogglesUI();
 }
 
 /**
@@ -47,9 +57,18 @@ function toggleDiscussionMode() {
  * @returns {void}
  */
 function toggleThinkingMode() {
-    const current = getState('thinkingMode');
+    const current = getState('thinkingEnabled');
     const newValue = !current;
-    setState('thinkingMode', newValue);
+    setState('thinkingEnabled', newValue);
+
+    // enabledTools 동기화
+    var currentTools = (typeof getState === 'function' ? getState('mcpToolsEnabled') : null) || {};
+    var updatedTools = Object.assign({}, currentTools);
+    updatedTools.sequential_thinking = newValue;
+    setState('mcpToolsEnabled', updatedTools);
+
+    saveMCPSettings();
+    updateMCPToolTogglesUI();
 
     const thinkingLevel = getState('thinkingLevel') || 'high';
     const btn = document.getElementById('thinkingModeBtn');
@@ -69,6 +88,12 @@ function toggleDeepResearch() {
     const newValue = !current;
     setState('deepResearchMode', newValue);
 
+    // enabledTools 동기화
+    var currentTools = (typeof getState === 'function' ? getState('mcpToolsEnabled') : null) || {};
+    var updatedTools = Object.assign({}, currentTools);
+    updatedTools.deep_research = newValue;
+    setState('mcpToolsEnabled', updatedTools);
+
     const btn = document.getElementById('deepResearchBtn');
     if (btn) {
         btn.classList.toggle('active', newValue);
@@ -79,6 +104,8 @@ function toggleDeepResearch() {
     if (newValue) {
         if (getState('discussionMode')) {
             setState('discussionMode', false);
+            updatedTools.discussion_mode = false;
+            setState('mcpToolsEnabled', updatedTools);
             const discussionBtn = document.getElementById('discussionModeBtn');
             if (discussionBtn) discussionBtn.classList.remove('active');
         }
@@ -86,6 +113,8 @@ function toggleDeepResearch() {
     } else {
         showToast('💬 일반 모드로 전환', 'info');
     }
+    saveMCPSettings();
+    updateMCPToolTogglesUI();
 }
 
 /**
@@ -253,14 +282,12 @@ function showResearchProgress(progress) {
         }, 2000);
     }
 }
-
-// 전역 노출 (레거시 호환)
+// 전역 노옥 (레거시 호환)
 window.toggleDiscussionMode = toggleDiscussionMode;
 window.toggleThinkingMode = toggleThinkingMode;
 window.toggleDeepResearch = toggleDeepResearch;
 window.showDiscussionProgress = showDiscussionProgress;
 window.showResearchProgress = showResearchProgress;
-
 export {
     toggleDiscussionMode,
     toggleThinkingMode,

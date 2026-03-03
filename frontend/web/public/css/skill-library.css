@@ -1,0 +1,370 @@
+/**
+ * Skill Library - 스킬 라이브러리 페이지 전용 CSS
+ * 
+ * CSP 호환을 위해 외부 CSS 파일로 분리됨
+ */
+
+.sl-page {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+}
+.sl-header {
+    padding: var(--space-5, 1.25rem) var(--space-5, 1.25rem) 0;
+    flex-shrink: 0;
+}
+.sl-header h1 {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--text-primary, #fff);
+    margin: 0 0 var(--space-2, 0.5rem);
+    display: flex;
+    align-items: center;
+    gap: var(--space-2, 0.5rem);
+}
+.sl-header p {
+    color: var(--text-secondary, #94a3b8);
+    margin-bottom: var(--space-3, 0.75rem);
+    font-size: 0.875rem;
+}
+
+/* Tabs */
+.sl-tabs {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid var(--border-color, #2d3748);
+    margin-bottom: 0;
+}
+.sl-tab {
+    padding: 0.75rem 1.25rem;
+    cursor: pointer;
+    color: var(--text-secondary, #a0aec0);
+    border: none;
+    border-bottom: 2px solid transparent;
+    background: transparent;
+    font-weight: 500;
+    font-size: 0.9rem;
+    transition: color 0.15s, border-color 0.15s;
+}
+.sl-tab:hover { color: var(--text-primary, #fff); }
+.sl-tab.active {
+    color: var(--accent-primary, #3b82f6);
+    border-bottom-color: var(--accent-primary, #3b82f6);
+}
+
+/* Tab panes */
+.sl-tab-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: var(--space-5, 1.25rem);
+}
+.sl-pane { display: none; }
+.sl-pane.active { display: block; }
+
+/* Toolbar row */
+.sl-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--space-3, 0.75rem);
+    margin-bottom: var(--space-4, 1rem);
+}
+.sl-search-group {
+    display: flex;
+    gap: var(--space-2, 0.5rem);
+    flex: 1;
+    max-width: 600px;
+    flex-wrap: wrap;
+}
+.sl-input-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+    flex: 1;
+}
+.sl-input-icon {
+    position: absolute;
+    left: 0.75rem;
+    color: var(--text-secondary, #94a3b8);
+    pointer-events: none;
+    font-size: 0.875rem;
+}
+.sl-input {
+    width: 100%;
+    padding: 0.5rem 0.75rem 0.5rem 2.2rem;
+    background: var(--bg-secondary, #1e293b);
+    border: 1px solid var(--border-light, #334155);
+    border-radius: var(--radius-md, 6px);
+    color: var(--text-primary, #fff);
+    font-size: 0.875rem;
+    box-sizing: border-box;
+}
+.sl-input::placeholder { color: var(--text-muted, #64748b); }
+.sl-input:focus { outline: none; border-color: var(--accent-primary, #3b82f6); }
+.sl-select {
+    padding: 0.5rem 0.75rem;
+    background: var(--bg-secondary, #1e293b);
+    border: 1px solid var(--border-light, #334155);
+    border-radius: var(--radius-md, 6px);
+    color: var(--text-primary, #fff);
+    font-size: 0.875rem;
+}
+.sl-select:focus { outline: none; border-color: var(--accent-primary, #3b82f6); }
+
+/* Buttons */
+.sl-btn {
+    padding: 0.5rem 1rem;
+    border-radius: var(--radius-md, 6px);
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    border: none;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2, 0.5rem);
+    transition: opacity 0.15s;
+}
+.sl-btn:hover { opacity: 0.85; }
+.sl-btn-primary { background: var(--accent-primary, #3b82f6); color: #fff; }
+.sl-btn-secondary { background: var(--bg-tertiary, #2d3748); color: var(--text-primary, #fff); }
+.sl-btn-outline { background: transparent; color: var(--text-secondary, #94a3b8); border: 1px solid var(--border-light, #334155); }
+.sl-btn-outline:hover { color: var(--text-primary, #fff); border-color: var(--text-secondary, #94a3b8); }
+.sl-btn-sm { padding: 0.35rem 0.75rem; font-size: 0.8rem; }
+
+/* Grids */
+.skill-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 1.25rem;
+}
+
+/* Cards */
+.skill-card {
+    background-color: var(--bg-card, #1e293b);
+    border: 1px solid var(--border-color, #334155);
+    border-radius: 0.5rem;
+    padding: 1.25rem;
+    transition: border-color 0.2s, transform 0.2s;
+    display: flex;
+    flex-direction: column;
+}
+.skill-card:hover {
+    border-color: var(--accent-primary, #3b82f6);
+    transform: translateY(-2px);
+}
+.skill-card-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 0.5rem;
+}
+.skill-card-badge {
+    font-size: 0.75rem;
+    padding: 0.2rem 0.5rem;
+    border-radius: 1rem;
+    background: rgba(59,130,246,0.1);
+    color: var(--accent-primary, #3b82f6);
+    border: 1px solid rgba(59,130,246,0.2);
+    display: inline-block;
+}
+.skill-card-menu {
+    position: relative;
+}
+.skill-card-menu-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary, #94a3b8);
+    cursor: pointer;
+    padding: 0.2rem 0.4rem;
+    border-radius: 4px;
+    font-size: 1.1rem;
+    line-height: 1;
+}
+.skill-card-menu-btn:hover { background: var(--bg-tertiary, #2d3748); }
+.skill-card-dropdown {
+    display: none;
+    position: absolute;
+    right: 0;
+    top: 100%;
+    background: var(--bg-card, #1e293b);
+    border: 1px solid var(--border-color, #334155);
+    border-radius: var(--radius-md, 6px);
+    min-width: 160px;
+    z-index: 100;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+}
+.skill-card-dropdown.open { display: block; }
+.skill-card-dropdown a {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    color: var(--text-primary, #fff);
+    text-decoration: none;
+    font-size: 0.875rem;
+}
+.skill-card-dropdown a:hover { background: var(--bg-tertiary, #2d3748); }
+.skill-card-dropdown a.danger { color: var(--danger); }
+.skill-card-dropdown hr {
+    margin: 0.25rem 0;
+    border: none;
+    border-top: 1px solid var(--border-color, #334155);
+}
+.skill-card-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-primary, #fff);
+    margin-bottom: 0.4rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.skill-card-desc {
+    color: var(--text-secondary, #94a3b8);
+    font-size: 0.8rem;
+    line-height: 1.5;
+    flex-grow: 1;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    margin-bottom: 0.75rem;
+}
+.skill-card-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-top: 1px solid var(--border-color, #334155);
+    padding-top: 0.75rem;
+    margin-top: auto;
+}
+.skill-card-footer small { color: var(--text-muted, #64748b); font-size: 0.75rem; }
+.sl-badge {
+    font-size: 0.7rem;
+    padding: 0.15rem 0.5rem;
+    border-radius: 1rem;
+    border: 1px solid;
+}
+.sl-badge-success { background: rgba(34,197,94,0.1); color: var(--success, #4ade80); border-color: rgba(34,197,94,0.25); }
+.sl-badge-secondary { background: rgba(148,163,184,0.1); color: var(--text-secondary, #94a3b8); border-color: rgba(148,163,184,0.2); }
+
+/* MP search toolbar */
+.sl-mp-search {
+    display: flex;
+    gap: var(--space-2, 0.5rem);
+    margin-bottom: 1.25rem;
+    max-width: 600px;
+}
+.sl-mp-search .sl-input-wrap { flex: 1; }
+
+/* MP card action buttons */
+.skill-card-actions {
+    display: flex;
+    gap: 0.5rem;
+    border-top: 1px solid var(--border-color, #334155);
+    padding-top: 0.75rem;
+    margin-top: auto;
+}
+
+/* Pagination */
+.sl-pagination {
+    display: flex;
+    justify-content: center;
+    gap: 0.25rem;
+    margin-top: 1.25rem;
+    flex-wrap: wrap;
+}
+.sl-page-btn {
+    padding: 0.35rem 0.65rem;
+    background: var(--bg-secondary, #1e293b);
+    border: 1px solid var(--border-color, #334155);
+    border-radius: var(--radius-md, 6px);
+    color: var(--text-secondary, #94a3b8);
+    cursor: pointer;
+    font-size: 0.8rem;
+}
+.sl-page-btn:hover { border-color: var(--accent-primary, #3b82f6); color: var(--text-primary, #fff); }
+.sl-page-btn.active { background: var(--accent-primary, #3b82f6); border-color: var(--accent-primary, #3b82f6); color: #fff; }
+.sl-page-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* Loading / Empty states */
+.sl-loading {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 3rem;
+    width: 100%;
+    color: var(--text-secondary, #94a3b8);
+}
+.sl-empty {
+    text-align: center;
+    padding: 3rem;
+    color: var(--text-secondary, #94a3b8);
+    width: 100%;
+    font-size: 0.9rem;
+}
+.sl-error {
+    padding: 1rem 1.25rem;
+    background: rgba(248,113,113,0.1);
+    border: 1px solid rgba(248,113,113,0.25);
+    border-radius: 0.5rem;
+    color: var(--danger, #f87171);
+    font-size: 0.875rem;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* Spinner */
+@keyframes sl-spin { to { transform: rotate(360deg); } }
+.sl-spinner {
+    width: 1.5rem; height: 1.5rem;
+    border: 2px solid var(--border-color, #334155);
+    border-top-color: var(--accent-primary, #3b82f6);
+    border-radius: 50%;
+    animation: sl-spin 0.7s linear infinite;
+    margin: auto;
+}
+
+/* 인라인 스킬 편집 모달 */
+.sl-modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.6);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+}
+.sl-modal-overlay.open { display: flex; }
+.sl-modal {
+    background: var(--bg-card, #1e293b);
+    border: 1px solid var(--border-light, #334155);
+    border-radius: var(--radius-lg, 12px);
+    padding: 1.75rem;
+    width: min(660px, 95vw);
+    max-height: 90vh;
+    overflow-y: auto;
+}
+.sl-modal h2 { margin: 0 0 1.25rem; font-size: 1.1rem; font-weight: 600; color: var(--text-primary, #fff); }
+.sl-modal .sl-form-group { margin-bottom: 1rem; }
+.sl-modal .sl-form-label { display: block; font-size: 0.82rem; font-weight: 500; color: var(--text-secondary, #94a3b8); margin-bottom: 0.4rem; }
+.sl-modal .sl-form-input,
+.sl-modal .sl-form-textarea,
+.sl-modal .sl-form-select {
+    width: 100%; background: var(--bg-secondary, #0f172a);
+    border: 1px solid var(--border-color, #334155);
+    border-radius: var(--radius-md, 6px);
+    padding: 0.5rem 0.75rem;
+    color: var(--text-primary, #fff);
+    font-size: 0.875rem;
+    box-sizing: border-box;
+}
+.sl-modal .sl-form-textarea { resize: vertical; }
+.sl-modal .sl-form-textarea.mono { font-family: monospace; font-size: 0.82rem; }
+.sl-modal-actions {
+    display: flex; gap: 0.75rem; justify-content: flex-end;
+    margin-top: 1.25rem; padding-top: 1rem;
+    border-top: 1px solid var(--border-color, #334155);
+}

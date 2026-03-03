@@ -13,6 +13,10 @@ import { getState, setState, addToMemory } from './state.js';
 import { sendWsMessage } from './websocket.js';
 import { scrollToBottom, escapeHtml, renderMarkdown, showToast } from './ui.js';
 import { authFetch } from './auth.js';
+import { DEFAULT_AUTO_MODEL, STORAGE_KEY_GENERAL_SETTINGS, STORAGE_KEY_SELECTED_MODEL, STORAGE_KEY_USER } from './constants.js';
+
+// SafeStorage 래퍼 — safe-storage.js에서 전역 등록됨
+const SS = window.SafeStorage;
 
 /**
  * AI 응답 생성 중단 요청
@@ -21,10 +25,10 @@ import { authFetch } from './auth.js';
  */
 function abortChat() {
     if (!getState('isGenerating')) return;
-    
+
     console.log('[Chat] 응답 생성 중단 요청');
     sendWsMessage({ type: 'abort' });
-    
+
     // UI 상태 업데이트
     setState('isGenerating', false);
     hideAbortButton();
@@ -37,7 +41,7 @@ function abortChat() {
  */
 function showAbortButton() {
     let abortBtn = document.getElementById('abortButton');
-    
+
     if (!abortBtn) {
         // 중단 버튼 생성
         const inputArea = document.querySelector('.input-area') || document.querySelector('.chat-input-container');
@@ -53,7 +57,7 @@ function showAbortButton() {
             `;
             abortBtn.onclick = abortChat;
             abortBtn.title = '응답 생성 중단';
-            
+
             // 전송 버튼 옆에 삽입
             const sendBtn = document.getElementById('sendButton');
             if (sendBtn) {
@@ -63,7 +67,7 @@ function showAbortButton() {
             }
         }
     }
-    
+
     if (abortBtn) {
         abortBtn.style.display = 'flex';
     }
@@ -105,7 +109,11 @@ async function sendMessage() {
 
     // 사용자 메시지 추가
     addChatMessage('user', message);
-    addToMemory('user', message);
+    // saveHistory 설정이 활성화된 경우에만 메모리에 저장
+    const generalSettingsForHistory = JSON.parse(SS.getItem(STORAGE_KEY_GENERAL_SETTINGS) || '{}');
+    if (generalSettingsForHistory.saveHistory !== false) {
+        addToMemory('user', message);
+    }
 
     // 입력창 초기화
     input.value = '';
@@ -116,7 +124,7 @@ async function sendMessage() {
     setState('currentAssistantMessage', assistantDiv);
     setState('messageStartTime', Date.now());
     setState('isGenerating', true);
-    
+
     // 중단 버튼 표시
     showAbortButton();
 
@@ -125,13 +133,23 @@ async function sendMessage() {
         const payload = {
             type: 'chat',
             message: message,
-            model: document.getElementById('modelSelect')?.value || localStorage.getItem('selectedModel') || 'openmake_llm_auto',
+            model: document.getElementById('modelSelect')?.value || SS.getItem(STORAGE_KEY_SELECTED_MODEL) || DEFAULT_AUTO_MODEL,
             history: getState('conversationMemory'),
-            webSearch: getState('webSearchEnabled'),
+            webSearch: getState('webSearchEnabled') || (getState('mcpToolsEnabled') || {}).web_search === true,
             thinkingMode: getState('thinkingEnabled'),
+            thinkingLevel: getState('thinkingLevel') || 'high',
+            discussionMode: getState('discussionMode') || false,
+            deepResearchMode: getState('deepResearchMode') || false,
             enabledTools: getState('mcpToolsEnabled') || {},
+            ragEnabled: getState('ragEnabled') || false,
             sessionId: getState('currentChatId') // 세션 ID 포함
         };
+
+        // 🌐 사용자 언어 설정을 WebSocket 메시지에 포함
+        const generalSettings = JSON.parse(SS.getItem(STORAGE_KEY_GENERAL_SETTINGS) || '{}');
+        if (generalSettings.lang) {
+            payload.language = generalSettings.lang;
+        }
 
         // 파일이 첨부된 경우
         if (attachedFiles.length > 0) {
@@ -145,11 +163,11 @@ async function sendMessage() {
         // 문서 컨텍스트가 있는 경우
         const docContext = getState('activeDocumentContext');
         if (docContext) {
-            payload.documentId = docContext.docId;
+            payload.docId = docContext.docId;
         }
 
         // 🔐 인증된 사용자 정보를 WebSocket 메시지에 포함
-        const storedUser = localStorage.getItem('user');
+        const storedUser = SS.getItem(STORAGE_KEY_USER);
         const parsedUser = storedUser ? JSON.parse(storedUser) : {};
         if (parsedUser.userId || parsedUser.id) payload.userId = parsedUser.userId || parsedUser.id;
         if (parsedUser.role) payload.userRole = parsedUser.role;
@@ -418,8 +436,11 @@ function finishAssistantMessage(errorMessage = null, serverMessageId = null) {
             renderMarkdown(content, finalAnswer);
         }
 
-        // 메모리에 추가
-        addToMemory('assistant', rawText);
+        // saveHistory 설정이 활성화된 경우에만 메모리에 추가
+        const gSettings = JSON.parse(SS.getItem(STORAGE_KEY_GENERAL_SETTINGS) || '{}');
+        if (gSettings.saveHistory !== false) {
+            addToMemory('assistant', rawText);
+        }
     }
 
     // 응답 시간 표시
@@ -430,6 +451,54 @@ function finishAssistantMessage(errorMessage = null, serverMessageId = null) {
         if (timeEl) {
             timeEl.textContent += ` · ${duration}초`;
         }
+    }
+
+    // 스킬 attribution: 해당 응답 메시지에 어떤 스킬로 생성되었는지 표시
+    const activeSkillNames = getState('activeSkillNames');
+    if (!errorMessage && activeSkillNames && activeSkillNames.length > 0) {
+        const wrapper = currentMsg.querySelector('.message-wrapper');
+        const timeEl = currentMsg.querySelector('.message-time');
+        if (wrapper && timeEl) {
+            function escSkill(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+            const chips = activeSkillNames.map(function(n) {
+                return '<span class="attribution-chip">' + escSkill(n) + '</span>';
+            }).join('');
+            const attrEl = document.createElement('div');
+            attrEl.className = 'message-attribution';
+            attrEl.innerHTML = '<span class="attribution-label">✶ 스킬 적용</span><div class="attribution-chips">' + chips + '</div>';
+            wrapper.insertBefore(attrEl, timeEl);
+        }
+        setState('activeSkillNames', null);
+    }
+
+    // RAG 출처 표시: 검색된 참조 문서 출처 카드
+    const ragSources = getState('ragSources');
+    if (!errorMessage && ragSources && ragSources.length > 0) {
+        const wrapper = currentMsg.querySelector('.message-wrapper');
+        const timeElForRag = currentMsg.querySelector('.message-time');
+        if (wrapper && timeElForRag) {
+            function escRag(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+            const sourceCards = ragSources.map(function(src) {
+                const pct = (src.relevanceScore * 100).toFixed(0);
+                const barColor = src.relevanceScore >= 0.8 ? 'var(--success)' : src.relevanceScore >= 0.5 ? 'var(--warning)' : 'var(--text-muted)';
+                return '<div class="rag-source-card">' +
+                    '<div class="rag-source-header">' +
+                        '<span class="rag-source-icon">📄</span>' +
+                        '<span class="rag-source-name">' + escRag(src.source) + '</span>' +
+                        '<span class="rag-source-score" style="--bar-color:' + barColor + ';--bar-width:' + pct + '%">' + pct + '%</span>' +
+                    '</div>' +
+                    '<div class="rag-source-snippet">' + escRag(src.snippet) + '</div>' +
+                '</div>';
+            }).join('');
+            const ragEl = document.createElement('div');
+            ragEl.className = 'rag-sources-container';
+            ragEl.innerHTML = '<details class="rag-sources-details">' +
+                '<summary class="rag-sources-summary">📖 참조 문서 (' + ragSources.length + ')</summary>' +
+                '<div class="rag-sources-list">' + sourceCards + '</div>' +
+            '</details>';
+            wrapper.insertBefore(ragEl, timeElForRag);
+        }
+        setState('ragSources', null);
     }
 
     setState('currentAssistantMessage', null);
@@ -497,7 +566,7 @@ function sendFeedback(msgElementId, signal) {
     // 시각적 피드백 — 선택된 버튼 활성화
     if (msgElement && signal !== 'regenerate') {
         var feedbackBtns = msgElement.querySelectorAll('.feedback-btn');
-        feedbackBtns.forEach(function(btn) {
+        feedbackBtns.forEach(function (btn) {
             btn.classList.remove('feedback-active');
         });
         var activeBtn = msgElement.querySelector('[data-feedback="' + signal + '"]');
@@ -507,7 +576,7 @@ function sendFeedback(msgElementId, signal) {
     }
 
     // 서버 전송 (fire-and-forget)
-    authFetch('/api/chat/feedback', {
+    authFetch(API_ENDPOINTS.CHAT_FEEDBACK, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -515,7 +584,7 @@ function sendFeedback(msgElementId, signal) {
             sessionId: sessionId || 'anonymous',
             signal: signal
         })
-    }).catch(function(err) {
+    }).catch(function (err) {
         console.error('[Feedback] 전송 실패:', err);
     });
 }
@@ -547,6 +616,9 @@ function newChat() {
     setState('attachedFiles', []);
     setState('activeDocumentContext', null);
 
+    // 새 대화 시작 시 활성 스킬 상태 초기화
+    setState('activeSkillNames', null);
+
     // 입력창 초기화
     const input = document.getElementById('chatInput');
     if (input) {
@@ -570,7 +642,7 @@ function useSuggestion(text) {
 }
 
 // 피드백 버튼 이벤트 위임
-document.addEventListener('click', function(e) {
+document.addEventListener('click', function (e) {
     var feedbackBtn = e.target.closest('.feedback-btn');
     if (!feedbackBtn) return;
 

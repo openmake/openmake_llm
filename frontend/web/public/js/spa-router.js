@@ -7,16 +7,18 @@
  * 모듈 기반 페이지 로딩, 인증/관리자 가드, CSS 관리를 제공합니다.
  *
  * 사용법:
- *   Router.register('/canvas.html', { ... });
+ *   Router.register('/research.html', { ... });
  *   Router.start();
- *   Router.navigate('/canvas.html');
+ *   Router.navigate('/research.html');
  *
  * @module spa-router
  */
 
+import { STORAGE_KEY_USER, STORAGE_KEY_GUEST_MODE, STORAGE_KEY_IS_GUEST } from './modules/constants.js';
+
 // ─── 내부 상태 ─────────────────────────────────────
 const _routes = new Map();           // path → routeConfig
-const _loadedModules = new Set();    // 이미 로드된 모듈 파일
+const _loadedModules = new Map();    // path → module default export (ES Module 캐시)
 const _beforeHooks = [];             // onBeforeNavigate 콜백
 const _afterHooks = [];              // onAfterNavigate 콜백
 
@@ -29,7 +31,7 @@ const _RELOAD_GUARD_WINDOW = 3000; // 3초 이내 동일 경로 리디렉트 감
 const _RELOAD_GUARD_MAX = 3;       // 최대 허용 횟수
 
 // 캐시 버스터 — 배포 시 deploy-frontend.sh가 이 값을 업데이트
-const _moduleVersion = 11;
+const _moduleVersion = 16;
 
 // ─── 상수 ──────────────────────────────────────────
 const CHAT_PATH = '/';
@@ -37,18 +39,8 @@ const LOGIN_PATH = '/login.html';
 const DEFAULT_TITLE = 'OpenMake.AI';
 const LOG_PREFIX = '[Router]';
 
-// Safe localStorage wrapper for Safari Private Mode
-const SafeStorage = window.SafeStorage = window.SafeStorage || {
-    getItem: function (key) {
-        try { return localStorage.getItem(key); } catch (e) { return null; }
-    },
-    setItem: function (key, value) {
-        try { localStorage.setItem(key, value); } catch (e) {}
-    },
-    removeItem: function (key) {
-        try { localStorage.removeItem(key); } catch (e) {}
-    }
-};
+// SafeStorage 래퍼 — safe-storage.js에서 전역 등록됨
+const SafeStorage = window.SafeStorage;
 
 // ─── 유틸리티 ──────────────────────────────────────
 
@@ -113,7 +105,7 @@ function _recordReload(path) {
  */
 function isAdminUser() {
     try {
-        var stored = SafeStorage.getItem('user');
+        var stored = SafeStorage.getItem(STORAGE_KEY_USER);
         if (!stored) return false;
         var user = JSON.parse(stored);
         return user && user.role === 'admin';
@@ -127,12 +119,10 @@ function isAdminUser() {
  * @returns {boolean}
  */
 function isAuthenticated() {
-    const authToken = SafeStorage.getItem('authToken');
-    // OAuth 로그인 시 httpOnly 쿠키만 있고 authToken은 없을 수 있음 -> user 객체 확인
-    const user = SafeStorage.getItem('user');
-    const isGuest = SafeStorage.getItem('guestMode') === 'true' ||
-                    SafeStorage.getItem('isGuest') === 'true';
-    return (!!authToken || !!user) && !isGuest;
+    const user = SafeStorage.getItem(STORAGE_KEY_USER);
+    const isGuest = SafeStorage.getItem(STORAGE_KEY_GUEST_MODE) === 'true' ||
+        SafeStorage.getItem(STORAGE_KEY_IS_GUEST) === 'true';
+    return !!user && user !== '{}' && user !== 'null' && !isGuest;
 }
 
 /**
@@ -191,13 +181,32 @@ function showLoading() {
 function showError(message) {
     const container = document.getElementById('page-content');
     if (!container) return;
-    container.innerHTML = `
-        <div class="spa-error">
-            <h2>\uD398\uC774\uC9C0 \uB85C\uB4DC \uC2E4\uD328</h2>
-            <p>${message}</p>
-            <button onclick="Router.navigate('/')">\uCC44\uD305\uC73C\uB85C \uB3CC\uC544\uAC00\uAE30</button>
-        </div>
-    `;
+
+    // BUG-019 수정: innerHTML에 직접 message를 삽입하면 XSS 위험.
+    // DOM API로 안전하게 구성합니다.
+    const wrapper = document.createElement('div');
+    wrapper.className = 'spa-error';
+
+    const heading = document.createElement('h2');
+    heading.textContent = '\ud398\uc774\uc9c0 \ub85c\ub4dc \uc2e4\ud328';
+
+    const para = document.createElement('p');
+    para.textContent = message; // textContent는 HTML을 이스케이프합니다.
+
+    const btn = document.createElement('button');
+    btn.textContent = '\ucc44\ud305\uc73c\ub85c \ub3cc\uc544\uac00\uae30';
+    btn.addEventListener('click', function () {
+        if (window.Router && window.Router.navigate) {
+            window.Router.navigate('/');
+        }
+    });
+
+    wrapper.appendChild(heading);
+    wrapper.appendChild(para);
+    wrapper.appendChild(btn);
+
+    container.innerHTML = '';
+    container.appendChild(wrapper);
     container.style.display = '';
 }
 
@@ -246,33 +255,29 @@ function removeModuleCSS(moduleName) {
     });
 }
 
-// ─── 스크립트 동적 로딩 ────────────────────────────
+// ─── ES Module 동적 로딩 ────────────────────────────
 
 /**
- * <script> 태그 주입으로 모듈 파일 로드
- * @param {string} src - 스크립트 파일 경로
- * @returns {Promise<void>}
+ * ES Module dynamic import()로 페이지 모듈 로드
+ * @param {string} src - 모듈 파일 경로
+ * @returns {Promise<object>} 모듈의 default export ({ getHTML, init, cleanup })
  */
-function loadScript(src) {
-    return new Promise(function (resolve, reject) {
-        // 이미 로드됨
-        if (_loadedModules.has(src)) {
-            return resolve();
-        }
+async function loadModule(src) {
+    // 이미 로드됨 → 캐시된 모듈 반환
+    if (_loadedModules.has(src)) {
+        return _loadedModules.get(src);
+    }
 
-        var script = document.createElement('script');
-        script.src = src + '?v=' + _moduleVersion;
-        script.async = true;
-        script.onload = function () {
-            _loadedModules.add(src);
-            log('\uBAA8\uB4C8 \uB85C\uB4DC \uC644\uB8CC:', src);
-            resolve();
-        };
-        script.onerror = function () {
-            reject(new Error('\uBAA8\uB4C8 \uD30C\uC77C \uB85C\uB4DC \uC2E4\uD328: ' + src));
-        };
-        document.body.appendChild(script);
-    });
+    try {
+        var moduleUrl = src + '?v=' + _moduleVersion;
+        var mod = await import(moduleUrl);
+        var pageModule = mod.default || mod;
+        _loadedModules.set(src, pageModule);
+        log('모듈 로드 완료:', src);
+        return pageModule;
+    } catch (e) {
+        throw new Error('모듈 파일 로드 실패: ' + src + ' — ' + e.message);
+    }
 }
 
 // ─── 뷰 전환 ──────────────────────────────────────
@@ -369,6 +374,15 @@ async function executeNavigation(path, options) {
     var previousRoute = _currentRoute;
     var targetRoute = _routes.get(normalizedPath);
 
+    // 클린 URL 지원: /skill-library → /skill-library.html 자동 변환
+    if (!targetRoute && normalizedPath !== CHAT_PATH && !normalizedPath.endsWith('.html')) {
+        var htmlPath = normalizedPath + '.html';
+        var htmlRoute = _routes.get(htmlPath);
+        if (htmlRoute) {
+            normalizedPath = htmlPath;
+            targetRoute = htmlRoute;
+        }
+    }
     // login.html은 항상 풀 페이지 리디렉트
     if (normalizedPath === LOGIN_PATH) {
         window.location.href = LOGIN_PATH;
@@ -411,6 +425,31 @@ async function executeNavigation(path, options) {
         targetRoute = _routes.get(CHAT_PATH) || null;
     }
 
+    // ─── 티어 가드 ─────────────────────
+    if (targetRoute && targetRoute.minTier) {
+        var TIER_LEVEL = { free: 0, pro: 1, enterprise: 2 };
+        var userTier = (function () {
+            try {
+                var SK = window.STORAGE_KEYS || {};
+                var SS = window.SafeStorage || window.localStorage;
+                var isGuest = SS.getItem(SK.GUEST_MODE || 'guestMode') === 'true' ||
+                    SS.getItem(SK.IS_GUEST || 'isGuest') === 'true' ||
+                    !SS.getItem(SK.USER || 'user');
+                if (isGuest) return 'free';
+                var savedUser = SS.getItem(SK.USER || 'user');
+                if (!savedUser) return 'free';
+                var user = JSON.parse(savedUser);
+                if (user.role === 'admin' || user.role === 'administrator') return 'enterprise';
+                return user.tier || 'free';
+            } catch (e) { return 'free'; }
+        })();
+        if ((TIER_LEVEL[userTier] || 0) < (TIER_LEVEL[targetRoute.minTier] || 0)) {
+            warn('티어 권한 부족, 채팅으로 리디렉트:', normalizedPath, '(필요:', targetRoute.minTier, '/ 현재:', userTier, ')');
+            normalizedPath = CHAT_PATH;
+            targetRoute = _routes.get(CHAT_PATH) || null;
+        }
+    }
+
     // ─── beforeNavigate 훅 ───────────────
     var navInfo = {
         from: previousRoute ? previousRoute.path : (window.location.pathname),
@@ -431,12 +470,13 @@ async function executeNavigation(path, options) {
 
     // ─── 현재 모듈 정리 ──────────────────
     if (_currentRoute && _currentRoute.moduleName) {
-        var currentModule = window.PageModules && window.PageModules[_currentRoute.moduleName];
+        var currentModule = _loadedModules.get(_currentRoute.moduleFile)
+            || (window.PageModules && window.PageModules[_currentRoute.moduleName]);
         if (currentModule && typeof currentModule.cleanup === 'function') {
             try {
                 currentModule.cleanup();
             } catch (e) {
-                warn('\uBAA8\uB4C8 cleanup \uC624\uB958:', _currentRoute.moduleName, e);
+                warn('모듈 cleanup 오류:', _currentRoute.moduleName, e);
             }
         }
         // 이전 모듈 CSS 제거
@@ -467,15 +507,18 @@ async function executeNavigation(path, options) {
     showLoading();
 
     try {
-        // 모듈 파일 로드 (캐시 확인 포함)
-        if (targetRoute.moduleFile && !_loadedModules.has(targetRoute.moduleFile)) {
-            await loadScript(targetRoute.moduleFile);
+        // ES Module 동적 로드 (import() 캐시 포함)
+        var pageModule;
+        if (targetRoute.moduleFile) {
+            pageModule = await loadModule(targetRoute.moduleFile);
         }
 
-        // 모듈 참조 획득
-        var pageModule = window.PageModules && window.PageModules[targetRoute.moduleName];
+        // fallback: window.PageModules에서 참조 (레거시 호환)
         if (!pageModule) {
-            throw new Error('\uBAA8\uB4C8\uC774 \uB4F1\uB85D\uB418\uC9C0 \uC54A\uC558\uC2B5\uB2C8\uB2E4: window.PageModules.' + targetRoute.moduleName);
+            pageModule = window.PageModules && window.PageModules[targetRoute.moduleName];
+        }
+        if (!pageModule) {
+            throw new Error('모듈이 등록되지 않았습니다: ' + targetRoute.moduleName);
         }
 
         // HTML 주입 (네비게이션 바 포함)
@@ -489,7 +532,7 @@ async function executeNavigation(path, options) {
                 // 뒤로가기 버튼 이벤트 바인딩
                 var backButton = container.querySelector('.spa-page-nav-back');
                 if (backButton) {
-                    backButton.addEventListener('click', function(e) {
+                    backButton.addEventListener('click', function (e) {
                         e.preventDefault();
                         if (window.Router && window.Router.navigate) {
                             window.Router.navigate('/');
@@ -632,21 +675,21 @@ function registerFromNavItems() {
         if (!item.href || item.href === '/' || item.href === LOGIN_PATH) return;
 
         var path = item.href;
-        // moduleName: '/canvas.html' → 'canvas'
+        // moduleName: '/research.html' → 'research'
         var moduleName = path.replace(/^\//, '').replace(/\.html$/, '');
 
         Router.register(path, {
             moduleName: moduleName,
             moduleFile: '/js/modules/pages/' + moduleName + '.js',
-            cssFiles: [], // 각 모듈이 필요 시 자체 등록
+            cssFiles: item.cssFiles || [],
             requireAuth: !!item.requireAuth,
             requireAdmin: !!item.requireAdmin,
+            minTier: item.minTier || null,
             title: item.label || moduleName,
             icon: item.icon || '',
             iconify: item.iconify || ''
         });
     });
-
     log('\uB77C\uC6B0\uD2B8 \uC790\uB3D9 \uB4F1\uB85D \uC644\uB8CC:', _routes.size, '\uAC1C');
 }
 
@@ -656,7 +699,7 @@ var Router = {
 
     /**
      * 라우트 등록
-     * @param {string} path - URL 경로 (예: '/canvas.html')
+     * @param {string} path - URL 경로 (예: '/research.html')
      * @param {object} config - 라우트 설정
      * @param {string} config.moduleName - PageModules 키
      * @param {string} config.moduleFile - 모듈 JS 파일 경로

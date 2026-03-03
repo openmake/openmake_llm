@@ -11,6 +11,7 @@
 
 export { default as metricsRouter, setClusterManager, setActiveConnectionsGetter } from './metrics.routes';
 export { default as agentRouter } from './agents.routes';
+export { default as skillsRouter } from './skills.routes';
 export { default as modelRouter } from './model.routes';
 export { mcpRouter } from './mcp.routes';
 
@@ -28,9 +29,7 @@ export { memoryRouter } from './memory.routes';
 // 🆕 신규 도메인 라우트
 export { default as auditRouter } from './audit.routes';
 export { default as researchRouter } from './research.routes';
-export { default as canvasRouter } from './canvas.routes';
 export { default as externalRouter } from './external.routes';
-export { default as marketplaceRouter } from './marketplace.routes';
 
 // 🆕 Push 알림 라우트
 export { pushRouter } from './push.routes';
@@ -43,3 +42,6 @@ export { default as developerDocsRouter } from './developer-docs.routes';
 
 // 🆕 Chat Feedback 라우트
 export { default as chatFeedbackRouter } from './chat-feedback.routes';
+
+// 🆕 Token Monitoring 라우트
+export { tokenMonitoringRouter } from './token-monitoring.routes';

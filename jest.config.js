@@ -36,16 +36,12 @@ module.exports = {
     
     // 제외 패턴
     // Playwright 테스트는 npx playwright test로 실행
-    // auth.test.ts, unified-database.test.ts in tests/unit/: 아키텍처 변경(SQLite→PostgreSQL)으로 stale
-    // → 최신 버전은 backend/api/src/__tests__/ 에 존재
     testPathIgnorePatterns: [
         '/node_modules/',
         '\\.d\\.ts$',
         '/dist/',
         '/build/',
         '/tests/e2e/',
-        'tests/unit/__tests__/auth\\.test\\.ts$',
-        'tests/unit/__tests__/unified-database\\.test\\.ts$'
     ],
     
     // 모듈 해석에서 dist 폴더 제외 (소스 .ts와 컴파일된 .d.ts 간 타입 충돌 방지)
@@ -74,13 +70,15 @@ module.exports = {
         '!**/node_modules/**',
         '!**/dist/**'
     ],
-    
     // 타임아웃
     testTimeout: 30000,
-    
-    // 상세 출력
     verbose: true,
+    // Worker 메모리 제한 — 유휴 워커가 지정 메모리를 초과하면 자동 재시작
+    // Jest 29+ 기능, worker leak 경고 해소
+    workerIdleMemoryLimit: '512MB',
     
+    // 모든 테스트 완료 후 강제 종료 — 정리되지 않은 타이머/핸들 대응
+    forceExit: true,
     // 캐시 디렉토리
     cacheDirectory: '<rootDir>/.jest-cache'
 };

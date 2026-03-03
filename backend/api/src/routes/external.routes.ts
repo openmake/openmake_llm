@@ -23,11 +23,13 @@
 
 import { Router, Request, Response } from 'express';
 import { createLogger } from '../utils/logger';
-import { success, badRequest, notFound, internalError, forbidden } from '../utils/api-response';
+import { success, badRequest, notFound, forbidden } from '../utils/api-response';
 import { requireAuth } from '../auth';
 import { asyncHandler } from '../utils/error-handler';
 import { getUnifiedDatabase, ExternalServiceType } from '../data/models/unified-database';
 import { v4 as uuidv4 } from 'uuid';
+import { validate } from '../middlewares/validation';
+import { createExternalConnectionSchema, updateExternalTokensSchema, addExternalFileSchema } from '../schemas/external.schema';
 
 const logger = createLogger('ExternalRoutes');
 const router = Router();
@@ -55,7 +57,7 @@ router.get('/', requireAuth, asyncHandler(async (req: Request, res: Response) =>
  * POST /api/external
  * 외부 서비스 연결 생성/업데이트
  */
-router.post('/', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+router.post('/', requireAuth, validate(createExternalConnectionSchema), asyncHandler(async (req: Request, res: Response) => {
     const { serviceType, accessToken, refreshToken, tokenExpiresAt, accountEmail, accountName, metadata } = req.body;
 
     if (!serviceType) {
@@ -118,7 +120,7 @@ router.get('/:serviceType', requireAuth, asyncHandler(async (req: Request, res: 
  * PUT /api/external/:connectionId/tokens
  * 연결 토큰 갱신
  */
-router.put('/:connectionId/tokens', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+router.put('/:connectionId/tokens', requireAuth, validate(updateExternalTokensSchema), asyncHandler(async (req: Request, res: Response) => {
     const { connectionId } = req.params;
     const { accessToken, refreshToken, expiresAt } = req.body;
 
@@ -205,7 +207,7 @@ router.get('/:connectionId/files', requireAuth, asyncHandler(async (req: Request
  * POST /api/external/:connectionId/files
  * 외부 파일 캐시
  */
-router.post('/:connectionId/files', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+router.post('/:connectionId/files', requireAuth, validate(addExternalFileSchema), asyncHandler(async (req: Request, res: Response) => {
     const { connectionId } = req.params;
     const { externalId, fileName, fileType, fileSize, webUrl, cachedContent } = req.body;
 

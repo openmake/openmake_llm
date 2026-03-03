@@ -1,4 +1,5 @@
 -- ============================================
+-- ============================================
 -- OpenMake.Ai - Database Schema
 -- Migrated from SQLite to PostgreSQL + pgvector
 -- ============================================
@@ -20,7 +21,7 @@ CREATE TABLE IF NOT EXISTS users (
 -- 대화 세션 테이블
 CREATE TABLE IF NOT EXISTS conversation_sessions (
     id TEXT PRIMARY KEY,
-    user_id TEXT REFERENCES users(id),
+    user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
     anon_session_id TEXT,
     title TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -45,7 +46,7 @@ CREATE TABLE IF NOT EXISTS conversation_messages (
 -- API 사용량 테이블
 CREATE TABLE IF NOT EXISTS api_usage (
     id SERIAL PRIMARY KEY,
-    date TEXT NOT NULL,
+    date DATE NOT NULL,
     api_key_id TEXT,
     requests INTEGER DEFAULT 0,
     tokens INTEGER DEFAULT 0,
@@ -61,8 +62,8 @@ CREATE TABLE IF NOT EXISTS api_usage (
 CREATE TABLE IF NOT EXISTS agent_usage_logs (
     id SERIAL PRIMARY KEY,
     timestamp TIMESTAMPTZ DEFAULT NOW(),
-    user_id TEXT REFERENCES users(id),
-    session_id TEXT REFERENCES conversation_sessions(id),
+    user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+    session_id TEXT REFERENCES conversation_sessions(id) ON DELETE SET NULL,
     agent_id TEXT NOT NULL,
     query TEXT,
     response_preview TEXT,
@@ -76,7 +77,7 @@ CREATE TABLE IF NOT EXISTS agent_usage_logs (
 CREATE TABLE IF NOT EXISTS agent_feedback (
     id TEXT PRIMARY KEY,
     agent_id TEXT NOT NULL,
-    user_id TEXT REFERENCES users(id),
+    user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
     rating INTEGER NOT NULL CHECK (rating >= 1 AND rating <= 5),
     comment TEXT,
     query TEXT,
@@ -96,7 +97,7 @@ CREATE TABLE IF NOT EXISTS custom_agents (
     emoji TEXT DEFAULT '🤖',
     temperature REAL,
     max_tokens INTEGER,
-    created_by TEXT REFERENCES users(id),
+    created_by TEXT REFERENCES users(id) ON DELETE CASCADE,
     enabled BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
@@ -162,7 +163,7 @@ CREATE TABLE IF NOT EXISTS memory_tags (
 
 CREATE TABLE IF NOT EXISTS research_sessions (
     id TEXT PRIMARY KEY,
-    user_id TEXT REFERENCES users(id),
+    user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
     topic TEXT NOT NULL,
     status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'running', 'completed', 'failed', 'cancelled')),
     depth TEXT DEFAULT 'standard' CHECK(depth IN ('quick', 'standard', 'deep')),
@@ -186,84 +187,6 @@ CREATE TABLE IF NOT EXISTS research_steps (
     status TEXT DEFAULT 'pending',
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
-
--- ============================================
--- 마켓플레이스 테이블
--- ============================================
-
-CREATE TABLE IF NOT EXISTS agent_marketplace (
-    id TEXT PRIMARY KEY,
-    agent_id TEXT NOT NULL REFERENCES custom_agents(id),
-    author_id TEXT NOT NULL REFERENCES users(id),
-    title TEXT NOT NULL,
-    description TEXT,
-    long_description TEXT,
-    category TEXT,
-    tags JSONB,
-    icon TEXT DEFAULT '🤖',
-    price REAL DEFAULT 0,
-    is_free BOOLEAN DEFAULT TRUE,
-    is_featured BOOLEAN DEFAULT FALSE,
-    is_verified BOOLEAN DEFAULT FALSE,
-    downloads INTEGER DEFAULT 0,
-    rating_avg REAL DEFAULT 0,
-    rating_count INTEGER DEFAULT 0,
-    version TEXT DEFAULT '1.0.0',
-    status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'approved', 'rejected', 'suspended')),
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW(),
-    published_at TIMESTAMPTZ
-);
-
-CREATE TABLE IF NOT EXISTS agent_reviews (
-    id TEXT PRIMARY KEY,
-    marketplace_id TEXT NOT NULL REFERENCES agent_marketplace(id) ON DELETE CASCADE,
-    user_id TEXT NOT NULL REFERENCES users(id),
-    rating INTEGER NOT NULL CHECK(rating >= 1 AND rating <= 5),
-    title TEXT,
-    content TEXT,
-    helpful_count INTEGER DEFAULT 0,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    UNIQUE(marketplace_id, user_id)
-);
-
-CREATE TABLE IF NOT EXISTS agent_installations (
-    id SERIAL PRIMARY KEY,
-    marketplace_id TEXT NOT NULL REFERENCES agent_marketplace(id),
-    user_id TEXT NOT NULL REFERENCES users(id),
-    installed_at TIMESTAMPTZ DEFAULT NOW(),
-    UNIQUE(marketplace_id, user_id)
-);
-
--- ============================================
--- Canvas 협업 도구 테이블
--- ============================================
-
-CREATE TABLE IF NOT EXISTS canvas_documents (
-    id TEXT PRIMARY KEY,
-    user_id TEXT NOT NULL REFERENCES users(id),
-    session_id TEXT REFERENCES conversation_sessions(id),
-    title TEXT NOT NULL,
-    doc_type TEXT DEFAULT 'document' CHECK(doc_type IN ('document', 'code', 'diagram', 'table')),
-    content TEXT,
-    language TEXT,
-    version INTEGER DEFAULT 1,
-    is_shared BOOLEAN DEFAULT FALSE,
-    share_token TEXT UNIQUE,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS canvas_versions (
-    id SERIAL PRIMARY KEY,
-    document_id TEXT NOT NULL REFERENCES canvas_documents(id) ON DELETE CASCADE,
-    version INTEGER NOT NULL,
-    content TEXT NOT NULL,
-    change_summary TEXT,
-    created_by TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
 -- ============================================
 -- 외부 서비스 통합 테이블
 -- ============================================
@@ -317,7 +240,7 @@ DO $$ BEGIN
                     source_type TEXT NOT NULL CHECK(source_type IN (''document'', ''memory'', ''conversation'', ''agent'')),
                     source_id TEXT NOT NULL,
                     chunk_index INTEGER DEFAULT 0,
-                    chunk_text TEXT NOT NULL,
+                    content TEXT NOT NULL,
                     embedding vector(768),
                     metadata JSONB,
                     created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -330,7 +253,7 @@ DO $$ BEGIN
                 source_type TEXT NOT NULL CHECK(source_type IN ('document', 'memory', 'conversation', 'agent')),
                 source_id TEXT NOT NULL,
                 chunk_index INTEGER DEFAULT 0,
-                chunk_text TEXT NOT NULL,
+                content TEXT NOT NULL,
                 embedding TEXT,
                 metadata JSONB,
                 created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -353,6 +276,22 @@ CREATE TABLE IF NOT EXISTS push_subscriptions (
     auth TEXT NOT NULL,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- 사용자 메시지 피드백 테이블 (signal 기반 — thumbs_up / thumbs_down / regenerate)
+CREATE TABLE IF NOT EXISTS message_feedback (
+    id SERIAL PRIMARY KEY,
+    message_id TEXT NOT NULL,
+    session_id TEXT NOT NULL,
+    user_id TEXT,
+    signal TEXT NOT NULL CHECK (signal IN ('thumbs_up', 'thumbs_down', 'regenerate')),
+    routing_metadata JSONB,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_feedback_message ON message_feedback(message_id);
+CREATE INDEX IF NOT EXISTS idx_feedback_session ON message_feedback(session_id);
+CREATE INDEX IF NOT EXISTS idx_feedback_signal  ON message_feedback(signal);
+CREATE INDEX IF NOT EXISTS idx_feedback_created ON message_feedback(created_at);
 
 -- ============================================
 -- 인덱스
@@ -382,17 +321,6 @@ CREATE INDEX IF NOT EXISTS idx_research_user ON research_sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_research_status ON research_sessions(status);
 CREATE INDEX IF NOT EXISTS idx_research_steps_session ON research_steps(session_id);
 
--- Marketplace indexes
-CREATE INDEX IF NOT EXISTS idx_marketplace_category ON agent_marketplace(category);
-CREATE INDEX IF NOT EXISTS idx_marketplace_downloads ON agent_marketplace(downloads DESC);
-CREATE INDEX IF NOT EXISTS idx_marketplace_status ON agent_marketplace(status);
-CREATE INDEX IF NOT EXISTS idx_reviews_marketplace ON agent_reviews(marketplace_id);
-CREATE INDEX IF NOT EXISTS idx_installations_user ON agent_installations(user_id);
-
--- Canvas indexes
-CREATE INDEX IF NOT EXISTS idx_canvas_user ON canvas_documents(user_id);
-CREATE INDEX IF NOT EXISTS idx_canvas_session ON canvas_documents(session_id);
-CREATE INDEX IF NOT EXISTS idx_canvas_versions_doc ON canvas_versions(document_id);
 
 -- External indexes
 CREATE INDEX IF NOT EXISTS idx_connections_user ON external_connections(user_id);
@@ -415,10 +343,15 @@ END $$;
 -- Full-text search indexes (pg_trgm 확장 필요)
 DO $$ BEGIN
     IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_trgm') THEN
-        EXECUTE 'CREATE INDEX IF NOT EXISTS idx_messages_content_trgm ON conversation_messages USING gin (content gin_trgm_ops)';
-        EXECUTE 'CREATE INDEX IF NOT EXISTS idx_memories_value_trgm ON user_memories USING gin (value gin_trgm_ops)';
+        BEGIN
+            EXECUTE 'CREATE INDEX IF NOT EXISTS idx_messages_content_trgm ON conversation_messages USING gin (content gin_trgm_ops)';
+            EXECUTE 'CREATE INDEX IF NOT EXISTS idx_memories_value_trgm ON user_memories USING gin (value gin_trgm_ops)';
+            RAISE NOTICE '[pg_trgm] 트라이그램 인덱스 생성 완료';
+        EXCEPTION WHEN OTHERS THEN
+            RAISE NOTICE '[pg_trgm] 인덱스 생성 실패 (shared library 문제) — 건너뜀: %', SQLERRM;
+        END;
     ELSE
-        RAISE NOTICE 'pg_trgm extension not installed — skipping trigram indexes. Run: CREATE EXTENSION IF NOT EXISTS pg_trgm;';
+        RAISE NOTICE '[pg_trgm] 확장 미설치 — 트라이그램 인덱스 건너뜀. Run: CREATE EXTENSION IF NOT EXISTS pg_trgm;';
     END IF;
 END $$;
 
@@ -498,7 +431,24 @@ CREATE INDEX IF NOT EXISTS idx_api_keys_active ON user_api_keys(user_id, is_acti
 CREATE INDEX IF NOT EXISTS idx_api_keys_tier ON user_api_keys(rate_limit_tier);
 
 -- Session & Audit indexes (from unified-database.ts)
-CREATE INDEX IF NOT EXISTS idx_sessions_anon ON conversation_sessions(anon_session_id);
+-- Remove duplicate anon_session_id rows before creating unique index (keep the most recent row per value)
+-- NOTE: id column is TEXT; use updated_at for ordering to avoid lexicographic comparison issues
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM conversation_sessions WHERE anon_session_id IS NOT NULL GROUP BY anon_session_id HAVING COUNT(*) > 1) THEN
+        DELETE FROM conversation_sessions cs
+        WHERE anon_session_id IS NOT NULL
+          AND ctid NOT IN (
+            SELECT DISTINCT ON (anon_session_id) ctid
+            FROM conversation_sessions
+            WHERE anon_session_id IS NOT NULL
+            ORDER BY anon_session_id, updated_at DESC NULLS LAST
+          );
+        RAISE NOTICE '[schema] 중복 anon_session_id 로우 정리 완료';
+    END IF;
+END $$;
+DROP INDEX IF EXISTS idx_sessions_anon;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_sessions_anon ON conversation_sessions(anon_session_id) WHERE anon_session_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_audit_user ON audit_logs(user_id);
 
 -- OAuth state index (cleanup query)
@@ -592,7 +542,6 @@ CREATE TABLE IF NOT EXISTS token_daily_stats (
 -- Critical single-column indexes
 CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
 CREATE INDEX IF NOT EXISTS idx_users_is_active ON users(is_active);
-CREATE INDEX IF NOT EXISTS idx_canvas_share_token ON canvas_documents(share_token);
 CREATE INDEX IF NOT EXISTS idx_sessions_updated_at ON conversation_sessions(updated_at);
 
 -- Composite indexes for common query patterns
@@ -600,7 +549,164 @@ CREATE INDEX IF NOT EXISTS idx_sessions_user_updated ON conversation_sessions(us
 CREATE INDEX IF NOT EXISTS idx_messages_session_created ON conversation_messages(session_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_memories_user_category ON user_memories(user_id, category);
 CREATE INDEX IF NOT EXISTS idx_audit_user_created ON audit_logs(user_id, timestamp DESC);
-CREATE INDEX IF NOT EXISTS idx_canvas_user_updated ON canvas_documents(user_id, updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_research_user_created ON research_sessions(user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_research_steps_session_number ON research_steps(session_id, step_number);
 CREATE INDEX IF NOT EXISTS idx_connections_user_service ON external_connections(user_id, service_type);
+
+-- Phase 3-DBA: Additional index coverage for tables missing indexes
+-- custom_agents: queried by created_by
+CREATE INDEX IF NOT EXISTS idx_custom_agents_created_by ON custom_agents(created_by);
+CREATE INDEX IF NOT EXISTS idx_custom_agents_enabled ON custom_agents(enabled);
+
+-- push_subscriptions_store: queried by user_id for subscription lookup
+CREATE INDEX IF NOT EXISTS idx_push_subs_user_id ON push_subscriptions_store(user_id);
+
+-- alert_history: queried by type, severity, and created_at for dashboard filtering
+CREATE INDEX IF NOT EXISTS idx_alert_history_type ON alert_history(type);
+CREATE INDEX IF NOT EXISTS idx_alert_history_severity ON alert_history(severity);
+CREATE INDEX IF NOT EXISTS idx_alert_history_created ON alert_history(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_alert_history_ack ON alert_history(acknowledged);
+
+-- ============================================
+-- 🎯 Agent Skills 시스템 테이블
+-- ============================================
+
+-- 에이전트 스킬 정의 테이블
+CREATE TABLE IF NOT EXISTS agent_skills (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    description TEXT,
+    content TEXT NOT NULL,
+    category TEXT DEFAULT 'general',
+    is_public BOOLEAN DEFAULT FALSE,
+    created_by TEXT REFERENCES users(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    source_repo TEXT,
+    source_path TEXT
+);
+
+-- 에이전트-스킬 연결 테이블
+CREATE TABLE IF NOT EXISTS agent_skill_assignments (
+    agent_id TEXT NOT NULL,
+    skill_id TEXT NOT NULL REFERENCES agent_skills(id) ON DELETE CASCADE,
+    priority INTEGER DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    PRIMARY KEY (agent_id, skill_id)
+);
+
+-- Agent Skills 인덱스
+CREATE INDEX IF NOT EXISTS idx_agent_skills_created_by ON agent_skills(created_by);
+CREATE INDEX IF NOT EXISTS idx_agent_skills_category ON agent_skills(category);
+CREATE INDEX IF NOT EXISTS idx_agent_skills_public ON agent_skills(is_public);
+CREATE INDEX IF NOT EXISTS idx_skill_assignments_agent ON agent_skill_assignments(agent_id);
+CREATE INDEX IF NOT EXISTS idx_skill_assignments_skill ON agent_skill_assignments(skill_id);
+
+
+-- ============================================
+-- 🔄 마이그레이션: message_feedback 스키마 업그레이드
+-- rating 기반 구버전 → signal 기반 신버전으로 자동 마이그레이션
+-- 신규 설치는 위의 CREATE TABLE IF NOT EXISTS가 함
+-- ============================================
+DO $$ BEGIN
+    -- rating 컴럼이 존재하면 구버전 스키마 → 마이그레이션 수행
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name  = 'message_feedback'
+          AND column_name = 'rating'
+    ) THEN
+        -- 1. FK 제약 제거 (message_id INTEGER FK, session_id FK)
+        ALTER TABLE message_feedback DROP CONSTRAINT IF EXISTS message_feedback_message_id_fkey;
+        ALTER TABLE message_feedback DROP CONSTRAINT IF EXISTS message_feedback_session_id_fkey;
+
+        -- 2. 구버전 컴럼 제거
+        ALTER TABLE message_feedback DROP COLUMN IF EXISTS rating;
+        ALTER TABLE message_feedback DROP COLUMN IF EXISTS feedback_text;
+
+        -- 3. message_id 타입 변경: INTEGER → TEXT
+        ALTER TABLE message_feedback ALTER COLUMN message_id TYPE TEXT USING message_id::TEXT;
+
+        -- 4. 신규 컴럼 추가 (signal)
+        ALTER TABLE message_feedback ADD COLUMN IF NOT EXISTS signal TEXT NOT NULL DEFAULT 'thumbs_up';
+        ALTER TABLE message_feedback ALTER COLUMN signal DROP DEFAULT;
+
+        -- 5. 신규 컴럼 추가 (routing_metadata)
+        ALTER TABLE message_feedback ADD COLUMN IF NOT EXISTS routing_metadata JSONB;
+
+        -- 6. signal CHECK 제약 추가
+        BEGIN
+            ALTER TABLE message_feedback ADD CONSTRAINT message_feedback_signal_check
+                CHECK (signal IN ('thumbs_up', 'thumbs_down', 'regenerate'));
+        EXCEPTION WHEN duplicate_object THEN NULL;
+        END;
+
+        -- 7. 구버전 인덱스 제거
+        DROP INDEX IF EXISTS idx_message_feedback_rating;
+        DROP INDEX IF EXISTS idx_message_feedback_message;
+        DROP INDEX IF EXISTS idx_message_feedback_session;
+        DROP INDEX IF EXISTS idx_message_feedback_user;
+        DROP INDEX IF EXISTS idx_message_feedback_created;
+
+        -- 8. 신규 인덱스 생성
+        CREATE INDEX IF NOT EXISTS idx_feedback_message ON message_feedback(message_id);
+        CREATE INDEX IF NOT EXISTS idx_feedback_session ON message_feedback(session_id);
+        CREATE INDEX IF NOT EXISTS idx_feedback_signal  ON message_feedback(signal);
+        CREATE INDEX IF NOT EXISTS idx_feedback_created ON message_feedback(created_at);
+
+        RAISE NOTICE '[migration] message_feedback: rating 기반 → signal 기반 스키마 마이그레이션 완료';
+    END IF;
+END $$;
+
+-- ============================================
+-- P4 마이그레이션: api_usage.date TEXT → DATE
+-- 기존 DB에 date 컬럼이 TEXT 타입이면 DATE로 변환
+-- ============================================
+DO $$ BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name  = 'api_usage'
+          AND column_name = 'date'
+          AND data_type   = 'text'
+    ) THEN
+        ALTER TABLE api_usage ALTER COLUMN date TYPE DATE USING date::DATE;
+        RAISE NOTICE '[migration] api_usage.date: TEXT → DATE 변환 완료';
+    END IF;
+END $$;
+
+-- ============================================
+-- P4 마이그레이션: conversation_sessions.user_id FK → ON DELETE CASCADE
+-- 기존 FK가 NO ACTION이면 CASCADE로 재생성
+-- ============================================
+DO $$
+DECLARE
+    v_constraint TEXT;
+    v_delete_rule TEXT;
+BEGIN
+    SELECT tc.constraint_name, rc.delete_rule
+      INTO v_constraint, v_delete_rule
+      FROM information_schema.table_constraints  tc
+      JOIN information_schema.key_column_usage   kcu ON tc.constraint_name = kcu.constraint_name
+      JOIN information_schema.referential_constraints rc ON tc.constraint_name = rc.constraint_name
+     WHERE tc.table_schema = 'public'
+       AND tc.table_name   = 'conversation_sessions'
+       AND kcu.column_name = 'user_id'
+       AND tc.constraint_type = 'FOREIGN KEY'
+     LIMIT 1;
+
+    IF v_constraint IS NOT NULL AND v_delete_rule <> 'CASCADE' THEN
+        EXECUTE 'ALTER TABLE conversation_sessions DROP CONSTRAINT ' || quote_ident(v_constraint);
+        ALTER TABLE conversation_sessions
+            ADD CONSTRAINT conversation_sessions_user_id_fkey
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
+        RAISE NOTICE '[migration] conversation_sessions.user_id FK: ON DELETE CASCADE 추가 완료';
+    ELSE
+        RAISE NOTICE '[migration] conversation_sessions.user_id FK: 이미 CASCADE 또는 FK 없음 — 건너뜀';
+    END IF;
+END $$;
+
+-- [D1 NO-OP] vector_embeddings는 상단 pgvector-aware DO 블록(307-343)에서 이미 처리됨
+DO $$ BEGIN
+    RAISE NOTICE '[schema] D1 vector_embeddings block skipped (already managed by pgvector-aware initializer)';
+END $$;

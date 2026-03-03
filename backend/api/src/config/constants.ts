@@ -3,11 +3,14 @@
  * 애플리케이션 상수 중앙 관리
  * ============================================================
  * 모든 매직 넘버와 하드코딩된 값을 이곳에 정의합니다.
+ *
+ * NOTE: 런타임 제한/타임아웃/가격은 다음 모듈로 이관됨:
+ *   - config/runtime-limits.ts (컨텍스트, 토큰, 문서, 용량)
+ *   - config/timeouts.ts (타임아웃, 주기, 서킷 브레이커)
+ *   - config/pricing.ts (비용 추정)
+ *   - config/external-services.ts (외부 URL)
+ *   - config/model-defaults.ts (엔진/모델 프리셋)
  */
-
-// ============================================
-// 파일 업로드 제한
-// ============================================
 
 /**
  * 파일 업로드 제한 설정
@@ -17,77 +20,17 @@
  */
 export const FILE_LIMITS = {
     /** 최대 파일 크기 (MB) */
-    MAX_SIZE_MB: 100,
+    MAX_SIZE_MB: 300,
     /** 최대 파일 크기 (Bytes) */
-    MAX_SIZE_BYTES: 100 * 1024 * 1024,
-    /** 허용되는 문서 확장자 */
-    ALLOWED_DOCUMENT_EXTENSIONS: ['.pdf', '.txt', '.doc', '.docx', '.md'],
-    /** 허용되는 이미지 확장자 */
-    ALLOWED_IMAGE_EXTENSIONS: ['.jpg', '.jpeg', '.png', '.gif', '.webp']
-} as const;
-
-// ============================================
-// Rate Limiting 설정
-// ============================================
-
-/**
- * Rate Limiting 설정
- *
- * API 엔드포인트별 요청 빈도 제한을 정의합니다.
- * 일반 API, 인증 API, 채팅 API 각각 독립적인 윈도우와 최대 요청 수를 가집니다.
- */
-export const RATE_LIMITS = {
-    /** 일반 API: 15분당 100 요청 */
-    GENERAL: {
-        windowMs: 15 * 60 * 1000,
-        max: 100,
-        message: { error: 'Too many requests. Please try again later.' }
-    },
-    /** 인증 API: 15분당 5 요청 */
-    AUTH: {
-        windowMs: 15 * 60 * 1000,
-        max: 5,
-        message: { error: 'Too many authentication attempts. Please try again later.' }
-    },
-    /** 채팅 API: 1분당 30 요청 */
-    CHAT: {
-        windowMs: 60 * 1000,
-        max: 30,
-        message: { error: 'Too many chat requests. Please slow down.' }
-    }
-} as const;
-
-// ============================================
-// 캐시 설정
-// ============================================
-
-/**
- * 인메모리 캐시 설정
- *
- * LRU 캐시의 기본 TTL과 최대 항목 수를 정의합니다.
- */
-export const CACHE_CONFIG = {
-    /** 기본 TTL (밀리초) - 30분 */
-    DEFAULT_TTL_MS: 30 * 60 * 1000,
-    /** 최대 캐시 항목 수 */
-    MAX_SIZE: 1000
-} as const;
-
-// ============================================
-// API 키 관리
-// ============================================
-
-/**
- * Cloud API Key 로테이션 설정
- *
- * API Key 실패 감지 및 자동 전환 정책을 정의합니다.
- * 429/401 에러 발생 시 다음 키로 전환하는 임계값과 쿨다운 시간을 관리합니다.
- */
-export const API_KEY_CONFIG = {
-    /** 실패 시 다음 키로 전환하기 전 최대 실패 횟수 */
-    MAX_FAILURES_BEFORE_SWITCH: 2,
-    /** 실패한 키 재시도까지 대기 시간 (밀리초) - 5분 */
-    FAILURE_COOLDOWN_MS: 5 * 60 * 1000
+    MAX_SIZE_BYTES: 300 * 1024 * 1024,
+    /** 허용되는 문서 확장자 (참고용 — 실제 업로드 제한은 validation.ts에서 관리) */
+    ALLOWED_DOCUMENT_EXTENSIONS: ['.pdf', '.txt', '.doc', '.docx', '.md', '.csv', '.xlsx', '.xls', '.pptx', '.hwp', '.hwpx', '.json', '.xml', '.yaml', '.yml', '.log', '.rtf', '.odt'],
+    /** 허용되는 이미지 확장자 (참고용 — 실제 업로드 제한은 validation.ts에서 관리) */
+    ALLOWED_IMAGE_EXTENSIONS: ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg', '.bmp', '.tiff', '.ico'],
+    /** 허용되는 문서 MIME 타입 (참고용 — 실제 업로드 제한은 validation.ts에서 관리) */
+    ALLOWED_DOCUMENT_MIME_TYPES: ['application/pdf', 'text/plain', 'text/markdown', 'text/csv', 'application/json', 'application/xml', 'text/xml', 'application/rtf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.openxmlformats-officedocument.presentationml.presentation', 'application/x-hwp', 'application/vnd.oasis.opendocument.text', 'text/yaml'],
+    /** 허용되는 이미지 MIME 타입 (참고용 — 실제 업로드 제한은 validation.ts에서 관리) */
+    ALLOWED_IMAGE_MIME_TYPES: ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml', 'image/bmp', 'image/tiff', 'image/x-icon']
 } as const;
 
 // ============================================
@@ -134,43 +77,6 @@ export const AUTH_CONFIG = {
 } as const;
 
 // ============================================
-// LLM 모델 설정
-// ============================================
-
-/**
- * LLM 모델 기본 설정
- *
- * 기본 모델명과 모델별 최대 컨텍스트 길이(문자 수)를 정의합니다.
- * Gemini 모델은 일반 모델 대비 더 큰 컨텍스트 윈도우를 지원합니다.
- */
-export const LLM_CONFIG = {
-    /** 기본 모델 */
-    DEFAULT_MODEL: 'gemini-3-flash-preview:cloud',
-    /** Gemini 모델 최대 컨텍스트 길이 */
-    GEMINI_MAX_CONTEXT_CHARS: 100000,
-    /** 일반 모델 최대 컨텍스트 길이 */
-    DEFAULT_MAX_CONTEXT_CHARS: 30000
-} as const;
-
-// ============================================
-// 로깅 레벨
-// ============================================
-
-/**
- * 로깅 레벨 우선순위 매핑
- *
- * 숫자가 클수록 심각도가 높습니다. Winston 로거와 연동됩니다.
- */
-export const LOG_LEVELS = {
-    DEBUG: 0,
-    INFO: 1,
-    WARN: 2,
-    ERROR: 3
-} as const;
-
-export type LogLevel = keyof typeof LOG_LEVELS;
-
-// ============================================
 // 외부 서비스 호스트
 // ============================================
 
@@ -178,7 +84,7 @@ export type LogLevel = keyof typeof LOG_LEVELS;
  * Ollama Cloud API 호스트 URL
  *
  * :cloud 접미사 모델 사용 시 연결할 Ollama Cloud 서버 주소입니다.
- * client.ts, agent-loop.ts, multi-model-client.ts에서 공통 참조합니다.
+ * client.ts, agent-loop.ts에서 공통 참조합니다.
  */
 export const OLLAMA_CLOUD_HOST = 'https://ollama.com';
 
@@ -192,3 +98,15 @@ export const OLLAMA_CLOUD_HOST = 'https://ollama.com';
  * GitHub API 등 외부 API 호출 시 식별자로 사용합니다.
  */
 export const APP_USER_AGENT = 'OpenMake-AI';
+
+// ============================================
+// 모델 선택
+// ============================================
+
+/**
+ * 자동 모델 선택 프로파일 ID
+ *
+ * 사용자가 모델을 명시하지 않았을 때 사용되는 기본 프로파일 ID입니다.
+ * pipeline-profile, cost-tier, model.routes 등에서 공통 참조합니다.
+ */
+export const DEFAULT_AUTO_MODEL = 'openmake_llm_auto';

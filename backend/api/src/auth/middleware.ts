@@ -20,6 +20,8 @@ import { extractToken, verifyToken, hasPermission, isAdmin, clearTokenCookie } f
 import { getUserManager, PublicUser, UserRole } from '../data/user-manager';
 import { unauthorized, forbidden } from '../utils/api-response';
 
+import { createLogger } from '../utils/logger';
+const log = createLogger('AuthMiddleware');
 /**
  * JWT 토큰 형식 사전 검증 (header.payload.signature 3-part dot 구조)
  * jwt.verify() 호출 전에 빠르게 걸러내어 불필요한 에러 로그 방지
@@ -84,8 +86,13 @@ declare global {
 export async function optionalAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
     // Cookie first (httpOnly), then Authorization header (backward compat)
     const authHeader = req.headers.authorization;
-    const token = (req.cookies?.auth_token) || extractToken(authHeader);
+    const cookieToken = req.cookies?.auth_token;
+    const token = cookieToken || extractToken(authHeader);
 
+    // 🔍 DEBUG: 쿠키 수신 상태 로깅 (인증 문제 디버깅용)
+    if (req.path?.includes('/chat/sessions')) {
+        log.info(`[optionalAuth] path=${req.path} hasCookie=${!!cookieToken} hasHeader=${!!authHeader} hasToken=${!!token}`);
+    }
     if (token) {
         // 사전 검증: JWT 형식(xxx.yyy.zzz)이 아니면 검증 생략 + 쿠키 클리어
         if (!looksLikeJWT(token)) {

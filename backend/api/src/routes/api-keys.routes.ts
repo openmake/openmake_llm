@@ -10,13 +10,17 @@
  *
  * @module routes/api-keys.routes
  * @description
- * - POST   /api/v1/api-keys              - 새 API Key 생성 (인증, Zod 검증)
- * - GET    /api/v1/api-keys              - 사용자의 API Key 목록 (인증)
- * - GET    /api/v1/api-keys/:id          - 단일 API Key 상세 (인증)
- * - PATCH  /api/v1/api-keys/:id          - API Key 수정 (인증, Zod 검증)
- * - DELETE /api/v1/api-keys/:id          - API Key 삭제 (인증)
- * - POST   /api/v1/api-keys/:id/rotate   - API Key 순환 (인증)
- * - GET    /api/v1/api-keys/:id/usage    - API Key 사용량 조회 (인증)
+ * 이 라우터는 두 경로에 마운트됩니다:
+ *   - /api/api-keys       — JWT 인증 (requireAuth, 브라우저 유저)
+ *   - /api/v1/api-keys    — API Key 인증 (requireApiKey via v1 router)
+ *
+ * - POST   /api-keys              - 새 API Key 생성 (인증, Zod 검증)
+ * - GET    /api-keys              - 사용자의 API Key 목록 (인증)
+ * - GET    /api-keys/:id          - 단일 API Key 상세 (인증)
+ * - PATCH  /api-keys/:id          - API Key 수정 (인증, Zod 검증)
+ * - DELETE /api-keys/:id          - API Key 삭제 (인증)
+ * - POST   /api-keys/:id/rotate   - API Key 순환 (인증)
+ * - GET    /api-keys/:id/usage    - API Key 사용량 조회 (인증)
  *
  * @requires requireAuth - JWT 인증 미들웨어
  * @requires validate - Zod 스키마 검증 미들웨어
@@ -28,11 +32,13 @@ import { z } from 'zod';
 import { requireAuth } from '../auth';
 import { validate } from '../middlewares/validation';
 import { asyncHandler } from '../utils/error-handler';
-import { success, notFound, badRequest, forbidden } from '../utils/api-response';
+import { success, notFound, badRequest, forbidden, unauthorized, rateLimited } from '../utils/api-response';
 import { getApiKeyService, ApiKeyError } from '../services/ApiKeyService';
 import type { ApiKeyTier } from '../data/models/unified-database';
+import { createLogger } from '../utils/logger';
 
 const router = Router();
+const logger = createLogger('ApiKeysRoutes');
 
 // ===== Validation Schemas =====
 
@@ -103,7 +109,7 @@ router.post('/',
     asyncHandler(async (req: Request, res: Response) => {
         const userId = getUserId(req);
         if (!userId) {
-            res.status(401).json(forbidden('User ID not found.'));
+            res.status(401).json(unauthorized('User ID not found.'));
             return;
         }
 
@@ -151,7 +157,7 @@ router.post('/',
             }));
         } catch (err) {
             if (err instanceof ApiKeyError && err.code === 'KEY_LIMIT_EXCEEDED') {
-                res.status(429).json(badRequest(err.message));
+                res.status(429).json(rateLimited(err.message));
                 return;
             }
             throw err;
@@ -167,7 +173,7 @@ router.get('/',
     asyncHandler(async (req: Request, res: Response) => {
         const userId = getUserId(req);
         if (!userId) {
-            res.status(401).json(forbidden('User ID not found.'));
+            res.status(401).json(unauthorized('User ID not found.'));
             return;
         }
 
@@ -190,7 +196,7 @@ router.get('/:id',
     asyncHandler(async (req: Request, res: Response) => {
         const userId = getUserId(req);
         if (!userId) {
-            res.status(401).json(forbidden('User ID not found.'));
+            res.status(401).json(unauthorized('User ID not found.'));
             return;
         }
 
@@ -215,7 +221,7 @@ router.patch('/:id',
     asyncHandler(async (req: Request, res: Response) => {
         const userId = getUserId(req);
         if (!userId) {
-            res.status(401).json(forbidden('User ID not found.'));
+            res.status(401).json(unauthorized('User ID not found.'));
             return;
         }
 
@@ -247,7 +253,7 @@ router.delete('/:id',
     asyncHandler(async (req: Request, res: Response) => {
         const userId = getUserId(req);
         if (!userId) {
-            res.status(401).json(forbidden('User ID not found.'));
+            res.status(401).json(unauthorized('User ID not found.'));
             return;
         }
 
@@ -271,7 +277,7 @@ router.post('/:id/rotate',
     asyncHandler(async (req: Request, res: Response) => {
         const userId = getUserId(req);
         if (!userId) {
-            res.status(401).json(forbidden('User ID not found.'));
+            res.status(401).json(unauthorized('User ID not found.'));
             return;
         }
 
@@ -308,7 +314,7 @@ router.get('/:id/usage',
     asyncHandler(async (req: Request, res: Response) => {
         const userId = getUserId(req);
         if (!userId) {
-            res.status(401).json(forbidden('User ID not found.'));
+            res.status(401).json(unauthorized('User ID not found.'));
             return;
         }
 

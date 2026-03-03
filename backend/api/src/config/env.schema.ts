@@ -11,6 +11,12 @@
 import { z } from 'zod';
 import { SERVER_CONFIG } from './constants';
 
+// Language configuration types
+const supportedLanguageSchema = z.enum([
+    'ko', 'en', 'ja', 'zh', 'es', 'fr', 'de', 'pt', 'ru', 'ar',
+    'hi', 'it', 'nl', 'sv', 'da', 'no', 'fi', 'th', 'vi', 'tr'
+]);
+
 const nodeEnvSchema = z.enum(['development', 'test', 'production']);
 const logLevelSchema = z.enum(['debug', 'info', 'warn', 'error']);
 const geminiThinkLevelSchema = z.enum(['low', 'medium', 'high']);
@@ -67,12 +73,9 @@ export const envSchema = z
         // Ollama
         OLLAMA_BASE_URL: z.url().default('http://localhost:11434'),
         OLLAMA_DEFAULT_MODEL: z.string().min(1).default('gemini-3-flash-preview:cloud'),
-        OLLAMA_KOREAN_MODEL: z.string().min(1).default('gemini-3-flash-preview:cloud'),
-        OLLAMA_MODEL: z.string().min(1).default('gemini-3-flash-preview:cloud'),
         OLLAMA_TIMEOUT: positiveIntWithDefault(120000).refine((value) => value <= 600000, {
             message: 'OLLAMA_TIMEOUT must be between 1 and 600000 milliseconds',
         }),
-        OLLAMA_HOST: z.string().default('http://localhost:11434'),
         OLLAMA_API_KEY: z.string().default(''),
         OLLAMA_API_KEY_PRIMARY: z.string().default(''),
         OLLAMA_API_KEY_SECONDARY: z.string().default(''),
@@ -89,7 +92,6 @@ export const envSchema = z
         GEMINI_THINK_ENABLED: booleanFromString(true),
         GEMINI_THINK_LEVEL: geminiThinkLevelSchema.default('high'),
         GEMINI_NUM_CTX: positiveIntWithDefault(32768),
-        GEMINI_EMBEDDING_MODEL: z.string().min(1).default('gemini-3-flash-preview:cloud'),
         GEMINI_WEB_SEARCH_ENABLED: booleanFromString(true),
 
         // External
@@ -97,6 +99,7 @@ export const envSchema = z
         GOOGLE_CSE_ID: z.string().default(''),
         FIRECRAWL_API_KEY: z.string().default(''),
         FIRECRAWL_API_URL: z.url().default('https://api.firecrawl.dev/v1'),
+        GITHUB_TOKEN: z.string().default(''),
         VAPID_PUBLIC_KEY: z.string().default(''),
         VAPID_PRIVATE_KEY: z.string().default(''),
         VAPID_SUBJECT: z.string().default('mailto:admin@openmake.ai'),
@@ -126,6 +129,15 @@ OMK_ENGINE_CODE: z.string().min(1).default('glm-5:cloud'),
         OMK_DOMAIN_CREATIVE: z.string().default(''),
         OMK_DOMAIN_ANALYSIS: z.string().default(''),
         OMK_DOMAIN_GENERAL: z.string().default(''),
+
+        // Language Policy
+        ENABLE_DYNAMIC_RESPONSE_LANGUAGE: booleanFromString(false),
+        DEFAULT_RESPONSE_LANGUAGE: supportedLanguageSchema.default('ko'),
+        LANGUAGE_DETECTION_MIN_CONFIDENCE: z.coerce.number().min(0).max(1).default(0.7),
+        LANGUAGE_FALLBACK_LANGUAGE: supportedLanguageSchema.default('en'),
+
+        // Cookie Security (HTTPS 없이 production 운영 시 false)
+        COOKIE_SECURE: booleanFromString(false),
     })
     .superRefine((data, ctx) => {
         if (data.NODE_ENV !== 'production') {

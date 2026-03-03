@@ -11,7 +11,6 @@ import { optionalAuth, requireAuth } from '../auth';
 import { createLogger } from '../utils/logger';
 import { success, unauthorized, badRequest, forbidden } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
-import { getConfig } from '../config';
 
 const log = createLogger('SessionController');
 
@@ -41,8 +40,6 @@ export class SessionController {
 
     private setupRoutes(): void {
         const conversationDb = getConversationDB();
-        const envConfig = getConfig();
-
         const hasSessionAccess = (session: ConversationSession | undefined, req: Request): boolean => {
             if (req.user?.role === 'admin') {
                 return true;

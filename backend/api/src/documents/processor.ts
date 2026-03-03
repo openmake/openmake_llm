@@ -5,7 +5,20 @@ import { promisify } from 'util';
 import { getConfig } from '../config/env';
 import { ProgressCallback, createProgressEvent } from './progress';
 import { createLogger } from '../utils/logger';
+import { DOCUMENT_PROCESSING } from '../config/runtime-limits';
 
+/** ISO 639-1 코드를 영어 언어명으로 변환 (LLM 프롬프트용) */
+const LANGUAGE_NAMES: Record<string, string> = {
+    ko: 'Korean', en: 'English', ja: 'Japanese', zh: 'Chinese',
+    es: 'Spanish', fr: 'French', de: 'German', pt: 'Portuguese',
+    ru: 'Russian', ar: 'Arabic', hi: 'Hindi', it: 'Italian',
+    nl: 'Dutch', sv: 'Swedish', da: 'Danish', no: 'Norwegian',
+    fi: 'Finnish', th: 'Thai', vi: 'Vietnamese', tr: 'Turkish'
+};
+
+function getLanguageName(code: string): string {
+    return LANGUAGE_NAMES[code] || LANGUAGE_NAMES['en']!;
+}
 const logger = createLogger('DocumentProcessor');
 
 const execAsync = promisify(exec);
@@ -52,7 +65,7 @@ export async function extractPdfText(
             if (data.text && data.text.length > 0) {
                 extractedText = data.text.trim();
                 numPages = data.numpages;
-                console.log(`[PDF/텍스트] 추출 성공: ${numPages}페이지, ${extractedText.length}자`);
+                logger.info(`[PDF/텍스트] 추출 성공: ${numPages}페이지, ${extractedText.length}자`);
             }
         } catch (innerError) {
             console.warn = originalWarn;
@@ -61,14 +74,14 @@ export async function extractPdfText(
         }
     } catch (e: unknown) {
         // 텍스트 추출이 불가능한 경우 (이미지 PDF 등)
-        console.log('[PDF] 텍스트 레이어가 없습니다. 이미지 정밀 분석(OCR)을 준비합니다...');
+        logger.info('[PDF] 텍스트 레이어가 없습니다. 이미지 정밀 분석(OCR)을 준비합니다...');
         onProgress?.(createProgressEvent('ocr_prepare', 'OCR 프로세스 준비 중...', filename, 20));
     }
 
     // 2차 시도: OCR (텍스트가 없거나 너무 짧은 경우 - 이미지 PDF 또는 인코딩 문제)
     if (extractedText.length < 100) {
         try {
-            console.log(`[PDF/OCR] 텍스트가 부족합니다(${extractedText.length}자). LLM 보정을 위한 OCR 프로세스 시작...`);
+            logger.info(`[PDF/OCR] 텍스트가 부족합니다(${extractedText.length}자). LLM 보정을 위한 OCR 프로세스 시작...`);
             onProgress?.(createProgressEvent('ocr_prepare', `텍스트 부족(${extractedText.length}자). OCR 시작...`, filename, 25));
             const Tesseract = require('tesseract.js');
 
@@ -81,7 +94,7 @@ export async function extractPdfText(
             try {
                 // pdftoppm 사용 (Poppler) - 모든 페이지를 개별 PNG로 변환
                 // macOS: brew install poppler
-                console.log(`[PDF/OCR] pdftoppm으로 전체 페이지 이미지 변환 중...`);
+                logger.info(`[PDF/OCR] pdftoppm으로 전체 페이지 이미지 변환 중...`);
                 onProgress?.(createProgressEvent('ocr_convert', 'PDF 페이지를 이미지로 변환 중...', filename, 35));
 
                 // pdftoppm 사용: -png 옵션으로 PNG 출력, -r 200 으로 200 DPI 설정
@@ -92,8 +105,8 @@ export async function extractPdfText(
                     await execAsync(`pdftoppm -png -r 200 "${filePath}" "${tempDir}/page"`);
                 } else {
                     // pdftoppm 없으면 sips 사용 (첫 페이지만 - 폴백)
-                    console.log(`[PDF/OCR] pdftoppm을 찾을 수 없어 sips 폴백 (첫 페이지만 추출됩니다. 'brew install poppler'로 pdftoppm 설치 권장)`);
-                    await execAsync(`sips -s format png --resampleHeightWidthMax 3000 "${filePath}" --out "${tempDir}"`);
+                    logger.info(`[PDF/OCR] pdftoppm을 찾을 수 없어 sips 폴백 (첫 페이지만 추출됩니다. 'brew install poppler'로 pdftoppm 설치 권장)`);
+                    await execAsync(`sips -s format png --resampleHeightWidthMax ${DOCUMENT_PROCESSING.IMAGE_RESAMPLE_MAX} "${filePath}" --out "${tempDir}"`);
                 }
 
                 const imageFiles = fs.readdirSync(tempDir)
@@ -107,7 +120,7 @@ export async function extractPdfText(
 
                 if (imageFiles.length > 0) {
                     const config = getConfig();
-                    console.log(`[PDF/OCR] 변환된 이미지 ${imageFiles.length}장 분석 (모델: ${config.ollamaDefaultModel} 연동용)`);
+                    logger.info(`[PDF/OCR] 변환된 이미지 ${imageFiles.length}장 분석 (모델: ${config.ollamaDefaultModel} 연동용)`);
 
                     let ocrText = '';
                     // 전체 페이지 분석 (메모리 효율을 위해 최대 30페이지로 제한)
@@ -133,7 +146,7 @@ export async function extractPdfText(
 
                     if (ocrText.trim().length > extractedText.length) {
                         extractedText = `[OCR Raw Data]\n(이 문서는 이미지 PDF입니다. 아래 텍스트는 OCR 추출 결과이며 오타가 있을 수 있습니다. 문맥을 파악하여 해석해 주세요.)\n\n${ocrText.trim()}`;
-                        console.log(`[PDF/OCR] 최종 추출 완료: ${extractedText.length}자`);
+                        logger.info(`[PDF/OCR] 최종 추출 완료: ${extractedText.length}자`);
                         onProgress?.(createProgressEvent('ocr_complete', `OCR 추출 완료: ${extractedText.length}자`, filename, 95));
                     }
                 }
@@ -146,7 +159,7 @@ export async function extractPdfText(
                 }
             }
         } catch (e: unknown) {
-            console.error('[PDF/OCR] 프로세스 오류:', (e instanceof Error ? e.message : String(e)));
+            logger.error('[PDF/OCR] 프로세스 오류:', (e instanceof Error ? e.message : String(e)));
         }
     }
 
@@ -199,7 +212,7 @@ export async function extractImageText(
 
     try {
         const Tesseract = require('tesseract.js');
-        console.log(`[OCR] 이미지 분석 시작: ${filename}`);
+        logger.info(`[OCR] 이미지 분석 시작: ${filename}`);
         onProgress?.(createProgressEvent('image_ocr', '이미지 OCR 분석 시작...', filename, 20));
 
         const result = await Tesseract.recognize(filePath, 'kor+eng', {
@@ -218,10 +231,10 @@ export async function extractImageText(
         });
 
         const text = result.data.text.trim();
-        console.log(`[OCR] 추출 완료: ${text.length}자`);
+        logger.info(`[OCR] 추출 완료: ${text.length}자`);
         onProgress?.(createProgressEvent('ocr_complete', `OCR 추출 완료: ${text.length}자`, filename, 95));
 
-        const stats = fs.statSync(filePath);
+        fs.statSync(filePath);
         const buffer = fs.readFileSync(filePath);
         const base64 = buffer.toString('base64');
 
@@ -236,7 +249,7 @@ export async function extractImageText(
             }
         };
     } catch (e: unknown) {
-        console.error('[OCR] 오류:', (e instanceof Error ? e.message : String(e)));
+        logger.error('[OCR] 오류:', (e instanceof Error ? e.message : String(e)));
 
         // 이미지 파일인 경우 텍스트 추출에 실패해도 base64 데이터는 지원 (Vision 모델용)
         try {
@@ -275,7 +288,7 @@ export async function extractExcelText(
         await workbook.xlsx.readFile(filePath);
 
         let allText = '';
-        console.log(`[Excel] 시트 ${workbook.worksheets.length}개 처리 중...`);
+        logger.info(`[Excel] 시트 ${workbook.worksheets.length}개 처리 중...`);
 
         workbook.eachSheet((worksheet: { name: string; eachRow: (cb: (row: { values: unknown[] | Record<string, unknown> }, rowNumber: number) => void) => void }, sheetId: number) => {
             allText += `\n\n=== 시트: ${worksheet.name} ===\n\n`;
@@ -298,7 +311,7 @@ export async function extractExcelText(
             });
         });
 
-        console.log(`[Excel] 추출 완료: ${allText.length}자, ${workbook.worksheets.length}개 시트`);
+        logger.info(`[Excel] 추출 완료: ${allText.length}자, ${workbook.worksheets.length}개 시트`);
         onProgress?.(createProgressEvent('complete', `Excel 추출 완료: ${workbook.worksheets.length}개 시트`, filename, 100));
 
         return {
@@ -308,7 +321,7 @@ export async function extractExcelText(
             info: { sheets: workbook.worksheets.length }
         };
     } catch (e: unknown) {
-        console.error('[Excel] 오류:', (e instanceof Error ? e.message : String(e)));
+        logger.error('[Excel] 오류:', (e instanceof Error ? e.message : String(e)));
         return {
             filename,
             type: 'excel',
@@ -332,7 +345,7 @@ export async function extractBinaryInfo(filePath: string): Promise<DocumentResul
 
 파일 형식: ${ext || '(확장자 없음)'}
 파일 크기: ${(stats.size / 1024).toFixed(1)} KB
-수정일: ${stats.mtime.toLocaleString('ko-KR')}
+수정일: ${stats.mtime.toLocaleString()}
 
 ⚠️ 이 파일 형식은 텍스트 추출을 지원하지 않습니다.
 지원되는 형식: PDF, TXT, MD, 이미지(OCR), Excel, CSV, JSON, HTML, 코드 파일`
@@ -349,7 +362,7 @@ export async function extractDocument(
     const ext = path.extname(filePath).toLowerCase();
     const filename = path.basename(filePath);
 
-    console.log(`[Extract] 파일 처리: ${filename} (${ext})`);
+    logger.info(`[Extract] 파일 처리: ${filename} (${ext})`);
     onProgress?.(createProgressEvent('extract', `파일 분석 시작: ${filename}`, filename, 5));
 
     // PDF
@@ -399,8 +412,8 @@ export async function extractDocument(
 /**
  * 문서 요약 프롬프트 생성 (JSON 형식)
  */
-export function createSummaryPrompt(document: DocumentResult, language: string = 'ko'): string {
-    const maxLength = 30000;
+export function createSummaryPrompt(document: DocumentResult, language: string = 'en'): string {
+    const maxLength = DOCUMENT_PROCESSING.MAX_TEXT_LENGTH;
     let text = document.text;
     if (text.length > maxLength) {
         text = text.substring(0, maxLength) + '\n\n[... 문서의 나머지 부분 생략 ...]';
@@ -432,14 +445,14 @@ Response Format (JSON):
   "implications": "Implications or conclusion"
 }
 
-Ensure the response is valid JSON. Translate all content to Korean.`;
+Ensure the response is valid JSON. Translate all content to ${getLanguageName(language)}.`;
 }
 
 /**
  * Q&A 프롬프트 생성 (JSON 형식)
  */
-export function createQAPrompt(document: DocumentResult, question: string): string {
-    const maxLength = 28000;
+export function createQAPrompt(document: DocumentResult, question: string, language: string = 'en'): string {
+    const maxLength = DOCUMENT_PROCESSING.MAX_SUMMARY_TEXT_LENGTH;
     let text = document.text;
     if (text.length > maxLength) {
         text = text.substring(0, maxLength) + '\n\n[... 문서의 나머지 부분 생략 ...]';
@@ -466,5 +479,5 @@ Response Format (JSON):
   "additional_info": "Any additional context or limitations (optional)"
 }
 
-Ensure the response is valid JSON. Translate all content to Korean. If the answer cannot be found in the document, state that clearly in the "answer" field.`;
+Ensure the response is valid JSON. Translate all content to ${getLanguageName(language)}. If the answer cannot be found in the document, state that clearly in the "answer" field.`;
 }

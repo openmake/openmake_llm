@@ -15,6 +15,9 @@
 // 1. ES Module Imports (의존성 순서)
 // ============================================
 
+// 0. SafeStorage 전역 초기화 (모든 모듈보다 먼저 로드)
+import './modules/safe-storage.js';
+import { STORAGE_KEY_GUEST_MODE, STORAGE_KEY_IS_GUEST, STORAGE_KEY_USER, STORAGE_KEY_THEME } from './modules/constants.js';
 // 1-1. 상태 관리 (최우선)
 import { AppState, getState, setState, subscribe, addToMemory, clearMemory } from './modules/state.js';
 
@@ -66,7 +69,7 @@ import {
     sendMessage, addChatMessage, appendToken,
     finishAssistantMessage, copyMessage, regenerateMessage,
     newChat as chatNewChat, useSuggestion, abortChat
-} from './modules/chat.js?v=19';
+} from './modules/chat.js?v=20';
 
 // 1-8. 세션 관리 (state, auth 의존)
 import {
@@ -109,7 +112,6 @@ import {
 import {
     startFeatureChat, handleCommand,
     showHelpAndMessage, performWebSearch,
-    syncMCPSettingsToServer, syncMCPSettingsFromServer,
     showHelpPopup, hideHelpPopup,
     hideHelpPopupDelayed, closeHelpPopup
 } from './modules/error-handler.js';
@@ -122,24 +124,23 @@ import { showUserGuide, closeGuideModal, useMode } from './modules/guide.js';
 import './modules/sanitize.js';
 
 // 1-15. 네비게이션 데이터
-import { NAV_ITEMS } from './nav-items.js';
+import { NAV_ITEMS } from './nav-items.js?v=3';
 
 // 1-16. SPA 라우터
-import { Router, SafeStorage } from './spa-router.js';
+import { Router, SafeStorage } from './spa-router.js?v=16';
 
-// 1-17. 컴포넌트 (사이드바, 관리자 패널, 오프라인 인디케이터, 설치 프롬프트)
-import { UnifiedSidebar } from './components/unified-sidebar.js';
+// 1-17. 컴포넌트 (사이드바, 관리자 패널)
+import { UnifiedSidebar } from './components/unified-sidebar.js?v=3';
 import { AdminPanel } from './components/admin-panel.js';
-import { show as offlineShow, hide as offlineHide, isOffline as offlineIsOffline } from './components/offline-indicator.js';
-import { show as installShow, hide as installHide, isInstalled } from './components/install-prompt.js';
+
 
 
 // ============================================
 // 2. SPA 모드: alert() → showToast() 변환 (blocking alert 방지)
 // ============================================
-(function() {
+(function () {
     var _origAlert = window.alert;
-    window.alert = function(msg) {
+    window.alert = function (msg) {
         if (typeof showToast === 'function') {
             showToast(msg, 'warning');
         } else {
@@ -188,10 +189,9 @@ function initMobileSidebar() {
  * @returns {void}
  */
 function filterRestrictedMenus() {
-    const authToken = localStorage.getItem('authToken');
     const currentUser = getCurrentUser();
-    const isGuest = localStorage.getItem('guestMode') === 'true' || localStorage.getItem('isGuest') === 'true';
-    const isAuthenticated = (authToken || currentUser) && !isGuest;
+    const isGuest = SafeStorage.getItem(STORAGE_KEY_GUEST_MODE) === 'true' || SafeStorage.getItem(STORAGE_KEY_IS_GUEST) === 'true';
+    const isAuthenticated = !!currentUser && !isGuest;
 
     // data-require-auth="true" 속성이 있는 메뉴 항목 숨기기
     document.querySelectorAll('[data-require-auth="true"]').forEach(el => {
@@ -225,7 +225,8 @@ function showUserStatusBadge(isAuthenticated, isGuest) {
     if (!userInfo) return;
 
     if (isAuthenticated) {
-        const user = JSON.parse(localStorage.getItem('user') || '{}');
+        const SS = window.SafeStorage;
+        const user = JSON.parse(SS.getItem(STORAGE_KEY_USER) || '{}');
         userInfo.innerHTML = `<span style="color: var(--success);">👤 ${escapeHtml(user.email || user.username || '사용자')}</span>`;
         userInfo.style.display = 'block';
     } else if (isGuest) {
@@ -421,7 +422,7 @@ async function initApp() {
     connectWebSocket();
 
     // 4. 테마 적용
-    const savedTheme = localStorage.getItem('theme') || 'dark';
+    const savedTheme = localStorage.getItem(STORAGE_KEY_THEME) || 'dark';
     applyTheme(savedTheme);
 
     // 5. 설정 로드
@@ -612,6 +613,7 @@ window.toggleDeepResearch = toggleDeepResearch;
 window.showDiscussionProgress = showDiscussionProgress;
 window.showResearchProgress = showResearchProgress;
 
+
 // 클러스터
 window.BRAND_MODELS = BRAND_MODELS;
 window.updateClusterInfo = updateClusterInfo;
@@ -637,8 +639,6 @@ window.startFeatureChat = startFeatureChat;
 window.handleCommand = handleCommand;
 window.showHelpAndMessage = showHelpAndMessage;
 window.performWebSearch = performWebSearch;
-window.syncMCPSettingsToServer = syncMCPSettingsToServer;
-window.syncMCPSettingsFromServer = syncMCPSettingsFromServer;
 window.useMode = useMode;
 window.showHelpPopup = showHelpPopup;
 window.hideHelpPopup = hideHelpPopup;

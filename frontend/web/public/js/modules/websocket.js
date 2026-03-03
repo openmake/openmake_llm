@@ -111,7 +111,7 @@ function sendWsMessage(data) {
  * WebSocket 수신 메시지 핸들러
  * 메시지 타입에 따라 적절한 처리 함수를 호출합니다.
  * 지원 타입: init, stats, update, cluster_event, token, done, error, aborted, agents,
- *            mcp_settings_ack, agent_selected, discussion_progress, research_progress,
+ *            agent_selected, discussion_progress, research_progress,
  *            progress, session_created
  * @param {Object} data - 파싱된 수신 메시지 객체
  * @param {string} data.type - 메시지 타입 식별자
@@ -143,6 +143,27 @@ function handleMessage(data) {
         case 'done':
             if (typeof finishAssistantMessage === 'function') {
                 finishAssistantMessage(null, data.messageId || null);
+            }
+            break;
+
+        case 'token_warning':
+            // 토큰 만료 임박 경고 — 자동 갱신 시도 (진행 중인 AI 응답에 영향 없음)
+            debugWarn('[WebSocket] 토큰 만료 임박, 자동 갱신 시도...');
+            if (typeof window.trySilentRefresh === 'function') {
+                window.trySilentRefresh().then(function(refreshed) {
+                    if (refreshed) {
+                        var newToken = getState('auth.authToken');
+                        if (newToken) {
+                            sendWsMessage({ type: 'refresh', authToken: newToken });
+                            debugLog('[WebSocket] 토큰 자동 갱신 성공, WebSocket 세션 갱신 완료');
+                        }
+                    } else {
+                        debugWarn('[WebSocket] 토큰 자동 갱신 실패 — 곧 재로그인이 필요합니다');
+                        if (typeof showToast === 'function') {
+                            showToast('인증이 곧 만료됩니다. 페이지를 새로고침하거나 다시 로그인하세요.', 'warning');
+                        }
+                    }
+                });
             }
             break;
 
@@ -202,20 +223,22 @@ function handleMessage(data) {
             }
             break;
 
-        case 'mcp_settings_ack':
-            if (typeof showToast === 'function') {
-                showToast(
-                    data.success ? 'MCP 설정이 저장되었습니다.' : 'MCP 설정 저장 실패',
-                    data.success ? 'success' : 'error'
-                );
-            }
-            break;
 
         case 'agent_selected':
             debugLog('[WebSocket] 에이전트 선택:', data.agent);
             if (typeof showAgentBadge === 'function') {
                 showAgentBadge(data.agent);
             }
+            break;
+
+        case 'skills_activated':
+            debugLog('[WebSocket] 스킬 활성화:', data.skillNames);
+            setState('activeSkillNames', Array.isArray(data.skillNames) ? data.skillNames : []);
+            break;
+
+        case 'rag_sources':
+            debugLog('[WebSocket] RAG 출처 수신:', data.sources);
+            setState('ragSources', Array.isArray(data.sources) ? data.sources : null);
             break;
 
         case 'discussion_progress':
