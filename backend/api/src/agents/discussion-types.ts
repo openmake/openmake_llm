@@ -113,6 +113,7 @@ export interface DiscussionConfig {
     enableFactCheck?: boolean;
     /** 🆕 Deep Thinking 모드 활성화 */
     enableDeepThinking?: boolean;
+    userLanguage?: string;
     
     // ========================================
     // 🆕 컨텍스트 엔지니어링 필드

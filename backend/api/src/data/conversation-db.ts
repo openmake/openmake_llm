@@ -140,12 +140,20 @@ function isDuplicateKeyError(err: unknown): boolean {
  * - 배치 메시지 로딩으로 N+1 쿼리 방지
  */
 class ConversationDB {
+    /** 스키마 초기화 완료 Promise (race condition 방지) */
+    private initReady: Promise<void>;
+
     /**
      * ConversationDB 인스턴스를 생성합니다.
      * 초기화 시 스키마 마이그레이션과 JSON 데이터 이관을 비동기로 수행합니다.
      */
     constructor() {
-        this.init().catch(err => logger.error('[ConversationDB] Init failed:', err));
+        this.initReady = this.init().catch(err => { logger.error('[ConversationDB] Init failed:', err); });
+    }
+
+    /** 스키마 초기화 완료를 보장하는 헬퍼 */
+    async ensureReady(): Promise<void> {
+        await this.initReady;
     }
 
     private async init(): Promise<void> {
@@ -379,7 +387,7 @@ class ConversationDB {
         if (!row) return undefined;
 
         const msgResult = await pool.query(
-            'SELECT * FROM conversation_messages WHERE session_id = $1 ORDER BY created_at ASC',
+            'SELECT * FROM conversation_messages WHERE session_id = $1 ORDER BY created_at ASC LIMIT 500',
             [id]
         );
 
@@ -575,8 +583,8 @@ export function getConversationDB() {
     return dbInstance;
 }
 
-/** 세션 정리 스케줄러 타이머 */
-let cleanupTimer: ReturnType<typeof setTimeout> | null = null;
+/** 세션 정리 스케줄러 타이머 (BUG-021 수정: setInterval 반환값이므로 ReturnType<typeof setInterval> 사용) */
+let cleanupTimer: ReturnType<typeof setInterval> | null = null;
 
 /**
  * 만료 세션 자동 정리 스케줄러를 시작합니다.
@@ -599,4 +607,16 @@ export function startSessionCleanupScheduler(intervalHours: number = 24) {
             logger.error('[ConversationDB] Cleanup error:', error);
         }
     }, intervalHours * 60 * 60 * 1000);
+}
+
+/**
+ * 세션 정리 스케줄러를 중지합니다.
+ * 서버 graceful shutdown 시 호출합니다.
+ */
+export function stopSessionCleanupScheduler(): void {
+    if (cleanupTimer) {
+        clearInterval(cleanupTimer);
+        cleanupTimer = null;
+        logger.info('[ConversationDB] Cleanup scheduler stopped');
+    }
 }

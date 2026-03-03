@@ -18,15 +18,13 @@ import { asyncHandler } from '../utils/error-handler';
 import { success, badRequest } from '../utils/api-response';
 import { FeedbackRepository } from '../data/repositories/feedback-repository';
 import { getPool } from '../data/models/unified-database';
+import { validate } from '../middlewares/validation';
+import { chatFeedbackSchema } from '../schemas/chat-feedback.schema';
+import { createLogger } from '../utils/logger';
 
 const router = Router();
+const logger = createLogger('ChatFeedbackRoutes');
 
-const VALID_SIGNALS = ['thumbs_up', 'thumbs_down', 'regenerate'] as const;
-type FeedbackSignal = typeof VALID_SIGNALS[number];
-
-function isValidSignal(value: unknown): value is FeedbackSignal {
-    return typeof value === 'string' && (VALID_SIGNALS as readonly string[]).includes(value);
-}
 
 /**
  * POST /api/chat/feedback
@@ -36,48 +34,27 @@ function isValidSignal(value: unknown): value is FeedbackSignal {
 router.post(
     '/',
     optionalAuth,
+    validate(chatFeedbackSchema),
     asyncHandler(async (req: Request, res: Response) => {
         const { messageId, sessionId, signal, routingMetadata } = req.body as {
-            messageId?: unknown;
-            sessionId?: unknown;
-            signal?: unknown;
-            routingMetadata?: unknown;
+            messageId: string;
+            sessionId: string;
+            signal: 'thumbs_up' | 'thumbs_down' | 'regenerate';
+            routingMetadata?: {
+                model?: string;
+                queryType?: string;
+                a2aMode?: string;
+                latencyMs?: number;
+                profileId?: string;
+            };
         };
-
-        // 필수 필드 검증
-        if (!messageId || typeof messageId !== 'string') {
-            res.status(400).json(badRequest('messageId는 필수 문자열입니다'));
-            return;
-        }
-        if (!sessionId || typeof sessionId !== 'string') {
-            res.status(400).json(badRequest('sessionId는 필수 문자열입니다'));
-            return;
-        }
-        if (!isValidSignal(signal)) {
-            res.status(400).json(
-                badRequest(
-                    `signal은 ${VALID_SIGNALS.join(', ')} 중 하나여야 합니다`,
-                    { received: signal }
-                )
-            );
-            return;
-        }
-
-        // routingMetadata 타입 가드 (객체 또는 null/undefined만 허용)
         const safeMetadata =
             routingMetadata !== null &&
             routingMetadata !== undefined &&
             typeof routingMetadata === 'object' &&
             !Array.isArray(routingMetadata)
-                ? (routingMetadata as {
-                      model?: string;
-                      queryType?: string;
-                      a2aMode?: string;
-                      latencyMs?: number;
-                      profileId?: string;
-                  })
+                ? routingMetadata
                 : undefined;
-
         const repo = new FeedbackRepository(getPool());
         await repo.recordFeedback({
             messageId,
@@ -86,7 +63,6 @@ router.post(
             signal,
             routingMetadata: safeMetadata,
         });
-
         res.json(success({ recorded: true }));
     })
 );

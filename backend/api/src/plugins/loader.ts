@@ -14,8 +14,10 @@ import * as os from 'os';
 import { Plugin, PluginManifest, PluginContext } from './types';
 import { getRegistry } from './registry';
 import { getConfig } from '../config';
+import { createLogger } from '../utils/logger';
 
 const PLUGINS_DIR = path.join(os.homedir(), '.ollama-coder', 'plugins');
+const logger = createLogger('PluginLoader');
 
 export class PluginLoader {
     private loadedPlugins: Map<string, Plugin> = new Map();
@@ -43,7 +45,7 @@ export class PluginLoader {
                 try {
                     await this.loadPlugin(path.join(PLUGINS_DIR, entry.name));
                 } catch (error) {
-                    console.error(`플러그인 로드 실패: ${entry.name}`, error);
+                    logger.error(`플러그인 로드 실패: ${entry.name}`, error);
                 }
             }
         }
@@ -104,7 +106,7 @@ export class PluginLoader {
             getRegistry().unregister(name);
             this.loadedPlugins.delete(name);
         } catch (error) {
-            console.error(`플러그인 언로드 실패: ${name}`, error);
+            logger.error(`플러그인 언로드 실패: ${name}`, error);
         }
     }
 

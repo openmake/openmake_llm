@@ -34,9 +34,14 @@ import { getConversationDB } from '../data/conversation-db';
 import { buildExecutionPlan, type ExecutionPlan } from './profile-resolver';
 import { getPromptConfig } from './prompt';
 import { createLogger } from '../utils/logger';
-import type { ChatMessage, ToolDefinition, ToolCall } from '../ollama/types';
+import type { ChatMessage, ToolDefinition } from '../ollama/types';
 import { randomBytes } from 'crypto';
-
+import { 
+    determineLanguagePolicy,
+    type SupportedLanguageCode,
+    type LanguagePolicyDecision
+} from './language-policy';
+import { getConfig } from '../config/env';
 const log = createLogger('ChatRequestHandler');
 
 // ============================================
@@ -103,12 +108,18 @@ export interface ChatRequestParams {
     thinkingLevel?: 'low' | 'medium' | 'high';
     /** 사용자가 활성화한 MCP 도구 목록 (키: 도구명, 값: 활성화 여부) */
     enabledTools?: Record<string, boolean>;
+    /** RAG (문서 기반 응답) 활성화 여부 */
+    ragEnabled?: boolean;
     /** OpenAI 호환 도구 정의 배열 (외부 Tool Calling용) */
     tools?: ToolDefinition[];
     /** 도구 호출 제어 ("auto"|"none"|"required"|{type:"function",function:{name:string}}) */
     tool_choice?: 'auto' | 'none' | 'required' | { type: 'function'; function: { name: string } };
     /** 사용자 컨텍스트 */
     userContext: ChatUserContext;
+    /** API Key 인증 요청 시 키 ID */
+    apiKeyId?: string;
+    /** 사용자가 설정에서 선택한 선호 언어 (language-policy userPreference) */
+    userLanguagePreference?: string;
     /** 클러스터 매니저 */
     clusterManager: ClusterManager;
     /** 요청 중단 시그널 */
@@ -121,6 +132,10 @@ export interface ChatRequestParams {
     onDiscussionProgress?: (progress: DiscussionProgress) => void;
     /** 딥 리서치 진행 콜백 */
     onResearchProgress?: (progress: ResearchProgress) => void;
+    /** 스킬 활성화 콜백 - 에이전트에 주입된 스킬 이름 목록 */
+    onSkillsActivated?: (skillNames: string[]) => void;
+    /** RAG 출처 정보 콜백 - 검색된 문서 출처/관련도/스니펫 전달 */
+    onRAGSources?: (sources: Array<{ source: string; relevanceScore: number; snippet: string }>) => void;
 }
 
 /**
@@ -358,6 +373,7 @@ export class ChatRequestHandler {
             thinkingMode,
             thinkingLevel,
             enabledTools,
+            ragEnabled,
             tools,
             tool_choice,
             userContext,
@@ -367,6 +383,9 @@ export class ChatRequestHandler {
             onAgentSelected,
             onDiscussionProgress,
             onResearchProgress,
+            onSkillsActivated,
+            onRAGSources,
+            userLanguagePreference,
         } = params;
 
         // 1. ExecutionPlan 해석
@@ -438,11 +457,13 @@ export class ChatRequestHandler {
         const chatService = new ChatService(client);
 
         // §9 ExecutionPlan 설정과 사용자 요청을 병합
-        const mergedDiscussionMode = plan.useDiscussion || discussionMode;
-        const mergedThinkingMode = plan.thinkingLevel !== 'off' || thinkingMode;
-        const mergedThinkingLevel = plan.thinkingLevel !== 'off'
-            ? plan.thinkingLevel as 'low' | 'medium' | 'high'
-            : thinkingLevel;
+        // 토론 모드: 사용자 명시적 토글(discussionMode)만 반영.
+        // 프로파일의 discussion 기본값은 사용자가 직접 켜지 않는 한 적용하지 않는다.
+        const mergedDiscussionMode = discussionMode === true;
+        // Thinking 모드: 사용자 명시적 토글(thinkingMode)만 반영.
+        // 프로파일의 thinking 기본값은 사용자가 직접 켜지 않는 한 적용하지 않는다.
+        const mergedThinkingMode = thinkingMode === true;
+        const mergedThinkingLevel = thinkingMode ? (thinkingLevel || 'high') : undefined;
 
         const chatRequest: ChatMessageRequest = {
             message,
@@ -455,10 +476,13 @@ export class ChatRequestHandler {
             thinkingMode: mergedThinkingMode,
             thinkingLevel: mergedThinkingLevel,
             userId: userContext.userId,
+            apiKeyId: params.apiKeyId,
             userRole: userContext.userRole,
             userTier: userContext.userTier,
             enabledTools,
+            ragEnabled,
             abortSignal,
+            userLanguagePreference,
         };
 
         const response = await chatService.processMessage(
@@ -469,6 +493,8 @@ export class ChatRequestHandler {
             onDiscussionProgress,
             onResearchProgress,
             plan,
+            onSkillsActivated,
+            onRAGSources,
         );
 
         const endTime = Date.now();
@@ -517,13 +543,32 @@ export class ChatRequestHandler {
         tool_calls?: OpenAIToolCall[];
         finish_reason: 'stop' | 'tool_calls';
     }> {
-        const { message, history, images, tools, tool_choice, client, onToken, abortSignal } = params;
+        const { message, history, images, tools, tool_choice, client, onToken, abortSignal: _abortSignal } = params;
+
+        // 언어 정책 결정 (메시지 기반 감지 — 외부 Tool Calling 경로는 userLanguagePreference 없음)
+        const config = getConfig();
+        let detectedLanguage: string = 'en'; // default fallback
+
+        // 메시지 기반 언어 감지 항상 수행 (외부 API 요청은 사용자 설정 없으므로 메시지에서 감지)
+        try {
+            const languagePolicy = determineLanguagePolicy(message, {
+                defaultLanguage: config.defaultResponseLanguage,
+                enableDynamicResponse: true,
+                minConfidenceThreshold: config.languageDetectionMinConfidence,
+                shortTextThreshold: 20,
+                fallbackLanguage: config.languageFallbackLanguage,
+                supportedLanguages: ['ko', 'en', 'ja', 'zh', 'es', 'fr', 'de', 'pt', 'ru', 'ar', 'hi', 'it', 'nl', 'sv', 'da', 'no', 'fi', 'th', 'vi', 'tr']
+            });
+            detectedLanguage = languagePolicy.resolvedLanguage;
+        } catch (error) {
+            console.warn('언어 감지 실패, 기본 언어 사용:', error);
+        }
 
         // tool_choice가 "none"이면 도구 없이 호출
         const effectiveTools = tool_choice === 'none' ? undefined : tools;
 
         // 시스템 프롬프트 구성
-        const promptConfig = getPromptConfig(message);
+        const promptConfig = getPromptConfig(message, detectedLanguage);
 
         // 대화 히스토리 구성 (OpenAI 형식 → Ollama 형식 변환)
         const messages: ChatMessage[] = [

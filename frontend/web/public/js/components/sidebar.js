@@ -28,9 +28,8 @@ class SharedSidebar {
      * @returns {boolean} 로그인 여부
      */
     isLoggedIn() {
-        const authToken = localStorage.getItem('authToken');
         const user = localStorage.getItem('user');
-        return !!authToken || !!user;
+        return !!(user && user !== '{}' && user !== 'null');
     }
 
     /**
@@ -63,11 +62,8 @@ class SharedSidebar {
         const menuItems = navData ? navData.menu.map(item => ({ ...item })) : [
             { href: '/', icon: '💬', label: '채팅' },
             { href: '/cluster.html', icon: '🖥️', label: '클러스터', requireAuth: true },
-            { href: '/mcp-tools.html', icon: '🔧', label: 'MCP 도구' },
             { href: '/history.html', icon: '📜', label: '대화 히스토리', requireAuth: true },
-            { href: '/canvas.html', icon: '📄', label: '캔버스', requireAuth: true },
             { href: '/research.html', icon: '🔬', label: '딥 리서치', requireAuth: true },
-            { href: '/marketplace.html', icon: '🏪', label: '마켓플레이스', requireAuth: true },
             { href: '/custom-agents.html', icon: '🤖', label: '커스텀 에이전트', requireAuth: true },
             { href: '/memory.html', icon: '🧠', label: 'AI 메모리', requireAuth: true },
             { href: '/usage.html', icon: '📈', label: 'API 사용량', requireAuth: true },
@@ -86,9 +82,40 @@ class SharedSidebar {
             { href: '/settings.html', icon: '⚙️', label: '설정' }
         ];
 
-        // 인증 상태에 따라 필터링
-        const filteredMenuItems = menuItems.filter(item => !item.requireAuth || isAuth);
-        let filteredAdminItems = adminItems.filter(item => !item.requireAuth || isAuth);
+        // 티어 레벨 정의 및 도우미 함수
+        const TIER_LEVEL = { free: 0, pro: 1, enterprise: 2 };
+        const getUserTier = () => {
+            try {
+                const SS = window.SafeStorage || window.localStorage;
+                const SK = window.STORAGE_KEYS || {};
+                const isGuest = SS.getItem(SK.GUEST_MODE || 'guestMode') === 'true' ||
+                    SS.getItem(SK.IS_GUEST || 'isGuest') === 'true' ||
+                    !SS.getItem(SK.USER || 'user');
+                if (isGuest) return 'free';
+                const savedUser = SS.getItem(SK.USER || 'user');
+                if (!savedUser) return 'free';
+                const user = JSON.parse(savedUser);
+                if (user.role === 'admin' || user.role === 'administrator') return 'enterprise';
+                return user.tier || 'free';
+            } catch (e) { return 'free'; }
+        };
+        const canAccessTier = (userTier, requiredTier) =>
+            (TIER_LEVEL[userTier] || 0) >= (TIER_LEVEL[requiredTier] || 0);
+
+        const userTier = getUserTier();
+
+        // 인증 상태 + 티어에 따라 필터링
+        const filteredMenuItems = menuItems.filter(item => {
+            if (item.requireAuth && !isAuth) return false;
+            if (item.minTier && !canAccessTier(userTier, item.minTier)) return false;
+            return true;
+        });
+        let filteredAdminItems = adminItems.filter(item => {
+            if (item.requireAuth && !isAuth) return false;
+            if (item.requireAdmin && !isAuth) return false;
+            if (item.minTier && !canAccessTier(userTier, item.minTier)) return false;
+            return true;
+        });
 
         // 게스트/비로그인일 때: 설정만 남으면 메뉴 섹션으로 이동
         if (!isAuth && filteredAdminItems.length === 1 && filteredAdminItems[0].href === '/settings.html') {
@@ -123,7 +150,7 @@ class SharedSidebar {
             const user = JSON.parse(localStorage.getItem('user') || '{}');
             return `
                 <div class="user-status">
-                    <span class="user-badge logged-in">👤 ${user.username || '사용자'}</span>
+                    <span class="user-badge logged-in">👤 ${(function(s){var d=document.createElement('div');d.textContent=s||'사용자';return d.innerHTML;})(user.username)}</span>
                 </div>
             `;
         } else if (isGuest) {
@@ -238,7 +265,7 @@ function toggleMobileSidebar(e) {
 // 로그아웃 (🆕 서버 토큰 블랙리스트 연동 + AppState 정리)
 function logout() {
      // 서버에 로그아웃 요청 (httpOnly 쿠키 포함)
-     fetch('/api/auth/logout', {
+     fetch(API_ENDPOINTS.AUTH_LOGOUT, {
          method: 'POST',
          credentials: 'include'  // 🔒 httpOnly 쿠키 포함
      }).catch(() => {});
@@ -278,10 +305,9 @@ function initTheme() {
 // 페이지 접근 권한 체크 (제한된 페이지용)
 function checkPageAccess(restrictedPages = []) {
     const currentPage = window.location.pathname;
-    const authToken = localStorage.getItem('authToken');
     const user = localStorage.getItem('user');
     const isGuest = localStorage.getItem('isGuest') === 'true';
-    const isAuthenticated = (authToken || user) && !isGuest;
+    const isAuthenticated = !!(user && user !== '{}' && user !== 'null') && !isGuest;
 
     if (restrictedPages.includes(currentPage) && !isAuthenticated) {
         // 제한된 페이지에 비인증 사용자가 접근 시 로그인 페이지로 리디렉션

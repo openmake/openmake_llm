@@ -58,14 +58,14 @@ describe('Model Selector', () => {
             const prevDefault = process.env.OLLAMA_DEFAULT_MODEL;
 
             try {
-                process.env.OMK_ENGINE_FAST = 'kimi-k2.5:cloud';
+                process.env.OMK_ENGINE_FAST = 'qwen3.5:397b-cloud';
                 process.env.OLLAMA_DEFAULT_MODEL = 'gemini-3-flash-preview:cloud';
                 resetConfig();
 
                 const result = await selectOptimalModel('안녕');
 
                 expect(result.queryType).toBe('chat');
-                expect(result.model).toBe('kimi-k2.5:cloud');
+                expect(result.model).toBe('qwen3.5:397b-cloud');
             } finally {
                 if (prevFast === undefined) {
                     delete process.env.OMK_ENGINE_FAST;

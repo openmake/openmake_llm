@@ -67,8 +67,8 @@
             </header>
             <div class="content-area">
                 <div class="new-research">
-                    <div class="form-group" style="flex:3"><label>연구 주제</label><input type="text" id="topic" placeholder="연구하고 싶은 주제를 입력하세요..."></div>
-                    <div class="form-group" style="flex:1"><label>깊이</label>
+                    <div class="form-group" style="flex:3"><label for="topic">연구 주제</label><input type="text" id="topic" placeholder="연구하고 싶은 주제를 입력하세요..."></div>
+                    <div class="form-group" style="flex:1"><label for="depth">깊이</label>
                         <select id="depth"><option value="quick">빠른 검색</option><option value="standard" selected>표준</option><option value="deep">심층</option></select>
                     </div>
                     <button class="btn-primary" onclick="createSession()">연구 시작</button>
@@ -91,12 +91,11 @@
 
     <div id="toast" class="toast"></div>
 
-    <script src="/js/components/sidebar.js"></script>
-    <script>
+    <script type="module" src="/js/components/sidebar.js"></script>
+    <script type="module">
         function authFetch(url, options = {}) {
-            const token = localStorage.getItem('authToken');
-            const headers = { 'Content-Type': 'application/json', ...(token ? { 'Authorization': 'Bearer ' + token } : {}), ...options.headers };
-            return fetch(url, { ...options, headers }).then(r => r.json());
+            const headers = { 'Content-Type': 'application/json', ...options.headers };
+            return fetch(url, { ...options, headers, credentials: 'include' }).then(r => r.json());
         }
         function showToast(msg, type = 'success') {
             const t = document.getElementById('toast');
@@ -190,6 +189,11 @@
 
         document.getElementById('topic').addEventListener('keydown', e => { if (e.key === 'Enter') createSession(); });
         loadSessions();
+
+        window.createSession = createSession;
+        window.closeDetail = closeDetail;
+        window.deleteSession = deleteSession;
+        window.openSession = openSession;
     </script>
 </body>
 </html>

@@ -26,6 +26,18 @@ import { KeyExhaustionError } from '../errors/key-exhaustion.error';
 
 const logger = createLogger('ErrorHandler');
 
+const SENSITIVE_KEY_PATTERNS = ['password', 'token', 'api_key', 'secret', 'key', 'authorization', 'auth', 'credential'];
+
+function sanitizeForLog(obj: Record<string, unknown>): Record<string, unknown> {
+    return Object.fromEntries(
+        Object.entries(obj).map(([k, v]) => {
+            const lk = k.toLowerCase();
+            const isSensitive = SENSITIVE_KEY_PATTERNS.some(p => lk.includes(p));
+            return isSensitive ? [k, '[REDACTED]'] : [k, v];
+        })
+    );
+}
+
 /**
  * Base application error class
  */
@@ -168,7 +180,10 @@ export function errorHandler(
     if (err instanceof KeyExhaustionError) {
         logger.warn(`All API keys exhausted: ${err.message}`, { path: req.path });
         res.set('Retry-After', String(err.retryAfterSeconds));
-        res.status(503).json(apiError(ErrorCodes.SERVICE_UNAVAILABLE, err.getDisplayMessage('ko'), {
+        const acceptLangHeader = req.headers['accept-language']?.substring(0, 2).toLowerCase() || 'en';
+        const supportedErrorLangs = ['ko', 'en', 'ja', 'zh', 'es', 'de'];
+        const errorLang = supportedErrorLangs.includes(acceptLangHeader) ? acceptLangHeader : 'en';
+        res.status(503).json(apiError(ErrorCodes.SERVICE_UNAVAILABLE, err.getDisplayMessage(errorLang), {
             errorType: 'api_keys_exhausted',
             retryAfter: err.retryAfterSeconds,
             resetTime: err.resetTime.toISOString(),
@@ -206,10 +221,16 @@ export function errorHandler(
     }
 
     // ── 기타 알 수 없는 에러 → 500 ──
+    const safeBody = req.body && typeof req.body === 'object'
+        ? sanitizeForLog(req.body as Record<string, unknown>)
+        : req.body;
+    const safeQuery = req.query && typeof req.query === 'object'
+        ? sanitizeForLog(req.query as Record<string, unknown>)
+        : req.query;
     logger.error(`[${req.method}] ${req.path}: ${err.message}`, {
         stack: err.stack,
-        body: req.body,
-        query: req.query
+        body: safeBody,
+        query: safeQuery
     });
 
     const statusCode = err.status || 500;

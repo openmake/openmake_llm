@@ -22,7 +22,7 @@ export interface ProgressEvent {
     message: string;
     progress?: number;  // 0-100
     filename?: string;
-    details?: Record<string, any>;
+    details?: Record<string, unknown>;
 }
 
 export type ProgressCallback = (event: ProgressEvent) => void;
@@ -35,7 +35,7 @@ export function createProgressEvent(
     message: string,
     filename?: string,
     progress?: number,
-    details?: Record<string, any>
+    details?: Record<string, unknown>
 ): ProgressEvent {
     return {
         type: 'document_progress',

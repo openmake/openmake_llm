@@ -12,6 +12,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { envSchema } from './env.schema';
 import { SERVER_CONFIG } from './constants';
+import type { SupportedLanguageCode } from '../chat/language-policy';
 
 export interface EnvConfig {
     // Node
@@ -43,15 +44,12 @@ export interface EnvConfig {
     // Ollama
     ollamaBaseUrl: string;
     ollamaDefaultModel: string;
-    ollamaKoreanModel: string;
-    ollamaModel: string;
     ollamaTimeout: number;
-    ollamaHost: string;
     ollamaApiKey: string;
     ollamaApiKeyPrimary: string;
     ollamaApiKeySecondary: string;
     ollamaSshKey: string;
-    ollamaModels: string[];  // Per-key models (OLLAMA_MODEL_1, _2, etc.)
+    ollamaModels: string[];  // Per-key models — 로그 표시용 (OLLAMA_MODEL_1, _2, etc.)
 
     // Rate limits
     ollamaHourlyLimit: number;
@@ -65,7 +63,6 @@ export interface EnvConfig {
     geminiThinkEnabled: boolean;
     geminiThinkLevel: 'low' | 'medium' | 'high';
     geminiNumCtx: number;
-    geminiEmbeddingModel: string;
     geminiWebSearchEnabled: boolean;
 
     // External services
@@ -73,6 +70,7 @@ export interface EnvConfig {
     googleCseId: string;
     firecrawlApiKey: string;
     firecrawlApiUrl: string;
+    githubToken: string;
 
     // Documents
     documentTtlHours: number;
@@ -97,6 +95,9 @@ export interface EnvConfig {
     apiKeyPepper: string;
     apiKeyMaxPerUser: number;
 
+    // Cookie Security (HTTPS 없이 production 운영 시 false로 설정)
+    cookieSecure: boolean;
+
     // Pipeline Profile — Brand Model → Internal Engine Mapping
     omkEngineLlm: string;
     omkEnginePro: string;
@@ -112,6 +113,12 @@ export interface EnvConfig {
     omkDomainCreative: string;
     omkDomainAnalysis: string;
     omkDomainGeneral: string;
+
+    // Language Policy
+    enableDynamicResponseLanguage: boolean;
+    defaultResponseLanguage: SupportedLanguageCode;
+    languageDetectionMinConfidence: number;
+    languageFallbackLanguage: SupportedLanguageCode;
 }
 
 const DEFAULT_CONFIG: EnvConfig = {
@@ -144,15 +151,12 @@ const DEFAULT_CONFIG: EnvConfig = {
     // Ollama
     ollamaBaseUrl: 'http://localhost:11434',
     ollamaDefaultModel: 'gemini-3-flash-preview:cloud',
-    ollamaKoreanModel: 'gemini-3-flash-preview:cloud',
-    ollamaModel: 'gemini-3-flash-preview:cloud',
     ollamaTimeout: 120000,
-    ollamaHost: 'http://localhost:11434',
     ollamaApiKey: '',
     ollamaApiKeyPrimary: '',
     ollamaApiKeySecondary: '',
     ollamaSshKey: '',
-    ollamaModels: [],  // Per-key models
+    ollamaModels: [],  // Per-key models — 로그 표시용
 
     // Rate limits
     ollamaHourlyLimit: 150,
@@ -166,7 +170,6 @@ const DEFAULT_CONFIG: EnvConfig = {
     geminiThinkEnabled: true,
     geminiThinkLevel: 'high' as const,
     geminiNumCtx: 32768,
-    geminiEmbeddingModel: 'gemini-3-flash-preview:cloud',
     geminiWebSearchEnabled: true,
 
     // External services
@@ -174,6 +177,7 @@ const DEFAULT_CONFIG: EnvConfig = {
     googleCseId: '',
     firecrawlApiKey: '',
     firecrawlApiUrl: 'https://api.firecrawl.dev/v1',
+    githubToken: '',
 
     // Documents
     documentTtlHours: 1,
@@ -198,6 +202,9 @@ const DEFAULT_CONFIG: EnvConfig = {
     apiKeyPepper: '',
     apiKeyMaxPerUser: 5,
 
+    // Cookie Security
+    cookieSecure: false,
+
     // Pipeline Profile — Brand Model → Internal Engine Mapping
     omkEngineLlm: 'gemini-3-flash-preview:cloud',
     omkEnginePro: 'gemini-3-flash-preview:cloud',
@@ -213,6 +220,12 @@ const DEFAULT_CONFIG: EnvConfig = {
     omkDomainCreative: '',
     omkDomainAnalysis: '',
     omkDomainGeneral: '',
+
+    // Language Policy
+    enableDynamicResponseLanguage: false,
+    defaultResponseLanguage: 'ko',
+    languageDetectionMinConfidence: 0.7,
+    languageFallbackLanguage: 'en',
 };
 
 function parseEnvFile(filePath: string): Record<string, string> {
@@ -316,10 +329,7 @@ export function loadConfig(): EnvConfig {
         CORS_ORIGINS: env('CORS_ORIGINS'),
         OLLAMA_BASE_URL: env('OLLAMA_BASE_URL'),
         OLLAMA_DEFAULT_MODEL: env('OLLAMA_DEFAULT_MODEL'),
-        OLLAMA_KOREAN_MODEL: env('OLLAMA_KOREAN_MODEL'),
-        OLLAMA_MODEL: env('OLLAMA_MODEL'),
         OLLAMA_TIMEOUT: env('OLLAMA_TIMEOUT'),
-        OLLAMA_HOST: env('OLLAMA_HOST'),
         OLLAMA_API_KEY: env('OLLAMA_API_KEY'),
         OLLAMA_API_KEY_PRIMARY: env('OLLAMA_API_KEY_PRIMARY'),
         OLLAMA_API_KEY_SECONDARY: env('OLLAMA_API_KEY_SECONDARY'),
@@ -332,12 +342,12 @@ export function loadConfig(): EnvConfig {
         GEMINI_THINK_ENABLED: env('GEMINI_THINK_ENABLED'),
         GEMINI_THINK_LEVEL: env('GEMINI_THINK_LEVEL'),
         GEMINI_NUM_CTX: env('GEMINI_NUM_CTX'),
-        GEMINI_EMBEDDING_MODEL: env('GEMINI_EMBEDDING_MODEL'),
         GEMINI_WEB_SEARCH_ENABLED: env('GEMINI_WEB_SEARCH_ENABLED'),
         GOOGLE_API_KEY: env('GOOGLE_API_KEY'),
         GOOGLE_CSE_ID: env('GOOGLE_CSE_ID'),
         FIRECRAWL_API_KEY: env('FIRECRAWL_API_KEY'),
         FIRECRAWL_API_URL: env('FIRECRAWL_API_URL'),
+        GITHUB_TOKEN: env('GITHUB_TOKEN'),
         DOCUMENT_TTL_HOURS: env('DOCUMENT_TTL_HOURS'),
         MAX_UPLOADED_DOCUMENTS: env('MAX_UPLOADED_DOCUMENTS'),
         MAX_CONVERSATION_SESSIONS: env('MAX_CONVERSATION_SESSIONS'),
@@ -363,6 +373,15 @@ export function loadConfig(): EnvConfig {
         OMK_DOMAIN_CREATIVE: env('OMK_DOMAIN_CREATIVE'),
         OMK_DOMAIN_ANALYSIS: env('OMK_DOMAIN_ANALYSIS'),
         OMK_DOMAIN_GENERAL: env('OMK_DOMAIN_GENERAL'),
+
+        // Language Policy
+        ENABLE_DYNAMIC_RESPONSE_LANGUAGE: env('ENABLE_DYNAMIC_RESPONSE_LANGUAGE'),
+        DEFAULT_RESPONSE_LANGUAGE: env('DEFAULT_RESPONSE_LANGUAGE'),
+        LANGUAGE_DETECTION_MIN_CONFIDENCE: env('LANGUAGE_DETECTION_MIN_CONFIDENCE'),
+        LANGUAGE_FALLBACK_LANGUAGE: env('LANGUAGE_FALLBACK_LANGUAGE'),
+
+        // Cookie Security
+        COOKIE_SECURE: env('COOKIE_SECURE'),
     });
 
     if (!parsedResult.success) {
@@ -407,16 +426,13 @@ export function loadConfig(): EnvConfig {
         // Ollama
         ollamaBaseUrl: parsed.OLLAMA_BASE_URL ?? DEFAULT_CONFIG.ollamaBaseUrl,
         ollamaDefaultModel: parsed.OLLAMA_DEFAULT_MODEL ?? DEFAULT_CONFIG.ollamaDefaultModel,
-        ollamaKoreanModel: parsed.OLLAMA_KOREAN_MODEL ?? DEFAULT_CONFIG.ollamaKoreanModel,
-        ollamaModel: parsed.OLLAMA_MODEL ?? DEFAULT_CONFIG.ollamaModel,
         ollamaTimeout: parsed.OLLAMA_TIMEOUT ?? DEFAULT_CONFIG.ollamaTimeout,
-        ollamaHost: parsed.OLLAMA_HOST ?? DEFAULT_CONFIG.ollamaHost,
         ollamaApiKey: parsed.OLLAMA_API_KEY ?? DEFAULT_CONFIG.ollamaApiKey,
         ollamaApiKeyPrimary: parsed.OLLAMA_API_KEY_PRIMARY ?? DEFAULT_CONFIG.ollamaApiKeyPrimary,
         ollamaApiKeySecondary: parsed.OLLAMA_API_KEY_SECONDARY ?? DEFAULT_CONFIG.ollamaApiKeySecondary,
         ollamaSshKey: parsed.OLLAMA_SSH_KEY ?? DEFAULT_CONFIG.ollamaSshKey,
 
-        // Per-key models (OLLAMA_MODEL_1, _2, _3, ... N)
+        // Per-key models — 로그 표시용 (OLLAMA_MODEL_1, _2, _3, ... N)
         ollamaModels: parsed.OLLAMA_MODELS ?? DEFAULT_CONFIG.ollamaModels,
 
         // Rate limits
@@ -431,7 +447,6 @@ export function loadConfig(): EnvConfig {
         geminiThinkEnabled: parsed.GEMINI_THINK_ENABLED ?? DEFAULT_CONFIG.geminiThinkEnabled,
         geminiThinkLevel: parsed.GEMINI_THINK_LEVEL ?? DEFAULT_CONFIG.geminiThinkLevel,
         geminiNumCtx: parsed.GEMINI_NUM_CTX ?? DEFAULT_CONFIG.geminiNumCtx,
-        geminiEmbeddingModel: parsed.GEMINI_EMBEDDING_MODEL ?? DEFAULT_CONFIG.geminiEmbeddingModel,
         geminiWebSearchEnabled: parsed.GEMINI_WEB_SEARCH_ENABLED ?? DEFAULT_CONFIG.geminiWebSearchEnabled,
 
         // External services
@@ -439,6 +454,7 @@ export function loadConfig(): EnvConfig {
         googleCseId: parsed.GOOGLE_CSE_ID ?? DEFAULT_CONFIG.googleCseId,
         firecrawlApiKey: parsed.FIRECRAWL_API_KEY ?? DEFAULT_CONFIG.firecrawlApiKey,
         firecrawlApiUrl: parsed.FIRECRAWL_API_URL ?? DEFAULT_CONFIG.firecrawlApiUrl,
+        githubToken: parsed.GITHUB_TOKEN ?? DEFAULT_CONFIG.githubToken,
 
         // Documents
         documentTtlHours: parsed.DOCUMENT_TTL_HOURS ?? DEFAULT_CONFIG.documentTtlHours,
@@ -478,6 +494,15 @@ export function loadConfig(): EnvConfig {
         omkDomainCreative: parsed.OMK_DOMAIN_CREATIVE ?? DEFAULT_CONFIG.omkDomainCreative,
         omkDomainAnalysis: parsed.OMK_DOMAIN_ANALYSIS ?? DEFAULT_CONFIG.omkDomainAnalysis,
         omkDomainGeneral: parsed.OMK_DOMAIN_GENERAL ?? DEFAULT_CONFIG.omkDomainGeneral,
+
+        // Language Policy
+        enableDynamicResponseLanguage: parsed.ENABLE_DYNAMIC_RESPONSE_LANGUAGE ?? DEFAULT_CONFIG.enableDynamicResponseLanguage,
+        defaultResponseLanguage: parsed.DEFAULT_RESPONSE_LANGUAGE ?? DEFAULT_CONFIG.defaultResponseLanguage,
+        languageDetectionMinConfidence: parsed.LANGUAGE_DETECTION_MIN_CONFIDENCE ?? DEFAULT_CONFIG.languageDetectionMinConfidence,
+        languageFallbackLanguage: parsed.LANGUAGE_FALLBACK_LANGUAGE ?? DEFAULT_CONFIG.languageFallbackLanguage,
+
+        // Cookie Security
+        cookieSecure: parsed.COOKIE_SECURE ?? DEFAULT_CONFIG.cookieSecure,
     };
 }
 

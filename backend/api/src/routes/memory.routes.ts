@@ -27,8 +27,12 @@ import { MemoryCategory } from '../data/models/unified-database';
 import { success, badRequest, notFound, forbidden } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
 import { requireAuth } from '../auth';
-import { getPool, getUnifiedDatabase } from '../data/models/unified-database';
+import { validate } from '../middlewares/validation';
+import { getUnifiedDatabase } from '../data/models/unified-database';
+import { createMemorySchema, updateMemorySchema } from '../schemas/memory.schema';
+import { createLogger } from '../utils/logger';
 const router = Router();
+const logger = createLogger('MemoryRoutes');
 
 // 모든 메모리 엔드포인트에 인증 필수
 router.use(requireAuth);
@@ -44,7 +48,7 @@ router.use(requireAuth);
 router.get('/', asyncHandler(async (req: Request, res: Response) => {
      const userId = (req.user && 'userId' in req.user ? req.user.userId : req.user?.id?.toString()) || 'anonymous';
      const category = req.query.category as MemoryCategory | undefined;
-     const limit = parseInt(req.query.limit as string) || 50;
+     const limit = parseInt(req.query.limit as string, 10) || 50;
      const minImportance = parseFloat(req.query.minImportance as string) || undefined;
 
      const memoryService = getMemoryService();
@@ -68,7 +72,7 @@ const MEMORY_LIMITS: Record<string, number> = {
    * POST /api/memory
   * 메모리 생성
   */
-router.post('/', asyncHandler(async (req: Request, res: Response) => {
+router.post('/', validate(createMemorySchema), asyncHandler(async (req: Request, res: Response) => {
      const userId = (req.user && 'userId' in req.user ? req.user.userId : req.user?.id?.toString()) || 'anonymous';
      const { category, key, value, importance, tags } = req.body;
 
@@ -85,7 +89,7 @@ router.post('/', asyncHandler(async (req: Request, res: Response) => {
           const memSvc = getMemoryService();
           const existing = await memSvc.getUserMemories(userId, { limit: memoryLimit + 1 });
           if (existing.length >= memoryLimit) {
-              res.status(403).json(badRequest(`메모리 생성 제한 초과 (${userTier}: 최대 ${memoryLimit}개)`));
+              res.status(403).json(forbidden(`메모리 생성 제한 초과 (${userTier}: 최대 ${memoryLimit}개)`));
               return;
           }
       }
@@ -117,7 +121,7 @@ router.get('/search', asyncHandler(async (req: Request, res: Response) => {
     if (!q || q.trim().length === 0) {
         return res.status(400).json(badRequest('검색어(q)는 필수입니다'));
     }
-    const limit = parseInt(req.query.limit as string) || 10;
+    const limit = parseInt(req.query.limit as string, 10) || 10;
     const db = getUnifiedDatabase();
     const memories = await db.getRelevantMemories(userId, q, limit);
     res.json(success({ memories, total: memories.length, query: q }));
@@ -127,16 +131,16 @@ router.get('/search', asyncHandler(async (req: Request, res: Response) => {
    * PUT /api/memory/:id
   * 메모리 수정
   */
-router.put('/:id', asyncHandler(async (req: Request, res: Response) => {
+router.put('/:id', validate(updateMemorySchema), asyncHandler(async (req: Request, res: Response) => {
      const memoryId = req.params.id;
     const userId = (req.user && 'userId' in req.user ? req.user.userId : req.user?.id?.toString()) || 'anonymous';
+    const db = getUnifiedDatabase();
     // 소유권 확인
-    const pool = getPool();
-    const ownerCheck = await pool.query('SELECT user_id FROM user_memories WHERE id = $1', [memoryId]);
-    if (ownerCheck.rows.length === 0) {
+    const ownerUserId = await db.getMemoryOwner(memoryId);
+    if (ownerUserId === null) {
         return res.status(404).json(notFound('메모리를 찾을 수 없습니다'));
     }
-    if (String(ownerCheck.rows[0].user_id) !== userId && req.user?.role !== 'admin') {
+    if (String(ownerUserId) !== userId && req.user?.role !== 'admin') {
         return res.status(403).json(forbidden('접근 권한이 없습니다'));
     }
      const { value, importance } = req.body;
@@ -155,16 +159,16 @@ router.put('/:id', asyncHandler(async (req: Request, res: Response) => {
    * DELETE /api/memory/:id
   * 메모리 삭제
   */
-router.delete('/:id', asyncHandler(async (req: Request, res: Response) => {
+router.delete('/:id', requireAuth, asyncHandler(async (req: Request, res: Response) => {
      const memoryId = req.params.id;
     const userId = (req.user && 'userId' in req.user ? req.user.userId : req.user?.id?.toString()) || 'anonymous';
+    const db = getUnifiedDatabase();
     // 소유권 확인
-    const pool = getPool();
-    const ownerCheck = await pool.query('SELECT user_id FROM user_memories WHERE id = $1', [memoryId]);
-    if (ownerCheck.rows.length === 0) {
+    const ownerUserId = await db.getMemoryOwner(memoryId);
+    if (ownerUserId === null) {
         return res.status(404).json(notFound('메모리를 찾을 수 없습니다'));
     }
-    if (String(ownerCheck.rows[0].user_id) !== userId && req.user?.role !== 'admin') {
+    if (String(ownerUserId) !== userId && req.user?.role !== 'admin') {
         return res.status(403).json(forbidden('접근 권한이 없습니다'));
     }
 
@@ -178,7 +182,7 @@ router.delete('/:id', asyncHandler(async (req: Request, res: Response) => {
    * DELETE /api/memory
   * 사용자의 모든 메모리 삭제
   */
-router.delete('/', asyncHandler(async (req: Request, res: Response) => {
+router.delete('/', requireAuth, asyncHandler(async (req: Request, res: Response) => {
      const userId = (req.user && 'userId' in req.user ? req.user.userId : req.user?.id?.toString()) || 'anonymous';
      const confirm = req.query.confirm === 'true';
 

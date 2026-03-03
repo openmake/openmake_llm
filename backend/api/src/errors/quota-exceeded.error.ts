@@ -11,6 +11,8 @@
  * @throws HTTP 429 Too Many Requests
  * @see api-usage-tracker.ts - 사용량 추적 및 할당량 검사
  */
+import { QUOTA_RETRY_AFTER } from '../config/timeouts';
+
 export class QuotaExceededError extends Error {
     public readonly quotaType: 'hourly' | 'weekly' | 'both';
     public readonly used: number;
@@ -25,6 +27,6 @@ export class QuotaExceededError extends Error {
         this.used = used;
         this.limit = limit;
         // Hourly quota resets faster
-        this.retryAfterSeconds = quotaType === 'hourly' ? 3600 : 86400;
+        this.retryAfterSeconds = quotaType === 'hourly' ? QUOTA_RETRY_AFTER.HOURLY_SECONDS : QUOTA_RETRY_AFTER.DAILY_SECONDS;
     }
 }

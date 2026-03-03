@@ -23,72 +23,19 @@ import * as dotenv from 'dotenv';
 import * as pathModule from 'path';
 dotenv.config({ path: pathModule.resolve(__dirname, '../../../.env') });
 
-import express, { Application, Request, Response, NextFunction } from 'express';
-import { Server as HttpServer, ServerResponse, createServer } from 'http';
-import { WebSocketServer, WebSocket } from 'ws';
-import * as path from 'path';
-import * as fs from 'fs';
-import helmet from 'helmet';
-import cookieParser from 'cookie-parser';
+import express, { Application } from 'express';
+import { Server as HttpServer, createServer } from 'http';
+import { WebSocketServer } from 'ws';
 import { ClusterManager, getClusterManager } from './cluster/manager';
-import { startSessionCleanupScheduler } from './data/conversation-db';
-
-// 🆕 고도화 모듈 임포트
-import {
-    metricsRouter,
-    agentRouter,
-    mcpRouter,
-    setClusterManager as setMetricsCluster,
-    setActiveConnectionsGetter as setMetricsConnections,
-    // 🆕 리팩토링된 라우트
-    chatRouter,
-    setChatCluster,
-    documentsRouter,
-    setDocumentsDeps,
-    webSearchRouter,
-    setWebSearchCluster,
-    // 🆕 추가 분리된 라우트
-    usageRouter,
-    nodesRouter,
-    setNodesCluster,
-    agentsMonitoringRouter,
-    memoryRouter,
-    auditRouter,
-    researchRouter,
-    canvasRouter,
-    externalRouter,
-    marketplaceRouter,
-    // 🆕 Push 알림 라우트
-    pushRouter,
-    // 🆕 모델 정보 라우트
-    modelRouter,
-    // 🆕 Developer Documentation 라우트
-    developerDocsRouter,
-    // 🆕 Chat Feedback 라우트
-    chatFeedbackRouter
-} from './routes';
-import { tokenMonitoringRouter } from './routes/token-monitoring.routes';
-import v1Router from './routes/v1';
-import { requestLogger, analyticsMiddleware, generalLimiter, chatLimiter, authLimiter, corsMiddleware } from './middlewares';
-import { requestIdMiddleware } from './middlewares/request-id';
-import { bootstrapServices } from './bootstrap';
-import { getConnectionPool } from './ollama/connection-pool';
-import { getAnalyticsSystem } from './monitoring/analytics';
-
-
-// 🆕 리팩토링된 컨트롤러 임포트
-import {
-    createClusterController,
-    createHealthController,
-    createAuthController,
-    createAdminController,
-    createSessionController
-} from './controllers';
-import { uploadedDocuments } from './documents/store';
+import { startSessionCleanupScheduler, getConversationDB } from './data/conversation-db';
+import { startDbRetention } from './data/db-retention';
+import { startPeriodicCleanup } from './utils/token-cleanup';
+import { setActiveConnectionsGetter as setMetricsConnections } from './routes/metrics.routes';
 import { WebSocketHandler } from './sockets/handler';
-import { RATE_LIMITS, SERVER_CONFIG, OLLAMA_CLOUD_HOST } from './config/constants';
-import { setupSwaggerRoutes } from './swagger';
-import { errorHandler, notFoundHandler } from './utils/error-handler';
+import { getAnalyticsSystem } from './monitoring/analytics';
+import { setupSecurity, setupStaticFiles, setupParsersAndLimiting, setupErrorHandling } from './middlewares/setup';
+import { setupApiRoutes } from './routes/setup';
+import { getConfig } from './config';
 
 /**
  * 대시보드 서버 초기화 옵션
@@ -103,26 +50,6 @@ interface DashboardOptions {
 
 
 
-// 로그 레벨 표준화 헬퍼
-import { getConfig } from './config';
-const envConfig = getConfig();
-const logLevels = { debug: 0, info: 1, warn: 2, error: 3 };
-const currentLogLevel = logLevels[envConfig.logLevel] || 1;
-
-const log = {
-    debug: (msg: string, ...args: unknown[]) => {
-        if (currentLogLevel <= 0) console.log(`[DEBUG] ${msg}`, ...args);
-    },
-    info: (msg: string, ...args: unknown[]) => {
-        if (currentLogLevel <= 1) console.log(`[INFO] ${msg}`, ...args);
-    },
-    warn: (msg: string, ...args: unknown[]) => {
-        if (currentLogLevel <= 2) console.warn(`[WARN] ${msg}`, ...args);
-    },
-    error: (msg: string, ...args: unknown[]) => {
-        console.error(`[ERROR] ${msg}`, ...args);
-    }
-};
 
 
 
@@ -193,241 +120,11 @@ export class DashboardServer {
      * @private
      */
     private setupRoutes(): void {
-        this.setupSecurity(this.app);
-        this.setupStaticFiles(this.app);
-        this.setupParsersAndLimiting(this.app);
-        this.setupApiRoutes(this.app);
-        this.setupErrorHandling(this.app);
-    }
-
-    private setupSecurity(app: Application): void {
-        app.use('/api', (req, res, next) => {
-            res.setHeader('Content-Type', 'application/json; charset=utf-8');
-            next();
-        });
-    }
-
-    private setupParsersAndLimiting(app: Application): void {
-        app.use('/api/auth/', authLimiter);
-        app.use('/api/chat', chatLimiter);
-        app.use('/api/', (req, res, next) => {
-            if (req.originalUrl.includes('/api/monitoring') || req.originalUrl.includes('/api/metrics')) {
-                return next();
-            }
-            generalLimiter(req, res, next);
-        });
-
-        app.use(corsMiddleware);
-        app.use(requestIdMiddleware);
-        app.use(requestLogger);
-        app.use(analyticsMiddleware);
-    }
-
-    private setupStaticFiles(app: Application): void {
-        const SPA_PAGES = new Set([
-            'canvas', 'research', 'mcp-tools', 'marketplace', 'custom-agents',
-            'agent-learning', 'cluster', 'usage', 'analytics', 'admin-metrics',
-            'admin', 'audit', 'external', 'alerts', 'memory', 'settings',
-            'password-change', 'history', 'guide', 'developer', 'api-keys',
-            'token-monitoring'
-        ]);
-
-        app.use((req: Request, res: Response, next: NextFunction) => {
-            // SPA 라우팅: /{page}.html 또는 /{page} (클린 URL) 모두 index.html로 서빙
-            const htmlMatch = req.path.match(/^\/([a-z0-9-]+)\.html$/);
-            const cleanMatch = req.path.match(/^\/([a-z0-9-]+)$/);
-            const match = htmlMatch || cleanMatch;
-            if (match && SPA_PAGES.has(match[1])) {
-                if (match[1] === 'external' && htmlMatch) {
-                    return next();
-                }
-
-                const indexPath = path.join(__dirname, 'public', 'index.html');
-                if (fs.existsSync(indexPath)) {
-                    res.setHeader('Content-Type', 'text/html; charset=utf-8');
-                    return res.sendFile(indexPath);
-                }
-                const fallbackPath = path.join(__dirname, '../../../frontend/web/public', 'index.html');
-                if (fs.existsSync(fallbackPath)) {
-                    res.setHeader('Content-Type', 'text/html; charset=utf-8');
-                    return res.sendFile(fallbackPath);
-                }
-            }
-            next();
-        });
-
-        app.get('/externel.html', (req: Request, res: Response) => {
-            const queryIndex = req.originalUrl.indexOf('?');
-            const query = queryIndex >= 0 ? req.originalUrl.slice(queryIndex) : '';
-            res.redirect(302, `/external.html${query}`);
-        });
-
-        app.use(helmet({
-            contentSecurityPolicy: {
-                directives: {
-                    defaultSrc: ["'self'"],
-                    scriptSrc: [
-                        "'self'",
-                        "'unsafe-inline'",
-                        "https://cdn.jsdelivr.net",
-                        "https://cdnjs.cloudflare.com",
-                    ],
-                    styleSrc: [
-                        "'self'",
-                        "'unsafe-inline'",
-                        "https://cdn.jsdelivr.net",
-                        "https://cdnjs.cloudflare.com",
-                        "https://fonts.googleapis.com",
-                    ],
-                    imgSrc: ["'self'", "data:", "blob:", "https:"],
-                    connectSrc: [
-                        "'self'",
-                        "ws:",
-                        "wss:",
-                        getConfig().ollamaBaseUrl,
-                        OLLAMA_CLOUD_HOST,
-                        "https://api.iconify.design",
-                        "https://cdn.jsdelivr.net",
-                        "https://cdnjs.cloudflare.com",
-                        "https://fonts.googleapis.com",
-                        "https://fonts.gstatic.com",
-                    ],
-                    fontSrc: [
-                        "'self'",
-                        "data:",
-                        "https://cdn.jsdelivr.net",
-                        "https://fonts.gstatic.com",
-                    ],
-                    scriptSrcAttr: ["'unsafe-inline'"],
-                    objectSrc: ["'none'"],
-                    frameAncestors: ["'none'"],
-                    baseUri: ["'self'"],
-                    formAction: ["'self'"],
-                    upgradeInsecureRequests: null,
-                }
-            },
-            crossOriginEmbedderPolicy: false,
-            crossOriginResourcePolicy: { policy: 'cross-origin' }
-        }));
-
-        app.use(express.json());
-        app.use(cookieParser());
-
-        const staticHeaders = (res: ServerResponse, filePath: string) => {
-            if (filePath.endsWith('.html')) {
-                res.setHeader('Content-Type', 'text/html; charset=utf-8');
-            } else if (filePath.endsWith('.js')) {
-                res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
-            } else if (filePath.endsWith('.css')) {
-                res.setHeader('Content-Type', 'text/css; charset=utf-8');
-            }
-
-            if (filePath.endsWith('service-worker.js')) {
-                res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-            } else if (filePath.endsWith('.html')) {
-                res.setHeader('Cache-Control', 'no-cache');
-            } else if (filePath.endsWith('.js') || filePath.endsWith('.css')) {
-                res.setHeader('Cache-Control', 'public, max-age=604800, stale-while-revalidate=86400');
-            } else if (/\.(png|jpg|jpeg|svg|gif|webp|ico)$/i.test(filePath)) {
-                res.setHeader('Cache-Control', 'public, max-age=2592000');
-            } else if (filePath.endsWith('.json')) {
-                res.setHeader('Cache-Control', 'no-cache');
-            }
-        };
-
-        app.use(express.static(path.join(__dirname, 'public'), {
-            etag: true,
-            lastModified: true,
-            setHeaders: staticHeaders
-        }));
-
-        const frontendPath = path.join(__dirname, '../../../frontend/web/public');
-        app.use(express.static(frontendPath, {
-            etag: true,
-            lastModified: true,
-            setHeaders: staticHeaders
-        }));
-    }
-
-    private setupApiRoutes(app: Application): void {
-        app.use('/api/v1', v1Router);
-
-        app.use('/api', (req, res, next) => {
-            if (!req.path.startsWith('/v1')) {
-                res.set('Deprecation', 'true');
-                res.set('Link', '</api/v1>; rel="successor-version"');
-            }
-            next();
-        });
-
-        setMetricsCluster(this.cluster);
-        app.use('/api/metrics', metricsRouter);
-        app.use('/api/agents', agentRouter);
-        app.use('/api/monitoring', tokenMonitoringRouter);
-        app.use('/api/mcp', mcpRouter);
-
-        bootstrapServices();
-
-        app.use('/', createHealthController(this.cluster));
-        app.use('/api/cluster', createClusterController(this.cluster));
-        app.use('/api/auth', createAuthController(this.port));
-        app.use('/api/admin', createAdminController());
-
-        setChatCluster(this.cluster);
-        setDocumentsDeps(this.cluster, this.broadcast.bind(this));
-        setWebSearchCluster(this.cluster);
-        setNodesCluster(this.cluster);
-        // 🆕 /api/chat/feedback 는 /api/chat 보다 먼저 마운트해야 Express가 올바르게 매칭
-        app.use('/api/chat/feedback', chatFeedbackRouter);
-        app.use('/api/chat', chatRouter);
-        app.use('/api', documentsRouter);
-        app.use('/api', webSearchRouter);
-        app.use('/api/usage', usageRouter);
-        app.use('/api/nodes', nodesRouter);
-        app.use('/api/agents-monitoring', agentsMonitoringRouter);
-        app.use('/api/memory', memoryRouter);
-        app.use('/api/audit', auditRouter);
-        app.use('/api/research', researchRouter);
-        app.use('/api/canvas', canvasRouter);
-        app.use('/api/external', externalRouter);
-        app.use('/api/marketplace', marketplaceRouter);
-        app.use('/api/push', pushRouter);
-        app.use('/api/docs', developerDocsRouter);
-
-        setupSwaggerRoutes(app);
-
-        app.use('/api/chat/sessions', createSessionController());
-        app.use('/api/chat/conversations', createSessionController());
-        app.use('/api', modelRouter);
-
-        app.get('/admin', (req: Request, res: Response) => {
-            const adminPath = path.join(__dirname, 'public', 'admin.html');
-            if (fs.existsSync(adminPath)) {
-                res.sendFile(adminPath);
-            } else {
-                res.status(404).send('Admin page not found.');
-            }
-        });
-
-        app.get('/', (req: Request, res: Response) => {
-            const frontendPath = path.join(__dirname, '../../../frontend/web/public');
-            const indexPath = path.join(frontendPath, 'index.html');
-            if (fs.existsSync(indexPath)) {
-                res.sendFile(indexPath);
-            } else {
-                const fallbackPath = path.join(__dirname, 'public', 'index.html');
-                if (fs.existsSync(fallbackPath)) {
-                    res.sendFile(fallbackPath);
-                } else {
-                    res.status(404).send('Dashboard UI files not found. Please run build.');
-                }
-            }
-        });
-    }
-
-    private setupErrorHandling(app: Application): void {
-        app.use(notFoundHandler);
-        app.use(errorHandler);
+        setupSecurity(this.app);
+        setupStaticFiles(this.app, __dirname);
+        setupParsersAndLimiting(this.app);
+        setupApiRoutes(this.app, this.cluster, this.broadcast.bind(this));
+        setupErrorHandling(this.app);
     }
 
 
@@ -460,8 +157,51 @@ export class DashboardServer {
         // 클러스터 시작
         await this.cluster.start();
 
+        // ConversationDB / UserManager 초기화 완료 보장 (race condition 방지)
+        // 스키마 마이그레이션이 완료되기 전에 API 요청을 처리하지 않도록 대기
+        try {
+            const { getUserManager } = await import('./data/user-manager');
+            await Promise.all([
+                getConversationDB().ensureReady(),
+                getUserManager().ensureReady()
+            ]);
+            console.log('[Server] DB 초기화 완료');
+        } catch (err) {
+            console.error('[Server] DB 초기화 실패 (서버는 계속 시작):', err);
+        }
+
+        // 에이전트 스킬 자동 시딩 (17개 산업 분야 에이전트 전문 지침 DB 등록)
+        try {
+            const { seedAgentSkills } = await import('./agents/skill-seeder');
+            seedAgentSkills().catch((err: unknown) => console.error('[Server] 스킬 시딩 실패:', err));
+        } catch (err) {
+            console.error('[Server] 스킬 시더 로드 실패:', err);
+        }
+
+        // 유틸리티 스킬 자동 시딩 (40개 실용 유틸리티 스킬 DB 등록)
+        try {
+            const { seedUtilitySkills } = await import('./agents/utility-skills-seeder');
+            seedUtilitySkills().catch((err: unknown) => console.error('[Server] 유틸리티 스킬 시딩 실패:', err));
+        } catch (err) {
+            console.error('[Server] 유틸리티 스킬 시더 로드 실패:', err);
+        }
+
         // 세션 자동 정리 스케줄러 시작 (24시간마다 30일 이상 된 세션 정리)
         startSessionCleanupScheduler(24);
+
+        // DB 데이터 보존 정리 스케줄러 시작 (만료 문서, 토큰, OAuth state 정리)
+        startDbRetention();
+
+        // 토큰 블랙리스트/레이트리밋 만료 데이터 주기 정리 스케줄러 시작
+        startPeriodicCleanup();
+
+        // 시맨틱 분류 캐시 워밍 (비동기, 서버 시작 차단 안 함)
+        try {
+            const { warmClassificationCache } = await import('./chat/llm-classifier');
+            warmClassificationCache().catch((err: unknown) => console.error('[Server] 캐시 워밍 실패:', err));
+        } catch (err) {
+            console.error('[Server] 캐시 워밍 로드 실패:', err);
+        }
 
         return new Promise((resolve, reject) => {
             // HTTP 서버 오류 핸들러
@@ -497,6 +237,7 @@ export class DashboardServer {
      */
     stop(): void {
         this.cluster.stop();
+        this.wsHandler.stopHeartbeat();
         this.wss.close();
         this.server.close();
     }
@@ -540,7 +281,7 @@ if (require.main === module) {
         process.exit(1);
     });
 
-    process.on('unhandledRejection', (reason, promise) => {
+    process.on('unhandledRejection', (reason, _promise) => {
         console.error('[FATAL] unhandledRejection:', reason);
         // 로깅만 수행, 즉시 종료하지 않음 (Node.js 기본 동작과 동일)
     });
@@ -555,7 +296,7 @@ if (require.main === module) {
             process.exit(1);
         });
 
-    // Graceful shutdown: SIGINT (Ctrl+C) + SIGTERM (Docker/K8s)
+    // Graceful shutdown: SIGINT (Ctrl+C) + SIGTERM
     const gracefulShutdown = async (signal: string) => {
         console.log(`\n👋 ${signal} 수신 — 서버 종료 중...`);
 
@@ -567,6 +308,51 @@ if (require.main === module) {
             console.log('[Shutdown] 모든 외부 MCP 서버 연결 해제 완료');
         } catch (error) {
             console.error('[Shutdown] 외부 MCP 서버 정리 중 오류:', error);
+        }
+
+        // DB 커넥션 풀 정상 종료
+        try {
+            const { closeDatabase } = await import('./data/models/unified-database');
+            await closeDatabase();
+            console.log('[Shutdown] DB 커넥션 풀 종료 완료');
+        } catch (error) {
+            console.error('[Shutdown] DB 커넥션 풀 종료 중 오류:', error);
+        }
+
+        // OAuth state 정리 타이머 중지
+        try {
+            const { stopOAuthCleanup } = await import('./controllers/auth.controller');
+            stopOAuthCleanup();
+            console.log('[Shutdown] OAuth 정리 타이머 중지 완료');
+        } catch (error) {
+            console.error('[Shutdown] OAuth 정리 타이머 중지 중 오류:', error);
+        }
+
+        // Analytics 타이머 중지
+        try {
+            const { getAnalyticsSystem } = await import('./monitoring/analytics');
+            getAnalyticsSystem().dispose();
+            console.log('[Shutdown] Analytics 타이머 중지 완료');
+        } catch (error) {
+            console.error('[Shutdown] Analytics 타이머 중지 중 오류:', error);
+        }
+
+        // 세션 정리 스케줄러 중지
+        try {
+            const { stopSessionCleanupScheduler } = await import('./data/conversation-db');
+            stopSessionCleanupScheduler();
+            console.log('[Shutdown] 세션 정리 스케줄러 중지 완료');
+        } catch (error) {
+            console.error('[Shutdown] 세션 정리 스케줄러 중지 중 오류:', error);
+        }
+
+        // TokenBlacklist 타이머 정리
+        try {
+            const { resetTokenBlacklist } = await import('./data/models/token-blacklist');
+            resetTokenBlacklist();
+            console.log('[Shutdown] TokenBlacklist 타이머 중지 완료');
+        } catch (error) {
+            console.error('[Shutdown] TokenBlacklist 타이머 중지 중 오류:', error);
         }
 
         server.stop();

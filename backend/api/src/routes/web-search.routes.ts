@@ -20,10 +20,14 @@ import { Router, Request, Response } from 'express';
 import { ClusterManager } from '../cluster/manager';
 import { OllamaClient } from '../ollama/client';
 import { getConfig } from '../config';
-import { success, badRequest, internalError, serviceUnavailable } from '../utils/api-response';
+import { success, serviceUnavailable } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
 import { createLogger } from '../utils/logger';
 import { buildExecutionPlan } from '../chat/profile-resolver';
+import { requireAuth } from '../auth';
+import { validate } from '../middlewares/validation';
+import { webSearchSchema } from '../schemas/web-search.schema';
+import { CAPACITY } from '../config/runtime-limits';
 
 const logger = createLogger('WebSearchRoutes');
 
@@ -43,12 +47,8 @@ export function setClusterManager(cluster: ClusterManager): void {
  * POST /api/web-search
  * 웹 검색 API (실제 인터넷 검색 + 사실 검증)
  */
-router.post('/web-search', asyncHandler(async (req: Request, res: Response) => {
-     const { query } = req.body;
-     if (!query || typeof query !== 'string' || query.trim().length === 0) {
-         return res.status(400).json(badRequest('query는 필수입니다'));
-     }
-     const requestedModel = req.body.model;
+router.post('/web-search', requireAuth, validate(webSearchSchema), asyncHandler(async (req: Request, res: Response) => {
+     const { query, model: requestedModel } = req.body as { query: string; model?: string };
      const model = (!requestedModel || requestedModel === 'default')
          ? envConfig.ollamaDefaultModel
          : requestedModel;
@@ -68,7 +68,8 @@ router.post('/web-search', asyncHandler(async (req: Request, res: Response) => {
 
       // Cloud 모델 처리
       let client: OllamaClient | undefined;
-      const isCloudModel = wsEngineModel?.toLowerCase().endsWith(':cloud');
+      const lowerEngineModel = wsEngineModel?.toLowerCase() ?? '';
+      const isCloudModel = lowerEngineModel.endsWith(':cloud') || lowerEngineModel.endsWith('-cloud');
 
       if (isCloudModel) {
           const { createClient } = await import('../ollama/client');
@@ -96,21 +97,21 @@ router.post('/web-search', asyncHandler(async (req: Request, res: Response) => {
 ## 질문
 ${query}
 
-## 웹 검색 결과 (${new Date().toLocaleDateString('ko-KR')} 기준)
+## 웹 검색 결과 (${new Date().toLocaleDateString()} 기준)
 ${sourcesContext}
 
 ## 답변 지침
 1. 검색 결과를 기반으로 최신 정보를 제공하세요
 2. 출처가 있을 경우 [출처 N] 형식으로 인용하세요
 3. 정보가 불확실한 경우 명시하세요
-4. 한국어로 답변하세요
+4. 사용자가 사용한 언어로 친절하고 이해하기 쉽게 답변하세요
 
 ## 답변:`;
 
       logger.info('[WebSearch] LLM에 사실 검증 요청...');
      const result = await client.generate(searchPrompt, {
          temperature: 0.3,
-          num_ctx: 65536  // Ollama 공식 권장: 웹 검색/에이전트 시 최소 64K 토큰
+          num_ctx: CAPACITY.WEB_SEARCH_NUM_CTX  // Ollama 공식 권장: 웹 검색/에이전트 시 최소 64K 토큰
      });
      const response = result.response;
 

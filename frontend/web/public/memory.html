@@ -69,7 +69,7 @@
             </header>
             <div class="content-area">
                 <div class="toolbar">
-                    <input type="text" id="searchInput" placeholder="메모리 검색...">
+                    <input type="text" id="searchInput" placeholder="메모리 검색..." aria-label="메모리 검색">
                     <button class="btn-primary" onclick="openNew()">+ 새 메모리</button>
                 </div>
                 <div class="filter-tabs" id="filterTabs">
@@ -89,22 +89,22 @@
     <div class="modal-overlay" id="editorModal">
         <div class="modal">
             <h2 id="editorTitle">새 메모리</h2>
-            <div class="form-group"><label>카테고리</label>
+            <div class="form-group"><label for="memCategory">카테고리</label>
                 <select id="memCategory">
                     <option value="preference">선호도</option><option value="fact">사실</option><option value="project">프로젝트</option>
                     <option value="relationship">관계</option><option value="skill">기술</option><option value="context">맥락</option>
                 </select>
             </div>
-            <div class="form-group"><label>키</label><input type="text" id="memKey" placeholder="메모리 제목/키"></div>
-            <div class="form-group"><label>값</label><textarea id="memValue" placeholder="메모리 내용..."></textarea></div>
+            <div class="form-group"><label for="memKey">키</label><input type="text" id="memKey" placeholder="메모리 제목/키"></div>
+            <div class="form-group"><label for="memValue">값</label><textarea id="memValue" placeholder="메모리 내용..."></textarea></div>
             <div class="form-group">
-                <label>중요도</label>
+                <label for="memImportance">중요도</label>
                 <div class="range-row">
                     <input type="range" id="memImportance" min="1" max="10" step="1" value="5">
                     <span class="range-val" id="impVal">5</span>
                 </div>
             </div>
-            <div class="form-group"><label>태그 (쉼표 구분)</label><input type="text" id="memTags" placeholder="태그1, 태그2, ..."></div>
+            <div class="form-group"><label for="memTags">태그 (쉼표 구분)</label><input type="text" id="memTags" placeholder="태그1, 태그2, ..."></div>
             <div class="modal-actions">
                 <button class="btn-secondary" onclick="closeEditor()">취소</button>
                 <button class="btn-danger" id="btnDelete" style="display:none" onclick="deleteMem()">삭제</button>
@@ -115,8 +115,8 @@
 
     <div id="toast" class="toast"></div>
 
-    <script src="/js/components/sidebar.js"></script>
-    <script>
+    <script type="module" src="/js/components/sidebar.js"></script>
+    <script type="module">
         const CAT_LABELS = { preference:'선호도', fact:'사실', project:'프로젝트', relationship:'관계', skill:'기술', context:'맥락' };
         let allMems = [];
         let currentFilter = 'all';
@@ -124,9 +124,8 @@
         let searchMode = false;
 
         function authFetch(url, options = {}) {
-            const token = localStorage.getItem('authToken');
-            const headers = { 'Content-Type':'application/json', ...(token ? {'Authorization':'Bearer '+token} : {}), ...options.headers };
-            return fetch(url, { ...options, headers }).then(r => r.json());
+            const headers = { 'Content-Type':'application/json', ...options.headers };
+            return fetch(url, { ...options, headers, credentials: 'include' }).then(r => r.json());
         }
         function showToast(msg, type = 'success') {
             const t = document.getElementById('toast');
@@ -264,6 +263,12 @@
         }, 400));
 
         loadMems();
+
+        window.openNew = openNew;
+        window.closeEditor = closeEditor;
+        window.deleteMem = deleteMem;
+        window.saveMem = saveMem;
+        window.openMem = openMem;
     </script>
 </body>
 </html>

@@ -10,7 +10,7 @@
  * @description
  * - PostgreSQL Pool 기반 커넥션 관리 (pg 드라이버)
  * - 서버 시작 시 스키마 자동 생성 (CREATE TABLE IF NOT EXISTS)
- * - Repository 위임 패턴 (User, Conversation, Memory, Research, ApiKey, Canvas, Marketplace, Audit)
+ * - Repository 위임 패턴 (User, Conversation, Memory, Research, ApiKey, Audit)
  * - 재시도 로직 내장 (withRetry 래퍼)
  * - 싱글톤 접근: getUnifiedDatabase(), getPool()
  */
@@ -24,9 +24,8 @@ import { createLogger } from '../../utils/logger';
 import {
     ApiKeyRepository,
     AuditRepository,
-    CanvasRepository,
     ConversationRepository,
-    MarketplaceRepository,
+    ExternalRepository,
     MemoryRepository,
     ResearchRepository,
     UserRepository
@@ -37,12 +36,12 @@ const logger = createLogger('UnifiedDB');
 /** SQL 쿼리 파라미터 타입 - $1, $2 등의 플레이스홀더에 바인딩되는 값 */
 type QueryParam = string | number | boolean | null | undefined;
 
-/** PostgreSQL 쿼리 결과 행의 제네릭 타입 */
-type DbRow = Record<string, unknown>;
-
 const SCHEMA_FILE_RELATIVE_PATH = 'services/database/init/002-schema.sql';
 
-// Fallback schema for packaged/deployed environments where the SQL file is unavailable.
+// Source of truth policy:
+// 1) services/database/init/002-schema.sql is canonical for schema evolution.
+// 2) LEGACY_SCHEMA is fallback-only for packaged/deployed environments where file access fails.
+// 3) Keep LEGACY_SCHEMA aligned with core CREATE TABLE definitions and essential lookup indexes.
 const LEGACY_SCHEMA = `
 CREATE TABLE IF NOT EXISTS users (
     id TEXT PRIMARY KEY,
@@ -59,7 +58,7 @@ CREATE TABLE IF NOT EXISTS users (
 
 CREATE TABLE IF NOT EXISTS conversation_sessions (
     id TEXT PRIMARY KEY,
-    user_id TEXT REFERENCES users(id),
+    user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
     anon_session_id TEXT,
     title TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -82,7 +81,7 @@ CREATE TABLE IF NOT EXISTS conversation_messages (
 
 CREATE TABLE IF NOT EXISTS api_usage (
     id SERIAL PRIMARY KEY,
-    date TEXT NOT NULL,
+    date DATE NOT NULL,
     api_key_id TEXT,
     requests INTEGER DEFAULT 0,
     tokens INTEGER DEFAULT 0,
@@ -94,6 +93,7 @@ CREATE TABLE IF NOT EXISTS api_usage (
     UNIQUE(date, api_key_id)
 );
 
+-- [P3 LEGACY] push_subscriptions: 레거시 테이블. 활성 푸시 구독은 push_subscriptions_store 사용. 사용자 삭제 시 cleanup용 DELETE만 존재.
 CREATE TABLE IF NOT EXISTS push_subscriptions (
     id SERIAL PRIMARY KEY,
     user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
@@ -115,7 +115,7 @@ CREATE INDEX IF NOT EXISTS idx_usage_date ON api_usage(date);
 CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON conversation_sessions(user_id);
-CREATE INDEX IF NOT EXISTS idx_sessions_anon ON conversation_sessions(anon_session_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_sessions_anon ON conversation_sessions(anon_session_id) WHERE anon_session_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_blacklist_expires ON token_blacklist(expires_at);
 
 CREATE TABLE IF NOT EXISTS chat_rate_limits (
@@ -163,6 +163,7 @@ CREATE TABLE IF NOT EXISTS uploaded_documents (
 );
 CREATE INDEX IF NOT EXISTS idx_uploaded_documents_expires ON uploaded_documents(expires_at);
 
+-- [P3 UNUSED] token_daily_stats: 미사용 테이블. ApiUsageTracker가 현재 인메모리 전용으로 동작. 미래 DB 용 write-through 시 활성화 예정.
 CREATE TABLE IF NOT EXISTS token_daily_stats (
     date_key TEXT PRIMARY KEY,
     total_prompt_tokens INTEGER NOT NULL DEFAULT 0,
@@ -196,6 +197,259 @@ CREATE INDEX IF NOT EXISTS idx_feedback_message ON message_feedback(message_id);
 CREATE INDEX IF NOT EXISTS idx_feedback_session ON message_feedback(session_id);
 CREATE INDEX IF NOT EXISTS idx_feedback_signal ON message_feedback(signal);
 CREATE INDEX IF NOT EXISTS idx_feedback_created ON message_feedback(created_at);
+
+CREATE TABLE IF NOT EXISTS agent_usage_logs (
+    id SERIAL PRIMARY KEY,
+    timestamp TIMESTAMPTZ DEFAULT NOW(),
+    user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+    session_id TEXT REFERENCES conversation_sessions(id) ON DELETE SET NULL,
+    agent_id TEXT NOT NULL,
+    query TEXT,
+    response_preview TEXT,
+    response_time_ms INTEGER,
+    tokens_used INTEGER,
+    success BOOLEAN DEFAULT TRUE,
+    error_message TEXT
+);
+
+CREATE TABLE IF NOT EXISTS agent_feedback (
+    id TEXT PRIMARY KEY,
+    agent_id TEXT NOT NULL,
+    user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+    rating INTEGER NOT NULL CHECK (rating >= 1 AND rating <= 5),
+    comment TEXT,
+    query TEXT,
+    response TEXT,
+    tags JSONB,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS custom_agents (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    description TEXT,
+    system_prompt TEXT NOT NULL,
+    keywords JSONB,
+    category TEXT,
+    emoji TEXT DEFAULT '\uD83E\uDD16',
+    temperature REAL,
+    max_tokens INTEGER,
+    created_by TEXT REFERENCES users(id) ON DELETE CASCADE,
+    enabled BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS audit_logs (
+    id SERIAL PRIMARY KEY,
+    timestamp TIMESTAMPTZ DEFAULT NOW(),
+    action TEXT NOT NULL,
+    user_id TEXT,
+    resource_type TEXT,
+    resource_id TEXT,
+    details JSONB,
+    ip_address TEXT,
+    user_agent TEXT
+);
+
+CREATE TABLE IF NOT EXISTS alert_history (
+    id SERIAL PRIMARY KEY,
+    type TEXT NOT NULL,
+    severity TEXT NOT NULL,
+    title TEXT NOT NULL,
+    message TEXT,
+    data JSONB,
+    acknowledged BOOLEAN DEFAULT FALSE,
+    acknowledged_by TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    acknowledged_at TIMESTAMPTZ
+);
+
+CREATE TABLE IF NOT EXISTS user_memories (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    category TEXT NOT NULL CHECK(category IN ('preference', 'fact', 'project', 'relationship', 'skill', 'context')),
+    key TEXT NOT NULL,
+    value TEXT NOT NULL,
+    importance REAL DEFAULT 0.5,
+    access_count INTEGER DEFAULT 0,
+    last_accessed TIMESTAMPTZ,
+    source_session_id TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    expires_at TIMESTAMPTZ,
+    UNIQUE(user_id, category, key)
+);
+
+CREATE TABLE IF NOT EXISTS memory_tags (
+    id SERIAL PRIMARY KEY,
+    memory_id TEXT NOT NULL REFERENCES user_memories(id) ON DELETE CASCADE,
+    tag TEXT NOT NULL,
+    UNIQUE(memory_id, tag)
+);
+
+CREATE TABLE IF NOT EXISTS research_sessions (
+    id TEXT PRIMARY KEY,
+    user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
+    topic TEXT NOT NULL,
+    status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'running', 'completed', 'failed', 'cancelled')),
+    depth TEXT DEFAULT 'standard' CHECK(depth IN ('quick', 'standard', 'deep')),
+    progress INTEGER DEFAULT 0,
+    summary TEXT,
+    key_findings JSONB,
+    sources JSONB,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    completed_at TIMESTAMPTZ
+);
+
+CREATE TABLE IF NOT EXISTS research_steps (
+    id SERIAL PRIMARY KEY,
+    session_id TEXT NOT NULL REFERENCES research_sessions(id) ON DELETE CASCADE,
+    step_number INTEGER NOT NULL,
+    step_type TEXT NOT NULL,
+    query TEXT,
+    result TEXT,
+    sources JSONB,
+    status TEXT DEFAULT 'pending',
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS external_connections (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    service_type TEXT NOT NULL CHECK(service_type IN ('google_drive', 'notion', 'github', 'slack', 'dropbox')),
+    access_token TEXT,
+    refresh_token TEXT,
+    token_expires_at TIMESTAMPTZ,
+    account_email TEXT,
+    account_name TEXT,
+    metadata JSONB,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(user_id, service_type)
+);
+
+CREATE TABLE IF NOT EXISTS external_files (
+    id TEXT PRIMARY KEY,
+    connection_id TEXT NOT NULL REFERENCES external_connections(id) ON DELETE CASCADE,
+    external_id TEXT NOT NULL,
+    file_name TEXT NOT NULL,
+    file_type TEXT,
+    file_size INTEGER,
+    web_url TEXT,
+    last_synced TIMESTAMPTZ,
+    cached_content TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(connection_id, external_id)
+);
+
+-- [P3 UNUSED] vector_embeddings: 미사용 테이블. 현재 TS 코드에서 미사용. pgvector 기반 단어 검색 구현 시 활성화 예정. embedding TEXT 폴백 버전.
+CREATE TABLE IF NOT EXISTS vector_embeddings (
+    id SERIAL PRIMARY KEY,
+    source_type TEXT NOT NULL CHECK(source_type IN ('document', 'memory', 'conversation', 'agent')),
+    source_id TEXT NOT NULL,
+    chunk_index INTEGER DEFAULT 0,
+    chunk_text TEXT NOT NULL,
+    embedding TEXT,
+    metadata JSONB,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS mcp_servers (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL UNIQUE,
+    transport_type TEXT NOT NULL CHECK(transport_type IN ('stdio', 'sse', 'streamable-http')),
+    command TEXT,
+    args JSONB,
+    env JSONB,
+    url TEXT,
+    enabled BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS user_api_keys (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    key_hash TEXT NOT NULL UNIQUE,
+    key_prefix TEXT NOT NULL DEFAULT 'omk_live_',
+    last_4 TEXT NOT NULL,
+    name TEXT NOT NULL,
+    description TEXT,
+    scopes JSONB DEFAULT '["*"]',
+    allowed_models JSONB DEFAULT '["*"]',
+    rate_limit_tier TEXT NOT NULL DEFAULT 'free' CHECK(rate_limit_tier IN ('free', 'starter', 'standard', 'enterprise')),
+    is_active BOOLEAN DEFAULT TRUE,
+    last_used_at TIMESTAMPTZ,
+    expires_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    total_requests INTEGER DEFAULT 0,
+    total_tokens INTEGER DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS agent_skills (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    description TEXT,
+    content TEXT NOT NULL,
+    category TEXT DEFAULT 'general',
+    is_public BOOLEAN DEFAULT FALSE,
+    created_by TEXT REFERENCES users(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    source_repo TEXT,
+    source_path TEXT
+);
+
+CREATE TABLE IF NOT EXISTS agent_skill_assignments (
+    agent_id TEXT NOT NULL,
+    skill_id TEXT NOT NULL REFERENCES agent_skills(id) ON DELETE CASCADE,
+    priority INTEGER DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    PRIMARY KEY (agent_id, skill_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_agent_logs_agent ON agent_usage_logs(agent_id);
+CREATE INDEX IF NOT EXISTS idx_agent_logs_time ON agent_usage_logs(timestamp);
+CREATE INDEX IF NOT EXISTS idx_feedback_agent ON agent_feedback(agent_id);
+CREATE INDEX IF NOT EXISTS idx_audit_action ON audit_logs(action);
+CREATE INDEX IF NOT EXISTS idx_audit_time ON audit_logs(timestamp);
+CREATE INDEX IF NOT EXISTS idx_audit_user ON audit_logs(user_id);
+
+CREATE INDEX IF NOT EXISTS idx_memories_user ON user_memories(user_id);
+CREATE INDEX IF NOT EXISTS idx_memories_category ON user_memories(category);
+CREATE INDEX IF NOT EXISTS idx_memories_importance ON user_memories(importance DESC);
+CREATE INDEX IF NOT EXISTS idx_memory_tags_memory ON memory_tags(memory_id);
+
+CREATE INDEX IF NOT EXISTS idx_research_user ON research_sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_research_status ON research_sessions(status);
+CREATE INDEX IF NOT EXISTS idx_research_steps_session ON research_steps(session_id);
+
+CREATE INDEX IF NOT EXISTS idx_connections_user ON external_connections(user_id);
+CREATE INDEX IF NOT EXISTS idx_connections_service ON external_connections(service_type);
+CREATE INDEX IF NOT EXISTS idx_ext_files_connection ON external_files(connection_id);
+
+CREATE INDEX IF NOT EXISTS idx_embeddings_source ON vector_embeddings(source_type, source_id);
+
+CREATE INDEX IF NOT EXISTS idx_mcp_servers_name ON mcp_servers(name);
+CREATE INDEX IF NOT EXISTS idx_mcp_servers_enabled ON mcp_servers(enabled);
+
+CREATE INDEX IF NOT EXISTS idx_api_keys_user ON user_api_keys(user_id);
+CREATE INDEX IF NOT EXISTS idx_api_keys_hash ON user_api_keys(key_hash);
+CREATE INDEX IF NOT EXISTS idx_api_keys_active ON user_api_keys(user_id, is_active);
+CREATE INDEX IF NOT EXISTS idx_api_keys_tier ON user_api_keys(rate_limit_tier);
+
+CREATE INDEX IF NOT EXISTS idx_oauth_states_created ON oauth_states(created_at);
+
+CREATE INDEX IF NOT EXISTS idx_agent_skills_created_by ON agent_skills(created_by);
+CREATE INDEX IF NOT EXISTS idx_agent_skills_category ON agent_skills(category);
+CREATE INDEX IF NOT EXISTS idx_agent_skills_public ON agent_skills(is_public);
+CREATE INDEX IF NOT EXISTS idx_skill_assignments_agent ON agent_skill_assignments(agent_id);
+CREATE INDEX IF NOT EXISTS idx_skill_assignments_skill ON agent_skill_assignments(skill_id);
 `;
 
 /**
@@ -348,85 +602,6 @@ export interface ResearchStep {
 }
 
 // ============================================
-// 🏪 마켓플레이스 인터페이스
-// ============================================
-
-export type MarketplaceStatus = 'pending' | 'approved' | 'rejected' | 'suspended';
-
-export interface MarketplaceAgent {
-    id: string;
-    agent_id: string;
-    author_id: string;
-    title: string;
-    description?: string;
-    long_description?: string;
-    category?: string;
-    tags?: string[];
-    icon: string;
-    price: number;
-    is_free: boolean;
-    is_featured: boolean;
-    is_verified: boolean;
-    downloads: number;
-    rating_avg: number;
-    rating_count: number;
-    version: string;
-    status: MarketplaceStatus;
-    created_at: string;
-    updated_at: string;
-    published_at?: string;
-}
-
-export interface AgentReview {
-    id: string;
-    marketplace_id: string;
-    user_id: string;
-    rating: number;
-    title?: string;
-    content?: string;
-    helpful_count: number;
-    created_at: string;
-}
-
-export interface AgentInstallation {
-    id: number;
-    marketplace_id: string;
-    user_id: string;
-    installed_at: string;
-}
-
-// ============================================
-// 📝 Canvas 인터페이스
-// ============================================
-
-export type CanvasDocType = 'document' | 'code' | 'diagram' | 'table';
-
-export interface CanvasDocument {
-    id: string;
-    user_id: string;
-    session_id?: string;
-    title: string;
-    doc_type: CanvasDocType;
-    content?: string;
-    language?: string;
-    version: number;
-    is_shared: boolean;
-    share_token?: string;
-    created_at: string;
-    updated_at: string;
-}
-
-export interface CanvasVersion {
-    id: number;
-    document_id: string;
-    version: number;
-    content: string;
-    change_summary?: string;
-    created_by?: string;
-    created_at: string;
-}
-
-// ============================================
 // 🔗 외부 서비스 통합 인터페이스
 // ============================================
 
@@ -568,7 +743,7 @@ export const API_KEY_TIER_LIMITS: Record<ApiKeyTier, {
  * @description
  * - 서버 시작 시 스키마 자동 초기화 (SQL 파일 또는 LEGACY_SCHEMA 폴백)
  * - pg Pool 기반 커넥션 풀링 (statement_timeout: 30s, idle_timeout: 30s)
- * - 8개 Repository 위임: User, Conversation, Memory, Research, ApiKey, Canvas, Marketplace, Audit
+ * - 7개 Repository 위임: User, Conversation, Memory, Research, ApiKey, Audit, External
  * - withRetry 래퍼를 통한 일시적 연결 오류 자동 재시도
  */
 export class UnifiedDatabase {
@@ -593,20 +768,19 @@ export class UnifiedDatabase {
     /** API Key 관리 데이터 접근 Repository */
     private readonly apiKeyRepository: ApiKeyRepository;
 
-    /** 캔버스 문서 데이터 접근 Repository */
-    private readonly canvasRepository: CanvasRepository;
-
-    /** 마켓플레이스 데이터 접근 Repository */
-    private readonly marketplaceRepository: MarketplaceRepository;
-
-    /** 감사 로그 및 외부 연동 데이터 접근 Repository */
+    /** 감사 로그 데이터 접근 Repository */
     private readonly auditRepository: AuditRepository;
 
+    /** 외부 연동 및 MCP 서버 데이터 접근 Repository */
+    private readonly externalRepository: ExternalRepository;
+
     constructor() {
-        const poolConfig: PoolConfig & { idle_timeout: number } = {
+        const poolConfig: PoolConfig = {
             connectionString: getConfig().databaseUrl,
+            max: 20,
+            min: 5,
             statement_timeout: 30000,
-            idle_timeout: 30000,
+            idleTimeoutMillis: 30000,
             connectionTimeoutMillis: 10000
         };
         this.pool = new Pool(poolConfig);
@@ -626,9 +800,8 @@ export class UnifiedDatabase {
         this.memoryRepository = new MemoryRepository(this.pool);
         this.researchRepository = new ResearchRepository(this.pool);
         this.apiKeyRepository = new ApiKeyRepository(this.pool);
-        this.canvasRepository = new CanvasRepository(this.pool);
-        this.marketplaceRepository = new MarketplaceRepository(this.pool);
         this.auditRepository = new AuditRepository(this.pool);
+        this.externalRepository = new ExternalRepository(this.pool);
 
         logger.info('[UnifiedDB] PostgreSQL Pool initialized');
     }
@@ -850,6 +1023,10 @@ export class UnifiedDatabase {
         return this.memoryRepository.deleteUserMemories(userId);
     }
 
+    async getMemoryOwner(memoryId: string): Promise<string | null> {
+        return this.memoryRepository.getOwnerUserId(memoryId);
+    }
+
     // ============================================
     // 🔍 Deep Research 메서드
     // ============================================
@@ -897,119 +1074,8 @@ export class UnifiedDatabase {
         return this.researchRepository.getUserResearchSessions(userId, limit);
     }
 
-    // ============================================
-    // 🏪 마켓플레이스 메서드
-    // ============================================
-
-    async publishToMarketplace(params: {
-        id: string;
-        agentId: string;
-        authorId: string;
-        title: string;
-        description?: string;
-        longDescription?: string;
-        category?: string;
-        tags?: string[];
-        icon?: string;
-        price?: number;
-    }): Promise<MarketplaceAgent> {
-        return this.marketplaceRepository.publishToMarketplace(params);
-    }
-
-    async getMarketplaceAgents(options?: {
-        category?: string;
-        status?: MarketplaceStatus;
-        featured?: boolean;
-        search?: string;
-        sortBy?: string;
-        limit?: number;
-        offset?: number;
-    }): Promise<MarketplaceAgent[]> {
-        return this.marketplaceRepository.getMarketplaceAgents(options);
-    }
-
-    async getMarketplaceAgent(marketplaceId: string): Promise<MarketplaceAgent | undefined> {
-        return this.marketplaceRepository.getMarketplaceAgent(marketplaceId);
-    }
-
-    async updateMarketplaceStatus(marketplaceId: string, status: MarketplaceStatus): Promise<void> {
-        return this.marketplaceRepository.updateMarketplaceStatus(marketplaceId, status);
-    }
-
-    async installAgent(marketplaceId: string, userId: string): Promise<void> {
-        return this.marketplaceRepository.installAgent(marketplaceId, userId);
-    }
-
-    async uninstallAgent(marketplaceId: string, userId: string): Promise<void> {
-        return this.marketplaceRepository.uninstallAgent(marketplaceId, userId);
-    }
-
-    async getUserInstalledAgents(userId: string): Promise<MarketplaceAgent[]> {
-        return this.marketplaceRepository.getUserInstalledAgents(userId);
-    }
-
-    async addAgentReview(params: {
-        id: string;
-        marketplaceId: string;
-        userId: string;
-        rating: number;
-        title?: string;
-        content?: string;
-    }): Promise<void> {
-        return this.marketplaceRepository.addAgentReview(params);
-    }
-
-    async getAgentReviews(marketplaceId: string, limit: number = 20): Promise<AgentReview[]> {
-        return this.marketplaceRepository.getAgentReviews(marketplaceId, limit);
-    }
-
-    // ============================================
-    // 📝 Canvas 메서드
-    // ============================================
-
-    async createCanvasDocument(params: {
-        id: string;
-        userId: string;
-        sessionId?: string;
-        title: string;
-        docType?: CanvasDocType;
-        content?: string;
-        language?: string;
-    }): Promise<void> {
-        return this.canvasRepository.createCanvasDocument(params);
-    }
-
-    async getCanvasDocument(documentId: string): Promise<CanvasDocument | undefined> {
-        return this.canvasRepository.getCanvasDocument(documentId);
-    }
-
-    async updateCanvasDocument(documentId: string, updates: {
-        title?: string;
-        content?: string;
-        changeSummary?: string;
-        updatedBy?: string;
-    }): Promise<void> {
-        return this.canvasRepository.updateCanvasDocument(documentId, updates);
-    }
-
-    async getCanvasVersions(documentId: string): Promise<CanvasVersion[]> {
-        return this.canvasRepository.getCanvasVersions(documentId);
-    }
-
-    async getUserCanvasDocuments(userId: string, limit: number = 50): Promise<CanvasDocument[]> {
-        return this.canvasRepository.getUserCanvasDocuments(userId, limit);
-    }
-
-    async shareCanvasDocument(documentId: string, shareToken: string): Promise<void> {
-        return this.canvasRepository.shareCanvasDocument(documentId, shareToken);
-    }
-
-    async getCanvasDocumentByShareToken(shareToken: string): Promise<CanvasDocument | undefined> {
-        return this.canvasRepository.getCanvasDocumentByShareToken(shareToken);
-    }
-
-    async deleteCanvasDocument(documentId: string): Promise<void> {
-        return this.canvasRepository.deleteCanvasDocument(documentId);
+    async deleteResearchSession(sessionId: string): Promise<void> {
+        return this.researchRepository.deleteSessionWithSteps(sessionId);
     }
 
     // ============================================
@@ -1027,19 +1093,19 @@ export class UnifiedDatabase {
         accountName?: string;
         metadata?: Record<string, unknown>;
     }): Promise<void> {
-        return this.auditRepository.createExternalConnection(params);
+        return this.externalRepository.createExternalConnection(params);
     }
 
     async getUserConnections(userId: string): Promise<ExternalConnection[]> {
-        return this.auditRepository.getUserConnections(userId);
+        return this.externalRepository.getUserConnections(userId);
     }
 
     async getExternalConnection(connectionId: string): Promise<ExternalConnection | undefined> {
-        return this.auditRepository.getExternalConnection(connectionId);
+        return this.externalRepository.getExternalConnection(connectionId);
     }
 
     async getUserConnectionByService(userId: string, serviceType: ExternalServiceType): Promise<ExternalConnection | undefined> {
-        return this.auditRepository.getUserConnectionByService(userId, serviceType);
+        return this.externalRepository.getUserConnectionByService(userId, serviceType);
     }
 
     async updateConnectionTokens(connectionId: string, tokens: {
@@ -1047,11 +1113,11 @@ export class UnifiedDatabase {
         refreshToken?: string;
         expiresAt?: string;
     }): Promise<void> {
-        return this.auditRepository.updateConnectionTokens(connectionId, tokens);
+        return this.externalRepository.updateConnectionTokens(connectionId, tokens);
     }
 
     async disconnectService(userId: string, serviceType: ExternalServiceType): Promise<void> {
-        return this.auditRepository.disconnectService(userId, serviceType);
+        return this.externalRepository.disconnectService(userId, serviceType);
     }
 
     // 외부 파일 캐시
@@ -1065,15 +1131,15 @@ export class UnifiedDatabase {
         webUrl?: string;
         cachedContent?: string;
     }): Promise<void> {
-        return this.auditRepository.cacheExternalFile(params);
+        return this.externalRepository.cacheExternalFile(params);
     }
 
     async getConnectionFiles(connectionId: string, limit: number = 100): Promise<ExternalFile[]> {
-        return this.auditRepository.getConnectionFiles(connectionId, limit);
+        return this.externalRepository.getConnectionFiles(connectionId, limit);
     }
 
     async getCachedFile(connectionId: string, externalId: string): Promise<ExternalFile | undefined> {
-        return this.auditRepository.getCachedFile(connectionId, externalId);
+        return this.externalRepository.getCachedFile(connectionId, externalId);
     }
 
     // ============================================
@@ -1081,23 +1147,23 @@ export class UnifiedDatabase {
     // ============================================
 
     async getMcpServers(): Promise<MCPServerRow[]> {
-        return this.auditRepository.getMcpServers();
+        return this.externalRepository.getMcpServers();
     }
 
     async getMcpServerById(id: string): Promise<MCPServerRow | null> {
-        return this.auditRepository.getMcpServerById(id);
+        return this.externalRepository.getMcpServerById(id);
     }
 
     async createMcpServer(server: Omit<MCPServerRow, 'created_at' | 'updated_at'>): Promise<MCPServerRow> {
-        return this.auditRepository.createMcpServer(server);
+        return this.externalRepository.createMcpServer(server);
     }
 
     async updateMcpServer(id: string, updates: Partial<Pick<MCPServerRow, 'name' | 'transport_type' | 'command' | 'args' | 'env' | 'url' | 'enabled'>>): Promise<MCPServerRow | null> {
-        return this.auditRepository.updateMcpServer(id, updates);
+        return this.externalRepository.updateMcpServer(id, updates);
     }
 
     async deleteMcpServer(id: string): Promise<boolean> {
-        return this.auditRepository.deleteMcpServer(id);
+        return this.externalRepository.deleteMcpServer(id);
     }
 
     // ============================================

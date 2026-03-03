@@ -114,11 +114,11 @@
                     </header>
 
                     <div class="search-bar" style="margin-bottom: var(--space-6);">
-                        <input type="date" id="filterDate" class="form-input" style="width: auto;"
+                        <input type="date" id="filterDate" class="form-input" style="width: auto;" aria-label="날짜 필터"
                             onchange="loadSessions()">
-                        <input type="text" id="searchQuery" class="form-input" style="max-width: 300px;"
+                        <input type="text" id="searchQuery" class="form-input" style="max-width: 300px;" aria-label="검색어 입력"
                             placeholder="검색어 입력..." onkeyup="debounceSearch()">
-                        <select id="sortOrder" class="form-select" style="width: auto;" onchange="loadSessions()">
+                        <select id="sortOrder" class="form-select" style="width: auto;" aria-label="정렬 순서" onchange="loadSessions()">
                             <option value="desc">최신순</option>
                             <option value="asc">오래된순</option>
                         </select>
@@ -135,17 +135,17 @@
         </div>
     </div>
 
-    <script src="/js/components/sidebar.js"></script>
-    <script>
+    <script type="module" src="/js/components/sidebar.js"></script>
+    <script type="module">
         const API_BASE = window.location.origin;
         let allSessions = [];
         let searchTimeout;
 
         // 인증 체크
         (function checkAuthAccess() {
-            const authToken = localStorage.getItem('authToken');
+            const user = localStorage.getItem('user');
             const isGuest = localStorage.getItem('isGuest') === 'true';
-            if (!authToken || isGuest) {
+            if (!user || isGuest) {
                 alert('이 페이지는 로그인이 필요합니다.');
                 window.location.href = '/login.html';
             }
@@ -159,11 +159,7 @@
             }
 
             try {
-                // 🔑 인증 헤더 추가 (관리자/사용자 인증 전달)
-                const authToken = localStorage.getItem('authToken');
-                const headers = authToken ? { 'Authorization': `Bearer ${authToken}` } : {};
-
-                const res = await fetch('/api/chat/sessions?limit=100', { headers });
+                const res = await fetch('/api/chat/sessions?limit=100', { credentials: 'include' });
                 const data = await res.json();
                 const payload = data.data || data;
 
@@ -262,6 +258,11 @@
         }
 
         loadSessions();
+
+        window.exportHistory = exportHistory;
+        window.loadSessions = loadSessions;
+        window.debounceSearch = debounceSearch;
+        window.goToSession = goToSession;
     </script>
 </body>
 

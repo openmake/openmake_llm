@@ -84,6 +84,8 @@ export class ApiKeyManager {
     private lastFailoverTime: Date | null = null;
     /** 키별 실패 기록 (인덱스 -> {실패 횟수, 마지막 실패 시각}) — 쿨다운 판단에 사용 */
     private keyFailures: Map<number, { count: number; lastFail: Date }> = new Map();
+    /** 🆕 키풀 라운드로빈 포인터 (getNextAvailableKey용, per-instance 키 할당에 사용) */
+    private roundRobinIndex = 0;
 
     /**
      * Fire-and-forget DB operation — silently falls back to cache-only on failure
@@ -295,30 +297,8 @@ export class ApiKeyManager {
         return this.sshKey;
     }
 
-    /**
-     * 🆕 특정 인덱스의 키-모델 쌍 반환 (A2A 병렬 처리용)
-     */
-    getKeyModelPair(index: number): KeyModelPair | null {
-        if (index < 0 || index >= this.keys.length) return null;
-        
-        return {
-            key: this.keys[index],
-            model: this.models[index] || getConfig().ollamaDefaultModel,
-            index
-        };
-    }
-
-    /**
-     * 🆕 모든 키-모델 쌍 반환 (A2A 병렬 처리용)
-     */
-    getAllKeyModelPairs(): KeyModelPair[] {
-        const defaultModel = getConfig().ollamaDefaultModel;
-        return this.keys.map((key, index) => ({
-            key,
-            model: this.models[index] || defaultModel,
-            index
-        }));
-    }
+    // getKeyModelPair(), getAllKeyModelPairs() 제거됨
+    // → 키풀 라운드로빈 아키텍처에서는 키-모델 쌍이 불필요
 
     /**
      * 🆕 특정 인덱스의 Authorization 헤더 생성 (A2A 병렬 처리용)
@@ -453,6 +433,98 @@ export class ApiKeyManager {
         return true;
     }
 
+    // findKeyIndexForModel(), findAlternateKeyForModel() 제거됨
+    // → getNextAvailableKey()로 대체 (모델 독립 키풀 라운드로빈)
+
+    /**
+     * 특정 키 인덱스의 실패를 기록합니다 (싱글톤 로테이션 트리거 없이).
+     * Per-instance key binding에서 사용됩니다.
+     *
+     * @param keyIndex - 실패한 키 인덱스
+     * @param error - 에러 정보
+     */
+    recordKeyFailure(keyIndex: number, error?: unknown): void {
+        if (keyIndex < 0 || keyIndex >= this.keys.length) return;
+
+        const err = error as { response?: { status?: number }; code?: string } | undefined;
+        const errorCode = err?.response?.status || err?.code || 'unknown';
+
+        const currentFailure = this.keyFailures.get(keyIndex) || { count: 0, lastFail: new Date() };
+        currentFailure.count++;
+        currentFailure.lastFail = new Date();
+        this.keyFailures.set(keyIndex, currentFailure);
+
+        this.dbWrite(
+            `INSERT INTO api_key_failures (key_index, fail_count, last_fail_at, updated_at)
+             VALUES ($1, $2, $3, NOW())
+             ON CONFLICT (key_index) DO UPDATE SET fail_count = $2, last_fail_at = $3, updated_at = NOW()`,
+            [keyIndex, currentFailure.count, currentFailure.lastFail.toISOString()]
+        );
+
+        const masked = (this.keys[keyIndex] || '').substring(0, 8) + '...';
+        logger.warn(`⚠️ Key ${keyIndex + 1} (${masked}) 실패 기록 - 코드: ${errorCode}`);
+    }
+
+    /**
+     * 특정 키 인덱스의 성공을 기록합니다 (per-instance용).
+     * @param keyIndex - 성공한 키 인덱스
+     */
+    recordKeySuccess(keyIndex: number): void {
+        if (keyIndex < 0 || keyIndex >= this.keys.length) return;
+        this.keyFailures.delete(keyIndex);
+        this.dbWrite('DELETE FROM api_key_failures WHERE key_index = $1', [keyIndex]);
+    }
+
+    /**
+     * 🆕 키풀에서 다음 사용 가능한 키 인덱스를 라운드로빈으로 선택합니다.
+     * 모델과 무관하게 키풀 전체를 순환하며, 쿨다운 중인 키는 스킵합니다.
+     *
+     * 알고리즘:
+     * 1. roundRobinIndex 부터 순회 시작
+     * 2. excludeIndex(현재 실패한 키)는 건너뜀
+     * 3. 쿨다운(5분) 경과 또는 실패 기록 없는 키 선택
+     * 4. 선택 후 roundRobinIndex를 다음 위치로 전진
+     * 5. 모든 키가 쿨다운이면 -1 반환
+     *
+     * @param excludeIndex - 제외할 키 인덱스 (현재 실패한 키, 선택적)
+     * @returns 사용 가능한 키 인덱스 (0-based), 없으면 -1
+     */
+    getNextAvailableKey(excludeIndex?: number): number {
+        if (this.keys.length === 0) return -1;
+
+        const now = Date.now();
+        const cooldownMs = 5 * 60 * 1000; // 5분 쿨다운 (rotateToNextKey와 동일)
+
+        for (let attempt = 0; attempt < this.keys.length; attempt++) {
+            const idx = (this.roundRobinIndex + attempt) % this.keys.length;
+
+            // 제외할 인덱스 건너뜀 (429 발생한 키)
+            if (idx === excludeIndex) continue;
+
+            const failure = this.keyFailures.get(idx);
+            // 실패 기록 없거나 쿨다운 경과 시 선택
+            if (!failure || (now - failure.lastFail.getTime() > cooldownMs)) {
+                // 다음 호출을 위해 포인터 전진
+                this.roundRobinIndex = (idx + 1) % this.keys.length;
+                return idx;
+            }
+        }
+
+        // 모든 키가 쿨다운 상태
+        return -1;
+    }
+
+    /**
+     * 🆕 특정 키 인덱스의 API 키 문자열을 반환합니다.
+     * getNextAvailableKey()로 얻은 인덱스의 실제 키를 가져올 때 사용합니다.
+     *
+     * @param index - 키 인덱스 (0-based)
+     * @returns API 키 문자열, 유효하지 않은 인덱스면 빈 문자열
+     */
+    getKeyByIndex(index: number): string {
+        if (index < 0 || index >= this.keys.length) return '';
+        return this.keys[index];
+    }
     /**
      * 🆕 모든 키가 쿨다운 상태인지 확인하고, 가장 빨리 사용 가능한 시간 반환
      * @returns null if at least one key is available, or the earliest reset time if all keys are in cooldown

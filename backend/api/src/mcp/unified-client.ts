@@ -12,7 +12,7 @@
  * - 사용자 등급(tier) 기반 도구 접근 제어
  * - UserContext 기반 샌드박스 경로 변환
  * - Sequential Thinking 메시지 적용
- * - 기능 상태(Feature State) 관리
+ * - 외부 MCP 서버 초기화 (DB 연동)
  * - 외부 MCP 서버 초기화 (DB 연동)
  * - 싱글톤 인스턴스 제공
  *
@@ -24,8 +24,8 @@
  */
 
 import { MCPServer, createMCPServer } from './server';
-import { getSequentialThinkingServer, applySequentialThinking } from './sequential-thinking';
-import { MCPToolDefinition, MCPToolResult, MCPRequest, MCPResponse } from './types';
+import { applySequentialThinking } from './sequential-thinking';
+import { MCPToolResult, MCPRequest, MCPResponse } from './types';
 import { UserTier } from '../data/user-manager';
 import { canUseTool, getToolsForTier } from './tool-tiers';
 import { UserSandbox, UserContext } from './user-sandbox';
@@ -37,18 +37,13 @@ import { createLogger } from '../utils/logger';
 const logger = createLogger('MCP');
 
 /**
- * MCP 기능 상태 인터페이스
+ * 통합 MCP 클라이언트
  *
- * UI에서 토글 가능한 MCP 기능의 활성화 상태를 나타냅니다.
+ * 애플리케이션 전체에서 MCP 기능을 사용하기 위한 통합 인터페이스입니다.
+ * getUnifiedMCPClient()로 싱글톤 인스턴스를 사용합니다.
  *
- * @interface MCPFeatureState
+ * @class UnifiedMCPClient
  */
-export interface MCPFeatureState {
-    /** Sequential Thinking 활성화 여부 (기본값: false, UI의 뇌 버튼으로 토글) */
-    sequentialThinking: boolean;
-    /** 웹 검색 활성화 여부 */
-    webSearch: boolean;
-}
 
 /**
  * 통합 MCP 클라이언트
@@ -61,11 +56,7 @@ export interface MCPFeatureState {
 export class UnifiedMCPClient {
     /** 내장 MCP 서버 (JSON-RPC 도구 처리) */
     private server: MCPServer;
-    /** MCP 기능 토글 상태 */
-    private featureState: MCPFeatureState = {
-        sequentialThinking: false,  // 기본값 false (사용자가 UI 버튼으로 활성화)
-        webSearch: false
-    };
+    /** 내장 + 외부 도구 통합 라우터 */
     /** 내장 + 외부 도구 통합 라우터 */
     private toolRouter: ToolRouter;
     /** 외부 MCP 서버 연결 관리자 */
@@ -84,19 +75,8 @@ export class UnifiedMCPClient {
     }
 
     /**
-     * 기능 상태 설정
+     * 등록된 도구 수 조회
      */
-    async setFeatureState(state: Partial<MCPFeatureState>): Promise<void> {
-        this.featureState = { ...this.featureState, ...state };
-        logger.info(`기능 상태 업데이트:`, this.featureState);
-    }
-
-    /**
-     * 현재 기능 상태 조회
-     */
-    getFeatureState(): MCPFeatureState {
-        return { ...this.featureState };
-    }
 
     /**
      * 등록된 도구 수 조회
@@ -167,40 +147,20 @@ export class UnifiedMCPClient {
         return this.server.handleRequest(request);
     }
 
-    /**
-     * 메시지에 MCP 기능 적용
-     */
-    enhanceMessage(message: string): string {
-        let enhanced = message;
-
-        // Sequential Thinking 적용
-        if (this.featureState.sequentialThinking) {
-            enhanced = applySequentialThinking(enhanced, true);
-        }
-
-        return enhanced;
-    }
 
     /**
      * 상태 초기화
      */
     reset(): void {
-        if (this.featureState.sequentialThinking) {
-            getSequentialThinkingServer().reset();
-        }
         logger.info('상태 초기화 완료');
     }
 
     /**
      * 통계 조회
      */
-    getStats(): {
-        tools: number;
-        features: MCPFeatureState;
-    } {
+    getStats(): { tools: number } {
         return {
-            tools: this.getToolCount(),
-            features: this.getFeatureState()
+            tools: this.getToolCount()
         };
     }
 
@@ -241,7 +201,17 @@ export class UnifiedMCPClient {
         }
 
         // 파일 경로 인자가 있으면 샌드박스 경로로 변환
-        const sandboxedArgs = this.applySandboxPaths(args, context.userId);
+        let sandboxedArgs: Record<string, unknown>;
+        try {
+            sandboxedArgs = this.applySandboxPaths(args, context.userId);
+        } catch (error) {
+            const message = error instanceof Error ? error.message : '샌드박스 경로 검증 실패';
+            logger.warn(`⚠️ 도구 실행 차단: ${toolName} (user: ${context.userId}) - ${message}`);
+            return {
+                content: [{ type: 'text', text: message }],
+                isError: true
+            };
+        }
 
         logger.info(`🔧 도구 실행: ${toolName} (user: ${context.userId}, tier: ${context.tier})`);
         return this.executeTool(toolName, sandboxedArgs);
@@ -278,7 +248,7 @@ export class UnifiedMCPClient {
      *
      * path, file, directory 등 일반적인 경로 인자명을 감지하여
      * UserSandbox.resolvePath()로 안전한 절대 경로로 변환합니다.
-     * 경로 탈출 시도 시 __blocked_ 플래그를 설정합니다.
+     * 경로 탈출 시도 시 즉시 에러를 발생시켜 도구 실행을 차단합니다.
      *
      * @param args - 원본 도구 실행 인자
      * @param userId - 사용자 ID
@@ -299,8 +269,8 @@ export class UnifiedMCPClient {
                 if (safePath) {
                     result[key] = safePath;
                 } else {
-                    // 경로 탈출 시도 시 빈 결과 반환하도록 표시
-                    result[`__blocked_${key}`] = true;
+                    delete result[key];
+                    throw new Error(`차단된 경로 인자: ${key}`);
                 }
             }
         }

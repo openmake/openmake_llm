@@ -12,6 +12,10 @@
 import { getState, setState } from './state.js';
 import { authFetch } from './auth.js';
 import { showToast } from './ui.js';
+import { STORAGE_KEY_MCP_SETTINGS, STORAGE_KEY_PROMPT_MODE, STORAGE_KEY_AGENT_MODE } from './constants.js';
+
+// SafeStorage 래퍼 — safe-storage.js에서 전역 등록됨
+const SS = window.SafeStorage;
 
 /**
  * MCP 도구 마스터 목록 — 백엔드의 builtInTools + tool-tiers와 동기화
@@ -20,54 +24,132 @@ import { showToast } from './ui.js';
  */
 var MCP_TOOL_CATALOG = [
     {
+        category: '추론',
+        emoji: '🧠',
+        tools: [
+            { name: 'sequential_thinking', label: 'Sequential Thinking', description: '단계별 추론 프로세스를 적용합니다', minTier: 'free' }
+        ]
+    },
+    {
+        category: '모드',
+        emoji: '🎯',
+        tools: [
+            { name: 'discussion_mode', label: '멀티 에이전트 토론', description: '여러 AI 모델이 토론하여 최적의 답변을 생성합니다', minTier: 'free' },
+            { name: 'deep_research', label: 'Deep Research', description: '자동으로 심층 연구를 수행합니다', minTier: 'free' }
+        ]
+    },
+    {
         category: '비전',
         emoji: '👁️',
         tools: [
-            { name: 'vision_ocr', label: '이미지 OCR', description: '이미지에서 텍스트를 추출합니다' },
-            { name: 'analyze_image', label: '이미지 분석', description: '이미지 내용을 분석합니다' }
+            { name: 'vision_ocr', label: '이미지 OCR', description: '이미지에서 텍스트를 추출합니다', minTier: 'free' },
+            { name: 'analyze_image', label: '이미지 분석', description: '이미지 내용을 분석합니다', minTier: 'free' }
         ]
     },
     {
         category: '웹 검색',
         emoji: '🌐',
         tools: [
-            { name: 'web_search', label: '웹 검색', description: '실시간 웹 검색을 수행합니다' },
-            { name: 'fact_check', label: '팩트 체크', description: '정보의 사실 여부를 검증합니다' },
-            { name: 'extract_webpage', label: '웹페이지 추출', description: '웹페이지 콘텐츠를 추출합니다' },
-            { name: 'research_topic', label: '주제 연구', description: '주제에 대한 심층 연구를 수행합니다' }
+            { name: 'web_search', label: '웹 검색', description: '실시간 웹 검색을 수행합니다', minTier: 'free' },
+            { name: 'fact_check', label: '팩트 체크', description: '정보의 사실 여부를 검증합니다', minTier: 'enterprise' },
+            { name: 'extract_webpage', label: '웹페이지 추출', description: '웹페이지 콘텐츠를 추출합니다', minTier: 'enterprise' },
+            { name: 'research_topic', label: '주제 연구', description: '주제에 대한 심층 연구를 수행합니다', minTier: 'enterprise' }
         ]
     },
     {
-        category: '추론',
-        emoji: '🧠',
+        category: '문서',
+        emoji: '📄',
         tools: [
-            { name: 'sequential_thinking', label: 'Sequential Thinking', description: '단계별 논리적 추론 체인' }
+            { name: 'rag', label: 'RAG (문서 기반 응답)', description: '업로드 문서에서 관련 정보를 검색하여 응답에 활용', minTier: 'free' }
         ]
     },
     {
         category: '스크래핑',
         emoji: '🔥',
         tools: [
-            { name: 'firecrawl_scrape', label: 'Firecrawl 스크래핑', description: '웹페이지를 스크래핑합니다' },
-            { name: 'firecrawl_search', label: 'Firecrawl 검색', description: '웹을 검색합니다' },
-            { name: 'firecrawl_map', label: 'Firecrawl URL 맵', description: 'URL 구조를 매핑합니다' },
-            { name: 'firecrawl_crawl', label: 'Firecrawl 크롤링', description: '웹사이트를 크롤링합니다' }
+            { name: 'firecrawl_scrape', label: 'Firecrawl 스크래핑', description: '웹페이지를 스크래핑합니다', minTier: 'pro' },
+            { name: 'firecrawl_search', label: 'Firecrawl 검색', description: '웹을 검색합니다', minTier: 'pro' },
+            { name: 'firecrawl_map', label: 'Firecrawl URL 맵', description: 'URL 구조를 매핑합니다', minTier: 'pro' },
+            { name: 'firecrawl_crawl', label: 'Firecrawl 크롤링', description: '웹사이트를 크롤링합니다', minTier: 'pro' }
         ]
     }
 ];
 
 /**
+ * webSearchEnabled ↔ mcpToolsEnabled.web_search 양방향 동기화
+ * 어느 한쪽이 변경되면 다른 쪽도 동일한 값으로 맞춥니다.
+ * @param {boolean} enabled - 웹 검색 활성화 여부
+ * @returns {void}
+ */
+function syncWebSearchState(enabled) {
+    setState('webSearchEnabled', enabled);
+    var current = getState('mcpToolsEnabled') || {};
+    if (current.web_search !== enabled) {
+        var updated = Object.assign({}, current);
+        updated.web_search = enabled;
+        setState('mcpToolsEnabled', updated);
+    }
+}
+
+function syncThinkingState(enabled) {
+    setState('thinkingEnabled', enabled);
+    var current = getState('mcpToolsEnabled') || {};
+    if (current.sequential_thinking !== enabled) {
+        var updated = Object.assign({}, current);
+        updated.sequential_thinking = enabled;
+        setState('mcpToolsEnabled', updated);
+    }
+}
+
+function syncDiscussionState(enabled) {
+    setState('discussionMode', enabled);
+    var current = getState('mcpToolsEnabled') || {};
+    if (current.discussion_mode !== enabled) {
+        var updated = Object.assign({}, current);
+        updated.discussion_mode = enabled;
+        setState('mcpToolsEnabled', updated);
+    }
+}
+
+function syncDeepResearchState(enabled) {
+    setState('deepResearchMode', enabled);
+    var current = getState('mcpToolsEnabled') || {};
+    if (current.deep_research !== enabled) {
+        var updated = Object.assign({}, current);
+        updated.deep_research = enabled;
+        setState('mcpToolsEnabled', updated);
+    }
+}
+
+function syncRAGState(enabled) {
+    setState('ragEnabled', enabled);
+    var current = getState('mcpToolsEnabled') || {};
+    if (current.rag !== enabled) {
+        var updated = Object.assign({}, current);
+        updated.rag = enabled;
+        setState('mcpToolsEnabled', updated);
+    }
+}
+
+var VIRTUAL_TOOL_MAP = {
+    sequential_thinking: { stateKey: 'thinkingEnabled', syncFn: syncThinkingState, btnId: 'thinkingModeBtn' },
+    discussion_mode: { stateKey: 'discussionMode', syncFn: syncDiscussionState, btnId: 'discussionModeBtn' },
+    deep_research: { stateKey: 'deepResearchMode', syncFn: syncDeepResearchState, btnId: 'deepResearchBtn' },
+    web_search: { stateKey: 'webSearchEnabled', syncFn: syncWebSearchState, btnId: 'webSearchBtn' },
+    rag: { stateKey: 'ragEnabled', syncFn: syncRAGState, btnId: null }
+};
+
+/**
  * localStorage에서 MCP 설정을 로드하여 AppState와 UI에 반영
  * thinking, webSearch 토글 상태 및 개별 도구 활성화 상태를 복원합니다.
+ * 레거시 마이그레이션: webSearch 플래그를 enabledTools.web_search로 통합합니다.
  * @returns {void}
  */
 function loadMCPSettings() {
-    const saved = localStorage.getItem('mcpSettings');
+    const saved = SS.getItem(STORAGE_KEY_MCP_SETTINGS);
     if (saved) {
         try {
             var settings = JSON.parse(saved);
-            setState('thinkingEnabled', settings.thinking !== false);
-            setState('webSearchEnabled', settings.webSearch === true);
 
             // MCP 도구 활성화 상태 로드 (기본: 전체 비활성)
             if (settings.enabledTools && typeof settings.enabledTools === 'object') {
@@ -76,8 +158,50 @@ function loadMCPSettings() {
                 setState('mcpToolsEnabled', {});
             }
 
-            // UI 동기화
-            updateMCPToggleUI();
+            var enabledTools = getState('mcpToolsEnabled') || {};
+
+            // 레거시 마이그레이션: thinking → enabledTools.sequential_thinking
+            if (enabledTools.sequential_thinking === undefined) {
+                enabledTools = Object.assign({}, enabledTools);
+                enabledTools.sequential_thinking = settings.thinking !== false;
+                setState('mcpToolsEnabled', enabledTools);
+            }
+
+            // 레거시 마이그레이션: webSearch → enabledTools.web_search
+            if (enabledTools.web_search === undefined && settings.webSearch === true) {
+                enabledTools = Object.assign({}, enabledTools);
+                enabledTools.web_search = true;
+                setState('mcpToolsEnabled', enabledTools);
+            }
+
+            // 레거시 마이그레이션: rag → enabledTools.rag
+            if (enabledTools.rag === undefined && settings.rag === true) {
+                enabledTools = Object.assign({}, enabledTools);
+                enabledTools.rag = true;
+                setState('mcpToolsEnabled', enabledTools);
+            }
+
+            // 모든 virtual tool의 AppState를 enabledTools에서 동기화
+            var finalTools = getState('mcpToolsEnabled') || {};
+            setState('thinkingEnabled', finalTools.sequential_thinking !== false);
+            setState('webSearchEnabled', finalTools.web_search === true);
+            setState('ragEnabled', finalTools.rag === true);
+            setState('discussionMode', finalTools.discussion_mode === true);
+            setState('deepResearchMode', finalTools.deep_research === true);
+
+            // 채팅 버튼 active 클래스 동기화 (BUG-3 fix)
+            var btnMap = [
+                ['thinkingModeBtn', finalTools.sequential_thinking !== false],
+                ['webSearchBtn', finalTools.web_search === true],
+                ['discussionModeBtn', finalTools.discussion_mode === true],
+                ['deepResearchBtn', finalTools.deep_research === true]
+            ];
+            btnMap.forEach(function (pair) {
+                var btn = document.getElementById(pair[0]);
+                if (btn) btn.classList.toggle('active', pair[1]);
+            });
+
+            // MCP 도구 토글 UI 동기화
             updateMCPToolTogglesUI();
         } catch (e) {
             console.error('MCP 설정 로드 오류:', e);
@@ -90,12 +214,14 @@ function loadMCPSettings() {
  * @returns {void}
  */
 function saveMCPSettings() {
+    var enabledTools = getState('mcpToolsEnabled') || {};
     var settings = {
-        thinking: getState('thinkingEnabled'),
-        webSearch: getState('webSearchEnabled'),
-        enabledTools: getState('mcpToolsEnabled') || {}
+        thinking: enabledTools.sequential_thinking !== false,
+        webSearch: enabledTools.web_search === true,
+        rag: enabledTools.rag === true,
+        enabledTools: enabledTools
     };
-    localStorage.setItem('mcpSettings', JSON.stringify(settings));
+    SS.setItem(STORAGE_KEY_MCP_SETTINGS, JSON.stringify(settings));
 }
 
 /**
@@ -107,23 +233,26 @@ function saveMCPSettings() {
 function toggleMCPModule(module) {
     switch (module) {
         case 'thinking':
-            const thinkingEnabled = !getState('thinkingEnabled');
-            setState('thinkingEnabled', thinkingEnabled);
-            updateToggleUI('mcpThinking', thinkingEnabled);
+            toggleMCPTool('sequential_thinking');
             break;
 
         case 'webSearch':
-            const webSearchEnabled = !getState('webSearchEnabled');
-            setState('webSearchEnabled', webSearchEnabled);
-            updateToggleUI('mcpWebSearch', webSearchEnabled);
+            toggleMCPTool('web_search');
             break;
 
         case 'pdf':
-            // PDF 모듈은 항상 활성화
-            break;
+            // PDF 모듈은 서버 사이드 처리 — 클라이언트 토글 없음, 상태 변경 불필요
+            return; // saveMCPSettings() 호출도 생략
 
         case 'github':
-            // GitHub 모듈 토글
+            // GitHub 모듈 토글 (agentMode와 같은 방식으로 상태 저장)
+            const githubEnabled = !getState('githubEnabled');
+            setState('githubEnabled', githubEnabled);
+            updateToggleUI('mcpGithub', githubEnabled);
+            break;
+
+        case 'rag':
+            toggleMCPTool('rag');
             break;
     }
 
@@ -148,8 +277,8 @@ function updateToggleUI(id, enabled) {
  * @returns {void}
  */
 function updateMCPToggleUI() {
-    updateToggleUI('mcpThinking', getState('thinkingEnabled'));
-    updateToggleUI('mcpWebSearch', getState('webSearchEnabled'));
+    // Legacy no-op: AI모델 섹션의 개별 토글이 MCP 도구 섹션으로 통합됨
+    // updateMCPToolTogglesUI()가 MCP 도구 체크박스를 동기화함
 }
 
 /**
@@ -169,12 +298,13 @@ function toggleWebSearch() {
     showToast(status);
 }
 
+
 /**
  * localStorage에서 프롬프트 모드를 로드하여 AppState에 반영
  * @returns {void}
  */
 function loadPromptMode() {
-    const saved = localStorage.getItem('promptMode');
+    const saved = SS.getItem(STORAGE_KEY_PROMPT_MODE);
     if (saved) {
         setState('promptMode', saved);
     }
@@ -187,7 +317,7 @@ function loadPromptMode() {
  */
 function setPromptMode(mode) {
     setState('promptMode', mode);
-    localStorage.setItem('promptMode', mode);
+    SS.setItem(STORAGE_KEY_PROMPT_MODE, mode);
 }
 
 /**
@@ -195,7 +325,7 @@ function setPromptMode(mode) {
  * @returns {void}
  */
 function loadAgentMode() {
-    const saved = localStorage.getItem('agentMode');
+    const saved = SS.getItem(STORAGE_KEY_AGENT_MODE);
     setState('agentMode', saved === 'true');
 }
 
@@ -207,7 +337,7 @@ function loadAgentMode() {
 function toggleAgentMode() {
     const enabled = !getState('agentMode');
     setState('agentMode', enabled);
-    localStorage.setItem('agentMode', enabled.toString());
+    SS.setItem(STORAGE_KEY_AGENT_MODE, enabled.toString());
 }
 
 /**
@@ -216,7 +346,7 @@ function toggleAgentMode() {
  */
 async function loadCurrentModel() {
     try {
-        const response = await authFetch('/api/model');
+        const response = await authFetch(API_ENDPOINTS.MODEL);
         const data = await response.json();
 
         const modelNameEl = document.getElementById('activeModelName');
@@ -244,9 +374,9 @@ function saveSettings() {
  * @returns {void}
  */
 function resetSettings() {
-    localStorage.removeItem('mcpSettings');
-    localStorage.removeItem('promptMode');
-    localStorage.removeItem('agentMode');
+    SS.removeItem(STORAGE_KEY_MCP_SETTINGS);
+    SS.removeItem(STORAGE_KEY_PROMPT_MODE);
+    SS.removeItem(STORAGE_KEY_AGENT_MODE);
 
     setState('thinkingEnabled', true);
     setState('webSearchEnabled', false);
@@ -255,7 +385,7 @@ function resetSettings() {
     setState('agentMode', false);
 
     // 테마는 다크로 초기화
-    localStorage.setItem('theme', 'dark');
+    SS.setItem('theme', 'dark');
     if (typeof applyTheme === 'function') {
         applyTheme('dark');
     }
@@ -275,6 +405,17 @@ function toggleMCPTool(toolName) {
     var updated = Object.assign({}, current);
     updated[toolName] = !updated[toolName];
     setState('mcpToolsEnabled', updated);
+
+    // Virtual tool sync: update AppState + chat bar button
+    var mapping = VIRTUAL_TOOL_MAP[toolName];
+    if (mapping) {
+        setState(mapping.stateKey, updated[toolName] === true);
+        if (mapping.btnId) {
+            var btn = document.getElementById(mapping.btnId);
+            if (btn) btn.classList.toggle('active', updated[toolName] === true);
+        }
+    }
+
     saveMCPSettings();
 
     var status = updated[toolName] ? '활성화' : '비활성화';
@@ -288,12 +429,24 @@ function toggleMCPTool(toolName) {
  */
 function setAllMCPTools(enabled) {
     var updated = {};
-    MCP_TOOL_CATALOG.forEach(function(group) {
-        group.tools.forEach(function(tool) {
+    MCP_TOOL_CATALOG.forEach(function (group) {
+        group.tools.forEach(function (tool) {
             updated[tool.name] = enabled;
         });
     });
     setState('mcpToolsEnabled', updated);
+
+    // Sync all virtual tools
+    Object.keys(VIRTUAL_TOOL_MAP).forEach(function (toolName) {
+        var mapping = VIRTUAL_TOOL_MAP[toolName];
+        var toolEnabled = updated[toolName] === true;
+        setState(mapping.stateKey, toolEnabled);
+        if (mapping.btnId) {
+            var btn = document.getElementById(mapping.btnId);
+            if (btn) btn.classList.toggle('active', toolEnabled);
+        }
+    });
+
     saveMCPSettings();
     updateMCPToolTogglesUI();
 
@@ -314,8 +467,8 @@ function getEnabledTools() {
  */
 function updateMCPToolTogglesUI() {
     var enabled = getState('mcpToolsEnabled') || {};
-    MCP_TOOL_CATALOG.forEach(function(group) {
-        group.tools.forEach(function(tool) {
+    MCP_TOOL_CATALOG.forEach(function (group) {
+        group.tools.forEach(function (tool) {
             var toggle = document.getElementById('mcpTool_' + tool.name);
             if (toggle) {
                 toggle.checked = enabled[tool.name] === true;
@@ -356,6 +509,12 @@ window.setAllMCPTools = setAllMCPTools;
 window.getEnabledTools = getEnabledTools;
 window.updateMCPToolTogglesUI = updateMCPToolTogglesUI;
 window.MCP_TOOL_CATALOG = MCP_TOOL_CATALOG;
+window.syncWebSearchState = syncWebSearchState;
+window.syncThinkingState = syncThinkingState;
+window.syncDiscussionState = syncDiscussionState;
+window.syncDeepResearchState = syncDeepResearchState;
+window.syncRAGState = syncRAGState;
+window.VIRTUAL_TOOL_MAP = VIRTUAL_TOOL_MAP;
 window.loadPromptMode = loadPromptMode;
 window.setPromptMode = setPromptMode;
 window.loadAgentMode = loadAgentMode;
@@ -369,6 +528,12 @@ export {
     MCP_TOOL_CATALOG,
     loadMCPSettings,
     saveMCPSettings,
+    syncWebSearchState,
+    syncThinkingState,
+    syncDiscussionState,
+    syncDeepResearchState,
+    syncRAGState,
+    VIRTUAL_TOOL_MAP,
     toggleMCPModule,
     toggleWebSearch,
     toggleMCPTool,

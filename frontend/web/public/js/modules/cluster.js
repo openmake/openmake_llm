@@ -13,13 +13,14 @@
 import { getState, setState } from './state.js';
 import { escapeHtml, showToast } from './ui.js';
 import { isAdmin } from './auth.js';
+import { DEFAULT_AUTO_MODEL, STORAGE_KEY_SELECTED_MODEL } from './constants.js';
 
 /**
  * 브랜드 모델 프로파일 정의 (backend pipeline-profile.ts와 동기화)
  * @type {Array<{id: string, name: string, desc: string}>}
  */
 const BRAND_MODELS = [
-    { id: 'openmake_llm_auto', name: 'OpenMake LLM Auto', desc: '자동 라우팅' },
+    { id: DEFAULT_AUTO_MODEL, name: 'OpenMake LLM Auto', desc: '자동 라우팅' },
     { id: 'openmake_llm', name: 'OpenMake LLM', desc: '균형 잡힌 범용' },
     { id: 'openmake_llm_pro', name: 'OpenMake LLM Pro', desc: '프리미엄 품질' },
     { id: 'openmake_llm_fast', name: 'OpenMake LLM Fast', desc: '속도 최적화' },
@@ -101,7 +102,7 @@ function updateClusterStatus(text, online) {
  */
 async function fetchClusterInfoFallback() {
     try {
-        const response = await fetch('/api/cluster', {
+        const response = await fetch(API_ENDPOINTS.CLUSTER, {
             credentials: 'include'
         });
         if (response.ok) {
@@ -124,7 +125,7 @@ function updateModelSelect() {
     const isAdminUser = isAdmin();
 
     if (!isAdminUser) {
-        select.innerHTML = '<option value="openmake_llm_auto">OpenMake LLM Auto</option>';
+        select.innerHTML = `<option value="${DEFAULT_AUTO_MODEL}">OpenMake LLM Auto</option>`;
         select.disabled = true;
         select.style.cursor = 'default';
         return;
@@ -133,8 +134,8 @@ function updateModelSelect() {
     select.disabled = false;
     select.style.cursor = 'pointer';
 
-    const savedModel = localStorage.getItem('selectedModel');
-    const defaultModelId = 'openmake_llm_auto';
+    const savedModel = localStorage.getItem(STORAGE_KEY_SELECTED_MODEL);
+    const defaultModelId = DEFAULT_AUTO_MODEL;
 
     select.innerHTML = BRAND_MODELS.map(m => {
         const isSelected = savedModel ? m.id === savedModel : m.id === defaultModelId;
@@ -233,13 +234,13 @@ async function loadModelInfo() {
     modelListContainer.innerHTML = '<span style="color: var(--text-muted);">조회 중...</span>';
 
     try {
-        const response = await fetch('/api/models', { credentials: 'include' });
+        const response = await fetch(API_ENDPOINTS.MODELS, { credentials: 'include' });
         if (response.ok) {
             const data = await response.json();
             const payload = data.data || data;
 
-            const savedModel = localStorage.getItem('selectedModel');
-            const defaultModelId = payload.defaultModel || 'openmake_llm_auto';
+            const savedModel = localStorage.getItem(STORAGE_KEY_SELECTED_MODEL);
+            const defaultModelId = payload.defaultModel || DEFAULT_AUTO_MODEL;
 
             let activeDisplayName = 'OpenMake LLM Auto';
             if (payload.models && payload.models.length > 0) {

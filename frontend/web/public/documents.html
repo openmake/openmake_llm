@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="ko" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover">
+    <title>문서 관리 - OpenMake.Ai</title>
+    <link rel="icon" type="image/png" href="/logo.png">
+    <link rel="preconnect" href="https://cdn.jsdelivr.net">
+    <link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="/css/design-tokens.css">
+    <link rel="stylesheet" href="/css/components.css">
+    <link rel="stylesheet" href="/css/layout.css">
+    <style>
+        .doc-upload-area { background:var(--bg-card); border:2px dashed var(--border-light); border-radius:var(--radius-lg); padding:var(--space-6); margin-bottom:var(--space-5); text-align:center; cursor:pointer; transition:border-color .2s, background .2s; }
+        .doc-upload-area:hover, .doc-upload-area.dragover { border-color:var(--accent-primary); background:var(--bg-secondary); }
+        .doc-upload-area svg { margin-bottom:var(--space-3); color:var(--text-muted); }
+        .doc-upload-area p { color:var(--text-secondary); margin:0 0 var(--space-2); }
+        .doc-upload-area span { color:var(--text-muted); font-size:var(--font-size-sm); }
+        .doc-upload-area input[type="file"] { display:none; }
+
+        .doc-stats { display:flex; gap:var(--space-4); margin-bottom:var(--space-5); flex-wrap:wrap; }
+        .doc-stat-card { background:var(--bg-card); border:1px solid var(--border-light); border-radius:var(--radius-md); padding:var(--space-4); flex:1; min-width:120px; text-align:center; }
+        .doc-stat-card .stat-value { font-size:1.5rem; font-weight:var(--font-weight-semibold); color:var(--accent-primary); }
+        .doc-stat-card .stat-label { font-size:var(--font-size-sm); color:var(--text-muted); margin-top:var(--space-1); }
+
+        .doc-list { display:flex; flex-direction:column; gap:var(--space-3); }
+        .doc-card { background:var(--bg-card); border:1px solid var(--border-light); border-radius:var(--radius-lg); padding:var(--space-4) var(--space-5); display:flex; align-items:center; gap:var(--space-4); transition:border-color .2s; }
+        .doc-card:hover { border-color:var(--accent-primary); }
+        .doc-card .doc-icon { font-size:1.5rem; flex-shrink:0; }
+        .doc-card .doc-info { flex:1; min-width:0; }
+        .doc-card .doc-name { font-weight:var(--font-weight-semibold); color:var(--text-primary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .doc-card .doc-meta { display:flex; gap:var(--space-3); align-items:center; flex-wrap:wrap; font-size:var(--font-size-sm); color:var(--text-muted); margin-top:var(--space-1); }
+        .doc-card .doc-actions { display:flex; gap:var(--space-2); flex-shrink:0; }
+        .doc-card .doc-actions button { padding:var(--space-2) var(--space-3); border:none; border-radius:var(--radius-md); cursor:pointer; font-size:var(--font-size-sm); font-weight:var(--font-weight-semibold); }
+
+        .badge-type { display:inline-block; padding:2px 10px; border-radius:var(--radius-md); font-size:11px; font-weight:var(--font-weight-semibold); background:var(--bg-tertiary); color:var(--text-secondary); }
+        .badge-embedded { background:var(--success); color:#fff; }
+
+        .btn-primary { padding:var(--space-3) var(--space-5); background:var(--accent-primary); color:#fff; border:none; border-radius:var(--radius-md); cursor:pointer; font-weight:var(--font-weight-semibold); white-space:nowrap; }
+        .btn-secondary { background:var(--bg-tertiary); color:var(--text-primary); border:1px solid var(--border-light) !important; }
+        .btn-danger { background:var(--danger); color:#fff; }
+        .btn-sm { padding:var(--space-1) var(--space-3); font-size:var(--font-size-sm); }
+
+        .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:1000; justify-content:center; align-items:center; }
+        .modal-overlay.open { display:flex; }
+        .modal { background:var(--bg-card); border:1px solid var(--border-light); border-radius:var(--radius-lg); width:90%; max-width:700px; max-height:90vh; overflow-y:auto; padding:var(--space-6); }
+        .modal h2 { margin:0 0 var(--space-4); color:var(--text-primary); }
+        .detail-section { margin-bottom:var(--space-5); }
+        .detail-section h3 { color:var(--text-secondary); font-size:var(--font-size-sm); margin-bottom:var(--space-2); text-transform:uppercase; letter-spacing:.5px; }
+        .detail-section p { color:var(--text-primary); line-height:1.6; }
+        .detail-section pre { background:var(--bg-secondary); padding:var(--space-3); border-radius:var(--radius-md); font-size:var(--font-size-sm); color:var(--text-secondary); max-height:300px; overflow-y:auto; white-space:pre-wrap; word-break:break-word; }
+        .modal-actions { display:flex; gap:var(--space-3); justify-content:flex-end; margin-top:var(--space-5); }
+        .modal-actions button { padding:var(--space-2) var(--space-4); border:none; border-radius:var(--radius-md); cursor:pointer; font-weight:var(--font-weight-semibold); }
+
+        .empty-state { text-align:center; padding:var(--space-8); color:var(--text-muted); }
+        .empty-state h2 { color:var(--text-secondary); margin-bottom:var(--space-3); }
+        .toast { position:fixed; bottom:20px; right:20px; padding:var(--space-3) var(--space-5); border-radius:var(--radius-md); color:#fff; z-index:2000; opacity:0; transition:opacity .3s; }
+        .toast.show { opacity:1; } .toast.success { background:var(--success); } .toast.error { background:var(--danger); }
+        .loading { text-align:center; padding:var(--space-6); color:var(--text-muted); }
+
+        .upload-progress { margin-top:var(--space-3); }
+        .upload-progress .progress-bar { height:6px; background:var(--bg-tertiary); border-radius:3px; overflow:hidden; }
+        .upload-progress .progress-fill { height:100%; background:var(--accent-primary); border-radius:3px; transition:width .3s; }
+        .upload-progress .progress-text { font-size:var(--font-size-sm); color:var(--text-muted); margin-top:var(--space-1); }
+    </style>
+</head>
+<body>
+    <div class="layout">
+        <aside class="sidebar" id="sidebar"></aside>
+        <div class="sidebar-overlay" onclick="toggleSidebar()"></div>
+        <main class="main-content">
+            <header class="page-header">
+                <button class="mobile-menu-btn" onclick="toggleMobileSidebar(event)">&#9776;</button>
+                <h1>문서 관리</h1>
+            </header>
+            <div class="content-area">
+                <!-- Upload Area -->
+                <div class="doc-upload-area" id="docUploadArea">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                        <polyline points="17 8 12 3 7 8"/>
+                        <line x1="12" y1="3" x2="12" y2="15"/>
+                    </svg>
+                    <p>파일을 여기에 드래그하거나 클릭하여 업로드</p>
+                    <span>PDF, 텍스트, 이미지 파일 지원</span>
+                    <input type="file" id="docFileInput" accept=".pdf,.txt,.md,.csv,.json,.xlsx,.xls,.doc,.docx,.png,.jpg,.jpeg,.gif,.webp">
+                    <div id="uploadProgress" class="upload-progress" style="display:none">
+                        <div class="progress-bar"><div class="progress-fill" id="uploadProgressFill" style="width:0%"></div></div>
+                        <div class="progress-text" id="uploadProgressText"></div>
+                    </div>
+                </div>
+
+                <!-- Stats -->
+                <div class="doc-stats" id="docStats"></div>
+
+                <!-- Document List -->
+                <div id="docList" class="doc-list"><div class="loading">문서를 불러오는 중...</div></div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Detail Modal -->
+    <div class="modal-overlay" id="docDetailModal">
+        <div class="modal">
+            <h2 id="docDetailTitle">문서 상세</h2>
+            <div id="docDetailContent"></div>
+            <div class="modal-actions">
+                <button class="btn-secondary" onclick="closeDocDetail()">닫기</button>
+                <button class="btn-danger" id="btnDeleteDoc" onclick="deleteCurrentDoc()">삭제</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="docToast" class="toast"></div>
+
+    <script type="module" src="/js/components/sidebar.js"></script>
+    <script type="module" src="/js/modules/api-endpoints.js"></script>
+    <script type="module">
+        function authFetch(url, options) {
+            options = options || {};
+            var headers = Object.assign({ 'Content-Type': 'application/json' }, options.headers || {});
+            return fetch(url, Object.assign({}, options, { headers: headers, credentials: 'include' }));
+        }
+        function showToast(msg, type) {
+            type = type || 'success';
+            var t = document.getElementById('docToast');
+            if (!t) return;
+            t.textContent = msg;
+            t.className = 'toast ' + type + ' show';
+            setTimeout(function() { t.classList.remove('show'); }, 3000);
+        }
+        function esc(s) { var d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+
+        var currentDocId = null;
+
+        function formatFileSize(bytes) {
+            if (!bytes) return '0 B';
+            var units = ['B', 'KB', 'MB', 'GB'];
+            var i = 0;
+            while (bytes >= 1024 && i < units.length - 1) { bytes /= 1024; i++; }
+            return bytes.toFixed(i === 0 ? 0 : 1) + ' ' + units[i];
+        }
+
+        function getDocIcon(type) {
+            var icons = { pdf: '📄', txt: '📝', md: '📝', csv: '📊', json: '🔧', xlsx: '📊', xls: '📊', doc: '📃', docx: '📃', png: '🖼️', jpg: '🖼️', jpeg: '🖼️', gif: '🖼️', webp: '🖼️' };
+            return icons[type] || '📎';
+        }
+
+        async function loadDocuments() {
+            try {
+                var res = await authFetch(API_ENDPOINTS.DOCUMENTS);
+                var data = await res.json();
+                var docs = data.data || data || [];
+                var el = document.getElementById('docList');
+                if (!el) return;
+
+                if (!Array.isArray(docs) || docs.length === 0) {
+                    el.innerHTML = '<div class="empty-state"><h2>업로드된 문서가 없습니다</h2><p>위에서 파일을 드래그하거나 클릭하여 문서를 업로드하세요.</p></div>';
+                    renderStats(0, 0);
+                    return;
+                }
+
+                var totalSize = 0;
+                var embeddedCount = 0;
+                el.innerHTML = docs.map(function(doc) {
+                    var ext = (doc.original_name || doc.filename || '').split('.').pop().toLowerCase();
+                    totalSize += (doc.file_size || doc.size || 0);
+                    if (doc.has_embeddings || doc.embedding_count > 0) embeddedCount++;
+                    var sizeStr = formatFileSize(doc.file_size || doc.size || 0);
+                    var dateStr = doc.created_at ? new Date(doc.created_at).toLocaleDateString('ko') : '';
+                    var hasEmb = doc.has_embeddings || doc.embedding_count > 0;
+
+                    return '<div class="doc-card" data-doc-id="' + (doc.id || doc.doc_id) + '">' +
+                        '<span class="doc-icon">' + getDocIcon(ext) + '</span>' +
+                        '<div class="doc-info">' +
+                            '<div class="doc-name">' + esc(doc.original_name || doc.filename) + '</div>' +
+                            '<div class="doc-meta">' +
+                                '<span class="badge-type">' + esc(ext.toUpperCase()) + '</span>' +
+                                (hasEmb ? '<span class="badge-type badge-embedded">임베딩 완료</span>' : '') +
+                                '<span>' + sizeStr + '</span>' +
+                                '<span>' + dateStr + '</span>' +
+                            '</div>' +
+                        '</div>' +
+                        '<div class="doc-actions">' +
+                            '<button class="btn-secondary btn-sm" onclick="event.stopPropagation(); viewDocDetail(\'' + (doc.id || doc.doc_id) + '\')">상세</button>' +
+                            '<button class="btn-danger btn-sm" onclick="event.stopPropagation(); confirmDeleteDoc(\'' + (doc.id || doc.doc_id) + '\', \'' + esc(doc.original_name || doc.filename).replace(/'/g, "\\'") + '\')">삭제</button>' +
+                        '</div>' +
+                    '</div>';
+                }).join('');
+
+                renderStats(docs.length, embeddedCount, totalSize);
+            } catch (e) {
+                console.error('[Documents] 문서 목록 로드 실패:', e);
+                showToast('문서 목록 로드 실패', 'error');
+            }
+        }
+
+        function renderStats(total, embedded, totalSize) {
+            var el = document.getElementById('docStats');
+            if (!el) return;
+            el.innerHTML =
+                '<div class="doc-stat-card"><div class="stat-value">' + (total || 0) + '</div><div class="stat-label">전체 문서</div></div>' +
+                '<div class="doc-stat-card"><div class="stat-value">' + (embedded || 0) + '</div><div class="stat-label">임베딩 완료</div></div>' +
+                '<div class="doc-stat-card"><div class="stat-value">' + formatFileSize(totalSize || 0) + '</div><div class="stat-label">총 용량</div></div>';
+        }
+
+        async function uploadDocument(file) {
+            var formData = new FormData();
+            formData.append('file', file);
+
+            var progressEl = document.getElementById('uploadProgress');
+            var fillEl = document.getElementById('uploadProgressFill');
+            var textEl = document.getElementById('uploadProgressText');
+            if (progressEl) progressEl.style.display = 'block';
+            if (fillEl) fillEl.style.width = '30%';
+            if (textEl) textEl.textContent = '업로드 중: ' + esc(file.name);
+
+            try {
+                var res = await fetch(API_ENDPOINTS.UPLOAD, {
+                    method: 'POST',
+                    credentials: 'include',
+                    body: formData
+                });
+                if (!res.ok) throw new Error('HTTP ' + res.status + ': ' + res.statusText);
+                var data = await res.json();
+                if (data.data && data.success) Object.assign(data, data.data);
+
+                if (fillEl) fillEl.style.width = '100%';
+                if (textEl) textEl.textContent = '완료: ' + esc(file.name);
+
+                if (data.success) {
+                    showToast('📄 ' + esc(data.filename || file.name) + ' 업로드 완료');
+                    setTimeout(function() {
+                        if (progressEl) progressEl.style.display = 'none';
+                        if (fillEl) fillEl.style.width = '0%';
+                    }, 1500);
+                    loadDocuments();
+                } else {
+                    var errMsg = (data.error && typeof data.error === 'object') ? data.error.message : data.error;
+                    showToast(errMsg || '업로드 실패', 'error');
+                    if (progressEl) progressEl.style.display = 'none';
+                }
+            } catch (e) {
+                console.error('[Documents] 업로드 실패:', e);
+                showToast('업로드 오류: ' + e.message, 'error');
+                if (progressEl) progressEl.style.display = 'none';
+            }
+        }
+
+        async function viewDocDetail(docId) {
+            currentDocId = docId;
+            var modal = document.getElementById('docDetailModal');
+            if (modal) modal.classList.add('open');
+            var content = document.getElementById('docDetailContent');
+            if (content) content.innerHTML = '<div class="loading">불러오는 중...</div>';
+
+            try {
+                var res = await authFetch(API_ENDPOINTS.DOCUMENTS + '/' + docId);
+                var data = await res.json();
+                var doc = data.data || data;
+
+                var title = document.getElementById('docDetailTitle');
+                if (title) title.textContent = doc.original_name || doc.filename || '문서 상세';
+
+                var ext = (doc.original_name || doc.filename || '').split('.').pop().toLowerCase();
+                var html = '<div class="detail-section"><h3>문서 정보</h3>' +
+                    '<p><strong>파일명:</strong> ' + esc(doc.original_name || doc.filename) + '</p>' +
+                    '<p><strong>유형:</strong> ' + esc(ext.toUpperCase()) + '</p>' +
+                    '<p><strong>크기:</strong> ' + formatFileSize(doc.file_size || doc.size || 0) + '</p>' +
+                    '<p><strong>업로드:</strong> ' + (doc.created_at ? new Date(doc.created_at).toLocaleString('ko') : '-') + '</p>' +
+                    (doc.text_length ? '<p><strong>텍스트 길이:</strong> ' + Number(doc.text_length).toLocaleString() + '자</p>' : '') +
+                    '</div>';
+
+                if (doc.text) {
+                    var preview = doc.text.length > 2000 ? doc.text.substring(0, 2000) + '\n\n... (' + (doc.text.length - 2000) + '자 더)' : doc.text;
+                    html += '<div class="detail-section"><h3>내용 미리보기</h3><pre>' + esc(preview) + '</pre></div>';
+                }
+
+                if (content) content.innerHTML = html;
+            } catch (e) {
+                console.error('[Documents] 문서 상세 로드 실패:', e);
+                if (content) content.innerHTML = '<div class="empty-state"><p>문서 정보를 불러올 수 없습니다</p></div>';
+            }
+        }
+
+        function closeDocDetail() {
+            var modal = document.getElementById('docDetailModal');
+            if (modal) modal.classList.remove('open');
+        }
+
+        async function confirmDeleteDoc(docId, name) {
+            if (!confirm('"' + name + '" 문서를 삭제하시겠습니까?\n벡터 임베딩도 함께 삭제됩니다.')) return;
+            await performDelete(docId);
+        }
+
+        async function deleteCurrentDoc() {
+            if (!currentDocId || !confirm('이 문서를 삭제하시겠습니까?\n벡터 임베딩도 함께 삭제됩니다.')) return;
+            await performDelete(currentDocId);
+            closeDocDetail();
+        }
+
+        async function performDelete(docId) {
+            try {
+                var res = await fetch(API_ENDPOINTS.DOCUMENTS + '/' + docId, {
+                    method: 'DELETE',
+                    credentials: 'include'
+                });
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                var data = await res.json();
+                var payload = data.data || data;
+                if (payload.deleted) {
+                    showToast('문서가 삭제되었습니다 (임베딩 ' + (payload.embeddingsDeleted || 0) + '개 삭제)');
+                    loadDocuments();
+                } else {
+                    showToast('삭제 실패', 'error');
+                }
+            } catch (e) {
+                console.error('[Documents] 삭제 실패:', e);
+                showToast('삭제 오류: ' + e.message, 'error');
+            }
+        }
+
+        // Setup upload area interactions
+        (function() {
+            var uploadArea = document.getElementById('docUploadArea');
+            var fileInput = document.getElementById('docFileInput');
+
+            if (uploadArea && fileInput) {
+                uploadArea.addEventListener('click', function() { fileInput.click(); });
+                fileInput.addEventListener('change', function(e) {
+                    if (e.target.files.length > 0) {
+                        Array.from(e.target.files).forEach(function(f) { uploadDocument(f); });
+                        fileInput.value = '';
+                    }
+                });
+                uploadArea.addEventListener('dragover', function(e) { e.preventDefault(); uploadArea.classList.add('dragover'); });
+                uploadArea.addEventListener('dragleave', function() { uploadArea.classList.remove('dragover'); });
+                uploadArea.addEventListener('drop', function(e) {
+                    e.preventDefault();
+                    uploadArea.classList.remove('dragover');
+                    if (e.dataTransfer.files.length > 0) {
+                        Array.from(e.dataTransfer.files).forEach(function(f) { uploadDocument(f); });
+                    }
+                });
+            }
+        })();
+
+        loadDocuments();
+
+        window.viewDocDetail = viewDocDetail;
+        window.closeDocDetail = closeDocDetail;
+        window.confirmDeleteDoc = confirmDeleteDoc;
+        window.deleteCurrentDoc = deleteCurrentDoc;
+    </script>
+</body>
+</html>

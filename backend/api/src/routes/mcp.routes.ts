@@ -9,8 +9,7 @@
  *
  * @module routes/mcp.routes
  * @description
- * - GET    /api/mcp/settings              - MCP 설정 조회 (선택적 인증)
- * - PUT    /api/mcp/settings              - MCP 설정 저장 (선택적 인증)
+ * - POST   /api/mcp/terminal              - 터미널 실행 (비활성화, HTTP 410)
  * - POST   /api/mcp/terminal              - 터미널 실행 (비활성화, HTTP 410)
  * - GET    /api/mcp/tools                 - 사용 가능한 도구 목록 (등급별 필터링)
  * - POST   /api/mcp/tools/:name/execute   - 도구 실행 (인증, 컨텍스트 기반 권한)
@@ -29,47 +28,20 @@
 import { Router, Request, Response } from 'express';
 import { getUnifiedMCPClient } from '../mcp';
 import { requireAuth, optionalAuth } from '../auth';
-import { success, badRequest, unauthorized, forbidden, internalError } from '../utils/api-response';
+import { success, badRequest, unauthorized, forbidden, notFound, internalError } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
 import { getUnifiedDatabase } from '../data/models/unified-database';
 import type { MCPTransportType } from '../mcp/types';
 import { createLogger } from '../utils/logger';
+import { validate } from '../middlewares/validation';
+import { mcpToolExecuteSchema, mcpServerCreateSchema } from '../schemas/mcp.schema';
 
 const logger = createLogger('McpRoutes');
 
 // 라우터 생성
 export const mcpRouter = Router();
 
-// MCP 설정 조회 (GET) - 비로그인 사용자도 조회 가능
-mcpRouter.get('/settings', optionalAuth, (req: Request, res: Response) => {
-     try {
-         const mcpClient = getUnifiedMCPClient();
-         const settings = mcpClient.getFeatureState();
-         res.json(success({ settings }));
-      } catch (error) {
-          logger.error('[MCP Settings] 조회 실패:', error);
-          res.status(500).json(internalError('설정을 불러오는 중 오류가 발생했습니다'));
-      }
-});
-
-// MCP 설정 저장 (PUT) - 비로그인 사용자도 저장 가능 (글로벌 설정)
-mcpRouter.put('/settings', optionalAuth, asyncHandler(async (req: Request, res: Response) => {
-    const newSettings = req.body;
-
-     // 유효성 검사 (간단)
-     if (!newSettings || typeof newSettings !== 'object') {
-         res.status(400).json(badRequest('유효하지 않은 설정 데이터입니다'));
-         return;
-     }
-
-     const mcpClient = getUnifiedMCPClient();
-     await mcpClient.setFeatureState(newSettings);
-
-     // 변경된 설정 반환
-     const updatedSettings = mcpClient.getFeatureState();
-     res.json(success({ settings: updatedSettings }));
- }));
-
+ // 🔒 보안 패치 2026-02-07: 터미널 명령어 실행 엔드포인트 비활성화 (RCE 위험)
  // 🔒 보안 패치 2026-02-07: 터미널 명령어 실행 엔드포인트 비활성화 (RCE 위험)
  // runCommandTool이 제거되었으므로 이 엔드포인트도 비활성화
  mcpRouter.post('/terminal', requireAuth, (_req: Request, res: Response) => {
@@ -96,7 +68,7 @@ mcpRouter.put('/settings', optionalAuth, asyncHandler(async (req: Request, res: 
  });
 
   // 도구 실행 (POST) - 사용자 컨텍스트 기반 권한 검증
-  mcpRouter.post('/tools/:name/execute', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+  mcpRouter.post('/tools/:name/execute', requireAuth, validate(mcpToolExecuteSchema), asyncHandler(async (req: Request, res: Response) => {
       const { name } = req.params;
       const { arguments: args = {} } = req.body;
 
@@ -129,8 +101,6 @@ mcpRouter.put('/settings', optionalAuth, asyncHandler(async (req: Request, res: 
  // 🔌 외부 MCP 서버 관리 API
  // ============================================
 
- /** 유효한 transport 타입 */
- const VALID_TRANSPORTS: MCPTransportType[] = ['stdio', 'sse', 'streamable-http'];
 
   // 외부 서버 목록 + 연결 상태 (GET)
   mcpRouter.get('/servers', requireAuth, asyncHandler(async (req: Request, res: Response) => {
@@ -155,32 +125,21 @@ mcpRouter.put('/settings', optionalAuth, asyncHandler(async (req: Request, res: 
   }));
 
   // 새 외부 서버 등록 (POST) - admin 전용
-  mcpRouter.post('/servers', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+  mcpRouter.post('/servers', requireAuth, validate(mcpServerCreateSchema), asyncHandler(async (req: Request, res: Response) => {
       if (req.user?.role !== 'admin') {
           res.status(403).json(forbidden('관리자만 서버를 등록할 수 있습니다'));
           return;
       }
 
-      const { name, transport_type, command, args, env, url, enabled } = req.body;
-
-      // 유효성 검사
-      if (!name || typeof name !== 'string') {
-          res.status(400).json(badRequest('서버 이름을 입력하세요'));
-          return;
-      }
-      if (!transport_type || !VALID_TRANSPORTS.includes(transport_type)) {
-          res.status(400).json(badRequest(`유효하지 않은 transport 타입입니다. 허용: ${VALID_TRANSPORTS.join(', ')}`));
-          return;
-      }
-      if (transport_type === 'stdio' && !command) {
-          res.status(400).json(badRequest('stdio transport에는 command가 필요합니다'));
-          return;
-      }
-      if ((transport_type === 'sse' || transport_type === 'streamable-http') && !url) {
-          res.status(400).json(badRequest(`${transport_type} transport에는 url이 필요합니다`));
-          return;
-      }
-
+      const { name, transport_type, command, args, env, url, enabled } = req.body as {
+          name: string;
+          transport_type: 'stdio' | 'sse' | 'streamable-http';
+          command?: string;
+          args?: string[];
+          env?: Record<string, string>;
+          url?: string;
+          enabled?: boolean;
+      };
       const id = `mcp_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
       const config = {
           id,
@@ -224,7 +183,7 @@ mcpRouter.put('/settings', optionalAuth, asyncHandler(async (req: Request, res: 
       const server = await db.getMcpServerById(id);
 
       if (!server) {
-          res.status(404).json(badRequest('서버를 찾을 수 없습니다'));
+          res.status(404).json(notFound('서버'));
           return;
       }
 
@@ -266,7 +225,7 @@ mcpRouter.put('/settings', optionalAuth, asyncHandler(async (req: Request, res: 
           const db = getUnifiedDatabase();
           const server = await db.getMcpServerById(id);
           if (!server) {
-              res.status(404).json(badRequest('서버를 찾을 수 없습니다'));
+              res.status(404).json(notFound('서버'));
               return;
           }
           // 존재하지만 연결 안 된 상태

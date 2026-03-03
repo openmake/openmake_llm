@@ -9,7 +9,7 @@
  * @module __tests__/routing-logger
  */
 
-import { describe, it, expect } from 'bun:test';
+// Jest globals (describe, it, expect) are available automatically
 import {
     createRoutingLogEntry,
     logRoutingDecision,

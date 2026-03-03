@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="ko" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover">
+    <title>API 키 관리 - OpenMake.Ai</title>
+    <link rel="icon" type="image/png" href="/logo.png">
+    <link rel="preconnect" href="https://cdn.jsdelivr.net">
+    <link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="/css/design-tokens.css">
+    <link rel="stylesheet" href="/css/components.css">
+    <link rel="stylesheet" href="/css/layout.css">
+    <style>
+        .toolbar { display:flex; gap:var(--space-3); align-items:center; flex-wrap:wrap; margin-bottom:var(--space-5); }
+        .toolbar .btn-primary { padding:var(--space-2) var(--space-4); background:var(--accent-primary); color:#fff; border:none; border-radius:var(--radius-md); cursor:pointer; font-weight:var(--font-weight-semibold); white-space:nowrap; }
+        .key-list { display:flex; flex-direction:column; gap:var(--space-3); }
+        .key-card { background:var(--bg-card); border:1px solid var(--border-light); border-radius:var(--radius-lg); padding:var(--space-5); }
+        .key-card .key-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:var(--space-3); }
+        .key-card .key-name { font-weight:var(--font-weight-semibold); color:var(--text-primary); font-size:1rem; }
+        .key-card .key-prefix { font-family:monospace; color:var(--text-muted); font-size:var(--font-size-sm); background:var(--bg-tertiary); padding:2px 6px; border-radius:var(--radius-sm); }
+        .key-card .key-meta { display:flex; gap:var(--space-4); flex-wrap:wrap; font-size:var(--font-size-sm); color:var(--text-muted); margin-bottom:var(--space-3); }
+        .key-card .key-actions { display:flex; gap:var(--space-2); }
+        .key-card .key-actions button { padding:var(--space-1) var(--space-3); border:1px solid var(--border-light); border-radius:var(--radius-md); cursor:pointer; font-size:var(--font-size-sm); background:var(--bg-tertiary); color:var(--text-primary); }
+        .key-card .key-actions button:hover { border-color:var(--accent-primary); }
+        .key-card .key-actions .btn-danger { background:var(--danger); color:#fff; border-color:var(--danger); }
+        .badge-active { display:inline-block; padding:2px 8px; border-radius:var(--radius-md); font-size:11px; font-weight:var(--font-weight-semibold); background:var(--success); color:#fff; }
+        .badge-inactive { display:inline-block; padding:2px 8px; border-radius:var(--radius-md); font-size:11px; font-weight:var(--font-weight-semibold); background:var(--danger); color:#fff; }
+        .badge-tier { display:inline-block; padding:2px 8px; border-radius:var(--radius-md); font-size:11px; font-weight:var(--font-weight-semibold); background:var(--bg-tertiary); color:var(--text-secondary); }
+        .empty-state { text-align:center; padding:var(--space-8); color:var(--text-muted); }
+        .empty-state h2 { color:var(--text-secondary); margin-bottom:var(--space-3); }
+        .loading { text-align:center; padding:var(--space-6); color:var(--text-muted); }
+        .toast { position:fixed; bottom:20px; right:20px; padding:var(--space-3) var(--space-5); border-radius:var(--radius-md); color:#fff; z-index:2000; opacity:0; transition:opacity .3s; }
+        .toast.show { opacity:1; } .toast.success { background:var(--success); } .toast.error { background:var(--danger); }
+
+        .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:1000; justify-content:center; align-items:center; }
+        .modal-overlay.open { display:flex; }
+        .modal { background:var(--bg-card); border:1px solid var(--border-light); border-radius:var(--radius-lg); width:90%; max-width:500px; max-height:90vh; overflow-y:auto; padding:var(--space-6); }
+        .modal h2 { margin:0 0 var(--space-4); color:var(--text-primary); }
+        .form-group { margin-bottom:var(--space-4); }
+        .form-group label { display:block; margin-bottom:var(--space-2); color:var(--text-secondary); font-size:var(--font-size-sm); font-weight:var(--font-weight-semibold); }
+        .form-group input, .form-group select { width:100%; padding:var(--space-3); background:var(--bg-secondary); border:1px solid var(--border-light); border-radius:var(--radius-md); color:var(--text-primary); box-sizing:border-box; }
+        .modal-actions { display:flex; gap:var(--space-3); justify-content:flex-end; margin-top:var(--space-5); }
+        .modal-actions button { padding:var(--space-2) var(--space-4); border:none; border-radius:var(--radius-md); cursor:pointer; font-weight:var(--font-weight-semibold); }
+        .btn-save { background:var(--accent-primary); color:#fff; }
+        .btn-secondary { background:var(--bg-tertiary); color:var(--text-primary); border:1px solid var(--border-light) !important; }
+
+        .new-key-display { background:var(--bg-tertiary); padding:var(--space-4); border-radius:var(--radius-md); margin:var(--space-4) 0; }
+        .new-key-display code { font-family:monospace; word-break:break-all; color:var(--accent-primary); font-size:var(--font-size-sm); }
+        .new-key-display .warning { color:var(--warning); font-size:var(--font-size-sm); margin-top:var(--space-2); }
+    </style>
+</head>
+<body>
+    <div class="layout">
+        <aside class="sidebar" id="sidebar"></aside>
+        <div class="sidebar-overlay" onclick="toggleSidebar()"></div>
+        <main class="main-content">
+            <header class="page-header">
+                <button class="mobile-menu-btn" onclick="toggleMobileSidebar(event)">&#9776;</button>
+                <h1>🔐 API 키 관리</h1>
+            </header>
+            <div class="content-area">
+                <div class="toolbar">
+                    <button class="btn-primary" onclick="openCreateKey()">+ 새 API 키</button>
+                </div>
+                <div id="keyList" class="key-list">
+                    <div class="loading">불러오는 중...</div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <div class="modal-overlay" id="createModal">
+        <div class="modal">
+            <h2>새 API 키 생성</h2>
+            <div class="form-group"><label for="keyName">키 이름</label><input type="text" id="keyName" placeholder="예: 프로덕션 서버"></div>
+            <div class="form-group"><label for="keyDesc">설명</label><input type="text" id="keyDesc" placeholder="키 용도 설명 (선택)"></div>
+            <div class="form-group">
+                <label for="keyTier">Rate Limit 등급</label>
+                <select id="keyTier">
+                    <option value="free">Free (10 RPM)</option>
+                    <option value="starter">Starter (30 RPM)</option>
+                    <option value="standard">Standard (60 RPM)</option>
+                </select>
+            </div>
+            <div id="newKeyDisplay" style="display:none">
+                <div class="new-key-display">
+                    <div>생성된 API 키:</div>
+                    <code id="newKeyValue"></code>
+                    <div class="warning">⚠️ 이 키는 다시 표시되지 않습니다. 안전한 곳에 보관하세요.</div>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button class="btn-secondary" onclick="closeCreateKey()">닫기</button>
+                <button class="btn-save" id="btnCreate" onclick="createKey()">생성</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="toast"></div>
+
+    <script type="module" src="/js/components/sidebar.js"></script>
+    <script type="module">
+        function authFetch(url, opts = {}) {
+            const headers = { 'Content-Type':'application/json', ...opts.headers };
+            return fetch(url, { ...opts, headers, credentials: 'include' }).then(r => r.json());
+        }
+        function showToast(msg, type = 'success') {
+            const t = document.getElementById('toast');
+            t.textContent = msg; t.className = 'toast ' + type + ' show';
+            setTimeout(() => t.classList.remove('show'), 3000);
+        }
+        function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+        function fmtDate(s) { return s ? new Date(s).toLocaleDateString('ko-KR') : '-'; }
+
+        let keys = [];
+
+        async function loadKeys() {
+            try {
+                const res = await authFetch('/api/api-keys');
+                keys = res.data || [];
+                renderKeys();
+            } catch(e) {
+                document.getElementById('keyList').innerHTML = '<div class="empty-state"><h2>로드 실패</h2></div>';
+            }
+        }
+
+        function renderKeys() {
+            const el = document.getElementById('keyList');
+            if (!keys.length) {
+                el.innerHTML = '<div class="empty-state"><h2>API 키가 없습니다</h2><p>새 API 키를 생성하여 외부 서비스에서 OpenMake.AI를 사용하세요.</p></div>';
+                return;
+            }
+            el.innerHTML = keys.map(k => `
+                <div class="key-card">
+                    <div class="key-header">
+                        <span class="key-name">${esc(k.name)}</span>
+                        <span class="key-prefix">${esc(k.key_prefix || 'omk_live_')}****${esc(k.last_4 || '')}</span>
+                    </div>
+                    <div class="key-meta">
+                        <span class="${k.is_active ? 'badge-active' : 'badge-inactive'}">${k.is_active ? '활성' : '비활성'}</span>
+                        <span class="badge-tier">${esc(k.rate_limit_tier || 'free')}</span>
+                        <span>요청: ${(k.total_requests || 0).toLocaleString()}</span>
+                        <span>토큰: ${(k.total_tokens || 0).toLocaleString()}</span>
+                        <span>생성: ${fmtDate(k.created_at)}</span>
+                        <span>마지막 사용: ${fmtDate(k.last_used_at)}</span>
+                    </div>
+                    <div class="key-actions">
+                        <button onclick="rotateKey('${k.id}')">🔄 회전</button>
+                        <button class="btn-danger" onclick="deleteKey('${k.id}', '${esc(k.name)}')">🗑️ 삭제</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function openCreateKey() {
+            document.getElementById('keyName').value = '';
+            document.getElementById('keyDesc').value = '';
+            document.getElementById('keyTier').value = 'free';
+            document.getElementById('newKeyDisplay').style.display = 'none';
+            document.getElementById('btnCreate').style.display = '';
+            document.getElementById('createModal').classList.add('open');
+        }
+        function closeCreateKey() { document.getElementById('createModal').classList.remove('open'); }
+
+        async function createKey() {
+            const name = document.getElementById('keyName').value.trim();
+            if (!name) { showToast('키 이름을 입력하세요', 'error'); return; }
+            try {
+                const res = await authFetch('/api/api-keys', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        name,
+                        description: document.getElementById('keyDesc').value.trim(),
+                        rateLimitTier: document.getElementById('keyTier').value
+                    })
+                });
+                if (res.data && res.data.rawKey) {
+                    document.getElementById('newKeyValue').textContent = res.data.rawKey;
+                    document.getElementById('newKeyDisplay').style.display = '';
+                    document.getElementById('btnCreate').style.display = 'none';
+                    showToast('API 키가 생성되었습니다.');
+                    loadKeys();
+                } else {
+                    showToast('키 생성됨 (표시 불가)');
+                    closeCreateKey();
+                    loadKeys();
+                }
+            } catch(e) { showToast('생성 실패', 'error'); }
+        }
+
+        async function rotateKey(id) {
+            if (!confirm('이 키를 회전하시겠습니까? 기존 키는 즉시 무효화됩니다.')) return;
+            try {
+                await authFetch('/api/api-keys/' + id + '/rotate', { method: 'POST' });
+                showToast('키가 회전되었습니다.');
+                loadKeys();
+            } catch(e) { showToast('회전 실패', 'error'); }
+        }
+
+        async function deleteKey(id, name) {
+            if (!confirm('"' + name + '" 키를 삭제하시겠습니까?')) return;
+            try {
+                await authFetch('/api/api-keys/' + id, { method: 'DELETE' });
+                showToast('키가 삭제되었습니다.');
+                loadKeys();
+            } catch(e) { showToast('삭제 실패', 'error'); }
+        }
+
+        loadKeys();
+
+        window.openCreateKey = openCreateKey;
+        window.closeCreateKey = closeCreateKey;
+        window.createKey = createKey;
+        window.rotateKey = rotateKey;
+        window.deleteKey = deleteKey;
+    </script>
+</body>
+</html>

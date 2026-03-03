@@ -33,6 +33,7 @@
 
 import { getConfig } from '../config/env';
 import type { CostTier } from './cost-tier';
+import { DEFAULT_AUTO_MODEL } from '../config/constants';
 
 // ============================================
 // 파이프라인 프로파일 인터페이스
@@ -147,7 +148,7 @@ export interface PipelineProfile {
  * @example
  * const profiles = getProfiles();
  * const proProfile = profiles['openmake_llm_pro'];
- * console.log(proProfile.engineModel); // config.omkEnginePro 값
+ * logger.info(proProfile.engineModel); // config.omkEnginePro 값
  */
 export function getProfiles(): Record<string, PipelineProfile> {
     const config = getConfig();
@@ -262,8 +263,8 @@ export function getProfiles(): Record<string, PipelineProfile> {
         },
 
         // ── 7. openmake_llm_auto — Smart Auto-Routing ──
-        'openmake_llm_auto': {
-            id: 'openmake_llm_auto',
+        [DEFAULT_AUTO_MODEL]: {
+            id: DEFAULT_AUTO_MODEL,
             displayName: 'OpenMake LLM Auto',
             description: '스마트 자동 라우팅 — 질문 유형에 따라 최적 모델 자동 선택 (코딩, 분석, 창작, 비전 등)',
             engineModel: '__auto__',

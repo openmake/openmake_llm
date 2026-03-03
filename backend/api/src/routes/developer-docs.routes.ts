@@ -18,9 +18,12 @@
 
 import { Router, Request, Response } from 'express';
 import * as path from 'path';
-import * as fs from 'fs';
+import { promises as fsp } from 'fs';
 import { success, error as apiError, ErrorCodes } from '../utils/api-response';
+import { asyncHandler } from '../utils/error-handler';
+import { createLogger } from '../utils/logger';
 
+const logger = createLogger('DeveloperDocsRoutes');
 const router = Router();
 
 // 문서 디렉토리 경로
@@ -38,24 +41,29 @@ router.get('/developer', (_req: Request, res: Response) => {
  * GET /api/docs/api-reference
  * API Reference 마크다운 원문 제공 (JSON 래핑)
  */
-router.get('/api-reference', (_req: Request, res: Response) => {
+router.get('/api-reference', asyncHandler(async (_req: Request, res: Response) => {
     const planPath = path.join(DOCS_DIR, 'API_KEY_SERVICE_PLAN.md');
 
-    if (!fs.existsSync(planPath)) {
-        res.status(404).json(apiError(
-            ErrorCodes.NOT_FOUND,
-            'API reference document not found.'
-        ));
-        return;
+    try {
+        const content = await fsp.readFile(planPath, 'utf-8');
+        res.json(success({
+            title: 'OpenMake LLM API Key Service Plan',
+            format: 'markdown',
+            content,
+        }));
+    } catch (err: unknown) {
+        const isNotFound = err instanceof Error && 'code' in err && (err as NodeJS.ErrnoException).code === 'ENOENT';
+        if (isNotFound) {
+            res.status(404).json(apiError(
+                ErrorCodes.NOT_FOUND,
+                'API reference document not found.'
+            ));
+        } else {
+            logger.error('API reference document read failed:', err);
+            throw err;
+        }
     }
-
-    const content = fs.readFileSync(planPath, 'utf-8');
-    res.json(success({
-        title: 'OpenMake LLM API Key Service Plan',
-        format: 'markdown',
-        content,
-    }));
-});
+}));
 
 /**
  * GET /api/docs/quickstart

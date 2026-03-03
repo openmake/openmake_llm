@@ -145,8 +145,8 @@
                                     <h4>테마</h4>
                                     <p>앱의 색상 테마를 선택합니다</p>
                                 </div>
-                                <select id="themeSelect" class="form-select" style="width: auto; min-width: 180px;"
-                                    onchange="setTheme(this.value)">
+                                <select id="themeSelect" class="form-select" style="width: auto;
+                                    min-width: 180px;">
                                     <option value="dark">다크 모드</option>
                                     <option value="light">라이트 모드</option>
                                     <option value="system">시스템 설정</option>
@@ -155,12 +155,29 @@
                             <div class="setting-row">
                                 <div class="setting-info">
                                     <h4>언어</h4>
-                                    <p>인터페이스 언어를 선택합니다</p>
+                                    <p>AI 응답 및 인터페이스 언어를 선택합니다</p>
                                 </div>
                                 <select id="langSelect" class="form-select" style="width: auto; min-width: 180px;">
                                     <option value="ko">한국어</option>
                                     <option value="en">English</option>
                                     <option value="ja">日本語</option>
+                                    <option value="zh">中文(简体)</option>
+                                    <option value="es">Español</option>
+                                    <option value="fr">Français</option>
+                                    <option value="de">Deutsch</option>
+                                    <option value="pt">Português</option>
+                                    <option value="ru">Русский</option>
+                                    <option value="ar">العربية</option>
+                                    <option value="hi">हिन्दी</option>
+                                    <option value="it">Italiano</option>
+                                    <option value="nl">Nederlands</option>
+                                    <option value="sv">Svenska</option>
+                                    <option value="da">Dansk</option>
+                                    <option value="no">Norsk</option>
+                                    <option value="fi">Suomi</option>
+                                    <option value="th">ไทย</option>
+                                    <option value="vi">Tiếng Việt</option>
+                                    <option value="tr">Türkçe</option>
                                 </select>
                             </div>
                         </div>
@@ -215,8 +232,8 @@
                                         class="toggle-slider"></span></label>
                             </div>
                             <div style="display: flex; gap: var(--space-3); margin-top: var(--space-4);">
-                                <button class="btn btn-secondary" onclick="exportData()">📥 데이터 내보내기</button>
-                                <button class="btn btn-danger" onclick="clearHistory()">🗑️ 기록 삭제</button>
+                                <button class="btn btn-secondary" id="exportBtn">📥 데이터 내보내기</button>
+                                <button class="btn btn-danger" id="clearHistoryBtn">🗑️ 기록 삭제</button>
                             </div>
                         </div>
                     </div>
@@ -262,130 +279,16 @@
                     </div>
 
                     <div style="display: flex; gap: var(--space-3);">
-                        <button class="btn btn-primary" onclick="saveSettings()">💾 설정 저장</button>
-                        <button class="btn btn-secondary" onclick="resetSettings()">↩️ 초기화</button>
+                        <button class="btn btn-primary" id="saveBtn">💾 설정 저장</button>
+                        <button class="btn btn-secondary" id="resetBtn">↩️ 초기화</button>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <script src="/js/components/sidebar.js"></script>
-    <script>
-        // 관리자 확인 헬퍼
-        function isAdmin() {
-            const savedUser = localStorage.getItem('user');
-            if (!savedUser) return false;
-            try {
-                const user = JSON.parse(savedUser);
-                return user.role === 'admin' || user.role === 'administrator';
-            } catch (e) { return false; }
-        }
-
-        async function loadModels() {
-            const modelSelect = document.getElementById('modelSelect');
-
-            // 🔒 관리자가 아니면 모델 이름 숨김
-            if (!isAdmin()) {
-                modelSelect.innerHTML = '<option value="openmake_llm_auto">OpenMake LLM Auto</option>';
-                modelSelect.disabled = true;
-                modelSelect.style.cursor = 'default';
-                return;
-            }
-
-            try {
-                const response = await fetch('/api/models');
-                if (response.ok) {
-                    const rawData = await response.json();
-                    const data = rawData.data || rawData;
-                    if (data.models && data.models.length > 0) {
-                        const savedModel = localStorage.getItem('selectedModel');
-                        const defaultModel = data.defaultModel || 'openmake_llm_auto';
-
-                        modelSelect.innerHTML = data.models.map(model => {
-                            const modelId = model.modelId || model.name;
-                            const displayName = model.name;
-                            const desc = model.description || '';
-                            const isSelected = savedModel ? modelId === savedModel : modelId === defaultModel;
-                            return `<option value="${modelId}" ${isSelected ? 'selected' : ''}>${displayName}${desc ? ' — ' + desc : ''}</option>`;
-                        }).join('');
-                    }
-                }
-            } catch (e) {
-                console.error('모델 로드 실패:', e);
-                const savedModel = localStorage.getItem('selectedModel');
-                if (savedModel) modelSelect.innerHTML = `<option value="${savedModel}">${savedModel}</option>`;
-            }
-        }
-
-        async function loadSystemInfo() {
-            try {
-                const res = await fetch('/health');
-                if (res.ok) {
-                    const json = await res.json();
-                    const d = json.data || json;
-                    const verEl = document.getElementById('sysVersion');
-                    const statusEl = document.getElementById('sysStatus');
-                    const nodesEl = document.getElementById('sysNodes');
-                    const updateEl = document.getElementById('sysLastUpdate');
-                    if (verEl) verEl.textContent = 'v' + (d.version || '?');
-                    if (statusEl) {
-                        statusEl.textContent = '● ' + (d.status === 'healthy' ? '온라인' : '오프라인');
-                        statusEl.style.color = d.status === 'healthy' ? 'var(--success)' : 'var(--error)';
-                    }
-                    if (nodesEl && d.cluster) {
-                        nodesEl.textContent = d.cluster.onlineNodes + '/' + d.cluster.totalNodes + ' (' + d.cluster.totalModels + ' 모델)';
-                    }
-                    if (updateEl && d.build && d.build.gitDate) {
-                        updateEl.textContent = d.build.gitDate;
-                    }
-                }
-            } catch (e) { console.warn('시스템 정보 로드 실패:', e); }
-        }
-
-        function initAccountCard() {
-            var accountCard = document.getElementById('accountCard');
-            var adminLink = document.getElementById('adminLink');
-            var loggedIn = !!localStorage.getItem('authToken');
-            if (loggedIn && accountCard) {
-                accountCard.style.display = '';
-                if (isAdmin() && adminLink) adminLink.style.display = '';
-            }
-        }
-
-        async function initSettings() { await loadModels(); loadSettings(); loadSystemInfo(); initAccountCard(); }
-
-        function setTheme(theme) { document.documentElement.setAttribute('data-theme', theme); localStorage.setItem('theme', theme); }
-
-        function saveSettings() {
-            setTheme(document.getElementById('themeSelect').value);
-            localStorage.setItem('selectedModel', document.getElementById('modelSelect').value);
-            const mcpSettings = JSON.parse(localStorage.getItem('mcpSettings') || '{}');
-            mcpSettings.thinking = document.getElementById('thinkingToggle').checked;
-            mcpSettings.webSearch = document.getElementById('webSearchToggle').checked;
-            localStorage.setItem('mcpSettings', JSON.stringify(mcpSettings));
-            localStorage.setItem('generalSettings', JSON.stringify({ lang: document.getElementById('langSelect').value, saveHistory: document.getElementById('saveHistoryToggle').checked }));
-            alert('설정이 저장되었습니다.');
-        }
-
-        function loadSettings() {
-            const theme = localStorage.getItem('theme') || 'dark';
-            document.getElementById('themeSelect').value = theme;
-            setTheme(theme);
-            const selectedModel = localStorage.getItem('selectedModel');
-            if (selectedModel && [...document.getElementById('modelSelect').options].some(o => o.value === selectedModel)) document.getElementById('modelSelect').value = selectedModel;
-            const savedMcp = localStorage.getItem('mcpSettings');
-            if (savedMcp) { const mcp = JSON.parse(savedMcp); document.getElementById('thinkingToggle').checked = mcp.thinking !== false; document.getElementById('webSearchToggle').checked = mcp.webSearch === true; }
-            const savedGeneral = localStorage.getItem('generalSettings');
-            if (savedGeneral) { const general = JSON.parse(savedGeneral); document.getElementById('langSelect').value = general.lang || 'ko'; document.getElementById('saveHistoryToggle').checked = general.saveHistory !== false; }
-        }
-
-        function resetSettings() { if (confirm('모든 설정을 초기화하시겠습니까?')) { localStorage.removeItem('theme'); localStorage.removeItem('selectedModel'); localStorage.removeItem('mcpSettings'); localStorage.removeItem('generalSettings'); location.reload(); } }
-        function exportData() { alert('데이터 내보내기 기능은 준비 중입니다.'); }
-        function clearHistory() { if (confirm('모든 대화 기록을 삭제하시겠습니까?')) alert('대화 기록이 삭제되었습니다.'); }
-
-        initSettings();
-    </script>
+    <script type="module" src="/js/components/sidebar.js"></script>
+    <script type="module" src="/js/settings-standalone.js"></script>
 </body>
 
 </html>

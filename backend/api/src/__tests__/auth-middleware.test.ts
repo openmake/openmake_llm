@@ -78,6 +78,7 @@ function createMockRequest(overrides: Partial<Request> = {}): Request {
     return {
         headers: {},
         cookies: {},
+        path: '/test',
         ...overrides
     } as Request;
 }

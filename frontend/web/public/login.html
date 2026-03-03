@@ -7,6 +7,7 @@
         content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover">
     <title>로그인 - OpenMake.Ai</title>
     <link rel="icon" type="image/png" href="/logo.png">
+    <meta name="theme-color" content="#c061ff">
 
     <!-- 통합 디자인 시스템 -->
     <link rel="preconnect" href="https://cdn.jsdelivr.net">
@@ -15,15 +16,7 @@
     <link rel="stylesheet" href="/css/design-tokens.css">
 
 
-    <!-- PWA 메타 태그 -->
-    <meta name="theme-color" content="#c061ff">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="OpenMake.Ai">
-    <meta name="mobile-web-app-capable" content="yes">
-    <link rel="manifest" href="/manifest.json">
-    <link rel="apple-touch-icon" href="/icons/icon-192.png">
-    <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon.png">
+
 
     <style>
         * {
@@ -389,15 +382,7 @@
         }
     </style>
 
-    <script>
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/service-worker.js')
-                    .then(reg => console.log('[PWA] SW 등록 성공'))
-                    .catch(err => console.warn('[PWA] SW 등록 실패:', err));
-            });
-        }
-    </script>
+
 </head>
 
 <body>
@@ -448,6 +433,12 @@
             <!-- 회원가입 폼 -->
             <div id="registerPanel" class="form-panel">
                 <form id="registerForm" onsubmit="handleRegister(event)">
+                    <div class="form-group">
+                        <label class="form-label" for="registerUsername">사용자명</label>
+                        <input type="text" id="registerUsername" class="form-input" placeholder="홍길동" required
+                            minlength="3" maxlength="50">
+                        <span class="form-hint">3~50자, 다른 사용자에게 표시됩니다</span>
+                    </div>
                     <div class="form-group">
                         <label class="form-label" for="registerEmail">이메일</label>
                         <input type="email" id="registerEmail" class="form-input" placeholder="example@email.com"
@@ -512,7 +503,7 @@
         </div>
     </div>
 
-    <script>
+    <script type="module">
         const API_BASE = window.location.origin;
 
         // 저장된 테마 적용
@@ -537,12 +528,29 @@
 
         initTheme();
 
-        // 🔒 자동로그인 차단: login.html 진입 시 stale 토큰 정리
-        // 이전: authToken이 있으면 /api/auth/me로 자동 리다이렉트 → 제거
-        // 사용자가 로그인 페이지에 도달하면 기존 인증 상태를 초기화
-        localStorage.removeItem('authToken');
-        localStorage.removeItem('user');
-        localStorage.removeItem('guestMode');
+        // 🔒 로그인 상태 확인: 이미 인증되었으면 홈으로 리다이렉트
+        // httpOnly 쿠키로 인증 상태 확인 후 localStorage 정리 여부 결정
+        (async function checkAuthAndRedirect() {
+            try {
+                const res = await fetch('/api/auth/me', { credentials: 'include' });
+                if (res.ok) {
+                    const data = await res.json();
+                    const user = data.data?.user || data.user;
+                    if (user && user.email) {
+                        // 이미 로그인됨 → 홈으로 이동
+                        console.log('[Login] 이미 인증됨, 홈으로 리다이렉트:', user.email);
+                        window.location.href = '/';
+                        return;
+                    }
+                }
+            } catch (e) {
+                // 네트워크 오류 — 무시
+            }
+            // 인증 안 됨 → stale localStorage 정리
+            localStorage.removeItem('authToken');
+            localStorage.removeItem('user');
+            localStorage.removeItem('guestMode');
+        })();
 
         function switchTab(tab) {
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -606,7 +614,6 @@
                     // api-response 표준 형식: data.data.token, data.data.user
                     const payload = data.data || data;
                     const token = payload.token;
-                    localStorage.setItem('authToken', token);
                     localStorage.removeItem('guestMode');
                     localStorage.removeItem('isGuest');
                     // JWT에서 사용자 정보 추출하여 저장
@@ -674,9 +681,15 @@
             e.preventDefault();
             hideMessages();
 
+            const username = document.getElementById('registerUsername').value.trim();
             const email = document.getElementById('registerEmail').value;
             const password = document.getElementById('registerPassword').value;
             const passwordConfirm = document.getElementById('registerPasswordConfirm').value;
+
+            if (!username || username.length < 3) {
+                showError('사용자명은 3자 이상이어야 합니다');
+                return;
+            }
 
             if (password !== passwordConfirm) {
                 showError('비밀번호가 일치하지 않습니다');
@@ -689,7 +702,7 @@
                 const res = await fetch(`${API_BASE}/api/auth/register`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email, password })
+                    body: JSON.stringify({ username, email, password })
                 });
 
                 const data = await res.json();
@@ -729,21 +742,29 @@
 
         async function checkOAuthProviders() {
             try {
+                console.log('[Login] OAuth 프로바이더 확인 시작...');
                 const res = await fetch(`${API_BASE}/api/auth/providers`);
                 const data = await res.json();
+                console.log('[Login] OAuth 프로바이더 응답:', data);
 
                 // api-response 표준 형식: data.data.providers
                 const payload = data.data || data;
                 const providers = payload.providers || [];
+                console.log('[Login] 활성 프로바이더:', providers);
+
                 const section = document.getElementById('socialLoginSection');
                 const divider = document.getElementById('divider1');
 
                 if (providers.length === 0) {
+                    console.log('[Login] 프로바이더 없음 - 섹션 숨김');
                     section.style.display = 'none';
                     if (divider) divider.style.display = 'none';
                 } else {
                     const googleBtn = document.querySelector('.social-btn-google');
                     const githubBtn = document.querySelector('.social-btn-github');
+
+                    console.log('[Login] Google 버튼 요소:', googleBtn);
+                    console.log('[Login] Google 포함 여부:', providers.includes('google'));
 
                     if (googleBtn) {
                         googleBtn.style.display = providers.includes('google') ? 'flex' : 'none';
@@ -753,7 +774,7 @@
                     }
                 }
             } catch (e) {
-                console.warn('OAuth 프로바이더 확인 실패:', e);
+                console.error('[Login] OAuth 프로바이더 확인 실패:', e);
             }
         }
 
@@ -764,6 +785,14 @@
         if (oauthError) {
             showError('소셜 로그인 실패: ' + oauthError);
         }
+
+        window.switchTab = switchTab;
+        window.handleLogin = handleLogin;
+        window.handleRegister = handleRegister;
+        window.continueAsGuest = continueAsGuest;
+        window.loginWithGoogle = loginWithGoogle;
+        window.loginWithGitHub = loginWithGitHub;
+        window.toggleTheme = toggleTheme;
     </script>
 </body>
 

@@ -10,8 +10,7 @@
  * @description
  * - OllamaClient: HTTP 클라이언트 (Generate, Chat, Embed, WebSearch)
  * - Agent Loop: Multi-turn Tool Calling 에이전트 루프
- * - ApiKeyManager: Cloud API Key 자동 로테이션
- * - MultiModelClientFactory: A2A 병렬 생성 클라이언트 팩토리
+ * - ApiKeyManager: Cloud API Key 자동 로테이션 + 키풀 라운드로빈
  * - ApiUsageTracker: 사용량 추적 및 쿼터 관리
  * - Types: 모든 Ollama API 타입/인터페이스
  */
@@ -31,17 +30,9 @@ export {
 } from './agent-loop';
 export type { AgentLoopOptions, AgentLoopResult } from './agent-loop';
 
-// API 키 관리 — Cloud API Key 자동 로테이션
+// API 키 관리 — Cloud API Key 키풀 라운드로빈 + 자동 로테이션
 export { getApiKeyManager, ApiKeyManager } from './api-key-manager';
-export type { KeyModelPair, ApiKeyConfig } from './api-key-manager';
-
-// 멀티모델 클라이언트 — A2A 병렬 생성
-export { 
-    getMultiModelClientFactory, 
-    MultiModelClientFactory,
-    resetMultiModelClientFactory 
-} from './multi-model-client';
-export type { ParallelChatResult, ModelClient } from './multi-model-client';
+export type { ApiKeyConfig } from './api-key-manager';
 
 // API 사용량 추적 — 쿼터 관리 및 통계
 export { getApiUsageTracker } from './api-usage-tracker';
