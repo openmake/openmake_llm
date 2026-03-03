@@ -22,7 +22,11 @@
         "test:e2e:ui": "npx playwright test --ui",
         "lint": "eslint . --ext .ts,.tsx,.js,.jsx",
         "clean": "rm -rf */dist **/dist",
-        "check:schema-drift": "bash scripts/check-schema-drift.sh"
+        "check:schema-drift": "bash scripts/check-schema-drift.sh",
+        "ci": "bash scripts/ci-test.sh",
+        "hooks:install": "bash scripts/install-hooks.sh",
+        "test:bun": "cd backend/api && bun test --timeout 15000",
+        "migrate": "npx ts-node scripts/run-migrations.ts"
     },
     "keywords": [
         "ai",
@@ -40,11 +44,23 @@
         "@playwright/test": "^1.58.0",
         "@types/node": "^20.10.0",
         "@types/nodemailer": "^7.0.9",
+        "@typescript-eslint/eslint-plugin": "^8.56.1",
+        "@typescript-eslint/parser": "^8.56.1",
         "concurrently": "^8.2.2",
         "eslint": "^8.0.0",
         "jest": "^29.7.0",
         "playwright": "^1.58.0",
         "typescript": "^5.3.2"
     },
-    "dependencies": {}
+    "dependencies": {
+        "@opentelemetry/api": "^1.9.0",
+        "@opentelemetry/exporter-trace-otlp-http": "^0.212.0",
+        "@opentelemetry/instrumentation-express": "^0.60.0",
+        "@opentelemetry/instrumentation-http": "^0.212.0",
+        "@opentelemetry/resources": "^2.5.1",
+        "@opentelemetry/sdk-node": "^0.212.0",
+        "@opentelemetry/sdk-trace-base": "^2.5.1",
+        "@opentelemetry/sdk-trace-node": "^2.5.1",
+        "@opentelemetry/semantic-conventions": "^1.40.0"
+    }
 }

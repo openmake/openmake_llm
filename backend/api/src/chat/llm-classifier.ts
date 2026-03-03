@@ -43,7 +43,7 @@ const logger = createLogger('LLMClassifier');
 const CLASSIFIER_MODEL = 'gemini-3-flash-preview:cloud';
 
 /** 분류 호출 타임아웃 (ms) */
-const CLASSIFIER_TIMEOUT_MS = 3000;
+const CLASSIFIER_TIMEOUT_MS = 10000;
 
 /** 캐시 TTL (ms) — 30분 */
 const CACHE_TTL_MS = 30 * 60 * 1000;

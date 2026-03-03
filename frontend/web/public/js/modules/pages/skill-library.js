@@ -534,5 +534,5 @@
         }
     };
 
-const { getHTML, init, cleanup } = window.PageModules['skill-library'];
-export default { getHTML, init, cleanup };
+const pageModule = window.PageModules['skill-library'];
+export default pageModule;

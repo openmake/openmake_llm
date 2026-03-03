@@ -33,6 +33,35 @@ import {
 
 const logger = createLogger('UnifiedDB');
 
+type SpanLike = {
+    setAttribute: (key: string, value: string | number | boolean) => SpanLike;
+};
+
+type WithSpanLike = <T>(
+    tracerName: string,
+    spanName: string,
+    fn: (span: SpanLike) => Promise<T>,
+    options?: { kind?: number; attributes?: Record<string, string | number | boolean> }
+) => Promise<T>;
+
+let cachedWithSpan: WithSpanLike | null | undefined;
+
+function getWithSpan(): WithSpanLike | null {
+    if (cachedWithSpan !== undefined) {
+        return cachedWithSpan;
+    }
+
+    try {
+        const otelModule = require('../../observability/otel') as { withSpan?: WithSpanLike };
+        cachedWithSpan = typeof otelModule.withSpan === 'function' ? otelModule.withSpan : null;
+    } catch (err) {
+        logger.debug('[UnifiedDB] OTel withSpan load skipped', err);
+        cachedWithSpan = null;
+    }
+
+    return cachedWithSpan;
+}
+
 /** SQL 쿼리 파라미터 타입 - $1, $2 등의 플레이스홀더에 바인딩되는 값 */
 type QueryParam = string | number | boolean | null | undefined;
 
@@ -868,10 +897,27 @@ export class UnifiedDatabase {
      * 일시적 연결 오류 시 자동 재시도 (지수 백오프)
      */
     private retryQuery(text: string, params?: QueryParam[]): Promise<QueryResult<Record<string, unknown>>> {
-        return withRetry(
-            () => this.pool.query(text, params),
-            { operation: text.substring(0, 50) }
-        );
+        const withSpan = getWithSpan();
+
+        if (!withSpan) {
+            return withRetry(
+                () => this.pool.query(text, params),
+                { operation: text.substring(0, 50) }
+            );
+        }
+
+        return withSpan('UnifiedDB', 'db.query', async (span) => {
+            span.setAttribute('db.system', 'postgresql');
+            span.setAttribute('db.statement', text.substring(0, 200));
+
+            const result = await withRetry(
+                () => this.pool.query(text, params),
+                { operation: text.substring(0, 50) }
+            );
+
+            span.setAttribute('db.rows_affected', result.rowCount ?? 0);
+            return result;
+        });
     }
 
     // ===== 사용자 관리 =====
@@ -954,8 +1000,8 @@ export class UnifiedDatabase {
         return this.auditRepository.logAgentUsage(params);
     }
 
-    async getAgentStats(agentId: string) {
-        return this.auditRepository.getAgentStats(agentId);
+    async getAgentStats(agentId: string, userId?: string) {
+        return this.auditRepository.getAgentStats(agentId, userId);
     }
 
     // ===== 감사 로그 =====
@@ -972,8 +1018,8 @@ export class UnifiedDatabase {
         return this.auditRepository.logAudit(params);
     }
 
-    async getAuditLogs(limit: number = 100) {
-        return this.auditRepository.getAuditLogs(limit);
+    async getAuditLogs(limit: number = 100, userId?: string) {
+        return this.auditRepository.getAuditLogs(limit, userId);
     }
 
     // ===== 통계 =====

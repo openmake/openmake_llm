@@ -16,6 +16,7 @@
 2. CSS 변수는 `css/design-tokens.css`에서 관리
 3. 캐시 버스터 (`?v=N`) 사용 시 HTML과 JS 파일 동기화 필수
 4. 인라인 `onclick` 대신 JS에서 동적 바인딩
+5. Docker/컨테이너화(Dockerfile, docker-compose, .dockerignore) 관련 개발 계획, 제안, 구현 금지 — 프로젝트 방침으로 영구 제외
 
 ## Installed Skills Reference
 

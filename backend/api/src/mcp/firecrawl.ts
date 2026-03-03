@@ -22,6 +22,7 @@ import { getConfig } from '../config/env';
 import { TRUNCATION } from '../config/runtime-limits';
 import { LLM_TIMEOUTS } from '../config/timeouts';
 import { firecrawlPost } from '../utils/firecrawl-client';
+import { validateOutboundUrl } from '../security/ssrf-guard';
 
 
 // ============================================
@@ -154,6 +155,7 @@ export const firecrawlScrapeTool: MCPToolDefinition = {
     async handler(args: Record<string, unknown>): Promise<MCPToolResult> {
         try {
             const url = args.url as string;
+            await validateOutboundUrl(url);
             const options: FirecrawlScrapeOptions = {
                 formats: (args.formats as FirecrawlScrapeOptions['formats']) || ['markdown'],
                 onlyMainContent: args.onlyMainContent !== false,
@@ -317,6 +319,7 @@ export const firecrawlMapTool: MCPToolDefinition = {
     async handler(args: Record<string, unknown>): Promise<MCPToolResult> {
         try {
             const url = args.url as string;
+            await validateOutboundUrl(url);
             const options: FirecrawlMapOptions = {
                 search: args.search as string,
                 limit: (args.limit as number) || 100,
@@ -392,6 +395,7 @@ export const firecrawlCrawlTool: MCPToolDefinition = {
     async handler(args: Record<string, unknown>): Promise<MCPToolResult> {
         try {
             const url = args.url as string;
+            await validateOutboundUrl(url);
             const options = {
                 limit: (args.limit as number) || 10,
                 maxDepth: (args.maxDepth as number) || 2,

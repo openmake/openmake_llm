@@ -37,8 +37,10 @@ import * as fs from 'fs';
 import { getConfig } from '../config/env';
 import { createLogger } from '../utils/logger';
 
-/** 사용자 데이터 루트 경로 (config에서 로드) */
-const USER_DATA_ROOT = getConfig().userDataPath;
+/** 사용자 데이터 루트 경로 (config에서 로드 — 지연 평가로 Bun 병렬 테스트 레이스 방어) */
+function getUserDataRoot(): string {
+    return getConfig().userDataPath ?? './data/users';
+}
 const logger = createLogger('UserSandbox');
 
 /**
@@ -59,7 +61,7 @@ export class UserSandbox {
      * @returns 절대 경로 (USER_DATA_ROOT/{userId}/workspace)
      */
     static getWorkDir(userId: string | number): string {
-        return path.resolve(USER_DATA_ROOT, String(userId), 'workspace');
+        return path.resolve(getUserDataRoot(), String(userId), 'workspace');
     }
 
     /**
@@ -69,7 +71,7 @@ export class UserSandbox {
      * @returns 절대 경로 (USER_DATA_ROOT/{userId}/data)
      */
     static getDataDir(userId: string | number): string {
-        return path.resolve(USER_DATA_ROOT, String(userId), 'data');
+        return path.resolve(getUserDataRoot(), String(userId), 'data');
     }
 
     /**
@@ -79,7 +81,7 @@ export class UserSandbox {
      * @returns 절대 경로 (USER_DATA_ROOT/{userId}/temp)
      */
     static getTempDir(userId: string | number): string {
-        return path.resolve(USER_DATA_ROOT, String(userId), 'temp');
+        return path.resolve(getUserDataRoot(), String(userId), 'temp');
     }
 
     /**
@@ -117,7 +119,7 @@ export class UserSandbox {
      * - 수정: "/data/users/10/".startsWith("/data/users/1/") = false (안전)
      */
     static validatePath(userId: string | number, targetPath: string): boolean {
-        const userRoot = path.resolve(USER_DATA_ROOT, String(userId));
+        const userRoot = path.resolve(getUserDataRoot(), String(userId));
         const resolvedPath = path.resolve(targetPath);
 
         // 🔒 보안 강화: trailing separator 추가로 prefix 우회 방지
@@ -223,7 +225,7 @@ export class UserSandbox {
     static async getUserDbPath(userId: string | number): Promise<string> {
         // 디렉토리 초기화 (존재하지 않으면 생성)
         await this.initUserDirs(userId);
-        return path.resolve(USER_DATA_ROOT, String(userId), 'data', 'user.db');
+        return path.resolve(getUserDataRoot(), String(userId), 'data', 'user.db');
     }
 
     /**
@@ -234,7 +236,7 @@ export class UserSandbox {
      */
     static async getUserConversationDbPath(userId: string | number): Promise<string> {
         await this.initUserDirs(userId);
-        return path.resolve(USER_DATA_ROOT, String(userId), 'data', 'conversations.db');
+        return path.resolve(getUserDataRoot(), String(userId), 'data', 'conversations.db');
     }
 
     /**
@@ -245,7 +247,7 @@ export class UserSandbox {
      */
     static async getUserConfigPath(userId: string | number): Promise<string> {
         await this.initUserDirs(userId);
-        return path.resolve(USER_DATA_ROOT, String(userId), 'config.json');
+        return path.resolve(getUserDataRoot(), String(userId), 'config.json');
     }
 
     /**
@@ -287,7 +289,7 @@ export class UserSandbox {
      * @returns 성공이면 true, 실패이면 false
      */
     static async deleteUserData(userId: string | number): Promise<boolean> {
-        const userRoot = path.resolve(USER_DATA_ROOT, String(userId));
+        const userRoot = path.resolve(getUserDataRoot(), String(userId));
         try {
             await fs.promises.rm(userRoot, { recursive: true, force: true });
             logger.info(`사용자 데이터 삭제: ${userId}`);
@@ -306,7 +308,7 @@ export class UserSandbox {
      * @returns 총 바이트 수 (디렉토리 미존재 시 0)
      */
     static getUserDiskUsage(userId: string | number): number {
-        const userRoot = path.resolve(USER_DATA_ROOT, String(userId));
+        const userRoot = path.resolve(getUserDataRoot(), String(userId));
         if (!fs.existsSync(userRoot)) return 0;
 
         let totalSize = 0;

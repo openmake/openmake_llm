@@ -1,0 +1,155 @@
+#!/usr/bin/env bash
+# ==============================================================
+# CI Gate Script — 통합 테스트/빌드/린트 게이트
+# ==============================================================
+# pre-push 훅 또는 `npm run ci`에서 호출합니다.
+# 실패 시 즉시 중단 (fail-on-red).
+#
+# 사용법:
+#   bash scripts/ci-test.sh
+#   npm run ci
+#
+# 실행 순서:
+#   1. Bun Test (backend/api — 66 test files)
+#   2. TypeScript Build (tsc + frontend deploy)
+#   3. ESLint (TypeScript + JavaScript)
+#
+# 종료 코드:
+#   0 — 모든 게이트 통과
+#   1 — 하나 이상의 게이트 실패
+# ==============================================================
+
+set -euo pipefail
+
+# ─── 색상 코드 ───
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
+NC='\033[0m' # No Color
+
+# ─── 프로젝트 루트 ───
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# ─── 타이머 ───
+START_TIME=$(date +%s)
+
+# ─── 결과 추적 ───
+PASSED=0
+FAILED=0
+RESULTS=()
+
+# ─── 단계 실행 함수 ───
+run_step() {
+    local step_name="$1"
+    shift
+    local step_start
+    step_start=$(date +%s)
+
+    echo ""
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${CYAN}▶ ${step_name}${NC}"
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+
+    if "$@"; then
+        local step_end
+        step_end=$(date +%s)
+        local elapsed=$((step_end - step_start))
+        echo -e "${GREEN}✅ ${step_name} — 통과 (${elapsed}s)${NC}"
+        RESULTS+=("✅ ${step_name} (${elapsed}s)")
+        PASSED=$((PASSED + 1))
+    else
+        local step_end
+        step_end=$(date +%s)
+        local elapsed=$((step_end - step_start))
+        echo -e "${RED}❌ ${step_name} — 실패 (${elapsed}s)${NC}"
+        RESULTS+=("❌ ${step_name} (${elapsed}s)")
+        FAILED=$((FAILED + 1))
+        # set -e에 의해 여기서 스크립트 종료
+        # 하지만 summary를 출력하기 위해 trap 사용
+    fi
+}
+
+# ─── 실패 시 서머리 출력 ───
+print_summary() {
+    local END_TIME
+    END_TIME=$(date +%s)
+    local TOTAL_ELAPSED=$((END_TIME - START_TIME))
+
+    echo ""
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${CYAN}📊 CI Gate Summary${NC}"
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    for r in "${RESULTS[@]}"; do
+        echo -e "   $r"
+    done
+    echo ""
+    echo -e "   총 소요시간: ${TOTAL_ELAPSED}s"
+
+    if [[ $FAILED -gt 0 ]]; then
+        echo -e "   ${RED}❌ ${FAILED}개 게이트 실패 — push 차단${NC}"
+        echo ""
+        exit 1
+    else
+        echo -e "   ${GREEN}✅ 모든 게이트 통과 (${PASSED}/3)${NC}"
+        echo ""
+        exit 0
+    fi
+}
+
+trap print_summary EXIT
+
+# ─── Step 1: Bun Test ───
+# agent-loop.test.ts는 Ollama 실제 연결을 시도하여 CI에서 hang 발생 → 제외
+# Bun은 모든 파일을 단일 프로세스에서 실행하므로 jest.mock이 파일 간 누출됨
+# → 각 파일을 개별 bun test 프로세스로 실행하여 mock 격리 보장
+
+# CI 환경변수 설정 — auth 모듈이 모듈 로드 시점에 JWT_SECRET을 읽으므로 프로세스 레벨에서 export 필수
+export JWT_SECRET="ci-test-secret-for-testing-only"
+export NODE_ENV="test"
+CI_EXCLUDE="agent-loop.test.ts"
+
+run_step "Bun Test (backend/api)" bash -c '
+    # macOS에는 GNU timeout이 없으므로 순수 셸로 타임아웃 구현
+    run_with_timeout() {
+        local secs=$1; shift
+        "$@" &
+        local pid=$!
+        (
+            sleep "$secs"
+            kill -9 "$pid" 2>/dev/null
+        ) &
+        local watchdog=$!
+        wait "$pid" 2>/dev/null
+        local ret=$?
+        kill "$watchdog" 2>/dev/null
+        wait "$watchdog" 2>/dev/null
+        return $ret
+    }
+
+    TEST_FAILED=0
+    TEST_PASSED=0
+    TEST_ERRORS=""
+    for f in '"$PROJECT_ROOT"'/backend/api/src/__tests__/*.test.ts; do
+        fname=$(basename "$f")
+        case "$fname" in '"$CI_EXCLUDE"') continue ;; esac
+        if run_with_timeout 30 bun test --timeout 15000 "$f" > /dev/null 2>&1; then
+            TEST_PASSED=$((TEST_PASSED + 1))
+        else
+            TEST_FAILED=$((TEST_FAILED + 1))
+            TEST_ERRORS="$TEST_ERRORS $fname"
+        fi
+    done
+    echo "  ✅ $TEST_PASSED passed, ❌ $TEST_FAILED failed"
+    if [ $TEST_FAILED -gt 0 ]; then
+        echo "  실패 파일:$TEST_ERRORS"
+        exit 1
+    fi
+'
+
+# ─── Step 2: Build ───
+run_step "TypeScript Build" bash -c "cd '$PROJECT_ROOT' && npm run build"
+
+# ─── Step 3: Lint ───
+run_step "ESLint" bash -c "cd '$PROJECT_ROOT' && npm run lint"

@@ -100,6 +100,10 @@ describe('RAGService', () => {
         // VectorRepository 메서드를 spy
         // RAGService 내부에서 생성된 VectorRepository의 query를 mockPoolQuery로 대체
         mockPoolQuery.mockResolvedValue({ rows: [], rowCount: 0 });
+
+        // pgvectorAvailable 캐시 초기화 (테스트 간 격리)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (service as any).vectorRepo.pgvectorAvailable = null;
     });
 
     describe('embedDocument', () => {
@@ -116,10 +120,8 @@ describe('RAGService', () => {
             // 임베딩 결과
             mockEmbedBatch.mockResolvedValue([[0.1, 0.2], [0.3, 0.4]]);
 
-            // 저장 (2번 INSERT)
-            mockPoolQuery
-                .mockResolvedValueOnce({ rowCount: 1 })
-                .mockResolvedValueOnce({ rowCount: 1 });
+            // 저장 (BATCH_SIZE=200 이하이므로 1회 배치 INSERT)
+            mockPoolQuery.mockResolvedValueOnce({ rowCount: 2 });
 
             const result = await service.embedDocument({
                 docId: 'doc-001',
@@ -171,6 +173,7 @@ describe('RAGService', () => {
 
             expect(result.embeddedChunks).toBe(1);
             // hasEmbeddings + deleteBySource + INSERT = 최소 3회 호출
+            // Note: withRetry wraps each query, but doesn't add extra calls on success
             expect(mockPoolQuery.mock.calls.length).toBeGreaterThanOrEqual(3);
         });
 

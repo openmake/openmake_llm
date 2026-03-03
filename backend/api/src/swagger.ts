@@ -63,6 +63,7 @@ AI 채팅 어시스턴트 API 문서
         { name: 'Auth', description: '인증 관련 API' },
         { name: 'Chat', description: '채팅 관련 API' },
         { name: 'Documents', description: '문서 업로드 및 분석' },
+        { name: 'Knowledge Base', description: 'Knowledge Base 관리 (N:M)' },
         { name: 'Agents', description: 'AI 에이전트 관련 API' },
         { name: 'MCP', description: 'MCP 서버 및 도구 관리' },
         { name: 'Tools', description: '도구 API (웹 검색 등)' },
@@ -732,11 +733,53 @@ AI 채팅 어시스턴트 API 문서
                 }
             }
         },
+        '/api/v1/chat/completions': {
+            post: {
+                tags: ['Chat'],
+                summary: 'OpenAI-compatible chat completions',
+                description: 'OpenAI Python SDK compatible endpoint. Supports streaming (SSE) and non-streaming responses.',
+                security: [{ apiKeyAuth: [] }],
+                requestBody: {
+                    required: true,
+                    content: {
+                        'application/json': {
+                            schema: {
+                                type: 'object',
+                                required: ['model', 'messages'],
+                                properties: {
+                                    model: { type: 'string', description: 'Model ID (e.g., openmake_llm, openmake_llm_pro)' },
+                                    messages: {
+                                        type: 'array',
+                                        items: {
+                                            type: 'object',
+                                            properties: {
+                                                role: { type: 'string', enum: ['system', 'user', 'assistant', 'tool'] },
+                                                content: { type: 'string' }
+                                            }
+                                        }
+                                    },
+                                    stream: { type: 'boolean', default: false },
+                                    temperature: { type: 'number' },
+                                    max_tokens: { type: 'integer' },
+                                    tools: { type: 'array', items: { type: 'object' } },
+                                    tool_choice: { type: 'string' }
+                                }
+                            }
+                        }
+                    }
+                },
+                responses: {
+                    '200': { description: 'Chat completion response (OpenAI format)' },
+                    '400': { description: 'Invalid request' },
+                    '401': { description: 'API Key required' }
+                }
+            }
+        },
         '/api/v1/models': {
             get: {
                 tags: ['Models'],
-                summary: 'Brand Model 목록 조회',
-                description: '사용 가능한 OpenMake LLM brand model 목록을 반환합니다.',
+                summary: 'OpenAI-compatible model list',
+                description: 'OpenAI format 모델 목록을 반환합니다. object=list, data[].object=model 구조를 따릅니다.',
                 responses: {
                     '200': {
                         description: '모델 목록',
@@ -753,6 +796,8 @@ AI 채팅 어시스턴트 API 문서
                                                 properties: {
                                                     id: { type: 'string', example: 'openmake_llm_auto' },
                                                     object: { type: 'string', example: 'model' },
+                                                    created: { type: 'integer', example: 1700000000 },
+                                                    owned_by: { type: 'string', example: 'openmake' },
                                                     name: { type: 'string', example: 'OpenMake LLM' },
                                                     description: { type: 'string' },
                                                     capabilities: { type: 'array', items: { type: 'string' } }
@@ -764,6 +809,71 @@ AI 채팅 어시스턴트 API 문서
                             }
                         }
                     }
+                }
+            }
+        },
+        '/api/kb': {
+            post: {
+                tags: ['Knowledge Base'],
+                summary: 'Create knowledge base',
+                description: 'Create a new knowledge base collection',
+                requestBody: {
+                    required: true,
+                    content: {
+                        'application/json': {
+                            schema: {
+                                type: 'object',
+                                required: ['name'],
+                                properties: {
+                                    name: { type: 'string' },
+                                    description: { type: 'string' },
+                                    visibility: { type: 'string', enum: ['private', 'team', 'public'] }
+                                }
+                            }
+                        }
+                    }
+                },
+                responses: {
+                    '201': { description: 'Knowledge base created' },
+                    '400': { description: 'Invalid request' },
+                    '401': { description: 'Authentication required' }
+                }
+            },
+            get: {
+                tags: ['Knowledge Base'],
+                summary: 'List knowledge bases',
+                description: 'List knowledge base collections available to the user',
+                responses: {
+                    '200': { description: 'Knowledge base list' },
+                    '401': { description: 'Authentication required' }
+                }
+            }
+        },
+        '/api/rag/search': {
+            post: {
+                tags: ['Knowledge Base'],
+                summary: 'Hybrid RAG search',
+                description: 'Run RAG search against embedded document chunks.',
+                requestBody: {
+                    required: true,
+                    content: {
+                        'application/json': {
+                            schema: {
+                                type: 'object',
+                                required: ['query'],
+                                properties: {
+                                    query: { type: 'string' },
+                                    docId: { type: 'string' },
+                                    topK: { type: 'integer' },
+                                    threshold: { type: 'number' }
+                                }
+                            }
+                        }
+                    }
+                },
+                responses: {
+                    '200': { description: 'Search results' },
+                    '400': { description: 'Invalid query' }
                 }
             }
         },
