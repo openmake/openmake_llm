@@ -154,13 +154,21 @@ async function sendMessage() {
         // 파일이 첨부된 경우
         if (attachedFiles.length > 0) {
             payload.files = attachedFiles.map(f => ({
-                id: f.id,
-                name: f.name,
+                id: f.docId || f.id,
+                name: f.filename || f.name,
                 type: f.type
             }));
+
+            // 이미지 파일의 base64 데이터를 images 배열로 전달
+            const imageBase64List = attachedFiles
+                .filter(f => f.isImage && f.base64)
+                .map(f => f.base64);
+            if (imageBase64List.length > 0) {
+                payload.images = imageBase64List;
+            }
         }
 
-        // 문서 컨텍스트가 있는 경우
+        // 문서 컨텍스트가 있는 경우 (PDF + 이미지 모두)
         const docContext = getState('activeDocumentContext');
         if (docContext) {
             payload.docId = docContext.docId;
