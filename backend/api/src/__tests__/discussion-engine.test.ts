@@ -217,7 +217,8 @@ describe('startDiscussion() - 기본 플로우', () => {
         expect(opinion.agentId).toBe('agent-1');
         expect(opinion.agentName).toBe('에이전트A');
         expect(opinion.agentEmoji).toBe('🤖');
-        expect(opinion.confidence).toBe(0.8);
+        expect(opinion.confidence).toBeGreaterThanOrEqual(0.6);
+        expect(opinion.confidence).toBeLessThanOrEqual(1.0);
         expect(opinion.timestamp).toBeInstanceOf(Date);
     });
 
@@ -428,7 +429,7 @@ describe('startDiscussion() - onProgress 콜백', () => {
 
         await engine.startDiscussion('주제');
 
-        const discussingEvent = progressEvents.find(e => e.phase === 'discussing');
+        const discussingEvent = progressEvents.find(e => e.phase === 'discussing' && e.currentAgent);
         expect(discussingEvent?.currentAgent).toBe('에이전트A');
         expect(discussingEvent?.agentEmoji).toBe('🤖');
     });

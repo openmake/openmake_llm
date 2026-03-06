@@ -39,6 +39,8 @@ import {
     getLoopProgressRange
 } from './deep-research-utils';
 
+import { parallelBatch } from '../workflow/graph-engine';
+
 // Re-export types so consumers don't break
 export type { ResearchConfig, ResearchProgress, ResearchResult };
 
@@ -606,12 +608,20 @@ export class DeepResearchService {
         const denominator = Math.max(subTopics.length * averageQueriesPerTopic, 1);
         const resultsPerQuery = Math.max(15, Math.ceil(this.config.maxSearchResults / denominator));
 
+        // 모든 (서브토픽, 쿼리) 쌍을 플래팅
+        const allQueries = subTopics.flatMap(st =>
+            st.searchQueries.map(q => ({ subTopic: st, query: q }))
+        );
+
         let stepIndex = 0;
 
-        for (const subTopic of subTopics) {
-            this.throwIfAborted();
-            for (const query of subTopic.searchQueries) {
+        // 서브토픽 쿼리들을 병렬 실행 (동시 5개)
+        await parallelBatch(
+            allQueries,
+            async ({ query }) => {
                 this.throwIfAborted();
+                if (sourceMap.size >= this.config.maxTotalSources) return;
+
                 try {
                     const results = await performWebSearch(query, {
                         maxResults: resultsPerQuery,
@@ -622,23 +632,16 @@ export class DeepResearchService {
 
                     const uniqueForQuery: SearchResult[] = [];
                     for (const result of results) {
-                        if (!result.url) {
-                            continue;
-                        }
-
+                        if (!result.url) continue;
                         const normalizedUrl = normalizeUrl(result.url);
-                        if (seenUrls.has(normalizedUrl)) {
-                            continue;
-                        }
+                        if (seenUrls.has(normalizedUrl)) continue;
 
                         seenUrls.add(normalizedUrl);
                         sourceMap.set(normalizedUrl, result);
                         discoveredResults.push(result);
                         uniqueForQuery.push(result);
 
-                        if (sourceMap.size >= this.config.maxTotalSources) {
-                            break;
-                        }
+                        if (sourceMap.size >= this.config.maxTotalSources) break;
                     }
 
                     await db.addResearchStep({
@@ -650,15 +653,15 @@ export class DeepResearchService {
                         sources: uniqueForQuery.slice(0, CAPACITY.RESEARCH_MAX_SOURCES_PER_QUERY).map(item => item.url),
                         status: 'completed'
                     });
-
-                    if (sourceMap.size >= this.config.maxTotalSources) {
-                        return discoveredResults;
-                    }
                 } catch (error) {
                     logger.warn(`[DeepResearch] 검색 실패 (${query}): ${error instanceof Error ? error.message : String(error)}`);
                 }
+            },
+            {
+                concurrency: 5,
+                signal: this.abortController?.signal
             }
-        }
+        );
 
         return discoveredResults;
     }
@@ -815,36 +818,43 @@ export class DeepResearchService {
 
         const uniqueResults = deduplicateSources(searchResults);
         const chunks = chunkArray(uniqueResults, this.config.chunkSize);
-        const chunkSummaries: string[] = [];
 
-        for (let chunkIndex = 0; chunkIndex < chunks.length; chunkIndex++) {
-            this.throwIfAborted();
-            const chunk = chunks[chunkIndex];
-            const chunkContext = chunk
-                .map(source => {
-                    const sourceIndex = uniqueResults.findIndex(item => normalizeUrl(item.url) === normalizeUrl(source.url)) + 1;
-                    const content = source.fullContent?.trim().length
-                        ? source.fullContent
-                        : source.snippet;
-                    const compactContent = content.length > TRUNCATION.RESEARCH_CONTENT_MAX ? `${content.slice(0, TRUNCATION.RESEARCH_CONTENT_MAX)}\n...(중략)` : content;
-
-                    return `[출처 ${sourceIndex}] ${source.title}\nURL: ${source.url}\n내용:\n${compactContent}`;
-                })
-                .join('\n\n');
-
-            const chunkPrompt = getChunkSummaryPrompt(this.config.language, topic, chunkIndex, chunks.length, chunkContext);
-
-            try {
-                const response = await this.client.chat([
-                    { role: 'user', content: chunkPrompt }
-                ], { temperature: 0.35 });
+        // 청크 요약을 병렬 실행 (동시 3개 - LLM 호출이므로 적절히 제한)
+        const chunkResults = await parallelBatch(
+            chunks,
+            async (chunk, chunkIndex) => {
                 this.throwIfAborted();
-                chunkSummaries.push(response.content.trim());
-            } catch (error) {
-                logger.error(`[DeepResearch] 청크 요약 실패 (${chunkIndex + 1}/${chunks.length}): ${error instanceof Error ? error.message : String(error)}`);
-                chunkSummaries.push('청크 요약 실패');
+                const chunkContext = chunk
+                    .map(source => {
+                        const sourceIndex = uniqueResults.findIndex(item => normalizeUrl(item.url) === normalizeUrl(source.url)) + 1;
+                        const content = source.fullContent?.trim().length
+                            ? source.fullContent
+                            : source.snippet;
+                        const compactContent = content.length > TRUNCATION.RESEARCH_CONTENT_MAX ? `${content.slice(0, TRUNCATION.RESEARCH_CONTENT_MAX)}\n...(중략)` : content;
+                        return `[출처 ${sourceIndex}] ${source.title}\nURL: ${source.url}\n내용:\n${compactContent}`;
+                    })
+                    .join('\n\n');
+
+                const chunkPrompt = getChunkSummaryPrompt(this.config.language, topic, chunkIndex, chunks.length, chunkContext);
+
+                try {
+                    const response = await this.client.chat([
+                        { role: 'user', content: chunkPrompt }
+                    ], { temperature: 0.35 });
+                    this.throwIfAborted();
+                    return response.content.trim();
+                } catch (error) {
+                    logger.error(`[DeepResearch] 청크 요약 실패 (${chunkIndex + 1}/${chunks.length}): ${error instanceof Error ? error.message : String(error)}`);
+                    return '청크 요약 실패';
+                }
+            },
+            {
+                concurrency: 3,
+                signal: this.abortController?.signal
             }
-        }
+        );
+
+        const chunkSummaries = chunkResults.map(r => r ?? '청크 요약 실패');
 
         const mergedPrompt = getMergePrompt(this.config.language, topic, chunkSummaries);
 
