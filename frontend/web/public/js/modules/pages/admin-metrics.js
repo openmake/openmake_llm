@@ -19,7 +19,7 @@
      * @param {string} s - 이스케이프할 문자열
      * @returns {string} 이스케이프된 문자열
      */
-    function esc(s) { var d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+    function esc(s) { var d = document.createElement('div'); d.textContent = s != null ? String(s) : ''; return d.innerHTML; }
 
     window.PageModules['admin-metrics'] = {
         /**

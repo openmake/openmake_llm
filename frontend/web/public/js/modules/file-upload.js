@@ -30,7 +30,11 @@ async function uploadFile(file) {
         uploadArea.innerHTML = `
             <div class="upload-content">
                 <span class="loading-spinner"></span>
-                <p>업로드 중: ${escapeHtml(file.name)}</p>
+                <p class="upload-status-text">업로드 중: ${escapeHtml(file.name)}</p>
+                <div class="upload-progress-bar" style="width:100%;height:6px;background:var(--bg-secondary);border-radius:4px;margin-top:8px;overflow:hidden;">
+                    <div class="upload-progress-fill" style="width:0%;height:100%;background:var(--accent-primary);border-radius:4px;transition:width 0.2s ease;"></div>
+                </div>
+                <p class="upload-percent" style="font-size:0.75rem;color:var(--text-muted);margin-top:4px;">0%</p>
             </div>
         `;
     }
@@ -47,16 +51,41 @@ async function uploadFile(file) {
             });
         }
 
-        const res = await fetch(API_ENDPOINTS.UPLOAD, {
-            method: 'POST',
-            credentials: 'include',
-            body: formData
-        });
-        if (!res.ok) {
-            throw new Error(`HTTP ${res.status}: ${res.statusText}`);
-        }
+        // XMLHttpRequest로 업로드 진행률 표시
+        const data = await new Promise((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', API_ENDPOINTS.UPLOAD);
+            xhr.withCredentials = true;
 
-        const data = await res.json();
+            xhr.upload.onprogress = (e) => {
+                if (e.lengthComputable && uploadArea) {
+                    const pct = Math.round((e.loaded / e.total) * 100);
+                    const fill = uploadArea.querySelector('.upload-progress-fill');
+                    const percent = uploadArea.querySelector('.upload-percent');
+                    const statusText = uploadArea.querySelector('.upload-status-text');
+                    if (fill) fill.style.width = pct + '%';
+                    if (percent) percent.textContent = pct + '%';
+                    if (statusText && pct >= 100) {
+                        statusText.textContent = '서버 분석 중...';
+                    }
+                }
+            };
+
+            xhr.onload = () => {
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    try {
+                        resolve(JSON.parse(xhr.responseText));
+                    } catch (e) {
+                        reject(new Error('응답 파싱 실패'));
+                    }
+                } else {
+                    reject(new Error(`HTTP ${xhr.status}: ${xhr.statusText}`));
+                }
+            };
+
+            xhr.onerror = () => reject(new Error('네트워크 오류'));
+            xhr.send(formData);
+        });
 
         // Unwrap api-response wrapper
         if (data.data && data.success) { Object.assign(data, data.data); }
@@ -101,15 +130,15 @@ async function uploadFile(file) {
 
             closeFileModal();
 
-            // PDF 문서인 경우 세션 레벨 컨텍스트 설정
-            if (data.docId && !data.isImage) {
+            // 세션 레벨 컨텍스트 설정 (PDF + 이미지 모두)
+            if (data.docId) {
                 setState('activeDocumentContext', {
                     docId: data.docId,
                     filename: data.filename,
                     textLength: data.textLength || 0
                 });
                 updateActiveDocumentUI();
-                console.log(`[Upload] 활성 문서 설정: ${data.filename} (${data.textLength}자)`);
+                console.log(`[Upload] 활성 문서 설정: ${data.filename} (${data.textLength}자, isImage=${!!data.isImage})`);
             }
 
             showToast(`📄 ${data.filename} 업로드 완료 - 문서 컨텍스트 활성화됨`, 'success');
