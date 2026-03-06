@@ -55,7 +55,7 @@ jest.mock('../config/runtime-limits', () => ({
         CHUNK_SIZE: 1000,
         CHUNK_OVERLAP: 200,
         TOP_K: 5,
-        RELEVANCE_THRESHOLD: 0.3,
+        RELEVANCE_THRESHOLD: 0.45,
         EMBEDDING_DIMENSIONS: 768,
         MAX_CONTEXT_CHARS: 4000,
     },
@@ -247,7 +247,7 @@ describe('RAGService', () => {
             expect(context.documents[0].content).toBe('문서1');
             expect(context.documents[0].relevanceScore).toBe(0.9);
             expect(context.documents[1].content).toBe('문서2');
-            expect(context.relevanceThreshold).toBe(0.3);
+            expect(context.relevanceThreshold).toBe(0.45);
         });
 
         test('빈 결과 시 빈 documents 배열', () => {

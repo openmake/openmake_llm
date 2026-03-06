@@ -291,7 +291,18 @@ export class RAGService {
         userId?: string,
         docId?: string,
     ): Promise<RAGContext | null> {
-        const results = await this.search({ query, userId, docId });
+        // Adaptive Top-K: 쿼리 길이와 복잡도에 따라 검색 범위를 동적으로 조정
+        // 짧은 쿼리(키워드 검색) → 적은 결과, 긴 복잡한 쿼리 → 넓은 검색
+        const queryLen = query.trim().length;
+        const hasMultipleSentences = (query.match(/[.?!。？！]\s/g) || []).length >= 1;
+        let adaptiveTopK: number = RAG_CONFIG.TOP_K; // 기본 5
+        if (queryLen > 100 || hasMultipleSentences) {
+            adaptiveTopK = Math.min(RAG_CONFIG.TOP_K * 2, 10); // 복잡 쿼리 → 최대 10
+        } else if (queryLen < 20) {
+            adaptiveTopK = Math.max(Math.floor(RAG_CONFIG.TOP_K * 0.6), 3); // 짧은 쿼리 → 최소 3
+        }
+
+        const results = await this.search({ query, userId, docId, topK: adaptiveTopK });
 
         if (results.length === 0) {
             return null;

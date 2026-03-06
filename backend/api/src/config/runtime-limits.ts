@@ -53,6 +53,27 @@ export const DISCUSSION_TOKEN_BUDGET = {
 } as const;
 
 // ============================================
+// 대화 히스토리 요약 설정
+// ============================================
+
+/**
+ * 대화 히스토리가 길어질 때 자동 요약을 적용하는 설정.
+ * ChatService에서 히스토리 조립 전에 참조합니다.
+ */
+export const HISTORY_SUMMARIZER = {
+    /** 요약을 트리거하는 최소 히스토리 메시지 수 */
+    MIN_MESSAGES_TO_SUMMARIZE: 10,
+    /** 요약 없이 그대로 유지할 최근 메시지 수 */
+    RECENT_MESSAGES_TO_KEEP: 6,
+    /** 요약 대상(오래된 메시지)의 최대 글자 수 (초과 시 잘라서 요약) */
+    MAX_CHARS_FOR_SUMMARY_INPUT: 12000,
+    /** 요약 결과의 최대 토큰 수 (LLM 응답 제한) */
+    MAX_SUMMARY_TOKENS: 500,
+    /** 요약 LLM 호출 타임아웃 (ms) */
+    SUMMARY_TIMEOUT_MS: 15000,
+} as const;
+
+// ============================================
 // 문서 처리 크기
 // ============================================
 
@@ -185,8 +206,8 @@ export const RAG_CONFIG = {
     CHUNK_OVERLAP: 200,
     /** 검색 시 반환할 최대 청크 수 */
     TOP_K: 5,
-    /** 관련도 임계값 (0.0~1.0, 이 값 이상만 반환) */
-    RELEVANCE_THRESHOLD: 0.3,
+    /** 관련도 임계값 (0.0~1.0, 이 값 이상만 반환, 0.3→0.45로 상향: 노이즈 감소) */
+    RELEVANCE_THRESHOLD: 0.45,
     /** 임베딩 모델 이름 (Ollama) */
     EMBEDDING_MODEL: 'nomic-embed-text',
     /** 임베딩 벡터 차원 수 (vector_embeddings 테이블과 일치해야 함) */
