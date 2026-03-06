@@ -49,7 +49,7 @@ jest.mock('../config/runtime-limits', () => ({
         CHUNK_SIZE: 1000,
         CHUNK_OVERLAP: 200,
         TOP_K: 5,
-        RELEVANCE_THRESHOLD: 0.3,
+        RELEVANCE_THRESHOLD: 0.45,
         EMBEDDING_DIMENSIONS: 768,
         MAX_CONTEXT_CHARS: 4000,
     },
