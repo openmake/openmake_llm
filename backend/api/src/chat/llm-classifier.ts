@@ -323,45 +323,77 @@ export function _setSemanticCacheForTest(cache: SemanticClassificationCache): vo
 
 /** 사전 캐시할 공통 쿼리 패턴 */
 const WARM_QUERIES: Array<{ query: string; type: QueryType; confidence: number }> = [
-    // chat
+    // chat (8)
     { query: '안녕하세요', type: 'chat', confidence: 0.95 },
     { query: '안녕', type: 'chat', confidence: 0.95 },
     { query: 'hello', type: 'chat', confidence: 0.95 },
     { query: '반가워', type: 'chat', confidence: 0.90 },
     { query: '뭐해?', type: 'chat', confidence: 0.90 },
-    // code
+    { query: 'hi there', type: 'chat', confidence: 0.90 },
+    { query: '고마워', type: 'chat', confidence: 0.90 },
+    { query: '넌 누구야?', type: 'chat', confidence: 0.90 },
+    // code (10)
     { query: '코드 작성해줘', type: 'code', confidence: 0.95 },
     { query: '코드 리뷰해줘', type: 'code', confidence: 0.95 },
     { query: '버그 수정해줘', type: 'code', confidence: 0.95 },
     { query: '이 에러 해결해줘', type: 'code', confidence: 0.90 },
     { query: '파이썬으로 작성해줘', type: 'code', confidence: 0.90 },
     { query: 'write a function', type: 'code', confidence: 0.90 },
-    // math
+    { query: 'fix this bug', type: 'code', confidence: 0.90 },
+    { query: 'API 만들어줘', type: 'code', confidence: 0.90 },
+    { query: '자바스크립트 코드 설명해줘', type: 'code', confidence: 0.90 },
+    { query: '리팩토링해줘', type: 'code', confidence: 0.90 },
+    // math (6)
     { query: '수학 문제 풀어줘', type: 'math', confidence: 0.95 },
     { query: '이 방정식 풀어줘', type: 'math', confidence: 0.95 },
     { query: '계산해줘', type: 'math', confidence: 0.90 },
-    // creative
+    { query: '확률 계산해줘', type: 'math', confidence: 0.90 },
+    { query: 'solve this equation', type: 'math', confidence: 0.90 },
+    { query: '통계 분석해줘', type: 'math', confidence: 0.85 },
+    // creative (7)
     { query: '시 써줘', type: 'creative', confidence: 0.95 },
     { query: '이야기 만들어줘', type: 'creative', confidence: 0.95 },
     { query: '마케팅 문구 작성해줘', type: 'creative', confidence: 0.90 },
-    // analysis
+    { query: '블로그 글 써줘', type: 'creative', confidence: 0.90 },
+    { query: '소설 써줘', type: 'creative', confidence: 0.95 },
+    { query: 'write a poem', type: 'creative', confidence: 0.90 },
+    { query: '아이디어 좀 내줘', type: 'creative', confidence: 0.85 },
+    // analysis (8)
     { query: '데이터 분석해줘', type: 'analysis', confidence: 0.95 },
     { query: '비교 분석해줘', type: 'analysis', confidence: 0.90 },
     { query: '장단점 분석해줘', type: 'analysis', confidence: 0.90 },
-    // translation
+    { query: '시장 분석해줘', type: 'analysis', confidence: 0.90 },
+    { query: 'SWOT 분석해줘', type: 'analysis', confidence: 0.95 },
+    { query: '트렌드 분석해줘', type: 'analysis', confidence: 0.90 },
+    { query: 'analyze this data', type: 'analysis', confidence: 0.90 },
+    { query: '전략 세워줘', type: 'analysis', confidence: 0.85 },
+    // translation (6)
     { query: '번역해줘', type: 'translation', confidence: 0.95 },
     { query: '영어로 번역해줘', type: 'translation', confidence: 0.95 },
     { query: 'translate this', type: 'translation', confidence: 0.95 },
-    // vision
+    { query: '일본어로 번역해줘', type: 'translation', confidence: 0.95 },
+    { query: '한국어로 번역해줘', type: 'translation', confidence: 0.95 },
+    { query: 'translate to English', type: 'translation', confidence: 0.95 },
+    // vision (5)
     { query: '이 이미지 분석해줘', type: 'vision', confidence: 0.95 },
     { query: '사진 설명해줘', type: 'vision', confidence: 0.90 },
-    // document
+    { query: '이 스크린샷 봐줘', type: 'vision', confidence: 0.90 },
+    { query: '그림 분석해줘', type: 'vision', confidence: 0.90 },
+    { query: 'describe this image', type: 'vision', confidence: 0.90 },
+    // document (6)
     { query: '이 문서 요약해줘', type: 'document', confidence: 0.95 },
     { query: 'PDF 분석해줘', type: 'document', confidence: 0.90 },
-    // korean
+    { query: '파일 내용 정리해줘', type: 'document', confidence: 0.90 },
+    { query: '문서에서 핵심 내용 추출해줘', type: 'document', confidence: 0.90 },
+    { query: 'summarize this document', type: 'document', confidence: 0.90 },
+    { query: '보고서 요약해줘', type: 'document', confidence: 0.90 },
+    // korean (6)
     { query: '오늘 날씨 어때?', type: 'korean', confidence: 0.85 },
     { query: '한국어로 설명해줘', type: 'korean', confidence: 0.85 },
     { query: '맛집 추천해줘', type: 'korean', confidence: 0.85 },
+    { query: '여행지 추천해줘', type: 'korean', confidence: 0.85 },
+    { query: '요즘 뭐가 유행이야?', type: 'korean', confidence: 0.85 },
+    { query: '좋은 책 추천해줘', type: 'korean', confidence: 0.85 },
 ];
 
 /** 캐시 워밍 실행 상태 (중복 방지) */
