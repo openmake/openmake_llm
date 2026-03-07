@@ -1,7 +1,7 @@
 # ==============================================================
 # GitHub Actions CI Pipeline — scripts/ci-test.sh 미러링
 # ==============================================================
-# 3 게이트: Bun Test → TypeScript Build → ESLint
+# 4 게이트: Bun Test → TypeScript Build → File Size Guard → ESLint
 # Docker 사용 없음 (프로젝트 방침 영구 제외)
 # ==============================================================
 
@@ -23,7 +23,7 @@ env:
 
 jobs:
   ci:
-    name: CI Gate (Test → Build → Lint)
+    name: CI Gate (Test → Build → Size → Lint)
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -81,6 +81,23 @@ jobs:
       - name: "Gate 2: TypeScript Build"
         run: npm run build
 
-      # ─── Gate 3: ESLint ───
-      - name: "Gate 3: ESLint"
+      # ─── Gate 3: File Size Guard (max 600 lines) ───
+      - name: "Gate 3: File Size Guard"
+        run: |
+          MAX_LINES=600
+          VIOLATIONS=""
+          while IFS= read -r f; do
+            lines=$(grep -c '' "$f" 2>/dev/null || echo 0)
+            if [ "$lines" -gt "$MAX_LINES" ]; then
+              VIOLATIONS="$VIOLATIONS\n  $f ($lines lines)"
+            fi
+          done < <(find backend/api/src -name '*.ts' -not -path '*/dist/*' -not -path '*__tests__*' -not -name '*.test.*' -not -name '*.d.ts' -not -name '*-locales.ts' -not -name '*-data-*.ts' -not -name '*-guidelines.ts')
+          if [ -n "$VIOLATIONS" ]; then
+            echo "Files exceeding $MAX_LINES lines:$VIOLATIONS"
+            exit 1
+          fi
+          echo "All source files within $MAX_LINES line limit"
+
+      # ─── Gate 4: ESLint ───
+      - name: "Gate 4: ESLint"
         run: npm run lint

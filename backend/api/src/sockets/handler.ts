@@ -37,6 +37,7 @@
  */
 import { WebSocket, WebSocketServer } from 'ws';
 import { IncomingMessage } from 'http';
+import crypto from 'node:crypto';
 import { ClusterManager } from '../cluster/manager';
 import { getUnifiedMCPClient } from '../mcp';
 import { createLogger } from '../utils/logger';
@@ -45,6 +46,7 @@ import { authenticateWebSocket, refreshWebSocketAuthentication } from './ws-auth
 import { WEBSOCKET_TIMEOUTS } from '../config/timeouts';
 import { handleChatMessage } from './ws-chat-handler';
 import { withSpan } from '../observability/otel';
+import { runWithRequestContext } from '../utils/request-context';
 
 const log = createLogger('WebSocketHandler');
 const WS_MAX_CONNECTIONS_PER_USER = 5;
@@ -199,32 +201,35 @@ export class WebSocketHandler {
             });
 
             ws.on('message', async (data) => {
-                try {
-                    if (!this.validateSessionOnMessage(ws)) {
-                        return;
-                    }
-
-                    const raw = data.toString();
-                    if (raw.length > 1024 * 1024) {
-                        ws.send(JSON.stringify({ type: 'error', message: '메시지가 너무 큽니다' }));
-                        return;
-                    }
-
-                    let msg: WSMessage;
+                const wsRequestId = crypto.randomUUID();
+                await runWithRequestContext({ requestId: wsRequestId }, async () => {
                     try {
-                        msg = JSON.parse(raw);
-                    } catch {
-                        ws.send(JSON.stringify({ type: 'error', message: '잘못된 메시지 형식입니다' }));
-                        return;
-                    }
+                        if (!this.validateSessionOnMessage(ws)) {
+                            return;
+                        }
 
-                    log.debug(`[WS] 메시지 수신: type=${msg.type}`);
-                    this.touchActivity(extWs);
-                    extWs._messageCount = (extWs._messageCount || 0) + 1;
-                    await this.handleMessage(ws, msg);
-                } catch (e: unknown) {
-                    log.error('[WS] 메시지 처리 오류:', (e instanceof Error ? e.message : String(e)) || e);
-                }
+                        const raw = data.toString();
+                        if (raw.length > 1024 * 1024) {
+                            ws.send(JSON.stringify({ type: 'error', message: '메시지가 너무 큽니다' }));
+                            return;
+                        }
+
+                        let msg: WSMessage;
+                        try {
+                            msg = JSON.parse(raw);
+                        } catch {
+                            ws.send(JSON.stringify({ type: 'error', message: '잘못된 메시지 형식입니다' }));
+                            return;
+                        }
+
+                        log.debug(`[WS] 메시지 수신: type=${msg.type}`);
+                        this.touchActivity(extWs);
+                        extWs._messageCount = (extWs._messageCount || 0) + 1;
+                        await this.handleMessage(ws, msg);
+                    } catch (e: unknown) {
+                        log.error('[WS] 메시지 처리 오류:', (e instanceof Error ? e.message : String(e)) || e);
+                    }
+                });
             });
         });
     }

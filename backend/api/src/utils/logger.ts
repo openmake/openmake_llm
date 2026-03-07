@@ -17,6 +17,7 @@
 import winston from 'winston';
 import path from 'path';
 import { getConfig } from '../config/env';
+import { getRequestId } from './request-context';
 
 const logDir = path.join(__dirname, '../../logs');
 
@@ -34,15 +35,17 @@ function getTraceIdSafe(): string | undefined {
     return _getTraceId ? _getTraceId() : undefined;
 }
 
-// 커스텀 포맷 (trace_id 포함)
+// 커스텀 포맷 (request_id + trace_id 포함)
 const customFormat = winston.format.combine(
     winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
     winston.format.errors({ stack: true }),
     winston.format.printf(({ level, message, timestamp, ...meta }) => {
+        const reqId = getRequestId();
         const traceId = getTraceIdSafe();
+        const reqStr = reqId ? ` req=${reqId}` : '';
         const traceStr = traceId ? ` trace_id=${traceId}` : '';
         const metaStr = Object.keys(meta).length ? JSON.stringify(meta) : '';
-        return `[${timestamp}] ${level.toUpperCase()}:${traceStr} ${message} ${metaStr}`;
+        return `[${timestamp}] ${level.toUpperCase()}:${reqStr}${traceStr} ${message} ${metaStr}`;
     })
 );
 

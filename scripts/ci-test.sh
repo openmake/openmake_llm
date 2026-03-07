@@ -12,7 +12,8 @@
 # 실행 순서:
 #   1. Bun Test (backend/api — 66 test files)
 #   2. TypeScript Build (tsc + frontend deploy)
-#   3. ESLint (TypeScript + JavaScript)
+#   3. File Size Guard (max 600 lines per source file)
+#   4. ESLint (TypeScript + JavaScript)
 #
 # 종료 코드:
 #   0 — 모든 게이트 통과
@@ -92,7 +93,7 @@ print_summary() {
         echo ""
         exit 1
     else
-        echo -e "   ${GREEN}✅ 모든 게이트 통과 (${PASSED}/3)${NC}"
+        echo -e "   ${GREEN}✅ 모든 게이트 통과 (${PASSED}/4)${NC}"
         echo ""
         exit 0
     fi
@@ -151,5 +152,22 @@ run_step "Bun Test (backend/api)" bash -c '
 # ─── Step 2: Build ───
 run_step "TypeScript Build" bash -c "cd '$PROJECT_ROOT' && npm run build"
 
-# ─── Step 3: Lint ───
+# ─── Step 3: File Size Guard ───
+run_step "File Size Guard (max 600 lines)" bash -c '
+    MAX_LINES=600
+    VIOLATIONS=""
+    while IFS= read -r f; do
+        lines=$(grep -c "" "$f" 2>/dev/null || echo 0)
+        if [ "$lines" -gt "$MAX_LINES" ]; then
+            VIOLATIONS="$VIOLATIONS\n  $f ($lines lines)"
+        fi
+    done < <(find "'"$PROJECT_ROOT"'/backend/api/src" -name "*.ts" -not -path "*/dist/*" -not -path "*__tests__*" -not -name "*.test.*" -not -name "*.d.ts" -not -name "*-locales.ts" -not -name "*-data-*.ts" -not -name "*-guidelines.ts")
+    if [ -n "$VIOLATIONS" ]; then
+        echo -e "Files exceeding $MAX_LINES lines:$VIOLATIONS"
+        exit 1
+    fi
+    echo "All source files within $MAX_LINES line limit"
+'
+
+# ─── Step 4: Lint ───
 run_step "ESLint" bash -c "cd '$PROJECT_ROOT' && npm run lint"
