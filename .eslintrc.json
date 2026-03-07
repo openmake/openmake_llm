@@ -15,6 +15,11 @@
     "@typescript-eslint/no-unused-vars": ["warn", {
       "argsIgnorePattern": "^_",
       "varsIgnorePattern": "^_"
+    }],
+    "max-lines": ["warn", {
+      "max": 400,
+      "skipBlankLines": true,
+      "skipComments": true
     }]
   },
   "overrides": [
