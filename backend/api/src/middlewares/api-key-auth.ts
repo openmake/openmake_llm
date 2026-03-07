@@ -38,14 +38,17 @@ function extractApiKey(req: Request): string | undefined {
         }
     }
 
-    // 3. 쿼리 파라미터 (GET 요청만) — DEPRECATED: X-API-Key 헤더 사용 권장
+    // 3. 쿼리 파라미터 (GET 요청만) — DEPRECATED: 2025-06-01 이후 제거 예정
     if (req.method === 'GET' && req.query.api_key) {
         const queryKey = req.query.api_key as string;
         if (queryKey.startsWith(API_KEY_PREFIX)) {
-            logger.warn('[DEPRECATED] api_key query parameter is deprecated. Use X-API-Key header instead.', {
+            logger.warn('[DEPRECATED] api_key query parameter will be removed after 2025-06-01. Use X-API-Key header instead.', {
                 path: req.path,
                 ip: req.ip
             });
+            // Sunset 헤더: 클라이언트에 폐기 일정 알림
+            req.res?.setHeader('Deprecation', 'true');
+            req.res?.setHeader('Sunset', 'Sun, 01 Jun 2025 00:00:00 GMT');
             return queryKey;
         }
     }
