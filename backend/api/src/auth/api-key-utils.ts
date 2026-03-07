@@ -17,6 +17,10 @@
 
 import crypto from 'node:crypto';
 import { getConfig } from '../config/env';
+import { createLogger } from '../utils/logger';
+
+const logger = createLogger('ApiKeyUtils');
+let pepperWarningEmitted = false;
 
 /** API Key 접두사 */
 export const API_KEY_PREFIX = 'omk_live_';
@@ -49,6 +53,10 @@ export function hashApiKey(plainKey: string): string {
     }
 
     // pepper 미설정 시 단순 SHA-256 (개발/테스트 환경)
+    if (!pepperWarningEmitted) {
+        logger.warn('API_KEY_PEPPER is not set. Using plain SHA-256 for API key hashing. Set API_KEY_PEPPER in .env for production security.');
+        pepperWarningEmitted = true;
+    }
     return crypto
         .createHash('sha256')
         .update(plainKey)

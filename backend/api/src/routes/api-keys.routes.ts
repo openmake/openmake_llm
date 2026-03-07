@@ -5,7 +5,7 @@
  *
  * 외부 개발자용 API Key의 발급, 조회, 수정, 삭제, 순환(rotate) 및
  * 사용량 조회를 담당하는 REST API입니다.
- * 등급별(free/pro/enterprise) 키 발급 수량을 제한하며,
+ * 등급별(free/starter/standard/enterprise) 키 발급 수량을 제한하며,
  * 평문 키는 생성/순환 시 한 번만 노출됩니다.
  *
  * @module routes/api-keys.routes
@@ -118,7 +118,8 @@ router.post('/',
         // 등급별 API 키 발급 수량 제한
         const API_KEY_LIMITS: Record<string, number> = {
             free: 2,
-            pro: 10,
+            starter: 5,
+            standard: 10,
             enterprise: 50
         };
         const userTier = (req.user && 'tier' in req.user) ? (req.user as { tier: string }).tier : 'free';

@@ -68,11 +68,21 @@ function convertTools(request: OpenAIChatCompletionRequest): ToolDefinition[] | 
     }));
 }
 
+/** API Key rate_limit_tier → ChatUserContext userTier 변환 */
+function mapApiKeyTierToUserTier(rateLimitTier?: string): 'free' | 'pro' | 'enterprise' {
+    switch (rateLimitTier) {
+        case 'enterprise': return 'enterprise';
+        case 'standard': return 'pro';
+        case 'starter': return 'pro';
+        default: return 'free';
+    }
+}
+
 function buildUserContext(req: Request): ChatUserContext {
     return {
         authenticatedUserId: req.apiKeyRecord?.user_id?.toString() || null,
         userRole: 'user',
-        userTier: (req.apiKeyRecord?.rate_limit_tier as 'free' | 'pro' | 'enterprise') || 'free',
+        userTier: mapApiKeyTierToUserTier(req.apiKeyRecord?.rate_limit_tier),
         userId: req.apiKeyRecord?.user_id?.toString() || `apikey_${req.apiKeyId}`,
     };
 }
