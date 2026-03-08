@@ -65,9 +65,9 @@ router.post(
             routingMetadata: safeMetadata,
         });
 
-        // 피드백 → 장기 메모리에 컨텍스트 기록 (fire-and-forget)
+        // 피드백 → 장기 메모리에 컨텍스트 기록 (fire-and-forget, 응답 지연 없음)
         if (feedbackUserId && safeMetadata) {
-            try {
+            (async () => {
                 const { getMemoryService } = await import('../services/MemoryService');
                 const memoryService = getMemoryService();
                 const feedbackInfo = [
@@ -101,9 +101,7 @@ router.post(
                         tags: ['feedback', 'regenerate'],
                     });
                 }
-            } catch (e) {
-                logger.debug('피드백 메모리 저장 실패 (무시):', e);
-            }
+            })().catch(e => logger.debug('피드백 메모리 저장 실패 (무시):', e));
         }
 
         res.json(success({ recorded: true }));

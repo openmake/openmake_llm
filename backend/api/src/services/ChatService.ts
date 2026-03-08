@@ -928,7 +928,7 @@ export class ChatService {
             };
 
             const extracted = await memoryService.extractAndSaveMemories(
-                userId, '', userMessage, assistantResponse, llmExtractor
+                userId, null, userMessage, assistantResponse, llmExtractor
             );
 
             if (extracted.length > 0) {
