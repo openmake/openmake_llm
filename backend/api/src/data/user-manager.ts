@@ -122,7 +122,7 @@ class UserManagerImpl {
         const pool = getPool();
         try {
             await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS tier TEXT DEFAULT \'free\'');
-        } catch (_e: unknown) {
+        } catch {
             // 이미 존재하는 경우 무시
         }
     }
