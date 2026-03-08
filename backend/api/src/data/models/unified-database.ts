@@ -380,7 +380,7 @@ CREATE TABLE IF NOT EXISTS vector_embeddings (
     source_type TEXT NOT NULL CHECK(source_type IN ('document', 'memory', 'conversation', 'agent')),
     source_id TEXT NOT NULL,
     chunk_index INTEGER DEFAULT 0,
-    chunk_text TEXT NOT NULL,
+    content TEXT NOT NULL,
     embedding TEXT,
     metadata JSONB,
     created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -452,6 +452,7 @@ CREATE INDEX IF NOT EXISTS idx_audit_user ON audit_logs(user_id);
 CREATE INDEX IF NOT EXISTS idx_memories_user ON user_memories(user_id);
 CREATE INDEX IF NOT EXISTS idx_memories_category ON user_memories(category);
 CREATE INDEX IF NOT EXISTS idx_memories_importance ON user_memories(importance DESC);
+CREATE INDEX IF NOT EXISTS idx_memories_user_category ON user_memories(user_id, category);
 CREATE INDEX IF NOT EXISTS idx_memory_tags_memory ON memory_tags(memory_id);
 
 CREATE INDEX IF NOT EXISTS idx_research_user ON research_sessions(user_id);
@@ -568,10 +569,11 @@ export class UnifiedDatabase {
     private readonly externalRepository: ExternalRepository;
 
     constructor() {
+        const config = getConfig();
         const poolConfig: PoolConfig = {
-            connectionString: getConfig().databaseUrl,
-            max: 20,
-            min: 5,
+            connectionString: config.databaseUrl,
+            max: config.dbPoolMax,
+            min: config.dbPoolMin,
             statement_timeout: 30000,
             idleTimeoutMillis: 30000,
             connectionTimeoutMillis: 10000
@@ -615,6 +617,16 @@ export class UnifiedDatabase {
             `);
         } catch (_e: unknown) {
             // Constraint may already be correct — ignore
+        }
+
+        // pg_trgm GIN 인덱스 생성 시도 (LEGACY_SCHEMA 폴백 시에도 적용)
+        try {
+            await this.pool.query(`CREATE EXTENSION IF NOT EXISTS pg_trgm`);
+            await this.pool.query(`CREATE INDEX IF NOT EXISTS idx_memories_key_trgm ON user_memories USING gin (key gin_trgm_ops)`);
+            await this.pool.query(`CREATE INDEX IF NOT EXISTS idx_memories_value_trgm ON user_memories USING gin (value gin_trgm_ops)`);
+            logger.info('[UnifiedDB] pg_trgm 트라이그램 인덱스 생성 완료');
+        } catch (_e: unknown) {
+            logger.info('[UnifiedDB] pg_trgm 인덱스 생성 건너뜀 (확장 미지원 환경)');
         }
     }
 
@@ -835,6 +847,14 @@ export class UnifiedDatabase {
 
     async getMemoryOwner(memoryId: string): Promise<string | null> {
         return this.memoryRepository.getOwnerUserId(memoryId);
+    }
+
+    async cleanupExpiredMemories(): Promise<number> {
+        return this.memoryRepository.cleanupExpiredMemories();
+    }
+
+    async decayMemoryImportance(): Promise<number> {
+        return this.memoryRepository.decayImportance();
     }
 
     // ============================================

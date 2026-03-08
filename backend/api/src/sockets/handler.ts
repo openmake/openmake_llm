@@ -71,6 +71,8 @@ export class WebSocketHandler {
     private userConnectionAttempts: Map<string, number[]> = new Map();
     /** 하트비트 인터벌 타이머 (30초 주기) */
     private heartbeatInterval: ReturnType<typeof setInterval> | null = null;
+    /** Rate limit Map 정리 인터벌 (60초 주기) */
+    private rateLimitCleanupInterval: ReturnType<typeof setInterval> | null = null;
 
     /**
      * WebSocketHandler 생성자
@@ -85,6 +87,7 @@ export class WebSocketHandler {
         this.setupConnection();
         this.setupClusterEvents();
         this.startHeartbeat();
+        this.startRateLimitCleanup();
     }
 
     /**
@@ -513,12 +516,45 @@ export class WebSocketHandler {
     }
 
     /**
-     * 하트비트 중지 (서버 종료 시 호출)
+     * Rate limit Map 주기적 정리 (60초 주기)
+     * 연결 시도 기록에서 윈도우 시간이 지난 항목을 제거하여 메모리 누수 방지
+     */
+    private startRateLimitCleanup(): void {
+        this.rateLimitCleanupInterval = setInterval(() => {
+            const now = Date.now();
+            for (const [key, attempts] of this.ipConnectionAttempts) {
+                const filtered = attempts.filter(ts => now - ts <= WS_CONNECTION_RATE_WINDOW_MS);
+                if (filtered.length === 0) {
+                    this.ipConnectionAttempts.delete(key);
+                } else {
+                    this.ipConnectionAttempts.set(key, filtered);
+                }
+            }
+            for (const [key, attempts] of this.userConnectionAttempts) {
+                const filtered = attempts.filter(ts => now - ts <= WS_CONNECTION_RATE_WINDOW_MS);
+                if (filtered.length === 0) {
+                    this.userConnectionAttempts.delete(key);
+                } else {
+                    this.userConnectionAttempts.set(key, filtered);
+                }
+            }
+        }, WS_CONNECTION_RATE_WINDOW_MS);
+        if (this.rateLimitCleanupInterval && typeof this.rateLimitCleanupInterval === 'object' && 'unref' in this.rateLimitCleanupInterval) {
+            (this.rateLimitCleanupInterval as NodeJS.Timeout).unref();
+        }
+    }
+
+    /**
+     * 하트비트 및 정리 타이머 중지 (서버 종료 시 호출)
      */
     public stopHeartbeat(): void {
         if (this.heartbeatInterval) {
             clearInterval(this.heartbeatInterval);
             this.heartbeatInterval = null;
+        }
+        if (this.rateLimitCleanupInterval) {
+            clearInterval(this.rateLimitCleanupInterval);
+            this.rateLimitCleanupInterval = null;
         }
     }
 
