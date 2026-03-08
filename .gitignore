@@ -37,7 +37,6 @@ coverage/
 .agent/
 .spawner/
 .claude/
-.sisyphus/
 .cursorrules
 .ruff_cache/
 
