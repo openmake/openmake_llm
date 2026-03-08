@@ -9,6 +9,7 @@ import { Request, Response, Router } from 'express';
 import * as fs from 'fs';
 import * as path from 'path';
 import { ClusterManager, getClusterManager } from '../cluster/manager';
+import { getPool } from '../data/models/unified-database';
 import { success } from '../utils/api-response';
 
 // package.json에서 버전을 한 번만 읽어 캐시
@@ -84,16 +85,36 @@ export class HealthController {
 
     /**
      * GET /ready
-     * 서비스 준비 상태 확인
+     * 서비스 준비 상태 확인 (클러스터 + DB 연결)
      */
     private async readinessCheck(req: Request, res: Response): Promise<void> {
         const stats = this.cluster.getStats();
-        const isReady = stats.onlineNodes > 0;
+        const clusterReady = stats.onlineNodes > 0;
+
+        // DB 연결 확인 (2초 타임아웃)
+        let dbReady = false;
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        try {
+            const pool = getPool();
+            const dbPing = pool.query('SELECT 1');
+            const timeout = new Promise<never>((_, reject) => {
+                timer = setTimeout(() => reject(new Error('DB ping timeout')), 2000);
+            });
+            await Promise.race([dbPing, timeout]);
+            dbReady = true;
+        } catch {
+            dbReady = false;
+        } finally {
+            if (timer) clearTimeout(timer);
+        }
+
+        const isReady = clusterReady && dbReady;
 
         res.status(isReady ? 200 : 503).json(success({
             ready: isReady,
             onlineNodes: stats.onlineNodes,
             totalNodes: stats.totalNodes,
+            dbConnected: dbReady,
             timestamp: new Date().toISOString()
         }));
     }

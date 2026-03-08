@@ -24,6 +24,8 @@ export interface EnvConfig {
 
     // Database
     databaseUrl: string;
+    dbPoolMax: number;
+    dbPoolMin: number;
 
     // Auth
     jwtSecret: string;
@@ -131,6 +133,8 @@ const DEFAULT_CONFIG: EnvConfig = {
 
     // Database
     databaseUrl: 'postgresql://localhost:5432/openmake_llm',
+    dbPoolMax: 20,
+    dbPoolMin: 5,
 
     // Auth
     jwtSecret: '',
@@ -326,6 +330,8 @@ export function loadConfig(): EnvConfig {
         GITHUB_CLIENT_ID: env('GITHUB_CLIENT_ID'),
         GITHUB_CLIENT_SECRET: env('GITHUB_CLIENT_SECRET'),
         OAUTH_REDIRECT_URI: env('OAUTH_REDIRECT_URI'),
+        DB_POOL_MAX: env('DB_POOL_MAX'),
+        DB_POOL_MIN: env('DB_POOL_MIN'),
         CORS_ORIGINS: env('CORS_ORIGINS'),
         OLLAMA_BASE_URL: env('OLLAMA_BASE_URL'),
         OLLAMA_DEFAULT_MODEL: env('OLLAMA_DEFAULT_MODEL'),
@@ -406,6 +412,8 @@ export function loadConfig(): EnvConfig {
 
         // Database
         databaseUrl: parsed.DATABASE_URL ?? DEFAULT_CONFIG.databaseUrl,
+        dbPoolMax: parsed.DB_POOL_MAX ?? DEFAULT_CONFIG.dbPoolMax,
+        dbPoolMin: parsed.DB_POOL_MIN ?? DEFAULT_CONFIG.dbPoolMin,
 
         // Auth
         jwtSecret: parsed.JWT_SECRET ?? DEFAULT_CONFIG.jwtSecret,
