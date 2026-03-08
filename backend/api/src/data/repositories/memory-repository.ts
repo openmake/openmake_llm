@@ -126,7 +126,7 @@ export class MemoryRepository extends BaseRepository {
                 SET access_count = access_count + 1, last_accessed = NOW()
                 WHERE id IN (${idPlaceholders})`,
                 ids
-            ).catch(_e => { /* 갱신 실패는 무시 — 핵심 검색 기능에 영향 없음 */ });
+            ).catch(() => { /* access_count 갱신 실패는 무시 — 핵심 검색 기능에 영향 없음 */ });
         }
 
         return rows;
