@@ -914,7 +914,7 @@ export class ChatService {
 
             // LLM 추출기: 현재 클라이언트를 활용하여 메모리 추출 프롬프트 실행
             const llmExtractor = async (prompt: string): Promise<string> => {
-                const timeoutMs = 5000;
+                const timeoutMs = 30000;
                 const result = await Promise.race([
                     this.client.chat(
                         [{ role: 'user' as const, content: prompt }],
