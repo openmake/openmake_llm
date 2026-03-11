@@ -20,7 +20,7 @@ import axios from 'axios';
 import * as crypto from 'crypto';
 import type { Application, Request, Response } from 'express';
 import { getConfig } from '../config/env';
-import { getAuthService } from '../services/AuthService';
+import { getAuthService } from './AuthService';
 import { setTokenCookie, setRefreshTokenCookie, generateRefreshToken } from '../auth';
 import { createLogger } from '../utils/logger';
 import { GOOGLE_OAUTH, GITHUB_OAUTH, GITHUB_API } from '../config/external-services';

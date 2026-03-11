@@ -273,7 +273,7 @@ export class DiscussionStrategy implements ChatStrategy<DiscussionStrategyContex
         let userMemoryContext = '';
         if (userId && userId !== 'guest') {
             try {
-                const { getMemoryService } = await import('../../../services/MemoryService');
+                const { getMemoryService } = await import('../../../domains/memory/MemoryService');
                 const memoryService = getMemoryService();
                 const memoryResult = await memoryService.buildMemoryContext(userId, message);
 

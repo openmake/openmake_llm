@@ -26,7 +26,7 @@ import { asyncHandler } from '../utils/error-handler';
 import { validate } from '../middlewares/validation';
 import { createAuditSchema } from '../schemas/audit.schema';
 import { requireAuth, requireAdmin } from '../auth';
-import { getAuditService } from '../services/AuditService';
+import { getAuditService } from '../domains/audit';
 
 const logger = createLogger('AuditRoutes');
 const router = Router();

@@ -11,9 +11,9 @@
 
 import { v4 as uuidv4 } from 'uuid';
 import crypto from 'node:crypto';
-import { getUnifiedDatabase, UserMemory, MemoryCategory } from '../data/models/unified-database';
-import { createLogger } from '../utils/logger';
-import { CAPACITY, TRUNCATION, DISCUSSION_TOKEN_BUDGET } from '../config/runtime-limits';
+import { getUnifiedDatabase, UserMemory, MemoryCategory } from '../../data/models/unified-database';
+import { createLogger } from '../../utils/logger';
+import { CAPACITY, TRUNCATION, DISCUSSION_TOKEN_BUDGET } from '../../config/runtime-limits';
 
 const logger = createLogger('MemoryService');
 
@@ -135,7 +135,7 @@ export class MemoryService {
      */
     private async saveMemoryEmbedding(memoryId: string, key: string, value: string): Promise<void> {
         try {
-            const { getEmbeddingService } = await import('../domains/rag/EmbeddingService');
+            const { getEmbeddingService } = await import('../../domains/rag/EmbeddingService');
             const embeddingService = getEmbeddingService();
             const text = `${key}: ${value}`;
             const embedding = await embeddingService.embedText(text);
@@ -173,13 +173,13 @@ export class MemoryService {
 
         // 2) 시맨틱 검색 시도 (EmbeddingService 사용 가능 시)
         try {
-            const { getEmbeddingService } = await import('../domains/rag/EmbeddingService');
+            const { getEmbeddingService } = await import('../../domains/rag/EmbeddingService');
             const embeddingService = getEmbeddingService();
             const queryEmbedding = await embeddingService.embedText(query);
 
             if (queryEmbedding && queryEmbedding.length > 0) {
                 const pool = this.db.getPool();
-                const { MemoryRepository } = await import('../data/repositories/memory-repository');
+                const { MemoryRepository } = await import('../../data/repositories/memory-repository');
                 const memRepo = new MemoryRepository(pool);
                 const semanticIds = await memRepo.getSemanticMemoryIds(queryEmbedding, userId, limit);
 

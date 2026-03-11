@@ -22,7 +22,7 @@
  */
 
 import { Router, Request, Response } from 'express';
-import { getMemoryService } from '../services/MemoryService';
+import { getMemoryService } from '../domains/memory/MemoryService';
 import { MemoryCategory } from '../data/models/unified-database';
 import { success, badRequest, notFound, forbidden } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';

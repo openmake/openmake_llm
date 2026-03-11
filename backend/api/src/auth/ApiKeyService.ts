@@ -9,7 +9,7 @@
 
 import crypto from 'node:crypto';
 import { getUnifiedDatabase, UserApiKey, UserApiKeyPublic, ApiKeyTier } from '../data/models/unified-database';
-import { generateApiKey, hashApiKey, extractLast4, API_KEY_PREFIX } from '../auth/api-key-utils';
+import { generateApiKey, hashApiKey, extractLast4, API_KEY_PREFIX } from './api-key-utils';
 import { getConfig } from '../config/env';
 import { createLogger } from '../utils/logger';
 

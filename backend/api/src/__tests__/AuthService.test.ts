@@ -60,7 +60,7 @@ jest.mock('../utils/logger', () => ({
 // Import after mocks
 // ─────────────────────────────────────────────
 
-import { AuthService, getAuthService } from '../services/AuthService';
+import { AuthService, getAuthService } from '../auth/AuthService';
 import { getUserManager } from '../data/user-manager';
 import { generateToken } from '../auth';
 import { getConfig } from '../config/env';

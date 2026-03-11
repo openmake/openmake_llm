@@ -68,7 +68,7 @@ router.post(
         // 피드백 → 장기 메모리에 컨텍스트 기록 (fire-and-forget, 응답 지연 없음)
         if (feedbackUserId && safeMetadata) {
             (async () => {
-                const { getMemoryService } = await import('../services/MemoryService');
+                const { getMemoryService } = await import('../domains/memory/MemoryService');
                 const memoryService = getMemoryService();
                 const feedbackInfo = [
                     safeMetadata.model && `model=${safeMetadata.model}`,

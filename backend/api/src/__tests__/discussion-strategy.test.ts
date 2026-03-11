@@ -35,7 +35,7 @@ jest.mock('../agents/discussion-engine', () => ({
 }));
 
 // MemoryService 동적 import mock
-jest.mock('../services/MemoryService', () => ({
+jest.mock('../domains/memory/MemoryService', () => ({
     getMemoryService: jest.fn().mockReturnValue({
         buildMemoryContext: mockBuildMemoryContext,
     }),

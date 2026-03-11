@@ -53,7 +53,7 @@ jest.mock('uuid', () => ({
 // Import after mocks
 // ─────────────────────────────────────────────
 
-import { MemoryService, getMemoryService } from '../services/MemoryService';
+import { MemoryService, getMemoryService } from '../domains/memory/MemoryService';
 import { getUnifiedDatabase } from '../data/models/unified-database';
 import type { UserMemory } from '../data/models/unified-database';
 

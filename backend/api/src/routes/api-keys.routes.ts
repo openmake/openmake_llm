@@ -33,7 +33,7 @@ import { requireAuth } from '../auth';
 import { validate } from '../middlewares/validation';
 import { asyncHandler } from '../utils/error-handler';
 import { success, notFound, badRequest, forbidden, unauthorized, rateLimited } from '../utils/api-response';
-import { getApiKeyService, ApiKeyError } from '../services/ApiKeyService';
+import { getApiKeyService, ApiKeyError } from '../auth/ApiKeyService';
 import type { ApiKeyTier } from '../data/models/unified-database';
 import { createLogger } from '../utils/logger';
 

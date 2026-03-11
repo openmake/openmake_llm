@@ -7,7 +7,7 @@
 
 import crypto from 'node:crypto';
 import { getUserManager, PublicUser } from '../data/user-manager';
-import { generateToken } from '../auth';
+import { generateToken } from './index';
 import { createLogger } from '../utils/logger';
 import { getConfig } from '../config/env';
 

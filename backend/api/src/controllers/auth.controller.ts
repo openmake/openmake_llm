@@ -7,7 +7,7 @@
 
 import { Request, Response, Router } from 'express';
 import * as crypto from 'crypto';
-import { getAuthService } from '../services/AuthService';
+import { getAuthService } from '../auth/AuthService';
 import { getUserManager } from '../data/user-manager';
 import type { OAuthTokenResponse, GoogleUserInfo, GitHubUser, GitHubEmail } from '../auth/types';
 import { requireAuth, extractToken, blacklistToken, setTokenCookie, clearTokenCookie, setRefreshTokenCookie, generateRefreshToken, generateToken, verifyRefreshToken } from '../auth';

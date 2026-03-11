@@ -355,8 +355,8 @@ export class AgentLearningSystem {
 
             // 실패 패턴을 장기 메모리에 저장 (라우팅 자동 보정용)
             try {
-                const { getMemoryService } = require('../services/MemoryService') as {
-                    getMemoryService: () => import('../services/MemoryService').MemoryService;
+                const { getMemoryService } = require('../domains/memory/MemoryService') as {
+                    getMemoryService: () => import('../domains/memory/MemoryService').MemoryService;
                 };
                 const memoryService = getMemoryService();
 

@@ -1,5 +1,5 @@
-import { getPool, getUnifiedDatabase } from '../data/models/unified-database';
-import { createLogger } from '../utils/logger';
+import { getPool, getUnifiedDatabase } from '../../data/models/unified-database';
+import { createLogger } from '../../utils/logger';
 
 const logger = createLogger('AuditService');
 

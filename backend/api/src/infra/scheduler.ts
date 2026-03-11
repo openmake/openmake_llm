@@ -58,7 +58,7 @@ export async function startSchedulers(): Promise<NodeJS.Timeout[]> {
         // 메모리 통합: 중복 메모리 병합 (12시간마다)
         const memConsolidateTimer = setInterval(async () => {
             try {
-                const { getMemoryService } = await import('../services/MemoryService');
+                const { getMemoryService } = await import('../domains/memory/MemoryService');
                 const memoryService = getMemoryService();
                 const pool = db.getPool();
                 const result = await pool.query<{ user_id: string }>(

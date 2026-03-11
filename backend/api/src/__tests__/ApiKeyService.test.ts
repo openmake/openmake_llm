@@ -70,7 +70,7 @@ jest.mock('../utils/logger', () => ({
 // Import after mocks
 // ─────────────────────────────────────────────
 
-import { ApiKeyService, ApiKeyError, getApiKeyService } from '../services/ApiKeyService';
+import { ApiKeyService, ApiKeyError, getApiKeyService } from '../auth/ApiKeyService';
 import { getUnifiedDatabase } from '../data/models/unified-database';
 import type { UserApiKey } from '../data/models/unified-database';
 

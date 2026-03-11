@@ -595,7 +595,7 @@ export class ChatService {
         let memoryContextStr = '';
         if (userId) {
             try {
-                const { getMemoryService } = await import('../../services/MemoryService');
+                const { getMemoryService } = await import('../../domains/memory/MemoryService');
                 const memoryService = getMemoryService();
                 const memoryContext = await memoryService.buildMemoryContext(userId, message);
                 if (memoryContext.contextString) {
@@ -909,7 +909,7 @@ export class ChatService {
      */
     private async extractMemoriesAsync(userId: string, userMessage: string, assistantResponse: string): Promise<void> {
         try {
-            const { getMemoryService } = await import('../../services/MemoryService');
+            const { getMemoryService } = await import('../../domains/memory/MemoryService');
             const memoryService = getMemoryService();
 
             // LLM 추출기: 현재 클라이언트를 활용하여 메모리 추출 프롬프트 실행

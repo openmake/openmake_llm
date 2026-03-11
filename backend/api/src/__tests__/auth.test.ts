@@ -166,7 +166,7 @@ describe('Auth Module', () => {
 });
 
 // Add at the end of the file, after existing tests
-import { AuthService } from '../services/AuthService';
+import { AuthService } from '../auth/AuthService';
 
 describe('Password Policy', () => {
     const authService = new AuthService();

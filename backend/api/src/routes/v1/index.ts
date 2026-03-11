@@ -43,7 +43,7 @@ import { success, unauthorized } from '../../utils/api-response';
 import { requireApiKey } from '../../middlewares/api-key-auth';
 import { apiKeyRateLimiter, apiKeyTPMLimiter } from '../../middlewares/api-key-limiter';
 import { asyncHandler } from '../../utils/error-handler';
-import { getApiKeyService } from '../../services/ApiKeyService';
+import { getApiKeyService } from '../../auth/ApiKeyService';
 import { ClusterManager } from '../../cluster/manager';
 
 export interface V1RouterDeps {
