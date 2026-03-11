@@ -2,7 +2,7 @@
  * ChatService Tests
  * Basic tests for chat service types and interfaces
  */
-import { ChatHistoryMessage, AgentSelectionInfo, ToolCallInfo, WebSearchResult } from '../services/ChatService';
+import { ChatHistoryMessage, AgentSelectionInfo, ToolCallInfo, WebSearchResult } from '../domains/chat/service';
 
 describe('ChatService Types', () => {
     describe('ChatHistoryMessage', () => {

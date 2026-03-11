@@ -38,7 +38,7 @@ import externalRouter from '../external.routes';
 import { pushRouter } from '../push.routes';
 import apiKeysRouter from '../api-keys.routes';
 import { createOpenAICompatRouter } from '../openai-compat.routes';
-import { listAvailableModels } from '../../chat/profile-resolver';
+import { listAvailableModels } from '../../domains/chat/pipeline/profile-resolver';
 import { success, unauthorized } from '../../utils/api-response';
 import { requireApiKey } from '../../middlewares/api-key-auth';
 import { apiKeyRateLimiter, apiKeyTPMLimiter } from '../../middlewares/api-key-limiter';

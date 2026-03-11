@@ -18,7 +18,7 @@ import { AgentSelection, AgentPhase } from './types';
 import { AGENTS } from './agent-data';
 import { createLogger } from '../utils/logger';
 import { getSkillManager } from './skill-manager';
-import { getLanguageTemplate, type SupportedLanguageCode } from '../chat/language-policy';
+import { getLanguageTemplate, type SupportedLanguageCode } from '../domains/chat/pipeline/language-policy';
 const logger = createLogger('AgentSystem');
 
 type PromptLanguageCode = 'ko' | 'en' | 'ja' | 'zh' | 'es' | 'de' | 'fr';

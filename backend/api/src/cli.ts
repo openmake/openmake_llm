@@ -34,7 +34,7 @@ for (const envPath of envPaths) {
 import { Command } from 'commander';
 import chalk from 'chalk';
 import { createClient } from './ollama/client';
-import { startChat } from './chat';
+import { startChat } from './domains/chat/pipeline';
 import { reviewFile } from './commands/review';
 import { generateCode } from './commands/generate';
 import { explainFile } from './commands/explain';

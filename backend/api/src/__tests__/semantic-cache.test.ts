@@ -17,9 +17,9 @@
  * - clear(): 모든 엔트리 및 통계 초기화
  */
 
-import { cosineSimilarity, SemanticClassificationCache } from '../chat/semantic-cache';
-import type { EmbedFunction } from '../chat/semantic-cache';
-import type { QueryType } from '../chat/model-selector-types';
+import { cosineSimilarity, SemanticClassificationCache } from '../domains/chat/pipeline/semantic-cache';
+import type { EmbedFunction } from '../domains/chat/pipeline/semantic-cache';
+import type { QueryType } from '../domains/chat/pipeline/model-selector-types';
 
 // ============================================================
 // cosineSimilarity 단위 테스트

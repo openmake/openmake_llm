@@ -69,7 +69,7 @@ jest.mock('../utils/logger', () => ({
 // Import after mocks
 // ─────────────────────────────────────────────
 
-import { recordChatMetrics } from '../services/chat-service-metrics';
+import { recordChatMetrics } from '../domains/chat/service/chat-service-metrics';
 import { getApiUsageTracker } from '../ollama/api-usage-tracker';
 import { getApiKeyManager } from '../ollama/api-key-manager';
 import { recordTokenUsage } from '../middlewares/rate-limit-headers';

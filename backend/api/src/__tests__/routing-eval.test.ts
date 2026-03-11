@@ -14,8 +14,8 @@
  */
 
 import { describe, it, expect } from 'bun:test';
-import { classifyQuery } from '../chat/query-classifier';
-import type { QueryType } from '../chat/model-selector-types';
+import { classifyQuery } from '../domains/chat/pipeline/query-classifier';
+import type { QueryType } from '../domains/chat/pipeline/model-selector-types';
 import { ROUTING_EVAL_DATASET, type EvalCase } from './routing-eval-data';
 
 // ═══════════════════════════════════════════

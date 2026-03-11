@@ -1,0 +1,6 @@
+{
+  "name": "worker-2",
+  "index": 2,
+  "role": "executor",
+  "assigned_tasks": []
+}

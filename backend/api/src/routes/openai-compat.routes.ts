@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { ClusterManager } from '../cluster/manager';
 import { asyncHandler } from '../utils/error-handler';
-import { ChatRequestError, ChatRequestHandler, ChatUserContext } from '../chat/request-handler';
+import { ChatRequestError, ChatRequestHandler, ChatUserContext } from '../domains/chat/pipeline/request-handler';
 import { ToolDefinition } from '../ollama/types';
 import {
     OpenAIChatCompletionRequest,

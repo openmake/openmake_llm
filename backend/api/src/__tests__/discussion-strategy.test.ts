@@ -11,10 +11,10 @@
  * - 토론 실패 시 fallback 응답
  * - webSearch 사실 검증 활성화/비활성화
  */
-import { DiscussionStrategy } from '../services/chat-strategies/discussion-strategy';
-import type { DiscussionStrategyContext } from '../services/chat-strategies/types';
+import { DiscussionStrategy } from '../domains/chat/strategies/discussion-strategy';
+import type { DiscussionStrategyContext } from '../domains/chat/strategies/types';
 import type { OllamaClient } from '../ollama/client';
-import type { ChatMessageRequest } from '../services/ChatService';
+import type { ChatMessageRequest } from '../domains/chat/service';
 import type { DocumentStore } from '../documents/store';
 
 // ─────────────────────────────────────────────

@@ -33,7 +33,7 @@ import { validate } from '../middlewares/validation';
 import { getUnifiedDatabase } from '../data/models/unified-database';
 import { v4 as uuidv4 } from 'uuid';
 import { createDeepResearchService } from '../services/DeepResearchService';
-import { detectLanguage } from '../chat/language-policy';
+import { detectLanguage } from '../domains/chat/pipeline/language-policy';
 import {
     createResearchSessionSchema,
     addResearchStepSchema,

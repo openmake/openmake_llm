@@ -13,7 +13,7 @@ import {
     type SupportedLanguageCode,
     type LanguagePolicyConfig,
     type LanguagePolicyDecision
-} from '../chat/language-policy';
+} from '../domains/chat/pipeline/language-policy';
 describe('Language Policy System', () => {
     
     // ============================================================

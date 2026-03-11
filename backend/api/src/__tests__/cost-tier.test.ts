@@ -8,8 +8,8 @@ import {
     isWithinTierBudget,
     applyCostTierCeiling,
     type CostTier,
-} from '../chat/cost-tier';
-import type { QueryType } from '../chat/model-selector-types';
+} from '../domains/chat/pipeline/cost-tier';
+import type { QueryType } from '../domains/chat/pipeline/model-selector-types';
 
 describe('CostTier', () => {
     describe('COST_TIER_ORDER', () => {

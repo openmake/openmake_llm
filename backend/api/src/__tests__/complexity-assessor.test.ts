@@ -1,6 +1,6 @@
 // Jest globals (describe, test, expect) are available automatically
-import { assessComplexity, A2A_SKIP_THRESHOLD } from '../chat/complexity-assessor';
-import type { ComplexityContext } from '../chat/complexity-assessor';
+import { assessComplexity, A2A_SKIP_THRESHOLD } from '../domains/chat/pipeline/complexity-assessor';
+import type { ComplexityContext } from '../domains/chat/pipeline/complexity-assessor';
 
 describe('ComplexityAssessor', () => {
     // Helper to create a basic context

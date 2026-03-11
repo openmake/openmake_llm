@@ -9,7 +9,7 @@
  * @module agents/discussion-locales
  * @see agents/discussion-engine - 이 상수들을 소비하는 메인 엔진
  */
-import type { PromptLocaleCode } from '../chat/language-policy';
+import type { PromptLocaleCode } from '../domains/chat/pipeline/language-policy';
 
 export const DISCUSSION_SYSTEM_PROMPTS: Record<PromptLocaleCode, {
     deepThinking: string;

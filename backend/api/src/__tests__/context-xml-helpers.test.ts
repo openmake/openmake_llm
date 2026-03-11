@@ -9,7 +9,7 @@ import {
     contextSection,
     examplesSection,
     thinkingSection,
-} from '../chat/context-xml-helpers';
+} from '../domains/chat/pipeline/context-xml-helpers';
 
 // ===== xmlTag =====
 

@@ -24,7 +24,7 @@ import { optionalApiKey } from '../middlewares/api-key-auth';
 import { chatRateLimiter } from '../middlewares/chat-rate-limiter';
 import { validate } from '../middlewares/validation';
 import { chatRequestSchema } from '../schemas';
-import { ChatRequestHandler, ChatRequestError } from '../chat/request-handler';
+import { ChatRequestHandler, ChatRequestError } from '../domains/chat/pipeline/request-handler';
 import { createLogger } from '../utils/logger';
 
 const logger = createLogger('ChatRoutes');

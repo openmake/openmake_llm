@@ -470,8 +470,9 @@ async function executeNavigation(path, options) {
 
     // ─── 현재 모듈 정리 ──────────────────
     if (_currentRoute && _currentRoute.moduleName) {
-        var currentModule = _loadedModules.get(_currentRoute.moduleFile)
-            || (window.PageModules && window.PageModules[_currentRoute.moduleName]);
+        var currentModule = _loadedModules.get(_currentRoute.moduleFile);
+            // Legacy fallback commented out — all page modules now use ES Module export default
+            // || (window.PageModules && window.PageModules[_currentRoute.moduleName]);
         if (currentModule && typeof currentModule.cleanup === 'function') {
             try {
                 currentModule.cleanup();
@@ -513,10 +514,10 @@ async function executeNavigation(path, options) {
             pageModule = await loadModule(targetRoute.moduleFile);
         }
 
-        // fallback: window.PageModules에서 참조 (레거시 호환)
-        if (!pageModule) {
-            pageModule = window.PageModules && window.PageModules[targetRoute.moduleName];
-        }
+        // Legacy fallback commented out — all page modules now use ES Module export default
+        // if (!pageModule) {
+        //     pageModule = window.PageModules && window.PageModules[targetRoute.moduleName];
+        // }
         if (!pageModule) {
             throw new Error('모듈이 등록되지 않았습니다: ' + targetRoute.moduleName);
         }
@@ -842,10 +843,10 @@ var Router = {
 
         _started = true;
 
-        // PageModules 컨테이너 초기화
-        if (!window.PageModules) {
-            window.PageModules = {};
-        }
+        // PageModules 컨테이너 초기화 (legacy — all modules now use ES Module export default)
+        // if (!window.PageModules) {
+        //     window.PageModules = {};
+        // }
 
         // nav-items.js 기반 자동 등록
         registerFromNavItems();

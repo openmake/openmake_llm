@@ -54,10 +54,10 @@ jest.mock('../mcp/unified-client', () => ({
 // Imports (after mocks)
 // ============================================
 
-import { AgentLoopStrategy } from '../services/chat-strategies/agent-loop-strategy';
-import type { DirectStrategy } from '../services/chat-strategies/direct-strategy';
-import type { AgentLoopStrategyContext } from '../services/chat-strategies/types';
-import type { DirectStrategyResult } from '../services/chat-strategies/types';
+import { AgentLoopStrategy } from '../domains/chat/strategies/agent-loop-strategy';
+import type { DirectStrategy } from '../domains/chat/strategies/direct-strategy';
+import type { AgentLoopStrategyContext } from '../domains/chat/strategies/types';
+import type { DirectStrategyResult } from '../domains/chat/strategies/types';
 import type { OllamaClient } from '../ollama/client';
 import type { UserContext } from '../mcp/user-sandbox';
 

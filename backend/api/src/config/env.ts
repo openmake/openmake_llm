@@ -12,7 +12,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { envSchema } from './env.schema';
 import { SERVER_CONFIG } from './constants';
-import type { SupportedLanguageCode } from '../chat/language-policy';
+import type { SupportedLanguageCode } from '../domains/chat/pipeline/language-policy';
 
 export interface EnvConfig {
     // Node

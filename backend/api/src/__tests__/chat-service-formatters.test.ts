@@ -5,7 +5,7 @@
  * - formatResearchResult: 연구 결과 마크다운 포맷팅 (헤더, 요약, 발견사항, 참고자료, 통계)
  * - formatDiscussionResult: 멀티 에이전트 토론 결과 마크다운 포맷팅
  */
-import { formatResearchResult, formatDiscussionResult } from '../services/chat-service-formatters';
+import { formatResearchResult, formatDiscussionResult } from '../domains/chat/service/chat-service-formatters';
 import type { DiscussionResult } from '../agents/discussion-types';
 
 // ─────────────────────────────────────────────

@@ -22,7 +22,7 @@ import {
 } from '../services/DeepResearchService';
 import { v4 as uuidv4 } from 'uuid';
 import { createLogger } from '../utils/logger';
-import { detectLanguage } from '../chat/language-policy';
+import { detectLanguage } from '../domains/chat/pipeline/language-policy';
 import { CLEANUP_INTERVALS } from '../config/timeouts';
 import { getSearchLocale } from '../i18n/search-locale';
 

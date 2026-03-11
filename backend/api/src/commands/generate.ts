@@ -16,7 +16,7 @@ import * as path from 'path';
 import chalk from 'chalk';
 import inquirer from 'inquirer';
 import { OllamaClient } from '../ollama/client';
-import { getSystemPrompt } from '../chat/prompt';
+import { getSystemPrompt } from '../domains/chat/pipeline/prompt';
 import { createSpinner } from '../ui/spinner';
 
 /**

@@ -12,7 +12,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { hashApiKey, isValidApiKeyFormat, API_KEY_PREFIX } from '../auth/api-key-utils';
 import { getUnifiedDatabase } from '../data/models/unified-database';
-import { isValidBrandModel } from '../chat/pipeline-profile';
+import { isValidBrandModel } from '../domains/chat/pipeline/pipeline-profile';
 import { error as apiError, ErrorCodes } from '../utils/api-response';
 import { createLogger } from '../utils/logger';
 

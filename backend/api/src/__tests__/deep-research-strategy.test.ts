@@ -10,10 +10,10 @@
  * - onProgress 콜백 전달
  * - 에러 전파
  */
-import { DeepResearchStrategy } from '../services/chat-strategies/deep-research-strategy';
-import type { DeepResearchStrategyContext } from '../services/chat-strategies/types';
+import { DeepResearchStrategy } from '../domains/chat/strategies/deep-research-strategy';
+import type { DeepResearchStrategyContext } from '../domains/chat/strategies/types';
 import type { OllamaClient } from '../ollama/client';
-import type { ChatMessageRequest } from '../services/ChatService';
+import type { ChatMessageRequest } from '../domains/chat/service';
 
 // ─────────────────────────────────────────────
 // Mock 설정 (jest.mock은 호이스팅되므로 팩토리 내부에서 jest.fn() 생성)

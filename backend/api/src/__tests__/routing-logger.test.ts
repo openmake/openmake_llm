@@ -15,7 +15,7 @@ import {
     logRoutingDecision,
     logA2AModelSelection,
     type RoutingDecisionLog,
-} from '../chat/routing-logger';
+} from '../domains/chat/pipeline/routing-logger';
 
 // ============================================================
 // 1. createRoutingLogEntry - Default Values

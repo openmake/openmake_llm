@@ -3,7 +3,7 @@
  * classifyQuery() — 9가지 QueryType 분류 로직 검증
  */
 
-import { classifyQuery } from '../chat/query-classifier';
+import { classifyQuery } from '../domains/chat/pipeline/query-classifier';
 
 describe('classifyQuery', () => {
     describe('code 분류', () => {

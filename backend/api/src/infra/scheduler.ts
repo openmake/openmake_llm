@@ -105,7 +105,7 @@ export async function startSchedulers(): Promise<NodeJS.Timeout[]> {
 
     // 시맨틱 분류 캐시 워밍 (비동기, 서버 시작 차단 안 함)
     try {
-        const { warmClassificationCache } = await import('../chat/llm-classifier');
+        const { warmClassificationCache } = await import('../domains/chat/pipeline/llm-classifier');
         warmClassificationCache().catch((err: unknown) => console.error('[Server] 캐시 워밍 실패:', err));
     } catch (err) {
         console.error('[Server] 캐시 워밍 로드 실패:', err);

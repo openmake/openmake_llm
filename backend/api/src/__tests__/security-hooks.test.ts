@@ -16,7 +16,7 @@ import {
     redactPII,
     type SecurityCheckResult,
     type SecurityViolation,
-} from '../chat/security-hooks';
+} from '../domains/chat/pipeline/security-hooks';
 
 // ============================================================
 // 1. Jailbreak Detection Tests

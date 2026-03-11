@@ -1,4 +1,4 @@
-import { classifyQuery, selectOptimalModel, checkModelCapability } from '../chat/model-selector';
+import { classifyQuery, selectOptimalModel, checkModelCapability } from '../domains/chat/pipeline/model-selector';
 import { resetConfig } from '../config/env';
 
 describe('Model Selector', () => {

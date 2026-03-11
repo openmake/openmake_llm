@@ -1,0 +1,453 @@
+{
+  "version": "1.0.0",
+  "lastScanned": 1773236457799,
+  "projectRoot": "/Users/tom/projects/development/openmake_llm",
+  "techStack": {
+    "languages": [
+      {
+        "name": "JavaScript/TypeScript",
+        "version": null,
+        "confidence": "high",
+        "markers": [
+          "package.json"
+        ]
+      }
+    ],
+    "frameworks": [
+      {
+        "name": "@playwright/test",
+        "version": "1.58.0",
+        "category": "testing"
+      },
+      {
+        "name": "jest",
+        "version": "29.7.0",
+        "category": "testing"
+      },
+      {
+        "name": "playwright",
+        "version": "1.58.0",
+        "category": "testing"
+      }
+    ],
+    "packageManager": "npm",
+    "runtime": null
+  },
+  "build": {
+    "buildCommand": "npm run build",
+    "testCommand": "npm test",
+    "lintCommand": "npm run lint",
+    "devCommand": "npm run dev",
+    "scripts": {
+      "build": "npm run build:backend && npm run build:frontend && npm run deploy:frontend",
+      "build:database": "echo 'No separate database build needed'",
+      "build:backend": "cd backend/api && npm run build",
+      "build:frontend": "cd frontend/web && npm run build",
+      "deploy:frontend": "bash scripts/deploy-frontend.sh",
+      "build:all": "npm run build",
+      "dev": "concurrently \"npm run dev:api\" \"npm run dev:frontend\"",
+      "dev:api": "cd backend/api && npm run dev",
+      "dev:frontend": "cd frontend/web && npm run dev",
+      "start": "node backend/api/dist/server.js",
+      "start:api": "node backend/api/dist/server.js",
+      "test": "jest",
+      "test:unit": "cd tests/unit && jest",
+      "test:integration": "cd tests/integration && jest",
+      "test:e2e": "npx playwright test",
+      "test:e2e:ui": "npx playwright test --ui",
+      "lint": "eslint . --ext .ts,.tsx,.js,.jsx",
+      "clean": "rm -rf */dist **/dist",
+      "check:schema-drift": "bash scripts/check-schema-drift.sh",
+      "ci": "bash scripts/ci-test.sh",
+      "hooks:install": "bash scripts/install-hooks.sh",
+      "test:bun": "cd backend/api && bun test --timeout 15000",
+      "migrate": "npx ts-node scripts/run-migrations.ts"
+    }
+  },
+  "conventions": {
+    "namingStyle": null,
+    "importStyle": null,
+    "testPattern": null,
+    "fileOrganization": null
+  },
+  "structure": {
+    "isMonorepo": true,
+    "workspaces": [
+      "backend/api",
+      "frontend/web"
+    ],
+    "mainDirectories": [
+      "scripts",
+      "tests"
+    ],
+    "gitBranches": {
+      "defaultBranch": "main",
+      "branchingStrategy": null
+    }
+  },
+  "customNotes": [],
+  "directoryMap": {
+    "backend": {
+      "path": "backend",
+      "purpose": null,
+      "fileCount": 0,
+      "lastAccessed": 1773236457784,
+      "keyFiles": []
+    },
+    "data": {
+      "path": "data",
+      "purpose": "Data files",
+      "fileCount": 1,
+      "lastAccessed": 1773236457785,
+      "keyFiles": []
+    },
+    "frontend": {
+      "path": "frontend",
+      "purpose": null,
+      "fileCount": 0,
+      "lastAccessed": 1773236457789,
+      "keyFiles": []
+    },
+    "scripts": {
+      "path": "scripts",
+      "purpose": "Build/utility scripts",
+      "fileCount": 10,
+      "lastAccessed": 1773236457790,
+      "keyFiles": [
+        "check-schema-drift.sh",
+        "ci-test.sh",
+        "deploy-frontend.sh",
+        "eval-rag.d.ts",
+        "eval-rag.d.ts.map"
+      ]
+    },
+    "services": {
+      "path": "services",
+      "purpose": "Business logic services",
+      "fileCount": 0,
+      "lastAccessed": 1773236457790,
+      "keyFiles": []
+    },
+    "tests": {
+      "path": "tests",
+      "purpose": "Test files",
+      "fileCount": 0,
+      "lastAccessed": 1773236457790,
+      "keyFiles": []
+    },
+    "backend/api": {
+      "path": "backend/api",
+      "purpose": "API routes",
+      "fileCount": 5,
+      "lastAccessed": 1773236457790,
+      "keyFiles": [
+        "AGENTS.md",
+        "bunfig.toml",
+        "jest.config.js"
+      ]
+    }
+  },
+  "hotPaths": [
+    {
+      "path": "backend/api/src/server.ts",
+      "accessCount": 9,
+      "lastAccessed": 1773239342690,
+      "type": "file"
+    },
+    {
+      "path": "",
+      "accessCount": 9,
+      "lastAccessed": 1773239464804,
+      "type": "directory"
+    },
+    {
+      "path": "backend/api/src/routes/setup.ts",
+      "accessCount": 9,
+      "lastAccessed": 1773239475601,
+      "type": "file"
+    },
+    {
+      "path": "frontend/web/public/js/spa-router.js",
+      "accessCount": 8,
+      "lastAccessed": 1773239406504,
+      "type": "file"
+    },
+    {
+      "path": "package.json",
+      "accessCount": 7,
+      "lastAccessed": 1773238176701,
+      "type": "file"
+    },
+    {
+      "path": "frontend/web/public/js/modules/pages/research.js",
+      "accessCount": 7,
+      "lastAccessed": 1773239370269,
+      "type": "file"
+    },
+    {
+      "path": "frontend/web/AGENTS.md",
+      "accessCount": 4,
+      "lastAccessed": 1773237642303,
+      "type": "file"
+    },
+    {
+      "path": "backend/api/AGENTS.md",
+      "accessCount": 4,
+      "lastAccessed": 1773237713867,
+      "type": "file"
+    },
+    {
+      "path": "backend/api/src/routes/index.ts",
+      "accessCount": 4,
+      "lastAccessed": 1773239446159,
+      "type": "file"
+    },
+    {
+      "path": "jest.config.js",
+      "accessCount": 3,
+      "lastAccessed": 1773238164297,
+      "type": "file"
+    },
+    {
+      "path": "frontend/web/public/js/modules",
+      "accessCount": 3,
+      "lastAccessed": 1773239190115,
+      "type": "directory"
+    },
+    {
+      "path": "AGENTS.md",
+      "accessCount": 2,
+      "lastAccessed": 1773237371950,
+      "type": "file"
+    },
+    {
+      "path": "backend/api/src/routes",
+      "accessCount": 2,
+      "lastAccessed": 1773237656074,
+      "type": "directory"
+    },
+    {
+      "path": "scripts/run-migrations.ts",
+      "accessCount": 2,
+      "lastAccessed": 1773238112669,
+      "type": "file"
+    },
+    {
+      "path": "backend/api/src/data/migrations/runner.ts",
+      "accessCount": 2,
+      "lastAccessed": 1773238113579,
+      "type": "file"
+    },
+    {
+      "path": "backend/api/src/chat/AGENTS.md",
+      "accessCount": 2,
+      "lastAccessed": 1773239602332,
+      "type": "file"
+    },
+    {
+      "path": "README.md",
+      "accessCount": 1,
+      "lastAccessed": 1773237328564,
+      "type": "file"
+    },
+    {
+      "path": "backend/api/src/services/ChatService.ts",
+      "accessCount": 1,
+      "lastAccessed": 1773237633406,
+      "type": "file"
+    },
+    {
+      "path": "backend/AGENTS.md",
+      "accessCount": 1,
+      "lastAccessed": 1773237649978,
+      "type": "file"
+    },
+    {
+      "path": "frontend/AGENTS.md",
+      "accessCount": 1,
+      "lastAccessed": 1773237652251,
+      "type": "file"
+    },
+    {
+      "path": "backend/api/src/services",
+      "accessCount": 1,
+      "lastAccessed": 1773237657005,
+      "type": "directory"
+    },
+    {
+      "path": "backend/api/src/chat",
+      "accessCount": 1,
+      "lastAccessed": 1773237657751,
+      "type": "directory"
+    },
+    {
+      "path": "scripts/AGENTS.md",
+      "accessCount": 1,
+      "lastAccessed": 1773237668642,
+      "type": "file"
+    },
+    {
+      "path": "services/AGENTS.md",
+      "accessCount": 1,
+      "lastAccessed": 1773237671283,
+      "type": "file"
+    },
+    {
+      "path": "services/database/AGENTS.md",
+      "accessCount": 1,
+      "lastAccessed": 1773237688354,
+      "type": "file"
+    },
+    {
+      "path": "tests/AGENTS.md",
+      "accessCount": 1,
+      "lastAccessed": 1773237690919,
+      "type": "file"
+    },
+    {
+      "path": "tests/e2e/AGENTS.md",
+      "accessCount": 1,
+      "lastAccessed": 1773237700664,
+      "type": "file"
+    },
+    {
+      "path": "frontend/web/public/AGENTS.md",
+      "accessCount": 1,
+      "lastAccessed": 1773237730847,
+      "type": "file"
+    },
+    {
+      "path": "backend/api/src/AGENTS.md",
+      "accessCount": 1,
+      "lastAccessed": 1773237745050,
+      "type": "file"
+    },
+    {
+      "path": "frontend/web/public/css/AGENTS.md",
+      "accessCount": 1,
+      "lastAccessed": 1773237748171,
+      "type": "file"
+    },
+    {
+      "path": "frontend/web/public/js/AGENTS.md",
+      "accessCount": 1,
+      "lastAccessed": 1773237762723,
+      "type": "file"
+    },
+    {
+      "path": "backend/api/src/agents/AGENTS.md",
+      "accessCount": 1,
+      "lastAccessed": 1773237767695,
+      "type": "file"
+    },
+    {
+      "path": "frontend/web/public/js/components/AGENTS.md",
+      "accessCount": 1,
+      "lastAccessed": 1773237774766,
+      "type": "file"
+    },
+    {
+      "path": "backend/api/src/auth/AGENTS.md",
+      "accessCount": 1,
+      "lastAccessed": 1773237782674,
+      "type": "file"
+    },
+    {
+      "path": "backend/api/src/cache/AGENTS.md",
+      "accessCount": 1,
+      "lastAccessed": 1773237792385,
+      "type": "file"
+    },
+    {
+      "path": "frontend/web/public/js/modules/AGENTS.md",
+      "accessCount": 1,
+      "lastAccessed": 1773237804807,
+      "type": "file"
+    },
+    {
+      "path": "backend/api/src/cluster/AGENTS.md",
+      "accessCount": 1,
+      "lastAccessed": 1773237822691,
+      "type": "file"
+    },
+    {
+      "path": "frontend/web/public/js/modules/pages/AGENTS.md",
+      "accessCount": 1,
+      "lastAccessed": 1773237829472,
+      "type": "file"
+    },
+    {
+      "path": "frontend/web/public/js/main.js",
+      "accessCount": 1,
+      "lastAccessed": 1773237832651,
+      "type": "file"
+    },
+    {
+      "path": "backend/api/src/commands/AGENTS.md",
+      "accessCount": 1,
+      "lastAccessed": 1773237833496,
+      "type": "file"
+    },
+    {
+      "path": "frontend/web/public/js/modules/state.js",
+      "accessCount": 1,
+      "lastAccessed": 1773237833619,
+      "type": "file"
+    },
+    {
+      "path": "frontend/web/public/js/modules/chat.js",
+      "accessCount": 1,
+      "lastAccessed": 1773237834508,
+      "type": "file"
+    },
+    {
+      "path": "frontend/web/public/js/modules/index.js",
+      "accessCount": 1,
+      "lastAccessed": 1773237834527,
+      "type": "file"
+    },
+    {
+      "path": "frontend/web/scripts/AGENTS.md",
+      "accessCount": 1,
+      "lastAccessed": 1773237837368,
+      "type": "file"
+    },
+    {
+      "path": "backend/api/src/config/AGENTS.md",
+      "accessCount": 1,
+      "lastAccessed": 1773237844833,
+      "type": "file"
+    },
+    {
+      "path": "frontend/web/public/js/nav-items.js",
+      "accessCount": 1,
+      "lastAccessed": 1773237849455,
+      "type": "file"
+    },
+    {
+      "path": "backend/api/src/controllers/AGENTS.md",
+      "accessCount": 1,
+      "lastAccessed": 1773237858038,
+      "type": "file"
+    },
+    {
+      "path": "scripts",
+      "accessCount": 1,
+      "lastAccessed": 1773237858624,
+      "type": "directory"
+    },
+    {
+      "path": "backend/api/src/data/AGENTS.md",
+      "accessCount": 1,
+      "lastAccessed": 1773237875103,
+      "type": "file"
+    },
+    {
+      "path": "backend/api/src/data/repositories/AGENTS.md",
+      "accessCount": 1,
+      "lastAccessed": 1773237885719,
+      "type": "file"
+    }
+  ],
+  "userDirectives": []
+}

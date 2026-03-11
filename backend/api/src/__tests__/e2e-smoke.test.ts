@@ -76,7 +76,7 @@ describe('E2E Smoke Tests - Pipeline Integration', () => {
     });
 
     it('Profile resolver lists available brand models', async () => {
-        const mod = await import('../chat/profile-resolver');
+        const mod = await import('../domains/chat/pipeline/profile-resolver');
         const models = mod.listAvailableModels();
         expect(Array.isArray(models)).toBe(true);
         expect(models.length).toBeGreaterThan(0);
@@ -84,7 +84,7 @@ describe('E2E Smoke Tests - Pipeline Integration', () => {
     });
 
     it('ChatRequestHandler exports processChat methods', async () => {
-        const mod = await import('../chat/request-handler');
+        const mod = await import('../domains/chat/pipeline/request-handler');
         expect(typeof mod.ChatRequestHandler.processChat).toBe('function');
         expect(typeof mod.ChatRequestHandler.resolveUserContextFromRequest).toBe('function');
     });

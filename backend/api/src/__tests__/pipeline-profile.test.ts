@@ -9,7 +9,7 @@ import {
     getProfiles,
     getBrandModelAliases,
     isValidBrandModel,
-} from '../chat/pipeline-profile';
+} from '../domains/chat/pipeline/pipeline-profile';
 
 describe('getProfiles', () => {
     test('7개 브랜드 모델 프로파일 반환', () => {

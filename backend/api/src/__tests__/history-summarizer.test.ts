@@ -12,7 +12,7 @@ jest.mock('../ollama/client', () => ({
     })),
 }));
 
-import { summarizeHistory } from '../chat/history-summarizer';
+import { summarizeHistory } from '../domains/chat/pipeline/history-summarizer';
 import { HISTORY_SUMMARIZER } from '../config/runtime-limits';
 import { createClient } from '../ollama/client';
 

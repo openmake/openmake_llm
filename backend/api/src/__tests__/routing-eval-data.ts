@@ -7,7 +7,7 @@
  * @module __tests__/routing-eval-data
  */
 
-import type { QueryType } from '../chat/model-selector-types';
+import type { QueryType } from '../domains/chat/pipeline/model-selector-types';
 
 export interface EvalCase {
     query: string;

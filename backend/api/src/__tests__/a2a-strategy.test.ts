@@ -76,8 +76,8 @@ jest.mock('../chat/language-policy', () => ({
 // Imports (after mocks)
 // ============================================
 
-import { A2AStrategy } from '../services/chat-strategies/a2a-strategy';
-import type { A2AStrategyContext } from '../services/chat-strategies/types';
+import { A2AStrategy } from '../domains/chat/strategies/a2a-strategy';
+import type { A2AStrategyContext } from '../domains/chat/strategies/types';
 import type { ChatMessage, ModelOptions } from '../ollama/types';
 
 // ============================================

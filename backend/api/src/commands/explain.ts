@@ -15,7 +15,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import chalk from 'chalk';
 import { OllamaClient } from '../ollama/client';
-import { getSystemPrompt } from '../chat/prompt';
+import { getSystemPrompt } from '../domains/chat/pipeline/prompt';
 import { createSpinner } from '../ui/spinner';
 import { detectLanguage } from '../ui/highlight';
 

@@ -18,12 +18,12 @@
  * @module i18n
  */
 
-import type { PromptLocaleCode } from '../chat/language-policy';
+import type { PromptLocaleCode } from '../domains/chat/pipeline/language-policy';
 
 // ============================================================
 // Re-export PromptLocaleCode for convenience
 // ============================================================
-export type { PromptLocaleCode } from '../chat/language-policy';
+export type { PromptLocaleCode } from '../domains/chat/pipeline/language-policy';
 
 // ============================================================
 // Locale Content Map Type

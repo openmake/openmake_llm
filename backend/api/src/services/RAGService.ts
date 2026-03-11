@@ -15,7 +15,7 @@ import { VectorRepository, type VectorSearchResult, type VectorEmbeddingInput } 
 import { getEmbeddingService } from './EmbeddingService';
 import { chunkDocument, type TextChunk, type ChunkOptions } from '../documents/chunker';
 import { RAG_CONFIG } from '../config/runtime-limits';
-import type { RAGContext, RAGDocument } from '../chat/context-types';
+import type { RAGContext, RAGDocument } from '../domains/chat/pipeline/context-types';
 import { getReranker } from './Reranker';
 
 const logger = createLogger('RAGService');

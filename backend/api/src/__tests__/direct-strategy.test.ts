@@ -35,8 +35,8 @@ jest.mock('../utils/logger', () => ({
 // Imports
 // ============================================
 
-import { DirectStrategy } from '../services/chat-strategies/direct-strategy';
-import type { DirectStrategyContext } from '../services/chat-strategies/types';
+import { DirectStrategy } from '../domains/chat/strategies/direct-strategy';
+import type { DirectStrategyContext } from '../domains/chat/strategies/types';
 import type { OllamaClient } from '../ollama/client';
 import type { ToolDefinition, ToolCall, ChatMessage } from '../ollama/types';
 

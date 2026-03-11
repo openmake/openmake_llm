@@ -6,8 +6,8 @@ import {
     applyDomainEngineOverride,
     resolveDomainEngine,
     type DomainKey,
-} from '../chat/domain-router';
-import type { QueryType } from '../chat/model-selector-types';
+} from '../domains/chat/pipeline/domain-router';
+import type { QueryType } from '../domains/chat/pipeline/model-selector-types';
 
 // getConfig 모킹
 jest.mock('../config/env', () => ({

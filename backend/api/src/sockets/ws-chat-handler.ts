@@ -6,14 +6,14 @@
 import { WebSocket } from 'ws';
 import * as crypto from 'crypto';
 import { ClusterManager } from '../cluster/manager';
-import { selectOptimalModel } from '../chat/model-selector';
-import { ChatRequestHandler, ChatRequestError } from '../chat/request-handler';
+import { selectOptimalModel } from '../domains/chat/pipeline/model-selector';
+import { ChatRequestHandler, ChatRequestError } from '../domains/chat/pipeline/request-handler';
 import { QuotaExceededError } from '../utils/errors/quota-exceeded.error';
 import { KeyExhaustionError } from '../utils/errors/key-exhaustion.error';
 import { checkChatRateLimit } from '../middlewares/chat-rate-limiter';
 import { createLogger } from '../utils/logger';
 import { WSMessage, ExtendedWebSocket } from './ws-types';
-import { detectLanguage, type SupportedLanguageCode } from '../chat/language-policy';
+import { detectLanguage, type SupportedLanguageCode } from '../domains/chat/pipeline/language-policy';
 import { uploadedDocuments } from '../documents/store';
 
 // 다국어 시사 키워드 맵

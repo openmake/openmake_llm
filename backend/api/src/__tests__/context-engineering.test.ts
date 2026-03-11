@@ -14,7 +14,7 @@ import {
     type OutputFormat,
     type PromptMetadata,
     type RAGContext
-} from '../chat/context-engineering';
+} from '../domains/chat/pipeline/context-engineering';
 
 // ============================================================
 // 1. xmlTag() Tests

@@ -7,7 +7,7 @@
  * Bun에서 jest.mock이 파일 간 누출될 수 있으므로
  * model-selector.test.ts와 분리합니다.
  */
-import { selectBrandProfileForAutoRouting } from '../chat/model-selector';
+import { selectBrandProfileForAutoRouting } from '../domains/chat/pipeline/model-selector';
 
 // getConfig를 economy 티어로 모킹
 jest.mock('../config/env', () => ({

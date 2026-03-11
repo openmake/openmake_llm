@@ -3,7 +3,7 @@
  * escapeXml() 함수 — XML 특수 문자 이스케이프 및 프롬프트 인젝션 방어
  */
 
-import { escapeXml } from '../chat/xml-escape';
+import { escapeXml } from '../domains/chat/pipeline/xml-escape';
 
 describe('escapeXml', () => {
     describe('개별 특수문자 이스케이프', () => {

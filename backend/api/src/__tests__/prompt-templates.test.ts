@@ -3,8 +3,8 @@
  * detectPromptType() 가중치 스코어링 + PromptCache TTL/LRU + SYSTEM_PROMPTS 구조 검증
  */
 
-import { detectPromptType, PromptCache, SYSTEM_PROMPTS } from '../chat/prompt-templates';
-import type { PromptType } from '../chat/prompt-templates';
+import { detectPromptType, PromptCache, SYSTEM_PROMPTS } from '../domains/chat/pipeline/prompt-templates';
+import type { PromptType } from '../domains/chat/pipeline/prompt-templates';
 
 // ============================================================
 // SYSTEM_PROMPTS 구조 검증

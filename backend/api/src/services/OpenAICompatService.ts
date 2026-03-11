@@ -1,5 +1,5 @@
 import { randomBytes } from 'crypto';
-import { listAvailableModels } from '../chat/profile-resolver';
+import { listAvailableModels } from '../domains/chat/pipeline/profile-resolver';
 
 export interface OpenAIMessage {
     role: 'system' | 'user' | 'assistant' | 'tool';

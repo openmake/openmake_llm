@@ -15,7 +15,7 @@
 import { Router, Request, Response } from 'express';
 import { success } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
-import { getProfiles } from '../chat/pipeline-profile';
+import { getProfiles } from '../domains/chat/pipeline/pipeline-profile';
 import { createLogger } from '../utils/logger';
 import { DEFAULT_AUTO_MODEL } from '../config/constants';
 

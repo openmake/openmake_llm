@@ -17,7 +17,7 @@ import {
     resolveProfile,
     buildExecutionPlan,
     listAvailableModels,
-} from '../chat/profile-resolver';
+} from '../domains/chat/pipeline/profile-resolver';
 
 const BRAND_MODELS = [
     'openmake_llm',

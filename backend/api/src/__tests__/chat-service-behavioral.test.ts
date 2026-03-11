@@ -6,7 +6,7 @@ import type {
     WebSearchResult,
     ChatResponseMeta,
     ChatHistoryMessage,
-} from '../services/ChatService';
+} from '../domains/chat/service';
 
 /**
  * UserTier type - mirrors the actual type from user-manager

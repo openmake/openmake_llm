@@ -32,7 +32,7 @@ import { sanitizePromptInput } from '../utils/input-sanitizer';
 import type { DiscussionConfig, DiscussionProgress, AgentOpinion, DiscussionResult } from './discussion-types';
 import { createContextBuilder } from './discussion-context';
 import { createLogger } from '../utils/logger';
-import { resolvePromptLocale } from '../chat/language-policy';
+import { resolvePromptLocale } from '../domains/chat/pipeline/language-policy';
 import { parallelBatch } from '../utils/graph-engine';
 import {
     DISCUSSION_SYSTEM_PROMPTS,

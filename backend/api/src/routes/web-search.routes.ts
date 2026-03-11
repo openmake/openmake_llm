@@ -23,7 +23,7 @@ import { getConfig } from '../config';
 import { success, serviceUnavailable } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
 import { createLogger } from '../utils/logger';
-import { buildExecutionPlan } from '../chat/profile-resolver';
+import { buildExecutionPlan } from '../domains/chat/pipeline/profile-resolver';
 import { requireAuth } from '../auth';
 import { validate } from '../middlewares/validation';
 import { webSearchSchema } from '../schemas/web-search.schema';
