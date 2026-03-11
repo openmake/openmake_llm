@@ -74,3 +74,4 @@ backend/api/.ollama-cluster.json
 # Screenshots (may contain personal info)
 *.png
 !frontend/web/public/**/*.png
+.omc/

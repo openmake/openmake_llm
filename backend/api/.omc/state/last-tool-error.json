@@ -1,7 +1,0 @@
-{
-  "tool_name": "Bash",
-  "tool_input_preview": "{\"command\":\"cd /Users/tom/projects/development/openmake_llm && omc team api transition-task-status --input '{\\\"team_name\\\":\\\"openmake-llm-users-tom-project\\\",\\\"task_id\\\":\\\"2\\\",\\\"from\\\":\\\"in_progress\\\"...",
-  "error": "Exit code 1\n{\"schema_version\":\"1.0\",\"timestamp\":\"2026-03-11T14:37:19.332Z\",\"command\":\"omc team api transition-task-status\",\"ok\":false,\"operation\":\"transition-task-status\",\"error\":{\"code\":\"operation_failed\",\"message\":\"ENOENT: no such file or directory, mkdir '/Users/tom/projects/development/openmake_llm/'/Users/tom/projects/development/openmake_llm/.omc/state/team/openmake-llm-users-tom-project/tasks/.lock-2'\"}}",
-  "timestamp": "2026-03-11T14:37:19.430Z",
-  "retry_count": 3
-}

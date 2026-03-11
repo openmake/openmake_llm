@@ -1,7 +1,0 @@
-{
-  "tool_name": "Bash",
-  "tool_input_preview": "{\"command\":\"cd /Users/tom/projects/development/openmake_llm/backend/api && npx tsc --noEmit 2>&1\",\"timeout\":120000,\"description\":\"TypeScript build check after fix\"}",
-  "error": "Exit code 2\nsrc/routes/web-search.routes.ts(131,1): error TS1005: '}' expected.",
-  "timestamp": "2026-03-11T14:27:17.099Z",
-  "retry_count": 2
-}
