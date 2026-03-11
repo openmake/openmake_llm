@@ -264,13 +264,65 @@ function renderMarkdown(element, text) {
                 breaks: true,
                 gfm: true
             });
-            element.innerHTML = window.purifyHTML(marked.parse(text));
+
+            // KaTeX: 수식 표현식을 HTML로 변환 (marked 전에 처리)
+            let processed = text;
+            if (typeof katex !== 'undefined') {
+                // 블록 수식: $$...$$ (block math)
+                processed = processed.replace(/\$\$([\s\S]+?)\$\$/g, (_match, expr) => {
+                    try {
+                        return katex.renderToString(expr.trim(), { displayMode: true, throwOnError: false });
+                    } catch { return `<pre class="katex-error">${expr}</pre>`; }
+                });
+                // 인라인 수식: $...$ (inline math, 코드 블록 내부의 $ 제외)
+                processed = processed.replace(/(?<!\$)\$([^\$\n]+?)\$(?!\$)/g, (_match, expr) => {
+                    try {
+                        return katex.renderToString(expr.trim(), { displayMode: false, throwOnError: false });
+                    } catch { return `<code class="katex-error">${expr}</code>`; }
+                });
+            }
+
+            element.innerHTML = window.purifyHTML(marked.parse(processed));
             element.classList.add('markdown-body');
 
-            // 코드 하이라이팅
+            // 코드 하이라이팅 (Mermaid 블록 제외)
             if (typeof hljs !== 'undefined') {
                 element.querySelectorAll('pre code').forEach((block) => {
-                    hljs.highlightElement(block);
+                    if (!block.classList.contains('language-mermaid')) {
+                        hljs.highlightElement(block);
+                    }
+                });
+            }
+
+            // Mermaid: 다이어그램 렌더링
+            if (typeof mermaid !== 'undefined') {
+                // 초기화 (한 번만)
+                if (!window._mermaidInitialized) {
+                    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+                    mermaid.initialize({
+                        startOnLoad: false,
+                        theme: isDark ? 'dark' : 'default',
+                        securityLevel: 'strict',
+                    });
+                    window._mermaidInitialized = true;
+                }
+
+                element.querySelectorAll('pre code.language-mermaid').forEach(async (block) => {
+                    const pre = block.parentElement;
+                    const container = document.createElement('div');
+                    container.className = 'mermaid-container';
+                    const code = block.textContent;
+                    try {
+                        const id = `mermaid-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+                        const { svg } = await mermaid.render(id, code);
+                        container.innerHTML = svg;
+                    } catch (e) {
+                        console.warn('Mermaid render error:', e);
+                        container.textContent = code;
+                    }
+                    if (pre && pre.parentElement) {
+                        pre.replaceWith(container);
+                    }
                 });
             }
         } catch (e) {

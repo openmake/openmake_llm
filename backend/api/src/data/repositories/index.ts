@@ -9,3 +9,4 @@ export { ExternalRepository } from './external-repository';
 export { FeedbackRepository } from './feedback-repository';
 export { SkillRepository } from './skill-repository';
 export { VectorRepository } from './vector-repository';
+export { KBRepository } from './kb-repository';

@@ -862,3 +862,89 @@
     -webkit-box-orient: vertical;
     overflow: hidden;
 }
+
+/* ==========================================
+   문서 업로드 진행바
+   ========================================== */
+
+.document-progress {
+    display: flex;
+    align-items: center;
+    padding: var(--space-3) var(--space-4);
+    background: var(--bg-card);
+    border: var(--border-width) solid var(--border-light);
+    border-radius: var(--radius-md);
+    margin-bottom: var(--space-3);
+    box-shadow: var(--shadow-sm);
+    animation: fadeIn 0.2s ease-out;
+    transition: opacity 0.3s ease;
+}
+
+.document-progress.hiding {
+    opacity: 0;
+}
+
+.progress-content {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    width: 100%;
+}
+
+.progress-icon {
+    font-size: var(--font-size-lg);
+    flex-shrink: 0;
+    line-height: 1;
+}
+
+.progress-icon.animate {
+    animation: spin 1.5s linear infinite;
+}
+
+.progress-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1;
+    min-width: 0;
+}
+
+.progress-filename {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.progress-message {
+    font-size: var(--font-size-xs);
+    color: var(--text-muted);
+}
+
+.document-progress .progress-bar {
+    height: 6px;
+    background: var(--bg-secondary);
+    border-radius: var(--radius-full);
+    overflow: hidden;
+    border: 1px solid var(--border-light);
+    min-width: 80px;
+    max-width: 120px;
+    flex-shrink: 0;
+}
+
+.document-progress .progress-fill {
+    height: 100%;
+    background: var(--accent-primary);
+    border-radius: var(--radius-full);
+    transition: width 0.3s ease;
+}
+
+.document-progress .progress-fill.complete {
+    background: var(--success);
+}
+
+.document-progress .progress-fill.error {
+    background: var(--danger);
+}

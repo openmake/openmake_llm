@@ -12,23 +12,27 @@ jest.mock('../schemas/security.schema', () => ({
 }));
 
 // fs mock — validateFileUploadSecurity 에서 파일 시그니처 검증 시 사용
-jest.mock('fs', () => {
-    const actual = jest.requireActual<typeof import('fs')>('fs');
-    return {
-        ...actual,
-        openSync: jest.fn().mockReturnValue(1),
-        readSync: jest.fn((fd, buffer: Buffer) => {
-            // PDF 시그니처: %PDF-
-            buffer[0] = 0x25; // %
-            buffer[1] = 0x50; // P
-            buffer[2] = 0x44; // D
-            buffer[3] = 0x46; // F
-            buffer[4] = 0x2D; // -
-            return 5;
-        }),
-        closeSync: jest.fn()
-    };
+// Bun은 jest.requireActual을 지원하지 않으므로 필요한 함수만 직접 mock
+// 모듈 레벨에서 mock 참조를 보관하여 테스트 내에서 mockImplementationOnce 가능
+const mockOpenSync = jest.fn().mockReturnValue(1);
+const mockReadSync = jest.fn((_fd: number, buffer: Buffer) => {
+    // PDF 시그니처: %PDF-
+    buffer[0] = 0x25; // %
+    buffer[1] = 0x50; // P
+    buffer[2] = 0x44; // D
+    buffer[3] = 0x46; // F
+    buffer[4] = 0x2D; // -
+    return 5;
 });
+const mockCloseSync = jest.fn();
+
+jest.mock('fs', () => ({
+    existsSync: () => true,
+    readFileSync: () => '',
+    openSync: mockOpenSync,
+    readSync: mockReadSync,
+    closeSync: mockCloseSync,
+}));
 
 import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
@@ -41,6 +45,7 @@ import {
     validateFileUploadSecurity
 } from '../middlewares/validation';
 import { detectMaliciousPatterns } from '../schemas/security.schema';
+const mockDetectMaliciousPatterns = detectMaliciousPatterns as jest.MockedFunction<typeof detectMaliciousPatterns>;
 import { FILE_LIMITS } from '../config/constants';
 
 // ============================================================
@@ -200,11 +205,11 @@ describe('validateWithSecurity()', () => {
 
     beforeEach(() => {
         jest.clearAllMocks();
-        jest.mocked(detectMaliciousPatterns).mockReturnValue({ detected: false, reasons: [] });
+        mockDetectMaliciousPatterns.mockReturnValue({ detected: false, reasons: [] });
     });
 
     test('detectMaliciousInput=true + 악성 패턴 감지 → 400', () => {
-        jest.mocked(detectMaliciousPatterns).mockReturnValue({
+        mockDetectMaliciousPatterns.mockReturnValue({
             detected: true,
             reasons: ['SQL injection detected']
         });
@@ -511,7 +516,7 @@ describe('validateFileUploadSecurity()', () => {
     });
 
     test('파일명에 악성 패턴 감지 → 400', () => {
-        jest.mocked(detectMaliciousPatterns).mockReturnValueOnce({
+        mockDetectMaliciousPatterns.mockReturnValueOnce({
             detected: true,
             reasons: ['malicious filename']
         });
@@ -547,8 +552,7 @@ describe('validateFileUploadSecurity()', () => {
 
     test('PNG 파일 → magic number 검증 통과', () => {
         // PNG 시그니처 mock: 0x89 50 4E 47
-        const fs = require('fs') as { readSync: jest.Mock };
-        fs.readSync.mockImplementationOnce((_fd: number, buffer: Buffer) => {
+        mockReadSync.mockImplementationOnce((_fd: number, buffer: Buffer) => {
             buffer[0] = 0x89;
             buffer[1] = 0x50;
             buffer[2] = 0x4E;
@@ -569,8 +573,7 @@ describe('validateFileUploadSecurity()', () => {
     });
 
     test('잘못된 PDF magic number → 400', () => {
-        const fs = require('fs') as { readSync: jest.Mock };
-        fs.readSync.mockImplementationOnce((_fd: number, buffer: Buffer) => {
+        mockReadSync.mockImplementationOnce((_fd: number, buffer: Buffer) => {
             // PDF가 아닌 바이트
             buffer[0] = 0x00;
             buffer[1] = 0x00;
@@ -578,7 +581,6 @@ describe('validateFileUploadSecurity()', () => {
             buffer[3] = 0x00;
             return 4;
         });
-
         const middleware = validateFileUploadSecurity();
         const req = makeMockReq({
             file: makeFile({ originalname: 'fake.pdf', mimetype: 'application/pdf' })

@@ -37,6 +37,7 @@ import researchRouter from '../research.routes';
 import externalRouter from '../external.routes';
 import { pushRouter } from '../push.routes';
 import apiKeysRouter from '../api-keys.routes';
+import openaiCompatRouter from '../openai-compat.routes';
 import { listAvailableModels } from '../../chat/profile-resolver';
 import { success, unauthorized } from '../../utils/api-response';
 import { requireApiKey } from '../../middlewares/api-key-auth';
@@ -120,6 +121,7 @@ v1Router.get('/usage/daily', requireApiKey, asyncHandler(async (req, res) => {
 }));
 
 // Mount all routes under v1
+v1Router.use('/', openaiCompatRouter);
 v1Router.use('/chat', chatRouter);
 v1Router.use('/agents', agentRouter);
 v1Router.use('/mcp', mcpRouter);
@@ -139,17 +141,20 @@ v1Router.use('/api-keys', apiKeysRouter);
 
 // §9 Brand Model 목록 (외부 API Key 사용자용)
 v1Router.get('/models', asyncHandler(async (_req, res) => {
+    const created = Math.floor(Date.now() / 1000);
     const models = listAvailableModels();
-    res.json(success({
+    res.json({
         object: 'list',
         data: models.map(m => ({
             id: m.id,
             object: 'model',
+            created,
+            owned_by: 'openmake',
             name: m.name,
             description: m.description,
             capabilities: m.capabilities,
         })),
-    }));
+    });
 }));
 
 export default v1Router;

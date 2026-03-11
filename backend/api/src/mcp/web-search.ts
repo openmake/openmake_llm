@@ -33,6 +33,7 @@ import { getConfig } from '../config/env';
 import { createLogger } from '../utils/logger';
 import { CAPACITY, TRUNCATION } from '../config/runtime-limits';
 import { getSearchLocale } from '../i18n/search-locale';
+import { safeFetch } from '../security/ssrf-guard';
 
 /** Google Custom Search API 키 */
 const GOOGLE_API_KEY = getConfig().googleApiKey;
@@ -725,7 +726,7 @@ export const extractWebpageTool: MCPToolDefinition = {
     handler: async (args): Promise<MCPToolResult> => {
         const url = args.url as string;
         try {
-            const response = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+            const response = await safeFetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
             const html = await response.text();
             const content = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().substring(0, TRUNCATION.WEB_CONTENT_MAX);
             return { content: [{ type: 'text', text: content }] };

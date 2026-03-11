@@ -17,16 +17,35 @@
 import winston from 'winston';
 import path from 'path';
 import { getConfig } from '../config/env';
+import { getRequestId } from './request-context';
 
 const logDir = path.join(__dirname, '../../logs');
 
-// 커스텀 포맷
+// trace_id 추출 헬퍼 (OTel 모듈 lazy 로딩)
+let _getTraceId: (() => string | undefined) | null = null;
+let _traceIdChecked = false;
+function getTraceIdSafe(): string | undefined {
+    if (!_traceIdChecked) {
+        _traceIdChecked = true;
+        try {
+            const otel = require('../observability/otel') as { getCurrentTraceId?: () => string | undefined };
+            _getTraceId = typeof otel.getCurrentTraceId === 'function' ? otel.getCurrentTraceId : null;
+        } catch { /* OTel not available */ }
+    }
+    return _getTraceId ? _getTraceId() : undefined;
+}
+
+// 커스텀 포맷 (request_id + trace_id 포함)
 const customFormat = winston.format.combine(
     winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
     winston.format.errors({ stack: true }),
     winston.format.printf(({ level, message, timestamp, ...meta }) => {
+        const reqId = getRequestId();
+        const traceId = getTraceIdSafe();
+        const reqStr = reqId ? ` req=${reqId}` : '';
+        const traceStr = traceId ? ` trace_id=${traceId}` : '';
         const metaStr = Object.keys(meta).length ? JSON.stringify(meta) : '';
-        return `[${timestamp}] ${level.toUpperCase()}: ${message} ${metaStr}`;
+        return `[${timestamp}] ${level.toUpperCase()}:${reqStr}${traceStr} ${message} ${metaStr}`;
     })
 );
 

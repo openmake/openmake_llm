@@ -16,6 +16,7 @@ import * as fs from 'fs';
 import v1Router from './v1';
 import { tokenMonitoringRouter } from './token-monitoring.routes';
 import { default as chatRouter, setClusterManager as setChatCluster } from './chat.routes';
+import { setClusterManager as setOpenAICompatCluster } from './openai-compat.routes';
 import { default as documentsRouter, setDependencies as setDocumentsDeps } from './documents.routes';
 import ragRouter from './rag.routes';
 import { default as webSearchRouter, setClusterManager as setWebSearchCluster } from './web-search.routes';
@@ -37,7 +38,8 @@ import {
     modelRouter,
     developerDocsRouter,
     chatFeedbackRouter,
-    apiKeysRouter
+    apiKeysRouter,
+    kbRouter
 } from './index';
 import { setupSwaggerRoutes } from '../swagger';
 import { createClusterController, createHealthController, createAuthController, createAdminController, createSessionController } from '../controllers';
@@ -131,6 +133,7 @@ export function setupApiRoutes(
 
     // 클러스터 의존성 주입
     setChatCluster(cluster);
+    setOpenAICompatCluster(cluster);
     setDocumentsDeps(cluster, broadcast);
     setWebSearchCluster(cluster);
     setNodesCluster(cluster);
@@ -154,6 +157,7 @@ export function setupApiRoutes(
     app.use('/api/docs', developerDocsRouter);
     app.use('/api/api-keys', apiKeysRouter);
     app.use('/api/rag', ragRouter);
+    app.use('/api/kb', kbRouter);
 
     // Swagger 설정
     setupSwaggerRoutes(app);

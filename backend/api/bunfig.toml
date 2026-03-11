@@ -1,4 +1,4 @@
 [test]
 # dist/ 디렉토리의 컴파일된 JS 테스트 제외 (src/ TypeScript 테스트만 실행)
 root = "./src"
-preload = ["./src/test-preload.ts"]
+# preload = ["./src/test-preload.ts"]  # 파일 삭제됨 — 개별 테스트에서 환경 관리
