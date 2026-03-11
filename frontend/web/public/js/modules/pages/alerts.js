@@ -9,7 +9,6 @@
  * @module pages/alerts
  */
 'use strict';
-    window.PageModules = window.PageModules || {};
     let _intervals = [];
     let _timeouts = [];
 
@@ -109,5 +108,4 @@
     }
 
     const pageModule = { getHTML, init, cleanup };
-    window.PageModules['alerts'] = pageModule;
     export default pageModule;

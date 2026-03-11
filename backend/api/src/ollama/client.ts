@@ -51,8 +51,8 @@ import { OLLAMA_CLOUD_HOST } from '../config/constants';
 import { createLogger } from '../utils/logger';
 import { getApiKeyManager, ApiKeyManager } from './api-key-manager';
 import { getApiUsageTracker } from './api-usage-tracker';
-import { QuotaExceededError } from '../errors/quota-exceeded.error';
-import { KeyExhaustionError } from '../errors/key-exhaustion.error';
+import { QuotaExceededError } from '../utils/errors/quota-exceeded.error';
+import { KeyExhaustionError } from '../utils/errors/key-exhaustion.error';
 import { runAgentLoop, AgentLoopResult } from './agent-loop';
 
 const logger = createLogger('OllamaClient');

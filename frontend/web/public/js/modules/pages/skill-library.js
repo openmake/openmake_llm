@@ -4,8 +4,6 @@
  * =========================================================================
  */
 'use strict';
-    window.PageModules = window.PageModules || {};
-
     /** 카테고리 ID → 한국어 레이블 매핑 */
     const CATEGORY_LABELS = {
         general: '일반',
@@ -146,7 +144,7 @@
 </div>`;
     }
 
-    window.PageModules['skill-library'] = {
+    const pageModule = {
         getHTML: function () {
             return getPageHTML();
         },
@@ -565,5 +563,4 @@
         }
     };
 
-const pageModule = window.PageModules['skill-library'];
 export default pageModule;

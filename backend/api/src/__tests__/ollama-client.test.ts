@@ -83,7 +83,7 @@ jest.mock('../ollama/agent-loop', () => ({
 // ============================================
 
 import { OllamaClient, createClient } from '../ollama/client';
-import { QuotaExceededError } from '../errors/quota-exceeded.error';
+import { QuotaExceededError } from '../utils/errors/quota-exceeded.error';
 
 // ============================================
 // Tests

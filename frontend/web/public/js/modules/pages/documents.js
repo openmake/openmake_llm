@@ -8,8 +8,6 @@
  * @module pages/documents
  */
 'use strict';
-    window.PageModules = window.PageModules || {};
-
     // Module-scoped state
     let _intervals = [];
     var _listeners = [];
@@ -274,7 +272,7 @@
         });
     }
 
-    window.PageModules['documents'] = {
+    const pageModule = {
         getHTML: function() {
             return '<div class="page-documents">' +
                 '<style data-spa-style="documents">' +
@@ -457,5 +455,4 @@
         }
     };
 
-const { getHTML, init, cleanup } = window.PageModules['documents'];
-export default { getHTML, init, cleanup };
+export default pageModule;

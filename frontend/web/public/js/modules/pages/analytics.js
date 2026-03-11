@@ -9,7 +9,6 @@
  * @module pages/analytics
  */
 'use strict';
-    window.PageModules = window.PageModules || {};
     let _intervals = [];
     let _timeouts = [];
 
@@ -179,5 +178,4 @@
     }
 
     const pageModule = { getHTML, init, cleanup };
-    window.PageModules['analytics'] = pageModule;
     export default pageModule;

@@ -9,7 +9,6 @@
  * @module pages/api-keys
  */
 'use strict';
-    window.PageModules = window.PageModules || {};
     /** @type {number[]} setInterval ID 배열 (cleanup용) */
     let _intervals = [];
     /** @type {number[]} setTimeout ID 배열 (cleanup용) */
@@ -232,7 +231,7 @@
         '</div>';
 
     // Module Logic
-    window.PageModules['api-keys'] = {
+    const pageModule = {
         getHTML: function() {
             return '<style data-spa-style="api-keys">' + CSS + '</style>' + HTML;
         },
@@ -456,5 +455,4 @@
         }
     }
 
-const { getHTML, init, cleanup } = window.PageModules['api-keys'];
-export default { getHTML, init, cleanup };
+export default pageModule;

@@ -9,8 +9,6 @@
  * @module pages/research
  */
 'use strict';
-    window.PageModules = window.PageModules || {};
-
     // Module-scoped state
     let _intervals = [];
     var _listeners = [];
@@ -155,7 +153,7 @@
         });
     }
 
-    window.PageModules['research'] = {
+    const pageModule = {
         getHTML: function() {
             return '<div class="page-research">' +
                 '<style data-spa-style="research">' +
@@ -289,5 +287,4 @@
         }
     };
 
-const { getHTML, init, cleanup } = window.PageModules['research'];
-export default { getHTML, init, cleanup };
+export default pageModule;

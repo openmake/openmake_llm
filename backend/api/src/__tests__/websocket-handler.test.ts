@@ -6,8 +6,8 @@
 import { EventEmitter } from 'events';
 import { WebSocket, WebSocketServer } from 'ws';
 import { IncomingMessage } from 'http';
-import { QuotaExceededError } from '../errors/quota-exceeded.error';
-import { KeyExhaustionError } from '../errors/key-exhaustion.error';
+import { QuotaExceededError } from '../utils/errors/quota-exceeded.error';
+import { KeyExhaustionError } from '../utils/errors/key-exhaustion.error';
 
 // ─── Mocks ───────────────────────────────────────────────────
 

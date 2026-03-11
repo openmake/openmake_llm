@@ -32,7 +32,7 @@
  * @see cluster/manager.ts - ClusterManager에서 노드별 서킷 브레이커 사용
  */
 
-import { CircuitOpenError } from '../errors/circuit-open.error';
+import { CircuitOpenError } from '../utils/errors/circuit-open.error';
 import { createLogger } from '../utils/logger';
 import { CIRCUIT_BREAKER_DEFAULTS } from '../config/timeouts';
 

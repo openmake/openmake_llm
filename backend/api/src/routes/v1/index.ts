@@ -20,15 +20,15 @@
  */
 import { Router } from 'express';
 
-// Import existing routers
-import chatRouter from '../chat.routes';
+// Import factory routers
+import { createChatRouter } from '../chat.routes';
 import agentRouter from '../agents.routes';
 import { mcpRouter } from '../mcp.routes';
 import usageRouter from '../usage.routes';
-import metricsRouter from '../metrics.routes';
-import documentsRouter from '../documents.routes';
-import webSearchRouter from '../web-search.routes';
-import nodesRouter from '../nodes.routes';
+import { createMetricsRouter } from '../metrics.routes';
+import { createDocumentsRouter } from '../documents.routes';
+import { createWebSearchRouter } from '../web-search.routes';
+import { createNodesRouter } from '../nodes.routes';
 import agentsMonitoringRouter from '../agents-monitoring.routes';
 import { tokenMonitoringRouter } from '../token-monitoring.routes';
 import { memoryRouter } from '../memory.routes';
@@ -37,14 +37,20 @@ import researchRouter from '../research.routes';
 import externalRouter from '../external.routes';
 import { pushRouter } from '../push.routes';
 import apiKeysRouter from '../api-keys.routes';
-import openaiCompatRouter from '../openai-compat.routes';
+import { createOpenAICompatRouter } from '../openai-compat.routes';
 import { listAvailableModels } from '../../chat/profile-resolver';
 import { success, unauthorized } from '../../utils/api-response';
 import { requireApiKey } from '../../middlewares/api-key-auth';
 import { apiKeyRateLimiter, apiKeyTPMLimiter } from '../../middlewares/api-key-limiter';
 import { asyncHandler } from '../../utils/error-handler';
 import { getApiKeyService } from '../../services/ApiKeyService';
+import { ClusterManager } from '../../cluster/manager';
 
+export interface V1RouterDeps {
+    cluster: ClusterManager;
+}
+
+export function createV1Router({ cluster }: V1RouterDeps): Router {
 const v1Router = Router();
 
 // §4 Rate Limit 미들웨어 — API Key 인증 요청에만 동작 (비인증 자동 스킵)
@@ -120,6 +126,14 @@ v1Router.get('/usage/daily', requireApiKey, asyncHandler(async (req, res) => {
     }));
 }));
 
+// Create factory routers with cluster dependency
+const openaiCompatRouter = createOpenAICompatRouter({ cluster });
+const chatRouter = createChatRouter({ cluster });
+const metricsRouter = createMetricsRouter({ cluster });
+const documentsRouter = createDocumentsRouter({ cluster, broadcast: () => {} });
+const webSearchRouter = createWebSearchRouter({ cluster });
+const nodesRouter = createNodesRouter({ cluster });
+
 // Mount all routes under v1
 v1Router.use('/', openaiCompatRouter);
 v1Router.use('/chat', chatRouter);
@@ -157,4 +171,7 @@ v1Router.get('/models', asyncHandler(async (_req, res) => {
     });
 }));
 
-export default v1Router;
+return v1Router;
+}
+
+export default createV1Router;

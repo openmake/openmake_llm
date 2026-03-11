@@ -9,11 +9,10 @@
  * @module pages/memory
  */
 'use strict';
-    window.PageModules = window.PageModules || {};
     let _intervals = [];
     let _timeouts = [];
 
-    window.PageModules['memory'] = {
+    const pageModule = {
         getHTML: function() {
             return '<div class="page-memory">' +
                 '<style data-spa-style="memory">' +
@@ -199,5 +198,4 @@
         }
     };
 
-const { getHTML, init, cleanup } = window.PageModules['memory'];
-export default { getHTML, init, cleanup };
+export default pageModule;

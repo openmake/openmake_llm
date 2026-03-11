@@ -10,11 +10,10 @@
  */
 'use strict';
     var SK = window.STORAGE_KEYS || {};
-    window.PageModules = window.PageModules || {};
     let _intervals = [];
     let _timeouts = [];
 
-    window.PageModules['password-change'] = {
+    const pageModule = {
         getHTML: function () {
             return '<div class="page-password-change">' +
                 '<style data-spa-style="password-change">' +
@@ -155,5 +154,4 @@
         }
     };
 
-const { getHTML, init, cleanup } = window.PageModules['password-change'];
-export default { getHTML, init, cleanup };
+export default pageModule;

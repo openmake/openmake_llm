@@ -4,7 +4,7 @@
  */
 
 import { CircuitBreaker, CircuitBreakerRegistry } from '../cluster/circuit-breaker';
-import { CircuitOpenError } from '../errors/circuit-open.error';
+import { CircuitOpenError } from '../utils/errors/circuit-open.error';
 
 // CircuitBreakerRegistry 싱글톤 격리
 let _registryInstance: CircuitBreakerRegistry | null = null;

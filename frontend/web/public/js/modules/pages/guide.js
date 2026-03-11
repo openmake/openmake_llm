@@ -8,7 +8,6 @@
  * @module pages/guide
  */
 'use strict';
-    window.PageModules = window.PageModules || {};
     /** @type {number[]} setInterval ID 배열 (cleanup용) */
     let _intervals = [];
 
@@ -277,5 +276,4 @@
     }
 
     const pageModule = { getHTML, init, cleanup };
-    window.PageModules['guide'] = pageModule;
     export default pageModule;

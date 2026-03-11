@@ -8,12 +8,15 @@ import {
     OpenAICompatService,
 } from '../services/OpenAICompatService';
 
-const openaiCompatRouter = Router();
-let clusterManager: ClusterManager;
-
-export function setClusterManager(cluster: ClusterManager): void {
-    clusterManager = cluster;
+export interface OpenAICompatRouterDeps {
+    cluster: ClusterManager;
 }
+
+/**
+ * OpenAI 호환 라우터 팩토리 함수
+ */
+export function createOpenAICompatRouter({ cluster }: OpenAICompatRouterDeps): Router {
+    const openaiCompatRouter = Router();
 
 function isRecord(value: unknown): value is Record<string, unknown> {
     return value !== null && typeof value === 'object';
@@ -87,16 +90,16 @@ function buildUserContext(req: Request): ChatUserContext {
     };
 }
 
-function openaiError(res: Response, status: number, message: string): void {
-    res.status(status).json({
-        error: {
-            message,
-            type: 'invalid_request_error',
-        },
-    });
-}
+    function openaiError(res: Response, status: number, message: string): void {
+        res.status(status).json({
+            error: {
+                message,
+                type: 'invalid_request_error',
+            },
+        });
+    }
 
-openaiCompatRouter.post('/chat/completions', asyncHandler(async (req: Request, res: Response) => {
+    openaiCompatRouter.post('/chat/completions', asyncHandler(async (req: Request, res: Response) => {
     const body = req.body as OpenAIChatCompletionRequest;
 
     if (!body?.model || typeof body.model !== 'string') {
@@ -109,7 +112,7 @@ openaiCompatRouter.post('/chat/completions', asyncHandler(async (req: Request, r
         return;
     }
 
-    if (!clusterManager) {
+    if (!cluster) {
         openaiError(res, 503, 'Cluster manager not initialized');
         return;
     }
@@ -149,7 +152,7 @@ openaiCompatRouter.post('/chat/completions', asyncHandler(async (req: Request, r
                 tool_choice: body.tool_choice,
                 userContext,
                 apiKeyId: req.apiKeyId,
-                clusterManager,
+                clusterManager: cluster,
                 abortSignal: abortController.signal,
                 onToken: (token: string) => {
                     if (aborted) {
@@ -206,7 +209,7 @@ openaiCompatRouter.post('/chat/completions', asyncHandler(async (req: Request, r
             tool_choice: body.tool_choice,
             userContext,
             apiKeyId: req.apiKeyId,
-            clusterManager,
+            clusterManager: cluster,
             onToken: () => {
                 // non-streaming endpoint intentionally ignores token events
             },
@@ -239,4 +242,5 @@ openaiCompatRouter.post('/chat/completions', asyncHandler(async (req: Request, r
     }
 }));
 
-export default openaiCompatRouter;
+    return openaiCompatRouter;
+}

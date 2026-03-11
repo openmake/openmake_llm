@@ -11,7 +11,6 @@
 'use strict';
     var AUTO_MODEL = window.DEFAULT_AUTO_MODEL || 'openmake_llm_auto';
     var SK = window.STORAGE_KEYS || {};
-    window.PageModules = window.PageModules || {};
     let _intervals = [];
     let _timeouts = [];
     function esc(s) { var d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
@@ -195,7 +194,7 @@
         '</div>' +
         '<div id="toast" class="toast"></div>';
 
-    window.PageModules['settings'] = {
+    const pageModule = {
         getHTML: function () {
             return '<div class="page-settings">' +
                 HTML +
@@ -575,5 +574,4 @@
         }
     };
 
-const { getHTML, init, cleanup } = window.PageModules['settings'];
-export default { getHTML, init, cleanup };
+export default pageModule;

@@ -31,23 +31,23 @@ import { CAPACITY } from '../config/runtime-limits';
 
 const logger = createLogger('WebSearchRoutes');
 
-const router = Router();
-let clusterManager: ClusterManager;
-
 const envConfig = getConfig();
 
-/**
- * 클러스터 매니저 참조 설정
- */
-export function setClusterManager(cluster: ClusterManager): void {
-    clusterManager = cluster;
+export interface WebSearchRouterDeps {
+    cluster: ClusterManager;
 }
 
 /**
- * POST /api/web-search
- * 웹 검색 API (실제 인터넷 검색 + 사실 검증)
+ * 웹 검색 라우터 팩토리 함수
  */
-router.post('/web-search', requireAuth, validate(webSearchSchema), asyncHandler(async (req: Request, res: Response) => {
+export function createWebSearchRouter({ cluster }: WebSearchRouterDeps): Router {
+    const router = Router();
+
+    /**
+     * POST /api/web-search
+     * 웹 검색 API (실제 인터넷 검색 + 사실 검증)
+     */
+    router.post('/web-search', requireAuth, validate(webSearchSchema), asyncHandler(async (req: Request, res: Response) => {
      const { query, model: requestedModel } = req.body as { query: string; model?: string };
      const model = (!requestedModel || requestedModel === 'default')
          ? envConfig.ollamaDefaultModel
@@ -76,8 +76,8 @@ router.post('/web-search', requireAuth, validate(webSearchSchema), asyncHandler(
           client = createClient({ model: wsEngineModel });
            logger.info(`[WebSearch] Cloud 클라이언트 생성: ${wsEngineModel}`);
       } else {
-          const bestNode = clusterManager.getBestNode(wsEngineModel);
-          client = bestNode ? clusterManager.createScopedClient(bestNode.id, wsEngineModel) : undefined;
+          const bestNode = cluster.getBestNode(wsEngineModel);
+          client = bestNode ? cluster.createScopedClient(bestNode.id, wsEngineModel) : undefined;
       }
 
       if (!client) {
@@ -127,4 +127,5 @@ ${sourcesContext}
       }));
 }));
 
-export default router;
+    return router;
+}

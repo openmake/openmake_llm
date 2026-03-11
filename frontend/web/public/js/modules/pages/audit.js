@@ -10,11 +10,10 @@
  */
 'use strict';
     var SK = window.STORAGE_KEYS || {};
-    window.PageModules = window.PageModules || {};
     let _intervals = [];
     let _timeouts = [];
 
-    window.PageModules['audit'] = {
+    const pageModule = {
         getHTML: function () {
             return '<div class="page-audit">' +
                 '<style data-spa-style="audit">' +
@@ -184,5 +183,4 @@
         }
     };
 
-const { getHTML, init, cleanup } = window.PageModules['audit'];
-export default { getHTML, init, cleanup };
+export default pageModule;

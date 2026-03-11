@@ -33,7 +33,7 @@ import type { DiscussionConfig, DiscussionProgress, AgentOpinion, DiscussionResu
 import { createContextBuilder } from './discussion-context';
 import { createLogger } from '../utils/logger';
 import { resolvePromptLocale } from '../chat/language-policy';
-import { parallelBatch } from '../workflow/graph-engine';
+import { parallelBatch } from '../utils/graph-engine';
 import {
     DISCUSSION_SYSTEM_PROMPTS,
     DISCUSSION_LABELS,

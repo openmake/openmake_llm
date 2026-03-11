@@ -49,7 +49,7 @@ import {
     getResearchMessage
 } from './deep-research-prompts';
 
-import { parallelBatch } from '../workflow/graph-engine';
+import { parallelBatch } from '../utils/graph-engine';
 
 // Re-export types so consumers don't break
 export type { ResearchConfig, ResearchProgress, ResearchResult };

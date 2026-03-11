@@ -25,44 +25,45 @@ import { validate } from '../middlewares/validation';
 import { addClusterNodeSchema } from '../schemas/nodes.schema';
 import { createLogger } from '../utils/logger';
 
-const router = Router();
 const logger = createLogger('NodesRoutes');
 
-// 클러스터 노드 관리는 관리자 전용
-router.use(requireAuth, requireAdmin);
-
-let clusterRef: ClusterManager;
-
-/**
- * 클러스터 매니저 참조 설정
- */
-export function setClusterManager(cluster: ClusterManager): void {
-    clusterRef = cluster;
+export interface NodesRouterDeps {
+    cluster: ClusterManager;
 }
 
 /**
- * 노드 추가
- * POST /api/nodes
+ * 노드 라우터 팩토리 함수
  */
-router.post('/', validate(addClusterNodeSchema), asyncHandler(async (req: Request, res: Response) => {
-    const { host, port, name } = req.body as { host: string; port: number; name?: string };
+export function createNodesRouter({ cluster }: NodesRouterDeps): Router {
+    const router = Router();
 
-     const node = await clusterRef.addNode(host, port, name);
-     if (node) {
-         res.json(success(node));
-     } else {
-         res.status(500).json(internalError('노드 추가 실패'));
-     }
-}));
+    // 클러스터 노드 관리는 관리자 전용
+    router.use(requireAuth, requireAdmin);
 
-/**
- * 노드 제거
- * DELETE /api/nodes/:nodeId
- */
-router.delete('/:nodeId', asyncHandler(async (req: Request, res: Response) => {
-     const { nodeId } = req.params;
-     const deleted = clusterRef.removeNode(decodeURIComponent(nodeId));
-     res.json(success({ deleted }));
- }));
+    /**
+     * 노드 추가
+     * POST /api/nodes
+     */
+    router.post('/', validate(addClusterNodeSchema), asyncHandler(async (req: Request, res: Response) => {
+        const { host, port, name } = req.body as { host: string; port: number; name?: string };
 
-export default router;
+        const node = await cluster.addNode(host, port, name);
+        if (node) {
+            res.json(success(node));
+        } else {
+            res.status(500).json(internalError('노드 추가 실패'));
+        }
+    }));
+
+    /**
+     * 노드 제거
+     * DELETE /api/nodes/:nodeId
+     */
+    router.delete('/:nodeId', asyncHandler(async (req: Request, res: Response) => {
+        const { nodeId } = req.params;
+        const deleted = cluster.removeNode(decodeURIComponent(nodeId));
+        res.json(success({ deleted }));
+    }));
+
+    return router;
+}

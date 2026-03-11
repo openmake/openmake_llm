@@ -45,17 +45,6 @@ import { requireAuth, requireAdmin } from '../auth';
 import { asyncHandler } from '../utils/error-handler';
 
 const logger = createLogger('MetricsRoutes');
-const router = Router();
-
-// 시스템 메트릭은 관리자 전용
-router.use(requireAuth, requireAdmin);
-
-// 클러스터 매니저 참조 (서버에서 주입)
-let clusterManager: ClusterManager | null = null;
-
-export function setClusterManager(cluster: ClusterManager) {
-    clusterManager = cluster;
-}
 
 // 활성 WebSocket 연결 수 게터 (서버에서 주입)
 let activeConnectionsGetter: () => number = () => 0;
@@ -64,17 +53,30 @@ export function setActiveConnectionsGetter(getter: () => number) {
     activeConnectionsGetter = getter;
 }
 
-// ================================================
-// 시스템 메트릭 (admin-metrics.html용)
-// ================================================
+export interface MetricsRouterDeps {
+    cluster: ClusterManager;
+}
 
 /**
- * GET /api/metrics
- * 시스템 메트릭 API (admin-metrics.html에서 사용)
+ * 메트릭 라우터 팩토리 함수
  */
-router.get('/', asyncHandler(async (req: Request, res: Response) => {
-    const clusterStats = clusterManager?.getStats();
-    const nodes = clusterManager?.getNodes() || [];
+export function createMetricsRouter({ cluster }: MetricsRouterDeps): Router {
+    const router = Router();
+
+    // 시스템 메트릭은 관리자 전용
+    router.use(requireAuth, requireAdmin);
+
+    // ================================================
+    // 시스템 메트릭 (admin-metrics.html용)
+    // ================================================
+
+    /**
+     * GET /api/metrics
+     * 시스템 메트릭 API (admin-metrics.html에서 사용)
+     */
+    router.get('/', asyncHandler(async (req: Request, res: Response) => {
+    const clusterStats = cluster?.getStats();
+    const nodes = cluster?.getNodes() || [];
 
     // 프로세스 메모리 정보
     const memoryUsage = process.memoryUsage();
@@ -150,7 +152,7 @@ router.get('/metrics', asyncHandler(async (req: Request, res: Response) => {
     const uptime = process.uptime();
     const memUsage = process.memoryUsage();
 
-    res.json(success({ system: { uptime: Math.round(uptime), memory: { used: Math.round(memUsage.heapUsed / 1024 / 1024), total: Math.round(memUsage.heapTotal / 1024 / 1024), percentage: Math.round((memUsage.heapUsed / memUsage.heapTotal) * 100) }, cpu: { cores: os.cpus().length, loadAvg: os.loadavg() } }, cluster: clusterManager ? { name: clusterManager.clusterName, stats: clusterManager.getStats(), nodes: clusterManager.getNodes().map(n => ({ id: n.id, name: n.name, status: n.status, latency: n.latency, models: n.models.length })) } : null, ...summary, cache: cache.getStats() }));
+    res.json(success({ system: { uptime: Math.round(uptime), memory: { used: Math.round(memUsage.heapUsed / 1024 / 1024), total: Math.round(memUsage.heapTotal / 1024 / 1024), percentage: Math.round((memUsage.heapUsed / memUsage.heapTotal) * 100) }, cpu: { cores: os.cpus().length, loadAvg: os.loadavg() } }, cluster: cluster ? { name: cluster.clusterName, stats: cluster.getStats(), nodes: cluster.getNodes().map(n => ({ id: n.id, name: n.name, status: n.status, latency: n.latency, models: n.models.length })) } : null, ...summary, cache: cache.getStats() }));
 }));
 
 // ================================================
@@ -284,5 +286,5 @@ router.get('/health', asyncHandler(async (req: Request, res: Response) => {
     res.status(statusCode).json(success(health));
 }));
 
-export default router;
-export { router as metricsRouter };
+    return router;
+}

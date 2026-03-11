@@ -10,7 +10,6 @@
  */
 'use strict';
     const SK = window.STORAGE_KEYS || {};
-window.PageModules = window.PageModules || {};
 let _intervals = [];
 let _timeouts = [];
     function esc(s) { var d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
@@ -136,5 +135,4 @@ function cleanup() {
 }
 
 const pageModule = { getHTML, init, cleanup };
-window.PageModules['cluster'] = pageModule;
 export default pageModule;

@@ -9,8 +9,6 @@
  * @module pages/token-monitoring
  */
 'use strict';
-    window.PageModules = window.PageModules || {};
-
 function getHTML() {
             return '<div class="page-token-monitoring">' +
                 '<style data-spa-style="token-monitoring">' +
@@ -53,5 +51,4 @@ function cleanup() {
 }
 
 const pageModule = { getHTML, init, cleanup };
-window.PageModules['token-monitoring'] = pageModule;
 export default pageModule;

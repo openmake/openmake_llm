@@ -9,7 +9,6 @@
  * @module pages/developer
  */
 'use strict';
-    window.PageModules = window.PageModules || {};
     /** @type {number[]} setInterval ID 배열 (cleanup용) */
     let _intervals = [];
     /** @type {IntersectionObserver|null} 스크롤 관찰자 */
@@ -79,7 +78,7 @@
         return lang;
     }
 
-    window.PageModules['developer'] = {
+    const pageModule = {
         getHTML: function() {
             var styles = '<style data-spa-style="developer">' +
                 '.dev-layout { display: flex; gap: var(--space-8); position: relative; max-width: 1400px; margin: 0 auto; }' +
@@ -1059,5 +1058,4 @@
         }
     };
 
-const { getHTML, init, cleanup } = window.PageModules['developer'];
-export default { getHTML, init, cleanup };
+export default pageModule;

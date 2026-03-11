@@ -9,7 +9,6 @@
  * @module pages/agent-learning
  */
 'use strict';
-    window.PageModules = window.PageModules || {};
 let _intervals = [];
 let _timeouts = [];
 
@@ -226,5 +225,4 @@ function cleanup() {
 }
 
 const pageModule = { getHTML, init, cleanup };
-window.PageModules['agent-learning'] = pageModule;
 export default pageModule;

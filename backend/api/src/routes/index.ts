@@ -9,20 +9,21 @@
  * @module routes/index
  */
 
-export { default as metricsRouter, setClusterManager, setActiveConnectionsGetter } from './metrics.routes';
+export { createMetricsRouter, setActiveConnectionsGetter } from './metrics.routes';
 export { default as agentRouter } from './agents.routes';
 export { default as skillsRouter } from './skills.routes';
 export { default as modelRouter } from './model.routes';
 export { mcpRouter } from './mcp.routes';
 
-// 🆕 리팩토링된 라우트
-export { default as chatRouter, setClusterManager as setChatCluster } from './chat.routes';
-export { default as documentsRouter, setDependencies as setDocumentsDeps } from './documents.routes';
-export { default as webSearchRouter, setClusterManager as setWebSearchCluster } from './web-search.routes';
+// 🆕 리팩토링된 라우트 (팩토리 패턴)
+export { createChatRouter } from './chat.routes';
+export { createDocumentsRouter } from './documents.routes';
+export { createWebSearchRouter } from './web-search.routes';
+export { createOpenAICompatRouter } from './openai-compat.routes';
 
 // 🆕 추가 분리된 라우트
 export { default as usageRouter } from './usage.routes';
-export { default as nodesRouter, setClusterManager as setNodesCluster } from './nodes.routes';
+export { createNodesRouter } from './nodes.routes';
 export { default as agentsMonitoringRouter } from './agents-monitoring.routes';
 export { memoryRouter } from './memory.routes';
 

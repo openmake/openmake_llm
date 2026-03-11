@@ -46,10 +46,6 @@ import { optionalAuth } from '../auth';
 
 const logger = createLogger('DocumentsRoutes');
 
-const router = Router();
-let clusterManager: ClusterManager;
-let broadcastFn: (data: Record<string, unknown>) => void;
-
 // 로그 헬퍼 (Winston logger 위임)
 const log = {
     debug: (msg: string, ...args: unknown[]) => {
@@ -115,19 +111,22 @@ const upload = multer({
     limits: { fileSize: FILE_LIMITS.MAX_SIZE_BYTES } // 300MB 제한
 });
 
-/**
- * 의존성 주입
- */
-export function setDependencies(cluster: ClusterManager, broadcast: (data: Record<string, unknown>) => void): void {
-    clusterManager = cluster;
-    broadcastFn = broadcast;
+export interface DocumentsRouterDeps {
+    cluster: ClusterManager;
+    broadcast: (data: Record<string, unknown>) => void;
 }
 
 /**
- * POST /api/upload
- * 파일 업로드
+ * 문서 라우터 팩토리 함수
  */
-router.post('/upload', optionalAuth, validateUploadContentType(FILE_LIMITS.MAX_SIZE_BYTES), upload.single('file'), validateFileUploadSecurity(), asyncHandler(async (req: Request, res: Response) => {
+export function createDocumentsRouter({ cluster, broadcast }: DocumentsRouterDeps): Router {
+    const router = Router();
+
+    /**
+     * POST /api/upload
+     * 파일 업로드
+     */
+    router.post('/upload', optionalAuth, validateUploadContentType(FILE_LIMITS.MAX_SIZE_BYTES), upload.single('file'), validateFileUploadSecurity(), asyncHandler(async (req: Request, res: Response) => {
      try {
          if (!req.file) {
              res.status(400).json(badRequest('파일이 없습니다'));
@@ -138,7 +137,7 @@ router.post('/upload', optionalAuth, validateUploadContentType(FILE_LIMITS.MAX_S
          logger.info(`[Upload] 파일 업로드: ${originalFilename}`);
 
         // 업로드 시작 알림
-        broadcastFn?.({
+        broadcast?.({
             type: 'document_progress',
             stage: 'upload',
             message: `파일 업로드 완료: ${originalFilename}`,
@@ -149,7 +148,7 @@ router.post('/upload', optionalAuth, validateUploadContentType(FILE_LIMITS.MAX_S
          // 진행 상태 콜백
          const onProgress = (event: ProgressEvent) => {
              logger.info(`[Progress] ${event.stage}: ${event.message} (${event.progress || 0}%)`);
-            broadcastFn?.({
+            broadcast?.({
                 ...event,
                 filename: originalFilename
             });
@@ -164,7 +163,7 @@ router.post('/upload', optionalAuth, validateUploadContentType(FILE_LIMITS.MAX_S
          logger.info(`[Upload] 텍스트 추출 완료: ${doc.text.length}자`);
 
         // 완료 알림
-        broadcastFn?.({
+        broadcast?.({
             type: 'document_progress',
             stage: 'complete',
             message: `분석 완료: ${doc.text.length}자 추출`,
@@ -182,7 +181,7 @@ router.post('/upload', optionalAuth, validateUploadContentType(FILE_LIMITS.MAX_S
                 userId,
             }).then(result => {
                 logger.info(`[RAG] 문서 임베딩 완료: ${result.embeddedChunks}/${result.totalChunks}개 청크 (${result.durationMs}ms)`);
-                broadcastFn?.({
+                broadcast?.({
                     type: 'document_progress',
                     stage: 'rag_complete',
                     message: `RAG 임베딩 완료: ${result.embeddedChunks}개 청크 저장됨`,
@@ -198,7 +197,7 @@ router.post('/upload', optionalAuth, validateUploadContentType(FILE_LIMITS.MAX_S
       } catch (error: unknown) {
           logger.error('[Upload] 오류:', error);
 
-         broadcastFn?.({
+         broadcast?.({
              type: 'document_progress',
              stage: 'error',
              message: `오류: ${(error instanceof Error ? error.message : '파일 처리 중 오류가 발생했습니다')}`,
@@ -237,8 +236,8 @@ router.post('/summarize', validate(summarizeDocumentSchema), asyncHandler(async 
       const sumIsAuto = sumPlan.resolvedEngine === '__auto__';
       const sumEngineModel = sumIsAuto ? '' : (sumPlan.resolvedEngine || model);
 
-      const bestNode = clusterManager.getBestNode(sumEngineModel);
-      const client = bestNode ? clusterManager.createScopedClient(bestNode.id, sumEngineModel) : undefined;
+      const bestNode = cluster.getBestNode(sumEngineModel);
+      const client = bestNode ? cluster.createScopedClient(bestNode.id, sumEngineModel) : undefined;
 
       if (!client) {
           res.status(503).json(serviceUnavailable('사용 가능한 노드가 없습니다'));
@@ -291,8 +290,8 @@ router.post('/document/ask', validate(documentAskSchema), asyncHandler(async (re
       const qaIsAuto = qaPlan.resolvedEngine === '__auto__';
       const qaEngineModel = qaIsAuto ? '' : (qaPlan.resolvedEngine || model);
 
-      const bestNode = clusterManager.getBestNode(qaEngineModel);
-      const client = bestNode ? clusterManager.createScopedClient(bestNode.id, qaEngineModel) : undefined;
+      const bestNode = cluster.getBestNode(qaEngineModel);
+      const client = bestNode ? cluster.createScopedClient(bestNode.id, qaEngineModel) : undefined;
 
       if (!client) {
           res.status(503).json(serviceUnavailable('사용 가능한 노드가 없습니다'));
@@ -397,4 +396,5 @@ router.delete('/documents/:docId', asyncHandler(async (req: Request, res: Respon
      res.json(success({ deleted, embeddingsDeleted }));
  }));
 
-export default router;
+    return router;
+}

@@ -21,8 +21,8 @@
 import { Request, Response, NextFunction } from 'express';
 import { createLogger } from './logger';
 import { error as apiError, badRequest as apiBadRequest, ErrorCodes, ApiErrorResponse } from './api-response';
-import { QuotaExceededError } from '../errors/quota-exceeded.error';
-import { KeyExhaustionError } from '../errors/key-exhaustion.error';
+import { QuotaExceededError } from './errors/quota-exceeded.error';
+import { KeyExhaustionError } from './errors/key-exhaustion.error';
 
 const logger = createLogger('ErrorHandler');
 

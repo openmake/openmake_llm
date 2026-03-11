@@ -9,11 +9,10 @@
  * @module pages/external
  */
 'use strict';
-    window.PageModules = window.PageModules || {};
     let _intervals = [];
     let _timeouts = [];
 
-    window.PageModules['external'] = {
+    const pageModule = {
         getHTML: function() {
             return '<div class="page-external">' +
                 '<style data-spa-style="external">' +
@@ -170,5 +169,4 @@
         }
     };
 
-const { getHTML, init, cleanup } = window.PageModules['external'];
-export default { getHTML, init, cleanup };
+export default pageModule;

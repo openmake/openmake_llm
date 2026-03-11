@@ -10,11 +10,10 @@
  */
 'use strict';
     var SK = window.STORAGE_KEYS || {};
-    window.PageModules = window.PageModules || {};
     let _intervals = [];
     let _timeouts = [];
 
-    window.PageModules['history'] = {
+    const pageModule = {
         getHTML: function () {
             return '<div class="page-history">' +
                 '<style data-spa-style="history">' +
@@ -180,5 +179,4 @@
         }
     };
 
-const { getHTML, init, cleanup } = window.PageModules['history'];
-export default { getHTML, init, cleanup };
+export default pageModule;

@@ -9,7 +9,6 @@
  * @module pages/admin-metrics
  */
 'use strict';
-    window.PageModules = window.PageModules || {};
     /** @type {number[]} setInterval ID 배열 (cleanup용) */
     let _intervals = [];
     /** @type {number[]} setTimeout ID 배열 (cleanup용) */
@@ -21,7 +20,7 @@
      */
     function esc(s) { var d = document.createElement('div'); d.textContent = s != null ? String(s) : ''; return d.innerHTML; }
 
-    window.PageModules['admin-metrics'] = {
+    const pageModule = {
         /**
          * 페이지 HTML 문자열 반환
          * @returns {string} 시스템 대시보드 HTML (스타일 + 차트 컨테이너 포함)
@@ -373,5 +372,4 @@
         }
     };
 
-const { getHTML, init, cleanup } = window.PageModules['admin-metrics'];
-export default { getHTML, init, cleanup };
+export default pageModule;

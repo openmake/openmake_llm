@@ -13,22 +13,20 @@ import { Application, Request, Response } from 'express';
 import * as path from 'path';
 import * as fs from 'fs';
 
-import v1Router from './v1';
+import { createV1Router } from './v1';
 import { tokenMonitoringRouter } from './token-monitoring.routes';
-import { default as chatRouter, setClusterManager as setChatCluster } from './chat.routes';
-import { setClusterManager as setOpenAICompatCluster } from './openai-compat.routes';
-import { default as documentsRouter, setDependencies as setDocumentsDeps } from './documents.routes';
+import { createChatRouter } from './chat.routes';
+import { createOpenAICompatRouter } from './openai-compat.routes';
+import { createDocumentsRouter } from './documents.routes';
 import ragRouter from './rag.routes';
-import { default as webSearchRouter, setClusterManager as setWebSearchCluster } from './web-search.routes';
+import { createWebSearchRouter } from './web-search.routes';
 import {
-    metricsRouter,
-    setClusterManager as setMetricsCluster,
+    createMetricsRouter,
     agentRouter,
     skillsRouter,
     mcpRouter,
     usageRouter,
-    nodesRouter,
-    setNodesCluster,
+    createNodesRouter,
     agentsMonitoringRouter,
     memoryRouter,
     auditRouter,
@@ -83,6 +81,7 @@ export function setupApiRoutes(
     });
 
     // V1 API 마운트
+    const v1Router = createV1Router({ cluster });
     app.use('/api/v1', v1Router);
 
     // Deprecation 경고 (외부 API Key 사용자에게만 표시 — 내부 SPA 요청 제외)
@@ -101,8 +100,13 @@ export function setupApiRoutes(
         next();
     });
 
-    // 클러스터 의존성 주입
-    setMetricsCluster(cluster);
+    // 팩토리 패턴으로 라우터 생성
+    const metricsRouter = createMetricsRouter({ cluster });
+    const chatRouter = createChatRouter({ cluster });
+    const openaiCompatRouter = createOpenAICompatRouter({ cluster });
+    const documentsRouter = createDocumentsRouter({ cluster, broadcast });
+    const webSearchRouter = createWebSearchRouter({ cluster });
+    const nodesRouter = createNodesRouter({ cluster });
 
     // 마운트 순서 중요: 구체적인 경로를 먼저, 파라미터 경로를 나중에
     app.use('/api/metrics', metricsRouter);
@@ -131,12 +135,6 @@ export function setupApiRoutes(
     app.use('/api/auth', createAuthController(getConfig().port));
     app.use('/api/admin', createAdminController());
 
-    // 클러스터 의존성 주입
-    setChatCluster(cluster);
-    setOpenAICompatCluster(cluster);
-    setDocumentsDeps(cluster, broadcast);
-    setWebSearchCluster(cluster);
-    setNodesCluster(cluster);
     // 🆕 세션/대화 라우트 — /api/chat 보다 먼저 마운트 (Express 라우팅 명시성 보장)
     const sessionController = createSessionController();
     app.use('/api/chat/sessions', sessionController);

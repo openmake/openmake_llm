@@ -355,10 +355,8 @@ if (require.main === module) {
             }
 
             // 메모리/학습 스케줄러 타이머 정리
-            for (const timer of memoryTimers) {
-                clearInterval(timer);
-            }
-            memoryTimers.length = 0;
+            const { clearSchedulerTimers } = await import('./infra/scheduler');
+            clearSchedulerTimers();
             console.log('[Shutdown] 메모리/학습 스케줄러 타이머 정리 완료');
 
             // OpenTelemetry SDK 종료 (OTel flush 보장)

@@ -1,4 +1,4 @@
-<!-- Parent: ../AGENTS.md -->
+<!-- Parent: ../../AGENTS.md -->
 <!-- Generated: 2026-03-11 | Updated: 2026-03-11 -->
 
 # errors — Custom Error Classes

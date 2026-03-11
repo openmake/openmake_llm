@@ -33,7 +33,7 @@ import {
 import { loadClusterConfig } from './config';
 import { createClient, OllamaClient } from '../ollama/client';
 import { CircuitBreakerRegistry } from './circuit-breaker';
-import { AllNodesFailedError } from '../errors/all-nodes-failed.error';
+import { AllNodesFailedError } from '../utils/errors/all-nodes-failed.error';
 import { createLogger } from '../utils/logger';
 
 const logger = createLogger('ClusterManager');

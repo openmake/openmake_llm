@@ -11,11 +11,10 @@
  * @module pages/custom-agents
  */
 'use strict';
-    window.PageModules = window.PageModules || {};
     let _intervals = [];
     let _timeouts = [];
 
-    window.PageModules['custom-agents'] = {
+    const pageModule = {
         getHTML: function() {
             return '<div class="page-custom-agents">' +
                 '<style data-spa-style="custom-agents">' +
@@ -379,5 +378,4 @@
         }
     };
 
-const { getHTML, init, cleanup } = window.PageModules['custom-agents'];
-export default { getHTML, init, cleanup };
+export default pageModule;

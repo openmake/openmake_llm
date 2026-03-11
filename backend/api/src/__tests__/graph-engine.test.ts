@@ -4,8 +4,8 @@
  */
 
 import { describe, it, expect } from 'bun:test';
-import { StateGraph, START, END, parallelBatch } from '../workflow/graph-engine';
-import type { NodeProgressEvent } from '../workflow/graph-engine';
+import { StateGraph, START, END, parallelBatch } from '../utils/graph-engine';
+import type { NodeProgressEvent } from '../utils/graph-engine';
 
 // ═══════════════════════════════════════════
 // 테스트용 상태 타입

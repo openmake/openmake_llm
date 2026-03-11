@@ -10,13 +10,12 @@
  */
 'use strict';
     var SK = window.STORAGE_KEYS || {};
-    window.PageModules = window.PageModules || {};
     /** @type {number[]} setInterval ID 배열 (cleanup용) */
     let _intervals = [];
     /** @type {number[]} setTimeout ID 배열 (cleanup용) */
     let _timeouts = [];
 
-    window.PageModules['admin'] = {
+    const pageModule = {
         /**
          * 페이지 HTML 문자열 반환
          * @returns {string} 관리자 대시보드 HTML (스타일 포함)
@@ -362,5 +361,4 @@
         }
     };
 
-const { getHTML, init, cleanup } = window.PageModules['admin'];
-export default { getHTML, init, cleanup };
+export default pageModule;

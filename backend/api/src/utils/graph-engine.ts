@@ -12,7 +12,7 @@
  * - ConditionalEdge: 런타임에 다음 노드를 결정하는 동적 분기
  * - 병렬 실행: 의존성이 충족된 노드는 자동으로 동시 실행
  *
- * @module workflow/graph-engine
+ * @module utils/graph-engine
  */
 
 import { createLogger } from '../utils/logger';

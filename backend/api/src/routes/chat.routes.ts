@@ -27,23 +27,24 @@ import { chatRequestSchema } from '../schemas';
 import { ChatRequestHandler, ChatRequestError } from '../chat/request-handler';
 import { createLogger } from '../utils/logger';
 
-const router = Router();
 const logger = createLogger('ChatRoutes');
-let clusterManager: ClusterManager;
 
-/**
- * 클러스터 매니저 참조 설정
- */
-export function setClusterManager(cluster: ClusterManager): void {
-    clusterManager = cluster;
+export interface ChatRouterDeps {
+    cluster: ClusterManager;
 }
 
 /**
- * POST /api/chat
- * 일반 채팅 API (non-streaming)
- * 🔒 Phase 2 보안 패치: optionalAuth 미들웨어 적용
+ * 채팅 라우터 팩토리 함수
  */
-router.post('/', optionalApiKey, optionalAuth, chatRateLimiter, validate(chatRequestSchema), asyncHandler(async (req: Request, res: Response) => {
+export function createChatRouter({ cluster }: ChatRouterDeps): Router {
+    const router = Router();
+
+    /**
+     * POST /api/chat
+     * 일반 채팅 API (non-streaming)
+     * 🔒 Phase 2 보안 패치: optionalAuth 미들웨어 적용
+     */
+    router.post('/', optionalApiKey, optionalAuth, chatRateLimiter, validate(chatRequestSchema), asyncHandler(async (req: Request, res: Response) => {
     const { message, model, nodeId, history, sessionId, tools, tool_choice } = req.body;
 
     // 인증 확인 (ChatRequestHandler로 통합)
@@ -68,7 +69,7 @@ router.post('/', optionalApiKey, optionalAuth, chatRateLimiter, validate(chatReq
             tool_choice,
             userContext,
             apiKeyId: req.apiKeyId,
-            clusterManager,
+            clusterManager: cluster,
             onToken: () => { /* 일반 채팅은 스트리밍 안 함 */ },
         });
 
@@ -149,7 +150,7 @@ router.post('/stream', optionalApiKey, optionalAuth, chatRateLimiter, validate(c
             tool_choice,
             userContext,
             apiKeyId: req.apiKeyId,
-            clusterManager,
+            clusterManager: cluster,
             abortSignal: abortController.signal,
             onToken: (token: string) => {
                 if (aborted) return;
@@ -179,4 +180,5 @@ router.post('/stream', optionalApiKey, optionalAuth, chatRateLimiter, validate(c
     }
 });
 
-export default router;
+    return router;
+}
