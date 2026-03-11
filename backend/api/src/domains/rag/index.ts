@@ -21,3 +21,10 @@ export type { EvalQuery, SearchResult, QueryEvalResult, EvalReport } from './rag
 
 export { assessTextQuality, isTextQualityAcceptable, assessAndGate } from './OCRQualityGate';
 export type { TextQualityMetrics, QualityThresholds, QualityAssessment } from './OCRQualityGate';
+
+// Documents (consolidated from top-level documents/)
+export * from './documents';
+export { uploadedDocuments } from './documents/store';
+export type { DocumentStore } from './documents/store';
+export { chunkDocument, chunkText } from './documents/chunker';
+export type { TextChunk, ChunkOptions, ChunkMetadata } from './documents/chunker';

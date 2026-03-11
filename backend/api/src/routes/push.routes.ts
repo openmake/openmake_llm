@@ -23,7 +23,7 @@ import { createLogger } from '../utils/logger';
 import { asyncHandler } from '../utils/error-handler';
 import { validate } from '../middlewares/validation';
 import { pushSubscribeSchema, pushUnsubscribeSchema } from '../schemas/push.schema';
-import { getPushService, PushSubscription } from '../services/PushService';
+import { getPushService, PushSubscription } from './push.service';
 
 const logger = createLogger('PushRoutes');
 

@@ -38,6 +38,7 @@ import type { UserTier } from '../data/user-manager';
 import { canUseTool } from './tool-tiers';
 import type { UserContext } from './user-sandbox';
 import { createLogger } from '../utils/logger';
+import { errorMessage } from '../utils/error-message';
 
 const logger = createLogger('ToolRouter');
 
@@ -170,7 +171,7 @@ export class ToolRouter {
             try {
                 return await builtIn.handler(args, context);
             } catch (error) {
-                const message = error instanceof Error ? error.message : String(error);
+                const message = errorMessage(error);
                 return {
                     content: [{ type: 'text', text: `도구 실행 오류 (${name}): ${message}` }],
                     isError: true,

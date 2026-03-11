@@ -202,10 +202,15 @@ describe('Password Policy', () => {
     });
     
     it('should accept valid password', async () => {
-        const result = await authService.register({ email: 'newuser@test.com', password: 'ValidPass1!' });
-        // Success depends on whether user already exists, but should NOT fail on password
-        if (!result.success) {
-            expect(result.error).not.toContain('비밀번호');
+        // Mock createUser to avoid DB dependency — only testing password validation
+        const spy = jest.spyOn((authService as any).userManager, 'createUser').mockResolvedValue({
+            id: '1', email: 'newuser@test.com', role: 'user', tier: 'free', is_active: true, created_at: new Date().toISOString()
+        });
+        try {
+            const result = await authService.register({ email: 'newuser@test.com', password: 'ValidPass1!' });
+            expect(result.success).toBe(true);
+        } finally {
+            spy.mockRestore();
         }
     });
 });

@@ -25,6 +25,7 @@ import { ToolRouter } from './tool-router';
 import type { MCPServerConfig, MCPConnectionStatus } from './types';
 import type { UnifiedDatabase, MCPServerRow } from '../data/models/unified-database';
 import { createLogger } from '../utils/logger';
+import { errorMessage } from '../utils/error-message';
 
 const logger = createLogger('MCPRegistry');
 
@@ -94,7 +95,7 @@ export class MCPServerRegistry {
                 try {
                     await this.connectServer(config.id, config);
                 } catch (error) {
-                    const msg = error instanceof Error ? error.message : String(error);
+                    const msg = errorMessage(error);
                     logger.error(`Failed to connect "${config.name}" during init:`, msg);
                     // 초기화 실패는 전체를 중단하지 않음
                 }

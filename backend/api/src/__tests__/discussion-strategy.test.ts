@@ -15,7 +15,7 @@ import { DiscussionStrategy } from '../domains/chat/strategies/discussion-strate
 import type { DiscussionStrategyContext } from '../domains/chat/strategies/types';
 import type { OllamaClient } from '../ollama/client';
 import type { ChatMessageRequest } from '../domains/chat/service';
-import type { DocumentStore } from '../documents/store';
+import type { DocumentStore } from '../domains/rag/documents/store';
 
 // ─────────────────────────────────────────────
 // Mock 설정
@@ -46,7 +46,7 @@ jest.mock('../mcp', () => ({
     performWebSearch: mockPerformWebSearch,
 }));
 
-jest.mock('../chat/language-policy', () => ({
+jest.mock('../domains/chat/pipeline/language-policy', () => ({
     resolvePromptLocale: (lang: string) => {
         const map: Record<string, string> = { ko: 'ko', en: 'en', ja: 'ja', zh: 'zh', es: 'es', de: 'de' };
         return map[lang] || 'en';

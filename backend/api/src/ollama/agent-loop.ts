@@ -32,6 +32,7 @@
 import { Ollama, Message, Tool, ToolCall, ChatResponse } from 'ollama';
 import { ChatMessage, ToolDefinition, ThinkOption, UsageMetrics, normalizeThinkOption } from './types';
 import { createLogger } from '../utils/logger';
+import { errorMessage } from '../utils/error-message';
 
 /**
  * Thinking 필드를 포함하는 확장 메시지 인터페이스
@@ -433,7 +434,7 @@ export async function runAgentLoop(options: AgentLoopOptions): Promise<AgentLoop
                 const isPermanent = status === 401 || status === 403 || status === 404 || isApiKeyExhaustionError(error);
 
                  if (isPermanent) {
-                     logger.error(`❌ 영구 실패(${status || 'unknown'}): ${(error instanceof Error ? error.message : String(error))}`);
+                     logger.error(`❌ 영구 실패(${status || 'unknown'}): ${errorMessage(error)}`);
                      throw error;
                  }
 
@@ -513,10 +514,10 @@ export async function runAgentLoop(options: AgentLoopOptions): Promise<AgentLoop
                 });
 
              } catch (error: unknown) {
-                 logger.error(`❌ 도구 실행 오류: ${(error instanceof Error ? error.message : String(error))}`);
+                 logger.error(`❌ 도구 실행 오류: ${errorMessage(error)}`);
                  messages.push({
                     role: 'tool',
-                    content: `Error: ${(error instanceof Error ? error.message : String(error))}`,
+                    content: `Error: ${errorMessage(error)}`,
                     tool_name: funcName
                 });
             }

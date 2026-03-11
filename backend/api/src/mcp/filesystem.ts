@@ -24,6 +24,7 @@ import * as path from 'path';
 import * as fs from 'fs/promises';
 import { UserSandbox, UserContext } from './user-sandbox';
 import { MCPToolDefinition, MCPToolResult, MCPToolHandler } from './types';
+import { errorMessage } from '../utils/error-message';
 
 /**
  * 허용된 파일 확장자 집합
@@ -185,7 +186,7 @@ export const readFileTool: MCPToolDefinition = {
             };
         } catch (error: unknown) {
             return {
-                content: [{ type: 'text', text: `파일 읽기 실패: ${(error instanceof Error ? error.message : String(error))}` }],
+                content: [{ type: 'text', text: `파일 읽기 실패: ${errorMessage(error)}` }],
                 isError: true
             };
         }
@@ -266,7 +267,7 @@ export const writeFileTool: MCPToolDefinition = {
             };
         } catch (error: unknown) {
             return {
-                content: [{ type: 'text', text: `파일 쓰기 실패: ${(error instanceof Error ? error.message : String(error))}` }],
+                content: [{ type: 'text', text: `파일 쓰기 실패: ${errorMessage(error)}` }],
                 isError: true
             };
         }
@@ -335,7 +336,7 @@ export const listDirectoryTool: MCPToolDefinition = {
             };
         } catch (error: unknown) {
             return {
-                content: [{ type: 'text', text: `디렉토리 조회 실패: ${(error instanceof Error ? error.message : String(error))}` }],
+                content: [{ type: 'text', text: `디렉토리 조회 실패: ${errorMessage(error)}` }],
                 isError: true
             };
         }
@@ -390,7 +391,7 @@ export const deleteFileTool: MCPToolDefinition = {
             };
         } catch (error: unknown) {
             return {
-                content: [{ type: 'text', text: `파일 삭제 실패: ${(error instanceof Error ? error.message : String(error))}` }],
+                content: [{ type: 'text', text: `파일 삭제 실패: ${errorMessage(error)}` }],
                 isError: true
             };
         }

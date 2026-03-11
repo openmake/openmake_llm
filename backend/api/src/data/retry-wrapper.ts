@@ -7,6 +7,7 @@
  */
 
 import { createLogger } from '../utils/logger';
+import { errorMessage } from '../utils/error-message';
 
 const logger = createLogger('RetryWrapper');
 
@@ -112,7 +113,7 @@ export async function withRetry<T>(
 
             logger.warn(
                 `[${operation}] 재시도 ${attempt + 1}/${maxRetries} (${delay.toFixed(0)}ms 후)`,
-                { error: err instanceof Error ? err.message : String(err) }
+                { error: errorMessage(err) }
             );
 
             await new Promise(resolve => setTimeout(resolve, delay));

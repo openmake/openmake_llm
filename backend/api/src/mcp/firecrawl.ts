@@ -23,6 +23,7 @@ import { TRUNCATION } from '../config/runtime-limits';
 import { LLM_TIMEOUTS } from '../config/timeouts';
 import { firecrawlPost } from '../utils/firecrawl-client';
 import { validateOutboundUrl } from '../security/ssrf-guard';
+import { errorMessage } from '../utils/error-message';
 
 
 // ============================================
@@ -180,7 +181,7 @@ export const firecrawlScrapeTool: MCPToolDefinition = {
             };
         } catch (error: unknown) {
             return {
-                content: [{ type: 'text', text: `❌ 스크래핑 실패: ${(error instanceof Error ? error.message : String(error))}` }],
+                content: [{ type: 'text', text: `❌ 스크래핑 실패: ${errorMessage(error)}` }],
                 isError: true
             };
         }
@@ -270,7 +271,7 @@ export const firecrawlSearchTool: MCPToolDefinition = {
             };
         } catch (error: unknown) {
             return {
-                content: [{ type: 'text', text: `❌ 검색 실패: ${(error instanceof Error ? error.message : String(error))}` }],
+                content: [{ type: 'text', text: `❌ 검색 실패: ${errorMessage(error)}` }],
                 isError: true
             };
         }
@@ -345,7 +346,7 @@ export const firecrawlMapTool: MCPToolDefinition = {
             };
         } catch (error: unknown) {
             return {
-                content: [{ type: 'text', text: `❌ URL 매핑 실패: ${(error instanceof Error ? error.message : String(error))}` }],
+                content: [{ type: 'text', text: `❌ URL 매핑 실패: ${errorMessage(error)}` }],
                 isError: true
             };
         }
@@ -413,7 +414,7 @@ export const firecrawlCrawlTool: MCPToolDefinition = {
             };
         } catch (error: unknown) {
             return {
-                content: [{ type: 'text', text: `❌ 크롤링 시작 실패: ${(error instanceof Error ? error.message : String(error))}` }],
+                content: [{ type: 'text', text: `❌ 크롤링 시작 실패: ${errorMessage(error)}` }],
                 isError: true
             };
         }

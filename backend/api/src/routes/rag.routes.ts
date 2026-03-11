@@ -16,7 +16,7 @@
 
 import { Router, Request, Response } from 'express';
 import { getRAGService } from '../domains/rag/RAGService';
-import { uploadedDocuments } from '../documents/store';
+import { uploadedDocuments } from '../domains/rag/documents/store';
 import { success, badRequest, notFound } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
 import { createLogger } from '../utils/logger';

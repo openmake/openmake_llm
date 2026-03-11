@@ -35,6 +35,7 @@ import { createClient, OllamaClient } from '../ollama/client';
 import { CircuitBreakerRegistry } from './circuit-breaker';
 import { AllNodesFailedError } from '../utils/errors/all-nodes-failed.error';
 import { createLogger } from '../utils/logger';
+import { errorMessage } from '../utils/error-message';
 
 const logger = createLogger('ClusterManager');
 
@@ -202,7 +203,7 @@ export class ClusterManager extends EventEmitter {
                 node.models = response.models.map(m => m.name);
             } catch (e: unknown) {
                 // 모델 목록 조회 실패 - 로깅
-                console.debug(`[Cluster] ${nodeId} 모델 목록 조회 실패:`, (e instanceof Error ? e.message : String(e)) || e);
+                console.debug(`[Cluster] ${nodeId} 모델 목록 조회 실패:`, errorMessage(e));
             }
 
             // 레이턴시 측정
@@ -521,7 +522,7 @@ export class ClusterManager extends EventEmitter {
                 node.models = response.models.map(m => m.name);
             } catch (e: unknown) {
                 // 모델 목록 갱신 실패 - 로깅
-                console.debug(`[Cluster] ${nodeId} 모델 갱신 실패:`, (e instanceof Error ? e.message : String(e)) || e);
+                console.debug(`[Cluster] ${nodeId} 모델 갱신 실패:`, errorMessage(e));
             }
             node.latency = await this.measureLatency(client);
         }

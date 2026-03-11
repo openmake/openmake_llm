@@ -8,11 +8,12 @@
  */
 
 import { DocumentResult } from './index';
-import { getConfig } from '../config/env';
-import { createLogger } from '../utils/logger';
-import { getPool } from '../data/models/unified-database';
+import { getConfig } from '../../../config/env';
+import { createLogger } from '../../../utils/logger';
+import { getPool } from '../../../data/models/unified-database';
 import type { Pool } from 'pg';
-import { CLEANUP_INTERVALS } from '../config/timeouts';
+import { CLEANUP_INTERVALS } from '../../../config/timeouts';
+import { errorMessage } from '../../../utils/error-message';
 
 const logger = createLogger('DocumentStore');
 
@@ -78,7 +79,7 @@ function dbUpsertDocument(docId: string, document: DocumentResult, createdAt: nu
              expires_at = EXCLUDED.expires_at`,
         [docId, JSON.stringify(document), createdAtIso, lastAccessedAtIso, expiresAt]
     ).catch(err => {
-        logger.warn(`[DocumentStore/DB] upsert failed for ${docId}: ${err instanceof Error ? err.message : String(err)}`);
+        logger.warn(`[DocumentStore/DB] upsert failed for ${docId}: ${errorMessage(err)}`);
     });
 }
 
@@ -93,7 +94,7 @@ function dbUpdateLastAccessed(docId: string, lastAccessedAt: number): void {
         `UPDATE uploaded_documents SET last_accessed_at = $1, expires_at = $2 WHERE doc_id = $3`,
         [lastAccessedAtIso, expiresAt, docId]
     ).catch(err => {
-        logger.warn(`[DocumentStore/DB] update last_accessed failed for ${docId}: ${err instanceof Error ? err.message : String(err)}`);
+        logger.warn(`[DocumentStore/DB] update last_accessed failed for ${docId}: ${errorMessage(err)}`);
     });
 }
 
@@ -102,7 +103,7 @@ function dbDeleteDocument(docId: string): void {
     if (!pool) return;
 
     pool.query(`DELETE FROM uploaded_documents WHERE doc_id = $1`, [docId]).catch(err => {
-        logger.warn(`[DocumentStore/DB] delete failed for ${docId}: ${err instanceof Error ? err.message : String(err)}`);
+        logger.warn(`[DocumentStore/DB] delete failed for ${docId}: ${errorMessage(err)}`);
     });
 }
 
@@ -111,7 +112,7 @@ function dbDeleteAllDocuments(): void {
     if (!pool) return;
 
     pool.query(`DELETE FROM uploaded_documents`).catch(err => {
-        logger.warn(`[DocumentStore/DB] clear failed: ${err instanceof Error ? err.message : String(err)}`);
+        logger.warn(`[DocumentStore/DB] clear failed: ${errorMessage(err)}`);
     });
 }
 
@@ -120,7 +121,7 @@ function dbCleanupExpired(): void {
     if (!pool) return;
 
     pool.query(`DELETE FROM uploaded_documents WHERE expires_at < NOW()`).catch(err => {
-        logger.warn(`[DocumentStore/DB] cleanup expired failed: ${err instanceof Error ? err.message : String(err)}`);
+        logger.warn(`[DocumentStore/DB] cleanup expired failed: ${errorMessage(err)}`);
     });
 }
 
@@ -155,7 +156,7 @@ function dbWarmCache(docId: string, cache: Map<string, StoredDocument>, deletedK
             logger.info(`[DocumentStore/DB] cache warmed for ${docId}`);
         }
     }).catch(err => {
-        logger.warn(`[DocumentStore/DB] warm cache failed for ${docId}: ${err instanceof Error ? err.message : String(err)}`);
+        logger.warn(`[DocumentStore/DB] warm cache failed for ${docId}: ${errorMessage(err)}`);
     });
 }
 

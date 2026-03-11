@@ -36,7 +36,7 @@ jest.mock('../utils/input-sanitizer', () => ({
     validatePromptInput: jest.fn().mockReturnValue({ valid: true })
 }));
 
-jest.mock('../chat/language-policy', () => ({
+jest.mock('../domains/chat/pipeline/language-policy', () => ({
     resolvePromptLocale: (lang: string) => {
         const map: Record<string, string> = { ko: 'ko', en: 'en', ja: 'ja', zh: 'zh', es: 'es', de: 'de' };
         return map[lang] || 'en';

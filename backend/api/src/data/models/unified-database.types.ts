@@ -41,6 +41,8 @@ export interface ConversationSession {
     id: string;
     /** 소유 사용자 ID (FK → users.id) */
     user_id?: string;
+    /** 비로그인 사용자 세션 식별자 (UUID v4) */
+    anon_session_id?: string;
     /** 대화 제목 */
     title: string;
     /** 세션 생성 일시 (ISO 8601) */

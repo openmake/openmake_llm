@@ -61,11 +61,11 @@ jest.mock('../utils/logger', () => ({
     }),
 }));
 
-jest.mock('../chat/routing-logger', () => ({
+jest.mock('../domains/chat/pipeline/routing-logger', () => ({
     logA2AModelSelection: jest.fn(),
 }));
 
-jest.mock('../chat/language-policy', () => ({
+jest.mock('../domains/chat/pipeline/language-policy', () => ({
     resolvePromptLocale: (lang: string) => {
         const map: Record<string, string> = { ko: 'ko', en: 'en', ja: 'ja', zh: 'zh', es: 'es', de: 'de' };
         return map[lang] || 'en';

@@ -14,6 +14,7 @@
 import { OllamaClient, createClient } from '../../../ollama/client';
 import { createLogger } from '../../../utils/logger';
 import { HISTORY_SUMMARIZER } from '../../../config/runtime-limits';
+import { errorMessage } from '../../../utils/error-message';
 
 const logger = createLogger('HistorySummarizer');
 
@@ -128,7 +129,7 @@ export async function summarizeHistory(
             summarizedCount: summarizedMessages.length,
         };
     } catch (error) {
-        const errMsg = error instanceof Error ? error.message : String(error);
+        const errMsg = errorMessage(error);
         logger.warn(`히스토리 요약 실패 (원본 유지): ${errMsg}`);
         return {
             messages: history,

@@ -26,7 +26,7 @@ import { getPromptConfig } from './pipeline/prompt';
 import { selectOptimalModel, adjustOptionsForModel, checkModelCapability, type ModelSelection, selectBrandProfileForAutoRouting } from './pipeline/model-selector';
 import { type ExecutionPlan, buildExecutionPlan } from './pipeline/profile-resolver';
 import { assessComplexity } from './pipeline/complexity-assessor';
-import type { DocumentStore } from '../../documents/store';
+import type { DocumentStore } from '../rag/documents/store';
 import type { UserTier } from '../../data/user-manager';
 import type { UserContext } from '../../mcp/user-sandbox';
 import { CONTEXT_LIMITS } from '../../config/runtime-limits';
@@ -47,7 +47,7 @@ import {
 import { getConfig } from '../../config/env';
 import { createRoutingLogEntry, logRoutingDecision, type RoutingDecisionLog } from './pipeline/routing-logger';
 import { applyDomainEngineOverride } from './pipeline/domain-router';
-import type { ChatMessageRequest } from './service/chat-service-types';
+import type { ChatMessageRequest, ProcessMessageOptions } from './service/chat-service-types';
 import { getRAGService } from '../rag/RAGService';
 import type { QueryType } from './pipeline/model-selector-types';
 
@@ -61,6 +61,7 @@ export type {
     ChatResponseMeta,
     ChatServiceConfig,
     ChatMessageRequest,
+    ProcessMessageOptions,
 } from './service/chat-service-types';
 
 const logger = createLogger('ChatService');
@@ -80,15 +81,18 @@ const logger = createLogger('ChatService');
  *
  * @class ChatService
  */
+/**
+ * 요청별 컨텍스트 — 싱글턴 ChatService에서 동시 요청 간 상태 충돌을 방지합니다.
+ */
+interface RequestContext {
+    userContext: UserContext | null;
+    enabledTools: Record<string, boolean> | undefined;
+    executionPlan: ExecutionPlan | undefined;
+}
+
 export class ChatService {
     /** Ollama API 통신 클라이언트 */
     private client: OllamaClient;
-    /** 현재 요청의 사용자 컨텍스트 (도구 접근 권한 결정에 사용) */
-    private currentUserContext: UserContext | null = null;
-    /** 사용자가 활성화한 MCP 도구 목록 (undefined면 레거시 모드: 전체 허용) */
-    private currentEnabledTools: Record<string, boolean> | undefined = undefined;
-    /** 현재 실행 계획 (requiredTools 강제 포함에 사용) */
-    private currentExecutionPlan: ExecutionPlan | undefined = undefined;
 
     /** 단일 LLM 직접 호출 전략 */
     private readonly directStrategy: DirectStrategy;
@@ -138,22 +142,17 @@ export class ChatService {
     }
 
     /**
-     * 현재 요청의 사용자 컨텍스트를 설정합니다.
-     *
-     * 도구 접근 권한 및 MCP 도구 티어 결정에 사용됩니다.
-     *
-     * @param userId - 사용자 ID
-     * @param userRole - 사용자 역할
-     * @param userTier - 사용자 구독 등급
+     * 요청별 컨텍스트를 생성합니다.
      */
-    private setUserContext(userId: string, userRole?: 'admin' | 'user' | 'guest', userTier?: UserTier): void {
+    private buildRequestContext(userId: string, userRole: 'admin' | 'user' | 'guest' | undefined, userTier: UserTier | undefined, enabledTools: Record<string, boolean> | undefined, executionPlan: ExecutionPlan | undefined): RequestContext {
         const tier = this.resolveUserTier(userRole, userTier);
-        this.currentUserContext = {
+        const userContext: UserContext = {
             userId: userId || 'guest',
             tier,
             role: userRole || 'guest',
         };
         logger.info(`사용자 컨텍스트 설정: userId=${userId}, role=${userRole}, tier=${tier}`);
+        return { userContext, enabledTools, executionPlan };
     }
 
     /**
@@ -164,19 +163,19 @@ export class ChatService {
      *
      * @returns 사용 가능한 도구 정의 배열
      */
-    private getAllowedTools(): ToolDefinition[] {
+    private getAllowedTools(reqCtx: RequestContext): ToolDefinition[] {
         const toolRouter = getUnifiedMCPClient().getToolRouter();
-        const userTierForTools = this.currentUserContext?.tier || 'free';
+        const userTierForTools = reqCtx.userContext?.tier || 'free';
         const allTools = toolRouter.getOllamaTools(userTierForTools) as ToolDefinition[];
 
         // enabledTools가 전달된 경우, 사용자가 명시적으로 활성화한 도구만 허용
         // enabledTools가 없으면 레거시 호환: 전체 허용 (API 클라이언트 등)
-        if (this.currentEnabledTools !== undefined) {
-            const filtered = allTools.filter(t => this.currentEnabledTools![t.function.name] === true);
+        if (reqCtx.enabledTools !== undefined) {
+            const filtered = allTools.filter(t => reqCtx.enabledTools![t.function.name] === true);
 
             // requiredTools 강제 포함: 프로파일이 요구하는 도구는 사용자 토글과 무관하게 포함
             // 예: Vision 프로파일은 vision 도구가 항상 필요함
-            const requiredTools = this.currentExecutionPlan?.requiredTools;
+            const requiredTools = reqCtx.executionPlan?.requiredTools;
             if (requiredTools && requiredTools.length > 0) {
                 for (const reqToolName of requiredTools) {
                     const alreadyIncluded = filtered.some(t => t.function.name.includes(reqToolName));
@@ -207,27 +206,14 @@ export class ChatService {
      * 5. A2A 병렬 생성 시도 → 실패 시 AgentLoop 폴백
      * 6. 사용량 메트릭 기록
      *
-     * @param req - 채팅 메시지 요청 객체
-     * @param uploadedDocuments - 업로드된 문서 저장소
-     * @param onToken - 스트리밍 토큰 콜백 (SSE 전송용)
-     * @param onAgentSelected - 에이전트 선택 결과 콜백
-     * @param onDiscussionProgress - 토론 진행 상황 콜백
-     * @param onResearchProgress - 연구 진행 상황 콜백
-     * @param executionPlan - Brand Model 실행 계획 (PipelineProfile 기반)
+     * @param options - 통합 옵션 객체 (요청, 문서, 실행 계획, 콜백 포함)
      * @returns AI가 생성한 전체 응답 문자열
      * @throws {Error} abortSignal에 의해 요청이 중단된 경우 'ABORTED' 에러
      */
-    async processMessage(
-        req: ChatMessageRequest,
-        uploadedDocuments: DocumentStore,
-        onToken: (token: string) => void,
-        onAgentSelected?: (agent: { type: string; name: string; emoji?: string; phase?: string; reason?: string; confidence?: number }) => void,
-        onDiscussionProgress?: (progress: DiscussionProgress) => void,
-        onResearchProgress?: (progress: ResearchProgress) => void,
-        executionPlan?: ExecutionPlan,
-        onSkillsActivated?: (skillNames: string[]) => void,
-        onRAGSources?: (sources: Array<{ source: string; relevanceScore: number; snippet: string }>) => void
-    ): Promise<string> {
+    async processMessage(options: ProcessMessageOptions): Promise<string> {
+        const { req, documents: uploadedDocuments, executionPlan, callbacks } = options;
+        const onToken = callbacks?.onToken ?? (() => {});
+        const { onAgentSelected, onDiscussionProgress, onResearchProgress, onSkillsActivated, onRAGSources } = callbacks ?? {};
         const {
             message,
             history,
@@ -254,9 +240,7 @@ export class ChatService {
             }
         };
 
-        this.setUserContext(userId || 'guest', userRole, userTier);
-        this.currentEnabledTools = enabledTools;
-        this.currentExecutionPlan = executionPlan;
+        const reqCtx = this.buildRequestContext(userId || 'guest', userRole, userTier, enabledTools, executionPlan);
 
         // ── 보안 사전 검사 ──
         const securityPreCheck = preRequestCheck(message || '');
@@ -391,7 +375,7 @@ export class ChatService {
             executionPlan, message: message || '', modelSelection, routingLog,
             images, docId, history, currentHistory, chatOptions, maxTurns,
             supportsTools, supportsThinking, thinkingMode, thinkingLevel,
-            languagePolicy, streamToken, abortSignal, checkAborted,
+            languagePolicy, streamToken, abortSignal, checkAborted, reqCtx,
         });
 
         // ── Step 6: 메트릭 기록 및 보안 사후 검사 ──
@@ -720,12 +704,13 @@ export class ChatService {
         streamToken: (token: string) => void;
         abortSignal?: AbortSignal;
         checkAborted: () => void;
+        reqCtx: RequestContext;
     }): Promise<void> {
         const {
             executionPlan, message, modelSelection, routingLog,
             images, docId, history, currentHistory, chatOptions, maxTurns,
             supportsTools, supportsThinking, thinkingMode, thinkingLevel,
-            languagePolicy, streamToken, abortSignal, checkAborted,
+            languagePolicy, streamToken, abortSignal, checkAborted, reqCtx,
         } = params;
 
         // A2A(Agent-to-Agent) 병렬 생성 전략 결정: off면 건너뛰고 AgentLoop으로 직행
@@ -789,8 +774,8 @@ export class ChatService {
                 thinkingMode,
                 thinkingLevel,
                 executionPlan,
-                currentUserContext: this.currentUserContext,
-                getAllowedTools: () => this.getAllowedTools(),
+                currentUserContext: reqCtx.userContext,
+                getAllowedTools: () => this.getAllowedTools(reqCtx),
                 onToken: streamToken,
                 abortSignal,
                 checkAborted,

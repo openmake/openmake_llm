@@ -47,6 +47,7 @@ import { WEBSOCKET_TIMEOUTS } from '../config/timeouts';
 import { handleChatMessage } from './ws-chat-handler';
 import { withSpan } from '../observability/otel';
 import { runWithRequestContext } from '../utils/request-context';
+import { errorMessage } from '../utils/error-message';
 
 const log = createLogger('WebSocketHandler');
 const WS_MAX_CONNECTIONS_PER_USER = 5;
@@ -55,7 +56,7 @@ const WS_CONNECTION_RATE_MAX_PER_IP = 30;
 const WS_CONNECTION_RATE_MAX_PER_USER = 15;
 const WS_AUTH_EXPIRY_WARNING_WINDOW_MS = 2 * 60 * 1000;
 
-// 대화 DB는 ChatRequestHandler 내부에서 getConversationDB()로 접근합니다.
+// 대화 DB는 ChatRequestHandler 내부에서 getUnifiedDatabase().conversations로 접근합니다.
 
 /**
  * WebSocket 연결 핸들러 클래스
@@ -230,7 +231,7 @@ export class WebSocketHandler {
                         extWs._messageCount = (extWs._messageCount || 0) + 1;
                         await this.handleMessage(ws, msg);
                     } catch (e: unknown) {
-                        log.error('[WS] 메시지 처리 오류:', (e instanceof Error ? e.message : String(e)) || e);
+                        log.error('[WS] 메시지 처리 오류:', errorMessage(e));
                     }
                 });
             });
@@ -305,7 +306,7 @@ export class WebSocketHandler {
                         }));
                         log.debug(`[WS] 에이전트 목록 전송: ${agents.length}개 (내장: ${agents.filter(a => !a.external).length}, 외부: ${agents.filter(a => a.external).length})`);
                     } catch (e: unknown) {
-                        log.error('[WS] 에이전트 목록 조회 실패:', (e instanceof Error ? e.message : String(e)));
+                        log.error('[WS] 에이전트 목록 조회 실패:', errorMessage(e));
                     }
                     break;
                 }

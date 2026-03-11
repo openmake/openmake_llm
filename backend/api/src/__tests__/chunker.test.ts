@@ -1,7 +1,7 @@
 /**
  * DocumentChunker 단위 테스트
  */
-import { chunkText, chunkDocument } from '../documents/chunker';
+import { chunkText, chunkDocument } from '../domains/rag/documents/chunker';
 
 describe('DocumentChunker', () => {
     describe('chunkText', () => {

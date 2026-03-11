@@ -46,14 +46,14 @@ describe('E2E Smoke Tests - Pipeline Integration', () => {
 
     it('OpenAICompatService generates valid completion IDs', () => {
         // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const { OpenAICompatService } = require('../services/OpenAICompatService');
+        const { OpenAICompatService } = require('../routes/openai-compat.service');
         const id = OpenAICompatService.generateCompletionId();
         expect(id).toMatch(/^chatcmpl-/);
     });
 
     it('OpenAICompatService lists models in OpenAI format', () => {
         // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const { OpenAICompatService } = require('../services/OpenAICompatService');
+        const { OpenAICompatService } = require('../routes/openai-compat.service');
         const response = OpenAICompatService.listModels();
         expect(response.object).toBe('list');
         expect(response.data.length).toBeGreaterThan(0);

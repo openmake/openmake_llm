@@ -27,6 +27,7 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
 import type { MCPServerConfig, MCPConnectionStatus, MCPTool, MCPToolResult } from './types';
 import { createLogger } from '../utils/logger';
+import { errorMessage } from '../utils/error-message';
 
 const logger = createLogger('ExternalMCP');
 
@@ -152,7 +153,7 @@ export class ExternalMCPClient {
             logger.info(`Connected to "${this.config.name}" — ${this.discoveredTools.length} tools discovered`);
         } catch (error) {
             this.status = 'error';
-            this.lastError = error instanceof Error ? error.message : String(error);
+            this.lastError = errorMessage(error);
             this.discoveredTools = [];
             logger.error(`Failed to connect to "${this.config.name}":`, this.lastError);
             throw error;
@@ -215,7 +216,7 @@ export class ExternalMCPClient {
             const result = await this.client.callTool({ name, arguments: args }) as SDKCallToolResult;
             return this.sdkResultToMCPToolResult(result);
         } catch (error) {
-            const message = error instanceof Error ? error.message : String(error);
+            const message = errorMessage(error);
             return {
                 content: [{ type: 'text', text: `도구 실행 오류 (${this.config.name}::${name}): ${message}` }],
                 isError: true,

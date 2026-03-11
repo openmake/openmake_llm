@@ -65,7 +65,7 @@ export function recordChatMetrics(params: {
         });
 
         try {
-            const { getMetrics } = require('../monitoring/metrics');
+            const { getMetrics } = require('../../../monitoring/metrics');
             const metricsCollector = getMetrics();
 
             metricsCollector.incrementCounter('chat_requests_total', 1, { model });
@@ -80,7 +80,7 @@ export function recordChatMetrics(params: {
         }
 
         try {
-            const { getAnalyticsSystem } = require('../monitoring/analytics');
+            const { getAnalyticsSystem } = require('../../../monitoring/analytics');
             const analytics = getAnalyticsSystem();
 
             const agentName = selectedAgent ? selectedAgent.name : 'General Chat';

@@ -37,10 +37,14 @@ import {
     developerDocsRouter,
     chatFeedbackRouter,
     apiKeysRouter,
-    kbRouter
+    kbRouter,
+    createHealthRouter,
+    createClusterRouter,
+    createAuthRouter,
+    createAdminRouter,
+    createSessionRouter
 } from './index';
 import { setupSwaggerRoutes } from '../swagger';
-import { createClusterController, createHealthController, createAuthController, createAdminController, createSessionController } from '../controllers';
 import { ClusterManager } from '../cluster/manager';
 import { bootstrapServices } from '../bootstrap';
 import { getConfig } from '../config';
@@ -129,16 +133,16 @@ export function setupApiRoutes(
     app.post('/api/auth/login/guest', guestHandler);
     app.post('/api/auth/register/guest', guestHandler);
 
-    // 컨트롤러 라우트
-    app.use('/', createHealthController(cluster));
-    app.use('/api/cluster', createClusterController(cluster));
-    app.use('/api/auth', createAuthController(getConfig().port));
-    app.use('/api/admin', createAdminController());
+    // 라우트 (컨트롤러에서 마이그레이션됨)
+    app.use('/', createHealthRouter({ cluster }));
+    app.use('/api/cluster', createClusterRouter({ cluster }));
+    app.use('/api/auth', createAuthRouter({ serverPort: getConfig().port }));
+    app.use('/api/admin', createAdminRouter());
 
     // 🆕 세션/대화 라우트 — /api/chat 보다 먼저 마운트 (Express 라우팅 명시성 보장)
-    const sessionController = createSessionController();
-    app.use('/api/chat/sessions', sessionController);
-    app.use('/api/chat/conversations', sessionController);
+    const sessionRouter = createSessionRouter();
+    app.use('/api/chat/sessions', sessionRouter);
+    app.use('/api/chat/conversations', sessionRouter);
     // 🆕 /api/chat/feedback 는 /api/chat 보다 먼저 마운트해야 Express가 올바르게 매칭
     app.use('/api/chat/feedback', chatFeedbackRouter);
     app.use('/api/chat', chatRouter);

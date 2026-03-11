@@ -6,7 +6,7 @@ import { ToolDefinition } from '../ollama/types';
 import {
     OpenAIChatCompletionRequest,
     OpenAICompatService,
-} from '../services/OpenAICompatService';
+} from './openai-compat.service';
 
 export interface OpenAICompatRouterDeps {
     cluster: ClusterManager;

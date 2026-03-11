@@ -54,6 +54,7 @@ import { getApiUsageTracker } from './api-usage-tracker';
 import { QuotaExceededError } from '../utils/errors/quota-exceeded.error';
 import { KeyExhaustionError } from '../utils/errors/key-exhaustion.error';
 import { runAgentLoop, AgentLoopResult } from './agent-loop';
+import { errorMessage } from '../utils/error-message';
 
 const logger = createLogger('OllamaClient');
 
@@ -809,7 +810,7 @@ export class OllamaClient {
             logger.info(`✅ Web Fetch: "${response.data.title}"`);
             return response.data;
         } catch (error: unknown) {
-            logger.error('Web Fetch 실패:', (error instanceof Error ? error.message : String(error)));
+            logger.error('Web Fetch 실패:', errorMessage(error));
             return { title: '', content: '', links: [] };
         }
     }

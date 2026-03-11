@@ -34,6 +34,7 @@ import { createContextBuilder } from './discussion-context';
 import { createLogger } from '../utils/logger';
 import { resolvePromptLocale } from '../domains/chat/pipeline/language-policy';
 import { parallelBatch } from '../utils/graph-engine';
+import { errorMessage } from '../utils/error-message';
 import {
     DISCUSSION_SYSTEM_PROMPTS,
     DISCUSSION_LABELS,
@@ -185,7 +186,7 @@ ${contextInstructions}
                 timestamp: new Date()
             };
         } catch (error) {
-            const errMsg = error instanceof Error ? error.message : String(error);
+            const errMsg = errorMessage(error);
             logger.error(`❌ ${agent.emoji} ${agent.name} 의견 생성 실패: ${errMsg}`);
             return null;
         }

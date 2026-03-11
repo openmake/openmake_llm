@@ -9,6 +9,10 @@
  */
 import type { UserTier } from '../../../data/user-manager';
 import type { OllamaClient } from '../../../ollama/client';
+import type { DiscussionProgress } from '../../../agents/discussion-engine';
+import type { ResearchProgress } from '../../research/DeepResearchService';
+import type { ExecutionPlan } from '../pipeline/profile-resolver';
+import type { DocumentStore } from '../../rag/documents/store';
 
 /**
  * 채팅 히스토리 메시지 인터페이스
@@ -184,4 +188,33 @@ export interface ChatMessageRequest {
     abortSignal?: AbortSignal;
     /** 사용자가 설정에서 선택한 선호 언어 (language-policy userPreference) */
     userLanguagePreference?: string;
+}
+
+/**
+ * processMessage()에 전달되는 통합 옵션 객체
+ *
+ * @interface ProcessMessageOptions
+ */
+export interface ProcessMessageOptions {
+    /** 채팅 메시지 요청 객체 */
+    req: ChatMessageRequest;
+    /** 업로드된 문서 저장소 */
+    documents: DocumentStore;
+    /** Brand Model 실행 계획 */
+    executionPlan?: ExecutionPlan;
+    /** 스트리밍 및 진행 상황 콜백 */
+    callbacks?: {
+        /** 스트리밍 토큰 콜백 (SSE 전송용) */
+        onToken: (token: string) => void;
+        /** 에이전트 선택 결과 콜백 */
+        onAgentSelected?: (agent: { type: string; name: string; emoji?: string; phase?: string; reason?: string; confidence?: number }) => void;
+        /** 토론 진행 상황 콜백 */
+        onDiscussionProgress?: (progress: DiscussionProgress) => void;
+        /** 연구 진행 상황 콜백 */
+        onResearchProgress?: (progress: ResearchProgress) => void;
+        /** 활성화된 스킬 콜백 */
+        onSkillsActivated?: (skillNames: string[]) => void;
+        /** RAG 출처 정보 콜백 */
+        onRAGSources?: (sources: Array<{ source: string; relevanceScore: number; snippet: string }>) => void;
+    };
 }

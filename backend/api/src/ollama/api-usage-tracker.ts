@@ -203,11 +203,8 @@ interface QuotaStatus {
     isOverLimit: boolean;
     /** 경고 레벨 (safe: <70%, warning: 70-90%, critical: >90%) */
     warningLevel: 'safe' | 'warning' | 'critical';
-    /** 개별 키 할당량 상태 */
-    keys?: {
-        primary: KeyQuotaStatus;
-        secondary: KeyQuotaStatus;
-    };
+    /** 개별 키 할당량 상태 (동적 키 개수 지원) */
+    keys?: KeyQuotaStatus[];
     /** 현재 활성 키 ID */
     activeKey?: string;
 }
@@ -645,21 +642,17 @@ class ApiUsageTracker {
         const limits = getQuotaLimits();
         const todayStats = this.getTodayStats();
 
-        // 🆕 개별 키 상태 먼저 계산
+        // 개별 키 상태 계산 (동적 키 개수)
         const keysStatus = this.getKeysQuotaStatus();
+        const keyCount = keysStatus.length || 1;
 
-        // 🆕 두 키의 사용량 합산 (각 키는 개별 2500 한도)
-        const primaryHourly = keysStatus.primary.hourly.used;
-        const secondaryHourly = keysStatus.secondary.hourly.used;
-        const primaryWeekly = keysStatus.primary.weekly.used;
-        const secondaryWeekly = keysStatus.secondary.weekly.used;
+        // 모든 키의 사용량 합산
+        const totalHourlyUsed = keysStatus.reduce((sum, k) => sum + k.hourly.used, 0);
+        const totalWeeklyUsed = keysStatus.reduce((sum, k) => sum + k.weekly.used, 0);
 
-        // 🆕 총 한도 = 키 개수 * 개별 한도
-        const totalHourlyLimit = limits.hourlyLimit * 2;  // 150 * 2 = 300
-        const totalWeeklyLimit = limits.weeklyLimit * 2;  // 2500 * 2 = 5000
-
-        const totalHourlyUsed = primaryHourly + secondaryHourly;
-        const totalWeeklyUsed = primaryWeekly + secondaryWeekly;
+        // 총 한도 = 키 개수 * 개별 한도
+        const totalHourlyLimit = limits.hourlyLimit * keyCount;
+        const totalWeeklyLimit = limits.weeklyLimit * keyCount;
 
         return {
             hourly: {
@@ -688,8 +681,8 @@ class ApiUsageTracker {
             },
             isOverLimit: totalWeeklyUsed >= totalWeeklyLimit,
             warningLevel: this.calculateWarningLevelCombined(totalHourlyUsed, totalWeeklyUsed, totalHourlyLimit, totalWeeklyLimit),
-            // 🆕 개별 키 상태 추가
-            keys: keysStatus,
+            // 개별 키 상태 추가 (동적 배열)
+            keys: keysStatus.length > 0 ? keysStatus : undefined,
             activeKey: this.getActiveKeyId()
         };
     }
@@ -708,25 +701,26 @@ class ApiUsageTracker {
     }
 
     /**
-     * 🆕 모든 키의 할당량 상태 조회 (4개 키 지원)
+     * 모든 키의 할당량 상태 조회 (동적 키 개수 지원)
      */
-    private getKeysQuotaStatus(): { primary: KeyQuotaStatus; secondary: KeyQuotaStatus } {
-        const cfg = getConfig();
-        const key1 = process.env.OLLAMA_API_KEY_1 || cfg.ollamaApiKeyPrimary;
-        const key2 = process.env.OLLAMA_API_KEY_2 || cfg.ollamaApiKeySecondary;
-
-        // ApiKeyManager에서 현재 활성 키 인덱스 확인
-        let activeIndex = 0;
+    private getKeysQuotaStatus(): KeyQuotaStatus[] {
+        let manager: ReturnType<typeof getApiKeyManager>;
         try {
-            activeIndex = getApiKeyManager().getStatus().activeKeyIndex;
+            manager = getApiKeyManager();
         } catch (e) {
-            // ignore
+            return [];
         }
 
-        return {
-            primary: this.getKeyQuotaStatus(getKeyId(key1), activeIndex === 0),
-            secondary: this.getKeyQuotaStatus(getKeyId(key2), activeIndex === 1)
-        };
+        const status = manager.getStatus();
+        const totalKeys = status.totalKeys;
+        const activeIndex = status.activeKeyIndex;
+
+        const result: KeyQuotaStatus[] = [];
+        for (let i = 0; i < totalKeys; i++) {
+            const key = manager.getKeyByIndex(i);
+            result.push(this.getKeyQuotaStatus(getKeyId(key), i === activeIndex));
+        }
+        return result;
     }
 
     /**
@@ -744,16 +738,6 @@ class ApiUsageTracker {
     /**
      * 경고 레벨 계산
      */
-    private _calculateWarningLevel(hourlyUsage: number, weeklyUsage: number, limits: QuotaLimits): 'safe' | 'warning' | 'critical' {
-        const hourlyPercentage = (hourlyUsage / limits.hourlyLimit) * 100;
-        const weeklyPercentage = (weeklyUsage / limits.weeklyLimit) * 100;
-        const maxPercentage = Math.max(hourlyPercentage, weeklyPercentage);
-
-        if (maxPercentage >= 90) return 'critical';
-        if (maxPercentage >= 70) return 'warning';
-        return 'safe';
-    }
-
     /**
      * 보관 기간이 지난 오래된 데이터를 정리합니다.
      *

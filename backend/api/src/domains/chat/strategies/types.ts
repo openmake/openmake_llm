@@ -14,7 +14,7 @@
  */
 import type { DiscussionProgress, DiscussionResult } from '../../../agents/discussion-engine';
 import type { ExecutionPlan } from '../pipeline/profile-resolver';
-import type { DocumentStore } from '../../../documents/store';
+import type { DocumentStore } from '../../rag/documents/store';
 import type { UserContext } from '../../../mcp/user-sandbox';
 import type { OllamaClient } from '../../../ollama/client';
 import type { ChatMessage, ModelOptions, ToolCall, ToolDefinition } from '../../../ollama/types';

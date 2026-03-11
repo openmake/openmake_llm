@@ -16,6 +16,7 @@
  */
 
 import { createLogger } from '../utils/logger';
+import { errorMessage } from '../utils/error-message';
 
 const logger = createLogger('WorkflowGraph');
 
@@ -254,7 +255,7 @@ export class CompiledGraph<S extends Record<string, unknown>> {
                 const promise = node.handler({ ...state }, ctx)
                     .then(result => ({ nodeId, result }))
                     .catch(error => {
-                        const msg = error instanceof Error ? error.message : String(error);
+                        const msg = errorMessage(error);
                         logger.error(`Node "${nodeId}" failed: ${msg}`);
                         nodeStatuses.set(nodeId, 'failed');
                         emitProgress(nodeId, 'failed', msg);

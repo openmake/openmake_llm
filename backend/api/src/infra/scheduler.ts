@@ -5,9 +5,11 @@
  * schedulers into a single module.
  */
 
-import { startSessionCleanupScheduler } from '../data/conversation-db';
 import { startDbRetention } from '../data/db-retention';
 import { startPeriodicCleanup } from '../utils/token-cleanup';
+import { createLogger } from '../utils/logger';
+
+const logger = createLogger('Scheduler');
 
 /** All scheduler timers for cleanup on shutdown */
 const schedulerTimers: NodeJS.Timeout[] = [];
@@ -125,8 +127,46 @@ export function getSchedulerTimers(): NodeJS.Timeout[] {
  * Clear all scheduler timers.
  */
 export function clearSchedulerTimers(): void {
+    stopSessionCleanupScheduler();
     for (const timer of schedulerTimers) {
         clearInterval(timer);
     }
     schedulerTimers.length = 0;
+}
+
+// ===== Session cleanup scheduler (migrated from conversation-db.ts) =====
+
+let cleanupTimer: ReturnType<typeof setInterval> | null = null;
+
+/**
+ * 만료 세션 자동 정리 스케줄러를 시작합니다.
+ * 지정된 간격으로 30일 이상 된 세션을 삭제합니다.
+ */
+function startSessionCleanupScheduler(intervalHours: number = 24): void {
+    if (cleanupTimer) clearInterval(cleanupTimer);
+
+    logger.info(`[Scheduler] Session cleanup scheduler started (interval: ${intervalHours}h)`);
+
+    cleanupTimer = setInterval(async () => {
+        try {
+            const { getUnifiedDatabase } = await import('../data/models/unified-database');
+            const count = await getUnifiedDatabase().conversations.cleanupOldSessions(30);
+            if (count > 0) {
+                logger.info(`[Scheduler] Cleaned ${count} old sessions`);
+            }
+        } catch (error) {
+            logger.error('[Scheduler] Session cleanup error:', error);
+        }
+    }, intervalHours * 60 * 60 * 1000);
+}
+
+/**
+ * 세션 정리 스케줄러를 중지합니다.
+ */
+function stopSessionCleanupScheduler(): void {
+    if (cleanupTimer) {
+        clearInterval(cleanupTimer);
+        cleanupTimer = null;
+        logger.info('[Scheduler] Session cleanup scheduler stopped');
+    }
 }

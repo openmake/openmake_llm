@@ -29,8 +29,8 @@ import { ChatService } from '../service';
 import type { ChatMessageRequest } from '../service';
 import type { DiscussionProgress } from '../../../agents/discussion-engine';
 import type { ResearchProgress } from '../../../domains/research/DeepResearchService';
-import { uploadedDocuments } from '../../../documents/store';
-import { getConversationDB } from '../../../data/conversation-db';
+import { uploadedDocuments } from '../../rag/documents/store';
+import { getUnifiedDatabase } from '../../../data/models/unified-database';
 import { buildExecutionPlan, type ExecutionPlan } from './profile-resolver';
 import { getPromptConfig } from './prompt';
 import { createLogger } from '../../../utils/logger';
@@ -295,7 +295,7 @@ export class ChatRequestHandler {
             return sessionId;
         }
 
-        const conversationDb = getConversationDB();
+        const conversationDb = getUnifiedDatabase().conversations;
         const session = await conversationDb.createSession(
             authenticatedUserId || undefined,
             message.substring(0, 30),
@@ -319,7 +319,7 @@ export class ChatRequestHandler {
         message: string,
         model?: string,
     ): Promise<void> {
-        const conversationDb = getConversationDB();
+        const conversationDb = getUnifiedDatabase().conversations;
         await conversationDb.addMessage(sessionId, 'user', message, { model });
     }
 
@@ -337,7 +337,7 @@ export class ChatRequestHandler {
         model?: string,
         responseTime?: number,
     ): Promise<void> {
-        const conversationDb = getConversationDB();
+        const conversationDb = getUnifiedDatabase().conversations;
         await conversationDb.addMessage(sessionId, 'assistant', response, {
             model,
             responseTime,
@@ -485,17 +485,19 @@ export class ChatRequestHandler {
             userLanguagePreference,
         };
 
-        const response = await chatService.processMessage(
-            chatRequest,
-            uploadedDocuments,
-            onToken,
-            onAgentSelected,
-            onDiscussionProgress,
-            onResearchProgress,
-            plan,
-            onSkillsActivated,
-            onRAGSources,
-        );
+        const response = await chatService.processMessage({
+            req: chatRequest,
+            documents: uploadedDocuments,
+            executionPlan: plan,
+            callbacks: {
+                onToken,
+                onAgentSelected,
+                onDiscussionProgress,
+                onResearchProgress,
+                onSkillsActivated,
+                onRAGSources,
+            },
+        });
 
         const endTime = Date.now();
         const responseTime = endTime - startTime;

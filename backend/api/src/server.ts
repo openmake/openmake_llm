@@ -27,7 +27,7 @@ import express, { Application } from 'express';
 import { Server as HttpServer, createServer } from 'http';
 import { WebSocketServer } from 'ws';
 import { ClusterManager, getClusterManager } from './cluster/manager';
-import { getConversationDB } from './data/conversation-db';
+import { getUnifiedDatabase } from './data/models/unified-database';
 import { setActiveConnectionsGetter as setMetricsConnections } from './routes/metrics.routes';
 import { startSchedulers } from './infra/scheduler';
 import { registerProcessHandlers } from './infra/lifecycle';
@@ -167,12 +167,12 @@ export class DashboardServer {
         // 클러스터 시작
         await this.cluster.start();
 
-        // ConversationDB / UserManager 초기화 완료 보장 (race condition 방지)
+        // UnifiedDatabase / UserManager 초기화 완료 보장 (race condition 방지)
         // 스키마 마이그레이션이 완료되기 전에 API 요청을 처리하지 않도록 대기
         try {
             const { getUserManager } = await import('./data/user-manager');
             await Promise.all([
-                getConversationDB().ensureReady(),
+                getUnifiedDatabase().ensureReady(),
                 getUserManager().ensureReady()
             ]);
             console.log('[Server] DB 초기화 완료');
@@ -320,7 +320,7 @@ if (require.main === module) {
 
             // OAuth state 정리 타이머 중지
             try {
-                const { stopOAuthCleanup } = await import('./controllers/auth.controller');
+                const { stopOAuthCleanup } = await import('./routes/auth.routes');
                 stopOAuthCleanup();
                 console.log('[Shutdown] OAuth 정리 타이머 중지 완료');
             } catch (error) {
@@ -334,15 +334,6 @@ if (require.main === module) {
                 console.log('[Shutdown] Analytics 타이머 중지 완료');
             } catch (error) {
                 console.error('[Shutdown] Analytics 타이머 중지 중 오류:', error);
-            }
-
-            // 세션 정리 스케줄러 중지
-            try {
-                const { stopSessionCleanupScheduler } = await import('./data/conversation-db');
-                stopSessionCleanupScheduler();
-                console.log('[Shutdown] 세션 정리 스케줄러 중지 완료');
-            } catch (error) {
-                console.error('[Shutdown] 세션 정리 스케줄러 중지 중 오류:', error);
             }
 
             // TokenBlacklist 타이머 정리

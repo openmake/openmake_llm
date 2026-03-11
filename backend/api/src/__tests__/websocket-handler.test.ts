@@ -42,12 +42,16 @@ jest.mock('../data/user-manager', () => ({
     })),
 }));
 
-// Mock conversation-db (lazy require in handler)
-jest.mock('../data/conversation-db', () => ({
-    getConversationDB: jest.fn(() => ({
-        createSession: jest.fn().mockResolvedValue({ id: 'session-123' }),
-        addMessage: jest.fn().mockResolvedValue(undefined),
+// Mock unified-database (used by request-handler for conversation access)
+jest.mock('../data/models/unified-database', () => ({
+    getUnifiedDatabase: jest.fn(() => ({
+        conversations: {
+            createSession: jest.fn().mockResolvedValue({ id: 'session-123' }),
+            addMessage: jest.fn().mockResolvedValue(undefined),
+        },
+        ensureReady: jest.fn().mockResolvedValue(undefined),
     })),
+    getPool: jest.fn(),
 }));
 
 // Mock conversation logger
@@ -142,7 +146,7 @@ jest.mock('../sockets/ws-chat-handler', () => ({
 // 여기서는 model-selector를 mock하지 않습니다.
 
 // Mock documents store
-jest.mock('../documents/store', () => ({
+jest.mock('../domains/rag/documents/store', () => ({
     uploadedDocuments: {},
 }));
 

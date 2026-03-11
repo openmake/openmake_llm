@@ -31,8 +31,8 @@ import {
      createSummaryPrompt,
      createQAPrompt,
      ProgressEvent
-  } from '../documents';
-  import { uploadedDocuments } from '../documents/store';
+  } from '../domains/rag/documents';
+  import { uploadedDocuments } from '../domains/rag/documents/store';
   import { success, badRequest, notFound, serviceUnavailable } from '../utils/api-response';
   import { asyncHandler } from '../utils/error-handler';
   import { createLogger } from '../utils/logger';

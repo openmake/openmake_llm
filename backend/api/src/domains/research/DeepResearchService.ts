@@ -50,6 +50,7 @@ import {
 } from './deep-research-prompts';
 
 import { parallelBatch } from '../../utils/graph-engine';
+import { errorMessage } from '../../utils/error-message';
 
 // Re-export types so consumers don't break
 export type { ResearchConfig, ResearchProgress, ResearchResult };
@@ -274,15 +275,15 @@ export class DeepResearchService {
                 throw error;
             }
 
-            const errorMessage = error instanceof Error ? error.message : String(error);
-            logger.error(`[DeepResearch] 실패: ${errorMessage}`);
+            const errMsg = errorMessage(error);
+            logger.error(`[DeepResearch] 실패: ${errMsg}`);
 
             await db.updateResearchSession(sessionId, {
                 status: 'failed',
-                summary: `리서치 실패: ${errorMessage}`
+                summary: `리서치 실패: ${errMsg}`
             });
 
-            this.reportProgress(onProgress, sessionId, 'failed', 0, this.config.maxLoops, 'error', 0, `오류: ${errorMessage}`);
+            this.reportProgress(onProgress, sessionId, 'failed', 0, this.config.maxLoops, 'error', 0, `오류: ${errMsg}`);
 
             throw error;
         } finally {
@@ -350,7 +351,7 @@ export class DeepResearchService {
 
             return finalSubTopics;
         } catch (error) {
-            logger.error(`[DeepResearch] 주제 분해 실패: ${error instanceof Error ? error.message : String(error)}`);
+            logger.error(`[DeepResearch] 주제 분해 실패: ${errorMessage(error)}`);
             return buildFallbackSubTopics(topic);
         }
     }
@@ -425,7 +426,7 @@ export class DeepResearchService {
                         status: 'completed'
                     });
                 } catch (error) {
-                    logger.warn(`[DeepResearch] 검색 실패 (${query}): ${error instanceof Error ? error.message : String(error)}`);
+                    logger.warn(`[DeepResearch] 검색 실패 (${query}): ${errorMessage(error)}`);
                 }
             },
             {
@@ -490,7 +491,7 @@ export class DeepResearchService {
                             source.fullContent = markdown;
                         }
                     } catch (error) {
-                        logger.warn(`[DeepResearch] 스크래핑 실패 (${source.url}): ${error instanceof Error ? error.message : String(error)}`);
+                        logger.warn(`[DeepResearch] 스크래핑 실패 (${source.url}): ${errorMessage(error)}`);
                     } finally {
                         scrapedUrls.add(normalizedUrl);
                     }
@@ -615,7 +616,7 @@ export class DeepResearchService {
                     this.throwIfAborted();
                     return response.content.trim();
                 } catch (error) {
-                    logger.error(`[DeepResearch] 청크 요약 실패 (${chunkIndex + 1}/${chunks.length}): ${error instanceof Error ? error.message : String(error)}`);
+                    logger.error(`[DeepResearch] 청크 요약 실패 (${chunkIndex + 1}/${chunks.length}): ${errorMessage(error)}`);
                     return '청크 요약 실패';
                 }
             },
@@ -649,7 +650,7 @@ export class DeepResearchService {
 
             return { summary: mergedSummary, keyPoints };
         } catch (error) {
-            logger.error(`[DeepResearch] 합성 실패: ${error instanceof Error ? error.message : String(error)}`);
+            logger.error(`[DeepResearch] 합성 실패: ${errorMessage(error)}`);
             return { summary: getResearchMessage('synthesisFailed', this.config.language), keyPoints: [] };
         }
     }
@@ -677,7 +678,7 @@ export class DeepResearchService {
 
             return response.content.toLowerCase().includes('yes');
         } catch (error) {
-            logger.error(`[DeepResearch] 추가 정보 판단 실패: ${error instanceof Error ? error.message : String(error)}`);
+            logger.error(`[DeepResearch] 추가 정보 판단 실패: ${errorMessage(error)}`);
             return sourceCount < this.config.maxTotalSources;
         }
     }
@@ -740,7 +741,7 @@ export class DeepResearchService {
 
             return { summary, keyFindings };
         } catch (error) {
-            logger.error(`[DeepResearch] 보고서 생성 실패: ${error instanceof Error ? error.message : String(error)}`);
+            logger.error(`[DeepResearch] 보고서 생성 실패: ${errorMessage(error)}`);
             return { summary: getResearchMessage('reportFailed', this.config.language), keyFindings: [] };
         }
     }

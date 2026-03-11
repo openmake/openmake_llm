@@ -20,6 +20,7 @@ import type { ChatStrategy, ChatResult, DiscussionStrategyContext } from './type
 import { createLogger } from '../../../utils/logger';
 import { CONTEXT_LIMITS, DISCUSSION_TOKEN_BUDGET } from '../../../config/runtime-limits';
 import { resolvePromptLocale, type PromptLocaleCode } from '../pipeline/language-policy';
+import { errorMessage } from '../../../utils/error-message';
 
 const logger = createLogger('DiscussionStrategy');
 
@@ -394,7 +395,7 @@ export class DiscussionStrategy implements ChatStrategy<DiscussionStrategyContex
         try {
             result = await discussionEngine.startDiscussion(message, webSearchFn);
         } catch (discussionError) {
-            const errMsg = discussionError instanceof Error ? discussionError.message : String(discussionError);
+            const errMsg = errorMessage(discussionError);
             logger.error(`❌ 토론 엔진 실행 실패: ${errMsg}`);
 
             const fallbackResponse = localized.fallbackResponse;

@@ -21,6 +21,7 @@ import type { ChatStrategy, ChatResult, DeepResearchStrategyContext } from './ty
 import { createLogger } from '../../../utils/logger';
 import { detectLanguage } from '../pipeline/language-policy';
 import { LLM_TIMEOUTS } from '../../../config/timeouts';
+import { errorMessage } from '../../../utils/error-message';
 
 const logger = createLogger('DeepResearchStrategy');
 
@@ -89,7 +90,7 @@ export class DeepResearchStrategy implements ChatStrategy<DeepResearchStrategyCo
 
         // RAG 자동 저장 (비동기 — 스트리밍 응답을 차단하지 않음)
         this.saveToRAG(result, userId, sessionId).catch(err => {
-            logger.warn(`Deep Research → RAG 저장 실패 (무시): ${err instanceof Error ? err.message : String(err)}`);
+            logger.warn(`Deep Research → RAG 저장 실패 (무시): ${errorMessage(err)}`);
         });
 
         return { response: formattedResponse };

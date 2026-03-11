@@ -28,7 +28,7 @@ jest.mock('../domains/rag/EmbeddingService', () => ({
 }));
 
 const mockChunkDocument = jest.fn();
-jest.mock('../documents/chunker', () => ({
+jest.mock('../domains/rag/documents/chunker', () => ({
     chunkDocument: mockChunkDocument,
 }));
 
@@ -49,6 +49,13 @@ jest.mock('../utils/logger', () => ({
 }));
 
 jest.mock('../config/runtime-limits', () => ({
+    MODEL_CONTEXT_DEFAULTS: {
+        DEFAULT_NUM_CTX: 32768,
+        EXTENDED_NUM_CTX: 65536,
+        LOW_NUM_CTX: 16384,
+        DEFAULT_NUM_PREDICT: 8192,
+        LOW_NUM_PREDICT: 4096,
+    },
     RAG_CONFIG: {
         EMBEDDING_MODEL: 'test-embed-model',
         EMBEDDING_BATCH_SIZE: 2,

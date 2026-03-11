@@ -41,6 +41,14 @@ module.exports = {
         '/dist/',
         '/build/',
         '/tests/e2e/',
+        // bun:test files — run via `npm run test:bun`, not Jest
+        'request-context\\.test\\.ts$',
+        'routing-eval\\.test\\.ts$',
+        'otel\\.test\\.ts$',
+        'rag-pipeline\\.test\\.ts$',
+        'kb-repository\\.test\\.ts$',
+        'graph-engine\\.test\\.ts$',
+        'firecrawl\\.test\\.ts$',
     ],
     
     // 모듈 해석에서 dist 폴더 제외 (소스 .ts와 컴파일된 .d.ts 간 타입 충돌 방지)

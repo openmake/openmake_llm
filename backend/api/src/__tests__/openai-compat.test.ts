@@ -1,7 +1,7 @@
 import {
     OpenAICompatService,
     OpenAIMessage,
-} from '../services/OpenAICompatService';
+} from '../routes/openai-compat.service';
 
 describe('OpenAICompatService', () => {
     it('generateCompletionId returns prefixed completion id', () => {

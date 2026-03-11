@@ -9,7 +9,7 @@
  * @module documents/chunker
  */
 
-import { RAG_CONFIG } from '../config/runtime-limits';
+import { RAG_CONFIG } from '../../../config/runtime-limits';
 
 /**
  * 개별 텍스트 청크 인터페이스

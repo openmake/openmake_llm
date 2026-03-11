@@ -4,12 +4,11 @@
 # data — PostgreSQL Data Access Layer
 
 ## Purpose
-All database access for the application. Uses raw SQL with the `pg` Pool — no ORM. `conversation-db.ts` manages chat sessions and message persistence. `user-manager.ts` handles user CRUD with bcrypt password hashing. `retry-wrapper.ts` provides transparent retry logic for transient DB errors. Repositories under `repositories/` provide typed access to each domain table. Schema migrations run automatically on startup via `migrations/runner.ts`.
+All database access for the application. Uses raw SQL with the `pg` Pool — no ORM. `user-manager.ts` handles user CRUD with bcrypt password hashing. `retry-wrapper.ts` provides transparent retry logic for transient DB errors. Repositories under `repositories/` provide typed access to each domain table (including `conversation-repository.ts` for chat sessions/messages). Schema migrations run automatically on startup via `migrations/runner.ts`.
 
 ## Key Files
 | File | Description |
 |------|-------------|
-| `conversation-db.ts` | Chat session and message persistence — create, read, list, delete conversations |
 | `user-manager.ts` | User CRUD with bcrypt hashing; role assignment |
 | `retry-wrapper.ts` | Wraps DB calls with exponential-backoff retry for transient connection errors |
 

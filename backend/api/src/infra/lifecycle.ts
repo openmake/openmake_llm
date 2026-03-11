@@ -38,7 +38,7 @@ async function gracefulShutdown(signal: string, server: DashboardServer): Promis
 
         // OAuth state 정리 타이머 중지
         try {
-            const { stopOAuthCleanup } = await import('../controllers/auth.controller');
+            const { stopOAuthCleanup } = await import('../routes/auth.routes');
             stopOAuthCleanup();
             console.log('[Shutdown] OAuth 정리 타이머 중지 완료');
         } catch (error) {
@@ -52,15 +52,6 @@ async function gracefulShutdown(signal: string, server: DashboardServer): Promis
             console.log('[Shutdown] Analytics 타이머 중지 완료');
         } catch (error) {
             console.error('[Shutdown] Analytics 타이머 중지 중 오류:', error);
-        }
-
-        // 세션 정리 스케줄러 중지
-        try {
-            const { stopSessionCleanupScheduler } = await import('../data/conversation-db');
-            stopSessionCleanupScheduler();
-            console.log('[Shutdown] 세션 정리 스케줄러 중지 완료');
-        } catch (error) {
-            console.error('[Shutdown] 세션 정리 스케줄러 중지 중 오류:', error);
         }
 
         // TokenBlacklist 타이머 정리

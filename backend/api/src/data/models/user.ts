@@ -8,6 +8,7 @@ import * as crypto from 'crypto';
 import { getUnifiedDatabase, getPool, User } from './unified-database';
 import { getConfig } from '../../config/env';
 import { createLogger } from '../../utils/logger';
+import { errorMessage } from '../../utils/error-message';
 
 const logger = createLogger('UserModel');
 
@@ -53,7 +54,7 @@ export class UserModel {
 
             return this.toPublicUser(user);
         } catch (error: unknown) {
-            logger.error('사용자 생성 실패:', (error instanceof Error ? error.message : String(error)));
+            logger.error('사용자 생성 실패:', errorMessage(error));
             return null;
         }
     }

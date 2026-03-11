@@ -15,6 +15,7 @@ import { NodeSDK } from '@opentelemetry/sdk-node';
 import { BatchSpanProcessor, ConsoleSpanExporter, TraceIdRatioBasedSampler } from '@opentelemetry/sdk-trace-node';
 import { ATTR_SERVICE_NAME, ATTR_SERVICE_VERSION } from '@opentelemetry/semantic-conventions';
 import { createLogger } from '../utils/logger';
+import { errorMessage } from '../utils/error-message';
 
 const logger = createLogger('OTel');
 
@@ -126,7 +127,7 @@ export async function withSpan<T>(
         span.recordException(error instanceof Error ? error : new Error(String(error)));
         span.setStatus({
             code: SpanStatusCode.ERROR,
-            message: error instanceof Error ? error.message : String(error),
+            message: errorMessage(error),
         });
         throw error;
     } finally {

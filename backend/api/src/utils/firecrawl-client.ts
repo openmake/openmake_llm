@@ -16,6 +16,7 @@
 
 import { createLogger } from './logger';
 import { validateOutboundUrl } from '../security/ssrf-guard';
+import { errorMessage } from './error-message';
 
 const logger = createLogger('FirecrawlClient');
 
@@ -194,7 +195,7 @@ export async function firecrawlPost(options: FirecrawlPostOptions): Promise<unkn
         if (error instanceof Error && error.message.startsWith('Firecrawl 서킷 브레이커')) {
             throw error;
         }
-        logger.error(`요청 실패 (${endpoint}):`, (error instanceof Error ? error.message : String(error)));
+        logger.error(`요청 실패 (${endpoint}):`, errorMessage(error));
         throw error;
     } finally {
         if (timeoutHandle) {

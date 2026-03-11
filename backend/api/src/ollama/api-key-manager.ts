@@ -25,6 +25,7 @@
 import { getConfig } from '../config/env';
 import { getPool } from '../data/models/unified-database';
 import { createLogger } from '../utils/logger';
+import { errorMessage } from '../utils/error-message';
 
 const logger = createLogger('ApiKeyManager');
 
@@ -93,7 +94,7 @@ export class ApiKeyManager {
     private dbWrite(text: string, params: (string | number | null)[]): void {
         try {
             getPool().query(text, params).catch(err => {
-                logger.warn('DB write failed (cache-only mode):', err instanceof Error ? err.message : String(err));
+                logger.warn('DB write failed (cache-only mode):', errorMessage(err));
             });
         } catch (_e) {
             // getPool() may throw if DB not initialized — silently ignore
@@ -119,7 +120,7 @@ export class ApiKeyManager {
                     }
                 })
                 .catch(err => {
-                    logger.warn('DB 캐시 워밍 실패 (캐시 전용 모드):', err instanceof Error ? err.message : String(err));
+                    logger.warn('DB 캐시 워밍 실패 (캐시 전용 모드):', errorMessage(err));
                 });
         } catch (_e) {
             // getPool() may throw if DB not initialized — silently ignore
@@ -174,7 +175,7 @@ export class ApiKeyManager {
                 this.keys = this.loadKeysFromEnv();
             }
         } catch (error) {
-            logger.warn(`⚠️ API 키 초기화 실패, 빈 키 목록으로 진행: ${(error instanceof Error ? error.message : String(error))}`);
+            logger.warn(`⚠️ API 키 초기화 실패, 빈 키 목록으로 진행: ${errorMessage(error)}`);
             this.keys = [];
         }
 

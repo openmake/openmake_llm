@@ -14,7 +14,7 @@ import { checkChatRateLimit } from '../middlewares/chat-rate-limiter';
 import { createLogger } from '../utils/logger';
 import { WSMessage, ExtendedWebSocket } from './ws-types';
 import { detectLanguage, type SupportedLanguageCode } from '../domains/chat/pipeline/language-policy';
-import { uploadedDocuments } from '../documents/store';
+import { uploadedDocuments } from '../domains/rag/documents/store';
 
 // 다국어 시사 키워드 맵
 const CURRENT_EVENTS_KEYWORDS: Record<string, string[]> = {

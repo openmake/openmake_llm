@@ -2,10 +2,11 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import { getConfig } from '../config/env';
+import { getConfig } from '../../../config/env';
 import { ProgressCallback, createProgressEvent } from './progress';
-import { createLogger } from '../utils/logger';
-import { DOCUMENT_PROCESSING } from '../config/runtime-limits';
+import { createLogger } from '../../../utils/logger';
+import { DOCUMENT_PROCESSING } from '../../../config/runtime-limits';
+import { errorMessage } from '../../../utils/error-message';
 
 /** ISO 639-1 코드를 영어 언어명으로 변환 (LLM 프롬프트용) */
 const LANGUAGE_NAMES: Record<string, string> = {
@@ -159,7 +160,7 @@ export async function extractPdfText(
                 }
             }
         } catch (e: unknown) {
-            logger.error('[PDF/OCR] 프로세스 오류:', (e instanceof Error ? e.message : String(e)));
+            logger.error('[PDF/OCR] 프로세스 오류:', errorMessage(e));
         }
     }
 
@@ -249,7 +250,7 @@ export async function extractImageText(
             }
         };
     } catch (e: unknown) {
-        logger.error('[OCR] 오류:', (e instanceof Error ? e.message : String(e)));
+        logger.error('[OCR] 오류:', errorMessage(e));
 
         // 이미지 파일인 경우 텍스트 추출에 실패해도 base64 데이터는 지원 (Vision 모델용)
         try {
@@ -265,7 +266,7 @@ export async function extractImageText(
             return {
                 filename,
                 type: 'image',
-                text: `[이미지 파일: ${filename}] OCR 처리 및 파일 읽기 오류: ${(e instanceof Error ? e.message : String(e))}`
+                text: `[이미지 파일: ${filename}] OCR 처리 및 파일 읽기 오류: ${errorMessage(e)}`
             };
         }
     }
@@ -321,11 +322,11 @@ export async function extractExcelText(
             info: { sheets: workbook.worksheets.length }
         };
     } catch (e: unknown) {
-        logger.error('[Excel] 오류:', (e instanceof Error ? e.message : String(e)));
+        logger.error('[Excel] 오류:', errorMessage(e));
         return {
             filename,
             type: 'excel',
-            text: `[Excel 파일: ${filename}] 처리 오류: ${(e instanceof Error ? e.message : String(e))}`
+            text: `[Excel 파일: ${filename}] 처리 오류: ${errorMessage(e)}`
         };
     }
 }

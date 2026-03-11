@@ -22,6 +22,7 @@ import {
 } from '../domains/research/DeepResearchService';
 import { v4 as uuidv4 } from 'uuid';
 import { createLogger } from '../utils/logger';
+import { errorMessage } from '../utils/error-message';
 import { detectLanguage } from '../domains/chat/pipeline/language-policy';
 import { CLEANUP_INTERVALS } from '../config/timeouts';
 import { getSearchLocale } from '../i18n/search-locale';
@@ -164,15 +165,15 @@ export const researchTool: MCPToolDefinition = {
             };
 
         } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : String(error);
-            logger.error(`[DeepResearch MCP] 오류: ${errorMessage}`);
+            const errMsg = errorMessage(error);
+            logger.error(`[DeepResearch MCP] 오류: ${errMsg}`);
 
             return {
                 content: [{
                     type: 'text',
                     text: JSON.stringify({
                         success: false,
-                        error: errorMessage
+                        error: errMsg
                     }, null, 2)
                 }],
                 isError: true
@@ -286,13 +287,13 @@ export const getResearchStatusTool: MCPToolDefinition = {
             };
 
         } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : String(error);
+            const errMsg = errorMessage(error);
             return {
                 content: [{
                     type: 'text',
                     text: JSON.stringify({
                         success: false,
-                        error: errorMessage
+                        error: errMsg
                     }, null, 2)
                 }],
                 isError: true
@@ -423,13 +424,13 @@ export const configureResearchTool: MCPToolDefinition = {
             };
 
         } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : String(error);
+            const errMsg = errorMessage(error);
             return {
                 content: [{
                     type: 'text',
                     text: JSON.stringify({
                         success: false,
-                        error: errorMessage
+                        error: errMsg
                     }, null, 2)
                 }],
                 isError: true

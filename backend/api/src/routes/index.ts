@@ -49,3 +49,10 @@ export { tokenMonitoringRouter } from './token-monitoring.routes';
 
 // 🆕 Knowledge Base 라우트
 export { default as kbRouter } from './kb.routes';
+
+// 🆕 컨트롤러에서 마이그레이션된 라우트
+export { createHealthRouter } from './health.routes';
+export { createClusterRouter } from './cluster.routes';
+export { createAuthRouter, stopOAuthCleanup } from './auth.routes';
+export { createAdminRouter } from './admin.routes';
+export { createSessionRouter } from './session.routes';

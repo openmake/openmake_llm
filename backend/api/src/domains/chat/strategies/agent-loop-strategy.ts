@@ -21,6 +21,7 @@ import { DirectStrategy } from './direct-strategy';
 import type { AgentLoopStrategyContext, ChatStrategy, ChatResult } from './types';
 import { createLogger } from '../../../utils/logger';
 import { TRUNCATION } from '../../../config/runtime-limits';
+import { errorMessage } from '../../../utils/error-message';
 
 const logger = createLogger('AgentLoopStrategy');
 
@@ -181,9 +182,9 @@ export class AgentLoopStrategy implements ChatStrategy<AgentLoopStrategyContext,
                 }
                 return '검색 결과가 없습니다.';
             } catch (e: unknown) {
-                const errorMessage = e instanceof Error ? e.message : String(e);
-                logger.error('web_search 실행 실패:', errorMessage);
-                return `Error: ${errorMessage}`;
+                const errMsg = errorMessage(e);
+                logger.error('web_search 실행 실패:', errMsg);
+                return `Error: ${errMsg}`;
             }
         }
 
@@ -198,9 +199,9 @@ export class AgentLoopStrategy implements ChatStrategy<AgentLoopStrategyContext,
                 }
                 return '페이지 콘텐츠를 가져올 수 없습니다.';
             } catch (e: unknown) {
-                const errorMessage = e instanceof Error ? e.message : String(e);
-                logger.error('web_fetch 실행 실패:', errorMessage);
-                return `Error: ${errorMessage}`;
+                const errMsg = errorMessage(e);
+                logger.error('web_fetch 실행 실패:', errMsg);
+                return `Error: ${errMsg}`;
             }
         }
 
@@ -247,9 +248,9 @@ export class AgentLoopStrategy implements ChatStrategy<AgentLoopStrategyContext,
 
                 return `📝 OCR 결과:\n\n${extractedText}`;
             } catch (e: unknown) {
-                const errorMessage = e instanceof Error ? e.message : String(e);
-                logger.error('vision_ocr 실행 실패:', errorMessage);
-                return `Error: ${errorMessage}`;
+                const errMsg = errorMessage(e);
+                logger.error('vision_ocr 실행 실패:', errMsg);
+                return `Error: ${errMsg}`;
             }
         }
 
@@ -296,9 +297,9 @@ export class AgentLoopStrategy implements ChatStrategy<AgentLoopStrategyContext,
 
                 return `🖼️ 이미지 분석 결과:\n\n${analysis}`;
             } catch (e: unknown) {
-                const errorMessage = e instanceof Error ? e.message : String(e);
-                logger.error('analyze_image 실행 실패:', errorMessage);
-                return `Error: ${errorMessage}`;
+                const errMsg = errorMessage(e);
+                logger.error('analyze_image 실행 실패:', errMsg);
+                return `Error: ${errMsg}`;
             }
         }
 
@@ -311,9 +312,9 @@ export class AgentLoopStrategy implements ChatStrategy<AgentLoopStrategyContext,
             }
             return result.content.map((c: { text?: string }) => c.text).join('\n');
         } catch (e: unknown) {
-            const errorMessage = e instanceof Error ? e.message : String(e);
-            logger.error(`Tool execution failed: ${errorMessage}`);
-            return `Error: ${errorMessage}`;
+            const errMsg = errorMessage(e);
+            logger.error(`Tool execution failed: ${errMsg}`);
+            return `Error: ${errMsg}`;
         }
     }
 }
