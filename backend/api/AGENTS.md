@@ -1,3 +1,4 @@
+<!-- Parent: ../../AGENTS.md -->
 # Backend (Express/TypeScript) — AI Skill Guide
 
 > 이 파일은 `backend/api/src/` 작업 시 AI 에이전트가 참조하는 스킬 가이드입니다.

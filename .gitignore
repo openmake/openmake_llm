@@ -12,6 +12,10 @@ dist/
 build/
 *.tsbuildinfo
 
+# Script build artifacts
+scripts/*.d.ts
+scripts/*.js.map
+
 # Logs
 *.log
 logs/

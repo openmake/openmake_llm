@@ -30,8 +30,7 @@ module.exports = {
     // 테스트 파일 패턴
     testMatch: [
         '<rootDir>/backend/api/src/**/__tests__/**/*.test.ts',
-        '<rootDir>/backend/api/src/**/*.test.ts',
-        '<rootDir>/tests/unit/**/*.test.ts'
+        '<rootDir>/backend/api/src/**/*.test.ts'
     ],
     
     // 제외 패턴

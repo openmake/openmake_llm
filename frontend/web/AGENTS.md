@@ -1,3 +1,4 @@
+<!-- Parent: ../../AGENTS.md -->
 # Frontend (Vanilla JS) — AI Skill Guide
 
 > 이 파일은 `frontend/web/` 작업 시 AI 에이전트가 참조하는 스킬 가이드입니다.
