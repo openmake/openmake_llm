@@ -65,6 +65,7 @@
         "@types/express": "^5.0.6",
         "@types/inquirer": "^9.0.9",
         "@types/jest": "^30.0.0",
+        "@types/jsonwebtoken": "^9.0.10",
         "@types/multer": "^2.0.0",
         "@types/node": "^20.10.0",
         "@types/pdf-parse": "^1.1.5",
