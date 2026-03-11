@@ -41,8 +41,8 @@ coverage/
 .ruff_cache/
 
 # Runtime data (databases, user data, usage stats)
-data/
-!data/.gitkeep
+/data/
+!/data/.gitkeep
 backend/api/data/
 
 # Legacy backup files
