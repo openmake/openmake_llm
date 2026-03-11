@@ -16,6 +16,7 @@ import { getEmbeddingService } from './EmbeddingService';
 import { chunkDocument, type TextChunk, type ChunkOptions } from '../documents/chunker';
 import { RAG_CONFIG } from '../config/runtime-limits';
 import type { RAGContext, RAGDocument } from '../chat/context-types';
+import { getReranker } from './Reranker';
 
 const logger = createLogger('RAGService');
 
@@ -179,6 +180,79 @@ export class RAGService {
     }
 
     /**
+     * 하이브리드 검색 (Vector + FTS/BM25 + RRF 융합 + Cross-encoder Reranking)
+     *
+     * 3단계 파이프라인:
+     * 1. 벡터 유사도 검색 (시맨틱) + FTS 렉시컬 검색 (BM25/tsvector)
+     * 2. Reciprocal Rank Fusion으로 두 결과를 융합
+     * 3. Cross-encoder Reranker로 최종 재순위화
+     *
+     * @param request - RAG 검색 요청
+     * @returns 재순위화된 검색 결과
+     */
+    async searchHybrid(request: RAGSearchRequest): Promise<VectorSearchResult[]> {
+        const { query, userId, docId, topK, threshold } = request;
+        const finalTopK = topK ?? RAG_CONFIG.TOP_K;
+        // Reranker에 충분한 후보를 제공하기 위해 넓은 창 사용 (최소 20)
+        const retrievalWindow = Math.max(finalTopK * 4, 20);
+
+        // 1. 쿼리 임베딩 생성
+        const embeddingService = getEmbeddingService();
+        const queryEmbedding = await embeddingService.embedText(query);
+
+        // 2. 병렬 검색 실행 (Vector + FTS)
+        const searchOptions = {
+            topK: retrievalWindow,
+            threshold: threshold ?? RAG_CONFIG.RELEVANCE_THRESHOLD,
+            sourceType: 'document' as const,
+            sourceId: docId,
+            userId,
+        };
+
+        const [vectorResults, lexicalResults] = await Promise.all([
+            queryEmbedding
+                ? this.vectorRepo.searchSimilar(queryEmbedding, searchOptions)
+                : Promise.resolve([]),
+            this.vectorRepo.searchLexical(query, {
+                topK: retrievalWindow,
+                sourceType: 'document',
+                sourceId: docId,
+                userId,
+            }),
+        ]);
+
+        logger.info(
+            `[RAG Hybrid] vector=${vectorResults.length}개, lexical=${lexicalResults.length}개 → RRF 융합`
+        );
+
+        // 3. RRF 융합
+        if (vectorResults.length === 0 && lexicalResults.length === 0) {
+            return [];
+        }
+
+        let candidates: VectorSearchResult[];
+
+        if (lexicalResults.length === 0) {
+            candidates = vectorResults.slice(0, retrievalWindow);
+        } else if (vectorResults.length === 0) {
+            candidates = lexicalResults.slice(0, retrievalWindow);
+        } else {
+            // RRF로 넓은 후보 풀 생성 (reranker에 전달할 양)
+            candidates = reciprocalRankFusion(vectorResults, lexicalResults, retrievalWindow);
+        }
+
+        // 4. Cross-encoder Reranking
+        try {
+            const reranker = getReranker();
+            const reranked = await reranker.rerank(query, candidates, finalTopK);
+            return reranked;
+        } catch (error) {
+            logger.warn('[RAG Hybrid] Reranker 실패 — RRF 결과로 fallback:', error);
+            return candidates.slice(0, finalTopK);
+        }
+    }
+
+    /**
      * RAG 검색 결과를 ContextEngineering용 RAGContext로 변환합니다.
      *
      * ChatService에서 setRAGContext()에 전달할 수 있는 형태로 변환합니다.
@@ -217,7 +291,18 @@ export class RAGService {
         userId?: string,
         docId?: string,
     ): Promise<RAGContext | null> {
-        const results = await this.search({ query, userId, docId });
+        // Adaptive Top-K: 쿼리 길이와 복잡도에 따라 검색 범위를 동적으로 조정
+        // 짧은 쿼리(키워드 검색) → 적은 결과, 긴 복잡한 쿼리 → 넓은 검색
+        const queryLen = query.trim().length;
+        const hasMultipleSentences = (query.match(/[.?!。？！]\s/g) || []).length >= 1;
+        let adaptiveTopK: number = RAG_CONFIG.TOP_K; // 기본 5
+        if (queryLen > 100 || hasMultipleSentences) {
+            adaptiveTopK = Math.min(RAG_CONFIG.TOP_K * 2, 10); // 복잡 쿼리 → 최대 10
+        } else if (queryLen < 20) {
+            adaptiveTopK = Math.max(Math.floor(RAG_CONFIG.TOP_K * 0.6), 3); // 짧은 쿼리 → 최소 3
+        }
+
+        const results = await this.search({ query, userId, docId, topK: adaptiveTopK });
 
         if (results.length === 0) {
             return null;
@@ -276,6 +361,60 @@ export class RAGService {
             embeddingModelAvailable: modelAvailable,
         };
     }
+}
+
+/**
+ * Reciprocal Rank Fusion (RRF) — 벡터 + 렉시컬 검색 결과를 융합합니다.
+ *
+ * 각 결과 리스트의 순위(rank)를 기반으로 점수를 계산하며,
+ * 동일 문서가 두 리스트에 모두 등장하면 점수가 합산됩니다.
+ *
+ * score(d) = ∑ 1/(k + rank_i(d))
+ *
+ * @param vectorResults - 벡터 유사도 검색 결과 (순위 정렬됨)
+ * @param lexicalResults - FTS 렉시컬 검색 결과 (순위 정렬됨)
+ * @param topK - 반환할 최대 결과 수
+ * @param k - RRF 상수 (기본: 60, 논문 권장값)
+ * @returns RRF 점수 순으로 정렬된 검색 결과
+ */
+export function reciprocalRankFusion(
+    vectorResults: VectorSearchResult[],
+    lexicalResults: VectorSearchResult[],
+    topK: number,
+    k: number = 60,
+): VectorSearchResult[] {
+    const scores = new Map<number, number>();
+    const metadataMap = new Map<number, VectorSearchResult>();
+
+    // 벡터 결과 점수 계산
+    vectorResults.forEach((r, i) => {
+        const current = scores.get(r.id) ?? 0;
+        scores.set(r.id, current + 1 / (k + i + 1));
+        if (!metadataMap.has(r.id)) {
+            metadataMap.set(r.id, r);
+        }
+    });
+
+    // 렉시컬 결과 점수 합산
+    lexicalResults.forEach((r, i) => {
+        const current = scores.get(r.id) ?? 0;
+        scores.set(r.id, current + 1 / (k + i + 1));
+        if (!metadataMap.has(r.id)) {
+            metadataMap.set(r.id, r);
+        }
+    });
+
+    // RRF 점수 순 정렬 후 topK 반환
+    return [...scores.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, topK)
+        .map(([id, score]) => {
+            const original = metadataMap.get(id)!;
+            return {
+                ...original,
+                similarity: score, // RRF 점수로 대체
+            };
+        });
 }
 
 // 싱글톤 팩토리

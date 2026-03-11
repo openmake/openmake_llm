@@ -1,6 +1,9 @@
 /**
  * retry-wrapper.ts 단위 테스트
  * withRetry, withTransaction 검증
+ *
+ * Bun 호환: jest.useFakeTimers/runAllTimersAsync 대신
+ * 실제 타이머(baseDelayMs=10, maxDelayMs=100)로 테스트
  */
 
 import { withRetry, withTransaction } from '../data/retry-wrapper';
@@ -19,20 +22,13 @@ jest.mock('../utils/logger', () => ({
 // ===== withRetry =====
 
 describe('withRetry', () => {
-    beforeEach(() => {
-        jest.useFakeTimers();
-    });
-
     afterEach(() => {
-        jest.useRealTimers();
         jest.clearAllMocks();
     });
 
     test('성공 시 결과 반환 (1회 호출)', async () => {
         const fn = jest.fn().mockResolvedValue('result');
-        const promise = withRetry(fn, { maxRetries: 3, baseDelayMs: 10 });
-        await jest.runAllTimersAsync();
-        const result = await promise;
+        const result = await withRetry(fn, { maxRetries: 3, baseDelayMs: 10 });
         expect(result).toBe('result');
         expect(fn).toHaveBeenCalledTimes(1);
     });
@@ -43,9 +39,7 @@ describe('withRetry', () => {
             .mockRejectedValueOnce(retryableError)
             .mockResolvedValue('ok');
 
-        const promise = withRetry(fn, { maxRetries: 3, baseDelayMs: 10, maxDelayMs: 100 });
-        await jest.runAllTimersAsync();
-        const result = await promise;
+        const result = await withRetry(fn, { maxRetries: 3, baseDelayMs: 10, maxDelayMs: 100 });
         expect(result).toBe('ok');
         expect(fn).toHaveBeenCalledTimes(2);
     });
@@ -56,9 +50,7 @@ describe('withRetry', () => {
             .mockRejectedValueOnce(err)
             .mockResolvedValue('connected');
 
-        const promise = withRetry(fn, { maxRetries: 3, baseDelayMs: 10, maxDelayMs: 100 });
-        await jest.runAllTimersAsync();
-        const result = await promise;
+        const result = await withRetry(fn, { maxRetries: 3, baseDelayMs: 10, maxDelayMs: 100 });
         expect(result).toBe('connected');
     });
 
@@ -68,9 +60,7 @@ describe('withRetry', () => {
             .mockRejectedValueOnce(err)
             .mockResolvedValue('ok');
 
-        const promise = withRetry(fn, { maxRetries: 3, baseDelayMs: 10, maxDelayMs: 100 });
-        await jest.runAllTimersAsync();
-        const result = await promise;
+        const result = await withRetry(fn, { maxRetries: 3, baseDelayMs: 10, maxDelayMs: 100 });
         expect(result).toBe('ok');
     });
 
@@ -80,9 +70,7 @@ describe('withRetry', () => {
             .mockRejectedValueOnce(err)
             .mockResolvedValue('ok');
 
-        const promise = withRetry(fn, { maxRetries: 3, baseDelayMs: 10, maxDelayMs: 100 });
-        await jest.runAllTimersAsync();
-        const result = await promise;
+        const result = await withRetry(fn, { maxRetries: 3, baseDelayMs: 10, maxDelayMs: 100 });
         expect(result).toBe('ok');
     });
 
@@ -104,25 +92,20 @@ describe('withRetry', () => {
         const err = Object.assign(new Error('persistent timeout'), { code: 'ETIMEDOUT' });
         const fn = jest.fn().mockRejectedValue(err);
 
-        let caughtErr: unknown;
-        const promise = withRetry(fn, { maxRetries: 2, baseDelayMs: 10, maxDelayMs: 100 })
-            .catch(e => { caughtErr = e; });
-        await jest.runAllTimersAsync();
-        await promise;
-        expect((caughtErr as Error).message).toBe('persistent timeout');
-        // attempt 0, 1, 2 = 양 3회 (maxRetries=2 → 0,1,2까지 시도)
+        await expect(
+            withRetry(fn, { maxRetries: 2, baseDelayMs: 10, maxDelayMs: 100 })
+        ).rejects.toThrow('persistent timeout');
+        // attempt 0, 1, 2 = 총 3회 (maxRetries=2 → 0,1,2까지 시도)
         expect(fn).toHaveBeenCalledTimes(3);
     });
+
     test('maxRetries=0 → 딱 1회만 시도 후 throw', async () => {
         const err = Object.assign(new Error('fail'), { code: 'ETIMEDOUT' });
         const fn = jest.fn().mockRejectedValue(err);
 
-        let caughtErr: unknown;
-        const promise = withRetry(fn, { maxRetries: 0, baseDelayMs: 10 })
-            .catch(e => { caughtErr = e; });
-        await jest.runAllTimersAsync();
-        await promise;
-        expect((caughtErr as Error).message).toBe('fail');
+        await expect(
+            withRetry(fn, { maxRetries: 0, baseDelayMs: 10 })
+        ).rejects.toThrow('fail');
         expect(fn).toHaveBeenCalledTimes(1);
     });
 

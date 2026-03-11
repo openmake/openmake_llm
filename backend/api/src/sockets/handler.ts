@@ -37,6 +37,7 @@
  */
 import { WebSocket, WebSocketServer } from 'ws';
 import { IncomingMessage } from 'http';
+import crypto from 'node:crypto';
 import { ClusterManager } from '../cluster/manager';
 import { getUnifiedMCPClient } from '../mcp';
 import { createLogger } from '../utils/logger';
@@ -44,6 +45,8 @@ import { WSMessage, ExtendedWebSocket } from './ws-types';
 import { authenticateWebSocket, refreshWebSocketAuthentication } from './ws-auth';
 import { WEBSOCKET_TIMEOUTS } from '../config/timeouts';
 import { handleChatMessage } from './ws-chat-handler';
+import { withSpan } from '../observability/otel';
+import { runWithRequestContext } from '../utils/request-context';
 
 const log = createLogger('WebSocketHandler');
 const WS_MAX_CONNECTIONS_PER_USER = 5;
@@ -68,6 +71,8 @@ export class WebSocketHandler {
     private userConnectionAttempts: Map<string, number[]> = new Map();
     /** 하트비트 인터벌 타이머 (30초 주기) */
     private heartbeatInterval: ReturnType<typeof setInterval> | null = null;
+    /** Rate limit Map 정리 인터벌 (60초 주기) */
+    private rateLimitCleanupInterval: ReturnType<typeof setInterval> | null = null;
 
     /**
      * WebSocketHandler 생성자
@@ -82,6 +87,7 @@ export class WebSocketHandler {
         this.setupConnection();
         this.setupClusterEvents();
         this.startHeartbeat();
+        this.startRateLimitCleanup();
     }
 
     /**
@@ -198,32 +204,35 @@ export class WebSocketHandler {
             });
 
             ws.on('message', async (data) => {
-                try {
-                    if (!this.validateSessionOnMessage(ws)) {
-                        return;
-                    }
-
-                    const raw = data.toString();
-                    if (raw.length > 1024 * 1024) {
-                        ws.send(JSON.stringify({ type: 'error', message: '메시지가 너무 큽니다' }));
-                        return;
-                    }
-
-                    let msg: WSMessage;
+                const wsRequestId = crypto.randomUUID();
+                await runWithRequestContext({ requestId: wsRequestId }, async () => {
                     try {
-                        msg = JSON.parse(raw);
-                    } catch {
-                        ws.send(JSON.stringify({ type: 'error', message: '잘못된 메시지 형식입니다' }));
-                        return;
-                    }
+                        if (!this.validateSessionOnMessage(ws)) {
+                            return;
+                        }
 
-                    log.debug(`[WS] 메시지 수신: type=${msg.type}`);
-                    this.touchActivity(extWs);
-                    extWs._messageCount = (extWs._messageCount || 0) + 1;
-                    await this.handleMessage(ws, msg);
-                } catch (e: unknown) {
-                    log.error('[WS] 메시지 처리 오류:', (e instanceof Error ? e.message : String(e)) || e);
-                }
+                        const raw = data.toString();
+                        if (raw.length > 1024 * 1024) {
+                            ws.send(JSON.stringify({ type: 'error', message: '메시지가 너무 큽니다' }));
+                            return;
+                        }
+
+                        let msg: WSMessage;
+                        try {
+                            msg = JSON.parse(raw);
+                        } catch {
+                            ws.send(JSON.stringify({ type: 'error', message: '잘못된 메시지 형식입니다' }));
+                            return;
+                        }
+
+                        log.debug(`[WS] 메시지 수신: type=${msg.type}`);
+                        this.touchActivity(extWs);
+                        extWs._messageCount = (extWs._messageCount || 0) + 1;
+                        await this.handleMessage(ws, msg);
+                    } catch (e: unknown) {
+                        log.error('[WS] 메시지 처리 오류:', (e instanceof Error ? e.message : String(e)) || e);
+                    }
+                });
             });
         });
     }
@@ -247,66 +256,70 @@ export class WebSocketHandler {
             return;
         }
 
-        switch (typedMsg.type) {
-            case 'refresh':
-                await this.handleRefresh(ws, typedMsg);
-                ws.send(JSON.stringify({
-                    type: 'update',
-                    data: {
-                        stats: this.cluster.getStats(),
-                        nodes: this.cluster.getNodes()
-                    }
-                }));
-                break;
+        await withSpan('WebSocketHandler', `ws.${typedMsg.type}`, async (span) => {
+            span.setAttribute('ws.message_type', typedMsg.type);
 
-            case 'request_agents': {
-                // MCP 도구 목록을 에이전트 형식으로 반환 (내장 + 외부)
-                try {
-                    const mcpClient = getUnifiedMCPClient();
-                    const toolRouter = mcpClient.getToolRouter();
-                    const allTools = toolRouter.getAllTools();
+            switch (typedMsg.type) {
+                case 'refresh':
+                    await this.handleRefresh(ws, typedMsg);
+                    ws.send(JSON.stringify({
+                        type: 'update',
+                        data: {
+                            stats: this.cluster.getStats(),
+                            nodes: this.cluster.getNodes()
+                        }
+                    }));
+                    break;
 
-                    const agents = allTools.map(tool => {
-                        // 외부 도구: mcp://serverName/toolName
-                        if (toolRouter.isExternalTool(tool.name)) {
-                            const [serverName, ...rest] = tool.name.split('::');
-                            const originalName = rest.join('::');
+                case 'request_agents': {
+                    // MCP 도구 목록을 에이전트 형식으로 반환 (내장 + 외부)
+                    try {
+                        const mcpClient = getUnifiedMCPClient();
+                        const toolRouter = mcpClient.getToolRouter();
+                        const allTools = toolRouter.getAllTools();
+
+                        const agents = allTools.map(tool => {
+                            // 외부 도구: mcp://serverName/toolName
+                            if (toolRouter.isExternalTool(tool.name)) {
+                                const [serverName, ...rest] = tool.name.split('::');
+                                const originalName = rest.join('::');
+                                return {
+                                    url: `mcp://${serverName}/${originalName}`,
+                                    name: tool.name,
+                                    description: tool.description,
+                                    external: true,
+                                };
+                            }
+                            // 내장 도구: local://toolName
                             return {
-                                url: `mcp://${serverName}/${originalName}`,
+                                url: `local://${tool.name}`,
                                 name: tool.name,
                                 description: tool.description,
-                                external: true,
+                                external: false,
                             };
-                        }
-                        // 내장 도구: local://toolName
-                        return {
-                            url: `local://${tool.name}`,
-                            name: tool.name,
-                            description: tool.description,
-                            external: false,
-                        };
-                    });
+                        });
 
-                    ws.send(JSON.stringify({
-                        type: 'agents',
-                        agents
-                    }));
-                    log.debug(`[WS] 에이전트 목록 전송: ${agents.length}개 (내장: ${agents.filter(a => !a.external).length}, 외부: ${agents.filter(a => a.external).length})`);
-                } catch (e: unknown) {
-                    log.error('[WS] 에이전트 목록 조회 실패:', (e instanceof Error ? e.message : String(e)));
+                        ws.send(JSON.stringify({
+                            type: 'agents',
+                            agents
+                        }));
+                        log.debug(`[WS] 에이전트 목록 전송: ${agents.length}개 (내장: ${agents.filter(a => !a.external).length}, 외부: ${agents.filter(a => a.external).length})`);
+                    } catch (e: unknown) {
+                        log.error('[WS] 에이전트 목록 조회 실패:', (e instanceof Error ? e.message : String(e)));
+                    }
+                    break;
                 }
-                break;
+
+                case 'chat':
+                    await this.handleChat(ws, typedMsg);
+                    break;
+
+                case 'abort':
+                    // 현재 진행 중인 채팅 중단
+                    this.handleAbort(ws);
+                    break;
             }
-
-            case 'chat':
-                await this.handleChat(ws, typedMsg);
-                break;
-
-            case 'abort':
-                // 현재 진행 중인 채팅 중단
-                this.handleAbort(ws);
-                break;
-        }
+        });
     }
 
     private async handleRefresh(ws: WebSocket, msg: WSMessage): Promise<void> {
@@ -503,12 +516,45 @@ export class WebSocketHandler {
     }
 
     /**
-     * 하트비트 중지 (서버 종료 시 호출)
+     * Rate limit Map 주기적 정리 (60초 주기)
+     * 연결 시도 기록에서 윈도우 시간이 지난 항목을 제거하여 메모리 누수 방지
+     */
+    private startRateLimitCleanup(): void {
+        this.rateLimitCleanupInterval = setInterval(() => {
+            const now = Date.now();
+            for (const [key, attempts] of this.ipConnectionAttempts) {
+                const filtered = attempts.filter(ts => now - ts <= WS_CONNECTION_RATE_WINDOW_MS);
+                if (filtered.length === 0) {
+                    this.ipConnectionAttempts.delete(key);
+                } else {
+                    this.ipConnectionAttempts.set(key, filtered);
+                }
+            }
+            for (const [key, attempts] of this.userConnectionAttempts) {
+                const filtered = attempts.filter(ts => now - ts <= WS_CONNECTION_RATE_WINDOW_MS);
+                if (filtered.length === 0) {
+                    this.userConnectionAttempts.delete(key);
+                } else {
+                    this.userConnectionAttempts.set(key, filtered);
+                }
+            }
+        }, WS_CONNECTION_RATE_WINDOW_MS);
+        if (this.rateLimitCleanupInterval && typeof this.rateLimitCleanupInterval === 'object' && 'unref' in this.rateLimitCleanupInterval) {
+            (this.rateLimitCleanupInterval as NodeJS.Timeout).unref();
+        }
+    }
+
+    /**
+     * 하트비트 및 정리 타이머 중지 (서버 종료 시 호출)
      */
     public stopHeartbeat(): void {
         if (this.heartbeatInterval) {
             clearInterval(this.heartbeatInterval);
             this.heartbeatInterval = null;
+        }
+        if (this.rateLimitCleanupInterval) {
+            clearInterval(this.rateLimitCleanupInterval);
+            this.rateLimitCleanupInterval = null;
         }
     }
 

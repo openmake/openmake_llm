@@ -48,7 +48,8 @@ interface DashboardOptions {
     cluster?: ClusterManager;
 }
 
-
+/** 메모리/학습 스케줄러 타이머 (graceful shutdown 시 정리용) */
+const memoryTimers: NodeJS.Timeout[] = [];
 
 
 
@@ -154,6 +155,17 @@ export class DashboardServer {
      * @throws {Error} 포트가 이미 사용 중인 경우 (EADDRINUSE)
      */
     async start(): Promise<void> {
+        // OTel SDK 초기화 (환경변수로 비활성화 가능)
+        try {
+            const { initTelemetry } = await import('./observability/otel');
+            const sdk = initTelemetry();
+            if (sdk) {
+                console.log('[Server] OpenTelemetry 초기화 완료 (샘플링: 10%)');
+            }
+        } catch (err) {
+            console.error('[Server] OpenTelemetry 초기화 실패 (서버는 계속 시작):', err);
+        }
+
         // 클러스터 시작
         await this.cluster.start();
 
@@ -194,6 +206,80 @@ export class DashboardServer {
 
         // 토큰 블랙리스트/레이트리밋 만료 데이터 주기 정리 스케줄러 시작
         startPeriodicCleanup();
+
+        // 메모리 생명주기 관리 스케줄러 (만료 정리: 1시간마다, 중요도 감쇠: 24시간마다)
+        try {
+            const { getUnifiedDatabase } = await import('./data/models/unified-database');
+            const db = getUnifiedDatabase();
+            const memCleanupTimer = setInterval(async () => {
+                try {
+                    const deleted = await db.cleanupExpiredMemories();
+                    if (deleted > 0) console.log(`[MemoryGC] 만료 메모리 ${deleted}개 정리`);
+                } catch (e) {
+                    console.error('[MemoryGC] 만료 정리 실패:', e);
+                }
+            }, 60 * 60 * 1000); // 1시간
+            memCleanupTimer.unref();
+            memoryTimers.push(memCleanupTimer);
+
+            const memDecayTimer = setInterval(async () => {
+                try {
+                    const decayed = await db.decayMemoryImportance();
+                    if (decayed > 0) console.log(`[MemoryGC] 중요도 감쇠 적용: ${decayed}개`);
+                } catch (e) {
+                    console.error('[MemoryGC] 중요도 감쇠 실패:', e);
+                }
+            }, 24 * 60 * 60 * 1000); // 24시간
+            memDecayTimer.unref();
+            memoryTimers.push(memDecayTimer);
+
+            // 메모리 통합: 중복 메모리 병합 (12시간마다, 활성 사용자 대상)
+            const memConsolidateTimer = setInterval(async () => {
+                try {
+                    const { getMemoryService } = await import('./services/MemoryService');
+                    const memoryService = getMemoryService();
+                    const pool = db.getPool();
+                    const result = await pool.query<{ user_id: string }>(
+                        `SELECT DISTINCT user_id FROM user_memories
+                         GROUP BY user_id HAVING COUNT(*) > 20
+                         LIMIT 50`
+                    );
+                    let totalConsolidated = 0;
+                    for (const row of result.rows) {
+                        const deleted = await memoryService.consolidateMemories(row.user_id);
+                        totalConsolidated += deleted;
+                    }
+                    if (totalConsolidated > 0) {
+                        console.log(`[MemoryGC] 메모리 통합: ${totalConsolidated}개 중복 제거`);
+                    }
+                } catch (e) {
+                    console.error('[MemoryGC] 메모리 통합 실패:', e);
+                }
+            }, 12 * 60 * 60 * 1000); // 12시간
+            memConsolidateTimer.unref();
+            memoryTimers.push(memConsolidateTimer);
+        } catch (err) {
+            console.error('[Server] 메모리 생명주기 스케줄러 시작 실패:', err);
+        }
+
+        // 에이전트 자기개선 사이클 스케줄러 (24시간마다)
+        try {
+            const { getAgentLearningSystem } = await import('./agents/learning');
+            const learningTimer = setInterval(async () => {
+                try {
+                    const result = await getAgentLearningSystem().runSelfImprovementCycle();
+                    if (result.suggestions > 0) {
+                        console.log(`[SelfImprove] ${result.improvedAgents.length}개 에이전트, ${result.suggestions}개 개선 제안`);
+                    }
+                } catch (e) {
+                    console.error('[SelfImprove] 자기개선 사이클 실패:', e);
+                }
+            }, 24 * 60 * 60 * 1000);
+            learningTimer.unref();
+            memoryTimers.push(learningTimer);
+        } catch (err) {
+            console.error('[Server] 자기개선 스케줄러 시작 실패:', err);
+        }
 
         // 시맨틱 분류 캐시 워밍 (비동기, 서버 시작 차단 안 함)
         try {
@@ -297,65 +383,97 @@ if (require.main === module) {
         });
 
     // Graceful shutdown: SIGINT (Ctrl+C) + SIGTERM
+    const GRACEFUL_SHUTDOWN_TIMEOUT_MS = 30000;
+
     const gracefulShutdown = async (signal: string) => {
         console.log(`\n👋 ${signal} 수신 — 서버 종료 중...`);
 
-        // 외부 MCP 서버 프로세스 정리
+        const shutdownWork = async () => {
+            // 외부 MCP 서버 프로세스 정리
+            try {
+                const { getUnifiedMCPClient } = await import('./mcp');
+                const registry = getUnifiedMCPClient().getServerRegistry();
+                await registry.disconnectAll();
+                console.log('[Shutdown] 모든 외부 MCP 서버 연결 해제 완료');
+            } catch (error) {
+                console.error('[Shutdown] 외부 MCP 서버 정리 중 오류:', error);
+            }
+
+            // DB 커넥션 풀 정상 종료
+            try {
+                const { closeDatabase } = await import('./data/models/unified-database');
+                await closeDatabase();
+                console.log('[Shutdown] DB 커넥션 풀 종료 완료');
+            } catch (error) {
+                console.error('[Shutdown] DB 커넥션 풀 종료 중 오류:', error);
+            }
+
+            // OAuth state 정리 타이머 중지
+            try {
+                const { stopOAuthCleanup } = await import('./controllers/auth.controller');
+                stopOAuthCleanup();
+                console.log('[Shutdown] OAuth 정리 타이머 중지 완료');
+            } catch (error) {
+                console.error('[Shutdown] OAuth 정리 타이머 중지 중 오류:', error);
+            }
+
+            // Analytics 타이머 중지
+            try {
+                const { getAnalyticsSystem } = await import('./monitoring/analytics');
+                getAnalyticsSystem().dispose();
+                console.log('[Shutdown] Analytics 타이머 중지 완료');
+            } catch (error) {
+                console.error('[Shutdown] Analytics 타이머 중지 중 오류:', error);
+            }
+
+            // 세션 정리 스케줄러 중지
+            try {
+                const { stopSessionCleanupScheduler } = await import('./data/conversation-db');
+                stopSessionCleanupScheduler();
+                console.log('[Shutdown] 세션 정리 스케줄러 중지 완료');
+            } catch (error) {
+                console.error('[Shutdown] 세션 정리 스케줄러 중지 중 오류:', error);
+            }
+
+            // TokenBlacklist 타이머 정리
+            try {
+                const { resetTokenBlacklist } = await import('./data/models/token-blacklist');
+                resetTokenBlacklist();
+                console.log('[Shutdown] TokenBlacklist 타이머 중지 완료');
+            } catch (error) {
+                console.error('[Shutdown] TokenBlacklist 타이머 중지 중 오류:', error);
+            }
+
+            // 메모리/학습 스케줄러 타이머 정리
+            for (const timer of memoryTimers) {
+                clearInterval(timer);
+            }
+            memoryTimers.length = 0;
+            console.log('[Shutdown] 메모리/학습 스케줄러 타이머 정리 완료');
+
+            // OpenTelemetry SDK 종료 (OTel flush 보장)
+            try {
+                const { shutdownTelemetry } = await import('./observability/otel');
+                await shutdownTelemetry();
+                console.log('[Shutdown] OpenTelemetry 종료 완료');
+            } catch (error) {
+                console.error('[Shutdown] OpenTelemetry 종료 중 오류:', error);
+            }
+
+            server.stop();
+        };
+
+        // 30초 전체 타임아웃: 종료 작업이 지연될 경우 강제 종료
+        const timeoutPromise = new Promise<never>((_, reject) => {
+            setTimeout(() => reject(new Error('Graceful shutdown timed out')), GRACEFUL_SHUTDOWN_TIMEOUT_MS);
+        });
+
         try {
-            const { getUnifiedMCPClient } = await import('./mcp');
-            const registry = getUnifiedMCPClient().getServerRegistry();
-            await registry.disconnectAll();
-            console.log('[Shutdown] 모든 외부 MCP 서버 연결 해제 완료');
+            await Promise.race([shutdownWork(), timeoutPromise]);
         } catch (error) {
-            console.error('[Shutdown] 외부 MCP 서버 정리 중 오류:', error);
+            console.error('[Shutdown] 종료 타임아웃 또는 오류 — 강제 종료:', error);
         }
 
-        // DB 커넥션 풀 정상 종료
-        try {
-            const { closeDatabase } = await import('./data/models/unified-database');
-            await closeDatabase();
-            console.log('[Shutdown] DB 커넥션 풀 종료 완료');
-        } catch (error) {
-            console.error('[Shutdown] DB 커넥션 풀 종료 중 오류:', error);
-        }
-
-        // OAuth state 정리 타이머 중지
-        try {
-            const { stopOAuthCleanup } = await import('./controllers/auth.controller');
-            stopOAuthCleanup();
-            console.log('[Shutdown] OAuth 정리 타이머 중지 완료');
-        } catch (error) {
-            console.error('[Shutdown] OAuth 정리 타이머 중지 중 오류:', error);
-        }
-
-        // Analytics 타이머 중지
-        try {
-            const { getAnalyticsSystem } = await import('./monitoring/analytics');
-            getAnalyticsSystem().dispose();
-            console.log('[Shutdown] Analytics 타이머 중지 완료');
-        } catch (error) {
-            console.error('[Shutdown] Analytics 타이머 중지 중 오류:', error);
-        }
-
-        // 세션 정리 스케줄러 중지
-        try {
-            const { stopSessionCleanupScheduler } = await import('./data/conversation-db');
-            stopSessionCleanupScheduler();
-            console.log('[Shutdown] 세션 정리 스케줄러 중지 완료');
-        } catch (error) {
-            console.error('[Shutdown] 세션 정리 스케줄러 중지 중 오류:', error);
-        }
-
-        // TokenBlacklist 타이머 정리
-        try {
-            const { resetTokenBlacklist } = await import('./data/models/token-blacklist');
-            resetTokenBlacklist();
-            console.log('[Shutdown] TokenBlacklist 타이머 중지 완료');
-        } catch (error) {
-            console.error('[Shutdown] TokenBlacklist 타이머 중지 중 오류:', error);
-        }
-
-        server.stop();
         process.exit(0);
     };
 

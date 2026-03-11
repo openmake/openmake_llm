@@ -94,16 +94,16 @@ export class SkillManager {
         return skill;
     }
 
-    async updateSkill(id: string, input: UpdateSkillInput): Promise<AgentSkill | null> {
+    async updateSkill(id: string, input: UpdateSkillInput, actor?: { userId: string; userRole: string }): Promise<AgentSkill | null> {
         const repo = await this.ensureInitialized();
-        const updated = await repo.updateSkill(id, input);
+        const updated = await repo.updateSkill(id, input, actor);
         if (updated) logger.info(`스킬 수정됨: ${id}`);
         return updated;
     }
 
-    async deleteSkill(id: string): Promise<boolean> {
+    async deleteSkill(id: string, actor?: { userId: string; userRole: string }): Promise<boolean> {
         const repo = await this.ensureInitialized();
-        const deleted = await repo.deleteSkill(id);
+        const deleted = await repo.deleteSkill(id, actor);
         if (deleted) logger.info(`스킬 삭제됨: ${id}`);
         return deleted;
     }

@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# ==============================================================
+# Git Pre-push Hook — CI 게이트
+# ==============================================================
+# push 전 자동으로 테스트/빌드/린트를 실행합니다.
+# 실패 시 push를 차단합니다.
+#
+# 설치:
+#   bash scripts/install-hooks.sh
+#   또는: npm run hooks:install
+#
+# 우회 (긴급 시에만):
+#   git push --no-verify
+# ==============================================================
+
+set -euo pipefail
+
+ROOT_DIR="$(git rev-parse --show-toplevel)"
+
+echo "🔒 Pre-push CI gate 실행 중..."
+echo ""
+
+bash "$ROOT_DIR/scripts/ci-test.sh"

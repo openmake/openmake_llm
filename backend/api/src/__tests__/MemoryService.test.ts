@@ -271,6 +271,80 @@ describe('MemoryService', () => {
     });
 
     // ─────────────────────────────────────────
+    // consolidateMemories
+    // ─────────────────────────────────────────
+    describe('consolidateMemories', () => {
+        test('메모리가 2개 미만이면 0을 반환한다', async () => {
+            mockGetUserMemories.mockResolvedValue([makeMemory()]);
+            const result = await service.consolidateMemories('user-001');
+            expect(result).toBe(0);
+        });
+
+        test('같은 category+key를 가진 중복 메모리를 병합한다', async () => {
+            mockGetUserMemories.mockResolvedValue([
+                makeMemory({ id: 'mem-001', category: 'fact', key: '이름', value: '홍길동', importance: 0.9 }),
+                makeMemory({ id: 'mem-002', category: 'fact', key: '이름', value: '홍길동2', importance: 0.5 }),
+            ]);
+            const result = await service.consolidateMemories('user-001');
+            expect(result).toBe(1);
+            expect(mockDeleteMemory).toHaveBeenCalledWith('mem-002');
+            expect(mockUpdateMemory).toHaveBeenCalledWith('mem-001', expect.objectContaining({
+                value: expect.stringContaining('홍길동'),
+            }));
+        });
+
+        test('importance가 가장 높은 메모리를 유지한다', async () => {
+            mockGetUserMemories.mockResolvedValue([
+                makeMemory({ id: 'mem-low', category: 'fact', key: '이름', value: 'A', importance: 0.3 }),
+                makeMemory({ id: 'mem-high', category: 'fact', key: '이름', value: 'B', importance: 0.9 }),
+            ]);
+            await service.consolidateMemories('user-001');
+            // importance 낮은 쪽이 삭제됨
+            expect(mockDeleteMemory).toHaveBeenCalledWith('mem-low');
+            expect(mockDeleteMemory).not.toHaveBeenCalledWith('mem-high');
+        });
+
+        test('다른 카테고리의 같은 키는 병합하지 않는다', async () => {
+            mockGetUserMemories.mockResolvedValue([
+                makeMemory({ id: 'mem-001', category: 'fact', key: '이름', value: 'A' }),
+                makeMemory({ id: 'mem-002', category: 'preference', key: '이름', value: 'B' }),
+            ]);
+            const result = await service.consolidateMemories('user-001');
+            expect(result).toBe(0);
+        });
+
+        test('값이 동일한 중복은 병합 시 값을 변경하지 않는다', async () => {
+            mockGetUserMemories.mockResolvedValue([
+                makeMemory({ id: 'mem-001', category: 'fact', key: '이름', value: '홍길동', importance: 0.9 }),
+                makeMemory({ id: 'mem-002', category: 'fact', key: '이름', value: '홍길동', importance: 0.5 }),
+            ]);
+            await service.consolidateMemories('user-001');
+            expect(mockUpdateMemory).not.toHaveBeenCalled();
+            expect(mockDeleteMemory).toHaveBeenCalledWith('mem-002');
+        });
+    });
+
+    // ─────────────────────────────────────────
+    // buildMemoryContext 캐시 동작
+    // ─────────────────────────────────────────
+    describe('buildMemoryContext 캐시', () => {
+        test('같은 userId+query 조합은 캐시를 반환한다', async () => {
+            mockGetRelevantMemories.mockResolvedValue([makeMemory()]);
+            await service.buildMemoryContext('user-001', '쿼리A');
+            await service.buildMemoryContext('user-001', '쿼리A');
+            // 두 번째 호출에서는 DB 호출 없이 캐시 반환
+            expect(mockGetRelevantMemories).toHaveBeenCalledTimes(1);
+        });
+
+        test('같은 userId지만 다른 query는 별도 캐시 엔트리를 사용한다', async () => {
+            mockGetRelevantMemories.mockResolvedValue([makeMemory()]);
+            await service.buildMemoryContext('user-001', '쿼리A');
+            await service.buildMemoryContext('user-001', '쿼리B');
+            expect(mockGetRelevantMemories).toHaveBeenCalledTimes(2);
+        });
+    });
+
+    // ─────────────────────────────────────────
     // extractAndSaveMemories
     // ─────────────────────────────────────────
     describe('extractAndSaveMemories', () => {

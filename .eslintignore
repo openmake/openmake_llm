@@ -1,0 +1,22 @@
+# Build output
+dist/
+build/
+*.min.js
+
+# Dependencies
+node_modules/
+
+# Vendor libraries (third-party, minified)
+frontend/web/public/vendor/
+frontend/web/public/js/vendor/
+
+# Config files (CommonJS / special syntax)
+jest.config.js
+ecosystem.config.js
+playwright.config.ts
+
+# E2E tests (Playwright — separate lint config needed)
+tests/e2e/
+
+# Generated files
+*.d.ts

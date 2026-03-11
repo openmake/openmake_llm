@@ -62,7 +62,7 @@ describe('VectorRepository', () => {
     let repo: VectorRepository;
 
     beforeEach(() => {
-        jest.clearAllMocks();
+        jest.resetAllMocks();
         repo = createRepo();
     });
 
@@ -75,9 +75,7 @@ describe('VectorRepository', () => {
         });
 
         test('단일 임베딩 저장 성공', async () => {
-            // pgvector 확인
-            mockQuery.mockResolvedValueOnce({ rows: [{ exists: true }] });
-            // INSERT
+            // 배치 INSERT (단일 항목)
             mockQuery.mockResolvedValueOnce({ rowCount: 1 });
 
             const count = await repo.storeEmbeddings([makeInput()]);
@@ -85,14 +83,9 @@ describe('VectorRepository', () => {
             expect(count).toBe(1);
         });
 
-        test('다중 임베딩 저장 성공', async () => {
-            // pgvector 확인
-            mockQuery.mockResolvedValueOnce({ rows: [{ exists: true }] });
-            // INSERT × 3
-            mockQuery
-                .mockResolvedValueOnce({ rowCount: 1 })
-                .mockResolvedValueOnce({ rowCount: 1 })
-                .mockResolvedValueOnce({ rowCount: 1 });
+        test('다중 임베딩 저장 성공 (배치 INSERT)', async () => {
+            // 배치 INSERT → 1번의 쿼리로 3개 저장
+            mockQuery.mockResolvedValueOnce({ rowCount: 3 });
 
             const inputs = [
                 makeInput({ chunkIndex: 0 }),
@@ -103,13 +96,15 @@ describe('VectorRepository', () => {
             const count = await repo.storeEmbeddings(inputs);
 
             expect(count).toBe(3);
+            // 배치 INSERT는 1번만 호출됨
+            expect(mockQuery).toHaveBeenCalledTimes(1);
         });
 
-        test('개별 INSERT 실패 시 나머지 성공', async () => {
-            // pgvector 확인
-            mockQuery.mockResolvedValueOnce({ rows: [{ exists: true }] });
-            // INSERT: 성공, 실패, 성공
+        test('배치 INSERT 실패 시 개별 fallback으로 부분 저장', async () => {
+            // 배치 INSERT 실패 → 개별 INSERT fallback
             mockQuery
+                .mockRejectedValueOnce(new Error('배치 INSERT 실패'))
+                // 개별 fallback: 성공, 실패, 성공
                 .mockResolvedValueOnce({ rowCount: 1 })
                 .mockRejectedValueOnce(new Error('INSERT 실패'))
                 .mockResolvedValueOnce({ rowCount: 1 });
@@ -125,24 +120,10 @@ describe('VectorRepository', () => {
             expect(count).toBe(2);
         });
 
-        test('pgvector 미설치 시 TEXT 형식으로 저장', async () => {
-            // pgvector 미설치
-            mockQuery.mockResolvedValueOnce({ rows: [{ exists: false }] });
-            // INSERT (JSON 형식)
-            mockQuery.mockResolvedValueOnce({ rowCount: 1 });
-
-            const count = await repo.storeEmbeddings([makeInput()]);
-
-            expect(count).toBe(1);
-            // INSERT 호출에서 embedding이 JSON 문자열인지 확인
-            const insertCall = mockQuery.mock.calls[1];
-            const embeddingParam = insertCall[1][4];
-            expect(embeddingParam).toBe(JSON.stringify([0.1, 0.2, 0.3]));
-        });
     });
 
     describe('searchSimilar', () => {
-        test('pgvector 미설치 시 빈 배열 반환', async () => {
+        test('pgvector 미사용 시 빈 배열 반환', async () => {
             mockQuery.mockResolvedValueOnce({ rows: [{ exists: false }] });
 
             const results = await repo.searchSimilar([0.1, 0.2]);

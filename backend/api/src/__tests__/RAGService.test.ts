@@ -55,7 +55,7 @@ jest.mock('../config/runtime-limits', () => ({
         CHUNK_SIZE: 1000,
         CHUNK_OVERLAP: 200,
         TOP_K: 5,
-        RELEVANCE_THRESHOLD: 0.3,
+        RELEVANCE_THRESHOLD: 0.45,
         EMBEDDING_DIMENSIONS: 768,
         MAX_CONTEXT_CHARS: 4000,
     },
@@ -100,6 +100,10 @@ describe('RAGService', () => {
         // VectorRepository 메서드를 spy
         // RAGService 내부에서 생성된 VectorRepository의 query를 mockPoolQuery로 대체
         mockPoolQuery.mockResolvedValue({ rows: [], rowCount: 0 });
+
+        // pgvectorAvailable 캐시 초기화 (테스트 간 격리)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (service as any).vectorRepo.pgvectorAvailable = null;
     });
 
     describe('embedDocument', () => {
@@ -116,10 +120,8 @@ describe('RAGService', () => {
             // 임베딩 결과
             mockEmbedBatch.mockResolvedValue([[0.1, 0.2], [0.3, 0.4]]);
 
-            // 저장 (2번 INSERT)
-            mockPoolQuery
-                .mockResolvedValueOnce({ rowCount: 1 })
-                .mockResolvedValueOnce({ rowCount: 1 });
+            // 저장 (BATCH_SIZE=200 이하이므로 1회 배치 INSERT)
+            mockPoolQuery.mockResolvedValueOnce({ rowCount: 2 });
 
             const result = await service.embedDocument({
                 docId: 'doc-001',
@@ -171,6 +173,7 @@ describe('RAGService', () => {
 
             expect(result.embeddedChunks).toBe(1);
             // hasEmbeddings + deleteBySource + INSERT = 최소 3회 호출
+            // Note: withRetry wraps each query, but doesn't add extra calls on success
             expect(mockPoolQuery.mock.calls.length).toBeGreaterThanOrEqual(3);
         });
 
@@ -244,7 +247,7 @@ describe('RAGService', () => {
             expect(context.documents[0].content).toBe('문서1');
             expect(context.documents[0].relevanceScore).toBe(0.9);
             expect(context.documents[1].content).toBe('문서2');
-            expect(context.relevanceThreshold).toBe(0.3);
+            expect(context.relevanceThreshold).toBe(0.45);
         });
 
         test('빈 결과 시 빈 documents 배열', () => {
