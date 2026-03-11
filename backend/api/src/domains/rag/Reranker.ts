@@ -14,10 +14,10 @@
  * @module services/Reranker
  */
 
-import { createLogger } from '../utils/logger';
-import { getClusterManager } from '../cluster/manager';
-import type { OllamaClient } from '../ollama/client';
-import type { VectorSearchResult } from '../data/repositories/vector-repository';
+import { createLogger } from '../../utils/logger';
+import { getClusterManager } from '../../cluster/manager';
+import type { OllamaClient } from '../../ollama/client';
+import type { VectorSearchResult } from '../../data/repositories/vector-repository';
 
 const logger = createLogger('Reranker');
 

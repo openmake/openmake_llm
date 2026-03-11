@@ -28,7 +28,7 @@ import { OllamaClient } from '../../../ollama/client';
 import { ChatService } from '../service';
 import type { ChatMessageRequest } from '../service';
 import type { DiscussionProgress } from '../../../agents/discussion-engine';
-import type { ResearchProgress } from '../../../services/DeepResearchService';
+import type { ResearchProgress } from '../../../domains/research/DeepResearchService';
 import { uploadedDocuments } from '../../../documents/store';
 import { getConversationDB } from '../../../data/conversation-db';
 import { buildExecutionPlan, type ExecutionPlan } from './profile-resolver';

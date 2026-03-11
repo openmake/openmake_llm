@@ -1,47 +1,12 @@
 /**
  * ============================================================
- * Deep Research Module — 통합 진입점 (Barrel)
+ * Deep Research — Legacy re-export shim
  * ============================================================
  *
- * Deep Research 관련 서비스, 타입, 유틸리티를 단일 경로로
- * import할 수 있도록 re-export합니다.
+ * Files have moved to `domains/research/`. This barrel provides
+ * backward-compatible re-exports so existing imports continue to
+ * work while callers are migrated.
  *
- * @example
- * import { DeepResearchService, type ResearchConfig, normalizeUrl } from '../services/deep-research';
- *
- * @module services/deep-research
+ * @deprecated Import from `../../domains/research` instead.
  */
-
-// ── Service ──────────────────────────────────────────
-export {
-    DeepResearchService,
-    createDeepResearchService,
-    quickResearch,
-    getResearchConfig,
-    configureResearch,
-} from '../DeepResearchService';
-
-// ── Types ────────────────────────────────────────────
-export type {
-    ResearchConfig,
-    ResearchProgress,
-    ResearchResult,
-    SubTopic,
-    SynthesisResult,
-} from '../deep-research-types';
-
-export {
-    DEFAULT_CONFIG as RESEARCH_DEFAULT_CONFIG,
-    setGlobalConfig as setResearchGlobalConfig,
-} from '../deep-research-types';
-
-// ── Utilities ────────────────────────────────────────
-export {
-    normalizeUrl,
-    deduplicateSources,
-    clampImportance,
-    buildFallbackSubTopics,
-    chunkArray,
-    extractBulletLikeFindings,
-    getLoopProgressRange,
-} from '../deep-research-utils';
+export * from '../../domains/research';

@@ -9,13 +9,13 @@
  * @module services/RAGService
  */
 
-import { createLogger } from '../utils/logger';
-import { getPool } from '../data/models/unified-database';
-import { VectorRepository, type VectorSearchResult, type VectorEmbeddingInput } from '../data/repositories/vector-repository';
+import { createLogger } from '../../utils/logger';
+import { getPool } from '../../data/models/unified-database';
+import { VectorRepository, type VectorSearchResult, type VectorEmbeddingInput } from '../../data/repositories/vector-repository';
 import { getEmbeddingService } from './EmbeddingService';
-import { chunkDocument, type TextChunk, type ChunkOptions } from '../documents/chunker';
-import { RAG_CONFIG } from '../config/runtime-limits';
-import type { RAGContext, RAGDocument } from '../domains/chat/pipeline/context-types';
+import { chunkDocument, type TextChunk, type ChunkOptions } from '../../documents/chunker';
+import { RAG_CONFIG } from '../../config/runtime-limits';
+import type { RAGContext, RAGDocument } from '../chat/pipeline/context-types';
 import { getReranker } from './Reranker';
 
 const logger = createLogger('RAGService');

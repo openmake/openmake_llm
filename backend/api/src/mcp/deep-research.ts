@@ -19,7 +19,7 @@ import {
     getResearchMessage,
     ResearchConfig,
     ResearchProgress
-} from '../services/DeepResearchService';
+} from '../domains/research/DeepResearchService';
 import { v4 as uuidv4 } from 'uuid';
 import { createLogger } from '../utils/logger';
 import { detectLanguage } from '../domains/chat/pipeline/language-policy';

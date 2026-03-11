@@ -9,14 +9,14 @@
  * @module services/DeepResearchService
  */
 
-import { OllamaClient, createClient } from '../ollama/client';
-import { performWebSearch, SearchResult } from '../mcp/web-search';
-import { isFirecrawlConfigured } from '../mcp/firecrawl';
-import { firecrawlPost } from '../utils/firecrawl-client';
-import { getConfig } from '../config/env';
-import { getUnifiedDatabase } from '../data/models/unified-database';
-import { createLogger } from '../utils/logger';
-import { CAPACITY, TRUNCATION } from '../config/runtime-limits';
+import { OllamaClient, createClient } from '../../ollama/client';
+import { performWebSearch, SearchResult } from '../../mcp/web-search';
+import { isFirecrawlConfigured } from '../../mcp/firecrawl';
+import { firecrawlPost } from '../../utils/firecrawl-client';
+import { getConfig } from '../../config/env';
+import { getUnifiedDatabase } from '../../data/models/unified-database';
+import { createLogger } from '../../utils/logger';
+import { CAPACITY, TRUNCATION } from '../../config/runtime-limits';
 import { v4 as uuidv4 } from 'uuid';
 
 import {
@@ -49,7 +49,7 @@ import {
     getResearchMessage
 } from './deep-research-prompts';
 
-import { parallelBatch } from '../utils/graph-engine';
+import { parallelBatch } from '../../utils/graph-engine';
 
 // Re-export types so consumers don't break
 export type { ResearchConfig, ResearchProgress, ResearchResult };

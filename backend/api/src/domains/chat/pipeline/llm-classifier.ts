@@ -65,7 +65,7 @@ const CONFIDENCE_THRESHOLD = 0.7;
 const embedFunction: EmbedFunction = async (text: string): Promise<number[] | null> => {
     try {
         // Lazy import to avoid circular dependency and startup overhead
-        const { getEmbeddingService } = await import('../../../services/EmbeddingService');
+        const { getEmbeddingService } = await import('../../rag/EmbeddingService');
         const service = getEmbeddingService();
         return await service.embedText(text);
     } catch (error) {

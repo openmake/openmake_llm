@@ -135,7 +135,7 @@ export class MemoryService {
      */
     private async saveMemoryEmbedding(memoryId: string, key: string, value: string): Promise<void> {
         try {
-            const { getEmbeddingService } = await import('./EmbeddingService');
+            const { getEmbeddingService } = await import('../domains/rag/EmbeddingService');
             const embeddingService = getEmbeddingService();
             const text = `${key}: ${value}`;
             const embedding = await embeddingService.embedText(text);
@@ -173,7 +173,7 @@ export class MemoryService {
 
         // 2) 시맨틱 검색 시도 (EmbeddingService 사용 가능 시)
         try {
-            const { getEmbeddingService } = await import('./EmbeddingService');
+            const { getEmbeddingService } = await import('../domains/rag/EmbeddingService');
             const embeddingService = getEmbeddingService();
             const queryEmbedding = await embeddingService.embedText(query);
 

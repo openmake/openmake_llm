@@ -8,8 +8,8 @@
  * @module services/deep-research-types
  */
 
-import type { SearchResult } from '../mcp/web-search';
-import { LLM_TIMEOUTS } from '../config/timeouts';
+import type { SearchResult } from '../../mcp/web-search';
+import { LLM_TIMEOUTS } from '../../config/timeouts';
 
 // ============================================================
 // 타입 정의

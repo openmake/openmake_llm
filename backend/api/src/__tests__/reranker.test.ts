@@ -35,7 +35,7 @@ jest.mock('../utils/logger', () => ({
 // Import after mocks
 // ─────────────────────────────────────────────
 
-import { Reranker, buildRerankPrompt, parseScore } from '../services/Reranker';
+import { Reranker, buildRerankPrompt, parseScore } from '../domains/rag/Reranker';
 import type { VectorSearchResult } from '../data/repositories/vector-repository';
 
 // ─────────────────────────────────────────────

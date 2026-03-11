@@ -10,10 +10,10 @@
  * @module services/EmbeddingService
  */
 
-import { createLogger } from '../utils/logger';
-import { getClusterManager } from '../cluster/manager';
-import { RAG_CONFIG } from '../config/runtime-limits';
-import type { OllamaClient } from '../ollama/client';
+import { createLogger } from '../../utils/logger';
+import { getClusterManager } from '../../cluster/manager';
+import { RAG_CONFIG } from '../../config/runtime-limits';
+import type { OllamaClient } from '../../ollama/client';
 
 const logger = createLogger('EmbeddingService');
 

@@ -15,8 +15,8 @@
  */
 import { v4 as uuidv4 } from 'uuid';
 import { getUnifiedDatabase } from '../../../data/models/unified-database';
-import { DeepResearchService } from '../../../services/DeepResearchService';
-import type { ResearchResult } from '../../../services/deep-research-types';
+import { DeepResearchService } from '../../../domains/research/DeepResearchService';
+import type { ResearchResult } from '../../../domains/research/deep-research-types';
 import type { ChatStrategy, ChatResult, DeepResearchStrategyContext } from './types';
 import { createLogger } from '../../../utils/logger';
 import { detectLanguage } from '../pipeline/language-policy';
@@ -102,7 +102,7 @@ export class DeepResearchStrategy implements ChatStrategy<DeepResearchStrategyCo
      * 동일/유사 주제 후속 질의 시 RAG 검색으로 즉시 활용할 수 있도록 합니다.
      */
     private async saveToRAG(result: ResearchResult, userId?: string, sessionId?: string): Promise<void> {
-        const { RAGService } = await import('../../../services/RAGService');
+        const { RAGService } = await import('../../rag/RAGService');
         const ragService = new RAGService();
 
         // 보고서 전문 구성: summary + keyFindings + 소스 콘텐츠(있는 경우)

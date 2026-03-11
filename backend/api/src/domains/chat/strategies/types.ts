@@ -18,7 +18,7 @@ import type { DocumentStore } from '../../../documents/store';
 import type { UserContext } from '../../../mcp/user-sandbox';
 import type { OllamaClient } from '../../../ollama/client';
 import type { ChatMessage, ModelOptions, ToolCall, ToolDefinition } from '../../../ollama/types';
-import type { ResearchProgress } from '../../../services/DeepResearchService';
+import type { ResearchProgress } from '../../../domains/research/DeepResearchService';
 import type { ChatMessageRequest } from '../service';
 
 /**

@@ -49,7 +49,7 @@ jest.mock('../config/runtime-limits', () => ({
 // Import after mocks
 // ─────────────────────────────────────────────
 
-import { EmbeddingService } from '../services/EmbeddingService';
+import { EmbeddingService } from '../domains/rag/EmbeddingService';
 
 // ─────────────────────────────────────────────
 // 테스트

@@ -19,7 +19,7 @@ import type { ChatMessageRequest } from '../domains/chat/service';
 // Mock 설정 (jest.mock은 호이스팅되므로 팩토리 내부에서 jest.fn() 생성)
 // ─────────────────────────────────────────────
 
-jest.mock('../services/DeepResearchService', () => ({
+jest.mock('../domains/research/DeepResearchService', () => ({
     DeepResearchService: jest.fn().mockImplementation(() => ({
         executeResearch: jest.fn(),
     })),
@@ -39,7 +39,7 @@ jest.mock('uuid', () => ({
 // Mock 참조 획득 (import 후 jest.mocked 사용)
 // ─────────────────────────────────────────────
 
-import { DeepResearchService } from '../services/DeepResearchService';
+import { DeepResearchService } from '../domains/research/DeepResearchService';
 import { getUnifiedDatabase } from '../data/models/unified-database';
 import { v4 as uuidv4 } from 'uuid';
 

@@ -34,7 +34,7 @@ import { getUnifiedMCPClient } from '../../mcp/unified-client';
 import { OllamaClient } from '../../ollama/client';
 import { getGptOssTaskPreset, isGeminiModel, type ChatMessage, type ToolDefinition, type ModelOptions } from '../../ollama/types';
 import { applySequentialThinking } from '../../mcp/sequential-thinking';
-import type { ResearchProgress } from '../../services/DeepResearchService';
+import type { ResearchProgress } from '../research/DeepResearchService';
 import { A2AStrategy, AgentLoopStrategy, DeepResearchStrategy, DirectStrategy, DiscussionStrategy } from './strategies';
 import { formatResearchResult, formatDiscussionResult } from './service/chat-service-formatters';
 import { recordChatMetrics } from './service/chat-service-metrics';
@@ -48,7 +48,7 @@ import { getConfig } from '../../config/env';
 import { createRoutingLogEntry, logRoutingDecision, type RoutingDecisionLog } from './pipeline/routing-logger';
 import { applyDomainEngineOverride } from './pipeline/domain-router';
 import type { ChatMessageRequest } from './service/chat-service-types';
-import { getRAGService } from '../../services/RAGService';
+import { getRAGService } from '../rag/RAGService';
 import type { QueryType } from './pipeline/model-selector-types';
 
 // Re-export all types so consumers importing from ChatService don't break

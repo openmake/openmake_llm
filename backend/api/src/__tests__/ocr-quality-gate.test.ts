@@ -3,7 +3,7 @@ import {
     isTextQualityAcceptable,
     assessAndGate,
     type TextQualityMetrics,
-} from '../services/OCRQualityGate';
+} from '../domains/rag/OCRQualityGate';
 
 describe('OCRQualityGate', () => {
     // ============================================================

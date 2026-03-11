@@ -9,7 +9,7 @@
  * @module services/deep-research-utils
  */
 
-import type { SearchResult } from '../mcp/web-search';
+import type { SearchResult } from '../../mcp/web-search';
 import type { SubTopic } from './deep-research-types';
 
 /**

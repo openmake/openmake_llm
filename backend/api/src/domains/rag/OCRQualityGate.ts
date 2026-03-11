@@ -10,7 +10,7 @@
  * @module services/OCRQualityGate
  */
 
-import { createLogger } from '../utils/logger';
+import { createLogger } from '../../utils/logger';
 
 const logger = createLogger('OCRQualityGate');
 

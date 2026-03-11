@@ -11,7 +11,7 @@ import {
     chunkArray,
     extractBulletLikeFindings,
     getLoopProgressRange,
-} from '../services/deep-research-utils';
+} from '../domains/research/deep-research-utils';
 import type { SearchResult } from '../mcp/web-search';
 
 // ===== normalizeUrl =====

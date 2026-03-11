@@ -32,7 +32,7 @@ import { assertResourceOwnerOrAdmin } from '../auth/ownership';
 import { validate } from '../middlewares/validation';
 import { getUnifiedDatabase } from '../data/models/unified-database';
 import { v4 as uuidv4 } from 'uuid';
-import { createDeepResearchService } from '../services/DeepResearchService';
+import { createDeepResearchService } from '../domains/research/DeepResearchService';
 import { detectLanguage } from '../domains/chat/pipeline/language-policy';
 import {
     createResearchSessionSchema,

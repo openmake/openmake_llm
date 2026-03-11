@@ -22,13 +22,13 @@ import {
     calculateContextRecall,
     evaluateRelevance,
     BASELINE_QUERIES,
-} from '../services/rag-metrics';
+} from '../domains/rag/rag-metrics';
 
 // ────────────────────────────────────────
 // RRF 함수 import
 // ────────────────────────────────────────
 
-import { reciprocalRankFusion } from '../services/RAGService';
+import { reciprocalRankFusion } from '../domains/rag/RAGService';
 import type { VectorSearchResult } from '../data/repositories/vector-repository';
 
 // ────────────────────────────────────────

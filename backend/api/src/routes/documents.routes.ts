@@ -41,7 +41,7 @@ import { detectLanguage } from '../domains/chat/pipeline/language-policy';
   import { validate, validateUploadContentType, validateFileUploadSecurity } from '../middlewares/validation';
   import { summarizeDocumentSchema, documentAskSchema } from '../schemas/documents.schema';
 import { FILE_LIMITS } from '../config/constants';
-import { getRAGService } from '../services/RAGService';
+import { getRAGService } from '../domains/rag/RAGService';
 import { optionalAuth } from '../auth';
 
 const logger = createLogger('DocumentsRoutes');

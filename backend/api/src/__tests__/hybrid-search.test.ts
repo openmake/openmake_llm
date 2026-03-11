@@ -14,7 +14,7 @@ const mockEmbedText = jest.fn();
 const mockEmbedBatch = jest.fn();
 const mockIsAvailable = jest.fn();
 
-jest.mock('../services/EmbeddingService', () => ({
+jest.mock('../domains/rag/EmbeddingService', () => ({
     getEmbeddingService: jest.fn().mockReturnValue({
         embedText: mockEmbedText,
         embedBatch: mockEmbedBatch,
@@ -59,7 +59,7 @@ jest.mock('../config/runtime-limits', () => ({
 // Import after mocks
 // ─────────────────────────────────────────────
 
-import { reciprocalRankFusion } from '../services/RAGService';
+import { reciprocalRankFusion } from '../domains/rag/RAGService';
 import type { VectorSearchResult } from '../data/repositories/vector-repository';
 
 // ─────────────────────────────────────────────

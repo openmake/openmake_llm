@@ -13,19 +13,19 @@ describe('E2E Smoke Tests - Pipeline Integration', () => {
     });
 
     it('RAGService exports searchHybrid and reciprocalRankFusion', async () => {
-        const mod = await import('../services/RAGService');
+        const mod = await import('../domains/rag/RAGService');
         expect(typeof mod.RAGService).toBe('function');
         expect(typeof mod.RAGService.prototype.searchHybrid).toBe('function');
         expect(typeof mod.reciprocalRankFusion).toBe('function');
     });
 
     it('Reranker module exports Reranker class', async () => {
-        const mod = await import('../services/Reranker');
+        const mod = await import('../domains/rag/Reranker');
         expect(typeof mod.Reranker).toBe('function');
     });
 
     it('OCRQualityGate module exports core gate functions', async () => {
-        const mod = await import('../services/OCRQualityGate');
+        const mod = await import('../domains/rag/OCRQualityGate');
         expect(typeof mod.assessTextQuality).toBe('function');
         expect(typeof mod.isTextQualityAcceptable).toBe('function');
         expect(typeof mod.assessAndGate).toBe('function');
@@ -37,7 +37,7 @@ describe('E2E Smoke Tests - Pipeline Integration', () => {
     });
 
     it('RAGMetrics exports evaluation functions', async () => {
-        const mod = await import('../services/rag-metrics');
+        const mod = await import('../domains/rag/rag-metrics');
         expect(typeof mod.calculateNDCG).toBe('function');
         expect(typeof mod.calculateMRR).toBe('function');
         expect(typeof mod.calculateContextPrecision).toBe('function');
