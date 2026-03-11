@@ -69,7 +69,7 @@ export interface SynthesisResult {
 
 export const DEFAULT_CONFIG: ResearchConfig = {
     maxLoops: 5,
-    llmModel: 'gemma3:4b',
+    llmModel: '',
     searchApi: 'all',
     maxSearchResults: 360,
     language: 'en',

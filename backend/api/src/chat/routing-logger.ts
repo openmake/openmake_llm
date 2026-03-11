@@ -7,6 +7,7 @@
  * @module chat/routing-logger
  */
 import { createLogger } from '../utils/logger';
+import { getRequestId } from '../utils/request-context';
 
 const logger = createLogger('RoutingDecision');
 
@@ -57,6 +58,7 @@ export interface RoutingDecisionLog {
 export function createRoutingLogEntry(partial: Partial<RoutingDecisionLog>): RoutingDecisionLog {
     return {
         timestamp: new Date().toISOString(),
+        requestId: partial.requestId ?? getRequestId(),
         queryFeatures: partial.queryFeatures ?? {
             queryType: 'unknown',
             confidence: 0,

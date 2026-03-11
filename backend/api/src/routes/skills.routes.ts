@@ -22,10 +22,11 @@
 
 import { Router, Request, Response } from 'express';
 import { createLogger } from '../utils/logger';
-import { success, notFound, forbidden, unauthorized } from '../utils/api-response';
+import { success, notFound, unauthorized } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
 import { getSkillManager } from '../agents/skill-manager';
 import { requireAuth } from '../auth';
+import { assertResourceOwnerOrAdmin } from '../auth/ownership';
 import { validate, validateQuery } from '../middlewares/validation';
 import {
     createSkillSchema,
@@ -182,15 +183,19 @@ router.put('/:skillId', requireAuth, validate(updateSkillSchema), asyncHandler(a
         return;
     }
     // 시스템 스킬(createdBy=null)은 누구나 수정 가능, 사용자 스킬은 소유자만 수정 가능
-    if (skill.createdBy && skill.createdBy !== userId) {
-        res.status(403).json(forbidden('이 스킬을 수정할 권한이 없습니다'));
-        return;
+    if (skill.createdBy) {
+        assertResourceOwnerOrAdmin(
+            String(skill.createdBy),
+            String(userId),
+            req.user?.role || 'user'
+        );
     }
 
     const { name, description, content, category, isPublic } = req.body;
+    const actor = { userId: String(userId), userRole: req.user?.role || 'user' };
     const updated = await getSkillManager().updateSkill(skillId, {
         name, description, content, category, isPublic,
-    });
+    }, actor);
 
     if (!updated) {
         res.status(404).json(notFound('스킬'));
@@ -214,12 +219,16 @@ router.delete('/:skillId', requireAuth, asyncHandler(async (req: Request, res: R
         return;
     }
     // 시스템 스킬(createdBy=null)은 누구나 삭제 가능, 사용자 스킬은 소유자만 삭제 가능
-    if (skill.createdBy && skill.createdBy !== userId) {
-        res.status(403).json(forbidden('이 스킬을 삭제할 권한이 없습니다'));
-        return;
+    if (skill.createdBy) {
+        assertResourceOwnerOrAdmin(
+            String(skill.createdBy),
+            String(userId),
+            req.user?.role || 'user'
+        );
     }
 
-    const deleted = await getSkillManager().deleteSkill(skillId);
+    const actor = { userId: String(userId), userRole: req.user?.role || 'user' };
+    const deleted = await getSkillManager().deleteSkill(skillId, actor);
     if (!deleted) {
         res.status(404).json(notFound('스킬'));
         return;

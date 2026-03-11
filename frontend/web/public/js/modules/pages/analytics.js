@@ -35,6 +35,18 @@
         function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
         function fmtNum(n) { return n != null ? Number(n).toLocaleString('ko-KR') : '-'; }
 
+        function fmtUptime(sec) {
+            if (!sec || sec < 0) return '0초';
+            const d = Math.floor(sec / 86400);
+            const h = Math.floor((sec % 86400) / 3600);
+            const m = Math.floor((sec % 3600) / 60);
+            const s = sec % 60;
+            if (d > 0) return `${d}일 ${h}시간`;
+            if (h > 0) return `${h}시간 ${m}분`;
+            if (m > 0) return `${m}분 ${s}초`;
+            return `${s}초`;
+        }
+
         function renderHealth(usage) {
             const today = usage.today || {};
             const errorRate = today.totalRequests > 0 ? ((today.totalErrors / today.totalRequests) * 100).toFixed(1) : '0';
@@ -44,9 +56,9 @@
 
             document.getElementById('healthSection').innerHTML = `
                 <div style="margin-bottom:var(--space-3)"><span class="health-badge health-${status}">${label}</span></div>
-                 <div class="metric-row"><span class="metric-label">업타임</span><span class="metric-value">${usage.uptime || 0}초</span></div>
+                 <div class="metric-row"><span class="metric-label">업타임</span><span class="metric-value">${fmtUptime(usage.uptime || 0)}</span></div>
                 <div class="metric-row"><span class="metric-label">에러율</span><span class="metric-value">${errorRate}%</span></div>
-                <div class="metric-row"><span class="metric-label">평균 응답</span><span class="metric-value">${Math.round(today.avgResponseTime || 0)}ms</span></div>
+                <div class="metric-row"><span class="metric-label">평균 응답</span><span class="metric-value">${(today.avgResponseTime || 0) >= 1000 ? ((today.avgResponseTime / 1000).toFixed(1) + '초') : (Math.round(today.avgResponseTime || 0) + 'ms')}</span></div>
                 <div class="metric-row"><span class="metric-label">오늘 요청</span><span class="metric-value">${fmtNum(today.totalRequests)}</span></div>
             `;
         }
@@ -80,7 +92,8 @@
         function renderAgentTable(data) {
             const el = document.getElementById('agentTable');
             const metrics = data?.data?.metrics || data?.data?.summary || [];
-            if (!metrics || (Array.isArray(metrics) && metrics.length === 0)) {
+            const isEmptyObj = metrics && typeof metrics === 'object' && !Array.isArray(metrics) && Object.keys(metrics).length === 0;
+            if (!metrics || isEmptyObj || (Array.isArray(metrics) && metrics.length === 0)) {
                 el.innerHTML = '<div class="empty-state">에이전트 성능 데이터가 없습니다.</div>';
                 return;
             }
@@ -134,8 +147,13 @@
                 renderAgentTable(metrics);
                 renderFeedback(feedback);
 
-                // 사용자 행동은 별도 API가 없으므로 빈 상태 표시
-                renderPeakHours([]);
+                // 피크 시간대: hourlyBreakdown에서 요청이 있는 시간대 추출
+                const hourly = usage.data?.today?.hourlyBreakdown || [];
+                const activeHours = hourly
+                    .filter(h => h.requests > 0)
+                    .sort((a, b) => b.requests - a.requests);
+                renderPeakHours(activeHours);
+                // 인기 쿼리는 별도 API가 없으므로 빈 상태 표시
                 renderTopQueries([]);
 
                 document.getElementById('refreshInfo').textContent = `마지막 업데이트: ${new Date().toLocaleTimeString('ko-KR')}`;

@@ -1262,6 +1262,34 @@ body {
     border: none;
 }
 
+/* Mermaid diagram containers */
+.mermaid-container {
+    text-align: center;
+    margin: 1rem 0;
+    overflow-x: auto;
+    padding: 0.5rem;
+    border-radius: var(--radius-md, 8px);
+    background: var(--bg-secondary, #f8f9fa);
+}
+[data-theme="dark"] .mermaid-container {
+    background: var(--bg-tertiary, #1e1e2e);
+}
+.mermaid-container svg {
+    max-width: 100%;
+    height: auto;
+}
+
+/* KaTeX math rendering */
+.katex-display {
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 0.5rem 0;
+}
+.katex-error {
+    color: var(--status-error, #e74c3c);
+    font-style: italic;
+}
+
 .message-content blockquote {
     border-left: 4px solid var(--accent-primary);
     padding-left: 16px;

@@ -27,6 +27,7 @@ import { MemoryCategory } from '../data/models/unified-database';
 import { success, badRequest, notFound, forbidden } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
 import { requireAuth } from '../auth';
+import { assertResourceOwnerOrAdmin } from '../auth/ownership';
 import { validate } from '../middlewares/validation';
 import { getUnifiedDatabase } from '../data/models/unified-database';
 import { createMemorySchema, updateMemorySchema } from '../schemas/memory.schema';
@@ -140,9 +141,11 @@ router.put('/:id', validate(updateMemorySchema), asyncHandler(async (req: Reques
     if (ownerUserId === null) {
         return res.status(404).json(notFound('메모리를 찾을 수 없습니다'));
     }
-    if (String(ownerUserId) !== userId && req.user?.role !== 'admin') {
-        return res.status(403).json(forbidden('접근 권한이 없습니다'));
-    }
+    assertResourceOwnerOrAdmin(
+        String(ownerUserId),
+        String(userId),
+        req.user?.role || 'user'
+    );
      const { value, importance } = req.body;
 
       if (!value && importance === undefined) {
@@ -168,9 +171,11 @@ router.delete('/:id', requireAuth, asyncHandler(async (req: Request, res: Respon
     if (ownerUserId === null) {
         return res.status(404).json(notFound('메모리를 찾을 수 없습니다'));
     }
-    if (String(ownerUserId) !== userId && req.user?.role !== 'admin') {
-        return res.status(403).json(forbidden('접근 권한이 없습니다'));
-    }
+    assertResourceOwnerOrAdmin(
+        String(ownerUserId),
+        String(userId),
+        req.user?.role || 'user'
+    );
 
      const memoryService = getMemoryService();
      await memoryService.deleteMemory(memoryId);

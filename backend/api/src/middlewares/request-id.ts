@@ -9,9 +9,11 @@
 
 import { Request, Response, NextFunction } from 'express';
 import crypto from 'node:crypto';
+import { runWithRequestContext } from '../utils/request-context';
 
 /**
  * Request ID 생성 및 첨부 미들웨어
+ * AsyncLocalStorage 컨텍스트를 열어 하위 서비스에서 getRequestId()로 조회 가능
  */
 export function requestIdMiddleware(req: Request, res: Response, next: NextFunction): void {
     const existingId = req.headers['x-request-id'];
@@ -22,5 +24,5 @@ export function requestIdMiddleware(req: Request, res: Response, next: NextFunct
     req.requestId = id;
     res.setHeader('X-Request-Id', id);
 
-    next();
+    runWithRequestContext({ requestId: id }, () => next());
 }

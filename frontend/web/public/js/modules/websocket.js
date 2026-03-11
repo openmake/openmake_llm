@@ -112,7 +112,7 @@ function sendWsMessage(data) {
  * 메시지 타입에 따라 적절한 처리 함수를 호출합니다.
  * 지원 타입: init, stats, update, cluster_event, token, done, error, aborted, agents,
  *            agent_selected, discussion_progress, research_progress,
- *            progress, session_created
+ *            document_progress, session_created
  * @param {Object} data - 파싱된 수신 메시지 객체
  * @param {string} data.type - 메시지 타입 식별자
  * @returns {void}
@@ -197,9 +197,12 @@ function handleMessage(data) {
             }
             break;
 
-        case 'progress':
+        case 'document_progress':
+            debugLog('[WebSocket] 문서 진행 이벤트 수신:', data.stage, data.message, data.progress);
             if (typeof showDocumentProgress === 'function') {
                 showDocumentProgress(data);
+            } else {
+                debugWarn('[WebSocket] showDocumentProgress 함수를 찾을 수 없음');
             }
             break;
 

@@ -104,6 +104,10 @@ export const envSchema = z
         VAPID_PRIVATE_KEY: z.string().default(''),
         VAPID_SUBJECT: z.string().default('mailto:admin@openmake.ai'),
 
+        // Database Pool
+        DB_POOL_MAX: positiveIntWithDefault(20),
+        DB_POOL_MIN: nonNegativeIntWithDefault(5),
+
         // Limits and storage
         DOCUMENT_TTL_HOURS: positiveIntWithDefault(1),
         MAX_UPLOADED_DOCUMENTS: positiveIntWithDefault(100),
@@ -119,8 +123,8 @@ export const envSchema = z
         OMK_ENGINE_PRO: z.string().min(1).default('gemini-3-flash-preview:cloud'),
         OMK_ENGINE_FAST: z.string().min(1).default('gemini-3-flash-preview:cloud'),
         OMK_ENGINE_THINK: z.string().min(1).default('gemini-3-flash-preview:cloud'),
-OMK_ENGINE_CODE: z.string().min(1).default('glm-5:cloud'),
-  OMK_ENGINE_VISION: z.string().min(1).default('qwen3.5:397b-cloud'),
+        OMK_ENGINE_CODE: z.string().min(1).default('glm-5:cloud'),
+        OMK_ENGINE_VISION: z.string().min(1).default('qwen3.5:397b-cloud'),
 
         // P2: Cost Tier & Domain Routing
         OMK_COST_TIER_DEFAULT: z.enum(['economy', 'standard', 'premium']).default('premium'),

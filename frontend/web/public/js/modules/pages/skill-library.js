@@ -6,6 +6,37 @@
 'use strict';
     window.PageModules = window.PageModules || {};
 
+    /** 카테고리 ID → 한국어 레이블 매핑 */
+    const CATEGORY_LABELS = {
+        general: '일반',
+        coding: '코딩',
+        writing: '글쓰기',
+        analysis: '분석',
+        creative: '창작/디자인',
+        education: '교육/학습',
+        business: '비즈니스',
+        science: '과학/연구',
+        technology: '기술/IT',
+        finance: '금융/투자',
+        healthcare: '의료/건강',
+        legal: '법률',
+        engineering: '엔지니어링',
+        media: '미디어',
+        government: '공공/정부',
+        'real-estate': '부동산',
+        energy: '에너지/환경',
+        logistics: '물류/운송',
+        hospitality: '관광/서비스',
+        agriculture: '농업/식품',
+        special: '특수 분야',
+        productivity: '생산성',
+        communication: '커뮤니케이션',
+    };
+
+    function categoryLabel(id) {
+        return CATEGORY_LABELS[id] || id || '일반';
+    }
+
     let localSkills = [];
     let userAssignedIds = new Set(); // 사용자 개인 할당 스킬 ID 집합
     let editingSkillId = null; // 현재 편집 중인 스킬 ID (null = 새 스킬)
@@ -250,7 +281,7 @@
                         if (c.category) {
                             const opt = document.createElement('option');
                             opt.value = c.category;
-                            opt.textContent = `${c.category} (${c.count})`;
+                            opt.textContent = `${categoryLabel(c.category)} (${c.count})`;
                             select.appendChild(opt);
                         }
                     });
@@ -336,7 +367,7 @@
                 return `
                 <div class="skill-card">
                     <div class="skill-card-top">
-                        <span class="skill-card-badge">${esc(skill.category || 'general')}${userBadge}${systemBadge}</span>
+                        <span class="skill-card-badge">${esc(categoryLabel(skill.category))}${userBadge}${systemBadge}</span>
                         <div class="skill-card-menu">
                             <button class="skill-card-menu-btn" title="더 보기"
                                 onclick="(function(btn){btn.nextElementSibling.classList.toggle('open');event.stopPropagation();})(this)">⋯</button>
@@ -534,5 +565,5 @@
         }
     };
 
-const { getHTML, init, cleanup } = window.PageModules['skill-library'];
-export default { getHTML, init, cleanup };
+const pageModule = window.PageModules['skill-library'];
+export default pageModule;

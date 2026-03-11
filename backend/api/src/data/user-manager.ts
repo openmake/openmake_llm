@@ -115,13 +115,14 @@ class UserManagerImpl {
     private async init(): Promise<void> {
         await this.ensureSchema();
         await this.ensureAdminUser();
+        await this.ensureSystemUser();
     }
 
     private async ensureSchema(): Promise<void> {
         const pool = getPool();
         try {
             await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS tier TEXT DEFAULT \'free\'');
-        } catch (_e: unknown) {
+        } catch {
             // 이미 존재하는 경우 무시
         }
     }
@@ -215,6 +216,26 @@ class UserManagerImpl {
         }
     }
 
+    /**
+     * 시스템 내부 작업용 사용자 보장 (에이전트 학습, 자기개선 메모리 등)
+     */
+    private async ensureSystemUser(): Promise<void> {
+        const pool = getPool();
+        try {
+            const result = await pool.query('SELECT id FROM users WHERE id = $1', ['system']);
+            if (result.rows.length > 0) return;
+            await pool.query(
+                `INSERT INTO users (id, username, email, password_hash, role, tier, is_active)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7)
+                 ON CONFLICT (id) DO NOTHING`,
+                ['system', 'system', 'system@internal', '', 'user', 'enterprise', true]
+            );
+            logger.info('[UserManager] 시스템 내부 사용자 생성 완료');
+        } catch (e) {
+            logger.warn('[UserManager] 시스템 사용자 생성 실패 (무시):', e);
+        }
+    }
+
     private rowToPublicUser(row: UserRow): PublicUser {
         return {
             id: row.id,
@@ -244,8 +265,8 @@ class UserManagerImpl {
             await client.query('BEGIN');
             await client.query('SELECT pg_advisory_xact_lock(1)');
 
-            // lock 내에서 중복 재확인
-            const dupCheck = await pool.query('SELECT id FROM users WHERE email = $1 OR username = $1', [input.email]);
+            // lock 내에서 중복 재확인 (같은 client 연결에서 조회해야 lock 보호 유효)
+            const dupCheck = await client.query('SELECT id FROM users WHERE email = $1 OR username = $1', [input.email]);
             if (dupCheck.rows.length > 0) {
                 await client.query('ROLLBACK');
                 return null;

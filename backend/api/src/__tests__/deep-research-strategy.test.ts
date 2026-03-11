@@ -43,9 +43,9 @@ import { DeepResearchService } from '../services/DeepResearchService';
 import { getUnifiedDatabase } from '../data/models/unified-database';
 import { v4 as uuidv4 } from 'uuid';
 
-const MockDeepResearchService = jest.mocked(DeepResearchService);
-const mockGetUnifiedDatabase = jest.mocked(getUnifiedDatabase);
-const mockUuidV4 = jest.mocked(uuidv4);
+const MockDeepResearchService = DeepResearchService as unknown as jest.Mock;
+const mockGetUnifiedDatabase = getUnifiedDatabase as jest.MockedFunction<typeof getUnifiedDatabase>;
+const mockUuidV4 = uuidv4 as jest.MockedFunction<typeof uuidv4>;
 
 // ─────────────────────────────────────────────
 // Helpers

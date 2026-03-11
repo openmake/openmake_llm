@@ -6,8 +6,8 @@
 import { analyzeTopicIntent, TOPIC_CATEGORIES } from '../agents/topic-analyzer';
 
 describe('TOPIC_CATEGORIES 구조', () => {
-    test('8개 카테고리가 정의되어 있다', () => {
-        expect(TOPIC_CATEGORIES).toHaveLength(8);
+    test('17개 카테고리가 정의되어 있다', () => {
+        expect(TOPIC_CATEGORIES).toHaveLength(17);
     });
 
     test('각 카테고리에 name, patterns, relatedAgents, expansionKeywords 필드 존재', () => {
@@ -35,7 +35,7 @@ describe('TOPIC_CATEGORIES 구조', () => {
         }
     });
 
-    test('8개 기대 카테고리명 포함', () => {
+    test('17개 기대 카테고리명 포함', () => {
         const names = TOPIC_CATEGORIES.map(c => c.name);
         expect(names).toContain('프로그래밍/개발');
         expect(names).toContain('비즈니스/창업');
@@ -45,6 +45,15 @@ describe('TOPIC_CATEGORIES 구조', () => {
         expect(names).toContain('교육/학습');
         expect(names).toContain('디자인/크리에이티브');
         expect(names).toContain('데이터/AI');
+        expect(names).toContain('엔지니어링');
+        expect(names).toContain('과학/연구');
+        expect(names).toContain('미디어/커뮤니케이션');
+        expect(names).toContain('공공/정부');
+        expect(names).toContain('부동산');
+        expect(names).toContain('에너지/환경');
+        expect(names).toContain('물류/운송');
+        expect(names).toContain('관광/호스피탈리티');
+        expect(names).toContain('농업/식품');
     });
 });
 

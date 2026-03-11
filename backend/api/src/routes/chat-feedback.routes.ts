@@ -55,14 +55,55 @@ router.post(
             !Array.isArray(routingMetadata)
                 ? routingMetadata
                 : undefined;
+        const feedbackUserId = req.user ? String((req.user as { userId?: string; id?: string | number }).userId ?? (req.user as { id?: string | number }).id ?? '') || undefined : undefined;
         const repo = new FeedbackRepository(getPool());
         await repo.recordFeedback({
             messageId,
             sessionId,
-            userId: req.user ? String((req.user as { userId?: string; id?: string | number }).userId ?? (req.user as { id?: string | number }).id ?? '') || undefined : undefined,
+            userId: feedbackUserId,
             signal,
             routingMetadata: safeMetadata,
         });
+
+        // 피드백 → 장기 메모리에 컨텍스트 기록 (fire-and-forget, 응답 지연 없음)
+        if (feedbackUserId && safeMetadata) {
+            (async () => {
+                const { getMemoryService } = await import('../services/MemoryService');
+                const memoryService = getMemoryService();
+                const feedbackInfo = [
+                    safeMetadata.model && `model=${safeMetadata.model}`,
+                    safeMetadata.queryType && `type=${safeMetadata.queryType}`,
+                    safeMetadata.profileId && `profile=${safeMetadata.profileId}`,
+                ].filter(Boolean).join(', ');
+
+                if (signal === 'thumbs_down') {
+                    await memoryService.saveMemory(feedbackUserId, sessionId || null, {
+                        category: 'context',
+                        key: '부정 피드백 패턴',
+                        value: `불만족 응답 (${feedbackInfo})`,
+                        importance: 0.4,
+                        tags: ['feedback', 'negative'],
+                    });
+                } else if (signal === 'thumbs_up') {
+                    await memoryService.saveMemory(feedbackUserId, sessionId || null, {
+                        category: 'context',
+                        key: '긍정 피드백 패턴',
+                        value: `만족 응답 (${feedbackInfo})`,
+                        importance: 0.3,
+                        tags: ['feedback', 'positive'],
+                    });
+                } else if (signal === 'regenerate') {
+                    await memoryService.saveMemory(feedbackUserId, sessionId || null, {
+                        category: 'context',
+                        key: '재생성 요청 패턴',
+                        value: `응답 재생성 요청 (${feedbackInfo})`,
+                        importance: 0.35,
+                        tags: ['feedback', 'regenerate'],
+                    });
+                }
+            })().catch(e => logger.debug('피드백 메모리 저장 실패 (무시):', e));
+        }
+
         res.json(success({ recorded: true }));
     })
 );

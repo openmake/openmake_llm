@@ -23,9 +23,10 @@
 
 import { Router, Request, Response } from 'express';
 import { createLogger } from '../utils/logger';
-import { success, badRequest, notFound, forbidden } from '../utils/api-response';
+import { success, badRequest, notFound } from '../utils/api-response';
 import { requireAuth } from '../auth';
 import { asyncHandler } from '../utils/error-handler';
+import { assertResourceOwnerOrAdmin } from '../auth/ownership';
 import { getUnifiedDatabase, ExternalServiceType } from '../data/models/unified-database';
 import { v4 as uuidv4 } from 'uuid';
 import { validate } from '../middlewares/validation';
@@ -136,10 +137,11 @@ router.put('/:connectionId/tokens', requireAuth, validate(updateExternalTokensSc
         res.status(404).json(notFound('외부 연결'));
         return;
     }
-    if (connection.user_id !== String(req.user!.id) && req.user!.role !== 'admin') {
-        res.status(403).json(forbidden('접근 권한이 없습니다'));
-        return;
-    }
+    assertResourceOwnerOrAdmin(
+        String(connection.user_id),
+        String(req.user!.id),
+        req.user!.role || 'user'
+    );
 
     await db.updateConnectionTokens(connectionId, {
         accessToken,
@@ -193,10 +195,11 @@ router.get('/:connectionId/files', requireAuth, asyncHandler(async (req: Request
         res.status(404).json(notFound('외부 연결'));
         return;
     }
-    if (connection.user_id !== String(req.user!.id) && req.user!.role !== 'admin') {
-        res.status(403).json(forbidden('접근 권한이 없습니다'));
-        return;
-    }
+    assertResourceOwnerOrAdmin(
+        String(connection.user_id),
+        String(req.user!.id),
+        req.user!.role || 'user'
+    );
 
     const files = await db.getConnectionFiles(connectionId);
 
@@ -223,10 +226,11 @@ router.post('/:connectionId/files', requireAuth, validate(addExternalFileSchema)
         res.status(404).json(notFound('외부 연결'));
         return;
     }
-    if (connection.user_id !== String(req.user!.id) && req.user!.role !== 'admin') {
-        res.status(403).json(forbidden('접근 권한이 없습니다'));
-        return;
-    }
+    assertResourceOwnerOrAdmin(
+        String(connection.user_id),
+        String(req.user!.id),
+        req.user!.role || 'user'
+    );
 
     const fileId = uuidv4();
 

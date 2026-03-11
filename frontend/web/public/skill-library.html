@@ -76,6 +76,18 @@
         }
         function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
 
+        const CATEGORY_LABELS = {
+            general:'일반', coding:'코딩', writing:'글쓰기', analysis:'분석',
+            creative:'창작/디자인', education:'교육/학습', business:'비즈니스',
+            science:'과학/연구', technology:'기술/IT', finance:'금융/투자',
+            healthcare:'의료/건강', legal:'법률', engineering:'엔지니어링',
+            media:'미디어', government:'공공/정부', 'real-estate':'부동산',
+            energy:'에너지/환경', logistics:'물류/운송', hospitality:'관광/서비스',
+            agriculture:'농업/식품', special:'특수 분야', productivity:'생산성',
+            communication:'커뮤니케이션',
+        };
+        function catLabel(id) { return CATEGORY_LABELS[id] || id || '일반'; }
+
         let skills = [];
         let categories = [];
         let currentFilter = '';
@@ -86,18 +98,18 @@
                 categories = res.data || [];
                 const tabs = document.getElementById('filterTabs');
                 tabs.innerHTML = '<button class="filter-tab active" data-cat="">전체</button>' +
-                    categories.map(c => '<button class="filter-tab" data-cat="' + esc(c) + '">' + esc(c) + '</button>').join('');
+                    categories.map(c => '<button class="filter-tab" data-cat="' + esc(c.category) + '">' + esc(catLabel(c.category)) + ' (' + c.count + ')</button>').join('');
             } catch(e) { /* ignore */ }
         }
 
         async function loadSkills() {
             const params = new URLSearchParams();
             const search = document.getElementById('searchInput').value.trim();
-            if (search) params.set('q', search);
+            if (search) params.set('search', search);
             if (currentFilter) params.set('category', currentFilter);
             try {
                 const res = await authFetch('/api/agents/skills?' + params.toString());
-                skills = res.data || [];
+                skills = (res.data && res.data.skills) || [];
                 renderSkills();
             } catch(e) {
                 document.getElementById('skillGrid').innerHTML = '<div class="empty-state"><h2>로드 실패</h2></div>';
@@ -115,8 +127,8 @@
                     <h3>${esc(s.name)}</h3>
                     <div class="skill-desc">${esc(s.description || '')}</div>
                     <div class="skill-meta">
-                        <span class="badge badge-cat">${esc(s.category || 'general')}</span>
-                        <span class="badge ${s.is_public ? 'badge-public' : 'badge-private'}">${s.is_public ? '공개' : '비공개'}</span>
+                        <span class="badge badge-cat">${esc(catLabel(s.category))}</span>
+                        <span class="badge ${s.isPublic ? 'badge-public' : 'badge-private'}">${s.isPublic ? '공개' : '비공개'}</span>
                     </div>
                     <div class="skill-actions">
                         <button onclick="exportSkill('${s.id}')">📤 내보내기</button>

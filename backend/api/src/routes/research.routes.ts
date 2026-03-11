@@ -28,6 +28,7 @@ import { createLogger } from '../utils/logger';
 import { success, badRequest, notFound, forbidden } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
 import { requireAuth } from '../auth';
+import { assertResourceOwnerOrAdmin } from '../auth/ownership';
 import { validate } from '../middlewares/validation';
 import { getUnifiedDatabase } from '../data/models/unified-database';
 import { v4 as uuidv4 } from 'uuid';
@@ -120,10 +121,11 @@ router.get('/sessions/:sessionId', asyncHandler(async (req: Request, res: Respon
         return res.status(404).json(notFound('리서치 세션을 찾을 수 없습니다.'));
     }
 
-    // 소유권 확인
-    if (String(session.user_id) !== String(req.user!.id) && req.user!.role !== 'admin') {
-        return res.status(403).json(forbidden('접근 권한이 없습니다'));
-    }
+    assertResourceOwnerOrAdmin(
+        String(session.user_id),
+        String(req.user!.id),
+        req.user!.role || 'user'
+    );
 
     const steps = await db.getResearchSteps(sessionId);
 
@@ -145,10 +147,11 @@ router.put('/sessions/:sessionId', validate(updateResearchSessionSchema), asyncH
         return res.status(404).json(notFound('리서치 세션을 찾을 수 없습니다.'));
     }
 
-    // 소유권 확인
-    if (String(session.user_id) !== String(req.user!.id) && req.user!.role !== 'admin') {
-        return res.status(403).json(forbidden('접근 권한이 없습니다'));
-    }
+    assertResourceOwnerOrAdmin(
+        String(session.user_id),
+        String(req.user!.id),
+        req.user!.role || 'user'
+    );
 
     await db.updateResearchSession(sessionId, {
         status,
@@ -182,10 +185,11 @@ router.post('/sessions/:sessionId/steps', validate(addResearchStepSchema), async
         return res.status(404).json(notFound('리서치 세션을 찾을 수 없습니다.'));
     }
 
-    // 소유권 확인
-    if (String(session.user_id) !== String(req.user!.id) && req.user!.role !== 'admin') {
-        return res.status(403).json(forbidden('접근 권한이 없습니다'));
-    }
+    assertResourceOwnerOrAdmin(
+        String(session.user_id),
+        String(req.user!.id),
+        req.user!.role || 'user'
+    );
 
     await db.addResearchStep({
         sessionId,
@@ -216,10 +220,11 @@ router.get('/sessions/:sessionId/steps', asyncHandler(async (req: Request, res: 
         return res.status(404).json(notFound('리서치 세션을 찾을 수 없습니다.'));
     }
 
-    // 소유권 확인
-    if (String(session.user_id) !== String(req.user!.id) && req.user!.role !== 'admin') {
-        return res.status(403).json(forbidden('접근 권한이 없습니다'));
-    }
+    assertResourceOwnerOrAdmin(
+        String(session.user_id),
+        String(req.user!.id),
+        req.user!.role || 'user'
+    );
 
     const steps = await db.getResearchSteps(sessionId);
 
@@ -241,10 +246,11 @@ router.post('/sessions/:sessionId/execute', validate(executeResearchSchema), asy
         return res.status(404).json(notFound('리서치 세션을 찾을 수 없습니다.'));
     }
 
-    // 소유권 확인
-    if (String(session.user_id) !== String(req.user!.id) && req.user!.role !== 'admin') {
-        return res.status(403).json(forbidden('접근 권한이 없습니다'));
-    }
+    assertResourceOwnerOrAdmin(
+        String(session.user_id),
+        String(req.user!.id),
+        req.user!.role || 'user'
+    );
 
     if (session.status === 'running') {
         return res.status(400).json(badRequest('이미 실행 중인 리서치입니다.'));
@@ -292,10 +298,11 @@ router.delete('/sessions/:sessionId', requireAuth, asyncHandler(async (req: Requ
         return res.status(404).json(notFound('리서치 세션을 찾을 수 없습니다.'));
     }
 
-    // 소유권 확인
-    if (String(session.user_id) !== String(req.user!.id) && req.user!.role !== 'admin') {
-        return res.status(403).json(forbidden('접근 권한이 없습니다'));
-    }
+    assertResourceOwnerOrAdmin(
+        String(session.user_id),
+        String(req.user!.id),
+        req.user!.role || 'user'
+    );
 
     await db.deleteResearchSession(sessionId);
 
