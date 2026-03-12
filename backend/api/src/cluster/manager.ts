@@ -178,7 +178,10 @@ export class ClusterManager extends EventEmitter {
         }
 
         const client = createClient({
-            baseUrl: `http://${host}:${port}`
+            baseUrl: `http://${host}:${port}`,
+            // 로컬 노드 헬스체크/모델 목록 수집은 반드시 로컬 Ollama를 보도록
+            // non-cloud 모델명을 명시해 Cloud 호스트 자동 전환을 막는다.
+            model: 'local-probe'
         });
 
         // 연결 테스트
