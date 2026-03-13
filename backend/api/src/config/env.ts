@@ -121,6 +121,13 @@ export interface EnvConfig {
     defaultResponseLanguage: SupportedLanguageCode;
     languageDetectionMinConfidence: number;
     languageFallbackLanguage: SupportedLanguageCode;
+
+    // RAG (Retrieval-Augmented Generation)
+    embeddingModel: string;
+    chunkSize: number;
+    chunkOverlap: number;
+    ragTopK: number;
+    ragRelevanceThreshold: number;
 }
 
 const DEFAULT_CONFIG: EnvConfig = {
@@ -230,6 +237,13 @@ const DEFAULT_CONFIG: EnvConfig = {
     defaultResponseLanguage: 'ko',
     languageDetectionMinConfidence: 0.7,
     languageFallbackLanguage: 'en',
+
+    // RAG
+    embeddingModel: 'nomic-embed-text',
+    chunkSize: 1000,
+    chunkOverlap: 200,
+    ragTopK: 5,
+    ragRelevanceThreshold: 0.3,
 };
 
 function parseEnvFile(filePath: string): Record<string, string> {
@@ -388,6 +402,13 @@ export function loadConfig(): EnvConfig {
 
         // Cookie Security
         COOKIE_SECURE: env('COOKIE_SECURE'),
+
+        // RAG
+        EMBEDDING_MODEL: env('EMBEDDING_MODEL'),
+        RAG_CHUNK_SIZE: env('RAG_CHUNK_SIZE'),
+        RAG_CHUNK_OVERLAP: env('RAG_CHUNK_OVERLAP'),
+        RAG_TOP_K: env('RAG_TOP_K'),
+        RAG_RELEVANCE_THRESHOLD: env('RAG_RELEVANCE_THRESHOLD'),
     });
 
     if (!parsedResult.success) {
@@ -511,6 +532,13 @@ export function loadConfig(): EnvConfig {
 
         // Cookie Security
         cookieSecure: parsed.COOKIE_SECURE ?? DEFAULT_CONFIG.cookieSecure,
+
+        // RAG
+        embeddingModel: parsed.EMBEDDING_MODEL ?? DEFAULT_CONFIG.embeddingModel,
+        chunkSize: parsed.RAG_CHUNK_SIZE ?? DEFAULT_CONFIG.chunkSize,
+        chunkOverlap: parsed.RAG_CHUNK_OVERLAP ?? DEFAULT_CONFIG.chunkOverlap,
+        ragTopK: parsed.RAG_TOP_K ?? DEFAULT_CONFIG.ragTopK,
+        ragRelevanceThreshold: parsed.RAG_RELEVANCE_THRESHOLD ?? DEFAULT_CONFIG.ragRelevanceThreshold,
     };
 }
 

@@ -86,7 +86,7 @@ export const AUTH_CONFIG = {
  * :cloud 접미사 모델 사용 시 연결할 Ollama Cloud 서버 주소입니다.
  * client.ts, agent-loop.ts에서 공통 참조합니다.
  */
-export const OLLAMA_CLOUD_HOST = 'https://ollama.com';
+export const OLLAMA_CLOUD_HOST = process.env.OLLAMA_CLOUD_HOST || process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
 
 // ============================================
 // 애플리케이션 메타 정보

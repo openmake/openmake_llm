@@ -262,6 +262,13 @@ export class ChatService {
         if (languagePolicy?.resolvedLanguage) {
             req.userLanguagePreference = languagePolicy.resolvedLanguage;
         }
+        // Discussion/DeepResearch 모드에서도 Auto-Routing이 작동하도록 모델 해석 선행
+        if ((discussionMode || deepResearchMode) && executionPlan?.resolvedEngine === '__auto__') {
+            const promptConfig = getPromptConfig(message, languagePolicy?.resolvedLanguage);
+            const hasImages = (images && images.length > 0) || false;
+            await this.resolveModel(message || '', hasImages, executionPlan, promptConfig);
+        }
+
         if (discussionMode) {
             return this.processMessageWithDiscussion(req, uploadedDocuments, onToken, onDiscussionProgress);
         }

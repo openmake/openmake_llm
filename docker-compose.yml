@@ -1,0 +1,55 @@
+services:
+  # ==========================================
+  # PostgreSQL + pgvector
+  # ==========================================
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: openmake_llm
+      POSTGRES_USER: openmake
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-openmake_secret}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./services/database/init/001-extensions.sql:/docker-entrypoint-initdb.d/001-extensions.sql:ro
+    # ports: 호스트 PG와 충돌 방지 — app은 내부 네트워크로 접근
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U openmake -d openmake_llm"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # ==========================================
+  # OpenMake API + Frontend
+  # ==========================================
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "${PORT:-52416}:52416"
+    env_file:
+      - .env
+    environment:
+      # Docker 내부 네트워크용 오버라이드
+      DATABASE_URL: postgresql://openmake:${POSTGRES_PASSWORD:-openmake_secret}@postgres:5432/openmake_llm
+      # Host Ollama 접근 (host.docker.internal → 호스트 머신)
+      OLLAMA_HOST: http://host.docker.internal:11434
+      OLLAMA_BASE_URL: http://host.docker.internal:11434
+      PORT: 52416
+      NODE_ENV: production
+      API_KEY_PEPPER: ${API_KEY_PEPPER:-docker_default_pepper_change_me}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - uploads:/app/backend/api/uploads
+      - userdata:/data/users
+
+volumes:
+  pgdata:
+  uploads:
+  userdata:

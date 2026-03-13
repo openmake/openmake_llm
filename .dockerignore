@@ -1,0 +1,17 @@
+node_modules
+*/node_modules
+**/node_modules
+.git
+.env
+*.log
+dist
+**/dist
+.omc
+.claude
+tests
+**/__tests__
+**/*.test.ts
+**/*.spec.ts
+bun.lock
+playwright.config.ts
+jest.config.js

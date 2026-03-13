@@ -142,6 +142,13 @@ export const envSchema = z
 
         // Cookie Security (HTTPS 없이 production 운영 시 false)
         COOKIE_SECURE: booleanFromString(false),
+
+        // RAG (Retrieval-Augmented Generation)
+        EMBEDDING_MODEL: z.string().min(1).default('nomic-embed-text'),
+        RAG_CHUNK_SIZE: positiveIntWithDefault(1000),
+        RAG_CHUNK_OVERLAP: nonNegativeIntWithDefault(200),
+        RAG_TOP_K: positiveIntWithDefault(5),
+        RAG_RELEVANCE_THRESHOLD: z.coerce.number().min(0).max(1).default(0.3),
     })
     .superRefine((data, ctx) => {
         if (data.NODE_ENV !== 'production') {
