@@ -70,3 +70,12 @@ backend/api/.ollama-cluster.json
 # Screenshots (may contain personal info)
 *.png
 !frontend/web/public/**/*.png
+
+# Project Documentation
+README.md
+openmake_prd.md
+
+# Compiled Scripts
+scripts/*.js
+scripts/*.map
+scripts/*.d.ts
