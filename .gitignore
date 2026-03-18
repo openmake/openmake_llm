@@ -79,3 +79,20 @@ openmake_prd.md
 scripts/*.js
 scripts/*.map
 scripts/*.d.ts
+
+# Tests & Dev Configs
+**/__tests__/
+tests/
+*.test.ts
+*.spec.ts
+jest.config.js
+playwright.config.ts
+.eslintignore
+.eslintrc.json
+.github/workflows/
+
+# Dev Documentation
+CLAUDE.md
+AGENTS.md
+SCHEMA_SOURCE_OF_TRUTH.md
+user-guide.md
