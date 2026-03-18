@@ -191,7 +191,7 @@ export class MemoryRepository extends BaseRepository {
             try {
                 const emb = JSON.parse(row.embedding) as number[];
                 const score = this.cosineSimilarity(queryEmbedding, emb);
-                if (score > 0.3) {
+                if (score > 0.5) {
                     scored.push({ id: row.source_id, score });
                 }
             } catch { /* skip invalid embedding */ }

@@ -255,7 +255,9 @@ export class ChatService {
         };
 
         this.setUserContext(userId || 'guest', userRole, userTier);
-        this.currentEnabledTools = enabledTools;
+        // API Key 요청에서 enabledTools 미전달 시 내장 MCP 도구 비활성화
+        // 외부 서비스(openmake/rag 등)는 자체 도구 체계를 사용하므로 내장 도구 간섭 방지
+        this.currentEnabledTools = req.apiKeyId && !enabledTools ? {} : enabledTools;
         this.currentExecutionPlan = executionPlan;
 
         // ── 보안 사전 검사 ──
@@ -308,15 +310,34 @@ export class ChatService {
         };
 
         // ── Step 2: 에이전트 라우팅 ──
-        const { agentSelection, agentSystemMessage, selectedAgent } = await this.resolveAgent(
-            message || '', userId, languagePolicy?.resolvedLanguage || 'en',
-            onAgentSelected, onSkillsActivated,
-        );
+        // API Key 요청: 에이전트 라우팅 스킵 → general 에이전트 사용
+        // 외부 서비스(openmake/rag 등)는 자체 라우팅/프롬프트를 사용하므로 이중 라우팅 방지
+        let agentSelection: AgentSelection;
+        let agentSystemMessage: string;
+        let selectedAgent: (typeof AGENTS)[string];
+
+        if (req.apiKeyId) {
+            agentSelection = {
+                primaryAgent: 'general',
+                category: 'general',
+                phase: undefined,
+                reason: '[API Key] 외부 요청 — 에이전트 라우팅 스킵',
+                confidence: 1.0,
+                matchedKeywords: [],
+            };
+            agentSystemMessage = '';
+            selectedAgent = getAgentById('general') || AGENTS['general'];
+        } else {
+            ({ agentSelection, agentSystemMessage, selectedAgent } = await this.resolveAgent(
+                message || '', userId, languagePolicy?.resolvedLanguage || 'en',
+                onAgentSelected, onSkillsActivated,
+            ));
+        }
 
         // ── Step 3: 컨텍스트 구성 (문서 + RAG + 웹검색) ──
         const { finalEnhancedMessage, documentImages } = await this.buildContextForLLM(
             message || '', docId, uploadedDocuments, ragEnabled, userId,
-            webSearchContext, thinkingMode, onRAGSources,
+            webSearchContext, thinkingMode, onRAGSources, req.apiKeyId,
         );
 
         // ── Step 4: 모델 선택 ──
@@ -410,8 +431,12 @@ export class ChatService {
         }
 
         // ── Step 7: 장기 메모리 자동 추출 (fire-and-forget, 응답 지연 없음) ──
-        if (userId && message) {
-            this.extractMemoriesAsync(userId, message, fullResponse).catch(e => logger.debug('메모리 추출 fire-and-forget 실패:', e?.message));
+        // API Key 요청: 외부 서비스(openmake/rag 등)의 메시지에 이미 RAG 문서가 포함되어 있을 수 있으므로
+        // 메모리 추출을 완전히 스킵하여 외부 문서 내용이 내부 메모리로 오염되는 것을 방지
+        // RAG/웹검색 컨텍스트가 주입된 답변은 메모리 추출을 스킵하여 오염 방지
+        if (userId && message && !req.apiKeyId) {
+            const hasExternalContext = !!(ragEnabled || webSearchContext || docId);
+            this.extractMemoriesAsync(userId, message, fullResponse, hasExternalContext).catch(e => logger.debug('메모리 추출 fire-and-forget 실패:', e?.message));
         }
 
         return fullResponse;
@@ -525,6 +550,7 @@ export class ChatService {
         webSearchContext: string | undefined,
         thinkingMode: boolean | undefined,
         onRAGSources?: (sources: Array<{ source: string; relevanceScore: number; snippet: string }>) => void,
+        apiKeyId?: string,
     ): Promise<{ finalEnhancedMessage: string; documentImages: string[] }> {
         // 문서 컨텍스트 구성: 업로드된 문서의 텍스트와 이미지를 추출
         let documentContext = '';
@@ -555,15 +581,17 @@ export class ChatService {
             }
         }
 
-        // ── RAG 컨텍스트 검색 및 주입 (사용자가 RAG 활성화 시에만) ──
+        // ── RAG 컨텍스트 검색 및 주입 ──
+        // docId가 있을 때만 RAG 검색을 수행: 문서 첨부 없이 RAG가 켜져 있으면
+        // 모든 문서 청크가 검색 대상이 되어 무관한 문서 내용이 답변에 혼입되는 것을 방지
         let ragContextStr = '';
-        if (ragEnabled) {
+        if (ragEnabled && docId) {
             try {
                 const ragService = getRAGService();
                 const ragContext = await ragService.getRAGContextForChat(
                     message,
                     userId,
-                    docId || undefined,
+                    docId,
                 );
                 if (ragContext && ragContext.documents.length > 0) {
                     ragContextStr = '## \uD83D\uDD0D RAG CONTEXT (Retrieved Documents)\n';
@@ -592,8 +620,11 @@ export class ChatService {
         }
 
         // ── Memory 컨텍스트 주입: 사용자별 기억된 정보를 응답에 반영 ──
+        // API Key 요청: 외부 서비스의 메모리와 내부 메모리가 교차 오염되지 않도록 스킵
+        // 짧은 인사/단순 메시지에는 메모리 주입을 스킵하여 불필요한 컨텍스트 오염 방지
         let memoryContextStr = '';
-        if (userId) {
+        const isSimpleGreeting = message.trim().length < 15 && /^(안녕|하이|헬로|hello|hi|hey|good\s*(morning|afternoon|evening)|잘\s*지내|반가|감사합니다|고마워|ㅎㅇ|ㅎㅎ)/i.test(message.trim());
+        if (userId && !isSimpleGreeting && !apiKeyId) {
             try {
                 const { getMemoryService } = await import('./MemoryService');
                 const memoryService = getMemoryService();
@@ -907,8 +938,25 @@ export class ChatService {
      * 대화에서 메모리를 비동기로 추출합니다 (fire-and-forget).
      * LLM 추출기를 연결하여 의미 있는 정보를 자동으로 장기 메모리에 저장합니다.
      */
-    private async extractMemoriesAsync(userId: string, userMessage: string, assistantResponse: string): Promise<void> {
+    private async extractMemoriesAsync(
+        userId: string,
+        userMessage: string,
+        assistantResponse: string,
+        hasExternalContext: boolean = false,
+    ): Promise<void> {
         try {
+            // 외부 컨텍스트(RAG/웹검색)가 주입된 답변은 메모리 추출 대상에서 제외
+            // RAG 문서 내용이 사용자 정보로 잘못 추출되는 악순환 방지
+            if (hasExternalContext) {
+                logger.debug('외부 컨텍스트(RAG/웹검색) 포함 답변 — 메모리 추출 스킵');
+                return;
+            }
+
+            // 짧은 인사/단순 메시지는 메모리 추출 스킵
+            if (userMessage.trim().length < 15) {
+                return;
+            }
+
             const { getMemoryService } = await import('./MemoryService');
             const memoryService = getMemoryService();
 
