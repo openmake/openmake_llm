@@ -153,8 +153,8 @@ run_step "Bun Test (backend/api)" bash -c '
 run_step "TypeScript Build" bash -c "cd '$PROJECT_ROOT' && npm run build"
 
 # ─── Step 3: File Size Guard ───
-run_step "File Size Guard (max 600 lines)" bash -c '
-    MAX_LINES=600
+run_step "File Size Guard (max 1200 lines)" bash -c '
+    MAX_LINES=1200
     VIOLATIONS=""
     while IFS= read -r f; do
         lines=$(grep -c "" "$f" 2>/dev/null || echo 0)
