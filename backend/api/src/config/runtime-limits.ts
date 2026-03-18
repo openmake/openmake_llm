@@ -206,8 +206,8 @@ export const RAG_CONFIG = {
     CHUNK_OVERLAP: 200,
     /** 검색 시 반환할 최대 청크 수 */
     TOP_K: 5,
-    /** 관련도 임계값 (0.0~1.0, 이 값 이상만 반환, 0.3→0.45로 상향: 노이즈 감소) */
-    RELEVANCE_THRESHOLD: 0.45,
+    /** 관련도 임계값 (0.0~1.0, 이 값 이상만 반환, 0.45→0.6 상향: 무관 문서 혼입 방지) */
+    RELEVANCE_THRESHOLD: 0.6,
     /** 임베딩 모델 이름 (Ollama) */
     EMBEDDING_MODEL: 'nomic-embed-text',
     /** 임베딩 벡터 차원 수 (vector_embeddings 테이블과 일치해야 함) */
