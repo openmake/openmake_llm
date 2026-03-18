@@ -437,7 +437,8 @@ Return ONLY the JSON array, no explanation.`;
             const jsonMatch = safeLlmResult.match(/\[[\s\S]*\]/);
             if (!jsonMatch) return [];
 
-            const parsed = JSON.parse(jsonMatch[0]);
+            const jsonStr = this.sanitizeJsonString(jsonMatch[0]);
+            const parsed = JSON.parse(jsonStr);
             if (!Array.isArray(parsed)) return [];
 
             return parsed.filter(item =>
@@ -451,9 +452,31 @@ Return ONLY the JSON array, no explanation.`;
                 tags: Array.isArray(item.tags) ? item.tags.slice(0, TRUNCATION.MEMORY_MAX_TAGS) : []
             }));
         } catch (e) {
-            logger.error('JSON 파싱 실패:', e);
+            logger.error('JSON 파싱 실패:', e instanceof Error ? e.message : e);
             return [];
         }
+    }
+
+    /**
+     * LLM이 반환한 JSON 문자열의 일반적인 오류를 정제합니다.
+     * - 후행 쉼표 제거
+     * - 제어 문자 이스케이프
+     * - 문자열 값 내부의 이스케이프되지 않은 줄바꿈 처리
+     */
+    private sanitizeJsonString(json: string): string {
+        let result = json;
+        // 1) 문자열 값 내부의 이스케이프되지 않은 제어 문자 처리
+        //    JSON 문자열 안의 raw newline/tab을 이스케이프 시퀀스로 변환
+        result = result.replace(/"(?:[^"\\]|\\.)*"/g, (match) => {
+            return match
+                .replace(/(?<!\\)\t/g, '\\t')
+                .replace(/(?<!\\)\r\n/g, '\\n')
+                .replace(/(?<!\\)\r/g, '\\n')
+                .replace(/(?<!\\)\n/g, '\\n');
+        });
+        // 2) 후행 쉼표 제거 (], } 앞의 쉼표)
+        result = result.replace(/,\s*([}\]])/g, '$1');
+        return result;
     }
 
     private extractByRules(userMessage: string, _assistantResponse: string): MemoryExtractionResult[] {
