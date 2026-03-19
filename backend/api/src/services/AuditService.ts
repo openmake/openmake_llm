@@ -60,13 +60,20 @@ export class AuditService {
         const limit = filters.limit ?? 100;
         const offset = filters.offset ?? 0;
 
+        // 전체 매칭 수를 별도 COUNT 쿼리로 가져옴 (페이지네이션 total)
+        const countResult = await pool.query(
+            `SELECT COUNT(*) AS cnt FROM audit_logs ${whereClause}`,
+            params
+        );
+        const total = parseInt((countResult.rows[0] as { cnt: string }).cnt, 10);
+
         const result = await pool.query(
             `SELECT * FROM audit_logs ${whereClause} ORDER BY timestamp DESC LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
             [...params, limit, offset]
         );
 
         const logs = result.rows as AuditLog[];
-        return { logs, total: logs.length };
+        return { logs, total };
     }
 
     async getDistinctActions(): Promise<string[]> {
