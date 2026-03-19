@@ -177,17 +177,18 @@ function showAgentBadge(agent) {
     const badgeContainer = document.getElementById('agentBadge');
     if (!badgeContainer) return;
 
-    const phaseColors = { planning: '#f59e0b', build: '#22c55e', optimization: '#3b82f6' };
-    const phaseLabels = { planning: '기획', build: '구현', optimization: '최적화' };
+    const phaseLabels = { planning: '분석 중...', build: '생성 중...', optimization: '최적화 중...' };
+    const phaseStep = phaseLabels[agent.phase] || '처리 중...';
+    const confidence = agent.confidence ? `신뢰도 ${Math.round(agent.confidence * 100)}%` : '';
+    const reason = agent.reason || '';
 
     badgeContainer.innerHTML = `
-        <div class="agent-badge-content" style="display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 20px; background: var(--bg-card); border: 2px solid var(--border-light); box-shadow: 2px 2px 0 #000; font-size: 0.85rem; animation: slideUp 0.3s ease-out;">
-            <span style="font-size: 1.2rem;">${agent.emoji || '🤖'}</span>
-            <div style="display: flex; flex-direction: column;">
-                <span style="font-weight: 600; color: var(--text-primary);">${escapeHtml(agent.name || '에이전트')}</span>
-                <span style="font-size: 0.7rem; color: var(--text-secondary);">${escapeHtml(agent.reason || '')}</span>
-            </div>
-            ${agent.phase ? `<span style="font-size: 0.65rem; padding: 2px 6px; background: ${phaseColors[agent.phase] || '#6b7280'}22; border: 1px solid ${phaseColors[agent.phase] || '#6b7280'}; border-radius: 8px; color: ${phaseColors[agent.phase] || '#6b7280'}; font-weight: 500;">${phaseLabels[agent.phase] || agent.phase}</span>` : ''}
+        <div class="agent-status-toast">
+            <span class="toast-agent-icon">${escapeHtml(agent.emoji || '🤖')}</span>
+            <span class="toast-agent-name">${escapeHtml(agent.name || '에이전트')}</span>
+            <span class="toast-step">${escapeHtml(phaseStep)}</span>
+            ${confidence ? `<span class="toast-confidence">${escapeHtml(confidence)}</span>` : ''}
+            ${reason ? `<span class="toast-reason">${escapeHtml(reason)}</span>` : ''}
         </div>
     `;
     badgeContainer.style.display = 'block';
