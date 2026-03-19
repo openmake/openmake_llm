@@ -34,6 +34,7 @@ import { Router, Request, Response } from 'express';
 import { createLogger } from '../utils/logger';
 import { getApiUsageTracker } from '../ollama/api-usage-tracker';
 import { getCacheSystem } from '../cache';
+import { getClassificationCacheStats } from '../chat/llm-classifier';
 import { getAlertSystem } from '../monitoring/alerts';
 import { getAnalyticsSystem } from '../monitoring/analytics';
 import { getConnectionPool } from '../ollama/connection-pool';
@@ -240,7 +241,16 @@ router.get('/alerts', asyncHandler(async (req: Request, res: Response) => {
  */
 router.get('/cache/stats', asyncHandler(async (req: Request, res: Response) => {
     const cache = getCacheSystem();
-    res.json(success(cache.getStats()));
+    const classificationStats = getClassificationCacheStats();
+    res.json(success({
+        queryCache: cache.getStats(),
+        classificationCache: {
+            ...classificationStats,
+            status: classificationStats.hitRate >= 70 ? 'healthy'
+                  : classificationStats.hitRate >= 40 ? 'warming'
+                  : 'cold',
+        },
+    }));
 }));
 
 /**

@@ -259,7 +259,7 @@ export function clearClassificationCache(): void {
 }
 
 /** 캐시 통계를 반환합니다 (모니터링용) */
-export function getClassificationCacheStats(): { l1Hits: number; misses: number } {
+export function getClassificationCacheStats(): { l1Hits: number; misses: number; size: number; maxSize: number; hitRate: number } {
     return getClassificationCache().getStats();
 }
 
