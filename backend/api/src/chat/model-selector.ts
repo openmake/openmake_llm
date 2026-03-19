@@ -267,11 +267,12 @@ export async function selectOptimalModel(query: string, hasImages?: boolean): Pr
             classifiedConfidence = regexResult.confidence;
             logger.info(`[selectOptimalModel] Regex fallback: ${classifiedType} (${(classifiedConfidence * 100).toFixed(0)}%)`);
         }
-    } catch {
+    } catch (error) {
         const regexResult = _classifyQuery(query);
         classifiedType = regexResult.type;
         classifiedConfidence = regexResult.confidence;
-        logger.warn(`[selectOptimalModel] LLM 분류 예외 → regex fallback: ${classifiedType}`);
+        const errMsg = error instanceof Error ? error.message : String(error);
+        logger.warn(`[selectOptimalModel] LLM 분류 예외 → regex fallback: ${classifiedType} (${errMsg})`);
     }
 
     // 이미지가 첨부된 경우 비전 모델 강제 선택
@@ -557,7 +558,14 @@ export async function selectBrandProfileForAutoRouting(query: string, hasImages?
     let classifiedConfidence: number;
     let classifierSource: 'llm' | 'cache' | 'regex' = 'regex';
 
-    const llmResult = await classifyWithLLM(query);
+    let llmResult: Awaited<ReturnType<typeof classifyWithLLM>> = null;
+    try {
+        llmResult = await classifyWithLLM(query);
+    } catch (error) {
+        const errMsg = error instanceof Error ? error.message : String(error);
+        logger.warn(`[selectBrandProfileForAutoRouting] LLM 분류 예외 → regex fallback (${errMsg})`);
+    }
+
     if (llmResult && llmResult.confidence >= getConfidenceThreshold()) {
         // LLM 분류 성공 + 신뢰도 충분
         classifiedType = llmResult.type;
