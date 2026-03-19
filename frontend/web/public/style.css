@@ -1466,9 +1466,8 @@ body {
     .modal-content { width: 95%; max-height: 85vh; border-radius: var(--radius-lg); }
     .modal-header, .modal-body, .modal-footer { padding: 16px; }
     
-    #agentBadge { font-size: 0.75rem; }
-    #agentBadge .agent-badge { padding: 4px 10px; gap: 6px; }
-    
+    /* #agentBadge 모바일 스타일은 chat-status-toast.css로 이전됨 */
+
     .sidebar-logo-container { padding: 0.5rem 0 1rem; }
     .sidebar-logo { width: 100px; }
     

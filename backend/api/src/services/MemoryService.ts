@@ -13,7 +13,7 @@ import { v4 as uuidv4 } from 'uuid';
 import crypto from 'node:crypto';
 import { getUnifiedDatabase, UserMemory, MemoryCategory } from '../data/models/unified-database';
 import { createLogger } from '../utils/logger';
-import { CAPACITY, TRUNCATION, DISCUSSION_TOKEN_BUDGET } from '../config/runtime-limits';
+import { CAPACITY, TRUNCATION, DISCUSSION_TOKEN_BUDGET, CACHE_CONFIG } from '../config/runtime-limits';
 
 const logger = createLogger('MemoryService');
 
@@ -36,10 +36,8 @@ interface MemoryCacheEntry {
     cachedAt: number;
 }
 
-/** 캐시 TTL (5분) */
-const MEMORY_CACHE_TTL_MS = 5 * 60 * 1000;
-/** 캐시 최대 크기 */
-const MEMORY_CACHE_MAX_SIZE = 200;
+const MEMORY_CACHE_TTL_MS = CACHE_CONFIG.MEMORY_CACHE_TTL_MS;
+const MEMORY_CACHE_MAX_SIZE = CACHE_CONFIG.MEMORY_CACHE_MAX_SIZE;
 
 /**
  * 장기 메모리 서비스 클래스
@@ -122,35 +120,7 @@ export class MemoryService {
             tags: memory.tags
         });
         this.invalidateCache(userId);
-
-        // 임베딩 저장 (fire-and-forget, 시맨틱 검색용)
-        this.saveMemoryEmbedding(id, memory.key, memory.value).catch(e => logger.debug('임베딩 저장 실패:', e?.message));
-
         return id;
-    }
-
-    /**
-     * 메모리의 임베딩 벡터를 vector_embeddings 테이블에 저장합니다.
-     * EmbeddingService가 사용 가능한 경우에만 동작합니다.
-     */
-    private async saveMemoryEmbedding(memoryId: string, key: string, value: string): Promise<void> {
-        try {
-            const { getEmbeddingService } = await import('./EmbeddingService');
-            const embeddingService = getEmbeddingService();
-            const text = `${key}: ${value}`;
-            const embedding = await embeddingService.embedText(text);
-            if (embedding && embedding.length > 0) {
-                const pool = this.db.getPool();
-                await pool.query(
-                    `INSERT INTO vector_embeddings (source_type, source_id, chunk_index, content, embedding)
-                     VALUES ('memory', $1, 0, $2, $3)
-                     ON CONFLICT DO NOTHING`,
-                    [memoryId, text, JSON.stringify(embedding)]
-                );
-            }
-        } catch (e) {
-            logger.debug('메모리 임베딩 저장 실패 (무시):', e instanceof Error ? e.message : e);
-        }
     }
 
     /**
@@ -170,35 +140,6 @@ export class MemoryService {
     async getRelevantMemories(userId: string, query: string, limit: number = 10): Promise<UserMemory[]> {
         // 1) 키워드 기반 검색 (기존)
         const keywordResults = await this.db.getRelevantMemories(userId, query, limit);
-
-        // 2) 시맨틱 검색 시도 (EmbeddingService 사용 가능 시)
-        try {
-            const { getEmbeddingService } = await import('./EmbeddingService');
-            const embeddingService = getEmbeddingService();
-            const queryEmbedding = await embeddingService.embedText(query);
-
-            if (queryEmbedding && queryEmbedding.length > 0) {
-                const pool = this.db.getPool();
-                const { MemoryRepository } = await import('../data/repositories/memory-repository');
-                const memRepo = new MemoryRepository(pool);
-                const semanticIds = await memRepo.getSemanticMemoryIds(queryEmbedding, userId, limit);
-
-                // 키워드 결과에 없는 시맨틱 결과를 병합
-                const existingIds = new Set(keywordResults.map(m => m.id));
-                const newIds = semanticIds.filter(id => !existingIds.has(id));
-
-                if (newIds.length > 0) {
-                    const allMemories = await this.getUserMemories(userId);
-                    const semanticMemories = allMemories.filter(m => newIds.includes(m.id));
-                    keywordResults.push(...semanticMemories);
-                    // importance 순 재정렬 후 limit 적용
-                    keywordResults.sort((a, b) => (b.importance ?? 0) - (a.importance ?? 0));
-                    keywordResults.splice(limit);
-                }
-            }
-        } catch {
-            // 시맨틱 검색 실패 시 키워드 결과만 반환 (graceful degradation)
-        }
 
         return keywordResults;
     }
