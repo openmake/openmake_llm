@@ -38,7 +38,7 @@ import { applySequentialThinking } from '../mcp/sequential-thinking';
 import type { ResearchProgress } from './DeepResearchService';
 import { A2AStrategy, AgentLoopStrategy, DeepResearchStrategy, DirectStrategy, DiscussionStrategy } from './chat-strategies';
 import { formatResearchResult, formatDiscussionResult } from './chat-service-formatters';
-import { recordChatMetrics } from './chat-service-metrics';
+import { recordChatMetrics, recordMemoryExtractionFailure } from './chat-service-metrics';
 import { preRequestCheck, postResponseCheck } from '../chat/security-hooks';
 import { 
     determineLanguagePolicy,
@@ -437,7 +437,11 @@ export class ChatService {
         // RAG/웹검색 컨텍스트가 주입된 답변은 메모리 추출을 스킵하여 오염 방지
         if (userId && message && !req.apiKeyId) {
             const hasExternalContext = !!(ragEnabled || webSearchContext || docId);
-            this.extractMemoriesAsync(userId, message, fullResponse, hasExternalContext).catch(e => logger.debug('메모리 추출 fire-and-forget 실패:', e?.message));
+            this.extractMemoriesAsync(userId, message, fullResponse, hasExternalContext).catch((e: Error) => {
+                const reason = e?.message?.includes('timeout') ? 'timeout' : 'unknown';
+                logger.warn('메모리 추출 fire-and-forget 실패:', e?.message);
+                recordMemoryExtractionFailure(reason);
+            });
         }
 
         return fullResponse;
