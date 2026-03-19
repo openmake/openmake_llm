@@ -52,7 +52,7 @@ router.post('/embed/:docId', asyncHandler(async (req: Request, res: Response) =>
         userId,
     });
 
-    logger.info(`[RAG] 수동 임베딩: ${doc.filename} → ${result.embeddedChunks}/${result.totalChunks}개`);
+    logger.info(`[RAG] 수동 인덱싱: ${doc.filename} → ${result.storedChunks}/${result.totalChunks}개`);
     res.json(success(result));
 }));
 
@@ -100,7 +100,7 @@ router.get('/status/:docId', asyncHandler(async (req: Request, res: Response) =>
     const { docId } = req.params;
     const ragService = getRAGService();
 
-    const hasEmbeddings = await ragService.hasDocumentEmbeddings(docId);
+    const hasEmbeddings = await ragService.hasDocumentChunks(docId);
 
     res.json(success({
         docId,
