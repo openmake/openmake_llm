@@ -176,6 +176,23 @@
     --transition-normal: 150ms ease;
     --transition-slow: 200ms ease;
     --transition-bounce: cubic-bezier(0.4, 0, 0.2, 1);
+
+    /* ------- Legacy Aliases (style.css 호환) ------- */
+    --accent-glow: #c061ff;
+    --border-dark: #000000;
+    --radius-xl: 16px;
+    --transition: 0.2s ease-in-out;
+
+    /* ------- Animation Durations ------- */
+    --anim-duration-fast: 150ms;
+    --anim-duration-normal: 300ms;
+    --anim-duration-slow: 500ms;
+    --anim-duration-slower: 800ms;
+
+    --anim-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+    --anim-ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+    --anim-ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+    --anim-ease-bounce: cubic-bezier(0.68, -0.55, 0.265, 1.55);
 }
 
 /* ==========================================
