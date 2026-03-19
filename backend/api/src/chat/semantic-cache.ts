@@ -12,11 +12,12 @@
 
 import { createLogger } from '../utils/logger';
 import type { QueryType } from './model-selector-types';
+import { CACHE_CONFIG } from '../config/runtime-limits';
 
 const logger = createLogger('ClassificationCache');
 
-const DEFAULT_TTL_MS = 30 * 60 * 1000;
-const DEFAULT_MAX_SIZE = 500;
+const DEFAULT_TTL_MS = CACHE_CONFIG.CLASSIFICATION_CACHE_TTL_MS;
+const DEFAULT_MAX_SIZE = CACHE_CONFIG.CLASSIFICATION_CACHE_MAX_SIZE;
 
 interface CacheEntry {
     normalizedQuery: string;
