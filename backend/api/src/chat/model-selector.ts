@@ -250,21 +250,43 @@ export function getModelPresets(): Record<string, ModelPreset> {
  */
 export async function selectOptimalModel(query: string, hasImages?: boolean): Promise<ModelSelection> {
     const config = getConfig();
-    const classification = _classifyQuery(query);
+
+    // ── LLM 분류 우선, 실패/신뢰도 부족/예외 시 regex fallback ──
+    let classifiedType: QueryType;
+    let classifiedConfidence: number;
+
+    try {
+        const llmResult = await classifyWithLLM(query);
+        if (llmResult && llmResult.confidence >= getConfidenceThreshold()) {
+            classifiedType = llmResult.type;
+            classifiedConfidence = llmResult.confidence;
+            logger.info(`[selectOptimalModel] LLM 분류: ${classifiedType} (${(classifiedConfidence * 100).toFixed(0)}%) [source=${llmResult.source}]`);
+        } else {
+            const regexResult = _classifyQuery(query);
+            classifiedType = regexResult.type;
+            classifiedConfidence = regexResult.confidence;
+            logger.info(`[selectOptimalModel] Regex fallback: ${classifiedType} (${(classifiedConfidence * 100).toFixed(0)}%)`);
+        }
+    } catch {
+        const regexResult = _classifyQuery(query);
+        classifiedType = regexResult.type;
+        classifiedConfidence = regexResult.confidence;
+        logger.warn(`[selectOptimalModel] LLM 분류 예외 → regex fallback: ${classifiedType}`);
+    }
 
     // 이미지가 첨부된 경우 비전 모델 강제 선택
     if (hasImages) {
-        classification.type = 'vision';
+        classifiedType = 'vision';
     }
 
-    logger.info(`질문 유형: ${classification.type} (신뢰도: ${(classification.confidence * 100).toFixed(0)}%)`);
+    logger.info(`질문 유형: ${classifiedType} (신뢰도: ${(classifiedConfidence * 100).toFixed(0)}%)`);
 
     // 질문 유형에 맞는 최적 모델 찾기
     let selectedPreset: ModelPreset | null = null;
     let lowestPriority = Infinity;
 
     for (const [, preset] of Object.entries(getModelPresets())) {
-        if (preset.bestFor.includes(classification.type)) {
+        if (preset.bestFor.includes(classifiedType)) {
             if (preset.priority < lowestPriority) {
                 lowestPriority = preset.priority;
                 selectedPreset = preset;
@@ -286,8 +308,8 @@ export async function selectOptimalModel(query: string, hasImages?: boolean): Pr
     return {
         model: actualModel,
         options: selectedPreset.options,
-        reason: `${classification.type} 질문 → ${selectedPreset.name} 사용`,
-        queryType: classification.type,
+        reason: `${classifiedType} 질문 → ${selectedPreset.name} 사용`,
+        queryType: classifiedType,
         supportsToolCalling: selectedPreset.capabilities.toolCalling,
         supportsThinking: selectedPreset.capabilities.thinking,
         supportsVision: selectedPreset.capabilities.vision,
