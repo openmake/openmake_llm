@@ -513,6 +513,10 @@ function finishAssistantMessage(errorMessage = null, serverMessageId = null) {
     setState('messageStartTime', null);
     setState('isGenerating', false);
     hideAbortButton();
+
+    // AI 상태 토스트 숨김
+    const agentBadge = document.getElementById('agentBadge');
+    if (agentBadge) agentBadge.style.display = 'none';
 }
 
 /**
