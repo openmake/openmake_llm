@@ -24,6 +24,10 @@ export const LLM_TIMEOUTS = {
     FIRECRAWL_TIMEOUT_MS: 30000,
     /** 키워드 라우터 LLM 호출 타임아웃 (ms) — ROUTING_TIMEOUT_MS보다 높음 */
     KEYWORD_ROUTING_TIMEOUT_MS: 10000,
+    /** LLM 기반 쿼리 분류기 타임아웃 (ms) */
+    CLASSIFIER_TIMEOUT_MS: 10000,
+    /** fire-and-forget 메모리 추출 LLM 호출 타임아웃 (ms) */
+    MEMORY_EXTRACTION_TIMEOUT_MS: 30000,
 } as const;
 
 // ============================================

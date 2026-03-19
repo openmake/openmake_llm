@@ -30,6 +30,7 @@ import type { DocumentStore } from '../documents/store';
 import type { UserTier } from '../data/user-manager';
 import type { UserContext } from '../mcp/user-sandbox';
 import { CONTEXT_LIMITS } from '../config/runtime-limits';
+import { LLM_TIMEOUTS } from '../config/timeouts';
 import { getUnifiedMCPClient } from '../mcp/unified-client';
 import { OllamaClient } from '../ollama/client';
 import { getGptOssTaskPreset, isGeminiModel, type ChatMessage, type ToolDefinition, type ModelOptions } from '../ollama/types';
@@ -666,7 +667,8 @@ export class ChatService {
         promptConfig: { options?: ModelOptions },
     ): Promise<ModelSelection> {
         if (executionPlan?.isBrandModel && executionPlan.resolvedEngine === '__auto__') {
-            const targetBrandProfile = await selectBrandProfileForAutoRouting(message, hasImages);
+            const autoRoutingResult = await selectBrandProfileForAutoRouting(message, hasImages);
+            const targetBrandProfile = autoRoutingResult.profileId;
             const autoExecutionPlan = buildExecutionPlan(targetBrandProfile);
 
             logger.info(`Auto-Routing: ${executionPlan.requestedModel} → ${targetBrandProfile} (engine=${autoExecutionPlan.resolvedEngine})`);
@@ -682,13 +684,10 @@ export class ChatService {
             executionPlan.contextStrategy = autoExecutionPlan.contextStrategy;
             executionPlan.timeBudgetMs = autoExecutionPlan.timeBudgetMs;
             executionPlan.requiredTools = autoExecutionPlan.requiredTools;
+            executionPlan.classifiedQueryType = autoRoutingResult.classifiedQueryType;
 
             // P2-2: Domain engine override (auto-routing only)
-            const resolvedQueryType: QueryType =
-                autoExecutionPlan.promptStrategy === 'force_coder' ? 'code'
-                : autoExecutionPlan.promptStrategy === 'force_reasoning' ? 'math'
-                : autoExecutionPlan.promptStrategy === 'force_creative' ? 'creative'
-                : 'chat';
+            const resolvedQueryType: QueryType = autoRoutingResult.classifiedQueryType;
 
             const domainResult = applyDomainEngineOverride(
                 autoExecutionPlan.resolvedEngine, resolvedQueryType
@@ -962,7 +961,7 @@ export class ChatService {
 
             // LLM 추출기: 현재 클라이언트를 활용하여 메모리 추출 프롬프트 실행
             const llmExtractor = async (prompt: string): Promise<string> => {
-                const timeoutMs = 30000;
+                const timeoutMs = LLM_TIMEOUTS.MEMORY_EXTRACTION_TIMEOUT_MS;
                 const result = await Promise.race([
                     this.client.chat(
                         [{ role: 'user' as const, content: prompt }],
