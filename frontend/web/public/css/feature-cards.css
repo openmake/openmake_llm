@@ -119,37 +119,8 @@
 
 /* ========================================
    Light (Cream/Beige) Theme - 업로드 디자인 기반
+   NOTE: CSS 변수 정의는 design-tokens.css [data-theme="light"] 블록으로 이전됨
    ======================================== */
-[data-theme="light"],
-.theme-light {
-    /* 크림/베이지 배경 */
-    --bg-app: #F5F0E8;
-    --bg-main: #F5F0E8;
-    --bg-sidebar: #EDE8DE;
-    --bg-secondary: #FFFFFF;
-    --bg-card: #FFFFFF;
-    --bg-tertiary: #F0EBE3;
-    --bg-hover: #e8e3db;
-    --bg-active: #ddd8d0;
-
-    /* 텍스트 */
-    --text-primary: #333333;
-    --text-secondary: #666666;
-    --text-muted: #999999;
-
-    /* 보더 — Neo Brutalism 2.0 */
-    --border-light: #d1d1d1;
-    --border-medium: #1a1a2e;
-
-    /* 그림자 — hard offset, no blur */
-    --shadow-sm: 2px 2px 0 #1a1a2e;
-    --shadow-md: 4px 4px 0 #1a1a2e;
-
-    /* 액센트 — Neo Brutalism purple */
-    --accent-primary: #7c3aed;
-    --accent-primary-hover: #6d28d9;
-    --accent-primary-light: #ede9fe;
-}
 
 /* 라이트 테마 Welcome Screen */
 [data-theme="light"] .welcome-screen,
