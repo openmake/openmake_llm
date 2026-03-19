@@ -62,6 +62,12 @@
     --info: #4cc9f0;
     --info-light: rgba(76, 201, 240, 0.15);
 
+    /* ------- Semantic Aliases (호환성) ------- */
+    --accent-success: var(--success);        /* #a3e635 — success 색상 alias */
+    --error: var(--danger);                  /* #f87171 — error/danger 색상 alias */
+    --bg-primary: var(--bg-sidebar);         /* #12122a — primary bg alias */
+    --success-rgb: 163, 230, 53;            /* rgba(var(--success-rgb), 0.x) 사용 */
+
     /* ------- Background Colors (Dark Theme — Deep Saturated Navy) ------- */
     --bg-app: #1a1a2e;
     --bg-main: #1a1a2e;
@@ -254,6 +260,9 @@
     /* ------- Hard Shadows (replaces glows) ------- */
     --glow-primary: 4px 4px 0 rgba(124, 58, 237, 0.4);
     --glow-input-focus: 0 0 0 3px rgba(124, 58, 237, 0.15);
+
+    /* ------- Semantic Aliases (라이트 테마) ------- */
+    --bg-primary: var(--bg-sidebar);         /* #f5f0e8 — primary bg alias (light) */
 }
 
 /* ==========================================
