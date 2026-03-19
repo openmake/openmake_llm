@@ -197,8 +197,31 @@ export const MODEL_CONTEXT_DEFAULTS = {
 // ============================================
 
 /**
- * RAG 파이프라인에서 사용하는 청킹/임베딩/검색 설정
+ * RAG 파이프라인에서 사용하는 청킹/검색 설정
  */
+// ============================================
+// 캐시 설정
+// ============================================
+
+/**
+ * 인메모리 캐시 TTL 및 용량 설정
+ * SemanticClassificationCache, CacheSystem에서 참조
+ */
+export const CACHE_CONFIG = {
+    /** L1 분류 캐시 TTL (ms) — 기본 30분 */
+    CLASSIFICATION_CACHE_TTL_MS: 30 * 60 * 1000,
+    /** L1 분류 캐시 최대 항목 수 */
+    CLASSIFICATION_CACHE_MAX_SIZE: 500,
+    /** 쿼리 응답 캐시 TTL (ms) — 기본 10분 */
+    QUERY_CACHE_TTL_MS: 10 * 60 * 1000,
+    /** 쿼리 응답 캐시 최대 항목 수 */
+    QUERY_CACHE_MAX_SIZE: 200,
+    /** 라우팅 캐시 TTL (ms) — 기본 5분 */
+    ROUTING_CACHE_TTL_MS: 5 * 60 * 1000,
+    /** 라우팅 캐시 최대 항목 수 */
+    ROUTING_CACHE_MAX_SIZE: 100,
+} as const;
+
 export const RAG_CONFIG = {
     /** 문서 청크 크기 (문자 수) */
     CHUNK_SIZE: 1000,
@@ -208,12 +231,6 @@ export const RAG_CONFIG = {
     TOP_K: 5,
     /** 관련도 임계값 (0.0~1.0, 이 값 이상만 반환, 0.45→0.6 상향: 무관 문서 혼입 방지) */
     RELEVANCE_THRESHOLD: 0.6,
-    /** 임베딩 모델 이름 (Ollama) */
-    EMBEDDING_MODEL: 'nomic-embed-text',
-    /** 임베딩 벡터 차원 수 (vector_embeddings 테이블과 일치해야 함) */
-    EMBEDDING_DIMENSIONS: 768,
-    /** 배치 임베딩 최대 입력 수 (벤치마크 결과: 64가 52.4 chunks/s로 최적) */
-    EMBEDDING_BATCH_SIZE: 64,
     /** RAG 컨텍스트에 주입할 최대 문자 수 */
     MAX_CONTEXT_CHARS: 4000,
 } as const;

@@ -31,6 +31,7 @@ import type { QueryType } from './model-selector-types';
 import type { FormatOption } from '../ollama/types';
 import { SemanticClassificationCache } from './semantic-cache';
 import { LLM_TIMEOUTS } from '../config/timeouts';
+import { CACHE_CONFIG } from '../config/runtime-limits';
 
 const logger = createLogger('LLMClassifier');
 
@@ -41,11 +42,11 @@ const logger = createLogger('LLMClassifier');
 /** 분류용 모델 (Fast 프로파일 엔진) */
 const CLASSIFIER_MODEL = 'gemini-3-flash-preview:cloud';
 
-/** 캐시 TTL (ms) — 30분 */
-const CACHE_TTL_MS = 30 * 60 * 1000;
+/** 캐시 TTL (ms) — CACHE_CONFIG에서 참조 */
+const CACHE_TTL_MS = CACHE_CONFIG.CLASSIFICATION_CACHE_TTL_MS;
 
-/** 캐시 최대 크기 */
-const CACHE_MAX_SIZE = 500;
+/** 캐시 최대 크기 — CACHE_CONFIG에서 참조 */
+const CACHE_MAX_SIZE = CACHE_CONFIG.CLASSIFICATION_CACHE_MAX_SIZE;
 
 /** 최소 신뢰도 임계값 — 이 값 미만이면 regex fallback */
 const CONFIDENCE_THRESHOLD = 0.7;
