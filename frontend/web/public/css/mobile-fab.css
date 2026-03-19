@@ -31,7 +31,7 @@
     bottom: 56px;
     right: 0;
     background: var(--bg-sidebar);
-    border: 2px solid var(--border-default);
+    border: 2px solid var(--border-light);
     border-radius: 8px;
     box-shadow: 4px 4px 0 #000;
     padding: 6px;
