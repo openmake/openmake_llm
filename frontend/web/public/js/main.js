@@ -133,6 +133,9 @@ import { Router, SafeStorage } from './spa-router.js?v=16';
 import { UnifiedSidebar } from './components/unified-sidebar.js?v=3';
 import { AdminPanel } from './components/admin-panel.js';
 
+// 1-18. 모바일 FAB 메뉴
+import { init as initMobileFab } from './modules/mobile-fab.js';
+
 
 
 // ============================================
@@ -435,6 +438,9 @@ async function initApp() {
 
     // 7. 모바일 사이드바 초기화
     initMobileSidebar();
+
+    // 7-1. 모바일 FAB 메뉴 초기화 (480px 이하)
+    initMobileFab();
 
     // 8. 이벤트 리스너 등록
     setupEventListeners();
