@@ -23,6 +23,7 @@
 
 import { PipelineProfile, getProfiles, isValidBrandModel } from './pipeline-profile';
 import { createLogger } from '../utils/logger';
+import type { QueryType } from './model-selector-types';
 
 const logger = createLogger('ProfileResolver');
 
@@ -75,6 +76,9 @@ export interface ExecutionPlan {
 
     /** brand model 여부 (외부 API Key 요청인지 판별) */
     isBrandModel: boolean;
+
+    /** Auto-Routing에서 분류된 원본 QueryType (Brand Profile 직접 선택 시 undefined) */
+    classifiedQueryType?: QueryType;
 }
 
 // ============================================
@@ -109,7 +113,7 @@ export function resolveProfile(requestedModel: string): PipelineProfile | null {
  */
 export function buildExecutionPlan(
     requestedModel: string,
-    overrides?: Partial<{
+    _overrides?: Partial<{
         temperature: number;
         maxTokens: number;
         stream: boolean;

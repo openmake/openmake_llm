@@ -13,6 +13,7 @@
  * - 제네릭 ChatStrategy 인터페이스로 타입 안전한 전략 교체 지원
  */
 import type { DiscussionProgress, DiscussionResult } from '../../agents/discussion-engine';
+import type { QueryType } from '../../chat/model-selector-types';
 import type { ExecutionPlan } from '../../chat/profile-resolver';
 import type { DocumentStore } from '../../documents/store';
 import type { UserContext } from '../../mcp/user-sandbox';
@@ -86,7 +87,7 @@ export interface A2AStrategyContext extends ChatContext {
     /** 모델 옵션 (temperature, top_p 등) */
     chatOptions: ModelOptions;
     /** 질문 유형 (A2A 모델 조합 동적 선택용, 하위 호환 위해 optional) */
-    queryType?: string;
+    queryType?: QueryType;
     /** 사용자 언어 (A2A 합성 프롬프트 다국어화용, language-policy에서 결정) */
     userLanguage?: string;
 }

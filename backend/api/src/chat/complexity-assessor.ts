@@ -93,7 +93,7 @@ export function assessComplexity(ctx: ComplexityContext): ComplexityAssessment {
         signals.push('long_history');
     }
 
-    if (['analysis', 'math', 'document'].includes(ctx.classification.type)) {
+    if (['analysis', 'math', 'math-hard', 'math-applied', 'reasoning', 'document', 'code-agent'].includes(ctx.classification.type)) {
         score += 0.1;
         signals.push(`complex_type:${ctx.classification.type}`);
     }

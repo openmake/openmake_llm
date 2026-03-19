@@ -1,0 +1,164 @@
+<h2>프론트엔드 UI/UX 현황 분석</h2>
+<p class="subtitle">코드 분석으로 발견한 이슈 및 개선 가능 영역 — 어떤 부분이 가장 신경 쓰이시나요?</p>
+
+<style>
+.analysis-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 20px 0; }
+.issue-card { background: var(--bg, #1e1e2e); border: 2px solid var(--border, #333); border-radius: 8px; padding: 16px; }
+.issue-card.critical { border-color: #f87171; }
+.issue-card.medium { border-color: #facc15; }
+.issue-card.low { border-color: #4cc9f0; }
+.issue-card.good { border-color: #a3e635; }
+.badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; margin-bottom: 8px; }
+.badge.critical { background: rgba(248,113,113,0.2); color: #f87171; }
+.badge.medium { background: rgba(250,204,21,0.2); color: #facc15; }
+.badge.low { background: rgba(76,201,240,0.2); color: #4cc9f0; }
+.badge.good { background: rgba(163,230,53,0.2); color: #a3e635; }
+.issue-title { font-weight: 700; font-size: 0.95rem; margin-bottom: 6px; }
+.issue-desc { font-size: 0.82rem; color: #aaa; line-height: 1.5; }
+.code-snippet { background: rgba(0,0,0,0.3); border-radius: 4px; padding: 6px 10px; font-family: monospace; font-size: 11px; margin-top: 8px; color: #c061ff; }
+
+.scope-section { margin: 20px 0; }
+.scope-title { font-size: 0.8rem; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #888; margin-bottom: 12px; }
+
+/* wireframe styles */
+.wf-app { display: flex; height: 200px; border: 2px solid #444; border-radius: 6px; overflow: hidden; font-size: 11px; }
+.wf-sidebar { width: 60px; background: #12122a; border-right: 2px solid #333; display: flex; flex-direction: column; align-items: center; padding: 8px 4px; gap: 6px; }
+.wf-sidebar-icon { width: 32px; height: 32px; background: #252547; border-radius: 4px; border: 1px solid #444; }
+.wf-sidebar-icon.active { background: #c061ff; border-color: #000; }
+.wf-main { flex: 1; background: #1a1a2e; display: flex; flex-direction: column; }
+.wf-chat-area { flex: 1; padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+.wf-msg { padding: 6px 8px; border-radius: 4px; font-size: 10px; }
+.wf-msg.user { background: #c061ff; color: white; align-self: flex-end; max-width: 60%; }
+.wf-msg.ai { background: #252547; border: 1px solid #333; align-self: flex-start; max-width: 70%; }
+.wf-input { background: #252547; border-top: 2px solid #333; padding: 6px; display: flex; gap: 4px; }
+.wf-input-field { flex: 1; background: #1a1a2e; border: 1px solid #444; border-radius: 4px; height: 24px; }
+.wf-send-btn { width: 32px; background: #c061ff; border: 2px solid #000; border-radius: 4px; }
+
+.conflict-demo { display: flex; gap: 12px; margin-top: 8px; }
+.color-box { flex: 1; padding: 6px; border-radius: 4px; font-size: 10px; text-align: center; border: 1px solid #555; }
+</style>
+
+<div class="scope-section">
+  <div class="scope-title">🔍 발견된 이슈</div>
+  <div class="analysis-grid">
+
+    <div class="issue-card critical">
+      <span class="badge critical">🔴 기술부채</span>
+      <div class="issue-title">CSS 변수 3중 중복 정의</div>
+      <div class="issue-desc">
+        동일한 CSS 변수가 <code>design-tokens.css</code>, <code>style.css</code>, <code>feature-cards.css</code> 3곳에 각각 다른 값으로 정의됨.
+        라이트 테마 배경색이 컴포넌트마다 달라 시각적 불일치 발생.
+      </div>
+      <div class="conflict-demo">
+        <div class="color-box" style="background:#fdfbf7;color:#333;">design-tokens<br>#fdfbf7</div>
+        <div class="color-box" style="background:#f0f0f5;color:#333;">style.css<br>#f0f0f5</div>
+        <div class="color-box" style="background:#F5F0E8;color:#333;">feature-cards<br>#F5F0E8</div>
+      </div>
+    </div>
+
+    <div class="issue-card medium">
+      <span class="badge medium">🟡 UX 개선</span>
+      <div class="issue-title">채팅 입력창 기능 노출 부족</div>
+      <div class="issue-desc">
+        현재 채팅 입력창에 모드 전환(Discussion/Research/Vision), 도구 선택 등 핵심 기능들이 숨겨져 있어
+        처음 사용자가 기능을 발견하기 어려움. 툴팁·힌트 부재.
+      </div>
+    </div>
+
+    <div class="issue-card medium">
+      <span class="badge medium">🟡 모바일 반응형</span>
+      <div class="issue-title">480px 이하 Feature Cards 너비 부족</div>
+      <div class="issue-desc">
+        작은 모바일(480px 이하)에서 feature cards가 2열 그리드를 유지해 카드 하나의 너비가
+        ~120px로 좁아짐. 1열 → 2열 순서 조정이 필요.
+      </div>
+    </div>
+
+    <div class="issue-card low">
+      <span class="badge low">🔵 고도화 기회</span>
+      <div class="issue-title">AI 응답 상태 피드백 미흡</div>
+      <div class="issue-desc">
+        스트리밍 응답 중 '생각 중...' 외에 현재 어떤 에이전트/전략이 동작하는지
+        (A2A/Discussion/DeepResearch) 사용자에게 실시간 표시 없음.
+      </div>
+    </div>
+
+    <div class="issue-card low">
+      <span class="badge low">🔵 고도화 기회</span>
+      <div class="issue-title">Welcome Screen 기능 카드 확장성</div>
+      <div class="issue-desc">
+        현재 max-width 500px, 2열 고정. 넓은 화면(≥1200px)에서
+        4열 레이아웃으로 더 많은 기능을 한 번에 표시 가능.
+      </div>
+    </div>
+
+    <div class="issue-card good">
+      <span class="badge good">✅ 잘 된 부분</span>
+      <div class="issue-title">Neo Brutalism 디자인 시스템</div>
+      <div class="issue-desc">
+        디자인 토큰 체계, 3-state 사이드바, 다크/라이트 테마 전환, 한글 타이포그래피(Pretendard),
+        접근성(skip-link, aria-live) 모두 잘 구현됨.
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="scope-section">
+  <div class="scope-title">📐 현재 채팅 UI 구조</div>
+  <div class="wf-app">
+    <div class="wf-sidebar">
+      <div class="wf-sidebar-icon active"></div>
+      <div class="wf-sidebar-icon"></div>
+      <div class="wf-sidebar-icon"></div>
+      <div class="wf-sidebar-icon"></div>
+    </div>
+    <div class="wf-main">
+      <div class="wf-chat-area">
+        <div class="wf-msg ai">안녕하세요! 무엇을 도와드릴까요?</div>
+        <div class="wf-msg user">코드 리뷰 해줘</div>
+        <div class="wf-msg ai">물론입니다. 코드를 공유해 주세요...</div>
+      </div>
+      <div class="wf-input">
+        <div class="wf-input-field"></div>
+        <div class="wf-send-btn"></div>
+      </div>
+    </div>
+  </div>
+  <p style="font-size:11px;color:#888;margin-top:6px;">현재: 아이콘 64px 사이드바 + 채팅 영역 — 입력창 위 도구 선택 버튼 존재</p>
+</div>
+
+<div class="scope-section">
+  <div class="scope-title">💬 어떤 부분이 가장 중요한가요?</div>
+</div>
+
+<div class="options" data-multiselect>
+  <div class="option" data-choice="css-cleanup" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>CSS 변수 일원화</h3>
+      <p>기술부채 해소 — 라이트/다크 테마 색상 일관성 확보. 코드 정리, 사용자에게 보이는 변화 작음.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="chat-ux" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>채팅 UX 개선</h3>
+      <p>AI 실행 상태 표시, 기능 발견성 개선, 입력창 힌트. 사용자 경험 직접 향상.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="mobile" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>모바일 반응형 강화</h3>
+      <p>480px 이하 최적화, 터치 UX 개선. 모바일 사용자가 있는 경우 중요.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="welcome-screen" onclick="toggleSelect(this)">
+    <div class="letter">D</div>
+    <div class="content">
+      <h3>Welcome Screen 고도화</h3>
+      <p>기능 카드 확장, 넓은 화면 4열 레이아웃, 온보딩 개선.</p>
+    </div>
+  </div>
+</div>

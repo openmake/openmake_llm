@@ -1,0 +1,177 @@
+<h2>채팅 실행 상태 표시 — 배치 방식</h2>
+<p class="subtitle">AI가 어떤 에이전트로, 왜, 어떤 단계를 진행 중인지 보여주는 영역의 위치</p>
+
+<style>
+/* mini wireframe */
+.wf { display:flex; height:260px; border:2px solid #444; border-radius:8px; overflow:hidden; font-size:10px; background:#1a1a2e; }
+.wf-sb { width:52px; background:#12122a; border-right:2px solid #333; display:flex; flex-direction:column; align-items:center; padding:6px 4px; gap:5px; flex-shrink:0; }
+.wf-icon { width:28px; height:28px; background:#252547; border-radius:4px; border:1px solid #444; }
+.wf-icon.a { background:#c061ff; border-color:#000; }
+.wf-body { flex:1; display:flex; flex-direction:column; min-width:0; }
+.wf-msgs { flex:1; padding:8px; display:flex; flex-direction:column; gap:5px; overflow:hidden; }
+.wf-msg { padding:5px 8px; border-radius:4px; }
+.wf-msg.u { background:#c061ff; color:white; align-self:flex-end; max-width:55%; }
+.wf-msg.ai { background:#252547; border:1px solid #333; align-self:flex-start; max-width:65%; color:#eee; }
+.wf-inp { background:#252547; border-top:2px solid #333; padding:5px; display:flex; gap:4px; height:34px; }
+.wf-inp-f { flex:1; background:#1a1a2e; border:1px solid #444; border-radius:4px; }
+.wf-btn { width:28px; background:#c061ff; border:2px solid #000; border-radius:4px; }
+
+/* status bar styles */
+.status-inline { background:#252547; border:1.5px solid #c061ff; border-radius:6px; margin:4px 8px; padding:5px 8px; color:#c061ff; display:flex; align-items:center; gap:5px; }
+.status-inline .dot { width:7px; height:7px; border-radius:50%; background:#c061ff; animation:blink 1s infinite; flex-shrink:0; }
+.status-inline .text { font-size:10px; font-weight:600; }
+.status-inline .sub { font-size:9px; color:#888; margin-left:auto; }
+
+.status-panel-right { width:130px; background:#12122a; border-left:2px solid #333; padding:6px; display:flex; flex-direction:column; gap:4px; }
+.status-panel-right .spr-title { font-size:9px; color:#888; font-weight:700; text-transform:uppercase; letter-spacing:.5px; }
+.spr-agent { background:#252547; border:1px solid #c061ff; border-radius:4px; padding:4px 5px; }
+.spr-agent .name { color:#c061ff; font-weight:700; font-size:9px; }
+.spr-agent .reason { color:#aaa; font-size:8px; margin-top:1px; }
+.spr-steps { display:flex; flex-direction:column; gap:2px; margin-top:2px; }
+.spr-step { font-size:8px; color:#888; display:flex; align-items:center; gap:3px; }
+.spr-step.done { color:#a3e635; }
+.spr-step.active { color:#fff; font-weight:600; }
+.spr-step::before { content:''; width:5px; height:5px; border-radius:50%; background:currentColor; flex-shrink:0; }
+
+.status-toast { position:absolute; bottom:42px; left:50%; transform:translateX(-50%); background:rgba(192,97,255,0.15); border:1.5px solid #c061ff; border-radius:6px; padding:5px 10px; color:#eee; white-space:nowrap; font-size:9px; display:flex; gap:6px; align-items:center; }
+
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+.split { display:flex; gap:16px; margin:16px 0; }
+.split .mockup { flex:1; }
+.option-label { font-size:12px; font-weight:700; color:#ccc; margin-bottom:6px; display:flex; align-items:center; gap:6px; }
+</style>
+
+<div class="split">
+
+  <!-- 옵션 A: 메시지 흐름 내 인라인 -->
+  <div class="mockup" style="flex:1;">
+    <div class="mockup-header">옵션 A — 메시지 사이 인라인</div>
+    <div class="mockup-body" style="padding:0;">
+      <div class="wf">
+        <div class="wf-sb">
+          <div class="wf-icon a"></div>
+          <div class="wf-icon"></div>
+          <div class="wf-icon"></div>
+        </div>
+        <div class="wf-body">
+          <div class="wf-msgs">
+            <div class="wf-msg u">코드 리뷰 해줘</div>
+            <div class="status-inline">
+              <div class="dot"></div>
+              <div>
+                <div class="text">코딩 에이전트 선택됨</div>
+                <div style="font-size:8px;color:#aaa;">이유: code-gen 분류 (신뢰도 94%)</div>
+                <div style="font-size:8px;color:#aaa;margin-top:1px;">① 코드 분석 중 ② 리뷰 생성 예정</div>
+              </div>
+              <div class="sub">~8s</div>
+            </div>
+            <div class="wf-msg ai" style="opacity:.6;">▌</div>
+          </div>
+          <div class="wf-inp">
+            <div class="wf-inp-f"></div>
+            <div class="wf-btn"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 옵션 B: 우측 패널 -->
+  <div class="mockup" style="flex:1;">
+    <div class="mockup-header">옵션 B — 우측 사이드 패널</div>
+    <div class="mockup-body" style="padding:0;">
+      <div class="wf">
+        <div class="wf-sb">
+          <div class="wf-icon a"></div>
+          <div class="wf-icon"></div>
+          <div class="wf-icon"></div>
+        </div>
+        <div class="wf-body">
+          <div class="wf-msgs">
+            <div class="wf-msg u">코드 리뷰 해줘</div>
+            <div class="wf-msg ai" style="opacity:.6;">▌</div>
+          </div>
+          <div class="wf-inp">
+            <div class="wf-inp-f"></div>
+            <div class="wf-btn"></div>
+          </div>
+        </div>
+        <div class="status-panel-right">
+          <div class="spr-title">실행 상태</div>
+          <div class="spr-agent">
+            <div class="name">⚡ 코딩 에이전트</div>
+            <div class="reason">code-gen 94% 신뢰도</div>
+          </div>
+          <div class="spr-steps">
+            <div class="spr-step done">코드 분류 완료</div>
+            <div class="spr-step active">코드 분석 중</div>
+            <div class="spr-step">리뷰 생성</div>
+            <div class="spr-step">포맷 정리</div>
+          </div>
+          <div style="font-size:8px;color:#888;margin-top:4px;">예상 ~8초</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- 옵션 C: 하단 플로팅 토스트 -->
+<div class="mockup">
+  <div class="mockup-header">옵션 C — 입력창 위 플로팅 토스트 (모바일 친화적)</div>
+  <div class="mockup-body" style="padding:0;">
+    <div class="wf" style="position:relative;">
+      <div class="wf-sb">
+        <div class="wf-icon a"></div>
+        <div class="wf-icon"></div>
+      </div>
+      <div class="wf-body">
+        <div class="wf-msgs">
+          <div class="wf-msg u">코드 리뷰 해줘</div>
+          <div class="wf-msg ai" style="opacity:.6;">▌</div>
+        </div>
+        <div class="status-toast">
+          <span style="color:#c061ff;font-weight:700;">⚡ 코딩 에이전트</span>
+          <span>코드 분석 중...</span>
+          <span style="color:#a3e635;">1/3</span>
+          <span style="color:#888;">~8s</span>
+        </div>
+        <div class="wf-inp">
+          <div class="wf-inp-f"></div>
+          <div class="wf-btn"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top:16px;">
+  <p class="subtitle" style="font-size:11px;color:#888;">
+    💡 모바일에서도 자주 사용하시므로: 옵션 A·C는 모바일 친화적, 옵션 B는 데스크톱에 적합 (모바일에서 패널 숨김 처리 필요)
+  </p>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="A" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>메시지 인라인</h3>
+      <p>대화 흐름 안에 자연스럽게 삽입. 이유·단계·예상시간 모두 표시. 모바일/데스크톱 동일 경험.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="B" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>우측 사이드 패널</h3>
+      <p>항상 볼 수 있는 전용 공간. 단계 목록이 깔끔. 데스크톱에 최적, 모바일 별도 처리 필요.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="C" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>플로팅 토스트</h3>
+      <p>최소 공간 차지, 입력창 바로 위에 컴팩트하게. 모바일 최적. 정보량은 가장 적음.</p>
+    </div>
+  </div>
+</div>

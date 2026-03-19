@@ -168,52 +168,6 @@ export class MemoryRepository extends BaseRepository {
     }
 
     /**
-     * 시맨틱 검색: 임베딩 벡터 기반으로 관련 메모리 ID를 조회합니다.
-     * vector_embeddings 테이블에서 source_type='memory'인 항목을 코사인 유사도로 비교합니다.
-     * @returns 관련 메모리 ID 배열 (유사도 순)
-     */
-    async getSemanticMemoryIds(queryEmbedding: number[], userId: string, limit: number = 5): Promise<string[]> {
-        // vector_embeddings에서 memory 타입 임베딩을 가져와 코사인 유사도 계산
-        const result = await this.query<{ source_id: string; embedding: string }>(
-            `SELECT ve.source_id, ve.embedding
-             FROM vector_embeddings ve
-             INNER JOIN user_memories um ON um.id = ve.source_id
-             WHERE ve.source_type = 'memory' AND um.user_id = $1
-             LIMIT 100`,
-            [userId]
-        );
-
-        if (result.rows.length === 0) return [];
-
-        // 앱 레이어에서 코사인 유사도 계산 (pgvector 없이)
-        const scored: Array<{ id: string; score: number }> = [];
-        for (const row of result.rows) {
-            try {
-                const emb = JSON.parse(row.embedding) as number[];
-                const score = this.cosineSimilarity(queryEmbedding, emb);
-                if (score > 0.5) {
-                    scored.push({ id: row.source_id, score });
-                }
-            } catch { /* skip invalid embedding */ }
-        }
-
-        scored.sort((a, b) => b.score - a.score);
-        return scored.slice(0, limit).map(s => s.id);
-    }
-
-    private cosineSimilarity(a: number[], b: number[]): number {
-        if (a.length !== b.length) return 0;
-        let dot = 0, normA = 0, normB = 0;
-        for (let i = 0; i < a.length; i++) {
-            dot += a[i] * b[i];
-            normA += a[i] * a[i];
-            normB += b[i] * b[i];
-        }
-        const denom = Math.sqrt(normA) * Math.sqrt(normB);
-        return denom === 0 ? 0 : dot / denom;
-    }
-
-    /**
      * 만료된 메모리 정리 (expires_at이 현재 시각보다 이전인 레코드 삭제)
      * @returns 삭제된 행 수
      */

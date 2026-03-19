@@ -53,12 +53,37 @@ export const PROFILE_COST_TIERS: Record<string, CostTier> = {
  * economy 티어는 모든 QueryType을 _fast로 다운그레이드 (vision 제외).
  */
 export const TIER_FALLBACK_MAP: Record<QueryType, Record<CostTier, string>> = {
+    'code-agent': {
+        economy: 'openmake_llm_fast',
+        standard: 'openmake_llm_code',
+        premium: 'openmake_llm_code',
+    },
+    'code-gen': {
+        economy: 'openmake_llm_fast',
+        standard: 'openmake_llm_code',
+        premium: 'openmake_llm_code',
+    },
     code: {
         economy: 'openmake_llm_fast',
         standard: 'openmake_llm_code',
         premium: 'openmake_llm_code',
     },
+    'math-hard': {
+        economy: 'openmake_llm_fast',
+        standard: 'openmake_llm',
+        premium: 'openmake_llm_think',
+    },
+    'math-applied': {
+        economy: 'openmake_llm_fast',
+        standard: 'openmake_llm',
+        premium: 'openmake_llm_think',
+    },
     math: {
+        economy: 'openmake_llm_fast',
+        standard: 'openmake_llm',
+        premium: 'openmake_llm_think',
+    },
+    reasoning: {
         economy: 'openmake_llm_fast',
         standard: 'openmake_llm',
         premium: 'openmake_llm_think',
