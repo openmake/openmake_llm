@@ -259,41 +259,29 @@ class UserManagerImpl {
         // bcrypt 해시는 lock 바깥에서 수행 (시간소요 작업)
         const passwordHash = await bcrypt.hash(input.password, BCRYPT_ROUNDS);
         const now = new Date().toISOString();
-        // 트랜잭션 하나로: advisory lock 획득 + id 계산 + INSERT (레이스 컨디션 방지)
-        const client = await pool.connect();
+        // 중복 확인
+        const dupCheck = await pool.query('SELECT id FROM users WHERE email = $1 OR username = $1', [input.email]);
+        if (dupCheck.rows.length > 0) {
+            return null;
+        }
+
+        // PostgreSQL 시퀀스로 원자적 ID 생성 (advisory lock 불필요)
+        const idResult = await pool.query("SELECT nextval('users_id_seq')::text AS id");
+        const id = (idResult.rows[0] as { id: string }).id;
+
+        const displayName = input.username || input.email;
         try {
-            await client.query('BEGIN');
-            await client.query('SELECT pg_advisory_xact_lock(1)');
-
-            // lock 내에서 중복 재확인 (같은 client 연결에서 조회해야 lock 보호 유효)
-            const dupCheck = await client.query('SELECT id FROM users WHERE email = $1 OR username = $1', [input.email]);
-            if (dupCheck.rows.length > 0) {
-                await client.query('ROLLBACK');
-                return null;
-            }
-
-            const idResult = await client.query(
-                `SELECT COALESCE(MAX(CAST(id AS INTEGER)), 0) + 1 as next_id FROM users WHERE id ~ $1`,
-                ['^\\d+$']
-            );
-            const id = String(idResult.rows[0]?.next_id || 1);
-
-            const displayName = input.username || input.email;
-            await client.query(
+            await pool.query(
                 `INSERT INTO users (id, username, password_hash, email, role, tier, is_active, created_at, updated_at)
                  VALUES ($1, $2, $3, $4, $5, $6, TRUE, $7, $8)`,
                 [id, displayName, passwordHash, input.email, role, tier, now, now]
             );
-            await client.query('COMMIT');
 
             const result = await pool.query('SELECT * FROM users WHERE id = $1', [id]);
             const row = result.rows[0] as UserRow | undefined;
             return row ? this.rowToPublicUser(row) : null;
         } catch (err) {
-            await client.query('ROLLBACK');
             throw err;
-        } finally {
-            client.release();
         }
     }
 
