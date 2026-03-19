@@ -22,7 +22,7 @@ import * as path from 'path';
 import { getPool } from './models/unified-database';
 import { getConfig } from '../config/env';
 import { createLogger } from '../utils/logger';
-import { withRetry } from './retry-wrapper';
+import { withRetry, withTransaction } from './retry-wrapper';
 
 const logger = createLogger('ConversationDB');
 
@@ -447,32 +447,39 @@ class ConversationDB {
     async addMessage(sessionId: string, role: 'user' | 'assistant' | 'system', content: string, options?: MessageOptions): Promise<ConversationMessage | null> {
         const pool = getPool();
 
-        // Verify session exists
+        // Verify session exists (트랜잭션 밖에서 먼저 확인 — 읽기 전용이므로 OK)
         const sessionResult = await pool.query('SELECT id FROM conversation_sessions WHERE id = $1', [sessionId]);
         if (sessionResult.rows.length === 0) return null;
 
         const now = new Date().toISOString();
 
-        const result = await withRetry(() => pool.query(`
-            INSERT INTO conversation_messages (session_id, role, content, model, thinking, tokens, response_time_ms, created_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-            RETURNING id
-        `, [
-            sessionId,
-            role,
-            content,
-            options?.model || null,
-            options?.thinking || null,
-            options?.tokensUsed || null,
-            options?.responseTime || null,
-            now
-        ]), { operation: 'addMessage' });
+        // INSERT + 세션 updated_at 갱신을 단일 트랜잭션으로 처리 (원자성 보장)
+        const result = await withTransaction(pool, async (client) => {
+            const insertResult = await withRetry(() => client.query(`
+                INSERT INTO conversation_messages (session_id, role, content, model, thinking, tokens, response_time_ms, created_at)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                RETURNING id
+            `, [
+                sessionId,
+                role,
+                content,
+                options?.model || null,
+                options?.thinking || null,
+                options?.tokensUsed || null,
+                options?.responseTime || null,
+                now
+            ]), { operation: 'addMessage' });
 
-        // Update session's updated_at
-        await pool.query('UPDATE conversation_sessions SET updated_at = $1 WHERE id = $2', [now, sessionId]);
+            await client.query(
+                'UPDATE conversation_sessions SET updated_at = $1 WHERE id = $2',
+                [now, sessionId]
+            );
+
+            return insertResult;
+        });
 
         return {
-            id: String(result.rows[0].id),
+            id: String((result.rows[0] as { id: number }).id),
             sessionId,
             role,
             content,

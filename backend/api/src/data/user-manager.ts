@@ -464,17 +464,26 @@ class UserManagerImpl {
 
     async getStats() {
         const pool = getPool();
-        const totalRow = await pool.query('SELECT COUNT(*) as cnt FROM users');
-        const activeRow = await pool.query('SELECT COUNT(*) as cnt FROM users WHERE is_active = TRUE');
-        const adminRow = await pool.query('SELECT COUNT(*) as cnt FROM users WHERE role = \'admin\'');
-        const userRow = await pool.query('SELECT COUNT(*) as cnt FROM users WHERE role = \'user\'');
-        const guestRow = await pool.query('SELECT COUNT(*) as cnt FROM users WHERE role = \'guest\'');
+        const result = await pool.query<{
+            total: string;
+            active: string;
+            admin: string;
+            user_role: string;
+            guest: string;
+        }>(`SELECT
+            COUNT(*)                                    AS total,
+            COUNT(*) FILTER (WHERE is_active = TRUE)    AS active,
+            COUNT(*) FILTER (WHERE role = 'admin')      AS admin,
+            COUNT(*) FILTER (WHERE role = 'user')       AS user_role,
+            COUNT(*) FILTER (WHERE role = 'guest')      AS guest
+           FROM users`);
+        const row = result.rows[0];
         return {
-            totalUsers: parseInt(totalRow.rows[0].cnt, 10),
-            activeUsers: parseInt(activeRow.rows[0].cnt, 10),
-            adminCount: parseInt(adminRow.rows[0].cnt, 10),
-            userCount: parseInt(userRow.rows[0].cnt, 10),
-            guestCount: parseInt(guestRow.rows[0].cnt, 10)
+            totalUsers:  parseInt(row.total,     10),
+            activeUsers: parseInt(row.active,    10),
+            adminCount:  parseInt(row.admin,     10),
+            userCount:   parseInt(row.user_role, 10),
+            guestCount:  parseInt(row.guest,     10)
         };
     }
 

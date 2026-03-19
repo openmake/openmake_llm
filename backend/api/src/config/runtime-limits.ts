@@ -205,7 +205,7 @@ export const MODEL_CONTEXT_DEFAULTS = {
 
 /**
  * 인메모리 캐시 TTL 및 용량 설정
- * SemanticClassificationCache, CacheSystem에서 참조
+ * SemanticClassificationCache, CacheSystem, MemoryService에서 참조
  */
 export const CACHE_CONFIG = {
     /** L1 분류 캐시 TTL (ms) — 기본 30분 */
@@ -220,6 +220,10 @@ export const CACHE_CONFIG = {
     ROUTING_CACHE_TTL_MS: 5 * 60 * 1000,
     /** 라우팅 캐시 최대 항목 수 */
     ROUTING_CACHE_MAX_SIZE: 100,
+    /** 메모리 서비스 컨텍스트 캐시 TTL (ms) — 기본 5분 */
+    MEMORY_CACHE_TTL_MS: 5 * 60 * 1000,
+    /** 메모리 서비스 컨텍스트 캐시 최대 항목 수 */
+    MEMORY_CACHE_MAX_SIZE: 200,
 } as const;
 
 export const RAG_CONFIG = {

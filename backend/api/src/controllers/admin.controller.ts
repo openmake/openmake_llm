@@ -192,7 +192,8 @@ export class AdminController {
                  LEFT JOIN conversation_sessions cs ON cs.id = cm.session_id
                  LEFT JOIN users u ON u.id = cs.user_id
                  ORDER BY cm.created_at DESC
-                 LIMIT ${CAPACITY.ADMIN_EXPORT_LIMIT}`
+                 LIMIT $1`,
+                [CAPACITY.ADMIN_EXPORT_LIMIT]
             );
 
             if (format === 'csv') {

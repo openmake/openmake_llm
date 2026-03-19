@@ -102,7 +102,8 @@ export class FeedbackRepository {
                 `SELECT id, message_id, session_id, user_id, signal, routing_metadata, created_at
                  FROM message_feedback
                  WHERE session_id = $1 AND user_id = $2
-                 ORDER BY created_at ASC`,
+                 ORDER BY created_at ASC
+                 LIMIT 500`,
                 [sessionId, userId]
             );
             return result.rows;
@@ -112,7 +113,8 @@ export class FeedbackRepository {
             `SELECT id, message_id, session_id, user_id, signal, routing_metadata, created_at
              FROM message_feedback
              WHERE session_id = $1
-             ORDER BY created_at ASC`,
+             ORDER BY created_at ASC
+             LIMIT 500`,
             [sessionId]
         );
         return result.rows;
