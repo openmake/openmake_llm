@@ -253,10 +253,10 @@ export function classifyQuery(query: string): QueryClassification {
     // 2차 세분화: code → code-agent / code-gen
     if (bestType === 'code') {
         const codeAgentPatterns = [
-            /\b(리팩토링|refactor|아키텍처|architecture|migration|마이그레이션)\b/i,
-            /\b(디버그|debug|버그.*찾|find.*bug|트러블슈팅|troubleshoot)\b/i,
-            /\b(코드.*리뷰|code.*review|개선|improve|최적화.*코드|optimize.*code)\b/i,
-            /\b(설계|design.*pattern|SOLID|DRY|KISS)\b/i,
+            /(리팩토링|\brefactor\b|아키텍처|\barchitecture\b|\bmigration\b|마이그레이션)/i,
+            /(디버그|\bdebug\b|버그.*찾|\bfind.*bug\b|트러블슈팅|\btroubleshoot\b)/i,
+            /(코드.*리뷰|\bcode.*review\b|개선|\bimprove\b|최적화.*코드|\boptimize.*code\b)/i,
+            /(설계|\bdesign.*pattern\b|\bSOLID\b|\bDRY\b|\bKISS\b)/i,
         ];
         const isCodeAgent = codeAgentPatterns.some(p => p.test(query));
         bestType = isCodeAgent ? 'code-agent' : 'code-gen';
@@ -265,24 +265,24 @@ export function classifyQuery(query: string): QueryClassification {
     // 2차 세분화: math → math-hard / math-applied
     if (bestType === 'math') {
         const mathHardPatterns = [
-            /\b(증명|proof|theorem|정리|보조정리|lemma)\b/i,
-            /\b(올림피아드|olympiad|IMO|AIME|AMC|KMO)\b/i,
-            /\b(정수론|number\s*theory|조합론|combinatorics)\b/i,
-            /\b(위상|topology|추상대수|abstract\s*algebra|해석학)\b/i,
+            /(증명|\bproof\b|\btheorem\b|정리|보조정리|\blemma\b)/i,
+            /(올림피아드|\bolympiad\b|\bIMO\b|\bAIME\b|\bAMC\b|\bKMO\b)/i,
+            /(정수론|\bnumber\s*theory\b|조합론|\bcombinatorics\b)/i,
+            /(위상|\btopology\b|추상대수|\babstract\s*algebra\b|해석학)/i,
         ];
         const isMathHard = mathHardPatterns.some(p => p.test(query));
         bestType = isMathHard ? 'math-hard' : 'math-applied';
     }
 
     // 2차 세분화: analysis → reasoning (논리 추론 감지 시)
-    // 한국어 문자는 \w에 해당하지 않아 \b가 동작하지 않으므로 \b 제거
+    // 한국어 문자는 \w에 해당하지 않아 \b가 동작하지 않으므로 영어에만 \b 적용
     if (bestType === 'analysis') {
         const reasoningPatterns = [
-            /(논리적|logical|논리|logic)/i,
-            /(인과|causal|원인.*결과|cause.*effect)/i,
-            /(만약.*라면|if.*then|가설|hypothesis)/i,
-            /(비판|critique|반박|counter.*argument|논증|argument)/i,
-            /(추론|inference|연역|deduction|귀납|induction)/i,
+            /(논리적|\blogical\b|논리|\blogic\b)/i,
+            /(인과|\bcausal\b|원인.*결과|cause.*effect)/i,
+            /(만약.*라면|if.*then|가설|\bhypothesis\b)/i,
+            /(비판|\bcritique\b|반박|counter.*argument|논증|\bargument\b)/i,
+            /(추론|\binference\b|연역|\bdeduction\b|귀납|\binduction\b)/i,
         ];
         const isReasoning = reasoningPatterns.some(p => p.test(query));
         if (isReasoning) bestType = 'reasoning';
