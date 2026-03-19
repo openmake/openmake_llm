@@ -87,3 +87,27 @@ export interface ModelCapabilities {
     vision: boolean;
     streaming: boolean;
 }
+
+/** 12 QueryType × 3 CostTier 2차원 엔진 매핑 */
+export const AUTO_ROUTING_ENGINE_MAP: Record<string, Record<'premium' | 'standard' | 'economy', string>> = {
+    'code-agent':   { premium: 'minimax-m2.5:1t-cloud',   standard: 'qwen3-coder:480b-cloud',  economy: 'qwen3-coder-next:cloud' },
+    'code-gen':     { premium: 'glm-5:cloud',              standard: 'glm-4.7:cloud',           economy: 'minimax-m2.1:cloud' },
+    'code':         { premium: 'glm-5:cloud',              standard: 'glm-4.7:cloud',           economy: 'minimax-m2.1:cloud' },
+    'math-hard':    { premium: 'deepseek-v3.2:cloud',      standard: 'kimi-k2-thinking:cloud',  economy: 'cogito-2.1:cloud' },
+    'math-applied': { premium: 'deepseek-v3.1:cloud',      standard: 'mistral-large-3:cloud',   economy: 'nemotron-3-super:cloud' },
+    'math':         { premium: 'deepseek-v3.1:cloud',      standard: 'mistral-large-3:cloud',   economy: 'nemotron-3-super:cloud' },
+    'reasoning':    { premium: 'kimi-k2.5:cloud',          standard: 'gpt-oss:120b-cloud',      economy: 'glm-4.6:cloud' },
+    'creative':     { premium: 'qwen3.5:397b-cloud',       standard: 'gpt-oss:120b-cloud',      economy: 'gemini-3-flash-preview:cloud' },
+    'analysis':     { premium: 'kimi-k2.5:cloud',          standard: 'qwen3.5:397b-cloud',      economy: 'gemini-3-flash-preview:cloud' },
+    'document':     { premium: 'qwen3-next:cloud',         standard: 'nemotron-3-super:cloud',  economy: 'qwen3.5:397b-cloud' },
+    'vision':       { premium: 'qwen3-vl:235b-cloud',      standard: 'qwen3.5:397b-cloud',      economy: 'kimi-k2.5:cloud' },
+    'translation':  { premium: 'minimax-m2.1:cloud',       standard: 'mistral-large-3:cloud',   economy: 'qwen3.5:397b-cloud' },
+    'korean':       { premium: 'qwen3.5:397b-cloud',       standard: 'minimax-m2.1:cloud',      economy: 'gemini-3-flash-preview:cloud' },
+    'chat':         { premium: 'gpt-oss:120b-cloud',       standard: 'kimi-k2:1t-cloud',        economy: 'gemini-3-flash-preview:cloud' },
+} as const;
+
+/** 하위호환 QueryType alias 정규화 맵 */
+export const QUERY_TYPE_ALIASES: Record<string, string> = {
+    'code': 'code-gen',
+    'math': 'math-applied',
+} as const;

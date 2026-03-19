@@ -26,8 +26,13 @@ export type DomainKey = 'code' | 'math' | 'creative' | 'analysis' | 'general';
 
 /** QueryType → DomainKey 매핑 */
 export const QUERY_TYPE_TO_DOMAIN: Record<QueryType, DomainKey> = {
+    'code-agent': 'code',
+    'code-gen': 'code',
     code: 'code',
+    'math-hard': 'math',
+    'math-applied': 'math',
     math: 'math',
+    reasoning: 'analysis',
     creative: 'creative',
     analysis: 'analysis',
     document: 'analysis',     // 문서 분석도 analysis 도메인

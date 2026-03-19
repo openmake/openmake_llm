@@ -18,6 +18,7 @@ import type { ChatStrategy, A2AStrategyContext, A2AStrategyResult } from './type
 import { createLogger } from '../../utils/logger';
 import { getConfig } from '../../config/env';
 import { logA2AModelSelection } from '../../chat/routing-logger';
+import type { QueryType } from '../../chat/model-selector-types';
 import { resolvePromptLocale, type PromptLocaleCode } from '../../chat/language-policy';
 
 const logger = createLogger('A2AStrategy');
@@ -49,56 +50,98 @@ function getDefaultA2AModels(): A2AModelSelection {
 }
 
 /**
+ * QueryType별 A2A 모델 조합 맵.
+ * Record<QueryType, ...>를 사용하여 새 QueryType 추가 시 컴파일 타임에 누락 감지.
+ *
+ * env는 런타임에 resolve되므로 함수로 반환합니다.
+ */
+function getA2AModelMap(): Record<QueryType, A2AModelSelection> {
+    const config = getConfig();
+    return {
+        'code-agent': {
+            primary: config.omkEngineCode,
+            secondary: config.omkEngineLlm,
+            synthesizer: config.omkEngineFast,
+        },
+        'code-gen': {
+            primary: config.omkEngineCode,
+            secondary: config.omkEngineLlm,
+            synthesizer: config.omkEngineFast,
+        },
+        code: {
+            primary: config.omkEngineCode,
+            secondary: config.omkEngineLlm,
+            synthesizer: config.omkEngineFast,
+        },
+        'math-hard': {
+            primary: config.omkEngineLlm,
+            secondary: config.omkEnginePro,
+            synthesizer: config.omkEngineFast,
+        },
+        'math-applied': {
+            primary: config.omkEngineLlm,
+            secondary: config.omkEnginePro,
+            synthesizer: config.omkEngineFast,
+        },
+        math: {
+            primary: config.omkEngineLlm,
+            secondary: config.omkEnginePro,
+            synthesizer: config.omkEngineFast,
+        },
+        reasoning: {
+            primary: config.omkEnginePro,
+            secondary: config.omkEngineLlm,
+            synthesizer: config.omkEngineFast,
+        },
+        creative: {
+            primary: config.omkEngineLlm,
+            secondary: config.omkEnginePro,
+            synthesizer: config.omkEngineFast,
+        },
+        analysis: {
+            primary: config.omkEngineLlm,
+            secondary: config.omkEngineCode,
+            synthesizer: config.omkEngineFast,
+        },
+        document: {
+            primary: config.omkEngineLlm,
+            secondary: config.omkEnginePro,
+            synthesizer: config.omkEngineFast,
+        },
+        chat: {
+            primary: config.omkEngineFast,
+            secondary: config.omkEngineLlm,
+            synthesizer: config.omkEngineFast,
+        },
+        vision: {
+            primary: config.omkEngineVision,
+            secondary: config.omkEngineLlm,
+            synthesizer: config.omkEngineFast,
+        },
+        translation: {
+            primary: config.omkEngineLlm,
+            secondary: config.omkEnginePro,
+            synthesizer: config.omkEngineFast,
+        },
+        korean: {
+            primary: config.omkEngineLlm,
+            secondary: config.omkEngineFast,
+            synthesizer: config.omkEngineFast,
+        },
+    };
+}
+
+/**
  * 질문 유형(QueryType)에 따라 최적의 A2A 모델 조합을 선택합니다.
  *
- * env.ts의 OMK_ENGINE_* 설정에서 런타임에 모델명을 resolve합니다.
- *
- * @param queryType - 사용자 질문 유형 (code/math/creative/analysis/chat/vision 등)
+ * @param queryType - 사용자 질문 유형
  * @returns 최적의 A2A 모델 조합 (primary + secondary + synthesizer)
  */
-function resolveA2AModels(queryType?: string): A2AModelSelection {
-    const config = getConfig();
-
-    switch (queryType) {
-        case 'code':
-            return {
-                primary: config.omkEngineCode,
-                secondary: config.omkEngineLlm,
-                synthesizer: config.omkEngineFast,
-            };
-        case 'math':
-            return {
-                primary: config.omkEngineLlm,
-                secondary: config.omkEnginePro,
-                synthesizer: config.omkEngineFast,
-            };
-        case 'creative':
-            return {
-                primary: config.omkEngineLlm,
-                secondary: config.omkEnginePro,
-                synthesizer: config.omkEngineFast,
-            };
-        case 'analysis':
-            return {
-                primary: config.omkEngineLlm,
-                secondary: config.omkEngineCode,
-                synthesizer: config.omkEngineFast,
-            };
-        case 'chat':
-            return {
-                primary: config.omkEngineFast,
-                secondary: config.omkEngineLlm,
-                synthesizer: config.omkEngineFast,
-            };
-        case 'vision':
-            return {
-                primary: config.omkEngineVision,
-                secondary: config.omkEngineLlm,
-                synthesizer: config.omkEngineFast,
-            };
-        default:
-            return getDefaultA2AModels();
+function resolveA2AModels(queryType?: QueryType): A2AModelSelection {
+    if (!queryType) {
+        return getDefaultA2AModels();
     }
+    return getA2AModelMap()[queryType] ?? getDefaultA2AModels();
 }
 
 /** A2A 합성 모델에 전달되는 시스템 프롬프트 (6개 언어) */

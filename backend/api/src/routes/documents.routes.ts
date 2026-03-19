@@ -181,11 +181,11 @@ router.post('/upload', optionalAuth, validateUploadContentType(FILE_LIMITS.MAX_S
                 filename: originalFilename,
                 userId,
             }).then(result => {
-                logger.info(`[RAG] 문서 임베딩 완료: ${result.embeddedChunks}/${result.totalChunks}개 청크 (${result.durationMs}ms)`);
+                logger.info(`[RAG] 문서 임베딩 완료: ${result.storedChunks}/${result.totalChunks}개 청크 (${result.durationMs}ms)`);
                 broadcastFn?.({
                     type: 'document_progress',
                     stage: 'rag_complete',
-                    message: `RAG 임베딩 완료: ${result.embeddedChunks}개 청크 저장됨`,
+                    message: `RAG 임베딩 완료: ${result.storedChunks}개 청크 저장됨`,
                     filename: originalFilename,
                     progress: 100
                 });
