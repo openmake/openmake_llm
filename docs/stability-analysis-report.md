@@ -227,9 +227,56 @@ Phase 3 (4주차~) — 품질 체계화 (P2)
 
 ---
 
+## 구현 완료 현황 (v3)
+
+### P0 전체 완료 ✅
+- P0-1: DB Fail-Fast (`process.exit(1)`)
+- P0-2: JWT_SECRET test 환경 제외 검증
+- P0-3/4: message_feedback FK (TEXT→INTEGER, CASCADE)
+- P0-5: agent_feedback 테이블 순서 및 FK
+- P0-6: unhandledRejection graceful shutdown
+- P0-7: XSS safeSetHTML/purifyHTML 래퍼
+
+### P1 전체 완료 ✅
+- P1-1: WebSocket onclose 상태 초기화
+- P1-2: ws.send() 안전 래퍼
+- P1-3: /api/health 상세 정보 (DB 풀, Ollama, 메모리)
+- P1-4: 라우트 통합 테스트 (routes-setup.test.ts)
+- P1-5: conversation-db 단위 테스트 (16 케이스)
+- P1-6: 캐시 워밍 지수 백오프 3회 재시도
+- P1-7: as 캐스트 → typeof 런타임 가드
+- P1-8: idx_messages_agent 인덱스 추가
+- P1-9: audit stats 5분 TTL 캐시
+- P1-10: decayImportance LIMIT 1000 배치
+- P1-11: matchMedia/ResizeObserver cleanup 구현
+- P1-12: gracefulShutdown 통합 함수
+- P1-13: CSP upgrade-insecure-requests
+- P1-14: aria-live a11y announcer
+
+### P2 전체 완료 ✅
+- P2-1: 커버리지 CI 게이트 (Branch≥20, Funcs≥25, Lines≥25)
+- P2-2: E2E 테스트 확장 (api-routes.spec.ts 추가)
+- P2-3: schedulers/index.ts 중앙 스케줄러 모듈
+- P2-4: 토큰 생성 속도 메트릭 수집
+- P2-5: idx_ext_files_created 인덱스
+- P2-6: idx_memories_user_importance / pg_trgm GIN 인덱스
+- P2-7: 배치 INSERT 개별 폴백 제거
+- P2-8: Mermaid Promise.all 병렬 렌더링
+- P2-9: appendToken DOM 쿼리 캐시
+- P2-10: @types/bun 제거
+
+### 추가 개선 (v3 사이클)
+- token-cleanup.test.ts: 만료 토큰/레이트리밋 정리 8 케이스
+- token-crypto.test.ts: AES-256-GCM 암호화 8 케이스
+- routes-setup.test.ts: Express 라우트 9 케이스
+- supertest 의존성 추가
+
+**최종 테스트 현황: 85 스위트 / 2093 테스트, 커버리지 Stmts 41% / Branch 30%**
+
 ## 변경 이력
 
 | 버전 | 날짜 | 변경 내용 |
 |------|------|----------|
 | v1 | 2026-03-20 | Claude Code 4개 에이전트 초기 분석 |
 | v2 | 2026-03-20 | Gemini CLI 보완 검토 반영: 스키마 타입 불일치·unhandledRejection·전체 innerHTML XSS 추가, P0 우선순위 재조정, 수정 방향 개선 (Fail-Fast/기동 거부/DOMPurify 래퍼), CSP·a11y 추가 |
+| v3 | 2026-03-20 | P0/P1/P2 전체 구현 완료, 추가 테스트(token-cleanup, token-crypto, routes-setup, conversation-db) 작성 |
