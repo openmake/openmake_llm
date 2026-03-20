@@ -139,6 +139,7 @@ CREATE TABLE IF NOT EXISTS token_blacklist (
 );
 
 CREATE INDEX IF NOT EXISTS idx_messages_session ON conversation_messages(session_id);
+CREATE INDEX IF NOT EXISTS idx_messages_agent ON conversation_messages(agent_id);
 CREATE INDEX IF NOT EXISTS idx_messages_created ON conversation_messages(created_at);
 CREATE INDEX IF NOT EXISTS idx_usage_date ON api_usage(date);
 CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
@@ -215,9 +216,9 @@ CREATE INDEX IF NOT EXISTS idx_messages_session_created ON conversation_messages
 
 CREATE TABLE IF NOT EXISTS message_feedback (
     id SERIAL PRIMARY KEY,
-    message_id TEXT NOT NULL,
-    session_id TEXT NOT NULL,
-    user_id TEXT,
+    message_id INTEGER NOT NULL REFERENCES conversation_messages(id) ON DELETE CASCADE,
+    session_id TEXT NOT NULL REFERENCES conversation_sessions(id) ON DELETE CASCADE,
+    user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
     signal TEXT NOT NULL CHECK (signal IN ('thumbs_up', 'thumbs_down', 'regenerate')),
     routing_metadata JSONB,
     created_at TIMESTAMPTZ DEFAULT NOW()
@@ -241,18 +242,6 @@ CREATE TABLE IF NOT EXISTS agent_usage_logs (
     error_message TEXT
 );
 
-CREATE TABLE IF NOT EXISTS agent_feedback (
-    id TEXT PRIMARY KEY,
-    agent_id TEXT NOT NULL,
-    user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
-    rating INTEGER NOT NULL CHECK (rating >= 1 AND rating <= 5),
-    comment TEXT,
-    query TEXT,
-    response TEXT,
-    tags JSONB,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
 CREATE TABLE IF NOT EXISTS custom_agents (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
@@ -267,6 +256,19 @@ CREATE TABLE IF NOT EXISTS custom_agents (
     enabled BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- custom_agents 이후에 정의하여 FK 참조 가능
+CREATE TABLE IF NOT EXISTS agent_feedback (
+    id TEXT PRIMARY KEY,
+    agent_id TEXT NOT NULL REFERENCES custom_agents(id) ON DELETE CASCADE,
+    user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+    rating INTEGER NOT NULL CHECK (rating >= 1 AND rating <= 5),
+    comment TEXT,
+    query TEXT,
+    response TEXT,
+    tags JSONB,
+    created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS audit_logs (

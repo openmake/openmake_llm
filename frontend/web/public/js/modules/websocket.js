@@ -10,6 +10,7 @@
  */
 
 import { getState, setState } from './state.js';
+import { hideAbortButton } from './chat.js';
 import { debugLog, debugWarn } from './utils.js';
 
 /** @type {number} 현재 재연결 시도 횟수 */
@@ -63,6 +64,16 @@ function connectWebSocket() {
     ws.onclose = (event) => {
         debugLog('[WebSocket] 연결 종료:', event.code);
         setState('ws', null);
+        
+        // 🔒 Phase 3: P1-1 재연결 시 UI 상태 초기화 (전송/중단 버튼 복구)
+        setState('isGenerating', false);
+        setState('isSending', false);
+        try {
+            hideAbortButton();
+        } catch (e) {
+            // DOM 접근 에러 무시
+        }
+
         updateConnectionStatus('disconnected', '연결 끊김');
 
         // 자동 재연결

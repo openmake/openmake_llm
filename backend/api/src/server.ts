@@ -179,7 +179,8 @@ export class DashboardServer {
             ]);
             console.log('[Server] DB 초기화 완료');
         } catch (err) {
-            console.error('[Server] DB 초기화 실패 (서버는 계속 시작):', err);
+            console.error('[Server] DB 초기화 실패 — Fail-Fast:', err);
+            process.exit(1);
         }
 
         // 에이전트 스킬 자동 시딩 (17개 산업 분야 에이전트 전문 지침 DB 등록)
@@ -281,13 +282,24 @@ export class DashboardServer {
             console.error('[Server] 자기개선 스케줄러 시작 실패:', err);
         }
 
-        // 시맨틱 분류 캐시 워밍 (비동기, 서버 시작 차단 안 함)
-        try {
-            const { warmClassificationCache } = await import('./chat/llm-classifier');
-            warmClassificationCache().catch((err: unknown) => console.error('[Server] 캐시 워밍 실패:', err));
-        } catch (err) {
-            console.error('[Server] 캐시 워밍 로드 실패:', err);
-        }
+        // 시맨틱 분류 캐시 워밍 (비동기, 서버 시작 차단 안 함, 최대 3회 재시도)
+        const warmWithRetry = async (attempts = 3) => {
+            for (let i = 1; i <= attempts; i++) {
+                try {
+                    const { warmClassificationCache } = await import('./chat/llm-classifier');
+                    await warmClassificationCache();
+                    console.log(`[Server] 캐시 워밍 완료 (시도 ${i}/${attempts})`);
+                    return;
+                } catch (err) {
+                    const delay = Math.pow(2, i) * 1000;
+                    console.error(`[Server] 캐시 워밍 실패 (시도 ${i}/${attempts}):`, err);
+                    if (i < attempts) {
+                        await new Promise(resolve => setTimeout(resolve, delay));
+                    }
+                }
+            }
+        };
+        warmWithRetry().catch(err => console.error('[Server] 캐시 워밍 최종 실패:', err));
 
         return new Promise((resolve, reject) => {
             // HTTP 서버 오류 핸들러
@@ -368,8 +380,10 @@ if (require.main === module) {
     });
 
     process.on('unhandledRejection', (reason, _promise) => {
-        console.error('[FATAL] unhandledRejection:', reason);
-        // 로깅만 수행, 즉시 종료하지 않음 (Node.js 기본 동작과 동일)
+        console.error('[FATAL] unhandledRejection — graceful shutdown 시작:', reason);
+        // 오염된 상태로 계속 실행하지 않고 graceful shutdown 후 PM2가 재시작
+        server.stop();
+        process.exit(1);
     });
 
     server.start()

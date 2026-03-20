@@ -241,21 +241,31 @@ export async function handleChatMessage(
             return;
         }
 
+        const safeSend = (data: any) => {
+            if (ws.readyState === ws.OPEN) {
+                try {
+                    ws.send(JSON.stringify(data));
+                } catch (e) {
+                    log.warn('[Chat] WebSocket send failed:', e);
+                }
+            }
+        };
+
         if (error instanceof ChatRequestError) {
             log.warn('[Chat] 요청 처리 에러:', error.message);
-            ws.send(JSON.stringify({ type: 'error', message: error.message }));
+            safeSend({ type: 'error', message: error.message });
         } else if (error instanceof QuotaExceededError) {
             log.warn('[Chat] API 할당량 초과:', error.message);
-            ws.send(JSON.stringify({
+            safeSend({
                 type: 'error',
                 message: `⚠️ ${getLocalizedTemplate(WS_ERROR_MESSAGES, userLang).quotaExceeded} (${error.quotaType}). ${error.used}/${error.limit}.`,
                 errorType: 'quota_exceeded',
                 retryAfter: error.retryAfterSeconds
-            }));
+            });
         } else if (error instanceof KeyExhaustionError) {
             // 🆕 모든 API 키 소진 에러 처리
             log.warn('[Chat] 모든 API 키 소진:', error.message);
-            ws.send(JSON.stringify({
+            safeSend({
                 type: 'error',
                 message: error.getDisplayMessage(userLang),
                 errorType: 'api_keys_exhausted',
@@ -263,11 +273,11 @@ export async function handleChatMessage(
                 resetTime: error.resetTime.toISOString(),
                 totalKeys: error.totalKeys,
                 keysInCooldown: error.keysInCooldown
-            }));
+            });
         } else {
             log.error('[Chat] 처리 중 오류:', error);
             // 🔒 Phase 2: 내부 에러 상세 누출 방지 — 제네릭 메시지만 전송
-            ws.send(JSON.stringify({ type: 'error', message: getLocalizedTemplate(WS_ERROR_MESSAGES, userLang).genericError }));
+            safeSend({ type: 'error', message: getLocalizedTemplate(WS_ERROR_MESSAGES, userLang).genericError });
         }
     } finally {
         // 중단 컨트롤러 정리
