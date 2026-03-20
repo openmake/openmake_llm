@@ -355,11 +355,15 @@ function setupEventListeners() {
         });
     }
 
-    // 전송 버튼 클릭
+    // 전송 버튼 클릭 — 생성 중이면 중단, 아니면 전송
     const sendBtn = document.getElementById('sendBtn');
     if (sendBtn) {
         sendBtn.addEventListener('click', () => {
-            sendMessage();
+            if (window.getState && window.getState('isGenerating')) {
+                if (typeof window.abortChat === 'function') window.abortChat();
+            } else {
+                sendMessage();
+            }
         });
     }
 

@@ -371,35 +371,10 @@ if (require.main === module) {
     const port = getConfig().port;
     const server = new DashboardServer({ port });
 
-    // 전역 예외 핸들러 등록 (프로세스 안정성)
-    process.on('uncaughtException', (err) => {
-        console.error('[FATAL] uncaughtException:', err);
-        // 비정상 상태이므로 graceful shutdown 후 종료
-        server.stop();
-        process.exit(1);
-    });
-
-    process.on('unhandledRejection', (reason, _promise) => {
-        console.error('[FATAL] unhandledRejection — graceful shutdown 시작:', reason);
-        // 오염된 상태로 계속 실행하지 않고 graceful shutdown 후 PM2가 재시작
-        server.stop();
-        process.exit(1);
-    });
-
-    server.start()
-        .then(() => {
-            console.log(`\n✅ OpenMake Dashboard: ${server.url}`);
-            console.log('종료하려면 Ctrl+C를 누르세요\n');
-        })
-        .catch((err) => {
-            console.error('❌ 서버 시작 실패:', err);
-            process.exit(1);
-        });
-
     // Graceful shutdown: SIGINT (Ctrl+C) + SIGTERM
     const GRACEFUL_SHUTDOWN_TIMEOUT_MS = 30000;
 
-    const gracefulShutdown = async (signal: string) => {
+    const gracefulShutdown = async (signal: string, exitCode: number = 0) => {
         console.log(`\n👋 ${signal} 수신 — 서버 종료 중...`);
 
         const shutdownWork = async () => {
@@ -488,8 +463,31 @@ if (require.main === module) {
             console.error('[Shutdown] 종료 타임아웃 또는 오류 — 강제 종료:', error);
         }
 
-        process.exit(0);
+        process.exit(exitCode);
     };
+
+    // 전역 예외 핸들러 등록 (프로세스 안정성)
+    process.on('uncaughtException', (err) => {
+        console.error('[FATAL] uncaughtException:', err);
+        // 비정상 상태이므로 graceful shutdown 후 종료
+        gracefulShutdown('uncaughtException', 1);
+    });
+
+    process.on('unhandledRejection', (reason, _promise) => {
+        console.error('[FATAL] unhandledRejection — graceful shutdown 시작:', reason);
+        // 오염된 상태로 계속 실행하지 않고 graceful shutdown 후 PM2가 재시작
+        gracefulShutdown('unhandledRejection', 1);
+    });
+
+    server.start()
+        .then(() => {
+            console.log(`\n✅ OpenMake Dashboard: ${server.url}`);
+            console.log('종료하려면 Ctrl+C를 누르세요\n');
+        })
+        .catch((err) => {
+            console.error('❌ 서버 시작 실패:', err);
+            process.exit(1);
+        });
 
     process.on('SIGINT', () => gracefulShutdown('SIGINT'));
     process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));

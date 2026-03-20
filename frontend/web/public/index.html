@@ -198,6 +198,15 @@
         <!-- 패널/오버레이 컨테이너 (T12에서 활용) -->
         <div id="panel-container"></div>
 
+        <!-- 스크린 리더용 라이브 알림 영역 (P1-14 접근성 개선) -->
+        <!-- aria-live="polite" — AI 응답 상태를 스크린 리더에 전달 (현재 포커스 방해 없이) -->
+        <div id="a11y-announcer"
+             aria-live="polite"
+             aria-atomic="true"
+             role="status"
+             style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;">
+        </div>
+
         <!-- 모달 레이어 -->
 
         <!-- 파일 업로드 모달 -->

@@ -504,11 +504,24 @@ body {
 .send-btn.abort-mode {
     background: var(--danger);
     border-color: var(--border-dark);
+    animation: abortPulse 1.5s ease-in-out infinite;
 }
 
 .send-btn.abort-mode:hover {
     background: #ef4444;
     box-shadow: var(--shadow-md);
+    transform: translate(-2px, -2px);
+    animation: none;
+}
+
+.send-btn.abort-mode:active {
+    transform: translate(1px, 1px);
+    box-shadow: none;
+}
+
+@keyframes abortPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
 }
 
 /* Modals */
@@ -1487,6 +1500,7 @@ body {
     .model-selector { display: none; }
     .message-wrapper { max-width: 95%; }
     .input-wrapper textarea { font-size: 16px; }
+    .connection-status .status-text { display: none; }
 }
 
 @media (hover: none) and (pointer: coarse) {

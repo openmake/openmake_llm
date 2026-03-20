@@ -18,6 +18,10 @@ import { DEFAULT_AUTO_MODEL, STORAGE_KEY_GENERAL_SETTINGS, STORAGE_KEY_SELECTED_
 // SafeStorage 래퍼 — safe-storage.js에서 전역 등록됨
 const SS = window.SafeStorage;
 
+// 전송 버튼의 원본 SVG (abort 모드 해제 시 복원용)
+const SEND_ICON_SVG = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13M22 2L15 22L11 13L2 9L22 2Z"/></svg>`;
+const ABORT_ICON_SVG = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>`;
+
 /**
  * AI 응답 생성 중단 요청
  * WebSocket을 통해 서버에 abort 메시지를 전송하고 UI를 업데이트합니다.
@@ -29,59 +33,46 @@ function abortChat() {
     console.log('[Chat] 응답 생성 중단 요청');
     sendWsMessage({ type: 'abort' });
 
-    // UI 상태 업데이트
     setState('isGenerating', false);
     hideAbortButton();
 }
 
 /**
- * 중단 버튼 표시
- * 버튼이 없으면 동적으로 생성하여 전송 버튼 옆에 삽입합니다.
+ * 전송 버튼을 중단 모드로 전환
+ * 전송 버튼의 스타일과 동작을 abort 모드로 변경합니다.
  * @returns {void}
  */
+/** 스크린 리더용 상태 공지 (P1-14 접근성) */
+function announceA11y(message) {
+    const el = document.getElementById('a11y-announcer');
+    if (!el) return;
+    // 동일 메시지 반복 시에도 aria-live 트리거 되도록 빈 값 후 설정
+    el.textContent = '';
+    requestAnimationFrame(() => { el.textContent = message; });
+}
+
 function showAbortButton() {
-    let abortBtn = document.getElementById('abortButton');
+    const sendBtn = document.getElementById('sendBtn');
+    if (!sendBtn) return;
 
-    if (!abortBtn) {
-        // 중단 버튼 생성
-        const inputArea = document.querySelector('.input-area') || document.querySelector('.chat-input-container');
-        if (inputArea) {
-            abortBtn = document.createElement('button');
-            abortBtn.id = 'abortButton';
-            abortBtn.className = 'abort-button';
-            abortBtn.innerHTML = `
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <rect x="6" y="6" width="12" height="12" rx="2"/>
-                </svg>
-                <span>중단</span>
-            `;
-            abortBtn.onclick = abortChat;
-            abortBtn.title = '응답 생성 중단';
-
-            // 전송 버튼 옆에 삽입
-            const sendBtn = document.getElementById('sendButton');
-            if (sendBtn) {
-                sendBtn.parentNode.insertBefore(abortBtn, sendBtn);
-            } else {
-                inputArea.appendChild(abortBtn);
-            }
-        }
-    }
-
-    if (abortBtn) {
-        abortBtn.style.display = 'flex';
-    }
+    sendBtn.classList.add('abort-mode');
+    sendBtn.innerHTML = ABORT_ICON_SVG;
+    sendBtn.title = '응답 생성 중단';
+    announceA11y('AI가 응답을 생성하고 있습니다.');
 }
 
 /**
- * 중단 버튼 숨기기
+ * 전송 버튼을 원래 상태로 복원
  * @returns {void}
  */
 function hideAbortButton() {
-    const abortBtn = document.getElementById('abortButton');
-    if (abortBtn) {
-        abortBtn.style.display = 'none';
-    }
+    const sendBtn = document.getElementById('sendBtn');
+    if (!sendBtn) return;
+
+    sendBtn.classList.remove('abort-mode');
+    sendBtn.innerHTML = SEND_ICON_SVG;
+    sendBtn.title = '전송 (Enter)';
+    announceA11y('AI 응답이 완료되었습니다.');
 }
 
 /**
@@ -186,8 +177,6 @@ async function sendMessage() {
     } catch (error) {
         console.error('[Chat] 전송 오류:', error);
         finishAssistantMessage('오류가 발생했습니다: ' + error.message);
-        setState('isGenerating', false);
-        hideAbortButton();
     }
 
     setState('isSending', false);
@@ -687,5 +676,6 @@ export {
     sendFeedback,
     newChat,
     useSuggestion,
-    abortChat
+    abortChat,
+    hideAbortButton
 };

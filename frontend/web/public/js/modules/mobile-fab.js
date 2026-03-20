@@ -103,4 +103,9 @@ export function init() {
         applyBreakpoint(fabContainer);
     });
     observer.observe(document.body);
+
+    // 정리(cleanup) 함수 제공
+    window.cleanupMobileFAB = function() {
+        observer.disconnect();
+    };
 }

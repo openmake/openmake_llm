@@ -335,11 +335,20 @@ function renderMarkdown(element, text) {
 }
 
 // 시스템 테마 변경 감지
-window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+const themeMediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+const handleThemeChange = (e) => {
     if (localStorage.getItem(STORAGE_KEY_THEME) === 'system') {
         applyTheme('system');
     }
-});
+};
+themeMediaQuery.addEventListener('change', handleThemeChange);
+
+/**
+ * UI 모듈 리소스 정리 (페이지 전환 시 호출 권장)
+ */
+function cleanupUI() {
+    themeMediaQuery.removeEventListener('change', handleThemeChange);
+}
 
 // 전역 노출 (레거시 호환)
 window.applyTheme = applyTheme;
@@ -358,6 +367,7 @@ window.showError = showError;
 window.scrollToBottom = scrollToBottom;
 window.escapeHtml = escapeHtml;
 window.renderMarkdown = renderMarkdown;
+window.cleanupUI = cleanupUI;
 
 export {
     applyTheme,
