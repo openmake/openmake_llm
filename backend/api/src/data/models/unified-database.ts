@@ -467,6 +467,11 @@ CREATE INDEX IF NOT EXISTS idx_research_steps_session ON research_steps(session_
 CREATE INDEX IF NOT EXISTS idx_connections_user ON external_connections(user_id);
 CREATE INDEX IF NOT EXISTS idx_connections_service ON external_connections(service_type);
 CREATE INDEX IF NOT EXISTS idx_ext_files_connection ON external_files(connection_id);
+-- P2-5: external_files 정렬 인덱스 (created_at DESC — 파일 목록 조회 시 정렬 성능)
+CREATE INDEX IF NOT EXISTS idx_ext_files_created ON external_files(connection_id, created_at DESC);
+-- P2-6: user_memories LIKE 풀스캔 대응 — pg_trgm GIN 인덱스 (LIKE '%keyword%' 인덱스 사용 가능)
+-- pg_trgm 미설치 환경 graceful 처리: Migration 011에서 조건부 생성
+CREATE INDEX IF NOT EXISTS idx_memories_user_importance ON user_memories(user_id, importance DESC, updated_at DESC);
 
 CREATE INDEX IF NOT EXISTS idx_embeddings_source ON vector_embeddings(source_type, source_id);
 

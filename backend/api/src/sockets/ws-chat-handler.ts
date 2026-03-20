@@ -186,11 +186,24 @@ export async function handleChatMessage(
             ? crypto.randomUUID()
             : `msg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
+        // 토큰 생성 메트릭 추적
+        let tokenCount = 0;
+        let firstTokenTime = 0;
+        const generationStartTime = Date.now();
+
         // 토큰 콜백에서 중단 여부 체크 (WS 고유)
         const tokenCallback = (token: string) => {
             if (abortController.signal.aborted) {
                 throw new Error('ABORTED');
             }
+
+            if (tokenCount === 0) {
+                firstTokenTime = Date.now();
+                const ttfb = firstTokenTime - generationStartTime;
+                log.debug(`[Chat] 첫 번째 토큰 생성됨 (TTFB: ${ttfb}ms)`);
+            }
+            tokenCount++;
+
             ws.send(JSON.stringify({ type: 'token', token, messageId }));
         };
 
@@ -227,8 +240,13 @@ export async function handleChatMessage(
             ws.send(JSON.stringify({ type: 'session_created', sessionId: result.sessionId }));
         }
 
-        log.info('[Chat] 생성 완료');
-        ws.send(JSON.stringify({ type: 'done', messageId }));
+        const generationDuration = Date.now() - (firstTokenTime || generationStartTime);
+        const tokensPerSec = tokenCount > 0 && generationDuration > 0 
+            ? (tokenCount / (generationDuration / 1000)).toFixed(2) 
+            : '0.00';
+            
+        log.info(`[Chat] 생성 완료: ${tokenCount} 토큰, 속도: ${tokensPerSec} tokens/sec`);
+        ws.send(JSON.stringify({ type: 'done', messageId, metrics: { tokensPerSec, tokenCount } }));
 
     } catch (error: unknown) {
         // 중단 컨트롤러 정리
