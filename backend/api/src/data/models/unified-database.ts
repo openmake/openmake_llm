@@ -376,22 +376,6 @@ CREATE TABLE IF NOT EXISTS external_files (
     UNIQUE(connection_id, external_id)
 );
 
--- [P3 LEGACY] vector_embeddings: LEGACY_SCHEMA 폴백 버전은 embedding TEXT로 유지합니다.
--- 실제 프로덕션 스키마(002-schema.sql)는 embedding vector(768)을 사용합니다.
--- pgvector 미설치 환경에서의 graceful degradation을 위해 TEXT 타입을 유지합니다.
--- vector(768) 변환은 Migration 008이 담당합니다 (pgvector 설치 시 자동 변환).
-CREATE TABLE IF NOT EXISTS vector_embeddings (
-    id SERIAL PRIMARY KEY,
-    source_type TEXT NOT NULL CHECK(source_type IN ('document', 'memory', 'conversation', 'agent')),
-    source_id TEXT NOT NULL,
-    chunk_index INTEGER DEFAULT 0,
-    content TEXT NOT NULL,
-    embedding TEXT,
-    metadata JSONB,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
 CREATE TABLE IF NOT EXISTS mcp_servers (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL UNIQUE,
@@ -472,8 +456,6 @@ CREATE INDEX IF NOT EXISTS idx_ext_files_created ON external_files(connection_id
 -- P2-6: user_memories LIKE 풀스캔 대응 — pg_trgm GIN 인덱스 (LIKE '%keyword%' 인덱스 사용 가능)
 -- pg_trgm 미설치 환경 graceful 처리: Migration 011에서 조건부 생성
 CREATE INDEX IF NOT EXISTS idx_memories_user_importance ON user_memories(user_id, importance DESC, updated_at DESC);
-
-CREATE INDEX IF NOT EXISTS idx_embeddings_source ON vector_embeddings(source_type, source_id);
 
 CREATE INDEX IF NOT EXISTS idx_mcp_servers_name ON mcp_servers(name);
 CREATE INDEX IF NOT EXISTS idx_mcp_servers_enabled ON mcp_servers(enabled);

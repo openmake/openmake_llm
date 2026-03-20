@@ -41,7 +41,6 @@ import { detectLanguage } from '../chat/language-policy';
   import { validate, validateUploadContentType, validateFileUploadSecurity } from '../middlewares/validation';
   import { summarizeDocumentSchema, documentAskSchema } from '../schemas/documents.schema';
 import { FILE_LIMITS } from '../config/constants';
-import { getRAGService } from '../services/RAGService';
 import { optionalAuth } from '../auth';
 
 const logger = createLogger('DocumentsRoutes');
@@ -171,28 +170,6 @@ router.post('/upload', optionalAuth, validateUploadContentType(FILE_LIMITS.MAX_S
             filename: originalFilename,
             progress: 100
         });
-
-        // RAG: 문서 임베딩 (fire-and-forget, 업로드 응답을 차단하지 않음)
-        if (doc.text && doc.text.length > 0) {
-            const userId = (req.user && 'userId' in req.user ? req.user.userId : req.user?.id?.toString()) as string | undefined;
-            getRAGService().embedDocument({
-                docId,
-                text: doc.text,
-                filename: originalFilename,
-                userId,
-            }).then(result => {
-                logger.info(`[RAG] 문서 임베딩 완료: ${result.storedChunks}/${result.totalChunks}개 청크 (${result.durationMs}ms)`);
-                broadcastFn?.({
-                    type: 'document_progress',
-                    stage: 'rag_complete',
-                    message: `RAG 임베딩 완료: ${result.storedChunks}개 청크 저장됨`,
-                    filename: originalFilename,
-                    progress: 100
-                });
-            }).catch(ragError => {
-                logger.warn('[RAG] 문서 임베딩 실패 (무시):', ragError);
-            });
-        }
 
          res.json(success({ docId, filename: doc.filename, type: doc.type, pages: doc.pages, textLength: doc.text.length, preview: doc.text.substring(0, 500) + (doc.text.length > 500 ? '...' : '') }));
       } catch (error: unknown) {
@@ -343,20 +320,11 @@ router.get('/documents', asyncHandler(async (_req: Request, res: Response) => {
 router.delete('/documents', asyncHandler(async (_req: Request, res: Response) => {
     const docCount = uploadedDocuments.size;
 
-    // RAG 벡터 임베딩 전체 삭제
-    let embeddingsDeleted = 0;
-    try {
-        embeddingsDeleted = await getRAGService().deleteAllDocumentEmbeddings();
-        logger.info(`[Documents] 전체 문서 임베딩 삭제: ${embeddingsDeleted}개`);
-    } catch (error) {
-        logger.error('[Documents] 전체 문서 임베딩 삭제 실패:', error);
-    }
-
     // 문서 저장소 전체 삭제 (인메모리 + DB)
     uploadedDocuments.clear();
 
-    logger.info(`[Documents] 전체 문서 삭제: ${docCount}개 문서, ${embeddingsDeleted}개 임베딩`);
-    res.json(success({ deletedDocuments: docCount, deletedEmbeddings: embeddingsDeleted }));
+    logger.info(`[Documents] 전체 문서 삭제: ${docCount}개 문서`);
+    res.json(success({ deletedDocuments: docCount }));
 }));
 
 /**
@@ -383,18 +351,7 @@ router.delete('/documents/:docId', asyncHandler(async (req: Request, res: Respon
      const { docId } = req.params;
      const deleted = uploadedDocuments.delete(docId);
 
-     // RAG 벡터 임베딩도 함께 삭제
-     let embeddingsDeleted = 0;
-     if (deleted) {
-         try {
-             embeddingsDeleted = await getRAGService().deleteDocumentEmbeddings(docId);
-             logger.info(`[RAG] 문서 임베딩 삭제: ${docId} → ${embeddingsDeleted}개 청크`);
-         } catch (error) {
-             logger.error(`[RAG] 문서 임베딩 삭제 실패 (${docId}):`, error);
-         }
-     }
-
-     res.json(success({ deleted, embeddingsDeleted }));
+     res.json(success({ deleted }));
  }));
 
 export default router;
