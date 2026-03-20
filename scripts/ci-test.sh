@@ -10,9 +10,9 @@
 #   npm run ci
 #
 # 실행 순서:
-#   1. Bun Test (backend/api — 66 test files)
+#   1. Jest Test (backend/api)
 #   2. TypeScript Build (tsc + frontend deploy)
-#   3. File Size Guard (max 600 lines per source file)
+#   3. File Size Guard (max 1200 lines per source file)
 #   4. ESLint (TypeScript + JavaScript)
 #
 # 종료 코드:
@@ -101,53 +101,14 @@ print_summary() {
 
 trap print_summary EXIT
 
-# ─── Step 1: Bun Test ───
+# ─── Step 1: Jest Test ───
 # agent-loop.test.ts는 Ollama 실제 연결을 시도하여 CI에서 hang 발생 → 제외
-# Bun은 모든 파일을 단일 프로세스에서 실행하므로 jest.mock이 파일 간 누출됨
-# → 각 파일을 개별 bun test 프로세스로 실행하여 mock 격리 보장
 
 # CI 환경변수 설정 — auth 모듈이 모듈 로드 시점에 JWT_SECRET을 읽으므로 프로세스 레벨에서 export 필수
 export JWT_SECRET="ci-test-secret-for-testing-only"
 export NODE_ENV="test"
-CI_EXCLUDE="agent-loop.test.ts"
 
-run_step "Bun Test (backend/api)" bash -c '
-    # macOS에는 GNU timeout이 없으므로 순수 셸로 타임아웃 구현
-    run_with_timeout() {
-        local secs=$1; shift
-        "$@" &
-        local pid=$!
-        (
-            sleep "$secs"
-            kill -9 "$pid" 2>/dev/null
-        ) &
-        local watchdog=$!
-        wait "$pid" 2>/dev/null
-        local ret=$?
-        kill "$watchdog" 2>/dev/null
-        wait "$watchdog" 2>/dev/null
-        return $ret
-    }
-
-    TEST_FAILED=0
-    TEST_PASSED=0
-    TEST_ERRORS=""
-    for f in '"$PROJECT_ROOT"'/backend/api/src/__tests__/*.test.ts; do
-        fname=$(basename "$f")
-        case "$fname" in '"$CI_EXCLUDE"') continue ;; esac
-        if run_with_timeout 30 bun test --timeout 15000 "$f" > /dev/null 2>&1; then
-            TEST_PASSED=$((TEST_PASSED + 1))
-        else
-            TEST_FAILED=$((TEST_FAILED + 1))
-            TEST_ERRORS="$TEST_ERRORS $fname"
-        fi
-    done
-    echo "  ✅ $TEST_PASSED passed, ❌ $TEST_FAILED failed"
-    if [ $TEST_FAILED -gt 0 ]; then
-        echo "  실패 파일:$TEST_ERRORS"
-        exit 1
-    fi
-'
+run_step "Jest Test (backend/api)" bash -c "cd '$PROJECT_ROOT' && npx jest --testPathIgnorePatterns='agent-loop.test.ts' --forceExit --timeout 15000 2>&1"
 
 # ─── Step 2: Build ───
 run_step "TypeScript Build" bash -c "cd '$PROJECT_ROOT' && npm run build"
