@@ -60,8 +60,21 @@ function debugError(...args) {
  */
 function truncateFilename(filename, maxLength) {
     if (!filename || filename.length <= maxLength) return filename;
-    const ext = filename.split('.').pop();
-    const name = filename.slice(0, -(ext.length + 1));
+    
+    const lastDotIndex = filename.lastIndexOf('.');
+    if (lastDotIndex === -1 || lastDotIndex === 0) {
+        // 확장자가 없거나 파일명이 점으로 시작하는 경우
+        return filename.slice(0, maxLength - 3) + '...';
+    }
+
+    const ext = filename.slice(lastDotIndex + 1);
+    const name = filename.slice(0, lastDotIndex);
+    
+    // 확장자가 너무 길면 그냥 전체를 자름
+    if (ext.length + 4 > maxLength) {
+        return filename.slice(0, maxLength - 3) + '...';
+    }
+
     const truncatedName = name.slice(0, maxLength - ext.length - 4) + '...';
     return truncatedName + '.' + ext;
 }
@@ -74,9 +87,10 @@ function truncateFilename(filename, maxLength) {
 function formatFileSize(bytes) {
     if (bytes === 0) return '0 Bytes';
     const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    const unit = sizes[i] || '??';
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + unit;
 }
 
 /**
