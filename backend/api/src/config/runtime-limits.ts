@@ -193,13 +193,6 @@ export const MODEL_CONTEXT_DEFAULTS = {
 } as const;
 
 // ============================================
-// RAG (Retrieval-Augmented Generation) 설정
-// ============================================
-
-/**
- * RAG 파이프라인에서 사용하는 청킹/검색 설정
- */
-// ============================================
 // 캐시 설정
 // ============================================
 
@@ -226,15 +219,3 @@ export const CACHE_CONFIG = {
     MEMORY_CACHE_MAX_SIZE: 200,
 } as const;
 
-export const RAG_CONFIG = {
-    /** 문서 청크 크기 (문자 수) */
-    CHUNK_SIZE: 1000,
-    /** 청크 간 오버랩 (문자 수) */
-    CHUNK_OVERLAP: 200,
-    /** 검색 시 반환할 최대 청크 수 */
-    TOP_K: 5,
-    /** 관련도 임계값 (0.0~1.0, 이 값 이상만 반환, 0.45→0.6 상향: 무관 문서 혼입 방지) */
-    RELEVANCE_THRESHOLD: 0.6,
-    /** RAG 컨텍스트에 주입할 최대 문자 수 */
-    MAX_CONTEXT_CHARS: 4000,
-} as const;

@@ -219,42 +219,6 @@ export interface ChatAdvancedOptions {
     tools?: ToolDefinition[];
 }
 
-/**
- * 임베딩 생성 요청 (Ollama /api/embed)
- * @interface EmbedRequest
- */
-export interface EmbedRequest {
-    /** 임베딩에 사용할 모델 이름 */
-    model: string;
-    /** 임베딩할 텍스트 (단일 문자열 또는 배열) */
-    input: string | string[];
-    /** 입력 텍스트를 컨텍스트 길이에 맞게 자동 자름 (기본값: true) */
-    truncate?: boolean;
-    /** 생성할 임베딩 벡터의 차원 수 */
-    dimensions?: number;
-    /** 모델 메모리 유지 시간 (기본값: '5m') */
-    keep_alive?: string | number;
-    /** 모델 추론 옵션 */
-    options?: ModelOptions;
-}
-
-/**
- * 임베딩 생성 응답
- * @interface EmbedResponse
- */
-export interface EmbedResponse {
-    /** 사용된 모델 이름 */
-    model: string;
-    /** 생성된 임베딩 벡터 배열 (입력 개수 x 차원) */
-    embeddings: number[][];
-    /** 전체 처리 소요 시간 (나노초) */
-    total_duration?: number;
-    /** 모델 로딩 소요 시간 (나노초) */
-    load_duration?: number;
-    /** 프롬프트 평가 토큰 수 */
-    prompt_eval_count?: number;
-}
-
 // ============================================
 // Ollama Web Search API Types
 // ============================================

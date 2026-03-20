@@ -34,8 +34,6 @@ import {
     FormatOption,
     ToolDefinition,
     ToolCall,
-    EmbedRequest,
-    EmbedResponse,
     UsageMetrics,
     WebSearchRequest,
     WebSearchResponse,
@@ -683,38 +681,6 @@ export class OllamaClient {
             });
             response.data.on('error', reject);
         });
-    }
-
-    /**
-     * 텍스트 임베딩을 생성합니다 (Ollama /api/embed).
-     *
-     * 텍스트를 벡터 공간의 숫자 배열로 변환합니다.
-     * 유사도 검색, 클러스터링 등에 활용됩니다.
-     *
-     * @param input - 임베딩할 텍스트 (단일 문자열 또는 배열)
-     * @param model - 임베딩 모델 이름 (기본값: 'embeddinggemma')
-     * @returns 임베딩 벡터 배열 (입력 개수 x 차원)
-     * @throws {Error} 임베딩 모델 사용 불가 시
-     */
-    async embed(
-        input: string | string[],
-        model?: string,
-        embedOptions?: {
-            truncate?: boolean;
-            keep_alive?: string | number;
-            options?: ModelOptions;
-        }
-    ): Promise<number[][]> {
-        const request: EmbedRequest = {
-            model: model || 'embeddinggemma',
-            input,
-            ...(embedOptions?.truncate !== undefined && { truncate: embedOptions.truncate }),
-            ...(embedOptions?.keep_alive !== undefined && { keep_alive: embedOptions.keep_alive }),
-            ...(embedOptions?.options && { options: embedOptions.options })
-        };
-
-        const response = await this.client.post<EmbedResponse>('/api/embed', request);
-        return response.data.embeddings;
     }
 
     /**

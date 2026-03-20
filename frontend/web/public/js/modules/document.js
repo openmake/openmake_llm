@@ -185,12 +185,11 @@ function showDocumentProgress(event) {
         'upload': '📤', 'extract': '📋', 'pdf_parse': '📄', 'ocr_prepare': '🔧',
         'ocr_convert': '🖼️', 'ocr_recognize': '🔍', 'ocr_complete': '✅',
         'excel_parse': '📊', 'image_ocr': '🖼️', 'text_read': '📝',
-        'rag_embed': '🧠', 'rag_complete': '✅',
         'complete': '✅', 'error': '❌'
     };
 
     const icon = stageIcons[event.stage] || '⏳';
-    const isComplete = event.stage === 'complete' || event.stage === 'rag_complete';
+    const isComplete = event.stage === 'complete';
     const isError = event.stage === 'error';
     const progressBar = event.progress !== undefined
         ? `<div class="progress-bar">

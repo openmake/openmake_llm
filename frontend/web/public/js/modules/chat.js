@@ -133,7 +133,6 @@ async function sendMessage() {
             discussionMode: getState('discussionMode') || false,
             deepResearchMode: getState('deepResearchMode') || false,
             enabledTools: getState('mcpToolsEnabled') || {},
-            ragEnabled: getState('ragEnabled') || false,
             sessionId: getState('currentChatId') // 세션 ID 포함
         };
 
@@ -329,6 +328,40 @@ function appendToken(token) {
 }
 
 /**
+ * Thinking 토큰 추가
+ * Ollama Thinking 모드에서 수신된 추론 과정 토큰을 접이식 UI로 표시합니다.
+ * @param {string} token - 수신된 thinking 텍스트 토큰 조각
+ * @returns {void}
+ */
+function appendThinkingToken(token) {
+    const content = getState('currentAssistantMessageContent');
+    if (!content) return;
+
+    // 로딩 스피너 제거
+    const spinner = content.querySelector('.loading-spinner');
+    if (spinner) spinner.remove();
+
+    // thinking 컨테이너 찾기 또는 생성
+    let thinkingEl = content.querySelector('.thinking-trace');
+    if (!thinkingEl) {
+        thinkingEl = document.createElement('details');
+        thinkingEl.className = 'thinking-trace';
+        thinkingEl.open = false;
+        thinkingEl.innerHTML = '<summary style="cursor:pointer;color:var(--text-muted);font-size:0.85em;margin-bottom:8px;">\uD83E\uDD14 \uCD94\uB860 \uACFC\uC815 \uBCF4\uAE30</summary><pre class="thinking-content" style="white-space:pre-wrap;font-size:0.82em;color:var(--text-muted);background:var(--bg-tertiary);padding:12px;border-radius:var(--radius-md);max-height:300px;overflow-y:auto;"></pre>';
+        content.prepend(thinkingEl);
+    }
+
+    const pre = thinkingEl.querySelector('.thinking-content');
+    if (pre) {
+        pre.textContent += token;
+        // 자동 스크롤 (열려있을 때만)
+        if (thinkingEl.open) {
+            pre.scrollTop = pre.scrollHeight;
+        }
+    }
+}
+
+/**
  * AI 응답 완료 처리
  * 생각 과정과 최종 답변을 분리하여 마크다운으로 렌더링하고,
  * 응답 시간을 표시합니다. 에러 메시지가 있으면 에러 스타일로 표시합니다.
@@ -464,36 +497,6 @@ function finishAssistantMessage(errorMessage = null, serverMessageId = null) {
             wrapper.insertBefore(attrEl, timeEl);
         }
         setState('activeSkillNames', null);
-    }
-
-    // RAG 출처 표시: 검색된 참조 문서 출처 카드
-    const ragSources = getState('ragSources');
-    if (!errorMessage && ragSources && ragSources.length > 0) {
-        const wrapper = currentMsg.querySelector('.message-wrapper');
-        const timeElForRag = currentMsg.querySelector('.message-time');
-        if (wrapper && timeElForRag) {
-            function escRag(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
-            const sourceCards = ragSources.map(function(src) {
-                const pct = (src.relevanceScore * 100).toFixed(0);
-                const barColor = src.relevanceScore >= 0.8 ? 'var(--success)' : src.relevanceScore >= 0.5 ? 'var(--warning)' : 'var(--text-muted)';
-                return '<div class="rag-source-card">' +
-                    '<div class="rag-source-header">' +
-                        '<span class="rag-source-icon">📄</span>' +
-                        '<span class="rag-source-name">' + escRag(src.source) + '</span>' +
-                        '<span class="rag-source-score" style="--bar-color:' + barColor + ';--bar-width:' + pct + '%">' + pct + '%</span>' +
-                    '</div>' +
-                    '<div class="rag-source-snippet">' + escRag(src.snippet) + '</div>' +
-                '</div>';
-            }).join('');
-            const ragEl = document.createElement('div');
-            ragEl.className = 'rag-sources-container';
-            ragEl.innerHTML = '<details class="rag-sources-details">' +
-                '<summary class="rag-sources-summary">📖 참조 문서 (' + ragSources.length + ')</summary>' +
-                '<div class="rag-sources-list">' + sourceCards + '</div>' +
-            '</details>';
-            wrapper.insertBefore(ragEl, timeElForRag);
-        }
-        setState('ragSources', null);
     }
 
     setState('currentAssistantMessage', null);
@@ -657,6 +660,7 @@ window.sendFeedback = sendFeedback;
 window.sendMessage = sendMessage;
 window.addChatMessage = addChatMessage;
 window.appendToken = appendToken;
+window.appendThinkingToken = appendThinkingToken;
 window.finishAssistantMessage = finishAssistantMessage;
 window.copyMessage = copyMessage;
 window.regenerateMessage = regenerateMessage;
@@ -668,6 +672,7 @@ export {
     sendMessage,
     addChatMessage,
     appendToken,
+    appendThinkingToken,
     finishAssistantMessage,
     copyMessage,
     regenerateMessage,

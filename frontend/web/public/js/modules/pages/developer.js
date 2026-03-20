@@ -743,7 +743,7 @@
                 '<tr><td>Model Listing</td><td style="color:var(--success);">Supported</td><td><code>GET /models</code></td></tr>' +
                 '<tr><td>Temperature / Top-p / Stop</td><td style="color:var(--success);">Supported</td><td>Standard sampling parameters</td></tr>' +
                 '<tr><td>Text Completions</td><td style="color:var(--text-muted);">Not Available</td><td><code>POST /completions</code> &mdash; use Chat Completions instead</td></tr>' +
-                '<tr><td>Embeddings</td><td style="color:var(--text-muted);">Not Available</td><td><code>POST /embeddings</code> &mdash; planned for future release</td></tr>' +
+                '<tr><td>Embeddings</td><td style="color:var(--text-muted);">Not Available</td><td><code>POST /embeddings</code></td></tr>' +
                 '<tr><td>Image Generation</td><td style="color:var(--text-muted);">Not Available</td><td>&mdash;</td></tr>' +
                 '</tbody></table>' +
 

@@ -52,7 +52,7 @@ export function systemRulesSection(rules: string[]): string {
 }
 
 /**
- * 컨텍스트 섹션 생성 (RAG 결과 등)
+ * 컨텍스트 섹션 생성
  * 🔒 사용자 입력이 포함될 수 있으므로 이스케이프 적용
  */
 export function contextSection(context: string): string {
