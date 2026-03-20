@@ -119,160 +119,143 @@ function sendWsMessage(data) {
 }
 
 /**
+ * WebSocket 메시지 타입별 처리 핸들러 맵
+ */
+const messageHandlers = {
+    'init': (data) => {
+        if (data.nodes) {
+            setState('nodes', data.nodes);
+            if (typeof updateClusterInfo === 'function') {
+                updateClusterInfo(data);
+            }
+        }
+    },
+    'cluster_event': (data) => {
+        if (typeof handleClusterEvent === 'function') {
+            handleClusterEvent(data.event);
+        }
+    },
+    'token': (data) => {
+        if (typeof appendToken === 'function') {
+            appendToken(data.token);
+        }
+    },
+    'done': (data) => {
+        if (typeof finishAssistantMessage === 'function') {
+            finishAssistantMessage(null, data.messageId || null);
+        }
+    },
+    'token_warning': () => {
+        debugWarn('[WebSocket] 토큰 만료 임박, 자동 갱신 시도...');
+        if (typeof window.trySilentRefresh === 'function') {
+            window.trySilentRefresh().then((refreshed) => {
+                if (refreshed) {
+                    const newToken = getState('auth.authToken');
+                    if (newToken) {
+                        sendWsMessage({ type: 'refresh', authToken: newToken });
+                        debugLog('[WebSocket] 토큰 자동 갱신 성공, WebSocket 세션 갱신 완료');
+                    }
+                } else {
+                    debugWarn('[WebSocket] 토큰 자동 갱신 실패 — 곧 재로그인이 필요합니다');
+                    if (typeof showToast === 'function') {
+                        showToast('인증이 곧 만료됩니다. 페이지를 새로고침하거나 다시 로그인하세요.', 'warning');
+                    }
+                }
+            });
+        }
+    },
+    'error': (data) => {
+        const errorMsg = data.message || data.error || '알 수 없는 오류가 발생했습니다';
+        console.error('[Server] 오류:', errorMsg);
+        if (typeof showError === 'function') {
+            showError(errorMsg);
+        }
+        if (typeof finishAssistantMessage === 'function') {
+            finishAssistantMessage(errorMsg);
+        }
+    },
+    'aborted': () => {
+        debugLog('[WebSocket] 응답 생성 중단됨');
+        if (typeof finishAssistantMessage === 'function') {
+            finishAssistantMessage('⏹️ 응답 생성이 중단되었습니다.');
+        }
+        if (typeof showToast === 'function') {
+            showToast('응답 생성이 중단되었습니다.', 'info');
+        }
+    },
+    'agents': (data) => {
+        if (data.agents && typeof renderAgentList === 'function') {
+            renderAgentList(data.agents);
+        }
+    },
+    'document_progress': (data) => {
+        debugLog('[WebSocket] 문서 진행 이벤트 수신:', data.stage, data.message, data.progress);
+        if (typeof showDocumentProgress === 'function') {
+            showDocumentProgress(data);
+        } else {
+            debugWarn('[WebSocket] showDocumentProgress 함수를 찾을 수 없음');
+        }
+    },
+    'session_created': (data) => {
+        if (data.sessionId) {
+            debugLog('[WebSocket] 세션 생성됨:', data.sessionId);
+            setState('currentChatId', data.sessionId);
+        }
+    },
+    'stats': (data) => {
+        debugLog('[WebSocket] MCP 통계 수신:', data.stats);
+    },
+    'update': (data) => {
+        if (data.data) {
+            setState('nodes', data.data.nodes);
+            if (typeof updateClusterInfo === 'function') {
+                updateClusterInfo(data.data);
+            }
+        }
+    },
+    'agent_selected': (data) => {
+        debugLog('[WebSocket] 에이전트 선택:', data.agent);
+        if (typeof showAgentBadge === 'function') {
+            showAgentBadge(data.agent);
+        }
+    },
+    'skills_activated': (data) => {
+        debugLog('[WebSocket] 스킬 활성화:', data.skillNames);
+        setState('activeSkillNames', Array.isArray(data.skillNames) ? data.skillNames : []);
+    },
+    'rag_sources': (data) => {
+        debugLog('[WebSocket] RAG 출처 수신:', data.sources);
+        setState('ragSources', Array.isArray(data.sources) ? data.sources : null);
+    },
+    'discussion_progress': (data) => {
+        debugLog('[WebSocket] 토론 진행:', data.progress);
+        if (typeof showDiscussionProgress === 'function') {
+            showDiscussionProgress(data.progress);
+        }
+    },
+    'research_progress': (data) => {
+        debugLog('[WebSocket] 리서치 진행:', data.progress);
+        if (typeof showResearchProgress === 'function') {
+            showResearchProgress(data.progress);
+        }
+    }
+};
+
+/**
  * WebSocket 수신 메시지 핸들러
  * 메시지 타입에 따라 적절한 처리 함수를 호출합니다.
- * 지원 타입: init, stats, update, cluster_event, token, done, error, aborted, agents,
- *            agent_selected, discussion_progress, research_progress,
- *            document_progress, session_created
  * @param {Object} data - 파싱된 수신 메시지 객체
- * @param {string} data.type - 메시지 타입 식별자
- * @returns {void}
  */
 function handleMessage(data) {
-    switch (data.type) {
-        case 'init':
-            if (data.nodes) {
-                setState('nodes', data.nodes);
-                if (typeof updateClusterInfo === 'function') {
-                    updateClusterInfo(data);
-                }
-            }
-            break;
-
-        case 'cluster_event':
-            if (typeof handleClusterEvent === 'function') {
-                handleClusterEvent(data.event);
-            }
-            break;
-
-        case 'token':
-            if (typeof appendToken === 'function') {
-                appendToken(data.token);
-            }
-            break;
-
-        case 'done':
-            if (typeof finishAssistantMessage === 'function') {
-                finishAssistantMessage(null, data.messageId || null);
-            }
-            break;
-
-        case 'token_warning':
-            // 토큰 만료 임박 경고 — 자동 갱신 시도 (진행 중인 AI 응답에 영향 없음)
-            debugWarn('[WebSocket] 토큰 만료 임박, 자동 갱신 시도...');
-            if (typeof window.trySilentRefresh === 'function') {
-                window.trySilentRefresh().then(function(refreshed) {
-                    if (refreshed) {
-                        var newToken = getState('auth.authToken');
-                        if (newToken) {
-                            sendWsMessage({ type: 'refresh', authToken: newToken });
-                            debugLog('[WebSocket] 토큰 자동 갱신 성공, WebSocket 세션 갱신 완료');
-                        }
-                    } else {
-                        debugWarn('[WebSocket] 토큰 자동 갱신 실패 — 곧 재로그인이 필요합니다');
-                        if (typeof showToast === 'function') {
-                            showToast('인증이 곧 만료됩니다. 페이지를 새로고침하거나 다시 로그인하세요.', 'warning');
-                        }
-                    }
-                });
-            }
-            break;
-
-        case 'error': {
-            // 백엔드는 대부분 data.message로 에러를 전송하고, 레이트 리밋만 data.error 사용
-            var errorMsg = data.message || data.error || '알 수 없는 오류가 발생했습니다';
-            console.error('[Server] 오류:', errorMsg);
-            if (typeof showError === 'function') {
-                showError(errorMsg);
-            }
-            // 진행 중인 AI 응답이 있으면 에러 메시지로 종료 (UI 고착 방지)
-            if (typeof finishAssistantMessage === 'function') {
-                finishAssistantMessage(errorMsg);
-            }
-            break;
-        }
-
-        case 'aborted':
-            debugLog('[WebSocket] 응답 생성 중단됨');
-            if (typeof finishAssistantMessage === 'function') {
-                finishAssistantMessage('⏹️ 응답 생성이 중단되었습니다.');
-            }
-            if (typeof showToast === 'function') {
-                showToast('응답 생성이 중단되었습니다.', 'info');
-            }
-            break;
-
-        case 'agents':
-            if (data.agents && typeof renderAgentList === 'function') {
-                renderAgentList(data.agents);
-            }
-            break;
-
-        case 'document_progress':
-            debugLog('[WebSocket] 문서 진행 이벤트 수신:', data.stage, data.message, data.progress);
-            if (typeof showDocumentProgress === 'function') {
-                showDocumentProgress(data);
-            } else {
-                debugWarn('[WebSocket] showDocumentProgress 함수를 찾을 수 없음');
-            }
-            break;
-
-        case 'session_created':
-            if (data.sessionId) {
-                debugLog('[WebSocket] 세션 생성됨:', data.sessionId);
-                setState('currentChatId', data.sessionId);
-            }
-            break;
-
-        case 'stats':
-            debugLog('[WebSocket] MCP 통계 수신:', data.stats);
-            break;
-
-        case 'update':
-            if (data.data) {
-                setState('nodes', data.data.nodes);
-                if (typeof updateClusterInfo === 'function') {
-                    updateClusterInfo(data.data);
-                }
-            }
-            break;
-
-
-        case 'agent_selected':
-            debugLog('[WebSocket] 에이전트 선택:', data.agent);
-            if (typeof showAgentBadge === 'function') {
-                showAgentBadge(data.agent);
-            }
-            break;
-
-        case 'skills_activated':
-            debugLog('[WebSocket] 스킬 활성화:', data.skillNames);
-            setState('activeSkillNames', Array.isArray(data.skillNames) ? data.skillNames : []);
-            break;
-
-        case 'rag_sources':
-            debugLog('[WebSocket] RAG 출처 수신:', data.sources);
-            setState('ragSources', Array.isArray(data.sources) ? data.sources : null);
-            break;
-
-        case 'discussion_progress':
-            debugLog('[WebSocket] 토론 진행:', data.progress);
-            if (typeof showDiscussionProgress === 'function') {
-                showDiscussionProgress(data.progress);
-            }
-            break;
-
-        case 'research_progress':
-            debugLog('[WebSocket] 리서치 진행:', data.progress);
-            if (typeof showResearchProgress === 'function') {
-                showResearchProgress(data.progress);
-            }
-            break;
-
-        default:
-            debugLog('[WebSocket] 알 수 없는 메시지 타입:', data.type);
+    const handler = messageHandlers[data.type];
+    if (handler) {
+        handler(data);
+    } else {
+        debugLog('[WebSocket] 알 수 없는 메시지 타입:', data.type);
     }
 }
+
+
 
 /**
  * 연결 상태 UI 업데이트
