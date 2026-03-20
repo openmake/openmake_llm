@@ -181,6 +181,7 @@ export class MemoryRepository extends BaseRepository {
     /**
      * 중요도 시간 감쇠: 30일 이상 미접근 메모리의 importance를 5% 감쇠
      * importance가 0.1 이하로 내려가지 않도록 제한
+     * 대규모 업데이트 시 락 경쟁을 방지하기 위해 1000건 단위로 제한하여 실행
      * @returns 갱신된 행 수
      */
     async decayImportance(): Promise<number> {
@@ -188,8 +189,12 @@ export class MemoryRepository extends BaseRepository {
             `UPDATE user_memories
              SET importance = GREATEST(0.1, importance * 0.95),
                  updated_at = NOW()
-             WHERE last_accessed < NOW() - INTERVAL '30 days'
-               AND importance > 0.1`
+             WHERE id IN (
+                 SELECT id FROM user_memories
+                 WHERE last_accessed < NOW() - INTERVAL '30 days'
+                   AND importance > 0.1
+                 LIMIT 1000
+             )`
         );
         return result.rowCount ?? 0;
     }
