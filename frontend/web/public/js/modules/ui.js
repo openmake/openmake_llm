@@ -257,7 +257,7 @@ function escapeHtml(str) {
  * @param {string} text - 마크다운 원본 텍스트
  * @returns {void}
  */
-function renderMarkdown(element, text) {
+async function renderMarkdown(element, text) {
     if (typeof marked !== 'undefined') {
         try {
             marked.setOptions({
