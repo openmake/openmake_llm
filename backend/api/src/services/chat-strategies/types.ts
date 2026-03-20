@@ -31,7 +31,7 @@ import type { ChatMessageRequest } from '../ChatService';
  */
 export interface ChatContext {
     /** 스트리밍 토큰 콜백 (SSE를 통해 클라이언트에 실시간 전송) */
-    onToken: (token: string) => void;
+    onToken: (token: string, thinking?: string) => void;
     /** 요청 중단 시그널 (클라이언트 연결 종료 시 활성화) */
     abortSignal?: AbortSignal;
     /** 중단 상태를 확인하고 'ABORTED' 에러를 throw하는 헬퍼 함수 */

@@ -49,7 +49,6 @@ import { getConfig } from '../config/env';
 import { createRoutingLogEntry, logRoutingDecision, type RoutingDecisionLog } from '../chat/routing-logger';
 import { applyDomainEngineOverride } from '../chat/domain-router';
 import type { ChatMessageRequest } from './chat-service-types';
-import { getRAGService } from './RAGService';
 import type { QueryType } from '../chat/model-selector-types';
 
 // Re-export all types so consumers importing from ChatService don't break
@@ -215,6 +214,8 @@ export class ChatService {
      * @param onDiscussionProgress - 토론 진행 상황 콜백
      * @param onResearchProgress - 연구 진행 상황 콜백
      * @param executionPlan - Brand Model 실행 계획 (PipelineProfile 기반)
+     * @param onSkillsActivated - 에이전트에 주입된 스킬 목록 콜백
+     * @param onThinking - Thinking 토큰 콜백 (추론 과정 실시간 전달)
      * @returns AI가 생성한 전체 응답 문자열
      * @throws {Error} abortSignal에 의해 요청이 중단된 경우 'ABORTED' 에러
      */
@@ -227,7 +228,7 @@ export class ChatService {
         onResearchProgress?: (progress: ResearchProgress) => void,
         executionPlan?: ExecutionPlan,
         onSkillsActivated?: (skillNames: string[]) => void,
-        onRAGSources?: (sources: Array<{ source: string; relevanceScore: number; snippet: string }>) => void
+        onThinking?: (thinking: string) => void,
     ): Promise<string> {
         const {
             message,
@@ -243,7 +244,6 @@ export class ChatService {
             userRole,
             userTier,
             enabledTools,
-            ragEnabled,
             abortSignal,
             userLanguagePreference,
         } = req;
@@ -257,7 +257,7 @@ export class ChatService {
 
         this.setUserContext(userId || 'guest', userRole, userTier);
         // API Key 요청에서 enabledTools 미전달 시 내장 MCP 도구 비활성화
-        // 외부 서비스(openmake/rag 등)는 자체 도구 체계를 사용하므로 내장 도구 간섭 방지
+        // 외부 서비스(openmake 등)는 자체 도구 체계를 사용하므로 내장 도구 간섭 방지
         this.currentEnabledTools = req.apiKeyId && !enabledTools ? {} : enabledTools;
         this.currentExecutionPlan = executionPlan;
 
@@ -305,14 +305,18 @@ export class ChatService {
 
         let fullResponse = '';
 
-        const streamToken = (token: string) => {
+        const streamToken = (token: string, thinking?: string) => {
+            if (thinking && onThinking) {
+                onThinking(thinking);
+                return;
+            }
             fullResponse += token;
             onToken(token);
         };
 
         // ── Step 2: 에이전트 라우팅 ──
         // API Key 요청: 에이전트 라우팅 스킵 → general 에이전트 사용
-        // 외부 서비스(openmake/rag 등)는 자체 라우팅/프롬프트를 사용하므로 이중 라우팅 방지
+        // 외부 서비스(openmake 등)는 자체 라우팅/프롬프트를 사용하므로 이중 라우팅 방지
         let agentSelection: AgentSelection;
         let agentSystemMessage: string;
         let selectedAgent: (typeof AGENTS)[string];
@@ -335,10 +339,10 @@ export class ChatService {
             ));
         }
 
-        // ── Step 3: 컨텍스트 구성 (문서 + RAG + 웹검색) ──
+        // ── Step 3: 컨텍스트 구성 (문서 + 웹검색) ──
         const { finalEnhancedMessage, documentImages } = await this.buildContextForLLM(
-            message || '', docId, uploadedDocuments, ragEnabled, userId,
-            webSearchContext, thinkingMode, onRAGSources, req.apiKeyId,
+            message || '', docId, uploadedDocuments, userId,
+            webSearchContext, thinkingMode, req.apiKeyId,
         );
 
         // ── Step 4: 모델 선택 ──
@@ -432,11 +436,11 @@ export class ChatService {
         }
 
         // ── Step 7: 장기 메모리 자동 추출 (fire-and-forget, 응답 지연 없음) ──
-        // API Key 요청: 외부 서비스(openmake/rag 등)의 메시지에 이미 RAG 문서가 포함되어 있을 수 있으므로
+        // API Key 요청: 외부 서비스의 메시지에 이미 문서가 포함되어 있을 수 있으므로
         // 메모리 추출을 완전히 스킵하여 외부 문서 내용이 내부 메모리로 오염되는 것을 방지
-        // RAG/웹검색 컨텍스트가 주입된 답변은 메모리 추출을 스킵하여 오염 방지
+        // 웹검색 컨텍스트가 주입된 답변은 메모리 추출을 스킵하여 오염 방지
         if (userId && message && !req.apiKeyId) {
-            const hasExternalContext = !!(ragEnabled || webSearchContext || docId);
+            const hasExternalContext = !!(webSearchContext || docId);
             this.extractMemoriesAsync(userId, message, fullResponse, hasExternalContext).catch((e: Error) => {
                 const reason = e?.message?.includes('timeout') ? 'timeout' : 'unknown';
                 logger.warn('메모리 추출 fire-and-forget 실패:', e?.message);
@@ -534,27 +538,23 @@ export class ChatService {
     }
 
     /**
-     * 문서, RAG, 웹검색 컨텍스트를 통합하여 최종 사용자 메시지를 구성합니다.
+     * 문서, 웹검색 컨텍스트를 통합하여 최종 사용자 메시지를 구성합니다.
      *
      * @param message - 사용자 원본 메시지
      * @param docId - 첨부 문서 ID
      * @param uploadedDocuments - 업로드된 문서 저장소
-     * @param ragEnabled - RAG 활성화 여부
      * @param userId - 사용자 ID
      * @param webSearchContext - 웹검색 컨텍스트
      * @param thinkingMode - Sequential Thinking 모드 활성화 여부
-     * @param onRAGSources - RAG 출처 정보 콜백
      * @returns 최종 강화된 메시지와 문서 이미지 배열
      */
     private async buildContextForLLM(
         message: string,
         docId: string | undefined,
         uploadedDocuments: DocumentStore,
-        ragEnabled: boolean | undefined,
         userId: string | undefined,
         webSearchContext: string | undefined,
         thinkingMode: boolean | undefined,
-        onRAGSources?: (sources: Array<{ source: string; relevanceScore: number; snippet: string }>) => void,
         apiKeyId?: string,
     ): Promise<{ finalEnhancedMessage: string; documentImages: string[] }> {
         // 문서 컨텍스트 구성: 업로드된 문서의 텍스트와 이미지를 추출
@@ -586,44 +586,6 @@ export class ChatService {
             }
         }
 
-        // ── RAG 컨텍스트 검색 및 주입 ──
-        // docId가 있을 때만 RAG 검색을 수행: 문서 첨부 없이 RAG가 켜져 있으면
-        // 모든 문서 청크가 검색 대상이 되어 무관한 문서 내용이 답변에 혼입되는 것을 방지
-        let ragContextStr = '';
-        if (ragEnabled && docId) {
-            try {
-                const ragService = getRAGService();
-                const ragContext = await ragService.getRAGContextForChat(
-                    message,
-                    userId,
-                    docId,
-                );
-                if (ragContext && ragContext.documents.length > 0) {
-                    ragContextStr = '## \uD83D\uDD0D RAG CONTEXT (Retrieved Documents)\n';
-                    for (const doc of ragContext.documents) {
-                        ragContextStr += `### Source: ${doc.source} (relevance: ${doc.relevanceScore.toFixed(2)})\n`;
-                        ragContextStr += `${doc.content}\n\n`;
-                    }
-                    ragContextStr += '---\n\n';
-                    logger.info(`RAG 컨텍스트 주입: ${ragContext.documents.length}개 문서, 쿼리="${ragContext.searchQuery.substring(0, 50)}..."`);
-
-                    // RAG 출처 정보를 프론트엔드에 전달
-                    if (onRAGSources) {
-                        const snippetMaxLen = 200;
-                        onRAGSources(ragContext.documents.map(doc => ({
-                            source: doc.source,
-                            relevanceScore: doc.relevanceScore,
-                            snippet: doc.content.length > snippetMaxLen
-                                ? doc.content.substring(0, snippetMaxLen) + '...'
-                                : doc.content,
-                        })));
-                    }
-                }
-            } catch (ragError) {
-                logger.warn('RAG 컨텍스트 검색 실패 (무시하고 계속):', ragError);
-            }
-        }
-
         // ── Memory 컨텍스트 주입: 사용자별 기억된 정보를 응답에 반영 ──
         // API Key 요청: 외부 서비스의 메모리와 내부 메모리가 교차 오염되지 않도록 스킵
         // 짧은 인사/단순 메시지에는 메모리 주입을 스킵하여 불필요한 컨텍스트 오염 방지
@@ -647,7 +609,6 @@ export class ChatService {
 
         let finalEnhancedMessage = '';
         if (documentContext) finalEnhancedMessage += documentContext;
-        if (ragContextStr) finalEnhancedMessage += ragContextStr;
         if (memoryContextStr) finalEnhancedMessage += memoryContextStr;
         if (webSearchContext) finalEnhancedMessage += webSearchContext;
         finalEnhancedMessage += `\n## USER QUESTION\n${enhancedUserMessage}`;
@@ -751,7 +712,7 @@ export class ChatService {
         thinkingMode: boolean | undefined;
         thinkingLevel: 'low' | 'medium' | 'high' | undefined;
         languagePolicy: LanguagePolicyDecision | undefined;
-        streamToken: (token: string) => void;
+        streamToken: (token: string, thinking?: string) => void;
         abortSignal?: AbortSignal;
         checkAborted: () => void;
     }): Promise<void> {
@@ -948,10 +909,9 @@ export class ChatService {
         hasExternalContext: boolean = false,
     ): Promise<void> {
         try {
-            // 외부 컨텍스트(RAG/웹검색)가 주입된 답변은 메모리 추출 대상에서 제외
-            // RAG 문서 내용이 사용자 정보로 잘못 추출되는 악순환 방지
+            // 외부 컨텍스트(웹검색 등)가 주입된 답변은 메모리 추출 대상에서 제외
             if (hasExternalContext) {
-                logger.debug('외부 컨텍스트(RAG/웹검색) 포함 답변 — 메모리 추출 스킵');
+                logger.debug('외부 컨텍스트(웹검색) 포함 답변 — 메모리 추출 스킵');
                 return;
             }
 

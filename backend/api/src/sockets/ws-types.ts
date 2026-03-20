@@ -26,8 +26,6 @@ export interface WSMessage {
     thinkingMode?: boolean;
     thinkingLevel?: string;
     enabledTools?: Record<string, boolean>;
-    /** 사용자가 RAG (문서 기반 응답)를 활성화했는지 여부 */
-    ragEnabled?: boolean;
     /** 첨부 파일 목록 */
     files?: Array<{ id: string; name: string; type: string }>;
     userRole?: string;

@@ -8,7 +8,7 @@
 #   - 진행률 / 현재 작업 / 로그 파일 / 실패 요약 / 선택 옵션 제공
 #
 # 해결 대상으로 포함한 실제 이슈:
-#   1. PostgreSQL / Ollama / pgvector 미설치
+#   1. PostgreSQL / Ollama 미설치
 #   2. PostgreSQL / Ollama 서비스 미기동
 #   3. .env 누락 또는 핵심 변수 부재
 #   4. DB 사용자 / DB / extension 미생성
@@ -258,7 +258,6 @@ if ((SKIP_BREW)); then
 else
   ensure_brew_formula postgresql@17
   ensure_brew_formula ollama
-  ensure_brew_formula pgvector
 fi
 ok "필수 패키지 설치 확인 완료"
 mark_done "Homebrew 패키지 설치"
@@ -310,7 +309,7 @@ mark_done ".env 준비 및 보정"
 
 step "DB 사용자 / DB / 확장 준비"
 if ((DRY_RUN)); then
-  echo "[dry-run] role/database 생성 및 vector/pg_trgm extension 적용"
+  echo "[dry-run] role/database 생성 및 pg_trgm extension 적용"
 else
   /opt/homebrew/opt/postgresql@17/bin/psql postgres <<SQL
 DO $$
@@ -324,7 +323,6 @@ END
 $$;
 SQL
   createdb -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" "$DB_NAME" 2>/dev/null || true
-  psql "$DATABASE_URL_VALUE" -c 'CREATE EXTENSION IF NOT EXISTS vector;' >/dev/null
   psql "$DATABASE_URL_VALUE" -c 'CREATE EXTENSION IF NOT EXISTS pg_trgm;' >/dev/null || true
 fi
 ok "DB / 확장 준비 완료"

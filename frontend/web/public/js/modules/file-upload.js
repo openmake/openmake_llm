@@ -305,7 +305,7 @@ async function deleteDocument(docId) {
         const data = await res.json();
         const payload = data.data || data;
         if (payload.deleted) {
-            console.log(`[Upload] 문서 삭제 완료: ${docId} (임베딩 ${payload.embeddingsDeleted || 0}개)`);
+            console.log(`[Upload] 문서 삭제 완료: ${docId}`);
             return true;
         }
         return false;

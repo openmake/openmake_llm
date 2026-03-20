@@ -223,10 +223,6 @@ const messageHandlers = {
         debugLog('[WebSocket] 스킬 활성화:', data.skillNames);
         setState('activeSkillNames', Array.isArray(data.skillNames) ? data.skillNames : []);
     },
-    'rag_sources': (data) => {
-        debugLog('[WebSocket] RAG 출처 수신:', data.sources);
-        setState('ragSources', Array.isArray(data.sources) ? data.sources : null);
-    },
     'discussion_progress': (data) => {
         debugLog('[WebSocket] 토론 진행:', data.progress);
         if (typeof showDiscussionProgress === 'function') {
@@ -237,6 +233,11 @@ const messageHandlers = {
         debugLog('[WebSocket] 리서치 진행:', data.progress);
         if (typeof showResearchProgress === 'function') {
             showResearchProgress(data.progress);
+        }
+    },
+    'thinking': (data) => {
+        if (typeof appendThinkingToken === 'function') {
+            appendThinkingToken(data.token);
         }
     }
 };

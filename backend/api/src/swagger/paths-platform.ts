@@ -323,34 +323,6 @@ export const platformPaths = {
             }
         }
     },
-    '/api/rag/search': {
-        post: {
-            tags: ['Knowledge Base'],
-            summary: 'Hybrid RAG search',
-            description: 'Run RAG search against embedded document chunks.',
-            requestBody: {
-                required: true,
-                content: {
-                    'application/json': {
-                        schema: {
-                            type: 'object',
-                            required: ['query'],
-                            properties: {
-                                query: { type: 'string' },
-                                docId: { type: 'string' },
-                                topK: { type: 'integer' },
-                                threshold: { type: 'number' }
-                            }
-                        }
-                    }
-                }
-            },
-            responses: {
-                '200': { description: 'Search results' },
-                '400': { description: 'Invalid query' }
-            }
-        }
-    },
     '/api/v1/api-keys': {
         post: {
             tags: ['API Keys'],

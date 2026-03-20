@@ -16,7 +16,6 @@
 import { v4 as uuidv4 } from 'uuid';
 import { getUnifiedDatabase } from '../../data/models/unified-database';
 import { DeepResearchService } from '../DeepResearchService';
-import type { ResearchResult } from '../deep-research-types';
 import type { ChatStrategy, ChatResult, DeepResearchStrategyContext } from './types';
 import { createLogger } from '../../utils/logger';
 import { detectLanguage } from '../../chat/language-policy';
@@ -87,61 +86,6 @@ export class DeepResearchStrategy implements ChatStrategy<DeepResearchStrategyCo
 
         logger.info(`🔬 Deep Research 완료: ${result.duration}ms, ${result.totalSteps} 단계`);
 
-        // RAG 자동 저장 (비동기 — 스트리밍 응답을 차단하지 않음)
-        this.saveToRAG(result, userId, sessionId).catch(err => {
-            logger.warn(`Deep Research → RAG 저장 실패 (무시): ${err instanceof Error ? err.message : String(err)}`);
-        });
-
         return { response: formattedResponse };
-    }
-
-    /**
-     * Deep Research 결과를 RAG 벡터 DB에 자동 저장합니다.
-     *
-     * 보고서 전문(summary + keyFindings + 소스 본문)을 하나의 RAG 문서로 임베딩하여,
-     * 동일/유사 주제 후속 질의 시 RAG 검색으로 즉시 활용할 수 있도록 합니다.
-     */
-    private async saveToRAG(result: ResearchResult, userId?: string, sessionId?: string): Promise<void> {
-        const { RAGService } = await import('../RAGService');
-        const ragService = new RAGService();
-
-        // 보고서 전문 구성: summary + keyFindings + 소스 콘텐츠(있는 경우)
-        const parts: string[] = [
-            `# ${result.topic}`,
-            '',
-            '## Summary',
-            result.summary,
-            '',
-            '## Key Findings',
-            ...result.keyFindings.map((f, i) => `${i + 1}. ${f}`),
-        ];
-
-        // 소스에 fullContent가 있으면 포함 (Firecrawl 스크래핑 결과)
-        const sourcesWithContent = result.sources.filter(
-            s => s.fullContent && s.fullContent.length > 50
-        );
-        if (sourcesWithContent.length > 0) {
-            parts.push('', '## Source Details');
-            for (const src of sourcesWithContent.slice(0, 20)) {
-                parts.push(`### ${src.title || src.url}`);
-                // 소스당 최대 3,000자로 제한하여 전체 문서 크기 관리
-                const content = src.fullContent!;
-                parts.push(content.length > 3000 ? content.substring(0, 3000) + '...' : content);
-                parts.push('');
-            }
-        }
-
-        const docId = `deep-research-${sessionId || uuidv4()}`;
-        const text = parts.join('\n');
-        const filename = `deep-research-${result.topic.substring(0, 50).replace(/[^a-zA-Z0-9가-힣\s]/g, '')}.md`;
-
-        await ragService.embedDocument({
-            docId,
-            text,
-            filename,
-            userId,
-        });
-
-        logger.info(`Deep Research → RAG 저장 완료: ${filename} (${text.length}자, docId=${docId})`);
     }
 }
