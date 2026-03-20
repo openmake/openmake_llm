@@ -13,6 +13,7 @@
 import { Pool } from 'pg';
 import { BaseRepository, QueryParam } from './base-repository';
 import { createLogger } from '../../utils/logger';
+import { withRetry } from '../retry-wrapper';
 
 const logger = createLogger('VectorRepository');
 
@@ -106,26 +107,19 @@ export class VectorRepository extends BaseRepository {
                     JSON.stringify(item.metadata ?? {}),
                 ]);
 
-                const result = await this.query(
-                    `INSERT INTO vector_embeddings (source_type, source_id, chunk_index, content, metadata)
-                     VALUES ${valueClauses}`,
-                    params
+                // ⚙️ P2-7: 배치 INSERT 실패 시 개별 INSERT 폴백 제거 — 재시도만 수행
+                const result = await withRetry(
+                    () => this.query(
+                        `INSERT INTO vector_embeddings (source_type, source_id, chunk_index, content, metadata)
+                         VALUES ${valueClauses}`,
+                        params
+                    ),
+                    { operation: `storeChunksBatch(offset=${i}, size=${batch.length})`, maxRetries: 2 }
                 );
                 storedCount += result.rowCount ?? batch.length;
             } catch (error) {
-                logger.warn(`배치 INSERT 실패 (offset=${i}) — 개별 INSERT fallback:`, error);
-                for (const item of batch) {
-                    try {
-                        await this.query(
-                            `INSERT INTO vector_embeddings (source_type, source_id, chunk_index, content, metadata)
-                             VALUES ($1, $2, $3, $4, $5::jsonb)`,
-                            [item.sourceType, item.sourceId, item.chunkIndex, item.content, JSON.stringify(item.metadata ?? {})]
-                        );
-                        storedCount++;
-                    } catch (innerError) {
-                        logger.error(`청크 저장 실패 (${item.sourceType}/${item.sourceId}, chunk=${item.chunkIndex}):`, innerError);
-                    }
-                }
+                logger.error(`청크 배치 저장 최종 실패 (offset=${i}):`, error);
+                // 개별 폴백 삭제 (성능 저하 방지) — 다음 배치로 진행
             }
         }
 

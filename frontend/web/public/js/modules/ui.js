@@ -307,23 +307,26 @@ function renderMarkdown(element, text) {
                     window._mermaidInitialized = true;
                 }
 
-                element.querySelectorAll('pre code.language-mermaid').forEach(async (block) => {
-                    const pre = block.parentElement;
-                    const container = document.createElement('div');
-                    container.className = 'mermaid-container';
-                    const code = block.textContent;
-                    try {
-                        const id = `mermaid-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-                        const { svg } = await mermaid.render(id, code);
-                        container.innerHTML = svg;
-                    } catch (e) {
-                        console.warn('Mermaid render error:', e);
-                        container.textContent = code;
-                    }
-                    if (pre && pre.parentElement) {
-                        pre.replaceWith(container);
-                    }
-                });
+                const mermaidBlocks = Array.from(element.querySelectorAll('pre code.language-mermaid'));
+                if (mermaidBlocks.length > 0) {
+                    await Promise.all(mermaidBlocks.map(async (block) => {
+                        const pre = block.parentElement;
+                        const container = document.createElement('div');
+                        container.className = 'mermaid-container';
+                        const code = block.textContent;
+                        try {
+                            const id = `mermaid-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+                            const { svg } = await mermaid.render(id, code);
+                            container.innerHTML = svg;
+                        } catch (e) {
+                            console.warn('Mermaid render error:', e);
+                            container.textContent = code;
+                        }
+                        if (pre && pre.parentElement) {
+                            pre.replaceWith(container);
+                        }
+                    }));
+                }
             }
         } catch (e) {
             console.error('Markdown parse error:', e);

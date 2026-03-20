@@ -113,6 +113,7 @@ async function sendMessage() {
     // AI 응답 메시지 생성
     const assistantDiv = addChatMessage('assistant', '');
     setState('currentAssistantMessage', assistantDiv);
+    setState('currentAssistantMessageContent', assistantDiv.querySelector('.message-content'));
     setState('messageStartTime', Date.now());
     setState('isGenerating', true);
 
@@ -261,10 +262,7 @@ function addChatMessage(role, content) {
  * @returns {void}
  */
 function appendToken(token) {
-    const currentMsg = getState('currentAssistantMessage');
-    if (!currentMsg) return;
-
-    const content = currentMsg.querySelector('.message-content');
+    const content = getState('currentAssistantMessageContent');
     if (!content) return;
 
     // 로딩 스피너 제거
