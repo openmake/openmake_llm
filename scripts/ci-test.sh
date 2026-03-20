@@ -108,7 +108,7 @@ trap print_summary EXIT
 export JWT_SECRET="ci-test-secret-for-testing-only"
 export NODE_ENV="test"
 
-run_step "Jest Test (backend/api)" bash -c "cd '$PROJECT_ROOT' && npx jest --testPathIgnorePatterns='agent-loop.test.ts' --forceExit --timeout 15000 2>&1"
+run_step "Jest Test (backend/api)" bash -c "cd '$PROJECT_ROOT' && npx jest --testPathIgnorePatterns='agent-loop.test.ts' --forceExit --testTimeout=15000 2>&1"
 
 # ─── Step 2: Build ───
 run_step "TypeScript Build" bash -c "cd '$PROJECT_ROOT' && npm run build"
