@@ -93,7 +93,7 @@ print_summary() {
         echo ""
         exit 1
     else
-        echo -e "   ${GREEN}✅ 모든 게이트 통과 (${PASSED}/4)${NC}"
+        echo -e "   ${GREEN}✅ 모든 게이트 통과 (${PASSED}/5)${NC}"
         echo ""
         exit 0
     fi
@@ -109,6 +109,10 @@ export JWT_SECRET="ci-test-secret-for-testing-only"
 export NODE_ENV="test"
 
 run_step "Jest Test (backend/api)" bash -c "cd '$PROJECT_ROOT' && npx jest --testPathIgnorePatterns='agent-loop.test.ts' --forceExit --testTimeout=15000 2>&1"
+
+# ─── Step 1.5: Coverage Gate (P2-1) ───
+# --passWithNoTests 없이 실행하여 임계값 미달 시 실패
+run_step "Coverage Gate (branches≥20 functions≥25 lines≥25)" bash -c "cd '$PROJECT_ROOT' && npx jest --testPathIgnorePatterns='agent-loop.test.ts' --coverage --forceExit --testTimeout=15000 --silent 2>&1 | tail -30"
 
 # ─── Step 2: Build ───
 run_step "TypeScript Build" bash -c "cd '$PROJECT_ROOT' && npm run build"
