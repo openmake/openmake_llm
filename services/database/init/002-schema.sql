@@ -286,6 +286,7 @@ CREATE INDEX IF NOT EXISTS idx_feedback_created ON message_feedback(created_at);
 
 -- Core indexes
 CREATE INDEX IF NOT EXISTS idx_messages_session ON conversation_messages(session_id);
+CREATE INDEX IF NOT EXISTS idx_messages_agent ON conversation_messages(agent_id);
 CREATE INDEX IF NOT EXISTS idx_messages_created ON conversation_messages(created_at);
 CREATE INDEX IF NOT EXISTS idx_usage_date ON api_usage(date);
 CREATE INDEX IF NOT EXISTS idx_agent_logs_agent ON agent_usage_logs(agent_id);
