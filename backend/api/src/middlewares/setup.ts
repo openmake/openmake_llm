@@ -249,8 +249,7 @@ export function setupStaticFiles(app: Application, dirname: string): void {
             `object-src 'none'`,
             `frame-ancestors 'none'`,
             `base-uri 'self'`,
-            `form-action 'self'`,
-            `upgrade-insecure-requests`
+            `form-action 'self'`
         ].join('; ');
     };
 
