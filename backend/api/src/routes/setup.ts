@@ -47,6 +47,7 @@ import { ClusterManager } from '../cluster/manager';
 import { bootstrapServices } from '../bootstrap';
 import { getConfig } from '../config';
 import { success } from '../utils/api-response';
+import { getPool } from '../data/models/unified-database';
 
 
 
@@ -70,10 +71,36 @@ export function setupApiRoutes(
         res.type('text/plain').send('User-agent: *\nDisallow: /api/\n');
     });
 
-    // /api/health — 전용 헬스체크 엔드포인트 (로그 노이즈 방지)
-    // NOTE: Intentionally returns lightweight raw JSON for external health probes.
-    app.get('/api/health', (_req: Request, res: Response) => {
-        res.json({ status: 'ok', timestamp: new Date().toISOString(), uptime: process.uptime() });
+    // /api/health — 전용 헬스체크 엔드포인트 (상세 상태 반환)
+    app.get('/api/health', async (_req: Request, res: Response) => {
+        const dbPool = getPool();
+        const memory = process.memoryUsage();
+        const clusterStats = cluster.getStats();
+
+        res.json({
+            status: 'ok',
+            timestamp: new Date().toISOString(),
+            uptime: process.uptime(),
+            services: {
+                database: {
+                    status: dbPool ? 'connected' : 'disconnected',
+                    total: dbPool?.totalCount || 0,
+                    idle: dbPool?.idleCount || 0,
+                    waiting: dbPool?.waitingCount || 0
+                },
+                ollama: {
+                    status: clusterStats.onlineNodes > 0 ? 'online' : 'offline',
+                    totalNodes: clusterStats.totalNodes,
+                    onlineNodes: clusterStats.onlineNodes,
+                    models: clusterStats.uniqueModels.length
+                },
+                memory: {
+                    heapUsedMB: Math.round(memory.heapUsed / 1024 / 1024),
+                    heapTotalMB: Math.round(memory.heapTotal / 1024 / 1024),
+                    rssMB: Math.round(memory.rss / 1024 / 1024)
+                }
+            }
+        });
     });
 
     // /api/status — 미니 헬스체크 (모니터링 호환)
