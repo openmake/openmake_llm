@@ -2,7 +2,7 @@
 .fab-container {
     display: none;
     position: fixed;
-    bottom: 24px;
+    bottom: calc(100px + env(safe-area-inset-bottom));
     right: 16px;
     z-index: 1000;
 }

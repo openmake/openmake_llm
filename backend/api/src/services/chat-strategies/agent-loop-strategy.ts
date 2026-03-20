@@ -169,8 +169,8 @@ export class AgentLoopStrategy implements ChatStrategy<AgentLoopStrategyContext,
         // 내장 도구 직접 처리: web_search
         if (toolName === 'web_search') {
             try {
-                const query = toolArgs.query as string;
-                const maxResults = (toolArgs.max_results as number) || 5;
+                const query = typeof toolArgs.query === 'string' ? toolArgs.query : '';
+                const maxResults = typeof toolArgs.max_results === 'number' ? toolArgs.max_results : 5;
                 const response = await context.client.webSearch(query, maxResults);
 
                 if (response.results && response.results.length > 0) {
