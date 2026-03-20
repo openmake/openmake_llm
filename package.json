@@ -25,7 +25,6 @@
         "check:schema-drift": "bash scripts/check-schema-drift.sh",
         "ci": "bash scripts/ci-test.sh",
         "hooks:install": "bash scripts/install-hooks.sh",
-        "test:bun": "cd backend/api && bun test --timeout 15000",
         "migrate": "npx ts-node scripts/run-migrations.ts"
     },
     "keywords": [

@@ -37,6 +37,7 @@ coverage/
 .agent/
 .spawner/
 .claude/
+.superpowers/
 .cursorrules
 .ruff_cache/
 
@@ -79,6 +80,16 @@ openmake_prd.md
 scripts/*.js
 scripts/*.map
 scripts/*.d.ts
+
+# Tool-generated plans/specs
+docs/superpowers/
+
+# Playwright MCP logs
+.playwright-mcp/
+
+# Bun
+bun.lock
+bunfig.toml
 
 # Tests & Dev Configs
 **/__tests__/
