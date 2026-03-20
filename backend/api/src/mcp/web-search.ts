@@ -156,7 +156,7 @@ async function searchOllamaWebSearch(query: string, maxResults: number = 10): Pr
             logger.info(`Ollama API: ${results.length}개`);
         }
     } catch (e) {
-        logger.error('Ollama API 실패:', e);
+        logger.error('Ollama API 실패:', e instanceof Error ? e.message : String(e));
     }
 
     return results;
@@ -223,7 +223,7 @@ async function searchFirecrawl(query: string, maxResults: number = 5, language: 
         }
         logger.info(`🔥 Firecrawl: ${results.length}개`);
     } catch (e) {
-        logger.error('Firecrawl 실패:', e);
+        logger.error('Firecrawl 실패:', e instanceof Error ? e.message : String(e));
     }
 
     return results;
@@ -277,7 +277,7 @@ async function searchGoogle(query: string, maxResults: number = 10, globalSearch
         }
         logger.info(`Google: ${results.length}개`);
     } catch (e) {
-        logger.error('Google 실패:', e);
+        logger.error('Google 실패:', e instanceof Error ? e.message : String(e));
     }
 
     return results;
@@ -322,7 +322,7 @@ async function searchWikipedia(query: string, language: string = 'en'): Promise<
 
         logger.info(`Wikipedia: ${results.length}개`);
     } catch (e) {
-        logger.error('Wikipedia 실패:', e);
+        logger.error('Wikipedia 실패:', e instanceof Error ? e.message : String(e));
     }
 
     return results;
@@ -393,7 +393,7 @@ async function searchGoogleNews(query: string, language: string = 'en'): Promise
 
         logger.info(`Google News: ${results.length}개`);
     } catch (e) {
-        logger.error('Google News 실패:', e);
+        logger.error('Google News 실패:', e instanceof Error ? e.message : String(e));
     }
 
     return results;
@@ -452,7 +452,7 @@ async function searchDuckDuckGoAPI(query: string): Promise<SearchResult[]> {
 
         logger.info(`DuckDuckGo API: ${results.length}개`);
     } catch (e) {
-        logger.error('DuckDuckGo API 실패:', e);
+        logger.error('DuckDuckGo API 실패:', e instanceof Error ? e.message : String(e));
     }
 
     return results;
@@ -512,7 +512,7 @@ async function searchNaverNews(query: string): Promise<SearchResult[]> {
 
         logger.info(`네이버 뉴스: ${results.length}개`);
     } catch (e) {
-        logger.error('네이버 뉴스 실패:', e);
+        logger.error('네이버 뉴스 실패:', e instanceof Error ? e.message : String(e));
     }
 
     return results;
