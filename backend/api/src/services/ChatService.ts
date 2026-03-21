@@ -367,7 +367,7 @@ export class ChatService {
                     undefined,
                     userId
                 ))
-                .catch(() => { /* shadow 실패는 무시 */ });
+                .catch((err: unknown) => { logger.debug('UIR shadow 실패 (무시):', err); });
         }
 
         // ── 라우팅 결정 로그 갱신 ──

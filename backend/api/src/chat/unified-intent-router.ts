@@ -410,8 +410,8 @@ async function logShadowComparison(
             `agentId=${agentIdMatch ? '일치' : '불일치'}, ` +
             `brandProfile=${brandProfileMatch ? '일치' : '불일치'}`
         );
-    } catch {
-        // DB 저장 실패는 조용히 처리 — 메인 플로우에 영향 없음
+    } catch (err) {
+        logger.warn('UIR shadow log DB 저장 실패 (메인 플로우 영향 없음):', err);
     }
 }
 
@@ -446,22 +446,10 @@ export async function runUIR(
     }
 
     if (!useUIR && UIR_SHADOW_ENABLED) {
-        // Shadow 모드: UIR 실행하되 결과는 로그만 저장, null 반환
-        const uirResult = await callUIRLLM(message, options);
-
-        // shadow 비교 로그 (비동기 fire-and-forget)
-        // legacy 결과는 호출자가 제공하지 않으므로 빈 값으로 기록
-        const legacyPlaceholder = { queryType: 'unknown', agentId: 'unknown', brandProfile: 'unknown' };
-        logShadowComparison(
-            message,
-            uirResult,
-            legacyPlaceholder,
-            options?.sessionId,
-            options?.userId
-        ).catch(() => {
-            // 로그 저장 실패 무시
-        });
-
+        // Shadow 모드: UIR LLM만 실행하고 null 반환 (비교 로그는 호출자가 recordShadowComparison으로 저장)
+        // ChatService가 legacy 결과를 알게 된 후에 recordShadowComparison()을 호출하므로
+        // 여기서 legacyPlaceholder로 저장하면 항상 불일치가 되어 의미없는 데이터가 쌓임.
+        // computeUIRResult() + recordShadowComparison() 패턴을 사용할 것.
         return null;
     }
 
