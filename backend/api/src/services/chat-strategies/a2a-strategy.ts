@@ -20,6 +20,7 @@ import { getConfig } from '../../config/env';
 import { logA2AModelSelection } from '../../chat/routing-logger';
 import type { QueryType } from '../../chat/model-selector-types';
 import { resolvePromptLocale, type PromptLocaleCode } from '../../chat/language-policy';
+import { LLM_TEMPERATURES } from '../../config/llm-parameters';
 
 const logger = createLogger('A2AStrategy');
 
@@ -376,8 +377,8 @@ export class A2AStrategy implements ChatStrategy<A2AStrategyContext, A2AStrategy
 
         // format 지정 시 temperature: 0 적용 (Ollama 공식 문서 권장)
         const synthesizerOptions = context.format
-            ? { temperature: 0 }
-            : { temperature: 0.3 };
+            ? { temperature: LLM_TEMPERATURES.FORMAT_STRICT }
+            : { temperature: LLM_TEMPERATURES.A2A_RESPONSE };
 
         await synthesizerClient.chat(
             [

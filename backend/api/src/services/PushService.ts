@@ -26,7 +26,7 @@ export class PushService {
              VALUES ($1, $2, $3, $4, $5, $6)
              ON CONFLICT (user_key) DO UPDATE SET endpoint = $2, p256dh = $3, auth_key = $4, user_id = $5`,
             [
-                subscription.endpoint,
+                `${userId}:${subscription.endpoint}`,
                 subscription.endpoint,
                 subscription.keys.p256dh,
                 subscription.keys.auth,
@@ -36,9 +36,9 @@ export class PushService {
         );
     }
 
-    async unsubscribe(_userId: string, endpoint: string): Promise<void> {
+    async unsubscribe(userId: string, endpoint: string): Promise<void> {
         const pool = getPool();
-        await pool.query('DELETE FROM push_subscriptions_store WHERE user_key = $1', [endpoint]);
+        await pool.query('DELETE FROM push_subscriptions_store WHERE user_key = $1', [`${userId}:${endpoint}`]);
     }
 
     async markUsed(endpoint: string): Promise<void> {

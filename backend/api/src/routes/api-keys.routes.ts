@@ -36,6 +36,7 @@ import { success, notFound, badRequest, forbidden, unauthorized, rateLimited } f
 import { getApiKeyService, ApiKeyError } from '../services/ApiKeyService';
 import type { ApiKeyTier } from '../data/models/unified-database';
 import { createLogger } from '../utils/logger';
+import { API_KEY_TIER_LIMITS } from '../config/tier-limits';
 
 const router = Router();
 const logger = createLogger('ApiKeysRoutes');
@@ -116,15 +117,9 @@ router.post('/',
         const service = getApiKeyService();
 
         // 등급별 API 키 발급 수량 제한
-        const API_KEY_LIMITS: Record<string, number> = {
-            free: 2,
-            starter: 5,
-            standard: 10,
-            enterprise: 50
-        };
         const userTier = (req.user && 'tier' in req.user) ? (req.user as { tier: string }).tier : 'free';
         const userRole = req.user?.role || 'user';
-        const keyLimit = userRole === 'admin' ? Infinity : (API_KEY_LIMITS[userTier] || API_KEY_LIMITS['free']);
+        const keyLimit = userRole === 'admin' ? Infinity : (API_KEY_TIER_LIMITS[userTier] || API_KEY_TIER_LIMITS['free']);
 
         if (keyLimit !== Infinity) {
             const existingKeys = await service.listKeys(userId);

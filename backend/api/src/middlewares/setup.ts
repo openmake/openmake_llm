@@ -298,7 +298,7 @@ export function setupStaticFiles(app: Application, dirname: string): void {
         next();
     });
 
-    app.get('/externel.html', (req: Request, res: Response) => {
+    app.get('/external.html', (req: Request, res: Response) => {
         const queryIndex = req.originalUrl.indexOf('?');
         const query = queryIndex >= 0 ? req.originalUrl.slice(queryIndex) : '';
         res.redirect(302, `/external.html${query}`);
@@ -314,7 +314,7 @@ export function setupStaticFiles(app: Application, dirname: string): void {
 
     app.get(/^\/([a-z0-9-]+)\.html$/, (req: Request, res: Response, next: NextFunction) => {
         const filename = req.params[0] ? `${req.params[0]}.html` : '';
-        if (!filename || filename === 'externel.html') {
+        if (!filename || filename === 'external.html') {
             return next();
         }
 

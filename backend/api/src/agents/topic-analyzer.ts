@@ -10,6 +10,7 @@
  */
 
 import topicCategoriesData from '../config/data/topic-categories.json';
+import { CONFIDENCE_DIVISORS } from '../config/llm-parameters';
 
 // ========================================
 // 의도 기반 토픽 분류 시스템
@@ -165,6 +166,6 @@ export function analyzeTopicIntent(message: string): {
     return {
         matchedCategories,
         suggestedAgents: Array.from(suggestedAgentsSet),
-        confidence: Math.min(totalMatches / 3, 1.0)
+        confidence: Math.min(totalMatches / CONFIDENCE_DIVISORS.TOPIC_ANALYZER, 1.0)
     };
 }

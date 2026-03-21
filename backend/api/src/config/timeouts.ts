@@ -132,3 +132,26 @@ export const WEBSOCKET_TIMEOUTS = {
     /** 하트비트 주기 (ms) — 30초 */
     HEARTBEAT_INTERVAL_MS: 30000,
 } as const;
+
+// ============================================
+// WebSocket 연결 제한
+// ============================================
+
+/**
+ * WebSocket 연결 수, 속도 제한, 인증 관련 상수
+ * sockets/handler.ts에서 참조
+ */
+export const WS_LIMITS = {
+    /** 사용자당 최대 동시 WebSocket 연결 수 */
+    MAX_CONNECTIONS_PER_USER: Number(process.env.WS_MAX_CONNECTIONS_PER_USER) || 5,
+    /** 연결 속도 제한 윈도우 (ms) — 기본 60초 */
+    CONNECTION_RATE_WINDOW_MS: Number(process.env.WS_CONNECTION_RATE_WINDOW_MS) || 60 * 1000,
+    /** IP당 윈도우 내 최대 연결 시도 수 */
+    CONNECTION_RATE_MAX_PER_IP: Number(process.env.WS_CONNECTION_RATE_MAX_PER_IP) || 30,
+    /** 사용자당 윈도우 내 최대 연결 시도 수 */
+    CONNECTION_RATE_MAX_PER_USER: Number(process.env.WS_CONNECTION_RATE_MAX_PER_USER) || 15,
+    /** 인증 토큰 만료 경고 윈도우 (ms) — 기본 2분 */
+    AUTH_EXPIRY_WARNING_WINDOW_MS: Number(process.env.WS_AUTH_EXPIRY_WARNING_WINDOW_MS) || 2 * 60 * 1000,
+    /** 토큰 만료 경고 중복 방지 쿨다운 (ms) — 기본 60초 */
+    AUTH_EXPIRY_WARNING_COOLDOWN_MS: Number(process.env.WS_AUTH_EXPIRY_WARNING_COOLDOWN_MS) || 60 * 1000,
+} as const;

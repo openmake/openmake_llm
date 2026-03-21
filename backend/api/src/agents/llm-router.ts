@@ -297,7 +297,7 @@ ${sanitizedMessage}
                     agentId: agentIdStr,
                     confidence: Number(parsed.confidence || parsed.score) || 0.85,
                     reasoning: String(parsed.reasoning || parsed.reason || ''),
-                    alternativeAgents: Array.isArray(parsed.alternatives) ? parsed.alternatives as string[] : []
+                    alternativeAgents: Array.isArray(parsed.alternatives) ? (parsed.alternatives as unknown[]).filter((x): x is string => typeof x === 'string') : []
                 };
             }
 
