@@ -94,9 +94,9 @@ export const UIR_MODEL =
 export const UIR_ROLLOUT_PERCENT =
     Number(process.env.OMK_UIR_ROLLOUT_PERCENT ?? '0');
 
-/** UIR shadow 비교 모드 활성화 (env: OMK_UIR_SHADOW_ENABLED) */
+/** UIR shadow 비교 모드 활성화 (env: OMK_UIR_SHADOW_ENABLED, 기본: false) */
 export const UIR_SHADOW_ENABLED =
-    (process.env.OMK_UIR_SHADOW_ENABLED ?? 'true') === 'true';
+    (process.env.OMK_UIR_SHADOW_ENABLED ?? 'false') === 'true';
 
 /** UIR 타임아웃 (ms) (env: OMK_UIR_TIMEOUT_MS) */
 export const UIR_TIMEOUT_MS =

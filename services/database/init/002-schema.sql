@@ -652,3 +652,57 @@ BEGIN
     END IF;
 END $$;
 
+
+-- ============================================
+-- UIR (Unified Intent Router) 스키마
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS uir_shadow_log (
+    id                    UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    session_id            VARCHAR(255),
+    user_id               VARCHAR(255),
+    query_hash            CHAR(64)    NOT NULL,
+    uir_query_type        VARCHAR(50),
+    uir_agent_id          VARCHAR(100),
+    uir_brand_profile     VARCHAR(50),
+    uir_complexity        NUMERIC(4,3),
+    uir_recommended_tools JSONB       DEFAULT '[]',
+    uir_confidence        NUMERIC(4,3),
+    uir_latency_ms        INTEGER,
+    legacy_query_type     VARCHAR(50),
+    legacy_agent_id       VARCHAR(100),
+    legacy_brand_profile  VARCHAR(50),
+    agent_match           BOOLEAN,
+    query_type_match      BOOLEAN,
+    profile_match         BOOLEAN,
+    created_at            TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_uir_shadow_log_created ON uir_shadow_log (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_uir_shadow_log_session ON uir_shadow_log (session_id) WHERE session_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_uir_shadow_log_user    ON uir_shadow_log (user_id)    WHERE user_id IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS uir_rollout_config (
+    id              SERIAL      PRIMARY KEY,
+    rollout_percent INTEGER     NOT NULL DEFAULT 0
+                    CHECK (rollout_percent BETWEEN 0 AND 100),
+    enabled         BOOLEAN     NOT NULL DEFAULT FALSE,
+    description     TEXT,
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_by      VARCHAR(255)
+);
+
+INSERT INTO uir_rollout_config (rollout_percent, enabled, description, updated_by)
+VALUES (0, FALSE, 'Initial config — shadow mode only, UIR not active', 'system')
+ON CONFLICT DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS uir_perf_stats (
+    stat_date          DATE        NOT NULL,
+    total_requests     INTEGER     NOT NULL DEFAULT 0,
+    shadow_requests    INTEGER     NOT NULL DEFAULT 0,
+    agent_match_count  INTEGER     NOT NULL DEFAULT 0,
+    qtype_match_count  INTEGER     NOT NULL DEFAULT 0,
+    avg_uir_latency_ms NUMERIC(8,2),
+    updated_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (stat_date)
+);
