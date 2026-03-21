@@ -18,6 +18,7 @@ import { AGENTS, industryData, getAgentById } from './agent-data';
 import { analyzeTopicIntent, TOPIC_CATEGORIES } from './topic-analyzer';
 import { createLogger } from '../utils/logger';
 import { getEnhancedKeywords, getKeywordIDF, getSynonyms, getCategoryWeight } from './enhanced-keywords';
+import { CATEGORY_BOOST, EXPANDED_DAMPING } from '../config/routing-config';
 
 const logger = createLogger('AgentRouter');
 
@@ -87,11 +88,9 @@ export async function routeToAgent(message: string): Promise<AgentSelection> {
             }
         }
     }
-    const CATEGORY_BOOST = 3;
 
     // 2단계: 향상된 키워드 매칭 (TF-IDF + 동의어 + 카테고리 가중치)
-    // PRIMARY (에이전트 고유 키워드) = 전체 가중치, EXPANDED (카테고리 어휘) = 0.3x 감쇄
-    const EXPANDED_DAMPING = 0.3;
+    // PRIMARY (에이전트 고유 키워드) = 전체 가중치, EXPANDED (카테고리 어휘) = EXPANDED_DAMPING x 감쇄
 
     for (const [categoryId, category] of Object.entries(industryData)) {
         const categoryWeight = getCategoryWeight(categoryId);

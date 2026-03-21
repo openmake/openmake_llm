@@ -1,0 +1,144 @@
+{
+  "queryPatterns": [
+    {
+      "type": "code",
+      "patterns": [
+        { "source": "```[\\w]*\\n", "flags": "" },
+        { "source": "\\b(function|class|const|let|var|def|import|export|return)\\b", "flags": "i" },
+        { "source": "\\b(error|bug|debug|fix|compile|runtime)\\b", "flags": "i" },
+        { "source": "\\.(js|ts|py|java|cpp|c|go|rs|rb|php|swift|kt)\\b", "flags": "i" },
+        { "source": "\\b(react|vue|angular|node|express|django|flask|spring)\\b", "flags": "i" },
+        { "source": "\\b(useState|useEffect|component|props|state)\\b", "flags": "i" },
+        { "source": "\\b(SELECT|INSERT|UPDATE|DELETE|JOIN|WHERE|FROM)\\b", "flags": "" },
+        { "source": "at\\s+\\w+\\s+\\(.*:\\d+:\\d+\\)", "flags": "" }
+      ],
+      "keywords": [
+        "코드", "코딩", "프로그래밍", "개발", "함수", "클래스", "버그", "에러",
+        "디버그", "컴파일", "구현", "api", "서버", "백엔드", "프론트엔드",
+        "code", "function", "class", "debug", "error", "implement",
+        "리팩토링", "최적화", "알고리즘", "자료구조", "라이브러리", "프레임워크",
+        "react", "vue", "angular", "python", "javascript", "typescript",
+        "컴포넌트", "component", "useState", "useEffect", "훅", "hook",
+        "docker", "kubernetes", "k8s", "ci/cd", "deploy", "pipeline", "devops", "git", "sql", "database", "query"
+      ],
+      "weight": 1.2
+    },
+    {
+      "type": "analysis",
+      "patterns": [
+        { "source": "\\b(분석|분석해|analyze|analysis)\\b", "flags": "i" },
+        { "source": "\\b(통계|데이터|차트|그래프|추세|패턴)\\b", "flags": "i" },
+        { "source": "\\b(비교|장단점|pros|cons|compare)\\b", "flags": "i" },
+        { "source": "\\b(어떻게\\s*생각|왜\\s*그런|이유가|원인이)\\b", "flags": "" },
+        { "source": "\\b(why|reason|cause|impact|effect|how\\s+does)\\b", "flags": "i" }
+      ],
+      "keywords": [
+        "분석", "분석해", "통계", "데이터", "인사이트", "추세", "패턴",
+        "비교", "장단점", "평가", "검토", "조사", "리서치",
+        "analyze", "analysis", "statistics", "data", "compare", "evaluate",
+        "원인", "영향", "impact", "effect", "reason", "why", "how does"
+      ],
+      "weight": 0.9
+    },
+    {
+      "type": "creative",
+      "patterns": [
+        { "source": "\\b(이야기|스토리|시나리오|소설|시)\\b.*\\b(작성|써|만들)\\b", "flags": "i" },
+        { "source": "\\b(작성|써|만들)\\b.*\\b(이야기|스토리|시나리오|소설|시)\\b", "flags": "i" },
+        { "source": "\\b(아이디어|브레인스토밍|창의|상상)\\b", "flags": "i" },
+        { "source": "\\b(creative|storytelling|fiction)\\b", "flags": "i" },
+        { "source": "\\b(write|compose|draft|create)\\b.*\\b(poem|story|email|letter|essay|blog)\\b", "flags": "i" }
+      ],
+      "keywords": [
+        "글쓰기", "이야기", "스토리", "소설", "시나리오",
+        "카피", "광고문구", "슬로건", "아이디어", "브레인스토밍",
+        "creative", "story", "brainstorm", "imagine", "상상", "창작",
+        "편지", "에세이", "블로그", "letter", "essay", "blog", "poem", "compose"
+      ],
+      "weight": 0.75
+    },
+    {
+      "type": "vision",
+      "patterns": [
+        { "source": "\\b(이미지|사진|그림|picture|image|photo)\\b", "flags": "i" },
+        { "source": "\\b(보여|봐|보이는|look|see|show)\\b.*\\b(이미지|사진|그림)\\b", "flags": "i" },
+        { "source": "\\b(ocr|텍스트.*추출|extract.*text)\\b", "flags": "i" }
+      ],
+      "keywords": [
+        "이미지", "사진", "그림", "스크린샷", "캡처", "시각", "비전",
+        "image", "picture", "photo", "screenshot", "visual", "ocr",
+        "분석해줘", "설명해줘", "뭐가 보여", "뭐야 이거"
+      ],
+      "weight": 1.0
+    },
+    {
+      "type": "math",
+      "patterns": [
+        { "source": "\\b(계산|수학|math|calculate|equation)\\b", "flags": "i" },
+        { "source": "\\d+\\s*[\\+\\-\\*\\/\\^]\\s*\\d+", "flags": "" },
+        { "source": "\\b(미적분|미분|적분|행렬|선형대수|통계)\\b", "flags": "i" },
+        { "source": "\\b(증명|proof|theorem|lemma|공리)\\b", "flags": "i" }
+      ],
+      "keywords": [
+        "계산", "수학", "공식", "방정식", "미적분", "미분", "적분",
+        "행렬", "선형대수", "확률", "통계", "기하", "삼각함수",
+        "math", "calculate", "equation", "formula", "integral", "derivative",
+        "증명", "proof", "theorem", "lemma"
+      ],
+      "weight": 0.95
+    },
+    {
+      "type": "document",
+      "patterns": [
+        { "source": "\\b(요약|summarize|summary)\\b", "flags": "i" },
+        { "source": "\\b(문서|document|pdf|docx)\\b", "flags": "i" },
+        { "source": "\\b(리포트|보고서|논문|report|paper)\\b", "flags": "i" }
+      ],
+      "keywords": [
+        "요약", "요약해", "정리", "문서", "리포트", "보고서", "논문",
+        "summarize", "summary", "document", "report", "paper",
+        "핵심", "중요한", "포인트", "key points"
+      ],
+      "weight": 0.8
+    },
+    {
+      "type": "translation",
+      "patterns": [
+        { "source": "\\b(번역|translate|translation)\\b", "flags": "i" },
+        { "source": "\\b(영어로|한국어로|일본어로|중국어로)\\b", "flags": "i" },
+        { "source": "\\b(to english|to korean|to japanese)\\b", "flags": "i" }
+      ],
+      "keywords": [
+        "번역", "번역해", "영어로", "한국어로", "일본어로", "중국어로",
+        "translate", "translation", "to english", "to korean"
+      ],
+      "weight": 0.9
+    },
+    {
+      "type": "korean",
+      "patterns": [
+        { "source": "[\\uAC00-\\uD7A3]", "flags": "" }
+      ],
+      "keywords": [],
+      "weight": 0.1
+    },
+    {
+      "type": "chat",
+      "patterns": [
+        { "source": "\\b(안녕|하이|헬로|hello|hi|hey)\\b", "flags": "i" },
+        { "source": "\\?$", "flags": "" },
+        { "source": "\\b(추천|추천해|추천해줘|알려줘|설명해줘|도와줘|도움)\\b", "flags": "i" },
+        { "source": "\\b(어떤\\s*게\\s*좋|뭐가\\s*좋|뭘\\s*쓸|뭐\\s*쓰|어떻게\\s*해)\\b", "flags": "i" },
+        { "source": "\\b(recommend|suggest|help|advice)\\b", "flags": "i" }
+      ],
+      "keywords": [
+        "안녕", "하이", "헬로", "뭐해", "어때", "알려줘", "설명해",
+        "추천", "추천해줘", "도와줘", "도움", "부탁", "궁금", "질문",
+        "어떤 게 좋아", "뭐가 좋아", "어떻게 해", "가르쳐", "알고 싶",
+        "hello", "hi", "hey", "what", "how", "tell me",
+        "recommend", "suggest", "help", "advice", "please"
+      ],
+      "weight": 0.6
+    }
+  ]
+}

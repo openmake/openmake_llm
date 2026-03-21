@@ -32,6 +32,8 @@ import type { FormatOption } from '../ollama/types';
 import { SemanticClassificationCache } from './semantic-cache';
 import { LLM_TIMEOUTS } from '../config/timeouts';
 import { CACHE_CONFIG } from '../config/runtime-limits';
+import { CLASSIFIER_MODEL, CONFIDENCE_THRESHOLD, CLASSIFIER_TEMPERATURE, CLASSIFIER_NUM_CTX } from '../config/routing-config';
+import warmQueriesRaw from '../config/data/warm-queries.json';
 
 const logger = createLogger('LLMClassifier');
 
@@ -39,17 +41,14 @@ const logger = createLogger('LLMClassifier');
 // 설정
 // ============================================================
 
-/** 분류용 모델 (Fast 프로파일 엔진) */
-const CLASSIFIER_MODEL = 'gemini-3-flash-preview:cloud';
-
 /** 캐시 TTL (ms) — CACHE_CONFIG에서 참조 */
 const CACHE_TTL_MS = CACHE_CONFIG.CLASSIFICATION_CACHE_TTL_MS;
 
 /** 캐시 최대 크기 — CACHE_CONFIG에서 참조 */
 const CACHE_MAX_SIZE = CACHE_CONFIG.CLASSIFICATION_CACHE_MAX_SIZE;
 
-/** 최소 신뢰도 임계값 — 이 값 미만이면 regex fallback */
-const CONFIDENCE_THRESHOLD = 0.7;
+/** warm-queries.json을 타입 안전하게 로드 */
+const warmQueriesData = warmQueriesRaw as Array<{ query: string; type: QueryType; confidence: number }>;
 
 // ============================================================
 // 분류 캐시 인스턴스 (Lazy 초기화)
@@ -157,8 +156,8 @@ async function callLLMClassifier(query: string): Promise<RawLLMResult | null> {
             { role: 'user', content: query },
         ],
         {
-            temperature: 0.1,
-            num_ctx: 1024,
+            temperature: CLASSIFIER_TEMPERATURE,
+            num_ctx: CLASSIFIER_NUM_CTX,
         },
         undefined,
         {
@@ -276,84 +275,6 @@ export function _setSemanticCacheForTest(cache: SemanticClassificationCache): vo
 // 캐시 워밍 (Pre-warming)
 // ============================================================
 
-/** 사전 캐시할 공통 쿼리 패턴 */
-const WARM_QUERIES: Array<{ query: string; type: QueryType; confidence: number }> = [
-    // chat (8)
-    { query: '안녕하세요', type: 'chat', confidence: 0.95 },
-    { query: '안녕', type: 'chat', confidence: 0.95 },
-    { query: 'hello', type: 'chat', confidence: 0.95 },
-    { query: '반가워', type: 'chat', confidence: 0.90 },
-    { query: '뭐해?', type: 'chat', confidence: 0.90 },
-    { query: 'hi there', type: 'chat', confidence: 0.90 },
-    { query: '고마워', type: 'chat', confidence: 0.90 },
-    { query: '넌 누구야?', type: 'chat', confidence: 0.90 },
-    // code-gen (6)
-    { query: '코드 작성해줘', type: 'code-gen', confidence: 0.95 },
-    { query: '파이썬으로 작성해줘', type: 'code-gen', confidence: 0.90 },
-    { query: 'write a function', type: 'code-gen', confidence: 0.90 },
-    { query: 'API 만들어줘', type: 'code-gen', confidence: 0.90 },
-    { query: '함수 만들어줘', type: 'code-gen', confidence: 0.90 },
-    { query: '스크립트 작성해줘', type: 'code-gen', confidence: 0.90 },
-    // code-agent (4)
-    { query: '코드 리뷰해줘', type: 'code-agent', confidence: 0.95 },
-    { query: '버그 수정해줘', type: 'code-agent', confidence: 0.95 },
-    { query: '이 에러 해결해줘', type: 'code-agent', confidence: 0.90 },
-    { query: '리팩토링해줘', type: 'code-agent', confidence: 0.90 },
-    // math-applied (4)
-    { query: '계산해줘', type: 'math-applied', confidence: 0.90 },
-    { query: '확률 계산해줘', type: 'math-applied', confidence: 0.90 },
-    { query: '통계 분석해줘', type: 'math-applied', confidence: 0.85 },
-    { query: '이 방정식 풀어줘', type: 'math-applied', confidence: 0.90 },
-    // math-hard (3)
-    { query: '수학 문제 풀어줘', type: 'math-hard', confidence: 0.85 },
-    { query: 'solve this equation', type: 'math-hard', confidence: 0.85 },
-    { query: '증명해줘', type: 'math-hard', confidence: 0.95 },
-    // creative (7)
-    { query: '시 써줘', type: 'creative', confidence: 0.95 },
-    { query: '이야기 만들어줘', type: 'creative', confidence: 0.95 },
-    { query: '마케팅 문구 작성해줘', type: 'creative', confidence: 0.90 },
-    { query: '블로그 글 써줘', type: 'creative', confidence: 0.90 },
-    { query: '소설 써줘', type: 'creative', confidence: 0.95 },
-    { query: 'write a poem', type: 'creative', confidence: 0.90 },
-    { query: '아이디어 좀 내줘', type: 'creative', confidence: 0.85 },
-    // analysis (8)
-    { query: '데이터 분석해줘', type: 'analysis', confidence: 0.95 },
-    { query: '비교 분석해줘', type: 'analysis', confidence: 0.90 },
-    { query: '장단점 분석해줘', type: 'analysis', confidence: 0.90 },
-    { query: '시장 분석해줘', type: 'analysis', confidence: 0.90 },
-    { query: 'SWOT 분석해줘', type: 'analysis', confidence: 0.95 },
-    { query: '트렌드 분석해줘', type: 'analysis', confidence: 0.90 },
-    { query: 'analyze this data', type: 'analysis', confidence: 0.90 },
-    { query: '전략 세워줘', type: 'analysis', confidence: 0.85 },
-    // translation (6)
-    { query: '번역해줘', type: 'translation', confidence: 0.95 },
-    { query: '영어로 번역해줘', type: 'translation', confidence: 0.95 },
-    { query: 'translate this', type: 'translation', confidence: 0.95 },
-    { query: '일본어로 번역해줘', type: 'translation', confidence: 0.95 },
-    { query: '한국어로 번역해줘', type: 'translation', confidence: 0.95 },
-    { query: 'translate to English', type: 'translation', confidence: 0.95 },
-    // vision (5)
-    { query: '이 이미지 분석해줘', type: 'vision', confidence: 0.95 },
-    { query: '사진 설명해줘', type: 'vision', confidence: 0.90 },
-    { query: '이 스크린샷 봐줘', type: 'vision', confidence: 0.90 },
-    { query: '그림 분석해줘', type: 'vision', confidence: 0.90 },
-    { query: 'describe this image', type: 'vision', confidence: 0.90 },
-    // document (6)
-    { query: '이 문서 요약해줘', type: 'document', confidence: 0.95 },
-    { query: 'PDF 분석해줘', type: 'document', confidence: 0.90 },
-    { query: '파일 내용 정리해줘', type: 'document', confidence: 0.90 },
-    { query: '문서에서 핵심 내용 추출해줘', type: 'document', confidence: 0.90 },
-    { query: 'summarize this document', type: 'document', confidence: 0.90 },
-    { query: '보고서 요약해줘', type: 'document', confidence: 0.90 },
-    // korean (6)
-    { query: '오늘 날씨 어때?', type: 'korean', confidence: 0.85 },
-    { query: '한국어로 설명해줘', type: 'korean', confidence: 0.85 },
-    { query: '맛집 추천해줘', type: 'korean', confidence: 0.85 },
-    { query: '여행지 추천해줘', type: 'korean', confidence: 0.85 },
-    { query: '요즘 뭐가 유행이야?', type: 'korean', confidence: 0.85 },
-    { query: '좋은 책 추천해줘', type: 'korean', confidence: 0.85 },
-];
-
 /** 캐시 워밍 실행 상태 (중복 방지) */
 let warmingInProgress = false;
 
@@ -374,13 +295,13 @@ export async function warmClassificationCache(): Promise<number> {
     const cache = getClassificationCache();
 
     try {
-        for (const warm of WARM_QUERIES) {
+        for (const warm of warmQueriesData) {
             cache.set(warm.query, warm.type, warm.confidence);
         }
-        logger.info(`캐시 워밍 완료: ${WARM_QUERIES.length}/${WARM_QUERIES.length}개`);
+        logger.info(`캐시 워밍 완료: ${warmQueriesData.length}/${warmQueriesData.length}개`);
     } finally {
         warmingInProgress = false;
     }
 
-    return WARM_QUERIES.length;
+    return warmQueriesData.length;
 }

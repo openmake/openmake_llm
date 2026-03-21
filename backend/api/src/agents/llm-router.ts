@@ -26,6 +26,7 @@ import industryData from './industry-agents.json';
 import { createLogger } from '../utils/logger';
 import { CAPACITY } from '../config/runtime-limits';
 import { LLM_TIMEOUTS } from '../config/timeouts';
+import { ROUTER_TEMPERATURE, ROUTER_NUM_PREDICT } from '../config/routing-config';
 
 const logger = createLogger('LLMRouter');
 
@@ -267,8 +268,8 @@ ${sanitizedMessage}
                 { role: 'system', content: systemPrompt },
                 { role: 'user', content: userPrompt }
             ], {
-                temperature: 0.1,  // 결정적인 응답을 위해 낮은 온도
-                num_predict: 200   // 짧은 응답만 필요
+                temperature: ROUTER_TEMPERATURE,
+                num_predict: ROUTER_NUM_PREDICT,
             });
 
             return response.content;
