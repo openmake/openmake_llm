@@ -21,6 +21,7 @@ import { DirectStrategy } from './direct-strategy';
 import type { AgentLoopStrategyContext, ChatStrategy, ChatResult } from './types';
 import { createLogger } from '../../utils/logger';
 import { TRUNCATION } from '../../config/runtime-limits';
+import { LLM_TEMPERATURES } from '../../config/llm-parameters';
 
 const logger = createLogger('AgentLoopStrategy');
 
@@ -240,7 +241,7 @@ export class AgentLoopStrategy implements ChatStrategy<AgentLoopStrategyContext,
                             images: [imageData],
                         },
                     ],
-                    { temperature: 0.1 }
+                    { temperature: LLM_TEMPERATURES.AGENT_TOOL_CALL }
                 );
 
                 const extractedText = ocrResponse.content || '';
@@ -289,7 +290,7 @@ export class AgentLoopStrategy implements ChatStrategy<AgentLoopStrategyContext,
                             images: [imageData],
                         },
                     ],
-                    { temperature: 0.3 }
+                    { temperature: LLM_TEMPERATURES.AGENT_RESPONSE }
                 );
 
                 const analysis = analysisResponse.content || '';

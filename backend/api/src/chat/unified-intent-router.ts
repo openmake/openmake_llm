@@ -284,6 +284,9 @@ ${sanitizedMessage}
 
         // queryType 검증
         const rawQueryType = String(parsed.queryType ?? '');
+        if (!(QUERY_TYPES as readonly string[]).includes(rawQueryType)) {
+            logger.warn(`UIR returned invalid queryType "${rawQueryType}", falling back to 'chat'`);
+        }
         const queryType: QueryType = (QUERY_TYPES as readonly string[]).includes(rawQueryType)
             ? (rawQueryType as QueryType)
             : 'chat';
@@ -351,7 +354,12 @@ async function logShadowComparison(
     try {
         // lazy import: DB 초기화 전 호출 방어
         const { getUnifiedDatabase } = await import('../data/models/unified-database');
-        const pool = getUnifiedDatabase().getPool();
+        const db = getUnifiedDatabase();
+        const pool = db?.getPool();
+        if (!pool) {
+            logger.warn('Database not initialized, skipping shadow log');
+            return;
+        }
 
         const uirQueryType = uirResult?.queryType ?? null;
         const uirAgentId = uirResult?.agentId ?? null;

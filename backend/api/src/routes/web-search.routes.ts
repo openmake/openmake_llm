@@ -28,6 +28,7 @@ import { requireAuth } from '../auth';
 import { validate } from '../middlewares/validation';
 import { webSearchSchema } from '../schemas/web-search.schema';
 import { CAPACITY } from '../config/runtime-limits';
+import { LLM_TEMPERATURES } from '../config/llm-parameters';
 
 const logger = createLogger('WebSearchRoutes');
 
@@ -76,6 +77,10 @@ router.post('/web-search', requireAuth, validate(webSearchSchema), asyncHandler(
           client = createClient({ model: wsEngineModel });
            logger.info(`[WebSearch] Cloud 클라이언트 생성: ${wsEngineModel}`);
       } else {
+          if (!clusterManager) {
+              res.status(503).json(serviceUnavailable('Cluster manager not initialized'));
+              return;
+          }
           const bestNode = clusterManager.getBestNode(wsEngineModel);
           client = bestNode ? clusterManager.createScopedClient(bestNode.id, wsEngineModel) : undefined;
       }
@@ -110,7 +115,7 @@ ${sourcesContext}
 
       logger.info('[WebSearch] LLM에 사실 검증 요청...');
      const result = await client.generate(searchPrompt, {
-         temperature: 0.3,
+         temperature: LLM_TEMPERATURES.WEB_SEARCH,
           num_ctx: CAPACITY.WEB_SEARCH_NUM_CTX  // Ollama 공식 권장: 웹 검색/에이전트 시 최소 64K 토큰
      });
      const response = result.response;

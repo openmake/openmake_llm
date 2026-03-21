@@ -17,6 +17,7 @@ import { getConfig } from '../config/env';
 import { getUnifiedDatabase } from '../data/models/unified-database';
 import { createLogger } from '../utils/logger';
 import { CAPACITY, TRUNCATION } from '../config/runtime-limits';
+import { LLM_TEMPERATURES } from '../config/llm-parameters';
 import { v4 as uuidv4 } from 'uuid';
 
 import {
@@ -300,7 +301,7 @@ export class DeepResearchService {
         try {
             const response = await this.client.chat([
                 { role: 'user', content: prompt }
-            ], { temperature: 0.3 });
+            ], { temperature: LLM_TEMPERATURES.RESEARCH_PLAN });
             this.throwIfAborted();
 
             const jsonMatch = response.content.match(/\[[\s\S]*\]/);
@@ -611,7 +612,7 @@ export class DeepResearchService {
                 try {
                     const response = await this.client.chat([
                         { role: 'user', content: chunkPrompt }
-                    ], { temperature: 0.35 });
+                    ], { temperature: LLM_TEMPERATURES.RESEARCH_SYNTHESIS });
                     this.throwIfAborted();
                     return response.content.trim();
                 } catch (error) {
@@ -632,7 +633,7 @@ export class DeepResearchService {
         try {
             const response = await this.client.chat([
                 { role: 'user', content: mergedPrompt }
-            ], { temperature: 0.4 });
+            ], { temperature: LLM_TEMPERATURES.RESEARCH_REPORT });
             this.throwIfAborted();
 
             const mergedSummary = response.content.trim();
@@ -672,7 +673,7 @@ export class DeepResearchService {
         try {
             const response = await this.client.chat([
                 { role: 'user', content: prompt }
-            ], { temperature: 0.1 });
+            ], { temperature: LLM_TEMPERATURES.RESEARCH_FACT_CHECK });
             this.throwIfAborted();
 
             return response.content.toLowerCase().includes('yes');
@@ -709,7 +710,7 @@ export class DeepResearchService {
         try {
             const response = await this.client.chat([
                 { role: 'user', content: prompt }
-            ], { temperature: 0.35 });
+            ], { temperature: LLM_TEMPERATURES.RESEARCH_SYNTHESIS });
             this.throwIfAborted();
 
             const content = response.content;

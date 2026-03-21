@@ -19,6 +19,7 @@ import { analyzeTopicIntent, TOPIC_CATEGORIES } from './topic-analyzer';
 import { createLogger } from '../utils/logger';
 import { getEnhancedKeywords, getKeywordIDF, getSynonyms, getCategoryWeight } from './enhanced-keywords';
 import { CATEGORY_BOOST, EXPANDED_DAMPING } from '../config/routing-config';
+import { CONFIDENCE_DIVISORS } from '../config/llm-parameters';
 
 const logger = createLogger('AgentRouter');
 
@@ -147,7 +148,7 @@ export async function routeToAgent(message: string): Promise<AgentSelection> {
                     category: categoryId,
                     phase: detectPhase(message),
                     reason: `${agent.name} - ${matchedKeywords.slice(0, 5).join(', ')} 키워드 매칭`,
-                    confidence: Math.min(score / 10, 1.0),
+                    confidence: Math.min(score / CONFIDENCE_DIVISORS.KEYWORD_ROUTER, 1.0),
                     matchedKeywords
                 };
             }

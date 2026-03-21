@@ -19,6 +19,7 @@ import type { ChatMessage } from '../../ollama/types';
 import type { ChatStrategy, ChatResult, DiscussionStrategyContext } from './types';
 import { createLogger } from '../../utils/logger';
 import { CONTEXT_LIMITS, DISCUSSION_TOKEN_BUDGET } from '../../config/runtime-limits';
+import { LLM_TEMPERATURES } from '../../config/llm-parameters';
 import { resolvePromptLocale, type PromptLocaleCode } from '../../chat/language-policy';
 
 const logger = createLogger('DiscussionStrategy');
@@ -313,7 +314,7 @@ export class DiscussionStrategy implements ChatStrategy<DiscussionStrategyContex
                                 images: [imageBase64],
                             },
                         ],
-                        { temperature: 0.2 }
+                        { temperature: LLM_TEMPERATURES.DISCUSSION }
                     );
 
                     if (analysisResponse.content) {

@@ -268,22 +268,28 @@ ${contextInstructions}
 
             // 같은 라운드 내 에이전트들은 서로 의존성이 없으므로 병렬 실행
             const previousForRound = round > 0 ? [...opinions] : [];
-            const roundResults = await parallelBatch<Agent, AgentOpinion | null>(
-                experts,
-                async (agent, i) => {
-                    onProgress?.({
-                        phase: 'discussing',
-                        currentAgent: agent.name,
-                        agentEmoji: agent.emoji,
-                        message: localizedProgressMessages.agentOpining(agent.emoji || '🤖', agent.name),
-                        progress: roundBaseProgress + (i * roundSpan / experts.length),
-                        roundNumber: round + 1,
-                        totalRounds: maxRounds
-                    });
-                    return generateAgentOpinion(agent, topic, previousForRound);
-                },
-                { concurrency: experts.length }
-            );
+            let roundResults: (AgentOpinion | null)[];
+            try {
+                roundResults = await parallelBatch<Agent, AgentOpinion | null>(
+                    experts,
+                    async (agent, i) => {
+                        onProgress?.({
+                            phase: 'discussing',
+                            currentAgent: agent.name,
+                            agentEmoji: agent.emoji,
+                            message: localizedProgressMessages.agentOpining(agent.emoji || '🤖', agent.name),
+                            progress: roundBaseProgress + (i * roundSpan / experts.length),
+                            roundNumber: round + 1,
+                            totalRounds: maxRounds
+                        });
+                        return generateAgentOpinion(agent, topic, previousForRound);
+                    },
+                    { concurrency: experts.length }
+                );
+            } catch (error) {
+                logger.error(`Round ${round + 1} parallel execution failed:`, error);
+                roundResults = [];
+            }
 
             for (const result of roundResults) {
                 if (result) opinions.push(result);
