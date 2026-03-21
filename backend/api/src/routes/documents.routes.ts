@@ -182,15 +182,19 @@ router.post('/upload', optionalAuth, validateUploadContentType(FILE_LIMITS.MAX_S
              filename: decodeFilename(req.file?.originalname || '')
          });
 
-         if (req.file && req.file.path && fs.existsSync(req.file.path)) {
-             try {
-                 fs.unlinkSync(req.file.path);
-             } catch (e) {
-                 // 무시
-             }
-         }
-
          throw error;
+     } finally {
+         // 텍스트 추출 완료 후 디스크 원본 파일 정리 (성공/실패 무관, 비동기)
+         const filePath = req.file?.path;
+         if (filePath) {
+             fs.promises.unlink(filePath)
+                 .then(() => logger.debug(`[Upload] 디스크 파일 정리: ${filePath}`))
+                 .catch((err: NodeJS.ErrnoException) => {
+                     if (err.code !== 'ENOENT') {
+                         logger.warn(`[Upload] 디스크 파일 정리 실패: ${filePath}`, err);
+                     }
+                 });
+         }
      }
 }));
 
