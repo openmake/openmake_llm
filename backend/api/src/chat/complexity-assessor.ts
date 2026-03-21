@@ -11,11 +11,16 @@
 
 import type { QueryClassification } from './model-selector-types';
 import { createLogger } from '../utils/logger';
+import {
+    A2A_SKIP_THRESHOLD as _A2A_SKIP_THRESHOLD,
+    COMPLEXITY_NEUTRAL_SCORE,
+    COMPLEXITY_WEIGHTS,
+} from '../config/routing-config';
 
 const logger = createLogger('ComplexityAssessor');
 
-/** A2A 건너뛰기 임계값 - 이 점수 미만이면 A2A 생략 */
-export const A2A_SKIP_THRESHOLD = 0.3;
+/** A2A 건너뛰기 임계값 - 이 점수 미만이면 A2A 생략 (routing-config에서 re-export) */
+export const A2A_SKIP_THRESHOLD = _A2A_SKIP_THRESHOLD;
 
 /** 복잡도 평가 입력 컨텍스트 */
 export interface ComplexityContext {
@@ -40,61 +45,61 @@ export interface ComplexityAssessment {
  * 쿼리 복잡도를 평가하여 A2A 게이팅 결정을 내립니다.
  */
 export function assessComplexity(ctx: ComplexityContext): ComplexityAssessment {
-    let score = 0.5; // 중립 시작점
+    let score = COMPLEXITY_NEUTRAL_SCORE; // 중립 시작점
     const signals: string[] = [];
 
     // ── 단순성 시그널 (감점) ──
-    if (ctx.query.length < 30) {
-        score -= 0.3;
+    if (ctx.query.length < COMPLEXITY_WEIGHTS.VERY_SHORT_THRESHOLD) {
+        score += COMPLEXITY_WEIGHTS.VERY_SHORT_PENALTY;
         signals.push('very_short_query');
-    } else if (ctx.query.length < 50) {
-        score -= 0.1;
+    } else if (ctx.query.length < COMPLEXITY_WEIGHTS.SHORT_THRESHOLD) {
+        score += COMPLEXITY_WEIGHTS.SHORT_PENALTY;
         signals.push('short_query');
     }
 
     if (ctx.classification.type === 'chat') {
-        score -= 0.2;
+        score += COMPLEXITY_WEIGHTS.CHAT_TYPE_PENALTY;
         signals.push('chat_type');
     }
 
-    if (ctx.classification.confidence < 0.2) {
-        score -= 0.1;
+    if (ctx.classification.confidence < COMPLEXITY_WEIGHTS.LOW_CONFIDENCE_THRESHOLD) {
+        score += COMPLEXITY_WEIGHTS.LOW_CONFIDENCE_PENALTY;
         signals.push('low_confidence');
     }
 
     // ── 복잡성 시그널 (가점) ──
-    if (ctx.query.length > 200) {
-        score += 0.2;
+    if (ctx.query.length > COMPLEXITY_WEIGHTS.LONG_THRESHOLD) {
+        score += COMPLEXITY_WEIGHTS.LONG_QUERY_BONUS;
         signals.push('long_query');
     }
 
-    if (ctx.classification.matchedPatterns.length >= 3) {
-        score += 0.2;
+    if (ctx.classification.matchedPatterns.length >= COMPLEXITY_WEIGHTS.MIN_PATTERN_COUNT) {
+        score += COMPLEXITY_WEIGHTS.MULTIPLE_PATTERNS_BONUS;
         signals.push('multiple_patterns');
     }
 
     if (/```/.test(ctx.query)) {
-        score += 0.3;
+        score += COMPLEXITY_WEIGHTS.CODE_BLOCK_BONUS;
         signals.push('has_code_block');
     }
 
     if (ctx.hasImages) {
-        score += 0.2;
+        score += COMPLEXITY_WEIGHTS.HAS_IMAGES_BONUS;
         signals.push('has_images');
     }
 
     if (ctx.hasDocuments) {
-        score += 0.2;
+        score += COMPLEXITY_WEIGHTS.HAS_DOCUMENTS_BONUS;
         signals.push('has_documents');
     }
 
-    if (ctx.historyLength > 5) {
-        score += 0.1;
+    if (ctx.historyLength > COMPLEXITY_WEIGHTS.MIN_HISTORY_LENGTH) {
+        score += COMPLEXITY_WEIGHTS.LONG_HISTORY_BONUS;
         signals.push('long_history');
     }
 
     if (['analysis', 'math', 'math-hard', 'math-applied', 'reasoning', 'document', 'code-agent'].includes(ctx.classification.type)) {
-        score += 0.1;
+        score += COMPLEXITY_WEIGHTS.COMPLEX_TYPE_BONUS;
         signals.push(`complex_type:${ctx.classification.type}`);
     }
 
