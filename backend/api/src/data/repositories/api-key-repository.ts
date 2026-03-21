@@ -8,7 +8,7 @@
  * - 키 해시 기반 인증 조회, 사용자별 키 목록
  */
 import { BaseRepository, QueryParam } from './base-repository';
-import type { ApiKeyTier, UserApiKey } from '../models/unified-database';
+import type { ApiKeyTier, UserApiKey } from '../models/unified-database.types';
 
 export class ApiKeyRepository extends BaseRepository {
     async recordApiUsage(date: string, apiKeyId: string, requests: number, tokens: number, errors: number, avgResponseTime: number, models: Record<string, unknown>) {

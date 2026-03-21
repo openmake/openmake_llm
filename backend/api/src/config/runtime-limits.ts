@@ -169,7 +169,56 @@ export const CAPACITY = {
     SEARCH_RESULT_MAX_DISPLAY: 10,
     /** Admin 대화 내보내기 SQL LIMIT */
     ADMIN_EXPORT_LIMIT: 10000,
+    /** 메모리 소프트 리밋 (기본 상한, 티어별 분기는 routes에서 처리) */
+    MEMORY_SOFT_LIMIT: 500,
+    /** 토큰→문자 변환 비율 (한국어 기준 보수적 추정) */
+    TOKEN_TO_CHAR_RATIO: 3,
 } as const;
+
+// ============================================
+// 메모리 감쇠 설정
+// ============================================
+
+/**
+ * 메모리 중요도 감쇠에 사용하는 상수
+ */
+export const MEMORY_DECAY = {
+    /** 감쇠 계수 (매 주기마다 importance에 곱함) */
+    DECAY_FACTOR: 0.95,
+    /** 감쇠 최저값 (importance가 이 값 이하로 내려가지 않음) */
+    DECAY_FLOOR: 0.1,
+} as const;
+
+// ============================================
+// Deep Research 기본 파라미터
+// ============================================
+
+/**
+ * Deep Research 기본 검색/소스 파라미터
+ */
+export const RESEARCH_DEFAULTS = {
+    /** 최대 검색 결과 수 */
+    MAX_SEARCH_RESULTS: 360,
+    /** 최대 전체 소스 수 */
+    MAX_TOTAL_SOURCES: 80,
+    /** 루프당 최대 스크래핑 수 */
+    MAX_SCRAPE_PER_LOOP: 15,
+    /** 청크 크기 */
+    CHUNK_SIZE: 10,
+} as const;
+
+// ============================================
+// Deep Research 깊이별 루프 설정
+// ============================================
+
+/**
+ * Deep Research depth별 반복 루프 횟수
+ */
+export const RESEARCH_DEPTH_LOOPS: Record<string, number> = {
+    quick: 1,
+    standard: 3,
+    deep: 5,
+};
 
 // ============================================
 // 모델 컨텍스트 윈도우 기본값

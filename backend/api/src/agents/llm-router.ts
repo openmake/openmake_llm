@@ -24,6 +24,7 @@ import { sanitizePromptInput, validatePromptInput } from '../utils/input-sanitiz
 import { AgentCategory } from './types';
 import industryData from './industry-agents.json';
 import { createLogger } from '../utils/logger';
+import { extractJSONFromResponse } from '../utils/json-parser';
 import { CAPACITY } from '../config/runtime-limits';
 import { LLM_TIMEOUTS } from '../config/timeouts';
 import { ROUTER_TEMPERATURE, ROUTER_NUM_PREDICT } from '../config/routing-config';
@@ -139,54 +140,6 @@ function formatAgentListForPrompt(summaries: AgentSummary[]): string {
     }
 
     return result;
-}
-
-/**
- * LLM 응답에서 JSON 객체 추출 (3단계 파싱 전략)
- *
- * LLM 응답은 JSON 외에 설명 텍스트를 포함할 수 있으므로,
- * 3단계 전략으로 JSON을 추출한다:
- *
- * 1단계: ```json 코드블록 내 JSON 추출 시도
- * 2단계: Greedy 매칭 (가장 바깥 {} 블록 — 중첩 브레이스 대응)
- * 3단계: Non-greedy 폴백 (가장 짧은 {} 블록)
- *
- * @param response - LLM의 원시 응답 문자열
- * @returns {Record<string, unknown> | null} - 파싱된 JSON 객체, 실패 시 null
- */
-function extractJSONFromResponse(response: string): Record<string, unknown> | null {
-    // 1단계: ```json 코드블록 내 JSON 추출 시도
-    const codeBlockMatch = response.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
-    if (codeBlockMatch) {
-        try {
-            return JSON.parse(codeBlockMatch[1]);
-        } catch {
-            // 코드블록 내 파싱 실패 시 다음 단계로
-        }
-    }
-
-    // 2단계: Greedy 매칭 (중첩 브레이스 대응 — 가장 바깥 {} 블록)
-    const greedyMatch = response.match(/\{[\s\S]*\}/);
-    if (greedyMatch) {
-        try {
-            return JSON.parse(greedyMatch[0]);
-        } catch {
-            // greedy 실패 시 non-greedy 시도
-        }
-    }
-
-    // 3단계: Non-greedy 폴백 (가장 짧은 {} 블록)
-    const lazyMatch = response.match(/\{[\s\S]*?\}/);
-    if (lazyMatch) {
-        try {
-            return JSON.parse(lazyMatch[0]);
-        } catch (e) {
-            logger.info('JSON 파싱 실패, 응답:', response.substring(0, 200));
-            return null;
-        }
-    }
-
-    return null;
 }
 
 /**

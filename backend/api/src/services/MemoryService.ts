@@ -82,7 +82,7 @@ export class MemoryService {
         // 티어 한도 검증: 현재 메모리 수 확인 후 초과 시 최저 importance 교체
         if (uniqueMemories.length > 0) {
             const currentMemories = await this.getUserMemories(userId);
-            const MEMORY_SOFT_LIMIT = 500; // 기본 상한 (티어별 분기는 routes에서 처리)
+            const MEMORY_SOFT_LIMIT = CAPACITY.MEMORY_SOFT_LIMIT;
             const availableSlots = Math.max(0, MEMORY_SOFT_LIMIT - currentMemories.length);
 
             if (availableSlots < uniqueMemories.length) {
@@ -175,8 +175,8 @@ export class MemoryService {
         }
 
         const tokenBudget = maxTokens ?? DISCUSSION_TOKEN_BUDGET.DEFAULT.maxMemoryTokens;
-        // 토큰 ≈ 문자수 / 3 (한국어 기준 보수적 추정)
-        const charBudget = tokenBudget * 3;
+        // 토큰 ≈ 문자수 / TOKEN_TO_CHAR_RATIO (한국어 기준 보수적 추정)
+        const charBudget = tokenBudget * CAPACITY.TOKEN_TO_CHAR_RATIO;
 
         const memories = await this.getRelevantMemories(userId, currentQuery, 10);
 

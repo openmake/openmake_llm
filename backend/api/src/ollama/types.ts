@@ -14,7 +14,6 @@
  * - 헬퍼 함수 (Thinking 활성화 판단, 모델 프리셋 선택)
  */
 
-import { MODEL_CONTEXT_DEFAULTS } from '../config/runtime-limits';
 
 /**
  * Ollama 클라이언트 기본 설정
@@ -556,108 +555,13 @@ export interface PsResponse {
 /**
  * 모델별 추론 파라미터 프리셋 모음
  *
- * 각 프리셋은 특정 작업 유형(추론, 코딩, 창작 등)에 최적화된
- * temperature, top_p, top_k, 컨텍스트 크기 등의 값을 포함합니다.
+ * 정의는 config/llm-parameters.ts에 중앙 관리됩니다.
+ * 하위 호환성을 위해 이 모듈에서 re-export합니다.
  *
- * - `GEMINI_*`: Gemini 모델용 프리셋
- * - `GPT_OSS_*`: GPT-OSS 모델용 프리셋
- *
- * @constant MODEL_PRESETS
+ * @see config/llm-parameters.ts
  */
-export const MODEL_PRESETS = {
-    // Gemini 3 Flash Preview 프리셋
-    GEMINI_DEFAULT: {
-        temperature: 0.7,
-        top_p: 0.9,
-        top_k: 40,
-        num_ctx: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
-        repeat_penalty: 1.1,
-    },
-    GEMINI_REASONING: {
-        temperature: 0.3,
-        top_p: 0.85,
-        top_k: 20,
-        num_ctx: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
-        repeat_penalty: 1.05,
-    },
-    GEMINI_CREATIVE: {
-        temperature: 0.9,
-        top_p: 0.95,
-        top_k: 50,
-        num_ctx: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
-        repeat_penalty: 1.2,
-    },
-    GEMINI_CODE: {
-        temperature: 0.2,
-        top_p: 0.8,
-        top_k: 10,
-        num_ctx: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
-        repeat_penalty: 1.0,
-    },
-    GPT_OSS_LOW_REASONING: {
-        temperature: 0.3,
-        top_p: 0.85,
-        top_k: 30,
-        repeat_penalty: 1.1,
-        num_ctx: MODEL_CONTEXT_DEFAULTS.LOW_NUM_CTX,
-        num_predict: MODEL_CONTEXT_DEFAULTS.LOW_NUM_PREDICT
-    } as ModelOptions,
-
-    GPT_OSS_MEDIUM_REASONING: {
-        temperature: 0.5,
-        top_p: 0.9,
-        top_k: 40,
-        repeat_penalty: 1.1,
-        num_ctx: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
-        num_predict: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_PREDICT
-    } as ModelOptions,
-
-    GPT_OSS_HIGH_REASONING: {
-        temperature: 0.7,
-        top_p: 0.95,
-        top_k: 50,
-        repeat_penalty: 1.15,
-        num_ctx: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
-        num_predict: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_PREDICT
-    } as ModelOptions,
-
-    GPT_OSS_CODE: {
-        temperature: 0.1,
-        top_p: 0.8,
-        top_k: 20,
-        repeat_penalty: 1.2,
-        num_ctx: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
-        num_predict: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_PREDICT
-    } as ModelOptions,
-
-    GPT_OSS_DOCUMENT: {
-        temperature: 0.2,
-        top_p: 0.85,
-        top_k: 25,
-        repeat_penalty: 1.15,
-        num_ctx: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
-        num_predict: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_PREDICT
-    } as ModelOptions,
-
-    GPT_OSS_JSON: {
-        temperature: 0.05,
-        top_p: 0.75,
-        top_k: 15,
-        repeat_penalty: 1.15,
-        num_ctx: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
-        num_predict: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_PREDICT,
-        mirostat: 1,
-        mirostat_tau: 2.5,
-        mirostat_eta: 0.05
-    } as ModelOptions,
-
-
-
-
-
-
-
-};
+import { MODEL_PRESETS } from '../config/llm-parameters';
+export { MODEL_PRESETS };
 
 // ============================================
 // Helper Functions

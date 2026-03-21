@@ -23,12 +23,24 @@ const logger = createLogger('DocumentProcessor');
 
 const execAsync = promisify(exec);
 
+/** 문서 처리 결과에 포함되는 부가 정보 */
+export interface DocumentInfo {
+    /** 이미지/PDF의 base64 인코딩 데이터 (Vision 모델용) */
+    base64?: string;
+    /** 이미지 MIME 타입 (e.g., "image/png") */
+    mime?: string;
+    /** OCR 인식 신뢰도 (0-100) */
+    confidence?: number;
+    /** Excel 시트 수 */
+    sheets?: number;
+}
+
 export interface DocumentResult {
     filename: string;
     type: string;
     text: string;
     pages?: number;
-    info?: Record<string, any>;
+    info?: DocumentInfo;
 }
 
 /**

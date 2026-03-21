@@ -34,6 +34,12 @@ import { createContextBuilder } from './discussion-context';
 import { createLogger } from '../utils/logger';
 import { resolvePromptLocale } from '../chat/language-policy';
 import { parallelBatch } from '../workflow/graph-engine';
+/** 토론 엔진에서 사용하는 웹 검색 결과 최소 인터페이스 */
+export interface DiscussionSearchResult {
+    title: string;
+    url: string;
+    snippet?: string;
+}
 import {
     DISCUSSION_SYSTEM_PROMPTS,
     DISCUSSION_LABELS,
@@ -238,7 +244,7 @@ ${contextInstructions}
      */
     async function startDiscussion(
         topic: string,
-        webSearchFn?: (query: string) => Promise<any[]>
+        webSearchFn?: (query: string, opts?: { maxResults?: number }) => Promise<DiscussionSearchResult[]>
     ): Promise<DiscussionResult> {
         const startTime = Date.now();
         const opinions: AgentOpinion[] = [];

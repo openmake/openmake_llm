@@ -10,6 +10,7 @@
 
 import type { SearchResult } from '../mcp/web-search';
 import { LLM_TIMEOUTS } from '../config/timeouts';
+import { RESEARCH_DEFAULTS } from '../config/runtime-limits';
 
 // ============================================================
 // 타입 정의
@@ -71,13 +72,13 @@ export const DEFAULT_CONFIG: ResearchConfig = {
     maxLoops: 5,
     llmModel: '',
     searchApi: 'all',
-    maxSearchResults: 360,
+    maxSearchResults: RESEARCH_DEFAULTS.MAX_SEARCH_RESULTS,
     language: 'en',
-    maxTotalSources: 80,
+    maxTotalSources: RESEARCH_DEFAULTS.MAX_TOTAL_SOURCES,
     scrapeFullContent: true,
-    maxScrapePerLoop: 15,
+    maxScrapePerLoop: RESEARCH_DEFAULTS.MAX_SCRAPE_PER_LOOP,
     scrapeTimeoutMs: LLM_TIMEOUTS.SCRAPE_TIMEOUT_MS,
-    chunkSize: 10
+    chunkSize: RESEARCH_DEFAULTS.CHUNK_SIZE
 };
 
 // 전역 설정 (configure로 변경 가능)

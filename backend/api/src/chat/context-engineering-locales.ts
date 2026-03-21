@@ -582,3 +582,28 @@ export const PRESET_CONTENT: Record<PromptLocaleCode, PresetContentData> = {
         }
     },
 };
+
+// ============================================================
+// 톤 스타일 다국어 매핑
+// ============================================================
+
+/**
+ * 톤 스타일을 각 언어에 맞는 설명으로 변환하는 매핑 테이블
+ * context-engineering.ts의 ContextEngineeringBuilder에서 사용됩니다.
+ */
+export const TONE_STYLE_DESCRIPTIONS: Record<string, Record<string, string>> = {
+    ko: { formal: '격식체 사용', casual: '반말체, 친근한 어조', professional: '전문적이고 객관적인 어조', friendly: '친근하고 편안한 어조' },
+    ja: { formal: '敵語を使用', casual: 'カジュアルで親しみやすい口調', professional: '専門的で客観的な口調', friendly: '親しみやすくリラックスした口調' },
+    zh: { formal: '使用正式语体', casual: '休闲友好的语气', professional: '专业客观的语气', friendly: '亲切随和的语气' },
+    es: { formal: 'Tono formal y respetuoso', casual: 'Tono casual y amigable', professional: 'Tono profesional y objetivo', friendly: 'Tono amigable y relajado' },
+    de: { formal: 'Formeller und respektvoller Ton', casual: 'Lockerer und freundlicher Ton', professional: 'Professioneller und sachlicher Ton', friendly: 'Freundlicher und entspannter Ton' },
+    fr: { formal: 'Ton formel et respectueux', casual: 'Ton décontracté et amical', professional: 'Ton professionnel et objectif', friendly: 'Ton amical et détendu' },
+};
+
+/** 기본 (영어) 톤 스타일 설명 */
+export const DEFAULT_TONE_DESCRIPTIONS: Record<string, string> = {
+    formal: 'Use formal and respectful tone',
+    casual: 'Use casual and friendly tone',
+    professional: 'Use professional and objective tone',
+    friendly: 'Use friendly and relaxed tone',
+};
