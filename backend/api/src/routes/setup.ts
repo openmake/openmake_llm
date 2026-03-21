@@ -185,7 +185,6 @@ export function setupApiRoutes(
     app.use('/api/docs', developerDocsRouter);
     app.use('/api/api-keys', apiKeysRouter);
     app.use('/api/kb', kbRouter);
-    app.use('/api/uir', uirRouter);
 
     // Swagger 설정
     setupSwaggerRoutes(app);
