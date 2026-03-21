@@ -50,6 +50,8 @@ import { createRoutingLogEntry, logRoutingDecision, type RoutingDecisionLog } fr
 import { applyDomainEngineOverride } from '../chat/domain-router';
 import type { ChatMessageRequest } from './chat-service-types';
 import type { QueryType } from '../chat/model-selector-types';
+import { computeUIRResult, recordShadowComparison } from '../chat/unified-intent-router';
+import { UIR_SHADOW_ENABLED } from '../config/routing-config';
 
 // Re-export all types so consumers importing from ChatService don't break
 export type {
@@ -349,6 +351,24 @@ export class ChatService {
         const promptConfig = getPromptConfig(message, languagePolicy?.resolvedLanguage);
         const hasImages = (images && images.length > 0) || documentImages.length > 0;
         const modelSelection = await this.resolveModel(message || '', hasImages, executionPlan, promptConfig);
+
+        // ── UIR Shadow 비교 (fire-and-forget, API Key 요청 제외) ──
+        // rollout=0일 때도 shadow 데이터를 수집하여 UIR 정확도를 사전 검증합니다.
+        if (UIR_SHADOW_ENABLED && !req.apiKeyId) {
+            computeUIRResult(message || '', { userId })
+                .then(uirResult => recordShadowComparison(
+                    message || '',
+                    uirResult,
+                    {
+                        queryType: modelSelection.queryType,
+                        agentId: agentSelection.primaryAgent,
+                        brandProfile: executionPlan?.requestedModel ?? 'default',
+                    },
+                    undefined,
+                    userId
+                ))
+                .catch(() => { /* shadow 실패는 무시 */ });
+        }
 
         // ── 라우팅 결정 로그 갱신 ──
         routingLog.queryFeatures.queryType = modelSelection.queryType;
