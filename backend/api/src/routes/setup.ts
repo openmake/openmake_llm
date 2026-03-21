@@ -38,7 +38,8 @@ import {
     developerDocsRouter,
     chatFeedbackRouter,
     apiKeysRouter,
-    kbRouter
+    kbRouter,
+    uirRouter
 } from './index';
 import { setupSwaggerRoutes } from '../swagger';
 import { createClusterController, createHealthController, createAuthController, createAdminController, createSessionController } from '../controllers';
@@ -136,6 +137,7 @@ export function setupApiRoutes(
     app.use('/api/agents/skills', skillsRouter);
     app.use('/api/agents', agentRouter);
     app.use('/api/monitoring', tokenMonitoringRouter);
+    app.use('/api/uir', uirRouter);
     app.use('/api/mcp', mcpRouter);
 
     // 부트스트랩 서비스 초기화
@@ -183,6 +185,7 @@ export function setupApiRoutes(
     app.use('/api/docs', developerDocsRouter);
     app.use('/api/api-keys', apiKeysRouter);
     app.use('/api/kb', kbRouter);
+    app.use('/api/uir', uirRouter);
 
     // Swagger 설정
     setupSwaggerRoutes(app);
