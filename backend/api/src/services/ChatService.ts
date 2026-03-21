@@ -418,6 +418,7 @@ export class ChatService {
             images, docId, history, currentHistory, chatOptions, maxTurns,
             supportsTools, supportsThinking, thinkingMode, thinkingLevel,
             languagePolicy, streamToken, abortSignal, checkAborted,
+            format: req.format,
         });
 
         // ── Step 6: 메트릭 기록 및 보안 사후 검사 ──
@@ -715,12 +716,13 @@ export class ChatService {
         streamToken: (token: string, thinking?: string) => void;
         abortSignal?: AbortSignal;
         checkAborted: () => void;
+        format?: import('../ollama/types').FormatOption;
     }): Promise<void> {
         const {
             executionPlan, message, modelSelection, routingLog,
             images, docId, history, currentHistory, chatOptions, maxTurns,
             supportsTools, supportsThinking, thinkingMode, thinkingLevel,
-            languagePolicy, streamToken, abortSignal, checkAborted,
+            languagePolicy, streamToken, abortSignal, checkAborted, format,
         } = params;
 
         // A2A(Agent-to-Agent) 병렬 생성 전략 결정: off면 건너뛰고 AgentLoop으로 직행
@@ -757,6 +759,7 @@ export class ChatService {
                     abortSignal,
                     checkAborted,
                     userLanguage: languagePolicy?.resolvedLanguage || 'en',
+                    format,
                 });
 
                 if (a2aResult.succeeded) {
@@ -789,6 +792,7 @@ export class ChatService {
                 onToken: streamToken,
                 abortSignal,
                 checkAborted,
+                format,
             });
         }
     }

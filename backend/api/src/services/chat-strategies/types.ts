@@ -18,7 +18,7 @@ import type { ExecutionPlan } from '../../chat/profile-resolver';
 import type { DocumentStore } from '../../documents/store';
 import type { UserContext } from '../../mcp/user-sandbox';
 import type { OllamaClient } from '../../ollama/client';
-import type { ChatMessage, ModelOptions, ToolCall, ToolDefinition } from '../../ollama/types';
+import type { ChatMessage, FormatOption, ModelOptions, ToolCall, ToolDefinition } from '../../ollama/types';
 import type { ResearchProgress } from '../DeepResearchService';
 import type { ChatMessageRequest } from '../ChatService';
 
@@ -90,6 +90,8 @@ export interface A2AStrategyContext extends ChatContext {
     queryType?: QueryType;
     /** 사용자 언어 (A2A 합성 프롬프트 다국어화용, language-policy에서 결정) */
     userLanguage?: string;
+    /** 구조화된 출력 형식 (Ollama format 파라미터: 'json' 또는 JSON Schema 객체) */
+    format?: FormatOption;
 }
 
 /**
@@ -122,6 +124,8 @@ export interface DirectStrategyContext extends ChatContext {
     allowedTools: ToolDefinition[];
     /** Thinking 깊이 옵션 */
     thinkOption?: 'low' | 'medium' | 'high';
+    /** 구조화된 출력 형식 (Ollama format 파라미터: 'json' 또는 JSON Schema 객체) */
+    format?: FormatOption;
 }
 
 /**
@@ -168,6 +172,8 @@ export interface AgentLoopStrategyContext extends ChatContext {
     currentUserContext: UserContext | null;
     /** 허용된 도구 목록을 반환하는 함수 */
     getAllowedTools: () => ToolDefinition[];
+    /** 구조화된 출력 형식 (Ollama format 파라미터: 'json' 또는 JSON Schema 객체) */
+    format?: FormatOption;
 }
 
 /**
