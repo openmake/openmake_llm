@@ -844,3 +844,9 @@ export function renderSdksSection() {
         '<p>Official SDKs for Python and Node.js are coming soon. In the meantime, you can use any standard HTTP client to access the API.</p>' +
         '</section>';
 }
+
+export default {
+    renderIntroSection, renderAuthSection, renderModelsSection,
+    renderChatSection, renderOpenAICompatSection, renderApiKeysSection,
+    renderUsageSection, renderRateLimitsSection, renderErrorsSection, renderSdksSection
+};
