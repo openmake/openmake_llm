@@ -8,8 +8,9 @@
  * - 접근 횟수 추적, 만료된 메모리 정리
  */
 import { withTransaction } from '../retry-wrapper';
+import { MEMORY_DECAY } from '../../config/runtime-limits';
 import { BaseRepository, QueryParam } from './base-repository';
-import type { MemoryCategory, UserMemory } from '../models/unified-database';
+import type { MemoryCategory, UserMemory } from '../models/unified-database.types';
 
 export class MemoryRepository extends BaseRepository {
     async createMemory(params: {
@@ -187,14 +188,15 @@ export class MemoryRepository extends BaseRepository {
     async decayImportance(): Promise<number> {
         const result = await this.query(
             `UPDATE user_memories
-             SET importance = GREATEST(0.1, importance * 0.95),
+             SET importance = GREATEST($1, importance * $2),
                  updated_at = NOW()
              WHERE id IN (
                  SELECT id FROM user_memories
                  WHERE last_accessed < NOW() - INTERVAL '30 days'
-                   AND importance > 0.1
+                   AND importance > $1
                  LIMIT 1000
-             )`
+             )`,
+            [MEMORY_DECAY.DECAY_FLOOR, MEMORY_DECAY.DECAY_FACTOR]
         );
         return result.rowCount ?? 0;
     }

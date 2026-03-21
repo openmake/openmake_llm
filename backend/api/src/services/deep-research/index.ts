@@ -45,3 +45,10 @@ export {
     extractBulletLikeFindings,
     getLoopProgressRange,
 } from '../deep-research-utils';
+
+// ── Pipeline stages ──────────────────────────────────
+export { decomposeTopics } from './topic-decomposer';
+export { searchSubTopics } from './source-searcher';
+export { scrapeSources, scrapeSingleUrl } from './content-scraper';
+export { synthesizeFindings, checkNeedsMoreInfo } from './findings-synthesizer';
+export { generateReport } from './report-generator';

@@ -20,7 +20,7 @@ import type { UserContext } from '../../mcp/user-sandbox';
 import type { OllamaClient } from '../../ollama/client';
 import type { ChatMessage, FormatOption, ModelOptions, ToolCall, ToolDefinition } from '../../ollama/types';
 import type { ResearchProgress } from '../DeepResearchService';
-import type { ChatMessageRequest } from '../ChatService';
+import type { ChatMessageRequest } from '../chat-service-types';
 
 /**
  * 채팅 전략 공통 컨텍스트

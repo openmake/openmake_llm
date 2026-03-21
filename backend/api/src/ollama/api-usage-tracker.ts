@@ -19,222 +19,29 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { getApiKeyManager } from './api-key-manager';
-import { getConfig } from '../config/env';
 import { createLogger } from '../utils/logger';
 
-/**
- * 일간 사용량 기록
- * @interface UsageRecord
- */
-interface UsageRecord {
-    /** 기록 날짜 (YYYY-MM-DD 형식) */
-    date: string;
-    /** 총 요청 횟수 */
-    requests: number;
-    /** 총 사용 토큰 수 */
-    tokens: number;
-    /** 에러 발생 횟수 */
-    errors: number;
-    /** 평균 응답 시간 (밀리초) */
-    avgResponseTime: number;
-    /** 모델별 요청 횟수 (모델명 -> 횟수) */
-    models: Record<string, number>;
-    /** Pipeline Profile(brand alias)별 요청 횟수 */
-    profiles?: Record<string, number>;
-    /** 총 처리 시간 누적 (나노초) — Ollama total_duration */
-    totalDuration?: number;
-    /** 모델 로딩 시간 누적 (나노초) — Ollama load_duration */
-    loadDuration?: number;
-    /** 토큰 생성 시간 누적 (나노초) — Ollama eval_duration */
-    evalDuration?: number;
-    /** 프롬프트 평가 시간 누적 (나노초) — Ollama prompt_eval_duration */
-    promptEvalDuration?: number;
-    /** 프롬프트 토큰 수 누적 */
-    promptTokens?: number;
-    /** 완료 토큰 수 누적 */
-    completionTokens?: number;
-}
+// 타입 re-export (하위 호환성 유지)
+import type {
+    UsageRecord,
+    UsageData,
+    HourlyRecord,
+    DailyStats,
+    WeeklyStats,
+    QuotaStatus,
+    KeyQuotaStatus,
+    RecordRequestParams
+} from './usage-tracker-types';
 
-/**
- * 시간별 사용량 기록
- * @interface HourlyRecord
- */
-interface HourlyRecord {
-    /** 시간 (0-23) */
-    hour: number;
-    /** 해당 시간 요청 횟수 */
-    requests: number;
-    /** 해당 시간 토큰 수 */
-    tokens: number;
-}
-
-/**
- * 일간 통계 요약
- * @interface DailyStats
- */
-interface DailyStats {
-    /** 날짜 (YYYY-MM-DD) */
-    date: string;
-    /** 총 요청 횟수 */
-    totalRequests: number;
-    /** 총 토큰 수 */
-    totalTokens: number;
-    /** 총 에러 수 */
-    totalErrors: number;
-    /** 평균 응답 시간 (밀리초) */
-    avgResponseTime: number;
-    /** 시간별 세분화 데이터 (24개 항목) */
-    hourlyBreakdown: HourlyRecord[];
-    /** 모델별 사용량 */
-    modelUsage: Record<string, number>;
-}
-
-/**
- * 주간 통계 요약
- * @interface WeeklyStats
- */
-interface WeeklyStats {
-    /** 주간 시작일 (YYYY-MM-DD) */
-    weekStart: string;
-    /** 주간 종료일 (YYYY-MM-DD) */
-    weekEnd: string;
-    /** 총 요청 횟수 */
-    totalRequests: number;
-    /** 총 토큰 수 */
-    totalTokens: number;
-    /** 총 에러 수 */
-    totalErrors: number;
-    /** 평균 응답 시간 (밀리초) */
-    avgResponseTime: number;
-    /** 일별 세분화 데이터 */
-    dailyBreakdown: UsageRecord[];
-}
-
-/**
- * 파일에 저장되는 사용량 데이터 구조
- * @interface UsageData
- */
-interface UsageData {
-    /** 일별 사용량 기록 (날짜 -> UsageRecord) */
-    daily: Record<string, UsageRecord>;
-    /** 마지막 데이터 갱신 시각 (ISO 8601) */
-    lastUpdated: string;
-    /** 개별 API 키별 사용량 통계 (키ID -> KeyUsageStats) */
-    perKey?: Record<string, KeyUsageStats>;
-}
-
-/**
- * 개별 API 키 사용량 통계
- * @interface KeyUsageStats
- */
-interface KeyUsageStats {
-    /** 키 식별자 (앞 8자리) */
-    keyId: string;
-    /** 전체 기간 총 요청 수 */
-    totalRequests: number;
-    /** 주간 요청 수 (7일마다 리셋) */
-    weeklyRequests: number;
-    /** 시간별 요청 수 (매 시간 리셋) */
-    hourlyRequests: number;
-    /** 마지막 주간 리셋 날짜 (ISO 날짜) */
-    lastReset: string;
-    /** 마지막 시간 리셋 시각 (0-23) */
-    lastHourReset: number;
-}
-
-/**
- * API 사용량 한계 설정
- * @interface QuotaLimits
- */
-interface QuotaLimits {
-    /** 시간당 최대 요청 수 */
-    hourlyLimit: number;
-    /** 주간 최대 요청 수 */
-    weeklyLimit: number;
-    /** 프리미엄 월간 최대 요청 수 */
-    monthlyPremiumLimit: number;
-}
-
-/**
- * 할당량 사용 현황 (개별 기간)
- * @interface QuotaUsage
- */
-interface QuotaUsage {
-    /** 사용량 */
-    used: number;
-    /** 한계값 */
-    limit: number;
-    /** 사용률 (%) */
-    percentage: number;
-    /** 남은 횟수 */
-    remaining: number;
-}
-
-/**
- * 개별 API 키의 할당량 상태
- * @interface KeyQuotaStatus
- */
-interface KeyQuotaStatus {
-    /** 키 식별자 (앞 8자리) */
-    keyId: string;
-    /** 현재 활성 키 여부 */
-    isActive: boolean;
-    /** 시간별 할당량 상태 */
-    hourly: QuotaUsage;
-    /** 주간 할당량 상태 */
-    weekly: QuotaUsage;
-    /** 할당량 소진 여부 */
-    isExhausted: boolean;
-}
-
-/**
- * 전체 할당량(쿼터) 상태 — 시간별/주간/일간 + 개별 키 상태
- * @interface QuotaStatus
- */
-interface QuotaStatus {
-    /** 시간별 할당량 상태 (모든 키 합산) */
-    hourly: QuotaUsage;
-    /** 주간 할당량 상태 (모든 키 합산) */
-    weekly: QuotaUsage;
-    /** 일간 추정 할당량 상태 */
-    daily: QuotaUsage;
-    /** 한계 초과 여부 */
-    isOverLimit: boolean;
-    /** 경고 레벨 (safe: <70%, warning: 70-90%, critical: >90%) */
-    warningLevel: 'safe' | 'warning' | 'critical';
-    /** 개별 키 할당량 상태 */
-    keys?: {
-        primary: KeyQuotaStatus;
-        secondary: KeyQuotaStatus;
-    };
-    /** 현재 활성 키 ID */
-    activeKey?: string;
-}
-
-/**
- * 환경변수에서 API 할당량 한계 설정을 로드합니다.
- *
- * @returns 시간별/주간/월간 프리미엄 한계값
- */
-function getQuotaLimits(): QuotaLimits {
-    const config = getConfig();
-    return {
-        hourlyLimit: config.ollamaHourlyLimit,
-        weeklyLimit: config.ollamaWeeklyLimit,
-        monthlyPremiumLimit: config.ollamaMonthlyPremiumLimit
-    };
-}
-
-/**
- * API 키의 앞 8자리로 식별자를 생성합니다.
- *
- * @param key - API 키 전체 문자열
- * @returns 키 식별자 (앞 8자리) 또는 'unknown'
- */
-function getKeyId(key: string): string {
-    return key ? key.substring(0, 8) : 'unknown';
-}
+// 할당량/통계 계산 함수
+import { getKeyId, calculateKeyQuotaStatus, calculateQuotaStatus } from './usage-quota';
+import {
+    createEmptyRecord,
+    calculateTodayStats,
+    calculateDailyStats,
+    calculateWeeklyStats,
+    calculateSummary
+} from './usage-statistics';
 
 /**
  * API 사용량 추적기 클래스
@@ -299,7 +106,6 @@ class ApiUsageTracker {
      * @private
      */
      private saveData(): void {
-         // 디바운스로 너무 빈번한 저장 방지
          if (this.saveDebounceTimer) {
              clearTimeout(this.saveDebounceTimer);
          }
@@ -347,14 +153,7 @@ class ApiUsageTracker {
     private ensureTodayRecord(): UsageRecord {
         const today = this.getToday();
         if (!this.data.daily[today]) {
-            this.data.daily[today] = {
-                date: today,
-                requests: 0,
-                tokens: 0,
-                errors: 0,
-                avgResponseTime: 0,
-                models: {}
-            };
+            this.data.daily[today] = createEmptyRecord(today);
         }
         return this.data.daily[today];
     }
@@ -362,20 +161,7 @@ class ApiUsageTracker {
     /**
      * API 요청 기록
      */
-    recordRequest(params: {
-        tokens?: number;
-        responseTime?: number;
-        model?: string;
-        error?: boolean;
-        apiKeyId?: string;  // 🆕 API 키 식별자
-        profileId?: string; // §9 Pipeline Profile ID (brand model alias)
-        promptTokens?: number;
-        completionTokens?: number;
-        totalDuration?: number;
-        loadDuration?: number;
-        evalDuration?: number;
-        promptEvalDuration?: number;
-    }): void {
+    recordRequest(params: RecordRequestParams): void {
         const record = this.ensureTodayRecord();
         const hour = new Date().getHours();
 
@@ -417,7 +203,7 @@ class ApiUsageTracker {
             record.models[params.model] = (record.models[params.model] || 0) + 1;
         }
 
-        // §9 프로파일(brand alias)별 사용량
+        // 프로파일(brand alias)별 사용량
         if (params.profileId) {
             if (!record.profiles) record.profiles = {};
             record.profiles[params.profileId] = (record.profiles[params.profileId] || 0) + 1;
@@ -427,7 +213,7 @@ class ApiUsageTracker {
         this.todayHourly[hour].requests++;
         this.todayHourly[hour].tokens += params.tokens || 0;
 
-        // 🆕 키별 사용량 기록
+        // 키별 사용량 기록
         if (params.apiKeyId) {
             this.recordKeyUsage(params.apiKeyId, hour);
         }
@@ -492,266 +278,43 @@ class ApiUsageTracker {
      * @returns 키별 시간/주간 할당량 상태 및 소진 여부
      */
     getKeyQuotaStatus(keyId: string, isActive: boolean): KeyQuotaStatus {
-        const limits = getQuotaLimits();
-        const keyStats = this.data.perKey?.[keyId];
-
-        const hourlyUsed = keyStats?.hourlyRequests || 0;
-        const weeklyUsed = keyStats?.weeklyRequests || 0;
-
-        return {
-            keyId,
-            isActive,
-            hourly: {
-                used: hourlyUsed,
-                limit: limits.hourlyLimit,
-                percentage: Math.round((hourlyUsed / limits.hourlyLimit) * 100),
-                remaining: Math.max(0, limits.hourlyLimit - hourlyUsed)
-            },
-            weekly: {
-                used: weeklyUsed,
-                limit: limits.weeklyLimit,
-                percentage: Math.round((weeklyUsed / limits.weeklyLimit) * 100),
-                remaining: Math.max(0, limits.weeklyLimit - weeklyUsed)
-            },
-            isExhausted: weeklyUsed >= limits.weeklyLimit || hourlyUsed >= limits.hourlyLimit
-        };
+        return calculateKeyQuotaStatus(this.data, keyId, isActive);
     }
 
-    /**
-     * 오늘 통계 조회
-     */
+    /** 오늘 통계 조회 */
     getTodayStats(): DailyStats {
-        const today = this.getToday();
-        const record = this.data.daily[today] || {
-            date: today,
-            requests: 0,
-            tokens: 0,
-            errors: 0,
-            avgResponseTime: 0,
-            models: {}
-        };
-
-        return {
-            date: today,
-            totalRequests: record.requests,
-            totalTokens: record.tokens,
-            totalErrors: record.errors,
-            avgResponseTime: record.avgResponseTime,
-            hourlyBreakdown: this.todayHourly,
-            modelUsage: record.models
-        };
+        return calculateTodayStats(this.data, this.getToday(), this.todayHourly);
     }
 
-    /**
-     * 최근 N일간의 일간 통계를 조회합니다.
-     *
-     * 데이터가 없는 날짜는 0으로 채워진 빈 레코드로 반환합니다.
-     * 결과는 오래된 순서(오름차순)로 정렬됩니다.
-     *
-     * @param days - 조회할 일수 (기본값: 7)
-     * @returns 일간 사용량 기록 배열 (오래된 순)
-     */
+    /** 최근 N일간 일간 통계 조회 */
     getDailyStats(days: number = 7): UsageRecord[] {
-        const result: UsageRecord[] = [];
-        const today = new Date();
-
-        for (let i = 0; i < days; i++) {
-            const date = new Date(today);
-            date.setDate(date.getDate() - i);
-            const dateStr = date.toISOString().split('T')[0];
-
-            if (this.data.daily[dateStr]) {
-                result.push(this.data.daily[dateStr]);
-            } else {
-                result.push({
-                    date: dateStr,
-                    requests: 0,
-                    tokens: 0,
-                    errors: 0,
-                    avgResponseTime: 0,
-                    models: {}
-                });
-            }
-        }
-
-        return result.reverse();  // 오래된 순서로 정렬
+        return calculateDailyStats(this.data, days);
     }
 
-    /**
-     * 주간 통계 조회
-     */
+    /** 주간 통계 조회 */
     getWeeklyStats(): WeeklyStats {
-        const dailyStats = this.getDailyStats(7);
-        const weekStart = dailyStats[0]?.date || this.getToday();
-        const weekEnd = dailyStats[dailyStats.length - 1]?.date || this.getToday();
-
-        const totals = dailyStats.reduce((acc, day) => ({
-            requests: acc.requests + day.requests,
-            tokens: acc.tokens + day.tokens,
-            errors: acc.errors + day.errors,
-            responseTimeSum: acc.responseTimeSum + (day.avgResponseTime * day.requests),
-            requestsWithTime: acc.requestsWithTime + (day.avgResponseTime > 0 ? day.requests : 0)
-        }), { requests: 0, tokens: 0, errors: 0, responseTimeSum: 0, requestsWithTime: 0 });
-
-        return {
-            weekStart,
-            weekEnd,
-            totalRequests: totals.requests,
-            totalTokens: totals.tokens,
-            totalErrors: totals.errors,
-            avgResponseTime: totals.requestsWithTime > 0
-                ? Math.round(totals.responseTimeSum / totals.requestsWithTime)
-                : 0,
-            dailyBreakdown: dailyStats
-        };
+        return calculateWeeklyStats(this.data);
     }
 
-    /**
-     * 전체 통계 요약
-     */
+    /** 전체 통계 요약 */
     getSummary(): {
         today: DailyStats;
         weekly: WeeklyStats;
         allTime: { totalRequests: number; totalTokens: number; totalErrors: number };
         quota: QuotaStatus;
     } {
-        const allRecords = Object.values(this.data.daily);
-        const allTime = allRecords.reduce((acc, day) => ({
-            totalRequests: acc.totalRequests + day.requests,
-            totalTokens: acc.totalTokens + day.tokens,
-            totalErrors: acc.totalErrors + day.errors
-        }), { totalRequests: 0, totalTokens: 0, totalErrors: 0 });
-
-        return {
-            today: this.getTodayStats(),
-            weekly: this.getWeeklyStats(),
-            allTime,
-            quota: this.getQuotaStatus()
-        };
+        return calculateSummary(this.data, this.getTodayStats());
     }
 
-    /**
-     * 🆕 현재 시간 사용량 조회
-     */
+    /** 현재 시간 사용량 조회 */
     getCurrentHourUsage(): number {
         const hour = new Date().getHours();
         return this.todayHourly[hour]?.requests || 0;
     }
 
-    /**
-     * 🆕 할당량(쿼터) 상태 조회
-     */
+    /** 할당량(쿼터) 상태 조회 */
     getQuotaStatus(): QuotaStatus {
-        const limits = getQuotaLimits();
-        const todayStats = this.getTodayStats();
-
-        // 🆕 개별 키 상태 먼저 계산
-        const keysStatus = this.getKeysQuotaStatus();
-
-        // 🆕 두 키의 사용량 합산 (각 키는 개별 2500 한도)
-        const primaryHourly = keysStatus.primary.hourly.used;
-        const secondaryHourly = keysStatus.secondary.hourly.used;
-        const primaryWeekly = keysStatus.primary.weekly.used;
-        const secondaryWeekly = keysStatus.secondary.weekly.used;
-
-        // 🆕 총 한도 = 키 개수 * 개별 한도
-        const totalHourlyLimit = limits.hourlyLimit * 2;  // 150 * 2 = 300
-        const totalWeeklyLimit = limits.weeklyLimit * 2;  // 2500 * 2 = 5000
-
-        const totalHourlyUsed = primaryHourly + secondaryHourly;
-        const totalWeeklyUsed = primaryWeekly + secondaryWeekly;
-
-        return {
-            hourly: {
-                used: totalHourlyUsed,
-                limit: totalHourlyLimit,
-                percentage: totalHourlyLimit > 0
-                    ? Math.round((totalHourlyUsed / totalHourlyLimit) * 100)
-                    : 0,
-                remaining: Math.max(0, totalHourlyLimit - totalHourlyUsed)
-            },
-            weekly: {
-                used: totalWeeklyUsed,
-                limit: totalWeeklyLimit,
-                percentage: totalWeeklyLimit > 0
-                    ? Math.round((totalWeeklyUsed / totalWeeklyLimit) * 100)
-                    : 0,
-                remaining: Math.max(0, totalWeeklyLimit - totalWeeklyUsed)
-            },
-            daily: {
-                used: todayStats.totalRequests,
-                limit: Math.round(totalWeeklyLimit / 7), // 일일 추정 한계 (714)
-                percentage: totalWeeklyLimit > 0
-                    ? Math.round((todayStats.totalRequests / (totalWeeklyLimit / 7)) * 100)
-                    : 0,
-                remaining: Math.max(0, Math.round(totalWeeklyLimit / 7) - todayStats.totalRequests)
-            },
-            isOverLimit: totalWeeklyUsed >= totalWeeklyLimit,
-            warningLevel: this.calculateWarningLevelCombined(totalHourlyUsed, totalWeeklyUsed, totalHourlyLimit, totalWeeklyLimit),
-            // 🆕 개별 키 상태 추가
-            keys: keysStatus,
-            activeKey: this.getActiveKeyId()
-        };
-    }
-
-    /**
-     * 🆕 통합 경고 레벨 계산
-     */
-    private calculateWarningLevelCombined(hourlyUsed: number, weeklyUsed: number, hourlyLimit: number, weeklyLimit: number): 'safe' | 'warning' | 'critical' {
-        const hourlyPercentage = (hourlyUsed / hourlyLimit) * 100;
-        const weeklyPercentage = (weeklyUsed / weeklyLimit) * 100;
-        const maxPercentage = Math.max(hourlyPercentage, weeklyPercentage);
-
-        if (maxPercentage >= 90) return 'critical';
-        if (maxPercentage >= 70) return 'warning';
-        return 'safe';
-    }
-
-    /**
-     * 🆕 모든 키의 할당량 상태 조회 (4개 키 지원)
-     */
-    private getKeysQuotaStatus(): { primary: KeyQuotaStatus; secondary: KeyQuotaStatus } {
-        const cfg = getConfig();
-        const key1 = process.env.OLLAMA_API_KEY_1 || cfg.ollamaApiKeyPrimary;
-        const key2 = process.env.OLLAMA_API_KEY_2 || cfg.ollamaApiKeySecondary;
-
-        // ApiKeyManager에서 현재 활성 키 인덱스 확인
-        let activeIndex = 0;
-        try {
-            activeIndex = getApiKeyManager().getStatus().activeKeyIndex;
-        } catch (e) {
-            // ignore
-        }
-
-        return {
-            primary: this.getKeyQuotaStatus(getKeyId(key1), activeIndex === 0),
-            secondary: this.getKeyQuotaStatus(getKeyId(key2), activeIndex === 1)
-        };
-    }
-
-    /**
-     * 🆕 현재 활성 키 ID 조회 (4개 키 지원)
-     */
-    private getActiveKeyId(): string {
-        try {
-            const manager = getApiKeyManager();
-            return getKeyId(manager.getCurrentKey());
-        } catch (e) {
-            return 'unknown';
-        }
-    }
-
-    /**
-     * 경고 레벨 계산
-     */
-    private _calculateWarningLevel(hourlyUsage: number, weeklyUsage: number, limits: QuotaLimits): 'safe' | 'warning' | 'critical' {
-        const hourlyPercentage = (hourlyUsage / limits.hourlyLimit) * 100;
-        const weeklyPercentage = (weeklyUsage / limits.weeklyLimit) * 100;
-        const maxPercentage = Math.max(hourlyPercentage, weeklyPercentage);
-
-        if (maxPercentage >= 90) return 'critical';
-        if (maxPercentage >= 70) return 'warning';
-        return 'safe';
+        return calculateQuotaStatus(this.data, this.getTodayStats());
     }
 
     /**
@@ -799,4 +362,6 @@ export function getApiUsageTracker(): ApiUsageTracker {
     return tracker;
 }
 
-export { ApiUsageTracker, UsageRecord, DailyStats, WeeklyStats, HourlyRecord, QuotaStatus };
+// 하위 호환성을 위한 re-export
+export { ApiUsageTracker };
+export type { UsageRecord, DailyStats, WeeklyStats, HourlyRecord, QuotaStatus } from './usage-tracker-types';

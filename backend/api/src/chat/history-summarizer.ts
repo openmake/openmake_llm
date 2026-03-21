@@ -14,6 +14,8 @@
 import { OllamaClient, createClient } from '../ollama/client';
 import { createLogger } from '../utils/logger';
 import { HISTORY_SUMMARIZER } from '../config/runtime-limits';
+import { LLM_TEMPERATURES } from '../config/llm-parameters';
+import { SUMMARY_SYSTEM_PROMPT } from './prompt-templates';
 
 const logger = createLogger('HistorySummarizer');
 
@@ -29,15 +31,6 @@ interface SummarizedHistory {
     originalCount: number;
     summarizedCount: number;
 }
-
-const SUMMARY_SYSTEM_PROMPT = `You are a conversation summarizer. Summarize the older conversation messages into a concise paragraph that preserves:
-- Key topics discussed
-- Important decisions or conclusions
-- User preferences or requirements mentioned
-- Any unresolved questions
-
-Output ONLY the summary paragraph. No headers, no bullet points, no explanation.
-Keep it under 200 words. Use the same language as the conversation.`;
 
 /**
  * 긴 대화 히스토리를 요약하여 압축합니다.
@@ -91,7 +84,7 @@ export async function summarizeHistory(
                 { role: 'user', content: olderText },
             ],
             {
-                temperature: 0.3,
+                temperature: LLM_TEMPERATURES.HISTORY_SUMMARY,
                 num_predict: HISTORY_SUMMARIZER.MAX_SUMMARY_TOKENS,
             }
         );

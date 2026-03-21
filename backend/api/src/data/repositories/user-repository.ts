@@ -10,7 +10,7 @@
  */
 import type { QueryResult } from 'pg';
 import { BaseRepository } from './base-repository';
-import type { User } from '../models/unified-database';
+import type { User } from '../models/unified-database.types';
 
 export class UserRepository extends BaseRepository {
     async createUser(id: string, username: string, passwordHash: string, email?: string, role: string = 'user'): Promise<QueryResult<Record<string, unknown>>> {

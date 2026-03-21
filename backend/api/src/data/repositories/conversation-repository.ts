@@ -9,7 +9,7 @@
  */
 import type { QueryResult } from 'pg';
 import { BaseRepository } from './base-repository';
-import type { ConversationMessage, ConversationSession } from '../models/unified-database';
+import type { ConversationMessage, ConversationSession } from '../models/unified-database.types';
 
 export class ConversationRepository extends BaseRepository {
     async createSession(id: string, userId?: string, title?: string, metadata?: Record<string, unknown> | null): Promise<QueryResult<Record<string, unknown>>> {

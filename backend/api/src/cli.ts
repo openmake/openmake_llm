@@ -43,6 +43,7 @@ import { createSpinner } from './ui/spinner';
 import { createMCPServer } from './mcp/server';
 import { createPluginLoader } from './plugins/loader';
 import { getConfig } from './config';
+import { QUERY_TYPE_PARAMS } from './config/llm-parameters';
 
 const VERSION = '1.4.1';
 const envConfig = getConfig();
@@ -105,7 +106,7 @@ program
 
             await client.generate(
                 question,
-                { temperature: 0.7 },
+                { temperature: QUERY_TYPE_PARAMS.DEFAULT_TEMP_FALLBACK },
                 (token) => {
                     if (firstToken) {
                         spinner.stop();

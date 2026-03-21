@@ -55,13 +55,9 @@ export {
 
 import { xmlTag, examplesSection } from './context-xml-helpers';
 
-// Re-export presets from context-engineering-presets
-export {
-    buildAssistantPrompt,
-    buildCoderPrompt,
-    buildReasoningPrompt,
-    createDynamicMetadata
-} from './context-engineering-presets';
+// Presets (buildAssistantPrompt, buildCoderPrompt, buildReasoningPrompt, createDynamicMetadata)
+// are exported directly from './context-engineering-presets' to avoid circular dependency.
+// Import them from './context-engineering-presets' instead of this file.
 
 import {
     generateLanguageInstructions,
@@ -76,6 +72,8 @@ import {
     FORMAT_DESCRIPTIONS,
     SOFT_INTERLOCK_CONTENT,
     FINAL_REMINDER_CONTENT,
+    TONE_STYLE_DESCRIPTIONS,
+    DEFAULT_TONE_DESCRIPTIONS,
 } from './context-engineering-locales';
 
 // ============================================================
@@ -287,22 +285,8 @@ ${this.metadata.modelName ? `${L.model}: ${this.metadata.modelName}` : ''}
      */
     private getToneStyleDescription(toneStyle: string | undefined): string {
         const lang = this.getLocale();
-        const toneMap: Record<string, Record<string, string>> = {
-            ko: { formal: '격식체 사용', casual: '반말체, 친근한 어조', professional: '전문적이고 객관적인 어조', friendly: '친근하고 편안한 어조' },
-            ja: { formal: '敵語を使用', casual: 'カジュアルで親しみやすい口調', professional: '専門的で客観的な口調', friendly: '親しみやすくリラックスした口調' },
-            zh: { formal: '使用正式语体', casual: '休闲友好的语气', professional: '专业客观的语气', friendly: '亲切随和的语气' },
-            es: { formal: 'Tono formal y respetuoso', casual: 'Tono casual y amigable', professional: 'Tono profesional y objetivo', friendly: 'Tono amigable y relajado' },
-            de: { formal: 'Formeller und respektvoller Ton', casual: 'Lockerer und freundlicher Ton', professional: 'Professioneller und sachlicher Ton', friendly: 'Freundlicher und entspannter Ton' },
-            fr: { formal: 'Ton formel et respectueux', casual: 'Ton décontracté et amical', professional: 'Ton professionnel et objectif', friendly: 'Ton amical et détendu' },
-        };
-        const defaultTone: Record<string, string> = {
-            formal: 'Use formal and respectful tone',
-            casual: 'Use casual and friendly tone',
-            professional: 'Use professional and objective tone',
-            friendly: 'Use friendly and relaxed tone'
-        };
-        const langTones = toneMap[lang] || defaultTone;
-        return langTones[toneStyle || 'friendly'] || defaultTone[toneStyle || 'friendly'] || defaultTone['friendly']!;
+        const langTones = TONE_STYLE_DESCRIPTIONS[lang] || DEFAULT_TONE_DESCRIPTIONS;
+        return langTones[toneStyle || 'friendly'] || DEFAULT_TONE_DESCRIPTIONS[toneStyle || 'friendly'] || DEFAULT_TONE_DESCRIPTIONS['friendly']!;
     }
 
     /**

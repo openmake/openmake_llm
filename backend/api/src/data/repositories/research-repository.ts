@@ -8,7 +8,7 @@
  * - 연구 상태(진행중/완료/실패) 관리
  */
 import { BaseRepository, QueryParam } from './base-repository';
-import type { ResearchDepth, ResearchSession, ResearchStatus, ResearchStep } from '../models/unified-database';
+import type { ResearchDepth, ResearchSession, ResearchStatus, ResearchStep } from '../models/unified-database.types';
 
 export class ResearchRepository extends BaseRepository {
     async createResearchSession(params: {

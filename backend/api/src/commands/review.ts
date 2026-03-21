@@ -16,6 +16,7 @@ import * as path from 'path';
 import chalk from 'chalk';
 import { OllamaClient } from '../ollama/client';
 import { getSystemPrompt } from '../chat/prompt';
+import { LLM_TEMPERATURES } from '../config/llm-parameters';
 import { createSpinner } from '../ui/spinner';
 import { detectLanguage } from '../ui/highlight';
 
@@ -66,7 +67,7 @@ ${content}
                 { role: 'system', content: getSystemPrompt('reviewer') },
                 { role: 'user', content: prompt }
             ],
-            { temperature: 0.3 },
+            { temperature: LLM_TEMPERATURES.CLI_REVIEW },
             (token) => {
                 if (firstToken) {
                     spinner.stop();

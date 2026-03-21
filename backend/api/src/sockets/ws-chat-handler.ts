@@ -262,7 +262,18 @@ export async function handleChatMessage(
             return;
         }
 
-        const safeSend = (data: any) => {
+        /** WebSocket 에러 응답 페이로드 */
+        interface ChatWSErrorPayload {
+            type: 'error';
+            message: string;
+            errorType?: string;
+            retryAfter?: number;
+            resetTime?: string;
+            totalKeys?: number;
+            keysInCooldown?: number;
+        }
+
+        const safeSend = (data: ChatWSErrorPayload) => {
             if (ws.readyState === ws.OPEN) {
                 try {
                     ws.send(JSON.stringify(data));

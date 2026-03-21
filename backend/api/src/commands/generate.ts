@@ -17,6 +17,7 @@ import chalk from 'chalk';
 import inquirer from 'inquirer';
 import { OllamaClient } from '../ollama/client';
 import { getSystemPrompt } from '../chat/prompt';
+import { LLM_TEMPERATURES } from '../config/llm-parameters';
 import { createSpinner } from '../ui/spinner';
 
 /**
@@ -62,7 +63,7 @@ ${description}
                 { role: 'system', content: getSystemPrompt('generator') },
                 { role: 'user', content: prompt }
             ],
-            { temperature: 0.5 },
+            { temperature: LLM_TEMPERATURES.CLI_GENERATE },
             (token) => {
                 if (firstToken) {
                     spinner.stop();

@@ -16,7 +16,7 @@
  * 등급별 API Key 최대 발급 수
  * api-keys.routes.ts에서 참조
  */
-export const API_KEY_TIER_LIMITS: Record<string, number> = {
+export const API_KEY_QUOTA: Record<string, number> = {
     free: Number(process.env.API_KEY_LIMIT_FREE) || 2,
     starter: Number(process.env.API_KEY_LIMIT_STARTER) || 5,
     standard: Number(process.env.API_KEY_LIMIT_STANDARD) || 10,

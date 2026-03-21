@@ -26,13 +26,14 @@
  * @see services/ChatService.ts - 이 모듈의 출력을 소비하여 LLM에 전달
  */
 
-import { ModelOptions, MODEL_PRESETS, ToolDefinition } from '../ollama/types';
+import { ModelOptions, ToolDefinition } from '../ollama/types';
+import { LLM_TEMPERATURES, LLM_TOP_P, MODEL_PRESETS } from '../config/llm-parameters';
 import {
     createDynamicMetadata,
     buildAssistantPrompt,
     buildCoderPrompt,
     buildReasoningPrompt
-} from './context-engineering';
+} from './context-engineering-presets';
 import { resolvePromptLocale } from './language-policy';
 import { resolveBasePromptLang, buildBasePrompt } from './prompt-locales';
 import type { PromptLanguageCode } from './prompt-locales';
@@ -78,25 +79,25 @@ export const COMMON_BASE_PROMPT = getEnhancedBasePrompt('en');
 
 export const GEMINI_PARAMS = {
     NON_REASONING: {
-        temperature: 0.5,
-        top_p: 0.9,
+        temperature: LLM_TEMPERATURES.GEMINI_NON_REASONING,
+        top_p: LLM_TOP_P.GEMINI_DEFAULT,
         do_sample: false
     },
     REASONING: {
-        temperature: 0.6,
-        top_p: 0.95,
+        temperature: LLM_TEMPERATURES.GEMINI_REASONING,
+        top_p: LLM_TOP_P.GEMINI_REASONING,
         do_sample: true
     },
     KOREAN: {
-        temperature: 0.1,
-        top_p: 0.9
+        temperature: LLM_TEMPERATURES.GEMINI_KOREAN,
+        top_p: LLM_TOP_P.GEMINI_DEFAULT
     },
     ANTI_DEGENERATION: {
-        presence_penalty: 1.5
+        presence_penalty: LLM_TOP_P.ANTI_DEGENERATION_PRESENCE_PENALTY
     },
     CODE: {
-        temperature: 0.3,
-        top_p: 0.9
+        temperature: LLM_TEMPERATURES.GEMINI_CODE,
+        top_p: LLM_TOP_P.GEMINI_DEFAULT
     }
 };
 
@@ -238,7 +239,7 @@ export function getPresetForPromptType(type: PromptType): ModelOptions {
         case 'security':
             return {
                 ...MODEL_PRESETS.GEMINI_CODE,
-                temperature: 0.4,
+                temperature: LLM_TEMPERATURES.REVIEWER,
                 repeat_penalty: 1.15
             };
         case 'explainer':
@@ -246,7 +247,7 @@ export function getPresetForPromptType(type: PromptType): ModelOptions {
         case 'translator':
             return {
                 ...MODEL_PRESETS.GEMINI_DEFAULT,
-                temperature: 0.5
+                temperature: LLM_TEMPERATURES.EXPLAINER
             };
         case 'agent':
             return MODEL_PRESETS.GEMINI_REASONING;
@@ -320,7 +321,7 @@ export function getToolCallingPrompt(tools: ToolDefinition[]): string {
 export function getKorean1_2BParams(): ModelOptions {
     return {
         ...MODEL_PRESETS.GEMINI_DEFAULT,
-        temperature: 0.1
+        temperature: LLM_TEMPERATURES.GEMINI_KOREAN
     };
 }
 

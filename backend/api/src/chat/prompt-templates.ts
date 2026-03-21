@@ -655,3 +655,20 @@ export function detectPromptType(question: string): PromptType {
 
     return scores[0].type;
 }
+
+// ============================================================
+// 히스토리 요약 시스템 프롬프트
+// ============================================================
+
+/**
+ * 대화 히스토리 요약에 사용되는 시스템 프롬프트
+ * @see chat/history-summarizer - summarizeHistory()에서 사용
+ */
+export const SUMMARY_SYSTEM_PROMPT = `You are a conversation summarizer. Summarize the older conversation messages into a concise paragraph that preserves:
+- Key topics discussed
+- Important decisions or conclusions
+- User preferences or requirements mentioned
+- Any unresolved questions
+
+Output ONLY the summary paragraph. No headers, no bullet points, no explanation.
+Keep it under 200 words. Use the same language as the conversation.`;
