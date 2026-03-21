@@ -49,6 +49,7 @@ const NAV_ITEMS = {
         { href: '/alerts.html', icon: '🔔', iconify: 'lucide:bell', label: '알림 관리', requireAuth: true, minTier: 'enterprise' },
         { href: '/password-change.html', icon: '🔑', iconify: 'lucide:key-round', label: '비밀번호 변경', requireAuth: true },
         { href: '/token-monitoring.html', icon: '🗝️', iconify: 'lucide:key-square', label: 'API 토큰 모니터링', requireAuth: true, requireAdmin: true },
+        { href: '/uir-monitor.html', icon: '🔀', iconify: 'lucide:git-branch', label: 'UIR 라우터 모니터', requireAuth: true, requireAdmin: true },
         { href: '/settings.html', icon: '⚙️', iconify: 'lucide:settings', label: '설정', cssFiles: ['/css/settings.css'] }
     ]
 };
