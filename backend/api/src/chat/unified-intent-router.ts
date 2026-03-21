@@ -28,6 +28,7 @@ import { analyzeTopicIntent } from '../agents/topic-analyzer';
 import { isValidAgentId, getAgentSummaries } from '../agents/llm-router';
 import { OllamaClient } from '../ollama/client';
 import { createLogger } from '../utils/logger';
+import { extractJSONFromResponse } from '../utils/json-parser';
 import { QUERY_TYPES, QueryType } from './model-selector-types';
 import { sanitizePromptInput, validatePromptInput } from '../utils/input-sanitizer';
 
@@ -106,44 +107,6 @@ function shouldUseUIR(userId?: string): boolean {
     const hash = createHash('sha256').update(userId ?? 'anonymous').digest('hex');
     const bucket = parseInt(hash.slice(0, 8), 16) % 100;
     return bucket < rollout;
-}
-
-// ============================================================
-// JSON 파싱 유틸리티 (llm-router와 동일한 3단계 전략)
-// ============================================================
-
-function extractJSONFromResponse(response: string): Record<string, unknown> | null {
-    // 1단계: ```json 코드블록 내 JSON
-    const codeBlockMatch = response.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
-    if (codeBlockMatch) {
-        try {
-            return JSON.parse(codeBlockMatch[1]);
-        } catch {
-            // 다음 단계로
-        }
-    }
-
-    // 2단계: Greedy 매칭 (가장 바깥 {} 블록)
-    const greedyMatch = response.match(/\{[\s\S]*\}/);
-    if (greedyMatch) {
-        try {
-            return JSON.parse(greedyMatch[0]);
-        } catch {
-            // 다음 단계로
-        }
-    }
-
-    // 3단계: Non-greedy 폴백
-    const lazyMatch = response.match(/\{[\s\S]*?\}/);
-    if (lazyMatch) {
-        try {
-            return JSON.parse(lazyMatch[0]);
-        } catch {
-            logger.info('UIR JSON 파싱 실패, 응답 일부:', response.substring(0, 200));
-        }
-    }
-
-    return null;
 }
 
 // ============================================================

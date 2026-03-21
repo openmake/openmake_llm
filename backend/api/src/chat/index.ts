@@ -14,8 +14,8 @@ import { OllamaClient } from '../ollama/client';
 import {
     ChatMessage,
     ModelOptions,
-    MODEL_PRESETS
 } from '../ollama/types';
+import { MODEL_PRESETS } from '../config/llm-parameters';
 import { getSystemPrompt } from './prompt';
 import { showCompactBanner, showModelInfo, showDivider } from '../ui/banner';
 import { createSpinner } from '../ui/spinner';

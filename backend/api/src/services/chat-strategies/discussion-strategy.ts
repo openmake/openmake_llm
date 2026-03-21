@@ -14,7 +14,7 @@
  * - 웹 검색 기반 사실 검증 (팩트체킹)
  * - 토큰 제한을 고려한 컨텍스트 우선순위 관리
  */
-import { createDiscussionEngine, type DiscussionResult } from '../../agents/discussion-engine';
+import { createDiscussionEngine, type DiscussionResult, type DiscussionSearchResult } from '../../agents/discussion-engine';
 import type { ChatMessage } from '../../ollama/types';
 import type { ChatStrategy, ChatResult, DiscussionStrategyContext } from './types';
 import { createLogger } from '../../utils/logger';
@@ -185,18 +185,6 @@ const DISCUSSION_STRATEGY_LOCALE_TEXTS: Record<PromptLocaleCode, {
     },
 };
 
-/**
- * 웹 검색 결과 인터페이스 (토론 내부용)
- * @interface WebSearchResult
- */
-interface WebSearchResult {
-    /** 검색 결과 제목 */
-    title: string;
-    /** 검색 결과 URL */
-    url: string;
-    /** 검색 결과 요약 스니펫 */
-    snippet?: string;
-}
 
 /**
  * 멀티 에이전트 토론 전략
@@ -384,7 +372,7 @@ export class DiscussionStrategy implements ChatStrategy<DiscussionStrategyContex
         );
 
         // 웹 검색 기반 사실 검증 함수 로드 (선택적)
-        let webSearchFn: ((q: string, opts?: { maxResults?: number }) => Promise<WebSearchResult[]>) | undefined;
+        let webSearchFn: ((q: string, opts?: { maxResults?: number }) => Promise<DiscussionSearchResult[]>) | undefined;
         try {
             const { performWebSearch } = await import('../../mcp');
             webSearchFn = performWebSearch;

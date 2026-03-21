@@ -4,7 +4,8 @@
     "description": "OpenMake API Server",
     "main": "dist/server.js",
     "scripts": {
-        "build": "tsc && npm run sync-frontend",
+        "build": "tsc && npm run copy-agent-data && npm run sync-frontend",
+        "copy-agent-data": "cp -r src/agents/data dist/agents/data",
         "sync-frontend": "cp -r ../../frontend/web/public/* dist/public/",
         "dev": "ts-node src/server.ts",
         "start": "node dist/server.js",

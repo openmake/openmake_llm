@@ -7,7 +7,7 @@
  * @module chat/prompt-locales
  */
 
-import { createDynamicMetadata } from './context-engineering';
+import { createDynamicMetadata } from './context-engineering-presets';
 
 export type PromptLanguageCode = 'ko' | 'en' | 'ja' | 'zh' | 'es' | 'de' | 'fr';
 

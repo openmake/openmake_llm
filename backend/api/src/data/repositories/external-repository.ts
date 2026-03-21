@@ -7,7 +7,7 @@
  * - MCP 서버 설정 관리 (mcp_servers)
  */
 import { BaseRepository, QueryParam } from './base-repository';
-import type { ExternalConnection, ExternalFile, ExternalServiceType, MCPServerRow } from '../models/unified-database';
+import type { ExternalConnection, ExternalFile, ExternalServiceType, MCPServerRow } from '../models/unified-database.types';
 import { encryptToken, decryptToken } from '../../utils/token-crypto';
 
 type DbRow = Record<string, unknown>;

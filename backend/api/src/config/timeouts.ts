@@ -31,6 +31,25 @@ export const LLM_TIMEOUTS = {
 } as const;
 
 // ============================================
+// DB 연결 풀 타임아웃
+// ============================================
+
+/**
+ * PostgreSQL 연결 풀 타임아웃 설정
+ * unified-database.ts에서 참조
+ */
+export const DB_POOL_TIMEOUTS = {
+    /** SQL statement 타임아웃 (ms) */
+    STATEMENT_TIMEOUT_MS: Number(process.env.DB_STATEMENT_TIMEOUT_MS) || 30000,
+    /** 유휴 클라이언트 타임아웃 (ms) */
+    IDLE_TIMEOUT_MS: Number(process.env.DB_IDLE_TIMEOUT_MS) || 30000,
+    /** 연결 획득 타임아웃 (ms) */
+    CONNECTION_TIMEOUT_MS: Number(process.env.DB_CONNECTION_TIMEOUT_MS) || 10000,
+    /** 헬스체크 ping 타임아웃 (ms) */
+    HEALTH_PING_TIMEOUT_MS: Number(process.env.DB_HEALTH_PING_TIMEOUT_MS) || 2000,
+} as const;
+
+// ============================================
 // 정리(Cleanup) 주기
 // ============================================
 
