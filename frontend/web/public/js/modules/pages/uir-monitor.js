@@ -29,6 +29,7 @@
             ".rollout-edit { display:flex; align-items:center; gap:var(--space-3); }\n" +
             ".rollout-edit label { font-size:var(--font-size-sm); color:var(--text-secondary); white-space:nowrap; }\n" +
             ".rollout-edit input[type=number] { width:80px; padding:var(--space-2) var(--space-3); border:1px solid var(--border-light); border-radius:var(--radius-md); background:var(--bg-secondary); color:var(--text-primary); font-size:var(--font-size-sm); }\n" +
+            ".rollout-edit select { padding:var(--space-2) var(--space-3); border:1px solid var(--border-light); border-radius:var(--radius-md); background:var(--bg-secondary); color:var(--text-primary); font-size:var(--font-size-sm); }\n" +
             ".uir-data-table { width:100%; border-collapse:collapse; font-size:var(--font-size-sm); }\n" +
             ".uir-data-table th, .uir-data-table td { padding:var(--space-2) var(--space-3); text-align:left; border-bottom:1px solid var(--border-light); white-space:nowrap; }\n" +
             ".uir-data-table th { background:var(--bg-tertiary); color:var(--text-secondary); font-weight:var(--font-weight-semibold); }\n" +
@@ -50,7 +51,7 @@
             '<\/header>' +
             '<div class="content-area">' +
 
-                '<p style="color:var(--text-muted);font-size:var(--font-size-sm);margin-bottom:var(--space-5)">Unified Intent Router shadow 비교 결과 및 롤아웃 현황을 확인합니다.</p>' +
+                '<p style="color:var(--text-muted);font-size:var(--font-size-sm);margin-bottom:var(--space-5)">Unified Intent Router shadow 비교 결과 및 롤아웃 현황을 확인합니다. (최근 7일 기준)</p>' +
 
                 '<!-- 상태 카드 -->' +
                 '<div class="uir-stats-grid" id="uirStatsGrid">' +
@@ -62,18 +63,18 @@
 
                 '<!-- 롤아웃 설정 -->' +
                 '<div class="uir-section" id="uirRolloutSection">' +
-                    '<h3>롤아웃 설정</h3>' +
+                    '<h3>롤아웃 설정<\/h3>' +
                     '<div class="loading-state">로딩 중...</div>' +
                 '<\/div>' +
 
                 '<!-- Shadow Log 테이블 -->' +
                 '<div style="background:var(--bg-card);border:1px solid var(--border-light);border-radius:var(--radius-lg);padding:var(--space-5);">' +
                     '<div class="uir-toolbar">' +
-                        '<h3>최근 Shadow Log</h3>' +
-                        '<button class="btn btn-secondary" id="uirRefreshBtn" onclick="window._uirRefresh && window._uirRefresh()">새로고침</button>' +
+                        '<h3>최근 Shadow Log<\/h3>' +
+                        '<button class="btn btn-secondary" id="uirRefreshBtn" onclick="window._uirRefresh && window._uirRefresh()">새로고침<\/button>' +
                     '<\/div>' +
                     '<div class="uir-table-wrap">' +
-                        '<div id="uirLogTable"><div class="loading-state">로딩 중...</div><\/div>' +
+                        '<div id="uirLogTable"><div class="loading-state">로딩 중...<\/div><\/div>' +
                     '<\/div>' +
                 '<\/div>' +
 
@@ -105,62 +106,72 @@
             function fmtTime(iso) {
                 if (!iso) return '-';
                 try {
-                    var d = new Date(iso);
-                    return d.toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                    return new Date(iso).toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
                 } catch (e) {
                     return String(iso).substring(0, 19);
                 }
             }
 
-            // 상태 카드 렌더링
-            function renderStats(data) {
-                var total = data.total_count != null ? data.total_count : (data.totalCount != null ? data.totalCount : '-');
-                var agentMatch = data.agent_match_rate != null ? data.agent_match_rate : (data.agentMatchRate != null ? data.agentMatchRate : null);
-                var qtypeMatch = data.qtype_match_rate != null ? data.qtype_match_rate : (data.qtypeMatchRate != null ? data.qtypeMatchRate : null);
-                var latency = data.avg_uir_latency_ms != null ? data.avg_uir_latency_ms : (data.avgLatencyMs != null ? data.avgLatencyMs : null);
-
+            // 상태 카드 렌더링 (API: { data: { stats: { total_comparisons, agent_match_rate, qtype_match_rate, avg_latency_ms } } })
+            function renderStats(stats) {
                 var elTotal = document.getElementById('statTotal');
                 var elAgent = document.getElementById('statAgentMatch');
                 var elQtype = document.getElementById('statQtypeMatch');
-                var elLat = document.getElementById('statLatency');
+                var elLat   = document.getElementById('statLatency');
 
-                if (elTotal) elTotal.textContent = total != null ? Number(total).toLocaleString('ko-KR') : '-';
-                if (elAgent) elAgent.textContent = agentMatch != null ? Number(agentMatch).toFixed(1) : '-';
-                if (elQtype) elQtype.textContent = qtypeMatch != null ? Number(qtypeMatch).toFixed(1) : '-';
-                if (elLat) elLat.textContent = latency != null ? Math.round(Number(latency)) : '-';
+                if (!stats) {
+                    if (elTotal) elTotal.textContent = '0';
+                    if (elAgent) elAgent.textContent = '-';
+                    if (elQtype) elQtype.textContent = '-';
+                    if (elLat)   elLat.textContent   = '-';
+                    return;
+                }
+
+                if (elTotal) elTotal.textContent = Number(stats.total_comparisons || 0).toLocaleString('ko-KR');
+                if (elAgent) elAgent.textContent = stats.agent_match_rate != null ? Number(stats.agent_match_rate).toFixed(1) : '-';
+                if (elQtype) elQtype.textContent = stats.qtype_match_rate  != null ? Number(stats.qtype_match_rate).toFixed(1)  : '-';
+                if (elLat)   elLat.textContent   = stats.avg_latency_ms   != null ? Math.round(Number(stats.avg_latency_ms))   : '-';
             }
 
-            // 롤아웃 설정 렌더링
-            function renderRollout(data) {
+            // 롤아웃 설정 렌더링 (API: { data: { rollout: { rollout_percent, enabled, description } } })
+            function renderRollout(rollout) {
                 var section = document.getElementById('uirRolloutSection');
                 if (!section) return;
 
-                var pct = data.rollout_percent != null ? data.rollout_percent : (data.rolloutPercent != null ? data.rolloutPercent : 0);
-                var enabled = data.enabled != null ? data.enabled : false;
+                if (!rollout) {
+                    section.innerHTML = '<h3>롤아웃 설정<\/h3><div class="empty-state">롤아웃 정보를 불러올 수 없습니다.<\/div>';
+                    return;
+                }
+
+                var pct = rollout.rollout_percent != null ? rollout.rollout_percent : 0;
+                var enabled = rollout.enabled === true;
                 var badgeHtml = enabled
-                    ? '<span class="badge-on">ON</span>'
-                    : '<span class="badge-off">OFF</span>';
+                    ? '<span class="badge-on">ON<\/span>'
+                    : '<span class="badge-off">OFF<\/span>';
 
                 section.innerHTML =
                     '<h3>롤아웃 설정<\/h3>' +
                     '<div class="rollout-row">' +
                         '<div class="rollout-info">' +
-                            '<div><div class="big-pct" id="rolloutPctDisplay">' + esc(String(pct)) + '%<\/div><div class="big-pct-label">현재 롤아웃 비율<\/div><\/div>' +
+                            '<div>' +
+                                '<div class="big-pct" id="rolloutPctDisplay">' + esc(String(pct)) + '%<\/div>' +
+                                '<div class="big-pct-label">현재 롤아웃 비율<\/div>' +
+                            '<\/div>' +
                             '<div>' + badgeHtml + '<\/div>' +
                         '<\/div>' +
                         '<div class="rollout-edit">' +
-                            '<label for="rolloutInput">롤아웃 %<\/label>' +
+                            '<label for="rolloutInput">새 비율 %<\/label>' +
                             '<input type="number" id="rolloutInput" min="0" max="100" value="' + esc(String(pct)) + '" />' +
+                            '<label for="rolloutEnabled">활성화<\/label>' +
+                            '<select id="rolloutEnabled">' +
+                                '<option value="true"' + (enabled ? ' selected' : '') + '>ON<\/option>' +
+                                '<option value="false"' + (!enabled ? ' selected' : '') + '>OFF<\/option>' +
+                            '<\/select>' +
                             '<button class="btn btn-primary" id="rolloutSaveBtn">저장<\/button>' +
                         '<\/div>' +
                     '<\/div>';
 
-                var saveBtn = document.getElementById('rolloutSaveBtn');
-                if (saveBtn) {
-                    saveBtn.addEventListener('click', function() {
-                        saveRollout();
-                    });
-                }
+                document.getElementById('rolloutSaveBtn').addEventListener('click', saveRollout);
             }
 
             // Shadow Log 테이블 렌더링
@@ -169,32 +180,23 @@
                 if (!el) return;
 
                 if (!rows || rows.length === 0) {
-                    el.innerHTML = '<div class="empty-state">Shadow log 데이터가 없습니다.</div>';
+                    el.innerHTML = '<div class="empty-state">Shadow log 데이터가 없습니다.<\/div>';
                     return;
                 }
 
                 var tbody = rows.map(function(r) {
-                    var agentMatch = r.agent_match != null ? r.agent_match : r.agentMatch;
-                    var qtypeMatch = r.qtype_match != null ? r.qtype_match : r.qtypeMatch;
-                    var uirAgent = r.uir_agent_id != null ? r.uir_agent_id : (r.uirAgentId != null ? r.uirAgentId : '-');
-                    var legacyAgent = r.legacy_agent_id != null ? r.legacy_agent_id : (r.legacyAgentId != null ? r.legacyAgentId : '-');
-                    var uirQtype = r.uir_query_type != null ? r.uir_query_type : (r.uirQueryType != null ? r.uirQueryType : '-');
-                    var legacyQtype = r.legacy_query_type != null ? r.legacy_query_type : (r.legacyQueryType != null ? r.legacyQueryType : '-');
-                    var latMs = r.uir_latency_ms != null ? r.uir_latency_ms : (r.uirLatencyMs != null ? r.uirLatencyMs : null);
-                    var ts = r.created_at || r.createdAt || r.timestamp || '';
-
-                    var agentMatchIcon = agentMatch ? '<span class="match-yes">&#x2705;<\/span>' : '<span class="match-no">&#x274C;<\/span>';
-                    var qtypeMatchIcon = qtypeMatch ? '<span class="match-yes">&#x2705;<\/span>' : '<span class="match-no">&#x274C;<\/span>';
+                    var agentMatchIcon = r.agent_match  ? '<span class="match-yes">&#x2705;<\/span>' : '<span class="match-no">&#x274C;<\/span>';
+                    var qtypeMatchIcon = r.query_type_match ? '<span class="match-yes">&#x2705;<\/span>' : '<span class="match-no">&#x274C;<\/span>';
 
                     return '<tr>' +
-                        '<td>' + esc(fmtTime(ts)) + '<\/td>' +
-                        '<td>' + esc(uirAgent) + '<\/td>' +
-                        '<td>' + esc(legacyAgent) + '<\/td>' +
+                        '<td>' + esc(fmtTime(r.created_at)) + '<\/td>' +
+                        '<td>' + esc(r.uir_agent_id   || '-') + '<\/td>' +
+                        '<td>' + esc(r.legacy_agent_id || '-') + '<\/td>' +
                         '<td style="text-align:center">' + agentMatchIcon + '<\/td>' +
-                        '<td>' + esc(uirQtype) + '<\/td>' +
-                        '<td>' + esc(legacyQtype) + '<\/td>' +
+                        '<td>' + esc(r.uir_query_type   || '-') + '<\/td>' +
+                        '<td>' + esc(r.legacy_query_type || '-') + '<\/td>' +
                         '<td style="text-align:center">' + qtypeMatchIcon + '<\/td>' +
-                        '<td>' + (latMs != null ? esc(Math.round(Number(latMs)) + 'ms') : '-') + '<\/td>' +
+                        '<td>' + (r.uir_latency_ms != null ? esc(Math.round(Number(r.uir_latency_ms)) + 'ms') : '-') + '<\/td>' +
                     '<\/tr>';
                 }).join('');
 
@@ -216,26 +218,30 @@
 
             // 롤아웃 저장
             async function saveRollout() {
-                var input = document.getElementById('rolloutInput');
-                if (!input) return;
+                var input   = document.getElementById('rolloutInput');
+                var selEnabled = document.getElementById('rolloutEnabled');
+                if (!input || !selEnabled) return;
+
                 var val = parseInt(input.value, 10);
                 if (isNaN(val) || val < 0 || val > 100) {
                     showToast('0~100 사이 값을 입력하세요.', 'error');
                     return;
                 }
+                var enabledVal = selEnabled.value === 'true';
+
                 try {
                     var res = await authFetch('/api/uir/rollout', {
                         method: 'PUT',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ rollout_percent: val })
+                        body: JSON.stringify({ rollout_percent: val, enabled: enabledVal })
                     });
-                    var data = await res.json();
-                    if (res.ok) {
+                    var json = await res.json();
+                    if (res.ok && json.success) {
                         showToast('롤아웃 설정이 저장되었습니다.', 'success');
-                        var display = document.getElementById('rolloutPctDisplay');
-                        if (display) display.textContent = val + '%';
+                        // 저장 성공 후 전체 재로드로 UI 갱신
+                        loadAll();
                     } else {
-                        var errMsg = (data && data.error && data.error.message) ? data.error.message : '저장 실패';
+                        var errMsg = (json && json.error && json.error.message) ? json.error.message : '저장 실패';
                         showToast(errMsg, 'error');
                     }
                 } catch (e) {
@@ -246,37 +252,44 @@
 
             // 전체 데이터 로드
             async function loadAll() {
+                // 통계 + 롤아웃 (stats 엔드포인트가 둘 다 반환)
                 try {
                     var statsRes = await authFetch('/api/uir/stats');
-                    if (statsRes.ok) {
-                        var statsData = await statsRes.json();
-                        renderStats(statsData.data || statsData);
+                    var statsJson = await statsRes.json();
+                    if (statsRes.ok && statsJson.success) {
+                        renderStats(statsJson.data.stats);
+                        // stats 응답에 rollout도 포함되어 있으면 함께 렌더링
+                        if (statsJson.data.rollout) {
+                            renderRollout(statsJson.data.rollout);
+                        }
                     }
                 } catch (e) {
                     console.error('[uir-monitor] stats load error:', e);
                 }
 
-                try {
-                    var rolloutRes = await authFetch('/api/uir/rollout');
-                    if (rolloutRes.ok) {
-                        var rolloutData = await rolloutRes.json();
-                        renderRollout(rolloutData.data || rolloutData);
-                    } else {
-                        var section = document.getElementById('uirRolloutSection');
-                        if (section) {
-                            section.innerHTML = '<h3>롤아웃 설정<\/h3><div class="empty-state">롤아웃 정보를 불러올 수 없습니다.<\/div>';
+                // rollout이 stats에서 로드되지 않은 경우 별도 조회
+                var rolloutSection = document.getElementById('uirRolloutSection');
+                if (rolloutSection && rolloutSection.innerHTML.includes('로딩 중')) {
+                    try {
+                        var rolloutRes = await authFetch('/api/uir/rollout');
+                        var rolloutJson = await rolloutRes.json();
+                        if (rolloutRes.ok && rolloutJson.success) {
+                            renderRollout(rolloutJson.data.rollout);
+                        } else {
+                            renderRollout(null);
                         }
+                    } catch (e) {
+                        console.error('[uir-monitor] rollout load error:', e);
+                        renderRollout(null);
                     }
-                } catch (e) {
-                    console.error('[uir-monitor] rollout load error:', e);
                 }
 
+                // Shadow log
                 try {
                     var logRes = await authFetch('/api/uir/log?limit=50');
-                    if (logRes.ok) {
-                        var logData = await logRes.json();
-                        var rows = Array.isArray(logData) ? logData : (logData.data || logData.rows || []);
-                        renderLogTable(rows);
+                    var logJson = await logRes.json();
+                    if (logRes.ok && logJson.success) {
+                        renderLogTable(logJson.data.items || []);
                     } else {
                         var el = document.getElementById('uirLogTable');
                         if (el) el.innerHTML = '<div class="empty-state">로그 데이터를 불러올 수 없습니다.<\/div>';
