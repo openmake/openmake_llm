@@ -451,6 +451,10 @@ function finishAssistantMessage(errorMessage = null, serverMessageId = null) {
             }
         }
 
+        // Ollama Thinking trace 보존: renderMarkdown이 innerHTML을 덮어쓰기 전에 저장
+        var existingThinkingTrace = content.querySelector('.thinking-trace');
+        var thinkingTraceHtml = existingThinkingTrace ? existingThinkingTrace.outerHTML : '';
+
         // 마크다운 렌더링: 접힌 사고 과정 상단, 결론 하단 (이미지 레이아웃)
         if (thinkingProcess && finalAnswer) {
             content.innerHTML = '<details class="thinking-block"><summary>\uD83D\uDCAD \uBD84\uC11D \uACFC\uC815 \uBCF4\uAE30 (\uB2E8\uACC4 1-' + stepCount + ')</summary><div class="thinking-content"></div></details><div class="final-answer"></div>';
@@ -462,6 +466,11 @@ function finishAssistantMessage(errorMessage = null, serverMessageId = null) {
             renderMarkdown(finalContent, finalAnswer);
         } else {
             renderMarkdown(content, finalAnswer);
+        }
+
+        // Ollama Thinking trace 복원: renderMarkdown 후 최상단에 다시 삽입
+        if (thinkingTraceHtml) {
+            content.insertAdjacentHTML('afterbegin', thinkingTraceHtml);
         }
 
         // saveHistory 설정이 활성화된 경우에만 메모리에 추가

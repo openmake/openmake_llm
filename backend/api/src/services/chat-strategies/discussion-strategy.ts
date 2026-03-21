@@ -340,8 +340,11 @@ export class DiscussionStrategy implements ChatStrategy<DiscussionStrategyContex
                 { role: 'user', content: userMessage },
             ];
 
-            await context.client.chat(chatMessages, {}, (token) => {
-                response += token;
+            await context.client.chat(chatMessages, {}, (token, thinking) => {
+                // Discussion 참가 모델의 thinking은 무시하고 content만 수집
+                if (!thinking) {
+                    response += token;
+                }
             });
 
             return response;

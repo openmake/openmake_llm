@@ -374,15 +374,27 @@ export class A2AStrategy implements ChatStrategy<A2AStrategyContext, A2AStrategy
             context.onToken(char);
         }
 
+        // format 지정 시 temperature: 0 적용 (Ollama 공식 문서 권장)
+        const synthesizerOptions = context.format
+            ? { temperature: 0 }
+            : { temperature: 0.3 };
+
         await synthesizerClient.chat(
             [
                 { role: 'system', content: A2A_SYNTHESIS_SYSTEM_PROMPTS[locale] },
                 { role: 'user', content: synthesisUserMessage },
             ],
-            { temperature: 0.3 },
-            (token) => {
+            synthesizerOptions,
+            (token, thinking) => {
+                if (thinking) {
+                    context.onToken('', thinking);
+                    return;
+                }
                 fullSynthesis += token;
                 context.onToken(token);
+            },
+            {
+                ...(context.format && { format: context.format }),
             }
         );
 

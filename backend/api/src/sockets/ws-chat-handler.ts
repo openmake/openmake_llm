@@ -227,7 +227,11 @@ export async function handleChatMessage(
             clusterManager: cluster,
             abortSignal: abortController.signal,
             onToken: tokenCallback,
-            onThinking: (thinking) => ws.send(JSON.stringify({ type: 'thinking', token: thinking, messageId })),
+            onThinking: (thinking) => {
+                if (abortController.signal.aborted) throw new Error('ABORTED');
+                ws.send(JSON.stringify({ type: 'thinking', token: thinking, messageId }));
+            },
+            format: msg.format as import('../ollama/types').FormatOption,
             onAgentSelected: (agent) => ws.send(JSON.stringify({ type: 'agent_selected', agent })),
             onDiscussionProgress: (progress) => ws.send(JSON.stringify({ type: 'discussion_progress', progress })),
             onResearchProgress: (progress) => ws.send(JSON.stringify({ type: 'research_progress', progress })),

@@ -54,6 +54,7 @@ router.post('/', optionalApiKey, optionalAuth, chatRateLimiter, validate(chatReq
     }
 
     try {
+        let thinkingTrace = '';
         const result = await ChatRequestHandler.processChat({
             message,
             model,
@@ -63,12 +64,16 @@ router.post('/', optionalApiKey, optionalAuth, chatRateLimiter, validate(chatReq
             docId: req.body.docId,
             images: req.body.images,
             webSearchContext: req.body.webSearchContext,
+            thinkingMode: req.body.thinkingMode,
+            thinkingLevel: req.body.thinkingLevel,
+            format: req.body.format,
             tools,
             tool_choice,
             userContext,
             apiKeyId: req.apiKeyId,
             clusterManager,
             onToken: () => { /* 일반 채팅은 스트리밍 안 함 */ },
+            onThinking: (thinking: string) => { thinkingTrace += thinking; },
         });
 
         // §9 디버그 정보 (x-omk-debug 헤더가 있을 때만 노출)
@@ -86,6 +91,7 @@ router.post('/', optionalApiKey, optionalAuth, chatRateLimiter, validate(chatReq
             response: result.response,
             sessionId: result.sessionId,
             model: result.model,
+            ...(thinkingTrace && { thinking: thinkingTrace }),
             ...(result.tool_calls && { tool_calls: result.tool_calls }),
             ...(result.finish_reason && { finish_reason: result.finish_reason }),
             ...(pipelineInfo && { pipeline_info: pipelineInfo }),
@@ -143,6 +149,7 @@ router.post('/stream', optionalApiKey, optionalAuth, chatRateLimiter, validate(c
             deepResearchMode: req.body.deepResearchMode,
             thinkingMode: req.body.thinkingMode,
             thinkingLevel: req.body.thinkingLevel,
+            format: req.body.format,
             tools,
             tool_choice,
             userContext,
@@ -152,6 +159,10 @@ router.post('/stream', optionalApiKey, optionalAuth, chatRateLimiter, validate(c
             onToken: (token: string) => {
                 if (aborted) return;
                 res.write(`data: ${JSON.stringify({ token })}\n\n`);
+            },
+            onThinking: (thinking: string) => {
+                if (aborted) return;
+                res.write(`data: ${JSON.stringify({ thinking })}\n\n`);
             },
         });
 
