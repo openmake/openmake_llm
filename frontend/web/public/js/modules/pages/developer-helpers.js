@@ -85,3 +85,5 @@ export function formatLang(lang) {
     if (lang === 'python') return 'Python';
     return lang;
 }
+
+export default { escapeHtml, highlight, getCodeBlock, formatLang };
