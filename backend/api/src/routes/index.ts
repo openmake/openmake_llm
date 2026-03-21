@@ -48,3 +48,6 @@ export { tokenMonitoringRouter } from './token-monitoring.routes';
 
 // 🆕 Knowledge Base 라우트
 export { default as kbRouter } from './kb.routes';
+
+// 🆕 UIR 모니터링 라우트
+export { default as uirRouter } from './uir.routes';
