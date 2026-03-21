@@ -32,6 +32,8 @@ export interface WSMessage {
     userTier?: 'free' | 'pro' | 'enterprise';
     /** 사용자 선호 언어 (설정 페이지에서 선택) */
     language?: string;
+    /** 구조화된 출력 형식 (Ollama format 파라미터: 'json' 또는 JSON Schema 객체) */
+    format?: 'json' | Record<string, unknown>;
     [key: string]: unknown;
 }
 

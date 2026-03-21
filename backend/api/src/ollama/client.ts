@@ -437,9 +437,8 @@ export class OllamaClient {
                                 fullResponse += data.response;
                                 onToken(data.response);
                             }
-                            // Thinking 필드 처리 (think=true 시)
+                            // Thinking 필드 처리 (think=true 시) — content와 분리
                             if (data.thinking) {
-                                fullResponse += data.thinking;
                                 onToken(data.thinking);
                             }
                             if (data.done) {
@@ -476,7 +475,6 @@ export class OllamaClient {
                             onToken(data.response);
                         }
                         if (data.thinking) {
-                            fullResponse += data.thinking;
                             onToken(data.thinking);
                         }
                         if (data.done) {

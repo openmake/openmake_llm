@@ -115,6 +115,8 @@ export const chatRequestSchema = z.object({
     webSearch: z.boolean().optional(),
     tools: z.array(toolDefinitionSchema).optional(),
     tool_choice: toolChoiceSchema.optional(),
+    /** 구조화된 출력 형식: 'json' 또는 JSON Schema 객체 */
+    format: z.union([z.literal('json'), z.record(z.string(), z.unknown())]).optional(),
 });
 
 /** 채팅 요청 TypeScript 타입 (Zod 스키마로부터 추론) */

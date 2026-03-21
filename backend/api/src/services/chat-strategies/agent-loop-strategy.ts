@@ -88,6 +88,7 @@ export class AgentLoopStrategy implements ChatStrategy<AgentLoopStrategyContext,
                 chatOptions: context.chatOptions,
                 allowedTools,
                 thinkOption,
+                format: context.format,
             });
 
             if (directResult.metrics) {
