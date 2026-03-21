@@ -13,6 +13,7 @@
  * - AgentLoopStrategy의 내부 빌딩 블록으로 사용됨
  */
 import type { ChatMessage } from '../../ollama/types';
+import { LLM_TEMPERATURES } from '../../config/llm-parameters';
 import type { ChatStrategy, DirectStrategyContext, DirectStrategyResult } from './types';
 
 /**
@@ -35,7 +36,7 @@ export class DirectStrategy implements ChatStrategy<DirectStrategyContext, Direc
     async execute(context: DirectStrategyContext): Promise<DirectStrategyResult> {
         // Ollama 공식 문서 권장: format 지정 시 temperature: 0 (결정론적 JSON 출력)
         const chatOptions = context.format
-            ? { ...context.chatOptions, temperature: 0 }
+            ? { ...context.chatOptions, temperature: LLM_TEMPERATURES.FORMAT_STRICT }
             : context.chatOptions;
 
         const response = await context.client.chat(

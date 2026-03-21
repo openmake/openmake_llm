@@ -41,6 +41,7 @@ import { detectLanguage } from '../chat/language-policy';
   import { validate, validateUploadContentType, validateFileUploadSecurity } from '../middlewares/validation';
   import { summarizeDocumentSchema, documentAskSchema } from '../schemas/documents.schema';
 import { FILE_LIMITS } from '../config/constants';
+import { LLM_TEMPERATURES } from '../config/llm-parameters';
 import { optionalAuth } from '../auth';
 
 const logger = createLogger('DocumentsRoutes');
@@ -218,6 +219,11 @@ router.post('/summarize', validate(summarizeDocumentSchema), asyncHandler(async 
       const sumIsAuto = sumPlan.resolvedEngine === '__auto__';
       const sumEngineModel = sumIsAuto ? '' : (sumPlan.resolvedEngine || model);
 
+      if (!clusterManager) {
+          res.status(503).json(serviceUnavailable('Cluster manager not initialized'));
+          return;
+      }
+
       const bestNode = clusterManager.getBestNode(sumEngineModel);
       const client = bestNode ? clusterManager.createScopedClient(bestNode.id, sumEngineModel) : undefined;
 
@@ -230,7 +236,7 @@ router.post('/summarize', validate(summarizeDocumentSchema), asyncHandler(async 
       const acceptLang = (req.headers['accept-language'] || '').substring(0, 2).toLowerCase();
       const docLang = ['ko','en','ja','zh','es','fr','de','pt','ru'].includes(acceptLang) ? acceptLang : detectLanguage(doc.text.substring(0, 500)).language;
       const prompt = createSummaryPrompt(doc, docLang);
-     const result = await client.generate(prompt, { temperature: 0.1 });
+     const result = await client.generate(prompt, { temperature: LLM_TEMPERATURES.DOCUMENT_SUMMARY });
     const response = result.response;
 
      logger.info('[Summarize] 요약 완료. JSON 파싱 시도...');
@@ -272,6 +278,11 @@ router.post('/document/ask', validate(documentAskSchema), asyncHandler(async (re
       const qaIsAuto = qaPlan.resolvedEngine === '__auto__';
       const qaEngineModel = qaIsAuto ? '' : (qaPlan.resolvedEngine || model);
 
+      if (!clusterManager) {
+          res.status(503).json(serviceUnavailable('Cluster manager not initialized'));
+          return;
+      }
+
       const bestNode = clusterManager.getBestNode(qaEngineModel);
       const client = bestNode ? clusterManager.createScopedClient(bestNode.id, qaEngineModel) : undefined;
 
@@ -283,7 +294,7 @@ router.post('/document/ask', validate(documentAskSchema), asyncHandler(async (re
       // 사용자 언어 감지: 질문 텍스트 기반
       const questionLang = detectLanguage(question).language;
       const prompt = createQAPrompt(doc, question, questionLang);
-    const result = await client.generate(prompt, { temperature: 0.1 });
+    const result = await client.generate(prompt, { temperature: LLM_TEMPERATURES.DOCUMENT_QA });
     const response = result.response;
 
     let parsedAnswer;

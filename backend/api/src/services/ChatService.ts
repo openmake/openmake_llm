@@ -31,6 +31,7 @@ import type { UserTier } from '../data/user-manager';
 import type { UserContext } from '../mcp/user-sandbox';
 import { CONTEXT_LIMITS } from '../config/runtime-limits';
 import { LLM_TIMEOUTS } from '../config/timeouts';
+import { LLM_TEMPERATURES } from '../config/llm-parameters';
 import { getUnifiedMCPClient } from '../mcp/unified-client';
 import { OllamaClient } from '../ollama/client';
 import { getGptOssTaskPreset, isGeminiModel, type ChatMessage, type ToolDefinition, type ModelOptions } from '../ollama/types';
@@ -950,14 +951,15 @@ export class ChatService {
             // LLM 추출기: 현재 클라이언트를 활용하여 메모리 추출 프롬프트 실행
             const llmExtractor = async (prompt: string): Promise<string> => {
                 const timeoutMs = LLM_TIMEOUTS.MEMORY_EXTRACTION_TIMEOUT_MS;
+                let timeoutHandle: ReturnType<typeof setTimeout>;
                 const result = await Promise.race([
                     this.client.chat(
                         [{ role: 'user' as const, content: prompt }],
-                        { temperature: 0.1, num_predict: 512 },
-                    ),
-                    new Promise<never>((_, reject) =>
-                        setTimeout(() => reject(new Error('Memory extraction timeout')), timeoutMs)
-                    ),
+                        { temperature: LLM_TEMPERATURES.MEMORY_EXTRACTION, num_predict: 512 },
+                    ).finally(() => clearTimeout(timeoutHandle)),
+                    new Promise<never>((_, reject) => {
+                        timeoutHandle = setTimeout(() => reject(new Error('Memory extraction timeout')), timeoutMs);
+                    }),
                 ]);
                 return result?.content || '';
             };

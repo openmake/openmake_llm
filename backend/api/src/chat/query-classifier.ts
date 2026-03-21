@@ -13,6 +13,7 @@
 
 import type { QueryType, QueryClassification } from './model-selector-types';
 import queryPatternsData from '../config/data/query-patterns.json';
+import { CONFIDENCE_DIVISORS } from '../config/llm-parameters';
 
 // ============================================================
 // 질문 유형 분류 패턴
@@ -70,7 +71,7 @@ const QUERY_PATTERNS: QueryPattern[] = compileQueryPatterns(
  * 2. 가장 높은 점수의 유형을 선택 (동점 시 먼저 발견된 유형)
  * 3. [IMAGE] 메타데이터가 있으면 vision으로 강제 전환
  * 4. 한국어 비율 30% 이상이면 subType='korean' 추가
- * 5. 신뢰도 = min(bestScore / 5, 1.0)
+ * 5. 신뢰도 = min(bestScore / CONFIDENCE_DIVISORS.QUERY_CLASSIFIER, 1.0)
  * 
  * @param query - 분류할 사용자 질문 텍스트
  * @returns 분류 결과 (유형, 신뢰도, 매칭된 패턴)
@@ -172,7 +173,7 @@ export function classifyQuery(query: string): QueryClassification {
     }
 
     // 신뢰도 계산 (0~1)
-    const confidence = Math.min(bestScore / 4, 1.0);
+    const confidence = Math.min(bestScore / CONFIDENCE_DIVISORS.QUERY_CLASSIFIER, 1.0);
 
     return {
         type: bestType,

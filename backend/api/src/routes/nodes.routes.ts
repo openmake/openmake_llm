@@ -47,6 +47,10 @@ export function setClusterManager(cluster: ClusterManager): void {
 router.post('/', validate(addClusterNodeSchema), asyncHandler(async (req: Request, res: Response) => {
     const { host, port, name } = req.body as { host: string; port: number; name?: string };
 
+     if (!clusterRef) {
+         return res.status(503).json({ error: 'Cluster manager not initialized' });
+     }
+
      const node = await clusterRef.addNode(host, port, name);
      if (node) {
          res.json(success(node));
@@ -61,6 +65,11 @@ router.post('/', validate(addClusterNodeSchema), asyncHandler(async (req: Reques
  */
 router.delete('/:nodeId', asyncHandler(async (req: Request, res: Response) => {
      const { nodeId } = req.params;
+
+     if (!clusterRef) {
+         return res.status(503).json({ error: 'Cluster manager not initialized' });
+     }
+
      const deleted = clusterRef.removeNode(decodeURIComponent(nodeId));
      res.json(success({ deleted }));
  }));
