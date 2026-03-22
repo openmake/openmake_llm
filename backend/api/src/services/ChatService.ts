@@ -279,10 +279,24 @@ export class ChatService {
             req.userLanguagePreference = languagePolicy.resolvedLanguage;
         }
         if (discussionMode) {
+            // Auto-routing 모델 해석: __auto__ → 실제 엔진 모델명으로 변환
+            // Discussion 모드는 일반 모드의 resolveModel() 흐름을 거치지 않으므로
+            // client가 placeholder "default"를 유지하면 Ollama 404 발생
+            if (executionPlan?.isBrandModel && executionPlan.resolvedEngine === '__auto__') {
+                const hasImages = (images && images.length > 0) || false;
+                const promptConfig = getPromptConfig(message, languagePolicy?.resolvedLanguage);
+                await this.resolveModel(message || '', hasImages, executionPlan, promptConfig);
+            }
             return this.processMessageWithDiscussion(req, uploadedDocuments, onToken, onDiscussionProgress);
         }
 
         if (deepResearchMode) {
+            // Auto-routing 모델 해석 (Discussion 모드와 동일한 이유)
+            if (executionPlan?.isBrandModel && executionPlan.resolvedEngine === '__auto__') {
+                const hasImages = (images && images.length > 0) || false;
+                const promptConfig = getPromptConfig(message, languagePolicy?.resolvedLanguage);
+                await this.resolveModel(message || '', hasImages, executionPlan, promptConfig);
+            }
             return this.processMessageWithDeepResearch(req, onToken, onResearchProgress);
         }
 

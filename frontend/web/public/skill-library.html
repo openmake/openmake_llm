@@ -14,17 +14,22 @@
         .toolbar { display:flex; gap:var(--space-3); align-items:center; flex-wrap:wrap; margin-bottom:var(--space-5); }
         .toolbar input { flex:1; min-width:200px; padding:var(--space-3); background:var(--bg-secondary); border:1px solid var(--border-light); border-radius:var(--radius-md); color:var(--text-primary); box-sizing:border-box; }
         .toolbar .btn-primary { padding:var(--space-2) var(--space-4); background:var(--accent-primary); color:#fff; border:none; border-radius:var(--radius-md); cursor:pointer; font-weight:var(--font-weight-semibold); white-space:nowrap; }
-        .filter-tabs { display:flex; gap:var(--space-2); margin-bottom:var(--space-5); flex-wrap:wrap; }
-        .filter-tab { padding:var(--space-2) var(--space-3); background:var(--bg-tertiary); border:1px solid var(--border-light); border-radius:var(--radius-md); cursor:pointer; color:var(--text-secondary); font-size:var(--font-size-sm); }
+        .filter-tabs { display:flex; gap:var(--space-2); margin-bottom:var(--space-4); flex-wrap:wrap; }
+        .filter-tab { padding:var(--space-2) var(--space-3); background:var(--bg-tertiary); border:1px solid var(--border-light); border-radius:var(--radius-md); cursor:pointer; color:var(--text-secondary); font-size:var(--font-size-sm); transition:all .2s; }
+        .filter-tab:hover { border-color:var(--accent-primary); color:var(--text-primary); }
         .filter-tab.active { background:var(--accent-primary); color:#fff; border-color:var(--accent-primary); }
+        .stats-bar { display:flex; justify-content:space-between; align-items:center; margin-bottom:var(--space-4); padding:var(--space-3) var(--space-4); background:var(--bg-secondary); border-radius:var(--radius-md); font-size:var(--font-size-sm); color:var(--text-muted); }
+        .stats-bar strong { color:var(--text-primary); }
         .skill-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:var(--space-4); }
         .skill-card { background:var(--bg-card); border:1px solid var(--border-light); border-radius:var(--radius-lg); padding:var(--space-5); transition:border-color .2s; }
         .skill-card:hover { border-color:var(--accent-primary); }
         .skill-card h3 { margin:0 0 var(--space-2); color:var(--text-primary); font-size:15px; }
-        .skill-card .skill-desc { color:var(--text-muted); font-size:var(--font-size-sm); margin-bottom:var(--space-3); display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
+        .skill-card .skill-desc { color:var(--text-muted); font-size:var(--font-size-sm); margin-bottom:var(--space-3); display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; min-height:3.6em; }
         .skill-meta { display:flex; gap:var(--space-2); align-items:center; flex-wrap:wrap; font-size:var(--font-size-sm); }
         .badge { display:inline-block; padding:2px 8px; border-radius:var(--radius-md); font-size:11px; font-weight:var(--font-weight-semibold); }
         .badge-cat { background:var(--bg-tertiary); color:var(--text-secondary); }
+        .badge-system { background:rgba(59,130,246,0.12); color:var(--info-color,#3b82f6); border:1px solid rgba(59,130,246,0.25); }
+        .badge-utility { background:rgba(168,85,247,0.12); color:#a855f7; border:1px solid rgba(168,85,247,0.25); }
         .badge-public { background:var(--success); color:#fff; }
         .badge-private { background:var(--bg-tertiary); color:var(--text-muted); }
         .skill-actions { display:flex; gap:var(--space-2); margin-top:var(--space-3); }
@@ -33,8 +38,15 @@
         .empty-state { text-align:center; padding:var(--space-8); color:var(--text-muted); }
         .empty-state h2 { color:var(--text-secondary); margin-bottom:var(--space-3); }
         .loading { text-align:center; padding:var(--space-6); color:var(--text-muted); }
+        .pagination { display:flex; justify-content:center; gap:var(--space-2); margin-top:var(--space-5); flex-wrap:wrap; }
+        .pagination button { padding:var(--space-2) var(--space-3); background:var(--bg-tertiary); border:1px solid var(--border-light); border-radius:var(--radius-md); cursor:pointer; color:var(--text-secondary); font-size:var(--font-size-sm); min-width:36px; }
+        .pagination button:hover:not(:disabled) { border-color:var(--accent-primary); color:var(--text-primary); }
+        .pagination button.active { background:var(--accent-primary); color:#fff; border-color:var(--accent-primary); }
+        .pagination button:disabled { opacity:0.4; cursor:default; }
         .toast { position:fixed; bottom:20px; right:20px; padding:var(--space-3) var(--space-5); border-radius:var(--radius-md); color:#fff; z-index:2000; opacity:0; transition:opacity .3s; }
         .toast.show { opacity:1; } .toast.success { background:var(--success); } .toast.error { background:var(--danger); }
+        .category-header { grid-column:1/-1; padding:var(--space-3) 0; margin-top:var(--space-3); border-bottom:1px solid var(--border-light); color:var(--text-secondary); font-size:var(--font-size-sm); font-weight:var(--font-weight-semibold); }
+        .category-header:first-child { margin-top:0; }
     </style>
 </head>
 <body>
@@ -44,7 +56,7 @@
         <main class="main-content">
             <header class="page-header">
                 <button class="mobile-menu-btn" onclick="toggleMobileSidebar(event)">&#9776;</button>
-                <h1>📦 스킬 라이브러리</h1>
+                <h1>스킬 라이브러리</h1>
             </header>
             <div class="content-area">
                 <div class="toolbar">
@@ -54,9 +66,11 @@
                 <div class="filter-tabs" id="filterTabs">
                     <button class="filter-tab active" data-cat="">전체</button>
                 </div>
+                <div id="statsBar" class="stats-bar" style="display:none"></div>
                 <div id="skillGrid" class="skill-grid">
                     <div class="loading">불러오는 중...</div>
                 </div>
+                <div id="pagination" class="pagination"></div>
             </div>
         </main>
     </div>
@@ -81,60 +95,136 @@
             creative:'창작/디자인', education:'교육/학습', business:'비즈니스',
             science:'과학/연구', technology:'기술/IT', finance:'금융/투자',
             healthcare:'의료/건강', legal:'법률', engineering:'엔지니어링',
-            media:'미디어', government:'공공/정부', 'real-estate':'부동산',
+            media:'미디어', 'social-welfare':'사회/복지', government:'공공/정부', 'real-estate':'부동산',
             energy:'에너지/환경', logistics:'물류/운송', hospitality:'관광/서비스',
             agriculture:'농업/식품', special:'특수 분야', productivity:'생산성',
             communication:'커뮤니케이션',
         };
         function catLabel(id) { return CATEGORY_LABELS[id] || id || '일반'; }
 
-        let skills = [];
+        const PAGE_SIZE = 18;
+        let allSkills = [];
+        let filteredSkills = [];
         let categories = [];
         let currentFilter = '';
+        let currentPage = 1;
 
         async function loadCategories() {
             try {
                 const res = await authFetch('/api/agents/skills/categories');
                 categories = res.data || [];
                 const tabs = document.getElementById('filterTabs');
-                tabs.innerHTML = '<button class="filter-tab active" data-cat="">전체</button>' +
+                const totalCount = categories.reduce((sum, c) => sum + c.count, 0);
+                tabs.innerHTML = '<button class="filter-tab active" data-cat="">전체 (' + totalCount + ')</button>' +
                     categories.map(c => '<button class="filter-tab" data-cat="' + esc(c.category) + '">' + esc(catLabel(c.category)) + ' (' + c.count + ')</button>').join('');
             } catch(e) { /* ignore */ }
         }
 
-        async function loadSkills() {
-            const params = new URLSearchParams();
-            const search = document.getElementById('searchInput').value.trim();
-            if (search) params.set('search', search);
-            if (currentFilter) params.set('category', currentFilter);
+        async function loadAllSkills() {
             try {
-                const res = await authFetch('/api/agents/skills?' + params.toString());
-                skills = (res.data && res.data.skills) || [];
-                renderSkills();
+                const res = await authFetch('/api/agents/skills?limit=200&sortBy=category');
+                allSkills = (res.data && res.data.skills) || [];
+                applyFilter();
             } catch(e) {
                 document.getElementById('skillGrid').innerHTML = '<div class="empty-state"><h2>로드 실패</h2></div>';
             }
         }
 
-        function renderSkills() {
+        function applyFilter() {
+            const search = document.getElementById('searchInput').value.trim().toLowerCase();
+            filteredSkills = allSkills.filter(s => {
+                if (currentFilter && s.category !== currentFilter) return false;
+                if (search) {
+                    return (s.name || '').toLowerCase().includes(search) ||
+                           (s.description || '').toLowerCase().includes(search);
+                }
+                return true;
+            });
+            currentPage = 1;
+            renderPage();
+        }
+
+        function renderPage() {
+            const totalPages = Math.ceil(filteredSkills.length / PAGE_SIZE) || 1;
+            if (currentPage > totalPages) currentPage = totalPages;
+            const start = (currentPage - 1) * PAGE_SIZE;
+            const pageSkills = filteredSkills.slice(start, start + PAGE_SIZE);
+
+            // Stats bar
+            const statsBar = document.getElementById('statsBar');
+            statsBar.style.display = 'flex';
+            const systemCount = filteredSkills.filter(s => (s.id || '').startsWith('system-skill-')).length;
+            const utilityCount = filteredSkills.filter(s => (s.id || '').startsWith('utility-skill-')).length;
+            const userCount = filteredSkills.length - systemCount - utilityCount;
+            statsBar.innerHTML = '<span>총 <strong>' + filteredSkills.length + '개</strong> 스킬' +
+                (systemCount ? ' (전문 에이전트: ' + systemCount + '개' : '') +
+                (utilityCount ? ', 유틸리티: ' + utilityCount + '개' : '') +
+                (userCount > 0 ? ', 사용자: ' + userCount + '개' : '') +
+                ')</span>' +
+                '<span>페이지 ' + currentPage + ' / ' + totalPages + '</span>';
+
+            renderSkills(pageSkills);
+            renderPagination(totalPages);
+        }
+
+        function renderSkills(pageSkills) {
             const el = document.getElementById('skillGrid');
-            if (!skills.length) {
+            if (!pageSkills.length) {
                 el.innerHTML = '<div class="empty-state"><h2>스킬이 없습니다</h2><p>새 스킬을 추가하거나 검색어를 변경해보세요.</p></div>';
                 return;
             }
-            el.innerHTML = skills.map(s => `
-                <div class="skill-card">
-                    <h3>${esc(s.name)}</h3>
-                    <div class="skill-desc">${esc(s.description || '')}</div>
-                    <div class="skill-meta">
-                        <span class="badge badge-cat">${esc(catLabel(s.category))}</span>
-                        <span class="badge ${s.isPublic ? 'badge-public' : 'badge-private'}">${s.isPublic ? '공개' : '비공개'}</span>
-                    </div>
-                    <div class="skill-actions">
-                        <button onclick="exportSkill('${s.id}')">📤 내보내기</button>
-                    </div>
-                </div>
-            `).join('');
+
+            let html = '';
+            let lastCategory = null;
+            pageSkills.forEach(s => {
+                // 카테고리가 바뀌면 구분 헤더 추가 (카테고리순 정렬 시)
+                if (!currentFilter && s.category !== lastCategory) {
+                    lastCategory = s.category;
+                    html += '<div class="category-header">' + esc(catLabel(s.category)) + '</div>';
+                }
+
+                const isSystem = (s.id || '').startsWith('system-skill-');
+                const typeBadge = isSystem
+                    ? '<span class="badge badge-system">전문 에이전트</span>'
+                    : '<span class="badge badge-utility">유틸리티</span>';
+
+                html += '<div class="skill-card">' +
+                    '<h3>' + esc(s.name) + '</h3>' +
+                    '<div class="skill-desc">' + esc(s.description || '') + '</div>' +
+                    '<div class="skill-meta">' +
+                        '<span class="badge badge-cat">' + esc(catLabel(s.category)) + '</span>' +
+                        typeBadge +
+                        '<span class="badge ' + (s.isPublic ? 'badge-public' : 'badge-private') + '">' + (s.isPublic ? '공개' : '비공개') + '</span>' +
+                    '</div>' +
+                    '<div class="skill-actions">' +
+                        '<button onclick="exportSkill(\'' + s.id + '\')">내보내기</button>' +
+                    '</div>' +
+                '</div>';
+            });
+            el.innerHTML = html;
+        }
+
+        function renderPagination(totalPages) {
+            const container = document.getElementById('pagination');
+            if (totalPages <= 1) { container.innerHTML = ''; return; }
+
+            let html = '<button ' + (currentPage === 1 ? 'disabled' : '') + ' onclick="changePage(' + (currentPage - 1) + ')">이전</button>';
+
+            const startPage = Math.max(1, currentPage - 2);
+            const endPage = Math.min(totalPages, startPage + 4);
+            for (let i = startPage; i <= endPage; i++) {
+                html += '<button class="' + (i === currentPage ? 'active' : '') + '" onclick="changePage(' + i + ')">' + i + '</button>';
+            }
+
+            html += '<button ' + (currentPage === totalPages ? 'disabled' : '') + ' onclick="changePage(' + (currentPage + 1) + ')">다음</button>';
+            container.innerHTML = html;
+        }
+
+        function changePage(page) {
+            const totalPages = Math.ceil(filteredSkills.length / PAGE_SIZE) || 1;
+            currentPage = Math.max(1, Math.min(page, totalPages));
+            renderPage();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
         }
 
         async function exportSkill(id) {
@@ -157,17 +247,18 @@
             document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
             e.target.classList.add('active');
             currentFilter = e.target.dataset.cat;
-            loadSkills();
+            applyFilter();
         });
 
         function debounce(fn, ms) { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; }
-        document.getElementById('searchInput').addEventListener('input', debounce(function() { loadSkills(); }, 400));
+        document.getElementById('searchInput').addEventListener('input', debounce(function() { applyFilter(); }, 400));
 
         loadCategories();
-        loadSkills();
+        loadAllSkills();
 
         window.openCreateModal = openCreateModal;
         window.exportSkill = exportSkill;
+        window.changePage = changePage;
     </script>
 </body>
 </html>

@@ -218,7 +218,7 @@ export class SkillRepository extends BaseRepository {
             sql += ' WHERE is_public = TRUE';
         }
 
-        sql += ' ORDER BY created_at DESC';
+        sql += ' ORDER BY created_at DESC, id ASC';
 
         const result = await this.query(sql, params);
         return result.rows.map((row) => this.rowToSkill(row));
@@ -258,16 +258,16 @@ export class SkillRepository extends BaseRepository {
         const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
         const sortMap: Record<NonNullable<SkillSearchOptions['sortBy']>, string> = {
-            newest: 'created_at DESC',
-            name: 'name ASC',
-            category: 'category ASC, name ASC',
-            updated: 'updated_at DESC',
+            newest: 'created_at DESC, id ASC',
+            name: 'name ASC, id ASC',
+            category: 'category ASC, name ASC, id ASC',
+            updated: 'updated_at DESC, id ASC',
         };
 
         const sortKey = options.sortBy ?? 'newest';
         const orderBy = sortMap[sortKey] ?? sortMap.newest;
 
-        const limit = Math.min(options.limit ?? 20, 100);
+        const limit = Math.min(options.limit ?? 20, 200);
         const offset = Math.max(0, options.offset ?? 0);
 
         const countResult = await this.query<CountRow>(
