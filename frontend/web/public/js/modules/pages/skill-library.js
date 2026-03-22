@@ -22,6 +22,7 @@
         legal: '법률',
         engineering: '엔지니어링',
         media: '미디어',
+        'social-welfare': '사회/복지',
         government: '공공/정부',
         'real-estate': '부동산',
         energy: '에너지/환경',
@@ -123,6 +124,7 @@
                     <option value="legal">법률</option>
                     <option value="engineering">엔지니어링</option>
                     <option value="media">미디어</option>
+                    <option value="social-welfare">사회/복지</option>
                     <option value="government">공공/정부</option>
                     <option value="real-estate">부동산</option>
                     <option value="energy">에너지/환경</option>

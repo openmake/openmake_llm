@@ -80,14 +80,16 @@ export async function getRelatedAgentsForDiscussion(
         }
     }
 
-    // 🆕 4. 보완적 에이전트 - 기술적 질문에는 기술 에이전트만, 비즈니스 질문에는 비즈니스 에이전트만
+    // 4. 보완적 에이전트 - 도메인별 차별화
     const techCategories = ['프로그래밍/개발', '데이터/AI'];
     const businessCategories = ['비즈니스/창업', '금융/투자'];
+    const socialCategories = ['사회/복지', '공공/정부'];
 
     const isTechQuestion = topicAnalysis.matchedCategories.some(c => techCategories.includes(c));
     const isBusinessQuestion = topicAnalysis.matchedCategories.some(c => businessCategories.includes(c));
+    const isSocialQuestion = topicAnalysis.matchedCategories.some(c => socialCategories.includes(c));
 
-    // 🆕 기술적 질문이면 기술 보완 에이전트만
+    // 기술적 질문이면 기술 보완 에이전트만
     if (isTechQuestion && !isBusinessQuestion) {
         const techComplementary = ['software-engineer', 'devops-engineer', 'ai-ml-engineer', 'data-analyst'];
         for (const agentId of techComplementary) {
@@ -99,7 +101,7 @@ export async function getRelatedAgentsForDiscussion(
             }
         }
     }
-    // 🆕 비즈니스 질문이면 비즈니스 보완 에이전트만
+    // 비즈니스 질문이면 비즈니스 보완 에이전트만
     else if (isBusinessQuestion && !isTechQuestion) {
         const businessComplementary = ['business-strategist', 'financial-analyst', 'risk-manager', 'project-manager'];
         for (const agentId of businessComplementary) {
@@ -111,9 +113,21 @@ export async function getRelatedAgentsForDiscussion(
             }
         }
     }
-    // 🆕 혼합 질문 또는 카테고리 미분류 시에만 다양한 관점 추가
+    // 사회/복지/공공 질문이면 사회 관련 보완 에이전트
+    else if (isSocialQuestion) {
+        const socialComplementary = ['sociologist', 'social-policy-researcher', 'demographer', 'labor-economist', 'policy-analyst'];
+        for (const agentId of socialComplementary) {
+            if (usedIds.has(agentId)) continue;
+            const agent = getAgentById(agentId);
+            if (agent) {
+                result.push(agent);
+                usedIds.add(agentId);
+            }
+        }
+    }
+    // 혼합 질문 또는 카테고리 미분류 시 — 범용 관점 에이전트
     else if (result.length < 3) {
-        const diverseAgents = ['business-strategist', 'data-analyst', 'project-manager'];
+        const diverseAgents = ['policy-analyst', 'business-strategist', 'data-analyst', 'educator', 'psychologist'];
         for (const agentId of diverseAgents) {
             if (usedIds.has(agentId)) continue;
             const agent = getAgentById(agentId);
