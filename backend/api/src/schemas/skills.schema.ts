@@ -38,7 +38,7 @@ export const searchSkillsQuerySchema = z.object({
     category: z.string().max(100).optional(),
     isPublic: z.coerce.boolean().optional(),
     sortBy: z.enum(['newest', 'name', 'category', 'updated']).optional().default('newest'),
-    limit: z.coerce.number().int().min(1).max(100).optional().default(20),
+    limit: z.coerce.number().int().min(1).max(200).optional().default(20),
     offset: z.coerce.number().int().min(0).optional().default(0),
 });
 

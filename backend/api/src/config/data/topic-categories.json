@@ -152,6 +152,23 @@
       "expansionKeywords": ["미디어", "홍보", "소셜", "커뮤니케이션", "콘텐츠"]
     },
     {
+      "name": "사회/복지",
+      "patterns": [
+        { "source": "사회적\\s*문제|사회\\s*문제|사회적\\s*이슈|사회\\s*이슈|사회\\s*현상", "flags": "i" },
+        { "source": "세대별|세대\\s*갈등|세대\\s*차이|MZ세대|베이비붐|X세대|밀레니얼|Z세대|청년\\s*세대|고령\\s*세대", "flags": "i" },
+        { "source": "복지|사회복지|사회보장|기본소득|실업급여|국민연금|건강보험", "flags": "i" },
+        { "source": "저출산|고령화|인구\\s*감소|인구\\s*문제|인구\\s*절벽|출산율", "flags": "i" },
+        { "source": "빈곤|불평등|양극화|소득\\s*격차|계층|사회\\s*이동|격차", "flags": "i" },
+        { "source": "고용|실업|일자리|노동|근로|비정규직|최저임금", "flags": "i" },
+        { "source": "주거|주택\\s*문제|전세\\s*사기|주거\\s*안정|주거\\s*복지", "flags": "i" },
+        { "source": "차별|인권|다문화|이민|난민|성평등|젠더", "flags": "i" },
+        { "source": "대한민국|한국\\s*사회|우리\\s*사회|국내\\s*사회|한국의\\s*문제", "flags": "i" }
+      ],
+      "excludePatterns": [],
+      "relatedAgents": ["policy-analyst", "public-administrator", "psychologist", "educator"],
+      "expansionKeywords": ["사회", "복지", "세대", "불평등", "인구", "고용"]
+    },
+    {
       "name": "공공/정부",
       "patterns": [
         { "source": "정부|정책|공공|행정|공무원|국회|입법", "flags": "i" },
