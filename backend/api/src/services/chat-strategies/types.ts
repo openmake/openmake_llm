@@ -198,6 +198,47 @@ export interface DiscussionStrategyContext extends ChatContext {
 }
 
 /**
+ * Generate-Verify(생성-검증) 전략 컨텍스트
+ *
+ * Generator(강력 모델)가 1차 응답을 생성하고,
+ * Verifier(다른 강력 모델)가 팩트체크·논리검증·보완을 수행합니다.
+ *
+ * @interface GenerateVerifyStrategyContext
+ * @extends ChatContext
+ */
+export interface GenerateVerifyStrategyContext extends ChatContext {
+    /** LLM에 전달할 메시지 배열 (시스템 프롬프트 + 대화 이력 + 사용자 메시지) */
+    messages: ChatMessage[];
+    /** 모델 옵션 (temperature, top_p 등) */
+    chatOptions: ModelOptions;
+    /** 질문 유형 (GV 모델 조합 동적 선택용) */
+    queryType?: QueryType;
+    /** 사용자 언어 (Verifier 프롬프트 다국어화용) */
+    userLanguage?: string;
+    /** 구조화된 출력 형식 (Ollama format 파라미터) */
+    format?: FormatOption;
+    /** Generator가 사용할 엔진 모델 */
+    generatorModel: string;
+    /** Verifier가 사용할 엔진 모델 */
+    verifierModel: string;
+}
+
+/**
+ * Generate-Verify 전략 결과
+ *
+ * @interface GenerateVerifyStrategyResult
+ * @extends ChatResult
+ */
+export interface GenerateVerifyStrategyResult extends ChatResult {
+    /** 전략 실행 성공 여부 (실패 시 AgentLoop으로 폴백) */
+    succeeded: boolean;
+    /** Verifier 검증 통과 여부 */
+    verified: boolean;
+    /** Verifier가 발견한 이슈 수 (0이면 원본 응답 유지) */
+    issuesFound: number;
+}
+
+/**
  * DeepResearch(심층 연구) 전략 컨텍스트
  *
  * 자율적 다단계 리서치 수행에 필요한 컨텍스트입니다.

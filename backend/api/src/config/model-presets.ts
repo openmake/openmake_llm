@@ -150,6 +150,100 @@ export function getModelPresets(): Record<string, ModelPreset> {
         priority: 1,  // 비전에 최우선
     },
 
+    // Devstral 2 - SW 엔지니어링 에이전트 (123B, Mistral)
+    // code-agent에서 qwen-coder(priority=0)보다 우선 선택
+    'devstral': {
+        name: 'Devstral 2',
+        envKey: 'OLLAMA_DEFAULT_MODEL',
+        defaultModel: 'devstral-2:cloud',
+        options: {
+            temperature: 0.2,
+            top_p: 0.85,
+            top_k: 30,
+            num_ctx: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
+            repeat_penalty: 1.0,
+        },
+        capabilities: {
+            toolCalling: true,
+            thinking: false,
+            vision: false,
+            streaming: true,
+            contextLength: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
+        },
+        bestFor: ['code-agent'],
+        priority: -1,
+    },
+
+    // Devstral Small 2 - 도구 사용/멀티파일 코드 편집 (24B, Mistral)
+    // code-gen에서 qwen-coder(priority=0)보다 우선 선택
+    'devstral-small': {
+        name: 'Devstral Small 2',
+        envKey: 'OLLAMA_DEFAULT_MODEL',
+        defaultModel: 'devstral-small-2:cloud',
+        options: {
+            temperature: 0.3,
+            top_p: 0.85,
+            top_k: 30,
+            num_ctx: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
+            repeat_penalty: 1.0,
+        },
+        capabilities: {
+            toolCalling: true,
+            thinking: false,
+            vision: false,
+            streaming: true,
+            contextLength: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
+        },
+        bestFor: ['code-gen'],
+        priority: -1,
+    },
+
+    // Nemotron 3 Nano - 경량 에이전트 (4B-30B MoE, NVIDIA)
+    'nemotron-nano': {
+        name: 'Nemotron 3 Nano',
+        envKey: 'OLLAMA_DEFAULT_MODEL',
+        defaultModel: 'nemotron-3-nano:cloud',
+        options: {
+            temperature: 0.3,
+            top_p: 0.85,
+            top_k: 30,
+            num_ctx: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
+            repeat_penalty: 1.1,
+        },
+        capabilities: {
+            toolCalling: true,
+            thinking: false,
+            vision: false,
+            streaming: true,
+            contextLength: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
+        },
+        bestFor: ['reasoning', 'chat'],
+        priority: 3,
+    },
+
+    // MiniMax M2.7 - 코딩/에이전트/생산성 (MiniMax 최신)
+    'minimax': {
+        name: 'MiniMax M2.7',
+        envKey: 'OLLAMA_DEFAULT_MODEL',
+        defaultModel: 'minimax-m2.7:cloud',
+        options: {
+            temperature: 0.5,
+            top_p: 0.9,
+            top_k: 40,
+            num_ctx: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
+            repeat_penalty: 1.1,
+        },
+        capabilities: {
+            toolCalling: true,
+            thinking: false,
+            vision: false,
+            streaming: true,
+            contextLength: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
+        },
+        bestFor: ['code-agent', 'code-gen', 'translation', 'korean'],
+        priority: 2,
+    },
+
     // 수학/과학 특화 프리셋
     'math-reasoning': {
         name: 'Math Reasoning',

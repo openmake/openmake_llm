@@ -31,7 +31,7 @@ import { getUnifiedMCPClient } from '../mcp/unified-client';
 import { OllamaClient } from '../ollama/client';
 import { getGptOssTaskPreset, type ChatMessage, type ToolDefinition, type ModelOptions } from '../ollama/types';
 import type { ResearchProgress } from './DeepResearchService';
-import { A2AStrategy, AgentLoopStrategy, DeepResearchStrategy, DirectStrategy, DiscussionStrategy } from './chat-strategies';
+import { A2AStrategy, AgentLoopStrategy, DeepResearchStrategy, DirectStrategy, DiscussionStrategy, GenerateVerifyStrategy } from './chat-strategies';
 import { formatResearchResult, formatDiscussionResult } from './chat-service-formatters';
 import { recordMemoryExtractionFailure } from './chat-service-metrics';
 import { preRequestCheck } from '../chat/security-hooks';
@@ -89,8 +89,10 @@ export class ChatService {
 
     /** 단일 LLM 직접 호출 전략 */
     private readonly directStrategy: DirectStrategy;
-    /** Agent-to-Agent 병렬 생성 전략 */
+    /** Agent-to-Agent 병렬 생성 전략 @deprecated Generate-Verify로 대체 예정 */
     private readonly a2aStrategy: A2AStrategy;
+    /** Generate-Verify 생성-검증 전략 */
+    private readonly generateVerifyStrategy: GenerateVerifyStrategy;
     /** 멀티 에이전트 토론 전략 */
     private readonly discussionStrategy: DiscussionStrategy;
     /** 심층 연구 오케스트레이션 전략 */
@@ -107,6 +109,7 @@ export class ChatService {
         this.client = client;
         this.directStrategy = new DirectStrategy();
         this.a2aStrategy = new A2AStrategy();
+        this.generateVerifyStrategy = new GenerateVerifyStrategy();
         this.discussionStrategy = new DiscussionStrategy();
         this.deepResearchStrategy = new DeepResearchStrategy();
         this.agentLoopStrategy = new AgentLoopStrategy(this.directStrategy);
@@ -570,6 +573,7 @@ export class ChatService {
         return selectAndExecuteStrategy({
             ...params,
             a2aStrategy: this.a2aStrategy,
+            generateVerifyStrategy: this.generateVerifyStrategy,
             agentLoopStrategy: this.agentLoopStrategy,
             client: this.client,
             currentUserContext: this.currentUserContext,

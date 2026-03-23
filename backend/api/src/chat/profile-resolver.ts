@@ -22,8 +22,10 @@
  */
 
 import { PipelineProfile, getProfiles, isValidBrandModel } from './pipeline-profile';
+import type { ExecutionStrategy } from './pipeline-profile';
 import { createLogger } from '../utils/logger';
 import type { QueryType } from './model-selector-types';
+import { GV_MODEL_MAP, GV_DEFAULT_MODELS } from '../config/model-defaults';
 
 const logger = createLogger('ProfileResolver');
 
@@ -79,6 +81,15 @@ export interface ExecutionPlan {
 
     /** Auto-Routing에서 분류된 원본 QueryType (Brand Profile 직접 선택 시 undefined) */
     classifiedQueryType?: QueryType;
+
+    /** 실행 전략 (A2A 대체) — 'single' | 'generate-verify' | 'conditional-verify' */
+    executionStrategy: ExecutionStrategy;
+
+    /** Generate-Verify 시 Generator 모델 (executionStrategy가 'single'이면 undefined) */
+    generatorModel?: string;
+
+    /** Generate-Verify 시 Verifier 모델 (executionStrategy가 'single'이면 undefined) */
+    verifierModel?: string;
 }
 
 // ============================================
@@ -98,6 +109,18 @@ export function resolveProfile(requestedModel: string): PipelineProfile | null {
 
     const profiles = getProfiles();
     return profiles[requestedModel] || null;
+}
+
+/**
+ * QueryType 기반으로 GV(Generate-Verify) 모델 쌍을 resolve합니다.
+ * classifiedQueryType이 나중에 설정되므로, 여기서는 기본값을 반환하고
+ * strategy-executor에서 queryType으로 최종 resolve합니다.
+ */
+function resolveGVModels(queryType?: string): { generator: string; verifier: string } {
+    if (queryType && queryType in GV_MODEL_MAP) {
+        return GV_MODEL_MAP[queryType];
+    }
+    return { ...GV_DEFAULT_MODELS };
 }
 
 /**
@@ -123,7 +146,12 @@ export function buildExecutionPlan(
 
     if (profile) {
         // Brand model → 프로파일 기반 실행 계획
-        logger.info(`Brand model 해석: ${requestedModel} → engine=${profile.engineModel}`);
+        const execStrategy: ExecutionStrategy = profile.executionStrategy;
+        logger.info(`Brand model 해석: ${requestedModel} → engine=${profile.engineModel}, strategy=${execStrategy}`);
+
+        // GV 모델 resolve (generate-verify / conditional-verify 전략에서만 사용)
+        const needsGV = execStrategy !== 'single';
+        const gvModels = needsGV ? resolveGVModels() : undefined;
 
         return {
             requestedModel,
@@ -139,6 +167,9 @@ export function buildExecutionPlan(
             timeBudgetMs: profile.timeBudgetSeconds * 1000,
             requiredTools: profile.requiredTools,
             isBrandModel: true,
+            executionStrategy: execStrategy,
+            generatorModel: gvModels?.generator,
+            verifierModel: gvModels?.verifier,
         };
     }
 
@@ -159,6 +190,7 @@ export function buildExecutionPlan(
         timeBudgetMs: 0,
         requiredTools: [],
         isBrandModel: false,
+        executionStrategy: 'single',
     };
 }
 
@@ -181,6 +213,7 @@ export function listAvailableModels(): Array<{
         name: p.displayName,
         description: p.description,
         capabilities: [
+            ...(p.executionStrategy !== 'single' ? ['generate-verify'] : []),
             ...(p.a2a !== 'off' ? ['agent'] : []),
             ...(p.thinking !== 'off' ? ['thinking'] : []),
             ...(p.discussion ? ['discussion'] : []),
