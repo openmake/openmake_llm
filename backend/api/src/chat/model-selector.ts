@@ -23,7 +23,6 @@
  * 5. adjustOptionsForModel() - 선택된 모델에 맞게 옵션 미세 조정
  * 
  * @see chat/pipeline-profile.ts - 브랜드 모델 프로파일 정의
- * @see chat/pipeline-profile.ts - 브랜드 모델 프로파일 정의
  * @see services/ChatService.ts - 최종 모델 선택 결과 소비
  */
 
@@ -35,6 +34,7 @@ import { MODEL_CONTEXT_DEFAULTS } from '../config/runtime-limits';
 import { QUERY_TYPE_PARAMS } from '../config/llm-parameters';
 import { applyCostTierCeiling, getDefaultCostTier } from './cost-tier';
 import { ModelPreset, getModelPresets } from '../config/model-presets';
+import { MODEL_CAPABILITY_PRESETS } from '../config/model-defaults';
 
 const logger = createLogger('ModelSelector');
 
@@ -171,23 +171,35 @@ export async function selectOptimalModel(query: string, hasImages?: boolean): Pr
  * @returns 해당 기능 지원 여부
  */
 export function checkModelCapability(
-    modelName: string, 
+    modelName: string,
     capability: 'toolCalling' | 'thinking' | 'vision' | 'streaming'
 ): boolean {
     const lowerModel = modelName.toLowerCase();
 
-    // 모델명으로 프리셋 찾기
+    // 1차: 모델명으로 프리셋 찾기 (정확한 매칭)
     for (const preset of Object.values(getModelPresets())) {
-        if (preset.defaultModel.toLowerCase().includes(lowerModel) || 
+        if (preset.defaultModel.toLowerCase().includes(lowerModel) ||
             lowerModel.includes(preset.defaultModel.split(':')[0].toLowerCase())) {
             return preset.capabilities[capability];
         }
     }
 
-    // 알 수 없는 모델은 기본값 반환
+    // 2차: MODEL_CAPABILITY_PRESETS에서 프리픽스 매칭 (longest match 우선)
+    // Auto-Routing 맵의 모델(kimi, deepseek, cogito 등)이 프리셋에 없을 때 사용
+    let bestMatch: { prefix: string; caps: typeof MODEL_CAPABILITY_PRESETS[string] } | null = null;
+    for (const [prefix, caps] of Object.entries(MODEL_CAPABILITY_PRESETS)) {
+        if (lowerModel.includes(prefix) && (!bestMatch || prefix.length > bestMatch.prefix.length)) {
+            bestMatch = { prefix, caps };
+        }
+    }
+    if (bestMatch) {
+        return bestMatch.caps[capability];
+    }
+
+    // 3차: 알 수 없는 모델은 보수적 기본값 반환
     const defaults: Record<string, boolean> = {
         toolCalling: true,
-        thinking: true,
+        thinking: false,
         vision: false,
         streaming: true,
     };
@@ -250,6 +262,11 @@ export function adjustOptionsForModel(
     if (lowerModel.includes('qwen') && lowerModel.includes('coder')) {
         adjustedOptions.temperature = Math.min(adjustedOptions.temperature || QUERY_TYPE_PARAMS.DEFAULT_TEMP_FALLBACK, QUERY_TYPE_PARAMS.QWEN_CODER_TEMP_CAP);
         adjustedOptions.repeat_penalty = 1.0;
+    }
+
+    // Kimi: 긴 컨텍스트 윈도우 지원 (128K+ 토큰)
+    if (lowerModel.includes('kimi')) {
+        adjustedOptions.num_ctx = Math.max(adjustedOptions.num_ctx || MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX, MODEL_CONTEXT_DEFAULTS.EXTENDED_NUM_CTX);
     }
 
     // Vision 모델: 이미지 분석에 적합한 설정

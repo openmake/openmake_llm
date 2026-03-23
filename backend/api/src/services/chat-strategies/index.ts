@@ -16,12 +16,15 @@ export { DirectStrategy } from './direct-strategy';
 export { DiscussionStrategy } from './discussion-strategy';
 export { DeepResearchStrategy } from './deep-research-strategy';
 export { AgentLoopStrategy } from './agent-loop-strategy';
+export { GenerateVerifyStrategy } from './generate-verify-strategy';
 export type {
     ChatContext,
     ChatResult,
     ChatStrategy,
     A2AStrategyContext,
     A2AStrategyResult,
+    GenerateVerifyStrategyContext,
+    GenerateVerifyStrategyResult,
     DirectStrategyContext,
     DirectStrategyResult,
     AgentLoopStrategyContext,
