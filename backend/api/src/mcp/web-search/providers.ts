@@ -1,18 +1,17 @@
 /**
  * Web Search 프로바이더
  *
- * Ollama, Firecrawl, Google, Wikipedia, Google News, DuckDuckGo, Naver 등
- * 7개 검색 소스의 개별 검색 함수를 구현합니다.
+ * Ollama, Google, Wikipedia, Google News, DuckDuckGo, Naver 등
+ * 6개 검색 소스의 개별 검색 함수를 구현합니다.
  *
  * @module mcp/web-search/providers
  */
 
 import { SearchResult } from './types';
 import { createClient } from '../../ollama/client';
-import { isFirecrawlConfigured } from '../firecrawl';
 import { getConfig } from '../../config/env';
 import { createLogger } from '../../utils/logger';
-import { CAPACITY, TRUNCATION } from '../../config/runtime-limits';
+import { CAPACITY } from '../../config/runtime-limits';
 import { getSearchLocale } from '../../i18n/search-locale';
 
 /** Google Custom Search API 키 */
@@ -75,74 +74,6 @@ export async function searchOllamaWebSearch(query: string, maxResults: number = 
         }
     } catch (e) {
         logger.error('Ollama API 실패:', e instanceof Error ? e.message : String(e));
-    }
-
-    return results;
-}
-
-/**
- * Firecrawl Search API 검색 (콘텐츠 스크래핑 포함)
- *
- * Firecrawl API를 사용하여 검색 결과와 함께 페이지 콘텐츠를 스크래핑합니다.
- * FIRECRAWL_API_KEY가 설정되지 않으면 빈 배열을 반환합니다.
- *
- * @param query - 검색 쿼리
- * @param maxResults - 최대 결과 수 (기본값: 5)
- * @param language - 검색 언어 (기본값: 'en')
- * @returns SearchResult 배열 (미설정 또는 실패 시 빈 배열)
- */
-export async function searchFirecrawl(query: string, maxResults: number = 5, language: string = 'en'): Promise<SearchResult[]> {
-    const results: SearchResult[] = [];
-
-    if (!isFirecrawlConfigured()) {
-        return results;
-    }
-
-    const FIRECRAWL_API_KEY = getConfig().firecrawlApiKey;
-    const FIRECRAWL_API_URL = getConfig().firecrawlApiUrl;
-
-    try {
-        logger.info(`Firecrawl 검색 시작: "${query}"`);
-
-        const response = await fetch(`${FIRECRAWL_API_URL}/search`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${FIRECRAWL_API_KEY}`
-            },
-            body: JSON.stringify({
-                query,
-                limit: maxResults,
-                lang: getSearchLocale(language).lang,
-                country: getSearchLocale(language).country,
-                scrapeOptions: {
-                    formats: ['markdown'],
-                    onlyMainContent: true
-                }
-            })
-        });
-
-        if (!response.ok) {
-            const errorText = await response.text();
-            logger.error(`Firecrawl API 오류 (${response.status}): ${errorText}`);
-            return results;
-        }
-
-        const data = await response.json() as { data?: Array<{ title?: string; url?: string; description?: string; markdown?: string }> };
-
-        if (data.data && Array.isArray(data.data)) {
-            for (const item of data.data) {
-                results.push({
-                    title: item.title || '',
-                    url: item.url || '',
-                    snippet: item.description || item.markdown?.substring(0, TRUNCATION.WEB_SNIPPET_MAX) || '',
-                    source: 'firecrawl.dev'
-                });
-            }
-        }
-        logger.info(`Firecrawl: ${results.length}개`);
-    } catch (e) {
-        logger.error('Firecrawl 실패:', e instanceof Error ? e.message : String(e));
     }
 
     return results;

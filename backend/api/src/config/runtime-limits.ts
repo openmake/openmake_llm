@@ -107,10 +107,10 @@ export const TRUNCATION = {
     RESEARCH_SUMMARY_MAX: 4000,
     /** Deep Research 소스 콘텐츠 최대 길이 */
     RESEARCH_CONTENT_MAX: 5000,
-    /** Firecrawl 결과 콘텐츠 최대 길이 */
-    FIRECRAWL_CONTENT_MAX: 1000,
-    /** Firecrawl URL 목록 최대 수 */
-    FIRECRAWL_MAX_URLS: 50,
+    /** 웹 스크래퍼 결과 콘텐츠 최대 길이 */
+    SCRAPER_CONTENT_MAX: 1000,
+    /** 웹 스크래퍼 URL 목록 최대 수 */
+    SCRAPER_MAX_URLS: 50,
     /** Discussion 이미지 분석 응답 최대 길이 */
     DISCUSSION_IMAGE_ANALYSIS_MAX: 500,
     /** Discussion 히스토리 항목 최대 길이 */
@@ -205,6 +205,8 @@ export const RESEARCH_DEFAULTS = {
     MAX_SCRAPE_PER_LOOP: 15,
     /** 청크 크기 */
     CHUNK_SIZE: 10,
+    /** 전체 합성을 실행하기 위한 최소 콘텐츠 길이 (문자). 이 미만이면 경량 합성 */
+    MIN_CONTENT_FOR_FULL_SYNTHESIS: 1000,
 } as const;
 
 // ============================================

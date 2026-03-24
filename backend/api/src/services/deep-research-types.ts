@@ -20,11 +20,11 @@ import { RESEARCH_DEFAULTS } from '../config/runtime-limits';
 export interface ResearchConfig {
     maxLoops: number;            // 최대 반복 횟수 (기본: 5)
     llmModel: string;            // 사용할 LLM 모델
-    searchApi: 'ollama' | 'firecrawl' | 'google' | 'all'; // 검색 API
+    searchApi: 'ollama' | 'google' | 'all'; // 검색 API
     maxSearchResults: number;    // 검색 결과 예산 (기본: 360)
     language: string;              // 출력 언어 (ISO 639-1 코드, 예: 'ko', 'en', 'ja')
     maxTotalSources: number;     // 목표 고유 소스 수 (기본: 80)
-    scrapeFullContent: boolean;  // Firecrawl로 풀 콘텐츠 스크래핑 여부 (기본: true)
+    scrapeFullContent: boolean;  // 풀 콘텐츠 스크래핑 여부 (기본: true)
     maxScrapePerLoop: number;    // 루프당 최대 스크래핑 수 (기본: 15)
     scrapeTimeoutMs: number;     // 개별 스크래핑 타임아웃 (기본: 15000)
     chunkSize: number;           // 중간 요약용 청크 사이즈 (기본: 10)

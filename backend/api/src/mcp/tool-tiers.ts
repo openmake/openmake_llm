@@ -27,7 +27,7 @@ import { MCP_NAMESPACE_SEPARATOR } from './types';
  *
  * 각 UserTier에 대해 접근 가능한 도구 이름 패턴을 정의합니다.
  * - '*': 모든 도구 허용 (enterprise 등급)
- * - 'prefix_*': 해당 접두사로 시작하는 모든 도구 허용 (예: 'firecrawl_*')
+ * - 'prefix_*': 해당 접두사로 시작하는 모든 도구 허용 (예: 'web_scrape/web_map/web_crawl*')
  * - 정확한 이름: 해당 도구만 허용 (예: 'web_search')
  *
  * @example
@@ -46,7 +46,9 @@ export const TOOL_TIERS: Record<UserTier, string[]> = {
         'web_search',
         'vision_ocr',
         'analyze_image',
-        'firecrawl_*',          // Firecrawl 관련 모든 도구
+        'web_scrape',           // 웹 스크래핑
+        'web_map',              // URL 매핑
+        'web_crawl',            // 웹 크롤링
     ],
     enterprise: [
         '*',                    // 모든 도구 허용
@@ -60,7 +62,7 @@ export const TOOL_TIERS: Record<UserTier, string[]> = {
  * 1. TOOL_TIERS[tier]에 '*' 포함 → 모든 도구 허용
  * 2. 외부 도구(:: 포함) → free 거부, pro는 기본 허용, 와일드카드/정확 매칭 우선
  * 3. 정확한 이름 매칭 확인
- * 4. 와일드카드 패턴 매칭 확인 (예: 'firecrawl_*' → 'firecrawl_scrape' 허용)
+ * 4. 와일드카드 패턴 매칭 확인 (예: 'web_scrape/web_map/web_crawl*' → 'web_scrape/web_map/web_crawlscrape' 허용)
  *
  * @param tier - 사용자 등급
  * @param toolName - 확인할 도구 이름 (네임스페이스 포함 가능)
@@ -104,7 +106,7 @@ export function canUseTool(tier: UserTier, toolName: string): boolean {
         return true;
     }
 
-    // 와일드카드 패턴 매칭 (예: 'firecrawl_*')
+    // 와일드카드 패턴 매칭 (예: 'web_scrape/web_map/web_crawl*')
     for (const pattern of allowedTools) {
         if (pattern.endsWith('*')) {
             const prefix = pattern.slice(0, -1);

@@ -1,16 +1,14 @@
 /**
  * Deep Research - 콘텐츠 스크래핑 모듈
  *
- * Firecrawl을 사용한 웹 페이지 스크래핑 기능을 제공합니다.
+ * 무료 웹 스크래퍼를 사용한 웹 페이지 스크래핑 기능을 제공합니다.
  *
  * @module services/deep-research/content-scraper
  */
 
 import type { SearchResult } from '../../mcp/web-search';
 import type { ResearchConfig, ResearchProgress } from '../deep-research-types';
-import { isFirecrawlConfigured } from '../../mcp/firecrawl';
-import { firecrawlPost } from '../../utils/firecrawl-client';
-import { getConfig } from '../../config/env';
+import { scrapePage } from '../../utils/web-scraper';
 import { getUnifiedDatabase } from '../../data/models/unified-database';
 import { createLogger } from '../../utils/logger';
 import { normalizeUrl } from '../deep-research-utils';
@@ -29,11 +27,6 @@ export async function scrapeSingleUrl(params: {
     const { url, config, abortSignal, throwIfAborted } = params;
 
     throwIfAborted();
-    const { firecrawlApiUrl, firecrawlApiKey } = getConfig();
-
-    if (!firecrawlApiKey) {
-        throw new Error('FIRECRAWL_API_KEY 환경변수가 설정되지 않았습니다.');
-    }
 
     // Abort signal 결합: 글로벌 연구 중단 + 개별 타임아웃
     const controller = new AbortController();
@@ -47,20 +40,13 @@ export async function scrapeSingleUrl(params: {
     const timeoutHandle = setTimeout(() => controller.abort(), config.scrapeTimeoutMs + 1000);
 
     try {
-        const payload = await firecrawlPost({
-            apiUrl: firecrawlApiUrl,
-            apiKey: firecrawlApiKey,
-            endpoint: '/scrape',
-            data: {
-                url,
-                formats: ['markdown'],
-                onlyMainContent: true,
-                timeout: config.scrapeTimeoutMs
-            },
-            signal: controller.signal
-        }) as { data?: { markdown?: string } };
+        const result = await scrapePage(url, {
+            onlyMainContent: true,
+            timeoutMs: config.scrapeTimeoutMs,
+            signal: controller.signal,
+        });
 
-        return payload.data?.markdown ?? '';
+        return result.markdown;
     } finally {
         if (abortSignal) {
             abortSignal.removeEventListener('abort', forwardAbort);
@@ -70,7 +56,7 @@ export async function scrapeSingleUrl(params: {
 }
 
 /**
- * Firecrawl로 풀 콘텐츠 스크래핑
+ * 풀 콘텐츠 스크래핑
  */
 export async function scrapeSources(params: {
     sources: SearchResult[];
@@ -102,11 +88,6 @@ export async function scrapeSources(params: {
 
     throwIfAborted();
     if (!config.scrapeFullContent) {
-        return;
-    }
-
-    if (!isFirecrawlConfigured()) {
-        logger.warn('[DeepResearch] Firecrawl API 키 미설정으로 스크래핑을 건너뜁니다.');
         return;
     }
 
@@ -163,7 +144,7 @@ export async function scrapeSources(params: {
             config.maxLoops,
             'scrape',
             currentProgress,
-            `Firecrawl 스크래핑: ${Math.min(scrapedUrls.size, totalTarget)}/${totalTarget} 소스`
+            `웹 스크래핑: ${Math.min(scrapedUrls.size, totalTarget)}/${totalTarget} 소스`
         );
 
         logger.info(`[DeepResearch] 스크래핑 진행: ${Math.min(scrapedUrls.size, totalTarget)}/${totalTarget} 소스`);
@@ -174,7 +155,7 @@ export async function scrapeSources(params: {
         sessionId,
         stepNumber: loopNumber * 100 + 99,
         stepType: 'search',
-        query: `루프 ${loopNumber} Firecrawl 스크래핑`,
+        query: `루프 ${loopNumber} 웹 스크래핑`,
         result: `${totalToScrape}개 URL 스크래핑 완료`,
         sources: scrapeCandidates.map(item => item.url),
         status: 'completed'

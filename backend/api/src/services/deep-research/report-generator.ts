@@ -37,6 +37,26 @@ export async function generateReport(params: {
     const db = getUnifiedDatabase();
     const uniqueSources = deduplicateSources(sources);
 
+    // 합성 결과가 모두 비어있거나 실패 메시지만 있으면 조기 반환
+    const meaningfulFindings = findings.filter(f =>
+        f && f.trim().length > 0
+        && f !== getResearchMessage('synthesisFailed', config.language)
+        && f !== getResearchMessage('noSources', config.language)
+    );
+    if (meaningfulFindings.length === 0) {
+        logger.warn('[DeepResearch] 의미 있는 합성 결과 없음 — 보고서 생성 건너뜀');
+        const fallbackSummary = getResearchMessage('reportFailed', config.language);
+        await db.addResearchStep({
+            sessionId,
+            stepNumber: 999,
+            stepType: 'report',
+            query: '최종 보고서 생성 (건너뜀 — 합성 데이터 없음)',
+            result: fallbackSummary,
+            status: 'completed'
+        });
+        return { summary: fallbackSummary, keyFindings: [] };
+    }
+
     const sourceList = uniqueSources
         .map((source, index) => `[${index + 1}] ${source.title} - ${source.url}`)
         .join('\n');
@@ -45,7 +65,7 @@ export async function generateReport(params: {
         .map((subTopic, index) => `${index + 1}. ${subTopic.title}`)
         .join('\n');
 
-    const prompt = getReportPrompt(config.language, topic, subTopicGuide, findings, sourceList);
+    const prompt = getReportPrompt(config.language, topic, subTopicGuide, meaningfulFindings, sourceList);
 
     try {
         const response = await client.chat([
