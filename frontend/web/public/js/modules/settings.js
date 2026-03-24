@@ -58,12 +58,11 @@ var MCP_TOOL_CATALOG = [
     },
     {
         category: '스크래핑',
-        emoji: '🔥',
+        emoji: '🌐',
         tools: [
-            { name: 'firecrawl_scrape', label: 'Firecrawl 스크래핑', description: '웹페이지를 스크래핑합니다', minTier: 'pro' },
-            { name: 'firecrawl_search', label: 'Firecrawl 검색', description: '웹을 검색합니다', minTier: 'pro' },
-            { name: 'firecrawl_map', label: 'Firecrawl URL 맵', description: 'URL 구조를 매핑합니다', minTier: 'pro' },
-            { name: 'firecrawl_crawl', label: 'Firecrawl 크롤링', description: '웹사이트를 크롤링합니다', minTier: 'pro' }
+            { name: 'web_scrape', label: '웹 스크래핑', description: '웹페이지를 마크다운으로 스크래핑합니다', minTier: 'pro' },
+            { name: 'web_map', label: 'URL 매핑', description: '웹사이트 URL 구조를 매핑합니다', minTier: 'pro' },
+            { name: 'web_crawl', label: '웹 크롤링', description: '웹사이트를 BFS로 크롤링합니다', minTier: 'pro' }
         ]
     }
 ];
