@@ -28,10 +28,14 @@ export const LLM_TIMEOUTS = {
     CLASSIFIER_TIMEOUT_MS: 10000,
     /** fire-and-forget 메모리 추출 LLM 호출 타임아웃 (ms) */
     MEMORY_EXTRACTION_TIMEOUT_MS: 30000,
+    /** Deep Research 주제 분해 타임아웃 (ms) */
+    RESEARCH_DECOMPOSE_TIMEOUT_MS: 60000,
     /** Deep Research 청크 합성 개별 타임아웃 (ms) — 전역 OLLAMA_TIMEOUT과 독립 */
-    SYNTHESIS_PER_CHUNK_TIMEOUT_MS: 90000,
+    SYNTHESIS_PER_CHUNK_TIMEOUT_MS: 120000,
     /** Deep Research 청크 병합 타임아웃 (ms) */
-    SYNTHESIS_MERGE_TIMEOUT_MS: 120000,
+    SYNTHESIS_MERGE_TIMEOUT_MS: 180000,
+    /** Deep Research 최종 보고서 생성 타임아웃 (ms) */
+    REPORT_GENERATION_TIMEOUT_MS: 300000,
 } as const;
 
 // ============================================

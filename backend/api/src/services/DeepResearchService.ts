@@ -108,6 +108,7 @@ export class DeepResearchService {
             const sourceMap = new Map<string, SearchResult>();
             const seenUrls = new Set<string>();
             const scrapedUrls = new Set<string>();
+            const usedQueries = new Set<string>();
             const allFindings: string[] = [];
 
             for (let loop = 0; loop < this.config.maxLoops; loop++) {
@@ -134,6 +135,7 @@ export class DeepResearchService {
                     loopNumber,
                     sourceMap,
                     seenUrls,
+                    usedQueries,
                     abortSignal: this.abortController?.signal,
                     throwIfAborted: () => this.throwIfAborted()
                 });

@@ -12,11 +12,23 @@ import { performWebSearch } from '../../mcp/web-search';
 import type { ResearchConfig, SubTopic } from '../deep-research-types';
 import { getUnifiedDatabase } from '../../data/models/unified-database';
 import { createLogger } from '../../utils/logger';
-import { CAPACITY } from '../../config/runtime-limits';
+import { CAPACITY, RESEARCH_DEFAULTS } from '../../config/runtime-limits';
 import { normalizeUrl } from '../deep-research-utils';
 import { parallelBatch } from '../../workflow/graph-engine';
 
 const logger = createLogger('DeepResearch:SourceSearcher');
+
+/**
+ * 서브 토픽에 대해 웹 검색 수행
+ */
+/**
+ * 검색 쿼리를 최대 단어 수로 잘라 핵심 키워드만 유지
+ */
+function truncateQuery(query: string, maxWords: number): string {
+    const words = query.trim().split(/\s+/);
+    if (words.length <= maxWords) return query.trim();
+    return words.slice(0, maxWords).join(' ');
+}
 
 /**
  * 서브 토픽에 대해 웹 검색 수행
@@ -29,10 +41,11 @@ export async function searchSubTopics(params: {
     loopNumber: number;
     sourceMap: Map<string, SearchResult>;
     seenUrls: Set<string>;
+    usedQueries: Set<string>;
     abortSignal?: AbortSignal;
     throwIfAborted: () => void;
 }): Promise<SearchResult[]> {
-    const { config, subTopics, sessionId, loopNumber, sourceMap, seenUrls, abortSignal, throwIfAborted } = params;
+    const { config, subTopics, sessionId, loopNumber, sourceMap, seenUrls, usedQueries, abortSignal, throwIfAborted } = params;
 
     throwIfAborted();
     const db = getUnifiedDatabase();
@@ -48,10 +61,16 @@ export async function searchSubTopics(params: {
     const denominator = Math.max(subTopics.length * averageQueriesPerTopic, 1);
     const resultsPerQuery = Math.max(15, Math.ceil(config.maxSearchResults / denominator));
 
-    // 모든 (서브토픽, 쿼리) 쌍을 플래팅
+    // 모든 (서브토픽, 쿼리) 쌍을 플래팅 — 이미 사용한 쿼리는 제외
+    const maxWords = RESEARCH_DEFAULTS.SEARCH_QUERY_MAX_WORDS;
     const allQueries = subTopics.flatMap(st =>
-        st.searchQueries.map(q => ({ subTopic: st, query: q }))
-    );
+        st.searchQueries.map(q => ({ subTopic: st, query: truncateQuery(q, maxWords) }))
+    ).filter(({ query }) => {
+        const normalized = query.toLowerCase().trim();
+        if (usedQueries.has(normalized)) return false;
+        usedQueries.add(normalized);
+        return true;
+    });
 
     let stepIndex = 0;
 
