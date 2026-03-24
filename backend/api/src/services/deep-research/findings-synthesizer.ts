@@ -82,7 +82,7 @@ export async function synthesizeFindings(params: {
 
     const chunks = chunkArray(uniqueResults, config.chunkSize);
 
-    // 청크 요약을 병렬 실행 (동시 3개 - LLM 호출이므로 적절히 제한)
+    // 청크 요약을 병렬 실행 (LLM I/O-bound이므로 높은 병렬도 허용)
     const chunkResults = await parallelBatch(
         chunks,
         async (chunk, chunkIndex) => {
@@ -135,7 +135,7 @@ export async function synthesizeFindings(params: {
             }
         },
         {
-            concurrency: 3,
+            concurrency: RESEARCH_DEFAULTS.SYNTHESIS_CONCURRENCY,
             signal: abortSignal
         }
     );
@@ -150,6 +150,18 @@ export async function synthesizeFindings(params: {
     }
 
     const mergedPrompt = getMergePrompt(config.language, topic, chunkSummaries);
+
+    // 병합 단계에 타임아웃 적용
+    const mergeController = new AbortController();
+    const mergeTimeout = setTimeout(
+        () => mergeController.abort(),
+        LLM_TIMEOUTS.SYNTHESIS_MERGE_TIMEOUT_MS,
+    );
+    const forwardMergeAbort = () => mergeController.abort();
+    if (abortSignal) {
+        if (abortSignal.aborted) { clearTimeout(mergeTimeout); throw new Error('RESEARCH_ABORTED'); }
+        abortSignal.addEventListener('abort', forwardMergeAbort);
+    }
 
     try {
         const response = await client.chat([
@@ -171,8 +183,21 @@ export async function synthesizeFindings(params: {
 
         return { summary: mergedSummary, keyPoints };
     } catch (error) {
-        logger.error(`[DeepResearch] 합성 실패: ${error instanceof Error ? error.message : String(error)}`);
+        const msg = error instanceof Error ? error.message : String(error);
+        if (msg === 'RESEARCH_ABORTED') throw error;
+        logger.error(`[DeepResearch] 합성 실패: ${msg}`);
+        // 부분 결과라도 반환: 청크 요약들을 합쳐서 fallback
+        const partialSummary = chunkSummaries.filter(s => s !== '청크 요약 실패').join('\n\n');
+        if (partialSummary.length > 0) {
+            logger.info('[DeepResearch] 병합 실패 → 청크 요약 결합으로 대체');
+            return { summary: partialSummary, keyPoints: extractBulletLikeFindings(partialSummary) };
+        }
         return { summary: getResearchMessage('synthesisFailed', config.language), keyPoints: [] };
+    } finally {
+        clearTimeout(mergeTimeout);
+        if (abortSignal) {
+            abortSignal.removeEventListener('abort', forwardMergeAbort);
+        }
     }
 }
 
@@ -190,7 +215,7 @@ export async function checkNeedsMoreInfo(params: {
     const { client, config, topic, currentFindings, sourceCount, throwIfAborted } = params;
 
     throwIfAborted();
-    if (sourceCount < 50) {
+    if (sourceCount < RESEARCH_DEFAULTS.MAX_TOTAL_SOURCES * 0.6) {
         return true;
     }
 
