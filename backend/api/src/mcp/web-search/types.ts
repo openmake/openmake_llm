@@ -20,7 +20,7 @@ export interface SearchResult {
     url: string;
     /** 결과 스니펫(요약) */
     snippet: string;
-    /** 전체 콘텐츠 (Firecrawl 스크래핑 시) */
+    /** 전체 콘텐츠 (스크래핑 시) */
     fullContent?: string;
     /** 검색 소스 도메인 (예: 'google.com', 'wikipedia.org') */
     source: string;

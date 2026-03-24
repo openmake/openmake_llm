@@ -24,7 +24,6 @@ import { v4 as uuidv4 } from 'uuid';
 import { createLogger } from '../utils/logger';
 import { detectLanguage } from '../chat/language-policy';
 import { CLEANUP_INTERVALS } from '../config/timeouts';
-import { getSearchLocale } from '../i18n/search-locale';
 
 const logger = createLogger('DeepResearchMCP');
 
@@ -335,7 +334,7 @@ export const configureResearchTool: MCPToolDefinition = {
                 },
                 searchApi: {
                     type: 'string',
-                    enum: ['ollama', 'firecrawl', 'google', 'all'],
+                    enum: ['ollama', 'google', 'all'],
                     description: '웹 검색 API 선택'
                 },
                 maxSearchResults: {
@@ -355,7 +354,7 @@ export const configureResearchTool: MCPToolDefinition = {
             // 타입 캐스팅
             const maxLoops = args.maxLoops as number | undefined;
             const llmModel = args.llmModel as string | undefined;
-            const searchApi = args.searchApi as 'ollama' | 'firecrawl' | 'google' | 'all' | undefined;
+            const searchApi = args.searchApi as 'ollama' | 'google' | 'all' | undefined;
             const maxSearchResults = args.maxSearchResults as number | undefined;
             const language = args.language as string | undefined;
 

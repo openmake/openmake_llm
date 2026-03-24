@@ -10,7 +10,7 @@
  * @description
  * - Sequential Thinking: 단계별 추론 프롬프트 인젝션
  * - MCP Server: JSON-RPC 2.0 기반 MCP 서버
- * - Built-in Tools: 코드 검색, 비전, 웹 검색, Firecrawl
+ * - Built-in Tools: 코드 검색, 비전, 웹 검색, 웹 스크래핑
  * - Web Search: 다중 소스 통합 웹 검색
  * - Deep Research: 심층 연구 도구
  * - Unified Client: 통합 MCP 클라이언트 (싱글톤)

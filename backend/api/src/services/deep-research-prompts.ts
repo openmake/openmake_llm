@@ -53,6 +53,20 @@ export function getChunkSummaryPrompt(lang: string, topic: string, chunkIndex: n
     return prompts[lang] || `This is a source chunk ${header} for research on "${topic}".\n\nRequirements:\n1) Write an intermediate summary in 800-1200 words.\n2) Include citations in [Source N] format for key claims.\n3) Keep evidence-driven language and avoid unsupported certainty.\n\nSources:\n${chunkContext}`;
 }
 
+/** 경량 청크 요약 프롬프트 (콘텐츠 부족 시 사용) */
+export function getLightweightChunkSummaryPrompt(lang: string, topic: string, chunkIndex: number, totalChunks: number, chunkContext: string): string {
+    const header = `(${chunkIndex + 1}/${totalChunks})`;
+    const prompts: Record<string, string> = {
+        ko: `다음은 "${topic}" 연구용 소스 청크${header}입니다.\n\n주의: 소스 콘텐츠가 제한적(스니펫 수준)입니다.\n\n요구사항:\n1) 사용 가능한 정보만으로 200-400 단어의 간결한 요약을 작성하세요.\n2) 출처가 있는 정보만 포함하고 추측하지 마세요.\n3) 핵심 주장마다 [출처 N] 형식의 인용을 포함하세요.\n4) 정보가 부족한 부분은 "추가 조사 필요"로 표시하세요.\n\n소스:\n${chunkContext}`,
+        ja: `以下は「${topic}」研究用のソースチャンク${header}です。\n\n注意: ソースコンテンツが限定的（スニペットレベル）です。\n\n要件:\n1) 利用可能な情報のみで200-400語の簡潔な要約を作成。\n2) 出典のある情報のみ含め、推測は禁止。\n3) [出典 N]形式の引用を含める。\n4) 情報不足の部分は「追加調査必要」と表示。\n\nソース:\n${chunkContext}`,
+        zh: `以下是"${topic}"研究用源块${header}。\n\n注意: 源内容有限（摘要级别）。\n\n要求:\n1) 仅用可用信息写200-400字简洁摘要。\n2) 只包含有来源的信息，不要推测。\n3) 包含[来源 N]格式引用。\n4) 信息不足部分标注"需进一步调查"。\n\n源:\n${chunkContext}`,
+        es: `Este es un fragmento de fuentes ${header} para la investigación sobre "${topic}".\n\nNota: El contenido de las fuentes es limitado (nivel de fragmento).\n\nRequisitos:\n1) Escribe un resumen conciso de 200-400 palabras solo con la información disponible.\n2) Solo incluye información con fuente, no especules.\n3) Incluye citas en formato [Fuente N].\n4) Marca las áreas con información insuficiente como "requiere investigación adicional".\n\nFuentes:\n${chunkContext}`,
+        de: `Dies ist ein Quellen-Chunk ${header} für die Recherche über "${topic}".\n\nHinweis: Der Quellinhalt ist begrenzt (Snippet-Niveau).\n\nAnforderungen:\n1) Schreiben Sie eine knappe Zusammenfassung von 200-400 Wörtern nur mit verfügbaren Informationen.\n2) Nur belegte Informationen, keine Spekulation.\n3) Zitate im Format [Quelle N].\n4) Kennzeichnen Sie Lücken mit „weitere Untersuchung erforderlich".\n\nQuellen:\n${chunkContext}`,
+        fr: `Ceci est un bloc de sources ${header} pour la recherche sur \"${topic}\".\n\nNote : Le contenu des sources est limité (niveau extrait).\n\nExigences :\n1) Rédigez un résumé concis de 200-400 mots uniquement avec les informations disponibles.\n2) N'incluez que les informations sourcées, pas de spéculation.\n3) Citations au format [Source N].\n4) Marquez les lacunes par \"investigation supplémentaire nécessaire\".\n\nSources :\n${chunkContext}`,
+    };
+    return prompts[lang] || `This is a source chunk ${header} for research on "${topic}".\n\nNote: Source content is limited (snippet-level only).\n\nRequirements:\n1) Write a concise summary in 200-400 words using only available information.\n2) Only include sourced information, do not speculate.\n3) Include citations in [Source N] format.\n4) Mark areas with insufficient information as "further investigation needed".\n\nSources:\n${chunkContext}`;
+}
+
 /** 청크 병합 프롬프트 */
 export function getMergePrompt(lang: string, topic: string, chunkSummaries: string[]): string {
     const summaryText = chunkSummaries.map((s, i) => `### Chunk ${i + 1}\n${s}`).join('\n\n');
@@ -144,13 +158,13 @@ const RESEARCH_MESSAGES: Record<string, Record<string, string>> = {
         fr: 'Boucle {loop} : Recherche terminée ({newCount} nouvelles, {totalCount}/{maxSources} sources au total)',
     },
     loopScraping: {
-        ko: '루프 {loop}: Firecrawl 스크래핑 준비 ({scrapedCount}/{maxSources} 소스)',
-        en: 'Loop {loop}: Preparing Firecrawl scraping ({scrapedCount}/{maxSources} sources)',
-        ja: 'ループ {loop}: Firecrawlスクレイピング準備 ({scrapedCount}/{maxSources}ソース)',
-        zh: '循环 {loop}: 准备Firecrawl抓取 ({scrapedCount}/{maxSources}来源)',
-        es: 'Bucle {loop}: Preparando scraping Firecrawl ({scrapedCount}/{maxSources} fuentes)',
-        de: 'Schleife {loop}: Firecrawl-Scraping vorbereiten ({scrapedCount}/{maxSources} Quellen)',
-        fr: 'Boucle {loop} : Préparation du scraping Firecrawl ({scrapedCount}/{maxSources} sources)',
+        ko: '루프 {loop}: 웹 스크래핑 스크래핑 준비 ({scrapedCount}/{maxSources} 소스)',
+        en: 'Loop {loop}: Preparing 웹 스크래핑 scraping ({scrapedCount}/{maxSources} sources)',
+        ja: 'ループ {loop}: 웹 스크래핑スクレイピング準備 ({scrapedCount}/{maxSources}ソース)',
+        zh: '循环 {loop}: 准备웹 스크래핑抓取 ({scrapedCount}/{maxSources}来源)',
+        es: 'Bucle {loop}: Preparando scraping 웹 스크래핑 ({scrapedCount}/{maxSources} fuentes)',
+        de: 'Schleife {loop}: 웹 스크래핑-Scraping vorbereiten ({scrapedCount}/{maxSources} Quellen)',
+        fr: 'Boucle {loop} : Préparation du scraping 웹 스크래핑 ({scrapedCount}/{maxSources} sources)',
     },
     loopSynthesizing: {
         ko: '루프 {loop}: 정보 합성 중...',
@@ -205,6 +219,15 @@ const RESEARCH_MESSAGES: Record<string, Record<string, string>> = {
         es: 'No se recopilaron fuentes.',
         de: 'Keine Quellen gesammelt.',
         fr: 'Aucune source collectée.',
+    },
+    insufficientContent: {
+        ko: '소스 콘텐츠 부족 (스크래핑 실패) — 경량 합성으로 전환',
+        en: 'Insufficient source content (scraping failed) — switching to lightweight synthesis',
+        ja: 'ソースコンテンツ不足（スクレイピング失敗）— 軽量合成に切替',
+        zh: '源内容不足（抓取失败）— 切换到轻量合成',
+        es: 'Contenido insuficiente (scraping fallido) — cambiando a síntesis ligera',
+        de: 'Unzureichender Quellinhalt (Scraping fehlgeschlagen) — Wechsel zu leichter Synthese',
+        fr: 'Contenu insuffisant (scraping échoué) — passage à la synthèse légère',
     },
     synthesisFailed: {
         ko: '합성 실패',
