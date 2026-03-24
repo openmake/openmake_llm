@@ -11,6 +11,7 @@ import type { ResearchConfig, ResearchProgress } from '../deep-research-types';
 import { scrapePage } from '../../utils/web-scraper';
 import { getUnifiedDatabase } from '../../data/models/unified-database';
 import { createLogger } from '../../utils/logger';
+import { RESEARCH_DEFAULTS } from '../../config/runtime-limits';
 import { normalizeUrl } from '../deep-research-utils';
 
 const logger = createLogger('DeepResearch:ContentScraper');
@@ -109,9 +110,10 @@ export async function scrapeSources(params: {
     const totalToScrape = scrapeCandidates.length;
     let finished = 0;
 
-    for (let i = 0; i < scrapeCandidates.length; i += 5) {
+    const batchSize = RESEARCH_DEFAULTS.SCRAPE_BATCH_SIZE;
+    for (let i = 0; i < scrapeCandidates.length; i += batchSize) {
         throwIfAborted();
-        const batch = scrapeCandidates.slice(i, i + 5);
+        const batch = scrapeCandidates.slice(i, i + batchSize);
 
         const settled = await Promise.allSettled(
             batch.map(async source => {

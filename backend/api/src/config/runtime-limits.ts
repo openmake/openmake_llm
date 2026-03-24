@@ -198,15 +198,21 @@ export const MEMORY_DECAY = {
  */
 export const RESEARCH_DEFAULTS = {
     /** 최대 검색 결과 수 */
-    MAX_SEARCH_RESULTS: 360,
+    MAX_SEARCH_RESULTS: 200,
     /** 최대 전체 소스 수 */
-    MAX_TOTAL_SOURCES: 80,
+    MAX_TOTAL_SOURCES: 50,
     /** 루프당 최대 스크래핑 수 */
-    MAX_SCRAPE_PER_LOOP: 15,
-    /** 청크 크기 */
-    CHUNK_SIZE: 10,
+    MAX_SCRAPE_PER_LOOP: 10,
+    /** 스크래핑 동시 배치 크기 (jsdom CPU 부하 제어) */
+    SCRAPE_BATCH_SIZE: 3,
+    /** 청크 크기 (소스 개수 기준) */
+    CHUNK_SIZE: 6,
+    /** 합성 병렬 동시실행 수 */
+    SYNTHESIS_CONCURRENCY: 5,
     /** 전체 합성을 실행하기 위한 최소 콘텐츠 길이 (문자). 이 미만이면 경량 합성 */
     MIN_CONTENT_FOR_FULL_SYNTHESIS: 1000,
+    /** 검색 쿼리 최대 단어 수 (초과 시 잘림) */
+    SEARCH_QUERY_MAX_WORDS: 10,
 } as const;
 
 // ============================================
@@ -218,8 +224,8 @@ export const RESEARCH_DEFAULTS = {
  */
 export const RESEARCH_DEPTH_LOOPS: Record<string, number> = {
     quick: 1,
-    standard: 3,
-    deep: 5,
+    standard: 2,
+    deep: 4,
 };
 
 // ============================================
