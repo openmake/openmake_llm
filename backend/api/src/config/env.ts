@@ -70,7 +70,9 @@ export interface EnvConfig {
     // External services
     googleApiKey: string;
     googleCseId: string;
+    /** @deprecated Firecrawl 제거됨. 무료 웹 스크래퍼로 대체 */
     firecrawlApiKey: string;
+    /** @deprecated Firecrawl 제거됨. 무료 웹 스크래퍼로 대체 */
     firecrawlApiUrl: string;
     githubToken: string;
 

@@ -66,7 +66,6 @@ export async function searchSubTopics(params: {
                 const results = await performWebSearch(query, {
                     maxResults: resultsPerQuery,
                     useOllamaFirst: config.searchApi === 'ollama' || config.searchApi === 'all',
-                    useFirecrawl: config.searchApi === 'firecrawl' || config.searchApi === 'all',
                     language: config.language
                 });
 

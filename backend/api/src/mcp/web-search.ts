@@ -6,7 +6,7 @@
  *
  * @module mcp/web-search
  * @see mcp/web-search/types - 타입 정의
- * @see mcp/web-search/providers - 검색 프로바이더 (Ollama, Firecrawl, Google, Wikipedia, News, DDG, Naver)
+ * @see mcp/web-search/providers - 검색 프로바이더 (Ollama, Google, Wikipedia, News, DDG, Naver)
  * @see mcp/web-search/search-orchestrator - 통합 검색 오케스트레이터
  * @see mcp/web-search/tools - MCP 도구 정의
  */

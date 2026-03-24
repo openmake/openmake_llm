@@ -20,14 +20,18 @@ export const LLM_TIMEOUTS = {
     ROUTING_TIMEOUT_MS: 5000,
     /** Deep Research 개별 스크래핑 타임아웃 (ms) */
     SCRAPE_TIMEOUT_MS: 15000,
-    /** Firecrawl 기본 요청 타임아웃 (ms) */
-    FIRECRAWL_TIMEOUT_MS: 30000,
+    /** 웹 스크래핑 기본 요청 타임아웃 (ms) */
+    WEB_SCRAPE_TIMEOUT_MS: 30000,
     /** 키워드 라우터 LLM 호출 타임아웃 (ms) — ROUTING_TIMEOUT_MS보다 높음 */
     KEYWORD_ROUTING_TIMEOUT_MS: 10000,
     /** LLM 기반 쿼리 분류기 타임아웃 (ms) */
     CLASSIFIER_TIMEOUT_MS: 10000,
     /** fire-and-forget 메모리 추출 LLM 호출 타임아웃 (ms) */
     MEMORY_EXTRACTION_TIMEOUT_MS: 30000,
+    /** Deep Research 청크 합성 개별 타임아웃 (ms) — 전역 OLLAMA_TIMEOUT과 독립 */
+    SYNTHESIS_PER_CHUNK_TIMEOUT_MS: 90000,
+    /** Deep Research 청크 병합 타임아웃 (ms) */
+    SYNTHESIS_MERGE_TIMEOUT_MS: 120000,
 } as const;
 
 // ============================================
