@@ -500,7 +500,7 @@
                         },
                         {
                             tier: 'pro', name: 'Pro', price: 'PRO', icon: '⚡',
-                            features: ['Free 전체 기능', 'Firecrawl 스크래핑 (4종)', '외부 MCP 도구 연동']
+                            features: ['Free 전체 기능', '웹 스크래핑 (3종)', '외부 MCP 도구 연동']
                         },
                         {
                             tier: 'enterprise', name: 'Enterprise', price: 'ENTERPRISE', icon: '🏢',
