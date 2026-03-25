@@ -27,7 +27,8 @@ export const TOKEN_COST = {
  */
 export const MODEL_PRICING: Readonly<Record<string, { input: number; output: number }>> = {
     'gemini-3-flash-preview:cloud': { input: 0.00001, output: 0.00002 },
-    'gemini-3-pro-preview:cloud': { input: 0.00005, output: 0.0001 },
-    'gpt-oss:120b': { input: 0.0001, output: 0.0002 },
+    // gemini-3-pro-preview:cloud — Ollama 레지스트리 미등록, 출시 시 활성화
+    // 'gemini-3-pro-preview:cloud': { input: 0.00005, output: 0.0001 },
+    'gpt-oss:120b-cloud': { input: 0.0001, output: 0.0002 },
     'default': { input: 0.00001, output: 0.00002 },
 } as const;

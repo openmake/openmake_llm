@@ -155,7 +155,7 @@ export function getModelPresets(): Record<string, ModelPreset> {
     'devstral': {
         name: 'Devstral 2',
         envKey: 'OLLAMA_DEFAULT_MODEL',
-        defaultModel: 'devstral-2:cloud',
+        defaultModel: 'devstral-2:123b-cloud',
         options: {
             temperature: 0.2,
             top_p: 0.85,
@@ -179,7 +179,7 @@ export function getModelPresets(): Record<string, ModelPreset> {
     'devstral-small': {
         name: 'Devstral Small 2',
         envKey: 'OLLAMA_DEFAULT_MODEL',
-        defaultModel: 'devstral-small-2:cloud',
+        defaultModel: 'devstral-small-2:24b-cloud',
         options: {
             temperature: 0.3,
             top_p: 0.85,
@@ -202,7 +202,7 @@ export function getModelPresets(): Record<string, ModelPreset> {
     'nemotron-nano': {
         name: 'Nemotron 3 Nano',
         envKey: 'OLLAMA_DEFAULT_MODEL',
-        defaultModel: 'nemotron-3-nano:cloud',
+        defaultModel: 'nemotron-3-nano:30b-cloud',
         options: {
             temperature: 0.3,
             top_p: 0.85,
