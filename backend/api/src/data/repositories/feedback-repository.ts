@@ -32,7 +32,6 @@ export interface FeedbackRecord {
     routingMetadata?: {
         model?: string;
         queryType?: string;
-        a2aMode?: string;
         latencyMs?: number;
         profileId?: string;
     };

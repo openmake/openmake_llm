@@ -47,10 +47,6 @@ export const LLM_TEMPERATURES = {
     AGENT_RESPONSE: Number(process.env.LLM_TEMP_AGENT_RESPONSE) || 0.3,
     /** format 지정 시 strict 모드 temperature */
     FORMAT_STRICT: 0,
-    /** A2A 라우팅 temperature */
-    A2A_ROUTING: 0,
-    /** A2A 합성기 응답 (a2a-strategy) */
-    A2A_RESPONSE: Number(process.env.LLM_TEMP_A2A_RESPONSE) || 0.3,
     /** Generate-Verify Verifier 응답 — 낮은 값으로 정확한 검증 수행 */
     GV_VERIFIER: Number(process.env.LLM_TEMP_GV_VERIFIER) || 0.1,
     /** Gemini 비추론 모드 */

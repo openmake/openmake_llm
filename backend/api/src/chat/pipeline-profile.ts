@@ -11,7 +11,7 @@
  * @module chat/pipeline-profile
  * @description
  * - 7개 브랜드 모델 프로파일 정의 (openmake_llm, _pro, _fast, _think, _code, _vision, _auto)
- * - 11가지 파이프라인 요소 (엔진, A2A, ExecutionStrategy, Thinking, Discussion, 프롬프트 전략 등) 조합
+ * - 10가지 파이프라인 요소 (엔진, ExecutionStrategy, Thinking, Discussion, 프롬프트 전략 등) 조합
  * - env 설정 기반 런타임 엔진 모델 resolve
  * - ProfileResolver, ChatService 에서 소비
  * 
@@ -40,18 +40,9 @@ import { DEFAULT_AUTO_MODEL } from '../config/constants';
 // ============================================
 
 /**
- * A2A (Agent-to-Agent) 사용 전략
- * - 'off': A2A 비활성화 (단일 모델 응답)
- * - 'conditional': 질문 복잡도에 따라 A2A 활성화
- * - 'always': 항상 다중 모델 병렬 생성 후 합성
- * @deprecated executionStrategy로 대체 예정 — 하위호환을 위해 유지
- */
-export type A2AStrategy = 'off' | 'conditional' | 'always';
-
-/**
- * 실행 전략 — A2A를 대체하는 새 파이프라인 실행 모드
+ * 파이프라인 실행 전략
  *
- * - 'single': 단일 모델 응답 (A2A 'off'와 동일)
+ * - 'single': 단일 모델 응답 (도구 호출 비활성화)
  * - 'generate-verify': 항상 Generator→Verifier 2단계 실행 (품질 최우선)
  * - 'conditional-verify': 복잡도 평가 후 조건부 검증 (균형)
  *
@@ -114,10 +105,7 @@ export interface PipelineProfile {
     /** 1. 내부 엔진 모델 ID (env에서 resolve) */
     engineModel: string;
 
-    /** 2. A2A (Agent-to-Agent) 전략 @deprecated executionStrategy로 대체 예정 */
-    a2a: A2AStrategy;
-
-    /** 2-1. 실행 전략 (A2A 대체) — 없으면 a2a 필드에서 자동 변환 */
+    /** 2. 실행 전략 — 'single' | 'generate-verify' | 'conditional-verify' */
     executionStrategy: ExecutionStrategy;
 
     /** 3. 사고(Thinking) 수준 */
@@ -175,7 +163,7 @@ export function getProfiles(): Record<string, PipelineProfile> {
             displayName: 'OpenMake LLM',
             description: '균형 잡힌 범용 모델 — 일반 대화, 콘텐츠 생성',
             engineModel: config.omkEngineLlm,
-            a2a: 'conditional',
+
             executionStrategy: 'conditional-verify',
             thinking: 'medium',
             discussion: false,
@@ -194,7 +182,7 @@ export function getProfiles(): Record<string, PipelineProfile> {
             displayName: 'OpenMake LLM Pro',
             description: '프리미엄 품질 — 복잡한 지시, 창작, 분석',
             engineModel: config.omkEnginePro,
-            a2a: 'always',
+
             executionStrategy: 'generate-verify',
             thinking: 'high',
             discussion: true,
@@ -213,7 +201,7 @@ export function getProfiles(): Record<string, PipelineProfile> {
             displayName: 'OpenMake LLM Fast',
             description: '속도 최적화 — 실시간 대화, 단순 작업',
             engineModel: config.omkEngineFast,
-            a2a: 'off',
+
             executionStrategy: 'single',
             thinking: 'off',
             discussion: false,
@@ -232,7 +220,7 @@ export function getProfiles(): Record<string, PipelineProfile> {
             displayName: 'OpenMake LLM Think',
             description: '심층 추론 — 수학, 논리, 복잡한 분석',
             engineModel: config.omkEngineThink,
-            a2a: 'always',
+
             executionStrategy: 'generate-verify',
             thinking: 'high',
             discussion: false,
@@ -251,7 +239,7 @@ export function getProfiles(): Record<string, PipelineProfile> {
             displayName: 'OpenMake LLM Code',
             description: '코드 전문 — 프로그래밍, 디버깅, 리팩토링',
             engineModel: config.omkEngineCode,
-            a2a: 'conditional',
+
             executionStrategy: 'conditional-verify',
             thinking: 'medium',
             discussion: false,
@@ -270,7 +258,7 @@ export function getProfiles(): Record<string, PipelineProfile> {
             displayName: 'OpenMake LLM Vision',
             description: '멀티모달 — 이미지 분석, OCR, 비전 작업',
             engineModel: config.omkEngineVision,
-            a2a: 'conditional',
+
             executionStrategy: 'single',
             thinking: 'medium',
             discussion: false,
@@ -289,7 +277,7 @@ export function getProfiles(): Record<string, PipelineProfile> {
             displayName: 'OpenMake LLM Auto',
             description: '스마트 자동 라우팅 — 질문 유형에 따라 최적 모델 자동 선택 (코딩, 분석, 창작, 비전 등)',
             engineModel: '__auto__',
-            a2a: 'conditional',
+
             executionStrategy: 'conditional-verify',
             thinking: 'medium',
             discussion: false,

@@ -83,7 +83,7 @@ export class OllamaClient {
     private context: number[] = [];
     /** API Key 관리자 인스턴스 (키 로테이션 담당) */
     private apiKeyManager: ApiKeyManager;
-    /** Per-instance bound key index (A2A 싱글톤 경합 방지) */
+    /** Per-instance bound key index (GV 병렬 인스턴스 경합 방지) */
     private keyRef: KeyIndexRef;
 
     /**

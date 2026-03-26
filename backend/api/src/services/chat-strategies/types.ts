@@ -9,7 +9,7 @@
  * @module services/chat-strategies/types
  * @description
  * - 공통 ChatContext/ChatResult 기반 타입
- * - 5가지 전략별 컨텍스트 인터페이스 (A2A, Direct, AgentLoop, Discussion, DeepResearch)
+ * - 전략별 컨텍스트 인터페이스 (Direct, AgentLoop, GenerateVerify, Discussion, DeepResearch)
  * - 제네릭 ChatStrategy 인터페이스로 타입 안전한 전략 교체 지원
  */
 import type { DiscussionProgress, DiscussionResult } from '../../agents/discussion-engine';
@@ -71,38 +71,6 @@ export interface ChatStrategy<TContext extends ChatContext = ChatContext, TResul
      * @returns 전략 실행 결과
      */
     execute(context: TContext): Promise<TResult>;
-}
-
-/**
- * A2A(Agent-to-Agent) 전략 컨텍스트
- *
- * 다중 모델 병렬 생성에 필요한 메시지 이력과 채팅 옵션을 포함합니다.
- *
- * @interface A2AStrategyContext
- * @extends ChatContext
- */
-export interface A2AStrategyContext extends ChatContext {
-    /** LLM에 전달할 메시지 배열 (시스템 프롬프트 + 대화 이력 + 사용자 메시지) */
-    messages: ChatMessage[];
-    /** 모델 옵션 (temperature, top_p 등) */
-    chatOptions: ModelOptions;
-    /** 질문 유형 (A2A 모델 조합 동적 선택용, 하위 호환 위해 optional) */
-    queryType?: QueryType;
-    /** 사용자 언어 (A2A 합성 프롬프트 다국어화용, language-policy에서 결정) */
-    userLanguage?: string;
-    /** 구조화된 출력 형식 (Ollama format 파라미터: 'json' 또는 JSON Schema 객체) */
-    format?: FormatOption;
-}
-
-/**
- * A2A 전략 결과
- *
- * @interface A2AStrategyResult
- * @extends ChatResult
- */
-export interface A2AStrategyResult extends ChatResult {
-    /** A2A 병렬 생성 성공 여부 (실패 시 AgentLoop으로 폴백) */
-    succeeded: boolean;
 }
 
 /**

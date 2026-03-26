@@ -8,10 +8,9 @@
  *
  * @module services/chat-strategies
  * @description
- * - 전략 클래스: A2A, Direct, Discussion, DeepResearch, AgentLoop
+ * - 전략 클래스: Direct, GenerateVerify, Discussion, DeepResearch, AgentLoop
  * - 타입: 각 전략별 Context/Result 인터페이스
  */
-export { A2AStrategy } from './a2a-strategy';
 export { DirectStrategy } from './direct-strategy';
 export { DiscussionStrategy } from './discussion-strategy';
 export { DeepResearchStrategy } from './deep-research-strategy';
@@ -21,8 +20,6 @@ export type {
     ChatContext,
     ChatResult,
     ChatStrategy,
-    A2AStrategyContext,
-    A2AStrategyResult,
     GenerateVerifyStrategyContext,
     GenerateVerifyStrategyResult,
     DirectStrategyContext,

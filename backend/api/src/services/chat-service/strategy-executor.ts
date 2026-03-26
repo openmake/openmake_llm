@@ -8,8 +8,6 @@
  * - 'generate-verify' → GenerateVerify 전략 실행 → 실패 시 AgentLoop 폴백
  * - 'conditional-verify' → 복잡도 평가 후 GV/AgentLoop 분기
  *
- * 하위호환: executionStrategy가 없으면 기존 A2A 로직으로 폴백
- *
  * @module services/chat-service/strategy-executor
  */
 import { createLogger } from '../../utils/logger';
@@ -23,7 +21,7 @@ import type { UserContext } from '../../mcp/user-sandbox';
 import type { ToolDefinition } from '../../ollama/types';
 import type { RoutingDecisionLog } from '../../chat/routing-logger';
 import type { LanguagePolicyDecision } from '../../chat/language-policy';
-import type { A2AStrategy, AgentLoopStrategy, GenerateVerifyStrategy } from '../chat-strategies';
+import type { AgentLoopStrategy, GenerateVerifyStrategy } from '../chat-strategies';
 
 const logger = createLogger('StrategyExecutor');
 
@@ -50,8 +48,6 @@ export interface StrategyExecutorParams {
     abortSignal?: AbortSignal;
     checkAborted: () => void;
     format?: FormatOption;
-    /** A2A 전략 인스턴스 @deprecated Generate-Verify로 대체 예정 */
-    a2aStrategy: A2AStrategy;
     /** Generate-Verify 전략 인스턴스 */
     generateVerifyStrategy: GenerateVerifyStrategy;
     /** AgentLoop 전략 인스턴스 */
@@ -68,8 +64,9 @@ export interface StrategyExecutorParams {
  * ExecutionStrategy 기반 응답 전략을 선택하고 실행합니다.
  *
  * 분기 로직:
- * 1. executionStrategy가 있으면 → 새 GV 기반 분기
- * 2. executionStrategy가 없으면 → 기존 A2A 기반 분기 (하위호환)
+ * - 'single' → AgentLoop 직행
+ * - 'generate-verify' → GV 실행 → 실패 시 AgentLoop 폴백
+ * - 'conditional-verify' → 복잡도 평가 후 GV/AgentLoop 분기
  *
  * @param params - 전략 실행에 필요한 모든 파라미터
  */
@@ -79,92 +76,30 @@ export async function selectAndExecuteStrategy(params: StrategyExecutorParams): 
         images, docId, history, currentHistory, chatOptions, maxTurns,
         supportsTools, supportsThinking, thinkingMode, thinkingLevel,
         languagePolicy, streamToken, abortSignal, checkAborted, format,
-        a2aStrategy, generateVerifyStrategy, agentLoopStrategy,
+        generateVerifyStrategy, agentLoopStrategy,
         client, currentUserContext, getAllowedTools,
     } = params;
 
-    const execStrategy = executionPlan?.executionStrategy;
+    const execStrategy = executionPlan?.executionStrategy ?? 'single';
 
-    // ── 새 ExecutionStrategy 기반 분기 ──
-    if (execStrategy) {
-        const handled = await executeWithStrategy({
-            execStrategy,
-            executionPlan: executionPlan!,
-            message, modelSelection, routingLog,
-            images, docId, history, currentHistory, chatOptions,
-            languagePolicy, streamToken, abortSignal, checkAborted, format,
-            generateVerifyStrategy,
-        });
-        if (handled) return;
+    const handled = await executeWithStrategy({
+        execStrategy,
+        executionPlan: executionPlan!,
+        message, modelSelection, routingLog,
+        images, docId, history, currentHistory, chatOptions,
+        languagePolicy, streamToken, abortSignal, checkAborted, format,
+        generateVerifyStrategy,
+    });
+    if (handled) return;
 
-        // GV 실패 또는 single → AgentLoop 폴백
-        logger.info('AgentLoop 폴백');
-        await agentLoopStrategy.execute({
-            client, currentHistory, chatOptions, maxTurns,
-            supportsTools, supportsThinking, thinkingMode, thinkingLevel,
-            executionPlan, currentUserContext, getAllowedTools,
-            onToken: streamToken, abortSignal, checkAborted, format,
-        });
-        return;
-    }
-
-    // ── 하위호환: 기존 A2A 기반 분기 (executionStrategy 미설정 시) ──
-    const a2aMode = executionPlan?.profile?.a2a ?? 'conditional';
-    let skipA2A = a2aMode === 'off';
-
-    if (!skipA2A && a2aMode === 'conditional') {
-        const complexity = assessComplexity({
-            query: message,
-            classification: { type: modelSelection.queryType, confidence: routingLog.queryFeatures.confidence || 0.5, matchedPatterns: [] },
-            hasImages: (images && images.length > 0) || false,
-            hasDocuments: !!docId,
-            historyLength: history?.length ?? 0,
-        });
-        if (complexity.shouldSkipA2A) {
-            skipA2A = true;
-            routingLog.routeDecision.complexityScore = complexity.score;
-            routingLog.routeDecision.complexitySignals = complexity.signals;
-        }
-    }
-
-    let a2aSucceeded = false;
-    if (!skipA2A) {
-        try {
-            checkAborted();
-            logger.info(`A2A 병렬 응답 시작... (strategy: ${a2aMode})`);
-            const a2aResult = await a2aStrategy.execute({
-                messages: currentHistory,
-                chatOptions,
-                queryType: modelSelection.queryType,
-                onToken: streamToken,
-                abortSignal,
-                checkAborted,
-                userLanguage: languagePolicy?.resolvedLanguage || 'en',
-                format,
-            });
-
-            if (a2aResult.succeeded) {
-                a2aSucceeded = true;
-                logger.info('A2A 병렬 응답 완료');
-            }
-        } catch (e) {
-            if (e instanceof Error && e.message === 'ABORTED') throw e;
-            logger.warn('A2A 실패, 단일 모델로 폴백:', e instanceof Error ? e.message : e);
-        }
-    } else {
-        logger.info('A2A 건너뜀 (strategy: off)');
-    }
-
-    if (!a2aSucceeded) {
-        logger.info('단일 모델 Agent Loop 폴백');
-
-        await agentLoopStrategy.execute({
-            client, currentHistory, chatOptions, maxTurns,
-            supportsTools, supportsThinking, thinkingMode, thinkingLevel,
-            executionPlan, currentUserContext, getAllowedTools,
-            onToken: streamToken, abortSignal, checkAborted, format,
-        });
-    }
+    // GV 실패 또는 single → AgentLoop 폴백
+    logger.info('AgentLoop 폴백');
+    await agentLoopStrategy.execute({
+        client, currentHistory, chatOptions, maxTurns,
+        supportsTools, supportsThinking, thinkingMode, thinkingLevel,
+        executionPlan, currentUserContext, getAllowedTools,
+        onToken: streamToken, abortSignal, checkAborted, format,
+    });
 }
 
 // ============================================
@@ -217,7 +152,7 @@ async function executeWithStrategy(p: ExecuteWithStrategyParams): Promise<boolea
             historyLength: p.history?.length ?? 0,
         });
 
-        if (complexity.shouldSkipA2A) {
+        if (complexity.shouldSkipGV) {
             logger.info(
                 `ExecutionStrategy: conditional-verify → 복잡도 낮음 (${complexity.score.toFixed(2)}) → AgentLoop`
             );

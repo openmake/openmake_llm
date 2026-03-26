@@ -29,7 +29,7 @@ const logger = createLogger('AgentLoopStrategy');
  * Multi-turn 도구 호출 루프 전략
  *
  * DirectStrategy로 LLM 호출 → 도구 호출 감지 → 도구 실행 → 결과 전달의
- * 반복 루프를 관리합니다. A2A 실패 시 폴백 전략으로도 사용됩니다.
+ * 반복 루프를 관리합니다. GV(Generate-Verify) 실패 시 폴백 전략으로도 사용됩니다.
  *
  * @class AgentLoopStrategy
  * @implements {ChatStrategy<AgentLoopStrategyContext, ChatResult>}
@@ -65,11 +65,11 @@ export class AgentLoopStrategy implements ChatStrategy<AgentLoopStrategyContext,
             currentTurn++;
             logger.info(`🔄 Agent Loop Turn ${currentTurn}/${context.maxTurns}`);
 
-            // 모델이 도구 호출을 지원하고, a2a='off' 프로파일이 아닌 경우에만 도구 목록 조회
-            // Fast 프로파일(a2a='off')은 속도 최적화를 위해 도구 호출 비활성화
+            // 모델이 도구 호출을 지원하고, single 전략이 아닌 경우에만 도구 목록 조회
+            // Fast 프로파일(single)은 속도 최적화를 위해 도구 호출 비활성화
             let allowedTools: ToolDefinition[] = [];
-            const profileA2A = context.executionPlan?.profile?.a2a;
-            if (context.supportsTools && profileA2A !== 'off') {
+            const execStrategy = context.executionPlan?.executionStrategy;
+            if (context.supportsTools && execStrategy !== 'single') {
                 allowedTools = context.getAllowedTools();
             }
 

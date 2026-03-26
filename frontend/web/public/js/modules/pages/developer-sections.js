@@ -69,15 +69,15 @@ export function renderModelsSection() {
         '<p>Each model has different capabilities tuned for its use case.</p>' +
         '<table class="rate-table">' +
         '<thead><tr>' +
-        '<th>Model</th><th>Agent (A2A)</th><th>Thinking</th><th>Discussion</th><th>Vision</th><th>Max Agent Turns</th><th>Time Budget</th>' +
+        '<th>Model</th><th>Strategy</th><th>Thinking</th><th>Discussion</th><th>Vision</th><th>Max Agent Turns</th><th>Time Budget</th>' +
         '</tr></thead>' +
         '<tbody>' +
-        '<tr><td><span class="param-name">openmake_llm</span></td><td>Conditional</td><td>Medium</td><td>—</td><td>—</td><td>5</td><td>Unlimited</td></tr>' +
-        '<tr><td><span class="param-name">openmake_llm_pro</span></td><td>Always</td><td>High</td><td>✓</td><td>—</td><td>8</td><td>Unlimited</td></tr>' +
+        '<tr><td><span class="param-name">openmake_llm</span></td><td>Conditional GV</td><td>Medium</td><td>—</td><td>—</td><td>5</td><td>Unlimited</td></tr>' +
+        '<tr><td><span class="param-name">openmake_llm_pro</span></td><td>Generate-Verify</td><td>High</td><td>✓</td><td>—</td><td>8</td><td>Unlimited</td></tr>' +
         '<tr><td><span class="param-name">openmake_llm_fast</span></td><td>—</td><td>—</td><td>—</td><td>—</td><td>1</td><td>3s</td></tr>' +
-        '<tr><td><span class="param-name">openmake_llm_think</span></td><td>Always</td><td>High</td><td>—</td><td>—</td><td>10</td><td>Unlimited</td></tr>' +
-        '<tr><td><span class="param-name">openmake_llm_code</span></td><td>Conditional</td><td>Medium</td><td>—</td><td>—</td><td>8</td><td>Unlimited</td></tr>' +
-        '<tr><td><span class="param-name">openmake_llm_vision</span></td><td>Conditional</td><td>Medium</td><td>—</td><td>✓</td><td>3</td><td>Unlimited</td></tr>' +
+        '<tr><td><span class="param-name">openmake_llm_think</span></td><td>Generate-Verify</td><td>High</td><td>—</td><td>—</td><td>10</td><td>Unlimited</td></tr>' +
+        '<tr><td><span class="param-name">openmake_llm_code</span></td><td>Conditional GV</td><td>Medium</td><td>—</td><td>—</td><td>8</td><td>Unlimited</td></tr>' +
+        '<tr><td><span class="param-name">openmake_llm_vision</span></td><td>Single</td><td>Medium</td><td>—</td><td>✓</td><td>3</td><td>Unlimited</td></tr>' +
         '<tr><td><span class="param-name">openmake_llm_auto</span></td><td>Auto (per routed model)</td><td>Auto</td><td>Auto</td><td>Auto</td><td>Auto</td><td>Auto</td></tr>' +
         '</tbody></table>' +
 
