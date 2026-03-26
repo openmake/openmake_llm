@@ -49,7 +49,7 @@ router.get('/models', asyncHandler(async (req: Request, res: Response) => {
         modelId: profile.id,
         description: profile.description,
         capabilities: {
-            a2a: profile.a2a,
+            executionStrategy: profile.executionStrategy,
             thinking: profile.thinking,
             discussion: profile.discussion,
             vision: profile.requiredTools.includes('vision'),

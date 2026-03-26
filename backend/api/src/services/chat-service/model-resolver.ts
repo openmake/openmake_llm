@@ -52,7 +52,7 @@ export async function resolveModel(params: ResolveModelParams): Promise<ModelSel
 
         executionPlan.resolvedEngine = autoExecutionPlan.resolvedEngine;
         executionPlan.profile = autoExecutionPlan.profile;
-        executionPlan.useAgentLoop = autoExecutionPlan.useAgentLoop;
+        executionPlan.useToolCalling = autoExecutionPlan.useToolCalling;
         executionPlan.agentLoopMax = autoExecutionPlan.agentLoopMax;
         executionPlan.loopStrategy = autoExecutionPlan.loopStrategy;
         executionPlan.thinkingLevel = autoExecutionPlan.thinkingLevel;

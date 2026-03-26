@@ -3,8 +3,8 @@
  * Complexity Assessor - 쿼리 복잡도 평가
  * ============================================================
  *
- * A2A 게이팅을 위한 쿼리 복잡도 점수를 계산합니다.
- * Pro/Think 프로파일에서 단순 쿼리의 불필요한 A2A 호출을 방지합니다.
+ * GV(Generate-Verify) 게이팅을 위한 쿼리 복잡도 점수를 계산합니다.
+ * conditional-verify 프로파일에서 단순 쿼리의 불필요한 GV 호출을 방지합니다.
  *
  * @module chat/complexity-assessor
  */
@@ -12,15 +12,15 @@
 import type { QueryClassification } from './model-selector-types';
 import { createLogger } from '../utils/logger';
 import {
-    A2A_SKIP_THRESHOLD as _A2A_SKIP_THRESHOLD,
+    GV_SKIP_THRESHOLD as _GV_SKIP_THRESHOLD,
     COMPLEXITY_NEUTRAL_SCORE,
     COMPLEXITY_WEIGHTS,
 } from '../config/routing-config';
 
 const logger = createLogger('ComplexityAssessor');
 
-/** A2A 건너뛰기 임계값 - 이 점수 미만이면 A2A 생략 (routing-config에서 re-export) */
-export const A2A_SKIP_THRESHOLD = _A2A_SKIP_THRESHOLD;
+/** GV 건너뛰기 임계값 - 이 점수 미만이면 Generate-Verify 생략 (routing-config에서 re-export) */
+export const GV_SKIP_THRESHOLD = _GV_SKIP_THRESHOLD;
 
 /** 복잡도 평가 입력 컨텍스트 */
 export interface ComplexityContext {
@@ -37,12 +37,12 @@ export interface ComplexityAssessment {
     score: number;
     /** 적용된 시그널 목록 (디버그용) */
     signals: string[];
-    /** A2A 건너뛰기 여부 */
-    shouldSkipA2A: boolean;
+    /** GV(Generate-Verify) 건너뛰기 여부 */
+    shouldSkipGV: boolean;
 }
 
 /**
- * 쿼리 복잡도를 평가하여 A2A 게이팅 결정을 내립니다.
+ * 쿼리 복잡도를 평가하여 GV(Generate-Verify) 게이팅 결정을 내립니다.
  */
 export function assessComplexity(ctx: ComplexityContext): ComplexityAssessment {
     let score = COMPLEXITY_NEUTRAL_SCORE; // 중립 시작점
@@ -105,13 +105,13 @@ export function assessComplexity(ctx: ComplexityContext): ComplexityAssessment {
 
     // 0~1 범위로 클램프
     score = Math.max(0, Math.min(1, score));
-    const shouldSkipA2A = score < A2A_SKIP_THRESHOLD;
+    const shouldSkipGV = score < GV_SKIP_THRESHOLD;
 
-    if (shouldSkipA2A) {
-        logger.info(`복잡도 낮음 → A2A 건너뜀: score=${score.toFixed(2)}, signals=[${signals.join(', ')}]`);
+    if (shouldSkipGV) {
+        logger.info(`복잡도 낮음 → GV 건너뜀: score=${score.toFixed(2)}, signals=[${signals.join(', ')}]`);
     } else {
-        logger.debug(`복잡도 충분 → A2A 실행: score=${score.toFixed(2)}, signals=[${signals.join(', ')}]`);
+        logger.debug(`복잡도 충분 → GV 실행: score=${score.toFixed(2)}, signals=[${signals.join(', ')}]`);
     }
 
-    return { score, signals, shouldSkipA2A };
+    return { score, signals, shouldSkipGV };
 }

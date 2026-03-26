@@ -4,7 +4,7 @@
  * ============================================================
  *
  * 다수의 Cloud API 키를 관리하고, 장애 발생 시 자동으로 다음 키로 전환합니다.
- * A2A 병렬 처리를 위한 키-모델 쌍 매핑도 지원합니다.
+ * GV 병렬 처리를 위한 키-모델 쌍 매핑도 지원합니다.
  *
  * 내부적으로 KeyPool(키 로딩/풀 관리)과 KeyCooldownTracker(실패/쿨다운 추적)를
  * 조합하여 기존 인터페이스를 유지합니다.
@@ -26,7 +26,7 @@ export type { KeyFailureRecord } from './key-cooldown';
 const logger = createLogger('ApiKeyManager');
 
 /**
- * API 키와 대응 모델의 쌍 (A2A 병렬 처리용)
+ * API 키와 대응 모델의 쌍 (GV 병렬 처리용)
  * @interface KeyModelPair
  */
 export interface KeyModelPair {
@@ -55,7 +55,7 @@ export interface ApiKeyConfig {
  * Cloud API Key 자동 로테이션 관리자
  *
  * 다수의 Cloud API 키를 라운드 로빈 + 쿨다운 회피 방식으로 관리합니다.
- * 각 키에 개별 모델을 매핑하여 A2A 병렬 생성을 지원합니다.
+ * 각 키에 개별 모델을 매핑하여 GV 병렬 생성을 지원합니다.
  *
  * 로테이션 알고리즘:
  * - 연속 실패 2회 또는 인증 에러(401/403/429) -> 즉시 다음 키로 전환
@@ -138,7 +138,7 @@ export class ApiKeyManager {
     }
 
     /**
-     * 특정 인덱스의 Authorization 헤더 생성 (A2A 병렬 처리용)
+     * 특정 인덱스의 Authorization 헤더 생성 (GV 병렬 처리용)
      */
     getAuthHeadersForIndex(index: number): Record<string, string> {
         return this.pool.getAuthHeadersForIndex(index);
@@ -222,7 +222,7 @@ export class ApiKeyManager {
     }
 
     /**
-     * 특정 인덱스로 강제 전환 (A2A용)
+     * 특정 인덱스로 강제 전환 (GV용)
      */
     setKeyIndex(index: number): boolean {
         if (index < 0 || index >= this.pool.getTotalKeys()) {

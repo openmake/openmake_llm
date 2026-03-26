@@ -81,7 +81,7 @@ router.post('/', optionalApiKey, optionalAuth, chatRateLimiter, validate(chatReq
         const pipelineInfo = debugRequested && result.executionPlan.isBrandModel ? {
             profile: result.executionPlan.requestedModel,
             engine: result.executionPlan.resolvedEngine,
-            a2a: result.executionPlan.useAgentLoop,
+            strategy: result.executionPlan.executionStrategy,
             thinking: result.executionPlan.thinkingLevel,
             discussion: result.executionPlan.useDiscussion,
         } : undefined;

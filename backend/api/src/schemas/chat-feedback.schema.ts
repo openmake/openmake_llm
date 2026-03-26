@@ -26,7 +26,6 @@ export const chatFeedbackSchema = z.object({
     routingMetadata: z.object({
         model: z.string().optional(),
         queryType: z.string().optional(),
-        a2aMode: z.string().optional(),
         latencyMs: z.number().optional(),
         profileId: z.string().optional()
     }).optional()

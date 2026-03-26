@@ -21,11 +21,8 @@ export interface RoutingQueryFeatures {
 }
 
 export interface RoutingRouteDecision {
-    strategy: 'a2a' | 'agent-loop' | 'direct' | 'discussion' | 'deep-research';
-    a2aMode?: string;
+    strategy: 'generate-verify' | 'agent-loop' | 'direct' | 'discussion' | 'deep-research';
     primaryModel?: string;
-    secondaryModel?: string;
-    synthesizerModel?: string;
     complexityScore?: number;
     complexitySignals?: string[];
     /** P2-1: 적용된 비용 티어 */
@@ -82,9 +79,3 @@ export function logRoutingDecision(log: RoutingDecisionLog): void {
     logger.info('routing-decision', { routingLog: log });
 }
 
-/**
- * A2A 모델 선택을 기록합니다.
- */
-export function logA2AModelSelection(queryType: string, primary: string, secondary: string, synthesizer: string): void {
-    logger.info(`A2A 모델 선택: queryType=${queryType}, primary=${primary}, secondary=${secondary}, synthesizer=${synthesizer}`);
-}
