@@ -39,9 +39,9 @@ export const ROUTER_NUM_PREDICT =
 
 // ── Complexity Assessor 설정 ─────────────────────────────────
 
-/** A2A 건너뛰기 임계값 - 이 점수 미만이면 A2A 생략 (env: OMK_A2A_SKIP_THRESHOLD) */
-export const A2A_SKIP_THRESHOLD =
-    Number(process.env.OMK_A2A_SKIP_THRESHOLD ?? '0.3');
+/** GV 건너뛰기 임계값 - 이 점수 미만이면 Generate-Verify 생략 (env: OMK_GV_SKIP_THRESHOLD) */
+export const GV_SKIP_THRESHOLD =
+    Number(process.env.OMK_GV_SKIP_THRESHOLD ?? process.env.OMK_A2A_SKIP_THRESHOLD ?? '0.3');
 
 /** 복잡도 시작 점수 */
 export const COMPLEXITY_NEUTRAL_SCORE = 0.5;

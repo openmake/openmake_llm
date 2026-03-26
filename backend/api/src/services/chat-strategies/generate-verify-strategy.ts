@@ -6,8 +6,8 @@
  * Generator(강력 모델)가 1차 응답을 생성하고,
  * Verifier(다른 강력 모델)가 팩트체크·논리검증·보완을 수행합니다.
  *
- * A2A 전략(3 API 호출)을 대체하여 2 API 호출로
- * 더 높은 품질과 교차 검증 효과를 제공합니다.
+ * 2 API 호출(Generator + Verifier)로
+ * 높은 품질과 교차 검증 효과를 제공합니다.
  *
  * @module services/chat-strategies/generate-verify-strategy
  * @description

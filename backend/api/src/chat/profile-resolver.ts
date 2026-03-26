@@ -49,8 +49,8 @@ export interface ExecutionPlan {
     /** 실제 사용할 내부 엔진 모델 ID */
     resolvedEngine: string;
 
-    /** A2A 에이전트 루프 활성화 여부 */
-    useAgentLoop: boolean;
+    /** 도구 호출 활성화 여부 (single이 아닌 전략에서 활성화) */
+    useToolCalling: boolean;
 
     /** 에이전트 루프 최대 반복 */
     agentLoopMax: number;
@@ -82,7 +82,7 @@ export interface ExecutionPlan {
     /** Auto-Routing에서 분류된 원본 QueryType (Brand Profile 직접 선택 시 undefined) */
     classifiedQueryType?: QueryType;
 
-    /** 실행 전략 (A2A 대체) — 'single' | 'generate-verify' | 'conditional-verify' */
+    /** 실행 전략 — 'single' | 'generate-verify' | 'conditional-verify' */
     executionStrategy: ExecutionStrategy;
 
     /** Generate-Verify 시 Generator 모델 (executionStrategy가 'single'이면 undefined) */
@@ -132,7 +132,7 @@ function resolveGVModels(queryType?: string): { generator: string; verifier: str
  * 
  * @param requestedModel - 외부 요청의 model 필드 (예: "openmake_llm_pro" 또는 일반 모델명)
  * @param overrides - 사용자 요청의 오버라이드 파라미터
- * @returns ExecutionPlan — resolvedEngine, A2A 모드, thinking 수준, 필수 도구 목록 등 실행에 필요한 모든 파라미터를 포함
+ * @returns ExecutionPlan — resolvedEngine, executionStrategy, thinking 수준, 필수 도구 목록 등 실행에 필요한 모든 파라미터를 포함
  */
 export function buildExecutionPlan(
     requestedModel: string,
@@ -157,7 +157,7 @@ export function buildExecutionPlan(
             requestedModel,
             profile,
             resolvedEngine: profile.engineModel,
-            useAgentLoop: profile.a2a !== 'off',
+            useToolCalling: profile.executionStrategy !== 'single',
             agentLoopMax: profile.agentLoopMax,
             loopStrategy: profile.loopStrategy,
             thinkingLevel: profile.thinking,
@@ -180,7 +180,7 @@ export function buildExecutionPlan(
         requestedModel,
         profile: null,
         resolvedEngine: requestedModel,
-        useAgentLoop: false,
+        useToolCalling: false,
         agentLoopMax: 5,
         loopStrategy: 'auto',
         thinkingLevel: 'medium',
@@ -214,7 +214,6 @@ export function listAvailableModels(): Array<{
         description: p.description,
         capabilities: [
             ...(p.executionStrategy !== 'single' ? ['generate-verify'] : []),
-            ...(p.a2a !== 'off' ? ['agent'] : []),
             ...(p.thinking !== 'off' ? ['thinking'] : []),
             ...(p.discussion ? ['discussion'] : []),
             ...p.requiredTools,

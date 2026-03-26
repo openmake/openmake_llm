@@ -9,7 +9,7 @@
  * @module services/ChatService
  * @description
  * - 에이전트 자동 라우팅 및 시스템 프롬프트 조립
- * - Brand Model 프로파일 기반 실행 전략 분기 (Direct, A2A, Discussion, DeepResearch, AgentLoop)
+ * - Brand Model 프로파일 기반 실행 전략 분기 (Direct, GV, Discussion, DeepResearch, AgentLoop)
  * - 문서/이미지/웹검색 컨텍스트 통합
  * - 사용량 추적 및 모니터링 메트릭 기록
  *
@@ -31,7 +31,7 @@ import { getUnifiedMCPClient } from '../mcp/unified-client';
 import { OllamaClient } from '../ollama/client';
 import { getGptOssTaskPreset, type ChatMessage, type ToolDefinition, type ModelOptions } from '../ollama/types';
 import type { ResearchProgress } from './DeepResearchService';
-import { A2AStrategy, AgentLoopStrategy, DeepResearchStrategy, DirectStrategy, DiscussionStrategy, GenerateVerifyStrategy } from './chat-strategies';
+import { AgentLoopStrategy, DeepResearchStrategy, DirectStrategy, DiscussionStrategy, GenerateVerifyStrategy } from './chat-strategies';
 import { formatResearchResult, formatDiscussionResult } from './chat-service-formatters';
 import { recordMemoryExtractionFailure } from './chat-service-metrics';
 import { preRequestCheck } from '../chat/security-hooks';
@@ -70,7 +70,7 @@ const logger = createLogger('ChatService');
  *
  * 전략 패턴(Strategy Pattern)을 통해 5가지 응답 생성 전략을 지원합니다:
  * - DirectStrategy: 단일 LLM 직접 호출
- * - A2AStrategy: 다중 모델 병렬 생성 후 합성
+ * - GenerateVerifyStrategy: Generator→Verifier 2단계 검증
  * - AgentLoopStrategy: Multi-turn 도구 호출 루프
  * - DiscussionStrategy: 멀티 에이전트 토론
  * - DeepResearchStrategy: 자율적 다단계 리서치
@@ -89,8 +89,6 @@ export class ChatService {
 
     /** 단일 LLM 직접 호출 전략 */
     private readonly directStrategy: DirectStrategy;
-    /** Agent-to-Agent 병렬 생성 전략 @deprecated Generate-Verify로 대체 예정 */
-    private readonly a2aStrategy: A2AStrategy;
     /** Generate-Verify 생성-검증 전략 */
     private readonly generateVerifyStrategy: GenerateVerifyStrategy;
     /** 멀티 에이전트 토론 전략 */
@@ -108,7 +106,6 @@ export class ChatService {
     constructor(client: OllamaClient) {
         this.client = client;
         this.directStrategy = new DirectStrategy();
-        this.a2aStrategy = new A2AStrategy();
         this.generateVerifyStrategy = new GenerateVerifyStrategy();
         this.discussionStrategy = new DiscussionStrategy();
         this.deepResearchStrategy = new DeepResearchStrategy();
@@ -204,7 +201,7 @@ export class ChatService {
      * 2. 에이전트 라우팅 및 시스템 프롬프트 구성
      * 3. 문서/이미지/웹검색 컨텍스트 통합
      * 4. 모델 선택 (Brand Model 또는 Auto-Routing)
-     * 5. A2A 병렬 생성 시도 → 실패 시 AgentLoop 폴백
+     * 5. GV(Generate-Verify) 전략 실행 → 실패 시 AgentLoop 폴백
      * 6. 사용량 메트릭 기록
      *
      * @param req - 채팅 메시지 요청 객체
@@ -385,8 +382,8 @@ export class ChatService {
         // ── 라우팅 결정 로그 갱신 ──
         routingLog.queryFeatures.queryType = modelSelection.queryType;
         routingLog.modelUsed = modelSelection.model;
-        routingLog.routeDecision.strategy = executionPlan?.profile?.a2a === 'off' ? 'agent-loop' : 'a2a';
-        routingLog.routeDecision.a2aMode = executionPlan?.profile?.a2a ?? 'conditional';
+        const execStrat = executionPlan?.executionStrategy ?? 'single';
+        routingLog.routeDecision.strategy = execStrat === 'single' ? 'agent-loop' : 'generate-verify';
 
         let chatOptions = adjustOptionsForModel(
             modelSelection.model,
@@ -444,7 +441,7 @@ export class ChatService {
             ...(currentImages.length > 0 && { images: currentImages }),
         });
 
-        // ── Step 5: 전략 선택 및 실행 (A2A → AgentLoop 폴백) ──
+        // ── Step 5: 전략 선택 및 실행 (GV → AgentLoop 폴백) ──
         await this.selectAndExecuteStrategy({
             executionPlan, message: message || '', modelSelection, routingLog,
             images, docId, history, currentHistory, chatOptions, maxTurns,
@@ -546,7 +543,7 @@ export class ChatService {
     }
 
     /**
-     * A2A 병렬 생성 → 실패 시 AgentLoop 폴백으로 응답 전략을 실행합니다.
+     * ExecutionStrategy 기반 응답 전략을 선택하고 실행합니다.
      * 실제 로직은 chat-service/strategy-executor.ts에 위임합니다.
      */
     private async selectAndExecuteStrategy(params: {
@@ -572,7 +569,6 @@ export class ChatService {
     }): Promise<void> {
         return selectAndExecuteStrategy({
             ...params,
-            a2aStrategy: this.a2aStrategy,
             generateVerifyStrategy: this.generateVerifyStrategy,
             agentLoopStrategy: this.agentLoopStrategy,
             client: this.client,

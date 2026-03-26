@@ -300,7 +300,7 @@ function loadAgentMode() {
 
 /**
  * 에이전트 모드 활성화/비활성화 토글
- * A2A(Agent-to-Agent) 실행 여부를 제어합니다.
+ * GV(Generate-Verify) 실행 여부를 제어합니다.
  * @returns {void}
  */
 function toggleAgentMode() {
