@@ -162,6 +162,13 @@ export async function verifyToken(token: string): Promise<JWTPayload | null> {
              }
          }
 
+         // refresh token으로 access 인증 시도 차단
+         // refresh token(7일 수명)이 access token(15분) 대신 사용되는 것을 방지
+         if (preCheck?.type === 'refresh') {
+             logger.warn('refresh 토큰으로 access 인증 시도 차단');
+             return null;
+         }
+
          const decoded = jwt.verify(token, JWT_SECRET);
          if (!isValidJWTPayload(decoded)) {
              logger.warn('JWT 페이로드 형식 불일치');

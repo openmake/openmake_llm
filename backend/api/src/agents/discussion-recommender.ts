@@ -38,7 +38,8 @@ export async function getRelatedAgentsForDiscussion(
     context?: string
 ): Promise<Agent[]> {
     // 🆕 토픽 분석에는 컨텍스트 포함 (분류 정확도 향상)
-    const fullText = context ? `${message}\n\n컨텍스트: ${context}` : message;
+    // "Context:" 레이블은 LLM 분류기 내부 입력이므로 영어로 통일 (다국어 사용자 무관)
+    const fullText = context ? `${message}\n\nContext: ${context}` : message;
     const topicAnalysis = analyzeTopicIntent(fullText);
 
     // 토픽+키워드 라우팅으로 주요 에이전트 선택

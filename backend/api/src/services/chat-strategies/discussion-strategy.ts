@@ -18,6 +18,7 @@ import { createDiscussionEngine, type DiscussionResult, type DiscussionSearchRes
 import type { ChatMessage } from '../../ollama/types';
 import type { ChatStrategy, ChatResult, DiscussionStrategyContext } from './types';
 import { createLogger } from '../../utils/logger';
+import { sanitizePromptInput } from '../../utils/input-sanitizer';
 import { CONTEXT_LIMITS, DISCUSSION_TOKEN_BUDGET } from '../../config/runtime-limits';
 import { LLM_TEMPERATURES } from '../../config/llm-parameters';
 import { resolvePromptLocale, type PromptLocaleCode } from '../../chat/language-policy';
@@ -244,10 +245,10 @@ export class DiscussionStrategy implements ChatStrategy<DiscussionStrategyContex
             }
         }
 
-        // 2단계: 대화 히스토리 변환
+        // 2단계: 대화 히스토리 변환 (프롬프트 인젝션 방어를 위해 content 정제)
         const conversationHistory = history?.map((h) => ({
             role: h.role as string,
-            content: h.content as string,
+            content: sanitizePromptInput(h.content as string),
         })) || [];
 
         if (conversationHistory.length > 0) {

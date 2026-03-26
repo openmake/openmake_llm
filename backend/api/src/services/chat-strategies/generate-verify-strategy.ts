@@ -151,8 +151,9 @@ export class GenerateVerifyStrategy
             if (e instanceof Error && e.message === 'ABORTED') throw e;
 
             // Verifier 실패 → Generator 응답 그대로 사용 (graceful degradation)
+            // succeeded=true를 유지하여 AgentLoop 폴백을 방지하되, verified=false로 미검증 표시
             logger.warn(
-                '⚠️ GV Verifier 실패, Generator 응답으로 폴백:',
+                `⚠️ GV Verifier 실패 (${context.verifierModel}), Generator 응답으로 폴백:`,
                 e instanceof Error ? e.message : e
             );
 

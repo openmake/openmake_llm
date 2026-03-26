@@ -292,8 +292,8 @@ export async function classifyWithLLM(query: string): Promise<LLMClassificationR
                         queryEmbedding = await client.embed(query);
                     }
                     getVectorCache().add(query, queryEmbedding, llmRaw.type, llmRaw.confidence);
-                } catch {
-                    // 벡터 저장 실패는 무시
+                } catch (vecSaveErr) {
+                    logger.debug(`벡터 캐시 저장 실패 (무시): ${vecSaveErr instanceof Error ? vecSaveErr.message : vecSaveErr}`);
                 }
             }
 
@@ -370,13 +370,21 @@ export async function warmClassificationCache(): Promise<number> {
                 const client = getEmbeddingClient();
                 const vCache = getVectorCache();
                 let vectorWarmed = 0;
+                let consecutiveFailures = 0;
                 for (const warm of warmQueriesData) {
                     try {
                         const embedding = await client.embed(warm.query);
                         vCache.add(warm.query, embedding, warm.type, warm.confidence);
                         vectorWarmed++;
-                    } catch {
-                        // 개별 실패 무시
+                        consecutiveFailures = 0;
+                    } catch (warmErr) {
+                        consecutiveFailures++;
+                        logger.debug(`벡터 캐시 워밍 개별 실패: ${warmErr instanceof Error ? warmErr.message : warmErr}`);
+                        // 연속 5회 실패 시 임베딩 모델 장애로 판단하고 조기 종료
+                        if (consecutiveFailures >= 5) {
+                            logger.warn(`벡터 캐시 워밍 중단: 연속 ${consecutiveFailures}회 실패 — 임베딩 모델 상태를 확인하세요`);
+                            break;
+                        }
                     }
                 }
                 logger.info(`벡터 캐시 워밍 완료: ${vectorWarmed}/${warmQueriesData.length}개`);

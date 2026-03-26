@@ -42,7 +42,21 @@ export function resolveLanguagePolicy(
         logger.info(`언어 정책 결정: ${policy.resolvedLanguage} (${userLanguagePreference ? '사용자 설정' : '자동 감지'}, 신뢰도: ${policy.detection.confidence.toFixed(2)})`);
         return policy;
     } catch (error) {
-        logger.warn('언어 감지 실패, 기본 언어 사용:', error);
-        return undefined;
+        logger.warn('언어 감지 실패, 기본 언어 폴백:', error instanceof Error ? error.message : error);
+        // undefined 대신 기본 정책을 반환하여 다운스트림에서 언어 기반 분기가 작동하도록 보장
+        const fallbackLang = (config.defaultResponseLanguage || 'ko') as SupportedLanguageCode;
+        return {
+            requestedLanguage: fallbackLang,
+            resolvedLanguage: fallbackLang,
+            reason: 'fallback_applied',
+            fallbackApplied: true,
+            detection: {
+                language: fallbackLang,
+                confidence: 0,
+                method: 'fallback',
+                textLength: message.length,
+                processedLength: message.length,
+            },
+        };
     }
 }

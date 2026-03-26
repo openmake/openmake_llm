@@ -262,7 +262,7 @@ ${sanitizedMessage}
         return null;
 
     } catch (error) {
-        logger.error('오류:', error);
+        logger.error(`LLM 라우터 에이전트 선택 실패 (message="${message.substring(0, 40)}..."):`, error instanceof Error ? error.message : error);
         return null;
     }
 }
