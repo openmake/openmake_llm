@@ -528,6 +528,84 @@ export const DISCUSSION_PROGRESS_MESSAGES: Record<PromptLocaleCode, {
     },
 };
 
+/**
+ * 컨텍스트 빌더에서 사용하는 다국어 레이블
+ * discussion-context.ts에서 buildFullContext() 시 각 항목의 제목으로 사용
+ */
+export const DISCUSSION_CONTEXT_LABELS: Record<PromptLocaleCode, {
+    userMemory: string;
+    conversationHistory: string;
+    document: string;
+    webSearch: string;
+    imageAnalysis: string;
+    imageItem: (index: number) => string;
+    middleOmitted: (charCount: number) => string;
+}> = {
+    ko: {
+        userMemory: '💾 사용자 선호도/기억',
+        conversationHistory: '💬 이전 대화 맥락',
+        document: '📄 참조 문서',
+        webSearch: '🔍 웹 검색 결과',
+        imageAnalysis: '🖼️ 이미지 분석 결과',
+        imageItem: (i) => `[이미지 ${i}]`,
+        middleOmitted: (c) => `... [중간 ${c}자 생략] ...`,
+    },
+    en: {
+        userMemory: '💾 User Preferences/Memory',
+        conversationHistory: '💬 Previous Conversation Context',
+        document: '📄 Reference Document',
+        webSearch: '🔍 Web Search Results',
+        imageAnalysis: '🖼️ Image Analysis Results',
+        imageItem: (i) => `[Image ${i}]`,
+        middleOmitted: (c) => `... [${c} chars omitted] ...`,
+    },
+    ja: {
+        userMemory: '💾 ユーザー設定/記憶',
+        conversationHistory: '💬 以前の会話コンテキスト',
+        document: '📄 参照ドキュメント',
+        webSearch: '🔍 Web検索結果',
+        imageAnalysis: '🖼️ 画像分析結果',
+        imageItem: (i) => `[画像 ${i}]`,
+        middleOmitted: (c) => `... [${c}文字省略] ...`,
+    },
+    zh: {
+        userMemory: '💾 用户偏好/记忆',
+        conversationHistory: '💬 之前的对话上下文',
+        document: '📄 参考文档',
+        webSearch: '🔍 网页搜索结果',
+        imageAnalysis: '🖼️ 图片分析结果',
+        imageItem: (i) => `[图片 ${i}]`,
+        middleOmitted: (c) => `... [省略 ${c} 字] ...`,
+    },
+    es: {
+        userMemory: '💾 Preferencias/Memoria del usuario',
+        conversationHistory: '💬 Contexto de conversación previa',
+        document: '📄 Documento de referencia',
+        webSearch: '🔍 Resultados de búsqueda web',
+        imageAnalysis: '🖼️ Resultados de análisis de imágenes',
+        imageItem: (i) => `[Imagen ${i}]`,
+        middleOmitted: (c) => `... [${c} caracteres omitidos] ...`,
+    },
+    de: {
+        userMemory: '💾 Benutzereinstellungen/Erinnerung',
+        conversationHistory: '💬 Vorheriger Gesprächskontext',
+        document: '📄 Referenzdokument',
+        webSearch: '🔍 Websuchergebnisse',
+        imageAnalysis: '🖼️ Bildanalyseergebnisse',
+        imageItem: (i) => `[Bild ${i}]`,
+        middleOmitted: (c) => `... [${c} Zeichen ausgelassen] ...`,
+    },
+    fr: {
+        userMemory: '💾 Préférences/Mémoire utilisateur',
+        conversationHistory: '💬 Contexte de conversation précédente',
+        document: '📄 Document de référence',
+        webSearch: '🔍 Résultats de recherche web',
+        imageAnalysis: '🖼️ Résultats d\'analyse d\'images',
+        imageItem: (i) => `[Image ${i}]`,
+        middleOmitted: (c) => `... [${c} caractères omis] ...`,
+    },
+};
+
 export const DISCUSSION_ERROR_MESSAGES: Record<PromptLocaleCode, {
     discussionFailureSummary: string;
     connectionErrorDetail: string;

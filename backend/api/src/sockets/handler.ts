@@ -12,7 +12,6 @@
  * @description 지원하는 WebSocket 메시지 타입:
  * - 'refresh'        - 클러스터 상태 업데이트 요청
  * - 'request_agents' - MCP 도구 목록 (에이전트 형식) 요청
- * - 'request_agents' - MCP 도구 목록 (에이전트 형식) 요청
  * - 'chat'           - AI 채팅 메시지 (스트리밍 토큰 응답)
  * - 'abort'          - 진행 중인 채팅 생성 중단
  *
@@ -20,7 +19,6 @@
  * - 'init'               - 초기 클러스터/MCP 상태
  * - 'stats'              - MCP 통계
  * - 'update'             - 클러스터 상태 업데이트
- * - 'agents'             - 에이전트(도구) 목록
  * - 'agents'             - 에이전트(도구) 목록
  * - 'token'              - AI 응답 스트리밍 토큰
  * - 'session_created'    - 새 세션 ID 알림
@@ -323,12 +321,14 @@ export class WebSocketHandler {
 
     private async handleRefresh(ws: WebSocket, msg: WSMessage): Promise<void> {
         const extWs = ws as ExtendedWebSocket;
-        const refreshToken = typeof msg.authToken === 'string' ? msg.authToken : null;
-        if (!refreshToken) {
+        // 클라이언트가 새 access token을 전송하여 WebSocket 세션 인증 갱신
+        // 주의: 이것은 HTTP refresh token 흐름과 별개 — access token만 허용됨
+        const newAccessToken = typeof msg.authToken === 'string' ? msg.authToken : null;
+        if (!newAccessToken) {
             return;
         }
 
-        const refreshed = await refreshWebSocketAuthentication(refreshToken, log);
+        const refreshed = await refreshWebSocketAuthentication(newAccessToken, log);
         if (!refreshed.userId) {
             ws.send(JSON.stringify({ type: 'error', message: '인증 갱신에 실패했습니다. 다시 로그인해주세요.' }));
             this.unregisterConnection(ws);

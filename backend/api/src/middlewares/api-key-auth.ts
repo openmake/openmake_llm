@@ -1,10 +1,9 @@
 /**
  * API Key 인증 미들웨어
  * 
- * 3가지 방법으로 API Key를 추출:
+ * 2가지 방법으로 API Key를 추출:
  *   1. X-API-Key 헤더 (권장)
  *   2. Authorization: Bearer omk_live_... (OpenAI 호환)
- *   3. ?api_key=omk_live_... 쿼리 파라미터 (GET 전용, Gemini 호환)
  * 
  * HMAC-SHA-256 해싱 + timing-safe 비교로 검증
  */
@@ -20,7 +19,7 @@ const logger = createLogger('ApiKeyAuth');
 
 /**
  * API Key에서 평문 키를 추출
- * 우선순위: X-API-Key > Authorization: Bearer > ?api_key=
+ * 우선순위: X-API-Key > Authorization: Bearer
  */
 function extractApiKey(req: Request): string | undefined {
     // 1. X-API-Key 헤더
@@ -38,21 +37,8 @@ function extractApiKey(req: Request): string | undefined {
         }
     }
 
-    // 3. 쿼리 파라미터 (GET 요청만) — DEPRECATED: 2025-06-01 이후 제거 예정
-    if (req.method === 'GET' && req.query.api_key) {
-        const queryKey = req.query.api_key as string;
-        if (queryKey.startsWith(API_KEY_PREFIX)) {
-            logger.warn('[DEPRECATED] api_key query parameter will be removed after 2025-06-01. Use X-API-Key header instead.', {
-                path: req.path,
-                ip: req.ip
-            });
-            // Sunset 헤더: 클라이언트에 폐기 일정 알림
-            req.res?.setHeader('Deprecation', 'true');
-            req.res?.setHeader('Sunset', 'Sun, 01 Jun 2025 00:00:00 GMT');
-            return queryKey;
-        }
-    }
-
+    // 쿼리 파라미터 ?api_key= 는 2025-06-01부로 제거됨
+    // X-API-Key 헤더 또는 Authorization: Bearer 사용 필요
     return undefined;
 }
 
@@ -66,7 +52,7 @@ export async function requireApiKey(req: Request, res: Response, next: NextFunct
     if (!plainKey) {
         res.status(401).json(apiError(
             ErrorCodes.UNAUTHORIZED,
-            'API key is required. Provide via X-API-Key header, Authorization: Bearer, or ?api_key= query parameter.'
+            'API key is required. Provide via X-API-Key header or Authorization: Bearer.'
         ));
         return;
     }

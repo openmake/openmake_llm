@@ -260,6 +260,7 @@ ${contextInstructions}
         const participants = experts.map(e => e.name);
 
         // 2. 라운드별 토론 (라운드 내 에이전트 의견 병렬 수집)
+        let consecutiveRoundFailures = 0;
         for (let round = 0; round < maxRounds; round++) {
             const roundBaseProgress = 10 + (round * 40 / maxRounds);
             const roundSpan = 40 / maxRounds;
@@ -295,6 +296,18 @@ ${contextInstructions}
             } catch (error) {
                 logger.error(`Round ${round + 1} parallel execution failed:`, error);
                 roundResults = [];
+            }
+
+            const roundSuccessCount = roundResults.filter(r => r !== null).length;
+            if (roundSuccessCount === 0) {
+                consecutiveRoundFailures++;
+                logger.warn(`Round ${round + 1}: 전체 에이전트 의견 생성 실패 (연속 ${consecutiveRoundFailures}회)`);
+                if (consecutiveRoundFailures >= 2) {
+                    logger.error('연속 2라운드 전체 실패 — 토론 조기 종료 (LLM 연결 상태 확인 필요)');
+                    break;
+                }
+            } else {
+                consecutiveRoundFailures = 0;
             }
 
             for (const result of roundResults) {

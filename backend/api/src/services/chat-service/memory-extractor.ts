@@ -82,6 +82,6 @@ export async function extractMemoriesAsync(params: MemoryExtractorParams): Promi
             logger.info(`장기 메모리 자동 추출: ${extracted.length}개 저장 (user=${userId})`);
         }
     } catch (e) {
-        logger.debug('메모리 자동 추출 실패 (무시):', e instanceof Error ? e.message : e);
+        logger.warn('메모리 자동 추출 실패:', e instanceof Error ? e.message : e);
     }
 }
