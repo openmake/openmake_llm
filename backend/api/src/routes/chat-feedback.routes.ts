@@ -133,4 +133,33 @@ router.get(
     })
 );
 
+/**
+ * GET /api/chat/feedback/stats/routing
+ * 라우팅 품질 통계를 반환합니다 (분류 출처별 피드백 분포 + 토큰 예산 효율성).
+ * Auth: requireAuth + requireAdmin
+ * Query: ?days=30 (기본값 30)
+ */
+router.get(
+    '/stats/routing',
+    requireAuth,
+    requireAdmin,
+    asyncHandler(async (req: Request, res: Response) => {
+        const rawDays = req.query['days'];
+        const days = rawDays !== undefined ? parseInt(String(rawDays), 10) : 30;
+
+        if (isNaN(days) || days < 1 || days > 365) {
+            res.status(400).json(badRequest('days는 1~365 사이의 정수여야 합니다'));
+            return;
+        }
+
+        const repo = new FeedbackRepository(getPool());
+        const [bySource, tokenEfficiency] = await Promise.all([
+            repo.getFeedbackByClassifierSource(days),
+            repo.getTokenBudgetEfficiency(days),
+        ]);
+
+        res.json(success({ bySource, tokenEfficiency }));
+    })
+);
+
 export default router;

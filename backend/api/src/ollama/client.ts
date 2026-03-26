@@ -36,6 +36,7 @@ import {
 } from './types';
 import { getConfig } from '../config';
 import { OLLAMA_CLOUD_HOST } from '../config/constants';
+import { EMBEDDING_MODEL } from '../config/routing-config';
 import { createLogger } from '../utils/logger';
 import { getApiKeyManager, ApiKeyManager } from './api-key-manager';
 import { getApiUsageTracker } from './api-usage-tracker';
@@ -330,6 +331,28 @@ export class OllamaClient {
                 eval_duration: response.data.eval_duration
             }
         };
+    }
+
+    /**
+     * Ollama /api/embed API를 호출하여 텍스트 임베딩 벡터를 생성합니다.
+     *
+     * @param text - 임베딩할 텍스트
+     * @param model - 임베딩 모델 (기본: EMBEDDING_MODEL)
+     * @returns 임베딩 벡터 (number[])
+     */
+    async embed(text: string, model?: string): Promise<number[]> {
+        const embeddingModel = model || EMBEDDING_MODEL;
+
+        const response = await this.client.post<{ embeddings: number[][] }>('/api/embed', {
+            model: embeddingModel,
+            input: text,
+        });
+
+        const data = response.data;
+        if (!data.embeddings || !data.embeddings[0]) {
+            throw new Error('Embedding 응답에 벡터가 없습니다');
+        }
+        return data.embeddings[0];
     }
 
     /**

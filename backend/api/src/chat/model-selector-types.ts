@@ -78,4 +78,8 @@ export interface ModelSelection {
     supportsThinking: boolean;
     /** 비전(이미지 분석) 지원 여부 */
     supportsVision: boolean;
+    /** P1-2: 분류 신뢰도 (0.0~1.0) */
+    classifiedConfidence?: number;
+    /** P1-2: 분류 출처 ('llm' | 'cache' | 'regex') */
+    classifierSource?: 'llm' | 'cache' | 'regex';
 }

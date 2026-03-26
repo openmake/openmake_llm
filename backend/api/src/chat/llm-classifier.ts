@@ -30,9 +30,10 @@ import { QUERY_TYPES } from './model-selector-types';
 import type { QueryType } from './model-selector-types';
 import type { FormatOption } from '../ollama/types';
 import { SemanticClassificationCache } from './semantic-cache';
+import { VectorClassificationCache } from './vector-cache';
 import { LLM_TIMEOUTS } from '../config/timeouts';
 import { CACHE_CONFIG } from '../config/runtime-limits';
-import { CLASSIFIER_MODEL, CONFIDENCE_THRESHOLD, CLASSIFIER_TEMPERATURE, CLASSIFIER_NUM_CTX } from '../config/routing-config';
+import { CLASSIFIER_MODEL, CONFIDENCE_THRESHOLD, CLASSIFIER_TEMPERATURE, CLASSIFIER_NUM_CTX, VECTOR_CACHE_ENABLED, EMBEDDING_MODEL } from '../config/routing-config';
 import warmQueriesRaw from '../config/data/warm-queries.json';
 
 const logger = createLogger('LLMClassifier');
@@ -64,6 +65,27 @@ function getClassificationCache(): SemanticClassificationCache {
         });
     }
     return classificationCache;
+}
+
+// ============================================================
+// 벡터 캐시 인스턴스 (L1.5, Lazy 초기화)
+// ============================================================
+
+let vectorCache: VectorClassificationCache | null = null;
+let embeddingClient: OllamaClient | null = null;
+
+function getVectorCache(): VectorClassificationCache {
+    if (!vectorCache) {
+        vectorCache = new VectorClassificationCache();
+    }
+    return vectorCache;
+}
+
+function getEmbeddingClient(): OllamaClient {
+    if (!embeddingClient) {
+        embeddingClient = new OllamaClient({ model: EMBEDDING_MODEL });
+    }
+    return embeddingClient;
 }
 
 // ============================================================
@@ -223,6 +245,34 @@ export async function classifyWithLLM(query: string): Promise<LLMClassificationR
         };
     }
 
+    // ── 1.5. L1.5 vector similarity ──
+    let queryEmbedding: number[] | null = null;
+    if (VECTOR_CACHE_ENABLED) {
+        try {
+            const client = getEmbeddingClient();
+            queryEmbedding = await client.embed(query);
+            const vCache = getVectorCache();
+            const vectorResult = vCache.search(queryEmbedding);
+
+            if (vectorResult) {
+                logger.info(
+                    `LLM 분류 벡터 캐시 히트: "${query.substring(0, 30)}..." → ${vectorResult.type} ` +
+                    `(sim=${vectorResult.similarity.toFixed(3)}, confidence=${(vectorResult.confidence * 100).toFixed(0)}%)`
+                );
+                // L1 캐시에도 저장 (다음번엔 exact-match로 히트)
+                cache.set(query, vectorResult.type, vectorResult.confidence);
+                return {
+                    type: vectorResult.type,
+                    confidence: vectorResult.confidence,
+                    source: 'cache' as const,
+                };
+            }
+        } catch (vecError) {
+            // 벡터 캐시 실패는 무시 -- LLM 분류로 진행
+            logger.debug(`벡터 캐시 검색 실패 (무시): ${vecError instanceof Error ? vecError.message : vecError}`);
+        }
+    }
+
     // ── 2. LLM 분류 호출 ──
     try {
         const llmRaw = await callLLMClassifier(query);
@@ -233,6 +283,20 @@ export async function classifyWithLLM(query: string): Promise<LLMClassificationR
                 `LLM 분류: "${query.substring(0, 30)}..." → ${llmRaw.type} ` +
                 `(${(llmRaw.confidence * 100).toFixed(0)}%) [${llmRaw.evalDuration}]`
             );
+
+            // 벡터 캐시에도 저장
+            if (VECTOR_CACHE_ENABLED) {
+                try {
+                    if (!queryEmbedding) {
+                        const client = getEmbeddingClient();
+                        queryEmbedding = await client.embed(query);
+                    }
+                    getVectorCache().add(query, queryEmbedding, llmRaw.type, llmRaw.confidence);
+                } catch {
+                    // 벡터 저장 실패는 무시
+                }
+            }
+
             return { type: llmRaw.type, confidence: llmRaw.confidence, source: 'llm' };
         }
     } catch (error) {
@@ -299,9 +363,38 @@ export async function warmClassificationCache(): Promise<number> {
             cache.set(warm.query, warm.type, warm.confidence);
         }
         logger.info(`캐시 워밍 완료: ${warmQueriesData.length}/${warmQueriesData.length}개`);
+
+        // 벡터 캐시 워밍 (비동기, 실패 허용)
+        if (VECTOR_CACHE_ENABLED) {
+            try {
+                const client = getEmbeddingClient();
+                const vCache = getVectorCache();
+                let vectorWarmed = 0;
+                for (const warm of warmQueriesData) {
+                    try {
+                        const embedding = await client.embed(warm.query);
+                        vCache.add(warm.query, embedding, warm.type, warm.confidence);
+                        vectorWarmed++;
+                    } catch {
+                        // 개별 실패 무시
+                    }
+                }
+                logger.info(`벡터 캐시 워밍 완료: ${vectorWarmed}/${warmQueriesData.length}개`);
+            } catch (e) {
+                logger.warn(`벡터 캐시 워밍 실패 (무시): ${e instanceof Error ? e.message : e}`);
+            }
+        }
     } finally {
         warmingInProgress = false;
     }
 
     return warmQueriesData.length;
+}
+
+/**
+ * 벡터 캐시 통계를 반환합니다 (모니터링용).
+ */
+export function getVectorCacheStats(): { hits: number; misses: number; size: number; hitRate: number } | null {
+    if (!vectorCache) return null;
+    return vectorCache.getStats();
 }

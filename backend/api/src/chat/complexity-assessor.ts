@@ -9,13 +9,14 @@
  * @module chat/complexity-assessor
  */
 
-import type { QueryClassification } from './model-selector-types';
+import type { QueryClassification, QueryType } from './model-selector-types';
 import { createLogger } from '../utils/logger';
 import {
     GV_SKIP_THRESHOLD as _GV_SKIP_THRESHOLD,
     COMPLEXITY_NEUTRAL_SCORE,
     COMPLEXITY_WEIGHTS,
 } from '../config/routing-config';
+import { TOKEN_BUDGETS } from '../config/llm-parameters';
 
 const logger = createLogger('ComplexityAssessor');
 
@@ -39,6 +40,8 @@ export interface ComplexityAssessment {
     signals: string[];
     /** GV(Generate-Verify) 건너뛰기 여부 */
     shouldSkipGV: boolean;
+    /** 권장 토큰 예산 (0=제한 없음) */
+    recommendedTokenBudget: number;
 }
 
 /**
@@ -113,5 +116,38 @@ export function assessComplexity(ctx: ComplexityContext): ComplexityAssessment {
         logger.debug(`복잡도 충분 → GV 실행: score=${score.toFixed(2)}, signals=[${signals.join(', ')}]`);
     }
 
-    return { score, signals, shouldSkipGV };
+    const recommendedTokenBudget = recommendTokenBudget(score, ctx.classification.type);
+    return { score, signals, shouldSkipGV, recommendedTokenBudget };
+}
+
+/**
+ * 복잡도 점수와 QueryType을 기반으로 권장 토큰 예산을 계산합니다.
+ *
+ * 알고리즘:
+ * 1. 복잡도 점수로 기본 예산 결정 (LOW/MEDIUM/HIGH/UNLIMITED)
+ * 2. QueryType별 오버라이드와 비교하여 더 큰 값 채택 (타입 최소 보장)
+ * 3. MIN_TOKENS 이상 보장 (0=UNLIMITED 제외)
+ */
+export function recommendTokenBudget(complexityScore: number, queryType: QueryType): number {
+    // 최고 복잡도: 제한 없음
+    if (complexityScore >= 0.8) return TOKEN_BUDGETS.UNLIMITED;
+
+    // 복잡도 기반 기본 예산
+    let budget: number;
+    if (complexityScore < 0.3) {
+        budget = TOKEN_BUDGETS.LOW;
+    } else if (complexityScore < 0.6) {
+        budget = TOKEN_BUDGETS.MEDIUM;
+    } else {
+        budget = TOKEN_BUDGETS.HIGH;
+    }
+
+    // QueryType별 최소 보장 (타입 오버라이드가 더 크면 채택)
+    const typeMinimum = TOKEN_BUDGETS.BY_TYPE[queryType];
+    if (typeMinimum && typeMinimum > budget) {
+        budget = typeMinimum;
+    }
+
+    // 최소 토큰 보장
+    return Math.max(budget, TOKEN_BUDGETS.MIN_TOKENS);
 }

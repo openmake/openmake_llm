@@ -33,6 +33,16 @@ export interface RoutingRouteDecision {
     domainEngine?: string;
     /** P2-2: 매칭된 도메인 키 */
     domainKey?: string;
+    /** P1-2: 분류 신뢰도 (0.0~1.0) */
+    classificationConfidence?: number;
+    /** P1-2: 분류 출처 */
+    classifierSource?: 'llm' | 'cache' | 'regex';
+    /** P1-2: 실행 전략 */
+    executionStrategy?: 'single' | 'generate-verify' | 'conditional-verify';
+    /** P1-2: GV 스킵 여부 (conditional-verify에서 복잡도 낮아 스킵) */
+    gvSkipped?: boolean;
+    /** P1-2: 토큰 예산 */
+    tokenBudget?: number;
 }
 
 export interface RoutingDecisionLog {
