@@ -32,6 +32,7 @@ import { isValidBrandModel, getProfiles } from './pipeline-profile';
 import { createLogger } from '../utils/logger';
 import { MODEL_CONTEXT_DEFAULTS } from '../config/runtime-limits';
 import { QUERY_TYPE_PARAMS } from '../config/llm-parameters';
+import { recommendTokenBudget } from './complexity-assessor';
 import { applyCostTierCeiling, getDefaultCostTier } from './cost-tier';
 import { ModelPreset, getModelPresets } from '../config/model-presets';
 import { MODEL_CAPABILITY_PRESETS } from '../config/model-defaults';
@@ -251,9 +252,10 @@ export function getModelContextLength(modelName: string): number {
  * @returns 조정된 모델 옵션 (원본 불변)
  */
 export function adjustOptionsForModel(
-    modelName: string, 
+    modelName: string,
     baseOptions: ModelOptions,
-    queryType: QueryType
+    queryType: QueryType,
+    complexityScore?: number
 ): ModelOptions {
     const lowerModel = modelName.toLowerCase();
     const adjustedOptions = { ...baseOptions };
@@ -300,6 +302,15 @@ export function adjustOptionsForModel(
             adjustedOptions.temperature = QUERY_TYPE_PARAMS.TRANSLATION_TEMP;
             adjustedOptions.repeat_penalty = QUERY_TYPE_PARAMS.TRANSLATION_REPEAT_PENALTY;
             break;
+    }
+
+    // ── 토큰 예산 관리 (num_predict) ──
+    // 기존에 num_predict가 설정되지 않은 경우에만 동적 설정
+    if (complexityScore !== undefined && !adjustedOptions.num_predict) {
+        const budget = recommendTokenBudget(complexityScore, queryType);
+        if (budget > 0) {
+            adjustedOptions.num_predict = budget;
+        }
     }
 
     return adjustedOptions;

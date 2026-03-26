@@ -100,6 +100,51 @@ export const LLM_PREDICT_LIMITS = {
     MEMORY_EXTRACTION: Number(process.env.LLM_PREDICT_MEMORY_EXTRACTION) || 512,
 } as const;
 
+/**
+ * 복잡도 기반 토큰 예산 (num_predict 동적 제어)
+ *
+ * assessComplexity()의 복잡도 점수와 QueryType을 기반으로
+ * 권장 num_predict 값을 결정할 때 사용합니다.
+ *
+ * UNLIMITED(0)은 Ollama에서 제한 없음을 의미합니다.
+ */
+export const TOKEN_BUDGETS = {
+    /** 최소 토큰 보장 (응답 잘림 방지) */
+    MIN_TOKENS: Number(process.env.OMK_TOKEN_BUDGET_MIN) || 128,
+    /** 저복잡도 (score < 0.3) 기본 예산 */
+    LOW: Number(process.env.OMK_TOKEN_BUDGET_LOW) || 256,
+    /** 중복잡도 (0.3 <= score < 0.6) 기본 예산 */
+    MEDIUM: Number(process.env.OMK_TOKEN_BUDGET_MEDIUM) || 1024,
+    /** 고복잡도 (0.6 <= score < 0.8) 기본 예산 */
+    HIGH: Number(process.env.OMK_TOKEN_BUDGET_HIGH) || 2048,
+    /** 최고복잡도 (score >= 0.8) — 0은 제한 없음 (Ollama 기본값 사용) */
+    UNLIMITED: 0,
+    /** QueryType별 오버라이드 — 복잡도 점수와 독립적으로 최소 보장 예산 */
+    BY_TYPE: {
+        'chat': Number(process.env.OMK_TOKEN_BUDGET_CHAT) || 512,
+        'korean': Number(process.env.OMK_TOKEN_BUDGET_KOREAN) || 512,
+        'translation': Number(process.env.OMK_TOKEN_BUDGET_TRANSLATION) || 1024,
+        'vision': Number(process.env.OMK_TOKEN_BUDGET_VISION) || 1024,
+        'math-applied': Number(process.env.OMK_TOKEN_BUDGET_MATH_APPLIED) || 1024,
+        'creative': Number(process.env.OMK_TOKEN_BUDGET_CREATIVE) || 2048,
+        'analysis': Number(process.env.OMK_TOKEN_BUDGET_ANALYSIS) || 2048,
+        'document': Number(process.env.OMK_TOKEN_BUDGET_DOCUMENT) || 2048,
+        'code-gen': Number(process.env.OMK_TOKEN_BUDGET_CODE_GEN) || 2048,
+        'code-agent': Number(process.env.OMK_TOKEN_BUDGET_CODE_AGENT) || 2048,
+        'reasoning': Number(process.env.OMK_TOKEN_BUDGET_REASONING) || 4096,
+        'math-hard': Number(process.env.OMK_TOKEN_BUDGET_MATH_HARD) || 4096,
+    } as Record<string, number>,
+} as const;
+
+/**
+ * 저복잡도 쿼리 프롬프트 지시어
+ * complexity score < GV_SKIP_THRESHOLD 일 때 시스템 프롬프트 끝에 주입하여
+ * LLM이 간결한 응답을 생성하도록 유도합니다.
+ */
+export const CONCISE_RESPONSE_DIRECTIVE =
+    process.env.OMK_CONCISE_DIRECTIVE ??
+    'Provide a concise, focused answer. Avoid unnecessary repetition or lengthy explanations.';
+
 // ============================================
 // 신뢰도 제수(Divisor)
 // ============================================

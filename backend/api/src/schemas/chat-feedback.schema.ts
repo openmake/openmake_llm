@@ -24,10 +24,19 @@ export const chatFeedbackSchema = z.object({
         message: "signal은 'thumbs_up', 'thumbs_down', 'regenerate' 중 하나여야 합니다"
     }),
     routingMetadata: z.object({
+        // 기존 필드
         model: z.string().optional(),
         queryType: z.string().optional(),
         latencyMs: z.number().optional(),
-        profileId: z.string().optional()
+        profileId: z.string().optional(),
+        // P1-2: 라우팅 품질 추적 메타데이터
+        classificationConfidence: z.number().min(0).max(1).optional(),
+        complexityScore: z.number().min(0).max(1).optional(),
+        classifierSource: z.enum(['llm', 'cache', 'regex']).optional(),
+        executionStrategy: z.enum(['single', 'generate-verify', 'conditional-verify']).optional(),
+        gvSkipped: z.boolean().optional(),
+        tokenBudget: z.number().int().nonnegative().optional(),
+        actualTokens: z.number().int().nonnegative().optional(),
     }).optional()
 });
 

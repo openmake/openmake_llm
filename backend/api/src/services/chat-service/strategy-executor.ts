@@ -158,9 +158,13 @@ async function executeWithStrategy(p: ExecuteWithStrategyParams): Promise<boolea
             );
             p.routingLog.routeDecision.complexityScore = complexity.score;
             p.routingLog.routeDecision.complexitySignals = complexity.signals;
+            p.routingLog.routeDecision.gvSkipped = true;
             return false;
         }
 
+        p.routingLog.routeDecision.complexityScore = complexity.score;
+        p.routingLog.routeDecision.complexitySignals = complexity.signals;
+        p.routingLog.routeDecision.gvSkipped = false;
         logger.info(
             `ExecutionStrategy: conditional-verify → 복잡도 충분 (${complexity.score.toFixed(2)}) → GV 실행`
         );

@@ -23,6 +23,8 @@ import { AGENTS, getAgentById, type AgentSelection } from '../agents';
 import type { DiscussionProgress } from '../agents/discussion-engine';
 import { getPromptConfig } from '../chat/prompt';
 import { adjustOptionsForModel, checkModelCapability } from '../chat/model-selector';
+import { assessComplexity, GV_SKIP_THRESHOLD } from '../chat/complexity-assessor';
+import { CONCISE_RESPONSE_DIRECTIVE } from '../config/llm-parameters';
 import type { ExecutionPlan } from '../chat/profile-resolver';
 import type { DocumentStore } from '../documents/store';
 import type { UserTier } from '../data/user-manager';
@@ -381,14 +383,37 @@ export class ChatService {
 
         // ── 라우팅 결정 로그 갱신 ──
         routingLog.queryFeatures.queryType = modelSelection.queryType;
+        routingLog.queryFeatures.confidence = modelSelection.classifiedConfidence ?? routingLog.queryFeatures.confidence;
         routingLog.modelUsed = modelSelection.model;
         const execStrat = executionPlan?.executionStrategy ?? 'single';
         routingLog.routeDecision.strategy = execStrat === 'single' ? 'agent-loop' : 'generate-verify';
 
+        // P1-2: 라우팅 품질 추적 메타데이터
+        routingLog.routeDecision.classificationConfidence = modelSelection.classifiedConfidence;
+        routingLog.routeDecision.classifierSource = modelSelection.classifierSource;
+        routingLog.routeDecision.executionStrategy = execStrat as 'single' | 'generate-verify' | 'conditional-verify';
+
+        // P1-1: 복잡도 기반 토큰 예산을 위해 사전 평가
+        const preComplexity = assessComplexity({
+            query: message,
+            classification: {
+                type: modelSelection.queryType,
+                confidence: routingLog.queryFeatures.confidence || 0.5,
+                matchedPatterns: [],
+            },
+            hasImages: (images && images.length > 0) || false,
+            hasDocuments: !!docId,
+            historyLength: history?.length ?? 0,
+        });
+
+        // P1-2: 복잡도 기반 토큰 예산을 routingLog에 기록
+        routingLog.routeDecision.tokenBudget = preComplexity.recommendedTokenBudget;
+
         let chatOptions = adjustOptionsForModel(
             modelSelection.model,
             { ...modelSelection.options, ...(promptConfig.options || {}) },
-            modelSelection.queryType
+            modelSelection.queryType,
+            preComplexity.score
         );
 
         if (docId) {
@@ -405,9 +430,14 @@ export class ChatService {
         const maxTurns = executionPlan?.agentLoopMax ?? 5;
 
         let currentHistory: ChatMessage[] = [];
-        const combinedSystemPrompt = agentSystemMessage
+        let combinedSystemPrompt = agentSystemMessage
             ? `${agentSystemMessage}\n\n---\n\n${promptConfig.systemPrompt}`
             : promptConfig.systemPrompt;
+
+        // P1-1: 저복잡도 쿼리에 간결한 응답 지시어 주입
+        if (preComplexity.score < GV_SKIP_THRESHOLD) {
+            combinedSystemPrompt += `\n\n${CONCISE_RESPONSE_DIRECTIVE}`;
+        }
 
         if (history && history.length > 0) {
             // 긴 히스토리 자동 요약 (토큰 비용 절감)

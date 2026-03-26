@@ -84,6 +84,8 @@ export async function resolveModel(params: ResolveModelParams): Promise<ModelSel
             supportsToolCalling: true,
             supportsThinking: autoExecutionPlan.thinkingLevel !== 'off',
             supportsVision: autoExecutionPlan.requiredTools.includes('vision'),
+            classifiedConfidence: autoRoutingResult.classifiedConfidence,
+            classifierSource: autoRoutingResult.classifierSource,
         };
     } else if (executionPlan?.isBrandModel) {
         logger.info(`Brand Model: ${executionPlan.requestedModel} → engine=${executionPlan.resolvedEngine}`);
