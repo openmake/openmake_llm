@@ -42,8 +42,8 @@ export class KeyCooldownTracker {
             getPool().query(text, params).catch(err => {
                 logger.warn('DB write failed (cache-only mode):', err instanceof Error ? err.message : String(err));
             });
-        } catch (_e) {
-            // getPool() may throw if DB not initialized — silently ignore
+        } catch (e) {
+            logger.warn('DB 미초기화 상태 — 키 쿨다운 영속화 불가 (인메모리 전용):', e instanceof Error ? e.message : String(e));
         }
     }
 
@@ -68,8 +68,8 @@ export class KeyCooldownTracker {
                 .catch(err => {
                     logger.warn('DB 캐시 워밍 실패 (캐시 전용 모드):', err instanceof Error ? err.message : String(err));
                 });
-        } catch (_e) {
-            // getPool() may throw if DB not initialized — silently ignore
+        } catch (e) {
+            logger.warn('DB 미초기화 상태 — 키 쿨다운 캐시 워밍 불가:', e instanceof Error ? e.message : String(e));
         }
     }
 

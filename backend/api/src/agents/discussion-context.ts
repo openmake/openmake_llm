@@ -12,6 +12,8 @@
 import type { DiscussionConfig, ContextPriority, TokenLimits } from './discussion-types';
 import { createLogger } from '../utils/logger';
 import { DISCUSSION_TOKEN_BUDGET } from '../config/runtime-limits';
+import { resolvePromptLocale } from '../chat/language-policy';
+import { DISCUSSION_CONTEXT_LABELS } from './discussion-locales';
 
 const logger = createLogger('Discussion');
 
@@ -20,14 +22,21 @@ export const tokensToChars = (tokens: number): number => tokens * 4;
 
 /**
  * 🆕 문자열을 토큰 제한에 맞게 자르기
+ * @param middleOmittedFn - 생략 메시지 포맷 함수 (다국어 지원)
  */
-export const truncateToLimit = (text: string, maxTokens: number): string => {
+export const truncateToLimit = (
+    text: string,
+    maxTokens: number,
+    middleOmittedFn?: (charCount: number) => string,
+): string => {
     const maxChars = tokensToChars(maxTokens);
     if (text.length <= maxChars) return text;
-    
+
     // 앞부분과 뒷부분을 유지하며 중간 생략
     const half = Math.floor(maxChars / 2);
-    return `${text.substring(0, half)}\n\n... [중간 ${text.length - maxChars}자 생략] ...\n\n${text.substring(text.length - half)}`;
+    const omitted = text.length - maxChars;
+    const omitMsg = middleOmittedFn ? middleOmittedFn(omitted) : `... [${omitted} chars omitted] ...`;
+    return `${text.substring(0, half)}\n\n${omitMsg}\n\n${text.substring(text.length - half)}`;
 };
 
 /**
@@ -54,8 +63,13 @@ export function createContextBuilder(config: DiscussionConfig): {
         imageDescriptions,
         // 🆕 우선순위 및 토큰 제한
         contextPriority,
-        tokenLimits
+        tokenLimits,
+        userLanguage,
     } = config;
+
+    // 다국어 레이블 resolve
+    const locale = resolvePromptLocale(userLanguage || 'en');
+    const contextLabels = DISCUSSION_CONTEXT_LABELS[locale];
 
     // ========================================
     // 🆕 컨텍스트 우선순위 기본값
@@ -110,12 +124,12 @@ export function createContextBuilder(config: DiscussionConfig): {
         if (userMemoryContext) {
             contextItems.push({
                 priority: priority.userMemory,
-                label: '💾 사용자 선호도/기억',
+                label: contextLabels.userMemory,
                 content: userMemoryContext,
                 maxTokens: limits.maxMemoryTokens
             });
         }
-        
+
         // 2. 대화 히스토리
         if (conversationHistory && conversationHistory.length > 0) {
             const recentHistory = conversationHistory.slice(-5);
@@ -124,40 +138,40 @@ export function createContextBuilder(config: DiscussionConfig): {
                 .join('\n');
             contextItems.push({
                 priority: priority.conversationHistory,
-                label: '💬 이전 대화 맥락',
+                label: contextLabels.conversationHistory,
                 content: historyText,
                 maxTokens: limits.maxHistoryTokens
             });
         }
-        
+
         // 3. 문서 컨텍스트
         if (documentContext) {
             contextItems.push({
                 priority: priority.document,
-                label: '📄 참조 문서',
+                label: contextLabels.document,
                 content: documentContext,
                 maxTokens: limits.maxDocumentTokens
             });
         }
-        
+
         // 4. 웹 검색 결과
         if (webSearchContext) {
             contextItems.push({
                 priority: priority.webSearch,
-                label: '🔍 웹 검색 결과',
+                label: contextLabels.webSearch,
                 content: webSearchContext,
                 maxTokens: limits.maxWebSearchTokens
             });
         }
-        
+
         // 5. 이미지 설명 (비전 모델 분석 결과)
         if (imageDescriptions && imageDescriptions.length > 0) {
             const imageText = imageDescriptions
-                .map((desc, i) => `[이미지 ${i + 1}]: ${desc}`)
+                .map((desc, i) => `${contextLabels.imageItem(i + 1)}: ${desc}`)
                 .join('\n');
             contextItems.push({
                 priority: priority.image,
-                label: '🖼️ 이미지 분석 결과',
+                label: contextLabels.imageAnalysis,
                 content: imageText,
                 maxTokens: limits.maxImageDescriptionTokens
             });
@@ -172,7 +186,7 @@ export function createContextBuilder(config: DiscussionConfig): {
         const maxTotalChars = tokensToChars(limits.maxTotalTokens);
         
         for (const item of contextItems) {
-            const truncated = truncateToLimit(item.content, item.maxTokens);
+            const truncated = truncateToLimit(item.content, item.maxTokens, contextLabels.middleOmitted);
             
             // 전체 제한 체크
             if (totalChars + truncated.length > maxTotalChars) {
