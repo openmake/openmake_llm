@@ -216,6 +216,31 @@ export const RESEARCH_DEFAULTS = {
 } as const;
 
 // ============================================
+// Deep Research Strategy 파라미터 (Chat 파이프라인 전용)
+// ============================================
+
+/**
+ * DeepResearchStrategy에서 사용하는 파라미터 (chat-strategies/deep-research-strategy.ts)
+ * RESEARCH_DEFAULTS보다 공격적인 설정 (WebSocket 스트리밍 기반 deep 모드)
+ */
+export const RESEARCH_STRATEGY_PARAMS = {
+    /** 최대 반복 루프 수 */
+    MAX_LOOPS: 5,
+    /** 검색 API 종류 */
+    SEARCH_API: 'all' as const,
+    /** 최대 검색 결과 수 */
+    MAX_SEARCH_RESULTS: 360,
+    /** 최대 전체 소스 수 */
+    MAX_TOTAL_SOURCES: 80,
+    /** 전체 콘텐츠 스크래핑 활성화 */
+    SCRAPE_FULL_CONTENT: true,
+    /** 루프당 최대 스크래핑 수 */
+    MAX_SCRAPE_PER_LOOP: 15,
+    /** 청크 크기 (소스 개수 기준) */
+    CHUNK_SIZE: 10,
+} as const;
+
+// ============================================
 // Deep Research 깊이별 루프 설정
 // ============================================
 
