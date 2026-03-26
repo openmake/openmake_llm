@@ -157,7 +157,6 @@ export const researchTool: MCPToolDefinition = {
                         topic,
                         depth,
                         message: `"${topic}" 주제에 대한 심층 연구가 시작되었습니다. get_research_status 도구로 진행 상황을 확인하세요.`,
-                        estimatedTime: depth === 'quick' ? '1-2분' : depth === 'standard' ? '3-5분' : '5-10분'
                     }, null, 2)
                 }]
             };
