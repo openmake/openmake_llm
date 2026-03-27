@@ -15,6 +15,7 @@ import {
     type LanguagePolicyDecision,
 } from '../../chat/language-policy';
 import { getConfig } from '../../config/env';
+import { LANGUAGE_THRESHOLDS } from '../../config/runtime-limits';
 
 const logger = createLogger('LanguageResolver');
 
@@ -35,7 +36,7 @@ export function resolveLanguagePolicy(
             defaultLanguage: config.defaultResponseLanguage,
             enableDynamicResponse: true,
             minConfidenceThreshold: config.languageDetectionMinConfidence,
-            shortTextThreshold: 20,
+            shortTextThreshold: LANGUAGE_THRESHOLDS.SHORT_TEXT_LENGTH_EXTENDED,
             fallbackLanguage: config.languageFallbackLanguage,
             supportedLanguages: ['ko', 'en', 'ja', 'zh', 'es', 'fr', 'de', 'pt', 'ru', 'ar', 'hi', 'it', 'nl', 'sv', 'da', 'no', 'fi', 'th', 'vi', 'tr']
         }, userLanguagePreference as SupportedLanguageCode | undefined);

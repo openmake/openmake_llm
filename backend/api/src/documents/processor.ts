@@ -6,6 +6,7 @@ import { getConfig } from '../config/env';
 import { ProgressCallback, createProgressEvent } from './progress';
 import { createLogger } from '../utils/logger';
 import { DOCUMENT_PROCESSING } from '../config/runtime-limits';
+import { DOCUMENT_SUMMARY_SYSTEM_PROMPT, DOCUMENT_QA_SYSTEM_PROMPT } from '../prompts/document-system';
 
 /** ISO 639-1 코드를 영어 언어명으로 변환 (LLM 프롬프트용) */
 const LANGUAGE_NAMES: Record<string, string> = {
@@ -431,8 +432,7 @@ export function createSummaryPrompt(document: DocumentResult, language: string =
         text = text.substring(0, maxLength) + '\n\n[... 문서의 나머지 부분 생략 ...]';
     }
 
-    return `You are a professional document analyst. Analyze the provided document and generate a structured summary in JSON format.
-The output MUST be a valid JSON object without any markdown formatting or code blocks.
+    return `${DOCUMENT_SUMMARY_SYSTEM_PROMPT}
 
 Document Info:
 - Filename: ${document.filename}
@@ -470,8 +470,7 @@ export function createQAPrompt(document: DocumentResult, question: string, langu
         text = text.substring(0, maxLength) + '\n\n[... 문서의 나머지 부분 생략 ...]';
     }
 
-    return `You are a professional document analyst. Answer the user's question based on the document content.
-The output MUST be a valid JSON object without any markdown formatting or code blocks.
+    return `${DOCUMENT_QA_SYSTEM_PROMPT}
 
 Document Info:
 - Filename: ${document.filename}

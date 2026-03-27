@@ -22,6 +22,7 @@ import type { AgentLoopStrategyContext, ChatStrategy, ChatResult } from './types
 import { createLogger } from '../../utils/logger';
 import { TRUNCATION } from '../../config/runtime-limits';
 import { LLM_TEMPERATURES } from '../../config/llm-parameters';
+import { VISION_OCR_SYSTEM_PROMPT, VISION_ANALYSIS_SYSTEM_PROMPT } from '../../prompts/vision-system';
 
 const logger = createLogger('AgentLoopStrategy');
 
@@ -234,7 +235,7 @@ export class AgentLoopStrategy implements ChatStrategy<AgentLoopStrategyContext,
 
                 const ocrResponse = await context.client.chat(
                     [
-                        { role: 'system', content: 'You are an OCR expert. Extract ALL text from the image exactly as it appears. Preserve formatting, line breaks, and structure. If the text is in Korean, Japanese, or Chinese, output it in the original language.' },
+                        { role: 'system', content: VISION_OCR_SYSTEM_PROMPT },
                         {
                             role: 'user',
                             content: `이 이미지에서 모든 텍스트를 정확하게 추출해주세요. 원본 형식을 최대한 유지하세요.${language !== 'auto' ? ` 언어: ${language}` : ''}`,
@@ -283,7 +284,7 @@ export class AgentLoopStrategy implements ChatStrategy<AgentLoopStrategyContext,
 
                 const analysisResponse = await context.client.chat(
                     [
-                        { role: 'system', content: 'You are an expert image analyst. Describe images in detail, including objects, text, colors, composition, and any relevant context.' },
+                        { role: 'system', content: VISION_ANALYSIS_SYSTEM_PROMPT },
                         {
                             role: 'user',
                             content: question,

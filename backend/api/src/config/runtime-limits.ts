@@ -275,6 +275,86 @@ export const MODEL_CONTEXT_DEFAULTS = {
 } as const;
 
 // ============================================
+// 신뢰도/중요도 기본값
+// ============================================
+
+/**
+ * 피드백 중요도 기본값
+ * routes/chat-feedback.routes.ts에서 참조
+ */
+export const FEEDBACK_IMPORTANCE = {
+    /** 부정 피드백 중요도 */
+    NEGATIVE: 0.4,
+    /** 긍정 피드백 중요도 */
+    POSITIVE: 0.3,
+    /** 재생성 요청 중요도 */
+    REGENERATE: 0.35,
+    /** 메모리 저장 기본 중요도 */
+    MEMORY_DEFAULT: 0.5,
+} as const;
+
+/**
+ * Discussion 응답 신뢰도 계산 파라미터
+ * agents/discussion-engine.ts에서 참조
+ */
+export const DISCUSSION_CONFIDENCE = {
+    /** 기본 신뢰도 */
+    BASE: 0.6,
+    /** 각 요소별 증가값 */
+    INCREMENT: 0.1,
+    /** 짧은 응답 길이 임계값 */
+    SHORT_RESPONSE_LENGTH: 300,
+    /** 긴 응답 길이 임계값 */
+    LONG_RESPONSE_LENGTH: 600,
+} as const;
+
+/**
+ * LLM 라우터 신뢰도 기본값
+ * agents/llm-router.ts에서 참조
+ */
+export const ROUTER_CONFIDENCE_FALLBACK = 0.85;
+
+/**
+ * 메모리 카테고리별 중요도
+ * services/MemoryService.ts에서 참조
+ */
+export const MEMORY_IMPORTANCE_BY_CATEGORY: Record<string, number> = {
+    name: 0.9,
+    job: 0.8,
+    preference: 0.6,
+    project: 0.7,
+    technology: 0.7,
+    location: 0.6,
+    goal: 0.6,
+    schedule: 0.7,
+    language: 0.8,
+    organization: 0.7,
+};
+
+/**
+ * 언어 감지 임계값
+ * chat/language-policy.ts에서 참조
+ */
+export const LANGUAGE_THRESHOLDS = {
+    /** 비라틴 알파벳 비율 임계값 */
+    NON_LATIN_RATIO: 0.3,
+    /** 한국어 비율 상한 임계값 */
+    KOREAN_HIGH: 0.7,
+    /** 한국어 비율 하한 임계값 */
+    KOREAN_LOW: 0.1,
+    /** 영어 감지 신뢰도 */
+    LATIN_EN_CONFIDENCE: 0.8,
+    /** 기타 라틴 알파벳 언어 신뢰도 */
+    LATIN_OTHER_CONFIDENCE: 0.75,
+    /** 언어 감지 최소 신뢰도 */
+    MIN_CONFIDENCE: 0.7,
+    /** 짧은 텍스트 판별 임계값 (language-policy 기본값) */
+    SHORT_TEXT_LENGTH: 10,
+    /** 짧은 텍스트 판별 임계값 (request-handler, language-resolver, context-engineering) */
+    SHORT_TEXT_LENGTH_EXTENDED: 20,
+} as const;
+
+// ============================================
 // 캐시 설정
 // ============================================
 

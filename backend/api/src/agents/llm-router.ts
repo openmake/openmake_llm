@@ -25,9 +25,10 @@ import { AgentCategory } from './types';
 import industryData from './industry-agents.json';
 import { createLogger } from '../utils/logger';
 import { extractJSONFromResponse } from '../utils/json-parser';
-import { CAPACITY } from '../config/runtime-limits';
+import { CAPACITY, ROUTER_CONFIDENCE_FALLBACK } from '../config/runtime-limits';
 import { LLM_TIMEOUTS } from '../config/timeouts';
 import { ROUTER_TEMPERATURE, ROUTER_NUM_PREDICT } from '../config/routing-config';
+import { buildLLMRouterSystemPrompt } from '../prompts/llm-router-system';
 
 const logger = createLogger('LLMRouter');
 
@@ -168,29 +169,7 @@ export async function routeWithLLM(
     const summaries = getAgentSummaries();
     const agentList = formatAgentListForPrompt(summaries);
 
-    const systemPrompt = `당신은 AI 에이전트 라우터입니다. 사용자 질문을 분석하여 가장 적합한 전문가를 선택하세요.
-
-## 분석 단계 (반드시 순서대로 수행):
-1. **핵심 의도 파악**: 사용자가 원하는 것이 무엇인가?
-2. **도메인 식별**: 어떤 분야와 관련된 질문인가?
-3. **전문성 유형**: 어떤 종류의 전문가가 필요한가?
-
-## 규칙:
-1. 키워드가 아닌 **질문 전체 맥락**을 분석하세요
-2. 질문의 **숨겨진 의도**도 파악하세요
-3. 가장 적합한 전문가 **1명**을 선택하세요
-4. 확신이 없어도 가장 근접한 전문가를 선택하세요
-
-## 사용 가능한 전문가 목록:
-${agentList}
-
-## 응답 형식 (반드시 JSON만 출력):
-{
-  "agent_id": "선택한 에이전트 ID",
-  "confidence": 0.0-1.0 사이의 신뢰도,
-  "reasoning": "선택 이유 (한 문장)",
-  "alternatives": ["대안1 ID", "대안2 ID"]
-}`;
+    const systemPrompt = buildLLMRouterSystemPrompt(agentList);
 
     // 🔧 라우팅 목적으로는 메시지 앞부분만 필요 — 긴 문서 입력은 잘라내기
     const MAX_ROUTING_INPUT = CAPACITY.ROUTING_INPUT_MAX_CHARS;
@@ -248,7 +227,7 @@ ${sanitizedMessage}
 
                 return {
                     agentId: agentIdStr,
-                    confidence: Number(parsed.confidence || parsed.score) || 0.85,
+                    confidence: Number(parsed.confidence || parsed.score) || ROUTER_CONFIDENCE_FALLBACK,
                     reasoning: String(parsed.reasoning || parsed.reason || ''),
                     alternativeAgents: Array.isArray(parsed.alternatives) ? (parsed.alternatives as unknown[]).filter((x): x is string => typeof x === 'string') : []
                 };

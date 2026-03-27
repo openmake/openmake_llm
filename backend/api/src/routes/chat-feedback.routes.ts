@@ -21,6 +21,7 @@ import { getPool } from '../data/models/unified-database';
 import { validate } from '../middlewares/validation';
 import { chatFeedbackSchema } from '../schemas/chat-feedback.schema';
 import { createLogger } from '../utils/logger';
+import { FEEDBACK_IMPORTANCE } from '../config/runtime-limits';
 
 const router = Router();
 const logger = createLogger('ChatFeedbackRoutes');
@@ -80,7 +81,7 @@ router.post(
                         category: 'context',
                         key: '부정 피드백 패턴',
                         value: `불만족 응답 (${feedbackInfo})`,
-                        importance: 0.4,
+                        importance: FEEDBACK_IMPORTANCE.NEGATIVE,
                         tags: ['feedback', 'negative'],
                     });
                 } else if (signal === 'thumbs_up') {
@@ -88,7 +89,7 @@ router.post(
                         category: 'context',
                         key: '긍정 피드백 패턴',
                         value: `만족 응답 (${feedbackInfo})`,
-                        importance: 0.3,
+                        importance: FEEDBACK_IMPORTANCE.POSITIVE,
                         tags: ['feedback', 'positive'],
                     });
                 } else if (signal === 'regenerate') {
@@ -96,7 +97,7 @@ router.post(
                         category: 'context',
                         key: '재생성 요청 패턴',
                         value: `응답 재생성 요청 (${feedbackInfo})`,
-                        importance: 0.35,
+                        importance: FEEDBACK_IMPORTANCE.REGENERATE,
                         tags: ['feedback', 'regenerate'],
                     });
                 }
