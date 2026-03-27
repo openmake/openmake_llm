@@ -381,3 +381,104 @@ export const CACHE_CONFIG = {
     MEMORY_CACHE_MAX_SIZE: 200,
 } as const;
 
+// ============================================
+// DB 재시도 정책
+// ============================================
+
+/**
+ * DB 재시도 래퍼 기본 파라미터
+ * data/retry-wrapper.ts에서 참조
+ */
+export const RETRY_DEFAULTS = {
+    /** 최대 재시도 횟수 */
+    MAX_RETRIES: 3,
+    /** 기본 딜레이 (ms) */
+    BASE_DELAY_MS: 500,
+    /** 최대 딜레이 (ms) */
+    MAX_DELAY_MS: 5000,
+} as const;
+
+// ============================================
+// OAuth 상태 관리
+// ============================================
+
+/**
+ * OAuth 상태 만료 및 정리 주기
+ * auth/oauth-provider.ts에서 참조
+ */
+export const OAUTH_STATE = {
+    /** 상태 만료 시간 (ms) — 10분 */
+    EXPIRY_MS: 10 * 60 * 1000,
+    /** 만료 상태 정리 주기 (ms) — 5분 */
+    CLEANUP_INTERVAL_MS: 5 * 60 * 1000,
+} as const;
+
+// ============================================
+// IDF 정규화 파라미터
+// ============================================
+
+/**
+ * 키워드 IDF 가중치 정규화 범위
+ * agents/enhanced-keywords.ts에서 참조
+ */
+export const IDF_NORMALIZATION = {
+    /** IDF 하한값 */
+    FLOOR: 0.1,
+    /** IDF 상한값 */
+    CEILING: 1.0,
+} as const;
+
+// ============================================
+// 도메인 카테고리 분류 (Discussion 보완 에이전트)
+// ============================================
+
+/**
+ * 토론 도메인 카테고리 분류
+ * agents/discussion-recommender.ts에서 참조
+ */
+export const DISCUSSION_DOMAIN_CATEGORIES = {
+    TECH: ['프로그래밍/개발', '데이터/AI'] as readonly string[],
+    BUSINESS: ['비즈니스/창업', '금융/투자'] as readonly string[],
+    SOCIAL: ['사회/복지', '공공/정부'] as readonly string[],
+};
+
+/**
+ * 도메인별 보완 에이전트 목록
+ * agents/discussion-recommender.ts에서 참조
+ */
+export const DISCUSSION_COMPLEMENTARY_AGENTS = {
+    TECH: ['software-engineer', 'devops-engineer', 'ai-ml-engineer', 'data-analyst'],
+    BUSINESS: ['business-strategist', 'financial-analyst', 'risk-manager', 'project-manager'],
+    SOCIAL: ['sociologist', 'social-policy-researcher', 'demographer', 'labor-economist', 'policy-analyst'],
+    DIVERSE: ['policy-analyst', 'business-strategist', 'data-analyst', 'educator', 'psychologist'],
+};
+
+// ============================================
+// 키워드 라우터 페이즈 감지
+// ============================================
+
+/**
+ * 작업 페이즈 감지 키워드 목록
+ * agents/keyword-router.ts의 detectPhase()에서 참조
+ */
+export const PHASE_KEYWORDS = {
+    PLANNING: ['설계', '계획', '기획', '분석', '조사', '검토', '평가', '전략', 'plan', 'design', 'analyze', '어떻게', '방법', '뭐가', '무엇'],
+    BUILD: ['구현', '개발', '코딩', '만들', '작성', '생성', 'implement', 'build', 'create', 'develop', '해줘', '해 줘'],
+    OPTIMIZATION: ['최적화', '개선', '리팩토링', '성능', '효율', 'optimize', 'improve', 'refactor', '더 좋', '더좋'],
+};
+
+// ============================================
+// 인사말 감지 패턴
+// ============================================
+
+/**
+ * 간단한 인사말 감지 설정
+ * services/chat-service/context-builder.ts에서 참조
+ */
+export const GREETING_DETECTION = {
+    /** 인사말로 판단할 최대 메시지 길이 */
+    MAX_LENGTH: 15,
+    /** 인사말 패턴 (정규식) */
+    PATTERN: /^(안녕|하이|헬로|hello|hi|hey|good\s*(morning|afternoon|evening)|잘\s*지내|반가|감사합니다|고마워|ㅎㅇ|ㅎㅎ)/i,
+};
+
