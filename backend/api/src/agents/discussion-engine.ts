@@ -34,6 +34,7 @@ import { createContextBuilder } from './discussion-context';
 import { createLogger } from '../utils/logger';
 import { resolvePromptLocale } from '../chat/language-policy';
 import { parallelBatch } from '../workflow/graph-engine';
+import { DISCUSSION_CONFIDENCE } from '../config/runtime-limits';
 /** 토론 엔진에서 사용하는 웹 검색 결과 최소 인터페이스 */
 export interface DiscussionSearchResult {
     title: string;
@@ -175,11 +176,11 @@ ${contextInstructions}
             const responseLen = response.length;
             const hasStructure = /^#{1,3}\s/m.test(response) || /^[-*]\s/m.test(response);
             const hasEvidence = /예시|사례|예를 들|example|e\.g\.|for instance/i.test(response);
-            let confidence = 0.6; // 기본 베이스
-            if (responseLen > 300) confidence += 0.1;
-            if (responseLen > 600) confidence += 0.1;
-            if (hasStructure) confidence += 0.1;
-            if (hasEvidence) confidence += 0.1;
+            let confidence: number = DISCUSSION_CONFIDENCE.BASE;
+            if (responseLen > DISCUSSION_CONFIDENCE.SHORT_RESPONSE_LENGTH) confidence += DISCUSSION_CONFIDENCE.INCREMENT;
+            if (responseLen > DISCUSSION_CONFIDENCE.LONG_RESPONSE_LENGTH) confidence += DISCUSSION_CONFIDENCE.INCREMENT;
+            if (hasStructure) confidence += DISCUSSION_CONFIDENCE.INCREMENT;
+            if (hasEvidence) confidence += DISCUSSION_CONFIDENCE.INCREMENT;
             confidence = Math.min(confidence, 1.0);
 
             return {

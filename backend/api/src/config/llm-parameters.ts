@@ -69,6 +69,12 @@ export const LLM_TEMPERATURES = {
     CLI_GENERATE: Number(process.env.LLM_TEMP_CLI_GENERATE) || 0.5,
     /** 히스토리 요약 */
     HISTORY_SUMMARY: Number(process.env.LLM_TEMP_HISTORY_SUMMARY) || 0.3,
+    /** Brand Model thinking='high' temperature */
+    THINKING_HIGH: Number(process.env.LLM_TEMP_THINKING_HIGH) || 0.3,
+    /** Brand Model thinking='off' temperature */
+    THINKING_OFF: Number(process.env.LLM_TEMP_THINKING_OFF) || 0.7,
+    /** Brand Model thinking 기본값 temperature */
+    THINKING_DEFAULT: Number(process.env.LLM_TEMP_THINKING_DEFAULT) || 0.5,
 } as const;
 
 // ============================================

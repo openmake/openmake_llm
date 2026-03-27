@@ -20,6 +20,7 @@ import {
     type SupportedLanguageCode
 } from './language-policy';
 import type { PromptMetadata } from './context-types';
+import { LANGUAGE_THRESHOLDS } from '../config/runtime-limits';
 
 /**
  * 기본 어시스턴트 프롬프트 빌더
@@ -137,8 +138,8 @@ export function createDynamicMetadata(
     const detectedLanguage = determineLanguagePolicy(query, {
         defaultLanguage: userPreference || 'en',
         enableDynamicResponse: true,
-        minConfidenceThreshold: 0.7,
-        shortTextThreshold: 20,
+        minConfidenceThreshold: LANGUAGE_THRESHOLDS.MIN_CONFIDENCE,
+        shortTextThreshold: LANGUAGE_THRESHOLDS.SHORT_TEXT_LENGTH_EXTENDED,
         fallbackLanguage: 'en',
         supportedLanguages: ['ko', 'en', 'ja', 'zh', 'es', 'fr', 'de', 'pt', 'ru', 'ar', 'hi', 'it', 'nl', 'sv', 'da', 'no', 'fi', 'th', 'vi', 'tr']
     });
