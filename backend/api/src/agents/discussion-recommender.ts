@@ -12,6 +12,7 @@ import { Agent } from './types';
 import { industryData, getAgentById } from './agent-data';
 import { analyzeTopicIntent } from './topic-analyzer';
 import { routeToAgent } from './keyword-router';
+import { DISCUSSION_DOMAIN_CATEGORIES, DISCUSSION_COMPLEMENTARY_AGENTS } from '../config/runtime-limits';
 
 /**
  * 토론용 관련 에이전트 추천 (토픽+키워드 라우팅 + 컨텍스트 반영)
@@ -82,54 +83,29 @@ export async function getRelatedAgentsForDiscussion(
     }
 
     // 4. 보완적 에이전트 - 도메인별 차별화
-    const techCategories = ['프로그래밍/개발', '데이터/AI'];
-    const businessCategories = ['비즈니스/창업', '금융/투자'];
-    const socialCategories = ['사회/복지', '공공/정부'];
+    const isTechQuestion = topicAnalysis.matchedCategories.some(c => DISCUSSION_DOMAIN_CATEGORIES.TECH.includes(c));
+    const isBusinessQuestion = topicAnalysis.matchedCategories.some(c => DISCUSSION_DOMAIN_CATEGORIES.BUSINESS.includes(c));
+    const isSocialQuestion = topicAnalysis.matchedCategories.some(c => DISCUSSION_DOMAIN_CATEGORIES.SOCIAL.includes(c));
 
-    const isTechQuestion = topicAnalysis.matchedCategories.some(c => techCategories.includes(c));
-    const isBusinessQuestion = topicAnalysis.matchedCategories.some(c => businessCategories.includes(c));
-    const isSocialQuestion = topicAnalysis.matchedCategories.some(c => socialCategories.includes(c));
+    const addComplementary = (agentIds: readonly string[]) => {
+        for (const agentId of agentIds) {
+            if (usedIds.has(agentId)) continue;
+            const agent = getAgentById(agentId);
+            if (agent) {
+                result.push(agent);
+                usedIds.add(agentId);
+            }
+        }
+    };
 
-    // 기술적 질문이면 기술 보완 에이전트만
     if (isTechQuestion && !isBusinessQuestion) {
-        const techComplementary = ['software-engineer', 'devops-engineer', 'ai-ml-engineer', 'data-analyst'];
-        for (const agentId of techComplementary) {
-            if (usedIds.has(agentId)) continue;
-            const agent = getAgentById(agentId);
-            if (agent) {
-                result.push(agent);
-                usedIds.add(agentId);
-            }
-        }
-    }
-    // 비즈니스 질문이면 비즈니스 보완 에이전트만
-    else if (isBusinessQuestion && !isTechQuestion) {
-        const businessComplementary = ['business-strategist', 'financial-analyst', 'risk-manager', 'project-manager'];
-        for (const agentId of businessComplementary) {
-            if (usedIds.has(agentId)) continue;
-            const agent = getAgentById(agentId);
-            if (agent) {
-                result.push(agent);
-                usedIds.add(agentId);
-            }
-        }
-    }
-    // 사회/복지/공공 질문이면 사회 관련 보완 에이전트
-    else if (isSocialQuestion) {
-        const socialComplementary = ['sociologist', 'social-policy-researcher', 'demographer', 'labor-economist', 'policy-analyst'];
-        for (const agentId of socialComplementary) {
-            if (usedIds.has(agentId)) continue;
-            const agent = getAgentById(agentId);
-            if (agent) {
-                result.push(agent);
-                usedIds.add(agentId);
-            }
-        }
-    }
-    // 혼합 질문 또는 카테고리 미분류 시 — 범용 관점 에이전트
-    else if (result.length < 3) {
-        const diverseAgents = ['policy-analyst', 'business-strategist', 'data-analyst', 'educator', 'psychologist'];
-        for (const agentId of diverseAgents) {
+        addComplementary(DISCUSSION_COMPLEMENTARY_AGENTS.TECH);
+    } else if (isBusinessQuestion && !isTechQuestion) {
+        addComplementary(DISCUSSION_COMPLEMENTARY_AGENTS.BUSINESS);
+    } else if (isSocialQuestion) {
+        addComplementary(DISCUSSION_COMPLEMENTARY_AGENTS.SOCIAL);
+    } else if (result.length < 3) {
+        for (const agentId of DISCUSSION_COMPLEMENTARY_AGENTS.DIVERSE) {
             if (usedIds.has(agentId)) continue;
             const agent = getAgentById(agentId);
             if (agent) {

@@ -33,6 +33,7 @@ import { getUnifiedDatabase } from '../data/models/unified-database';
 import { createMemorySchema, updateMemorySchema } from '../schemas/memory.schema';
 import { createLogger } from '../utils/logger';
 import { MEMORY_TIER_LIMITS } from '../config/tier-limits';
+import { FEEDBACK_IMPORTANCE } from '../config/runtime-limits';
 const router = Router();
 const logger = createLogger('MemoryRoutes');
 
@@ -101,7 +102,7 @@ router.post('/', validate(createMemorySchema), asyncHandler(async (req: Request,
          category,
          key,
          value,
-         importance: importance || 0.5,
+         importance: importance || FEEDBACK_IMPORTANCE.MEMORY_DEFAULT,
          tags: tags || []
      });
 

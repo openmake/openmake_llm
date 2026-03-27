@@ -7,6 +7,7 @@
  */
 
 import { createLogger } from '../utils/logger';
+import { RETRY_DEFAULTS } from '../config/runtime-limits';
 
 const logger = createLogger('RetryWrapper');
 
@@ -80,9 +81,9 @@ export async function withRetry<T>(
     options: RetryOptions = {}
 ): Promise<T> {
     const {
-        maxRetries = 3,
-        baseDelayMs = 500,
-        maxDelayMs = 5000,
+        maxRetries = RETRY_DEFAULTS.MAX_RETRIES,
+        baseDelayMs = RETRY_DEFAULTS.BASE_DELAY_MS,
+        maxDelayMs = RETRY_DEFAULTS.MAX_DELAY_MS,
         operation = 'unknown',
     } = options;
 
