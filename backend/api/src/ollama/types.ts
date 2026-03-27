@@ -560,7 +560,7 @@ export interface PsResponse {
  *
  * @see config/llm-parameters.ts
  */
-import { MODEL_PRESETS } from '../config/llm-parameters';
+import { MODEL_PRESETS, GPT_OSS_LEVEL_PRESETS, GPT_OSS_TASK_PRESETS } from '../config/llm-parameters';
 export { MODEL_PRESETS };
 
 // ============================================
@@ -590,11 +590,7 @@ export function getReasoningSystemPrompt(level: ReasoningLevel): string {
  * @returns 해당 레벨의 ModelOptions 프리셋
  */
 export function getGptOssPreset(level: ReasoningLevel): ModelOptions {
-    switch (level) {
-        case 'low': return MODEL_PRESETS.GPT_OSS_LOW_REASONING;
-        case 'medium': return MODEL_PRESETS.GPT_OSS_MEDIUM_REASONING;
-        case 'high': return MODEL_PRESETS.GPT_OSS_HIGH_REASONING;
-    }
+    return GPT_OSS_LEVEL_PRESETS[level] || MODEL_PRESETS.GPT_OSS_MEDIUM_REASONING;
 }
 
 /**
@@ -604,12 +600,7 @@ export function getGptOssPreset(level: ReasoningLevel): ModelOptions {
  * @returns 해당 작업에 최적화된 ModelOptions 프리셋
  */
 export function getGptOssTaskPreset(taskType: 'code' | 'document' | 'json' | 'chat'): ModelOptions {
-    switch (taskType) {
-        case 'code': return MODEL_PRESETS.GPT_OSS_CODE;
-        case 'document': return MODEL_PRESETS.GPT_OSS_DOCUMENT;
-        case 'json': return MODEL_PRESETS.GPT_OSS_JSON;
-        default: return MODEL_PRESETS.GPT_OSS_MEDIUM_REASONING;
-    }
+    return GPT_OSS_TASK_PRESETS[taskType] || MODEL_PRESETS.GPT_OSS_MEDIUM_REASONING;
 }
 
 /**

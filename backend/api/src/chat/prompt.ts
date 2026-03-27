@@ -27,7 +27,7 @@
  */
 
 import { ModelOptions, ToolDefinition } from '../ollama/types';
-import { LLM_TEMPERATURES, LLM_TOP_P, MODEL_PRESETS } from '../config/llm-parameters';
+import { LLM_TEMPERATURES, LLM_TOP_P, MODEL_PRESETS, PROMPT_TYPE_PRESETS } from '../config/llm-parameters';
 import {
     createDynamicMetadata,
     buildAssistantPrompt,
@@ -227,34 +227,7 @@ export function getModeSpecificPrompt(type: PromptType): string {
  * @returns 역할에 최적화된 ModelOptions
  */
 export function getPresetForPromptType(type: PromptType): ModelOptions {
-    switch (type) {
-        case 'reasoning':
-        case 'researcher':
-        case 'consultant':
-            return MODEL_PRESETS.GEMINI_REASONING;
-        case 'coder':
-        case 'generator':
-            return MODEL_PRESETS.GEMINI_CODE;
-        case 'reviewer':
-        case 'security':
-            return {
-                ...MODEL_PRESETS.GEMINI_CODE,
-                temperature: LLM_TEMPERATURES.REVIEWER,
-                repeat_penalty: 1.15
-            };
-        case 'explainer':
-        case 'writer':
-        case 'translator':
-            return {
-                ...MODEL_PRESETS.GEMINI_DEFAULT,
-                temperature: LLM_TEMPERATURES.EXPLAINER
-            };
-        case 'agent':
-            return MODEL_PRESETS.GEMINI_REASONING;
-        case 'assistant':
-        default:
-            return MODEL_PRESETS.GEMINI_REASONING;
-    }
+    return PROMPT_TYPE_PRESETS[type] || PROMPT_TYPE_PRESETS['assistant'];
 }
 
 /**

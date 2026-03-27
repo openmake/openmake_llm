@@ -9,6 +9,7 @@
 import { BaseRepository, QueryParam } from './base-repository';
 import type { ExternalConnection, ExternalFile, ExternalServiceType, MCPServerRow } from '../models/unified-database.types';
 import { encryptToken, decryptToken } from '../../utils/token-crypto';
+import { QUERY_ROW_LIMITS } from '../../config/runtime-limits';
 
 type DbRow = Record<string, unknown>;
 
@@ -174,7 +175,7 @@ export class ExternalRepository extends BaseRepository {
     }
 
     async getMcpServers(): Promise<MCPServerRow[]> {
-        const result = await this.query('SELECT * FROM mcp_servers ORDER BY created_at DESC LIMIT 1000');
+        const result = await this.query(`SELECT * FROM mcp_servers ORDER BY created_at DESC LIMIT ${QUERY_ROW_LIMITS.MCP_SERVERS_MAX}`);
         return result.rows.map((row: DbRow) => ({
             ...row,
             args: (row.args as string[] | null) || null,

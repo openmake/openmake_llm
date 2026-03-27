@@ -16,6 +16,7 @@
  */
 
 import { createLogger } from '../utils/logger';
+import { EVENT_LOOP_YIELD_MS } from '../config/runtime-limits';
 
 const logger = createLogger('WorkflowGraph');
 
@@ -267,7 +268,7 @@ export class CompiledGraph<S extends Record<string, unknown>> {
             // 이미 실행 중인 것이 있으면 하나라도 완료될 때까지 대기
             if (runningPromises.length === 0) {
                 // running 중인 노드 대기를 위한 짧은 지연
-                await new Promise(resolve => setTimeout(resolve, 10));
+                await new Promise(resolve => setTimeout(resolve, EVENT_LOOP_YIELD_MS));
                 continue;
             }
 
