@@ -10,7 +10,7 @@
  */
 import { createLogger } from '../../utils/logger';
 import { isGeminiModel } from '../../ollama/types';
-import { CONTEXT_LIMITS } from '../../config/runtime-limits';
+import { CONTEXT_LIMITS, GREETING_DETECTION } from '../../config/runtime-limits';
 import { applySequentialThinking } from '../../mcp/sequential-thinking';
 import type { DocumentStore } from '../../documents/store';
 
@@ -93,7 +93,7 @@ export async function buildContextForLLM(params: BuildContextParams): Promise<Bu
     // API Key 요청: 외부 서비스의 메모리와 내부 메모리가 교차 오염되지 않도록 스킵
     // 짧은 인사/단순 메시지에는 메모리 주입을 스킵하여 불필요한 컨텍스트 오염 방지
     let memoryContextStr = '';
-    const isSimpleGreeting = message.trim().length < 15 && /^(안녕|하이|헬로|hello|hi|hey|good\s*(morning|afternoon|evening)|잘\s*지내|반가|감사합니다|고마워|ㅎㅇ|ㅎㅎ)/i.test(message.trim());
+    const isSimpleGreeting = message.trim().length < GREETING_DETECTION.MAX_LENGTH && GREETING_DETECTION.PATTERN.test(message.trim());
     if (userId && !isSimpleGreeting && !apiKeyId) {
         try {
             const { getMemoryService } = await import('../MemoryService');

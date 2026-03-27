@@ -2,6 +2,7 @@ import industryAgentsJson from './industry-agents.json';
 import { RICH_SKILL_CONTENT } from './skill-seeder';
 import type { Agent, AgentCategory, IndustryAgentsData } from './types';
 import keywordData from '../config/data/keyword-data.json';
+import { IDF_NORMALIZATION } from '../config/runtime-limits';
 
 const SYNONYMS: Record<string, string[]> = keywordData.synonyms as Record<string, string[]>;
 const CATEGORY_WEIGHTS: Record<string, number> = keywordData.categoryWeights as Record<string, number>;
@@ -163,8 +164,8 @@ function buildKeywordIdf(agentKeywordMap: Map<string, Set<string>>): Map<string,
 
     for (const [keyword, count] of docFrequency.entries()) {
         const rawIdf = Math.log(totalAgents / Math.max(count, 1));
-        const normalized = maxRawIdf > 0 ? 0.1 + (rawIdf / maxRawIdf) * 0.9 : 1.0;
-        const clamped = Math.min(1.0, Math.max(0.1, Number(normalized.toFixed(4))));
+        const normalized = maxRawIdf > 0 ? IDF_NORMALIZATION.FLOOR + (rawIdf / maxRawIdf) * (IDF_NORMALIZATION.CEILING - IDF_NORMALIZATION.FLOOR) : IDF_NORMALIZATION.CEILING;
+        const clamped = Math.min(IDF_NORMALIZATION.CEILING, Math.max(IDF_NORMALIZATION.FLOOR, Number(normalized.toFixed(4))));
         idfWeights.set(keyword, clamped);
     }
 
@@ -197,10 +198,10 @@ export function getEnhancedKeywords(agentId: string): string[] {
 export function getKeywordIDF(keyword: string): number {
     const normalized = normalizeKeyword(keyword);
     if (!normalized) {
-        return 0.1;
+        return IDF_NORMALIZATION.FLOOR;
     }
 
-    return KEYWORD_IDF_MAP.get(normalized) ?? 0.1;
+    return KEYWORD_IDF_MAP.get(normalized) ?? IDF_NORMALIZATION.FLOOR;
 }
 
 export function getSynonyms(word: string): string[] {
