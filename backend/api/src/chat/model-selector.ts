@@ -31,7 +31,7 @@ import { ModelOptions } from '../ollama/types';
 import { isValidBrandModel, getProfiles } from './pipeline-profile';
 import { createLogger } from '../utils/logger';
 import { MODEL_CONTEXT_DEFAULTS } from '../config/runtime-limits';
-import { QUERY_TYPE_PARAMS } from '../config/llm-parameters';
+import { QUERY_TYPE_PARAMS, LLM_TEMPERATURES } from '../config/llm-parameters';
 import { recommendTokenBudget } from './complexity-assessor';
 import { applyCostTierCeiling, getDefaultCostTier } from './cost-tier';
 import { ModelPreset, getModelPresets } from '../config/model-presets';
@@ -348,7 +348,7 @@ export async function selectModelForProfile(requestedModel: string, query?: stri
             return {
                 model: resolvedProfile.engineModel,
                 options: {
-                    temperature: resolvedProfile.thinking === 'high' ? 0.3 : resolvedProfile.thinking === 'off' ? 0.7 : 0.5,
+                    temperature: resolvedProfile.thinking === 'high' ? LLM_TEMPERATURES.THINKING_HIGH : resolvedProfile.thinking === 'off' ? LLM_TEMPERATURES.THINKING_OFF : LLM_TEMPERATURES.THINKING_DEFAULT,
                     num_ctx: resolvedProfile.contextStrategy === 'full' ? MODEL_CONTEXT_DEFAULTS.EXTENDED_NUM_CTX : MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
                 },
                 reason: `Auto-Routing → ${resolvedProfile.displayName} → ${resolvedProfile.engineModel}`,
@@ -369,7 +369,7 @@ export async function selectModelForProfile(requestedModel: string, query?: stri
     return {
         model: profile.engineModel,
         options: {
-            temperature: profile.thinking === 'high' ? 0.3 : profile.thinking === 'off' ? 0.7 : 0.5,
+            temperature: profile.thinking === 'high' ? LLM_TEMPERATURES.THINKING_HIGH : profile.thinking === 'off' ? LLM_TEMPERATURES.THINKING_OFF : LLM_TEMPERATURES.THINKING_DEFAULT,
             num_ctx: profile.contextStrategy === 'full' ? MODEL_CONTEXT_DEFAULTS.EXTENDED_NUM_CTX : MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
         },
         reason: `Brand model ${profile.displayName} → ${profile.engineModel}`,
