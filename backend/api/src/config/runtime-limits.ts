@@ -482,3 +482,47 @@ export const GREETING_DETECTION = {
     PATTERN: /^(안녕|하이|헬로|hello|hi|hey|good\s*(morning|afternoon|evening)|잘\s*지내|반가|감사합니다|고마워|ㅎㅇ|ㅎㅎ)/i,
 };
 
+// ============================================
+// 이벤트 루프 양보 지연 (workflow)
+// ============================================
+
+/**
+ * 워크플로우 그래프 엔진에서 이벤트 루프 양보 시 사용하는 지연 시간(ms)
+ * workflow/graph-engine.ts에서 참조
+ */
+export const EVENT_LOOP_YIELD_MS = 10;
+
+// ============================================
+// SQL 안전 가드 제한
+// ============================================
+
+/**
+ * 쿼리 결과 행 수 제한 (대량 조회 방지용 안전 가드)
+ * data/repositories/external-repository.ts에서 참조
+ */
+export const QUERY_ROW_LIMITS = {
+    /** MCP 서버 목록 최대 행 수 */
+    MCP_SERVERS_MAX: 1000,
+} as const;
+
+// ============================================
+// 비밀번호 복잡도 정책
+// ============================================
+
+/**
+ * 비밀번호 복잡도 검증 규칙
+ * services/AuthService.ts에서 참조
+ */
+export const PASSWORD_POLICY = {
+    /** 최소 길이 */
+    MIN_LENGTH: 8,
+    /** 대문자 필수 패턴 */
+    UPPERCASE: /[A-Z]/,
+    /** 소문자 필수 패턴 */
+    LOWERCASE: /[a-z]/,
+    /** 숫자 필수 패턴 */
+    DIGIT: /[0-9]/,
+    /** 특수문자 필수 패턴 */
+    SPECIAL: /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/,
+};
+

@@ -21,6 +21,7 @@
 
 import { UserTier } from '../data/user-manager';
 import { MCP_NAMESPACE_SEPARATOR } from './types';
+import { ROLE_TIER_MAP } from '../config/llm-parameters';
 
 /**
  * 등급별 허용 도구 목록
@@ -151,14 +152,5 @@ export function getToolsForTier(tier: UserTier, allTools: string[]): string[] {
  * @returns 해당 역할의 기본 UserTier
  */
 export function getDefaultTierForRole(role: 'admin' | 'user' | 'guest'): UserTier {
-    switch (role) {
-        case 'admin':
-            return 'enterprise';
-        case 'user':
-            return 'free';
-        case 'guest':
-            return 'free';
-        default:
-            return 'free';
-    }
+    return (ROLE_TIER_MAP[role] || 'free') as UserTier;
 }

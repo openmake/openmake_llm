@@ -10,6 +10,7 @@ import { getUserManager, PublicUser } from '../data/user-manager';
 import { generateToken } from '../auth';
 import { createLogger } from '../utils/logger';
 import { getConfig } from '../config/env';
+import { PASSWORD_POLICY } from '../config/runtime-limits';
 
 const log = createLogger('AuthService');
 
@@ -49,23 +50,23 @@ export interface AuthResult {
  */
 function validatePasswordComplexity(password: string): { valid: boolean; errors: string[] } {
     const errors: string[] = [];
-    
-    if (password.length < 8) {
-        errors.push('비밀번호는 8자 이상이어야 합니다');
+
+    if (password.length < PASSWORD_POLICY.MIN_LENGTH) {
+        errors.push(`비밀번호는 ${PASSWORD_POLICY.MIN_LENGTH}자 이상이어야 합니다`);
     }
-    if (!/[A-Z]/.test(password)) {
+    if (!PASSWORD_POLICY.UPPERCASE.test(password)) {
         errors.push('대문자를 1개 이상 포함해야 합니다');
     }
-    if (!/[a-z]/.test(password)) {
+    if (!PASSWORD_POLICY.LOWERCASE.test(password)) {
         errors.push('소문자를 1개 이상 포함해야 합니다');
     }
-    if (!/[0-9]/.test(password)) {
+    if (!PASSWORD_POLICY.DIGIT.test(password)) {
         errors.push('숫자를 1개 이상 포함해야 합니다');
     }
-    if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) {
+    if (!PASSWORD_POLICY.SPECIAL.test(password)) {
         errors.push('특수문자를 1개 이상 포함해야 합니다');
     }
-    
+
     return { valid: errors.length === 0, errors };
 }
 

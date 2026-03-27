@@ -304,3 +304,64 @@ export const MODEL_PRESETS = {
         mirostat_eta: 0.05
     },
 };
+
+// ============================================
+// 프롬프트 역할별 프리셋 매핑 (Record 룩업)
+// ============================================
+
+/**
+ * PromptType → ModelOptions 매핑
+ * chat/prompt.ts의 getPresetForPromptType()에서 참조
+ */
+export const PROMPT_TYPE_PRESETS: Record<string, typeof MODEL_PRESETS[keyof typeof MODEL_PRESETS]> = {
+    reasoning: MODEL_PRESETS.GEMINI_REASONING,
+    researcher: MODEL_PRESETS.GEMINI_REASONING,
+    consultant: MODEL_PRESETS.GEMINI_REASONING,
+    coder: MODEL_PRESETS.GEMINI_CODE,
+    generator: MODEL_PRESETS.GEMINI_CODE,
+    reviewer: { ...MODEL_PRESETS.GEMINI_CODE, temperature: LLM_TEMPERATURES.REVIEWER, repeat_penalty: 1.15 },
+    security: { ...MODEL_PRESETS.GEMINI_CODE, temperature: LLM_TEMPERATURES.REVIEWER, repeat_penalty: 1.15 },
+    explainer: { ...MODEL_PRESETS.GEMINI_DEFAULT, temperature: LLM_TEMPERATURES.EXPLAINER },
+    writer: { ...MODEL_PRESETS.GEMINI_DEFAULT, temperature: LLM_TEMPERATURES.EXPLAINER },
+    translator: { ...MODEL_PRESETS.GEMINI_DEFAULT, temperature: LLM_TEMPERATURES.EXPLAINER },
+    agent: MODEL_PRESETS.GEMINI_REASONING,
+    assistant: MODEL_PRESETS.GEMINI_REASONING,
+};
+
+// ============================================
+// GPT-OSS 프리셋 매핑 (Record 룩업)
+// ============================================
+
+/**
+ * ReasoningLevel → GPT-OSS ModelOptions 매핑
+ * ollama/types.ts의 getGptOssPreset()에서 참조
+ */
+export const GPT_OSS_LEVEL_PRESETS: Record<string, typeof MODEL_PRESETS[keyof typeof MODEL_PRESETS]> = {
+    low: MODEL_PRESETS.GPT_OSS_LOW_REASONING,
+    medium: MODEL_PRESETS.GPT_OSS_MEDIUM_REASONING,
+    high: MODEL_PRESETS.GPT_OSS_HIGH_REASONING,
+};
+
+/**
+ * TaskType → GPT-OSS ModelOptions 매핑
+ * ollama/types.ts의 getGptOssTaskPreset()에서 참조
+ */
+export const GPT_OSS_TASK_PRESETS: Record<string, typeof MODEL_PRESETS[keyof typeof MODEL_PRESETS]> = {
+    code: MODEL_PRESETS.GPT_OSS_CODE,
+    document: MODEL_PRESETS.GPT_OSS_DOCUMENT,
+    json: MODEL_PRESETS.GPT_OSS_JSON,
+};
+
+// ============================================
+// 역할 → 도구 등급 매핑 (Record 룩업)
+// ============================================
+
+/**
+ * 사용자 역할 → 기본 도구 등급 매핑
+ * mcp/tool-tiers.ts의 getDefaultTierForRole()에서 참조
+ */
+export const ROLE_TIER_MAP: Record<string, string> = {
+    admin: 'enterprise',
+    user: 'free',
+    guest: 'free',
+};
