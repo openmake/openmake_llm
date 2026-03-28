@@ -73,7 +73,6 @@ backend/api/.ollama-cluster.json
 !frontend/web/public/**/*.png
 
 # Project Documentation
-README.md
 openmake_prd.md
 
 # Compiled Scripts
