@@ -526,3 +526,42 @@ export const PASSWORD_POLICY = {
     SPECIAL: /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/,
 };
 
+// ============================================
+// 도구 결과 컴팩션 (Agent Loop)
+// ============================================
+
+/**
+ * Agent Loop에서 오래된 도구 결과를 컴팩션하는 설정
+ * services/chat-strategies/agent-loop-strategy.ts에서 참조
+ *
+ * Anthropic 하네스 설계 원칙: "오래된 도구 결과를 요약/정리하여
+ * 컨텍스트 윈도우의 신호 대 잡음 비율을 유지"
+ */
+/**
+ * JIT 메모리 필터링 최소 중요도
+ * MemoryService.buildMemoryContext()에서 저품질 메모리 제외 시 사용
+ */
+export const JIT_MEMORY_MIN_IMPORTANCE = 0.2;
+
+export const TOOL_RESULT_COMPACTION = {
+    /** 원문을 유지할 최근 도구 결과 수 (이전 결과는 컴팩션) */
+    KEEP_RECENT: 2,
+    /** 컴팩션 시 도구 결과 최대 길이 (이상이면 잘라냄) */
+    COMPACTED_MAX_CHARS: 200,
+} as const;
+
+// ============================================
+// GV 품질 측정
+// ============================================
+
+/**
+ * Generate-Verify 품질 측정 설정
+ * services/chat-strategies/generate-verify-strategy.ts에서 참조
+ */
+export const GV_METRICS = {
+    /** 품질 측정 활성화 여부 (환경변수로 제어) */
+    ENABLED: process.env.OMK_GV_METRICS_ENABLED !== 'false',
+    /** 유의미한 수정으로 판단할 최소 변경 비율 (0.0~1.0) */
+    SIGNIFICANT_CHANGE_RATIO: 0.1,
+} as const;
+

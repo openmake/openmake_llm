@@ -20,7 +20,7 @@ import { getUnifiedMCPClient } from '../../mcp/unified-client';
 import { DirectStrategy } from './direct-strategy';
 import type { AgentLoopStrategyContext, ChatStrategy, ChatResult } from './types';
 import { createLogger } from '../../utils/logger';
-import { TRUNCATION } from '../../config/runtime-limits';
+import { TRUNCATION, TOOL_RESULT_COMPACTION } from '../../config/runtime-limits';
 import { LLM_TEMPERATURES } from '../../config/llm-parameters';
 import { VISION_OCR_SYSTEM_PROMPT, VISION_ANALYSIS_SYSTEM_PROMPT } from '../../prompts/vision-system';
 
@@ -112,6 +112,10 @@ export class AgentLoopStrategy implements ChatStrategy<AgentLoopStrategyContext,
                         tool_name: toolCall.function?.name,
                     });
                 }
+
+                // 도구 결과 컴팩션: 오래된 도구 결과를 요약하여 컨텍스트 낭비 방지
+                // Anthropic 하네스 원칙: "오래된 도구 결과는 요약/정리"
+                this.compactOldToolResults(context.currentHistory);
             } else {
                 finalResponse = directResult.response;
                 break;
@@ -317,6 +321,43 @@ export class AgentLoopStrategy implements ChatStrategy<AgentLoopStrategyContext,
             const errorMessage = e instanceof Error ? e.message : String(e);
             logger.error(`Tool execution failed: ${errorMessage}`);
             return `Error: ${errorMessage}`;
+        }
+    }
+
+    /**
+     * 오래된 도구 결과를 컴팩션하여 컨텍스트 윈도우 효율을 높입니다.
+     *
+     * 최근 N개(KEEP_RECENT)의 도구 결과는 원문을 유지하고,
+     * 그 이전의 도구 결과는 도구명과 결과 요약(앞 200자)만 남깁니다.
+     * 이는 Anthropic의 "도구 결과 정리" 권장 패턴을 따릅니다.
+     */
+    private compactOldToolResults(history: Array<{ role: string; content?: string; tool_name?: string }>): void {
+        // 도구 결과 메시지의 인덱스를 역순으로 수집
+        const toolIndices: number[] = [];
+        for (let i = history.length - 1; i >= 0; i--) {
+            if (history[i].role === 'tool') {
+                toolIndices.push(i);
+            }
+        }
+
+        // 최근 N개는 유지, 나머지를 컴팩션
+        const toCompact = toolIndices.slice(TOOL_RESULT_COMPACTION.KEEP_RECENT);
+        if (toCompact.length === 0) return;
+
+        let compactedCount = 0;
+        for (const idx of toCompact) {
+            const msg = history[idx];
+            const content = msg.content || '';
+            if (content.length > TOOL_RESULT_COMPACTION.COMPACTED_MAX_CHARS) {
+                const toolName = msg.tool_name || 'unknown';
+                const truncated = content.substring(0, TOOL_RESULT_COMPACTION.COMPACTED_MAX_CHARS);
+                msg.content = `[Compacted] ${toolName}: ${truncated}...`;
+                compactedCount++;
+            }
+        }
+
+        if (compactedCount > 0) {
+            logger.info(`📦 도구 결과 컴팩션: ${compactedCount}개 결과 압축`);
         }
     }
 }
