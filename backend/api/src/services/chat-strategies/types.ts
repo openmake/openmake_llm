@@ -204,6 +204,8 @@ export interface GenerateVerifyStrategyResult extends ChatResult {
     verified: boolean;
     /** Verifier가 발견한 이슈 수 (0이면 원본 응답 유지) */
     issuesFound: number;
+    /** Generator vs Verifier 응답 변경률 (0.0~1.0, Jaccard distance) */
+    verificationDelta?: number;
 }
 
 /**

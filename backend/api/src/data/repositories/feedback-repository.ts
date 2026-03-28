@@ -16,7 +16,7 @@ import { Pool } from 'pg';
 // ============================================================
 
 /** 피드백 신호 타입 */
-export type FeedbackSignal = 'thumbs_up' | 'thumbs_down' | 'regenerate';
+export type FeedbackSignal = 'thumbs_up' | 'thumbs_down' | 'regenerate' | 'auto-gv-metric';
 
 /** 피드백 기록 입력 데이터 */
 export interface FeedbackRecord {
@@ -42,6 +42,10 @@ export interface FeedbackRecord {
         gvSkipped?: boolean;
         tokenBudget?: number;
         actualTokens?: number;
+        // GV 검증 메트릭 (자동 수집)
+        gvVerified?: boolean;
+        gvVerificationDelta?: number;
+        gvIssuesFound?: number;
     };
 }
 
@@ -245,6 +249,40 @@ export class FeedbackRepository {
             WHERE created_at > NOW() - INTERVAL '1 day' * $1
             AND routing_metadata->>'tokenBudget' IS NOT NULL
             GROUP BY routing_metadata->>'queryType'
+            ORDER BY "sampleCount" DESC
+        `, [days]);
+        return result.rows;
+    }
+
+    /**
+     * GV(Generate-Verify) 검증 효율 통계를 반환합니다.
+     * 모델 조합별 평균 변경률, 검증 통과율, 이슈 발견율을 집계합니다.
+     * @param days - 집계 기간 (일, 기본값: 30)
+     */
+    async getGvVerificationStats(days: number = 30): Promise<Array<{
+        strategy: string;
+        avgDelta: number;
+        verifiedRate: number;
+        avgIssues: number;
+        sampleCount: number;
+    }>> {
+        const result = await this.pool.query<{
+            strategy: string;
+            avgDelta: number;
+            verifiedRate: number;
+            avgIssues: number;
+            sampleCount: number;
+        }>(`
+            SELECT
+                routing_metadata->>'executionStrategy' as "strategy",
+                AVG((routing_metadata->>'gvVerificationDelta')::numeric)::numeric(4,3) as "avgDelta",
+                AVG(CASE WHEN (routing_metadata->>'gvVerified')::boolean THEN 1 ELSE 0 END)::numeric(4,3) as "verifiedRate",
+                AVG((routing_metadata->>'gvIssuesFound')::numeric)::numeric(4,3) as "avgIssues",
+                COUNT(*)::int as "sampleCount"
+            FROM message_feedback
+            WHERE created_at > NOW() - INTERVAL '1 day' * $1
+            AND routing_metadata->>'gvVerificationDelta' IS NOT NULL
+            GROUP BY routing_metadata->>'executionStrategy'
             ORDER BY "sampleCount" DESC
         `, [days]);
         return result.rows;

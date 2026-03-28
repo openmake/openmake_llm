@@ -25,6 +25,7 @@ import { getPromptConfig } from '../chat/prompt';
 import { adjustOptionsForModel, checkModelCapability } from '../chat/model-selector';
 import { assessComplexity, GV_SKIP_THRESHOLD } from '../chat/complexity-assessor';
 import { CONCISE_RESPONSE_DIRECTIVE } from '../config/llm-parameters';
+import { BUDGET_HINTS, CAPACITY } from '../config/runtime-limits';
 import type { ExecutionPlan } from '../chat/profile-resolver';
 import type { DocumentStore } from '../documents/store';
 import type { UserTier } from '../data/user-manager';
@@ -463,6 +464,18 @@ export class ChatService {
             ];
         } else {
             currentHistory = [{ role: 'system', content: combinedSystemPrompt }];
+        }
+
+        // 동적 토큰 예산 프롬프트: 잔여 예산 부족 시 간결 지시 주입
+        // Anthropic 하네스 원칙: "토큰 예산 인식 프롬프트 제어"
+        if (preComplexity.recommendedTokenBudget > 0) {
+            const estimatedUsed = currentHistory.reduce((sum, m) => sum + (m.content?.length ?? 0), 0) / CAPACITY.TOKEN_TO_CHAR_RATIO;
+            const remaining = 1 - (estimatedUsed / preComplexity.recommendedTokenBudget);
+            if (remaining < BUDGET_HINTS.LOW_BUDGET_THRESHOLD && remaining > 0) {
+                const hint = (languagePolicy?.resolvedLanguage === 'ko') ? BUDGET_HINTS.HINT_KO : BUDGET_HINTS.HINT_EN;
+                currentHistory[0].content += `\n\n${hint}`;
+                logger.info(`💡 토큰 예산 부족 (잔여 ${(remaining * 100).toFixed(0)}%) → 간결 지시 주입`);
+            }
         }
 
         currentHistory.push({

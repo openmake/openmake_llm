@@ -152,6 +152,7 @@ export class GenerateVerifyStrategy
                 succeeded: true,
                 verified: true,
                 issuesFound: verificationDelta >= GV_METRICS.SIGNIFICANT_CHANGE_RATIO ? 1 : 0,
+                verificationDelta,
             };
 
         } catch (e) {
