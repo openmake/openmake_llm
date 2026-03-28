@@ -548,6 +548,14 @@ export const TOOL_RESULT_COMPACTION = {
     KEEP_RECENT: 2,
     /** 컴팩션 시 도구 결과 최대 길이 (이상이면 잘라냄) */
     COMPACTED_MAX_CHARS: 200,
+    /** 의미론적 요약 활성화 여부 (소형 모델로 요약, 기본 비활성) */
+    USE_SEMANTIC: process.env.ENABLE_SEMANTIC_COMPACTION === 'true',
+    /** 의미론적 요약 사용 소형 모델 */
+    COMPACTOR_MODEL: process.env.COMPACTOR_MODEL || 'phi3:mini',
+    /** 의미론적 요약 시 결과 최대 토큰 수 */
+    SEMANTIC_MAX_TOKENS: 150,
+    /** 의미론적 요약 대상 최소 길이 (이보다 짧으면 단순 절단) */
+    SEMANTIC_THRESHOLD_CHARS: 500,
 } as const;
 
 // ============================================
@@ -558,6 +566,23 @@ export const TOOL_RESULT_COMPACTION = {
  * Generate-Verify 품질 측정 설정
  * services/chat-strategies/generate-verify-strategy.ts에서 참조
  */
+// ============================================
+// 동적 토큰 예산 프롬프트
+// ============================================
+
+/**
+ * 잔여 토큰 예산이 부족할 때 시스템 프롬프트에 간결 응답 지시를 주입
+ * Anthropic 하네스 원칙: "토큰 예산 인식 프롬프트 제어"
+ */
+export const BUDGET_HINTS = {
+    /** 간결 지시 주입 임계값 (잔여 비율, 0.0~1.0) */
+    LOW_BUDGET_THRESHOLD: 0.2,
+    /** 한국어 간결 지시 */
+    HINT_KO: '주의: 토큰 예산이 부족합니다. 핵심만 간결하게 답변하세요. 불필요한 설명을 생략하세요.',
+    /** 영어 간결 지시 */
+    HINT_EN: 'Notice: Token budget is low. Be extremely concise and focus only on core answers.',
+} as const;
+
 export const GV_METRICS = {
     /** 품질 측정 활성화 여부 (환경변수로 제어) */
     ENABLED: process.env.OMK_GV_METRICS_ENABLED !== 'false',

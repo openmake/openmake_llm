@@ -194,7 +194,11 @@ async function executeWithStrategy(p: ExecuteWithStrategyParams): Promise<boolea
         });
 
         if (gvResult.succeeded) {
-            logger.info(`GV 완료: verified=${gvResult.verified}`);
+            // GV 메트릭을 routingLog에 기록 (DB 영속화)
+            p.routingLog.routeDecision.gvVerified = gvResult.verified;
+            p.routingLog.routeDecision.gvVerificationDelta = gvResult.verificationDelta;
+            p.routingLog.routeDecision.gvIssuesFound = gvResult.issuesFound;
+            logger.info(`GV 완료: verified=${gvResult.verified}, delta=${((gvResult.verificationDelta ?? 0) * 100).toFixed(1)}%`);
             return true;
         }
     } catch (e) {

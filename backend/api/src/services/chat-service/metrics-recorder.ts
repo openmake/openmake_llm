@@ -16,6 +16,8 @@ import { postResponseCheck, preRequestCheck } from '../../chat/security-hooks';
 import { logRoutingDecision, type RoutingDecisionLog } from '../../chat/routing-logger';
 import { recordChatMetrics } from '../chat-service-metrics';
 import type { ChatMessageRequest } from '../chat-service-types';
+import { FeedbackRepository } from '../../data/repositories/feedback-repository';
+import { getPool } from '../../data/models/unified-database';
 
 const logger = createLogger('MetricsRecorder');
 
@@ -83,4 +85,35 @@ export function recordMetricsAndVerify(params: MetricsRecordParams): void {
         ],
     };
     logRoutingDecision(routingLog);
+
+    // GV 메트릭이 포함된 경우 자동으로 DB에 영속화
+    // routing_metadata JSONB에 저장하여 getGvVerificationStats()로 집계 가능
+    if (routingLog.routeDecision.gvVerificationDelta != null) {
+        try {
+            const pool = getPool();
+            if (pool) {
+                const repo = new FeedbackRepository(pool);
+                repo.recordFeedback({
+                    messageId: routingLog.requestId || `auto-${Date.now()}`,
+                    sessionId: `gv-auto-${Date.now()}`,
+                    userId: req.userId,
+                    signal: 'auto-gv-metric',
+                    routingMetadata: {
+                        queryType: routingLog.queryFeatures.queryType,
+                        model: routingLog.modelUsed,
+                        latencyMs: routingLog.latencyMs,
+                        executionStrategy: routingLog.routeDecision.executionStrategy,
+                        gvVerified: routingLog.routeDecision.gvVerified,
+                        gvVerificationDelta: routingLog.routeDecision.gvVerificationDelta,
+                        gvIssuesFound: routingLog.routeDecision.gvIssuesFound,
+                        tokenBudget: routingLog.routeDecision.tokenBudget,
+                    },
+                }).catch(err => {
+                    logger.warn('GV 메트릭 DB 저장 실패 (무시):', err instanceof Error ? err.message : err);
+                });
+            }
+        } catch {
+            // DB 미연결 등 예외 무시 (graceful degradation)
+        }
+    }
 }
