@@ -34,7 +34,7 @@ import { getUnifiedMCPClient } from '../mcp/unified-client';
 import { OllamaClient } from '../ollama/client';
 import { getGptOssTaskPreset, type ChatMessage, type ToolDefinition, type ModelOptions } from '../ollama/types';
 import type { ResearchProgress } from './DeepResearchService';
-import { AgentLoopStrategy, DeepResearchStrategy, DirectStrategy, DiscussionStrategy, GenerateVerifyStrategy } from './chat-strategies';
+import { AgentLoopStrategy, DeepResearchStrategy, DirectStrategy, DiscussionStrategy, GenerateVerifyStrategy, ThinkingStrategy } from './chat-strategies';
 import { formatResearchResult, formatDiscussionResult } from './chat-service-formatters';
 import { recordMemoryExtractionFailure } from './chat-service-metrics';
 import { preRequestCheck } from '../chat/security-hooks';
@@ -100,6 +100,8 @@ export class ChatService {
     private readonly deepResearchStrategy: DeepResearchStrategy;
     /** Multi-turn 도구 호출 루프 전략 */
     private readonly agentLoopStrategy: AgentLoopStrategy;
+    /** Sprint Contract 기반 단계별 사고 전략 */
+    private readonly thinkingStrategy: ThinkingStrategy;
 
     /**
      * ChatService 인스턴스를 생성합니다.
@@ -113,6 +115,7 @@ export class ChatService {
         this.discussionStrategy = new DiscussionStrategy();
         this.deepResearchStrategy = new DeepResearchStrategy();
         this.agentLoopStrategy = new AgentLoopStrategy(this.directStrategy);
+        this.thinkingStrategy = new ThinkingStrategy(this.agentLoopStrategy);
     }
 
     /**
@@ -614,6 +617,7 @@ export class ChatService {
             ...params,
             generateVerifyStrategy: this.generateVerifyStrategy,
             agentLoopStrategy: this.agentLoopStrategy,
+            thinkingStrategy: this.thinkingStrategy,
             client: this.client,
             currentUserContext: this.currentUserContext,
             getAllowedTools: () => this.getAllowedTools(),

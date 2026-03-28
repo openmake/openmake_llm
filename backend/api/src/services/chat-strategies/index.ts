@@ -16,6 +16,8 @@ export { DiscussionStrategy } from './discussion-strategy';
 export { DeepResearchStrategy } from './deep-research-strategy';
 export { AgentLoopStrategy } from './agent-loop-strategy';
 export { GenerateVerifyStrategy } from './generate-verify-strategy';
+export { ThinkingStrategy } from './thinking-strategy';
+export type { ThinkingStrategyContext, ThinkingStrategyResult } from './thinking-strategy';
 export type {
     ChatContext,
     ChatResult,
@@ -27,4 +29,5 @@ export type {
     AgentLoopStrategyContext,
     DiscussionStrategyContext,
     DeepResearchStrategyContext,
+    ExecutionState,
 } from './types';

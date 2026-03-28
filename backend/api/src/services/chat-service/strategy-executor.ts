@@ -13,6 +13,7 @@
 import { createLogger } from '../../utils/logger';
 import { assessComplexity } from '../../chat/complexity-assessor';
 import { GV_MODEL_MAP, GV_DEFAULT_MODELS } from '../../config/model-defaults';
+import { THINKING_LIMITS } from '../../config/runtime-limits';
 import type { ModelSelection } from '../../chat/model-selector';
 import type { ExecutionPlan } from '../../chat/profile-resolver';
 import type { ChatMessage, ModelOptions, FormatOption } from '../../ollama/types';
@@ -21,7 +22,8 @@ import type { UserContext } from '../../mcp/user-sandbox';
 import type { ToolDefinition } from '../../ollama/types';
 import type { RoutingDecisionLog } from '../../chat/routing-logger';
 import type { LanguagePolicyDecision } from '../../chat/language-policy';
-import type { AgentLoopStrategy, GenerateVerifyStrategy } from '../chat-strategies';
+import type { AgentLoopStrategy, GenerateVerifyStrategy, ThinkingStrategy } from '../chat-strategies';
+import type { ExecutionState } from '../chat-strategies/types';
 
 const logger = createLogger('StrategyExecutor');
 
@@ -52,6 +54,8 @@ export interface StrategyExecutorParams {
     generateVerifyStrategy: GenerateVerifyStrategy;
     /** AgentLoop 전략 인스턴스 */
     agentLoopStrategy: AgentLoopStrategy;
+    /** Thinking 전략 인스턴스 */
+    thinkingStrategy: ThinkingStrategy;
     /** Ollama 클라이언트 */
     client: OllamaClient;
     /** 현재 사용자 컨텍스트 */
@@ -76,9 +80,41 @@ export async function selectAndExecuteStrategy(params: StrategyExecutorParams): 
         images, docId, history, currentHistory, chatOptions, maxTurns,
         supportsTools, supportsThinking, thinkingMode, thinkingLevel,
         languagePolicy, streamToken, abortSignal, checkAborted, format,
-        generateVerifyStrategy, agentLoopStrategy,
+        generateVerifyStrategy, agentLoopStrategy, thinkingStrategy,
         client, currentUserContext, getAllowedTools,
     } = params;
+
+    // Thinking 모드 활성화 시 ThinkingStrategy 우선 실행
+    // ExecutionState: 참조 기반으로 ThinkingStrategy 내부의 턴 소모를 추적
+    const executionState: ExecutionState = { turnsUsed: 0, startTime: Date.now() };
+
+    if (thinkingMode === true) {
+        logger.info('ThinkingStrategy 실행 (Sprint Contract)');
+        try {
+            const thinkResult = await thinkingStrategy.execute({
+                client, currentHistory, chatOptions, maxTurns,
+                supportsTools, supportsThinking, thinkingMode, thinkingLevel,
+                executionPlan, currentUserContext, getAllowedTools,
+                onToken: streamToken, abortSignal, checkAborted, format,
+                userLanguage: languagePolicy?.resolvedLanguage,
+                executionState,
+            });
+
+            // Thinking 메트릭을 routingLog에 기록
+            routingLog.routeDecision.thinkingSteps = thinkResult.thinkingSteps;
+            routingLog.routeDecision.thinkingCharsUsed = thinkResult.thinkingCharsUsed;
+            routingLog.routeDecision.conclusionForced = thinkResult.conclusionForced;
+            routingLog.routeDecision.verificationPassed = thinkResult.verificationPassed;
+            return;
+        } catch (e) {
+            if (e instanceof Error && e.message === 'ABORTED') throw e;
+            const elapsedMs = Date.now() - executionState.startTime;
+            logger.warn(
+                `ThinkingStrategy 실패 (소모 턴: ${executionState.turnsUsed}, 경과: ${elapsedMs}ms), AgentLoop 폴백:`,
+                e instanceof Error ? e.message : e,
+            );
+        }
+    }
 
     const execStrategy = executionPlan?.executionStrategy ?? 'single';
 
@@ -93,12 +129,33 @@ export async function selectAndExecuteStrategy(params: StrategyExecutorParams): 
     if (handled) return;
 
     // GV 실패 또는 single → AgentLoop 폴백
-    logger.info('AgentLoop 폴백');
+    // 잔여 턴 계산: ThinkingStrategy에서 소모한 턴을 차감하되 최소 FALLBACK_MIN_TURNS 보장
+    const naturalRemaining = maxTurns - executionState.turnsUsed;
+    const remainingTurns = Math.max(
+        THINKING_LIMITS.FALLBACK_MIN_TURNS,
+        naturalRemaining,
+    );
+    if (executionState.turnsUsed > 0) {
+        if (naturalRemaining < THINKING_LIMITS.FALLBACK_MIN_TURNS) {
+            logger.warn(
+                `AgentLoop 폴백: 잔여 턴(${naturalRemaining}) < FALLBACK_MIN_TURNS(${THINKING_LIMITS.FALLBACK_MIN_TURNS}), ` +
+                `최소 보장으로 상향 (ThinkingStrategy 소모: ${executionState.turnsUsed})`,
+            );
+        } else {
+            logger.info(
+                `AgentLoop 폴백 (잔여 턴: ${remainingTurns}, ThinkingStrategy 소모: ${executionState.turnsUsed})`,
+            );
+        }
+    } else {
+        logger.info('AgentLoop 폴백');
+    }
+
     await agentLoopStrategy.execute({
-        client, currentHistory, chatOptions, maxTurns,
+        client, currentHistory, chatOptions, maxTurns: remainingTurns,
         supportsTools, supportsThinking, thinkingMode, thinkingLevel,
         executionPlan, currentUserContext, getAllowedTools,
         onToken: streamToken, abortSignal, checkAborted, format,
+        executionState,
     });
 }
 

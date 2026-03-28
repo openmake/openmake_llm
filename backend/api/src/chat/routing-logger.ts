@@ -49,6 +49,14 @@ export interface RoutingRouteDecision {
     gvVerificationDelta?: number;
     /** GV 이슈 발견 수 */
     gvIssuesFound?: number;
+    /** Thinking 모드 사고 단계 수 */
+    thinkingSteps?: number;
+    /** Thinking 모드 사고 사용 문자 수 */
+    thinkingCharsUsed?: number;
+    /** Thinking 모드 결론 강제 여부 */
+    conclusionForced?: boolean;
+    /** Thinking 모드 결론-과정 일관성 검증 통과 여부 */
+    verificationPassed?: boolean;
 }
 
 export interface RoutingDecisionLog {
