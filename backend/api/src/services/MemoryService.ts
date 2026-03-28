@@ -189,7 +189,7 @@ export class MemoryService {
         const filteredMemories = memories.filter(m => (m.importance ?? 0.5) >= JIT_MEMORY_MIN_IMPORTANCE);
         const effectiveMemories = filteredMemories.length > 0
             ? filteredMemories
-            : memories.sort((a, b) => (b.importance ?? 0.5) - (a.importance ?? 0.5)).slice(0, 3);
+            : [...memories].sort((a, b) => (b.importance ?? 0.5) - (a.importance ?? 0.5)).slice(0, 3);
 
         const contextParts: string[] = ['## 🧠 User Memory Context'];
         
