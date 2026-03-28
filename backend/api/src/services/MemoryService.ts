@@ -13,7 +13,7 @@ import { v4 as uuidv4 } from 'uuid';
 import crypto from 'node:crypto';
 import { getUnifiedDatabase, UserMemory, MemoryCategory } from '../data/models/unified-database';
 import { createLogger } from '../utils/logger';
-import { CAPACITY, TRUNCATION, DISCUSSION_TOKEN_BUDGET, CACHE_CONFIG } from '../config/runtime-limits';
+import { CAPACITY, TRUNCATION, DISCUSSION_TOKEN_BUDGET, CACHE_CONFIG, JIT_MEMORY_MIN_IMPORTANCE } from '../config/runtime-limits';
 
 const logger = createLogger('MemoryService');
 
@@ -184,11 +184,18 @@ export class MemoryService {
             return { memories: [], contextString: '' };
         }
 
+        // JIT 필터링: 중요도 기반으로 저품질 메모리 제외
+        // Anthropic 컨텍스트 엔지니어링 원칙: "최소 고신호 토큰 집합"
+        const filteredMemories = memories.filter(m => (m.importance ?? 0.5) >= JIT_MEMORY_MIN_IMPORTANCE);
+        const effectiveMemories = filteredMemories.length > 0
+            ? filteredMemories
+            : memories.sort((a, b) => (b.importance ?? 0.5) - (a.importance ?? 0.5)).slice(0, 3);
+
         const contextParts: string[] = ['## 🧠 User Memory Context'];
         
         // 카테고리별 그룹화
         const grouped: Record<string, UserMemory[]> = {};
-        for (const m of memories) {
+        for (const m of effectiveMemories) {
             if (!grouped[m.category]) grouped[m.category] = [];
             grouped[m.category].push(m);
         }
@@ -224,7 +231,7 @@ export class MemoryService {
         contextParts.push('\n---\nUse this context to personalize your response.\n');
 
         const result: MemoryContext = {
-            memories: includedMemories.length > 0 ? includedMemories : memories,
+            memories: includedMemories.length > 0 ? includedMemories : effectiveMemories,
             contextString: contextParts.join('\n')
         };
 

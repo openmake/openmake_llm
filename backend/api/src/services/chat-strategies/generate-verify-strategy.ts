@@ -25,6 +25,7 @@ import { createLogger } from '../../utils/logger';
 import { resolvePromptLocale } from '../../chat/language-policy';
 import { VERIFIER_SYSTEM_PROMPTS, VERIFIER_LABELS, GV_HEADERS } from '../../prompts/verifier-system';
 import { LLM_TEMPERATURES } from '../../config/llm-parameters';
+import { GV_METRICS } from '../../config/runtime-limits';
 
 const logger = createLogger('GenerateVerifyStrategy');
 
@@ -136,15 +137,21 @@ export class GenerateVerifyStrategy
             );
 
             const totalDuration = Date.now() - startTime;
+
+            // GV 품질 측정: Generator vs Verifier 응답 변경률 계산
+            const verificationDelta = GV_METRICS.ENABLED
+                ? this.measureVerificationDelta(generatedResponse, fullVerifiedResponse)
+                : 0;
+
             logger.info(
-                `✅ GV 검증 완료: 총=${totalDuration}ms`
+                `✅ GV 검증 완료: 총=${totalDuration}ms, 변경률=${(verificationDelta * 100).toFixed(1)}%`
             );
 
             return {
                 response: header + fullVerifiedResponse,
                 succeeded: true,
                 verified: true,
-                issuesFound: 0,
+                issuesFound: verificationDelta >= GV_METRICS.SIGNIFICANT_CHANGE_RATIO ? 1 : 0,
             };
 
         } catch (e) {
@@ -173,5 +180,36 @@ export class GenerateVerifyStrategy
                 issuesFound: 0,
             };
         }
+    }
+
+    /**
+     * Generator 응답과 Verifier 응답 간의 변경률을 측정합니다.
+     *
+     * 간단한 문자 수준 비교로 "Verifier가 얼마나 수정했는지"를 0.0~1.0으로 반환합니다.
+     * Anthropic의 "load-bearing component 검증" 원칙에 따라
+     * GV 전략의 실효성을 데이터로 판단할 수 있게 합니다.
+     *
+     * @returns 변경 비율 (0.0 = 동일, 1.0 = 완전 변경)
+     */
+    private measureVerificationDelta(generated: string, verified: string): number {
+        if (!generated || !verified) return 0;
+
+        // 정규화: 공백/줄바꿈 통일
+        const norm = (s: string) => s.replace(/\s+/g, ' ').trim();
+        const g = norm(generated);
+        const v = norm(verified);
+
+        if (g === v) return 0;
+
+        // 단어 단위 변경률 (Jaccard distance 기반)
+        const gWords = new Set(g.split(' '));
+        const vWords = new Set(v.split(' '));
+        const union = new Set([...gWords, ...vWords]);
+        let intersection = 0;
+        for (const w of gWords) {
+            if (vWords.has(w)) intersection++;
+        }
+
+        return union.size === 0 ? 0 : 1 - (intersection / union.size);
     }
 }
