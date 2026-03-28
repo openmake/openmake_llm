@@ -149,9 +149,104 @@ export async function synthesizeFindings(params: {
         return { summary: getResearchMessage('synthesisFailed', config.language), keyPoints: [] };
     }
 
-    const mergedPrompt = getMergePrompt(config.language, topic, chunkSummaries);
+    // ── 계층적 Map-Reduce 병합 ──
+    // 청크 요약 수가 MAP_REDUCE_THRESHOLD 초과 시 재귀적 병합 수행
+    const mergedSummary = await hierarchicalMerge({
+        client, config, topic, summaries: chunkSummaries,
+        abortSignal, throwIfAborted, depth: 0,
+    });
 
-    // 병합 단계에 타임아웃 적용
+    const keyPoints = extractBulletLikeFindings(mergedSummary);
+
+    await db.addResearchStep({
+        sessionId,
+        stepNumber: loopNumber * 100 + 100,
+        stepType: 'synthesize',
+        query: `루프 ${loopNumber} 합성${isLightweight ? ' (경량)' : ''}`,
+        result: mergedSummary.slice(0, TRUNCATION.RESEARCH_SUMMARY_MAX),
+        status: 'completed'
+    });
+
+    return { summary: mergedSummary, keyPoints };
+}
+
+/**
+ * 계층적 Map-Reduce 병합
+ *
+ * 청크 요약 수가 MAP_REDUCE_THRESHOLD 이하이면 단일 병합,
+ * 초과하면 요약들을 다시 그룹으로 나누어 재귀적으로 병합합니다.
+ * MAX_HIERARCHY_DEPTH에 도달하면 단일 병합으로 강제 전환합니다.
+ *
+ * @returns 최종 병합된 요약 텍스트
+ */
+async function hierarchicalMerge(params: {
+    client: OllamaClient;
+    config: ResearchConfig;
+    topic: string;
+    summaries: string[];
+    abortSignal?: AbortSignal;
+    throwIfAborted: () => void;
+    depth: number;
+}): Promise<string> {
+    const { client, config, topic, summaries, abortSignal, throwIfAborted, depth } = params;
+    const validSummaries = summaries.filter(s => s !== '청크 요약 실패');
+
+    if (validSummaries.length === 0) {
+        return getResearchMessage('synthesisFailed', config.language);
+    }
+
+    // 단일 병합 조건: 요약 수가 임계값 이하이거나 최대 깊이 도달
+    if (validSummaries.length <= RESEARCH_DEFAULTS.MAP_REDUCE_THRESHOLD
+        || depth >= RESEARCH_DEFAULTS.MAX_HIERARCHY_DEPTH) {
+
+        if (depth > 0) {
+            logger.info(`[DeepResearch] 계층 ${depth} 병합: ${validSummaries.length}개 요약 → 최종 병합`);
+        }
+
+        return await singleMerge({ client, config, topic, summaries: validSummaries, abortSignal, throwIfAborted });
+    }
+
+    // 재귀적 병합: 요약들을 MAP_REDUCE_THRESHOLD 크기 그룹으로 나눠 중간 병합
+    const groupSize = RESEARCH_DEFAULTS.MAP_REDUCE_THRESHOLD;
+    const groups = chunkArray(validSummaries, groupSize);
+    logger.info(
+        `[DeepResearch] 계층적 병합 시작: ${validSummaries.length}개 요약 → ${groups.length}개 그룹 (깊이 ${depth})`
+    );
+
+    const intermediateSummaries = await parallelBatch(
+        groups,
+        async (group) => {
+            throwIfAborted();
+            return await singleMerge({ client, config, topic, summaries: group, abortSignal, throwIfAborted });
+        },
+        { concurrency: RESEARCH_DEFAULTS.SYNTHESIS_CONCURRENCY, signal: abortSignal }
+    );
+
+    const validIntermediate = (intermediateSummaries.filter(s => s != null) as string[]);
+
+    // 재귀: 중간 결과를 다시 병합
+    return hierarchicalMerge({
+        ...params,
+        summaries: validIntermediate,
+        depth: depth + 1,
+    });
+}
+
+/**
+ * 단일 수준 병합 — 요약 목록을 하나의 종합 요약으로 합성
+ */
+async function singleMerge(params: {
+    client: OllamaClient;
+    config: ResearchConfig;
+    topic: string;
+    summaries: string[];
+    abortSignal?: AbortSignal;
+    throwIfAborted: () => void;
+}): Promise<string> {
+    const { client, config, topic, summaries, abortSignal, throwIfAborted } = params;
+
+    const mergedPrompt = getMergePrompt(config.language, topic, summaries);
+
     const mergeController = new AbortController();
     const mergeTimeout = setTimeout(
         () => mergeController.abort(),
@@ -168,31 +263,14 @@ export async function synthesizeFindings(params: {
             { role: 'user', content: mergedPrompt }
         ], { temperature: LLM_TEMPERATURES.RESEARCH_REPORT });
         throwIfAborted();
-
-        const mergedSummary = response.content.trim();
-        const keyPoints = extractBulletLikeFindings(mergedSummary);
-
-        await db.addResearchStep({
-            sessionId,
-            stepNumber: loopNumber * 100 + 100,
-            stepType: 'synthesize',
-            query: `루프 ${loopNumber} 합성${isLightweight ? ' (경량)' : ''}`,
-            result: mergedSummary.slice(0, TRUNCATION.RESEARCH_SUMMARY_MAX),
-            status: 'completed'
-        });
-
-        return { summary: mergedSummary, keyPoints };
+        return response.content.trim();
     } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
         if (msg === 'RESEARCH_ABORTED') throw error;
-        logger.error(`[DeepResearch] 합성 실패: ${msg}`);
-        // 부분 결과라도 반환: 청크 요약들을 합쳐서 fallback
-        const partialSummary = chunkSummaries.filter(s => s !== '청크 요약 실패').join('\n\n');
-        if (partialSummary.length > 0) {
-            logger.info('[DeepResearch] 병합 실패 → 청크 요약 결합으로 대체');
-            return { summary: partialSummary, keyPoints: extractBulletLikeFindings(partialSummary) };
-        }
-        return { summary: getResearchMessage('synthesisFailed', config.language), keyPoints: [] };
+        logger.error(`[DeepResearch] 병합 실패: ${msg}`);
+        // 폴백: 청크 요약들을 합쳐서 반환
+        const partialSummary = summaries.filter(s => s !== '청크 요약 실패').join('\n\n');
+        return partialSummary || getResearchMessage('synthesisFailed', config.language);
     } finally {
         clearTimeout(mergeTimeout);
         if (abortSignal) {

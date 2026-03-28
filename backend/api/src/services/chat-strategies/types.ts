@@ -110,6 +110,21 @@ export interface DirectStrategyResult extends ChatResult {
 }
 
 /**
+ * 전략 간 공유 실행 상태 (참조 기반 추적)
+ *
+ * ThinkingStrategy → AgentLoop 폴백 시 이미 소모된 턴/시간을
+ * 참조 객체로 공유하여 폴백 전략이 잔여 자원만 사용하도록 합니다.
+ *
+ * @interface ExecutionState
+ */
+export interface ExecutionState {
+    /** 누적 사용 턴 수 (AgentLoop 내부에서 매 턴마다 증가) */
+    turnsUsed: number;
+    /** 실행 시작 시점 (밀리초 타임스탬프) */
+    startTime: number;
+}
+
+/**
  * AgentLoop(Multi-turn 도구 호출) 전략 컨텍스트
  *
  * 도구 호출이 없을 때까지 LLM ↔ 도구 실행을 반복하는 루프에 필요한 컨텍스트입니다.
@@ -142,6 +157,8 @@ export interface AgentLoopStrategyContext extends ChatContext {
     getAllowedTools: () => ToolDefinition[];
     /** 구조화된 출력 형식 (Ollama format 파라미터: 'json' 또는 JSON Schema 객체) */
     format?: FormatOption;
+    /** 전략 간 공유 실행 상태 (폴백 시 소모된 턴 수 추적용, optional) */
+    executionState?: ExecutionState;
 }
 
 /**

@@ -34,7 +34,7 @@ import { createContextBuilder } from './discussion-context';
 import { createLogger } from '../utils/logger';
 import { resolvePromptLocale } from '../chat/language-policy';
 import { parallelBatch } from '../workflow/graph-engine';
-import { DISCUSSION_CONFIDENCE } from '../config/runtime-limits';
+import { DISCUSSION_CONFIDENCE, DISCUSSION_CONSISTENCY } from '../config/runtime-limits';
 /** 토론 엔진에서 사용하는 웹 검색 결과 최소 인터페이스 */
 export interface DiscussionSearchResult {
     title: string;
@@ -241,6 +241,71 @@ ${contextInstructions}
     }
 
     /**
+     * Self-Consistency Score 측정
+     *
+     * 에이전트 의견들 간의 합의도를 수치화합니다.
+     * Evaluator 역할로 LLM을 호출하여 합의점/모순점을 추출하고,
+     * consensus / (consensus + conflict) 비율로 점수를 산출합니다.
+     */
+    async function calculateConsistencyScore(
+        opinions: AgentOpinion[],
+        topic: string
+    ): Promise<{ score: number; consensusPoints: string[]; conflictPoints: string[] }> {
+        // 최소 에이전트 수 미달 시 기본값 반환
+        if (opinions.length < DISCUSSION_CONSISTENCY.MIN_AGENTS) {
+            return { score: 1.0, consensusPoints: [], conflictPoints: [] };
+        }
+
+        const evaluationPrompt = `You are an impartial evaluator analyzing multiple expert opinions on a topic.
+Identify consensus points (where experts agree) and conflict points (where experts disagree).
+
+Return ONLY a JSON object in this exact format:
+{"consensus":["point1","point2"],"conflicts":["point1","point2"]}
+
+Rules:
+- Each point should be a single concise sentence
+- Maximum 5 consensus points and 5 conflict points
+- If no conflicts, return empty array for conflicts
+- Respond in the same language as the opinions`;
+
+        let contextMessage = `Topic: ${topic}\n\nExpert Opinions:\n`;
+        for (const op of opinions) {
+            contextMessage += `\n### ${op.agentName}\n${op.opinion.substring(0, 500)}\n`;
+        }
+        contextMessage += `\nAnalyze and return JSON:`;
+
+        try {
+            const response = await generateResponse(evaluationPrompt, contextMessage);
+
+            // JSON 추출 (LLM이 부가 텍스트를 추가할 수 있으므로 패턴 매칭)
+            const jsonMatch = response.match(/\{[\s\S]*"consensus"[\s\S]*"conflicts"[\s\S]*\}/);
+            if (!jsonMatch) {
+                logger.warn('Self-Consistency Score: JSON 패턴 미매칭, 폴백 반환');
+                return { score: 0.7, consensusPoints: [], conflictPoints: [] };
+            }
+
+            const parsed = JSON.parse(jsonMatch[0]) as {
+                consensus: string[];
+                conflicts: string[];
+            };
+
+            const consensusCount = Array.isArray(parsed.consensus) ? parsed.consensus.length : 0;
+            const conflictCount = Array.isArray(parsed.conflicts) ? parsed.conflicts.length : 0;
+            const total = consensusCount + conflictCount;
+            const score = total > 0 ? consensusCount / total : 1.0;
+
+            return {
+                score: Math.round(score * 100) / 100,
+                consensusPoints: Array.isArray(parsed.consensus) ? parsed.consensus.slice(0, 5) : [],
+                conflictPoints: Array.isArray(parsed.conflicts) ? parsed.conflicts.slice(0, 5) : [],
+            };
+        } catch (e) {
+            logger.warn('Self-Consistency Score 측정 실패:', e);
+            return { score: 0.7, consensusPoints: [], conflictPoints: [] };
+        }
+    }
+
+    /**
      * 토론 시작
      */
     async function startDiscussion(
@@ -363,6 +428,23 @@ ${contextInstructions}
             }
         }
 
+        // 4.5. Self-Consistency Score 측정 (에이전트 간 합의도)
+        let consistencyScore: number | undefined;
+        let consensusPoints: string[] | undefined;
+        let conflictPoints: string[] | undefined;
+
+        if (DISCUSSION_CONSISTENCY.ENABLED && opinions.length >= DISCUSSION_CONSISTENCY.MIN_AGENTS) {
+            try {
+                const consistency = await calculateConsistencyScore(opinions, topic);
+                consistencyScore = consistency.score;
+                consensusPoints = consistency.consensusPoints;
+                conflictPoints = consistency.conflictPoints;
+                logger.info(`📊 Self-Consistency Score: ${consistencyScore} (합의: ${consensusPoints.length}, 모순: ${conflictPoints.length})`);
+            } catch (e) {
+                logger.warn('Self-Consistency Score 측정 스킵:', e);
+            }
+        }
+
         // 5. 최종 답변 합성
         onProgress?.({
             phase: 'synthesizing',
@@ -385,7 +467,10 @@ ${contextInstructions}
             participants,
             opinions,
             totalTime: Date.now() - startTime,
-            factChecked
+            factChecked,
+            consistencyScore,
+            consensusPoints,
+            conflictPoints,
         };
     }
 
