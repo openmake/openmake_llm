@@ -71,6 +71,8 @@ backend/api/.ollama-cluster.json
 # Screenshots (may contain personal info)
 *.png
 !frontend/web/public/**/*.png
+!screenshot-main.png
+!skill-library-current.png
 
 # Project Documentation
 openmake_prd.md
