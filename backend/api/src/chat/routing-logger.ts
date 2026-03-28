@@ -43,6 +43,12 @@ export interface RoutingRouteDecision {
     gvSkipped?: boolean;
     /** P1-2: 토큰 예산 */
     tokenBudget?: number;
+    /** GV 검증 여부 */
+    gvVerified?: boolean;
+    /** GV 변경률 (0.0~1.0, Jaccard distance) */
+    gvVerificationDelta?: number;
+    /** GV 이슈 발견 수 */
+    gvIssuesFound?: number;
 }
 
 export interface RoutingDecisionLog {

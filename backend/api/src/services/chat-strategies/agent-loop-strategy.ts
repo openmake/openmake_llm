@@ -21,6 +21,7 @@ import { DirectStrategy } from './direct-strategy';
 import type { AgentLoopStrategyContext, ChatStrategy, ChatResult } from './types';
 import { createLogger } from '../../utils/logger';
 import { TRUNCATION, TOOL_RESULT_COMPACTION } from '../../config/runtime-limits';
+import { semanticCompact } from '../semantic-compactor';
 import { LLM_TEMPERATURES } from '../../config/llm-parameters';
 import { VISION_OCR_SYSTEM_PROMPT, VISION_ANALYSIS_SYSTEM_PROMPT } from '../../prompts/vision-system';
 
@@ -115,7 +116,7 @@ export class AgentLoopStrategy implements ChatStrategy<AgentLoopStrategyContext,
 
                 // 도구 결과 컴팩션: 오래된 도구 결과를 요약하여 컨텍스트 낭비 방지
                 // Anthropic 하네스 원칙: "오래된 도구 결과는 요약/정리"
-                this.compactOldToolResults(context.currentHistory);
+                await this.compactOldToolResults(context.currentHistory);
             } else {
                 finalResponse = directResult.response;
                 break;
@@ -331,7 +332,7 @@ export class AgentLoopStrategy implements ChatStrategy<AgentLoopStrategyContext,
      * 그 이전의 도구 결과는 도구명과 결과 요약(앞 200자)만 남깁니다.
      * 이는 Anthropic의 "도구 결과 정리" 권장 패턴을 따릅니다.
      */
-    private compactOldToolResults(history: Array<{ role: string; content?: string; tool_name?: string }>): void {
+    private async compactOldToolResults(history: Array<{ role: string; content?: string; tool_name?: string }>): Promise<void> {
         // 도구 결과 메시지의 인덱스를 역순으로 수집
         const toolIndices: number[] = [];
         for (let i = history.length - 1; i >= 0; i--) {
@@ -350,8 +351,14 @@ export class AgentLoopStrategy implements ChatStrategy<AgentLoopStrategyContext,
             const content = msg.content || '';
             if (content.length > TOOL_RESULT_COMPACTION.COMPACTED_MAX_CHARS) {
                 const toolName = msg.tool_name || 'unknown';
-                const truncated = content.substring(0, TOOL_RESULT_COMPACTION.COMPACTED_MAX_CHARS);
-                msg.content = `[Compacted] ${toolName}: ${truncated}...`;
+
+                if (TOOL_RESULT_COMPACTION.USE_SEMANTIC && content.length >= TOOL_RESULT_COMPACTION.SEMANTIC_THRESHOLD_CHARS) {
+                    // Semantic Compaction: 소형 모델로 의미 보존 요약
+                    msg.content = await semanticCompact(toolName, content);
+                } else {
+                    // 단순 절단 (기본)
+                    msg.content = `[Compacted] ${toolName}: ${content.substring(0, TOOL_RESULT_COMPACTION.COMPACTED_MAX_CHARS)}...`;
+                }
                 compactedCount++;
             }
         }

@@ -154,12 +154,13 @@ router.get(
         }
 
         const repo = new FeedbackRepository(getPool());
-        const [bySource, tokenEfficiency] = await Promise.all([
+        const [bySource, tokenEfficiency, gvStats] = await Promise.all([
             repo.getFeedbackByClassifierSource(days),
             repo.getTokenBudgetEfficiency(days),
+            repo.getGvVerificationStats(days),
         ]);
 
-        res.json(success({ bySource, tokenEfficiency }));
+        res.json(success({ bySource, tokenEfficiency, gvStats }));
     })
 );
 
