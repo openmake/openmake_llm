@@ -213,6 +213,10 @@ export const RESEARCH_DEFAULTS = {
     MIN_CONTENT_FOR_FULL_SYNTHESIS: 1000,
     /** 검색 쿼리 최대 단어 수 (초과 시 잘림) */
     SEARCH_QUERY_MAX_WORDS: 10,
+    /** 계층적 병합 전환 임계값 (청크 요약 수가 이 값 초과 시 재귀 병합) */
+    MAP_REDUCE_THRESHOLD: 8,
+    /** 계층적 병합 최대 깊이 (비용/지연 제어) */
+    MAX_HIERARCHY_DEPTH: 2,
 } as const;
 
 // ============================================
@@ -306,6 +310,23 @@ export const DISCUSSION_CONFIDENCE = {
     SHORT_RESPONSE_LENGTH: 300,
     /** 긴 응답 길이 임계값 */
     LONG_RESPONSE_LENGTH: 600,
+} as const;
+
+/**
+ * Self-Consistency Score 측정 설정
+ * Anthropic 하네스 원칙: Load-bearing Verification — 에이전트 간 합의도 측정
+ *
+ * agents/discussion-engine.ts에서 참조
+ */
+export const DISCUSSION_CONSISTENCY = {
+    /** Self-Consistency 측정 활성화 여부 */
+    ENABLED: process.env.ENABLE_CONSISTENCY_SCORE !== 'false',
+    /** 측정 최소 에이전트 수 (미만이면 스킵) */
+    MIN_AGENTS: 3,
+    /** Evaluator LLM 최대 토큰 */
+    EVALUATOR_MAX_TOKENS: 300,
+    /** 최소 일관성 점수 (미달 시 경고 플래그) */
+    MIN_REQUIRED_SCORE: 0.6,
 } as const;
 
 /**
@@ -581,6 +602,64 @@ export const BUDGET_HINTS = {
     HINT_KO: '주의: 토큰 예산이 부족합니다. 핵심만 간결하게 답변하세요. 불필요한 설명을 생략하세요.',
     /** 영어 간결 지시 */
     HINT_EN: 'Notice: Token budget is low. Be extremely concise and focus only on core answers.',
+} as const;
+
+// ============================================
+// Thinking 모드 Sprint Contract
+// ============================================
+
+/**
+ * Thinking 모드의 단계별 사고 제어 파라미터
+ * Anthropic 하네스 원칙: Sprint Contract — 코드 레벨 토큰/단계 예산 제어
+ *
+ * services/chat-strategies/thinking-strategy.ts에서 참조
+ */
+// ============================================
+// 웹 검색 결과 신뢰도 스코어링
+// ============================================
+
+/**
+ * 검색 결과 신선도/신뢰도 수치화 설정
+ * Anthropic 하네스 원칙: Load-bearing Verification — 검색 결과 품질 측정
+ *
+ * mcp/web-search/search-orchestrator.ts에서 참조
+ */
+export const SEARCH_RELIABILITY = {
+    /** 공식 도메인 가산점 */
+    OFFICIAL_DOMAIN_BOOST: 0.3,
+    /** 공식 도메인 패턴 */
+    OFFICIAL_DOMAINS: ['.gov', '.edu', '.org', '.ac.kr', '.go.kr', '.or.kr'] as readonly string[],
+    /** 신선도 가산 기간 (일, 이내면 가산) */
+    RECENCY_BONUS_DAYS: 365,
+    /** 신선도 감산 기간 (일, 초과하면 감산) */
+    RECENCY_PENALTY_DAYS: 1095,
+    /** 관련도 가중치 (정렬 시) */
+    RELEVANCE_WEIGHT: 0.6,
+    /** 신뢰도 가중치 (정렬 시) */
+    RELIABILITY_WEIGHT: 0.4,
+} as const;
+
+export const THINKING_LIMITS = {
+    /** 최대 사고 단계 수 (초과 시 결론 강제) */
+    MAX_STEPS: parseInt(process.env.THINKING_MAX_STEPS || '10', 10),
+    /** 전체 사고 토큰 예산 (문자 수 기준, TOKEN_TO_CHAR_RATIO 적용) */
+    MAX_THINK_CHARS: parseInt(process.env.THINKING_MAX_CHARS || '12000', 10),
+    /** 단계별 최소 콘텐츠 길이 (미달 시 조기 종료) */
+    MIN_STEP_CONTENT_CHARS: 50,
+    /** 예산 소진율 임계값 — 이 비율 초과 시 결론 강제 (0.0~1.0) */
+    FORCE_CONCLUSION_AT: 0.8,
+    /** 결론-과정 일관성 검증 활성화 (소형 모델 사용, opt-in) */
+    VERIFY_CONCLUSION: process.env.THINKING_VERIFY_CONCLUSION === 'true',
+    /** 검증용 소형 모델 */
+    VERIFIER_MODEL: process.env.THINKING_VERIFIER_MODEL || 'phi3:mini',
+    /** 검증 최대 토큰 */
+    VERIFIER_MAX_TOKENS: 200,
+    /** 예산 경고 임계값 — 잔여 비율이 이 값 미만이면 "핵심 집중" 안내 (0.0~1.0) */
+    WARNING_THRESHOLD: parseFloat(process.env.THINKING_WARNING_THRESHOLD || '0.5'),
+    /** 예산 위기 임계값 — 잔여 비율이 이 값 미만이면 "결론 강제" 안내 (0.0~1.0) */
+    CRITICAL_THRESHOLD: parseFloat(process.env.THINKING_CRITICAL_THRESHOLD || '0.2'),
+    /** 폴백 시 최소 보장 턴 수 (ThinkingStrategy 실패 → AgentLoop 폴백 시 최소 이만큼 보장) */
+    FALLBACK_MIN_TURNS: parseInt(process.env.THINKING_FALLBACK_MIN_TURNS || '2', 10),
 } as const;
 
 export const GV_METRICS = {

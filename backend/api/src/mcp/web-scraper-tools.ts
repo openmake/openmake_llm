@@ -14,10 +14,11 @@
  */
 
 import { MCPToolDefinition, MCPToolResult } from './types';
-import { TRUNCATION } from '../config/runtime-limits';
+import { TRUNCATION, TOOL_RESULT_COMPACTION } from '../config/runtime-limits';
 import { LLM_TIMEOUTS } from '../config/timeouts';
 import { scrapePage, mapSiteUrls, crawlSite } from '../utils/web-scraper';
 import { validateOutboundUrl } from '../security/ssrf-guard';
+import { semanticCompact } from '../services/semantic-compactor';
 
 // ============================================
 // web_scrape — 웹 페이지 스크래핑
@@ -56,8 +57,15 @@ export const webScrapeTool: MCPToolDefinition = {
                 timeoutMs: (args.timeout as number) || LLM_TIMEOUTS.WEB_SCRAPE_TIMEOUT_MS,
             });
 
+            // P3-b: LLM Pre-Synthesis — 긴 콘텐츠를 소형 모델로 사전 요약
+            let content = result.markdown;
+            if (TOOL_RESULT_COMPACTION.USE_SEMANTIC
+                && content.length >= TOOL_RESULT_COMPACTION.SEMANTIC_THRESHOLD_CHARS) {
+                content = await semanticCompact('web_scrape', content);
+            }
+
             return {
-                content: [{ type: 'text', text: `**${result.title || url}** 스크래핑 완료\n\n${result.markdown}` }],
+                content: [{ type: 'text', text: `**${result.title || url}** 스크래핑 완료\n\n${content}` }],
                 isError: false
             };
         } catch (error: unknown) {

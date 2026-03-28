@@ -65,6 +65,10 @@ export class AgentLoopStrategy implements ChatStrategy<AgentLoopStrategyContext,
             context.checkAborted?.();
 
             currentTurn++;
+            // ExecutionState 참조 업데이트 (폴백 시 소모 턴 추적)
+            if (context.executionState) {
+                context.executionState.turnsUsed++;
+            }
             logger.info(`🔄 Agent Loop Turn ${currentTurn}/${context.maxTurns}`);
 
             // 모델이 도구 호출을 지원하고, single 전략이 아닌 경우에만 도구 목록 조회

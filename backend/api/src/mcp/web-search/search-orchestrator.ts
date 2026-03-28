@@ -17,6 +17,7 @@ import {
     searchNaverNews
 } from './providers';
 import { createLogger } from '../../utils/logger';
+import { SEARCH_RELIABILITY } from '../../config/runtime-limits';
 
 const logger = createLogger('WebSearch');
 
@@ -95,7 +96,71 @@ export async function performWebSearch(query: string, options: { maxResults?: nu
 
     logger.info(`총 ${uniqueResults.length}개 (Ollama:${earlyOllamaResults.length}, Google:${googleResults.length}, Wiki:${wikiResults.length}, News:${newsResults.length}, DDG:${ddgResults.length}, Naver:${naverResults.length})`);
 
-    return uniqueResults.slice(0, maxResults);
+    // 신뢰도 스코어링 및 정렬
+    const scored = uniqueResults.map((result, index) => {
+        const reliability = scoreSearchResult(result);
+        result.qualityScore = reliability;
+        // 기존 순서 기반 관련도 (1.0 → 0.0, 상위일수록 높음)
+        const relevance = 1 - (index / Math.max(uniqueResults.length, 1));
+        const combinedScore = relevance * SEARCH_RELIABILITY.RELEVANCE_WEIGHT
+            + reliability * SEARCH_RELIABILITY.RELIABILITY_WEIGHT;
+        return { result, combinedScore };
+    });
+
+    scored.sort((a, b) => b.combinedScore - a.combinedScore);
+
+    return scored.map(s => s.result).slice(0, maxResults);
+}
+
+/**
+ * 검색 결과의 신선도/신뢰도를 수치화합니다.
+ *
+ * 도메인 권위와 게시 날짜를 기반으로 0.0~1.0 사이의 점수를 산출합니다.
+ * - 공식 도메인(.gov, .edu, .org 등) → 가산
+ * - 1년 이내 게시 → 가산
+ * - 3년 이상 경과 → 감산
+ * - 의미 있는 스니펫 → 가산
+ *
+ * @param result - 검색 결과 객체
+ * @returns 신뢰도 점수 (0.0~1.0)
+ */
+function scoreSearchResult(result: SearchResult): number {
+    let score = 0.5;
+
+    // 1. 도메인 권위
+    try {
+        const hostname = new URL(result.url).hostname.toLowerCase();
+        const isOfficial = SEARCH_RELIABILITY.OFFICIAL_DOMAINS.some(
+            domain => hostname.endsWith(domain)
+        );
+        if (isOfficial) {
+            score += SEARCH_RELIABILITY.OFFICIAL_DOMAIN_BOOST;
+        }
+    } catch {
+        // URL 파싱 실패 무시
+    }
+
+    // 2. 날짜 신선도
+    if (result.date) {
+        try {
+            const pubDate = new Date(result.date);
+            const daysSince = (Date.now() - pubDate.getTime()) / (1000 * 60 * 60 * 24);
+            if (daysSince <= SEARCH_RELIABILITY.RECENCY_BONUS_DAYS) {
+                score += 0.2;
+            } else if (daysSince > SEARCH_RELIABILITY.RECENCY_PENALTY_DAYS) {
+                score -= 0.1;
+            }
+        } catch {
+            // 날짜 파싱 실패 무시
+        }
+    }
+
+    // 3. 스니펫 품질 (의미 있는 길이)
+    if (result.snippet && result.snippet.length > 80) {
+        score += 0.1;
+    }
+
+    return Math.min(1.0, Math.max(0.0, score));
 }
 
 /**
