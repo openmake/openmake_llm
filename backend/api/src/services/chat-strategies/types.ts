@@ -125,6 +125,25 @@ export interface ExecutionState {
 }
 
 /**
+ * Informed Fallback 힌트
+ *
+ * 이전 전략(GV/Thinking)이 실패한 원인 정보를 폴백 전략(AgentLoop)에 전달합니다.
+ * Harness Engineering 원칙: Correct — 실패 원인을 후속 전략에 알려 동일 실수 방지
+ *
+ * @interface FallbackHint
+ */
+export interface FallbackHint {
+    /** 실패한 전략 이름 */
+    failedStrategy: 'generate-verify' | 'thinking' | 'conditional-verify';
+    /** 실패 원인 요약 (로그용, 사람이 읽을 수 있는 형태) */
+    reason: string;
+    /** 실패한 전략이 소모한 턴 수 */
+    turnsConsumed: number;
+    /** 실패한 전략의 경과 시간 (ms) */
+    elapsedMs: number;
+}
+
+/**
  * AgentLoop(Multi-turn 도구 호출) 전략 컨텍스트
  *
  * 도구 호출이 없을 때까지 LLM ↔ 도구 실행을 반복하는 루프에 필요한 컨텍스트입니다.
@@ -159,6 +178,8 @@ export interface AgentLoopStrategyContext extends ChatContext {
     format?: FormatOption;
     /** 전략 간 공유 실행 상태 (폴백 시 소모된 턴 수 추적용, optional) */
     executionState?: ExecutionState;
+    /** Informed Fallback 힌트 — 이전 전략 실패 원인 (Correct 원칙) */
+    fallbackHint?: FallbackHint;
 }
 
 /**
