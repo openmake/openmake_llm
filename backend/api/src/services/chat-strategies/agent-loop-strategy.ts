@@ -20,7 +20,7 @@ import { getUnifiedMCPClient } from '../../mcp/unified-client';
 import { DirectStrategy } from './direct-strategy';
 import type { AgentLoopStrategyContext, ChatStrategy, ChatResult } from './types';
 import { createLogger } from '../../utils/logger';
-import { TRUNCATION, TOOL_RESULT_COMPACTION, LOOP_DETECTION, PRE_COMPLETION_CHECKLIST, TRACE_ANALYZER, EVAL_PIPELINE, CONTEXT_GC } from '../../config/runtime-limits';
+import { TRUNCATION, TOOL_RESULT_COMPACTION, LOOP_DETECTION, PRE_COMPLETION_CHECKLIST, TRACE_ANALYZER, EVAL_PIPELINE, CONTEXT_GC, INFORMED_FALLBACK } from '../../config/runtime-limits';
 import { TraceAnalyzer } from './trace-analyzer';
 import { EvalPipeline } from './eval-pipeline';
 import { ContextGC } from './context-gc';
@@ -110,6 +110,24 @@ export class AgentLoopStrategy implements ChatStrategy<AgentLoopStrategyContext,
 
         // ── P5: Context GC 초기화 ──
         const contextGC = CONTEXT_GC.ENABLED ? new ContextGC() : null;
+
+        // ── P1 Routing: Informed Fallback — 이전 전략 실패 원인 주입 ──
+        if (INFORMED_FALLBACK.ENABLED && context.fallbackHint) {
+            const hint = context.fallbackHint;
+            const hintMessage = `[System Notice] This is a fallback execution. The previous "${hint.failedStrategy}" strategy failed after ${hint.turnsConsumed} turns (${hint.elapsedMs}ms). Reason: ${hint.reason}. Please use a different approach to answer the user's question.`;
+            context.currentHistory.push({ role: 'user', content: hintMessage });
+            logger.info(
+                `📋 Informed Fallback 주입: ${hint.failedStrategy} 실패 → 원인: ${hint.reason}`,
+            );
+            if (INFORMED_FALLBACK.INCLUDE_IN_METRICS) {
+                metrics.fallbackHint = {
+                    failedStrategy: hint.failedStrategy,
+                    reason: hint.reason,
+                    turnsConsumed: hint.turnsConsumed,
+                    elapsedMs: hint.elapsedMs,
+                };
+            }
+        }
 
         while (currentTurn < context.maxTurns) {
             context.checkAborted?.();

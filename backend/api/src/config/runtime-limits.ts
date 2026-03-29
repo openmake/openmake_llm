@@ -848,6 +848,160 @@ export const PRE_COMPLETION_CHECKLIST = {
     CODE_DOMAIN_PATTERN: /```|코드|code|function\s|class\s|import\s|const\s|let\s|var\s|def\s|async\s/i,
 } as const;
 
+// ============================================
+// Classification Confidence Gate (분류 신뢰도 게이트)
+// ============================================
+
+/**
+ * 분류 신뢰도가 낮을 때 보수적 전략으로 강제 전환하는 게이트 설정
+ *
+ * Harness Engineering 원칙: Verify + Correct — 분류 결과를 검증하고,
+ * 불확실한 경우 더 안전한 실행 경로로 수정합니다.
+ *
+ * services/chat-service/strategy-executor.ts에서 참조
+ */
+export const CONFIDENCE_GATE = {
+    /** 신뢰도 게이트 활성화 여부 */
+    ENABLED: process.env.CONFIDENCE_GATE_ENABLED !== 'false',
+    /** 게이트 발동 임계값 — 이 값 미만이면 보수적 전략으로 전환 */
+    THRESHOLD: parseFloat(process.env.CONFIDENCE_GATE_THRESHOLD || '0.4'),
+    /** 게이트 발동 시 적용할 전략 */
+    FALLBACK_STRATEGY: (process.env.CONFIDENCE_GATE_FALLBACK || 'generate-verify') as
+        'generate-verify' | 'conditional-verify',
+    /** 게이트 발동 시 thinking 모드 강제 활성화 여부 */
+    FORCE_THINKING: process.env.CONFIDENCE_GATE_FORCE_THINKING === 'true',
+    /** 메트릭 기록 여부 */
+    INCLUDE_IN_METRICS: process.env.CONFIDENCE_GATE_INCLUDE_METRICS !== 'false',
+} as const;
+
+// ============================================
+// Classification Disagreement Logging (분류 불일치 로깅)
+// ============================================
+
+/**
+ * Regex vs LLM 분류 결과 불일치를 추적하는 설정
+ *
+ * Harness Engineering 원칙: Verify — 두 독립 분류기의 교차 검증으로
+ * 분류 정확도 약점을 식별합니다.
+ *
+ * chat/llm-classifier.ts에서 참조
+ */
+export const DISAGREEMENT_LOGGING = {
+    /** 불일치 로깅 활성화 여부 */
+    ENABLED: process.env.DISAGREEMENT_LOGGING_ENABLED !== 'false',
+    /** 불일치 결과를 구조화 로그에 포함할지 여부 */
+    INCLUDE_IN_METRICS: process.env.DISAGREEMENT_INCLUDE_METRICS !== 'false',
+} as const;
+
+// ============================================
+// Informed Fallback (폴백 시 실패 원인 전달)
+// ============================================
+
+/**
+ * 이전 전략(GV/Thinking) 실패 시 원인 정보를 AgentLoop에 전달하는 설정
+ *
+ * Harness Engineering 원칙: Correct — 실패 원인을 후속 전략에 알려
+ * 동일 실수를 반복하지 않도록 교정
+ *
+ * services/chat-strategies/agent-loop-strategy.ts에서 참조
+ */
+export const INFORMED_FALLBACK = {
+    /** Informed Fallback 활성화 여부 */
+    ENABLED: process.env.INFORMED_FALLBACK_ENABLED !== 'false',
+    /** 메트릭 기록 여부 */
+    INCLUDE_IN_METRICS: process.env.INFORMED_FALLBACK_INCLUDE_METRICS !== 'false',
+} as const;
+
+// ============================================
+// Contextual Classification (대화 이력 기반 분류 강화)
+// ============================================
+
+/**
+ * LLM 분류기에 이전 대화 턴 컨텍스트를 제공하는 설정
+ *
+ * Harness Engineering 원칙: Inform — 분류기에 더 풍부한 컨텍스트를 제공하여
+ * 대명사/지시어 기반 쿼리 분류 정확도 향상
+ *
+ * chat/llm-classifier.ts에서 참조
+ */
+export const CONTEXTUAL_CLASSIFICATION = {
+    /** 대화 이력 기반 분류 활성화 여부 */
+    ENABLED: process.env.CONTEXTUAL_CLASSIFICATION_ENABLED !== 'false',
+    /** 분류기에 전달할 최대 이전 턴 수 */
+    MAX_HISTORY_TURNS: Number(process.env.CONTEXTUAL_CLASSIFICATION_MAX_TURNS || '3'),
+    /** 각 턴의 최대 문자 수 (너무 긴 컨텍스트 방지) */
+    MAX_CHARS_PER_TURN: Number(process.env.CONTEXTUAL_CLASSIFICATION_MAX_CHARS || '200'),
+} as const;
+
+// ============================================
+// Profile Validation (프로파일 유효성 검증)
+// ============================================
+
+/**
+ * 프로파일 설정의 논리적 일관성을 검증하는 설정
+ *
+ * Harness Engineering 원칙: Constrain — 논리적으로 모순되는 프로파일 설정을
+ * 서버 시작 시 조기 발견
+ *
+ * chat/profile-validator.ts에서 참조
+ */
+export const PROFILE_VALIDATION = {
+    /** 프로파일 검증 활성화 여부 */
+    ENABLED: process.env.PROFILE_VALIDATION_ENABLED !== 'false',
+    /** 검증 실패 시 서버 시작 차단 여부 (false=경고만) */
+    STRICT_MODE: process.env.PROFILE_VALIDATION_STRICT === 'true',
+} as const;
+
+// ============================================
+// Routing Post-hoc Verification (라우팅 사후 검증)
+// ============================================
+
+/**
+ * 라우팅 결정의 적절성을 응답 완료 후 사후 검증하는 설정
+ *
+ * Harness Engineering 원칙: Verify — 라우팅 결정이 실제로 적절했는지
+ * 응답 품질 신호(지연, 토큰 사용량, 에러)로 자동 판단
+ *
+ * chat/routing-verifier.ts에서 참조
+ */
+export const ROUTING_VERIFICATION = {
+    /** 사후 검증 활성화 여부 */
+    ENABLED: process.env.ROUTING_VERIFICATION_ENABLED !== 'false',
+    /** 비정상 지연으로 판단할 임계값 (ms) */
+    HIGH_LATENCY_THRESHOLD_MS: Number(process.env.ROUTING_HIGH_LATENCY_MS || '10000'),
+    /** 토큰 예산 대비 초과 사용 비율 임계값 (1.0 = 예산과 동일) */
+    TOKEN_OVERUSE_RATIO: parseFloat(process.env.ROUTING_TOKEN_OVERUSE_RATIO || '1.5'),
+    /** 검증 결과를 구조화 로그에 포함할지 여부 */
+    INCLUDE_IN_METRICS: process.env.ROUTING_VERIFICATION_INCLUDE_METRICS !== 'false',
+} as const;
+
+// ============================================
+// Feedback Cache Correction (피드백 기반 캐시 교정)
+// ============================================
+
+/**
+ * 사용자 피드백(thumbs_up/down)에 따라 분류 캐시를 교정하는 설정
+ *
+ * Harness Engineering 원칙: Correct — 사용자 피드백으로 캐시된 분류 결과를
+ * 교정하여 향후 동일 쿼리의 라우팅 품질 개선
+ *
+ * chat/feedback-cache-corrector.ts에서 참조
+ */
+export const FEEDBACK_CACHE_CORRECTION = {
+    /** 피드백 기반 캐시 교정 활성화 여부 */
+    ENABLED: process.env.FEEDBACK_CACHE_CORRECTION_ENABLED !== 'false',
+    /** thumbs_down 시 캐시 항목 무효화 여부 (false면 신뢰도만 감소) */
+    INVALIDATE_ON_NEGATIVE: process.env.FEEDBACK_CACHE_INVALIDATE !== 'false',
+    /** thumbs_up 시 신뢰도 부스트 값 (현재 신뢰도에 가산) */
+    POSITIVE_BOOST: parseFloat(process.env.FEEDBACK_POSITIVE_BOOST || '0.05'),
+    /** 동일 쿼리에 대한 교정 횟수 제한 (노이즈 방지) */
+    MAX_CORRECTIONS_PER_QUERY: Number(process.env.FEEDBACK_MAX_CORRECTIONS || '3'),
+    /** 교정 횟수 추적 윈도우 (ms, 기본 1시간) */
+    CORRECTION_WINDOW_MS: Number(process.env.FEEDBACK_CORRECTION_WINDOW_MS || '3600000'),
+    /** 메트릭 기록 여부 */
+    INCLUDE_IN_METRICS: process.env.FEEDBACK_CACHE_INCLUDE_METRICS !== 'false',
+} as const;
+
 export const GV_METRICS = {
     /** 품질 측정 활성화 여부 (환경변수로 제어) */
     ENABLED: process.env.OMK_GV_METRICS_ENABLED !== 'false',

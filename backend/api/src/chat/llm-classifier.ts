@@ -32,7 +32,7 @@ import type { FormatOption } from '../ollama/types';
 import { SemanticClassificationCache } from './semantic-cache';
 import { VectorClassificationCache } from './vector-cache';
 import { LLM_TIMEOUTS } from '../config/timeouts';
-import { CACHE_CONFIG } from '../config/runtime-limits';
+import { CACHE_CONFIG, CONTEXTUAL_CLASSIFICATION } from '../config/runtime-limits';
 import { CLASSIFIER_MODEL, CONFIDENCE_THRESHOLD, CLASSIFIER_TEMPERATURE, CLASSIFIER_NUM_CTX, VECTOR_CACHE_ENABLED, EMBEDDING_MODEL } from '../config/routing-config';
 import warmQueriesRaw from '../config/data/warm-queries.json';
 import { CLASSIFICATION_SYSTEM_PROMPT } from '../prompts/classifier-system';
@@ -133,17 +133,25 @@ interface RawLLMResult {
 
 /**
  * LLM 분류 호출만 수행합니다 (캐시 로직 없음).
+ *
+ * @param query - 분류할 사용자 쿼리
+ * @param conversationContext - 이전 대화 턴 요약 (대명사/지시어 해소용, optional)
  */
-async function callLLMClassifier(query: string): Promise<RawLLMResult | null> {
+async function callLLMClassifier(query: string, conversationContext?: string): Promise<RawLLMResult | null> {
     const classifier = new OllamaClient({
         model: CLASSIFIER_MODEL,
         timeout: LLM_TIMEOUTS.CLASSIFIER_TIMEOUT_MS,
     });
 
+    // P2: 대화 이력 컨텍스트가 있으면 사용자 메시지에 포함
+    const userContent = conversationContext
+        ? `[Conversation context]\n${conversationContext}\n\n[Current query]\n${query}`
+        : query;
+
     const result = await classifier.chat(
         [
             { role: 'system', content: CLASSIFICATION_SYSTEM_PROMPT },
-            { role: 'user', content: query },
+            { role: 'user', content: userContent },
         ],
         {
             temperature: CLASSIFIER_TEMPERATURE,
@@ -181,6 +189,42 @@ async function callLLMClassifier(query: string): Promise<RawLLMResult | null> {
 }
 
 /**
+ * 대화 이력에서 분류기에 전달할 컨텍스트 요약을 빌드합니다.
+ *
+ * P2 하네스 (Inform): 이전 턴 요약을 제공하여 대명사/지시어 기반 쿼리 해소
+ * "그거 더 설명해줘" → 이전 턴이 코드 관련이었으면 code-agent로 분류 가능
+ *
+ * @param history - 대화 이력 (최신 순이 아닌 시간순)
+ * @returns 요약 문자열 또는 undefined (이력 없으면)
+ */
+function buildConversationContext(
+    history?: Array<{ role: string; content: string }>,
+): string | undefined {
+    if (!CONTEXTUAL_CLASSIFICATION.ENABLED || !history || history.length === 0) {
+        return undefined;
+    }
+
+    const maxTurns = CONTEXTUAL_CLASSIFICATION.MAX_HISTORY_TURNS;
+    const maxChars = CONTEXTUAL_CLASSIFICATION.MAX_CHARS_PER_TURN;
+
+    // 최근 N턴만 추출 (user/assistant만, system 제외)
+    const relevantTurns = history
+        .filter(m => m.role === 'user' || m.role === 'assistant')
+        .slice(-maxTurns * 2); // user+assistant 쌍이므로 2배
+
+    if (relevantTurns.length === 0) return undefined;
+
+    const lines = relevantTurns.map(m => {
+        const content = typeof m.content === 'string'
+            ? m.content.substring(0, maxChars)
+            : '';
+        return `${m.role}: ${content}`;
+    });
+
+    return lines.join('\n');
+}
+
+/**
  * gemini-3-flash-preview:cloud를 사용하여 사용자 질문을 분류합니다.
  *
  * 실행 흐름:
@@ -190,9 +234,13 @@ async function callLLMClassifier(query: string): Promise<RawLLMResult | null> {
  * 4. LLM 실패 → null 반환 (caller가 regex fallback 처리)
  *
  * @param query - 사용자 질문 텍스트
+ * @param history - 이전 대화 이력 (대명사/지시어 해소용, optional)
  * @returns 분류 결과 또는 null (실패 시)
  */
-export async function classifyWithLLM(query: string): Promise<LLMClassificationResult | null> {
+export async function classifyWithLLM(
+    query: string,
+    history?: Array<{ role: string; content: string }>,
+): Promise<LLMClassificationResult | null> {
     if (!query || query.trim().length === 0) {
         return null;
     }
@@ -242,8 +290,11 @@ export async function classifyWithLLM(query: string): Promise<LLMClassificationR
     }
 
     // ── 2. LLM 분류 호출 ──
+    // P2: 대화 이력 기반 분류 강화 — 이전 턴 요약을 분류기에 제공
+    const conversationContext = buildConversationContext(history);
+
     try {
-        const llmRaw = await callLLMClassifier(query);
+        const llmRaw = await callLLMClassifier(query, conversationContext);
 
         if (llmRaw) {
             cache.set(query, llmRaw.type, llmRaw.confidence);
@@ -280,6 +331,70 @@ export function getConfidenceThreshold(): number {
     return CONFIDENCE_THRESHOLD;
 }
 
+// ============================================================
+// P1: 분류 불일치 로깅 (Disagreement Logging)
+// ============================================================
+
+import { DISAGREEMENT_LOGGING } from '../config/runtime-limits';
+
+/** 분류 불일치 기록 */
+export interface ClassificationDisagreement {
+    query: string;
+    llmType: string;
+    llmConfidence: number;
+    regexType: string;
+    regexConfidence: number;
+    finalType: string;
+    finalSource: 'llm' | 'cache' | 'regex';
+    timestamp: string;
+}
+
+/** 불일치 통계 (모니터링용) */
+const disagreementStats = { total: 0, logged: 0 };
+
+/**
+ * LLM 분류 결과와 Regex 분류 결과를 비교하여 불일치 시 로깅합니다.
+ *
+ * Harness Engineering 원칙 (Verify): 두 독립 분류기의 교차 검증으로
+ * 분류 약점을 식별합니다.
+ */
+export function logDisagreementIfAny(
+    query: string,
+    llmType: string,
+    llmConfidence: number,
+    regexType: string,
+    regexConfidence: number,
+    finalType: string,
+    finalSource: 'llm' | 'cache' | 'regex',
+): void {
+    if (!DISAGREEMENT_LOGGING.ENABLED) return;
+    if (llmType === regexType) return;
+
+    disagreementStats.total++;
+    disagreementStats.logged++;
+
+    const record: ClassificationDisagreement = {
+        query: query.substring(0, 200),
+        llmType,
+        llmConfidence,
+        regexType,
+        regexConfidence,
+        finalType,
+        finalSource,
+        timestamp: new Date().toISOString(),
+    };
+
+    logger.warn(
+        `🔀 분류 불일치: LLM=${llmType}(${(llmConfidence * 100).toFixed(0)}%) vs Regex=${regexType}(${(regexConfidence * 100).toFixed(0)}%) → 최종=${finalType}[${finalSource}]`,
+        DISAGREEMENT_LOGGING.INCLUDE_IN_METRICS ? { disagreement: record } : undefined,
+    );
+}
+
+/** 불일치 통계를 반환합니다 (모니터링용) */
+export function getDisagreementStats(): { total: number; logged: number } {
+    return { ...disagreementStats };
+}
+
 /** 캐시 크기를 반환합니다 (모니터링/디버깅용) */
 export function getClassificationCacheSize(): number {
     return getClassificationCache().size();
@@ -288,6 +403,32 @@ export function getClassificationCacheSize(): number {
 /** 캐시를 초기화합니다 (테스트용) */
 export function clearClassificationCache(): void {
     getClassificationCache().clear();
+}
+
+/**
+ * 특정 쿼리의 캐시 항목을 무효화합니다.
+ * P3-B: 부정 피드백 시 개별 캐시 무효화용
+ *
+ * @param query - 무효화할 쿼리
+ * @returns 무효화 성공 여부
+ */
+export function invalidateCacheEntry(query: string): boolean {
+    return getClassificationCache().delete(query);
+}
+
+/**
+ * 특정 쿼리의 캐시 항목 신뢰도를 갱신합니다.
+ * P3-B: 긍정 피드백 시 캐시 신뢰도 부스트용
+ *
+ * @param query - 갱신할 쿼리
+ * @param type - 분류 타입
+ * @param confidence - 새 신뢰도
+ */
+export function updateCacheConfidence(query: string, type: string, confidence: number): void {
+    const validTypes: readonly QueryType[] = QUERY_TYPES;
+    if (validTypes.includes(type as QueryType)) {
+        getClassificationCache().set(query, type as QueryType, Math.min(1.0, Math.max(0, confidence)));
+    }
 }
 
 /** 캐시 통계를 반환합니다 (모니터링용) */

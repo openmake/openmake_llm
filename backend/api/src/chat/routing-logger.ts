@@ -57,6 +57,15 @@ export interface RoutingRouteDecision {
     conclusionForced?: boolean;
     /** Thinking 모드 결론-과정 일관성 검증 통과 여부 */
     verificationPassed?: boolean;
+    /** 하네스 개입 — 분류 신뢰도 게이트 등 */
+    harnessIntervention?: string;
+    /** 하네스 개입 전 원래 전략 */
+    originalStrategy?: string;
+    /** P3: 사후 검증 결과 — 라우팅이 적절했는지 */
+    postVerification?: {
+        appropriate: boolean;
+        issues: string[];
+    };
 }
 
 export interface RoutingDecisionLog {
