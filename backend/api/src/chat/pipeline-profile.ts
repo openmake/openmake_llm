@@ -263,7 +263,7 @@ export function getProfiles(): Record<string, PipelineProfile> {
             thinking: 'medium',
             discussion: false,
             promptStrategy: 'auto',
-            agentLoopMax: 3,
+            agentLoopMax: 1,
             loopStrategy: 'sequential',
             contextStrategy: 'auto',
             timeBudgetSeconds: 0,
