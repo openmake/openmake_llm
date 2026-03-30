@@ -20,12 +20,51 @@ import { getUnifiedMCPClient } from '../../mcp/unified-client';
 import { DirectStrategy } from './direct-strategy';
 import type { AgentLoopStrategyContext, ChatStrategy, ChatResult } from './types';
 import { createLogger } from '../../utils/logger';
-import { TRUNCATION, TOOL_RESULT_COMPACTION } from '../../config/runtime-limits';
+import { TRUNCATION, TOOL_RESULT_COMPACTION, LOOP_DETECTION, PRE_COMPLETION_CHECKLIST, TRACE_ANALYZER, EVAL_PIPELINE, CONTEXT_GC, INFORMED_FALLBACK } from '../../config/runtime-limits';
+import { TraceAnalyzer } from './trace-analyzer';
+import { EvalPipeline } from './eval-pipeline';
+import { ContextGC } from './context-gc';
 import { semanticCompact } from '../semantic-compactor';
 import { LLM_TEMPERATURES } from '../../config/llm-parameters';
 import { VISION_OCR_SYSTEM_PROMPT, VISION_ANALYSIS_SYSTEM_PROMPT } from '../../prompts/vision-system';
+import { getChecklistPrompt, parseChecklistResult } from '../../prompts/checklist-system';
 
 const logger = createLogger('AgentLoopStrategy');
+
+// ============================================
+// Loop Detection 내부 타입
+// ============================================
+
+/** 도구 호출 추적 엔트리 */
+interface ToolCallEntry {
+    /** 도구 이름 */
+    name: string;
+    /** 인자 해시 (간단한 문자열 기반) */
+    argsHash: string;
+    /** 결과가 에러인지 여부 */
+    isError: boolean;
+    /** 에러 메시지 (에러인 경우) */
+    errorMessage?: string;
+}
+
+/**
+ * 도구 호출 인자를 간단한 해시 문자열로 변환합니다.
+ * 완전한 암호학적 해시가 아닌, 동일성 비교용 경량 해시입니다.
+ * 키를 알파벳 순으로 정렬하여 {a:1, b:2}와 {b:2, a:1}이 동일 해시가 되도록 합니다.
+ */
+function hashToolArgs(args: Record<string, unknown>): string {
+    try {
+        const sortedKeys = Object.keys(args).sort();
+        const sorted: Record<string, unknown> = {};
+        for (const key of sortedKeys) {
+            sorted[key] = args[key];
+        }
+        const str = JSON.stringify(sorted);
+        return str.substring(0, LOOP_DETECTION.ARGS_HASH_MAX_LENGTH);
+    } catch {
+        return 'unhashable';
+    }
+}
 
 /**
  * Multi-turn 도구 호출 루프 전략
@@ -60,6 +99,35 @@ export class AgentLoopStrategy implements ChatStrategy<AgentLoopStrategyContext,
         let metrics: Record<string, unknown> = {};
         let currentTurn = 0;
         let finalResponse = '';
+
+        // ── P0: Loop Detection 상태 초기화 ──
+        const callHistory: ToolCallEntry[] = [];
+        let loopWarningInjected = false;
+        let loopBroken = false;
+
+        // ── P4: Trace Analyzer 초기화 ──
+        const traceAnalyzer = TRACE_ANALYZER.ENABLED ? new TraceAnalyzer() : null;
+
+        // ── P5: Context GC 초기화 ──
+        const contextGC = CONTEXT_GC.ENABLED ? new ContextGC() : null;
+
+        // ── P1 Routing: Informed Fallback — 이전 전략 실패 원인 주입 ──
+        if (INFORMED_FALLBACK.ENABLED && context.fallbackHint) {
+            const hint = context.fallbackHint;
+            const hintMessage = `[System Notice] This is a fallback execution. The previous "${hint.failedStrategy}" strategy failed after ${hint.turnsConsumed} turns (${hint.elapsedMs}ms). Reason: ${hint.reason}. Please use a different approach to answer the user's question.`;
+            context.currentHistory.push({ role: 'user', content: hintMessage });
+            logger.info(
+                `📋 Informed Fallback 주입: ${hint.failedStrategy} 실패 → 원인: ${hint.reason}`,
+            );
+            if (INFORMED_FALLBACK.INCLUDE_IN_METRICS) {
+                metrics.fallbackHint = {
+                    failedStrategy: hint.failedStrategy,
+                    reason: hint.reason,
+                    turnsConsumed: hint.turnsConsumed,
+                    elapsedMs: hint.elapsedMs,
+                };
+            }
+        }
 
         while (currentTurn < context.maxTurns) {
             context.checkAborted?.();
@@ -108,7 +176,39 @@ export class AgentLoopStrategy implements ChatStrategy<AgentLoopStrategyContext,
                 logger.info(`🛠️ Tool Calls detected: ${directResult.toolCalls.length}`);
 
                 for (const toolCall of directResult.toolCalls) {
+                    const toolName = toolCall.function?.name || 'unknown';
+                    const toolArgs = toolCall.function?.arguments || {};
+
+                    // ── P4: Trace Analyzer — 도구 호출 시작 (stateless) ──
+                    let traceCtx: ReturnType<TraceAnalyzer['startToolCall']> | null = null;
+                    if (traceAnalyzer) {
+                        traceAnalyzer.setTurn(currentTurn);
+                        traceCtx = traceAnalyzer.startToolCall(toolName, toolArgs as Record<string, unknown>);
+                    }
+
                     const toolResult = await this.executeToolCall(context, toolCall);
+                    const isError = toolResult.startsWith('Error:') || toolResult.startsWith('🔒 권한 없음');
+
+                    // ── P4: Trace Analyzer — 도구 호출 종료 ──
+                    if (traceAnalyzer && traceCtx) {
+                        traceAnalyzer.endToolCall(
+                            traceCtx, toolResult, isError,
+                            isError ? toolResult.substring(0, 200) : undefined,
+                        );
+                    }
+
+                    // ── P0: Loop Detection — 호출 추적 ──
+                    const entry: ToolCallEntry = {
+                        name: toolName,
+                        argsHash: hashToolArgs(toolArgs),
+                        isError,
+                        errorMessage: isError ? toolResult.substring(0, 200) : undefined,
+                    };
+                    callHistory.push(entry);
+                    // 윈도우 크기 유지
+                    if (callHistory.length > LOOP_DETECTION.TRACKING_WINDOW) {
+                        callHistory.shift();
+                    }
 
                     // Ollama 공식 스펙: tool 결과 메시지에 tool_name 필수
                     context.currentHistory.push({
@@ -118,19 +218,261 @@ export class AgentLoopStrategy implements ChatStrategy<AgentLoopStrategyContext,
                     });
                 }
 
+                // ── P0: Loop Detection — 패턴 감지 ──
+                const loopStatus = this.detectLoop(callHistory);
+
+                if (loopStatus === 'break') {
+                    loopBroken = true;
+                    logger.warn('🚨 Doom Loop 강제 종료: 동일 패턴 반복 임계값 초과');
+                    // 루프 탈출 시 LLM에게 요약 응답 요청
+                    // user role 사용: 일부 모델은 대화 중간 system role을 거부함
+                    context.currentHistory.push({
+                        role: 'user',
+                        content: '[System Notice] The same tool call has been repeated and the loop has been forcefully terminated. Based on results so far, provide the best possible answer to the user. Explain what approach failed and suggest alternatives.',
+                    });
+                    // 마지막 1턴으로 요약 응답 생성
+                    const summaryResult = await this.directStrategy.execute({
+                        onToken: context.onToken,
+                        abortSignal: context.abortSignal,
+                        checkAborted: context.checkAborted,
+                        client: context.client,
+                        currentHistory: context.currentHistory,
+                        chatOptions: context.chatOptions,
+                        allowedTools: [], // 도구 없이 텍스트만 생성
+                        thinkOption,
+                        format: context.format,
+                    });
+                    finalResponse = summaryResult.response;
+                    break;
+                }
+
+                if (loopStatus === 'warn' && !loopWarningInjected) {
+                    loopWarningInjected = true;
+                    logger.warn('⚠️ Doom Loop 경고: 동일 패턴 반복 감지, 접근법 변경 유도');
+                    // user role 사용: 일부 모델은 대화 중간 system role을 거부함
+                    context.currentHistory.push({
+                        role: 'user',
+                        content: '[System Notice] You are repeating the same tool call with the same arguments. The previous approach is failing. Try a different tool, different arguments, or ask the user for more information.',
+                    });
+                }
+
                 // 도구 결과 컴팩션: 오래된 도구 결과를 요약하여 컨텍스트 낭비 방지
                 // Anthropic 하네스 원칙: "오래된 도구 결과는 요약/정리"
                 await this.compactOldToolResults(context.currentHistory);
+
+                // ── P5: Context GC — 적응형 컨텍스트 가비지 컬렉션 ──
+                if (contextGC) {
+                    try {
+                        const gcResult = contextGC.run(context.currentHistory);
+                        if (gcResult.pressureLevel !== 'normal') {
+                            logger.info(
+                                `🗑️ Context GC 실행 (turn ${currentTurn}): ` +
+                                `${gcResult.pressureLevel}, ${gcResult.charsBefore}→${gcResult.charsAfter}자`,
+                            );
+                        }
+                    } catch (gcError) {
+                        logger.warn('⚠️ Context GC 실행 중 오류 (무시):', gcError instanceof Error ? gcError.message : gcError);
+                    }
+                }
             } else {
                 finalResponse = directResult.response;
                 break;
             }
         }
 
+        // ── P2: PreCompletion Checklist — 종료 전 셀프 검증 ──
+        if (!loopBroken) {
+            finalResponse = await this.runPreCompletionChecklist(
+                context, finalResponse, metrics,
+            );
+        }
+
+        // Loop Detection 메트릭 기록
+        metrics.loopDetection = {
+            totalToolCalls: callHistory.length,
+            warningInjected: loopWarningInjected,
+            loopBroken,
+        };
+
+        // ── P4: Trace Analyzer — 분석 결과 기록 ──
+        if (traceAnalyzer && TRACE_ANALYZER.INCLUDE_IN_METRICS) {
+            metrics.traceAnalysis = traceAnalyzer.analyze();
+        }
+
+        // ── P5: Context GC — 누적 통계 기록 ──
+        if (contextGC && CONTEXT_GC.INCLUDE_IN_METRICS) {
+            metrics.contextGC = contextGC.getStats();
+        }
+
+        // ── P3: Eval Pipeline — 응답 품질 평가 ──
+        if (EVAL_PIPELINE.ENABLED && EVAL_PIPELINE.INCLUDE_IN_METRICS
+            && finalResponse.length >= EVAL_PIPELINE.MIN_RESPONSE_LENGTH) {
+            const userMsg = context.currentHistory.find(m => m.role === 'user');
+            const query = typeof userMsg?.content === 'string' ? userMsg.content : '';
+            metrics.evalResult = EvalPipeline.evaluate({ query, response: finalResponse });
+        }
+
         return {
             response: finalResponse,
             metrics,
         };
+    }
+
+    /**
+     * Doom Loop 패턴을 감지합니다.
+     *
+     * 최근 호출 이력에서 동일 도구+인자 반복 또는 동일 에러 반복을 탐지합니다.
+     *
+     * @returns 'ok' = 정상, 'warn' = 경고 주입 필요, 'break' = 루프 강제 종료
+     */
+    private detectLoop(callHistory: ToolCallEntry[]): 'ok' | 'warn' | 'break' {
+        if (callHistory.length < LOOP_DETECTION.SAME_CALL_WARN_AT) return 'ok';
+
+        // 동일 도구+인자 반복 카운트 (연속)
+        const latest = callHistory[callHistory.length - 1];
+        let sameCallCount = 0;
+        let sameErrorCount = 0;
+
+        for (let i = callHistory.length - 1; i >= 0; i--) {
+            const entry = callHistory[i];
+            if (entry.name === latest.name && entry.argsHash === latest.argsHash) {
+                sameCallCount++;
+            } else {
+                break; // 연속이 끊기면 중단
+            }
+        }
+
+        // 동일 에러 반복 카운트 (비연속 포함)
+        if (latest.isError && latest.errorMessage) {
+            for (const entry of callHistory) {
+                if (entry.isError && entry.errorMessage === latest.errorMessage) {
+                    sameErrorCount++;
+                }
+            }
+        }
+
+        // 강제 종료 판정
+        if (sameCallCount >= LOOP_DETECTION.SAME_CALL_BREAK_AT ||
+            sameErrorCount >= LOOP_DETECTION.SAME_ERROR_BREAK_AT) {
+            return 'break';
+        }
+
+        // 경고 판정
+        if (sameCallCount >= LOOP_DETECTION.SAME_CALL_WARN_AT ||
+            sameErrorCount >= LOOP_DETECTION.SAME_ERROR_WARN_AT) {
+            return 'warn';
+        }
+
+        return 'ok';
+    }
+
+    /**
+     * PreCompletion Checklist: AgentLoop 종료 직전 셀프 검증을 수행합니다.
+     *
+     * Harness Engineering 원칙 (Verify):
+     * 에이전트가 응답 완료 전에 스스로 체크리스트를 점검하여
+     * 1차 해결률(First-pass Resolution)을 극대화합니다.
+     *
+     * @param context - AgentLoop 컨텍스트
+     * @param response - 최종 응답 텍스트
+     * @param metrics - 응답 메트릭 (체크리스트 결과 기록용)
+     * @returns 검증 후 최종 응답 (수정되었을 수 있음)
+     */
+    private async runPreCompletionChecklist(
+        context: AgentLoopStrategyContext,
+        response: string,
+        metrics: Record<string, unknown>,
+    ): Promise<string> {
+        // 비활성화, 짧은 응답, 빈 응답이면 스킵
+        if (!PRE_COMPLETION_CHECKLIST.ENABLED ||
+            response.length < PRE_COMPLETION_CHECKLIST.MIN_RESPONSE_LENGTH) {
+            return response;
+        }
+
+        try {
+            // 쿼리 타입 추론: 히스토리에서 코드 관련 패턴 감지
+            const userMessage = [...context.currentHistory].reverse()
+                .find(m => m.role === 'user')?.content || '';
+            const isCodeRelated = PRE_COMPLETION_CHECKLIST.CODE_DOMAIN_PATTERN.test(
+                response + userMessage
+            );
+            const domain = isCodeRelated ? 'code' : 'general';
+
+            const checklistPrompt = getChecklistPrompt(domain, response);
+
+            // 체크리스트 검증 턴 (도구 없이 텍스트만)
+            const checkResult = await this.directStrategy.execute({
+                onToken: () => {}, // 체크리스트 결과는 사용자에게 스트리밍하지 않음
+                abortSignal: context.abortSignal,
+                checkAborted: context.checkAborted,
+                client: context.client,
+                currentHistory: [
+                    ...context.currentHistory,
+                    { role: 'user', content: checklistPrompt },
+                ],
+                chatOptions: {
+                    ...context.chatOptions,
+                    num_predict: PRE_COMPLETION_CHECKLIST.MAX_TOKENS,
+                },
+                allowedTools: [],
+                format: context.format,
+            });
+
+            const parsed = parseChecklistResult(checkResult.response);
+            metrics.preCompletionChecklist = {
+                domain,
+                passed: parsed.passed,
+                issues: parsed.issues,
+            };
+
+            if (parsed.passed) {
+                logger.info('✅ PreCompletion Checklist 통과');
+                return response;
+            }
+
+            // 체크리스트 실패: 보충 수정 턴 실행 (최대 MAX_RETRY회)
+            // 원본 응답은 이미 스트리밍됨 → 구분 헤더 후 수정 내용만 추가 스트리밍
+            logger.info(`⚠️ PreCompletion Checklist 실패 (이슈: ${parsed.issues.length}개), 보충 수정 시도`);
+
+            const issueList = parsed.issues.map((issue: string, i: number) => `${i + 1}. ${issue}`).join('\n');
+            const fixPrompt = `Your previous response had these issues:\n${issueList}\n\nProvide ONLY the corrections for these issues. Do not repeat the full response.`;
+
+            context.currentHistory.push({ role: 'user', content: fixPrompt });
+
+            // 구분 헤더를 스트리밍으로 전송
+            const separator = '\n\n---\n> 📋 *자체 검증에서 보완 사항이 발견되어 추가합니다:*\n\n';
+            for (const char of separator) {
+                context.onToken(char);
+            }
+
+            let fixedResponse = '';
+            const fixResult = await this.directStrategy.execute({
+                onToken: (token) => {
+                    fixedResponse += token;
+                    context.onToken(token);
+                },
+                abortSignal: context.abortSignal,
+                checkAborted: context.checkAborted,
+                client: context.client,
+                currentHistory: context.currentHistory,
+                chatOptions: context.chatOptions,
+                allowedTools: [],
+                format: context.format,
+            });
+
+            if (fixResult.response) {
+                logger.info('✅ PreCompletion Checklist 보충 수정 완료');
+                // 원본 + 구분자 + 보충 내용을 합쳐 최종 응답
+                return response + separator + fixResult.response;
+            }
+
+            return response;
+        } catch (e) {
+            // 체크리스트 실패는 원본 응답으로 graceful degradation
+            if (e instanceof Error && e.message === 'ABORTED') throw e;
+            logger.warn('⚠️ PreCompletion Checklist 실패 (무시):', e instanceof Error ? e.message : e);
+            return response;
+        }
     }
 
     /**

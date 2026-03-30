@@ -30,4 +30,5 @@ export type {
     DiscussionStrategyContext,
     DeepResearchStrategyContext,
     ExecutionState,
+    FallbackHint,
 } from './types';
