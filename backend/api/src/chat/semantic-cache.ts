@@ -106,6 +106,23 @@ export class SemanticClassificationCache {
         return count;
     }
 
+    /**
+     * 특정 쿼리의 캐시 항목을 삭제합니다.
+     * P3-B: 부정 피드백 시 캐시 무효화용
+     *
+     * @param query - 삭제할 쿼리
+     * @returns 삭제 성공 여부
+     */
+    delete(query: string): boolean {
+        const normalizedQuery = this.normalize(query);
+        const idx = this.exactIndex.get(normalizedQuery);
+        if (idx !== undefined && this.entries[idx]) {
+            this.removeEntry(idx);
+            return true;
+        }
+        return false;
+    }
+
     clear(): void {
         this.exactIndex.clear();
         this.entries.length = 0;
