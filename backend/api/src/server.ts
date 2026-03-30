@@ -195,6 +195,20 @@ export class DashboardServer {
             console.error('[Server] 유틸리티 스킬 시더 로드 실패:', err);
         }
 
+        // P2 하네스: 프로파일 유효성 검증 (Constrain 원칙)
+        try {
+            const { getProfiles } = await import('./chat/pipeline-profile');
+            const { validateAllProfiles } = await import('./chat/profile-validator');
+            const { PROFILE_VALIDATION } = await import('./config/runtime-limits');
+            const result = validateAllProfiles(getProfiles());
+            if (!result.valid && PROFILE_VALIDATION.STRICT_MODE) {
+                console.error('[Server] 프로파일 검증 실패 (STRICT_MODE) — Fail-Fast');
+                process.exit(1);
+            }
+        } catch (err) {
+            console.error('[Server] 프로파일 검증 중 오류 (무시):', err);
+        }
+
         // ⚙️ P2-3: 모든 백그라운드 스케줄러 통합 실행
         startAllSchedulers();
 

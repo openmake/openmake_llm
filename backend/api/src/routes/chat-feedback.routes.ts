@@ -65,6 +65,19 @@ router.post(
             routingMetadata: safeMetadata,
         });
 
+        // P3-B: 피드백 기반 분류 캐시 교정 (fire-and-forget)
+        if (signal === 'thumbs_down' || signal === 'thumbs_up') {
+            (async () => {
+                const { correctOnNegativeFeedback, boostOnPositiveFeedback } = await import('../chat/feedback-cache-corrector');
+                const query = safeMetadata?.queryType; // queryType을 프록시로 사용
+                if (signal === 'thumbs_down') {
+                    await correctOnNegativeFeedback(query, safeMetadata?.queryType);
+                } else {
+                    await boostOnPositiveFeedback(query, safeMetadata?.queryType);
+                }
+            })().catch(e => logger.debug('피드백 캐시 교정 실패 (무시):', e));
+        }
+
         // 피드백 → 장기 메모리에 컨텍스트 기록 (fire-and-forget, 응답 지연 없음)
         if (feedbackUserId && safeMetadata) {
             (async () => {

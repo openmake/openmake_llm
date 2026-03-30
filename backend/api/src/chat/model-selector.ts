@@ -64,7 +64,7 @@ export { classifyQuery } from './query-classifier';
 // Import classifyQuery for internal use (via separate name to avoid conflict)
 import { classifyQuery as _classifyQuery } from './query-classifier';
 // Import LLM classifier for Auto-Routing (Phase D)
-import { classifyWithLLM, getConfidenceThreshold } from './llm-classifier';
+import { classifyWithLLM, getConfidenceThreshold, logDisagreementIfAny } from './llm-classifier';
 
 // Re-export ModelPreset and getModelPresets from config for backward compatibility
 export { ModelPreset, getModelPresets } from '../config/model-presets';
@@ -90,7 +90,11 @@ export { ModelPreset, getModelPresets } from '../config/model-presets';
  * @param hasImages - 이미지 첨부 여부 (true면 vision 모델 강제 선택)
  * @returns 모델 선택 결과 (모델명, 옵션, 사유, 기능 플래그)
  */
-export async function selectOptimalModel(query: string, hasImages?: boolean): Promise<ModelSelection> {
+export async function selectOptimalModel(
+    query: string,
+    hasImages?: boolean,
+    history?: Array<{ role: string; content: string }>,
+): Promise<ModelSelection> {
     const config = getConfig();
 
     // ── LLM 분류 우선, 실패/신뢰도 부족/예외 시 regex fallback ──
@@ -98,11 +102,18 @@ export async function selectOptimalModel(query: string, hasImages?: boolean): Pr
     let classifiedConfidence: number;
 
     try {
-        const llmResult = await classifyWithLLM(query);
+        const llmResult = await classifyWithLLM(query, history);
         if (llmResult && llmResult.confidence >= getConfidenceThreshold()) {
             classifiedType = llmResult.type;
             classifiedConfidence = llmResult.confidence;
             logger.info(`[selectOptimalModel] LLM 분류: ${classifiedType} (${(classifiedConfidence * 100).toFixed(0)}%) [source=${llmResult.source}]`);
+            // P1: 불일치 로깅 — LLM 성공 시 regex와 교차 검증
+            const regexCheck = _classifyQuery(query);
+            logDisagreementIfAny(
+                query, llmResult.type, llmResult.confidence,
+                regexCheck.type, regexCheck.confidence,
+                classifiedType, llmResult.source === 'cache' ? 'cache' : 'llm',
+            );
         } else {
             const regexResult = _classifyQuery(query);
             classifiedType = regexResult.type;
@@ -409,7 +420,11 @@ export async function selectModelForProfile(requestedModel: string, query?: stri
  * @param hasImages - 이미지 첨부 여부
  * @returns brand model 프로파일 ID (예: 'openmake_llm_code')
  */
-export async function selectBrandProfileForAutoRouting(query: string, hasImages?: boolean): Promise<AutoRoutingResult> {
+export async function selectBrandProfileForAutoRouting(
+    query: string,
+    hasImages?: boolean,
+    history?: Array<{ role: string; content: string }>,
+): Promise<AutoRoutingResult> {
     // 이미지가 첨부되면 무조건 vision 프로파일
     if (hasImages) {
         logger.info('§9 Auto-Routing: 이미지 감지 → openmake_llm_vision');
@@ -428,7 +443,7 @@ export async function selectBrandProfileForAutoRouting(query: string, hasImages?
 
     let llmResult: Awaited<ReturnType<typeof classifyWithLLM>> = null;
     try {
-        llmResult = await classifyWithLLM(query);
+        llmResult = await classifyWithLLM(query, history);
     } catch (error) {
         const errMsg = error instanceof Error ? error.message : String(error);
         logger.warn(`[selectBrandProfileForAutoRouting] LLM 분류 예외 → regex fallback (${errMsg})`);
@@ -440,6 +455,13 @@ export async function selectBrandProfileForAutoRouting(query: string, hasImages?
         classifiedConfidence = llmResult.confidence;
         classifierSource = llmResult.source === 'cache' ? 'cache' : 'llm';
         logger.info(`§9 LLM 분류: ${classifiedType} (${(classifiedConfidence * 100).toFixed(0)}%) [source=${classifierSource}]`);
+        // P1: 불일치 로깅 — LLM 성공 시 regex와 교차 검증
+        const regexCheck = _classifyQuery(query);
+        logDisagreementIfAny(
+            query, llmResult.type, llmResult.confidence,
+            regexCheck.type, regexCheck.confidence,
+            classifiedType, classifierSource,
+        );
     } else {
         // LLM 분류 실패 또는 신뢰도 부족 → regex fallback
         const regexClassification = _classifyQuery(query);
