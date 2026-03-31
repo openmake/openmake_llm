@@ -156,7 +156,9 @@ export class OllamaClient {
             },
             async (error) => {
                 const statusCode = error?.response?.status;
-                logger.info(`❌ 요청 실패 - 상태 코드: ${statusCode}`);
+                const respBody = error?.response?.data;
+                const bodyStr = respBody ? (typeof respBody === 'string' ? respBody : JSON.stringify(respBody)).substring(0, 200) : '';
+                logger.info(`❌ 요청 실패 - 상태 코드: ${statusCode}${bodyStr ? ` | ${bodyStr}` : ''}`);
 
                 // 네트워크 에러 (ETIMEDOUT, ECONNREFUSED 등) 시 재시도
                 const isNetworkError = !statusCode && (

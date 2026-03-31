@@ -35,6 +35,8 @@ export interface EmbeddingResult {
 export class EmbeddingService {
     private readonly embeddingModel: string;
     private readonly batchSize: number;
+    /** nomic-embed-text 컨텍스트 길이 제한 (8192 토큰 ≈ 2000자 한국어 보수적 추정) */
+    private readonly maxInputChars = 2000;
 
     constructor() {
         this.embeddingModel = RAG_CONFIG.EMBEDDING_MODEL;
@@ -77,14 +79,17 @@ export class EmbeddingService {
         }
 
         try {
-            const embeddings = await client.embed(text, this.embeddingModel);
+            // 임베딩 모델 컨텍스트 길이 초과 방지 (한국어 ≈ 2-3 토큰/자)
+            const input = text.length > this.maxInputChars ? text.substring(0, this.maxInputChars) : text;
+            const embeddings = await client.embed(input, this.embeddingModel);
             if (embeddings.length === 0 || embeddings[0].length === 0) {
                 logger.warn('임베딩 결과가 비어있음');
                 return null;
             }
             return embeddings[0];
         } catch (error) {
-            logger.error('임베딩 생성 실패:', error);
+            const msg = error instanceof Error ? error.message : String(error);
+            logger.error(`임베딩 생성 실패: ${msg}`);
             return null;
         }
     }

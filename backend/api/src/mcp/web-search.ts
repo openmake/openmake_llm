@@ -155,8 +155,9 @@ async function searchOllamaWebSearch(query: string, maxResults: number = 10): Pr
             }
             logger.info(`Ollama API: ${results.length}개`);
         }
-    } catch (e) {
-        logger.error('Ollama API 실패:', e);
+    } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e);
+        logger.error(`Ollama API 실패: ${msg}`);
     }
 
     return results;

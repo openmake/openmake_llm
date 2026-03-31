@@ -61,13 +61,18 @@ const CONFIDENCE_THRESHOLD = 0.7;
 // 시맨틱 캐시 인스턴스 (Lazy 초기화)
 // ============================================================
 
+/** nomic-embed-text 컨텍스트 길이 제한 (8192 토큰 ≈ 6000자 보수적 추정) */
+const EMBED_MAX_CHARS = 6000;
+
 /** 임베딩 함수 — EmbeddingService 싱글톤을 lazy로 가져옴 */
 const embedFunction: EmbedFunction = async (text: string): Promise<number[] | null> => {
     try {
+        // 긴 입력은 임베딩 모델 컨텍스트 길이 초과 방지를 위해 절단
+        const truncated = text.length > EMBED_MAX_CHARS ? text.substring(0, EMBED_MAX_CHARS) : text;
         // Lazy import to avoid circular dependency and startup overhead
         const { getEmbeddingService } = await import('../../rag/EmbeddingService');
         const service = getEmbeddingService();
-        return await service.embedText(text);
+        return await service.embedText(truncated);
     } catch (error) {
         logger.debug('임베딩 서비스 사용 불가 — L2 캐시 비활성');
         return null;

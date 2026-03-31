@@ -44,7 +44,26 @@ const customFormat = winston.format.combine(
         const traceId = getTraceIdSafe();
         const reqStr = reqId ? ` req=${reqId}` : '';
         const traceStr = traceId ? ` trace_id=${traceId}` : '';
-        const metaStr = Object.keys(meta).length ? JSON.stringify(meta) : '';
+        let metaStr = '';
+        if (Object.keys(meta).length) {
+            try {
+                metaStr = JSON.stringify(meta);
+            } catch {
+                // Axios 에러 등 순환 참조가 포함된 경우 안전하게 처리
+                const seen = new WeakSet();
+                try {
+                    metaStr = JSON.stringify(meta, (_key, value) => {
+                        if (typeof value === 'object' && value !== null) {
+                            if (seen.has(value)) return '[Circular]';
+                            seen.add(value);
+                        }
+                        return value;
+                    });
+                } catch {
+                    metaStr = '[unserializable meta]';
+                }
+            }
+        }
         return `[${timestamp}] ${level.toUpperCase()}:${reqStr}${traceStr} ${message} ${metaStr}`;
     })
 );
