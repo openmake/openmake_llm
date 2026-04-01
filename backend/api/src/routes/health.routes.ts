@@ -10,6 +10,7 @@ import * as path from 'path';
 import { ClusterManager, getClusterManager } from '../cluster/manager';
 import { getPool } from '../data/models/unified-database';
 import { success } from '../utils/api-response';
+import { DB_POOL_TIMEOUTS } from '../config/timeouts';
 
 // package.json에서 버전을 한 번만 읽어 캐시
 const pkgJsonPath = path.resolve(__dirname, '../../package.json');
@@ -71,7 +72,7 @@ export function createHealthRouter(deps: HealthRouterDeps = {}): Router {
             const pool = getPool();
             const dbPing = pool.query('SELECT 1');
             const timeout = new Promise<never>((_, reject) => {
-                timer = setTimeout(() => reject(new Error('DB ping timeout')), 2000);
+                timer = setTimeout(() => reject(new Error('DB ping timeout')), DB_POOL_TIMEOUTS.HEALTH_PING_TIMEOUT_MS);
             });
             await Promise.race([dbPing, timeout]);
             dbReady = true;

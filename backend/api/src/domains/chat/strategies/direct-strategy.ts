@@ -12,7 +12,12 @@
  * - 도구 호출 감지 및 어시스턴트 메시지 구성
  * - AgentLoopStrategy의 내부 빌딩 블록으로 사용됨
  */
+<<<<<<< HEAD:backend/api/src/domains/chat/strategies/direct-strategy.ts
 import type { ChatMessage } from '../../../ollama/types';
+=======
+import type { ChatMessage } from '../../ollama/types';
+import { LLM_TEMPERATURES } from '../../config/llm-parameters';
+>>>>>>> fbe49389978ecfeb4fc6d2df399c18138a7fed78:backend/api/src/services/chat-strategies/direct-strategy.ts
 import type { ChatStrategy, DirectStrategyContext, DirectStrategyResult } from './types';
 
 /**
@@ -33,10 +38,20 @@ export class DirectStrategy implements ChatStrategy<DirectStrategyContext, Direc
      * @returns 응답 텍스트, 어시스턴트 메시지, 도구 호출 목록, 메트릭을 포함한 결과
      */
     async execute(context: DirectStrategyContext): Promise<DirectStrategyResult> {
+        // Ollama 공식 문서 권장: format 지정 시 temperature: 0 (결정론적 JSON 출력)
+        const chatOptions = context.format
+            ? { ...context.chatOptions, temperature: LLM_TEMPERATURES.FORMAT_STRICT }
+            : context.chatOptions;
+
         const response = await context.client.chat(
             context.currentHistory,
-            context.chatOptions,
-            (token) => {
+            chatOptions,
+            (token, thinking) => {
+                // Thinking 토큰은 별도로 전달 (content와 분리)
+                if (thinking) {
+                    context.onToken('', thinking);
+                    return;
+                }
                 // tool_calls JSON 토큰은 스트리밍에서 제외 (클라이언트에 전송하지 않음)
                 if (!token.includes('tool_calls')) {
                     context.onToken(token);
@@ -45,6 +60,7 @@ export class DirectStrategy implements ChatStrategy<DirectStrategyContext, Direc
             {
                 tools: context.allowedTools.length > 0 ? context.allowedTools : undefined,
                 think: context.thinkOption,
+                format: context.format,
             }
         );
 

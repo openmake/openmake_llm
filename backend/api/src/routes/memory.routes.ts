@@ -32,6 +32,8 @@ import { validate } from '../middlewares/validation';
 import { getUnifiedDatabase } from '../data/models/unified-database';
 import { createMemorySchema, updateMemorySchema } from '../schemas/memory.schema';
 import { createLogger } from '../utils/logger';
+import { MEMORY_TIER_LIMITS } from '../config/tier-limits';
+import { FEEDBACK_IMPORTANCE } from '../config/runtime-limits';
 const router = Router();
 const logger = createLogger('MemoryRoutes');
 
@@ -62,12 +64,7 @@ router.get('/', asyncHandler(async (req: Request, res: Response) => {
      res.json(success({ memories, total: memories.length, userId }));
 }));
 
-// 등급별 메모리 생성 제한
-const MEMORY_LIMITS: Record<string, number> = {
-    free: 50,
-    pro: 500,
-    enterprise: Infinity
-};
+// 등급별 메모리 생성 제한 → config/tier-limits.ts에서 로드
 
   /**
    * POST /api/memory
@@ -84,7 +81,7 @@ router.post('/', validate(createMemorySchema), asyncHandler(async (req: Request,
       // 등급별 메모리 생성 수량 제한
       const userTier = (req.user && 'tier' in req.user) ? (req.user as { tier: string }).tier : 'free';
       const userRole = req.user?.role || 'guest';
-      const memoryLimit = userRole === 'admin' ? Infinity : (MEMORY_LIMITS[userTier] || MEMORY_LIMITS['free']);
+      const memoryLimit = userRole === 'admin' ? Infinity : (MEMORY_TIER_LIMITS[userTier] || MEMORY_TIER_LIMITS['free']);
 
       if (memoryLimit !== Infinity) {
           const memSvc = getMemoryService();
@@ -105,7 +102,7 @@ router.post('/', validate(createMemorySchema), asyncHandler(async (req: Request,
          category,
          key,
          value,
-         importance: importance || 0.5,
+         importance: importance || FEEDBACK_IMPORTANCE.MEMORY_DEFAULT,
          tags: tags || []
      });
 

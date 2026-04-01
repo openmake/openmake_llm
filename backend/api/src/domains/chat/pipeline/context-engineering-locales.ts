@@ -31,12 +31,6 @@ export const SECTION_LABELS: Record<PromptLocaleCode, {
     knowledgeCutoff: string;
     responseLang: string;
     model: string;
-    retrievedDocs: string;
-    searchQuery: string;
-    relevance: string;
-    source: string;
-    date: string;
-    docWarning: string;
 }> = {
     ko: {
         persona: '페르소나', expertise: '전문 분야', behavioralTraits: '행동 특성',
@@ -48,9 +42,6 @@ export const SECTION_LABELS: Record<PromptLocaleCode, {
         finalReminder: '🎯 최종 확인 사항 (반드시 준수)',
         currentDate: '현재 날짜', knowledgeCutoff: '지식 기준일',
         responseLang: '응답 언어', model: '모델',
-        retrievedDocs: '검색된 참조 문서', searchQuery: '검색어',
-        relevance: '관련도', source: '출처', date: '날짜',
-        docWarning: '위 문서의 정보를 우선 참조하되, 최신 정보와 타임스탬프를 확인하세요.'
     },
     en: {
         persona: 'Persona', expertise: 'Areas of Expertise', behavioralTraits: 'Behavioral Traits',
@@ -62,9 +53,6 @@ export const SECTION_LABELS: Record<PromptLocaleCode, {
         finalReminder: '🎯 Final Checklist (Mandatory)',
         currentDate: 'Current Date', knowledgeCutoff: 'Knowledge Cutoff',
         responseLang: 'Response Language', model: 'Model',
-        retrievedDocs: 'Retrieved Reference Documents', searchQuery: 'Search Query',
-        relevance: 'Relevance', source: 'Source', date: 'Date',
-        docWarning: 'Prioritize the information from the documents above, but verify timeliness and timestamps.'
     },
     ja: {
         persona: 'ペルソナ', expertise: '専門分野', behavioralTraits: '行動特性',
@@ -76,9 +64,6 @@ export const SECTION_LABELS: Record<PromptLocaleCode, {
         finalReminder: '🎯 最終チェックリスト（必須遵守）',
         currentDate: '現在の日付', knowledgeCutoff: '知識の基準日',
         responseLang: '応答言語', model: 'モデル',
-        retrievedDocs: '検索された参照文書', searchQuery: '検索クエリ',
-        relevance: '関連度', source: 'ソース', date: '日付',
-        docWarning: '上記文書の情報を優先的に参照しつつ、最新情報とタイムスタンプを確認してください。'
     },
     zh: {
         persona: '角色定位', expertise: '专业领域', behavioralTraits: '行为特征',
@@ -90,9 +75,6 @@ export const SECTION_LABELS: Record<PromptLocaleCode, {
         finalReminder: '🎯 最终检查清单（必须遵守）',
         currentDate: '当前日期', knowledgeCutoff: '知识截止日期',
         responseLang: '响应语言', model: '模型',
-        retrievedDocs: '检索到的参考文档', searchQuery: '搜索查询',
-        relevance: '相关度', source: '来源', date: '日期',
-        docWarning: '优先参考上述文档信息，但请验证时效性和时间戳。'
     },
     es: {
         persona: 'Persona', expertise: 'Áreas de Experiencia', behavioralTraits: 'Rasgos de Comportamiento',
@@ -104,9 +86,6 @@ export const SECTION_LABELS: Record<PromptLocaleCode, {
         finalReminder: '🎯 Lista de Verificación Final (Obligatorio)',
         currentDate: 'Fecha Actual', knowledgeCutoff: 'Fecha de Corte del Conocimiento',
         responseLang: 'Idioma de Respuesta', model: 'Modelo',
-        retrievedDocs: 'Documentos de Referencia Recuperados', searchQuery: 'Consulta de Búsqueda',
-        relevance: 'Relevancia', source: 'Fuente', date: 'Fecha',
-        docWarning: 'Priorice la información de los documentos anteriores, pero verifique la actualidad y las marcas de tiempo.'
     },
     de: {
         persona: 'Persona', expertise: 'Fachgebiete', behavioralTraits: 'Verhaltensmerkmale',
@@ -118,9 +97,6 @@ export const SECTION_LABELS: Record<PromptLocaleCode, {
         finalReminder: '🎯 Abschlusscheckliste (Pflicht)',
         currentDate: 'Aktuelles Datum', knowledgeCutoff: 'Wissensstand',
         responseLang: 'Antwortsprache', model: 'Modell',
-        retrievedDocs: 'Abgerufene Referenzdokumente', searchQuery: 'Suchanfrage',
-        relevance: 'Relevanz', source: 'Quelle', date: 'Datum',
-        docWarning: 'Priorisieren Sie die Informationen aus den obigen Dokumenten, überprüfen Sie aber Aktualität und Zeitstempel.'
     },
     fr: {
         persona: 'Persona', expertise: 'Domaines d\'expertise', behavioralTraits: 'Traits comportementaux',
@@ -132,9 +108,6 @@ export const SECTION_LABELS: Record<PromptLocaleCode, {
         finalReminder: '🎯 Liste de vérification finale (Obligatoire)',
         currentDate: 'Date actuelle', knowledgeCutoff: 'Connaissances à jour jusqu\'au',
         responseLang: 'Langue de réponse', model: 'Modèle',
-        retrievedDocs: 'Documents de référence récupérés', searchQuery: 'Requête de recherche',
-        relevance: 'Pertinence', source: 'Source', date: 'Date',
-        docWarning: 'Priorisez les informations des documents ci-dessus, mais vérifiez l\'actualité et les horodatages.'
     },
 };
 
@@ -608,4 +581,29 @@ export const PRESET_CONTENT: Record<PromptLocaleCode, PresetContentData> = {
             stepByStep: 'Les problèmes complexes doivent être décomposés étape par étape'
         }
     },
+};
+
+// ============================================================
+// 톤 스타일 다국어 매핑
+// ============================================================
+
+/**
+ * 톤 스타일을 각 언어에 맞는 설명으로 변환하는 매핑 테이블
+ * context-engineering.ts의 ContextEngineeringBuilder에서 사용됩니다.
+ */
+export const TONE_STYLE_DESCRIPTIONS: Record<string, Record<string, string>> = {
+    ko: { formal: '격식체 사용', casual: '반말체, 친근한 어조', professional: '전문적이고 객관적인 어조', friendly: '친근하고 편안한 어조' },
+    ja: { formal: '敵語を使用', casual: 'カジュアルで親しみやすい口調', professional: '専門的で客観的な口調', friendly: '親しみやすくリラックスした口調' },
+    zh: { formal: '使用正式语体', casual: '休闲友好的语气', professional: '专业客观的语气', friendly: '亲切随和的语气' },
+    es: { formal: 'Tono formal y respetuoso', casual: 'Tono casual y amigable', professional: 'Tono profesional y objetivo', friendly: 'Tono amigable y relajado' },
+    de: { formal: 'Formeller und respektvoller Ton', casual: 'Lockerer und freundlicher Ton', professional: 'Professioneller und sachlicher Ton', friendly: 'Freundlicher und entspannter Ton' },
+    fr: { formal: 'Ton formel et respectueux', casual: 'Ton décontracté et amical', professional: 'Ton professionnel et objectif', friendly: 'Ton amical et détendu' },
+};
+
+/** 기본 (영어) 톤 스타일 설명 */
+export const DEFAULT_TONE_DESCRIPTIONS: Record<string, string> = {
+    formal: 'Use formal and respectful tone',
+    casual: 'Use casual and friendly tone',
+    professional: 'Use professional and objective tone',
+    friendly: 'Use friendly and relaxed tone',
 };

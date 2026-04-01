@@ -3,7 +3,7 @@
  * Search Locale — 언어별 검색 API 파라미터 매핑
  * ============================================================
  *
- * 웹 검색 (Google, Wikipedia, Google News, Firecrawl) 시
+ * 웹 검색 (Google, Wikipedia, Google News 등) 시
  * 사용자 언어에 맞는 지역/언어 파라미터를 제공합니다.
  *
  * @module i18n/search-locale
@@ -13,9 +13,9 @@
  * 검색 API에 필요한 지역화 파라미터
  */
 export interface SearchLocaleParams {
-    /** Firecrawl/일반 검색 언어 코드 (예: 'ko', 'en') */
+    /** 검색 언어 코드 (예: 'ko', 'en') */
     lang: string;
-    /** Firecrawl/일반 검색 국가 코드 (예: 'kr', 'us') */
+    /** 검색 국가 코드 (예: 'kr', 'us') */
     country: string;
     /** Google Custom Search 추가 파라미터 (예: '&gl=kr&lr=lang_ko') */
     googleParams: string;

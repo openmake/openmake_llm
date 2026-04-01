@@ -23,17 +23,25 @@
  * 5. adjustOptionsForModel() - 선택된 모델에 맞게 옵션 미세 조정
  * 
  * @see chat/pipeline-profile.ts - 브랜드 모델 프로파일 정의
- * @see chat/pipeline-profile.ts - 브랜드 모델 프로파일 정의
  * @see services/ChatService.ts - 최종 모델 선택 결과 소비
  */
 
 import { getConfig } from '../../../config/env';
 import { ModelOptions } from '../../../ollama/types';
 import { isValidBrandModel, getProfiles } from './pipeline-profile';
+<<<<<<< HEAD:backend/api/src/domains/chat/pipeline/model-selector.ts
 import { createLogger } from '../../../utils/logger';
 import { ENGINE_FALLBACKS } from '../../../config/model-defaults';
 import { MODEL_CONTEXT_DEFAULTS } from '../../../config/runtime-limits';
+=======
+import { createLogger } from '../utils/logger';
+import { MODEL_CONTEXT_DEFAULTS } from '../config/runtime-limits';
+import { QUERY_TYPE_PARAMS, LLM_TEMPERATURES } from '../config/llm-parameters';
+import { recommendTokenBudget } from './complexity-assessor';
+>>>>>>> fbe49389978ecfeb4fc6d2df399c18138a7fed78:backend/api/src/chat/model-selector.ts
 import { applyCostTierCeiling, getDefaultCostTier } from './cost-tier';
+import { ModelPreset, getModelPresets } from '../config/model-presets';
+import { MODEL_CAPABILITY_PRESETS } from '../config/model-defaults';
 
 const logger = createLogger('ModelSelector');
 
@@ -41,176 +49,31 @@ const logger = createLogger('ModelSelector');
 export type { QueryType, QueryClassification, ModelSelection } from './model-selector-types';
 import type { QueryType, ModelSelection } from './model-selector-types';
 
+/**
+ * Auto-Routing 결과 인터페이스
+ * selectBrandProfileForAutoRouting()의 반환 타입으로,
+ * 프로파일 ID와 분류 메타데이터를 함께 반환합니다.
+ */
+export interface AutoRoutingResult {
+    /** 선택된 brand model 프로파일 ID (예: 'openmake_llm_code') */
+    profileId: string;
+    /** Auto-Routing에서 분류된 QueryType */
+    classifiedQueryType: QueryType;
+    /** 분류 신뢰도 (0.0~1.0) */
+    classifiedConfidence: number;
+    /** 분류 소스 ('llm' | 'cache' | 'regex') */
+    classifierSource: 'llm' | 'cache' | 'regex';
+}
+
 // Re-export classifyQuery from query-classifier
 export { classifyQuery } from './query-classifier';
 // Import classifyQuery for internal use (via separate name to avoid conflict)
 import { classifyQuery as _classifyQuery } from './query-classifier';
 // Import LLM classifier for Auto-Routing (Phase D)
-import { classifyWithLLM, getConfidenceThreshold } from './llm-classifier';
+import { classifyWithLLM, getConfidenceThreshold, logDisagreementIfAny } from './llm-classifier';
 
-// ============================================================
-// 모델 프리셋 정의
-// ============================================================
-
-/**
- * 모델 프리셋 정의 인터페이스
- * 각 모델의 기본 설정, 기능, 적합한 질문 유형을 정의합니다.
- */
-interface ModelPreset {
-    /** 모델 표시 이름 (예: 'Gemini 3 Flash') */
-    name: string;
-    /** .env 변수명 (예: 'OLLAMA_MODEL_1') */
-    envKey: string;
-    /** 기본 모델명 (env 미설정 시 사용) */
-    defaultModel: string;
-    /** 모델 기본 옵션 (temperature, top_p 등) */
-    options: ModelOptions;
-    /** 모델 기능 플래그 */
-    capabilities: {
-        /** 도구 호출 지원 */
-        toolCalling: boolean;
-        /** 사고 모드 지원 */
-        thinking: boolean;
-        /** 비전(이미지) 지원 */
-        vision: boolean;
-        /** 스트리밍 지원 */
-        streaming: boolean;
-        /** 최대 컨텍스트 길이 (토큰) */
-        contextLength: number;
-    };
-    /** 이 모델이 최적인 질문 유형 목록 */
-    bestFor: QueryType[];
-    /** 선택 우선순위 (낮을수록 높음, 동일 QueryType 내에서 비교) */
-    priority: number;
-}
-
-// 사용 가능한 모델 프리셋
-export function getModelPresets(): Record<string, ModelPreset> {
-    const config = getConfig();
-    // 테스트 환경 등에서 config 값이 없을 때를 위한 폴백
-    const engineFast = config.omkEngineFast || ENGINE_FALLBACKS.FAST;
-    const engineLlm = config.omkEngineLlm || ENGINE_FALLBACKS.LLM;
-    const enginePro = config.omkEnginePro || ENGINE_FALLBACKS.PRO;
-    const engineCode = config.omkEngineCode || ENGINE_FALLBACKS.CODE;
-    const engineVision = config.omkEngineVision || ENGINE_FALLBACKS.VISION;
-    return {
-    // Gemini 3 Flash - 범용/코딩/분석
-    'gemini-flash': {
-        name: 'Gemini 3 Flash',
-        envKey: 'OLLAMA_MODEL_1',
-        defaultModel: engineFast,
-        options: {
-            temperature: 0.7,
-            top_p: 0.9,
-            top_k: 40,
-            num_ctx: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
-            repeat_penalty: 1.1,
-        },
-        capabilities: {
-            toolCalling: true,
-            thinking: true,
-            vision: true,
-            streaming: true,
-            contextLength: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
-        },
-        bestFor: ['code', 'analysis', 'chat', 'korean', 'document'],
-        priority: 1,
-    },
-
-    // GPT-OSS 120B - 고성능 추론/창작
-    'gpt-oss': {
-        name: 'GPT-OSS 120B',
-        envKey: 'OLLAMA_MODEL_2',
-        defaultModel: engineLlm,
-        options: {
-            temperature: 0.8,
-            top_p: 0.95,
-            top_k: 50,
-            num_ctx: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
-            repeat_penalty: 1.15,
-        },
-        capabilities: {
-            toolCalling: true,
-            thinking: true,
-            vision: false,
-            streaming: true,
-            contextLength: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
-        },
-        bestFor: ['creative', 'analysis', 'document'],
-        priority: 2,
-    },
-
-
-    // Qwen3 Coder Next - 코딩 특화
-    'qwen-coder': {
-        name: 'Qwen3 Coder Next',
-        envKey: 'OLLAMA_MODEL_4',
-        defaultModel: engineCode,
-        options: {
-            temperature: 0.2,
-            top_p: 0.8,
-            top_k: 20,
-            num_ctx: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
-            repeat_penalty: 1.0,
-        },
-        capabilities: {
-            toolCalling: true,
-            thinking: true,
-            vision: false,
-            streaming: true,
-            contextLength: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
-        },
-        bestFor: ['code'],
-        priority: 1,  // 코딩에 최우선
-    },
-
-    // Qwen3 VL 235B - 비전/멀티모달
-    'qwen-vl': {
-        name: 'Qwen3 VL 235B',
-        envKey: 'OLLAMA_MODEL_5',
-        defaultModel: engineVision,
-        options: {
-            temperature: 0.6,
-            top_p: 0.9,
-            top_k: 40,
-            num_ctx: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
-            repeat_penalty: 1.1,
-        },
-        capabilities: {
-            toolCalling: true,
-            thinking: true,
-            vision: true,
-            streaming: true,
-            contextLength: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
-        },
-        bestFor: ['vision'],
-        priority: 1,  // 비전에 최우선
-    },
-
-    // 수학/과학 특화 프리셋
-    'math-reasoning': {
-        name: 'Math Reasoning',
-        envKey: 'OLLAMA_DEFAULT_MODEL',
-        defaultModel: engineFast,
-        options: {
-            temperature: 0.2,
-            top_p: 0.8,
-            top_k: 15,
-            num_ctx: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
-            repeat_penalty: 1.0,
-        },
-        capabilities: {
-            toolCalling: true,
-            thinking: true,
-            vision: true,
-            streaming: true,
-            contextLength: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
-        },
-        bestFor: ['math'],
-        priority: 1,
-    },
-    };
-}
+// Re-export ModelPreset and getModelPresets from config for backward compatibility
+export { ModelPreset, getModelPresets } from '../config/model-presets';
 
 
 
@@ -233,23 +96,57 @@ export function getModelPresets(): Record<string, ModelPreset> {
  * @param hasImages - 이미지 첨부 여부 (true면 vision 모델 강제 선택)
  * @returns 모델 선택 결과 (모델명, 옵션, 사유, 기능 플래그)
  */
-export async function selectOptimalModel(query: string, hasImages?: boolean): Promise<ModelSelection> {
+export async function selectOptimalModel(
+    query: string,
+    hasImages?: boolean,
+    history?: Array<{ role: string; content: string }>,
+): Promise<ModelSelection> {
     const config = getConfig();
-    const classification = _classifyQuery(query);
+
+    // ── LLM 분류 우선, 실패/신뢰도 부족/예외 시 regex fallback ──
+    let classifiedType: QueryType;
+    let classifiedConfidence: number;
+
+    try {
+        const llmResult = await classifyWithLLM(query, history);
+        if (llmResult && llmResult.confidence >= getConfidenceThreshold()) {
+            classifiedType = llmResult.type;
+            classifiedConfidence = llmResult.confidence;
+            logger.info(`[selectOptimalModel] LLM 분류: ${classifiedType} (${(classifiedConfidence * 100).toFixed(0)}%) [source=${llmResult.source}]`);
+            // P1: 불일치 로깅 — LLM 성공 시 regex와 교차 검증
+            const regexCheck = _classifyQuery(query);
+            logDisagreementIfAny(
+                query, llmResult.type, llmResult.confidence,
+                regexCheck.type, regexCheck.confidence,
+                classifiedType, llmResult.source === 'cache' ? 'cache' : 'llm',
+            );
+        } else {
+            const regexResult = _classifyQuery(query);
+            classifiedType = regexResult.type;
+            classifiedConfidence = regexResult.confidence;
+            logger.info(`[selectOptimalModel] Regex fallback: ${classifiedType} (${(classifiedConfidence * 100).toFixed(0)}%)`);
+        }
+    } catch (error) {
+        const regexResult = _classifyQuery(query);
+        classifiedType = regexResult.type;
+        classifiedConfidence = regexResult.confidence;
+        const errMsg = error instanceof Error ? error.message : String(error);
+        logger.warn(`[selectOptimalModel] LLM 분류 예외 → regex fallback: ${classifiedType} (${errMsg})`);
+    }
 
     // 이미지가 첨부된 경우 비전 모델 강제 선택
     if (hasImages) {
-        classification.type = 'vision';
+        classifiedType = 'vision';
     }
 
-    logger.info(`질문 유형: ${classification.type} (신뢰도: ${(classification.confidence * 100).toFixed(0)}%)`);
+    logger.info(`질문 유형: ${classifiedType} (신뢰도: ${(classifiedConfidence * 100).toFixed(0)}%)`);
 
     // 질문 유형에 맞는 최적 모델 찾기
     let selectedPreset: ModelPreset | null = null;
     let lowestPriority = Infinity;
 
     for (const [, preset] of Object.entries(getModelPresets())) {
-        if (preset.bestFor.includes(classification.type)) {
+        if (preset.bestFor.includes(classifiedType)) {
             if (preset.priority < lowestPriority) {
                 lowestPriority = preset.priority;
                 selectedPreset = preset;
@@ -271,8 +168,8 @@ export async function selectOptimalModel(query: string, hasImages?: boolean): Pr
     return {
         model: actualModel,
         options: selectedPreset.options,
-        reason: `${classification.type} 질문 → ${selectedPreset.name} 사용`,
-        queryType: classification.type,
+        reason: `${classifiedType} 질문 → ${selectedPreset.name} 사용`,
+        queryType: classifiedType,
         supportsToolCalling: selectedPreset.capabilities.toolCalling,
         supportsThinking: selectedPreset.capabilities.thinking,
         supportsVision: selectedPreset.capabilities.vision,
@@ -292,23 +189,35 @@ export async function selectOptimalModel(query: string, hasImages?: boolean): Pr
  * @returns 해당 기능 지원 여부
  */
 export function checkModelCapability(
-    modelName: string, 
+    modelName: string,
     capability: 'toolCalling' | 'thinking' | 'vision' | 'streaming'
 ): boolean {
     const lowerModel = modelName.toLowerCase();
 
-    // 모델명으로 프리셋 찾기
+    // 1차: 모델명으로 프리셋 찾기 (정확한 매칭)
     for (const preset of Object.values(getModelPresets())) {
-        if (preset.defaultModel.toLowerCase().includes(lowerModel) || 
+        if (preset.defaultModel.toLowerCase().includes(lowerModel) ||
             lowerModel.includes(preset.defaultModel.split(':')[0].toLowerCase())) {
             return preset.capabilities[capability];
         }
     }
 
-    // 알 수 없는 모델은 기본값 반환
+    // 2차: MODEL_CAPABILITY_PRESETS에서 프리픽스 매칭 (longest match 우선)
+    // Auto-Routing 맵의 모델(kimi, deepseek, cogito 등)이 프리셋에 없을 때 사용
+    let bestMatch: { prefix: string; caps: typeof MODEL_CAPABILITY_PRESETS[string] } | null = null;
+    for (const [prefix, caps] of Object.entries(MODEL_CAPABILITY_PRESETS)) {
+        if (lowerModel.includes(prefix) && (!bestMatch || prefix.length > bestMatch.prefix.length)) {
+            bestMatch = { prefix, caps };
+        }
+    }
+    if (bestMatch) {
+        return bestMatch.caps[capability];
+    }
+
+    // 3차: 알 수 없는 모델은 보수적 기본값 반환
     const defaults: Record<string, boolean> = {
         toolCalling: true,
-        thinking: true,
+        thinking: false,
         vision: false,
         streaming: true,
     };
@@ -360,43 +269,65 @@ export function getModelContextLength(modelName: string): number {
  * @returns 조정된 모델 옵션 (원본 불변)
  */
 export function adjustOptionsForModel(
-    modelName: string, 
+    modelName: string,
     baseOptions: ModelOptions,
-    queryType: QueryType
+    queryType: QueryType,
+    complexityScore?: number
 ): ModelOptions {
     const lowerModel = modelName.toLowerCase();
     const adjustedOptions = { ...baseOptions };
 
     // Qwen Coder: 코딩에 특화된 낮은 temperature
     if (lowerModel.includes('qwen') && lowerModel.includes('coder')) {
-        adjustedOptions.temperature = Math.min(adjustedOptions.temperature || 0.7, 0.3);
+        adjustedOptions.temperature = Math.min(adjustedOptions.temperature || QUERY_TYPE_PARAMS.DEFAULT_TEMP_FALLBACK, QUERY_TYPE_PARAMS.QWEN_CODER_TEMP_CAP);
         adjustedOptions.repeat_penalty = 1.0;
     }
 
+    // Kimi: 긴 컨텍스트 윈도우 지원 (128K+ 토큰)
+    if (lowerModel.includes('kimi')) {
+        adjustedOptions.num_ctx = Math.max(adjustedOptions.num_ctx || MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX, MODEL_CONTEXT_DEFAULTS.EXTENDED_NUM_CTX);
+    }
 
     // Vision 모델: 이미지 분석에 적합한 설정
     if (lowerModel.includes('vl') || lowerModel.includes('vision')) {
-        adjustedOptions.temperature = 0.6;
+        adjustedOptions.temperature = QUERY_TYPE_PARAMS.VISION_TEMP;
     }
 
     // 질문 유형별 추가 조정
     switch (queryType) {
+        case 'code-agent':
+        case 'code-gen':
         case 'code':
-            adjustedOptions.temperature = Math.min(adjustedOptions.temperature || 0.7, 0.3);
+            adjustedOptions.temperature = Math.min(adjustedOptions.temperature || QUERY_TYPE_PARAMS.DEFAULT_TEMP_FALLBACK, QUERY_TYPE_PARAMS.CODE_TEMP_CAP);
             adjustedOptions.repeat_penalty = 1.0;
             break;
         case 'creative':
-            adjustedOptions.temperature = Math.max(adjustedOptions.temperature || 0.7, 0.85);
-            adjustedOptions.top_p = 0.95;
+            adjustedOptions.temperature = Math.max(adjustedOptions.temperature || QUERY_TYPE_PARAMS.DEFAULT_TEMP_FALLBACK, QUERY_TYPE_PARAMS.CREATIVE_TEMP_FLOOR);
+            adjustedOptions.top_p = QUERY_TYPE_PARAMS.CREATIVE_TOP_P;
             break;
+        case 'math-hard':
+        case 'math-applied':
         case 'math':
-            adjustedOptions.temperature = 0.1;
-            adjustedOptions.top_p = 0.8;
+            adjustedOptions.temperature = QUERY_TYPE_PARAMS.MATH_TEMP;
+            adjustedOptions.top_p = QUERY_TYPE_PARAMS.MATH_TOP_P;
+            break;
+        case 'reasoning':
+            adjustedOptions.temperature = QUERY_TYPE_PARAMS.REASONING_TEMP;
+            adjustedOptions.top_p = QUERY_TYPE_PARAMS.REASONING_TOP_P;
             break;
         case 'translation':
-            adjustedOptions.temperature = 0.3;
-            adjustedOptions.repeat_penalty = 1.2;
+            adjustedOptions.temperature = QUERY_TYPE_PARAMS.TRANSLATION_TEMP;
+            adjustedOptions.repeat_penalty = QUERY_TYPE_PARAMS.TRANSLATION_REPEAT_PENALTY;
             break;
+    }
+
+    // ── 토큰 예산 관리 (num_predict) ──
+    // 기존에 num_predict가 설정되지 않은 경우에만 동적 설정
+    if (complexityScore !== undefined && !adjustedOptions.num_predict) {
+        const budget = recommendTokenBudget(complexityScore, queryType);
+        if (budget > 0) {
+            adjustedOptions.num_predict = budget;
+        }
     }
 
     return adjustedOptions;
@@ -425,7 +356,8 @@ export async function selectModelForProfile(requestedModel: string, query?: stri
     // __auto__ 엔진: brand model 프로파일 자동 라우팅
     // 이 함수에서는 brand model 프로파일 ID만 반환 (실제 라우팅은 ChatService에서 buildExecutionPlan 사용)
     if (profile.engineModel === '__auto__') {
-        const targetProfile = await selectBrandProfileForAutoRouting(query || '', hasImages);
+        const autoRoutingResult = await selectBrandProfileForAutoRouting(query || '', hasImages);
+        const targetProfile = autoRoutingResult.profileId;
         const targetProfiles = getProfiles();
         const resolvedProfile = targetProfiles[targetProfile];
         if (resolvedProfile) {
@@ -433,14 +365,11 @@ export async function selectModelForProfile(requestedModel: string, query?: stri
             return {
                 model: resolvedProfile.engineModel,
                 options: {
-                    temperature: resolvedProfile.thinking === 'high' ? 0.3 : resolvedProfile.thinking === 'off' ? 0.7 : 0.5,
+                    temperature: resolvedProfile.thinking === 'high' ? LLM_TEMPERATURES.THINKING_HIGH : resolvedProfile.thinking === 'off' ? LLM_TEMPERATURES.THINKING_OFF : LLM_TEMPERATURES.THINKING_DEFAULT,
                     num_ctx: resolvedProfile.contextStrategy === 'full' ? MODEL_CONTEXT_DEFAULTS.EXTENDED_NUM_CTX : MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
                 },
                 reason: `Auto-Routing → ${resolvedProfile.displayName} → ${resolvedProfile.engineModel}`,
-                queryType: resolvedProfile.promptStrategy === 'force_coder' ? 'code'
-                    : resolvedProfile.promptStrategy === 'force_reasoning' ? 'math'
-                    : resolvedProfile.promptStrategy === 'force_creative' ? 'creative'
-                    : 'chat',
+                queryType: autoRoutingResult.classifiedQueryType,
                 supportsToolCalling: true,
                 supportsThinking: resolvedProfile.thinking !== 'off',
                 supportsVision: resolvedProfile.requiredTools.includes('vision'),
@@ -457,12 +386,12 @@ export async function selectModelForProfile(requestedModel: string, query?: stri
     return {
         model: profile.engineModel,
         options: {
-            temperature: profile.thinking === 'high' ? 0.3 : profile.thinking === 'off' ? 0.7 : 0.5,
+            temperature: profile.thinking === 'high' ? LLM_TEMPERATURES.THINKING_HIGH : profile.thinking === 'off' ? LLM_TEMPERATURES.THINKING_OFF : LLM_TEMPERATURES.THINKING_DEFAULT,
             num_ctx: profile.contextStrategy === 'full' ? MODEL_CONTEXT_DEFAULTS.EXTENDED_NUM_CTX : MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
         },
         reason: `Brand model ${profile.displayName} → ${profile.engineModel}`,
-        queryType: profile.promptStrategy === 'force_coder' ? 'code'
-            : profile.promptStrategy === 'force_reasoning' ? 'math'
+        queryType: profile.promptStrategy === 'force_coder' ? 'code-gen'
+            : profile.promptStrategy === 'force_reasoning' ? 'math-applied'
             : profile.promptStrategy === 'force_creative' ? 'creative'
             : 'chat',
         supportsToolCalling: true,
@@ -497,25 +426,48 @@ export async function selectModelForProfile(requestedModel: string, query?: stri
  * @param hasImages - 이미지 첨부 여부
  * @returns brand model 프로파일 ID (예: 'openmake_llm_code')
  */
-export async function selectBrandProfileForAutoRouting(query: string, hasImages?: boolean): Promise<string> {
+export async function selectBrandProfileForAutoRouting(
+    query: string,
+    hasImages?: boolean,
+    history?: Array<{ role: string; content: string }>,
+): Promise<AutoRoutingResult> {
     // 이미지가 첨부되면 무조건 vision 프로파일
     if (hasImages) {
         logger.info('§9 Auto-Routing: 이미지 감지 → openmake_llm_vision');
-        return 'openmake_llm_vision';
+        return {
+            profileId: 'openmake_llm_vision',
+            classifiedQueryType: 'vision',
+            classifiedConfidence: 1.0,
+            classifierSource: 'regex',
+        };
     }
 
     // ── Phase D: LLM 분류기 우선 시도, 실패 시 regex fallback ──
-    let classifiedType: import('./model-selector-types').QueryType;
+    let classifiedType: QueryType;
     let classifiedConfidence: number;
-    let classifierSource: 'llm' | 'cache' | 'semantic-cache' | 'regex' = 'regex';
+    let classifierSource: 'llm' | 'cache' | 'regex' = 'regex';
 
-    const llmResult = await classifyWithLLM(query);
+    let llmResult: Awaited<ReturnType<typeof classifyWithLLM>> = null;
+    try {
+        llmResult = await classifyWithLLM(query, history);
+    } catch (error) {
+        const errMsg = error instanceof Error ? error.message : String(error);
+        logger.warn(`[selectBrandProfileForAutoRouting] LLM 분류 예외 → regex fallback (${errMsg})`);
+    }
+
     if (llmResult && llmResult.confidence >= getConfidenceThreshold()) {
         // LLM 분류 성공 + 신뢰도 충분
         classifiedType = llmResult.type;
         classifiedConfidence = llmResult.confidence;
-        classifierSource = llmResult.source === 'cache' ? 'cache' : llmResult.source === 'semantic-cache' ? 'semantic-cache' : 'llm';
+        classifierSource = llmResult.source === 'cache' ? 'cache' : 'llm';
         logger.info(`§9 LLM 분류: ${classifiedType} (${(classifiedConfidence * 100).toFixed(0)}%) [source=${classifierSource}]`);
+        // P1: 불일치 로깅 — LLM 성공 시 regex와 교차 검증
+        const regexCheck = _classifyQuery(query);
+        logDisagreementIfAny(
+            query, llmResult.type, llmResult.confidence,
+            regexCheck.type, regexCheck.confidence,
+            classifiedType, classifierSource,
+        );
     } else {
         // LLM 분류 실패 또는 신뢰도 부족 → regex fallback
         const regexClassification = _classifyQuery(query);
@@ -532,10 +484,15 @@ export async function selectBrandProfileForAutoRouting(query: string, hasImages?
     let targetProfile: string;
 
     switch (classifiedType) {
+        case 'code-agent':
+        case 'code-gen':
         case 'code':
             targetProfile = 'openmake_llm_code';
             break;
+        case 'math-hard':
+        case 'math-applied':
         case 'math':
+        case 'reasoning':
             targetProfile = 'openmake_llm_think';
             break;
         case 'creative':
@@ -574,7 +531,12 @@ export async function selectBrandProfileForAutoRouting(query: string, hasImages?
     }
 
     logger.info(`§9 Auto-Routing: ${classifiedType} (confidence=${(classifiedConfidence * 100).toFixed(0)}%, source=${classifierSource}) → ${targetProfile}`);
-    return targetProfile;
+    return {
+        profileId: targetProfile,
+        classifiedQueryType: classifiedType,
+        classifiedConfidence,
+        classifierSource,
+    };
 }
 
 // ============================================================

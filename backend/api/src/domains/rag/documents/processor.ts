@@ -4,9 +4,15 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import { getConfig } from '../../../config/env';
 import { ProgressCallback, createProgressEvent } from './progress';
+<<<<<<< HEAD:backend/api/src/domains/rag/documents/processor.ts
 import { createLogger } from '../../../utils/logger';
 import { DOCUMENT_PROCESSING } from '../../../config/runtime-limits';
 import { errorMessage } from '../../../utils/error-message';
+=======
+import { createLogger } from '../utils/logger';
+import { DOCUMENT_PROCESSING } from '../config/runtime-limits';
+import { DOCUMENT_SUMMARY_SYSTEM_PROMPT, DOCUMENT_QA_SYSTEM_PROMPT } from '../prompts/document-system';
+>>>>>>> fbe49389978ecfeb4fc6d2df399c18138a7fed78:backend/api/src/documents/processor.ts
 
 /** ISO 639-1 코드를 영어 언어명으로 변환 (LLM 프롬프트용) */
 const LANGUAGE_NAMES: Record<string, string> = {
@@ -24,12 +30,24 @@ const logger = createLogger('DocumentProcessor');
 
 const execAsync = promisify(exec);
 
+/** 문서 처리 결과에 포함되는 부가 정보 */
+export interface DocumentInfo {
+    /** 이미지/PDF의 base64 인코딩 데이터 (Vision 모델용) */
+    base64?: string;
+    /** 이미지 MIME 타입 (e.g., "image/png") */
+    mime?: string;
+    /** OCR 인식 신뢰도 (0-100) */
+    confidence?: number;
+    /** Excel 시트 수 */
+    sheets?: number;
+}
+
 export interface DocumentResult {
     filename: string;
     type: string;
     text: string;
     pages?: number;
-    info?: Record<string, any>;
+    info?: DocumentInfo;
 }
 
 /**
@@ -420,8 +438,7 @@ export function createSummaryPrompt(document: DocumentResult, language: string =
         text = text.substring(0, maxLength) + '\n\n[... 문서의 나머지 부분 생략 ...]';
     }
 
-    return `You are a professional document analyst. Analyze the provided document and generate a structured summary in JSON format.
-The output MUST be a valid JSON object without any markdown formatting or code blocks.
+    return `${DOCUMENT_SUMMARY_SYSTEM_PROMPT}
 
 Document Info:
 - Filename: ${document.filename}
@@ -459,8 +476,7 @@ export function createQAPrompt(document: DocumentResult, question: string, langu
         text = text.substring(0, maxLength) + '\n\n[... 문서의 나머지 부분 생략 ...]';
     }
 
-    return `You are a professional document analyst. Answer the user's question based on the document content.
-The output MUST be a valid JSON object without any markdown formatting or code blocks.
+    return `${DOCUMENT_QA_SYSTEM_PROMPT}
 
 Document Info:
 - Filename: ${document.filename}

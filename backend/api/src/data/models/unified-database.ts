@@ -20,6 +20,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { withRetry } from '../retry-wrapper';
 import { getConfig } from '../../config/env';
+import { DB_POOL_TIMEOUTS } from '../../config/timeouts';
 import { createLogger } from '../../utils/logger';
 import {
     ApiKeyRepository,
@@ -176,9 +177,9 @@ export class UnifiedDatabase {
             connectionString: config.databaseUrl,
             max: config.dbPoolMax,
             min: config.dbPoolMin,
-            statement_timeout: 30000,
-            idleTimeoutMillis: 30000,
-            connectionTimeoutMillis: 10000
+            statement_timeout: DB_POOL_TIMEOUTS.STATEMENT_TIMEOUT_MS,
+            idleTimeoutMillis: DB_POOL_TIMEOUTS.IDLE_TIMEOUT_MS,
+            connectionTimeoutMillis: DB_POOL_TIMEOUTS.CONNECTION_TIMEOUT_MS
         };
         this.pool = new Pool(poolConfig);
 

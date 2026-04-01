@@ -24,6 +24,7 @@ import { getAuthService } from './AuthService';
 import { setTokenCookie, setRefreshTokenCookie, generateRefreshToken } from '../auth';
 import { createLogger } from '../utils/logger';
 import { GOOGLE_OAUTH, GITHUB_OAUTH, GITHUB_API } from '../config/external-services';
+import { OAUTH_STATE } from '../config/runtime-limits';
 
 /**
  * OAuth 프로바이더 설정 인터페이스
@@ -97,14 +98,13 @@ const logger = createLogger('OAuth');
 export class OAuthManager {
     private providers: Map<string, OAuthProviderConfig> = new Map();
     private states: Map<string, OAuthState> = new Map();
-    private stateExpiry = 10 * 60 * 1000; // 10분
+    private stateExpiry = OAUTH_STATE.EXPIRY_MS;
     private cleanupInterval: NodeJS.Timeout | null = null;
 
     constructor() {
         this.loadProvidersFromEnv();
 
-        // 만료된 상태 정리 (5분마다)
-        this.cleanupInterval = setInterval(() => this.cleanupExpiredStates(), 5 * 60 * 1000);
+        this.cleanupInterval = setInterval(() => this.cleanupExpiredStates(), OAUTH_STATE.CLEANUP_INTERVAL_MS);
     }
 
     /**

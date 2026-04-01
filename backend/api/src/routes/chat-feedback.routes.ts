@@ -21,6 +21,7 @@ import { getPool } from '../data/models/unified-database';
 import { validate } from '../middlewares/validation';
 import { chatFeedbackSchema } from '../schemas/chat-feedback.schema';
 import { createLogger } from '../utils/logger';
+import { FEEDBACK_IMPORTANCE } from '../config/runtime-limits';
 
 const router = Router();
 const logger = createLogger('ChatFeedbackRoutes');
@@ -43,7 +44,6 @@ router.post(
             routingMetadata?: {
                 model?: string;
                 queryType?: string;
-                a2aMode?: string;
                 latencyMs?: number;
                 profileId?: string;
             };
@@ -65,6 +65,19 @@ router.post(
             routingMetadata: safeMetadata,
         });
 
+        // P3-B: 피드백 기반 분류 캐시 교정 (fire-and-forget)
+        if (signal === 'thumbs_down' || signal === 'thumbs_up') {
+            (async () => {
+                const { correctOnNegativeFeedback, boostOnPositiveFeedback } = await import('../chat/feedback-cache-corrector');
+                const query = safeMetadata?.queryType; // queryType을 프록시로 사용
+                if (signal === 'thumbs_down') {
+                    await correctOnNegativeFeedback(query, safeMetadata?.queryType);
+                } else {
+                    await boostOnPositiveFeedback(query, safeMetadata?.queryType);
+                }
+            })().catch(e => logger.debug('피드백 캐시 교정 실패 (무시):', e));
+        }
+
         // 피드백 → 장기 메모리에 컨텍스트 기록 (fire-and-forget, 응답 지연 없음)
         if (feedbackUserId && safeMetadata) {
             (async () => {
@@ -81,7 +94,7 @@ router.post(
                         category: 'context',
                         key: '부정 피드백 패턴',
                         value: `불만족 응답 (${feedbackInfo})`,
-                        importance: 0.4,
+                        importance: FEEDBACK_IMPORTANCE.NEGATIVE,
                         tags: ['feedback', 'negative'],
                     });
                 } else if (signal === 'thumbs_up') {
@@ -89,7 +102,7 @@ router.post(
                         category: 'context',
                         key: '긍정 피드백 패턴',
                         value: `만족 응답 (${feedbackInfo})`,
-                        importance: 0.3,
+                        importance: FEEDBACK_IMPORTANCE.POSITIVE,
                         tags: ['feedback', 'positive'],
                     });
                 } else if (signal === 'regenerate') {
@@ -97,7 +110,7 @@ router.post(
                         category: 'context',
                         key: '재생성 요청 패턴',
                         value: `응답 재생성 요청 (${feedbackInfo})`,
-                        importance: 0.35,
+                        importance: FEEDBACK_IMPORTANCE.REGENERATE,
                         tags: ['feedback', 'regenerate'],
                     });
                 }
@@ -131,6 +144,36 @@ router.get(
         const stats = await repo.getFeedbackStats(days);
 
         res.json(success(stats));
+    })
+);
+
+/**
+ * GET /api/chat/feedback/stats/routing
+ * 라우팅 품질 통계를 반환합니다 (분류 출처별 피드백 분포 + 토큰 예산 효율성).
+ * Auth: requireAuth + requireAdmin
+ * Query: ?days=30 (기본값 30)
+ */
+router.get(
+    '/stats/routing',
+    requireAuth,
+    requireAdmin,
+    asyncHandler(async (req: Request, res: Response) => {
+        const rawDays = req.query['days'];
+        const days = rawDays !== undefined ? parseInt(String(rawDays), 10) : 30;
+
+        if (isNaN(days) || days < 1 || days > 365) {
+            res.status(400).json(badRequest('days는 1~365 사이의 정수여야 합니다'));
+            return;
+        }
+
+        const repo = new FeedbackRepository(getPool());
+        const [bySource, tokenEfficiency, gvStats] = await Promise.all([
+            repo.getFeedbackByClassifierSource(days),
+            repo.getTokenBudgetEfficiency(days),
+            repo.getGvVerificationStats(days),
+        ]);
+
+        res.json(success({ bySource, tokenEfficiency, gvStats }));
     })
 );
 

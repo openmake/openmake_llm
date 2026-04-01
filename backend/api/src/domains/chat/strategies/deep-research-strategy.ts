@@ -14,6 +14,7 @@
  * - 최대 5 루프, 360개 검색 결과, 80개 소스, 15개/루프 스크래핑 설정
  */
 import { v4 as uuidv4 } from 'uuid';
+<<<<<<< HEAD:backend/api/src/domains/chat/strategies/deep-research-strategy.ts
 import { getUnifiedDatabase } from '../../../data/models/unified-database';
 import { DeepResearchService } from '../../../domains/research/DeepResearchService';
 import type { ResearchResult } from '../../../domains/research/deep-research-types';
@@ -22,6 +23,16 @@ import { createLogger } from '../../../utils/logger';
 import { detectLanguage } from '../pipeline/language-policy';
 import { LLM_TIMEOUTS } from '../../../config/timeouts';
 import { errorMessage } from '../../../utils/error-message';
+=======
+import { getUnifiedDatabase } from '../../data/models/unified-database';
+import { DeepResearchService } from '../DeepResearchService';
+import type { ChatStrategy, ChatResult, DeepResearchStrategyContext } from './types';
+import { createLogger } from '../../utils/logger';
+import { detectLanguage } from '../../chat/language-policy';
+import { LLM_TIMEOUTS } from '../../config/timeouts';
+import { RESEARCH_STRATEGY_PARAMS } from '../../config/runtime-limits';
+import { sanitizePromptInput } from '../../utils/input-sanitizer';
+>>>>>>> fbe49389978ecfeb4fc6d2df399c18138a7fed78:backend/api/src/services/chat-strategies/deep-research-strategy.ts
 
 const logger = createLogger('DeepResearchStrategy');
 
@@ -48,22 +59,23 @@ export class DeepResearchStrategy implements ChatStrategy<DeepResearchStrategyCo
      * @returns 포맷팅된 연구 보고서 응답
      */
     async execute(context: DeepResearchStrategyContext): Promise<ChatResult> {
-        const { message, userId } = context.req;
+        const { message: rawMessage, userId } = context.req;
+        const message = sanitizePromptInput(rawMessage);
 
         logger.info('🔬 Deep Research 모드 시작');
 
         // 사용자 메시지에서 언어 감지 후 연구 서비스 생성
         const researchService = new DeepResearchService({
-            maxLoops: 5,
+            maxLoops: RESEARCH_STRATEGY_PARAMS.MAX_LOOPS,
             llmModel: context.client.model,
-            searchApi: 'all',
-            maxSearchResults: 360,
+            searchApi: RESEARCH_STRATEGY_PARAMS.SEARCH_API,
+            maxSearchResults: RESEARCH_STRATEGY_PARAMS.MAX_SEARCH_RESULTS,
             language: detectLanguage(message).language,
-            maxTotalSources: 80,
-            scrapeFullContent: true,
-            maxScrapePerLoop: 15,
+            maxTotalSources: RESEARCH_STRATEGY_PARAMS.MAX_TOTAL_SOURCES,
+            scrapeFullContent: RESEARCH_STRATEGY_PARAMS.SCRAPE_FULL_CONTENT,
+            maxScrapePerLoop: RESEARCH_STRATEGY_PARAMS.MAX_SCRAPE_PER_LOOP,
             scrapeTimeoutMs: LLM_TIMEOUTS.SCRAPE_TIMEOUT_MS,
-            chunkSize: 10,
+            chunkSize: RESEARCH_STRATEGY_PARAMS.CHUNK_SIZE,
         });
 
         // 연구 세션 ID 생성 및 DB 저장 (추후 조회/이어하기용)
@@ -78,9 +90,11 @@ export class DeepResearchStrategy implements ChatStrategy<DeepResearchStrategyCo
         });
 
         // 연구 실행 및 결과 포맷팅
-        const result = await researchService.executeResearch(sessionId, message, context.onProgress);
-        const formattedResponse = context.formatResearchResult(result);
+        try {
+            const result = await researchService.executeResearch(sessionId, message, context.onProgress);
+            const formattedResponse = context.formatResearchResult(result);
 
+<<<<<<< HEAD:backend/api/src/domains/chat/strategies/deep-research-strategy.ts
         // 포맷팅된 보고서를 문자 단위로 스트리밍 전송
         for (const char of formattedResponse) {
             context.onToken(char);
@@ -129,20 +143,37 @@ export class DeepResearchStrategy implements ChatStrategy<DeepResearchStrategyCo
                 const content = src.fullContent!;
                 parts.push(content.length > 3000 ? content.substring(0, 3000) + '...' : content);
                 parts.push('');
+=======
+            // 포맷팅된 보고서를 문자 단위로 스트리밍 전송
+            for (const char of formattedResponse) {
+                context.onToken(char);
+>>>>>>> fbe49389978ecfeb4fc6d2df399c18138a7fed78:backend/api/src/services/chat-strategies/deep-research-strategy.ts
             }
+
+            logger.info(`🔬 Deep Research 완료: ${result.duration}ms, ${result.totalSteps} 단계`);
+
+            return { response: formattedResponse };
+        } catch (error) {
+            const isAborted = error instanceof Error && error.message === 'RESEARCH_ABORTED';
+            if (isAborted) {
+                logger.info('🔬 Deep Research 사용자 취소');
+            } else {
+                logger.warn(`🔬 Deep Research 실패: ${error instanceof Error ? error.message : String(error)}`);
+            }
+
+            await db.updateResearchSession(sessionId, {
+                status: isAborted ? 'cancelled' : 'failed',
+            }).catch(dbErr => logger.warn(`세션 상태 업데이트 실패: ${dbErr}`));
+
+            const fallbackResponse = isAborted
+                ? '연구가 취소되었습니다.'
+                : '연구 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.';
+
+            for (const char of fallbackResponse) {
+                context.onToken(char);
+            }
+
+            return { response: fallbackResponse };
         }
-
-        const docId = `deep-research-${sessionId || uuidv4()}`;
-        const text = parts.join('\n');
-        const filename = `deep-research-${result.topic.substring(0, 50).replace(/[^a-zA-Z0-9가-힣\s]/g, '')}.md`;
-
-        await ragService.embedDocument({
-            docId,
-            text,
-            filename,
-            userId,
-        });
-
-        logger.info(`Deep Research → RAG 저장 완료: ${filename} (${text.length}자, docId=${docId})`);
     }
 }

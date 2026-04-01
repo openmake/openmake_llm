@@ -9,9 +9,10 @@
  * @module services/chat-strategies/types
  * @description
  * - 공통 ChatContext/ChatResult 기반 타입
- * - 5가지 전략별 컨텍스트 인터페이스 (A2A, Direct, AgentLoop, Discussion, DeepResearch)
+ * - 전략별 컨텍스트 인터페이스 (Direct, AgentLoop, GenerateVerify, Discussion, DeepResearch)
  * - 제네릭 ChatStrategy 인터페이스로 타입 안전한 전략 교체 지원
  */
+<<<<<<< HEAD:backend/api/src/domains/chat/strategies/types.ts
 import type { DiscussionProgress, DiscussionResult } from '../../../agents/discussion-engine';
 import type { ExecutionPlan } from '../pipeline/profile-resolver';
 import type { DocumentStore } from '../../rag/documents/store';
@@ -20,6 +21,17 @@ import type { OllamaClient } from '../../../ollama/client';
 import type { ChatMessage, ModelOptions, ToolCall, ToolDefinition } from '../../../ollama/types';
 import type { ResearchProgress } from '../../../domains/research/DeepResearchService';
 import type { ChatMessageRequest } from '../service';
+=======
+import type { DiscussionProgress, DiscussionResult } from '../../agents/discussion-engine';
+import type { QueryType } from '../../chat/model-selector-types';
+import type { ExecutionPlan } from '../../chat/profile-resolver';
+import type { DocumentStore } from '../../documents/store';
+import type { UserContext } from '../../mcp/user-sandbox';
+import type { OllamaClient } from '../../ollama/client';
+import type { ChatMessage, FormatOption, ModelOptions, ToolCall, ToolDefinition } from '../../ollama/types';
+import type { ResearchProgress } from '../DeepResearchService';
+import type { ChatMessageRequest } from '../chat-service-types';
+>>>>>>> fbe49389978ecfeb4fc6d2df399c18138a7fed78:backend/api/src/services/chat-strategies/types.ts
 
 /**
  * 채팅 전략 공통 컨텍스트
@@ -30,7 +42,7 @@ import type { ChatMessageRequest } from '../service';
  */
 export interface ChatContext {
     /** 스트리밍 토큰 콜백 (SSE를 통해 클라이언트에 실시간 전송) */
-    onToken: (token: string) => void;
+    onToken: (token: string, thinking?: string) => void;
     /** 요청 중단 시그널 (클라이언트 연결 종료 시 활성화) */
     abortSignal?: AbortSignal;
     /** 중단 상태를 확인하고 'ABORTED' 에러를 throw하는 헬퍼 함수 */
@@ -73,36 +85,6 @@ export interface ChatStrategy<TContext extends ChatContext = ChatContext, TResul
 }
 
 /**
- * A2A(Agent-to-Agent) 전략 컨텍스트
- *
- * 다중 모델 병렬 생성에 필요한 메시지 이력과 채팅 옵션을 포함합니다.
- *
- * @interface A2AStrategyContext
- * @extends ChatContext
- */
-export interface A2AStrategyContext extends ChatContext {
-    /** LLM에 전달할 메시지 배열 (시스템 프롬프트 + 대화 이력 + 사용자 메시지) */
-    messages: ChatMessage[];
-    /** 모델 옵션 (temperature, top_p 등) */
-    chatOptions: ModelOptions;
-    /** 질문 유형 (A2A 모델 조합 동적 선택용, 하위 호환 위해 optional) */
-    queryType?: string;
-    /** 사용자 언어 (A2A 합성 프롬프트 다국어화용, language-policy에서 결정) */
-    userLanguage?: string;
-}
-
-/**
- * A2A 전략 결과
- *
- * @interface A2AStrategyResult
- * @extends ChatResult
- */
-export interface A2AStrategyResult extends ChatResult {
-    /** A2A 병렬 생성 성공 여부 (실패 시 AgentLoop으로 폴백) */
-    succeeded: boolean;
-}
-
-/**
  * Direct(직접 호출) 전략 컨텍스트
  *
  * 단일 LLM에 한 번 요청하여 응답과 도구 호출 정보를 받는 데 필요한 컨텍스트입니다.
@@ -121,6 +103,8 @@ export interface DirectStrategyContext extends ChatContext {
     allowedTools: ToolDefinition[];
     /** Thinking 깊이 옵션 */
     thinkOption?: 'low' | 'medium' | 'high';
+    /** 구조화된 출력 형식 (Ollama format 파라미터: 'json' 또는 JSON Schema 객체) */
+    format?: FormatOption;
 }
 
 /**
@@ -134,6 +118,40 @@ export interface DirectStrategyResult extends ChatResult {
     assistantMessage: ChatMessage;
     /** LLM이 요청한 도구 호출 목록 (빈 배열이면 최종 응답) */
     toolCalls: ToolCall[];
+}
+
+/**
+ * 전략 간 공유 실행 상태 (참조 기반 추적)
+ *
+ * ThinkingStrategy → AgentLoop 폴백 시 이미 소모된 턴/시간을
+ * 참조 객체로 공유하여 폴백 전략이 잔여 자원만 사용하도록 합니다.
+ *
+ * @interface ExecutionState
+ */
+export interface ExecutionState {
+    /** 누적 사용 턴 수 (AgentLoop 내부에서 매 턴마다 증가) */
+    turnsUsed: number;
+    /** 실행 시작 시점 (밀리초 타임스탬프) */
+    startTime: number;
+}
+
+/**
+ * Informed Fallback 힌트
+ *
+ * 이전 전략(GV/Thinking)이 실패한 원인 정보를 폴백 전략(AgentLoop)에 전달합니다.
+ * Harness Engineering 원칙: Correct — 실패 원인을 후속 전략에 알려 동일 실수 방지
+ *
+ * @interface FallbackHint
+ */
+export interface FallbackHint {
+    /** 실패한 전략 이름 */
+    failedStrategy: 'generate-verify' | 'thinking' | 'conditional-verify';
+    /** 실패 원인 요약 (로그용, 사람이 읽을 수 있는 형태) */
+    reason: string;
+    /** 실패한 전략이 소모한 턴 수 */
+    turnsConsumed: number;
+    /** 실패한 전략의 경과 시간 (ms) */
+    elapsedMs: number;
 }
 
 /**
@@ -167,6 +185,12 @@ export interface AgentLoopStrategyContext extends ChatContext {
     currentUserContext: UserContext | null;
     /** 허용된 도구 목록을 반환하는 함수 */
     getAllowedTools: () => ToolDefinition[];
+    /** 구조화된 출력 형식 (Ollama format 파라미터: 'json' 또는 JSON Schema 객체) */
+    format?: FormatOption;
+    /** 전략 간 공유 실행 상태 (폴백 시 소모된 턴 수 추적용, optional) */
+    executionState?: ExecutionState;
+    /** Informed Fallback 힌트 — 이전 전략 실패 원인 (Correct 원칙) */
+    fallbackHint?: FallbackHint;
 }
 
 /**
@@ -188,6 +212,49 @@ export interface DiscussionStrategyContext extends ChatContext {
     onProgress?: (progress: DiscussionProgress) => void;
     /** 토론 결과를 마크다운으로 포맷팅하는 함수 */
     formatDiscussionResult: (result: DiscussionResult) => string;
+}
+
+/**
+ * Generate-Verify(생성-검증) 전략 컨텍스트
+ *
+ * Generator(강력 모델)가 1차 응답을 생성하고,
+ * Verifier(다른 강력 모델)가 팩트체크·논리검증·보완을 수행합니다.
+ *
+ * @interface GenerateVerifyStrategyContext
+ * @extends ChatContext
+ */
+export interface GenerateVerifyStrategyContext extends ChatContext {
+    /** LLM에 전달할 메시지 배열 (시스템 프롬프트 + 대화 이력 + 사용자 메시지) */
+    messages: ChatMessage[];
+    /** 모델 옵션 (temperature, top_p 등) */
+    chatOptions: ModelOptions;
+    /** 질문 유형 (GV 모델 조합 동적 선택용) */
+    queryType?: QueryType;
+    /** 사용자 언어 (Verifier 프롬프트 다국어화용) */
+    userLanguage?: string;
+    /** 구조화된 출력 형식 (Ollama format 파라미터) */
+    format?: FormatOption;
+    /** Generator가 사용할 엔진 모델 */
+    generatorModel: string;
+    /** Verifier가 사용할 엔진 모델 */
+    verifierModel: string;
+}
+
+/**
+ * Generate-Verify 전략 결과
+ *
+ * @interface GenerateVerifyStrategyResult
+ * @extends ChatResult
+ */
+export interface GenerateVerifyStrategyResult extends ChatResult {
+    /** 전략 실행 성공 여부 (실패 시 AgentLoop으로 폴백) */
+    succeeded: boolean;
+    /** Verifier 검증 통과 여부 */
+    verified: boolean;
+    /** Verifier가 발견한 이슈 수 (0이면 원본 응답 유지) */
+    issuesFound: number;
+    /** Generator vs Verifier 응답 변경률 (0.0~1.0, Jaccard distance) */
+    verificationDelta?: number;
 }
 
 /**

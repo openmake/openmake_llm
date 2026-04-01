@@ -32,8 +32,14 @@ import { assertResourceOwnerOrAdmin } from '../auth/ownership';
 import { validate } from '../middlewares/validation';
 import { getUnifiedDatabase } from '../data/models/unified-database';
 import { v4 as uuidv4 } from 'uuid';
+<<<<<<< HEAD
 import { createDeepResearchService } from '../domains/research/DeepResearchService';
 import { detectLanguage } from '../domains/chat/pipeline/language-policy';
+=======
+import { createDeepResearchService } from '../services/DeepResearchService';
+import { detectLanguage } from '../chat/language-policy';
+import { RESEARCH_DEPTH_LOOPS } from '../config/runtime-limits';
+>>>>>>> fbe49389978ecfeb4fc6d2df399c18138a7fed78
 import {
     createResearchSessionSchema,
     addResearchStepSchema,
@@ -261,7 +267,7 @@ router.post('/sessions/:sessionId/execute', validate(executeResearchSchema), asy
     }
 
     // depth에 따른 maxLoops 기본값 설정
-    const loops = maxLoops || (session.depth === 'quick' ? 1 : session.depth === 'standard' ? 3 : 5);
+    const loops = maxLoops || RESEARCH_DEPTH_LOOPS[session.depth] || RESEARCH_DEPTH_LOOPS.standard;
 
     // 서비스 생성 및 비동기 실행
     const language = detectLanguage(session.topic).language;
@@ -280,7 +286,6 @@ router.post('/sessions/:sessionId/execute', validate(executeResearchSchema), asy
         topic: session.topic,
         depth: session.depth,
         maxLoops: loops,
-        estimatedTime: session.depth === 'quick' ? '1-2분' : session.depth === 'standard' ? '3-5분' : '5-10분'
     }));
 }));
 

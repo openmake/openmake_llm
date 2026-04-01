@@ -257,7 +257,7 @@ function escapeHtml(str) {
  * @param {string} text - 마크다운 원본 텍스트
  * @returns {void}
  */
-function renderMarkdown(element, text) {
+async function renderMarkdown(element, text) {
     if (typeof marked !== 'undefined') {
         try {
             marked.setOptions({
@@ -307,23 +307,26 @@ function renderMarkdown(element, text) {
                     window._mermaidInitialized = true;
                 }
 
-                element.querySelectorAll('pre code.language-mermaid').forEach(async (block) => {
-                    const pre = block.parentElement;
-                    const container = document.createElement('div');
-                    container.className = 'mermaid-container';
-                    const code = block.textContent;
-                    try {
-                        const id = `mermaid-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-                        const { svg } = await mermaid.render(id, code);
-                        container.innerHTML = svg;
-                    } catch (e) {
-                        console.warn('Mermaid render error:', e);
-                        container.textContent = code;
-                    }
-                    if (pre && pre.parentElement) {
-                        pre.replaceWith(container);
-                    }
-                });
+                const mermaidBlocks = Array.from(element.querySelectorAll('pre code.language-mermaid'));
+                if (mermaidBlocks.length > 0) {
+                    await Promise.all(mermaidBlocks.map(async (block) => {
+                        const pre = block.parentElement;
+                        const container = document.createElement('div');
+                        container.className = 'mermaid-container';
+                        const code = block.textContent;
+                        try {
+                            const id = `mermaid-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+                            const { svg } = await mermaid.render(id, code);
+                            container.innerHTML = svg;
+                        } catch (e) {
+                            console.warn('Mermaid render error:', e);
+                            container.textContent = code;
+                        }
+                        if (pre && pre.parentElement) {
+                            pre.replaceWith(container);
+                        }
+                    }));
+                }
             }
         } catch (e) {
             console.error('Markdown parse error:', e);
@@ -335,11 +338,20 @@ function renderMarkdown(element, text) {
 }
 
 // 시스템 테마 변경 감지
-window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+const themeMediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+const handleThemeChange = (e) => {
     if (localStorage.getItem(STORAGE_KEY_THEME) === 'system') {
         applyTheme('system');
     }
-});
+};
+themeMediaQuery.addEventListener('change', handleThemeChange);
+
+/**
+ * UI 모듈 리소스 정리 (페이지 전환 시 호출 권장)
+ */
+function cleanupUI() {
+    themeMediaQuery.removeEventListener('change', handleThemeChange);
+}
 
 // 전역 노출 (레거시 호환)
 window.applyTheme = applyTheme;
@@ -358,6 +370,7 @@ window.showError = showError;
 window.scrollToBottom = scrollToBottom;
 window.escapeHtml = escapeHtml;
 window.renderMarkdown = renderMarkdown;
+window.cleanupUI = cleanupUI;
 
 export {
     applyTheme,

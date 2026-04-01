@@ -70,7 +70,9 @@ export interface EnvConfig {
     // External services
     googleApiKey: string;
     googleCseId: string;
+    /** @deprecated Firecrawl 제거됨. 무료 웹 스크래퍼로 대체 */
     firecrawlApiKey: string;
+    /** @deprecated Firecrawl 제거됨. 무료 웹 스크래퍼로 대체 */
     firecrawlApiUrl: string;
     githubToken: string;
 
@@ -297,9 +299,9 @@ export function validateConfig(config: EnvConfig): void {
         errors.push(`Invalid OLLAMA_TIMEOUT: ${config.ollamaTimeout} (must be between 1-600000ms)`);
     }
 
-    // JWT_SECRET 필수 검증 (프로덕션 환경)
-    if (config.nodeEnv === 'production' && (!config.jwtSecret || config.jwtSecret.length < 32)) {
-        errors.push('JWT_SECRET must be at least 32 characters in production');
+    // JWT_SECRET 필수 검증 (test 환경 제외 — 랜덤 생성 금지: PM2 재시작마다 세션 무효화)
+    if (config.nodeEnv !== 'test' && (!config.jwtSecret || config.jwtSecret.length < 32)) {
+        errors.push('JWT_SECRET must be at least 32 characters (set in .env). Random generation is forbidden — it invalidates all sessions on restart.');
     }
 
     // API_KEY_PEPPER 검증 (프로덕션 환경에서 API Key 서비스 사용 시)

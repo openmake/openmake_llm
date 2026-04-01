@@ -5,6 +5,7 @@
 
 import LRUCache = require('lru-cache');
 import { createLogger } from '../utils/logger';
+import { CACHE_CONFIG } from '../config/runtime-limits';
 
 const logger = createLogger('Cache');
 
@@ -49,9 +50,6 @@ export class CacheSystem {
     // 에이전트 라우팅 캐시 (동일 쿼리 패턴에 대한 라우팅 결과)
     private routingCache: LRUCache<string, CachedRouting>;
 
-    // 임베딩 캐시 (텍스트 임베딩 결과)
-    private embeddingCache: LRUCache<string, number[]>;
-
     // 통계
     private stats = {
         queryHits: 0,
@@ -61,8 +59,8 @@ export class CacheSystem {
     };
 
     constructor(options?: CacheOptions) {
-        const maxSize = options?.maxSize || 1000;
-        const ttlMs = options?.ttlMs || 30 * 60 * 1000; // 30분 기본 TTL
+        const maxSize = options?.maxSize || CACHE_CONFIG.QUERY_CACHE_MAX_SIZE;
+        const ttlMs = options?.ttlMs || CACHE_CONFIG.QUERY_CACHE_TTL_MS;
 
         this.queryCache = new LRUCache<string, CachedResponse>({
             max: maxSize,
@@ -73,11 +71,6 @@ export class CacheSystem {
         this.routingCache = new LRUCache<string, CachedRouting>({
             max: maxSize * 2, // 라우팅은 더 많이 캐싱
             ttl: ttlMs * 2    // 라우팅 결과는 더 오래 유지
-        });
-
-        this.embeddingCache = new LRUCache<string, number[]>({
-            max: maxSize,
-            ttl: ttlMs * 4    // 임베딩은 더 오래 유지
         });
 
         logger.info(`캐시 시스템 초기화 (maxSize: ${maxSize}, TTL: ${ttlMs}ms)`);
@@ -148,20 +141,6 @@ export class CacheSystem {
     }
 
     /**
-     * 임베딩 캐시 조회
-     */
-    getEmbedding(text: string): number[] | undefined {
-        return this.embeddingCache.get(text);
-    }
-
-    /**
-     * 임베딩 캐시 저장
-     */
-    setEmbedding(text: string, embedding: number[]): void {
-        this.embeddingCache.set(text, embedding);
-    }
-
-    /**
      * 쿼리 정규화 (캐시 키 생성용)
      */
     private normalizeQuery(query: string): string {
@@ -195,7 +174,6 @@ export class CacheSystem {
     clear(): void {
         this.queryCache.clear();
         this.routingCache.clear();
-        this.embeddingCache.clear();
         this.stats = { queryHits: 0, queryMisses: 0, routingHits: 0, routingMisses: 0 };
         logger.info('캐시 초기화됨');
     }

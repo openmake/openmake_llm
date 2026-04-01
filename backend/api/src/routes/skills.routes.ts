@@ -63,23 +63,16 @@ router.get('/categories', requireAuth, asyncHandler(async (req: Request, res: Re
  */
 router.get('/', requireAuth, validateQuery(searchSkillsQuerySchema), asyncHandler(async (req: Request, res: Response) => {
     const userId = (req.user && 'userId' in req.user ? (req.user as { userId: string }).userId : req.user?.id?.toString());
-    const { search, category, isPublic, sortBy, limit, offset } = req.query as {
-        search?: string;
-        category?: string;
-        isPublic?: boolean;
-        sortBy?: 'newest' | 'name' | 'category' | 'updated';
-        limit?: number;
-        offset?: number;
-    };
+    const query = req.query as Record<string, unknown>;
 
     const result = await getSkillManager().searchSkills({
         userId,
-        search: search ? String(search) : undefined,
-        category: category ? String(category) : undefined,
-        isPublic,
-        sortBy,
-        limit: typeof limit === 'number' ? limit : undefined,
-        offset: typeof offset === 'number' ? offset : undefined,
+        search: query.search ? String(query.search) : undefined,
+        category: query.category ? String(query.category) : undefined,
+        isPublic: query.isPublic as boolean | undefined,
+        sortBy: query.sortBy as 'newest' | 'name' | 'category' | 'updated' | undefined,
+        limit: query.limit != null ? Number(query.limit) : undefined,
+        offset: query.offset != null ? Number(query.offset) : undefined,
     });
 
     res.json(success(result));

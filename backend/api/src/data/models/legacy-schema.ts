@@ -1,5 +1,9 @@
 /**
+<<<<<<< HEAD
  * Legacy Schema SQL - Fallback schema for packaged/deployed environments
+=======
+ * LEGACY_SCHEMA - 폴백용 인라인 스키마 SQL
+>>>>>>> fbe49389978ecfeb4fc6d2df399c18138a7fed78
  *
  * Source of truth policy:
  * 1) services/database/init/002-schema.sql is canonical for schema evolution.
@@ -77,6 +81,10 @@ CREATE TABLE IF NOT EXISTS token_blacklist (
 );
 
 CREATE INDEX IF NOT EXISTS idx_messages_session ON conversation_messages(session_id);
+<<<<<<< HEAD
+=======
+CREATE INDEX IF NOT EXISTS idx_messages_agent ON conversation_messages(agent_id);
+>>>>>>> fbe49389978ecfeb4fc6d2df399c18138a7fed78
 CREATE INDEX IF NOT EXISTS idx_messages_created ON conversation_messages(created_at);
 CREATE INDEX IF NOT EXISTS idx_usage_date ON api_usage(date);
 CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
@@ -153,9 +161,15 @@ CREATE INDEX IF NOT EXISTS idx_messages_session_created ON conversation_messages
 
 CREATE TABLE IF NOT EXISTS message_feedback (
     id SERIAL PRIMARY KEY,
+<<<<<<< HEAD
     message_id TEXT NOT NULL,
     session_id TEXT NOT NULL,
     user_id TEXT,
+=======
+    message_id INTEGER NOT NULL REFERENCES conversation_messages(id) ON DELETE CASCADE,
+    session_id TEXT NOT NULL REFERENCES conversation_sessions(id) ON DELETE CASCADE,
+    user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+>>>>>>> fbe49389978ecfeb4fc6d2df399c18138a7fed78
     signal TEXT NOT NULL CHECK (signal IN ('thumbs_up', 'thumbs_down', 'regenerate')),
     routing_metadata JSONB,
     created_at TIMESTAMPTZ DEFAULT NOW()
@@ -179,6 +193,7 @@ CREATE TABLE IF NOT EXISTS agent_usage_logs (
     error_message TEXT
 );
 
+<<<<<<< HEAD
 CREATE TABLE IF NOT EXISTS agent_feedback (
     id TEXT PRIMARY KEY,
     agent_id TEXT NOT NULL,
@@ -191,6 +206,8 @@ CREATE TABLE IF NOT EXISTS agent_feedback (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+=======
+>>>>>>> fbe49389978ecfeb4fc6d2df399c18138a7fed78
 CREATE TABLE IF NOT EXISTS custom_agents (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
@@ -207,6 +224,22 @@ CREATE TABLE IF NOT EXISTS custom_agents (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+<<<<<<< HEAD
+=======
+-- custom_agents 이후에 정의하여 FK 참조 가능
+CREATE TABLE IF NOT EXISTS agent_feedback (
+    id TEXT PRIMARY KEY,
+    agent_id TEXT NOT NULL REFERENCES custom_agents(id) ON DELETE CASCADE,
+    user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+    rating INTEGER NOT NULL CHECK (rating >= 1 AND rating <= 5),
+    comment TEXT,
+    query TEXT,
+    response TEXT,
+    tags JSONB,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+>>>>>>> fbe49389978ecfeb4fc6d2df399c18138a7fed78
 CREATE TABLE IF NOT EXISTS audit_logs (
     id SERIAL PRIMARY KEY,
     timestamp TIMESTAMPTZ DEFAULT NOW(),
@@ -312,6 +345,7 @@ CREATE TABLE IF NOT EXISTS external_files (
     UNIQUE(connection_id, external_id)
 );
 
+<<<<<<< HEAD
 -- [P3 UNUSED] vector_embeddings: 미사용 테이블. 현재 TS 코드에서 미사용. pgvector 기반 단어 검색 구현 시 활성화 예정. embedding TEXT 폴백 버전.
 CREATE TABLE IF NOT EXISTS vector_embeddings (
     id SERIAL PRIMARY KEY,
@@ -325,6 +359,8 @@ CREATE TABLE IF NOT EXISTS vector_embeddings (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+=======
+>>>>>>> fbe49389978ecfeb4fc6d2df399c18138a7fed78
 CREATE TABLE IF NOT EXISTS mcp_servers (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL UNIQUE,
@@ -400,8 +436,16 @@ CREATE INDEX IF NOT EXISTS idx_research_steps_session ON research_steps(session_
 CREATE INDEX IF NOT EXISTS idx_connections_user ON external_connections(user_id);
 CREATE INDEX IF NOT EXISTS idx_connections_service ON external_connections(service_type);
 CREATE INDEX IF NOT EXISTS idx_ext_files_connection ON external_files(connection_id);
+<<<<<<< HEAD
 
 CREATE INDEX IF NOT EXISTS idx_embeddings_source ON vector_embeddings(source_type, source_id);
+=======
+-- P2-5: external_files 정렬 인덱스 (created_at DESC — 파일 목록 조회 시 정렬 성능)
+CREATE INDEX IF NOT EXISTS idx_ext_files_created ON external_files(connection_id, created_at DESC);
+-- P2-6: user_memories LIKE 풀스캔 대응 — pg_trgm GIN 인덱스 (LIKE '%keyword%' 인덱스 사용 가능)
+-- pg_trgm 미설치 환경 graceful 처리: Migration 011에서 조건부 생성
+CREATE INDEX IF NOT EXISTS idx_memories_user_importance ON user_memories(user_id, importance DESC, updated_at DESC);
+>>>>>>> fbe49389978ecfeb4fc6d2df399c18138a7fed78
 
 CREATE INDEX IF NOT EXISTS idx_mcp_servers_name ON mcp_servers(name);
 CREATE INDEX IF NOT EXISTS idx_mcp_servers_enabled ON mcp_servers(enabled);

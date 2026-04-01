@@ -28,6 +28,8 @@ import { requireAuth } from '../auth';
 import { validate } from '../middlewares/validation';
 import { webSearchSchema } from '../schemas/web-search.schema';
 import { CAPACITY } from '../config/runtime-limits';
+import { LLM_TEMPERATURES } from '../config/llm-parameters';
+import { buildWebSearchPrompt } from '../prompts/web-search-system';
 
 const logger = createLogger('WebSearchRoutes');
 
@@ -76,8 +78,17 @@ export function createWebSearchRouter({ cluster }: WebSearchRouterDeps): Router 
           client = createClient({ model: wsEngineModel });
            logger.info(`[WebSearch] Cloud 클라이언트 생성: ${wsEngineModel}`);
       } else {
+<<<<<<< HEAD
           const bestNode = cluster.getBestNode(wsEngineModel);
           client = bestNode ? cluster.createScopedClient(bestNode.id, wsEngineModel) : undefined;
+=======
+          if (!clusterManager) {
+              res.status(503).json(serviceUnavailable('Cluster manager not initialized'));
+              return;
+          }
+          const bestNode = clusterManager.getBestNode(wsEngineModel);
+          client = bestNode ? clusterManager.createScopedClient(bestNode.id, wsEngineModel) : undefined;
+>>>>>>> fbe49389978ecfeb4fc6d2df399c18138a7fed78
       }
 
       if (!client) {
@@ -92,25 +103,11 @@ export function createWebSearchRouter({ cluster }: WebSearchRouterDeps): Router 
          ).join('\n\n')
          : '(검색 결과 없음)';
 
-     const searchPrompt = `다음 질문에 대해 웹 검색 결과를 참고하여 정확하게 답변해주세요.
-
-## 질문
-${query}
-
-## 웹 검색 결과 (${new Date().toLocaleDateString()} 기준)
-${sourcesContext}
-
-## 답변 지침
-1. 검색 결과를 기반으로 최신 정보를 제공하세요
-2. 출처가 있을 경우 [출처 N] 형식으로 인용하세요
-3. 정보가 불확실한 경우 명시하세요
-4. 사용자가 사용한 언어로 친절하고 이해하기 쉽게 답변하세요
-
-## 답변:`;
+     const searchPrompt = buildWebSearchPrompt(query, sourcesContext, new Date().toLocaleDateString());
 
       logger.info('[WebSearch] LLM에 사실 검증 요청...');
      const result = await client.generate(searchPrompt, {
-         temperature: 0.3,
+         temperature: LLM_TEMPERATURES.WEB_SEARCH,
           num_ctx: CAPACITY.WEB_SEARCH_NUM_CTX  // Ollama 공식 권장: 웹 검색/에이전트 시 최소 64K 토큰
      });
      const response = result.response;

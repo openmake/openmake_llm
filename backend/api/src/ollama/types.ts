@@ -14,7 +14,6 @@
  * - 헬퍼 함수 (Thinking 활성화 판단, 모델 프리셋 선택)
  */
 
-import { MODEL_CONTEXT_DEFAULTS } from '../config/runtime-limits';
 
 /**
  * Ollama 클라이언트 기본 설정
@@ -217,42 +216,6 @@ export interface ChatAdvancedOptions {
     format?: FormatOption;
     /** 사용 가능한 도구 목록 */
     tools?: ToolDefinition[];
-}
-
-/**
- * 임베딩 생성 요청 (Ollama /api/embed)
- * @interface EmbedRequest
- */
-export interface EmbedRequest {
-    /** 임베딩에 사용할 모델 이름 */
-    model: string;
-    /** 임베딩할 텍스트 (단일 문자열 또는 배열) */
-    input: string | string[];
-    /** 입력 텍스트를 컨텍스트 길이에 맞게 자동 자름 (기본값: true) */
-    truncate?: boolean;
-    /** 생성할 임베딩 벡터의 차원 수 */
-    dimensions?: number;
-    /** 모델 메모리 유지 시간 (기본값: '5m') */
-    keep_alive?: string | number;
-    /** 모델 추론 옵션 */
-    options?: ModelOptions;
-}
-
-/**
- * 임베딩 생성 응답
- * @interface EmbedResponse
- */
-export interface EmbedResponse {
-    /** 사용된 모델 이름 */
-    model: string;
-    /** 생성된 임베딩 벡터 배열 (입력 개수 x 차원) */
-    embeddings: number[][];
-    /** 전체 처리 소요 시간 (나노초) */
-    total_duration?: number;
-    /** 모델 로딩 소요 시간 (나노초) */
-    load_duration?: number;
-    /** 프롬프트 평가 토큰 수 */
-    prompt_eval_count?: number;
 }
 
 // ============================================
@@ -592,108 +555,13 @@ export interface PsResponse {
 /**
  * 모델별 추론 파라미터 프리셋 모음
  *
- * 각 프리셋은 특정 작업 유형(추론, 코딩, 창작 등)에 최적화된
- * temperature, top_p, top_k, 컨텍스트 크기 등의 값을 포함합니다.
+ * 정의는 config/llm-parameters.ts에 중앙 관리됩니다.
+ * 하위 호환성을 위해 이 모듈에서 re-export합니다.
  *
- * - `GEMINI_*`: Gemini 모델용 프리셋
- * - `GPT_OSS_*`: GPT-OSS 모델용 프리셋
- *
- * @constant MODEL_PRESETS
+ * @see config/llm-parameters.ts
  */
-export const MODEL_PRESETS = {
-    // Gemini 3 Flash Preview 프리셋
-    GEMINI_DEFAULT: {
-        temperature: 0.7,
-        top_p: 0.9,
-        top_k: 40,
-        num_ctx: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
-        repeat_penalty: 1.1,
-    },
-    GEMINI_REASONING: {
-        temperature: 0.3,
-        top_p: 0.85,
-        top_k: 20,
-        num_ctx: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
-        repeat_penalty: 1.05,
-    },
-    GEMINI_CREATIVE: {
-        temperature: 0.9,
-        top_p: 0.95,
-        top_k: 50,
-        num_ctx: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
-        repeat_penalty: 1.2,
-    },
-    GEMINI_CODE: {
-        temperature: 0.2,
-        top_p: 0.8,
-        top_k: 10,
-        num_ctx: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
-        repeat_penalty: 1.0,
-    },
-    GPT_OSS_LOW_REASONING: {
-        temperature: 0.3,
-        top_p: 0.85,
-        top_k: 30,
-        repeat_penalty: 1.1,
-        num_ctx: MODEL_CONTEXT_DEFAULTS.LOW_NUM_CTX,
-        num_predict: MODEL_CONTEXT_DEFAULTS.LOW_NUM_PREDICT
-    } as ModelOptions,
-
-    GPT_OSS_MEDIUM_REASONING: {
-        temperature: 0.5,
-        top_p: 0.9,
-        top_k: 40,
-        repeat_penalty: 1.1,
-        num_ctx: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
-        num_predict: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_PREDICT
-    } as ModelOptions,
-
-    GPT_OSS_HIGH_REASONING: {
-        temperature: 0.7,
-        top_p: 0.95,
-        top_k: 50,
-        repeat_penalty: 1.15,
-        num_ctx: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
-        num_predict: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_PREDICT
-    } as ModelOptions,
-
-    GPT_OSS_CODE: {
-        temperature: 0.1,
-        top_p: 0.8,
-        top_k: 20,
-        repeat_penalty: 1.2,
-        num_ctx: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
-        num_predict: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_PREDICT
-    } as ModelOptions,
-
-    GPT_OSS_DOCUMENT: {
-        temperature: 0.2,
-        top_p: 0.85,
-        top_k: 25,
-        repeat_penalty: 1.15,
-        num_ctx: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
-        num_predict: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_PREDICT
-    } as ModelOptions,
-
-    GPT_OSS_JSON: {
-        temperature: 0.05,
-        top_p: 0.75,
-        top_k: 15,
-        repeat_penalty: 1.15,
-        num_ctx: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
-        num_predict: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_PREDICT,
-        mirostat: 1,
-        mirostat_tau: 2.5,
-        mirostat_eta: 0.05
-    } as ModelOptions,
-
-
-
-
-
-
-
-};
+import { MODEL_PRESETS, GPT_OSS_LEVEL_PRESETS, GPT_OSS_TASK_PRESETS } from '../config/llm-parameters';
+export { MODEL_PRESETS };
 
 // ============================================
 // Helper Functions
@@ -722,11 +590,7 @@ export function getReasoningSystemPrompt(level: ReasoningLevel): string {
  * @returns 해당 레벨의 ModelOptions 프리셋
  */
 export function getGptOssPreset(level: ReasoningLevel): ModelOptions {
-    switch (level) {
-        case 'low': return MODEL_PRESETS.GPT_OSS_LOW_REASONING;
-        case 'medium': return MODEL_PRESETS.GPT_OSS_MEDIUM_REASONING;
-        case 'high': return MODEL_PRESETS.GPT_OSS_HIGH_REASONING;
-    }
+    return GPT_OSS_LEVEL_PRESETS[level] || MODEL_PRESETS.GPT_OSS_MEDIUM_REASONING;
 }
 
 /**
@@ -736,12 +600,7 @@ export function getGptOssPreset(level: ReasoningLevel): ModelOptions {
  * @returns 해당 작업에 최적화된 ModelOptions 프리셋
  */
 export function getGptOssTaskPreset(taskType: 'code' | 'document' | 'json' | 'chat'): ModelOptions {
-    switch (taskType) {
-        case 'code': return MODEL_PRESETS.GPT_OSS_CODE;
-        case 'document': return MODEL_PRESETS.GPT_OSS_DOCUMENT;
-        case 'json': return MODEL_PRESETS.GPT_OSS_JSON;
-        default: return MODEL_PRESETS.GPT_OSS_MEDIUM_REASONING;
-    }
+    return GPT_OSS_TASK_PRESETS[taskType] || MODEL_PRESETS.GPT_OSS_MEDIUM_REASONING;
 }
 
 /**

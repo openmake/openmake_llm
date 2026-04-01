@@ -7,7 +7,11 @@
  */
 
 import { createLogger } from '../utils/logger';
+<<<<<<< HEAD
 import { errorMessage } from '../utils/error-message';
+=======
+import { RETRY_DEFAULTS } from '../config/runtime-limits';
+>>>>>>> fbe49389978ecfeb4fc6d2df399c18138a7fed78
 
 const logger = createLogger('RetryWrapper');
 
@@ -81,22 +85,37 @@ export async function withRetry<T>(
     options: RetryOptions = {}
 ): Promise<T> {
     const {
-        maxRetries = 3,
-        baseDelayMs = 500,
-        maxDelayMs = 5000,
+        maxRetries = RETRY_DEFAULTS.MAX_RETRIES,
+        baseDelayMs = RETRY_DEFAULTS.BASE_DELAY_MS,
+        maxDelayMs = RETRY_DEFAULTS.MAX_DELAY_MS,
         operation = 'unknown',
     } = options;
 
     let lastError: unknown;
 
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        const startTime = Date.now();
         try {
-            return await fn();
+            const result = await fn();
+            const duration = Date.now() - startTime;
+            
+            // 성공 로그 (첫 시도가 아닌 경우만 또는 특정 시간 초과 시 상세 로깅 가능)
+            if (attempt > 0) {
+                logger.info(`[Retry] 쿼리 성공: ${operation} (시도: ${attempt + 1}/${maxRetries + 1}, 소요시간: ${duration}ms)`);
+            } else if (duration > 1000) {
+                logger.warn(`[Performance] 느린 쿼리 감지: ${operation} (${duration}ms)`);
+            } else {
+                logger.debug(`[Performance] 쿼리 완료: ${operation} (${duration}ms)`);
+            }
+
+            return result;
         } catch (err) {
+            const duration = Date.now() - startTime;
             lastError = err;
 
             // 마지막 시도였으면 throw
             if (attempt >= maxRetries) {
+                logger.error(`[Performance] 쿼리 최종 실패: ${operation} (총 ${attempt + 1}회 시도, 마지막 시도 소요시간: ${duration}ms)`);
                 break;
             }
 

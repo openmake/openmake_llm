@@ -32,9 +32,21 @@ import { sanitizePromptInput } from '../utils/input-sanitizer';
 import type { DiscussionConfig, DiscussionProgress, AgentOpinion, DiscussionResult } from './discussion-types';
 import { createContextBuilder } from './discussion-context';
 import { createLogger } from '../utils/logger';
+<<<<<<< HEAD
 import { resolvePromptLocale } from '../domains/chat/pipeline/language-policy';
 import { parallelBatch } from '../utils/graph-engine';
 import { errorMessage } from '../utils/error-message';
+=======
+import { resolvePromptLocale } from '../chat/language-policy';
+import { parallelBatch } from '../workflow/graph-engine';
+import { DISCUSSION_CONFIDENCE, DISCUSSION_CONSISTENCY } from '../config/runtime-limits';
+/** 토론 엔진에서 사용하는 웹 검색 결과 최소 인터페이스 */
+export interface DiscussionSearchResult {
+    title: string;
+    url: string;
+    snippet?: string;
+}
+>>>>>>> fbe49389978ecfeb4fc6d2df399c18138a7fed78
 import {
     DISCUSSION_SYSTEM_PROMPTS,
     DISCUSSION_LABELS,
@@ -170,11 +182,11 @@ ${contextInstructions}
             const responseLen = response.length;
             const hasStructure = /^#{1,3}\s/m.test(response) || /^[-*]\s/m.test(response);
             const hasEvidence = /예시|사례|예를 들|example|e\.g\.|for instance/i.test(response);
-            let confidence = 0.6; // 기본 베이스
-            if (responseLen > 300) confidence += 0.1;
-            if (responseLen > 600) confidence += 0.1;
-            if (hasStructure) confidence += 0.1;
-            if (hasEvidence) confidence += 0.1;
+            let confidence: number = DISCUSSION_CONFIDENCE.BASE;
+            if (responseLen > DISCUSSION_CONFIDENCE.SHORT_RESPONSE_LENGTH) confidence += DISCUSSION_CONFIDENCE.INCREMENT;
+            if (responseLen > DISCUSSION_CONFIDENCE.LONG_RESPONSE_LENGTH) confidence += DISCUSSION_CONFIDENCE.INCREMENT;
+            if (hasStructure) confidence += DISCUSSION_CONFIDENCE.INCREMENT;
+            if (hasEvidence) confidence += DISCUSSION_CONFIDENCE.INCREMENT;
             confidence = Math.min(confidence, 1.0);
 
             return {
@@ -235,11 +247,76 @@ ${contextInstructions}
     }
 
     /**
+     * Self-Consistency Score 측정
+     *
+     * 에이전트 의견들 간의 합의도를 수치화합니다.
+     * Evaluator 역할로 LLM을 호출하여 합의점/모순점을 추출하고,
+     * consensus / (consensus + conflict) 비율로 점수를 산출합니다.
+     */
+    async function calculateConsistencyScore(
+        opinions: AgentOpinion[],
+        topic: string
+    ): Promise<{ score: number; consensusPoints: string[]; conflictPoints: string[] }> {
+        // 최소 에이전트 수 미달 시 기본값 반환
+        if (opinions.length < DISCUSSION_CONSISTENCY.MIN_AGENTS) {
+            return { score: 1.0, consensusPoints: [], conflictPoints: [] };
+        }
+
+        const evaluationPrompt = `You are an impartial evaluator analyzing multiple expert opinions on a topic.
+Identify consensus points (where experts agree) and conflict points (where experts disagree).
+
+Return ONLY a JSON object in this exact format:
+{"consensus":["point1","point2"],"conflicts":["point1","point2"]}
+
+Rules:
+- Each point should be a single concise sentence
+- Maximum 5 consensus points and 5 conflict points
+- If no conflicts, return empty array for conflicts
+- Respond in the same language as the opinions`;
+
+        let contextMessage = `Topic: ${topic}\n\nExpert Opinions:\n`;
+        for (const op of opinions) {
+            contextMessage += `\n### ${op.agentName}\n${op.opinion.substring(0, 500)}\n`;
+        }
+        contextMessage += `\nAnalyze and return JSON:`;
+
+        try {
+            const response = await generateResponse(evaluationPrompt, contextMessage);
+
+            // JSON 추출 (LLM이 부가 텍스트를 추가할 수 있으므로 패턴 매칭)
+            const jsonMatch = response.match(/\{[\s\S]*"consensus"[\s\S]*"conflicts"[\s\S]*\}/);
+            if (!jsonMatch) {
+                logger.warn('Self-Consistency Score: JSON 패턴 미매칭, 폴백 반환');
+                return { score: 0.7, consensusPoints: [], conflictPoints: [] };
+            }
+
+            const parsed = JSON.parse(jsonMatch[0]) as {
+                consensus: string[];
+                conflicts: string[];
+            };
+
+            const consensusCount = Array.isArray(parsed.consensus) ? parsed.consensus.length : 0;
+            const conflictCount = Array.isArray(parsed.conflicts) ? parsed.conflicts.length : 0;
+            const total = consensusCount + conflictCount;
+            const score = total > 0 ? consensusCount / total : 1.0;
+
+            return {
+                score: Math.round(score * 100) / 100,
+                consensusPoints: Array.isArray(parsed.consensus) ? parsed.consensus.slice(0, 5) : [],
+                conflictPoints: Array.isArray(parsed.conflicts) ? parsed.conflicts.slice(0, 5) : [],
+            };
+        } catch (e) {
+            logger.warn('Self-Consistency Score 측정 실패:', e);
+            return { score: 0.7, consensusPoints: [], conflictPoints: [] };
+        }
+    }
+
+    /**
      * 토론 시작
      */
     async function startDiscussion(
         topic: string,
-        webSearchFn?: (query: string) => Promise<any[]>
+        webSearchFn?: (query: string, opts?: { maxResults?: number }) => Promise<DiscussionSearchResult[]>
     ): Promise<DiscussionResult> {
         const startTime = Date.now();
         const opinions: AgentOpinion[] = [];
@@ -255,6 +332,7 @@ ${contextInstructions}
         const participants = experts.map(e => e.name);
 
         // 2. 라운드별 토론 (라운드 내 에이전트 의견 병렬 수집)
+        let consecutiveRoundFailures = 0;
         for (let round = 0; round < maxRounds; round++) {
             const roundBaseProgress = 10 + (round * 40 / maxRounds);
             const roundSpan = 40 / maxRounds;
@@ -269,22 +347,40 @@ ${contextInstructions}
 
             // 같은 라운드 내 에이전트들은 서로 의존성이 없으므로 병렬 실행
             const previousForRound = round > 0 ? [...opinions] : [];
-            const roundResults = await parallelBatch<Agent, AgentOpinion | null>(
-                experts,
-                async (agent, i) => {
-                    onProgress?.({
-                        phase: 'discussing',
-                        currentAgent: agent.name,
-                        agentEmoji: agent.emoji,
-                        message: localizedProgressMessages.agentOpining(agent.emoji || '🤖', agent.name),
-                        progress: roundBaseProgress + (i * roundSpan / experts.length),
-                        roundNumber: round + 1,
-                        totalRounds: maxRounds
-                    });
-                    return generateAgentOpinion(agent, topic, previousForRound);
-                },
-                { concurrency: experts.length }
-            );
+            let roundResults: (AgentOpinion | null)[];
+            try {
+                roundResults = await parallelBatch<Agent, AgentOpinion | null>(
+                    experts,
+                    async (agent, i) => {
+                        onProgress?.({
+                            phase: 'discussing',
+                            currentAgent: agent.name,
+                            agentEmoji: agent.emoji,
+                            message: localizedProgressMessages.agentOpining(agent.emoji || '🤖', agent.name),
+                            progress: roundBaseProgress + (i * roundSpan / experts.length),
+                            roundNumber: round + 1,
+                            totalRounds: maxRounds
+                        });
+                        return generateAgentOpinion(agent, topic, previousForRound);
+                    },
+                    { concurrency: experts.length }
+                );
+            } catch (error) {
+                logger.error(`Round ${round + 1} parallel execution failed:`, error);
+                roundResults = [];
+            }
+
+            const roundSuccessCount = roundResults.filter(r => r !== null).length;
+            if (roundSuccessCount === 0) {
+                consecutiveRoundFailures++;
+                logger.warn(`Round ${round + 1}: 전체 에이전트 의견 생성 실패 (연속 ${consecutiveRoundFailures}회)`);
+                if (consecutiveRoundFailures >= 2) {
+                    logger.error('연속 2라운드 전체 실패 — 토론 조기 종료 (LLM 연결 상태 확인 필요)');
+                    break;
+                }
+            } else {
+                consecutiveRoundFailures = 0;
+            }
 
             for (const result of roundResults) {
                 if (result) opinions.push(result);
@@ -338,6 +434,23 @@ ${contextInstructions}
             }
         }
 
+        // 4.5. Self-Consistency Score 측정 (에이전트 간 합의도)
+        let consistencyScore: number | undefined;
+        let consensusPoints: string[] | undefined;
+        let conflictPoints: string[] | undefined;
+
+        if (DISCUSSION_CONSISTENCY.ENABLED && opinions.length >= DISCUSSION_CONSISTENCY.MIN_AGENTS) {
+            try {
+                const consistency = await calculateConsistencyScore(opinions, topic);
+                consistencyScore = consistency.score;
+                consensusPoints = consistency.consensusPoints;
+                conflictPoints = consistency.conflictPoints;
+                logger.info(`📊 Self-Consistency Score: ${consistencyScore} (합의: ${consensusPoints.length}, 모순: ${conflictPoints.length})`);
+            } catch (e) {
+                logger.warn('Self-Consistency Score 측정 스킵:', e);
+            }
+        }
+
         // 5. 최종 답변 합성
         onProgress?.({
             phase: 'synthesizing',
@@ -360,7 +473,10 @@ ${contextInstructions}
             participants,
             opinions,
             totalTime: Date.now() - startTime,
-            factChecked
+            factChecked,
+            consistencyScore,
+            consensusPoints,
+            conflictPoints,
         };
     }
 

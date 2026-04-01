@@ -11,10 +11,18 @@
  * @see services/ChatService - processMessage()에서 히스토리 조립 전 호출
  */
 
+<<<<<<< HEAD:backend/api/src/domains/chat/pipeline/history-summarizer.ts
 import { OllamaClient, createClient } from '../../../ollama/client';
 import { createLogger } from '../../../utils/logger';
 import { HISTORY_SUMMARIZER } from '../../../config/runtime-limits';
 import { errorMessage } from '../../../utils/error-message';
+=======
+import { OllamaClient, createClient } from '../ollama/client';
+import { createLogger } from '../utils/logger';
+import { HISTORY_SUMMARIZER } from '../config/runtime-limits';
+import { LLM_TEMPERATURES } from '../config/llm-parameters';
+import { SUMMARY_SYSTEM_PROMPT } from './prompt-templates';
+>>>>>>> fbe49389978ecfeb4fc6d2df399c18138a7fed78:backend/api/src/chat/history-summarizer.ts
 
 const logger = createLogger('HistorySummarizer');
 
@@ -30,15 +38,6 @@ interface SummarizedHistory {
     originalCount: number;
     summarizedCount: number;
 }
-
-const SUMMARY_SYSTEM_PROMPT = `You are a conversation summarizer. Summarize the older conversation messages into a concise paragraph that preserves:
-- Key topics discussed
-- Important decisions or conclusions
-- User preferences or requirements mentioned
-- Any unresolved questions
-
-Output ONLY the summary paragraph. No headers, no bullet points, no explanation.
-Keep it under 200 words. Use the same language as the conversation.`;
 
 /**
  * 긴 대화 히스토리를 요약하여 압축합니다.
@@ -92,7 +91,7 @@ export async function summarizeHistory(
                 { role: 'user', content: olderText },
             ],
             {
-                temperature: 0.3,
+                temperature: LLM_TEMPERATURES.HISTORY_SUMMARY,
                 num_predict: HISTORY_SUMMARIZER.MAX_SUMMARY_TOKENS,
             }
         );

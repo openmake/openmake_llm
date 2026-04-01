@@ -26,14 +26,14 @@ export interface WSMessage {
     thinkingMode?: boolean;
     thinkingLevel?: string;
     enabledTools?: Record<string, boolean>;
-    /** 사용자가 RAG (문서 기반 응답)를 활성화했는지 여부 */
-    ragEnabled?: boolean;
     /** 첨부 파일 목록 */
     files?: Array<{ id: string; name: string; type: string }>;
     userRole?: string;
     userTier?: 'free' | 'pro' | 'enterprise';
     /** 사용자 선호 언어 (설정 페이지에서 선택) */
     language?: string;
+    /** 구조화된 출력 형식 (Ollama format 파라미터: 'json' 또는 JSON Schema 객체) */
+    format?: 'json' | Record<string, unknown>;
     [key: string]: unknown;
 }
 

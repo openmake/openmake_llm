@@ -14,6 +14,7 @@
  * - 웹 검색 기반 사실 검증 (팩트체킹)
  * - 토큰 제한을 고려한 컨텍스트 우선순위 관리
  */
+<<<<<<< HEAD:backend/api/src/domains/chat/strategies/discussion-strategy.ts
 import { createDiscussionEngine, type DiscussionResult } from '../../../agents/discussion-engine';
 import type { ChatMessage } from '../../../ollama/types';
 import type { ChatStrategy, ChatResult, DiscussionStrategyContext } from './types';
@@ -21,6 +22,16 @@ import { createLogger } from '../../../utils/logger';
 import { CONTEXT_LIMITS, DISCUSSION_TOKEN_BUDGET } from '../../../config/runtime-limits';
 import { resolvePromptLocale, type PromptLocaleCode } from '../pipeline/language-policy';
 import { errorMessage } from '../../../utils/error-message';
+=======
+import { createDiscussionEngine, type DiscussionResult, type DiscussionSearchResult } from '../../agents/discussion-engine';
+import type { ChatMessage } from '../../ollama/types';
+import type { ChatStrategy, ChatResult, DiscussionStrategyContext } from './types';
+import { createLogger } from '../../utils/logger';
+import { sanitizePromptInput } from '../../utils/input-sanitizer';
+import { CONTEXT_LIMITS, DISCUSSION_TOKEN_BUDGET } from '../../config/runtime-limits';
+import { LLM_TEMPERATURES } from '../../config/llm-parameters';
+import { resolvePromptLocale, type PromptLocaleCode } from '../../chat/language-policy';
+>>>>>>> fbe49389978ecfeb4fc6d2df399c18138a7fed78:backend/api/src/services/chat-strategies/discussion-strategy.ts
 
 const logger = createLogger('DiscussionStrategy');
 
@@ -185,18 +196,6 @@ const DISCUSSION_STRATEGY_LOCALE_TEXTS: Record<PromptLocaleCode, {
     },
 };
 
-/**
- * 웹 검색 결과 인터페이스 (토론 내부용)
- * @interface WebSearchResult
- */
-interface WebSearchResult {
-    /** 검색 결과 제목 */
-    title: string;
-    /** 검색 결과 URL */
-    url: string;
-    /** 검색 결과 요약 스니펫 */
-    snippet?: string;
-}
 
 /**
  * 멀티 에이전트 토론 전략
@@ -256,10 +255,10 @@ export class DiscussionStrategy implements ChatStrategy<DiscussionStrategyContex
             }
         }
 
-        // 2단계: 대화 히스토리 변환
+        // 2단계: 대화 히스토리 변환 (프롬프트 인젝션 방어를 위해 content 정제)
         const conversationHistory = history?.map((h) => ({
             role: h.role as string,
-            content: h.content as string,
+            content: sanitizePromptInput(h.content as string),
         })) || [];
 
         if (conversationHistory.length > 0) {
@@ -314,7 +313,7 @@ export class DiscussionStrategy implements ChatStrategy<DiscussionStrategyContex
                                 images: [imageBase64],
                             },
                         ],
-                        { temperature: 0.2 }
+                        { temperature: LLM_TEMPERATURES.DISCUSSION }
                     );
 
                     if (analysisResponse.content) {
@@ -341,8 +340,11 @@ export class DiscussionStrategy implements ChatStrategy<DiscussionStrategyContex
                 { role: 'user', content: userMessage },
             ];
 
-            await context.client.chat(chatMessages, {}, (token) => {
-                response += token;
+            await context.client.chat(chatMessages, {}, (token, thinking) => {
+                // Discussion 참가 모델의 thinking은 무시하고 content만 수집
+                if (!thinking) {
+                    response += token;
+                }
             });
 
             return response;
@@ -381,7 +383,7 @@ export class DiscussionStrategy implements ChatStrategy<DiscussionStrategyContex
         );
 
         // 웹 검색 기반 사실 검증 함수 로드 (선택적)
-        let webSearchFn: ((q: string, opts?: { maxResults?: number }) => Promise<WebSearchResult[]>) | undefined;
+        let webSearchFn: ((q: string, opts?: { maxResults?: number }) => Promise<DiscussionSearchResult[]>) | undefined;
         try {
             const { performWebSearch } = await import('../../../mcp');
             webSearchFn = performWebSearch;

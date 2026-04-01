@@ -12,7 +12,6 @@
  * @description 지원하는 WebSocket 메시지 타입:
  * - 'refresh'        - 클러스터 상태 업데이트 요청
  * - 'request_agents' - MCP 도구 목록 (에이전트 형식) 요청
- * - 'request_agents' - MCP 도구 목록 (에이전트 형식) 요청
  * - 'chat'           - AI 채팅 메시지 (스트리밍 토큰 응답)
  * - 'abort'          - 진행 중인 채팅 생성 중단
  *
@@ -20,7 +19,6 @@
  * - 'init'               - 초기 클러스터/MCP 상태
  * - 'stats'              - MCP 통계
  * - 'update'             - 클러스터 상태 업데이트
- * - 'agents'             - 에이전트(도구) 목록
  * - 'agents'             - 에이전트(도구) 목록
  * - 'token'              - AI 응답 스트리밍 토큰
  * - 'session_created'    - 새 세션 ID 알림
@@ -43,18 +41,13 @@ import { getUnifiedMCPClient } from '../mcp';
 import { createLogger } from '../utils/logger';
 import { WSMessage, ExtendedWebSocket } from './ws-types';
 import { authenticateWebSocket, refreshWebSocketAuthentication } from './ws-auth';
-import { WEBSOCKET_TIMEOUTS } from '../config/timeouts';
+import { WEBSOCKET_TIMEOUTS, WS_LIMITS } from '../config/timeouts';
 import { handleChatMessage } from './ws-chat-handler';
 import { withSpan } from '../observability/otel';
 import { runWithRequestContext } from '../utils/request-context';
 import { errorMessage } from '../utils/error-message';
 
 const log = createLogger('WebSocketHandler');
-const WS_MAX_CONNECTIONS_PER_USER = 5;
-const WS_CONNECTION_RATE_WINDOW_MS = 60 * 1000;
-const WS_CONNECTION_RATE_MAX_PER_IP = 30;
-const WS_CONNECTION_RATE_MAX_PER_USER = 15;
-const WS_AUTH_EXPIRY_WARNING_WINDOW_MS = 2 * 60 * 1000;
 
 // 대화 DB는 ChatRequestHandler 내부에서 getUnifiedDatabase().conversations로 접근합니다.
 
@@ -125,19 +118,19 @@ export class WebSocketHandler {
             const extWs = ws as ExtendedWebSocket;
             const clientIp = this.getClientIp(req);
 
-            if (this.isRateLimited(this.ipConnectionAttempts, clientIp, WS_CONNECTION_RATE_MAX_PER_IP)) {
+            if (this.isRateLimited(this.ipConnectionAttempts, clientIp, WS_LIMITS.CONNECTION_RATE_MAX_PER_IP)) {
                 ws.send(JSON.stringify({ type: 'error', message: '연결 요청이 너무 많습니다. 잠시 후 다시 시도해주세요.' }));
                 ws.close(1008, 'connection_rate_limited');
                 return;
             }
 
-            if (auth.userId && this.isRateLimited(this.userConnectionAttempts, auth.userId, WS_CONNECTION_RATE_MAX_PER_USER)) {
+            if (auth.userId && this.isRateLimited(this.userConnectionAttempts, auth.userId, WS_LIMITS.CONNECTION_RATE_MAX_PER_USER)) {
                 ws.send(JSON.stringify({ type: 'error', message: '사용자 연결 요청 한도를 초과했습니다. 잠시 후 다시 시도해주세요.' }));
                 ws.close(1008, 'user_connection_rate_limited');
                 return;
             }
 
-            if (auth.userId && this.getActiveConnectionsForUser(auth.userId) >= WS_MAX_CONNECTIONS_PER_USER) {
+            if (auth.userId && this.getActiveConnectionsForUser(auth.userId) >= WS_LIMITS.MAX_CONNECTIONS_PER_USER) {
                 ws.send(JSON.stringify({ type: 'error', message: '동시 WebSocket 세션 한도를 초과했습니다. 기존 세션을 종료 후 다시 시도해주세요.' }));
                 ws.close(1008, 'connection_limit_exceeded');
                 return;
@@ -202,6 +195,10 @@ export class WebSocketHandler {
             ws.on('pong', () => {
                 extWs._isAlive = true;
                 this.touchActivity(extWs);
+            });
+
+            ws.on('error', (err) => {
+                log.warn(`WebSocket error for user ${extWs._authenticatedUserId || 'anonymous'}:`, err);
             });
 
             ws.on('message', async (data) => {
@@ -325,12 +322,14 @@ export class WebSocketHandler {
 
     private async handleRefresh(ws: WebSocket, msg: WSMessage): Promise<void> {
         const extWs = ws as ExtendedWebSocket;
-        const refreshToken = typeof msg.authToken === 'string' ? msg.authToken : null;
-        if (!refreshToken) {
+        // 클라이언트가 새 access token을 전송하여 WebSocket 세션 인증 갱신
+        // 주의: 이것은 HTTP refresh token 흐름과 별개 — access token만 허용됨
+        const newAccessToken = typeof msg.authToken === 'string' ? msg.authToken : null;
+        if (!newAccessToken) {
             return;
         }
 
-        const refreshed = await refreshWebSocketAuthentication(refreshToken, log);
+        const refreshed = await refreshWebSocketAuthentication(newAccessToken, log);
         if (!refreshed.userId) {
             ws.send(JSON.stringify({ type: 'error', message: '인증 갱신에 실패했습니다. 다시 로그인해주세요.' }));
             this.unregisterConnection(ws);
@@ -436,7 +435,7 @@ export class WebSocketHandler {
     private cleanupOldAttempts(map: Map<string, number[]>, key: string): number[] {
         const now = Date.now();
         const attempts = map.get(key) || [];
-        const filtered = attempts.filter(ts => now - ts <= WS_CONNECTION_RATE_WINDOW_MS);
+        const filtered = attempts.filter(ts => now - ts <= WS_LIMITS.CONNECTION_RATE_WINDOW_MS);
         map.set(key, filtered);
         return filtered;
     }
@@ -504,9 +503,9 @@ export class WebSocketHandler {
         if (extWs._authTokenExpiresAtMs) {
             const now = Date.now();
             const remainingMs = extWs._authTokenExpiresAtMs - now;
-            if (remainingMs > 0 && remainingMs <= WS_AUTH_EXPIRY_WARNING_WINDOW_MS) {
+            if (remainingMs > 0 && remainingMs <= WS_LIMITS.AUTH_EXPIRY_WARNING_WINDOW_MS) {
                 const warnedAt = extWs._lastExpiryWarningAtMs || 0;
-                if (now - warnedAt > 60 * 1000) {
+                if (now - warnedAt > WS_LIMITS.AUTH_EXPIRY_WARNING_COOLDOWN_MS) {
                     ws.send(JSON.stringify({ type: 'token_warning', message: '인증 토큰이 곧 만료됩니다. refresh 메시지로 토큰을 갱신하세요.' }));
                     extWs._lastExpiryWarningAtMs = now;
                 }
@@ -524,7 +523,7 @@ export class WebSocketHandler {
         this.rateLimitCleanupInterval = setInterval(() => {
             const now = Date.now();
             for (const [key, attempts] of this.ipConnectionAttempts) {
-                const filtered = attempts.filter(ts => now - ts <= WS_CONNECTION_RATE_WINDOW_MS);
+                const filtered = attempts.filter(ts => now - ts <= WS_LIMITS.CONNECTION_RATE_WINDOW_MS);
                 if (filtered.length === 0) {
                     this.ipConnectionAttempts.delete(key);
                 } else {
@@ -532,14 +531,14 @@ export class WebSocketHandler {
                 }
             }
             for (const [key, attempts] of this.userConnectionAttempts) {
-                const filtered = attempts.filter(ts => now - ts <= WS_CONNECTION_RATE_WINDOW_MS);
+                const filtered = attempts.filter(ts => now - ts <= WS_LIMITS.CONNECTION_RATE_WINDOW_MS);
                 if (filtered.length === 0) {
                     this.userConnectionAttempts.delete(key);
                 } else {
                     this.userConnectionAttempts.set(key, filtered);
                 }
             }
-        }, WS_CONNECTION_RATE_WINDOW_MS);
+        }, WS_LIMITS.CONNECTION_RATE_WINDOW_MS);
         if (this.rateLimitCleanupInterval && typeof this.rateLimitCleanupInterval === 'object' && 'unref' in this.rateLimitCleanupInterval) {
             (this.rateLimitCleanupInterval as NodeJS.Timeout).unref();
         }

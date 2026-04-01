@@ -55,6 +55,7 @@ export function createChatRouter({ cluster }: ChatRouterDeps): Router {
     }
 
     try {
+        let thinkingTrace = '';
         const result = await ChatRequestHandler.processChat({
             message,
             model,
@@ -64,13 +65,16 @@ export function createChatRouter({ cluster }: ChatRouterDeps): Router {
             docId: req.body.docId,
             images: req.body.images,
             webSearchContext: req.body.webSearchContext,
-            ragEnabled: req.body.ragEnabled === true,
+            thinkingMode: req.body.thinkingMode,
+            thinkingLevel: req.body.thinkingLevel,
+            format: req.body.format,
             tools,
             tool_choice,
             userContext,
             apiKeyId: req.apiKeyId,
             clusterManager: cluster,
             onToken: () => { /* 일반 채팅은 스트리밍 안 함 */ },
+            onThinking: (thinking: string) => { thinkingTrace += thinking; },
         });
 
         // §9 디버그 정보 (x-omk-debug 헤더가 있을 때만 노출)
@@ -78,7 +82,7 @@ export function createChatRouter({ cluster }: ChatRouterDeps): Router {
         const pipelineInfo = debugRequested && result.executionPlan.isBrandModel ? {
             profile: result.executionPlan.requestedModel,
             engine: result.executionPlan.resolvedEngine,
-            a2a: result.executionPlan.useAgentLoop,
+            strategy: result.executionPlan.executionStrategy,
             thinking: result.executionPlan.thinkingLevel,
             discussion: result.executionPlan.useDiscussion,
         } : undefined;
@@ -88,6 +92,7 @@ export function createChatRouter({ cluster }: ChatRouterDeps): Router {
             response: result.response,
             sessionId: result.sessionId,
             model: result.model,
+            ...(thinkingTrace && { thinking: thinkingTrace }),
             ...(result.tool_calls && { tool_calls: result.tool_calls }),
             ...(result.finish_reason && { finish_reason: result.finish_reason }),
             ...(pipelineInfo && { pipeline_info: pipelineInfo }),
@@ -141,11 +146,11 @@ router.post('/stream', optionalApiKey, optionalAuth, chatRateLimiter, validate(c
             docId: req.body.docId,
             images: req.body.images,
             webSearchContext: req.body.webSearchContext,
-            ragEnabled: req.body.ragEnabled === true,
             discussionMode: req.body.discussionMode,
             deepResearchMode: req.body.deepResearchMode,
             thinkingMode: req.body.thinkingMode,
             thinkingLevel: req.body.thinkingLevel,
+            format: req.body.format,
             tools,
             tool_choice,
             userContext,
@@ -155,6 +160,10 @@ router.post('/stream', optionalApiKey, optionalAuth, chatRateLimiter, validate(c
             onToken: (token: string) => {
                 if (aborted) return;
                 res.write(`data: ${JSON.stringify({ token })}\n\n`);
+            },
+            onThinking: (thinking: string) => {
+                if (aborted) return;
+                res.write(`data: ${JSON.stringify({ thinking })}\n\n`);
             },
         });
 

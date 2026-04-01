@@ -53,6 +53,20 @@ export function getChunkSummaryPrompt(lang: string, topic: string, chunkIndex: n
     return prompts[lang] || `This is a source chunk ${header} for research on "${topic}".\n\nRequirements:\n1) Write an intermediate summary in 800-1200 words.\n2) Include citations in [Source N] format for key claims.\n3) Keep evidence-driven language and avoid unsupported certainty.\n\nSources:\n${chunkContext}`;
 }
 
+/** 경량 청크 요약 프롬프트 (콘텐츠 부족 시 사용) */
+export function getLightweightChunkSummaryPrompt(lang: string, topic: string, chunkIndex: number, totalChunks: number, chunkContext: string): string {
+    const header = `(${chunkIndex + 1}/${totalChunks})`;
+    const prompts: Record<string, string> = {
+        ko: `다음은 "${topic}" 연구용 소스 청크${header}입니다.\n\n주의: 소스 콘텐츠가 제한적(스니펫 수준)입니다.\n\n요구사항:\n1) 사용 가능한 정보만으로 200-400 단어의 간결한 요약을 작성하세요.\n2) 출처가 있는 정보만 포함하고 추측하지 마세요.\n3) 핵심 주장마다 [출처 N] 형식의 인용을 포함하세요.\n4) 정보가 부족한 부분은 "추가 조사 필요"로 표시하세요.\n\n소스:\n${chunkContext}`,
+        ja: `以下は「${topic}」研究用のソースチャンク${header}です。\n\n注意: ソースコンテンツが限定的（スニペットレベル）です。\n\n要件:\n1) 利用可能な情報のみで200-400語の簡潔な要約を作成。\n2) 出典のある情報のみ含め、推測は禁止。\n3) [出典 N]形式の引用を含める。\n4) 情報不足の部分は「追加調査必要」と表示。\n\nソース:\n${chunkContext}`,
+        zh: `以下是"${topic}"研究用源块${header}。\n\n注意: 源内容有限（摘要级别）。\n\n要求:\n1) 仅用可用信息写200-400字简洁摘要。\n2) 只包含有来源的信息，不要推测。\n3) 包含[来源 N]格式引用。\n4) 信息不足部分标注"需进一步调查"。\n\n源:\n${chunkContext}`,
+        es: `Este es un fragmento de fuentes ${header} para la investigación sobre "${topic}".\n\nNota: El contenido de las fuentes es limitado (nivel de fragmento).\n\nRequisitos:\n1) Escribe un resumen conciso de 200-400 palabras solo con la información disponible.\n2) Solo incluye información con fuente, no especules.\n3) Incluye citas en formato [Fuente N].\n4) Marca las áreas con información insuficiente como "requiere investigación adicional".\n\nFuentes:\n${chunkContext}`,
+        de: `Dies ist ein Quellen-Chunk ${header} für die Recherche über "${topic}".\n\nHinweis: Der Quellinhalt ist begrenzt (Snippet-Niveau).\n\nAnforderungen:\n1) Schreiben Sie eine knappe Zusammenfassung von 200-400 Wörtern nur mit verfügbaren Informationen.\n2) Nur belegte Informationen, keine Spekulation.\n3) Zitate im Format [Quelle N].\n4) Kennzeichnen Sie Lücken mit „weitere Untersuchung erforderlich".\n\nQuellen:\n${chunkContext}`,
+        fr: `Ceci est un bloc de sources ${header} pour la recherche sur \"${topic}\".\n\nNote : Le contenu des sources est limité (niveau extrait).\n\nExigences :\n1) Rédigez un résumé concis de 200-400 mots uniquement avec les informations disponibles.\n2) N'incluez que les informations sourcées, pas de spéculation.\n3) Citations au format [Source N].\n4) Marquez les lacunes par \"investigation supplémentaire nécessaire\".\n\nSources :\n${chunkContext}`,
+    };
+    return prompts[lang] || `This is a source chunk ${header} for research on "${topic}".\n\nNote: Source content is limited (snippet-level only).\n\nRequirements:\n1) Write a concise summary in 200-400 words using only available information.\n2) Only include sourced information, do not speculate.\n3) Include citations in [Source N] format.\n4) Mark areas with insufficient information as "further investigation needed".\n\nSources:\n${chunkContext}`;
+}
+
 /** 청크 병합 프롬프트 */
 export function getMergePrompt(lang: string, topic: string, chunkSummaries: string[]): string {
     const summaryText = chunkSummaries.map((s, i) => `### Chunk ${i + 1}\n${s}`).join('\n\n');
@@ -86,14 +100,14 @@ export function getReportPrompt(lang: string, topic: string, subTopicGuide: stri
     const h = getSectionHeaders(lang);
     const findingsText = findings.join('\n\n---\n\n');
     const prompts: Record<string, string> = {
-        ko: `"${topic}"에 대한 심층 연구 최종 보고서를 작성하세요.\n\n절대 축약하지 마세요. 충분히 상세하게 작성하세요. 모든 출처를 인용하세요.\n\n출력 요구사항:\n1) 종합 요약: 500-800 단어\n2) 주요 발견사항: 10-20개 번호 목록, 각 항목은 2-3문장\n3) 상세 분석: 아래 서브 토픽 구조를 기반으로 총 3000-5000 단어\n4) 참고 자료: 모든 고유 소스를 번호 목록으로 작성 ([N] Title - URL)\n5) 본문 모든 핵심 주장에 [출처 N] 형태의 인라인 인용 포함\n\n서브 토픽 구조:\n${subTopicGuide}\n\n중간 합성 결과:\n${findingsText}\n\n전체 소스 목록:\n${sourceList}\n\n다음 섹션 헤더를 유지하세요:\n## ${h.summary}\n## ${h.findings}\n## ${h.analysis}\n## ${h.references}`,
+        ko: `"${topic}"에 대한 심층 연구 최종 보고서를 작성하세요.\n\n절대 축약하지 마세요. 충분히 상세하게 작성하세요. 모든 출처를 인용하세요.\n\n## 출력 형식 요구사항\n\n### 전체 구조 (반드시 이 순서와 ## 헤더를 유지):\n\n## ${h.summary}\n- 500-800 단어의 종합 요약\n- 핵심 결론을 > 블록인용으로 강조\n\n## ${h.findings}\n- 10-20개 번호 목록 (1. 2. 3. ...)\n- 각 항목 2-3문장, [출처 N] 인용 포함\n\n## ${h.analysis}\n- 서브 토픽별 ### 소제목으로 구분\n- 총 3000-5000 단어\n- 비교 가능한 항목은 **마크다운 테이블** 사용\n- 핵심 인사이트는 > **블록인용** 활용\n- 대립되는 관점은 명시적으로 대비\n\n## ${h.references}\n- 모든 고유 소스를 번호 목록 ([N] Title - URL)\n\n### 마크다운 스타일 규칙:\n- **굵은 글씨**: 핵심 용어/수치 강조\n- > 블록인용: 주요 결론/인사이트\n- 테이블: 비교 분석 (| 항목 | A | B | 형태)\n- 인라인 인용: 모든 핵심 주장에 [출처 N]\n\n서브 토픽 구조:\n${subTopicGuide}\n\n중간 합성 결과:\n${findingsText}\n\n전체 소스 목록:\n${sourceList}`,
         ja: `「${topic}」についての深層研究最終報告書を作成してください。\n\n絶対に省略しないでください。十分に詳細に記述してください。\n\n出力要件:\n1) 総合概要: 500-800語\n2) 主な発見: 10-20項目の番号付きリスト、各項目2-3文\n3) 詳細分析: サブトピック構造に基づき合計3000-5000語\n4) 参考資料: 全ユニークソースを番号付きリストで\n5) 本文の全ての主要主張に[出典 N]形式のインライン引用を含む\n\nサブトピック構造:\n${subTopicGuide}\n\n中間合成結果:\n${findingsText}\n\n全ソースリスト:\n${sourceList}\n\n次のセクションヘッダーを維持してください:\n## ${h.summary}\n## ${h.findings}\n## ${h.analysis}\n## ${h.references}`,
         zh: `请撰写关于"${topic}"的深度研究最终报告。\n\n不要缩写。充分详细地写。引用所有来源。\n\n输出要求:\n1) 综合摘要: 500-800字\n2) 主要发现: 10-20个编号项目，每项2-3句\n3) 详细分析: 基于子主题结构共计3000-5000字\n4) 参考资料: 所有独立来源编号列表\n5) 正文中所有关键论点包含[来源 N]形式的内联引用\n\n子主题结构:\n${subTopicGuide}\n\n中间合成结果:\n${findingsText}\n\n全部来源列表:\n${sourceList}\n\n请保持以下章节标题:\n## ${h.summary}\n## ${h.findings}\n## ${h.analysis}\n## ${h.references}`,
         es: `Escribe un informe final de investigación profunda sobre "${topic}".\n\nNo abrevies. Escribe con todo detalle. Cita todas las fuentes.\n\nRequisitos de salida:\n1) Resumen ejecutivo: 500-800 palabras\n2) Hallazgos clave: 10-20 ítems numerados, 2-3 oraciones cada uno\n3) Análisis detallado: 3000-5000 palabras basado en subtemas\n4) Referencias: todas las fuentes como lista numerada\n5) Citas en línea [Fuente N] para todas las afirmaciones\n\nEstructura de subtemas:\n${subTopicGuide}\n\nSíntesis intermedia:\n${findingsText}\n\nLista completa de fuentes:\n${sourceList}\n\nMantén estos encabezados:\n## ${h.summary}\n## ${h.findings}\n## ${h.analysis}\n## ${h.references}`,
         de: `Erstellen Sie einen abschließenden Tiefenrecherche-Bericht über "${topic}".\n\nNicht kürzen. Ausführlich schreiben. Alle Quellen zitieren.\n\nAusgabeanforderungen:\n1) Zusammenfassung: 500-800 Wörter\n2) Wichtige Erkenntnisse: 10-20 nummerierte Punkte, je 2-3 Sätze\n3) Detailanalyse: 3000-5000 Wörter basierend auf Unterthemen\n4) Referenzen: alle Quellen als nummerierte Liste\n5) Inline-Zitate [Quelle N] für alle Kernaussagen\n\nUnterthemen-Struktur:\n${subTopicGuide}\n\nZwischensynthese:\n${findingsText}\n\nVollständige Quellenliste:\n${sourceList}\n\nBehalten Sie diese Abschnittsüberschriften bei:\n## ${h.summary}\n## ${h.findings}\n## ${h.analysis}\n## ${h.references}`,
         fr: `Rédigez un rapport final de recherche approfondie sur \"${topic}\".\n\nNe pas abréger. Écrivez en détail. Citez toutes les sources.\n\nExigences de sortie :\n1) Résumé exécutif : 500-800 mots\n2) Découvertes clés : 10-20 éléments numérotés, 2-3 phrases chacun\n3) Analyse détaillée : 3000-5000 mots basés sur les sous-thèmes\n4) Références : toutes les sources en liste numérotée\n5) Citations en ligne [Source N] pour toutes les affirmations clés\n\nStructure des sous-thèmes :\n${subTopicGuide}\n\nSynthèse intermédiaire :\n${findingsText}\n\nListe complète des sources :\n${sourceList}\n\nConservez ces en-têtes de section :\n## ${h.summary}\n## ${h.findings}\n## ${h.analysis}\n## ${h.references}`,
     };
-    return prompts[lang] || `Write a final deep-research report on "${topic}".\n\nDo not abbreviate. Write with full detail. Cite all sources.\n\nOutput requirements:\n1) Executive Summary: 500-800 words\n2) Key findings: 10-20 numbered findings, each 2-3 sentences\n3) Detailed analysis: 3000-5000 words total, structured by the subtopics below\n4) References: all unique sources as numbered list ([N] Title - URL)\n5) Inline citations in [Source N] format for all core claims\n\nSubtopic structure:\n${subTopicGuide}\n\nIntermediate synthesis:\n${findingsText}\n\nFull source list:\n${sourceList}\n\nKeep these section headers:\n## ${h.summary}\n## ${h.findings}\n## ${h.analysis}\n## ${h.references}`;
+    return prompts[lang] || `Write a final deep-research report on "${topic}".\n\nDo not abbreviate. Write with full detail. Cite all sources.\n\n## Output Format\n\n### Structure (keep these ## headers in order):\n\n## ${h.summary}\n- 500-800 word overview\n- Highlight key conclusions with > blockquotes\n\n## ${h.findings}\n- 10-20 numbered items (1. 2. 3. ...)\n- Each 2-3 sentences with [Source N] citations\n\n## ${h.analysis}\n- Use ### subheadings per subtopic\n- 3000-5000 words total\n- Use **markdown tables** for comparisons\n- Use > **blockquotes** for key insights\n- Contrast opposing viewpoints explicitly\n\n## ${h.references}\n- All unique sources as numbered list ([N] Title - URL)\n\n### Markdown style rules:\n- **Bold**: key terms/numbers\n- > Blockquote: major conclusions\n- Tables: comparison analysis (| Item | A | B | format)\n- Inline citations: [Source N] for all key claims\n\nSubtopic structure:\n${subTopicGuide}\n\nIntermediate synthesis:\n${findingsText}\n\nFull source list:\n${sourceList}`;
 }
 
 /** 리서치 진행/에러 메시지 다국어 매핑 */
@@ -144,13 +158,13 @@ const RESEARCH_MESSAGES: Record<string, Record<string, string>> = {
         fr: 'Boucle {loop} : Recherche terminée ({newCount} nouvelles, {totalCount}/{maxSources} sources au total)',
     },
     loopScraping: {
-        ko: '루프 {loop}: Firecrawl 스크래핑 준비 ({scrapedCount}/{maxSources} 소스)',
-        en: 'Loop {loop}: Preparing Firecrawl scraping ({scrapedCount}/{maxSources} sources)',
-        ja: 'ループ {loop}: Firecrawlスクレイピング準備 ({scrapedCount}/{maxSources}ソース)',
-        zh: '循环 {loop}: 准备Firecrawl抓取 ({scrapedCount}/{maxSources}来源)',
-        es: 'Bucle {loop}: Preparando scraping Firecrawl ({scrapedCount}/{maxSources} fuentes)',
-        de: 'Schleife {loop}: Firecrawl-Scraping vorbereiten ({scrapedCount}/{maxSources} Quellen)',
-        fr: 'Boucle {loop} : Préparation du scraping Firecrawl ({scrapedCount}/{maxSources} sources)',
+        ko: '루프 {loop}: 웹 스크래핑 준비 ({scrapedCount}/{maxSources} 소스)',
+        en: 'Loop {loop}: Preparing web scraping ({scrapedCount}/{maxSources} sources)',
+        ja: 'ループ {loop}: ウェブスクレイピング準備 ({scrapedCount}/{maxSources}ソース)',
+        zh: '循环 {loop}: 准备网页抓取 ({scrapedCount}/{maxSources}来源)',
+        es: 'Bucle {loop}: Preparando web scraping ({scrapedCount}/{maxSources} fuentes)',
+        de: 'Schleife {loop}: Web-Scraping vorbereiten ({scrapedCount}/{maxSources} Quellen)',
+        fr: 'Boucle {loop} : Préparation du web scraping ({scrapedCount}/{maxSources} sources)',
     },
     loopSynthesizing: {
         ko: '루프 {loop}: 정보 합성 중...',
@@ -205,6 +219,15 @@ const RESEARCH_MESSAGES: Record<string, Record<string, string>> = {
         es: 'No se recopilaron fuentes.',
         de: 'Keine Quellen gesammelt.',
         fr: 'Aucune source collectée.',
+    },
+    insufficientContent: {
+        ko: '소스 콘텐츠 부족 (스크래핑 실패) — 경량 합성으로 전환',
+        en: 'Insufficient source content (scraping failed) — switching to lightweight synthesis',
+        ja: 'ソースコンテンツ不足（スクレイピング失敗）— 軽量合成に切替',
+        zh: '源内容不足（抓取失败）— 切换到轻量合成',
+        es: 'Contenido insuficiente (scraping fallido) — cambiando a síntesis ligera',
+        de: 'Unzureichender Quellinhalt (Scraping fehlgeschlagen) — Wechsel zu leichter Synthese',
+        fr: 'Contenu insuffisant (scraping échoué) — passage à la synthèse légère',
     },
     synthesisFailed: {
         ko: '합성 실패',

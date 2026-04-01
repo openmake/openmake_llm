@@ -8,8 +8,14 @@
  * @module services/deep-research-types
  */
 
+<<<<<<< HEAD:backend/api/src/domains/research/deep-research-types.ts
 import type { SearchResult } from '../../mcp/web-search';
 import { LLM_TIMEOUTS } from '../../config/timeouts';
+=======
+import type { SearchResult } from '../mcp/web-search';
+import { LLM_TIMEOUTS } from '../config/timeouts';
+import { RESEARCH_DEFAULTS } from '../config/runtime-limits';
+>>>>>>> fbe49389978ecfeb4fc6d2df399c18138a7fed78:backend/api/src/services/deep-research-types.ts
 
 // ============================================================
 // 타입 정의
@@ -19,11 +25,11 @@ import { LLM_TIMEOUTS } from '../../config/timeouts';
 export interface ResearchConfig {
     maxLoops: number;            // 최대 반복 횟수 (기본: 5)
     llmModel: string;            // 사용할 LLM 모델
-    searchApi: 'ollama' | 'firecrawl' | 'google' | 'all'; // 검색 API
+    searchApi: 'ollama' | 'google' | 'all'; // 검색 API
     maxSearchResults: number;    // 검색 결과 예산 (기본: 360)
     language: string;              // 출력 언어 (ISO 639-1 코드, 예: 'ko', 'en', 'ja')
     maxTotalSources: number;     // 목표 고유 소스 수 (기본: 80)
-    scrapeFullContent: boolean;  // Firecrawl로 풀 콘텐츠 스크래핑 여부 (기본: true)
+    scrapeFullContent: boolean;  // 풀 콘텐츠 스크래핑 여부 (기본: true)
     maxScrapePerLoop: number;    // 루프당 최대 스크래핑 수 (기본: 15)
     scrapeTimeoutMs: number;     // 개별 스크래핑 타임아웃 (기본: 15000)
     chunkSize: number;           // 중간 요약용 청크 사이즈 (기본: 10)
@@ -71,13 +77,13 @@ export const DEFAULT_CONFIG: ResearchConfig = {
     maxLoops: 5,
     llmModel: '',
     searchApi: 'all',
-    maxSearchResults: 360,
+    maxSearchResults: RESEARCH_DEFAULTS.MAX_SEARCH_RESULTS,
     language: 'en',
-    maxTotalSources: 80,
+    maxTotalSources: RESEARCH_DEFAULTS.MAX_TOTAL_SOURCES,
     scrapeFullContent: true,
-    maxScrapePerLoop: 15,
+    maxScrapePerLoop: RESEARCH_DEFAULTS.MAX_SCRAPE_PER_LOOP,
     scrapeTimeoutMs: LLM_TIMEOUTS.SCRAPE_TIMEOUT_MS,
-    chunkSize: 10
+    chunkSize: RESEARCH_DEFAULTS.CHUNK_SIZE
 };
 
 // 전역 설정 (configure로 변경 가능)

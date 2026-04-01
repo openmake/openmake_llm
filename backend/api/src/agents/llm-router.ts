@@ -24,8 +24,11 @@ import { sanitizePromptInput, validatePromptInput } from '../utils/input-sanitiz
 import { AgentCategory } from './types';
 import industryData from './industry-agents.json';
 import { createLogger } from '../utils/logger';
-import { CAPACITY } from '../config/runtime-limits';
+import { extractJSONFromResponse } from '../utils/json-parser';
+import { CAPACITY, ROUTER_CONFIDENCE_FALLBACK } from '../config/runtime-limits';
 import { LLM_TIMEOUTS } from '../config/timeouts';
+import { ROUTER_TEMPERATURE, ROUTER_NUM_PREDICT } from '../config/routing-config';
+import { buildLLMRouterSystemPrompt } from '../prompts/llm-router-system';
 
 const logger = createLogger('LLMRouter');
 
@@ -141,54 +144,6 @@ function formatAgentListForPrompt(summaries: AgentSummary[]): string {
 }
 
 /**
- * LLM 응답에서 JSON 객체 추출 (3단계 파싱 전략)
- *
- * LLM 응답은 JSON 외에 설명 텍스트를 포함할 수 있으므로,
- * 3단계 전략으로 JSON을 추출한다:
- *
- * 1단계: ```json 코드블록 내 JSON 추출 시도
- * 2단계: Greedy 매칭 (가장 바깥 {} 블록 — 중첩 브레이스 대응)
- * 3단계: Non-greedy 폴백 (가장 짧은 {} 블록)
- *
- * @param response - LLM의 원시 응답 문자열
- * @returns {Record<string, unknown> | null} - 파싱된 JSON 객체, 실패 시 null
- */
-function extractJSONFromResponse(response: string): Record<string, unknown> | null {
-    // 1단계: ```json 코드블록 내 JSON 추출 시도
-    const codeBlockMatch = response.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
-    if (codeBlockMatch) {
-        try {
-            return JSON.parse(codeBlockMatch[1]);
-        } catch {
-            // 코드블록 내 파싱 실패 시 다음 단계로
-        }
-    }
-
-    // 2단계: Greedy 매칭 (중첩 브레이스 대응 — 가장 바깥 {} 블록)
-    const greedyMatch = response.match(/\{[\s\S]*\}/);
-    if (greedyMatch) {
-        try {
-            return JSON.parse(greedyMatch[0]);
-        } catch {
-            // greedy 실패 시 non-greedy 시도
-        }
-    }
-
-    // 3단계: Non-greedy 폴백 (가장 짧은 {} 블록)
-    const lazyMatch = response.match(/\{[\s\S]*?\}/);
-    if (lazyMatch) {
-        try {
-            return JSON.parse(lazyMatch[0]);
-        } catch (e) {
-            logger.info('JSON 파싱 실패, 응답:', response.substring(0, 200));
-            return null;
-        }
-    }
-
-    return null;
-}
-
-/**
  * LLM 기반 에이전트 라우팅 (메인 라우팅 함수)
  *
  * 사용자 메시지를 LLM으로 분석하여 최적의 에이전트를 선택한다.
@@ -214,29 +169,7 @@ export async function routeWithLLM(
     const summaries = getAgentSummaries();
     const agentList = formatAgentListForPrompt(summaries);
 
-    const systemPrompt = `당신은 AI 에이전트 라우터입니다. 사용자 질문을 분석하여 가장 적합한 전문가를 선택하세요.
-
-## 분석 단계 (반드시 순서대로 수행):
-1. **핵심 의도 파악**: 사용자가 원하는 것이 무엇인가?
-2. **도메인 식별**: 어떤 분야와 관련된 질문인가?
-3. **전문성 유형**: 어떤 종류의 전문가가 필요한가?
-
-## 규칙:
-1. 키워드가 아닌 **질문 전체 맥락**을 분석하세요
-2. 질문의 **숨겨진 의도**도 파악하세요
-3. 가장 적합한 전문가 **1명**을 선택하세요
-4. 확신이 없어도 가장 근접한 전문가를 선택하세요
-
-## 사용 가능한 전문가 목록:
-${agentList}
-
-## 응답 형식 (반드시 JSON만 출력):
-{
-  "agent_id": "선택한 에이전트 ID",
-  "confidence": 0.0-1.0 사이의 신뢰도,
-  "reasoning": "선택 이유 (한 문장)",
-  "alternatives": ["대안1 ID", "대안2 ID"]
-}`;
+    const systemPrompt = buildLLMRouterSystemPrompt(agentList);
 
     // 🔧 라우팅 목적으로는 메시지 앞부분만 필요 — 긴 문서 입력은 잘라내기
     const MAX_ROUTING_INPUT = CAPACITY.ROUTING_INPUT_MAX_CHARS;
@@ -267,8 +200,8 @@ ${sanitizedMessage}
                 { role: 'system', content: systemPrompt },
                 { role: 'user', content: userPrompt }
             ], {
-                temperature: 0.1,  // 결정적인 응답을 위해 낮은 온도
-                num_predict: 200   // 짧은 응답만 필요
+                temperature: ROUTER_TEMPERATURE,
+                num_predict: ROUTER_NUM_PREDICT,
             });
 
             return response.content;
@@ -294,9 +227,9 @@ ${sanitizedMessage}
 
                 return {
                     agentId: agentIdStr,
-                    confidence: Number(parsed.confidence || parsed.score) || 0.85,
+                    confidence: Number(parsed.confidence || parsed.score) || ROUTER_CONFIDENCE_FALLBACK,
                     reasoning: String(parsed.reasoning || parsed.reason || ''),
-                    alternativeAgents: Array.isArray(parsed.alternatives) ? parsed.alternatives as string[] : []
+                    alternativeAgents: Array.isArray(parsed.alternatives) ? (parsed.alternatives as unknown[]).filter((x): x is string => typeof x === 'string') : []
                 };
             }
 
@@ -308,7 +241,7 @@ ${sanitizedMessage}
         return null;
 
     } catch (error) {
-        logger.error('오류:', error);
+        logger.error(`LLM 라우터 에이전트 선택 실패 (message="${message.substring(0, 40)}..."):`, error instanceof Error ? error.message : error);
         return null;
     }
 }

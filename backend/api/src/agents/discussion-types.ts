@@ -69,6 +69,12 @@ export interface DiscussionResult {
     totalTime: number;
     /** 웹 검색 사실 검증 수행 여부 */
     factChecked?: boolean;
+    /** Self-Consistency Score (0.0~1.0, 에이전트 간 합의도) */
+    consistencyScore?: number;
+    /** 합의 사항 목록 */
+    consensusPoints?: string[];
+    /** 모순/불일치 사항 목록 */
+    conflictPoints?: string[];
 }
 
 /**

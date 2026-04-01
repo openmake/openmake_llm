@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="ko" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover">
+    <title>UIR 라우터 모니터 - OpenMake.Ai</title>
+    <link rel="icon" type="image/png" href="/logo.png">
+    <link rel="preconnect" href="https://cdn.jsdelivr.net">
+    <link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="/css/design-tokens.css">
+    <link rel="stylesheet" href="/css/components.css">
+    <link rel="stylesheet" href="/css/layout.css">
+    <style>
+        .stats-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:var(--space-4); margin-bottom:var(--space-5); }
+        .stat-card { background:var(--bg-card); border:1px solid var(--border-light); border-radius:var(--radius-lg); padding:var(--space-5); text-align:center; }
+        .stat-card .stat-label { font-size:var(--font-size-sm); color:var(--text-muted); margin-bottom:var(--space-2); }
+        .stat-card .stat-value { font-size:1.8rem; font-weight:var(--font-weight-bold); color:var(--accent-primary); }
+        .stat-card .stat-unit { font-size:var(--font-size-sm); color:var(--text-secondary); margin-left:2px; }
+        .card-section { background:var(--bg-card); border:1px solid var(--border-light); border-radius:var(--radius-lg); padding:var(--space-5); margin-bottom:var(--space-5); }
+        .card-section h2 { margin:0 0 var(--space-4); color:var(--text-primary); font-size:1rem; font-weight:var(--font-weight-semibold); border-bottom:1px solid var(--border-light); padding-bottom:var(--space-3); }
+        .rollout-row { display:flex; align-items:center; gap:var(--space-4); flex-wrap:wrap; }
+        .rollout-info { display:flex; align-items:center; gap:var(--space-3); flex:1; min-width:200px; }
+        .big-pct { font-size:2rem; font-weight:var(--font-weight-bold); color:var(--accent-primary); }
+        .big-pct-label { font-size:var(--font-size-sm); color:var(--text-muted); }
+        .badge { display:inline-block; padding:2px 10px; border-radius:var(--radius-md); font-size:var(--font-size-sm); font-weight:var(--font-weight-bold); }
+        .badge-on  { background:var(--success); color:#fff; }
+        .badge-off { background:var(--text-muted); color:#fff; }
+        .rollout-edit { display:flex; align-items:center; gap:var(--space-3); flex-wrap:wrap; }
+        .rollout-edit label { font-size:var(--font-size-sm); color:var(--text-secondary); white-space:nowrap; }
+        .rollout-edit input[type=number] { width:80px; padding:var(--space-2) var(--space-3); border:1px solid var(--border-light); border-radius:var(--radius-md); background:var(--bg-secondary); color:var(--text-primary); font-size:var(--font-size-sm); }
+        .rollout-edit select { padding:var(--space-2) var(--space-3); border:1px solid var(--border-light); border-radius:var(--radius-md); background:var(--bg-secondary); color:var(--text-primary); font-size:var(--font-size-sm); }
+        .btn-primary { padding:var(--space-2) var(--space-4); background:var(--accent-primary); color:#fff; border:none; border-radius:var(--radius-md); cursor:pointer; font-weight:var(--font-weight-semibold); }
+        .btn-secondary { padding:var(--space-2) var(--space-4); background:var(--bg-tertiary); color:var(--text-primary); border:1px solid var(--border-light); border-radius:var(--radius-md); cursor:pointer; font-weight:var(--font-weight-semibold); }
+        .toolbar { display:flex; align-items:center; justify-content:space-between; margin-bottom:var(--space-4); flex-wrap:wrap; gap:var(--space-3); }
+        .toolbar h2 { margin:0; color:var(--text-primary); font-size:1rem; font-weight:var(--font-weight-semibold); }
+        .table-wrapper { overflow-x:auto; }
+        .log-table { width:100%; border-collapse:collapse; font-size:var(--font-size-sm); min-width:700px; }
+        .log-table th, .log-table td { padding:var(--space-2) var(--space-3); text-align:left; border-bottom:1px solid var(--border-light); white-space:nowrap; }
+        .log-table th { background:var(--bg-tertiary); color:var(--text-secondary); font-weight:var(--font-weight-semibold); position:sticky; top:0; }
+        .log-table td { color:var(--text-primary); }
+        .log-table tr:last-child td { border-bottom:none; }
+        .match-yes { color:var(--success); }
+        .match-no  { color:var(--danger); }
+        .loading { text-align:center; padding:var(--space-6); color:var(--text-muted); }
+        .empty-state { text-align:center; padding:var(--space-8); color:var(--text-muted); }
+        .toast { position:fixed; bottom:20px; right:20px; padding:var(--space-3) var(--space-5); border-radius:var(--radius-md); color:#fff; z-index:2000; opacity:0; transition:opacity .3s; }
+        .toast.show { opacity:1; } .toast.success { background:var(--success); } .toast.error { background:var(--danger); }
+    </style>
+</head>
+<body>
+    <div class="layout">
+        <aside class="sidebar" id="sidebar"></aside>
+        <div class="sidebar-overlay" onclick="toggleSidebar()"></div>
+        <main class="main-content">
+            <header class="page-header">
+                <button class="mobile-menu-btn" onclick="toggleMobileSidebar(event)">&#9776;</button>
+                <h1>UIR 라우터 모니터</h1>
+            </header>
+            <div class="content-area" id="app">
+                <div class="loading">권한 확인 중...</div>
+            </div>
+        </main>
+    </div>
+
+    <div id="toast" class="toast"></div>
+
+    <script type="module" src="/js/components/sidebar.js"></script>
+    <script type="module">
+        function authFetch(url, options = {}) {
+            const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
+            return fetch(url, { ...options, credentials: 'include', headers });
+        }
+
+        function showToast(msg, type = 'success') {
+            const t = document.getElementById('toast');
+            t.textContent = msg;
+            t.className = 'toast ' + type + ' show';
+            setTimeout(() => t.classList.remove('show'), 3000);
+        }
+
+        function esc(s) {
+            const d = document.createElement('div');
+            d.textContent = s == null ? '' : String(s);
+            return d.innerHTML;
+        }
+
+        function fmtTime(iso) {
+            if (!iso) return '-';
+            return new Date(iso).toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        }
+
+        async function checkAdmin() {
+            try {
+                const res = await authFetch('/api/auth/me');
+                const json = await res.json();
+                const user = json.data || json;
+                if (!user || user.role !== 'admin') {
+                    alert('관리자 권한이 필요합니다.');
+                    window.location.href = '/';
+                    return false;
+                }
+                return true;
+            } catch (e) {
+                window.location.href = '/login.html';
+                return false;
+            }
+        }
+
+        function renderApp() {
+            document.getElementById('app').innerHTML = `
+                <p style="color:var(--text-muted);font-size:var(--font-size-sm);margin-bottom:var(--space-5)">
+                    Unified Intent Router shadow 비교 결과 및 롤아웃 현황 (최근 7일 기준)
+                </p>
+
+                <div class="stats-grid">
+                    <div class="stat-card"><div class="stat-label">총 비교 횟수</div><div class="stat-value" id="statTotal">-</div></div>
+                    <div class="stat-card"><div class="stat-label">에이전트 일치율</div><div class="stat-value" id="statAgent">-</div><span class="stat-unit">%</span></div>
+                    <div class="stat-card"><div class="stat-label">쿼리타입 일치율</div><div class="stat-value" id="statQtype">-</div><span class="stat-unit">%</span></div>
+                    <div class="stat-card"><div class="stat-label">평균 UIR 레이턴시</div><div class="stat-value" id="statLatency">-</div><span class="stat-unit">ms</span></div>
+                </div>
+
+                <div class="card-section" id="rolloutSection">
+                    <h2>롤아웃 설정</h2>
+                    <div class="loading">로딩 중...</div>
+                </div>
+
+                <div class="card-section">
+                    <div class="toolbar">
+                        <h2>최근 Shadow Log</h2>
+                        <button class="btn-secondary" onclick="loadAll()">새로고침</button>
+                    </div>
+                    <div class="table-wrapper">
+                        <div id="logArea"><div class="loading">로딩 중...</div></div>
+                    </div>
+                </div>`;
+        }
+
+        function renderStats(stats) {
+            if (!stats) return;
+            const el = (id) => document.getElementById(id);
+            if (el('statTotal'))   el('statTotal').textContent   = Number(stats.total_comparisons || 0).toLocaleString('ko-KR');
+            if (el('statAgent'))   el('statAgent').textContent   = stats.agent_match_rate  != null ? Number(stats.agent_match_rate).toFixed(1)  : '-';
+            if (el('statQtype'))   el('statQtype').textContent   = stats.qtype_match_rate  != null ? Number(stats.qtype_match_rate).toFixed(1)   : '-';
+            if (el('statLatency')) el('statLatency').textContent = stats.avg_latency_ms    != null ? Math.round(Number(stats.avg_latency_ms))    : '-';
+        }
+
+        function renderRollout(rollout) {
+            const section = document.getElementById('rolloutSection');
+            if (!section) return;
+
+            if (!rollout) {
+                section.innerHTML = '<h2>롤아웃 설정</h2><div class="empty-state">롤아웃 정보를 불러올 수 없습니다.</div>';
+                return;
+            }
+
+            const pct     = rollout.rollout_percent ?? 0;
+            const enabled = rollout.enabled === true;
+
+            section.innerHTML = `
+                <h2>롤아웃 설정</h2>
+                <div class="rollout-row">
+                    <div class="rollout-info">
+                        <div>
+                            <div class="big-pct" id="pctDisplay">${esc(String(pct))}%</div>
+                            <div class="big-pct-label">현재 롤아웃 비율</div>
+                        </div>
+                        <span class="badge ${enabled ? 'badge-on' : 'badge-off'}" id="enabledBadge">${enabled ? 'ON' : 'OFF'}</span>
+                    </div>
+                    <div class="rollout-edit">
+                        <label for="rolloutInput">새 비율 %</label>
+                        <input type="number" id="rolloutInput" min="0" max="100" value="${esc(String(pct))}" />
+                        <label for="rolloutEnabled">활성화</label>
+                        <select id="rolloutEnabled">
+                            <option value="true"${enabled ? ' selected' : ''}>ON</option>
+                            <option value="false"${!enabled ? ' selected' : ''}>OFF</option>
+                        </select>
+                        <button class="btn-primary" id="saveBtn">저장</button>
+                    </div>
+                </div>`;
+
+            document.getElementById('saveBtn').addEventListener('click', saveRollout);
+        }
+
+        function renderLog(rows) {
+            const el = document.getElementById('logArea');
+            if (!el) return;
+
+            if (!rows || rows.length === 0) {
+                el.innerHTML = '<div class="empty-state">Shadow log 데이터가 없습니다.</div>';
+                return;
+            }
+
+            const tbody = rows.map(r => {
+                const agentIcon = r.agent_match      ? '<span class="match-yes">✅</span>' : '<span class="match-no">❌</span>';
+                const qtypeIcon = r.query_type_match ? '<span class="match-yes">✅</span>' : '<span class="match-no">❌</span>';
+                return `<tr>
+                    <td>${esc(fmtTime(r.created_at))}</td>
+                    <td>${esc(r.uir_agent_id    || '-')}</td>
+                    <td>${esc(r.legacy_agent_id || '-')}</td>
+                    <td style="text-align:center">${agentIcon}</td>
+                    <td>${esc(r.uir_query_type    || '-')}</td>
+                    <td>${esc(r.legacy_query_type || '-')}</td>
+                    <td style="text-align:center">${qtypeIcon}</td>
+                    <td>${r.uir_latency_ms != null ? esc(Math.round(Number(r.uir_latency_ms)) + 'ms') : '-'}</td>
+                </tr>`;
+            }).join('');
+
+            el.innerHTML = `
+                <table class="log-table">
+                    <thead><tr>
+                        <th>시각</th>
+                        <th>UIR agentId</th><th>Legacy agentId</th><th>에이전트 일치</th>
+                        <th>UIR queryType</th><th>Legacy queryType</th><th>qType 일치</th>
+                        <th>UIR 레이턴시</th>
+                    </tr></thead>
+                    <tbody>${tbody}</tbody>
+                </table>`;
+        }
+
+        async function saveRollout() {
+            const input     = document.getElementById('rolloutInput');
+            const selEnabled = document.getElementById('rolloutEnabled');
+            if (!input || !selEnabled) return;
+
+            const val = parseInt(input.value, 10);
+            if (isNaN(val) || val < 0 || val > 100) {
+                showToast('0~100 사이 값을 입력하세요.', 'error');
+                return;
+            }
+
+            const enabledVal = selEnabled.value === 'true';
+            try {
+                const res  = await authFetch('/api/uir/rollout', {
+                    method: 'PUT',
+                    body: JSON.stringify({ rollout_percent: val, enabled: enabledVal })
+                });
+                const json = await res.json();
+                if (res.ok && json.success) {
+                    showToast('롤아웃 설정이 저장되었습니다.');
+                    loadAll();
+                } else {
+                    showToast(json?.error?.message || '저장 실패', 'error');
+                }
+            } catch (e) {
+                showToast('네트워크 오류가 발생했습니다.', 'error');
+            }
+        }
+
+        async function loadAll() {
+            try {
+                const res  = await authFetch('/api/uir/stats');
+                const json = await res.json();
+                if (res.ok && json.success) {
+                    renderStats(json.data.stats);
+                    if (json.data.rollout) renderRollout(json.data.rollout);
+                }
+            } catch (e) { console.error('[uir-monitor] stats error:', e); }
+
+            // rollout이 stats 응답에 없을 경우 별도 조회
+            const rolloutSection = document.getElementById('rolloutSection');
+            if (rolloutSection && rolloutSection.innerHTML.includes('로딩 중')) {
+                try {
+                    const res  = await authFetch('/api/uir/rollout');
+                    const json = await res.json();
+                    renderRollout(res.ok && json.success ? json.data.rollout : null);
+                } catch (e) { renderRollout(null); }
+            }
+
+            try {
+                const res  = await authFetch('/api/uir/log?limit=50');
+                const json = await res.json();
+                if (res.ok && json.success) {
+                    renderLog(json.data.items || []);
+                } else {
+                    const el = document.getElementById('logArea');
+                    if (el) el.innerHTML = '<div class="empty-state">로그 데이터를 불러올 수 없습니다.</div>';
+                }
+            } catch (e) {
+                const el = document.getElementById('logArea');
+                if (el) el.innerHTML = '<div class="empty-state">로그 로드 중 오류가 발생했습니다.</div>';
+            }
+        }
+
+        window.loadAll = loadAll;
+
+        checkAdmin().then(ok => {
+            if (ok) { renderApp(); loadAll(); }
+        });
+    </script>
+</body>
+</html>

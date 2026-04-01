@@ -21,11 +21,8 @@ export interface RoutingQueryFeatures {
 }
 
 export interface RoutingRouteDecision {
-    strategy: 'a2a' | 'agent-loop' | 'direct' | 'discussion' | 'deep-research';
-    a2aMode?: string;
+    strategy: 'generate-verify' | 'agent-loop' | 'direct' | 'discussion' | 'deep-research';
     primaryModel?: string;
-    secondaryModel?: string;
-    synthesizerModel?: string;
     complexityScore?: number;
     complexitySignals?: string[];
     /** P2-1: 적용된 비용 티어 */
@@ -36,6 +33,39 @@ export interface RoutingRouteDecision {
     domainEngine?: string;
     /** P2-2: 매칭된 도메인 키 */
     domainKey?: string;
+    /** P1-2: 분류 신뢰도 (0.0~1.0) */
+    classificationConfidence?: number;
+    /** P1-2: 분류 출처 */
+    classifierSource?: 'llm' | 'cache' | 'regex';
+    /** P1-2: 실행 전략 */
+    executionStrategy?: 'single' | 'generate-verify' | 'conditional-verify';
+    /** P1-2: GV 스킵 여부 (conditional-verify에서 복잡도 낮아 스킵) */
+    gvSkipped?: boolean;
+    /** P1-2: 토큰 예산 */
+    tokenBudget?: number;
+    /** GV 검증 여부 */
+    gvVerified?: boolean;
+    /** GV 변경률 (0.0~1.0, Jaccard distance) */
+    gvVerificationDelta?: number;
+    /** GV 이슈 발견 수 */
+    gvIssuesFound?: number;
+    /** Thinking 모드 사고 단계 수 */
+    thinkingSteps?: number;
+    /** Thinking 모드 사고 사용 문자 수 */
+    thinkingCharsUsed?: number;
+    /** Thinking 모드 결론 강제 여부 */
+    conclusionForced?: boolean;
+    /** Thinking 모드 결론-과정 일관성 검증 통과 여부 */
+    verificationPassed?: boolean;
+    /** 하네스 개입 — 분류 신뢰도 게이트 등 */
+    harnessIntervention?: string;
+    /** 하네스 개입 전 원래 전략 */
+    originalStrategy?: string;
+    /** P3: 사후 검증 결과 — 라우팅이 적절했는지 */
+    postVerification?: {
+        appropriate: boolean;
+        issues: string[];
+    };
 }
 
 export interface RoutingDecisionLog {
@@ -82,9 +112,3 @@ export function logRoutingDecision(log: RoutingDecisionLog): void {
     logger.info('routing-decision', { routingLog: log });
 }
 
-/**
- * A2A 모델 선택을 기록합니다.
- */
-export function logA2AModelSelection(queryType: string, primary: string, secondary: string, synthesizer: string): void {
-    logger.info(`A2A 모델 선택: queryType=${queryType}, primary=${primary}, secondary=${secondary}, synthesizer=${synthesizer}`);
-}

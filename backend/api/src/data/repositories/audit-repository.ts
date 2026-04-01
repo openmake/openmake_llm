@@ -108,7 +108,16 @@ export class AuditRepository extends BaseRepository {
         return result.rows;
     }
 
+    private static cachedStats: Record<string, number> | null = null;
+    private static lastCacheTime: number = 0;
+    private static readonly CACHE_TTL = 5 * 60 * 1000; // 5분
+
     async getStats() {
+        const now = Date.now();
+        if (AuditRepository.cachedStats && (now - AuditRepository.lastCacheTime < AuditRepository.CACHE_TTL)) {
+            return AuditRepository.cachedStats;
+        }
+
         const stats: Record<string, number> = {};
 
         const result = await this.query(
@@ -126,6 +135,9 @@ export class AuditRepository extends BaseRepository {
         for (const row of result.rows as { table_name: string; count: string }[]) {
             stats[row.table_name] = parseInt(row.count, 10);
         }
+
+        AuditRepository.cachedStats = stats;
+        AuditRepository.lastCacheTime = now;
 
         return stats;
     }

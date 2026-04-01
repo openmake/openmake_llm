@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 /**
  * ============================================================
  * Review Command - 코드 리뷰 CLI 명령
@@ -26,6 +27,37 @@ import { detectLanguage } from '../ui/highlight';
  * @param filePath - 리뷰할 파일 경로
  */
 export async function reviewFile(client: OllamaClient, filePath: string): Promise<void> {
+=======
+/**
+ * ============================================================
+ * Review Command - 코드 리뷰 CLI 명령
+ * ============================================================
+ *
+ * 지정된 파일의 코드를 LLM에 전달하여 코드 리뷰를 수행합니다.
+ * 코드 품질 점수, 문제점, 개선 제안, 장점을 포함한 결과를 출력합니다.
+ *
+ * @module commands/review
+ * @example
+ * node cli.js review ./src/app.ts
+ * node cli.js review ./utils/helper.py
+ */
+import * as fs from 'fs';
+import * as path from 'path';
+import chalk from 'chalk';
+import { OllamaClient } from '../ollama/client';
+import { getSystemPrompt } from '../chat/prompt';
+import { LLM_TEMPERATURES } from '../config/llm-parameters';
+import { createSpinner } from '../ui/spinner';
+import { detectLanguage } from '../ui/highlight';
+
+/**
+ * 파일의 코드를 LLM으로 리뷰합니다.
+ * 코드 품질(1-10점), 문제점, 개선 제안, 장점을 스트리밍 출력합니다.
+ * @param client - Ollama 클라이언트 인스턴스
+ * @param filePath - 리뷰할 파일 경로
+ */
+export async function reviewFile(client: OllamaClient, filePath: string): Promise<void> {
+>>>>>>> fbe49389978ecfeb4fc6d2df399c18138a7fed78
     const absolutePath = path.resolve(filePath);
 
     if (!fs.existsSync(absolutePath)) {
@@ -66,7 +98,7 @@ ${content}
                 { role: 'system', content: getSystemPrompt('reviewer') },
                 { role: 'user', content: prompt }
             ],
-            { temperature: 0.3 },
+            { temperature: LLM_TEMPERATURES.CLI_REVIEW },
             (token) => {
                 if (firstToken) {
                     spinner.stop();

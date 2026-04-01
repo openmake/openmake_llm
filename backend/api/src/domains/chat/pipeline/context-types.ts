@@ -5,7 +5,7 @@
  * 
  * context-engineering.ts에서 사용하는 인터페이스/타입 정의를 분리한 모듈입니다.
  * FourPillarPrompt, RoleDefinition, Constraint, OutputFormat,
- * PromptMetadata, RAGContext, RAGDocument 인터페이스를 정의합니다.
+ * PromptMetadata 인터페이스를 정의합니다.
  * 
  * @module chat/context-types
  * @see chat/context-engineering - 이 타입들을 사용하는 메인 모듈
@@ -95,31 +95,4 @@ export interface PromptMetadata {
     requestTimestamp: string;
     /** 사용 중인 모델명 */
     modelName?: string;
-}
-
-/**
- * RAG(Retrieval-Augmented Generation) 컨텍스트 정보
- * 검색된 참조 문서를 프롬프트에 주입하기 위한 구조체입니다.
- */
-export interface RAGContext {
-    /** 검색된 문서 배열 */
-    documents: RAGDocument[];
-    /** 검색에 사용된 쿼리 */
-    searchQuery: string;
-    /** 관련도 임계값 (이 값 이상의 문서만 포함) */
-    relevanceThreshold: number;
-}
-
-/**
- * RAG 개별 문서 인터페이스
- */
-export interface RAGDocument {
-    /** 문서 내용 */
-    content: string;
-    /** 문서 출처 (URL 또는 파일명) */
-    source: string;
-    /** 문서 날짜 */
-    timestamp?: string;
-    /** 관련도 점수 (0.0 ~ 1.0) */
-    relevanceScore: number;
 }

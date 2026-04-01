@@ -2,24 +2,36 @@
  * ============================================================
  * Auth Routes - 인증 관련 API 라우트
  * ============================================================
+<<<<<<< HEAD:backend/api/src/routes/auth.routes.ts
  */
 
 import { Request, Response, Router } from 'express';
 import * as crypto from 'crypto';
 import { getAuthService } from '../auth/AuthService';
+=======
+ * 인증 관련 API 라우트 (로컬 인증)
+ *
+ * OAuth 관련 핸들러는 auth-oauth.controller.ts로 분리되었습니다.
+ */
+
+import { Request, Response, Router } from 'express';
+import { getAuthService } from '../services/AuthService';
+>>>>>>> fbe49389978ecfeb4fc6d2df399c18138a7fed78:backend/api/src/controllers/auth.controller.ts
 import { getUserManager } from '../data/user-manager';
-import type { OAuthTokenResponse, GoogleUserInfo, GitHubUser, GitHubEmail } from '../auth/types';
 import { requireAuth, extractToken, blacklistToken, setTokenCookie, clearTokenCookie, setRefreshTokenCookie, generateRefreshToken, generateToken, verifyRefreshToken } from '../auth';
 import { createLogger } from '../utils/logger';
-import { success, badRequest, unauthorized, conflict, internalError, serviceUnavailable } from '../utils/api-response';
+import { success, badRequest, unauthorized, conflict, internalError } from '../utils/api-response';
 import { getConfig } from '../config/env';
-import { APP_USER_AGENT } from '../config/constants';
-import { GOOGLE_OAUTH, GITHUB_OAUTH, GITHUB_API } from '../config/external-services';
 import { validate } from '../middlewares/validation';
 import { loginSchema, registerSchema, changePasswordSchema, tierChangeSchema } from '../schemas';
+import { createAuthOAuthController } from './auth-oauth.controller';
+
+// OAuth cleanup 재수출 (server.ts에서 import하는 경로 유지)
+export { stopOAuthCleanup } from './auth-oauth.controller';
 
 const log = createLogger('AuthRoutes');
 
+<<<<<<< HEAD:backend/api/src/routes/auth.routes.ts
 // 🔒 Phase 2 보안 패치 2026-02-07: OAuth State 저장소 (CSRF 방어용)
 // 🔒 Phase 3 패치 2026-02-13: 인메모리 Map → DB 저장으로 변경 (클러스터/재시작 안전)
 const STATE_TTL_MS = 5 * 60 * 1000; // 5분
@@ -216,6 +228,54 @@ export function createAuthRouter(deps: AuthRouterDeps = {}): Router {
 
     // ===== 기본 인증 API =====
     router.post('/register', validate(registerSchema), async (req: Request, res: Response) => {
+=======
+/**
+ * 인증 관련 API 컨트롤러
+ *
+ * @class AuthController
+ * @description
+ * - 기본 인증 (register, login, logout)
+ * - 비밀번호 변경
+ * - 사용자 정보 조회
+ * - 토큰 갱신
+ *
+ * OAuth 인증은 AuthOAuthController (auth-oauth.controller.ts)에서 처리합니다.
+ */
+export class AuthController {
+    /** Express 라우터 인스턴스 */
+    private router: Router;
+
+    /**
+     * AuthController 인스턴스를 생성합니다.
+     * @param serverPort - 서버 포트 번호 (OAuth 컨트롤러에 전달, 기본값: .env PORT)
+     */
+    constructor(serverPort: number = getConfig().port) {
+        this.router = Router();
+        this.setupRoutes(serverPort);
+    }
+
+    private setupRoutes(serverPort: number): void {
+        // ===== 기본 인증 API =====
+        this.router.post('/register', validate(registerSchema), this.register.bind(this));
+        this.router.post('/login', validate(loginSchema), this.login.bind(this));
+        this.router.post('/logout', this.logout.bind(this));
+        this.router.get('/me', requireAuth, this.getCurrentUser.bind(this));
+        this.router.put('/password', requireAuth, validate(changePasswordSchema), this.changePassword.bind(this));
+        this.router.put('/tier', requireAuth, validate(tierChangeSchema), this.changeTier.bind(this));
+
+        // ===== Token Refresh =====
+        this.router.post('/refresh', this.refresh.bind(this));
+
+        // ===== OAuth API (auth-oauth.controller.ts에서 분리된 라우트) =====
+        this.router.use('/', createAuthOAuthController(serverPort));
+    }
+
+    /**
+     * POST /api/auth/register - 회원가입
+     * #24 연동: 표준 API 응답 형식
+     */
+    private async register(req: Request, res: Response): Promise<void> {
+>>>>>>> fbe49389978ecfeb4fc6d2df399c18138a7fed78:backend/api/src/controllers/auth.controller.ts
         try {
             const authService = getAuthService();
             const result = await authService.register(req.body);
@@ -383,6 +443,7 @@ export function createAuthRouter(deps: AuthRouterDeps = {}): Router {
         }
     });
 
+<<<<<<< HEAD:backend/api/src/routes/auth.routes.ts
     // ===== OAuth API =====
     router.get('/providers', (_req: Request, res: Response) => {
         const authService = getAuthService();
@@ -585,4 +646,23 @@ export function createAuthRouter(deps: AuthRouterDeps = {}): Router {
     });
 
     return router;
+=======
+    /**
+     * Express 라우터를 반환합니다.
+     * @returns 설정된 Router 인스턴스
+     */
+    getRouter(): Router {
+        return this.router;
+    }
+}
+
+/**
+ * AuthController 인스턴스를 생성하는 팩토리 함수
+ *
+ * @param serverPort - 서버 포트 번호 (선택적, 기본값: .env PORT)
+ * @returns 설정된 Express Router
+ */
+export function createAuthController(serverPort?: number): Router {
+    return new AuthController(serverPort).getRouter();
+>>>>>>> fbe49389978ecfeb4fc6d2df399c18138a7fed78:backend/api/src/controllers/auth.controller.ts
 }

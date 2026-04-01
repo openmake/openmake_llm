@@ -16,6 +16,7 @@
  *
  * @module mcp/sequential-thinking
  */
+import { THINKING_LIMITS } from '../config/runtime-limits';
 
 /**
  * Sequential Thinking을 채팅에 적용하기 위한 시스템 프롬프트
@@ -61,4 +62,41 @@ export function applySequentialThinking(question: string, enableThinking: boolea
 
 위 질문에 대해 먼저 최종 결론을 "## 결론" 제목으로 제시한 후, "---" 구분선 아래에 단계별 사고 과정을 [단계번호/총단계] 형식으로 보여주세요.
 `;
+}
+
+/**
+ * Sprint Contract 기반 단계별 사고 프롬프트를 생성합니다.
+ *
+ * ThinkingStrategy에서 시스템 프롬프트에 주입할 예산 인식 지시를 생성합니다.
+ * 기존 SEQUENTIAL_THINKING_SYSTEM_PROMPT를 기반으로 단계 수/토큰 예산을 포함합니다.
+ *
+ * @param step - 현재 단계 번호
+ * @param totalSteps - 총 단계 수
+ * @param context - 추가 컨텍스트 (언어, 잔여 예산 등)
+ * @returns 단계별 프롬프트 문자열
+ */
+export function buildThinkingStepPrompt(
+    step: number,
+    totalSteps: number,
+    context?: { language?: string; remainingBudgetRatio?: number }
+): string {
+    const isAsianLang = context?.language === 'ko' || context?.language === 'ja' || context?.language === 'zh';
+    const remainingRatio = context?.remainingBudgetRatio ?? 1.0;
+
+    let prompt = isAsianLang
+        ? `[${step}/${totalSteps}] 단계 — `
+        : `[${step}/${totalSteps}] Step — `;
+
+    // 잔여 예산이 CRITICAL_THRESHOLD 미만 시 결론 강제 지시
+    if (remainingRatio < THINKING_LIMITS.CRITICAL_THRESHOLD) {
+        prompt += isAsianLang
+            ? '⚠️ 예산 부족. 이 단계에서 최종 결론을 도출하세요.'
+            : '⚠️ Budget low. Derive your final conclusion in this step.';
+    } else if (remainingRatio < THINKING_LIMITS.WARNING_THRESHOLD) {
+        prompt += isAsianLang
+            ? '예산의 절반 이상을 사용했습니다. 핵심에 집중하세요.'
+            : 'Over half the budget used. Focus on essentials.';
+    }
+
+    return prompt;
 }

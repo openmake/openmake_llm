@@ -224,8 +224,26 @@ function purifyHTML(html) {
     return sanitizeHTML(html);
 }
 
+/**
+ * DOM 요소에 HTML을 안전하게 설정하는 헬퍼 함수 (P0-7 XSS 방어)
+ *
+ * 기존 패턴:  element.innerHTML = userHtml       ← XSS 위험
+ * 안전 패턴:  safeSetHTML(element, userHtml)     ← 자동 sanitize
+ *
+ * 페이지 모듈에서 사용자/API 데이터를 innerHTML로 렌더링할 때 반드시 사용.
+ * 순수 정적 템플릿(변수 없음)은 element.innerHTML 직접 사용 가능.
+ *
+ * @param {Element} element - HTML을 설정할 DOM 요소
+ * @param {string} html - 설정할 HTML 문자열 (sanitize 처리됨)
+ */
+function safeSetHTML(element, html) {
+    if (!element) return;
+    element.innerHTML = purifyHTML(String(html ?? ''));
+}
+
 // Expose on window for use in non-module scripts
 window.purifyHTML = purifyHTML;
 window.sanitizeHTML = sanitizeHTML;
 window.escapeHTML = escapeHTML;
 window.escapeCodeBlock = escapeCodeBlock;
+window.safeSetHTML = safeSetHTML;

@@ -27,7 +27,11 @@ import express, { Application } from 'express';
 import { Server as HttpServer, createServer } from 'http';
 import { WebSocketServer } from 'ws';
 import { ClusterManager, getClusterManager } from './cluster/manager';
+<<<<<<< HEAD
 import { getUnifiedDatabase } from './data/models/unified-database';
+=======
+import { getConversationDB } from './data/conversation-db';
+>>>>>>> fbe49389978ecfeb4fc6d2df399c18138a7fed78
 import { setActiveConnectionsGetter as setMetricsConnections } from './routes/metrics.routes';
 import { startSchedulers } from './infra/scheduler';
 import { registerProcessHandlers } from './infra/lifecycle';
@@ -36,6 +40,7 @@ import { getAnalyticsSystem } from './monitoring/analytics';
 import { setupSecurity, setupStaticFiles, setupParsersAndLimiting, setupErrorHandling } from './middlewares/setup';
 import { setupApiRoutes } from './routes/setup';
 import { getConfig } from './config';
+import { startAllSchedulers, stopAllSchedulers } from './schedulers';
 
 /**
  * 대시보드 서버 초기화 옵션
@@ -48,7 +53,10 @@ interface DashboardOptions {
     cluster?: ClusterManager;
 }
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> fbe49389978ecfeb4fc6d2df399c18138a7fed78
 
 
 
@@ -177,7 +185,8 @@ export class DashboardServer {
             ]);
             console.log('[Server] DB 초기화 완료');
         } catch (err) {
-            console.error('[Server] DB 초기화 실패 (서버는 계속 시작):', err);
+            console.error('[Server] DB 초기화 실패 — Fail-Fast:', err);
+            process.exit(1);
         }
 
         // 에이전트 스킬 자동 시딩 (17개 산업 분야 에이전트 전문 지침 DB 등록)
@@ -196,8 +205,46 @@ export class DashboardServer {
             console.error('[Server] 유틸리티 스킬 시더 로드 실패:', err);
         }
 
+<<<<<<< HEAD
         // 모든 주기적 스케줄러 시작 (세션 정리, DB 보존, 토큰 정리, 메모리 GC, 캐시 워밍 등)
         await startSchedulers();
+=======
+        // P2 하네스: 프로파일 유효성 검증 (Constrain 원칙)
+        try {
+            const { getProfiles } = await import('./chat/pipeline-profile');
+            const { validateAllProfiles } = await import('./chat/profile-validator');
+            const { PROFILE_VALIDATION } = await import('./config/runtime-limits');
+            const result = validateAllProfiles(getProfiles());
+            if (!result.valid && PROFILE_VALIDATION.STRICT_MODE) {
+                console.error('[Server] 프로파일 검증 실패 (STRICT_MODE) — Fail-Fast');
+                process.exit(1);
+            }
+        } catch (err) {
+            console.error('[Server] 프로파일 검증 중 오류 (무시):', err);
+        }
+
+        // ⚙️ P2-3: 모든 백그라운드 스케줄러 통합 실행
+        startAllSchedulers();
+
+        // 시맨틱 분류 캐시 워밍 (비동기, 서버 시작 차단 안 함, 최대 3회 재시도)
+        const warmWithRetry = async (attempts = 3) => {
+            for (let i = 1; i <= attempts; i++) {
+                try {
+                    const { warmClassificationCache } = await import('./chat/llm-classifier');
+                    await warmClassificationCache();
+                    console.log(`[Server] 캐시 워밍 완료 (시도 ${i}/${attempts})`);
+                    return;
+                } catch (err) {
+                    const delay = Math.pow(2, i) * 1000;
+                    console.error(`[Server] 캐시 워밍 실패 (시도 ${i}/${attempts}):`, err);
+                    if (i < attempts) {
+                        await new Promise(resolve => setTimeout(resolve, delay));
+                    }
+                }
+            }
+        };
+        warmWithRetry().catch(err => console.error('[Server] 캐시 워밍 최종 실패:', err));
+>>>>>>> fbe49389978ecfeb4fc6d2df399c18138a7fed78
 
         return new Promise((resolve, reject) => {
             // HTTP 서버 오류 핸들러
@@ -269,33 +316,10 @@ if (require.main === module) {
     const port = getConfig().port;
     const server = new DashboardServer({ port });
 
-    // 전역 예외 핸들러 등록 (프로세스 안정성)
-    process.on('uncaughtException', (err) => {
-        console.error('[FATAL] uncaughtException:', err);
-        // 비정상 상태이므로 graceful shutdown 후 종료
-        server.stop();
-        process.exit(1);
-    });
-
-    process.on('unhandledRejection', (reason, _promise) => {
-        console.error('[FATAL] unhandledRejection:', reason);
-        // 로깅만 수행, 즉시 종료하지 않음 (Node.js 기본 동작과 동일)
-    });
-
-    server.start()
-        .then(() => {
-            console.log(`\n✅ OpenMake Dashboard: ${server.url}`);
-            console.log('종료하려면 Ctrl+C를 누르세요\n');
-        })
-        .catch((err) => {
-            console.error('❌ 서버 시작 실패:', err);
-            process.exit(1);
-        });
-
     // Graceful shutdown: SIGINT (Ctrl+C) + SIGTERM
     const GRACEFUL_SHUTDOWN_TIMEOUT_MS = 30000;
 
-    const gracefulShutdown = async (signal: string) => {
+    const gracefulShutdown = async (signal: string, exitCode: number = 0) => {
         console.log(`\n👋 ${signal} 수신 — 서버 종료 중...`);
 
         const shutdownWork = async () => {
@@ -336,6 +360,12 @@ if (require.main === module) {
                 console.error('[Shutdown] Analytics 타이머 중지 중 오류:', error);
             }
 
+<<<<<<< HEAD
+=======
+            // ⚙️ P2-3: 모든 백그라운드 스케줄러 통합 중지
+            stopAllSchedulers();
+
+>>>>>>> fbe49389978ecfeb4fc6d2df399c18138a7fed78
             // TokenBlacklist 타이머 정리
             try {
                 const { resetTokenBlacklist } = await import('./data/models/token-blacklist');
@@ -345,11 +375,14 @@ if (require.main === module) {
                 console.error('[Shutdown] TokenBlacklist 타이머 중지 중 오류:', error);
             }
 
+<<<<<<< HEAD
             // 메모리/학습 스케줄러 타이머 정리
             const { clearSchedulerTimers } = await import('./infra/scheduler');
             clearSchedulerTimers();
             console.log('[Shutdown] 메모리/학습 스케줄러 타이머 정리 완료');
 
+=======
+>>>>>>> fbe49389978ecfeb4fc6d2df399c18138a7fed78
             // OpenTelemetry SDK 종료 (OTel flush 보장)
             try {
                 const { shutdownTelemetry } = await import('./observability/otel');
@@ -373,8 +406,31 @@ if (require.main === module) {
             console.error('[Shutdown] 종료 타임아웃 또는 오류 — 강제 종료:', error);
         }
 
-        process.exit(0);
+        process.exit(exitCode);
     };
+
+    // 전역 예외 핸들러 등록 (프로세스 안정성)
+    process.on('uncaughtException', (err) => {
+        console.error('[FATAL] uncaughtException:', err);
+        // 비정상 상태이므로 graceful shutdown 후 종료
+        gracefulShutdown('uncaughtException', 1);
+    });
+
+    process.on('unhandledRejection', (reason, _promise) => {
+        console.error('[FATAL] unhandledRejection — graceful shutdown 시작:', reason);
+        // 오염된 상태로 계속 실행하지 않고 graceful shutdown 후 PM2가 재시작
+        gracefulShutdown('unhandledRejection', 1);
+    });
+
+    server.start()
+        .then(() => {
+            console.log(`\n✅ OpenMake Dashboard: ${server.url}`);
+            console.log('종료하려면 Ctrl+C를 누르세요\n');
+        })
+        .catch((err) => {
+            console.error('❌ 서버 시작 실패:', err);
+            process.exit(1);
+        });
 
     process.on('SIGINT', () => gracefulShutdown('SIGINT'));
     process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));

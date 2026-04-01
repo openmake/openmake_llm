@@ -1,47 +1,27 @@
 /**
- * ============================================================
- * Web Search - 다중 소스 웹 검색 통합 도구
- * ============================================================
+ * Web Search - 하위 호환성 re-export
  *
- * Ollama API, Firecrawl, Google Custom Search, Wikipedia, Google News,
- * DuckDuckGo, Naver 등 7개 소스에서 웹 검색을 수행하는 MCP 도구입니다.
+ * 이 파일은 기존 import 경로(`mcp/web-search`)의 하위 호환성을 유지합니다.
+ * 실제 구현은 `mcp/web-search/` 디렉토리로 분리되었습니다.
  *
  * @module mcp/web-search
- * @description
- * - web_search: 통합 웹 검색 (Ollama 우선, 폴백으로 다중 소스 병렬 검색)
- * - fact_check: 사실 검증 (검색 결과 기반)
- * - extract_webpage: 웹페이지 콘텐츠 추출 (HTML → 텍스트)
- * - research_topic: 주제 연구 (통합 검색 활용)
- *
- * 검색 우선순위:
- * 1. Ollama 공식 Web Search API (최우선)
- * 2. Firecrawl Search API (콘텐츠 스크래핑 포함)
- * 3. 다중 소스 병렬 검색 (Google, Wikipedia, Google News, DuckDuckGo, Naver)
- *
- * 고볼륨 모드 (maxResults > 15):
- * - Deep Research에서 사용, 모든 소스에서 병렬 수집
- * - 조기 반환 없이 최대한 많은 결과 확보
- *
- * @requires GOOGLE_API_KEY - Google Custom Search API 키
- * @requires GOOGLE_CSE_ID - Google Custom Search Engine ID
+ * @see mcp/web-search/types - 타입 정의
+ * @see mcp/web-search/providers - 검색 프로바이더 (Ollama, Google, Wikipedia, News, DDG, Naver)
+ * @see mcp/web-search/search-orchestrator - 통합 검색 오케스트레이터
+ * @see mcp/web-search/tools - MCP 도구 정의
  */
 
-import { MCPToolDefinition, MCPToolResult } from './types';
-import { createClient } from '../ollama/client';
-import { isFirecrawlConfigured } from './firecrawl';
-import { getConfig } from '../config/env';
-import { createLogger } from '../utils/logger';
-import { CAPACITY, TRUNCATION } from '../config/runtime-limits';
-import { getSearchLocale } from '../i18n/search-locale';
-import { safeFetch } from '../security/ssrf-guard';
+export {
+    // 타입
+    type SearchResult,
+    type FactCheckResult,
+    type ResearchResult,
 
-/** Google Custom Search API 키 */
-const GOOGLE_API_KEY = getConfig().googleApiKey;
-/** Google Custom Search Engine ID */
-const GOOGLE_CSE_ID = getConfig().googleCseId;
-/** Logger instance */
-const logger = createLogger('WebSearch');
+    // 검색 함수
+    performWebSearch,
+    createFactCheckPrompt,
 
+<<<<<<< HEAD
 // API 키 미설정 경고
 if (!GOOGLE_API_KEY || !GOOGLE_CSE_ID) {
     logger.warn('⚠️ GOOGLE_API_KEY 또는 GOOGLE_CSE_ID가 설정되지 않았습니다.');
@@ -777,8 +757,12 @@ export const researchTopicTool: MCPToolDefinition = {
  * - research_topic: 주제 연구
  */
 export const webSearchTools: MCPToolDefinition[] = [
+=======
+    // MCP 도구
+>>>>>>> fbe49389978ecfeb4fc6d2df399c18138a7fed78
     webSearchTool,
     factCheckTool,
     extractWebpageTool,
-    researchTopicTool
-];
+    researchTopicTool,
+    webSearchTools
+} from './web-search/index';

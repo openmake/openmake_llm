@@ -44,4 +44,15 @@ export {
     chunkArray,
     extractBulletLikeFindings,
     getLoopProgressRange,
+<<<<<<< HEAD:backend/api/src/domains/research/index.ts
 } from './deep-research-utils';
+=======
+} from '../deep-research-utils';
+
+// ── Pipeline stages ──────────────────────────────────
+export { decomposeTopics } from './topic-decomposer';
+export { searchSubTopics } from './source-searcher';
+export { scrapeSources, scrapeSingleUrl } from './content-scraper';
+export { synthesizeFindings, checkNeedsMoreInfo } from './findings-synthesizer';
+export { generateReport } from './report-generator';
+>>>>>>> fbe49389978ecfeb4fc6d2df399c18138a7fed78:backend/api/src/services/deep-research/index.ts

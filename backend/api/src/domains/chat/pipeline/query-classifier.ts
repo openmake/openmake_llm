@@ -12,6 +12,8 @@
  */
 
 import type { QueryType, QueryClassification } from './model-selector-types';
+import queryPatternsData from '../config/data/query-patterns.json';
+import { CONFIDENCE_DIVISORS } from '../config/llm-parameters';
 
 // ============================================================
 // 질문 유형 분류 패턴
@@ -32,148 +34,30 @@ interface QueryPattern {
     weight: number;
 }
 
-const QUERY_PATTERNS: QueryPattern[] = [
-    {
-        type: 'code',
-        patterns: [
-            /```[\w]*\n/,                    // 코드 블록
-            /\b(function|class|const|let|var|def|import|export|return)\b/i,
-            /\b(error|bug|debug|fix|compile|runtime)\b/i,
-            /\.(js|ts|py|java|cpp|c|go|rs|rb|php|swift|kt)\b/i,
-            /\b(react|vue|angular|node|express|django|flask|spring)\b/i,
-            /\b(useState|useEffect|component|props|state)\b/i,
-            /\b(SELECT|INSERT|UPDATE|DELETE|JOIN|WHERE|FROM)\b/,  // SQL
-            /at\s+\w+\s+\(.*:\d+:\d+\)/,  // 에러 스택 트레이스
-        ],
-        keywords: [
-            '코드', '코딩', '프로그래밍', '개발', '함수', '클래스', '버그', '에러', 
-            '디버그', '컴파일', '구현', 'api', '서버', '백엔드', '프론트엔드',
-            'code', 'function', 'class', 'debug', 'error', 'implement',
-            '리팩토링', '최적화', '알고리즘', '자료구조', '라이브러리', '프레임워크',
-            'react', 'vue', 'angular', 'python', 'javascript', 'typescript',
-            '컴포넌트', 'component', 'useState', 'useEffect', '훅', 'hook',
-            'docker', 'kubernetes', 'k8s', 'ci/cd', 'deploy', 'pipeline', 'devops', 'git', 'sql', 'database', 'query'
-        ],
-        weight: 1.2,  // 코드 가중치 상향
-    },
-    {
-        type: 'analysis',
-        patterns: [
-            /\b(분석|분석해|analyze|analysis)\b/i,
-            /\b(통계|데이터|차트|그래프|추세|패턴)\b/i,
-            /\b(비교|장단점|pros|cons|compare)\b/i,
-            /\b(어떻게\s*생각|왜\s*그런|이유가|원인이)\b/,
-            /\b(why|reason|cause|impact|effect|how\s+does)\b/i,
-        ],
-        keywords: [
-            '분석', '분석해', '통계', '데이터', '인사이트', '추세', '패턴',
-            '비교', '장단점', '평가', '검토', '조사', '리서치',
-            'analyze', 'analysis', 'statistics', 'data', 'compare', 'evaluate',
-            '원인', '영향', 'impact', 'effect', 'reason', 'why', 'how does'
-        ],
-        weight: 0.9,
-    },
-    {
-        type: 'creative',
-        patterns: [
-            /\b(이야기|스토리|시나리오|소설|시)\b.*\b(작성|써|만들)\b/i,
-            /\b(작성|써|만들)\b.*\b(이야기|스토리|시나리오|소설|시)\b/i,
-            /\b(아이디어|브레인스토밍|창의|상상)\b/i,
-            /\b(creative|storytelling|fiction)\b/i,
-            /\b(write|compose|draft|create)\b.*\b(poem|story|email|letter|essay|blog)\b/i,
-        ],
-        keywords: [
-            '글쓰기', '이야기', '스토리', '소설', '시나리오',
-            '카피', '광고문구', '슬로건', '아이디어', '브레인스토밍',
-            'creative', 'story', 'brainstorm', 'imagine', '상상', '창작',
-            '편지', '에세이', '블로그', 'letter', 'essay', 'blog', 'poem', 'compose'
-        ],
-        weight: 0.75,  // 가중치 하향 (다른 유형 우선)
-    },
-    {
-        type: 'vision',
-        patterns: [
-            /\b(이미지|사진|그림|picture|image|photo)\b/i,
-            /\b(보여|봐|보이는|look|see|show)\b.*\b(이미지|사진|그림)\b/i,
-            /\b(ocr|텍스트.*추출|extract.*text)\b/i,
-        ],
-        keywords: [
-            '이미지', '사진', '그림', '스크린샷', '캡처', '시각', '비전',
-            'image', 'picture', 'photo', 'screenshot', 'visual', 'ocr',
-            '분석해줘', '설명해줘', '뭐가 보여', '뭐야 이거'
-        ],
-        weight: 1.0,
-    },
-    {
-        type: 'math',
-        patterns: [
-            /\b(계산|수학|math|calculate|equation)\b/i,
-            /\d+\s*[\+\-\*\/\^]\s*\d+/,    // 수식 패턴 (연산자 사이에 숫자 요구)
-            /\b(미적분|미분|적분|행렬|선형대수|통계)\b/i,
-            /\b(증명|proof|theorem|lemma|공리)\b/i,
-        ],
-        keywords: [
-            '계산', '수학', '공식', '방정식', '미적분', '미분', '적분',
-            '행렬', '선형대수', '확률', '통계', '기하', '삼각함수',
-            'math', 'calculate', 'equation', 'formula', 'integral', 'derivative',
-            '증명', 'proof', 'theorem', 'lemma'
-        ],
-        weight: 0.95,
-    },
-    {
-        type: 'document',
-        patterns: [
-            /\b(요약|summarize|summary)\b/i,
-            /\b(문서|document|pdf|docx)\b/i,
-            /\b(리포트|보고서|논문|report|paper)\b/i,
-        ],
-        keywords: [
-            '요약', '요약해', '정리', '문서', '리포트', '보고서', '논문',
-            'summarize', 'summary', 'document', 'report', 'paper',
-            '핵심', '중요한', '포인트', 'key points'
-        ],
-        weight: 0.8,
-    },
-    {
-        type: 'translation',
-        patterns: [
-            /\b(번역|translate|translation)\b/i,
-            /\b(영어로|한국어로|일본어로|중국어로)\b/i,
-            /\b(to english|to korean|to japanese)\b/i,
-        ],
-        keywords: [
-            '번역', '번역해', '영어로', '한국어로', '일본어로', '중국어로',
-            'translate', 'translation', 'to english', 'to korean'
-        ],
-        weight: 0.9,
-    },
-    {
-        type: 'korean',
-        patterns: [
-            /[\uAC00-\uD7A3]/,  // 한글 감지
-        ],
-        keywords: [],
-        weight: 0.1,  // 매우 낮은 가중치 (폴백 전용 - 다른 유형이 매칭되면 무시)
-    },
-    {
-        type: 'chat',
-        patterns: [
-            /\b(안녕|하이|헬로|hello|hi|hey)\b/i,
-            /\?$/,  // 질문 형태
-            /\b(추천|추천해|추천해줘|알려줘|설명해줘|도와줘|도움)\b/i,
-            /\b(어떤\s*게\s*좋|뭐가\s*좋|뭘\s*쓸|뭐\s*쓰|어떻게\s*해)\b/i,
-            /\b(recommend|suggest|help|advice)\b/i,
-        ],
-        keywords: [
-            '안녕', '하이', '헬로', '뭐해', '어때', '알려줘', '설명해',
-            '추천', '추천해줘', '도와줘', '도움', '부탁', '궁금', '질문',
-            '어떤 게 좋아', '뭐가 좋아', '어떻게 해', '가르쳐', '알고 싶',
-            'hello', 'hi', 'hey', 'what', 'how', 'tell me',
-            'recommend', 'suggest', 'help', 'advice', 'please'
-        ],
-        weight: 0.6,  // 일반 대화 가중치 (폴백 korean 0.1보다 높게)
-    },
-];
+interface RawPatternEntry {
+    source: string;
+    flags: string;
+}
+
+interface RawQueryPattern {
+    type: string;
+    patterns: RawPatternEntry[];
+    keywords: string[];
+    weight: number;
+}
+
+function compileQueryPatterns(raw: RawQueryPattern[]): QueryPattern[] {
+    return raw.map((item) => ({
+        type: item.type as QueryType,
+        patterns: item.patterns.map((p) => new RegExp(p.source, p.flags)),
+        keywords: item.keywords,
+        weight: item.weight,
+    }));
+}
+
+const QUERY_PATTERNS: QueryPattern[] = compileQueryPatterns(
+    queryPatternsData.queryPatterns as RawQueryPattern[]
+);
 
 // ============================================================
 // 질문 분류 함수
@@ -187,7 +71,7 @@ const QUERY_PATTERNS: QueryPattern[] = [
  * 2. 가장 높은 점수의 유형을 선택 (동점 시 먼저 발견된 유형)
  * 3. [IMAGE] 메타데이터가 있으면 vision으로 강제 전환
  * 4. 한국어 비율 30% 이상이면 subType='korean' 추가
- * 5. 신뢰도 = min(bestScore / 5, 1.0)
+ * 5. 신뢰도 = min(bestScore / CONFIDENCE_DIVISORS.QUERY_CLASSIFIER, 1.0)
  * 
  * @param query - 분류할 사용자 질문 텍스트
  * @returns 분류 결과 (유형, 신뢰도, 매칭된 패턴)
@@ -250,8 +134,46 @@ export function classifyQuery(query: string): QueryClassification {
         bestPatterns = ['image_metadata'];
     }
 
+    // 2차 세분화: code → code-agent / code-gen
+    if (bestType === 'code') {
+        const codeAgentPatterns = [
+            /(리팩토링|\brefactor\b|아키텍처|\barchitecture\b|\bmigration\b|마이그레이션)/i,
+            /(디버그|\bdebug\b|버그.*찾|\bfind.*bug\b|트러블슈팅|\btroubleshoot\b)/i,
+            /(코드.*리뷰|\bcode.*review\b|개선|\bimprove\b|최적화.*코드|\boptimize.*code\b)/i,
+            /(설계|\bdesign.*pattern\b|\bSOLID\b|\bDRY\b|\bKISS\b)/i,
+        ];
+        const isCodeAgent = codeAgentPatterns.some(p => p.test(query));
+        bestType = isCodeAgent ? 'code-agent' : 'code-gen';
+    }
+
+    // 2차 세분화: math → math-hard / math-applied
+    if (bestType === 'math') {
+        const mathHardPatterns = [
+            /(증명|\bproof\b|\btheorem\b|정리|보조정리|\blemma\b)/i,
+            /(올림피아드|\bolympiad\b|\bIMO\b|\bAIME\b|\bAMC\b|\bKMO\b)/i,
+            /(정수론|\bnumber\s*theory\b|조합론|\bcombinatorics\b)/i,
+            /(위상|\btopology\b|추상대수|\babstract\s*algebra\b|해석학)/i,
+        ];
+        const isMathHard = mathHardPatterns.some(p => p.test(query));
+        bestType = isMathHard ? 'math-hard' : 'math-applied';
+    }
+
+    // 2차 세분화: analysis → reasoning (논리 추론 감지 시)
+    // 한국어 문자는 \w에 해당하지 않아 \b가 동작하지 않으므로 영어에만 \b 적용
+    if (bestType === 'analysis') {
+        const reasoningPatterns = [
+            /(논리적|\blogical\b|논리|\blogic\b)/i,
+            /(인과|\bcausal\b|원인.*결과|cause.*effect)/i,
+            /(만약.*라면|if.*then|가설|\bhypothesis\b)/i,
+            /(비판|\bcritique\b|반박|counter.*argument|논증|\bargument\b)/i,
+            /(추론|\binference\b|연역|\bdeduction\b|귀납|\binduction\b)/i,
+        ];
+        const isReasoning = reasoningPatterns.some(p => p.test(query));
+        if (isReasoning) bestType = 'reasoning';
+    }
+
     // 신뢰도 계산 (0~1)
-    const confidence = Math.min(bestScore / 4, 1.0);
+    const confidence = Math.min(bestScore / CONFIDENCE_DIVISORS.QUERY_CLASSIFIER, 1.0);
 
     return {
         type: bestType,

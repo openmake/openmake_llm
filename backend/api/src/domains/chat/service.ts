@@ -9,7 +9,7 @@
  * @module services/ChatService
  * @description
  * - 에이전트 자동 라우팅 및 시스템 프롬프트 조립
- * - Brand Model 프로파일 기반 실행 전략 분기 (Direct, A2A, Discussion, DeepResearch, AgentLoop)
+ * - Brand Model 프로파일 기반 실행 전략 분기 (Direct, GV, Discussion, DeepResearch, AgentLoop)
  * - 문서/이미지/웹검색 컨텍스트 통합
  * - 사용량 추적 및 모니터링 메트릭 기록
  *
@@ -18,6 +18,7 @@
  * @requires ../chat/profile-resolver - Brand Model → ExecutionPlan 변환
  * @requires ../ollama/client - Ollama HTTP 클라이언트
  */
+<<<<<<< HEAD:backend/api/src/domains/chat/service.ts
 import { createLogger } from '../../utils/logger';
 import { routeToAgent, getAgentSystemMessage, AGENTS, getAgentById, detectPhase, type AgentSelection } from '../../agents';
 import { routeWithLLM, isValidAgentId } from '../../agents/llm-router';
@@ -50,6 +51,40 @@ import { applyDomainEngineOverride } from './pipeline/domain-router';
 import type { ChatMessageRequest, ProcessMessageOptions } from './service/chat-service-types';
 import { getRAGService } from '../rag/RAGService';
 import type { QueryType } from './pipeline/model-selector-types';
+=======
+import { createLogger } from '../utils/logger';
+import { AGENTS, getAgentById, type AgentSelection } from '../agents';
+import type { DiscussionProgress } from '../agents/discussion-engine';
+import { getPromptConfig } from '../chat/prompt';
+import { adjustOptionsForModel, checkModelCapability } from '../chat/model-selector';
+import { assessComplexity, GV_SKIP_THRESHOLD } from '../chat/complexity-assessor';
+import { CONCISE_RESPONSE_DIRECTIVE } from '../config/llm-parameters';
+import { BUDGET_HINTS, CAPACITY } from '../config/runtime-limits';
+import type { ExecutionPlan } from '../chat/profile-resolver';
+import type { DocumentStore } from '../documents/store';
+import type { UserTier } from '../data/user-manager';
+import type { UserContext } from '../mcp/user-sandbox';
+import { getUnifiedMCPClient } from '../mcp/unified-client';
+import { OllamaClient } from '../ollama/client';
+import { getGptOssTaskPreset, type ChatMessage, type ToolDefinition, type ModelOptions } from '../ollama/types';
+import type { ResearchProgress } from './DeepResearchService';
+import { AgentLoopStrategy, DeepResearchStrategy, DirectStrategy, DiscussionStrategy, GenerateVerifyStrategy, ThinkingStrategy } from './chat-strategies';
+import { formatResearchResult, formatDiscussionResult } from './chat-service-formatters';
+import { recordMemoryExtractionFailure } from './chat-service-metrics';
+import { preRequestCheck } from '../chat/security-hooks';
+import type { LanguagePolicyDecision } from '../chat/language-policy';
+import { createRoutingLogEntry, type RoutingDecisionLog } from '../chat/routing-logger';
+import type { ChatMessageRequest } from './chat-service-types';
+import { computeUIRResult, recordShadowComparison } from '../chat/unified-intent-router';
+import { UIR_SHADOW_ENABLED } from '../config/routing-config';
+import { buildContextForLLM } from './chat-service/context-builder';
+import { resolveModel } from './chat-service/model-resolver';
+import { selectAndExecuteStrategy } from './chat-service/strategy-executor';
+import { extractMemoriesAsync } from './chat-service/memory-extractor';
+import { resolveAgent as resolveAgentFn } from './chat-service/agent-resolver';
+import { resolveLanguagePolicy as resolveLanguagePolicyFn } from './chat-service/language-resolver';
+import { recordMetricsAndVerify as recordMetricsAndVerifyFn } from './chat-service/metrics-recorder';
+>>>>>>> fbe49389978ecfeb4fc6d2df399c18138a7fed78:backend/api/src/services/ChatService.ts
 
 // Re-export all types so consumers importing from ChatService don't break
 export type {
@@ -74,7 +109,7 @@ const logger = createLogger('ChatService');
  *
  * 전략 패턴(Strategy Pattern)을 통해 5가지 응답 생성 전략을 지원합니다:
  * - DirectStrategy: 단일 LLM 직접 호출
- * - A2AStrategy: 다중 모델 병렬 생성 후 합성
+ * - GenerateVerifyStrategy: Generator→Verifier 2단계 검증
  * - AgentLoopStrategy: Multi-turn 도구 호출 루프
  * - DiscussionStrategy: 멀티 에이전트 토론
  * - DeepResearchStrategy: 자율적 다단계 리서치
@@ -96,14 +131,16 @@ export class ChatService {
 
     /** 단일 LLM 직접 호출 전략 */
     private readonly directStrategy: DirectStrategy;
-    /** Agent-to-Agent 병렬 생성 전략 */
-    private readonly a2aStrategy: A2AStrategy;
+    /** Generate-Verify 생성-검증 전략 */
+    private readonly generateVerifyStrategy: GenerateVerifyStrategy;
     /** 멀티 에이전트 토론 전략 */
     private readonly discussionStrategy: DiscussionStrategy;
     /** 심층 연구 오케스트레이션 전략 */
     private readonly deepResearchStrategy: DeepResearchStrategy;
     /** Multi-turn 도구 호출 루프 전략 */
     private readonly agentLoopStrategy: AgentLoopStrategy;
+    /** Sprint Contract 기반 단계별 사고 전략 */
+    private readonly thinkingStrategy: ThinkingStrategy;
 
     /**
      * ChatService 인스턴스를 생성합니다.
@@ -113,10 +150,11 @@ export class ChatService {
     constructor(client: OllamaClient) {
         this.client = client;
         this.directStrategy = new DirectStrategy();
-        this.a2aStrategy = new A2AStrategy();
+        this.generateVerifyStrategy = new GenerateVerifyStrategy();
         this.discussionStrategy = new DiscussionStrategy();
         this.deepResearchStrategy = new DeepResearchStrategy();
         this.agentLoopStrategy = new AgentLoopStrategy(this.directStrategy);
+        this.thinkingStrategy = new ThinkingStrategy(this.agentLoopStrategy);
     }
 
     /**
@@ -203,9 +241,10 @@ export class ChatService {
      * 2. 에이전트 라우팅 및 시스템 프롬프트 구성
      * 3. 문서/이미지/웹검색 컨텍스트 통합
      * 4. 모델 선택 (Brand Model 또는 Auto-Routing)
-     * 5. A2A 병렬 생성 시도 → 실패 시 AgentLoop 폴백
+     * 5. GV(Generate-Verify) 전략 실행 → 실패 시 AgentLoop 폴백
      * 6. 사용량 메트릭 기록
      *
+<<<<<<< HEAD:backend/api/src/domains/chat/service.ts
      * @param options - 통합 옵션 객체 (요청, 문서, 실행 계획, 콜백 포함)
      * @returns AI가 생성한 전체 응답 문자열
      * @throws {Error} abortSignal에 의해 요청이 중단된 경우 'ABORTED' 에러
@@ -214,6 +253,31 @@ export class ChatService {
         const { req, documents: uploadedDocuments, executionPlan, callbacks } = options;
         const onToken = callbacks?.onToken ?? (() => {});
         const { onAgentSelected, onDiscussionProgress, onResearchProgress, onSkillsActivated, onRAGSources } = callbacks ?? {};
+=======
+     * @param req - 채팅 메시지 요청 객체
+     * @param uploadedDocuments - 업로드된 문서 저장소
+     * @param onToken - 스트리밍 토큰 콜백 (SSE 전송용)
+     * @param onAgentSelected - 에이전트 선택 결과 콜백
+     * @param onDiscussionProgress - 토론 진행 상황 콜백
+     * @param onResearchProgress - 연구 진행 상황 콜백
+     * @param executionPlan - Brand Model 실행 계획 (PipelineProfile 기반)
+     * @param onSkillsActivated - 에이전트에 주입된 스킬 목록 콜백
+     * @param onThinking - Thinking 토큰 콜백 (추론 과정 실시간 전달)
+     * @returns AI가 생성한 전체 응답 문자열
+     * @throws {Error} abortSignal에 의해 요청이 중단된 경우 'ABORTED' 에러
+     */
+    async processMessage(
+        req: ChatMessageRequest,
+        uploadedDocuments: DocumentStore,
+        onToken: (token: string) => void,
+        onAgentSelected?: (agent: { type: string; name: string; emoji?: string; phase?: string; reason?: string; confidence?: number }) => void,
+        onDiscussionProgress?: (progress: DiscussionProgress) => void,
+        onResearchProgress?: (progress: ResearchProgress) => void,
+        executionPlan?: ExecutionPlan,
+        onSkillsActivated?: (skillNames: string[]) => void,
+        onThinking?: (thinking: string) => void,
+    ): Promise<string> {
+>>>>>>> fbe49389978ecfeb4fc6d2df399c18138a7fed78:backend/api/src/services/ChatService.ts
         const {
             message,
             history,
@@ -228,7 +292,6 @@ export class ChatService {
             userRole,
             userTier,
             enabledTools,
-            ragEnabled,
             abortSignal,
             userLanguagePreference,
         } = req;
@@ -240,7 +303,15 @@ export class ChatService {
             }
         };
 
+<<<<<<< HEAD:backend/api/src/domains/chat/service.ts
         const reqCtx = this.buildRequestContext(userId || 'guest', userRole, userTier, enabledTools, executionPlan);
+=======
+        this.setUserContext(userId || 'guest', userRole, userTier);
+        // API Key 요청에서 enabledTools 미전달 시 내장 MCP 도구 비활성화
+        // 외부 서비스(openmake 등)는 자체 도구 체계를 사용하므로 내장 도구 간섭 방지
+        this.currentEnabledTools = req.apiKeyId && !enabledTools ? {} : enabledTools;
+        this.currentExecutionPlan = executionPlan;
+>>>>>>> fbe49389978ecfeb4fc6d2df399c18138a7fed78:backend/api/src/services/ChatService.ts
 
         // ── 보안 사전 검사 ──
         const securityPreCheck = preRequestCheck(message || '');
@@ -270,10 +341,24 @@ export class ChatService {
         }
 
         if (discussionMode) {
+            // Auto-routing 모델 해석: __auto__ → 실제 엔진 모델명으로 변환
+            // Discussion 모드는 일반 모드의 resolveModel() 흐름을 거치지 않으므로
+            // client가 placeholder "default"를 유지하면 Ollama 404 발생
+            if (executionPlan?.isBrandModel && executionPlan.resolvedEngine === '__auto__') {
+                const hasImages = (images && images.length > 0) || false;
+                const promptConfig = getPromptConfig(message, languagePolicy?.resolvedLanguage);
+                await this.resolveModel(message || '', hasImages, executionPlan, promptConfig);
+            }
             return this.processMessageWithDiscussion(req, uploadedDocuments, onToken, onDiscussionProgress);
         }
 
         if (deepResearchMode) {
+            // Auto-routing 모델 해석 (Discussion 모드와 동일한 이유)
+            if (executionPlan?.isBrandModel && executionPlan.resolvedEngine === '__auto__') {
+                const hasImages = (images && images.length > 0) || false;
+                const promptConfig = getPromptConfig(message, languagePolicy?.resolvedLanguage);
+                await this.resolveModel(message || '', hasImages, executionPlan, promptConfig);
+            }
             return this.processMessageWithDeepResearch(req, onToken, onResearchProgress);
         }
 
@@ -293,21 +378,44 @@ export class ChatService {
 
         let fullResponse = '';
 
-        const streamToken = (token: string) => {
+        const streamToken = (token: string, thinking?: string) => {
+            if (thinking && onThinking) {
+                onThinking(thinking);
+                return;
+            }
             fullResponse += token;
             onToken(token);
         };
 
         // ── Step 2: 에이전트 라우팅 ──
-        const { agentSelection, agentSystemMessage, selectedAgent } = await this.resolveAgent(
-            message || '', userId, languagePolicy?.resolvedLanguage || 'en',
-            onAgentSelected, onSkillsActivated,
-        );
+        // API Key 요청: 에이전트 라우팅 스킵 → general 에이전트 사용
+        // 외부 서비스(openmake 등)는 자체 라우팅/프롬프트를 사용하므로 이중 라우팅 방지
+        let agentSelection: AgentSelection;
+        let agentSystemMessage: string;
+        let selectedAgent: (typeof AGENTS)[string];
 
-        // ── Step 3: 컨텍스트 구성 (문서 + RAG + 웹검색) ──
+        if (req.apiKeyId) {
+            agentSelection = {
+                primaryAgent: 'general',
+                category: 'general',
+                phase: undefined,
+                reason: '[API Key] 외부 요청 — 에이전트 라우팅 스킵',
+                confidence: 1.0,
+                matchedKeywords: [],
+            };
+            agentSystemMessage = '';
+            selectedAgent = getAgentById('general') || AGENTS['general'];
+        } else {
+            ({ agentSelection, agentSystemMessage, selectedAgent } = await this.resolveAgent(
+                message || '', userId, languagePolicy?.resolvedLanguage || 'en',
+                onAgentSelected, onSkillsActivated,
+            ));
+        }
+
+        // ── Step 3: 컨텍스트 구성 (문서 + 웹검색) ──
         const { finalEnhancedMessage, documentImages } = await this.buildContextForLLM(
-            message || '', docId, uploadedDocuments, ragEnabled, userId,
-            webSearchContext, thinkingMode, onRAGSources,
+            message || '', docId, uploadedDocuments, userId,
+            webSearchContext, thinkingMode, req.apiKeyId,
         );
 
         // ── Step 4: 모델 선택 ──
@@ -315,16 +423,57 @@ export class ChatService {
         const hasImages = (images && images.length > 0) || documentImages.length > 0;
         const modelSelection = await this.resolveModel(message || '', hasImages, executionPlan, promptConfig);
 
+        // ── UIR Shadow 비교 (fire-and-forget, API Key 요청 제외) ──
+        // rollout=0일 때도 shadow 데이터를 수집하여 UIR 정확도를 사전 검증합니다.
+        if (UIR_SHADOW_ENABLED && !req.apiKeyId) {
+            computeUIRResult(message || '', { userId })
+                .then(uirResult => recordShadowComparison(
+                    message || '',
+                    uirResult,
+                    {
+                        queryType: modelSelection.queryType,
+                        agentId: agentSelection.primaryAgent,
+                        brandProfile: executionPlan?.requestedModel ?? 'default',
+                    },
+                    undefined,
+                    userId
+                ))
+                .catch((err: unknown) => { logger.warn('UIR shadow 비교 실패:', err instanceof Error ? err.message : err); });
+        }
+
         // ── 라우팅 결정 로그 갱신 ──
         routingLog.queryFeatures.queryType = modelSelection.queryType;
+        routingLog.queryFeatures.confidence = modelSelection.classifiedConfidence ?? routingLog.queryFeatures.confidence;
         routingLog.modelUsed = modelSelection.model;
-        routingLog.routeDecision.strategy = executionPlan?.profile?.a2a === 'off' ? 'agent-loop' : 'a2a';
-        routingLog.routeDecision.a2aMode = executionPlan?.profile?.a2a ?? 'conditional';
+        const execStrat = executionPlan?.executionStrategy ?? 'single';
+        routingLog.routeDecision.strategy = execStrat === 'single' ? 'agent-loop' : 'generate-verify';
+
+        // P1-2: 라우팅 품질 추적 메타데이터
+        routingLog.routeDecision.classificationConfidence = modelSelection.classifiedConfidence;
+        routingLog.routeDecision.classifierSource = modelSelection.classifierSource;
+        routingLog.routeDecision.executionStrategy = execStrat as 'single' | 'generate-verify' | 'conditional-verify';
+
+        // P1-1: 복잡도 기반 토큰 예산을 위해 사전 평가
+        const preComplexity = assessComplexity({
+            query: message,
+            classification: {
+                type: modelSelection.queryType,
+                confidence: routingLog.queryFeatures.confidence || 0.5,
+                matchedPatterns: [],
+            },
+            hasImages: (images && images.length > 0) || false,
+            hasDocuments: !!docId,
+            historyLength: history?.length ?? 0,
+        });
+
+        // P1-2: 복잡도 기반 토큰 예산을 routingLog에 기록
+        routingLog.routeDecision.tokenBudget = preComplexity.recommendedTokenBudget;
 
         let chatOptions = adjustOptionsForModel(
             modelSelection.model,
             { ...modelSelection.options, ...(promptConfig.options || {}) },
-            modelSelection.queryType
+            modelSelection.queryType,
+            preComplexity.score
         );
 
         if (docId) {
@@ -341,9 +490,14 @@ export class ChatService {
         const maxTurns = executionPlan?.agentLoopMax ?? 5;
 
         let currentHistory: ChatMessage[] = [];
-        const combinedSystemPrompt = agentSystemMessage
+        let combinedSystemPrompt = agentSystemMessage
             ? `${agentSystemMessage}\n\n---\n\n${promptConfig.systemPrompt}`
             : promptConfig.systemPrompt;
+
+        // P1-1: 저복잡도 쿼리에 간결한 응답 지시어 주입
+        if (preComplexity.score < GV_SKIP_THRESHOLD) {
+            combinedSystemPrompt += `\n\n${CONCISE_RESPONSE_DIRECTIVE}`;
+        }
 
         if (history && history.length > 0) {
             // 긴 히스토리 자동 요약 (토큰 비용 절감)
@@ -371,18 +525,35 @@ export class ChatService {
             currentHistory = [{ role: 'system', content: combinedSystemPrompt }];
         }
 
+        // 동적 토큰 예산 프롬프트: 잔여 예산 부족 시 간결 지시 주입
+        // Anthropic 하네스 원칙: "토큰 예산 인식 프롬프트 제어"
+        if (preComplexity.recommendedTokenBudget > 0) {
+            const estimatedUsed = currentHistory.reduce((sum, m) => sum + (m.content?.length ?? 0), 0) / CAPACITY.TOKEN_TO_CHAR_RATIO;
+            const remaining = 1 - (estimatedUsed / preComplexity.recommendedTokenBudget);
+            if (remaining < BUDGET_HINTS.LOW_BUDGET_THRESHOLD && remaining > 0) {
+                const hint = (languagePolicy?.resolvedLanguage === 'ko') ? BUDGET_HINTS.HINT_KO : BUDGET_HINTS.HINT_EN;
+                currentHistory[0].content += `\n\n${hint}`;
+                logger.info(`💡 토큰 예산 부족 (잔여 ${(remaining * 100).toFixed(0)}%) → 간결 지시 주입`);
+            }
+        }
+
         currentHistory.push({
             role: 'user',
             content: finalEnhancedMessage,
             ...(currentImages.length > 0 && { images: currentImages }),
         });
 
-        // ── Step 5: 전략 선택 및 실행 (A2A → AgentLoop 폴백) ──
+        // ── Step 5: 전략 선택 및 실행 (GV → AgentLoop 폴백) ──
         await this.selectAndExecuteStrategy({
             executionPlan, message: message || '', modelSelection, routingLog,
             images, docId, history, currentHistory, chatOptions, maxTurns,
             supportsTools, supportsThinking, thinkingMode, thinkingLevel,
+<<<<<<< HEAD:backend/api/src/domains/chat/service.ts
             languagePolicy, streamToken, abortSignal, checkAborted, reqCtx,
+=======
+            languagePolicy, streamToken, abortSignal, checkAborted,
+            format: req.format,
+>>>>>>> fbe49389978ecfeb4fc6d2df399c18138a7fed78:backend/api/src/services/ChatService.ts
         });
 
         // ── Step 6: 메트릭 기록 및 보안 사후 검사 ──
@@ -401,8 +572,16 @@ export class ChatService {
         }
 
         // ── Step 7: 장기 메모리 자동 추출 (fire-and-forget, 응답 지연 없음) ──
-        if (userId && message) {
-            this.extractMemoriesAsync(userId, message, fullResponse).catch(e => logger.debug('메모리 추출 fire-and-forget 실패:', e?.message));
+        // API Key 요청: 외부 서비스의 메시지에 이미 문서가 포함되어 있을 수 있으므로
+        // 메모리 추출을 완전히 스킵하여 외부 문서 내용이 내부 메모리로 오염되는 것을 방지
+        // 웹검색 컨텍스트가 주입된 답변은 메모리 추출을 스킵하여 오염 방지
+        if (userId && message && !req.apiKeyId) {
+            const hasExternalContext = !!(webSearchContext || docId);
+            this.extractMemoriesAsync(userId, message, fullResponse, hasExternalContext).catch((e: Error) => {
+                const reason = e?.message?.includes('timeout') ? 'timeout' : 'unknown';
+                logger.warn('메모리 추출 fire-and-forget 실패:', e?.message);
+                recordMemoryExtractionFailure(reason);
+            });
         }
 
         return fullResponse;
@@ -410,42 +589,18 @@ export class ChatService {
 
     /**
      * 사용자 메시지의 언어를 감지하고 응답 언어 정책을 결정합니다.
-     *
-     * @param message - 사용자 메시지
-     * @param userLanguagePreference - 사용자가 명시적으로 설정한 언어 선호
-     * @returns 언어 정책 결정 결과 (감지 실패 시 undefined)
+     * 실제 로직은 chat-service/language-resolver.ts에 위임합니다.
      */
     private resolveLanguagePolicy(
         message: string,
         userLanguagePreference?: string,
     ): LanguagePolicyDecision | undefined {
-        const config = getConfig();
-        try {
-            const policy = determineLanguagePolicy(message, {
-                defaultLanguage: config.defaultResponseLanguage,
-                enableDynamicResponse: true,
-                minConfidenceThreshold: config.languageDetectionMinConfidence,
-                shortTextThreshold: 20,
-                fallbackLanguage: config.languageFallbackLanguage,
-                supportedLanguages: ['ko', 'en', 'ja', 'zh', 'es', 'fr', 'de', 'pt', 'ru', 'ar', 'hi', 'it', 'nl', 'sv', 'da', 'no', 'fi', 'th', 'vi', 'tr']
-            }, userLanguagePreference as SupportedLanguageCode | undefined);
-            logger.info(`언어 정책 결정: ${policy.resolvedLanguage} (${userLanguagePreference ? '사용자 설정' : '자동 감지'}, 신뢰도: ${policy.detection.confidence.toFixed(2)})`);
-            return policy;
-        } catch (error) {
-            logger.warn('언어 감지 실패, 기본 언어 사용:', error);
-            return undefined;
-        }
+        return resolveLanguagePolicyFn(message, userLanguagePreference);
     }
 
     /**
      * LLM 의미론적 라우팅 → 키워드 폴백으로 에이전트를 선택하고 시스템 프롬프트를 구성합니다.
-     *
-     * @param message - 사용자 메시지
-     * @param userId - 사용자 ID
-     * @param languageCode - 응답 언어 코드
-     * @param onAgentSelected - 에이전트 선택 결과 콜백
-     * @param onSkillsActivated - 활성화된 스킬 콜백
-     * @returns 에이전트 선택 결과, 시스템 메시지, 선택된 에이전트 정보
+     * 실제 로직은 chat-service/agent-resolver.ts에 위임합니다.
      */
     private async resolveAgent(
         message: string,
@@ -454,69 +609,23 @@ export class ChatService {
         onAgentSelected?: (agent: { type: string; name: string; emoji?: string; phase?: string; reason?: string; confidence?: number }) => void,
         onSkillsActivated?: (skillNames: string[]) => void,
     ): Promise<{ agentSelection: AgentSelection; agentSystemMessage: string; selectedAgent: typeof AGENTS[string] }> {
-        let agentSelection: AgentSelection;
-        const llmResult = await routeWithLLM(message);
-
-        if (llmResult && llmResult.agentId && isValidAgentId(llmResult.agentId)) {
-            agentSelection = {
-                primaryAgent: llmResult.agentId,
-                category: getAgentById(llmResult.agentId)?.category || 'general',
-                phase: detectPhase(message),
-                reason: `[LLM] ${llmResult.reasoning}`,
-                confidence: llmResult.confidence,
-                matchedKeywords: []
-            };
-            logger.info(`LLM 라우팅 성공: ${llmResult.agentId} (신뢰도: ${llmResult.confidence})`);
-        } else {
-            agentSelection = await routeToAgent(message);
-            logger.info(`키워드 폴백 라우팅: ${agentSelection.primaryAgent}`);
-        }
-
-        const { prompt: agentSystemMessage, skillNames } = await getAgentSystemMessage(agentSelection, userId || undefined, languageCode);
-        const selectedAgent = AGENTS[agentSelection.primaryAgent];
-        logger.info(`에이전트: ${selectedAgent.emoji} ${selectedAgent.name}`);
-
-        if (onAgentSelected && selectedAgent) {
-            onAgentSelected({
-                type: agentSelection.primaryAgent,
-                name: selectedAgent.name,
-                emoji: selectedAgent.emoji,
-                phase: agentSelection.phase || 'planning',
-                reason: agentSelection.reason || '',
-                confidence: agentSelection.confidence || 0.5,
-            });
-        }
-
-        if (onSkillsActivated && skillNames.length > 0) {
-            onSkillsActivated(skillNames);
-        }
-
-        return { agentSelection, agentSystemMessage, selectedAgent };
+        return resolveAgentFn(message, userId, languageCode, onAgentSelected, onSkillsActivated);
     }
 
     /**
-     * 문서, RAG, 웹검색 컨텍스트를 통합하여 최종 사용자 메시지를 구성합니다.
-     *
-     * @param message - 사용자 원본 메시지
-     * @param docId - 첨부 문서 ID
-     * @param uploadedDocuments - 업로드된 문서 저장소
-     * @param ragEnabled - RAG 활성화 여부
-     * @param userId - 사용자 ID
-     * @param webSearchContext - 웹검색 컨텍스트
-     * @param thinkingMode - Sequential Thinking 모드 활성화 여부
-     * @param onRAGSources - RAG 출처 정보 콜백
-     * @returns 최종 강화된 메시지와 문서 이미지 배열
+     * 문서, 웹검색 컨텍스트를 통합하여 최종 사용자 메시지를 구성합니다.
+     * 실제 로직은 chat-service/context-builder.ts에 위임합니다.
      */
     private async buildContextForLLM(
         message: string,
         docId: string | undefined,
         uploadedDocuments: DocumentStore,
-        ragEnabled: boolean | undefined,
         userId: string | undefined,
         webSearchContext: string | undefined,
         thinkingMode: boolean | undefined,
-        onRAGSources?: (sources: Array<{ source: string; relevanceScore: number; snippet: string }>) => void,
+        apiKeyId?: string,
     ): Promise<{ finalEnhancedMessage: string; documentImages: string[] }> {
+<<<<<<< HEAD:backend/api/src/domains/chat/service.ts
         // 문서 컨텍스트 구성: 업로드된 문서의 텍스트와 이미지를 추출
         let documentContext = '';
         const documentImages: string[] = [];
@@ -608,94 +717,39 @@ export class ChatService {
         finalEnhancedMessage += `\n## USER QUESTION\n${enhancedUserMessage}`;
 
         return { finalEnhancedMessage, documentImages };
+=======
+        return buildContextForLLM({
+            message, docId, uploadedDocuments, userId,
+            webSearchContext, thinkingMode, apiKeyId,
+            clientModel: this.client.model,
+        });
+>>>>>>> fbe49389978ecfeb4fc6d2df399c18138a7fed78:backend/api/src/services/ChatService.ts
     }
 
     /**
      * Brand Model auto-routing / Brand Model 직접 매핑 / 일반 자동 선택으로 최적 모델을 결정합니다.
-     *
-     * @param message - 사용자 메시지
-     * @param hasImages - 이미지 포함 여부
-     * @param executionPlan - Brand Model 실행 계획
-     * @param promptConfig - 프롬프트 설정 (options 포함)
-     * @returns 모델 선택 결과
+     * 실제 로직은 chat-service/model-resolver.ts에 위임합니다.
      */
     private async resolveModel(
         message: string,
         hasImages: boolean,
         executionPlan: ExecutionPlan | undefined,
         promptConfig: { options?: ModelOptions },
-    ): Promise<ModelSelection> {
-        if (executionPlan?.isBrandModel && executionPlan.resolvedEngine === '__auto__') {
-            const targetBrandProfile = await selectBrandProfileForAutoRouting(message, hasImages);
-            const autoExecutionPlan = buildExecutionPlan(targetBrandProfile);
-
-            logger.info(`Auto-Routing: ${executionPlan.requestedModel} → ${targetBrandProfile} (engine=${autoExecutionPlan.resolvedEngine})`);
-
-            executionPlan.resolvedEngine = autoExecutionPlan.resolvedEngine;
-            executionPlan.profile = autoExecutionPlan.profile;
-            executionPlan.useAgentLoop = autoExecutionPlan.useAgentLoop;
-            executionPlan.agentLoopMax = autoExecutionPlan.agentLoopMax;
-            executionPlan.loopStrategy = autoExecutionPlan.loopStrategy;
-            executionPlan.thinkingLevel = autoExecutionPlan.thinkingLevel;
-            executionPlan.useDiscussion = autoExecutionPlan.useDiscussion;
-            executionPlan.promptStrategy = autoExecutionPlan.promptStrategy;
-            executionPlan.contextStrategy = autoExecutionPlan.contextStrategy;
-            executionPlan.timeBudgetMs = autoExecutionPlan.timeBudgetMs;
-            executionPlan.requiredTools = autoExecutionPlan.requiredTools;
-
-            // P2-2: Domain engine override (auto-routing only)
-            const resolvedQueryType: QueryType =
-                autoExecutionPlan.promptStrategy === 'force_coder' ? 'code'
-                : autoExecutionPlan.promptStrategy === 'force_reasoning' ? 'math'
-                : autoExecutionPlan.promptStrategy === 'force_creative' ? 'creative'
-                : 'chat';
-
-            const domainResult = applyDomainEngineOverride(
-                autoExecutionPlan.resolvedEngine, resolvedQueryType
-            );
-            if (domainResult.overridden) {
-                autoExecutionPlan.resolvedEngine = domainResult.engine;
-                executionPlan.resolvedEngine = domainResult.engine;
-                logger.info(`P2-2 Domain: ${domainResult.domain} → ${domainResult.engine}`);
-            }
-
-            this.client.setModel(autoExecutionPlan.resolvedEngine);
-            return {
-                model: autoExecutionPlan.resolvedEngine,
-                options: promptConfig.options || {},
-                reason: `Auto-Routing ${executionPlan.requestedModel} → ${targetBrandProfile} → ${autoExecutionPlan.resolvedEngine}${domainResult.overridden ? ` (domain=${domainResult.domain})` : ''}`,
-                queryType: resolvedQueryType,
-                supportsToolCalling: true,
-                supportsThinking: autoExecutionPlan.thinkingLevel !== 'off',
-                supportsVision: autoExecutionPlan.requiredTools.includes('vision'),
-            };
-        } else if (executionPlan?.isBrandModel) {
-            logger.info(`Brand Model: ${executionPlan.requestedModel} → engine=${executionPlan.resolvedEngine}`);
-            this.client.setModel(executionPlan.resolvedEngine);
-            return {
-                model: executionPlan.resolvedEngine,
-                options: promptConfig.options || {},
-                reason: `Brand model ${executionPlan.requestedModel} → ${executionPlan.resolvedEngine}`,
-                queryType: 'chat',
-                supportsToolCalling: true,
-                supportsThinking: true,
-                supportsVision: executionPlan.requiredTools.includes('vision'),
-            };
-        } else {
-            const selection = await selectOptimalModel(message, hasImages);
-            logger.info(`모델 자동 선택: ${selection.model} (${selection.reason})`);
-            this.client.setModel(selection.model);
-            return selection;
-        }
+    ): Promise<import('../chat/model-selector').ModelSelection> {
+        return resolveModel({
+            message, hasImages, executionPlan, promptConfig,
+            setModel: (model: string) => this.client.setModel(model),
+        });
     }
 
     /**
-     * A2A 병렬 생성 → 실패 시 AgentLoop 폴백으로 응답 전략을 실행합니다.
+     * ExecutionStrategy 기반 응답 전략을 선택하고 실행합니다.
+     * 실제 로직은 chat-service/strategy-executor.ts에 위임합니다.
      */
     private async selectAndExecuteStrategy(params: {
         executionPlan: ExecutionPlan | undefined;
         message: string;
-        modelSelection: ModelSelection;
+        modelSelection: import('../chat/model-selector').ModelSelection;
         routingLog: RoutingDecisionLog;
         images: string[] | undefined;
         docId: string | undefined;
@@ -708,9 +762,10 @@ export class ChatService {
         thinkingMode: boolean | undefined;
         thinkingLevel: 'low' | 'medium' | 'high' | undefined;
         languagePolicy: LanguagePolicyDecision | undefined;
-        streamToken: (token: string) => void;
+        streamToken: (token: string, thinking?: string) => void;
         abortSignal?: AbortSignal;
         checkAborted: () => void;
+<<<<<<< HEAD:backend/api/src/domains/chat/service.ts
         reqCtx: RequestContext;
     }): Promise<void> {
         const {
@@ -788,10 +843,24 @@ export class ChatService {
                 checkAborted,
             });
         }
+=======
+        format?: import('../ollama/types').FormatOption;
+    }): Promise<void> {
+        return selectAndExecuteStrategy({
+            ...params,
+            generateVerifyStrategy: this.generateVerifyStrategy,
+            agentLoopStrategy: this.agentLoopStrategy,
+            thinkingStrategy: this.thinkingStrategy,
+            client: this.client,
+            currentUserContext: this.currentUserContext,
+            getAllowedTools: () => this.getAllowedTools(),
+        });
+>>>>>>> fbe49389978ecfeb4fc6d2df399c18138a7fed78:backend/api/src/services/ChatService.ts
     }
 
     /**
      * 사용량 메트릭을 기록하고 보안 사후 검사 및 라우팅 로그를 완료합니다.
+     * 실제 로직은 chat-service/metrics-recorder.ts에 위임합니다.
      */
     private recordMetricsAndVerify(params: {
         fullResponse: string;
@@ -804,38 +873,10 @@ export class ChatService {
         securityPreCheck: ReturnType<typeof preRequestCheck>;
         routingLog: RoutingDecisionLog;
     }): void {
-        const {
-            fullResponse, startTime, message, req, selectedAgent,
-            agentSelection, executionPlan, securityPreCheck, routingLog,
-        } = params;
-
-        recordChatMetrics({
-            fullResponse,
-            startTime,
-            message,
+        recordMetricsAndVerifyFn({
+            ...params,
             model: this.client.model,
-            apiKeyId: req.apiKeyId,
-            selectedAgent,
-            agentSelection,
-            executionPlan,
         });
-
-        // ── 보안 사후 검사 + 라우팅 로그 완료 ──
-        const securityPostCheck = postResponseCheck(fullResponse);
-        if (!securityPostCheck.passed) {
-            logger.warn(`응답 보안 경고: ${securityPostCheck.violations.map(v => v.detail).join(', ')}`);
-        }
-
-        routingLog.latencyMs = Date.now() - startTime;
-        routingLog.securityFlags = {
-            preCheckPassed: securityPreCheck.passed,
-            postCheckPassed: securityPostCheck.passed,
-            violations: [
-                ...securityPreCheck.violations.map(v => `pre:${v.type}`),
-                ...securityPostCheck.violations.map(v => `post:${v.type}`),
-            ],
-        };
-        logRoutingDecision(routingLog);
     }
 
     /**
@@ -897,8 +938,9 @@ export class ChatService {
 
     /**
      * 대화에서 메모리를 비동기로 추출합니다 (fire-and-forget).
-     * LLM 추출기를 연결하여 의미 있는 정보를 자동으로 장기 메모리에 저장합니다.
+     * 실제 로직은 chat-service/memory-extractor.ts에 위임합니다.
      */
+<<<<<<< HEAD:backend/api/src/domains/chat/service.ts
     private async extractMemoriesAsync(userId: string, userMessage: string, assistantResponse: string): Promise<void> {
         try {
             const { getMemoryService } = await import('../../domains/memory/MemoryService');
@@ -929,5 +971,17 @@ export class ChatService {
         } catch (e) {
             logger.debug('메모리 자동 추출 실패 (무시):', e instanceof Error ? e.message : e);
         }
+=======
+    private async extractMemoriesAsync(
+        userId: string,
+        userMessage: string,
+        assistantResponse: string,
+        hasExternalContext: boolean = false,
+    ): Promise<void> {
+        return extractMemoriesAsync({
+            userId, userMessage, assistantResponse,
+            hasExternalContext, client: this.client,
+        });
+>>>>>>> fbe49389978ecfeb4fc6d2df399c18138a7fed78:backend/api/src/services/ChatService.ts
     }
 }

@@ -12,6 +12,8 @@
  * @module chat/language-policy
  */
 
+import { LANGUAGE_THRESHOLDS } from '../config/runtime-limits';
+
 // ============================================================
 // 타입 정의
 // ============================================================
@@ -265,8 +267,8 @@ export const LANGUAGE_TEMPLATES: Record<SupportedLanguageCode, LanguageResponseT
 export const DEFAULT_LANGUAGE_POLICY: LanguagePolicyConfig = {
     defaultLanguage: 'ko',
     enableDynamicResponse: false, // Feature flag로 제어
-    minConfidenceThreshold: 0.7,
-    shortTextThreshold: 10,
+    minConfidenceThreshold: LANGUAGE_THRESHOLDS.MIN_CONFIDENCE,
+    shortTextThreshold: LANGUAGE_THRESHOLDS.SHORT_TEXT_LENGTH,
     fallbackLanguage: 'en',
     supportedLanguages: [
         'ko', 'en', 'ja', 'zh', 'es', 'fr', 'de', 'pt', 'ru', 
@@ -439,7 +441,7 @@ export function detectLanguage(text: string): LanguageDetectionResult {
         for (const { lang, matches } of nonLatinResults) {
             if (matches && matches.length > 0) {
                 const ratio = matches.length / processedLength;
-                if (ratio > 0.3) { // 30% 이상이면 해당 언어로 판단
+                if (ratio > LANGUAGE_THRESHOLDS.NON_LATIN_RATIO) {
                     return {
                         language: lang,
                         confidence: Math.min(ratio * 2, 1.0),
@@ -480,7 +482,7 @@ export function detectLanguage(text: string): LanguageDetectionResult {
     const total = koreanMatches.length + latinMatches.length;
     const koreanRatio = koreanMatches.length / total;
 
-    if (koreanRatio > 0.7) {
+    if (koreanRatio > LANGUAGE_THRESHOLDS.KOREAN_HIGH) {
         return {
             language: 'ko',
             confidence: koreanRatio,
@@ -488,12 +490,12 @@ export function detectLanguage(text: string): LanguageDetectionResult {
             textLength: originalLength,
             processedLength
         };
-    } else if (koreanRatio < 0.1) {
+    } else if (koreanRatio < LANGUAGE_THRESHOLDS.KOREAN_LOW) {
         // 라틴 문자 주도 → 하위 언어 감지로 세분화
         const detectedLang = detectLatinSubLanguage(processedText);
         return {
             language: detectedLang,
-            confidence: detectedLang === 'en' ? 0.8 : 0.75,
+            confidence: detectedLang === 'en' ? LANGUAGE_THRESHOLDS.LATIN_EN_CONFIDENCE : LANGUAGE_THRESHOLDS.LATIN_OTHER_CONFIDENCE,
             method: 'regex',
             textLength: originalLength,
             processedLength

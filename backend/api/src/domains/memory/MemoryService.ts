@@ -11,9 +11,15 @@
 
 import { v4 as uuidv4 } from 'uuid';
 import crypto from 'node:crypto';
+<<<<<<< HEAD:backend/api/src/domains/memory/MemoryService.ts
 import { getUnifiedDatabase, UserMemory, MemoryCategory } from '../../data/models/unified-database';
 import { createLogger } from '../../utils/logger';
 import { CAPACITY, TRUNCATION, DISCUSSION_TOKEN_BUDGET } from '../../config/runtime-limits';
+=======
+import { getUnifiedDatabase, UserMemory, MemoryCategory } from '../data/models/unified-database';
+import { createLogger } from '../utils/logger';
+import { CAPACITY, TRUNCATION, DISCUSSION_TOKEN_BUDGET, CACHE_CONFIG, JIT_MEMORY_MIN_IMPORTANCE } from '../config/runtime-limits';
+>>>>>>> fbe49389978ecfeb4fc6d2df399c18138a7fed78:backend/api/src/services/MemoryService.ts
 
 const logger = createLogger('MemoryService');
 
@@ -36,10 +42,8 @@ interface MemoryCacheEntry {
     cachedAt: number;
 }
 
-/** 캐시 TTL (5분) */
-const MEMORY_CACHE_TTL_MS = 5 * 60 * 1000;
-/** 캐시 최대 크기 */
-const MEMORY_CACHE_MAX_SIZE = 200;
+const MEMORY_CACHE_TTL_MS = CACHE_CONFIG.MEMORY_CACHE_TTL_MS;
+const MEMORY_CACHE_MAX_SIZE = CACHE_CONFIG.MEMORY_CACHE_MAX_SIZE;
 
 /**
  * 장기 메모리 서비스 클래스
@@ -84,7 +88,7 @@ export class MemoryService {
         // 티어 한도 검증: 현재 메모리 수 확인 후 초과 시 최저 importance 교체
         if (uniqueMemories.length > 0) {
             const currentMemories = await this.getUserMemories(userId);
-            const MEMORY_SOFT_LIMIT = 500; // 기본 상한 (티어별 분기는 routes에서 처리)
+            const MEMORY_SOFT_LIMIT = CAPACITY.MEMORY_SOFT_LIMIT;
             const availableSlots = Math.max(0, MEMORY_SOFT_LIMIT - currentMemories.length);
 
             if (availableSlots < uniqueMemories.length) {
@@ -122,14 +126,11 @@ export class MemoryService {
             tags: memory.tags
         });
         this.invalidateCache(userId);
-
-        // 임베딩 저장 (fire-and-forget, 시맨틱 검색용)
-        this.saveMemoryEmbedding(id, memory.key, memory.value).catch(e => logger.debug('임베딩 저장 실패:', e?.message));
-
         return id;
     }
 
     /**
+<<<<<<< HEAD:backend/api/src/domains/memory/MemoryService.ts
      * 메모리의 임베딩 벡터를 vector_embeddings 테이블에 저장합니다.
      * EmbeddingService가 사용 가능한 경우에만 동작합니다.
      */
@@ -154,6 +155,8 @@ export class MemoryService {
     }
 
     /**
+=======
+>>>>>>> fbe49389978ecfeb4fc6d2df399c18138a7fed78:backend/api/src/services/MemoryService.ts
      * 사용자의 모든 메모리 조회
      */
     async getUserMemories(userId: string, options?: {
@@ -171,6 +174,7 @@ export class MemoryService {
         // 1) 키워드 기반 검색 (기존)
         const keywordResults = await this.db.getRelevantMemories(userId, query, limit);
 
+<<<<<<< HEAD:backend/api/src/domains/memory/MemoryService.ts
         // 2) 시맨틱 검색 시도 (EmbeddingService 사용 가능 시)
         try {
             const { getEmbeddingService } = await import('../../domains/rag/EmbeddingService');
@@ -200,6 +204,8 @@ export class MemoryService {
             // 시맨틱 검색 실패 시 키워드 결과만 반환 (graceful degradation)
         }
 
+=======
+>>>>>>> fbe49389978ecfeb4fc6d2df399c18138a7fed78:backend/api/src/services/MemoryService.ts
         return keywordResults;
     }
 
@@ -234,8 +240,8 @@ export class MemoryService {
         }
 
         const tokenBudget = maxTokens ?? DISCUSSION_TOKEN_BUDGET.DEFAULT.maxMemoryTokens;
-        // 토큰 ≈ 문자수 / 3 (한국어 기준 보수적 추정)
-        const charBudget = tokenBudget * 3;
+        // 토큰 ≈ 문자수 / TOKEN_TO_CHAR_RATIO (한국어 기준 보수적 추정)
+        const charBudget = tokenBudget * CAPACITY.TOKEN_TO_CHAR_RATIO;
 
         const memories = await this.getRelevantMemories(userId, currentQuery, 10);
 
@@ -243,11 +249,18 @@ export class MemoryService {
             return { memories: [], contextString: '' };
         }
 
+        // JIT 필터링: 중요도 기반으로 저품질 메모리 제외
+        // Anthropic 컨텍스트 엔지니어링 원칙: "최소 고신호 토큰 집합"
+        const filteredMemories = memories.filter(m => (m.importance ?? 0.5) >= JIT_MEMORY_MIN_IMPORTANCE);
+        const effectiveMemories = filteredMemories.length > 0
+            ? filteredMemories
+            : [...memories].sort((a, b) => (b.importance ?? 0.5) - (a.importance ?? 0.5)).slice(0, 3);
+
         const contextParts: string[] = ['## 🧠 User Memory Context'];
         
         // 카테고리별 그룹화
         const grouped: Record<string, UserMemory[]> = {};
-        for (const m of memories) {
+        for (const m of effectiveMemories) {
             if (!grouped[m.category]) grouped[m.category] = [];
             grouped[m.category].push(m);
         }
@@ -283,7 +296,7 @@ export class MemoryService {
         contextParts.push('\n---\nUse this context to personalize your response.\n');
 
         const result: MemoryContext = {
-            memories: includedMemories.length > 0 ? includedMemories : memories,
+            memories: includedMemories.length > 0 ? includedMemories : effectiveMemories,
             contextString: contextParts.join('\n')
         };
 
@@ -437,7 +450,8 @@ Return ONLY the JSON array, no explanation.`;
             const jsonMatch = safeLlmResult.match(/\[[\s\S]*\]/);
             if (!jsonMatch) return [];
 
-            const parsed = JSON.parse(jsonMatch[0]);
+            const jsonStr = this.sanitizeJsonString(jsonMatch[0]);
+            const parsed = JSON.parse(jsonStr);
             if (!Array.isArray(parsed)) return [];
 
             return parsed.filter(item =>
@@ -451,9 +465,31 @@ Return ONLY the JSON array, no explanation.`;
                 tags: Array.isArray(item.tags) ? item.tags.slice(0, TRUNCATION.MEMORY_MAX_TAGS) : []
             }));
         } catch (e) {
-            logger.error('JSON 파싱 실패:', e);
+            logger.error('JSON 파싱 실패:', e instanceof Error ? e.message : e);
             return [];
         }
+    }
+
+    /**
+     * LLM이 반환한 JSON 문자열의 일반적인 오류를 정제합니다.
+     * - 후행 쉼표 제거
+     * - 제어 문자 이스케이프
+     * - 문자열 값 내부의 이스케이프되지 않은 줄바꿈 처리
+     */
+    private sanitizeJsonString(json: string): string {
+        let result = json;
+        // 1) 문자열 값 내부의 이스케이프되지 않은 제어 문자 처리
+        //    JSON 문자열 안의 raw newline/tab을 이스케이프 시퀀스로 변환
+        result = result.replace(/"(?:[^"\\]|\\.)*"/g, (match) => {
+            return match
+                .replace(/(?<!\\)\t/g, '\\t')
+                .replace(/(?<!\\)\r\n/g, '\\n')
+                .replace(/(?<!\\)\r/g, '\\n')
+                .replace(/(?<!\\)\n/g, '\\n');
+        });
+        // 2) 후행 쉼표 제거 (], } 앞의 쉼표)
+        result = result.replace(/,\s*([}\]])/g, '$1');
+        return result;
     }
 
     private extractByRules(userMessage: string, _assistantResponse: string): MemoryExtractionResult[] {

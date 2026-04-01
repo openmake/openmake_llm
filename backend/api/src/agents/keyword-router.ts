@@ -18,6 +18,9 @@ import { AGENTS, industryData, getAgentById } from './agent-data';
 import { analyzeTopicIntent, TOPIC_CATEGORIES } from './topic-analyzer';
 import { createLogger } from '../utils/logger';
 import { getEnhancedKeywords, getKeywordIDF, getSynonyms, getCategoryWeight } from './enhanced-keywords';
+import { CATEGORY_BOOST, EXPANDED_DAMPING } from '../config/routing-config';
+import { CONFIDENCE_DIVISORS } from '../config/llm-parameters';
+import { PHASE_KEYWORDS } from '../config/runtime-limits';
 
 const logger = createLogger('AgentRouter');
 
@@ -87,11 +90,9 @@ export async function routeToAgent(message: string): Promise<AgentSelection> {
             }
         }
     }
-    const CATEGORY_BOOST = 3;
 
     // 2단계: 향상된 키워드 매칭 (TF-IDF + 동의어 + 카테고리 가중치)
-    // PRIMARY (에이전트 고유 키워드) = 전체 가중치, EXPANDED (카테고리 어휘) = 0.3x 감쇄
-    const EXPANDED_DAMPING = 0.3;
+    // PRIMARY (에이전트 고유 키워드) = 전체 가중치, EXPANDED (카테고리 어휘) = EXPANDED_DAMPING x 감쇄
 
     for (const [categoryId, category] of Object.entries(industryData)) {
         const categoryWeight = getCategoryWeight(categoryId);
@@ -148,7 +149,7 @@ export async function routeToAgent(message: string): Promise<AgentSelection> {
                     category: categoryId,
                     phase: detectPhase(message),
                     reason: `${agent.name} - ${matchedKeywords.slice(0, 5).join(', ')} 키워드 매칭`,
-                    confidence: Math.min(score / 10, 1.0),
+                    confidence: Math.min(score / CONFIDENCE_DIVISORS.KEYWORD_ROUTER, 1.0),
                     matchedKeywords
                 };
             }
@@ -180,21 +181,13 @@ export async function routeToAgent(message: string): Promise<AgentSelection> {
 export function detectPhase(message: string): AgentPhase {
     const lowerMessage = message.toLowerCase();
 
-    // 기획/설계 관련 키워드
-    const planningKeywords = ['설계', '계획', '기획', '분석', '조사', '검토', '평가', '전략', 'plan', 'design', 'analyze', '어떻게', '방법', '뭐가', '무엇'];
-    if (planningKeywords.some(kw => lowerMessage.includes(kw))) {
+    if (PHASE_KEYWORDS.PLANNING.some(kw => lowerMessage.includes(kw))) {
         return 'planning';
     }
-
-    // 구현/개발 관련 키워드
-    const buildKeywords = ['구현', '개발', '코딩', '만들', '작성', '생성', 'implement', 'build', 'create', 'develop', '해줘', '해 줘'];
-    if (buildKeywords.some(kw => lowerMessage.includes(kw))) {
+    if (PHASE_KEYWORDS.BUILD.some(kw => lowerMessage.includes(kw))) {
         return 'build';
     }
-
-    // 최적화/개선 관련 키워드
-    const optimizationKeywords = ['최적화', '개선', '리팩토링', '성능', '효율', 'optimize', 'improve', 'refactor', '더 좋', '더좋'];
-    if (optimizationKeywords.some(kw => lowerMessage.includes(kw))) {
+    if (PHASE_KEYWORDS.OPTIMIZATION.some(kw => lowerMessage.includes(kw))) {
         return 'optimization';
     }
 

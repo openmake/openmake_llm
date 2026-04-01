@@ -4,11 +4,15 @@
  * ============================================================
  *
  * ollama-deep-researcher MCP와 유사한 기능 제공:
- * - 주제 분해 → 웹 검색 → Firecrawl 스크래핑 → 청크 합성 → 반복 루프 → 보고서 생성
+ * - 주제 분해 → 웹 검색 → 웹 스크래핑 → 청크 합성 → 반복 루프 → 보고서 생성
+ *
+ * 각 단계의 구현은 deep-research/ 서브모듈에 위임하고,
+ * 이 클래스는 오케스트레이션과 진행 관리만 담당합니다.
  *
  * @module services/DeepResearchService
  */
 
+<<<<<<< HEAD:backend/api/src/domains/research/DeepResearchService.ts
 import { OllamaClient, createClient } from '../../ollama/client';
 import { performWebSearch, SearchResult } from '../../mcp/web-search';
 import { isFirecrawlConfigured } from '../../mcp/firecrawl';
@@ -17,28 +21,28 @@ import { getConfig } from '../../config/env';
 import { getUnifiedDatabase } from '../../data/models/unified-database';
 import { createLogger } from '../../utils/logger';
 import { CAPACITY, TRUNCATION } from '../../config/runtime-limits';
+=======
+import { OllamaClient, createClient } from '../ollama/client';
+import type { SearchResult } from '../mcp/web-search';
+import { getConfig } from '../config/env';
+import { RESEARCH_DEPTH_LOOPS } from '../config/runtime-limits';
+import { getUnifiedDatabase } from '../data/models/unified-database';
+import { createLogger } from '../utils/logger';
+>>>>>>> fbe49389978ecfeb4fc6d2df399c18138a7fed78:backend/api/src/services/DeepResearchService.ts
 import { v4 as uuidv4 } from 'uuid';
 
 import {
     ResearchConfig,
     ResearchProgress,
     ResearchResult,
-    SubTopic,
-    SynthesisResult,
     globalConfig,
     setGlobalConfig
 } from './deep-research-types';
 
-import {
-    deduplicateSources,
-    normalizeUrl,
-    clampImportance,
-    buildFallbackSubTopics,
-    chunkArray,
-    extractBulletLikeFindings,
-    getLoopProgressRange
-} from './deep-research-utils';
+import { deduplicateSources, getLoopProgressRange } from './deep-research-utils';
+import { getResearchMessage } from './deep-research-prompts';
 
+<<<<<<< HEAD:backend/api/src/domains/research/DeepResearchService.ts
 import {
     SECTION_HEADERS,
     getDecomposePrompt,
@@ -51,6 +55,14 @@ import {
 
 import { parallelBatch } from '../../utils/graph-engine';
 import { errorMessage } from '../../utils/error-message';
+=======
+// Pipeline stage functions
+import { decomposeTopics } from './deep-research/topic-decomposer';
+import { searchSubTopics } from './deep-research/source-searcher';
+import { scrapeSources } from './deep-research/content-scraper';
+import { synthesizeFindings, checkNeedsMoreInfo } from './deep-research/findings-synthesizer';
+import { generateReport } from './deep-research/report-generator';
+>>>>>>> fbe49389978ecfeb4fc6d2df399c18138a7fed78:backend/api/src/services/DeepResearchService.ts
 
 // Re-export types so consumers don't break
 export type { ResearchConfig, ResearchProgress, ResearchResult };
@@ -99,7 +111,13 @@ export class DeepResearchService {
             // 1단계: 주제 분해 (0-5%)
             this.throwIfAborted();
             this.reportProgress(onProgress, sessionId, 'running', 0, this.config.maxLoops, 'decompose', 2, getResearchMessage('analyzing', this.config.language));
-            const subTopics = await this.decomposeTopics(topic, sessionId);
+            const subTopics = await decomposeTopics({
+                client: this.client,
+                config: this.config,
+                topic,
+                sessionId,
+                throwIfAborted: () => this.throwIfAborted()
+            });
             await db.updateResearchSession(sessionId, { progress: 5 });
             this.reportProgress(
                 onProgress,
@@ -116,6 +134,7 @@ export class DeepResearchService {
             const sourceMap = new Map<string, SearchResult>();
             const seenUrls = new Set<string>();
             const scrapedUrls = new Set<string>();
+            const usedQueries = new Set<string>();
             const allFindings: string[] = [];
 
             for (let loop = 0; loop < this.config.maxLoops; loop++) {
@@ -134,13 +153,18 @@ export class DeepResearchService {
                     getResearchMessage('loopSearching', this.config.language, { loop: loopNumber })
                 );
 
-                const newlyDiscovered = await this.searchSubTopics(
+                const newlyDiscovered = await searchSubTopics({
+                    client: this.client,
+                    config: this.config,
                     subTopics,
                     sessionId,
                     loopNumber,
                     sourceMap,
-                    seenUrls
-                );
+                    seenUrls,
+                    usedQueries,
+                    abortSignal: this.abortController?.signal,
+                    throwIfAborted: () => this.throwIfAborted()
+                });
                 this.throwIfAborted();
 
                 const uniqueSources = Array.from(sourceMap.values());
@@ -175,15 +199,20 @@ export class DeepResearchService {
                     })
                 );
 
-                await this.scrapeSources(
-                    uniqueSources,
+                await scrapeSources({
+                    sources: uniqueSources,
                     scrapedUrls,
+                    config: this.config,
                     sessionId,
                     loopNumber,
                     onProgress,
-                    loopRange.scrapeStart,
-                    loopRange.scrapeEnd
-                );
+                    progressStart: loopRange.scrapeStart,
+                    progressEnd: loopRange.scrapeEnd,
+                    abortSignal: this.abortController?.signal,
+                    throwIfAborted: () => this.throwIfAborted(),
+                    reportProgress: (cb, sid, status, curLoop, totalLoops, step, prog, msg) =>
+                        this.reportProgress(cb, sid, status, curLoop, totalLoops, step, prog, msg)
+                });
                 this.throwIfAborted();
 
                 const sourcesAfterScrape = Array.from(sourceMap.values());
@@ -199,7 +228,16 @@ export class DeepResearchService {
                     getResearchMessage('loopSynthesizing', this.config.language, { loop: loopNumber })
                 );
 
-                const synthesis = await this.synthesizeFindings(topic, sourcesAfterScrape, sessionId, loopNumber);
+                const synthesis = await synthesizeFindings({
+                    client: this.client,
+                    config: this.config,
+                    topic,
+                    searchResults: sourcesAfterScrape,
+                    sessionId,
+                    loopNumber,
+                    abortSignal: this.abortController?.signal,
+                    throwIfAborted: () => this.throwIfAborted()
+                });
                 allFindings.push(synthesis.summary);
                 this.throwIfAborted();
 
@@ -228,7 +266,14 @@ export class DeepResearchService {
                 // 마지막 루프가 아니면 추가 필요 여부 판단
                 if (loop < this.config.maxLoops - 1) {
                     this.throwIfAborted();
-                    const needsMore = await this.checkNeedsMoreInfo(topic, allFindings, sourcesAfterScrape.length);
+                    const needsMore = await checkNeedsMoreInfo({
+                        client: this.client,
+                        config: this.config,
+                        topic,
+                        currentFindings: allFindings,
+                        sourceCount: sourcesAfterScrape.length,
+                        throwIfAborted: () => this.throwIfAborted()
+                    });
                     if (!needsMore) {
                         logger.info(`[DeepResearch] 루프 ${loopNumber}에서 충분한 정보 수집. 조기 종료.`);
                         break;
@@ -241,7 +286,16 @@ export class DeepResearchService {
             // 3단계: 최종 보고서 생성 (85-100%)
             this.throwIfAborted();
             this.reportProgress(onProgress, sessionId, 'running', this.config.maxLoops, this.config.maxLoops, 'report', 85, getResearchMessage('generatingReport', this.config.language));
-            const report = await this.generateReport(topic, allFindings, finalSources, subTopics, sessionId);
+            const report = await generateReport({
+                client: this.client,
+                config: this.config,
+                topic,
+                findings: allFindings,
+                sources: finalSources,
+                subTopics,
+                sessionId,
+                throwIfAborted: () => this.throwIfAborted()
+            });
 
             await db.updateResearchSession(sessionId, {
                 status: 'completed',
@@ -292,6 +346,7 @@ export class DeepResearchService {
     }
 
     /**
+<<<<<<< HEAD:backend/api/src/domains/research/DeepResearchService.ts
      * 주제를 서브 토픽으로 분해
      */
     private async decomposeTopics(topic: string, sessionId: string): Promise<SubTopic[]> {
@@ -747,6 +802,8 @@ export class DeepResearchService {
     }
 
     /**
+=======
+>>>>>>> fbe49389978ecfeb4fc6d2df399c18138a7fed78:backend/api/src/services/DeepResearchService.ts
      * 스텝 수 조회
      */
     private async getStepCount(sessionId: string): Promise<number> {
@@ -846,7 +903,7 @@ export async function quickResearch(
     });
 
     // depth에 따른 maxLoops 설정
-    const maxLoops = depth === 'quick' ? 1 : depth === 'standard' ? 3 : 5;
+    const maxLoops = RESEARCH_DEPTH_LOOPS[depth] ?? RESEARCH_DEPTH_LOOPS.standard;
 
     // 리서치 실행
     const service = createDeepResearchService({ maxLoops });

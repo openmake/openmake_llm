@@ -1,9 +1,9 @@
 /**
  * ============================================
- * Documents Page - 문서 관리 (RAG)
+ * Documents Page - 문서 관리
  * ============================================
  * 업로드된 문서를 관리하는 SPA 페이지 모듈입니다.
- * 문서 목록 조회, 업로드, 삭제, 상세 보기, 임베딩 상태 확인.
+ * 문서 목록 조회, 업로드, 삭제, 상세 보기.
  *
  * @module pages/documents
  */
@@ -47,12 +47,11 @@
         return icons[type] || '\uD83D\uDCCE';
     }
 
-    function _renderStats(total, embedded, totalSize) {
+    function _renderStats(total, _unused, totalSize) {
         var el = document.getElementById('docStats');
         if (!el) return;
         el.innerHTML =
             '<div class="doc-stat-card"><div class="stat-value">' + (total || 0) + '</div><div class="stat-label">\uC804\uCCB4 \uBB38\uC11C</div></div>' +
-            '<div class="doc-stat-card"><div class="stat-value">' + (embedded || 0) + '</div><div class="stat-label">\uC784\uBCA0\uB529 \uC644\uB8CC</div></div>' +
             '<div class="doc-stat-card"><div class="stat-value">' + _formatFileSize(totalSize || 0) + '</div><div class="stat-label">\uCD1D \uC6A9\uB7C9</div></div>';
     }
 
@@ -71,14 +70,11 @@
             }
 
             var totalSize = 0;
-            var embeddedCount = 0;
             el.innerHTML = docs.map(function(doc) {
                 var ext = (doc.original_name || doc.filename || '').split('.').pop().toLowerCase();
                 totalSize += (doc.file_size || doc.size || 0);
-                if (doc.has_embeddings || doc.embedding_count > 0) embeddedCount++;
                 var sizeStr = _formatFileSize(doc.file_size || doc.size || 0);
                 var dateStr = doc.created_at ? new Date(doc.created_at).toLocaleDateString('ko') : '';
-                var hasEmb = doc.has_embeddings || doc.embedding_count > 0;
                 var docId = doc.id || doc.doc_id;
 
                 return '<div class="doc-card" data-doc-id="' + docId + '">' +
@@ -87,7 +83,6 @@
                         '<div class="doc-name">' + _esc(doc.original_name || doc.filename) + '</div>' +
                         '<div class="doc-meta">' +
                             '<span class="badge-type">' + _esc(ext.toUpperCase()) + '</span>' +
-                            (hasEmb ? '<span class="badge-type badge-embedded">\uC784\uBCA0\uB529 \uC644\uB8CC</span>' : '') +
                             '<span>' + sizeStr + '</span>' +
                             '<span>' + dateStr + '</span>' +
                         '</div>' +
@@ -99,7 +94,7 @@
                 '</div>';
             }).join('');
 
-            _renderStats(docs.length, embeddedCount, totalSize);
+            _renderStats(docs.length, 0, totalSize);
         }).catch(function(e) {
             console.error('[Documents] \uBB38\uC11C \uBAA9\uB85D \uB85C\uB4DC \uC2E4\uD328:', e);
             _showToast('\uBB38\uC11C \uBAA9\uB85D \uB85C\uB4DC \uC2E4\uD328', 'error');
@@ -210,7 +205,7 @@
         }).then(function(data) {
             var payload = data.data || data;
             if (payload.deleted) {
-                _showToast('문서가 삭제되었습니다 (임베딩 ' + (payload.embeddingsDeleted || 0) + '개 삭제)');
+                _showToast('문서가 삭제되었습니다');
                 // 활성 문서 컨텍스트가 삭제된 문서와 일치하면 해제 (채팅에서 삭제된 문서 인용 방지)
                 var activeDoc = window.getState && window.getState('activeDocumentContext');
                 if (activeDoc && activeDoc.docId === docId) {
@@ -296,7 +291,6 @@
                 '.page-documents .doc-card .doc-actions { display:flex; gap:var(--space-2); flex-shrink:0; }' +
                 '.page-documents .doc-card .doc-actions button { padding:var(--space-1) var(--space-3); border:none; border-radius:var(--radius-md); cursor:pointer; font-size:var(--font-size-sm); font-weight:var(--font-weight-semibold); }' +
                 '.page-documents .badge-type { display:inline-block; padding:2px 10px; border-radius:var(--radius-md); font-size:11px; font-weight:var(--font-weight-semibold); background:var(--bg-tertiary); color:var(--text-secondary); }' +
-                '.page-documents .badge-embedded { background:var(--success); color:#fff; }' +
                 '.page-documents .btn-primary { padding:var(--space-3) var(--space-5); background:var(--accent-primary); color:#fff; border:none; border-radius:var(--radius-md); cursor:pointer; font-weight:var(--font-weight-semibold); white-space:nowrap; }' +
                 '.page-documents .btn-secondary { background:var(--bg-tertiary); color:var(--text-primary); border:1px solid var(--border-light) !important; }' +
                 '.page-documents .btn-danger { background:var(--danger); color:#fff; }' +

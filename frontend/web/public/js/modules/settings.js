@@ -57,20 +57,12 @@ var MCP_TOOL_CATALOG = [
         ]
     },
     {
-        category: '문서',
-        emoji: '📄',
-        tools: [
-            { name: 'rag', label: 'RAG (문서 기반 응답)', description: '업로드 문서에서 관련 정보를 검색하여 응답에 활용', minTier: 'free' }
-        ]
-    },
-    {
         category: '스크래핑',
-        emoji: '🔥',
+        emoji: '🌐',
         tools: [
-            { name: 'firecrawl_scrape', label: 'Firecrawl 스크래핑', description: '웹페이지를 스크래핑합니다', minTier: 'pro' },
-            { name: 'firecrawl_search', label: 'Firecrawl 검색', description: '웹을 검색합니다', minTier: 'pro' },
-            { name: 'firecrawl_map', label: 'Firecrawl URL 맵', description: 'URL 구조를 매핑합니다', minTier: 'pro' },
-            { name: 'firecrawl_crawl', label: 'Firecrawl 크롤링', description: '웹사이트를 크롤링합니다', minTier: 'pro' }
+            { name: 'web_scrape', label: '웹 스크래핑', description: '웹페이지를 마크다운으로 스크래핑합니다', minTier: 'pro' },
+            { name: 'web_map', label: 'URL 매핑', description: '웹사이트 URL 구조를 매핑합니다', minTier: 'pro' },
+            { name: 'web_crawl', label: '웹 크롤링', description: '웹사이트를 BFS로 크롤링합니다', minTier: 'pro' }
         ]
     }
 ];
@@ -121,22 +113,11 @@ function syncDeepResearchState(enabled) {
     }
 }
 
-function syncRAGState(enabled) {
-    setState('ragEnabled', enabled);
-    var current = getState('mcpToolsEnabled') || {};
-    if (current.rag !== enabled) {
-        var updated = Object.assign({}, current);
-        updated.rag = enabled;
-        setState('mcpToolsEnabled', updated);
-    }
-}
-
 var VIRTUAL_TOOL_MAP = {
     sequential_thinking: { stateKey: 'thinkingEnabled', syncFn: syncThinkingState, btnId: 'thinkingModeBtn' },
     discussion_mode: { stateKey: 'discussionMode', syncFn: syncDiscussionState, btnId: 'discussionModeBtn' },
     deep_research: { stateKey: 'deepResearchMode', syncFn: syncDeepResearchState, btnId: 'deepResearchBtn' },
     web_search: { stateKey: 'webSearchEnabled', syncFn: syncWebSearchState, btnId: 'webSearchBtn' },
-    rag: { stateKey: 'ragEnabled', syncFn: syncRAGState, btnId: null }
 };
 
 /**
@@ -174,18 +155,10 @@ function loadMCPSettings() {
                 setState('mcpToolsEnabled', enabledTools);
             }
 
-            // 레거시 마이그레이션: rag → enabledTools.rag
-            if (enabledTools.rag === undefined && settings.rag === true) {
-                enabledTools = Object.assign({}, enabledTools);
-                enabledTools.rag = true;
-                setState('mcpToolsEnabled', enabledTools);
-            }
-
             // 모든 virtual tool의 AppState를 enabledTools에서 동기화
             var finalTools = getState('mcpToolsEnabled') || {};
             setState('thinkingEnabled', finalTools.sequential_thinking !== false);
             setState('webSearchEnabled', finalTools.web_search === true);
-            setState('ragEnabled', finalTools.rag === true);
             setState('discussionMode', finalTools.discussion_mode === true);
             setState('deepResearchMode', finalTools.deep_research === true);
 
@@ -218,7 +191,6 @@ function saveMCPSettings() {
     var settings = {
         thinking: enabledTools.sequential_thinking !== false,
         webSearch: enabledTools.web_search === true,
-        rag: enabledTools.rag === true,
         enabledTools: enabledTools
     };
     SS.setItem(STORAGE_KEY_MCP_SETTINGS, JSON.stringify(settings));
@@ -251,9 +223,6 @@ function toggleMCPModule(module) {
             updateToggleUI('mcpGithub', githubEnabled);
             break;
 
-        case 'rag':
-            toggleMCPTool('rag');
-            break;
     }
 
     saveMCPSettings();
@@ -331,7 +300,7 @@ function loadAgentMode() {
 
 /**
  * 에이전트 모드 활성화/비활성화 토글
- * A2A(Agent-to-Agent) 실행 여부를 제어합니다.
+ * GV(Generate-Verify) 실행 여부를 제어합니다.
  * @returns {void}
  */
 function toggleAgentMode() {
@@ -513,7 +482,6 @@ window.syncWebSearchState = syncWebSearchState;
 window.syncThinkingState = syncThinkingState;
 window.syncDiscussionState = syncDiscussionState;
 window.syncDeepResearchState = syncDeepResearchState;
-window.syncRAGState = syncRAGState;
 window.VIRTUAL_TOOL_MAP = VIRTUAL_TOOL_MAP;
 window.loadPromptMode = loadPromptMode;
 window.setPromptMode = setPromptMode;
@@ -532,7 +500,6 @@ export {
     syncThinkingState,
     syncDiscussionState,
     syncDeepResearchState,
-    syncRAGState,
     VIRTUAL_TOOL_MAP,
     toggleMCPModule,
     toggleWebSearch,

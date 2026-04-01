@@ -22,7 +22,14 @@
  */
 
 import { PipelineProfile, getProfiles, isValidBrandModel } from './pipeline-profile';
+<<<<<<< HEAD:backend/api/src/domains/chat/pipeline/profile-resolver.ts
 import { createLogger } from '../../../utils/logger';
+=======
+import type { ExecutionStrategy } from './pipeline-profile';
+import { createLogger } from '../utils/logger';
+import type { QueryType } from './model-selector-types';
+import { GV_MODEL_MAP, GV_DEFAULT_MODELS } from '../config/model-defaults';
+>>>>>>> fbe49389978ecfeb4fc6d2df399c18138a7fed78:backend/api/src/chat/profile-resolver.ts
 
 const logger = createLogger('ProfileResolver');
 
@@ -46,8 +53,8 @@ export interface ExecutionPlan {
     /** 실제 사용할 내부 엔진 모델 ID */
     resolvedEngine: string;
 
-    /** A2A 에이전트 루프 활성화 여부 */
-    useAgentLoop: boolean;
+    /** 도구 호출 활성화 여부 (single이 아닌 전략에서 활성화) */
+    useToolCalling: boolean;
 
     /** 에이전트 루프 최대 반복 */
     agentLoopMax: number;
@@ -75,6 +82,18 @@ export interface ExecutionPlan {
 
     /** brand model 여부 (외부 API Key 요청인지 판별) */
     isBrandModel: boolean;
+
+    /** Auto-Routing에서 분류된 원본 QueryType (Brand Profile 직접 선택 시 undefined) */
+    classifiedQueryType?: QueryType;
+
+    /** 실행 전략 — 'single' | 'generate-verify' | 'conditional-verify' */
+    executionStrategy: ExecutionStrategy;
+
+    /** Generate-Verify 시 Generator 모델 (executionStrategy가 'single'이면 undefined) */
+    generatorModel?: string;
+
+    /** Generate-Verify 시 Verifier 모델 (executionStrategy가 'single'이면 undefined) */
+    verifierModel?: string;
 }
 
 // ============================================
@@ -97,6 +116,18 @@ export function resolveProfile(requestedModel: string): PipelineProfile | null {
 }
 
 /**
+ * QueryType 기반으로 GV(Generate-Verify) 모델 쌍을 resolve합니다.
+ * classifiedQueryType이 나중에 설정되므로, 여기서는 기본값을 반환하고
+ * strategy-executor에서 queryType으로 최종 resolve합니다.
+ */
+function resolveGVModels(queryType?: string): { generator: string; verifier: string } {
+    if (queryType && queryType in GV_MODEL_MAP) {
+        return GV_MODEL_MAP[queryType];
+    }
+    return { ...GV_DEFAULT_MODELS };
+}
+
+/**
  * 요청 모델명으로부터 완전한 실행 계획을 생성
  * 
  * Brand model alias를 구체적인 ExecutionPlan으로 매핑합니다.
@@ -105,11 +136,11 @@ export function resolveProfile(requestedModel: string): PipelineProfile | null {
  * 
  * @param requestedModel - 외부 요청의 model 필드 (예: "openmake_llm_pro" 또는 일반 모델명)
  * @param overrides - 사용자 요청의 오버라이드 파라미터
- * @returns ExecutionPlan — resolvedEngine, A2A 모드, thinking 수준, 필수 도구 목록 등 실행에 필요한 모든 파라미터를 포함
+ * @returns ExecutionPlan — resolvedEngine, executionStrategy, thinking 수준, 필수 도구 목록 등 실행에 필요한 모든 파라미터를 포함
  */
 export function buildExecutionPlan(
     requestedModel: string,
-    overrides?: Partial<{
+    _overrides?: Partial<{
         temperature: number;
         maxTokens: number;
         stream: boolean;
@@ -119,13 +150,18 @@ export function buildExecutionPlan(
 
     if (profile) {
         // Brand model → 프로파일 기반 실행 계획
-        logger.info(`Brand model 해석: ${requestedModel} → engine=${profile.engineModel}`);
+        const execStrategy: ExecutionStrategy = profile.executionStrategy;
+        logger.info(`Brand model 해석: ${requestedModel} → engine=${profile.engineModel}, strategy=${execStrategy}`);
+
+        // GV 모델 resolve (generate-verify / conditional-verify 전략에서만 사용)
+        const needsGV = execStrategy !== 'single';
+        const gvModels = needsGV ? resolveGVModels() : undefined;
 
         return {
             requestedModel,
             profile,
             resolvedEngine: profile.engineModel,
-            useAgentLoop: profile.a2a !== 'off',
+            useToolCalling: profile.executionStrategy !== 'single',
             agentLoopMax: profile.agentLoopMax,
             loopStrategy: profile.loopStrategy,
             thinkingLevel: profile.thinking,
@@ -135,6 +171,9 @@ export function buildExecutionPlan(
             timeBudgetMs: profile.timeBudgetSeconds * 1000,
             requiredTools: profile.requiredTools,
             isBrandModel: true,
+            executionStrategy: execStrategy,
+            generatorModel: gvModels?.generator,
+            verifierModel: gvModels?.verifier,
         };
     }
 
@@ -145,7 +184,7 @@ export function buildExecutionPlan(
         requestedModel,
         profile: null,
         resolvedEngine: requestedModel,
-        useAgentLoop: false,
+        useToolCalling: false,
         agentLoopMax: 5,
         loopStrategy: 'auto',
         thinkingLevel: 'medium',
@@ -155,6 +194,7 @@ export function buildExecutionPlan(
         timeBudgetMs: 0,
         requiredTools: [],
         isBrandModel: false,
+        executionStrategy: 'single',
     };
 }
 
@@ -177,7 +217,7 @@ export function listAvailableModels(): Array<{
         name: p.displayName,
         description: p.description,
         capabilities: [
-            ...(p.a2a !== 'off' ? ['agent'] : []),
+            ...(p.executionStrategy !== 'single' ? ['generate-verify'] : []),
             ...(p.thinking !== 'off' ? ['thinking'] : []),
             ...(p.discussion ? ['discussion'] : []),
             ...p.requiredTools,

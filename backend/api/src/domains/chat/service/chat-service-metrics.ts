@@ -102,3 +102,17 @@ export function recordChatMetrics(params: {
         logger.error('모니터링 데이터 기록 실패:', e);
     }
 }
+
+/**
+ * 메모리 추출 fire-and-forget 실패를 MetricsCollector에 기록합니다.
+ * @param reason - 실패 이유 ('timeout' | 'llm_error' | 'db_error' | 'unknown')
+ */
+export function recordMemoryExtractionFailure(reason: string): void {
+    try {
+        const { getMetrics } = require('../monitoring/metrics');
+        const metricsCollector = getMetrics();
+        metricsCollector.incrementCounter('memory_extraction_failures_total', 1, { reason });
+    } catch (e) {
+        logger.debug('memory extraction failure metric 기록 실패:', e);
+    }
+}

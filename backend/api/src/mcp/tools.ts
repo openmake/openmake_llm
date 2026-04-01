@@ -4,13 +4,13 @@
  * ============================================================
  *
  * MCP 시스템에서 제공하는 내장(built-in) 도구들을 정의합니다.
- * 이미지 OCR/분석, 웹 검색, Firecrawl 등의 도구를 포함합니다.
+ * 이미지 OCR/분석, 웹 검색, 웹 스크래핑 등의 도구를 포함합니다.
  *
  * @module mcp/tools
  * @description
  * - vision_ocr / analyze_image: 비전 모델 기반 이미지 처리 (ChatService 위임)
  * - 웹 검색 도구 (web-search.ts에서 가져오기)
- * - Firecrawl 도구 (firecrawl.ts에서 조건부 가져오기)
+ * - 웹 스크래핑 도구 (web-scraper-tools.ts에서 가져오기)
  *
  * @security
  * - 2026-02-07 보안 패치: run_command(RCE), read_file/write_file(샌드박스 미적용) 제거
@@ -116,20 +116,19 @@ export const analyzeImageTool: MCPToolDefinition = {
 
 // 웹 검색 도구 가져오기
 import { webSearchTools } from './web-search';
-// Firecrawl MCP 도구 가져오기
-import { firecrawlTools, isFirecrawlConfigured } from './firecrawl';
+// 웹 스크래핑 MCP 도구 가져오기 (Firecrawl 대체 — API 키 불필요, 항상 활성)
+import { webScraperTools } from './web-scraper-tools';
 
 /**
  * 전체 내장 도구 배열
  *
  * ToolRouter와 MCPServer에서 사용하는 모든 내장 도구 목록입니다.
- * Firecrawl 도구는 FIRECRAWL_API_KEY가 설정된 경우에만 포함됩니다.
  *
  * 포함된 도구:
  * - visionOcrTool: 이미지 OCR (비전 모델 위임)
  * - analyzeImageTool: 이미지 분석 (비전 모델 위임)
  * - webSearchTools: 웹 검색, 사실 검증, 웹페이지 추출, 주제 연구
- * - firecrawlTools: 스크래핑, 검색, URL 매핑, 크롤링 (조건부)
+ * - webScraperTools: 스크래핑, URL 매핑, 크롤링 (항상 활성)
  *
  * @security 2026-02-07 보안 패치: runCommandTool(RCE), readFileTool/writeFileTool(샌드박스 미적용) 제거
  */
@@ -137,5 +136,5 @@ export const builtInTools: MCPToolDefinition[] = [
     visionOcrTool,
     analyzeImageTool,
     ...webSearchTools,
-    ...(isFirecrawlConfigured() ? firecrawlTools : []),
+    ...webScraperTools,
 ];

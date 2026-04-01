@@ -8,7 +8,12 @@
  *
  * @module services/chat-service-formatters
  */
+<<<<<<< HEAD:backend/api/src/domains/chat/service/chat-service-formatters.ts
 import type { DiscussionResult } from '../../../agents/discussion-engine';
+=======
+import type { DiscussionResult } from '../agents/discussion-engine';
+import { DISCUSSION_CONSISTENCY } from '../config/runtime-limits';
+>>>>>>> fbe49389978ecfeb4fc6d2df399c18138a7fed78:backend/api/src/services/chat-service-formatters.ts
 
 /**
  * 심층 연구 결과를 마크다운 형식으로 포맷팅합니다.
@@ -72,6 +77,35 @@ export function formatDiscussionResult(result: DiscussionResult): string {
         formatted += `### ${opinion.agentEmoji} ${opinion.agentName}\n\n`;
         formatted += `> 💭 **Thinking**: ${opinion.agentName} 관점에서 분석 중...\n\n`;
         formatted += `${opinion.opinion}\n\n`;
+        formatted += '---\n\n';
+    }
+
+    // Self-Consistency Score 표시 (측정된 경우)
+    if (result.consistencyScore != null) {
+        const scorePercent = Math.round(result.consistencyScore * 100);
+        const isLowConsistency = result.consistencyScore < DISCUSSION_CONSISTENCY.MIN_REQUIRED_SCORE;
+
+        formatted += '### 📊 의견 일관성 분석\n\n';
+        formatted += `**합의도**: ${scorePercent}%`;
+        if (isLowConsistency) {
+            formatted += ' ⚠️ *전문가 간 의견이 분분합니다. 다양한 관점을 참고하세요.*';
+        }
+        formatted += '\n\n';
+
+        if (result.consensusPoints && result.consensusPoints.length > 0) {
+            formatted += '**합의 사항:**\n';
+            for (const point of result.consensusPoints) {
+                formatted += `- ✅ ${point}\n`;
+            }
+            formatted += '\n';
+        }
+        if (result.conflictPoints && result.conflictPoints.length > 0) {
+            formatted += '**의견 차이:**\n';
+            for (const point of result.conflictPoints) {
+                formatted += `- ⚡ ${point}\n`;
+            }
+            formatted += '\n';
+        }
         formatted += '---\n\n';
     }
 

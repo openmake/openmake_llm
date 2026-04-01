@@ -37,6 +37,7 @@ export interface NodesRouterDeps {
 export function createNodesRouter({ cluster }: NodesRouterDeps): Router {
     const router = Router();
 
+<<<<<<< HEAD
     // 클러스터 노드 관리는 관리자 전용
     router.use(requireAuth, requireAdmin);
 
@@ -46,6 +47,34 @@ export function createNodesRouter({ cluster }: NodesRouterDeps): Router {
      */
     router.post('/', validate(addClusterNodeSchema), asyncHandler(async (req: Request, res: Response) => {
         const { host, port, name } = req.body as { host: string; port: number; name?: string };
+=======
+     if (!clusterRef) {
+         return res.status(503).json({ error: 'Cluster manager not initialized' });
+     }
+
+     const node = await clusterRef.addNode(host, port, name);
+     if (node) {
+         res.json(success(node));
+     } else {
+         res.status(500).json(internalError('노드 추가 실패'));
+     }
+}));
+
+/**
+ * 노드 제거
+ * DELETE /api/nodes/:nodeId
+ */
+router.delete('/:nodeId', asyncHandler(async (req: Request, res: Response) => {
+     const { nodeId } = req.params;
+
+     if (!clusterRef) {
+         return res.status(503).json({ error: 'Cluster manager not initialized' });
+     }
+
+     const deleted = clusterRef.removeNode(decodeURIComponent(nodeId));
+     res.json(success({ deleted }));
+ }));
+>>>>>>> fbe49389978ecfeb4fc6d2df399c18138a7fed78
 
         const node = await cluster.addNode(host, port, name);
         if (node) {

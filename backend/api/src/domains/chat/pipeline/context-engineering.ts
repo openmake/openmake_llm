@@ -34,8 +34,6 @@ export type {
     Constraint,
     OutputFormat,
     PromptMetadata,
-    RAGContext,
-    RAGDocument
 } from './context-types';
 
 import type {
@@ -44,7 +42,6 @@ import type {
     Constraint,
     OutputFormat,
     PromptMetadata,
-    RAGContext,
 } from './context-types';
 
 // Re-export XML helpers from context-xml-helpers
@@ -58,13 +55,9 @@ export {
 
 import { xmlTag, examplesSection } from './context-xml-helpers';
 
-// Re-export presets from context-engineering-presets
-export {
-    buildAssistantPrompt,
-    buildCoderPrompt,
-    buildReasoningPrompt,
-    createDynamicMetadata
-} from './context-engineering-presets';
+// Presets (buildAssistantPrompt, buildCoderPrompt, buildReasoningPrompt, createDynamicMetadata)
+// are exported directly from './context-engineering-presets' to avoid circular dependency.
+// Import them from './context-engineering-presets' instead of this file.
 
 import {
     generateLanguageInstructions,
@@ -79,6 +72,8 @@ import {
     FORMAT_DESCRIPTIONS,
     SOFT_INTERLOCK_CONTENT,
     FINAL_REMINDER_CONTENT,
+    TONE_STYLE_DESCRIPTIONS,
+    DEFAULT_TONE_DESCRIPTIONS,
 } from './context-engineering-locales';
 
 // ============================================================
@@ -93,7 +88,7 @@ import {
  *
  * 빌드 순서 (위치 공학 적용):
  * 1. [Primacy] 메타데이터 + 역할 정의 (정체성 확립)
- * 2. [Context] RAG 문서 + 예시 + 추가 섹션 (사실 기반 지식 주입)
+ * 2. [Context] 예시 + 추가 섹션 (사실 기반 지식 주입)
  * 3. [Recency] 제약 조건 + 출력 형식 + 소프트 인터락 (제어 및 실행)
  *
  * @class ContextEngineeringBuilder
@@ -108,7 +103,6 @@ import {
 export class ContextEngineeringBuilder {
     private metadata: PromptMetadata;
     private pillars: Partial<FourPillarPrompt> = {};
-    private ragContext?: RAGContext;
     private additionalSections: string[] = [];
     private enableThinking: boolean = true;
     private examples: Array<{ input: string; output: string }> = [];
@@ -168,14 +162,6 @@ export class ContextEngineeringBuilder {
     }
 
     /**
-     * RAG 컨텍스트 설정
-     */
-    setRAGContext(context: RAGContext): this {
-        this.ragContext = context;
-        return this;
-    }
-
-    /**
      * Few-shot 예시 추가
      */
     addExample(input: string, output: string): this {
@@ -206,7 +192,7 @@ export class ContextEngineeringBuilder {
      * Prefix Cache 최적화 (Cloud LLM):
      * - Phase 1 (STATIC): Role → Constraints → OutputFormat → Interlock → Reminder
      *   요청 간 동일한 정적 섹션을 앞에 배치하여 implicit prefix caching 활용
-     * - Phase 2 (DYNAMIC): Metadata → RAG → Examples → CustomSections → Goal
+     * - Phase 2 (DYNAMIC): Metadata → Examples → CustomSections → Goal
      *   요청마다 변하는 동적 섹션을 뒤에 배치
      *
      * @returns 조립된 전체 시스템 프롬프트 문자열 (XML 태깅 구획화 적용)
@@ -241,12 +227,7 @@ export class ContextEngineeringBuilder {
         // 6. [Context] 메타데이터 — 날짜, 세션, 모델 정보
         sections.push(this.buildMetadataSection());
 
-        // 7. [Knowledge] RAG 컨텍스트 — 검색된 참조 문서
-        if (this.ragContext) {
-            sections.push(this.buildRAGSection());
-        }
-
-        // 8. [Examples] Few-shot 예시
+        // 7. [Examples] Few-shot 예시
         if (this.examples.length > 0) {
             sections.push(examplesSection(this.examples));
         }
@@ -304,51 +285,8 @@ ${this.metadata.modelName ? `${L.model}: ${this.metadata.modelName}` : ''}
      */
     private getToneStyleDescription(toneStyle: string | undefined): string {
         const lang = this.getLocale();
-        const toneMap: Record<string, Record<string, string>> = {
-            ko: { formal: '격식체 사용', casual: '반말체, 친근한 어조', professional: '전문적이고 객관적인 어조', friendly: '친근하고 편안한 어조' },
-            ja: { formal: '敵語を使用', casual: 'カジュアルで親しみやすい口調', professional: '専門的で客観的な口調', friendly: '親しみやすくリラックスした口調' },
-            zh: { formal: '使用正式语体', casual: '休闲友好的语气', professional: '专业客观的语气', friendly: '亲切随和的语气' },
-            es: { formal: 'Tono formal y respetuoso', casual: 'Tono casual y amigable', professional: 'Tono profesional y objetivo', friendly: 'Tono amigable y relajado' },
-            de: { formal: 'Formeller und respektvoller Ton', casual: 'Lockerer und freundlicher Ton', professional: 'Professioneller und sachlicher Ton', friendly: 'Freundlicher und entspannter Ton' },
-            fr: { formal: 'Ton formel et respectueux', casual: 'Ton décontracté et amical', professional: 'Ton professionnel et objectif', friendly: 'Ton amical et détendu' },
-        };
-        const defaultTone: Record<string, string> = {
-            formal: 'Use formal and respectful tone',
-            casual: 'Use casual and friendly tone',
-            professional: 'Use professional and objective tone',
-            friendly: 'Use friendly and relaxed tone'
-        };
-        const langTones = toneMap[lang] || defaultTone;
-        return langTones[toneStyle || 'friendly'] || defaultTone[toneStyle || 'friendly'] || defaultTone['friendly']!;
-    }
-
-    /**
-     * RAG 컨텍스트 섹션 생성
-     */
-    private buildRAGSection(): string {
-        if (!this.ragContext || this.ragContext.documents.length === 0) {
-            return '';
-        }
-
-        const L = this.getLabels();
-
-        const docs = this.ragContext.documents
-            .filter(d => d.relevanceScore >= this.ragContext!.relevanceThreshold)
-            .map((d, i) => `### ${L.retrievedDocs} ${i + 1} (${L.relevance}: ${(d.relevanceScore * 100).toFixed(0)}%)
-${L.source}: ${d.source}
-${d.timestamp ? `${L.date}: ${d.timestamp}` : ''}
-
-${d.content}`)
-            .join('\n\n');
-
-        return `<context>
-## ${L.retrievedDocs}
-${L.searchQuery}: "${this.ragContext.searchQuery}"
-
-${docs}
-
-⚠️ ${L.docWarning}
-</context>`;
+        const langTones = TONE_STYLE_DESCRIPTIONS[lang] || DEFAULT_TONE_DESCRIPTIONS;
+        return langTones[toneStyle || 'friendly'] || DEFAULT_TONE_DESCRIPTIONS[toneStyle || 'friendly'] || DEFAULT_TONE_DESCRIPTIONS['friendly']!;
     }
 
     /**

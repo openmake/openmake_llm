@@ -13,6 +13,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import type { QueryResult } from 'pg';
 import { BaseRepository } from './base-repository';
+<<<<<<< HEAD
 import type { ConversationMessage as DbMessage, ConversationSession as DbSession } from '../models/unified-database';
 import { getConfig } from '../../config/env';
 import { createLogger } from '../../utils/logger';
@@ -93,6 +94,9 @@ function isDuplicateKeyError(err: unknown): boolean {
     }
     return false;
 }
+=======
+import type { ConversationMessage, ConversationSession } from '../models/unified-database.types';
+>>>>>>> fbe49389978ecfeb4fc6d2df399c18138a7fed78
 
 export class ConversationRepository extends BaseRepository {
 

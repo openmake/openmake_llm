@@ -694,6 +694,23 @@
                 return;
             }
 
+            if (password.length < 8) {
+                showError('비밀번호는 8자 이상이어야 합니다');
+                return;
+            }
+            if (!/[A-Z]/.test(password) || !/[a-z]/.test(password)) {
+                showError('비밀번호에 대문자와 소문자를 포함해야 합니다');
+                return;
+            }
+            if (!/[0-9]/.test(password)) {
+                showError('비밀번호에 숫자를 포함해야 합니다');
+                return;
+            }
+            if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) {
+                showError('비밀번호에 특수문자를 포함해야 합니다');
+                return;
+            }
+
             setLoading('registerBtn', true);
 
             try {

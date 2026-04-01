@@ -7,7 +7,9 @@
  * - MCP 서버 설정 관리 (mcp_servers)
  */
 import { BaseRepository, QueryParam } from './base-repository';
-import type { ExternalConnection, ExternalFile, ExternalServiceType, MCPServerRow } from '../models/unified-database';
+import type { ExternalConnection, ExternalFile, ExternalServiceType, MCPServerRow } from '../models/unified-database.types';
+import { encryptToken, decryptToken } from '../../utils/token-crypto';
+import { QUERY_ROW_LIMITS } from '../../config/runtime-limits';
 
 type DbRow = Record<string, unknown>;
 
@@ -40,8 +42,8 @@ export class ExternalRepository extends BaseRepository {
                 params.id,
                 params.userId,
                 params.serviceType,
-                params.accessToken,
-                params.refreshToken,
+                params.accessToken != null ? encryptToken(params.accessToken) : params.accessToken,
+                params.refreshToken != null ? encryptToken(params.refreshToken) : params.refreshToken,
                 params.tokenExpiresAt,
                 params.accountEmail,
                 params.accountName,
@@ -57,6 +59,8 @@ export class ExternalRepository extends BaseRepository {
         );
         return result.rows.map((row) => ({
             ...row,
+            access_token: row.access_token != null ? decryptToken(row.access_token as string) : row.access_token,
+            refresh_token: row.refresh_token != null ? decryptToken(row.refresh_token as string) : row.refresh_token,
             is_active: !!row.is_active,
             metadata: row.metadata || {}
         }));
@@ -69,6 +73,8 @@ export class ExternalRepository extends BaseRepository {
 
         return {
             ...row,
+            access_token: row.access_token != null ? decryptToken(row.access_token as unknown as string) : row.access_token,
+            refresh_token: row.refresh_token != null ? decryptToken(row.refresh_token as unknown as string) : row.refresh_token,
             is_active: !!row.is_active,
             metadata: row.metadata || {}
         };
@@ -84,6 +90,8 @@ export class ExternalRepository extends BaseRepository {
 
         return {
             ...row,
+            access_token: row.access_token != null ? decryptToken(row.access_token as unknown as string) : row.access_token,
+            refresh_token: row.refresh_token != null ? decryptToken(row.refresh_token as unknown as string) : row.refresh_token,
             is_active: !!row.is_active,
             metadata: row.metadata || {}
         };
@@ -98,7 +106,12 @@ export class ExternalRepository extends BaseRepository {
             `UPDATE external_connections 
             SET access_token = $1, refresh_token = COALESCE($2, refresh_token), token_expires_at = $3, updated_at = NOW()
             WHERE id = $4`,
-            [tokens.accessToken, tokens.refreshToken, tokens.expiresAt, connectionId]
+            [
+                encryptToken(tokens.accessToken),
+                tokens.refreshToken != null ? encryptToken(tokens.refreshToken) : tokens.refreshToken,
+                tokens.expiresAt,
+                connectionId
+            ]
         );
     }
 
@@ -162,7 +175,7 @@ export class ExternalRepository extends BaseRepository {
     }
 
     async getMcpServers(): Promise<MCPServerRow[]> {
-        const result = await this.query('SELECT * FROM mcp_servers ORDER BY created_at DESC');
+        const result = await this.query(`SELECT * FROM mcp_servers ORDER BY created_at DESC LIMIT ${QUERY_ROW_LIMITS.MCP_SERVERS_MAX}`);
         return result.rows.map((row: DbRow) => ({
             ...row,
             args: (row.args as string[] | null) || null,

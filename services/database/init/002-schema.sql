@@ -1,7 +1,7 @@
 -- ============================================
 -- ============================================
 -- OpenMake.Ai - Database Schema
--- Migrated from SQLite to PostgreSQL + pgvector
+-- Migrated from SQLite to PostgreSQL
 -- ============================================
 
 -- 사용자 테이블
@@ -222,36 +222,6 @@ CREATE TABLE IF NOT EXISTS external_files (
 );
 
 -- ============================================
--- pgvector 벡터 임베딩 테이블 (NEW)
--- pgvector는 필수 의존성 (미설치 시 예외 발생)
--- ============================================
-
-DO $$ BEGIN
-    -- 테이블이 이미 존재하면 생성 건너뛰기 (vector 타입 해석 시 .so 로딩 오류 방지)
-    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'vector_embeddings') THEN
-        RAISE NOTICE '[pgvector] vector_embeddings 테이블 이미 존재 — 생성 건너뜀';
-    ELSE
-        IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'vector') THEN
-            EXECUTE '
-                CREATE TABLE vector_embeddings (
-                    id SERIAL PRIMARY KEY,
-                    source_type TEXT NOT NULL CHECK(source_type IN (''document'', ''memory'', ''conversation'', ''agent'')),
-                    source_id TEXT NOT NULL,
-                    chunk_index INTEGER DEFAULT 0,
-                    content TEXT NOT NULL,
-                    embedding vector(768),
-                    metadata JSONB,
-                    created_at TIMESTAMPTZ DEFAULT NOW(),
-                    updated_at TIMESTAMPTZ DEFAULT NOW()
-                )';
-            RAISE NOTICE '[pgvector] 확장 확인 완료 — vector(768) 컬럼 사용';
-        ELSE
-            RAISE EXCEPTION '[pgvector] extension "vector" is required. Install pgvector first: CREATE EXTENSION IF NOT EXISTS vector;';
-        END IF;
-    END IF;
-END $$;
-
--- ============================================
 -- Push 구독 테이블
 -- ============================================
 
@@ -286,6 +256,7 @@ CREATE INDEX IF NOT EXISTS idx_feedback_created ON message_feedback(created_at);
 
 -- Core indexes
 CREATE INDEX IF NOT EXISTS idx_messages_session ON conversation_messages(session_id);
+CREATE INDEX IF NOT EXISTS idx_messages_agent ON conversation_messages(agent_id);
 CREATE INDEX IF NOT EXISTS idx_messages_created ON conversation_messages(created_at);
 CREATE INDEX IF NOT EXISTS idx_usage_date ON api_usage(date);
 CREATE INDEX IF NOT EXISTS idx_agent_logs_agent ON agent_usage_logs(agent_id);
@@ -313,19 +284,6 @@ CREATE INDEX IF NOT EXISTS idx_research_steps_session ON research_steps(session_
 CREATE INDEX IF NOT EXISTS idx_connections_user ON external_connections(user_id);
 CREATE INDEX IF NOT EXISTS idx_connections_service ON external_connections(service_type);
 CREATE INDEX IF NOT EXISTS idx_ext_files_connection ON external_files(connection_id);
-
--- Vector indexes (pgvector 확장 필요)
-CREATE INDEX IF NOT EXISTS idx_embeddings_source ON vector_embeddings(source_type, source_id);
-DO $$ BEGIN
-    IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'vector') THEN
-        BEGIN
-            EXECUTE 'CREATE INDEX IF NOT EXISTS idx_embeddings_vector ON vector_embeddings USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100)';
-            RAISE NOTICE '[pgvector] ivfflat 인덱스 생성 완료';
-        EXCEPTION WHEN OTHERS THEN
-            RAISE NOTICE '[pgvector] ivfflat 인덱스 생성 실패 (shared library 미설치) — 건너뜀';
-        END;
-    END IF;
-END $$;
 
 -- Full-text search indexes (pg_trgm 확장 필요)
 DO $$ BEGIN
@@ -694,7 +652,57 @@ BEGIN
     END IF;
 END $$;
 
--- [D1 NO-OP] vector_embeddings는 상단 pgvector-aware DO 블록(307-343)에서 이미 처리됨
-DO $$ BEGIN
-    RAISE NOTICE '[schema] D1 vector_embeddings block skipped (already managed by pgvector-aware initializer)';
-END $$;
+
+-- ============================================
+-- UIR (Unified Intent Router) 스키마
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS uir_shadow_log (
+    id                    UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    session_id            VARCHAR(255),
+    user_id               VARCHAR(255),
+    query_hash            CHAR(64)    NOT NULL,
+    uir_query_type        VARCHAR(50),
+    uir_agent_id          VARCHAR(100),
+    uir_brand_profile     VARCHAR(50),
+    uir_complexity        NUMERIC(4,3),
+    uir_recommended_tools JSONB       DEFAULT '[]',
+    uir_confidence        NUMERIC(4,3),
+    uir_latency_ms        INTEGER,
+    legacy_query_type     VARCHAR(50),
+    legacy_agent_id       VARCHAR(100),
+    legacy_brand_profile  VARCHAR(50),
+    agent_match           BOOLEAN,
+    query_type_match      BOOLEAN,
+    profile_match         BOOLEAN,
+    created_at            TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_uir_shadow_log_created ON uir_shadow_log (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_uir_shadow_log_session ON uir_shadow_log (session_id) WHERE session_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_uir_shadow_log_user    ON uir_shadow_log (user_id)    WHERE user_id IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS uir_rollout_config (
+    id              SERIAL      PRIMARY KEY,
+    rollout_percent INTEGER     NOT NULL DEFAULT 0
+                    CHECK (rollout_percent BETWEEN 0 AND 100),
+    enabled         BOOLEAN     NOT NULL DEFAULT FALSE,
+    description     TEXT,
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_by      VARCHAR(255)
+);
+
+INSERT INTO uir_rollout_config (rollout_percent, enabled, description, updated_by)
+VALUES (0, FALSE, 'Initial config — shadow mode only, UIR not active', 'system')
+ON CONFLICT DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS uir_perf_stats (
+    stat_date          DATE        NOT NULL,
+    total_requests     INTEGER     NOT NULL DEFAULT 0,
+    shadow_requests    INTEGER     NOT NULL DEFAULT 0,
+    agent_match_count  INTEGER     NOT NULL DEFAULT 0,
+    qtype_match_count  INTEGER     NOT NULL DEFAULT 0,
+    avg_uir_latency_ms NUMERIC(8,2),
+    updated_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (stat_date)
+);

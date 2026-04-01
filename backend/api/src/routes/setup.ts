@@ -15,11 +15,18 @@ import * as fs from 'fs';
 
 import { createV1Router } from './v1';
 import { tokenMonitoringRouter } from './token-monitoring.routes';
+<<<<<<< HEAD
 import { createChatRouter } from './chat.routes';
 import { createOpenAICompatRouter } from './openai-compat.routes';
 import { createDocumentsRouter } from './documents.routes';
 import ragRouter from './rag.routes';
 import { createWebSearchRouter } from './web-search.routes';
+=======
+import { default as chatRouter, setClusterManager as setChatCluster } from './chat.routes';
+import { setClusterManager as setOpenAICompatCluster } from './openai-compat.routes';
+import { default as documentsRouter, setDependencies as setDocumentsDeps } from './documents.routes';
+import { default as webSearchRouter, setClusterManager as setWebSearchCluster } from './web-search.routes';
+>>>>>>> fbe49389978ecfeb4fc6d2df399c18138a7fed78
 import {
     createMetricsRouter,
     agentRouter,
@@ -38,17 +45,22 @@ import {
     chatFeedbackRouter,
     apiKeysRouter,
     kbRouter,
+<<<<<<< HEAD
     createHealthRouter,
     createClusterRouter,
     createAuthRouter,
     createAdminRouter,
     createSessionRouter
+=======
+    uirRouter
+>>>>>>> fbe49389978ecfeb4fc6d2df399c18138a7fed78
 } from './index';
 import { setupSwaggerRoutes } from '../swagger';
 import { ClusterManager } from '../cluster/manager';
 import { bootstrapServices } from '../bootstrap';
 import { getConfig } from '../config';
 import { success } from '../utils/api-response';
+import { getPool } from '../data/models/unified-database';
 
 
 
@@ -72,10 +84,36 @@ export function setupApiRoutes(
         res.type('text/plain').send('User-agent: *\nDisallow: /api/\n');
     });
 
-    // /api/health — 전용 헬스체크 엔드포인트 (로그 노이즈 방지)
-    // NOTE: Intentionally returns lightweight raw JSON for external health probes.
-    app.get('/api/health', (_req: Request, res: Response) => {
-        res.json({ status: 'ok', timestamp: new Date().toISOString(), uptime: process.uptime() });
+    // /api/health — 전용 헬스체크 엔드포인트 (상세 상태 반환)
+    app.get('/api/health', async (_req: Request, res: Response) => {
+        const dbPool = getPool();
+        const memory = process.memoryUsage();
+        const clusterStats = cluster.getStats();
+
+        res.json({
+            status: 'ok',
+            timestamp: new Date().toISOString(),
+            uptime: process.uptime(),
+            services: {
+                database: {
+                    status: dbPool ? 'connected' : 'disconnected',
+                    total: dbPool?.totalCount || 0,
+                    idle: dbPool?.idleCount || 0,
+                    waiting: dbPool?.waitingCount || 0
+                },
+                ollama: {
+                    status: clusterStats.onlineNodes > 0 ? 'online' : 'offline',
+                    totalNodes: clusterStats.totalNodes,
+                    onlineNodes: clusterStats.onlineNodes,
+                    models: clusterStats.uniqueModels.length
+                },
+                memory: {
+                    heapUsedMB: Math.round(memory.heapUsed / 1024 / 1024),
+                    heapTotalMB: Math.round(memory.heapTotal / 1024 / 1024),
+                    rssMB: Math.round(memory.rss / 1024 / 1024)
+                }
+            }
+        });
     });
 
     // /api/status — 미니 헬스체크 (모니터링 호환)
@@ -118,6 +156,7 @@ export function setupApiRoutes(
     app.use('/api/agents/skills', skillsRouter);
     app.use('/api/agents', agentRouter);
     app.use('/api/monitoring', tokenMonitoringRouter);
+    app.use('/api/uir', uirRouter);
     app.use('/api/mcp', mcpRouter);
 
     // 부트스트랩 서비스 초기화
@@ -158,7 +197,6 @@ export function setupApiRoutes(
     app.use('/api/push', pushRouter);
     app.use('/api/docs', developerDocsRouter);
     app.use('/api/api-keys', apiKeysRouter);
-    app.use('/api/rag', ragRouter);
     app.use('/api/kb', kbRouter);
 
     // Swagger 설정

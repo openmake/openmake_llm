@@ -18,19 +18,31 @@ import { ModelOptions } from '../../../ollama/types';
 // ============================================================
 
 /**
- * 질문 유형 분류 결과 (9가지)
+ * 모든 질문 유형 값 배열 — single source of truth
+ * QueryType 타입과 런타임 유효성 검사(validTypes, JSON Schema enum)가 여기서 파생됩니다.
+ */
+export const QUERY_TYPES = [
+    'code-agent',   // 리팩토링, 아키텍처, 디버깅
+    'code-gen',     // 코드 생성, 스니펫
+    'code',         // 하위호환 alias
+    'math-hard',    // 이론 수학, 증명
+    'math-applied', // 응용 수학, 통계
+    'math',         // 하위호환 alias
+    'reasoning',    // 논리 추론, 인과 분석
+    'analysis',     // 데이터 분석
+    'creative',     // 창작
+    'vision',       // 이미지 분석
+    'korean',       // 한국어 특화
+    'chat',         // 일반 대화
+    'document',     // 문서 처리
+    'translation',  // 번역
+] as const;
+
+/**
+ * 질문 유형 분류 결과 (14가지 (하위호환 alias 포함))
  * classifyQuery()가 사용자 질문을 분석하여 이 중 하나로 분류합니다.
  */
-export type QueryType = 
-    | 'code'           // 코딩/개발 관련
-    | 'analysis'       // 데이터 분석/논리적 추론
-    | 'creative'       // 창작/글쓰기/브레인스토밍
-    | 'vision'         // 이미지 분석/멀티모달
-    | 'korean'         // 한국어 특화
-    | 'math'           // 수학/과학 계산
-    | 'chat'           // 일반 대화
-    | 'document'       // 문서 분석/요약
-    | 'translation';   // 번역
+export type QueryType = typeof QUERY_TYPES[number];
 
 /**
  * 질문 분류 결과 인터페이스
@@ -66,4 +78,8 @@ export interface ModelSelection {
     supportsThinking: boolean;
     /** 비전(이미지 분석) 지원 여부 */
     supportsVision: boolean;
+    /** P1-2: 분류 신뢰도 (0.0~1.0) */
+    classifiedConfidence?: number;
+    /** P1-2: 분류 출처 ('llm' | 'cache' | 'regex') */
+    classifierSource?: 'llm' | 'cache' | 'regex';
 }

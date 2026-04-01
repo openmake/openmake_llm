@@ -1,0 +1,62 @@
+/* 모바일 FAB (Floating Action Button) 메뉴 — 480px 이하 */
+.fab-container {
+    display: none;
+    position: fixed;
+    bottom: calc(100px + env(safe-area-inset-bottom));
+    right: 16px;
+    z-index: 1000;
+}
+
+.fab-btn {
+    width: 48px;
+    height: 48px;
+    background: var(--accent-primary);
+    border: 2px solid #000;
+    border-radius: 50%;
+    box-shadow: 3px 3px 0 #000;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.3rem;
+    color: #fff;
+    transition: transform 0.15s;
+    line-height: 1;
+}
+.fab-btn:active { transform: scale(0.95); }
+
+.fab-menu {
+    display: none;
+    position: absolute;
+    bottom: 56px;
+    right: 0;
+    background: var(--bg-sidebar);
+    border: 2px solid var(--border-light);
+    border-radius: 8px;
+    box-shadow: 4px 4px 0 #000;
+    padding: 6px;
+    min-width: 140px;
+    flex-direction: column;
+    gap: 2px;
+}
+.fab-menu.open { display: flex; }
+
+.fab-menu-item {
+    padding: 8px 12px;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    color: var(--text-primary);
+    cursor: pointer;
+    white-space: nowrap;
+    background: none;
+    border: none;
+    text-align: left;
+    width: 100%;
+}
+.fab-menu-item:hover { background: var(--bg-hover, rgba(255,255,255,0.05)); }
+.fab-menu-item.primary { color: var(--accent-primary); font-weight: 700; }
+
+/* 데스크톱에서 항상 숨김 */
+@media (min-width: 481px) {
+    .fab-container { display: none !important; }
+}

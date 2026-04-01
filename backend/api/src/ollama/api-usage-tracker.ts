@@ -19,43 +19,21 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { getApiKeyManager } from './api-key-manager';
-import { getConfig } from '../config/env';
 import { createLogger } from '../utils/logger';
 
-/**
- * 일간 사용량 기록
- * @interface UsageRecord
- */
-interface UsageRecord {
-    /** 기록 날짜 (YYYY-MM-DD 형식) */
-    date: string;
-    /** 총 요청 횟수 */
-    requests: number;
-    /** 총 사용 토큰 수 */
-    tokens: number;
-    /** 에러 발생 횟수 */
-    errors: number;
-    /** 평균 응답 시간 (밀리초) */
-    avgResponseTime: number;
-    /** 모델별 요청 횟수 (모델명 -> 횟수) */
-    models: Record<string, number>;
-    /** Pipeline Profile(brand alias)별 요청 횟수 */
-    profiles?: Record<string, number>;
-    /** 총 처리 시간 누적 (나노초) — Ollama total_duration */
-    totalDuration?: number;
-    /** 모델 로딩 시간 누적 (나노초) — Ollama load_duration */
-    loadDuration?: number;
-    /** 토큰 생성 시간 누적 (나노초) — Ollama eval_duration */
-    evalDuration?: number;
-    /** 프롬프트 평가 시간 누적 (나노초) — Ollama prompt_eval_duration */
-    promptEvalDuration?: number;
-    /** 프롬프트 토큰 수 누적 */
-    promptTokens?: number;
-    /** 완료 토큰 수 누적 */
-    completionTokens?: number;
-}
+// 타입 re-export (하위 호환성 유지)
+import type {
+    UsageRecord,
+    UsageData,
+    HourlyRecord,
+    DailyStats,
+    WeeklyStats,
+    QuotaStatus,
+    KeyQuotaStatus,
+    RecordRequestParams
+} from './usage-tracker-types';
 
+<<<<<<< HEAD
 /**
  * 시간별 사용량 기록
  * @interface HourlyRecord
@@ -232,6 +210,17 @@ function getQuotaLimits(): QuotaLimits {
 function getKeyId(key: string): string {
     return key ? key.substring(0, 8) : 'unknown';
 }
+=======
+// 할당량/통계 계산 함수
+import { getKeyId, calculateKeyQuotaStatus, calculateQuotaStatus } from './usage-quota';
+import {
+    createEmptyRecord,
+    calculateTodayStats,
+    calculateDailyStats,
+    calculateWeeklyStats,
+    calculateSummary
+} from './usage-statistics';
+>>>>>>> fbe49389978ecfeb4fc6d2df399c18138a7fed78
 
 /**
  * API 사용량 추적기 클래스
@@ -296,7 +285,6 @@ class ApiUsageTracker {
      * @private
      */
      private saveData(): void {
-         // 디바운스로 너무 빈번한 저장 방지
          if (this.saveDebounceTimer) {
              clearTimeout(this.saveDebounceTimer);
          }
@@ -344,14 +332,7 @@ class ApiUsageTracker {
     private ensureTodayRecord(): UsageRecord {
         const today = this.getToday();
         if (!this.data.daily[today]) {
-            this.data.daily[today] = {
-                date: today,
-                requests: 0,
-                tokens: 0,
-                errors: 0,
-                avgResponseTime: 0,
-                models: {}
-            };
+            this.data.daily[today] = createEmptyRecord(today);
         }
         return this.data.daily[today];
     }
@@ -359,20 +340,7 @@ class ApiUsageTracker {
     /**
      * API 요청 기록
      */
-    recordRequest(params: {
-        tokens?: number;
-        responseTime?: number;
-        model?: string;
-        error?: boolean;
-        apiKeyId?: string;  // 🆕 API 키 식별자
-        profileId?: string; // §9 Pipeline Profile ID (brand model alias)
-        promptTokens?: number;
-        completionTokens?: number;
-        totalDuration?: number;
-        loadDuration?: number;
-        evalDuration?: number;
-        promptEvalDuration?: number;
-    }): void {
+    recordRequest(params: RecordRequestParams): void {
         const record = this.ensureTodayRecord();
         const hour = new Date().getHours();
 
@@ -414,7 +382,7 @@ class ApiUsageTracker {
             record.models[params.model] = (record.models[params.model] || 0) + 1;
         }
 
-        // §9 프로파일(brand alias)별 사용량
+        // 프로파일(brand alias)별 사용량
         if (params.profileId) {
             if (!record.profiles) record.profiles = {};
             record.profiles[params.profileId] = (record.profiles[params.profileId] || 0) + 1;
@@ -424,7 +392,7 @@ class ApiUsageTracker {
         this.todayHourly[hour].requests++;
         this.todayHourly[hour].tokens += params.tokens || 0;
 
-        // 🆕 키별 사용량 기록
+        // 키별 사용량 기록
         if (params.apiKeyId) {
             this.recordKeyUsage(params.apiKeyId, hour);
         }
@@ -489,156 +457,43 @@ class ApiUsageTracker {
      * @returns 키별 시간/주간 할당량 상태 및 소진 여부
      */
     getKeyQuotaStatus(keyId: string, isActive: boolean): KeyQuotaStatus {
-        const limits = getQuotaLimits();
-        const keyStats = this.data.perKey?.[keyId];
-
-        const hourlyUsed = keyStats?.hourlyRequests || 0;
-        const weeklyUsed = keyStats?.weeklyRequests || 0;
-
-        return {
-            keyId,
-            isActive,
-            hourly: {
-                used: hourlyUsed,
-                limit: limits.hourlyLimit,
-                percentage: Math.round((hourlyUsed / limits.hourlyLimit) * 100),
-                remaining: Math.max(0, limits.hourlyLimit - hourlyUsed)
-            },
-            weekly: {
-                used: weeklyUsed,
-                limit: limits.weeklyLimit,
-                percentage: Math.round((weeklyUsed / limits.weeklyLimit) * 100),
-                remaining: Math.max(0, limits.weeklyLimit - weeklyUsed)
-            },
-            isExhausted: weeklyUsed >= limits.weeklyLimit || hourlyUsed >= limits.hourlyLimit
-        };
+        return calculateKeyQuotaStatus(this.data, keyId, isActive);
     }
 
-    /**
-     * 오늘 통계 조회
-     */
+    /** 오늘 통계 조회 */
     getTodayStats(): DailyStats {
-        const today = this.getToday();
-        const record = this.data.daily[today] || {
-            date: today,
-            requests: 0,
-            tokens: 0,
-            errors: 0,
-            avgResponseTime: 0,
-            models: {}
-        };
-
-        return {
-            date: today,
-            totalRequests: record.requests,
-            totalTokens: record.tokens,
-            totalErrors: record.errors,
-            avgResponseTime: record.avgResponseTime,
-            hourlyBreakdown: this.todayHourly,
-            modelUsage: record.models
-        };
+        return calculateTodayStats(this.data, this.getToday(), this.todayHourly);
     }
 
-    /**
-     * 최근 N일간의 일간 통계를 조회합니다.
-     *
-     * 데이터가 없는 날짜는 0으로 채워진 빈 레코드로 반환합니다.
-     * 결과는 오래된 순서(오름차순)로 정렬됩니다.
-     *
-     * @param days - 조회할 일수 (기본값: 7)
-     * @returns 일간 사용량 기록 배열 (오래된 순)
-     */
+    /** 최근 N일간 일간 통계 조회 */
     getDailyStats(days: number = 7): UsageRecord[] {
-        const result: UsageRecord[] = [];
-        const today = new Date();
-
-        for (let i = 0; i < days; i++) {
-            const date = new Date(today);
-            date.setDate(date.getDate() - i);
-            const dateStr = date.toISOString().split('T')[0];
-
-            if (this.data.daily[dateStr]) {
-                result.push(this.data.daily[dateStr]);
-            } else {
-                result.push({
-                    date: dateStr,
-                    requests: 0,
-                    tokens: 0,
-                    errors: 0,
-                    avgResponseTime: 0,
-                    models: {}
-                });
-            }
-        }
-
-        return result.reverse();  // 오래된 순서로 정렬
+        return calculateDailyStats(this.data, days);
     }
 
-    /**
-     * 주간 통계 조회
-     */
+    /** 주간 통계 조회 */
     getWeeklyStats(): WeeklyStats {
-        const dailyStats = this.getDailyStats(7);
-        const weekStart = dailyStats[0]?.date || this.getToday();
-        const weekEnd = dailyStats[dailyStats.length - 1]?.date || this.getToday();
-
-        const totals = dailyStats.reduce((acc, day) => ({
-            requests: acc.requests + day.requests,
-            tokens: acc.tokens + day.tokens,
-            errors: acc.errors + day.errors,
-            responseTimeSum: acc.responseTimeSum + (day.avgResponseTime * day.requests),
-            requestsWithTime: acc.requestsWithTime + (day.avgResponseTime > 0 ? day.requests : 0)
-        }), { requests: 0, tokens: 0, errors: 0, responseTimeSum: 0, requestsWithTime: 0 });
-
-        return {
-            weekStart,
-            weekEnd,
-            totalRequests: totals.requests,
-            totalTokens: totals.tokens,
-            totalErrors: totals.errors,
-            avgResponseTime: totals.requestsWithTime > 0
-                ? Math.round(totals.responseTimeSum / totals.requestsWithTime)
-                : 0,
-            dailyBreakdown: dailyStats
-        };
+        return calculateWeeklyStats(this.data);
     }
 
-    /**
-     * 전체 통계 요약
-     */
+    /** 전체 통계 요약 */
     getSummary(): {
         today: DailyStats;
         weekly: WeeklyStats;
         allTime: { totalRequests: number; totalTokens: number; totalErrors: number };
         quota: QuotaStatus;
     } {
-        const allRecords = Object.values(this.data.daily);
-        const allTime = allRecords.reduce((acc, day) => ({
-            totalRequests: acc.totalRequests + day.requests,
-            totalTokens: acc.totalTokens + day.tokens,
-            totalErrors: acc.totalErrors + day.errors
-        }), { totalRequests: 0, totalTokens: 0, totalErrors: 0 });
-
-        return {
-            today: this.getTodayStats(),
-            weekly: this.getWeeklyStats(),
-            allTime,
-            quota: this.getQuotaStatus()
-        };
+        return calculateSummary(this.data, this.getTodayStats());
     }
 
-    /**
-     * 🆕 현재 시간 사용량 조회
-     */
+    /** 현재 시간 사용량 조회 */
     getCurrentHourUsage(): number {
         const hour = new Date().getHours();
         return this.todayHourly[hour]?.requests || 0;
     }
 
-    /**
-     * 🆕 할당량(쿼터) 상태 조회
-     */
+    /** 할당량(쿼터) 상태 조회 */
     getQuotaStatus(): QuotaStatus {
+<<<<<<< HEAD
         const limits = getQuotaLimits();
         const todayStats = this.getTodayStats();
 
@@ -738,6 +593,11 @@ class ApiUsageTracker {
     /**
      * 경고 레벨 계산
      */
+=======
+        return calculateQuotaStatus(this.data, this.getTodayStats());
+    }
+
+>>>>>>> fbe49389978ecfeb4fc6d2df399c18138a7fed78
     /**
      * 보관 기간이 지난 오래된 데이터를 정리합니다.
      *
@@ -783,4 +643,6 @@ export function getApiUsageTracker(): ApiUsageTracker {
     return tracker;
 }
 
-export { ApiUsageTracker, UsageRecord, DailyStats, WeeklyStats, HourlyRecord, QuotaStatus };
+// 하위 호환성을 위한 re-export
+export { ApiUsageTracker };
+export type { UsageRecord, DailyStats, WeeklyStats, HourlyRecord, QuotaStatus } from './usage-tracker-types';

@@ -41,7 +41,11 @@ import { detectLanguage } from '../domains/chat/pipeline/language-policy';
   import { validate, validateUploadContentType, validateFileUploadSecurity } from '../middlewares/validation';
   import { summarizeDocumentSchema, documentAskSchema } from '../schemas/documents.schema';
 import { FILE_LIMITS } from '../config/constants';
+<<<<<<< HEAD
 import { getRAGService } from '../domains/rag/RAGService';
+=======
+import { LLM_TEMPERATURES } from '../config/llm-parameters';
+>>>>>>> fbe49389978ecfeb4fc6d2df399c18138a7fed78
 import { optionalAuth } from '../auth';
 
 const logger = createLogger('DocumentsRoutes');
@@ -171,6 +175,7 @@ export function createDocumentsRouter({ cluster, broadcast }: DocumentsRouterDep
             progress: 100
         });
 
+<<<<<<< HEAD
         // RAG: 문서 임베딩 (fire-and-forget, 업로드 응답을 차단하지 않음)
         if (doc.text && doc.text.length > 0) {
             const userId = (req.user && 'userId' in req.user ? req.user.userId : req.user?.id?.toString()) as string | undefined;
@@ -193,6 +198,8 @@ export function createDocumentsRouter({ cluster, broadcast }: DocumentsRouterDep
             });
         }
 
+=======
+>>>>>>> fbe49389978ecfeb4fc6d2df399c18138a7fed78
          res.json(success({ docId, filename: doc.filename, type: doc.type, pages: doc.pages, textLength: doc.text.length, preview: doc.text.substring(0, 500) + (doc.text.length > 500 ? '...' : '') }));
       } catch (error: unknown) {
           logger.error('[Upload] 오류:', error);
@@ -204,15 +211,19 @@ export function createDocumentsRouter({ cluster, broadcast }: DocumentsRouterDep
              filename: decodeFilename(req.file?.originalname || '')
          });
 
-         if (req.file && req.file.path && fs.existsSync(req.file.path)) {
-             try {
-                 fs.unlinkSync(req.file.path);
-             } catch (e) {
-                 // 무시
-             }
-         }
-
          throw error;
+     } finally {
+         // 텍스트 추출 완료 후 디스크 원본 파일 정리 (성공/실패 무관, 비동기)
+         const filePath = req.file?.path;
+         if (filePath) {
+             fs.promises.unlink(filePath)
+                 .then(() => logger.debug(`[Upload] 디스크 파일 정리: ${filePath}`))
+                 .catch((err: NodeJS.ErrnoException) => {
+                     if (err.code !== 'ENOENT') {
+                         logger.warn(`[Upload] 디스크 파일 정리 실패: ${filePath}`, err);
+                     }
+                 });
+         }
      }
 }));
 
@@ -236,8 +247,18 @@ router.post('/summarize', validate(summarizeDocumentSchema), asyncHandler(async 
       const sumIsAuto = sumPlan.resolvedEngine === '__auto__';
       const sumEngineModel = sumIsAuto ? '' : (sumPlan.resolvedEngine || model);
 
+<<<<<<< HEAD
       const bestNode = cluster.getBestNode(sumEngineModel);
       const client = bestNode ? cluster.createScopedClient(bestNode.id, sumEngineModel) : undefined;
+=======
+      if (!clusterManager) {
+          res.status(503).json(serviceUnavailable('Cluster manager not initialized'));
+          return;
+      }
+
+      const bestNode = clusterManager.getBestNode(sumEngineModel);
+      const client = bestNode ? clusterManager.createScopedClient(bestNode.id, sumEngineModel) : undefined;
+>>>>>>> fbe49389978ecfeb4fc6d2df399c18138a7fed78
 
       if (!client) {
           res.status(503).json(serviceUnavailable('사용 가능한 노드가 없습니다'));
@@ -248,7 +269,7 @@ router.post('/summarize', validate(summarizeDocumentSchema), asyncHandler(async 
       const acceptLang = (req.headers['accept-language'] || '').substring(0, 2).toLowerCase();
       const docLang = ['ko','en','ja','zh','es','fr','de','pt','ru'].includes(acceptLang) ? acceptLang : detectLanguage(doc.text.substring(0, 500)).language;
       const prompt = createSummaryPrompt(doc, docLang);
-     const result = await client.generate(prompt, { temperature: 0.1 });
+     const result = await client.generate(prompt, { temperature: LLM_TEMPERATURES.DOCUMENT_SUMMARY });
     const response = result.response;
 
      logger.info('[Summarize] 요약 완료. JSON 파싱 시도...');
@@ -290,8 +311,18 @@ router.post('/document/ask', validate(documentAskSchema), asyncHandler(async (re
       const qaIsAuto = qaPlan.resolvedEngine === '__auto__';
       const qaEngineModel = qaIsAuto ? '' : (qaPlan.resolvedEngine || model);
 
+<<<<<<< HEAD
       const bestNode = cluster.getBestNode(qaEngineModel);
       const client = bestNode ? cluster.createScopedClient(bestNode.id, qaEngineModel) : undefined;
+=======
+      if (!clusterManager) {
+          res.status(503).json(serviceUnavailable('Cluster manager not initialized'));
+          return;
+      }
+
+      const bestNode = clusterManager.getBestNode(qaEngineModel);
+      const client = bestNode ? clusterManager.createScopedClient(bestNode.id, qaEngineModel) : undefined;
+>>>>>>> fbe49389978ecfeb4fc6d2df399c18138a7fed78
 
       if (!client) {
           res.status(503).json(serviceUnavailable('사용 가능한 노드가 없습니다'));
@@ -301,7 +332,7 @@ router.post('/document/ask', validate(documentAskSchema), asyncHandler(async (re
       // 사용자 언어 감지: 질문 텍스트 기반
       const questionLang = detectLanguage(question).language;
       const prompt = createQAPrompt(doc, question, questionLang);
-    const result = await client.generate(prompt, { temperature: 0.1 });
+    const result = await client.generate(prompt, { temperature: LLM_TEMPERATURES.DOCUMENT_QA });
     const response = result.response;
 
     let parsedAnswer;
@@ -342,20 +373,11 @@ router.get('/documents', asyncHandler(async (_req: Request, res: Response) => {
 router.delete('/documents', asyncHandler(async (_req: Request, res: Response) => {
     const docCount = uploadedDocuments.size;
 
-    // RAG 벡터 임베딩 전체 삭제
-    let embeddingsDeleted = 0;
-    try {
-        embeddingsDeleted = await getRAGService().deleteAllDocumentEmbeddings();
-        logger.info(`[Documents] 전체 문서 임베딩 삭제: ${embeddingsDeleted}개`);
-    } catch (error) {
-        logger.error('[Documents] 전체 문서 임베딩 삭제 실패:', error);
-    }
-
     // 문서 저장소 전체 삭제 (인메모리 + DB)
     uploadedDocuments.clear();
 
-    logger.info(`[Documents] 전체 문서 삭제: ${docCount}개 문서, ${embeddingsDeleted}개 임베딩`);
-    res.json(success({ deletedDocuments: docCount, deletedEmbeddings: embeddingsDeleted }));
+    logger.info(`[Documents] 전체 문서 삭제: ${docCount}개 문서`);
+    res.json(success({ deletedDocuments: docCount }));
 }));
 
 /**
@@ -382,18 +404,7 @@ router.delete('/documents/:docId', asyncHandler(async (req: Request, res: Respon
      const { docId } = req.params;
      const deleted = uploadedDocuments.delete(docId);
 
-     // RAG 벡터 임베딩도 함께 삭제
-     let embeddingsDeleted = 0;
-     if (deleted) {
-         try {
-             embeddingsDeleted = await getRAGService().deleteDocumentEmbeddings(docId);
-             logger.info(`[RAG] 문서 임베딩 삭제: ${docId} → ${embeddingsDeleted}개 청크`);
-         } catch (error) {
-             logger.error(`[RAG] 문서 임베딩 삭제 실패 (${docId}):`, error);
-         }
-     }
-
-     res.json(success({ deleted, embeddingsDeleted }));
+     res.json(success({ deleted }));
  }));
 
     return router;

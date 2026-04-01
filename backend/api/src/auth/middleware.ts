@@ -16,7 +16,7 @@
  */
 
 import { Request, Response, NextFunction } from 'express';
-import { extractToken, verifyToken, hasPermission, isAdmin, clearTokenCookie } from './index';
+import { extractToken, verifyToken, hasPermission, isAdmin, clearTokenCookie } from './auth-core';
 import { getUserManager, PublicUser, UserRole } from '../data/user-manager';
 import { unauthorized, forbidden } from '../utils/api-response';
 

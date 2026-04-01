@@ -1,3 +1,4 @@
+<<<<<<< HEAD:backend/api/src/domains/chat/pipeline/index.ts
 /**
  * ============================================================
  * CLI Chat Session - 터미널 대화 세션 오케스트레이션
@@ -22,6 +23,32 @@ import { createSpinner } from '../../../ui/spinner';
 import { createLogger } from '../../../utils/logger';
 
 const logger = createLogger('ChatModule');
+=======
+/**
+ * ============================================================
+ * CLI Chat Session - 터미널 대화 세션 오케스트레이션
+ * ============================================================
+ * 대화형 CLI 루프, 명령 처리(clear/help/exit), 모델 호출 및
+ * 스트리밍 출력 로직을 제공합니다.
+ *
+ * @module chat/index
+ */
+
+import inquirer from 'inquirer';
+import chalk from 'chalk';
+import { OllamaClient } from '../ollama/client';
+import {
+    ChatMessage,
+    ModelOptions,
+} from '../ollama/types';
+import { MODEL_PRESETS } from '../config/llm-parameters';
+import { getSystemPrompt } from './prompt';
+import { showCompactBanner, showModelInfo, showDivider } from '../ui/banner';
+import { createSpinner } from '../ui/spinner';
+import { createLogger } from '../utils/logger';
+
+const logger = createLogger('ChatModule');
+>>>>>>> fbe49389978ecfeb4fc6d2df399c18138a7fed78:backend/api/src/chat/index.ts
 
 export interface ChatOptions {
     model?: string;

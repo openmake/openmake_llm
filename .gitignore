@@ -41,6 +41,7 @@ coverage/
 .agent/
 .spawner/
 .claude/
+.superpowers/
 .cursorrules
 .ruff_cache/
 
@@ -74,4 +75,44 @@ backend/api/.ollama-cluster.json
 # Screenshots (may contain personal info)
 *.png
 !frontend/web/public/**/*.png
+<<<<<<< HEAD
 .omc/
+=======
+!screenshot-main.png
+!skill-library-current.png
+
+# Project Documentation
+openmake_prd.md
+
+# Compiled Scripts
+scripts/*.js
+scripts/*.map
+scripts/*.d.ts
+
+# Tool-generated plans/specs
+docs/superpowers/
+
+# Playwright MCP logs
+.playwright-mcp/
+
+# Bun
+bun.lock
+bunfig.toml
+
+# Tests & Dev Configs
+**/__tests__/
+tests/
+*.test.ts
+*.spec.ts
+jest.config.js
+playwright.config.ts
+.eslintignore
+.eslintrc.json
+.github/workflows/
+
+# Dev Documentation
+CLAUDE.md
+AGENTS.md
+SCHEMA_SOURCE_OF_TRUTH.md
+user-guide.md
+>>>>>>> fbe49389978ecfeb4fc6d2df399c18138a7fed78

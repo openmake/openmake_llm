@@ -5,72 +5,6 @@
    NOTE: Refactored to Neo Brutalism 2.0
    ======================================== */
 
-:root {
-    /* Neo Brutalism 2.0 Variables */
-    --bg-app: #1a1a2e;
-    --bg-sidebar: #12122a;
-    --bg-main: #1a1a2e;
-    --bg-card: #252547;
-    --bg-hover: #323250;
-    --bg-secondary: #252547;
-    --bg-tertiary: #2d2d42;
-
-    --accent-primary: #c061ff;
-    --accent-glow: #c061ff;
-    --success: #a3e635;
-    --warning: #facc15;
-    --danger: #f87171;
-    --info: #4cc9f0;
-
-    --text-primary: #ffffff;
-    --text-secondary: #a1a1aa;
-    --text-muted: #71717a;
-
-    --border-width: 2px;
-    --border-light: #2d2d42;
-    --border-medium: #4c4c68;
-    --border-dark: #000000;
-
-    --shadow-sm: 2px 2px 0 #000000;
-    --shadow-md: 4px 4px 0 #000000;
-    --shadow-lg: 6px 6px 0 #000000;
-    --shadow-xl: 8px 8px 0 #000000;
-
-    --radius-sm: 4px;
-    --radius-md: 8px;
-    --radius-lg: 12px;
-    --radius-xl: 16px;
-    --radius-full: 9999px;
-    
-    --transition: 0.2s ease-in-out;
-    --font-mono: 'JetBrains Mono', monospace;
-}
-
-/* Light theme overrides — style.css :root above conflicts with design-tokens.css [data-theme="light"].
-   Re-declare light values here so the cascade resolves correctly. */
-[data-theme="light"] {
-    --bg-app: #f0f0f5;
-    --bg-sidebar: #e8e8f0;
-    --bg-main: #f0f0f5;
-    --bg-card: #ffffff;
-    --bg-hover: rgba(0, 0, 0, 0.04);
-    --bg-secondary: #f5f5fa;
-    --bg-tertiary: #e8e8f0;
-
-    --text-primary: #1a1a2e;
-    --text-secondary: #4a4a6a;
-    --text-muted: #7878a0;
-
-    --border-light: #c8c8c8;
-    --border-medium: #1a1a2e;
-    --border-dark: #000000;
-
-    --shadow-sm: 2px 2px 0 rgba(0, 0, 0, 0.15);
-    --shadow-md: 4px 4px 0 rgba(0, 0, 0, 0.15);
-    --shadow-lg: 6px 6px 0 rgba(0, 0, 0, 0.15);
-    --shadow-xl: 8px 8px 0 rgba(0, 0, 0, 0.15);
-}
-
 /* style.css body augmentation */
 body {
     height: 100%;
@@ -570,11 +504,24 @@ body {
 .send-btn.abort-mode {
     background: var(--danger);
     border-color: var(--border-dark);
+    animation: abortPulse 1.5s ease-in-out infinite;
 }
 
 .send-btn.abort-mode:hover {
     background: #ef4444;
     box-shadow: var(--shadow-md);
+    transform: translate(-2px, -2px);
+    animation: none;
+}
+
+.send-btn.abort-mode:active {
+    transform: translate(1px, 1px);
+    box-shadow: none;
+}
+
+@keyframes abortPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
 }
 
 /* Modals */
@@ -1532,9 +1479,8 @@ body {
     .modal-content { width: 95%; max-height: 85vh; border-radius: var(--radius-lg); }
     .modal-header, .modal-body, .modal-footer { padding: 16px; }
     
-    #agentBadge { font-size: 0.75rem; }
-    #agentBadge .agent-badge { padding: 4px 10px; gap: 6px; }
-    
+    /* #agentBadge 모바일 스타일은 chat-status-toast.css로 이전됨 */
+
     .sidebar-logo-container { padding: 0.5rem 0 1rem; }
     .sidebar-logo { width: 100px; }
     
@@ -1554,6 +1500,7 @@ body {
     .model-selector { display: none; }
     .message-wrapper { max-width: 95%; }
     .input-wrapper textarea { font-size: 16px; }
+    .connection-status .status-text { display: none; }
 }
 
 @media (hover: none) and (pointer: coarse) {

@@ -20,10 +20,41 @@ export const LLM_TIMEOUTS = {
     ROUTING_TIMEOUT_MS: 5000,
     /** Deep Research 개별 스크래핑 타임아웃 (ms) */
     SCRAPE_TIMEOUT_MS: 15000,
-    /** Firecrawl 기본 요청 타임아웃 (ms) */
-    FIRECRAWL_TIMEOUT_MS: 30000,
+    /** 웹 스크래핑 기본 요청 타임아웃 (ms) */
+    WEB_SCRAPE_TIMEOUT_MS: 30000,
     /** 키워드 라우터 LLM 호출 타임아웃 (ms) — ROUTING_TIMEOUT_MS보다 높음 */
     KEYWORD_ROUTING_TIMEOUT_MS: 10000,
+    /** LLM 기반 쿼리 분류기 타임아웃 (ms) */
+    CLASSIFIER_TIMEOUT_MS: 10000,
+    /** fire-and-forget 메모리 추출 LLM 호출 타임아웃 (ms) */
+    MEMORY_EXTRACTION_TIMEOUT_MS: 30000,
+    /** Deep Research 주제 분해 타임아웃 (ms) */
+    RESEARCH_DECOMPOSE_TIMEOUT_MS: 60000,
+    /** Deep Research 청크 합성 개별 타임아웃 (ms) — 전역 OLLAMA_TIMEOUT과 독립 */
+    SYNTHESIS_PER_CHUNK_TIMEOUT_MS: 120000,
+    /** Deep Research 청크 병합 타임아웃 (ms) */
+    SYNTHESIS_MERGE_TIMEOUT_MS: 180000,
+    /** Deep Research 최종 보고서 생성 타임아웃 (ms) */
+    REPORT_GENERATION_TIMEOUT_MS: 300000,
+} as const;
+
+// ============================================
+// DB 연결 풀 타임아웃
+// ============================================
+
+/**
+ * PostgreSQL 연결 풀 타임아웃 설정
+ * unified-database.ts에서 참조
+ */
+export const DB_POOL_TIMEOUTS = {
+    /** SQL statement 타임아웃 (ms) */
+    STATEMENT_TIMEOUT_MS: Number(process.env.DB_STATEMENT_TIMEOUT_MS) || 30000,
+    /** 유휴 클라이언트 타임아웃 (ms) */
+    IDLE_TIMEOUT_MS: Number(process.env.DB_IDLE_TIMEOUT_MS) || 30000,
+    /** 연결 획득 타임아웃 (ms) */
+    CONNECTION_TIMEOUT_MS: Number(process.env.DB_CONNECTION_TIMEOUT_MS) || 10000,
+    /** 헬스체크 ping 타임아웃 (ms) */
+    HEALTH_PING_TIMEOUT_MS: Number(process.env.DB_HEALTH_PING_TIMEOUT_MS) || 2000,
 } as const;
 
 // ============================================
@@ -127,4 +158,27 @@ export const ALERT_THRESHOLDS = {
 export const WEBSOCKET_TIMEOUTS = {
     /** 하트비트 주기 (ms) — 30초 */
     HEARTBEAT_INTERVAL_MS: 30000,
+} as const;
+
+// ============================================
+// WebSocket 연결 제한
+// ============================================
+
+/**
+ * WebSocket 연결 수, 속도 제한, 인증 관련 상수
+ * sockets/handler.ts에서 참조
+ */
+export const WS_LIMITS = {
+    /** 사용자당 최대 동시 WebSocket 연결 수 */
+    MAX_CONNECTIONS_PER_USER: Number(process.env.WS_MAX_CONNECTIONS_PER_USER) || 5,
+    /** 연결 속도 제한 윈도우 (ms) — 기본 60초 */
+    CONNECTION_RATE_WINDOW_MS: Number(process.env.WS_CONNECTION_RATE_WINDOW_MS) || 60 * 1000,
+    /** IP당 윈도우 내 최대 연결 시도 수 */
+    CONNECTION_RATE_MAX_PER_IP: Number(process.env.WS_CONNECTION_RATE_MAX_PER_IP) || 30,
+    /** 사용자당 윈도우 내 최대 연결 시도 수 */
+    CONNECTION_RATE_MAX_PER_USER: Number(process.env.WS_CONNECTION_RATE_MAX_PER_USER) || 15,
+    /** 인증 토큰 만료 경고 윈도우 (ms) — 기본 2분 */
+    AUTH_EXPIRY_WARNING_WINDOW_MS: Number(process.env.WS_AUTH_EXPIRY_WARNING_WINDOW_MS) || 2 * 60 * 1000,
+    /** 토큰 만료 경고 중복 방지 쿨다운 (ms) — 기본 60초 */
+    AUTH_EXPIRY_WARNING_COOLDOWN_MS: Number(process.env.WS_AUTH_EXPIRY_WARNING_COOLDOWN_MS) || 60 * 1000,
 } as const;

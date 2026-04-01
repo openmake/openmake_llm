@@ -180,7 +180,10 @@
                             if (!res.ok) { const d = await res.json(); throw new Error((d.error && typeof d.error === 'object' ? d.error.message : d.error) || '수정 실패'); }
                             showToast('사용자 정보가 수정되었습니다', 'success');
                         } else {
-                            if (!password || password.length < 6) { showToast('비밀번호는 6자 이상이어야 합니다', 'error'); return; }
+                            if (!password || password.length < 8) { showToast('비밀번호는 8자 이상이어야 합니다', 'error'); return; }
+                            if (!/[A-Z]/.test(password) || !/[a-z]/.test(password)) { showToast('비밀번호에 대문자와 소문자를 포함해야 합니다', 'error'); return; }
+                            if (!/[0-9]/.test(password)) { showToast('비밀번호에 숫자를 포함해야 합니다', 'error'); return; }
+                            if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) { showToast('비밀번호에 특수문자를 포함해야 합니다', 'error'); return; }
                             const res = await authFetch(API_ENDPOINTS.ADMIN_USERS, { method: 'POST', body: JSON.stringify({ email, password, role }) });
                             if (!res.ok) { const d = await res.json(); throw new Error((d.error && typeof d.error === 'object' ? d.error.message : d.error) || '추가 실패'); }
                             showToast('사용자가 추가되었습니다', 'success');
