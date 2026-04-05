@@ -34,7 +34,7 @@ export function resolveLanguagePolicy(
     try {
         const policy = determineLanguagePolicy(message, {
             defaultLanguage: config.defaultResponseLanguage,
-            enableDynamicResponse: true,
+            enableDynamicResponse: config.enableDynamicResponseLanguage,
             minConfidenceThreshold: config.languageDetectionMinConfidence,
             shortTextThreshold: LANGUAGE_THRESHOLDS.SHORT_TEXT_LENGTH_EXTENDED,
             fallbackLanguage: config.languageFallbackLanguage,
