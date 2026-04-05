@@ -228,7 +228,7 @@ const DEFAULT_CONFIG: EnvConfig = {
     omkDomainGeneral: '',
 
     // Language Policy
-    enableDynamicResponseLanguage: false,
+    enableDynamicResponseLanguage: true,
     defaultResponseLanguage: 'ko',
     languageDetectionMinConfidence: 0.7,
     languageFallbackLanguage: 'en',
