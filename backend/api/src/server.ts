@@ -179,6 +179,16 @@ export class DashboardServer {
             process.exit(1);
         }
 
+        // 외부 MCP 서버 초기화 (DB에서 설정 로드 → stdio 연결)
+        try {
+            const { getUnifiedMCPClient } = await import('./mcp');
+            const { getUnifiedDatabase } = await import('./data/models/unified-database');
+            await getUnifiedMCPClient().initializeExternalServers(getUnifiedDatabase());
+            console.log('[Server] 외부 MCP 서버 초기화 완료');
+        } catch (err) {
+            console.error('[Server] 외부 MCP 서버 초기화 실패 (서비스 계속):', err);
+        }
+
         // 에이전트 스킬 자동 시딩 (17개 산업 분야 에이전트 전문 지침 DB 등록)
         try {
             const { seedAgentSkills } = await import('./agents/skill-seeder');
