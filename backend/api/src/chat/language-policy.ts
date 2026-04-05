@@ -500,11 +500,21 @@ export function detectLanguage(text: string): LanguageDetectionResult {
             textLength: originalLength,
             processedLength
         };
-    } else {
-        // 혼합 텍스트의 경우 한국어 우선
+    } else if (koreanRatio >= LANGUAGE_THRESHOLDS.KOREAN_MID) {
+        // 한국어 비율이 40% 이상 — 한국어 우선
         return {
             language: 'ko',
-            confidence: 0.6,
+            confidence: koreanRatio,
+            method: 'regex',
+            textLength: originalLength,
+            processedLength
+        };
+    } else {
+        // 한국어 비율 10~40% — 라틴 문자 주도, 하위 언어 감지로 세분화
+        const detectedLang = detectLatinSubLanguage(processedText);
+        return {
+            language: detectedLang,
+            confidence: detectedLang === 'en' ? LANGUAGE_THRESHOLDS.LATIN_EN_CONFIDENCE : LANGUAGE_THRESHOLDS.LATIN_OTHER_CONFIDENCE,
             method: 'regex',
             textLength: originalLength,
             processedLength

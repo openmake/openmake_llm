@@ -138,10 +138,12 @@ async function sendMessage() {
             sessionId: getState('currentChatId') // 세션 ID 포함
         };
 
-        // 사용자 언어 설정을 WebSocket 메시지에 포함
+        // 사용자 언어 설정을 WebSocket 메시지에 포함 (설정 > 브라우저 언어 순)
         const generalSettings = JSON.parse(SS.getItem(STORAGE_KEY_GENERAL_SETTINGS) || '{}');
         if (generalSettings.lang) {
             payload.language = generalSettings.lang;
+        } else if (navigator.language) {
+            payload.language = navigator.language.split('-')[0];
         }
 
         // 파일이 첨부된 경우

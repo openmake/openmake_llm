@@ -135,7 +135,7 @@ export const envSchema = z
         OMK_DOMAIN_GENERAL: z.string().default(''),
 
         // Language Policy
-        ENABLE_DYNAMIC_RESPONSE_LANGUAGE: booleanFromString(false),
+        ENABLE_DYNAMIC_RESPONSE_LANGUAGE: booleanFromString(true),
         DEFAULT_RESPONSE_LANGUAGE: supportedLanguageSchema.default('ko'),
         LANGUAGE_DETECTION_MIN_CONFIDENCE: z.coerce.number().min(0).max(1).default(0.7),
         LANGUAGE_FALLBACK_LANGUAGE: supportedLanguageSchema.default('en'),
