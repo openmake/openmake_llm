@@ -141,7 +141,7 @@ const DEFAULT_CONFIG: EnvConfig = {
     // Auth
     jwtSecret: '',
     adminPassword: '',
-    defaultAdminEmail: 'admin@localhost',
+    defaultAdminEmail: 'admin@example.com',
     adminEmails: '',
 
     // OAuth
