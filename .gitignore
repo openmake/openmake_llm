@@ -2,7 +2,7 @@
 .env
 .env.local
 .env.*.local
-.env.docker
+# Docker is permanently excluded from this project (PM2 + direct deploy only)
 
 # Dependencies
 node_modules/
