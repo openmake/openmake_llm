@@ -14,7 +14,7 @@ module.exports = {
         name: 'openmake-llm',
         script: 'backend/api/dist/cli.js',
         args: 'cluster --port 52416',
-        cwd: '/Volumes/MAC_APP/openmake_llm',
+        cwd: __dirname,
         
         // 환경 설정
         env: {

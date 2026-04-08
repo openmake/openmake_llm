@@ -363,6 +363,8 @@ export const LANGUAGE_THRESHOLDS = {
     KOREAN_HIGH: 0.7,
     /** 한국어 비율 하한 임계값 */
     KOREAN_LOW: 0.1,
+    /** 한국어-라틴 혼합 텍스트에서 한국어 우선 판정 임계값 */
+    KOREAN_MID: 0.4,
     /** 영어 감지 신뢰도 */
     LATIN_EN_CONFIDENCE: 0.8,
     /** 기타 라틴 알파벳 언어 신뢰도 */
