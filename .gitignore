@@ -2,10 +2,12 @@
 .env
 .env.local
 .env.*.local
-.env.docker
+# Docker is permanently excluded from this project (PM2 + direct deploy only)
 
 # Dependencies
 node_modules/
+mcp-venv/
+data/mcp/
 
 # Build outputs
 dist/
@@ -108,3 +110,4 @@ CLAUDE.md
 AGENTS.md
 SCHEMA_SOURCE_OF_TRUTH.md
 user-guide.md
+.omc

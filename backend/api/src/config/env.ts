@@ -141,7 +141,7 @@ const DEFAULT_CONFIG: EnvConfig = {
     // Auth
     jwtSecret: '',
     adminPassword: '',
-    defaultAdminEmail: 'admin@localhost',
+    defaultAdminEmail: 'admin@example.com',
     adminEmails: '',
 
     // OAuth
@@ -228,7 +228,7 @@ const DEFAULT_CONFIG: EnvConfig = {
     omkDomainGeneral: '',
 
     // Language Policy
-    enableDynamicResponseLanguage: false,
+    enableDynamicResponseLanguage: true,
     defaultResponseLanguage: 'ko',
     languageDetectionMinConfidence: 0.7,
     languageFallbackLanguage: 'en',

@@ -42,6 +42,7 @@ export const TOOL_TIERS: Record<UserTier, string[]> = {
         'web_search',           // 웹 검색
         'vision_ocr',           // 이미지 OCR
         'analyze_image',        // 이미지 분석
+        'noapi-google-search::*', // 외부: Google 검색
     ],
     pro: [
         'web_search',
@@ -50,9 +51,12 @@ export const TOOL_TIERS: Record<UserTier, string[]> = {
         'web_scrape',           // 웹 스크래핑
         'web_map',              // URL 매핑
         'web_crawl',            // 웹 크롤링
+        'noapi-google-search::*', // 외부: Google 검색
+        'Knowledge Graph Memory::*', // 외부: 장기 기억
+        'Playwright Browser::*',     // 외부: 브라우저 자동화
     ],
     enterprise: [
-        '*',                    // 모든 도구 허용
+        '*',                    // 모든 도구 허용 (PostgreSQL, Python REPL 포함)
     ]
 };
 
@@ -77,13 +81,9 @@ export function canUseTool(tier: UserTier, toolName: string): boolean {
         return true;
     }
 
-    // 외부 도구 (:: 네임스페이스) — free 등급에서는 접근 불가
+    // 외부 도구 (:: 네임스페이스) — 등급별 와일드카드/정확 매칭 후 판정
     if (toolName.includes(MCP_NAMESPACE_SEPARATOR)) {
-        if (tier === 'free') {
-            return false;
-        }
-        // pro/enterprise: 와일드카드 패턴으로 서버 단위 접근 제어 가능
-        // 예: TOOL_TIERS.pro에 "postgres::*" 추가 가능
+        // 먼저 allowedTools에서 와일드카드/정확 매칭 확인
         for (const pattern of allowedTools) {
             if (pattern.endsWith('*')) {
                 const prefix = pattern.slice(0, -1);
@@ -95,10 +95,7 @@ export function canUseTool(tier: UserTier, toolName: string): boolean {
                 return true;
             }
         }
-        // pro 등급: 기본적으로 모든 외부 도구 허용
-        if (tier === 'pro') {
-            return true;
-        }
+        // 매칭 실패 시: 명시적으로 허용되지 않은 외부 도구는 차단
         return false;
     }
 
