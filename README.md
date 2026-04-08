@@ -25,7 +25,7 @@ OpenMake LLM is a high-performance, self-hosted AI assistant platform designed f
 - **Intelligent Auto-Routing** — LLM classifier + 2-layer semantic cache for optimized query handling via `openmake_llm_auto`
 - **100+ Specialized Agents** — 18 industry categories with keyword routing, topic analysis, discussion engine, and skill management
 - **Deep Research Engine** — Multi-step autonomous research with topic decomposition, web scraping, content synthesis, and report generation
-- **MCP (Model Context Protocol)** — 9 built-in tools (web search, scraping, vision, etc.) with tier-based access, user sandbox, and external MCP client support
+- **MCP (Model Context Protocol)** — 15 built-in tools (web search, scraping, vision, filesystem, deep research, etc.) with tier-based access, user sandbox, and external MCP client support
 - **A2A (Agent-to-Agent) Multi-Model** — Parallel multi-model orchestration across different API keys and providers
 - **Real-time Streaming** — Low-latency WebSocket-based chat with streaming responses
 - **RAG (Retrieval-Augmented Generation)** — Upload your documents and get AI answers grounded in your own data
