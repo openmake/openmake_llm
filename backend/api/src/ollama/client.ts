@@ -172,14 +172,20 @@ export class OllamaClient {
         this.config.model = model;
 
         if (isCloud && !wasCloud) {
+            // Local → Cloud 전환: baseURL 변경 + 키 할당 + 인터셉터 설정
             this.client.defaults.baseURL = OLLAMA_CLOUD_HOST;
-            logger.info(`[setModel] Cloud 모델 전환 → ${OLLAMA_CLOUD_HOST} (model: ${model})`);
+            const poolKeyIndex = this.apiKeyManager.getNextAvailableKey();
+            this.keyRef.boundKeyIndex = poolKeyIndex !== -1 ? poolKeyIndex : this.apiKeyManager.getCurrentKeyIndex();
+            setupInterceptors(this.client, this.apiKeyManager, this.keyRef);
+            logger.info(`[setModel] Cloud 모델 전환 → ${OLLAMA_CLOUD_HOST} (model: ${model}, Key ${this.keyRef.boundKeyIndex + 1})`);
         } else if (!isCloud && wasCloud) {
+            // Cloud → Local 전환: baseURL 변경 + 키 해제
             this.client.defaults.baseURL = this.config.baseUrl;
+            this.keyRef.boundKeyIndex = -1;
             logger.info(`[setModel] Local 모델 전환 → ${this.config.baseUrl} (model: ${model})`);
         }
 
-        logger.info(`[setModel] 모델 변경: ${model} (키 유지: Key ${this.boundKeyIndex + 1})`);
+        logger.debug(`[setModel] 모델 변경: ${model}`);
     }
 
     /**
