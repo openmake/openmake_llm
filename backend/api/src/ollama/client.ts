@@ -105,28 +105,37 @@ export class OllamaClient {
         this.config = { ...DEFAULT_CONFIG, ...config };
         this.apiKeyManager = getApiKeyManager();
 
+        const isCloud = this.isCloudModel(this.config.model);
         let baseUrl = this.config.baseUrl;
-        if (this.isCloudModel(this.config.model)) {
+        if (isCloud) {
             baseUrl = OLLAMA_CLOUD_HOST;
             logger.info(`Cloud 모델 감지 - 호스트: ${baseUrl}`);
         }
 
-        // 키풀에서 라운드로빈으로 다음 가용 키 할당 (모델 무관)
-        const poolKeyIndex = this.apiKeyManager.getNextAvailableKey();
-        const boundKeyIndex = poolKeyIndex !== -1 ? poolKeyIndex : this.apiKeyManager.getCurrentKeyIndex();
-        this.keyRef = { boundKeyIndex };
-        logger.info(`[constructor] 키풀 할당: ${this.config.model} → Key ${this.keyRef.boundKeyIndex + 1}`);
+        if (isCloud) {
+            // Cloud 모델: 키풀에서 라운드로빈으로 다음 가용 키 할당
+            const poolKeyIndex = this.apiKeyManager.getNextAvailableKey();
+            const boundKeyIndex = poolKeyIndex !== -1 ? poolKeyIndex : this.apiKeyManager.getCurrentKeyIndex();
+            this.keyRef = { boundKeyIndex };
+            logger.info(`[constructor] 키풀 할당: ${this.config.model} → Key ${this.keyRef.boundKeyIndex + 1}`);
+        } else {
+            // 로컬 모델: 키 미할당
+            this.keyRef = { boundKeyIndex: -1 };
+            logger.debug(`[constructor] 로컬 모델 — 키 할당 스킵: ${this.config.model}`);
+        }
 
         this.client = axios.create({
             baseURL: baseUrl,
             timeout: this.config.timeout,
             headers: {
                 'Content-Type': 'application/json',
-                ...this.apiKeyManager.getAuthHeadersForIndex(this.keyRef.boundKeyIndex)
+                ...(isCloud ? this.apiKeyManager.getAuthHeadersForIndex(this.keyRef.boundKeyIndex) : {})
             }
         });
 
-        setupInterceptors(this.client, this.apiKeyManager, this.keyRef);
+        if (isCloud) {
+            setupInterceptors(this.client, this.apiKeyManager, this.keyRef);
+        }
     }
 
     /**
