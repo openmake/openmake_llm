@@ -118,6 +118,9 @@ export interface EnvConfig {
     omkDomainAnalysis: string;
     omkDomainGeneral: string;
 
+    // Generate-Verify skip threshold
+    omkGvSkipThreshold: number;
+
     // Language Policy
     enableDynamicResponseLanguage: boolean;
     defaultResponseLanguage: SupportedLanguageCode;
@@ -216,7 +219,7 @@ const DEFAULT_CONFIG: EnvConfig = {
     omkEnginePro: 'gemini-3-flash-preview:cloud',
     omkEngineFast: 'gemini-3-flash-preview:cloud',
     omkEngineThink: 'gemini-3-flash-preview:cloud',
-    omkEngineCode: 'glm-5:cloud',
+    omkEngineCode: 'glm-5.1:cloud',
     omkEngineVision: 'qwen3.5:397b-cloud',
 
     // Pipeline Profile — Cost Tier & Domain Routing (P2)
@@ -226,6 +229,9 @@ const DEFAULT_CONFIG: EnvConfig = {
     omkDomainCreative: '',
     omkDomainAnalysis: '',
     omkDomainGeneral: '',
+
+    // Generate-Verify skip threshold (routing-config.ts가 process.env로 직접 소비)
+    omkGvSkipThreshold: 0.3,
 
     // Language Policy
     enableDynamicResponseLanguage: true,
@@ -504,6 +510,9 @@ export function loadConfig(): EnvConfig {
         omkDomainCreative: parsed.OMK_DOMAIN_CREATIVE ?? DEFAULT_CONFIG.omkDomainCreative,
         omkDomainAnalysis: parsed.OMK_DOMAIN_ANALYSIS ?? DEFAULT_CONFIG.omkDomainAnalysis,
         omkDomainGeneral: parsed.OMK_DOMAIN_GENERAL ?? DEFAULT_CONFIG.omkDomainGeneral,
+
+        // Generate-Verify skip threshold
+        omkGvSkipThreshold: parsed.OMK_GV_SKIP_THRESHOLD ?? DEFAULT_CONFIG.omkGvSkipThreshold,
 
         // Language Policy
         enableDynamicResponseLanguage: parsed.ENABLE_DYNAMIC_RESPONSE_LANGUAGE ?? DEFAULT_CONFIG.enableDynamicResponseLanguage,
