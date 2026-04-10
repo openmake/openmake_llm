@@ -123,7 +123,7 @@ export const envSchema = z
         OMK_ENGINE_PRO: z.string().min(1).default('gemini-3-flash-preview:cloud'),
         OMK_ENGINE_FAST: z.string().min(1).default('gemini-3-flash-preview:cloud'),
         OMK_ENGINE_THINK: z.string().min(1).default('gemini-3-flash-preview:cloud'),
-        OMK_ENGINE_CODE: z.string().min(1).default('glm-5:cloud'),
+        OMK_ENGINE_CODE: z.string().min(1).default('glm-5.1:cloud'),
         OMK_ENGINE_VISION: z.string().min(1).default('qwen3.5:397b-cloud'),
 
         // P2: Cost Tier & Domain Routing
@@ -133,6 +133,11 @@ export const envSchema = z
         OMK_DOMAIN_CREATIVE: z.string().default(''),
         OMK_DOMAIN_ANALYSIS: z.string().default(''),
         OMK_DOMAIN_GENERAL: z.string().default(''),
+
+        // Generate-Verify skip threshold
+        // routing-config.ts가 process.env로 직접 소비하지만
+        // 스키마 일관성을 위해 명시적으로 등록
+        OMK_GV_SKIP_THRESHOLD: z.coerce.number().min(0).max(1).default(0.3),
 
         // Language Policy
         ENABLE_DYNAMIC_RESPONSE_LANGUAGE: booleanFromString(true),
