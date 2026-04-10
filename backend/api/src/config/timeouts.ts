@@ -181,4 +181,8 @@ export const WS_LIMITS = {
     AUTH_EXPIRY_WARNING_WINDOW_MS: Number(process.env.WS_AUTH_EXPIRY_WARNING_WINDOW_MS) || 2 * 60 * 1000,
     /** 토큰 만료 경고 중복 방지 쿨다운 (ms) — 기본 60초 */
     AUTH_EXPIRY_WARNING_COOLDOWN_MS: Number(process.env.WS_AUTH_EXPIRY_WARNING_COOLDOWN_MS) || 60 * 1000,
+    /** 메시지 빈도 제한 윈도우 (ms) — 기본 10초 */
+    MESSAGE_RATE_WINDOW_MS: Number(process.env.WS_MESSAGE_RATE_WINDOW_MS) || 10 * 1000,
+    /** 윈도우 내 최대 메시지 수 — 기본 30개 */
+    MESSAGE_RATE_MAX_PER_WINDOW: Number(process.env.WS_MESSAGE_RATE_MAX_PER_WINDOW) || 30,
 } as const;

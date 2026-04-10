@@ -244,7 +244,7 @@ export function setupStaticFiles(app: Application, dirname: string): void {
             `script-src-attr ${scriptSrcAttrDirective}`,
             `style-src-attr ${styleSrcAttrDirective}`,
             `img-src 'self' data: blob: https:`,
-            `connect-src 'self' ws: wss: ${getConfig().ollamaBaseUrl} ${OLLAMA_CLOUD_HOST} ${cdnList}`,
+            `connect-src 'self' ws://localhost:* wss://localhost:* ws://127.0.0.1:* wss://127.0.0.1:* ${getConfig().ollamaBaseUrl} ${OLLAMA_CLOUD_HOST} ${cdnList}`,
             `font-src 'self' data: ${CDN_DOMAINS[0]} ${CDN_DOMAINS[3]}`,
             `object-src 'none'`,
             `frame-ancestors 'none'`,
