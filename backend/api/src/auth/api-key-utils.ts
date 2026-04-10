@@ -52,7 +52,11 @@ export function hashApiKey(plainKey: string): string {
             .digest('hex');
     }
 
-    // pepper 미설정 시 단순 SHA-256 (개발/테스트 환경)
+    // pepper 미설정 시: 프로덕션에서는 에러, 그 외 환경에서는 단순 SHA-256 폴백
+    if (getConfig().nodeEnv === 'production') {
+        throw new Error('[ApiKeyUtils] API_KEY_PEPPER 환경변수는 프로덕션에서 필수입니다. .env에 설정하세요.');
+    }
+
     if (!pepperWarningEmitted) {
         logger.warn('API_KEY_PEPPER is not set. Using plain SHA-256 for API key hashing. Set API_KEY_PEPPER in .env for production security.');
         pepperWarningEmitted = true;

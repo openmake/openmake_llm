@@ -153,6 +153,7 @@ export class WebSocketHandler {
             extWs._connectedAtMs = Date.now();
             extWs._lastActivityAtMs = Date.now();
             extWs._messageCount = 0;
+            extWs._messageTimestamps = [];
             extWs._lastExpiryWarningAtMs = 0;
 
             this.registerUserConnection(extWs);
@@ -225,6 +226,19 @@ export class WebSocketHandler {
                         log.debug(`[WS] 메시지 수신: type=${msg.type}`);
                         this.touchActivity(extWs);
                         extWs._messageCount = (extWs._messageCount || 0) + 1;
+
+                        // 🔒 메시지 빈도 제한: 윈도우 내 최대 메시지 수 초과 시 차단
+                        const now = Date.now();
+                        if (!extWs._messageTimestamps) extWs._messageTimestamps = [];
+                        extWs._messageTimestamps.push(now);
+                        const windowStart = now - WS_LIMITS.MESSAGE_RATE_WINDOW_MS;
+                        extWs._messageTimestamps = extWs._messageTimestamps.filter(ts => ts > windowStart);
+                        if (extWs._messageTimestamps.length > WS_LIMITS.MESSAGE_RATE_MAX_PER_WINDOW) {
+                            log.warn(`[WS] 메시지 빈도 초과: userId=${extWs._authenticatedUserId || 'anonymous'}, count=${extWs._messageTimestamps.length}/${WS_LIMITS.MESSAGE_RATE_MAX_PER_WINDOW}`);
+                            ws.send(JSON.stringify({ type: 'error', message: '메시지 전송이 너무 빠릅니다. 잠시 후 다시 시도해주세요.' }));
+                            return;
+                        }
+
                         await this.handleMessage(ws, msg);
                     } catch (e: unknown) {
                         log.error('[WS] 메시지 처리 오류:', (e instanceof Error ? e.message : String(e)) || e);

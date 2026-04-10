@@ -179,7 +179,7 @@ router.post('/upload', optionalAuth, validateUploadContentType(FILE_LIMITS.MAX_S
          broadcastFn?.({
              type: 'document_progress',
              stage: 'error',
-             message: `오류: ${(error instanceof Error ? error.message : '파일 처리 중 오류가 발생했습니다')}`,
+             message: '파일 처리 중 오류가 발생했습니다',
              filename: decodeFilename(req.file?.originalname || '')
          });
 
