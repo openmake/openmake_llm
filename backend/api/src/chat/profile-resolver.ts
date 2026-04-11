@@ -26,6 +26,7 @@ import type { ExecutionStrategy } from './pipeline-profile';
 import { createLogger } from '../utils/logger';
 import type { QueryType } from './model-selector-types';
 import { GV_MODEL_MAP, GV_DEFAULT_MODELS } from '../config/model-defaults';
+import { applyHealthCircuitBreaker } from '../services/model-health-monitor';
 
 const logger = createLogger('ProfileResolver');
 
@@ -147,16 +148,31 @@ export function buildExecutionPlan(
     if (profile) {
         // Brand model → 프로파일 기반 실행 계획
         const execStrategy: ExecutionStrategy = profile.executionStrategy;
-        logger.info(`Brand model 해석: ${requestedModel} → engine=${profile.engineModel}, strategy=${execStrategy}`);
+
+        // §CB 서킷 브레이커: 프로파일이 선언한 엔진이 장애 상태면 안전 모델로 대체
+        const safeEngine = applyHealthCircuitBreaker(profile.engineModel);
+
+        logger.info(
+            `Brand model 해석: ${requestedModel} → engine=${safeEngine}${
+                safeEngine !== profile.engineModel ? ` (원본 ${profile.engineModel} 장애 — 서킷 브레이커 작동)` : ''
+            }, strategy=${execStrategy}`,
+        );
 
         // GV 모델 resolve (generate-verify / conditional-verify 전략에서만 사용)
         const needsGV = execStrategy !== 'single';
-        const gvModels = needsGV ? resolveGVModels() : undefined;
+        const gvModelsRaw = needsGV ? resolveGVModels() : undefined;
+        // GV 쌍도 서킷 브레이커 적용 (단, generator ≠ verifier 원칙 유지 위해 상호 후보로 전달)
+        const gvModels = gvModelsRaw
+            ? {
+                  generator: applyHealthCircuitBreaker(gvModelsRaw.generator, [gvModelsRaw.verifier]),
+                  verifier: applyHealthCircuitBreaker(gvModelsRaw.verifier, [gvModelsRaw.generator]),
+              }
+            : undefined;
 
         return {
             requestedModel,
             profile,
-            resolvedEngine: profile.engineModel,
+            resolvedEngine: safeEngine,
             useToolCalling: profile.executionStrategy !== 'single',
             agentLoopMax: profile.agentLoopMax,
             loopStrategy: profile.loopStrategy,
