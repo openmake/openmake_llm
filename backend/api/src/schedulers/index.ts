@@ -51,7 +51,58 @@ export async function startAllSchedulers(): Promise<void> {
     // 5. 에이전트 자기개선 사이클 스케줄러
     await startAgentLearningScheduler();
 
+    // 6. Cloud 모델 헬스체크 스케줄러 (5분마다 현재 활성 키로 전체 모델 ping)
+    startModelHealthScheduler();
+
     logger.info('모든 백그라운드 스케줄러 시작 완료');
+}
+
+/**
+ * Cloud 모델 헬스체크 스케줄러를 시작합니다.
+ *
+ * - 부팅 후 30초 뒤 1차 실행 (워밍업)
+ * - 이후 5분마다 반복
+ * - 스냅샷은 ModelHealthMonitor 싱글톤에 저장되어 routing-circuit-breaker와
+ *   Admin UI에서 조회됨
+ */
+function startModelHealthScheduler(): void {
+    const HEALTH_CHECK_INTERVAL_MS = 5 * 60 * 1000; // 5분
+    const WARMUP_DELAY_MS = 30 * 1000; // 30초
+
+    const runCheck = async () => {
+        try {
+            const { getModelHealthMonitor } = await import('../services/model-health-monitor');
+            const snapshot = await getModelHealthMonitor().runCheck({ full: false });
+            if (snapshot.unhealthyCount > 0) {
+                logger.warn(
+                    `[ModelHealth] ${snapshot.unhealthyCount}/${snapshot.modelCount} 모델 장애 — ` +
+                    snapshot.summary
+                        .filter((s) => !s.healthy)
+                        .map((s) => s.model)
+                        .join(', '),
+                );
+            } else {
+                logger.debug(
+                    `[ModelHealth] ${snapshot.healthyCount}/${snapshot.modelCount} 모델 정상 (${snapshot.totalDurationMs}ms)`,
+                );
+            }
+        } catch (err) {
+            logger.error('[ModelHealth] 헬스체크 실행 실패:', err);
+        }
+    };
+
+    // 워밍업: 부팅 직후에는 실행하지 않고 30초 뒤에 1차 실행
+    const warmupTimer = setTimeout(() => {
+        runCheck();
+        const interval = setInterval(runCheck, HEALTH_CHECK_INTERVAL_MS);
+        interval.unref();
+        activeTimers.push(interval);
+    }, WARMUP_DELAY_MS);
+    warmupTimer.unref();
+
+    logger.debug(
+        `ModelHealthScheduler 시작 완료 (워밍업 ${WARMUP_DELAY_MS / 1000}s, 주기 ${HEALTH_CHECK_INTERVAL_MS / 1000}s)`,
+    );
 }
 
 /**

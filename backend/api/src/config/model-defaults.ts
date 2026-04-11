@@ -142,14 +142,18 @@ export interface ModelCapabilities {
  * - GLM 버전 갱신: glm-5 → glm-5.1 (차세대 플래그십, 강화된 코딩·에이전트 능력)
  * - Vision economy 티어 교체: kimi-k2.5 → gemma4:31b-cloud
  *   (31B 멀티모달: vision+tools+thinking+audio, 256K context, 경량 economy에 적합)
+ * - math-*.standard + math-* GV verifier 교체: kimi-k2-thinking → gpt-oss:120b-cloud
+ *   (이유: 실측 결과 kimi-k2-thinking:cloud 간헐적 500 에러, 여러 키 교차 검증에서
+ *    75% 실패율 확인. gpt-oss:120b-cloud는 thinking 지원 + 안정성 검증 완료 +
+ *    deepseek 계열과 교차검증 원칙 유지)
  */
 export const AUTO_ROUTING_ENGINE_MAP: Record<string, Record<'premium' | 'standard' | 'economy', string>> = {
     'code-agent':   { premium: 'minimax-m2.7:cloud',       standard: 'devstral-2:123b-cloud',         economy: 'qwen3-coder-next:cloud' },
     'code-gen':     { premium: 'glm-5.1:cloud',            standard: 'devstral-small-2:24b-cloud',   economy: 'minimax-m2.7:cloud' },
     'code':         { premium: 'glm-5.1:cloud',            standard: 'devstral-small-2:24b-cloud',   economy: 'minimax-m2.7:cloud' },
-    'math-hard':    { premium: 'deepseek-v3.2:cloud',      standard: 'kimi-k2-thinking:cloud',   economy: 'cogito-2.1:671b-cloud' },
-    'math-applied': { premium: 'deepseek-v3.2:cloud',      standard: 'kimi-k2-thinking:cloud',   economy: 'nemotron-3-super:cloud' },
-    'math':         { premium: 'deepseek-v3.2:cloud',      standard: 'kimi-k2-thinking:cloud',   economy: 'nemotron-3-super:cloud' },
+    'math-hard':    { premium: 'deepseek-v3.2:cloud',      standard: 'gpt-oss:120b-cloud',       economy: 'cogito-2.1:671b-cloud' },
+    'math-applied': { premium: 'deepseek-v3.2:cloud',      standard: 'gpt-oss:120b-cloud',       economy: 'nemotron-3-super:cloud' },
+    'math':         { premium: 'deepseek-v3.2:cloud',      standard: 'gpt-oss:120b-cloud',       economy: 'nemotron-3-super:cloud' },
     'reasoning':    { premium: 'kimi-k2.5:cloud',          standard: 'gpt-oss:120b-cloud',       economy: 'nemotron-3-nano:30b-cloud' },
     'creative':     { premium: 'qwen3.5:397b-cloud',       standard: 'gpt-oss:120b-cloud',       economy: 'gemini-3-flash-preview:cloud' },
     'analysis':     { premium: 'kimi-k2.5:cloud',          standard: 'qwen3.5:397b-cloud',       economy: 'gemini-3-flash-preview:cloud' },
@@ -184,9 +188,9 @@ export const GV_MODEL_MAP: Record<string, Record<'generator' | 'verifier', strin
     'code-agent':   { generator: 'devstral-2:123b-cloud',    verifier: 'glm-5.1:cloud' },
     'code-gen':     { generator: 'glm-5.1:cloud',            verifier: 'devstral-small-2:24b-cloud' },
     'code':         { generator: 'glm-5.1:cloud',            verifier: 'minimax-m2.7:cloud' },
-    'math-hard':    { generator: 'deepseek-v3.2:cloud',      verifier: 'kimi-k2-thinking:cloud' },
-    'math-applied': { generator: 'deepseek-v3.2:cloud',      verifier: 'kimi-k2-thinking:cloud' },
-    'math':         { generator: 'deepseek-v3.2:cloud',      verifier: 'kimi-k2-thinking:cloud' },
+    'math-hard':    { generator: 'deepseek-v3.2:cloud',      verifier: 'gpt-oss:120b-cloud' },
+    'math-applied': { generator: 'deepseek-v3.2:cloud',      verifier: 'gpt-oss:120b-cloud' },
+    'math':         { generator: 'deepseek-v3.2:cloud',      verifier: 'gpt-oss:120b-cloud' },
     'reasoning':    { generator: 'kimi-k2.5:cloud',          verifier: 'gpt-oss:120b-cloud' },
     'creative':     { generator: 'qwen3.5:397b-cloud',       verifier: 'gpt-oss:120b-cloud' },
     'analysis':     { generator: 'kimi-k2.5:cloud',          verifier: 'qwen3.5:397b-cloud' },
