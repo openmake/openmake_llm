@@ -52,7 +52,7 @@ export class AuthController {
         // ===== 기본 인증 API =====
         this.router.post('/register', validate(registerSchema), this.register.bind(this));
         this.router.post('/login', validate(loginSchema), this.login.bind(this));
-        this.router.post('/logout', this.logout.bind(this));
+        this.router.post('/logout', requireAuth, this.logout.bind(this));
         this.router.get('/me', requireAuth, this.getCurrentUser.bind(this));
         this.router.put('/password', requireAuth, validate(changePasswordSchema), this.changePassword.bind(this));
         this.router.put('/tier', requireAuth, validate(tierChangeSchema), this.changeTier.bind(this));

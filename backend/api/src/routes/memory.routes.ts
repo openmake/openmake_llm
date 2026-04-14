@@ -78,6 +78,16 @@ router.post('/', validate(createMemorySchema), asyncHandler(async (req: Request,
           return res.status(400).json(badRequest('category, key, value는 필수입니다.'));
       }
 
+      // key/value 길이 제한 (DoS 방지)
+      const MAX_MEMORY_KEY_LENGTH = 500;
+      const MAX_MEMORY_VALUE_LENGTH = 10000;
+      if (key.length > MAX_MEMORY_KEY_LENGTH) {
+          return res.status(400).json(badRequest(`key는 최대 ${MAX_MEMORY_KEY_LENGTH}자까지 허용됩니다.`));
+      }
+      if (value.length > MAX_MEMORY_VALUE_LENGTH) {
+          return res.status(400).json(badRequest(`value는 최대 ${MAX_MEMORY_VALUE_LENGTH}자까지 허용됩니다.`));
+      }
+
       // 등급별 메모리 생성 수량 제한
       const userTier = (req.user && 'tier' in req.user) ? (req.user as { tier: string }).tier : 'free';
       const userRole = req.user?.role || 'guest';

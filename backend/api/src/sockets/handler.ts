@@ -45,6 +45,7 @@ import { WEBSOCKET_TIMEOUTS, WS_LIMITS } from '../config/timeouts';
 import { handleChatMessage } from './ws-chat-handler';
 import { withSpan } from '../observability/otel';
 import { runWithRequestContext } from '../utils/request-context';
+import { getConfig } from '../config';
 
 const log = createLogger('WebSocketHandler');
 
@@ -435,14 +436,34 @@ export class WebSocketHandler {
     }
 
     private getClientIp(req: IncomingMessage): string {
-        const xForwardedFor = req.headers['x-forwarded-for'];
-        if (typeof xForwardedFor === 'string' && xForwardedFor.length > 0) {
-            return xForwardedFor.split(',')[0].trim();
+        const trustedProxies = getConfig().trustedProxies;
+        const remoteAddr = req.socket?.remoteAddress || 'unknown';
+
+        // 신뢰 프록시 설정이 있고, 직접 연결 IP가 신뢰 범위인 경우만 X-Forwarded-For 사용
+        if (trustedProxies.length > 0 && this.isTrustedProxy(remoteAddr, trustedProxies)) {
+            const xForwardedFor = req.headers['x-forwarded-for'];
+            if (typeof xForwardedFor === 'string' && xForwardedFor.length > 0) {
+                return xForwardedFor.split(',')[0].trim();
+            }
+            if (Array.isArray(xForwardedFor) && xForwardedFor.length > 0) {
+                return xForwardedFor[0];
+            }
         }
-        if (Array.isArray(xForwardedFor) && xForwardedFor.length > 0) {
-            return xForwardedFor[0];
+
+        return remoteAddr;
+    }
+
+    private isTrustedProxy(ip: string, trusted: string[]): boolean {
+        if (trusted.includes('loopback') && (ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1')) {
+            return true;
         }
-        return req.socket?.remoteAddress || 'unknown';
+        if (trusted.includes('linklocal') && (ip.startsWith('169.254.') || ip.startsWith('fe80:'))) {
+            return true;
+        }
+        if (trusted.includes('uniquelocal') && (ip.startsWith('10.') || ip.startsWith('172.') || ip.startsWith('192.168.') || ip.startsWith('fc') || ip.startsWith('fd'))) {
+            return true;
+        }
+        return trusted.includes(ip);
     }
 
     private cleanupOldAttempts(map: Map<string, number[]>, key: string): number[] {
@@ -549,6 +570,19 @@ export class WebSocketHandler {
                     this.userConnectionAttempts.delete(key);
                 } else {
                     this.userConnectionAttempts.set(key, filtered);
+                }
+            }
+
+            // Map 크기 제한: 메모리 고갈 DoS 방지
+            const MAX_TRACKING_ENTRIES = 10000;
+            for (const map of [this.ipConnectionAttempts, this.userConnectionAttempts]) {
+                if (map.size > MAX_TRACKING_ENTRIES) {
+                    const entriesToDelete = map.size - MAX_TRACKING_ENTRIES;
+                    const iterator = map.keys();
+                    for (let i = 0; i < entriesToDelete; i++) {
+                        const key = iterator.next().value;
+                        if (key) map.delete(key);
+                    }
                 }
             }
         }, WS_LIMITS.CONNECTION_RATE_WINDOW_MS);

@@ -126,6 +126,9 @@ export interface EnvConfig {
     defaultResponseLanguage: SupportedLanguageCode;
     languageDetectionMinConfidence: number;
     languageFallbackLanguage: SupportedLanguageCode;
+
+    // Security — Trusted Proxies
+    trustedProxies: string[];
 }
 
 const DEFAULT_CONFIG: EnvConfig = {
@@ -238,6 +241,9 @@ const DEFAULT_CONFIG: EnvConfig = {
     defaultResponseLanguage: 'ko',
     languageDetectionMinConfidence: 0.7,
     languageFallbackLanguage: 'en',
+
+    // Security — Trusted Proxies
+    trustedProxies: ['loopback', 'linklocal', 'uniquelocal'],
 };
 
 function parseEnvFile(filePath: string): Record<string, string> {
@@ -396,6 +402,9 @@ export function loadConfig(): EnvConfig {
 
         // Cookie Security
         COOKIE_SECURE: env('COOKIE_SECURE'),
+
+        // Security — Trusted Proxies
+        TRUSTED_PROXIES: env('TRUSTED_PROXIES'),
     });
 
     if (!parsedResult.success) {
@@ -522,6 +531,9 @@ export function loadConfig(): EnvConfig {
 
         // Cookie Security
         cookieSecure: parsed.COOKIE_SECURE ?? DEFAULT_CONFIG.cookieSecure,
+
+        // Security — Trusted Proxies
+        trustedProxies: parsed.TRUSTED_PROXIES?.split(',').map((p: string) => p.trim()) || DEFAULT_CONFIG.trustedProxies,
     };
 }
 

@@ -371,20 +371,19 @@
                     <div class="skill-card-top">
                         <span class="skill-card-badge">${esc(categoryLabel(skill.category))}${userBadge}${systemBadge}</span>
                         <div class="skill-card-menu">
-                            <button class="skill-card-menu-btn" title="더 보기"
-                                onclick="(function(btn){btn.nextElementSibling.classList.toggle('open');event.stopPropagation();})(this)">⋯</button>
+                            <button class="skill-card-menu-btn" data-action="toggle-menu" title="더 보기">⋯</button>
                             <div class="skill-card-dropdown">
-                                <a href="#" onclick="sl_toggleUserSkill('${esc(skill.id)}', ${isUserAssigned});return false;">
+                                <a href="#" data-action="toggle-user" data-skill-id="${esc(skill.id)}" data-assigned="${isUserAssigned}">
                                     <span class="iconify" data-icon="lucide:user"></span> ${toggleLabel}
                                 </a>
-                                <a href="#" onclick="sl_editSkill('${esc(skill.id)}');return false;">
+                                <a href="#" data-action="edit" data-skill-id="${esc(skill.id)}">
                                     <span class="iconify" data-icon="lucide:edit-2"></span> 수정
                                 </a>
-                                <a href="#" onclick="sl_exportSkill('${esc(skill.id)}');return false;">
+                                <a href="#" data-action="export" data-skill-id="${esc(skill.id)}">
                                     <span class="iconify" data-icon="lucide:download"></span> 다운로드 (.SKILL)
                                 </a>
                                 <hr>
-                                <a href="#" class="danger" onclick="sl_deleteSkill('${esc(skill.id)}');return false;">
+                                <a href="#" class="danger" data-action="delete" data-skill-id="${esc(skill.id)}">
                                     <span class="iconify" data-icon="lucide:trash-2"></span> 삭제
                                 </a>
                             </div>
@@ -400,6 +399,28 @@
                     </div>
                 </div>`;
             }).join('');
+
+            // XSS 방지: 인라인 onclick 대신 이벤트 위임 사용
+            grid.addEventListener('click', (e) => {
+                const menuBtn = e.target.closest('[data-action="toggle-menu"]');
+                if (menuBtn) {
+                    e.stopPropagation();
+                    menuBtn.nextElementSibling.classList.toggle('open');
+                    return;
+                }
+                const link = e.target.closest('a[data-action]');
+                if (link) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const action = link.dataset.action;
+                    const skillId = link.dataset.skillId;
+                    if (action === 'toggle-user') sl_toggleUserSkill(skillId, link.dataset.assigned === 'true');
+                    else if (action === 'edit') sl_editSkill(skillId);
+                    else if (action === 'export') sl_exportSkill(skillId);
+                    else if (action === 'delete') sl_deleteSkill(skillId);
+                    return;
+                }
+            });
         },
 
 

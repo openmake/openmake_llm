@@ -174,12 +174,23 @@ export class OAuthManager {
             return null;
         }
 
+        // returnUrl 검증: 상대 경로만 허용 (Open Redirect 방지)
+        let safeReturnUrl: string | undefined;
+        if (returnUrl) {
+            if (returnUrl.startsWith('/') && !returnUrl.startsWith('//') && !returnUrl.includes('://')) {
+                safeReturnUrl = returnUrl;
+            } else {
+                logger.warn(`OAuth returnUrl 거부 (잠재적 Open Redirect): ${returnUrl}`);
+                safeReturnUrl = '/';
+            }
+        }
+
         // CSRF 방지용 상태 생성
         const nonce = crypto.randomBytes(32).toString('hex');
         const state: OAuthState = {
             nonce,
             provider,
-            returnUrl,
+            returnUrl: safeReturnUrl,
             createdAt: new Date()
         };
         this.states.set(nonce, state);

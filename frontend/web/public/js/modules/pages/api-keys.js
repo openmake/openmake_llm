@@ -318,10 +318,10 @@
                                 '</div>' +
                             '</div>' +
                             '<div class="ak-actions">' +
-                                '<button class="ak-btn ak-btn-secondary ak-btn-sm" onclick="rotateApiKey(\'' + key.id + '\')" title="키 재발급">' +
+                                '<button class="ak-btn ak-btn-secondary ak-btn-sm" data-action="rotate" data-key-id="' + esc(key.id) + '" title="키 재발급">' +
                                     '\uD83D\uDD04 재발급' +
                                 '</button>' +
-                                '<button class="ak-btn ak-btn-danger ak-btn-sm" onclick="deleteApiKey(\'' + key.id + '\')" title="삭제">' +
+                                '<button class="ak-btn ak-btn-danger ak-btn-sm" data-action="delete" data-key-id="' + esc(key.id) + '" title="삭제">' +
                                     '\uD83D\uDDD1\uFE0F 삭제' +
                                 '</button>' +
                             '</div>' +
@@ -329,11 +329,22 @@
                         '<div class="ak-key-value-row">' +
                             '<span style="color:var(--text-muted); font-size:12px;">TOKEN</span>' +
                             '<span class="ak-key-value">' + esc(prefix) + '****************' + esc(last4) + '</span>' +
-                            '<button class="ak-btn ak-btn-secondary ak-btn-icon" onclick="copyToClipboard(\'' + esc(prefix) + '...' + esc(last4) + '\')" title="복사" style="margin-left:auto;">\uD83D\uDCCB</button>' +
+                            '<button class="ak-btn ak-btn-secondary ak-btn-icon" data-action="copy" data-copy-text="' + esc(prefix) + '...' + esc(last4) + '" title="복사" style="margin-left:auto;">\uD83D\uDCCB</button>' +
                         '</div>' +
                     '</div>';
             });
             wrapper.innerHTML = html;
+
+            // XSS 방지: 인라인 onclick 대신 이벤트 위임 사용
+            wrapper.addEventListener('click', (e) => {
+                const btn = e.target.closest('button[data-action]');
+                if (!btn) return;
+                const action = btn.dataset.action;
+                const keyId = btn.dataset.keyId;
+                if (action === 'rotate') rotateApiKey(keyId);
+                else if (action === 'delete') deleteApiKey(keyId);
+                else if (action === 'copy') copyToClipboard(btn.dataset.copyText);
+            });
 
         } catch (e) {
             console.warn(e);

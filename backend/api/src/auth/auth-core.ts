@@ -66,7 +66,8 @@ export function generateToken(user: PublicUser): string {
     const payload: JWTPayload = {
         userId: user.id,
         email: user.email,
-        role: user.role
+        role: user.role,
+        type: 'access' as const
     };
 
     // jti(JWT ID)를 추가하여 토큰 단위 블랙리스트 지원
@@ -86,6 +87,9 @@ export function generateToken(user: PublicUser): string {
  * - jti 포함 (블랙리스트 지원)
  * - type: 'refresh' 필드로 액세스 토큰과 구분
  */
+// 사용자별 활성 세션 추적 (인메모리, 서버 재시작 시 초기화)
+const activeSessionMap = new Map<string, Array<{ jti: string; createdAt: number }>>();
+
 export function generateRefreshToken(user: PublicUser): string {
     const payload = {
         userId: user.id,
@@ -96,10 +100,40 @@ export function generateRefreshToken(user: PublicUser): string {
 
     const jti = crypto.randomBytes(16).toString('hex');
 
-    return jwt.sign(payload, JWT_SECRET, {
+    const token = jwt.sign(payload, JWT_SECRET, {
         expiresIn: AUTH_CONFIG.REFRESH_TOKEN_EXPIRY,
         jwtid: jti
     });
+
+    // 동시 세션 제한 적용
+    const userId = String(user.id);
+    const sessions = activeSessionMap.get(userId) || [];
+    sessions.push({ jti, createdAt: Date.now() });
+    activeSessionMap.set(userId, sessions);
+
+    if (sessions.length > AUTH_CONFIG.MAX_SESSIONS_PER_USER) {
+        const toRemove = sessions.splice(0, sessions.length - AUTH_CONFIG.MAX_SESSIONS_PER_USER);
+        const blacklist = getTokenBlacklist();
+        const expiresAt = Date.now() + AUTH_CONFIG.REFRESH_TOKEN_MAX_AGE_MS;
+        for (const old of toRemove) {
+            blacklist.add(old.jti, expiresAt).catch(err =>
+                logger.error('세션 제한 블랙리스트 추가 실패:', err)
+            );
+        }
+        logger.info(`사용자 ${userId} 세션 제한 초과: ${toRemove.length}개 이전 세션 블랙리스트 처리`);
+    }
+
+    return token;
+}
+
+/** 로그아웃 시 세션 맵에서 제거 */
+export function removeSessionFromMap(userId: string, jti: string): void {
+    const sessions = activeSessionMap.get(userId);
+    if (sessions) {
+        const idx = sessions.findIndex(s => s.jti === jti);
+        if (idx !== -1) sessions.splice(idx, 1);
+        if (sessions.length === 0) activeSessionMap.delete(userId);
+    }
 }
 
 /**
@@ -119,8 +153,10 @@ export async function verifyRefreshToken(token: string): Promise<JWTPayload | nu
                      logger.warn('블랙리스트된 리프레시 토큰 사용 시도');
                      return null;
                  }
-             } catch {
-                 // 블랙리스트 DB 접근 실패 시 무시 (가용성 우선)
+             } catch (blacklistError) {
+                 // 블랙리스트 DB 접근 실패 — 가용성 우선으로 토큰 허용하되 경고 로그 기록
+                 logger.warn('블랙리스트 DB 접근 실패: 리프레시 토큰 검증 우회됨 (가용성 우선)',
+                     { jti: preCheck.jti, error: blacklistError instanceof Error ? blacklistError.message : String(blacklistError) });
              }
          }
 
@@ -157,15 +193,17 @@ export async function verifyToken(token: string): Promise<JWTPayload | null> {
                      logger.warn('블랙리스트된 토큰 사용 시도');
                      return null;
                  }
-             } catch {
-                 // 블랙리스트 DB 접근 실패 시 무시 (가용성 우선)
+             } catch (blacklistError) {
+                 // 블랙리스트 DB 접근 실패 — 가용성 우선으로 토큰 허용하되 경고 로그 기록
+                 logger.warn('블랙리스트 DB 접근 실패: 토큰 검증 우회됨 (가용성 우선)',
+                     { jti: preCheck.jti, error: blacklistError instanceof Error ? blacklistError.message : String(blacklistError) });
              }
          }
 
          // refresh token으로 access 인증 시도 차단
-         // refresh token(7일 수명)이 access token(15분) 대신 사용되는 것을 방지
-         if (preCheck?.type === 'refresh') {
-             logger.warn('refresh 토큰으로 access 인증 시도 차단');
+         // access token만 허용: type 필드가 없거나(레거시) 'access'인 경우만 통과
+         if (preCheck?.type && preCheck.type !== 'access') {
+             logger.warn(`access 이외 토큰 타입 차단: ${preCheck.type}`);
              return null;
          }
 
