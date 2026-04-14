@@ -274,7 +274,11 @@ function finishAssistantMessage(errorMessage = null, serverMessageId = null) {
         }
 
         // finalAnswer에서 사고 과정 섹션 제거 (결론 이후 불필요한 내용 제거)
-        if (finalAnswer) {
+        // 토론 결과는 ---와 ## 헤더를 구조적으로 사용하므로 필터링 대상에서 제외
+        var isDiscussionResult = finalAnswer.indexOf('## \uD83C\uDFAF') !== -1 ||
+            finalAnswer.indexOf('## \uD83D\uDCCB \uC804\uBB38\uAC00\uBCC4') !== -1;
+
+        if (finalAnswer && !isDiscussionResult) {
             var thinkingSectionMarkers = ['## \uC0AC\uACE0 \uACFC\uC815', '## \uC0AC\uACE0\uACFC\uC815', '## Thinking Process'];
             for (var ti = 0; ti < thinkingSectionMarkers.length; ti++) {
                 var tIdx = finalAnswer.indexOf(thinkingSectionMarkers[ti]);
