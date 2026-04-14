@@ -19,7 +19,7 @@ import type { ChatMessage } from '../../ollama/types';
 import type { ChatStrategy, ChatResult, DiscussionStrategyContext } from './types';
 import { createLogger } from '../../utils/logger';
 import { sanitizePromptInput } from '../../utils/input-sanitizer';
-import { CONTEXT_LIMITS, DISCUSSION_TOKEN_BUDGET } from '../../config/runtime-limits';
+import { CONTEXT_LIMITS, DISCUSSION_TOKEN_BUDGET, MODEL_CONTEXT_DEFAULTS } from '../../config/runtime-limits';
 import { LLM_TEMPERATURES } from '../../config/llm-parameters';
 import { resolvePromptLocale, type PromptLocaleCode } from '../../chat/language-policy';
 
@@ -330,7 +330,7 @@ export class DiscussionStrategy implements ChatStrategy<DiscussionStrategyContex
                 { role: 'user', content: userMessage },
             ];
 
-            await context.client.chat(chatMessages, {}, (token, thinking) => {
+            await context.client.chat(chatMessages, { num_predict: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_PREDICT }, (token, thinking) => {
                 // Discussion 참가 모델의 thinking은 무시하고 content만 수집
                 if (!thinking) {
                     response += token;
