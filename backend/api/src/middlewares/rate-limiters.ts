@@ -7,7 +7,7 @@ import { Request, Response, NextFunction } from 'express';
 import { rateLimited } from '../utils/api-response';
 import {
     RL_GENERAL, RL_AUTH, RL_CHAT, RL_RESEARCH, RL_UPLOAD,
-    RL_WEB_SEARCH, RL_MEMORY, RL_MCP, RL_API_KEY_MGMT, RL_PUSH
+    RL_WEB_SEARCH, RL_MEMORY, RL_MCP, RL_API_KEY_MGMT, RL_PUSH, RL_ADMIN
 } from '../config/rate-limits';
 
 // ================================================
@@ -47,6 +47,8 @@ interface RateLimitDecision {
 // ================================================
 
 const DEFAULT_LIMITER_MAX_ENTRIES = 20000;
+/** Admin은 일반 사용자보다 높은 제한 적용 (완전 우회 방지) */
+const ADMIN_RATE_LIMIT_MULTIPLIER = 5;
 const advancedLimiterCounters = new Map<string, SlidingWindowCounter>();
 const advancedLimiterCleanupIntervalMs = 60_000;
 
@@ -213,21 +215,19 @@ if (
 
 export function createAdvancedRateLimiter(options: AdvancedRateLimiterOptions) {
     return (req: Request, res: Response, next: NextFunction): void => {
-        if (isAdminUser(req)) {
-            next();
-            return;
-        }
-
         const now = Date.now();
         const ip = getRequestIP(req);
         const userKey = getUserKey(req);
         const actorKey = userKey ? `user:${userKey}` : `ip:${ip}`;
 
+        // Admin은 높은 배수의 제한 적용 (완전 우회 방지)
+        const effectiveIpLimit = isAdminUser(req) ? options.ipLimit * ADMIN_RATE_LIMIT_MULTIPLIER : options.ipLimit;
+
         const endpointSpecificLimit = getEndpointSpecificLimit(options.endpointRules, req);
-        const perEndpointLimit = endpointSpecificLimit ?? options.ipLimit;
+        const perEndpointLimit = endpointSpecificLimit ?? effectiveIpLimit;
 
         const dimensions: Array<{ key: string; limit: number }> = [
-            { key: `ip:${ip}`, limit: options.ipLimit },
+            { key: `ip:${ip}`, limit: effectiveIpLimit },
             { key: `endpoint:${actorKey}:${getEndpointKey(req)}`, limit: perEndpointLimit },
         ];
 
@@ -411,4 +411,14 @@ export const pushLimiter = createAdvancedRateLimiter({
         { path: /^POST:.*\/push\/subscribe(?:\/|$)/, limit: RL_PUSH.subscribeLimit },
     ],
     message: '푸시 알림 요청이 너무 많습니다. 잠시 후 다시 시도하세요.',
+});
+
+/**
+ * Admin API 레이트 리미터
+ */
+export const adminLimiter = createAdvancedRateLimiter({
+    windowMs: RL_ADMIN.windowMs,
+    ipLimit: RL_ADMIN.ipLimit,
+    userLimit: RL_ADMIN.userLimit,
+    message: 'Admin API 요청이 너무 많습니다. 잠시 후 다시 시도하세요.',
 });

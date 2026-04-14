@@ -58,11 +58,13 @@ export function hashApiKey(plainKey: string): string {
     }
 
     if (!pepperWarningEmitted) {
-        logger.warn('API_KEY_PEPPER is not set. Using plain SHA-256 for API key hashing. Set API_KEY_PEPPER in .env for production security.');
+        logger.warn('API_KEY_PEPPER is not set. 개발 환경에서 임시 HMAC pepper를 사용합니다. .env에 API_KEY_PEPPER를 설정하세요.');
         pepperWarningEmitted = true;
     }
+    // 개발 환경에서도 HMAC 사용 (임시 고정 pepper)
+    const devPepper = 'dev-only-insecure-pepper-do-not-use-in-production';
     return crypto
-        .createHash('sha256')
+        .createHmac('sha256', devPepper)
         .update(plainKey)
         .digest('hex');
 }

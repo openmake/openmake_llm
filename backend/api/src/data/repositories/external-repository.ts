@@ -175,7 +175,7 @@ export class ExternalRepository extends BaseRepository {
     }
 
     async getMcpServers(): Promise<MCPServerRow[]> {
-        const result = await this.query(`SELECT * FROM mcp_servers ORDER BY created_at DESC LIMIT ${QUERY_ROW_LIMITS.MCP_SERVERS_MAX}`);
+        const result = await this.query('SELECT * FROM mcp_servers ORDER BY created_at DESC LIMIT $1', [QUERY_ROW_LIMITS.MCP_SERVERS_MAX]);
         return result.rows.map((row: DbRow) => ({
             ...row,
             args: (row.args as string[] | null) || null,

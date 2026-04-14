@@ -114,8 +114,8 @@ export class FeedbackRepository {
                  FROM message_feedback
                  WHERE session_id = $1 AND user_id = $2
                  ORDER BY created_at ASC
-                 LIMIT 500`,
-                [sessionId, userId]
+                 LIMIT $3`,
+                [sessionId, userId, 500]
             );
             return result.rows;
         }
@@ -125,8 +125,8 @@ export class FeedbackRepository {
              FROM message_feedback
              WHERE session_id = $1
              ORDER BY created_at ASC
-             LIMIT 500`,
-            [sessionId]
+             LIMIT $2`,
+            [sessionId, 500]
         );
         return result.rows;
     }

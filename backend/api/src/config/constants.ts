@@ -61,19 +61,25 @@ export const SERVER_CONFIG = {
  * JWT 액세스/리프레시 토큰 만료 시간, 세션 정리 주기,
  * 익명 세션 최대 유지 시간을 정의합니다.
  */
+// JWT + Cookie 만료 시간 단일 소스 (L4 보안 수정: 단위 혼용 방지)
+const ACCESS_TOKEN_DURATION_MINUTES = 15;
+const REFRESH_TOKEN_DURATION_DAYS = 7;
+
 export const AUTH_CONFIG = {
     /** 세션 정리 주기 (밀리초) - 24시간 */
     SESSION_CLEANUP_INTERVAL_MS: 24 * 60 * 60 * 1000,
-    /** 액세스 토큰 만료 시간 - 15분 (보안 강화) */
-    TOKEN_EXPIRY: '15m',
-    /** 리프레시 토큰 만료 시간 - 7일 */
-    REFRESH_TOKEN_EXPIRY: '7d',
-    /** 액세스 토큰 쿠키 maxAge (밀리초) - 15분 */
-    ACCESS_TOKEN_MAX_AGE_MS: 15 * 60 * 1000,
-    /** 리프레시 토큰 쿠키 maxAge (밀리초) - 7일 */
-    REFRESH_TOKEN_MAX_AGE_MS: 7 * 24 * 60 * 60 * 1000,
+    /** 액세스 토큰 만료 시간 (JWT expiresIn 형식) */
+    TOKEN_EXPIRY: `${ACCESS_TOKEN_DURATION_MINUTES}m`,
+    /** 리프레시 토큰 만료 시간 (JWT expiresIn 형식) */
+    REFRESH_TOKEN_EXPIRY: `${REFRESH_TOKEN_DURATION_DAYS}d`,
+    /** 액세스 토큰 쿠키 maxAge (밀리초) — TOKEN_EXPIRY와 동일 소스 */
+    ACCESS_TOKEN_MAX_AGE_MS: ACCESS_TOKEN_DURATION_MINUTES * 60 * 1000,
+    /** 리프레시 토큰 쿠키 maxAge (밀리초) — REFRESH_TOKEN_EXPIRY와 동일 소스 */
+    REFRESH_TOKEN_MAX_AGE_MS: REFRESH_TOKEN_DURATION_DAYS * 24 * 60 * 60 * 1000,
     /** 익명 세션 최대 유지 시간 (밀리초) - 30일 */
-    ANON_SESSION_MAX_AGE_MS: 30 * 24 * 60 * 60 * 1000
+    ANON_SESSION_MAX_AGE_MS: 30 * 24 * 60 * 60 * 1000,
+    /** 사용자당 최대 동시 활성 세션 수 */
+    MAX_SESSIONS_PER_USER: 5
 } as const;
 
 // ============================================

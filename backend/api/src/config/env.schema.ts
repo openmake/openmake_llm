@@ -147,6 +147,9 @@ export const envSchema = z
 
         // Cookie Security (HTTPS 없이 production 운영 시 false)
         COOKIE_SECURE: booleanFromString(false),
+
+        // Security — Trusted Proxies (쉼표 구분 문자열, 기본: loopback,linklocal,uniquelocal)
+        TRUSTED_PROXIES: z.string().optional(),
     })
     .superRefine((data, ctx) => {
         if (data.NODE_ENV !== 'production') {

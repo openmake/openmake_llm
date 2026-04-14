@@ -48,14 +48,14 @@ function addChatMessage(role, content) {
             <div class="message-wrapper">
                 <div class="message-content">${content || '<span class="loading-spinner"></span> 생각 중...'}</div>
                 <div class="message-actions">
-                    <button class="message-action-btn" onclick="copyMessage('${messageId}')" title="복사">
+                    <button class="message-action-btn" data-action="copy" title="복사">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <rect x="9" y="9" width="13" height="13" rx="2"/>
                             <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
                         </svg>
                         복사
                     </button>
-                    <button class="message-action-btn" onclick="regenerateMessage()" title="재생성">
+                    <button class="message-action-btn" data-action="regenerate" title="재생성">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M1 4v6h6"/><path d="M23 20v-6h-6"/>
                             <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/>
@@ -78,6 +78,15 @@ function addChatMessage(role, content) {
             </div>
         `;
     }
+
+    // XSS 방지: 인라인 onclick 대신 이벤트 위임 사용
+    div.querySelectorAll('.message-action-btn[data-action]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const action = btn.dataset.action;
+            if (action === 'copy') window.copyMessage(messageId);
+            else if (action === 'regenerate') window.regenerateMessage();
+        });
+    });
 
     container.appendChild(div);
     scrollToBottom();

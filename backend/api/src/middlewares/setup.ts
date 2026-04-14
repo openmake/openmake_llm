@@ -30,6 +30,7 @@ import {
     mcpLimiter,
     apiKeyManagementLimiter,
     pushLimiter,
+    adminLimiter,
     corsMiddleware
 } from './index';
 import { requestIdMiddleware } from './request-id';
@@ -149,6 +150,12 @@ export function setupSecurity(app: Application): void {
  * Rate limiting, CORS, 로깅 미들웨어를 설정합니다.
  */
 export function setupParsersAndLimiting(app: Application): void {
+    // 신뢰할 수 있는 프록시 설정 — X-Forwarded-For 헤더 검증
+    const trustedProxies = getConfig().trustedProxies;
+    if (trustedProxies.length > 0) {
+        app.set('trust proxy', trustedProxies);
+    }
+
     // 세분화된 엔드포인트별 rate limiter — 비용/위험도 순서대로 적용
     app.use('/api/auth/', authLimiter);
     app.use('/api/chat', chatLimiter);
@@ -159,11 +166,12 @@ export function setupParsersAndLimiting(app: Application): void {
     app.use('/api/mcp', mcpLimiter);
     app.use('/api/api-keys', apiKeyManagementLimiter);
     app.use('/api/push', pushLimiter);
+    app.use('/api/admin', adminLimiter);
     // generalLimiter는 전용 리미터가 없는 경로에만 적용 (이중 카운팅 방지)
     const dedicatedLimiterPrefixes = [
         '/api/auth/', '/api/chat', '/api/research', '/api/upload',
         '/api/web-search', '/api/memory', '/api/mcp',
-        '/api/api-keys', '/api/push', '/api/monitoring', '/api/metrics',
+        '/api/api-keys', '/api/push', '/api/admin', '/api/monitoring', '/api/metrics',
     ];
     app.use('/api/', (req, res, next) => {
         const url = req.originalUrl;
@@ -218,8 +226,8 @@ export function setupStaticFiles(app: Application, dirname: string): void {
         hashes.styleAttr.forEach((hash) => styleAttrHashes.add(hash));
     }
 
-    // script-src-attr: 'unsafe-inline' — 런타임 JS가 동적으로 onclick/onchange 핸들러를 생성하므로 해시 불가
-    // script-src (nonce 기반)가 XSS 1차 방어선이므로 보안 수준 유지됨
+    // script-src-attr: 'unsafe-inline' — 일부 JS 모듈에서 아직 innerHTML로 onclick을 생성
+    // 전체 마이그레이션 완료 후 'none'으로 강화 예정
     const scriptSrcAttrDirective = "'unsafe-inline'";
     // style-src-attr: 'unsafe-inline' — 런타임 JS가 동적으로 style 속성을 설정하므로 해시 불가
     const styleSrcAttrDirective = "'unsafe-inline'";

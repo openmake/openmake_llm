@@ -90,7 +90,8 @@ export {
     memoryLimiter,
     mcpLimiter,
     apiKeyManagementLimiter,
-    pushLimiter
+    pushLimiter,
+    adminLimiter
 } from './rate-limiters';
 
 // ================================================
@@ -162,7 +163,17 @@ export function analyticsMiddleware(req: Request, res: Response, next: NextFunct
  * - server.ts의 CORS 설정과 일관성 유지
  */
 export function corsMiddleware(req: Request, res: Response, next: NextFunction) {
-    const allowedOrigins = getConfig().corsOrigins.split(',').map(o => o.trim());
+    const allowedOrigins = getConfig().corsOrigins.split(',')
+        .map(o => o.trim())
+        .filter(o => {
+            if (!o) return false;
+            if (o === '*') return true;
+            if (!/^https?:\/\//i.test(o)) {
+                // 잘못된 CORS origin 형식은 무시 (http:// 또는 https://로 시작해야 함)
+                return false;
+            }
+            return true;
+        });
     const origin = req.headers.origin;
 
     // 화이트리스트 기반 Origin 검증
