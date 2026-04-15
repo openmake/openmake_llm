@@ -98,6 +98,18 @@ export const OLLAMA_CLOUD_HOST = 'https://ollama.com';
 // 애플리케이션 메타 정보
 // ============================================
 
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const rootPkg = require('../../../../package.json') as { version: string };
+
+/**
+ * 애플리케이션 버전 (Single Source of Truth)
+ *
+ * 루트 package.json의 version 필드에서 읽어옵니다.
+ * 버전을 변경할 때는 루트 package.json만 수정하면 됩니다.
+ * CLI 배너, OpenTelemetry, API 응답 등 모든 곳에서 이 상수를 참조합니다.
+ */
+export const APP_VERSION: string = rootPkg.version;
+
 /**
  * HTTP 요청 시 사용할 User-Agent 문자열
  *
