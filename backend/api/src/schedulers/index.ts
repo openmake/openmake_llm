@@ -74,12 +74,18 @@ function startModelHealthScheduler(): void {
             const { getModelHealthMonitor } = await import('../services/model-health-monitor');
             const snapshot = await getModelHealthMonitor().runCheck({ full: false });
             if (snapshot.unhealthyCount > 0) {
+                const unhealthyDetails = snapshot.summary
+                    .filter((s) => !s.healthy)
+                    .map((s) => {
+                        const err = s.errors[0];
+                        const detail = err
+                            ? ` (HTTP ${err.httpStatus}${err.error ? ': ' + err.error : ''})`
+                            : '';
+                        return `${s.model}${detail}`;
+                    })
+                    .join(', ');
                 logger.warn(
-                    `[ModelHealth] ${snapshot.unhealthyCount}/${snapshot.modelCount} 모델 장애 — ` +
-                    snapshot.summary
-                        .filter((s) => !s.healthy)
-                        .map((s) => s.model)
-                        .join(', '),
+                    `[ModelHealth] ${snapshot.unhealthyCount}/${snapshot.modelCount} 모델 장애 — ${unhealthyDetails}`,
                 );
             } else {
                 logger.debug(

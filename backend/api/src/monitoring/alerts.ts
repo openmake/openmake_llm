@@ -276,7 +276,7 @@ export class AlertSystem {
         logger.info(`\n${emoji} [${alert.severity.toUpperCase()}] ${alert.title}`);
         logger.info(`   ${alert.message}`);
         if (alert.data) {
-            logger.info(`   데이터:`, JSON.stringify(alert.data, null, 2));
+            logger.info(`   데이터: ${JSON.stringify(alert.data, null, 2)}`);
         }
     }
 
