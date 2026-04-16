@@ -1,6 +1,8 @@
 import dns from 'node:dns/promises';
 import { isIP } from 'node:net';
+import { Agent } from 'undici';
 import { createLogger } from '../utils/logger';
+import { SSRF_LIMITS } from '../config/security';
 
 const logger = createLogger('SSRFGuard');
 
@@ -14,7 +16,6 @@ const BLOCKED_IPV4_CIDRS = [
 ];
 
 const REDIRECT_STATUS_CODES = new Set([301, 302, 303, 307, 308]);
-const MAX_REDIRECTS = 5;
 
 export type DnsResolver = (hostname: string) => Promise<{ address: string }>;
 
@@ -118,23 +119,67 @@ export async function validateOutboundUrl(rawUrl: string, resolver: DnsResolver 
     return url;
 }
 
-export async function safeFetch(rawUrl: string, init?: RequestInit): Promise<Response> {
-    let currentUrl = (await validateOutboundUrl(rawUrl)).toString();
+/**
+ * undici Agent with pinned connect.lookup — DNS Rebinding 방어.
+ *
+ * URL의 hostname은 유지되어 TLS SNI/인증서 검증이 정상 동작하며,
+ * 실제 connect() 시점에만 고정 IP를 사용해 TOCTOU 공격을 차단한다.
+ *
+ * @internal
+ */
+function createPinnedAgent(pinnedAddress: string, ipFamily: 4 | 6): Agent {
+    return new Agent({
+        connect: {
+            lookup: (_hostname, _options, callback) => {
+                callback(null, pinnedAddress, ipFamily);
+            },
+        },
+    });
+}
 
-    for (let redirectCount = 0; redirectCount < MAX_REDIRECTS; redirectCount += 1) {
-        const response = await fetch(currentUrl, { ...init, redirect: 'manual' });
+export async function safeFetch(
+    rawUrl: string,
+    init?: RequestInit,
+    resolver: DnsResolver = dns.lookup
+): Promise<Response> {
+    let currentUrl = rawUrl;
+
+    for (let redirectCount = 0; redirectCount < SSRF_LIMITS.MAX_REDIRECTS; redirectCount += 1) {
+        const url = new URL(currentUrl);
+        if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+            const message = `SSRF blocked: scheme not allowed: ${url.protocol}`;
+            logger.warn(message, { rawUrl: currentUrl });
+            throw new Error(message);
+        }
+
+        const { address } = await resolver(url.hostname);
+        if (isBlockedIP(address)) {
+            const message = `SSRF blocked: resolved to blocked IP range: ${address}`;
+            logger.warn(message, { rawUrl: currentUrl, hostname: url.hostname, address });
+            throw new Error(message);
+        }
+
+        // DNS Rebinding 방어: undici Agent의 connect.lookup으로 resolved IP를 고정.
+        // URL hostname이 보존되므로 HTTPS SNI/인증서 검증이 정상 동작.
+        const ipFamily: 4 | 6 = isIP(address) === 6 ? 6 : 4;
+        const dispatcher = createPinnedAgent(address, ipFamily);
+
+        const response = await fetch(currentUrl, {
+            ...init,
+            redirect: 'manual',
+            // @ts-expect-error undici-specific dispatcher option supported by Node 22 fetch
+            dispatcher,
+        });
+
         const location = response.headers.get('location');
-
         if (REDIRECT_STATUS_CODES.has(response.status) && location) {
-            const nextUrl = new URL(location, currentUrl).toString();
-            await validateOutboundUrl(nextUrl);
-            currentUrl = nextUrl;
+            currentUrl = new URL(location, currentUrl).toString();
             continue;
         }
 
         return response;
     }
 
-    logger.warn('SSRF blocked: too many redirects', { rawUrl, maxRedirects: MAX_REDIRECTS });
+    logger.warn('SSRF blocked: too many redirects', { rawUrl, maxRedirects: SSRF_LIMITS.MAX_REDIRECTS });
     throw new Error('SSRF blocked: too many redirects');
 }
