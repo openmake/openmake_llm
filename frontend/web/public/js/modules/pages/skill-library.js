@@ -576,15 +576,26 @@
             const startPage = Math.max(1, safePage - 2);
             const endPage = Math.min(totalPages, startPage + 4);
 
-            let html = `<button class="sl-page-btn" ${safePage === 1 ? 'disabled' : ''} onclick="window.${changeFnName}(${safePage - 1})">이전</button>`;
+            let html = `<button class="sl-page-btn" ${safePage === 1 ? 'disabled' : ''} data-action="paginate" data-fn="${changeFnName}" data-page="${safePage - 1}">이전</button>`;
 
             for (let i = startPage; i <= endPage; i++) {
-                html += `<button class="sl-page-btn ${i === safePage ? 'active' : ''}" onclick="window.${changeFnName}(${i})">${i}</button>`;
+                html += `<button class="sl-page-btn ${i === safePage ? 'active' : ''}" data-action="paginate" data-fn="${changeFnName}" data-page="${i}">${i}</button>`;
             }
 
-            html += `<button class="sl-page-btn" ${safePage === totalPages ? 'disabled' : ''} onclick="window.${changeFnName}(${safePage + 1})">다음</button>`;
+            html += `<button class="sl-page-btn" ${safePage === totalPages ? 'disabled' : ''} data-action="paginate" data-fn="${changeFnName}" data-page="${safePage + 1}">다음</button>`;
 
             container.innerHTML = html;
+
+            if (!container.dataset.delegated) {
+                container.addEventListener('click', (e) => {
+                    const btn = e.target.closest('[data-action="paginate"]');
+                    if (!btn || btn.disabled) return;
+                    const fn = window[btn.dataset.fn];
+                    const page = parseInt(btn.dataset.page, 10);
+                    if (typeof fn === 'function' && !Number.isNaN(page)) fn(page);
+                });
+                container.dataset.delegated = '1';
+            }
         }
     };
 
