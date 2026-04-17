@@ -226,10 +226,15 @@ export function setupStaticFiles(app: Application, dirname: string): void {
         hashes.styleAttr.forEach((hash) => styleAttrHashes.add(hash));
     }
 
-    // script-src-attr: 'unsafe-inline' — 일부 JS 모듈에서 아직 innerHTML로 onclick을 생성
-    // 전체 마이그레이션 완료 후 'none'으로 강화 예정
-    const scriptSrcAttrDirective = "'unsafe-inline'";
-    // style-src-attr: 'unsafe-inline' — 런타임 JS가 동적으로 style 속성을 설정하므로 해시 불가
+    // script-src-attr: 정적 인라인 핸들러(onclick 등)의 SHA-256 해시 화이트리스트로 enforce.
+    // Stage 2-2a에서 동적 템플릿 리터럴 핸들러를 이벤트 위임으로 제거했으므로 수집된 해시는 안정적.
+    // 새 인라인 핸들러가 런타임에 주입되면 CSP가 차단 → 신규 코드는 addEventListener 사용 강제.
+    // 해시 수집 실패(전량 마이그레이션 완료) 시 'none'으로 자동 강화.
+    const scriptSrcAttrDirective = scriptAttrHashes.size > 0
+        ? Array.from(scriptAttrHashes).join(' ')
+        : "'none'";
+    // style-src-attr: 'unsafe-inline' 유지. style-src-attr의 hash-source는 주요 브라우저(특히 Safari)
+    // 지원이 불완전하여 "enforce한 척하는 CSP" 리스크. 인라인 style 전량 제거 후 'none'으로 전환 예정.
     const styleSrcAttrDirective = "'unsafe-inline'";
 
     // CSP 허용 CDN 도메인 목록 — 추가/삭제 시 이 배열만 수정
