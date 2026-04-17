@@ -25,6 +25,8 @@ import { setTokenCookie, setRefreshTokenCookie, generateRefreshToken } from '../
 import { createLogger } from '../utils/logger';
 import { GOOGLE_OAUTH, GITHUB_OAUTH, GITHUB_API } from '../config/external-services';
 import { OAUTH_STATE } from '../config/runtime-limits';
+import { getKeyValueStore } from '../storage';
+import { STORAGE_POLICY } from '../config/security';
 
 /**
  * OAuth 프로바이더 설정 인터페이스
@@ -97,25 +99,28 @@ const logger = createLogger('OAuth');
  */
 export class OAuthManager {
     private providers: Map<string, OAuthProviderConfig> = new Map();
-    private states: Map<string, OAuthState> = new Map();
     private stateExpiry = OAUTH_STATE.EXPIRY_MS;
-    private cleanupInterval: NodeJS.Timeout | null = null;
+
+    // Stage 2-H3 Phase 3: states Map 제거 → KeyValueStore.
+    // cleanupInterval/cleanupExpiredStates 제거 — store TTL이 자연 만료 처리.
+    // state semantics 불변: 32바이트 nonce, 10분 만료, 일회성 소비.
 
     constructor() {
         this.loadProvidersFromEnv();
+    }
 
-        this.cleanupInterval = setInterval(() => this.cleanupExpiredStates(), OAUTH_STATE.CLEANUP_INTERVAL_MS);
+    /**
+     * state 저장 키 — STORAGE_POLICY prefix로 다른 앱과 네임스페이스 격리
+     */
+    private stateKey(nonce: string): string {
+        return STORAGE_POLICY.KEY_PREFIX + STORAGE_POLICY.OAUTH_STATE_PREFIX + nonce;
     }
 
     /**
      * 리소스 정리 - 메모리 누수 방지
+     * (state는 KeyValueStore가 공용 관리하므로 destroy 시 삭제하지 않음 — 다른 인스턴스가 접근 중일 수 있음)
      */
     destroy(): void {
-        if (this.cleanupInterval) {
-            clearInterval(this.cleanupInterval);
-            this.cleanupInterval = null;
-        }
-        this.states.clear();
         this.providers.clear();
         logger.info('OAuthManager 리소스 정리 완료');
     }
@@ -166,8 +171,10 @@ export class OAuthManager {
 
     /**
      * 인증 URL 생성
+     * Stage 2-H3 Phase 3: state 저장을 KeyValueStore로 이전하면서 async로 변경.
+     * nonce 생성·returnUrl 검증·URL 구성 로직은 동일 (behavior-preserving).
      */
-    getAuthorizationUrl(provider: string, returnUrl?: string): string | null {
+    async getAuthorizationUrl(provider: string, returnUrl?: string): Promise<string | null> {
         const config = this.providers.get(provider);
         if (!config) {
             logger.error(`알 수 없는 프로바이더: ${provider}`);
@@ -193,7 +200,7 @@ export class OAuthManager {
             returnUrl: safeReturnUrl,
             createdAt: new Date()
         };
-        this.states.set(nonce, state);
+        await getKeyValueStore().set(this.stateKey(nonce), state, OAUTH_STATE.EXPIRY_MS);
 
         // URL 생성
         const params = new URLSearchParams({
@@ -215,6 +222,8 @@ export class OAuthManager {
 
     /**
      * 콜백 처리 - 인증 코드로 토큰 교환
+     * Stage 2-H3 Phase 3: state 조회/삭제를 KeyValueStore로 이전.
+     * 일회성 소비·만료 검증 semantics 그대로 유지 (auth additive rule 준수).
      */
     async handleCallback(
         provider: string,
@@ -222,17 +231,20 @@ export class OAuthManager {
         state: string
     ): Promise<OAuthUserInfo | null> {
         // 상태 검증
-        const storedState = this.states.get(state);
-        if (!storedState || storedState.provider !== provider) {
+        const store = getKeyValueStore();
+        const storedRaw = await store.get<OAuthState>(this.stateKey(state));
+        if (!storedRaw || storedRaw.provider !== provider) {
             logger.error('잘못된 state 또는 provider');
             return null;
         }
 
         // 상태 삭제 (한 번만 사용)
-        this.states.delete(state);
+        await store.del(this.stateKey(state));
 
-        // 만료 체크
-        if (Date.now() - storedState.createdAt.getTime() > this.stateExpiry) {
+        // 만료 체크 — store TTL이 1차 방어, createdAt 기반이 2차 방어 (시계 드리프트·TTL 누락 대비)
+        // storedRaw.createdAt은 JSON 라운드트립 후 ISO 문자열일 수 있으므로 Date 재구성
+        const createdAtMs = new Date(storedRaw.createdAt).getTime();
+        if (Date.now() - createdAtMs > this.stateExpiry) {
             logger.error('만료된 state');
             return null;
         }
@@ -384,17 +396,7 @@ export class OAuthManager {
         }
     }
 
-    /**
-     * 만료된 상태 정리
-     */
-    private cleanupExpiredStates(): void {
-        const now = Date.now();
-        for (const [nonce, state] of this.states) {
-            if (now - state.createdAt.getTime() > this.stateExpiry) {
-                this.states.delete(nonce);
-            }
-        }
-    }
+    // Stage 2-H3 Phase 3: cleanupExpiredStates 제거 — KeyValueStore TTL이 자연 만료 처리
 }
 
 // 싱글톤 인스턴스
@@ -421,11 +423,11 @@ export function setupOAuthRoutes(app: Application): void {
     });
 
     // 인증 시작
-    app.get('/api/auth/login/:provider', (req: Request, res: Response) => {
+    app.get('/api/auth/login/:provider', async (req: Request, res: Response) => {
         const { provider } = req.params;
         const returnUrl = req.query.returnUrl as string | undefined;
 
-        const authUrl = oauth.getAuthorizationUrl(provider, returnUrl);
+        const authUrl = await oauth.getAuthorizationUrl(provider, returnUrl);
         if (!authUrl) {
             return res.status(400).json({ error: '지원하지 않는 프로바이더' });
         }
