@@ -35,6 +35,38 @@ export const COOKIE_POLICY = {
 } as const;
 
 /**
+ * HSTS (Strict-Transport-Security) 정책 상수.
+ * helmet 기본 180일보다 길게 설정 — OWASP 권장은 최소 1년.
+ * preload는 되돌리기 어려운 단방향 티켓이라 조직 정책 결정 전까지 미포함.
+ */
+export const HSTS_POLICY = {
+    /** max-age — 2년 (초 단위) */
+    MAX_AGE_SECONDS: 2 * 365 * 24 * 60 * 60,
+    /** includeSubDomains 활성 */
+    INCLUDE_SUBDOMAINS: true,
+    /** Chrome HSTS preload list 등록 여부 (false = 롤백 가능 상태 유지) */
+    PRELOAD: false,
+} as const;
+
+/**
+ * Rate limiter counter 저장 정책.
+ */
+export const RATE_LIMIT_POLICY = {
+    /** counter TTL = windowMs * 이 배수. sliding window의 이전 window까지 커버하려면 2 이상 필요 */
+    TTL_WINDOW_MULTIPLIER: 2,
+    /** Admin은 일반 사용자 limit × 이 배수까지 허용 (완전 우회 방지) */
+    ADMIN_MULTIPLIER: 5,
+} as const;
+
+/**
+ * OAuth state nonce 생성 정책.
+ */
+export const OAUTH_NONCE_POLICY = {
+    /** CSRF 방지용 nonce 바이트 수 (32 = 256bit 엔트로피, hex 64자) */
+    BYTES: 32,
+} as const;
+
+/**
  * Permissions-Policy 디렉티브 허용 범위 상수.
  * `()` = 전면 차단 / `(self)` = same-origin 문서만 허용 / `(self "https://x.com")` = 특정 origin 추가.
  *
@@ -127,4 +159,11 @@ export const CSRF_POLICY = {
         '/api/auth/callback/',
         '/api/csrf-token',
     ] as const,
+    /** 쿠키 옵션 — JS 읽기 가능해야 Double-Submit 패턴 성립 (httpOnly:false 필수) */
+    COOKIE_OPTIONS: {
+        /** SameSite 정책: Strict = cross-site 전혀 전송 안 함 (Double-Submit 패턴과 시너지) */
+        SAME_SITE: 'strict' as const,
+        /** 쿠키 적용 path — 앱 전체 */
+        PATH: '/',
+    },
 } as const;

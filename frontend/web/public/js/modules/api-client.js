@@ -12,7 +12,19 @@
  * @module api-client
  */
 
-/** 비변경 메서드는 CSRF 토큰 주입 대상에서 제외 */
+/**
+ * CSRF API 계약 상수 — backend `config/security.ts`의 CSRF_POLICY를 반영.
+ * 이 프로젝트는 build-step 없는 vanilla JS이므로 백엔드 상수를 직접 import할 수 없다.
+ * 백엔드에서 값이 바뀌면 이 블록도 함께 업데이트해야 한다.
+ * @see backend/api/src/config/security.ts CSRF_POLICY
+ */
+const CSRF_CONTRACT = Object.freeze({
+    COOKIE_NAME: 'csrf_token',
+    HEADER_NAME: 'X-CSRF-Token',
+    TOKEN_ENDPOINT: '/api/csrf-token',
+});
+
+/** CSRF 검증 대상 메서드 — 백엔드 SAFE_METHODS의 역보완 (mutating만) */
 const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
 /** document.cookie에서 이름으로 값 추출 */
@@ -23,15 +35,15 @@ function readCookie(name) {
 }
 
 /**
- * CSRF 토큰 lazy-fetch. 쿠키에 토큰 없으면 /api/csrf-token 호출로 발급 받고 반환.
+ * CSRF 토큰 lazy-fetch. 쿠키에 토큰 없으면 TOKEN_ENDPOINT 호출로 발급 받고 반환.
  * 실패해도 throw하지 않음 — 서버가 warn 모드면 요청이 통과할 수 있어 사용자 경험 보호.
  */
 async function ensureCsrfToken() {
-    let token = readCookie('csrf_token');
+    let token = readCookie(CSRF_CONTRACT.COOKIE_NAME);
     if (token) return token;
     try {
-        await fetch('/api/csrf-token', { method: 'GET', credentials: 'include' });
-        token = readCookie('csrf_token');
+        await fetch(CSRF_CONTRACT.TOKEN_ENDPOINT, { method: 'GET', credentials: 'include' });
+        token = readCookie(CSRF_CONTRACT.COOKIE_NAME);
     } catch (_e) { /* 네트워크 실패: 호출측은 토큰 없이 진행, 서버 모드에 따라 결과 달라짐 */ }
     return token;
 }
@@ -59,9 +71,9 @@ async function apiRequest(endpoint, options = {}) {
     }
 
     // CSRF Double-Submit Cookie 헤더 주입 (변경 메서드에 한정)
-    if (MUTATING_METHODS.has(method) && !headers['X-CSRF-Token']) {
+    if (MUTATING_METHODS.has(method) && !headers[CSRF_CONTRACT.HEADER_NAME]) {
         const token = await ensureCsrfToken();
-        if (token) headers['X-CSRF-Token'] = token;
+        if (token) headers[CSRF_CONTRACT.HEADER_NAME] = token;
     }
 
     return fetch(endpoint, {

@@ -96,9 +96,9 @@ export function csrfTokenIssuer(_req: Request, res: Response): void {
     res.cookie(CSRF_POLICY.COOKIE_NAME, token, {
         httpOnly: false,
         secure: getConfig().cookieSecure,
-        sameSite: 'strict',
+        sameSite: CSRF_POLICY.COOKIE_OPTIONS.SAME_SITE,
         maxAge: CSRF_POLICY.COOKIE_MAX_AGE_MS,
-        path: '/',
+        path: CSRF_POLICY.COOKIE_OPTIONS.PATH,
     });
     res.json({ token });
 }

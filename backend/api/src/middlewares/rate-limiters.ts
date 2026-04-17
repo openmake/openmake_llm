@@ -10,7 +10,7 @@ import {
     RL_WEB_SEARCH, RL_MEMORY, RL_MCP, RL_API_KEY_MGMT, RL_PUSH, RL_ADMIN
 } from '../config/rate-limits';
 import { getKeyValueStore } from '../storage';
-import { STORAGE_POLICY } from '../config/security';
+import { STORAGE_POLICY, RATE_LIMIT_POLICY } from '../config/security';
 
 // ================================================
 // 타입 정의
@@ -47,9 +47,6 @@ interface RateLimitDecision {
 // ================================================
 // 내부 상태 및 유틸리티
 // ================================================
-
-/** Admin은 일반 사용자보다 높은 제한 적용 (완전 우회 방지) */
-const ADMIN_RATE_LIMIT_MULTIPLIER = 5;
 
 /** Stage 2-H3 Phase 2: counter 키 네임스페이스 — STORAGE_POLICY 사용 */
 function makeStorageKey(counterKey: string): string {
@@ -150,7 +147,7 @@ function calculateSlidingWindowUsage(counter: SlidingWindowCounter, now: number,
 
 /**
  * Stage 2-H3 Phase 2: counter 평가 + 증가 + 저장. 모든 작업이 async.
- * 카운터는 `windowMs * 2` TTL로 저장되어 구 window는 자연 만료 (이전 LRU 로직 대체).
+ * 카운터는 `windowMs * RATE_LIMIT_POLICY.TTL_WINDOW_MULTIPLIER` TTL로 저장되어 구 window는 자연 만료 (이전 LRU 로직 대체).
  */
 async function evaluateAndIncrement(
     counterKey: string,
@@ -166,7 +163,7 @@ async function evaluateAndIncrement(
     if ((currentUsage + 1) > limit) {
         // 거부된 요청은 카운터 증가 없음 — 상태 저장도 불필요 (기존 in-memory 동작과 동일)
         // 다만 window 롤오버 상태는 저장해 다음 요청이 stale 보지 않도록
-        await store.set(storageKey, counter, windowMs * 2);
+        await store.set(storageKey, counter, windowMs * RATE_LIMIT_POLICY.TTL_WINDOW_MULTIPLIER);
         const resetAtMs = counter.currentWindowStart + windowMs;
         const retryAfterSeconds = Math.max(1, Math.ceil((resetAtMs - now) / 1000));
 
@@ -180,7 +177,7 @@ async function evaluateAndIncrement(
     }
 
     counter.currentCount += 1;
-    await store.set(storageKey, counter, windowMs * 2);
+    await store.set(storageKey, counter, windowMs * RATE_LIMIT_POLICY.TTL_WINDOW_MULTIPLIER);
     const updatedUsage = calculateSlidingWindowUsage(counter, now, windowMs);
     const remaining = Math.max(0, Math.floor(limit - updatedUsage));
 
@@ -205,7 +202,7 @@ export function createAdvancedRateLimiter(options: AdvancedRateLimiterOptions) {
         const actorKey = userKey ? `user:${userKey}` : `ip:${ip}`;
 
         // Admin은 높은 배수의 제한 적용 (완전 우회 방지)
-        const effectiveIpLimit = isAdminUser(req) ? options.ipLimit * ADMIN_RATE_LIMIT_MULTIPLIER : options.ipLimit;
+        const effectiveIpLimit = isAdminUser(req) ? options.ipLimit * RATE_LIMIT_POLICY.ADMIN_MULTIPLIER : options.ipLimit;
 
         const endpointSpecificLimit = getEndpointSpecificLimit(options.endpointRules, req);
         const perEndpointLimit = endpointSpecificLimit ?? effectiveIpLimit;
