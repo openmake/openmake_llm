@@ -7,7 +7,11 @@
  * @module storage/types
  */
 
-export type StorageValue = string | number | Record<string, unknown>;
+/**
+ * 저장 가능한 값 타입. object는 JSON 직렬화 가능한 모든 구조체를 허용 (interface 포함).
+ * TypeScript의 Record<string, unknown>은 explicit interface와 호환되지 않으므로 object 사용.
+ */
+export type StorageValue = string | number | object;
 
 export interface KeyValueStore {
     /**
