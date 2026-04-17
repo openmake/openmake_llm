@@ -138,11 +138,18 @@ function listFilesRecursive(dirPath: string, extensions: string[]): string[] {
 }
 
 /**
- * API JSON Content-Type 헤더를 강제합니다.
+ * API JSON Content-Type 헤더를 강제하고, 민감 응답의 브라우저 캐시를 차단합니다.
+ *
+ * Stage 2-M1: Cache-Control: no-store
+ * - /api/* 응답은 사용자별 민감 데이터(메모리, audit log, API key 등)를 포함할 수 있음
+ * - 기본값 없음 → 브라우저 heuristic이 disk/BFCache에 저장 가능 → 로그아웃 후 히스토리 복원으로 노출 위험
+ * - no-store: 모든 캐시 저장 금지 (disk, memory, BFCache). CDN도 저장 안 함
+ * - 개별 엔드포인트가 캐시 가능하면 라우트에서 setHeader로 override 가능
  */
 export function setupSecurity(app: Application): void {
     app.use('/api', (_req, res, next) => {
         res.setHeader('Content-Type', 'application/json; charset=utf-8');
+        res.setHeader('Cache-Control', 'no-store');
         next();
     });
 }
