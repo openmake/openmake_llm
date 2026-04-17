@@ -187,12 +187,16 @@
                     <div class="val-preview">${esc(m.value)}</div>
                     <div class="mem-meta">
                         <span class="badge badge-${m.category}">${CAT_LABELS[m.category] || m.category}</span>
-                        <span class="importance-bar"><span class="importance-fill" style="width:${imp*10}%;background:${impColor(imp)}"></span></span>
+                        <span class="importance-bar"><span class="importance-fill" data-width="${imp*10}" data-bg="${impColor(imp)}"></span></span>
                         <span style="color:var(--text-muted)">${imp}/10</span>
                     </div>
                     ${tags.length ? '<div class="tag-pills">' + tags.map(t => '<span class="tag-pill">' + esc(t) + '</span>').join('') + '</div>' : ''}
                 </div>`;
             }).join('');
+            el.querySelectorAll('.importance-fill[data-width]').forEach(node => {
+                node.style.width = node.dataset.width + '%';
+                node.style.background = node.dataset.bg;
+            });
         }
 
         function openNew() {
