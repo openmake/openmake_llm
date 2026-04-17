@@ -9,6 +9,8 @@ import {
     RL_GENERAL, RL_AUTH, RL_CHAT, RL_RESEARCH, RL_UPLOAD,
     RL_WEB_SEARCH, RL_MEMORY, RL_MCP, RL_API_KEY_MGMT, RL_PUSH, RL_ADMIN
 } from '../config/rate-limits';
+import { getKeyValueStore } from '../storage';
+import { STORAGE_POLICY } from '../config/security';
 
 // ================================================
 // 타입 정의
@@ -46,11 +48,13 @@ interface RateLimitDecision {
 // 내부 상태 및 유틸리티
 // ================================================
 
-const DEFAULT_LIMITER_MAX_ENTRIES = 20000;
 /** Admin은 일반 사용자보다 높은 제한 적용 (완전 우회 방지) */
 const ADMIN_RATE_LIMIT_MULTIPLIER = 5;
-const advancedLimiterCounters = new Map<string, SlidingWindowCounter>();
-const advancedLimiterCleanupIntervalMs = 60_000;
+
+/** Stage 2-H3 Phase 2: counter 키 네임스페이스 — STORAGE_POLICY 사용 */
+function makeStorageKey(counterKey: string): string {
+    return STORAGE_POLICY.KEY_PREFIX + STORAGE_POLICY.RATE_LIMIT_PREFIX + counterKey;
+}
 
 function getRequestIP(req: Request): string {
     return req.ip || 'unknown';
@@ -96,19 +100,25 @@ function getWindowStart(now: number, windowMs: number): number {
     return now - (now % windowMs);
 }
 
-function getOrCreateCounter(key: string, windowMs: number, now: number): SlidingWindowCounter {
+/**
+ * Stage 2-H3 Phase 2: KeyValueStore에서 counter 로드 또는 생성.
+ * 이전 버전의 in-place 갱신과 달리 매 호출마다 store.get → 메모리 객체 수정 → store.set 시퀀스로 동작.
+ * 단일 프로세스(MemoryStore)에서는 기존 Map 동작과 동일 semantics.
+ * Redis 전환 시 동시성은 incr 기반 재설계가 필요하며, 이는 Phase 4 과제.
+ */
+async function getOrCreateCounter(key: string, windowMs: number, now: number): Promise<SlidingWindowCounter> {
+    const store = getKeyValueStore();
+    const storageKey = makeStorageKey(key);
     const windowStart = getWindowStart(now, windowMs);
-    const existing = advancedLimiterCounters.get(key);
+    const existing = await store.get<SlidingWindowCounter>(storageKey);
 
     if (!existing) {
-        const created: SlidingWindowCounter = {
+        return {
             currentWindowStart: windowStart,
             currentCount: 0,
             previousWindowStart: windowStart - windowMs,
             previousCount: 0,
         };
-        advancedLimiterCounters.set(key, created);
-        return created;
     }
 
     if (existing.currentWindowStart === windowStart) {
@@ -116,18 +126,20 @@ function getOrCreateCounter(key: string, windowMs: number, now: number): Sliding
     }
 
     if (existing.currentWindowStart === (windowStart - windowMs)) {
-        existing.previousWindowStart = existing.currentWindowStart;
-        existing.previousCount = existing.currentCount;
-        existing.currentWindowStart = windowStart;
-        existing.currentCount = 0;
-        return existing;
+        return {
+            previousWindowStart: existing.currentWindowStart,
+            previousCount: existing.currentCount,
+            currentWindowStart: windowStart,
+            currentCount: 0,
+        };
     }
 
-    existing.previousWindowStart = windowStart - windowMs;
-    existing.previousCount = 0;
-    existing.currentWindowStart = windowStart;
-    existing.currentCount = 0;
-    return existing;
+    return {
+        previousWindowStart: windowStart - windowMs,
+        previousCount: 0,
+        currentWindowStart: windowStart,
+        currentCount: 0,
+    };
 }
 
 function calculateSlidingWindowUsage(counter: SlidingWindowCounter, now: number, windowMs: number): number {
@@ -136,16 +148,25 @@ function calculateSlidingWindowUsage(counter: SlidingWindowCounter, now: number,
     return counter.currentCount + (counter.previousCount * weight);
 }
 
-function evaluateAndIncrement(
+/**
+ * Stage 2-H3 Phase 2: counter 평가 + 증가 + 저장. 모든 작업이 async.
+ * 카운터는 `windowMs * 2` TTL로 저장되어 구 window는 자연 만료 (이전 LRU 로직 대체).
+ */
+async function evaluateAndIncrement(
     counterKey: string,
     limit: number,
     windowMs: number,
     now: number
-): RateLimitDecision {
-    const counter = getOrCreateCounter(counterKey, windowMs, now);
+): Promise<RateLimitDecision> {
+    const store = getKeyValueStore();
+    const storageKey = makeStorageKey(counterKey);
+    const counter = await getOrCreateCounter(counterKey, windowMs, now);
     const currentUsage = calculateSlidingWindowUsage(counter, now, windowMs);
 
     if ((currentUsage + 1) > limit) {
+        // 거부된 요청은 카운터 증가 없음 — 상태 저장도 불필요 (기존 in-memory 동작과 동일)
+        // 다만 window 롤오버 상태는 저장해 다음 요청이 stale 보지 않도록
+        await store.set(storageKey, counter, windowMs * 2);
         const resetAtMs = counter.currentWindowStart + windowMs;
         const retryAfterSeconds = Math.max(1, Math.ceil((resetAtMs - now) / 1000));
 
@@ -159,6 +180,7 @@ function evaluateAndIncrement(
     }
 
     counter.currentCount += 1;
+    await store.set(storageKey, counter, windowMs * 2);
     const updatedUsage = calculateSlidingWindowUsage(counter, now, windowMs);
     const remaining = Math.max(0, Math.floor(limit - updatedUsage));
 
@@ -171,50 +193,12 @@ function evaluateAndIncrement(
     };
 }
 
-function cleanupAdvancedLimiterStore(now: number = Date.now()): void {
-    for (const [key, counter] of advancedLimiterCounters) {
-        const staleFor = now - counter.currentWindowStart;
-        if (staleFor > (2 * 60 * 60 * 1000)) {
-            advancedLimiterCounters.delete(key);
-        }
-    }
-
-    if (advancedLimiterCounters.size <= DEFAULT_LIMITER_MAX_ENTRIES) {
-        return;
-    }
-
-    const entriesToDrop = advancedLimiterCounters.size - DEFAULT_LIMITER_MAX_ENTRIES;
-    let dropped = 0;
-
-    for (const key of advancedLimiterCounters.keys()) {
-        advancedLimiterCounters.delete(key);
-        dropped += 1;
-
-        if (dropped >= entriesToDrop) {
-            break;
-        }
-    }
-}
-
-const advancedLimiterCleanupInterval = setInterval(() => {
-    cleanupAdvancedLimiterStore();
-}, advancedLimiterCleanupIntervalMs);
-
-if (
-    typeof advancedLimiterCleanupInterval === 'object'
-    && advancedLimiterCleanupInterval !== null
-    && 'unref' in advancedLimiterCleanupInterval
-    && typeof advancedLimiterCleanupInterval.unref === 'function'
-) {
-    advancedLimiterCleanupInterval.unref();
-}
-
 // ================================================
 // createAdvancedRateLimiter
 // ================================================
 
 export function createAdvancedRateLimiter(options: AdvancedRateLimiterOptions) {
-    return (req: Request, res: Response, next: NextFunction): void => {
+    return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
         const now = Date.now();
         const ip = getRequestIP(req);
         const userKey = getUserKey(req);
@@ -238,7 +222,7 @@ export function createAdvancedRateLimiter(options: AdvancedRateLimiterOptions) {
         let strictestResult: RateLimitDecision | null = null;
 
         for (const dimension of dimensions) {
-            const result = evaluateAndIncrement(
+            const result = await evaluateAndIncrement(
                 `${dimension.key}:${options.windowMs}`,
                 dimension.limit,
                 options.windowMs,
