@@ -37,6 +37,7 @@ import { requestIdMiddleware } from './request-id';
 import { errorHandler, notFoundHandler } from '../utils/error-handler';
 import { OLLAMA_CLOUD_HOST } from '../config/constants';
 import { getConfig } from '../config';
+import { buildPermissionsPolicyHeader } from '../config/security';
 
 interface CspLocals {
     cspNonce?: string;
@@ -326,6 +327,15 @@ export function setupStaticFiles(app: Application, dirname: string): void {
         crossOriginOpenerPolicy: false,
         originAgentCluster: false,
     }));
+
+    // Stage 2-M5: Permissions-Policy — helmet 기본 미포함. powerful browser API 전면 차단.
+    // 프론트 실 사용 중인 clipboard-write만 (self) 허용, 그 외 camera/microphone/geolocation/usb/payment 등 ().
+    // 값은 빌드 시점 상수이므로 응답마다 재계산 피하기 위해 클로저 밖에서 1회 계산.
+    const permissionsPolicyHeader = buildPermissionsPolicyHeader();
+    app.use((_req: Request, res: Response, next: NextFunction) => {
+        res.setHeader('Permissions-Policy', permissionsPolicyHeader);
+        next();
+    });
 
     app.get(/^\/([a-z0-9-]+)\.html$/, (req: Request, res: Response, next: NextFunction) => {
         const filename = req.params[0] ? `${req.params[0]}.html` : '';

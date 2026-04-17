@@ -34,6 +34,65 @@ export const COOKIE_POLICY = {
     ALLOW_INSECURE_IN_PRODUCTION: false,
 } as const;
 
+/**
+ * Permissions-Policy 디렉티브 허용 범위 상수.
+ * `()` = 전면 차단 / `(self)` = same-origin 문서만 허용 / `(self "https://x.com")` = 특정 origin 추가.
+ *
+ * 프론트 스캔 결과 실 사용 중인 powerful API는 `navigator.clipboard.writeText`만 확인됨.
+ * 나머지는 XSS / iframe embed 시 공격면이 되므로 전면 차단.
+ */
+export const PERMISSIONS_POLICY = {
+    DIRECTIVES: {
+        // 센서·입력 장치
+        'accelerometer': '()',
+        'ambient-light-sensor': '()',
+        'gyroscope': '()',
+        'magnetometer': '()',
+        'battery': '()',
+        'gamepad': '()',
+        // 미디어 캡처
+        'camera': '()',
+        'microphone': '()',
+        'display-capture': '()',
+        // 위치·웨이크락
+        'geolocation': '()',
+        'screen-wake-lock': '()',
+        // 외부 연결
+        'usb': '()',
+        'midi': '()',
+        'bluetooth': '()',
+        'serial': '()',
+        'hid': '()',
+        // 결제·인증
+        'payment': '()',
+        'publickey-credentials-get': '()',
+        'publickey-credentials-create': '()',
+        // 미디어 재생
+        'autoplay': '()',
+        'encrypted-media': '()',
+        'fullscreen': '()',
+        'picture-in-picture': '()',
+        // 기타
+        'document-domain': '()',
+        'sync-xhr': '()',
+        'web-share': '()',
+        'xr-spatial-tracking': '()',
+        // 프라이버시 — Chrome FLoC/Topics (명시 차단)
+        'interest-cohort': '()',
+        'browsing-topics': '()',
+        // 클립보드 — 복사 기능만 self 허용, 읽기는 차단
+        'clipboard-read': '()',
+        'clipboard-write': '(self)',
+    } as const,
+} as const;
+
+/** Permissions-Policy 헤더 값 빌드 (정렬 안정성 위해 Object.entries 순서 유지) */
+export function buildPermissionsPolicyHeader(): string {
+    return Object.entries(PERMISSIONS_POLICY.DIRECTIVES)
+        .map(([name, allowlist]) => `${name}=${allowlist}`)
+        .join(', ');
+}
+
 export type CsrfMode = 'off' | 'warn' | 'enforce';
 
 export const CSRF_POLICY = {
