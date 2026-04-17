@@ -93,6 +93,22 @@ export function buildPermissionsPolicyHeader(): string {
         .join(', ');
 }
 
+/**
+ * Stage 2-H3: 공용 Key-Value 저장소 정책 상수.
+ * Rate limiter와 OAuth state의 키 네임스페이스·TTL 관리.
+ * CLAUDE.md no-hardcoding policy에 따라 prefix/TTL을 리터럴 대신 명명 상수로.
+ */
+export const STORAGE_POLICY = {
+    /** 다른 앱과 Redis DB 공유 시 네임스페이스 격리용 루트 prefix */
+    KEY_PREFIX: 'omk:',
+    /** Rate limiter sliding-window counter 키 prefix */
+    RATE_LIMIT_PREFIX: 'rl:',
+    /** OAuth state nonce 키 prefix */
+    OAUTH_STATE_PREFIX: 'oauth:state:',
+    /** OAuth state nonce 수명 — CSRF 검증 유효 기간 */
+    OAUTH_STATE_TTL_MS: 10 * 60 * 1000,
+} as const;
+
 export type CsrfMode = 'off' | 'warn' | 'enforce';
 
 export const CSRF_POLICY = {

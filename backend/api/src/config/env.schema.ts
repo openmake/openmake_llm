@@ -68,6 +68,12 @@ export const envSchema = z
         // default 'warn' enables monitoring from deploy without breaking existing clients
         CSRF_PROTECTION: z.enum(['off', 'warn', 'enforce']).default('warn'),
 
+        // Storage backend for rate-limiter and OAuth state (additive; default preserves single-instance)
+        // memory: per-instance in-memory (current behavior) / redis: shared across instances
+        STORAGE_BACKEND: z.enum(['memory', 'redis']).default('memory'),
+        // Redis connection URL — required when STORAGE_BACKEND=redis
+        REDIS_URL: z.string().default(''),
+
         // OAuth
         GOOGLE_CLIENT_ID: z.string().default(''),
         GOOGLE_CLIENT_SECRET: z.string().default(''),
