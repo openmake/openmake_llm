@@ -135,6 +135,10 @@ export interface EnvConfig {
 
     // Security — CSRF Double-Submit Cookie policy
     csrfProtection: 'off' | 'warn' | 'enforce';
+
+    // Storage — shared backend for rate-limiter and OAuth state
+    storageBackend: 'memory' | 'redis';
+    redisUrl: string;
 }
 
 const DEFAULT_CONFIG: EnvConfig = {
@@ -256,6 +260,10 @@ const DEFAULT_CONFIG: EnvConfig = {
 
     // Security — CSRF Double-Submit Cookie (additive; 'warn' logs without blocking)
     csrfProtection: 'warn' as const,
+
+    // Storage — default memory preserves single-instance in-memory behavior
+    storageBackend: 'memory' as const,
+    redisUrl: '',
 };
 
 function parseEnvFile(filePath: string): Record<string, string> {
@@ -325,6 +333,11 @@ export function validateConfig(config: EnvConfig): void {
     // API_KEY_PEPPER 검증 (프로덕션 환경에서 API Key 서비스 사용 시)
     if (config.nodeEnv === 'production' && config.apiKeyPepper === '') {
         errors.push('API_KEY_PEPPER is required in production for API key hashing security');
+    }
+
+    // Stage 2-H3: STORAGE_BACKEND=redis 선택 시 REDIS_URL 필수
+    if (config.storageBackend === 'redis' && !config.redisUrl) {
+        errors.push('REDIS_URL must be set when STORAGE_BACKEND=redis');
     }
 
     if (errors.length > 0) {
@@ -431,6 +444,10 @@ export function loadConfig(): EnvConfig {
 
         // Security — CSRF Protection
         CSRF_PROTECTION: env('CSRF_PROTECTION'),
+
+        // Storage backend
+        STORAGE_BACKEND: env('STORAGE_BACKEND'),
+        REDIS_URL: env('REDIS_URL'),
     });
 
     if (!parsedResult.success) {
@@ -566,6 +583,10 @@ export function loadConfig(): EnvConfig {
 
         // Security — CSRF Protection
         csrfProtection: parsed.CSRF_PROTECTION ?? DEFAULT_CONFIG.csrfProtection,
+
+        // Storage backend
+        storageBackend: parsed.STORAGE_BACKEND ?? DEFAULT_CONFIG.storageBackend,
+        redisUrl: parsed.REDIS_URL ?? DEFAULT_CONFIG.redisUrl,
     };
 }
 
