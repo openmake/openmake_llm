@@ -60,6 +60,9 @@ export const envSchema = z
         API_KEY_PEPPER: z.string().default(''),
         API_KEY_MAX_PER_USER: positiveIntWithDefault(5),
 
+        // Security — Blacklist Policy (additive; default 'open' preserves legacy behavior)
+        BLACKLIST_FAIL_MODE: z.enum(['open', 'safe']).default('open'),
+
         // OAuth
         GOOGLE_CLIENT_ID: z.string().default(''),
         GOOGLE_CLIENT_SECRET: z.string().default(''),

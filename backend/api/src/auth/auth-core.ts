@@ -154,9 +154,14 @@ export async function verifyRefreshToken(token: string): Promise<JWTPayload | nu
                      return null;
                  }
              } catch (blacklistError) {
-                 // 블랙리스트 DB 접근 실패 — 가용성 우선으로 토큰 허용하되 경고 로그 기록
-                 logger.warn('블랙리스트 DB 접근 실패: 리프레시 토큰 검증 우회됨 (가용성 우선)',
-                     { jti: preCheck.jti, error: blacklistError instanceof Error ? blacklistError.message : String(blacklistError) });
+                 // BLACKLIST_FAIL_MODE로 DB 장애 시 정책 선택 (additive: default 'open' = 기존 동작)
+                 const failMode = getConfig().blacklistFailMode;
+                 logger.warn('블랙리스트 DB 접근 실패 (refresh)',
+                     { jti: preCheck.jti, failMode, error: blacklistError instanceof Error ? blacklistError.message : String(blacklistError) });
+                 if (failMode === 'safe') {
+                     return null;
+                 }
+                 // open: 기존 동작 유지 — 토큰 통과
              }
          }
 
@@ -194,9 +199,14 @@ export async function verifyToken(token: string): Promise<JWTPayload | null> {
                      return null;
                  }
              } catch (blacklistError) {
-                 // 블랙리스트 DB 접근 실패 — 가용성 우선으로 토큰 허용하되 경고 로그 기록
-                 logger.warn('블랙리스트 DB 접근 실패: 토큰 검증 우회됨 (가용성 우선)',
-                     { jti: preCheck.jti, error: blacklistError instanceof Error ? blacklistError.message : String(blacklistError) });
+                 // BLACKLIST_FAIL_MODE로 DB 장애 시 정책 선택 (additive: default 'open' = 기존 동작)
+                 const failMode = getConfig().blacklistFailMode;
+                 logger.warn('블랙리스트 DB 접근 실패 (access)',
+                     { jti: preCheck.jti, failMode, error: blacklistError instanceof Error ? blacklistError.message : String(blacklistError) });
+                 if (failMode === 'safe') {
+                     return null;
+                 }
+                 // open: 기존 동작 유지 — 토큰 통과
              }
          }
 
