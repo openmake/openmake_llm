@@ -40,8 +40,9 @@ import { ClusterManager } from '../cluster/manager';
 import { getUnifiedMCPClient } from '../mcp';
 import { createLogger } from '../utils/logger';
 import { WSMessage, ExtendedWebSocket } from './ws-types';
-import { authenticateWebSocket, refreshWebSocketAuthentication } from './ws-auth';
+import { authenticateWebSocket, refreshWebSocketAuthentication, validateWebSocketOrigin } from './ws-auth';
 import { WEBSOCKET_TIMEOUTS, WS_LIMITS } from '../config/timeouts';
+import { WS_SECURITY } from '../config/security';
 import { handleChatMessage } from './ws-chat-handler';
 import { withSpan } from '../observability/otel';
 import { runWithRequestContext } from '../utils/request-context';
@@ -112,6 +113,24 @@ export class WebSocketHandler {
      */
     private setupConnection(): void {
         this.wss.on('connection', async (ws: WebSocket, req: IncomingMessage) => {
+            // CSWSH 방어: Origin 헤더 화이트리스트 검증
+            // CORS는 WS upgrade에 적용되지 않으므로 서버가 직접 검증해야 한다.
+            const origin = req.headers.origin;
+            const originAllowlist = getConfig().corsOrigins.split(',')
+                .map(o => o.trim())
+                .filter(o => o.length > 0 && o !== '*');
+            if (!validateWebSocketOrigin(origin, originAllowlist)) {
+                const clientIpForLog = this.getClientIp(req);
+                log.warn(`[WS] Origin 거부: origin=${origin ?? '<none>'}, ip=${clientIpForLog}`);
+                try {
+                    ws.send(JSON.stringify({ type: 'error', message: '허용되지 않은 Origin입니다.' }));
+                } catch {
+                    /* socket may already be closed */
+                }
+                ws.close(WS_SECURITY.ORIGIN_REJECTED_CLOSE_CODE, WS_SECURITY.ORIGIN_REJECTED_REASON);
+                return;
+            }
+
             // WebSocket 연결 인증
             const auth = await authenticateWebSocket(req, log);
 
