@@ -256,7 +256,9 @@ export function setupStaticFiles(app: Application, dirname: string): void {
             `style-src 'self' 'unsafe-inline' ${CDN_DOMAINS[0]} ${CDN_DOMAINS[1]} ${CDN_DOMAINS[2]}`,
             `script-src-attr ${scriptSrcAttrDirective}`,
             `style-src-attr ${styleSrcAttrDirective}`,
-            `img-src 'self' data: blob: https:`,
+            // Stage 2-M4: 'https:' 와일드카드 제거 — XSS 시 임의 외부 서버로 이미지 기반 exfiltration 차단.
+            // data: = 인라인 SVG 아이콘, blob: = 파일 업로드 프리뷰(URL.createObjectURL). 실 외부 이미지 도메인은 없음.
+            `img-src 'self' data: blob:`,
             `connect-src 'self' ws://localhost:* wss://localhost:* ws://127.0.0.1:* wss://127.0.0.1:* ${getConfig().ollamaBaseUrl} ${OLLAMA_CLOUD_HOST} ${cdnList}`,
             `font-src 'self' data: ${CDN_DOMAINS[0]} ${CDN_DOMAINS[3]}`,
             `object-src 'none'`,
