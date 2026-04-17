@@ -142,3 +142,22 @@ export async function refreshWebSocketAuthentication(
 ): Promise<WebSocketAuthResult> {
     return resolveAuthFromToken(token, logger, 'bearer');
 }
+
+/**
+ * WebSocket Cross-Site Hijacking (CSWSH) 방어.
+ * CORS는 WS upgrade 요청에 적용되지 않으므로 서버가 Origin을 직접 검증해야 한다.
+ * WHATWG Origin 스펙에 따라 대소문자 엄격 비교를 수행하며, 와일드카드는 허용하지 않는다.
+ *
+ * @param origin - upgrade 요청의 Origin 헤더 값
+ * @param allowlist - 허용 도메인 목록 (getConfig().corsOrigins 파싱 결과)
+ * @returns 허용 여부 (false 시 호출 측에서 close(1008) 수행)
+ */
+export function validateWebSocketOrigin(
+    origin: string | undefined,
+    allowlist: string[]
+): boolean {
+    if (!origin || origin.length === 0) {
+        return false;
+    }
+    return allowlist.some(allowed => allowed !== '*' && allowed === origin);
+}
