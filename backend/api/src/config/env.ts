@@ -132,6 +132,9 @@ export interface EnvConfig {
 
     // Security — Blacklist Policy
     blacklistFailMode: 'open' | 'safe';
+
+    // Security — CSRF Double-Submit Cookie policy
+    csrfProtection: 'off' | 'warn' | 'enforce';
 }
 
 const DEFAULT_CONFIG: EnvConfig = {
@@ -250,6 +253,9 @@ const DEFAULT_CONFIG: EnvConfig = {
 
     // Security — Blacklist Policy (additive; 'open' maintains legacy fail-open behavior)
     blacklistFailMode: 'open' as const,
+
+    // Security — CSRF Double-Submit Cookie (additive; 'warn' logs without blocking)
+    csrfProtection: 'warn' as const,
 };
 
 function parseEnvFile(filePath: string): Record<string, string> {
@@ -422,6 +428,9 @@ export function loadConfig(): EnvConfig {
 
         // Security — Blacklist Policy
         BLACKLIST_FAIL_MODE: env('BLACKLIST_FAIL_MODE'),
+
+        // Security — CSRF Protection
+        CSRF_PROTECTION: env('CSRF_PROTECTION'),
     });
 
     if (!parsedResult.success) {
@@ -554,6 +563,9 @@ export function loadConfig(): EnvConfig {
 
         // Security — Blacklist Policy
         blacklistFailMode: parsed.BLACKLIST_FAIL_MODE ?? DEFAULT_CONFIG.blacklistFailMode,
+
+        // Security — CSRF Protection
+        csrfProtection: parsed.CSRF_PROTECTION ?? DEFAULT_CONFIG.csrfProtection,
     };
 }
 
