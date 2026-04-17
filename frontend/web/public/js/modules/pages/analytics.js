@@ -116,9 +116,12 @@
             el.innerHTML = hours.slice(0, 6).map(h => `
                 <div style="margin-bottom:var(--space-2)">
                     <div class="metric-row"><span class="metric-label">${h.hour}시</span><span class="metric-value">${fmtNum(h.requests)}건</span></div>
-                    <div class="peak-bar"><div class="peak-fill" style="width:${(h.requests/max*100)}%"></div></div>
+                    <div class="peak-bar"><div class="peak-fill" data-width="${(h.requests/max*100)}"></div></div>
                 </div>
             `).join('');
+            el.querySelectorAll('.peak-fill[data-width]').forEach(node => {
+                node.style.width = node.dataset.width + '%';
+            });
         }
 
         function renderTopQueries(queries) {
