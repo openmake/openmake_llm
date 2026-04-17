@@ -37,7 +37,7 @@ import { requestIdMiddleware } from './request-id';
 import { errorHandler, notFoundHandler } from '../utils/error-handler';
 import { OLLAMA_CLOUD_HOST } from '../config/constants';
 import { getConfig } from '../config';
-import { buildPermissionsPolicyHeader } from '../config/security';
+import { buildPermissionsPolicyHeader, HSTS_POLICY } from '../config/security';
 
 interface CspLocals {
     cspNonce?: string;
@@ -336,11 +336,12 @@ export function setupStaticFiles(app: Application, dirname: string): void {
         // same-origin 정책은 Spectre-class 공격 완화 + cross-origin popup opener 분리.
         crossOriginOpenerPolicy: { policy: 'same-origin' },
         originAgentCluster: false,
-        // Stage 2-M6: HSTS max-age를 2년으로 연장 (helmet 기본 180일).
-        // includeSubDomains 유지. preload는 되돌리기 어려워 조직 정책 결정 전까지 미포함.
+        // Stage 2-M6: HSTS_POLICY 상수 사용 (helmet 기본 180일 → 2년).
+        // preload 미포함은 의도 — 롤백 가능성 유지.
         strictTransportSecurity: {
-            maxAge: 63_072_000,
-            includeSubDomains: true,
+            maxAge: HSTS_POLICY.MAX_AGE_SECONDS,
+            includeSubDomains: HSTS_POLICY.INCLUDE_SUBDOMAINS,
+            preload: HSTS_POLICY.PRELOAD,
         },
     }));
 

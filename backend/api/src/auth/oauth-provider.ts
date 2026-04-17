@@ -26,7 +26,7 @@ import { createLogger } from '../utils/logger';
 import { GOOGLE_OAUTH, GITHUB_OAUTH, GITHUB_API } from '../config/external-services';
 import { OAUTH_STATE } from '../config/runtime-limits';
 import { getKeyValueStore } from '../storage';
-import { STORAGE_POLICY } from '../config/security';
+import { STORAGE_POLICY, OAUTH_NONCE_POLICY } from '../config/security';
 
 /**
  * OAuth 프로바이더 설정 인터페이스
@@ -192,8 +192,8 @@ export class OAuthManager {
             }
         }
 
-        // CSRF 방지용 상태 생성
-        const nonce = crypto.randomBytes(32).toString('hex');
+        // CSRF 방지용 상태 생성 — OAUTH_NONCE_POLICY.BYTES 바이트 랜덤 hex
+        const nonce = crypto.randomBytes(OAUTH_NONCE_POLICY.BYTES).toString('hex');
         const state: OAuthState = {
             nonce,
             provider,
