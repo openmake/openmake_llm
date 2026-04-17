@@ -63,6 +63,11 @@ export const envSchema = z
         // Security — Blacklist Policy (additive; default 'open' preserves legacy behavior)
         BLACKLIST_FAIL_MODE: z.enum(['open', 'safe']).default('open'),
 
+        // Security — CSRF Double-Submit Cookie policy (additive)
+        // off: disabled / warn: log mismatches, allow / enforce: 403 on mismatch
+        // default 'warn' enables monitoring from deploy without breaking existing clients
+        CSRF_PROTECTION: z.enum(['off', 'warn', 'enforce']).default('warn'),
+
         // OAuth
         GOOGLE_CLIENT_ID: z.string().default(''),
         GOOGLE_CLIENT_SECRET: z.string().default(''),
