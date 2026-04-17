@@ -129,6 +129,9 @@ export interface EnvConfig {
 
     // Security — Trusted Proxies
     trustedProxies: string[];
+
+    // Security — Blacklist Policy
+    blacklistFailMode: 'open' | 'safe';
 }
 
 const DEFAULT_CONFIG: EnvConfig = {
@@ -244,6 +247,9 @@ const DEFAULT_CONFIG: EnvConfig = {
 
     // Security — Trusted Proxies
     trustedProxies: ['loopback', 'linklocal', 'uniquelocal'],
+
+    // Security — Blacklist Policy (additive; 'open' maintains legacy fail-open behavior)
+    blacklistFailMode: 'open' as const,
 };
 
 function parseEnvFile(filePath: string): Record<string, string> {
@@ -300,6 +306,14 @@ export function validateConfig(config: EnvConfig): void {
     // JWT_SECRET 필수 검증 (test 환경 제외 — 랜덤 생성 금지: PM2 재시작마다 세션 무효화)
     if (config.nodeEnv !== 'test' && (!config.jwtSecret || config.jwtSecret.length < 32)) {
         errors.push('JWT_SECRET must be at least 32 characters (set in .env). Random generation is forbidden — it invalidates all sessions on restart.');
+    }
+
+    // Production에서 HTTPS 없이 쿠키 전송 방지 — HttpOnly 쿠키가 평문으로 노출되는 것을 차단
+    if (config.nodeEnv === 'production' && !config.cookieSecure) {
+        errors.push(
+            'COOKIE_SECURE must be true in production. ' +
+            'Set COOKIE_SECURE=true in .env when running behind HTTPS.'
+        );
     }
 
     // API_KEY_PEPPER 검증 (프로덕션 환경에서 API Key 서비스 사용 시)
@@ -405,6 +419,9 @@ export function loadConfig(): EnvConfig {
 
         // Security — Trusted Proxies
         TRUSTED_PROXIES: env('TRUSTED_PROXIES'),
+
+        // Security — Blacklist Policy
+        BLACKLIST_FAIL_MODE: env('BLACKLIST_FAIL_MODE'),
     });
 
     if (!parsedResult.success) {
@@ -534,6 +551,9 @@ export function loadConfig(): EnvConfig {
 
         // Security — Trusted Proxies
         trustedProxies: parsed.TRUSTED_PROXIES?.split(',').map((p: string) => p.trim()) || DEFAULT_CONFIG.trustedProxies,
+
+        // Security — Blacklist Policy
+        blacklistFailMode: parsed.BLACKLIST_FAIL_MODE ?? DEFAULT_CONFIG.blacklistFailMode,
     };
 }
 
