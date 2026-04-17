@@ -331,8 +331,17 @@ export function setupStaticFiles(app: Application, dirname: string): void {
         contentSecurityPolicy: false,
         crossOriginEmbedderPolicy: false,
         crossOriginResourcePolicy: { policy: 'cross-origin' },
-        crossOriginOpenerPolicy: false,
+        // Stage 2-M6: COOP 활성화 — 프론트 스캔 결과 window.open은 모두 same-origin이고
+        // 외부 링크는 <a target=_blank rel="noopener noreferrer">로 이미 opener 격리됨.
+        // same-origin 정책은 Spectre-class 공격 완화 + cross-origin popup opener 분리.
+        crossOriginOpenerPolicy: { policy: 'same-origin' },
         originAgentCluster: false,
+        // Stage 2-M6: HSTS max-age를 2년으로 연장 (helmet 기본 180일).
+        // includeSubDomains 유지. preload는 되돌리기 어려워 조직 정책 결정 전까지 미포함.
+        strictTransportSecurity: {
+            maxAge: 63_072_000,
+            includeSubDomains: true,
+        },
     }));
 
     // Stage 2-M5: Permissions-Policy — helmet 기본 미포함. powerful browser API 전면 차단.
