@@ -390,8 +390,12 @@ export async function crawlSite(
         visited.add(normalizedUrl);
 
         // 제외 경로 체크
+        // excludePaths는 MCP web_crawl 도구 인자(LLM/사용자 유래) — regex 특수문자를 escape해 ReDoS 차단.
+        // 지원 문법: glob `*` 만. (a+)+, (.*)*, 역참조 등 catastrophic backtracking 패턴 무력화.
         const shouldExclude = excludePaths.some(pattern => {
-            const regex = new RegExp(pattern.replace(/\*/g, '.*'));
+            if (typeof pattern !== 'string' || pattern.length > 200) return false;
+            const escaped = pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&');
+            const regex = new RegExp(escaped.replace(/\*/g, '.*'));
             return regex.test(new URL(current.url).pathname);
         });
         if (shouldExclude) continue;
