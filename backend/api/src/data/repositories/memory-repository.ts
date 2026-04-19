@@ -194,9 +194,9 @@ export class MemoryRepository extends BaseRepository {
                  SELECT id FROM user_memories
                  WHERE last_accessed < NOW() - INTERVAL '30 days'
                    AND importance > $1
-                 LIMIT 1000
+                 LIMIT $3
              )`,
-            [MEMORY_DECAY.DECAY_FLOOR, MEMORY_DECAY.DECAY_FACTOR]
+            [MEMORY_DECAY.DECAY_FLOOR, MEMORY_DECAY.DECAY_FACTOR, 1000]
         );
         return result.rowCount ?? 0;
     }

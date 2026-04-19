@@ -193,8 +193,8 @@ function showDocumentProgress(event) {
     const isError = event.stage === 'error';
     const progressBar = event.progress !== undefined
         ? `<div class="progress-bar">
-             <div class="progress-fill ${isComplete ? 'complete' : ''} ${isError ? 'error' : ''}" 
-                  style="width: ${event.progress}%"></div>
+             <div class="progress-fill ${isComplete ? 'complete' : ''} ${isError ? 'error' : ''}"
+                  data-width="${event.progress}"></div>
            </div>`
         : '';
 
@@ -212,6 +212,9 @@ function showDocumentProgress(event) {
             ${progressBar}
         </div>
     `;
+    progressContainer.querySelectorAll('.progress-fill[data-width]').forEach(node => {
+        node.style.width = node.dataset.width + '%';
+    });
 
     progressContainer.style.display = 'flex';
     progressContainer.classList.remove('hiding');

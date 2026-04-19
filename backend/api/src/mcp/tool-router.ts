@@ -38,6 +38,7 @@ import type { UserTier } from '../data/user-manager';
 import { canUseTool } from './tool-tiers';
 import type { UserContext } from './user-sandbox';
 import { createLogger } from '../utils/logger';
+import { MCP_EXTERNAL_TOOL_LIMITS } from '../config/timeouts';
 
 const logger = createLogger('ToolRouter');
 
@@ -160,8 +161,32 @@ export class ToolRouter {
                 };
             }
 
-            // 외부 서버에는 원본 이름으로 호출
-            return executor(externalEntry.originalName, args);
+            // 외부 도구 실행 (타임아웃 + 출력 크기 제한 적용)
+            try {
+                const result = await Promise.race([
+                    executor(externalEntry.originalName, args),
+                    new Promise<never>((_, reject) =>
+                        setTimeout(() => reject(new Error(`외부 도구 타임아웃: ${name} (${MCP_EXTERNAL_TOOL_LIMITS.EXECUTION_TIMEOUT_MS}ms 초과)`)), MCP_EXTERNAL_TOOL_LIMITS.EXECUTION_TIMEOUT_MS)
+                    )
+                ]);
+
+                // 출력 크기 제한
+                if (result.content) {
+                    for (const item of result.content) {
+                        if ('text' in item && typeof item.text === 'string' && item.text.length > MCP_EXTERNAL_TOOL_LIMITS.MAX_OUTPUT_SIZE) {
+                            item.text = item.text.substring(0, MCP_EXTERNAL_TOOL_LIMITS.MAX_OUTPUT_SIZE) + '\n... (출력이 1MB를 초과하여 잘렸습니다)';
+                        }
+                    }
+                }
+
+                return result;
+            } catch (error) {
+                const message = error instanceof Error ? error.message : '외부 도구 실행 실패';
+                return {
+                    content: [{ type: 'text', text: message }],
+                    isError: true,
+                };
+            }
         }
 
         // 2. 내장 도구 확인

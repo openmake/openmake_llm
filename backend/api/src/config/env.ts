@@ -118,11 +118,27 @@ export interface EnvConfig {
     omkDomainAnalysis: string;
     omkDomainGeneral: string;
 
+    // Generate-Verify skip threshold
+    omkGvSkipThreshold: number;
+
     // Language Policy
     enableDynamicResponseLanguage: boolean;
     defaultResponseLanguage: SupportedLanguageCode;
     languageDetectionMinConfidence: number;
     languageFallbackLanguage: SupportedLanguageCode;
+
+    // Security — Trusted Proxies
+    trustedProxies: string[];
+
+    // Security — Blacklist Policy
+    blacklistFailMode: 'open' | 'safe';
+
+    // Security — CSRF Double-Submit Cookie policy
+    csrfProtection: 'off' | 'warn' | 'enforce';
+
+    // Storage — shared backend for rate-limiter and OAuth state
+    storageBackend: 'memory' | 'redis';
+    redisUrl: string;
 }
 
 const DEFAULT_CONFIG: EnvConfig = {
@@ -216,7 +232,7 @@ const DEFAULT_CONFIG: EnvConfig = {
     omkEnginePro: 'gemini-3-flash-preview:cloud',
     omkEngineFast: 'gemini-3-flash-preview:cloud',
     omkEngineThink: 'gemini-3-flash-preview:cloud',
-    omkEngineCode: 'glm-5:cloud',
+    omkEngineCode: 'glm-5.1:cloud',
     omkEngineVision: 'qwen3.5:397b-cloud',
 
     // Pipeline Profile — Cost Tier & Domain Routing (P2)
@@ -227,11 +243,27 @@ const DEFAULT_CONFIG: EnvConfig = {
     omkDomainAnalysis: '',
     omkDomainGeneral: '',
 
+    // Generate-Verify skip threshold (routing-config.ts가 process.env로 직접 소비)
+    omkGvSkipThreshold: 0.3,
+
     // Language Policy
     enableDynamicResponseLanguage: true,
     defaultResponseLanguage: 'ko',
     languageDetectionMinConfidence: 0.7,
     languageFallbackLanguage: 'en',
+
+    // Security — Trusted Proxies
+    trustedProxies: ['loopback', 'linklocal', 'uniquelocal'],
+
+    // Security — Blacklist Policy (additive; 'open' maintains legacy fail-open behavior)
+    blacklistFailMode: 'open' as const,
+
+    // Security — CSRF Double-Submit Cookie (additive; 'warn' logs without blocking)
+    csrfProtection: 'warn' as const,
+
+    // Storage — default memory preserves single-instance in-memory behavior
+    storageBackend: 'memory' as const,
+    redisUrl: '',
 };
 
 function parseEnvFile(filePath: string): Record<string, string> {
@@ -290,9 +322,22 @@ export function validateConfig(config: EnvConfig): void {
         errors.push('JWT_SECRET must be at least 32 characters (set in .env). Random generation is forbidden — it invalidates all sessions on restart.');
     }
 
+    // Production에서 HTTPS 없이 쿠키 전송 방지 — HttpOnly 쿠키가 평문으로 노출되는 것을 차단
+    if (config.nodeEnv === 'production' && !config.cookieSecure) {
+        errors.push(
+            'COOKIE_SECURE must be true in production. ' +
+            'Set COOKIE_SECURE=true in .env when running behind HTTPS.'
+        );
+    }
+
     // API_KEY_PEPPER 검증 (프로덕션 환경에서 API Key 서비스 사용 시)
     if (config.nodeEnv === 'production' && config.apiKeyPepper === '') {
         errors.push('API_KEY_PEPPER is required in production for API key hashing security');
+    }
+
+    // Stage 2-H3: STORAGE_BACKEND=redis 선택 시 REDIS_URL 필수
+    if (config.storageBackend === 'redis' && !config.redisUrl) {
+        errors.push('REDIS_URL must be set when STORAGE_BACKEND=redis');
     }
 
     if (errors.length > 0) {
@@ -390,6 +435,19 @@ export function loadConfig(): EnvConfig {
 
         // Cookie Security
         COOKIE_SECURE: env('COOKIE_SECURE'),
+
+        // Security — Trusted Proxies
+        TRUSTED_PROXIES: env('TRUSTED_PROXIES'),
+
+        // Security — Blacklist Policy
+        BLACKLIST_FAIL_MODE: env('BLACKLIST_FAIL_MODE'),
+
+        // Security — CSRF Protection
+        CSRF_PROTECTION: env('CSRF_PROTECTION'),
+
+        // Storage backend
+        STORAGE_BACKEND: env('STORAGE_BACKEND'),
+        REDIS_URL: env('REDIS_URL'),
     });
 
     if (!parsedResult.success) {
@@ -505,6 +563,9 @@ export function loadConfig(): EnvConfig {
         omkDomainAnalysis: parsed.OMK_DOMAIN_ANALYSIS ?? DEFAULT_CONFIG.omkDomainAnalysis,
         omkDomainGeneral: parsed.OMK_DOMAIN_GENERAL ?? DEFAULT_CONFIG.omkDomainGeneral,
 
+        // Generate-Verify skip threshold
+        omkGvSkipThreshold: parsed.OMK_GV_SKIP_THRESHOLD ?? DEFAULT_CONFIG.omkGvSkipThreshold,
+
         // Language Policy
         enableDynamicResponseLanguage: parsed.ENABLE_DYNAMIC_RESPONSE_LANGUAGE ?? DEFAULT_CONFIG.enableDynamicResponseLanguage,
         defaultResponseLanguage: parsed.DEFAULT_RESPONSE_LANGUAGE ?? DEFAULT_CONFIG.defaultResponseLanguage,
@@ -513,6 +574,19 @@ export function loadConfig(): EnvConfig {
 
         // Cookie Security
         cookieSecure: parsed.COOKIE_SECURE ?? DEFAULT_CONFIG.cookieSecure,
+
+        // Security — Trusted Proxies
+        trustedProxies: parsed.TRUSTED_PROXIES?.split(',').map((p: string) => p.trim()) || DEFAULT_CONFIG.trustedProxies,
+
+        // Security — Blacklist Policy
+        blacklistFailMode: parsed.BLACKLIST_FAIL_MODE ?? DEFAULT_CONFIG.blacklistFailMode,
+
+        // Security — CSRF Protection
+        csrfProtection: parsed.CSRF_PROTECTION ?? DEFAULT_CONFIG.csrfProtection,
+
+        // Storage backend
+        storageBackend: parsed.STORAGE_BACKEND ?? DEFAULT_CONFIG.storageBackend,
+        redisUrl: parsed.REDIS_URL ?? DEFAULT_CONFIG.redisUrl,
     };
 }
 

@@ -60,6 +60,20 @@ export const envSchema = z
         API_KEY_PEPPER: z.string().default(''),
         API_KEY_MAX_PER_USER: positiveIntWithDefault(5),
 
+        // Security — Blacklist Policy (additive; default 'open' preserves legacy behavior)
+        BLACKLIST_FAIL_MODE: z.enum(['open', 'safe']).default('open'),
+
+        // Security — CSRF Double-Submit Cookie policy (additive)
+        // off: disabled / warn: log mismatches, allow / enforce: 403 on mismatch
+        // default 'warn' enables monitoring from deploy without breaking existing clients
+        CSRF_PROTECTION: z.enum(['off', 'warn', 'enforce']).default('warn'),
+
+        // Storage backend for rate-limiter and OAuth state (additive; default preserves single-instance)
+        // memory: per-instance in-memory (current behavior) / redis: shared across instances
+        STORAGE_BACKEND: z.enum(['memory', 'redis']).default('memory'),
+        // Redis connection URL — required when STORAGE_BACKEND=redis
+        REDIS_URL: z.string().default(''),
+
         // OAuth
         GOOGLE_CLIENT_ID: z.string().default(''),
         GOOGLE_CLIENT_SECRET: z.string().default(''),
@@ -123,7 +137,7 @@ export const envSchema = z
         OMK_ENGINE_PRO: z.string().min(1).default('gemini-3-flash-preview:cloud'),
         OMK_ENGINE_FAST: z.string().min(1).default('gemini-3-flash-preview:cloud'),
         OMK_ENGINE_THINK: z.string().min(1).default('gemini-3-flash-preview:cloud'),
-        OMK_ENGINE_CODE: z.string().min(1).default('glm-5:cloud'),
+        OMK_ENGINE_CODE: z.string().min(1).default('glm-5.1:cloud'),
         OMK_ENGINE_VISION: z.string().min(1).default('qwen3.5:397b-cloud'),
 
         // P2: Cost Tier & Domain Routing
@@ -134,6 +148,11 @@ export const envSchema = z
         OMK_DOMAIN_ANALYSIS: z.string().default(''),
         OMK_DOMAIN_GENERAL: z.string().default(''),
 
+        // Generate-Verify skip threshold
+        // routing-config.ts가 process.env로 직접 소비하지만
+        // 스키마 일관성을 위해 명시적으로 등록
+        OMK_GV_SKIP_THRESHOLD: z.coerce.number().min(0).max(1).default(0.3),
+
         // Language Policy
         ENABLE_DYNAMIC_RESPONSE_LANGUAGE: booleanFromString(true),
         DEFAULT_RESPONSE_LANGUAGE: supportedLanguageSchema.default('ko'),
@@ -142,6 +161,9 @@ export const envSchema = z
 
         // Cookie Security (HTTPS 없이 production 운영 시 false)
         COOKIE_SECURE: booleanFromString(false),
+
+        // Security — Trusted Proxies (쉼표 구분 문자열, 기본: loopback,linklocal,uniquelocal)
+        TRUSTED_PROXIES: z.string().optional(),
     })
     .superRefine((data, ctx) => {
         if (data.NODE_ENV !== 'production') {

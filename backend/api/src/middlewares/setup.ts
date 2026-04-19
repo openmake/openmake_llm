@@ -30,12 +30,14 @@ import {
     mcpLimiter,
     apiKeyManagementLimiter,
     pushLimiter,
+    adminLimiter,
     corsMiddleware
 } from './index';
 import { requestIdMiddleware } from './request-id';
 import { errorHandler, notFoundHandler } from '../utils/error-handler';
 import { OLLAMA_CLOUD_HOST } from '../config/constants';
 import { getConfig } from '../config';
+import { buildPermissionsPolicyHeader, HSTS_POLICY } from '../config/security';
 
 interface CspLocals {
     cspNonce?: string;
@@ -136,11 +138,18 @@ function listFilesRecursive(dirPath: string, extensions: string[]): string[] {
 }
 
 /**
- * API JSON Content-Type 헤더를 강제합니다.
+ * API JSON Content-Type 헤더를 강제하고, 민감 응답의 브라우저 캐시를 차단합니다.
+ *
+ * Stage 2-M1: Cache-Control: no-store
+ * - /api/* 응답은 사용자별 민감 데이터(메모리, audit log, API key 등)를 포함할 수 있음
+ * - 기본값 없음 → 브라우저 heuristic이 disk/BFCache에 저장 가능 → 로그아웃 후 히스토리 복원으로 노출 위험
+ * - no-store: 모든 캐시 저장 금지 (disk, memory, BFCache). CDN도 저장 안 함
+ * - 개별 엔드포인트가 캐시 가능하면 라우트에서 setHeader로 override 가능
  */
 export function setupSecurity(app: Application): void {
     app.use('/api', (_req, res, next) => {
         res.setHeader('Content-Type', 'application/json; charset=utf-8');
+        res.setHeader('Cache-Control', 'no-store');
         next();
     });
 }
@@ -149,6 +158,12 @@ export function setupSecurity(app: Application): void {
  * Rate limiting, CORS, 로깅 미들웨어를 설정합니다.
  */
 export function setupParsersAndLimiting(app: Application): void {
+    // 신뢰할 수 있는 프록시 설정 — X-Forwarded-For 헤더 검증
+    const trustedProxies = getConfig().trustedProxies;
+    if (trustedProxies.length > 0) {
+        app.set('trust proxy', trustedProxies);
+    }
+
     // 세분화된 엔드포인트별 rate limiter — 비용/위험도 순서대로 적용
     app.use('/api/auth/', authLimiter);
     app.use('/api/chat', chatLimiter);
@@ -159,11 +174,12 @@ export function setupParsersAndLimiting(app: Application): void {
     app.use('/api/mcp', mcpLimiter);
     app.use('/api/api-keys', apiKeyManagementLimiter);
     app.use('/api/push', pushLimiter);
+    app.use('/api/admin', adminLimiter);
     // generalLimiter는 전용 리미터가 없는 경로에만 적용 (이중 카운팅 방지)
     const dedicatedLimiterPrefixes = [
         '/api/auth/', '/api/chat', '/api/research', '/api/upload',
         '/api/web-search', '/api/memory', '/api/mcp',
-        '/api/api-keys', '/api/push', '/api/monitoring', '/api/metrics',
+        '/api/api-keys', '/api/push', '/api/admin', '/api/monitoring', '/api/metrics',
     ];
     app.use('/api/', (req, res, next) => {
         const url = req.originalUrl;
@@ -218,10 +234,15 @@ export function setupStaticFiles(app: Application, dirname: string): void {
         hashes.styleAttr.forEach((hash) => styleAttrHashes.add(hash));
     }
 
-    // script-src-attr: 'unsafe-inline' — 런타임 JS가 동적으로 onclick/onchange 핸들러를 생성하므로 해시 불가
-    // script-src (nonce 기반)가 XSS 1차 방어선이므로 보안 수준 유지됨
-    const scriptSrcAttrDirective = "'unsafe-inline'";
-    // style-src-attr: 'unsafe-inline' — 런타임 JS가 동적으로 style 속성을 설정하므로 해시 불가
+    // script-src-attr: 정적 인라인 핸들러(onclick 등)의 SHA-256 해시 화이트리스트로 enforce.
+    // Stage 2-2a에서 동적 템플릿 리터럴 핸들러를 이벤트 위임으로 제거했으므로 수집된 해시는 안정적.
+    // 새 인라인 핸들러가 런타임에 주입되면 CSP가 차단 → 신규 코드는 addEventListener 사용 강제.
+    // 해시 수집 실패(전량 마이그레이션 완료) 시 'none'으로 자동 강화.
+    const scriptSrcAttrDirective = scriptAttrHashes.size > 0
+        ? Array.from(scriptAttrHashes).join(' ')
+        : "'none'";
+    // style-src-attr: 'unsafe-inline' 유지. style-src-attr의 hash-source는 주요 브라우저(특히 Safari)
+    // 지원이 불완전하여 "enforce한 척하는 CSP" 리스크. 인라인 style 전량 제거 후 'none'으로 전환 예정.
     const styleSrcAttrDirective = "'unsafe-inline'";
 
     // CSP 허용 CDN 도메인 목록 — 추가/삭제 시 이 배열만 수정
@@ -243,8 +264,10 @@ export function setupStaticFiles(app: Application, dirname: string): void {
             `style-src 'self' 'unsafe-inline' ${CDN_DOMAINS[0]} ${CDN_DOMAINS[1]} ${CDN_DOMAINS[2]}`,
             `script-src-attr ${scriptSrcAttrDirective}`,
             `style-src-attr ${styleSrcAttrDirective}`,
-            `img-src 'self' data: blob: https:`,
-            `connect-src 'self' ws: wss: ${getConfig().ollamaBaseUrl} ${OLLAMA_CLOUD_HOST} ${cdnList}`,
+            // Stage 2-M4: 'https:' 와일드카드 제거 — XSS 시 임의 외부 서버로 이미지 기반 exfiltration 차단.
+            // data: = 인라인 SVG 아이콘, blob: = 파일 업로드 프리뷰(URL.createObjectURL). 실 외부 이미지 도메인은 없음.
+            `img-src 'self' data: blob:`,
+            `connect-src 'self' ws://localhost:* wss://localhost:* ws://127.0.0.1:* wss://127.0.0.1:* ${getConfig().ollamaBaseUrl} ${OLLAMA_CLOUD_HOST} ${cdnList}`,
             `font-src 'self' data: ${CDN_DOMAINS[0]} ${CDN_DOMAINS[3]}`,
             `object-src 'none'`,
             `frame-ancestors 'none'`,
@@ -308,9 +331,28 @@ export function setupStaticFiles(app: Application, dirname: string): void {
         contentSecurityPolicy: false,
         crossOriginEmbedderPolicy: false,
         crossOriginResourcePolicy: { policy: 'cross-origin' },
-        crossOriginOpenerPolicy: false,
+        // Stage 2-M6: COOP 활성화 — 프론트 스캔 결과 window.open은 모두 same-origin이고
+        // 외부 링크는 <a target=_blank rel="noopener noreferrer">로 이미 opener 격리됨.
+        // same-origin 정책은 Spectre-class 공격 완화 + cross-origin popup opener 분리.
+        crossOriginOpenerPolicy: { policy: 'same-origin' },
         originAgentCluster: false,
+        // Stage 2-M6: HSTS_POLICY 상수 사용 (helmet 기본 180일 → 2년).
+        // preload 미포함은 의도 — 롤백 가능성 유지.
+        strictTransportSecurity: {
+            maxAge: HSTS_POLICY.MAX_AGE_SECONDS,
+            includeSubDomains: HSTS_POLICY.INCLUDE_SUBDOMAINS,
+            preload: HSTS_POLICY.PRELOAD,
+        },
     }));
+
+    // Stage 2-M5: Permissions-Policy — helmet 기본 미포함. powerful browser API 전면 차단.
+    // 프론트 실 사용 중인 clipboard-write만 (self) 허용, 그 외 camera/microphone/geolocation/usb/payment 등 ().
+    // 값은 빌드 시점 상수이므로 응답마다 재계산 피하기 위해 클로저 밖에서 1회 계산.
+    const permissionsPolicyHeader = buildPermissionsPolicyHeader();
+    app.use((_req: Request, res: Response, next: NextFunction) => {
+        res.setHeader('Permissions-Policy', permissionsPolicyHeader);
+        next();
+    });
 
     app.get(/^\/([a-z0-9-]+)\.html$/, (req: Request, res: Response, next: NextFunction) => {
         const filename = req.params[0] ? `${req.params[0]}.html` : '';

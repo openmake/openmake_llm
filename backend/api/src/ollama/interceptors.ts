@@ -44,8 +44,9 @@ export function setupInterceptors(
     apiKeyManager: ApiKeyManager,
     keyRef: KeyIndexRef
 ): void {
-    // 요청 인터셉터: per-instance bound key 주입
+    // 요청 인터셉터: per-instance bound key 주입 (로컬 모델은 스킵)
     client.interceptors.request.use((config) => {
+        if (keyRef.boundKeyIndex === -1) return config;
         const authHeaders = apiKeyManager.getAuthHeadersForIndex(keyRef.boundKeyIndex);
         if (authHeaders.Authorization) {
             config.headers.Authorization = authHeaders.Authorization;
@@ -56,12 +57,19 @@ export function setupInterceptors(
     // 응답 인터셉터: 실패 시 폴백 처리
     client.interceptors.response.use(
         (response) => {
-            apiKeyManager.recordKeySuccess(keyRef.boundKeyIndex);
+            if (keyRef.boundKeyIndex !== -1) {
+                apiKeyManager.recordKeySuccess(keyRef.boundKeyIndex);
+            }
             return response;
         },
         async (error) => {
             const statusCode = error?.response?.status;
-            logger.info(`요청 실패 - 상태 코드: ${statusCode}`);
+            logger.debug(`요청 실패 - 상태 코드: ${statusCode}`);
+
+            // 로컬 모델(키 미할당)이면 키 로테이션 없이 에러 전파
+            if (keyRef.boundKeyIndex === -1) {
+                throw error;
+            }
 
             // 네트워크 에러 감지
             const isNetworkError = !statusCode && (
@@ -112,7 +120,9 @@ export function setupInterceptors(
                     apiKeyManager.recordKeyFailure(keyRef.boundKeyIndex, error);
                 }
             } else {
-                apiKeyManager.recordKeyFailure(keyRef.boundKeyIndex, error);
+                if (keyRef.boundKeyIndex !== -1) {
+                    apiKeyManager.recordKeyFailure(keyRef.boundKeyIndex, error);
+                }
             }
 
             throw error;

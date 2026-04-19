@@ -282,9 +282,19 @@ function renderAttachments() {
     container.innerHTML = attachedFiles.map((f, i) => `
         <div class="attachment-item">
             <span>${f.isImage ? '🖼️' : (f.type === 'pdf' ? '📄' : '📝')} ${escapeHtml(f.filename)}</span>
-            <button class="attachment-remove" onclick="removeAttachment(${i})">&times;</button>
+            <button class="attachment-remove" data-action="remove-attachment" data-index="${i}">&times;</button>
         </div>
     `).join('');
+
+    if (!container.dataset.delegated) {
+        container.addEventListener('click', (e) => {
+            const btn = e.target.closest('[data-action="remove-attachment"]');
+            if (!btn) return;
+            const idx = parseInt(btn.dataset.index, 10);
+            if (!Number.isNaN(idx)) removeAttachment(idx);
+        });
+        container.dataset.delegated = '1';
+    }
 }
 
 /**

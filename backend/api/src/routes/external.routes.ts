@@ -41,6 +41,13 @@ function isValidServiceType(value: string): value is ExternalServiceType {
     return VALID_SERVICE_TYPES.includes(value as ExternalServiceType);
 }
 
+/** 민감한 토큰 정보를 응답에서 제거하고, 토큰 존재 여부만 반환 */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function stripTokens(connection: any): Record<string, unknown> {
+    const { access_token, refresh_token, ...safe } = connection;
+    return { ...safe, hasAccessToken: !!access_token, hasRefreshToken: !!refresh_token };
+}
+
 /**
  * GET /api/external
  * 사용자의 외부 서비스 연결 목록 조회
@@ -51,7 +58,8 @@ router.get('/', requireAuth, asyncHandler(async (req: Request, res: Response) =>
 
     const connections = await db.getUserConnections(userId);
 
-    res.json(success(connections));
+    const safeConnections = (connections as any[]).map(stripTokens);
+    res.json(success(safeConnections));
 }));
 
 /**
@@ -90,7 +98,7 @@ router.post('/', requireAuth, validate(createExternalConnectionSchema), asyncHan
     const connection = await db.getUserConnectionByService(userId, serviceType);
 
     logger.info(`외부 연결 생성/업데이트: ${serviceType} by user ${userId}`);
-    res.status(201).json(success(connection));
+    res.status(201).json(success(connection ? stripTokens(connection as any) : { created: true }));
 }));
 
 /**
@@ -114,7 +122,7 @@ router.get('/:serviceType', requireAuth, asyncHandler(async (req: Request, res: 
         return;
     }
 
-    res.json(success(connection));
+    res.json(success(stripTokens(connection as any)));
 }));
 
 /**
@@ -152,7 +160,7 @@ router.put('/:connectionId/tokens', requireAuth, validate(updateExternalTokensSc
     const updated = await db.getExternalConnection(connectionId);
 
     logger.info(`외부 연결 토큰 갱신: ${connectionId}`);
-    res.json(success(updated));
+    res.json(success(updated ? stripTokens(updated) : { updated: true }));
 }));
 
 /**

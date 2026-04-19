@@ -108,8 +108,8 @@ export async function getSession(id: string): Promise<ConversationSession | unde
     if (!row) return undefined;
 
     const msgResult = await pool.query(
-        'SELECT * FROM conversation_messages WHERE session_id = $1 ORDER BY created_at ASC LIMIT 500',
-        [id]
+        'SELECT * FROM conversation_messages WHERE session_id = $1 ORDER BY created_at ASC LIMIT $2',
+        [id, 500]
     );
 
     const messages = (msgResult.rows as MessageRow[]).map(mr => rowToMessage(mr));

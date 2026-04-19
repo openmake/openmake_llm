@@ -125,8 +125,11 @@
                             <span>${depthLabels[s.depth] || s.depth}</span>
                             <span>${new Date(s.created_at).toLocaleDateString('ko')}</span>
                         </div>
-                        ${s.progress > 0 ? `<div class="progress-bar"><div class="progress-fill" style="width:${s.progress}%"></div></div>` : ''}
+                        ${s.progress > 0 ? `<div class="progress-bar"><div class="progress-fill" data-width="${s.progress}"></div></div>` : ''}
                     </div>`).join('');
+                el.querySelectorAll('.progress-fill[data-width]').forEach(node => {
+                    node.style.width = node.dataset.width + '%';
+                });
             } catch (e) { showToast('세션 로드 실패', 'error'); }
         }
 

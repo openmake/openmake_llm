@@ -176,8 +176,12 @@ export const mcpRouter = Router();
       res.json(success({ deleted: true }));
   }));
 
-  // 서버 수동 연결 (POST)
+  // 서버 수동 연결 (POST) - admin 전용
   mcpRouter.post('/servers/:id/connect', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+      if (req.user?.role !== 'admin') {
+          res.status(403).json(forbidden('관리자만 서버를 연결할 수 있습니다'));
+          return;
+      }
       const { id } = req.params;
       const db = getUnifiedDatabase();
       const server = await db.getMcpServerById(id);
@@ -205,8 +209,12 @@ export const mcpRouter = Router();
       res.json(success({ status }));
   }));
 
-  // 서버 수동 연결 해제 (POST)
+  // 서버 수동 연결 해제 (POST) - admin 전용
   mcpRouter.post('/servers/:id/disconnect', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+      if (req.user?.role !== 'admin') {
+          res.status(403).json(forbidden('관리자만 서버를 연결 해제할 수 있습니다'));
+          return;
+      }
       const { id } = req.params;
       const registry = getUnifiedMCPClient().getServerRegistry();
       await registry.disconnectServer(id);

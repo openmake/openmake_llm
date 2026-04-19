@@ -213,6 +213,18 @@ export class UnifiedMCPClient {
             };
         }
 
+        // 비경로 인자 보안 검증 (SQL 인젝션, 명령어 인젝션 등)
+        try {
+            sandboxedArgs = this.sanitizeToolArgs(sandboxedArgs, toolName);
+        } catch (error) {
+            const message = error instanceof Error ? error.message : '도구 인자 검증 실패';
+            logger.warn(`⚠️ 도구 인자 차단: ${toolName} (user: ${context.userId}) - ${message}`);
+            return {
+                content: [{ type: 'text', text: message }],
+                isError: true
+            };
+        }
+
         logger.info(`🔧 도구 실행: ${toolName} (user: ${context.userId}, tier: ${context.tier})`);
         return this.executeTool(toolName, sandboxedArgs);
     }
@@ -271,6 +283,43 @@ export class UnifiedMCPClient {
                 } else {
                     delete result[key];
                     throw new Error(`차단된 경로 인자: ${key}`);
+                }
+            }
+        }
+
+        return result;
+    }
+
+    /**
+     * 도구 인자에서 위험한 패턴을 검증/차단
+     *
+     * SQL, 명령어, URL 등 비경로 인자에 대한 기본 보안 검증을 수행합니다.
+     * 경로 인자는 applySandboxPaths()에서 별도 처리됩니다.
+     */
+    private sanitizeToolArgs(
+        args: Record<string, unknown>,
+        toolName: string
+    ): Record<string, unknown> {
+        const result = { ...args };
+
+        const DANGEROUS_PATTERNS: Record<string, RegExp[]> = {
+            sql: [/\b(DROP|ALTER|TRUNCATE|EXEC|EXECUTE|GRANT|REVOKE)\b/i],
+            query: [/\b(DROP|ALTER|TRUNCATE|EXEC|EXECUTE|GRANT|REVOKE)\b/i],
+            command: [/[;&|`$(){}]/],
+            cmd: [/[;&|`$(){}]/],
+            url: [/^(file|data|javascript|vbscript):/i],
+            href: [/^(file|data|javascript|vbscript):/i],
+        };
+
+        for (const [key, value] of Object.entries(result)) {
+            if (typeof value !== 'string') continue;
+
+            const patterns = DANGEROUS_PATTERNS[key.toLowerCase()];
+            if (!patterns) continue;
+
+            for (const pattern of patterns) {
+                if (pattern.test(value)) {
+                    throw new Error(`차단된 도구 인자: ${key} (도구: ${toolName}) — 위험한 패턴 감지`);
                 }
             }
         }
