@@ -165,11 +165,16 @@ export async function pingModelOnce(
  */
 export class ModelHealthMonitor {
     private snapshot: HealthSnapshot | null = null;
-    private inFlight: Promise<HealthSnapshot> | null = null;
+    private inFlight = new Map<string, Promise<HealthSnapshot>>();
 
     /**
-     * 헬스체크를 실행합니다. 동일한 체크가 이미 진행 중이면
+     * 헬스체크를 실행합니다. 동일 옵션 조합의 체크가 이미 진행 중이면
      * 기존 Promise를 재사용해 중복 호출을 방지합니다.
+     *
+     * bug_002: 이전 구현은 단일 슬롯 inFlight라 옵션이 다른 caller가
+     *          먼저 진행 중인 다른 스냅샷을 받아가는 문제가 있었다.
+     *          (예: scheduler의 {full:false} 중 admin의 {full:true}가 single-key
+     *           스냅샷을 "전체 키 매트릭스"인 양 받음)
      *
      * @param options.full  true=모든 키 × 모든 모델, false=현재 활성 키 1개
      * @param options.model 특정 모델만 체크
@@ -180,17 +185,23 @@ export class ModelHealthMonitor {
         model?: string;
         timeoutMs?: number;
     } = {}): Promise<HealthSnapshot> {
-        if (this.inFlight) {
-            return this.inFlight;
+        const key = JSON.stringify({
+            full: !!options.full,
+            model: options.model ?? null,
+            timeoutMs: options.timeoutMs ?? null,
+        });
+        const existing = this.inFlight.get(key);
+        if (existing) {
+            return existing;
         }
 
-        const promise = this.doCheck(options);
-        this.inFlight = promise;
-        try {
-            return await promise;
-        } finally {
-            this.inFlight = null;
-        }
+        const promise = this.doCheck(options).finally(() => {
+            if (this.inFlight.get(key) === promise) {
+                this.inFlight.delete(key);
+            }
+        });
+        this.inFlight.set(key, promise);
+        return promise;
     }
 
     private async doCheck(options: {

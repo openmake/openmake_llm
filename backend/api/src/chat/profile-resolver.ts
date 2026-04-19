@@ -147,10 +147,32 @@ export function buildExecutionPlan(
 
     if (profile) {
         // Brand model → 프로파일 기반 실행 계획
-        const execStrategy: ExecutionStrategy = profile.executionStrategy;
+        let execStrategy: ExecutionStrategy = profile.executionStrategy;
 
         // §CB 서킷 브레이커: 프로파일이 선언한 엔진이 장애 상태면 안전 모델로 대체
         const safeEngine = applyHealthCircuitBreaker(profile.engineModel);
+
+        // GV 모델 resolve (generate-verify / conditional-verify 전략에서만 사용)
+        const needsGV = execStrategy !== 'single';
+        const gvModelsRaw = needsGV ? resolveGVModels() : undefined;
+        // GV 쌍도 서킷 브레이커 적용 (단, generator ≠ verifier 원칙 유지 위해 상호 후보로 전달)
+        let gvModels = gvModelsRaw
+            ? {
+                  generator: applyHealthCircuitBreaker(gvModelsRaw.generator, [gvModelsRaw.verifier]),
+                  verifier: applyHealthCircuitBreaker(gvModelsRaw.verifier, [gvModelsRaw.generator]),
+              }
+            : undefined;
+
+        // bug_008: 두 모델이 동일 tier-3 fallback(예: FAST)으로 수렴하면 GV 의미 없음
+        //          (자기 자신을 검증하는 꼴) → single 전략으로 다운그레이드
+        if (gvModels && gvModels.generator === gvModels.verifier) {
+            logger.warn(
+                `GV 붕괴 감지: generator/verifier가 동일 fallback(${gvModels.generator})로 수렴 — ` +
+                `executionStrategy를 single로 다운그레이드 (원본 ${execStrategy}, 원본 GV ${gvModelsRaw?.generator}/${gvModelsRaw?.verifier})`,
+            );
+            execStrategy = 'single';
+            gvModels = undefined;
+        }
 
         logger.info(
             `Brand model 해석: ${requestedModel} → engine=${safeEngine}${
@@ -158,22 +180,11 @@ export function buildExecutionPlan(
             }, strategy=${execStrategy}`,
         );
 
-        // GV 모델 resolve (generate-verify / conditional-verify 전략에서만 사용)
-        const needsGV = execStrategy !== 'single';
-        const gvModelsRaw = needsGV ? resolveGVModels() : undefined;
-        // GV 쌍도 서킷 브레이커 적용 (단, generator ≠ verifier 원칙 유지 위해 상호 후보로 전달)
-        const gvModels = gvModelsRaw
-            ? {
-                  generator: applyHealthCircuitBreaker(gvModelsRaw.generator, [gvModelsRaw.verifier]),
-                  verifier: applyHealthCircuitBreaker(gvModelsRaw.verifier, [gvModelsRaw.generator]),
-              }
-            : undefined;
-
         return {
             requestedModel,
             profile,
             resolvedEngine: safeEngine,
-            useToolCalling: profile.executionStrategy !== 'single',
+            useToolCalling: execStrategy !== 'single',
             agentLoopMax: profile.agentLoopMax,
             loopStrategy: profile.loopStrategy,
             thinkingLevel: profile.thinking,

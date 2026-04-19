@@ -479,8 +479,19 @@ export class WebSocketHandler {
         if (trusted.includes('linklocal') && (ip.startsWith('169.254.') || ip.startsWith('fe80:'))) {
             return true;
         }
-        if (trusted.includes('uniquelocal') && (ip.startsWith('10.') || ip.startsWith('172.') || ip.startsWith('192.168.') || ip.startsWith('fc') || ip.startsWith('fd'))) {
-            return true;
+        if (trusted.includes('uniquelocal')) {
+            // RFC1918 IPv4: 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16 + IPv6 ULA fc00::/7
+            if (ip.startsWith('10.') || ip.startsWith('192.168.') || ip.startsWith('fc') || ip.startsWith('fd')) {
+                return true;
+            }
+            // bug_003: 172.x는 두 번째 옥텟이 16-31 범위(/12)만 RFC1918 사설. 172.0.0.0/8 전체 매칭은 XFF 스푸핑 취약점
+            const match172 = ip.match(/^172\.(\d+)\./);
+            if (match172) {
+                const second = parseInt(match172[1], 10);
+                if (second >= 16 && second <= 31) {
+                    return true;
+                }
+            }
         }
         return trusted.includes(ip);
     }
