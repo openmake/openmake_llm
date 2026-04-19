@@ -10,7 +10,8 @@
 import { Request, Response, Router } from 'express';
 import { getAuthService } from '../services/AuthService';
 import { getUserManager } from '../data/user-manager';
-import { requireAuth, extractToken, blacklistToken, setTokenCookie, clearTokenCookie, setRefreshTokenCookie, generateRefreshToken, generateToken, verifyRefreshToken } from '../auth';
+import { requireAuth, extractToken, blacklistToken, setTokenCookie, clearTokenCookie, setRefreshTokenCookie, generateRefreshToken, generateToken, verifyRefreshToken, removeSessionFromMap } from '../auth';
+import jwt from 'jsonwebtoken';
 import { createLogger } from '../utils/logger';
 import { success, badRequest, unauthorized, conflict, internalError } from '../utils/api-response';
 import { getConfig } from '../config/env';
@@ -135,6 +136,15 @@ export class AuthController {
         if (cookieToken) {
             blacklistToken(cookieToken);
         }
+        // Refresh 토큰: 블랙리스트 + activeSessionMap 정리 (bug_004)
+        const refreshToken = req.cookies?.refresh_token;
+        if (refreshToken) {
+            const decoded = jwt.decode(refreshToken) as { userId?: string | number; jti?: string } | null;
+            if (decoded?.userId && decoded.jti) {
+                removeSessionFromMap(String(decoded.userId), decoded.jti);
+            }
+            blacklistToken(refreshToken);
+        }
         clearTokenCookie(res);
         res.json(success({ message: '로그아웃되었습니다' }));
     }
@@ -247,6 +257,13 @@ export class AuthController {
 
             // 사용된 리프레시 토큰 블랙리스트 (토큰 로테이션)
             await blacklistToken(refreshToken);
+
+            // bug_004: activeSessionMap에서 이전 세션 제거 (generateRefreshToken의 FIFO splice가
+            //          다른 기기의 유효 세션을 실수로 blacklist 처리하는 것을 방지)
+            const oldDecoded = jwt.decode(refreshToken) as { jti?: string } | null;
+            if (oldDecoded?.jti && payload.userId) {
+                removeSessionFromMap(String(payload.userId), oldDecoded.jti);
+            }
 
             // 새 액세스 + 리프레시 토큰 발급
             const newAccessToken = generateToken(user);
