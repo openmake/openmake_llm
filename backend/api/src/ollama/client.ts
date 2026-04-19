@@ -105,28 +105,37 @@ export class OllamaClient {
         this.config = { ...DEFAULT_CONFIG, ...config };
         this.apiKeyManager = getApiKeyManager();
 
+        const isCloud = this.isCloudModel(this.config.model);
         let baseUrl = this.config.baseUrl;
-        if (this.isCloudModel(this.config.model)) {
+        if (isCloud) {
             baseUrl = OLLAMA_CLOUD_HOST;
             logger.info(`Cloud 모델 감지 - 호스트: ${baseUrl}`);
         }
 
-        // 키풀에서 라운드로빈으로 다음 가용 키 할당 (모델 무관)
-        const poolKeyIndex = this.apiKeyManager.getNextAvailableKey();
-        const boundKeyIndex = poolKeyIndex !== -1 ? poolKeyIndex : this.apiKeyManager.getCurrentKeyIndex();
-        this.keyRef = { boundKeyIndex };
-        logger.info(`[constructor] 키풀 할당: ${this.config.model} → Key ${this.keyRef.boundKeyIndex + 1}`);
+        if (isCloud) {
+            // Cloud 모델: 키풀에서 라운드로빈으로 다음 가용 키 할당
+            const poolKeyIndex = this.apiKeyManager.getNextAvailableKey();
+            const boundKeyIndex = poolKeyIndex !== -1 ? poolKeyIndex : this.apiKeyManager.getCurrentKeyIndex();
+            this.keyRef = { boundKeyIndex };
+            logger.info(`[constructor] 키풀 할당: ${this.config.model} → Key ${this.keyRef.boundKeyIndex + 1}`);
+        } else {
+            // 로컬 모델: 키 미할당
+            this.keyRef = { boundKeyIndex: -1 };
+            logger.debug(`[constructor] 로컬 모델 — 키 할당 스킵: ${this.config.model}`);
+        }
 
         this.client = axios.create({
             baseURL: baseUrl,
             timeout: this.config.timeout,
             headers: {
                 'Content-Type': 'application/json',
-                ...this.apiKeyManager.getAuthHeadersForIndex(this.keyRef.boundKeyIndex)
+                ...(isCloud ? this.apiKeyManager.getAuthHeadersForIndex(this.keyRef.boundKeyIndex) : {})
             }
         });
 
-        setupInterceptors(this.client, this.apiKeyManager, this.keyRef);
+        if (isCloud) {
+            setupInterceptors(this.client, this.apiKeyManager, this.keyRef);
+        }
     }
 
     /**
@@ -163,14 +172,20 @@ export class OllamaClient {
         this.config.model = model;
 
         if (isCloud && !wasCloud) {
+            // Local → Cloud 전환: baseURL 변경 + 키 할당 + 인터셉터 설정
             this.client.defaults.baseURL = OLLAMA_CLOUD_HOST;
-            logger.info(`[setModel] Cloud 모델 전환 → ${OLLAMA_CLOUD_HOST} (model: ${model})`);
+            const poolKeyIndex = this.apiKeyManager.getNextAvailableKey();
+            this.keyRef.boundKeyIndex = poolKeyIndex !== -1 ? poolKeyIndex : this.apiKeyManager.getCurrentKeyIndex();
+            setupInterceptors(this.client, this.apiKeyManager, this.keyRef);
+            logger.info(`[setModel] Cloud 모델 전환 → ${OLLAMA_CLOUD_HOST} (model: ${model}, Key ${this.keyRef.boundKeyIndex + 1})`);
         } else if (!isCloud && wasCloud) {
+            // Cloud → Local 전환: baseURL 변경 + 키 해제
             this.client.defaults.baseURL = this.config.baseUrl;
+            this.keyRef.boundKeyIndex = -1;
             logger.info(`[setModel] Local 모델 전환 → ${this.config.baseUrl} (model: ${model})`);
         }
 
-        logger.info(`[setModel] 모델 변경: ${model} (키 유지: Key ${this.boundKeyIndex + 1})`);
+        logger.debug(`[setModel] 모델 변경: ${model}`);
     }
 
     /**

@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { getConfig } from '../config/env';
 import { ProgressCallback, createProgressEvent } from './progress';
@@ -22,7 +22,7 @@ function getLanguageName(code: string): string {
 }
 const logger = createLogger('DocumentProcessor');
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 /** 문서 처리 결과에 포함되는 부가 정보 */
 export interface DocumentInfo {
@@ -42,6 +42,8 @@ export interface DocumentResult {
     text: string;
     pages?: number;
     info?: DocumentInfo;
+    /** 문서 소유자 ID (IDOR 방지를 위한 소유권 검증용) */
+    userId?: string | number;
 }
 
 /**
@@ -111,15 +113,15 @@ export async function extractPdfText(
                 onProgress?.(createProgressEvent('ocr_convert', 'PDF 페이지를 이미지로 변환 중...', filename, 35));
 
                 // pdftoppm 사용: -png 옵션으로 PNG 출력, -r 200 으로 200 DPI 설정
-                const { stdout: pdftoppmPath } = await execAsync('which pdftoppm').catch(() => ({ stdout: '' }));
+                const { stdout: pdftoppmPath } = await execFileAsync('which', ['pdftoppm']).catch(() => ({ stdout: '' }));
 
                 if (pdftoppmPath.trim()) {
                     // pdftoppm이 설치된 경우 사용 (권장)
-                    await execAsync(`pdftoppm -png -r 200 "${filePath}" "${tempDir}/page"`);
+                    await execFileAsync('pdftoppm', ['-png', '-r', '200', filePath, `${tempDir}/page`]);
                 } else {
                     // pdftoppm 없으면 sips 사용 (첫 페이지만 - 폴백)
                     logger.info(`[PDF/OCR] pdftoppm을 찾을 수 없어 sips 폴백 (첫 페이지만 추출됩니다. 'brew install poppler'로 pdftoppm 설치 권장)`);
-                    await execAsync(`sips -s format png --resampleHeightWidthMax ${DOCUMENT_PROCESSING.IMAGE_RESAMPLE_MAX} "${filePath}" --out "${tempDir}"`);
+                    await execFileAsync('sips', ['-s', 'format', 'png', '--resampleHeightWidthMax', String(DOCUMENT_PROCESSING.IMAGE_RESAMPLE_MAX), filePath, '--out', tempDir]);
                 }
 
                 const imageFiles = fs.readdirSync(tempDir)

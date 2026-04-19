@@ -181,4 +181,19 @@ export const WS_LIMITS = {
     AUTH_EXPIRY_WARNING_WINDOW_MS: Number(process.env.WS_AUTH_EXPIRY_WARNING_WINDOW_MS) || 2 * 60 * 1000,
     /** 토큰 만료 경고 중복 방지 쿨다운 (ms) — 기본 60초 */
     AUTH_EXPIRY_WARNING_COOLDOWN_MS: Number(process.env.WS_AUTH_EXPIRY_WARNING_COOLDOWN_MS) || 60 * 1000,
+    /** 메시지 빈도 제한 윈도우 (ms) — 기본 10초 */
+    MESSAGE_RATE_WINDOW_MS: Number(process.env.WS_MESSAGE_RATE_WINDOW_MS) || 10 * 1000,
+    /** 윈도우 내 최대 메시지 수 — 기본 30개 */
+    MESSAGE_RATE_MAX_PER_WINDOW: Number(process.env.WS_MESSAGE_RATE_MAX_PER_WINDOW) || 30,
+} as const;
+
+// ============================================
+// MCP 외부 도구 실행 제한
+// ============================================
+
+export const MCP_EXTERNAL_TOOL_LIMITS = {
+    /** 외부 도구 실행 타임아웃 (ms) — 30초 */
+    EXECUTION_TIMEOUT_MS: Number(process.env.MCP_EXTERNAL_TOOL_TIMEOUT_MS) || 30_000,
+    /** 외부 도구 출력 최대 크기 (bytes) — 1MB */
+    MAX_OUTPUT_SIZE: Number(process.env.MCP_EXTERNAL_TOOL_MAX_OUTPUT_SIZE) || 1024 * 1024,
 } as const;

@@ -25,6 +25,7 @@ import { chatRateLimiter } from '../middlewares/chat-rate-limiter';
 import { validate } from '../middlewares/validation';
 import { chatRequestSchema } from '../schemas';
 import { ChatRequestHandler, ChatRequestError } from '../chat/request-handler';
+import { getConversationDB } from '../data/conversation-db';
 import { createLogger } from '../utils/logger';
 
 const router = Router();
@@ -51,6 +52,16 @@ router.post('/', optionalApiKey, optionalAuth, chatRateLimiter, validate(chatReq
     if (!userContext) {
         res.status(401).json(unauthorized('인증이 필요합니다'));
         return;
+    }
+
+    // 세션 소유권 검증 (IDOR 방지)
+    if (sessionId && userContext.userId && userContext.userId !== 'guest') {
+        const convDB = getConversationDB();
+        const session = await convDB.getSession(sessionId);
+        if (session && session.userId && String(session.userId) !== String(userContext.userId)) {
+            res.status(403).json({ error: '이 세션에 접근할 권한이 없습니다' });
+            return;
+        }
     }
 
     try {
@@ -120,6 +131,16 @@ router.post('/stream', optionalApiKey, optionalAuth, chatRateLimiter, validate(c
     if (!userContext) {
         res.status(401).json(unauthorized('인증이 필요합니다'));
         return;
+    }
+
+    // 세션 소유권 검증 (IDOR 방지)
+    if (sessionId && userContext.userId && userContext.userId !== 'guest') {
+        const convDB = getConversationDB();
+        const session = await convDB.getSession(sessionId);
+        if (session && session.userId && String(session.userId) !== String(userContext.userId)) {
+            res.status(403).json({ error: '이 세션에 접근할 권한이 없습니다' });
+            return;
+        }
     }
 
     res.setHeader('Content-Type', 'text/event-stream');

@@ -137,7 +137,10 @@ function sanitizeNode(node) {
             const allowedAttrs = ALLOWED_ATTRIBUTES[tagName] || [];
             const attrs = Array.from(child.attributes);
             for (const attr of attrs) {
-                if (!allowedAttrs.includes(attr.name)) {
+                // 모든 on* 이벤트 핸들러 속성 무조건 차단 (SVG 포함)
+                if (attr.name.toLowerCase().startsWith('on')) {
+                    child.removeAttribute(attr.name);
+                } else if (!allowedAttrs.includes(attr.name)) {
                     child.removeAttribute(attr.name);
                 } else {
                     // href/src의 위험한 스킴 체크
@@ -215,9 +218,23 @@ function purifyHTML(html) {
                 'font-size', 'dy', 'refX', 'refY', 'markerWidth', 'markerHeight', 'orient',
                 'encoding', 'aria-hidden', 'style'
             ],
-            FORBID_ATTR: ['onerror', 'onload', 'onclick', 'onmouseover'],
+            FORBID_ATTR: [
+                'onerror', 'onload', 'onclick', 'onmouseover',
+                'onfocus', 'onblur', 'onmouseenter', 'onmouseleave',
+                'onmousedown', 'onmouseup', 'onkeydown', 'onkeyup', 'onkeypress',
+                'onsubmit', 'onreset', 'onchange', 'oninput', 'onscroll',
+                'ondblclick', 'oncontextmenu', 'ondrag', 'ondrop',
+                'onanimationstart', 'onanimationend', 'ontransitionend',
+                'ontouchstart', 'ontouchend', 'ontouchmove',
+                'onpointerdown', 'onpointerup', 'onpointermove',
+                'onwheel', 'onresize', 'onpaste', 'oncopy',
+                'onbeforeinput', 'onfocusin', 'onfocusout',
+                'onmousemove', 'onselect', 'ontoggle'
+            ],
             ADD_ATTR: ['target'],
-            ALLOW_DATA_ATTR: false
+            ALLOW_DATA_ATTR: false,
+            // DOMPurify 내장 on* 이벤트 핸들러 전체 차단 (FORBID_ATTR 보완)
+            FORBID_TAGS: ['script', 'iframe', 'object', 'embed', 'form', 'input', 'textarea', 'button', 'select']
         });
     }
     // Fallback to custom sanitizer

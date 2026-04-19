@@ -194,11 +194,14 @@
                             <span class="text-sm font-bold">${esc(item.data.percentage)}%</span>
                         </div>
                         <div class="progress-bar">
-                            <div class="progress-fill ${getProgressClass(item.data.percentage)}" 
-                                 style="width: ${Math.min(item.data.percentage, 100)}%"></div>
+                            <div class="progress-fill ${getProgressClass(item.data.percentage)}"
+                                 data-width="${Math.min(item.data.percentage, 100)}"></div>
                         </div>
                     </div>
                 `).join('');
+                        container.querySelectorAll('.progress-fill[data-width]').forEach(node => {
+                            node.style.width = node.dataset.width + '%';
+                        });
 
                         // 경고 배지
                         const badge = document.getElementById('quotaWarningBadge');

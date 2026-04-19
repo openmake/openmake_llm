@@ -27,6 +27,8 @@ export interface JWTPayload {
     email: string;
     /** 사용자 역할 (admin/user/guest) */
     role: UserRole;
+    /** 토큰 타입 ('access' | 'refresh', 레거시 토큰은 미설정) */
+    type?: 'access' | 'refresh';
     /** 토큰 발급 시각 (jwt 자동 생성, epoch seconds) */
     iat?: number;
     /** 토큰 만료 시각 (epoch seconds) */

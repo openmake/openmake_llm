@@ -219,6 +219,7 @@
                         <button class="tab active" onclick="switchTab('users')">👥 사용자 관리</button>
                         <button class="tab" onclick="switchTab('conversations')">💬 대화 기록</button>
                         <button class="tab" onclick="switchTab('stats')">📊 통계</button>
+                        <button class="tab" onclick="switchTab('modelHealth')">🩺 모델 헬스</button>
                     </div>
 
                     <!-- Stats Cards -->
@@ -325,6 +326,55 @@
                             </div>
                         </div>
                     </div>
+
+                    <!-- Model Health Panel -->
+                    <div id="modelHealthPanel" class="panel">
+                        <div class="admin-stats-grid">
+                            <div class="metric-card card">
+                                <div class="metric-card-value" id="mhHealthyCount">-</div>
+                                <div class="text-muted text-sm">정상 모델</div>
+                            </div>
+                            <div class="metric-card card">
+                                <div class="metric-card-value" id="mhUnhealthyCount" style="color:#e74c3c;">-</div>
+                                <div class="text-muted text-sm">장애 모델</div>
+                            </div>
+                            <div class="metric-card card">
+                                <div class="metric-card-value" id="mhKeyCount">-</div>
+                                <div class="text-muted text-sm">체크 키 수</div>
+                            </div>
+                            <div class="metric-card card">
+                                <div class="metric-card-value" id="mhLastCheck" style="font-size:0.9rem;">-</div>
+                                <div class="text-muted text-sm">마지막 체크</div>
+                            </div>
+                        </div>
+                        <div class="card">
+                            <div class="card-header">
+                                <span class="card-title">Cloud 모델 × API Key 헬스 매트릭스</span>
+                                <div style="display:flex; gap:8px;">
+                                    <button class="btn btn-secondary btn-sm" onclick="refreshModelHealthSnapshot()">🔄 스냅샷 새로고침</button>
+                                    <button class="btn btn-primary btn-sm" onclick="runModelHealthLive(false)">⚡ 현재 키로 즉시 체크</button>
+                                    <button class="btn btn-primary btn-sm" onclick="runModelHealthLive(true)">🔬 전체 키 매트릭스</button>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <p class="text-muted text-sm" id="mhStatusLine">로딩 중...</p>
+                                <div class="table-container admin-table-wrap">
+                                    <table class="data-table">
+                                        <thead>
+                                            <tr>
+                                                <th>모델</th>
+                                                <th>상태</th>
+                                                <th>OK / Total</th>
+                                                <th>평균 지연</th>
+                                                <th>에러</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="mhTable"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -418,7 +468,103 @@
             document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
             document.querySelector(`[onclick="switchTab('${tab}')"]`).classList.add('active');
             document.getElementById(`${tab}Panel`).classList.add('active');
+            if (tab === 'modelHealth') {
+                refreshModelHealthSnapshot();
+            }
         }
+
+        // ============================================
+        // 모델 헬스체크 UI 로직
+        // ============================================
+
+        /** 스냅샷(캐시된 주기 헬스체크 결과) 조회 */
+        async function refreshModelHealthSnapshot() {
+            setModelHealthStatus('스냅샷 로딩 중...');
+            try {
+                const res = await authFetch('/api/models/health/snapshot');
+                const data = await res.json();
+                const payload = data.data || data;
+                if (!payload.available) {
+                    setModelHealthStatus(payload.message || '스냅샷이 아직 없습니다. 즉시 체크를 실행하세요.');
+                    return;
+                }
+                renderModelHealth(payload);
+            } catch (e) {
+                setModelHealthStatus('스냅샷 조회 실패: ' + (e && e.message ? e.message : String(e)));
+            }
+        }
+
+        /** 라이브 헬스체크 실행 */
+        async function runModelHealthLive(full) {
+            const mode = full ? '전체 키 매트릭스' : '현재 활성 키';
+            setModelHealthStatus(`${mode} 체크 실행 중... (수십 초 소요될 수 있습니다)`);
+            try {
+                const res = await authFetch('/api/models/health' + (full ? '?full=true' : ''));
+                const data = await res.json();
+                if (!res.ok || data.success === false) {
+                    throw new Error(data.error || ('HTTP ' + res.status));
+                }
+                const payload = data.data || data;
+                renderModelHealth(payload);
+            } catch (e) {
+                setModelHealthStatus('라이브 체크 실패: ' + (e && e.message ? e.message : String(e)));
+            }
+        }
+
+        function setModelHealthStatus(text) {
+            const el = document.getElementById('mhStatusLine');
+            if (el) el.textContent = text;
+        }
+
+        function renderModelHealth(snapshot) {
+            document.getElementById('mhHealthyCount').textContent = snapshot.healthyCount ?? '-';
+            document.getElementById('mhUnhealthyCount').textContent = snapshot.unhealthyCount ?? '-';
+            document.getElementById('mhKeyCount').textContent = snapshot.keyCount != null && snapshot.totalKeys != null
+                ? `${snapshot.keyCount} / ${snapshot.totalKeys}`
+                : '-';
+            const ts = snapshot.checkedAt ? new Date(snapshot.checkedAt).toLocaleString('ko-KR') : '-';
+            document.getElementById('mhLastCheck').textContent = ts;
+
+            const mode = snapshot.mode === 'full-matrix' ? '전체 매트릭스' : '현재 활성 키';
+            setModelHealthStatus(`${mode} · ${snapshot.modelCount}개 모델 · ${snapshot.totalDurationMs}ms`);
+
+            const tbody = document.getElementById('mhTable');
+            if (!Array.isArray(snapshot.summary) || snapshot.summary.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted p-4">데이터 없음</td></tr>';
+                return;
+            }
+            const rows = snapshot.summary.map(s => {
+                const badge = s.healthy
+                    ? '<span class="badge badge-active">정상</span>'
+                    : '<span class="badge badge-inactive" style="background:#e74c3c;color:white;">장애</span>';
+                const ratio = `${s.okCount} / ${s.totalCount}`;
+                const latency = s.avgLatencyMs != null ? `${s.avgLatencyMs}ms` : '-';
+                const errors = (s.errors || []).slice(0, 3).map(e => {
+                    const status = e.httpStatus || 'err';
+                    return `K${(e.keyIndex ?? 0) + 1}=${status}`;
+                }).join(', ') || '-';
+                return `<tr>
+                    <td><code>${escapeHtml(s.model)}</code></td>
+                    <td>${badge}</td>
+                    <td>${ratio}</td>
+                    <td>${latency}</td>
+                    <td class="text-sm text-muted">${escapeHtml(errors)}</td>
+                </tr>`;
+            });
+            tbody.innerHTML = rows.join('');
+        }
+
+        // 30초 간격으로 헬스 탭이 열려있을 때만 자동 새로고침
+        setInterval(() => {
+            const panel = document.getElementById('modelHealthPanel');
+            if (panel && panel.classList.contains('active')) {
+                refreshModelHealthSnapshot();
+            }
+        }, 30000);
+
+        window.switchTab = switchTab;
+        window.refreshModelHealthSnapshot = refreshModelHealthSnapshot;
+        window.runModelHealthLive = runModelHealthLive;
 
         async function loadUsers() {
              const role = document.getElementById('filterRole').value;

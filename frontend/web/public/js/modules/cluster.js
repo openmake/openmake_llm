@@ -65,13 +65,16 @@ function updateSidebarClusterInfo() {
         if (nodes.length > 0) {
             nodesList.innerHTML = nodes.map(n =>
                 `<div style="margin: 4px 0; display: flex; align-items: center; gap: 8px;">
-                    <span style="color: ${n.status === 'online' ? '#22c55e' : '#ef4444'}">●</span>
+                    <span class="cluster-node-dot" data-status="${n.status === 'online' ? 'online' : 'offline'}">●</span>
                     <div>
                         <div style="font-weight: 500;">${escapeHtml(n.name || n.id)}</div>
                         <div style="font-size: 12px; color: var(--text-muted);">${escapeHtml(n.host)}:${escapeHtml(String(n.port))}</div>
                     </div>
                 </div>`
             ).join('');
+            nodesList.querySelectorAll('.cluster-node-dot[data-status]').forEach(node => {
+                node.style.color = node.dataset.status === 'online' ? '#22c55e' : '#ef4444';
+            });
         } else {
             nodesList.innerHTML = '<div style="color: var(--text-muted);">노드 없음</div>';
         }

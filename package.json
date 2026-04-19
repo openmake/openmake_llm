@@ -19,12 +19,13 @@
         "test:integration": "cd tests/integration && jest",
         "test:e2e": "npx playwright test",
         "test:e2e:ui": "npx playwright test --ui",
-        "lint": "eslint . --ext .ts,.tsx,.js,.jsx",
+        "lint": "eslint .",
         "clean": "rm -rf */dist **/dist",
         "check:schema-drift": "bash scripts/check-schema-drift.sh",
         "ci": "bash scripts/ci-test.sh",
         "hooks:install": "bash scripts/install-hooks.sh",
-        "migrate": "npx ts-node scripts/run-migrations.ts"
+        "migrate": "npx ts-node scripts/run-migrations.ts",
+        "version": "node -e \"const v=require('./package.json').version;const fs=require('fs');['backend/api/package.json','frontend/web/package.json'].forEach(f=>{const p=JSON.parse(fs.readFileSync(f,'utf8'));p.version=v;fs.writeFileSync(f,JSON.stringify(p,null,4)+'\\n')});console.log('✅ 모든 workspace 버전 동기화 완료:',v)\" && git add backend/api/package.json frontend/web/package.json"
     },
     "keywords": [
         "ai",
@@ -34,6 +35,9 @@
     ],
     "author": "",
     "license": "MIT",
+    "engines": {
+        "node": ">=22"
+    },
     "workspaces": [
         "backend/api",
         "frontend/web"
@@ -43,10 +47,9 @@
         "@types/node": "^20.10.0",
         "@types/nodemailer": "^7.0.9",
         "@types/supertest": "^7.2.0",
-        "@typescript-eslint/eslint-plugin": "^8.56.1",
-        "@typescript-eslint/parser": "^8.56.1",
+        "typescript-eslint": "^8.56.1",
         "concurrently": "^8.2.2",
-        "eslint": "^8.0.0",
+        "eslint": "^9.0.0",
         "jest": "^29.7.0",
         "playwright": "^1.58.0",
         "supertest": "^7.2.2",

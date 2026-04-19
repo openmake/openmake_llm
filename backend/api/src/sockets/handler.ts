@@ -40,11 +40,13 @@ import { ClusterManager } from '../cluster/manager';
 import { getUnifiedMCPClient } from '../mcp';
 import { createLogger } from '../utils/logger';
 import { WSMessage, ExtendedWebSocket } from './ws-types';
-import { authenticateWebSocket, refreshWebSocketAuthentication } from './ws-auth';
+import { authenticateWebSocket, refreshWebSocketAuthentication, validateWebSocketOrigin } from './ws-auth';
 import { WEBSOCKET_TIMEOUTS, WS_LIMITS } from '../config/timeouts';
+import { WS_SECURITY } from '../config/security';
 import { handleChatMessage } from './ws-chat-handler';
 import { withSpan } from '../observability/otel';
 import { runWithRequestContext } from '../utils/request-context';
+import { getConfig } from '../config';
 
 const log = createLogger('WebSocketHandler');
 
@@ -111,6 +113,24 @@ export class WebSocketHandler {
      */
     private setupConnection(): void {
         this.wss.on('connection', async (ws: WebSocket, req: IncomingMessage) => {
+            // CSWSH 방어: Origin 헤더 화이트리스트 검증
+            // CORS는 WS upgrade에 적용되지 않으므로 서버가 직접 검증해야 한다.
+            const origin = req.headers.origin;
+            const originAllowlist = getConfig().corsOrigins.split(',')
+                .map(o => o.trim())
+                .filter(o => o.length > 0 && o !== '*');
+            if (!validateWebSocketOrigin(origin, originAllowlist)) {
+                const clientIpForLog = this.getClientIp(req);
+                log.warn(`[WS] Origin 거부: origin=${origin ?? '<none>'}, ip=${clientIpForLog}`);
+                try {
+                    ws.send(JSON.stringify({ type: 'error', message: '허용되지 않은 Origin입니다.' }));
+                } catch {
+                    /* socket may already be closed */
+                }
+                ws.close(WS_SECURITY.ORIGIN_REJECTED_CLOSE_CODE, WS_SECURITY.ORIGIN_REJECTED_REASON);
+                return;
+            }
+
             // WebSocket 연결 인증
             const auth = await authenticateWebSocket(req, log);
 
@@ -153,6 +173,7 @@ export class WebSocketHandler {
             extWs._connectedAtMs = Date.now();
             extWs._lastActivityAtMs = Date.now();
             extWs._messageCount = 0;
+            extWs._messageTimestamps = [];
             extWs._lastExpiryWarningAtMs = 0;
 
             this.registerUserConnection(extWs);
@@ -225,6 +246,19 @@ export class WebSocketHandler {
                         log.debug(`[WS] 메시지 수신: type=${msg.type}`);
                         this.touchActivity(extWs);
                         extWs._messageCount = (extWs._messageCount || 0) + 1;
+
+                        // 🔒 메시지 빈도 제한: 윈도우 내 최대 메시지 수 초과 시 차단
+                        const now = Date.now();
+                        if (!extWs._messageTimestamps) extWs._messageTimestamps = [];
+                        extWs._messageTimestamps.push(now);
+                        const windowStart = now - WS_LIMITS.MESSAGE_RATE_WINDOW_MS;
+                        extWs._messageTimestamps = extWs._messageTimestamps.filter(ts => ts > windowStart);
+                        if (extWs._messageTimestamps.length > WS_LIMITS.MESSAGE_RATE_MAX_PER_WINDOW) {
+                            log.warn(`[WS] 메시지 빈도 초과: userId=${extWs._authenticatedUserId || 'anonymous'}, count=${extWs._messageTimestamps.length}/${WS_LIMITS.MESSAGE_RATE_MAX_PER_WINDOW}`);
+                            ws.send(JSON.stringify({ type: 'error', message: '메시지 전송이 너무 빠릅니다. 잠시 후 다시 시도해주세요.' }));
+                            return;
+                        }
+
                         await this.handleMessage(ws, msg);
                     } catch (e: unknown) {
                         log.error('[WS] 메시지 처리 오류:', (e instanceof Error ? e.message : String(e)) || e);
@@ -421,14 +455,45 @@ export class WebSocketHandler {
     }
 
     private getClientIp(req: IncomingMessage): string {
-        const xForwardedFor = req.headers['x-forwarded-for'];
-        if (typeof xForwardedFor === 'string' && xForwardedFor.length > 0) {
-            return xForwardedFor.split(',')[0].trim();
+        const trustedProxies = getConfig().trustedProxies;
+        const remoteAddr = req.socket?.remoteAddress || 'unknown';
+
+        // 신뢰 프록시 설정이 있고, 직접 연결 IP가 신뢰 범위인 경우만 X-Forwarded-For 사용
+        if (trustedProxies.length > 0 && this.isTrustedProxy(remoteAddr, trustedProxies)) {
+            const xForwardedFor = req.headers['x-forwarded-for'];
+            if (typeof xForwardedFor === 'string' && xForwardedFor.length > 0) {
+                return xForwardedFor.split(',')[0].trim();
+            }
+            if (Array.isArray(xForwardedFor) && xForwardedFor.length > 0) {
+                return xForwardedFor[0];
+            }
         }
-        if (Array.isArray(xForwardedFor) && xForwardedFor.length > 0) {
-            return xForwardedFor[0];
+
+        return remoteAddr;
+    }
+
+    private isTrustedProxy(ip: string, trusted: string[]): boolean {
+        if (trusted.includes('loopback') && (ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1')) {
+            return true;
         }
-        return req.socket?.remoteAddress || 'unknown';
+        if (trusted.includes('linklocal') && (ip.startsWith('169.254.') || ip.startsWith('fe80:'))) {
+            return true;
+        }
+        if (trusted.includes('uniquelocal')) {
+            // RFC1918 IPv4: 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16 + IPv6 ULA fc00::/7
+            if (ip.startsWith('10.') || ip.startsWith('192.168.') || ip.startsWith('fc') || ip.startsWith('fd')) {
+                return true;
+            }
+            // bug_003: 172.x는 두 번째 옥텟이 16-31 범위(/12)만 RFC1918 사설. 172.0.0.0/8 전체 매칭은 XFF 스푸핑 취약점
+            const match172 = ip.match(/^172\.(\d+)\./);
+            if (match172) {
+                const second = parseInt(match172[1], 10);
+                if (second >= 16 && second <= 31) {
+                    return true;
+                }
+            }
+        }
+        return trusted.includes(ip);
     }
 
     private cleanupOldAttempts(map: Map<string, number[]>, key: string): number[] {
@@ -535,6 +600,19 @@ export class WebSocketHandler {
                     this.userConnectionAttempts.delete(key);
                 } else {
                     this.userConnectionAttempts.set(key, filtered);
+                }
+            }
+
+            // Map 크기 제한: 메모리 고갈 DoS 방지
+            const MAX_TRACKING_ENTRIES = 10000;
+            for (const map of [this.ipConnectionAttempts, this.userConnectionAttempts]) {
+                if (map.size > MAX_TRACKING_ENTRIES) {
+                    const entriesToDelete = map.size - MAX_TRACKING_ENTRIES;
+                    const iterator = map.keys();
+                    for (let i = 0; i < entriesToDelete; i++) {
+                        const key = iterator.next().value;
+                        if (key) map.delete(key);
+                    }
                 }
             }
         }, WS_LIMITS.CONNECTION_RATE_WINDOW_MS);

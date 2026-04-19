@@ -57,5 +57,6 @@ export interface ExtendedWebSocket extends WebSocket {
     _connectedAtMs?: number;
     _lastActivityAtMs?: number;
     _messageCount?: number;
+    _messageTimestamps?: number[];
     _lastExpiryWarningAtMs?: number;
 }
