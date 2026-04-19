@@ -146,10 +146,43 @@ function calculateSlidingWindowUsage(counter: SlidingWindowCounter, now: number,
 }
 
 /**
+ * bug_006: key별 promise chain으로 read-modify-write를 직렬화.
+ * MemoryStore 기반 async get/set 사이에 event-loop yield가 생기면서 동일 키에
+ * 대한 동시 요청이 같은 pre-increment 값을 읽고 각자 +1로 쓰는 lost-update 경합이
+ * 발생했다. 키마다 이전 작업이 끝날 때까지 대기시켜 atomic 증분 semantics 복원.
+ *
+ * Phase 4(Redis) 전환 시에는 Lua 스크립트 또는 INCR 기반 atomic primitive가 더 적합.
+ */
+const keyLocks = new Map<string, Promise<unknown>>();
+
+async function withKeyLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
+    const prev = keyLocks.get(key) ?? Promise.resolve();
+    const next: Promise<T> = prev.then(fn, fn);
+    const tracked: Promise<unknown> = next.catch(() => undefined);
+    keyLocks.set(key, tracked);
+    tracked.finally(() => {
+        if (keyLocks.get(key) === tracked) {
+            keyLocks.delete(key);
+        }
+    });
+    return next;
+}
+
+/**
  * Stage 2-H3 Phase 2: counter 평가 + 증가 + 저장. 모든 작업이 async.
  * 카운터는 `windowMs * RATE_LIMIT_POLICY.TTL_WINDOW_MULTIPLIER` TTL로 저장되어 구 window는 자연 만료 (이전 LRU 로직 대체).
  */
 async function evaluateAndIncrement(
+    counterKey: string,
+    limit: number,
+    windowMs: number,
+    now: number
+): Promise<RateLimitDecision> {
+    const storageKey = makeStorageKey(counterKey);
+    return withKeyLock(storageKey, () => performEvaluateAndIncrement(counterKey, limit, windowMs, now));
+}
+
+async function performEvaluateAndIncrement(
     counterKey: string,
     limit: number,
     windowMs: number,
