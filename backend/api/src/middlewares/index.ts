@@ -4,76 +4,12 @@
  */
 
 import { Request, Response, NextFunction } from 'express';
-import jwt from 'jsonwebtoken';
 import { createLogger } from '../utils/logger';
 // QuotaExceededError는 utils/error-handler.ts에서 통합 처리
 import { getConfig } from '../config';
 import { getAnalyticsSystem } from '../monitoring/analytics';
-// AuthUser 타입은 auth/middleware.ts에서 정의됨
-import { AuthUser } from '../auth/middleware';
-import { unauthorized, forbidden, internalError } from '../utils/api-response';
 
 const logger = createLogger('Middleware');
-let authMiddlewareWarned = false;
-
-// ================================================
-// 인증 미들웨어
-// ================================================
-
-/**
- * JWT 토큰 검증 미들웨어
- * @deprecated This middleware only verifies JWT and does not validate user activity state. Use requireAuth from ../auth/middleware.ts instead.
- */
-export function authMiddleware(required: boolean = true) {
-    return (req: Request, res: Response, next: NextFunction) => {
-        if (!authMiddlewareWarned) {
-            logger.warn('[DEPRECATED] authMiddleware does not verify user.is_active. Use requireAuth from auth/middleware.ts instead.');
-            authMiddlewareWarned = true;
-        }
-
-        const authHeader = req.headers.authorization;
-
-        // Cookie first (httpOnly), then Authorization header (backward compat)
-        const token = req.cookies?.auth_token ||
-                      (authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : undefined);
-
-        if (!token) {
-            if (required) {
-                return res.status(401).json(unauthorized('인증이 필요합니다.'));
-            }
-            return next();
-        }
-        const jwtSecret = getConfig().jwtSecret;
-
-        // JWT_SECRET 미설정 시 보안 오류
-        if (!jwtSecret) {
-            logger.error('JWT_SECRET 환경변수가 설정되지 않았습니다!');
-            return res.status(500).json(internalError('서버 인증 설정 오류'));
-        }
-
-        try {
-            const decoded = jwt.verify(token, jwtSecret) as AuthUser;
-            req.user = decoded;
-            next();
-        } catch (error) {
-            if (required) {
-                return res.status(401).json(unauthorized('유효하지 않은 토큰입니다.'));
-            }
-            next();
-        }
-    };
-}
-
-/**
- * 관리자 권한 확인 미들웨어
- */
-export function adminMiddleware(req: Request, res: Response, next: NextFunction) {
-    const user = req.user;
-    if (!user || user.role !== 'admin') {
-        return res.status(403).json(forbidden('관리자 권한이 필요합니다.'));
-    }
-    next();
-}
 
 // ================================================
 // 레이트 리미팅 미들웨어 (rate-limiters.ts에서 re-export)
@@ -90,7 +26,8 @@ export {
     memoryLimiter,
     mcpLimiter,
     apiKeyManagementLimiter,
-    pushLimiter
+    pushLimiter,
+    adminLimiter
 } from './rate-limiters';
 
 // ================================================
@@ -162,7 +99,17 @@ export function analyticsMiddleware(req: Request, res: Response, next: NextFunct
  * - server.ts의 CORS 설정과 일관성 유지
  */
 export function corsMiddleware(req: Request, res: Response, next: NextFunction) {
-    const allowedOrigins = getConfig().corsOrigins.split(',').map(o => o.trim());
+    const allowedOrigins = getConfig().corsOrigins.split(',')
+        .map(o => o.trim())
+        .filter(o => {
+            if (!o) return false;
+            if (o === '*') return true;
+            if (!/^https?:\/\//i.test(o)) {
+                // 잘못된 CORS origin 형식은 무시 (http:// 또는 https://로 시작해야 함)
+                return false;
+            }
+            return true;
+        });
     const origin = req.headers.origin;
 
     // 화이트리스트 기반 Origin 검증

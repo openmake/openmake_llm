@@ -130,3 +130,12 @@ export const RL_PUSH = {
     userLimit: Number(process.env.RL_PUSH_USER) || 30,
     subscribeLimit: Number(process.env.RL_PUSH_SUBSCRIBE) || 5,
 } as const;
+
+/**
+ * Admin API 레이트 리밋
+ */
+export const RL_ADMIN = {
+    windowMs: WINDOW_1M,
+    ipLimit: Number(process.env.RL_ADMIN_IP) || 100,
+    userLimit: Number(process.env.RL_ADMIN_USER) || 150,
+} as const;

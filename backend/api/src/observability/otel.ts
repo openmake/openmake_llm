@@ -14,6 +14,7 @@ import { resourceFromAttributes } from '@opentelemetry/resources';
 import { NodeSDK } from '@opentelemetry/sdk-node';
 import { BatchSpanProcessor, ConsoleSpanExporter, TraceIdRatioBasedSampler } from '@opentelemetry/sdk-trace-node';
 import { ATTR_SERVICE_NAME, ATTR_SERVICE_VERSION } from '@opentelemetry/semantic-conventions';
+import { APP_VERSION } from '../config/constants';
 import { createLogger } from '../utils/logger';
 
 const logger = createLogger('OTel');
@@ -66,7 +67,7 @@ export function initTelemetry(): NodeSDK | null {
         const sdk = new NodeSDK({
             resource: resourceFromAttributes({
                 [ATTR_SERVICE_NAME]: 'openmake-llm',
-                [ATTR_SERVICE_VERSION]: '1.0.0',
+                [ATTR_SERVICE_VERSION]: APP_VERSION,
             }),
             sampler: new TraceIdRatioBasedSampler(OTEL_SAMPLE_RATE),
             spanProcessors,

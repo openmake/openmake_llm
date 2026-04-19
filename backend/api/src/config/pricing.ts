@@ -30,5 +30,7 @@ export const MODEL_PRICING: Readonly<Record<string, { input: number; output: num
     // gemini-3-pro-preview:cloud — Ollama 레지스트리 미등록, 출시 시 활성화
     // 'gemini-3-pro-preview:cloud': { input: 0.00005, output: 0.0001 },
     'gpt-oss:120b-cloud': { input: 0.0001, output: 0.0002 },
+    'glm-5.1:cloud': { input: 0.0001, output: 0.0002 },
+    'gemma4:31b-cloud': { input: 0.00002, output: 0.00004 },
     'default': { input: 0.00001, output: 0.00002 },
 } as const;

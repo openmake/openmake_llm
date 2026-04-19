@@ -48,6 +48,7 @@ import { bootstrapServices } from '../bootstrap';
 import { getConfig } from '../config';
 import { success } from '../utils/api-response';
 import { getPool } from '../data/models/unified-database';
+import { csrfProtectionMiddleware, csrfTokenIssuer } from '../middlewares/csrf-protection';
 
 
 
@@ -70,6 +71,11 @@ export function setupApiRoutes(
     app.get('/robots.txt', (_req: Request, res: Response) => {
         res.type('text/plain').send('User-agent: *\nDisallow: /api/\n');
     });
+
+    // CSRF Double-Submit Cookie (Stage 2-H4) — /api/* 스코프, auth 미들웨어보다 먼저.
+    // 토큰 발급 엔드포인트는 비-mutating GET이며 CSRF_POLICY.SKIP_PATHS에 의해 자체 스킵됨.
+    app.get('/api/csrf-token', csrfTokenIssuer);
+    app.use('/api', csrfProtectionMiddleware);
 
     // /api/health — 전용 헬스체크 엔드포인트 (상세 상태 반환)
     app.get('/api/health', async (_req: Request, res: Response) => {

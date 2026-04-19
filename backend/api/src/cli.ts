@@ -42,10 +42,10 @@ import { showBanner } from './ui/banner';
 import { createSpinner } from './ui/spinner';
 import { createMCPServer } from './mcp/server';
 import { createPluginLoader } from './plugins/loader';
-import { getConfig } from './config';
+import { getConfig, APP_VERSION } from './config';
 import { QUERY_TYPE_PARAMS } from './config/llm-parameters';
 
-const VERSION = '1.4.1';
+const VERSION = APP_VERSION;
 const envConfig = getConfig();
 const DEFAULT_MODEL = envConfig.ollamaDefaultModel;
 

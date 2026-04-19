@@ -79,7 +79,7 @@
                 return;
             }
             el.innerHTML = agents.map(a => `
-                <div class="agent-card" onclick="openAgent('${a.id}')">
+                <div class="agent-card" data-agent-id="${esc(a.id)}">
                     <div class="agent-emoji">${a.emoji || '🤖'}</div>
                     <h3>${esc(a.name)}</h3>
                     <div class="desc">${esc(a.description)}</div>
@@ -89,10 +89,25 @@
                         <span class="temp-label">온도 ${a.temperature != null ? a.temperature : '0.7'}</span>
                     </div>
                     <div class="card-actions">
-                        <button onclick="event.stopPropagation();cloneAgent('${a.id}')">복제</button>
-                        <button onclick="event.stopPropagation();confirmDelete('${a.id}')">삭제</button>
+                        <button data-action="clone">복제</button>
+                        <button data-action="delete">삭제</button>
                     </div>
                 </div>`).join('');
+
+            // XSS 방지: 인라인 onclick 대신 이벤트 위임 사용
+            el.addEventListener('click', (e) => {
+                const actionBtn = e.target.closest('button[data-action]');
+                if (actionBtn) {
+                    e.stopPropagation();
+                    const card = actionBtn.closest('.agent-card');
+                    const agentId = card?.dataset.agentId;
+                    if (actionBtn.dataset.action === 'clone') cloneAgent(agentId);
+                    else if (actionBtn.dataset.action === 'delete') confirmDelete(agentId);
+                    return;
+                }
+                const card = e.target.closest('.agent-card[data-agent-id]');
+                if (card) openAgent(card.dataset.agentId);
+            });
         }
 
         function openNew() {

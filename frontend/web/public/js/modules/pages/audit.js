@@ -122,7 +122,7 @@
                             const details = l.details || l.metadata || '';
                             const detailStr = typeof details === 'object' ? JSON.stringify(details) : String(details);
                             const truncated = detailStr.length > 60 ? detailStr.substring(0, 60) + '...' : detailStr;
-                            return `<tr onclick="openDetail(${i})">
+                            return `<tr class="log-row" data-idx="${i}">
                         <td style="white-space:nowrap">${new Date(l.timestamp || l.created_at).toLocaleString('ko')}</td>
                         <td>${actionBadge(l.action)}</td>
                         <td>${esc(l.userId || l.user_id || '-')}</td>
@@ -130,6 +130,13 @@
                         <td>${esc(l.ip_address || l.ip || '-')}</td>
                     </tr>`;
                         }).join('');
+                        if (!body.dataset.delegated) {
+                            body.addEventListener('click', (e) => {
+                                const tr = e.target.closest('tr[data-idx]');
+                                if (tr) openDetail(parseInt(tr.dataset.idx, 10));
+                            });
+                            body.dataset.delegated = '1';
+                        }
                     } catch (e) {
                         var countEl = document.getElementById('logCount');
                         if (countEl) countEl.textContent = '';

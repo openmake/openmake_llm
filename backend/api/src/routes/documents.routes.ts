@@ -42,7 +42,7 @@ import { detectLanguage } from '../chat/language-policy';
   import { summarizeDocumentSchema, documentAskSchema } from '../schemas/documents.schema';
 import { FILE_LIMITS } from '../config/constants';
 import { LLM_TEMPERATURES } from '../config/llm-parameters';
-import { optionalAuth } from '../auth';
+import { requireAuth } from '../auth';
 
 const logger = createLogger('DocumentsRoutes');
 
@@ -127,7 +127,7 @@ export function setDependencies(cluster: ClusterManager, broadcast: (data: Recor
  * POST /api/upload
  * 파일 업로드
  */
-router.post('/upload', optionalAuth, validateUploadContentType(FILE_LIMITS.MAX_SIZE_BYTES), upload.single('file'), validateFileUploadSecurity(), asyncHandler(async (req: Request, res: Response) => {
+router.post('/upload', requireAuth, validateUploadContentType(FILE_LIMITS.MAX_SIZE_BYTES), upload.single('file'), validateFileUploadSecurity(), asyncHandler(async (req: Request, res: Response) => {
      try {
          if (!req.file) {
              res.status(400).json(badRequest('파일이 없습니다'));
@@ -159,6 +159,9 @@ router.post('/upload', optionalAuth, validateUploadContentType(FILE_LIMITS.MAX_S
         doc.filename = originalFilename;
 
         const docId = `${Date.now()}-${Math.random().toString(36).substring(7)}`;
+        // IDOR 방지: 문서에 소유자 ID 기록
+        const user = (req as any).user;
+        doc.userId = user?.id || user?.userId;
         uploadedDocuments.set(docId, doc);
 
          logger.info(`[Upload] 텍스트 추출 완료: ${doc.text.length}자`);
@@ -179,7 +182,7 @@ router.post('/upload', optionalAuth, validateUploadContentType(FILE_LIMITS.MAX_S
          broadcastFn?.({
              type: 'document_progress',
              stage: 'error',
-             message: `오류: ${(error instanceof Error ? error.message : '파일 처리 중 오류가 발생했습니다')}`,
+             message: '파일 처리 중 오류가 발생했습니다',
              filename: decodeFilename(req.file?.originalname || '')
          });
 
@@ -203,12 +206,21 @@ router.post('/upload', optionalAuth, validateUploadContentType(FILE_LIMITS.MAX_S
  * POST /api/summarize
  * 문서 요약
  */
-router.post('/summarize', validate(summarizeDocumentSchema), asyncHandler(async (req: Request, res: Response) => {
+router.post('/summarize', requireAuth, validate(summarizeDocumentSchema), asyncHandler(async (req: Request, res: Response) => {
      const { docId, model } = req.body;
 
      const doc = uploadedDocuments.get(docId);
      if (!doc) {
          res.status(404).json(notFound('문서'));
+         return;
+     }
+
+     // 소유권 검증 (IDOR 방지, bug_011: owner-less 문서는 admin만 접근 가능)
+     const requestUser = (req as any).user;
+     const requestUserId = requestUser?.id || requestUser?.userId;
+     const isAdmin = requestUser?.role === 'admin';
+     if (!isAdmin && (!doc.userId || !requestUserId || String(doc.userId) !== String(requestUserId))) {
+         res.status(403).json({ error: '이 문서에 접근할 권한이 없습니다' });
          return;
      }
 
@@ -262,12 +274,21 @@ router.post('/summarize', validate(summarizeDocumentSchema), asyncHandler(async 
    * POST /api/document/ask
   * 문서 Q&A
   */
-router.post('/document/ask', validate(documentAskSchema), asyncHandler(async (req: Request, res: Response) => {
+router.post('/document/ask', requireAuth, validate(documentAskSchema), asyncHandler(async (req: Request, res: Response) => {
      const { docId, question, model } = req.body;
 
      const doc = uploadedDocuments.get(docId);
      if (!doc) {
          res.status(404).json(notFound('문서'));
+         return;
+     }
+
+     // 소유권 검증 (IDOR 방지, bug_011: owner-less 문서는 admin만 접근 가능)
+     const requestUser = (req as any).user;
+     const requestUserId = requestUser?.id || requestUser?.userId;
+     const isAdmin = requestUser?.role === 'admin';
+     if (!isAdmin && (!doc.userId || !requestUserId || String(doc.userId) !== String(requestUserId))) {
+         res.status(403).json({ error: '이 문서에 접근할 권한이 없습니다' });
          return;
      }
 
@@ -317,14 +338,24 @@ router.post('/document/ask', validate(documentAskSchema), asyncHandler(async (re
   * GET /api/documents
  * 업로드된 문서 목록
  */
-router.get('/documents', asyncHandler(async (_req: Request, res: Response) => {
-     const docs = Array.from(uploadedDocuments.entries()).map(([id, doc]) => ({
-         id,
-         filename: doc.filename,
-         type: doc.type,
-         pages: doc.pages,
-         textLength: doc.text.length
-     }));
+router.get('/documents', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+     const requestUser = (req as any).user;
+     const requestUserId = requestUser?.id || requestUser?.userId;
+     const isAdmin = requestUser?.role === 'admin';
+
+     const docs = Array.from(uploadedDocuments.entries())
+         .filter(([, doc]) => {
+             // bug_011: owner-less 화이트리스트 제거. admin만 전체 조회 가능, 일반 사용자는 본인 소유 문서만
+             if (isAdmin) return true;
+             return !!doc.userId && !!requestUserId && String(doc.userId) === String(requestUserId);
+         })
+         .map(([id, doc]) => ({
+             id,
+             filename: doc.filename,
+             type: doc.type,
+             pages: doc.pages,
+             textLength: doc.text.length
+         }));
      res.json(success(docs));
  }));
 
@@ -332,7 +363,13 @@ router.get('/documents', asyncHandler(async (_req: Request, res: Response) => {
  * DELETE /api/documents
  * 업로드된 전체 문서 일괄 삭제
  */
-router.delete('/documents', asyncHandler(async (_req: Request, res: Response) => {
+router.delete('/documents', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+    const requestUser = (req as any).user;
+    if (requestUser?.role !== 'admin') {
+        res.status(403).json({ error: '전체 문서 삭제는 관리자만 가능합니다' });
+        return;
+    }
+
     const docCount = uploadedDocuments.size;
 
     // 문서 저장소 전체 삭제 (인메모리 + DB)
@@ -346,12 +383,21 @@ router.delete('/documents', asyncHandler(async (_req: Request, res: Response) =>
  * GET /api/documents/:docId
  * 개별 문서 조회
  */
-router.get('/documents/:docId', asyncHandler(async (req: Request, res: Response) => {
+router.get('/documents/:docId', requireAuth, asyncHandler(async (req: Request, res: Response) => {
      const { docId } = req.params;
      const doc = uploadedDocuments.get(docId);
 
      if (!doc) {
          res.status(404).json(notFound('문서'));
+         return;
+     }
+
+     // 소유권 검증 (bug_011: owner-less 문서는 admin만 접근 가능)
+     const requestUser = (req as any).user;
+     const requestUserId = requestUser?.id || requestUser?.userId;
+     const isAdmin = requestUser?.role === 'admin';
+     if (!isAdmin && (!doc.userId || !requestUserId || String(doc.userId) !== String(requestUserId))) {
+         res.status(403).json({ error: '이 문서에 접근할 권한이 없습니다' });
          return;
      }
 
@@ -362,10 +408,25 @@ router.get('/documents/:docId', asyncHandler(async (req: Request, res: Response)
  * DELETE /api/documents/:docId
  * 문서 삭제
  */
-router.delete('/documents/:docId', asyncHandler(async (req: Request, res: Response) => {
+router.delete('/documents/:docId', requireAuth, asyncHandler(async (req: Request, res: Response) => {
      const { docId } = req.params;
-     const deleted = uploadedDocuments.delete(docId);
+     const doc = uploadedDocuments.get(docId);
 
+     if (!doc) {
+         res.status(404).json({ error: '문서를 찾을 수 없습니다' });
+         return;
+     }
+
+     // 소유권 검증 (bug_011: owner-less 문서는 admin만 삭제 가능)
+     const requestUser = (req as any).user;
+     const requestUserId = requestUser?.id || requestUser?.userId;
+     const isAdmin = requestUser?.role === 'admin';
+     if (!isAdmin && (!doc.userId || !requestUserId || String(doc.userId) !== String(requestUserId))) {
+         res.status(403).json({ error: '이 문서를 삭제할 권한이 없습니다' });
+         return;
+     }
+
+     const deleted = uploadedDocuments.delete(docId);
      res.json(success({ deleted }));
  }));
 

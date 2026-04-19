@@ -411,8 +411,8 @@ export class SkillRepository extends BaseRepository {
              GROUP BY s.id, s.name, s.description, s.content, s.category, s.is_public,
                       s.created_by, s.created_at, s.updated_at, s.source_repo, s.source_path
              ORDER BY MIN(a.priority) ASC, s.name ASC
-             LIMIT 15`,
-            params
+             LIMIT $${params.length + 1}`,
+            [...params, 15]
         );
         return result.rows.map((row) => this.rowToSkill(row));
     }
