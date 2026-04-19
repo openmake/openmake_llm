@@ -13,10 +13,12 @@
 
 import { KeyValueStore } from './types';
 import { MemoryStore } from './memory-store';
+import { RedisStore } from './redis-store';
 import { getConfig } from '../config';
 
 export type { KeyValueStore, StorageValue } from './types';
 export { MemoryStore } from './memory-store';
+export { RedisStore } from './redis-store';
 
 let cachedInstance: KeyValueStore | null = null;
 
@@ -33,8 +35,11 @@ export function getKeyValueStore(): KeyValueStore {
             cachedInstance = new MemoryStore();
             return cachedInstance;
         case 'redis':
-            // Phase 4에서 RedisStore 활성화 예정
-            throw new Error('RedisStore not implemented yet — set STORAGE_BACKEND=memory until Phase 4 lands');
+            if (!cfg.redisUrl) {
+                throw new Error('REDIS_URL is required when STORAGE_BACKEND=redis');
+            }
+            cachedInstance = new RedisStore(cfg.redisUrl);
+            return cachedInstance;
         default:
             throw new Error(`Unknown STORAGE_BACKEND: ${cfg.storageBackend}`);
     }
