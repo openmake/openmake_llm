@@ -162,6 +162,10 @@ export const envSchema = z
         // Cookie Security (HTTPS 없이 production 운영 시 false)
         COOKIE_SECURE: booleanFromString(false),
 
+        // HTTPS 없는 production 환경에서 COOKIE_SECURE=false 를 허용하는 명시적 opt-out.
+        // 기본 false — 운영자가 리스크를 인지하고 .env 에 직접 true 로 설정해야만 가드 통과.
+        ALLOW_INSECURE_COOKIES: booleanFromString(false),
+
         // Security — Trusted Proxies (쉼표 구분 문자열, 기본: loopback,linklocal,uniquelocal)
         TRUSTED_PROXIES: z.string().optional(),
     })

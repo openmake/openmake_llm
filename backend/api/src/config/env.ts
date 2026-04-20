@@ -102,6 +102,9 @@ export interface EnvConfig {
     // Cookie Security (HTTPS 없이 production 운영 시 false로 설정)
     cookieSecure: boolean;
 
+    // HTTPS 없는 production 환경에서 cookieSecure=false 를 명시적으로 허용 (opt-out)
+    allowInsecureCookies: boolean;
+
     // Pipeline Profile — Brand Model → Internal Engine Mapping
     omkEngineLlm: string;
     omkEnginePro: string;
@@ -226,6 +229,7 @@ const DEFAULT_CONFIG: EnvConfig = {
 
     // Cookie Security
     cookieSecure: false,
+    allowInsecureCookies: false,
 
     // Pipeline Profile — Brand Model → Internal Engine Mapping
     omkEngineLlm: 'gemini-3-flash-preview:cloud',
@@ -322,12 +326,23 @@ export function validateConfig(config: EnvConfig): void {
         errors.push('JWT_SECRET must be at least 32 characters (set in .env). Random generation is forbidden — it invalidates all sessions on restart.');
     }
 
-    // Production에서 HTTPS 없이 쿠키 전송 방지 — HttpOnly 쿠키가 평문으로 노출되는 것을 차단
+    // Production에서 HTTPS 없이 쿠키 전송 방지 — HttpOnly 쿠키가 평문으로 노출되는 것을 차단.
+    // HTTPS 미지원 환경에서는 ALLOW_INSECURE_COOKIES=true 로 명시적 opt-out 가능.
     if (config.nodeEnv === 'production' && !config.cookieSecure) {
-        errors.push(
-            'COOKIE_SECURE must be true in production. ' +
-            'Set COOKIE_SECURE=true in .env when running behind HTTPS.'
-        );
+        if (!config.allowInsecureCookies) {
+            errors.push(
+                'COOKIE_SECURE must be true in production. ' +
+                'Set COOKIE_SECURE=true in .env when running behind HTTPS, ' +
+                'or set ALLOW_INSECURE_COOKIES=true to explicitly opt out (insecure — tokens transmitted in plaintext).'
+            );
+        } else {
+            // Logger가 아직 초기화되지 않았으므로 console.warn 사용
+            console.warn(
+                '\n\x1b[33m[SECURITY WARNING]\x1b[0m COOKIE_SECURE=false in production with ALLOW_INSECURE_COOKIES=true.\n' +
+                '  HttpOnly session cookies (JWT access/refresh tokens) will be transmitted over plaintext HTTP.\n' +
+                '  This is vulnerable to MITM token theft. Deploy HTTPS (e.g. Caddy, Cloudflare Tunnel) as soon as possible.\n'
+            );
+        }
     }
 
     // API_KEY_PEPPER 검증 (프로덕션 환경에서 API Key 서비스 사용 시)
@@ -435,6 +450,7 @@ export function loadConfig(): EnvConfig {
 
         // Cookie Security
         COOKIE_SECURE: env('COOKIE_SECURE'),
+        ALLOW_INSECURE_COOKIES: env('ALLOW_INSECURE_COOKIES'),
 
         // Security — Trusted Proxies
         TRUSTED_PROXIES: env('TRUSTED_PROXIES'),
@@ -574,6 +590,7 @@ export function loadConfig(): EnvConfig {
 
         // Cookie Security
         cookieSecure: parsed.COOKIE_SECURE ?? DEFAULT_CONFIG.cookieSecure,
+        allowInsecureCookies: parsed.ALLOW_INSECURE_COOKIES ?? DEFAULT_CONFIG.allowInsecureCookies,
 
         // Security — Trusted Proxies
         trustedProxies: parsed.TRUSTED_PROXIES?.split(',').map((p: string) => p.trim()) || DEFAULT_CONFIG.trustedProxies,
