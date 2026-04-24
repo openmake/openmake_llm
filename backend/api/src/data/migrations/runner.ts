@@ -76,8 +76,12 @@ export class MigrationRunner {
                 logger.info(`Applying migration ${migration.filename}`);
                 await client.query('BEGIN');
                 await client.query(migration.sql);
+                // 일부 SQL 파일이 자체적으로 ON CONFLICT INSERT를 포함 (legacy 패턴)
+                // → runner의 INSERT도 ON CONFLICT DO NOTHING으로 만들어 중복 INSERT를 흡수
+                // (자체 INSERT가 없는 파일은 runner INSERT가 정상 적용됨)
                 await client.query(
-                    'INSERT INTO migration_versions (version, filename, checksum) VALUES ($1, $2, $3)',
+                    `INSERT INTO migration_versions (version, filename, checksum) VALUES ($1, $2, $3)
+                     ON CONFLICT (version) DO NOTHING`,
                     [migration.version, migration.filename, migration.checksum]
                 );
                 await client.query('COMMIT');

@@ -23,6 +23,17 @@ INSERT INTO migration_versions (version, filename)
 VALUES ('007', '007_message_feedback_fk.sql')
 ON CONFLICT (version) DO NOTHING;
 
+-- 사전 정리: orphan FK 후보 데이터 정리 (FK 추가 시 위반 방지)
+-- session: ON DELETE CASCADE 정책상 orphan 세션 참조는 어차피 삭제 대상 → 사전 삭제
+DELETE FROM message_feedback
+ WHERE session_id IS NOT NULL
+   AND session_id NOT IN (SELECT id FROM conversation_sessions);
+-- user_id: ON DELETE SET NULL 정책 → orphan은 NULL로 변경 (감사성 데이터 보존)
+UPDATE message_feedback
+   SET user_id = NULL
+ WHERE user_id IS NOT NULL
+   AND user_id NOT IN (SELECT id FROM users);
+
 -- message_feedback.session_id → conversation_sessions(id) FK 추가 (ON DELETE CASCADE)
 -- 세션 삭제 시 관련 피드백도 함께 삭제
 DO $$

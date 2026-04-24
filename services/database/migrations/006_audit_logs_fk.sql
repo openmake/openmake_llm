@@ -19,6 +19,13 @@ INSERT INTO migration_versions (version, filename)
 VALUES ('006', '006_audit_logs_fk.sql')
 ON CONFLICT (version) DO NOTHING;
 
+-- 사전 정리: orphan user_id를 NULL로 변경 (FK 추가 전 데이터 정합성 확보)
+-- 삭제된 사용자(13 등)의 감사 로그는 user_id=NULL로 보존 — ON DELETE SET NULL 정책과 동일
+UPDATE audit_logs
+   SET user_id = NULL
+ WHERE user_id IS NOT NULL
+   AND user_id NOT IN (SELECT id FROM users);
+
 -- audit_logs.user_id → users(id) FK 추가 (ON DELETE SET NULL)
 -- 감사 추적 보존을 위해 사용자 삭제 시 NULL 처리
 DO $$

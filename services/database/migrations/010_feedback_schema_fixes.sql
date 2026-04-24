@@ -27,8 +27,14 @@ ON CONFLICT (version) DO NOTHING;
 -- ---------------------------------------------------------------
 -- 1. message_feedback.message_id: TEXT → INTEGER + FK
 -- ---------------------------------------------------------------
--- 기존 데이터가 모두 숫자 문자열이라고 가정 (빈 테이블 또는 숫자 ID만 존재)
--- 비숫자 데이터가 있으면 이 단계에서 에러 발생 → 사전에 확인 필요
+-- 사전 정리: 비숫자 message_id (UUID, msg-{ts} 등 legacy 형식)는
+-- conversation_messages.id (INTEGER SERIAL)와 매핑 불가능한 orphan이므로 삭제.
+-- 운영 데이터 손실 가능성 → backend/api/logs/db-backups/ 에 사전 dump 권장
+-- (운영 환경에서는 openmake_llm.sh deploy가 실행 전 자동 백업)
+DELETE FROM message_feedback
+ WHERE message_id IS NOT NULL
+   AND message_id !~ '^[0-9]+$';
+
 DO $$
 BEGIN
     -- 컬럼 타입 변경 (TEXT → INTEGER)
@@ -44,6 +50,12 @@ BEGIN
             ALTER COLUMN message_id TYPE INTEGER USING message_id::INTEGER;
         CREATE INDEX IF NOT EXISTS idx_feedback_message ON message_feedback(message_id);
     END IF;
+
+    -- FK 추가 전 추가 정합성 확인: INTEGER로 바뀐 후에도 conversation_messages에 없는 ID가
+    -- 있을 수 있으므로 orphan 추가 정리 (CASCADE 정책이라 어차피 삭제 대상)
+    DELETE FROM message_feedback
+     WHERE message_id IS NOT NULL
+       AND message_id NOT IN (SELECT id FROM conversation_messages);
 
     -- FK 제약 추가 (conversation_messages.id ON DELETE CASCADE)
     IF NOT EXISTS (
