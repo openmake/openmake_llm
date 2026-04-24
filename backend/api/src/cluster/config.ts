@@ -12,6 +12,9 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { ClusterConfig, StaticNode } from './types';
 import { SERVER_CONFIG } from '../config/constants';
+import { createLogger } from '../utils/logger';
+
+const logger = createLogger('ClusterConfig');
 
 const DEFAULT_CONFIG: ClusterConfig = {
     name: 'ollama-cluster',
@@ -39,7 +42,7 @@ export function loadClusterConfig(): ClusterConfig {
                 const fileConfig = JSON.parse(content) as Partial<ClusterConfig>;
                 return { ...DEFAULT_CONFIG, ...fileConfig };
             } catch (e) {
-                console.warn(`설정 파일 파싱 실패: ${configPath}`);
+                logger.warn(`설정 파일 파싱 실패: ${configPath}`, e);
             }
         }
     }

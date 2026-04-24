@@ -45,6 +45,7 @@ import { runAgentLoop, AgentLoopResult } from './agent-loop';
 import { setupInterceptors, KeyIndexRef } from './interceptors';
 import { streamGenerate, streamChat } from './stream-parser';
 import { webSearch as webSearchApi, webFetch as webFetchApi } from './web-api';
+import { withSpan } from '../observability/otel';
 
 const logger = createLogger('OllamaClient');
 
@@ -330,22 +331,50 @@ export class OllamaClient {
             ...(advancedOptions?.keep_alive !== undefined && { keep_alive: advancedOptions.keep_alive })
         };
 
-        if (onToken) {
-            return streamChat(this.client, request, onToken);
-        }
+        // OTel span: LLM 호출 1건당 1 span. 본문은 PII/비용 위험으로 기록하지 않음.
+        // 입력 메시지 수, 토큰 수 등 비식별 메트릭만 속성으로 남긴다.
+        return withSpan(
+            'ollama-client',
+            'llm.chat',
+            async (span) => {
+                if (onToken) {
+                    const result = await streamChat(this.client, request, onToken);
+                    if (result.metrics) {
+                        span.setAttribute('llm.prompt_eval_count', result.metrics.prompt_eval_count ?? 0);
+                        span.setAttribute('llm.eval_count', result.metrics.eval_count ?? 0);
+                        span.setAttribute('llm.total_duration_ms', Math.round((result.metrics.total_duration ?? 0) / 1e6));
+                    }
+                    span.setAttribute('llm.response_chars', (result.content ?? '').length);
+                    return result;
+                }
 
-        const response = await this.client.post<ChatResponse>('/api/chat', request);
-        return {
-            ...response.data.message,
-            metrics: {
-                total_duration: response.data.total_duration,
-                load_duration: response.data.load_duration,
-                prompt_eval_count: response.data.prompt_eval_count,
-                prompt_eval_duration: response.data.prompt_eval_duration,
-                eval_count: response.data.eval_count,
-                eval_duration: response.data.eval_duration
+                const response = await this.client.post<ChatResponse>('/api/chat', request);
+                span.setAttribute('llm.prompt_eval_count', response.data.prompt_eval_count ?? 0);
+                span.setAttribute('llm.eval_count', response.data.eval_count ?? 0);
+                span.setAttribute('llm.total_duration_ms', Math.round((response.data.total_duration ?? 0) / 1e6));
+                span.setAttribute('llm.response_chars', (response.data.message?.content ?? '').length);
+                return {
+                    ...response.data.message,
+                    metrics: {
+                        total_duration: response.data.total_duration,
+                        load_duration: response.data.load_duration,
+                        prompt_eval_count: response.data.prompt_eval_count,
+                        prompt_eval_duration: response.data.prompt_eval_duration,
+                        eval_count: response.data.eval_count,
+                        eval_duration: response.data.eval_duration
+                    }
+                };
+            },
+            {
+                attributes: {
+                    'llm.model': this.config.model,
+                    'llm.message_count': messages.length,
+                    'llm.stream': !!onToken,
+                    'llm.has_tools': !!advancedOptions?.tools,
+                    'llm.has_format': !!advancedOptions?.format,
+                },
             }
-        };
+        );
     }
 
     /**

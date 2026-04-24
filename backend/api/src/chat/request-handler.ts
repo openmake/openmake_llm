@@ -560,7 +560,7 @@ export class ChatRequestHandler {
             });
             detectedLanguage = languagePolicy.resolvedLanguage;
         } catch (error) {
-            console.warn('언어 감지 실패, 기본 언어 사용:', error);
+            log.warn('언어 감지 실패, 기본 언어 사용:', error);
         }
 
         // tool_choice가 "none"이면 도구 없이 호출

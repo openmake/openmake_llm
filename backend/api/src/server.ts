@@ -241,6 +241,19 @@ export class DashboardServer {
         };
         warmWithRetry().catch(err => console.error('[Server] 캐시 워밍 최종 실패:', err));
 
+        // Semantic Router 백그라운드 초기화 (PoC, fire-and-forget)
+        // OMK_SEMANTIC_ROUTER_ENABLED=true일 때만 실행, 미설정 시 noop
+        // 인덱스 미준비 상태에서는 shadow 비교가 자동 스킵되어 메인 흐름 영향 X
+        (async () => {
+            try {
+                const { initSemanticRouter } = await import('./agents/semantic-router-instance');
+                const { OllamaClient } = await import('./ollama/client');
+                initSemanticRouter(new OllamaClient());
+            } catch (err) {
+                console.error('[Server] Semantic Router 초기화 호출 실패 (무시):', err);
+            }
+        })();
+
         return new Promise((resolve, reject) => {
             // HTTP 서버 오류 핸들러
             this.server.on('error', (error: NodeJS.ErrnoException) => {

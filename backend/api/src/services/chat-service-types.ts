@@ -131,6 +131,29 @@ export interface ChatResponseMeta {
 }
 
 /**
+ * 시스템 이벤트 (사용자에게 시스템 상태 변경을 알리는 메타 이벤트)
+ *
+ * UI는 이 이벤트를 별도 알림 영역(토스트, 배너 등)에 표시할 수 있음.
+ * 마크다운 본문에 prepend하는 fallback과 달리 본문 렌더링과 분리됨.
+ *
+ * @interface SystemEvent
+ */
+export interface SystemEvent {
+    /** 이벤트 종류 — 확장 가능 (현재: auto-discussion-activated) */
+    type: 'auto-discussion-activated' | string;
+    /** 사용자 표시용 메시지 (다국어 처리 완료) */
+    message: string;
+    /** 이벤트별 추가 데이터 (디버그/UI 분기용) */
+    metadata?: Record<string, unknown>;
+}
+
+/**
+ * 시스템 이벤트 콜백
+ * Gemini 권고: 단일 콜백 + type 분기 (확장성 ↑)
+ */
+export type SystemEventCallback = (event: SystemEvent) => void;
+
+/**
  * ChatService 설정 인터페이스
  * @interface ChatServiceConfig
  */

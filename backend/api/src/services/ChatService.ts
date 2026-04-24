@@ -26,6 +26,8 @@ import { adjustOptionsForModel, checkModelCapability } from '../chat/model-selec
 import { assessComplexity, GV_SKIP_THRESHOLD } from '../chat/complexity-assessor';
 import { CONCISE_RESPONSE_DIRECTIVE } from '../config/llm-parameters';
 import { BUDGET_HINTS, CAPACITY } from '../config/runtime-limits';
+import { decideDiscussionActivation, getAutoDiscussionNotice } from '../chat/discussion-router';
+import { withSpan } from '../observability/otel';
 import type { ExecutionPlan } from '../chat/profile-resolver';
 import type { DocumentStore } from '../documents/store';
 import type { UserTier } from '../data/user-manager';
@@ -40,7 +42,7 @@ import { recordMemoryExtractionFailure } from './chat-service-metrics';
 import { preRequestCheck } from '../chat/security-hooks';
 import type { LanguagePolicyDecision } from '../chat/language-policy';
 import { createRoutingLogEntry, type RoutingDecisionLog } from '../chat/routing-logger';
-import type { ChatMessageRequest } from './chat-service-types';
+import type { ChatMessageRequest, SystemEventCallback } from './chat-service-types';
 import { computeUIRResult, recordShadowComparison } from '../chat/unified-intent-router';
 import { UIR_SHADOW_ENABLED } from '../config/routing-config';
 import { buildContextForLLM } from './chat-service/context-builder';
@@ -232,6 +234,51 @@ export class ChatService {
         executionPlan?: ExecutionPlan,
         onSkillsActivated?: (skillNames: string[]) => void,
         onThinking?: (thinking: string) => void,
+        onSystemEvent?: SystemEventCallback,
+    ): Promise<string> {
+        // 채팅 요청 전체를 root span으로 추적 (모든 LLM/도구 호출이 자식 span으로 자동 연결)
+        return withSpan(
+            'chat-service',
+            'chat.process',
+            async (rootSpan) => {
+                const result = await this.processMessageInternal(
+                    req, uploadedDocuments, onToken,
+                    onAgentSelected, onDiscussionProgress, onResearchProgress,
+                    executionPlan, onSkillsActivated, onThinking, onSystemEvent,
+                );
+                rootSpan.setAttribute('chat.response_chars', result.length);
+                return result;
+            },
+            {
+                attributes: {
+                    'chat.user_id': req.userId || 'guest',
+                    'chat.user_role': req.userRole || 'guest',
+                    'chat.user_tier': req.userTier || 'free',
+                    'chat.query_length': (req.message || '').length,
+                    'chat.has_images': (req.images?.length ?? 0) > 0,
+                    'chat.has_doc': !!req.docId,
+                    'chat.history_length': req.history?.length ?? 0,
+                    'chat.brand_profile': executionPlan?.requestedModel || 'none',
+                    'chat.discussion_mode': req.discussionMode === true,
+                    'chat.deep_research_mode': req.deepResearchMode === true,
+                    'chat.thinking_mode': req.thinkingMode === true,
+                },
+            }
+        );
+    }
+
+    /** processMessage의 본체 — withSpan으로 wrap된 진입점에서 호출 */
+    private async processMessageInternal(
+        req: ChatMessageRequest,
+        uploadedDocuments: DocumentStore,
+        onToken: (token: string) => void,
+        onAgentSelected?: (agent: { type: string; name: string; emoji?: string; phase?: string; reason?: string; confidence?: number }) => void,
+        onDiscussionProgress?: (progress: DiscussionProgress) => void,
+        onResearchProgress?: (progress: ResearchProgress) => void,
+        executionPlan?: ExecutionPlan,
+        onSkillsActivated?: (skillNames: string[]) => void,
+        onThinking?: (thinking: string) => void,
+        onSystemEvent?: SystemEventCallback,
     ): Promise<string> {
         const {
             message,
@@ -284,7 +331,18 @@ export class ChatService {
         if (languagePolicy?.resolvedLanguage) {
             req.userLanguagePreference = languagePolicy.resolvedLanguage;
         }
-        if (discussionMode) {
+
+        // 토론 자동 활성화 결정 (chat/discussion-router에 위임)
+        const discussionDecision = decideDiscussionActivation({
+            explicitMode: discussionMode,
+            executionPlan,
+            message: message || '',
+            hasImages: (images && images.length > 0) || false,
+            hasDocuments: !!docId,
+            historyLength: history?.length ?? 0,
+        });
+
+        if (discussionDecision.activate) {
             // Auto-routing 모델 해석: __auto__ → 실제 엔진 모델명으로 변환
             // Discussion 모드는 일반 모드의 resolveModel() 흐름을 거치지 않으므로
             // client가 placeholder "default"를 유지하면 Ollama 404 발생
@@ -293,6 +351,30 @@ export class ChatService {
                 const promptConfig = getPromptConfig(message, languagePolicy?.resolvedLanguage);
                 await this.resolveModel(message || '', hasImages, executionPlan, promptConfig);
             }
+
+            // Auto 프로파일 자동 활성화 시 사용자에게 알림
+            // - 메타 이벤트 콜백(onSystemEvent)이 주어지면 우선 사용 (UI 분리)
+            // - 콜백 없으면 마크다운 본문 prepend (fallback, 기존 동작)
+            const notice = getAutoDiscussionNotice(
+                discussionDecision,
+                languagePolicy?.resolvedLanguage || 'en'
+            );
+            if (notice) {
+                if (onSystemEvent) {
+                    onSystemEvent({
+                        type: 'auto-discussion-activated',
+                        message: notice.replace(/^>\s*/, '').trim(),
+                        metadata: {
+                            language: languagePolicy?.resolvedLanguage || 'en',
+                            complexityScore: discussionDecision.complexityScore,
+                            reason: discussionDecision.reason,
+                        },
+                    });
+                } else {
+                    for (const ch of notice) onToken(ch);
+                }
+            }
+
             return this.processMessageWithDiscussion(req, uploadedDocuments, onToken, onDiscussionProgress);
         }
 
@@ -319,6 +401,13 @@ export class ChatService {
                 brandProfile: executionPlan?.requestedModel,
             },
         });
+
+        // 토론 자동 결정 추적 (보류된 경우만 일반 파이프라인 routingLog에 기록)
+        // 자동 활성화된 경우는 토론 경로로 분기되어 이 시점에 도달하지 않음
+        if (discussionDecision.complexityScore !== undefined) {
+            routingLog.routeDecision.discussionAutoActivated = false;
+            routingLog.routeDecision.discussionAutoComplexity = discussionDecision.complexityScore;
+        }
 
         let fullResponse = '';
 
@@ -663,6 +752,12 @@ export class ChatService {
         onToken: (token: string) => void,
         onProgress?: (progress: DiscussionProgress) => void
     ): Promise<string> {
+        const abortSignal = req.abortSignal;
+        const checkAborted = () => {
+            if (abortSignal?.aborted) {
+                throw new Error('ABORTED');
+            }
+        };
         const result = await this.discussionStrategy.execute({
             req,
             uploadedDocuments,
@@ -670,6 +765,8 @@ export class ChatService {
             onProgress,
             formatDiscussionResult: (discussionResult) => formatDiscussionResult(discussionResult),
             onToken,
+            abortSignal,
+            checkAborted,
         });
 
         return result.response;

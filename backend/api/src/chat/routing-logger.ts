@@ -66,6 +66,10 @@ export interface RoutingRouteDecision {
         appropriate: boolean;
         issues: string[];
     };
+    /** 토론 자동 활성화 여부 (Pro 프로파일에서 복잡도 기반으로 시스템이 결정) */
+    discussionAutoActivated?: boolean;
+    /** 토론 자동 활성화 결정 시 복잡도 점수 */
+    discussionAutoComplexity?: number;
 }
 
 export interface RoutingDecisionLog {
