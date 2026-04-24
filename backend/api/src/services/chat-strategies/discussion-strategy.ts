@@ -22,6 +22,7 @@ import { sanitizePromptInput } from '../../utils/input-sanitizer';
 import { CONTEXT_LIMITS, DISCUSSION_TOKEN_BUDGET, MODEL_CONTEXT_DEFAULTS } from '../../config/runtime-limits';
 import { LLM_TEMPERATURES } from '../../config/llm-parameters';
 import { resolvePromptLocale, type PromptLocaleCode } from '../../chat/language-policy';
+import { withSpan } from '../../observability/otel';
 
 const logger = createLogger('DiscussionStrategy');
 
@@ -212,9 +213,44 @@ export class DiscussionStrategy implements ChatStrategy<DiscussionStrategyContex
      * @returns 포맷팅된 토론 결과 응답
      */
     async execute(context: DiscussionStrategyContext): Promise<ChatResult> {
+        // 토론 전체를 root span으로 감싸 5단계 비용/지연 분석을 가능하게 함.
+        // 자식 span(llm.chat 등)은 AsyncLocalStorage로 자동 부모 연결됨.
+        return withSpan(
+            'discussion-strategy',
+            'discussion.execute',
+            async (rootSpan) => {
+                const result = await this.executeInternal(context);
+                if (typeof result.response === 'string') {
+                    rootSpan.setAttribute('discussion.response_chars', result.response.length);
+                }
+                return result;
+            },
+            {
+                attributes: {
+                    'discussion.user_id': context.req.userId || 'guest',
+                    'discussion.has_doc': !!context.req.docId,
+                    'discussion.has_images': (context.req.images?.length ?? 0) > 0,
+                    'discussion.history_length': context.req.history?.length ?? 0,
+                    'discussion.has_web_search': !!context.req.webSearchContext,
+                    'discussion.language': context.req.userLanguagePreference || 'en',
+                },
+            }
+        );
+    }
+
+    /** 토론 실행 본체 — withSpan으로 wrap된 execute에서 호출 */
+    private async executeInternal(context: DiscussionStrategyContext): Promise<ChatResult> {
         const { message, docId, history, webSearchContext, images, userId, userLanguagePreference } = context.req;
         const locale = resolvePromptLocale(userLanguagePreference || 'en');
         const localized = DISCUSSION_STRATEGY_LOCALE_TEXTS[locale];
+
+        // 클라이언트 단절 시 즉시 토론 중단을 위한 abort 체크 헬퍼
+        // checkAborted가 주어지지 않은 경우(레거시 호출자) abortSignal에서 직접 검사
+        const checkAborted = context.checkAborted ?? (() => {
+            if (context.abortSignal?.aborted) {
+                throw new Error('ABORTED');
+            }
+        });
 
         logger.info('🎯 멀티 에이전트 토론 모드 시작');
 
@@ -291,6 +327,7 @@ export class DiscussionStrategy implements ChatStrategy<DiscussionStrategyContex
 
             const imagePromises = allImages.slice(0, 3).map(async (imageBase64, i) => {
                 try {
+                    checkAborted();
                     const analysisResponse = await context.client.chat(
                         [
                             {
@@ -322,8 +359,13 @@ export class DiscussionStrategy implements ChatStrategy<DiscussionStrategyContex
         }
 
         // 5단계: DiscussionEngine 생성 및 토론 실행
-        /** DiscussionEngine에 주입할 LLM 응답 생성 함수 */
+        /** DiscussionEngine에 주입할 LLM 응답 생성 함수
+         *  - 호출 직전 abort 체크: 다음 라운드/전문가로 진입 전 중단
+         *  - 스트리밍 토큰 콜백 내부 abort 체크: 진행 중인 LLM 호출의 다음 토큰을 throw로 차단
+         *    (OllamaClient.chat이 abortSignal 인자를 받지 않으므로 콜백 throw가 가장 적은 침습)
+         */
         const generateResponse = async (systemPrompt: string, userMessage: string): Promise<string> => {
+            checkAborted();
             let response = '';
             const chatMessages: ChatMessage[] = [
                 { role: 'system', content: systemPrompt },
@@ -335,6 +377,8 @@ export class DiscussionStrategy implements ChatStrategy<DiscussionStrategyContex
                 if (!thinking) {
                     response += token;
                 }
+                // 토큰 콜백마다 abort 체크 → 클라이언트 단절 시 다음 토큰 직전에 stream 중단
+                checkAborted();
             });
 
             return response;
@@ -383,11 +427,18 @@ export class DiscussionStrategy implements ChatStrategy<DiscussionStrategyContex
         }
 
         // 6단계: 토론 실행 및 결과 포맷팅/스트리밍
+        checkAborted();
         let result: DiscussionResult;
         try {
             result = await discussionEngine.startDiscussion(message, webSearchFn);
         } catch (discussionError) {
             const errMsg = discussionError instanceof Error ? discussionError.message : String(discussionError);
+            // ABORTED는 정상적인 클라이언트 단절 → 폴백 메시지 없이 그대로 전파
+            // 이미 클라이언트는 끊겼으므로 폴백 응답을 보낼 필요가 없음
+            if (errMsg === 'ABORTED') {
+                logger.info('토론 중단됨 (클라이언트 단절)');
+                throw discussionError;
+            }
             logger.error(`❌ 토론 엔진 실행 실패: ${errMsg}`);
 
             const fallbackResponse = localized.fallbackResponse;
@@ -401,9 +452,13 @@ export class DiscussionStrategy implements ChatStrategy<DiscussionStrategyContex
 
         const formattedResponse = context.formatDiscussionResult(result);
 
-        // 포맷팅된 결과를 문자 단위로 스트리밍 전송
-        for (const char of formattedResponse) {
-            context.onToken(char);
+        // 포맷팅된 결과를 스트리밍 전송 (100자마다 abort 체크 — 매 문자 체크는 오버헤드)
+        const ABORT_CHECK_INTERVAL = 100;
+        for (let i = 0; i < formattedResponse.length; i++) {
+            if (i % ABORT_CHECK_INTERVAL === 0) {
+                checkAborted();
+            }
+            context.onToken(formattedResponse[i]);
         }
 
         logger.info(`🎯 토론 완료: ${result.totalTime}ms, 참여자: ${result.participants.length}명`);

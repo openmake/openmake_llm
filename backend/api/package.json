@@ -12,7 +12,12 @@
         "watch": "tsc --watch",
         "test": "jest",
         "test:watch": "jest --watch",
-        "test:coverage": "jest --coverage"
+        "test:coverage": "jest --coverage",
+        "eval:routing": "ts-node src/evaluation/run-evaluation.ts",
+        "eval:routing:strict": "OMK_EVAL_PASS_THRESHOLD=1.0 ts-node src/evaluation/run-evaluation.ts",
+        "eval:augmented": "ts-node src/evaluation/run-augmented-evaluation.ts",
+        "eval:response": "ts-node src/evaluation/run-response-evaluation.ts",
+        "eval:all": "npm run eval:routing && npm run eval:response"
     },
     "dependencies": {
         "@modelcontextprotocol/sdk": "^1.25.3",
