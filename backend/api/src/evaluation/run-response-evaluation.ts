@@ -4,12 +4,19 @@
  * ============================================================
  *
  * PoC 단계는 deterministic mock generator로 시작 — LLM 비용 0, 빠른 피드백.
- * 추후 --real 플래그로 실제 ChatService 연결 가능 (현재 미구현, throw).
+ * --real 플래그로 ChatService 실제 호출 가능 (비용 가드 4중 적용).
  *
  * 사용법:
- *   npm run eval:response                        # mock generator (기본)
+ *   npm run eval:response                                # mock generator (기본)
  *   ts-node src/evaluation/run-response-evaluation.ts custom-dataset.json
- *   ts-node src/evaluation/run-response-evaluation.ts --real    # 실제 LLM (미구현)
+ *   ts-node src/evaluation/run-response-evaluation.ts --real           # 실제 LLM, 기본 5건
+ *   ts-node src/evaluation/run-response-evaluation.ts --real --limit 3 # 첫 3건만
+ *
+ * **--real 모드 운영 사고 방지 가드**:
+ *   1) `--real` 명시적 플래그가 있어야만 활성 (기본은 mock)
+ *   2) `--limit N` 또는 `OMK_EVAL_REAL_DEFAULT_LIMIT`(기본 5)으로 케이스 수 제한
+ *   3) `OMK_EVAL_REAL_TIMEOUT_MS` (기본 60_000) — 케이스당 timeout
+ *   4) `OMK_EVAL_REAL_MAX_TOKENS` (기본 2000) — 케이스당 추정 토큰 한도
  *
  * @module evaluation/run-response-evaluation
  */
@@ -22,9 +29,14 @@ dotenv.config({ path: path.resolve(__dirname, '../../../../.env') });
 
 import { loadGoldenDataset } from './dataset-loader';
 import { runResponseEvaluation, type ResponseGenerator } from './response-evaluator';
-import type { EvaluationSummary } from './types';
+import type { EvaluationSummary, GoldenDataset } from './types';
+// 주의: real-response-generator는 ChatService/OllamaClient 등 무거운 의존성을
+// 끌어오므로 mock 모드 회귀 비용을 피하기 위해 lazy require로 로드한다.
 
 const PASS_RATE_THRESHOLD = Number(process.env.OMK_EVAL_RESPONSE_THRESHOLD ?? '0.5');
+const REAL_TIMEOUT_MS = Number(process.env.OMK_EVAL_REAL_TIMEOUT_MS ?? '60000');
+const REAL_MAX_TOKENS = Number(process.env.OMK_EVAL_REAL_MAX_TOKENS ?? '2000');
+const REAL_DEFAULT_LIMIT = Number(process.env.OMK_EVAL_REAL_DEFAULT_LIMIT ?? '5');
 
 function getGitCommitHash(): string {
     try {
@@ -80,22 +92,106 @@ const mockResponseGenerator: ResponseGenerator = async (query) => {
     return `Mock response for: ${query.slice(0, 80)}`;
 };
 
-const realResponseGenerator: ResponseGenerator = async () => {
-    // 향후 ChatService.processMessage wrapping 자리 — 비용 모니터링 필요로 별도 PR
-    throw new Error('--real 모드는 아직 구현되지 않았습니다 (ChatService 통합 + 비용 가드 필요)');
-};
+/**
+ * CLI 인자 파싱 — `--real`, `--mock`, `--limit N` 처리.
+ * 남은 positional 인자(있으면 첫 번째)를 customPath로 사용.
+ */
+interface ParsedArgs {
+    useReal: boolean;
+    explicitLimit?: number;
+    customPath?: string;
+}
+
+function parseArgs(argv: string[]): ParsedArgs {
+    const useReal = argv.includes('--real');
+    let explicitLimit: number | undefined;
+    const positional: string[] = [];
+
+    for (let i = 0; i < argv.length; i++) {
+        const a = argv[i];
+        if (a === '--real' || a === '--mock') continue;
+        if (a === '--limit') {
+            const next = argv[i + 1];
+            if (!next || Number.isNaN(Number(next))) {
+                throw new Error(`--limit 다음에 숫자가 와야 합니다 (받은 값: "${next}")`);
+            }
+            explicitLimit = Number(next);
+            if (explicitLimit < 1) {
+                throw new Error(`--limit 값은 1 이상이어야 합니다 (받은 값: ${explicitLimit})`);
+            }
+            i++; // skip the number
+            continue;
+        }
+        positional.push(a);
+    }
+
+    return { useReal, explicitLimit, customPath: positional[0] };
+}
+
+/**
+ * --limit (또는 환경변수 default) 만큼 response-pattern 케이스를 슬라이스.
+ * 평가 사고 방지: --real 모드에서 명시 limit 없으면 처음 N건(기본 5)만 실행.
+ * mock 모드는 무제한(기본 동작 보존).
+ */
+function applyLimit(dataset: GoldenDataset, useReal: boolean, explicitLimit?: number): {
+    dataset: GoldenDataset;
+    limitedTo: number | null;
+} {
+    const limit = explicitLimit ?? (useReal ? REAL_DEFAULT_LIMIT : undefined);
+    if (limit === undefined || !Number.isFinite(limit)) {
+        return { dataset, limitedTo: null };
+    }
+
+    const responseCases = dataset.cases.filter((c) => c.category === 'response-pattern');
+    if (responseCases.length <= limit) {
+        return { dataset, limitedTo: null };
+    }
+
+    const otherCases = dataset.cases.filter((c) => c.category !== 'response-pattern');
+    const slicedResponse = responseCases.slice(0, limit);
+    return {
+        dataset: { ...dataset, cases: [...otherCases, ...slicedResponse] },
+        limitedTo: limit,
+    };
+}
 
 async function main() {
-    const args = process.argv.slice(2).filter((a) => a !== '--real' && a !== '--mock');
-    const customPath = args[0];
-    const useReal = process.argv.includes('--real');
+    const { useReal, explicitLimit, customPath } = parseArgs(process.argv.slice(2));
 
-    const dataset = loadGoldenDataset(customPath);
-    const generator = useReal ? realResponseGenerator : mockResponseGenerator;
-    const mode = useReal ? 'real' : 'mock';
+    const rawDataset = loadGoldenDataset(customPath);
+    const { dataset, limitedTo } = applyLimit(rawDataset, useReal, explicitLimit);
+
+    let generator: ResponseGenerator;
+    let mode: 'mock' | 'real';
+
+    if (useReal) {
+        // Lazy load: ChatService/OllamaClient 등 LLM 의존성은 --real 모드에서만 필요
+        // (mock 모드 회귀 시 web-scraper 등 무관한 모듈이 컴파일되는 비용 회피)
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const { createRealResponseGenerator } = require('./real-response-generator') as
+            typeof import('./real-response-generator');
+        generator = createRealResponseGenerator({
+            timeoutMs: REAL_TIMEOUT_MS,
+            maxTokensPerCase: REAL_MAX_TOKENS,
+            abortOnBudgetExceed: true,
+        });
+        mode = 'real';
+    } else {
+        generator = mockResponseGenerator;
+        mode = 'mock';
+    }
 
     console.log(`\n[Response Evaluation] 데이터셋: v${dataset.version}, 모드: ${mode}`);
-    console.log(`[Response Evaluation] 통과 임계값: ${(PASS_RATE_THRESHOLD * 100).toFixed(0)}%\n`);
+    console.log(`[Response Evaluation] 통과 임계값: ${(PASS_RATE_THRESHOLD * 100).toFixed(0)}%`);
+    if (useReal) {
+        console.log(
+            `[Response Evaluation] --real 가드: timeoutMs=${REAL_TIMEOUT_MS}, ` +
+            `maxTokens=${REAL_MAX_TOKENS}, limit=${limitedTo ?? 'all'}`,
+        );
+    } else if (limitedTo !== null) {
+        console.log(`[Response Evaluation] --limit 적용: ${limitedTo}건`);
+    }
+    console.log('');
 
     const summary = await runResponseEvaluation(dataset, generator);
     printSummary(summary, mode);

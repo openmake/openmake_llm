@@ -27,6 +27,7 @@ import { ClusterManager } from '../cluster/manager';
 import { OllamaClient } from '../ollama/client';
 import { ChatService } from '../services/ChatService';
 import type { ChatMessageRequest } from '../services/ChatService';
+import type { SystemEventCallback } from '../services/chat-service-types';
 import type { DiscussionProgress } from '../agents/discussion-engine';
 import type { ResearchProgress } from '../services/DeepResearchService';
 import { uploadedDocuments } from '../documents/store';
@@ -137,6 +138,8 @@ export interface ChatRequestParams {
     onResearchProgress?: (progress: ResearchProgress) => void;
     /** 스킬 활성화 콜백 - 에이전트에 주입된 스킬 이름 목록 */
     onSkillsActivated?: (skillNames: string[]) => void;
+    /** 시스템 이벤트 콜백 - 자동 토론 활성화 등 메타 알림 (UI에서 토스트로 표시) */
+    onSystemEvent?: SystemEventCallback;
 }
 
 /**
@@ -384,6 +387,7 @@ export class ChatRequestHandler {
             onDiscussionProgress,
             onResearchProgress,
             onSkillsActivated,
+            onSystemEvent,
             userLanguagePreference,
         } = params;
 
@@ -494,6 +498,7 @@ export class ChatRequestHandler {
             plan,
             onSkillsActivated,
             params.onThinking,
+            onSystemEvent,
         );
 
         const endTime = Date.now();

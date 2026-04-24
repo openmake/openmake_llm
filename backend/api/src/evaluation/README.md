@@ -13,6 +13,7 @@ evaluation/
 ├── router-evaluator.ts                  # 키워드 라우팅 정확도 평가
 ├── response-evaluator.ts                # mustContain/mustNotContain 평가
 ├── semantic-augmented-evaluator.ts      # strict + relaxed 이중 평가
+├── real-response-generator.ts           # ChatService 호출 래퍼 (--real)
 ├── run-evaluation.ts                    # CLI: eval:routing
 ├── run-augmented-evaluation.ts          # CLI: eval:augmented
 └── run-response-evaluation.ts           # CLI: eval:response
@@ -46,6 +47,9 @@ npm run eval:routing:strict
 | `OMK_EVAL_PASS_THRESHOLD` | `0.5` | eval:routing 통과 임계값 |
 | `OMK_EVAL_AUGMENTED_THRESHOLD` | `0.5` | eval:augmented relaxed 임계값 |
 | `OMK_EVAL_RESPONSE_THRESHOLD` | `0.5` | eval:response 통과 임계값 |
+| `OMK_EVAL_REAL_TIMEOUT_MS` | `60000` | --real 모드 케이스당 timeout (ms) |
+| `OMK_EVAL_REAL_MAX_TOKENS` | `2000` | --real 모드 케이스당 추정 토큰 한도 |
+| `OMK_EVAL_REAL_DEFAULT_LIMIT` | `5` | --real 모드 기본 케이스 수 (--limit 미지정 시) |
 | `OMK_SEMANTIC_ROUTER_ENABLED` | `(eval:augmented가 강제 true)` | semantic 인덱스 활성화 |
 | `OMK_EMBEDDING_MODEL` | `nomic-embed-text` | Ollama 임베딩 모델 |
 
@@ -112,7 +116,25 @@ npm run eval:routing:strict
 
 ### eval:response
 - mock 모드는 `MOCK_RESPONSE_RULES` 룰셋 검증 (평가기 자체 동작 확인)
-- `--real` 모드는 미구현 (ChatService wrapping + 비용 모니터링 필요)
+- `--real` 모드는 ChatService를 직접 호출하여 실제 LLM 응답 평가
+  - **경고**: 실제 LLM 비용 발생, Ollama API 키 필요 (`.env` 의 `OLLAMA_API_KEY_*`)
+  - 운영 사고 방지 4중 가드:
+    1. `--real` 명시적 플래그가 있어야만 활성 (기본은 `--mock`)
+    2. `--limit N` 또는 `OMK_EVAL_REAL_DEFAULT_LIMIT` (기본 5건)
+    3. `OMK_EVAL_REAL_TIMEOUT_MS` (기본 60s) — `AbortController`로 강제 중단
+    4. `OMK_EVAL_REAL_MAX_TOKENS` (기본 2000) — `onToken` 누적 char 수의
+       보수적 토큰 추정(`chars/3`)이 한도 초과 시 즉시 abort
+  - 토큰 추정은 휴리스틱 (정확한 prompt_eval_count/eval_count는 ChatService
+    외부로 노출되지 않음). 영문 ~4 char/token이 일반적이므로 `/3`은 빨리
+    abort 하는 안전 측 추정.
+
+```bash
+# --real 모드 사용 예
+ts-node src/evaluation/run-response-evaluation.ts --real            # 처음 5건
+ts-node src/evaluation/run-response-evaluation.ts --real --limit 3  # 처음 3건
+OMK_EVAL_REAL_TIMEOUT_MS=30000 OMK_EVAL_REAL_MAX_TOKENS=1000 \
+  ts-node src/evaluation/run-response-evaluation.ts --real --limit 1
+```
 
 ## CI 통합 (후속)
 
@@ -139,7 +161,7 @@ commit 사이의 통과율 변동을 추적 가능.
 | LLM-as-Judge | ❌ | response-pattern 한계 명확해질 때 |
 | Admin UI | ❌ | DB 통합 후 |
 | JUnit XML 출력 | ❌ | CI 정식 통합 단계 |
-| eval:response --real | ❌ | ChatService 통합 + 비용 가드 필요 |
+| eval:response --real | ✅ | 4중 비용 가드 적용 (timeout, max-tokens, --limit, --real 플래그) |
 
 ## 베이스라인 측정값 (v0.4.0)
 
