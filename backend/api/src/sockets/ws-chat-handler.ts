@@ -236,6 +236,19 @@ export async function handleChatMessage(
             onDiscussionProgress: (progress) => ws.send(JSON.stringify({ type: 'discussion_progress', progress })),
             onResearchProgress: (progress) => ws.send(JSON.stringify({ type: 'research_progress', progress })),
             onSkillsActivated: (skillNames) => ws.send(JSON.stringify({ type: 'skills_activated', skillNames })),
+            // 시스템 이벤트 (자동 토론 활성화 등 메타 알림) — UI 토스트 분리 표시
+            onSystemEvent: (event) => {
+                if (ws.readyState === ws.OPEN) {
+                    ws.send(JSON.stringify({
+                        type: 'system_event',
+                        payload: {
+                            type: event.type,
+                            message: event.message,
+                            metadata: event.metadata,
+                        },
+                    }));
+                }
+            },
         });
 
         // WS 고유: 새 세션 생성 알림

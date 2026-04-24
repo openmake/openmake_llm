@@ -12,6 +12,7 @@
 import { getState, setState } from './state.js';
 import { hideAbortButton } from './chat.js';
 import { debugLog, debugWarn } from './utils.js';
+import { showSystemToast } from './system-toast.js';
 
 /** @type {number} 현재 재연결 시도 횟수 */
 let reconnectAttempts = 0;
@@ -238,6 +239,24 @@ const messageHandlers = {
     'thinking': (data) => {
         if (typeof appendThinkingToken === 'function') {
             appendThinkingToken(data.token);
+        }
+    },
+    /**
+     * 시스템 이벤트 (백엔드 onSystemEvent 콜백)
+     * 형식: { type: 'system_event', payload: { type, message, metadata? } }
+     * 자동 토론 활성화 등 메타 알림을 우측 상단 토스트로 표시.
+     */
+    'system_event': (data) => {
+        const payload = data && data.payload;
+        if (!payload || typeof payload !== 'object') {
+            debugWarn('[WebSocket] system_event payload 누락');
+            return;
+        }
+        debugLog('[WebSocket] 시스템 이벤트:', payload.type, payload.message);
+        try {
+            showSystemToast(payload);
+        } catch (e) {
+            console.error('[WebSocket] showSystemToast 호출 실패:', e);
         }
     }
 };
