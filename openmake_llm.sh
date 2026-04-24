@@ -9,9 +9,13 @@
 #   Layer 4: OpenMake LLM    (PM2 — ecosystem.config.js, PORT=52416)
 #
 # 사용법:
-#   ./openmake_llm.sh start      # 의존성 → 앱 순서로 기동
+#   ./openmake_llm.sh start      # 의존성 → 앱 순서로 기동 (빌드/마이그레이션 X)
 #   ./openmake_llm.sh stop       # 앱 → 의존성 역순으로 정지
-#   ./openmake_llm.sh restart    # stop 후 start
+#   ./openmake_llm.sh restart    # PM2 앱만 재시작 (코드 반영 X — 환경변수 변경 등)
+#   ./openmake_llm.sh build      # npm run build (TypeScript + frontend sync)
+#   ./openmake_llm.sh migrate    # DB 마이그레이션 적용 (status로 사전 확인 권장)
+#   ./openmake_llm.sh deploy     # build + migrate + restart (코드 변경 운영 반영)
+#                                # 옵션: --yes (확인 skip), --no-migrate (마이그 생략)
 #   ./openmake_llm.sh status     # 모든 계층 상태 확인
 #   ./openmake_llm.sh logs       # OpenMake LLM 실시간 로그
 #   ./openmake_llm.sh health     # /health 엔드포인트 응답 확인
@@ -329,17 +333,133 @@ cmd_restart() {
     cmd_start
 }
 
+# ── build / migrate / deploy ───────────────────────────────────────────────────
+cmd_build() {
+    log_step "npm run build (TypeScript 컴파일 + frontend sync)"
+    if ! ( cd "$SCRIPT_DIR" && npm run build ); then
+        log_err "빌드 실패 — 후속 작업 중단"
+        return 2
+    fi
+    log_ok "빌드 완료"
+}
+
+cmd_migrate() {
+    log_step "DB 마이그레이션 (status → migrate)"
+
+    # 마이그레이션 CLI는 dotenv 자동 로드를 안 하므로 스크립트에서 export
+    # (server.ts/cli.ts와 달리 backend/api/src/data/migrations/cli.ts는
+    #  config 검증을 그대로 실행해서 JWT_SECRET 등이 필요)
+    local env_file="$SCRIPT_DIR/.env"
+    if [[ ! -f "$env_file" ]]; then
+        log_err ".env 파일을 찾을 수 없음: $env_file"
+        return 2
+    fi
+
+    log_info "현재 마이그레이션 상태 조회"
+    if ! ( cd "$SCRIPT_DIR/backend/api" && set -a && . "$env_file" && set +a && \
+           npx ts-node src/data/migrations/cli.ts status ); then
+        log_err "마이그레이션 status 조회 실패"
+        return 2
+    fi
+    echo ""
+    log_info "마이그레이션 적용 중"
+    if ! ( cd "$SCRIPT_DIR/backend/api" && set -a && . "$env_file" && set +a && \
+           npx ts-node src/data/migrations/cli.ts migrate ); then
+        log_err "마이그레이션 적용 실패 — 후속 작업 중단"
+        return 2
+    fi
+    log_ok "마이그레이션 완료"
+}
+
+# 옵션 파싱: --yes, --no-migrate
+parse_deploy_opts() {
+    DEPLOY_YES=0
+    DEPLOY_NO_MIGRATE=0
+    for arg in "$@"; do
+        case "$arg" in
+            --yes|-y) DEPLOY_YES=1 ;;
+            --no-migrate) DEPLOY_NO_MIGRATE=1 ;;
+            *)
+                log_err "알 수 없는 deploy 옵션: $arg"
+                echo "  지원: --yes, --no-migrate"
+                exit 1
+                ;;
+        esac
+    done
+}
+
+confirm_or_exit() {
+    local prompt="$1"
+    if [[ "$DEPLOY_YES" -eq 1 ]] || [[ "${OMK_DEPLOY_SKIP_CONFIRM:-0}" == "1" ]]; then
+        log_info "확인 자동 통과 (--yes 또는 OMK_DEPLOY_SKIP_CONFIRM=1)"
+        return 0
+    fi
+    if [[ ! -t 0 ]]; then
+        log_err "비대화형 환경 — --yes 플래그 또는 OMK_DEPLOY_SKIP_CONFIRM=1 필요"
+        exit 1
+    fi
+    read -r -p "$(printf '%s%s%s [y/N]: ' "$C_WARN" "$prompt" "$C_RESET")" reply
+    case "$reply" in
+        [yY]|[yY][eE][sS]) return 0 ;;
+        *) log_warn "사용자 거부 — deploy 중단"; exit 0 ;;
+    esac
+}
+
+cmd_deploy() {
+    parse_deploy_opts "$@"
+    preflight
+
+    log_step "Deploy: build → migrate → restart"
+
+    # 1) 빌드
+    cmd_build
+
+    # 2) 마이그레이션 (확인 프롬프트, --no-migrate면 skip)
+    if [[ "$DEPLOY_NO_MIGRATE" -eq 1 ]]; then
+        log_info "마이그레이션 생략 (--no-migrate)"
+    else
+        confirm_or_exit "DB 마이그레이션을 진행합니다. 계속하시겠습니까?"
+        cmd_migrate
+    fi
+
+    # 3) 재시작 (앱만)
+    log_step "PM2 앱 재시작 (의존성은 그대로 유지)"
+    if pm2 jlist 2>/dev/null | grep -q "\"name\":\"$APP_NAME\""; then
+        pm2 restart "$APP_NAME" --update-env >/dev/null 2>&1 || {
+            log_err "$APP_NAME restart 실패"
+            return 2
+        }
+        wait_for_port "$APP_PORT" "OpenMake LLM"
+    else
+        log_info "$APP_NAME PM2 미등록 — 신규 시작"
+        ( cd "$SCRIPT_DIR" && pm2 start ecosystem.config.js ) || return 2
+        wait_for_port "$APP_PORT" "OpenMake LLM"
+    fi
+
+    echo ""
+    log_ok "Deploy 완료 — 변경사항이 운영에 반영되었습니다"
+    show_status
+}
+
 usage() {
     cat <<EOF
 OpenMake LLM 통합 서비스 매니저
 
 사용법:
-  $0 <command>
+  $0 <command> [options]
 
-명령:
+서비스 관리:
   start     PostgreSQL → Redis → Ollama → OpenMake LLM 순차 기동
   stop      역순 정지
-  restart   stop 후 start
+  restart   PM2 앱만 재시작 (코드 반영 X — 환경변수 변경 등)
+
+코드 변경 반영:
+  build     npm run build (TypeScript + frontend sync)
+  migrate   DB 마이그레이션 (status → migrate)
+  deploy    build + migrate + restart 통합 (코드 변경 운영 반영)
+            옵션: --yes (확인 프롬프트 skip), --no-migrate (마이그 생략)
+
+관측:
   status    모든 계층 상태 확인 (포트 + brew + PM2)
   health    /health 엔드포인트 호출 확인
   logs      OpenMake LLM 실시간 로그 (PM2)
@@ -349,17 +469,29 @@ OpenMake LLM 통합 서비스 매니저
   - PM2 전역 설치 (npm i -g pm2)
   - Node 22+ (mise/nvm으로 활성)
 
-오버라이드 가능 환경변수:
+오버라이드 환경변수:
   PORT (기본 52416), POSTGRES_PORT (5432), REDIS_PORT (6379), OLLAMA_PORT (11434)
+  OMK_DEPLOY_SKIP_CONFIRM=1 (deploy 마이그레이션 확인 자동 통과)
+
+예시:
+  $0 start                          # 처음 기동
+  $0 deploy                         # 코드 변경 후 운영 반영 (확인 프롬프트)
+  $0 deploy --yes                   # 확인 없이 즉시 진행
+  $0 deploy --no-migrate            # 마이그레이션 생략하고 build+restart만
+  $0 deploy --yes --no-migrate      # 둘 다 적용
 EOF
 }
 
 main() {
     local cmd="${1:-}"
+    shift || true
     case "$cmd" in
         start)    cmd_start ;;
         stop)     cmd_stop ;;
         restart)  cmd_restart ;;
+        build)    cmd_build ;;
+        migrate)  cmd_migrate ;;
+        deploy)   cmd_deploy "$@" ;;
         status)   show_status ;;
         health)   show_health ;;
         logs)     show_logs ;;
