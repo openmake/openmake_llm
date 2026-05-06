@@ -105,14 +105,6 @@ export interface EnvConfig {
     // HTTPS 없는 production 환경에서 cookieSecure=false 를 명시적으로 허용 (opt-out)
     allowInsecureCookies: boolean;
 
-    // Pipeline Profile — Brand Model → Internal Engine Mapping
-    omkEngineLlm: string;
-    omkEnginePro: string;
-    omkEngineFast: string;
-    omkEngineThink: string;
-    omkEngineCode: string;
-    omkEngineVision: string;
-
     // Pipeline Profile — Cost Tier & Domain Routing (P2)
     omkCostTierDefault: string;
     omkDomainCode: string;
@@ -175,7 +167,7 @@ const DEFAULT_CONFIG: EnvConfig = {
 
     // Ollama
     ollamaBaseUrl: 'http://localhost:11434',
-    ollamaDefaultModel: 'gemini-3-flash-preview:cloud',
+    ollamaDefaultModel: 'gemma4:e4b',
     ollamaTimeout: 120000,
     ollamaApiKey: '',
     ollamaApiKeyPrimary: '',
@@ -230,14 +222,6 @@ const DEFAULT_CONFIG: EnvConfig = {
     // Cookie Security
     cookieSecure: false,
     allowInsecureCookies: false,
-
-    // Pipeline Profile — Brand Model → Internal Engine Mapping
-    omkEngineLlm: 'gemini-3-flash-preview:cloud',
-    omkEnginePro: 'gemini-3-flash-preview:cloud',
-    omkEngineFast: 'gemini-3-flash-preview:cloud',
-    omkEngineThink: 'gemini-3-flash-preview:cloud',
-    omkEngineCode: 'glm-5.1:cloud',
-    omkEngineVision: 'qwen3.5:397b-cloud',
 
     // Pipeline Profile — Cost Tier & Domain Routing (P2)
     omkCostTierDefault: 'premium',
@@ -427,12 +411,6 @@ export function loadConfig(): EnvConfig {
         SWAGGER_BASE_URL: env('SWAGGER_BASE_URL'),
         API_KEY_PEPPER: env('API_KEY_PEPPER'),
         API_KEY_MAX_PER_USER: env('API_KEY_MAX_PER_USER'),
-        OMK_ENGINE_LLM: env('OMK_ENGINE_LLM'),
-        OMK_ENGINE_PRO: env('OMK_ENGINE_PRO'),
-        OMK_ENGINE_FAST: env('OMK_ENGINE_FAST'),
-        OMK_ENGINE_THINK: env('OMK_ENGINE_THINK'),
-        OMK_ENGINE_CODE: env('OMK_ENGINE_CODE'),
-        OMK_ENGINE_VISION: env('OMK_ENGINE_VISION'),
 
         // P2: Cost Tier & Domain Routing
         OMK_COST_TIER_DEFAULT: env('OMK_COST_TIER_DEFAULT'),
@@ -562,14 +540,6 @@ export function loadConfig(): EnvConfig {
         // API Key Service
         apiKeyPepper: parsed.API_KEY_PEPPER ?? DEFAULT_CONFIG.apiKeyPepper,
         apiKeyMaxPerUser: parsed.API_KEY_MAX_PER_USER ?? DEFAULT_CONFIG.apiKeyMaxPerUser,
-
-        // Pipeline Profile — Brand Model → Internal Engine Mapping
-        omkEngineLlm: parsed.OMK_ENGINE_LLM ?? DEFAULT_CONFIG.omkEngineLlm,
-        omkEnginePro: parsed.OMK_ENGINE_PRO ?? DEFAULT_CONFIG.omkEnginePro,
-        omkEngineFast: parsed.OMK_ENGINE_FAST ?? DEFAULT_CONFIG.omkEngineFast,
-        omkEngineThink: parsed.OMK_ENGINE_THINK ?? DEFAULT_CONFIG.omkEngineThink,
-        omkEngineCode: parsed.OMK_ENGINE_CODE ?? DEFAULT_CONFIG.omkEngineCode,
-        omkEngineVision: parsed.OMK_ENGINE_VISION ?? DEFAULT_CONFIG.omkEngineVision,
 
         // Pipeline Profile — Cost Tier & Domain Routing (P2)
         omkCostTierDefault: parsed.OMK_COST_TIER_DEFAULT ?? DEFAULT_CONFIG.omkCostTierDefault,
