@@ -27,7 +27,7 @@ import { success, badRequest, notFound } from '../utils/api-response';
 import { requireAuth } from '../auth';
 import { asyncHandler } from '../utils/error-handler';
 import { assertResourceOwnerOrAdmin } from '../auth/ownership';
-import { getUnifiedDatabase, ExternalServiceType } from '../data/models/unified-database';
+import { getUnifiedDatabase, ExternalServiceType, ExternalConnection } from '../data/models/unified-database';
 import { v4 as uuidv4 } from 'uuid';
 import { validate } from '../middlewares/validation';
 import { createExternalConnectionSchema, updateExternalTokensSchema, addExternalFileSchema } from '../schemas/external.schema';
@@ -42,9 +42,11 @@ function isValidServiceType(value: string): value is ExternalServiceType {
 }
 
 /** 민감한 토큰 정보를 응답에서 제거하고, 토큰 존재 여부만 반환 */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function stripTokens(connection: any): Record<string, unknown> {
-    const { access_token, refresh_token, ...safe } = connection;
+function stripTokens(connection: ExternalConnection): Record<string, unknown> {
+    // ExternalConnection 은 access_token / refresh_token 필드를 포함할 수 있음 (DB 컬럼).
+    // Record 로 캐스트해 destructuring 후 안전 객체 재구성.
+    const raw = connection as unknown as Record<string, unknown>;
+    const { access_token, refresh_token, ...safe } = raw;
     return { ...safe, hasAccessToken: !!access_token, hasRefreshToken: !!refresh_token };
 }
 
@@ -58,7 +60,7 @@ router.get('/', requireAuth, asyncHandler(async (req: Request, res: Response) =>
 
     const connections = await db.getUserConnections(userId);
 
-    const safeConnections = (connections as any[]).map(stripTokens);
+    const safeConnections = connections.map(stripTokens);
     res.json(success(safeConnections));
 }));
 
@@ -98,7 +100,7 @@ router.post('/', requireAuth, validate(createExternalConnectionSchema), asyncHan
     const connection = await db.getUserConnectionByService(userId, serviceType);
 
     logger.info(`외부 연결 생성/업데이트: ${serviceType} by user ${userId}`);
-    res.status(201).json(success(connection ? stripTokens(connection as any) : { created: true }));
+    res.status(201).json(success(connection ? stripTokens(connection) : { created: true }));
 }));
 
 /**
@@ -122,7 +124,7 @@ router.get('/:serviceType', requireAuth, asyncHandler(async (req: Request, res: 
         return;
     }
 
-    res.json(success(stripTokens(connection as any)));
+    res.json(success(stripTokens(connection)));
 }));
 
 /**
