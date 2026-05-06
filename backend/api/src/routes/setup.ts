@@ -15,6 +15,7 @@ import * as fs from 'fs';
 
 import v1Router from './v1';
 import { tokenMonitoringRouter } from './token-monitoring.routes';
+import debugQueueRouter from './debug-queue.routes';
 import { default as chatRouter, setClusterManager as setChatCluster } from './chat.routes';
 import { setClusterManager as setOpenAICompatCluster } from './openai-compat.routes';
 import { default as documentsRouter, setDependencies as setDocumentsDeps } from './documents.routes';
@@ -145,6 +146,7 @@ export function setupApiRoutes(
     app.use('/api/monitoring', tokenMonitoringRouter);
     app.use('/api/uir', uirRouter);
     app.use('/api/mcp', mcpRouter);
+    app.use('/api/debug-queue', debugQueueRouter);
 
     // 부트스트랩 서비스 초기화
     bootstrapServices();
