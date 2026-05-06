@@ -21,10 +21,6 @@
         "test:e2e:ui": "npx playwright test --ui",
         "lint": "eslint .",
         "clean": "rm -rf */dist **/dist",
-        "check:schema-drift": "bash scripts/check-schema-drift.sh",
-        "ci": "bash scripts/ci-test.sh",
-        "hooks:install": "bash scripts/install-hooks.sh",
-        "migrate": "npx ts-node scripts/run-migrations.ts",
         "version": "node -e \"const v=require('./package.json').version;const fs=require('fs');['backend/api/package.json','frontend/web/package.json'].forEach(f=>{const p=JSON.parse(fs.readFileSync(f,'utf8'));p.version=v;fs.writeFileSync(f,JSON.stringify(p,null,4)+'\\n')});console.log('✅ 모든 workspace 버전 동기화 완료:',v)\" && git add backend/api/package.json frontend/web/package.json"
     },
     "keywords": [

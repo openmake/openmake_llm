@@ -51,8 +51,10 @@ export async function startAllSchedulers(): Promise<void> {
     // 5. 에이전트 자기개선 사이클 스케줄러
     await startAgentLearningScheduler();
 
-    // 6. Cloud 모델 헬스체크 스케줄러 (5분마다 현재 활성 키로 전체 모델 ping)
-    startModelHealthScheduler();
+    // 6. Cloud 모델 헬스체크 스케줄러 — 단일 로컬 모델 전환 (2026-05-06) 후 비활성.
+    //    `model-health-monitor` 가 스텁(항상 healthy, 빈 스냅샷)이라 5분 주기 호출은 no-op.
+    //    Cloud 모델 재도입 시 이 줄의 주석을 해제하여 즉시 복구 가능.
+    // startModelHealthScheduler();
 
     logger.info('모든 백그라운드 스케줄러 시작 완료');
 }
@@ -65,7 +67,8 @@ export async function startAllSchedulers(): Promise<void> {
  * - 스냅샷은 ModelHealthMonitor 싱글톤에 저장되어 routing-circuit-breaker와
  *   Admin UI에서 조회됨
  */
-function startModelHealthScheduler(): void {
+// Cloud 재도입 시 외부에서 직접 호출 가능하도록 export 유지 (현재는 비활성)
+export function startModelHealthScheduler(): void {
     const HEALTH_CHECK_INTERVAL_MS = 5 * 60 * 1000; // 5분
     const WARMUP_DELAY_MS = 30 * 1000; // 30초
 

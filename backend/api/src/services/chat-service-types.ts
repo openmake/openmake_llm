@@ -139,8 +139,8 @@ export interface ChatResponseMeta {
  * @interface SystemEvent
  */
 export interface SystemEvent {
-    /** 이벤트 종류 — 확장 가능 (현재: auto-discussion-activated) */
-    type: 'auto-discussion-activated' | string;
+    /** 이벤트 종류 — 확장 가능 (예: 'info' | 'warning' | 'success') */
+    type: string;
     /** 사용자 표시용 메시지 (다국어 처리 완료) */
     message: string;
     /** 이벤트별 추가 데이터 (디버그/UI 분기용) */

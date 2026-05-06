@@ -26,7 +26,6 @@ import { adjustOptionsForModel, checkModelCapability } from '../chat/model-selec
 import { assessComplexity, GV_SKIP_THRESHOLD } from '../chat/complexity-assessor';
 import { CONCISE_RESPONSE_DIRECTIVE, TOKEN_BUDGETS } from '../config/llm-parameters';
 import { BUDGET_HINTS, CAPACITY } from '../config/runtime-limits';
-import { decideDiscussionActivation, getAutoDiscussionNotice } from '../chat/discussion-router';
 import { withSpan } from '../observability/otel';
 import type { ExecutionPlan } from '../chat/profile-resolver';
 import type { DocumentStore } from '../documents/store';
@@ -332,49 +331,11 @@ export class ChatService {
             req.userLanguagePreference = languagePolicy.resolvedLanguage;
         }
 
-        // 토론 자동 활성화 결정 (chat/discussion-router에 위임)
-        const discussionDecision = decideDiscussionActivation({
-            explicitMode: discussionMode,
-            executionPlan,
-            message: message || '',
-            hasImages: (images && images.length > 0) || false,
-            hasDocuments: !!docId,
-            historyLength: history?.length ?? 0,
-        });
-
-        if (discussionDecision.activate) {
-            // Auto-routing 모델 해석: __auto__ → 실제 엔진 모델명으로 변환
-            // Discussion 모드는 일반 모드의 resolveModel() 흐름을 거치지 않으므로
-            // client가 placeholder "default"를 유지하면 Ollama 404 발생
-            if (executionPlan?.isBrandModel && executionPlan.resolvedEngine === '__auto__') {
-                const hasImages = (images && images.length > 0) || false;
-                const promptConfig = getPromptConfig(message, languagePolicy?.resolvedLanguage);
-                await this.resolveModel(message || '', hasImages, executionPlan, promptConfig);
-            }
-
-            // Auto 프로파일 자동 활성화 시 사용자에게 알림
-            // - 메타 이벤트 콜백(onSystemEvent)이 주어지면 우선 사용 (UI 분리)
-            // - 콜백 없으면 마크다운 본문 prepend (fallback, 기존 동작)
-            const notice = getAutoDiscussionNotice(
-                discussionDecision,
-                languagePolicy?.resolvedLanguage || 'en'
-            );
-            if (notice) {
-                if (onSystemEvent) {
-                    onSystemEvent({
-                        type: 'auto-discussion-activated',
-                        message: notice.replace(/^>\s*/, '').trim(),
-                        metadata: {
-                            language: languagePolicy?.resolvedLanguage || 'en',
-                            complexityScore: discussionDecision.complexityScore,
-                            reason: discussionDecision.reason,
-                        },
-                    });
-                } else {
-                    for (const ch of notice) onToken(ch);
-                }
-            }
-
+        // 토론 모드: 사용자 명시 토글(`discussionMode === true`)만 활성화 트리거.
+        // 단일 로컬 모델 전환(2026-05-06) 후 Brand Model 프로파일이 모두 제거되어
+        // `decideDiscussionActivation()` 의 자동 분기는 모두 false 반환 → 함수 호출 자체 제거.
+        // 향후 자동 토론 활성화가 필요하면 새 정책으로 재설계 (이전 구현 참조: discussion-router.ts).
+        if (discussionMode === true) {
             return this.processMessageWithDiscussion(req, uploadedDocuments, onToken, onDiscussionProgress);
         }
 
@@ -402,12 +363,8 @@ export class ChatService {
             },
         });
 
-        // 토론 자동 결정 추적 (보류된 경우만 일반 파이프라인 routingLog에 기록)
-        // 자동 활성화된 경우는 토론 경로로 분기되어 이 시점에 도달하지 않음
-        if (discussionDecision.complexityScore !== undefined) {
-            routingLog.routeDecision.discussionAutoActivated = false;
-            routingLog.routeDecision.discussionAutoComplexity = discussionDecision.complexityScore;
-        }
+        // 자동 토론 활성화 추적 필드는 자동 분기 제거 (2026-05-07) 후 항상 false.
+        // 호환성을 위해 routingLog 스키마 자체는 유지하되 자동 결정 메타는 미기록.
 
         let fullResponse = '';
 
