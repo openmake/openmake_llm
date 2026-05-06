@@ -8,6 +8,7 @@ import * as crypto from 'crypto';
 import { ClusterManager } from '../cluster/manager';
 import { selectOptimalModel } from '../chat/model-selector';
 import { ChatRequestHandler, ChatRequestError } from '../chat/request-handler';
+import { enqueueDebugCapture, DEBUG_QUEUE_TTL_MS } from '../data/conversation-debug-queue';
 import { QuotaExceededError } from '../errors/quota-exceeded.error';
 import { KeyExhaustionError } from '../errors/key-exhaustion.error';
 import { checkChatRateLimit } from '../middlewares/chat-rate-limiter';
@@ -125,9 +126,15 @@ export async function handleChatMessage(
     const abortController = new AbortController();
     extWs._abortController = abortController;
 
+    // catch 블록(B4 디버그 큐)에서 접근하기 위해 try 외부에 선언.
+    // try 안에서 실제 값으로 갱신된다.
+    let selectedModel = model;
+    let validSessionId: string | undefined;
+    let tokenCount = 0;
+    let partialAssistantResponse = '';
+
     try {
         // 모델 결정 (자동 선택 또는 사용자 지정)
-        let selectedModel = model;
         if (!model || model === 'default') {
             const optimalModel = await selectOptimalModel(message);
             selectedModel = optimalModel.model;
@@ -179,17 +186,18 @@ export async function handleChatMessage(
         }
 
         // WS 고유: 세션 생성 시 length < 10 체크 (노드 ID와 구별)
-        const validSessionId = (sessionId && sessionId.length >= 10) ? sessionId : undefined;
+        validSessionId = (sessionId && sessionId.length >= 10) ? sessionId : undefined;
 
         // messageId 생성 (WS 고유: 토큰 스트리밍에 사용)
         const messageId = crypto.randomUUID
             ? crypto.randomUUID()
             : `msg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
-        // 토큰 생성 메트릭 추적
-        let tokenCount = 0;
+        // 토큰 생성 메트릭 추적 (tokenCount, partialAssistantResponse 는 catch 접근을 위해 try 외부 선언)
+        tokenCount = 0;
         let firstTokenTime = 0;
         const generationStartTime = Date.now();
+        partialAssistantResponse = '';
 
         // 토큰 콜백에서 중단 여부 체크 (WS 고유)
         const tokenCallback = (token: string) => {
@@ -203,6 +211,7 @@ export async function handleChatMessage(
                 log.debug(`[Chat] 첫 번째 토큰 생성됨 (TTFB: ${ttfb}ms)`);
             }
             tokenCount++;
+            partialAssistantResponse += token;
 
             ws.send(JSON.stringify({ type: 'token', token, messageId }));
         };
@@ -327,6 +336,37 @@ export async function handleChatMessage(
             log.error('[Chat] 처리 중 오류:', error);
             // 🔒 Phase 2: 내부 에러 상세 누출 방지 — 제네릭 메시지만 전송
             safeSend({ type: 'error', message: getLocalizedTemplate(WS_ERROR_MESSAGES, userLang).genericError });
+
+            // B+ Phase B4: 디버그 자동 보존 — 사용자 saveHistory=false 여도
+            // 에러 재현을 위해 본문을 24h 임시 보관 (TTL 후 자동 삭제)
+            if (validSessionId && message) {
+                const auditUserId = extWs._authenticatedUserId || 'anonymous';
+                const errorCode = error instanceof Error ? error.name : 'UnknownError';
+                enqueueDebugCapture({
+                    sessionId: validSessionId,
+                    userId: auditUserId,
+                    reason: 'auto-error',
+                    userMessage: message,
+                    assistantMessage: partialAssistantResponse,
+                    errorCode,
+                    routingMetadata: {
+                        model: selectedModel,
+                        tokenCountAtError: tokenCount,
+                        partialResponseLength: partialAssistantResponse.length,
+                    },
+                }).then((capture) => {
+                    if (capture) {
+                        // 사용자에게 보존 사실 + 만료 시각 알림 (선택적 신뢰 회복)
+                        const expiresInMs = DEBUG_QUEUE_TTL_MS['auto-error'];
+                        ws.send(JSON.stringify({
+                            type: 'debug_retained',
+                            captureId: capture.id,
+                            expiresAt: capture.expiresAt.toISOString(),
+                            ttlHours: Math.round(expiresInMs / 3600000),
+                        }));
+                    }
+                }).catch(() => {/* 디버그 큐 실패는 사용자 흐름 안 막음 */});
+            }
         }
     } finally {
         // 중단 컨트롤러 정리
