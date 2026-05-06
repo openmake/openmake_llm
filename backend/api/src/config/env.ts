@@ -70,10 +70,6 @@ export interface EnvConfig {
     // External services
     googleApiKey: string;
     googleCseId: string;
-    /** @deprecated Firecrawl 제거됨. 무료 웹 스크래퍼로 대체 */
-    firecrawlApiKey: string;
-    /** @deprecated Firecrawl 제거됨. 무료 웹 스크래퍼로 대체 */
-    firecrawlApiUrl: string;
     githubToken: string;
 
     // Documents
@@ -192,8 +188,6 @@ const DEFAULT_CONFIG: EnvConfig = {
     // External services
     googleApiKey: '',
     googleCseId: '',
-    firecrawlApiKey: '',
-    firecrawlApiUrl: 'https://api.firecrawl.dev/v1',
     githubToken: '',
 
     // Documents
@@ -397,8 +391,6 @@ export function loadConfig(): EnvConfig {
         GEMINI_WEB_SEARCH_ENABLED: env('GEMINI_WEB_SEARCH_ENABLED'),
         GOOGLE_API_KEY: env('GOOGLE_API_KEY'),
         GOOGLE_CSE_ID: env('GOOGLE_CSE_ID'),
-        FIRECRAWL_API_KEY: env('FIRECRAWL_API_KEY'),
-        FIRECRAWL_API_URL: env('FIRECRAWL_API_URL'),
         GITHUB_TOKEN: env('GITHUB_TOKEN'),
         DOCUMENT_TTL_HOURS: env('DOCUMENT_TTL_HOURS'),
         MAX_UPLOADED_DOCUMENTS: env('MAX_UPLOADED_DOCUMENTS'),
@@ -514,8 +506,6 @@ export function loadConfig(): EnvConfig {
         // External services
         googleApiKey: parsed.GOOGLE_API_KEY ?? DEFAULT_CONFIG.googleApiKey,
         googleCseId: parsed.GOOGLE_CSE_ID ?? DEFAULT_CONFIG.googleCseId,
-        firecrawlApiKey: parsed.FIRECRAWL_API_KEY ?? DEFAULT_CONFIG.firecrawlApiKey,
-        firecrawlApiUrl: parsed.FIRECRAWL_API_URL ?? DEFAULT_CONFIG.firecrawlApiUrl,
         githubToken: parsed.GITHUB_TOKEN ?? DEFAULT_CONFIG.githubToken,
 
         // Documents

@@ -111,8 +111,6 @@ export const envSchema = z
         // External
         GOOGLE_API_KEY: z.string().default(''),
         GOOGLE_CSE_ID: z.string().default(''),
-        FIRECRAWL_API_KEY: z.string().default(''),
-        FIRECRAWL_API_URL: z.url().default('https://api.firecrawl.dev/v1'),
         GITHUB_TOKEN: z.string().default(''),
         VAPID_PUBLIC_KEY: z.string().default(''),
         VAPID_PRIVATE_KEY: z.string().default(''),
