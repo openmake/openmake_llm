@@ -13,21 +13,37 @@
 import { getState, setState } from './state.js';
 import { escapeHtml, showToast } from './ui.js';
 import { isAdmin } from './auth.js';
-import { DEFAULT_AUTO_MODEL, STORAGE_KEY_SELECTED_MODEL } from './constants.js';
+import { STORAGE_KEY_SELECTED_MODEL } from './constants.js';
 
 /**
- * 브랜드 모델 프로파일 정의 (backend pipeline-profile.ts와 동기화)
- * @type {Array<{id: string, name: string, desc: string}>}
+ * 백엔드 /api/models 응답 캐시 (모듈 스코프)
+ * @type {Array<{id: string, name: string, desc: string}> | null}
  */
-const BRAND_MODELS = [
-    { id: DEFAULT_AUTO_MODEL, name: 'OpenMake LLM Auto', desc: '자동 라우팅' },
-    { id: 'openmake_llm', name: 'OpenMake LLM', desc: '균형 잡힌 범용' },
-    { id: 'openmake_llm_pro', name: 'OpenMake LLM Pro', desc: '프리미엄 품질' },
-    { id: 'openmake_llm_fast', name: 'OpenMake LLM Fast', desc: '속도 최적화' },
-    { id: 'openmake_llm_think', name: 'OpenMake LLM Think', desc: '심층 추론' },
-    { id: 'openmake_llm_code', name: 'OpenMake LLM Code', desc: '코드 전문' },
-    { id: 'openmake_llm_vision', name: 'OpenMake LLM Vision', desc: '멀티모달' },
-];
+let CACHED_MODELS = null;
+
+/**
+ * 백엔드에서 사용 가능한 모델 목록을 조회 (캐시됨)
+ * @async
+ * @returns {Promise<Array<{id: string, name: string, desc: string}>>}
+ */
+async function fetchAvailableModels() {
+    if (CACHED_MODELS) return CACHED_MODELS;
+    try {
+        const res = await fetch(API_ENDPOINTS.MODELS, { credentials: 'include' });
+        if (!res.ok) return [];
+        const raw = await res.json();
+        const data = raw.data || raw;
+        if (!data.models || data.models.length === 0) return [];
+        CACHED_MODELS = data.models.map(m => ({
+            id: m.modelId || m.name,
+            name: m.name,
+            desc: m.description || ''
+        }));
+        return CACHED_MODELS;
+    } catch (e) {
+        return [];
+    }
+}
 
 /**
  * 클러스터 노드 정보를 전역 상태에 반영하고 UI 업데이트
@@ -118,17 +134,27 @@ async function fetchClusterInfoFallback() {
 }
 
 /**
- * 모델 선택 드롭다운 UI를 브랜드 모델 프로파일로 업데이트
- * @returns {void}
+ * 모델 선택 드롭다운 UI를 백엔드 응답 기반으로 업데이트
+ * @async
+ * @returns {Promise<void>}
  */
-function updateModelSelect() {
+async function updateModelSelect() {
     const select = document.getElementById('modelSelect');
     if (!select) return;
 
     const isAdminUser = isAdmin();
+    const models = await fetchAvailableModels();
+
+    if (models.length === 0) {
+        select.innerHTML = `<option value="">사용 가능한 모델 없음</option>`;
+        return;
+    }
+
+    const defaultId = models[0].id;
 
     if (!isAdminUser) {
-        select.innerHTML = `<option value="${DEFAULT_AUTO_MODEL}">OpenMake LLM Auto</option>`;
+        const m = models[0];
+        select.innerHTML = `<option value="${escapeHtml(m.id)}">${escapeHtml(m.name)}</option>`;
         select.disabled = true;
         select.style.cursor = 'default';
         return;
@@ -138,10 +164,10 @@ function updateModelSelect() {
     select.style.cursor = 'pointer';
 
     const savedModel = localStorage.getItem(STORAGE_KEY_SELECTED_MODEL);
-    const defaultModelId = DEFAULT_AUTO_MODEL;
+    const targetId = savedModel || defaultId;
 
-    select.innerHTML = BRAND_MODELS.map(m => {
-        const isSelected = savedModel ? m.id === savedModel : m.id === defaultModelId;
+    select.innerHTML = models.map(m => {
+        const isSelected = m.id === targetId;
         return `<option value="${escapeHtml(m.id)}" ${isSelected ? 'selected' : ''}>${escapeHtml(m.name)}</option>`;
     }).join('');
 
@@ -151,8 +177,8 @@ function updateModelSelect() {
 
     select.onchange = function () {
         localStorage.setItem('selectedModel', this.value);
-        const brandModel = BRAND_MODELS.find(m => m.id === this.value);
-        const displayName = brandModel ? brandModel.name : this.value;
+        const model = models.find(m => m.id === this.value);
+        const displayName = model ? model.name : this.value;
         showToast(`🤖 모델 변경됨: ${displayName}`);
     };
 }
@@ -199,10 +225,11 @@ function showAgentBadge(agent) {
 
 /**
  * 모델을 선택하고 localStorage에 저장, UI 갱신
- * @param {string} modelId - 선택할 브랜드 모델 ID
- * @returns {void}
+ * @async
+ * @param {string} modelId - 선택할 모델 ID
+ * @returns {Promise<void>}
  */
-function selectModel(modelId) {
+async function selectModel(modelId) {
     localStorage.setItem('selectedModel', modelId);
     loadModelInfo();
 
@@ -211,8 +238,9 @@ function selectModel(modelId) {
         select.value = modelId;
     }
 
-    const brandModel = BRAND_MODELS.find(m => m.id === modelId);
-    const displayName = brandModel ? brandModel.name : modelId;
+    const models = await fetchAvailableModels();
+    const model = models.find(m => m.id === modelId);
+    const displayName = model ? model.name : modelId;
     showToast(`🤖 모델 선택됨: ${displayName}`);
 }
 
@@ -228,12 +256,6 @@ async function loadModelInfo() {
 
     const isAdminUser = isAdmin();
 
-    if (!isAdminUser) {
-        activeModelName.textContent = 'OpenMake LLM Auto';
-        modelListContainer.innerHTML = '<span style="color: var(--text-muted);">모델 정보는 관리자만 볼 수 있습니다</span>';
-        return;
-    }
-
     activeModelName.textContent = '로딩 중...';
     modelListContainer.innerHTML = '<span style="color: var(--text-muted);">조회 중...</span>';
 
@@ -243,39 +265,44 @@ async function loadModelInfo() {
             const data = await response.json();
             const payload = data.data || data;
 
-            const savedModel = localStorage.getItem(STORAGE_KEY_SELECTED_MODEL);
-            const defaultModelId = payload.defaultModel || DEFAULT_AUTO_MODEL;
-
-            let activeDisplayName = 'OpenMake LLM Auto';
-            if (payload.models && payload.models.length > 0) {
-                const activeModel = payload.models.find(m => {
-                    const modelId = m.modelId || m.name;
-                    return savedModel ? modelId === savedModel : modelId === defaultModelId;
-                });
-                if (activeModel) activeDisplayName = activeModel.name;
-            }
-            activeModelName.textContent = activeDisplayName;
-
-            if (payload.models && payload.models.length > 0) {
-                modelListContainer.innerHTML = payload.models.map(model => {
-                    const modelId = model.modelId || model.name;
-                    const displayName = model.name;
-                    const isActive = savedModel ? modelId === savedModel : modelId === defaultModelId;
-                    return `
-                        <div class="model-badge ${isActive ? 'active' : ''}" onclick="selectModel('${escapeHtml(modelId)}')">
-                            ${isActive ? '✓ ' : ''}${escapeHtml(displayName)}
-                        </div>
-                    `;
-                }).join('');
-            } else {
+            if (!payload.models || payload.models.length === 0) {
+                activeModelName.textContent = '모델 없음';
                 modelListContainer.innerHTML = '<span style="color: var(--text-muted);">사용 가능한 모델 없음</span>';
+                return;
             }
+
+            const savedModel = localStorage.getItem(STORAGE_KEY_SELECTED_MODEL);
+            const defaultModelId = payload.defaultModel || (payload.models[0].modelId || payload.models[0].name);
+
+            const activeModel = payload.models.find(m => {
+                const modelId = m.modelId || m.name;
+                return savedModel ? modelId === savedModel : modelId === defaultModelId;
+            }) || payload.models[0];
+            activeModelName.textContent = activeModel.name;
+
+            // 비관리자는 활성 모델만 표시
+            if (!isAdminUser) {
+                modelListContainer.innerHTML = '<span style="color: var(--text-muted);">모델 정보는 관리자만 볼 수 있습니다</span>';
+                return;
+            }
+
+            modelListContainer.innerHTML = payload.models.map(model => {
+                const modelId = model.modelId || model.name;
+                const displayName = model.name;
+                const activeId = activeModel.modelId || activeModel.name;
+                const isActive = modelId === activeId;
+                return `
+                    <div class="model-badge ${isActive ? 'active' : ''}" onclick="selectModel('${escapeHtml(modelId)}')">
+                        ${isActive ? '✓ ' : ''}${escapeHtml(displayName)}
+                    </div>
+                `;
+            }).join('');
         } else {
             throw new Error('모델 API 응답 오류');
         }
     } catch (error) {
         console.error('[Settings] 모델 정보 조회 실패:', error);
-        activeModelName.textContent = 'OpenMake LLM Auto';
+        activeModelName.textContent = '연결 실패';
         modelListContainer.innerHTML = '<span style="color: var(--text-muted);">모델 목록을 가져올 수 없습니다</span>';
     }
 }
@@ -294,7 +321,6 @@ function formatSize(bytes) {
 }
 
 // 전역 노출 (레거시 호환)
-window.BRAND_MODELS = BRAND_MODELS;
 window.updateClusterInfo = updateClusterInfo;
 window.updateSidebarClusterInfo = updateSidebarClusterInfo;
 window.updateClusterStatus = updateClusterStatus;
@@ -307,7 +333,6 @@ window.loadModelInfo = loadModelInfo;
 window.formatSize = formatSize;
 
 export {
-    BRAND_MODELS,
     updateClusterInfo,
     updateSidebarClusterInfo,
     updateClusterStatus,
