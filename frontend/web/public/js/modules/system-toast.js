@@ -11,14 +11,14 @@
  *
  * SystemEvent 타입 (backend/api/src/services/chat-service-types.ts):
  *   interface SystemEvent {
- *     type: 'auto-discussion-activated' | string;
+ *     type: 'info' | 'warning' | 'success' | string;
  *     message: string;       // 다국어 처리 완료 평문
  *     metadata?: Record<string, unknown>;
  *   }
  *
  * 사용:
  *   import { showSystemToast } from './system-toast.js';
- *   showSystemToast({ type: 'auto-discussion-activated', message: '복합 질문 감지 — 자동 토론 모드 활성화' });
+ *   showSystemToast({ type: 'info', message: '시스템 알림 메시지' });
  *
  * 또는 전역 노출본:
  *   window.showSystemToast(event)
@@ -28,10 +28,10 @@
  * ============================================================
  * 1. 채팅 페이지(/) 로드 후 브라우저 DevTools 콘솔에서:
  *      window.showSystemToast({
- *        type: 'auto-discussion-activated',
- *        message: '복합 질문 감지 — 자동 토론 모드 활성화'
+ *        type: 'info',
+ *        message: '시스템 알림 메시지'
  *      })
- *    → 우측 상단에 보라색 좌측 보더 토스트가 나타나고 5초 후 사라져야 함.
+ *    → 우측 상단에 토스트가 나타나고 5초 후 사라져야 함.
  *
  * 2. 다중 토스트 스택 테스트 (4개 연속 호출 → 가장 오래된 1개 즉시 제거):
  *      for (let i = 1; i <= 4; i++) {
@@ -74,7 +74,6 @@ const LEAVE_ANIM_MS = 180;
 
 /** event.type → 좌측 아이콘 이모지 (선택적 시각 단서) */
 const TYPE_ICONS = {
-    'auto-discussion-activated': '\u{1F4AC}', // 💬
     'info': '\u{2139}\u{FE0F}',                // ℹ️
     'warning': '\u{26A0}\u{FE0F}',             // ⚠️
     'success': '\u{2705}',                     // ✅
@@ -82,7 +81,6 @@ const TYPE_ICONS = {
 
 /** event.type → CSS variant 클래스 매핑 */
 const TYPE_CLASS_MAP = {
-    'auto-discussion-activated': 'system-toast--auto-discussion-activated',
     'info': 'system-toast--info',
     'warning': 'system-toast--warning',
     'success': 'system-toast--success',
