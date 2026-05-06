@@ -184,6 +184,17 @@ const messageHandlers = {
             showToast('응답 생성이 중단되었습니다.', 'info');
         }
     },
+    // B+ Phase B4 후속: 에러 발생 시 백엔드가 본문을 디버그 큐에 자동 보존했음을 사용자에게 알림
+    // saveHistory=false 환경에서도 운영자가 디버깅 가능하도록, 그러나 사용자에게는 명시적으로 통지
+    'debug_retained': (data) => {
+        const ttlHours = typeof data.ttlHours === 'number' ? data.ttlHours : 24;
+        const expiresAt = data.expiresAt ? new Date(data.expiresAt).toLocaleString() : '';
+        const message = `🔍 오류 재현용으로 본문이 임시 저장되었습니다 (${ttlHours}시간 후 자동 삭제${expiresAt ? `: ${expiresAt}` : ''}).`;
+        debugLog('[WebSocket] debug_retained:', data.captureId, 'expires:', data.expiresAt);
+        if (typeof showToast === 'function') {
+            showToast(message, 'info');
+        }
+    },
     'agents': (data) => {
         if (data.agents && typeof renderAgentList === 'function') {
             renderAgentList(data.agents);
