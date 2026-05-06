@@ -13,6 +13,11 @@
  */
 import { OllamaClient } from '../ollama/client';
 import { TOOL_RESULT_COMPACTION } from '../config/runtime-limits';
+import { LLM_TEMPERATURES } from '../config/llm-parameters';
+import {
+    SEMANTIC_COMPACTOR_SYSTEM_PROMPT,
+    buildSemanticCompactorUserMessage,
+} from '../prompts/semantic-compactor-system';
 import { createLogger } from '../utils/logger';
 
 const logger = createLogger('SemanticCompactor');
@@ -34,17 +39,11 @@ export async function semanticCompact(toolName: string, content: string): Promis
         const client = new OllamaClient({ model: TOOL_RESULT_COMPACTION.COMPACTOR_MODEL });
         const result = await client.chat(
             [
-                {
-                    role: 'system',
-                    content: 'You are a concise summarizer. Summarize the following tool execution result, preserving key data points, numbers, and actionable information. Output only the summary, no preamble.',
-                },
-                {
-                    role: 'user',
-                    content: `Tool: ${toolName}\nResult:\n${content}`,
-                },
+                { role: 'system', content: SEMANTIC_COMPACTOR_SYSTEM_PROMPT },
+                { role: 'user', content: buildSemanticCompactorUserMessage(toolName, content) },
             ],
             {
-                temperature: 0,
+                temperature: LLM_TEMPERATURES.SEMANTIC_COMPACTION,
                 num_predict: TOOL_RESULT_COMPACTION.SEMANTIC_MAX_TOKENS,
             },
         );
