@@ -14,7 +14,7 @@
 
 import { OllamaClient, createClient } from '../ollama/client';
 import type { SearchResult } from '../mcp/web-search';
-import { getConfig } from '../config/env';
+import { getModelForRole } from '../config/model-roles';
 import { RESEARCH_DEPTH_LOOPS } from '../config/runtime-limits';
 import { getUnifiedDatabase } from '../data/models/unified-database';
 import { createLogger } from '../utils/logger';
@@ -55,9 +55,9 @@ export class DeepResearchService {
 
     constructor(config?: Partial<ResearchConfig>) {
         this.config = { ...globalConfig, ...config };
-        // 기본 llmModel이 비어있으면 환경 설정에서 resolve
+        // 기본 llmModel이 비어있으면 model-roles 레지스트리에서 resolve
         if (!this.config.llmModel) {
-            this.config.llmModel = getConfig().ollamaDefaultModel;
+            this.config.llmModel = getModelForRole('chat');
             logger.info(`[DeepResearch] llmModel 미지정 → ${this.config.llmModel}`);
         }
         this.client = createClient({ model: this.config.llmModel });

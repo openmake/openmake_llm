@@ -35,6 +35,7 @@ process.env.OMK_SEMANTIC_ROUTER_ENABLED = 'true';
 import { loadGoldenDataset } from './dataset-loader';
 import { runAugmentedEvaluation } from './semantic-augmented-evaluator';
 import type { AugmentedSummary } from './semantic-augmented-evaluator';
+import { getModelForRole } from '../config/model-roles';
 
 const PASS_RATE_THRESHOLD = Number(process.env.OMK_EVAL_AUGMENTED_THRESHOLD ?? '0.5');
 
@@ -119,7 +120,7 @@ function saveSummaryToFile(summary: AugmentedSummary): void {
             gitCommit: commit,
             nodeVersion: process.version,
             generatedAt: new Date().toISOString(),
-            embeddingModel: process.env.OMK_EMBEDDING_MODEL ?? 'nomic-embed-text',
+            embeddingModel: getModelForRole('embedding'),
         },
         ...summary,
     };
