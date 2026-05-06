@@ -4,21 +4,21 @@
  * ============================================================
  *
  * LLM 모델 정보 조회를 위한 REST API 엔드포인트입니다.
- * 브랜드 모델 프로파일 기반으로 서비스 모델명을 반환합니다.
+ * model-roles 레지스트리 기반으로 실제 사용 중인 로컬 모델을 반환합니다.
  *
  * @module routes/model.routes
  * @description
- * - GET /api/model - 현재 기본 모델 정보 (브랜드 모델명)
- * - GET /api/models - 브랜드 모델 프로파일 목록
- * - GET /api/models/health - Cloud 모델 × API Key 헬스체크 매트릭스 (admin only)
+ * - GET /api/model - 현재 사용 중인 로컬 모델 정보
+ * - GET /api/models - 사용 가능한 모델 목록 (model-roles 기반 단일 모델)
+ * - GET /api/models/health - 모델 헬스체크 (admin only, 로컬 모델 환경에서는 stub)
  */
 
 import { Router, Request, Response } from 'express';
 import { success } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
-import { getProfiles } from '../chat/pipeline-profile';
 import { createLogger } from '../utils/logger';
-import { DEFAULT_AUTO_MODEL } from '../config/constants';
+import { getModelForRole } from '../config/model-roles';
+import { MODEL_CAPABILITY_PRESETS } from '../config/model-defaults';
 import { requireAuth, requireAdmin } from '../auth';
 import { getModelHealthMonitor } from '../services/model-health-monitor';
 
@@ -28,39 +28,53 @@ const logger = createLogger('ModelRoutes');
 /**
  * GET /model
  * 현재 모델 정보 API (프론트엔드 settings.js 호출용)
- * 브랜드 모델명을 반환합니다.
+ * model-roles 레지스트리의 chat 역할 모델을 반환합니다.
  */
 router.get('/model', asyncHandler(async (req: Request, res: Response) => {
+    const modelId = getModelForRole('chat');
     res.json(success({
-        model: 'OpenMake LLM Auto',
-        modelId: DEFAULT_AUTO_MODEL,
-        provider: 'openmake'
+        model: modelId,
+        modelId,
+        provider: 'ollama-local'
     }));
 }));
 
 /**
  * GET /models
- * 브랜드 모델 프로파일 목록 API
- * pipeline-profile.ts에 정의된 서비스 모델명을 반환합니다.
+ * 사용 가능한 모델 목록 API
+ * model-roles 레지스트리의 chat 역할 모델을 반환합니다.
+ * capabilities 는 MODEL_CAPABILITY_PRESETS 의 가장 긴 prefix 매칭으로 조회합니다.
  */
 router.get('/models', asyncHandler(async (req: Request, res: Response) => {
-    const profiles = getProfiles();
-    const defaultModelId = DEFAULT_AUTO_MODEL;
+    const chatModel = getModelForRole('chat');
 
-    const models = Object.values(profiles).map(profile => ({
-        name: profile.displayName,
-        modelId: profile.id,
-        description: profile.description,
-        capabilities: {
-            executionStrategy: profile.executionStrategy,
-            thinking: profile.thinking,
-            discussion: profile.discussion,
-            vision: profile.requiredTools.includes('vision'),
+    // MODEL_CAPABILITY_PRESETS에서 가장 긴 prefix 매칭으로 capabilities 조회
+    const lower = chatModel.toLowerCase();
+    let caps = { toolCalling: true, thinking: false, vision: false, streaming: true };
+    let bestPrefix = '';
+    for (const [prefix, presetCaps] of Object.entries(MODEL_CAPABILITY_PRESETS)) {
+        if (lower.includes(prefix) && prefix.length > bestPrefix.length) {
+            bestPrefix = prefix;
+            caps = presetCaps;
         }
-    }));
+    }
+
+    const models = [{
+        name: chatModel,
+        modelId: chatModel,
+        description: `Local Ollama model (${chatModel})`,
+        capabilities: {
+            executionStrategy: 'single' as const,
+            thinking: caps.thinking ? 'medium' : 'off',
+            discussion: false,
+            vision: caps.vision,
+            toolCalling: caps.toolCalling,
+            streaming: caps.streaming,
+        }
+    }];
 
     res.json(success({
-        defaultModel: defaultModelId,
+        defaultModel: chatModel,
         models
     }));
 }));
