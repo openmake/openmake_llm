@@ -24,7 +24,7 @@ import type { DiscussionProgress } from '../agents/discussion-engine';
 import { getPromptConfig } from '../chat/prompt';
 import { adjustOptionsForModel, checkModelCapability } from '../chat/model-selector';
 import { assessComplexity, GV_SKIP_THRESHOLD } from '../chat/complexity-assessor';
-import { CONCISE_RESPONSE_DIRECTIVE } from '../config/llm-parameters';
+import { CONCISE_RESPONSE_DIRECTIVE, TOKEN_BUDGETS } from '../config/llm-parameters';
 import { BUDGET_HINTS, CAPACITY } from '../config/runtime-limits';
 import { decideDiscussionActivation, getAutoDiscussionNotice } from '../chat/discussion-router';
 import { withSpan } from '../observability/otel';
@@ -512,6 +512,24 @@ export class ChatService {
         if (docId) {
             const docPreset = getGptOssTaskPreset('document');
             chatOptions = { ...docPreset, ...chatOptions };
+        }
+
+        // Thinking ON 시 num_predict 최소 보장.
+        // 배경: Ollama /api/chat 응답은 message.content 와 message.thinking 이
+        //      같은 num_predict 토큰 풀을 공유. 작은 cap에서 thinking 모델이
+        //      사고에 토큰을 다 쓰면 실제 응답이 비어 나오는 잘림 발생.
+        //      (예: chat/korean → tokenBudget 512, thinking이 2000+ 토큰 소비
+        //       → message.content 빈 응답 → empty-response 에러)
+        if (thinkingMode === true) {
+            const minTokens = TOKEN_BUDGETS.THINKING_MIN_TOKENS;
+            const current = chatOptions.num_predict;
+            if (current === undefined || current === null || (current > 0 && current < minTokens)) {
+                logger.info(
+                    `[ChatService] Thinking 활성 — num_predict 보강: ${current ?? 'undefined'} → ${minTokens}`
+                );
+                chatOptions = { ...chatOptions, num_predict: minTokens };
+                routingLog.routeDecision.tokenBudget = minTokens;
+            }
         }
 
         const currentImages = [...(images || []), ...documentImages];

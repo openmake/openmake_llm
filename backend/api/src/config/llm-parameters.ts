@@ -125,6 +125,18 @@ export const TOKEN_BUDGETS = {
     HIGH: Number(process.env.OMK_TOKEN_BUDGET_HIGH) || 2048,
     /** 최고복잡도 (score >= 0.8) — 0은 제한 없음 (Ollama 기본값 사용) */
     UNLIMITED: 0,
+    /**
+     * Thinking 모드 활성화 시 num_predict 최소 보장 — env: OMK_THINKING_MIN_TOKENS.
+     *
+     * 배경: Ollama의 /api/chat 응답은 message.content 와 message.thinking 이
+     *      같은 num_predict 토큰 풀을 공유합니다. 작은 cap(예: 512)에서 thinking
+     *      모델이 사고에 토큰을 다 쓰면 실제 응답이 비어 나오는 잘림 현상이
+     *      발생합니다 (gemma4:e4b 등 8B local 모델에서 특히 빈번).
+     *
+     * 효과: thinking ON 시 chatOptions.num_predict 가 이 값 미만이면 자동으로
+     *      이 값으로 상향. fast-path / thinking OFF 시에는 기존 budget 그대로.
+     */
+    THINKING_MIN_TOKENS: Number(process.env.OMK_THINKING_MIN_TOKENS) || 4096,
     /** QueryType별 오버라이드 — 복잡도 점수와 독립적으로 최소 보장 예산 */
     BY_TYPE: {
         'chat': Number(process.env.OMK_TOKEN_BUDGET_CHAT) || 512,
