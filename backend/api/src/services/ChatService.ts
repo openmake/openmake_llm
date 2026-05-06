@@ -622,7 +622,10 @@ export class ChatService {
         // API Key 요청: 외부 서비스의 메시지에 이미 문서가 포함되어 있을 수 있으므로
         // 메모리 추출을 완전히 스킵하여 외부 문서 내용이 내부 메모리로 오염되는 것을 방지
         // 웹검색 컨텍스트가 주입된 답변은 메모리 추출을 스킵하여 오염 방지
-        if (userId && message && !req.apiKeyId) {
+        // memoryLearning=false (사용자 명시 OFF): MemoryService 호출 자체를 스킵
+        // memoryLearning=true 또는 undefined: Extract-and-Forget — saveHistory 와 독립
+        const memoryLearningEnabled = req.memoryLearning !== false;
+        if (userId && message && !req.apiKeyId && memoryLearningEnabled) {
             const hasExternalContext = !!(webSearchContext || docId);
             this.extractMemoriesAsync(userId, message, fullResponse, hasExternalContext).catch((e: Error) => {
                 const reason = e?.message?.includes('timeout') ? 'timeout' : 'unknown';

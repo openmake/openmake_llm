@@ -116,6 +116,12 @@ export interface ChatRequestParams {
      * settings.html saveHistoryToggle 과 연결.
      */
     saveHistory?: boolean;
+    /**
+     * 장기 메모리 자동 추출 여부.
+     * undefined/true → 추출 (기본). false → MemoryService 호출 스킵.
+     * settings.html memoryLearningToggle 과 연결. saveHistory 와 독립.
+     */
+    memoryLearning?: boolean;
     /** 구조화된 출력 형식 (Ollama format 파라미터: 'json' 또는 JSON Schema 객체) */
     format?: import('../ollama/types').FormatOption;
     /** 사용자가 활성화한 MCP 도구 목록 (키: 도구명, 값: 활성화 여부) */
@@ -426,6 +432,7 @@ export class ChatRequestHandler {
             thinkingMode,
             thinkingLevel,
             saveHistory,
+            memoryLearning,
             enabledTools,
             tools,
             tool_choice,
@@ -540,6 +547,7 @@ export class ChatRequestHandler {
             deepResearchMode,
             thinkingMode: mergedThinkingMode,
             thinkingLevel: mergedThinkingLevel,
+            memoryLearning,
             userId: userContext.userId,
             apiKeyId: params.apiKeyId,
             userRole: userContext.userRole,
