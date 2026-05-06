@@ -221,6 +221,8 @@ export async function handleChatMessage(
             deepResearchMode: msg.deepResearchMode === true,
             thinkingMode: msg.thinkingMode === true,
             thinkingLevel: (msg.thinkingLevel || 'high') as 'low' | 'medium' | 'high',
+            // 사용자가 명시적으로 false 보낼 때만 본문 저장 차단. 미지정/true → 저장 (기본 보존)
+            saveHistory: msg.saveHistory !== false,
             enabledTools: msg.enabledTools,
             userLanguagePreference: userLangPreference,
             userContext,

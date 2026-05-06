@@ -136,7 +136,10 @@ async function sendMessage() {
             discussionMode: getState('discussionMode') || false,
             deepResearchMode: getState('deepResearchMode') || false,
             enabledTools: getState('mcpToolsEnabled') || {},
-            sessionId: getState('currentChatId') // 세션 ID 포함
+            sessionId: getState('currentChatId'), // 세션 ID 포함
+            // 본문 저장 여부 — settings.html saveHistoryToggle 과 연결
+            // false 면 백엔드는 conversation_messages INSERT 스킵, audit log 만 기록
+            saveHistory: (JSON.parse(SS.getItem(STORAGE_KEY_GENERAL_SETTINGS) || '{}').saveHistory) !== false
         };
 
         // 사용자 언어 설정을 WebSocket 메시지에 포함 (설정 > 브라우저 언어 순)

@@ -25,6 +25,13 @@ export interface WSMessage {
     deepResearchMode?: boolean;
     thinkingMode?: boolean;
     thinkingLevel?: string;
+    /**
+     * 메시지 본문을 conversation_messages 에 저장할지 여부.
+     * 기본 true (생략 시 저장). false 면 본문은 저장하지 않고
+     * conversation_audit_log 에 메타만 기록한다.
+     * settings.html 의 saveHistoryToggle UI 와 연결.
+     */
+    saveHistory?: boolean;
     enabledTools?: Record<string, boolean>;
     /** 첨부 파일 목록 */
     files?: Array<{ id: string; name: string; type: string }>;
