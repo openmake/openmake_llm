@@ -33,6 +33,7 @@ import type { ResearchProgress } from '../services/DeepResearchService';
 import { uploadedDocuments } from '../documents/store';
 import { getConversationDB } from '../data/conversation-db';
 import { buildExecutionPlan, type ExecutionPlan } from './profile-resolver';
+import { detectFastPath } from './fast-path-detector';
 import { getPromptConfig } from './prompt';
 import { createLogger } from '../utils/logger';
 import type { ChatMessage, ToolDefinition } from '../ollama/types';
@@ -463,10 +464,16 @@ export class ChatRequestHandler {
         // 토론 모드: 사용자 명시적 토글(discussionMode)만 반영.
         // 프로파일의 discussion 기본값은 사용자가 직접 켜지 않는 한 적용하지 않는다.
         const mergedDiscussionMode = discussionMode === true;
-        // Thinking 모드: 사용자 명시적 토글(thinkingMode)만 반영.
-        // 프로파일의 thinking 기본값은 사용자가 직접 켜지 않는 한 적용하지 않는다.
-        const mergedThinkingMode = thinkingMode === true;
-        const mergedThinkingLevel = thinkingMode ? (thinkingLevel || 'high') : undefined;
+        // Thinking 모드 결정 우선순위:
+        //   1. Fast-path 매칭 (명백한 인사·단답형) → 강제 OFF
+        //   2. 사용자 명시적 토글(thinkingMode === true) → ON
+        //   3. 그 외 → OFF
+        const fastPath = detectFastPath(message);
+        const mergedThinkingMode = !fastPath.matched && thinkingMode === true;
+        const mergedThinkingLevel = mergedThinkingMode ? (thinkingLevel || 'high') : undefined;
+        if (fastPath.matched && thinkingMode === true) {
+            log.info(`[RequestHandler] Fast-path 감지(${fastPath.reason}) — 사용자 thinking 토글 무시하고 OFF`);
+        }
 
         const chatRequest: ChatMessageRequest = {
             message,
