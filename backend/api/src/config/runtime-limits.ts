@@ -1011,3 +1011,19 @@ export const GV_METRICS = {
     SIGNIFICANT_CHANGE_RATIO: 0.1,
 } as const;
 
+/**
+ * Ollama HTTP 인터셉터 재시도 정책
+ * ollama/interceptors.ts 에서 참조
+ */
+export const OLLAMA_RETRY = {
+    /** 키풀 폴백 최대 재시도 횟수 (429/401/403/400/502 시 다른 키로 스왑) */
+    MAX_KEY_FALLBACK_ATTEMPTS:
+        Number(process.env.OMK_OLLAMA_MAX_KEY_FALLBACK_ATTEMPTS) || 3,
+    /** 네트워크 에러(ETIMEDOUT 등) 최대 재시도 횟수 */
+    MAX_NETWORK_RETRIES:
+        Number(process.env.OMK_OLLAMA_MAX_NETWORK_RETRIES) || 2,
+    /** 지수 백오프 base 지연 (ms) — backoffMs = base * 2^retryCount */
+    NETWORK_BACKOFF_BASE_MS:
+        Number(process.env.OMK_OLLAMA_NETWORK_BACKOFF_BASE_MS) || 1000,
+} as const;
+

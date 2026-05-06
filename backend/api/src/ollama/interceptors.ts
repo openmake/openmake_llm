@@ -11,6 +11,7 @@
 import { AxiosInstance } from 'axios';
 import { ApiKeyManager } from './api-key-manager';
 import { KeyExhaustionError } from '../errors/key-exhaustion.error';
+import { OLLAMA_RETRY } from '../config/runtime-limits';
 import { createLogger } from '../utils/logger';
 
 const logger = createLogger('OllamaInterceptors');
@@ -87,7 +88,7 @@ export function setupInterceptors(
                 const retryCount = error.config?._retryCount || 0;
                 const alternateKeyIndex = apiKeyManager.getNextAvailableKey(keyRef.boundKeyIndex);
 
-                if (alternateKeyIndex !== -1 && error.config && retryCount < 3) {
+                if (alternateKeyIndex !== -1 && error.config && retryCount < OLLAMA_RETRY.MAX_KEY_FALLBACK_ATTEMPTS) {
                     keyRef.boundKeyIndex = alternateKeyIndex;
                     error.config._retryCount = retryCount + 1;
                     const newAuthHeaders = apiKeyManager.getAuthHeadersForIndex(keyRef.boundKeyIndex);
@@ -107,10 +108,10 @@ export function setupInterceptors(
             } else if (isNetworkError && error.config) {
                 // 네트워크 일시 장애 시 최대 2회 재시도 (지수 백오프)
                 const retryCount = error.config._retryCount || 0;
-                const maxNetworkRetries = 2;
+                const maxNetworkRetries = OLLAMA_RETRY.MAX_NETWORK_RETRIES;
                 if (retryCount < maxNetworkRetries) {
                     error.config._retryCount = retryCount + 1;
-                    const backoffMs = Math.pow(2, retryCount) * 1000;
+                    const backoffMs = Math.pow(2, retryCount) * OLLAMA_RETRY.NETWORK_BACKOFF_BASE_MS;
                     logger.info(`네트워크 에러(${error.code}) - ${backoffMs}ms 후 재시도 (${retryCount + 1}/${maxNetworkRetries})`);
                     await new Promise(resolve => setTimeout(resolve, backoffMs));
                     return client.request(error.config);
