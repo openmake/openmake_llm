@@ -17,6 +17,7 @@ import { createLogger } from '../utils/logger';
 import { SemanticAgentRouter, type EmbedFunction, type AgentCandidate } from './semantic-router';
 import { DEFAULT_SEMANTIC_CACHE_PATH } from './semantic-cache';
 import { industryData } from './agent-data';
+import { getModelForRole } from '../config/model-roles';
 import type { OllamaClient } from '../ollama/client';
 
 const logger = createLogger('SemanticRouterInstance');
@@ -30,8 +31,7 @@ const SEMANTIC_ROUTER_SAMPLE_RATE =
 const SEMANTIC_DISK_CACHE_ENABLED =
     (process.env.OMK_SEMANTIC_DISK_CACHE_ENABLED ?? 'true') === 'true';
 
-const SEMANTIC_EMBEDDING_MODEL =
-    process.env.OMK_EMBEDDING_MODEL ?? 'nomic-embed-text';
+const SEMANTIC_EMBEDDING_MODEL = getModelForRole('embedding');
 
 let routerInstance: SemanticAgentRouter | null = null;
 let initPromise: Promise<void> | null = null;
