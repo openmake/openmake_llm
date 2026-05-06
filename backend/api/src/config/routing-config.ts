@@ -11,9 +11,9 @@
 
 // ── LLM Classifier 설정 ──────────────────────────────────────
 
-/** 분류용 모델 (env: OMK_CLASSIFIER_MODEL) */
+/** 분류용 모델 (env: OMK_CLASSIFIER_MODEL) — 기본값: 로컬 모델 */
 export const CLASSIFIER_MODEL =
-    process.env.OMK_CLASSIFIER_MODEL ?? 'gemini-3-flash-preview:cloud';
+    process.env.OMK_CLASSIFIER_MODEL ?? process.env.OLLAMA_DEFAULT_MODEL ?? 'gemma4:e4b';
 
 /** LLM 분류 최소 신뢰도 임계값 - 이 값 미만이면 regex fallback (env: OMK_CONFIDENCE_THRESHOLD) */
 export const CONFIDENCE_THRESHOLD =
@@ -122,9 +122,9 @@ export const COMPLEXITY_WEIGHTS = {
 
 // ── UIR (Unified Intent Router) 설정 ─────────────────────────
 
-/** UIR 전용 모델 (env: OMK_UIR_MODEL) */
+/** UIR 전용 모델 (env: OMK_UIR_MODEL) — 기본값: 로컬 모델 */
 export const UIR_MODEL =
-    process.env.OMK_UIR_MODEL ?? 'gemini-3-flash-preview:cloud';
+    process.env.OMK_UIR_MODEL ?? process.env.OLLAMA_DEFAULT_MODEL ?? 'gemma4:e4b';
 
 /** UIR 롤아웃 비율 0=shadow only, 100=full UIR (env: OMK_UIR_ROLLOUT_PERCENT) */
 export const UIR_ROLLOUT_PERCENT =
