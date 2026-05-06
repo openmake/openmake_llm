@@ -51,40 +51,13 @@ export function renderAuthSection() {
 export function renderModelsSection() {
     return '<section id="models" class="dev-section">' +
         '<h2>Available Models</h2>' +
-        '<p>OpenMake offers a range of models suitable for different tasks and price points.</p>' +
-        '<table class="rate-table">' +
-        '<thead><tr><th>Model Alias</th><th>Description</th><th>Use Case</th></tr></thead>' +
-        '<tbody>' +
-        '<tr><td><span class="param-name">openmake_llm</span></td><td>Balanced General</td><td>Standard chat, content generation</td></tr>' +
-        '<tr><td><span class="param-name">openmake_llm_pro</span></td><td>Premium Quality</td><td>Complex instructions, creative writing</td></tr>' +
-        '<tr><td><span class="param-name">openmake_llm_fast</span></td><td>Speed Optimized</td><td>Real-time chat, simple tasks</td></tr>' +
-        '<tr><td><span class="param-name">openmake_llm_think</span></td><td>Deep Reasoning</td><td>Math, logic, complex analysis</td></tr>' +
-        '<tr><td><span class="param-name">openmake_llm_code</span></td><td>Code Specialist</td><td>Programming, debugging, refactoring</td></tr>' +
-        '<tr><td><span class="param-name">openmake_llm_vision</span></td><td>Multimodal</td><td>Image analysis, OCR</td></tr>' +
-        '<tr><td><span class="param-name">openmake_llm_auto</span></td><td>Smart Auto-Routing</td><td>Automatically routes to <strong>pro</strong>, <strong>fast</strong>, <strong>think</strong>, <strong>code</strong>, or <strong>vision</strong> based on query type</td></tr>' +
-        '</tbody></table>' +
-
-        // Feature matrix
-        '<h3>Feature Matrix</h3>' +
-        '<p>Each model has different capabilities tuned for its use case.</p>' +
-        '<table class="rate-table">' +
-        '<thead><tr>' +
-        '<th>Model</th><th>Strategy</th><th>Thinking</th><th>Discussion</th><th>Vision</th><th>Max Agent Turns</th><th>Time Budget</th>' +
-        '</tr></thead>' +
-        '<tbody>' +
-        '<tr><td><span class="param-name">openmake_llm</span></td><td>Conditional GV</td><td>Medium</td><td>—</td><td>—</td><td>5</td><td>Unlimited</td></tr>' +
-        '<tr><td><span class="param-name">openmake_llm_pro</span></td><td>Generate-Verify</td><td>High</td><td>✓</td><td>—</td><td>8</td><td>Unlimited</td></tr>' +
-        '<tr><td><span class="param-name">openmake_llm_fast</span></td><td>—</td><td>—</td><td>—</td><td>—</td><td>1</td><td>3s</td></tr>' +
-        '<tr><td><span class="param-name">openmake_llm_think</span></td><td>Generate-Verify</td><td>High</td><td>—</td><td>—</td><td>10</td><td>Unlimited</td></tr>' +
-        '<tr><td><span class="param-name">openmake_llm_code</span></td><td>Conditional GV</td><td>Medium</td><td>—</td><td>—</td><td>8</td><td>Unlimited</td></tr>' +
-        '<tr><td><span class="param-name">openmake_llm_vision</span></td><td>Single</td><td>Medium</td><td>—</td><td>✓</td><td>3</td><td>Unlimited</td></tr>' +
-        '<tr><td><span class="param-name">openmake_llm_auto</span></td><td>Auto (per routed model)</td><td>Auto</td><td>Auto</td><td>Auto</td><td>Auto</td><td>Auto</td></tr>' +
-        '</tbody></table>' +
+        '<p>OpenMake LLM runs on a single locally-hosted Ollama model. Use the <code>GET /api/models</code> endpoint to retrieve the active model and its capabilities at runtime.</p>' +
 
         '<div class="alert-info" style="margin-top: 1rem; padding: 0.75rem 1rem; border-left: 3px solid var(--info); background: var(--bg-tertiary); border-radius: 4px;">' +
-        '<strong>Note:</strong> Internal engine models are abstracted behind these aliases. ' +
-        'The actual engine may change without notice as we optimize quality and performance. ' +
-        'Always reference models by their <code>openmake_llm_*</code> alias.</div>' +
+        '<strong>Note:</strong> The model identifier is determined by the server configuration. ' +
+        'Always query <code>GET /api/models</code> to discover the current model ID and its <code>capabilities</code> ' +
+        '(<code>vision</code>, <code>thinking</code>, <code>toolCalling</code>, <code>streaming</code>) before sending a request. ' +
+        'The <code>model</code> field in chat requests is optional — if omitted, the server uses its default.</div>' +
         '</section>';
 }
 
@@ -101,7 +74,7 @@ export function renderChatSection() {
         '<h3>Request Body</h3>' +
         '<table class="param-table">' +
         '<tr><td style="width: 200px;"><span class="param-name">message</span><span class="param-type">string</span></td><td>Required. The user\'s message to the AI assistant.</td></tr>' +
-        '<tr><td><span class="param-name">model</span><span class="param-type">string</span></td><td>Required. ID of the model to use (e.g., <code>openmake_llm</code>, <code>openmake_llm_auto</code>).</td></tr>' +
+        '<tr><td><span class="param-name">model</span><span class="param-type">string</span></td><td>Optional. Model ID to use. If omitted, the server uses its default model. Query <code>GET /api/models</code> to discover available IDs.</td></tr>' +
         '<tr><td><span class="param-name">sessionId</span><span class="param-type">string</span></td><td>Optional. Session ID from a previous response to continue a conversation.</td></tr>' +
         '<tr><td><span class="param-name">history</span><span class="param-type">array</span></td><td>Optional. Array of previous messages, each with <code>role</code> (<code>user</code>/<code>assistant</code>) and <code>content</code>.</td></tr>' +
         '</table>' +
@@ -120,7 +93,7 @@ export function renderChatSection() {
             '  -H "X-API-Key: omk_live_sk_..." \\\n' +
             '  -d \'{\n' +
             '    "message": "Hello!",\n' +
-            '    "model": "openmake_llm"\n' +
+            '    "model": "gemma4:e4b"\n' +
             '  }\'',
             'python',
             'import requests\n\n' +
@@ -131,7 +104,7 @@ export function renderChatSection() {
             '}\n' +
             'data = {\n' +
             '    "message": "Hello!",\n' +
-            '    "model": "openmake_llm"\n' +
+            '    "model": "gemma4:e4b"\n' +
             '}\n' +
             'response = requests.post(url, headers=headers, json=data)\n' +
             'print(response.json())',
@@ -144,7 +117,7 @@ export function renderChatSection() {
             '  },\n' +
             '  body: JSON.stringify({\n' +
             '    message: "Hello!",\n' +
-            '    model: "openmake_llm"\n' +
+            '    model: "gemma4:e4b"\n' +
             '  })\n' +
             '});\n' +
             'const data = await response.json();'
@@ -158,7 +131,7 @@ export function renderChatSection() {
             '  "data": {\n' +
             '    "response": "Hello! How can I help you today?",\n' +
             '    "sessionId": "sess_a1b2c3d4...",\n' +
-            '    "model": "openmake_llm",\n' +
+            '    "model": "gemma4:e4b",\n' +
             '    "finish_reason": "stop"\n' +
             '  }\n' +
             '}',
@@ -169,7 +142,7 @@ export function renderChatSection() {
             '  "data": {\n' +
             '    "response": "Hello! How can I help you today?",\n' +
             '    "sessionId": "sess_a1b2c3d4...",\n' +
-            '    "model": "openmake_llm",\n' +
+            '    "model": "gemma4:e4b",\n' +
             '    "finish_reason": "stop"\n' +
             '  }\n' +
             '}',
@@ -180,7 +153,7 @@ export function renderChatSection() {
             '  data: {\n' +
             '    response: "Hello! How can I help you today?",\n' +
             '    sessionId: "sess_a1b2c3d4...",\n' +
-            '    model: "openmake_llm",\n' +
+            '    model: "gemma4:e4b",\n' +
             '    finish_reason: "stop"\n' +
             '  }\n' +
             '}'
@@ -213,7 +186,7 @@ export function renderOpenAICompatSection() {
             '    api_key="omk_live_sk_..."\n' +
             ')\n\n' +
             'response = client.chat.completions.create(\n' +
-            '    model="openmake_llm",\n' +
+            '    model="gemma4:e4b",\n' +
             '    messages=[\n' +
             '        {"role": "user", "content": "Hello!"}\n' +
             '    ]\n' +
@@ -226,7 +199,7 @@ export function renderOpenAICompatSection() {
             '  apiKey: "omk_live_sk_..."\n' +
             '});\n\n' +
             'const response = await client.chat.completions.create({\n' +
-            '  model: "openmake_llm",\n' +
+            '  model: "gemma4:e4b",\n' +
             '  messages: [\n' +
             '    { role: "user", content: "Hello!" }\n' +
             '  ]\n' +
@@ -237,7 +210,7 @@ export function renderOpenAICompatSection() {
             '  -H "Content-Type: application/json" \\\n' +
             '  -H "Authorization: Bearer omk_live_sk_..." \\\n' +
             '  -d \'{\n' +
-            '    "model": "openmake_llm",\n' +
+            '    "model": "gemma4:e4b",\n' +
             '    "messages": [\n' +
             '      {"role": "user", "content": "Hello!"}\n' +
             '    ]\n' +
@@ -251,7 +224,7 @@ export function renderOpenAICompatSection() {
 
         '<h3>Request Body</h3>' +
         '<table class="param-table">' +
-        '<tr><td style="width: 200px;"><span class="param-name">model</span><span class="param-type">string</span></td><td>Required. Model ID (e.g., <code>openmake_llm</code>, <code>openmake_llm_auto</code>).</td></tr>' +
+        '<tr><td style="width: 200px;"><span class="param-name">model</span><span class="param-type">string</span></td><td>Optional. Model ID. If omitted, the server uses its default. Query <code>GET /api/models</code> to discover available IDs.</td></tr>' +
         '<tr><td><span class="param-name">messages</span><span class="param-type">array</span></td><td>Required. Array of message objects with <code>role</code> (<code>system</code>, <code>user</code>, <code>assistant</code>, <code>tool</code>) and <code>content</code>.</td></tr>' +
         '<tr><td><span class="param-name">stream</span><span class="param-type">boolean</span></td><td>Optional. If <code>true</code>, returns a stream of Server-Sent Events (SSE). Default: <code>false</code>.</td></tr>' +
         '<tr><td><span class="param-name">temperature</span><span class="param-type">number</span></td><td>Optional. Sampling temperature (0&ndash;2). Higher values produce more random output.</td></tr>' +
@@ -271,7 +244,7 @@ export function renderOpenAICompatSection() {
             '  "id": "chatcmpl-abc123def456...",\n' +
             '  "object": "chat.completion",\n' +
             '  "created": 1709827200,\n' +
-            '  "model": "openmake_llm",\n' +
+            '  "model": "gemma4:e4b",\n' +
             '  "choices": [\n' +
             '    {\n' +
             '      "index": 0,\n' +
@@ -291,7 +264,7 @@ export function renderOpenAICompatSection() {
             'python',
             '# response object\n' +
             'response.id           # "chatcmpl-abc123def456..."\n' +
-            'response.model        # "openmake_llm"\n' +
+            'response.model        # "gemma4:e4b"\n' +
             'response.choices[0].message.content\n' +
             '                      # "Hello! How can I help you today?"\n' +
             'response.choices[0].finish_reason\n' +
@@ -303,7 +276,7 @@ export function renderOpenAICompatSection() {
             '  id: "chatcmpl-abc123def456...",\n' +
             '  object: "chat.completion",\n' +
             '  created: 1709827200,\n' +
-            '  model: "openmake_llm",\n' +
+            '  model: "gemma4:e4b",\n' +
             '  choices: [{\n' +
             '    index: 0,\n' +
             '    message: { role: "assistant", content: "Hello! ..." },\n' +
@@ -323,7 +296,7 @@ export function renderOpenAICompatSection() {
             '  -H "Content-Type: application/json" \\\n' +
             '  -H "Authorization: Bearer omk_live_sk_..." \\\n' +
             '  -d \'{\n' +
-            '    "model": "openmake_llm",\n' +
+            '    "model": "gemma4:e4b",\n' +
             '    "stream": true,\n' +
             '    "messages": [\n' +
             '      {"role": "user", "content": "Tell me a joke"}\n' +
@@ -331,7 +304,7 @@ export function renderOpenAICompatSection() {
             '  }\'',
             'python',
             'stream = client.chat.completions.create(\n' +
-            '    model="openmake_llm",\n' +
+            '    model="gemma4:e4b",\n' +
             '    messages=[{"role": "user", "content": "Tell me a joke"}],\n' +
             '    stream=True\n' +
             ')\n\n' +
@@ -341,7 +314,7 @@ export function renderOpenAICompatSection() {
             '        print(delta.content, end="", flush=True)',
             'typescript',
             'const stream = await client.chat.completions.create({\n' +
-            '  model: "openmake_llm",\n' +
+            '  model: "gemma4:e4b",\n' +
             '  messages: [{ role: "user", content: "Tell me a joke" }],\n' +
             '  stream: true\n' +
             '});\n\n' +
@@ -356,12 +329,12 @@ export function renderOpenAICompatSection() {
         getCodeBlock(
             'curl',
             '// First chunk (role)\n' +
-            'data: {"id":"chatcmpl-abc...","object":"chat.completion.chunk","created":1709827200,"model":"openmake_llm","choices":[{"index":0,"delta":{"role":"assistant"},"finish_reason":null}]}\n\n' +
+            'data: {"id":"chatcmpl-abc...","object":"chat.completion.chunk","created":1709827200,"model":"gemma4:e4b","choices":[{"index":0,"delta":{"role":"assistant"},"finish_reason":null}]}\n\n' +
             '// Content chunks\n' +
-            'data: {"id":"chatcmpl-abc...","object":"chat.completion.chunk","created":1709827200,"model":"openmake_llm","choices":[{"index":0,"delta":{"content":"Hello"},"finish_reason":null}]}\n\n' +
-            'data: {"id":"chatcmpl-abc...","object":"chat.completion.chunk","created":1709827200,"model":"openmake_llm","choices":[{"index":0,"delta":{"content":"!"},"finish_reason":null}]}\n\n' +
+            'data: {"id":"chatcmpl-abc...","object":"chat.completion.chunk","created":1709827200,"model":"gemma4:e4b","choices":[{"index":0,"delta":{"content":"Hello"},"finish_reason":null}]}\n\n' +
+            'data: {"id":"chatcmpl-abc...","object":"chat.completion.chunk","created":1709827200,"model":"gemma4:e4b","choices":[{"index":0,"delta":{"content":"!"},"finish_reason":null}]}\n\n' +
             '// Final chunk\n' +
-            'data: {"id":"chatcmpl-abc...","object":"chat.completion.chunk","created":1709827200,"model":"openmake_llm","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}\n\n' +
+            'data: {"id":"chatcmpl-abc...","object":"chat.completion.chunk","created":1709827200,"model":"gemma4:e4b","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}\n\n' +
             'data: [DONE]',
             'python',
             '# Each chunk object:\n' +
@@ -375,7 +348,7 @@ export function renderOpenAICompatSection() {
             '  id: "chatcmpl-abc...",\n' +
             '  object: "chat.completion.chunk",\n' +
             '  created: 1709827200,\n' +
-            '  model: "openmake_llm",\n' +
+            '  model: "gemma4:e4b",\n' +
             '  choices: [{\n' +
             '    index: 0,\n' +
             '    delta: { content: "Hello" },  // partial text\n' +
@@ -394,7 +367,7 @@ export function renderOpenAICompatSection() {
             '  -H "Content-Type: application/json" \\\n' +
             '  -H "Authorization: Bearer omk_live_sk_..." \\\n' +
             '  -d \'{\n' +
-            '    "model": "openmake_llm_pro",\n' +
+            '    "model": "gemma4:e4b",\n' +
             '    "messages": [\n' +
             '      {"role": "user", "content": "What is the weather in Seoul?"}\n' +
             '    ],\n' +
@@ -417,7 +390,7 @@ export function renderOpenAICompatSection() {
             '  }\'',
             'python',
             'response = client.chat.completions.create(\n' +
-            '    model="openmake_llm_pro",\n' +
+            '    model="gemma4:e4b",\n' +
             '    messages=[\n' +
             '        {"role": "user", "content": "What is the weather in Seoul?"}\n' +
             '    ],\n' +
@@ -443,7 +416,7 @@ export function renderOpenAICompatSection() {
             '    print(tool_calls[0].function.arguments)  # {"location": "Seoul"}',
             'typescript',
             'const response = await client.chat.completions.create({\n' +
-            '  model: "openmake_llm_pro",\n' +
+            '  model: "gemma4:e4b",\n' +
             '  messages: [\n' +
             '    { role: "user", content: "What is the weather in Seoul?" }\n' +
             '  ],\n' +
@@ -477,7 +450,7 @@ export function renderOpenAICompatSection() {
             '{\n' +
             '  "id": "chatcmpl-abc123...",\n' +
             '  "object": "chat.completion",\n' +
-            '  "model": "openmake_llm_pro",\n' +
+            '  "model": "gemma4:e4b",\n' +
             '  "choices": [{\n' +
             '    "index": 0,\n' +
             '    "message": {\n' +
@@ -505,7 +478,7 @@ export function renderOpenAICompatSection() {
             '})\n\n' +
             '# Continue the conversation\n' +
             'final = client.chat.completions.create(\n' +
-            '    model="openmake_llm_pro",\n' +
+            '    model="gemma4:e4b",\n' +
             '    messages=messages\n' +
             ')',
             'typescript',
@@ -518,7 +491,7 @@ export function renderOpenAICompatSection() {
             '});\n\n' +
             '// Continue the conversation\n' +
             'const final = await client.chat.completions.create({\n' +
-            '  model: "openmake_llm_pro",\n' +
+            '  model: "gemma4:e4b",\n' +
             '  messages\n' +
             '});'
         ) +
@@ -550,34 +523,26 @@ export function renderOpenAICompatSection() {
             '  "object": "list",\n' +
             '  "data": [\n' +
             '    {\n' +
-            '      "id": "openmake_llm",\n' +
+            '      "id": "gemma4:e4b",\n' +
             '      "object": "model",\n' +
             '      "created": 1709827200,\n' +
-            '      "owned_by": "openmake",\n' +
-            '      "name": "Default",\n' +
-            '      "description": "Balanced general-purpose model"\n' +
-            '    },\n' +
-            '    {\n' +
-            '      "id": "openmake_llm_pro",\n' +
-            '      "object": "model",\n' +
-            '      "created": 1709827200,\n' +
-            '      "owned_by": "openmake"\n' +
+            '      "owned_by": "ollama-local",\n' +
+            '      "name": "gemma4:e4b",\n' +
+            '      "description": "Local Ollama model (gemma4:e4b)"\n' +
             '    }\n' +
             '  ]\n' +
             '}',
             'python',
             '# models object\n' +
             'models.object    # "list"\n' +
-            'models.data[0].id         # "openmake_llm"\n' +
-            'models.data[0].owned_by   # "openmake"',
+            'models.data[0].id         # "gemma4:e4b"\n' +
+            'models.data[0].owned_by   # "ollama-local"',
             'typescript',
             '// models object\n' +
             '{\n' +
             '  object: "list",\n' +
             '  data: [\n' +
-            '    { id: "openmake_llm", object: "model", created: 1709827200, owned_by: "openmake" },\n' +
-            '    { id: "openmake_llm_pro", object: "model", created: 1709827200, owned_by: "openmake" },\n' +
-            '    // ...\n' +
+            '    { id: "gemma4:e4b", object: "model", created: 1709827200, owned_by: "ollama-local" }\n' +
             '  ]\n' +
             '}'
         ) +

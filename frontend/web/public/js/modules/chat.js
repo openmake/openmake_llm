@@ -11,7 +11,7 @@
 
 import { getState, setState, addToMemory } from './state.js';
 import { sendWsMessage } from './websocket.js';
-import { DEFAULT_AUTO_MODEL, STORAGE_KEY_GENERAL_SETTINGS, STORAGE_KEY_SELECTED_MODEL, STORAGE_KEY_USER } from './constants.js';
+import { STORAGE_KEY_GENERAL_SETTINGS, STORAGE_KEY_SELECTED_MODEL, STORAGE_KEY_USER } from './constants.js';
 
 // 하위 모듈 import
 import { addChatMessage, appendToken, appendThinkingToken, finishAssistantMessage, setHideAbortButton } from './chat-renderer.js';
@@ -127,7 +127,8 @@ async function sendMessage() {
         const payload = {
             type: 'chat',
             message: message,
-            model: document.getElementById('modelSelect')?.value || SS.getItem(STORAGE_KEY_SELECTED_MODEL) || DEFAULT_AUTO_MODEL,
+            // 빈 model은 백엔드가 자동 선택 (ws-chat-handler.ts: !model || model === 'default' → selectOptimalModel)
+            model: document.getElementById('modelSelect')?.value || SS.getItem(STORAGE_KEY_SELECTED_MODEL) || '',
             history: getState('conversationMemory'),
             webSearch: getState('webSearchEnabled') || (getState('mcpToolsEnabled') || {}).web_search === true,
             thinkingMode: getState('thinkingEnabled'),

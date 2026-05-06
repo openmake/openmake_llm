@@ -95,7 +95,6 @@ import {
 
 // 1-11. 클러스터 (state 의존)
 import {
-    BRAND_MODELS,
     updateClusterInfo, updateSidebarClusterInfo, updateClusterStatus,
     fetchClusterInfoFallback, updateModelSelect, handleClusterEvent,
     showAgentBadge, selectModel, loadModelInfo, formatSize
@@ -625,7 +624,6 @@ window.showResearchProgress = showResearchProgress;
 
 
 // 클러스터
-window.BRAND_MODELS = BRAND_MODELS;
 window.updateClusterInfo = updateClusterInfo;
 window.updateSidebarClusterInfo = updateSidebarClusterInfo;
 window.updateClusterStatus = updateClusterStatus;

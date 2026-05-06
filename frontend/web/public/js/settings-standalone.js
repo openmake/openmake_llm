@@ -18,8 +18,15 @@
 
     // SafeStorage 래퍼 — safe-storage.js에서 전역 등록됨
     var safeStorage = window.SafeStorage;
-    var AUTO_MODEL = window.DEFAULT_AUTO_MODEL || 'openmake_llm_auto';
     var SK = window.STORAGE_KEYS || {};
+
+    // ─── XSS 방어 헬퍼 ───
+    function escAttr(s) {
+        return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+    }
+    function escText(s) {
+        return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
 
     // ─── 관리자 확인 헬퍼 ───
     function isAdmin() {
@@ -36,14 +43,6 @@
         var modelSelect = document.getElementById('modelSelect');
         if (!modelSelect) return;
 
-        // 관리자가 아니면 모델 이름 숨김
-        if (!isAdmin()) {
-            modelSelect.innerHTML = '<option value="' + AUTO_MODEL + '">OpenMake LLM Auto</option>';
-            modelSelect.disabled = true;
-            modelSelect.style.cursor = 'default';
-            return;
-        }
-
         try {
             var response = await fetch('/api/models');
             if (response.ok) {
@@ -51,23 +50,35 @@
                 var data = rawData.data || rawData;
                 if (data.models && data.models.length > 0) {
                     var savedModel = safeStorage.getItem(SK.SELECTED_MODEL || 'selectedModel');
-                    var defaultModel = data.defaultModel || AUTO_MODEL;
+                    var defaultModel = data.defaultModel || (data.models[0].modelId || data.models[0].name);
 
                     modelSelect.innerHTML = data.models.map(function (model) {
                         var modelId = model.modelId || model.name;
                         var displayName = model.name;
                         var desc = model.description || '';
                         var isSelected = savedModel ? modelId === savedModel : modelId === defaultModel;
-                        return '<option value="' + modelId + '" ' + (isSelected ? 'selected' : '') + '>' +
-                            displayName + (desc ? ' — ' + desc : '') + '</option>';
+                        return '<option value="' + escAttr(modelId) + '" ' + (isSelected ? 'selected' : '') + '>' +
+                            escText(displayName) + (desc ? ' — ' + escText(desc) : '') + '</option>';
                     }).join('');
+
+                    // 비관리자는 선택 변경 불가 (옵션은 그대로 표시)
+                    if (!isAdmin()) {
+                        modelSelect.disabled = true;
+                        modelSelect.style.cursor = 'default';
+                    }
+                } else {
+                    modelSelect.innerHTML = '<option value="">사용 가능한 모델 없음</option>';
                 }
+            } else {
+                modelSelect.innerHTML = '<option value="">모델 로드 실패</option>';
             }
         } catch (e) {
             console.error('모델 로드 실패:', e);
             var savedModel = safeStorage.getItem(SK.SELECTED_MODEL || 'selectedModel');
             if (savedModel) {
-                modelSelect.innerHTML = '<option value="' + savedModel + '">' + savedModel + '</option>';
+                modelSelect.innerHTML = '<option value="' + escAttr(savedModel) + '">' + escText(savedModel) + '</option>';
+            } else {
+                modelSelect.innerHTML = '<option value="">로드 실패</option>';
             }
         }
     }
