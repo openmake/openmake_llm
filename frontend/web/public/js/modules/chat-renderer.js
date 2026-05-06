@@ -73,6 +73,9 @@ function addChatMessage(role, content) {
                             <path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17"/>
                         </svg>
                     </button>
+                    <button class="message-action-btn" data-action="report" data-msg-id="${messageId}" title="문제 신고 (디버깅용 7일 보관)">
+                        🚩
+                    </button>
                 </div>
                 <div class="message-time" id="${messageId}-time">${timestamp}</div>
             </div>
@@ -85,6 +88,9 @@ function addChatMessage(role, content) {
             const action = btn.dataset.action;
             if (action === 'copy') window.copyMessage(messageId);
             else if (action === 'regenerate') window.regenerateMessage();
+            else if (action === 'report' && typeof window.reportMessage === 'function') {
+                window.reportMessage(messageId);
+            }
         });
     });
 
