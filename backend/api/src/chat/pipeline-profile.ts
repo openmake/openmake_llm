@@ -31,9 +31,7 @@
  * @see chat/model-selector.ts - auto 모드 시 질문 유형 기반 프로파일 선택
  */
 
-import { getConfig } from '../config/env';
 import type { CostTier } from './cost-tier';
-import { DEFAULT_AUTO_MODEL } from '../config/constants';
 
 // ============================================
 // 파이프라인 프로파일 인터페이스
@@ -154,142 +152,7 @@ export interface PipelineProfile {
  * logger.info(proProfile.engineModel); // config.omkEnginePro 값
  */
 export function getProfiles(): Record<string, PipelineProfile> {
-    const config = getConfig();
-
-    return {
-        // ── 1. openmake_llm — Balanced General ──
-        'openmake_llm': {
-            id: 'openmake_llm',
-            displayName: 'OpenMake LLM',
-            description: '균형 잡힌 범용 모델 — 일반 대화, 콘텐츠 생성',
-            engineModel: config.omkEngineLlm,
-
-            executionStrategy: 'conditional-verify',
-            thinking: 'medium',
-            discussion: false,
-            promptStrategy: 'auto',
-            agentLoopMax: 5,
-            loopStrategy: 'auto',
-            contextStrategy: 'auto',
-            timeBudgetSeconds: 0,
-            requiredTools: [],
-            costTier: 'standard',
-        },
-
-        // ── 2. openmake_llm_pro — Premium Quality ──
-        'openmake_llm_pro': {
-            id: 'openmake_llm_pro',
-            displayName: 'OpenMake LLM Pro',
-            description: '프리미엄 품질 — 복잡한 지시, 창작, 분석',
-            engineModel: config.omkEnginePro,
-
-            executionStrategy: 'generate-verify',
-            thinking: 'high',
-            discussion: true,
-            promptStrategy: 'auto',
-            agentLoopMax: 8,
-            loopStrategy: 'auto',
-            contextStrategy: 'full',
-            timeBudgetSeconds: 0,
-            requiredTools: [],
-            costTier: 'premium',
-        },
-
-        // ── 3. openmake_llm_fast — Speed Optimized ──
-        'openmake_llm_fast': {
-            id: 'openmake_llm_fast',
-            displayName: 'OpenMake LLM Fast',
-            description: '속도 최적화 — 실시간 대화, 단순 작업',
-            engineModel: config.omkEngineFast,
-
-            executionStrategy: 'single',
-            thinking: 'off',
-            discussion: false,
-            promptStrategy: 'none',
-            agentLoopMax: 1,
-            loopStrategy: 'sequential',
-            contextStrategy: 'lite',
-            timeBudgetSeconds: 3,
-            requiredTools: [],
-            costTier: 'economy',
-        },
-
-        // ── 4. openmake_llm_think — Deep Reasoning ──
-        'openmake_llm_think': {
-            id: 'openmake_llm_think',
-            displayName: 'OpenMake LLM Think',
-            description: '심층 추론 — 수학, 논리, 복잡한 분석',
-            engineModel: config.omkEngineThink,
-
-            executionStrategy: 'generate-verify',
-            thinking: 'high',
-            discussion: false,
-            promptStrategy: 'force_reasoning',
-            agentLoopMax: 10,
-            loopStrategy: 'sequential',
-            contextStrategy: 'full',
-            timeBudgetSeconds: 0,
-            requiredTools: [],
-            costTier: 'premium',
-        },
-
-        // ── 5. openmake_llm_code — Code Specialist ──
-        'openmake_llm_code': {
-            id: 'openmake_llm_code',
-            displayName: 'OpenMake LLM Code',
-            description: '코드 전문 — 프로그래밍, 디버깅, 리팩토링',
-            engineModel: config.omkEngineCode,
-
-            executionStrategy: 'conditional-verify',
-            thinking: 'medium',
-            discussion: false,
-            promptStrategy: 'force_coder',
-            agentLoopMax: 8,
-            loopStrategy: 'auto',
-            contextStrategy: 'full',
-            timeBudgetSeconds: 0,
-            requiredTools: [],
-            costTier: 'standard',
-        },
-
-        // ── 6. openmake_llm_vision — Multimodal / Vision ──
-        'openmake_llm_vision': {
-            id: 'openmake_llm_vision',
-            displayName: 'OpenMake LLM Vision',
-            description: '멀티모달 — 이미지 분석, OCR, 비전 작업',
-            engineModel: config.omkEngineVision,
-
-            executionStrategy: 'single',
-            thinking: 'medium',
-            discussion: false,
-            promptStrategy: 'auto',
-            agentLoopMax: 1,
-            loopStrategy: 'sequential',
-            contextStrategy: 'auto',
-            timeBudgetSeconds: 0,
-            requiredTools: ['vision'],
-            costTier: 'premium',
-        },
-
-        // ── 7. openmake_llm_auto — Smart Auto-Routing ──
-        [DEFAULT_AUTO_MODEL]: {
-            id: DEFAULT_AUTO_MODEL,
-            displayName: 'OpenMake LLM Auto',
-            description: '스마트 자동 라우팅 — 질문 유형에 따라 최적 모델 자동 선택 (코딩, 분석, 창작, 비전 등)',
-            engineModel: '__auto__',
-
-            executionStrategy: 'conditional-verify',
-            thinking: 'medium',
-            discussion: false,
-            promptStrategy: 'auto',
-            agentLoopMax: 5,
-            loopStrategy: 'auto',
-            contextStrategy: 'auto',
-            timeBudgetSeconds: 0,
-            requiredTools: [],
-            costTier: 'standard',
-        },
-    };
+    return {};
 }
 
 /**
@@ -309,6 +172,6 @@ export function getBrandModelAliases(): string[] {
  * @param model - 검증할 모델명 문자열
  * @returns 유효한 브랜드 모델이면 true, 아니면 false
  */
-export function isValidBrandModel(model: string): boolean {
-    return model in getProfiles();
+export function isValidBrandModel(_model: string): boolean {
+    return false;
 }
