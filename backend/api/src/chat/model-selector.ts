@@ -32,7 +32,7 @@ import { createLogger } from '../utils/logger';
 import { MODEL_CONTEXT_DEFAULTS } from '../config/runtime-limits';
 import { QUERY_TYPE_PARAMS, LLM_TOP_P } from '../config/llm-parameters';
 import { recommendTokenBudget } from './complexity-assessor';
-import { getModelPresets } from '../config/model-presets';
+import { getModelPresets, MODEL_PRESET_KEYS } from '../config/model-presets';
 import { MODEL_CAPABILITY_PRESETS } from '../config/model-defaults';
 
 const logger = createLogger('ModelSelector');
@@ -292,5 +292,5 @@ export function getRecommendedModel(queryType: QueryType): string {
             return preset.defaultModel;
         }
     }
-    return getModelPresets()['gemma4'].defaultModel;
+    return getModelPresets()[MODEL_PRESET_KEYS.DEFAULT_LOCAL].defaultModel;
 }

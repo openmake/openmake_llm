@@ -47,13 +47,23 @@ export interface ModelPreset {
     priority: number;
 }
 
+/**
+ * 모델 프리셋 키 상수.
+ * 키 자체를 코드 여러 곳에서 참조해야 할 때 매직 문자열을 피한다.
+ * (e.g. fallback resolver, 테스트 fixture)
+ */
+export const MODEL_PRESET_KEYS = {
+    /** 기본 로컬 모델 프리셋 — `getModelPresets()` 의 fallback 키 */
+    DEFAULT_LOCAL: 'gemma4',
+} as const;
+
 // 사용 가능한 모델 프리셋
 export function getModelPresets(): Record<string, ModelPreset> {
     const config = getConfig();
     const localModel = config.ollamaDefaultModel;  // gemma4:e4b
 
     return {
-        'gemma4': {
+        [MODEL_PRESET_KEYS.DEFAULT_LOCAL]: {
             name: 'gemma4:e4b',
             envKey: 'OLLAMA_DEFAULT_MODEL',
             defaultModel: localModel,

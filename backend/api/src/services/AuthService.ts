@@ -6,7 +6,7 @@
  */
 
 import crypto from 'node:crypto';
-import { getUserManager, PublicUser } from '../data/user-manager';
+import { getUserManager, PublicUser, USER_ROLES } from '../data/user-manager';
 import { generateToken } from '../auth';
 import { createLogger } from '../utils/logger';
 import { getConfig } from '../config/env';
@@ -167,7 +167,7 @@ export class AuthService {
                 .split(',')
                 .map(e => e.toLowerCase().trim())
                 .filter(e => e);
-            const role = adminEmails.includes(email.toLowerCase()) ? 'admin' : 'user';
+            const role = adminEmails.includes(email.toLowerCase()) ? USER_ROLES.ADMIN : USER_ROLES.USER;
 
             publicUser = await this.userManager.createUser({
                 email,
@@ -187,9 +187,9 @@ export class AuthService {
                 .map(e => e.toLowerCase().trim())
                 .filter(e => e);
 
-            if (adminEmails.includes(email.toLowerCase()) && publicUser.role !== 'admin') {
-                await this.userManager.changeRole(publicUser.id, 'admin');
-                publicUser.role = 'admin';
+            if (adminEmails.includes(email.toLowerCase()) && publicUser.role !== USER_ROLES.ADMIN) {
+                await this.userManager.changeRole(publicUser.id, USER_ROLES.ADMIN);
+                publicUser.role = USER_ROLES.ADMIN;
             }
         }
 
