@@ -131,6 +131,19 @@ async function startMemorySchedulers(): Promise<void> {
         memCleanupTimer.unref();
         activeTimers.push(memCleanupTimer);
 
+        // 4.1.b 디버그 큐 TTL 정리 (1시간마다)
+        // B+ Phase B4/B5: 에러 자동 저장(24h) + 사용자 신고(7d) 만료 항목 삭제
+        const debugQueueCleanupTimer = setInterval(async () => {
+            try {
+                const { cleanupExpiredDebugQueue } = await import('../data/conversation-debug-queue');
+                await cleanupExpiredDebugQueue();
+            } catch (e) {
+                logger.error('[DebugQueue] 정리 실패:', e);
+            }
+        }, 60 * 60 * 1000);
+        debugQueueCleanupTimer.unref();
+        activeTimers.push(debugQueueCleanupTimer);
+
         // 4.2 중요도 감쇠 적용 (24시간마다)
         const memDecayTimer = setInterval(async () => {
             try {
