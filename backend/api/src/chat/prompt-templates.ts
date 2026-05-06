@@ -428,10 +428,15 @@ interface CachedPrompt {
  * 
  * @class PromptCache
  */
+/** 프롬프트 캐시 TTL (ms) — env: OMK_PROMPT_CACHE_TTL_MS (기본 5분) */
+const PROMPT_CACHE_TTL_MS = Number(process.env.OMK_PROMPT_CACHE_TTL_MS) || 5 * 60 * 1000;
+/** 프롬프트 캐시 최대 엔트리 수 — env: OMK_PROMPT_CACHE_MAX_SIZE (기본 50) */
+const PROMPT_CACHE_MAX_SIZE = Number(process.env.OMK_PROMPT_CACHE_MAX_SIZE) || 50;
+
 export class PromptCache {
     private cache = new Map<string, CachedPrompt>();
-    private readonly TTL_MS = 5 * 60 * 1000; // 5분 캐시
-    private readonly MAX_SIZE = 50;
+    private readonly TTL_MS = PROMPT_CACHE_TTL_MS;
+    private readonly MAX_SIZE = PROMPT_CACHE_MAX_SIZE;
 
     private computeHash(type: PromptType, includeBase: boolean, language: string = 'en'): string {
         return `${type}:${includeBase}:${language}`;

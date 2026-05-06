@@ -29,6 +29,13 @@ const BCRYPT_ROUNDS = 12;
 
 export type UserRole = 'admin' | 'user' | 'guest';
 
+/** UserRole 값 상수 — 인라인 문자열 사용 방지 (CLAUDE.md No-Hardcoding) */
+export const USER_ROLES = {
+    ADMIN: 'admin',
+    USER: 'user',
+    GUEST: 'guest',
+} as const satisfies Record<string, UserRole>;
+
 // MCP 도구 접근 등급
 export type UserTier = 'free' | 'pro' | 'enterprise';
 
