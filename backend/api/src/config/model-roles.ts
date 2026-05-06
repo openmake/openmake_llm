@@ -137,8 +137,17 @@ export async function validateModels(
         return;
     }
 
-    // exact match 만 통과 (태그까지 정확히 일치)
-    const missing = localModels.filter(m => !installed.includes(m));
+    // 매칭 규칙:
+    //   1. exact match — 'nomic-embed-text:latest' === 'nomic-embed-text:latest'
+    //   2. 태그 미지정 입력은 모든 태그와 매칭 (Ollama 관행: 태그 생략 시 :latest)
+    //      예: 'nomic-embed-text' 등록 → 'nomic-embed-text:latest' 설치된 경우 매칭
+    const missing = localModels.filter(m => {
+        if (installed.includes(m)) return false;
+        if (!m.includes(':')) {
+            return !installed.some(i => i === `${m}:latest` || i.startsWith(`${m}:`));
+        }
+        return true;
+    });
 
     if (missing.length === 0) {
         logger.info(`모든 등록된 모델이 Ollama에 설치되어 있습니다 (${localModels.length}개).`);
@@ -147,7 +156,13 @@ export async function validateModels(
 
     const errMsg = `Ollama에 설치되지 않은 모델: ${missing.join(', ')}. ` +
         `설치하려면: ${missing.map(m => `\`ollama pull ${m}\``).join(', ')}`;
-    if (failFast) {
+
+    // embedding 모델 미설치는 옵션 기능(시맨틱 캐시/라우터) 비활성화로 graceful degrade —
+    // production fail-fast 대상에서 제외.
+    const embeddingModel = roleModels.embedding;
+    const onlyEmbeddingMissing = missing.length === 1 && missing[0] === embeddingModel;
+
+    if (failFast && !onlyEmbeddingMissing) {
         logger.error(errMsg);
         throw new Error(errMsg);
     }
