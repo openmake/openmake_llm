@@ -32,6 +32,7 @@ import type { DiscussionProgress } from '../agents/discussion-engine';
 import type { ResearchProgress } from '../services/DeepResearchService';
 import { uploadedDocuments } from '../documents/store';
 import { getConversationDB } from '../data/conversation-db';
+import { recordAuditLog } from '../data/conversation-audit';
 import { buildExecutionPlan, type ExecutionPlan } from './profile-resolver';
 import { detectFastPath } from './fast-path-detector';
 import { getPromptConfig } from './prompt';
@@ -109,6 +110,12 @@ export interface ChatRequestParams {
     thinkingMode?: boolean;
     /** 사고 수준 */
     thinkingLevel?: 'low' | 'medium' | 'high';
+    /**
+     * 메시지 본문을 conversation_messages 에 저장할지 여부.
+     * undefined/true → 저장 (기본). false → 본문 저장 스킵, audit log 만 기록.
+     * settings.html saveHistoryToggle 과 연결.
+     */
+    saveHistory?: boolean;
     /** 구조화된 출력 형식 (Ollama format 파라미터: 'json' 또는 JSON Schema 객체) */
     format?: import('../ollama/types').FormatOption;
     /** 사용자가 활성화한 MCP 도구 목록 (키: 도구명, 값: 활성화 여부) */
@@ -315,38 +322,79 @@ export class ChatRequestHandler {
     /**
      * 사용자 메시지를 DB에 저장합니다.
      *
+     * 저장 정책 (B+ 보강):
+     *   - audit log 는 항상 INSERT (운영 메트릭 보장)
+     *   - 본문 INSERT 는 saveHistory !== false 일 때만 (사용자 통제)
+     *
      * @param sessionId - 세션 ID
+     * @param userId - 감사 로그용 사용자 ID
      * @param message - 메시지 본문
      * @param model - 표시용 모델명
+     * @param saveHistory - 본문 저장 여부 (기본 true)
      */
     static async saveUserMessage(
         sessionId: string,
+        userId: string,
         message: string,
         model?: string,
+        saveHistory: boolean = true,
     ): Promise<void> {
-        const conversationDb = getConversationDB();
-        await conversationDb.addMessage(sessionId, 'user', message, { model });
+        // 1. 감사 로그 — 항상 (실패해도 채팅 흐름 유지)
+        await recordAuditLog({
+            sessionId,
+            userId,
+            messageRole: 'user',
+            model,
+            contentSkipped: !saveHistory,
+            contentLength: message.length,
+        });
+
+        // 2. 본문 저장 — saveHistory=true 일 때만
+        if (saveHistory) {
+            const conversationDb = getConversationDB();
+            await conversationDb.addMessage(sessionId, 'user', message, { model });
+        }
     }
 
     /**
      * AI 응답을 DB에 저장합니다.
      *
+     * 저장 정책 (B+ 보강): saveUserMessage 와 동일.
+     *
      * @param sessionId - 세션 ID
+     * @param userId - 감사 로그용 사용자 ID
      * @param response - 응답 본문
      * @param model - 표시용 모델명
      * @param responseTime - 응답 소요 시간 (ms)
+     * @param saveHistory - 본문 저장 여부 (기본 true)
      */
     static async saveAssistantMessage(
         sessionId: string,
+        userId: string,
         response: string,
         model?: string,
         responseTime?: number,
+        saveHistory: boolean = true,
     ): Promise<void> {
-        const conversationDb = getConversationDB();
-        await conversationDb.addMessage(sessionId, 'assistant', response, {
+        // 1. 감사 로그 — 항상
+        await recordAuditLog({
+            sessionId,
+            userId,
+            messageRole: 'assistant',
             model,
-            responseTime,
+            responseTimeMs: responseTime,
+            contentSkipped: !saveHistory,
+            contentLength: response.length,
         });
+
+        // 2. 본문 저장 — saveHistory=true 일 때만
+        if (saveHistory) {
+            const conversationDb = getConversationDB();
+            await conversationDb.addMessage(sessionId, 'assistant', response, {
+                model,
+                responseTime,
+            });
+        }
     }
 
     /**
@@ -377,6 +425,7 @@ export class ChatRequestHandler {
             deepResearchMode,
             thinkingMode,
             thinkingLevel,
+            saveHistory,
             enabledTools,
             tools,
             tool_choice,
@@ -411,7 +460,11 @@ export class ChatRequestHandler {
 
         // 4. 사용자 메시지 저장 — 외부에는 brand alias만 노출
         const maskedModel = displayModel || client.model;
-        await ChatRequestHandler.saveUserMessage(currentSessionId, message, maskedModel);
+        // 감사 로그용 사용자 식별자 — 인증된 user id 우선, 익명 세션 id, 최종 'anonymous'
+        const auditUserId = userContext.authenticatedUserId || userContext.anonSessionId || 'anonymous';
+        // saveHistory 미지정 → true (기본 보존)
+        const persistContent = saveHistory !== false;
+        await ChatRequestHandler.saveUserMessage(currentSessionId, auditUserId, message, maskedModel, persistContent);
 
         const startTime = Date.now();
 
@@ -437,9 +490,11 @@ export class ChatRequestHandler {
             // AI 응답 저장 (tool_calls인 경우에도 히스토리에 기록)
             await ChatRequestHandler.saveAssistantMessage(
                 currentSessionId,
+                auditUserId,
                 result.response,
                 maskedModel,
                 responseTime,
+                persistContent,
             );
 
             return {
@@ -514,9 +569,11 @@ export class ChatRequestHandler {
         // 6. AI 응답 저장
         await ChatRequestHandler.saveAssistantMessage(
             currentSessionId,
+            auditUserId,
             response,
             maskedModel,
             responseTime,
+            persistContent,
         );
 
         return {
