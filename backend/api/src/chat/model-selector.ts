@@ -32,7 +32,7 @@ import { createLogger } from '../utils/logger';
 import { MODEL_CONTEXT_DEFAULTS } from '../config/runtime-limits';
 import { QUERY_TYPE_PARAMS, LLM_TOP_P } from '../config/llm-parameters';
 import { recommendTokenBudget } from './complexity-assessor';
-import { ModelPreset, getModelPresets } from '../config/model-presets';
+import { getModelPresets } from '../config/model-presets';
 import { MODEL_CAPABILITY_PRESETS } from '../config/model-defaults';
 
 const logger = createLogger('ModelSelector');
