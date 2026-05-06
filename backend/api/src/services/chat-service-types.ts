@@ -191,6 +191,12 @@ export interface ChatMessageRequest {
     thinkingMode?: boolean;
     /** Thinking 깊이 수준 */
     thinkingLevel?: 'low' | 'medium' | 'high';
+    /**
+     * 장기 메모리 자동 추출 여부 (settings.html memoryLearningToggle).
+     * undefined/true → 추출 (기본). false → MemoryService 호출 스킵.
+     * saveHistory 와 독립 — saveHistory=false 여도 추출 후 본문 폐기 가능 (Extract-and-Forget).
+     */
+    memoryLearning?: boolean;
     /** 요청한 사용자의 ID */
     userId?: string;
     /** API Key 인증 요청 시 키 ID */

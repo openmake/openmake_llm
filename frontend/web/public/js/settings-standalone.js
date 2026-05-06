@@ -153,10 +153,12 @@
         mcpSettings.enabledTools.web_search = webSearchChecked;
         safeStorage.setItem(SK.MCP_SETTINGS || 'mcpSettings', JSON.stringify(mcpSettings));
 
+        var memoryLearningToggle = document.getElementById('memoryLearningToggle');
         if (langSelect && saveHistoryToggle) {
             safeStorage.setItem(SK.GENERAL_SETTINGS || 'generalSettings', JSON.stringify({
                 lang: langSelect.value,
-                saveHistory: saveHistoryToggle.checked
+                saveHistory: saveHistoryToggle.checked,
+                memoryLearning: memoryLearningToggle ? memoryLearningToggle.checked : true
             }));
         }
 
@@ -209,8 +211,10 @@
                 var general = JSON.parse(savedGeneral);
                 var langEl = document.getElementById('langSelect');
                 var historyEl = document.getElementById('saveHistoryToggle');
+                var memoryEl = document.getElementById('memoryLearningToggle');
                 if (langEl) langEl.value = general.lang || 'ko';
                 if (historyEl) historyEl.checked = general.saveHistory !== false;
+                if (memoryEl) memoryEl.checked = general.memoryLearning !== false;
             } catch (e) {
                 console.warn('generalSettings 파싱 실패:', e);
             }

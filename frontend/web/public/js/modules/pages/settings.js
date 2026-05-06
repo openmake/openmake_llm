@@ -117,8 +117,12 @@
         '</div>' +
         '<div class="s-card-body">' +
         '<div class="setting-row">' +
-        '<div class="setting-info"><h4>\uB300\uD654 \uAE30\uB85D \uC800\uC7A5</h4><p>\uB300\uD654 \uB0B4\uC6A9\uC744 \uC11C\uBC84\uC5D0 \uC800\uC7A5\uD569\uB2C8\uB2E4</p></div>' +
+        '<div class="setting-info"><h4>\uB300\uD654 \uBCF8\uBB38 \uC800\uC7A5</h4><p>\uB300\uD654 \uBCF8\uBB38\uC744 \uC11C\uBC84 DB\uC5D0 \uC800\uC7A5\uD569\uB2C8\uB2E4. \uB044\uBA74 \uBCF8\uBB38\uC740 \uC800\uC7A5\uB418\uC9C0 \uC54A\uC73C\uBA70, \uC0AC\uC6A9\uB7C9 \uBA54\uD0C0\uB9CC \uC775\uBA85 \uD1B5\uACC4\uC6A9\uC73C\uB85C \uAE30\uB85D\uB429\uB2C8\uB2E4.</p></div>' +
         '<label class="toggle"><input type="checkbox" checked id="saveHistoryToggle"><span class="toggle-slider"></span></label>' +
+        '</div>' +
+        '<div class="setting-row">' +
+        '<div class="setting-info"><h4>\uC7A5\uAE30 \uAE30\uC5B5 \uD559\uC2B5</h4><p>\uB300\uD654\uC5D0\uC11C \uC774\uB984\u00B7\uC9C1\uC5C5\u00B7\uC120\uD638 \uAC19\uC740 \uC0AC\uC2E4\uC744 \uCD94\uCD9C\uD558\uC5EC \uC800\uC7A5\uD569\uB2C8\uB2E4. \uC704 \uC124\uC815\uACFC \uB3C5\uB9BD\uC785\uB2C8\uB2E4.</p></div>' +
+        '<label class="toggle"><input type="checkbox" checked id="memoryLearningToggle"><span class="toggle-slider"></span></label>' +
         '</div>' +
         '<div class="s-btn-row">' +
         '<button class="s-btn s-btn-secondary" onclick="exportData()">\uD83D\uDCE5 \uB370\uC774\uD130 \uB0B4\uBCF4\uB0B4\uAE30</button>' +
@@ -317,7 +321,11 @@
                     // 명시적 저장 호출
                     if (typeof window.saveMCPSettings === 'function') window.saveMCPSettings();
 
-                    safeStorage.setItem(SK.GENERAL_SETTINGS || 'generalSettings', JSON.stringify({ lang: document.getElementById('langSelect').value, saveHistory: document.getElementById('saveHistoryToggle').checked }));
+                    safeStorage.setItem(SK.GENERAL_SETTINGS || 'generalSettings', JSON.stringify({
+                        lang: document.getElementById('langSelect').value,
+                        saveHistory: document.getElementById('saveHistoryToggle').checked,
+                        memoryLearning: (document.getElementById('memoryLearningToggle') || { checked: true }).checked
+                    }));
                     (typeof showToast === 'function' ? showToast('설정이 저장되었습니다.', 'warning') : console.warn('설정이 저장되었습니다.'));
                 }
 
@@ -336,7 +344,13 @@
                     if (typeof window.loadMCPSettings === 'function') window.loadMCPSettings();
 
                     var savedGeneral = safeStorage.getItem(SK.GENERAL_SETTINGS || 'generalSettings');
-                    if (savedGeneral) { var general = JSON.parse(savedGeneral); document.getElementById('langSelect').value = general.lang || ''; document.getElementById('saveHistoryToggle').checked = general.saveHistory !== false; }
+                    if (savedGeneral) {
+                        var general = JSON.parse(savedGeneral);
+                        document.getElementById('langSelect').value = general.lang || '';
+                        document.getElementById('saveHistoryToggle').checked = general.saveHistory !== false;
+                        var memEl = document.getElementById('memoryLearningToggle');
+                        if (memEl) memEl.checked = general.memoryLearning !== false;
+                    }
                 }
 
                 function resetSettings() { if (confirm('모든 설정을 초기화하시겠습니까?')) { safeStorage.removeItem(SK.THEME || 'theme'); safeStorage.removeItem(SK.SELECTED_MODEL || 'selectedModel'); safeStorage.removeItem(SK.MCP_SETTINGS || 'mcpSettings'); safeStorage.removeItem(SK.GENERAL_SETTINGS || 'generalSettings'); location.reload(); } }
