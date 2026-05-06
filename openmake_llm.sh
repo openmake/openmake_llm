@@ -168,7 +168,18 @@ start_redis() {
 
 start_ollama() {
     log_step "Layer 3/4: Ollama"
-    ensure_brew_started "$OLLAMA_FORMULA" "Ollama"
+    # brew services start 가 plist xattr(com.apple.provenance) 충돌로 실패하므로
+    # launchctl load 로 직접 기동한다.
+    local plist="$HOME/Library/LaunchAgents/homebrew.mxcl.ollama.plist"
+    if port_listening "$OLLAMA_PORT"; then
+        log_ok "Ollama 이미 실행 중"
+    elif [[ -f "$plist" ]]; then
+        log_info "Ollama 시작 중 (launchctl load)"
+        launchctl load "$plist" 2>/dev/null || true
+    else
+        log_info "Ollama 시작 중 (ollama serve)"
+        nohup ollama serve >/opt/homebrew/var/log/ollama.log 2>&1 &
+    fi
     wait_for_port "$OLLAMA_PORT" "Ollama"
 }
 
@@ -215,7 +226,14 @@ stop_app() {
 
 stop_ollama() {
     log_step "정지 2/4: Ollama"
-    ensure_brew_stopped "$OLLAMA_FORMULA" "Ollama"
+    local plist="$HOME/Library/LaunchAgents/homebrew.mxcl.ollama.plist"
+    if [[ -f "$plist" ]]; then
+        log_info "Ollama 정지 중 (launchctl unload)"
+        launchctl unload "$plist" 2>/dev/null || true
+    else
+        pkill -f "ollama serve" 2>/dev/null || true
+    fi
+    log_ok "Ollama 정지"
 }
 
 stop_redis() {
