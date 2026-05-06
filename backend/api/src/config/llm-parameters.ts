@@ -47,6 +47,8 @@ export const LLM_TEMPERATURES = {
     AGENT_RESPONSE: Number(process.env.LLM_TEMP_AGENT_RESPONSE) || 0.3,
     /** format 지정 시 strict 모드 temperature */
     FORMAT_STRICT: 0,
+    /** Semantic Compactor — 도구 결과 요약 시 결정론적 응답 강제 */
+    SEMANTIC_COMPACTION: Number(process.env.LLM_TEMP_SEMANTIC_COMPACTION) || 0,
     /** Generate-Verify Verifier 응답 — 낮은 값으로 정확한 검증 수행 */
     GV_VERIFIER: Number(process.env.LLM_TEMP_GV_VERIFIER) || 0.1,
     /** Gemini 비추론 모드 */
