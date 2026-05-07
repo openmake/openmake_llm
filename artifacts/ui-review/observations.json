@@ -1,0 +1,1289 @@
+[
+  {
+    "name": "chat",
+    "route": "/",
+    "status": 200,
+    "finalUrl": "http://rasplay.tplinkdns.com:52416/",
+    "title": "채팅 - OpenMake.AI",
+    "screenshot": "artifacts/ui-review/current/chat.png",
+    "info": {
+      "bodyClass": "",
+      "bodyText": "Skip to main content OpenMake.AI 새 대화 문서 관리 대화 기록이 없습니다 새 대화를 시작해보세요 ? 로그인 FREE 오늘도 화이팅! 무엇을 도와드릴까요? 😊 AI 어시스턴트가 질문에 답변하고, 문서를 분석하고, 코드를 작성합니다. 코딩 에이전트 코드 작성 및 디버깅 시작하기 문서 작성 도우미 블로그, 보고서 초안 작성 시작하기 데이터 분석 데이터 시각화 및 인사이트 도출 시작하기 자유 대화 무엇이든 물어보세요 시작하기 연결됨",
+      "textLength": 255,
+      "headings": [
+        "오늘도 화이팅!\n무엇을 도와드릴까요? 😊",
+        "📎 파일 첨부",
+        "⚙️ 설정",
+        "📖 사용자 가이드"
+      ],
+      "buttons": [
+        "새 대화",
+        "설정",
+        "로그아웃",
+        "시작하기",
+        "시작하기",
+        "시작하기",
+        "시작하기",
+        "×",
+        "×",
+        "☀️ 라이트",
+        "🌙 다크",
+        "💻 시스템"
+      ],
+      "links": [
+        {
+          "href": "#mainContent",
+          "text": "Skip to main content"
+        },
+        {
+          "href": "/documents.html",
+          "text": "문서 관리"
+        }
+      ],
+      "navItems": [
+        "문서 관리"
+      ],
+      "bg": "rgb(26, 26, 46)",
+      "color": "rgb(240, 240, 242)",
+      "viewport": {
+        "w": 1440,
+        "h": 1000
+      },
+      "scrollHeight": 1000,
+      "components": {
+        "cards": 6,
+        "tables": 0,
+        "forms": 0,
+        "inputs": 7,
+        "modals": 20,
+        "charts": 15
+      }
+    }
+  },
+  {
+    "name": "history",
+    "route": "/history.html",
+    "status": 200,
+    "finalUrl": "http://rasplay.tplinkdns.com:52416/login.html",
+    "title": "로그인 - OpenMake.Ai",
+    "screenshot": "artifacts/ui-review/current/history.png",
+    "info": {
+      "bodyClass": "",
+      "bodyText": "☀️ 안녕하세요! 👋 OpenMake.Ai에 로그인하세요 로그인 회원가입 이메일 비밀번호 로그인 또는 Google로 계속하기 또는 🙋 게스트로 계속하기",
+      "textLength": 86,
+      "headings": [
+        "안녕하세요! 👋"
+      ],
+      "buttons": [
+        "☀️",
+        "로그인",
+        "회원가입",
+        "로그인",
+        "가입하기",
+        "Google로 계속하기",
+        "GitHub로 계속하기",
+        "🙋 게스트로 계속하기"
+      ],
+      "links": [],
+      "navItems": [],
+      "bg": "rgb(26, 26, 46)",
+      "color": "rgb(240, 240, 242)",
+      "viewport": {
+        "w": 1440,
+        "h": 1000
+      },
+      "scrollHeight": 1000,
+      "components": {
+        "cards": 1,
+        "tables": 0,
+        "forms": 2,
+        "inputs": 6,
+        "modals": 0,
+        "charts": 2
+      }
+    }
+  },
+  {
+    "name": "guide",
+    "route": "/guide.html",
+    "status": 200,
+    "finalUrl": "http://rasplay.tplinkdns.com:52416/guide.html",
+    "title": "사용 가이드 - OpenMake.AI",
+    "screenshot": "artifacts/ui-review/current/guide.png",
+    "info": {
+      "bodyClass": "",
+      "bodyText": "Skip to main content OpenMake.AI 새 대화 문서 관리 대화 기록이 없습니다 새 대화를 시작해보세요 ? 로그인 FREE 채팅으로 사용 가이드 📖 OpenMake.Ai 사용자 가이드 버전 1.5.2 · 마지막 업데이트: 2026-02-14 🎯 소개 OpenMake.Ai은 다양한 AI 모델을 활용하여 대화, 코드 작성, 문서 분석, 번역 등 다양한 작업을 수행할 수 있는 올인원 AI 어시스턴트입니다. ✏️ 프롬프트 모드 (12종) 각 모드는 특정 작업에 최적화된 시스템 프롬프트를 사용합니다. 질문 내용에 따라 자동으로 최적 모드가 선택됩니다. 🟢 기본 모드 🤝 Assistant 기본 일반 대화, 질문 답변, 정보 제공 🧠 Reasoning 복잡한 문제 해결, 수학적/논리적 분석 💻 개발 모드 👨‍💻 Coder 프로그래밍, 디버깅, API 개발 🔍 Reviewer 코드 품질 분석, 보안 취약점 검토 🏗️ Generator 프로젝트 스캐폴딩, 보일러플레이트 생성 🛡️ Security 보안 취약점 분석, 방어 전략 수립 📝 콘텐츠 모드 ✍️ Writer 블로그, 이메일, 보고서 작성 📚 Explainer 복잡한 개념을 쉽게 설명 🌐 Translator 다국어 번역, 문화적 맥락 해설 🔬 분석 모드 🔎 Researcher 리서치, 데이터 조사, 트렌드 분석 💼 Consultant 비즈니스 전략, 문제 해결 🤖 Agent 외부 도구 호출, 자동화 작업 🔧 MCP 도구 외부 서비스와 연동하여 LLM의 능력을 확장합니다. 도구 기능 🔍 웹 검색 Google/DuckDuckGo/Naver 검색 🐙 GitHub 레포지토리 검색, 이슈 관리, 코드 조회 📊 Exa Search 학술/기술 문서 검색 📄 PDF 분석 문서 요약 및 Q&A 🖼️ ",
+      "textLength": 1471,
+      "headings": [
+        "오늘도 화이팅!무엇을\n                            도와드릴까요? 😊",
+        "사용 가이드",
+        "📖 OpenMake.Ai 사용자 가이드",
+        "🎯 소개",
+        "✏️ 프롬프트 모드 (12종)",
+        "🟢 기본 모드",
+        "💻 개발 모드",
+        "📝 콘텐츠 모드",
+        "🔬 분석 모드",
+        "🔧 MCP 도구",
+        "📄 문서 분석",
+        "지원 형식"
+      ],
+      "buttons": [
+        "새 대화",
+        "설정",
+        "로그아웃",
+        "시작하기",
+        "시작하기",
+        "시작하기",
+        "시작하기",
+        "×",
+        "×",
+        "☀️ 라이트",
+        "🌙 다크",
+        "💻 시스템"
+      ],
+      "links": [
+        {
+          "href": "#mainContent",
+          "text": "Skip to main content"
+        },
+        {
+          "href": "/documents.html",
+          "text": "문서 관리"
+        },
+        {
+          "href": "/",
+          "text": "채팅으로"
+        }
+      ],
+      "navItems": [
+        "문서 관리",
+        "채팅으로"
+      ],
+      "bg": "rgb(26, 26, 46)",
+      "color": "rgb(240, 240, 242)",
+      "viewport": {
+        "w": 1440,
+        "h": 1000
+      },
+      "scrollHeight": 1000,
+      "components": {
+        "cards": 18,
+        "tables": 1,
+        "forms": 0,
+        "inputs": 7,
+        "modals": 20,
+        "charts": 16
+      }
+    }
+  },
+  {
+    "name": "developer",
+    "route": "/developer.html",
+    "status": 200,
+    "finalUrl": "http://rasplay.tplinkdns.com:52416/developer.html",
+    "title": "API 문서 - OpenMake.AI",
+    "screenshot": "artifacts/ui-review/current/developer.png",
+    "info": {
+      "bodyClass": "",
+      "bodyText": "Skip to main content OpenMake.AI 새 대화 문서 관리 대화 기록이 없습니다 새 대화를 시작해보세요 ? 로그인 FREE 채팅으로 API 문서 Introduction Authentication Available Models Chat OpenAI Compatibility API Keys Usage & Billing Rate Limits Errors SDKs API Documentation Build AI-powered applications with the OpenMake LLM API. Our API is designed to be compatible with standard industry formats, making integration seamless. Base URL http://rasplay.tplinkdns.com:52416/api/v1 All API requests require authentication. API requests without a valid API key will fail. Authentication The OpenMake API uses API keys to authenticate requests. You can view and manage your API keys in the API 키 관리 page. Your API keys carry many privileges, so be sure to keep them secure! Do not share your secret API keys in publicly accessible areas such as GitHub, client-side code, etc. Authentication Methods We support three methods of authentication, in or",
+      "textLength": 17302,
+      "headings": [
+        "오늘도 화이팅!무엇을\n                            도와드릴까요? 😊",
+        "API 문서",
+        "API Documentation",
+        "Base URL",
+        "Authentication",
+        "Authentication Methods",
+        "Available Models",
+        "Chat",
+        "Request Body",
+        "Response",
+        "Response Example",
+        "OpenAI Compatibility"
+      ],
+      "buttons": [
+        "새 대화",
+        "설정",
+        "로그아웃",
+        "시작하기",
+        "시작하기",
+        "시작하기",
+        "시작하기",
+        "cURL",
+        "Python",
+        "TypeScript",
+        "Copy",
+        "cURL"
+      ],
+      "links": [
+        {
+          "href": "#mainContent",
+          "text": "Skip to main content"
+        },
+        {
+          "href": "/documents.html",
+          "text": "문서 관리"
+        },
+        {
+          "href": "/",
+          "text": "채팅으로"
+        },
+        {
+          "href": "#intro",
+          "text": "Introduction"
+        },
+        {
+          "href": "#auth",
+          "text": "Authentication"
+        },
+        {
+          "href": "#models",
+          "text": "Available Models"
+        },
+        {
+          "href": "#chat",
+          "text": "Chat"
+        },
+        {
+          "href": "#openai-compat",
+          "text": "OpenAI Compatibility"
+        },
+        {
+          "href": "#chat-completions",
+          "text": "Chat Completions"
+        },
+        {
+          "href": "#openai-models",
+          "text": "Models"
+        },
+        {
+          "href": "#openai-streaming",
+          "text": "Streaming"
+        },
+        {
+          "href": "#apikeys",
+          "text": "API Keys"
+        },
+        {
+          "href": "#create-key",
+          "text": "Create Key"
+        },
+        {
+          "href": "#list-keys",
+          "text": "List Keys"
+        },
+        {
+          "href": "#get-key",
+          "text": "Get Key"
+        },
+        {
+          "href": "#update-key",
+          "text": "Update Key"
+        },
+        {
+          "href": "#delete-key",
+          "text": "Delete Key"
+        },
+        {
+          "href": "#key-usage",
+          "text": "Key Usage"
+        },
+        {
+          "href": "#usage",
+          "text": "Usage & Billing"
+        },
+        {
+          "href": "#rate-limits",
+          "text": "Rate Limits"
+        },
+        {
+          "href": "#errors",
+          "text": "Errors"
+        },
+        {
+          "href": "#sdks",
+          "text": "SDKs"
+        },
+        {
+          "href": "/api-keys.html",
+          "text": "API 키 관리"
+        },
+        {
+          "href": "#tool-calling",
+          "text": "Tool Calling"
+        }
+      ],
+      "navItems": [
+        "문서 관리",
+        "채팅으로",
+        "Introduction",
+        "Authentication",
+        "Available Models",
+        "Chat",
+        "OpenAI Compatibility",
+        "Chat Completions",
+        "Models",
+        "Streaming",
+        "API Keys",
+        "Create Key",
+        "List Keys",
+        "Get Key",
+        "Update Key",
+        "Delete Key",
+        "Key Usage",
+        "Usage & Billing",
+        "Rate Limits",
+        "Errors",
+        "SDKs"
+      ],
+      "bg": "rgb(26, 26, 46)",
+      "color": "rgb(240, 240, 242)",
+      "viewport": {
+        "w": 1440,
+        "h": 1000
+      },
+      "scrollHeight": 1000,
+      "components": {
+        "cards": 8,
+        "tables": 7,
+        "forms": 0,
+        "inputs": 7,
+        "modals": 20,
+        "charts": 16
+      }
+    }
+  },
+  {
+    "name": "research",
+    "route": "/research.html",
+    "status": 200,
+    "finalUrl": "http://rasplay.tplinkdns.com:52416/login.html",
+    "title": "로그인 - OpenMake.Ai",
+    "screenshot": "artifacts/ui-review/current/research.png",
+    "info": {
+      "bodyClass": "",
+      "bodyText": "☀️ 안녕하세요! 👋 OpenMake.Ai에 로그인하세요 로그인 회원가입 이메일 비밀번호 로그인 또는 Google로 계속하기 또는 🙋 게스트로 계속하기",
+      "textLength": 86,
+      "headings": [
+        "안녕하세요! 👋"
+      ],
+      "buttons": [
+        "☀️",
+        "로그인",
+        "회원가입",
+        "로그인",
+        "가입하기",
+        "Google로 계속하기",
+        "GitHub로 계속하기",
+        "🙋 게스트로 계속하기"
+      ],
+      "links": [],
+      "navItems": [],
+      "bg": "rgb(26, 26, 46)",
+      "color": "rgb(240, 240, 242)",
+      "viewport": {
+        "w": 1440,
+        "h": 1000
+      },
+      "scrollHeight": 1000,
+      "components": {
+        "cards": 1,
+        "tables": 0,
+        "forms": 2,
+        "inputs": 6,
+        "modals": 0,
+        "charts": 2
+      }
+    }
+  },
+  {
+    "name": "documents",
+    "route": "/documents.html",
+    "status": 200,
+    "finalUrl": "http://rasplay.tplinkdns.com:52416/documents.html",
+    "title": "문서 관리 - OpenMake.Ai",
+    "screenshot": "artifacts/ui-review/current/documents.png",
+    "info": {
+      "bodyClass": "",
+      "bodyText": "OpenMake.Ai ⚠️ 비로그인 메뉴 💬 채팅 📖 사용 가이드 ⚙️ 설정 🔐 로그인 문서 관리 파일을 여기에 드래그하거나 클릭하여 업로드 PDF, 텍스트, 이미지 파일 지원 0 전체 문서 0 B 총 용량 업로드된 문서가 없습니다 위에서 파일을 드래그하거나 클릭하여 문서를 업로드하세요.",
+      "textLength": 164,
+      "headings": [
+        "문서 관리",
+        "업로드된 문서가 없습니다",
+        "문서 상세"
+      ],
+      "buttons": [
+        "☰",
+        "닫기",
+        "삭제"
+      ],
+      "links": [
+        {
+          "href": "/",
+          "text": "OpenMake.Ai"
+        },
+        {
+          "href": "/",
+          "text": "💬\n채팅"
+        },
+        {
+          "href": "/guide.html",
+          "text": "📖\n사용 가이드"
+        },
+        {
+          "href": "/settings.html",
+          "text": "⚙️\n설정"
+        },
+        {
+          "href": "/login.html",
+          "text": "🔐\n로그인"
+        }
+      ],
+      "navItems": [
+        "OpenMake.Ai",
+        "💬\n채팅",
+        "📖\n사용 가이드",
+        "⚙️\n설정",
+        "🔐\n로그인"
+      ],
+      "bg": "rgb(26, 26, 46)",
+      "color": "rgb(240, 240, 242)",
+      "viewport": {
+        "w": 1440,
+        "h": 1000
+      },
+      "scrollHeight": 1000,
+      "components": {
+        "cards": 2,
+        "tables": 0,
+        "forms": 0,
+        "inputs": 1,
+        "modals": 3,
+        "charts": 2
+      }
+    }
+  },
+  {
+    "name": "custom-agents",
+    "route": "/custom-agents.html",
+    "status": 200,
+    "finalUrl": "http://rasplay.tplinkdns.com:52416/login.html",
+    "title": "로그인 - OpenMake.Ai",
+    "screenshot": "artifacts/ui-review/current/custom-agents.png",
+    "info": {
+      "bodyClass": "",
+      "bodyText": "☀️ 안녕하세요! 👋 OpenMake.Ai에 로그인하세요 로그인 회원가입 이메일 비밀번호 로그인 또는 Google로 계속하기 또는 🙋 게스트로 계속하기",
+      "textLength": 86,
+      "headings": [
+        "안녕하세요! 👋"
+      ],
+      "buttons": [
+        "☀️",
+        "로그인",
+        "회원가입",
+        "로그인",
+        "가입하기",
+        "Google로 계속하기",
+        "GitHub로 계속하기",
+        "🙋 게스트로 계속하기"
+      ],
+      "links": [],
+      "navItems": [],
+      "bg": "rgb(26, 26, 46)",
+      "color": "rgb(240, 240, 242)",
+      "viewport": {
+        "w": 1440,
+        "h": 1000
+      },
+      "scrollHeight": 1000,
+      "components": {
+        "cards": 1,
+        "tables": 0,
+        "forms": 2,
+        "inputs": 6,
+        "modals": 0,
+        "charts": 2
+      }
+    }
+  },
+  {
+    "name": "skill-library",
+    "route": "/skill-library.html",
+    "status": 200,
+    "finalUrl": "http://rasplay.tplinkdns.com:52416/login.html",
+    "title": "로그인 - OpenMake.Ai",
+    "screenshot": "artifacts/ui-review/current/skill-library.png",
+    "info": {
+      "bodyClass": "",
+      "bodyText": "☀️ 안녕하세요! 👋 OpenMake.Ai에 로그인하세요 로그인 회원가입 이메일 비밀번호 로그인 또는 Google로 계속하기 또는 🙋 게스트로 계속하기",
+      "textLength": 86,
+      "headings": [
+        "안녕하세요! 👋"
+      ],
+      "buttons": [
+        "☀️",
+        "로그인",
+        "회원가입",
+        "로그인",
+        "가입하기",
+        "Google로 계속하기",
+        "GitHub로 계속하기",
+        "🙋 게스트로 계속하기"
+      ],
+      "links": [],
+      "navItems": [],
+      "bg": "rgb(26, 26, 46)",
+      "color": "rgb(240, 240, 242)",
+      "viewport": {
+        "w": 1440,
+        "h": 1000
+      },
+      "scrollHeight": 1000,
+      "components": {
+        "cards": 1,
+        "tables": 0,
+        "forms": 2,
+        "inputs": 6,
+        "modals": 0,
+        "charts": 2
+      }
+    }
+  },
+  {
+    "name": "memory",
+    "route": "/memory.html",
+    "status": 200,
+    "finalUrl": "http://rasplay.tplinkdns.com:52416/login.html",
+    "title": "로그인 - OpenMake.Ai",
+    "screenshot": "artifacts/ui-review/current/memory.png",
+    "info": {
+      "bodyClass": "",
+      "bodyText": "☀️ 안녕하세요! 👋 OpenMake.Ai에 로그인하세요 로그인 회원가입 이메일 비밀번호 로그인 또는 Google로 계속하기 또는 🙋 게스트로 계속하기",
+      "textLength": 86,
+      "headings": [
+        "안녕하세요! 👋"
+      ],
+      "buttons": [
+        "☀️",
+        "로그인",
+        "회원가입",
+        "로그인",
+        "가입하기",
+        "Google로 계속하기",
+        "GitHub로 계속하기",
+        "🙋 게스트로 계속하기"
+      ],
+      "links": [],
+      "navItems": [],
+      "bg": "rgb(26, 26, 46)",
+      "color": "rgb(240, 240, 242)",
+      "viewport": {
+        "w": 1440,
+        "h": 1000
+      },
+      "scrollHeight": 1000,
+      "components": {
+        "cards": 1,
+        "tables": 0,
+        "forms": 2,
+        "inputs": 6,
+        "modals": 0,
+        "charts": 2
+      }
+    }
+  },
+  {
+    "name": "usage",
+    "route": "/usage.html",
+    "status": 200,
+    "finalUrl": "http://rasplay.tplinkdns.com:52416/login.html",
+    "title": "로그인 - OpenMake.Ai",
+    "screenshot": "artifacts/ui-review/current/usage.png",
+    "info": {
+      "bodyClass": "",
+      "bodyText": "☀️ 안녕하세요! 👋 OpenMake.Ai에 로그인하세요 로그인 회원가입 이메일 비밀번호 로그인 또는 Google로 계속하기 또는 🙋 게스트로 계속하기",
+      "textLength": 86,
+      "headings": [
+        "안녕하세요! 👋"
+      ],
+      "buttons": [
+        "☀️",
+        "로그인",
+        "회원가입",
+        "로그인",
+        "가입하기",
+        "Google로 계속하기",
+        "GitHub로 계속하기",
+        "🙋 게스트로 계속하기"
+      ],
+      "links": [],
+      "navItems": [],
+      "bg": "rgb(26, 26, 46)",
+      "color": "rgb(240, 240, 242)",
+      "viewport": {
+        "w": 1440,
+        "h": 1000
+      },
+      "scrollHeight": 1000,
+      "components": {
+        "cards": 1,
+        "tables": 0,
+        "forms": 2,
+        "inputs": 6,
+        "modals": 0,
+        "charts": 2
+      }
+    }
+  },
+  {
+    "name": "agent-learning",
+    "route": "/agent-learning.html",
+    "status": 200,
+    "finalUrl": "http://rasplay.tplinkdns.com:52416/login.html",
+    "title": "로그인 - OpenMake.Ai",
+    "screenshot": "artifacts/ui-review/current/agent-learning.png",
+    "info": {
+      "bodyClass": "",
+      "bodyText": "☀️ 안녕하세요! 👋 OpenMake.Ai에 로그인하세요 로그인 회원가입 이메일 비밀번호 로그인 또는 Google로 계속하기 또는 🙋 게스트로 계속하기",
+      "textLength": 86,
+      "headings": [
+        "안녕하세요! 👋"
+      ],
+      "buttons": [
+        "☀️",
+        "로그인",
+        "회원가입",
+        "로그인",
+        "가입하기",
+        "Google로 계속하기",
+        "GitHub로 계속하기",
+        "🙋 게스트로 계속하기"
+      ],
+      "links": [],
+      "navItems": [],
+      "bg": "rgb(26, 26, 46)",
+      "color": "rgb(240, 240, 242)",
+      "viewport": {
+        "w": 1440,
+        "h": 1000
+      },
+      "scrollHeight": 1000,
+      "components": {
+        "cards": 1,
+        "tables": 0,
+        "forms": 2,
+        "inputs": 6,
+        "modals": 0,
+        "charts": 2
+      }
+    }
+  },
+  {
+    "name": "api-keys",
+    "route": "/api-keys.html",
+    "status": 200,
+    "finalUrl": "http://rasplay.tplinkdns.com:52416/login.html",
+    "title": "로그인 - OpenMake.Ai",
+    "screenshot": "artifacts/ui-review/current/api-keys.png",
+    "info": {
+      "bodyClass": "",
+      "bodyText": "☀️ 안녕하세요! 👋 OpenMake.Ai에 로그인하세요 로그인 회원가입 이메일 비밀번호 로그인 또는 Google로 계속하기 또는 🙋 게스트로 계속하기",
+      "textLength": 86,
+      "headings": [
+        "안녕하세요! 👋"
+      ],
+      "buttons": [
+        "☀️",
+        "로그인",
+        "회원가입",
+        "로그인",
+        "가입하기",
+        "Google로 계속하기",
+        "GitHub로 계속하기",
+        "🙋 게스트로 계속하기"
+      ],
+      "links": [],
+      "navItems": [],
+      "bg": "rgb(26, 26, 46)",
+      "color": "rgb(240, 240, 242)",
+      "viewport": {
+        "w": 1440,
+        "h": 1000
+      },
+      "scrollHeight": 1000,
+      "components": {
+        "cards": 1,
+        "tables": 0,
+        "forms": 2,
+        "inputs": 6,
+        "modals": 0,
+        "charts": 2
+      }
+    }
+  },
+  {
+    "name": "cluster",
+    "route": "/cluster.html",
+    "status": 200,
+    "finalUrl": "http://rasplay.tplinkdns.com:52416/login.html",
+    "title": "로그인 - OpenMake.Ai",
+    "screenshot": "artifacts/ui-review/current/cluster.png",
+    "info": {
+      "bodyClass": "",
+      "bodyText": "☀️ 안녕하세요! 👋 OpenMake.Ai에 로그인하세요 로그인 회원가입 이메일 비밀번호 로그인 또는 Google로 계속하기 또는 🙋 게스트로 계속하기",
+      "textLength": 86,
+      "headings": [
+        "안녕하세요! 👋"
+      ],
+      "buttons": [
+        "☀️",
+        "로그인",
+        "회원가입",
+        "로그인",
+        "가입하기",
+        "Google로 계속하기",
+        "GitHub로 계속하기",
+        "🙋 게스트로 계속하기"
+      ],
+      "links": [],
+      "navItems": [],
+      "bg": "rgb(26, 26, 46)",
+      "color": "rgb(240, 240, 242)",
+      "viewport": {
+        "w": 1440,
+        "h": 1000
+      },
+      "scrollHeight": 1000,
+      "components": {
+        "cards": 1,
+        "tables": 0,
+        "forms": 2,
+        "inputs": 6,
+        "modals": 0,
+        "charts": 2
+      }
+    }
+  },
+  {
+    "name": "admin",
+    "route": "/admin.html",
+    "status": 200,
+    "finalUrl": "http://rasplay.tplinkdns.com:52416/login.html",
+    "title": "로그인 - OpenMake.Ai",
+    "screenshot": "artifacts/ui-review/current/admin.png",
+    "info": {
+      "bodyClass": "",
+      "bodyText": "☀️ 안녕하세요! 👋 OpenMake.Ai에 로그인하세요 로그인 회원가입 이메일 비밀번호 로그인 또는 Google로 계속하기 또는 🙋 게스트로 계속하기",
+      "textLength": 86,
+      "headings": [
+        "안녕하세요! 👋"
+      ],
+      "buttons": [
+        "☀️",
+        "로그인",
+        "회원가입",
+        "로그인",
+        "가입하기",
+        "Google로 계속하기",
+        "GitHub로 계속하기",
+        "🙋 게스트로 계속하기"
+      ],
+      "links": [],
+      "navItems": [],
+      "bg": "rgb(26, 26, 46)",
+      "color": "rgb(240, 240, 242)",
+      "viewport": {
+        "w": 1440,
+        "h": 1000
+      },
+      "scrollHeight": 1000,
+      "components": {
+        "cards": 1,
+        "tables": 0,
+        "forms": 2,
+        "inputs": 6,
+        "modals": 0,
+        "charts": 2
+      }
+    }
+  },
+  {
+    "name": "admin-metrics",
+    "route": "/admin-metrics.html",
+    "status": 200,
+    "finalUrl": "http://rasplay.tplinkdns.com:52416/login.html",
+    "title": "로그인 - OpenMake.Ai",
+    "screenshot": "artifacts/ui-review/current/admin-metrics.png",
+    "info": {
+      "bodyClass": "",
+      "bodyText": "☀️ 안녕하세요! 👋 OpenMake.Ai에 로그인하세요 로그인 회원가입 이메일 비밀번호 로그인 또는 Google로 계속하기 또는 🙋 게스트로 계속하기",
+      "textLength": 86,
+      "headings": [
+        "안녕하세요! 👋"
+      ],
+      "buttons": [
+        "☀️",
+        "로그인",
+        "회원가입",
+        "로그인",
+        "가입하기",
+        "Google로 계속하기",
+        "GitHub로 계속하기",
+        "🙋 게스트로 계속하기"
+      ],
+      "links": [],
+      "navItems": [],
+      "bg": "rgb(26, 26, 46)",
+      "color": "rgb(240, 240, 242)",
+      "viewport": {
+        "w": 1440,
+        "h": 1000
+      },
+      "scrollHeight": 1000,
+      "components": {
+        "cards": 1,
+        "tables": 0,
+        "forms": 2,
+        "inputs": 6,
+        "modals": 0,
+        "charts": 2
+      }
+    }
+  },
+  {
+    "name": "audit",
+    "route": "/audit.html",
+    "status": 200,
+    "finalUrl": "http://rasplay.tplinkdns.com:52416/login.html",
+    "title": "로그인 - OpenMake.Ai",
+    "screenshot": "artifacts/ui-review/current/audit.png",
+    "info": {
+      "bodyClass": "",
+      "bodyText": "☀️ 안녕하세요! 👋 OpenMake.Ai에 로그인하세요 로그인 회원가입 이메일 비밀번호 로그인 또는 Google로 계속하기 또는 🙋 게스트로 계속하기",
+      "textLength": 86,
+      "headings": [
+        "안녕하세요! 👋"
+      ],
+      "buttons": [
+        "☀️",
+        "로그인",
+        "회원가입",
+        "로그인",
+        "가입하기",
+        "Google로 계속하기",
+        "GitHub로 계속하기",
+        "🙋 게스트로 계속하기"
+      ],
+      "links": [],
+      "navItems": [],
+      "bg": "rgb(26, 26, 46)",
+      "color": "rgb(240, 240, 242)",
+      "viewport": {
+        "w": 1440,
+        "h": 1000
+      },
+      "scrollHeight": 1000,
+      "components": {
+        "cards": 1,
+        "tables": 0,
+        "forms": 2,
+        "inputs": 6,
+        "modals": 0,
+        "charts": 2
+      }
+    }
+  },
+  {
+    "name": "external",
+    "route": "/external.html",
+    "status": null,
+    "finalUrl": "chrome-error://chromewebdata/",
+    "title": "",
+    "screenshot": "artifacts/ui-review/current/external.png",
+    "info": {
+      "bodyClass": "",
+      "bodyText": "",
+      "textLength": 0,
+      "headings": [],
+      "buttons": [],
+      "links": [],
+      "navItems": [],
+      "bg": "rgba(0, 0, 0, 0)",
+      "color": "rgb(0, 0, 0)",
+      "viewport": {
+        "w": 1440,
+        "h": 1000
+      },
+      "scrollHeight": 1000,
+      "components": {
+        "cards": 0,
+        "tables": 0,
+        "forms": 0,
+        "inputs": 0,
+        "modals": 0,
+        "charts": 0
+      }
+    }
+  },
+  {
+    "name": "analytics",
+    "route": "/analytics.html",
+    "status": 200,
+    "finalUrl": "http://rasplay.tplinkdns.com:52416/login.html",
+    "title": "로그인 - OpenMake.Ai",
+    "screenshot": "artifacts/ui-review/current/analytics.png",
+    "info": {
+      "bodyClass": "",
+      "bodyText": "☀️ 안녕하세요! 👋 OpenMake.Ai에 로그인하세요 로그인 회원가입 이메일 비밀번호 로그인 또는 Google로 계속하기 또는 🙋 게스트로 계속하기",
+      "textLength": 86,
+      "headings": [
+        "안녕하세요! 👋"
+      ],
+      "buttons": [
+        "☀️",
+        "로그인",
+        "회원가입",
+        "로그인",
+        "가입하기",
+        "Google로 계속하기",
+        "GitHub로 계속하기",
+        "🙋 게스트로 계속하기"
+      ],
+      "links": [],
+      "navItems": [],
+      "bg": "rgb(26, 26, 46)",
+      "color": "rgb(240, 240, 242)",
+      "viewport": {
+        "w": 1440,
+        "h": 1000
+      },
+      "scrollHeight": 1000,
+      "components": {
+        "cards": 1,
+        "tables": 0,
+        "forms": 2,
+        "inputs": 6,
+        "modals": 0,
+        "charts": 2
+      }
+    }
+  },
+  {
+    "name": "alerts",
+    "route": "/alerts.html",
+    "status": 200,
+    "finalUrl": "http://rasplay.tplinkdns.com:52416/login.html",
+    "title": "로그인 - OpenMake.Ai",
+    "screenshot": "artifacts/ui-review/current/alerts.png",
+    "info": {
+      "bodyClass": "",
+      "bodyText": "☀️ 안녕하세요! 👋 OpenMake.Ai에 로그인하세요 로그인 회원가입 이메일 비밀번호 로그인 또는 Google로 계속하기 또는 🙋 게스트로 계속하기",
+      "textLength": 86,
+      "headings": [
+        "안녕하세요! 👋"
+      ],
+      "buttons": [
+        "☀️",
+        "로그인",
+        "회원가입",
+        "로그인",
+        "가입하기",
+        "Google로 계속하기",
+        "GitHub로 계속하기",
+        "🙋 게스트로 계속하기"
+      ],
+      "links": [],
+      "navItems": [],
+      "bg": "rgb(26, 26, 46)",
+      "color": "rgb(240, 240, 242)",
+      "viewport": {
+        "w": 1440,
+        "h": 1000
+      },
+      "scrollHeight": 1000,
+      "components": {
+        "cards": 1,
+        "tables": 0,
+        "forms": 2,
+        "inputs": 6,
+        "modals": 0,
+        "charts": 2
+      }
+    }
+  },
+  {
+    "name": "password-change",
+    "route": "/password-change.html",
+    "status": 200,
+    "finalUrl": "http://rasplay.tplinkdns.com:52416/login.html",
+    "title": "로그인 - OpenMake.Ai",
+    "screenshot": "artifacts/ui-review/current/password-change.png",
+    "info": {
+      "bodyClass": "",
+      "bodyText": "☀️ 안녕하세요! 👋 OpenMake.Ai에 로그인하세요 로그인 회원가입 이메일 비밀번호 로그인 또는 Google로 계속하기 또는 🙋 게스트로 계속하기",
+      "textLength": 86,
+      "headings": [
+        "안녕하세요! 👋"
+      ],
+      "buttons": [
+        "☀️",
+        "로그인",
+        "회원가입",
+        "로그인",
+        "가입하기",
+        "Google로 계속하기",
+        "GitHub로 계속하기",
+        "🙋 게스트로 계속하기"
+      ],
+      "links": [],
+      "navItems": [],
+      "bg": "rgb(26, 26, 46)",
+      "color": "rgb(240, 240, 242)",
+      "viewport": {
+        "w": 1440,
+        "h": 1000
+      },
+      "scrollHeight": 1000,
+      "components": {
+        "cards": 1,
+        "tables": 0,
+        "forms": 2,
+        "inputs": 6,
+        "modals": 0,
+        "charts": 2
+      }
+    }
+  },
+  {
+    "name": "token-monitoring",
+    "route": "/token-monitoring.html",
+    "status": 200,
+    "finalUrl": "http://rasplay.tplinkdns.com:52416/login.html",
+    "title": "로그인 - OpenMake.Ai",
+    "screenshot": "artifacts/ui-review/current/token-monitoring.png",
+    "info": {
+      "bodyClass": "",
+      "bodyText": "☀️ 안녕하세요! 👋 OpenMake.Ai에 로그인하세요 로그인 회원가입 이메일 비밀번호 로그인 또는 Google로 계속하기 또는 🙋 게스트로 계속하기",
+      "textLength": 86,
+      "headings": [
+        "안녕하세요! 👋"
+      ],
+      "buttons": [
+        "☀️",
+        "로그인",
+        "회원가입",
+        "로그인",
+        "가입하기",
+        "Google로 계속하기",
+        "GitHub로 계속하기",
+        "🙋 게스트로 계속하기"
+      ],
+      "links": [],
+      "navItems": [],
+      "bg": "rgb(26, 26, 46)",
+      "color": "rgb(240, 240, 242)",
+      "viewport": {
+        "w": 1440,
+        "h": 1000
+      },
+      "scrollHeight": 1000,
+      "components": {
+        "cards": 1,
+        "tables": 0,
+        "forms": 2,
+        "inputs": 6,
+        "modals": 0,
+        "charts": 2
+      }
+    }
+  },
+  {
+    "name": "uir-monitor",
+    "route": "/uir-monitor.html",
+    "status": 200,
+    "finalUrl": "http://rasplay.tplinkdns.com:52416/",
+    "title": "채팅 - OpenMake.AI",
+    "screenshot": "artifacts/ui-review/current/uir-monitor.png",
+    "info": {
+      "bodyClass": "",
+      "bodyText": "Skip to main content OpenMake.AI 새 대화 문서 관리 대화 기록이 없습니다 새 대화를 시작해보세요 ? 로그인 FREE 오늘도 화이팅! 무엇을 도와드릴까요? 😊 AI 어시스턴트가 질문에 답변하고, 문서를 분석하고, 코드를 작성합니다. 코딩 에이전트 코드 작성 및 디버깅 시작하기 문서 작성 도우미 블로그, 보고서 초안 작성 시작하기 데이터 분석 데이터 시각화 및 인사이트 도출 시작하기 자유 대화 무엇이든 물어보세요 시작하기 연결됨",
+      "textLength": 255,
+      "headings": [
+        "오늘도 화이팅!\n무엇을 도와드릴까요? 😊",
+        "📎 파일 첨부",
+        "⚙️ 설정",
+        "📖 사용자 가이드"
+      ],
+      "buttons": [
+        "새 대화",
+        "설정",
+        "로그아웃",
+        "시작하기",
+        "시작하기",
+        "시작하기",
+        "시작하기",
+        "×",
+        "×",
+        "☀️ 라이트",
+        "🌙 다크",
+        "💻 시스템"
+      ],
+      "links": [
+        {
+          "href": "#mainContent",
+          "text": "Skip to main content"
+        },
+        {
+          "href": "/documents.html",
+          "text": "문서 관리"
+        }
+      ],
+      "navItems": [
+        "문서 관리"
+      ],
+      "bg": "rgb(26, 26, 46)",
+      "color": "rgb(240, 240, 242)",
+      "viewport": {
+        "w": 1440,
+        "h": 1000
+      },
+      "scrollHeight": 1000,
+      "components": {
+        "cards": 6,
+        "tables": 0,
+        "forms": 0,
+        "inputs": 7,
+        "modals": 20,
+        "charts": 15
+      }
+    }
+  },
+  {
+    "name": "settings",
+    "route": "/settings.html",
+    "status": 200,
+    "finalUrl": "http://rasplay.tplinkdns.com:52416/settings.html",
+    "title": "설정 - OpenMake.AI",
+    "screenshot": "artifacts/ui-review/current/settings.png",
+    "info": {
+      "bodyClass": "",
+      "bodyText": "Skip to main content OpenMake.AI 새 대화 문서 관리 대화 기록이 없습니다 새 대화를 시작해보세요 ? 로그인 FREE 채팅으로 설정 ⚙️ 설정 앱 환경 및 AI 모델 설정 🎨 외관 테마 앱의 색상 테마를 선택합니다 다크 모드 라이트 모드 시스템 설정 언어 AI 응답 언어를 선택합니다. 자동 감지 시 사용자 메시지 언어로 응답합니다. 🌐 자동 감지 (Auto-detect) 한국어 English 日本語 中文(简体) Español Français Deutsch Português Русский العربية हिन्दी Italiano Nederlands Svenska Dansk Norsk Suomi ไทย Tiếng Việt Türkçe 🤖 AI 모델 기본 모델 채팅에 사용할 AI 모델을 선택합니다 gemma4:e4b — Local Ollama model (gemma4:e4b) 🔧 MCP 도구 MCP 도구 관리 AI가 사용할 수 있는 외부 도구를 개별적으로 활성화/비활성화합니다 전체 활성화 전체 비활성화 🧠 추론 Sequential Thinking 단계별 추론 프로세스를 적용합니다 🎯 모드 멀티 에이전트 토론 여러 AI 모델이 토론하여 최적의 답변을 생성합니다 Deep Research 자동으로 심층 연구를 수행합니다 👁️ 비전 이미지 OCR 이미지에서 텍스트를 추출합니다 이미지 분석 이미지 내용을 분석합니다 🌐 웹 검색 웹 검색 실시간 웹 검색을 수행합니다 팩트 체크 ENTERPRISE 정보의 사실 여부를 검증합니다 웹페이지 추출 ENTERPRISE 웹페이지 콘텐츠를 추출합니다 주제 연구 ENTERPRISE 주제에 대한 심층 연구를 수행합니다 🌐 스크래핑 웹 스크래핑 PRO 웹페이지를 마크다운으로 스크래핑합니다 URL 매핑 PRO 웹사이트 URL 구",
+      "textLength": 1343,
+      "headings": [
+        "오늘도 화이팅!무엇을\n                            도와드릴까요? 😊",
+        "설정",
+        "설정",
+        "📎 파일 첨부",
+        "⚙️ 설정",
+        "📖 사용자 가이드"
+      ],
+      "buttons": [
+        "새 대화",
+        "설정",
+        "로그아웃",
+        "시작하기",
+        "시작하기",
+        "시작하기",
+        "시작하기",
+        "전체 활성화",
+        "전체 비활성화",
+        "✓ 현재 플랜",
+        "⬆ 업그레이드",
+        "⬆ 업그레이드"
+      ],
+      "links": [
+        {
+          "href": "#mainContent",
+          "text": "Skip to main content"
+        },
+        {
+          "href": "/documents.html",
+          "text": "문서 관리"
+        },
+        {
+          "href": "/",
+          "text": "채팅으로"
+        },
+        {
+          "href": "/api-keys.html",
+          "text": "🔑 API 키 관리"
+        },
+        {
+          "href": "/developer.html",
+          "text": "📋 API 문서"
+        },
+        {
+          "href": "/password-change.html",
+          "text": "🔑 비밀번호 변경"
+        },
+        {
+          "href": "/admin.html",
+          "text": "👥 사용자 관리"
+        }
+      ],
+      "navItems": [
+        "문서 관리",
+        "채팅으로"
+      ],
+      "bg": "rgb(26, 26, 46)",
+      "color": "rgb(240, 240, 242)",
+      "viewport": {
+        "w": 1440,
+        "h": 1000
+      },
+      "scrollHeight": 1000,
+      "components": {
+        "cards": 49,
+        "tables": 0,
+        "forms": 0,
+        "inputs": 23,
+        "modals": 20,
+        "charts": 16
+      }
+    }
+  },
+  {
+    "name": "login",
+    "route": "/login.html",
+    "status": 200,
+    "finalUrl": "http://rasplay.tplinkdns.com:52416/login.html",
+    "title": "로그인 - OpenMake.Ai",
+    "screenshot": "artifacts/ui-review/current/login.png",
+    "info": {
+      "bodyClass": "",
+      "bodyText": "☀️ 안녕하세요! 👋 OpenMake.Ai에 로그인하세요 로그인 회원가입 이메일 비밀번호 로그인 또는 Google로 계속하기 또는 🙋 게스트로 계속하기",
+      "textLength": 86,
+      "headings": [
+        "안녕하세요! 👋"
+      ],
+      "buttons": [
+        "☀️",
+        "로그인",
+        "회원가입",
+        "로그인",
+        "가입하기",
+        "Google로 계속하기",
+        "GitHub로 계속하기",
+        "🙋 게스트로 계속하기"
+      ],
+      "links": [],
+      "navItems": [],
+      "bg": "rgb(26, 26, 46)",
+      "color": "rgb(240, 240, 242)",
+      "viewport": {
+        "w": 1440,
+        "h": 1000
+      },
+      "scrollHeight": 1000,
+      "components": {
+        "cards": 1,
+        "tables": 0,
+        "forms": 2,
+        "inputs": 6,
+        "modals": 0,
+        "charts": 2
+      }
+    }
+  }
+]

@@ -12,6 +12,7 @@
 import { getState, setState } from './state.js';
 import { hideAbortButton } from './chat.js';
 import { debugLog, debugWarn } from './utils.js';
+import { showSystemToast } from './system-toast.js';
 
 /** @type {number} 현재 재연결 시도 횟수 */
 let reconnectAttempts = 0;
@@ -183,6 +184,17 @@ const messageHandlers = {
             showToast('응답 생성이 중단되었습니다.', 'info');
         }
     },
+    // B+ Phase B4 후속: 에러 발생 시 백엔드가 본문을 디버그 큐에 자동 보존했음을 사용자에게 알림
+    // saveHistory=false 환경에서도 운영자가 디버깅 가능하도록, 그러나 사용자에게는 명시적으로 통지
+    'debug_retained': (data) => {
+        const ttlHours = typeof data.ttlHours === 'number' ? data.ttlHours : 24;
+        const expiresAt = data.expiresAt ? new Date(data.expiresAt).toLocaleString() : '';
+        const message = `🔍 오류 재현용으로 본문이 임시 저장되었습니다 (${ttlHours}시간 후 자동 삭제${expiresAt ? `: ${expiresAt}` : ''}).`;
+        debugLog('[WebSocket] debug_retained:', data.captureId, 'expires:', data.expiresAt);
+        if (typeof showToast === 'function') {
+            showToast(message, 'info');
+        }
+    },
     'agents': (data) => {
         if (data.agents && typeof renderAgentList === 'function') {
             renderAgentList(data.agents);
@@ -238,6 +250,24 @@ const messageHandlers = {
     'thinking': (data) => {
         if (typeof appendThinkingToken === 'function') {
             appendThinkingToken(data.token);
+        }
+    },
+    /**
+     * 시스템 이벤트 (백엔드 onSystemEvent 콜백)
+     * 형식: { type: 'system_event', payload: { type, message, metadata? } }
+     * 자동 토론 활성화 등 메타 알림을 우측 상단 토스트로 표시.
+     */
+    'system_event': (data) => {
+        const payload = data && data.payload;
+        if (!payload || typeof payload !== 'object') {
+            debugWarn('[WebSocket] system_event payload 누락');
+            return;
+        }
+        debugLog('[WebSocket] 시스템 이벤트:', payload.type, payload.message);
+        try {
+            showSystemToast(payload);
+        } catch (e) {
+            console.error('[WebSocket] showSystemToast 호출 실패:', e);
         }
     }
 };

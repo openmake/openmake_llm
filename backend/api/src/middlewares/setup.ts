@@ -238,8 +238,12 @@ export function setupStaticFiles(app: Application, dirname: string): void {
     // Stage 2-2a에서 동적 템플릿 리터럴 핸들러를 이벤트 위임으로 제거했으므로 수집된 해시는 안정적.
     // 새 인라인 핸들러가 런타임에 주입되면 CSP가 차단 → 신규 코드는 addEventListener 사용 강제.
     // 해시 수집 실패(전량 마이그레이션 완료) 시 'none'으로 자동 강화.
+    //
+    // 'unsafe-hashes' 키워드는 CSP 스펙상 inline event handler(onclick 등)에 해시를 적용하기 위해 필수.
+    // 이름과 달리 'unsafe-inline'보다 훨씬 안전 — 해시와 정확히 일치하는 핸들러만 허용.
+    // 공격자가 XSS로 임의 핸들러를 주입해도 해시가 없으면 실행되지 않음.
     const scriptSrcAttrDirective = scriptAttrHashes.size > 0
-        ? Array.from(scriptAttrHashes).join(' ')
+        ? `'unsafe-hashes' ${Array.from(scriptAttrHashes).join(' ')}`
         : "'none'";
     // style-src-attr: 'unsafe-inline' 유지. style-src-attr의 hash-source는 주요 브라우저(특히 Safari)
     // 지원이 불완전하여 "enforce한 척하는 CSP" 리스크. 인라인 style 전량 제거 후 'none'으로 전환 예정.

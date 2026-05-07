@@ -86,7 +86,7 @@ export const envSchema = z
 
         // Ollama
         OLLAMA_BASE_URL: z.url().default('http://localhost:11434'),
-        OLLAMA_DEFAULT_MODEL: z.string().min(1).default('gemini-3-flash-preview:cloud'),
+        OLLAMA_DEFAULT_MODEL: z.string().min(1).default('gemma4:e4b'),
         OLLAMA_TIMEOUT: positiveIntWithDefault(120000).refine((value) => value <= 600000, {
             message: 'OLLAMA_TIMEOUT must be between 1 and 600000 milliseconds',
         }),
@@ -111,8 +111,6 @@ export const envSchema = z
         // External
         GOOGLE_API_KEY: z.string().default(''),
         GOOGLE_CSE_ID: z.string().default(''),
-        FIRECRAWL_API_KEY: z.string().default(''),
-        FIRECRAWL_API_URL: z.url().default('https://api.firecrawl.dev/v1'),
         GITHUB_TOKEN: z.string().default(''),
         VAPID_PUBLIC_KEY: z.string().default(''),
         VAPID_PRIVATE_KEY: z.string().default(''),
@@ -131,14 +129,6 @@ export const envSchema = z
 
         // Swagger
         SWAGGER_BASE_URL: z.string().default(''),
-
-        // Engine mapping
-        OMK_ENGINE_LLM: z.string().min(1).default('gemini-3-flash-preview:cloud'),
-        OMK_ENGINE_PRO: z.string().min(1).default('gemini-3-flash-preview:cloud'),
-        OMK_ENGINE_FAST: z.string().min(1).default('gemini-3-flash-preview:cloud'),
-        OMK_ENGINE_THINK: z.string().min(1).default('gemini-3-flash-preview:cloud'),
-        OMK_ENGINE_CODE: z.string().min(1).default('glm-5.1:cloud'),
-        OMK_ENGINE_VISION: z.string().min(1).default('qwen3.5:397b-cloud'),
 
         // P2: Cost Tier & Domain Routing
         OMK_COST_TIER_DEFAULT: z.enum(['economy', 'standard', 'premium']).default('premium'),
@@ -161,6 +151,10 @@ export const envSchema = z
 
         // Cookie Security (HTTPS 없이 production 운영 시 false)
         COOKIE_SECURE: booleanFromString(false),
+
+        // HTTPS 없는 production 환경에서 COOKIE_SECURE=false 를 허용하는 명시적 opt-out.
+        // 기본 false — 운영자가 리스크를 인지하고 .env 에 직접 true 로 설정해야만 가드 통과.
+        ALLOW_INSECURE_COOKIES: booleanFromString(false),
 
         // Security — Trusted Proxies (쉼표 구분 문자열, 기본: loopback,linklocal,uniquelocal)
         TRUSTED_PROXIES: z.string().optional(),

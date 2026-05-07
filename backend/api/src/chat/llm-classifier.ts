@@ -3,11 +3,13 @@
  * LLM Classifier - LLM 기반 쿼리 분류기
  * ============================================================
  *
- * gemini-3-flash-preview:cloud 모델을 사용하여 사용자 질문을
- * 12가지 QueryType으로 분류합니다.
+ * `model-roles` 레지스트리의 `classifier` 역할 모델(`CLASSIFIER_MODEL`)을
+ * 사용하여 사용자 질문을 14개 QueryType 으로 분류합니다.
+ * 단일 로컬 모델 전환 후 기본은 `chat` 역할과 동일 모델(예: `gemma4:e4b`)이며,
+ * `OMK_CLASSIFIER_MODEL` 환경변수로 별도 모델 지정 가능.
  *
- * 기존 regex 기반 classifyQuery()의 정확도 ~68%를 ~92-95%로 개선하기 위한 모듈입니다.
- * 에러 발생 시 기존 regex classifier로 graceful fallback 합니다.
+ * 기존 regex 기반 classifyQuery() 의 정확도 ~68% 를 ~92-95% 로 개선하기 위한 모듈입니다.
+ * 에러 발생 시 regex classifier 로 graceful fallback 합니다.
  *
  * 캐시 아키텍처:
  *   L1 (exact-match) → cache.getExact() — 동기, <1ms
@@ -21,7 +23,7 @@
  * @module chat/llm-classifier
  * @see chat/semantic-cache - 분류 캐시 모듈
  * @see chat/query-classifier - regex 기반 분류기 (fallback)
- * @see chat/model-selector - selectBrandProfileForAutoRouting()에서 사용
+ * @see chat/model-selector - selectOptimalModel() 에서 사용
  */
 
 import { OllamaClient } from '../ollama/client';

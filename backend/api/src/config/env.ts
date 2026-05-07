@@ -70,10 +70,6 @@ export interface EnvConfig {
     // External services
     googleApiKey: string;
     googleCseId: string;
-    /** @deprecated Firecrawl 제거됨. 무료 웹 스크래퍼로 대체 */
-    firecrawlApiKey: string;
-    /** @deprecated Firecrawl 제거됨. 무료 웹 스크래퍼로 대체 */
-    firecrawlApiUrl: string;
     githubToken: string;
 
     // Documents
@@ -102,13 +98,8 @@ export interface EnvConfig {
     // Cookie Security (HTTPS 없이 production 운영 시 false로 설정)
     cookieSecure: boolean;
 
-    // Pipeline Profile — Brand Model → Internal Engine Mapping
-    omkEngineLlm: string;
-    omkEnginePro: string;
-    omkEngineFast: string;
-    omkEngineThink: string;
-    omkEngineCode: string;
-    omkEngineVision: string;
+    // HTTPS 없는 production 환경에서 cookieSecure=false 를 명시적으로 허용 (opt-out)
+    allowInsecureCookies: boolean;
 
     // Pipeline Profile — Cost Tier & Domain Routing (P2)
     omkCostTierDefault: string;
@@ -172,7 +163,7 @@ const DEFAULT_CONFIG: EnvConfig = {
 
     // Ollama
     ollamaBaseUrl: 'http://localhost:11434',
-    ollamaDefaultModel: 'gemini-3-flash-preview:cloud',
+    ollamaDefaultModel: 'gemma4:e4b',
     ollamaTimeout: 120000,
     ollamaApiKey: '',
     ollamaApiKeyPrimary: '',
@@ -197,8 +188,6 @@ const DEFAULT_CONFIG: EnvConfig = {
     // External services
     googleApiKey: '',
     googleCseId: '',
-    firecrawlApiKey: '',
-    firecrawlApiUrl: 'https://api.firecrawl.dev/v1',
     githubToken: '',
 
     // Documents
@@ -226,14 +215,7 @@ const DEFAULT_CONFIG: EnvConfig = {
 
     // Cookie Security
     cookieSecure: false,
-
-    // Pipeline Profile — Brand Model → Internal Engine Mapping
-    omkEngineLlm: 'gemini-3-flash-preview:cloud',
-    omkEnginePro: 'gemini-3-flash-preview:cloud',
-    omkEngineFast: 'gemini-3-flash-preview:cloud',
-    omkEngineThink: 'gemini-3-flash-preview:cloud',
-    omkEngineCode: 'glm-5.1:cloud',
-    omkEngineVision: 'qwen3.5:397b-cloud',
+    allowInsecureCookies: false,
 
     // Pipeline Profile — Cost Tier & Domain Routing (P2)
     omkCostTierDefault: 'premium',
@@ -322,12 +304,23 @@ export function validateConfig(config: EnvConfig): void {
         errors.push('JWT_SECRET must be at least 32 characters (set in .env). Random generation is forbidden — it invalidates all sessions on restart.');
     }
 
-    // Production에서 HTTPS 없이 쿠키 전송 방지 — HttpOnly 쿠키가 평문으로 노출되는 것을 차단
+    // Production에서 HTTPS 없이 쿠키 전송 방지 — HttpOnly 쿠키가 평문으로 노출되는 것을 차단.
+    // HTTPS 미지원 환경에서는 ALLOW_INSECURE_COOKIES=true 로 명시적 opt-out 가능.
     if (config.nodeEnv === 'production' && !config.cookieSecure) {
-        errors.push(
-            'COOKIE_SECURE must be true in production. ' +
-            'Set COOKIE_SECURE=true in .env when running behind HTTPS.'
-        );
+        if (!config.allowInsecureCookies) {
+            errors.push(
+                'COOKIE_SECURE must be true in production. ' +
+                'Set COOKIE_SECURE=true in .env when running behind HTTPS, ' +
+                'or set ALLOW_INSECURE_COOKIES=true to explicitly opt out (insecure — tokens transmitted in plaintext).'
+            );
+        } else {
+            // Logger가 아직 초기화되지 않았으므로 console.warn 사용
+            console.warn(
+                '\n\x1b[33m[SECURITY WARNING]\x1b[0m COOKIE_SECURE=false in production with ALLOW_INSECURE_COOKIES=true.\n' +
+                '  HttpOnly session cookies (JWT access/refresh tokens) will be transmitted over plaintext HTTP.\n' +
+                '  This is vulnerable to MITM token theft. Deploy HTTPS (e.g. Caddy, Cloudflare Tunnel) as soon as possible.\n'
+            );
+        }
     }
 
     // API_KEY_PEPPER 검증 (프로덕션 환경에서 API Key 서비스 사용 시)
@@ -398,8 +391,6 @@ export function loadConfig(): EnvConfig {
         GEMINI_WEB_SEARCH_ENABLED: env('GEMINI_WEB_SEARCH_ENABLED'),
         GOOGLE_API_KEY: env('GOOGLE_API_KEY'),
         GOOGLE_CSE_ID: env('GOOGLE_CSE_ID'),
-        FIRECRAWL_API_KEY: env('FIRECRAWL_API_KEY'),
-        FIRECRAWL_API_URL: env('FIRECRAWL_API_URL'),
         GITHUB_TOKEN: env('GITHUB_TOKEN'),
         DOCUMENT_TTL_HOURS: env('DOCUMENT_TTL_HOURS'),
         MAX_UPLOADED_DOCUMENTS: env('MAX_UPLOADED_DOCUMENTS'),
@@ -412,12 +403,6 @@ export function loadConfig(): EnvConfig {
         SWAGGER_BASE_URL: env('SWAGGER_BASE_URL'),
         API_KEY_PEPPER: env('API_KEY_PEPPER'),
         API_KEY_MAX_PER_USER: env('API_KEY_MAX_PER_USER'),
-        OMK_ENGINE_LLM: env('OMK_ENGINE_LLM'),
-        OMK_ENGINE_PRO: env('OMK_ENGINE_PRO'),
-        OMK_ENGINE_FAST: env('OMK_ENGINE_FAST'),
-        OMK_ENGINE_THINK: env('OMK_ENGINE_THINK'),
-        OMK_ENGINE_CODE: env('OMK_ENGINE_CODE'),
-        OMK_ENGINE_VISION: env('OMK_ENGINE_VISION'),
 
         // P2: Cost Tier & Domain Routing
         OMK_COST_TIER_DEFAULT: env('OMK_COST_TIER_DEFAULT'),
@@ -435,6 +420,7 @@ export function loadConfig(): EnvConfig {
 
         // Cookie Security
         COOKIE_SECURE: env('COOKIE_SECURE'),
+        ALLOW_INSECURE_COOKIES: env('ALLOW_INSECURE_COOKIES'),
 
         // Security — Trusted Proxies
         TRUSTED_PROXIES: env('TRUSTED_PROXIES'),
@@ -520,8 +506,6 @@ export function loadConfig(): EnvConfig {
         // External services
         googleApiKey: parsed.GOOGLE_API_KEY ?? DEFAULT_CONFIG.googleApiKey,
         googleCseId: parsed.GOOGLE_CSE_ID ?? DEFAULT_CONFIG.googleCseId,
-        firecrawlApiKey: parsed.FIRECRAWL_API_KEY ?? DEFAULT_CONFIG.firecrawlApiKey,
-        firecrawlApiUrl: parsed.FIRECRAWL_API_URL ?? DEFAULT_CONFIG.firecrawlApiUrl,
         githubToken: parsed.GITHUB_TOKEN ?? DEFAULT_CONFIG.githubToken,
 
         // Documents
@@ -547,14 +531,6 @@ export function loadConfig(): EnvConfig {
         apiKeyPepper: parsed.API_KEY_PEPPER ?? DEFAULT_CONFIG.apiKeyPepper,
         apiKeyMaxPerUser: parsed.API_KEY_MAX_PER_USER ?? DEFAULT_CONFIG.apiKeyMaxPerUser,
 
-        // Pipeline Profile — Brand Model → Internal Engine Mapping
-        omkEngineLlm: parsed.OMK_ENGINE_LLM ?? DEFAULT_CONFIG.omkEngineLlm,
-        omkEnginePro: parsed.OMK_ENGINE_PRO ?? DEFAULT_CONFIG.omkEnginePro,
-        omkEngineFast: parsed.OMK_ENGINE_FAST ?? DEFAULT_CONFIG.omkEngineFast,
-        omkEngineThink: parsed.OMK_ENGINE_THINK ?? DEFAULT_CONFIG.omkEngineThink,
-        omkEngineCode: parsed.OMK_ENGINE_CODE ?? DEFAULT_CONFIG.omkEngineCode,
-        omkEngineVision: parsed.OMK_ENGINE_VISION ?? DEFAULT_CONFIG.omkEngineVision,
-
         // Pipeline Profile — Cost Tier & Domain Routing (P2)
         omkCostTierDefault: parsed.OMK_COST_TIER_DEFAULT ?? DEFAULT_CONFIG.omkCostTierDefault,
         omkDomainCode: parsed.OMK_DOMAIN_CODE ?? DEFAULT_CONFIG.omkDomainCode,
@@ -574,6 +550,7 @@ export function loadConfig(): EnvConfig {
 
         // Cookie Security
         cookieSecure: parsed.COOKIE_SECURE ?? DEFAULT_CONFIG.cookieSecure,
+        allowInsecureCookies: parsed.ALLOW_INSECURE_COOKIES ?? DEFAULT_CONFIG.allowInsecureCookies,
 
         // Security — Trusted Proxies
         trustedProxies: parsed.TRUSTED_PROXIES?.split(',').map((p: string) => p.trim()) || DEFAULT_CONFIG.trustedProxies,

@@ -12,7 +12,7 @@
  */
 import { createLogger } from '../../utils/logger';
 import { assessComplexity } from '../../chat/complexity-assessor';
-import { GV_MODEL_MAP, GV_DEFAULT_MODELS } from '../../config/model-defaults';
+import { getConfig } from '../../config/env';
 import { THINKING_LIMITS, CONFIDENCE_GATE, INFORMED_FALLBACK, ROUTING_VERIFICATION } from '../../config/runtime-limits';
 import { verifyRoutingDecision } from '../../chat/routing-verifier';
 import type { ResponseQualitySignals } from '../../chat/routing-verifier';
@@ -311,11 +311,9 @@ async function executeWithStrategy(p: ExecuteWithStrategyParams): Promise<Strate
         logger.info('ExecutionStrategy: generate-verify → GV 실행');
     }
 
-    // QueryType 기반 최종 GV 모델 resolve
-    const queryType = modelSelection.queryType;
-    const gvModels = (queryType && queryType in GV_MODEL_MAP)
-        ? GV_MODEL_MAP[queryType]
-        : GV_DEFAULT_MODELS;
+    // 단일 로컬 모델: generator = verifier = localModel
+    const localModel = getConfig().ollamaDefaultModel;
+    const gvModels = { generator: localModel, verifier: localModel };
 
     const gvStartTime = Date.now();
     try {

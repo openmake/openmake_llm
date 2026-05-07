@@ -27,11 +27,14 @@ import { ClusterManager } from '../cluster/manager';
 import { OllamaClient } from '../ollama/client';
 import { ChatService } from '../services/ChatService';
 import type { ChatMessageRequest } from '../services/ChatService';
+import type { SystemEventCallback } from '../services/chat-service-types';
 import type { DiscussionProgress } from '../agents/discussion-engine';
 import type { ResearchProgress } from '../services/DeepResearchService';
 import { uploadedDocuments } from '../documents/store';
 import { getConversationDB } from '../data/conversation-db';
+import { recordAuditLog } from '../data/conversation-audit';
 import { buildExecutionPlan, type ExecutionPlan } from './profile-resolver';
+import { detectFastPath } from './fast-path-detector';
 import { getPromptConfig } from './prompt';
 import { createLogger } from '../utils/logger';
 import type { ChatMessage, ToolDefinition } from '../ollama/types';
@@ -43,6 +46,10 @@ import {
 } from './language-policy';
 import { getConfig } from '../config/env';
 import { LANGUAGE_THRESHOLDS } from '../config/runtime-limits';
+import { OllamaProvider } from '../providers/ollama-provider';
+import { ProviderRouter } from '../providers/provider-router';
+import { ExternalKeysRepository } from '../data/repositories/external-keys-repo';
+import { getPool } from '../data/models/unified-database';
 const log = createLogger('ChatRequestHandler');
 
 // ============================================
@@ -107,6 +114,18 @@ export interface ChatRequestParams {
     thinkingMode?: boolean;
     /** 사고 수준 */
     thinkingLevel?: 'low' | 'medium' | 'high';
+    /**
+     * 메시지 본문을 conversation_messages 에 저장할지 여부.
+     * undefined/true → 저장 (기본). false → 본문 저장 스킵, audit log 만 기록.
+     * settings.html saveHistoryToggle 과 연결.
+     */
+    saveHistory?: boolean;
+    /**
+     * 장기 메모리 자동 추출 여부.
+     * undefined/true → 추출 (기본). false → MemoryService 호출 스킵.
+     * settings.html memoryLearningToggle 과 연결. saveHistory 와 독립.
+     */
+    memoryLearning?: boolean;
     /** 구조화된 출력 형식 (Ollama format 파라미터: 'json' 또는 JSON Schema 객체) */
     format?: import('../ollama/types').FormatOption;
     /** 사용자가 활성화한 MCP 도구 목록 (키: 도구명, 값: 활성화 여부) */
@@ -137,6 +156,8 @@ export interface ChatRequestParams {
     onResearchProgress?: (progress: ResearchProgress) => void;
     /** 스킬 활성화 콜백 - 에이전트에 주입된 스킬 이름 목록 */
     onSkillsActivated?: (skillNames: string[]) => void;
+    /** 시스템 이벤트 콜백 - 자동 토론 활성화 등 메타 알림 (UI에서 토스트로 표시) */
+    onSystemEvent?: SystemEventCallback;
 }
 
 /**
@@ -311,38 +332,79 @@ export class ChatRequestHandler {
     /**
      * 사용자 메시지를 DB에 저장합니다.
      *
+     * 저장 정책 (B+ 보강):
+     *   - audit log 는 항상 INSERT (운영 메트릭 보장)
+     *   - 본문 INSERT 는 saveHistory !== false 일 때만 (사용자 통제)
+     *
      * @param sessionId - 세션 ID
+     * @param userId - 감사 로그용 사용자 ID
      * @param message - 메시지 본문
      * @param model - 표시용 모델명
+     * @param saveHistory - 본문 저장 여부 (기본 true)
      */
     static async saveUserMessage(
         sessionId: string,
+        userId: string,
         message: string,
         model?: string,
+        saveHistory: boolean = true,
     ): Promise<void> {
-        const conversationDb = getConversationDB();
-        await conversationDb.addMessage(sessionId, 'user', message, { model });
+        // 1. 감사 로그 — 항상 (실패해도 채팅 흐름 유지)
+        await recordAuditLog({
+            sessionId,
+            userId,
+            messageRole: 'user',
+            model,
+            contentSkipped: !saveHistory,
+            contentLength: message.length,
+        });
+
+        // 2. 본문 저장 — saveHistory=true 일 때만
+        if (saveHistory) {
+            const conversationDb = getConversationDB();
+            await conversationDb.addMessage(sessionId, 'user', message, { model });
+        }
     }
 
     /**
      * AI 응답을 DB에 저장합니다.
      *
+     * 저장 정책 (B+ 보강): saveUserMessage 와 동일.
+     *
      * @param sessionId - 세션 ID
+     * @param userId - 감사 로그용 사용자 ID
      * @param response - 응답 본문
      * @param model - 표시용 모델명
      * @param responseTime - 응답 소요 시간 (ms)
+     * @param saveHistory - 본문 저장 여부 (기본 true)
      */
     static async saveAssistantMessage(
         sessionId: string,
+        userId: string,
         response: string,
         model?: string,
         responseTime?: number,
+        saveHistory: boolean = true,
     ): Promise<void> {
-        const conversationDb = getConversationDB();
-        await conversationDb.addMessage(sessionId, 'assistant', response, {
+        // 1. 감사 로그 — 항상
+        await recordAuditLog({
+            sessionId,
+            userId,
+            messageRole: 'assistant',
             model,
-            responseTime,
+            responseTimeMs: responseTime,
+            contentSkipped: !saveHistory,
+            contentLength: response.length,
         });
+
+        // 2. 본문 저장 — saveHistory=true 일 때만
+        if (saveHistory) {
+            const conversationDb = getConversationDB();
+            await conversationDb.addMessage(sessionId, 'assistant', response, {
+                model,
+                responseTime,
+            });
+        }
     }
 
     /**
@@ -373,6 +435,8 @@ export class ChatRequestHandler {
             deepResearchMode,
             thinkingMode,
             thinkingLevel,
+            saveHistory,
+            memoryLearning,
             enabledTools,
             tools,
             tool_choice,
@@ -384,6 +448,7 @@ export class ChatRequestHandler {
             onDiscussionProgress,
             onResearchProgress,
             onSkillsActivated,
+            onSystemEvent,
             userLanguagePreference,
         } = params;
 
@@ -406,7 +471,11 @@ export class ChatRequestHandler {
 
         // 4. 사용자 메시지 저장 — 외부에는 brand alias만 노출
         const maskedModel = displayModel || client.model;
-        await ChatRequestHandler.saveUserMessage(currentSessionId, message, maskedModel);
+        // 감사 로그용 사용자 식별자 — 인증된 user id 우선, 익명 세션 id, 최종 'anonymous'
+        const auditUserId = userContext.authenticatedUserId || userContext.anonSessionId || 'anonymous';
+        // saveHistory 미지정 → true (기본 보존)
+        const persistContent = saveHistory !== false;
+        await ChatRequestHandler.saveUserMessage(currentSessionId, auditUserId, message, maskedModel, persistContent);
 
         const startTime = Date.now();
 
@@ -432,9 +501,11 @@ export class ChatRequestHandler {
             // AI 응답 저장 (tool_calls인 경우에도 히스토리에 기록)
             await ChatRequestHandler.saveAssistantMessage(
                 currentSessionId,
+                auditUserId,
                 result.response,
                 maskedModel,
                 responseTime,
+                persistContent,
             );
 
             return {
@@ -453,16 +524,25 @@ export class ChatRequestHandler {
         // ═══════════════════════════════════════════════════════
 
         // 5. ChatService 호출
-        const chatService = new ChatService(client);
+        const ollamaProvider = new OllamaProvider(client);
+        const externalKeysRepo = new ExternalKeysRepository(getPool());
+        const providerRouter = new ProviderRouter({ ollamaProvider, externalKeysRepo });
+        const chatService = new ChatService(client, providerRouter);
 
         // §9 ExecutionPlan 설정과 사용자 요청을 병합
         // 토론 모드: 사용자 명시적 토글(discussionMode)만 반영.
         // 프로파일의 discussion 기본값은 사용자가 직접 켜지 않는 한 적용하지 않는다.
         const mergedDiscussionMode = discussionMode === true;
-        // Thinking 모드: 사용자 명시적 토글(thinkingMode)만 반영.
-        // 프로파일의 thinking 기본값은 사용자가 직접 켜지 않는 한 적용하지 않는다.
-        const mergedThinkingMode = thinkingMode === true;
-        const mergedThinkingLevel = thinkingMode ? (thinkingLevel || 'high') : undefined;
+        // Thinking 모드 결정 우선순위:
+        //   1. Fast-path 매칭 (명백한 인사·단답형) → 강제 OFF
+        //   2. 사용자 명시적 토글(thinkingMode === true) → ON
+        //   3. 그 외 → OFF
+        const fastPath = detectFastPath(message);
+        const mergedThinkingMode = !fastPath.matched && thinkingMode === true;
+        const mergedThinkingLevel = mergedThinkingMode ? (thinkingLevel || 'high') : undefined;
+        if (fastPath.matched && thinkingMode === true) {
+            log.info(`[RequestHandler] Fast-path 감지(${fastPath.reason}) — 사용자 thinking 토글 무시하고 OFF`);
+        }
 
         const chatRequest: ChatMessageRequest = {
             message,
@@ -474,6 +554,7 @@ export class ChatRequestHandler {
             deepResearchMode,
             thinkingMode: mergedThinkingMode,
             thinkingLevel: mergedThinkingLevel,
+            memoryLearning,
             userId: userContext.userId,
             apiKeyId: params.apiKeyId,
             userRole: userContext.userRole,
@@ -494,6 +575,7 @@ export class ChatRequestHandler {
             plan,
             onSkillsActivated,
             params.onThinking,
+            onSystemEvent,
         );
 
         const endTime = Date.now();
@@ -502,9 +584,11 @@ export class ChatRequestHandler {
         // 6. AI 응답 저장
         await ChatRequestHandler.saveAssistantMessage(
             currentSessionId,
+            auditUserId,
             response,
             maskedModel,
             responseTime,
+            persistContent,
         );
 
         return {
@@ -560,7 +644,7 @@ export class ChatRequestHandler {
             });
             detectedLanguage = languagePolicy.resolvedLanguage;
         } catch (error) {
-            console.warn('언어 감지 실패, 기본 언어 사용:', error);
+            log.warn('언어 감지 실패, 기본 언어 사용:', error);
         }
 
         // tool_choice가 "none"이면 도구 없이 호출

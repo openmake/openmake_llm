@@ -48,6 +48,8 @@ import { QUERY_TYPE_PARAMS } from './config/llm-parameters';
 const VERSION = APP_VERSION;
 const envConfig = getConfig();
 const DEFAULT_MODEL = envConfig.ollamaDefaultModel;
+/** cluster.start() 후 노드 상태 동기화를 기다리는 짧은 지연 (ms) */
+const CLUSTER_STATUS_REFRESH_DELAY_MS = 1000;
 
 const program = new Command();
 
@@ -282,7 +284,7 @@ program
         await cluster.start();
 
         // 잠시 대기하여 상태 업데이트
-        await new Promise(r => setTimeout(r, 1000));
+        await new Promise(r => setTimeout(r, CLUSTER_STATUS_REFRESH_DELAY_MS));
 
         const nodes = cluster.getNodes();
         const stats = cluster.getStats();

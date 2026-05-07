@@ -8,6 +8,7 @@ import * as crypto from 'crypto';
 import { ClusterManager } from '../cluster/manager';
 import { selectOptimalModel } from '../chat/model-selector';
 import { ChatRequestHandler, ChatRequestError } from '../chat/request-handler';
+import { enqueueDebugCapture, DEBUG_QUEUE_TTL_MS } from '../data/conversation-debug-queue';
 import { QuotaExceededError } from '../errors/quota-exceeded.error';
 import { KeyExhaustionError } from '../errors/key-exhaustion.error';
 import { checkChatRateLimit } from '../middlewares/chat-rate-limiter';
@@ -15,6 +16,7 @@ import { createLogger } from '../utils/logger';
 import { WSMessage, ExtendedWebSocket } from './ws-types';
 import { detectLanguage, type SupportedLanguageCode } from '../chat/language-policy';
 import { uploadedDocuments } from '../documents/store';
+import { getStaleDataWarning } from '../config/stale-data-warning';
 
 // 다국어 시사 키워드 맵
 const CURRENT_EVENTS_KEYWORDS: Record<string, string[]> = {
@@ -125,9 +127,15 @@ export async function handleChatMessage(
     const abortController = new AbortController();
     extWs._abortController = abortController;
 
+    // catch 블록(B4 디버그 큐)에서 접근하기 위해 try 외부에 선언.
+    // try 안에서 실제 값으로 갱신된다.
+    let selectedModel = model;
+    let validSessionId: string | undefined;
+    let tokenCount = 0;
+    let partialAssistantResponse = '';
+
     try {
         // 모델 결정 (자동 선택 또는 사용자 지정)
-        let selectedModel = model;
         if (!model || model === 'default') {
             const optimalModel = await selectOptimalModel(message);
             selectedModel = optimalModel.model;
@@ -161,9 +169,10 @@ export async function handleChatMessage(
         const userWebSearchEnabled = msg.webSearch === true;
         let webSearchContext = '';
 
-        // MCP 도구 토글에서 web_search가 비활성화된 경우 pre-chat 웹 검색도 차단
-        const mcpWebSearchAllowed = msg.enabledTools === undefined || msg.enabledTools?.web_search === true;
-        if (mcpWebSearchAllowed && (userWebSearchEnabled || isCurrentEventsQuery)) {
+        // pre-chat 웹 검색 게이트: 사용자가 명시적으로 web_search=false를 송신한 경우만 차단.
+        // 빈 객체 {} 또는 미지정(undefined)은 허용 — 시사 키워드 자동 검색이 기본 동작이어야 함.
+        const userExplicitlyDisabledSearch = msg.enabledTools?.web_search === false;
+        if (!userExplicitlyDisabledSearch && (userWebSearchEnabled || isCurrentEventsQuery)) {
             try {
                 const { performWebSearch } = await import('../mcp');
                 const searchResults = await performWebSearch(message, { maxResults: 5, language: userLang });
@@ -178,18 +187,27 @@ export async function handleChatMessage(
             }
         }
 
+        // 시사 질의인데 외부 데이터를 얻지 못한 경우(검색 차단·결과 0건·검색 실패 모두 포함)
+        // 환각 방지 안전망 메시지를 system prompt 채널(webSearchContext)로 주입.
+        if (isCurrentEventsQuery && !webSearchContext) {
+            const warning = getStaleDataWarning(userLang);
+            webSearchContext = `\n\n## ⚠️ ${warning.header}\n${warning.instruction}\n`;
+            log.info(`[Chat] 시사 질의 + 외부 데이터 부재 → 환각 방지 안전망 주입 (lang=${userLang}, explicitlyDisabled=${userExplicitlyDisabledSearch})`);
+        }
+
         // WS 고유: 세션 생성 시 length < 10 체크 (노드 ID와 구별)
-        const validSessionId = (sessionId && sessionId.length >= 10) ? sessionId : undefined;
+        validSessionId = (sessionId && sessionId.length >= 10) ? sessionId : undefined;
 
         // messageId 생성 (WS 고유: 토큰 스트리밍에 사용)
         const messageId = crypto.randomUUID
             ? crypto.randomUUID()
             : `msg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
-        // 토큰 생성 메트릭 추적
-        let tokenCount = 0;
+        // 토큰 생성 메트릭 추적 (tokenCount, partialAssistantResponse 는 catch 접근을 위해 try 외부 선언)
+        tokenCount = 0;
         let firstTokenTime = 0;
         const generationStartTime = Date.now();
+        partialAssistantResponse = '';
 
         // 토큰 콜백에서 중단 여부 체크 (WS 고유)
         const tokenCallback = (token: string) => {
@@ -203,6 +221,7 @@ export async function handleChatMessage(
                 log.debug(`[Chat] 첫 번째 토큰 생성됨 (TTFB: ${ttfb}ms)`);
             }
             tokenCount++;
+            partialAssistantResponse += token;
 
             ws.send(JSON.stringify({ type: 'token', token, messageId }));
         };
@@ -221,6 +240,10 @@ export async function handleChatMessage(
             deepResearchMode: msg.deepResearchMode === true,
             thinkingMode: msg.thinkingMode === true,
             thinkingLevel: (msg.thinkingLevel || 'high') as 'low' | 'medium' | 'high',
+            // 사용자가 명시적으로 false 보낼 때만 본문 저장 차단. 미지정/true → 저장 (기본 보존)
+            saveHistory: msg.saveHistory !== false,
+            // 메모리 학습 — saveHistory 와 독립. 명시 false 만 차단, 기본 활성
+            memoryLearning: msg.memoryLearning !== false,
             enabledTools: msg.enabledTools,
             userLanguagePreference: userLangPreference,
             userContext,
@@ -236,6 +259,19 @@ export async function handleChatMessage(
             onDiscussionProgress: (progress) => ws.send(JSON.stringify({ type: 'discussion_progress', progress })),
             onResearchProgress: (progress) => ws.send(JSON.stringify({ type: 'research_progress', progress })),
             onSkillsActivated: (skillNames) => ws.send(JSON.stringify({ type: 'skills_activated', skillNames })),
+            // 시스템 이벤트 (자동 토론 활성화 등 메타 알림) — UI 토스트 분리 표시
+            onSystemEvent: (event) => {
+                if (ws.readyState === ws.OPEN) {
+                    ws.send(JSON.stringify({
+                        type: 'system_event',
+                        payload: {
+                            type: event.type,
+                            message: event.message,
+                            metadata: event.metadata,
+                        },
+                    }));
+                }
+            },
         });
 
         // WS 고유: 새 세션 생성 알림
@@ -310,6 +346,37 @@ export async function handleChatMessage(
             log.error('[Chat] 처리 중 오류:', error);
             // 🔒 Phase 2: 내부 에러 상세 누출 방지 — 제네릭 메시지만 전송
             safeSend({ type: 'error', message: getLocalizedTemplate(WS_ERROR_MESSAGES, userLang).genericError });
+
+            // B+ Phase B4: 디버그 자동 보존 — 사용자 saveHistory=false 여도
+            // 에러 재현을 위해 본문을 24h 임시 보관 (TTL 후 자동 삭제)
+            if (validSessionId && message) {
+                const auditUserId = extWs._authenticatedUserId || 'anonymous';
+                const errorCode = error instanceof Error ? error.name : 'UnknownError';
+                enqueueDebugCapture({
+                    sessionId: validSessionId,
+                    userId: auditUserId,
+                    reason: 'auto-error',
+                    userMessage: message,
+                    assistantMessage: partialAssistantResponse,
+                    errorCode,
+                    routingMetadata: {
+                        model: selectedModel,
+                        tokenCountAtError: tokenCount,
+                        partialResponseLength: partialAssistantResponse.length,
+                    },
+                }).then((capture) => {
+                    if (capture) {
+                        // 사용자에게 보존 사실 + 만료 시각 알림 (선택적 신뢰 회복)
+                        const expiresInMs = DEBUG_QUEUE_TTL_MS['auto-error'];
+                        ws.send(JSON.stringify({
+                            type: 'debug_retained',
+                            captureId: capture.id,
+                            expiresAt: capture.expiresAt.toISOString(),
+                            ttlHours: Math.round(expiresInMs / 3600000),
+                        }));
+                    }
+                }).catch(() => {/* 디버그 큐 실패는 사용자 흐름 안 막음 */});
+            }
         }
     } finally {
         // 중단 컨트롤러 정리

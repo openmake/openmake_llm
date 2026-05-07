@@ -18,8 +18,15 @@
 
     // SafeStorage 래퍼 — safe-storage.js에서 전역 등록됨
     var safeStorage = window.SafeStorage;
-    var AUTO_MODEL = window.DEFAULT_AUTO_MODEL || 'openmake_llm_auto';
     var SK = window.STORAGE_KEYS || {};
+
+    // ─── XSS 방어 헬퍼 ───
+    function escAttr(s) {
+        return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+    }
+    function escText(s) {
+        return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
 
     // ─── 관리자 확인 헬퍼 ───
     function isAdmin() {
@@ -36,14 +43,6 @@
         var modelSelect = document.getElementById('modelSelect');
         if (!modelSelect) return;
 
-        // 관리자가 아니면 모델 이름 숨김
-        if (!isAdmin()) {
-            modelSelect.innerHTML = '<option value="' + AUTO_MODEL + '">OpenMake LLM Auto</option>';
-            modelSelect.disabled = true;
-            modelSelect.style.cursor = 'default';
-            return;
-        }
-
         try {
             var response = await fetch('/api/models');
             if (response.ok) {
@@ -51,23 +50,58 @@
                 var data = rawData.data || rawData;
                 if (data.models && data.models.length > 0) {
                     var savedModel = safeStorage.getItem(SK.SELECTED_MODEL || 'selectedModel');
-                    var defaultModel = data.defaultModel || AUTO_MODEL;
+                    var defaultModel = data.defaultModel || (data.models[0].modelId || data.models[0].name);
 
-                    modelSelect.innerHTML = data.models.map(function (model) {
+                    // provider 별 그룹화 — ollama / anthropic / openai-compatible
+                    var groups = { ollama: [], anthropic: [], 'openai-compatible': [] };
+                    data.models.forEach(function (m) {
+                        var p = m.provider || 'ollama';
+                        if (!groups[p]) groups[p] = [];
+                        groups[p].push(m);
+                    });
+
+                    function renderOption(model) {
                         var modelId = model.modelId || model.name;
                         var displayName = model.name;
                         var desc = model.description || '';
                         var isSelected = savedModel ? modelId === savedModel : modelId === defaultModel;
-                        return '<option value="' + modelId + '" ' + (isSelected ? 'selected' : '') + '>' +
-                            displayName + (desc ? ' — ' + desc : '') + '</option>';
-                    }).join('');
+                        return '<option value="' + escAttr(modelId) + '" ' + (isSelected ? 'selected' : '') + '>' +
+                            escText(displayName) + (desc ? ' — ' + escText(desc) : '') + '</option>';
+                    }
+
+                    var groupLabels = {
+                        ollama: '🖥️ Local (Ollama)',
+                        anthropic: '🧠 Anthropic Claude',
+                        'openai-compatible': '🌐 OpenAI Compatible',
+                    };
+
+                    var html = '';
+                    ['ollama', 'anthropic', 'openai-compatible'].forEach(function (key) {
+                        if (groups[key].length === 0) return;
+                        html += '<optgroup label="' + escAttr(groupLabels[key] || key) + '">';
+                        html += groups[key].map(renderOption).join('');
+                        html += '</optgroup>';
+                    });
+                    modelSelect.innerHTML = html;
+
+                    // 비관리자는 선택 변경 불가 (옵션은 그대로 표시)
+                    if (!isAdmin()) {
+                        modelSelect.disabled = true;
+                        modelSelect.style.cursor = 'default';
+                    }
+                } else {
+                    modelSelect.innerHTML = '<option value="">사용 가능한 모델 없음</option>';
                 }
+            } else {
+                modelSelect.innerHTML = '<option value="">모델 로드 실패</option>';
             }
         } catch (e) {
             console.error('모델 로드 실패:', e);
             var savedModel = safeStorage.getItem(SK.SELECTED_MODEL || 'selectedModel');
             if (savedModel) {
-                modelSelect.innerHTML = '<option value="' + savedModel + '">' + savedModel + '</option>';
+                modelSelect.innerHTML = '<option value="' + escAttr(savedModel) + '">' + escText(savedModel) + '</option>';
+            } else {
+                modelSelect.innerHTML = '<option value="">로드 실패</option>';
             }
         }
     }
@@ -142,10 +176,12 @@
         mcpSettings.enabledTools.web_search = webSearchChecked;
         safeStorage.setItem(SK.MCP_SETTINGS || 'mcpSettings', JSON.stringify(mcpSettings));
 
+        var memoryLearningToggle = document.getElementById('memoryLearningToggle');
         if (langSelect && saveHistoryToggle) {
             safeStorage.setItem(SK.GENERAL_SETTINGS || 'generalSettings', JSON.stringify({
                 lang: langSelect.value,
-                saveHistory: saveHistoryToggle.checked
+                saveHistory: saveHistoryToggle.checked,
+                memoryLearning: memoryLearningToggle ? memoryLearningToggle.checked : true
             }));
         }
 
@@ -198,8 +234,10 @@
                 var general = JSON.parse(savedGeneral);
                 var langEl = document.getElementById('langSelect');
                 var historyEl = document.getElementById('saveHistoryToggle');
+                var memoryEl = document.getElementById('memoryLearningToggle');
                 if (langEl) langEl.value = general.lang || 'ko';
                 if (historyEl) historyEl.checked = general.saveHistory !== false;
+                if (memoryEl) memoryEl.checked = general.memoryLearning !== false;
             } catch (e) {
                 console.warn('generalSettings 파싱 실패:', e);
             }

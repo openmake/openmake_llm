@@ -1,0 +1,162 @@
+/**
+ * ============================================================
+ * System Toast - SystemEvent 알림 UI
+ * ============================================================
+ *
+ * 백엔드의 SystemEvent (자동 토론 활성화 등 메타 이벤트) 를
+ * 화면 우측 상단 토스트로 표시하는 컴포넌트.
+ *
+ * 특징:
+ *   - 우측 상단 고정 위치 (sidebar/header 충돌 회피용 z-index)
+ *   - 다중 토스트 세로 스택 (최대 3개, FIFO)
+ *   - 5초 자동 사라짐 + 수동 닫기 버튼
+ *   - 슬라이드인 애니메이션 + prefers-reduced-motion 지원
+ *   - 모바일: 좌우 여백 보장 + max-width 제약
+ *   - Neo Brutalism 디자인 토큰 활용
+ *
+ * 클래스:
+ *   .system-toast-container — 고정 컨테이너 (단일)
+ *   .system-toast           — 개별 토스트 카드
+ *   .system-toast-icon      — 좌측 아이콘 영역
+ *   .system-toast-message   — 메시지 텍스트
+ *   .system-toast-close     — 우측 닫기 버튼
+ *
+ * 변형 (event.type 기반):
+ *   .system-toast--auto-discussion-activated
+ *   .system-toast--info (default)
+ */
+
+.system-toast-container {
+    position: fixed;
+    top: var(--space-4, 16px);
+    right: var(--space-4, 16px);
+    /* 모달(보통 1000~1500), 헤더(보통 100), 사이드바(보통 200) 위에 표시 */
+    z-index: 2000;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2, 8px);
+    pointer-events: none; /* 컨테이너 자체는 클릭 통과, 자식만 활성 */
+    max-width: 360px;
+    width: calc(100vw - var(--space-8, 32px));
+}
+
+.system-toast {
+    pointer-events: auto;
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-3, 12px);
+    padding: var(--space-3, 12px) var(--space-4, 16px);
+    background: var(--bg-card, #252547);
+    color: var(--text-primary, #f0f0f2);
+    border: var(--border-width, 2px) solid var(--border-color, #000);
+    border-left: 4px solid var(--accent-primary, #c061ff);
+    border-radius: var(--radius-md, 6px);
+    box-shadow: var(--shadow-brutal, 4px 4px 0 #000);
+    font-family: var(--font-sans);
+    font-size: var(--font-size-sm, 0.875rem);
+    line-height: var(--line-height-normal, 1.5);
+    animation: systemToastSlideIn 220ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* type별 액센트 색상 분기 (좌측 보더만 변경) */
+.system-toast--auto-discussion-activated {
+    border-left-color: var(--accent-purple, #bd52eb);
+}
+.system-toast--info {
+    border-left-color: var(--info, #4cc9f0);
+}
+.system-toast--warning {
+    border-left-color: var(--warning, #facc15);
+}
+.system-toast--success {
+    border-left-color: var(--success, #a3e635);
+}
+
+.system-toast-icon {
+    flex: 0 0 auto;
+    font-size: 1.1rem;
+    line-height: 1.2;
+    user-select: none;
+}
+
+.system-toast-message {
+    flex: 1 1 auto;
+    /* 긴 메시지/연속 비공백 문자 줄바꿈 */
+    word-break: break-word;
+    overflow-wrap: anywhere;
+    color: var(--text-primary, #f0f0f2);
+}
+
+.system-toast-close {
+    flex: 0 0 auto;
+    background: transparent;
+    border: none;
+    color: var(--text-secondary, #b0b0c0);
+    font-size: 1.1rem;
+    line-height: 1;
+    padding: 2px 6px;
+    cursor: pointer;
+    border-radius: var(--radius-sm, 4px);
+    transition: background-color 120ms ease, color 120ms ease;
+}
+.system-toast-close:hover,
+.system-toast-close:focus-visible {
+    background-color: var(--bg-hover, rgba(255, 255, 255, 0.08));
+    color: var(--text-primary, #f0f0f2);
+    outline: none;
+}
+
+/* 사라질 때 페이드 + 우측 슬라이드 (제거 직전 0.18초간) */
+.system-toast--leaving {
+    animation: systemToastSlideOut 180ms ease-in forwards;
+}
+
+@keyframes systemToastSlideIn {
+    from {
+        opacity: 0;
+        transform: translateX(24px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@keyframes systemToastSlideOut {
+    from {
+        opacity: 1;
+        transform: translateX(0);
+    }
+    to {
+        opacity: 0;
+        transform: translateX(24px);
+    }
+}
+
+/* 모바일: 좌우 여백 작게, 컨테이너 거의 full width */
+@media (max-width: 640px) {
+    .system-toast-container {
+        top: var(--space-2, 8px);
+        right: var(--space-2, 8px);
+        left: var(--space-2, 8px);
+        max-width: none;
+        width: auto;
+    }
+    .system-toast {
+        font-size: var(--font-size-sm, 0.875rem);
+    }
+}
+
+/* 접근성: 모션 감소 환경에서는 애니메이션 제거, 즉시 표시 */
+@media (prefers-reduced-motion: reduce) {
+    .system-toast,
+    .system-toast--leaving {
+        animation: none;
+    }
+}
+
+/* 라이트 테마 호환 (light-theme 변수 자동 적용) */
+[data-theme='light'] .system-toast {
+    background: var(--bg-card, #ffffff);
+    color: var(--text-primary, #1a1a2e);
+}

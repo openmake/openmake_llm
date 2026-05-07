@@ -21,12 +21,11 @@
  * @see docs/api/API_KEY_SERVICE_PLAN.md 9절
  */
 
-import { PipelineProfile, getProfiles, isValidBrandModel } from './pipeline-profile';
+import type { PipelineProfile } from './pipeline-profile';
 import type { ExecutionStrategy } from './pipeline-profile';
 import { createLogger } from '../utils/logger';
 import type { QueryType } from './model-selector-types';
-import { GV_MODEL_MAP, GV_DEFAULT_MODELS } from '../config/model-defaults';
-import { applyHealthCircuitBreaker } from '../services/model-health-monitor';
+import { getConfig } from '../config/env';
 
 const logger = createLogger('ProfileResolver');
 
@@ -98,42 +97,11 @@ export interface ExecutionPlan {
 // ============================================
 
 /**
- * 요청 모델명을 파이프라인 프로파일로 해석
- * 
- * @param requestedModel - 외부 요청의 model 필드 (예: "openmake_llm_pro")
- * @returns 해석된 PipelineProfile 또는 null (brand model이 아닌 경우)
- */
-export function resolveProfile(requestedModel: string): PipelineProfile | null {
-    if (!isValidBrandModel(requestedModel)) {
-        return null;
-    }
-
-    const profiles = getProfiles();
-    return profiles[requestedModel] || null;
-}
-
-/**
- * QueryType 기반으로 GV(Generate-Verify) 모델 쌍을 resolve합니다.
- * classifiedQueryType이 나중에 설정되므로, 여기서는 기본값을 반환하고
- * strategy-executor에서 queryType으로 최종 resolve합니다.
- */
-function resolveGVModels(queryType?: string): { generator: string; verifier: string } {
-    if (queryType && queryType in GV_MODEL_MAP) {
-        return GV_MODEL_MAP[queryType];
-    }
-    return { ...GV_DEFAULT_MODELS };
-}
-
-/**
- * 요청 모델명으로부터 완전한 실행 계획을 생성
- * 
- * Brand model alias를 구체적인 ExecutionPlan으로 매핑합니다.
- * Brand model이면 프로파일 기반으로 실행 계획을 구성하고,
- * 일반 모델이면 기본 설정으로 패스스루합니다.
- * 
- * @param requestedModel - 외부 요청의 model 필드 (예: "openmake_llm_pro" 또는 일반 모델명)
- * @param overrides - 사용자 요청의 오버라이드 파라미터
- * @returns ExecutionPlan — resolvedEngine, executionStrategy, thinking 수준, 필수 도구 목록 등 실행에 필요한 모든 파라미터를 포함
+ * 요청 모델명으로부터 실행 계획을 생성합니다.
+ * 단일 로컬 모델(ollamaDefaultModel)로 항상 해석합니다.
+ *
+ * @param requestedModel - 외부 요청의 model 필드
+ * @returns ExecutionPlan
  */
 export function buildExecutionPlan(
     requestedModel: string,
@@ -143,70 +111,13 @@ export function buildExecutionPlan(
         stream: boolean;
     }>
 ): ExecutionPlan {
-    const profile = resolveProfile(requestedModel);
-
-    if (profile) {
-        // Brand model → 프로파일 기반 실행 계획
-        let execStrategy: ExecutionStrategy = profile.executionStrategy;
-
-        // §CB 서킷 브레이커: 프로파일이 선언한 엔진이 장애 상태면 안전 모델로 대체
-        const safeEngine = applyHealthCircuitBreaker(profile.engineModel);
-
-        // GV 모델 resolve (generate-verify / conditional-verify 전략에서만 사용)
-        const needsGV = execStrategy !== 'single';
-        const gvModelsRaw = needsGV ? resolveGVModels() : undefined;
-        // GV 쌍도 서킷 브레이커 적용 (단, generator ≠ verifier 원칙 유지 위해 상호 후보로 전달)
-        let gvModels = gvModelsRaw
-            ? {
-                  generator: applyHealthCircuitBreaker(gvModelsRaw.generator, [gvModelsRaw.verifier]),
-                  verifier: applyHealthCircuitBreaker(gvModelsRaw.verifier, [gvModelsRaw.generator]),
-              }
-            : undefined;
-
-        // bug_008: 두 모델이 동일 tier-3 fallback(예: FAST)으로 수렴하면 GV 의미 없음
-        //          (자기 자신을 검증하는 꼴) → single 전략으로 다운그레이드
-        if (gvModels && gvModels.generator === gvModels.verifier) {
-            logger.warn(
-                `GV 붕괴 감지: generator/verifier가 동일 fallback(${gvModels.generator})로 수렴 — ` +
-                `executionStrategy를 single로 다운그레이드 (원본 ${execStrategy}, 원본 GV ${gvModelsRaw?.generator}/${gvModelsRaw?.verifier})`,
-            );
-            execStrategy = 'single';
-            gvModels = undefined;
-        }
-
-        logger.info(
-            `Brand model 해석: ${requestedModel} → engine=${safeEngine}${
-                safeEngine !== profile.engineModel ? ` (원본 ${profile.engineModel} 장애 — 서킷 브레이커 작동)` : ''
-            }, strategy=${execStrategy}`,
-        );
-
-        return {
-            requestedModel,
-            profile,
-            resolvedEngine: safeEngine,
-            useToolCalling: execStrategy !== 'single',
-            agentLoopMax: profile.agentLoopMax,
-            loopStrategy: profile.loopStrategy,
-            thinkingLevel: profile.thinking,
-            useDiscussion: profile.discussion,
-            promptStrategy: profile.promptStrategy,
-            contextStrategy: profile.contextStrategy,
-            timeBudgetMs: profile.timeBudgetSeconds * 1000,
-            requiredTools: profile.requiredTools,
-            isBrandModel: true,
-            executionStrategy: execStrategy,
-            generatorModel: gvModels?.generator,
-            verifierModel: gvModels?.verifier,
-        };
-    }
-
-    // 일반 모델 → 기본 패스스루 (기존 동작 유지)
-    logger.debug(`일반 모델 패스스루: ${requestedModel}`);
+    const config = getConfig();
+    logger.debug(`buildExecutionPlan: ${requestedModel} → ${config.ollamaDefaultModel}`);
 
     return {
         requestedModel,
         profile: null,
-        resolvedEngine: requestedModel,
+        resolvedEngine: config.ollamaDefaultModel,
         useToolCalling: false,
         agentLoopMax: 5,
         loopStrategy: 'auto',
@@ -222,10 +133,8 @@ export function buildExecutionPlan(
 }
 
 /**
- * 모든 사용 가능한 brand model 목록을 외부 API용 형식으로 반환합니다.
- * 각 모델의 ID, 이름, 설명, 지원 기능(agent, thinking, discussion 등)을 포함합니다.
- * 
- * @returns 외부 API 응답용 모델 목록 배열
+ * 사용 가능한 brand model 목록을 반환합니다.
+ * 단일 로컬 모델 환경에서는 빈 배열을 반환합니다.
  */
 export function listAvailableModels(): Array<{
     id: string;
@@ -233,17 +142,5 @@ export function listAvailableModels(): Array<{
     description: string;
     capabilities: string[];
 }> {
-    const profiles = getProfiles();
-
-    return Object.values(profiles).map(p => ({
-        id: p.id,
-        name: p.displayName,
-        description: p.description,
-        capabilities: [
-            ...(p.executionStrategy !== 'single' ? ['generate-verify'] : []),
-            ...(p.thinking !== 'off' ? ['thinking'] : []),
-            ...(p.discussion ? ['discussion'] : []),
-            ...p.requiredTools,
-        ],
-    }));
+    return [];
 }

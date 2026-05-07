@@ -184,11 +184,75 @@ function initFeedbackDelegation() {
 // 모듈 로드 시 이벤트 위임 등록
 initFeedbackDelegation();
 
+/**
+ * 메시지를 디버깅용으로 신고합니다 (B+ Phase B5).
+ * 7일간 conversation_debug_queue 에 임시 보관되어 운영자가 디버깅에 활용할 수 있습니다.
+ *
+ * @param {string} messageId - 신고할 어시스턴트 메시지 DOM ID
+ * @returns {Promise<void>}
+ */
+async function reportMessage(messageId) {
+    const sessionId = getState('currentChatId');
+    if (!sessionId) {
+        showToast('세션이 없습니다 — 신고 불가', 'error');
+        return;
+    }
+
+    const msgEl = document.getElementById(messageId);
+    if (!msgEl) return;
+    const assistantContent = (msgEl.querySelector('.message-content')?.innerText || '').trim();
+
+    // 가장 최근 사용자 메시지 본문을 함께 캡처
+    const allMessages = Array.from(document.querySelectorAll('#chatMessages .message'));
+    const idx = allMessages.indexOf(msgEl);
+    let userContent = '';
+    for (let i = idx - 1; i >= 0; i--) {
+        const m = allMessages[i];
+        if (m.classList.contains('user')) {
+            userContent = (m.querySelector('.message-content')?.innerText || '').trim();
+            break;
+        }
+    }
+    if (!userContent) {
+        showToast('직전 사용자 메시지를 찾을 수 없습니다', 'error');
+        return;
+    }
+
+    if (!confirm('이 메시지를 디버깅용으로 신고하시겠습니까?\n\n해당 메시지 페어가 운영자에게 7일간 보관됩니다 (자동 삭제).')) return;
+
+    const reason = prompt('신고 사유 (선택, 최대 500자):', '');
+
+    try {
+        const res = await authFetch('/api/debug-queue/report', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                sessionId,
+                userMessage: userContent,
+                assistantMessage: assistantContent,
+                reason: reason || undefined,
+            }),
+        });
+        if (!res.ok) {
+            const err = await res.json().catch(() => null);
+            showToast('신고 실패: ' + (err?.message || res.statusText), 'error');
+            return;
+        }
+        const json = await res.json();
+        const ttlDays = json?.data?.ttlDays || 7;
+        showToast(`✅ 신고 접수됨 (${ttlDays}일 보관)`, 'success');
+    } catch (e) {
+        console.error('신고 실패:', e);
+        showToast('신고 전송 실패', 'error');
+    }
+}
+
 export {
     copyMessage,
     regenerateMessage,
     sendFeedback,
     newChat,
     useSuggestion,
-    setSendMessage
+    setSendMessage,
+    reportMessage,
 };

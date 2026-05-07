@@ -121,10 +121,6 @@ export const APP_USER_AGENT = 'OpenMake-AI';
 // 모델 선택
 // ============================================
 
-/**
- * 자동 모델 선택 프로파일 ID
- *
- * 사용자가 모델을 명시하지 않았을 때 사용되는 기본 프로파일 ID입니다.
- * pipeline-profile, cost-tier, model.routes 등에서 공통 참조합니다.
- */
-export const DEFAULT_AUTO_MODEL = 'openmake_llm_auto';
+// DEFAULT_AUTO_MODEL ('openmake_llm_auto') 상수는 단일 로컬 모델 전환 (2026-05-06)
+// 후 모든 사용처가 제거되어 삭제됨. 현재 모델 식별은 `getModelForRole('chat')`
+// 또는 `getConfig().ollamaDefaultModel` 사용.

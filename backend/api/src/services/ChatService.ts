@@ -24,8 +24,9 @@ import type { DiscussionProgress } from '../agents/discussion-engine';
 import { getPromptConfig } from '../chat/prompt';
 import { adjustOptionsForModel, checkModelCapability } from '../chat/model-selector';
 import { assessComplexity, GV_SKIP_THRESHOLD } from '../chat/complexity-assessor';
-import { CONCISE_RESPONSE_DIRECTIVE } from '../config/llm-parameters';
+import { CONCISE_RESPONSE_DIRECTIVE, TOKEN_BUDGETS } from '../config/llm-parameters';
 import { BUDGET_HINTS, CAPACITY } from '../config/runtime-limits';
+import { withSpan } from '../observability/otel';
 import type { ExecutionPlan } from '../chat/profile-resolver';
 import type { DocumentStore } from '../documents/store';
 import type { UserTier } from '../data/user-manager';
@@ -40,7 +41,7 @@ import { recordMemoryExtractionFailure } from './chat-service-metrics';
 import { preRequestCheck } from '../chat/security-hooks';
 import type { LanguagePolicyDecision } from '../chat/language-policy';
 import { createRoutingLogEntry, type RoutingDecisionLog } from '../chat/routing-logger';
-import type { ChatMessageRequest } from './chat-service-types';
+import type { ChatMessageRequest, SystemEventCallback } from './chat-service-types';
 import { computeUIRResult, recordShadowComparison } from '../chat/unified-intent-router';
 import { UIR_SHADOW_ENABLED } from '../config/routing-config';
 import { buildContextForLLM } from './chat-service/context-builder';
@@ -50,6 +51,8 @@ import { extractMemoriesAsync } from './chat-service/memory-extractor';
 import { resolveAgent as resolveAgentFn } from './chat-service/agent-resolver';
 import { resolveLanguagePolicy as resolveLanguagePolicyFn } from './chat-service/language-resolver';
 import { recordMetricsAndVerify as recordMetricsAndVerifyFn } from './chat-service/metrics-recorder';
+import { ProviderRouter } from '../providers/provider-router';
+import { runProviderGate } from './chat-service/provider-gate';
 
 // Re-export all types so consumers importing from ChatService don't break
 export type {
@@ -83,6 +86,10 @@ const logger = createLogger('ChatService');
 export class ChatService {
     /** Ollama API 통신 클라이언트 */
     private client: OllamaClient;
+    /** 외부 LLM provider 검증/해석 라우터 (선택) — 미지정 시 게이트 비활성 (테스트 호환) */
+    private readonly providerRouter?: ProviderRouter;
+    /** 직전 외부 provider 호출의 사용량 메트릭 (billing/usage 이벤트용) */
+    private lastProviderUsage: import('../ollama/types').UsageMetrics | null = null;
     /** 현재 요청의 사용자 컨텍스트 (도구 접근 권한 결정에 사용) */
     private currentUserContext: UserContext | null = null;
     /** 사용자가 활성화한 MCP 도구 목록 (undefined면 레거시 모드: 전체 허용) */
@@ -107,9 +114,11 @@ export class ChatService {
      * ChatService 인스턴스를 생성합니다.
      *
      * @param client - Ollama HTTP 클라이언트 인스턴스
+     * @param providerRouter - 외부 provider 검증 라우터 (선택, 미지정 시 게이트 비활성)
      */
-    constructor(client: OllamaClient) {
+    constructor(client: OllamaClient, providerRouter?: ProviderRouter) {
         this.client = client;
+        this.providerRouter = providerRouter;
         this.directStrategy = new DirectStrategy();
         this.generateVerifyStrategy = new GenerateVerifyStrategy();
         this.discussionStrategy = new DiscussionStrategy();
@@ -232,6 +241,51 @@ export class ChatService {
         executionPlan?: ExecutionPlan,
         onSkillsActivated?: (skillNames: string[]) => void,
         onThinking?: (thinking: string) => void,
+        onSystemEvent?: SystemEventCallback,
+    ): Promise<string> {
+        // 채팅 요청 전체를 root span으로 추적 (모든 LLM/도구 호출이 자식 span으로 자동 연결)
+        return withSpan(
+            'chat-service',
+            'chat.process',
+            async (rootSpan) => {
+                const result = await this.processMessageInternal(
+                    req, uploadedDocuments, onToken,
+                    onAgentSelected, onDiscussionProgress, onResearchProgress,
+                    executionPlan, onSkillsActivated, onThinking, onSystemEvent,
+                );
+                rootSpan.setAttribute('chat.response_chars', result.length);
+                return result;
+            },
+            {
+                attributes: {
+                    'chat.user_id': req.userId || 'guest',
+                    'chat.user_role': req.userRole || 'guest',
+                    'chat.user_tier': req.userTier || 'free',
+                    'chat.query_length': (req.message || '').length,
+                    'chat.has_images': (req.images?.length ?? 0) > 0,
+                    'chat.has_doc': !!req.docId,
+                    'chat.history_length': req.history?.length ?? 0,
+                    'chat.brand_profile': executionPlan?.requestedModel || 'none',
+                    'chat.discussion_mode': req.discussionMode === true,
+                    'chat.deep_research_mode': req.deepResearchMode === true,
+                    'chat.thinking_mode': req.thinkingMode === true,
+                },
+            }
+        );
+    }
+
+    /** processMessage의 본체 — withSpan으로 wrap된 진입점에서 호출 */
+    private async processMessageInternal(
+        req: ChatMessageRequest,
+        uploadedDocuments: DocumentStore,
+        onToken: (token: string) => void,
+        onAgentSelected?: (agent: { type: string; name: string; emoji?: string; phase?: string; reason?: string; confidence?: number }) => void,
+        onDiscussionProgress?: (progress: DiscussionProgress) => void,
+        onResearchProgress?: (progress: ResearchProgress) => void,
+        executionPlan?: ExecutionPlan,
+        onSkillsActivated?: (skillNames: string[]) => void,
+        onThinking?: (thinking: string) => void,
+        onSystemEvent?: SystemEventCallback,
     ): Promise<string> {
         const {
             message,
@@ -264,6 +318,19 @@ export class ChatService {
         this.currentEnabledTools = req.apiKeyId && !enabledTools ? {} : enabledTools;
         this.currentExecutionPlan = executionPlan;
 
+        // ── Provider Gate: 모델 ID 검증 (strategy 실행 이전 조기 차단) ──
+        // 외부 provider(anthropic 등) 분기 시 strategy 우회하여 직접 streamChat 호출.
+        if (this.providerRouter) {
+            const resolved = await runProviderGate(this.providerRouter, {
+                requestedModel: executionPlan?.requestedModel,
+                fallbackModel: this.client.model,
+                ctx: { userId: req.userId, userRole: req.userRole },
+            });
+            if (resolved.providerId !== 'ollama') {
+                return await this.streamFromExternalProvider(resolved, req, onToken);
+            }
+        }
+
         // ── 보안 사전 검사 ──
         const securityPreCheck = preRequestCheck(message || '');
         if (!securityPreCheck.passed) {
@@ -284,15 +351,12 @@ export class ChatService {
         if (languagePolicy?.resolvedLanguage) {
             req.userLanguagePreference = languagePolicy.resolvedLanguage;
         }
-        if (discussionMode) {
-            // Auto-routing 모델 해석: __auto__ → 실제 엔진 모델명으로 변환
-            // Discussion 모드는 일반 모드의 resolveModel() 흐름을 거치지 않으므로
-            // client가 placeholder "default"를 유지하면 Ollama 404 발생
-            if (executionPlan?.isBrandModel && executionPlan.resolvedEngine === '__auto__') {
-                const hasImages = (images && images.length > 0) || false;
-                const promptConfig = getPromptConfig(message, languagePolicy?.resolvedLanguage);
-                await this.resolveModel(message || '', hasImages, executionPlan, promptConfig);
-            }
+
+        // 토론 모드: 사용자 명시 토글(`discussionMode === true`)만 활성화 트리거.
+        // 단일 로컬 모델 전환(2026-05-06) 후 Brand Model 프로파일이 모두 제거되어
+        // `decideDiscussionActivation()` 의 자동 분기는 모두 false 반환 → 함수 호출 자체 제거.
+        // 향후 자동 토론 활성화가 필요하면 새 정책으로 재설계 (이전 구현 참조: discussion-router.ts).
+        if (discussionMode === true) {
             return this.processMessageWithDiscussion(req, uploadedDocuments, onToken, onDiscussionProgress);
         }
 
@@ -319,6 +383,9 @@ export class ChatService {
                 brandProfile: executionPlan?.requestedModel,
             },
         });
+
+        // 자동 토론 활성화 추적 필드는 자동 분기 제거 (2026-05-07) 후 항상 false.
+        // 호환성을 위해 routingLog 스키마 자체는 유지하되 자동 결정 메타는 미기록.
 
         let fullResponse = '';
 
@@ -425,6 +492,24 @@ export class ChatService {
             chatOptions = { ...docPreset, ...chatOptions };
         }
 
+        // Thinking ON 시 num_predict 최소 보장.
+        // 배경: Ollama /api/chat 응답은 message.content 와 message.thinking 이
+        //      같은 num_predict 토큰 풀을 공유. 작은 cap에서 thinking 모델이
+        //      사고에 토큰을 다 쓰면 실제 응답이 비어 나오는 잘림 발생.
+        //      (예: chat/korean → tokenBudget 512, thinking이 2000+ 토큰 소비
+        //       → message.content 빈 응답 → empty-response 에러)
+        if (thinkingMode === true) {
+            const minTokens = TOKEN_BUDGETS.THINKING_MIN_TOKENS;
+            const current = chatOptions.num_predict;
+            if (current === undefined || current === null || (current > 0 && current < minTokens)) {
+                logger.info(
+                    `[ChatService] Thinking 활성 — num_predict 보강: ${current ?? 'undefined'} → ${minTokens}`
+                );
+                chatOptions = { ...chatOptions, num_predict: minTokens };
+                routingLog.routeDecision.tokenBudget = minTokens;
+            }
+        }
+
         const currentImages = [...(images || []), ...documentImages];
 
         const supportsTools = checkModelCapability(modelSelection.model, 'toolCalling');
@@ -515,7 +600,10 @@ export class ChatService {
         // API Key 요청: 외부 서비스의 메시지에 이미 문서가 포함되어 있을 수 있으므로
         // 메모리 추출을 완전히 스킵하여 외부 문서 내용이 내부 메모리로 오염되는 것을 방지
         // 웹검색 컨텍스트가 주입된 답변은 메모리 추출을 스킵하여 오염 방지
-        if (userId && message && !req.apiKeyId) {
+        // memoryLearning=false (사용자 명시 OFF): MemoryService 호출 자체를 스킵
+        // memoryLearning=true 또는 undefined: Extract-and-Forget — saveHistory 와 독립
+        const memoryLearningEnabled = req.memoryLearning !== false;
+        if (userId && message && !req.apiKeyId && memoryLearningEnabled) {
             const hasExternalContext = !!(webSearchContext || docId);
             this.extractMemoriesAsync(userId, message, fullResponse, hasExternalContext).catch((e: Error) => {
                 const reason = e?.message?.includes('timeout') ? 'timeout' : 'unknown';
@@ -582,10 +670,9 @@ export class ChatService {
         executionPlan: ExecutionPlan | undefined,
         promptConfig: { options?: ModelOptions },
     ): Promise<import('../chat/model-selector').ModelSelection> {
-        return resolveModel({
-            message, hasImages, executionPlan, promptConfig,
-            setModel: (model: string) => this.client.setModel(model),
-        });
+        // Pure Manual (Decision F): setModel 콜백 미전달 — OllamaClient 생성자
+        // 단계의 모델이 사용자 선택을 그대로 반영하며, 분류·옵션 튜닝만 수행.
+        return resolveModel({ message, hasImages, executionPlan, promptConfig });
     }
 
     /**
@@ -663,6 +750,12 @@ export class ChatService {
         onToken: (token: string) => void,
         onProgress?: (progress: DiscussionProgress) => void
     ): Promise<string> {
+        const abortSignal = req.abortSignal;
+        const checkAborted = () => {
+            if (abortSignal?.aborted) {
+                throw new Error('ABORTED');
+            }
+        };
         const result = await this.discussionStrategy.execute({
             req,
             uploadedDocuments,
@@ -670,6 +763,8 @@ export class ChatService {
             onProgress,
             formatDiscussionResult: (discussionResult) => formatDiscussionResult(discussionResult),
             onToken,
+            abortSignal,
+            checkAborted,
         });
 
         return result.response;
@@ -700,6 +795,140 @@ export class ChatService {
         });
 
         return result.response;
+    }
+
+    /**
+     * 직전 외부 provider 호출의 사용량 메트릭 조회.
+     * Ollama 경로는 strategies → request-handler.ts 가 별도 경로로 처리.
+     */
+    getLastProviderUsage(): import('../ollama/types').UsageMetrics | null {
+        return this.lastProviderUsage;
+    }
+
+    /**
+     * 외부 provider(anthropic 등) 직접 스트리밍 호출 — strategy 우회.
+     *
+     * Ollama 전용 기능(Discussion / DeepResearch / Tool Loop / Generate-Verify) 은
+     * 외부 provider 에서 동작 보장이 어렵고 비용/지연 영향이 크므로 Phase 3 에서는
+     * 단일 streamChat 호출 + 토큰 콜백 + 사용량 기록으로 한정.
+     * Phase 5 에서 frontend 가 외부 모델 선택 시 해당 토글들을 disable 처리한다.
+     */
+    private async streamFromExternalProvider(
+        resolved: import('../providers/provider-router').ResolvedProvider,
+        req: ChatMessageRequest,
+        onToken: (token: string, thinking?: string) => void,
+    ): Promise<string> {
+        const messages: ChatMessage[] = [];
+
+        for (const h of req.history ?? []) {
+            const role = h.role === 'user' || h.role === 'assistant' || h.role === 'system'
+                ? h.role
+                : 'user';
+            messages.push({
+                role,
+                content: h.content,
+                ...(h.images ? { images: h.images } : {}),
+            });
+        }
+
+        messages.push({
+            role: 'user',
+            content: req.message,
+            ...(req.images ? { images: req.images } : {}),
+        });
+
+        const startedAt = Date.now();
+        let errorCode: string | null = null;
+        let result;
+        try {
+            result = await resolved.provider.streamChat(
+                {
+                    messages,
+                    modelId: resolved.modelId,
+                    ...(req.abortSignal ? { abortSignal: req.abortSignal } : {}),
+                },
+                {
+                    onToken: (token) => onToken(token),
+                    onThinking: (thinking) => onToken('', thinking),
+                    onUsage: (usage) => {
+                        this.lastProviderUsage = usage;
+                    },
+                },
+            );
+        } catch (err) {
+            errorCode = err && typeof err === 'object' && 'code' in err
+                ? String((err as { code: unknown }).code)
+                : 'UPSTREAM_ERROR';
+            // 사용량 적재 (실패 호출도 기록)
+            this.recordExternalUsageFireAndForget({
+                userId: req.userId,
+                resolved,
+                inputTokens: 0,
+                outputTokens: 0,
+                durationMs: Date.now() - startedAt,
+                errorCode,
+            });
+            throw err;
+        }
+
+        logger.info(
+            `외부 provider 호출 완료: ${resolved.fullId} ` +
+            `(in=${result.usage.prompt_eval_count ?? 0}, out=${result.usage.eval_count ?? 0})`,
+        );
+
+        // 사용량 적재 (성공 호출, fire-and-forget — DB 실패가 응답을 막지 않도록)
+        this.recordExternalUsageFireAndForget({
+            userId: req.userId,
+            resolved,
+            inputTokens: result.usage.prompt_eval_count ?? 0,
+            outputTokens: result.usage.eval_count ?? 0,
+            durationMs: Date.now() - startedAt,
+            finishReason: result.finishReason,
+        });
+
+        return result.content;
+    }
+
+    private recordExternalUsageFireAndForget(input: {
+        userId: string | undefined;
+        resolved: import('../providers/provider-router').ResolvedProvider;
+        inputTokens: number;
+        outputTokens: number;
+        durationMs: number;
+        finishReason?: string;
+        errorCode?: string | null;
+    }): void {
+        if (!input.userId || !this.providerRouter) return;
+        const repo = this.providerRouter.getExternalKeysRepo();
+        if (!repo) return;
+        const userId = input.userId;
+
+        // 단가표 기반 cost 계산 (config/external-pricing.ts) — micros 단위
+        // import 는 함수 내부 require 로 — circular import 방지 + lazy load
+        const { computeCostMicros } = require('../config/external-pricing') as
+            typeof import('../config/external-pricing');
+        const costUsdMicros = computeCostMicros(
+            input.resolved.providerId,
+            input.resolved.modelId,
+            input.inputTokens,
+            input.outputTokens,
+        );
+
+        repo.recordUsage({
+            userId,
+            providerId: input.resolved.providerId,
+            modelId: input.resolved.modelId,
+            inputTokens: input.inputTokens,
+            outputTokens: input.outputTokens,
+            costUsdMicros,
+            durationMs: input.durationMs,
+            finishReason: input.finishReason,
+            errorCode: input.errorCode ?? undefined,
+        }).then(() => {
+            return repo.touchLastUsed(userId, input.resolved.providerId);
+        }).catch((err) => {
+            logger.warn(`외부 사용량 기록 실패: ${err instanceof Error ? err.message : err}`);
+        });
     }
 
     /**

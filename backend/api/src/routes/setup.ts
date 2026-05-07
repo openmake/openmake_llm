@@ -15,6 +15,7 @@ import * as fs from 'fs';
 
 import v1Router from './v1';
 import { tokenMonitoringRouter } from './token-monitoring.routes';
+import debugQueueRouter from './debug-queue.routes';
 import { default as chatRouter, setClusterManager as setChatCluster } from './chat.routes';
 import { setClusterManager as setOpenAICompatCluster } from './openai-compat.routes';
 import { default as documentsRouter, setDependencies as setDocumentsDeps } from './documents.routes';
@@ -38,6 +39,7 @@ import {
     developerDocsRouter,
     chatFeedbackRouter,
     apiKeysRouter,
+    externalKeysRouter,
     kbRouter,
     uirRouter
 } from './index';
@@ -145,6 +147,7 @@ export function setupApiRoutes(
     app.use('/api/monitoring', tokenMonitoringRouter);
     app.use('/api/uir', uirRouter);
     app.use('/api/mcp', mcpRouter);
+    app.use('/api/debug-queue', debugQueueRouter);
 
     // 부트스트랩 서비스 초기화
     bootstrapServices();
@@ -190,6 +193,7 @@ export function setupApiRoutes(
     app.use('/api/push', pushRouter);
     app.use('/api/docs', developerDocsRouter);
     app.use('/api/api-keys', apiKeysRouter);
+    app.use('/api/external-keys', externalKeysRouter);
     app.use('/api/kb', kbRouter);
 
     // Swagger 설정

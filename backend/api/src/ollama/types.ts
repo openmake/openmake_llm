@@ -671,36 +671,8 @@ export function isGeminiModel(modelName: string): boolean {
     return modelName.toLowerCase().includes('gemini');
 }
 
-/**
- * Gemini 모델의 작업 유형별 프리셋을 반환합니다.
- *
- * @param taskType - 작업 유형 ('default' | 'reasoning' | 'code' | 'creative')
- * @returns 해당 작업에 최적화된 Gemini ModelOptions 프리셋
- */
-export function getGeminiPreset(taskType: 'default' | 'reasoning' | 'code' | 'creative'): ModelOptions {
-    switch (taskType) {
-        case 'reasoning': return MODEL_PRESETS.GEMINI_REASONING;
-        case 'code': return MODEL_PRESETS.GEMINI_CODE;
-        case 'creative': return MODEL_PRESETS.GEMINI_CREATIVE;
-        default: return MODEL_PRESETS.GEMINI_DEFAULT;
-    }
-}
-
-/**
- * Gemini 모델용 시스템 프롬프트를 생성합니다.
- *
- * Thinking 활성화 시 `<think>...</think>` 태그 형식의 추론 과정을 포함하는
- * 프롬프트를 반환합니다.
- *
- * @param enableThinking - Thinking 모드 활성화 여부 (기본값: true)
- * @returns Gemini 시스템 프롬프트 문자열
- */
-export function getGeminiSystemPrompt(enableThinking: boolean = true): string {
-    if (enableThinking) {
-        return `You are Gemini 3 Flash, an advanced AI assistant with superior reasoning capabilities.
-When solving complex problems, think step-by-step through the problem carefully.
-Always show your reasoning process for math, logic, and complex analysis tasks.`;
-    }
-    return `You are Gemini 3 Flash, a helpful and knowledgeable AI assistant.
-Provide clear, accurate, and well-structured responses in the user's language.`;
-}
+// 삭제된 dead code:
+//   - getGeminiPreset(taskType): MODEL_PRESETS.GEMINI_* 직접 참조로 충분, 함수 미사용
+//   - getGeminiSystemPrompt(enableThinking): 시스템 프롬프트는 chat/prompt.ts 빌더가 담당
+// 단일 로컬 모델 전환 (2026-05-06) 후 호출처 0건 확인 후 제거.
+// isGeminiModel(modelName) 은 context-builder.ts 에서 사용 중이므로 유지.

@@ -29,6 +29,7 @@
     <link rel="stylesheet" href="css/light-theme.css?v=8">
     <link rel="stylesheet" href="style.css?v=9">
     <link rel="stylesheet" href="css/chat-status-toast.css">
+    <link rel="stylesheet" href="css/system-toast.css?v=1">
     <link rel="stylesheet" href="css/mobile-fab.css">
     <!-- Iconify Icon Web Component (self-hosted, defer) -->
     <script src="vendor/iconify-icon.min.js" defer></script>
@@ -314,6 +315,16 @@
                                     <span class="toggle-slider"></span>
                                 </label>
                             </div>
+                        </div>
+                    </div>
+
+                    <!-- API 키 관리 -->
+                    <div class="settings-group">
+                        <span class="settings-label">🔐 API 키 관리</span>
+                        <div class="btn-group" style="flex-wrap:wrap; gap:8px;">
+                            <a href="/api-keys.html" class="btn" style="text-decoration:none;">🔑 OpenMake API 키</a>
+                            <a href="/external-keys.html" class="btn btn-primary" style="text-decoration:none;">🌐 외부 LLM 키 (Anthropic / OpenAI 호환)</a>
+                            <a href="/developer.html" class="btn" style="text-decoration:none;">📋 API 문서</a>
                         </div>
                     </div>
 

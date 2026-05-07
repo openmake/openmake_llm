@@ -4,23 +4,29 @@
  * ============================================================
  *
  * LLM 모델 정보 조회를 위한 REST API 엔드포인트입니다.
- * 브랜드 모델 프로파일 기반으로 서비스 모델명을 반환합니다.
+ * model-roles 레지스트리 기반으로 실제 사용 중인 로컬 모델을 반환합니다.
  *
  * @module routes/model.routes
  * @description
- * - GET /api/model - 현재 기본 모델 정보 (브랜드 모델명)
- * - GET /api/models - 브랜드 모델 프로파일 목록
- * - GET /api/models/health - Cloud 모델 × API Key 헬스체크 매트릭스 (admin only)
+ * - GET /api/model - 현재 사용 중인 로컬 모델 정보
+ * - GET /api/models - 사용 가능한 모델 목록 (model-roles 기반 단일 모델)
+ * - GET /api/models/health - 모델 헬스체크 (admin only, 로컬 모델 환경에서는 stub)
  */
 
 import { Router, Request, Response } from 'express';
 import { success } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
-import { getProfiles } from '../chat/pipeline-profile';
 import { createLogger } from '../utils/logger';
-import { DEFAULT_AUTO_MODEL } from '../config/constants';
+import { getModelForRole } from '../config/model-roles';
+import { MODEL_CAPABILITY_PRESETS } from '../config/model-defaults';
 import { requireAuth, requireAdmin } from '../auth';
 import { getModelHealthMonitor } from '../services/model-health-monitor';
+import { ExternalKeysRepository } from '../data/repositories/external-keys-repo';
+import { getPool } from '../data/models/unified-database';
+import { AnthropicProvider } from '../providers/anthropic-provider';
+import { OpenAICompatProvider } from '../providers/openai-compat-provider';
+import { buildFullModelId } from '../providers/i-provider';
+import { getProviderCatalogEntry } from '../config/external-providers';
 
 const router = Router();
 const logger = createLogger('ModelRoutes');
@@ -28,40 +34,158 @@ const logger = createLogger('ModelRoutes');
 /**
  * GET /model
  * 현재 모델 정보 API (프론트엔드 settings.js 호출용)
- * 브랜드 모델명을 반환합니다.
+ * model-roles 레지스트리의 chat 역할 모델을 반환합니다.
  */
-router.get('/model', asyncHandler(async (req: Request, res: Response) => {
+router.get('/model', asyncHandler(async (_req: Request, res: Response) => {
+    const modelId = getModelForRole('chat');
     res.json(success({
-        model: 'OpenMake LLM Auto',
-        modelId: DEFAULT_AUTO_MODEL,
-        provider: 'openmake'
+        model: modelId,
+        modelId,
+        provider: 'ollama-local'
     }));
 }));
 
 /**
  * GET /models
- * 브랜드 모델 프로파일 목록 API
- * pipeline-profile.ts에 정의된 서비스 모델명을 반환합니다.
+ * 사용 가능한 모델 목록 API
+ * model-roles 레지스트리의 chat 역할 모델을 반환합니다.
+ * capabilities 는 MODEL_CAPABILITY_PRESETS 의 가장 긴 prefix 매칭으로 조회합니다.
  */
 router.get('/models', asyncHandler(async (req: Request, res: Response) => {
-    const profiles = getProfiles();
-    const defaultModelId = DEFAULT_AUTO_MODEL;
+    const chatModel = getModelForRole('chat');
 
-    const models = Object.values(profiles).map(profile => ({
-        name: profile.displayName,
-        modelId: profile.id,
-        description: profile.description,
-        capabilities: {
-            executionStrategy: profile.executionStrategy,
-            thinking: profile.thinking,
-            discussion: profile.discussion,
-            vision: profile.requiredTools.includes('vision'),
+    // MODEL_CAPABILITY_PRESETS에서 가장 긴 prefix 매칭으로 capabilities 조회
+    const lower = chatModel.toLowerCase();
+    let caps = { toolCalling: true, thinking: false, vision: false, streaming: true };
+    let bestPrefix = '';
+    for (const [prefix, presetCaps] of Object.entries(MODEL_CAPABILITY_PRESETS)) {
+        if (lower.includes(prefix) && prefix.length > bestPrefix.length) {
+            bestPrefix = prefix;
+            caps = presetCaps;
         }
-    }));
+    }
+
+    type ModelEntry = {
+        name: string;
+        modelId: string;
+        description: string;
+        provider: string;
+        capabilities: {
+            executionStrategy: 'single';
+            thinking: 'off' | 'medium';
+            discussion: boolean;
+            vision: boolean;
+            toolCalling: boolean;
+            streaming: boolean;
+        };
+    };
+
+    const models: ModelEntry[] = [{
+        name: chatModel,
+        modelId: buildFullModelId('ollama', chatModel),
+        description: `Local Ollama model (${chatModel})`,
+        provider: 'ollama',
+        capabilities: {
+            executionStrategy: 'single',
+            thinking: caps.thinking ? 'medium' : 'off',
+            discussion: false,
+            vision: caps.vision,
+            toolCalling: caps.toolCalling,
+            streaming: caps.streaming,
+        },
+    }];
+
+    // 인증된 사용자는 외부 provider 키 등록분도 추가
+    const userId = req.user && 'userId' in req.user
+        ? (req.user as { userId: string }).userId
+        : null;
+    if (userId) {
+        try {
+            const repo = new ExternalKeysRepository(getPool());
+            const userKeys = await repo.listByUser(userId);
+            for (const keyRow of userKeys) {
+                if (keyRow.sdkType === 'anthropic') {
+                    const provider = new AnthropicProvider({ apiKey: 'placeholder', baseUrl: keyRow.baseUrl });
+                    const list = await provider.listModels();
+                    for (const m of list) {
+                        models.push({
+                            name: m.displayName,
+                            modelId: m.fullId,
+                            description: 'Anthropic — BYO key',
+                            provider: 'anthropic',
+                            capabilities: {
+                                executionStrategy: 'single',
+                                thinking: m.capabilities.thinking ? 'medium' : 'off',
+                                discussion: false,
+                                vision: m.capabilities.vision,
+                                toolCalling: m.capabilities.toolCalling,
+                                streaming: m.capabilities.streaming,
+                            },
+                        });
+                    }
+                }
+                // openai-compatible 분기: provider 의 /v1/models 호출 (TTL 캐시 + 실패 격리)
+                if (keyRow.sdkType === 'openai-compatible' && keyRow.baseUrl) {
+                    try {
+                        // 캐시 우선 조회 (EXTERNAL_MODELS_CACHE_TTL_MS, 기본 1h)
+                        const cacheTtlMs = parseInt(
+                            process.env.EXTERNAL_MODELS_CACHE_TTL_MS ?? '3600000',
+                            10,
+                        );
+                        type CachedModel = { id: string; fullId: string; displayName: string; capabilities: Record<string, boolean> };
+                        const cached = await repo.getCachedModels(userId, keyRow.providerId, cacheTtlMs);
+                        let list: CachedModel[] | null = cached as CachedModel[] | null;
+
+                        if (!list) {
+                            const plaintextKey = await repo.decryptKey(userId, keyRow.providerId);
+                            if (!plaintextKey) continue;
+                            const provider = new OpenAICompatProvider({
+                                providerId: keyRow.providerId,
+                                apiKey: plaintextKey,
+                                baseUrl: keyRow.baseUrl,
+                            });
+                            const fresh = await provider.listModels();
+                            // ProviderModel[] 을 캐시-친화 형태로 직렬화
+                            list = fresh.map((m) => ({
+                                id: m.id,
+                                fullId: m.fullId,
+                                displayName: m.displayName,
+                                capabilities: m.capabilities as unknown as Record<string, boolean>,
+                            }));
+                            await repo.putCachedModels(userId, keyRow.providerId, list);
+                        }
+
+                        const catalogDisplay = getProviderCatalogEntry(keyRow.providerId)?.displayName ?? keyRow.providerId;
+                        for (const m of list) {
+                            const caps = m.capabilities;
+                            models.push({
+                                name: m.displayName,
+                                modelId: m.fullId,
+                                description: `${catalogDisplay} — BYO key`,
+                                provider: keyRow.providerId,
+                                capabilities: {
+                                    executionStrategy: 'single',
+                                    thinking: caps.thinking ? 'medium' : 'off',
+                                    discussion: false,
+                                    vision: !!caps.vision,
+                                    toolCalling: !!caps.toolCalling,
+                                    streaming: !!caps.streaming,
+                                },
+                            });
+                        }
+                    } catch (err) {
+                        logger.warn(`${keyRow.providerId} /v1/models 조회 실패: ${err instanceof Error ? err.message : err}`);
+                    }
+                }
+            }
+        } catch (err) {
+            logger.warn(`외부 모델 카탈로그 조회 실패: ${err instanceof Error ? err.message : err}`);
+        }
+    }
 
     res.json(success({
-        defaultModel: defaultModelId,
-        models
+        defaultModel: buildFullModelId('ollama', chatModel),
+        models,
     }));
 }));
 

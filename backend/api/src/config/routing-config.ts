@@ -9,11 +9,12 @@
  * @module config/routing-config
  */
 
+import { getModelForRole } from './model-roles';
+
 // ── LLM Classifier 설정 ──────────────────────────────────────
 
-/** 분류용 모델 (env: OMK_CLASSIFIER_MODEL) */
-export const CLASSIFIER_MODEL =
-    process.env.OMK_CLASSIFIER_MODEL ?? 'gemini-3-flash-preview:cloud';
+/** 분류용 모델 — model-roles 레지스트리 경유 */
+export const CLASSIFIER_MODEL = getModelForRole('classifier');
 
 /** LLM 분류 최소 신뢰도 임계값 - 이 값 미만이면 regex fallback (env: OMK_CONFIDENCE_THRESHOLD) */
 export const CONFIDENCE_THRESHOLD =
@@ -42,6 +43,42 @@ export const ROUTER_NUM_PREDICT =
 /** GV 건너뛰기 임계값 - 이 점수 미만이면 Generate-Verify 생략 (env: OMK_GV_SKIP_THRESHOLD) */
 export const GV_SKIP_THRESHOLD =
     Number(process.env.OMK_GV_SKIP_THRESHOLD ?? process.env.OMK_A2A_SKIP_THRESHOLD ?? '0.3');
+
+/**
+ * 토론(Discussion) 자동 활성화 임계값
+ * Pro 프로파일(useDiscussion=true)에서 사용자가 discussionMode를 명시하지 않았을 때,
+ * 복잡도 점수가 이 값 이상이면 자동으로 토론 모드 활성화.
+ * 보수적 시작: 0.7 (단순/중간 질의 자동 토론 방지)
+ * env: OMK_DISCUSSION_AUTO_THRESHOLD
+ */
+export const DISCUSSION_AUTO_THRESHOLD =
+    Number(process.env.OMK_DISCUSSION_AUTO_THRESHOLD ?? '0.7');
+
+/**
+ * Auto 프로파일 전용 토론 자동 활성화 임계값
+ * Auto 프로파일은 useDiscussion=false 고정이지만, 매우 복잡한 질의에 한해
+ * 토론을 자동 활성화. Pro(0.7)보다 훨씬 보수적인 0.9로 시작.
+ * "편하게 쓰는 모드"라는 사용자 기대를 깨지 않도록 정말 필요한 경우만 발동.
+ * env: OMK_DISCUSSION_AUTO_MODE_THRESHOLD
+ */
+export const DISCUSSION_AUTO_MODE_THRESHOLD =
+    Number(process.env.OMK_DISCUSSION_AUTO_MODE_THRESHOLD ?? '0.9');
+
+/**
+ * 토론 자동 활성화 기능 토글
+ * false면 사용자가 discussionMode=true를 명시한 경우에만 토론 실행 (기존 동작)
+ * env: OMK_DISCUSSION_AUTO_ENABLED (기본 true)
+ */
+export const DISCUSSION_AUTO_ENABLED =
+    (process.env.OMK_DISCUSSION_AUTO_ENABLED ?? 'true') === 'true';
+
+/**
+ * Auto 프로파일에서 토론 자동 활성화 토글
+ * 기본 false (Auto는 보수적 — Pro와 달리 사용자가 토론 비용을 명시 동의하지 않음)
+ * env: OMK_DISCUSSION_AUTO_MODE_ENABLED
+ */
+export const DISCUSSION_AUTO_MODE_ENABLED =
+    (process.env.OMK_DISCUSSION_AUTO_MODE_ENABLED ?? 'false') === 'true';
 
 /** 복잡도 시작 점수 */
 export const COMPLEXITY_NEUTRAL_SCORE = 0.5;
@@ -86,9 +123,8 @@ export const COMPLEXITY_WEIGHTS = {
 
 // ── UIR (Unified Intent Router) 설정 ─────────────────────────
 
-/** UIR 전용 모델 (env: OMK_UIR_MODEL) */
-export const UIR_MODEL =
-    process.env.OMK_UIR_MODEL ?? 'gemini-3-flash-preview:cloud';
+/** UIR 전용 모델 — model-roles 레지스트리 경유 */
+export const UIR_MODEL = getModelForRole('router');
 
 /** UIR 롤아웃 비율 0=shadow only, 100=full UIR (env: OMK_UIR_ROLLOUT_PERCENT) */
 export const UIR_ROLLOUT_PERCENT =
@@ -125,9 +161,8 @@ export const EXPANDED_DAMPING =
     Number(process.env.OMK_EXPANDED_DAMPING ?? '0.3');
 
 // ── Vector Cache (L1.5) 설정 ──────────────────────────────────
-/** 임베딩 모델 (env: OMK_EMBEDDING_MODEL) */
-export const EMBEDDING_MODEL =
-    process.env.OMK_EMBEDDING_MODEL ?? 'nomic-embed-text';
+/** 임베딩 모델 — model-roles 레지스트리 경유 */
+export const EMBEDDING_MODEL = getModelForRole('embedding');
 
 /** 벡터 캐시 유사도 임계값 (env: OMK_VECTOR_CACHE_THRESHOLD) */
 export const VECTOR_CACHE_THRESHOLD =

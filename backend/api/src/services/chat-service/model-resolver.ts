@@ -1,108 +1,53 @@
 /**
  * ============================================================
- * Model Resolver — 최적 모델 선택 모듈
+ * Model Resolver — 쿼리 분류 + 옵션 튜닝
  * ============================================================
  *
- * Brand Model auto-routing, Brand Model 직접 매핑, 일반 자동 선택으로
- * 최적 LLM 모델을 결정합니다.
- * ChatService.resolveModel 메서드에서 추출되었습니다.
+ * Decision F (Pure Manual) 적용 후:
+ * - **모델 자동 선택은 비활성화** — 사용자가 명시한 모델만 사용
+ * - 분류기는 여전히 동작 (caching/관측 + adjustOptionsForModel 의 옵션 튜닝 목적)
+ * - 반환되는 selection.model 은 ollamaDefaultModel 로 고정 (Phase 1 단일 모델 환경)
+ * - setModel 콜백은 더 이상 호출되지 않음 — OllamaClient.model 은 생성자에서 결정
  *
  * @module services/chat-service/model-resolver
  */
 import { createLogger } from '../../utils/logger';
-import { selectOptimalModel, selectBrandProfileForAutoRouting, type ModelSelection } from '../../chat/model-selector';
-import { type ExecutionPlan, buildExecutionPlan } from '../../chat/profile-resolver';
-import { applyDomainEngineOverride } from '../../chat/domain-router';
+import { selectOptimalModel, type ModelSelection } from '../../chat/model-selector';
 import type { ModelOptions } from '../../ollama/types';
-import type { QueryType } from '../../chat/model-selector-types';
 
 const logger = createLogger('ModelResolver');
 
 /**
- * resolveModel 함수의 입력 파라미터
+ * resolveModel 함수의 입력 파라미터.
+ *
+ * `setModel` 은 Pure Manual 정책 도입 이전의 잔재 — 호출되지 않음.
+ * 호출자 코드 호환을 위해 옵셔널로 유지하되, 실제 서명은 무시.
  */
 export interface ResolveModelParams {
     /** 사용자 메시지 */
     message: string;
     /** 이미지 포함 여부 */
     hasImages: boolean;
-    /** Brand Model 실행 계획 */
-    executionPlan: ExecutionPlan | undefined;
-    /** 프롬프트 설정 (options 포함) */
-    promptConfig: { options?: ModelOptions };
-    /** 클라이언트 모델 변경 콜백 */
-    setModel: (model: string) => void;
+    /** Brand Model 실행 계획 (미사용, 하위 호환용) */
+    executionPlan?: unknown;
+    /** 프롬프트 설정 (미사용, 하위 호환용) */
+    promptConfig?: { options?: ModelOptions };
+    /**
+     * @deprecated Pure Manual 모드 — 사용자 명시 모델을 override 하지 않으므로 호출되지 않음.
+     *   호출자 호환을 위해 옵셔널로 유지.
+     */
+    setModel?: (model: string) => void;
 }
 
 /**
- * Brand Model auto-routing / Brand Model 직접 매핑 / 일반 자동 선택으로 최적 모델을 결정합니다.
+ * 쿼리 분류 + 옵션 튜닝 (Pure Manual: 모델 변경 없음).
  *
- * @param params - 모델 선택에 필요한 파라미터
- * @returns 모델 선택 결과
+ * @param params - 분류·튜닝에 필요한 파라미터
+ * @returns 분류 결과 + adjustedOptions (호출자가 ModelOptions 머지에 사용)
  */
 export async function resolveModel(params: ResolveModelParams): Promise<ModelSelection> {
-    const { message, hasImages, executionPlan, promptConfig, setModel } = params;
-
-    if (executionPlan?.isBrandModel && executionPlan.resolvedEngine === '__auto__') {
-        const autoRoutingResult = await selectBrandProfileForAutoRouting(message, hasImages);
-        const targetBrandProfile = autoRoutingResult.profileId;
-        const autoExecutionPlan = buildExecutionPlan(targetBrandProfile);
-
-        logger.info(`Auto-Routing: ${executionPlan.requestedModel} → ${targetBrandProfile} (engine=${autoExecutionPlan.resolvedEngine})`);
-
-        executionPlan.resolvedEngine = autoExecutionPlan.resolvedEngine;
-        executionPlan.profile = autoExecutionPlan.profile;
-        executionPlan.useToolCalling = autoExecutionPlan.useToolCalling;
-        executionPlan.agentLoopMax = autoExecutionPlan.agentLoopMax;
-        executionPlan.loopStrategy = autoExecutionPlan.loopStrategy;
-        executionPlan.thinkingLevel = autoExecutionPlan.thinkingLevel;
-        executionPlan.useDiscussion = autoExecutionPlan.useDiscussion;
-        executionPlan.promptStrategy = autoExecutionPlan.promptStrategy;
-        executionPlan.contextStrategy = autoExecutionPlan.contextStrategy;
-        executionPlan.timeBudgetMs = autoExecutionPlan.timeBudgetMs;
-        executionPlan.requiredTools = autoExecutionPlan.requiredTools;
-        executionPlan.classifiedQueryType = autoRoutingResult.classifiedQueryType;
-
-        // P2-2: Domain engine override (auto-routing only)
-        const resolvedQueryType: QueryType = autoRoutingResult.classifiedQueryType;
-
-        const domainResult = applyDomainEngineOverride(
-            autoExecutionPlan.resolvedEngine, resolvedQueryType
-        );
-        if (domainResult.overridden) {
-            autoExecutionPlan.resolvedEngine = domainResult.engine;
-            executionPlan.resolvedEngine = domainResult.engine;
-            logger.info(`P2-2 Domain: ${domainResult.domain} → ${domainResult.engine}`);
-        }
-
-        setModel(autoExecutionPlan.resolvedEngine);
-        return {
-            model: autoExecutionPlan.resolvedEngine,
-            options: promptConfig.options || {},
-            reason: `Auto-Routing ${executionPlan.requestedModel} → ${targetBrandProfile} → ${autoExecutionPlan.resolvedEngine}${domainResult.overridden ? ` (domain=${domainResult.domain})` : ''}`,
-            queryType: resolvedQueryType,
-            supportsToolCalling: true,
-            supportsThinking: autoExecutionPlan.thinkingLevel !== 'off',
-            supportsVision: autoExecutionPlan.requiredTools.includes('vision'),
-            classifiedConfidence: autoRoutingResult.classifiedConfidence,
-            classifierSource: autoRoutingResult.classifierSource,
-        };
-    } else if (executionPlan?.isBrandModel) {
-        logger.info(`Brand Model: ${executionPlan.requestedModel} → engine=${executionPlan.resolvedEngine}`);
-        setModel(executionPlan.resolvedEngine);
-        return {
-            model: executionPlan.resolvedEngine,
-            options: promptConfig.options || {},
-            reason: `Brand model ${executionPlan.requestedModel} → ${executionPlan.resolvedEngine}`,
-            queryType: 'chat',
-            supportsToolCalling: true,
-            supportsThinking: true,
-            supportsVision: executionPlan.requiredTools.includes('vision'),
-        };
-    } else {
-        const selection = await selectOptimalModel(message, hasImages);
-        logger.info(`모델 자동 선택: ${selection.model} (${selection.reason})`);
-        setModel(selection.model);
-        return selection;
-    }
+    const { message, hasImages } = params;
+    const selection = await selectOptimalModel(message, hasImages);
+    logger.info(`쿼리 분류: ${selection.queryType} (모델 변경 없음 — Pure Manual)`);
+    return selection;
 }

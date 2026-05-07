@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>OpenMake Consistent UI/UX Proposal</title>
+<style>
+@font-face{font-family:Pretendard;src:url('../../../frontend/web/public/vendor/pretendard/woff2/Pretendard-Regular.woff2') format('woff2');font-weight:400}
+@font-face{font-family:Pretendard;src:url('../../../frontend/web/public/vendor/pretendard/woff2/Pretendard-Bold.woff2') format('woff2');font-weight:700}
+@font-face{font-family:Pretendard;src:url('../../../frontend/web/public/vendor/pretendard/woff2/Pretendard-ExtraBold.woff2') format('woff2');font-weight:800}
+:root{
+    --accent-primary:#c061ff;--accent-hover:#a855f7;--accent-light:rgba(192,97,255,.15);
+    --accent-blue:#4cc9f0;--success:#a3e635;--warning:#facc15;--danger:#f87171;--info:#4cc9f0;
+    --bg-app:#1a1a2e;--bg-sidebar:#12122a;--bg-card:#252547;--bg-tertiary:#2f2f5a;--bg-active:rgba(192,97,255,.15);
+    --text-primary:#f0f0f2;--text-secondary:#b0b0c0;--text-muted:#7878a0;--border-light:#3d3d6b;--border-medium:#4d4d7a;--border-strong:#6060a0;
+    --shadow-sm:2px 2px 0 #000;--shadow-md:4px 4px 0 #000;--shadow-lg:6px 6px 0 #000;
+}
+*{box-sizing:border-box}body{margin:0;background:var(--bg-app);font-family:Pretendard,system-ui,sans-serif;color:var(--text-primary)}
+.board{width:1920px;height:1080px;position:relative;overflow:hidden;padding:44px 56px;background:var(--bg-app)}
+.board:before{content:"";position:absolute;inset:0;background:radial-gradient(circle at 12% 10%,rgba(192,97,255,.13),transparent 28%),radial-gradient(circle at 90% 12%,rgba(76,201,240,.08),transparent 24%);pointer-events:none}.board>*{position:relative;z-index:1}
+.badge-top{display:inline-flex;align-items:center;gap:10px;padding:10px 16px;border:2px solid var(--border-light);border-radius:10px;background:var(--bg-card);box-shadow:var(--shadow-sm);color:var(--accent-primary);font-weight:800;font-size:17px}.badge-top span{color:var(--text-secondary);font-weight:700}
+h1{margin:18px 0 10px;font-size:54px;line-height:1.08;letter-spacing:-.045em;font-weight:800}h1 em{font-style:normal;color:var(--accent-primary)}.sub{max-width:1260px;margin:0 0 26px;color:var(--text-secondary);font-size:21px;line-height:1.48}.sub strong{color:var(--text-primary)}
+.grid{display:grid;gap:22px}.g2{grid-template-columns:1.05fr .95fr}.g3{grid-template-columns:repeat(3,1fr)}.g4{grid-template-columns:repeat(4,1fr)}
+.card{background:var(--bg-card);border:2px solid var(--border-light);border-radius:16px;box-shadow:var(--shadow-md);padding:22px}.card h2{font-size:29px;margin:0 0 16px;letter-spacing:-.03em}.card h3{font-size:21px;margin:0 0 8px}.card p,.card li{color:var(--text-secondary);font-size:16px;line-height:1.45}.card ul{margin:0;padding-left:20px}.small{font-size:13px;color:var(--text-muted)}
+.tag{display:inline-flex;border:2px solid #000;border-radius:7px;background:var(--accent-primary);color:#fff;padding:6px 10px;font-size:12px;font-weight:800;box-shadow:var(--shadow-sm)}.tag.green{background:var(--success);color:#15151e}.tag.yellow{background:var(--warning);color:#15151e}.tag.blue{background:var(--info);color:#15151e}.tag.red{background:var(--danger);color:#15151e}.tag.ghost{background:var(--bg-tertiary);color:var(--text-secondary);border-color:var(--border-light);box-shadow:none}
+.btn{border:2px solid #000;border-radius:8px;background:var(--accent-primary);color:#fff;font-weight:800;padding:12px 16px;box-shadow:var(--shadow-md)}.btn.secondary{background:var(--bg-tertiary);color:var(--text-primary);border-color:var(--border-medium)}
+.mock{height:674px;background:var(--bg-app);border:2px solid var(--border-light);border-radius:18px;box-shadow:var(--shadow-lg);overflow:hidden;display:grid;grid-template-columns:280px 1fr}.side{background:var(--bg-sidebar);border-right:2px solid var(--border-light);display:flex;flex-direction:column;padding:20px 14px}.brand{display:flex;align-items:center;gap:12px;font-size:19px;font-weight:800;margin:18px 0 22px}.logo{width:42px;height:42px;border-radius:10px;background:linear-gradient(135deg,#4cc9f0,#a3e635);border:2px solid #000;box-shadow:var(--shadow-sm)}.navbtn{display:flex;align-items:center;gap:10px;height:46px;border:2px solid transparent;border-radius:8px;color:var(--text-secondary);padding:0 14px;margin:4px 0;font-weight:700}.navbtn.active{background:var(--bg-active);border-color:var(--border-light);border-left:5px solid var(--accent-primary);color:var(--text-primary)}.navbtn.light{background:var(--bg-tertiary);border-color:var(--border-light);box-shadow:var(--shadow-sm);color:var(--text-primary)}.side-bottom{margin-top:auto;border-top:2px solid var(--border-light);padding-top:14px;display:flex;align-items:center;justify-content:space-between}.tier{font-size:11px;border:2px solid #000;background:var(--warning);color:#171717;border-radius:5px;padding:4px 7px;font-weight:800}
+.main{padding:24px 28px;background:var(--bg-app);overflow:hidden}.topbar{display:flex;justify-content:space-between;align-items:center;background:var(--bg-card);border:2px solid var(--border-light);border-radius:10px;box-shadow:var(--shadow-sm);padding:12px 16px;margin-bottom:18px}.crumb{display:flex;gap:12px;align-items:center;font-weight:800}.back{border:2px solid var(--border-light);border-radius:7px;padding:8px 12px;color:var(--text-secondary);background:var(--bg-tertiary)}
+.panel{background:var(--bg-card);border:2px solid var(--border-light);border-radius:14px;box-shadow:var(--shadow-md);padding:20px}.panel-title{display:flex;align-items:center;justify-content:space-between;border-bottom:2px solid var(--border-light);padding-bottom:13px;margin-bottom:16px}.panel-title b{font-size:22px}.hero{display:grid;grid-template-columns:1fr 285px;gap:16px}.welcome h2{font-size:36px;line-height:1.12;margin:0 0 10px}.welcome p{color:var(--text-secondary);font-size:17px;margin:0}.chips{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0}.chip{border:2px solid var(--border-light);border-radius:8px;background:var(--bg-tertiary);padding:7px 10px;color:var(--text-secondary);font-size:13px;font-weight:700}.chip.active{background:var(--accent-primary);color:white;border-color:#000;box-shadow:var(--shadow-sm)}
+.composer{height:150px;margin-top:16px;background:var(--bg-secondary,#252547);border:2px solid var(--border-strong);border-radius:16px;box-shadow:var(--shadow-lg);padding:18px;display:flex;flex-direction:column;justify-content:space-between}.composer .placeholder{color:var(--text-muted);font-size:17px}.tools{display:flex;align-items:center;justify-content:space-between}.toolset{display:flex;gap:10px;color:var(--text-secondary)}.tool{width:32px;height:32px;border-radius:8px;border:2px solid var(--border-light);display:grid;place-items:center;background:var(--bg-tertiary)}
+.metric-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.metric{background:var(--bg-card);border:2px solid var(--border-light);border-radius:12px;box-shadow:var(--shadow-sm);padding:15px}.metric b{display:block;color:var(--accent-primary);font-size:28px}.metric span{color:var(--text-muted);font-size:13px}.status-list{display:grid;gap:12px}.status-item{display:grid;grid-template-columns:132px 1fr auto;gap:14px;align-items:center;background:var(--bg-tertiary);border:2px solid var(--border-light);border-radius:12px;padding:13px}.status-item b{font-size:16px}.status-item span{color:var(--text-secondary);font-size:15px}.bar{height:10px;background:var(--bg-app);border:2px solid var(--border-light);border-radius:999px;overflow:hidden}.bar i{display:block;height:100%;background:var(--accent-primary)}
+.list{display:grid;gap:12px}.list-row{display:grid;grid-template-columns:140px 1fr;gap:14px;padding:14px;border:2px solid var(--border-light);border-radius:12px;background:var(--bg-tertiary)}.list-row b{font-size:16px}.list-row span{font-size:15px;color:var(--text-secondary);line-height:1.38}.mini-card{min-height:160px}.page-title{font-size:33px;font-weight:800;margin:0 0 10px}.divider{height:2px;background:var(--border-light);margin:14px 0 20px}.footer{position:absolute;left:56px;right:56px;bottom:28px;display:flex;justify-content:space-between;color:var(--text-muted);font-size:15px}
+.matrix{background:var(--bg-card);border:2px solid var(--border-light);border-radius:18px;box-shadow:var(--shadow-lg);padding:24px}table{width:100%;border-collapse:collapse;font-size:15px}th{text-align:left;color:var(--text-muted);font-size:12px;text-transform:uppercase;letter-spacing:.08em;padding:10px 12px;border-bottom:2px solid var(--border-light)}td{padding:10px 12px;border-bottom:1px solid var(--border-light);color:var(--text-secondary);vertical-align:top}td:first-child{color:var(--text-primary);font-weight:800}.priority{display:inline-flex;min-width:34px;justify-content:center;border:2px solid #000;border-radius:6px;padding:4px 7px;font-size:12px;font-weight:800;box-shadow:var(--shadow-sm)}.p1{background:var(--danger);color:#141414}.p2{background:var(--warning);color:#141414}.p3{background:var(--success);color:#141414}
+.split2{display:grid;grid-template-columns:1fr 1fr;gap:14px}.doc-card{background:var(--bg-tertiary);border:2px solid var(--border-light);border-radius:12px;box-shadow:var(--shadow-sm);padding:16px}.doc-card h4{font-size:18px;margin:0 0 8px}.doc-card p{font-size:14px;color:var(--text-secondary);margin:0}.timeline{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.step{background:var(--bg-tertiary);border:2px solid var(--border-light);border-radius:12px;padding:13px;min-height:120px}.step strong{display:block;color:var(--text-primary);margin-bottom:8px}.step span{font-size:14px;color:var(--text-secondary)}
+#v2-board-03 .mock{height:620px}
+#v2-board-03 .grid.g4{margin-top:18px}
+#v2-board-03 .grid.g4 .card{padding:16px;min-height:118px}
+#v2-board-03 .grid.g4 .card h3{font-size:18px;margin-bottom:6px}
+#v2-board-03 .grid.g4 .card p{font-size:13px;line-height:1.34;margin:0}
+#v2-board-03 .footer{bottom:18px}
+</style>
+</head>
+<body>
+<section class="board" id="v2-board-01">
+    <div class="badge-top">V2 · 현재 디자인 유지형 <span>Functional UX Upgrade</span></div>
+    <h1>홈/채팅은 그대로 두고 <em>작업 시작성</em>만 강화</h1>
+    <p class="sub">현재 홈페이지의 다크 퍼플 배경, 좌측 대화 사이드바, brutal card/shadow, 보라색 CTA는 유지합니다. 바꾸는 것은 시각 정체성이 아니라 <strong>모델 상태, 프롬프트 모드, 문서 컨텍스트, 예상 비용을 어디에 보여줄지</strong>입니다.</p>
+    <div class="grid g2">
+        <div class="mock">
+            <aside class="side">
+                <div class="brand"><div class="logo"></div>OpenMake.AI</div>
+                <div class="navbtn light">+ 새 대화</div>
+                <div class="navbtn">문서 관리</div>
+                <div class="navbtn active">대화 검색...</div>
+                <div style="margin:18px 0 8px;color:var(--text-muted);font-size:12px;font-weight:800">오늘</div>
+                <div class="navbtn">API 문서 개선 논의</div>
+                <div class="navbtn">문서 요약 워크플로우</div>
+                <div class="side-bottom"><span>Admin</span><span class="tier">ENTERPRISE</span></div>
+            </aside>
+            <main class="main">
+                <div class="topbar"><div class="crumb"><span class="back">←</span><span>채팅</span></div><div class="chips"><span class="chip active">Gemma4:e4b</span><span class="chip">로컬 정상</span><span class="chip">예상 $0.02</span></div></div>
+                <div class="hero">
+                    <div class="panel welcome">
+                        <h2>오늘도 화이팅!<br>무엇을 도와드릴까요?</h2>
+                        <p>기존 웰컴 메시지를 유지하되 작업 전 필요한 설정을 바로 노출합니다.</p>
+                        <div class="chips"><span class="chip active">Assistant</span><span class="chip">Coder</span><span class="chip">Reviewer</span><span class="chip">Research</span><span class="chip">문서 기반 답변</span></div>
+                        <div class="composer"><div class="placeholder">메시지를 입력하세요... 문서, URL, 코드도 함께 첨부 가능</div><div class="tools"><div class="toolset"><span class="tool">+</span><span class="tool">📎</span><span class="tool">🌐</span><span class="tool">🧠</span><span class="tool">🧪</span></div><button class="btn">전송</button></div></div>
+                    </div>
+                    <div class="panel">
+                        <div class="panel-title"><b>실행 전 확인</b><span class="tag green">READY</span></div>
+                        <div class="status-list">
+                            <div class="status-item" style="grid-template-columns:1fr auto"><span>문서 컨텍스트</span><b>2개 연결</b></div>
+                            <div class="status-item" style="grid-template-columns:1fr auto"><span>MCP 도구</span><b>3개 활성</b></div>
+                            <div class="status-item" style="grid-template-columns:1fr auto"><span>토큰 예측</span><b>4.8K</b></div>
+                            <div class="status-item" style="grid-template-columns:1fr auto"><span>응답 모드</span><b>자동 선택</b></div>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+        <div class="card">
+            <h2>현재 홈페이지 일관성 유지 기준</h2>
+            <div class="list">
+                <div class="list-row"><b>유지</b><span>다크 퍼플 배경, 좌측 대화 히스토리, 보라색 CTA, 카드형 추천 작업, hard shadow, 둥근 8~16px radius.</span></div>
+                <div class="list-row"><b>개선</b><span>추천 카드가 입력창과 시각적으로 충돌하지 않게 위계를 낮추고, composer 주변에 “실행 조건”을 모읍니다.</span></div>
+                <div class="list-row"><b>추가 기능</b><span>모델 상태, 예상 비용/토큰, 활성 도구, 첨부 문서, 프롬프트 모드를 실행 전 확인 영역으로 통합합니다.</span></div>
+                <div class="list-row"><b>효과</b><span>사용자는 설정 페이지로 이동하지 않고도 현재 대화가 어떤 모델/도구/문서를 쓰는지 판단할 수 있습니다.</span></div>
+                <div class="list-row"><b>주의</b><span>새로운 컬러 팔레트나 완전히 다른 정보 구조를 도입하지 않습니다. 기존 홈 화면의 인상을 유지합니다.</span></div>
+            </div>
+        </div>
+    </div>
+    <div class="footer"><span>Board 01: Home/Chat functional upgrade</span><span>Design language: current OpenMake Neo Brutalism</span></div>
+</section>
+<section class="board" id="v2-board-02">
+    <div class="badge-top">V2 · 페이지군별 유지형 개선 <span>Docs / Guide / Documents</span></div>
+    <h1>문서형 페이지는 <em>읽기/실행 흐름</em>을 보강</h1>
+    <p class="sub">사용 가이드와 API 문서는 현재의 카드, 보더, 퍼플 액센트를 유지하면서 탐색 피로를 낮춰야 합니다. 문서 관리는 빈 상태를 유지하되 업로드 이후 다음 행동을 명확히 제안합니다.</p>
+    <div class="grid g3">
+        <div class="card mini-card">
+            <div class="panel-title"><b>사용 가이드</b><span class="tag blue">읽기 개선</span></div>
+            <div class="split2">
+                <div class="doc-card"><h4>Sticky 목차</h4><p>좌측 사이드바는 유지하고, 본문 내부에 섹션 목차만 얇게 고정합니다.</p></div>
+                <div class="doc-card"><h4>빠른 시작</h4><p>상단에 “3분 시작”, “모드별 예시”, “문서 분석” 탭을 추가합니다.</p></div>
+            </div>
+            <div class="divider"></div><p>긴 문서를 전부 읽게 하지 않고, 사용자가 목적별로 바로 이동하도록 만듭니다.</p>
+        </div>
+        <div class="card mini-card">
+            <div class="panel-title"><b>API 문서</b><span class="tag yellow">실행 개선</span></div>
+            <div class="split2">
+                <div class="doc-card"><h4>Copy/Test CTA</h4><p>Base URL, cURL, SDK 예제에 복사/테스트 버튼을 고정합니다.</p></div>
+                <div class="doc-card"><h4>Docs Mode</h4><p>앱 사이드바는 유지하되 문서 내부 TOC 폭을 줄여 본문 폭을 확보합니다.</p></div>
+            </div>
+            <div class="divider"></div><p>API 문서는 읽는 문서가 아니라 바로 검증하는 콘솔에 가까워야 합니다.</p>
+        </div>
+        <div class="card mini-card">
+            <div class="panel-title"><b>문서 관리</b><span class="tag green">빈 상태 개선</span></div>
+            <div class="split2">
+                <div class="doc-card"><h4>처리 상태</h4><p>업로드, 파싱, 인덱싱, 질문 가능 상태를 단계로 표시합니다.</p></div>
+                <div class="doc-card"><h4>질문 시작</h4><p>업로드 완료 후 “이 문서로 질문하기” CTA를 즉시 보여줍니다.</p></div>
+            </div>
+            <div class="divider"></div><p>현재의 업로드 박스 스타일은 유지하고, 작업 완료 이후 행동만 추가합니다.</p>
+        </div>
+    </div>
+    <div class="grid g2" style="margin-top:22px">
+        <div class="mock" style="height:470px;grid-template-columns:260px 1fr">
+            <aside class="side"><div class="brand"><div class="logo"></div>OpenMake.AI</div><div class="navbtn">채팅</div><div class="navbtn active">문서 관리</div><div class="navbtn">사용 가이드</div><div class="navbtn">API 문서</div></aside>
+            <main class="main"><div class="topbar"><div class="crumb"><span class="back">← 채팅으로</span><span>문서 관리</span></div><button class="btn">업로드</button></div><div class="panel"><div class="panel-title"><b>문서 파이프라인</b><span class="tag green">질문 가능</span></div><div class="timeline"><div class="step"><strong>1 업로드</strong><span>PDF, MD, TXT 지원</span></div><div class="step"><strong>2 파싱</strong><span>본문/표/코드 추출</span></div><div class="step"><strong>3 인덱싱</strong><span>검색 가능한 청크 생성</span></div><div class="step"><strong>4 질문</strong><span>채팅 컨텍스트 연결</span></div></div></div></main>
+        </div>
+        <div class="card"><h2>페이지별 기능 제안</h2><div class="list"><div class="list-row"><b>가이드</b><span>현재 본문 스타일을 유지하고 검색, anchor copy, 최근 본 섹션을 추가합니다.</span></div><div class="list-row"><b>API 문서</b><span>언어 탭을 sticky 처리하고, 예제 코드 옆에 copy/test 버튼을 일관 배치합니다.</span></div><div class="list-row"><b>문서 관리</b><span>업로드 전/중/후 상태별 empty state를 구분합니다. “없습니다”보다 다음 행동이 중요합니다.</span></div><div class="list-row"><b>설정</b><span>현재 섹션 카드 구조는 유지하되, 변경 영향도와 저장 상태를 상단 summary에 표시합니다.</span></div></div></div>
+    </div>
+    <div class="footer"><span>Board 02: Documentation and document workflow</span><span>No new visual language introduced</span></div>
+</section>
+<section class="board" id="v2-board-03">
+    <div class="badge-top">V2 · Pro/Admin 유지형 개선 <span>Operational UX</span></div>
+    <h1>Pro/Admin 화면은 <em>상태와 조치</em> 중심으로 정리</h1>
+    <p class="sub">리서치, 에이전트, 사용량, API 키, 통합 모니터링은 현재 카드 스타일을 그대로 쓰되 카드의 목적을 “정보 나열”에서 “다음 조치 결정”으로 바꿉니다.</p>
+    <div class="grid g2">
+        <div class="mock">
+            <aside class="side"><div class="brand"><div class="logo"></div>OpenMake.AI</div><div class="navbtn">딥 리서치</div><div class="navbtn">API 키 관리</div><div class="navbtn active">통합 모니터링</div><div class="navbtn">감사 로그</div><div class="navbtn">알림 관리</div><div class="side-bottom"><span>Admin</span><span class="tier">ENTERPRISE</span></div></aside>
+            <main class="main"><div class="topbar"><div class="crumb"><span class="back">←</span><span>통합 모니터링</span></div><div class="chips"><span class="chip active">Warning</span><span class="chip">30초 자동갱신</span></div></div><div class="metric-grid"><div class="metric"><span>오늘 요청</span><b>1,240</b></div><div class="metric"><span>예상 비용</span><b>$18.74</b></div><div class="metric"><span>오류율</span><b>1.2%</b></div><div class="metric"><span>노드</span><b>1/2</b></div></div><div class="panel" style="margin-top:16px"><div class="panel-title"><b>우선 조치</b><span class="tag red">2건</span></div><div class="status-list"><div class="status-item"><b>API Key #2</b><span>실패 2회. 자동 로테이션 권장</span><button class="btn secondary">확인</button></div><div class="status-item"><b>remote-cpu-1</b><span>지연 180ms. 라우팅 가중치 조정 필요</span><button class="btn secondary">조정</button></div><div class="status-item"><b>토큰 사용량</b><span><div class="bar"><i style="width:74%"></i></div></span><span class="tag yellow">74%</span></div></div></div></main>
+        </div>
+        <div class="card"><h2>운영 화면 기능 개선</h2><div class="list"><div class="list-row"><b>딥 리서치</b><span>세션 카드에 단계 타임라인, 출처 품질, 보고서 미리보기, 중단/재시작 CTA를 추가합니다.</span></div><div class="list-row"><b>커스텀 에이전트</b><span>빈 상태에 템플릿, 권장 스킬, 테스트 프롬프트를 보여주고 생성 모달로 연결합니다.</span></div><div class="list-row"><b>사용량</b><span>KPI 카드 아래에 비용 예측, 오류 원인, 기간 비교 insight strip을 추가합니다.</span></div><div class="list-row"><b>API 키</b><span>scope, last used, 만료/회전, 위험 상태를 카드 안에서 바로 조작할 수 있게 합니다.</span></div><div class="list-row"><b>모니터링</b><span>카드를 줄이지 말고 위계를 바꿉니다. 최상단은 위험도와 우선 조치, 하단은 상세 차트/테이블입니다.</span></div></div></div>
+    </div>
+    <div class="grid g4" style="margin-top:22px"><div class="card"><span class="tag">P1</span><h3>라우팅 일관성</h3><p>external 오류, uir/token redirect는 사용자가 기능 부재와 권한 부족을 구분할 수 없게 만듭니다.</p></div><div class="card"><span class="tag yellow">P2</span><h3>필터 저장</h3><p>감사/사용량/알림 화면의 기간, 심각도, 사용자 필터를 저장해 재방문 효율을 높입니다.</p></div><div class="card"><span class="tag green">P2</span><h3>상태 배지 표준화</h3><p>정상/주의/위험/비활성 배지를 모든 관리자 화면에서 같은 위치와 색상으로 사용합니다.</p></div><div class="card"><span class="tag blue">P3</span><h3>도움말 Drawer</h3><p>복잡한 설정은 페이지 이동보다 우측 도움말 drawer로 설명을 붙입니다.</p></div></div>
+    <div class="footer"><span>Board 03: Pro/Admin operational UX</span><span>Same card, border, shadow, accent system</span></div>
+</section>
+<section class="board" id="v2-board-04">
+    <div class="badge-top">V2 · 페이지별 재제안 매트릭스 <span>Consistency-first</span></div>
+    <h1>현재 디자인을 유지한 <em>기능 개선 우선순위</em></h1>
+    <p class="sub">아래 표는 “시각 리브랜딩 없이 가능한 개선”만 정리했습니다. 기존 홈페이지의 색상, 사이드바, 카드, brutal shadow는 유지합니다.</p>
+    <div class="matrix">
+        <table>
+            <thead><tr><th>페이지</th><th>유지할 디자인 요소</th><th>기능적 개선안</th><th>우선</th></tr></thead>
+            <tbody>
+                <tr><td>채팅 홈</td><td>웰컴, 추천 카드, 하단 composer, 좌측 히스토리</td><td>composer 주변에 모델 상태, 모드, 첨부 문서, 예상 토큰/비용 노출</td><td><span class="priority p1">P1</span></td></tr>
+                <tr><td>로그인</td><td>중앙 카드, 보라 CTA, 게스트 진입</td><td>보안/데이터 저장 안내, OAuth와 일반 로그인의 시각 구분, redirect 안내</td><td><span class="priority p2">P2</span></td></tr>
+                <tr><td>사용 가이드</td><td>현재 문서 본문 스타일과 카드</td><td>sticky 목차, 검색, 빠른 시작 탭, anchor copy</td><td><span class="priority p2">P2</span></td></tr>
+                <tr><td>API 문서</td><td>문서 TOC, 코드 탭, dark code block</td><td>copy/test CTA, SDK 탭 sticky, Base URL 고정, 인증 상태 안내</td><td><span class="priority p1">P1</span></td></tr>
+                <tr><td>문서 관리</td><td>업로드 박스, 통계 카드, 빈 상태</td><td>처리 파이프라인, 질문 시작 CTA, 최근 문서/오류 상태 표시</td><td><span class="priority p1">P1</span></td></tr>
+                <tr><td>설정</td><td>섹션 카드와 select/input 스타일</td><td>변경 영향도, 저장 상태, 테스트 연결 버튼, 섹션별 reset</td><td><span class="priority p2">P2</span></td></tr>
+                <tr><td>딥 리서치</td><td>입력 폼, 세션 카드, 진행률 bar</td><td>단계 타임라인, 출처 품질, 보고서 preview, 중단/재시작 CTA</td><td><span class="priority p1">P1</span></td></tr>
+                <tr><td>커스텀 에이전트</td><td>상단 CTA, 모달, 카드 리스트</td><td>템플릿 갤러리, 권장 스킬 조합, 테스트 프롬프트</td><td><span class="priority p2">P2</span></td></tr>
+                <tr><td>스킬 라이브러리</td><td>탭과 카드형 스킬 목록</td><td>권한/버전/설치 상태/카테고리 필터를 카드에 통합</td><td><span class="priority p2">P2</span></td></tr>
+                <tr><td>AI 메모리</td><td>메모리 카드와 검색</td><td>신뢰도, 출처, 만료일, 개인정보 토글, 삭제 전 영향도</td><td><span class="priority p2">P2</span></td></tr>
+                <tr><td>API 사용량</td><td>KPI 카드, 기간 탭, 테이블</td><td>비용 예측, 오류 원인, 전 기간 비교, 임계치 경고</td><td><span class="priority p1">P1</span></td></tr>
+                <tr><td>API 키 관리</td><td>키 카드, 생성 모달, 빠른 시작</td><td>scope, last used, rotate/revoke, 위험 배지, 복사 후 노출 제한</td><td><span class="priority p1">P1</span></td></tr>
+                <tr><td>관리자/모니터링</td><td>통계 카드, 테이블, 새로고침 CTA</td><td>위험도 요약, 우선 조치 카드, 노드/키/비용 관계 표시</td><td><span class="priority p1">P1</span></td></tr>
+                <tr><td>감사/알림/분석</td><td>필터, 카드, 테이블</td><td>심각도 필터, 상세 drawer, 테스트 알림, 저장된 필터</td><td><span class="priority p2">P2</span></td></tr>
+                <tr><td>외부 연동/라우터</td><td>기존 메뉴 체계</td><td>오류/권한/미등록 라우트 상태를 명확히 분리하고 empty state 제공</td><td><span class="priority p1">P1</span></td></tr>
+            </tbody>
+        </table>
+    </div>
+    <div class="footer"><span>Board 04: consistency-first page matrix</span><span>Generated from current site observations</span></div>
+</section>
+</body>
+</html>
