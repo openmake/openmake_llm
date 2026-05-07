@@ -274,6 +274,7 @@ export class ExternalKeysRepository extends BaseRepository {
         occurredAt: Date;
         inputTokens: number;
         outputTokens: number;
+        costUsdMicros: number;
         durationMs: number | null;
         finishReason: string | null;
     }>> {
@@ -283,11 +284,12 @@ export class ExternalKeysRepository extends BaseRepository {
             occurred_at: Date;
             input_tokens: number;
             output_tokens: number;
+            cost_usd_micros: string | number;
             duration_ms: number | null;
             finish_reason: string | null;
         }>(
             `SELECT provider_id, model_id, occurred_at, input_tokens, output_tokens,
-                    duration_ms, finish_reason
+                    cost_usd_micros, duration_ms, finish_reason
              FROM external_provider_usage
              WHERE user_id = $1
              ORDER BY occurred_at DESC
@@ -300,6 +302,10 @@ export class ExternalKeysRepository extends BaseRepository {
             occurredAt: r.occurred_at,
             inputTokens: r.input_tokens,
             outputTokens: r.output_tokens,
+            // pg 의 BIGINT 는 string 으로 들어올 수 있음 — Number 로 정규화
+            costUsdMicros: typeof r.cost_usd_micros === 'string'
+                ? Number(r.cost_usd_micros)
+                : r.cost_usd_micros,
             durationMs: r.duration_ms,
             finishReason: r.finish_reason,
         }));

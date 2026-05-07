@@ -39,6 +39,8 @@ const KNOWN_FULLID_PREFIXES: readonly string[] = [
     'gemini',
     'groq',
     'together',
+    'mistral',
+    'cohere',
     'ollama-remote',
     'openai-compatible',
 ];

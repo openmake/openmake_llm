@@ -124,6 +124,30 @@ export const EXTERNAL_PROVIDER_CATALOG: ReadonlyArray<ExternalProviderCatalogEnt
             '오픈소스 모델 호스팅(Llama, Qwen, DeepSeek, Mistral 등) 전문.',
     },
     {
+        id: 'mistral',
+        displayName: 'Mistral AI',
+        sdkType: 'openai-compatible',
+        defaultBaseUrl: 'https://api.mistral.ai/v1',
+        validatePath: '/models',
+        enabled: true,
+        sortOrder: 55,
+        helpText:
+            'Mistral La Plateforme (https://console.mistral.ai/api-keys)의 API 키를 입력하세요. ' +
+            'Mistral Large / Medium / Small / Codestral 등 자체 모델 직접 호출.',
+    },
+    {
+        id: 'cohere',
+        displayName: 'Cohere',
+        sdkType: 'openai-compatible',
+        defaultBaseUrl: 'https://api.cohere.com/compatibility/v1',
+        validatePath: '/models',
+        enabled: true,
+        sortOrder: 58,
+        helpText:
+            'Cohere (https://dashboard.cohere.com/api-keys)의 API 키를 입력하세요. ' +
+            'Command R+ / Command R / Aya Expanse 등 — OpenAI 호환 endpoint 사용.',
+    },
+    {
         id: 'ollama-remote',
         displayName: 'Ollama (원격 서버)',
         sdkType: 'openai-compatible',
