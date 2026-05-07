@@ -1,0 +1,501 @@
+[
+  {
+    "name": "history",
+    "route": "/history.html",
+    "screenshot": "artifacts/ui-review/auth-current/history.png",
+    "finalUrl": "http://rasplay.tplinkdns.com:52416/history.html",
+    "title": "히스토리 - OpenMake.AI",
+    "headings": [
+      "오늘도 화이팅!무엇을\n                            도와드릴까요? 😊",
+      "히스토리",
+      "📜 대화 히스토리",
+      "📎 파일 첨부",
+      "⚙️ 설정",
+      "📖 사용자 가이드"
+    ],
+    "textLength": 237,
+    "text": "Skip to main content OpenMake.AI 새 대화 문서 관리 오늘 API 문서 개선 논의 문서 요약 워크플로우 A Admin ENTERPRISE 채팅으로 히스토리 📜 대화 히스토리 이전 대화 기록 조회 📥 내보내기 🔄 새로고침 최신순 오래된순 API 문서 개선 논의 5월 7일 오전 05:18 💬 Unknown Model 문서 요약 워크플로우 5월 7일 오전 03:18 💬 Unknown Model",
+    "components": {
+      "cards": 8,
+      "tables": 0,
+      "forms": 0,
+      "inputs": 10,
+      "charts": 17,
+      "buttons": 32
+    }
+  },
+  {
+    "name": "research",
+    "route": "/research.html",
+    "screenshot": "artifacts/ui-review/auth-current/research.png",
+    "finalUrl": "http://rasplay.tplinkdns.com:52416/research.html",
+    "title": "딥 리서치 - OpenMake.AI",
+    "headings": [
+      "오늘도 화이팅!무엇을\n                            도와드릴까요? 😊",
+      "딥 리서치",
+      "딥 리서치",
+      "국내 LLM 서비스 UX 벤치마크",
+      "API 과금 체계 비교",
+      "연구 상세",
+      "📎 파일 첨부",
+      "⚙️ 설정",
+      "📖 사용자 가이드"
+    ],
+    "textLength": 203,
+    "text": "Skip to main content OpenMake.AI 새 대화 문서 관리 오늘 API 문서 개선 논의 문서 요약 워크플로우 A Admin ENTERPRISE 채팅으로 딥 리서치 딥 리서치 연구 주제 깊이 빠른 검색 표준 심층 연구 시작 국내 LLM 서비스 UX 벤치마크 진행중 표준 2026. 5. 7. API 과금 체계 비교 완료 심층 2026. 5. 5.",
+    "components": {
+      "cards": 8,
+      "tables": 0,
+      "forms": 0,
+      "inputs": 9,
+      "charts": 17,
+      "buttons": 33
+    }
+  },
+  {
+    "name": "documents",
+    "route": "/documents.html",
+    "screenshot": "artifacts/ui-review/auth-current/documents.png",
+    "finalUrl": "http://rasplay.tplinkdns.com:52416/documents.html",
+    "title": "문서 관리 - OpenMake.Ai",
+    "headings": [
+      "문서 관리",
+      "업로드된 문서가 없습니다",
+      "문서 상세"
+    ],
+    "textLength": 310,
+    "text": "OpenMake.Ai 👤 사용자 메뉴 💬 채팅 🖥️ 클러스터 📜 대화 히스토리 🔬 딥 리서치 🤖 커스텀 에이전트 🧠 AI 메모리 📈 API 사용량 🎓 에이전트 학습 📖 사용 가이드 관리 👥 사용자 관리 📊 통합 모니터링 📋 감사 로그 🔗 외부 연동 📊 분석 대시보드 🔔 알림 관리 🔑 비밀번호 변경 ⚙️ 설정 🚪 로그아웃 문서 관리 파일을 여기에 드래그하거나 클릭하여 업로드 PDF, 텍스트, 이미지 파일 지원 0 전체 문서 0 B 총 용량 업로드된 문서가 없습니다 위에서 파일을 드래그하거나 클릭하여 문서를 업로드하세요.",
+    "components": {
+      "cards": 2,
+      "tables": 0,
+      "forms": 0,
+      "inputs": 1,
+      "charts": 2,
+      "buttons": 4
+    }
+  },
+  {
+    "name": "custom-agents",
+    "route": "/custom-agents.html",
+    "screenshot": "artifacts/ui-review/auth-current/custom-agents.png",
+    "finalUrl": "http://rasplay.tplinkdns.com:52416/custom-agents.html",
+    "title": "커스텀 에이전트 - OpenMake.AI",
+    "headings": [
+      "오늘도 화이팅!무엇을\n                            도와드릴까요? 😊",
+      "커스텀 에이전트",
+      "커스텀 에이전트",
+      "스킬 관리",
+      "커스텀 에이전트가 없습니다",
+      "새 에이전트",
+      "새 스킬",
+      "📎 파일 첨부",
+      "⚙️ 설정",
+      "📖 사용자 가이드"
+    ],
+    "textLength": 165,
+    "text": "Skip to main content OpenMake.AI 새 대화 문서 관리 오늘 API 문서 개선 논의 문서 요약 워크플로우 A Admin ENTERPRISE 채팅으로 커스텀 에이전트 커스텀 에이전트 + 새 에이전트 🎯 스킬 관리 커스텀 에이전트가 없습니다 새 에이전트를 만들어 시작하세요.",
+    "components": {
+      "cards": 6,
+      "tables": 0,
+      "forms": 0,
+      "inputs": 19,
+      "charts": 17,
+      "buttons": 40
+    }
+  },
+  {
+    "name": "skill-library",
+    "route": "/skill-library.html",
+    "screenshot": "artifacts/ui-review/auth-current/skill-library.png",
+    "finalUrl": "http://rasplay.tplinkdns.com:52416/skill-library.html",
+    "title": "스킬 라이브러리 - OpenMake.AI",
+    "headings": [
+      "오늘도 화이팅!무엇을\n                            도와드릴까요? 😊",
+      "스킬 라이브러리",
+      "스킬 라이브러리",
+      "웹 리서치",
+      "코드 생성",
+      "스킬 편집",
+      "📎 파일 첨부",
+      "⚙️ 설정",
+      "📖 사용자 가이드"
+    ],
+    "textLength": 290,
+    "text": "Skip to main content OpenMake.AI 새 대화 문서 관리 오늘 API 문서 개선 논의 문서 요약 워크플로우 A Admin ENTERPRISE 채팅으로 스킬 라이브러리 스킬 라이브러리 로컬에 설치된 에이전트 스킬을 관리합니다. 내 스킬 모든 카테고리 최신순 업데이트순 이름순 카테고리순 새 스킬 등록 research🔒 시스템 ⋯ 웹 리서치 근거 기반 자료 수집 Invalid Date Private development🔒 시스템 ⋯ 코드 생성 구현 초안 작성 Invalid Date Private",
+    "components": {
+      "cards": 24,
+      "tables": 0,
+      "forms": 0,
+      "inputs": 14,
+      "charts": 17,
+      "buttons": 36
+    }
+  },
+  {
+    "name": "memory",
+    "route": "/memory.html",
+    "screenshot": "artifacts/ui-review/auth-current/memory.png",
+    "finalUrl": "http://rasplay.tplinkdns.com:52416/memory.html",
+    "title": "AI 메모리 - OpenMake.AI",
+    "headings": [
+      "오늘도 화이팅!무엇을\n                            도와드릴까요? 😊",
+      "AI 메모리",
+      "AI 메모리",
+      "새 메모리",
+      "📎 파일 첨부",
+      "⚙️ 설정",
+      "📖 사용자 가이드"
+    ],
+    "textLength": 151,
+    "text": "Skip to main content OpenMake.AI 새 대화 문서 관리 오늘 API 문서 개선 논의 문서 요약 워크플로우 A Admin ENTERPRISE 채팅으로 AI 메모리 AI 메모리 + 새 메모리 전체 선호도 사실 프로젝트 관계 기술 맥락 5/10 5/10",
+    "components": {
+      "cards": 8,
+      "tables": 0,
+      "forms": 0,
+      "inputs": 13,
+      "charts": 17,
+      "buttons": 42
+    }
+  },
+  {
+    "name": "usage",
+    "route": "/usage.html",
+    "screenshot": "artifacts/ui-review/auth-current/usage.png",
+    "finalUrl": "http://rasplay.tplinkdns.com:52416/usage.html",
+    "title": "API 사용량 - OpenMake.AI",
+    "headings": [
+      "오늘도 화이팅!무엇을\n                            도와드릴까요? 😊",
+      "API 사용량",
+      "API 사용량",
+      "일간 통계",
+      "📎 파일 첨부",
+      "⚙️ 설정",
+      "📖 사용자 가이드"
+    ],
+    "textLength": 287,
+    "text": "Skip to main content OpenMake.AI 새 대화 문서 관리 오늘 API 문서 개선 논의 문서 요약 워크플로우 A Admin ENTERPRISE 채팅으로 API 사용량 API 사용량 마지막 업데이트: 오전 5:19:05 📊 - 총 요청 🔤 - 총 토큰 ❌ - 총 에러 ⏱️ - 평균 응답시간 오늘 주간 전체 일간 통계 날짜 요청 토큰 에러 평균 응답시간 2026-05-01 110 42,000 - - 2026-05-02 196 76,000 - - 2026-05-03 172 69,000 - -",
+    "components": {
+      "cards": 11,
+      "tables": 1,
+      "forms": 0,
+      "inputs": 7,
+      "charts": 17,
+      "buttons": 34
+    }
+  },
+  {
+    "name": "agent-learning",
+    "route": "/agent-learning.html",
+    "screenshot": "artifacts/ui-review/auth-current/agent-learning.png",
+    "finalUrl": "http://rasplay.tplinkdns.com:52416/agent-learning.html",
+    "title": "에이전트 학습 - OpenMake.AI",
+    "headings": [
+      "오늘도 화이팅!무엇을\n                            도와드릴까요? 😊",
+      "에이전트 학습",
+      "에이전트 학습",
+      "품질 점수",
+      "실패 패턴",
+      "개선 제안",
+      "A/B 테스트",
+      "📎 파일 첨부",
+      "⚙️ 설정",
+      "📖 사용자 가이드"
+    ],
+    "textLength": 200,
+    "text": "Skip to main content OpenMake.AI 새 대화 문서 관리 오늘 API 문서 개선 논의 문서 요약 워크플로우 A Admin ENTERPRISE 채팅으로 에이전트 학습 에이전트 학습 - 총 피드백 - 평균 평점 - 양호 비율 - 활성 에이전트 에이전트 선택: 에이전트를 선택하세요 A/B 테스트 로딩 중... 로딩 중... 데이터 로드 실패",
+    "components": {
+      "cards": 15,
+      "tables": 0,
+      "forms": 0,
+      "inputs": 8,
+      "charts": 17,
+      "buttons": 31
+    }
+  },
+  {
+    "name": "api-keys",
+    "route": "/api-keys.html",
+    "screenshot": "artifacts/ui-review/auth-current/api-keys.png",
+    "finalUrl": "http://rasplay.tplinkdns.com:52416/api-keys.html",
+    "title": "API 키 관리 - OpenMake.AI",
+    "headings": [
+      "오늘도 화이팅!무엇을\n                            도와드릴까요? 😊",
+      "API 키 관리",
+      "API 키 관리",
+      "새 키 생성",
+      "내 API 키 목록",
+      "아직 생성된 API 키가 없습니다",
+      "빠른 시작",
+      "API 키 생성 완료",
+      "📎 파일 첨부",
+      "⚙️ 설정",
+      "📖 사용자 가이드"
+    ],
+    "textLength": 449,
+    "text": "Skip to main content OpenMake.AI 새 대화 문서 관리 오늘 API 문서 개선 논의 문서 요약 워크플로우 A Admin ENTERPRISE 채팅으로 API 키 관리 🔑 API 키 관리 외부 서비스 연동을 위한 API 키를 안전하게 관리하세요. 새 키 생성 생성하기 내 API 키 목록 ↻ 📁 아직 생성된 API 키가 없습니다 새 키를 생성하여 API 연동을 시작하세요. 빠른 시작 터미널에서 다음 명령어로 API를 테스트해보세요: curl -X POST http://rasplay.tplinkdns.com:52416/api/v1/chat \\ -H \"X-API-Key: YOUR_KEY\" \\ -H \"Content-Type: application/json\" \\ -d '{\"message\":\"Hello!\",\"model\":\"openmake_llm\"}' 📄 전체 API 문서 보기 →",
+    "components": {
+      "cards": 14,
+      "tables": 0,
+      "forms": 0,
+      "inputs": 8,
+      "charts": 17,
+      "buttons": 34
+    }
+  },
+  {
+    "name": "cluster",
+    "route": "/cluster.html",
+    "screenshot": "artifacts/ui-review/auth-current/cluster.png",
+    "finalUrl": "http://rasplay.tplinkdns.com:52416/cluster.html",
+    "title": "클러스터 - OpenMake.AI",
+    "headings": [
+      "오늘도 화이팅!무엇을\n                            도와드릴까요? 😊",
+      "클러스터",
+      "🖥️ 클러스터 대시보드",
+      "📎 파일 첨부",
+      "⚙️ 설정",
+      "📖 사용자 가이드"
+    ],
+    "textLength": 260,
+    "text": "Skip to main content OpenMake.AI 새 대화 문서 관리 오늘 API 문서 개선 논의 문서 요약 워크플로우 A Admin ENTERPRISE 채팅으로 클러스터 🖥️ 클러스터 대시보드 Ollama 노드 모니터링 🔄 새로고침 2 총 노드 1 온라인 노드 0 사용 가능 모델 32ms 평균 지연시간 local-gpu-1 온라인 node-1 32ms 지연시간 0 모델 수 remote-cpu-1 오프라인 node-2 180ms 지연시간 0 모델 수",
+    "components": {
+      "cards": 16,
+      "tables": 0,
+      "forms": 0,
+      "inputs": 7,
+      "charts": 17,
+      "buttons": 31
+    }
+  },
+  {
+    "name": "admin",
+    "route": "/admin.html",
+    "screenshot": "artifacts/ui-review/auth-current/admin.png",
+    "finalUrl": "http://rasplay.tplinkdns.com:52416/admin.html",
+    "title": "사용자 관리 - OpenMake.AI",
+    "headings": [
+      "오늘도 화이팅!무엇을\n                            도와드릴까요? 😊",
+      "사용자 관리",
+      "👥 관리자 대시보드",
+      "사용자 편집",
+      "📎 파일 첨부",
+      "⚙️ 설정",
+      "📖 사용자 가이드"
+    ],
+    "textLength": 354,
+    "text": "Skip to main content OpenMake.AI 새 대화 문서 관리 오늘 API 문서 개선 논의 문서 요약 워크플로우 A Admin ENTERPRISE 채팅으로 사용자 관리 👥 관리자 대시보드 사용자 및 대화 관리 ← 채팅으로 돌아가기 👥 사용자 관리 💬 대화 기록 📊 통계 42 총 사용자 27 활성 사용자 0 관리자 0 오늘 질문 사용자 목록 + 사용자 추가 모든 역할 관리자 일반 사용자 게스트 ID 이메일 역할 상태 가입일 마지막 로그인 작업 u1 admin@example.com 관리자 활성 2026-05-07 - 편집 삭제 u2 user@example.com 사용자 활성 2026-05-07 - 편집 삭제",
+    "components": {
+      "cards": 24,
+      "tables": 2,
+      "forms": 1,
+      "inputs": 18,
+      "charts": 17,
+      "buttons": 42
+    }
+  },
+  {
+    "name": "admin-metrics",
+    "route": "/admin-metrics.html",
+    "screenshot": "artifacts/ui-review/auth-current/admin-metrics.png",
+    "finalUrl": "http://rasplay.tplinkdns.com:52416/admin-metrics.html",
+    "title": "통합 모니터링 - OpenMake.AI",
+    "headings": [
+      "오늘도 화이팅!무엇을\n                            도와드릴까요? 😊",
+      "통합 모니터링",
+      "📊 통합 시스템 대시보드",
+      "📎 파일 첨부",
+      "⚙️ 설정",
+      "📖 사용자 가이드"
+    ],
+    "textLength": 498,
+    "text": "Skip to main content OpenMake.AI 새 대화 문서 관리 오늘 API 문서 개선 논의 문서 요약 워크플로우 A Admin ENTERPRISE 채팅으로 통합 모니터링 📊 통합 시스템 대시보드 마지막 업데이트: 5:19:16 AM 🔄 새로고침 시스템 업타임 23시간 23분 메모리 사용량 286 MB 정상 활성 연결 14 오늘 요청 1,240 482.0K 토큰 🔐 API 키 상태 및 모니터링 API 키 로테이션 🔑 Key 1 omk_live_****A91 활성 Key 2 omk_live_****C04 실패 2 키 상태 리셋 오늘 예상 비용 💰 $ 18.7421 요청: 1240회 | 토큰: 482.0K 할당량 현황 주의 시간당 (620/1000) 62% 일간 (추정) (7400/10000) 74% 주간 (38200/70000) 55% 시간별 요청 (오늘) 일간 트래픽 (최근 7일) 클러스터 노드 정보 local-gpu-1 32ms remote-cpu-1 -",
+    "components": {
+      "cards": 51,
+      "tables": 0,
+      "forms": 0,
+      "inputs": 7,
+      "charts": 19,
+      "buttons": 32
+    }
+  },
+  {
+    "name": "audit",
+    "route": "/audit.html",
+    "screenshot": "artifacts/ui-review/auth-current/audit.png",
+    "finalUrl": "http://rasplay.tplinkdns.com:52416/audit.html",
+    "title": "감사 로그 - OpenMake.AI",
+    "headings": [
+      "오늘도 화이팅!무엇을\n                            도와드릴까요? 😊",
+      "감사 로그",
+      "감사 로그",
+      "감사 로그가 없습니다",
+      "로그 상세",
+      "📎 파일 첨부",
+      "⚙️ 설정",
+      "📖 사용자 가이드"
+    ],
+    "textLength": 180,
+    "text": "Skip to main content OpenMake.AI 새 대화 문서 관리 오늘 API 문서 개선 논의 문서 요약 워크플로우 A Admin ENTERPRISE 채팅으로 감사 로그 감사 로그 액션 전체 사용자 ID 개수 50개 100개 200개 500개 조회 총 0건 시간 액션 사용자 세부정보 IP 감사 로그가 없습니다",
+    "components": {
+      "cards": 6,
+      "tables": 1,
+      "forms": 0,
+      "inputs": 10,
+      "charts": 17,
+      "buttons": 33
+    }
+  },
+  {
+    "name": "external",
+    "route": "/external.html",
+    "screenshot": "artifacts/ui-review/auth-current/external.png",
+    "finalUrl": "chrome-error://chromewebdata/",
+    "title": "",
+    "headings": [],
+    "textLength": 0,
+    "text": "",
+    "components": {
+      "cards": 0,
+      "tables": 0,
+      "forms": 0,
+      "inputs": 0,
+      "charts": 0,
+      "buttons": 0
+    }
+  },
+  {
+    "name": "analytics",
+    "route": "/analytics.html",
+    "screenshot": "artifacts/ui-review/auth-current/analytics.png",
+    "finalUrl": "http://rasplay.tplinkdns.com:52416/analytics.html",
+    "title": "분석 대시보드 - OpenMake.AI",
+    "headings": [
+      "오늘도 화이팅!무엇을\n                            도와드릴까요? 😊",
+      "분석 대시보드",
+      "분석 대시보드",
+      "시스템 상태",
+      "비용 분석",
+      "피드백 통계",
+      "에이전트 성능",
+      "사용자 행동 분석",
+      "피크 시간대",
+      "인기 쿼리",
+      "📎 파일 첨부",
+      "⚙️ 설정"
+    ],
+    "textLength": 320,
+    "text": "Skip to main content OpenMake.AI 새 대화 문서 관리 오늘 API 문서 개선 논의 문서 요약 워크플로우 A Admin ENTERPRISE 채팅으로 분석 대시보드 분석 대시보드 마지막 업데이트: 오전 5:19:22 시스템 상태 정상 업타임 0초 에러율 0% 평균 응답 0ms 오늘 요청 - 비용 분석 $0.0000 주간 비용 일간 $0.0000 월간 예상 $0.000 피드백 통계 총 피드백 0 평균 평점 0.0/5.0 양호 비율 0% 에이전트 성능 에이전트 성능 데이터가 없습니다. 사용자 행동 분석 피크 시간대 데이터 없음 인기 쿼리 데이터 없음",
+    "components": {
+      "cards": 11,
+      "tables": 0,
+      "forms": 0,
+      "inputs": 7,
+      "charts": 17,
+      "buttons": 31
+    }
+  },
+  {
+    "name": "alerts",
+    "route": "/alerts.html",
+    "screenshot": "artifacts/ui-review/auth-current/alerts.png",
+    "finalUrl": "http://rasplay.tplinkdns.com:52416/alerts.html",
+    "title": "알림 관리 - OpenMake.AI",
+    "headings": [
+      "오늘도 화이팅!무엇을\n                            도와드릴까요? 😊",
+      "알림 관리",
+      "알림 관리",
+      "알림 시스템",
+      "임계값 설정",
+      "알림 유형",
+      "알림 히스토리",
+      "알림 없음",
+      "📎 파일 첨부",
+      "⚙️ 설정",
+      "📖 사용자 가이드"
+    ],
+    "textLength": 332,
+    "text": "Skip to main content OpenMake.AI 새 대화 문서 관리 오늘 API 문서 개선 논의 문서 요약 워크플로우 A Admin ENTERPRISE 채팅으로 알림 관리 알림 관리 알림 시스템 상태 활성화 채널 console 총 알림 0 임계값 설정 할당량 경고 70% 할당량 위험 90% 응답시간 임계 5,000ms 에러율 임계 10% 쿨다운 15분 알림 유형 할당량 경고 warning 할당량 위험 critical 키 소진 critical 응답시간 급증 warning 에러율 급증 critical 알림 히스토리 전체 정보 경고 위험 알림 없음 해당 필터에 맞는 알림이 없습니다.",
+    "components": {
+      "cards": 9,
+      "tables": 0,
+      "forms": 0,
+      "inputs": 7,
+      "charts": 17,
+      "buttons": 35
+    }
+  },
+  {
+    "name": "password-change",
+    "route": "/password-change.html",
+    "screenshot": "artifacts/ui-review/auth-current/password-change.png",
+    "finalUrl": "http://rasplay.tplinkdns.com:52416/password-change.html",
+    "title": "비밀번호 변경 - OpenMake.AI",
+    "headings": [
+      "오늘도 화이팅!무엇을\n                            도와드릴까요? 😊",
+      "비밀번호 변경",
+      "비밀번호 변경",
+      "🔒 비밀번호 변경",
+      "📎 파일 첨부",
+      "⚙️ 설정",
+      "📖 사용자 가이드"
+    ],
+    "textLength": 218,
+    "text": "Skip to main content OpenMake.AI 새 대화 문서 관리 오늘 API 문서 개선 논의 문서 요약 워크플로우 A Admin ENTERPRISE 채팅으로 비밀번호 변경 비밀번호 변경 🔒 비밀번호 변경 현재 비밀번호 👁️ 새 비밀번호 👁️ ✗ 최소 8자 이상 ✗ 대소문자 포함 ✗ 숫자 포함 ✗ 특수문자 포함 새 비밀번호 확인 👁️ 비밀번호 변경 ← 설정으로 돌아가기",
+    "components": {
+      "cards": 7,
+      "tables": 0,
+      "forms": 1,
+      "inputs": 10,
+      "charts": 17,
+      "buttons": 35
+    }
+  },
+  {
+    "name": "token-monitoring",
+    "route": "/token-monitoring.html",
+    "screenshot": "artifacts/ui-review/auth-current/token-monitoring.png",
+    "finalUrl": "http://rasplay.tplinkdns.com:52416/admin-metrics.html",
+    "title": "통합 모니터링 - OpenMake.AI",
+    "headings": [
+      "오늘도 화이팅!무엇을\n                            도와드릴까요? 😊",
+      "통합 모니터링",
+      "📊 통합 시스템 대시보드",
+      "📎 파일 첨부",
+      "⚙️ 설정",
+      "📖 사용자 가이드"
+    ],
+    "textLength": 498,
+    "text": "Skip to main content OpenMake.AI 새 대화 문서 관리 오늘 API 문서 개선 논의 문서 요약 워크플로우 A Admin ENTERPRISE 채팅으로 통합 모니터링 📊 통합 시스템 대시보드 마지막 업데이트: 5:19:28 AM 🔄 새로고침 시스템 업타임 23시간 23분 메모리 사용량 286 MB 정상 활성 연결 14 오늘 요청 1,240 482.0K 토큰 🔐 API 키 상태 및 모니터링 API 키 로테이션 🔑 Key 1 omk_live_****A91 활성 Key 2 omk_live_****C04 실패 2 키 상태 리셋 오늘 예상 비용 💰 $ 18.7421 요청: 1240회 | 토큰: 482.0K 할당량 현황 주의 시간당 (620/1000) 62% 일간 (추정) (7400/10000) 74% 주간 (38200/70000) 55% 시간별 요청 (오늘) 일간 트래픽 (최근 7일) 클러스터 노드 정보 local-gpu-1 32ms remote-cpu-1 -",
+    "components": {
+      "cards": 51,
+      "tables": 0,
+      "forms": 0,
+      "inputs": 7,
+      "charts": 19,
+      "buttons": 32
+    }
+  },
+  {
+    "name": "uir-monitor",
+    "route": "/uir-monitor.html",
+    "screenshot": "artifacts/ui-review/auth-current/uir-monitor.png",
+    "finalUrl": "http://rasplay.tplinkdns.com:52416/",
+    "title": "채팅 - OpenMake.AI",
+    "headings": [
+      "오늘도 화이팅!\n무엇을 도와드릴까요? 😊",
+      "📎 파일 첨부",
+      "⚙️ 설정",
+      "📖 사용자 가이드"
+    ],
+    "textLength": 266,
+    "text": "Skip to main content OpenMake.AI 새 대화 문서 관리 오늘 API 문서 개선 논의 문서 요약 워크플로우 A Admin ENTERPRISE 오늘도 화이팅! 무엇을 도와드릴까요? 😊 AI 어시스턴트가 질문에 답변하고, 문서를 분석하고, 코드를 작성합니다. 코딩 에이전트 코드 작성 및 디버깅 시작하기 문서 작성 도우미 블로그, 보고서 초안 작성 시작하기 데이터 분석 데이터 시각화 및 인사이트 도출 시작하기 자유 대화 무엇이든 물어보세요 시작하기 연결됨",
+    "components": {
+      "cards": 6,
+      "tables": 0,
+      "forms": 0,
+      "inputs": 7,
+      "charts": 16,
+      "buttons": 30
+    }
+  }
+]
