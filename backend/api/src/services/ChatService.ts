@@ -902,12 +902,25 @@ export class ChatService {
         const repo = this.providerRouter.getExternalKeysRepo();
         if (!repo) return;
         const userId = input.userId;
+
+        // 단가표 기반 cost 계산 (config/external-pricing.ts) — micros 단위
+        // import 는 함수 내부 require 로 — circular import 방지 + lazy load
+        const { computeCostMicros } = require('../config/external-pricing') as
+            typeof import('../config/external-pricing');
+        const costUsdMicros = computeCostMicros(
+            input.resolved.providerId,
+            input.resolved.modelId,
+            input.inputTokens,
+            input.outputTokens,
+        );
+
         repo.recordUsage({
             userId,
             providerId: input.resolved.providerId,
             modelId: input.resolved.modelId,
             inputTokens: input.inputTokens,
             outputTokens: input.outputTokens,
+            costUsdMicros,
             durationMs: input.durationMs,
             finishReason: input.finishReason,
             errorCode: input.errorCode ?? undefined,

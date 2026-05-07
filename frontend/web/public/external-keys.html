@@ -236,13 +236,26 @@
             }
             const totalIn = rows.reduce((s, r) => s + (r.input_tokens || 0), 0);
             const totalOut = rows.reduce((s, r) => s + (r.output_tokens || 0), 0);
+            const totalCostMicros = rows.reduce((s, r) => s + (r.cost_usd_micros || 0), 0);
+            const fmtUsd = (micros) => {
+                if (!micros) return '-';
+                const usd = micros / 1_000_000;
+                if (usd >= 0.01) return '$' + usd.toFixed(4);
+                if (usd >= 0.0001) return '$' + usd.toFixed(6);
+                return '<$0.0001';
+            };
             root.innerHTML = ''
                 + '<div style="margin-bottom:var(--space-3); color:var(--text-secondary)">'
-                + '최근 ' + rows.length + '건 — 입력 토큰 누계 <b>' + totalIn.toLocaleString() + '</b>, 출력 토큰 누계 <b>' + totalOut.toLocaleString() + '</b>'
+                + '최근 ' + rows.length + '건 — 입력 토큰 누계 <b>' + totalIn.toLocaleString() + '</b>, '
+                + '출력 토큰 누계 <b>' + totalOut.toLocaleString() + '</b>, '
+                + '비용 누계 <b>' + fmtUsd(totalCostMicros) + '</b> '
+                + '<span style="color:var(--text-muted); font-size:0.85em">(추정 — 정확한 청구는 각 provider 콘솔 참조)</span>'
                 + '</div>'
                 + '<table style="width:100%; border-collapse:collapse; font-size:var(--font-size-sm)">'
                 + '<thead><tr style="text-align:left; color:var(--text-muted); border-bottom:1px solid var(--border-light)">'
-                + '<th style="padding:var(--space-2) 0">시각</th><th>Provider</th><th>모델</th><th style="text-align:right">in</th><th style="text-align:right">out</th><th style="text-align:right">지연</th>'
+                + '<th style="padding:var(--space-2) 0">시각</th><th>Provider</th><th>모델</th>'
+                + '<th style="text-align:right">in</th><th style="text-align:right">out</th>'
+                + '<th style="text-align:right">비용</th><th style="text-align:right">지연</th>'
                 + '</tr></thead>'
                 + '<tbody>'
                 + rows.map(function(r) {
@@ -252,6 +265,7 @@
                         + '<td><code style="background:var(--bg-tertiary); padding:1px 4px; border-radius:var(--radius-sm)">' + esc(r.model_id) + '</code></td>'
                         + '<td style="text-align:right">' + (r.input_tokens || 0).toLocaleString() + '</td>'
                         + '<td style="text-align:right">' + (r.output_tokens || 0).toLocaleString() + '</td>'
+                        + '<td style="text-align:right; color:var(--text-secondary)">' + fmtUsd(r.cost_usd_micros) + '</td>'
                         + '<td style="text-align:right; color:var(--text-muted)">' + (r.duration_ms ? r.duration_ms + 'ms' : '-') + '</td>'
                         + '</tr>';
                 }).join('')
