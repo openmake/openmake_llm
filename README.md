@@ -31,6 +31,7 @@ OpenMake LLM is a high-performance, self-hosted AI assistant platform designed f
 - **RAG (Retrieval-Augmented Generation)** — Upload your documents and get AI answers grounded in your own data
 - **OpenAI-Compatible API** — Drop-in replacement endpoint for OpenAI API consumers
 - **Ollama Cluster Management** — Multi-node cluster with load balancing and API key pool rotation (up to 5 keys)
+- **External LLM Providers (BYO Key)** — Each user can register Anthropic Claude / OpenAI-compatible (Groq, OpenRouter, Together, vLLM…) keys at `/external-keys.html`. Keys are AES-256-GCM encrypted at rest, and external billing goes to the user's own provider account.
 
 <details>
 <summary><b>View All 18 Agent Categories (100+ Agents)</b></summary>
