@@ -32,6 +32,9 @@ import {
     getProviderCatalogEntry,
 } from '../config/external-providers';
 import { validateOutboundUrl } from '../security/ssrf-guard';
+import { AnthropicProvider } from '../providers/anthropic-provider';
+import { OpenAICompatProvider } from '../providers/openai-compat-provider';
+import type { IProvider } from '../providers/i-provider';
 import { createLogger } from '../utils/logger';
 
 const router = Router();
@@ -225,16 +228,57 @@ router.post('/:providerId/validate',
             return;
         }
 
-        // Phase 3·4 에서 IProvider.validateCredentials() 호출로 교체.
-        // Phase 1·2: provider 어댑터가 아직 없으므로 NOT_IMPLEMENTED 응답.
+        // 평문 키 복호화 후 적절한 provider 인스턴스로 validateCredentials() 호출
+        const plaintextKey = await getRepo().decryptKey(userId, providerId);
+        if (!plaintextKey) {
+            res.status(500).json(badRequest('키 복호화 실패'));
+            return;
+        }
+
+        let provider: IProvider;
+        if (existing.sdkType === 'anthropic') {
+            provider = new AnthropicProvider({ apiKey: plaintextKey, baseUrl: existing.baseUrl });
+        } else if (existing.sdkType === 'openai-compatible') {
+            if (!existing.baseUrl) {
+                res.status(400).json(
+                    badRequest(`'${providerId}' 키에 base_url 이 등록되지 않았습니다`),
+                );
+                return;
+            }
+            provider = new OpenAICompatProvider({
+                providerId,
+                apiKey: plaintextKey,
+                baseUrl: existing.baseUrl,
+            });
+        } else {
+            res.status(400).json(
+                badRequest(`알 수 없는 sdk_type: ${existing.sdkType}`),
+            );
+            return;
+        }
+
+        const result = await provider.validateCredentials();
         await getRepo().recordValidation(userId, providerId, {
-            ok: false,
-            error: 'Provider 어댑터가 아직 활성화되지 않았습니다 (Phase 3/4 예정)',
+            ok: result.ok,
+            error: result.ok ? null : (result.error ?? 'Validation failed'),
         });
 
-        res.status(503).json(
-            badRequest('Provider 검증은 Phase 3/4 에서 활성화됩니다'),
+        logger.info(
+            `외부 키 검증: user=${userId} provider=${providerId} ok=${result.ok} latency=${result.latencyMs}ms`,
         );
+
+        if (!result.ok) {
+            res.status(400).json(
+                badRequest(result.error || '검증 실패 — 키 또는 base_url 을 확인하세요'),
+            );
+            return;
+        }
+
+        res.json(success({
+            provider_id: providerId,
+            ok: true,
+            latency_ms: result.latencyMs,
+        }));
     }),
 );
 
