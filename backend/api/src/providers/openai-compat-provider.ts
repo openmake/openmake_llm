@@ -45,6 +45,60 @@ const DEFAULT_CAPABILITIES: ProviderCapabilities = {
 };
 
 /**
+ * 모델 ID 패턴별 capability 추론.
+ * 정확한 매핑은 provider 마다 달라 — 인기 패턴 기반 휴리스틱.
+ *
+ * @param providerId - 'openrouter', 'gemini', 'groq', 'mistral', 'cohere' 등
+ * @param modelId - 모델 식별자 (provider 마다 형식 상이)
+ */
+function inferCapabilitiesFromModelId(
+    providerId: string,
+    modelId: string,
+): ProviderCapabilities {
+    const lower = modelId.toLowerCase();
+    const caps: ProviderCapabilities = { ...DEFAULT_CAPABILITIES };
+
+    // Vision 추론 — vision/multimodal 키워드 또는 알려진 비전 모델
+    const visionPatterns = [
+        /vision/i, /multimodal/i, /-vl-/i,
+        /gpt-4o/, /gpt-5/, /gpt-4-turbo/,
+        /claude-3/, /claude-4/, /claude-opus/, /claude-sonnet/, /claude-haiku/,
+        /gemini-/, // Gemini 전 라인 vision 지원
+        /llama-3.2-.*-vision/,
+        /pixtral/, /qwen2-vl/,
+    ];
+    if (visionPatterns.some((p) => p.test(lower))) {
+        caps.vision = true;
+    }
+
+    // Thinking 추론 — reasoning/thinking/r1 패턴
+    const thinkingPatterns = [
+        /-r1/, /-o1/, /reasoning/, /thinking/, /-deepseek-r1/,
+        /claude-opus-4/, /claude-sonnet-4/, // Anthropic extended thinking
+    ];
+    if (thinkingPatterns.some((p) => p.test(lower))) {
+        caps.thinking = true;
+    }
+
+    // Tool calling 미지원 — Cohere Command R 모델은 native tools 미지원 (compatibility endpoint)
+    // 단순화: provider 차원 정책으로만 처리
+    if (providerId === 'cohere') {
+        caps.toolCalling = false;
+    }
+
+    // 임베딩 모델 식별 (text-embedding / embed / embedding 패턴)
+    if (/embed/i.test(lower)) {
+        caps.embedding = true;
+        caps.streaming = false;
+        caps.toolCalling = false;
+        caps.vision = false;
+        caps.thinking = false;
+    }
+
+    return caps;
+}
+
+/**
  * OpenAI 형식 메시지로 변환.
  *
  * - role 매핑: system/user/assistant/tool 그대로 유지
@@ -150,10 +204,8 @@ export class OpenAICompatProvider implements IProvider {
         });
     }
 
-    getCapabilities(_modelId: string): ProviderCapabilities {
-        // OpenAI 호환 endpoint 는 동적 — 보수적 기본값 반환.
-        // 사용자 프로필별 capability 등록은 P5 에서 도입 가능.
-        return { ...DEFAULT_CAPABILITIES };
+    getCapabilities(modelId: string): ProviderCapabilities {
+        return inferCapabilitiesFromModelId(this.id, modelId);
     }
 
     async listModels(): Promise<ProviderModel[]> {
@@ -165,7 +217,7 @@ export class OpenAICompatProvider implements IProvider {
                 displayName: m.id,
                 contextWindow: 32_000, // 보수적 기본 — endpoint 별 실제 값은 카탈로그에서 관리
                 outputLimit: 8_000,
-                capabilities: { ...DEFAULT_CAPABILITIES },
+                capabilities: inferCapabilitiesFromModelId(this.id, m.id),
             }));
         } catch (err) {
             logger.warn(`OpenAI 호환 모델 목록 조회 실패 (${this.baseUrl}): ${err}`);

@@ -49,18 +49,49 @@ const MODEL_PRICING: Record<string, ModelPricing> = {
     'groq:llama-3.1-8b-instant':       { input:  0.05, output:  0.08 },
     'groq:mixtral-8x7b-32768':         { input:  0.24, output:  0.24 },
 
-    // OpenRouter / Together / Mistral / Cohere / Ollama-remote 는
-    // 모델별 동적 단가 — 사용자 검토 후 본 파일 직접 수정 또는 별도 service 도입
+    // ── Mistral La Plateforme ─────────────────────────────────────
+    'mistral:mistral-large-latest':    { input:  2.00, output:  6.00 },
+    'mistral:mistral-medium-latest':   { input:  0.40, output:  2.00 },
+    'mistral:mistral-small-latest':    { input:  0.10, output:  0.30 },
+    'mistral:codestral-latest':        { input:  0.20, output:  0.60 },
+
+    // ── Cohere ─────────────────────────────────────────────────────
+    'cohere:command-r-plus':           { input:  2.50, output: 10.00 },
+    'cohere:command-r':                { input:  0.15, output:  0.60 },
+    'cohere:command-r7b':              { input:  0.0375, output: 0.15 },
+
+    // ── OpenRouter (인기 라우팅 모델 — 작은 마크업 포함, 정확값은 대시보드 참조) ──
+    'openrouter:openai/gpt-5':                     { input:  2.50, output: 10.00 },
+    'openrouter:openai/gpt-4o':                    { input:  2.50, output: 10.00 },
+    'openrouter:openai/gpt-4o-mini':               { input:  0.15, output:  0.60 },
+    'openrouter:anthropic/claude-opus-4.5':        { input: 15.00, output: 75.00 },
+    'openrouter:anthropic/claude-sonnet-4.6':      { input:  3.00, output: 15.00 },
+    'openrouter:anthropic/claude-haiku-4.5':       { input:  1.00, output:  5.00 },
+    'openrouter:google/gemini-2.5-pro':            { input:  1.25, output: 10.00 },
+    'openrouter:google/gemini-2.5-flash':          { input:  0.30, output:  2.50 },
+    'openrouter:meta-llama/llama-3.3-70b-instruct': { input: 0.59, output:  0.79 },
+    'openrouter:deepseek/deepseek-r1':             { input:  0.55, output:  2.19 },
+    'openrouter:deepseek/deepseek-v3':             { input:  0.27, output:  1.10 },
+
+    // ── Together AI (오픈소스 호스팅) ──────────────────────────────
+    'together:meta-llama/Llama-3.3-70B-Instruct-Turbo':  { input: 0.88, output: 0.88 },
+    'together:meta-llama/Llama-3.1-405B-Instruct-Turbo': { input: 3.50, output: 3.50 },
+    'together:Qwen/Qwen2.5-72B-Instruct-Turbo':           { input: 1.20, output: 1.20 },
+    'together:deepseek-ai/DeepSeek-V3':                   { input: 1.25, output: 1.25 },
 };
 
 /**
  * provider 별 fallback 단가 (모델별 정확 매칭 미발견 시 사용)
  */
 const PROVIDER_FALLBACK_PRICING: Record<string, ModelPricing> = {
-    anthropic:   { input:  3.00, output: 15.00 }, // Sonnet 기준 보수적 추정
+    anthropic:   { input:  3.00, output: 15.00 }, // Sonnet 기준
     gemini:      { input:  1.25, output: 10.00 }, // Pro 기준
     groq:        { input:  0.59, output:  0.79 }, // 70B Llama 기준
-    // 기타 provider 는 fallback 없음 — cost=0 으로 underestimate
+    mistral:     { input:  0.40, output:  2.00 }, // Medium 기준
+    cohere:      { input:  0.15, output:  0.60 }, // Command R 기준
+    openrouter:  { input:  3.00, output: 15.00 }, // Sonnet 기준 보수적
+    together:    { input:  0.88, output:  0.88 }, // 70B Llama 기준
+    // ollama-remote / openai-compatible 은 base_url 임의 — fallback 없음 (cost=0 underestimate)
 };
 
 /**
