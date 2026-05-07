@@ -20,6 +20,7 @@
         "eval:all": "npm run eval:routing && npm run eval:response"
     },
     "dependencies": {
+        "@anthropic-ai/sdk": "^0.95.1",
         "@modelcontextprotocol/sdk": "^1.25.3",
         "@modelcontextprotocol/server-filesystem": "^2026.1.14",
         "@mozilla/readability": "^0.6.0",
