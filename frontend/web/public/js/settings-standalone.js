@@ -52,14 +52,37 @@
                     var savedModel = safeStorage.getItem(SK.SELECTED_MODEL || 'selectedModel');
                     var defaultModel = data.defaultModel || (data.models[0].modelId || data.models[0].name);
 
-                    modelSelect.innerHTML = data.models.map(function (model) {
+                    // provider 별 그룹화 — ollama / anthropic / openai-compatible
+                    var groups = { ollama: [], anthropic: [], 'openai-compatible': [] };
+                    data.models.forEach(function (m) {
+                        var p = m.provider || 'ollama';
+                        if (!groups[p]) groups[p] = [];
+                        groups[p].push(m);
+                    });
+
+                    function renderOption(model) {
                         var modelId = model.modelId || model.name;
                         var displayName = model.name;
                         var desc = model.description || '';
                         var isSelected = savedModel ? modelId === savedModel : modelId === defaultModel;
                         return '<option value="' + escAttr(modelId) + '" ' + (isSelected ? 'selected' : '') + '>' +
                             escText(displayName) + (desc ? ' — ' + escText(desc) : '') + '</option>';
-                    }).join('');
+                    }
+
+                    var groupLabels = {
+                        ollama: '🖥️ Local (Ollama)',
+                        anthropic: '🧠 Anthropic Claude',
+                        'openai-compatible': '🌐 OpenAI Compatible',
+                    };
+
+                    var html = '';
+                    ['ollama', 'anthropic', 'openai-compatible'].forEach(function (key) {
+                        if (groups[key].length === 0) return;
+                        html += '<optgroup label="' + escAttr(groupLabels[key] || key) + '">';
+                        html += groups[key].map(renderOption).join('');
+                        html += '</optgroup>';
+                    });
+                    modelSelect.innerHTML = html;
 
                     // 비관리자는 선택 변경 불가 (옵션은 그대로 표시)
                     if (!isAdmin()) {

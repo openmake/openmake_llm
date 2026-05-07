@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="ko" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover">
+    <title>외부 LLM 키 관리 - OpenMake.Ai</title>
+    <link rel="icon" type="image/png" href="/logo.png">
+    <link rel="preconnect" href="https://cdn.jsdelivr.net">
+    <link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="/css/design-tokens.css">
+    <link rel="stylesheet" href="/css/components.css">
+    <link rel="stylesheet" href="/css/layout.css">
+    <style>
+        .ek-container { max-width: 800px; margin: 0 auto; padding: var(--space-6); }
+        .ek-card { background:var(--bg-card); border:1px solid var(--border-light); border-radius:var(--radius-lg); padding:var(--space-5); margin-bottom:var(--space-4); }
+        .ek-card h3 { margin:0 0 var(--space-2) 0; color:var(--text-primary); font-size:var(--font-size-lg); display:flex; align-items:center; gap:var(--space-2); }
+        .ek-help { color:var(--text-muted); font-size:var(--font-size-sm); line-height:1.6; margin-bottom:var(--space-3); }
+        .ek-form { display:flex; flex-direction:column; gap:var(--space-3); }
+        .ek-form label { font-size:var(--font-size-sm); color:var(--text-secondary); font-weight:var(--font-weight-medium); }
+        .ek-form input { width:100%; background:var(--bg-tertiary); border:1px solid var(--border-light); border-radius:var(--radius-md); padding:var(--space-3); color:var(--text-primary); font-family:inherit; box-sizing:border-box; }
+        .ek-form input:focus { outline:none; border-color:var(--accent-primary); }
+        .ek-actions { display:flex; gap:var(--space-2); justify-content:flex-end; margin-top:var(--space-2); }
+        .ek-btn { padding:var(--space-2) var(--space-4); border-radius:var(--radius-md); cursor:pointer; font-weight:var(--font-weight-semibold); border:none; }
+        .ek-btn-primary { background:var(--accent-primary); color:#fff; }
+        .ek-btn-danger { background:var(--danger); color:#fff; }
+        .ek-btn-secondary { background:var(--bg-tertiary); color:var(--text-primary); border:1px solid var(--border-light); }
+        .ek-status { display:flex; gap:var(--space-3); margin-top:var(--space-3); font-size:var(--font-size-sm); flex-wrap:wrap; }
+        .ek-status-row { color:var(--text-muted); }
+        .ek-status-row code { background:var(--bg-tertiary); padding:2px 6px; border-radius:var(--radius-sm); font-family:monospace; }
+        .ek-disabled-badge { background:var(--bg-tertiary); color:var(--text-muted); padding:2px 8px; border-radius:var(--radius-md); font-size:11px; margin-left:var(--space-2); }
+        .ek-active-badge { background:var(--success); color:#fff; padding:2px 8px; border-radius:var(--radius-md); font-size:11px; margin-left:var(--space-2); }
+        .ek-validation-ok { color:var(--success); }
+        .ek-validation-fail { color:var(--danger); }
+        .toast { position:fixed; bottom:var(--space-6); left:50%; transform:translateX(-50%); padding:var(--space-3) var(--space-5); background:var(--bg-card); border:1px solid var(--border-light); border-radius:var(--radius-lg); color:var(--text-primary); box-shadow:var(--shadow-lg); opacity:0; transition:opacity 0.3s; z-index:1000; }
+        .toast.show { opacity:1; }
+        .toast.error { border-color:var(--danger); }
+    </style>
+</head>
+<body>
+<div class="layout">
+    <aside class="sidebar" id="sidebar"></aside>
+    <div class="sidebar-overlay" onclick="toggleSidebar()"></div>
+    <main class="main-content">
+        <header class="page-header">
+            <button class="mobile-menu-btn" onclick="toggleMobileSidebar(event)">&#9776;</button>
+            <h1>🌐 외부 LLM 키 관리</h1>
+        </header>
+        <div class="content-area">
+            <div class="ek-container">
+                <p style="color:var(--text-muted); margin-bottom:var(--space-5);">
+                    Anthropic / OpenAI 호환 endpoint 등 외부 LLM provider 의 API 키를 등록합니다.
+                    키는 AES-256-GCM 으로 암호화되어 저장되며, 사용량은 본 서비스가 아닌 해당 provider 계정으로 청구됩니다.
+                </p>
+                <div id="providerList"><div style="color:var(--text-muted)">불러오는 중...</div></div>
+            </div>
+        </div>
+    </main>
+</div>
+<div id="toast" class="toast"></div>
+
+<script type="module" src="/js/components/sidebar.js"></script>
+<script type="module">
+    function esc(s) { var d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
+    function showToast(msg, type) {
+        var t = document.getElementById('toast');
+        t.textContent = msg;
+        t.className = 'toast show' + (type === 'error' ? ' error' : '');
+        setTimeout(function() { t.className = 'toast'; }, 3000);
+    }
+    function fmt(d) { if (!d) return '-'; try { return new Date(d).toLocaleString('ko-KR'); } catch (e) { return '-'; } }
+    function authFetch(url, opts) {
+        opts = opts || {};
+        opts.credentials = 'include';
+        opts.headers = Object.assign({ 'Content-Type': 'application/json' }, opts.headers || {});
+        return (window.authFetch || fetch)(url, opts);
+    }
+
+    async function load() {
+        try {
+            const res = await authFetch('/api/external-keys');
+            if (!res.ok) {
+                if (res.status === 401) {
+                    document.getElementById('providerList').innerHTML = '<div style="text-align:center; padding:var(--space-8); color:var(--text-muted)">로그인이 필요합니다. <a href="/login.html">로그인</a></div>';
+                    return;
+                }
+                throw new Error('로드 실패');
+            }
+            const json = await res.json();
+            render(json.data && json.data.providers ? json.data.providers : []);
+        } catch (e) {
+            showToast('카탈로그 로드 실패', 'error');
+        }
+    }
+
+    function render(providers) {
+        const root = document.getElementById('providerList');
+        if (!providers.length) {
+            root.innerHTML = '<div style="text-align:center; padding:var(--space-8); color:var(--text-muted)">등록 가능한 provider 가 없습니다.</div>';
+            return;
+        }
+        root.innerHTML = providers.map(function(p) {
+            const enabled = p.enabled;
+            const k = p.user_key;
+            const validation = k && k.last_validated_at
+                ? (k.last_validation_ok
+                    ? '<span class="ek-validation-ok">✓ ' + fmt(k.last_validated_at) + ' 검증 통과</span>'
+                    : '<span class="ek-validation-fail">✗ ' + esc(k.last_validation_error || '검증 실패') + '</span>')
+                : '<span style="color:var(--text-muted)">미검증</span>';
+
+            return ''
+                + '<div class="ek-card">'
+                + '<h3>' + esc(p.display_name)
+                + (enabled ? '<span class="ek-active-badge">활성</span>' : '<span class="ek-disabled-badge">Coming Soon</span>')
+                + (k ? '<span class="ek-active-badge">' + esc(k.key_prefix) + '</span>' : '')
+                + '</h3>'
+                + '<div class="ek-help">' + esc(p.help_text) + '</div>'
+                + (enabled ? renderForm(p, k) : '')
+                + (k ? '<div class="ek-status">'
+                        + '<span class="ek-status-row">검증: ' + validation + '</span>'
+                        + '<span class="ek-status-row">마지막 사용: ' + fmt(k.last_used_at) + '</span>'
+                        + '<span class="ek-status-row">등록: ' + fmt(k.created_at) + '</span>'
+                    + '</div>' : '')
+                + '</div>';
+        }).join('');
+
+        // 폼 핸들러 바인딩 (CSP 친화 — onclick 인라인 회피)
+        document.querySelectorAll('[data-ek-action]').forEach(function(btn) {
+            btn.addEventListener('click', function(ev) {
+                ev.preventDefault();
+                const action = btn.dataset.ekAction;
+                const provider = btn.dataset.provider;
+                if (action === 'save') saveKey(provider);
+                else if (action === 'delete') deleteKey(provider);
+                else if (action === 'validate') validateKey(provider);
+            });
+        });
+    }
+
+    function renderForm(p, k) {
+        const id = 'ek-' + p.provider_id;
+        return ''
+            + '<div class="ek-form">'
+            + '<label>표시 이름 <input type="text" id="' + id + '-name" value="' + esc(k ? k.display_name : p.display_name) + '" /></label>'
+            + (p.sdk_type === 'openai-compatible'
+                ? '<label>Base URL <input type="text" id="' + id + '-baseurl" value="' + esc(k && k.base_url ? k.base_url : p.default_base_url) + '" /></label>'
+                : '')
+            + '<label>API Key <input type="password" id="' + id + '-key" placeholder="' + (k ? '변경하지 않으려면 비워두세요' : (p.key_prefix_pattern || 'API 키')) + '" /></label>'
+            + '<div class="ek-actions">'
+            + (k ? '<button class="ek-btn ek-btn-secondary" data-ek-action="validate" data-provider="' + esc(p.provider_id) + '">🔍 검증</button>' : '')
+            + (k ? '<button class="ek-btn ek-btn-danger" data-ek-action="delete" data-provider="' + esc(p.provider_id) + '">🗑️ 삭제</button>' : '')
+            + '<button class="ek-btn ek-btn-primary" data-ek-action="save" data-provider="' + esc(p.provider_id) + '">' + (k ? '갱신' : '등록') + '</button>'
+            + '</div>'
+            + '</div>';
+    }
+
+    async function saveKey(providerId) {
+        const id = 'ek-' + providerId;
+        const nameEl = document.getElementById(id + '-name');
+        const keyEl = document.getElementById(id + '-key');
+        const baseUrlEl = document.getElementById(id + '-baseurl');
+        const apiKey = keyEl.value.trim();
+        if (!apiKey) {
+            showToast('API 키를 입력하세요', 'error');
+            return;
+        }
+        // sdk_type 은 카탈로그에서 결정 — 프론트는 보내지 않고 백엔드에서 검증
+        const card = nameEl.closest('.ek-card');
+        const sdkType = baseUrlEl ? 'openai-compatible' : 'anthropic';
+        try {
+            const res = await authFetch('/api/external-keys/' + encodeURIComponent(providerId), {
+                method: 'POST',
+                body: JSON.stringify({
+                    sdk_type: sdkType,
+                    display_name: nameEl.value.trim() || providerId,
+                    base_url: baseUrlEl ? (baseUrlEl.value.trim() || null) : null,
+                    api_key: apiKey,
+                }),
+            });
+            if (!res.ok) {
+                const err = await res.json().catch(function() { return {}; });
+                throw new Error(err.error || err.message || '저장 실패');
+            }
+            showToast('저장되었습니다');
+            load();
+        } catch (e) {
+            showToast(e.message || '저장 실패', 'error');
+        }
+    }
+
+    async function deleteKey(providerId) {
+        if (!confirm("'" + providerId + "' 키를 삭제하시겠습니까?")) return;
+        try {
+            const res = await authFetch('/api/external-keys/' + encodeURIComponent(providerId), { method: 'DELETE' });
+            if (!res.ok) throw new Error('삭제 실패');
+            showToast('삭제되었습니다');
+            load();
+        } catch (e) {
+            showToast('삭제 실패', 'error');
+        }
+    }
+
+    async function validateKey(providerId) {
+        showToast('검증 중...');
+        try {
+            const res = await authFetch('/api/external-keys/' + encodeURIComponent(providerId) + '/validate', { method: 'POST' });
+            if (!res.ok) {
+                const err = await res.json().catch(function() { return {}; });
+                showToast(err.error || err.message || '검증 실패 (Phase 3+ 활성화)', 'error');
+                return;
+            }
+            showToast('검증 성공');
+            load();
+        } catch (e) {
+            showToast('검증 실패', 'error');
+        }
+    }
+
+    load();
+</script>
+</body>
+</html>

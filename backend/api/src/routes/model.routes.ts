@@ -21,6 +21,10 @@ import { getModelForRole } from '../config/model-roles';
 import { MODEL_CAPABILITY_PRESETS } from '../config/model-defaults';
 import { requireAuth, requireAdmin } from '../auth';
 import { getModelHealthMonitor } from '../services/model-health-monitor';
+import { ExternalKeysRepository } from '../data/repositories/external-keys-repo';
+import { getPool } from '../data/models/unified-database';
+import { AnthropicProvider } from '../providers/anthropic-provider';
+import { buildFullModelId } from '../providers/i-provider';
 
 const router = Router();
 const logger = createLogger('ModelRoutes');
@@ -45,7 +49,7 @@ router.get('/model', asyncHandler(async (_req: Request, res: Response) => {
  * model-roles 레지스트리의 chat 역할 모델을 반환합니다.
  * capabilities 는 MODEL_CAPABILITY_PRESETS 의 가장 긴 prefix 매칭으로 조회합니다.
  */
-router.get('/models', asyncHandler(async (_req: Request, res: Response) => {
+router.get('/models', asyncHandler(async (req: Request, res: Response) => {
     const chatModel = getModelForRole('chat');
 
     // MODEL_CAPABILITY_PRESETS에서 가장 긴 prefix 매칭으로 capabilities 조회
@@ -59,23 +63,76 @@ router.get('/models', asyncHandler(async (_req: Request, res: Response) => {
         }
     }
 
-    const models = [{
-        name: chatModel,
-        modelId: chatModel,
-        description: `Local Ollama model (${chatModel})`,
+    type ModelEntry = {
+        name: string;
+        modelId: string;
+        description: string;
+        provider: 'ollama' | 'anthropic' | 'openai-compatible';
         capabilities: {
-            executionStrategy: 'single' as const,
+            executionStrategy: 'single';
+            thinking: 'off' | 'medium';
+            discussion: boolean;
+            vision: boolean;
+            toolCalling: boolean;
+            streaming: boolean;
+        };
+    };
+
+    const models: ModelEntry[] = [{
+        name: chatModel,
+        modelId: buildFullModelId('ollama', chatModel),
+        description: `Local Ollama model (${chatModel})`,
+        provider: 'ollama',
+        capabilities: {
+            executionStrategy: 'single',
             thinking: caps.thinking ? 'medium' : 'off',
             discussion: false,
             vision: caps.vision,
             toolCalling: caps.toolCalling,
             streaming: caps.streaming,
-        }
+        },
     }];
 
+    // 인증된 사용자는 외부 provider 키 등록분도 추가
+    const userId = req.user && 'userId' in req.user
+        ? (req.user as { userId: string }).userId
+        : null;
+    if (userId) {
+        try {
+            const repo = new ExternalKeysRepository(getPool());
+            const userKeys = await repo.listByUser(userId);
+            for (const keyRow of userKeys) {
+                if (keyRow.sdkType === 'anthropic') {
+                    const provider = new AnthropicProvider({ apiKey: 'placeholder', baseUrl: keyRow.baseUrl });
+                    const list = await provider.listModels();
+                    for (const m of list) {
+                        models.push({
+                            name: m.displayName,
+                            modelId: m.fullId,
+                            description: 'Anthropic — BYO key',
+                            provider: 'anthropic',
+                            capabilities: {
+                                executionStrategy: 'single',
+                                thinking: m.capabilities.thinking ? 'medium' : 'off',
+                                discussion: false,
+                                vision: m.capabilities.vision,
+                                toolCalling: m.capabilities.toolCalling,
+                                streaming: m.capabilities.streaming,
+                            },
+                        });
+                    }
+                }
+                // openai-compatible 은 동적 /v1/models 조회가 비용 — 사용자가 모델 직접 입력하는
+                // 자유 형식으로 둠 (Phase 5 후속 개선 가능)
+            }
+        } catch (err) {
+            logger.warn(`외부 모델 카탈로그 조회 실패: ${err instanceof Error ? err.message : err}`);
+        }
+    }
+
     res.json(success({
-        defaultModel: chatModel,
-        models
+        defaultModel: buildFullModelId('ollama', chatModel),
+        models,
     }));
 }));
 
