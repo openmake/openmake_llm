@@ -72,8 +72,10 @@ function inferCapabilitiesFromModelId(
     }
 
     // Thinking 추론 — reasoning/thinking/r1 패턴
+    // o1-* 또는 o3-* 같이 word boundary 다음 시작하는 모델, 또는 -r1/-o1 suffix 패턴 모두 매칭
     const thinkingPatterns = [
-        /-r1/, /-o1/, /reasoning/, /thinking/, /-deepseek-r1/,
+        /(^|[^a-z])o1[-_/]/, /(^|[^a-z])o3[-_/]/, // OpenAI reasoning 시리즈 (o1-mini, o3, gpt-o1 등)
+        /-r1\b/, /reasoning/, /thinking/, /deepseek-r1/,
         /claude-opus-4/, /claude-sonnet-4/, // Anthropic extended thinking
     ];
     if (thinkingPatterns.some((p) => p.test(lower))) {
