@@ -837,26 +837,85 @@ export class ChatService {
             ...(req.images ? { images: req.images } : {}),
         });
 
-        const result = await resolved.provider.streamChat(
-            {
-                messages,
-                modelId: resolved.modelId,
-                ...(req.abortSignal ? { abortSignal: req.abortSignal } : {}),
-            },
-            {
-                onToken: (token) => onToken(token),
-                onThinking: (thinking) => onToken('', thinking),
-                onUsage: (usage) => {
-                    this.lastProviderUsage = usage;
+        const startedAt = Date.now();
+        let errorCode: string | null = null;
+        let result;
+        try {
+            result = await resolved.provider.streamChat(
+                {
+                    messages,
+                    modelId: resolved.modelId,
+                    ...(req.abortSignal ? { abortSignal: req.abortSignal } : {}),
                 },
-            },
-        );
+                {
+                    onToken: (token) => onToken(token),
+                    onThinking: (thinking) => onToken('', thinking),
+                    onUsage: (usage) => {
+                        this.lastProviderUsage = usage;
+                    },
+                },
+            );
+        } catch (err) {
+            errorCode = err && typeof err === 'object' && 'code' in err
+                ? String((err as { code: unknown }).code)
+                : 'UPSTREAM_ERROR';
+            // 사용량 적재 (실패 호출도 기록)
+            this.recordExternalUsageFireAndForget({
+                userId: req.userId,
+                resolved,
+                inputTokens: 0,
+                outputTokens: 0,
+                durationMs: Date.now() - startedAt,
+                errorCode,
+            });
+            throw err;
+        }
 
         logger.info(
             `외부 provider 호출 완료: ${resolved.fullId} ` +
             `(in=${result.usage.prompt_eval_count ?? 0}, out=${result.usage.eval_count ?? 0})`,
         );
+
+        // 사용량 적재 (성공 호출, fire-and-forget — DB 실패가 응답을 막지 않도록)
+        this.recordExternalUsageFireAndForget({
+            userId: req.userId,
+            resolved,
+            inputTokens: result.usage.prompt_eval_count ?? 0,
+            outputTokens: result.usage.eval_count ?? 0,
+            durationMs: Date.now() - startedAt,
+            finishReason: result.finishReason,
+        });
+
         return result.content;
+    }
+
+    private recordExternalUsageFireAndForget(input: {
+        userId: string | undefined;
+        resolved: import('../providers/provider-router').ResolvedProvider;
+        inputTokens: number;
+        outputTokens: number;
+        durationMs: number;
+        finishReason?: string;
+        errorCode?: string | null;
+    }): void {
+        if (!input.userId || !this.providerRouter) return;
+        const repo = this.providerRouter.getExternalKeysRepo();
+        if (!repo) return;
+        const userId = input.userId;
+        repo.recordUsage({
+            userId,
+            providerId: input.resolved.providerId,
+            modelId: input.resolved.modelId,
+            inputTokens: input.inputTokens,
+            outputTokens: input.outputTokens,
+            durationMs: input.durationMs,
+            finishReason: input.finishReason,
+            errorCode: input.errorCode ?? undefined,
+        }).then(() => {
+            return repo.touchLastUsed(userId, input.resolved.providerId);
+        }).catch((err) => {
+            logger.warn(`외부 사용량 기록 실패: ${err instanceof Error ? err.message : err}`);
+        });
     }
 
     /**

@@ -224,6 +224,88 @@ export class ExternalKeysRepository extends BaseRepository {
     }
 
     /**
+     * 외부 provider 호출 사용량 레코드 1건 적재 (external_provider_usage 테이블).
+     *
+     * cost_usd_micros 는 호출자가 사전 계산하여 전달 (provider 별 단가표는
+     * config 또는 별도 service 에서 관리 예정 — Phase 5+ 후속 개선).
+     */
+    async recordUsage(input: {
+        userId: string;
+        providerId: string;
+        modelId: string;
+        inputTokens: number;
+        outputTokens: number;
+        thinkingTokens?: number;
+        costUsdMicros?: number;
+        durationMs?: number;
+        finishReason?: string;
+        errorCode?: string;
+    }): Promise<void> {
+        await this.query(
+            `INSERT INTO external_provider_usage
+                (user_id, provider_id, model_id, input_tokens, output_tokens,
+                 thinking_tokens, cost_usd_micros, duration_ms, finish_reason, error_code)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+            [
+                input.userId,
+                input.providerId,
+                input.modelId,
+                input.inputTokens,
+                input.outputTokens,
+                input.thinkingTokens ?? null,
+                input.costUsdMicros ?? 0,
+                input.durationMs ?? null,
+                input.finishReason ?? null,
+                input.errorCode ?? null,
+            ],
+        );
+    }
+
+    /**
+     * 사용자의 최근 외부 provider 사용량 조회 (UI 표시용).
+     * 최근 N건의 호출 메타 + 누적 토큰/비용을 반환.
+     */
+    async listRecentUsage(
+        userId: string,
+        limit: number = 50,
+    ): Promise<Array<{
+        providerId: string;
+        modelId: string;
+        occurredAt: Date;
+        inputTokens: number;
+        outputTokens: number;
+        durationMs: number | null;
+        finishReason: string | null;
+    }>> {
+        const result = await this.query<{
+            provider_id: string;
+            model_id: string;
+            occurred_at: Date;
+            input_tokens: number;
+            output_tokens: number;
+            duration_ms: number | null;
+            finish_reason: string | null;
+        }>(
+            `SELECT provider_id, model_id, occurred_at, input_tokens, output_tokens,
+                    duration_ms, finish_reason
+             FROM external_provider_usage
+             WHERE user_id = $1
+             ORDER BY occurred_at DESC
+             LIMIT $2`,
+            [userId, limit],
+        );
+        return result.rows.map((r) => ({
+            providerId: r.provider_id,
+            modelId: r.model_id,
+            occurredAt: r.occurred_at,
+            inputTokens: r.input_tokens,
+            outputTokens: r.output_tokens,
+            durationMs: r.duration_ms,
+            finishReason: r.finish_reason,
+        }));
+    }
+
+    /**
      * 키 삭제 (소프트 비활성화) — DB row는 audit를 위해 보존하고 is_active=false 처리.
      */
     async deactivate(userId: string, providerId: string): Promise<boolean> {

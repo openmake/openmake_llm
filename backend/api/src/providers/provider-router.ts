@@ -86,6 +86,14 @@ export class ProviderRouter {
     constructor(private deps: ProviderRouterDeps) {}
 
     /**
+     * 주입된 ExternalKeysRepository 노출 — 사용량 기록 등 후속 작업에 사용.
+     * 미주입 라우터는 undefined.
+     */
+    getExternalKeysRepo(): ExternalKeysRepository | undefined {
+        return this.deps.externalKeysRepo;
+    }
+
+    /**
      * fullModelId('provider:model')를 파싱하여 IProvider 어댑터와 modelId를 반환합니다.
      *
      * @throws {ProviderError} INVALID_MODEL_ID — 형식 오류('provider:model' 미준수)

@@ -185,6 +185,30 @@ router.delete('/:providerId',
     }),
 );
 
+router.get('/usage/recent',
+    requireAuth,
+    asyncHandler(async (req: Request, res: Response) => {
+        const userId = getUserId(req);
+        if (!userId) {
+            res.status(401).json(unauthorized('User ID not found.'));
+            return;
+        }
+        const limit = Math.min(parseInt(req.query.limit as string, 10) || 50, 200);
+        const recent = await getRepo().listRecentUsage(userId, limit);
+        res.json(success({
+            usage: recent.map((r) => ({
+                provider_id: r.providerId,
+                model_id: r.modelId,
+                occurred_at: r.occurredAt,
+                input_tokens: r.inputTokens,
+                output_tokens: r.outputTokens,
+                duration_ms: r.durationMs,
+                finish_reason: r.finishReason,
+            })),
+        }));
+    }),
+);
+
 router.post('/:providerId/validate',
     requireAuth,
     asyncHandler(async (req: Request, res: Response) => {
