@@ -5,9 +5,11 @@
  *
  * 만료된 DB 레코드를 주기적으로 정리합니다.
  * 대상 테이블:
- * - uploaded_documents : expires_at 기준 만료 문서 삭제
- * - token_blacklist    : expires_at(ms epoch) 기준 만료 토큰 삭제
- * - oauth_states       : 10분 이상 경과한 OAuth state 삭제
+ * - uploaded_documents              : expires_at 기준 만료 문서 삭제
+ * - token_blacklist                 : expires_at(ms epoch) 기준 만료 토큰 삭제
+ * - oauth_states                    : 10분 이상 경과한 OAuth state 삭제
+ * - external_provider_usage         : EXTERNAL_USAGE_RETENTION_DAYS(기본 90일) 보존
+ * - external_provider_models_cache  : 7일 이상 stale 항목 정리 (TTL 만료 후 누적 방지)
  *
  * @module data/db-retention
  */
@@ -53,6 +55,32 @@ async function runRetention(): Promise<void> {
         );
         if ((oauthResult.rowCount ?? 0) > 0) {
             logger.info(`[DbRetention] 만료 OAuth state ${oauthResult.rowCount}건 삭제 완료`);
+        }
+
+        // 4. external_provider_usage 90일 보존 (env: EXTERNAL_USAGE_RETENTION_DAYS)
+        const retentionDays = parseInt(
+            process.env.EXTERNAL_USAGE_RETENTION_DAYS ?? '90',
+            10,
+        );
+        if (Number.isFinite(retentionDays) && retentionDays > 0) {
+            const usageResult = await pool.query(
+                `DELETE FROM external_provider_usage
+                 WHERE occurred_at < NOW() - ($1 || ' days')::interval`,
+                [retentionDays.toString()]
+            );
+            if ((usageResult.rowCount ?? 0) > 0) {
+                logger.info(`[DbRetention] 외부 사용량 ${usageResult.rowCount}건 정리 완료 (${retentionDays}일 초과)`);
+            }
+        }
+
+        // 5. external_provider_models_cache stale 정리 — TTL 만료 후 7일 이상 방치 항목 삭제
+        // (read 시점 TTL 체크는 따로 수행 — 여기는 row 누적 방지용 GC)
+        const cacheResult = await pool.query(
+            `DELETE FROM external_provider_models_cache
+             WHERE cached_at < NOW() - INTERVAL '7 days'`
+        );
+        if ((cacheResult.rowCount ?? 0) > 0) {
+            logger.info(`[DbRetention] 외부 모델 캐시 stale ${cacheResult.rowCount}건 정리 완료`);
         }
 
     } catch (err) {
