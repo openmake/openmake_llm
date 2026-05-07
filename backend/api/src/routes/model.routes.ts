@@ -124,19 +124,40 @@ router.get('/models', asyncHandler(async (req: Request, res: Response) => {
                         });
                     }
                 }
-                // openai-compatible 분기: provider 의 /v1/models 호출 (실패 시 빈 배열)
+                // openai-compatible 분기: provider 의 /v1/models 호출 (TTL 캐시 + 실패 격리)
                 if (keyRow.sdkType === 'openai-compatible' && keyRow.baseUrl) {
                     try {
-                        const plaintextKey = await repo.decryptKey(userId, keyRow.providerId);
-                        if (!plaintextKey) continue;
-                        const provider = new OpenAICompatProvider({
-                            providerId: keyRow.providerId,
-                            apiKey: plaintextKey,
-                            baseUrl: keyRow.baseUrl,
-                        });
-                        const list = await provider.listModels();
+                        // 캐시 우선 조회 (EXTERNAL_MODELS_CACHE_TTL_MS, 기본 1h)
+                        const cacheTtlMs = parseInt(
+                            process.env.EXTERNAL_MODELS_CACHE_TTL_MS ?? '3600000',
+                            10,
+                        );
+                        type CachedModel = { id: string; fullId: string; displayName: string; capabilities: Record<string, boolean> };
+                        const cached = await repo.getCachedModels(userId, keyRow.providerId, cacheTtlMs);
+                        let list: CachedModel[] | null = cached as CachedModel[] | null;
+
+                        if (!list) {
+                            const plaintextKey = await repo.decryptKey(userId, keyRow.providerId);
+                            if (!plaintextKey) continue;
+                            const provider = new OpenAICompatProvider({
+                                providerId: keyRow.providerId,
+                                apiKey: plaintextKey,
+                                baseUrl: keyRow.baseUrl,
+                            });
+                            const fresh = await provider.listModels();
+                            // ProviderModel[] 을 캐시-친화 형태로 직렬화
+                            list = fresh.map((m) => ({
+                                id: m.id,
+                                fullId: m.fullId,
+                                displayName: m.displayName,
+                                capabilities: m.capabilities as unknown as Record<string, boolean>,
+                            }));
+                            await repo.putCachedModels(userId, keyRow.providerId, list);
+                        }
+
                         const catalogDisplay = getProviderCatalogEntry(keyRow.providerId)?.displayName ?? keyRow.providerId;
                         for (const m of list) {
+                            const caps = m.capabilities;
                             models.push({
                                 name: m.displayName,
                                 modelId: m.fullId,
@@ -144,11 +165,11 @@ router.get('/models', asyncHandler(async (req: Request, res: Response) => {
                                 provider: keyRow.providerId,
                                 capabilities: {
                                     executionStrategy: 'single',
-                                    thinking: m.capabilities.thinking ? 'medium' : 'off',
+                                    thinking: caps.thinking ? 'medium' : 'off',
                                     discussion: false,
-                                    vision: m.capabilities.vision,
-                                    toolCalling: m.capabilities.toolCalling,
-                                    streaming: m.capabilities.streaming,
+                                    vision: !!caps.vision,
+                                    toolCalling: !!caps.toolCalling,
+                                    streaming: !!caps.streaming,
                                 },
                             });
                         }
