@@ -48,6 +48,8 @@ import { getConfig } from '../config/env';
 import { LANGUAGE_THRESHOLDS } from '../config/runtime-limits';
 import { OllamaProvider } from '../providers/ollama-provider';
 import { ProviderRouter } from '../providers/provider-router';
+import { ExternalKeysRepository } from '../data/repositories/external-keys-repo';
+import { getPool } from '../data/models/unified-database';
 const log = createLogger('ChatRequestHandler');
 
 // ============================================
@@ -523,7 +525,8 @@ export class ChatRequestHandler {
 
         // 5. ChatService 호출
         const ollamaProvider = new OllamaProvider(client);
-        const providerRouter = new ProviderRouter({ ollamaProvider });
+        const externalKeysRepo = new ExternalKeysRepository(getPool());
+        const providerRouter = new ProviderRouter({ ollamaProvider, externalKeysRepo });
         const chatService = new ChatService(client, providerRouter);
 
         // §9 ExecutionPlan 설정과 사용자 요청을 병합
