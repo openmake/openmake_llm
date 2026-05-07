@@ -20,6 +20,7 @@ import {
 import { ProviderError } from './provider-errors';
 import { OllamaProvider } from './ollama-provider';
 import { AnthropicProvider } from './anthropic-provider';
+import { OpenAICompatProvider } from './openai-compat-provider';
 import type { ExternalKeysRepository, ExternalApiKeyRow } from '../data/repositories/external-keys-repo';
 import type { ModelRole } from '../config/model-roles';
 import { createLogger } from '../utils/logger';
@@ -63,11 +64,17 @@ async function instantiateExternalProvider(
         });
     }
     if (keyRow.sdkType === 'openai-compatible') {
-        // Phase 4 에서 OpenAICompatProvider 도입 예정
-        throw new ProviderError(
-            'NOT_SUPPORTED',
-            `Provider '${providerId}' (openai-compatible) 는 Phase 4 에서 활성화됩니다`,
-        );
+        if (!keyRow.baseUrl) {
+            throw new ProviderError(
+                'NOT_SUPPORTED',
+                `openai-compatible provider '${providerId}' 에 base_url 이 등록되지 않았습니다`,
+            );
+        }
+        return new OpenAICompatProvider({
+            providerId,
+            apiKey: plaintextKey,
+            baseUrl: keyRow.baseUrl,
+        });
     }
     throw new ProviderError(
         'NOT_SUPPORTED',

@@ -56,7 +56,7 @@ export const EXTERNAL_PROVIDER_CATALOG: ReadonlyArray<ExternalProviderCatalogEnt
         defaultBaseUrl: 'https://api.anthropic.com',
         keyPrefixPattern: 'sk-ant-',
         validatePath: '/v1/models',
-        enabled: false, // Phase 3 에서 true 로 전환
+        enabled: true, // Phase 3 활성
         sortOrder: 10,
         helpText:
             'Anthropic Console (https://console.anthropic.com)에서 발급한 API 키를 입력하세요. ' +
@@ -68,7 +68,7 @@ export const EXTERNAL_PROVIDER_CATALOG: ReadonlyArray<ExternalProviderCatalogEnt
         sdkType: 'openai-compatible',
         defaultBaseUrl: 'https://api.groq.com/openai/v1',
         validatePath: '/models',
-        enabled: false, // Phase 4 에서 true 로 전환
+        enabled: true, // Phase 4 활성
         sortOrder: 20,
         helpText:
             'OpenAI Chat Completions 호환 endpoint(Groq, OpenRouter, Together, vLLM 등)의 ' +
