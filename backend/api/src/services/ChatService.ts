@@ -670,10 +670,9 @@ export class ChatService {
         executionPlan: ExecutionPlan | undefined,
         promptConfig: { options?: ModelOptions },
     ): Promise<import('../chat/model-selector').ModelSelection> {
-        return resolveModel({
-            message, hasImages, executionPlan, promptConfig,
-            setModel: (model: string) => this.client.setModel(model),
-        });
+        // Pure Manual (Decision F): setModel 콜백 미전달 — OllamaClient 생성자
+        // 단계의 모델이 사용자 선택을 그대로 반영하며, 분류·옵션 튜닝만 수행.
+        return resolveModel({ message, hasImages, executionPlan, promptConfig });
     }
 
     /**
