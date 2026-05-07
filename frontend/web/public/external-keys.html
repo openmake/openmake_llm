@@ -52,6 +52,11 @@
                     키는 AES-256-GCM 으로 암호화되어 저장되며, 사용량은 본 서비스가 아닌 해당 provider 계정으로 청구됩니다.
                 </p>
                 <div id="providerList"><div style="color:var(--text-muted)">불러오는 중...</div></div>
+
+                <div class="ek-card" style="margin-top:var(--space-6)">
+                    <h3>📊 최근 외부 사용량</h3>
+                    <div id="usageList" class="ek-help">불러오는 중...</div>
+                </div>
             </div>
         </div>
     </main>
@@ -215,7 +220,49 @@
         }
     }
 
+    async function loadUsage() {
+        const root = document.getElementById('usageList');
+        try {
+            const res = await authFetch('/api/external-keys/usage/recent?limit=20');
+            if (!res.ok) {
+                if (res.status !== 401) root.textContent = '사용량 로드 실패';
+                return;
+            }
+            const json = await res.json();
+            const rows = (json.data && json.data.usage) || [];
+            if (!rows.length) {
+                root.innerHTML = '<div style="color:var(--text-muted)">아직 외부 provider 호출 기록이 없습니다.</div>';
+                return;
+            }
+            const totalIn = rows.reduce((s, r) => s + (r.input_tokens || 0), 0);
+            const totalOut = rows.reduce((s, r) => s + (r.output_tokens || 0), 0);
+            root.innerHTML = ''
+                + '<div style="margin-bottom:var(--space-3); color:var(--text-secondary)">'
+                + '최근 ' + rows.length + '건 — 입력 토큰 누계 <b>' + totalIn.toLocaleString() + '</b>, 출력 토큰 누계 <b>' + totalOut.toLocaleString() + '</b>'
+                + '</div>'
+                + '<table style="width:100%; border-collapse:collapse; font-size:var(--font-size-sm)">'
+                + '<thead><tr style="text-align:left; color:var(--text-muted); border-bottom:1px solid var(--border-light)">'
+                + '<th style="padding:var(--space-2) 0">시각</th><th>Provider</th><th>모델</th><th style="text-align:right">in</th><th style="text-align:right">out</th><th style="text-align:right">지연</th>'
+                + '</tr></thead>'
+                + '<tbody>'
+                + rows.map(function(r) {
+                    return '<tr style="border-bottom:1px solid var(--border-light)">'
+                        + '<td style="padding:var(--space-2) 0; color:var(--text-muted)">' + esc(fmt(r.occurred_at)) + '</td>'
+                        + '<td>' + esc(r.provider_id) + '</td>'
+                        + '<td><code style="background:var(--bg-tertiary); padding:1px 4px; border-radius:var(--radius-sm)">' + esc(r.model_id) + '</code></td>'
+                        + '<td style="text-align:right">' + (r.input_tokens || 0).toLocaleString() + '</td>'
+                        + '<td style="text-align:right">' + (r.output_tokens || 0).toLocaleString() + '</td>'
+                        + '<td style="text-align:right; color:var(--text-muted)">' + (r.duration_ms ? r.duration_ms + 'ms' : '-') + '</td>'
+                        + '</tr>';
+                }).join('')
+                + '</tbody></table>';
+        } catch (e) {
+            root.textContent = '사용량 로드 실패';
+        }
+    }
+
     load();
+    loadUsage();
 </script>
 </body>
 </html>
