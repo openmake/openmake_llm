@@ -16,6 +16,7 @@ import { createLogger } from '../utils/logger';
 import { WSMessage, ExtendedWebSocket } from './ws-types';
 import { detectLanguage, type SupportedLanguageCode } from '../chat/language-policy';
 import { uploadedDocuments } from '../documents/store';
+import { getStaleDataWarning } from '../config/stale-data-warning';
 
 // 다국어 시사 키워드 맵
 const CURRENT_EVENTS_KEYWORDS: Record<string, string[]> = {
@@ -168,9 +169,10 @@ export async function handleChatMessage(
         const userWebSearchEnabled = msg.webSearch === true;
         let webSearchContext = '';
 
-        // MCP 도구 토글에서 web_search가 비활성화된 경우 pre-chat 웹 검색도 차단
-        const mcpWebSearchAllowed = msg.enabledTools === undefined || msg.enabledTools?.web_search === true;
-        if (mcpWebSearchAllowed && (userWebSearchEnabled || isCurrentEventsQuery)) {
+        // pre-chat 웹 검색 게이트: 사용자가 명시적으로 web_search=false를 송신한 경우만 차단.
+        // 빈 객체 {} 또는 미지정(undefined)은 허용 — 시사 키워드 자동 검색이 기본 동작이어야 함.
+        const userExplicitlyDisabledSearch = msg.enabledTools?.web_search === false;
+        if (!userExplicitlyDisabledSearch && (userWebSearchEnabled || isCurrentEventsQuery)) {
             try {
                 const { performWebSearch } = await import('../mcp');
                 const searchResults = await performWebSearch(message, { maxResults: 5, language: userLang });
@@ -183,6 +185,14 @@ export async function handleChatMessage(
             } catch (e) {
                 log.error('[Chat] 웹 검색 실패:', e);
             }
+        }
+
+        // 시사 질의인데 외부 데이터를 얻지 못한 경우(검색 차단·결과 0건·검색 실패 모두 포함)
+        // 환각 방지 안전망 메시지를 system prompt 채널(webSearchContext)로 주입.
+        if (isCurrentEventsQuery && !webSearchContext) {
+            const warning = getStaleDataWarning(userLang);
+            webSearchContext = `\n\n## ⚠️ ${warning.header}\n${warning.instruction}\n`;
+            log.info(`[Chat] 시사 질의 + 외부 데이터 부재 → 환각 방지 안전망 주입 (lang=${userLang}, explicitlyDisabled=${userExplicitlyDisabledSearch})`);
         }
 
         // WS 고유: 세션 생성 시 length < 10 체크 (노드 ID와 구별)
