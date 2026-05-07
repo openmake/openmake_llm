@@ -46,6 +46,8 @@ import {
 } from './language-policy';
 import { getConfig } from '../config/env';
 import { LANGUAGE_THRESHOLDS } from '../config/runtime-limits';
+import { OllamaProvider } from '../providers/ollama-provider';
+import { ProviderRouter } from '../providers/provider-router';
 const log = createLogger('ChatRequestHandler');
 
 // ============================================
@@ -520,7 +522,9 @@ export class ChatRequestHandler {
         // ═══════════════════════════════════════════════════════
 
         // 5. ChatService 호출
-        const chatService = new ChatService(client);
+        const ollamaProvider = new OllamaProvider(client);
+        const providerRouter = new ProviderRouter({ ollamaProvider });
+        const chatService = new ChatService(client, providerRouter);
 
         // §9 ExecutionPlan 설정과 사용자 요청을 병합
         // 토론 모드: 사용자 명시적 토글(discussionMode)만 반영.
