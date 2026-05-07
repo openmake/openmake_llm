@@ -24,7 +24,9 @@ import { getModelHealthMonitor } from '../services/model-health-monitor';
 import { ExternalKeysRepository } from '../data/repositories/external-keys-repo';
 import { getPool } from '../data/models/unified-database';
 import { AnthropicProvider } from '../providers/anthropic-provider';
+import { OpenAICompatProvider } from '../providers/openai-compat-provider';
 import { buildFullModelId } from '../providers/i-provider';
+import { getProviderCatalogEntry } from '../config/external-providers';
 
 const router = Router();
 const logger = createLogger('ModelRoutes');
@@ -67,7 +69,7 @@ router.get('/models', asyncHandler(async (req: Request, res: Response) => {
         name: string;
         modelId: string;
         description: string;
-        provider: 'ollama' | 'anthropic' | 'openai-compatible';
+        provider: string;
         capabilities: {
             executionStrategy: 'single';
             thinking: 'off' | 'medium';
@@ -122,8 +124,38 @@ router.get('/models', asyncHandler(async (req: Request, res: Response) => {
                         });
                     }
                 }
-                // openai-compatible 은 동적 /v1/models 조회가 비용 — 사용자가 모델 직접 입력하는
-                // 자유 형식으로 둠 (Phase 5 후속 개선 가능)
+                // openai-compatible 분기: provider 의 /v1/models 호출 (실패 시 빈 배열)
+                if (keyRow.sdkType === 'openai-compatible' && keyRow.baseUrl) {
+                    try {
+                        const plaintextKey = await repo.decryptKey(userId, keyRow.providerId);
+                        if (!plaintextKey) continue;
+                        const provider = new OpenAICompatProvider({
+                            providerId: keyRow.providerId,
+                            apiKey: plaintextKey,
+                            baseUrl: keyRow.baseUrl,
+                        });
+                        const list = await provider.listModels();
+                        const catalogDisplay = getProviderCatalogEntry(keyRow.providerId)?.displayName ?? keyRow.providerId;
+                        for (const m of list) {
+                            models.push({
+                                name: m.displayName,
+                                modelId: m.fullId,
+                                description: `${catalogDisplay} — BYO key`,
+                                provider: keyRow.providerId,
+                                capabilities: {
+                                    executionStrategy: 'single',
+                                    thinking: m.capabilities.thinking ? 'medium' : 'off',
+                                    discussion: false,
+                                    vision: m.capabilities.vision,
+                                    toolCalling: m.capabilities.toolCalling,
+                                    streaming: m.capabilities.streaming,
+                                },
+                            });
+                        }
+                    } catch (err) {
+                        logger.warn(`${keyRow.providerId} /v1/models 조회 실패: ${err instanceof Error ? err.message : err}`);
+                    }
+                }
             }
         } catch (err) {
             logger.warn(`외부 모델 카탈로그 조회 실패: ${err instanceof Error ? err.message : err}`);

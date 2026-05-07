@@ -42,11 +42,18 @@ export interface ExternalProviderCatalogEntry {
 }
 
 /**
- * Phase 1 시점 카탈로그.
+ * 외부 LLM provider 카탈로그.
  *
- * - `enabled: false` 인 항목은 UI 에 "Coming Soon" 으로 노출하거나 숨길 수 있음.
- * - openai-compatible 은 동적 등록(사용자가 임의 base_url 입력)이므로 단일
- *   엔트리로 표현하되 UI 에서 다중 instance(Groq, OpenRouter 등)를 허용.
+ * 모든 provider 는 OpenAI Chat Completions 호환 endpoint 또는 Anthropic
+ * 네이티브 SDK 로 호출됩니다. 각 entry 의 `id` 는 fullId prefix
+ * (`<provider_id>:<model_id>`) 와 동일하며, DB 의 (user_id, provider_id) UNIQUE
+ * 제약으로 사용자당 1개 키만 등록 가능합니다.
+ *
+ * 추가 시 체크리스트:
+ *   1. provider_id 를 services/chat-service/provider-gate.ts 의
+ *      KNOWN_FULLID_PREFIXES 에도 등록
+ *   2. sdk_type 은 'anthropic' | 'openai-compatible' 만 허용 (DB CHECK 제약)
+ *   3. defaultBaseUrl 은 https:// 가 표준 — Ollama 등 http:// 는 사용자 입력으로 수정
  */
 export const EXTERNAL_PROVIDER_CATALOG: ReadonlyArray<ExternalProviderCatalogEntry> = [
     {
@@ -56,23 +63,92 @@ export const EXTERNAL_PROVIDER_CATALOG: ReadonlyArray<ExternalProviderCatalogEnt
         defaultBaseUrl: 'https://api.anthropic.com',
         keyPrefixPattern: 'sk-ant-',
         validatePath: '/v1/models',
-        enabled: true, // Phase 3 활성
+        enabled: true,
         sortOrder: 10,
         helpText:
             'Anthropic Console (https://console.anthropic.com)에서 발급한 API 키를 입력하세요. ' +
             '사용량은 본 서비스가 아닌 Anthropic 계정으로 청구됩니다.',
     },
     {
-        id: 'openai-compatible',
-        displayName: 'OpenAI Compatible',
+        id: 'openrouter',
+        displayName: 'OpenRouter',
         sdkType: 'openai-compatible',
-        defaultBaseUrl: 'https://api.groq.com/openai/v1',
+        defaultBaseUrl: 'https://openrouter.ai/api/v1',
+        keyPrefixPattern: 'sk-or-',
         validatePath: '/models',
-        enabled: true, // Phase 4 활성
+        enabled: true,
         sortOrder: 20,
         helpText:
-            'OpenAI Chat Completions 호환 endpoint(Groq, OpenRouter, Together, vLLM 등)의 ' +
-            'base URL 과 API 키를 입력하세요. localhost / 사설 IP / link-local 주소는 차단됩니다.',
+            'OpenRouter (https://openrouter.ai/keys)의 통합 API 키를 입력하세요. ' +
+            '300+ 모델(GPT, Claude, Gemini, Llama 등)을 단일 endpoint 로 라우팅합니다. ' +
+            '모델 ID 는 "openai/gpt-5", "anthropic/claude-opus-4.5", "google/gemini-2.5-pro" 등 ' +
+            'OpenRouter 의 namespaced 형식을 그대로 사용합니다.',
+    },
+    {
+        id: 'gemini',
+        displayName: 'Google Gemini',
+        sdkType: 'openai-compatible',
+        defaultBaseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
+        keyPrefixPattern: 'AIza',
+        validatePath: '/models',
+        enabled: true,
+        sortOrder: 30,
+        helpText:
+            'Google AI Studio (https://aistudio.google.com/app/apikey)의 API 키를 입력하세요. ' +
+            'Gemini OpenAI 호환 endpoint 를 사용합니다. ' +
+            '예시 모델: "gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.0-flash-exp".',
+    },
+    {
+        id: 'groq',
+        displayName: 'Groq (LPU 가속)',
+        sdkType: 'openai-compatible',
+        defaultBaseUrl: 'https://api.groq.com/openai/v1',
+        keyPrefixPattern: 'gsk_',
+        validatePath: '/models',
+        enabled: true,
+        sortOrder: 40,
+        helpText:
+            'Groq Cloud (https://console.groq.com/keys)의 API 키를 입력하세요. ' +
+            'LPU 하드웨어 기반 초고속 추론(>500 tok/sec) — Llama, Mixtral, Whisper 등.',
+    },
+    {
+        id: 'together',
+        displayName: 'Together AI',
+        sdkType: 'openai-compatible',
+        defaultBaseUrl: 'https://api.together.xyz/v1',
+        validatePath: '/models',
+        enabled: true,
+        sortOrder: 50,
+        helpText:
+            'Together AI (https://api.together.xyz/settings/api-keys)의 API 키를 입력하세요. ' +
+            '오픈소스 모델 호스팅(Llama, Qwen, DeepSeek, Mistral 등) 전문.',
+    },
+    {
+        id: 'ollama-remote',
+        displayName: 'Ollama (원격 서버)',
+        sdkType: 'openai-compatible',
+        defaultBaseUrl: 'https://my-ollama-server.example.com/v1',
+        validatePath: '/models',
+        enabled: true,
+        sortOrder: 60,
+        helpText:
+            '본인 소유의 원격 Ollama 서버(OpenAI 호환 모드 활성)에 연결합니다. ' +
+            'Ollama v0.1.40+ 는 기본적으로 /v1 OpenAI 호환 endpoint 를 노출합니다. ' +
+            'localhost/사설 IP 는 SSRF 차단 — 공개 도메인 또는 외부 IP 만 등록 가능. ' +
+            '미인증 서버는 임의 문자열(예: "no-auth")을 키로 입력하세요.',
+    },
+    {
+        id: 'openai-compatible',
+        displayName: '직접 입력 (기타 OpenAI 호환)',
+        sdkType: 'openai-compatible',
+        defaultBaseUrl: 'https://your-endpoint.example.com/v1',
+        validatePath: '/models',
+        enabled: true,
+        sortOrder: 90,
+        helpText:
+            '위 목록에 없는 OpenAI Chat Completions 호환 endpoint 를 사용자 정의로 등록합니다. ' +
+            'vLLM, LM Studio (원격), Cerebras, Fireworks, Mistral La Plateforme 등에 적용. ' +
+            'localhost / 사설 IP / link-local 주소는 SSRF 가드로 차단됩니다.',
     },
 ] as const;
 
