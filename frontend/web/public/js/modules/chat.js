@@ -11,7 +11,7 @@
 
 import { getState, setState, addToMemory } from './state.js';
 import { sendWsMessage } from './websocket.js';
-import { DEFAULT_AUTO_MODEL, STORAGE_KEY_GENERAL_SETTINGS, STORAGE_KEY_SELECTED_MODEL, STORAGE_KEY_USER } from './constants.js';
+import { STORAGE_KEY_GENERAL_SETTINGS, STORAGE_KEY_SELECTED_MODEL, STORAGE_KEY_USER } from './constants.js';
 
 // 하위 모듈 import
 import { addChatMessage, appendToken, appendThinkingToken, finishAssistantMessage, setHideAbortButton } from './chat-renderer.js';
@@ -127,7 +127,8 @@ async function sendMessage() {
         const payload = {
             type: 'chat',
             message: message,
-            model: document.getElementById('modelSelect')?.value || SS.getItem(STORAGE_KEY_SELECTED_MODEL) || DEFAULT_AUTO_MODEL,
+            // 빈 model은 백엔드가 자동 선택 (ws-chat-handler.ts: !model || model === 'default' → selectOptimalModel)
+            model: document.getElementById('modelSelect')?.value || SS.getItem(STORAGE_KEY_SELECTED_MODEL) || '',
             history: getState('conversationMemory'),
             webSearch: getState('webSearchEnabled') || (getState('mcpToolsEnabled') || {}).web_search === true,
             thinkingMode: getState('thinkingEnabled'),
@@ -135,7 +136,13 @@ async function sendMessage() {
             discussionMode: getState('discussionMode') || false,
             deepResearchMode: getState('deepResearchMode') || false,
             enabledTools: getState('mcpToolsEnabled') || {},
-            sessionId: getState('currentChatId') // 세션 ID 포함
+            sessionId: getState('currentChatId'), // 세션 ID 포함
+            // 본문 저장 여부 — settings.html saveHistoryToggle 과 연결
+            // false 면 백엔드는 conversation_messages INSERT 스킵, audit log 만 기록
+            saveHistory: (JSON.parse(SS.getItem(STORAGE_KEY_GENERAL_SETTINGS) || '{}').saveHistory) !== false,
+            // 메모리 학습 — settings.html memoryLearningToggle 과 연결, saveHistory 와 독립
+            // false 면 MemoryService 호출 스킵 (이름·선호 등 추출 비활성)
+            memoryLearning: (JSON.parse(SS.getItem(STORAGE_KEY_GENERAL_SETTINGS) || '{}').memoryLearning) !== false
         };
 
         // 사용자 언어 설정을 WebSocket 메시지에 포함 (설정 > 브라우저 언어 순)

@@ -12,6 +12,7 @@
 import { createLogger } from '../../utils/logger';
 import { routeToAgent, getAgentSystemMessage, AGENTS, getAgentById, detectPhase, type AgentSelection } from '../../agents';
 import { routeWithLLM, isValidAgentId } from '../../agents/llm-router';
+import { shadowCompare as semanticShadowCompare } from '../../agents/semantic-router-instance';
 
 const logger = createLogger('AgentResolver');
 
@@ -62,6 +63,11 @@ export async function resolveAgent(
     const { prompt: agentSystemMessage, skillNames } = await getAgentSystemMessage(agentSelection, userId || undefined, languageCode);
     const selectedAgent = AGENTS[agentSelection.primaryAgent];
     logger.info(`에이전트: ${selectedAgent.emoji} ${selectedAgent.name}`);
+
+    // Semantic Router shadow 비교 (fire-and-forget — 메인 흐름 영향 X)
+    // 인덱스 미준비 또는 비활성화 시 자동 스킵. 실패해도 라우팅 결정에 영향 없음.
+    semanticShadowCompare(message, agentSelection.primaryAgent, agentSelection.confidence ?? 0)
+        .catch((err) => logger.warn('shadow 비교 호출 실패 (무시):', err));
 
     if (onAgentSelected && selectedAgent) {
         onAgentSelected({

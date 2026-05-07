@@ -70,6 +70,8 @@ import {
     finishAssistantMessage, copyMessage, regenerateMessage,
     newChat as chatNewChat, useSuggestion, abortChat
 } from './modules/chat.js?v=20';
+// 메시지 신고 (B+ Phase B5) — 디버깅용 본문 임시 보관 요청
+import { reportMessage } from './modules/chat-actions.js?v=20';
 
 // 1-8. 세션 관리 (state, auth 의존)
 import {
@@ -95,7 +97,6 @@ import {
 
 // 1-11. 클러스터 (state 의존)
 import {
-    BRAND_MODELS,
     updateClusterInfo, updateSidebarClusterInfo, updateClusterStatus,
     fetchClusterInfoFallback, updateModelSelect, handleClusterEvent,
     showAgentBadge, selectModel, loadModelInfo, formatSize
@@ -593,6 +594,7 @@ window.appendToken = appendToken;
 window.finishAssistantMessage = finishAssistantMessage;
 window.copyMessage = copyMessage;
 window.regenerateMessage = regenerateMessage;
+window.reportMessage = reportMessage;
 window.newChat = newChat;
 window.useSuggestion = useSuggestion;
 window.abortChat = abortChat;
@@ -625,7 +627,6 @@ window.showResearchProgress = showResearchProgress;
 
 
 // 클러스터
-window.BRAND_MODELS = BRAND_MODELS;
 window.updateClusterInfo = updateClusterInfo;
 window.updateSidebarClusterInfo = updateSidebarClusterInfo;
 window.updateClusterStatus = updateClusterStatus;

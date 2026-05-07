@@ -23,14 +23,15 @@ export const TOKEN_COST = {
 /**
  * 모델별 입출력 토큰 단가 (USD per token)
  *
- * token-monitoring.routes.ts에서 비용 산정에 사용합니다.
+ * token-monitoring.routes.ts 에서 비용 산정에 사용합니다.
+ *
+ * 단일 로컬 모델 환경 (2026-05-06 전환 후):
+ *   - 로컬 모델은 직접 비용이 없으므로 0
+ *   - 'default' 항목은 미등록 모델 fallback 으로 유지
+ *
+ * 향후 cloud 모델 재도입 시 여기에 항목 추가 (env 외부화도 검토 가능).
  */
 export const MODEL_PRICING: Readonly<Record<string, { input: number; output: number }>> = {
-    'gemini-3-flash-preview:cloud': { input: 0.00001, output: 0.00002 },
-    // gemini-3-pro-preview:cloud — Ollama 레지스트리 미등록, 출시 시 활성화
-    // 'gemini-3-pro-preview:cloud': { input: 0.00005, output: 0.0001 },
-    'gpt-oss:120b-cloud': { input: 0.0001, output: 0.0002 },
-    'glm-5.1:cloud': { input: 0.0001, output: 0.0002 },
-    'gemma4:31b-cloud': { input: 0.00002, output: 0.00004 },
-    'default': { input: 0.00001, output: 0.00002 },
+    'gemma4:e4b': { input: 0, output: 0 },
+    'default': { input: 0, output: 0 },
 } as const;

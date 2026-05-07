@@ -9,16 +9,6 @@
  */
 
 // ============================================
-// 모델 선택
-// ============================================
-
-/** 자동 모델 선택 프로파일 ID — 백엔드 config/constants.ts와 동일 */
-export const DEFAULT_AUTO_MODEL = 'openmake_llm_auto';
-
-// IIFE 모듈(pages/*.js, settings-standalone.js)에서 접근 가능하도록 window 노출
-window.DEFAULT_AUTO_MODEL = DEFAULT_AUTO_MODEL;
-
-// ============================================
 // localStorage 키 이름
 // ============================================
 

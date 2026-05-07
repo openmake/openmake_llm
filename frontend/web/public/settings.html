@@ -192,19 +192,13 @@
                                     <p>채팅에 사용할 AI 모델을 선택합니다</p>
                                 </div>
                                 <select id="modelSelect" class="form-select" style="width: auto; min-width: 200px;">
-                                    <option value="openmake_llm_auto">OpenMake LLM Auto</option>
-                                    <option value="openmake_llm">OpenMake LLM</option>
-                                    <option value="openmake_llm_pro">OpenMake LLM Pro</option>
-                                    <option value="openmake_llm_fast">OpenMake LLM Fast</option>
-                                    <option value="openmake_llm_think">OpenMake LLM Think</option>
-                                    <option value="openmake_llm_code">OpenMake LLM Code</option>
-                                    <option value="openmake_llm_vision">OpenMake LLM Vision</option>
+                                    <option value="">로딩 중...</option>
                                 </select>
                             </div>
                             <div class="setting-row">
                                 <div class="setting-info">
                                     <h4>Sequential Thinking</h4>
-                                    <p>Chain-of-Thought 추론 활성화</p>
+                                    <p>Chain-of-Thought 추론 활성화 (인사·단답형 질문은 자동 비활성화)</p>
                                 </div>
                                 <label class="toggle"><input type="checkbox" checked id="thinkingToggle"><span
                                         class="toggle-slider"></span></label>
@@ -225,10 +219,18 @@
                         <div class="card-body">
                             <div class="setting-row">
                                 <div class="setting-info">
-                                    <h4>대화 기록 저장</h4>
-                                    <p>대화 내용을 서버에 저장합니다</p>
+                                    <h4>대화 본문 저장</h4>
+                                    <p>대화 본문을 서버 DB에 저장합니다. 끄면 본문은 저장되지 않으며, 사용량 메타(토큰·모델·시각)만 익명 통계용으로 기록됩니다.</p>
                                 </div>
                                 <label class="toggle"><input type="checkbox" checked id="saveHistoryToggle"><span
+                                        class="toggle-slider"></span></label>
+                            </div>
+                            <div class="setting-row">
+                                <div class="setting-info">
+                                    <h4>장기 기억 학습</h4>
+                                    <p>대화에서 이름·직업·선호 같은 사실을 추출하여 저장합니다. 추출 후 원본 본문은 즉시 폐기되며, 위 '대화 본문 저장' 설정과 독립입니다.</p>
+                                </div>
+                                <label class="toggle"><input type="checkbox" checked id="memoryLearningToggle"><span
                                         class="toggle-slider"></span></label>
                             </div>
                             <div style="display: flex; gap: var(--space-3); margin-top: var(--space-4);">

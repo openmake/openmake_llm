@@ -34,6 +34,7 @@ import { getAnalyticsSystem } from './monitoring/analytics';
 import { setupSecurity, setupStaticFiles, setupParsersAndLimiting, setupErrorHandling } from './middlewares/setup';
 import { setupApiRoutes } from './routes/setup';
 import { getConfig } from './config';
+import { validateModels } from './config/model-roles';
 import { startAllSchedulers, stopAllSchedulers } from './schedulers';
 
 /**
@@ -165,6 +166,16 @@ export class DashboardServer {
         // 클러스터 시작
         await this.cluster.start();
 
+        // 모델 설정 검증 — 미설치 모델 / 잘못된 cloud 참조 조기 감지
+        // production 환경에서는 fail-fast, 그 외에는 경고만
+        try {
+            const cfg = getConfig();
+            await validateModels(cfg.ollamaBaseUrl, cfg.nodeEnv === 'production');
+        } catch (err) {
+            console.error('[Server] 모델 검증 실패 — Fail-Fast:', err);
+            process.exit(1);
+        }
+
         // ConversationDB / UserManager 초기화 완료 보장 (race condition 방지)
         // 스키마 마이그레이션이 완료되기 전에 API 요청을 처리하지 않도록 대기
         try {
@@ -240,6 +251,19 @@ export class DashboardServer {
             }
         };
         warmWithRetry().catch(err => console.error('[Server] 캐시 워밍 최종 실패:', err));
+
+        // Semantic Router 백그라운드 초기화 (PoC, fire-and-forget)
+        // OMK_SEMANTIC_ROUTER_ENABLED=true일 때만 실행, 미설정 시 noop
+        // 인덱스 미준비 상태에서는 shadow 비교가 자동 스킵되어 메인 흐름 영향 X
+        (async () => {
+            try {
+                const { initSemanticRouter } = await import('./agents/semantic-router-instance');
+                const { OllamaClient } = await import('./ollama/client');
+                initSemanticRouter(new OllamaClient());
+            } catch (err) {
+                console.error('[Server] Semantic Router 초기화 호출 실패 (무시):', err);
+            }
+        })();
 
         return new Promise((resolve, reject) => {
             // HTTP 서버 오류 핸들러

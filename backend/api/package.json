@@ -12,9 +12,15 @@
         "watch": "tsc --watch",
         "test": "jest",
         "test:watch": "jest --watch",
-        "test:coverage": "jest --coverage"
+        "test:coverage": "jest --coverage",
+        "eval:routing": "ts-node src/evaluation/run-evaluation.ts",
+        "eval:routing:strict": "OMK_EVAL_PASS_THRESHOLD=1.0 ts-node src/evaluation/run-evaluation.ts",
+        "eval:augmented": "ts-node src/evaluation/run-augmented-evaluation.ts",
+        "eval:response": "ts-node src/evaluation/run-response-evaluation.ts",
+        "eval:all": "npm run eval:routing && npm run eval:response"
     },
     "dependencies": {
+        "@anthropic-ai/sdk": "^0.95.1",
         "@modelcontextprotocol/sdk": "^1.25.3",
         "@modelcontextprotocol/server-filesystem": "^2026.1.14",
         "@mozilla/readability": "^0.6.0",
@@ -49,6 +55,7 @@
         "multer": "^2.0.2",
         "nodemailer": "^7.0.13",
         "ollama": "^0.6.3",
+        "openai": "^6.37.0",
         "ora": "^9.2.0",
         "pdf-parse": "^2.4.5",
         "pg": "^8.18.0",

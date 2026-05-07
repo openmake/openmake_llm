@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'/Volumes/MAC_APP/openmake_llm/.codex/hooks/block-prd-commit.sh'"
+          }
+        ]
+      }
+    ]
+  }
+}

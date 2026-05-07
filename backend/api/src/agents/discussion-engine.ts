@@ -50,6 +50,23 @@ import {
 
 const logger = createLogger('Discussion');
 
+// ─────────────────────────────────────────────────────────────────────────
+// 정규식 명명 상수 (CLAUDE.md No-Hardcoding: 인라인 정규식 금지)
+// ─────────────────────────────────────────────────────────────────────────
+
+/**
+ * 응답에 근거(예시·사례·example) 표현이 포함되었는지 검출.
+ * 한국어/영어 두 언어의 일반적인 evidence 마커를 인식한다.
+ */
+const EVIDENCE_MARKER_PATTERN = /예시|사례|예를 들|example|e\.g\.|for instance/i;
+
+/**
+ * Self-Consistency 평가 응답에서 consensus / conflicts 키를 포함한
+ * JSON 객체를 추출하기 위한 패턴.
+ * LLM이 JSON 앞뒤로 prose 를 추가하는 경우에 대응.
+ */
+const SELF_CONSISTENCY_JSON_PATTERN = /\{[\s\S]*"consensus"[\s\S]*"conflicts"[\s\S]*\}/;
+
 // Re-export all types so consumers importing from discussion-engine don't break
 export type { DiscussionProgress, AgentOpinion, DiscussionResult, ContextPriority, TokenLimits, DiscussionConfig } from './discussion-types';
 
@@ -175,7 +192,7 @@ ${contextInstructions}
             // 긴 응답 + 구조화된 응답(마크다운 헤더, 목록) = 높은 신뢰도
             const responseLen = response.length;
             const hasStructure = /^#{1,3}\s/m.test(response) || /^[-*]\s/m.test(response);
-            const hasEvidence = /예시|사례|예를 들|example|e\.g\.|for instance/i.test(response);
+            const hasEvidence = EVIDENCE_MARKER_PATTERN.test(response);
             let confidence: number = DISCUSSION_CONFIDENCE.BASE;
             if (responseLen > DISCUSSION_CONFIDENCE.SHORT_RESPONSE_LENGTH) confidence += DISCUSSION_CONFIDENCE.INCREMENT;
             if (responseLen > DISCUSSION_CONFIDENCE.LONG_RESPONSE_LENGTH) confidence += DISCUSSION_CONFIDENCE.INCREMENT;
@@ -278,7 +295,7 @@ Rules:
             const response = await generateResponse(evaluationPrompt, contextMessage);
 
             // JSON 추출 (LLM이 부가 텍스트를 추가할 수 있으므로 패턴 매칭)
-            const jsonMatch = response.match(/\{[\s\S]*"consensus"[\s\S]*"conflicts"[\s\S]*\}/);
+            const jsonMatch = response.match(SELF_CONSISTENCY_JSON_PATTERN);
             if (!jsonMatch) {
                 logger.warn('Self-Consistency Score: JSON 패턴 미매칭, 폴백 반환');
                 return { score: 0.7, consensusPoints: [], conflictPoints: [] };

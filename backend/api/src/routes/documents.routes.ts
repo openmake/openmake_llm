@@ -124,6 +124,29 @@ export function setDependencies(cluster: ClusterManager, broadcast: (data: Recor
 }
 
 /**
+ * 인증된 요청에서 사용자 ID를 추출합니다.
+ * req.user 는 PublicUser(DB, .id) 또는 AuthUser(JWT, .userId) 둘 중 하나입니다.
+ * (kb.routes.ts 와 동일 패턴 — 향후 공통 유틸로 추출 가능)
+ */
+function getUserId(req: Request): string | undefined {
+    const u = req.user;
+    if (!u) return undefined;
+    if ('userId' in u) return u.userId;
+    if ('id' in u && u.id !== undefined) return String(u.id);
+    return undefined;
+}
+
+/**
+ * 인증된 요청에서 사용자 역할을 추출합니다.
+ */
+function getUserRole(req: Request): string | undefined {
+    const u = req.user;
+    if (!u) return undefined;
+    if ('role' in u) return (u as { role: string }).role;
+    return undefined;
+}
+
+/**
  * POST /api/upload
  * 파일 업로드
  */
@@ -160,8 +183,7 @@ router.post('/upload', requireAuth, validateUploadContentType(FILE_LIMITS.MAX_SI
 
         const docId = `${Date.now()}-${Math.random().toString(36).substring(7)}`;
         // IDOR 방지: 문서에 소유자 ID 기록
-        const user = (req as any).user;
-        doc.userId = user?.id || user?.userId;
+        doc.userId = getUserId(req);
         uploadedDocuments.set(docId, doc);
 
          logger.info(`[Upload] 텍스트 추출 완료: ${doc.text.length}자`);
@@ -216,9 +238,8 @@ router.post('/summarize', requireAuth, validate(summarizeDocumentSchema), asyncH
      }
 
      // 소유권 검증 (IDOR 방지, bug_011: owner-less 문서는 admin만 접근 가능)
-     const requestUser = (req as any).user;
-     const requestUserId = requestUser?.id || requestUser?.userId;
-     const isAdmin = requestUser?.role === 'admin';
+     const requestUserId = getUserId(req);
+     const isAdmin = getUserRole(req) === 'admin';
      if (!isAdmin && (!doc.userId || !requestUserId || String(doc.userId) !== String(requestUserId))) {
          res.status(403).json({ error: '이 문서에 접근할 권한이 없습니다' });
          return;
@@ -284,9 +305,8 @@ router.post('/document/ask', requireAuth, validate(documentAskSchema), asyncHand
      }
 
      // 소유권 검증 (IDOR 방지, bug_011: owner-less 문서는 admin만 접근 가능)
-     const requestUser = (req as any).user;
-     const requestUserId = requestUser?.id || requestUser?.userId;
-     const isAdmin = requestUser?.role === 'admin';
+     const requestUserId = getUserId(req);
+     const isAdmin = getUserRole(req) === 'admin';
      if (!isAdmin && (!doc.userId || !requestUserId || String(doc.userId) !== String(requestUserId))) {
          res.status(403).json({ error: '이 문서에 접근할 권한이 없습니다' });
          return;
@@ -339,9 +359,8 @@ router.post('/document/ask', requireAuth, validate(documentAskSchema), asyncHand
  * 업로드된 문서 목록
  */
 router.get('/documents', requireAuth, asyncHandler(async (req: Request, res: Response) => {
-     const requestUser = (req as any).user;
-     const requestUserId = requestUser?.id || requestUser?.userId;
-     const isAdmin = requestUser?.role === 'admin';
+     const requestUserId = getUserId(req);
+     const isAdmin = getUserRole(req) === 'admin';
 
      const docs = Array.from(uploadedDocuments.entries())
          .filter(([, doc]) => {
@@ -364,8 +383,7 @@ router.get('/documents', requireAuth, asyncHandler(async (req: Request, res: Res
  * 업로드된 전체 문서 일괄 삭제
  */
 router.delete('/documents', requireAuth, asyncHandler(async (req: Request, res: Response) => {
-    const requestUser = (req as any).user;
-    if (requestUser?.role !== 'admin') {
+    if (getUserRole(req) !== 'admin') {
         res.status(403).json({ error: '전체 문서 삭제는 관리자만 가능합니다' });
         return;
     }
@@ -393,9 +411,8 @@ router.get('/documents/:docId', requireAuth, asyncHandler(async (req: Request, r
      }
 
      // 소유권 검증 (bug_011: owner-less 문서는 admin만 접근 가능)
-     const requestUser = (req as any).user;
-     const requestUserId = requestUser?.id || requestUser?.userId;
-     const isAdmin = requestUser?.role === 'admin';
+     const requestUserId = getUserId(req);
+     const isAdmin = getUserRole(req) === 'admin';
      if (!isAdmin && (!doc.userId || !requestUserId || String(doc.userId) !== String(requestUserId))) {
          res.status(403).json({ error: '이 문서에 접근할 권한이 없습니다' });
          return;
@@ -418,9 +435,8 @@ router.delete('/documents/:docId', requireAuth, asyncHandler(async (req: Request
      }
 
      // 소유권 검증 (bug_011: owner-less 문서는 admin만 삭제 가능)
-     const requestUser = (req as any).user;
-     const requestUserId = requestUser?.id || requestUser?.userId;
-     const isAdmin = requestUser?.role === 'admin';
+     const requestUserId = getUserId(req);
+     const isAdmin = getUserRole(req) === 'admin';
      if (!isAdmin && (!doc.userId || !requestUserId || String(doc.userId) !== String(requestUserId))) {
          res.status(403).json({ error: '이 문서를 삭제할 권한이 없습니다' });
          return;
