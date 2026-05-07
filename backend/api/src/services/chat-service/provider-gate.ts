@@ -30,10 +30,18 @@ import type {
  * fullId 첫 콜론 prefix가 이 목록에 있으면 그대로 fullId로 취급, 아니면
  * Ollama 모델명(태그 포함)으로 간주하고 'ollama:' prefix를 자동 보강합니다.
  *
- * Phase 4에서 사용자가 등록한 openai-compat provider id를 동적으로 추가해야 함
- * (별도 함수로 ProviderRouter.getRegisteredPrefixes() 같은 형태 도입 예정).
+ * 카탈로그(EXTERNAL_PROVIDER_CATALOG) 와 동기화 필수 — 새 provider 추가 시 양쪽 갱신.
  */
-const KNOWN_FULLID_PREFIXES: readonly string[] = ['ollama', 'anthropic'];
+const KNOWN_FULLID_PREFIXES: readonly string[] = [
+    'ollama',
+    'anthropic',
+    'openrouter',
+    'gemini',
+    'groq',
+    'together',
+    'ollama-remote',
+    'openai-compatible',
+];
 
 export interface ProviderGateInput {
     /** 사용자가 명시한 모델 ID (executionPlan.requestedModel) — undefined면 fallback 사용 */
