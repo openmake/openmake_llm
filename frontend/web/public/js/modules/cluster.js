@@ -175,12 +175,56 @@ async function updateModelSelect() {
         localStorage.setItem('selectedModel', select.value);
     }
 
+    // 초기 모델 capability 토글 동기화
+    applyModelCapabilityToggles(select.value);
+
     select.onchange = function () {
         localStorage.setItem('selectedModel', this.value);
         const model = models.find(m => m.id === this.value);
         const displayName = model ? model.name : this.value;
         showToast(`🤖 모델 변경됨: ${displayName}`);
+        applyModelCapabilityToggles(this.value);
     };
+}
+
+/**
+ * 외부 provider 선택 시 Ollama 전용 기능 토글을 비활성화합니다.
+ *
+ * Phase 3.6 의 streamFromExternalProvider 는 strategies 를 우회하므로
+ * Discussion / DeepResearch 모드는 외부 모델에서 동작하지 않습니다.
+ * Thinking 은 Anthropic extended thinking 으로 매핑 가능하므로 활성 유지.
+ *
+ * @param {string} modelFullId - 'provider:model' 형식 (또는 bare ollama 모델명)
+ */
+function applyModelCapabilityToggles(modelFullId) {
+    if (!modelFullId) return;
+
+    // 외부 provider 식별 — KNOWN_FULLID_PREFIXES 와 동기화
+    const colonIdx = modelFullId.indexOf(':');
+    const prefix = colonIdx > 0 ? modelFullId.slice(0, colonIdx) : '';
+    const isExternal = ['anthropic', 'openrouter', 'gemini', 'groq', 'together', 'ollama-remote', 'openai-compatible'].includes(prefix);
+
+    const discussionBtn = document.getElementById('discussionModeBtn');
+    const deepResearchBtn = document.getElementById('deepResearchBtn');
+
+    [discussionBtn, deepResearchBtn].forEach((btn) => {
+        if (!btn) return;
+        if (isExternal) {
+            btn.disabled = true;
+            btn.style.opacity = '0.4';
+            btn.style.cursor = 'not-allowed';
+            btn.title = '외부 provider(Anthropic / OpenAI 호환)에서는 미지원 — Ollama 모델에서만 동작';
+            // 활성 상태였다면 해제
+            btn.classList.remove('active');
+        } else {
+            btn.disabled = false;
+            btn.style.opacity = '';
+            btn.style.cursor = '';
+            // 원래 title 복원 (data-original-title 패턴 미사용 — 인라인 fallback)
+            if (btn.id === 'discussionModeBtn') btn.title = '멀티 에이전트 토론';
+            else if (btn.id === 'deepResearchBtn') btn.title = 'Deep Research (심층 연구)';
+        }
+    });
 }
 
 /**
