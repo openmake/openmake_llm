@@ -39,6 +39,7 @@ import {
     developerDocsRouter,
     chatFeedbackRouter,
     apiKeysRouter,
+    externalKeysRouter,
     kbRouter,
     uirRouter
 } from './index';
@@ -192,6 +193,7 @@ export function setupApiRoutes(
     app.use('/api/push', pushRouter);
     app.use('/api/docs', developerDocsRouter);
     app.use('/api/api-keys', apiKeysRouter);
+    app.use('/api/external-keys', externalKeysRouter);
     app.use('/api/kb', kbRouter);
 
     // Swagger 설정
