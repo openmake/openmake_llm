@@ -154,6 +154,9 @@ router.post('/:providerId',
             apiKey: req.body.api_key,
         });
 
+        // 키 변경 시 모델 카탈로그 캐시 무효화 (stale 데이터 제거)
+        await getRepo().invalidateCachedModels(userId, providerId);
+
         logger.info(`외부 키 등록: user=${userId} provider=${providerId}`);
         res.status(201).json(
             success({
@@ -183,6 +186,8 @@ router.delete('/:providerId',
             res.status(404).json(notFound('Key not found or already inactive'));
             return;
         }
+        // 삭제 시 모델 카탈로그 캐시도 제거
+        await getRepo().invalidateCachedModels(userId, providerId);
         logger.info(`외부 키 삭제: user=${userId} provider=${providerId}`);
         res.json(success({ deleted: true, provider_id: providerId }));
     }),

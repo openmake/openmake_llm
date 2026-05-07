@@ -306,6 +306,58 @@ export class ExternalKeysRepository extends BaseRepository {
     }
 
     /**
+     * 외부 provider 모델 카탈로그 캐시 조회 (external_provider_models_cache).
+     *
+     * @param ttlMs 캐시 TTL — 이보다 오래된 항목은 stale 처리 (null 반환)
+     * @returns 캐시 적중 시 models JSON 배열, 미스 또는 stale 시 null
+     */
+    async getCachedModels(
+        userId: string,
+        providerId: string,
+        ttlMs: number,
+    ): Promise<unknown[] | null> {
+        const result = await this.query<{ models_json: unknown[]; cached_at: Date }>(
+            `SELECT models_json, cached_at FROM external_provider_models_cache
+             WHERE user_id = $1 AND provider_id = $2`,
+            [userId, providerId],
+        );
+        const row = result.rows[0];
+        if (!row) return null;
+        const ageMs = Date.now() - new Date(row.cached_at).getTime();
+        if (ageMs > ttlMs) return null;
+        return Array.isArray(row.models_json) ? row.models_json : null;
+    }
+
+    /**
+     * 캐시 무효화 — 키 등록·갱신·삭제 시 호출하여 stale 카탈로그 제거.
+     */
+    async invalidateCachedModels(userId: string, providerId: string): Promise<void> {
+        await this.query(
+            `DELETE FROM external_provider_models_cache
+             WHERE user_id = $1 AND provider_id = $2`,
+            [userId, providerId],
+        );
+    }
+
+    /**
+     * 외부 provider 모델 카탈로그 캐시 갱신 (upsert).
+     */
+    async putCachedModels(
+        userId: string,
+        providerId: string,
+        models: unknown[],
+    ): Promise<void> {
+        await this.query(
+            `INSERT INTO external_provider_models_cache (user_id, provider_id, cached_at, models_json)
+             VALUES ($1, $2, now(), $3)
+             ON CONFLICT (user_id, provider_id) DO UPDATE SET
+                cached_at = now(),
+                models_json = EXCLUDED.models_json`,
+            [userId, providerId, JSON.stringify(models)],
+        );
+    }
+
+    /**
      * 키 삭제 (소프트 비활성화) — DB row는 audit를 위해 보존하고 is_active=false 처리.
      */
     async deactivate(userId: string, providerId: string): Promise<boolean> {
