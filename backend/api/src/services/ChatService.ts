@@ -88,6 +88,8 @@ export class ChatService {
     private client: OllamaClient;
     /** 외부 LLM provider 검증/해석 라우터 (선택) — 미지정 시 게이트 비활성 (테스트 호환) */
     private readonly providerRouter?: ProviderRouter;
+    /** 직전 외부 provider 호출의 사용량 메트릭 (billing/usage 이벤트용) */
+    private lastProviderUsage: import('../ollama/types').UsageMetrics | null = null;
     /** 현재 요청의 사용자 컨텍스트 (도구 접근 권한 결정에 사용) */
     private currentUserContext: UserContext | null = null;
     /** 사용자가 활성화한 MCP 도구 목록 (undefined면 레거시 모드: 전체 허용) */
@@ -317,13 +319,16 @@ export class ChatService {
         this.currentExecutionPlan = executionPlan;
 
         // ── Provider Gate: 모델 ID 검증 (strategy 실행 이전 조기 차단) ──
+        // 외부 provider(anthropic 등) 분기 시 strategy 우회하여 직접 streamChat 호출.
         if (this.providerRouter) {
-            await runProviderGate(this.providerRouter, {
+            const resolved = await runProviderGate(this.providerRouter, {
                 requestedModel: executionPlan?.requestedModel,
                 fallbackModel: this.client.model,
                 ctx: { userId: req.userId, userRole: req.userRole },
             });
-            // Phase 1: result discarded (always ollama). Phase 3: use resolved.provider.streamChat()
+            if (resolved.providerId !== 'ollama') {
+                return await this.streamFromExternalProvider(resolved, req, onToken);
+            }
         }
 
         // ── 보안 사전 검사 ──
@@ -791,6 +796,68 @@ export class ChatService {
         });
 
         return result.response;
+    }
+
+    /**
+     * 직전 외부 provider 호출의 사용량 메트릭 조회.
+     * Ollama 경로는 strategies → request-handler.ts 가 별도 경로로 처리.
+     */
+    getLastProviderUsage(): import('../ollama/types').UsageMetrics | null {
+        return this.lastProviderUsage;
+    }
+
+    /**
+     * 외부 provider(anthropic 등) 직접 스트리밍 호출 — strategy 우회.
+     *
+     * Ollama 전용 기능(Discussion / DeepResearch / Tool Loop / Generate-Verify) 은
+     * 외부 provider 에서 동작 보장이 어렵고 비용/지연 영향이 크므로 Phase 3 에서는
+     * 단일 streamChat 호출 + 토큰 콜백 + 사용량 기록으로 한정.
+     * Phase 5 에서 frontend 가 외부 모델 선택 시 해당 토글들을 disable 처리한다.
+     */
+    private async streamFromExternalProvider(
+        resolved: import('../providers/provider-router').ResolvedProvider,
+        req: ChatMessageRequest,
+        onToken: (token: string, thinking?: string) => void,
+    ): Promise<string> {
+        const messages: ChatMessage[] = [];
+
+        for (const h of req.history ?? []) {
+            const role = h.role === 'user' || h.role === 'assistant' || h.role === 'system'
+                ? h.role
+                : 'user';
+            messages.push({
+                role,
+                content: h.content,
+                ...(h.images ? { images: h.images } : {}),
+            });
+        }
+
+        messages.push({
+            role: 'user',
+            content: req.message,
+            ...(req.images ? { images: req.images } : {}),
+        });
+
+        const result = await resolved.provider.streamChat(
+            {
+                messages,
+                modelId: resolved.modelId,
+                ...(req.abortSignal ? { abortSignal: req.abortSignal } : {}),
+            },
+            {
+                onToken: (token) => onToken(token),
+                onThinking: (thinking) => onToken('', thinking),
+                onUsage: (usage) => {
+                    this.lastProviderUsage = usage;
+                },
+            },
+        );
+
+        logger.info(
+            `외부 provider 호출 완료: ${resolved.fullId} ` +
+            `(in=${result.usage.prompt_eval_count ?? 0}, out=${result.usage.eval_count ?? 0})`,
+        );
+        return result.content;
     }
 
     /**
