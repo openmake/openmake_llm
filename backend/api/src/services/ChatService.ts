@@ -51,6 +51,8 @@ import { extractMemoriesAsync } from './chat-service/memory-extractor';
 import { resolveAgent as resolveAgentFn } from './chat-service/agent-resolver';
 import { resolveLanguagePolicy as resolveLanguagePolicyFn } from './chat-service/language-resolver';
 import { recordMetricsAndVerify as recordMetricsAndVerifyFn } from './chat-service/metrics-recorder';
+import { ProviderRouter } from '../providers/provider-router';
+import { runProviderGate } from './chat-service/provider-gate';
 
 // Re-export all types so consumers importing from ChatService don't break
 export type {
@@ -84,6 +86,8 @@ const logger = createLogger('ChatService');
 export class ChatService {
     /** Ollama API 통신 클라이언트 */
     private client: OllamaClient;
+    /** 외부 LLM provider 검증/해석 라우터 (선택) — 미지정 시 게이트 비활성 (테스트 호환) */
+    private readonly providerRouter?: ProviderRouter;
     /** 현재 요청의 사용자 컨텍스트 (도구 접근 권한 결정에 사용) */
     private currentUserContext: UserContext | null = null;
     /** 사용자가 활성화한 MCP 도구 목록 (undefined면 레거시 모드: 전체 허용) */
@@ -108,9 +112,11 @@ export class ChatService {
      * ChatService 인스턴스를 생성합니다.
      *
      * @param client - Ollama HTTP 클라이언트 인스턴스
+     * @param providerRouter - 외부 provider 검증 라우터 (선택, 미지정 시 게이트 비활성)
      */
-    constructor(client: OllamaClient) {
+    constructor(client: OllamaClient, providerRouter?: ProviderRouter) {
         this.client = client;
+        this.providerRouter = providerRouter;
         this.directStrategy = new DirectStrategy();
         this.generateVerifyStrategy = new GenerateVerifyStrategy();
         this.discussionStrategy = new DiscussionStrategy();
@@ -309,6 +315,16 @@ export class ChatService {
         // 외부 서비스(openmake 등)는 자체 도구 체계를 사용하므로 내장 도구 간섭 방지
         this.currentEnabledTools = req.apiKeyId && !enabledTools ? {} : enabledTools;
         this.currentExecutionPlan = executionPlan;
+
+        // ── Provider Gate: 모델 ID 검증 (strategy 실행 이전 조기 차단) ──
+        if (this.providerRouter) {
+            await runProviderGate(this.providerRouter, {
+                requestedModel: executionPlan?.requestedModel,
+                fallbackModel: this.client.model,
+                ctx: { userId: req.userId, userRole: req.userRole },
+            });
+            // Phase 1: result discarded (always ollama). Phase 3: use resolved.provider.streamChat()
+        }
 
         // ── 보안 사전 검사 ──
         const securityPreCheck = preRequestCheck(message || '');
