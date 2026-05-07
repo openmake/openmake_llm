@@ -43,6 +43,13 @@ export interface ProviderRouterDeps {
 export class ProviderRouter {
     constructor(private deps: ProviderRouterDeps) {}
 
+    /**
+     * fullModelId('provider:model')를 파싱하여 IProvider 어댑터와 modelId를 반환합니다.
+     *
+     * @throws {ProviderError} INVALID_MODEL_ID — 형식 오류('provider:model' 미준수)
+     * @throws {ProviderError} GUEST_NOT_ALLOWED — 외부 모델 요청 + 비인증 사용자
+     * @throws {ProviderError} NOT_SUPPORTED — Phase 1에서 ollama 외 provider (Phase 3/4 활성 예정)
+     */
     async resolve(
         fullModelId: string,
         ctx: ProviderRouterContext,
@@ -82,6 +89,10 @@ export class ProviderRouter {
         );
     }
 
+    /**
+     * 사용 가능한 모든 모델 목록을 반환합니다.
+     * Phase 1에서는 ollama 모델만, Phase 3+에서는 사용자가 키 등록한 외부 provider 모델도 합산.
+     */
     async listAllModels(_ctx: ProviderRouterContext): Promise<ProviderModel[]> {
         const ollamaModels = await this.deps.ollamaProvider.listModels();
         // Phase 3+4: 사용자가 키 등록한 외부 provider 모델 추가
