@@ -219,12 +219,29 @@
                         el.textContent = '';
                         return;
                     }
+                    // 5분 sessionStorage 캐시 — settings 페이지 빠른 재진입 시 rate limit
+                    // (RL_API_KEY_MGMT.readLimit) 충돌 방지.
+                    var CACHE_KEY = '__apiKeyCountCache';
+                    var TTL_MS = 5 * 60 * 1000;
+                    try {
+                        var cachedRaw = sessionStorage.getItem(CACHE_KEY);
+                        if (cachedRaw) {
+                            var cached = JSON.parse(cachedRaw);
+                            if (cached && (Date.now() - cached.t) < TTL_MS && typeof cached.count === 'number') {
+                                el.textContent = cached.count + '개 활성';
+                                return;
+                            }
+                        }
+                    } catch (e) { /* sessionStorage 미사용 — fetch fallback */ }
                     try {
                         var res = await fetch(API_ENDPOINTS.API_KEYS, { credentials: 'include' });
                         if (res.ok) {
                             var data = await res.json();
                             var count = (data.data && data.data.count) || 0;
                             el.textContent = count + '\uAC1C \uD65C\uC131';
+                            try { sessionStorage.setItem(CACHE_KEY, JSON.stringify({ t: Date.now(), count: count })); } catch (e) {}
+                        } else if (res.status === 429) {
+                            el.textContent = '';
                         } else {
                             el.textContent = '\uB85C\uADF8\uC778 \uD544\uC694';
                         }
