@@ -356,7 +356,11 @@ function renderOpenRouterGroup(models, selected, label) {
         escText(label) +
         ' <span style="opacity:0.6;font-weight:normal">(' +
         (q ? filteredCount + ' / ' + totalCount : totalCount) +
-        ')</span></div>';
+        ')</span>' +
+        // 367+ 모델은 dropdown max-height 안에 다 안 들어가므로 모달로 펼치는 진입점.
+        ' <button type="button" class="model-selector-expand-btn" data-action="open-list-modal" ' +
+        'title="전체 모델을 큰 창에서 검색·선택">📋 전체 보기</button>' +
+        '</div>';
 
     html += '<div class="model-selector-search-row">' +
         '<input type="text" class="model-selector-search" placeholder="🔍 모델 검색…" ' +
@@ -416,18 +420,42 @@ function renderOpenRouterOption(m, selected) {
  */
 function bindOpenRouterSearchHandler(dropdown) {
     const input = dropdown.querySelector('.model-selector-search');
-    if (!input) return;
-    input.addEventListener('input', function (ev) {
-        ev.stopPropagation();
-        _orSearchQuery = ev.target.value;
-        renderDropdown();
-        const newInput = dropdown.querySelector('.model-selector-search');
-        if (newInput) {
-            newInput.focus();
-            newInput.setSelectionRange(_orSearchQuery.length, _orSearchQuery.length);
-        }
-    });
-    input.addEventListener('click', function (ev) { ev.stopPropagation(); });
+    if (input) {
+        input.addEventListener('input', function (ev) {
+            ev.stopPropagation();
+            _orSearchQuery = ev.target.value;
+            renderDropdown();
+            const newInput = dropdown.querySelector('.model-selector-search');
+            if (newInput) {
+                newInput.focus();
+                newInput.setSelectionRange(_orSearchQuery.length, _orSearchQuery.length);
+            }
+        });
+        input.addEventListener('click', function (ev) { ev.stopPropagation(); });
+    }
+
+    // "📋 전체 보기" 버튼 — ModelListModal 열기 (367 모델 전체 큰 창에서 검색/선택)
+    const expandBtn = dropdown.querySelector('[data-action="open-list-modal"]');
+    if (expandBtn) {
+        expandBtn.addEventListener('click', function (ev) {
+            ev.preventDefault();
+            ev.stopPropagation();
+            if (!window.ModelListModal) {
+                console.warn('[ModelSelector] window.ModelListModal 미정의 — 모듈 로드 실패');
+                if (window.showToast) window.showToast('모달 로드 실패 — 페이지 새로고침 필요', 'error');
+                return;
+            }
+            const orModels = _models.filter(m => (m.provider || 'ollama') === 'openrouter');
+            window.ModelListModal.open({
+                models: orModels,
+                selected: getSelectedModel(),
+                onSelect: function (modelId) {
+                    setSelectedModel(modelId);
+                    closeDropdown();
+                },
+            });
+        });
+    }
 }
 
 /**
