@@ -89,12 +89,23 @@ function getSelectedModel() {
 }
 
 function setSelectedModel(modelId) {
-    localStorage.setItem(STORAGE_KEY, modelId);
+    try {
+        localStorage.setItem(STORAGE_KEY, modelId);
+    } catch (e) {
+        console.warn('[ModelSelector] localStorage 쓰기 실패 (incognito?):', e);
+    }
     renderTrigger();
     if (window.showToast) window.showToast('🤖 모델 변경됨: ' + modelId);
     if (typeof window.applyModelCapabilityToggles === 'function') {
-        window.applyModelCapabilityToggles(modelId);
+        try {
+            window.applyModelCapabilityToggles(modelId);
+        } catch (e) {
+            console.warn('[ModelSelector] applyModelCapabilityToggles 오류:', e);
+        }
     }
+    // chat.js 등이 settings select#modelSelect 를 읽는 경우 호환성 — 동일 값 동기화
+    const legacySel = document.getElementById('modelSelect');
+    if (legacySel) legacySel.value = modelId;
 }
 
 function renderTrigger() {
@@ -203,44 +214,58 @@ export async function mount(targetElement) {
     targetElement.appendChild(_container);
 
     _container.addEventListener('click', function (ev) {
-        const toggleBtn = ev.target.closest('[data-action="toggle"]');
-        if (toggleBtn) {
-            ev.stopPropagation();
-            toggleDropdown();
-            return;
-        }
-        const menuTrigger = ev.target.closest('[data-action="open-menu"]');
-        if (menuTrigger) {
-            ev.stopPropagation();
-            const providerId = menuTrigger.dataset.provider;
-            const modelId = menuTrigger.dataset.modelId;
-            if (window.ModelActionMenu) {
-                window.ModelActionMenu.open(menuTrigger, { providerId, modelId });
+        try {
+            const toggleBtn = ev.target.closest('[data-action="toggle"]');
+            if (toggleBtn) {
+                ev.preventDefault();
+                ev.stopPropagation();
+                toggleDropdown();
+                return;
             }
-            return;
-        }
-        const addOption = ev.target.closest('[data-action="add-key"]');
-        if (addOption) {
-            ev.stopPropagation();
-            const providerId = addOption.dataset.provider;
-            if (window.AddKeyModal) {
-                window.AddKeyModal.open({ providerId, onSuccess: refresh });
+            const menuTrigger = ev.target.closest('[data-action="open-menu"]');
+            if (menuTrigger) {
+                ev.preventDefault();
+                ev.stopPropagation();
+                const providerId = menuTrigger.dataset.provider;
+                const modelId = menuTrigger.dataset.modelId;
+                if (window.ModelActionMenu) {
+                    window.ModelActionMenu.open(menuTrigger, { providerId, modelId });
+                } else {
+                    console.warn('[ModelSelector] window.ModelActionMenu 미정의 — 모듈 로드 실패');
+                }
+                return;
             }
-            closeDropdown();
-            return;
-        }
-        const option = ev.target.closest('.model-selector-option');
-        if (option && !option.classList.contains('disabled')) {
-            const modelId = option.dataset.modelId;
-            if (modelId) {
-                setSelectedModel(modelId);
+            const addOption = ev.target.closest('[data-action="add-key"]');
+            if (addOption) {
+                ev.preventDefault();
+                ev.stopPropagation();
+                const providerId = addOption.dataset.provider;
+                if (window.AddKeyModal) {
+                    window.AddKeyModal.open({ providerId, onSuccess: refresh });
+                } else {
+                    console.warn('[ModelSelector] window.AddKeyModal 미정의 — 모듈 로드 실패');
+                    if (window.showToast) window.showToast('등록 모달 로드 실패 — 페이지 새로고침 필요', 'error');
+                }
                 closeDropdown();
+                return;
             }
+            const option = ev.target.closest('.model-selector-option');
+            if (option && !option.classList.contains('disabled')) {
+                ev.preventDefault();
+                ev.stopPropagation();
+                const modelId = option.dataset.modelId;
+                if (modelId) {
+                    setSelectedModel(modelId);
+                    closeDropdown();
+                }
+            }
+        } catch (err) {
+            console.error('[ModelSelector] 클릭 핸들러 오류:', err);
         }
     });
 
     document.addEventListener('click', function (ev) {
-        if (_isOpen && !_container.contains(ev.target)) closeDropdown();
+        if (_isOpen && _container && !_container.contains(ev.target)) closeDropdown();
     });
 
     await loadData();
