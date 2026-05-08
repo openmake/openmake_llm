@@ -31,7 +31,7 @@
 .model-selector-dropdown {
     position: absolute;
     bottom: calc(100% + 4px);
-    left: 0;
+    right: 0;
     min-width: 320px;
     max-width: 480px;
     max-height: 420px;

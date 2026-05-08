@@ -25,7 +25,7 @@
     <link rel="stylesheet" href="css/feature-cards.css?v=8">
     <link rel="stylesheet" href="css/layout.css?v=8">
     <link rel="stylesheet" href="css/components.css?v=8">
-    <link rel="stylesheet" href="css/model-selector.css?v=1">
+    <link rel="stylesheet" href="css/model-selector.css?v=2">
      <link rel="stylesheet" href="css/unified-sidebar.css?v=9">
     <link rel="stylesheet" href="css/light-theme.css?v=8">
     <link rel="stylesheet" href="style.css?v=9">
@@ -136,7 +136,6 @@
                                 aria-label="메시지 입력" onkeydown="handleKeyDown(event)"></textarea>
                             <div class="input-actions">
                                 <div class="left-actions">
-                                    <div id="modelSelectorMount" style="margin-right:8px"></div>
                                     <button class="action-btn" onclick="newChat()" title="새 대화 (+)">
                                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
                                             stroke="currentColor" stroke-width="2">
@@ -178,6 +177,7 @@
                                         <span class="status-dot"></span>
                                         <span class="status-text">연결됨</span>
                                     </div>
+                                    <div id="modelSelectorMount" style="margin-right:8px"></div>
                                     <button class="send-btn" id="sendBtn" title="전송 (Enter)">
                                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
                                             stroke="currentColor" stroke-width="2">
