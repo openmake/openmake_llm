@@ -15,7 +15,8 @@
  * - `GUEST_NOT_ALLOWED`: 인증 없는 게스트 사용자에게 차단된 기능
  * - `MISSING_API_KEY`: API 키 미설정 (환경변수/DB 모두)
  * - `INVALID_API_KEY`: 키 형식 오류 또는 인증 실패
- * - `QUOTA_EXCEEDED`: 사용량/토큰/요금 한도 초과
+ * - `QUOTA_EXCEEDED`: 사용량/토큰/요금 한도 초과 (rate limit)
+ * - `INSUFFICIENT_CREDIT`: 잔액 부족 (HTTP 402 — OpenRouter 등 paid endpoint)
  * - `MODEL_NOT_FOUND`: provider가 해당 모델을 알지 못함
  * - `NOT_SUPPORTED`: provider가 요청 기능(스트리밍/툴/비전 등)을 지원하지 않음
  * - `UPSTREAM_ERROR`: provider 응답이 5xx 또는 네트워크 실패
@@ -26,6 +27,7 @@ export type ProviderErrorCode =
     | 'MISSING_API_KEY'
     | 'INVALID_API_KEY'
     | 'QUOTA_EXCEEDED'
+    | 'INSUFFICIENT_CREDIT'
     | 'MODEL_NOT_FOUND'
     | 'NOT_SUPPORTED'
     | 'UPSTREAM_ERROR'
