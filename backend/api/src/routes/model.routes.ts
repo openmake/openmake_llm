@@ -126,9 +126,12 @@ router.get('/models', optionalAuth, asyncHandler(async (req: Request, res: Respo
         },
     }];
 
-    // 인증된 사용자는 외부 provider 키 등록분도 추가
-    const userId = req.user && 'userId' in req.user
-        ? (req.user as { userId: string }).userId
+    // 인증된 사용자는 외부 provider 키 등록분도 추가.
+    // optionalAuth 가 PublicUser(id) 를 req.user 에 부착 — JWT payload(userId)가 아님.
+    // 둘 다 체크 (방어적): JWT payload 변형 또는 다른 미들웨어 변형 대응.
+    const userObj = req.user as Record<string, unknown> | undefined;
+    const userId = userObj
+        ? String(userObj.id ?? userObj.userId ?? '') || null
         : null;
     if (userId) {
         try {
