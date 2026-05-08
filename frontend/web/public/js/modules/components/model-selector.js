@@ -160,7 +160,7 @@ function renderDropdown() {
                 '" data-model-id="' + escAttr(m.modelId) + '" data-provider="' + escAttr(pid) + '">' +
                 '<span>' + (isActive ? '<span class="check">✓ </span>' : '') + escText(m.name) + '</span>' +
                 (pid !== 'ollama' && _isAuthenticated
-                    ? '<button class="menu-trigger" data-action="open-menu" data-provider="' +
+                    ? '<button type="button" class="menu-trigger" data-action="open-menu" data-provider="' +
                       escAttr(pid) + '" data-model-id="' + escAttr(m.modelId) + '" title="메뉴">⋮</button>'
                     : '') +
                 '</div>';
@@ -188,6 +188,63 @@ function renderDropdown() {
     }
 
     dropdown.innerHTML = html;
+    bindDropdownHandlers(dropdown);
+}
+
+/**
+ * 렌더된 dropdown 의 각 인터랙티브 element 에 직접 핸들러 부착.
+ * 이벤트 위임이 실패하는 환경(레이어 z-index, 부모 핸들러 중복 등) 회피.
+ */
+function bindDropdownHandlers(dropdown) {
+    // 모델 옵션 클릭 — 모델 변경
+    dropdown.querySelectorAll('.model-selector-option').forEach((el) => {
+        if (el.classList.contains('disabled')) return;
+        el.addEventListener('click', function (ev) {
+            // ⋮ 메뉴 trigger 클릭은 별도 처리 — option 클릭과 분리
+            if (ev.target.closest('[data-action="open-menu"]')) return;
+            ev.preventDefault();
+            ev.stopPropagation();
+            const modelId = el.dataset.modelId;
+            console.info('[ModelSelector] 옵션 클릭:', modelId);
+            if (modelId) {
+                setSelectedModel(modelId);
+                closeDropdown();
+            }
+        });
+    });
+
+    // ⋮ 메뉴 trigger 클릭
+    dropdown.querySelectorAll('[data-action="open-menu"]').forEach((el) => {
+        el.addEventListener('click', function (ev) {
+            ev.preventDefault();
+            ev.stopPropagation();
+            const providerId = el.dataset.provider;
+            const modelId = el.dataset.modelId;
+            console.info('[ModelSelector] ⋮ 메뉴 클릭:', providerId);
+            if (window.ModelActionMenu) {
+                window.ModelActionMenu.open(el, { providerId, modelId });
+            } else {
+                console.warn('[ModelSelector] window.ModelActionMenu 미정의');
+            }
+        });
+    });
+
+    // "+ 새 LLM 키 등록" 클릭
+    dropdown.querySelectorAll('[data-action="add-key"]').forEach((el) => {
+        el.addEventListener('click', function (ev) {
+            ev.preventDefault();
+            ev.stopPropagation();
+            const providerId = el.dataset.provider;
+            console.info('[ModelSelector] + 추가 클릭:', providerId);
+            if (window.AddKeyModal) {
+                window.AddKeyModal.open({ providerId, onSuccess: refresh });
+            } else {
+                console.warn('[ModelSelector] window.AddKeyModal 미정의 — 모듈 로드 실패');
+                if (window.showToast) window.showToast('등록 모달 로드 실패 — 페이지 새로고침 필요', 'error');
+            }
+            closeDropdown();
+        });
+    });
 }
 
 function toggleDropdown() {
@@ -207,7 +264,7 @@ export async function mount(targetElement) {
     _container = document.createElement('div');
     _container.className = 'model-selector';
     _container.innerHTML =
-        '<button class="model-selector-trigger" data-action="toggle">' +
+        '<button type="button" class="model-selector-trigger" data-action="toggle">' +
         '<span class="icon">📋</span><span class="name">로딩 중...</span><span class="arrow">▾</span>' +
         '</button>' +
         '<div class="model-selector-dropdown"></div>';
