@@ -46,18 +46,20 @@ CREATE TABLE IF NOT EXISTS conversation_audit_log (
     content_length INTEGER NOT NULL DEFAULT 0      -- 본문 길이 (보안 모니터링)
 );
 
--- 사용자별 시간순 조회 — Admin 대시보드 / 사용량 분석
-CREATE INDEX IF NOT EXISTS idx_audit_user_time
-    ON conversation_audit_log (user_id, created_at DESC);
-
--- 에러 로그 빠른 필터 — 에러 발생 메시지만 조회
-CREATE INDEX IF NOT EXISTS idx_audit_error
-    ON conversation_audit_log (error_code)
-    WHERE error_code IS NOT NULL;
-
--- 세션별 감사 추적 — 디버깅 시 특정 세션의 전체 흐름 조회
-CREATE INDEX IF NOT EXISTS idx_audit_session_time
-    ON conversation_audit_log (session_id, created_at);
+-- ── 인덱스 (CREATE INDEX 는 테이블 owner 권한 필요 — graceful skip) ──
+-- 인덱스 미생성 시: audit 데이터 쓰기/읽기 정상, 단 admin 대시보드 쿼리 성능 저하.
+DO $$
+BEGIN
+    -- 사용자별 시간순 조회 — Admin 대시보드 / 사용량 분석
+    EXECUTE 'CREATE INDEX IF NOT EXISTS idx_audit_user_time ON conversation_audit_log (user_id, created_at DESC)';
+    -- 에러 로그 빠른 필터 — 에러 발생 메시지만 조회
+    EXECUTE 'CREATE INDEX IF NOT EXISTS idx_audit_error ON conversation_audit_log (error_code) WHERE error_code IS NOT NULL';
+    -- 세션별 감사 추적 — 디버깅 시 특정 세션의 전체 흐름 조회
+    EXECUTE 'CREATE INDEX IF NOT EXISTS idx_audit_session_time ON conversation_audit_log (session_id, created_at)';
+EXCEPTION
+    WHEN insufficient_privilege THEN
+        RAISE NOTICE '014: CREATE INDEX skipped (table owner mismatch — admin queries may run slower)';
+END $$;
 
 -- ── COMMENT (owner 정합 후 — 권한 부족 시 graceful skip) ──
 DO $$
