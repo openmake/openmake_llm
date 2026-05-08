@@ -121,35 +121,6 @@ export const COMPLEXITY_WEIGHTS = {
     LOW_CONFIDENCE_THRESHOLD: 0.2,
 } as const;
 
-// ── UIR (Unified Intent Router) 설정 ─────────────────────────
-
-/** UIR 전용 모델 — model-roles 레지스트리 경유 */
-export const UIR_MODEL = getModelForRole('router');
-
-/** UIR 롤아웃 비율 0=shadow only, 100=full UIR (env: OMK_UIR_ROLLOUT_PERCENT) */
-export const UIR_ROLLOUT_PERCENT =
-    Number(process.env.OMK_UIR_ROLLOUT_PERCENT ?? '0');
-
-/** UIR shadow 비교 모드 활성화 (env: OMK_UIR_SHADOW_ENABLED, 기본: false) */
-export const UIR_SHADOW_ENABLED =
-    (process.env.OMK_UIR_SHADOW_ENABLED ?? 'false') === 'true';
-
-/** UIR 타임아웃 (ms) (env: OMK_UIR_TIMEOUT_MS) */
-export const UIR_TIMEOUT_MS =
-    Number(process.env.OMK_UIR_TIMEOUT_MS ?? '8000');
-
-/** UIR temperature (결정적 응답) (env: OMK_UIR_TEMPERATURE) */
-export const UIR_TEMPERATURE =
-    Number(process.env.OMK_UIR_TEMPERATURE ?? '0.1');
-
-/** UIR 최대 예측 토큰 수 (env: OMK_UIR_NUM_PREDICT) */
-export const UIR_NUM_PREDICT =
-    Number(process.env.OMK_UIR_NUM_PREDICT ?? '400');
-
-/** UIR pre-filter 최대 에이전트 수 (env: OMK_UIR_MAX_AGENTS) */
-export const UIR_MAX_AGENTS =
-    Number(process.env.OMK_UIR_MAX_AGENTS ?? '20');
-
 // ── Keyword Router 설정 ──────────────────────────────────────
 
 /** 카테고리 직접 매칭 부스트 점수 (env: OMK_CATEGORY_BOOST) */
