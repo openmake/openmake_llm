@@ -11,10 +11,14 @@
  * Ollama 태그 컨벤션('name:tag', 예: 'gemma4:e4b')과 fullId('provider:model')
  * 의 충돌을 해결하기 위해 known-provider-prefix 허용목록을 사용합니다.
  *
- * Phase 1 동작:
- * - 'ollama:*' 또는 'anthropic:*' → fullId 그대로 통과
+ * 동작:
+ * - 'ollama:*' 또는 'openrouter:*' → fullId 그대로 통과
  * - 그 외 (콜론 없음 또는 알려지지 않은 prefix) → 'ollama:' prefix 자동 보강
- * - 외부 provider → ProviderError 조기 throw
+ * - 외부 provider (openrouter 외) → ProviderError 조기 throw
+ *
+ * 2026-05-08 외부 카탈로그(EXTERNAL_PROVIDER_CATALOG)가 openrouter 단독으로
+ * 축소됨에 따라, anthropic 등 기타 prefix 는 ollama 태그로 간주되어 보강 후
+ * 다운스트림에서 거부됩니다.
  *
  * @module services/chat-service/provider-gate
  */
@@ -34,15 +38,7 @@ import type {
  */
 const KNOWN_FULLID_PREFIXES: readonly string[] = [
     'ollama',
-    'anthropic',
     'openrouter',
-    'gemini',
-    'groq',
-    'together',
-    'mistral',
-    'cohere',
-    'ollama-remote',
-    'openai-compatible',
 ];
 
 export interface ProviderGateInput {
