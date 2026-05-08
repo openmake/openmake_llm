@@ -1,38 +1,17 @@
 /**
  * ============================================================
- * Pipeline Profile - 7개 브랜드 모델 파이프라인 프로파일 정의
+ * Pipeline Profile — ExecutionPlan 공용 type alias
  * ============================================================
- * 
- * 외부 사용자가 요청하는 모델 별칭(openmake_llm, openmake_llm_pro 등)을
- * 내부 파이프라인 실행 전략으로 매핑합니다.
- * 각 프로파일은 10가지 파이프라인 요소를 조합하여
- * 모델 선택, 에이전트 사용, 사고 수준, 프롬프트 전략 등을 결정합니다.
- * 
- * @module chat/pipeline-profile
- * @description
- * - 7개 브랜드 모델 프로파일 정의 (openmake_llm, _pro, _fast, _think, _code, _vision, _auto)
- * - 10가지 파이프라인 요소 (엔진, ExecutionStrategy, Thinking, Discussion, 프롬프트 전략 등) 조합
- * - env 설정 기반 런타임 엔진 모델 resolve
- * - ProfileResolver, ChatService 에서 소비
- * 
- * 프로파일 매핑 요약:
- * | Alias               | 엔진     | ExecStrategy         | Thinking | 용도                |
- * |---------------------|----------|----------------------|----------|---------------------|
- * | openmake_llm        | LLM      | conditional-verify   | medium   | 균형 잡힌 범용       |
- * | openmake_llm_pro    | Pro      | generate-verify      | high     | 프리미엄 품질        |
- * | openmake_llm_fast   | Fast     | single               | off      | 속도 최적화          |
- * | openmake_llm_think  | Think    | generate-verify      | high     | 심층 추론            |
- * | openmake_llm_code   | Code     | conditional-verify   | medium   | 코드 전문            |
- * | openmake_llm_vision | Vision   | single               | medium   | 멀티모달/비전        |
  *
- * @see docs/api/API_KEY_SERVICE_PLAN.md 9절
- * @see chat/profile-resolver.ts - 프로파일을 ExecutionPlan으로 변환
+ * 단일 로컬 모델 환경에서 ExecutionPlan / 채팅 strategy 가 공유하는
+ * narrow type alias 만 남았다 (이전의 brand profile 시스템 잔여).
+ *
+ * @module chat/pipeline-profile
+ * @see chat/profile-resolver.ts - ExecutionPlan 정의에서 ExecutionStrategy 사용
  */
 
-import type { CostTier } from './cost-tier';
-
 // ============================================
-// 파이프라인 프로파일 인터페이스
+// 파이프라인 실행 전략
 // ============================================
 
 /**
@@ -54,81 +33,3 @@ export type ExecutionStrategy = 'single' | 'generate-verify' | 'conditional-veri
  * - 'high': 심층적 Chain-of-Thought 추론
  */
 export type ThinkingLevel = 'off' | 'low' | 'medium' | 'high';
-
-/**
- * 프롬프트 인젝션 전략 - 시스템 프롬프트에 주입할 역할 페르소나 결정
- * - 'auto': 질문 유형에 따라 자동 감지 (detectPromptType)
- * - 'force_coder': 코딩 전문가 프롬프트 강제 적용
- * - 'force_reasoning': 추론 전문가 프롬프트 강제 적용
- * - 'force_creative': 창작 전문가 프롬프트 강제 적용
- * - 'none': 프롬프트 인젝션 없음 (빠른 응답용)
- */
-export type PromptStrategy = 'auto' | 'force_coder' | 'force_reasoning' | 'force_creative' | 'none';
-
-/**
- * 컨텍스트 윈도우 관리 전략
- * - 'full': 전체 컨텍스트 사용 (65536 토큰)
- * - 'lite': 최소 컨텍스트 사용 (32768 토큰, 속도 우선)
- * - 'auto': 질문 길이에 따라 자동 결정
- */
-export type ContextStrategy = 'full' | 'lite' | 'auto';
-
-/**
- * 에이전트 루프 실행 방식
- * - 'parallel': 여러 도구를 병렬로 실행
- * - 'sequential': 도구를 순차적으로 실행
- * - 'auto': 도구 의존성에 따라 자동 결정
- */
-export type LoopStrategy = 'parallel' | 'sequential' | 'auto';
-
-/**
- * 파이프라인 프로파일
- * 
- * 하나의 brand model alias에 대한 10가지 실행 전략을 정의합니다.
- */
-export interface PipelineProfile {
-    /** 프로파일 ID (brand model alias) */
-    id: string;
-
-    /** 표시 이름 */
-    displayName: string;
-
-    /** 설명 */
-    description: string;
-
-    // ─── 10가지 파이프라인 요소 ───
-
-    /** 1. 내부 엔진 모델 ID (env에서 resolve) */
-    engineModel: string;
-
-    /** 2. 실행 전략 — 'single' | 'generate-verify' | 'conditional-verify' */
-    executionStrategy: ExecutionStrategy;
-
-    /** 3. 사고(Thinking) 수준 */
-    thinking: ThinkingLevel;
-
-    /** 4. 토론(Discussion) 활성화 여부 */
-    discussion: boolean;
-
-    /** 5. 프롬프트 인젝션 전략 */
-    promptStrategy: PromptStrategy;
-
-    /** 6. 에이전트 루프 최대 반복 횟수 */
-    agentLoopMax: number;
-
-    /** 7. 에이전트 루프 실행 방식 */
-    loopStrategy: LoopStrategy;
-
-    /** 8. 컨텍스트 윈도우 전략 */
-    contextStrategy: ContextStrategy;
-
-    /** 9. 시간 예산 (초) — 0이면 무제한 */
-    timeBudgetSeconds: number;
-
-    /** 10. 필수 도구 (없으면 빈 배열) */
-    requiredTools: string[];
-
-    /** 11. 비용 티어 (P2-1) */
-    costTier: CostTier;
-}
-
