@@ -71,6 +71,49 @@ const PROVIDER_ORDER = [
     'together', 'mistral', 'cohere', 'ollama-remote', 'openai-compatible',
 ];
 
+/**
+ * Frontend fallback 모델 — backend `/api/models` 가 외부 모델 합산을 안 할 때
+ * (캐시 stale 또는 backend 옛 dist 사용 중) 등록된 키 기준으로 직접 보강.
+ * backend `getProviderFallbackModels` 와 동일 정의 (PR #11).
+ */
+const FRONTEND_FALLBACK_MODELS = {
+    openrouter: [
+        { id: 'openai/gpt-5',                     name: 'GPT-5' },
+        { id: 'anthropic/claude-opus-4.5',        name: 'Claude Opus 4.5' },
+        { id: 'anthropic/claude-sonnet-4.6',      name: 'Claude Sonnet 4.6' },
+        { id: 'google/gemini-2.5-pro',            name: 'Gemini 2.5 Pro (via OR)' },
+        { id: 'meta-llama/llama-3.3-70b-instruct', name: 'Llama 3.3 70B' },
+        { id: 'deepseek/deepseek-r1',             name: 'DeepSeek R1' },
+    ],
+    gemini: [
+        { id: 'gemini-2.5-pro',                   name: 'Gemini 2.5 Pro' },
+        { id: 'gemini-2.5-flash',                 name: 'Gemini 2.5 Flash' },
+        { id: 'gemini-2.0-flash-exp',             name: 'Gemini 2.0 Flash (Exp)' },
+    ],
+    groq: [
+        { id: 'llama-3.3-70b-versatile',          name: 'Llama 3.3 70B (Versatile)' },
+        { id: 'llama-3.1-8b-instant',             name: 'Llama 3.1 8B (Instant)' },
+    ],
+    together: [
+        { id: 'meta-llama/Llama-3.3-70B-Instruct-Turbo', name: 'Llama 3.3 70B Turbo' },
+        { id: 'Qwen/Qwen2.5-72B-Instruct-Turbo',         name: 'Qwen 2.5 72B Turbo' },
+    ],
+    mistral: [
+        { id: 'mistral-large-latest',             name: 'Mistral Large' },
+        { id: 'mistral-medium-latest',            name: 'Mistral Medium' },
+        { id: 'codestral-latest',                 name: 'Codestral' },
+    ],
+    cohere: [
+        { id: 'command-r-plus',                   name: 'Command R+' },
+        { id: 'command-r',                        name: 'Command R' },
+    ],
+    anthropic: [
+        { id: 'claude-opus-4-5',                  name: 'Claude Opus 4.5' },
+        { id: 'claude-sonnet-4-6',                name: 'Claude Sonnet 4.6' },
+        { id: 'claude-haiku-4-5',                 name: 'Claude Haiku 4.5' },
+    ],
+};
+
 let _container = null;
 let _isOpen = false;
 let _models = [];
@@ -119,6 +162,26 @@ async function loadData() {
 
     _isAdmin = !!(window.AppState && window.AppState.user && window.AppState.user.role === 'admin')
         || (typeof window.isAdmin === 'function' && window.isAdmin());
+
+    // Frontend fallback inject — backend 응답에 외부 모델 미포함 시 등록된 키 기준 보강.
+    // backend dist 가 옛 코드일 때도 사용자가 즉시 모델 선택 가능 (streamChat 은 정상 작동).
+    const externalProviders = new Set(_models.filter(m => (m.provider || 'ollama') !== 'ollama').map(m => m.provider));
+    for (const p of _providers) {
+        if (!p.user_key) continue;
+        if (externalProviders.has(p.provider_id)) continue; // 이미 backend 가 합산
+        const fallback = FRONTEND_FALLBACK_MODELS[p.provider_id];
+        if (!fallback || fallback.length === 0) continue;
+        for (const m of fallback) {
+            _models.push({
+                modelId: p.provider_id + ':' + m.id,
+                name: m.name,
+                provider: p.provider_id,
+                description: p.display_name + ' — frontend fallback (backend 미합산)',
+                capabilities: { executionStrategy: 'single', thinking: 'off', discussion: false, vision: false, toolCalling: true, streaming: true },
+            });
+        }
+        logDebug('frontend fallback 적용: ' + p.provider_id + ' (+' + fallback.length + ' models)');
+    }
 }
 
 function getSelectedModel() {
