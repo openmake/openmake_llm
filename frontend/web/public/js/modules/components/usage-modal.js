@@ -52,12 +52,12 @@ export async function open(opts) {
     opts = opts || {};
     ensure();
     _modal.innerHTML =
-        '<div class="modal" style="max-width:720px;width:90%;background:var(--bg-card);border-radius:var(--radius-lg);padding:0;box-shadow:var(--shadow-lg)">' +
-        '<div class="modal-header" style="padding:var(--space-4) var(--space-5);border-bottom:1px solid var(--border-light);display:flex;justify-content:space-between;align-items:center">' +
-        '<h3 style="margin:0;font-size:var(--font-size-lg)">📊 외부 LLM 사용량' +
-        (opts.providerId ? ' — ' + escText(opts.providerId) : '') +
-        '</h3><button data-action="close" style="background:none;border:none;font-size:24px;cursor:pointer;color:var(--text-muted)">&times;</button></div>' +
-        '<div class="modal-body" id="usage-modal-body" style="padding:var(--space-5);max-height:60vh;overflow-y:auto">' +
+        '<div class="ek-modal-box wide">' +
+        '<div class="ek-modal-box-header">' +
+        '<h3>📊 외부 LLM 사용량' + (opts.providerId ? ' — ' + escText(opts.providerId) : '') + '</h3>' +
+        '<button type="button" class="ek-modal-box-close" data-action="close">&times;</button>' +
+        '</div>' +
+        '<div class="ek-modal-box-body scrollable" id="usage-modal-body">' +
         '<div style="color:var(--text-muted)">불러오는 중...</div>' +
         '</div></div>';
     _modal.classList.add('active');
