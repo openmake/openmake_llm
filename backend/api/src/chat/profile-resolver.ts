@@ -1,27 +1,21 @@
 /**
  * ============================================================
- * Profile Resolver - Brand Model Alias를 ExecutionPlan으로 변환
+ * Profile Resolver - 외부 API model 필드를 ExecutionPlan으로 변환
  * ============================================================
- * 
- * 외부 API 요청의 model 필드를 파이프라인 프로파일로 변환하고,
- * ChatService가 소비할 수 있는 실행 계획(ExecutionPlan)을 생성합니다.
- * Brand model이 아닌 일반 모델은 기본 설정으로 패스스루됩니다.
- * 
+ *
+ * 외부 API 요청의 model 필드를 ChatService 가 소비할 수 있는 실행 계획
+ * (ExecutionPlan) 으로 변환합니다. 단일 로컬 모델 환경에서는 모든 요청을
+ * 동일한 ExecutionPlan 으로 패스스루합니다.
+ *
  * @module chat/profile-resolver
  * @description
- * - resolveProfile(): 모델명 -> PipelineProfile 변환 (brand model 아니면 null)
- * - buildExecutionPlan(): 모델명 -> 완전한 ExecutionPlan 생성 (brand/일반 모두 지원)
- * - listAvailableModels(): 외부 API용 brand model 목록 반환
- * 
- * 실행 흐름:
- * API 요청 (model='openmake_llm_pro') -> resolveProfile() -> buildExecutionPlan() -> ChatService
- * 
- * @see chat/pipeline-profile.ts - PipelineProfile 정의
+ * - buildExecutionPlan(): 모델명 -> ExecutionPlan 생성
+ * - listAvailableModels(): 외부 API용 모델 목록 반환 (현재 빈 배열)
+ *
  * @see services/ChatService.ts - ExecutionPlan 소비자
  * @see docs/api/API_KEY_SERVICE_PLAN.md 9절
  */
 
-import type { PipelineProfile } from './pipeline-profile';
 import type { ExecutionStrategy } from './pipeline-profile';
 import { createLogger } from '../utils/logger';
 import type { QueryType } from './model-selector-types';
@@ -43,8 +37,8 @@ export interface ExecutionPlan {
     /** 원본 요청 모델명 (brand alias 또는 원본 모델) */
     requestedModel: string;
 
-    /** 해석된 프로파일 (없으면 기본 모델 직접 사용) */
-    profile: PipelineProfile | null;
+    /** 해석된 프로파일 (현재 항상 null — 단일 로컬 모델 환경) */
+    profile: null;
 
     /** 실제 사용할 내부 엔진 모델 ID */
     resolvedEngine: string;

@@ -225,7 +225,7 @@ export class ChatService {
      * @param onAgentSelected - 에이전트 선택 결과 콜백
      * @param onDiscussionProgress - 토론 진행 상황 콜백
      * @param onResearchProgress - 연구 진행 상황 콜백
-     * @param executionPlan - Brand Model 실행 계획 (PipelineProfile 기반)
+     * @param executionPlan - 실행 계획 (ExecutionPlan)
      * @param onSkillsActivated - 에이전트에 주입된 스킬 목록 콜백
      * @param onThinking - Thinking 토큰 콜백 (추론 과정 실시간 전달)
      * @returns AI가 생성한 전체 응답 문자열

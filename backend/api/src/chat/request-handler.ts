@@ -78,12 +78,8 @@ export interface ChatUserContext {
 export interface ExecutionPlanResult {
     /** 해석된 ExecutionPlan */
     plan: ExecutionPlan;
-    /** __auto__ 라우팅 여부 */
-    isAutoRouting: boolean;
-    /** 노드 선택에 사용할 실제 엔진 모델 (auto면 빈 문자열) */
+    /** 노드 선택에 사용할 실제 엔진 모델 */
     engineModel: string;
-    /** 외부 응답용 표시 모델명 (brand model이면 alias) */
-    displayModel: string | undefined;
 }
 
 /**
@@ -259,20 +255,15 @@ export class ChatRequestHandler {
     }
 
     /**
-     * brand model alias → ExecutionPlan 변환
+     * 외부 model 식별자 → ExecutionPlan 변환
      *
-     * @param model - 모델명 (brand alias 또는 일반 모델)
-     * @returns 해석 결과 (plan, engineModel, displayModel 등)
+     * @param model - 모델명
+     * @returns 해석 결과 (plan, engineModel)
      */
     static buildPlan(model: string): ExecutionPlanResult {
         const plan = buildExecutionPlan(model || '');
-        const isAutoRouting = plan.resolvedEngine === '__auto__';
-        // Auto-routing 시 'default'를 전달하여 getBestNode()에서 모델 필터링을 건너뛰도록 함
-        // (실제 모델은 ChatService에서 auto-routing 후 setModel()로 설정됨)
-        const engineModel = isAutoRouting ? 'default' : (plan.resolvedEngine || model);
-        const displayModel = plan.isBrandModel ? plan.requestedModel : undefined;
-
-        return { plan, isAutoRouting, engineModel, displayModel };
+        const engineModel = plan.resolvedEngine || model;
+        return { plan, engineModel };
     }
 
     /**
@@ -453,7 +444,7 @@ export class ChatRequestHandler {
         } = params;
 
         // 1. ExecutionPlan 해석
-        const { plan, engineModel, displayModel } = ChatRequestHandler.buildPlan(model || '');
+        const { plan, engineModel } = ChatRequestHandler.buildPlan(model || '');
 
         // 2. OllamaClient 생성
         const client = ChatRequestHandler.createClient(clusterManager, engineModel, nodeId);
@@ -469,8 +460,8 @@ export class ChatRequestHandler {
             userContext.anonSessionId,
         );
 
-        // 4. 사용자 메시지 저장 — 외부에는 brand alias만 노출
-        const maskedModel = displayModel || client.model;
+        // 4. 사용자 메시지 저장
+        const maskedModel = client.model;
         // 감사 로그용 사용자 식별자 — 인증된 user id 우선, 익명 세션 id, 최종 'anonymous'
         const auditUserId = userContext.authenticatedUserId || userContext.anonSessionId || 'anonymous';
         // saveHistory 미지정 → true (기본 보존)
