@@ -75,6 +75,25 @@ export interface ChatStreamCallbacks {
 }
 
 /**
+ * OpenRouter provider 라우팅 preference (OpenRouter 만의 확장 필드).
+ *
+ * OpenRouter 의 `provider` body 옵션 — 동일 모델 ID 에 대해 어느 underlying
+ * provider 로 라우팅할지 제어. 다른 OpenAI-compat endpoint 는 무시.
+ *
+ * @see https://openrouter.ai/docs/features/provider-routing
+ */
+export interface OpenRouterProviderRouting {
+    /** 라우팅 정렬 기준 — 'price' (cheapest first) | 'throughput' | 'latency' */
+    sort?: 'price' | 'throughput' | 'latency';
+    /** Zero Data Retention 모드 — 저장 안 하는 provider 만 사용 */
+    zdr?: boolean;
+    /** allowlist — 명시된 provider 만 사용 (예: ['openai', 'anthropic']) */
+    allow?: string[];
+    /** denylist — 명시된 provider 제외 (예: ['together']) */
+    ignore?: string[];
+}
+
+/**
  * 스트리밍 채팅 요청 옵션
  */
 export interface ChatStreamOptions {
@@ -92,6 +111,11 @@ export interface ChatStreamOptions {
     tools?: ToolDefinition[];
     /** 호출 취소 신호 (사용자 중단/타임아웃) */
     abortSignal?: AbortSignal;
+    /**
+     * OpenRouter provider 라우팅 옵션 (OpenRouter 호출 시만 사용 — 타 endpoint 는 무시).
+     * 미지정 시 OpenRouter 기본 라우팅 (mixture).
+     */
+    providerRouting?: OpenRouterProviderRouting;
 }
 
 /**

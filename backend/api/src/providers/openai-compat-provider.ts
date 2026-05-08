@@ -314,6 +314,12 @@ export class OpenAICompatProvider implements IProvider {
         opts.abortSignal?.addEventListener('abort', () => { aborted = true; });
 
         try {
+            // OpenRouter provider routing — providerId === 'openrouter' 일 때만 body 의 provider 필드로 전달.
+            // 타 OpenAI-compat endpoint (Groq/Together 등) 는 이 필드를 무시 — 안전.
+            const openRouterProvider = this.id === 'openrouter' && opts.providerRouting
+                ? { provider: opts.providerRouting }
+                : {};
+
             const requestParams = {
                 model: opts.modelId,
                 messages,
@@ -322,6 +328,7 @@ export class OpenAICompatProvider implements IProvider {
                 max_tokens: opts.maxTokens ?? DEFAULT_MAX_TOKENS,
                 ...(opts.temperature !== undefined ? { temperature: opts.temperature } : {}),
                 ...(tools ? { tools } : {}),
+                ...openRouterProvider,
             };
 
             const stream = await this.client.chat.completions.create(requestParams as never);
