@@ -22,6 +22,20 @@
 -- @see docs/superpowers/specs/2026-05-07-external-llm-integration-design.md (§5)
 -- ============================================================
 
+-- ── 운영 DB 권한 정합 (014/015 와 동일 graceful 패턴, 3 테이블 모두) ──
+DO $$
+BEGIN
+    EXECUTE format('ALTER TABLE IF EXISTS user_external_api_keys OWNER TO %I', current_user);
+    EXECUTE format('ALTER TABLE IF EXISTS external_provider_usage OWNER TO %I', current_user);
+    EXECUTE format('ALTER TABLE IF EXISTS external_provider_models_cache OWNER TO %I', current_user);
+    RAISE NOTICE '016: ownership normalized to %', current_user;
+EXCEPTION
+    WHEN insufficient_privilege THEN
+        RAISE NOTICE '016: ALTER OWNER skipped (current_user lacks superuser/owner privilege)';
+    WHEN OTHERS THEN
+        RAISE NOTICE '016: ALTER OWNER skipped (%)', SQLERRM;
+END $$;
+
 CREATE TABLE IF NOT EXISTS user_external_api_keys (
     id BIGSERIAL PRIMARY KEY,
     user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -42,21 +56,19 @@ CREATE TABLE IF NOT EXISTS user_external_api_keys (
     UNIQUE (user_id, provider_id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_user_ext_keys_user
-    ON user_external_api_keys (user_id, is_active);
-
-CREATE INDEX IF NOT EXISTS idx_user_ext_keys_invalid
-    ON user_external_api_keys (last_validated_at)
-    WHERE last_validation_ok = FALSE;
-
-COMMENT ON TABLE user_external_api_keys IS
-    '사용자별 외부 LLM provider BYO API 키 — token-crypto.ts AES-256-GCM 암호화';
-COMMENT ON COLUMN user_external_api_keys.encrypted_key IS
-    'token-crypto.ts encryptToken() 출력 (v1:iv:ct:tag 단일 문자열)';
-COMMENT ON COLUMN user_external_api_keys.key_prefix IS
-    'UI 표시용 키 prefix (예: sk-ant-test-...) — 평문 노출 금지';
-COMMENT ON COLUMN user_external_api_keys.last_validation_ok IS
-    'NULL=미검증, TRUE=직전 검증 성공, FALSE=실패 (idx_user_ext_keys_invalid 부분 인덱스 대상)';
+-- ── 인덱스 + COMMENT (graceful) — user_external_api_keys ──
+DO $$
+BEGIN
+    EXECUTE 'CREATE INDEX IF NOT EXISTS idx_user_ext_keys_user ON user_external_api_keys (user_id, is_active)';
+    EXECUTE 'CREATE INDEX IF NOT EXISTS idx_user_ext_keys_invalid ON user_external_api_keys (last_validated_at) WHERE last_validation_ok = FALSE';
+    EXECUTE 'COMMENT ON TABLE user_external_api_keys IS ''사용자별 외부 LLM provider BYO API 키 — token-crypto.ts AES-256-GCM 암호화''';
+    EXECUTE 'COMMENT ON COLUMN user_external_api_keys.encrypted_key IS ''token-crypto.ts encryptToken() 출력 (v1:iv:ct:tag 단일 문자열)''';
+    EXECUTE 'COMMENT ON COLUMN user_external_api_keys.key_prefix IS ''UI 표시용 키 prefix (예: sk-ant-test-...) — 평문 노출 금지''';
+    EXECUTE 'COMMENT ON COLUMN user_external_api_keys.last_validation_ok IS ''NULL=미검증, TRUE=직전 검증 성공, FALSE=실패 (idx_user_ext_keys_invalid 부분 인덱스 대상)''';
+EXCEPTION
+    WHEN insufficient_privilege THEN
+        RAISE NOTICE '016: idx/comment for user_external_api_keys skipped';
+END $$;
 
 CREATE TABLE IF NOT EXISTS external_provider_usage (
     id BIGSERIAL PRIMARY KEY,
@@ -74,18 +86,18 @@ CREATE TABLE IF NOT EXISTS external_provider_usage (
     error_code VARCHAR(64)
 );
 
-CREATE INDEX IF NOT EXISTS idx_ext_usage_user_date
-    ON external_provider_usage (user_id, occurred_at DESC);
-
-CREATE INDEX IF NOT EXISTS idx_ext_usage_user_provider
-    ON external_provider_usage (user_id, provider_id, occurred_at DESC);
-
-COMMENT ON TABLE external_provider_usage IS
-    '외부 provider 호출별 토큰/비용 사용량 — 90일 보존 (cleanup cron 별도)';
-COMMENT ON COLUMN external_provider_usage.cost_usd_micros IS
-    '1 USD = 1,000,000 micros — 부동소수 누적 오차 방지';
-COMMENT ON COLUMN external_provider_usage.thinking_tokens IS
-    'Anthropic extended thinking 토큰 — 미지원 provider 는 NULL';
+-- ── 인덱스 + COMMENT (graceful) — external_provider_usage ──
+DO $$
+BEGIN
+    EXECUTE 'CREATE INDEX IF NOT EXISTS idx_ext_usage_user_date ON external_provider_usage (user_id, occurred_at DESC)';
+    EXECUTE 'CREATE INDEX IF NOT EXISTS idx_ext_usage_user_provider ON external_provider_usage (user_id, provider_id, occurred_at DESC)';
+    EXECUTE 'COMMENT ON TABLE external_provider_usage IS ''외부 provider 호출별 토큰/비용 사용량 — 90일 보존 (cleanup cron 별도)''';
+    EXECUTE 'COMMENT ON COLUMN external_provider_usage.cost_usd_micros IS ''1 USD = 1,000,000 micros — 부동소수 누적 오차 방지''';
+    EXECUTE 'COMMENT ON COLUMN external_provider_usage.thinking_tokens IS ''Anthropic extended thinking 토큰 — 미지원 provider 는 NULL''';
+EXCEPTION
+    WHEN insufficient_privilege THEN
+        RAISE NOTICE '016: idx/comment for external_provider_usage skipped';
+END $$;
 
 CREATE TABLE IF NOT EXISTS external_provider_models_cache (
     user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -95,8 +107,12 @@ CREATE TABLE IF NOT EXISTS external_provider_models_cache (
     PRIMARY KEY (user_id, provider_id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_ext_models_cache_stale
-    ON external_provider_models_cache (cached_at);
-
-COMMENT ON TABLE external_provider_models_cache IS
-    '외부 provider /v1/models 응답 캐시 — TTL 1h (EXTERNAL_MODELS_CACHE_TTL_MS)';
+-- ── 인덱스 + COMMENT (graceful) — external_provider_models_cache ──
+DO $$
+BEGIN
+    EXECUTE 'CREATE INDEX IF NOT EXISTS idx_ext_models_cache_stale ON external_provider_models_cache (cached_at)';
+    EXECUTE 'COMMENT ON TABLE external_provider_models_cache IS ''외부 provider /v1/models 응답 캐시 — TTL 1h (EXTERNAL_MODELS_CACHE_TTL_MS)''';
+EXCEPTION
+    WHEN insufficient_privilege THEN
+        RAISE NOTICE '016: idx/comment for external_provider_models_cache skipped';
+END $$;
