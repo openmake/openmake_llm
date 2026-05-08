@@ -146,7 +146,6 @@
         '</div>' +
         '<div class="s-btn-row">' +
         '<a href="/api-keys.html" class="s-btn s-btn-primary" style="text-decoration:none;">\uD83D\uDD11 API \uD0A4 \uAD00\uB9AC</a>' +
-        '<a href="/external-keys.html" class="s-btn s-btn-primary" style="text-decoration:none;">\uD83C\uDF10 \uC678\uBD80 LLM \uD0A4</a>' +
         '<a href="/developer.html" class="s-btn s-btn-secondary" style="text-decoration:none;">\uD83D\uDCCB API \uBB38\uC11C</a>' +
         '</div>' +
         '</div>' +

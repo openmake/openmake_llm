@@ -38,7 +38,6 @@ const NAV_ITEMS = {
         { href: '/usage.html', icon: '📈', iconify: 'lucide:bar-chart-2', label: 'API 사용량', requireAuth: true },
         { href: '/agent-learning.html', icon: '🎓', iconify: 'lucide:graduation-cap', label: '에이전트 학습', requireAuth: true, minTier: 'pro' },
         { href: '/api-keys.html', icon: '🔐', iconify: 'lucide:key', label: 'API 키 관리', requireAuth: true, minTier: 'pro' },
-        { href: '/external-keys.html', icon: '🌐', iconify: 'lucide:globe', label: '외부 LLM 키', requireAuth: true },
         { href: '/cluster.html', icon: '🖥️', iconify: 'lucide:monitor', label: '클러스터', requireAuth: true, minTier: 'enterprise' }
     ],
     admin: [
