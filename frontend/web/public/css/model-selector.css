@@ -245,3 +245,84 @@
     white-space: nowrap;
     font-family: ui-monospace, SFMono-Regular, monospace;
 }
+
+/* "📋 전체 보기" 버튼 — OpenRouter 그룹 라벨 우측 */
+.model-selector-expand-btn {
+    margin-left: 6px;
+    padding: 2px 8px;
+    font-size: 10px;
+    font-weight: 600;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-light);
+    border-radius: 4px;
+    cursor: pointer;
+}
+.model-selector-expand-btn:hover {
+    background: var(--bg-tertiary);
+    border-color: #5078dc;
+}
+
+/* ─── ModelListModal — OpenRouter 367+ 모델 전체 화면 모달 ─── */
+.modal-overlay#modelListModalOverlay {
+    position: fixed; inset: 0; background: rgba(0, 0, 0, 0.65);
+    display: none; align-items: center; justify-content: center;
+    z-index: 10000; padding: 20px;
+}
+.modal-overlay#modelListModalOverlay.active { display: flex; }
+.mlm-box {
+    background: var(--bg-card); border: 1px solid var(--border-light);
+    border-radius: 8px; box-shadow: 0 12px 48px rgba(0,0,0,0.4);
+    width: min(900px, 96vw); max-height: 90vh;
+    display: flex; flex-direction: column; overflow: hidden;
+}
+.mlm-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 18px; border-bottom: 1px solid var(--border-light);
+    background: var(--bg-secondary); flex-shrink: 0;
+}
+.mlm-header h3 { margin: 0; font-size: 14px; font-weight: 600; color: var(--text-primary); }
+.mlm-close {
+    background: transparent; border: none; color: var(--text-muted);
+    font-size: 22px; cursor: pointer; line-height: 1; padding: 0 4px;
+}
+.mlm-close:hover { color: var(--text-primary); }
+.mlm-search-row {
+    padding: 10px 14px; border-bottom: 1px solid var(--border-light);
+    background: var(--bg-tertiary); flex-shrink: 0;
+}
+.mlm-search {
+    width: 100%; padding: 8px 12px; font-size: 13px;
+    border: 1px solid var(--border-light); border-radius: 4px;
+    background: var(--bg-primary); color: var(--text-primary); outline: none;
+}
+.mlm-search:focus { border-color: #5078dc; box-shadow: 0 0 0 2px rgba(80,120,220,0.2); }
+.mlm-list { flex: 1 1 auto; overflow-y: auto; padding: 4px 0; }
+.mlm-subgroup {
+    padding: 6px 14px 4px; font-size: 11px; font-weight: 600;
+    color: var(--text-muted); background: var(--bg-secondary);
+    text-transform: uppercase; letter-spacing: 0.5px;
+    position: sticky; top: 0; z-index: 1;
+}
+.mlm-row {
+    display: grid; grid-template-columns: 1fr auto auto;
+    gap: 12px; align-items: center; padding: 8px 14px;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    cursor: pointer; font-size: 13px; color: var(--text-primary);
+}
+.mlm-row:hover { background: var(--bg-tertiary); }
+.mlm-row.active { background: rgba(80,120,220,0.08); font-weight: 600; }
+.mlm-row .check { color: #5078dc; margin-right: 4px; }
+.mlm-row-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mlm-row-id {
+    font-family: ui-monospace, SFMono-Regular, monospace;
+    font-size: 10px; color: var(--text-muted);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 220px;
+}
+.mlm-row-meta { flex-shrink: 0; }
+.mlm-empty { padding: 24px; text-align: center; color: var(--text-muted); font-size: 13px; }
+.mlm-footer {
+    padding: 8px 14px; border-top: 1px solid var(--border-light);
+    background: var(--bg-secondary); flex-shrink: 0;
+}
+.mlm-hint { font-size: 11px; color: var(--text-muted); }

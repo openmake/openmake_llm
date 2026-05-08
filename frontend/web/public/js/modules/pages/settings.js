@@ -289,6 +289,7 @@
                             import('../components/add-key-modal.js'),
                             import('../components/usage-modal.js'),
                             import('../components/model-action-menu.js'),
+                            import('../components/model-list-modal.js'),
                         ]);
                         const mod = await import('../components/model-selector.js');
                         window.ModelSelector = mod.default;
