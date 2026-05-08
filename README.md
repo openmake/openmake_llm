@@ -25,7 +25,7 @@ OpenMake LLM is a high-performance, self-hosted AI assistant platform designed f
 - **Intelligent Auto-Routing** — LLM classifier + 2-layer semantic cache for optimized query handling via `openmake_llm_auto`
 - **100+ Specialized Agents** — 18 industry categories with keyword routing, topic analysis, discussion engine, and skill management
 - **Deep Research Engine** — Multi-step autonomous research with topic decomposition, web scraping, content synthesis, and report generation
-- **MCP (Model Context Protocol)** — 15 built-in tools (web search, scraping, vision, filesystem, deep research, etc.) with tier-based access, user sandbox, and external MCP client support
+- **MCP (Model Context Protocol)** — 9 built-in tools (web search, scraping, vision, filesystem, deep research, sequential thinking, firecrawl, etc.) with tier-based access, user sandbox, and external MCP client support
 - **A2A (Agent-to-Agent) Multi-Model** — Parallel multi-model orchestration across different API keys and providers
 - **Real-time Streaming** — Low-latency WebSocket-based chat with streaming responses
 - **RAG (Retrieval-Augmented Generation)** — Upload your documents and get AI answers grounded in your own data
@@ -368,11 +368,12 @@ Open **http://localhost:52416** in your browser. You can:
 
 #### What to Do After Login
 
-1. **Start a chat** — Type a message in the chat input. The default model profile is `Default`.
-2. **Switch model profiles** — Click the model selector (bottom of the chat) to try `Fast` (quick replies), `Think` (deep reasoning), `Code` (programming), or `Auto` (intelligent routing).
-3. **Try an expert agent** — Open the Agent panel to select a specialist (e.g., Software Engineer, Financial Analyst) for domain-specific conversations.
-4. **Explore the Skill Library** — Browse available tools and capabilities in the Skill Library tab.
-5. **Admin settings** — If logged in as admin, visit the Admin panel to manage users, models, and system configuration.
+1. **Start a chat** — Type a message in the chat input. The default model is the configured Ollama model.
+2. **Switch models** — Click the **📋 model selector** at the right of the input area (next to the send button). Dropdown shows your local Ollama model + any external LLM providers you've registered (Anthropic / OpenRouter / Gemini / Groq / etc.). **Pure Manual mode** — your selection is never overridden by auto-routing.
+3. **Register external LLM keys** — From the same dropdown, click "+ 새 LLM 키 등록" → choose a provider → enter your API key. Registered models appear immediately in the dropdown.
+4. **Try an expert agent** — Open the Agent panel to select a specialist (e.g., Software Engineer, Financial Analyst) for domain-specific conversations.
+5. **Explore the Skill Library** — Browse available tools and capabilities in the Skill Library tab.
+6. **Admin settings** — If logged in as admin, visit the Admin panel to manage users, models, and system configuration.
 
 ### Production
 
@@ -484,11 +485,18 @@ Each user can register their own API keys directly from the chat input area — 
 | 직접 입력 | `openai` SDK | (사용자 입력) | 기타 OpenAI 호환 endpoint (vLLM, LM Studio 등) |
 
 **Pricing & Capability:**
-- 34 models with built-in USD pricing (1M token 단위, micros 누적 정확도)
+- 34 models with built-in USD pricing (1M token 단위, BIGINT micros 누적 정확도)
 - Capability auto-inference per model ID — vision (gpt-4o, claude-3+, gemini-, pixtral 등), thinking (claude-opus-4, deepseek-r1, o1/o3), embedding (text-embedding-*)
 - Cohere `command-r-*` 는 native tools 미지원 — 자동 비활성
+- `/v1/models` 빈 응답 시 provider별 fallback 모델 보강 (Gemini 3 / OpenRouter 6 / Groq 2 / Together 2 / Mistral 3 / Cohere 2)
 
-**Phase 2 (planned):** OpenAI ChatGPT Plus/Pro OAuth (구독 계정 sign-in 지원). Anthropic OAuth는 Anthropic ToS 제약으로 영구 제외.
+**Usage tracking:**
+- 모든 외부 호출별 토큰/비용/지연 자동 기록 (`external_provider_usage` 테이블)
+- ⋮ → 📊 사용량 모달: 직전 50건 raw 표 + **최근 30일 provider별 누계 박스** (호출수 / 토큰 / 비용 USD)
+- `GET /api/external-keys/usage/summary?days=N` REST endpoint (max 90일)
+- 90일 자동 보존 (db-retention cron, 환경변수 `EXTERNAL_USAGE_RETENTION_DAYS`)
+
+**Phase 2 (planned):** OpenAI ChatGPT Plus/Pro OAuth (구독 계정 sign-in). 단, OpenAI/Anthropic 모두 표준 third-party OAuth client 등록 미공개 — 실현 가능성은 provider 정책 변경 의존. Anthropic Claude Pro/Max OAuth는 ToS 명시 금지로 영구 제외.
 
 ## Project Structure
 
@@ -508,9 +516,11 @@ backend/api/src/
 └── cluster/         # Multi-node cluster management
 
 frontend/web/public/
-├── js/modules/      # 23 core modules (chat, auth, state, websocket, sanitize)
-│   └── pages/       # 24 page modules (admin, analytics, research, documents)
-└── css/             # Design tokens and styles
+├── js/modules/         # Core modules (chat, auth, state, websocket, sanitize)
+│   ├── pages/          # 23 page modules (admin, analytics, research, documents...)
+│   └── components/     # Reusable components (model-selector, add-key-modal,
+│                       #                       usage-modal, model-action-menu)
+└── css/                # Design tokens, components, model-selector styles
 ```
 
 ## Development
@@ -536,6 +546,22 @@ npm run test:e2e:ui      # Playwright interactive UI mode
 OpenMake LLM provides an **OpenAI-compatible endpoint** (`/api/v1/chat/completions`), allowing it to serve as a drop-in replacement for applications using the OpenAI API.
 
 Interactive API documentation is available at `http://localhost:52416/api/docs` when running in development mode.
+
+### Selected Domain Endpoints
+
+| Endpoint | Method | Auth | Purpose |
+|---|---|---|---|
+| `/api/v1/chat/completions` | POST | API key (`X-API-Key`) | OpenAI-compatible chat (drop-in for OpenAI consumers) |
+| `/api/models` | GET | optional | Available models (Ollama + 인증 시 사용자 등록 외부 LLM 합산) |
+| `/api/external-keys` | GET | JWT | Provider 카탈로그 + 사용자 등록 키 메타 |
+| `/api/external-keys/:providerId` | POST/DELETE | JWT | 키 등록·갱신·삭제 (AES-256-GCM 암호화) |
+| `/api/external-keys/:providerId/validate` | POST | JWT | 키 즉시 검증 (latency 포함) |
+| `/api/external-keys/usage/recent` | GET | JWT | 직전 50건 raw 사용량 |
+| `/api/external-keys/usage/summary?days=N` | GET | JWT | N일(max 90) provider별 누계 (call/tokens/cost) |
+| `/api/api-keys` | GET/POST/DELETE | JWT | OpenMake 자체 API 키 관리 (서드파티 클라이언트용) |
+| `/api/usage` | GET | JWT | OpenMake 자체 사용량 통계 |
+
+`/external-keys.html` URL 은 폐기됨 — `/?openModelSelector=1` 로 301 redirect.
 
 ### Skill Library
 
@@ -585,6 +611,10 @@ Contributions are welcome! Please ensure:
 | `command not found: brew` | Homebrew not installed | Install from [brew.sh](https://brew.sh): `/bin/bash -c "$(curl -fsSL ...)"` |
 | Embedding error on first chat | `nomic-embed-text` not pulled | Run `ollama pull nomic-embed-text` before starting the server |
 | DB password with special characters | URL encoding needed | Encode special chars in `DATABASE_URL` (e.g., `@` → `%40`, `#` → `%23`) |
+| External LLM 키 등록 후 모델 미노출 | provider `/v1/models` 빈 응답 + 캐시 stale | `DELETE FROM external_provider_models_cache WHERE provider_id='<id>'` 후 PM2 재시작. 자동 fallback 모델로 dropdown 채워짐 |
+| `External 키 검증 실패` | 잘못된 API 키 또는 base_url SSRF 차단 | ⋮ → 🔍 검증 → 에러 메시지 확인. localhost/사설 IP는 SSRF 가드로 차단됨 |
+| Modal 미가시 (dropdown은 보임) | `.modal-overlay.active` CSS 미로드 | 하드 리로드 (Cmd+Shift+R) 또는 `?v=` 캐시 버스터 갱신 |
+| `TOKEN_ENCRYPTION_KEY 환경 변수가 설정되지 않았습니다` 경고 | 외부 LLM API 키 평문 저장 위험 | `openssl rand -hex 32` → `TOKEN_ENCRYPTION_KEY` `.env`에 설정 → PM2 재시작 |
 
 </details>
 
