@@ -75,10 +75,8 @@
         '</div>' +
         '<div class="s-card-body">' +
         '<div class="setting-row">' +
-        '<div class="setting-info"><h4>\uAE30\uBCF8 \uBAA8\uB378</h4><p>\uCC44\uD305\uC5D0 \uC0AC\uC6A9\uD560 AI \uBAA8\uB378\uC744 \uC120\uD0DD\uD569\uB2C8\uB2E4</p></div>' +
-        '<select id="modelSelect" class="s-select">' +
-        '<option value="">로딩 중...</option>' +
-        '</select>' +
+        '<div class="setting-info"><h4>\uAE30\uBCF8 \uBAA8\uB378</h4><p>\uCC44\uD305\uC5D0 \uC0AC\uC6A9\uD560 AI \uBAA8\uB378\uC744 \uC120\uD0DD\uD569\uB2C8\uB2E4. OpenRouter \uD0A4\uB97C \uB4F1\uB85D\uD558\uBA74 367+ \uBAA8\uB378\uC774 \uB178\uCD9C\uB429\uB2C8\uB2E4.</p></div>' +
+        '<div id="modelSelectorMount" class="settings-model-selector-mount"></div>' +
         '</div>' +
         '</div>' +
         '</div>' +
@@ -199,7 +197,7 @@
                 '</div>';
         },
 
-        init: function () {
+        init: async function () {
             try {
                 var safeStorage = window.SafeStorage;
                 // 관리자 확인 헬퍼
@@ -210,51 +208,6 @@
                         const user = JSON.parse(savedUser);
                         return user.role === 'admin' || user.role === 'administrator';
                     } catch (e) { return false; }
-                }
-
-                async function loadModels() {
-                    const modelSelect = document.getElementById('modelSelect');
-                    if (!modelSelect) return;
-
-                    try {
-                        const response = await fetch(API_ENDPOINTS.MODELS, {
-                            credentials: 'include'  // 🔒 httpOnly 쿠키 포함
-                        });
-                        if (response.ok) {
-                            const rawData = await response.json();
-                            var data = rawData.data || rawData;
-                            if (data.models && data.models.length > 0) {
-                                var savedModel = safeStorage.getItem(SK.SELECTED_MODEL || 'selectedModel');
-                                var defaultModel = data.defaultModel || (data.models[0].modelId || data.models[0].name);
-
-                                modelSelect.innerHTML = data.models.map(function (model) {
-                                    var modelId = model.modelId || model.name;
-                                    var displayName = model.name;
-                                    var desc = model.description || '';
-                                    var isSelected = savedModel ? modelId === savedModel : modelId === defaultModel;
-                                    return '<option value="' + esc(modelId) + '" ' + (isSelected ? 'selected' : '') + '>' + esc(displayName) + (desc ? ' — ' + esc(desc) : '') + '</option>';
-                                }).join('');
-
-                                // 🔒 비관리자는 선택 변경 불가 (옵션은 그대로 표시)
-                                if (!isAdmin()) {
-                                    modelSelect.disabled = true;
-                                    modelSelect.style.cursor = 'default';
-                                }
-                            } else {
-                                modelSelect.innerHTML = '<option value="">사용 가능한 모델 없음</option>';
-                            }
-                        } else {
-                            modelSelect.innerHTML = '<option value="">모델 로드 실패</option>';
-                        }
-                    } catch (e) {
-                        console.error('모델 로드 실패:', e);
-                        var savedModel = safeStorage.getItem(SK.SELECTED_MODEL || 'selectedModel');
-                        if (savedModel) {
-                            modelSelect.innerHTML = '<option value="' + esc(savedModel) + '">' + esc(savedModel) + ' (오프라인)</option>';
-                        } else {
-                            modelSelect.innerHTML = '<option value="">로드 실패</option>';
-                        }
-                    }
                 }
 
                 async function loadApiKeyCount() {
@@ -309,13 +262,28 @@
                     }
                 }
 
-                async function initSettings() { await loadModels(); loadSettings(); loadApiKeyCount(); loadSystemInfo(); }
+                async function initSettings() {
+                    // Mount unified ModelSelector — single entry point for model selection + key registration
+                    try {
+                        const mod = await import('../components/model-selector.js');
+                        window.ModelSelector = mod.default;
+                        const mountEl = document.getElementById('modelSelectorMount');
+                        if (mountEl) {
+                            await mod.mount(mountEl);
+                        }
+                    } catch (e) {
+                        console.error('[settings] ModelSelector mount 실패:', e);
+                    }
+                    loadSettings();
+                    loadApiKeyCount();
+                    loadSystemInfo();
+                }
 
                 function setTheme(theme) { document.documentElement.setAttribute('data-theme', theme); safeStorage.setItem('theme', theme); }
 
                 function saveSettings() {
                     setTheme(document.getElementById('themeSelect').value);
-                    safeStorage.setItem(SK.SELECTED_MODEL || 'selectedModel', document.getElementById('modelSelect').value);
+                    // 모델 선택은 ModelSelector 컴포넌트가 자체 관리/영속화
 
                     // MCP 도구 설정은 toggleMCPTool/setAllMCPTools에서 이미 실시간 저장됨
                     // 명시적 저장 호출
@@ -333,13 +301,7 @@
                     var theme = safeStorage.getItem(SK.THEME || 'theme') || 'dark';
                     document.getElementById('themeSelect').value = theme;
                     setTheme(theme);
-                    var selectedModel = safeStorage.getItem(SK.SELECTED_MODEL || 'selectedModel');
-                    if (selectedModel) {
-                        var opts = document.getElementById('modelSelect').options;
-                        for (var i = 0; i < opts.length; i++) {
-                            if (opts[i].value === selectedModel) { document.getElementById('modelSelect').value = selectedModel; break; }
-                        }
-                    }
+                    // 모델 선택은 ModelSelector 컴포넌트가 자체 복원
                     // MCP 설정은 loadMCPSettings()에서 통합 관리
                     if (typeof window.loadMCPSettings === 'function') window.loadMCPSettings();
 
@@ -578,6 +540,13 @@
             _intervals = [];
             _timeouts.forEach(function (id) { clearTimeout(id); });
             _timeouts = [];
+            try {
+                if (window.ModelSelector && typeof window.ModelSelector.unmount === 'function') {
+                    window.ModelSelector.unmount();
+                }
+            } catch (e) {
+                console.warn('[settings] ModelSelector unmount 실패:', e);
+            }
             // Remove onclick-exposed globals
             try { delete window.exportData; } catch (e) { }
             try { delete window.clearHistory; } catch (e) { }
