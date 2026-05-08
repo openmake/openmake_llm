@@ -53,35 +53,31 @@ function render(provider) {
     const supportsOAuth = (provider.auth_methods || ['api_key']).includes('oauth');
 
     _modal.innerHTML =
-        '<div class="modal" style="max-width:480px;background:var(--bg-card);border-radius:var(--radius-lg);padding:0;box-shadow:var(--shadow-lg)">' +
-        '<div class="modal-header" style="padding:var(--space-4) var(--space-5);border-bottom:1px solid var(--border-light);display:flex;justify-content:space-between;align-items:center">' +
-        '<h3 style="margin:0;font-size:var(--font-size-lg)">' + escText(provider.display_name) + ' 키 등록</h3>' +
-        '<button data-action="close" style="background:none;border:none;font-size:24px;cursor:pointer;color:var(--text-muted)">&times;</button>' +
+        '<div class="ek-modal-box">' +
+        '<div class="ek-modal-box-header">' +
+        '<h3>' + escText(provider.display_name) + ' 키 등록</h3>' +
+        '<button type="button" class="ek-modal-box-close" data-action="close">&times;</button>' +
         '</div>' +
-        '<div class="modal-body" style="padding:var(--space-5);display:flex;flex-direction:column;gap:var(--space-3)">' +
+        '<div class="ek-modal-box-body">' +
         (supportsOAuth
-            ? '<div style="font-size:var(--font-size-sm)">인증 방식:<br>' +
-              '<label style="margin-right:12px"><input type="radio" name="authMethod" value="api_key" checked> API Key 직접 입력</label>' +
+            ? '<div>인증 방식:<br>' +
+              '<label><input type="radio" name="authMethod" value="api_key" checked> API Key 직접 입력</label> ' +
               '<label style="color:var(--text-muted)"><input type="radio" name="authMethod" value="oauth" disabled> OAuth (Phase 2 예정)</label>' +
               '</div>'
             : '') +
-        '<label style="font-size:var(--font-size-sm);color:var(--text-secondary)">표시 이름' +
-        '<input type="text" id="ek-name" value="' + escAttr(provider.display_name) +
-        '" style="width:100%;padding:var(--space-2) var(--space-3);background:var(--bg-tertiary);border:1px solid var(--border-light);border-radius:var(--radius-md);color:var(--text-primary);box-sizing:border-box;margin-top:4px" /></label>' +
+        '<label>표시 이름' +
+        '<input type="text" id="ek-name" value="' + escAttr(provider.display_name) + '" /></label>' +
         (isOpenAICompat
-            ? '<label style="font-size:var(--font-size-sm);color:var(--text-secondary)">Base URL' +
-              '<input type="text" id="ek-baseurl" value="' + escAttr(provider.default_base_url) +
-              '" style="width:100%;padding:var(--space-2) var(--space-3);background:var(--bg-tertiary);border:1px solid var(--border-light);border-radius:var(--radius-md);color:var(--text-primary);box-sizing:border-box;margin-top:4px" /></label>'
+            ? '<label>Base URL<input type="text" id="ek-baseurl" value="' + escAttr(provider.default_base_url) + '" /></label>'
             : '') +
-        '<label style="font-size:var(--font-size-sm);color:var(--text-secondary)">API Key' +
-        '<input type="password" id="ek-key" placeholder="' + escAttr(provider.key_prefix_pattern || '키 입력') +
-        '" autocomplete="off" style="width:100%;padding:var(--space-2) var(--space-3);background:var(--bg-tertiary);border:1px solid var(--border-light);border-radius:var(--radius-md);color:var(--text-primary);box-sizing:border-box;margin-top:4px;font-family:monospace" /></label>' +
+        '<label>API Key' +
+        '<input type="password" id="ek-key" placeholder="' + escAttr(provider.key_prefix_pattern || '키 입력') + '" autocomplete="off" /></label>' +
         '<div style="font-size:11px;color:var(--text-muted)">' + escText(provider.help_text || '') + '</div>' +
         '<div style="font-size:11px;color:var(--text-muted)">※ 사용량은 본 서비스가 아닌 ' + escText(provider.display_name) + ' 계정으로 청구됩니다.</div>' +
         '</div>' +
-        '<div class="modal-footer" style="padding:var(--space-4) var(--space-5);border-top:1px solid var(--border-light);display:flex;justify-content:flex-end;gap:var(--space-2)">' +
-        '<button data-action="close" style="padding:var(--space-2) var(--space-4);background:var(--bg-tertiary);border:1px solid var(--border-light);border-radius:var(--radius-md);cursor:pointer;color:var(--text-primary)">취소</button>' +
-        '<button data-action="save" style="padding:var(--space-2) var(--space-4);background:var(--accent-primary);border:none;border-radius:var(--radius-md);cursor:pointer;color:#fff;font-weight:var(--font-weight-semibold)">등록</button>' +
+        '<div class="ek-modal-box-footer">' +
+        '<button type="button" class="ek-modal-btn-secondary" data-action="close">취소</button>' +
+        '<button type="button" class="ek-modal-btn-primary" data-action="save">등록</button>' +
         '</div>' +
         '</div>';
 
@@ -168,7 +164,15 @@ export async function open(opts) {
     }
     logDbg('  ✓ provider 매치, render() 호출');
     render(_currentProvider);
-    logDbg('  ✓ modal active 적용 (display=' + getComputedStyle(_modal).display + ')');
+    const overlayStyle = getComputedStyle(_modal);
+    const innerBox = _modal.querySelector('.ek-modal-box');
+    const innerRect = innerBox ? innerBox.getBoundingClientRect() : null;
+    const innerStyle = innerBox ? getComputedStyle(innerBox) : null;
+    logDbg('  ✓ overlay display=' + overlayStyle.display +
+        ' z=' + overlayStyle.zIndex + ' bg=' + overlayStyle.backgroundColor.slice(0, 30));
+    logDbg('  ✓ inner box: ' + (innerBox ? 'exists' : 'NULL') +
+        (innerRect ? ' rect=' + Math.round(innerRect.width) + 'x' + Math.round(innerRect.height) : '') +
+        (innerStyle ? ' bg=' + innerStyle.backgroundColor.slice(0, 30) : ''));
 }
 
 window.AddKeyModal = { open, close };
