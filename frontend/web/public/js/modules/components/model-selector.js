@@ -39,6 +39,65 @@ const PROVIDER_ORDER = [
 ];
 
 /**
+ * 중복 dedup 시 우선순위 — 같은 canonical 모델이 여러 provider 에서 노출되면 우선순위 높은 것만 유지.
+ * 직접 provider 가 OpenRouter 보다 보통 cheaper + lower latency 라 우선.
+ * 로컬(ollama) 은 항상 최우선.
+ */
+const PROVIDER_DEDUP_PRIORITY = {
+    ollama: 100,
+    'ollama-remote': 90,
+    anthropic: 80,
+    gemini: 80,
+    groq: 80,
+    together: 80,
+    mistral: 80,
+    cohere: 80,
+    'openai-compatible': 60,
+    openrouter: 50, // 라우터 → 직접 provider 가 등록돼 있으면 그쪽 우선
+};
+
+/**
+ * 모델의 canonical key 를 만든다 — 같은 key 의 모델은 동일 모델로 간주.
+ *
+ * 정확 매치 룰 (보수적):
+ *   - 'openai:gpt-4o'                 → 'openai/gpt-4o'
+ *   - 'openrouter:openai/gpt-4o'      → 'openai/gpt-4o'   (dedup 매치)
+ *   - 'anthropic:claude-sonnet-4-6'   → 'anthropic/claude-sonnet-4-6'
+ *   - 'openrouter:anthropic/claude-sonnet-4.6' → 'anthropic/claude-sonnet-4.6'
+ *     (4-6 vs 4.6 표기 차이는 별개 모델로 취급 — false positive 방지)
+ *   - 'ollama:gemma4:e4b'             → 'ollama/gemma4:e4b'
+ */
+function canonicalModelKey(model) {
+    const provider = model.provider || 'ollama';
+    let id = model.modelId || '';
+    const prefix = provider + ':';
+    if (id.startsWith(prefix)) id = id.slice(prefix.length);
+    // OpenRouter 의 modelId 는 이미 'vendor/model' 네임스페이스 — 그대로
+    // 직접 provider 의 modelId 는 'model' 만 — 'provider/model' 로 prefix
+    if (provider !== 'openrouter' && !id.includes('/')) {
+        id = provider + '/' + id;
+    }
+    return id.toLowerCase();
+}
+
+/**
+ * 같은 canonical 키의 모델을 PROVIDER_DEDUP_PRIORITY 기준으로 1개만 유지.
+ * 입력 순서는 보존 (Map 의 삽입 순서).
+ */
+function dedupModels(models) {
+    const winner = new Map();
+    for (const m of models) {
+        const key = canonicalModelKey(m);
+        const cur = winner.get(key);
+        if (!cur) { winner.set(key, m); continue; }
+        const curPri = PROVIDER_DEDUP_PRIORITY[cur.provider || 'ollama'] ?? 0;
+        const newPri = PROVIDER_DEDUP_PRIORITY[m.provider || 'ollama'] ?? 0;
+        if (newPri > curPri) winner.set(key, m);
+    }
+    return Array.from(winner.values());
+}
+
+/**
  * Frontend fallback 모델 — backend `/api/models` 가 외부 모델 합산을 안 할 때
  * (캐시 stale 또는 backend 옛 dist 사용 중) 등록된 키 기준으로 직접 보강.
  * backend `getProviderFallbackModels` 와 동일 정의 (PR #11).
@@ -148,6 +207,14 @@ async function loadData() {
             });
         }
         logDebug('frontend fallback 적용: ' + p.provider_id + ' (+' + fallback.length + ' models)');
+    }
+
+    // 중복 dedup — 같은 모델이 여러 provider 에서 노출 시 우선순위 높은 1개만 유지.
+    // 예: 사용자가 Anthropic 직접 + OpenRouter 둘 다 등록 → 직접 Anthropic 우선.
+    const beforeCount = _models.length;
+    _models = dedupModels(_models);
+    if (_models.length < beforeCount) {
+        logDebug('dedup: ' + beforeCount + ' → ' + _models.length + ' (' + (beforeCount - _models.length) + ' 중복 제거)');
     }
 }
 
