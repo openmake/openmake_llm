@@ -22,38 +22,18 @@ function logDebug(msg) {
 
 const PROVIDER_LABELS = {
     ollama: '🖥️ Ollama 로컬',
-    anthropic: '🧠 Anthropic Claude',
     openrouter: '🌐 OpenRouter',
-    gemini: '✨ Google Gemini',
-    groq: '⚡ Groq',
-    together: '🤝 Together AI',
-    mistral: '🌬️ Mistral AI',
-    cohere: '🎯 Cohere',
-    'ollama-remote': '🖥️ Ollama (원격)',
-    'openai-compatible': '🌐 OpenAI 호환',
 };
 
-const PROVIDER_ORDER = [
-    'ollama', 'anthropic', 'openrouter', 'gemini', 'groq',
-    'together', 'mistral', 'cohere', 'ollama-remote', 'openai-compatible',
-];
+const PROVIDER_ORDER = ['ollama', 'openrouter'];
 
 /**
- * 중복 dedup 시 우선순위 — 같은 canonical 모델이 여러 provider 에서 노출되면 우선순위 높은 것만 유지.
- * 직접 provider 가 OpenRouter 보다 보통 cheaper + lower latency 라 우선.
- * 로컬(ollama) 은 항상 최우선.
+ * 중복 dedup 시 우선순위 — 같은 canonical 모델이 여러 provider 에서 노출되면 우선순위 높은 1개만 유지.
+ * Tasks 1-7 (2026-05-08) 이후 외부 provider 가 OpenRouter 단독이라 실질적 dedup 은 없지만 코드 경로 보존.
  */
 const PROVIDER_DEDUP_PRIORITY = {
     ollama: 100,
-    'ollama-remote': 90,
-    anthropic: 80,
-    gemini: 80,
-    groq: 80,
-    together: 80,
-    mistral: 80,
-    cohere: 80,
-    'openai-compatible': 60,
-    openrouter: 50, // 라우터 → 직접 provider 가 등록돼 있으면 그쪽 우선
+    openrouter: 50,
 };
 
 /**
@@ -110,33 +90,6 @@ const FRONTEND_FALLBACK_MODELS = {
         { id: 'google/gemini-2.5-pro',            name: 'Gemini 2.5 Pro (via OR)' },
         { id: 'meta-llama/llama-3.3-70b-instruct', name: 'Llama 3.3 70B' },
         { id: 'deepseek/deepseek-r1',             name: 'DeepSeek R1' },
-    ],
-    gemini: [
-        { id: 'gemini-2.5-pro',                   name: 'Gemini 2.5 Pro' },
-        { id: 'gemini-2.5-flash',                 name: 'Gemini 2.5 Flash' },
-        { id: 'gemini-2.0-flash-exp',             name: 'Gemini 2.0 Flash (Exp)' },
-    ],
-    groq: [
-        { id: 'llama-3.3-70b-versatile',          name: 'Llama 3.3 70B (Versatile)' },
-        { id: 'llama-3.1-8b-instant',             name: 'Llama 3.1 8B (Instant)' },
-    ],
-    together: [
-        { id: 'meta-llama/Llama-3.3-70B-Instruct-Turbo', name: 'Llama 3.3 70B Turbo' },
-        { id: 'Qwen/Qwen2.5-72B-Instruct-Turbo',         name: 'Qwen 2.5 72B Turbo' },
-    ],
-    mistral: [
-        { id: 'mistral-large-latest',             name: 'Mistral Large' },
-        { id: 'mistral-medium-latest',            name: 'Mistral Medium' },
-        { id: 'codestral-latest',                 name: 'Codestral' },
-    ],
-    cohere: [
-        { id: 'command-r-plus',                   name: 'Command R+' },
-        { id: 'command-r',                        name: 'Command R' },
-    ],
-    anthropic: [
-        { id: 'claude-opus-4-5',                  name: 'Claude Opus 4.5' },
-        { id: 'claude-sonnet-4-6',                name: 'Claude Sonnet 4.6' },
-        { id: 'claude-haiku-4-5',                 name: 'Claude Haiku 4.5' },
     ],
 };
 
@@ -239,9 +192,6 @@ function setSelectedModel(modelId) {
             console.warn('[ModelSelector] applyModelCapabilityToggles 오류:', e);
         }
     }
-    // chat.js 등이 settings select#modelSelect 를 읽는 경우 호환성 — 동일 값 동기화
-    const legacySel = document.getElementById('modelSelect');
-    if (legacySel) legacySel.value = modelId;
 }
 
 function renderTrigger() {
@@ -252,9 +202,8 @@ function renderTrigger() {
     const provider = model ? (model.provider || 'ollama') : null;
     // provider 별 아이콘 — 어떤 LLM 사용 중인지 한눈에
     const PROVIDER_ICONS = {
-        ollama: '🖥️', anthropic: '🧠', openrouter: '🌐', gemini: '✨',
-        groq: '⚡', together: '🤝', mistral: '🌬️', cohere: '🎯',
-        'ollama-remote': '🖥️', 'openai-compatible': '🌐',
+        ollama: '🖥️',
+        openrouter: '🌐',
     };
     const icon = provider && PROVIDER_ICONS[provider] ? PROVIDER_ICONS[provider] : '📋';
     const trigger = _container.querySelector('.model-selector-trigger');
