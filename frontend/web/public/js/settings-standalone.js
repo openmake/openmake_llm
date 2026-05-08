@@ -52,8 +52,8 @@
                     var savedModel = safeStorage.getItem(SK.SELECTED_MODEL || 'selectedModel');
                     var defaultModel = data.defaultModel || (data.models[0].modelId || data.models[0].name);
 
-                    // provider 별 그룹화 — ollama / anthropic / openai-compatible
-                    var groups = { ollama: [], anthropic: [], 'openai-compatible': [] };
+                    // provider 별 그룹화 — ollama / openai-compatible (OpenRouter)
+                    var groups = { ollama: [], 'openai-compatible': [] };
                     data.models.forEach(function (m) {
                         var p = m.provider || 'ollama';
                         if (!groups[p]) groups[p] = [];
@@ -71,12 +71,11 @@
 
                     var groupLabels = {
                         ollama: '🖥️ Local (Ollama)',
-                        anthropic: '🧠 Anthropic Claude',
-                        'openai-compatible': '🌐 OpenAI Compatible',
+                        'openai-compatible': '🌐 OpenRouter',
                     };
 
                     var html = '';
-                    ['ollama', 'anthropic', 'openai-compatible'].forEach(function (key) {
+                    ['ollama', 'openai-compatible'].forEach(function (key) {
                         if (groups[key].length === 0) return;
                         html += '<optgroup label="' + escAttr(groupLabels[key] || key) + '">';
                         html += groups[key].map(renderOption).join('');

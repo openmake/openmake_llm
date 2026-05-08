@@ -202,7 +202,7 @@ function applyModelCapabilityToggles(modelFullId) {
     // 외부 provider 식별 — KNOWN_FULLID_PREFIXES 와 동기화
     const colonIdx = modelFullId.indexOf(':');
     const prefix = colonIdx > 0 ? modelFullId.slice(0, colonIdx) : '';
-    const isExternal = ['anthropic', 'openrouter', 'gemini', 'groq', 'together', 'mistral', 'cohere', 'ollama-remote', 'openai-compatible'].includes(prefix);
+    const isExternal = prefix === 'openrouter';
 
     const discussionBtn = document.getElementById('discussionModeBtn');
     const deepResearchBtn = document.getElementById('deepResearchBtn');
