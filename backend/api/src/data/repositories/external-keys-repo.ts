@@ -364,6 +364,55 @@ export class ExternalKeysRepository extends BaseRepository {
     }
 
     /**
+     * 사용자별 일별 사용량 집계 — UsageModal 차트 / 비용 추이용.
+     *
+     * @param days 조회 일수 (기본 30일)
+     * @returns 날짜별 + provider별 토큰/비용 합산
+     */
+    async listDailyUsage(
+        userId: string,
+        days: number = 30,
+    ): Promise<Array<{
+        day: string;
+        providerId: string;
+        callCount: number;
+        inputTokens: number;
+        outputTokens: number;
+        costUsdMicros: number;
+    }>> {
+        const result = await this.query<{
+            day: string;
+            provider_id: string;
+            call_count: string;
+            input_tokens: string;
+            output_tokens: string;
+            cost_usd_micros: string;
+        }>(
+            `SELECT
+                to_char(occurred_at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS day,
+                provider_id,
+                COUNT(*)::text AS call_count,
+                SUM(input_tokens)::text AS input_tokens,
+                SUM(output_tokens)::text AS output_tokens,
+                SUM(cost_usd_micros)::text AS cost_usd_micros
+             FROM external_provider_usage
+             WHERE user_id = $1
+               AND occurred_at > NOW() - ($2 || ' days')::interval
+             GROUP BY day, provider_id
+             ORDER BY day DESC, provider_id ASC`,
+            [userId, days.toString()],
+        );
+        return result.rows.map((r) => ({
+            day: r.day,
+            providerId: r.provider_id,
+            callCount: Number(r.call_count),
+            inputTokens: Number(r.input_tokens),
+            outputTokens: Number(r.output_tokens),
+            costUsdMicros: Number(r.cost_usd_micros),
+        }));
+    }
+
+    /**
      * 키 삭제 (소프트 비활성화) — DB row는 audit를 위해 보존하고 is_active=false 처리.
      */
     async deactivate(userId: string, providerId: string): Promise<boolean> {
