@@ -8,8 +8,10 @@
  * - micros 단위(1 USD = 1,000,000 micros) 로 계산하여 BIGINT 누적 오차 방지
  *
  * 단가 정확성:
- * - 본 단가는 2026-05 시점 공개 정보 기반 — 정확한 청구는 각 provider 콘솔에서 확인
- * - OpenRouter / Together AI 는 모델별 동적 가격 — 카탈로그 fallback 만 제공
+ * - 본 단가는 2026-05 시점 공개 정보 기반 — 정확한 청구는 OpenRouter 대시보드에서 확인
+ * - OpenRouter 는 모델별 동적 가격 — listOpenRouterModels()가 /v1/models 에서 실시간 단가를
+ *   ProviderModel.pricing 으로 전달. 본 카탈로그는 그 경로 실패 시 fallback.
+ *   provider 직접 cost (OpenRouter usage.cost) 는 streamChat 에서 우선 채택 (Stage 4f).
  *
  * @see services/database/migrations/016_external_provider_integration.sql
  */
@@ -31,36 +33,10 @@ export interface ModelPricing {
  * 모델별 정확 매칭이 우선, 미발견 시 provider 기본값 fallback.
  */
 const MODEL_PRICING: Record<string, ModelPricing> = {
-    // ── Anthropic ──────────────────────────────────────────────────
-    'anthropic:claude-opus-4-5':       { input: 15.00, output: 75.00 },
-    'anthropic:claude-opus-4-7':       { input: 15.00, output: 75.00 },
-    'anthropic:claude-sonnet-4-5':     { input:  3.00, output: 15.00 },
-    'anthropic:claude-sonnet-4-6':     { input:  3.00, output: 15.00 },
-    'anthropic:claude-sonnet-4-7':     { input:  3.00, output: 15.00 },
-    'anthropic:claude-haiku-4-5':      { input:  1.00, output:  5.00 },
-
-    // ── Google Gemini (OpenAI 호환 endpoint) ───────────────────────
-    'gemini:gemini-2.5-pro':           { input:  1.25, output: 10.00 },
-    'gemini:gemini-2.5-flash':         { input:  0.30, output:  2.50 },
-    'gemini:gemini-2.0-flash-exp':     { input:  0.00, output:  0.00 }, // 무료 (실험)
-
-    // ── Groq (LPU) — 대부분 모델 무료 또는 매우 저렴 ───────────────
-    'groq:llama-3.3-70b-versatile':    { input:  0.59, output:  0.79 },
-    'groq:llama-3.1-8b-instant':       { input:  0.05, output:  0.08 },
-    'groq:mixtral-8x7b-32768':         { input:  0.24, output:  0.24 },
-
-    // ── Mistral La Plateforme ─────────────────────────────────────
-    'mistral:mistral-large-latest':    { input:  2.00, output:  6.00 },
-    'mistral:mistral-medium-latest':   { input:  0.40, output:  2.00 },
-    'mistral:mistral-small-latest':    { input:  0.10, output:  0.30 },
-    'mistral:codestral-latest':        { input:  0.20, output:  0.60 },
-
-    // ── Cohere ─────────────────────────────────────────────────────
-    'cohere:command-r-plus':           { input:  2.50, output: 10.00 },
-    'cohere:command-r':                { input:  0.15, output:  0.60 },
-    'cohere:command-r7b':              { input:  0.0375, output: 0.15 },
-
-    // ── OpenRouter (인기 라우팅 모델 — 작은 마크업 포함, 정확값은 대시보드 참조) ──
+    // ── OpenRouter (인기 라우팅 모델 — 카탈로그 fallback 단가) ──
+    // OpenRouter 는 모델별 동적 가격. listOpenRouterModels() 가 /v1/models 응답에서
+    // 모델별 실시간 가격을 ProviderModel.pricing 으로 전달함. 본 테이블은 그 경로가
+    // 실패했거나 OpenRouter 가 새 모델을 추가했지만 아직 사전 등록되지 않은 경우의 fallback.
     'openrouter:openai/gpt-5':                     { input:  2.50, output: 10.00 },
     'openrouter:openai/gpt-4o':                    { input:  2.50, output: 10.00 },
     'openrouter:openai/gpt-4o-mini':               { input:  0.15, output:  0.60 },
@@ -72,26 +48,13 @@ const MODEL_PRICING: Record<string, ModelPricing> = {
     'openrouter:meta-llama/llama-3.3-70b-instruct': { input: 0.59, output:  0.79 },
     'openrouter:deepseek/deepseek-r1':             { input:  0.55, output:  2.19 },
     'openrouter:deepseek/deepseek-v3':             { input:  0.27, output:  1.10 },
-
-    // ── Together AI (오픈소스 호스팅) ──────────────────────────────
-    'together:meta-llama/Llama-3.3-70B-Instruct-Turbo':  { input: 0.88, output: 0.88 },
-    'together:meta-llama/Llama-3.1-405B-Instruct-Turbo': { input: 3.50, output: 3.50 },
-    'together:Qwen/Qwen2.5-72B-Instruct-Turbo':           { input: 1.20, output: 1.20 },
-    'together:deepseek-ai/DeepSeek-V3':                   { input: 1.25, output: 1.25 },
 };
 
 /**
  * provider 별 fallback 단가 (모델별 정확 매칭 미발견 시 사용)
  */
 const PROVIDER_FALLBACK_PRICING: Record<string, ModelPricing> = {
-    anthropic:   { input:  3.00, output: 15.00 }, // Sonnet 기준
-    gemini:      { input:  1.25, output: 10.00 }, // Pro 기준
-    groq:        { input:  0.59, output:  0.79 }, // 70B Llama 기준
-    mistral:     { input:  0.40, output:  2.00 }, // Medium 기준
-    cohere:      { input:  0.15, output:  0.60 }, // Command R 기준
-    openrouter:  { input:  3.00, output: 15.00 }, // Sonnet 기준 보수적
-    together:    { input:  0.88, output:  0.88 }, // 70B Llama 기준
-    // ollama-remote / openai-compatible 은 base_url 임의 — fallback 없음 (cost=0 underestimate)
+    openrouter: { input: 3.00, output: 15.00 }, // Sonnet 기준 보수적
 };
 
 /**
