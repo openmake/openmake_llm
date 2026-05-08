@@ -32,6 +32,57 @@ const router = Router();
 const logger = createLogger('ModelRoutes');
 
 /**
+ * Provider 별 fallback 모델 목록 — `/v1/models` API 호출 실패 또는 빈 배열 반환 시
+ * 사용자가 채팅을 시작할 수 있도록 제공하는 known 모델 카탈로그.
+ *
+ * Gemini OpenAI 호환 endpoint 등 일부 provider 가 `/v1/models` 미구현인 경우 대응.
+ */
+function getProviderFallbackModels(
+    providerId: string,
+): Array<{ id: string; fullId: string; displayName: string; capabilities: Record<string, boolean> }> {
+    const KNOWN_MODELS: Record<string, Array<{ id: string; displayName: string; capabilities: Record<string, boolean> }>> = {
+        gemini: [
+            { id: 'gemini-2.5-pro',           displayName: 'Gemini 2.5 Pro',           capabilities: { streaming: true, toolCalling: true, vision: true, thinking: false, embedding: false } },
+            { id: 'gemini-2.5-flash',         displayName: 'Gemini 2.5 Flash',         capabilities: { streaming: true, toolCalling: true, vision: true, thinking: false, embedding: false } },
+            { id: 'gemini-2.0-flash-exp',     displayName: 'Gemini 2.0 Flash (Exp)',   capabilities: { streaming: true, toolCalling: true, vision: true, thinking: false, embedding: false } },
+        ],
+        openrouter: [
+            { id: 'openai/gpt-5',                    displayName: 'GPT-5',                       capabilities: { streaming: true, toolCalling: true, vision: true, thinking: false, embedding: false } },
+            { id: 'anthropic/claude-opus-4.5',       displayName: 'Claude Opus 4.5',             capabilities: { streaming: true, toolCalling: true, vision: true, thinking: true, embedding: false } },
+            { id: 'anthropic/claude-sonnet-4.6',     displayName: 'Claude Sonnet 4.6',           capabilities: { streaming: true, toolCalling: true, vision: true, thinking: true, embedding: false } },
+            { id: 'google/gemini-2.5-pro',           displayName: 'Gemini 2.5 Pro (via OR)',     capabilities: { streaming: true, toolCalling: true, vision: true, thinking: false, embedding: false } },
+            { id: 'meta-llama/llama-3.3-70b-instruct', displayName: 'Llama 3.3 70B',             capabilities: { streaming: true, toolCalling: true, vision: false, thinking: false, embedding: false } },
+            { id: 'deepseek/deepseek-r1',            displayName: 'DeepSeek R1',                 capabilities: { streaming: true, toolCalling: true, vision: false, thinking: true, embedding: false } },
+        ],
+        groq: [
+            { id: 'llama-3.3-70b-versatile',  displayName: 'Llama 3.3 70B (Versatile)',  capabilities: { streaming: true, toolCalling: true, vision: false, thinking: false, embedding: false } },
+            { id: 'llama-3.1-8b-instant',     displayName: 'Llama 3.1 8B (Instant)',     capabilities: { streaming: true, toolCalling: true, vision: false, thinking: false, embedding: false } },
+        ],
+        together: [
+            { id: 'meta-llama/Llama-3.3-70B-Instruct-Turbo',  displayName: 'Llama 3.3 70B Turbo',  capabilities: { streaming: true, toolCalling: true, vision: false, thinking: false, embedding: false } },
+            { id: 'Qwen/Qwen2.5-72B-Instruct-Turbo',           displayName: 'Qwen 2.5 72B Turbo',   capabilities: { streaming: true, toolCalling: true, vision: false, thinking: false, embedding: false } },
+        ],
+        mistral: [
+            { id: 'mistral-large-latest',     displayName: 'Mistral Large',     capabilities: { streaming: true, toolCalling: true, vision: false, thinking: false, embedding: false } },
+            { id: 'mistral-medium-latest',    displayName: 'Mistral Medium',    capabilities: { streaming: true, toolCalling: true, vision: false, thinking: false, embedding: false } },
+            { id: 'codestral-latest',         displayName: 'Codestral',         capabilities: { streaming: true, toolCalling: true, vision: false, thinking: false, embedding: false } },
+        ],
+        cohere: [
+            { id: 'command-r-plus',           displayName: 'Command R+',        capabilities: { streaming: true, toolCalling: false, vision: false, thinking: false, embedding: false } },
+            { id: 'command-r',                displayName: 'Command R',         capabilities: { streaming: true, toolCalling: false, vision: false, thinking: false, embedding: false } },
+        ],
+    };
+    const known = KNOWN_MODELS[providerId];
+    if (!known) return [];
+    return known.map(m => ({
+        id: m.id,
+        fullId: buildFullModelId(providerId, m.id),
+        displayName: m.displayName,
+        capabilities: m.capabilities,
+    }));
+}
+
+/**
  * GET /model
  * 현재 모델 정보 API (프론트엔드 settings.js 호출용)
  * model-roles 레지스트리의 chat 역할 모델을 반환합니다.
@@ -136,7 +187,7 @@ router.get('/models', asyncHandler(async (req: Request, res: Response) => {
                         const cached = await repo.getCachedModels(userId, keyRow.providerId, cacheTtlMs);
                         let list: CachedModel[] | null = cached as CachedModel[] | null;
 
-                        if (!list) {
+                        if (!list || list.length === 0) {
                             const plaintextKey = await repo.decryptKey(userId, keyRow.providerId);
                             if (!plaintextKey) continue;
                             const provider = new OpenAICompatProvider({
@@ -145,17 +196,25 @@ router.get('/models', asyncHandler(async (req: Request, res: Response) => {
                                 baseUrl: keyRow.baseUrl,
                             });
                             const fresh = await provider.listModels();
-                            // ProviderModel[] 을 캐시-친화 형태로 직렬화
                             list = fresh.map((m) => ({
                                 id: m.id,
                                 fullId: m.fullId,
                                 displayName: m.displayName,
                                 capabilities: m.capabilities as unknown as Record<string, boolean>,
                             }));
-                            await repo.putCachedModels(userId, keyRow.providerId, list);
+                            // 빈 배열은 캐싱 안 함 (stale 영구화 방지) + provider별 fallback 모델 보강
+                            if (list.length === 0) {
+                                list = getProviderFallbackModels(keyRow.providerId);
+                                if (list.length > 0) {
+                                    logger.warn(`${keyRow.providerId} /v1/models 빈 배열 — fallback ${list.length}개 사용 (캐싱 skip)`);
+                                }
+                            } else {
+                                await repo.putCachedModels(userId, keyRow.providerId, list);
+                            }
                         }
 
                         const catalogDisplay = getProviderCatalogEntry(keyRow.providerId)?.displayName ?? keyRow.providerId;
+                        if (!list) continue;
                         for (const m of list) {
                             const caps = m.capabilities;
                             models.push({
