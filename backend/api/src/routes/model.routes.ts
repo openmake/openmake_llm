@@ -23,7 +23,6 @@ import { requireAuth, requireAdmin } from '../auth';
 import { getModelHealthMonitor } from '../services/model-health-monitor';
 import { ExternalKeysRepository } from '../data/repositories/external-keys-repo';
 import { getPool } from '../data/models/unified-database';
-import { AnthropicProvider } from '../providers/anthropic-provider';
 import { OpenAICompatProvider } from '../providers/openai-compat-provider';
 import { buildFullModelId } from '../providers/i-provider';
 import { getProviderCatalogEntry } from '../config/external-providers';
@@ -35,41 +34,19 @@ const logger = createLogger('ModelRoutes');
  * Provider 별 fallback 모델 목록 — `/v1/models` API 호출 실패 또는 빈 배열 반환 시
  * 사용자가 채팅을 시작할 수 있도록 제공하는 known 모델 카탈로그.
  *
- * Gemini OpenAI 호환 endpoint 등 일부 provider 가 `/v1/models` 미구현인 경우 대응.
+ * OpenRouter `/v1/models` 가 빈 배열을 반환하거나 호출이 실패한 경우 대응.
  */
 function getProviderFallbackModels(
     providerId: string,
-): Array<{ id: string; fullId: string; displayName: string; capabilities: Record<string, boolean> }> {
-    const KNOWN_MODELS: Record<string, Array<{ id: string; displayName: string; capabilities: Record<string, boolean> }>> = {
-        gemini: [
-            { id: 'gemini-2.5-pro',           displayName: 'Gemini 2.5 Pro',           capabilities: { streaming: true, toolCalling: true, vision: true, thinking: false, embedding: false } },
-            { id: 'gemini-2.5-flash',         displayName: 'Gemini 2.5 Flash',         capabilities: { streaming: true, toolCalling: true, vision: true, thinking: false, embedding: false } },
-            { id: 'gemini-2.0-flash-exp',     displayName: 'Gemini 2.0 Flash (Exp)',   capabilities: { streaming: true, toolCalling: true, vision: true, thinking: false, embedding: false } },
-        ],
+): Array<{ id: string; fullId: string; displayName: string; capabilities: Record<string, boolean>; isFree?: boolean }> {
+    const KNOWN_MODELS: Record<string, Array<{ id: string; displayName: string; capabilities: Record<string, boolean>; isFree?: boolean }>> = {
         openrouter: [
-            { id: 'openai/gpt-5',                    displayName: 'GPT-5',                       capabilities: { streaming: true, toolCalling: true, vision: true, thinking: false, embedding: false } },
-            { id: 'anthropic/claude-opus-4.5',       displayName: 'Claude Opus 4.5',             capabilities: { streaming: true, toolCalling: true, vision: true, thinking: true, embedding: false } },
-            { id: 'anthropic/claude-sonnet-4.6',     displayName: 'Claude Sonnet 4.6',           capabilities: { streaming: true, toolCalling: true, vision: true, thinking: true, embedding: false } },
-            { id: 'google/gemini-2.5-pro',           displayName: 'Gemini 2.5 Pro (via OR)',     capabilities: { streaming: true, toolCalling: true, vision: true, thinking: false, embedding: false } },
-            { id: 'meta-llama/llama-3.3-70b-instruct', displayName: 'Llama 3.3 70B',             capabilities: { streaming: true, toolCalling: true, vision: false, thinking: false, embedding: false } },
-            { id: 'deepseek/deepseek-r1',            displayName: 'DeepSeek R1',                 capabilities: { streaming: true, toolCalling: true, vision: false, thinking: true, embedding: false } },
-        ],
-        groq: [
-            { id: 'llama-3.3-70b-versatile',  displayName: 'Llama 3.3 70B (Versatile)',  capabilities: { streaming: true, toolCalling: true, vision: false, thinking: false, embedding: false } },
-            { id: 'llama-3.1-8b-instant',     displayName: 'Llama 3.1 8B (Instant)',     capabilities: { streaming: true, toolCalling: true, vision: false, thinking: false, embedding: false } },
-        ],
-        together: [
-            { id: 'meta-llama/Llama-3.3-70B-Instruct-Turbo',  displayName: 'Llama 3.3 70B Turbo',  capabilities: { streaming: true, toolCalling: true, vision: false, thinking: false, embedding: false } },
-            { id: 'Qwen/Qwen2.5-72B-Instruct-Turbo',           displayName: 'Qwen 2.5 72B Turbo',   capabilities: { streaming: true, toolCalling: true, vision: false, thinking: false, embedding: false } },
-        ],
-        mistral: [
-            { id: 'mistral-large-latest',     displayName: 'Mistral Large',     capabilities: { streaming: true, toolCalling: true, vision: false, thinking: false, embedding: false } },
-            { id: 'mistral-medium-latest',    displayName: 'Mistral Medium',    capabilities: { streaming: true, toolCalling: true, vision: false, thinking: false, embedding: false } },
-            { id: 'codestral-latest',         displayName: 'Codestral',         capabilities: { streaming: true, toolCalling: true, vision: false, thinking: false, embedding: false } },
-        ],
-        cohere: [
-            { id: 'command-r-plus',           displayName: 'Command R+',        capabilities: { streaming: true, toolCalling: false, vision: false, thinking: false, embedding: false } },
-            { id: 'command-r',                displayName: 'Command R',         capabilities: { streaming: true, toolCalling: false, vision: false, thinking: false, embedding: false } },
+            { id: 'openai/gpt-5',                    displayName: 'GPT-5',                       isFree: false, capabilities: { streaming: true, toolCalling: true, vision: true,  thinking: false, embedding: false } },
+            { id: 'anthropic/claude-opus-4.5',       displayName: 'Claude Opus 4.5',             isFree: false, capabilities: { streaming: true, toolCalling: true, vision: true,  thinking: true,  embedding: false } },
+            { id: 'anthropic/claude-sonnet-4.6',     displayName: 'Claude Sonnet 4.6',           isFree: false, capabilities: { streaming: true, toolCalling: true, vision: true,  thinking: true,  embedding: false } },
+            { id: 'google/gemini-2.5-pro',           displayName: 'Gemini 2.5 Pro (via OR)',     isFree: false, capabilities: { streaming: true, toolCalling: true, vision: true,  thinking: false, embedding: false } },
+            { id: 'meta-llama/llama-3.3-70b-instruct', displayName: 'Llama 3.3 70B',             isFree: false, capabilities: { streaming: true, toolCalling: true, vision: false, thinking: false, embedding: false } },
+            { id: 'deepseek/deepseek-r1',            displayName: 'DeepSeek R1',                 isFree: false, capabilities: { streaming: true, toolCalling: true, vision: false, thinking: true,  embedding: false } },
         ],
     };
     const known = KNOWN_MODELS[providerId];
@@ -79,6 +56,7 @@ function getProviderFallbackModels(
         fullId: buildFullModelId(providerId, m.id),
         displayName: m.displayName,
         capabilities: m.capabilities,
+        isFree: m.isFree ?? false,
     }));
 }
 
@@ -129,6 +107,8 @@ router.get('/models', asyncHandler(async (req: Request, res: Response) => {
             toolCalling: boolean;
             streaming: boolean;
         };
+        isFree?: boolean;
+        pricing?: { input: number; output: number };
     };
 
     const models: ModelEntry[] = [{
@@ -155,26 +135,6 @@ router.get('/models', asyncHandler(async (req: Request, res: Response) => {
             const repo = new ExternalKeysRepository(getPool());
             const userKeys = await repo.listByUser(userId);
             for (const keyRow of userKeys) {
-                if (keyRow.sdkType === 'anthropic') {
-                    const provider = new AnthropicProvider({ apiKey: 'placeholder', baseUrl: keyRow.baseUrl });
-                    const list = await provider.listModels();
-                    for (const m of list) {
-                        models.push({
-                            name: m.displayName,
-                            modelId: m.fullId,
-                            description: 'Anthropic — BYO key',
-                            provider: 'anthropic',
-                            capabilities: {
-                                executionStrategy: 'single',
-                                thinking: m.capabilities.thinking ? 'medium' : 'off',
-                                discussion: false,
-                                vision: m.capabilities.vision,
-                                toolCalling: m.capabilities.toolCalling,
-                                streaming: m.capabilities.streaming,
-                            },
-                        });
-                    }
-                }
                 // openai-compatible 분기: provider 의 /v1/models 호출 (TTL 캐시 + 실패 격리)
                 if (keyRow.sdkType === 'openai-compatible' && keyRow.baseUrl) {
                     try {
@@ -183,7 +143,14 @@ router.get('/models', asyncHandler(async (req: Request, res: Response) => {
                             process.env.EXTERNAL_MODELS_CACHE_TTL_MS ?? '3600000',
                             10,
                         );
-                        type CachedModel = { id: string; fullId: string; displayName: string; capabilities: Record<string, boolean> };
+                        type CachedModel = {
+                            id: string;
+                            fullId: string;
+                            displayName: string;
+                            capabilities: Record<string, boolean>;
+                            isFree?: boolean;
+                            pricing?: { input: number; output: number };
+                        };
                         const cached = await repo.getCachedModels(userId, keyRow.providerId, cacheTtlMs);
                         let list: CachedModel[] | null = cached as CachedModel[] | null;
 
@@ -201,6 +168,8 @@ router.get('/models', asyncHandler(async (req: Request, res: Response) => {
                                 fullId: m.fullId,
                                 displayName: m.displayName,
                                 capabilities: m.capabilities as unknown as Record<string, boolean>,
+                                isFree: m.isFree,
+                                pricing: m.pricing,
                             }));
                             // 빈 배열은 캐싱 안 함 (stale 영구화 방지) + provider별 fallback 모델 보강
                             if (list.length === 0) {
@@ -230,6 +199,8 @@ router.get('/models', asyncHandler(async (req: Request, res: Response) => {
                                     toolCalling: !!caps.toolCalling,
                                     streaming: !!caps.streaming,
                                 },
+                                isFree: m.isFree,
+                                pricing: m.pricing,
                             });
                         }
                     } catch (err) {
