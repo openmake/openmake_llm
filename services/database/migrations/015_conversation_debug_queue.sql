@@ -14,6 +14,18 @@
 -- @see scheduler 의 debug-queue-cleanup task (TTL 만료 정리)
 -- ============================================================
 
+-- ── 운영 DB 권한 정합 (014 와 동일 graceful 패턴) ──
+DO $$
+BEGIN
+    EXECUTE format('ALTER TABLE IF EXISTS conversation_debug_queue OWNER TO %I', current_user);
+    RAISE NOTICE '015: ownership normalized to %', current_user;
+EXCEPTION
+    WHEN insufficient_privilege THEN
+        RAISE NOTICE '015: ALTER OWNER skipped (current_user lacks superuser/owner privilege)';
+    WHEN OTHERS THEN
+        RAISE NOTICE '015: ALTER OWNER skipped (%)', SQLERRM;
+END $$;
+
 CREATE TABLE IF NOT EXISTS conversation_debug_queue (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     session_id UUID NOT NULL,
@@ -27,21 +39,27 @@ CREATE TABLE IF NOT EXISTS conversation_debug_queue (
     routing_metadata JSONB                         -- model, agent, queryType 등 운영 메타
 );
 
--- TTL 만료 빠른 정리용 — cleanup cron 이 매시간 expires_at < now() 조건으로 DELETE
-CREATE INDEX IF NOT EXISTS idx_debug_queue_expires
-    ON conversation_debug_queue (expires_at);
+-- ── 인덱스 (graceful — owner 부재 시 skip) ──
+DO $$
+BEGIN
+    -- TTL 만료 빠른 정리용 — cleanup cron 이 매시간 expires_at < now() 조건으로 DELETE
+    EXECUTE 'CREATE INDEX IF NOT EXISTS idx_debug_queue_expires ON conversation_debug_queue (expires_at)';
+    -- 사용자별 신고 이력 조회용
+    EXECUTE 'CREATE INDEX IF NOT EXISTS idx_debug_queue_user ON conversation_debug_queue (user_id, captured_at DESC)';
+    -- 세션별 디버그 추적용
+    EXECUTE 'CREATE INDEX IF NOT EXISTS idx_debug_queue_session ON conversation_debug_queue (session_id, captured_at DESC)';
+EXCEPTION
+    WHEN insufficient_privilege THEN
+        RAISE NOTICE '015: CREATE INDEX skipped (table owner mismatch)';
+END $$;
 
--- 사용자별 신고 이력 조회용
-CREATE INDEX IF NOT EXISTS idx_debug_queue_user
-    ON conversation_debug_queue (user_id, captured_at DESC);
-
--- 세션별 디버그 추적용 — 특정 세션에서 무엇이 잘못됐는지 한눈에 확인
-CREATE INDEX IF NOT EXISTS idx_debug_queue_session
-    ON conversation_debug_queue (session_id, captured_at DESC);
-
-COMMENT ON TABLE conversation_debug_queue IS
-    '에러 자동 저장 + 사용자 신고 본문 임시 보존 — TTL 후 자동 삭제';
-COMMENT ON COLUMN conversation_debug_queue.reason IS
-    'auto-error (24h TTL) | user-report (7d TTL)';
-COMMENT ON COLUMN conversation_debug_queue.assistant_message IS
-    '부분 응답 가능 — 첫 토큰 전 에러면 빈 문자열';
+-- ── COMMENT (graceful) ──
+DO $$
+BEGIN
+    EXECUTE 'COMMENT ON TABLE conversation_debug_queue IS ''에러 자동 저장 + 사용자 신고 본문 임시 보존 — TTL 후 자동 삭제''';
+    EXECUTE 'COMMENT ON COLUMN conversation_debug_queue.reason IS ''auto-error (24h TTL) | user-report (7d TTL)''';
+    EXECUTE 'COMMENT ON COLUMN conversation_debug_queue.assistant_message IS ''부분 응답 가능 — 첫 토큰 전 에러면 빈 문자열''';
+EXCEPTION
+    WHEN insufficient_privilege THEN
+        RAISE NOTICE '015: COMMENT skipped (table owner mismatch)';
+END $$;
