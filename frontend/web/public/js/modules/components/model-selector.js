@@ -246,10 +246,21 @@ function renderDropdown() {
 
     // 사용 가이드 (등록된 외부 키가 없을 때만 노출)
     const hasExternal = _models.some(m => (m.provider || 'ollama') !== 'ollama');
-    if (_isAuthenticated && !hasExternal) {
+    const registeredButMissing = _isAuthenticated &&
+        _providers.some(p => p.user_key) && !hasExternal;
+
+    if (_isAuthenticated && !hasExternal && !registeredButMissing) {
         html =
             '<div style="padding:8px 12px;font-size:11px;color:var(--text-muted);background:var(--bg-tertiary);border-bottom:1px solid var(--border-light);line-height:1.5">' +
             '💡 외부 LLM 사용 — 아래 <b>"+ 새 LLM 키 등록"</b>에서 provider 선택 후 키 입력하면 모델이 위쪽에 자동으로 추가됩니다.' +
+            '</div>' + html;
+    } else if (registeredButMissing) {
+        const registered = _providers.filter(p => p.user_key).map(p => p.provider_id).join(', ');
+        html =
+            '<div style="padding:10px 12px;font-size:11px;color:var(--danger);background:rgba(220,38,38,0.08);border-bottom:1px solid var(--border-light);line-height:1.5">' +
+            '⚠️ 등록된 키 [<b>' + escText(registered) + '</b>]가 있지만 모델 합산 실패. ' +
+            '<br>운영자 조치: <code>pm2 restart openmake-api</code> + ' +
+            '<code>DELETE FROM external_provider_models_cache</code>' +
             '</div>' + html;
     }
 
@@ -410,6 +421,28 @@ export async function mount(targetElement) {
         ' / globals: AddKey=' + !!window.AddKeyModal +
         ', Usage=' + !!window.UsageModal +
         ', Menu=' + !!window.ModelActionMenu);
+
+    // 자동 진단 — 등록된 키 vs 합산된 외부 모델 일치 여부
+    const registeredKeys = _providers.filter(p => p.user_key).map(p => p.provider_id);
+    const externalModelsByProvider = {};
+    _models.filter(m => (m.provider || 'ollama') !== 'ollama').forEach(m => {
+        externalModelsByProvider[m.provider] = (externalModelsByProvider[m.provider] || 0) + 1;
+    });
+    if (registeredKeys.length > 0) {
+        logDebug('등록된 키: [' + registeredKeys.join(', ') + ']');
+        logDebug('합산된 외부 모델: ' +
+            (Object.keys(externalModelsByProvider).length > 0
+                ? JSON.stringify(externalModelsByProvider)
+                : '0건'));
+        const missing = registeredKeys.filter(p => !externalModelsByProvider[p]);
+        if (missing.length > 0) {
+            logDebug('⚠️ 키 [' + missing.join(', ') + '] 모델 미합산 — 가능 원인:');
+            logDebug('  1. PM2 재시작 안 됨 (새 fallback 코드 미적용)');
+            logDebug('  2. external_provider_models_cache stale 빈 배열');
+            logDebug('  3. provider /v1/models endpoint 응답 실패');
+            logDebug('해결: pm2 restart openmake-api && DELETE FROM external_provider_models_cache');
+        }
+    }
 
     if (location.search.includes('openModelSelector=1')) {
         toggleDropdown();
