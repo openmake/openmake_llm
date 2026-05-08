@@ -227,6 +227,9 @@ function applyModelCapabilityToggles(modelFullId) {
     });
 }
 
+// 글로벌 노출 — ModelSelector.setSelectedModel 에서 호출
+window.applyModelCapabilityToggles = applyModelCapabilityToggles;
+
 /**
  * 클러스터 이벤트 수신 시 노드 정보 새로고침 요청
  * @param {Object} event - 클러스터 이벤트 데이터
@@ -294,14 +297,12 @@ async function selectModel(modelId) {
  * @returns {Promise<void>}
  */
 async function loadModelInfo() {
+    // ModelSelector(채팅 입력 영역) 가 모든 모델 변경 책임 — 본 함수는 settings modal 의
+    // activeModelName read-only 표시만 유지. 변경 UI(modelListContainer badge) 는 제거됨.
     const activeModelName = document.getElementById('activeModelName');
-    const modelListContainer = document.getElementById('modelListContainer');
-    if (!activeModelName || !modelListContainer) return;
-
-    const isAdminUser = isAdmin();
+    if (!activeModelName) return;
 
     activeModelName.textContent = '로딩 중...';
-    modelListContainer.innerHTML = '<span style="color: var(--text-muted);">조회 중...</span>';
 
     try {
         const response = await fetch(API_ENDPOINTS.MODELS, { credentials: 'include' });
@@ -311,36 +312,16 @@ async function loadModelInfo() {
 
             if (!payload.models || payload.models.length === 0) {
                 activeModelName.textContent = '모델 없음';
-                modelListContainer.innerHTML = '<span style="color: var(--text-muted);">사용 가능한 모델 없음</span>';
                 return;
             }
 
             const savedModel = localStorage.getItem(STORAGE_KEY_SELECTED_MODEL);
             const defaultModelId = payload.defaultModel || (payload.models[0].modelId || payload.models[0].name);
-
             const activeModel = payload.models.find(m => {
                 const modelId = m.modelId || m.name;
                 return savedModel ? modelId === savedModel : modelId === defaultModelId;
             }) || payload.models[0];
             activeModelName.textContent = activeModel.name;
-
-            // 비관리자는 활성 모델만 표시
-            if (!isAdminUser) {
-                modelListContainer.innerHTML = '<span style="color: var(--text-muted);">모델 정보는 관리자만 볼 수 있습니다</span>';
-                return;
-            }
-
-            modelListContainer.innerHTML = payload.models.map(model => {
-                const modelId = model.modelId || model.name;
-                const displayName = model.name;
-                const activeId = activeModel.modelId || activeModel.name;
-                const isActive = modelId === activeId;
-                return `
-                    <div class="model-badge ${isActive ? 'active' : ''}" onclick="selectModel('${escapeHtml(modelId)}')">
-                        ${isActive ? '✓ ' : ''}${escapeHtml(displayName)}
-                    </div>
-                `;
-            }).join('');
         } else {
             throw new Error('모델 API 응답 오류');
         }

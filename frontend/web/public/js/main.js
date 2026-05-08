@@ -686,6 +686,32 @@ window.AdminPanel = AdminPanel;
 window._appInitialized = true;
 
 // ============================================
+// 통합 모델 셀렉트 (외부 LLM 키 등록·선택·관리 single entry)
+// ============================================
+async function _mountModelSelector() {
+    const target = document.getElementById('modelSelectorMount');
+    if (!target) return;
+    try {
+        // 보조 컴포넌트 사전 로드 (window.* 글로벌 노출)
+        await Promise.all([
+            import('./modules/components/add-key-modal.js'),
+            import('./modules/components/usage-modal.js'),
+            import('./modules/components/model-action-menu.js'),
+        ]);
+        const mod = await import('./modules/components/model-selector.js');
+        await mod.default.mount(target);
+        window.ModelSelector = mod.default;
+    } catch (e) {
+        console.warn('[main] ModelSelector mount 실패:', e);
+    }
+}
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', _mountModelSelector);
+} else {
+    _mountModelSelector();
+}
+
+// ============================================
 // 8. 모듈 로드 시 initApp 자동 실행 (DOMContentLoaded 대체)
 // ============================================
 // ES module은 defer와 동일하게 DOM 파싱 후 실행되므로
