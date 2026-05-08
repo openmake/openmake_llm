@@ -39,6 +39,21 @@ export interface ExternalProviderCatalogEntry {
     sortOrder: number;
     /** 키 등록 안내 — UI 도움말 텍스트 */
     helpText: string;
+    /**
+     * 지원 인증 방식. Phase 1: 모두 ['api_key'].
+     * Phase 2 에서 ['api_key', 'oauth'] 로 확장 가능 (OpenAI ChatGPT Plus/Pro 등).
+     */
+    authMethods: ReadonlyArray<'api_key' | 'oauth'>;
+    /**
+     * OAuth 흐름 메타데이터 — authMethods 에 'oauth' 포함 시에만 활용.
+     * Phase 1: 모든 entry 에서 undefined.
+     */
+    oauthConfig?: {
+        startPath: string;
+        callbackPath: string;
+        clientIdEnv: string;
+        scopes: string[];
+    };
 }
 
 /**
@@ -68,6 +83,7 @@ export const EXTERNAL_PROVIDER_CATALOG: ReadonlyArray<ExternalProviderCatalogEnt
         helpText:
             'Anthropic Console (https://console.anthropic.com)에서 발급한 API 키를 입력하세요. ' +
             '사용량은 본 서비스가 아닌 Anthropic 계정으로 청구됩니다.',
+        authMethods: ['api_key'] as const,
     },
     {
         id: 'openrouter',
@@ -83,6 +99,7 @@ export const EXTERNAL_PROVIDER_CATALOG: ReadonlyArray<ExternalProviderCatalogEnt
             '300+ 모델(GPT, Claude, Gemini, Llama 등)을 단일 endpoint 로 라우팅합니다. ' +
             '모델 ID 는 "openai/gpt-5", "anthropic/claude-opus-4.5", "google/gemini-2.5-pro" 등 ' +
             'OpenRouter 의 namespaced 형식을 그대로 사용합니다.',
+        authMethods: ['api_key'] as const,
     },
     {
         id: 'gemini',
@@ -97,6 +114,7 @@ export const EXTERNAL_PROVIDER_CATALOG: ReadonlyArray<ExternalProviderCatalogEnt
             'Google AI Studio (https://aistudio.google.com/app/apikey)의 API 키를 입력하세요. ' +
             'Gemini OpenAI 호환 endpoint 를 사용합니다. ' +
             '예시 모델: "gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.0-flash-exp".',
+        authMethods: ['api_key'] as const,
     },
     {
         id: 'groq',
@@ -110,6 +128,7 @@ export const EXTERNAL_PROVIDER_CATALOG: ReadonlyArray<ExternalProviderCatalogEnt
         helpText:
             'Groq Cloud (https://console.groq.com/keys)의 API 키를 입력하세요. ' +
             'LPU 하드웨어 기반 초고속 추론(>500 tok/sec) — Llama, Mixtral, Whisper 등.',
+        authMethods: ['api_key'] as const,
     },
     {
         id: 'together',
@@ -122,6 +141,7 @@ export const EXTERNAL_PROVIDER_CATALOG: ReadonlyArray<ExternalProviderCatalogEnt
         helpText:
             'Together AI (https://api.together.xyz/settings/api-keys)의 API 키를 입력하세요. ' +
             '오픈소스 모델 호스팅(Llama, Qwen, DeepSeek, Mistral 등) 전문.',
+        authMethods: ['api_key'] as const,
     },
     {
         id: 'mistral',
@@ -134,6 +154,7 @@ export const EXTERNAL_PROVIDER_CATALOG: ReadonlyArray<ExternalProviderCatalogEnt
         helpText:
             'Mistral La Plateforme (https://console.mistral.ai/api-keys)의 API 키를 입력하세요. ' +
             'Mistral Large / Medium / Small / Codestral 등 자체 모델 직접 호출.',
+        authMethods: ['api_key'] as const,
     },
     {
         id: 'cohere',
@@ -146,6 +167,7 @@ export const EXTERNAL_PROVIDER_CATALOG: ReadonlyArray<ExternalProviderCatalogEnt
         helpText:
             'Cohere (https://dashboard.cohere.com/api-keys)의 API 키를 입력하세요. ' +
             'Command R+ / Command R / Aya Expanse 등 — OpenAI 호환 endpoint 사용.',
+        authMethods: ['api_key'] as const,
     },
     {
         id: 'ollama-remote',
@@ -160,6 +182,7 @@ export const EXTERNAL_PROVIDER_CATALOG: ReadonlyArray<ExternalProviderCatalogEnt
             'Ollama v0.1.40+ 는 기본적으로 /v1 OpenAI 호환 endpoint 를 노출합니다. ' +
             'localhost/사설 IP 는 SSRF 차단 — 공개 도메인 또는 외부 IP 만 등록 가능. ' +
             '미인증 서버는 임의 문자열(예: "no-auth")을 키로 입력하세요.',
+        authMethods: ['api_key'] as const,
     },
     {
         id: 'openai-compatible',
@@ -173,6 +196,7 @@ export const EXTERNAL_PROVIDER_CATALOG: ReadonlyArray<ExternalProviderCatalogEnt
             '위 목록에 없는 OpenAI Chat Completions 호환 endpoint 를 사용자 정의로 등록합니다. ' +
             'vLLM, LM Studio (원격), Cerebras, Fireworks, Mistral La Plateforme 등에 적용. ' +
             'localhost / 사설 IP / link-local 주소는 SSRF 가드로 차단됩니다.',
+        authMethods: ['api_key'] as const,
     },
 ] as const;
 
