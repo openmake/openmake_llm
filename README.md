@@ -31,10 +31,11 @@ OpenMake LLM is a high-performance, self-hosted AI assistant platform designed f
 - **RAG (Retrieval-Augmented Generation)** — Upload your documents and get AI answers grounded in your own data
 - **OpenAI-Compatible API** — Drop-in replacement endpoint for OpenAI API consumers
 - **Ollama Cluster Management** — Multi-node cluster with load balancing and API key pool rotation (up to 5 keys)
-- **External LLM Providers (BYO Key, 9 providers)** — Each user can register their own API keys directly from the unified model selector in the chat input area (no separate page needed). Keys are AES-256-GCM encrypted at rest, billed to the user's own provider account, and managed via inline ⋮ context menu (validate / usage / delete).
-  - **Anthropic Claude** (native SDK): Opus 4.5 / Sonnet 4.6 / Haiku 4.5
-  - **OpenAI-compatible** (8 providers): OpenRouter (300+ routed models), Google Gemini, Groq (LPU), Together AI, Mistral La Plateforme, Cohere, remote Ollama, custom endpoints
-  - 34 models with detailed pricing (USD micros) + capability inference (vision/thinking/tool calling/embedding) auto-detected per model ID
+- **External LLM Provider — OpenRouter Single Catalog (367+ models)** — Each user registers their OpenRouter API key from **Settings → AI 모델 → 기본 모델**. Keys are AES-256-GCM encrypted at rest, billed to the user's own OpenRouter account, and managed via ⋮ context menu (validate / usage / delete). The OpenRouter catalog card opens a full-screen modal with all routed models (free + paid) — search, sort by price, free-first display, and one-click selection.
+  - **OpenRouter** (`openai`-compatible SDK + `defaultHeaders` attribution) — single endpoint that routes to GPT-5, Claude Opus/Sonnet/Haiku, Gemini, Llama, DeepSeek, and 360+ other models
+  - **Live capability inference** — vision (`architecture.input_modalities`), tool calling (`supported_parameters: ['tools']`), thinking (`supported_parameters: ['reasoning']` or `pricing.internal_reasoning`), pricing (per-1M-token USD from `/v1/models`)
+  - **Free model first-class** — `:free` suffix or pricing 0/0 detection, sorted to top with 🆓 FREE badge
+  - **Dynamic pricing** — `pricing.prompt`/`pricing.completion` extracted live from each model entry; OpenRouter's `usage.cost` is used for actual billing when available, with the routing fallback ($3/$15 per 1M tokens) only as a safety net
   - 90-day usage retention with per-call cost tracking
 
 <details>
@@ -369,11 +370,13 @@ Open **http://localhost:52416** in your browser. You can:
 #### What to Do After Login
 
 1. **Start a chat** — Type a message in the chat input. The default model is the configured Ollama model.
-2. **Switch models** — Click the **📋 model selector** at the right of the input area (next to the send button). Dropdown shows your local Ollama model + any external LLM providers you've registered (Anthropic / OpenRouter / Gemini / Groq / etc.). **Pure Manual mode** — your selection is never overridden by auto-routing.
-3. **Register external LLM keys** — From the same dropdown, click "+ 새 LLM 키 등록" → choose a provider → enter your API key. Registered models appear immediately in the dropdown.
+2. **Switch models** — Open **Settings → AI 모델 → 기본 모델**. The unified ModelSelector dropdown shows your local Ollama model + an OpenRouter card. Click the OpenRouter card to open a full-screen modal with all 367+ routed models (free models on top, search box, click-to-select). **Pure Manual mode** — your selection is never overridden by auto-routing.
+3. **Register an OpenRouter key** — In the same dropdown, click "+ 새 LLM 키 등록 → OpenRouter" → enter your `sk-or-...` API key. The model list immediately re-populates with all routed models.
 4. **Try an expert agent** — Open the Agent panel to select a specialist (e.g., Software Engineer, Financial Analyst) for domain-specific conversations.
 5. **Explore the Skill Library** — Browse available tools and capabilities in the Skill Library tab.
 6. **Admin settings** — If logged in as admin, visit the Admin panel to manage users, models, and system configuration.
+
+> **Note (2026-05-08+):** The model selector is now exclusively in the Settings page — the chat input area no longer hosts the dropdown, keeping the chat UI clean. The unified component (mount + key registration + ⋮ menu + search/sort modal) is the single entry point.
 
 ### Production
 
@@ -412,6 +415,11 @@ All settings are managed via `.env`. See [`.env.example`](.env.example) for the 
 | `EXTERNAL_MODELS_CACHE_TTL_MS` | External provider `/v1/models` 응답 cache TTL (ms) | `3600000` (1h) |
 | `EXTERNAL_USAGE_RETENTION_DAYS` | `external_provider_usage` 보존 기간 (db-retention cron) | `90` |
 | `EXTERNAL_PROVIDER_REQUEST_TIMEOUT_MS` | 외부 provider 호출 타임아웃 | `120000` |
+| `OMK_APP_URL` | OpenRouter `HTTP-Referer` 헤더 — rankings 노출용 (선택) | (미설정 시 헤더 생략) |
+| `OMK_APP_TITLE` | OpenRouter `X-OpenRouter-Title` 헤더 (선택) | (미설정 시 헤더 생략) |
+| `OMK_APP_CATEGORIES` | OpenRouter `X-OpenRouter-Categories` 헤더 (선택) | (미설정 시 헤더 생략) |
+| `OMK_COOP_ENABLED` | `Cross-Origin-Opener-Policy` 헤더 활성 (HTTPS 환경에서만 의미) | `false` |
+| `RL_API_KEY_MGMT_READ` | `/api/api-keys` GET 요청 한도 (15분 window) | `200` |
 
 ### Supported Models & Engine Mapping
 
@@ -458,45 +466,57 @@ The following models are available for A2A multi-model orchestration. The first 
 - **Google Custom Search** — `GOOGLE_API_KEY`, `GOOGLE_CSE_ID`
 - **Language Policy** — `DEFAULT_RESPONSE_LANGUAGE` (20+ languages supported)
 
-### External LLM Providers (BYO Key Workflow)
+### External LLM Provider — OpenRouter (BYO Key Workflow)
 
-Each user can register their own API keys directly from the chat input area — no separate page or admin role required. Operators only need to set `TOKEN_ENCRYPTION_KEY` once.
+External LLM is consolidated to **OpenRouter as the single catalog** (2026-05-08, migration 018). OpenRouter routes a single API key to 367+ models (GPT-5, Claude, Gemini, Llama, DeepSeek 등) — eliminates the need to register separate keys per provider. Each user manages their own key from the **Settings page**.
 
 **Workflow:**
-1. Login → main chat page
-2. Click the model selector trigger (📋) at the right of the input area
-3. Open the dropdown → "+ 새 LLM 키 등록" section lists all unregistered providers
-4. Click any provider (e.g., "+ Anthropic Claude") → key registration modal
-5. Enter API key → registered key's models automatically populate the dropdown
-6. ⋮ context menu next to any registered model → validate / view usage / delete
+1. Login → **Settings → AI 모델 → 기본 모델**
+2. ModelSelector dropdown opens with the OpenRouter card
+3. If no key registered: "+ 새 LLM 키 등록 → OpenRouter" → key registration modal → enter `sk-or-...`
+4. After registration, click the OpenRouter card → full-screen `ModelListModal` opens with:
+   - 🆓 무료 (29) sub-header (free models, sorted alphabetically)
+   - 💰 유료 (338) sub-header (paid models, sorted by input price ascending)
+   - Top search input (auto-focus, focus + caret preserved across keystrokes)
+   - Click any row → modal closes, model selected, dropdown reflects choice
+5. ⋮ context menu (in the dropdown card) → validate / view usage / delete
 
-**Supported providers (catalog):**
+**Supported provider:**
 
 | Provider | SDK | Default Base URL | Models |
 |---|---|---|---|
-| Anthropic | native `@anthropic-ai/sdk` | `api.anthropic.com` | Claude Opus 4.5 / Sonnet 4.6 / Haiku 4.5 |
-| OpenRouter | `openai` SDK | `openrouter.ai/api/v1` | GPT-5, Claude, Gemini, Llama, DeepSeek (300+ routed) |
-| Google Gemini | `openai` SDK | `generativelanguage.googleapis.com/v1beta/openai` | Gemini 2.5 Pro / Flash / 2.0 Flash Exp |
-| Groq | `openai` SDK | `api.groq.com/openai/v1` | Llama 3.3 70B (LPU 추론) |
-| Together AI | `openai` SDK | `api.together.xyz/v1` | Llama / Qwen / DeepSeek (오픈소스 호스팅) |
-| Mistral | `openai` SDK | `api.mistral.ai/v1` | Large / Medium / Small / Codestral |
-| Cohere | `openai` SDK | `api.cohere.com/compatibility/v1` | Command R+ / Command R |
-| Ollama (remote) | `openai` SDK | (사용자 입력) | 원격 Ollama 서버 OpenAI 호환 mode |
-| 직접 입력 | `openai` SDK | (사용자 입력) | 기타 OpenAI 호환 endpoint (vLLM, LM Studio 등) |
+| **OpenRouter** | `openai` SDK + `defaultHeaders` (HTTP-Referer / X-OpenRouter-Title / X-OpenRouter-Categories from `OMK_APP_*` env vars) | `https://openrouter.ai/api/v1` | 367+ routed (GPT-5, Claude Opus 4.5 / Sonnet 4.6 / Haiku 4.5, Gemini 2.5 Pro/Flash, Llama 3.3 70B, DeepSeek R1/V3 ... 다수의 free 모델 포함) |
 
-**Pricing & Capability:**
-- 34 models with built-in USD pricing (1M token 단위, BIGINT micros 누적 정확도)
-- Capability auto-inference per model ID — vision (gpt-4o, claude-3+, gemini-, pixtral 등), thinking (claude-opus-4, deepseek-r1, o1/o3), embedding (text-embedding-*)
-- Cohere `command-r-*` 는 native tools 미지원 — 자동 비활성
-- `/v1/models` 빈 응답 시 provider별 fallback 모델 보강 (Gemini 3 / OpenRouter 6 / Groq 2 / Together 2 / Mistral 3 / Cohere 2)
+> **Defensive dead code retained:** `AnthropicProvider` class + `provider-router.ts` anthropic dispatch branch + DB CHECK constraint `sdk_type IN ('anthropic', 'openai-compatible')` are kept for future re-introduction. Currently only OpenRouter (sdkType `openai-compatible`) is registrable via UI.
+
+**Live capability inference (per model, from `/v1/models`):**
+- `vision = architecture.input_modalities.includes('image')`
+- `toolCalling = supported_parameters.includes('tools')`
+- `thinking = supported_parameters.includes('reasoning' | 'include_reasoning')` 또는 `pricing.internal_reasoning != null`
+- `streaming = true` (OpenRouter chat completions 전체)
+- `pricing.input/output` — `pricing.prompt`/`pricing.completion` × 1,000,000 (per-token USD → per-1M-token USD)
+
+**Free model detection (dual heuristic):**
+- `id.endsWith(':free')` OR `(promptUsd === 0 && completionUsd === 0)`
+- 29 free models (2026-05-08 기준) sort to top of modal, marked with 🆓 FREE badge
+
+**Pricing fallback chain:**
+1. **Live**: each `ProviderModel.pricing` from `/v1/models` (per-call accuracy)
+2. **Direct cost**: OpenRouter's `usage.cost` field on completion (Stage 4f, when reported)
+3. **Catalog fallback**: 11 popular models pre-registered in `external-pricing.ts`
+4. **Provider routing fallback**: $3/$15 per 1M (Sonnet-equivalent conservative estimate)
 
 **Usage tracking:**
 - 모든 외부 호출별 토큰/비용/지연 자동 기록 (`external_provider_usage` 테이블)
-- ⋮ → 📊 사용량 모달: 직전 50건 raw 표 + **최근 30일 provider별 누계 박스** (호출수 / 토큰 / 비용 USD)
+- ⋮ → 📊 사용량 모달: 직전 50건 raw 표 + **최근 30일 provider별 누계 박스**
 - `GET /api/external-keys/usage/summary?days=N` REST endpoint (max 90일)
 - 90일 자동 보존 (db-retention cron, 환경변수 `EXTERNAL_USAGE_RETENTION_DAYS`)
 
-**Phase 2 (planned):** OpenAI ChatGPT Plus/Pro OAuth (구독 계정 sign-in). 단, OpenAI/Anthropic 모두 표준 third-party OAuth client 등록 미공개 — 실현 가능성은 provider 정책 변경 의존. Anthropic Claude Pro/Max OAuth는 ToS 명시 금지로 영구 제외.
+**Migration 018 (operational):**
+- Removes legacy provider rows (`provider_id <> 'openrouter'`) from 3 tables: `user_external_api_keys`, `external_provider_models_cache`, `external_provider_usage`
+- Idempotent (re-runnable, 0/0/0 on second pass)
+- Schema preserved — DB CHECK still allows `'anthropic' | 'openai-compatible'` for future re-introduction
+- Apply with: `npx ts-node backend/api/src/data/migrations/cli.ts migrate`
 
 ## Project Structure
 
@@ -517,10 +537,22 @@ backend/api/src/
 
 frontend/web/public/
 ├── js/modules/         # Core modules (chat, auth, state, websocket, sanitize)
-│   ├── pages/          # 23 page modules (admin, analytics, research, documents...)
-│   └── components/     # Reusable components (model-selector, add-key-modal,
-│                       #                       usage-modal, model-action-menu)
+│   ├── pages/          # 24 page modules (admin, analytics, research, documents...)
+│   │                   # Settings page hosts the unified ModelSelector mount point.
+│   └── components/     # Reusable components:
+│                       #  - model-selector.js (dropdown + Ollama group + OpenRouter card)
+│                       #  - model-list-modal.js (full-screen 367+ model browser)
+│                       #  - add-key-modal.js, usage-modal.js, model-action-menu.js
 └── css/                # Design tokens, components, model-selector styles
+```
+
+**Frontend lifecycle (SPA):** ModelSelector exports `mount(target)` / `refresh()` / `unmount()`. The Settings page calls `mount` on init and `unmount` on cleanup — required to remove the document-level click handler and reset module state, preventing memory leaks across route transitions.
+
+```
+services/database/migrations/
+├── 016_external_provider_integration.sql  # 3 tables: user_external_api_keys, ..._usage, ..._models_cache
+├── 017_drop_uir_schema.sql                # Legacy UIR cleanup
+└── 018_keep_only_openrouter.sql           # 2026-05-08: catalog reduction (DELETE non-openrouter)
 ```
 
 ## Development
@@ -561,7 +593,7 @@ Interactive API documentation is available at `http://localhost:52416/api/docs` 
 | `/api/api-keys` | GET/POST/DELETE | JWT | OpenMake 자체 API 키 관리 (서드파티 클라이언트용) |
 | `/api/usage` | GET | JWT | OpenMake 자체 사용량 통계 |
 
-`/external-keys.html` URL 은 폐기됨 — `/?openModelSelector=1` 로 301 redirect.
+`/external-keys.html` URL 은 폐기됨 — `/?openModelSelector=1` 로 301 redirect (legacy bookmark 호환). 새 entry point 는 `/settings` 페이지.
 
 ### Skill Library
 
@@ -611,9 +643,14 @@ Contributions are welcome! Please ensure:
 | `command not found: brew` | Homebrew not installed | Install from [brew.sh](https://brew.sh): `/bin/bash -c "$(curl -fsSL ...)"` |
 | Embedding error on first chat | `nomic-embed-text` not pulled | Run `ollama pull nomic-embed-text` before starting the server |
 | DB password with special characters | URL encoding needed | Encode special chars in `DATABASE_URL` (e.g., `@` → `%40`, `#` → `%23`) |
-| External LLM 키 등록 후 모델 미노출 | provider `/v1/models` 빈 응답 + 캐시 stale | `DELETE FROM external_provider_models_cache WHERE provider_id='<id>'` 후 PM2 재시작. 자동 fallback 모델로 dropdown 채워짐 |
-| `External 키 검증 실패` | 잘못된 API 키 또는 base_url SSRF 차단 | ⋮ → 🔍 검증 → 에러 메시지 확인. localhost/사설 IP는 SSRF 가드로 차단됨 |
-| Modal 미가시 (dropdown은 보임) | `.modal-overlay.active` CSS 미로드 | 하드 리로드 (Cmd+Shift+R) 또는 `?v=` 캐시 버스터 갱신 |
+| OpenRouter 키 등록 후 모델 6개만 노출 | `/api/models` 응답에 외부 모델 미합산 (`req.user.id` 미설정) | `npm run build` + PM2 재시작. 그래도 안 되면 `DELETE FROM external_provider_models_cache` 로 캐시 비우고 재등록 |
+| OpenRouter 모달 클릭해도 모델 선택 안 됨 | 브라우저 캐시 — `model-list-modal.js` 옛 버전 | 하드 리로드 (Cmd+Shift+R) 또는 시크릿 창. 모달의 모델 row 클릭 시 close + setSelectedModel 동작 확인 |
+| 풀스크린 모달이 작게 보임 (dropdown처럼) | `model-selector.css` 캐시 stale (`?v=` 갱신 누락) | 하드 리로드. `<link href="...?v=N">` 의 N 값이 갱신되었는지 DevTools Network 탭에서 확인 |
+| Settings 페이지 진입 시 ModelSelector 안 뜸 | 3개 sibling 모달 (AddKeyModal/UsageModal/ModelActionMenu) import 실패 | DevTools Console: `[settings] ModelSelector mount 실패` 확인. settings.js init() 의 `Promise.all([... 4개 import ...])` 가 모두 성공해야 함 |
+| `/api/api-keys` 429 Too Many Requests | settings 페이지 빠른 재진입 시 GET 한도 (default 200/15min) 초과 | 5분 sessionStorage 캐시가 적용되어 있음. 브라우저 캐시 갱신 또는 `RL_API_KEY_MGMT_READ` 환경변수로 한도 상향 |
+| `Cross-Origin-Opener-Policy header has been ignored` 경고 | HTTP/IP origin 에서 헤더 무시 (정상) | `OMK_COOP_ENABLED=false` (기본) 시 헤더 미발송. HTTPS 도입 후 `true` 로 활성화 |
+| WebSocket connection failed (외부 도메인) | 공유기/라우터 NAT 가 ws upgrade 차단 | `localhost:52416` 직접 접속 시 정상. 외부 도메인은 HTTPS (Caddy/Cloudflare Tunnel) 도입 권장 |
+| `External 키 검증 실패` | 잘못된 OpenRouter 키 또는 SSRF 차단 | ⋮ → 🔍 검증 → 에러 메시지 확인. localhost/사설 IP는 SSRF 가드로 차단됨 |
 | `TOKEN_ENCRYPTION_KEY 환경 변수가 설정되지 않았습니다` 경고 | 외부 LLM API 키 평문 저장 위험 | `openssl rand -hex 32` → `TOKEN_ENCRYPTION_KEY` `.env`에 설정 → PM2 재시작 |
 
 </details>
