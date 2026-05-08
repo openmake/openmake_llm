@@ -131,15 +131,6 @@ async function save() {
 }
 
 function logDbg(msg) {
-    try {
-        const panel = document.getElementById('ms-debug-panel');
-        if (panel) {
-            const line = document.createElement('div');
-            line.textContent = '[' + new Date().toLocaleTimeString() + '] [AddKeyModal] ' + msg;
-            panel.appendChild(line);
-            panel.scrollTop = panel.scrollHeight;
-        }
-    } catch (_) {}
     try { console.info('[AddKeyModal]', msg); } catch (_) {}
 }
 

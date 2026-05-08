@@ -889,34 +889,78 @@ export class ChatService {
             ...(req.images ? { images: req.images } : {}),
         });
 
+        // ── Phase 6: Tool Calling Agent Loop (외부 LLM) ──
+        // Provider capabilities 확인 — toolCalling 지원하면 MCP 도구 노출
+        const caps = resolved.provider.getCapabilities(resolved.modelId);
+        const tools = caps.toolCalling ? this.getAllowedTools() : [];
+
         const startedAt = Date.now();
         let errorCode: string | null = null;
-        let result;
+        let result: import('../providers/i-provider').ChatStreamResult | undefined;
+        let inputTokensTotal = 0;
+        let outputTokensTotal = 0;
+        const MAX_TOOL_TURNS = 5;
+
         try {
-            result = await resolved.provider.streamChat(
-                {
-                    messages,
-                    modelId: resolved.modelId,
-                    ...(req.abortSignal ? { abortSignal: req.abortSignal } : {}),
-                },
-                {
-                    onToken: (token) => onToken(token),
-                    onThinking: (thinking) => onToken('', thinking),
-                    onUsage: (usage) => {
-                        this.lastProviderUsage = usage;
+            for (let turn = 0; turn < MAX_TOOL_TURNS; turn++) {
+                result = await resolved.provider.streamChat(
+                    {
+                        messages,
+                        modelId: resolved.modelId,
+                        ...(tools.length > 0 ? { tools } : {}),
+                        ...(req.abortSignal ? { abortSignal: req.abortSignal } : {}),
                     },
-                },
-            );
+                    {
+                        onToken: (token) => onToken(token),
+                        onThinking: (thinking) => onToken('', thinking),
+                        onUsage: (usage) => {
+                            this.lastProviderUsage = usage;
+                            inputTokensTotal += usage.prompt_eval_count ?? 0;
+                            outputTokensTotal += usage.eval_count ?? 0;
+                        },
+                    },
+                );
+
+                if (!result.toolCalls || result.toolCalls.length === 0) {
+                    break; // 도구 호출 없음 — 최종 응답
+                }
+
+                logger.info(`🛠️ 외부 LLM tool calls (turn ${turn + 1}): ${result.toolCalls.length}개`);
+
+                // assistant message 추가 (tool_calls 포함)
+                messages.push({
+                    role: 'assistant',
+                    content: result.content || '',
+                    tool_calls: result.toolCalls.map((tc) => ({
+                        type: 'function' as const,
+                        function: {
+                            name: tc.name,
+                            arguments: tc.args as Record<string, unknown>,
+                        },
+                    })),
+                });
+
+                // 각 tool 실행 후 tool result 추가
+                for (const tc of result.toolCalls) {
+                    const toolResult = await this.executeExternalTool(tc.name, tc.args as Record<string, unknown>);
+                    messages.push({
+                        role: 'tool',
+                        content: toolResult,
+                        tool_name: tc.name,
+                    });
+                }
+                // 다음 turn 으로 (LLM 이 도구 결과 받아 최종 응답 생성)
+            }
+            if (!result) throw new Error('streamChat 호출 결과 없음');
         } catch (err) {
             errorCode = err && typeof err === 'object' && 'code' in err
                 ? String((err as { code: unknown }).code)
                 : 'UPSTREAM_ERROR';
-            // 사용량 적재 (실패 호출도 기록)
             this.recordExternalUsageFireAndForget({
                 userId: req.userId,
                 resolved,
-                inputTokens: 0,
-                outputTokens: 0,
+                inputTokens: inputTokensTotal,
+                outputTokens: outputTokensTotal,
                 durationMs: Date.now() - startedAt,
                 errorCode,
             });
@@ -925,20 +969,59 @@ export class ChatService {
 
         logger.info(
             `외부 provider 호출 완료: ${resolved.fullId} ` +
-            `(in=${result.usage.prompt_eval_count ?? 0}, out=${result.usage.eval_count ?? 0})`,
+            `(in=${inputTokensTotal}, out=${outputTokensTotal}, tools=${tools.length})`,
         );
 
         // 사용량 적재 (성공 호출, fire-and-forget — DB 실패가 응답을 막지 않도록)
+        // multi-turn loop 통해 누적된 토큰 사용
         this.recordExternalUsageFireAndForget({
             userId: req.userId,
             resolved,
-            inputTokens: result.usage.prompt_eval_count ?? 0,
-            outputTokens: result.usage.eval_count ?? 0,
+            inputTokens: inputTokensTotal,
+            outputTokens: outputTokensTotal,
             durationMs: Date.now() - startedAt,
             finishReason: result.finishReason,
         });
 
         return result.content;
+    }
+
+    /**
+     * 외부 LLM Tool Calling — MCP 도구를 직접 실행하여 결과 반환.
+     * UnifiedMCPClient.executeToolWithContext 통해 user sandbox + tier 권한 체크.
+     */
+    private async executeExternalTool(
+        toolName: string,
+        toolArgs: Record<string, unknown>,
+    ): Promise<string> {
+        try {
+            // tier 권한 체크 — AgentLoopStrategy 와 동일 정책
+            if (this.currentUserContext) {
+                const { canUseTool } = await import('../mcp/tool-tiers');
+                if (!canUseTool(this.currentUserContext.tier, toolName)) {
+                    return `🔒 권한 없음: "${toolName}" 도구는 ${this.currentUserContext.tier} 등급에서 사용 불가`;
+                }
+            }
+
+            const mcpClient = getUnifiedMCPClient();
+            const userCtx = this.currentUserContext || {
+                userId: 'guest',
+                tier: 'free' as const,
+                role: 'guest' as const,
+            };
+            const result = await mcpClient.executeToolWithContext(toolName, toolArgs, userCtx);
+
+            // MCPToolResult → 문자열 직렬화
+            if (result.isError) {
+                return `Error: ${typeof result.content === 'string' ? result.content : JSON.stringify(result.content)}`;
+            }
+            if (typeof result.content === 'string') return result.content;
+            return JSON.stringify(result.content).slice(0, 8000);
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            logger.warn(`외부 LLM 도구 실행 실패 (${toolName}): ${msg}`);
+            return `Error: ${msg}`;
+        }
     }
 
     private recordExternalUsageFireAndForget(input: {
