@@ -31,15 +31,15 @@ async function authFetch(url, opts) {
 function ensure() {
     if (_modal) return _modal;
     _modal = document.createElement('div');
+    // 본 프로젝트 modal 시스템 호환 — components.css의 .modal-overlay.active 패턴 따름
     _modal.className = 'modal-overlay';
     _modal.id = 'addKeyModalOverlay';
-    _modal.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center';
     document.body.appendChild(_modal);
     return _modal;
 }
 
 export function close() {
-    if (_modal) _modal.style.display = 'none';
+    if (_modal) _modal.classList.remove('active');
     if (_clickHandler && _modal) {
         _modal.removeEventListener('click', _clickHandler);
         _clickHandler = null;
@@ -85,7 +85,7 @@ function render(provider) {
         '</div>' +
         '</div>';
 
-    _modal.style.display = 'flex';
+    _modal.classList.add('active');
 
     _clickHandler = function (ev) {
         const action = ev.target.closest('[data-action]');
@@ -134,12 +134,27 @@ async function save() {
     }
 }
 
+function logDbg(msg) {
+    try {
+        const panel = document.getElementById('ms-debug-panel');
+        if (panel) {
+            const line = document.createElement('div');
+            line.textContent = '[' + new Date().toLocaleTimeString() + '] [AddKeyModal] ' + msg;
+            panel.appendChild(line);
+            panel.scrollTop = panel.scrollHeight;
+        }
+    } catch (_) {}
+    try { console.info('[AddKeyModal]', msg); } catch (_) {}
+}
+
 export async function open(opts) {
     ensure();
+    logDbg('open(' + opts.providerId + ') 시작');
     _currentProvider = null;
     _onSuccess = opts.onSuccess || null;
     const res = await authFetch('/api/external-keys');
     if (!res.ok) {
+        logDbg('  ✗ /api/external-keys ' + res.status + ' — 로그인 필요');
         if (window.showToast) window.showToast('카탈로그 로드 실패 (로그인 필요)', 'error');
         return;
     }
@@ -147,10 +162,13 @@ export async function open(opts) {
     const providers = (json.data && json.data.providers) || [];
     _currentProvider = providers.find(p => p.provider_id === opts.providerId);
     if (!_currentProvider) {
+        logDbg('  ✗ providers 에 ' + opts.providerId + ' 미발견 (' + providers.length + ' 개)');
         if (window.showToast) window.showToast('Provider 미발견: ' + opts.providerId, 'error');
         return;
     }
+    logDbg('  ✓ provider 매치, render() 호출');
     render(_currentProvider);
+    logDbg('  ✓ modal active 적용 (display=' + getComputedStyle(_modal).display + ')');
 }
 
 window.AddKeyModal = { open, close };
