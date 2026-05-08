@@ -14,6 +14,45 @@
 
 const STORAGE_KEY = 'selectedModel';
 
+// ============================================
+// Debug overlay — 임시 진단용 (운영 안정 후 제거)
+// 사용자가 콘솔 못 보는 환경에서 화면 우상단에 모든 ModelSelector 이벤트 표시.
+// localStorage.setItem('MS_DEBUG_OFF', '1') 하면 비활성.
+// ============================================
+function logDebug(msg) {
+    try { console.info('[ModelSelector]', msg); } catch (_) {}
+    if (localStorage.getItem('MS_DEBUG_OFF') === '1') return;
+    let panel = document.getElementById('ms-debug-panel');
+    if (!panel) {
+        panel = document.createElement('div');
+        panel.id = 'ms-debug-panel';
+        panel.style.cssText =
+            'position:fixed;top:8px;right:8px;background:rgba(0,0,0,0.85);color:#0f0;' +
+            'padding:8px 12px;font-size:11px;font-family:monospace;border-radius:6px;' +
+            'z-index:99999;max-width:420px;max-height:60vh;overflow-y:auto;line-height:1.4;' +
+            'box-shadow:0 4px 12px rgba(0,0,0,0.5)';
+        const closeBtn = document.createElement('button');
+        closeBtn.textContent = '✕ close';
+        closeBtn.style.cssText = 'position:absolute;top:4px;right:4px;background:#333;color:#fff;border:none;cursor:pointer;font-size:10px;padding:2px 6px;border-radius:3px';
+        closeBtn.onclick = function () {
+            panel.remove();
+            try { localStorage.setItem('MS_DEBUG_OFF', '1'); } catch (_) {}
+        };
+        const title = document.createElement('div');
+        title.textContent = '🔍 ModelSelector 진단 (close=비활성)';
+        title.style.cssText = 'color:#ff0;margin-bottom:4px;font-weight:bold';
+        panel.appendChild(closeBtn);
+        panel.appendChild(title);
+        document.body.appendChild(panel);
+    }
+    const line = document.createElement('div');
+    const ts = new Date().toLocaleTimeString();
+    line.textContent = '[' + ts + '] ' + msg;
+    panel.appendChild(line);
+    while (panel.children.length > 25) panel.removeChild(panel.children[2]);
+    panel.scrollTop = panel.scrollHeight;
+}
+
 const PROVIDER_LABELS = {
     ollama: '🖥️ Ollama 로컬',
     anthropic: '🧠 Anthropic Claude',
@@ -196,6 +235,11 @@ function renderDropdown() {
  * 이벤트 위임이 실패하는 환경(레이어 z-index, 부모 핸들러 중복 등) 회피.
  */
 function bindDropdownHandlers(dropdown) {
+    const optionCount = dropdown.querySelectorAll('.model-selector-option').length;
+    const addCount = dropdown.querySelectorAll('[data-action="add-key"]').length;
+    const menuCount = dropdown.querySelectorAll('[data-action="open-menu"]').length;
+    logDebug('dropdown 렌더 — opt=' + optionCount + ', +추가=' + addCount + ', ⋮=' + menuCount);
+
     // 모델 옵션 클릭 — 모델 변경
     dropdown.querySelectorAll('.model-selector-option').forEach((el) => {
         if (el.classList.contains('disabled')) return;
@@ -205,10 +249,12 @@ function bindDropdownHandlers(dropdown) {
             ev.preventDefault();
             ev.stopPropagation();
             const modelId = el.dataset.modelId;
-            console.info('[ModelSelector] 옵션 클릭:', modelId);
+            logDebug('✓ 옵션 클릭: ' + modelId);
             if (modelId) {
                 setSelectedModel(modelId);
                 closeDropdown();
+            } else {
+                logDebug('  ✗ modelId 비어있음 — dataset 누락');
             }
         });
     });
@@ -220,11 +266,11 @@ function bindDropdownHandlers(dropdown) {
             ev.stopPropagation();
             const providerId = el.dataset.provider;
             const modelId = el.dataset.modelId;
-            console.info('[ModelSelector] ⋮ 메뉴 클릭:', providerId);
+            logDebug('⋮ 메뉴 클릭: ' + providerId);
             if (window.ModelActionMenu) {
                 window.ModelActionMenu.open(el, { providerId, modelId });
             } else {
-                console.warn('[ModelSelector] window.ModelActionMenu 미정의');
+                logDebug('  ✗ window.ModelActionMenu 미정의');
             }
         });
     });
@@ -235,11 +281,11 @@ function bindDropdownHandlers(dropdown) {
             ev.preventDefault();
             ev.stopPropagation();
             const providerId = el.dataset.provider;
-            console.info('[ModelSelector] + 추가 클릭:', providerId);
+            logDebug('+ 추가 클릭: ' + providerId);
             if (window.AddKeyModal) {
                 window.AddKeyModal.open({ providerId, onSuccess: refresh });
             } else {
-                console.warn('[ModelSelector] window.AddKeyModal 미정의 — 모듈 로드 실패');
+                logDebug('  ✗ window.AddKeyModal 미정의');
                 if (window.showToast) window.showToast('등록 모달 로드 실패 — 페이지 새로고침 필요', 'error');
             }
             closeDropdown();
@@ -249,6 +295,7 @@ function bindDropdownHandlers(dropdown) {
 
 function toggleDropdown() {
     _isOpen = !_isOpen;
+    logDebug('toggle → ' + (_isOpen ? '열림' : '닫힘'));
     const dropdown = _container.querySelector('.model-selector-dropdown');
     if (dropdown) dropdown.classList.toggle('open', _isOpen);
     if (_isOpen) renderDropdown();
@@ -261,6 +308,7 @@ function closeDropdown() {
 }
 
 export async function mount(targetElement) {
+    logDebug('mount 시작');
     _container = document.createElement('div');
     _container.className = 'model-selector';
     _container.innerHTML =
@@ -327,6 +375,11 @@ export async function mount(targetElement) {
 
     await loadData();
     renderTrigger();
+    logDebug('mount 완료 — models=' + _models.length + ' / providers=' + _providers.length +
+        ' / auth=' + _isAuthenticated + ' / admin=' + _isAdmin +
+        ' / globals: AddKey=' + !!window.AddKeyModal +
+        ', Usage=' + !!window.UsageModal +
+        ', Menu=' + !!window.ModelActionMenu);
 
     if (location.search.includes('openModelSelector=1')) {
         toggleDropdown();
