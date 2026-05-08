@@ -250,27 +250,27 @@ function renderDropdown() {
     for (const pid of PROVIDER_ORDER) {
         if (!groups[pid] || groups[pid].length === 0) continue;
         const label = PROVIDER_LABELS[pid] || pid;
-        const count = groups[pid].length;
-        // OpenWork pattern (provider-auth-modal.tsx:42 modelCount) — 카탈로그 entry 옆에 모델 수 표시
-        html += '<div class="model-selector-optgroup-label">' +
-            escText(label) +
-            ' <span style="opacity:0.6;font-weight:normal">(' + count + ')</span>' +
-            '</div>';
-        for (const m of groups[pid]) {
-            const isActive = m.modelId === selected;
-            const isOllama = pid === 'ollama';
-            const disabled = isOllama && !_isAdmin && !isActive;
-            html +=
-                '<div class="model-selector-option' +
-                (isActive ? ' active' : '') +
-                (disabled ? ' disabled' : '') +
-                '" data-model-id="' + escAttr(m.modelId) + '" data-provider="' + escAttr(pid) + '">' +
-                '<span>' + (isActive ? '<span class="check">✓ </span>' : '') + escText(m.name) + '</span>' +
-                (pid !== 'ollama' && _isAuthenticated
-                    ? '<button type="button" class="menu-trigger" data-action="open-menu" data-provider="' +
-                      escAttr(pid) + '" data-model-id="' + escAttr(m.modelId) + '" title="메뉴">⋮</button>'
-                    : '') +
+
+        if (pid === 'openrouter') {
+            html += renderOpenRouterGroup(groups[pid], selected, label);
+        } else {
+            const count = groups[pid].length;
+            html += '<div class="model-selector-optgroup-label">' +
+                escText(label) +
+                ' <span style="opacity:0.6;font-weight:normal">(' + count + ')</span>' +
                 '</div>';
+            for (const m of groups[pid]) {
+                const isActive = m.modelId === selected;
+                const isOllama = pid === 'ollama';
+                const disabled = isOllama && !_isAdmin && !isActive;
+                html +=
+                    '<div class="model-selector-option' +
+                    (isActive ? ' active' : '') +
+                    (disabled ? ' disabled' : '') +
+                    '" data-model-id="' + escAttr(m.modelId) + '" data-provider="' + escAttr(pid) + '">' +
+                    '<span>' + (isActive ? '<span class="check">✓ </span>' : '') + escText(m.name) + '</span>' +
+                    '</div>';
+            }
         }
     }
 
@@ -294,7 +294,6 @@ function renderDropdown() {
         html = '<div style="padding:12px;color:var(--text-muted);text-align:center">사용 가능한 모델 없음</div>';
     }
 
-    // 사용 가이드 (등록된 외부 키가 없을 때만 노출)
     const hasExternal = _models.some(m => (m.provider || 'ollama') !== 'ollama');
     const registeredButMissing = _isAuthenticated &&
         _providers.some(p => p.user_key) && !hasExternal;
@@ -302,7 +301,7 @@ function renderDropdown() {
     if (_isAuthenticated && !hasExternal && !registeredButMissing) {
         html =
             '<div style="padding:8px 12px;font-size:11px;color:var(--text-muted);background:var(--bg-tertiary);border-bottom:1px solid var(--border-light);line-height:1.5">' +
-            '💡 외부 LLM 사용 — 아래 <b>"+ 새 LLM 키 등록"</b>에서 provider 선택 후 키 입력하면 모델이 위쪽에 자동으로 추가됩니다.' +
+            '💡 외부 LLM 사용 — 아래 <b>"+ 새 LLM 키 등록"</b>에서 OpenRouter 키 입력 시 모델이 위쪽에 자동 추가됩니다.' +
             '</div>' + html;
     } else if (registeredButMissing) {
         const registered = _providers.filter(p => p.user_key).map(p => p.provider_id).join(', ');
@@ -316,6 +315,119 @@ function renderDropdown() {
 
     dropdown.innerHTML = html;
     bindDropdownHandlers(dropdown);
+    bindOpenRouterSearchHandler(dropdown);
+}
+
+/**
+ * OpenRouter 그룹 렌더 — 검색박스 + free-first 정렬 + 무료/유료 sub-header + 배지.
+ *
+ * 정렬 규칙:
+ *   1. isFree=true 가 isFree=false 보다 앞
+ *   2. 같은 isFree 안에서: paid 는 입력가격 cheapest 우선, free 는 알파벳 순
+ *   3. 동일 가격 시 displayName 알파벳 순
+ *
+ * 검색: modelId 또는 name 의 lowercase substring 매칭. 빈 query 면 전체.
+ */
+function renderOpenRouterGroup(models, selected, label) {
+    const q = _orSearchQuery.toLowerCase();
+    const filtered = q
+        ? models.filter(m =>
+            (m.modelId || '').toLowerCase().includes(q) ||
+            (m.name || '').toLowerCase().includes(q))
+        : models.slice();
+
+    filtered.sort((a, b) => {
+        const aFree = !!a.isFree, bFree = !!b.isFree;
+        if (aFree !== bFree) return aFree ? -1 : 1;
+        if (!aFree) {
+            const aPrice = (a.pricing && a.pricing.input) || 0;
+            const bPrice = (b.pricing && b.pricing.input) || 0;
+            if (aPrice !== bPrice) return aPrice - bPrice;
+        }
+        return (a.name || '').localeCompare(b.name || '');
+    });
+
+    const free = filtered.filter(m => m.isFree);
+    const paid = filtered.filter(m => !m.isFree);
+    const totalCount = models.length;
+    const filteredCount = filtered.length;
+
+    let html = '<div class="model-selector-optgroup-label">' +
+        escText(label) +
+        ' <span style="opacity:0.6;font-weight:normal">(' +
+        (q ? filteredCount + ' / ' + totalCount : totalCount) +
+        ')</span></div>';
+
+    html += '<div class="model-selector-search-row">' +
+        '<input type="text" class="model-selector-search" placeholder="🔍 모델 검색…" ' +
+        'value="' + escAttr(_orSearchQuery) + '" />' +
+        '</div>';
+
+    if (free.length > 0) {
+        html += '<div class="model-selector-subgroup-label">🆓 무료 (' + free.length + ')</div>';
+        for (const m of free) {
+            html += renderOpenRouterOption(m, selected);
+        }
+    }
+    if (paid.length > 0) {
+        html += '<div class="model-selector-subgroup-label">💰 유료 (' + paid.length + ')</div>';
+        for (const m of paid) {
+            html += renderOpenRouterOption(m, selected);
+        }
+    }
+    if (free.length === 0 && paid.length === 0) {
+        html += '<div style="padding:8px 12px;color:var(--text-muted);font-size:12px">검색 결과 없음</div>';
+    }
+    return html;
+}
+
+/**
+ * OpenRouter 모델 1개 entry 렌더 — 배지 (FREE 또는 가격) 포함.
+ */
+function renderOpenRouterOption(m, selected) {
+    const isActive = m.modelId === selected;
+    const badge = m.isFree
+        ? '<span class="badge badge-free">🆓 FREE</span>'
+        : (m.pricing
+            ? '<span class="price">$' +
+                (m.pricing.input != null ? m.pricing.input.toFixed(2) : '?') + ' / $' +
+                (m.pricing.output != null ? m.pricing.output.toFixed(2) : '?') +
+                ' /1M</span>'
+            : '');
+    return '<div class="model-selector-option' +
+        (isActive ? ' active' : '') +
+        '" data-model-id="' + escAttr(m.modelId) + '" data-provider="openrouter">' +
+        '<span>' + (isActive ? '<span class="check">✓ </span>' : '') + escText(m.name) + '</span>' +
+        '<span class="model-selector-option-meta">' +
+        badge +
+        (_isAuthenticated
+            ? '<button type="button" class="menu-trigger" data-action="open-menu" data-provider="openrouter" data-model-id="' +
+              escAttr(m.modelId) + '" title="메뉴">⋮</button>'
+            : '') +
+        '</span>' +
+        '</div>';
+}
+
+/**
+ * 검색 input 의 input 이벤트 — 입력 후 dropdown 재렌더 시 focus + caret 보존.
+ *
+ * 매 키스트로크마다 dropdown.innerHTML 을 재작성하므로 input element 가
+ * 새로 생성됨 → 동일 selector 로 재조회 후 focus + setSelectionRange 로 caret 위치 복원.
+ */
+function bindOpenRouterSearchHandler(dropdown) {
+    const input = dropdown.querySelector('.model-selector-search');
+    if (!input) return;
+    input.addEventListener('input', function (ev) {
+        ev.stopPropagation();
+        _orSearchQuery = ev.target.value;
+        renderDropdown();
+        const newInput = dropdown.querySelector('.model-selector-search');
+        if (newInput) {
+            newInput.focus();
+            newInput.setSelectionRange(_orSearchQuery.length, _orSearchQuery.length);
+        }
+    });
+    input.addEventListener('click', function (ev) { ev.stopPropagation(); });
 }
 
 /**
