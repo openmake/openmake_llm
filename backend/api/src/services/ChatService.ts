@@ -320,6 +320,7 @@ export class ChatService {
 
         // ── Provider Gate: 모델 ID 검증 (strategy 실행 이전 조기 차단) ──
         // 외부 provider(anthropic 등) 분기 시 strategy 우회하여 직접 streamChat 호출.
+        let externalResolved: import('../providers/provider-router').ResolvedProvider | null = null;
         if (this.providerRouter) {
             const resolved = await runProviderGate(this.providerRouter, {
                 requestedModel: executionPlan?.requestedModel,
@@ -327,7 +328,9 @@ export class ChatService {
                 ctx: { userId: req.userId, userRole: req.userRole },
             });
             if (resolved.providerId !== 'ollama') {
-                return await this.streamFromExternalProvider(resolved, req, onToken);
+                externalResolved = resolved;
+                // 외부 LLM 도 컨텍스트 정합성 확보 — agent 페르소나 + buildContextForLLM 결과 통합
+                // 단 thinking/tool-calling 등 strategies 전용 기능은 여전히 우회
             }
         }
 
@@ -428,6 +431,17 @@ export class ChatService {
             message || '', docId, uploadedDocuments, userId,
             webSearchContext, thinkingMode, req.apiKeyId,
         );
+
+        // ── 외부 LLM 분기 (agent + context 통합 후) ──
+        // strategies 우회하지만 agent 페르소나 + buildContextForLLM 결과 + 언어 정책은 통합.
+        // tool calling / thinking / discussion / deep research 는 여전히 미지원.
+        if (externalResolved) {
+            return await this.streamFromExternalProvider(externalResolved, req, onToken, {
+                agentSystemMessage,
+                enhancedMessage: finalEnhancedMessage,
+                resolvedLanguage: languagePolicy?.resolvedLanguage,
+            });
+        }
 
         // ── Step 4: 모델 선택 ──
         const promptConfig = getPromptConfig(message, languagePolicy?.resolvedLanguage);
@@ -817,12 +831,24 @@ export class ChatService {
         resolved: import('../providers/provider-router').ResolvedProvider,
         req: ChatMessageRequest,
         onToken: (token: string, thinking?: string) => void,
+        ctx: {
+            agentSystemMessage?: string;
+            enhancedMessage?: string;       // buildContextForLLM 결과 (문서 + 웹검색 통합)
+            resolvedLanguage?: string;
+        } = {},
     ): Promise<string> {
         const messages: ChatMessage[] = [];
 
-        // System prompt — 외부 모델도 일관된 페르소나/언어 유지
+        // System prompt — agent 페르소나 + 언어 + (legacy) webSearchContext 통합
         const systemPromptParts: string[] = [];
-        const langCode = req.userLanguagePreference;
+
+        // 1. Agent 페르소나 (Software Engineer / Financial Analyst 등 전문가 system message)
+        if (ctx.agentSystemMessage) {
+            systemPromptParts.push(ctx.agentSystemMessage);
+        }
+
+        // 2. 언어 정책 — userLanguagePreference 또는 languagePolicy.resolvedLanguage
+        const langCode = ctx.resolvedLanguage || req.userLanguagePreference;
         if (langCode) {
             const langMap: Record<string, string> = {
                 ko: '한국어', en: 'English', ja: '日本語', zh: '中文',
@@ -831,13 +857,16 @@ export class ChatService {
             const langName = langMap[langCode] || langCode;
             systemPromptParts.push(`Respond in ${langName}.`);
         }
-        // 외부 모델은 strategies 우회이므로 webSearchContext 를 system 으로 주입 — 검색 결과 활용 보장
-        if (req.webSearchContext) {
+
+        // 3. webSearchContext fallback (enhancedMessage 가 없는 경로 호환)
+        // enhancedMessage 가 있으면 이미 buildContextForLLM 이 검색결과 통합했으므로 중복 방지.
+        if (!ctx.enhancedMessage && req.webSearchContext) {
             systemPromptParts.push(
                 '아래 웹검색 결과를 바탕으로 정확한 답변을 제공하세요. 결과에 없는 정보는 추측하지 말고 모른다고 답하세요.\n\n' +
                 req.webSearchContext,
             );
         }
+
         if (systemPromptParts.length > 0) {
             messages.push({ role: 'system', content: systemPromptParts.join('\n\n') });
         }
@@ -853,9 +882,10 @@ export class ChatService {
             });
         }
 
+        // user message — buildContextForLLM 결과 (문서 + 웹검색 통합) 가 있으면 그걸 사용
         messages.push({
             role: 'user',
-            content: req.message,
+            content: ctx.enhancedMessage || req.message,
             ...(req.images ? { images: req.images } : {}),
         });
 
