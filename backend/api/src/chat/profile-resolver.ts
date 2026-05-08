@@ -127,8 +127,10 @@ export function buildExecutionPlan(
 }
 
 /**
- * 사용 가능한 brand model 목록을 반환합니다.
- * 단일 로컬 모델 환경에서는 빈 배열을 반환합니다.
+ * 외부 API 용 모델 목록 — OpenAI 호환 /v1/models 응답 데이터.
+ *
+ * 단일 로컬 모델 환경에서는 ollamaDefaultModel 1개를 노출한다.
+ * (이전: 빈 배열 → 외부 OpenAI 호환 클라이언트가 사용 가능 모델 없음으로 인식)
  */
 export function listAvailableModels(): Array<{
     id: string;
@@ -136,5 +138,12 @@ export function listAvailableModels(): Array<{
     description: string;
     capabilities: string[];
 }> {
-    return [];
+    const config = getConfig();
+    const modelId = config.ollamaDefaultModel;
+    return [{
+        id: modelId,
+        name: modelId,
+        description: 'OpenMake LLM — 단일 로컬 모델 (Ollama)',
+        capabilities: ['chat', 'streaming'],
+    }];
 }
