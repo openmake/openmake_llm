@@ -19,7 +19,7 @@ import { asyncHandler } from '../utils/error-handler';
 import { createLogger } from '../utils/logger';
 import { getModelForRole } from '../config/model-roles';
 import { MODEL_CAPABILITY_PRESETS } from '../config/model-defaults';
-import { requireAuth, requireAdmin } from '../auth';
+import { requireAuth, requireAdmin, optionalAuth } from '../auth';
 import { getModelHealthMonitor } from '../services/model-health-monitor';
 import { ExternalKeysRepository } from '../data/repositories/external-keys-repo';
 import { getPool } from '../data/models/unified-database';
@@ -80,7 +80,7 @@ router.get('/model', asyncHandler(async (_req: Request, res: Response) => {
  * model-roles 레지스트리의 chat 역할 모델을 반환합니다.
  * capabilities 는 MODEL_CAPABILITY_PRESETS 의 가장 긴 prefix 매칭으로 조회합니다.
  */
-router.get('/models', asyncHandler(async (req: Request, res: Response) => {
+router.get('/models', optionalAuth, asyncHandler(async (req: Request, res: Response) => {
     const chatModel = getModelForRole('chat');
 
     // MODEL_CAPABILITY_PRESETS에서 가장 긴 prefix 매칭으로 capabilities 조회
