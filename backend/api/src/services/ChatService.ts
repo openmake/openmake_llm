@@ -42,8 +42,6 @@ import { preRequestCheck } from '../chat/security-hooks';
 import type { LanguagePolicyDecision } from '../chat/language-policy';
 import { createRoutingLogEntry, type RoutingDecisionLog } from '../chat/routing-logger';
 import type { ChatMessageRequest, SystemEventCallback } from './chat-service-types';
-import { computeUIRResult, recordShadowComparison } from '../chat/unified-intent-router';
-import { UIR_SHADOW_ENABLED } from '../config/routing-config';
 import { buildContextForLLM } from './chat-service/context-builder';
 import { resolveModel } from './chat-service/model-resolver';
 import { selectAndExecuteStrategy } from './chat-service/strategy-executor';
@@ -441,24 +439,6 @@ export class ChatService {
         const promptConfig = getPromptConfig(message, languagePolicy?.resolvedLanguage);
         const hasImages = (images && images.length > 0) || documentImages.length > 0;
         const modelSelection = await this.resolveModel(message || '', hasImages, executionPlan, promptConfig);
-
-        // ── UIR Shadow 비교 (fire-and-forget, API Key 요청 제외) ──
-        // rollout=0일 때도 shadow 데이터를 수집하여 UIR 정확도를 사전 검증합니다.
-        if (UIR_SHADOW_ENABLED && !req.apiKeyId) {
-            computeUIRResult(message || '', { userId })
-                .then(uirResult => recordShadowComparison(
-                    message || '',
-                    uirResult,
-                    {
-                        queryType: modelSelection.queryType,
-                        agentId: agentSelection.primaryAgent,
-                        brandProfile: executionPlan?.requestedModel ?? 'default',
-                    },
-                    undefined,
-                    userId
-                ))
-                .catch((err: unknown) => { logger.warn('UIR shadow 비교 실패:', err instanceof Error ? err.message : err); });
-        }
 
         // ── 라우팅 결정 로그 갱신 ──
         routingLog.queryFeatures.queryType = modelSelection.queryType;
