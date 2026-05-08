@@ -61,7 +61,7 @@ export interface QueryClassification {
 
 /**
  * 모델 선택 결과 인터페이스
- * selectOptimalModel() 또는 selectModelForProfile()의 반환 타입입니다.
+ * selectOptimalModel() 의 반환 타입입니다.
  */
 export interface ModelSelection {
     /** 선택된 모델 ID (예: 'gemini-3-flash-preview:cloud') */
