@@ -179,6 +179,10 @@ function mapOpenAIError(err: unknown): ProviderError {
         if (status === 401 || status === 403) {
             return new ProviderError('INVALID_API_KEY', `OpenAI 호환 인증 실패: ${message}`, err);
         }
+        if (status === 402) {
+            // OpenRouter / paid endpoint 의 잔액 부족 — 사용자에게 충전 안내 가능
+            return new ProviderError('INSUFFICIENT_CREDIT', `잔액 부족: ${message}`, err);
+        }
         if (status === 429) {
             return new ProviderError('QUOTA_EXCEEDED', `OpenAI 호환 할당량 초과: ${message}`, err);
         }
@@ -187,6 +191,34 @@ function mapOpenAIError(err: unknown): ProviderError {
         }
     }
     return new ProviderError('UPSTREAM_ERROR', `OpenAI 호환 호출 실패: ${message}`, err);
+}
+
+/**
+ * OpenRouter 권장 attribution 헤더를 빌드한다.
+ *
+ * OpenRouter 공식 SDK (@openrouter/sdk) 가 표준화한 3개 헤더:
+ * - HTTP-Referer: 운영 도메인 (대시보드 leaderboard 등록용)
+ * - X-OpenRouter-Title: 앱 이름
+ * - X-OpenRouter-Categories: 앱 카테고리 (선택)
+ *
+ * 환경변수 OMK_APP_URL / OMK_APP_TITLE / OMK_APP_CATEGORIES 에서 읽는다.
+ * 미설정 시 해당 헤더는 보내지 않는다 (필수 아님 — 동작에는 영향 없으나 attribution 누락).
+ *
+ * 이 헤더는 providerId === 'openrouter' 일 때만 의미가 있다 — 다른 OpenAI-compat
+ * endpoint (Groq/Together 등) 는 이 헤더를 무시한다.
+ *
+ * @see https://openrouter.ai/docs/api-reference/overview
+ * @see OpenRouterTeam/typescript-sdk src/funcs/* 의 X-OpenRouter-Title 헤더 처리
+ */
+function buildOpenRouterHeaders(): Record<string, string> {
+    const headers: Record<string, string> = {};
+    const appUrl = process.env.OMK_APP_URL?.trim();
+    const appTitle = process.env.OMK_APP_TITLE?.trim();
+    const appCategories = process.env.OMK_APP_CATEGORIES?.trim();
+    if (appUrl) headers['HTTP-Referer'] = appUrl;
+    if (appTitle) headers['X-OpenRouter-Title'] = appTitle;
+    if (appCategories) headers['X-OpenRouter-Categories'] = appCategories;
+    return headers;
 }
 
 export class OpenAICompatProvider implements IProvider {
@@ -200,9 +232,17 @@ export class OpenAICompatProvider implements IProvider {
     constructor(opts: { providerId: string; apiKey: string; baseUrl: string }) {
         this.id = opts.providerId;
         this.baseUrl = opts.baseUrl;
+        // OpenRouter 호출 시 권장 attribution 헤더를 디폴트로 첨부한다.
+        // 다른 OpenAI-compat endpoint (Groq/Together 등) 에는 영향 없음 — 그쪽이 무시.
+        const defaultHeaders = opts.providerId === 'openrouter'
+            ? buildOpenRouterHeaders()
+            : undefined;
         this.client = new OpenAI({
             apiKey: opts.apiKey,
             baseURL: opts.baseUrl,
+            ...(defaultHeaders && Object.keys(defaultHeaders).length > 0
+                ? { defaultHeaders }
+                : {}),
         });
     }
 
