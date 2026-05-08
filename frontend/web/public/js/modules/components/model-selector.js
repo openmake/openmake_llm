@@ -152,12 +152,25 @@ function renderTrigger() {
     const selected = getSelectedModel();
     const model = _models.find(m => m.modelId === selected);
     const displayName = model ? model.name : (selected || '모델 선택');
+    const provider = model ? (model.provider || 'ollama') : null;
+    // provider 별 아이콘 — 어떤 LLM 사용 중인지 한눈에
+    const PROVIDER_ICONS = {
+        ollama: '🖥️', anthropic: '🧠', openrouter: '🌐', gemini: '✨',
+        groq: '⚡', together: '🤝', mistral: '🌬️', cohere: '🎯',
+        'ollama-remote': '🖥️', 'openai-compatible': '🌐',
+    };
+    const icon = provider && PROVIDER_ICONS[provider] ? PROVIDER_ICONS[provider] : '📋';
     const trigger = _container.querySelector('.model-selector-trigger');
     if (trigger) {
         trigger.innerHTML =
-            '<span class="icon">📋</span>' +
+            '<span class="icon">' + icon + '</span>' +
             '<span class="name">' + escText(displayName) + '</span>' +
             '<span class="arrow">▾</span>';
+        if (provider && provider !== 'ollama') {
+            trigger.title = '현재 사용 중: ' + provider + ' / ' + displayName;
+        } else {
+            trigger.title = '모델 선택 — 클릭하여 변경';
+        }
     }
 }
 
@@ -231,6 +244,15 @@ function renderDropdown() {
         html = '<div style="padding:12px;color:var(--text-muted);text-align:center">사용 가능한 모델 없음</div>';
     }
 
+    // 사용 가이드 (등록된 외부 키가 없을 때만 노출)
+    const hasExternal = _models.some(m => (m.provider || 'ollama') !== 'ollama');
+    if (_isAuthenticated && !hasExternal) {
+        html =
+            '<div style="padding:8px 12px;font-size:11px;color:var(--text-muted);background:var(--bg-tertiary);border-bottom:1px solid var(--border-light);line-height:1.5">' +
+            '💡 외부 LLM 사용 — 아래 <b>"+ 새 LLM 키 등록"</b>에서 provider 선택 후 키 입력하면 모델이 위쪽에 자동으로 추가됩니다.' +
+            '</div>' + html;
+    }
+
     dropdown.innerHTML = html;
     bindDropdownHandlers(dropdown);
 }
@@ -288,7 +310,10 @@ function bindDropdownHandlers(dropdown) {
             const providerId = el.dataset.provider;
             logDebug('+ 추가 클릭: ' + providerId);
             if (window.AddKeyModal) {
-                window.AddKeyModal.open({ providerId, onSuccess: refresh });
+                window.AddKeyModal.open({
+                    providerId,
+                    onSuccess: () => refresh({ afterRegisterProviderId: providerId }),
+                });
             } else {
                 logDebug('  ✗ window.AddKeyModal 미정의');
                 if (window.showToast) window.showToast('등록 모달 로드 실패 — 페이지 새로고침 필요', 'error');
@@ -391,12 +416,44 @@ export async function mount(targetElement) {
     }
 }
 
-export function refresh() {
-    logDebug('refresh 호출');
+export function refresh(opts) {
+    logDebug('refresh 호출' + (opts && opts.afterRegisterProviderId ? ' (등록 후: ' + opts.afterRegisterProviderId + ')' : ''));
+    const prevModelIds = new Set(_models.map(m => m.modelId));
     return loadData().then(() => {
         const grouped = groupModelsByProvider();
         const summary = Object.keys(grouped).map(p => p + '=' + grouped[p].length).join(', ');
         logDebug('refresh 완료 — models=' + _models.length + ' (' + summary + ')');
+
+        // 등록 직후: 새로 추가된 첫 모델 자동 선택 + dropdown 자동 재오픈
+        if (opts && opts.afterRegisterProviderId) {
+            const newModelsForProvider = _models.filter(m =>
+                (m.provider || '') === opts.afterRegisterProviderId && !prevModelIds.has(m.modelId)
+            );
+            if (newModelsForProvider.length > 0) {
+                const firstNew = newModelsForProvider[0];
+                setSelectedModel(firstNew.modelId);
+                logDebug('자동 선택: ' + firstNew.modelId + ' (' + newModelsForProvider.length + ' new models)');
+                if (window.showToast) {
+                    window.showToast(
+                        '✓ ' + opts.afterRegisterProviderId + ' 등록 완료 — ' +
+                        newModelsForProvider.length + '개 모델 사용 가능. "' + firstNew.name + '" 자동 선택됨.'
+                    );
+                }
+            } else {
+                if (window.showToast) {
+                    window.showToast(
+                        '⚠️ ' + opts.afterRegisterProviderId + ' 등록은 됐지만 모델 목록 미수신. ' +
+                        '드롭다운을 다시 열어 확인하거나 검증(⋮ → 🔍)을 시도하세요.',
+                        'error',
+                    );
+                }
+            }
+            // 사용자가 새 모델을 시각 확인할 수 있도록 dropdown 자동 재오픈
+            if (!_isOpen) toggleDropdown();
+            else renderDropdown();
+            return;
+        }
+
         renderTrigger();
         if (_isOpen) renderDropdown();
     });
