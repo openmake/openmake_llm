@@ -408,6 +408,9 @@ export const apiKeyManagementLimiter = createAdvancedRateLimiter({
     ipLimit: RL_API_KEY_MGMT.ipLimit,
     userLimit: RL_API_KEY_MGMT.userLimit,
     endpointRules: [
+        // GET (settings 페이지 카운트/리스트 조회) 는 mutation 과 별개의 관대한 한도 —
+        // 페이지 진입마다 호출되므로 30/15min 공유 시 정상 사용 패턴도 차단됨.
+        { path: /^GET:.*\/api-keys(?:\/|$)/, limit: RL_API_KEY_MGMT.readLimit },
         { path: /^POST:.*\/api-keys(?:\/|$)/, limit: RL_API_KEY_MGMT.createLimit },
         { path: /^DELETE:.*\/api-keys(?:\/|$)/, limit: RL_API_KEY_MGMT.deleteLimit },
     ],

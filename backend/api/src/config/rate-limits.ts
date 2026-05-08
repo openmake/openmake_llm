@@ -117,6 +117,8 @@ export const RL_API_KEY_MGMT = {
     windowMs: WINDOW_15M,
     ipLimit: Number(process.env.RL_API_KEY_MGMT_IP) || 20,
     userLimit: Number(process.env.RL_API_KEY_MGMT_USER) || 30,
+    /** GET (count/list) 전용 — settings 페이지 진입마다 호출되므로 mutation 보다 훨씬 관대 */
+    readLimit: Number(process.env.RL_API_KEY_MGMT_READ) || 200,
     createLimit: Number(process.env.RL_API_KEY_MGMT_CREATE) || 10,
     deleteLimit: Number(process.env.RL_API_KEY_MGMT_DELETE) || 10,
 } as const;
