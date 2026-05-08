@@ -11,7 +11,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { hashApiKey, isValidApiKeyFormat, API_KEY_PREFIX } from '../auth/api-key-utils';
 import { getUnifiedDatabase } from '../data/models/unified-database';
-import { isValidBrandModel } from '../chat/pipeline-profile';
 import { error as apiError, ErrorCodes } from '../utils/api-response';
 import { createLogger } from '../utils/logger';
 
@@ -94,22 +93,6 @@ export async function requireApiKey(req: Request, res: Response, next: NextFunct
                 'API key is deactivated.'
             ));
             return;
-        }
-
-        // §9.14.2 allowed_models 검증 — 브랜드 별칭 기준 비교
-        const requestedModel = (req.body as Record<string, unknown>)?.model as string | undefined;
-        if (requestedModel && keyRecord.allowed_models) {
-            const allowedModels = keyRecord.allowed_models as string[];
-            // ['*']이면 모든 모델 허용
-            const isWildcard = allowedModels.length === 1 && allowedModels[0] === '*';
-            if (!isWildcard && isValidBrandModel(requestedModel) && !allowedModels.includes(requestedModel)) {
-                res.status(403).json(apiError(
-                    ErrorCodes.FORBIDDEN,
-                    `Model '${requestedModel}' is not allowed for this API key. Allowed models: ${allowedModels.join(', ')}`,
-                    { allowed_models: allowedModels }
-                ));
-                return;
-            }
         }
 
         // Request에 API Key 정보 첨부
