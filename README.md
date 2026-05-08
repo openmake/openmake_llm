@@ -31,7 +31,11 @@ OpenMake LLM is a high-performance, self-hosted AI assistant platform designed f
 - **RAG (Retrieval-Augmented Generation)** — Upload your documents and get AI answers grounded in your own data
 - **OpenAI-Compatible API** — Drop-in replacement endpoint for OpenAI API consumers
 - **Ollama Cluster Management** — Multi-node cluster with load balancing and API key pool rotation (up to 5 keys)
-- **External LLM Providers (BYO Key)** — Each user can register Anthropic Claude / OpenAI-compatible (Groq, OpenRouter, Together, vLLM…) keys at `/external-keys.html`. Keys are AES-256-GCM encrypted at rest, and external billing goes to the user's own provider account.
+- **External LLM Providers (BYO Key, 9 providers)** — Each user can register their own API keys directly from the unified model selector in the chat input area (no separate page needed). Keys are AES-256-GCM encrypted at rest, billed to the user's own provider account, and managed via inline ⋮ context menu (validate / usage / delete).
+  - **Anthropic Claude** (native SDK): Opus 4.5 / Sonnet 4.6 / Haiku 4.5
+  - **OpenAI-compatible** (8 providers): OpenRouter (300+ routed models), Google Gemini, Groq (LPU), Together AI, Mistral La Plateforme, Cohere, remote Ollama, custom endpoints
+  - 34 models with detailed pricing (USD micros) + capability inference (vision/thinking/tool calling/embedding) auto-detected per model ID
+  - 90-day usage retention with per-call cost tracking
 
 <details>
 <summary><b>View All 18 Agent Categories (100+ Agents)</b></summary>
@@ -403,6 +407,10 @@ All settings are managed via `.env`. See [`.env.example`](.env.example) for the 
 | `ADMIN_PASSWORD` | Initial admin account password | **Required** |
 | `DEFAULT_ADMIN_EMAIL` | Admin login email | `admin@example.com` |
 | `OLLAMA_API_KEY_1..5` | Ollama Cloud API key pool ([get key](https://ollama.com/settings)) | **Required** for cloud models |
+| `TOKEN_ENCRYPTION_KEY` | AES-256-GCM key for OAuth tokens + external LLM API keys (`openssl rand -hex 32`) | **Required** for production (BYO key 암호화 SSoT) |
+| `EXTERNAL_MODELS_CACHE_TTL_MS` | External provider `/v1/models` 응답 cache TTL (ms) | `3600000` (1h) |
+| `EXTERNAL_USAGE_RETENTION_DAYS` | `external_provider_usage` 보존 기간 (db-retention cron) | `90` |
+| `EXTERNAL_PROVIDER_REQUEST_TIMEOUT_MS` | 외부 provider 호출 타임아웃 | `120000` |
 
 ### Supported Models & Engine Mapping
 
@@ -448,6 +456,39 @@ The following models are available for A2A multi-model orchestration. The first 
 - **Google OAuth 2.0** — `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`
 - **Google Custom Search** — `GOOGLE_API_KEY`, `GOOGLE_CSE_ID`
 - **Language Policy** — `DEFAULT_RESPONSE_LANGUAGE` (20+ languages supported)
+
+### External LLM Providers (BYO Key Workflow)
+
+Each user can register their own API keys directly from the chat input area — no separate page or admin role required. Operators only need to set `TOKEN_ENCRYPTION_KEY` once.
+
+**Workflow:**
+1. Login → main chat page
+2. Click the model selector trigger (📋) at the right of the input area
+3. Open the dropdown → "+ 새 LLM 키 등록" section lists all unregistered providers
+4. Click any provider (e.g., "+ Anthropic Claude") → key registration modal
+5. Enter API key → registered key's models automatically populate the dropdown
+6. ⋮ context menu next to any registered model → validate / view usage / delete
+
+**Supported providers (catalog):**
+
+| Provider | SDK | Default Base URL | Models |
+|---|---|---|---|
+| Anthropic | native `@anthropic-ai/sdk` | `api.anthropic.com` | Claude Opus 4.5 / Sonnet 4.6 / Haiku 4.5 |
+| OpenRouter | `openai` SDK | `openrouter.ai/api/v1` | GPT-5, Claude, Gemini, Llama, DeepSeek (300+ routed) |
+| Google Gemini | `openai` SDK | `generativelanguage.googleapis.com/v1beta/openai` | Gemini 2.5 Pro / Flash / 2.0 Flash Exp |
+| Groq | `openai` SDK | `api.groq.com/openai/v1` | Llama 3.3 70B (LPU 추론) |
+| Together AI | `openai` SDK | `api.together.xyz/v1` | Llama / Qwen / DeepSeek (오픈소스 호스팅) |
+| Mistral | `openai` SDK | `api.mistral.ai/v1` | Large / Medium / Small / Codestral |
+| Cohere | `openai` SDK | `api.cohere.com/compatibility/v1` | Command R+ / Command R |
+| Ollama (remote) | `openai` SDK | (사용자 입력) | 원격 Ollama 서버 OpenAI 호환 mode |
+| 직접 입력 | `openai` SDK | (사용자 입력) | 기타 OpenAI 호환 endpoint (vLLM, LM Studio 등) |
+
+**Pricing & Capability:**
+- 34 models with built-in USD pricing (1M token 단위, micros 누적 정확도)
+- Capability auto-inference per model ID — vision (gpt-4o, claude-3+, gemini-, pixtral 등), thinking (claude-opus-4, deepseek-r1, o1/o3), embedding (text-embedding-*)
+- Cohere `command-r-*` 는 native tools 미지원 — 자동 비활성
+
+**Phase 2 (planned):** OpenAI ChatGPT Plus/Pro OAuth (구독 계정 sign-in 지원). Anthropic OAuth는 Anthropic ToS 제약으로 영구 제외.
 
 ## Project Structure
 
