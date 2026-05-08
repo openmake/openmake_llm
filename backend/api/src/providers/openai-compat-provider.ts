@@ -119,6 +119,28 @@ type OpenAIMessage = {
     tool_call_id?: string;
 };
 
+/**
+ * base64 이미지의 magic number 로 MIME 타입 추론.
+ *
+ * data: URI 가 없는 raw base64 입력에 대해 정확한 Content-Type 을 부여하기 위함.
+ * 이전 동작 (`data:image/png;base64,...` hardcode) 은 JPEG/WEBP/GIF 첨부 시 잘못된
+ * MIME 으로 vision 모델 호출 실패 가능성이 있었음.
+ *
+ * - PNG  : 파일 시그니처 89 50 4E 47 → base64 'iVBORw0K...'
+ * - JPEG : 파일 시그니처 FF D8 FF    → base64 '/9j/...'
+ * - GIF  : 파일 시그니처 47 49 46 38 → base64 'R0lGOD...'
+ * - WEBP : 파일 시그니처 RIFF....WEBP → base64 'UklGR...'
+ *
+ * 알려지지 않은 형식은 PNG 폴백 (이전 동작 유지 — 대부분 vision API 가 PNG 처리).
+ */
+function inferImageMime(b64: string): string {
+    if (b64.startsWith('iVBORw0K')) return 'image/png';
+    if (b64.startsWith('/9j/')) return 'image/jpeg';
+    if (b64.startsWith('R0lGOD')) return 'image/gif';
+    if (b64.startsWith('UklGR')) return 'image/webp';
+    return 'image/png';
+}
+
 function toOpenAIMessages(messages: ChatMessage[]): OpenAIMessage[] {
     return messages.map((msg, idx): OpenAIMessage => {
         if (msg.role === 'tool') {
@@ -133,7 +155,7 @@ function toOpenAIMessages(messages: ChatMessage[]): OpenAIMessage[] {
             const blocks: Array<{ type: string; text?: string; image_url?: { url: string } }> = [];
             if (msg.content) blocks.push({ type: 'text', text: msg.content });
             for (const img of msg.images) {
-                const url = img.startsWith('data:') ? img : `data:image/png;base64,${img}`;
+                const url = img.startsWith('data:') ? img : `data:${inferImageMime(img)};base64,${img}`;
                 blocks.push({ type: 'image_url', image_url: { url } });
             }
             return { role: msg.role, content: blocks };
