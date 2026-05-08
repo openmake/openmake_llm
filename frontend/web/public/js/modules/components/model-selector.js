@@ -252,7 +252,7 @@ function renderDropdown() {
         const label = PROVIDER_LABELS[pid] || pid;
 
         if (pid === 'openrouter') {
-            html += renderOpenRouterGroup(groups[pid], selected, label);
+            html += renderOpenRouterGroup(groups[pid], selected);
         } else {
             const count = groups[pid].length;
             html += '<div class="model-selector-optgroup-label">' +
@@ -315,7 +315,7 @@ function renderDropdown() {
 
     dropdown.innerHTML = html;
     bindDropdownHandlers(dropdown);
-    bindOpenRouterSearchHandler(dropdown);
+    bindOpenRouterCardHandler(dropdown);
 }
 
 /**
@@ -328,134 +328,72 @@ function renderDropdown() {
  *
  * 검색: modelId 또는 name 의 lowercase substring 매칭. 빈 query 면 전체.
  */
-function renderOpenRouterGroup(models, selected, label) {
-    const q = _orSearchQuery.toLowerCase();
-    const filtered = q
-        ? models.filter(m =>
-            (m.modelId || '').toLowerCase().includes(q) ||
-            (m.name || '').toLowerCase().includes(q))
-        : models.slice();
-
-    filtered.sort((a, b) => {
-        const aFree = !!a.isFree, bFree = !!b.isFree;
-        if (aFree !== bFree) return aFree ? -1 : 1;
-        if (!aFree) {
-            const aPrice = (a.pricing && a.pricing.input) || 0;
-            const bPrice = (b.pricing && b.pricing.input) || 0;
-            if (aPrice !== bPrice) return aPrice - bPrice;
-        }
-        return (a.name || '').localeCompare(b.name || '');
-    });
-
-    const free = filtered.filter(m => m.isFree);
-    const paid = filtered.filter(m => !m.isFree);
+function renderOpenRouterGroup(models, selected) {
+    // OpenRouter 는 367+ 모델이라 dropdown max-height (420px) 안에 다 안 들어감 →
+    // inline list 대신 풀스크린 모달 진입점만 표시. 클릭 시 ModelListModal 이 열림.
+    const free = models.filter(m => m.isFree);
+    const paid = models.filter(m => !m.isFree);
     const totalCount = models.length;
-    const filteredCount = filtered.length;
 
-    let html = '<div class="model-selector-optgroup-label">' +
-        escText(label) +
-        ' <span style="opacity:0.6;font-weight:normal">(' +
-        (q ? filteredCount + ' / ' + totalCount : totalCount) +
-        ')</span>' +
-        // 367+ 모델은 dropdown max-height 안에 다 안 들어가므로 모달로 펼치는 진입점.
-        ' <button type="button" class="model-selector-expand-btn" data-action="open-list-modal" ' +
-        'title="전체 모델을 큰 창에서 검색·선택">📋 전체 보기</button>' +
+    // 현재 선택된 OpenRouter 모델 정보 (있다면)
+    const selectedOR = models.find(m => m.modelId === selected);
+
+    let html = '<div class="model-selector-or-card" data-action="open-list-modal" ' +
+        'title="클릭하여 전체 ' + totalCount + ' 모델 검색·선택">' +
+        '<div class="or-card-header">' +
+        '<span class="or-card-icon">🌐</span>' +
+        '<span class="or-card-title">OpenRouter</span>' +
+        '<span class="or-card-count">' + totalCount + ' 모델</span>' +
+        '</div>' +
+        '<div class="or-card-stats">' +
+        '<span class="or-stat or-stat-free">🆓 무료 ' + free.length + '</span>' +
+        '<span class="or-stat or-stat-paid">💰 유료 ' + paid.length + '</span>' +
         '</div>';
 
-    html += '<div class="model-selector-search-row">' +
-        '<input type="text" class="model-selector-search" placeholder="🔍 모델 검색…" ' +
-        'value="' + escAttr(_orSearchQuery) + '" />' +
+    if (selectedOR) {
+        html += '<div class="or-card-selected">' +
+            '✓ 선택됨: ' + escText(selectedOR.name) +
+            (selectedOR.isFree
+                ? ' <span class="badge badge-free">🆓 FREE</span>'
+                : (selectedOR.pricing
+                    ? ' <span class="price">$' +
+                        (selectedOR.pricing.input || 0).toFixed(2) + ' / $' +
+                        (selectedOR.pricing.output || 0).toFixed(2) + ' /1M</span>'
+                    : '')) +
+            '</div>';
+    }
+
+    html += '<div class="or-card-action">📋 전체 모델 보기 →</div>' +
         '</div>';
 
-    if (free.length > 0) {
-        html += '<div class="model-selector-subgroup-label">🆓 무료 (' + free.length + ')</div>';
-        for (const m of free) {
-            html += renderOpenRouterOption(m, selected);
-        }
-    }
-    if (paid.length > 0) {
-        html += '<div class="model-selector-subgroup-label">💰 유료 (' + paid.length + ')</div>';
-        for (const m of paid) {
-            html += renderOpenRouterOption(m, selected);
-        }
-    }
-    if (free.length === 0 && paid.length === 0) {
-        html += '<div style="padding:8px 12px;color:var(--text-muted);font-size:12px">검색 결과 없음</div>';
-    }
     return html;
 }
 
 /**
- * OpenRouter 모델 1개 entry 렌더 — 배지 (FREE 또는 가격) 포함.
+ * OpenRouter 카드 클릭 시 ModelListModal 열기 — 367 모델을 풀스크린 모달에서 검색·선택.
+ * Inline list / 검색 input 은 사용 안 함 (dropdown max-height 클리핑 회피).
  */
-function renderOpenRouterOption(m, selected) {
-    const isActive = m.modelId === selected;
-    const badge = m.isFree
-        ? '<span class="badge badge-free">🆓 FREE</span>'
-        : (m.pricing
-            ? '<span class="price">$' +
-                (m.pricing.input != null ? m.pricing.input.toFixed(2) : '?') + ' / $' +
-                (m.pricing.output != null ? m.pricing.output.toFixed(2) : '?') +
-                ' /1M</span>'
-            : '');
-    return '<div class="model-selector-option' +
-        (isActive ? ' active' : '') +
-        '" data-model-id="' + escAttr(m.modelId) + '" data-provider="openrouter">' +
-        '<span>' + (isActive ? '<span class="check">✓ </span>' : '') + escText(m.name) + '</span>' +
-        '<span class="model-selector-option-meta">' +
-        badge +
-        (_isAuthenticated
-            ? '<button type="button" class="menu-trigger" data-action="open-menu" data-provider="openrouter" data-model-id="' +
-              escAttr(m.modelId) + '" title="메뉴">⋮</button>'
-            : '') +
-        '</span>' +
-        '</div>';
-}
-
-/**
- * 검색 input 의 input 이벤트 — 입력 후 dropdown 재렌더 시 focus + caret 보존.
- *
- * 매 키스트로크마다 dropdown.innerHTML 을 재작성하므로 input element 가
- * 새로 생성됨 → 동일 selector 로 재조회 후 focus + setSelectionRange 로 caret 위치 복원.
- */
-function bindOpenRouterSearchHandler(dropdown) {
-    const input = dropdown.querySelector('.model-selector-search');
-    if (input) {
-        input.addEventListener('input', function (ev) {
-            ev.stopPropagation();
-            _orSearchQuery = ev.target.value;
-            renderDropdown();
-            const newInput = dropdown.querySelector('.model-selector-search');
-            if (newInput) {
-                newInput.focus();
-                newInput.setSelectionRange(_orSearchQuery.length, _orSearchQuery.length);
-            }
+function bindOpenRouterCardHandler(dropdown) {
+    const card = dropdown.querySelector('.model-selector-or-card');
+    if (!card) return;
+    card.addEventListener('click', function (ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        if (!window.ModelListModal) {
+            console.warn('[ModelSelector] window.ModelListModal 미정의 — 모듈 로드 실패');
+            if (window.showToast) window.showToast('모달 로드 실패 — 페이지 새로고침 필요', 'error');
+            return;
+        }
+        const orModels = _models.filter(m => (m.provider || 'ollama') === 'openrouter');
+        window.ModelListModal.open({
+            models: orModels,
+            selected: getSelectedModel(),
+            onSelect: function (modelId) {
+                setSelectedModel(modelId);
+                closeDropdown();
+            },
         });
-        input.addEventListener('click', function (ev) { ev.stopPropagation(); });
-    }
-
-    // "📋 전체 보기" 버튼 — ModelListModal 열기 (367 모델 전체 큰 창에서 검색/선택)
-    const expandBtn = dropdown.querySelector('[data-action="open-list-modal"]');
-    if (expandBtn) {
-        expandBtn.addEventListener('click', function (ev) {
-            ev.preventDefault();
-            ev.stopPropagation();
-            if (!window.ModelListModal) {
-                console.warn('[ModelSelector] window.ModelListModal 미정의 — 모듈 로드 실패');
-                if (window.showToast) window.showToast('모달 로드 실패 — 페이지 새로고침 필요', 'error');
-                return;
-            }
-            const orModels = _models.filter(m => (m.provider || 'ollama') === 'openrouter');
-            window.ModelListModal.open({
-                models: orModels,
-                selected: getSelectedModel(),
-                onSelect: function (modelId) {
-                    setSelectedModel(modelId);
-                    closeDropdown();
-                },
-            });
-        });
-    }
+    });
 }
 
 /**

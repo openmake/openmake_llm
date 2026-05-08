@@ -246,21 +246,42 @@
     font-family: ui-monospace, SFMono-Regular, monospace;
 }
 
-/* "📋 전체 보기" 버튼 — OpenRouter 그룹 라벨 우측 */
-.model-selector-expand-btn {
-    margin-left: 6px;
-    padding: 2px 8px;
-    font-size: 10px;
-    font-weight: 600;
-    background: var(--bg-primary);
-    color: var(--text-primary);
-    border: 1px solid var(--border-light);
-    border-radius: 4px;
+/* OpenRouter 카드 — dropdown 안에서 모달 진입점 (전체 367 모델은 모달에서) */
+.model-selector-or-card {
+    margin: 6px 8px;
+    padding: 10px 12px;
+    background: linear-gradient(135deg, rgba(80,120,220,0.08), rgba(80,120,220,0.02));
+    border: 1px solid rgba(80,120,220,0.3);
+    border-radius: 8px;
     cursor: pointer;
+    transition: border-color 0.15s, box-shadow 0.15s;
 }
-.model-selector-expand-btn:hover {
-    background: var(--bg-tertiary);
+.model-selector-or-card:hover {
     border-color: #5078dc;
+    box-shadow: 0 2px 8px rgba(80,120,220,0.18);
+}
+.or-card-header {
+    display: flex; align-items: center; gap: 8px; margin-bottom: 6px;
+}
+.or-card-icon { font-size: 16px; }
+.or-card-title { font-size: 13px; font-weight: 700; color: var(--text-primary); }
+.or-card-count {
+    margin-left: auto; font-size: 11px; color: var(--text-muted);
+    background: var(--bg-tertiary); padding: 1px 8px; border-radius: 10px;
+}
+.or-card-stats {
+    display: flex; gap: 10px; font-size: 11px; margin-bottom: 4px;
+}
+.or-stat-free { color: #22c55e; font-weight: 600; }
+.or-stat-paid { color: var(--text-muted); }
+.or-card-selected {
+    font-size: 11px; color: var(--text-primary); padding: 4px 8px;
+    background: rgba(34,197,94,0.08); border-radius: 4px; margin: 4px 0;
+    display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+}
+.or-card-action {
+    margin-top: 6px; font-size: 12px; font-weight: 600;
+    color: #5078dc; text-align: right;
 }
 
 /* ─── ModelListModal — OpenRouter 367+ 모델 전체 화면 모달 ─── */
