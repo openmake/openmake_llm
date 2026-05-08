@@ -268,7 +268,7 @@ export const platformPaths = {
                                         items: {
                                             type: 'object',
                                             properties: {
-                                                id: { type: 'string', example: 'openmake_llm_auto' },
+                                                id: { type: 'string', example: 'openmake_llm' },
                                                 object: { type: 'string', example: 'model' },
                                                 created: { type: 'integer', example: 1700000000 },
                                                 owned_by: { type: 'string', example: 'openmake' },

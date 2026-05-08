@@ -55,11 +55,11 @@ interface PipelineProfile {
 }
 ```
 
-**Brand Models**: `openmake_llm`, `openmake_llm_pro`, `openmake_llm_fast`, `openmake_llm_think`, `openmake_llm_code`, `openmake_llm_vision`, `openmake_llm_auto`
+**Brand Models**: `openmake_llm`, `openmake_llm_pro`, `openmake_llm_fast`, `openmake_llm_think`, `openmake_llm_code`, `openmake_llm_vision`
 
 **규칙**: 새 모델 추가 시 PipelineProfile + ProfileResolver + ModelSelector 3곳 모두 수정 필수.
 
-## 2. Model Selector (자동 라우팅)
+## 2. Model Selector (QueryType → 모델 프리셋)
 
 QueryType 분류 → 최적 모델 매칭:
 

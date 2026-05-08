@@ -121,6 +121,4 @@ export const APP_USER_AGENT = 'OpenMake-AI';
 // 모델 선택
 // ============================================
 
-// DEFAULT_AUTO_MODEL ('openmake_llm_auto') 상수는 단일 로컬 모델 전환 (2026-05-06)
-// 후 모든 사용처가 제거되어 삭제됨. 현재 모델 식별은 `getModelForRole('chat')`
-// 또는 `getConfig().ollamaDefaultModel` 사용.
+// 모델 식별은 `getModelForRole('chat')` 또는 `getConfig().ollamaDefaultModel` 사용.
