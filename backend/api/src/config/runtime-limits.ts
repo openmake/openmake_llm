@@ -1027,3 +1027,25 @@ export const OLLAMA_RETRY = {
         Number(process.env.OMK_OLLAMA_NETWORK_BACKOFF_BASE_MS) || 1000,
 } as const;
 
+// ============================================
+// 외부 LLM 도구 노출 정책
+// ============================================
+
+/**
+ * 외부 LLM(Anthropic/OpenAI-compat) 경로에서 노출하지 않는 MCP 도구 목록.
+ *
+ * 본 도구들은 MCP 사양상 등록되어 있으나, 실제 처리는 Ollama 경로의
+ * AgentLoopStrategy 가 가로채서 OllamaClient.chat(비전 모델) 으로 위임한다
+ * (mcp/tools.ts visionOcrTool/analyzeImageTool 핸들러는 안내 문구만 반환하는 stub).
+ *
+ * 외부 LLM 경로(streamFromExternalProvider)에는 그런 가로채기 레이어가 없어
+ * 호출 시 stub 응답만 받게 되므로 토큰 낭비 + 잘못된 답변을 유발한다.
+ * 또한 GPT-4o/Claude/Gemini 등 외부 vision 모델은 native 멀티모달이라 별도 OCR 도구가 불필요하다.
+ *
+ * services/ChatService.ts streamFromExternalProvider 에서 참조한다.
+ */
+export const EXTERNAL_LLM_TOOL_BLACKLIST: readonly string[] = [
+    'vision_ocr',
+    'analyze_image',
+] as const;
+

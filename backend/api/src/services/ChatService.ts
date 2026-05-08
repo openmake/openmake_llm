@@ -25,7 +25,7 @@ import { getPromptConfig } from '../chat/prompt';
 import { adjustOptionsForModel, checkModelCapability } from '../chat/model-selector';
 import { assessComplexity, GV_SKIP_THRESHOLD } from '../chat/complexity-assessor';
 import { CONCISE_RESPONSE_DIRECTIVE, TOKEN_BUDGETS } from '../config/llm-parameters';
-import { BUDGET_HINTS, CAPACITY } from '../config/runtime-limits';
+import { BUDGET_HINTS, CAPACITY, EXTERNAL_LLM_TOOL_BLACKLIST } from '../config/runtime-limits';
 import { withSpan } from '../observability/otel';
 import type { ExecutionPlan } from '../chat/profile-resolver';
 import type { DocumentStore } from '../documents/store';
@@ -891,8 +891,11 @@ export class ChatService {
 
         // ── Phase 6: Tool Calling Agent Loop (외부 LLM) ──
         // Provider capabilities 확인 — toolCalling 지원하면 MCP 도구 노출
+        // EXTERNAL_LLM_TOOL_BLACKLIST: Ollama 비전 모델 위임용 stub 도구는 외부 경로에서 제외
         const caps = resolved.provider.getCapabilities(resolved.modelId);
-        const tools = caps.toolCalling ? this.getAllowedTools() : [];
+        const tools = caps.toolCalling
+            ? this.getAllowedTools().filter((t) => !EXTERNAL_LLM_TOOL_BLACKLIST.includes(t.function.name))
+            : [];
 
         const startedAt = Date.now();
         let errorCode: string | null = null;
