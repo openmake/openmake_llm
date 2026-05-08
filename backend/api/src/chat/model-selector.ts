@@ -26,7 +26,7 @@ import { createLogger } from '../utils/logger';
 import { MODEL_CONTEXT_DEFAULTS } from '../config/runtime-limits';
 import { QUERY_TYPE_PARAMS, LLM_TOP_P } from '../config/llm-parameters';
 import { recommendTokenBudget } from './complexity-assessor';
-import { getModelPresets, MODEL_PRESET_KEYS } from '../config/model-presets';
+import { getModelPresets } from '../config/model-presets';
 import { MODEL_CAPABILITY_PRESETS } from '../config/model-defaults';
 
 const logger = createLogger('ModelSelector');
@@ -164,27 +164,6 @@ export function checkModelCapability(
     return defaults[capability] ?? false;
 }
 
-/**
- * 모델의 최대 컨텍스트 길이(토큰)를 반환합니다.
- * MODEL_PRESETS에서 검색하며, 미발견 시 기본값 32768을 반환합니다.
- * 
- * @param modelName - 확인할 모델명
- * @returns 최대 컨텍스트 길이 (토큰 단위)
- */
-export function getModelContextLength(modelName: string): number {
-    const lowerModel = modelName.toLowerCase();
-
-    for (const preset of Object.values(getModelPresets())) {
-        if (preset.defaultModel.toLowerCase().includes(lowerModel) ||
-            lowerModel.includes(preset.defaultModel.split(':')[0].toLowerCase())) {
-            return preset.capabilities.contextLength;
-        }
-    }
-
-    // 기본값
-    return MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX;
-}
-
 // ============================================================
 // 모델별 파라미터 조정
 // ============================================================
@@ -256,35 +235,3 @@ export function adjustOptionsForModel(
     return adjustedOptions;
 }
 
-// ============================================================
-// 유틸리티
-// ============================================================
-
-/**
- * 사용 가능한 모든 모델 프리셋 목록을 반환합니다.
- * 
- * @returns 프리셋 ID, 이름, 적합한 질문 유형 배열
- */
-export function getAvailablePresets(): Array<{ id: string; name: string; bestFor: QueryType[] }> {
-    return Object.entries(getModelPresets()).map(([id, preset]) => ({
-        id,
-        name: preset.name,
-        bestFor: preset.bestFor,
-    }));
-}
-
-/**
- * 질문 유형별 추천 모델명을 반환합니다.
- * bestFor 배열의 첫 번째 항목이 일치하는 프리셋의 defaultModel을 반환합니다.
- * 
- * @param queryType - 질문 유형
- * @returns 추천 모델명 (폴백: gemini-flash의 defaultModel)
- */
-export function getRecommendedModel(queryType: QueryType): string {
-    for (const preset of Object.values(getModelPresets())) {
-        if (preset.bestFor[0] === queryType) {
-            return preset.defaultModel;
-        }
-    }
-    return getModelPresets()[MODEL_PRESET_KEYS.DEFAULT_LOCAL].defaultModel;
-}
