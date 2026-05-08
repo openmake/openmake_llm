@@ -72,8 +72,32 @@ for f in "$PUBLIC_DIR"/js/modules/pages/*.js; do
     fi
 done
 
-# ─── 4. ES Module 문법 검증: export/import가 있는 JS 파일의 모듈 파싱 ───
-echo "  [4/4] ES Module 문법 검증 (V8 파서)..."
+# ─── 4. NAV_ITEMS ↔ pages/*.js 동기화 검증 ───
+# nav-items.js 의 모든 href: '/<name>.html' entry 는 pages/<name>.js 모듈이 존재해야 함
+# (spa-router.js 가 자동으로 dynamic import 시도 — 누락 시 콘솔 에러)
+echo "  [4/5] NAV_ITEMS ↔ pages 모듈 동기화 검증..."
+NAV_FILE="$PUBLIC_DIR/js/nav-items.js"
+NAV_ERRORS=0
+if [ -f "$NAV_FILE" ]; then
+    while IFS= read -r entry; do
+        page_name=$(echo "$entry" | sed -E "s/^.*href: '\/([^']+)\.html'.*$/\1/")
+        if [ -z "$page_name" ] || [ "$page_name" = "$entry" ]; then continue; fi
+        # 채팅 (/) 같은 NAV root entry 는 page module 없음 — 본 검증은 .html 으로 끝나는 것만
+        module_path="$PUBLIC_DIR/js/modules/pages/$page_name.js"
+        if [ ! -f "$module_path" ]; then
+            echo -e "  ${RED}✗ NAV entry '/$page_name.html' 에 대응하는 SPA 모듈 누락: js/modules/pages/$page_name.js${NC}"
+            NAV_ERRORS=$((NAV_ERRORS + 1))
+        fi
+    done < <(grep -E "href: '/[^']+\.html'" "$NAV_FILE")
+    if [ $NAV_ERRORS -gt 0 ]; then
+        ERRORS=$((ERRORS + NAV_ERRORS))
+    fi
+else
+    echo -e "  ${YELLOW}⚠ nav-items.js 미발견 — 스킵${NC}"
+fi
+
+# ─── 5. ES Module 문법 검증: export/import가 있는 JS 파일의 모듈 파싱 ───
+echo "  [5/5] ES Module 문법 검증 (V8 파서)..."
 MODULE_ERRORS=0
 for f in "$PUBLIC_DIR"/js/modules/*.js "$PUBLIC_DIR"/js/modules/pages/*.js "$PUBLIC_DIR"/js/components/*.js "$PUBLIC_DIR"/js/spa-router.js "$PUBLIC_DIR"/js/nav-items.js; do
     if [ -f "$f" ]; then
