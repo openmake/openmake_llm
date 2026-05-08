@@ -13,6 +13,23 @@
 -- @see services/ChatService.ts (audit 호출 진입점)
 -- ============================================================
 
+-- ── 운영 DB 권한 정합 (멱등) ──
+-- 신규 환경: 다음 CREATE TABLE 이 current_user 를 owner 로 만든다 (no-op).
+-- 운영 환경: 이미 다른 owner 로 생성된 conversation_audit_log 가 있을 수 있다
+--   (이전 init script / 수동 생성 흔적). COMMENT ON 은 owner 권한이 필요하므로
+--   가능하면 owner 를 current_user 로 보정한다.
+-- graceful: superuser 또는 현재 owner 가 아니면 ALTER 가 실패 — skip 하고 계속.
+DO $$
+BEGIN
+    EXECUTE format('ALTER TABLE IF EXISTS conversation_audit_log OWNER TO %I', current_user);
+    RAISE NOTICE '014: ownership normalized to %', current_user;
+EXCEPTION
+    WHEN insufficient_privilege THEN
+        RAISE NOTICE '014: ALTER OWNER skipped (current_user lacks superuser/owner privilege)';
+    WHEN OTHERS THEN
+        RAISE NOTICE '014: ALTER OWNER skipped (%)', SQLERRM;
+END $$;
+
 CREATE TABLE IF NOT EXISTS conversation_audit_log (
     id BIGSERIAL PRIMARY KEY,
     session_id UUID NOT NULL,
@@ -42,9 +59,13 @@ CREATE INDEX IF NOT EXISTS idx_audit_error
 CREATE INDEX IF NOT EXISTS idx_audit_session_time
     ON conversation_audit_log (session_id, created_at);
 
-COMMENT ON TABLE conversation_audit_log IS
-    '메시지 본문 제외 운영 메타 — saveHistory 토글과 무관하게 항상 기록';
-COMMENT ON COLUMN conversation_audit_log.content_skipped IS
-    'true 이면 사용자가 saveHistory=false 로 본문 저장을 차단한 메시지';
-COMMENT ON COLUMN conversation_audit_log.content_length IS
-    '본문 저장 여부와 무관하게 항상 길이 기록 — 비정상 길이 감지용';
+-- ── COMMENT (owner 정합 후 — 권한 부족 시 graceful skip) ──
+DO $$
+BEGIN
+    EXECUTE 'COMMENT ON TABLE conversation_audit_log IS ''메시지 본문 제외 운영 메타 — saveHistory 토글과 무관하게 항상 기록''';
+    EXECUTE 'COMMENT ON COLUMN conversation_audit_log.content_skipped IS ''true 이면 사용자가 saveHistory=false 로 본문 저장을 차단한 메시지''';
+    EXECUTE 'COMMENT ON COLUMN conversation_audit_log.content_length IS ''본문 저장 여부와 무관하게 항상 길이 기록 — 비정상 길이 감지용''';
+EXCEPTION
+    WHEN insufficient_privilege THEN
+        RAISE NOTICE '014: COMMENT skipped (table owner mismatch — metadata only, no functional impact)';
+END $$;
