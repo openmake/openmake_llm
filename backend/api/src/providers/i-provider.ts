@@ -58,6 +58,11 @@ export interface ProviderModel {
     capabilities: ProviderCapabilities;
     /** 1M 토큰당 USD 단가 (선택, cloud provider 전용) */
     pricing?: { input: number; output: number };
+    /**
+     * 무료 모델 여부 (OpenRouter 등에서 ":free" suffix 또는 pricing 0/0 인 모델).
+     * UI 정렬·배지에 사용. backend listOpenRouterModels 가 채움 — 다른 provider 는 undefined.
+     */
+    isFree?: boolean;
 }
 
 /**
