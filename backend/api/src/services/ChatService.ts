@@ -820,6 +820,28 @@ export class ChatService {
     ): Promise<string> {
         const messages: ChatMessage[] = [];
 
+        // System prompt — 외부 모델도 일관된 페르소나/언어 유지
+        const systemPromptParts: string[] = [];
+        const langCode = req.userLanguagePreference;
+        if (langCode) {
+            const langMap: Record<string, string> = {
+                ko: '한국어', en: 'English', ja: '日本語', zh: '中文',
+                es: 'Español', fr: 'Français', de: 'Deutsch',
+            };
+            const langName = langMap[langCode] || langCode;
+            systemPromptParts.push(`Respond in ${langName}.`);
+        }
+        // 외부 모델은 strategies 우회이므로 webSearchContext 를 system 으로 주입 — 검색 결과 활용 보장
+        if (req.webSearchContext) {
+            systemPromptParts.push(
+                '아래 웹검색 결과를 바탕으로 정확한 답변을 제공하세요. 결과에 없는 정보는 추측하지 말고 모른다고 답하세요.\n\n' +
+                req.webSearchContext,
+            );
+        }
+        if (systemPromptParts.length > 0) {
+            messages.push({ role: 'system', content: systemPromptParts.join('\n\n') });
+        }
+
         for (const h of req.history ?? []) {
             const role = h.role === 'user' || h.role === 'assistant' || h.role === 'system'
                 ? h.role
