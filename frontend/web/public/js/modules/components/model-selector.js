@@ -14,43 +14,10 @@
 
 const STORAGE_KEY = 'selectedModel';
 
-// ============================================
-// Debug overlay — 임시 진단용 (운영 안정 후 제거)
-// 사용자가 콘솔 못 보는 환경에서 화면 우상단에 모든 ModelSelector 이벤트 표시.
-// localStorage.setItem('MS_DEBUG_OFF', '1') 하면 비활성.
-// ============================================
+// 디버그 로그 — console 만 (page overlay 제거됨, PR #20).
+// 필요 시 DevTools Console 에서 [ModelSelector] 검색.
 function logDebug(msg) {
     try { console.info('[ModelSelector]', msg); } catch (_) {}
-    if (localStorage.getItem('MS_DEBUG_OFF') === '1') return;
-    let panel = document.getElementById('ms-debug-panel');
-    if (!panel) {
-        panel = document.createElement('div');
-        panel.id = 'ms-debug-panel';
-        panel.style.cssText =
-            'position:fixed;top:8px;right:8px;background:rgba(0,0,0,0.85);color:#0f0;' +
-            'padding:8px 12px;font-size:11px;font-family:monospace;border-radius:6px;' +
-            'z-index:99999;max-width:420px;max-height:60vh;overflow-y:auto;line-height:1.4;' +
-            'box-shadow:0 4px 12px rgba(0,0,0,0.5)';
-        const closeBtn = document.createElement('button');
-        closeBtn.textContent = '✕ close';
-        closeBtn.style.cssText = 'position:absolute;top:4px;right:4px;background:#333;color:#fff;border:none;cursor:pointer;font-size:10px;padding:2px 6px;border-radius:3px';
-        closeBtn.onclick = function () {
-            panel.remove();
-            try { localStorage.setItem('MS_DEBUG_OFF', '1'); } catch (_) {}
-        };
-        const title = document.createElement('div');
-        title.textContent = '🔍 ModelSelector 진단 (close=비활성)';
-        title.style.cssText = 'color:#ff0;margin-bottom:4px;font-weight:bold';
-        panel.appendChild(closeBtn);
-        panel.appendChild(title);
-        document.body.appendChild(panel);
-    }
-    const line = document.createElement('div');
-    const ts = new Date().toLocaleTimeString();
-    line.textContent = '[' + ts + '] ' + msg;
-    panel.appendChild(line);
-    while (panel.children.length > 25) panel.removeChild(panel.children[2]);
-    panel.scrollTop = panel.scrollHeight;
 }
 
 const PROVIDER_LABELS = {
