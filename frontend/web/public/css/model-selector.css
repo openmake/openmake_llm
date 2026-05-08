@@ -31,7 +31,7 @@
 .model-selector-dropdown {
     position: absolute;
     bottom: calc(100% + 4px);
-    left: 0;
+    right: 0;
     min-width: 320px;
     max-width: 480px;
     max-height: 420px;
@@ -102,3 +102,80 @@
     color: var(--text-primary);
 }
 .model-action-menu .menu-item:hover { background: var(--bg-tertiary); }
+
+/* AddKeyModal / UsageModal 내부 box — CSP 호환 (inline style 회피) */
+.ek-modal-box {
+    max-width: 480px;
+    width: 100%;
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    padding: 0;
+    box-shadow: var(--shadow-lg);
+    color: var(--text-primary);
+}
+.ek-modal-box.wide { max-width: 720px; }
+.ek-modal-box-header {
+    padding: var(--space-4) var(--space-5);
+    border-bottom: 1px solid var(--border-light);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.ek-modal-box-header h3 { margin: 0; font-size: var(--font-size-lg); }
+.ek-modal-box-close {
+    background: none;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    color: var(--text-muted);
+    padding: 0 8px;
+}
+.ek-modal-box-body {
+    padding: var(--space-5);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+}
+.ek-modal-box-body.scrollable { max-height: 60vh; overflow-y: auto; }
+.ek-modal-box-body label {
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
+    display: block;
+}
+.ek-modal-box-body input[type="text"],
+.ek-modal-box-body input[type="password"] {
+    width: 100%;
+    padding: var(--space-2) var(--space-3);
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+    color: var(--text-primary);
+    box-sizing: border-box;
+    margin-top: 4px;
+}
+.ek-modal-box-body input[type="password"] { font-family: monospace; }
+.ek-modal-box-footer {
+    padding: var(--space-4) var(--space-5);
+    border-top: 1px solid var(--border-light);
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-2);
+}
+.ek-modal-btn-primary {
+    padding: var(--space-2) var(--space-4);
+    background: var(--accent-primary);
+    border: none;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    color: #fff;
+    font-weight: var(--font-weight-semibold);
+}
+.ek-modal-btn-secondary {
+    padding: var(--space-2) var(--space-4);
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    color: var(--text-primary);
+}

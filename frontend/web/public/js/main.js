@@ -690,7 +690,10 @@ window._appInitialized = true;
 // ============================================
 async function _mountModelSelector() {
     const target = document.getElementById('modelSelectorMount');
-    if (!target) return;
+    if (!target) {
+        console.warn('[main] #modelSelectorMount 미발견 — ModelSelector 미마운트');
+        return;
+    }
     try {
         // 보조 컴포넌트 사전 로드 (window.* 글로벌 노출)
         await Promise.all([
@@ -698,11 +701,14 @@ async function _mountModelSelector() {
             import('./modules/components/usage-modal.js'),
             import('./modules/components/model-action-menu.js'),
         ]);
+        console.info('[main] AddKeyModal/UsageModal/ModelActionMenu 로드 완료');
         const mod = await import('./modules/components/model-selector.js');
         await mod.default.mount(target);
         window.ModelSelector = mod.default;
+        console.info('[main] ModelSelector 마운트 완료',
+            { hasAddKeyModal: !!window.AddKeyModal, hasUsageModal: !!window.UsageModal, hasModelActionMenu: !!window.ModelActionMenu });
     } catch (e) {
-        console.warn('[main] ModelSelector mount 실패:', e);
+        console.error('[main] ModelSelector mount 실패:', e);
     }
 }
 if (document.readyState === 'loading') {
