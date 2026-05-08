@@ -187,7 +187,12 @@ function renderDropdown() {
     for (const pid of PROVIDER_ORDER) {
         if (!groups[pid] || groups[pid].length === 0) continue;
         const label = PROVIDER_LABELS[pid] || pid;
-        html += '<div class="model-selector-optgroup-label">' + escText(label) + '</div>';
+        const count = groups[pid].length;
+        // OpenWork pattern (provider-auth-modal.tsx:42 modelCount) — 카탈로그 entry 옆에 모델 수 표시
+        html += '<div class="model-selector-optgroup-label">' +
+            escText(label) +
+            ' <span style="opacity:0.6;font-weight:normal">(' + count + ')</span>' +
+            '</div>';
         for (const m of groups[pid]) {
             const isActive = m.modelId === selected;
             const isOllama = pid === 'ollama';
