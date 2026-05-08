@@ -841,6 +841,13 @@ export class ChatService {
             );
         }
 
+        // 4. 현재 사용 중인 모델 정보 — 사용자가 "어떤 모델 쓰고 있어?" 같은 질문 시 답변할 수 있도록
+        // self-introspection 가능. fullId (provider:model) 형식으로 명확히 전달.
+        systemPromptParts.push(
+            `[현재 사용 중인 모델: ${resolved.fullId}] ` +
+            `사용자가 모델/provider 정보를 묻는 경우 위 식별자를 그대로 알려주세요.`,
+        );
+
         if (systemPromptParts.length > 0) {
             messages.push({ role: 'system', content: systemPromptParts.join('\n\n') });
         }
