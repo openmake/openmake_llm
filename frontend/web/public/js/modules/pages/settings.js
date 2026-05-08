@@ -263,8 +263,16 @@
                 }
 
                 async function initSettings() {
-                    // Mount unified ModelSelector — single entry point for model selection + key registration
+                    // Mount unified ModelSelector — single entry point for model selection + key registration.
+                    // ModelSelector 가 호출하는 3개 sibling 모달 (AddKeyModal / UsageModal / ModelActionMenu)
+                    // 도 함께 사전 로드해야 함 — 각 모듈은 self-import 시 window.* 글로벌로 자체 노출.
+                    // 미로드 시 "+ OpenRouter" / ⋮ 메뉴 클릭이 silent fail (window.AddKeyModal 미정의).
                     try {
+                        await Promise.all([
+                            import('../components/add-key-modal.js'),
+                            import('../components/usage-modal.js'),
+                            import('../components/model-action-menu.js'),
+                        ]);
                         const mod = await import('../components/model-selector.js');
                         window.ModelSelector = mod.default;
                         const mountEl = document.getElementById('modelSelectorMount');
