@@ -49,6 +49,12 @@ export interface UsageMetrics {
     eval_count?: number;
     /** 토큰 생성 소요 시간 (나노초) */
     eval_duration?: number;
+    /**
+     * 호출 비용 (USD micros — 1 USD = 1,000,000 micros).
+     * OpenRouter 가 응답에 포함시키는 직접 cost — 카탈로그 fallback 보다 정확.
+     * 미지원 provider (Ollama 등) 는 undefined.
+     */
+    cost_usd_micros?: number;
 }
 
 /**

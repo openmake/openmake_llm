@@ -876,6 +876,9 @@ export class ChatService {
         let result: import('../providers/i-provider').ChatStreamResult | undefined;
         let inputTokensTotal = 0;
         let outputTokensTotal = 0;
+        // OpenRouter 가 응답에 직접 노출하는 cost (USD micros) — multi-turn 누적.
+        // 전체 turn 중 한 번이라도 직접 cost 가 들어오면 카탈로그 fallback 보다 우선.
+        let directCostUsdMicrosTotal: number | undefined;
         const MAX_TOOL_TURNS = 5;
 
         try {
@@ -894,6 +897,9 @@ export class ChatService {
                             this.lastProviderUsage = usage;
                             inputTokensTotal += usage.prompt_eval_count ?? 0;
                             outputTokensTotal += usage.eval_count ?? 0;
+                            if (usage.cost_usd_micros !== undefined) {
+                                directCostUsdMicrosTotal = (directCostUsdMicrosTotal ?? 0) + usage.cost_usd_micros;
+                            }
                         },
                     },
                 );
@@ -940,6 +946,7 @@ export class ChatService {
                 outputTokens: outputTokensTotal,
                 durationMs: Date.now() - startedAt,
                 errorCode,
+                ...(directCostUsdMicrosTotal !== undefined ? { directCostUsdMicros: directCostUsdMicrosTotal } : {}),
             });
             throw err;
         }
@@ -950,7 +957,7 @@ export class ChatService {
         );
 
         // 사용량 적재 (성공 호출, fire-and-forget — DB 실패가 응답을 막지 않도록)
-        // multi-turn loop 통해 누적된 토큰 사용
+        // multi-turn loop 통해 누적된 토큰 + provider 직접 cost (있으면 우선) 사용
         this.recordExternalUsageFireAndForget({
             userId: req.userId,
             resolved,
@@ -958,6 +965,7 @@ export class ChatService {
             outputTokens: outputTokensTotal,
             durationMs: Date.now() - startedAt,
             finishReason: result.finishReason,
+            ...(directCostUsdMicrosTotal !== undefined ? { directCostUsdMicros: directCostUsdMicrosTotal } : {}),
         });
 
         return result.content;
@@ -1009,22 +1017,32 @@ export class ChatService {
         durationMs: number;
         finishReason?: string;
         errorCode?: string | null;
+        /**
+         * Provider 가 응답에 직접 노출한 cost (OpenRouter 'usage.cost' micros 누적).
+         * 제공되면 카탈로그 fallback (computeCostMicros) 보다 우선 사용 — 정확도 향상.
+         */
+        directCostUsdMicros?: number;
     }): void {
         if (!input.userId || !this.providerRouter) return;
         const repo = this.providerRouter.getExternalKeysRepo();
         if (!repo) return;
         const userId = input.userId;
 
-        // 단가표 기반 cost 계산 (config/external-pricing.ts) — micros 단위
-        // import 는 함수 내부 require 로 — circular import 방지 + lazy load
-        const { computeCostMicros } = require('../config/external-pricing') as
-            typeof import('../config/external-pricing');
-        const costUsdMicros = computeCostMicros(
-            input.resolved.providerId,
-            input.resolved.modelId,
-            input.inputTokens,
-            input.outputTokens,
-        );
+        // Cost 결정: provider 직접 cost 우선 → 없으면 카탈로그 fallback.
+        let costUsdMicros: number;
+        if (input.directCostUsdMicros !== undefined && input.directCostUsdMicros >= 0) {
+            costUsdMicros = input.directCostUsdMicros;
+        } else {
+            // 카탈로그 단가표 (config/external-pricing.ts) — circular import 방지 위해 lazy require
+            const { computeCostMicros } = require('../config/external-pricing') as
+                typeof import('../config/external-pricing');
+            costUsdMicros = computeCostMicros(
+                input.resolved.providerId,
+                input.resolved.modelId,
+                input.inputTokens,
+                input.outputTokens,
+            );
+        }
 
         repo.recordUsage({
             userId,
