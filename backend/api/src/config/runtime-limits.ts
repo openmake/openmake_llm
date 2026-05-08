@@ -936,25 +936,6 @@ export const CONTEXTUAL_CLASSIFICATION = {
 } as const;
 
 // ============================================
-// Profile Validation (프로파일 유효성 검증)
-// ============================================
-
-/**
- * 프로파일 설정의 논리적 일관성을 검증하는 설정
- *
- * Harness Engineering 원칙: Constrain — 논리적으로 모순되는 프로파일 설정을
- * 서버 시작 시 조기 발견
- *
- * chat/profile-validator.ts에서 참조
- */
-export const PROFILE_VALIDATION = {
-    /** 프로파일 검증 활성화 여부 */
-    ENABLED: process.env.PROFILE_VALIDATION_ENABLED !== 'false',
-    /** 검증 실패 시 서버 시작 차단 여부 (false=경고만) */
-    STRICT_MODE: process.env.PROFILE_VALIDATION_STRICT === 'true',
-} as const;
-
-// ============================================
 // Routing Post-hoc Verification (라우팅 사후 검증)
 // ============================================
 
