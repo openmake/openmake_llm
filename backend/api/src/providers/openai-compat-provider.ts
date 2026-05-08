@@ -36,6 +36,25 @@ const logger = createLogger('OpenAICompatProvider');
 const PROVIDER_DISPLAY_NAME = 'OpenAI Compatible';
 const DEFAULT_MAX_TOKENS = 4096;
 
+/**
+ * provider 가 context_length / max_completion_tokens 를 응답에 포함하지 않을 때
+ * 사용하는 보수적 기본값. 카탈로그(L2 config) 가 아니라 런타임 fallback 이므로
+ * 본 모듈 안에서만 의미 있음.
+ */
+const FALLBACK_CONTEXT_WINDOW_TOKENS = 32_000;
+const FALLBACK_OUTPUT_LIMIT_TOKENS = 8_000;
+/** OpenRouter pricing.{prompt,completion} 은 토큰당 USD — 1M 토큰 단위로 변환. */
+const PER_TOKEN_TO_PER_MILLION = 1_000_000;
+
+/**
+ * OpenRouter 응답의 prompt/completion 가격 문자열을 안전하게 USD float 로 변환.
+ * NaN / null / 비-string 입력은 0 으로 처리 — isFree 0/0 검출 신뢰성 보장.
+ */
+function safeUsdParse(s: unknown): number {
+    const n = typeof s === 'string' ? parseFloat(s) : NaN;
+    return Number.isFinite(n) ? n : 0;
+}
+
 const DEFAULT_CAPABILITIES: ProviderCapabilities = {
     streaming: true,
     toolCalling: true,
@@ -317,18 +336,95 @@ export class OpenAICompatProvider implements IProvider {
     }
 
     async listModels(): Promise<ProviderModel[]> {
+        if (this.id === 'openrouter') {
+            return this.listOpenRouterModels();
+        }
         try {
             const list = await this.client.models.list();
             return list.data.map((m) => ({
                 id: m.id,
                 fullId: buildFullModelId(this.id, m.id),
                 displayName: m.id,
-                contextWindow: 32_000, // 보수적 기본 — endpoint 별 실제 값은 카탈로그에서 관리
-                outputLimit: 8_000,
+                contextWindow: FALLBACK_CONTEXT_WINDOW_TOKENS,
+                outputLimit: FALLBACK_OUTPUT_LIMIT_TOKENS,
                 capabilities: inferCapabilitiesFromModelId(this.id, m.id),
             }));
         } catch (err) {
             logger.warn(`OpenAI 호환 모델 목록 조회 실패 (${this.baseUrl}): ${err}`);
+            return [];
+        }
+    }
+
+    /**
+     * OpenRouter 모델 목록 — SDK 경로 + 응답 확장 필드 추출.
+     *
+     * `this.client.models.list()` 는 OpenAI Node SDK 6.x 경로로, constructor 가
+     * 적용한 defaultHeaders (HTTP-Referer / X-OpenRouter-Title / X-OpenRouter-Categories)
+     * 를 자동 첨부한다. SDK 의 OpenAI Model 타입은 OpenRouter 의 확장 필드 (name,
+     * context_length, architecture, supported_parameters, top_provider, pricing) 를
+     * 노출하지 않지만, runtime 객체에는 그대로 남아있어 cast 로 접근 가능 (검증됨).
+     *
+     * Capabilities 는 휴리스틱(inferCapabilitiesFromModelId)이 아닌 API 응답 기반:
+     *   vision     = architecture.input_modalities.includes('image')
+     *   toolCalling = supported_parameters.includes('tools')
+     *   thinking   = supported_parameters 의 reasoning/include_reasoning 플래그 또는
+     *                pricing.internal_reasoning 존재 (canonical 신호 우선, 가격 fallback)
+     *   streaming  = true (OpenRouter chat completions 전체)
+     *   embedding  = false (chat 모델만)
+     *
+     * Free 판정 dual heuristic — id 가 ":free" 로 끝나거나 prompt/completion 둘 다 "0".
+     * pricing 문자열이 비-숫자(NaN) 또는 누락이면 0 으로 처리 (safeUsdParse).
+     */
+    private async listOpenRouterModels(): Promise<ProviderModel[]> {
+        try {
+            const list = await this.client.models.list();
+            return list.data.map((raw) => {
+                const m = raw as unknown as {
+                    id: string;
+                    name?: string;
+                    context_length?: number;
+                    architecture?: { input_modalities?: string[] };
+                    supported_parameters?: string[];
+                    top_provider?: { max_completion_tokens?: number };
+                    pricing?: {
+                        prompt?: string;
+                        completion?: string;
+                        internal_reasoning?: string;
+                    };
+                };
+                const promptUsd = safeUsdParse(m.pricing?.prompt);
+                const completionUsd = safeUsdParse(m.pricing?.completion);
+                const isFree =
+                    m.id.endsWith(':free') || (promptUsd === 0 && completionUsd === 0);
+                const inputModalities = m.architecture?.input_modalities ?? [];
+                const supportedParams = m.supported_parameters ?? [];
+                const hasReasoningParam =
+                    supportedParams.includes('reasoning') ||
+                    supportedParams.includes('include_reasoning');
+                return {
+                    id: m.id,
+                    fullId: buildFullModelId('openrouter', m.id),
+                    displayName: m.name ?? m.id,
+                    contextWindow: m.context_length ?? FALLBACK_CONTEXT_WINDOW_TOKENS,
+                    outputLimit: m.top_provider?.max_completion_tokens ?? FALLBACK_OUTPUT_LIMIT_TOKENS,
+                    capabilities: {
+                        streaming: true,
+                        toolCalling: supportedParams.includes('tools'),
+                        vision: inputModalities.includes('image'),
+                        thinking: hasReasoningParam || m.pricing?.internal_reasoning != null,
+                        embedding: false,
+                    },
+                    pricing: {
+                        input: promptUsd * PER_TOKEN_TO_PER_MILLION,
+                        output: completionUsd * PER_TOKEN_TO_PER_MILLION,
+                    },
+                    isFree,
+                };
+            });
+        } catch (err) {
+            logger.warn(
+                `OpenRouter /models 호출 실패: ${err instanceof Error ? err.message : err}`,
+            );
             return [];
         }
     }
