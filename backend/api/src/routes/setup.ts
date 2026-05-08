@@ -40,8 +40,7 @@ import {
     chatFeedbackRouter,
     apiKeysRouter,
     externalKeysRouter,
-    kbRouter,
-    uirRouter
+    kbRouter
 } from './index';
 import { setupSwaggerRoutes } from '../swagger';
 import { createClusterController, createHealthController, createAuthController, createAdminController, createSessionController } from '../controllers';
@@ -145,7 +144,6 @@ export function setupApiRoutes(
     app.use('/api/agents/skills', skillsRouter);
     app.use('/api/agents', agentRouter);
     app.use('/api/monitoring', tokenMonitoringRouter);
-    app.use('/api/uir', uirRouter);
     app.use('/api/mcp', mcpRouter);
     app.use('/api/debug-queue', debugQueueRouter);
 

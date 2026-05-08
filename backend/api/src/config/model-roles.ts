@@ -25,8 +25,20 @@ export type ModelRole = 'chat' | 'classifier' | 'router' | 'embedding';
 const ROLE_ENV_VAR: Record<ModelRole, string> = {
     chat:       'OLLAMA_DEFAULT_MODEL',
     classifier: 'OMK_CLASSIFIER_MODEL',
-    router:     'OMK_UIR_MODEL',
+    router:     'OMK_ROUTER_MODEL',
     embedding:  'OMK_EMBEDDING_MODEL',
+};
+
+/**
+ * Legacy env var 폴백 매핑 — 신규 변수가 미설정이면 시도한다.
+ * 운영 환경의 .env 가 갱신될 때까지 호환성을 유지하기 위함.
+ *
+ * router: OMK_UIR_MODEL — UIR (Unified Intent Router) 삭제 후 router role 만
+ *   별도 시스템(agents/llm-router)으로 살아남았다. 새 이름 OMK_ROUTER_MODEL
+ *   권장이나 기존 운영자가 OMK_UIR_MODEL 설정해뒀을 수 있다.
+ */
+const LEGACY_ROLE_ENV_VAR: Partial<Record<ModelRole, string>> = {
+    router: 'OMK_UIR_MODEL',
 };
 
 /**
@@ -57,6 +69,16 @@ export function getModelForRole(role: ModelRole): string {
     const roleEnvValue = process.env[roleEnvName];
     if (roleEnvValue && roleEnvValue.trim() !== '') {
         return roleEnvValue.trim();
+    }
+
+    // Legacy env var 폴백 — 신규 변수 미설정 시
+    const legacyEnvName = LEGACY_ROLE_ENV_VAR[role];
+    if (legacyEnvName) {
+        const legacyValue = process.env[legacyEnvName];
+        if (legacyValue && legacyValue.trim() !== '') {
+            logger.warn(`${legacyEnvName} 는 deprecated — ${roleEnvName} 사용 권장`);
+            return legacyValue.trim();
+        }
     }
 
     if (!NON_DELEGABLE_ROLES.has(role)) {
