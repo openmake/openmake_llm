@@ -141,9 +141,11 @@ function bindHandlers() {
         var row = ev.target.closest('.mlm-row');
         if (row && row.dataset.modelId) {
             var picked = row.dataset.modelId;
+            // close() 가 _onSelect = null 로 reset 하므로 callback 을 먼저 캡처해야 함.
+            var cb = _onSelect;
             close();
-            if (typeof _onSelect === 'function') {
-                try { _onSelect(picked); } catch (e) { console.warn('[ModelListModal] onSelect 오류:', e); }
+            if (typeof cb === 'function') {
+                try { cb(picked); } catch (e) { console.warn('[ModelListModal] onSelect 오류:', e); }
             }
         }
     };
