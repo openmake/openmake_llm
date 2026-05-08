@@ -99,6 +99,10 @@ let _models = [];
 let _providers = [];
 let _isAuthenticated = false;
 let _isAdmin = false;
+/** Named handler for document-level outside-click — hoisted so unmount() can remove it. */
+let _onDocumentClick = null;
+/** OpenRouter group search query — preserved across re-renders so input focus survives. */
+let _orSearchQuery = '';
 
 function escAttr(s) {
     return String(s == null ? '' : s)
@@ -456,9 +460,10 @@ export async function mount(targetElement) {
         }
     });
 
-    document.addEventListener('click', function (ev) {
+    _onDocumentClick = function (ev) {
         if (_isOpen && _container && !_container.contains(ev.target)) closeDropdown();
-    });
+    };
+    document.addEventListener('click', _onDocumentClick);
 
     await loadData();
     renderTrigger();
@@ -538,4 +543,31 @@ export function refresh(opts) {
     });
 }
 
-export default { mount, refresh };
+/**
+ * SPA cleanup — settings 페이지가 라우트 떠날 때 settings.js cleanup() 에서 호출.
+ *
+ * 처리:
+ *   1. document click 리스너 해제 (named _onDocumentClick 으로 등록되어 있음)
+ *   2. 컨테이너 DOM 제거
+ *   3. 모듈 스코프 상태 초기화 — 다음 mount() 가 fresh 상태로 시작하도록
+ *
+ * 미호출 시: document click 리스너가 누적되어 메모리 leak (특히 라우팅 반복 시).
+ */
+export function unmount() {
+    if (_onDocumentClick) {
+        document.removeEventListener('click', _onDocumentClick);
+        _onDocumentClick = null;
+    }
+    if (_container && _container.parentNode) {
+        _container.parentNode.removeChild(_container);
+    }
+    _container = null;
+    _isOpen = false;
+    _models = [];
+    _providers = [];
+    _isAuthenticated = false;
+    _isAdmin = false;
+    _orSearchQuery = '';
+}
+
+export default { mount, refresh, unmount };
