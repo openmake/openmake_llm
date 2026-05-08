@@ -387,7 +387,11 @@ export async function mount(targetElement) {
 }
 
 export function refresh() {
+    logDebug('refresh 호출');
     return loadData().then(() => {
+        const grouped = groupModelsByProvider();
+        const summary = Object.keys(grouped).map(p => p + '=' + grouped[p].length).join(', ');
+        logDebug('refresh 완료 — models=' + _models.length + ' (' + summary + ')');
         renderTrigger();
         if (_isOpen) renderDropdown();
     });
