@@ -331,14 +331,20 @@ export function setupStaticFiles(app: Application, dirname: string): void {
         res.redirect(302, `/external.html${query}`);
     });
 
+    // COOP 활성 여부 — HTTP/비-localhost origin (예: rasplay.tplinkdns.com:52416) 에서는
+    // 브라우저가 헤더를 무시하면서 경고 로그를 매 요청마다 출력함 ("URL's origin was untrustworthy").
+    // 정책 효과는 HTTPS 환경에서만 유효하므로, OMK_COOP_ENABLED=true 일 때만 send.
+    // 기본 false — HTTPS 도입 (Caddy/Cloudflare Tunnel 등) 시 명시적 활성화.
+    const coopEnabled = process.env.OMK_COOP_ENABLED === 'true';
     app.use(helmet({
         contentSecurityPolicy: false,
         crossOriginEmbedderPolicy: false,
         crossOriginResourcePolicy: { policy: 'cross-origin' },
-        // Stage 2-M6: COOP 활성화 — 프론트 스캔 결과 window.open은 모두 same-origin이고
+        // Stage 2-M6: COOP — 프론트 스캔 결과 window.open은 모두 same-origin이고
         // 외부 링크는 <a target=_blank rel="noopener noreferrer">로 이미 opener 격리됨.
         // same-origin 정책은 Spectre-class 공격 완화 + cross-origin popup opener 분리.
-        crossOriginOpenerPolicy: { policy: 'same-origin' },
+        // HTTP 환경에서는 비활성 (브라우저가 untrustworthy origin 으로 무시 + 경고만 발생).
+        crossOriginOpenerPolicy: coopEnabled ? { policy: 'same-origin' } : false,
         originAgentCluster: false,
         // Stage 2-M6: HSTS_POLICY 상수 사용 (helmet 기본 180일 → 2년).
         // preload 미포함은 의도 — 롤백 가능성 유지.
