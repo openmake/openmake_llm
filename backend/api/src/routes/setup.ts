@@ -174,6 +174,12 @@ export function setupApiRoutes(
     setDocumentsDeps(cluster, broadcast);
     setWebSearchCluster(cluster);
     setNodesCluster(cluster);
+
+    // 외부 LLM 키 페이지 폐기 (2026-05-08) — 통합 모델 셀렉트로 흡수.
+    // 북마크/외부 링크 사용자 호환을 위한 한시적 redirect.
+    app.get('/external-keys.html', (_req: Request, res: Response) => {
+        res.redirect(301, '/?openModelSelector=1');
+    });
     // 🆕 세션/대화 라우트 — /api/chat 보다 먼저 마운트 (Express 라우팅 명시성 보장)
     const sessionController = createSessionController();
     app.use('/api/chat/sessions', sessionController);
