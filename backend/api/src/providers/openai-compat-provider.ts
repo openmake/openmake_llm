@@ -108,9 +108,21 @@ function inferCapabilitiesFromModelId(
  * - tool_calls: assistant role 에 그대로 첨부
  * - tool: tool_call_id + content 형식
  */
+type OpenAIContentBlock = {
+    type: string;
+    text?: string;
+    image_url?: { url: string };
+    /**
+     * OpenRouter prompt caching marker — Anthropic Claude / Alibaba Qwen 처럼
+     * 명시적 cache breakpoint 가 필요한 모델에 첨부.
+     * 자동 cache provider (OpenAI/Gemini/Groq 등) 는 무시.
+     */
+    cache_control?: { type: 'ephemeral' };
+};
+
 type OpenAIMessage = {
     role: 'system' | 'user' | 'assistant' | 'tool';
-    content?: string | Array<{ type: string; text?: string; image_url?: { url: string } }>;
+    content?: string | OpenAIContentBlock[];
     tool_calls?: Array<{
         id: string;
         type: 'function';
@@ -118,6 +130,24 @@ type OpenAIMessage = {
     }>;
     tool_call_id?: string;
 };
+
+/**
+ * 모델 ID 가 OpenRouter 명시적 prompt caching 이 필요한 모델인지 판단.
+ *
+ * OpenRouter docs (guides/best-practices/prompt-caching) 에 따르면:
+ * - 자동 cache: OpenAI / Gemini / DeepSeek / Grok / Moonshot / Groq → 추가 설정 불필요
+ * - 명시 cache_control 필요: Anthropic Claude / Alibaba Qwen 일부 / DeepSeek V3.2
+ *
+ * 본 함수는 명시적 cache 가 필요한 케이스만 true 반환 — system 메시지에
+ * cache_control: { type: 'ephemeral' } 첨부 대상.
+ */
+function needsExplicitPromptCache(providerId: string, modelId: string): boolean {
+    if (providerId !== 'openrouter') return false;
+    const lower = modelId.toLowerCase();
+    if (lower.includes('claude')) return true;
+    if (/\bqwen3-coder\b|\bqwen-plus\b|\bqwen3-max\b|\bqwen3\.6-plus\b|\bdeepseek-v3\.2\b/.test(lower)) return true;
+    return false;
+}
 
 /**
  * base64 이미지의 magic number 로 MIME 타입 추론.
@@ -141,7 +171,10 @@ function inferImageMime(b64: string): string {
     return 'image/png';
 }
 
-function toOpenAIMessages(messages: ChatMessage[]): OpenAIMessage[] {
+function toOpenAIMessages(
+    messages: ChatMessage[],
+    opts?: { cacheSystemPrompt?: boolean },
+): OpenAIMessage[] {
     return messages.map((msg, idx): OpenAIMessage => {
         if (msg.role === 'tool') {
             return {
@@ -152,13 +185,24 @@ function toOpenAIMessages(messages: ChatMessage[]): OpenAIMessage[] {
         }
 
         if (msg.images && msg.images.length > 0 && (msg.role === 'user' || msg.role === 'system')) {
-            const blocks: Array<{ type: string; text?: string; image_url?: { url: string } }> = [];
+            const blocks: OpenAIContentBlock[] = [];
             if (msg.content) blocks.push({ type: 'text', text: msg.content });
             for (const img of msg.images) {
                 const url = img.startsWith('data:') ? img : `data:${inferImageMime(img)};base64,${img}`;
                 blocks.push({ type: 'image_url', image_url: { url } });
             }
             return { role: msg.role, content: blocks };
+        }
+
+        // System prompt cache breakpoint — Anthropic / Qwen 류 명시적 caching 모델 한정.
+        // content 를 array 로 변환하고 cache_control 첨부 (TTL 5분, OpenRouter 가 sticky routing 으로 cache hit 최대화).
+        if (msg.role === 'system' && opts?.cacheSystemPrompt && typeof msg.content === 'string' && msg.content.length > 0) {
+            return {
+                role: 'system',
+                content: [
+                    { type: 'text', text: msg.content, cache_control: { type: 'ephemeral' } },
+                ],
+            };
         }
 
         if (msg.role === 'assistant' && msg.tool_calls && msg.tool_calls.length > 0) {
@@ -307,7 +351,8 @@ export class OpenAICompatProvider implements IProvider {
         opts: ChatStreamOptions,
         callbacks: ChatStreamCallbacks,
     ): Promise<ChatStreamResult> {
-        const messages = toOpenAIMessages(opts.messages);
+        const cacheSystemPrompt = needsExplicitPromptCache(this.id, opts.modelId);
+        const messages = toOpenAIMessages(opts.messages, { cacheSystemPrompt });
         const tools = opts.tools && opts.tools.length > 0 ? toOpenAITools(opts.tools) : undefined;
 
         let aborted = false;
