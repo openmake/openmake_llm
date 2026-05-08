@@ -36,13 +36,12 @@ function ensure() {
     _modal = document.createElement('div');
     _modal.className = 'modal-overlay';
     _modal.id = 'usageModalOverlay';
-    _modal.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center';
     document.body.appendChild(_modal);
     return _modal;
 }
 
 export function close() {
-    if (_modal) _modal.style.display = 'none';
+    if (_modal) _modal.classList.remove('active');
     if (_clickHandler && _modal) {
         _modal.removeEventListener('click', _clickHandler);
         _clickHandler = null;
@@ -61,7 +60,7 @@ export async function open(opts) {
         '<div class="modal-body" id="usage-modal-body" style="padding:var(--space-5);max-height:60vh;overflow-y:auto">' +
         '<div style="color:var(--text-muted)">불러오는 중...</div>' +
         '</div></div>';
-    _modal.style.display = 'flex';
+    _modal.classList.add('active');
 
     _clickHandler = function (ev) {
         if (ev.target.closest('[data-action="close"]')) close();
