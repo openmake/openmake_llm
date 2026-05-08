@@ -85,11 +85,36 @@ export async function open(opts) {
     const totalOut = rows.reduce((s, r) => s + (r.output_tokens || 0), 0);
     const totalCost = rows.reduce((s, r) => s + (r.cost_usd_micros || 0), 0);
 
-    body.innerHTML =
+    // 30일 daily summary 시도 (실패해도 raw 표는 그대로 표시)
+    let summaryHtml = '';
+    try {
+        const sumRes = await authFetch('/api/external-keys/usage/summary?days=30');
+        if (sumRes.ok) {
+            const sumJson = await sumRes.json();
+            const totalsByProvider = (sumJson.data && sumJson.data.totals_by_provider) || [];
+            if (totalsByProvider.length > 0) {
+                summaryHtml =
+                    '<div style="margin-bottom:12px;padding:8px 12px;background:var(--bg-tertiary);border-radius:6px;font-size:12px">' +
+                    '<div style="color:var(--text-muted);margin-bottom:6px">📅 최근 30일 provider별 누계</div>' +
+                    '<table style="width:100%;font-size:12px"><tbody>' +
+                    totalsByProvider.map((t) =>
+                        '<tr>' +
+                        '<td style="padding:2px 0">' + escText(t.provider_id) + '</td>' +
+                        '<td style="text-align:right;color:var(--text-muted)">호출 ' + t.call_count.toLocaleString() + '</td>' +
+                        '<td style="text-align:right;color:var(--text-muted)">' + (t.input_tokens + t.output_tokens).toLocaleString() + ' tok</td>' +
+                        '<td style="text-align:right;color:var(--accent-primary)">' + escText(fmtUsd(t.cost_usd_micros)) + '</td>' +
+                        '</tr>'
+                    ).join('') +
+                    '</tbody></table></div>';
+            }
+        }
+    } catch (_) { /* summary 실패 → 기본 표만 */ }
+
+    body.innerHTML = summaryHtml +
         '<div style="margin-bottom:12px;color:var(--text-secondary);font-size:var(--font-size-sm)">' +
-        rows.length + '건 — 입력 ' + totalIn.toLocaleString() + ' / 출력 ' + totalOut.toLocaleString() +
-        ' 토큰, 비용 누계 <b>' + escText(fmtUsd(totalCost)) +
-        '</b> <span style="color:var(--text-muted);font-size:11px">(추정 — 정확한 청구는 각 provider 콘솔 참조)</span></div>' +
+        '🕒 직전 ' + rows.length + '건 — 입력 ' + totalIn.toLocaleString() + ' / 출력 ' + totalOut.toLocaleString() +
+        ' 토큰, 비용 <b>' + escText(fmtUsd(totalCost)) +
+        '</b> <span style="color:var(--text-muted);font-size:11px">(추정 — 정확한 청구는 각 provider 콘솔)</span></div>' +
         '<table style="width:100%;border-collapse:collapse;font-size:13px">' +
         '<thead><tr style="text-align:left;color:var(--text-muted);border-bottom:1px solid var(--border-light)">' +
         '<th style="padding:6px 0">시각</th><th>Provider</th><th>모델</th>' +

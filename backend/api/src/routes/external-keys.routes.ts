@@ -218,6 +218,48 @@ router.get('/usage/recent',
     }),
 );
 
+router.get('/usage/summary',
+    requireAuth,
+    asyncHandler(async (req: Request, res: Response) => {
+        const userId = getUserId(req);
+        if (!userId) {
+            res.status(401).json(unauthorized('User ID not found.'));
+            return;
+        }
+        const days = Math.min(parseInt(req.query.days as string, 10) || 30, 90);
+        const rows = await getRepo().listDailyUsage(userId, days);
+
+        // provider별 누계
+        const totalsByProvider: Record<string, { calls: number; inTokens: number; outTokens: number; costMicros: number }> = {};
+        for (const r of rows) {
+            const t = totalsByProvider[r.providerId] = totalsByProvider[r.providerId] || { calls: 0, inTokens: 0, outTokens: 0, costMicros: 0 };
+            t.calls += r.callCount;
+            t.inTokens += r.inputTokens;
+            t.outTokens += r.outputTokens;
+            t.costMicros += r.costUsdMicros;
+        }
+
+        res.json(success({
+            days,
+            daily: rows.map(r => ({
+                day: r.day,
+                provider_id: r.providerId,
+                call_count: r.callCount,
+                input_tokens: r.inputTokens,
+                output_tokens: r.outputTokens,
+                cost_usd_micros: r.costUsdMicros,
+            })),
+            totals_by_provider: Object.entries(totalsByProvider).map(([providerId, t]) => ({
+                provider_id: providerId,
+                call_count: t.calls,
+                input_tokens: t.inTokens,
+                output_tokens: t.outTokens,
+                cost_usd_micros: t.costMicros,
+            })),
+        }));
+    }),
+);
+
 router.post('/:providerId/validate',
     requireAuth,
     asyncHandler(async (req: Request, res: Response) => {
