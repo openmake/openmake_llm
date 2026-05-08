@@ -133,8 +133,7 @@ export class MetricsController {
      */
     private getModelInfo(req: Request, res: Response): void {
         try {
-            // 단일 로컬 모델 전환 후: model-roles 레지스트리의 chat 역할이 단일 진실 소스
-            // (이전: DEFAULT_AUTO_MODEL = 'openmake_llm_auto' ghost — Brand Model 시대 잔재)
+            // model-roles 레지스트리의 chat 역할이 단일 진실 소스
             const modelId = getModelForRole('chat');
             res.json(success({ model: modelId, modelId, provider: 'ollama-local' }));
          } catch (error) {

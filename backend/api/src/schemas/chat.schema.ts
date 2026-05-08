@@ -87,7 +87,7 @@ const toolChoiceSchema = z.union([
  * 채팅 요청 본문 스키마
  * @property {string} message - 사용자 메시지 (1~100,000자, 필수)
  * @property {Array} [history] - 이전 대화 히스토리
- * @property {string} [model] - 사용할 브랜드 모델 (예: openmake_llm_auto)
+ * @property {string} [model] - 사용할 모델 ID (예: openmake_llm, gpt-4o, claude-sonnet-4-6)
  * @property {string} [nodeId] - 특정 클러스터 노드 ID
  * @property {string} [sessionId] - 기존 대화 세션 ID
  * @property {string} [anonSessionId] - 비로그인 사용자 세션 ID

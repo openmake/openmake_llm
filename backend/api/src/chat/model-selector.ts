@@ -1,28 +1,22 @@
 /**
  * ============================================================
- * Model Selector - 질문 유형별 자동 모델 라우팅
+ * Model Selector - 질문 유형별 모델 프리셋 선택
  * ============================================================
- * 
+ *
  * 사용자 질문을 분석하여 9가지 QueryType으로 분류하고,
- * 최적의 Ollama 모델 프리셋을 자동 선택합니다.
- * Brand model alias(openmake_llm_auto)를 통한 스마트 자동 라우팅도 지원합니다.
- * 
+ * 최적의 Ollama 모델 프리셋을 선택합니다.
+ *
  * @module chat/model-selector
  * @description
  * - 질문 유형 분류: 정규식 패턴 매칭 + 키워드 가중치 스코어링 알고리즘
  * - 모델 프리셋 선택: QueryType별 최적 모델 매칭 (우선순위 기반)
- * - Brand Model 지원: pipeline-profile.ts의 프로파일 기반 ModelSelection 생성
- * - Auto-Routing: openmake_llm_auto 요청 시 질문 유형에 따라 brand profile 자동 선택
  * - 모델별 파라미터 조정: 모델 특성에 맞는 temperature, top_p, num_ctx 자동 튜닝
- * 
- * 자동 라우팅 알고리즘 흐름:
+ *
+ * 알고리즘 흐름:
  * 1. classifyQuery() - 정규식/키워드로 QueryType 분류 + 신뢰도 계산
  * 2. selectOptimalModel() - QueryType에 맞는 ModelPreset 선택
- * 3. selectModelForProfile() - Brand model alias인 경우 프로파일 기반 선택
- * 4. selectBrandProfileForAutoRouting() - auto 모드 시 brand profile ID 결정
- * 5. adjustOptionsForModel() - 선택된 모델에 맞게 옵션 미세 조정
- * 
- * @see chat/pipeline-profile.ts - 브랜드 모델 프로파일 정의
+ * 3. adjustOptionsForModel() - 선택된 모델에 맞게 옵션 미세 조정
+ *
  * @see services/ChatService.ts - 최종 모델 선택 결과 소비
  */
 

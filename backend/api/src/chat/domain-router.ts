@@ -2,15 +2,11 @@
  * ============================================================
  * Domain Router — 역할 라우팅 (P2-2)
  * ============================================================
- * 
+ *
  * QueryType을 5개 도메인(code/math/creative/analysis/general)으로 매핑하고,
  * env에서 도메인별 전문 모델을 읽어 엔진 오버라이드를 수행합니다.
- * 
- * auto-routing(openmake_llm_auto) 경로에서만 적용되며,
- * 사용자가 명시적으로 프로파일을 선택한 경우 원본 엔진을 유지합니다.
- * 
+ *
  * @module chat/domain-router
- * @see services/ChatService - auto-routing 블록에서 소비
  * @see config/env - OMK_DOMAIN_* 환경 변수
  */
 

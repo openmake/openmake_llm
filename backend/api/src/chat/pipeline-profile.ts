@@ -24,11 +24,9 @@
  * | openmake_llm_think  | Think    | generate-verify      | high     | 심층 추론            |
  * | openmake_llm_code   | Code     | conditional-verify   | medium   | 코드 전문            |
  * | openmake_llm_vision | Vision   | single               | medium   | 멀티모달/비전        |
- * | openmake_llm_auto   | __auto__ | conditional-verify   | medium   | 스마트 자동 라우팅    |
- * 
+ *
  * @see docs/api/API_KEY_SERVICE_PLAN.md 9절
  * @see chat/profile-resolver.ts - 프로파일을 ExecutionPlan으로 변환
- * @see chat/model-selector.ts - auto 모드 시 질문 유형 기반 프로파일 선택
  */
 
 import type { CostTier } from './cost-tier';
@@ -160,7 +158,7 @@ export function getProfiles(): Record<string, PipelineProfile> {
  * 
  * @returns 브랜드 모델 alias 문자열 배열
  * @example
- * getBrandModelAliases(); // ['openmake_llm', 'openmake_llm_pro', ..., 'openmake_llm_auto']
+ * getBrandModelAliases(); // ['openmake_llm', 'openmake_llm_pro', ..., 'openmake_llm_vision']
  */
 export function getBrandModelAliases(): string[] {
     return Object.keys(getProfiles());
