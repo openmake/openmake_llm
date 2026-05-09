@@ -265,6 +265,12 @@ export class OllamaClient {
     ): Promise<{ response: string; metrics?: UsageMetrics }> {
         this.checkQuota();
 
+        // keep_alive 기본값: 호출자 미지정 시 envConfig.ollamaKeepAlive 자동 주입.
+        // Ollama 기본값(5분)이 짧아 대형 모델 콜드 로딩이 잦은 문제를 해결.
+        const effectiveKeepAlive: string | number = advancedOptions?.keep_alive !== undefined
+            ? advancedOptions.keep_alive
+            : getConfig().ollamaKeepAlive;
+
         const request: GenerateRequest = {
             model: this.config.model,
             prompt,
@@ -275,7 +281,7 @@ export class OllamaClient {
             ...(advancedOptions?.think !== undefined && { think: normalizeThinkOption(advancedOptions.think, this.config.model) }),
             ...(advancedOptions?.format && { format: advancedOptions.format }),
             ...(advancedOptions?.system && { system: advancedOptions.system }),
-            ...(advancedOptions?.keep_alive !== undefined && { keep_alive: advancedOptions.keep_alive })
+            keep_alive: effectiveKeepAlive,
         };
 
         if (onToken) {
@@ -320,6 +326,12 @@ export class OllamaClient {
     ): Promise<ChatMessage & { metrics?: UsageMetrics }> {
         this.checkQuota();
 
+        // keep_alive 기본값: 호출자 미지정 시 envConfig.ollamaKeepAlive 자동 주입.
+        // Ollama 기본값(5분)이 짧아 대형 모델 콜드 로딩이 잦은 문제를 해결.
+        const effectiveKeepAlive: string | number = advancedOptions?.keep_alive !== undefined
+            ? advancedOptions.keep_alive
+            : getConfig().ollamaKeepAlive;
+
         const request: ChatRequest = {
             model: this.config.model,
             messages,
@@ -328,7 +340,7 @@ export class OllamaClient {
             ...(advancedOptions?.think !== undefined && { think: normalizeThinkOption(advancedOptions.think, this.config.model) }),
             ...(advancedOptions?.format && { format: advancedOptions.format }),
             ...(advancedOptions?.tools && { tools: advancedOptions.tools }),
-            ...(advancedOptions?.keep_alive !== undefined && { keep_alive: advancedOptions.keep_alive })
+            keep_alive: effectiveKeepAlive,
         };
 
         // OTel span: LLM 호출 1건당 1 span. 본문은 PII/비용 위험으로 기록하지 않음.
