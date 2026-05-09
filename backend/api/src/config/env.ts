@@ -53,6 +53,17 @@ export interface EnvConfig {
     ollamaSshKey: string;
     ollamaModels: string[];  // Per-key models — 로그 표시용 (OLLAMA_MODEL_1, _2, etc.)
 
+    // Latency / Single-model optimization
+    /** Ollama keep_alive duration ('24h', '1h', '-1' 등) — chat/generate 호출 시 자동 주입 */
+    ollamaKeepAlive: string;
+    /**
+     * LLM classifier 우회 여부.
+     * - 'true' → 항상 우회 (regex/fast-path 만 사용)
+     * - 'false' → 항상 활성 (다중 모델 환경에서 분류 정밀도 우선)
+     * - undefined/'auto' → 단일 모델 환경(getModelPresets() 키 1개) 자동 감지
+     */
+    omkDisableLlmClassifier: 'true' | 'false' | 'auto';
+
     // Rate limits
     ollamaHourlyLimit: number;
     ollamaWeeklyLimit: number;
@@ -170,6 +181,8 @@ const DEFAULT_CONFIG: EnvConfig = {
     ollamaApiKeySecondary: '',
     ollamaSshKey: '',
     ollamaModels: [],  // Per-key models — 로그 표시용
+    ollamaKeepAlive: '24h',
+    omkDisableLlmClassifier: 'auto' as const,
 
     // Rate limits
     ollamaHourlyLimit: 150,
@@ -384,6 +397,8 @@ export function loadConfig(): EnvConfig {
         OLLAMA_WEEKLY_LIMIT: env('OLLAMA_WEEKLY_LIMIT'),
         OLLAMA_MONTHLY_PREMIUM_LIMIT: env('OLLAMA_MONTHLY_PREMIUM_LIMIT'),
         OLLAMA_MODELS: ollamaModels,
+        OMK_OLLAMA_KEEP_ALIVE: env('OMK_OLLAMA_KEEP_ALIVE'),
+        OMK_DISABLE_LLM_CLASSIFIER: env('OMK_DISABLE_LLM_CLASSIFIER'),
         LOG_LEVEL: env('LOG_LEVEL'),
         GEMINI_THINK_ENABLED: env('GEMINI_THINK_ENABLED'),
         GEMINI_THINK_LEVEL: env('GEMINI_THINK_LEVEL'),
@@ -488,6 +503,15 @@ export function loadConfig(): EnvConfig {
 
         // Per-key models — 로그 표시용 (OLLAMA_MODEL_1, _2, _3, ... N)
         ollamaModels: parsed.OLLAMA_MODELS ?? DEFAULT_CONFIG.ollamaModels,
+
+        // Latency / Single-model optimization
+        ollamaKeepAlive: parsed.OMK_OLLAMA_KEEP_ALIVE ?? DEFAULT_CONFIG.ollamaKeepAlive,
+        omkDisableLlmClassifier: ((): 'true' | 'false' | 'auto' => {
+            const raw = parsed.OMK_DISABLE_LLM_CLASSIFIER?.trim().toLowerCase();
+            if (raw === 'true') return 'true';
+            if (raw === 'false') return 'false';
+            return 'auto';
+        })(),
 
         // Rate limits
         ollamaHourlyLimit: parsed.OLLAMA_HOURLY_LIMIT ?? DEFAULT_CONFIG.ollamaHourlyLimit,

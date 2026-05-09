@@ -866,3 +866,71 @@ thinking 결정 우선순위 변경 (line 466):
   - `prefer-const`: `__tests__/circuit-breaker.test.ts`, `monitoring/analytics.ts`, `services/AuthService.ts`, `services/chat-strategies/discussion-strategy.ts`
   - `@typescript-eslint/no-namespace`: `auth/middleware.ts`
   - `@typescript-eslint/no-this-alias`: `documents/store.ts` 2건
+
+---
+
+### 2026-05-09 — Latency 개선 P2-강화 + P1 + P4 (단일 모델 환경)
+
+**증상 (B안 — DDNS/localhost 모두 느림)**: 부팅 직후 또는 5분 idle 후 첫 채팅 요청에 9.6GB `gemma4:e4b` 콜드 로딩 (~10–30s). hot 상태에서도 매 요청 LLM classifier round-trip 2회 발생 (단순 인사 포함, fast-path 미적용 경로).
+
+**근본 원인 3가지**:
+1. `/api/ps` 응답 `{"models":[]}` — 모델 unload 상태. `OllamaClient.chat()/generate()` 가 `keep_alive` 미전달 → Ollama 기본값 5분 사용.
+2. `selectOptimalModel()` 이 단일 모델 환경에서도 LLM classifier 호출. 분류 결과는 옵션 튜닝(QUERY_TYPE_PARAMS) 에만 영향이고 모델 라우팅에 영향 없음에도 round-trip 발생.
+3. `selectOptimalModel()` 이 `ws-chat-handler.ts:223` + `services/chat-service/model-resolver.ts:50` 두 곳에서 호출 — 매 요청 LLM round-trip 2회.
+
+**변경 파일** (1 PR / 미커밋):
+| 파일 | 변경 |
+|------|------|
+| `config/env.schema.ts` | `OMK_OLLAMA_KEEP_ALIVE` (default `'24h'`), `OMK_DISABLE_LLM_CLASSIFIER` (`'true'`/`'false'`/`'auto'`) 등록 |
+| `config/env.ts` | `EnvConfig.ollamaKeepAlive`, `omkDisableLlmClassifier` 필드 추가 + `loadConfig()` 매핑 |
+| `chat/model-selector.ts` | `selectOptimalModel()` 진입부에 (1) `detectFastPath()` 우회 (2) `shouldBypassLlmClassifier()` 가드 추가. 단일 모델 환경(`getModelPresets()` 키 ≤ 1) 자동 감지 |
+| `ollama/client.ts` | `chat()`/`generate()` 에서 `advancedOptions.keep_alive` 미지정 시 `getConfig().ollamaKeepAlive` 자동 주입 (호출자 0건 변경) |
+| `server.ts` | `start()` 에 P4 비동기 워밍업 추가 (`ollamaDefaultModel` 1토큰 generate, 실패 무시) |
+| `__tests__/cookie-secure-enforcement.test.ts` | EnvConfig fixture 에 새 필드 추가 |
+| `__tests__/model-selector-llm.test.ts` | `OMK_DISABLE_LLM_CLASSIFIER='false'` 강제 + `resetConfig()` (LLM 경로 검증 스위트이므로 short-circuit 비활성) |
+| `.env.example` | `OMK_OLLAMA_KEEP_ALIVE=24h`, `OMK_DISABLE_LLM_CLASSIFIER=auto` 안내 |
+
+**Short-circuit 결정 트리** (`chat/model-selector.ts`):
+1. `detectFastPath(query)` 매칭 → `queryType='chat'` 즉시 반환 (LLM/regex 모두 우회)
+2. `shouldBypassLlmClassifier()` true → regex 분류만 사용 (LLM round-trip 0회)
+3. 그 외 (다중 모델 환경) → 기존 LLM classifier 경로 유지
+
+**`shouldBypassLlmClassifier()` 결정**:
+- env `OMK_DISABLE_LLM_CLASSIFIER='true'` → 항상 우회
+- env `'false'` → 항상 활성
+- 미지정/`'auto'` → `Object.keys(getModelPresets()).length <= 1` 자동 감지 (현재 단일 모델이므로 우회)
+
+**검증 결과 (PM2 reload 직후)**:
+- `npx tsc -p backend/api/tsconfig.json`: 0 오류
+- `npm test --workspace=openmake-api -- --testPathPattern="model-selector|fast-path|llm-classifier|cookie-secure"`: 37/37 PASS
+- `npx eslint --quiet`: 변경 7개 파일 0 오류
+- `pm2 reload openmake-llm --update-env`: 성공 (무중단)
+- `[Server] 모델 워밍업 완료 — gemma4:e4b (37884ms, keep_alive=24h)` 로그 확인
+- `/api/ps`: `gemma4:e4b` size_vram=10.41GB, expires_at=내일 동시각 → 24h keep_alive 정확 적용
+- Hot Ollama 직접 호출 latency (`num_predict=1`): 0.19~0.81s
+
+**예상 사용자 체감 효과**:
+- 부팅 직후 첫 요청: 콜드 로딩 ~30s → 즉시 응답 (워밍업이 미리 흡수)
+- 5분 idle 후 첫 요청: 콜드 로딩 ~30s → hot 상태 유지 (24h)
+- 매 요청 LLM classifier round-trip: 2회 → 0~1회 (단일 모델 모드 자동 우회 + fast-path)
+- 단순 인사 ("안녕") 분류 시간: ~500ms~2s → <1ms (regex/fast-path)
+
+**메모리 trade-off**: gemma4:e4b 10.4GB가 24h 상시 점유. 메모리 부담 시 `OMK_OLLAMA_KEEP_ALIVE=1h` 또는 `30m` 으로 단축 가능.
+
+**Post-deploy 메모리 모니터링 (16 GiB 머신, 동일 세션)**:
+- 측정 직전: Wired 13.57GB, Free 0.06GB, Swap used 9.44/10GB, Swapouts 누적 1.66M 페이지 (≈25GB) → swap 포화 직전.
+- 사용자 결정으로 `OMK_OLLAMA_KEEP_ALIVE=30m` 으로 즉시 단축 (`.env` 적용 + `pm2 reload --update-env`).
+- 새 워밍업 11.8s 완료, `/api/ps` `expires_at` 29.7분 → 30m 정확 적용.
+- reload 직후: Swap used 9.44GB → 8.88GB (-566MB, PM2 워커 재시작에 의한 페이지 정리). Wired/Free는 모델 hot 상태라 변화 없음.
+- 30분+ idle 시 모델 unload 시점부터 wired 메모리 ~10GB 회수 + swap 점진적 회복 예상.
+
+**모니터링 1-liner** (재측정용):
+```bash
+echo "Wired:$(vm_stat | awk '/Pages wired down/ {printf \"%.2fGB\", $4*16384/1e9}')  Free:$(vm_stat | awk '/Pages free/ {printf \"%.2fGB\", $3*16384/1e9}')  $(sysctl -n vm.swapusage | awk '{print \"Swap:\"$3\"/\"$7}')"
+curl -sS http://localhost:11434/api/ps | python3 -c "import sys,json;d=json.load(sys.stdin); [print(f\"  {m['name']}: vram={m['size_vram']/1e9:.2f}GB, expires_at={m['expires_at']}\") for m in d['models']]"
+```
+
+**잔존 항목 (후속 처리 후보)**:
+- `nomic-embed-text:latest` 가 별도 OllamaClient 인스턴스(llm-classifier.ts `getEmbeddingClient`)에서 호출되어 keep_alive 자동 주입은 적용되지만 expires_at 5분 — 임베딩 모델은 137M 으로 작아 영향 미미. 별도 정리 시 환경변수 분리 검토.
+- 시사 키워드 자동 web_search (P5): "오늘/지금/최근" false-positive 차단은 별도 작업으로 보류.
+- 다중 모델 환경 복귀 시: `.env` 에서 `OMK_DISABLE_LLM_CLASSIFIER=false` 명시 + 신규 모델 프리셋을 `getModelPresets()` 에 추가하면 자동으로 LLM classifier 재활성.

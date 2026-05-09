@@ -239,6 +239,23 @@ export class DashboardServer {
         };
         warmWithRetry().catch(err => console.error('[Server] 캐시 워밍 최종 실패:', err));
 
+        // 모델 워밍업 (P4): 단일 모델을 메모리에 미리 로드하여 첫 사용자 요청이 콜드 로딩에 걸리지 않도록.
+        // 비동기, 실패해도 서버 시작은 계속. keep_alive 는 envConfig.ollamaKeepAlive 자동 주입.
+        (async () => {
+            try {
+                const { OllamaClient } = await import('./ollama/client');
+                const cfg = getConfig();
+                const warmupClient = new OllamaClient({ model: cfg.ollamaDefaultModel });
+                const t0 = Date.now();
+                await warmupClient.generate(' ', { num_predict: 1 });
+                const elapsed = Date.now() - t0;
+                console.log(`[Server] 모델 워밍업 완료 — ${cfg.ollamaDefaultModel} (${elapsed}ms, keep_alive=${cfg.ollamaKeepAlive})`);
+            } catch (err) {
+                const message = err instanceof Error ? err.message : String(err);
+                console.warn('[Server] 모델 워밍업 실패 (무시, 첫 사용자 요청 시 콜드 로딩 발생 가능):', message);
+            }
+        })();
+
         // Semantic Router 백그라운드 초기화 (PoC, fire-and-forget)
         // OMK_SEMANTIC_ROUTER_ENABLED=true일 때만 실행, 미설정 시 noop
         // 인덱스 미준비 상태에서는 shadow 비교가 자동 스킵되어 메인 흐름 영향 X
