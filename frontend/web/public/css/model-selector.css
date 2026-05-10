@@ -1,5 +1,5 @@
 /**
- * Model Selector — 채팅 입력 영역 통합 모델 셀렉트 dropdown
+ * Model Selector — Settings 페이지 "AI 모델" 카드 통합 모델 셀렉트 dropdown
  * 외부 LLM 키 등록·선택·관리 single entry point
  */
 .model-selector { position: relative; display: inline-block; }
@@ -30,7 +30,7 @@
 
 .model-selector-dropdown {
     position: absolute;
-    bottom: calc(100% + 4px);
+    top: calc(100% + 4px);
     right: 0;
     min-width: 320px;
     max-width: 480px;
