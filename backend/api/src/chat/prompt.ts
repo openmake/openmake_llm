@@ -164,9 +164,37 @@ export function getPresetWithUserConfig(
 // ============================================================
 
 /**
+ * 정체성 가드 — 모든 페르소나 공통으로 prepend 되는 hard guard.
+ * qwen 등 distillation 학습 모델이 자신을 Google/OpenAI 등으로 환각하는 것을 방지.
+ *
+ * 명시적 부정문 + 긍정문 결합 (LLM 정체성 환각에 가장 효과적).
+ * 브랜드명은 OMK_BRAND_NAME 환경변수 오버라이드 가능 (default: OpenMake.AI).
+ */
+function getIdentityGuard(userLanguage: string): string {
+    const brand = process.env.OMK_BRAND_NAME || 'OpenMake.AI';
+    const locale = resolvePromptLocale(userLanguage);
+    if (locale === 'ko') {
+        return `## 🆔 정체성 가드 (Identity Guard)
+- 당신은 **${brand}** 가 운영하는 자체 호스팅 LLM 플랫폼의 일부입니다.
+- 당신은 Google, Gemini, Bard, OpenAI, GPT, ChatGPT, Anthropic, Claude, Meta Llama, Microsoft Copilot 등 **외부 상용 AI 서비스가 아닙니다**.
+- 정체성·제조사·학습 출처 질문에는 "${brand} 가 운영하는 로컬 LLM 서비스" 라고만 답하세요.
+- 학습 데이터에서 본 다른 모델의 이름·소속·학습 컷오프를 자기 것처럼 답하지 마세요. 확실하지 않으면 "확인되지 않습니다" 라고 답하세요.
+
+`;
+    }
+    return `## 🆔 Identity Guard
+- You are part of **${brand}**'s self-hosted LLM platform.
+- You are **NOT** Google, Gemini, Bard, OpenAI, GPT, ChatGPT, Anthropic, Claude, Meta Llama, Microsoft Copilot, or any other commercial AI service.
+- When asked about your identity, maker, or training origin, answer only: "${brand}'s locally-hosted LLM service".
+- Do not adopt names, affiliations, or knowledge cutoffs from your training data as your own. If unsure, answer: "not verifiable".
+
+`;
+}
+
+/**
  * 시스템 프롬프트를 빌드합니다.
- * includeBase=true이면 공통 기반 프롬프트(COMMON_BASE_PROMPT) + 역할 프롬프트를 조합합니다.
- * 
+ * includeBase=true이면 정체성 가드 + 공통 기반 프롬프트(COMMON_BASE_PROMPT) + 역할 프롬프트를 조합합니다.
+ *
  * @param type - 프롬프트 역할 유형 (기본: 'assistant')
  * @param includeBase - 공통 기반 프롬프트 포함 여부 (기본: true)
  * @returns 조합된 시스템 프롬프트 문자열
@@ -175,20 +203,21 @@ export function buildSystemPrompt(type: PromptType = 'assistant', includeBase: b
     // Use language-aware prompt builders for supported types
     const promptLocale = resolvePromptLocale(userLanguage);
     if (includeBase) {
+        const guard = getIdentityGuard(userLanguage);
         let rolePrompt: string;
         switch (type) {
             case 'assistant':
                 rolePrompt = buildAssistantPrompt(promptLocale);
-                return rolePrompt;
+                return guard + rolePrompt;
             case 'coder':
                 rolePrompt = buildCoderPrompt(promptLocale);
-                return rolePrompt;
+                return guard + rolePrompt;
             case 'reasoning':
                 rolePrompt = buildReasoningPrompt(promptLocale);
-                return rolePrompt;
+                return guard + rolePrompt;
             default:
                 // Fallback to original static prompts for other types
-                return `${getEnhancedBasePrompt(userLanguage)}
+                return `${guard}${getEnhancedBasePrompt(userLanguage)}
 
 ## 🤖 ${getRoleLabel(userLanguage)}: ${getPromptTypeDescription(type, userLanguage)}
 
