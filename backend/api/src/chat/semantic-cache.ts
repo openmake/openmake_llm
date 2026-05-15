@@ -42,7 +42,7 @@ export class SemanticClassificationCache {
     private readonly maxSize: number;
     private readonly exactIndex = new Map<string, number>();
     private readonly entries: Array<CacheEntry | null> = [];
-    private stats = { l1Hits: 0, misses: 0 };
+    private stats = { l1Hits: 0, misses: 0, evictions: 0 };
 
     constructor(options?: SemanticCacheOptions) {
         this.ttlMs = options?.ttlMs ?? DEFAULT_TTL_MS;
@@ -126,15 +126,16 @@ export class SemanticClassificationCache {
     clear(): void {
         this.exactIndex.clear();
         this.entries.length = 0;
-        this.stats = { l1Hits: 0, misses: 0 };
+        this.stats = { l1Hits: 0, misses: 0, evictions: 0 };
     }
 
-    getStats(): { l1Hits: number; misses: number; size: number; maxSize: number; hitRate: number } {
+    getStats(): { l1Hits: number; misses: number; evictions: number; size: number; maxSize: number; hitRate: number } {
         const total = this.stats.l1Hits + this.stats.misses;
         const hitRate = total > 0 ? Math.round((this.stats.l1Hits / total) * 10000) / 100 : 0;
         return {
             l1Hits: this.stats.l1Hits,
             misses: this.stats.misses,
+            evictions: this.stats.evictions,
             size: this.size(),
             maxSize: this.maxSize,
             hitRate,
@@ -173,6 +174,15 @@ export class SemanticClassificationCache {
                 oldestIdx = i;
             }
         }
-        if (oldestIdx >= 0) this.removeEntry(oldestIdx);
+        if (oldestIdx >= 0) {
+            this.stats.evictions++;
+            const evicted = this.entries[oldestIdx];
+            this.removeEntry(oldestIdx);
+            // 캐시 thrashing 진단: maxSize 대비 eviction 빈도가 높으면 maxSize 상향 검토
+            logger.debug(
+                `LRU eviction: "${evicted?.normalizedQuery.substring(0, 30)}..." ` +
+                `(total evictions: ${this.stats.evictions}, maxSize: ${this.maxSize})`
+            );
+        }
     }
 }
