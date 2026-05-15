@@ -61,6 +61,8 @@ export class WebSocketHandler {
     private wss: WebSocketServer;
     private cluster: ClusterManager;
     private clients: Set<WebSocket> = new Set();
+    /** broadcast 시 backpressure 임계 초과 횟수 — terminate 임계 도달 시 강제 종료 */
+    private slowClientCounters: WeakMap<WebSocket, number> = new WeakMap();
     private userConnections: Map<string, Set<WebSocket>> = new Map();
     private ipConnectionAttempts: Map<string, number[]> = new Map();
     private userConnectionAttempts: Map<string, number[]> = new Map();
@@ -637,15 +639,56 @@ export class WebSocketHandler {
 
     /**
      * 모든 연결된 클라이언트에 메시지를 브로드캐스트합니다.
-     * OPEN 상태인 클라이언트에만 전송합니다.
+     * OPEN 상태이며 backpressure 임계 미만인 클라이언트에만 전송합니다.
+     *
+     * Backpressure 정책:
+     *  - bufferedAmount > THRESHOLD_BYTES: 송신 skip + slowClient 카운터 증가
+     *  - 카운터가 TERMINATE_AFTER 초과: ws.terminate() 로 강제 종료
+     *    (heartbeat 가 없는 dead connection 정리)
+     *  - 정상 송신 시 카운터 리셋
+     *
+     * 이전 동작 (await/콜백 없는 단순 send) 은 슬로우 클라이언트가
+     * 이벤트 루프와 Node 메모리를 점유하여 fast 클라이언트의 latency 까지 끌어올렸음.
+     *
      * @param data - 전송할 JSON 직렬화 가능 데이터
      */
     public broadcast(data: Record<string, unknown>): void {
         const message = JSON.stringify(data);
+        const threshold = WS_LIMITS.BROADCAST_BACKPRESSURE_THRESHOLD_BYTES;
+        const terminateAfter = WS_LIMITS.BROADCAST_BACKPRESSURE_TERMINATE_AFTER;
+        let skipped = 0;
+        let terminated = 0;
+
         for (const client of this.clients) {
-            if (client.readyState === WebSocket.OPEN) {
-                client.send(message);
+            if (client.readyState !== WebSocket.OPEN) continue;
+
+            // 슬로우 클라이언트 감지 — bufferedAmount 가 임계 초과
+            if (client.bufferedAmount > threshold) {
+                const count = (this.slowClientCounters.get(client) ?? 0) + 1;
+                this.slowClientCounters.set(client, count);
+                skipped++;
+
+                if (terminateAfter > 0 && count >= terminateAfter) {
+                    // 만성적 stall — 강제 종료 (close 핸들러가 cleanup 처리)
+                    client.terminate();
+                    this.slowClientCounters.delete(client);
+                    terminated++;
+                }
+                continue;
             }
+
+            // 정상 송신 — slow 카운터 리셋
+            if (this.slowClientCounters.has(client)) {
+                this.slowClientCounters.delete(client);
+            }
+            client.send(message);
+        }
+
+        if (skipped > 0 || terminated > 0) {
+            log.warn(
+                `broadcast backpressure: skipped=${skipped}, terminated=${terminated} ` +
+                `(threshold=${threshold}B, terminateAfter=${terminateAfter})`
+            );
         }
     }
 }
