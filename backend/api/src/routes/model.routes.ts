@@ -34,24 +34,15 @@ const logger = createLogger('ModelRoutes');
  * Provider 별 fallback 모델 목록 — `/v1/models` API 호출 실패 또는 빈 배열 반환 시
  * 사용자가 채팅을 시작할 수 있도록 제공하는 known 모델 카탈로그.
  *
- * OpenRouter `/v1/models` 가 빈 배열을 반환하거나 호출이 실패한 경우 대응.
+ * 모델 카탈로그는 No-Hardcoding 정책에 따라 `config/external-providers.ts` 의
+ * `EXTERNAL_PROVIDER_CATALOG[].fallbackModels` 에 외부화되어 있습니다.
  */
 function getProviderFallbackModels(
     providerId: string,
 ): Array<{ id: string; fullId: string; displayName: string; capabilities: Record<string, boolean>; isFree?: boolean }> {
-    const KNOWN_MODELS: Record<string, Array<{ id: string; displayName: string; capabilities: Record<string, boolean>; isFree?: boolean }>> = {
-        openrouter: [
-            { id: 'openai/gpt-5',                    displayName: 'GPT-5',                       isFree: false, capabilities: { streaming: true, toolCalling: true, vision: true,  thinking: false, embedding: false } },
-            { id: 'anthropic/claude-opus-4.5',       displayName: 'Claude Opus 4.5',             isFree: false, capabilities: { streaming: true, toolCalling: true, vision: true,  thinking: true,  embedding: false } },
-            { id: 'anthropic/claude-sonnet-4.6',     displayName: 'Claude Sonnet 4.6',           isFree: false, capabilities: { streaming: true, toolCalling: true, vision: true,  thinking: true,  embedding: false } },
-            { id: 'google/gemini-2.5-pro',           displayName: 'Gemini 2.5 Pro (via OR)',     isFree: false, capabilities: { streaming: true, toolCalling: true, vision: true,  thinking: false, embedding: false } },
-            { id: 'meta-llama/llama-3.3-70b-instruct', displayName: 'Llama 3.3 70B',             isFree: false, capabilities: { streaming: true, toolCalling: true, vision: false, thinking: false, embedding: false } },
-            { id: 'deepseek/deepseek-r1',            displayName: 'DeepSeek R1',                 isFree: false, capabilities: { streaming: true, toolCalling: true, vision: false, thinking: true,  embedding: false } },
-        ],
-    };
-    const known = KNOWN_MODELS[providerId];
-    if (!known) return [];
-    return known.map(m => ({
+    const entry = getProviderCatalogEntry(providerId);
+    if (!entry?.fallbackModels?.length) return [];
+    return entry.fallbackModels.map(m => ({
         id: m.id,
         fullId: buildFullModelId(providerId, m.id),
         displayName: m.displayName,

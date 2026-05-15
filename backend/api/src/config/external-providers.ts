@@ -53,6 +53,17 @@ export interface ExternalProviderCatalogEntry {
         clientIdEnv: string;
         scopes: string[];
     };
+    /**
+     * provider `/v1/models` API 가 빈 배열을 반환하거나 호출이 실패한 경우
+     * 사용자가 채팅을 시작할 수 있도록 제공하는 known 모델 카탈로그.
+     * No-Hardcoding 정책에 따라 model.routes.ts 의 인라인 KNOWN_MODELS 를 이 곳으로 이동.
+     */
+    fallbackModels?: ReadonlyArray<{
+        id: string;
+        displayName: string;
+        capabilities: { streaming: boolean; toolCalling: boolean; vision: boolean; thinking: boolean; embedding: boolean };
+        isFree?: boolean;
+    }>;
 }
 
 /**
@@ -85,6 +96,14 @@ export const EXTERNAL_PROVIDER_CATALOG: ReadonlyArray<ExternalProviderCatalogEnt
             '모델 ID 는 "openai/gpt-5", "anthropic/claude-opus-4.5", "google/gemini-2.5-pro" 등 ' +
             'OpenRouter 의 namespaced 형식을 그대로 사용합니다.',
         authMethods: ['api_key'] as const,
+        fallbackModels: [
+            { id: 'openai/gpt-5',                      displayName: 'GPT-5',                       isFree: false, capabilities: { streaming: true, toolCalling: true, vision: true,  thinking: false, embedding: false } },
+            { id: 'anthropic/claude-opus-4.5',         displayName: 'Claude Opus 4.5',             isFree: false, capabilities: { streaming: true, toolCalling: true, vision: true,  thinking: true,  embedding: false } },
+            { id: 'anthropic/claude-sonnet-4.6',       displayName: 'Claude Sonnet 4.6',           isFree: false, capabilities: { streaming: true, toolCalling: true, vision: true,  thinking: true,  embedding: false } },
+            { id: 'google/gemini-2.5-pro',             displayName: 'Gemini 2.5 Pro (via OR)',     isFree: false, capabilities: { streaming: true, toolCalling: true, vision: true,  thinking: false, embedding: false } },
+            { id: 'meta-llama/llama-3.3-70b-instruct', displayName: 'Llama 3.3 70B',               isFree: false, capabilities: { streaming: true, toolCalling: true, vision: false, thinking: false, embedding: false } },
+            { id: 'deepseek/deepseek-r1',              displayName: 'DeepSeek R1',                 isFree: false, capabilities: { streaming: true, toolCalling: true, vision: false, thinking: true,  embedding: false } },
+        ],
     },
 ] as const;
 
