@@ -321,8 +321,12 @@ function finishAssistantMessage(errorMessage = null, serverMessageId = null) {
         }
 
         // Ollama Thinking trace 복원: renderMarkdown 후 최상단에 다시 삽입
+        // 방어적 살균: outerHTML round-trip 이지만 상류 경로 변경에 안전하도록 한 번 더 sanitize
         if (thinkingTraceHtml) {
-            content.insertAdjacentHTML('afterbegin', thinkingTraceHtml);
+            var safeTrace = (typeof window.purifyHTML === 'function')
+                ? window.purifyHTML(thinkingTraceHtml)
+                : thinkingTraceHtml;
+            content.insertAdjacentHTML('afterbegin', safeTrace);
         }
 
         // saveHistory 설정이 활성화된 경우에만 메모리에 추가
