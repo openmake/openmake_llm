@@ -1,6 +1,6 @@
 /**
  * PM2 Ecosystem Configuration
- * 
+ *
  * 사용법:
  *   pm2 start ecosystem.config.js          # 시작
  *   pm2 restart openmake-llm               # 재시작
@@ -8,6 +8,15 @@
  *   pm2 logs openmake-llm                  # 로그 보기
  *   pm2 monit                              # 모니터링 대시보드
  *   pm2 save && pm2 startup                # 시스템 부팅 시 자동 시작
+ *
+ * 로그 로테이션 (필수, 1회만 실행):
+ *   pm2 install pm2-logrotate
+ *   pm2 set pm2-logrotate:max_size 10M
+ *   pm2 set pm2-logrotate:retain 30
+ *   pm2 set pm2-logrotate:compress true
+ *   pm2 set pm2-logrotate:rotateInterval '0 0 * * *'
+ *   # /tmp/openmake-llm-*.log 가 10MB 도달 시 회전, 30일 보관, gzip 압축
+ *   # 미설정 시 단일 로그 파일이 무한 증가 → 디스크 가득 위험
  */
 module.exports = {
     apps: [{
