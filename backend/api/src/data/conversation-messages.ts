@@ -22,19 +22,47 @@ import {
 
 /**
  * 세션 목록에 대한 메시지 배치 로딩 (N+1 방지)
+ *
+ * @param rows - 세션 row 목록
+ * @param options.maxMessagesPerSession - 세션당 최근 N 메시지로 제한 (기본 미지정: 모든 메시지).
+ *   list view 에서는 50 등 작은 값을 전달해 5K+ 메시지 보유 사용자의 메모리 spike 방지.
+ *   single-session detail 은 getSession() 의 LIMIT 500 패턴을 사용하므로 본 함수 미사용.
  */
-export async function loadMessagesForSessions(rows: SessionRow[]): Promise<ConversationSession[]> {
+export async function loadMessagesForSessions(
+    rows: SessionRow[],
+    options?: { maxMessagesPerSession?: number }
+): Promise<ConversationSession[]> {
     if (rows.length === 0) return [];
 
     const pool = getPool();
     const ids = rows.map(r => r.id);
     const placeholders = ids.map((_, i) => `$${i + 1}`).join(',');
+    const maxPerSession = options?.maxMessagesPerSession;
 
-    const msgResult = await pool.query(
-        `SELECT * FROM conversation_messages WHERE session_id IN (${placeholders}) ORDER BY created_at ASC`,
-        ids
-    );
-    const msgRows = msgResult.rows as MessageRow[];
+    let msgRows: MessageRow[];
+    if (maxPerSession === undefined || maxPerSession <= 0) {
+        // 기존 동작 (하위 호환): 세션당 메시지 무제한
+        const msgResult = await pool.query(
+            `SELECT * FROM conversation_messages WHERE session_id IN (${placeholders}) ORDER BY created_at ASC`,
+            ids
+        );
+        msgRows = msgResult.rows as MessageRow[];
+    } else {
+        // window function 으로 세션당 최근 N 메시지만 — list view 페이로드 비대화 방지.
+        // ROW_NUMBER() PARTITION BY session_id ORDER BY created_at DESC 로 최신 N 추출 후
+        // 외부에서 created_at ASC 로 재정렬 (기존 동작과 동일 순서 보장).
+        const msgResult = await pool.query(
+            `SELECT * FROM (
+                SELECT *, ROW_NUMBER() OVER (
+                    PARTITION BY session_id ORDER BY created_at DESC
+                ) AS rn
+                FROM conversation_messages WHERE session_id IN (${placeholders})
+            ) ranked WHERE rn <= $${ids.length + 1}
+            ORDER BY session_id, created_at ASC`,
+            [...ids, maxPerSession]
+        );
+        msgRows = msgResult.rows as MessageRow[];
+    }
 
     // Group messages by session_id
     const msgMap = new Map<string, ConversationMessage[]>();
