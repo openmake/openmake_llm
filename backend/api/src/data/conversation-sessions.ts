@@ -126,7 +126,9 @@ export async function getSessionsByUserId(userId: string, limit: number = 50): P
         [userId, limit]
     );
 
-    return loadMessagesForSessions(result.rows as SessionRow[]);
+    // list view: 세션당 최근 50개만 — 5K+ 메시지 사용자의 메모리 spike 방지.
+    // single-session detail 은 getSession() 의 LIMIT 500 으로 별도 로드.
+    return loadMessagesForSessions(result.rows as SessionRow[], { maxMessagesPerSession: 50 });
 }
 
 /**
@@ -139,7 +141,9 @@ export async function getSessionsByAnonId(anonSessionId: string, limit: number =
         [anonSessionId, limit]
     );
 
-    return loadMessagesForSessions(result.rows as SessionRow[]);
+    // list view: 세션당 최근 50개만 — 5K+ 메시지 사용자의 메모리 spike 방지.
+    // single-session detail 은 getSession() 의 LIMIT 500 으로 별도 로드.
+    return loadMessagesForSessions(result.rows as SessionRow[], { maxMessagesPerSession: 50 });
 }
 
 /**
@@ -152,7 +156,9 @@ export async function getAllSessions(limit: number = 100): Promise<ConversationS
         [limit]
     );
 
-    return loadMessagesForSessions(result.rows as SessionRow[]);
+    // list view: 세션당 최근 50개만 — 5K+ 메시지 사용자의 메모리 spike 방지.
+    // single-session detail 은 getSession() 의 LIMIT 500 으로 별도 로드.
+    return loadMessagesForSessions(result.rows as SessionRow[], { maxMessagesPerSession: 50 });
 }
 
 /**
