@@ -17,7 +17,13 @@ const supportedLanguageSchema = z.enum([
     'hi', 'it', 'nl', 'sv', 'da', 'no', 'fi', 'th', 'vi', 'tr'
 ]);
 
-const nodeEnvSchema = z.enum(['development', 'test', 'production']);
+// dev/test 외 모든 환경 (production, staging, uat, qa, ...) 은 시크릿 강제 — token-crypto.ts SAFE_TO_SKIP_ENVS 와 일관.
+// staging/uat/qa 가 누락된 white-list 였던 기존 enum 은 deploy 시 silent token plaintext 위험을 만들었음.
+const nodeEnvSchema = z.enum(['development', 'test', 'production', 'staging', 'uat', 'qa']);
+const SAFE_ENVS_FOR_MISSING_SECRETS = new Set(['development', 'test']);
+function isUnsafeEnv(env: string | undefined): boolean {
+    return !SAFE_ENVS_FOR_MISSING_SECRETS.has(env ?? '');
+}
 const logLevelSchema = z.enum(['debug', 'info', 'warn', 'error']);
 const geminiThinkLevelSchema = z.enum(['low', 'medium', 'high']);
 
@@ -59,6 +65,9 @@ export const envSchema = z
         ADMIN_EMAILS: z.string().default(''),
         API_KEY_PEPPER: z.string().default(''),
         API_KEY_MAX_PER_USER: positiveIntWithDefault(5),
+        // OAuth 토큰 AES-256-GCM 키 — 64자리 hex (openssl rand -hex 32).
+        // dev/test 외 모든 환경 (production, staging, uat, qa) 에서 필수 — superRefine 검증.
+        TOKEN_ENCRYPTION_KEY: z.string().default(''),
 
         // Security — Blacklist Policy (additive; default 'open' preserves legacy behavior)
         BLACKLIST_FAIL_MODE: z.enum(['open', 'safe']).default('open'),
@@ -172,7 +181,9 @@ export const envSchema = z
         OMK_DISABLE_LLM_CLASSIFIER: z.string().optional(),
     })
     .superRefine((data, ctx) => {
-        if (data.NODE_ENV !== 'production') {
+        // dev/test 가 아닌 모든 환경 (production, staging, uat, qa, ...) 에서 시크릿 강제.
+        // 화이트리스트 (production 만 검사) 패턴은 staging silent fallback 위험을 만들어 사용 안 함.
+        if (!isUnsafeEnv(data.NODE_ENV)) {
             return;
         }
 
@@ -180,7 +191,7 @@ export const envSchema = z
             ctx.addIssue({
                 code: 'custom',
                 path: ['JWT_SECRET'],
-                message: 'JWT_SECRET must be at least 32 characters in production',
+                message: `JWT_SECRET must be at least 32 characters in ${data.NODE_ENV} environment`,
             });
         }
 
@@ -188,7 +199,23 @@ export const envSchema = z
             ctx.addIssue({
                 code: 'custom',
                 path: ['API_KEY_PEPPER'],
-                message: 'API_KEY_PEPPER is required in production for API key hashing security',
+                message: `API_KEY_PEPPER is required in ${data.NODE_ENV} environment for API key hashing security`,
+            });
+        }
+
+        // TOKEN_ENCRYPTION_KEY: 누락 시 OAuth 토큰 평문 저장 → DB 백업 노출 시 자격증명 유출.
+        // token-crypto.ts assertTokenEncryptionKeyForProduction 와 동일 규칙 — 부팅 더 빠른 시점에서 검출.
+        if (!data.TOKEN_ENCRYPTION_KEY || data.TOKEN_ENCRYPTION_KEY.length === 0) {
+            ctx.addIssue({
+                code: 'custom',
+                path: ['TOKEN_ENCRYPTION_KEY'],
+                message: `TOKEN_ENCRYPTION_KEY is required in ${data.NODE_ENV} environment (openssl rand -hex 32). OAuth tokens are stored plaintext without it.`,
+            });
+        } else if (data.TOKEN_ENCRYPTION_KEY.length !== 64) {
+            ctx.addIssue({
+                code: 'custom',
+                path: ['TOKEN_ENCRYPTION_KEY'],
+                message: `TOKEN_ENCRYPTION_KEY must be exactly 64 hex characters (32 bytes). Current length: ${data.TOKEN_ENCRYPTION_KEY.length}`,
             });
         }
     });
