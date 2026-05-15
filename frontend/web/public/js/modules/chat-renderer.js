@@ -303,9 +303,10 @@ function finishAssistantMessage(errorMessage = null, serverMessageId = null) {
             }
         }
 
-        // Ollama Thinking trace 보존: renderMarkdown이 innerHTML을 덮어쓰기 전에 저장
+        // Ollama Thinking trace 보존: renderMarkdown이 innerHTML을 덮어쓰기 전에 DOM Node 자체 보존.
+        // outerHTML 직렬화 round-trip 회피 — HTML re-parse 비용 + DOM XSS 표면 제거.
         var existingThinkingTrace = content.querySelector('.thinking-trace');
-        var thinkingTraceHtml = existingThinkingTrace ? existingThinkingTrace.outerHTML : '';
+        var thinkingTraceNode = existingThinkingTrace ? existingThinkingTrace.cloneNode(true) : null;
 
         // 마크다운 렌더링: 접힌 사고 과정 상단, 결론 하단 (이미지 레이아웃)
         if (thinkingProcess && finalAnswer) {
@@ -320,13 +321,10 @@ function finishAssistantMessage(errorMessage = null, serverMessageId = null) {
             renderMarkdown(content, finalAnswer);
         }
 
-        // Ollama Thinking trace 복원: renderMarkdown 후 최상단에 다시 삽입
-        // 방어적 살균: outerHTML round-trip 이지만 상류 경로 변경에 안전하도록 한 번 더 sanitize
-        if (thinkingTraceHtml) {
-            var safeTrace = (typeof window.purifyHTML === 'function')
-                ? window.purifyHTML(thinkingTraceHtml)
-                : thinkingTraceHtml;
-            content.insertAdjacentHTML('afterbegin', safeTrace);
+        // Ollama Thinking trace 복원: renderMarkdown 후 최상단에 DOM Node 재삽입.
+        // cloneNode 로 보존된 노드를 직접 insertBefore — HTML 직렬화/파싱 0회, XSS 표면 제거.
+        if (thinkingTraceNode) {
+            content.insertBefore(thinkingTraceNode, content.firstChild);
         }
 
         // saveHistory 설정이 활성화된 경우에만 메모리에 추가
