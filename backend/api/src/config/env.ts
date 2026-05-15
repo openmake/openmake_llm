@@ -105,6 +105,8 @@ export interface EnvConfig {
     // API Key Service
     apiKeyPepper: string;
     apiKeyMaxPerUser: number;
+    /** OAuth 토큰 AES-256-GCM 키 (64자리 hex). dev/test 외 환경에서 필수 — env.schema.ts superRefine 검증. */
+    tokenEncryptionKey: string;
 
     // Cookie Security (HTTPS 없이 production 운영 시 false로 설정)
     cookieSecure: boolean;
@@ -225,6 +227,7 @@ const DEFAULT_CONFIG: EnvConfig = {
     // API Key Service
     apiKeyPepper: '',
     apiKeyMaxPerUser: 5,
+    tokenEncryptionKey: '',
 
     // Cookie Security
     cookieSecure: false,
@@ -418,6 +421,7 @@ export function loadConfig(): EnvConfig {
         SWAGGER_BASE_URL: env('SWAGGER_BASE_URL'),
         API_KEY_PEPPER: env('API_KEY_PEPPER'),
         API_KEY_MAX_PER_USER: env('API_KEY_MAX_PER_USER'),
+        TOKEN_ENCRYPTION_KEY: env('TOKEN_ENCRYPTION_KEY'),
 
         // P2: Cost Tier & Domain Routing
         OMK_COST_TIER_DEFAULT: env('OMK_COST_TIER_DEFAULT'),
@@ -554,6 +558,7 @@ export function loadConfig(): EnvConfig {
         // API Key Service
         apiKeyPepper: parsed.API_KEY_PEPPER ?? DEFAULT_CONFIG.apiKeyPepper,
         apiKeyMaxPerUser: parsed.API_KEY_MAX_PER_USER ?? DEFAULT_CONFIG.apiKeyMaxPerUser,
+        tokenEncryptionKey: parsed.TOKEN_ENCRYPTION_KEY ?? DEFAULT_CONFIG.tokenEncryptionKey,
 
         // Pipeline Profile — Cost Tier & Domain Routing (P2)
         omkCostTierDefault: parsed.OMK_COST_TIER_DEFAULT ?? DEFAULT_CONFIG.omkCostTierDefault,
