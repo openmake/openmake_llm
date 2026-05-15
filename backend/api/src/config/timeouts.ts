@@ -185,6 +185,17 @@ export const WS_LIMITS = {
     MESSAGE_RATE_WINDOW_MS: Number(process.env.WS_MESSAGE_RATE_WINDOW_MS) || 10 * 1000,
     /** 윈도우 내 최대 메시지 수 — 기본 30개 */
     MESSAGE_RATE_MAX_PER_WINDOW: Number(process.env.WS_MESSAGE_RATE_MAX_PER_WINDOW) || 30,
+    /**
+     * Backpressure 임계 (bytes). bufferedAmount 가 이 값을 초과한 클라이언트는
+     * broadcast 시 skip 됨 — 슬로우 클라이언트가 이벤트 루프/메모리 점유 방지.
+     * 기본 1MB — 일반 cluster_event 메시지 (~수 KB) 수십 개가 큐에 쌓인 수준.
+     */
+    BROADCAST_BACKPRESSURE_THRESHOLD_BYTES: Number(process.env.WS_BROADCAST_BACKPRESSURE_THRESHOLD_BYTES) || 1 * 1024 * 1024,
+    /**
+     * 위 임계를 N회 연속 초과한 클라이언트는 강제 종료 (terminate). 0 = 종료 안 함.
+     * 기본 5회 — 일시적 네트워크 spike 는 허용, 만성적 stall 은 정리.
+     */
+    BROADCAST_BACKPRESSURE_TERMINATE_AFTER: Number(process.env.WS_BROADCAST_BACKPRESSURE_TERMINATE_AFTER) || 5,
 } as const;
 
 // ============================================
