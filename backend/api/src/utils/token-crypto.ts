@@ -7,7 +7,7 @@
  *
  * 암호화 포맷: `v1:${iv_hex}:${ciphertext_hex}:${tag_hex}`
  * - v1: prefix로 암호화 여부를 감지 (하위 호환: prefix 없으면 평문으로 반환)
- * - TOKEN_ENCRYPTION_KEY 미설정 시 no-op (개발환경 호환)
+ * - TOKEN_ENCRYPTION_KEY 미설정 시 dev 환경은 no-op, production 환경은 throw
  *
  * 키 생성 방법: openssl rand -hex 32
  */
@@ -26,7 +26,15 @@ let _keyWarningLogged = false;
 
 function getKey(): Buffer | null {
     const hexKey = process.env.TOKEN_ENCRYPTION_KEY;
+    const isProduction = process.env.NODE_ENV === 'production';
+
     if (!hexKey) {
+        if (isProduction) {
+            throw new Error(
+                'TOKEN_ENCRYPTION_KEY 환경 변수가 production 환경에서 필수입니다. ' +
+                'OAuth 토큰 평문 저장 방지를 위해 설정하세요. (openssl rand -hex 32)'
+            );
+        }
         if (!_keyWarningLogged) {
             logger.warn(
                 'TOKEN_ENCRYPTION_KEY 환경 변수가 설정되지 않았습니다. ' +
@@ -38,6 +46,12 @@ function getKey(): Buffer | null {
         return null;
     }
     if (hexKey.length !== 64) {
+        if (isProduction) {
+            throw new Error(
+                `TOKEN_ENCRYPTION_KEY 길이가 올바르지 않습니다 (production 환경). ` +
+                `64자리 hex 문자열(32 bytes)이어야 합니다. 현재: ${hexKey.length}자.`
+            );
+        }
         logger.error(
             `TOKEN_ENCRYPTION_KEY 길이가 올바르지 않습니다. ` +
             `64자리 hex 문자열(32 bytes)이어야 합니다. 현재: ${hexKey.length}자. ` +
@@ -46,6 +60,15 @@ function getKey(): Buffer | null {
         return null;
     }
     return Buffer.from(hexKey, 'hex');
+}
+
+/**
+ * 서버 부팅 시 호출하여 production 환경에서 키 누락을 사전 검출합니다.
+ * 누락 시 throw — bootstrap.ts 가 잡아 전체 startup 을 중단시킵니다.
+ */
+export function assertTokenEncryptionKeyForProduction(): void {
+    if (process.env.NODE_ENV !== 'production') return;
+    getKey(); // production 분기에서 throw
 }
 
 /**

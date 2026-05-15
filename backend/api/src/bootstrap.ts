@@ -28,12 +28,14 @@ import { getAgentLearningSystem } from './agents/learning';
 import { getCustomAgentBuilder } from './agents/custom-builder';
 import { getSkillManager } from './agents/skill-manager';
 import { getPool } from './data/models/unified-database';
+import { assertTokenEncryptionKeyForProduction } from './utils/token-crypto';
 
 /**
  * 모든 싱글톤 서비스를 초기화합니다.
  * 서버 시작 시 한 번만 호출되어야 합니다.
  */
 export function bootstrapServices(): void {
+    assertTokenEncryptionKeyForProduction(); // production 에서 키 누락 시 즉시 실패
     getCacheSystem();          // 캐시 시스템 시작
     getAnalyticsSystem();      // 분석 시스템 시작
     getAlertSystem().setPool(getPool()); // alert_history DB 영속화 활성화
