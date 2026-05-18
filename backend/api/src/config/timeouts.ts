@@ -30,7 +30,7 @@ export const LLM_TIMEOUTS = {
     MEMORY_EXTRACTION_TIMEOUT_MS: 30000,
     /** Deep Research 주제 분해 타임아웃 (ms) */
     RESEARCH_DECOMPOSE_TIMEOUT_MS: 60000,
-    /** Deep Research 청크 합성 개별 타임아웃 (ms) — 전역 OLLAMA_TIMEOUT과 독립 */
+    /** Deep Research 청크 합성 개별 타임아웃 (ms) — 전역 LLM_TIMEOUT과 독립 */
     SYNTHESIS_PER_CHUNK_TIMEOUT_MS: 120000,
     /** Deep Research 청크 병합 타임아웃 (ms) */
     SYNTHESIS_MERGE_TIMEOUT_MS: 180000,

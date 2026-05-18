@@ -28,7 +28,7 @@ import {
     buildFullModelId,
 } from './i-provider';
 import { ProviderError } from './provider-errors';
-import type { ChatMessage, ToolDefinition, UsageMetrics } from '../ollama/types';
+import type { ChatMessage, ToolDefinition, UsageMetrics } from '../llm';
 import { createLogger } from '../utils/logger';
 
 const logger = createLogger('OpenAICompatProvider');
@@ -487,6 +487,12 @@ export class OpenAICompatProvider implements IProvider {
                 choices: Array<{
                     delta?: {
                         content?: string;
+                        /**
+                         * vLLM `--reasoning-parser` (deepseek_r1, qwen3, granite 등) 활성 시
+                         * 응답 chunk 에 reasoning 필드가 추가됨. OpenRouter Anthropic extended thinking
+                         * 응답도 동일 필드명 사용.
+                         */
+                        reasoning?: string;
                         tool_calls?: Array<{
                             index: number;
                             id?: string;
@@ -502,6 +508,10 @@ export class OpenAICompatProvider implements IProvider {
                 if (choice?.delta?.content) {
                     content += choice.delta.content;
                     callbacks.onToken?.(choice.delta.content);
+                }
+                if (choice?.delta?.reasoning) {
+                    // reasoning chunk — i-provider 의 onThinking 콜백으로 전달
+                    callbacks.onThinking?.(choice.delta.reasoning);
                 }
                 if (choice?.delta?.tool_calls) {
                     for (const tc of choice.delta.tool_calls) {

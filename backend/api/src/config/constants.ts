@@ -121,4 +121,4 @@ export const APP_USER_AGENT = 'OpenMake-AI';
 // 모델 선택
 // ============================================
 
-// 모델 식별은 `getModelForRole('chat')` 또는 `getConfig().ollamaDefaultModel` 사용.
+// 모델 식별은 `getModelForRole('chat')` 또는 `getConfig().llmDefaultModel` 사용.

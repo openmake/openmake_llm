@@ -12,7 +12,7 @@
  * @module providers/i-provider
  */
 
-import type { ChatMessage, ToolDefinition, UsageMetrics } from '../ollama/types';
+import type { ChatMessage, ToolDefinition, UsageMetrics } from '../llm';
 
 /**
  * 어댑터가 사용하는 SDK 종류 — 디버깅/관측 목적의 메타 정보.

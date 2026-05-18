@@ -993,20 +993,24 @@ export const GV_METRICS = {
 } as const;
 
 /**
- * Ollama HTTP 인터셉터 재시도 정책
- * ollama/interceptors.ts 에서 참조
+ * LLM HTTP 재시도 정책 (vLLM/LiteLLM)
+ * 이전 OLLAMA_RETRY 의 의미 유지 — OpenAI SDK 가 자체 retry 도 수행하나,
+ * 추가 안전망으로 본 상수도 호출자에서 참조 가능.
  */
-export const OLLAMA_RETRY = {
-    /** 키풀 폴백 최대 재시도 횟수 (429/401/403/400/502 시 다른 키로 스왑) */
-    MAX_KEY_FALLBACK_ATTEMPTS:
-        Number(process.env.OMK_OLLAMA_MAX_KEY_FALLBACK_ATTEMPTS) || 3,
+export const LLM_RETRY = {
+    /** 4xx/5xx 시 최대 재시도 횟수 */
+    MAX_FALLBACK_ATTEMPTS:
+        Number(process.env.OMK_LLM_MAX_FALLBACK_ATTEMPTS) || 3,
     /** 네트워크 에러(ETIMEDOUT 등) 최대 재시도 횟수 */
     MAX_NETWORK_RETRIES:
-        Number(process.env.OMK_OLLAMA_MAX_NETWORK_RETRIES) || 2,
+        Number(process.env.OMK_LLM_MAX_NETWORK_RETRIES) || 2,
     /** 지수 백오프 base 지연 (ms) — backoffMs = base * 2^retryCount */
     NETWORK_BACKOFF_BASE_MS:
-        Number(process.env.OMK_OLLAMA_NETWORK_BACKOFF_BASE_MS) || 1000,
+        Number(process.env.OMK_LLM_NETWORK_BACKOFF_BASE_MS) || 1000,
 } as const;
+
+/** @deprecated Use LLM_RETRY. 호환 alias — P8 에서 제거 */
+export const OLLAMA_RETRY = LLM_RETRY;
 
 // ============================================
 // 외부 LLM 도구 노출 정책

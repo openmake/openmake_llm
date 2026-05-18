@@ -43,19 +43,17 @@ export interface EnvConfig {
     // CORS
     corsOrigins: string;
 
-    // Ollama
-    ollamaBaseUrl: string;
-    ollamaDefaultModel: string;
-    ollamaTimeout: number;
-    ollamaApiKey: string;
-    ollamaApiKeyPrimary: string;
-    ollamaApiKeySecondary: string;
-    ollamaSshKey: string;
-    ollamaModels: string[];  // Per-key models — 로그 표시용 (OLLAMA_MODEL_1, _2, etc.)
+    // LLM Backend (vLLM via LiteLLM proxy)
+    llmBaseUrl: string;
+    llmApiKey: string;
+    llmDefaultModel: string;
+    llmEmbeddingModel: string;
+    llmTimeout: number;
+    llmHourlyTokenLimit: number;
+    llmWeeklyTokenLimit: number;
+    /** vLLM `--reasoning-parser` 미설정 환경 등에서 extra_body.reasoning_effort 거절 방지 토글. */
+    llmEnableReasoningEffort: boolean;
 
-    // Latency / Single-model optimization
-    /** Ollama keep_alive duration ('24h', '1h', '-1' 등) — chat/generate 호출 시 자동 주입 */
-    ollamaKeepAlive: string;
     /**
      * LLM classifier 우회 여부.
      * - 'true' → 항상 우회 (regex/fast-path 만 사용)
@@ -63,11 +61,6 @@ export interface EnvConfig {
      * - undefined/'auto' → 단일 모델 환경(getModelPresets() 키 1개) 자동 감지
      */
     omkDisableLlmClassifier: 'true' | 'false' | 'auto';
-
-    // Rate limits
-    ollamaHourlyLimit: number;
-    ollamaWeeklyLimit: number;
-    ollamaMonthlyPremiumLimit: number;
 
     // Log
     logLevel: 'debug' | 'info' | 'warn' | 'error';
@@ -174,22 +167,16 @@ const DEFAULT_CONFIG: EnvConfig = {
     // CORS
     corsOrigins: `http://localhost:${SERVER_CONFIG.DEFAULT_PORT}`,
 
-    // Ollama
-    ollamaBaseUrl: 'http://localhost:11434',
-    ollamaDefaultModel: 'gemma4:e4b',
-    ollamaTimeout: 120000,
-    ollamaApiKey: '',
-    ollamaApiKeyPrimary: '',
-    ollamaApiKeySecondary: '',
-    ollamaSshKey: '',
-    ollamaModels: [],  // Per-key models — 로그 표시용
-    ollamaKeepAlive: '24h',
+    // LLM Backend (vLLM via LiteLLM proxy)
+    llmBaseUrl: 'http://localhost:4000',
+    llmApiKey: 'sk-no-key',
+    llmDefaultModel: 'qwen2.5-7b',
+    llmEmbeddingModel: 'bge-large-en',
+    llmTimeout: 120000,
+    llmHourlyTokenLimit: 300000,
+    llmWeeklyTokenLimit: 5000000,
+    llmEnableReasoningEffort: false,
     omkDisableLlmClassifier: 'auto' as const,
-
-    // Rate limits
-    ollamaHourlyLimit: 150,
-    ollamaWeeklyLimit: 2500,
-    ollamaMonthlyPremiumLimit: 5,
 
     // Log
     logLevel: 'info',
@@ -301,18 +288,18 @@ export function validateConfig(config: EnvConfig): void {
     const errors: string[] = [];
 
     // URL 검증
-    if (!config.ollamaBaseUrl || !config.ollamaBaseUrl.startsWith('http')) {
-        errors.push(`Invalid OLLAMA_BASE_URL: ${config.ollamaBaseUrl}`);
+    if (!config.llmBaseUrl || !config.llmBaseUrl.startsWith('http')) {
+        errors.push(`Invalid LLM_BASE_URL: ${config.llmBaseUrl}`);
     }
 
     // 모델 이름 검증
-    if (!config.ollamaDefaultModel || config.ollamaDefaultModel.trim() === '') {
-        errors.push('OLLAMA_DEFAULT_MODEL is required');
+    if (!config.llmDefaultModel || config.llmDefaultModel.trim() === '') {
+        errors.push('LLM_DEFAULT_MODEL is required');
     }
 
     // 타임아웃 검증
-    if (config.ollamaTimeout <= 0 || config.ollamaTimeout > 600000) {
-        errors.push(`Invalid OLLAMA_TIMEOUT: ${config.ollamaTimeout} (must be between 1-600000ms)`);
+    if (config.llmTimeout <= 0 || config.llmTimeout > 600000) {
+        errors.push(`Invalid LLM_TIMEOUT: ${config.llmTimeout} (must be between 1-600000ms)`);
     }
 
     // JWT_SECRET 필수 검증 (test 환경 제외 — 랜덤 생성 금지: PM2 재시작마다 세션 무효화)
@@ -364,14 +351,6 @@ export function loadConfig(): EnvConfig {
 
     const env = (key: string): string | undefined => process.env[key] || fileEnv[key];
 
-    const ollamaModels: string[] = [];
-    for (let index = 1; index <= 10; index++) {
-        const model = env(`OLLAMA_MODEL_${index}`);
-        if (model && model.trim() !== '') {
-            ollamaModels.push(model.trim());
-        }
-    }
-
     const parsedResult = envSchema.safeParse({
         NODE_ENV: env('NODE_ENV'),
         PORT: env('PORT'),
@@ -389,18 +368,14 @@ export function loadConfig(): EnvConfig {
         DB_POOL_MAX: env('DB_POOL_MAX'),
         DB_POOL_MIN: env('DB_POOL_MIN'),
         CORS_ORIGINS: env('CORS_ORIGINS'),
-        OLLAMA_BASE_URL: env('OLLAMA_BASE_URL'),
-        OLLAMA_DEFAULT_MODEL: env('OLLAMA_DEFAULT_MODEL'),
-        OLLAMA_TIMEOUT: env('OLLAMA_TIMEOUT'),
-        OLLAMA_API_KEY: env('OLLAMA_API_KEY'),
-        OLLAMA_API_KEY_PRIMARY: env('OLLAMA_API_KEY_PRIMARY'),
-        OLLAMA_API_KEY_SECONDARY: env('OLLAMA_API_KEY_SECONDARY'),
-        OLLAMA_SSH_KEY: env('OLLAMA_SSH_KEY'),
-        OLLAMA_HOURLY_LIMIT: env('OLLAMA_HOURLY_LIMIT'),
-        OLLAMA_WEEKLY_LIMIT: env('OLLAMA_WEEKLY_LIMIT'),
-        OLLAMA_MONTHLY_PREMIUM_LIMIT: env('OLLAMA_MONTHLY_PREMIUM_LIMIT'),
-        OLLAMA_MODELS: ollamaModels,
-        OMK_OLLAMA_KEEP_ALIVE: env('OMK_OLLAMA_KEEP_ALIVE'),
+        LLM_BASE_URL: env('LLM_BASE_URL'),
+        LLM_API_KEY: env('LLM_API_KEY'),
+        LLM_DEFAULT_MODEL: env('LLM_DEFAULT_MODEL'),
+        LLM_EMBEDDING_MODEL: env('LLM_EMBEDDING_MODEL'),
+        LLM_TIMEOUT: env('LLM_TIMEOUT'),
+        LLM_HOURLY_TOKEN_LIMIT: env('LLM_HOURLY_TOKEN_LIMIT'),
+        LLM_WEEKLY_TOKEN_LIMIT: env('LLM_WEEKLY_TOKEN_LIMIT'),
+        LLM_ENABLE_REASONING_EFFORT: env('LLM_ENABLE_REASONING_EFFORT'),
         OMK_DISABLE_LLM_CLASSIFIER: env('OMK_DISABLE_LLM_CLASSIFIER'),
         LOG_LEVEL: env('LOG_LEVEL'),
         GEMINI_THINK_ENABLED: env('GEMINI_THINK_ENABLED'),
@@ -496,31 +471,22 @@ export function loadConfig(): EnvConfig {
         // CORS
         corsOrigins: parsed.CORS_ORIGINS ?? DEFAULT_CONFIG.corsOrigins,
 
-        // Ollama
-        ollamaBaseUrl: parsed.OLLAMA_BASE_URL ?? DEFAULT_CONFIG.ollamaBaseUrl,
-        ollamaDefaultModel: parsed.OLLAMA_DEFAULT_MODEL ?? DEFAULT_CONFIG.ollamaDefaultModel,
-        ollamaTimeout: parsed.OLLAMA_TIMEOUT ?? DEFAULT_CONFIG.ollamaTimeout,
-        ollamaApiKey: parsed.OLLAMA_API_KEY ?? DEFAULT_CONFIG.ollamaApiKey,
-        ollamaApiKeyPrimary: parsed.OLLAMA_API_KEY_PRIMARY ?? DEFAULT_CONFIG.ollamaApiKeyPrimary,
-        ollamaApiKeySecondary: parsed.OLLAMA_API_KEY_SECONDARY ?? DEFAULT_CONFIG.ollamaApiKeySecondary,
-        ollamaSshKey: parsed.OLLAMA_SSH_KEY ?? DEFAULT_CONFIG.ollamaSshKey,
+        // LLM Backend (vLLM via LiteLLM proxy)
+        llmBaseUrl: parsed.LLM_BASE_URL ?? DEFAULT_CONFIG.llmBaseUrl,
+        llmApiKey: parsed.LLM_API_KEY ?? DEFAULT_CONFIG.llmApiKey,
+        llmDefaultModel: parsed.LLM_DEFAULT_MODEL ?? DEFAULT_CONFIG.llmDefaultModel,
+        llmEmbeddingModel: parsed.LLM_EMBEDDING_MODEL ?? DEFAULT_CONFIG.llmEmbeddingModel,
+        llmTimeout: parsed.LLM_TIMEOUT ?? DEFAULT_CONFIG.llmTimeout,
+        llmHourlyTokenLimit: parsed.LLM_HOURLY_TOKEN_LIMIT ?? DEFAULT_CONFIG.llmHourlyTokenLimit,
+        llmWeeklyTokenLimit: parsed.LLM_WEEKLY_TOKEN_LIMIT ?? DEFAULT_CONFIG.llmWeeklyTokenLimit,
+        llmEnableReasoningEffort: (parsed.LLM_ENABLE_REASONING_EFFORT ?? 'false').toLowerCase() === 'true',
 
-        // Per-key models — 로그 표시용 (OLLAMA_MODEL_1, _2, _3, ... N)
-        ollamaModels: parsed.OLLAMA_MODELS ?? DEFAULT_CONFIG.ollamaModels,
-
-        // Latency / Single-model optimization
-        ollamaKeepAlive: parsed.OMK_OLLAMA_KEEP_ALIVE ?? DEFAULT_CONFIG.ollamaKeepAlive,
         omkDisableLlmClassifier: ((): 'true' | 'false' | 'auto' => {
             const raw = parsed.OMK_DISABLE_LLM_CLASSIFIER?.trim().toLowerCase();
             if (raw === 'true') return 'true';
             if (raw === 'false') return 'false';
             return 'auto';
         })(),
-
-        // Rate limits
-        ollamaHourlyLimit: parsed.OLLAMA_HOURLY_LIMIT ?? DEFAULT_CONFIG.ollamaHourlyLimit,
-        ollamaWeeklyLimit: parsed.OLLAMA_WEEKLY_LIMIT ?? DEFAULT_CONFIG.ollamaWeeklyLimit,
-        ollamaMonthlyPremiumLimit: parsed.OLLAMA_MONTHLY_PREMIUM_LIMIT ?? DEFAULT_CONFIG.ollamaMonthlyPremiumLimit,
 
         // Log
         logLevel: parsed.LOG_LEVEL ?? DEFAULT_CONFIG.logLevel,

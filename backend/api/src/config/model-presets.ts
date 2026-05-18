@@ -12,7 +12,7 @@
 
 import { getConfig } from './env';
 import { MODEL_CONTEXT_DEFAULTS } from './runtime-limits';
-import type { ModelOptions } from '../ollama/types';
+import type { ModelOptions } from '../llm/types';
 import type { QueryType } from '../chat/model-selector-types';
 
 /**
@@ -22,7 +22,7 @@ import type { QueryType } from '../chat/model-selector-types';
 export interface ModelPreset {
     /** 모델 표시 이름 (예: 'Gemini 3 Flash') */
     name: string;
-    /** .env 변수명 (예: 'OLLAMA_MODEL_1') */
+    /** .env 변수명 (예: 'LLM_DEFAULT_MODEL') */
     envKey: string;
     /** 기본 모델명 (env 미설정 시 사용) */
     defaultModel: string;
@@ -54,18 +54,18 @@ export interface ModelPreset {
  */
 export const MODEL_PRESET_KEYS = {
     /** 기본 로컬 모델 프리셋 — `getModelPresets()` 의 fallback 키 */
-    DEFAULT_LOCAL: 'gemma4',
+    DEFAULT_LOCAL: 'local-llm',
 } as const;
 
 // 사용 가능한 모델 프리셋
 export function getModelPresets(): Record<string, ModelPreset> {
     const config = getConfig();
-    const localModel = config.ollamaDefaultModel;  // gemma4:e4b
+    const localModel = config.llmDefaultModel;
 
     return {
         [MODEL_PRESET_KEYS.DEFAULT_LOCAL]: {
-            name: 'gemma4:e4b',
-            envKey: 'OLLAMA_DEFAULT_MODEL',
+            name: localModel,
+            envKey: 'LLM_DEFAULT_MODEL',
             defaultModel: localModel,
             options: {
                 temperature: 0.7,

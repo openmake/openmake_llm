@@ -93,20 +93,24 @@ export const envSchema = z
         // CORS
         CORS_ORIGINS: z.string().default(`http://localhost:${SERVER_CONFIG.DEFAULT_PORT}`),
 
-        // Ollama
-        OLLAMA_BASE_URL: z.url().default('http://localhost:11434'),
-        OLLAMA_DEFAULT_MODEL: z.string().min(1).default('gemma4:e4b'),
-        OLLAMA_TIMEOUT: positiveIntWithDefault(120000).refine((value) => value <= 600000, {
-            message: 'OLLAMA_TIMEOUT must be between 1 and 600000 milliseconds',
+        // LLM Backend (vLLM via LiteLLM proxy)
+        LLM_BASE_URL: z.url().default('http://localhost:4000'),
+        LLM_API_KEY: z.string().default('sk-no-key'),
+        LLM_DEFAULT_MODEL: z.string().min(1).default('qwen2.5-7b'),
+        LLM_EMBEDDING_MODEL: z.string().min(1).default('bge-large-en'),
+        LLM_TIMEOUT: positiveIntWithDefault(120000).refine((value) => value <= 600000, {
+            message: 'LLM_TIMEOUT must be between 1 and 600000 milliseconds',
         }),
-        OLLAMA_API_KEY: z.string().default(''),
-        OLLAMA_API_KEY_PRIMARY: z.string().default(''),
-        OLLAMA_API_KEY_SECONDARY: z.string().default(''),
-        OLLAMA_SSH_KEY: z.string().default(''),
-        OLLAMA_HOURLY_LIMIT: nonNegativeIntWithDefault(150),
-        OLLAMA_WEEKLY_LIMIT: nonNegativeIntWithDefault(2500),
-        OLLAMA_MONTHLY_PREMIUM_LIMIT: nonNegativeIntWithDefault(5),
-        OLLAMA_MODELS: z.array(z.string().min(1)).default([]),
+        LLM_HOURLY_TOKEN_LIMIT: nonNegativeIntWithDefault(300000),
+        LLM_WEEKLY_TOKEN_LIMIT: nonNegativeIntWithDefault(5000000),
+        /**
+         * vLLM `extra_body.reasoning_effort` 전송 활성화 (opt-in 기본).
+         *
+         * 기본 'false' — vLLM 이 `--reasoning-parser deepseek_r1|qwen3|...` 없이 가동된
+         * 환경에서 unknown body param 거절을 방지하기 위함. 사용 모델/서버가 reasoning
+         * 을 지원하면 .env 에서 'true' 로 명시 활성화.
+         */
+        LLM_ENABLE_REASONING_EFFORT: z.string().default('false'),
 
         // Logging
         LOG_LEVEL: logLevelSchema.default('info'),
@@ -167,12 +171,6 @@ export const envSchema = z
 
         // Security — Trusted Proxies (쉼표 구분 문자열, 기본: loopback,linklocal,uniquelocal)
         TRUSTED_PROXIES: z.string().optional(),
-
-        // Latency / Single-model optimization
-        // Ollama keep_alive: 모델을 메모리에 유지하는 시간.
-        // '24h', '1h', '5m', '-1' (무제한), '0' (즉시 unload) 등 Ollama duration 문자열.
-        // OllamaClient.chat()/generate() 호출 시 advancedOptions.keep_alive 미지정이면 이 값이 자동 주입됨.
-        OMK_OLLAMA_KEEP_ALIVE: z.string().default('24h'),
 
         // 단일 모델 환경에서 LLM classifier round-trip 우회.
         // true 시 selectOptimalModel()이 regex/fast-path만으로 QueryType 결정 → LLM 호출 0회.

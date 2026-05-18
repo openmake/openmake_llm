@@ -5,7 +5,7 @@
  * 사용자 BYO Key 등록 화면에서 노출할 provider 목록과 각 provider 의 SDK 종류,
  * 기본 base URL, 검증 endpoint 등을 정의합니다.
  *
- * 활성: ollama (로컬, 키 불필요) + openrouter (BYO key, OpenAI 호환 endpoint).
+ * 활성: 로컬 LLM (vLLM via LiteLLM, 키 불필요) + openrouter (BYO key, OpenAI 호환 endpoint).
  * 다른 외부 provider 는 2026-05-08 마이그레이션 018 로 카탈로그에서 제외됨.
  *
  * SSRF 정책: base_url 등록 시 {@link security/ssrf-guard.ts} validateOutboundUrl 로
@@ -78,7 +78,7 @@ export interface ExternalProviderCatalogEntry {
  *   1. provider_id 를 services/chat-service/provider-gate.ts 의
  *      KNOWN_FULLID_PREFIXES 에도 등록
  *   2. sdk_type 은 'anthropic' | 'openai-compatible' 만 허용 (DB CHECK 제약)
- *   3. defaultBaseUrl 은 https:// 가 표준 — Ollama 등 http:// 는 사용자 입력으로 수정
+ *   3. defaultBaseUrl 은 https:// 가 표준 — 로컬 vLLM 등 http:// 는 사용자 입력으로 수정
  */
 export const EXTERNAL_PROVIDER_CATALOG: ReadonlyArray<ExternalProviderCatalogEntry> = [
     {
