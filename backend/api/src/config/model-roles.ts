@@ -42,16 +42,20 @@ const LEGACY_ROLE_ENV_VAR: Partial<Record<ModelRole, string>> = {
 };
 
 /**
- * 역할별 기본 모델
- * - chat/classifier/router: 기본 로컬 채팅 모델
- * - embedding: 전용 임베딩 모델 (chat 모델로 fallback 불가)
+ * 역할별 fallback 모델 — env 미설정 시 사용하는 보수적 기본값.
+ *
+ * chat/classifier/router: env LLM_DEFAULT_MODEL 우선, 미설정 시 빈 문자열 — 호출자가
+ * 명시적 모델 지정을 강제하도록 의도. embedding: LLM_EMBEDDING_MODEL 우선.
+ *
+ * 주의: env 값을 module-load 타이밍에 캐싱하지 않고 lookup 시점마다 process.env 를
+ * 다시 읽어 PM2 reload / test override 가 즉시 반영되도록 한다.
  */
-const ROLE_DEFAULTS: Record<ModelRole, string> = {
-    chat:       'gemma4:e4b',
-    classifier: 'gemma4:e4b',
-    router:     'gemma4:e4b',
-    embedding:  'nomic-embed-text',
-};
+function roleFallback(role: ModelRole): string {
+    if (role === 'embedding') {
+        return process.env.LLM_EMBEDDING_MODEL?.trim() || 'nomic-embed-text';
+    }
+    return process.env.LLM_DEFAULT_MODEL?.trim() || '';
+}
 
 /** embedding은 chat 모델로 자동 위임이 불가능한 역할 */
 const NON_DELEGABLE_ROLES: ReadonlySet<ModelRole> = new Set(['embedding']);
@@ -60,9 +64,9 @@ const NON_DELEGABLE_ROLES: ReadonlySet<ModelRole> = new Set(['embedding']);
  * 주어진 역할에 사용할 모델명을 반환합니다.
  *
  * 우선순위:
- *   1. 역할별 env var
- *   2. OLLAMA_DEFAULT_MODEL (embedding 제외)
- *   3. ROLE_DEFAULTS 하드코딩 기본값
+ *   1. 역할별 env var (OMK_CHAT_MODEL, OMK_CLASSIFIER_MODEL, ...)
+ *   2. Legacy env var (OMK_UIR_MODEL → router)
+ *   3. LLM_DEFAULT_MODEL (embedding 제외) / LLM_EMBEDDING_MODEL
  */
 export function getModelForRole(role: ModelRole): string {
     const roleEnvName = ROLE_ENV_VAR[role];
@@ -82,13 +86,13 @@ export function getModelForRole(role: ModelRole): string {
     }
 
     if (!NON_DELEGABLE_ROLES.has(role)) {
-        const defaultModel = process.env.OLLAMA_DEFAULT_MODEL;
+        const defaultModel = process.env.LLM_DEFAULT_MODEL;
         if (defaultModel && defaultModel.trim() !== '') {
             return defaultModel.trim();
         }
     }
 
-    return ROLE_DEFAULTS[role];
+    return roleFallback(role);
 }
 
 /**
@@ -109,78 +113,66 @@ export function getAllRoleModels(): Record<ModelRole, string> {
  *
  * 기능:
  *   1. 모든 역할별 모델 식별 — 중복 제거 후 unique 모델 목록 생성
- *   2. 클라우드 모델(:cloud 접미사) 발견 시 경고 (단일 로컬 모델 환경 가정).
- *      production + failFast=true 인 경우 cloud 참조도 fail-fast 대상으로 포함.
- *   3. Ollama API에 ping — 미설치 모델 발견 시 경고 또는 fail-fast.
- *      모델명은 exact match 로만 비교 (태그까지 정확히 일치해야 함).
+ *   2. OpenAI 호환 `/v1/models` (또는 `/models`) endpoint 로 ping — 미등록 모델 발견 시
+ *      경고 또는 fail-fast. LiteLLM/vLLM 응답: `{ data: [{ id, ... }] }`.
  *
- * @param llmBaseUrl Ollama 서버 base URL
- * @param failFast true=production 환경에서 미설치/cloud 모델 발견 시 throw
+ * @param llmBaseUrl LiteLLM/vLLM proxy base URL (예: http://host:13434)
+ * @param failFast true=production 환경에서 미등록 모델 발견 시 throw
  */
 export async function validateModels(
     llmBaseUrl: string,
     failFast: boolean = false,
 ): Promise<void> {
     const roleModels = getAllRoleModels();
-    const uniqueModels = Array.from(new Set(Object.values(roleModels)));
+    const uniqueModels = Array.from(new Set(Object.values(roleModels))).filter(Boolean);
 
     logger.info(`모델 역할 매핑: ${JSON.stringify(roleModels)}`);
 
-    const cloudModels = uniqueModels.filter(m => m.toLowerCase().endsWith(':cloud'));
-    if (cloudModels.length > 0) {
-        const cloudMsg =
-            `클라우드 모델 참조 감지: ${cloudModels.join(', ')} — ` +
-            `단일 로컬 모델 환경에서는 의도치 않을 수 있습니다.`;
-        if (failFast) {
-            logger.error(cloudMsg);
-            throw new Error(cloudMsg);
-        }
-        logger.warn(cloudMsg);
+    if (uniqueModels.length === 0) {
+        logger.warn('등록된 모델이 없습니다 — LLM_DEFAULT_MODEL 및 OMK_*_MODEL 환경변수를 확인하세요.');
+        return;
     }
 
-    // 로컬 검증 대상: cloud 제외한 모델 (cloud 는 Ollama tags 에 나타나지 않음)
-    const localModels = uniqueModels.filter(m => !m.toLowerCase().endsWith(':cloud'));
-    if (localModels.length === 0) return;
+    // /v1/models endpoint 시도. baseURL 이 /v1 을 포함하면 그대로, 아니면 자동 append.
+    const modelsUrl = llmBaseUrl.replace(/\/+$/, '').endsWith('/v1')
+        ? `${llmBaseUrl.replace(/\/+$/, '')}/models`
+        : `${llmBaseUrl.replace(/\/+$/, '')}/v1/models`;
 
-    let installed: string[] = [];
+    let registered: string[] = [];
     try {
-        const res = await fetch(`${llmBaseUrl}/api/tags`, {
+        const headers: Record<string, string> = { Accept: 'application/json' };
+        const apiKey = process.env.LLM_API_KEY;
+        if (apiKey && apiKey.length > 0) headers.Authorization = `Bearer ${apiKey}`;
+
+        const res = await fetch(modelsUrl, {
+            headers,
             signal: AbortSignal.timeout(5000),
         });
         if (!res.ok) {
-            logger.warn(`Ollama tags API 응답 비정상 (${res.status}) — 모델 검증 스킵`);
+            logger.warn(`LLM /v1/models 응답 비정상 (${res.status}) — 모델 검증 스킵`);
             return;
         }
-        const data = await res.json() as { models?: Array<{ name: string }> };
-        installed = (data.models ?? []).map(m => m.name);
+        const data = await res.json() as { data?: Array<{ id: string }> };
+        registered = (data.data ?? []).map(m => m.id);
     } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        logger.warn(`Ollama 연결 실패 — 모델 검증 스킵: ${msg}`);
+        logger.warn(`LLM 서버 연결 실패 (${modelsUrl}) — 모델 검증 스킵: ${msg}`);
         return;
     }
 
-    // 매칭 규칙:
-    //   1. exact match — 'nomic-embed-text:latest' === 'nomic-embed-text:latest'
-    //   2. 태그 미지정 입력은 모든 태그와 매칭 (Ollama 관행: 태그 생략 시 :latest)
-    //      예: 'nomic-embed-text' 등록 → 'nomic-embed-text:latest' 설치된 경우 매칭
-    const missing = localModels.filter(m => {
-        if (installed.includes(m)) return false;
-        if (!m.includes(':')) {
-            return !installed.some(i => i === `${m}:latest` || i.startsWith(`${m}:`));
-        }
-        return true;
-    });
+    // 매칭 규칙: exact id 일치 (LiteLLM alias / vLLM served-model-name)
+    const missing = uniqueModels.filter(m => !registered.includes(m));
 
     if (missing.length === 0) {
-        logger.info(`모든 등록된 모델이 Ollama에 설치되어 있습니다 (${localModels.length}개).`);
+        logger.info(`모든 등록된 모델이 LLM 서버에 노출되어 있습니다 (${uniqueModels.length}개).`);
         return;
     }
 
-    const errMsg = `Ollama에 설치되지 않은 모델: ${missing.join(', ')}. ` +
-        `설치하려면: ${missing.map(m => `\`ollama pull ${m}\``).join(', ')}`;
+    const errMsg = `LLM 서버에 노출되지 않은 모델: ${missing.join(', ')}. ` +
+        `LiteLLM config.yaml 의 model_list 또는 vLLM --served-model-name 을 확인하세요. ` +
+        `현재 LLM 서버 모델 목록: [${registered.join(', ') || '(empty)'}]`;
 
-    // embedding 모델 미설치는 옵션 기능(시맨틱 캐시/라우터) 비활성화로 graceful degrade —
-    // production fail-fast 대상에서 제외.
+    // embedding 모델 미등록은 옵션 기능(시맨틱 캐시/라우터) 비활성화로 graceful degrade.
     const embeddingModel = roleModels.embedding;
     const onlyEmbeddingMissing = missing.length === 1 && missing[0] === embeddingModel;
 
