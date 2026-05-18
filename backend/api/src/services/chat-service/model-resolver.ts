@@ -7,36 +7,26 @@
  * - **모델 자동 선택은 비활성화** — 사용자가 명시한 모델만 사용
  * - 분류기는 여전히 동작 (caching/관측 + adjustOptionsForModel 의 옵션 튜닝 목적)
  * - 반환되는 selection.model 은 llmDefaultModel 로 고정 (Phase 1 단일 모델 환경)
- * - setModel 콜백은 더 이상 호출되지 않음 — OllamaClient.model 은 생성자에서 결정
  *
  * @module services/chat-service/model-resolver
  */
 import { createLogger } from '../../utils/logger';
 import { selectOptimalModel, type ModelSelection } from '../../chat/model-selector';
-import type { ModelOptions } from '../../llm';
 
 const logger = createLogger('ModelResolver');
 
 /**
  * resolveModel 함수의 입력 파라미터.
  *
- * `setModel` 은 Pure Manual 정책 도입 이전의 잔재 — 호출되지 않음.
- * 호출자 코드 호환을 위해 옵셔널로 유지하되, 실제 서명은 무시.
+ * 변경 이력 (2026-05-19): setModel / executionPlan / promptConfig 의 dead 필드 제거.
+ * ChatService.resolveModel(line 663) 이 setModel 을 전달하지 않으며, executionPlan /
+ * promptConfig 도 함수 본문에서 사용되지 않음 (Pure Manual 모드 도입 이후 잔재).
  */
 export interface ResolveModelParams {
     /** 사용자 메시지 */
     message: string;
     /** 이미지 포함 여부 */
     hasImages: boolean;
-    /** Brand Model 실행 계획 (미사용, 하위 호환용) */
-    executionPlan?: unknown;
-    /** 프롬프트 설정 (미사용, 하위 호환용) */
-    promptConfig?: { options?: ModelOptions };
-    /**
-     * @deprecated Pure Manual 모드 — 사용자 명시 모델을 override 하지 않으므로 호출되지 않음.
-     *   호출자 호환을 위해 옵셔널로 유지.
-     */
-    setModel?: (model: string) => void;
 }
 
 /**

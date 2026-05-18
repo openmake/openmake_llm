@@ -12,7 +12,7 @@
  * @module services/DeepResearchService
  */
 
-import { OllamaClient, createClient } from '../llm';
+import { LLMClient, createClient } from '../llm';
 import type { SearchResult } from '../mcp/web-search';
 import { getModelForRole } from '../config/model-roles';
 import { RESEARCH_DEPTH_LOOPS } from '../config/runtime-limits';
@@ -49,7 +49,7 @@ const logger = createLogger('DeepResearchService');
 // ============================================================
 
 export class DeepResearchService {
-    private client: OllamaClient;
+    private client: LLMClient;
     private config: ResearchConfig;
     private abortController: AbortController | null = null;
 

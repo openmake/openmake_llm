@@ -9,7 +9,7 @@
 
 import { EventEmitter } from 'events';
 import { ClusterNode, ClusterEvent } from './types';
-import { OllamaClient } from '../llm';
+import { LLMClient } from '../llm';
 
 /**
  * 클러스터 노드 헬스체크 담당
@@ -26,7 +26,7 @@ export class HealthChecker {
     constructor(
         private readonly healthCheckIntervalMs: number,
         private readonly emitter: EventEmitter,
-        private readonly getNodeEntries: () => Array<{ node: ClusterNode; client: OllamaClient }>
+        private readonly getNodeEntries: () => Array<{ node: ClusterNode; client: LLMClient }>
     ) {}
 
     /**
@@ -35,7 +35,7 @@ export class HealthChecker {
      * @param client - 측정 대상 Ollama 클라이언트
      * @returns 레이턴시(ms) 또는 Infinity (연결 실패 시)
      */
-    async measureLatency(client: OllamaClient): Promise<number> {
+    async measureLatency(client: LLMClient): Promise<number> {
         const start = Date.now();
         try {
             await client.isAvailable();
@@ -54,7 +54,7 @@ export class HealthChecker {
      * @param node - 업데이트할 노드
      * @param client - 해당 노드의 Ollama 클라이언트
      */
-    async updateNodeStatus(node: ClusterNode, client: OllamaClient): Promise<void> {
+    async updateNodeStatus(node: ClusterNode, client: LLMClient): Promise<void> {
         const wasOnline = node.status === 'online';
         const isAvailable = await client.isAvailable();
 

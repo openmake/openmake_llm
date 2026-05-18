@@ -30,7 +30,7 @@ dotenv.config({ path: path.resolve(__dirname, '../../../../.env') });
 import { loadGoldenDataset } from './dataset-loader';
 import { runResponseEvaluation, type ResponseGenerator } from './response-evaluator';
 import type { EvaluationSummary, GoldenDataset } from './types';
-// 주의: real-response-generator는 ChatService/OllamaClient 등 무거운 의존성을
+// 주의: real-response-generator는 ChatService/LLMClient 등 무거운 의존성을
 // 끌어오므로 mock 모드 회귀 비용을 피하기 위해 lazy require로 로드한다.
 
 const PASS_RATE_THRESHOLD = Number(process.env.OMK_EVAL_RESPONSE_THRESHOLD ?? '0.5');
@@ -165,7 +165,7 @@ async function main() {
     let mode: 'mock' | 'real';
 
     if (useReal) {
-        // Lazy load: ChatService/OllamaClient 등 LLM 의존성은 --real 모드에서만 필요
+        // Lazy load: ChatService/LLMClient 등 LLM 의존성은 --real 모드에서만 필요
         // (mock 모드 회귀 시 web-scraper 등 무관한 모듈이 컴파일되는 비용 회피)
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { createRealResponseGenerator } = require('./real-response-generator') as

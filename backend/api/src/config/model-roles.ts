@@ -34,12 +34,20 @@ const ROLE_ENV_VAR: Record<ModelRole, string> = {
  * Legacy env var 폴백 매핑 — 신규 변수가 미설정이면 시도한다.
  * 운영 환경의 .env 가 갱신될 때까지 호환성을 유지하기 위함.
  *
- * router: OMK_UIR_MODEL — UIR (Unified Intent Router) 삭제 후 router role 만
- *   별도 시스템(agents/llm-router)으로 살아남았다. 새 이름 OMK_ROUTER_MODEL
- *   권장이나 기존 운영자가 OMK_UIR_MODEL 설정해뒀을 수 있다.
+ * 의도적 보존 (whitelisted legacy fallback):
+ *   - chat: 'OLLAMA_DEFAULT_MODEL'
+ *       Ollama → vLLM 마이그레이션 (2026-05) 이전 운영 .env 에 박혀있는 키.
+ *       운영자가 일괄 갱신하기 전까지 graceful fallback. 신규 권장: OMK_CHAT_MODEL
+ *       또는 LLM_DEFAULT_MODEL (line 89 의 LLM_DEFAULT_MODEL fallback 이 최후 안전망).
+ *   - router: 'OMK_UIR_MODEL'
+ *       UIR (Unified Intent Router) 삭제 후 router role 만 별도 시스템(agents/llm-router)
+ *       으로 살아남았다. 신규 권장: OMK_ROUTER_MODEL.
+ *
+ * 이 매핑은 *읽기 전용 호환 grace period* 이며, 운영자가 신규 변수로 전환하면 자동으로
+ * legacy 키는 무시됩니다. 시간이 지나 운영 전수에서 신규 변수가 사용되면 별도 PR 에서 제거 가능.
  */
 const LEGACY_ROLE_ENV_VAR: Partial<Record<ModelRole, string>> = {
-    chat:   'OLLAMA_DEFAULT_MODEL',  // legacy — Ollama 시절 .env 호환
+    chat:   'OLLAMA_DEFAULT_MODEL',
     router: 'OMK_UIR_MODEL',
 };
 

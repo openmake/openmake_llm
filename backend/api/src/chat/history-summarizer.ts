@@ -11,7 +11,7 @@
  * @see services/ChatService - processMessage()에서 히스토리 조립 전 호출
  */
 
-import { OllamaClient, createClient } from '../llm';
+import { LLMClient, createClient } from '../llm';
 import { createLogger } from '../utils/logger';
 import { HISTORY_SUMMARIZER } from '../config/runtime-limits';
 import { LLM_TEMPERATURES } from '../config/llm-parameters';
@@ -73,7 +73,7 @@ export async function summarizeHistory(
     }
 
     try {
-        const client: OllamaClient = createClient({
+        const client: LLMClient = createClient({
             model,
             timeout: HISTORY_SUMMARIZER.SUMMARY_TIMEOUT_MS,
         });

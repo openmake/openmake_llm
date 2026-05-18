@@ -9,7 +9,7 @@
 
 import { ClusterNode } from './types';
 import { CircuitBreakerRegistry } from './circuit-breaker';
-import { OllamaClient } from '../llm';
+import { LLMClient } from '../llm';
 import { AllNodesFailedError } from '../errors/all-nodes-failed.error';
 import { createLogger } from '../utils/logger';
 
@@ -24,7 +24,7 @@ const logger = createLogger('NodeSelector');
 export class NodeSelector {
     constructor(
         private readonly getOnlineNodes: () => ClusterNode[],
-        private readonly createScopedClient: (nodeId: string, model?: string) => OllamaClient | undefined
+        private readonly createScopedClient: (nodeId: string, model?: string) => LLMClient | undefined
     ) {}
 
     /**
@@ -89,7 +89,7 @@ export class NodeSelector {
      */
     async tryWithFallback<T>(
         modelName: string,
-        fn: (client: OllamaClient, node: ClusterNode) => Promise<T>
+        fn: (client: LLMClient, node: ClusterNode) => Promise<T>
     ): Promise<{ result: T; node: ClusterNode }> {
         const candidates = this.getCandidateNodes(modelName);
         if (candidates.length === 0) {

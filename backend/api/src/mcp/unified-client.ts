@@ -68,7 +68,7 @@ export class UnifiedMCPClient {
      * MCPServer, ToolRouter, MCPServerRegistry를 초기화합니다.
      */
     constructor() {
-        this.server = createMCPServer('ollama-unified-mcp', '1.0.0');
+        this.server = createMCPServer('openmake-unified-mcp', '1.0.0');
         this.toolRouter = new ToolRouter();
         this.serverRegistry = new MCPServerRegistry(this.toolRouter);
         logger.info(`통합 MCP 클라이언트 초기화 - ${this.getToolCount()}개 도구 등록됨`);

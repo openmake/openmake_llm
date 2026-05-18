@@ -2,14 +2,15 @@
  * Web Search 오케스트레이터
  *
  * 다중 검색 프로바이더를 조율하여 통합 웹 검색을 수행합니다.
- * 2단계 검색 전략 (Ollama -> 다중 소스 병렬)을 구현합니다.
+ * Google CSE / Wikipedia / Google News / DuckDuckGo / Naver News 병렬 수집 후
+ * 신뢰도 스코어링 으로 통합. (2026-05-19 이전 Ollama Cloud /api/web_search 우선
+ * 단계는 vLLM 마이그레이션 시 제거.)
  *
  * @module mcp/web-search/search-orchestrator
  */
 
 import { SearchResult } from './types';
 import {
-    searchOllamaWebSearch,
     searchGoogle,
     searchWikipedia,
     searchGoogleNews,
@@ -28,38 +29,26 @@ const logger = createLogger('WebSearch');
  * 1. Ollama Web Search API (최우선, 고볼륨이 아니면 성공 시 조기 반환)
  * 2. 다중 소스 병렬 검색 (Google, Wikipedia, News, DuckDuckGo, Naver)
  *
- * 결과 우선순위: Ollama > News > Naver > Google > Wiki > DDG
+ * 결과 우선순위: News > Naver > Google > Wiki > DDG
  * URL 정규화를 통해 중복을 제거합니다.
  *
  * @param query - 검색 쿼리
  * @param options.maxResults - 최대 결과 수 (기본값: 30)
  * @param options.globalSearch - 전세계 검색 여부 (기본값: true)
- * @param options.useOllamaFirst - Ollama API 우선 사용 (기본값: true)
  * @param options.language - 검색 언어 (기본값: 'en')
  * @returns 중복 제거된 SearchResult 배열
+ *
+ * 변경 이력: 2026-05-19 — Ollama Cloud /api/web_search 폐기로 useOllamaFirst/searchOllamaWebSearch 제거.
  */
-export async function performWebSearch(query: string, options: { maxResults?: number; globalSearch?: boolean; useOllamaFirst?: boolean; language?: string } = {}): Promise<SearchResult[]> {
-    const { maxResults = 30, globalSearch = true, useOllamaFirst = true, language = 'en' } = options;
+export async function performWebSearch(query: string, options: { maxResults?: number; globalSearch?: boolean; language?: string } = {}): Promise<SearchResult[]> {
+    const { maxResults = 30, globalSearch = true, language = 'en' } = options;
 
     // 고볼륨 모드: maxResults > 15이면 모든 소스에서 병렬 수집 (Deep Research 용)
     const highVolumeMode = maxResults > 15;
 
     logger.info(`쿼리: ${query} (maxResults: ${maxResults}, highVolume: ${highVolumeMode})`);
 
-    // 1단계: Ollama 공식 API 우선 시도 (고볼륨이 아닌 경우에만 조기 반환)
-    let earlyOllamaResults: SearchResult[] = [];
-    if (useOllamaFirst) {
-        earlyOllamaResults = await searchOllamaWebSearch(query, Math.min(maxResults, 10));
-        if (earlyOllamaResults.length > 0 && !highVolumeMode) {
-            logger.info(`Ollama API 성공: ${earlyOllamaResults.length}개 결과`);
-            return earlyOllamaResults;
-        }
-        if (earlyOllamaResults.length === 0) {
-            logger.info('Ollama API 결과 없음, 폴백 검색 시작...');
-        }
-    }
-
-    // 2단계: 모든 소스에서 병렬 검색
+    // 모든 소스에서 병렬 검색
     const searchPromises: Promise<SearchResult[]>[] = [
         searchGoogle(query, 10, globalSearch, language),
         searchWikipedia(query, language),
@@ -75,9 +64,8 @@ export async function performWebSearch(query: string, options: { maxResults?: nu
     const ddgResults = allSearchResults[3] || [];
     const naverResults = allSearchResults[4] || [];
 
-    // 결과 합치기 (우선순위: Ollama > 뉴스 > Naver > Google > Wikipedia > DDG)
+    // 결과 합치기 (우선순위: 뉴스 > Naver > Google > Wikipedia > DDG)
     const allResults = [
-        ...earlyOllamaResults,     // Ollama API 결과
         ...newsResults,            // 뉴스 (최신 사실 정보)
         ...naverResults,           // 네이버 뉴스 (한국어만)
         ...googleResults,          // Google 검색
@@ -94,7 +82,7 @@ export async function performWebSearch(query: string, options: { maxResults?: nu
         return true;
     });
 
-    logger.info(`총 ${uniqueResults.length}개 (Ollama:${earlyOllamaResults.length}, Google:${googleResults.length}, Wiki:${wikiResults.length}, News:${newsResults.length}, DDG:${ddgResults.length}, Naver:${naverResults.length})`);
+    logger.info(`총 ${uniqueResults.length}개 (Google:${googleResults.length}, Wiki:${wikiResults.length}, News:${newsResults.length}, DDG:${ddgResults.length}, Naver:${naverResults.length})`);
 
     // 신뢰도 스코어링 및 정렬
     const scored = uniqueResults.map((result, index) => {

@@ -362,7 +362,7 @@ export class DiscussionStrategy implements ChatStrategy<DiscussionStrategyContex
         /** DiscussionEngine에 주입할 LLM 응답 생성 함수
          *  - 호출 직전 abort 체크: 다음 라운드/전문가로 진입 전 중단
          *  - 스트리밍 토큰 콜백 내부 abort 체크: 진행 중인 LLM 호출의 다음 토큰을 throw로 차단
-         *    (OllamaClient.chat이 abortSignal 인자를 받지 않으므로 콜백 throw가 가장 적은 침습)
+         *    (LLMClient.chat이 abortSignal 인자를 받지 않으므로 콜백 throw가 가장 적은 침습)
          */
         const generateResponse = async (systemPrompt: string, userMessage: string): Promise<string> => {
             checkAborted();

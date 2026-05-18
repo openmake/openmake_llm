@@ -10,7 +10,7 @@
 
 import inquirer from 'inquirer';
 import chalk from 'chalk';
-import { OllamaClient } from '../llm';
+import { LLMClient } from '../llm';
 import {
     ChatMessage,
     ModelOptions,
@@ -29,12 +29,12 @@ export interface ChatOptions {
 }
 
 export class ChatSession {
-    private client: OllamaClient;
+    private client: LLMClient;
     private messages: ChatMessage[] = [];
     private systemPrompt: string;
     private modelOptions: ModelOptions;
 
-    constructor(client: OllamaClient, options: ChatOptions = {}) {
+    constructor(client: LLMClient, options: ChatOptions = {}) {
         this.client = client;
 
         // Gemini 모델 전용 프리셋 사용 (추론 모드 지원)
@@ -166,7 +166,7 @@ export class ChatSession {
     }
 }
 
-export async function startChat(client: OllamaClient, options?: ChatOptions): Promise<void> {
+export async function startChat(client: LLMClient, options?: ChatOptions): Promise<void> {
     const session = new ChatSession(client, options);
     await session.start();
 }

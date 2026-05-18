@@ -61,7 +61,7 @@ router.get('/model', asyncHandler(async (_req: Request, res: Response) => {
     res.json(success({
         model: modelId,
         modelId,
-        provider: 'ollama-local'
+        provider: 'local-llm'
     }));
 }));
 
@@ -104,9 +104,9 @@ router.get('/models', optionalAuth, asyncHandler(async (req: Request, res: Respo
 
     const models: ModelEntry[] = [{
         name: chatModel,
-        modelId: buildFullModelId('ollama', chatModel),
+        modelId: buildFullModelId('local-llm', chatModel),
         description: `Local LLM model (${chatModel})`,
-        provider: 'ollama',
+        provider: 'local-llm',
         capabilities: {
             executionStrategy: 'single',
             thinking: caps.thinking ? 'medium' : 'off',
@@ -208,7 +208,7 @@ router.get('/models', optionalAuth, asyncHandler(async (req: Request, res: Respo
     }
 
     res.json(success({
-        defaultModel: buildFullModelId('ollama', chatModel),
+        defaultModel: buildFullModelId('local-llm', chatModel),
         models,
     }));
 }));

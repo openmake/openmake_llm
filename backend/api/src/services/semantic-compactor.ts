@@ -11,7 +11,7 @@
  *
  * @module services/semantic-compactor
  */
-import { OllamaClient } from '../llm';
+import { LLMClient } from '../llm';
 import { TOOL_RESULT_COMPACTION } from '../config/runtime-limits';
 import { LLM_TEMPERATURES } from '../config/llm-parameters';
 import {
@@ -36,7 +36,7 @@ export async function semanticCompact(toolName: string, content: string): Promis
     }
 
     try {
-        const client = new OllamaClient({ model: TOOL_RESULT_COMPACTION.COMPACTOR_MODEL });
+        const client = new LLMClient({ model: TOOL_RESULT_COMPACTION.COMPACTOR_MODEL });
         const result = await client.chat(
             [
                 { role: 'system', content: SEMANTIC_COMPACTOR_SYSTEM_PROMPT },

@@ -26,8 +26,7 @@ export interface LLMConfig {
     timeout: number;
 }
 
-/** @deprecated Use LLMConfig. 호환 alias — P8 에서 제거 */
-export type OllamaConfig = LLMConfig;
+// OllamaConfig 호환 alias 제거됨 (2026-05-19): 0 callers 확인 후 제거. 신규 코드는 LLMConfig 사용.
 
 /**
  * LLM 응답 성능 메트릭

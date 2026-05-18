@@ -81,7 +81,7 @@ program
         spinner.succeed('LLM 서버 연결됨');
 
         // 플러그인 로드
-        const loader = createPluginLoader({ ollamaModel: options.model });
+        const loader = createPluginLoader({ llmModel: options.model });
         await loader.loadAll();
 
         const plugins = loader.getLoadedPlugins();

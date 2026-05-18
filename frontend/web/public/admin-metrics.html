@@ -165,30 +165,16 @@
                         </div>
                     </div>
 
-                    <!-- 2. API Key Monitoring (신규) -->
+                    <!-- 2. API Key Monitoring 섹션 제거됨 (2026-05-19): -->
+                    <!--   Ollama 시절 키 풀 회전 상태 표시였으나, LiteLLM 마이그레이션 후 -->
+                    <!--   단일 master key 운영이라 dead UI 였음. 비용·할당량은 아래 카드 유지. -->
                     <div class="monitoring-section">
                         <div class="section-header">
-                            <span class="section-icon">🔐</span>
-                            <span class="section-title">API 키 상태 및 모니터링</span>
+                            <span class="section-icon">💰</span>
+                            <span class="section-title">비용 및 할당량 모니터링</span>
                         </div>
 
                         <div class="dashboard-grid">
-                            <!-- API Keys Status -->
-                            <div class="card">
-                                <div class="card-header">
-                                    <span class="card-title">API 키 로테이션</span>
-                                    <span class="card-icon">🔑</span>
-                                </div>
-                                <div id="keyStatusContainer" style="padding: 10px;">
-                                    <div class="text-muted">로딩 중...</div>
-                                </div>
-                                <div class="card-footer"
-                                    style="padding: 10px; border-top: 1px solid var(--border-light);">
-                                    <button class="btn btn-sm btn-outline" onclick="resetKeys()" style="width: 100%;">키
-                                        상태 리셋</button>
-                                </div>
-                            </div>
-
                             <!-- Cost Tracker -->
                             <div class="card">
                                 <div class="card-header">
@@ -354,7 +340,6 @@
         // --- Token Monitoring Logic ---
         async function loadMonitoringData() {
             await Promise.all([
-                loadKeyStatus(),
                 loadQuotaStatus(),
                 loadSummary(),
                 loadCosts(),
@@ -363,29 +348,7 @@
             ]);
         }
 
-        // API 키 상태
-        async function loadKeyStatus() {
-            try {
-                const res = await fetch('/api/monitoring/keys');
-                const rawData = await res.json();
-                const data = rawData.data || rawData;
-
-                const container = document.getElementById('keyStatusContainer');
-                container.innerHTML = data.keys.map(key => `
-                    <div class="key-item ${key.isActive ? 'active' : ''} ${key.failCount > 0 ? 'warning' : ''}">
-                        <div>
-                            <div style="font-weight: 600; font-size: 0.9rem;">Key ${key.index}</div>
-                            <div style="font-size: 0.8rem; color: var(--text-muted);">${key.keyId}</div>
-                        </div>
-                        <div style="text-align: right;">
-                             <span class="badge ${key.isActive ? 'badge-success' : (key.failCount > 0 ? 'badge-warning' : 'badge')}">
-                                ${key.isActive ? '활성' : (key.failCount > 0 ? `실패 ${key.failCount}` : '대기')}
-                             </span>
-                        </div>
-                    </div>
-                `).join('');
-            } catch (e) { console.error(e); }
-        }
+        // loadKeyStatus() 제거됨 (2026-05-19): API 키 풀 모니터링은 LiteLLM 마이그레이션 후 dead.
 
         // 할당량 상태
         async function loadQuotaStatus() {
@@ -540,15 +503,7 @@
             };
         }
 
-        // 키 리셋
-        async function resetKeys() {
-            if (!confirm('모든 API 키 상태를 초기화하시겠습니까?')) return;
-            try {
-                await fetch('/api/monitoring/keys/reset', { method: 'POST' });
-                alert('초기화되었습니다.');
-                loadKeyStatus();
-            } catch (e) { alert('실패: ' + e.message); }
-        }
+        // resetKeys() 제거됨 (2026-05-19): API 키 풀 리셋은 LiteLLM 마이그레이션 후 dead.
 
         // 유틸리티
         function getProgressClass(percentage) {

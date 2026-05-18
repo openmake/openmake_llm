@@ -1017,7 +1017,7 @@ export const LLM_RETRY = {
  * 외부 LLM(Anthropic/OpenAI-compat) 경로에서 노출하지 않는 MCP 도구 목록.
  *
  * 본 도구들은 MCP 사양상 등록되어 있으나, 실제 처리는 Ollama 경로의
- * AgentLoopStrategy 가 가로채서 OllamaClient.chat(비전 모델) 으로 위임한다
+ * AgentLoopStrategy 가 가로채서 LLMClient.chat(비전 모델) 으로 위임한다
  * (mcp/tools.ts visionOcrTool/analyzeImageTool 핸들러는 안내 문구만 반환하는 stub).
  *
  * 외부 LLM 경로(streamFromExternalProvider)에는 그런 가로채기 레이어가 없어

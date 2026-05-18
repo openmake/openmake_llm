@@ -3,7 +3,7 @@
  * LLMClient — vLLM/LiteLLM OpenAI-compatible thin wrapper
  * ============================================================
  *
- * Ollama 시절 OllamaClient 의 외부 시그니처를 유지하면서 내부는 OpenAI Node SDK
+ * Ollama 시절 LLMClient 의 외부 시그니처를 유지하면서 내부는 OpenAI Node SDK
  * 호출로 위임합니다 — 호출자 100+ 곳의 변경 최소화가 목표입니다.
  *
  * 위임 원칙:
@@ -161,7 +161,7 @@ export class LLMClient {
      * vLLM 의 /v1/completions 는 stop sequence 처리 등 미세한 quirks 가 있어
      * 표준화된 /v1/chat/completions 가 안정적입니다. system + user 단일 turn 으로 구성.
      *
-     * 주의: 기존 OllamaClient.generate() 의 context: number[] 반환은 지원하지 않습니다.
+     * 주의: 기존 LLMClient.generate() 의 context: number[] 반환은 지원하지 않습니다.
      * (호출자 7곳 검토 결과 context 사용처 없음 — 단일 호출만)
      */
     async generate(

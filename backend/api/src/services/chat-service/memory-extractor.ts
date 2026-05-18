@@ -11,7 +11,7 @@
 import { createLogger } from '../../utils/logger';
 import { LLM_TIMEOUTS } from '../../config/timeouts';
 import { LLM_TEMPERATURES, LLM_PREDICT_LIMITS } from '../../config/llm-parameters';
-import type { OllamaClient } from '../../llm';
+import type { LLMClient } from '../../llm';
 
 const logger = createLogger('MemoryExtractor');
 
@@ -28,7 +28,7 @@ export interface MemoryExtractorParams {
     /** 외부 컨텍스트(웹검색 등) 포함 여부 */
     hasExternalContext?: boolean;
     /** Ollama 클라이언트 인스턴스 (LLM 추출 호출용) */
-    client: OllamaClient;
+    client: LLMClient;
 }
 
 /**

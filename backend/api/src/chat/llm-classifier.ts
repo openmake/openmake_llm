@@ -26,7 +26,7 @@
  * @see chat/model-selector - selectOptimalModel() 에서 사용
  */
 
-import { OllamaClient } from '../llm';
+import { LLMClient } from '../llm';
 import { createLogger } from '../utils/logger';
 import { QUERY_TYPES } from './model-selector-types';
 import type { QueryType } from './model-selector-types';
@@ -75,7 +75,7 @@ function getClassificationCache(): SemanticClassificationCache {
 // ============================================================
 
 let vectorCache: VectorClassificationCache | null = null;
-let embeddingClient: OllamaClient | null = null;
+let embeddingClient: LLMClient | null = null;
 
 function getVectorCache(): VectorClassificationCache {
     if (!vectorCache) {
@@ -84,9 +84,9 @@ function getVectorCache(): VectorClassificationCache {
     return vectorCache;
 }
 
-function getEmbeddingClient(): OllamaClient {
+function getEmbeddingClient(): LLMClient {
     if (!embeddingClient) {
-        embeddingClient = new OllamaClient({ model: EMBEDDING_MODEL });
+        embeddingClient = new LLMClient({ model: EMBEDDING_MODEL });
     }
     return embeddingClient;
 }
@@ -140,7 +140,7 @@ interface RawLLMResult {
  * @param conversationContext - 이전 대화 턴 요약 (대명사/지시어 해소용, optional)
  */
 async function callLLMClassifier(query: string, conversationContext?: string): Promise<RawLLMResult | null> {
-    const classifier = new OllamaClient({
+    const classifier = new LLMClient({
         model: CLASSIFIER_MODEL,
         timeout: LLM_TIMEOUTS.CLASSIFIER_TIMEOUT_MS,
     });

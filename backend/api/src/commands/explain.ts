@@ -14,7 +14,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import chalk from 'chalk';
-import { OllamaClient } from '../llm';
+import { LLMClient } from '../llm';
 import { getSystemPrompt } from '../chat/prompt';
 import { LLM_TEMPERATURES } from '../config/llm-parameters';
 import { createSpinner } from '../ui/spinner';
@@ -26,7 +26,7 @@ import { detectLanguage } from '../ui/highlight';
  * @param client - Ollama 클라이언트 인스턴스
  * @param filePath - 설명할 파일 경로
  */
-export async function explainFile(client: OllamaClient, filePath: string): Promise<void> {
+export async function explainFile(client: LLMClient, filePath: string): Promise<void> {
     const absolutePath = path.resolve(filePath);
 
     if (!fs.existsSync(absolutePath)) {

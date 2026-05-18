@@ -17,7 +17,7 @@ import type { ChatStrategy, ChatResult, AgentLoopStrategyContext } from './types
 import type { AgentLoopStrategy } from './agent-loop-strategy';
 import { createLogger } from '../../utils/logger';
 import { THINKING_LIMITS, CAPACITY, REASONING_SANDWICH } from '../../config/runtime-limits';
-import { OllamaClient } from '../../llm';
+import { LLMClient } from '../../llm';
 
 const logger = createLogger('ThinkingStrategy');
 
@@ -276,7 +276,7 @@ async function verifyConclusionConsistency(
             ? `아래 결론이 사고 과정에서 논리적으로 도출되었는지 판단하세요. "YES" 또는 "NO"만 답하세요.\n\n결론:\n${conclusion}\n\n사고 과정:\n${reasoning}`
             : `Determine if the conclusion logically follows from the reasoning below. Answer only "YES" or "NO".\n\nConclusion:\n${conclusion}\n\nReasoning:\n${reasoning}`;
 
-        const verifierClient = new OllamaClient({ model: THINKING_LIMITS.VERIFIER_MODEL });
+        const verifierClient = new LLMClient({ model: THINKING_LIMITS.VERIFIER_MODEL });
         const verifyResponse = await verifierClient.chat(
             [{ role: 'user', content: prompt }],
             { num_predict: THINKING_LIMITS.VERIFIER_MAX_TOKENS }

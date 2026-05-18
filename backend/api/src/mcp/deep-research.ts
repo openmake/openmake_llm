@@ -333,8 +333,8 @@ export const configureResearchTool: MCPToolDefinition = {
                 },
                 searchApi: {
                     type: 'string',
-                    enum: ['ollama', 'google', 'all'],
-                    description: '웹 검색 API 선택'
+                    enum: ['google', 'all'],
+                    description: '웹 검색 API 선택 (legacy "ollama" 값은 "all" 로 normalize)'
                 },
                 maxSearchResults: {
                     type: 'number',
@@ -353,7 +353,12 @@ export const configureResearchTool: MCPToolDefinition = {
             // 타입 캐스팅
             const maxLoops = args.maxLoops as number | undefined;
             const llmModel = args.llmModel as string | undefined;
-            const searchApi = args.searchApi as 'ollama' | 'google' | 'all' | undefined;
+            // legacy 'ollama' 값은 'all' 로 normalize (vLLM 마이그레이션 이후 Ollama Cloud /api/web_search 폐기)
+            const rawSearchApi = args.searchApi as string | undefined;
+            const searchApi: 'google' | 'all' | undefined =
+                rawSearchApi === 'ollama' ? 'all'
+                : (rawSearchApi === 'google' || rawSearchApi === 'all') ? rawSearchApi
+                : undefined;
             const maxSearchResults = args.maxSearchResults as number | undefined;
             const language = args.language as string | undefined;
 

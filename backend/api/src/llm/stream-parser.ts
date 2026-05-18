@@ -4,7 +4,7 @@
  * ============================================================
  *
  * vLLM/LiteLLM 의 SSE 스트림(`data: {choices:[{delta:{...}}]}`) 을 파싱하여
- * 기존 OllamaClient 시그니처와 호환되는 `(content, thinking)` 콜백으로 전달합니다.
+ * 기존 LLMClient 시그니처와 호환되는 `(content, thinking)` 콜백으로 전달합니다.
  *
  * - delta.content → onToken(token, undefined)
  * - delta.reasoning → onToken('', thinking) — vLLM `--reasoning-parser` 결과
@@ -21,6 +21,7 @@ import type {
     ToolDefinition,
     FormatOption,
 } from './types';
+import { buildImageDataUrl } from '../utils/image-mime';
 
 type OpenAIChatChunk = {
     choices: Array<{
@@ -89,8 +90,10 @@ function toOpenAIMessages(messages: ChatMessage[]): unknown[] {
             const blocks: unknown[] = [];
             if (m.content) blocks.push({ type: 'text', text: m.content });
             for (const img of m.images) {
-                const url = img.startsWith('data:') ? img : `data:image/png;base64,${img}`;
-                blocks.push({ type: 'image_url', image_url: { url } });
+                // MIME 하드코드 제거 (2026-05-19): magic number 기반 추론으로 통일.
+                // 이전 'data:image/png;base64,...' hardcode 가 JPEG/WebP/GIF 첨부 시
+                // vLLM Vision payload 부정확 → buildImageDataUrl 공용 helper 사용.
+                blocks.push({ type: 'image_url', image_url: { url: buildImageDataUrl(img) } });
             }
             return { role: m.role, content: blocks };
         }

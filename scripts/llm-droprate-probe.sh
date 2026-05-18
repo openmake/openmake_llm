@@ -44,8 +44,20 @@
 
 set -euo pipefail
 
+# ─── .env 의 LLM_BASE_URL 자동 로드 (없으면 localhost:8002 fallback) ───
+#   2026-05-19 수정: 이전 기본값 http://localhost:8002 가 vLLM embed 포트 (8003) 와
+#   인접하여 운영자 혼동 우려 + LiteLLM 진입점이 외부 13401 인 환경에선 의미 없는
+#   기본값이었음. .env 의 LLM_BASE_URL 을 자동 인지하도록 변경.
+_ENV_LLM_BASE_URL=""
+for _env_path in "$(dirname "$0")/../.env" "$(pwd)/.env"; do
+    if [[ -f "${_env_path}" ]]; then
+        _ENV_LLM_BASE_URL=$(grep -E '^LLM_BASE_URL=' "${_env_path}" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"' | tr -d "'")
+        [[ -n "${_ENV_LLM_BASE_URL}" ]] && break
+    fi
+done
+
 # ─── 설정 (env 오버라이드 가능) ───────────────────────────────
-ENDPOINT="${ENDPOINT:-http://localhost:8002}"
+ENDPOINT="${ENDPOINT:-${_ENV_LLM_BASE_URL:-http://localhost:8002}}"
 API_KEY="${API_KEY:-sk-vllm}"
 MODEL="${MODEL:-exaone4.5-33b-awq}"
 N="${N:-30}"

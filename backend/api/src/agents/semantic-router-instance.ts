@@ -18,7 +18,7 @@ import { SemanticAgentRouter, type EmbedFunction, type AgentCandidate } from './
 import { DEFAULT_SEMANTIC_CACHE_PATH } from './semantic-cache';
 import { industryData } from './agent-data';
 import { getModelForRole } from '../config/model-roles';
-import type { OllamaClient } from '../llm';
+import type { LLMClient } from '../llm';
 
 const logger = createLogger('SemanticRouterInstance');
 
@@ -55,9 +55,9 @@ function getOrCreateRouter(embed: EmbedFunction): SemanticAgentRouter {
  * 서버 부팅 후 백그라운드에서 호출. 100명 에이전트 임베딩을 채운다.
  * 실패해도 메인 흐름에 영향 없음 (shadow 호출이 자동 스킵됨).
  *
- * @param client OllamaClient (embed 호출용)
+ * @param client LLMClient (embed 호출용)
  */
-export function initSemanticRouter(client: OllamaClient): void {
+export function initSemanticRouter(client: LLMClient): void {
     if (!SEMANTIC_ROUTER_ENABLED) {
         logger.info('Semantic Router 비활성 (OMK_SEMANTIC_ROUTER_ENABLED=false)');
         return;

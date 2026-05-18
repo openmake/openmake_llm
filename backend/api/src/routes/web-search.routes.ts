@@ -13,12 +13,12 @@
  *
  * @requires ClusterManager - Ollama 클러스터 관리
  * @requires performWebSearch - Google Custom Search 실행
- * @requires OllamaClient - LLM 생성 클라이언트
+ * @requires LLMClient - LLM 생성 클라이언트
  */
 
 import { Router, Request, Response } from 'express';
 import { ClusterManager } from '../cluster/manager';
-import { OllamaClient } from '../llm';
+import { LLMClient } from '../llm';
 import { getConfig } from '../config';
 import { success, serviceUnavailable } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
@@ -69,7 +69,7 @@ router.post('/web-search', requireAuth, validate(webSearchSchema), asyncHandler(
       const wsEngineModel = wsIsAuto ? '' : (wsPlan.resolvedEngine || model);
 
       // Cloud 모델 처리
-      let client: OllamaClient | undefined;
+      let client: LLMClient | undefined;
       const lowerEngineModel = wsEngineModel?.toLowerCase() ?? '';
       const isCloudModel = lowerEngineModel.endsWith(':cloud') || lowerEngineModel.endsWith('-cloud');
 

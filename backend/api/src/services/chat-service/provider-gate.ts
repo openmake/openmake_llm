@@ -32,19 +32,21 @@ import type {
 
 /**
  * fullId 첫 콜론 prefix가 이 목록에 있으면 그대로 fullId로 취급, 아니면
- * Ollama 모델명(태그 포함)으로 간주하고 'ollama:' prefix를 자동 보강합니다.
+ * 로컬 LLM 모델명(태그 포함)으로 간주하고 'local-llm:' prefix 를 자동 보강합니다.
  *
+ * legacy 'ollama:' prefix 도 호환 — parseFullModelId 가 자동 normalize 합니다.
  * 카탈로그(EXTERNAL_PROVIDER_CATALOG) 와 동기화 필수 — 새 provider 추가 시 양쪽 갱신.
  */
 const KNOWN_FULLID_PREFIXES: readonly string[] = [
-    'ollama',
+    'local-llm',
+    'ollama',       // legacy alias — parseFullModelId 가 'local-llm' 으로 normalize
     'openrouter',
 ];
 
 export interface ProviderGateInput {
     /** 사용자가 명시한 모델 ID (executionPlan.requestedModel) — undefined면 fallback 사용 */
     requestedModel?: string;
-    /** 클러스터가 할당한 기본 OllamaClient 모델 — requestedModel 미지정 시 사용 */
+    /** 클러스터가 할당한 기본 LLMClient 모델 — requestedModel 미지정 시 사용 */
     fallbackModel: string;
     /** 사용자 컨텍스트 (게스트 가드 판정용) */
     ctx: ProviderRouterContext;
@@ -68,7 +70,7 @@ export function normalizeToFullId(
     if (KNOWN_FULLID_PREFIXES.includes(prefix)) {
         return raw;
     }
-    return buildFullModelId('ollama', raw);
+    return buildFullModelId('local-llm', raw);
 }
 
 /**

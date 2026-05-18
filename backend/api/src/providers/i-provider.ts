@@ -22,6 +22,12 @@ import type { ChatMessage, ToolDefinition, UsageMetrics } from '../llm';
  * - `openai-compatible`: OpenAI Chat Completions 호환 endpoint
  *   (Groq, OpenRouter, Together, vLLM 등)
  */
+/**
+ * SDK 타입 식별자 — provider 의 native SDK 종류.
+ * 'ollama' 는 legacy 명칭으로 유지 (DB CHECK 제약, ExternalKeysRepo 호환). 신규 추가 시 'local-llm' 보다는
+ * 'vllm' / 'openai-compatible' 등 SDK 단위 식별자 사용 권장. parseFullModelId 가 model ID prefix
+ * 'ollama:' → 'local-llm:' 로 normalize 하는 것과는 별개 — sdkType 은 *어댑터 내부 식별자*.
+ */
 export type SdkType = 'ollama' | 'anthropic' | 'openai-compatible';
 
 /**
@@ -183,10 +189,14 @@ export interface IProvider {
 
 /**
  * 'provider:model' fullId 파싱.
- * 첫 콜론 기준 분리, 이후 콜론은 모두 model id에 포함 (Ollama 태그 호환).
+ * 첫 콜론 기준 분리, 이후 콜론은 모두 model id 에 포함 (모델 태그 호환).
+ *
+ * Provider id alias 정규화 — legacy 'ollama:<model>' 형식은 canonical 'local-llm' 으로
+ * normalize 됩니다. 운영 중 저장된 모델 ID, 외부 클라이언트 호환을 위한 grace period.
  *
  * @example
- *   parseFullModelId('ollama:gemma4:e4b') → { providerId: 'ollama', modelId: 'gemma4:e4b' }
+ *   parseFullModelId('local-llm:exaone4.5-33b-awq') → { providerId: 'local-llm', modelId: 'exaone4.5-33b-awq' }
+ *   parseFullModelId('ollama:exaone4.5-33b-awq')   → { providerId: 'local-llm', modelId: 'exaone4.5-33b-awq' }  // legacy alias
  *   parseFullModelId('anthropic:claude-sonnet-4-5') → { providerId: 'anthropic', modelId: 'claude-sonnet-4-5' }
  *
  * @throws Error if format is invalid
@@ -196,12 +206,28 @@ export function parseFullModelId(fullId: string): { providerId: string; modelId:
     if (idx <= 0 || idx === fullId.length - 1) {
         throw new Error(`Invalid model id format: ${fullId} (expected 'provider:model')`);
     }
-    return { providerId: fullId.slice(0, idx), modelId: fullId.slice(idx + 1) };
+    const rawProviderId = fullId.slice(0, idx);
+    const modelId = fullId.slice(idx + 1);
+    return { providerId: normalizeProviderId(rawProviderId), modelId };
 }
 
 /**
- * provider id 와 model id 를 결합하여 router 레벨 fullId 생성
+ * Provider id alias normalize — 'ollama' → 'local-llm' (legacy compat).
+ *
+ * 다른 provider id 는 그대로 통과합니다. 새 canonical id 가 도입되면 이 함수에
+ * mapping 한 줄만 추가하면 됩니다.
+ */
+export function normalizeProviderId(providerId: string): string {
+    if (providerId === 'ollama') return 'local-llm';
+    return providerId;
+}
+
+/**
+ * provider id 와 model id 를 결합하여 router 레벨 fullId 생성.
+ *
+ * legacy 'ollama' 입력도 자동으로 'local-llm' 으로 normalize. 호출자가 canonical id 를
+ * 모르고 옛 이름을 넘겨도 출력은 항상 표준 형식.
  */
 export function buildFullModelId(providerId: string, modelId: string): string {
-    return `${providerId}:${modelId}`;
+    return `${normalizeProviderId(providerId)}:${modelId}`;
 }

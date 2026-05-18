@@ -34,7 +34,7 @@ import {
     ClusterEvent
 } from './types';
 import { loadClusterConfig } from './config';
-import { createClient, OllamaClient } from '../llm';
+import { createClient, LLMClient } from '../llm';
 import { HealthChecker } from './health-checker';
 import { NodeSelector } from './node-selector';
 
@@ -67,7 +67,7 @@ export class ClusterManager extends EventEmitter {
     private nodes: Map<string, ClusterNode> = new Map();
 
     /** 노드별 Ollama 클라이언트 맵 */
-    private clients: Map<string, OllamaClient> = new Map();
+    private clients: Map<string, LLMClient> = new Map();
 
     /** 클러스터 설정 */
     private config: ClusterConfig;
@@ -289,9 +289,9 @@ export class ClusterManager extends EventEmitter {
      * 동시성이 필요한 경우 createScopedClient()를 사용하세요.
      *
      * @param nodeId - 노드 ID
-     * @returns 해당 노드의 OllamaClient 또는 undefined
+     * @returns 해당 노드의 LLMClient 또는 undefined
      */
-    getClient(nodeId: string): OllamaClient | undefined {
+    getClient(nodeId: string): LLMClient | undefined {
         return this.clients.get(nodeId);
     }
 
@@ -303,7 +303,7 @@ export class ClusterManager extends EventEmitter {
      *
      * @param nodeId - 노드 ID
      * @param model - 이 요청에서 사용할 모델명 (선택)
-     * @returns 격리된 새 OllamaClient 인스턴스 또는 undefined
+     * @returns 격리된 새 LLMClient 인스턴스 또는 undefined
      *
      * @example
      * ```typescript
@@ -311,7 +311,7 @@ export class ClusterManager extends EventEmitter {
      * // client.setModel()은 다른 요청에 영향을 주지 않음
      * ```
      */
-    createScopedClient(nodeId: string, model?: string): OllamaClient | undefined {
+    createScopedClient(nodeId: string, model?: string): LLMClient | undefined {
         const baseClient = this.clients.get(nodeId);
         const node = this.nodes.get(nodeId);
         if (!baseClient || !node) return undefined;
@@ -355,7 +355,7 @@ export class ClusterManager extends EventEmitter {
      */
     async tryWithFallback<T>(
         modelName: string,
-        fn: (client: OllamaClient, node: ClusterNode) => Promise<T>
+        fn: (client: LLMClient, node: ClusterNode) => Promise<T>
     ): Promise<{ result: T; node: ClusterNode }> {
         return this.selector.tryWithFallback(modelName, fn);
     }
@@ -389,8 +389,8 @@ export class ClusterManager extends EventEmitter {
     /**
      * HealthChecker에 전달할 노드+클라이언트 엔트리 목록
      */
-    private getNodeEntries(): Array<{ node: ClusterNode; client: OllamaClient }> {
-        const entries: Array<{ node: ClusterNode; client: OllamaClient }> = [];
+    private getNodeEntries(): Array<{ node: ClusterNode; client: LLMClient }> {
+        const entries: Array<{ node: ClusterNode; client: LLMClient }> = [];
         for (const [nodeId, node] of this.nodes) {
             const client = this.clients.get(nodeId);
             if (client) {

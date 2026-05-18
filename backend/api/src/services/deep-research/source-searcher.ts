@@ -6,7 +6,7 @@
  * @module services/deep-research/source-searcher
  */
 
-import type { OllamaClient } from '../../llm';
+import type { LLMClient } from '../../llm';
 import type { SearchResult } from '../../mcp/web-search';
 import { performWebSearch } from '../../mcp/web-search';
 import type { ResearchConfig, SubTopic } from '../deep-research-types';
@@ -34,7 +34,7 @@ function truncateQuery(query: string, maxWords: number): string {
  * 서브 토픽에 대해 웹 검색 수행
  */
 export async function searchSubTopics(params: {
-    client: OllamaClient;
+    client: LLMClient;
     config: ResearchConfig;
     subTopics: SubTopic[];
     sessionId: string;
@@ -84,7 +84,6 @@ export async function searchSubTopics(params: {
             try {
                 const results = await performWebSearch(query, {
                     maxResults: resultsPerQuery,
-                    useOllamaFirst: config.searchApi === 'ollama' || config.searchApi === 'all',
                     language: config.language
                 });
 

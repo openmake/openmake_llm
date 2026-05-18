@@ -117,10 +117,10 @@ export class ProviderRouter {
         }
         const { providerId, modelId } = parsed;
 
-        // providerId 'ollama' 는 *historical* — vLLM 마이그레이션 후에도 호환 위해 유지
-        // (브랜드 모델 ID 'ollama:exaone4.5-33b-awq' 등이 운영 중인 환경 다수). 실제 dispatch
-        // 대상은 LocalLLMProvider (vLLM/LiteLLM).
-        if (providerId === 'ollama') {
+        // Canonical provider id 'local-llm' — vLLM/LiteLLM 진입점.
+        // parseFullModelId 가 legacy 'ollama:' 를 'local-llm' 으로 normalize 하므로
+        // 옛 모델 ID 'ollama:exaone4.5-...' 도 자동으로 이 분기로 들어옴.
+        if (providerId === 'local-llm') {
             return {
                 provider: this.deps.localProvider,
                 providerId,

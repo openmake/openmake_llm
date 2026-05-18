@@ -6,7 +6,7 @@
  * @module services/deep-research/topic-decomposer
  */
 
-import type { OllamaClient } from '../../llm';
+import type { LLMClient } from '../../llm';
 import type { ResearchConfig, SubTopic } from '../deep-research-types';
 import { getUnifiedDatabase } from '../../data/models/unified-database';
 import { createLogger } from '../../utils/logger';
@@ -21,7 +21,7 @@ const logger = createLogger('DeepResearch:TopicDecomposer');
  * 주제를 서브 토픽으로 분해
  */
 export async function decomposeTopics(params: {
-    client: OllamaClient;
+    client: LLMClient;
     config: ResearchConfig;
     topic: string;
     sessionId: string;

@@ -47,6 +47,9 @@ export interface PluginHooks {
 export interface PluginContext {
     workingDirectory: string;
     configDirectory: string;
+    /** 로컬 LLM 모델 ID (canonical). */
+    llmModel: string;
+    /** @deprecated Use llmModel. 호환 alias — 기존 플러그인 호환 위해 동일 값 유지. */
     ollamaModel: string;
 }
 

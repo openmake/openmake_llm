@@ -8,7 +8,7 @@
  * @module services/chat-service-types
  */
 import type { UserTier } from '../data/user-manager';
-import type { OllamaClient } from '../llm';
+import type { LLMClient } from '../llm';
 
 /**
  * 채팅 히스토리 메시지 인터페이스
@@ -159,7 +159,7 @@ export type SystemEventCallback = (event: SystemEvent) => void;
  */
 export interface ChatServiceConfig {
     /** Ollama 클라이언트 인스턴스 */
-    client: OllamaClient;
+    client: LLMClient;
     /** 사용할 모델 이름 */
     model: string;
 }

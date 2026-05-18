@@ -7,6 +7,8 @@ import {
     OpenAIChatCompletionRequest,
     OpenAICompatService,
 } from '../services/OpenAICompatService';
+import { listAvailableModels } from '../chat/profile-resolver';
+import { parseFullModelId, normalizeProviderId } from '../providers/i-provider';
 
 const openaiCompatRouter = Router();
 let clusterManager: ClusterManager;
@@ -109,6 +111,32 @@ openaiCompatRouter.post('/chat/completions', asyncHandler(async (req: Request, r
         return;
     }
 
+    // body.model 검증 (2026-05-19): 이전엔 임의 문자열도 buildExecutionPlan() 가 기본 모델로
+    // silent override → 운영자/외부 클라이언트가 *잘못된 모델 이름* 을 보내도 알 길 없음.
+    // vLLM/OpenAI spec 준수 위해 listAvailableModels() 에 없는 model id 는 404 로 거절.
+    // 호환: 'local-llm:<model>' / 'ollama:<model>' (legacy normalize) 둘 다 허용.
+    {
+        const available = new Set(listAvailableModels().map((m) => m.id));
+        const requested = body.model;
+        let resolvedModelId: string = requested;
+        if (requested.includes(':')) {
+            try {
+                const parsed = parseFullModelId(requested);
+                if (normalizeProviderId(parsed.providerId) === 'local-llm') {
+                    resolvedModelId = parsed.modelId;
+                }
+            } catch { /* invalid fullId 형식 — 그대로 검증 */ }
+        }
+        if (!available.has(requested) && !available.has(resolvedModelId)) {
+            openaiError(
+                res,
+                404,
+                `Model '${requested}' not found. Available: ${[...available].join(', ')}`,
+            );
+            return;
+        }
+    }
+
     if (!clusterManager) {
         openaiError(res, 503, 'Cluster manager not initialized');
         return;
@@ -145,6 +173,7 @@ openaiCompatRouter.post('/chat/completions', asyncHandler(async (req: Request, r
                 message: converted.message,
                 model: body.model,
                 history: converted.history,
+                ...(converted.images && converted.images.length > 0 ? { images: converted.images } : {}),
                 tools,
                 tool_choice: body.tool_choice,
                 userContext,
@@ -212,9 +241,15 @@ openaiCompatRouter.post('/chat/completions', asyncHandler(async (req: Request, r
             },
         });
 
-        const promptTokens = OpenAICompatService.estimateTokens(
-            body.messages.map((m) => m.content ?? '').join(' '),
-        );
+        // content array 가 섞여 있어도 안전하게 텍스트만 추출 — string 인 경우만 join, 배열인 경우 text 블록 합산
+        const promptTextParts: string[] = [];
+        for (const m of body.messages) {
+            if (typeof m.content === 'string') promptTextParts.push(m.content);
+            else if (Array.isArray(m.content)) {
+                for (const p of m.content) if (p.type === 'text') promptTextParts.push(p.text);
+            }
+        }
+        const promptTokens = OpenAICompatService.estimateTokens(promptTextParts.join(' '));
         const completionTokens = OpenAICompatService.estimateTokens(result.response);
 
         const response = OpenAICompatService.buildResponse({

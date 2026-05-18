@@ -19,7 +19,7 @@
  * @see config/model-defaults.ts - GV_MODEL_MAP
  * @see prompts/verifier-system.ts - Verifier 시스템 프롬프트
  */
-import { OllamaClient } from '../../llm';
+import { LLMClient } from '../../llm';
 import type { ChatStrategy, GenerateVerifyStrategyContext, GenerateVerifyStrategyResult } from './types';
 import { createLogger } from '../../utils/logger';
 import { resolvePromptLocale } from '../../chat/language-policy';
@@ -51,7 +51,7 @@ export class GenerateVerifyStrategy
         );
 
         // ── Step 1: Generator — 1차 응답 생성 (내부 버퍼링) ──
-        const generatorClient = new OllamaClient({ model: context.generatorModel });
+        const generatorClient = new LLMClient({ model: context.generatorModel });
         let generatedResponse: string;
 
         try {
@@ -102,7 +102,7 @@ export class GenerateVerifyStrategy
             labels.verificationRequest,
         ].join('\n');
 
-        const verifierClient = new OllamaClient({ model: context.verifierModel });
+        const verifierClient = new LLMClient({ model: context.verifierModel });
         let fullVerifiedResponse = '';
 
         // format 지정 시 temperature: 0 적용 (Ollama 공식 문서 권장)

@@ -32,7 +32,7 @@ import type { DocumentStore } from '../documents/store';
 import type { UserTier } from '../data/user-manager';
 import type { UserContext } from '../mcp/user-sandbox';
 import { getUnifiedMCPClient } from '../mcp/unified-client';
-import { OllamaClient } from '../llm';
+import { LLMClient } from '../llm';
 import { getGptOssTaskPreset, type ChatMessage, type ToolDefinition, type ModelOptions } from '../llm';
 import type { ResearchProgress } from './DeepResearchService';
 import { AgentLoopStrategy, DeepResearchStrategy, DirectStrategy, DiscussionStrategy, GenerateVerifyStrategy, ThinkingStrategy } from './chat-strategies';
@@ -83,7 +83,7 @@ const logger = createLogger('ChatService');
  */
 export class ChatService {
     /** Ollama API 통신 클라이언트 */
-    private client: OllamaClient;
+    private client: LLMClient;
     /** 외부 LLM provider 검증/해석 라우터 (선택) — 미지정 시 게이트 비활성 (테스트 호환) */
     private readonly providerRouter?: ProviderRouter;
     /** 직전 외부 provider 호출의 사용량 메트릭 (billing/usage 이벤트용) */
@@ -114,7 +114,7 @@ export class ChatService {
      * @param client - Ollama HTTP 클라이언트 인스턴스
      * @param providerRouter - 외부 provider 검증 라우터 (선택, 미지정 시 게이트 비활성)
      */
-    constructor(client: OllamaClient, providerRouter?: ProviderRouter) {
+    constructor(client: LLMClient, providerRouter?: ProviderRouter) {
         this.client = client;
         this.providerRouter = providerRouter;
         this.directStrategy = new DirectStrategy();
@@ -177,7 +177,7 @@ export class ChatService {
     private getAllowedTools(): ToolDefinition[] {
         const toolRouter = getUnifiedMCPClient().getToolRouter();
         const userTierForTools = this.currentUserContext?.tier || 'free';
-        const allTools = toolRouter.getOllamaTools(userTierForTools) as ToolDefinition[];
+        const allTools = toolRouter.getLLMTools(userTierForTools) as ToolDefinition[];
 
         // enabledTools가 전달된 경우, 사용자가 명시적으로 활성화한 도구만 허용
         // enabledTools가 없으면 레거시 호환: 전체 허용 (API 클라이언트 등)
@@ -435,10 +435,10 @@ export class ChatService {
             });
         }
 
-        // ── Step 4: 모델 선택 ──
+        // ── Step 4: 쿼리 분류 + 옵션 튜닝 (Pure Manual 모드) ──
         const promptConfig = getPromptConfig(message, languagePolicy?.resolvedLanguage);
         const hasImages = (images && images.length > 0) || documentImages.length > 0;
-        const modelSelection = await this.resolveModel(message || '', hasImages, executionPlan, promptConfig);
+        const modelSelection = await this.resolveModel(message || '', hasImages);
 
         // ── 라우팅 결정 로그 갱신 ──
         routingLog.queryFeatures.queryType = modelSelection.queryType;
@@ -649,18 +649,14 @@ export class ChatService {
     }
 
     /**
-     * Brand Model auto-routing / Brand Model 직접 매핑 / 일반 자동 선택으로 최적 모델을 결정합니다.
-     * 실제 로직은 chat-service/model-resolver.ts에 위임합니다.
+     * 쿼리 분류 + 옵션 튜닝 (Pure Manual 모드 — 모델 변경 없음).
+     * 실제 로직은 chat-service/model-resolver.ts 에 위임합니다.
      */
     private async resolveModel(
         message: string,
         hasImages: boolean,
-        executionPlan: ExecutionPlan | undefined,
-        promptConfig: { options?: ModelOptions },
     ): Promise<import('../chat/model-selector').ModelSelection> {
-        // Pure Manual (Decision F): setModel 콜백 미전달 — OllamaClient 생성자
-        // 단계의 모델이 사용자 선택을 그대로 반영하며, 분류·옵션 튜닝만 수행.
-        return resolveModel({ message, hasImages, executionPlan, promptConfig });
+        return resolveModel({ message, hasImages });
     }
 
     /**
@@ -870,10 +866,26 @@ export class ChatService {
             ...(req.images ? { images: req.images } : {}),
         });
 
-        // ── Phase 6: Tool Calling Agent Loop (외부 LLM) ──
-        // Provider capabilities 확인 — toolCalling 지원하면 MCP 도구 노출
-        // EXTERNAL_LLM_TOOL_BLACKLIST: Ollama 비전 모델 위임용 stub 도구는 외부 경로에서 제외
+        // Provider capabilities 확인.
         const caps = resolved.provider.getCapabilities(resolved.modelId);
+
+        // ── Vision capability gating (2026-05-19) ──
+        // 이미지가 첨부됐지만 모델이 vision 미지원이면 400 으로 명시적 거절.
+        // 이전엔 silent 무시였으나 vLLM Multimodal spec 상 이미지 payload 는 vision 모델로만
+        // 라우팅해야 함. 운영자는 OMK_VISION_MODEL 환경변수로 별도 vision 모델 분기 가능.
+        const hasImages = (req.images && req.images.length > 0)
+            || (req.history ?? []).some((h) => h.images && h.images.length > 0);
+        if (hasImages && !caps.vision) {
+            const err = new Error(
+                `Model '${resolved.fullId}' does not support vision input (capabilities.vision=false). ` +
+                'Use a vision-capable model or remove images from the request.',
+            );
+            (err as Error & { statusCode?: number }).statusCode = 400;
+            throw err;
+        }
+
+        // ── Phase 6: Tool Calling Agent Loop (외부 LLM) ──
+        // EXTERNAL_LLM_TOOL_BLACKLIST: vision 모델 위임용 stub 도구는 외부 경로에서 제외
         const tools = caps.toolCalling
             ? this.getAllowedTools().filter((t) => !EXTERNAL_LLM_TOOL_BLACKLIST.includes(t.function.name))
             : [];

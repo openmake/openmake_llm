@@ -19,7 +19,7 @@
  * @see {@link module:agents/monitor} - 라우팅 성능 모니터링
  */
 
-import { OllamaClient } from '../llm';
+import { LLMClient } from '../llm';
 import { sanitizePromptInput, validatePromptInput } from '../utils/input-sanitizer';
 import { AgentCategory } from './types';
 import industryData from './industry-agents.json';
@@ -70,20 +70,20 @@ interface AgentSummary {
     description: string;
 }
 
-/** 전역 OllamaClient 싱글톤 인스턴스 (라우팅 전용) */
-let routerClient: OllamaClient | null = null;
+/** 전역 LLMClient 싱글톤 인스턴스 (라우팅 전용) */
+let routerClient: LLMClient | null = null;
 
 /**
- * 라우팅 전용 OllamaClient 싱글톤 반환
+ * 라우팅 전용 LLMClient 싱글톤 반환
  *
  * 라우팅 요청마다 새 클라이언트를 생성하지 않고 단일 인스턴스를 재사용한다.
  * 첫 호출 시 lazy initialization으로 생성된다.
  *
- * @returns {OllamaClient} - 라우팅 전용 Ollama 클라이언트 인스턴스
+ * @returns {LLMClient} - 라우팅 전용 Ollama 클라이언트 인스턴스
  */
-function getRouterClient(): OllamaClient {
+function getRouterClient(): LLMClient {
     if (!routerClient) {
-        routerClient = new OllamaClient();
+        routerClient = new LLMClient();
     }
     return routerClient;
 }

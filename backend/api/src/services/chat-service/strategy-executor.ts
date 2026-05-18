@@ -19,7 +19,7 @@ import type { ResponseQualitySignals } from '../../chat/routing-verifier';
 import type { ModelSelection } from '../../chat/model-selector';
 import type { ExecutionPlan } from '../../chat/profile-resolver';
 import type { ChatMessage, ModelOptions, FormatOption } from '../../llm';
-import type { OllamaClient } from '../../llm';
+import type { LLMClient } from '../../llm';
 import type { UserContext } from '../../mcp/user-sandbox';
 import type { ToolDefinition } from '../../llm';
 import type { RoutingDecisionLog } from '../../chat/routing-logger';
@@ -59,7 +59,7 @@ export interface StrategyExecutorParams {
     /** Thinking 전략 인스턴스 */
     thinkingStrategy: ThinkingStrategy;
     /** Ollama 클라이언트 */
-    client: OllamaClient;
+    client: LLMClient;
     /** 현재 사용자 컨텍스트 */
     currentUserContext: UserContext | null;
     /** 허용된 도구 목록을 반환하는 콜백 */

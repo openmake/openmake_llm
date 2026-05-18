@@ -17,7 +17,7 @@ import type { QueryType } from '../../chat/model-selector-types';
 import type { ExecutionPlan } from '../../chat/profile-resolver';
 import type { DocumentStore } from '../../documents/store';
 import type { UserContext } from '../../mcp/user-sandbox';
-import type { OllamaClient } from '../../llm';
+import type { LLMClient } from '../../llm';
 import type { ChatMessage, FormatOption, ModelOptions, ToolCall, ToolDefinition } from '../../llm';
 import type { ResearchProgress } from '../DeepResearchService';
 import type { ChatMessageRequest } from '../chat-service-types';
@@ -83,7 +83,7 @@ export interface ChatStrategy<TContext extends ChatContext = ChatContext, TResul
  */
 export interface DirectStrategyContext extends ChatContext {
     /** Ollama 클라이언트 인스턴스 */
-    client: OllamaClient;
+    client: LLMClient;
     /** 현재 대화 히스토리 (시스템 프롬프트 + 이전 메시지 + 사용자 메시지) */
     currentHistory: ChatMessage[];
     /** 모델 옵션 */
@@ -153,7 +153,7 @@ export interface FallbackHint {
  */
 export interface AgentLoopStrategyContext extends ChatContext {
     /** Ollama 클라이언트 인스턴스 */
-    client: OllamaClient;
+    client: LLMClient;
     /** 현재 대화 히스토리 (루프 진행에 따라 도구 결과가 추가됨) */
     currentHistory: ChatMessage[];
     /** 모델 옵션 */
@@ -196,7 +196,7 @@ export interface DiscussionStrategyContext extends ChatContext {
     /** 업로드된 문서 저장소 (토론 컨텍스트에 문서 포함용) */
     uploadedDocuments: DocumentStore;
     /** Ollama 클라이언트 인스턴스 */
-    client: OllamaClient;
+    client: LLMClient;
     /** 토론 진행 상황 콜백 */
     onProgress?: (progress: DiscussionProgress) => void;
     /** 토론 결과를 마크다운으로 포맷팅하는 함수 */
@@ -258,7 +258,7 @@ export interface DeepResearchStrategyContext extends ChatContext {
     /** 원본 채팅 메시지 요청 */
     req: ChatMessageRequest;
     /** Ollama 클라이언트 인스턴스 */
-    client: OllamaClient;
+    client: LLMClient;
     /** 연구 진행 상황 콜백 */
     onProgress?: (progress: ResearchProgress) => void;
     /** 연구 결과를 마크다운으로 포맷팅하는 함수 */

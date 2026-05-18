@@ -9,7 +9,6 @@
  * @module services/chat-service-metrics
  */
 import { createLogger } from '../utils/logger';
-import { getApiKeyManager } from '../llm';
 import { getApiUsageTracker } from '../llm';
 import type { ExecutionPlan } from '../chat/profile-resolver';
 import { recordTokenUsage } from '../middlewares/rate-limit-headers';
@@ -44,11 +43,10 @@ export function recordChatMetrics(params: {
     const { fullResponse, startTime, message, model, apiKeyId, selectedAgent, agentSelection, executionPlan } = params;
 
     // 사용량 추적 및 모니터링 메트릭 기록 (실패해도 응답 반환에 영향 없음)
+    // 변경 이력 (2026-05-19): getApiKeyManager / currentKey 사용 제거. Ollama 시절 키 풀
+    // 회전 추적용이었으나 LiteLLM 마이그레이션 후 단일 master key 운영이라 불필요.
     try {
         const usageTracker = getApiUsageTracker();
-        const keyManager = getApiKeyManager();
-        const currentKey = keyManager.getCurrentKey();
-
         const responseTime = Date.now() - startTime;
         const tokenCount = fullResponse.length;
 
@@ -60,7 +58,6 @@ export function recordChatMetrics(params: {
             tokens: tokenCount,
             responseTime,
             model,
-            apiKeyId: currentKey ? currentKey.substring(0, 8) : undefined,
             profileId: executionPlan?.isBrandModel ? executionPlan.requestedModel : undefined,
         });
 
@@ -71,10 +68,6 @@ export function recordChatMetrics(params: {
             metricsCollector.incrementCounter('chat_requests_total', 1, { model });
             metricsCollector.recordResponseTime(responseTime, model);
             metricsCollector.recordTokenUsage(tokenCount, model);
-
-            if (currentKey) {
-                metricsCollector.incrementCounter('api_key_usage', 1, { keyId: currentKey.substring(0, 8) });
-            }
         } catch (e) {
             logger.warn('MetricsCollector 기록 실패:', e);
         }

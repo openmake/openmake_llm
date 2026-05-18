@@ -44,22 +44,6 @@ function decodeXmlEntities(text: string): string {
 }
 
 /**
- * Ollama 공식 Web Search API 검색 (최우선 소스)
- *
- * Ollama 클라우드의 웹 검색 API를 호출합니다.
- * 가장 먼저 시도되며, 결과가 있으면 다른 소스를 건너뜁니다.
- *
- * @param query - 검색 쿼리
- * @param maxResults - 최대 결과 수 (기본값: 10)
- * @returns SearchResult 배열 (실패 시 빈 배열)
- */
-export async function searchOllamaWebSearch(_query: string, _maxResults: number = 10): Promise<SearchResult[]> {
-    // Ollama Cloud /api/web_search 폐기됨 (2026-05-18 vLLM 마이그레이션).
-    // 호출자 호환을 위해 함수는 유지하지만 빈 배열 반환 — Google CSE 등 다른 provider 가 검색 수행.
-    return [];
-}
-
-/**
  * Google Custom Search API 검색
  *
  * Google Custom Search Engine을 통해 웹 검색을 수행합니다.

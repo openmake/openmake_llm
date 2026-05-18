@@ -55,14 +55,14 @@ const logger = createLogger('ToolRouter');
 type ExternalToolExecutor = (name: string, args: Record<string, unknown>) => Promise<MCPToolResult>;
 
 /**
- * Ollama 호환 도구 형식
+ * LLM Function Calling 도구 형식 (OpenAI 호환)
  *
- * Ollama LLM이 Function Calling에 사용하는 도구 형식입니다.
- * MCPTool을 이 형식으로 변환하여 LLM에 전달합니다.
+ * vLLM/LiteLLM 의 chat.completions.create({ tools }) 가 요구하는 형식입니다.
+ * MCPTool 을 이 형식으로 변환하여 LLM 에 전달합니다.
  *
- * @interface OllamaTool
+ * @interface LLMTool
  */
-interface OllamaTool {
+interface LLMTool {
     /** 도구 타입 (항상 'function') */
     type: 'function';
     /** 도구 함수 정의 */
@@ -210,15 +210,15 @@ export class ToolRouter {
     }
 
     /**
-     * Ollama 호환 도구 형식으로 변환
+     * LLM Function Calling 도구 형식으로 변환 (OpenAI 호환)
      *
-     * MCPTool 형식을 Ollama Function Calling이 요구하는 형식으로 변환합니다.
-     * tier에 따라 접근 가능한 도구만 포함됩니다.
+     * MCPTool 형식을 vLLM/LiteLLM chat.completions.create({ tools }) 가 요구하는
+     * 형식으로 변환합니다. tier 에 따라 접근 가능한 도구만 포함됩니다.
      *
      * @param tier - 사용자 등급
-     * @returns Ollama Function Calling 호환 도구 배열
+     * @returns OpenAI 호환 tools 배열
      */
-    getOllamaTools(tier: UserTier): OllamaTool[] {
+    getLLMTools(tier: UserTier): LLMTool[] {
         const tools = this.getToolsForTier(tier);
         return tools.map(tool => ({
             type: 'function' as const,
@@ -232,6 +232,11 @@ export class ToolRouter {
                 },
             },
         }));
+    }
+
+    /** @deprecated Use getLLMTools(). 호환 alias — P9 에서 제거 예정. */
+    getOllamaTools(tier: UserTier): LLMTool[] {
+        return this.getLLMTools(tier);
     }
 
     /**

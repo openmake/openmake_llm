@@ -7,7 +7,7 @@
  * @module services/deep-research/findings-synthesizer
  */
 
-import type { OllamaClient } from '../../llm';
+import type { LLMClient } from '../../llm';
 import type { SearchResult } from '../../mcp/web-search';
 import type { ResearchConfig, SynthesisResult } from '../deep-research-types';
 import { getUnifiedDatabase } from '../../data/models/unified-database';
@@ -49,7 +49,7 @@ function measureTotalContent(sources: SearchResult[]): number {
  * 검색 결과를 청크로 나눠 LLM 합성
  */
 export async function synthesizeFindings(params: {
-    client: OllamaClient;
+    client: LLMClient;
     config: ResearchConfig;
     topic: string;
     searchResults: SearchResult[];
@@ -180,7 +180,7 @@ export async function synthesizeFindings(params: {
  * @returns 최종 병합된 요약 텍스트
  */
 async function hierarchicalMerge(params: {
-    client: OllamaClient;
+    client: LLMClient;
     config: ResearchConfig;
     topic: string;
     summaries: string[];
@@ -236,7 +236,7 @@ async function hierarchicalMerge(params: {
  * 단일 수준 병합 — 요약 목록을 하나의 종합 요약으로 합성
  */
 async function singleMerge(params: {
-    client: OllamaClient;
+    client: LLMClient;
     config: ResearchConfig;
     topic: string;
     summaries: string[];
@@ -283,7 +283,7 @@ async function singleMerge(params: {
  * 추가 정보가 필요한지 확인
  */
 export async function checkNeedsMoreInfo(params: {
-    client: OllamaClient;
+    client: LLMClient;
     config: ResearchConfig;
     topic: string;
     currentFindings: string[];

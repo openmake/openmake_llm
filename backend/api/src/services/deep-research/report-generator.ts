@@ -6,7 +6,7 @@
  * @module services/deep-research/report-generator
  */
 
-import type { OllamaClient } from '../../llm';
+import type { LLMClient } from '../../llm';
 import type { SearchResult } from '../../mcp/web-search';
 import type { ResearchConfig, SubTopic } from '../deep-research-types';
 import { getUnifiedDatabase } from '../../data/models/unified-database';
@@ -78,7 +78,7 @@ function buildFallbackReport(lang: string, topic: string, findings: string[], so
  * 최종 보고서 생성
  */
 export async function generateReport(params: {
-    client: OllamaClient;
+    client: LLMClient;
     config: ResearchConfig;
     topic: string;
     findings: string[];

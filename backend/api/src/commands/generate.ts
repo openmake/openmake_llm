@@ -15,7 +15,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import chalk from 'chalk';
 import inquirer from 'inquirer';
-import { OllamaClient } from '../llm';
+import { LLMClient } from '../llm';
 import { getSystemPrompt } from '../chat/prompt';
 import { LLM_TEMPERATURES } from '../config/llm-parameters';
 import { createSpinner } from '../ui/spinner';
@@ -28,7 +28,7 @@ import { createSpinner } from '../ui/spinner';
  * @param options - 생성 옵션 (output: 저장 파일명, language: 프로그래밍 언어)
  */
 export async function generateCode(
-    client: OllamaClient,
+    client: LLMClient,
     description: string,
     options: { output?: string; language?: string } = {}
 ): Promise<void> {

@@ -32,7 +32,7 @@
  *
  * @module evaluation/real-response-generator
  */
-import { OllamaClient } from '../llm';
+import { LLMClient } from '../llm';
 import { ChatService } from '../services/ChatService';
 import { createLogger } from '../utils/logger';
 import type { ChatMessageRequest } from '../services/chat-service-types';
@@ -49,7 +49,7 @@ const TOKEN_ESTIMATION_DIVISOR = 3;
 /** createRealResponseGenerator 옵션 */
 export interface RealResponseGeneratorOptions {
     /** LLM 클라이언트 (미지정 시 환경변수 기반 기본 클라이언트 생성) */
-    llmClient?: OllamaClient;
+    llmClient?: LLMClient;
     /** 케이스당 최대 실행 시간 (ms). 기본 60_000 */
     timeoutMs?: number;
     /** 케이스당 최대 추정 토큰. 기본 2000 */
@@ -57,7 +57,7 @@ export interface RealResponseGeneratorOptions {
     /** 토큰 한도 초과 시 즉시 abort + throw할지. 기본 true */
     abortOnBudgetExceed?: boolean;
     /** ChatService 인스턴스를 외부에서 주입 (테스트용). 미지정 시 매 호출마다 new */
-    chatServiceFactory?: (client: OllamaClient) => ChatService;
+    chatServiceFactory?: (client: LLMClient) => ChatService;
 }
 
 /** 응답 생성 중 가드 트리거를 식별하기 위한 Error 서브타입 */
@@ -90,7 +90,7 @@ export function createRealResponseGenerator(
 
     return async (query, language) => {
         // 케이스 간 상태 누수 방지: client/service를 새로 생성
-        const client = options.llmClient ?? new OllamaClient({});
+        const client = options.llmClient ?? new LLMClient({});
         const chatService = factory(client);
 
         // 단일 AbortController로 timeout + token-budget 두 가드를 모두 처리

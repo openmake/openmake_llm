@@ -11,7 +11,7 @@
  * @description
  * - resolveUserContext(): Express req 또는 WebSocket 연결에서 사용자 컨텍스트 추출
  * - buildPlan(): brand model alias → ExecutionPlan 변환
- * - createClient(): 요청별 격리된 OllamaClient 생성
+ * - createClient(): 요청별 격리된 LLMClient 생성
  * - ensureSession(): 세션 존재 확인 및 생성
  * - saveUserMessage(): 사용자 메시지 DB 저장
  * - saveAssistantMessage(): AI 응답 DB 저장
@@ -24,7 +24,7 @@
 
 import { Request } from 'express';
 import { ClusterManager } from '../cluster/manager';
-import { OllamaClient, createClient as createDirectClient } from '../llm';
+import { LLMClient, createClient as createDirectClient } from '../llm';
 import { ChatService } from '../services/ChatService';
 import type { ChatMessageRequest } from '../services/ChatService';
 import type { SystemEventCallback } from '../services/chat-service-types';
@@ -267,18 +267,18 @@ export class ChatRequestHandler {
     }
 
     /**
-     * 요청별 격리된 OllamaClient를 생성합니다.
+     * 요청별 격리된 LLMClient를 생성합니다.
      *
      * @param clusterManager - 클러스터 매니저 인스턴스
      * @param engineModel - 엔진 모델 ID
      * @param nodeId - 특정 노드 ID (선택)
-     * @returns OllamaClient 또는 undefined (사용 가능한 노드 없음)
+     * @returns LLMClient 또는 undefined (사용 가능한 노드 없음)
      */
     static createClient(
         clusterManager: ClusterManager,
         engineModel: string,
         nodeId?: string,
-    ): OllamaClient | undefined {
+    ): LLMClient | undefined {
         if (nodeId && nodeId.length < 10) {
             return clusterManager.createScopedClient(nodeId, engineModel);
         }
@@ -402,7 +402,7 @@ export class ChatRequestHandler {
      * 전체 채팅 파이프라인을 오케스트레이션합니다.
      *
      * 1. ExecutionPlan 해석
-     * 2. OllamaClient 생성
+     * 2. LLMClient 생성
      * 3. 세션 확보 (생성 또는 기존 사용)
      * 4. 사용자 메시지 DB 저장
      * 5. ChatService.processMessage() 호출
@@ -612,7 +612,7 @@ export class ChatRequestHandler {
         images?: string[];
         tools: ToolDefinition[];
         tool_choice?: 'auto' | 'none' | 'required' | { type: 'function'; function: { name: string } };
-        client: OllamaClient;
+        client: LLMClient;
         onToken: (token: string) => void;
         abortSignal?: AbortSignal;
     }): Promise<{

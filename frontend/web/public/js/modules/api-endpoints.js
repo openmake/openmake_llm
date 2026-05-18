@@ -71,8 +71,7 @@ const API_ENDPOINTS = Object.freeze({
     // ── Monitoring & Metrics ──────────────────────
     METRICS: '/api/metrics',
     METRICS_ALERTS: '/api/metrics/alerts',
-    MONITORING_KEYS: '/api/monitoring/keys',
-    MONITORING_KEYS_RESET: '/api/monitoring/keys/reset',
+    // MONITORING_KEYS / MONITORING_KEYS_RESET 제거됨 (2026-05-19): LiteLLM 마이그레이션 후 dead.
     MONITORING_USAGE_DAILY: '/api/monitoring/usage/daily',
     MONITORING_USAGE_HOURLY: '/api/monitoring/usage/hourly',
     MONITORING_QUOTA: '/api/monitoring/quota',

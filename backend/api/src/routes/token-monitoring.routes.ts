@@ -24,7 +24,6 @@
  */
 
 import { Router, Request, Response } from 'express';
-import { getApiKeyManager } from '../llm';
 import { getApiUsageTracker } from '../llm';
 import { success } from '../utils/api-response';
 import { requireAuth, requireAdmin } from '../auth';
@@ -39,38 +38,10 @@ const router = Router();
 // 토큰 모니터링은 관리자 전용
 router.use(requireAuth, requireAdmin);
 
-// ================================================
-// API 키 모니터링
-// ================================================
-
-/**
- * GET /api/monitoring/keys
- * 모든 API 키 상태 조회
- */
-router.get('/keys', asyncHandler(async (req: Request, res: Response) => {
-    const keyManager = getApiKeyManager();
-    const usageTracker = getApiUsageTracker();
-    const status = keyManager.getStatus();
-    const quotaStatus = usageTracker.getQuotaStatus();
-
-    // 각 키의 상세 정보 생성
-    const keys = [];
-    for (let i = 0; i < status.totalKeys; i++) {
-        const keyStatus = status.keyStatuses[i];
-        const isActive = i === status.activeKeyIndex;
-
-        keys.push({
-            index: i + 1,
-            keyId: keyStatus ? `Key ${i + 1}` : 'Unknown',
-            isActive,
-            failCount: keyStatus?.failCount || 0,
-            lastFail: keyStatus?.lastFail,
-            status: isActive ? 'active' : (keyStatus?.failCount > 0 ? 'warning' : 'standby')
-        });
-    }
-
-    res.json(success({ totalKeys: status.totalKeys, activeKeyIndex: status.activeKeyIndex + 1, currentFailures: status.failures, lastFailover: status.lastFailover, keys, quota: quotaStatus }));
-}));
+// API 키 모니터링 엔드포인트 제거됨 (2026-05-19):
+//   GET /api/monitoring/keys 는 Ollama 시절 API key pool 회전 상태를 표시했으나,
+//   LiteLLM 마이그레이션 후 단일 master key 운영이라 dead UI 였음.
+//   할당량(quota) 조회는 GET /api/monitoring/quota 가 담당.
 
 /**
  * GET /api/monitoring/usage/daily
@@ -127,27 +98,15 @@ router.get('/quota', asyncHandler(async (req: Request, res: Response) => {
 
 /**
  * GET /api/monitoring/summary
- * 전체 요약 통계
+ * 전체 요약 통계 (사용량 추적기 단독)
  */
 router.get('/summary', asyncHandler(async (req: Request, res: Response) => {
     const usageTracker = getApiUsageTracker();
-    const keyManager = getApiKeyManager();
-
-    const summary = usageTracker.getSummary();
-    const keyStatus = keyManager.getStatus();
-
-    res.json(success({ ...summary, keyInfo: { totalKeys: keyStatus.totalKeys, activeKey: keyStatus.activeKeyIndex + 1, failures: keyStatus.failures } }));
+    res.json(success(usageTracker.getSummary()));
 }));
 
-/**
- * POST /api/monitoring/keys/reset
- * API 키 상태 리셋 (관리자용)
- */
-router.post('/keys/reset', requireAdmin, asyncHandler(async (req: Request, res: Response) => {
-    const keyManager = getApiKeyManager();
-    keyManager.reset();
-    res.json(success({ message: 'API 키 상태가 리셋되었습니다.' }));
-}));
+// POST /api/monitoring/keys/reset 제거됨 (2026-05-19):
+//   Ollama 시절 키 풀 회전 상태 리셋이었으나, LiteLLM 마이그레이션 후 dead.
 
 /**
  * GET /api/monitoring/costs

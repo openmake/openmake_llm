@@ -8,14 +8,14 @@
  *
  * 매핑 요약:
  * - chat()           ⇄ streamChat()  (onToken/onThinking 분리, metrics 정규화)
- * - listModels()     ⇄ listModels()  (fullId='ollama:<name>' 빌드)
+ * - listModels()     ⇄ listModels()  (fullId='local-llm:<name>' 빌드, parseFullModelId 가 legacy 'ollama:' 도 인식)
  * - isAvailable()    ⇄ validateCredentials()
  * - embed()          ⇄ embed()
  *
- * 주의: PROVIDER_ID 와 sdkType 은 legacy 식별자 'ollama' 를 유지합니다.
- * DB CHECK 제약, fullId prefix (`ollama:<model>`), provider-gate 의 known-prefix
- * whitelist, frontend 의 provider 그룹화 키 등 약 20여 곳에 박혀 있어 rename 시
- * 마이그레이션 SQL 과 frontend 갱신이 동반되어야 합니다 — 별도 task 로 분리.
+ * 주의:
+ * - PROVIDER_ID 는 canonical 'local-llm' (vLLM/LiteLLM 진입점). buildFullModelId/parseFullModelId
+ *   가 legacy 'ollama' 입력을 자동 normalize 하므로 운영 중 저장된 'ollama:<model>' 도 무중단 호환.
+ * - sdkType 은 legacy 'ollama' 유지 — DB CHECK 제약 + ExternalKeysRepo 호환. 별도 마이그레이션 phase 에서 변경.
  *
  * @module providers/local-llm-provider
  */
@@ -39,10 +39,9 @@ import { createLogger } from '../utils/logger';
 const logger = createLogger('LocalLLMProvider');
 
 /**
- * Legacy provider ID — vLLM 마이그레이션 후에도 유지.
- * 변경 시 DB migration + frontend 갱신 필요 (P11 별도 task 후보).
+ * Canonical provider ID — vLLM/LiteLLM 진입점. parseFullModelId 가 legacy 'ollama:' 도 normalize.
  */
-const PROVIDER_ID = 'ollama';
+const PROVIDER_ID = 'local-llm';
 const PROVIDER_DISPLAY_NAME = 'Local LLM';
 
 const DEFAULT_CONTEXT_WINDOW = 8192;
