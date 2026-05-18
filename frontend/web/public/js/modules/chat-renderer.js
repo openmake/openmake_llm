@@ -177,7 +177,7 @@ function appendToken(token) {
 
 /**
  * Thinking 토큰 추가
- * Ollama Thinking 모드에서 수신된 추론 과정 토큰을 접이식 UI로 표시합니다.
+ * Native Thinking 모드에서 수신된 추론 과정 토큰을 접이식 UI로 표시합니다.
  * @param {string} token - 수신된 thinking 텍스트 토큰 조각
  * @returns {void}
  */
@@ -303,7 +303,7 @@ function finishAssistantMessage(errorMessage = null, serverMessageId = null) {
             }
         }
 
-        // Ollama Thinking trace 보존: renderMarkdown이 innerHTML을 덮어쓰기 전에 DOM Node 자체 보존.
+        // Native Thinking trace 보존: renderMarkdown이 innerHTML을 덮어쓰기 전에 DOM Node 자체 보존.
         // outerHTML 직렬화 round-trip 회피 — HTML re-parse 비용 + DOM XSS 표면 제거.
         var existingThinkingTrace = content.querySelector('.thinking-trace');
         var thinkingTraceNode = existingThinkingTrace ? existingThinkingTrace.cloneNode(true) : null;
@@ -321,7 +321,7 @@ function finishAssistantMessage(errorMessage = null, serverMessageId = null) {
             renderMarkdown(content, finalAnswer);
         }
 
-        // Ollama Thinking trace 복원: renderMarkdown 후 최상단에 DOM Node 재삽입.
+        // Native Thinking trace 복원: renderMarkdown 후 최상단에 DOM Node 재삽입.
         // cloneNode 로 보존된 노드를 직접 insertBefore — HTML 직렬화/파싱 0회, XSS 표면 제거.
         if (thinkingTraceNode) {
             content.insertBefore(thinkingTraceNode, content.firstChild);

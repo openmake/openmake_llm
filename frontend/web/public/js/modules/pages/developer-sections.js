@@ -528,7 +528,7 @@ export function renderOpenAICompatSection() {
             '      "created": 1709827200,\n' +
             '      "owned_by": "ollama-local",\n' +
             '      "name": "gemma4:e4b",\n' +
-            '      "description": "Local Ollama model (gemma4:e4b)"\n' +
+            '      "description": "로컬 LLM 모델 (gemma4:e4b)"\n' +
             '    }\n' +
             '  ]\n' +
             '}',

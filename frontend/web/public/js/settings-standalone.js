@@ -70,7 +70,7 @@
                     }
 
                     var groupLabels = {
-                        ollama: '🖥️ Local (Ollama)',
+                        ollama: '🖥️ 로컬 LLM',
                         'openai-compatible': '🌐 OpenRouter',
                     };
 

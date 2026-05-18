@@ -21,7 +21,7 @@ function logDebug(msg) {
 }
 
 const PROVIDER_LABELS = {
-    ollama: '🖥️ Ollama 로컬',
+    ollama: '🖥️ 로컬 LLM',
     openrouter: '🌐 OpenRouter',
 };
 

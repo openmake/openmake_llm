@@ -2,7 +2,7 @@
  * ============================================
  * Modes - 토론/Thinking/Deep Research 모드 관리
  * ============================================
- * 멀티 에이전트 토론, Ollama Native Thinking, Deep Research 모드의
+ * 멀티 에이전트 토론, Native Thinking, Deep Research 모드의
  * 토글과 진행 상황 UI를 담당합니다.
  *
  * app.js에서 추출됨 (L1600-1960)
@@ -53,7 +53,7 @@ function toggleDiscussionMode() {
 }
 
 /**
- * Ollama Native Thinking 모드 토글
+ * Native Thinking 모드 토글
  * @returns {void}
  */
 function toggleThinkingMode() {
