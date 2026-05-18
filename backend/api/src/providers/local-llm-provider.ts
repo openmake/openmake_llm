@@ -199,5 +199,3 @@ export class LocalLLMProvider implements IProvider {
     }
 }
 
-/** @deprecated Use LocalLLMProvider. 호환 alias — 후속 task 에서 호출자 정리 후 제거. */
-export { LocalLLMProvider as OllamaProvider };

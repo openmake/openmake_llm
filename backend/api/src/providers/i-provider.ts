@@ -3,8 +3,8 @@
  * IProvider - LLM Provider 추상화 인터페이스
  * ============================================================
  *
- * Ollama / Anthropic / OpenAI-compatible 등 서로 다른 SDK를 단일 추상 계층으로
- * 묶기 위한 인터페이스 정의. 이후 어댑터(OllamaProvider, AnthropicProvider,
+ * vLLM (LocalLLMProvider) / Anthropic / OpenAI-compatible 등 서로 다른 SDK를 단일
+ * 추상 계층으로 묶기 위한 인터페이스 정의. 이후 어댑터(LocalLLMProvider, AnthropicProvider,
  * OpenAICompatProvider)들이 이 인터페이스를 구현하며, 라우터/ChatService 는
  * 'provider:model' fullId 만 알면 동일한 호출 규약으로 모든 모델을 사용할 수
  * 있게 된다.

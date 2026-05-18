@@ -19,6 +19,7 @@ import type {
     ChatRequest,
     UsageMetrics,
     ToolDefinition,
+    FormatOption,
 } from './types';
 
 type OpenAIChatChunk = {
@@ -52,13 +53,36 @@ type OpenAIChatResponse = {
     usage?: { prompt_tokens?: number; completion_tokens?: number };
 };
 
+/**
+ * Ollama-style FormatOption → vLLM/OpenAI response_format 변환.
+ * vLLM 지원 타입: json_object | json_schema | structural_tag | text (docs.vllm.ai 2026-03 기준).
+ */
+function toResponseFormat(f: FormatOption | undefined): Record<string, unknown> | undefined {
+    if (!f) return undefined;
+    if (f === 'json') return { type: 'json_object' };
+    return {
+        type: 'json_schema',
+        json_schema: {
+            name: 'response',
+            schema: {
+                type: 'object',
+                properties: f.properties,
+                ...(f.required && { required: f.required }),
+            },
+            strict: true,
+        },
+    };
+}
+
 function toOpenAIMessages(messages: ChatMessage[]): unknown[] {
     return messages.map((m, idx) => {
         if (m.role === 'tool') {
             return {
                 role: 'tool',
                 content: m.content,
-                tool_call_id: m.tool_name ?? `tool_${idx}`,
+                // 진짜 id 우선 — 직전 assistant.tool_calls[].id 와 일치해야 vLLM/OpenAI spec 준수.
+                // fallback 으로 tool_name 또는 tool_${idx} 사용 (외부 입력 history 호환).
+                tool_call_id: m.tool_call_id ?? m.tool_name ?? `tool_${idx}`,
             };
         }
         if (m.images && m.images.length > 0 && (m.role === 'user' || m.role === 'system')) {
@@ -75,7 +99,8 @@ function toOpenAIMessages(messages: ChatMessage[]): unknown[] {
                 role: 'assistant',
                 content: m.content || '',
                 tool_calls: m.tool_calls.map((tc, i) => ({
-                    id: `call_${tc.function.name}_${i}`,
+                    // 진짜 id (vLLM 발급) 우선, 누락 시에만 합성 fallback.
+                    id: tc.id ?? `call_${tc.function.name}_${i}`,
                     type: 'function' as const,
                     function: {
                         name: tc.function.name,
@@ -117,6 +142,7 @@ export async function streamChat(
     extraBody?: Record<string, unknown>,
 ): Promise<ChatMessage & { metrics?: UsageMetrics }> {
     const tools = request.tools ? toOpenAITools(request.tools) : undefined;
+    const responseFormat = toResponseFormat(request.format);
     const stream = await openai.chat.completions.create({
         model: request.model,
         messages: toOpenAIMessages(request.messages),
@@ -124,6 +150,7 @@ export async function streamChat(
         stream_options: { include_usage: true },
         ...applyOptionsToRequest(request.options),
         ...(tools ? { tools } : {}),
+        ...(responseFormat && { response_format: responseFormat }),
         ...(extraBody ?? {}),
     } as never);
 
@@ -173,7 +200,8 @@ export async function streamChat(
         } catch {
             // parsing error — keep empty object
         }
-        toolCalls.push({ type: 'function', function: { name: buf.name, arguments: args } });
+        // vLLM 발급 id 보존 — agent-loop 다음 턴에서 tool 메시지 tool_call_id 와 일치 필요.
+        toolCalls.push({ type: 'function', id: buf.id, function: { name: buf.name, arguments: args } });
     }
 
     return {
@@ -194,12 +222,14 @@ export async function nonStreamChat(
     extraBody?: Record<string, unknown>,
 ): Promise<ChatMessage & { metrics?: UsageMetrics }> {
     const tools = request.tools ? toOpenAITools(request.tools) : undefined;
+    const responseFormat = toResponseFormat(request.format);
     const response = await openai.chat.completions.create({
         model: request.model,
         messages: toOpenAIMessages(request.messages),
         stream: false,
         ...applyOptionsToRequest(request.options),
         ...(tools ? { tools } : {}),
+        ...(responseFormat && { response_format: responseFormat }),
         ...(extraBody ?? {}),
     } as never);
 
@@ -212,7 +242,8 @@ export async function nonStreamChat(
         } catch {
             // parsing error — keep empty
         }
-        return { type: 'function' as const, function: { name: tc.function.name, arguments: args } };
+        // vLLM 발급 id 보존 — non-stream 응답에서도 동일 원칙.
+        return { type: 'function' as const, id: tc.id, function: { name: tc.function.name, arguments: args } };
     });
 
     return {

@@ -7,9 +7,10 @@
  * 새 sub-LLM 추가 시 ModelRole에 한 줄만 추가하면 됩니다.
  *
  * 환경변수 우선순위:
- *   1. 역할별 env var (OMK_CLASSIFIER_MODEL 등)
- *   2. OLLAMA_DEFAULT_MODEL (메인 모델로 자동 위임, embedding 제외)
- *   3. ROLE_DEFAULTS 하드코딩 기본값
+ *   1. 역할별 env var (OMK_CHAT_MODEL, OMK_CLASSIFIER_MODEL 등)
+ *   2. Legacy OLLAMA_DEFAULT_MODEL (호환 — 신 운영자는 OMK_CHAT_MODEL 권장)
+ *   3. LLM_DEFAULT_MODEL (메인 모델로 자동 위임, embedding 제외)
+ *   4. ROLE_DEFAULTS 하드코딩 기본값
  *
  * @module config/model-roles
  */
@@ -21,9 +22,9 @@ const logger = createLogger('ModelRoles');
 /** LLM 호출 역할 */
 export type ModelRole = 'chat' | 'classifier' | 'router' | 'embedding';
 
-/** 역할별 env var 이름 매핑 */
+/** 역할별 env var 이름 매핑 — OMK_* 일관 (vLLM/LiteLLM 표준) */
 const ROLE_ENV_VAR: Record<ModelRole, string> = {
-    chat:       'OLLAMA_DEFAULT_MODEL',
+    chat:       'OMK_CHAT_MODEL',
     classifier: 'OMK_CLASSIFIER_MODEL',
     router:     'OMK_ROUTER_MODEL',
     embedding:  'OMK_EMBEDDING_MODEL',
@@ -38,6 +39,7 @@ const ROLE_ENV_VAR: Record<ModelRole, string> = {
  *   권장이나 기존 운영자가 OMK_UIR_MODEL 설정해뒀을 수 있다.
  */
 const LEGACY_ROLE_ENV_VAR: Partial<Record<ModelRole, string>> = {
+    chat:   'OLLAMA_DEFAULT_MODEL',  // legacy — Ollama 시절 .env 호환
     router: 'OMK_UIR_MODEL',
 };
 

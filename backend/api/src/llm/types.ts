@@ -177,6 +177,12 @@ export interface ToolDefinition {
 export interface ToolCall {
     /** 호출 타입 (현재 'function'만 지원) */
     type: 'function';
+    /**
+     * vLLM/OpenAI 가 발급한 tool_call 식별자 (예: 'call_abc123').
+     * Multi-turn 시 직후 tool 응답 메시지의 tool_call_id 와 정확히 일치해야 함.
+     * Mismatch 시 vLLM hermes/granite 등의 chat_template 렌더링이 깨지거나 spec 위반.
+     */
+    id?: string;
     /** 호출할 함수 정보 */
     function: {
         /** 스트리밍 시 도구 호출 인덱스 (순서 식별용) */
@@ -309,8 +315,14 @@ export interface ChatMessage {
     thinking?: string;
     /** LLM이 요청한 도구 호출 목록 (assistant 역할에서만 사용) */
     tool_calls?: ToolCall[];
-    /** 도구 실행 결과의 출처 도구 이름 (tool 역할에서만 사용) */
+    /** 도구 실행 결과의 출처 도구 이름 (tool 역할에서만 사용, 디버깅·로깅용) */
     tool_name?: string;
+    /**
+     * 직전 assistant.tool_calls[].id 를 echo back (tool 역할 메시지 필수 필드).
+     * OpenAI/vLLM spec: 누락 또는 mismatch 시 multi-turn tool calling 깨짐.
+     * 외부 클라이언트(request-handler.ts:608) 가 history 로 보내올 수도 있음.
+     */
+    tool_call_id?: string;
 }
 
 /**

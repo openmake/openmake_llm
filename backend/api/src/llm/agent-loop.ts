@@ -94,25 +94,29 @@ export async function runAgentLoop(params: AgentLoopParams): Promise<AgentLoopRe
         for (const tc of result.tool_calls) {
             const name = tc.function.name;
             const fn = availableFunctions[name];
+            // tool_call_id 는 vLLM 이 발급한 진짜 id (tc.id) — 다음 턴 vLLM chat_template
+            // 렌더링에서 assistant.tool_calls[].id 와 정확히 일치해야 spec 준수.
             if (!fn) {
                 logger.warn(`Tool not found: ${name}`);
                 conversation.push({
                     role: 'tool',
                     content: `Error: tool ${name} not found`,
                     tool_name: name,
+                    tool_call_id: tc.id,
                 });
                 continue;
             }
             try {
                 const toolResult = await fn(tc.function.arguments ?? {});
                 const text = typeof toolResult === 'string' ? toolResult : JSON.stringify(toolResult);
-                conversation.push({ role: 'tool', content: text, tool_name: name });
+                conversation.push({ role: 'tool', content: text, tool_name: name, tool_call_id: tc.id });
                 params.onToolCall?.(name, tc.function.arguments, toolResult);
             } catch (e) {
                 conversation.push({
                     role: 'tool',
                     content: `Error: ${e instanceof Error ? e.message : String(e)}`,
                     tool_name: name,
+                    tool_call_id: tc.id,
                 });
             }
         }

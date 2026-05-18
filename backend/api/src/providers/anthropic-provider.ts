@@ -4,13 +4,13 @@
  * ============================================================
  *
  * Anthropic Messages API 를 IProvider 인터페이스로 래핑합니다.
- * 사용자별 BYO API 키를 받아 임시 인스턴스로 호출하며, OllamaProvider 와
+ * 사용자별 BYO API 키를 받아 임시 인스턴스로 호출하며, LocalLLMProvider 와
  * 동일한 streamChat / listModels / validateCredentials 규약을 제공합니다.
  *
  * SSoT 충돌 방지:
- * - usage 필드는 Anthropic 의 input_tokens/output_tokens 를 Ollama 명명
+ * - usage 필드는 Anthropic 의 input_tokens/output_tokens 를 LLM 명명
  *   (prompt_eval_count/eval_count) 으로 매핑한 뒤 IProvider.usage 에 전달
- * - tool_calls/thinking 도 Ollama 어댑터 동일 형식으로 정규화
+ * - tool_calls/thinking 도 LLM 어댑터 동일 형식으로 정규화
  *
  * Phase 3 범위:
  * - text + tool_calls + extended thinking + vision (image content blocks)
@@ -420,7 +420,7 @@ export class AnthropicProvider implements IProvider {
     async embed(_text: string, _modelId: string): Promise<number[]> {
         throw new ProviderError(
             'NOT_SUPPORTED',
-            'Anthropic 은 임베딩 모델을 제공하지 않습니다 — Ollama nomic-embed-text 를 사용하세요',
+            'Anthropic 은 임베딩 모델을 제공하지 않습니다 — 로컬 LLM_EMBEDDING_MODEL (예: bge-m3) 을 사용하세요',
         );
     }
 }

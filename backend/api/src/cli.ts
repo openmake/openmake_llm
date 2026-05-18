@@ -54,8 +54,8 @@ const CLUSTER_STATUS_REFRESH_DELAY_MS = 1000;
 const program = new Command();
 
 program
-    .name('ollama-coder')
-    .description('AI 어시스턴트 - Ollama LLM 백엔드')
+    .name('openmake-coder')
+    .description('AI 어시스턴트 - vLLM/LiteLLM LLM 백엔드')
     .version(VERSION);
 
 // chat 명령어
@@ -68,17 +68,17 @@ program
 
         const client = createClient({ model: options.model });
 
-        const spinner = createSpinner('Ollama 연결 확인 중...');
+        const spinner = createSpinner('LLM 서버 연결 확인 중...');
         spinner.start();
 
         const available = await client.isAvailable();
         if (!available) {
-            spinner.fail('Ollama 서버에 연결할 수 없습니다');
-            console.log(chalk.yellow('\n💡 Ollama를 시작하려면: ollama serve\n'));
+            spinner.fail('LLM 서버 (vLLM/LiteLLM) 에 연결할 수 없습니다');
+            console.log(chalk.yellow('\n💡 vLLM/LiteLLM 을 시작하고 .env 의 LLM_BASE_URL 을 확인하세요.\n'));
             process.exit(1);
         }
 
-        spinner.succeed('Ollama 연결됨');
+        spinner.succeed('LLM 서버 연결됨');
 
         // 플러그인 로드
         const loader = createPluginLoader({ ollamaModel: options.model });
@@ -196,9 +196,9 @@ program
 // connect 명령어 (연결 테스트)
 program
     .command('connect')
-    .description('Ollama 서버 연결 테스트')
+    .description('LLM 서버 (vLLM/LiteLLM) 연결 테스트')
     .action(async () => {
-        console.log(chalk.cyan('\n🔗 Ollama 연결 테스트\n'));
+        console.log(chalk.cyan('\n🔗 LLM 서버 연결 테스트\n'));
         console.log(chalk.gray(`   서버 URL: ${envConfig.llmBaseUrl}`));
         console.log(chalk.gray(`   기본 모델: ${envConfig.llmDefaultModel}`));
         console.log('');
@@ -210,7 +210,7 @@ program
         const available = await client.isAvailable();
 
         if (available) {
-            spinner.succeed('Ollama 서버 연결 성공!');
+            spinner.succeed('LLM 서버 연결 성공!');
 
             try {
                 const models = await client.listModels();
@@ -223,12 +223,12 @@ program
                 console.log(chalk.yellow('\n⚠️ 모델 목록 조회 실패'));
             }
         } else {
-            spinner.fail('Ollama 서버 연결 실패');
+            spinner.fail('LLM 서버 연결 실패 (vLLM/LiteLLM)');
             console.log(chalk.yellow(`\n💡 다음 사항을 확인하세요:`));
-            console.log(chalk.gray(`   1. Ollama 서버가 실행 중인지 확인`));
-            console.log(chalk.gray(`   2. 원격 서버인 경우: OLLAMA_HOST=0.0.0.0 ollama serve`));
-            console.log(chalk.gray(`   3. 방화벽에서 11434 포트 허용`));
-            console.log(chalk.gray(`   4. .env 파일에서 OLLAMA_BASE_URL 확인`));
+            console.log(chalk.gray(`   1. vLLM/LiteLLM 서버가 실행 중인지 확인`));
+            console.log(chalk.gray(`   2. 원격 서버인 경우: vllm serve --host 0.0.0.0 ...`));
+            console.log(chalk.gray(`   3. 방화벽에서 LiteLLM 포트 (기본 8001 또는 외부 NAT 포트) 허용`));
+            console.log(chalk.gray(`   4. .env 파일에서 LLM_BASE_URL 확인`));
         }
         console.log('');
     });

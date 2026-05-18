@@ -57,11 +57,11 @@ export class MCPServer {
 
     /**
      * MCPServer 인스턴스를 생성합니다.
-     * 
-     * @param name - 서버 이름 (기본값: 'ollama-coder')
+     *
+     * @param name - 서버 이름 (기본값: 'openmake-coder')
      * @param version - 서버 버전 (기본값: '1.0.0')
      */
-    constructor(name: string = 'ollama-coder', version: string = '1.0.0') {
+    constructor(name: string = 'openmake-coder', version: string = '1.0.0') {
         this.serverInfo = {
             name,
             version,

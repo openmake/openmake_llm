@@ -48,8 +48,8 @@ const TOKEN_ESTIMATION_DIVISOR = 3;
 
 /** createRealResponseGenerator 옵션 */
 export interface RealResponseGeneratorOptions {
-    /** Ollama 클라이언트 (미지정 시 환경변수 기반 기본 클라이언트 생성) */
-    ollamaClient?: OllamaClient;
+    /** LLM 클라이언트 (미지정 시 환경변수 기반 기본 클라이언트 생성) */
+    llmClient?: OllamaClient;
     /** 케이스당 최대 실행 시간 (ms). 기본 60_000 */
     timeoutMs?: number;
     /** 케이스당 최대 추정 토큰. 기본 2000 */
@@ -90,7 +90,7 @@ export function createRealResponseGenerator(
 
     return async (query, language) => {
         // 케이스 간 상태 누수 방지: client/service를 새로 생성
-        const client = options.ollamaClient ?? new OllamaClient({});
+        const client = options.llmClient ?? new OllamaClient({});
         const chatService = factory(client);
 
         // 단일 AbortController로 timeout + token-budget 두 가드를 모두 처리

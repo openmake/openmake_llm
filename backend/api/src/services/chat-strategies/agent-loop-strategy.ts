@@ -210,11 +210,12 @@ export class AgentLoopStrategy implements ChatStrategy<AgentLoopStrategyContext,
                         callHistory.shift();
                     }
 
-                    // Ollama 공식 스펙: tool 결과 메시지에 tool_name 필수
+                    // tool 결과 메시지: tool_name 디버깅용 + tool_call_id 로 직전 assistant.tool_calls[].id 와 매칭 (vLLM/OpenAI spec).
                     context.currentHistory.push({
                         role: 'tool',
                         content: toolResult,
                         tool_name: toolCall.function?.name,
+                        ...(toolCall.id && { tool_call_id: toolCall.id }),
                     });
                 }
 

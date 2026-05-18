@@ -917,12 +917,13 @@ export class ChatService {
 
                 logger.info(`🛠️ 외부 LLM tool calls (turn ${turn + 1}): ${result.toolCalls.length}개`);
 
-                // assistant message 추가 (tool_calls 포함)
+                // assistant message 추가 (tool_calls 포함) — provider 발급 id 보존.
                 messages.push({
                     role: 'assistant',
                     content: result.content || '',
                     tool_calls: result.toolCalls.map((tc) => ({
                         type: 'function' as const,
+                        id: tc.id,
                         function: {
                             name: tc.name,
                             arguments: tc.args as Record<string, unknown>,
@@ -930,13 +931,14 @@ export class ChatService {
                     })),
                 });
 
-                // 각 tool 실행 후 tool result 추가
+                // 각 tool 실행 후 tool result 추가 — tool_call_id 로 위 assistant.tool_calls[].id 와 매칭.
                 for (const tc of result.toolCalls) {
                     const toolResult = await this.executeExternalTool(tc.name, tc.args as Record<string, unknown>);
                     messages.push({
                         role: 'tool',
                         content: toolResult,
                         tool_name: tc.name,
+                        tool_call_id: tc.id,
                     });
                 }
                 // 다음 turn 으로 (LLM 이 도구 결과 받아 최종 응답 생성)

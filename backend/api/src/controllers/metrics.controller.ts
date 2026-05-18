@@ -135,7 +135,7 @@ export class MetricsController {
         try {
             // model-roles 레지스트리의 chat 역할이 단일 진실 소스
             const modelId = getModelForRole('chat');
-            res.json(success({ model: modelId, modelId, provider: 'ollama-local' }));
+            res.json(success({ model: modelId, modelId, provider: 'local-llm' }));
          } catch (error) {
              log.error('[Model API] 오류:', error);
              res.status(500).json(internalError('모델 정보 조회 실패'));

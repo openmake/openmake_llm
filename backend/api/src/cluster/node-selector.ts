@@ -119,18 +119,14 @@ export class NodeSelector {
     }
 
     /**
-     * 모델 조건으로 후보 필터링
+     * 모델 조건으로 후보 필터링.
+     *
+     * vLLM/LiteLLM 환경에서는 모든 모델이 동일 LiteLLM 진입점 (단일 노드) 으로 라우팅되므로
+     * 노드별 model list 필터는 사실상 'default' 와 동일하게 모든 후보 통과시킴 — 그러나
+     * 미래 multi-node 운영 대비해 필터 로직 자체는 유지.
      */
     private filterByModel(candidates: ClusterNode[], modelName?: string): ClusterNode[] {
         if (!modelName || modelName === 'default') {
-            return candidates;
-        }
-
-        const lowerModel = modelName.toLowerCase();
-        const isCloudModel = lowerModel.endsWith(':cloud') || lowerModel.endsWith('-cloud');
-
-        if (isCloudModel) {
-            logger.info(`Cloud 모델 → 노드 필터링 건너뜀 (${modelName})`);
             return candidates;
         }
 

@@ -301,7 +301,7 @@ export class AlertSystem {
         await this.transporter.sendMail({
             from: this.config.emailConfig.auth.user,
             to: this.config.emailConfig.recipients.join(', '),
-            subject: `[Ollama LLM] ${alert.severity.toUpperCase()}: ${alert.title}`,
+            subject: `[OpenMake LLM] ${alert.severity.toUpperCase()}: ${alert.title}`,
             html
         });
 

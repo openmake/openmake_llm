@@ -105,7 +105,7 @@ router.get('/models', optionalAuth, asyncHandler(async (req: Request, res: Respo
     const models: ModelEntry[] = [{
         name: chatModel,
         modelId: buildFullModelId('ollama', chatModel),
-        description: `Local Ollama model (${chatModel})`,
+        description: `Local LLM model (${chatModel})`,
         provider: 'ollama',
         capabilities: {
             executionStrategy: 'single',

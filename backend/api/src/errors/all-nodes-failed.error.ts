@@ -14,7 +14,7 @@
 export class AllNodesFailedError extends Error {
     /** 요청한 모델 이름 */
     public readonly model: string;
-    /** 시도된 노드 ID 목록 (예: ["192.168.1.100:11434", "192.168.1.101:11434"]) */
+    /** 시도된 노드 ID 목록 (예: ["vllm-host-a:8001", "vllm-host-b:8001"]) */
     public readonly attemptedNodes: string[];
     /** 각 노드에서 발생한 에러 목록 (attemptedNodes와 동일 순서) */
     public readonly errors: Error[];

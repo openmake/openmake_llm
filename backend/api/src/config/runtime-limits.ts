@@ -1009,9 +1009,6 @@ export const LLM_RETRY = {
         Number(process.env.OMK_LLM_NETWORK_BACKOFF_BASE_MS) || 1000,
 } as const;
 
-/** @deprecated Use LLM_RETRY. 호환 alias — P8 에서 제거 */
-export const OLLAMA_RETRY = LLM_RETRY;
-
 // ============================================
 // 외부 LLM 도구 노출 정책
 // ============================================

@@ -136,8 +136,8 @@ export class ChatSession {
 
             if (error instanceof Error) {
                 if (error.message.includes('ECONNREFUSED')) {
-                    logger.info(chalk.red('\n❌ Ollama 서버에 연결할 수 없습니다.'));
-                    logger.info(chalk.yellow('   ollama serve 명령으로 서버를 시작하세요.\n'));
+                    logger.info(chalk.red('\n❌ LLM 서버 (vLLM/LiteLLM) 에 연결할 수 없습니다.'));
+                    logger.info(chalk.yellow('   .env 의 LLM_BASE_URL 을 확인하고 vLLM/LiteLLM 을 기동하세요.\n'));
                 } else {
                     logger.info(chalk.red(`\n❌ 오류: ${error.message}\n`));
                 }

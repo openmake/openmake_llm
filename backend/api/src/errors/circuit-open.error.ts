@@ -16,7 +16,7 @@
 export type CircuitState = 'CLOSED' | 'OPEN' | 'HALF_OPEN';
 
 export class CircuitOpenError extends Error {
-    /** 서킷 브레이커 이름 (예: "node:192.168.1.100:11434") */
+    /** 서킷 브레이커 이름 (예: "node:vllm-host:8001") */
     public readonly circuitName: string;
     /** 현재 서킷 상태 (항상 'OPEN') */
     public readonly state: CircuitState;

@@ -199,7 +199,9 @@ function toOpenAIMessages(
             return {
                 role: 'tool',
                 content: msg.content,
-                tool_call_id: msg.tool_name ?? `tool_${idx}`,
+                // 진짜 tool_call_id (직전 assistant.tool_calls[].id) 우선,
+                // 누락 시 tool_name 또는 tool_${idx} 합성 — spec 준수와 외부 history 호환.
+                tool_call_id: msg.tool_call_id ?? msg.tool_name ?? `tool_${idx}`,
             };
         }
 
@@ -229,7 +231,8 @@ function toOpenAIMessages(
                 role: 'assistant',
                 content: msg.content || '',
                 tool_calls: msg.tool_calls.map((tc, i) => ({
-                    id: `call_${tc.function.name}_${i}`,
+                    // provider 발급 id (Anthropic/OpenAI/Gemini) 우선 — fake 합성은 fallback 만.
+                    id: tc.id ?? `call_${tc.function.name}_${i}`,
                     type: 'function' as const,
                     function: {
                         name: tc.function.name,
@@ -581,7 +584,7 @@ export class OpenAICompatProvider implements IProvider {
         // Phase 4 에서는 NOT_SUPPORTED 로 통일. Phase 5+ 에서 별도 임베딩 어댑터 분리.
         throw new ProviderError(
             'NOT_SUPPORTED',
-            'OpenAI 호환 임베딩은 별도 어댑터에서 처리 — Ollama nomic-embed-text 사용 권장',
+            'OpenAI 호환 임베딩은 별도 어댑터에서 처리 — 로컬 LLM_EMBEDDING_MODEL (예: bge-m3) 사용 권장',
         );
     }
 }

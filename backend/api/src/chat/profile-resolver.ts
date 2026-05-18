@@ -143,7 +143,7 @@ export function listAvailableModels(): Array<{
     return [{
         id: modelId,
         name: modelId,
-        description: 'OpenMake LLM — 단일 로컬 모델 (Ollama)',
+        description: 'OpenMake LLM — 단일 로컬 모델 (vLLM/LiteLLM)',
         capabilities: ['chat', 'streaming'],
     }];
 }

@@ -95,7 +95,7 @@ export function setupApiRoutes(
                     idle: dbPool?.idleCount || 0,
                     waiting: dbPool?.waitingCount || 0
                 },
-                ollama: {
+                llm: {
                     status: clusterStats.onlineNodes > 0 ? 'online' : 'offline',
                     totalNodes: clusterStats.totalNodes,
                     onlineNodes: clusterStats.onlineNodes,

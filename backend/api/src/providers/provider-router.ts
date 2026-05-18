@@ -18,7 +18,7 @@ import {
     buildFullModelId,
 } from './i-provider';
 import { ProviderError } from './provider-errors';
-import { OllamaProvider } from './local-llm-provider';
+import { LocalLLMProvider } from './local-llm-provider';
 import { AnthropicProvider } from './anthropic-provider';
 import { OpenAICompatProvider } from './openai-compat-provider';
 import type { ExternalKeysRepository, ExternalApiKeyRow } from '../data/repositories/external-keys-repo';
@@ -40,7 +40,8 @@ export interface ResolvedProvider {
 }
 
 export interface ProviderRouterDeps {
-    ollamaProvider: OllamaProvider;
+    /** 로컬 vLLM/LiteLLM 진입점 — 기본(ollama provider id) 라우팅 대상. */
+    localProvider: LocalLLMProvider;
     /** Phase 3+ 외부 키 저장소 — 미주입 시 외부 provider 분기는 NOT_SUPPORTED */
     externalKeysRepo?: ExternalKeysRepository;
     // Phase 4: openaiCompatProvider 팩토리
@@ -116,9 +117,12 @@ export class ProviderRouter {
         }
         const { providerId, modelId } = parsed;
 
+        // providerId 'ollama' 는 *historical* — vLLM 마이그레이션 후에도 호환 위해 유지
+        // (브랜드 모델 ID 'ollama:exaone4.5-33b-awq' 등이 운영 중인 환경 다수). 실제 dispatch
+        // 대상은 LocalLLMProvider (vLLM/LiteLLM).
         if (providerId === 'ollama') {
             return {
-                provider: this.deps.ollamaProvider,
+                provider: this.deps.localProvider,
                 providerId,
                 modelId,
                 fullId: fullModelId,
@@ -174,13 +178,13 @@ export class ProviderRouter {
 
     /**
      * 사용 가능한 모든 모델 목록을 반환합니다.
-     * - 게스트: ollama 모델만
-     * - 로그인 사용자: ollama + 등록된 외부 provider 카탈로그
+     * - 게스트: local (vLLM/LiteLLM) 모델만
+     * - 로그인 사용자: local + 등록된 외부 provider 카탈로그
      */
     async listAllModels(ctx: ProviderRouterContext): Promise<ProviderModel[]> {
-        const ollamaModels = await this.deps.ollamaProvider.listModels();
+        const localModels = await this.deps.localProvider.listModels();
         if (!ctx.userId || !this.deps.externalKeysRepo) {
-            return ollamaModels;
+            return localModels;
         }
 
         const userKeys = await this.deps.externalKeysRepo.listByUser(ctx.userId);
@@ -204,14 +208,14 @@ export class ProviderRouter {
             // Phase 4: openai-compatible 모델 카탈로그
         }
 
-        return [...ollamaModels, ...externalModels];
+        return [...localModels, ...externalModels];
     }
 
     /**
-     * sub-LLM(classifier/router/embedding) 역할 → 항상 OllamaProvider.
+     * sub-LLM(classifier/router/embedding) 역할 → 항상 local (vLLM/LiteLLM) provider.
      * 외부 provider 는 채팅 전용으로 한정 (사용자 키 비용/지연 회피).
      */
     resolveForRole(_role: ModelRole): IProvider {
-        return this.deps.ollamaProvider;
+        return this.deps.localProvider;
     }
 }

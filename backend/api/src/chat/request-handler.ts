@@ -24,7 +24,7 @@
 
 import { Request } from 'express';
 import { ClusterManager } from '../cluster/manager';
-import { OllamaClient } from '../llm';
+import { OllamaClient, createClient as createDirectClient } from '../llm';
 import { ChatService } from '../services/ChatService';
 import type { ChatMessageRequest } from '../services/ChatService';
 import type { SystemEventCallback } from '../services/chat-service-types';
@@ -46,7 +46,7 @@ import {
 } from './language-policy';
 import { getConfig } from '../config/env';
 import { LANGUAGE_THRESHOLDS } from '../config/runtime-limits';
-import { OllamaProvider } from '../providers/local-llm-provider';
+import { LocalLLMProvider } from '../providers/local-llm-provider';
 import { ProviderRouter } from '../providers/provider-router';
 import { ExternalKeysRepository } from '../data/repositories/external-keys-repo';
 import { getPool } from '../data/models/unified-database';
@@ -446,11 +446,14 @@ export class ChatRequestHandler {
         // 1. ExecutionPlan 해석
         const { plan, engineModel } = ChatRequestHandler.buildPlan(model || '');
 
-        // 2. OllamaClient 생성
-        const client = ChatRequestHandler.createClient(clusterManager, engineModel, nodeId);
-        if (!client) {
-            throw new ChatRequestError('사용 가능한 노드가 없습니다', 503);
-        }
+        // 2. LLM Client 생성 — cluster 노드 우선, 부재 시 LLM_BASE_URL direct fallback.
+        //    이전엔 cluster 미등록 시 즉시 503 throw 했는데, ProviderRouter 가 외부 provider
+        //    (OpenRouter/Anthropic 등) 로 dispatch 하는 경로까지 막혀 잘못된 차단이었음.
+        //    fallback client 는 external provider 경로에선 *호출 안 되고* 생성만 됨 — 라우터가
+        //    실제 dispatch 결정.
+        const client =
+            ChatRequestHandler.createClient(clusterManager, engineModel, nodeId)
+            ?? createDirectClient({ model: engineModel });
 
         // 3. 세션 확보
         const currentSessionId = await ChatRequestHandler.ensureSession(
@@ -515,9 +518,9 @@ export class ChatRequestHandler {
         // ═══════════════════════════════════════════════════════
 
         // 5. ChatService 호출
-        const ollamaProvider = new OllamaProvider(client);
+        const localProvider = new LocalLLMProvider(client);
         const externalKeysRepo = new ExternalKeysRepository(getPool());
-        const providerRouter = new ProviderRouter({ ollamaProvider, externalKeysRepo });
+        const providerRouter = new ProviderRouter({ localProvider, externalKeysRepo });
         const chatService = new ChatService(client, providerRouter);
 
         // §9 ExecutionPlan 설정과 사용자 요청을 병합
@@ -698,10 +701,10 @@ export class ChatRequestHandler {
             }
         );
 
-        // Ollama 응답의 tool_calls를 OpenAI 호환 형식으로 변환
-        const ollamaToolCalls = llmResponse.tool_calls;
-        if (ollamaToolCalls && ollamaToolCalls.length > 0) {
-            const openaiToolCalls: OpenAIToolCall[] = ollamaToolCalls.map(tc => ({
+        // LLM 응답의 tool_calls 를 OpenAI 호환 형식으로 정규화 (id 합성)
+        const llmToolCalls = llmResponse.tool_calls;
+        if (llmToolCalls && llmToolCalls.length > 0) {
+            const openaiToolCalls: OpenAIToolCall[] = llmToolCalls.map(tc => ({
                 id: `call_${randomBytes(12).toString('hex')}`,
                 type: 'function' as const,
                 function: {

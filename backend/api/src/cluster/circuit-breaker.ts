@@ -92,7 +92,7 @@ const DEFAULT_CONFIG: CircuitBreakerConfig = {
  *
  * @example
  * ```typescript
- * const breaker = new CircuitBreaker('node:192.168.1.100:11434');
+ * const breaker = new CircuitBreaker('node:vllm-host:8001');
  * try {
  *   const result = await breaker.execute(() => client.chat(messages));
  * } catch (error) {
@@ -379,7 +379,7 @@ export class CircuitBreaker {
  * @example
  * ```typescript
  * const registry = CircuitBreakerRegistry.getInstance();
- * const breaker = registry.getOrCreate('node:192.168.1.100:11434', {
+ * const breaker = registry.getOrCreate('node:vllm-host:8001', {
  *   failureThreshold: 3,
  *   resetTimeout: 15000,
  * });

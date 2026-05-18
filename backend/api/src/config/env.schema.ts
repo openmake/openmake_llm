@@ -111,6 +111,7 @@ export const envSchema = z
          * 을 지원하면 .env 에서 'true' 로 명시 활성화.
          */
         LLM_ENABLE_REASONING_EFFORT: z.string().default('false'),
+        LLM_EMBEDDING_BASE_URL: z.url().optional(),
 
         // Logging
         LOG_LEVEL: logLevelSchema.default('info'),

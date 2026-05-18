@@ -50,6 +50,7 @@ const logger = createLogger('LLMClient');
 
 export class LLMClient {
     private openai: OpenAI;
+    private embeddingOpenai: OpenAI;
     private config: LLMConfig;
 
     constructor(config: Partial<LLMConfig> = {}) {
@@ -66,7 +67,15 @@ export class LLMClient {
             apiKey: this.config.apiKey && this.config.apiKey.length > 0 ? this.config.apiKey : 'sk-no-key',
             timeout: this.config.timeout,
         });
-        logger.debug(`LLMClient init: ${this.config.baseUrl} (model=${this.config.model})`);
+        const embeddingBaseUrl = getConfig().llmEmbeddingBaseUrl || this.config.baseUrl;
+        this.embeddingOpenai = embeddingBaseUrl !== this.config.baseUrl
+            ? new OpenAI({
+                baseURL: embeddingBaseUrl,
+                apiKey: this.config.apiKey && this.config.apiKey.length > 0 ? this.config.apiKey : 'sk-no-key',
+                timeout: this.config.timeout,
+            })
+            : this.openai;
+        logger.debug(`LLMClient init: chat=${this.config.baseUrl} embed=${embeddingBaseUrl} (model=${this.config.model})`);
     }
 
     get model(): string {
@@ -190,7 +199,7 @@ export class LLMClient {
 
     async embed(text: string, model?: string): Promise<number[]> {
         const embeddingModel = model || getConfig().llmEmbeddingModel;
-        const res = await this.openai.embeddings.create({
+        const res = await this.embeddingOpenai.embeddings.create({
             model: embeddingModel,
             input: text,
         } as never);
@@ -221,7 +230,6 @@ export class LLMClient {
             template: '',
             details: { parameter_size: '', quantization_level: '' },
             capabilities: ['completion'],
-            ...(model && { /* model name kept in caller scope */ }),
         };
     }
 
