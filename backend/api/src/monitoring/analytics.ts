@@ -17,7 +17,7 @@
  */
 
 import { createLogger } from '../utils/logger';
-import { getApiUsageTracker } from '../ollama/api-usage-tracker';
+import { getApiUsageTracker } from '../llm';
 import * as os from 'os';
 
 import { AGENTS } from '../agents/agent-data';

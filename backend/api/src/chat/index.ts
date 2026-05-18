@@ -10,11 +10,11 @@
 
 import inquirer from 'inquirer';
 import chalk from 'chalk';
-import { OllamaClient } from '../ollama/client';
+import { OllamaClient } from '../llm';
 import {
     ChatMessage,
     ModelOptions,
-} from '../ollama/types';
+} from '../llm';
 import { MODEL_PRESETS } from '../config/llm-parameters';
 import { getSystemPrompt } from './prompt';
 import { showCompactBanner, showModelInfo, showDivider } from '../ui/banner';

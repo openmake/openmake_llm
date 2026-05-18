@@ -92,7 +92,7 @@ export interface ExecutionPlan {
 
 /**
  * 요청 모델명으로부터 실행 계획을 생성합니다.
- * 단일 로컬 모델(ollamaDefaultModel)로 항상 해석합니다.
+ * 단일 로컬 모델(llmDefaultModel)로 항상 해석합니다.
  *
  * @param requestedModel - 외부 요청의 model 필드
  * @returns ExecutionPlan
@@ -106,12 +106,12 @@ export function buildExecutionPlan(
     }>
 ): ExecutionPlan {
     const config = getConfig();
-    logger.debug(`buildExecutionPlan: ${requestedModel} → ${config.ollamaDefaultModel}`);
+    logger.debug(`buildExecutionPlan: ${requestedModel} → ${config.llmDefaultModel}`);
 
     return {
         requestedModel,
         profile: null,
-        resolvedEngine: config.ollamaDefaultModel,
+        resolvedEngine: config.llmDefaultModel,
         useToolCalling: false,
         agentLoopMax: 5,
         loopStrategy: 'auto',
@@ -129,7 +129,7 @@ export function buildExecutionPlan(
 /**
  * 외부 API 용 모델 목록 — OpenAI 호환 /v1/models 응답 데이터.
  *
- * 단일 로컬 모델 환경에서는 ollamaDefaultModel 1개를 노출한다.
+ * 단일 로컬 모델 환경에서는 llmDefaultModel 1개를 노출한다.
  * (이전: 빈 배열 → 외부 OpenAI 호환 클라이언트가 사용 가능 모델 없음으로 인식)
  */
 export function listAvailableModels(): Array<{
@@ -139,7 +139,7 @@ export function listAvailableModels(): Array<{
     capabilities: string[];
 }> {
     const config = getConfig();
-    const modelId = config.ollamaDefaultModel;
+    const modelId = config.llmDefaultModel;
     return [{
         id: modelId,
         name: modelId,

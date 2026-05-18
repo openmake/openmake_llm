@@ -9,8 +9,8 @@
  * @module services/chat-service-metrics
  */
 import { createLogger } from '../utils/logger';
-import { getApiKeyManager } from '../ollama/api-key-manager';
-import { getApiUsageTracker } from '../ollama/api-usage-tracker';
+import { getApiKeyManager } from '../llm';
+import { getApiUsageTracker } from '../llm';
 import type { ExecutionPlan } from '../chat/profile-resolver';
 import { recordTokenUsage } from '../middlewares/rate-limit-headers';
 

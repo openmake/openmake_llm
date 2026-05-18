@@ -56,7 +56,7 @@ async function main() {
 
     // CLI 단독에서 semantic router init + 인덱스 빌드 대기
     // 서버 인스턴스의 singleton과는 별도 프로세스라 안전 (각 Node 프로세스가 독립)
-    const { OllamaClient } = await import('../ollama/client');
+    const { OllamaClient } = await import('../llm');
     const { initSemanticRouter, isSemanticRouterReady, findSemanticCandidates } =
         await import('../agents/semantic-router-instance');
 

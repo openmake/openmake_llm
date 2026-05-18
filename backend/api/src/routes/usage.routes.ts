@@ -16,7 +16,7 @@
  */
 
 import { Router, Request, Response } from 'express';
-import { getApiUsageTracker } from '../ollama/api-usage-tracker';
+import { getApiUsageTracker } from '../llm';
 import { success } from '../utils/api-response';
 import { requireAuth } from '../auth';
 import { asyncHandler } from '../utils/error-handler';

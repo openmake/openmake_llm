@@ -21,7 +21,7 @@
  */
 
 import { getConfig } from '../config/env';
-import { ModelOptions } from '../ollama/types';
+import { ModelOptions } from '../llm';
 import { createLogger } from '../utils/logger';
 import { MODEL_CONTEXT_DEFAULTS } from '../config/runtime-limits';
 import { QUERY_TYPE_PARAMS, LLM_TOP_P } from '../config/llm-parameters';
@@ -54,7 +54,7 @@ export { ModelPreset, getModelPresets } from '../config/model-presets';
 // ============================================================
 
 /**
- * 질문 유형을 분류하고 단일 로컬 모델(ollamaDefaultModel)로 응답합니다.
+ * 질문 유형을 분류하고 단일 로컬 모델(llmDefaultModel)로 응답합니다.
  *
  * @param query - 사용자 질문 텍스트
  * @param hasImages - 이미지 첨부 여부 (true면 vision 유형으로 강제 전환)
@@ -132,7 +132,7 @@ export async function selectOptimalModel(
 
     logger.info(`질문 유형: ${classifiedType} (신뢰도: ${(classifiedConfidence * 100).toFixed(0)}%)`);
 
-    const localModel = config.ollamaDefaultModel;
+    const localModel = config.llmDefaultModel;
     const baseOptions: ModelOptions = {
         temperature: QUERY_TYPE_PARAMS.DEFAULT_TEMP_FALLBACK,
         top_p: LLM_TOP_P.GEMINI_DEFAULT,

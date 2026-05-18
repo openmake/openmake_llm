@@ -18,7 +18,7 @@
 
 import { Router, Request, Response } from 'express';
 import { ClusterManager } from '../cluster/manager';
-import { OllamaClient } from '../ollama/client';
+import { OllamaClient } from '../llm';
 import { getConfig } from '../config';
 import { success, serviceUnavailable } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
@@ -52,7 +52,7 @@ export function setClusterManager(cluster: ClusterManager): void {
 router.post('/web-search', requireAuth, validate(webSearchSchema), asyncHandler(async (req: Request, res: Response) => {
      const { query, model: requestedModel } = req.body as { query: string; model?: string };
      const model = (!requestedModel || requestedModel === 'default')
-         ? envConfig.ollamaDefaultModel
+         ? envConfig.llmDefaultModel
          : requestedModel;
 
       logger.info(`[WebSearch] 쿼리: ${query?.substring(0, 50)}... (모델: ${model})`);
@@ -74,7 +74,7 @@ router.post('/web-search', requireAuth, validate(webSearchSchema), asyncHandler(
       const isCloudModel = lowerEngineModel.endsWith(':cloud') || lowerEngineModel.endsWith('-cloud');
 
       if (isCloudModel) {
-          const { createClient } = await import('../ollama/client');
+          const { createClient } = await import('../llm');
           client = createClient({ model: wsEngineModel });
            logger.info(`[WebSearch] Cloud 클라이언트 생성: ${wsEngineModel}`);
       } else {

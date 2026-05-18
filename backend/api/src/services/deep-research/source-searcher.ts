@@ -6,7 +6,7 @@
  * @module services/deep-research/source-searcher
  */
 
-import type { OllamaClient } from '../../ollama/client';
+import type { OllamaClient } from '../../llm';
 import type { SearchResult } from '../../mcp/web-search';
 import { performWebSearch } from '../../mcp/web-search';
 import type { ResearchConfig, SubTopic } from '../deep-research-types';

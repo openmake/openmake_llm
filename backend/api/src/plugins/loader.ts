@@ -27,7 +27,7 @@ export class PluginLoader {
         this.context = {
             workingDirectory: process.cwd(),
             configDirectory: path.join(os.homedir(), '.ollama-coder'),
-            ollamaModel: getConfig().ollamaDefaultModel,
+            ollamaModel: getConfig().llmDefaultModel,
             ...context
         };
     }

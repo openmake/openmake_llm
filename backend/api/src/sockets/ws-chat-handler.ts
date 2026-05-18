@@ -337,7 +337,7 @@ export async function handleChatMessage(
                 if (abortController.signal.aborted) throw new Error('ABORTED');
                 ws.send(JSON.stringify({ type: 'thinking', token: thinking, messageId }));
             },
-            format: msg.format as import('../ollama/types').FormatOption,
+            format: msg.format as import('../llm').FormatOption,
             onAgentSelected: (agent) => ws.send(JSON.stringify({ type: 'agent_selected', agent })),
             onDiscussionProgress: (progress) => ws.send(JSON.stringify({ type: 'discussion_progress', progress })),
             onResearchProgress: (progress) => ws.send(JSON.stringify({ type: 'research_progress', progress })),

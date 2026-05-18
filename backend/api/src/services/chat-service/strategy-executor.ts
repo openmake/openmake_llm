@@ -18,10 +18,10 @@ import { verifyRoutingDecision } from '../../chat/routing-verifier';
 import type { ResponseQualitySignals } from '../../chat/routing-verifier';
 import type { ModelSelection } from '../../chat/model-selector';
 import type { ExecutionPlan } from '../../chat/profile-resolver';
-import type { ChatMessage, ModelOptions, FormatOption } from '../../ollama/types';
-import type { OllamaClient } from '../../ollama/client';
+import type { ChatMessage, ModelOptions, FormatOption } from '../../llm';
+import type { OllamaClient } from '../../llm';
 import type { UserContext } from '../../mcp/user-sandbox';
-import type { ToolDefinition } from '../../ollama/types';
+import type { ToolDefinition } from '../../llm';
 import type { RoutingDecisionLog } from '../../chat/routing-logger';
 import type { LanguagePolicyDecision } from '../../chat/language-policy';
 import type { AgentLoopStrategy, GenerateVerifyStrategy, ThinkingStrategy } from '../chat-strategies';
@@ -312,7 +312,7 @@ async function executeWithStrategy(p: ExecuteWithStrategyParams): Promise<Strate
     }
 
     // 단일 로컬 모델: generator = verifier = localModel
-    const localModel = getConfig().ollamaDefaultModel;
+    const localModel = getConfig().llmDefaultModel;
     const gvModels = { generator: localModel, verifier: localModel };
 
     const gvStartTime = Date.now();

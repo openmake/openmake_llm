@@ -11,7 +11,7 @@
 import { createLogger } from '../../utils/logger';
 import { LLM_TIMEOUTS } from '../../config/timeouts';
 import { LLM_TEMPERATURES, LLM_PREDICT_LIMITS } from '../../config/llm-parameters';
-import type { OllamaClient } from '../../ollama/client';
+import type { OllamaClient } from '../../llm';
 
 const logger = createLogger('MemoryExtractor');
 

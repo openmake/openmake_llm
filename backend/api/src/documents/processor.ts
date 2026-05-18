@@ -135,7 +135,7 @@ export async function extractPdfText(
 
                 if (imageFiles.length > 0) {
                     const config = getConfig();
-                    logger.info(`[PDF/OCR] 변환된 이미지 ${imageFiles.length}장 분석 (모델: ${config.ollamaDefaultModel} 연동용)`);
+                    logger.info(`[PDF/OCR] 변환된 이미지 ${imageFiles.length}장 분석 (모델: ${config.llmDefaultModel} 연동용)`);
 
                     let ocrText = '';
                     // 전체 페이지 분석 (메모리 효율을 위해 최대 30페이지로 제한)

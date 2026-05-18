@@ -6,14 +6,14 @@
  * Decision F (Pure Manual) 적용 후:
  * - **모델 자동 선택은 비활성화** — 사용자가 명시한 모델만 사용
  * - 분류기는 여전히 동작 (caching/관측 + adjustOptionsForModel 의 옵션 튜닝 목적)
- * - 반환되는 selection.model 은 ollamaDefaultModel 로 고정 (Phase 1 단일 모델 환경)
+ * - 반환되는 selection.model 은 llmDefaultModel 로 고정 (Phase 1 단일 모델 환경)
  * - setModel 콜백은 더 이상 호출되지 않음 — OllamaClient.model 은 생성자에서 결정
  *
  * @module services/chat-service/model-resolver
  */
 import { createLogger } from '../../utils/logger';
 import { selectOptimalModel, type ModelSelection } from '../../chat/model-selector';
-import type { ModelOptions } from '../../ollama/types';
+import type { ModelOptions } from '../../llm';
 
 const logger = createLogger('ModelResolver');
 

@@ -32,12 +32,12 @@
 
 import { Router, Request, Response } from 'express';
 import { createLogger } from '../utils/logger';
-import { getApiUsageTracker } from '../ollama/api-usage-tracker';
+import { getApiUsageTracker } from '../llm';
 import { getCacheSystem } from '../cache';
 import { getClassificationCacheStats } from '../chat/llm-classifier';
 import { getAlertSystem } from '../monitoring/alerts';
 import { getAnalyticsSystem } from '../monitoring/analytics';
-import { getConnectionPool } from '../ollama/connection-pool';
+import { getConnectionPool } from '../llm';
 import { ClusterManager } from '../cluster/manager';
 import { getAgentMonitor } from '../agents';
 import * as os from 'os';

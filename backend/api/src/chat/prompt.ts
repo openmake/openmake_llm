@@ -26,7 +26,7 @@
  * @see services/ChatService.ts - 이 모듈의 출력을 소비하여 LLM에 전달
  */
 
-import { ModelOptions, ToolDefinition } from '../ollama/types';
+import { ModelOptions, ToolDefinition } from '../llm';
 import { LLM_TEMPERATURES, LLM_TOP_P, MODEL_PRESETS, PROMPT_TYPE_PRESETS } from '../config/llm-parameters';
 import {
     createDynamicMetadata,

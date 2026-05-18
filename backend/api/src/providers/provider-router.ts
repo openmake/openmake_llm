@@ -18,7 +18,7 @@ import {
     buildFullModelId,
 } from './i-provider';
 import { ProviderError } from './provider-errors';
-import { OllamaProvider } from './ollama-provider';
+import { OllamaProvider } from './local-llm-provider';
 import { AnthropicProvider } from './anthropic-provider';
 import { OpenAICompatProvider } from './openai-compat-provider';
 import type { ExternalKeysRepository, ExternalApiKeyRow } from '../data/repositories/external-keys-repo';

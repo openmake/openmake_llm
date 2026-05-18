@@ -32,8 +32,8 @@ import type { DocumentStore } from '../documents/store';
 import type { UserTier } from '../data/user-manager';
 import type { UserContext } from '../mcp/user-sandbox';
 import { getUnifiedMCPClient } from '../mcp/unified-client';
-import { OllamaClient } from '../ollama/client';
-import { getGptOssTaskPreset, type ChatMessage, type ToolDefinition, type ModelOptions } from '../ollama/types';
+import { OllamaClient } from '../llm';
+import { getGptOssTaskPreset, type ChatMessage, type ToolDefinition, type ModelOptions } from '../llm';
 import type { ResearchProgress } from './DeepResearchService';
 import { AgentLoopStrategy, DeepResearchStrategy, DirectStrategy, DiscussionStrategy, GenerateVerifyStrategy, ThinkingStrategy } from './chat-strategies';
 import { formatResearchResult, formatDiscussionResult } from './chat-service-formatters';
@@ -87,7 +87,7 @@ export class ChatService {
     /** 외부 LLM provider 검증/해석 라우터 (선택) — 미지정 시 게이트 비활성 (테스트 호환) */
     private readonly providerRouter?: ProviderRouter;
     /** 직전 외부 provider 호출의 사용량 메트릭 (billing/usage 이벤트용) */
-    private lastProviderUsage: import('../ollama/types').UsageMetrics | null = null;
+    private lastProviderUsage: import('../llm').UsageMetrics | null = null;
     /** 현재 요청의 사용자 컨텍스트 (도구 접근 권한 결정에 사용) */
     private currentUserContext: UserContext | null = null;
     /** 사용자가 활성화한 MCP 도구 목록 (undefined면 레거시 모드: 전체 허용) */
@@ -686,7 +686,7 @@ export class ChatService {
         streamToken: (token: string, thinking?: string) => void;
         abortSignal?: AbortSignal;
         checkAborted: () => void;
-        format?: import('../ollama/types').FormatOption;
+        format?: import('../llm').FormatOption;
     }): Promise<void> {
         return selectAndExecuteStrategy({
             ...params,
@@ -789,7 +789,7 @@ export class ChatService {
      * 직전 외부 provider 호출의 사용량 메트릭 조회.
      * Ollama 경로는 strategies → request-handler.ts 가 별도 경로로 처리.
      */
-    getLastProviderUsage(): import('../ollama/types').UsageMetrics | null {
+    getLastProviderUsage(): import('../llm').UsageMetrics | null {
         return this.lastProviderUsage;
     }
 

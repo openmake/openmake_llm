@@ -11,7 +11,7 @@
  *
  * @module services/semantic-compactor
  */
-import { OllamaClient } from '../ollama/client';
+import { OllamaClient } from '../llm';
 import { TOOL_RESULT_COMPACTION } from '../config/runtime-limits';
 import { LLM_TEMPERATURES } from '../config/llm-parameters';
 import {

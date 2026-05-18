@@ -26,11 +26,11 @@
  * @see chat/model-selector - selectOptimalModel() 에서 사용
  */
 
-import { OllamaClient } from '../ollama/client';
+import { OllamaClient } from '../llm';
 import { createLogger } from '../utils/logger';
 import { QUERY_TYPES } from './model-selector-types';
 import type { QueryType } from './model-selector-types';
-import type { FormatOption } from '../ollama/types';
+import type { FormatOption } from '../llm';
 import { SemanticClassificationCache } from './semantic-cache';
 import { VectorClassificationCache } from './vector-cache';
 import { LLM_TIMEOUTS } from '../config/timeouts';

@@ -12,7 +12,7 @@
  * @module services/DeepResearchService
  */
 
-import { OllamaClient, createClient } from '../ollama/client';
+import { OllamaClient, createClient } from '../llm';
 import type { SearchResult } from '../mcp/web-search';
 import { getModelForRole } from '../config/model-roles';
 import { RESEARCH_DEPTH_LOOPS } from '../config/runtime-limits';

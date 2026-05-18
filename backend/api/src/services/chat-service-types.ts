@@ -8,7 +8,7 @@
  * @module services/chat-service-types
  */
 import type { UserTier } from '../data/user-manager';
-import type { OllamaClient } from '../ollama/client';
+import type { OllamaClient } from '../llm';
 
 /**
  * 채팅 히스토리 메시지 인터페이스
@@ -212,5 +212,5 @@ export interface ChatMessageRequest {
     /** 사용자가 설정에서 선택한 선호 언어 (language-policy userPreference) */
     userLanguagePreference?: string;
     /** 구조화된 출력 형식 (Ollama format 파라미터: 'json' 또는 JSON Schema 객체) */
-    format?: import('../ollama/types').FormatOption;
+    format?: import('../llm').FormatOption;
 }

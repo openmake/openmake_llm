@@ -12,7 +12,7 @@
  * - 도구 호출 감지 및 어시스턴트 메시지 구성
  * - AgentLoopStrategy의 내부 빌딩 블록으로 사용됨
  */
-import type { ChatMessage } from '../../ollama/types';
+import type { ChatMessage } from '../../llm';
 import { LLM_TEMPERATURES } from '../../config/llm-parameters';
 import type { ChatStrategy, DirectStrategyContext, DirectStrategyResult } from './types';
 

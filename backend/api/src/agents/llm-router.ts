@@ -19,7 +19,7 @@
  * @see {@link module:agents/monitor} - 라우팅 성능 모니터링
  */
 
-import { OllamaClient } from '../ollama/client';
+import { OllamaClient } from '../llm';
 import { sanitizePromptInput, validatePromptInput } from '../utils/input-sanitizer';
 import { AgentCategory } from './types';
 import industryData from './industry-agents.json';

@@ -6,7 +6,7 @@
  * @module services/deep-research/report-generator
  */
 
-import type { OllamaClient } from '../../ollama/client';
+import type { OllamaClient } from '../../llm';
 import type { SearchResult } from '../../mcp/web-search';
 import type { ResearchConfig, SubTopic } from '../deep-research-types';
 import { getUnifiedDatabase } from '../../data/models/unified-database';

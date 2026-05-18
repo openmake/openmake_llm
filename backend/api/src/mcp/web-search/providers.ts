@@ -8,7 +8,6 @@
  */
 
 import { SearchResult } from './types';
-import { createClient } from '../../ollama/client';
 import { getConfig } from '../../config/env';
 import { createLogger } from '../../utils/logger';
 import { CAPACITY } from '../../config/runtime-limits';
@@ -54,29 +53,10 @@ function decodeXmlEntities(text: string): string {
  * @param maxResults - 최대 결과 수 (기본값: 10)
  * @returns SearchResult 배열 (실패 시 빈 배열)
  */
-export async function searchOllamaWebSearch(query: string, maxResults: number = 10): Promise<SearchResult[]> {
-    const results: SearchResult[] = [];
-
-    try {
-        const client = createClient();
-        const response = await client.webSearch(query, maxResults);
-
-        if (response.results && response.results.length > 0) {
-            for (const item of response.results) {
-                results.push({
-                    title: item.title || '',
-                    url: item.url || '',
-                    snippet: item.content || '',
-                    source: 'ollama.com'
-                });
-            }
-            logger.info(`Ollama API: ${results.length}개`);
-        }
-    } catch (e) {
-        logger.error('Ollama API 실패:', e instanceof Error ? e.message : String(e));
-    }
-
-    return results;
+export async function searchOllamaWebSearch(_query: string, _maxResults: number = 10): Promise<SearchResult[]> {
+    // Ollama Cloud /api/web_search 폐기됨 (2026-05-18 vLLM 마이그레이션).
+    // 호출자 호환을 위해 함수는 유지하지만 빈 배열 반환 — Google CSE 등 다른 provider 가 검색 수행.
+    return [];
 }
 
 /**

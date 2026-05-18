@@ -33,7 +33,7 @@ for (const envPath of envPaths) {
 
 import { Command } from 'commander';
 import chalk from 'chalk';
-import { createClient } from './ollama/client';
+import { createClient } from './llm';
 import { startChat } from './chat';
 import { reviewFile } from './commands/review';
 import { generateCode } from './commands/generate';
@@ -47,7 +47,7 @@ import { QUERY_TYPE_PARAMS } from './config/llm-parameters';
 
 const VERSION = APP_VERSION;
 const envConfig = getConfig();
-const DEFAULT_MODEL = envConfig.ollamaDefaultModel;
+const DEFAULT_MODEL = envConfig.llmDefaultModel;
 /** cluster.start() 후 노드 상태 동기화를 기다리는 짧은 지연 (ms) */
 const CLUSTER_STATUS_REFRESH_DELAY_MS = 1000;
 
@@ -199,8 +199,8 @@ program
     .description('Ollama 서버 연결 테스트')
     .action(async () => {
         console.log(chalk.cyan('\n🔗 Ollama 연결 테스트\n'));
-        console.log(chalk.gray(`   서버 URL: ${envConfig.ollamaBaseUrl}`));
-        console.log(chalk.gray(`   기본 모델: ${envConfig.ollamaDefaultModel}`));
+        console.log(chalk.gray(`   서버 URL: ${envConfig.llmBaseUrl}`));
+        console.log(chalk.gray(`   기본 모델: ${envConfig.llmDefaultModel}`));
         console.log('');
 
         const spinner = createSpinner('연결 확인 중...');

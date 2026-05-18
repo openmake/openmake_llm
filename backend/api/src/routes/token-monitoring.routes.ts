@@ -24,8 +24,8 @@
  */
 
 import { Router, Request, Response } from 'express';
-import { getApiKeyManager } from '../ollama/api-key-manager';
-import { getApiUsageTracker } from '../ollama/api-usage-tracker';
+import { getApiKeyManager } from '../llm';
+import { getApiUsageTracker } from '../llm';
 import { success } from '../utils/api-response';
 import { requireAuth, requireAdmin } from '../auth';
 import { asyncHandler } from '../utils/error-handler';

@@ -31,7 +31,7 @@ import {
     buildFullModelId,
 } from './i-provider';
 import { ProviderError } from './provider-errors';
-import type { ChatMessage, ToolDefinition, UsageMetrics } from '../ollama/types';
+import type { ChatMessage, ToolDefinition, UsageMetrics } from '../llm';
 import { createLogger } from '../utils/logger';
 
 const logger = createLogger('AnthropicProvider');

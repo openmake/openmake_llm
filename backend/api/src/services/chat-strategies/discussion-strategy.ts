@@ -15,7 +15,7 @@
  * - 토큰 제한을 고려한 컨텍스트 우선순위 관리
  */
 import { createDiscussionEngine, type DiscussionResult, type DiscussionSearchResult } from '../../agents/discussion-engine';
-import type { ChatMessage } from '../../ollama/types';
+import type { ChatMessage } from '../../llm';
 import type { ChatStrategy, ChatResult, DiscussionStrategyContext } from './types';
 import { createLogger } from '../../utils/logger';
 import { sanitizePromptInput } from '../../utils/input-sanitizer';

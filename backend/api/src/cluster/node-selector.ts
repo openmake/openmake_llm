@@ -9,7 +9,7 @@
 
 import { ClusterNode } from './types';
 import { CircuitBreakerRegistry } from './circuit-breaker';
-import { OllamaClient } from '../ollama/client';
+import { OllamaClient } from '../llm';
 import { AllNodesFailedError } from '../errors/all-nodes-failed.error';
 import { createLogger } from '../utils/logger';
 

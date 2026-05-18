@@ -1,6 +1,6 @@
 import { ClusterManager, getClusterManager } from './manager';
-import { createClient } from '../ollama/client';
-import { ChatMessage, ModelOptions, ListModelsResponse, ModelInfo, UsageMetrics } from '../ollama/types';
+import { createClient } from '../llm';
+import { ChatMessage, ModelOptions, ListModelsResponse, ModelInfo, UsageMetrics } from '../llm';
 import { ClusterNode } from './types';
 import { getConfig } from '../config';
 import { createLogger } from '../utils/logger';
@@ -34,7 +34,7 @@ export class MultiNodeClient {
         };
         // 환경설정에서 기본 모델 읽기
         const envConfig = getConfig();
-        this.defaultModel = envConfig.ollamaDefaultModel;
+        this.defaultModel = envConfig.llmDefaultModel;
     }
 
     /**

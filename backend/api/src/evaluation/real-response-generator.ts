@@ -32,7 +32,7 @@
  *
  * @module evaluation/real-response-generator
  */
-import { OllamaClient } from '../ollama/client';
+import { OllamaClient } from '../llm';
 import { ChatService } from '../services/ChatService';
 import { createLogger } from '../utils/logger';
 import type { ChatMessageRequest } from '../services/chat-service-types';

@@ -19,7 +19,7 @@
  * @see config/model-defaults.ts - GV_MODEL_MAP
  * @see prompts/verifier-system.ts - Verifier 시스템 프롬프트
  */
-import { OllamaClient } from '../../ollama/client';
+import { OllamaClient } from '../../llm';
 import type { ChatStrategy, GenerateVerifyStrategyContext, GenerateVerifyStrategyResult } from './types';
 import { createLogger } from '../../utils/logger';
 import { resolvePromptLocale } from '../../chat/language-policy';

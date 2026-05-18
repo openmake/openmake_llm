@@ -6,7 +6,7 @@
  * @module services/deep-research/topic-decomposer
  */
 
-import type { OllamaClient } from '../../ollama/client';
+import type { OllamaClient } from '../../llm';
 import type { ResearchConfig, SubTopic } from '../deep-research-types';
 import { getUnifiedDatabase } from '../../data/models/unified-database';
 import { createLogger } from '../../utils/logger';

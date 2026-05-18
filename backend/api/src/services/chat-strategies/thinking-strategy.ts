@@ -17,7 +17,7 @@ import type { ChatStrategy, ChatResult, AgentLoopStrategyContext } from './types
 import type { AgentLoopStrategy } from './agent-loop-strategy';
 import { createLogger } from '../../utils/logger';
 import { THINKING_LIMITS, CAPACITY, REASONING_SANDWICH } from '../../config/runtime-limits';
-import { OllamaClient } from '../../ollama/client';
+import { OllamaClient } from '../../llm';
 
 const logger = createLogger('ThinkingStrategy');
 

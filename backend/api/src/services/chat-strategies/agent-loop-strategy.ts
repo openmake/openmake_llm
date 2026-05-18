@@ -14,7 +14,7 @@
  * - 기타 도구는 ToolRouter를 통해 MCP 도구로 실행
  * - maxTurns 제한으로 무한 루프 방지
  */
-import type { ToolDefinition } from '../../ollama/types';
+import type { ToolDefinition } from '../../llm';
 import { canUseTool } from '../../mcp/tool-tiers';
 import { getUnifiedMCPClient } from '../../mcp/unified-client';
 import { DirectStrategy } from './direct-strategy';

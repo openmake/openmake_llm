@@ -18,7 +18,7 @@ import { SemanticAgentRouter, type EmbedFunction, type AgentCandidate } from './
 import { DEFAULT_SEMANTIC_CACHE_PATH } from './semantic-cache';
 import { industryData } from './agent-data';
 import { getModelForRole } from '../config/model-roles';
-import type { OllamaClient } from '../ollama/client';
+import type { OllamaClient } from '../llm';
 
 const logger = createLogger('SemanticRouterInstance');
 

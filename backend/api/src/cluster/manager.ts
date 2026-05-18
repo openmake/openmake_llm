@@ -34,7 +34,7 @@ import {
     ClusterEvent
 } from './types';
 import { loadClusterConfig } from './config';
-import { createClient, OllamaClient } from '../ollama/client';
+import { createClient, OllamaClient } from '../llm';
 import { HealthChecker } from './health-checker';
 import { NodeSelector } from './node-selector';
 

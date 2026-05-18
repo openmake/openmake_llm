@@ -114,11 +114,11 @@ export function getAllRoleModels(): Record<ModelRole, string> {
  *   3. Ollama API에 ping — 미설치 모델 발견 시 경고 또는 fail-fast.
  *      모델명은 exact match 로만 비교 (태그까지 정확히 일치해야 함).
  *
- * @param ollamaBaseUrl Ollama 서버 base URL
+ * @param llmBaseUrl Ollama 서버 base URL
  * @param failFast true=production 환경에서 미설치/cloud 모델 발견 시 throw
  */
 export async function validateModels(
-    ollamaBaseUrl: string,
+    llmBaseUrl: string,
     failFast: boolean = false,
 ): Promise<void> {
     const roleModels = getAllRoleModels();
@@ -144,7 +144,7 @@ export async function validateModels(
 
     let installed: string[] = [];
     try {
-        const res = await fetch(`${ollamaBaseUrl}/api/tags`, {
+        const res = await fetch(`${llmBaseUrl}/api/tags`, {
             signal: AbortSignal.timeout(5000),
         });
         if (!res.ok) {

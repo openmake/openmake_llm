@@ -9,7 +9,7 @@
  * @module services/chat-service/context-builder
  */
 import { createLogger } from '../../utils/logger';
-import { isGeminiModel } from '../../ollama/types';
+import { isGeminiModel } from '../../llm';
 import { CONTEXT_LIMITS, GREETING_DETECTION } from '../../config/runtime-limits';
 import { applySequentialThinking } from '../../mcp/sequential-thinking';
 import type { DocumentStore } from '../../documents/store';

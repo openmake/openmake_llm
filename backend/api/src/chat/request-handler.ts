@@ -24,7 +24,7 @@
 
 import { Request } from 'express';
 import { ClusterManager } from '../cluster/manager';
-import { OllamaClient } from '../ollama/client';
+import { OllamaClient } from '../llm';
 import { ChatService } from '../services/ChatService';
 import type { ChatMessageRequest } from '../services/ChatService';
 import type { SystemEventCallback } from '../services/chat-service-types';
@@ -37,7 +37,7 @@ import { buildExecutionPlan, type ExecutionPlan } from './profile-resolver';
 import { detectFastPath } from './fast-path-detector';
 import { getPromptConfig } from './prompt';
 import { createLogger } from '../utils/logger';
-import type { ChatMessage, ToolDefinition } from '../ollama/types';
+import type { ChatMessage, ToolDefinition } from '../llm';
 import { randomBytes } from 'crypto';
 import { 
     determineLanguagePolicy,
@@ -46,7 +46,7 @@ import {
 } from './language-policy';
 import { getConfig } from '../config/env';
 import { LANGUAGE_THRESHOLDS } from '../config/runtime-limits';
-import { OllamaProvider } from '../providers/ollama-provider';
+import { OllamaProvider } from '../providers/local-llm-provider';
 import { ProviderRouter } from '../providers/provider-router';
 import { ExternalKeysRepository } from '../data/repositories/external-keys-repo';
 import { getPool } from '../data/models/unified-database';
@@ -122,8 +122,8 @@ export interface ChatRequestParams {
      * settings.html memoryLearningToggle 과 연결. saveHistory 와 독립.
      */
     memoryLearning?: boolean;
-    /** 구조화된 출력 형식 (Ollama format 파라미터: 'json' 또는 JSON Schema 객체) */
-    format?: import('../ollama/types').FormatOption;
+    /** 구조화된 출력 형식 ('json' 또는 JSON Schema 객체 — OpenAI response_format 호환) */
+    format?: import('../llm').FormatOption;
     /** 사용자가 활성화한 MCP 도구 목록 (키: 도구명, 값: 활성화 여부) */
     enabledTools?: Record<string, boolean>;
     /** OpenAI 호환 도구 정의 배열 (외부 Tool Calling용) */

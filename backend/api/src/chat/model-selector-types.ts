@@ -11,7 +11,7 @@
  * @see chat/query-classifier - classifyQuery()에서 사용
  */
 
-import { ModelOptions } from '../ollama/types';
+import { ModelOptions } from '../llm';
 
 // ============================================================
 // 질문 유형 정의

@@ -17,8 +17,8 @@ import type { QueryType } from '../../chat/model-selector-types';
 import type { ExecutionPlan } from '../../chat/profile-resolver';
 import type { DocumentStore } from '../../documents/store';
 import type { UserContext } from '../../mcp/user-sandbox';
-import type { OllamaClient } from '../../ollama/client';
-import type { ChatMessage, FormatOption, ModelOptions, ToolCall, ToolDefinition } from '../../ollama/types';
+import type { OllamaClient } from '../../llm';
+import type { ChatMessage, FormatOption, ModelOptions, ToolCall, ToolDefinition } from '../../llm';
 import type { ResearchProgress } from '../DeepResearchService';
 import type { ChatMessageRequest } from '../chat-service-types';
 

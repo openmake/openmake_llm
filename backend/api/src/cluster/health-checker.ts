@@ -9,7 +9,7 @@
 
 import { EventEmitter } from 'events';
 import { ClusterNode, ClusterEvent } from './types';
-import { OllamaClient } from '../ollama/client';
+import { OllamaClient } from '../llm';
 
 /**
  * 클러스터 노드 헬스체크 담당
