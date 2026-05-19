@@ -31,10 +31,9 @@ const NAV_ITEMS = {
         { href: '/guide.html', icon: '📖', iconify: 'lucide:book-open', label: '사용 가이드' },
         { href: '/developer.html', icon: '📖', iconify: 'lucide:code-2', label: 'API 문서' },
         { href: '/research.html', icon: '🔬', iconify: 'lucide:flask-conical', label: '딥 리서치', requireAuth: true, minTier: 'pro' },
-        { href: '/documents.html', icon: '📑', iconify: 'lucide:file-search', label: '문서 관리', requireAuth: true, minTier: 'pro' },
+        // /documents.html, /memory.html: 2026-05-19 제거
         { href: '/custom-agents.html', icon: '🤖', iconify: 'lucide:bot', label: '커스텀 에이전트', requireAuth: true, minTier: 'pro' },
         { href: '/skill-library.html', icon: '📦', iconify: 'lucide:package', label: '스킬 라이브러리', requireAuth: true, minTier: 'pro', cssFiles: ['/css/skill-library.css'] },
-        { href: '/memory.html', icon: '🧠', iconify: 'lucide:brain', label: 'AI 메모리', requireAuth: true, minTier: 'pro' },
         { href: '/usage.html', icon: '📈', iconify: 'lucide:bar-chart-2', label: 'API 사용량', requireAuth: true },
         { href: '/agent-learning.html', icon: '🎓', iconify: 'lucide:graduation-cap', label: '에이전트 학습', requireAuth: true, minTier: 'pro' },
         { href: '/api-keys.html', icon: '🔐', iconify: 'lucide:key', label: 'API 키 관리', requireAuth: true, minTier: 'pro' },

@@ -17,14 +17,14 @@ export { mcpRouter } from './mcp.routes';
 
 // 🆕 리팩토링된 라우트
 export { default as chatRouter, setClusterManager as setChatCluster } from './chat.routes';
-export { default as documentsRouter, setDependencies as setDocumentsDeps } from './documents.routes';
+// documentsRouter: 2026-05-19 제거 (문서 업로드/Q&A/요약 폐기)
 export { default as webSearchRouter, setClusterManager as setWebSearchCluster } from './web-search.routes';
 
 // 🆕 추가 분리된 라우트
 export { default as usageRouter } from './usage.routes';
 export { default as nodesRouter, setClusterManager as setNodesCluster } from './nodes.routes';
 export { default as agentsMonitoringRouter } from './agents-monitoring.routes';
-export { memoryRouter } from './memory.routes';
+// memoryRouter: 2026-05-19 제거 (MemoryService 폐기)
 
 // 🆕 신규 도메인 라우트
 export { default as auditRouter } from './audit.routes';
@@ -49,5 +49,4 @@ export { default as chatFeedbackRouter } from './chat-feedback.routes';
 // 🆕 Token Monitoring 라우트
 export { tokenMonitoringRouter } from './token-monitoring.routes';
 
-// 🆕 Knowledge Base 라우트
-export { default as kbRouter } from './kb.routes';
+// Knowledge Base 라우트: 2026-05-19 제거 (메타데이터 CRUD만, 채팅 미연결 — dead code)

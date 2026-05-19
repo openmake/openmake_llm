@@ -13,6 +13,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { getPool } from './models/unified-database';
 import { createLogger } from '../utils/logger';
+import { isPersistableUserId } from '../utils/user-id-validation';
 
 const logger = createLogger('ConversationMigration');
 
@@ -32,7 +33,7 @@ export async function initSchema(): Promise<void> {
  * Sanitize userId for FK safety: users 테이블에 존재하는 ID만 허용
  */
 function sanitizeUserId(userId: string | undefined | null, validUserIds: Set<string>): string | null {
-    if (!userId || userId === 'guest') return null;
+    if (!isPersistableUserId(userId)) return null;
     if (validUserIds.size > 0 && !validUserIds.has(userId)) return null;
     return userId;
 }

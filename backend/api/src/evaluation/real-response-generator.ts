@@ -139,11 +139,7 @@ export function createRealResponseGenerator(
         );
 
         try {
-            const response = await chatService.processMessage(
-                req,
-                new Map(), // DocumentStore: Map 호환 인터페이스
-                onToken,
-            );
+            const response = await chatService.processMessage(req, onToken);
 
             const durationMs = Date.now() - startedAt;
             const estimatedTokens = Math.ceil(chars / TOKEN_ESTIMATION_DIVISOR);

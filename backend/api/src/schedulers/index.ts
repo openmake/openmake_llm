@@ -45,8 +45,8 @@ export async function startAllSchedulers(): Promise<void> {
         logger.error('PeriodicCleanupScheduler 시작 실패:', err);
     }
 
-    // 4. 메모리 생명주기 관리 스케줄러 (만료 정리, 중요도 감쇠, 통합)
-    await startMemorySchedulers();
+    // 4. 디버그 큐 정리 스케줄러 (메모리 생명주기는 MemoryService 폐기와 함께 제거)
+    await startDebugQueueScheduler();
 
     // 5. 에이전트 자기개선 사이클 스케줄러
     await startAgentLearningScheduler();
@@ -115,27 +115,11 @@ export function startModelHealthScheduler(): void {
 }
 
 /**
- * 메모리 관련 스케줄러들을 시작합니다.
+ * 디버그 큐 TTL 정리 스케줄러 (1시간마다).
+ * (메모리 생명주기 스케줄러는 2026-05-19 MemoryService 폐기와 함께 제거)
  */
-async function startMemorySchedulers(): Promise<void> {
+async function startDebugQueueScheduler(): Promise<void> {
     try {
-        const { getUnifiedDatabase } = await import('../data/models/unified-database');
-        const db = getUnifiedDatabase();
-
-        // 4.1 만료 메모리 정리 (1시간마다)
-        const memCleanupTimer = setInterval(async () => {
-            try {
-                const deleted = await db.cleanupExpiredMemories();
-                if (deleted > 0) logger.info(`[MemoryGC] 만료 메모리 ${deleted}개 정리 완료`);
-            } catch (e) {
-                logger.error('[MemoryGC] 만료 메모리 정리 실패:', e);
-            }
-        }, 60 * 60 * 1000);
-        memCleanupTimer.unref();
-        activeTimers.push(memCleanupTimer);
-
-        // 4.1.b 디버그 큐 TTL 정리 (1시간마다)
-        // B+ Phase B4/B5: 에러 자동 저장(24h) + 사용자 신고(7d) 만료 항목 삭제
         const debugQueueCleanupTimer = setInterval(async () => {
             try {
                 const { cleanupExpiredDebugQueue } = await import('../data/conversation-debug-queue');
@@ -146,48 +130,9 @@ async function startMemorySchedulers(): Promise<void> {
         }, 60 * 60 * 1000);
         debugQueueCleanupTimer.unref();
         activeTimers.push(debugQueueCleanupTimer);
-
-        // 4.2 중요도 감쇠 적용 (24시간마다)
-        const memDecayTimer = setInterval(async () => {
-            try {
-                const decayed = await db.decayMemoryImportance();
-                if (decayed > 0) logger.info(`[MemoryGC] 중요도 감쇠 적용: ${decayed}개`);
-            } catch (e) {
-                logger.error('[MemoryGC] 중요도 감쇠 실패:', e);
-            }
-        }, 24 * 60 * 60 * 1000);
-        memDecayTimer.unref();
-        activeTimers.push(memDecayTimer);
-
-        // 4.3 중복 메모리 병합 (12시간마다)
-        const memConsolidateTimer = setInterval(async () => {
-            try {
-                const { getMemoryService } = await import('../services/MemoryService');
-                const memoryService = getMemoryService();
-                const pool = db.getPool();
-                const result = await pool.query<{ user_id: string }>(
-                    `SELECT DISTINCT user_id FROM user_memories
-                     GROUP BY user_id HAVING COUNT(*) > 20
-                     LIMIT 50`
-                );
-                let totalConsolidated = 0;
-                for (const row of result.rows) {
-                    const deleted = await memoryService.consolidateMemories(row.user_id);
-                    totalConsolidated += deleted;
-                }
-                if (totalConsolidated > 0) {
-                    logger.info(`[MemoryGC] 메모리 통합: ${totalConsolidated}개 중복 제거`);
-                }
-            } catch (e) {
-                logger.error('[MemoryGC] 메모리 통합 실패:', e);
-            }
-        }, 12 * 60 * 60 * 1000);
-        memConsolidateTimer.unref();
-        activeTimers.push(memConsolidateTimer);
-
-        logger.debug('메모리 생명주기 스케줄러 시작 완료');
+        logger.debug('디버그 큐 스케줄러 시작 완료');
     } catch (err) {
-        logger.error('메모리 생명주기 스케줄러 시작 실패:', err);
+        logger.error('디버그 큐 스케줄러 시작 실패:', err);
     }
 }
 

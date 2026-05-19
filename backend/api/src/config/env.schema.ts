@@ -97,7 +97,6 @@ export const envSchema = z
         LLM_BASE_URL: z.url().default('http://localhost:4000'),
         LLM_API_KEY: z.string().default('sk-no-key'),
         LLM_DEFAULT_MODEL: z.string().min(1).default('qwen2.5-7b'),
-        LLM_EMBEDDING_MODEL: z.string().min(1).default('bge-large-en'),
         LLM_TIMEOUT: positiveIntWithDefault(120000).refine((value) => value <= 600000, {
             message: 'LLM_TIMEOUT must be between 1 and 600000 milliseconds',
         }),
@@ -111,7 +110,7 @@ export const envSchema = z
          * 을 지원하면 .env 에서 'true' 로 명시 활성화.
          */
         LLM_ENABLE_REASONING_EFFORT: z.string().default('false'),
-        LLM_EMBEDDING_BASE_URL: z.url().optional(),
+        // LLM_EMBEDDING_MODEL / LLM_EMBEDDING_BASE_URL: 2026-05-19 제거 (vector cache/semantic router 폐기)
 
         // Logging
         LOG_LEVEL: logLevelSchema.default('info'),

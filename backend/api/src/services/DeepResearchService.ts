@@ -17,6 +17,7 @@ import type { SearchResult } from '../mcp/web-search';
 import { getModelForRole } from '../config/model-roles';
 import { RESEARCH_DEPTH_LOOPS } from '../config/runtime-limits';
 import { getUnifiedDatabase } from '../data/models/unified-database';
+import { isPersistableUserId } from '../utils/user-id-validation';
 import { createLogger } from '../utils/logger';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -409,8 +410,7 @@ export async function quickResearch(
     const sessionId = uuidv4();
 
     // 세션 생성 (anonymous/guest userId는 FK 위반 방지를 위해 null 처리)
-    const safeUserId = userId && userId !== 'guest' && !userId.startsWith('anon-') && userId !== 'anonymous'
-        ? userId : undefined;
+    const safeUserId = isPersistableUserId(userId) ? userId : undefined;
     await db.createResearchSession({
         id: sessionId,
         userId: safeUserId,

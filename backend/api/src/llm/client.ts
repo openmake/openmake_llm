@@ -50,7 +50,6 @@ const logger = createLogger('LLMClient');
 
 export class LLMClient {
     private openai: OpenAI;
-    private embeddingOpenai: OpenAI;
     private config: LLMConfig;
 
     constructor(config: Partial<LLMConfig> = {}) {
@@ -67,15 +66,7 @@ export class LLMClient {
             apiKey: this.config.apiKey && this.config.apiKey.length > 0 ? this.config.apiKey : 'sk-no-key',
             timeout: this.config.timeout,
         });
-        const embeddingBaseUrl = getConfig().llmEmbeddingBaseUrl || this.config.baseUrl;
-        this.embeddingOpenai = embeddingBaseUrl !== this.config.baseUrl
-            ? new OpenAI({
-                baseURL: embeddingBaseUrl,
-                apiKey: this.config.apiKey && this.config.apiKey.length > 0 ? this.config.apiKey : 'sk-no-key',
-                timeout: this.config.timeout,
-            })
-            : this.openai;
-        logger.debug(`LLMClient init: chat=${this.config.baseUrl} embed=${embeddingBaseUrl} (model=${this.config.model})`);
+        logger.debug(`LLMClient init: chat=${this.config.baseUrl} (model=${this.config.model})`);
     }
 
     get model(): string {
@@ -195,19 +186,6 @@ export class LLMClient {
             },
         );
         return { response: result.content, metrics: result.metrics };
-    }
-
-    async embed(text: string, model?: string): Promise<number[]> {
-        const embeddingModel = model || getConfig().llmEmbeddingModel;
-        const res = await this.embeddingOpenai.embeddings.create({
-            model: embeddingModel,
-            input: text,
-        } as never);
-        const data = (res as unknown as { data?: Array<{ embedding?: number[] }> }).data;
-        if (!data || !data[0] || !data[0].embedding) {
-            throw new Error('Embedding 응답에 벡터가 없습니다');
-        }
-        return data[0].embedding;
     }
 
     async listModels(): Promise<ListModelsResponse> {

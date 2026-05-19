@@ -41,7 +41,7 @@ export { recordChatMetrics } from '../chat-service-metrics';
 export { buildContextForLLM, type BuildContextParams, type BuildContextResult } from './context-builder';
 export { resolveModel, type ResolveModelParams } from './model-resolver';
 export { selectAndExecuteStrategy, type StrategyExecutorParams } from './strategy-executor';
-export { extractMemoriesAsync, type MemoryExtractorParams } from './memory-extractor';
+// memory-extractor: 2026-05-19 제거 (MemoryService 폐기)
 export { resolveAgent, type AgentResolutionResult } from './agent-resolver';
 export { resolveLanguagePolicy } from './language-resolver';
 export { recordMetricsAndVerify, type MetricsRecordParams } from './metrics-recorder';

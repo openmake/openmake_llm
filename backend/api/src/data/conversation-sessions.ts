@@ -12,6 +12,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { getPool } from './models/unified-database';
 import { getConfig } from '../config/env';
 import { createLogger } from '../utils/logger';
+import { isPersistableUserId } from '../utils/user-id-validation';
 import { withRetry } from './retry-wrapper';
 import {
     ConversationSession,
@@ -165,7 +166,7 @@ export async function getAllSessions(limit: number = 100): Promise<ConversationS
  * 하위 호환성: guest이면 전체, 그 외는 사용자별 조회
  */
 export async function getSessions(userId: string, limit: number = 50): Promise<ConversationSession[]> {
-    if (!userId || userId === 'guest') {
+    if (!isPersistableUserId(userId)) {
         return getAllSessions(limit);
     }
     return getSessionsByUserId(userId, limit);

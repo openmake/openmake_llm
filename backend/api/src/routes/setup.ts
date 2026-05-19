@@ -18,7 +18,6 @@ import { tokenMonitoringRouter } from './token-monitoring.routes';
 import debugQueueRouter from './debug-queue.routes';
 import { default as chatRouter, setClusterManager as setChatCluster } from './chat.routes';
 import { setClusterManager as setOpenAICompatCluster } from './openai-compat.routes';
-import { default as documentsRouter, setDependencies as setDocumentsDeps } from './documents.routes';
 import { default as webSearchRouter, setClusterManager as setWebSearchCluster } from './web-search.routes';
 import {
     metricsRouter,
@@ -30,7 +29,6 @@ import {
     nodesRouter,
     setNodesCluster,
     agentsMonitoringRouter,
-    memoryRouter,
     auditRouter,
     researchRouter,
     externalRouter,
@@ -40,7 +38,6 @@ import {
     chatFeedbackRouter,
     apiKeysRouter,
     externalKeysRouter,
-    kbRouter
 } from './index';
 import { setupSwaggerRoutes } from '../swagger';
 import { createClusterController, createHealthController, createAuthController, createAdminController, createSessionController } from '../controllers';
@@ -169,7 +166,6 @@ export function setupApiRoutes(
     // 클러스터 의존성 주입
     setChatCluster(cluster);
     setOpenAICompatCluster(cluster);
-    setDocumentsDeps(cluster, broadcast);
     setWebSearchCluster(cluster);
     setNodesCluster(cluster);
 
@@ -185,12 +181,10 @@ export function setupApiRoutes(
     // 🆕 /api/chat/feedback 는 /api/chat 보다 먼저 마운트해야 Express가 올바르게 매칭
     app.use('/api/chat/feedback', chatFeedbackRouter);
     app.use('/api/chat', chatRouter);
-    app.use('/api', documentsRouter);
     app.use('/api', webSearchRouter);
     app.use('/api/usage', usageRouter);
     app.use('/api/nodes', nodesRouter);
     app.use('/api/agents-monitoring', agentsMonitoringRouter);
-    app.use('/api/memory', memoryRouter);
     app.use('/api/audit', auditRouter);
     app.use('/api/research', researchRouter);
     app.use('/api/external', externalRouter);
@@ -198,7 +192,6 @@ export function setupApiRoutes(
     app.use('/api/docs', developerDocsRouter);
     app.use('/api/api-keys', apiKeysRouter);
     app.use('/api/external-keys', externalKeysRouter);
-    app.use('/api/kb', kbRouter);
 
     // Swagger 설정
     setupSwaggerRoutes(app);

@@ -11,6 +11,7 @@ import { optionalAuth, requireAuth } from '../auth';
 import { createLogger } from '../utils/logger';
 import { success, unauthorized, badRequest, forbidden } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
+import { historySummaryCache } from '../services/chat-service/history-summary-cache';
 
 const log = createLogger('SessionController');
 
@@ -229,6 +230,7 @@ export class SessionController {
               }
 
               const deleted = await conversationDb.deleteSession(sessionId);
+              historySummaryCache.invalidate(sessionId);
               res.json(success({ deleted }));
           }));
 

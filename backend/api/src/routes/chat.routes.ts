@@ -20,6 +20,7 @@ import { ClusterManager } from '../cluster/manager';
 import { success, serviceUnavailable, unauthorized } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
 import { optionalAuth } from '../auth';
+import { isPersistableUserId } from '../utils/user-id-validation';
 import { optionalApiKey } from '../middlewares/api-key-auth';
 import { chatRateLimiter } from '../middlewares/chat-rate-limiter';
 import { validate } from '../middlewares/validation';
@@ -55,7 +56,7 @@ router.post('/', optionalApiKey, optionalAuth, chatRateLimiter, validate(chatReq
     }
 
     // 세션 소유권 검증 (IDOR 방지)
-    if (sessionId && userContext.userId && userContext.userId !== 'guest') {
+    if (sessionId && isPersistableUserId(userContext.userId)) {
         const convDB = getConversationDB();
         const session = await convDB.getSession(sessionId);
         if (session && session.userId && String(session.userId) !== String(userContext.userId)) {
@@ -72,7 +73,6 @@ router.post('/', optionalApiKey, optionalAuth, chatRateLimiter, validate(chatReq
             nodeId,
             history,
             sessionId,
-            docId: req.body.docId,
             images: req.body.images,
             webSearchContext: req.body.webSearchContext,
             thinkingMode: req.body.thinkingMode,
@@ -134,7 +134,7 @@ router.post('/stream', optionalApiKey, optionalAuth, chatRateLimiter, validate(c
     }
 
     // 세션 소유권 검증 (IDOR 방지)
-    if (sessionId && userContext.userId && userContext.userId !== 'guest') {
+    if (sessionId && isPersistableUserId(userContext.userId)) {
         const convDB = getConversationDB();
         const session = await convDB.getSession(sessionId);
         if (session && session.userId && String(session.userId) !== String(userContext.userId)) {
@@ -163,7 +163,6 @@ router.post('/stream', optionalApiKey, optionalAuth, chatRateLimiter, validate(c
             nodeId,
             history: req.body.history,
             sessionId,
-            docId: req.body.docId,
             images: req.body.images,
             webSearchContext: req.body.webSearchContext,
             discussionMode: req.body.discussionMode,

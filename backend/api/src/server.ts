@@ -256,17 +256,6 @@ export class DashboardServer {
             }
         })();
 
-        // Semantic Router 백그라운드 초기화 (PoC, fire-and-forget)
-        (async () => {
-            try {
-                const { initSemanticRouter } = await import('./agents/semantic-router-instance');
-                const { LLMClient } = await import('./llm');
-                initSemanticRouter(new LLMClient());
-            } catch (err) {
-                console.error('[Server] Semantic Router 초기화 호출 실패 (무시):', err);
-            }
-        })();
-
         return new Promise((resolve, reject) => {
             // HTTP 서버 오류 핸들러
             this.server.on('error', (error: NodeJS.ErrnoException) => {

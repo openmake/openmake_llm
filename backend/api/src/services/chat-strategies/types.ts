@@ -15,7 +15,6 @@
 import type { DiscussionProgress, DiscussionResult } from '../../agents/discussion-engine';
 import type { QueryType } from '../../chat/model-selector-types';
 import type { ExecutionPlan } from '../../chat/profile-resolver';
-import type { DocumentStore } from '../../documents/store';
 import type { UserContext } from '../../mcp/user-sandbox';
 import type { LLMClient } from '../../llm';
 import type { ChatMessage, FormatOption, ModelOptions, ToolCall, ToolDefinition } from '../../llm';
@@ -193,8 +192,6 @@ export interface AgentLoopStrategyContext extends ChatContext {
 export interface DiscussionStrategyContext extends ChatContext {
     /** 원본 채팅 메시지 요청 */
     req: ChatMessageRequest;
-    /** 업로드된 문서 저장소 (토론 컨텍스트에 문서 포함용) */
-    uploadedDocuments: DocumentStore;
     /** Ollama 클라이언트 인스턴스 */
     client: LLMClient;
     /** 토론 진행 상황 콜백 */

@@ -47,14 +47,6 @@ export interface EnvConfig {
     llmBaseUrl: string;
     llmApiKey: string;
     llmDefaultModel: string;
-    llmEmbeddingModel: string;
-    llmEmbeddingBaseUrl: string;
-    /**
-     * LLM_EMBEDDING_BASE_URL 이 .env 에 명시되었는지 여부.
-     * false 면 llmBaseUrl 로 fallback 된 상태 — vLLM 직접 인스턴스가 chat/embed 분리된
-     * 환경에서는 silent mis-routing 위험. validateConfig 가 경고 출력.
-     */
-    llmEmbeddingBaseUrlExplicit: boolean;
     llmTimeout: number;
     llmHourlyTokenLimit: number;
     llmWeeklyTokenLimit: number;
@@ -178,9 +170,6 @@ const DEFAULT_CONFIG: EnvConfig = {
     llmBaseUrl: 'http://localhost:4000',
     llmApiKey: 'sk-no-key',
     llmDefaultModel: 'qwen2.5-7b',
-    llmEmbeddingModel: 'bge-large-en',
-    llmEmbeddingBaseUrl: 'http://localhost:4000',
-    llmEmbeddingBaseUrlExplicit: false,
     llmTimeout: 120000,
     llmHourlyTokenLimit: 300000,
     llmWeeklyTokenLimit: 5000000,
@@ -345,17 +334,6 @@ export function validateConfig(config: EnvConfig): void {
         errors.push('REDIS_URL must be set when STORAGE_BACKEND=redis');
     }
 
-    // LLM_EMBEDDING_BASE_URL 명시 안 됨 → llmBaseUrl 로 fallback.
-    // LiteLLM 단일 진입점 환경에서는 정상이나, vLLM 직접 인스턴스가 chat/embed 분리된 환경에서는
-    // /v1/embeddings 요청이 chat 인스턴스로 가서 silent fail. 경고로 운영자 주의 환기.
-    if (!config.llmEmbeddingBaseUrlExplicit) {
-        console.warn(
-            '\n\x1b[33m[CONFIG WARN]\x1b[0m LLM_EMBEDDING_BASE_URL is not set — falling back to LLM_BASE_URL.\n' +
-            '  Ensure the same endpoint serves both /v1/chat/completions and /v1/embeddings.\n' +
-            '  (LiteLLM proxy: OK · direct vLLM chat instance: embed requests will fail silently.)\n'
-        );
-    }
-
     // LLM_API_KEY 가 dummy 'sk-no-key' 인데 production 운영 — LiteLLM master_key 설정 시 401 폭발.
     // 운영자가 LiteLLM 을 비인증 모드로 의도했으면 무시 가능 — 경고로만 출력 (errors push 안 함).
     if (config.nodeEnv === 'production' && (config.llmApiKey === '' || config.llmApiKey === 'sk-no-key')) {
@@ -401,8 +379,6 @@ export function loadConfig(): EnvConfig {
         LLM_BASE_URL: env('LLM_BASE_URL'),
         LLM_API_KEY: env('LLM_API_KEY'),
         LLM_DEFAULT_MODEL: env('LLM_DEFAULT_MODEL'),
-        LLM_EMBEDDING_MODEL: env('LLM_EMBEDDING_MODEL'),
-        LLM_EMBEDDING_BASE_URL: env('LLM_EMBEDDING_BASE_URL'),
         LLM_TIMEOUT: env('LLM_TIMEOUT'),
         LLM_HOURLY_TOKEN_LIMIT: env('LLM_HOURLY_TOKEN_LIMIT'),
         LLM_WEEKLY_TOKEN_LIMIT: env('LLM_WEEKLY_TOKEN_LIMIT'),
@@ -506,9 +482,6 @@ export function loadConfig(): EnvConfig {
         llmBaseUrl: parsed.LLM_BASE_URL ?? DEFAULT_CONFIG.llmBaseUrl,
         llmApiKey: parsed.LLM_API_KEY ?? DEFAULT_CONFIG.llmApiKey,
         llmDefaultModel: parsed.LLM_DEFAULT_MODEL ?? DEFAULT_CONFIG.llmDefaultModel,
-        llmEmbeddingModel: parsed.LLM_EMBEDDING_MODEL ?? DEFAULT_CONFIG.llmEmbeddingModel,
-        llmEmbeddingBaseUrl: parsed.LLM_EMBEDDING_BASE_URL ?? parsed.LLM_BASE_URL ?? DEFAULT_CONFIG.llmEmbeddingBaseUrl,
-        llmEmbeddingBaseUrlExplicit: !!parsed.LLM_EMBEDDING_BASE_URL,
         llmTimeout: parsed.LLM_TIMEOUT ?? DEFAULT_CONFIG.llmTimeout,
         llmHourlyTokenLimit: parsed.LLM_HOURLY_TOKEN_LIMIT ?? DEFAULT_CONFIG.llmHourlyTokenLimit,
         llmWeeklyTokenLimit: parsed.LLM_WEEKLY_TOKEN_LIMIT ?? DEFAULT_CONFIG.llmWeeklyTokenLimit,

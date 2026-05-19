@@ -30,12 +30,14 @@ import type { ChatMessageRequest } from '../services/ChatService';
 import type { SystemEventCallback } from '../services/chat-service-types';
 import type { DiscussionProgress } from '../agents/discussion-engine';
 import type { ResearchProgress } from '../services/DeepResearchService';
-import { uploadedDocuments } from '../documents/store';
 import { getConversationDB } from '../data/conversation-db';
 import { recordAuditLog } from '../data/conversation-audit';
 import { buildExecutionPlan, type ExecutionPlan } from './profile-resolver';
 import { detectFastPath } from './fast-path-detector';
 import { getPromptConfig } from './prompt';
+import { historySummaryCache } from '../services/chat-service/history-summary-cache';
+import { summarizeHistory } from './history-summarizer';
+import { HISTORY_SUMMARIZER } from '../config/runtime-limits';
 import { createLogger } from '../utils/logger';
 import type { ChatMessage, ToolDefinition } from '../llm';
 import { randomBytes } from 'crypto';
@@ -68,8 +70,13 @@ export interface ChatUserContext {
     userRole: 'admin' | 'user' | 'guest';
     /** 사용자 등급 */
     userTier: 'free' | 'pro' | 'enterprise';
-    /** 메모리/추적용 사용자 ID (fallback 포함) */
-    userId: string;
+    /**
+     * 메모리/추적용 사용자 ID.
+     * 인증 사용자 ID → 익명 세션 ID 순으로 채워지며, 둘 다 없으면 undefined.
+     * 'guest' / 'anon-*' 같은 sentinel 문자열은 폐기 — 호출처는 표시용 fallback 만
+     * (예: `userContext.userId ?? 'guest'`). DB 저장 가드는 `isPersistableUserId` 사용.
+     */
+    userId?: string;
 }
 
 /**
@@ -96,8 +103,6 @@ export interface ChatRequestParams {
     history?: Array<{ role: string; content: string; images?: string[] }>;
     /** 이미지 데이터 */
     images?: string[];
-    /** 문서 ID */
-    docId?: string;
     /** 기존 세션 ID */
     sessionId?: string;
     /** 웹 검색 컨텍스트 */
@@ -116,12 +121,6 @@ export interface ChatRequestParams {
      * settings.html saveHistoryToggle 과 연결.
      */
     saveHistory?: boolean;
-    /**
-     * 장기 메모리 자동 추출 여부.
-     * undefined/true → 추출 (기본). false → MemoryService 호출 스킵.
-     * settings.html memoryLearningToggle 과 연결. saveHistory 와 독립.
-     */
-    memoryLearning?: boolean;
     /** 구조화된 출력 형식 ('json' 또는 JSON Schema 객체 — OpenAI response_format 호환) */
     format?: import('../llm').FormatOption;
     /** 사용자가 활성화한 MCP 도구 목록 (키: 도구명, 값: 활성화 여부) */
@@ -177,6 +176,19 @@ export interface OpenAIToolCall {
 /**
  * processChat() 결과
  */
+/**
+ * 경로 분기 측정 메타 — TTFB 단일 라인 로그용.
+ * #1 fast-path 우회, #2 agent 병렬화, #5 사전 요약 캐시 효과 분리 측정.
+ */
+export interface RoutingMeta {
+    /** fast-path 매칭 (인사·단답형) */
+    fastPath: boolean;
+    /** agent LLM 라우팅 우회 (fast-path 또는 API Key) */
+    agentBypass: boolean;
+    /** 사전 요약 캐시 히트 (inline summarize 우회) */
+    summaryCacheHit: boolean;
+}
+
 export interface ChatResult {
     /** AI 응답 전문 */
     response: string;
@@ -192,6 +204,8 @@ export interface ChatResult {
     tool_calls?: OpenAIToolCall[];
     /** 응답 종료 사유 ("stop": 정상 완료, "tool_calls": 도구 호출 대기) */
     finish_reason?: 'stop' | 'tool_calls';
+    /** 경로 분기 측정 메타 (TTFB 분석용, 일반 채팅 응답에만 포함) */
+    routingMeta?: RoutingMeta;
 }
 
 // ============================================
@@ -223,7 +237,7 @@ export class ChatRequestHandler {
             anonSessionId,
             userRole: (req.user as { role?: string } | undefined)?.role as 'admin' | 'user' | 'guest' || 'guest',
             userTier: 'free',
-            userId: authenticatedUserId || anonSessionId || 'guest',
+            userId: authenticatedUserId ?? anonSessionId,
         };
     }
 
@@ -250,7 +264,7 @@ export class ChatRequestHandler {
             anonSessionId,
             userRole: wsAuthUserRole,
             userTier: wsAuthUserTier,
-            userId: wsAuthUserId || msgUserId || anonSessionId || 'guest',
+            userId: wsAuthUserId ?? msgUserId ?? anonSessionId,
         };
     }
 
@@ -419,7 +433,6 @@ export class ChatRequestHandler {
             nodeId,
             history,
             images,
-            docId,
             sessionId,
             webSearchContext,
             discussionMode,
@@ -427,7 +440,6 @@ export class ChatRequestHandler {
             thinkingMode,
             thinkingLevel,
             saveHistory,
-            memoryLearning,
             enabledTools,
             tools,
             tool_choice,
@@ -538,17 +550,24 @@ export class ChatRequestHandler {
             log.info(`[RequestHandler] Fast-path 감지(${fastPath.reason}) — 사용자 thinking 토글 무시하고 OFF`);
         }
 
+        // 사전 요약 캐시 조회: 이전 턴 종료 후 백그라운드로 미리 요약된 결과가 있으면 사용.
+        // hit 조건은 (sessionId, history.length) 정확 일치. mismatch 시 ChatService 가
+        // inline summarize 로 자동 fallback 하므로 안전.
+        const cachedSummary = historySummaryCache.get(currentSessionId, history?.length ?? 0);
+        if (cachedSummary) {
+            log.info(`[RequestHandler] 사전 요약 캐시 히트: length=${history?.length ?? 0} → ${cachedSummary.length}개 (inline summarize 우회)`);
+        }
+        const effectiveHistory = cachedSummary ?? history;
+
         const chatRequest: ChatMessageRequest = {
             message,
-            history,
-            docId,
+            history: effectiveHistory,
             images,
             webSearchContext,
             discussionMode: mergedDiscussionMode,
             deepResearchMode,
             thinkingMode: mergedThinkingMode,
             thinkingLevel: mergedThinkingLevel,
-            memoryLearning,
             userId: userContext.userId,
             apiKeyId: params.apiKeyId,
             userRole: userContext.userRole,
@@ -561,7 +580,6 @@ export class ChatRequestHandler {
 
         const response = await chatService.processMessage(
             chatRequest,
-            uploadedDocuments,
             onToken,
             onAgentSelected,
             onDiscussionProgress,
@@ -585,6 +603,26 @@ export class ChatRequestHandler {
             persistContent,
         );
 
+        // 7. 다음 턴을 위한 사전 요약 (백그라운드, fire-and-forget)
+        // 새 history = 기존 + user message + assistant response.
+        // 길이가 임계값 이상일 때만 요약 LLM 호출. 실패는 무시 (다음 턴이 inline fallback).
+        // 캐시는 ChatRequest 시 cached.length === request.history.length 정확 일치만 사용.
+        const newHistoryLength = (history?.length ?? 0) + 2;
+        if (newHistoryLength >= HISTORY_SUMMARIZER.MIN_MESSAGES_TO_SUMMARIZE) {
+            const newHistory = [
+                ...(history ?? []),
+                { role: 'user', content: message },
+                { role: 'assistant', content: response },
+            ];
+            void summarizeHistory(newHistory, maskedModel)
+                .then((s) => {
+                    if (s.wasSummarized) {
+                        historySummaryCache.set(currentSessionId, newHistoryLength, s.messages);
+                    }
+                })
+                .catch((err) => log.warn(`[RequestHandler] 사전 요약 백그라운드 실패 (무시): ${err instanceof Error ? err.message : err}`));
+        }
+
         return {
             response,
             sessionId: currentSessionId,
@@ -592,6 +630,11 @@ export class ChatRequestHandler {
             executionPlan: plan,
             responseTime,
             finish_reason: 'stop',
+            routingMeta: {
+                fastPath: fastPath.matched,
+                agentBypass: !!(params.apiKeyId || fastPath.matched),
+                summaryCacheHit: cachedSummary !== null,
+            },
         };
     }
 

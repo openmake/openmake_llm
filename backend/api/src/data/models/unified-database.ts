@@ -27,7 +27,6 @@ import {
     AuditRepository,
     ConversationRepository,
     ExternalRepository,
-    MemoryRepository,
     ResearchRepository,
     UserRepository
 } from '../repositories';
@@ -140,9 +139,6 @@ export class UnifiedDatabase {
     /** 대화 세션/메시지 데이터 접근 Repository */
     private readonly conversationRepository: ConversationRepository;
 
-    /** 장기 메모리 데이터 접근 Repository */
-    private readonly memoryRepository: MemoryRepository;
-
     /** 딥 리서치 데이터 접근 Repository */
     private readonly researchRepository: ResearchRepository;
 
@@ -179,7 +175,6 @@ export class UnifiedDatabase {
 
         this.userRepository = new UserRepository(this.pool);
         this.conversationRepository = new ConversationRepository(this.pool);
-        this.memoryRepository = new MemoryRepository(this.pool);
         this.researchRepository = new ResearchRepository(this.pool);
         this.apiKeyRepository = new ApiKeyRepository(this.pool);
         this.auditRepository = new AuditRepository(this.pool);
@@ -392,57 +387,7 @@ export class UnifiedDatabase {
     }
 
     // ============================================
-    // 🧠 장기 메모리 시스템 메서드
-    // ============================================
-
-    async createMemory(params: {
-        id: string;
-        userId: string;
-        category: MemoryCategory;
-        key: string;
-        value: string;
-        importance?: number;
-        sourceSessionId?: string;
-        tags?: string[];
-    }): Promise<void> {
-        return this.memoryRepository.createMemory(params);
-    }
-
-    async getUserMemories(userId: string, options?: {
-        category?: MemoryCategory;
-        limit?: number;
-        minImportance?: number;
-    }): Promise<UserMemory[]> {
-        return this.memoryRepository.getUserMemories(userId, options);
-    }
-
-    async getRelevantMemories(userId: string, query: string, limit: number = 10): Promise<UserMemory[]> {
-        return this.memoryRepository.getRelevantMemories(userId, query, limit);
-    }
-
-    async updateMemory(memoryId: string, updates: { value?: string; importance?: number }): Promise<void> {
-        return this.memoryRepository.updateMemory(memoryId, updates);
-    }
-
-    async deleteMemory(memoryId: string): Promise<void> {
-        return this.memoryRepository.deleteMemory(memoryId);
-    }
-
-    async deleteUserMemories(userId: string): Promise<void> {
-        return this.memoryRepository.deleteUserMemories(userId);
-    }
-
-    async getMemoryOwner(memoryId: string): Promise<string | null> {
-        return this.memoryRepository.getOwnerUserId(memoryId);
-    }
-
-    async cleanupExpiredMemories(): Promise<number> {
-        return this.memoryRepository.cleanupExpiredMemories();
-    }
-
-    async decayMemoryImportance(): Promise<number> {
-        return this.memoryRepository.decayImportance();
-    }
+    // 장기 메모리 시스템 메서드: 2026-05-19 제거 (MemoryService 폐기)
 
     // ============================================
     // 🔍 Deep Research 메서드

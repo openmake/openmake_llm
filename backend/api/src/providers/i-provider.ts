@@ -42,8 +42,6 @@ export interface ProviderCapabilities {
     vision: boolean;
     /** 추론 과정 노출(Thinking / extended thinking) 지원 */
     thinking: boolean;
-    /** 임베딩 벡터 생성 지원 */
-    embedding: boolean;
 }
 
 /**
@@ -178,13 +176,6 @@ export interface IProvider {
      * 스트림 종료 시 누적 결과를 Promise 로 반환
      */
     streamChat(opts: ChatStreamOptions, callbacks: ChatStreamCallbacks): Promise<ChatStreamResult>;
-
-    /**
-     * 임베딩 벡터 생성
-     * @param text 임베딩할 텍스트
-     * @param modelId 임베딩 모델 식별자
-     */
-    embed(text: string, modelId: string): Promise<number[]>;
 }
 
 /**

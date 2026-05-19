@@ -55,7 +55,6 @@ const FALLBACK_CAPABILITIES: ProviderCapabilities = {
     toolCalling: false,
     thinking: false,
     vision: false,
-    embedding: false,
 };
 
 /**
@@ -83,7 +82,6 @@ export class LocalLLMProvider implements IProvider {
             toolCalling: preset.toolCalling,
             thinking: preset.thinking,
             vision: preset.vision,
-            embedding: false,
         };
     }
 
@@ -188,13 +186,5 @@ export class LocalLLMProvider implements IProvider {
         }
     }
 
-    async embed(text: string, modelId: string): Promise<number[]> {
-        try {
-            return await this.client.embed(text, modelId);
-        } catch (err) {
-            const message = err instanceof Error ? err.message : String(err);
-            throw new ProviderError('UPSTREAM_ERROR', `LLM embed 실패: ${message}`, err);
-        }
-    }
 }
 

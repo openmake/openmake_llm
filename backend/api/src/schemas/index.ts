@@ -12,11 +12,10 @@ export * from './auth.schema';
 export * from './chat.schema';
 export * from './skills.schema';
 export * from './agents.schema';
-export * from './memory.schema';
+// memory.schema / documents.schema: 2026-05-19 제거
 export * from './research.schema';
 
 export * from './external.schema';
-export * from './documents.schema';
 export * from './web-search.schema';
 export * from './push.schema';
 export * from './mcp.schema';

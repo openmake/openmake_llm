@@ -16,7 +16,6 @@ import { checkChatRateLimit } from '../middlewares/chat-rate-limiter';
 import { createLogger } from '../utils/logger';
 import { WSMessage, ExtendedWebSocket } from './ws-types';
 import { detectLanguage, type SupportedLanguageCode } from '../chat/language-policy';
-import { uploadedDocuments } from '../documents/store';
 import { getStaleDataWarning } from '../config/stale-data-warning';
 
 // 다국어 시사 키워드 맵
@@ -153,53 +152,18 @@ export async function handleChatMessage(
 ): Promise<void> {
     const { cluster, extWs, logger: log } = options;
 
-    const hasFiles = Array.isArray(msg.files) && msg.files.length > 0;
+    // 파일 첨부/문서 docId: 2026-05-19 제거. images (base64) 만 직접 지원.
     const hasImages = Array.isArray(msg.images) && msg.images.length > 0;
-    const hasDoc = typeof msg.docId === 'string' && msg.docId.trim() !== '';
     const hasMessage = typeof msg.message === 'string' && msg.message.trim() !== '';
 
-    if (!hasMessage && !hasFiles && !hasImages && !hasDoc) {
+    if (!hasMessage && !hasImages) {
         ws.send(JSON.stringify({ type: 'error', message: '메시지가 필요합니다' }));
         return;
     }
 
-    // 파일만 첨부하고 메시지가 없는 경우 기본 메시지 자동 생성
-    if (!hasMessage) {
-        const fileNames = msg.files?.map(f => f.name).join(', ') || '첨부 파일';
-        msg.message = `첨부된 파일을 분석해주세요: ${fileNames}`;
-    }
-
     const { model, nodeId, history, sessionId, anonSessionId } = msg;
-    let { images, docId } = msg;
+    const { images } = msg;
     const message = (msg.message ?? '').trim();
-
-    // files 배열에서 uploadedDocuments를 조회하여 이미지 base64 및 docId 보강
-    if (hasFiles && msg.files) {
-        const resolvedImages: string[] = [...(images || [])];
-        for (const file of msg.files) {
-            const fileDocId = file.id;
-            if (!fileDocId) continue;
-
-            const doc = uploadedDocuments.get(fileDocId);
-            if (!doc) continue;
-
-            // docId가 아직 없으면 첫 번째 파일의 docId 사용
-            if (!docId) {
-                docId = fileDocId;
-            }
-
-            // 이미지 base64가 있으면 images에 추가 (프론트엔드에서 이미 보낸 것과 중복 방지)
-            if (doc.type === 'image' && doc.info?.base64) {
-                if (!resolvedImages.includes(doc.info.base64)) {
-                    resolvedImages.push(doc.info.base64);
-                    log.info(`[Chat] 📎 파일에서 이미지 해석: ${doc.filename}`);
-                }
-            }
-        }
-        if (resolvedImages.length > 0) {
-            images = resolvedImages;
-        }
-    }
 
     // 사용자 언어 감지 — 설정에서 선택한 언어를 우선, 없으면 메시지 기반 자동 감지
     const userLangPreference = (typeof msg.language === 'string' && msg.language.trim()) ? msg.language.trim() as SupportedLanguageCode : undefined;
@@ -316,7 +280,6 @@ export async function handleChatMessage(
             nodeId,
             history,
             images,
-            docId,
             sessionId: validSessionId,
             webSearchContext,
             discussionMode: msg.discussionMode === true,
@@ -326,7 +289,6 @@ export async function handleChatMessage(
             // 사용자가 명시적으로 false 보낼 때만 본문 저장 차단. 미지정/true → 저장 (기본 보존)
             saveHistory: msg.saveHistory !== false,
             // 메모리 학습 — saveHistory 와 독립. 명시 false 만 차단, 기본 활성
-            memoryLearning: msg.memoryLearning !== false,
             enabledTools: msg.enabledTools,
             userLanguagePreference: userLangPreference,
             userContext,
@@ -363,11 +325,19 @@ export async function handleChatMessage(
         }
 
         const generationDuration = Date.now() - (firstTokenTime || generationStartTime);
-        const tokensPerSec = tokenCount > 0 && generationDuration > 0 
-            ? (tokenCount / (generationDuration / 1000)).toFixed(2) 
+        const tokensPerSec = tokenCount > 0 && generationDuration > 0
+            ? (tokenCount / (generationDuration / 1000)).toFixed(2)
             : '0.00';
-            
-        log.info(`[Chat] 생성 완료: ${tokenCount} 토큰, 속도: ${tokensPerSec} tokens/sec`);
+        const ttfb = firstTokenTime > 0 ? firstTokenTime - generationStartTime : -1;
+
+        // 운영 측정용 단일 라인 로그: TTFB + 경로 분기 플래그 + 토큰 처리량.
+        // grep 패턴: "[ChatMetrics]" 로 추출, 컬럼 파싱으로 분기별 p50/p95 분석 가능.
+        const rm = result.routingMeta;
+        log.info(
+            `[ChatMetrics] ttfb=${ttfb}ms fp=${rm?.fastPath ? 'Y' : 'N'} ` +
+            `agent_bypass=${rm?.agentBypass ? 'Y' : 'N'} cache_hit=${rm?.summaryCacheHit ? 'Y' : 'N'} ` +
+            `tokens=${tokenCount} tps=${tokensPerSec} total=${result.responseTime}ms model=${selectedModel}`
+        );
         ws.send(JSON.stringify({ type: 'done', messageId, metrics: { tokensPerSec, tokenCount } }));
 
     } catch (error: unknown) {

@@ -24,11 +24,11 @@ import type { DiscussionProgress } from '../agents/discussion-engine';
 import { getPromptConfig } from '../chat/prompt';
 import { adjustOptionsForModel, checkModelCapability } from '../chat/model-selector';
 import { assessComplexity, GV_SKIP_THRESHOLD } from '../chat/complexity-assessor';
+import { detectFastPath } from '../chat/fast-path-detector';
 import { CONCISE_RESPONSE_DIRECTIVE, TOKEN_BUDGETS } from '../config/llm-parameters';
 import { BUDGET_HINTS, CAPACITY, EXTERNAL_LLM_TOOL_BLACKLIST } from '../config/runtime-limits';
 import { withSpan } from '../observability/otel';
 import type { ExecutionPlan } from '../chat/profile-resolver';
-import type { DocumentStore } from '../documents/store';
 import type { UserTier } from '../data/user-manager';
 import type { UserContext } from '../mcp/user-sandbox';
 import { getUnifiedMCPClient } from '../mcp/unified-client';
@@ -37,7 +37,6 @@ import { getGptOssTaskPreset, type ChatMessage, type ToolDefinition, type ModelO
 import type { ResearchProgress } from './DeepResearchService';
 import { AgentLoopStrategy, DeepResearchStrategy, DirectStrategy, DiscussionStrategy, GenerateVerifyStrategy, ThinkingStrategy } from './chat-strategies';
 import { formatResearchResult, formatDiscussionResult } from './chat-service-formatters';
-import { recordMemoryExtractionFailure } from './chat-service-metrics';
 import { preRequestCheck } from '../chat/security-hooks';
 import type { LanguagePolicyDecision } from '../chat/language-policy';
 import { createRoutingLogEntry, type RoutingDecisionLog } from '../chat/routing-logger';
@@ -45,12 +44,12 @@ import type { ChatMessageRequest, SystemEventCallback } from './chat-service-typ
 import { buildContextForLLM } from './chat-service/context-builder';
 import { resolveModel } from './chat-service/model-resolver';
 import { selectAndExecuteStrategy } from './chat-service/strategy-executor';
-import { extractMemoriesAsync } from './chat-service/memory-extractor';
 import { resolveAgent as resolveAgentFn } from './chat-service/agent-resolver';
 import { resolveLanguagePolicy as resolveLanguagePolicyFn } from './chat-service/language-resolver';
 import { recordMetricsAndVerify as recordMetricsAndVerifyFn } from './chat-service/metrics-recorder';
 import { ProviderRouter } from '../providers/provider-router';
 import { runProviderGate } from './chat-service/provider-gate';
+import { isPersistableUserId } from '../utils/user-id-validation';
 
 // Re-export all types so consumers importing from ChatService don't break
 export type {
@@ -218,7 +217,6 @@ export class ChatService {
      * 6. 사용량 메트릭 기록
      *
      * @param req - 채팅 메시지 요청 객체
-     * @param uploadedDocuments - 업로드된 문서 저장소
      * @param onToken - 스트리밍 토큰 콜백 (SSE 전송용)
      * @param onAgentSelected - 에이전트 선택 결과 콜백
      * @param onDiscussionProgress - 토론 진행 상황 콜백
@@ -231,7 +229,6 @@ export class ChatService {
      */
     async processMessage(
         req: ChatMessageRequest,
-        uploadedDocuments: DocumentStore,
         onToken: (token: string) => void,
         onAgentSelected?: (agent: { type: string; name: string; emoji?: string; phase?: string; reason?: string; confidence?: number }) => void,
         onDiscussionProgress?: (progress: DiscussionProgress) => void,
@@ -247,7 +244,7 @@ export class ChatService {
             'chat.process',
             async (rootSpan) => {
                 const result = await this.processMessageInternal(
-                    req, uploadedDocuments, onToken,
+                    req, onToken,
                     onAgentSelected, onDiscussionProgress, onResearchProgress,
                     executionPlan, onSkillsActivated, onThinking, onSystemEvent,
                 );
@@ -261,7 +258,6 @@ export class ChatService {
                     'chat.user_tier': req.userTier || 'free',
                     'chat.query_length': (req.message || '').length,
                     'chat.has_images': (req.images?.length ?? 0) > 0,
-                    'chat.has_doc': !!req.docId,
                     'chat.history_length': req.history?.length ?? 0,
                     'chat.brand_profile': executionPlan?.requestedModel || 'none',
                     'chat.discussion_mode': req.discussionMode === true,
@@ -275,7 +271,6 @@ export class ChatService {
     /** processMessage의 본체 — withSpan으로 wrap된 진입점에서 호출 */
     private async processMessageInternal(
         req: ChatMessageRequest,
-        uploadedDocuments: DocumentStore,
         onToken: (token: string) => void,
         onAgentSelected?: (agent: { type: string; name: string; emoji?: string; phase?: string; reason?: string; confidence?: number }) => void,
         onDiscussionProgress?: (progress: DiscussionProgress) => void,
@@ -358,7 +353,7 @@ export class ChatService {
         // `decideDiscussionActivation()` 의 자동 분기는 모두 false 반환 → 함수 호출 자체 제거.
         // 향후 자동 토론 활성화가 필요하면 새 정책으로 재설계 (이전 구현 참조: discussion-router.ts).
         if (discussionMode === true) {
-            return this.processMessageWithDiscussion(req, uploadedDocuments, onToken, onDiscussionProgress);
+            return this.processMessageWithDiscussion(req, onToken, onDiscussionProgress);
         }
 
         if (deepResearchMode) {
@@ -393,43 +388,70 @@ export class ChatService {
             onToken(token);
         };
 
-        // ── Step 2: 에이전트 라우팅 ──
-        // API Key 요청: 에이전트 라우팅 스킵 → general 에이전트 사용
-        // 외부 서비스(openmake 등)는 자체 라우팅/프롬프트를 사용하므로 이중 라우팅 방지
-        let agentSelection: AgentSelection;
-        let agentSystemMessage: string;
-        let selectedAgent: (typeof AGENTS)[string];
+        // ── Step 2: 에이전트 라우팅 (병렬 시작) ──
+        // API Key 요청 / Fast-path: 즉시 'general' 로 해결 (LLM 호출 없음).
+        // 일반 경로: resolveAgent() 를 await 없이 시작하여 Step 3-4 와 동시 실행.
+        // 합류 지점: externalResolved 분기 또는 combinedSystemPrompt 조립 직전.
+        // 이득: max(LLM 라우팅, buildContext + resolveModel) 만큼 TTFB 단축.
+        type AgentResolution = {
+            agentSelection: AgentSelection;
+            agentSystemMessage: string;
+            selectedAgent: (typeof AGENTS)[string];
+        };
 
-        if (req.apiKeyId) {
-            agentSelection = {
-                primaryAgent: 'general',
-                category: 'general',
-                phase: undefined,
-                reason: '[API Key] 외부 요청 — 에이전트 라우팅 스킵',
-                confidence: 1.0,
-                matchedKeywords: [],
-            };
-            agentSystemMessage = '';
-            selectedAgent = getAgentById('general') || AGENTS['general'];
+        const fastPath = req.apiKeyId ? null : detectFastPath(message || '');
+        const agentBypassed = !!(req.apiKeyId || fastPath?.matched);
+        let agentPromise: Promise<AgentResolution>;
+
+        if (agentBypassed) {
+            const reason = req.apiKeyId
+                ? '[API Key] 외부 요청 — 에이전트 라우팅 스킵'
+                : `[Fast-path:${fastPath?.reason}] 단답형 — LLM 라우팅 스킵`;
+            const bypassAgent = getAgentById('general') || AGENTS['general'];
+            agentPromise = Promise.resolve({
+                agentSelection: {
+                    primaryAgent: 'general',
+                    category: 'general',
+                    phase: undefined,
+                    reason,
+                    confidence: 1.0,
+                    matchedKeywords: [],
+                },
+                agentSystemMessage: '',
+                selectedAgent: bypassAgent,
+            });
+            if (onAgentSelected && bypassAgent && !req.apiKeyId) {
+                onAgentSelected({
+                    type: 'general',
+                    name: bypassAgent.name,
+                    emoji: bypassAgent.emoji,
+                    phase: 'planning',
+                    reason,
+                    confidence: 1.0,
+                });
+            }
         } else {
-            ({ agentSelection, agentSystemMessage, selectedAgent } = await this.resolveAgent(
+            agentPromise = this.resolveAgent(
                 message || '', userId, languagePolicy?.resolvedLanguage || 'en',
                 onAgentSelected, onSkillsActivated,
-            ));
+            );
+            // 합류 await 전에 다른 await 가 throw 할 경우 unhandled rejection 방지.
+            // 실제 에러는 합류 await 에서 다시 throw 되어 호출자가 받음.
+            agentPromise.catch(() => { /* swallow — re-thrown at join */ });
         }
 
-        // ── Step 3: 컨텍스트 구성 (문서 + 웹검색) ──
+        // ── Step 3: 컨텍스트 구성 (웹검색) — agent 와 병렬 진행 ──
         const { finalEnhancedMessage, documentImages } = await this.buildContextForLLM(
-            message || '', docId, uploadedDocuments, userId,
-            webSearchContext, thinkingMode, req.apiKeyId,
+            message || '', webSearchContext, thinkingMode, req.apiKeyId,
         );
 
         // ── 외부 LLM 분기 (agent + context 통합 후) ──
         // strategies 우회하지만 agent 페르소나 + buildContextForLLM 결과 + 언어 정책은 통합.
         // tool calling / thinking / discussion / deep research 는 여전히 미지원.
         if (externalResolved) {
+            const { agentSystemMessage: agentSysMsgForExternal } = await agentPromise;
             return await this.streamFromExternalProvider(externalResolved, req, onToken, {
-                agentSystemMessage,
+                agentSystemMessage: agentSysMsgForExternal,
                 enhancedMessage: finalEnhancedMessage,
                 resolvedLanguage: languagePolicy?.resolvedLanguage,
             });
@@ -505,6 +527,12 @@ export class ChatService {
         logger.debug(`모델 기능: tools=${supportsTools}, thinking=${supportsThinking}`);
 
         const maxTurns = executionPlan?.agentLoopMax ?? 5;
+
+        // ── 합류: Step 5 직전에 agent 결과 수신 ──
+        // 병렬로 실행되던 resolveAgent() 의 결과를 여기서 await.
+        // buildContextForLLM + resolveModel + 동기 단계가 진행되는 동안
+        // LLM 라우팅 호출이 끝나 있다면 추가 대기 없음.
+        const { agentSelection, agentSystemMessage, selectedAgent } = await agentPromise;
 
         let currentHistory: ChatMessage[] = [];
         let combinedSystemPrompt = agentSystemMessage
@@ -584,21 +612,7 @@ export class ChatService {
             logger.warn(`비정상적으로 짧은 응답 (${fullResponse.trim().length}자) — 원문 유지`);
         }
 
-        // ── Step 7: 장기 메모리 자동 추출 (fire-and-forget, 응답 지연 없음) ──
-        // API Key 요청: 외부 서비스의 메시지에 이미 문서가 포함되어 있을 수 있으므로
-        // 메모리 추출을 완전히 스킵하여 외부 문서 내용이 내부 메모리로 오염되는 것을 방지
-        // 웹검색 컨텍스트가 주입된 답변은 메모리 추출을 스킵하여 오염 방지
-        // memoryLearning=false (사용자 명시 OFF): MemoryService 호출 자체를 스킵
-        // memoryLearning=true 또는 undefined: Extract-and-Forget — saveHistory 와 독립
-        const memoryLearningEnabled = req.memoryLearning !== false;
-        if (userId && message && !req.apiKeyId && memoryLearningEnabled) {
-            const hasExternalContext = !!(webSearchContext || docId);
-            this.extractMemoriesAsync(userId, message, fullResponse, hasExternalContext).catch((e: Error) => {
-                const reason = e?.message?.includes('timeout') ? 'timeout' : 'unknown';
-                logger.warn('메모리 추출 fire-and-forget 실패:', e?.message);
-                recordMemoryExtractionFailure(reason);
-            });
-        }
+        // Step 7 장기 메모리 자동 추출: 2026-05-19 제거 (MemoryService 폐기)
 
         return fullResponse;
     }
@@ -634,16 +648,12 @@ export class ChatService {
      */
     private async buildContextForLLM(
         message: string,
-        docId: string | undefined,
-        uploadedDocuments: DocumentStore,
-        userId: string | undefined,
         webSearchContext: string | undefined,
         thinkingMode: boolean | undefined,
         apiKeyId?: string,
     ): Promise<{ finalEnhancedMessage: string; documentImages: string[] }> {
         return buildContextForLLM({
-            message, docId, uploadedDocuments, userId,
-            webSearchContext, thinkingMode, apiKeyId,
+            message, webSearchContext, thinkingMode, apiKeyId,
             clientModel: this.client.model,
         });
     }
@@ -730,7 +740,6 @@ export class ChatService {
      */
     async processMessageWithDiscussion(
         req: ChatMessageRequest,
-        uploadedDocuments: DocumentStore,
         onToken: (token: string) => void,
         onProgress?: (progress: DiscussionProgress) => void
     ): Promise<string> {
@@ -742,7 +751,6 @@ export class ChatService {
         };
         const result = await this.discussionStrategy.execute({
             req,
-            uploadedDocuments,
             client: this.client,
             onProgress,
             formatDiscussionResult: (discussionResult) => formatDiscussionResult(discussionResult),
@@ -906,6 +914,11 @@ export class ChatService {
                     {
                         messages,
                         modelId: resolved.modelId,
+                        // thinkingMode 사용자 명시 토글을 provider 까지 전파.
+                        // local-llm-provider 가 advancedOptions.think 로 매핑 → reasoning-adapter 가
+                        // chat_template_kwargs.enable_thinking 으로 변환 (vLLM EXAONE/Qwen3).
+                        // fast-path 매칭 시 request-handler 에서 이미 false 로 강제 OFF.
+                        thinking: req.thinkingMode === true,
                         ...(tools.length > 0 ? { tools } : {}),
                         ...(req.abortSignal ? { abortSignal: req.abortSignal } : {}),
                     },
@@ -1044,7 +1057,10 @@ export class ChatService {
          */
         directCostUsdMicros?: number;
     }): void {
-        if (!input.userId || !this.providerRouter) return;
+        // FK 가드: 'guest'/'anon-*'/'anonymous' sentinel 은 users 테이블에 없어 FK 위반.
+        // isPersistableUserId 가 type-guard 로 narrowing → 이후 userId 는 string 보장.
+        // 비인증 사용자의 외부 provider 호출은 사용량 추적 대상 외 (quota/billing 미적용).
+        if (!isPersistableUserId(input.userId) || !this.providerRouter) return;
         const repo = this.providerRouter.getExternalKeysRepo();
         if (!repo) return;
         const userId = input.userId;
@@ -1082,19 +1098,4 @@ export class ChatService {
         });
     }
 
-    /**
-     * 대화에서 메모리를 비동기로 추출합니다 (fire-and-forget).
-     * 실제 로직은 chat-service/memory-extractor.ts에 위임합니다.
-     */
-    private async extractMemoriesAsync(
-        userId: string,
-        userMessage: string,
-        assistantResponse: string,
-        hasExternalContext: boolean = false,
-    ): Promise<void> {
-        return extractMemoriesAsync({
-            userId, userMessage, assistantResponse,
-            hasExternalContext, client: this.client,
-        });
-    }
 }

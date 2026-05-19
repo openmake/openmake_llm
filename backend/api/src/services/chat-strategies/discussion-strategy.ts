@@ -19,6 +19,7 @@ import type { ChatMessage } from '../../llm';
 import type { ChatStrategy, ChatResult, DiscussionStrategyContext } from './types';
 import { createLogger } from '../../utils/logger';
 import { sanitizePromptInput } from '../../utils/input-sanitizer';
+import { isPersistableUserId } from '../../utils/user-id-validation';
 import { CONTEXT_LIMITS, DISCUSSION_TOKEN_BUDGET, MODEL_CONTEXT_DEFAULTS } from '../../config/runtime-limits';
 import { LLM_TEMPERATURES } from '../../config/llm-parameters';
 import { resolvePromptLocale, type PromptLocaleCode } from '../../chat/language-policy';
@@ -254,32 +255,9 @@ export class DiscussionStrategy implements ChatStrategy<DiscussionStrategyContex
 
         logger.info('🎯 멀티 에이전트 토론 모드 시작');
 
-        // 1단계: 문서 컨텍스트 추출 (텍스트 + 이미지)
-        let documentContext = '';
-        let documentImages: string[] = [];
-
-        if (docId) {
-            const doc = context.uploadedDocuments.get(docId);
-            if (doc) {
-                let docText = doc.text || '';
-                const maxChars = CONTEXT_LIMITS.DEFAULT_MAX_CONTEXT_CHARS;
-
-                if (docText.length > maxChars) {
-                    const half = Math.floor(maxChars / 2);
-                    docText = `${docText.substring(0, half)}\n${localized.documentMiddleOmitted}\n${docText.substring(docText.length - half)}`;
-                }
-
-                documentContext = `${localized.documentLabel}: ${doc.filename} (${doc.type})\n` +
-                    `${localized.lengthLabel}: ${doc.text.length}${localized.lengthUnit}\n\n${docText}`;
-
-                logger.info(`📄 문서 컨텍스트 적용: ${doc.filename} (${docText.length}자)`);
-
-                if (['image', 'pdf'].includes(doc.type) && doc.info?.base64) {
-                    documentImages.push(doc.info.base64);
-                    logger.info('🖼️ 문서 이미지 데이터 추출됨');
-                }
-            }
-        }
+        // 1단계 문서 컨텍스트 추출: 2026-05-19 문서 첨부 폐기와 함께 제거.
+        const documentContext = '';
+        const documentImages: string[] = [];
 
         // 2단계: 대화 히스토리 변환 (프롬프트 인젝션 방어를 위해 content 정제)
         const conversationHistory = history?.map((h) => ({
@@ -295,22 +273,8 @@ export class DiscussionStrategy implements ChatStrategy<DiscussionStrategyContex
             logger.info(`🔍 웹 검색 컨텍스트 적용: ${webSearchContext.length}자`);
         }
 
-        // 3단계: 사용자 장기 메모리 조회 (게스트가 아닌 경우만)
-        let userMemoryContext = '';
-        if (userId && userId !== 'guest') {
-            try {
-                const { getMemoryService } = await import('../MemoryService');
-                const memoryService = getMemoryService();
-                const memoryResult = await memoryService.buildMemoryContext(userId, message);
-
-                if (memoryResult.contextString) {
-                    userMemoryContext = memoryResult.contextString;
-                    logger.info(`💾 사용자 메모리 컨텍스트 적용: ${memoryResult.memories.length}개 기억, ${userMemoryContext.length}자`);
-                }
-            } catch (e) {
-                logger.warn('MemoryService 로드 실패:', e);
-            }
-        }
+        // 3단계 사용자 장기 메모리 조회: 2026-05-19 MemoryService 폐기와 함께 제거
+        const userMemoryContext = '';
 
         // 4단계: 이미지 분석 (최대 3개, 비전 모델을 통해 텍스트 설명 추출)
         const allImages = [...(images || []), ...documentImages];

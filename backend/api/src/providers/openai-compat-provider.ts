@@ -60,7 +60,6 @@ const DEFAULT_CAPABILITIES: ProviderCapabilities = {
     toolCalling: true,
     thinking: false,
     vision: false, // 일부 endpoint(OpenRouter Claude/Gemini 등)에서만 가능 — 보수적 기본값
-    embedding: false,
 };
 
 /**
@@ -107,14 +106,7 @@ function inferCapabilitiesFromModelId(
         caps.toolCalling = false;
     }
 
-    // 임베딩 모델 식별 (text-embedding / embed / embedding 패턴)
-    if (/embed/i.test(lower)) {
-        caps.embedding = true;
-        caps.streaming = false;
-        caps.toolCalling = false;
-        caps.vision = false;
-        caps.thinking = false;
-    }
+    // 임베딩 모델은 별도 분기 미지원 (vector cache / semantic router 폐기 — 2026-05-19)
 
     return caps;
 }
@@ -397,7 +389,6 @@ export class OpenAICompatProvider implements IProvider {
                         toolCalling: supportedParams.includes('tools'),
                         vision: inputModalities.includes('image'),
                         thinking: hasReasoningParam || m.pricing?.internal_reasoning != null,
-                        embedding: false,
                     },
                     pricing: {
                         input: promptUsd * PER_TOKEN_TO_PER_MILLION,
@@ -561,12 +552,4 @@ export class OpenAICompatProvider implements IProvider {
         }
     }
 
-    async embed(_text: string, _modelId: string): Promise<number[]> {
-        // OpenAI 호환 endpoint 일부는 임베딩 지원하나, 주된 사용처는 채팅이므로
-        // Phase 4 에서는 NOT_SUPPORTED 로 통일. Phase 5+ 에서 별도 임베딩 어댑터 분리.
-        throw new ProviderError(
-            'NOT_SUPPORTED',
-            'OpenAI 호환 임베딩은 별도 어댑터에서 처리 — 로컬 LLM_EMBEDDING_MODEL (예: bge-m3) 사용 권장',
-        );
-    }
 }

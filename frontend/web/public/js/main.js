@@ -83,11 +83,7 @@ import {
     newChat as sessionNewChat
 } from './modules/session.js';
 
-// 1-9. 파일 업로드 (state 의존)
-import {
-    uploadFile, setupFileInput, setupChatDropZone,
-    renderAttachments, removeAttachment, clearAttachments
-} from './modules/file-upload.js';
+// 1-9. 파일 업로드: 2026-05-19 제거 (문서 처리 폐기)
 
 // 1-10. 모드 토글 (state 의존)
 import {
@@ -368,11 +364,7 @@ function setupEventListeners() {
         });
     }
 
-    // 파일 입력 설정
-    setupFileInput();
-
-    // 채팅 입력 영역 드래그 앤 드롭 파일 업로드
-    setupChatDropZone();
+    // 파일 입력/드롭존: 2026-05-19 제거 (문서 처리 폐기)
 
     // 모달 외부 클릭 시 닫기
     document.querySelectorAll('.modal').forEach(modal => {
@@ -610,13 +602,7 @@ window.saveMessageToSession = saveMessageToSession;
 window.deleteSession = deleteSession;
 window.addToChatHistory = addToChatHistory;
 
-// 파일 업로드
-window.uploadFile = uploadFile;
-window.setupFileInput = setupFileInput;
-window.setupChatDropZone = setupChatDropZone;
-window.renderAttachments = renderAttachments;
-window.removeAttachment = removeAttachment;
-window.clearAttachments = clearAttachments;
+// 파일 업로드 window 노출: 2026-05-19 제거 (문서 처리 폐기)
 
 // 모드 토글
 window.toggleDiscussionMode = toggleDiscussionMode;

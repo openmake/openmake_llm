@@ -61,7 +61,7 @@ export interface ExternalProviderCatalogEntry {
     fallbackModels?: ReadonlyArray<{
         id: string;
         displayName: string;
-        capabilities: { streaming: boolean; toolCalling: boolean; vision: boolean; thinking: boolean; embedding: boolean };
+        capabilities: { streaming: boolean; toolCalling: boolean; vision: boolean; thinking: boolean };
         isFree?: boolean;
     }>;
 }
@@ -97,12 +97,12 @@ export const EXTERNAL_PROVIDER_CATALOG: ReadonlyArray<ExternalProviderCatalogEnt
             'OpenRouter 의 namespaced 형식을 그대로 사용합니다.',
         authMethods: ['api_key'] as const,
         fallbackModels: [
-            { id: 'openai/gpt-5',                      displayName: 'GPT-5',                       isFree: false, capabilities: { streaming: true, toolCalling: true, vision: true,  thinking: false, embedding: false } },
-            { id: 'anthropic/claude-opus-4.5',         displayName: 'Claude Opus 4.5',             isFree: false, capabilities: { streaming: true, toolCalling: true, vision: true,  thinking: true,  embedding: false } },
-            { id: 'anthropic/claude-sonnet-4.6',       displayName: 'Claude Sonnet 4.6',           isFree: false, capabilities: { streaming: true, toolCalling: true, vision: true,  thinking: true,  embedding: false } },
-            { id: 'google/gemini-2.5-pro',             displayName: 'Gemini 2.5 Pro (via OR)',     isFree: false, capabilities: { streaming: true, toolCalling: true, vision: true,  thinking: false, embedding: false } },
-            { id: 'meta-llama/llama-3.3-70b-instruct', displayName: 'Llama 3.3 70B',               isFree: false, capabilities: { streaming: true, toolCalling: true, vision: false, thinking: false, embedding: false } },
-            { id: 'deepseek/deepseek-r1',              displayName: 'DeepSeek R1',                 isFree: false, capabilities: { streaming: true, toolCalling: true, vision: false, thinking: true,  embedding: false } },
+            { id: 'openai/gpt-5',                      displayName: 'GPT-5',                       isFree: false, capabilities: { streaming: true, toolCalling: true, vision: true,  thinking: false } },
+            { id: 'anthropic/claude-opus-4.5',         displayName: 'Claude Opus 4.5',             isFree: false, capabilities: { streaming: true, toolCalling: true, vision: true,  thinking: true } },
+            { id: 'anthropic/claude-sonnet-4.6',       displayName: 'Claude Sonnet 4.6',           isFree: false, capabilities: { streaming: true, toolCalling: true, vision: true,  thinking: true } },
+            { id: 'google/gemini-2.5-pro',             displayName: 'Gemini 2.5 Pro (via OR)',     isFree: false, capabilities: { streaming: true, toolCalling: true, vision: true,  thinking: false } },
+            { id: 'meta-llama/llama-3.3-70b-instruct', displayName: 'Llama 3.3 70B',               isFree: false, capabilities: { streaming: true, toolCalling: true, vision: false, thinking: false } },
+            { id: 'deepseek/deepseek-r1',              displayName: 'DeepSeek R1',                 isFree: false, capabilities: { streaming: true, toolCalling: true, vision: false, thinking: true } },
         ],
     },
 ] as const;

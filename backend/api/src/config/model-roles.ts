@@ -19,15 +19,14 @@ import { createLogger } from '../utils/logger';
 
 const logger = createLogger('ModelRoles');
 
-/** LLM 호출 역할 */
-export type ModelRole = 'chat' | 'classifier' | 'router' | 'embedding';
+/** LLM 호출 역할 (embedding role 은 2026-05-19 제거 — vector cache / semantic router 폐기) */
+export type ModelRole = 'chat' | 'classifier' | 'router';
 
 /** 역할별 env var 이름 매핑 — OMK_* 일관 (vLLM/LiteLLM 표준) */
 const ROLE_ENV_VAR: Record<ModelRole, string> = {
     chat:       'OMK_CHAT_MODEL',
     classifier: 'OMK_CLASSIFIER_MODEL',
     router:     'OMK_ROUTER_MODEL',
-    embedding:  'OMK_EMBEDDING_MODEL',
 };
 
 /**
@@ -54,21 +53,15 @@ const LEGACY_ROLE_ENV_VAR: Partial<Record<ModelRole, string>> = {
 /**
  * 역할별 fallback 모델 — env 미설정 시 사용하는 보수적 기본값.
  *
- * chat/classifier/router: env LLM_DEFAULT_MODEL 우선, 미설정 시 빈 문자열 — 호출자가
- * 명시적 모델 지정을 강제하도록 의도. embedding: LLM_EMBEDDING_MODEL 우선.
+ * env LLM_DEFAULT_MODEL 우선, 미설정 시 빈 문자열 — 호출자가
+ * 명시적 모델 지정을 강제하도록 의도.
  *
  * 주의: env 값을 module-load 타이밍에 캐싱하지 않고 lookup 시점마다 process.env 를
  * 다시 읽어 PM2 reload / test override 가 즉시 반영되도록 한다.
  */
-function roleFallback(role: ModelRole): string {
-    if (role === 'embedding') {
-        return process.env.LLM_EMBEDDING_MODEL?.trim() || 'nomic-embed-text';
-    }
+function roleFallback(_role: ModelRole): string {
     return process.env.LLM_DEFAULT_MODEL?.trim() || '';
 }
-
-/** embedding은 chat 모델로 자동 위임이 불가능한 역할 */
-const NON_DELEGABLE_ROLES: ReadonlySet<ModelRole> = new Set(['embedding']);
 
 /**
  * 주어진 역할에 사용할 모델명을 반환합니다.
@@ -76,7 +69,7 @@ const NON_DELEGABLE_ROLES: ReadonlySet<ModelRole> = new Set(['embedding']);
  * 우선순위:
  *   1. 역할별 env var (OMK_CHAT_MODEL, OMK_CLASSIFIER_MODEL, ...)
  *   2. Legacy env var (OMK_UIR_MODEL → router)
- *   3. LLM_DEFAULT_MODEL (embedding 제외) / LLM_EMBEDDING_MODEL
+ *   3. LLM_DEFAULT_MODEL
  */
 export function getModelForRole(role: ModelRole): string {
     const roleEnvName = ROLE_ENV_VAR[role];
@@ -95,11 +88,9 @@ export function getModelForRole(role: ModelRole): string {
         }
     }
 
-    if (!NON_DELEGABLE_ROLES.has(role)) {
-        const defaultModel = process.env.LLM_DEFAULT_MODEL;
-        if (defaultModel && defaultModel.trim() !== '') {
-            return defaultModel.trim();
-        }
+    const defaultModel = process.env.LLM_DEFAULT_MODEL;
+    if (defaultModel && defaultModel.trim() !== '') {
+        return defaultModel.trim();
     }
 
     return roleFallback(role);
@@ -114,7 +105,6 @@ export function getAllRoleModels(): Record<ModelRole, string> {
         chat:       getModelForRole('chat'),
         classifier: getModelForRole('classifier'),
         router:     getModelForRole('router'),
-        embedding:  getModelForRole('embedding'),
     };
 }
 
@@ -182,11 +172,7 @@ export async function validateModels(
         `LiteLLM config.yaml 의 model_list 또는 vLLM --served-model-name 을 확인하세요. ` +
         `현재 LLM 서버 모델 목록: [${registered.join(', ') || '(empty)'}]`;
 
-    // embedding 모델 미등록은 옵션 기능(시맨틱 캐시/라우터) 비활성화로 graceful degrade.
-    const embeddingModel = roleModels.embedding;
-    const onlyEmbeddingMissing = missing.length === 1 && missing[0] === embeddingModel;
-
-    if (failFast && !onlyEmbeddingMissing) {
+    if (failFast) {
         logger.error(errMsg);
         throw new Error(errMsg);
     }

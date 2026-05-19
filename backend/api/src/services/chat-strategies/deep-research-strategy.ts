@@ -18,6 +18,7 @@ import { getUnifiedDatabase } from '../../data/models/unified-database';
 import { DeepResearchService } from '../DeepResearchService';
 import type { ChatStrategy, ChatResult, DeepResearchStrategyContext } from './types';
 import { createLogger } from '../../utils/logger';
+import { isPersistableUserId } from '../../utils/user-id-validation';
 import { detectLanguage } from '../../chat/language-policy';
 import { LLM_TIMEOUTS } from '../../config/timeouts';
 import { RESEARCH_STRATEGY_PARAMS } from '../../config/runtime-limits';
@@ -73,7 +74,7 @@ export class DeepResearchStrategy implements ChatStrategy<DeepResearchStrategyCo
         const db = getUnifiedDatabase();
         await db.createResearchSession({
             id: sessionId,
-            userId: userId && userId !== 'guest' && !userId.startsWith('anon-') ? userId : undefined,
+            userId: isPersistableUserId(userId) ? userId : undefined,
             topic: message,
             depth: 'deep',
         });

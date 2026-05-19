@@ -353,43 +353,18 @@ export class AgentLearningSystem {
             const failurePatterns = this.analyzeFailurePatterns(agentId);
             if (failurePatterns.length === 0) continue;
 
-            // 실패 패턴을 장기 메모리에 저장 (라우팅 자동 보정용)
-            try {
-                const { getMemoryService } = require('../services/MemoryService') as {
-                    getMemoryService: () => import('../services/MemoryService').MemoryService;
-                };
-                const memoryService = getMemoryService();
-
-                const patternsStr = failurePatterns
-                    .slice(0, 3)
-                    .map(p => `${p.pattern}(${p.count}건)`)
-                    .join(', ');
-
-                // 에이전트별 품질 이슈를 context 카테고리로 저장
-                await memoryService.saveMemory('system', null, {
-                    category: 'context',
-                    key: `agent_quality_${agentId}`,
-                    value: `품질=${quality.overallScore}/100, 추세=${quality.recentTrend}, 실패패턴: ${patternsStr}`,
-                    importance: 0.7,
-                    tags: ['agent', 'quality', 'self-improvement'],
-                });
-
-                // 라우팅 보정 힌트 저장
-                if (quality.overallScore < 40) {
-                    await memoryService.saveMemory('system', null, {
-                        category: 'context',
-                        key: `routing_hint_${agentId}`,
-                        value: `에이전트 ${agentId} 품질 저하(${quality.overallScore}/100). 대안 라우팅 검토 필요.`,
-                        importance: 0.8,
-                        tags: ['routing', 'hint', 'auto-correction'],
-                    });
-                }
-
-                improvedAgents.push(agentId);
-                totalSuggestions += failurePatterns.length;
-            } catch (e) {
-                logger.error(`자기개선 메모리 저장 실패 (agent=${agentId}):`, e);
-            }
+            // 자기개선 메모리 저장: 2026-05-19 MemoryService 폐기와 함께 제거.
+            // 품질/라우팅 힌트는 logger 만으로 기록 — 자동 보정은 후속 인프라 신설 필요.
+            const patternsStr = failurePatterns
+                .slice(0, 3)
+                .map(p => `${p.pattern}(${p.count}건)`)
+                .join(', ');
+            logger.warn(
+                `[자기개선] agent=${agentId} 품질=${quality.overallScore}/100 ` +
+                `추세=${quality.recentTrend} 실패패턴: ${patternsStr}`,
+            );
+            improvedAgents.push(agentId);
+            totalSuggestions += failurePatterns.length;
         }
 
         if (improvedAgents.length > 0) {

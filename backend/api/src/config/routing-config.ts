@@ -131,18 +131,6 @@ export const CATEGORY_BOOST =
 export const EXPANDED_DAMPING =
     Number(process.env.OMK_EXPANDED_DAMPING ?? '0.3');
 
-// ── Vector Cache (L1.5) 설정 ──────────────────────────────────
-/** 임베딩 모델 — model-roles 레지스트리 경유 */
-export const EMBEDDING_MODEL = getModelForRole('embedding');
-
-/** 벡터 캐시 유사도 임계값 (env: OMK_VECTOR_CACHE_THRESHOLD) */
-export const VECTOR_CACHE_THRESHOLD =
-    Number(process.env.OMK_VECTOR_CACHE_THRESHOLD ?? '0.85');
-
-/** 벡터 캐시 최대 크기 (env: OMK_VECTOR_CACHE_MAX_SIZE) */
-export const VECTOR_CACHE_MAX_SIZE =
-    Number(process.env.OMK_VECTOR_CACHE_MAX_SIZE ?? '2000');
-
-/** 벡터 캐시 활성화 여부 (env: OMK_VECTOR_CACHE_ENABLED) */
-export const VECTOR_CACHE_ENABLED =
-    (process.env.OMK_VECTOR_CACHE_ENABLED ?? 'true') === 'true';
+// Vector cache (L1.5) / embedding 인프라는 2026-05-19 제거됨.
+// 사유: 단일 모델 환경에서 LLM classifier 자동 우회로 호출 0건 — dead code.
+// 재도입 시: VECTOR_CACHE_* 환경변수 + embedding 모델 + LLMClient.embed() 복원 필요.

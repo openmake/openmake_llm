@@ -22,13 +22,17 @@ import type {
     FormatOption,
 } from './types';
 import { buildImageDataUrl } from '../utils/image-mime';
+import { parseReasoningTags } from './reasoning-tag-parser';
 
 type OpenAIChatChunk = {
     choices: Array<{
         delta?: {
             role?: string;
             content?: string;
+            /** OpenAI/일부 vLLM 빌드의 reasoning 필드 */
             reasoning?: string;
+            /** vLLM 0.21+ EXAONE/Qwen3 reasoning 모델의 thinking 토큰 필드 */
+            reasoning_content?: string;
             tool_calls?: Array<{
                 index: number;
                 id?: string;
@@ -44,7 +48,10 @@ type OpenAIChatResponse = {
     choices: Array<{
         message: {
             content?: string | null;
+            /** OpenAI/일부 vLLM 빌드의 reasoning 필드 */
             reasoning?: string;
+            /** vLLM 0.21+ EXAONE/Qwen3 reasoning 모델의 thinking 필드 */
+            reasoning_content?: string;
             tool_calls?: Array<{
                 id: string;
                 function: { name: string; arguments: string };
@@ -169,7 +176,9 @@ export async function streamChat(
             content += choice.delta.content;
             onToken(choice.delta.content, undefined);
         }
-        const reasoningDelta = (choice?.delta as { reasoning?: string } | undefined)?.reasoning;
+        // vLLM 0.21+ 는 reasoning 모델 출력을 `delta.reasoning_content` 로 보냄 (EXAONE/Qwen3).
+        // 일부 빌드는 `delta.reasoning` 도 사용 — 두 필드 모두 수신하여 호환.
+        const reasoningDelta = choice?.delta?.reasoning ?? choice?.delta?.reasoning_content;
         if (reasoningDelta) {
             thinking += reasoningDelta;
             onToken('', reasoningDelta);
@@ -207,9 +216,18 @@ export async function streamChat(
         toolCalls.push({ type: 'function', id: buf.id, function: { name: buf.name, arguments: args } });
     }
 
+    // Defensive client-side reasoning-tag split (2026-05-19):
+    // vLLM 에 `--reasoning-parser deepseek_r1` 가 미설정이면 EXAONE 등의 `<think>...</think>`
+    // 가 content 로 흘러나옴. 응답 최종 단계에서 분리하여 *저장되는 message* 는 clean 한
+    // 본문만 보유 (chat history, 다음 턴 컨텍스트, UI 디스플레이 모두 정상화).
+    const reasoningSplit = parseReasoningTags(content);
+    if (reasoningSplit.thinking) {
+        thinking = thinking ? `${thinking}\n${reasoningSplit.thinking}` : reasoningSplit.thinking;
+    }
+
     return {
         role: 'assistant',
-        content,
+        content: reasoningSplit.content,
         ...(thinking && { thinking }),
         ...(toolCalls.length > 0 && { tool_calls: toolCalls }),
         metrics: {
@@ -249,10 +267,19 @@ export async function nonStreamChat(
         return { type: 'function' as const, id: tc.id, function: { name: tc.function.name, arguments: args } };
     });
 
+    // Defensive client-side reasoning-tag split (non-stream 동일 원칙):
+    // vLLM `--reasoning-parser` 미설정 시 content 에 섞인 `<think>...</think>` 분리.
+    // vLLM 0.21+ reasoning 모델은 `message.reasoning_content` 로도 thinking 전달 — 두 필드 모두 수신.
+    const reasoningSplit = parseReasoningTags(msg.content ?? '');
+    const serverReasoning = msg.reasoning ?? msg.reasoning_content;
+    const combinedThinking = serverReasoning
+        ? (reasoningSplit.thinking ? `${serverReasoning}\n${reasoningSplit.thinking}` : serverReasoning)
+        : reasoningSplit.thinking;
+
     return {
         role: 'assistant',
-        content: msg.content ?? '',
-        ...(msg.reasoning && { thinking: msg.reasoning }),
+        content: reasoningSplit.content,
+        ...(combinedThinking && { thinking: combinedThinking }),
         ...(toolCalls.length > 0 && { tool_calls: toolCalls }),
         metrics: {
             prompt_eval_count: r.usage?.prompt_tokens,

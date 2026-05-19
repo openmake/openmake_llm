@@ -55,21 +55,21 @@ const KNOWN_MODELS: Array<{
         displayName: 'Claude Opus 4.5',
         contextWindow: 200_000,
         outputLimit: 32_000,
-        capabilities: { streaming: true, toolCalling: true, thinking: true, vision: true, embedding: false },
+        capabilities: { streaming: true, toolCalling: true, thinking: true, vision: true },
     },
     {
         id: 'claude-sonnet-4-6',
         displayName: 'Claude Sonnet 4.6',
         contextWindow: 200_000,
         outputLimit: 64_000,
-        capabilities: { streaming: true, toolCalling: true, thinking: true, vision: true, embedding: false },
+        capabilities: { streaming: true, toolCalling: true, thinking: true, vision: true },
     },
     {
         id: 'claude-haiku-4-5',
         displayName: 'Claude Haiku 4.5',
         contextWindow: 200_000,
         outputLimit: 32_000,
-        capabilities: { streaming: true, toolCalling: true, thinking: false, vision: true, embedding: false },
+        capabilities: { streaming: true, toolCalling: true, thinking: false, vision: true },
     },
 ];
 
@@ -78,7 +78,6 @@ const DEFAULT_CAPABILITIES: ProviderCapabilities = {
     toolCalling: true,
     thinking: false,
     vision: true,
-    embedding: false,
 };
 
 const DEFAULT_MAX_TOKENS = 4096;
@@ -417,10 +416,4 @@ export class AnthropicProvider implements IProvider {
         }
     }
 
-    async embed(_text: string, _modelId: string): Promise<number[]> {
-        throw new ProviderError(
-            'NOT_SUPPORTED',
-            'Anthropic 은 임베딩 모델을 제공하지 않습니다 — 로컬 LLM_EMBEDDING_MODEL (예: bge-m3) 을 사용하세요',
-        );
-    }
 }
