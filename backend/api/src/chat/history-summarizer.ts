@@ -86,6 +86,12 @@ export async function summarizeHistory(
             {
                 temperature: LLM_TEMPERATURES.HISTORY_SUMMARY,
                 num_predict: HISTORY_SUMMARIZER.MAX_SUMMARY_TOKENS,
+            },
+            undefined,
+            {
+                // 요약 태스크는 reasoning 불필요 — MAX_SUMMARY_TOKENS 가 reasoning 으로
+                // 소비되면 본 요약문이 잘려나가 fallback notice 만 노출되는 사고 방지.
+                think: false,
             }
         );
 

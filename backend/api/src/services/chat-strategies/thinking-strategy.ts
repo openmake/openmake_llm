@@ -279,7 +279,13 @@ async function verifyConclusionConsistency(
         const verifierClient = new LLMClient({ model: THINKING_LIMITS.VERIFIER_MODEL });
         const verifyResponse = await verifierClient.chat(
             [{ role: 'user', content: prompt }],
-            { num_predict: THINKING_LIMITS.VERIFIER_MAX_TOKENS }
+            { num_predict: THINKING_LIMITS.VERIFIER_MAX_TOKENS },
+            undefined,
+            {
+                // 검증기는 YES/NO 한 단어만 출력 — reasoning 폭주 시 VERIFIER_MAX_TOKENS
+                // (보통 1~10) 안에서 본 답변 미생성. 결정형 분류기 패턴이므로 reasoning OFF.
+                think: false,
+            }
         );
 
         return verifyResponse.content.trim().toUpperCase().startsWith('YES');

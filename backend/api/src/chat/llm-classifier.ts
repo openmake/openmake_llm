@@ -139,6 +139,9 @@ async function callLLMClassifier(query: string, conversationContext?: string): P
         },
         undefined,
         {
+            // 분류기는 JSON only 응답 — reasoning 토큰이 max_tokens 를 소진하면 응답 누락
+            // (EXAONE 4.5 측정: reasoning_content 만 채워지고 content=null). 강제 비활성.
+            think: false,
             format: CLASSIFICATION_FORMAT,
         }
     );

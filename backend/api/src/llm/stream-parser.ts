@@ -24,6 +24,18 @@ import type {
 import { buildImageDataUrl } from '../utils/image-mime';
 import { parseReasoningTags } from './reasoning-tag-parser';
 
+/**
+ * Fallback 메시지: vLLM reasoning 모델(EXAONE/Qwen3 등) 이 reasoning 토큰만으로
+ * max_tokens 를 소진하여 `content` 가 `null|""` 로 반환된 경우 사용자에게 노출.
+ *
+ * 발생 조건 (vLLM 0.21+ EXAONE 4.5):
+ *   finish_reason="length", message.content=null, message.reasoning_content="...".
+ * 해결책: max_tokens(num_predict) 증가 또는 `LLM_DISABLE_THINKING_BY_DEFAULT=true`.
+ */
+const FALLBACK_REASONING_ONLY_NOTICE =
+    '(응답 한도(max_tokens) 내에서 reasoning 단계만 완료되어 본문이 생성되지 않았습니다. ' +
+    '재시도 시 더 짧게 질문하거나, 관리자에게 num_predict 증가 또는 reasoning 비활성화를 요청하세요.)';
+
 type OpenAIChatChunk = {
     choices: Array<{
         delta?: {
@@ -57,6 +69,7 @@ type OpenAIChatResponse = {
                 function: { name: string; arguments: string };
             }>;
         };
+        finish_reason?: string | null;
     }>;
     usage?: { prompt_tokens?: number; completion_tokens?: number };
 };
@@ -139,9 +152,13 @@ function applyOptionsToRequest(options?: ChatRequest['options']): Record<string,
     const params: Record<string, unknown> = {};
     if (options.temperature !== undefined) params.temperature = options.temperature;
     if (options.top_p !== undefined) params.top_p = options.top_p;
+    if (options.top_k !== undefined) params.top_k = options.top_k;
     if (options.num_predict !== undefined) params.max_tokens = options.num_predict;
     if (options.seed !== undefined) params.seed = options.seed;
     if (options.stop !== undefined) params.stop = options.stop;
+    // OpenAI/vLLM native penalty 파라미터 — EXAONE 4.5 카드 권장 (presence_penalty=1.5).
+    if (options.presence_penalty !== undefined) params.presence_penalty = options.presence_penalty;
+    if (options.frequency_penalty !== undefined) params.frequency_penalty = options.frequency_penalty;
     return params;
 }
 
@@ -169,12 +186,55 @@ export async function streamChat(
     const toolBuffers = new Map<number, { id: string; name: string; jsonBuffer: string }>();
     let promptTokens: number | undefined;
     let completionTokens: number | undefined;
+    let finishReason: string | null = null;
+
+    // Streaming-time `</think>` boundary split (vLLM `--reasoning-parser` 미설정 환경 대응).
+    //
+    // EXAONE 4.5 chat_template 은 assistant turn 시작 토큰으로 `<think>` 를 *프롬프트에 prepend*
+    // 하므로 모델 출력 스트림에는 여는 태그 없이 reasoning 본문 → `</think>` → 답변 순으로
+    // 흘러나옴. 서버에 reasoning-parser 가 없으면 이 전체가 `delta.content` 로 도착하여,
+    // 후처리 split 만으로는 *이미 UI 에 그려진 reasoning* 을 되돌릴 수 없음.
+    //
+    // 해결: chat_template_kwargs.enable_thinking 으로 reasoning 기대 여부 판단 후, 기대 시
+    // 초기 토큰을 thinking 채널 (`onToken('', x)`) 로 라우팅. `</think>` 경계 발견 시 이후
+    // 토큰을 content 채널 (`onToken(x, undefined)`) 로 전환. 부분 태그 탐지를 위해
+    // 8바이트(`</think>` 길이) lookback 버퍼 유지 — 청크 경계에서 안전한 분할 보장.
+    const kwargs = (extraBody?.chat_template_kwargs ?? {}) as { enable_thinking?: boolean };
+    const THINK_CLOSE = '</think>';
+    let pendingReasoning = '';
+    let inReasoning = kwargs.enable_thinking !== false;
 
     for await (const raw of stream as unknown as AsyncIterable<OpenAIChatChunk>) {
         const choice = raw.choices?.[0];
         if (choice?.delta?.content) {
-            content += choice.delta.content;
-            onToken(choice.delta.content, undefined);
+            const incoming = choice.delta.content;
+            if (inReasoning) {
+                pendingReasoning += incoming;
+                const closeIdx = pendingReasoning.indexOf(THINK_CLOSE);
+                if (closeIdx >= 0) {
+                    const reasoningPart = pendingReasoning.slice(0, closeIdx);
+                    const contentPart = pendingReasoning.slice(closeIdx + THINK_CLOSE.length);
+                    if (reasoningPart) {
+                        thinking += reasoningPart;
+                        onToken('', reasoningPart);
+                    }
+                    inReasoning = false;
+                    if (contentPart) {
+                        content += contentPart;
+                        onToken(contentPart, undefined);
+                    }
+                    pendingReasoning = '';
+                } else if (pendingReasoning.length > THINK_CLOSE.length) {
+                    // 마지막 THINK_CLOSE.length 바이트는 부분 태그일 수 있어 유보, 나머지만 emit.
+                    const safePrefix = pendingReasoning.slice(0, -THINK_CLOSE.length);
+                    thinking += safePrefix;
+                    onToken('', safePrefix);
+                    pendingReasoning = pendingReasoning.slice(-THINK_CLOSE.length);
+                }
+            } else {
+                content += incoming;
+                onToken(incoming, undefined);
+            }
         }
         // vLLM 0.21+ 는 reasoning 모델 출력을 `delta.reasoning_content` 로 보냄 (EXAONE/Qwen3).
         // 일부 빌드는 `delta.reasoning` 도 사용 — 두 필드 모두 수신하여 호환.
@@ -198,10 +258,22 @@ export async function streamChat(
                 if (tc.function?.arguments) buf.jsonBuffer += tc.function.arguments;
             }
         }
+        if (choice?.finish_reason) finishReason = choice.finish_reason;
         if (raw.usage) {
             promptTokens = raw.usage.prompt_tokens ?? promptTokens;
             completionTokens = raw.usage.completion_tokens ?? completionTokens;
         }
+    }
+
+    // 스트림 종료 시 reasoning 버퍼 잔존 처리. `</think>` 가 끝까지 안 나타난 경우 —
+    // (a) 모델이 reasoning 만 출력하고 답변 미생성 (finish_reason="length"): thinking 채널로 flush
+    // (b) chat_template 이 `<think>` 를 prepend 하지 않은 모델인데 enable_thinking 만 true 였던 경우:
+    //     실제로는 답변이었음 — 그러나 안전하게 thinking 으로 flush 후 아래 recovery 로직이
+    //     content 가 비어있으면 thinking 을 본 답변으로 승격하여 사용자에게 노출.
+    if (pendingReasoning) {
+        thinking += pendingReasoning;
+        onToken('', pendingReasoning);
+        pendingReasoning = '';
     }
 
     const toolCalls: ChatMessage['tool_calls'] = [];
@@ -225,14 +297,33 @@ export async function streamChat(
         thinking = thinking ? `${thinking}\n${reasoningSplit.thinking}` : reasoningSplit.thinking;
     }
 
+    // Reasoning-channel recovery (vLLM 운영자 reasoning-parser 오설정 워크어라운드):
+    // 일부 vLLM 빌드는 enable_thinking=false 요청을 받고도 EXAONE 출력 전체를 reasoning
+    // 채널로 라우팅하여 content=null 을 반환. 이 경우 reasoning 을 본 답변으로 승격하여
+    // 사용자에게 빈 화면이 보이지 않도록 한다. finish_reason="length" 면 절단 안내도 부착.
+    let finalContent = reasoningSplit.content;
+    let finalThinking = thinking;
+    if (!finalContent && thinking && toolCalls.length === 0) {
+        finalContent = thinking;
+        finalThinking = '';
+        // 스트리밍 클라이언트는 reasoning 델타를 별도 채널(onToken thinking 인자)로 받았기에,
+        // content 채널에는 아무것도 보내지 않은 상태. 승격된 답변을 content 채널로 재방송.
+        onToken(thinking, undefined);
+        if (finishReason === 'length') {
+            finalContent += '\n\n' + FALLBACK_REASONING_ONLY_NOTICE;
+            onToken('\n\n' + FALLBACK_REASONING_ONLY_NOTICE, undefined);
+        }
+    }
+
     return {
         role: 'assistant',
-        content: reasoningSplit.content,
-        ...(thinking && { thinking }),
+        content: finalContent,
+        ...(finalThinking && { thinking: finalThinking }),
         ...(toolCalls.length > 0 && { tool_calls: toolCalls }),
         metrics: {
             prompt_eval_count: promptTokens,
             eval_count: completionTokens,
+            ...(finishReason && { finish_reason: finishReason }),
         },
     };
 }
@@ -255,7 +346,9 @@ export async function nonStreamChat(
     } as never);
 
     const r = response as unknown as OpenAIChatResponse;
-    const msg = r.choices[0]?.message ?? { content: '' };
+    const choice0 = r.choices[0];
+    const msg = choice0?.message ?? { content: '' };
+    const finishReason = choice0?.finish_reason ?? undefined;
     const toolCalls: ChatMessage['tool_calls'] = (msg.tool_calls ?? []).map((tc) => {
         let args: Record<string, unknown> = {};
         try {
@@ -276,14 +369,27 @@ export async function nonStreamChat(
         ? (reasoningSplit.thinking ? `${serverReasoning}\n${reasoningSplit.thinking}` : serverReasoning)
         : reasoningSplit.thinking;
 
+    // Reasoning-channel recovery (non-stream 동일 — streamChat 의 동일 원칙 적용).
+    // content 비어있고 reasoning 만 채워진 경우 reasoning 을 본 답변으로 승격.
+    let finalContent = reasoningSplit.content;
+    let finalThinking = combinedThinking;
+    if (!finalContent && combinedThinking && toolCalls.length === 0) {
+        finalContent = combinedThinking;
+        finalThinking = '';
+        if (finishReason === 'length') {
+            finalContent += '\n\n' + FALLBACK_REASONING_ONLY_NOTICE;
+        }
+    }
+
     return {
         role: 'assistant',
-        content: reasoningSplit.content,
-        ...(combinedThinking && { thinking: combinedThinking }),
+        content: finalContent,
+        ...(finalThinking && { thinking: finalThinking }),
         ...(toolCalls.length > 0 && { tool_calls: toolCalls }),
         metrics: {
             prompt_eval_count: r.usage?.prompt_tokens,
             eval_count: r.usage?.completion_tokens,
+            ...(finishReason && { finish_reason: finishReason }),
         },
     };
 }

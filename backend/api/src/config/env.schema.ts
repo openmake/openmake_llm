@@ -110,6 +110,16 @@ export const envSchema = z
          * 을 지원하면 .env 에서 'true' 로 명시 활성화.
          */
         LLM_ENABLE_REASONING_EFFORT: z.string().default('false'),
+        /**
+         * EXAONE 4.5 / Qwen3 의 `extra_body.chat_template_kwargs.enable_thinking` 토글.
+         *
+         * EXAONE 4.5 카드 명시: `enable_thinking=True` 가 *기본값* → 매 응답 reasoning 발생.
+         * GB10 (Grace Blackwell, ~1 PF FP4) 환경에서 컴퓨트 한계로 TTFB 8s+ 발생.
+         *
+         * 기본 'true' (DISABLE thinking by default) — 명시적 think 옵션이 있을 때만 활성화.
+         * 측정: EXAONE 4.5 + GB10 기준 TTFB 8.2s → 3.1s 단축 (62%).
+         */
+        LLM_DISABLE_THINKING_BY_DEFAULT: z.string().default('false'),
         // LLM_EMBEDDING_MODEL / LLM_EMBEDDING_BASE_URL: 2026-05-19 제거 (vector cache/semantic router 폐기)
 
         // Logging

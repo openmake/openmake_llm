@@ -450,7 +450,10 @@ export class ChatService {
         // tool calling / thinking / discussion / deep research 는 여전히 미지원.
         if (externalResolved) {
             const { agentSystemMessage: agentSysMsgForExternal } = await agentPromise;
-            return await this.streamFromExternalProvider(externalResolved, req, onToken, {
+            // 2-arg streamToken 전달 — thinking 토큰이 onThinking SSE 채널로 정상 라우팅되도록.
+            // (1-arg onToken 전달 시 provider 의 reasoning 출력이 SSE token 채널에 빈 문자열로 흘러
+            //  사용자 UI 에 "답변 없음" 또는 reasoning 텍스트 노출 사고 발생.)
+            return await this.streamFromExternalProvider(externalResolved, req, streamToken, {
                 agentSystemMessage: agentSysMsgForExternal,
                 enhancedMessage: finalEnhancedMessage,
                 resolvedLanguage: languagePolicy?.resolvedLanguage,
@@ -923,7 +926,7 @@ export class ChatService {
                         ...(req.abortSignal ? { abortSignal: req.abortSignal } : {}),
                     },
                     {
-                        onToken: (token) => onToken(token),
+                        onToken: (token) => onToken(token, undefined),
                         onThinking: (thinking) => onToken('', thinking),
                         onUsage: (usage) => {
                             this.lastProviderUsage = usage;

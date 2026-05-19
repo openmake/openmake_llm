@@ -223,12 +223,33 @@ export function checkModelCapability(
  * @returns 조정된 모델 옵션 (원본 불변)
  */
 export function adjustOptionsForModel(
-    _modelName: string,
+    modelName: string,
     baseOptions: ModelOptions,
     queryType: QueryType,
     complexityScore?: number
 ): ModelOptions {
     const adjustedOptions = { ...baseOptions };
+
+    // ── 모델별 권장 sampling 보강 ──
+    // EXAONE 4.5: HF 카드 공식 권장 (presence_penalty=1.5 반복 억제 핵심).
+    // GB10 하드웨어 (~1 PF FP4, ~600 GB/s) 에서 짧은 num_predict 가 latency 유리.
+    // 호출자가 명시한 값은 *덮어쓰지 않음* — undefined 인 경우에만 모델 권장 채움.
+    const lowerModel = (modelName || '').toLowerCase();
+    if (lowerModel.startsWith('exaone4') || lowerModel.includes('exaone-4')) {
+        if (adjustedOptions.presence_penalty === undefined) {
+            adjustedOptions.presence_penalty = 1.5;          // 카드 권장
+        }
+        if (adjustedOptions.top_p === undefined) {
+            adjustedOptions.top_p = 0.95;                     // 카드 권장
+        }
+        // 한국어 입력 휴리스틱은 호출자(query language detector)가 별도 처리. 여기선 기본 일반 목적값.
+        if (adjustedOptions.temperature === undefined) {
+            adjustedOptions.temperature = 1.0;                // 카드 일반 목적 권장
+        }
+        if (!adjustedOptions.num_predict) {
+            adjustedOptions.num_predict = 8192;               // GB10 latency-friendly 기본
+        }
+    }
 
     // 질문 유형별 추가 조정
     switch (queryType) {

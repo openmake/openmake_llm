@@ -25,11 +25,17 @@ export function thinkToReasoningEffort(t: ThinkOption | undefined): 'low' | 'med
  * 두 가지 extra_body 키를 지원:
  *   1. `reasoning_effort` — OpenAI 표준. `LLM_ENABLE_REASONING_EFFORT=true` 시 활성.
  *   2. `chat_template_kwargs.enable_thinking` — vLLM/EXAONE/Qwen3 reasoning 모델용.
- *      `LLM_DISABLE_THINKING_BY_DEFAULT=true` 시 think=false/undefined 요청에
- *      `enable_thinking: false` 를 명시 전송하여 reasoning 토큰 생성을 차단.
- *      (측정 결과: EXAONE 4.5 기준 TTFB 8.2s → 3.1s, 62% 단축)
  *
- * Opt-in 설계 — 모델/서버가 해당 옵션을 지원할 때만 .env 에서 활성화.
+ * `enable_thinking` 결정 규칙 (우선순위 순):
+ *   a) `think === false`  → enable_thinking=false 를 *항상* 명시 전송. 메타 LLM 호출
+ *      (분류기/라우터/요약기/검증기) 에서 reasoning 토큰이 max_tokens 를 소진하여
+ *      본 응답이 비어버리는 사고를 차단. env 와 무관하게 우선 적용.
+ *   b) `think === true|'low'|'medium'|'high'`  → enable_thinking=true.
+ *   c) `think === undefined`  → env `LLM_DISABLE_THINKING_BY_DEFAULT=true` 일 때만
+ *      enable_thinking=false 를 보냄 (서버 기본값 오버라이드). 그렇지 않으면 미전송
+ *      (서버/모델 chat_template 의 기본값 — EXAONE 4.5 는 기본 ON).
+ *
+ * 측정: EXAONE 4.5 기준 TTFB 8.2s → 3.1s (reasoning OFF, 62% 단축).
  * vLLM 0.21+ 에서 chat_template 이 `enable_thinking` 변수를 인식해야 작동.
  */
 export function buildExtraBody(t: ThinkOption | undefined): Record<string, unknown> | undefined {
@@ -42,9 +48,15 @@ export function buildExtraBody(t: ThinkOption | undefined): Record<string, unkno
     }
 
     const disableThinkingByDefault = (process.env.LLM_DISABLE_THINKING_BY_DEFAULT ?? 'false').toLowerCase() === 'true';
-    if (disableThinkingByDefault) {
-        const thinkingOn = t === true || t === 'low' || t === 'medium' || t === 'high';
-        result.chat_template_kwargs = { enable_thinking: thinkingOn };
+    if (t === false) {
+        // 명시적 비활성 — env 와 무관하게 강제 OFF.
+        result.chat_template_kwargs = { enable_thinking: false };
+    } else if (t === true || t === 'low' || t === 'medium' || t === 'high') {
+        // 명시적 활성 — disableThinkingByDefault 가 true 여도 호출자 요청 우선.
+        result.chat_template_kwargs = { enable_thinking: true };
+    } else if (disableThinkingByDefault) {
+        // think 미지정 + env 기본 OFF 정책.
+        result.chat_template_kwargs = { enable_thinking: false };
     }
 
     return Object.keys(result).length > 0 ? result : undefined;

@@ -55,6 +55,11 @@ export interface UsageMetrics {
      * 미지원 provider (Ollama 등) 는 undefined.
      */
     cost_usd_micros?: number;
+    /**
+     * vLLM/OpenAI 응답 finish_reason — "stop" | "length" | "tool_calls" | "content_filter" 등.
+     * "length" 가 발생하면 max_tokens 한도에서 절단 — reasoning 모델은 본문 미생성 위험.
+     */
+    finish_reason?: string;
 }
 
 /**
@@ -127,6 +132,16 @@ export interface ModelOptions {
     min_p?: number;
     /** 난수 시드 (재현 가능한 출력용, 0=랜덤) */
     seed?: number;
+    /**
+     * OpenAI presence_penalty — 이미 등장한 토큰 재출현 억제 (-2.0 ~ 2.0, 양수 일수록 다양성 ↑).
+     * EXAONE 4.5 모델 카드 권장값: 1.5 (반복 응답 방지). vLLM/OpenAI native param.
+     * @see https://huggingface.co/LGAI-EXAONE/EXAONE-4.5-33B-AWQ
+     */
+    presence_penalty?: number;
+    /**
+     * OpenAI frequency_penalty — 토큰 출현 빈도 비례 억제 (-2.0 ~ 2.0). vLLM/OpenAI native param.
+     */
+    frequency_penalty?: number;
 }
 
 // ============================================
