@@ -1,5 +1,10 @@
 #!/usr/bin/env ts-node
 
+// Load environment variables BEFORE any other imports (config 검증이 일찍 일어남)
+import * as dotenv from 'dotenv';
+import * as pathModule from 'path';
+dotenv.config({ path: pathModule.resolve(__dirname, '../../../../../.env') });
+
 import { closeDatabase, getPool, getUnifiedDatabase } from '../models/unified-database';
 import { MigrationRunner } from './runner';
 

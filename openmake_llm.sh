@@ -2,11 +2,13 @@
 # ==============================================================================
 # OpenMake LLM 통합 서비스 매니저
 # ==============================================================================
-# 4계층 의존성을 순차 기동/정지/상태확인:
+# 3계층 의존성을 순차 기동/정지/상태확인:
 #   Layer 1: PostgreSQL@16   (DATABASE_URL=127.0.0.1:5432)
 #   Layer 2: Redis           (REDIS_URL=localhost:6379)
-#   Layer 3: Ollama          (localhost:11434)
-#   Layer 4: OpenMake LLM    (PM2 — ecosystem.config.js, PORT=52416)
+#   Layer 3: OpenMake LLM    (PM2 — ecosystem.config.js, PORT=52416)
+#
+# NOTE: LLM 추론은 외부 서버(vLLM/LiteLLM, OpenAI 호환 API)로 위임되어
+#       로컬 Ollama 데몬은 더 이상 기동하지 않는다. `LLM_*` 환경변수 참조.
 #
 # 사용법:
 #   ./openmake_llm.sh start      # 의존성 → 앱 순서로 기동 (빌드/마이그레이션 X)
@@ -21,7 +23,7 @@
 #   ./openmake_llm.sh health     # /health 엔드포인트 응답 확인
 #
 # 환경 가정 (macOS + Homebrew):
-#   - PostgreSQL/Redis/Ollama는 brew services로 관리
+#   - PostgreSQL/Redis는 brew services로 관리
 #   - OpenMake LLM 앱은 PM2로 관리
 #   - mise / nvm 등으로 Node 22+ 활성화 상태
 #
@@ -38,10 +40,8 @@ readonly APP_NAME="openmake-llm"
 readonly APP_PORT="${PORT:-52416}"
 readonly POSTGRES_FORMULA="postgresql@16"
 readonly REDIS_FORMULA="redis"
-readonly OLLAMA_FORMULA="ollama"
 readonly POSTGRES_PORT="${POSTGRES_PORT:-5432}"
 readonly REDIS_PORT="${REDIS_PORT:-6379}"
-readonly OLLAMA_PORT="${OLLAMA_PORT:-11434}"
 readonly HEALTH_RETRIES=15
 readonly HEALTH_INTERVAL=2
 
@@ -110,6 +110,44 @@ wait_for_port() {
     return 1
 }
 
+# PM2 앱 부팅 중 로그를 스트리밍하면서 포트 LISTEN을 대기.
+# 실패 시 최근 로그 덤프로 즉시 진단 가능하게 한다.
+wait_for_app_with_logs() {
+    local port="$1"
+    local label="$2"
+    local max_seconds=$((HEALTH_RETRIES * HEALTH_INTERVAL))
+
+    log_info "$label 시작 로그 스트리밍 (포트 $port 대기, 최대 ${max_seconds}s)"
+    printf "%s──────── PM2 logs (stream) ────────%s\n" "$C_DIM" "$C_RESET"
+
+    # 백그라운드 스트리밍 — restart 시 잔여 라인 5줄 + 신규 출력
+    pm2 logs "$APP_NAME" --lines 5 &
+    local tail_pid=$!
+
+    local i ok=0
+    for ((i=1; i<=HEALTH_RETRIES; i++)); do
+        if port_listening "$port"; then
+            ok=1
+            break
+        fi
+        sleep "$HEALTH_INTERVAL"
+    done
+
+    # 스트리밍 종료 — set -e 환경에서 SIGTERM 종료코드(143) 가드
+    kill "$tail_pid" 2>/dev/null || true
+    wait "$tail_pid" 2>/dev/null || true
+    printf "%s──────── PM2 logs (end) ───────────%s\n" "$C_DIM" "$C_RESET"
+
+    if [[ $ok -eq 1 ]]; then
+        log_ok "$label 포트 $port LISTEN 확인 (${i}회 시도, ~$((i * HEALTH_INTERVAL))s)"
+        return 0
+    fi
+
+    log_err "$label 포트 $port 응답 없음 (${max_seconds}s 초과) — 최근 100줄 덤프:"
+    pm2 logs "$APP_NAME" --lines 100 --nostream 2>/dev/null || true
+    return 1
+}
+
 # ── brew 서비스 헬퍼 ──────────────────────────────────────────────────────────
 brew_service_status() {
     # "started" | "stopped" | "error" | "none" 반환
@@ -153,38 +191,21 @@ ensure_brew_stopped() {
     fi
 }
 
-# ── 4계층 액션 ────────────────────────────────────────────────────────────────
+# ── 3계층 액션 ────────────────────────────────────────────────────────────────
 start_postgres() {
-    log_step "Layer 1/4: PostgreSQL"
+    log_step "Layer 1/3: PostgreSQL"
     ensure_brew_started "$POSTGRES_FORMULA" "PostgreSQL"
     wait_for_port "$POSTGRES_PORT" "PostgreSQL"
 }
 
 start_redis() {
-    log_step "Layer 2/4: Redis"
+    log_step "Layer 2/3: Redis"
     ensure_brew_started "$REDIS_FORMULA" "Redis"
     wait_for_port "$REDIS_PORT" "Redis"
 }
 
-start_ollama() {
-    log_step "Layer 3/4: Ollama"
-    # brew services start 가 plist xattr(com.apple.provenance) 충돌로 실패하므로
-    # launchctl load 로 직접 기동한다.
-    local plist="$HOME/Library/LaunchAgents/homebrew.mxcl.ollama.plist"
-    if port_listening "$OLLAMA_PORT"; then
-        log_ok "Ollama 이미 실행 중"
-    elif [[ -f "$plist" ]]; then
-        log_info "Ollama 시작 중 (launchctl load)"
-        launchctl load "$plist" 2>/dev/null || true
-    else
-        log_info "Ollama 시작 중 (ollama serve)"
-        nohup ollama serve >/opt/homebrew/var/log/ollama.log 2>&1 &
-    fi
-    wait_for_port "$OLLAMA_PORT" "Ollama"
-}
-
 start_app() {
-    log_step "Layer 4/4: OpenMake LLM (PM2)"
+    log_step "Layer 3/3: OpenMake LLM (PM2)"
 
     # build 산출물 확인 — 미빌드 시 안내
     if [[ ! -f "$SCRIPT_DIR/backend/api/dist/cli.js" ]]; then
@@ -211,11 +232,11 @@ start_app() {
         }
     fi
 
-    wait_for_port "$APP_PORT" "OpenMake LLM"
+    wait_for_app_with_logs "$APP_PORT" "OpenMake LLM"
 }
 
 stop_app() {
-    log_step "정지 1/4: OpenMake LLM (PM2)"
+    log_step "정지 1/3: OpenMake LLM (PM2)"
     if pm2 jlist 2>/dev/null | grep -q "\"name\":\"$APP_NAME\""; then
         pm2 stop "$APP_NAME" >/dev/null 2>&1 || log_warn "$APP_NAME stop 명령 실패"
         log_ok "$APP_NAME 정지"
@@ -224,25 +245,13 @@ stop_app() {
     fi
 }
 
-stop_ollama() {
-    log_step "정지 2/4: Ollama"
-    local plist="$HOME/Library/LaunchAgents/homebrew.mxcl.ollama.plist"
-    if [[ -f "$plist" ]]; then
-        log_info "Ollama 정지 중 (launchctl unload)"
-        launchctl unload "$plist" 2>/dev/null || true
-    else
-        pkill -f "ollama serve" 2>/dev/null || true
-    fi
-    log_ok "Ollama 정지"
-}
-
 stop_redis() {
-    log_step "정지 3/4: Redis"
+    log_step "정지 2/3: Redis"
     ensure_brew_stopped "$REDIS_FORMULA" "Redis"
 }
 
 stop_postgres() {
-    log_step "정지 4/4: PostgreSQL"
+    log_step "정지 3/3: PostgreSQL"
     ensure_brew_stopped "$POSTGRES_FORMULA" "PostgreSQL"
 }
 
@@ -273,13 +282,6 @@ show_status() {
         print_status_row "Redis ($REDIS_PORT)" "ok" "$(brew_service_status "$REDIS_FORMULA")"
     else
         print_status_row "Redis ($REDIS_PORT)" "fail" "포트 미응답"
-    fi
-
-    # Ollama
-    if port_listening "$OLLAMA_PORT"; then
-        print_status_row "Ollama ($OLLAMA_PORT)" "ok" "$(brew_service_status "$OLLAMA_FORMULA")"
-    else
-        print_status_row "Ollama ($OLLAMA_PORT)" "fail" "포트 미응답"
     fi
 
     # OpenMake LLM (PM2)
@@ -328,17 +330,15 @@ cmd_start() {
     preflight
     start_postgres
     start_redis
-    start_ollama
     start_app
     echo ""
-    log_ok "전체 4계층 기동 완료"
+    log_ok "전체 3계층 기동 완료"
     show_status
 }
 
 cmd_stop() {
     preflight
     stop_app
-    stop_ollama
     stop_redis
     stop_postgres
     echo ""
@@ -364,9 +364,8 @@ cmd_build() {
 cmd_migrate() {
     log_step "DB 마이그레이션 (status → migrate)"
 
-    # 마이그레이션 CLI는 dotenv 자동 로드를 안 하므로 스크립트에서 export
-    # (server.ts/cli.ts와 달리 backend/api/src/data/migrations/cli.ts는
-    #  config 검증을 그대로 실행해서 JWT_SECRET 등이 필요)
+    # 마이그레이션 CLI는 cli.ts 상단에서 dotenv 를 직접 로드하므로
+    # 스크립트는 .env 파일이 존재하는지만 확인하고 그대로 위임한다.
     local env_file="$SCRIPT_DIR/.env"
     if [[ ! -f "$env_file" ]]; then
         log_err ".env 파일을 찾을 수 없음: $env_file"
@@ -374,15 +373,13 @@ cmd_migrate() {
     fi
 
     log_info "현재 마이그레이션 상태 조회"
-    if ! ( cd "$SCRIPT_DIR/backend/api" && set -a && . "$env_file" && set +a && \
-           npx ts-node src/data/migrations/cli.ts status ); then
+    if ! ( cd "$SCRIPT_DIR/backend/api" && npx ts-node src/data/migrations/cli.ts status ); then
         log_err "마이그레이션 status 조회 실패"
         return 2
     fi
     echo ""
     log_info "마이그레이션 적용 중"
-    if ! ( cd "$SCRIPT_DIR/backend/api" && set -a && . "$env_file" && set +a && \
-           npx ts-node src/data/migrations/cli.ts migrate ); then
+    if ! ( cd "$SCRIPT_DIR/backend/api" && npx ts-node src/data/migrations/cli.ts migrate ); then
         log_err "마이그레이션 적용 실패 — 후속 작업 중단"
         return 2
     fi
@@ -447,11 +444,11 @@ cmd_deploy() {
             log_err "$APP_NAME restart 실패"
             return 2
         }
-        wait_for_port "$APP_PORT" "OpenMake LLM"
+        wait_for_app_with_logs "$APP_PORT" "OpenMake LLM"
     else
         log_info "$APP_NAME PM2 미등록 — 신규 시작"
         ( cd "$SCRIPT_DIR" && pm2 start ecosystem.config.js ) || return 2
-        wait_for_port "$APP_PORT" "OpenMake LLM"
+        wait_for_app_with_logs "$APP_PORT" "OpenMake LLM"
     fi
 
     echo ""
@@ -467,7 +464,8 @@ OpenMake LLM 통합 서비스 매니저
   $0 <command> [options]
 
 서비스 관리:
-  start     PostgreSQL → Redis → Ollama → OpenMake LLM 순차 기동
+  start     PostgreSQL → Redis → OpenMake LLM 순차 기동
+            (LLM 추론은 외부 vLLM/LiteLLM 서버 사용 — 로컬 Ollama 기동 안 함)
   stop      역순 정지
   restart   PM2 앱만 재시작 (코드 반영 X — 환경변수 변경 등)
 
@@ -488,7 +486,7 @@ OpenMake LLM 통합 서비스 매니저
   - Node 22+ (mise/nvm으로 활성)
 
 오버라이드 환경변수:
-  PORT (기본 52416), POSTGRES_PORT (5432), REDIS_PORT (6379), OLLAMA_PORT (11434)
+  PORT (기본 52416), POSTGRES_PORT (5432), REDIS_PORT (6379)
   OMK_DEPLOY_SKIP_CONFIRM=1 (deploy 마이그레이션 확인 자동 통과)
 
 예시:
