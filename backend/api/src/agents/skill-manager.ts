@@ -223,6 +223,73 @@ export class SkillManager {
      *
      * @see docs/superpowers/plans/2026-05-20-phase5-skill-upload.md \u00a77
      */
+    /**
+     * Manifest 모델 (021 마이그레이션) 의 prompt_md 를 시스템 프롬프트 블록으로 구성.
+     *
+     * 활성화 기준 = `getActiveSkillBindings` 와 동일 (agent + global + user:{userId}).
+     * 같은 skill 의 최신 version 만 사용.
+     *
+     * manifest 테이블 부재 시 null 반환 (graceful) — system-prompt 가 legacy
+     * `buildSkillPrompt` 로 fallback.
+     *
+     * @see docs/superpowers/plans/2026-05-20-phase5-skill-upload.md §7.5
+     */
+    async buildManifestPrompt(agentId: string, userId?: string, agentCategory?: string): Promise<string | null> {
+        let pool: Pool;
+        try {
+            await this.ensureInitialized();
+            const { getUnifiedDatabase } = await import('../data/models/unified-database');
+            pool = getUnifiedDatabase().getPool();
+        } catch (e) {
+            logger.debug('manifest prompt — DB 미초기화', e);
+            return null;
+        }
+
+        const params: unknown[] = [agentId, '__global__'];
+        let userClause = '';
+        if (userId) {
+            userClause = ' OR asa.agent_id = $3';
+            params.push(`user:${userId}`);
+        }
+
+        const sql = `
+            SELECT sm.id, sm.prompt_md, sm.manifest_yaml
+            FROM skill_manifests sm
+            INNER JOIN agent_skill_assignments asa ON asa.skill_id = sm.id
+            WHERE (asa.agent_id = $1 OR asa.agent_id = $2${userClause})
+              AND sm.version = (
+                  SELECT MAX(version) FROM skill_manifests WHERE id = sm.id
+              )
+            ORDER BY asa.priority DESC NULLS LAST, sm.id ASC
+            LIMIT 15
+        `;
+        let rows: Array<{ id: string; prompt_md: string; manifest_yaml: string }>;
+        try {
+            const result = await pool.query<{ id: string; prompt_md: string; manifest_yaml: string }>(sql, params);
+            rows = result.rows;
+        } catch (e) {
+            logger.debug('skill_manifests 조회 실패 (021 마이그레이션 미적용?) — null', e);
+            return null;
+        }
+        if (rows.length === 0) return null;
+
+        // agentCategory 필터: manifest_yaml 의 category 가 agent.category 와 일치하거나
+        // user-* prefix (사용자 개인 manifest) 인 경우만 포함 — 무관한 skill 의 프롬프트 오염 방지.
+        const filtered = rows.filter(r => {
+            if (!agentCategory) return true;
+            if (r.id.startsWith('user-')) return true;
+            const cat = /^---[\s\S]*?\bcategory:\s*([^\n]+)/.exec(r.manifest_yaml);
+            return !cat || cat[1]?.trim().replace(/^['"]|['"]$/g, '') === agentCategory;
+        });
+        if (filtered.length === 0) return null;
+
+        const blocks = filtered.map(r => {
+            const safeId = r.id.replace(/[<>"&]/g, '');
+            return `<skill_context name="${safeId}">\n${r.prompt_md}\n</skill_context>`;
+        });
+        return `\n\n## 적용된 스킬 (manifest)\n${blocks.join('\n\n')}`;
+    }
+
     async getActiveSkillBindings(agentId: string, userId?: string): Promise<ActiveSkillBinding[]> {
         let pool: Pool;
         try {
