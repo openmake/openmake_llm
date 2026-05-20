@@ -118,12 +118,14 @@ export const RL_MCP = {
  */
 export const RL_API_KEY_MGMT = {
     windowMs: WINDOW_15M,
-    ipLimit: Number(process.env.RL_API_KEY_MGMT_IP) || 20,
-    userLimit: Number(process.env.RL_API_KEY_MGMT_USER) || 30,
+    // settings/api-keys 페이지 진입 시 GET 다수 호출 + NAT 환경에서 IP 공유.
+    // 한도 5~20배 확대 (RL_MCP 와 동일 패턴). mutation 은 보수적 유지.
+    ipLimit: Number(process.env.RL_API_KEY_MGMT_IP) || 200,
+    userLimit: Number(process.env.RL_API_KEY_MGMT_USER) || 400,
     /** GET (count/list) 전용 — settings 페이지 진입마다 호출되므로 mutation 보다 훨씬 관대 */
-    readLimit: Number(process.env.RL_API_KEY_MGMT_READ) || 200,
-    createLimit: Number(process.env.RL_API_KEY_MGMT_CREATE) || 10,
-    deleteLimit: Number(process.env.RL_API_KEY_MGMT_DELETE) || 10,
+    readLimit: Number(process.env.RL_API_KEY_MGMT_READ) || 600,
+    createLimit: Number(process.env.RL_API_KEY_MGMT_CREATE) || 20,
+    deleteLimit: Number(process.env.RL_API_KEY_MGMT_DELETE) || 20,
 } as const;
 
 /**
