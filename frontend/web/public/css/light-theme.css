@@ -6,7 +6,7 @@
 /* 라이트 테마 사이드바 */
 [data-theme="light"] .sidebar,
 .theme-light .sidebar {
-    background: #fdfbf7 !important;
+    background: var(--bg-app) !important;
     border-right: 2px solid #1a1a1c;
 }
 
@@ -42,7 +42,7 @@
 /* 새 대화 버튼 - 라이트 테마 */
 [data-theme="light"] .sidebar-btn.new-chat,
 .theme-light .sidebar-btn.new-chat {
-    background: #ffffff;
+    background: var(--bg-card);
     border: 2px solid #1a1a1c;
     color: #1a1a1c;
     border-radius: 10px;
@@ -87,7 +87,7 @@
 
 [data-theme="light"] .history-item:hover,
 .theme-light .history-item:hover {
-    background: #ffffff;
+    background: var(--bg-card);
     border-color: #1a1a1c;
     color: #1a1a1c;
     box-shadow: 2px 2px 0 #1a1a1c;
@@ -113,7 +113,7 @@
 
 [data-theme="light"] .sidebar-nav-item:hover,
 .theme-light .sidebar-nav-item:hover {
-    background: #ffffff;
+    background: var(--bg-card);
     border-color: #1a1a1c;
     color: #1a1a1c;
     box-shadow: 2px 2px 0 #1a1a1c;
@@ -123,8 +123,8 @@
 /* 활성 메뉴 - 파란색 배경 */
 [data-theme="light"] .sidebar-nav-item.active,
 .theme-light .sidebar-nav-item.active {
-    background: #7c3aed !important;
-    color: #FFFFFF !important;
+    background: var(--accent-primary) !important;
+    color: var(--bg-card) !important;
     font-weight: 700;
     border: 2px solid #1a1a1c;
     box-shadow: 2px 2px 0 #1a1a1c;
@@ -132,7 +132,7 @@
 
 [data-theme="light"] .sidebar-nav-item.active .nav-icon,
 .theme-light .sidebar-nav-item.active .nav-icon {
-    color: #FFFFFF !important;
+    color: var(--bg-card) !important;
 }
 
 [data-theme="light"] .sidebar-nav-item .nav-icon,
@@ -152,12 +152,12 @@
     padding: 16px;
     border-top: 2px solid #1a1a1c;
     margin-top: auto;
-    background: #fdfbf7;
+    background: var(--bg-app);
 }
 
 [data-theme="light"] .sidebar-btn#loginBtn,
 .theme-light .sidebar-btn#loginBtn {
-    background: #FFFFFF;
+    background: var(--bg-card);
     border: 2px solid #1a1a1c;
     color: #1a1a1c;
     border-radius: 8px;
@@ -200,7 +200,7 @@
 [data-theme="light"] .theme-toggle:hover,
 .theme-light .sidebar-toggle:hover,
 .theme-light .theme-toggle:hover {
-    background: #ffffff;
+    background: var(--bg-card);
     border-color: #1a1a1c;
     color: #1a1a1c;
     box-shadow: 2px 2px 0 #1a1a1c;
@@ -212,7 +212,7 @@
    ======================================== */
 [data-theme="light"] .main-content,
 .theme-light .main-content {
-    background: #fdfbf7 !important;
+    background: var(--bg-app) !important;
 }
 
 [data-theme="light"] .welcome-screen,
@@ -238,7 +238,7 @@
    ======================================== */
 [data-theme="light"] .feature-card,
 .theme-light .feature-card {
-    background: #FFFFFF;
+    background: var(--bg-card);
     border: 2px solid #1a1a1c;
     box-shadow: 4px 4px 0 #1a1a1c;
     border-radius: 12px;
@@ -255,15 +255,15 @@
    ======================================== */
 [data-theme="light"] .chat-input-container,
 .theme-light .chat-input-container {
-    background: #FFFFFF;
+    background: var(--bg-card);
     border: 2px solid #1a1a1c;
     box-shadow: 4px 4px 0 #1a1a1c;
 }
 
 [data-theme="light"] .chat-input-container:focus-within,
 .theme-light .chat-input-container:focus-within {
-    border-color: #7c3aed;
-    box-shadow: 6px 6px 0 #7c3aed;
+    border-color: var(--accent-primary);
+    box-shadow: 6px 6px 0 var(--accent-primary);
     transform: translate(-2px, -2px);
 }
 
@@ -271,23 +271,23 @@
 [data-theme="light"] .chat-drop-overlay,
 .theme-light .chat-drop-overlay {
     background: rgba(124, 58, 237, 0.05);
-    border-color: #7c3aed;
+    border-color: var(--accent-primary);
 }
 
 [data-theme="light"] .chat-drag-active .chat-input-container,
 .theme-light .chat-drag-active .chat-input-container {
-    border-color: #7c3aed;
-    box-shadow: 6px 6px 0 #7c3aed;
+    border-color: var(--accent-primary);
+    box-shadow: 6px 6px 0 var(--accent-primary);
 }
 
 [data-theme="light"] .chat-drop-overlay-content,
 .theme-light .chat-drop-overlay-content {
-    color: #7c3aed;
+    color: var(--accent-primary);
 }
 
 [data-theme="light"] .chat-drop-overlay-content svg,
 .theme-light .chat-drop-overlay-content svg {
-    stroke: #7c3aed;
+    stroke: var(--accent-primary);
 }
 
 [data-theme="light"] .chat-drop-overlay-content p,
@@ -314,15 +314,15 @@
 /* 전송 버튼 - 파란색 -> 보라색 */
 [data-theme="light"] .send-btn,
 .theme-light .send-btn {
-    background: #7c3aed;
-    color: #FFFFFF;
+    background: var(--accent-primary);
+    color: var(--bg-card);
     border: 2px solid #1a1a1c;
     box-shadow: 2px 2px 0 #1a1a1c;
 }
 
 [data-theme="light"] .send-btn:hover,
 .theme-light .send-btn:hover {
-    background: #6d28d9;
+    background: var(--accent-primary-hover);
     transform: translate(-2px, -2px);
     box-shadow: 4px 4px 0 #1a1a1c;
 }
@@ -346,7 +346,7 @@
 
 [data-theme="light"] .action-btn:hover,
 .theme-light .action-btn:hover {
-    background: #ffffff;
+    background: var(--bg-card);
     border-color: #1a1a1c;
     color: #1a1a1c;
     box-shadow: 2px 2px 0 #1a1a1c;
@@ -355,9 +355,9 @@
 
 [data-theme="light"] .action-btn.active,
 .theme-light .action-btn.active {
-    color: #7c3aed;
+    color: var(--accent-primary);
     background: #f3e8ff;
-    border-color: #7c3aed;
+    border-color: var(--accent-primary);
     box-shadow: 2px 2px 0 #1a1a1c;
 }
 
@@ -372,7 +372,7 @@
 
 [data-theme="light"] .toggle-switch input:checked+.toggle-slider,
 .theme-light .toggle-switch input:checked+.toggle-slider {
-    background-color: #7c3aed !important;
+    background-color: var(--accent-primary) !important;
 }
 
 /* ========================================
@@ -380,7 +380,7 @@
    ======================================== */
 [data-theme="light"] .modal-content,
 .theme-light .modal-content {
-    background: #FFFFFF;
+    background: var(--bg-card);
     border: 2px solid #1a1a1c;
     box-shadow: 8px 8px 0 #1a1a1c;
 }
@@ -400,7 +400,7 @@
    ======================================== */
 [data-theme="light"] .btn,
 .theme-light .btn {
-    background: #FFFFFF;
+    background: var(--bg-card);
     border: 2px solid #1a1a1c;
     color: #1a1a1c;
     font-weight: 700;
@@ -418,14 +418,14 @@
 [data-theme="light"] .btn-primary,
 .theme-light .btn.active,
 .theme-light .btn-primary {
-    background: #7c3aed;
+    background: var(--accent-primary);
     border-color: #1a1a1c;
-    color: #FFFFFF;
+    color: var(--bg-card);
 }
 
 [data-theme="light"] .btn-primary:hover,
 .theme-light .btn-primary:hover {
-    background: #6d28d9;
+    background: var(--accent-primary-hover);
 }
 
 /* ========================================
@@ -460,7 +460,7 @@
 
 [data-theme="light"] ::-webkit-scrollbar-thumb:hover,
 .theme-light ::-webkit-scrollbar-thumb:hover {
-    background: #7c3aed;
+    background: var(--accent-primary);
 }
 
 /* ========================================
@@ -468,15 +468,15 @@
    ======================================== */
 [data-theme="light"] .chat-message.user .message-content,
 .theme-light .chat-message.user .message-content {
-    background: #7c3aed;
-    color: #FFFFFF;
+    background: var(--accent-primary);
+    color: var(--bg-card);
     border: 2px solid #1a1a1c;
     box-shadow: 4px 4px 0 #1a1a1c;
 }
 
 [data-theme="light"] .chat-message.assistant .message-content,
 .theme-light .chat-message.assistant .message-content {
-    background: #FFFFFF;
+    background: var(--bg-card);
     border: 2px solid #1a1a1c;
     color: #1a1a1c;
     box-shadow: 4px 4px 0 #1a1a1c;
