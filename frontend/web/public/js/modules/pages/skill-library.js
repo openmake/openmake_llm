@@ -93,6 +93,14 @@
                 </button>
             </div>
 
+            <!-- 리스트 컬럼 헤더 (skill-row 와 동일 구조로 정렬) -->
+            <div class="skill-row skill-row-header" role="row" aria-hidden="false">
+                <div class="skill-row-meta">카테고리</div>
+                <div class="skill-row-main">이름 · 설명</div>
+                <div class="skill-row-side">공개 / 등록일</div>
+                <div class="skill-row-actions">작업</div>
+            </div>
+
             <div id="localSkillsGrid" class="skill-grid">
                 <div class="sl-loading"><div class="sl-spinner"></div></div>
             </div>

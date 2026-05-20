@@ -139,33 +139,60 @@
     gap: 0.5rem;
 }
 
-/* Row — 한 행에 카테고리/이름·설명/메타/메뉴 가로 배치 */
+/* Row — 한 행에 카테고리/이름·설명/메타/메뉴 가로 배치 + 영역 사이 vertical divider */
 .skill-row {
     display: flex;
-    align-items: center;
-    gap: 1rem;
+    align-items: stretch;
+    gap: 0;
     background-color: var(--bg-card);
     border: 1px solid var(--border-color);
     border-radius: 0.5rem;
-    padding: 0.75rem 1rem;
+    padding: 0;
     transition: border-color 0.15s, background-color 0.15s;
+    overflow: hidden;
 }
 .skill-row:hover {
     border-color: var(--accent-primary);
     background-color: var(--bg-hover, rgba(255,255,255,0.02));
 }
-.skill-row-meta {
-    flex: 0 0 auto;
+/* 영역 공통: padding + 영역 사이 좌측 divider (첫 영역 제외) */
+.skill-row > * {
+    padding: 0.75rem 1rem;
     display: flex;
     align-items: center;
-    gap: 0.4rem;
-    min-width: 110px;
 }
+.skill-row > * + * {
+    border-left: 1px solid var(--border-color);
+}
+
+/* 리스트 컬럼 헤더 — 데이터 행과 같은 grid 구조 유지 */
+.skill-row-header {
+    background-color: var(--bg-secondary);
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    font-weight: var(--font-weight-semibold, 600);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 0.5rem;
+    cursor: default;
+}
+.skill-row-header:hover {
+    border-color: var(--border-color);
+    background-color: var(--bg-secondary);
+}
+.skill-row-meta {
+    flex: 0 0 180px;
+    align-items: center;
+    gap: 0.4rem;
+}
+.skill-row-meta .sl-badge { margin-left: 0; }
 .skill-row-main {
     flex: 1 1 auto;
     min-width: 0;
     display: flex;
     flex-direction: column;
+    align-items: stretch;
+    justify-content: center;
     gap: 0.15rem;
 }
 .skill-row-title {
@@ -187,8 +214,7 @@
     white-space: nowrap;
 }
 .skill-row-side {
-    flex: 0 0 auto;
-    display: flex;
+    flex: 0 0 180px;
     align-items: center;
     gap: 0.6rem;
 }
@@ -198,7 +224,8 @@
     white-space: nowrap;
 }
 .skill-row-actions {
-    flex: 0 0 auto;
+    flex: 0 0 70px;
+    justify-content: center;
 }
 /* mobile: stack columns */
 @media (max-width: 720px) {
