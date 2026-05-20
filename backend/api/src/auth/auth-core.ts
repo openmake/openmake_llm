@@ -73,10 +73,17 @@ export function generateToken(user: PublicUser): string {
     // jti(JWT ID)를 추가하여 토큰 단위 블랙리스트 지원
     const jti = crypto.randomBytes(16).toString('hex');
 
-    return jwt.sign(payload, JWT_SECRET, {
+    const token = jwt.sign(payload, JWT_SECRET, {
         expiresIn: AUTH_CONFIG.TOKEN_EXPIRY,
         jwtid: jti
     });
+
+    // Phase 7 lifecycle hook — per_session MCP 서버 자동 spawn.
+    // fire-and-forget (await 안 함) — 토큰 발급 응답을 막지 않음.
+    // supervisor 미초기화 시 silent skip (graceful).
+    void import('../mcp/lifecycle-hooks').then(m => m.emitUserLogin(user.id)).catch(() => { /* noop */ });
+
+    return token;
 }
 
 /**
