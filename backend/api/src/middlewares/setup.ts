@@ -317,10 +317,6 @@ export function setupStaticFiles(app: Application, dirname: string): void {
         const cleanMatch = req.path.match(/^\/([a-z0-9-]+)$/);
         const match = htmlMatch || cleanMatch;
         if (match && SPA_PAGES.has(match[1])) {
-            if (match[1] === 'external' && htmlMatch) {
-                return next();
-            }
-
             const indexPath = getIndexPath();
             if (indexPath) {
                 res.setHeader('Content-Type', 'text/html; charset=utf-8');
@@ -330,11 +326,9 @@ export function setupStaticFiles(app: Application, dirname: string): void {
         next();
     });
 
-    app.get('/external.html', (req: Request, res: Response) => {
-        const queryIndex = req.originalUrl.indexOf('?');
-        const query = queryIndex >= 0 ? req.originalUrl.slice(queryIndex) : '';
-        res.redirect(302, `/external.html${query}`);
-    });
+    // external.html: settings 의 integrations 탭에서 navigate 되는 외부 서비스 연동 페이지.
+    // SPA_PAGES 에 포함되어 위 fallback 으로 index.html 응답 → spa-router 가
+    // pages/external.js 동적 import. (별도 handler 였던 무한 redirect 루프 제거)
 
     // COOP 활성 여부 — HTTP/비-localhost origin (예: rasplay.tplinkdns.com:52416) 에서는
     // 브라우저가 헤더를 무시하면서 경고 로그를 매 요청마다 출력함 ("URL's origin was untrustworthy").
