@@ -14,8 +14,12 @@
 <body>
     <div id="app-root">
         <aside id="sidebar" role="complementary" aria-label="Sidebar"></aside>
-        <main class="page-content" id="mainContent" role="main"></main>
+        <main class="main-content" id="mainContent" role="main">
+            <div id="chat-area" style="display: none;"></div>
+            <div id="page-content"></div>
+        </main>
     </div>
+    <script type="module" src="/js/modules/api-endpoints.js?v=16"></script>
     <script type="module" src="/js/main.js?v=34"></script>
 </body>
 </html>
