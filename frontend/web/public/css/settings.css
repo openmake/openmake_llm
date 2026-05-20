@@ -587,3 +587,41 @@
         grid-template-columns: 1fr;
     }
 }
+
+/* Phase R1: claude.ai-style settings 탭 nav — 5개 분산 페이지 통합 진입점 */
+.settings-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    margin: 0 0 var(--space-5);
+    padding: var(--space-2);
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+}
+.settings-tab {
+    flex: 1;
+    min-width: 120px;
+    padding: var(--space-3) var(--space-4);
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-md);
+    color: var(--text-secondary);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+    cursor: pointer;
+    transition: background .15s, color .15s;
+    text-align: center;
+}
+.settings-tab:hover {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+}
+.settings-tab.active {
+    background: var(--accent-primary);
+    color: #fff;
+    font-weight: var(--font-weight-semibold);
+}
+@media (max-width: 640px) {
+    .settings-tab { flex-basis: calc(50% - var(--space-2)); }
+}

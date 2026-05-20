@@ -25,6 +25,15 @@
         '<p>\uC571 \uD658\uACBD \uBC0F AI \uBAA8\uB378 \uC124\uC815</p>' +
         '</div>' +
 
+        // Phase R1: claude.ai-style \uC88C\uCE21 \uD0ED \uC2DC\uC2A4\uD15C \u2014 5\uAC1C \uBD84\uC0B0 \uD398\uC774\uC9C0 \uD1B5\uD569 \uC9C4\uC785\uC810
+        '<nav class="settings-tabs" role="tablist" aria-label="Settings sections">' +
+        '<button class="settings-tab active" data-settings-tab="preferences" role="tab" aria-selected="true">\u2699\uFE0F \uD658\uACBD\uC124\uC815</button>' +
+        '<button class="settings-tab" data-settings-tab="account" data-navigate="/password-change.html" role="tab">\uD83D\uDC64 \uACC4\uC815</button>' +
+        '<button class="settings-tab" data-settings-tab="api-keys" data-navigate="/api-keys.html" role="tab">\uD83D\uDD11 API \uD0A4</button>' +
+        '<button class="settings-tab" data-settings-tab="usage" data-navigate="/usage.html" role="tab">\uD83D\uDCC8 \uC0AC\uC6A9\uB7C9</button>' +
+        '<button class="settings-tab" data-settings-tab="integrations" data-navigate="/external.html" role="tab">\uD83D\uDD17 \uC678\uBD80\uC5F0\uB3D9</button>' +
+        '</nav>' +
+
         '<div class="s-card">' +
         '<div class="s-card-header">' +
         '<span class="s-card-icon">\uD83C\uDFA8</span>' +
@@ -278,6 +287,22 @@
                         if (statusEl) { statusEl.textContent = '● 연결 실패'; statusEl.style.color = 'var(--danger)'; }
                     }
                 }
+
+                // Phase R1: settings 탭 클릭 핸들러 — claude.ai-style nav 통합
+                (function initSettingsTabs() {
+                    document.querySelectorAll('.settings-tab[data-navigate]').forEach(function (btn) {
+                        btn.addEventListener('click', function (ev) {
+                            ev.preventDefault();
+                            var target = btn.getAttribute('data-navigate');
+                            if (!target) return;
+                            if (window.Router && typeof window.Router.navigate === 'function') {
+                                window.Router.navigate(target);
+                            } else {
+                                window.location.href = target;
+                            }
+                        });
+                    });
+                })();
 
                 async function initSettings() {
                     // Mount unified ModelSelector — single entry point for model selection + key registration.

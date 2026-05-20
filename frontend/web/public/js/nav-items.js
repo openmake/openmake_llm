@@ -35,21 +35,20 @@ const NAV_ITEMS = {
         { href: '/custom-agents.html', icon: '🤖', iconify: 'lucide:bot', label: '커스텀 에이전트', requireAuth: true, minTier: 'pro' },
         { href: '/skill-library.html', icon: '📦', iconify: 'lucide:package', label: '스킬 라이브러리', requireAuth: true, minTier: 'pro', cssFiles: ['/css/skill-library.css'] },
         { href: '/mcp-servers.html', icon: '🔌', iconify: 'lucide:plug', label: 'MCP 서버', requireAuth: true },
-        { href: '/usage.html', icon: '📈', iconify: 'lucide:bar-chart-2', label: 'API 사용량', requireAuth: true },
+        // /usage.html, /api-keys.html: Phase R1 (2026-05-21) — settings 탭으로 통합
         { href: '/agent-learning.html', icon: '🎓', iconify: 'lucide:graduation-cap', label: '에이전트 학습', requireAuth: true, minTier: 'pro' },
-        { href: '/api-keys.html', icon: '🔐', iconify: 'lucide:key', label: 'API 키 관리', requireAuth: true, minTier: 'pro' },
         { href: '/cluster.html', icon: '🖥️', iconify: 'lucide:monitor', label: '클러스터', requireAuth: true, minTier: 'enterprise' }
     ],
     admin: [
         { href: '/admin.html', icon: '👥', iconify: 'lucide:users', label: '사용자 관리', requireAuth: true, requireAdmin: true },
         { href: '/admin-metrics.html', icon: '📊', iconify: 'lucide:bar-chart-3', label: '통합 모니터링', requireAuth: true, requireAdmin: true },
         { href: '/audit.html', icon: '📋', iconify: 'lucide:clipboard-list', label: '감사 로그', requireAuth: true, minTier: 'enterprise' },
-        { href: '/external.html', icon: '🔗', iconify: 'lucide:link', label: '외부 연동', requireAuth: true, minTier: 'pro' },
+        // /external.html: Phase R1 (2026-05-21) — settings 탭으로 통합
         { href: '/analytics.html', icon: '📊', iconify: 'lucide:pie-chart', label: '분석 대시보드', requireAuth: true, minTier: 'enterprise' },
         { href: '/alerts.html', icon: '🔔', iconify: 'lucide:bell', label: '알림 관리', requireAuth: true, minTier: 'enterprise' },
-        { href: '/password-change.html', icon: '🔑', iconify: 'lucide:key-round', label: '비밀번호 변경', requireAuth: true },
+        // /password-change.html: Phase R1 (2026-05-21) — settings 탭으로 통합
         { href: '/token-monitoring.html', icon: '🗝️', iconify: 'lucide:key-square', label: 'API 토큰 모니터링', requireAuth: true, requireAdmin: true },
-        { href: '/settings.html', icon: '⚙️', iconify: 'lucide:settings', label: '설정', cssFiles: ['/css/settings.css?v=3'] }
+        { href: '/settings.html', icon: '⚙️', iconify: 'lucide:settings', label: '설정', cssFiles: ['/css/settings.css?v=4'] }
     ]
 };
 
