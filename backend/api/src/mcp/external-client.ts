@@ -90,9 +90,16 @@ type TransportInstance = StdioClientTransport | StreamableHTTPClientTransport | 
  * 도구 검색/실행/상태 모니터링 기능을 제공합니다.
  * MCPServerRegistry에 의해 생명주기가 관리됩니다.
  *
+ * EventEmitter 상속:
+ *   - 'exit' : transport 가 종료되거나 child process 가 죽으면 emit
+ *   - 'error': transport 에러
+ * Phase 7 LifecycleSupervisor 가 listen 해서 crash detection 수행.
+ *
  * @class ExternalMCPClient
  */
-export class ExternalMCPClient {
+import { EventEmitter } from 'events';
+
+export class ExternalMCPClient extends EventEmitter {
     /** SDK 클라이언트 인스턴스 */
     private client: Client | null = null;
     /** Transport 인스턴스 (stdio/SSE/HTTP) */
@@ -114,6 +121,7 @@ export class ExternalMCPClient {
      * @param config - 외부 MCP 서버 연결 설정
      */
     constructor(config: MCPServerConfig) {
+        super();
         this.config = config;
     }
 
