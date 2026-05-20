@@ -22,7 +22,14 @@
  */
 'use strict';
 
-import { escapeHTML } from '../sanitize.js';
+// sanitize.js 는 ES export 없음 — window.escapeHTML 전역으로 노출됨.
+// 본 모듈은 window.escapeHTML 또는 fallback inline escape 사용.
+const escapeHTML = (str) => {
+    if (typeof window.escapeHTML === 'function') return window.escapeHTML(str);
+    const d = document.createElement('div');
+    d.textContent = str == null ? '' : String(str);
+    return d.innerHTML;
+};
 
 window.PageModules = window.PageModules || {};
 
