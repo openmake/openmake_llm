@@ -132,14 +132,88 @@
 .sl-btn-outline:hover { color: var(--text-primary, #fff); border-color: var(--text-secondary, #94a3b8); }
 .sl-btn-sm { padding: 0.35rem 0.75rem; font-size: 0.8rem; }
 
-/* Grids */
+/* List (가로 row 기반 — 카드 그리드에서 전환 2026-05-21) */
 .skill-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
 }
 
-/* Cards */
+/* Row — 한 행에 카테고리/이름·설명/메타/메뉴 가로 배치 */
+.skill-row {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 0.5rem;
+    padding: 0.75rem 1rem;
+    transition: border-color 0.15s, background-color 0.15s;
+}
+.skill-row:hover {
+    border-color: var(--accent-primary);
+    background-color: var(--bg-hover, rgba(255,255,255,0.02));
+}
+.skill-row-meta {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    min-width: 110px;
+}
+.skill-row-main {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+}
+.skill-row-title {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.skill-row-desc {
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+    line-height: 1.4;
+    margin: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.skill-row-side {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+}
+.skill-row-date {
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    white-space: nowrap;
+}
+.skill-row-actions {
+    flex: 0 0 auto;
+}
+/* mobile: stack columns */
+@media (max-width: 720px) {
+    .skill-row {
+        flex-wrap: wrap;
+        align-items: flex-start;
+    }
+    .skill-row-main { width: 100%; order: 2; }
+    .skill-row-meta { order: 1; }
+    .skill-row-side { order: 3; }
+    .skill-row-actions { order: 4; margin-left: auto; }
+    .skill-row-desc { white-space: normal; }
+}
+
+/* Legacy card classes (다른 곳 호환) */
 .skill-card {
     background-color: var(--bg-card, #1e293b);
     border: 1px solid var(--border-color, #334155);

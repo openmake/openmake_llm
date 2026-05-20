@@ -415,36 +415,40 @@
                 const toggleLabel = isUserAssigned ? '👤 나만 적용 해제' : '👤 나만 적용';
                 const isSystemSkill = !skill.createdBy;
                 const systemBadge = isSystemSkill ? '<span class="sl-badge" style="background:rgba(59,130,246,0.12);color:var(--info-color,#3b82f6);border-color:rgba(59,130,246,0.25);margin-left:0.4rem" title="시스템 스킬">🔒 시스템</span>' : '';
+                const visibilityBadge = skill.isPublic
+                    ? '<span class="sl-badge sl-badge-success">Public</span>'
+                    : '<span class="sl-badge sl-badge-secondary"><span class="iconify" data-icon="lucide:lock" style="font-size:10px;vertical-align:middle"></span> Private</span>';
                 return `
-                <div class="skill-card">
-                    <div class="skill-card-top">
-                        <span class="skill-card-badge">${esc(categoryLabel(skill.category))}${userBadge}${systemBadge}</span>
-                        <div class="skill-card-menu">
-                            <button class="skill-card-menu-btn" data-action="toggle-menu" title="더 보기">⋯</button>
-                            <div class="skill-card-dropdown">
-                                <a href="#" data-action="toggle-user" data-skill-id="${esc(skill.id)}" data-assigned="${isUserAssigned}">
-                                    <span class="iconify" data-icon="lucide:user"></span> ${toggleLabel}
-                                </a>
-                                <a href="#" data-action="edit" data-skill-id="${esc(skill.id)}">
-                                    <span class="iconify" data-icon="lucide:edit-2"></span> 수정
-                                </a>
-                                <a href="#" data-action="export" data-skill-id="${esc(skill.id)}">
-                                    <span class="iconify" data-icon="lucide:download"></span> 다운로드 (.SKILL)
-                                </a>
-                                <hr>
-                                <a href="#" class="danger" data-action="delete" data-skill-id="${esc(skill.id)}">
-                                    <span class="iconify" data-icon="lucide:trash-2"></span> 삭제
-                                </a>
-                            </div>
-                        </div>
+                <div class="skill-row">
+                    <div class="skill-row-meta">
+                        <span class="skill-card-badge">${esc(categoryLabel(skill.category))}</span>
+                        ${userBadge}${systemBadge}
                     </div>
-                    <h3 class="skill-card-title" title="${esc(skill.name)}">${esc(skill.name)}</h3>
-                    <p class="skill-card-desc" title="${esc(skill.description || '')}">${esc(skill.description || '설명이 없습니다.')}</p>
-                    <div class="skill-card-footer">
-                        <small>${new Date(skill.createdAt).toLocaleDateString()}</small>
-                        ${skill.isPublic
-                            ? '<span class="sl-badge sl-badge-success">Public</span>'
-                            : '<span class="sl-badge sl-badge-secondary"><span class="iconify" data-icon="lucide:lock" style="font-size:10px;vertical-align:middle"></span> Private</span>'}
+                    <div class="skill-row-main">
+                        <h3 class="skill-row-title" title="${esc(skill.name)}">${esc(skill.name)}</h3>
+                        <p class="skill-row-desc" title="${esc(skill.description || '')}">${esc(skill.description || '설명이 없습니다.')}</p>
+                    </div>
+                    <div class="skill-row-side">
+                        ${visibilityBadge}
+                        <small class="skill-row-date">${new Date(skill.createdAt).toLocaleDateString()}</small>
+                    </div>
+                    <div class="skill-row-actions skill-card-menu">
+                        <button class="skill-card-menu-btn" data-action="toggle-menu" title="더 보기">⋯</button>
+                        <div class="skill-card-dropdown">
+                            <a href="#" data-action="toggle-user" data-skill-id="${esc(skill.id)}" data-assigned="${isUserAssigned}">
+                                <span class="iconify" data-icon="lucide:user"></span> ${toggleLabel}
+                            </a>
+                            <a href="#" data-action="edit" data-skill-id="${esc(skill.id)}">
+                                <span class="iconify" data-icon="lucide:edit-2"></span> 수정
+                            </a>
+                            <a href="#" data-action="export" data-skill-id="${esc(skill.id)}">
+                                <span class="iconify" data-icon="lucide:download"></span> 다운로드 (.SKILL)
+                            </a>
+                            <hr>
+                            <a href="#" class="danger" data-action="delete" data-skill-id="${esc(skill.id)}">
+                                <span class="iconify" data-icon="lucide:trash-2"></span> 삭제
+                            </a>
+                        </div>
                     </div>
                 </div>`;
             }).join('');
