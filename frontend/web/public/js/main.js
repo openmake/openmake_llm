@@ -98,12 +98,9 @@ import {
     showAgentBadge, selectModel, loadModelInfo, formatSize
 } from './modules/cluster.js';
 
-// 1-12. 문서 (state 의존)
-import {
-    updateActiveDocumentUI, clearActiveDocument,
-    askDocumentQuestion, formatSummaryResponse,
-    showDocumentProgress
-} from './modules/document.js';
+// 1-12. 문서 모듈: 2026-05-19 RAG/문서 처리 제거 시 폐기됨 — import 제거
+//   - updateActiveDocumentUI, clearActiveDocument, askDocumentQuestion,
+//     formatSummaryResponse, showDocumentProgress 모두 미사용
 
 // 1-13. 에러 핸들러 / 기능 카드 (state 의존)
 import {
@@ -624,12 +621,7 @@ window.selectModel = selectModel;
 window.loadModelInfo = loadModelInfo;
 window.formatSize = formatSize;
 
-// 문서
-window.updateActiveDocumentUI = updateActiveDocumentUI;
-window.clearActiveDocument = clearActiveDocument;
-window.askDocumentQuestion = askDocumentQuestion;
-window.formatSummaryResponse = formatSummaryResponse;
-window.showDocumentProgress = showDocumentProgress;
+// 문서 모듈 window 등록: 2026-05-19 폐기 — 모두 제거
 
 // 에러 핸들러 / 기능 카드
 window.startFeatureChat = startFeatureChat;
