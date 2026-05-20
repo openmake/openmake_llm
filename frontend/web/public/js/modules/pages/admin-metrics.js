@@ -155,34 +155,43 @@
 
                         const container = document.getElementById('quotaSection');
 
-                        // 시간, 주간, 일간 (순서대로)
+                        // backend 응답 형식: { hourly, weekly } — daily 는 없음
+                        // percentage 는 백엔드에 없으므로 used/limit 으로 계산
                         const items = [
                             { label: '시간당', data: data.hourly },
-                            { label: '일간 (추정)', data: data.daily },
                             { label: '주간', data: data.weekly }
-                        ];
+                        ].filter(it => it.data && typeof it.data.used === 'number');
 
-                        container.innerHTML = items.map(item => `
+                        container.innerHTML = items.map(item => {
+                            const used = item.data.used;
+                            const limit = item.data.limit || 0;
+                            const pct = limit > 0 ? Math.round((used / limit) * 100) : 0;
+                            return `
                     <div>
                         <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
-                            <span class="text-sm font-medium">${esc(item.label)} (${esc(item.data.used)}/${esc(item.data.limit)})</span>
-                            <span class="text-sm font-bold">${esc(item.data.percentage)}%</span>
+                            <span class="text-sm font-medium">${esc(item.label)} (${esc(used)}/${esc(limit)})</span>
+                            <span class="text-sm font-bold">${pct}%</span>
                         </div>
                         <div class="progress-bar">
-                            <div class="progress-fill ${getProgressClass(item.data.percentage)}"
-                                 data-width="${Math.min(item.data.percentage, 100)}"></div>
+                            <div class="progress-fill ${getProgressClass(pct)}"
+                                 data-width="${Math.min(pct, 100)}"></div>
                         </div>
                     </div>
-                `).join('');
+                `;
+                        }).join('');
                         container.querySelectorAll('.progress-fill[data-width]').forEach(node => {
                             node.style.width = node.dataset.width + '%';
                         });
 
-                        // 경고 배지
+                        // 경고 배지 — 백엔드에 warningLevel 이 없으므로 hourly 사용률로 계산
                         const badge = document.getElementById('quotaWarningBadge');
                         if (badge) {
-                            badge.className = `badge ${data.warningLevel === 'safe' ? 'badge-success' : data.warningLevel === 'warning' ? 'badge-warning' : 'badge-danger'}`;
-                            badge.textContent = data.warningLevel === 'safe' ? '정상' : (data.warningLevel === 'warning' ? '주의' : '위험');
+                            const hUsed = data.hourly?.used || 0;
+                            const hLimit = data.hourly?.limit || 0;
+                            const hPct = hLimit > 0 ? (hUsed / hLimit) * 100 : 0;
+                            const level = hPct >= 90 ? 'danger' : hPct >= 70 ? 'warning' : 'safe';
+                            badge.className = `badge ${level === 'safe' ? 'badge-success' : level === 'warning' ? 'badge-warning' : 'badge-danger'}`;
+                            badge.textContent = level === 'safe' ? '정상' : (level === 'warning' ? '주의' : '위험');
                         }
 
                     } catch (e) { console.error(e); }
