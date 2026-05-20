@@ -76,11 +76,11 @@ export const OAUTH_NONCE_POLICY = {
 export const PERMISSIONS_POLICY = {
     DIRECTIVES: {
         // 센서·입력 장치
+        // 'ambient-light-sensor' / 'battery' 제거: Chrome 등 모던 브라우저가
+        // Permissions-Policy 표준에서 제거 → "Unrecognized feature" 경고 회피
         'accelerometer': '()',
-        'ambient-light-sensor': '()',
         'gyroscope': '()',
         'magnetometer': '()',
-        'battery': '()',
         'gamepad': '()',
         // 미디어 캡처
         'camera': '()',
@@ -105,7 +105,8 @@ export const PERMISSIONS_POLICY = {
         'fullscreen': '()',
         'picture-in-picture': '()',
         // 기타
-        'document-domain': '()',
+        // 'document-domain' 제거: Chrome 109+ 에서 Permissions-Policy 표준 제외
+        // → "Unrecognized feature" 경고 회피
         'sync-xhr': '()',
         'web-share': '()',
         'xr-spatial-tracking': '()',

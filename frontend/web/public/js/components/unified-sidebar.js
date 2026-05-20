@@ -193,11 +193,7 @@ UnifiedSidebar.prototype._renderHTML = function () {
         ICONS.plus +
         '<span class="us-label">\uC0C8 \uB300\uD654</span>' +
         '</button>' +
-        // Documents Link
-        '<a class="us-doc-link" href="/documents.html">' +
-        ICONS.fileSearch +
-        '<span class="us-label">\uBB38\uC11C \uAD00\uB9AC</span>' +
-        '</a>' +
+        // \uBB38\uC11C \uAD00\uB9AC \uB9C1\uD06C: 2026-05-19 RAG/\uBB38\uC11C \uCC98\uB9AC \uC81C\uAC70 \uC2DC \uD3D0\uAE30
 
         // Search
         '<div class="us-search">' +
@@ -267,21 +263,7 @@ UnifiedSidebar.prototype._bindEvents = function () {
         });
     }
 
-    // 문서 관리 링크
-    var docLink = this.el.querySelector('.us-doc-link');
-    if (docLink) {
-        docLink.addEventListener('click', function (e) {
-            e.preventDefault();
-            if (window.Router) {
-                window.Router.navigate('/documents.html');
-            } else {
-                window.location.href = '/documents.html';
-            }
-            if (isMobile()) {
-                self.setState(STATES.HIDDEN);
-            }
-        });
-    }
+    // 문서 관리 링크: 2026-05-19 폐기 — 핸들러 제거
 
     // 검색
     var searchInput = this.el.querySelector('.us-search-input');
