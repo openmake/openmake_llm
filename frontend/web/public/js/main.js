@@ -124,7 +124,7 @@ import { NAV_ITEMS } from './nav-items.js?v=4';
 import { Router, SafeStorage } from './spa-router.js?v=16';
 
 // 1-17. 컴포넌트 (사이드바, 관리자 패널)
-import { UnifiedSidebar } from './components/unified-sidebar.js?v=5';
+import { UnifiedSidebar } from './components/unified-sidebar.js?v=6';
 import { AdminPanel } from './components/admin-panel.js';
 
 // 1-18. 모바일 FAB 메뉴

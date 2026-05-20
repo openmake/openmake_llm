@@ -672,11 +672,12 @@ UnifiedSidebar.prototype._renderPageNav = function () {
     var TIER_LEVEL = { free: 0, starter: 1, standard: 2, pro: 3, enterprise: 4 };
     var rawUser = null;
     try {
+        // STORAGE_KEY_USER = 'user' (constants.js:16) — 'openmake_user' 아님
         var SS = window.SafeStorage;
-        rawUser = SS ? JSON.parse(SS.getItem('openmake_user') || 'null') : null;
+        rawUser = SS ? JSON.parse(SS.getItem('user') || 'null') : null;
     } catch (_e) { rawUser = null; }
     var isLoggedIn = !!rawUser;
-    var isAdmin = isLoggedIn && rawUser && rawUser.role === 'admin';
+    var isAdmin = isLoggedIn && rawUser && (rawUser.role === 'admin' || rawUser.role === 'administrator');
     var userTier = (isLoggedIn && rawUser && rawUser.tier) || 'free';
     var userTierLevel = TIER_LEVEL[userTier] != null ? TIER_LEVEL[userTier] : 0;
 
