@@ -21,10 +21,16 @@
  */
 
 import { Router, Request, Response } from 'express';
+import multer from 'multer';
 import { createLogger } from '../utils/logger';
 import { success, notFound, unauthorized } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
 import { getSkillManager } from '../agents/skill-manager';
+import { parseSkillFile, validateManifest } from '../agents/manifest-validator';
+import { ManifestImporter } from '../agents/manifest-importer';
+import { getUnifiedDatabase } from '../data/models/unified-database';
+import { getUnifiedMCPClient } from '../mcp/unified-client';
+import type { UserTier } from '../data/user-manager';
 import { requireAuth } from '../auth';
 import { assertResourceOwnerOrAdmin } from '../auth/ownership';
 import { validate, validateQuery } from '../middlewares/validation';
@@ -37,6 +43,20 @@ import { assignSkillSchema } from '../schemas/agents.schema';
 
 const logger = createLogger('SkillsRoutes');
 const router = Router();
+
+// .SKILL 업로드 multer (memoryStorage, 256KB 제한, P5-D7)
+const skillUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 256 * 1024 },
+    fileFilter: (_req, file, cb) => {
+        const lower = file.originalname.toLowerCase();
+        if (lower.endsWith('.skill') || lower.endsWith('.md')) {
+            cb(null, true);
+        } else {
+            cb(new Error('.SKILL 또는 .md 파일만 허용됩니다'));
+        }
+    },
+});
 
 // ================================================
 // 스킬 카테고리
@@ -100,6 +120,75 @@ router.post('/', requireAuth, validate(createSkillSchema), asyncHandler(async (r
     });
 
     res.status(201).json(success(skill));
+}));
+
+/**
+ * POST /api/agents/skills/upload
+ * .SKILL 매니페스트 업로드 (multipart/form-data)
+ *   - YAML frontmatter + Markdown body
+ *   - Zod 검증 + 도구 존재 검증 + sha256 checksum
+ *   - 트랜잭션으로 skill_manifests + skill_tool_bindings + skill_mcp_bundles 저장
+ *   - 중복 (id, version) 시 checksum 비교: 동일하면 멱등, 다르면 에러
+ *
+ * 참조: docs/superpowers/plans/2026-05-20-phase5-skill-upload.md §6
+ */
+router.post('/upload', requireAuth, skillUpload.single('file'), asyncHandler(async (req: Request, res: Response) => {
+    const file = req.file;
+    if (!file) {
+        res.status(400).json({ error: 'file 필드가 필요합니다 (multipart/form-data)' });
+        return;
+    }
+
+    const userId = (req.user && 'userId' in req.user ? (req.user as { userId: string }).userId : req.user?.id?.toString());
+    if (!userId) {
+        res.status(401).json(unauthorized('인증 필요'));
+        return;
+    }
+    const isAdmin = req.user?.role === 'admin';
+
+    const content = file.buffer.toString('utf-8');
+    let parsed;
+    try {
+        parsed = parseSkillFile(content);
+    } catch (e) {
+        res.status(400).json({ error: e instanceof Error ? e.message : String(e) });
+        return;
+    }
+
+    const toolRouter = getUnifiedMCPClient().getToolRouter();
+    const userTier: UserTier = ((req.user && 'tier' in req.user ? (req.user as { tier?: UserTier }).tier : 'free') ?? 'free') as UserTier;
+    const availableTools = toolRouter.getLLMTools(userTier).map((t: { function: { name: string } }) => t.function.name);
+    const availableToolNames = new Set<string>(availableTools);
+
+    const validation = await validateManifest(parsed, { availableToolNames });
+    if (!validation.ok) {
+        res.status(400).json({ error: 'manifest 검증 실패', details: validation.errors });
+        return;
+    }
+
+    try {
+        const importer = new ManifestImporter(getUnifiedDatabase().getPool());
+        const result = await importer.import({
+            manifest: validation.manifest,
+            prompt_md: validation.prompt_md,
+            raw_yaml: validation.raw_yaml,
+            checksum: validation.checksum,
+            createdBy: userId,
+            isAdmin,
+        });
+        logger.info(`skill upload: ${result.skill_id} v${result.version} (inserted=${result.inserted}, dup=${result.duplicate_checksum}, user=${userId})`);
+        res.status(result.inserted ? 201 : 200).json(success({
+            skill_id: result.skill_id,
+            version: result.version,
+            inserted: result.inserted,
+            duplicate_checksum: result.duplicate_checksum,
+            bindings_count: validation.manifest.tool_bindings.length,
+            bundles_count: validation.manifest.mcp_bundles.length,
+        }));
+    } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        res.status(500).json({ error: msg });
+    }
 }));
 
 // ================================================
