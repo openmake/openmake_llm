@@ -7,8 +7,17 @@
  * 인증 상태에 따라 항목을 필터링합니다.
  * (UnifiedSidebar가 주 사이드바이며, 이 컴포넌트는 레거시 호환용)
  *
+ * Phase R4 (2026-05-21): NAV_ITEMS 를 직접 import 하여 어느 페이지에서나
+ * 최신 nav 항목 일관성 보장. 이전엔 window.NAV_ITEMS 가 fallback 으로 빈
+ * standalone 페이지 (password-change/research/external/settings) 에서 옛
+ * 하드코딩 nav 사용되던 문제 해소.
+ *
  * @module components/sidebar
  */
+
+// NAV_ITEMS 강제 로드 — sidebar 가 로드되는 모든 페이지에서 window.NAV_ITEMS 보장
+import { NAV_ITEMS as _NAV_ITEMS_FROM_MODULE } from '../nav-items.js?v=4';
+if (!window.NAV_ITEMS) window.NAV_ITEMS = _NAV_ITEMS_FROM_MODULE;
 
 /**
  * 레거시 공유 사이드바 클래스
