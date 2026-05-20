@@ -186,11 +186,11 @@ UnifiedSidebar.prototype._renderHTML = function () {
         '<button class="us-toggle-btn" title="\uC0AC\uC774\uB4DC\uBC14 \uD1A0\uAE00" aria-label="Toggle sidebar">' + ICONS.sidebar + '</button>' +
         '<button class="us-theme-btn" title="\uD14C\uB9C8 \uBCC0\uACBD" aria-label="Toggle theme">' + ICONS.sun + ICONS.moon + '</button>' +
         '</div>' +
-        // Logo
-        '<div class="us-logo">' +
+        // Logo (click → 채팅으로 이동, 세션 유지)
+        '<a href="/" class="us-logo" data-us-home>' +
         '<img src="/logo.png" alt="OpenMake.AI" />' +
         '<span class="us-brand-text">OpenMake.AI</span>' +
-        '</div>' +
+        '</a>' +
         // New Chat
         '<button class="us-new-chat">' +
         ICONS.plus +
@@ -250,6 +250,22 @@ UnifiedSidebar.prototype._bindEvents = function () {
     if (themeBtn) {
         themeBtn.addEventListener('click', function () {
             self._toggleTheme();
+        });
+    }
+
+    // Logo click — 채팅으로 이동 (세션 유지)
+    var logoLink = this.el.querySelector('a.us-logo[data-us-home]');
+    if (logoLink) {
+        logoLink.addEventListener('click', function (ev) {
+            ev.preventDefault();
+            if (window.Router && typeof window.Router.navigate === 'function') {
+                window.Router.navigate('/');
+            } else {
+                window.location.href = '/';
+            }
+            if (isMobile()) {
+                self.setState(STATES.HIDDEN);
+            }
         });
     }
 
