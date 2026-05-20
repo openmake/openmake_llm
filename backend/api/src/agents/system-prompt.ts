@@ -234,18 +234,28 @@ ${applyPromptPlaceholders(promptTemplate.workingOn, { phase: getPhaseLabel(selec
 
     let result = basePrompt;
 
-    // 1. DB 스킬 주입 시도 (최우선 - skill-seeder로 자동 등록된 전문 지침)
+    // 1. DB 스킬 주입 시도 (최우선)
+    //    1a. manifest 모델 (021 마이그레이션) 우선 — Anthropic Skills 동형
+    //    1b. legacy agent_skills fallback — manifest 미사용/미적용 환경 호환
     let hasDbSkills = false;
     const skillNames: string[] = [];
     try {
-        const skills = await getSkillManager().getSkillsForAgent(agent.id, userId, agent.category);
-        if (skills.length > 0) {
-            for (const s of skills) skillNames.push(s.name);
-            const skillPrompt = await getSkillManager().buildSkillPrompt(agent.id, userId, agent.category);
-            if (skillPrompt) {
-                result += skillPrompt;
-                hasDbSkills = true;
-                logger.info(`DB 스킬 주입됨: ${agent.name} (${agent.id}) [${skillNames.join(', ')}]`);
+        const manifestPrompt = await getSkillManager().buildManifestPrompt(agent.id, userId, agent.category);
+        if (manifestPrompt) {
+            result += manifestPrompt;
+            hasDbSkills = true;
+            logger.info(`Manifest 스킬 주입됨: ${agent.name} (${agent.id})`);
+        } else {
+            // legacy fallback
+            const skills = await getSkillManager().getSkillsForAgent(agent.id, userId, agent.category);
+            if (skills.length > 0) {
+                for (const s of skills) skillNames.push(s.name);
+                const skillPrompt = await getSkillManager().buildSkillPrompt(agent.id, userId, agent.category);
+                if (skillPrompt) {
+                    result += skillPrompt;
+                    hasDbSkills = true;
+                    logger.info(`DB 스킬 (legacy) 주입됨: ${agent.name} (${agent.id}) [${skillNames.join(', ')}]`);
+                }
             }
         }
     } catch (e) {

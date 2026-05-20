@@ -740,7 +740,8 @@ export class ChatRequestHandler {
                 }
             },
             {
-                tools: effectiveTools,
+                ...(effectiveTools && { tools: effectiveTools }),
+                ...(tool_choice !== undefined && { tool_choice }),
             }
         );
 

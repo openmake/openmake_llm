@@ -1,0 +1,15 @@
+[Unit]
+Description=OpenMake vLLM Qwen2.5-7B Instance
+After=network.target
+
+[Service]
+Type=simple
+User=openmake
+EnvironmentFile=/etc/openmake/litellm.env
+WorkingDirectory=/opt/openmake_llm
+ExecStart=/opt/openmake_llm/scripts/vllm/qwen-serve.sh
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

@@ -84,6 +84,10 @@
                         <option value="category">카테고리순</option>
                     </select>
                 </div>
+                <button class="sl-btn sl-btn-secondary" id="btnUploadSkill" title=".SKILL 또는 .md 파일 업로드">
+                    <span class="iconify" data-icon="lucide:upload"></span> 업로드
+                </button>
+                <input type="file" id="skillUploadInput" accept=".skill,.md" style="display:none">
                 <button class="sl-btn sl-btn-primary" id="btnNewSkill">
                     <span class="iconify" data-icon="lucide:plus"></span> 새 스킬 등록
                 </button>
@@ -216,6 +220,51 @@
             // New skill button
             document.getElementById('btnNewSkill')?.addEventListener('click', () => {
                 self.openNewSkillModal();
+            });
+
+            // .SKILL 매니페스트 업로드
+            const uploadInput = document.getElementById('skillUploadInput');
+            document.getElementById('btnUploadSkill')?.addEventListener('click', () => {
+                uploadInput?.click();
+            });
+            uploadInput?.addEventListener('change', async (ev) => {
+                const file = ev.target.files?.[0];
+                if (!file) return;
+                if (file.size > 256 * 1024) {
+                    if (window.showToast) window.showToast('파일이 256KB 를 초과합니다', 'error');
+                    ev.target.value = '';
+                    return;
+                }
+                const fd = new FormData();
+                fd.append('file', file);
+                try {
+                    const res = await fetch('/api/agents/skills/upload', {
+                        method: 'POST',
+                        body: fd,
+                        credentials: 'include',
+                    });
+                    const data = await res.json().catch(() => ({}));
+                    if (!res.ok) {
+                        const details = Array.isArray(data?.details) ? `\n- ${data.details.join('\n- ')}` : '';
+                        const msg = (data?.error || data?.message || res.statusText) + details;
+                        if (window.showToast) window.showToast(`업로드 실패: ${msg}`, 'error');
+                        return;
+                    }
+                    const payload = data?.data || data;
+                    const skillId = payload?.skill_id || '?';
+                    const ver = payload?.version || '?';
+                    const dup = payload?.duplicate_checksum;
+                    if (dup) {
+                        if (window.showToast) window.showToast(`이미 존재하는 manifest (${skillId} v${ver})`, 'info');
+                    } else {
+                        if (window.showToast) window.showToast(`업로드 완료: ${skillId} v${ver} (도구 ${payload?.bindings_count ?? 0}개)`, 'success');
+                    }
+                    self.loadLocalSkills();
+                } catch (e) {
+                    if (window.showToast) window.showToast('업로드 중 오류: ' + (e?.message || e), 'error');
+                } finally {
+                    ev.target.value = '';
+                }
             });
 
             // 로컬 스킬 탭 검색/필터

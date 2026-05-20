@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="ko" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover">
+    <title>MCP 서버 - OpenMake.Ai</title>
+    <link rel="icon" type="image/png" href="/logo.png">
+    <link rel="preconnect" href="https://cdn.jsdelivr.net">
+    <link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="/css/design-tokens.css?v=42">
+    <link rel="stylesheet" href="/css/components.css?v=42">
+    <link rel="stylesheet" href="/css/layout.css?v=42">
+    <style>
+        /* MCP 서버 페이지 — design-tokens 변수만 사용 (하드코딩 금지) */
+        .mcp-page { padding: var(--space-5); max-width: 1200px; margin: 0 auto; }
+        .mcp-header { margin-bottom: var(--space-5); }
+        .mcp-header h1 { margin: 0 0 var(--space-2); color: var(--text-primary); font-size: 22px; }
+        .mcp-header p { margin: 0; color: var(--text-muted); font-size: var(--font-size-sm); }
+
+        .mcp-tabs { display: flex; gap: var(--space-2); margin-bottom: var(--space-4); border-bottom: 1px solid var(--border-light); }
+        .mcp-tab { padding: var(--space-3) var(--space-4); background: transparent; border: none; border-bottom: 2px solid transparent; cursor: pointer; color: var(--text-secondary); font-size: var(--font-size-md); transition: all .2s; }
+        .mcp-tab:hover { color: var(--text-primary); }
+        .mcp-tab.active { color: var(--accent-primary); border-bottom-color: var(--accent-primary); font-weight: var(--font-weight-semibold); }
+        .mcp-tab-panel { display: none; }
+        .mcp-tab-panel.active { display: block; }
+
+        .mcp-toolbar { display: flex; gap: var(--space-3); align-items: center; flex-wrap: wrap; margin-bottom: var(--space-4); }
+        .mcp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: var(--space-4); }
+        .mcp-card { background: var(--bg-card); border: 1px solid var(--border-light); border-radius: var(--radius-lg); padding: var(--space-5); transition: border-color .2s; }
+        .mcp-card:hover { border-color: var(--accent-primary); }
+        .mcp-card h3 { margin: 0 0 var(--space-2); color: var(--text-primary); font-size: 15px; }
+        .mcp-desc { color: var(--text-muted); font-size: var(--font-size-sm); margin-bottom: var(--space-3); min-height: 3em; }
+
+        .mcp-meta { display: flex; gap: var(--space-2); align-items: center; flex-wrap: wrap; font-size: var(--font-size-sm); margin-bottom: var(--space-3); }
+        .badge { display: inline-block; padding: 2px 8px; border-radius: var(--radius-md); font-size: 11px; font-weight: var(--font-weight-semibold); }
+        .badge-tier-free { background: var(--bg-tertiary); color: var(--text-secondary); }
+        .badge-tier-pro { background: rgba(168, 85, 247, 0.15); color: #a855f7; border: 1px solid rgba(168, 85, 247, 0.3); }
+        .badge-tier-enterprise { background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.3); }
+        .badge-vis-global { background: rgba(59, 130, 246, 0.12); color: #3b82f6; border: 1px solid rgba(59, 130, 246, 0.25); }
+        .badge-vis-private { background: var(--bg-tertiary); color: var(--text-muted); }
+        .badge-vis-shared { background: rgba(16, 185, 129, 0.12); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.25); }
+        .badge-status-running { background: var(--success, #10b981); color: #fff; }
+        .badge-status-stopped { background: var(--bg-tertiary); color: var(--text-muted); }
+        .badge-status-crashed { background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3); }
+        .badge-status-starting { background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.3); }
+        .badge-cat { background: var(--bg-tertiary); color: var(--text-secondary); }
+
+        .mcp-actions { display: flex; gap: var(--space-2); margin-top: var(--space-3); }
+        .mcp-actions button { padding: var(--space-1) var(--space-3); border: 1px solid var(--border-light); border-radius: var(--radius-md); cursor: pointer; font-size: var(--font-size-sm); background: var(--bg-tertiary); color: var(--text-primary); }
+        .mcp-actions button:hover { border-color: var(--accent-primary); }
+        .mcp-actions .btn-danger { color: #ef4444; border-color: rgba(239, 68, 68, 0.3); }
+        .mcp-actions .btn-danger:hover { border-color: #ef4444; background: rgba(239, 68, 68, 0.1); }
+
+        .mcp-empty { text-align: center; padding: var(--space-8); color: var(--text-muted); }
+        .mcp-loading { text-align: center; padding: var(--space-6); color: var(--text-muted); }
+
+        .mcp-instance-table { width: 100%; border-collapse: collapse; background: var(--bg-card); border-radius: var(--radius-lg); overflow: hidden; }
+        .mcp-instance-table th, .mcp-instance-table td { padding: var(--space-3) var(--space-4); text-align: left; border-bottom: 1px solid var(--border-light); font-size: var(--font-size-sm); }
+        .mcp-instance-table th { background: var(--bg-secondary); color: var(--text-secondary); font-weight: var(--font-weight-semibold); }
+        .mcp-instance-table tr:last-child td { border-bottom: none; }
+
+        .mcp-select { padding: var(--space-2) var(--space-3); background: var(--bg-secondary); border: 1px solid var(--border-light); border-radius: var(--radius-md); color: var(--text-primary); }
+
+        .mcp-modal { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.6); display: none; align-items: center; justify-content: center; z-index: 1000; }
+        .mcp-modal.open { display: flex; }
+        .mcp-modal-content { background: var(--bg-card); border: 1px solid var(--border-light); border-radius: var(--radius-lg); padding: var(--space-6); width: min(560px, 90vw); max-height: 90vh; overflow: auto; }
+        .mcp-modal-content h3 { margin: 0 0 var(--space-3); color: var(--text-primary); }
+        .mcp-field { margin-bottom: var(--space-4); }
+        .mcp-field label { display: block; margin-bottom: var(--space-2); color: var(--text-secondary); font-size: var(--font-size-sm); font-weight: var(--font-weight-semibold); }
+        .mcp-field .field-desc { color: var(--text-muted); font-size: 11px; margin-bottom: var(--space-2); }
+        .mcp-field input, .mcp-field textarea, .mcp-field select { width: 100%; padding: var(--space-3); background: var(--bg-secondary); border: 1px solid var(--border-light); border-radius: var(--radius-md); color: var(--text-primary); box-sizing: border-box; font-family: inherit; }
+        .mcp-field input:focus, .mcp-field textarea:focus, .mcp-field select:focus { outline: none; border-color: var(--accent-primary); }
+        .mcp-modal-actions { display: flex; gap: var(--space-3); justify-content: flex-end; margin-top: var(--space-5); }
+        .mcp-modal-actions button { padding: var(--space-2) var(--space-4); border-radius: var(--radius-md); cursor: pointer; font-weight: var(--font-weight-semibold); }
+        .mcp-modal-actions .btn-secondary { background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-light); }
+        .mcp-modal-actions .btn-primary { background: var(--accent-primary); color: #fff; border: none; }
+    </style>
+</head>
+<body>
+    <div id="app-root">
+        <nav id="main-nav"></nav>
+        <main class="mcp-page" id="mcp-page-root">
+            <header class="mcp-header">
+                <h1>🔌 MCP 서버</h1>
+                <p>로컬 도구 (파일 시스템, GitHub 등) 를 LLM 이 사용할 수 있도록 연결합니다.</p>
+            </header>
+
+            <div class="mcp-tabs" role="tablist">
+                <button class="mcp-tab active" data-tab="catalog" role="tab">📚 카탈로그</button>
+                <button class="mcp-tab" data-tab="my-servers" role="tab">👤 내 서버</button>
+                <button class="mcp-tab" data-tab="instances" role="tab">📊 인스턴스 상태</button>
+            </div>
+
+            <section id="mcp-panel-catalog" class="mcp-tab-panel active">
+                <div class="mcp-toolbar">
+                    <span style="color:var(--text-muted);font-size:var(--font-size-sm);">티어에 맞는 템플릿이 표시됩니다.</span>
+                </div>
+                <div id="mcp-catalog-grid" class="mcp-grid">
+                    <div class="mcp-loading">로딩 중…</div>
+                </div>
+            </section>
+
+            <section id="mcp-panel-my-servers" class="mcp-tab-panel">
+                <div class="mcp-toolbar">
+                    <button class="mcp-tab" id="mcp-refresh-my-servers">새로고침</button>
+                </div>
+                <div id="mcp-my-servers-grid" class="mcp-grid">
+                    <div class="mcp-loading">로딩 중…</div>
+                </div>
+            </section>
+
+            <section id="mcp-panel-instances" class="mcp-tab-panel">
+                <div class="mcp-toolbar">
+                    <select id="mcp-instance-server-select" class="mcp-select">
+                        <option value="">서버 선택…</option>
+                    </select>
+                    <button class="mcp-tab" id="mcp-refresh-instances">새로고침</button>
+                </div>
+                <div id="mcp-instances-container">
+                    <div class="mcp-empty">서버를 선택하세요.</div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <div id="mcp-register-modal" class="mcp-modal" role="dialog" aria-modal="true">
+        <div class="mcp-modal-content">
+            <h3 id="mcp-modal-title">서버 등록</h3>
+            <p id="mcp-modal-desc" style="color:var(--text-muted);font-size:var(--font-size-sm);margin:0 0 var(--space-3);"></p>
+            <div id="mcp-modal-fields"></div>
+            <div class="mcp-modal-actions">
+                <button class="btn-secondary" data-close-mcp-modal>취소</button>
+                <button class="btn-primary" id="mcp-modal-submit">등록</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="/js/main.js?v=42"></script>
+</body>
+</html>

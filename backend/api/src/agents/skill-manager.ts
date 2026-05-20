@@ -208,6 +208,132 @@ export class SkillManager {
             .join('\n\n');
         return `\n\n## \uc801\uc6a9\ub41c \uc2a4\ud0ac\n${skillBlocks}`;
     }
+
+    /**
+     * \ud65c\uc131\ud654\ub41c skill \uc758 tool_bindings \uc870\ud68c.
+     *
+     * \ud65c\uc131\ud654 \uae30\uc900 = agent_skill_assignments \uc758 agent_id \uac00 \ub2e4\uc74c \uc911 \ud558\ub098:
+     *   - \uc778\uc790 agentId (\ud604\uc7ac \ucc44\ud305\uc758 \uc5d0\uc774\uc804\ud2b8)
+     *   - '__global__' (\ubaa8\ub4e0 \uc5d0\uc774\uc804\ud2b8 \uacf5\ud1b5)
+     *   - 'user:{userId}' (\uc0ac\uc6a9\uc790 \uac1c\uc778 \ud560\ub2f9)
+     *
+     * manifest \ud14c\uc774\ube14 (021 \ub9c8\uc774\uadf8\ub808\uc774\uc158) \ubd80\uc7ac \uc2dc \ube48 \ubc30\uc5f4 \ubc18\ud658 (graceful) \u2014
+     * \ubcf8 \uba54\uc11c\ub4dc \ub3c4\uc785\uc740 \ubb34\uc601\ud5a5. ChatService.mergeToolsWithSkills() \uac00 \ube48 \ubc30\uc5f4\uc774\uba74
+     * \uae30\uc874 \ub3d9\uc791 \uadf8\ub300\ub85c.
+     *
+     * @see docs/superpowers/plans/2026-05-20-phase5-skill-upload.md \u00a77
+     */
+    /**
+     * Manifest 모델 (021 마이그레이션) 의 prompt_md 를 시스템 프롬프트 블록으로 구성.
+     *
+     * 활성화 기준 = `getActiveSkillBindings` 와 동일 (agent + global + user:{userId}).
+     * 같은 skill 의 최신 version 만 사용.
+     *
+     * manifest 테이블 부재 시 null 반환 (graceful) — system-prompt 가 legacy
+     * `buildSkillPrompt` 로 fallback.
+     *
+     * @see docs/superpowers/plans/2026-05-20-phase5-skill-upload.md §7.5
+     */
+    async buildManifestPrompt(agentId: string, userId?: string, agentCategory?: string): Promise<string | null> {
+        let pool: Pool;
+        try {
+            await this.ensureInitialized();
+            const { getUnifiedDatabase } = await import('../data/models/unified-database');
+            pool = getUnifiedDatabase().getPool();
+        } catch (e) {
+            logger.debug('manifest prompt — DB 미초기화', e);
+            return null;
+        }
+
+        const params: unknown[] = [agentId, '__global__'];
+        let userClause = '';
+        if (userId) {
+            userClause = ' OR asa.agent_id = $3';
+            params.push(`user:${userId}`);
+        }
+
+        const sql = `
+            SELECT sm.id, sm.prompt_md, sm.manifest_yaml
+            FROM skill_manifests sm
+            INNER JOIN agent_skill_assignments asa ON asa.skill_id = sm.id
+            WHERE (asa.agent_id = $1 OR asa.agent_id = $2${userClause})
+              AND sm.version = (
+                  SELECT MAX(version) FROM skill_manifests WHERE id = sm.id
+              )
+            ORDER BY asa.priority DESC NULLS LAST, sm.id ASC
+            LIMIT 15
+        `;
+        let rows: Array<{ id: string; prompt_md: string; manifest_yaml: string }>;
+        try {
+            const result = await pool.query<{ id: string; prompt_md: string; manifest_yaml: string }>(sql, params);
+            rows = result.rows;
+        } catch (e) {
+            logger.debug('skill_manifests 조회 실패 (021 마이그레이션 미적용?) — null', e);
+            return null;
+        }
+        if (rows.length === 0) return null;
+
+        // agentCategory 필터: manifest_yaml 의 category 가 agent.category 와 일치하거나
+        // user-* prefix (사용자 개인 manifest) 인 경우만 포함 — 무관한 skill 의 프롬프트 오염 방지.
+        const filtered = rows.filter(r => {
+            if (!agentCategory) return true;
+            if (r.id.startsWith('user-')) return true;
+            const cat = /^---[\s\S]*?\bcategory:\s*([^\n]+)/.exec(r.manifest_yaml);
+            return !cat || cat[1]?.trim().replace(/^['"]|['"]$/g, '') === agentCategory;
+        });
+        if (filtered.length === 0) return null;
+
+        const blocks = filtered.map(r => {
+            const safeId = r.id.replace(/[<>"&]/g, '');
+            return `<skill_context name="${safeId}">\n${r.prompt_md}\n</skill_context>`;
+        });
+        return `\n\n## 적용된 스킬 (manifest)\n${blocks.join('\n\n')}`;
+    }
+
+    async getActiveSkillBindings(agentId: string, userId?: string): Promise<ActiveSkillBinding[]> {
+        let pool: Pool;
+        try {
+            await this.ensureInitialized();
+            const { getUnifiedDatabase } = await import('../data/models/unified-database');
+            pool = getUnifiedDatabase().getPool();
+        } catch (e) {
+            logger.debug('skill binding \uc870\ud68c \u2014 DB \ubbf8\ucd08\uae30\ud654', e);
+            return [];
+        }
+
+        const params: unknown[] = [agentId, '__global__'];
+        let userClause = '';
+        if (userId) {
+            userClause = ' OR asa.agent_id = $3';
+            params.push(`user:${userId}`);
+        }
+
+        const sql = `
+            SELECT stb.skill_id, stb.skill_version, stb.tool_name, stb.binding_mode
+            FROM skill_tool_bindings stb
+            INNER JOIN agent_skill_assignments asa ON asa.skill_id = stb.skill_id
+            WHERE (asa.agent_id = $1 OR asa.agent_id = $2${userClause})
+            ORDER BY stb.skill_id, stb.tool_name
+        `;
+        try {
+            const result = await pool.query<ActiveSkillBinding>(sql, params);
+            return result.rows;
+        } catch (e) {
+            logger.debug('skill_tool_bindings \uc870\ud68c \uc2e4\ud328 (\ub9c8\uc774\uadf8\ub808\uc774\uc158 021 \ubbf8\uc801\uc6a9?) \u2014 \ube48 \ubc30\uc5f4 \ubc18\ud658', e);
+            return [];
+        }
+    }
+}
+
+/**
+ * \ud65c\uc131\ud654\ub41c skill \uc758 \ub2e8\uc77c \ub3c4\uad6c binding row.
+ * @see services/chat-service/tool-merger.ts \uc758 \ub3d9\uc77c \ud0c0\uc785
+ */
+export interface ActiveSkillBinding {
+    skill_id: string;
+    skill_version: string;
+    tool_name: string;
+    binding_mode: 'required' | 'allowed' | 'denied';
 }
 
 // ========================================

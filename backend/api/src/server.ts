@@ -391,6 +391,18 @@ if (require.main === module) {
                 console.error('[Shutdown] OpenTelemetry 종료 중 오류:', error);
             }
 
+            // Phase 7 lifecycle supervisor 정리 — 모든 사용자 MCP 서버 graceful kill
+            try {
+                const { getLifecycleSupervisor } = await import('./mcp/lifecycle-supervisor');
+                const sv = getLifecycleSupervisor();
+                if (sv) {
+                    console.log('[Shutdown] MCP 사용자 풀 정리 중...');
+                    await sv.shutdownAll();
+                }
+            } catch (error) {
+                console.error('[Shutdown] MCP supervisor 정리 중 오류:', error);
+            }
+
             server.stop();
         };
 
@@ -422,9 +434,47 @@ if (require.main === module) {
     });
 
     server.start()
-        .then(() => {
+        .then(async () => {
             console.log(`\n✅ OpenMake Dashboard: ${server.url}`);
             console.log('종료하려면 Ctrl+C를 누르세요\n');
+
+            // Phase 7 lifecycle supervisor 초기화 — 사용자별 MCP 프로세스 풀 관리.
+            // 부팅 시점 (DB ready 후) 에 1회 설정. setLifecycleSupervisor 가 싱글톤에 저장.
+            try {
+                const [
+                    { MCPLifecycleSupervisor, setLifecycleSupervisor },
+                    { getUserMCPPool },
+                    { McpCatalogRepository },
+                    { ExternalMCPClient },
+                    { getUnifiedDatabase },
+                ] = await Promise.all([
+                    import('./mcp/lifecycle-supervisor'),
+                    import('./mcp/user-pool'),
+                    import('./data/repositories/mcp-catalog-repository'),
+                    import('./mcp/external-client'),
+                    import('./data/models/unified-database'),
+                ]);
+                const supervisor = new MCPLifecycleSupervisor({
+                    userPool: getUserMCPPool(),
+                    repo: new McpCatalogRepository(getUnifiedDatabase().getPool()),
+                    clientFactory: (config) => new ExternalMCPClient({
+                        id: config.id,
+                        name: config.id,
+                        transport_type: config.transport_type,
+                        command: config.command ?? undefined,
+                        args: config.args as string[] | undefined,
+                        env: config.env ?? undefined,
+                        url: config.url ?? undefined,
+                        enabled: true,
+                        created_at: '',
+                        updated_at: '',
+                    }),
+                });
+                setLifecycleSupervisor(supervisor);
+                console.log('✅ MCP Lifecycle Supervisor 초기화 완료');
+            } catch (err) {
+                console.error('⚠️  MCP Lifecycle Supervisor 초기화 실패 (graceful skip):', err);
+            }
         })
         .catch((err) => {
             console.error('❌ 서버 시작 실패:', err);

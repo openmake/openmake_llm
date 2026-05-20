@@ -174,6 +174,14 @@ export async function handleChatMessage(
     const abortController = new AbortController();
     extWs._abortController = abortController;
 
+    // Phase 7 lifecycle hook — per_chat MCP 서버 spawn.
+    // chatId 식별자: 우선 sessionId, 없으면 anonSessionId, 없으면 timestamp.
+    const chatHookUserId = extWs._authenticatedUserId !== undefined ? String(extWs._authenticatedUserId) : undefined;
+    const chatHookId = sessionId || anonSessionId || `ws-${Date.now()}`;
+    if (chatHookUserId) {
+        void import('../mcp/lifecycle-hooks').then(m => m.emitChatStart(chatHookUserId, chatHookId)).catch(() => { /* noop */ });
+    }
+
     // catch 블록(B4 디버그 큐)에서 접근하기 위해 try 외부에 선언.
     // try 안에서 실제 값으로 갱신된다.
     let selectedModel = model;
@@ -444,5 +452,11 @@ export async function handleChatMessage(
     } finally {
         // 중단 컨트롤러 정리
         extWs._abortController = null;
+
+        // Phase 7 lifecycle hook — per_chat MCP 서버 graceful kill.
+        // try/finally 안 보장 — 에러 발생해도 누락 없이 정리 (P7-D4).
+        if (chatHookUserId) {
+            void import('../mcp/lifecycle-hooks').then(m => m.emitChatEnd(chatHookUserId, chatHookId)).catch(() => { /* noop */ });
+        }
     }
 }

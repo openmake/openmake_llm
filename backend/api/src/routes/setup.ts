@@ -25,6 +25,7 @@ import {
     agentRouter,
     skillsRouter,
     mcpRouter,
+    mcpCatalogRouter,
     usageRouter,
     nodesRouter,
     setNodesCluster,
@@ -142,6 +143,7 @@ export function setupApiRoutes(
     app.use('/api/agents', agentRouter);
     app.use('/api/monitoring', tokenMonitoringRouter);
     app.use('/api/mcp', mcpRouter);
+    app.use('/api/mcp', mcpCatalogRouter);
     app.use('/api/debug-queue', debugQueueRouter);
 
     // 부트스트랩 서비스 초기화

@@ -146,6 +146,13 @@ export class AuthController {
             blacklistToken(refreshToken);
         }
         clearTokenCookie(res);
+
+        // Phase 7 lifecycle hook — 사용자별 MCP 서버 graceful kill (per_session)
+        const uid = req.user?.id;
+        if (uid !== undefined) {
+            void import('../mcp/lifecycle-hooks').then(m => m.emitUserLogout(String(uid))).catch(() => { /* noop */ });
+        }
+
         res.json(success({ message: '로그아웃되었습니다' }));
     }
 

@@ -243,6 +243,8 @@ export interface ChatAdvancedOptions {
     format?: FormatOption;
     /** 사용 가능한 도구 목록 */
     tools?: ToolDefinition[];
+    /** vLLM tool_choice 제어 — ChatRequest.tool_choice 와 동일 시맨틱 */
+    tool_choice?: 'auto' | 'none' | 'required' | { type: 'function'; function: { name: string } };
 }
 
 // ============================================
@@ -358,6 +360,14 @@ export interface ChatRequest {
     format?: FormatOption;
     /** 사용 가능한 도구 정의 목록 (Tool Calling용) */
     tools?: ToolDefinition[];
+    /**
+     * vLLM `--enable-auto-tool-choice` 와 함께 동작하는 도구 호출 제어.
+     * - 'auto'    : 모델이 호출 시점 자율 결정
+     * - 'none'    : 도구 호출 금지 (호출 layer 가 tools 자체를 빼서 처리)
+     * - 'required': 반드시 1개 이상의 tool_call 반환
+     * - 객체      : 특정 함수 강제 호출
+     */
+    tool_choice?: 'auto' | 'none' | 'required' | { type: 'function'; function: { name: string } };
     /** 모델 메모리 유지 시간 (기본값: '5m', '-1'=영구, '0'=즉시 해제) */
     keep_alive?: string | number;
     /** 출력 토큰의 로그 확률 반환 여부 */

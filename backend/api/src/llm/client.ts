@@ -104,6 +104,7 @@ export class LLMClient {
             think?: ThinkOption;
             format?: FormatOption;
             tools?: ToolDefinition[];
+            tool_choice?: 'auto' | 'none' | 'required' | { type: 'function'; function: { name: string } };
             keep_alive?: string | number;
         },
     ): Promise<ChatMessage & { metrics?: UsageMetrics }> {
@@ -116,6 +117,7 @@ export class LLMClient {
             ...(advancedOptions?.think !== undefined && { think: advancedOptions.think }),
             ...(advancedOptions?.format && { format: advancedOptions.format }),
             ...(advancedOptions?.tools && { tools: advancedOptions.tools }),
+            ...(advancedOptions?.tool_choice !== undefined && { tool_choice: advancedOptions.tool_choice }),
         };
         const extraBody = buildExtraBody(advancedOptions?.think);
 

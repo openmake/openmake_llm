@@ -176,7 +176,7 @@ export async function streamChat(
         stream: true,
         stream_options: { include_usage: true },
         ...applyOptionsToRequest(request.options),
-        ...(tools ? { tools } : {}),
+        ...(tools ? { tools, ...(request.tool_choice !== undefined && { tool_choice: request.tool_choice }) } : {}),
         ...(responseFormat && { response_format: responseFormat }),
         ...(extraBody ?? {}),
     } as never);
@@ -340,7 +340,7 @@ export async function nonStreamChat(
         messages: toOpenAIMessages(request.messages),
         stream: false,
         ...applyOptionsToRequest(request.options),
-        ...(tools ? { tools } : {}),
+        ...(tools ? { tools, ...(request.tool_choice !== undefined && { tool_choice: request.tool_choice }) } : {}),
         ...(responseFormat && { response_format: responseFormat }),
         ...(extraBody ?? {}),
     } as never);

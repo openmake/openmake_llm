@@ -35,6 +35,9 @@ import type { MCPTransportType } from '../mcp/types';
 import { createLogger } from '../utils/logger';
 import { validate } from '../middlewares/validation';
 import { mcpToolExecuteSchema, mcpServerCreateSchema } from '../schemas/mcp.schema';
+import { McpCatalogRepository } from '../data/repositories/mcp-catalog-repository';
+import { canRegisterServer, canViewServer, canDeleteServer, canStartStopServer } from './mcp-visibility';
+import { validateOutboundUrl } from '../security/ssrf-guard';
 
 const logger = createLogger('McpRoutes');
 
@@ -103,14 +106,18 @@ export const mcpRouter = Router();
 
 
   // 외부 서버 목록 + 연결 상태 (GET)
+  // visibility 기반 필터: 본인 user_private + global + user_shared
   mcpRouter.get('/servers', requireAuth, asyncHandler(async (req: Request, res: Response) => {
-      const db = getUnifiedDatabase();
-      const servers = await db.getMcpServers();
+      const userId = String(req.user?.id ?? '');
+      const role = req.user?.role ?? 'user';
+      const actor = { id: userId, role };
+      const repo = new McpCatalogRepository(getUnifiedDatabase().getPool());
+      const allServers = await repo.listUserServers(userId);
+      const filtered = allServers.filter(s => canViewServer(actor, s));
+
       const registry = getUnifiedMCPClient().getServerRegistry();
       const statuses = registry.getAllStatuses();
-
-      // DB 서버 목록에 연결 상태 병합
-      const serversWithStatus = servers.map(server => {
+      const serversWithStatus = filtered.map(server => {
           const status = statuses.find(s => s.serverId === server.id);
           return {
               ...server,
@@ -124,14 +131,16 @@ export const mcpRouter = Router();
       res.json(success({ servers: serversWithStatus, total: serversWithStatus.length }));
   }));
 
-  // 새 외부 서버 등록 (POST) - admin 전용
+  // 새 외부 서버 등록 (POST) — visibility 분기:
+  //   global (admin) | user_private | user_shared (사용자는 카탈로그 템플릿만)
   mcpRouter.post('/servers', requireAuth, validate(mcpServerCreateSchema), asyncHandler(async (req: Request, res: Response) => {
-      if (req.user?.role !== 'admin') {
-          res.status(403).json(forbidden('관리자만 서버를 등록할 수 있습니다'));
-          return;
-      }
-
-      const { name, transport_type, command, args, env, url, enabled } = req.body as {
+      const userId = String(req.user?.id ?? '');
+      const role = req.user?.role ?? 'user';
+      const actor = { id: userId, role };
+      const {
+          name, transport_type, command, args, env, url, enabled,
+          visibility = 'global', catalog_template_id,
+      } = req.body as {
           name: string;
           transport_type: 'stdio' | 'sse' | 'streamable-http';
           command?: string;
@@ -139,7 +148,26 @@ export const mcpRouter = Router();
           env?: Record<string, string>;
           url?: string;
           enabled?: boolean;
+          visibility?: 'global' | 'user_private' | 'user_shared';
+          catalog_template_id?: string;
       };
+
+      const check = canRegisterServer(actor, { visibility, catalog_template_id });
+      if (!check.allowed) {
+          res.status(403).json(forbidden(check.reason));
+          return;
+      }
+
+      // SSRF guard — sse/http URL 등록 시 외부 호스트 검증
+      if ((transport_type === 'sse' || transport_type === 'streamable-http') && url) {
+          try {
+              await validateOutboundUrl(url);
+          } catch (e) {
+              res.status(400).json(badRequest(`URL 거부: ${e instanceof Error ? e.message : String(e)}`));
+              return;
+          }
+      }
+
       const id = `mcp_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
       const config = {
           id,
@@ -156,33 +184,63 @@ export const mcpRouter = Router();
 
       const db = getUnifiedDatabase();
       const registry = getUnifiedMCPClient().getServerRegistry();
-      const status = await registry.registerServer(config, db);
+      // global 만 즉시 spawn — user_* 는 Phase 7 lifecycle-supervisor 의 hook 으로 위임
+      // (현재 phase 에서는 db.upsertMcpServer 동등 동작으로 fallback. registry.registerServer 는 connect 시도 포함.)
+      const status = visibility === 'global'
+          ? await registry.registerServer(config, db)
+          : await registry.registerServer(config, db);
+      // visibility / user_id / catalog_template_id 컬럼은 ALTER (023) 후 별도 update —
+      // server-registry 의 db.addMcpServer 가 컬럼을 모를 수 있어 수동 UPDATE:
+      if (visibility !== 'global') {
+          await db.getPool().query(
+              `UPDATE mcp_servers SET user_id = $1, visibility = $2, catalog_template_id = $3 WHERE id = $4`,
+              [userId, visibility, catalog_template_id ?? null, id],
+          );
+      }
 
       res.status(201).json(success({ server: config, connectionStatus: status }));
   }));
 
-  // 서버 제거 (DELETE) - admin 전용
+  // 서버 제거 (DELETE) — 소유자 + admin
   mcpRouter.delete('/servers/:id', requireAuth, asyncHandler(async (req: Request, res: Response) => {
-      if (req.user?.role !== 'admin') {
-          res.status(403).json(forbidden('관리자만 서버를 삭제할 수 있습니다'));
-          return;
-      }
-
+      const userId = String(req.user?.id ?? '');
+      const role = req.user?.role ?? 'user';
+      const actor = { id: userId, role };
       const { id } = req.params;
       const db = getUnifiedDatabase();
+      const repo = new McpCatalogRepository(db.getPool());
+      const server = await repo.getServerById(id);
+      if (!server) {
+          res.status(404).json(notFound('서버'));
+          return;
+      }
+      if (!canDeleteServer(actor, server)) {
+          res.status(403).json(forbidden('해당 서버를 삭제할 권한이 없습니다'));
+          return;
+      }
       const registry = getUnifiedMCPClient().getServerRegistry();
-
       await registry.unregisterServer(id, db);
       res.json(success({ deleted: true }));
   }));
 
-  // 서버 수동 연결 (POST) - admin 전용
+  // 서버 수동 연결 (POST) — 소유자 + admin
   mcpRouter.post('/servers/:id/connect', requireAuth, asyncHandler(async (req: Request, res: Response) => {
-      if (req.user?.role !== 'admin') {
-          res.status(403).json(forbidden('관리자만 서버를 연결할 수 있습니다'));
-          return;
-      }
+      const userId = String(req.user?.id ?? '');
+      const role = req.user?.role ?? 'user';
+      const actor = { id: userId, role };
       const { id } = req.params;
+      {
+          const repo = new McpCatalogRepository(getUnifiedDatabase().getPool());
+          const server = await repo.getServerById(id);
+          if (!server) {
+              res.status(404).json(notFound('서버'));
+              return;
+          }
+          if (!canStartStopServer(actor, server)) {
+              res.status(403).json(forbidden('해당 서버를 연결할 권한이 없습니다'));
+              return;
+          }
+      }
       const db = getUnifiedDatabase();
       const server = await db.getMcpServerById(id);
 
@@ -209,13 +267,24 @@ export const mcpRouter = Router();
       res.json(success({ status }));
   }));
 
-  // 서버 수동 연결 해제 (POST) - admin 전용
+  // 서버 수동 연결 해제 (POST) — 소유자 + admin
   mcpRouter.post('/servers/:id/disconnect', requireAuth, asyncHandler(async (req: Request, res: Response) => {
-      if (req.user?.role !== 'admin') {
-          res.status(403).json(forbidden('관리자만 서버를 연결 해제할 수 있습니다'));
-          return;
-      }
+      const userId = String(req.user?.id ?? '');
+      const role = req.user?.role ?? 'user';
+      const actor = { id: userId, role };
       const { id } = req.params;
+      {
+          const repo = new McpCatalogRepository(getUnifiedDatabase().getPool());
+          const server = await repo.getServerById(id);
+          if (!server) {
+              res.status(404).json(notFound('서버'));
+              return;
+          }
+          if (!canStartStopServer(actor, server)) {
+              res.status(403).json(forbidden('해당 서버를 연결 해제할 권한이 없습니다'));
+              return;
+          }
+      }
       const registry = getUnifiedMCPClient().getServerRegistry();
       await registry.disconnectServer(id);
 
