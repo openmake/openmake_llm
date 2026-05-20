@@ -842,6 +842,39 @@
     flex-shrink: 0;
 }
 
+/* 페이지 nav (NAV_ITEMS) — 검색/대화 위에 표시 */
+.us-page-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 6px 8px 10px;
+    flex-shrink: 0;
+    border-bottom: 1px solid var(--border-light, #e5e7eb);
+    max-height: 40vh;
+    overflow-y: auto;
+}
+.us-nav-section { display: flex; flex-direction: column; gap: 2px; }
+.us-nav-section + .us-nav-section { margin-top: 8px; }
+.us-nav-link {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 10px;
+    border-radius: 8px;
+    color: var(--text-secondary, #475569);
+    text-decoration: none;
+    font-size: 13px;
+    transition: background .15s, color .15s;
+    cursor: pointer;
+}
+.us-nav-link:hover { background: var(--bg-tertiary, rgba(99,102,241,0.08)); color: var(--text-primary, #1e293b); }
+.us-nav-link.active { background: rgba(99,102,241,0.15); color: var(--accent-primary, #6366f1); }
+.unified-sidebar[data-state="icon"] .us-page-nav { padding: 6px 4px; }
+.unified-sidebar[data-state="icon"] .us-nav-link .us-label,
+.unified-sidebar[data-state="icon"] .us-nav-section-label { display: none; }
+.unified-sidebar.us-hover-expanded .us-nav-link .us-label,
+.unified-sidebar.us-hover-expanded .us-nav-section-label { display: inline; }
+
 .us-nav-divider {
     height: 1px;
     background: var(--border-light, #2d3748);

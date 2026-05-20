@@ -160,6 +160,9 @@ UnifiedSidebar.prototype.init = function () {
 
 
 
+    // 페이지 nav 렌더 (NAV_ITEMS.menu + admin) — tier/admin 권한 필터링
+    this._renderPageNav();
+
     // 대화 목록 로드
     this.loadConversations();
 
@@ -194,6 +197,9 @@ UnifiedSidebar.prototype._renderHTML = function () {
         '<span class="us-label">\uC0C8 \uB300\uD654</span>' +
         '</button>' +
         // \uBB38\uC11C \uAD00\uB9AC \uB9C1\uD06C: 2026-05-19 RAG/\uBB38\uC11C \uCC98\uB9AC \uC81C\uAC70 \uC2DC \uD3D0\uAE30
+
+        // \uD398\uC774\uC9C0 nav (NAV_ITEMS.menu + admin) \u2014 _buildPageNav \uAC00 \uB3D9\uC801 \uCC44\uC6C0
+        '<nav class="us-page-nav" id="usPageNav" role="navigation" aria-label="Pages"></nav>' +
 
         // Search
         '<div class="us-search">' +
@@ -644,6 +650,81 @@ UnifiedSidebar.prototype._closeUserMenu = function () {
     if (menu) {
         menu.classList.remove('active');
     }
+};
+
+// ─── 페이지 nav 렌더 ───────────────────────────────────
+
+/**
+ * NAV_ITEMS.menu + admin 을 권한별로 필터링하여 .us-page-nav 안에 렌더.
+ * - requireAuth: 로그인 안 한 사용자는 숨김
+ * - requireAdmin: admin role 만 표시
+ * - minTier: 사용자 tier 가 부족하면 숨김
+ */
+UnifiedSidebar.prototype._renderPageNav = function () {
+    var container = this.el && this.el.querySelector('#usPageNav');
+    if (!container) return;
+    var NAV = window.NAV_ITEMS;
+    if (!NAV || !NAV.menu) {
+        container.innerHTML = '';
+        return;
+    }
+
+    var TIER_LEVEL = { free: 0, starter: 1, standard: 2, pro: 3, enterprise: 4 };
+    var rawUser = null;
+    try {
+        var SS = window.SafeStorage;
+        rawUser = SS ? JSON.parse(SS.getItem('openmake_user') || 'null') : null;
+    } catch (_e) { rawUser = null; }
+    var isLoggedIn = !!rawUser;
+    var isAdmin = isLoggedIn && rawUser && rawUser.role === 'admin';
+    var userTier = (isLoggedIn && rawUser && rawUser.tier) || 'free';
+    var userTierLevel = TIER_LEVEL[userTier] != null ? TIER_LEVEL[userTier] : 0;
+
+    function passesFilter(item) {
+        if (item.requireAuth && !isLoggedIn) return false;
+        if (item.requireAdmin && !isAdmin) return false;
+        if (item.minTier && (TIER_LEVEL[item.minTier] || 99) > userTierLevel) return false;
+        return true;
+    }
+
+    function esc(s) { var d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+
+    function renderItems(items) {
+        return items.filter(passesFilter).map(function (item) {
+            return '<a class="us-nav-link" href="' + esc(item.href) + '" data-page-nav>' +
+                '<span class="us-nav-icon">' + esc(item.icon || '') + '</span>' +
+                '<span class="us-label">' + esc(item.label) + '</span>' +
+                '</a>';
+        }).join('');
+    }
+
+    var html = '<div class="us-nav-section us-nav-section-menu">' + renderItems(NAV.menu || []) + '</div>';
+    var adminHtml = renderItems(NAV.admin || []);
+    if (adminHtml) {
+        html += '<div class="us-nav-section us-nav-section-admin">' +
+            '<div class="us-nav-section-label">관리</div>' +
+            adminHtml +
+            '</div>';
+    }
+    container.innerHTML = html;
+
+    // SPA 라우터 통합 — 클릭 시 페이지 전환
+    var self = this;
+    container.querySelectorAll('[data-page-nav]').forEach(function (link) {
+        link.addEventListener('click', function (e) {
+            var href = link.getAttribute('href');
+            if (!href) return;
+            // 모바일에서는 사이드바 자동 숨김
+            if (isMobile()) {
+                self.setState(STATES.HIDDEN);
+            }
+            if (window.Router && typeof window.Router.navigate === 'function') {
+                e.preventDefault();
+                window.Router.navigate(href);
+            }
+            // Router 없으면 기본 동작 (페이지 이동)
+        });
+    });
 };
 
 // ─── 사용자 섹션 ───────────────────────────────────
