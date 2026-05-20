@@ -206,7 +206,7 @@ export function setupStaticFiles(app: Application, dirname: string): void {
         'agent-learning', 'cluster', 'usage', 'analytics', 'admin-metrics',
         'admin', 'audit', 'external', 'alerts', 'memory', 'settings',
         'password-change', 'history', 'guide', 'developer', 'api-keys',
-        'token-monitoring', 'skill-library'
+        'skill-library'
     ]);
 
     const publicPath = path.join(dirname, 'public');
