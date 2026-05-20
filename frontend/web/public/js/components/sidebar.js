@@ -16,7 +16,7 @@
  */
 
 // NAV_ITEMS 강제 로드 — sidebar 가 로드되는 모든 페이지에서 window.NAV_ITEMS 보장
-import { NAV_ITEMS as _NAV_ITEMS_FROM_MODULE } from '../nav-items.js?v=4';
+import { NAV_ITEMS as _NAV_ITEMS_FROM_MODULE } from '../nav-items.js?v=5';
 if (!window.NAV_ITEMS) window.NAV_ITEMS = _NAV_ITEMS_FROM_MODULE;
 
 /**
