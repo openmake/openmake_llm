@@ -1,0 +1,15 @@
+[Unit]
+Description=OpenMake LiteLLM Proxy
+After=network.target openmake-vllm-qwen.service openmake-vllm-exaone.service
+
+[Service]
+Type=simple
+User=openmake
+EnvironmentFile=/etc/openmake/litellm.env
+WorkingDirectory=/opt/openmake_llm
+ExecStart=/home/openmake/vllm-env/bin/litellm --config /opt/openmake_llm/scripts/vllm/litellm.config.yaml --port 4000
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

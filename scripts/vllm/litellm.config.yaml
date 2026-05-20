@@ -1,0 +1,20 @@
+model_list:
+  - model_name: qwen2.5-7b
+    litellm_params:
+      model: openai/Qwen/Qwen2.5-7B-Instruct
+      api_base: http://localhost:8001/v1
+      api_key: os.environ/VLLM_API_KEY
+
+  - model_name: exaone4.5-33b-awq
+    litellm_params:
+      model: openai/LGAI-EXAONE/EXAONE-4.5-33B-AWQ
+      api_base: http://localhost:8002/v1
+      api_key: os.environ/VLLM_API_KEY
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+  database_url: os.environ/DATABASE_URL
+
+litellm_settings:
+  drop_params: false
+  request_timeout: 120
