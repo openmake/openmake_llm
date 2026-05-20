@@ -103,11 +103,11 @@ import {
 //     formatSummaryResponse, showDocumentProgress 모두 미사용
 
 // 1-13. 에러 핸들러 / 기능 카드 (state 의존)
+//   showHelpPopup/hideHelpPopup/hideHelpPopupDelayed/closeHelpPopup 는
+//   2026-05-19 RAG 폐기 시 stub (빈 함수) 처리됨 → 본 정리에서 import 제거
 import {
     startFeatureChat, handleCommand,
     showHelpAndMessage, performWebSearch,
-    showHelpPopup, hideHelpPopup,
-    hideHelpPopupDelayed, closeHelpPopup
 } from './modules/error-handler.js';
 
 // 1-14. 가이드 (ui 의존)
@@ -629,10 +629,8 @@ window.handleCommand = handleCommand;
 window.showHelpAndMessage = showHelpAndMessage;
 window.performWebSearch = performWebSearch;
 window.useMode = useMode;
-window.showHelpPopup = showHelpPopup;
-window.hideHelpPopup = hideHelpPopup;
-window.hideHelpPopupDelayed = hideHelpPopupDelayed;
-window.closeHelpPopup = closeHelpPopup;
+// showHelpPopup/hideHelpPopup/hideHelpPopupDelayed/closeHelpPopup window 등록:
+// 2026-05-19 stub 처리된 deprecated 함수, 사용처 0 — 제거
 
 // 가이드
 window.showUserGuide = showUserGuide;

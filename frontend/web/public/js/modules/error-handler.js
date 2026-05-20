@@ -201,33 +201,18 @@ async function performWebSearch(query, model) {
 }
 
 
-// 레거시 빈 함수 (호환성 유지용)
-/** @deprecated 호환성 유지용 빈 함수 */
-function showHelpPopup() { }
-/** @deprecated 호환성 유지용 빈 함수 */
-function hideHelpPopup() { }
-/** @deprecated 호환성 유지용 빈 함수 */
-function hideHelpPopupDelayed() { }
-/** @deprecated 호환성 유지용 빈 함수 */
-function closeHelpPopup() { }
+// showHelpPopup/hideHelpPopup/hideHelpPopupDelayed/closeHelpPopup deprecated stub:
+// 2026-05-19 RAG 폐기 시 빈 함수 처리됨. 사용처 0 — 전체 제거.
 
 // 전역 노출 (레거시 호환)
 window.startFeatureChat = startFeatureChat;
 window.handleCommand = handleCommand;
 window.showHelpAndMessage = showHelpAndMessage;
 window.performWebSearch = performWebSearch;
-window.showHelpPopup = showHelpPopup;
-window.hideHelpPopup = hideHelpPopup;
-window.hideHelpPopupDelayed = hideHelpPopupDelayed;
-window.closeHelpPopup = closeHelpPopup;
 
 export {
     startFeatureChat,
     handleCommand,
     showHelpAndMessage,
     performWebSearch,
-    showHelpPopup,
-    hideHelpPopup,
-    hideHelpPopupDelayed,
-    closeHelpPopup
 };
