@@ -13,7 +13,7 @@
 import { getState, setState, addToMemory, clearMemory } from './state.js';
 import { escapeHtml, scrollToBottom, showToast } from './ui.js';
 import { addChatMessage } from './chat.js';
-import { clearAttachments } from './file-upload.js';
+// file-upload.js 는 2026-05-19 RAG/문서 처리 제거 시 폐기됨 — clearAttachments import 제거
 import { STORAGE_KEY_USER } from './constants.js';
 
 /**
@@ -342,7 +342,7 @@ function newChat() {
     const chatInput = document.getElementById('chatInput');
     if (chatInput) chatInput.value = '';
 
-    clearAttachments();
+    // clearAttachments() — file-upload.js 폐기로 제거 (2026-05-19)
     clearMemory();
 
     // 활성 상태 해제

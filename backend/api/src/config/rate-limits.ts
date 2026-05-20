@@ -104,10 +104,13 @@ export const RL_MEMORY = {
  */
 export const RL_MCP = {
     windowMs: WINDOW_15M,
-    ipLimit: Number(process.env.RL_MCP_IP) || 20,
-    userLimit: Number(process.env.RL_MCP_USER) || 40,
-    mcpLimit: Number(process.env.RL_MCP_MCP) || 20,
-    toolCallLimit: Number(process.env.RL_MCP_TOOL_CALL) || 10,
+    // Phase 6/7/8 MCP 사용자 격리 도입 후 frontend 가 페이지 진입 시
+    // GET catalog/servers/instances + start/stop/from-catalog 등 다수 endpoint 호출
+    // → 사전 20/40 한도가 너무 빡빡해서 429 빈발. 운영 정상 사용 패턴 고려해 확대.
+    ipLimit: Number(process.env.RL_MCP_IP) || 200,
+    userLimit: Number(process.env.RL_MCP_USER) || 400,
+    mcpLimit: Number(process.env.RL_MCP_MCP) || 200,
+    toolCallLimit: Number(process.env.RL_MCP_TOOL_CALL) || 30,
 } as const;
 
 /**
