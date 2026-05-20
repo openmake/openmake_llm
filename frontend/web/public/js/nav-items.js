@@ -40,14 +40,10 @@ const NAV_ITEMS = {
         { href: '/cluster.html', icon: '🖥️', iconify: 'lucide:monitor', label: '클러스터', requireAuth: true, minTier: 'enterprise' }
     ],
     admin: [
-        { href: '/admin.html', icon: '👥', iconify: 'lucide:users', label: '사용자 관리', requireAuth: true, requireAdmin: true },
-        { href: '/admin-metrics.html', icon: '📊', iconify: 'lucide:bar-chart-3', label: '통합 모니터링', requireAuth: true, requireAdmin: true },
-        { href: '/audit.html', icon: '📋', iconify: 'lucide:clipboard-list', label: '감사 로그', requireAuth: true, minTier: 'enterprise' },
+        { href: '/admin.html', icon: '👥', iconify: 'lucide:users', label: '관리자', requireAuth: true, requireAdmin: true },
+        // Phase R2 (2026-05-21): admin-metrics/audit/analytics/alerts/token-monitoring 5개 페이지를 /admin 의 섹션 탭으로 통합
         // /external.html: Phase R1 (2026-05-21) — settings 탭으로 통합
-        { href: '/analytics.html', icon: '📊', iconify: 'lucide:pie-chart', label: '분석 대시보드', requireAuth: true, minTier: 'enterprise' },
-        { href: '/alerts.html', icon: '🔔', iconify: 'lucide:bell', label: '알림 관리', requireAuth: true, minTier: 'enterprise' },
         // /password-change.html: Phase R1 (2026-05-21) — settings 탭으로 통합
-        { href: '/token-monitoring.html', icon: '🗝️', iconify: 'lucide:key-square', label: 'API 토큰 모니터링', requireAuth: true, requireAdmin: true },
         { href: '/settings.html', icon: '⚙️', iconify: 'lucide:settings', label: '설정', cssFiles: ['/css/settings.css?v=4'] }
     ]
 };

@@ -846,3 +846,28 @@
 .document-progress .progress-fill.error {
     background: var(--danger);
 }
+
+/* Phase R2: claude.ai-style admin 섹션 탭 — 6개 admin 페이지 통합 진입점 */
+.admin-section-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    margin: 0 0 var(--space-5);
+    padding: var(--space-2);
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+}
+.admin-section-tab {
+    padding: var(--space-3) var(--space-4);
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-md);
+    color: var(--text-secondary);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+    cursor: pointer;
+    transition: background .15s, color .15s;
+}
+.admin-section-tab:hover { background: var(--bg-tertiary); color: var(--text-primary); }
+.admin-section-tab.active { background: var(--accent-primary); color: #fff; font-weight: var(--font-weight-semibold); }
