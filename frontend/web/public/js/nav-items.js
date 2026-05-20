@@ -35,8 +35,8 @@ const NAV_ITEMS = {
         { href: '/projects.html', icon: '📁', iconify: 'lucide:folder', label: '프로젝트', requireAuth: true },
         // /custom-agents.html, /skill-library.html, /mcp-servers.html: Phase R3 (2026-05-21) — /projects hub 로 통합
         // /usage.html, /api-keys.html: Phase R1 (2026-05-21) — settings 탭으로 통합
-        { href: '/agent-learning.html', icon: '🎓', iconify: 'lucide:graduation-cap', label: '에이전트 학습', requireAuth: true, minTier: 'pro' },
-        { href: '/cluster.html', icon: '🖥️', iconify: 'lucide:monitor', label: '클러스터', requireAuth: true, minTier: 'enterprise' }
+        { href: '/agent-learning.html', icon: '🎓', iconify: 'lucide:graduation-cap', label: '에이전트 학습', requireAuth: true, minTier: 'pro' }
+        // /cluster.html: 2026-05-21 제거 — admin → 통합 모니터링 → "클러스터 노드 정보" section 과 중복
     ],
     admin: [
         { href: '/admin.html', icon: '👥', iconify: 'lucide:users', label: '관리자', requireAuth: true, requireAdmin: true },
