@@ -145,6 +145,30 @@ export class ToolRouter {
     async executeTool(name: string, args: Record<string, unknown>, context?: UserContext): Promise<MCPToolResult> {
         // 1. 외부 도구 확인 (:: 네임스페이스)
         if (name.includes(MCP_NAMESPACE_SEPARATOR)) {
+            // 1a. 사용자별 풀 우선 검색 (Phase 7 LifecycleSupervisor 가 채운 인스턴스)
+            //     context.userId 가 있으면 user_private/user_shared 서버는 사용자 풀에서만 접근.
+            if (context?.userId) {
+                const [serverId, toolName] = name.split(MCP_NAMESPACE_SEPARATOR, 2);
+                if (serverId && toolName) {
+                    const { getUserMCPPool } = await import('./user-pool');
+                    const userClient = getUserMCPPool().get(String(context.userId), serverId);
+                    if (userClient) {
+                        try {
+                            return await Promise.race([
+                                userClient.callTool(toolName, args),
+                                new Promise<never>((_, reject) =>
+                                    setTimeout(() => reject(new Error(`외부 도구 타임아웃: ${name}`)), MCP_EXTERNAL_TOOL_LIMITS.EXECUTION_TIMEOUT_MS)
+                                ),
+                            ]);
+                        } catch (e) {
+                            const msg = e instanceof Error ? e.message : String(e);
+                            return { content: [{ type: 'text', text: `사용자 풀 도구 실행 실패 (${name}): ${msg}` }], isError: true };
+                        }
+                    }
+                }
+            }
+
+            // 1b. 전역 externalTools (visibility=global) fallback
             const externalEntry = this.externalTools.get(name);
             if (!externalEntry) {
                 return {
