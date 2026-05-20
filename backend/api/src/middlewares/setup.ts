@@ -202,7 +202,7 @@ export function setupParsersAndLimiting(app: Application): void {
  */
 export function setupStaticFiles(app: Application, dirname: string): void {
     const SPA_PAGES = new Set([
-        'research', 'custom-agents',
+        'research', 'custom-agents', 'mcp-servers',
         'agent-learning', 'usage', 'analytics', 'admin-metrics',
         'admin', 'audit', 'external', 'alerts', 'memory', 'settings',
         'password-change', 'history', 'developer', 'api-keys',

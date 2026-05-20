@@ -33,7 +33,10 @@ const NAV_ITEMS = {
         { href: '/research.html', icon: '🔬', iconify: 'lucide:flask-conical', label: '딥 리서치', requireAuth: true, minTier: 'pro' },
         // /documents.html, /memory.html: 2026-05-19 제거
         { href: '/projects.html', icon: '📁', iconify: 'lucide:folder', label: '프로젝트', requireAuth: true },
-        // /custom-agents.html, /skill-library.html, /mcp-servers.html: Phase R3 (2026-05-21) — /projects hub 로 통합
+        // projects hub 의 3 카드 진입점 — 사이드바 nav 에서 hidden (projects 가 진입점), spa-router 라우트 등록 유지
+        { href: '/skill-library.html', icon: '📦', iconify: 'lucide:package', label: '스킬 라이브러리', requireAuth: true, minTier: 'pro', excludeFromSidebar: true },
+        { href: '/mcp-servers.html', icon: '🔌', iconify: 'lucide:plug', label: 'MCP 서버', requireAuth: true, excludeFromSidebar: true },
+        { href: '/custom-agents.html', icon: '🤖', iconify: 'lucide:bot', label: '커스텀 에이전트', requireAuth: true, minTier: 'pro', excludeFromSidebar: true },
         // /usage.html, /api-keys.html: Phase R1 (2026-05-21) — settings 탭으로 통합
         { href: '/agent-learning.html', icon: '🎓', iconify: 'lucide:graduation-cap', label: '에이전트 학습', requireAuth: true, minTier: 'pro' }
         // /cluster.html: 2026-05-21 제거 — admin → 통합 모니터링 → "클러스터 노드 정보" section 과 중복
