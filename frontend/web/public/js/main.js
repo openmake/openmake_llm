@@ -123,9 +123,10 @@ import { NAV_ITEMS } from './nav-items.js?v=4';
 // 1-16. SPA 라우터
 import { Router, SafeStorage } from './spa-router.js?v=16';
 
-// 1-17. 컴포넌트 (사이드바, 관리자 패널)
+// 1-17. 컴포넌트 (사이드바)
+// AdminPanel: 2026-05-21 제거 — R1~R3 통합 이후 11 항목 중 9개 stale.
+// 사이드바 톱니 버튼은 직접 /settings.html navigate (unified-sidebar.js).
 import { UnifiedSidebar } from './components/unified-sidebar.js?v=6';
-import { AdminPanel } from './components/admin-panel.js';
 
 // 1-18. 모바일 FAB 메뉴
 import { init as initMobileFab } from './modules/mobile-fab.js';
@@ -656,7 +657,6 @@ window.SafeStorage = SafeStorage;
 
 // 컴포넌트 (이미 각 파일에서 window.* 설정됨, 여기서 보장)
 window.UnifiedSidebar = UnifiedSidebar;
-window.AdminPanel = AdminPanel;
 
 // 초기화 플래그 — 레거시 app.js 중복 로드 방지
 window._appInitialized = true;

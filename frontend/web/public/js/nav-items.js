@@ -41,9 +41,9 @@ const NAV_ITEMS = {
     admin: [
         { href: '/admin.html', icon: '👥', iconify: 'lucide:users', label: '관리자', requireAuth: true, requireAdmin: true },
         // Phase R2 (2026-05-21): admin-metrics/audit/analytics/alerts/token-monitoring 5개 페이지를 /admin 의 섹션 탭으로 통합
-        // /external.html: Phase R1 (2026-05-21) — settings 탭으로 통합
-        // /password-change.html: Phase R1 (2026-05-21) — settings 탭으로 통합
-        { href: '/settings.html', icon: '⚙️', iconify: 'lucide:settings', label: '설정', cssFiles: ['/css/settings.css?v=4'] }
+        // /external.html / /password-change.html: Phase R1 (2026-05-21) — settings 탭으로 통합
+        // /settings.html: 2026-05-21 사이드바 nav 에서 hidden — 사이드바 최하단 user-section 의 톱니 버튼 + avatar dropdown 의 "설정" 항목이 진입점. spa-router 등록 유지 위해 entry 자체는 보존
+        { href: '/settings.html', icon: '⚙️', iconify: 'lucide:settings', label: '설정', cssFiles: ['/css/settings.css?v=4'], excludeFromSidebar: true }
     ]
 };
 

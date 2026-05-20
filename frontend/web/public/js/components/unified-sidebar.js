@@ -405,10 +405,12 @@ UnifiedSidebar.prototype._bindEvents = function () {
     var settingsBtn = this.el.querySelector('.us-settings-btn');
     if (settingsBtn) {
         settingsBtn.addEventListener('click', function () {
-            if (window.AdminPanel) {
-                window.AdminPanel.toggle();
-            } else if (window.Router) {
+            // R1~R3 통합 이후 AdminPanel 의 stale 항목들은 모두 settings/admin 탭으로 흡수됨.
+            // 톱니 클릭 → /settings.html 직접 진입 (avatar dropdown 의 "설정" 항목과 동일 동작)
+            if (window.Router && typeof window.Router.navigate === 'function') {
                 window.Router.navigate('/settings.html');
+            } else {
+                window.location.href = '/settings.html';
             }
             if (isMobile()) {
                 self.setState(STATES.HIDDEN);
@@ -698,6 +700,7 @@ UnifiedSidebar.prototype._renderPageNav = function () {
     var userTierLevel = TIER_LEVEL[userTier] != null ? TIER_LEVEL[userTier] : 0;
 
     function passesFilter(item) {
+        if (item.excludeFromSidebar) return false;
         if (item.requireAuth && !isLoggedIn) return false;
         if (item.requireAdmin && !isAdmin) return false;
         if (item.minTier && (TIER_LEVEL[item.minTier] || 99) > userTierLevel) return false;
