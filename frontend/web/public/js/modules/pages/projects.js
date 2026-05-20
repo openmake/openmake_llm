@@ -1,0 +1,124 @@
+/**
+ * ============================================
+ * Projects Page — claude.ai-style 카드 그리드 (Phase R3)
+ * ============================================
+ * skill-library / mcp-servers / custom-agents 3개 페이지의 통합 진입점.
+ * 사용자가 단일 hub 에서 사용 가능한 도구/스킬/에이전트 카테고리 선택.
+ *
+ * @module pages/projects
+ */
+'use strict';
+
+window.PageModules = window.PageModules || {};
+
+const escapeHTML = (str) => {
+    if (typeof window.escapeHTML === 'function') return window.escapeHTML(str);
+    const d = document.createElement('div');
+    d.textContent = str == null ? '' : String(str);
+    return d.innerHTML;
+};
+
+const CARDS = [
+    {
+        href: '/skill-library.html',
+        icon: '📦',
+        title: '스킬 라이브러리',
+        desc: '재사용 가능한 매니페스트 + 도구 바인딩 (Anthropic Skills 동형)',
+        tier: 'pro',
+        actions: ['.SKILL 업로드', '커스텀 작성', '시스템 스킬'],
+    },
+    {
+        href: '/mcp-servers.html',
+        icon: '🔌',
+        title: 'MCP 서버',
+        desc: '로컬 도구 (파일 시스템, GitHub 등) 를 LLM 에 연결',
+        tier: 'free',
+        actions: ['카탈로그 선택', '사용자 등록', 'lifecycle 추적'],
+    },
+    {
+        href: '/custom-agents.html',
+        icon: '🤖',
+        title: '커스텀 에이전트',
+        desc: '도메인 특화 에이전트 정의 + 라우팅',
+        tier: 'pro',
+        actions: ['100 전문가', 'LLM 라우팅', '토론 엔진'],
+    },
+];
+
+function renderCard(card) {
+    const actions = card.actions.map((a) => `<span class="proj-card-pill">${escapeHTML(a)}</span>`).join('');
+    return `
+        <a class="proj-card" href="${escapeHTML(card.href)}" data-projects-navigate="${escapeHTML(card.href)}">
+            <div class="proj-card-icon">${escapeHTML(card.icon)}</div>
+            <div class="proj-card-body">
+                <h3 class="proj-card-title">${escapeHTML(card.title)}
+                    <span class="proj-card-tier proj-tier-${escapeHTML(card.tier)}">${escapeHTML(card.tier)}</span>
+                </h3>
+                <p class="proj-card-desc">${escapeHTML(card.desc)}</p>
+                <div class="proj-card-actions">${actions}</div>
+            </div>
+            <span class="proj-card-arrow" aria-hidden="true">→</span>
+        </a>`;
+}
+
+function getHTML() {
+    const cards = CARDS.map(renderCard).join('');
+    return '<div class="projects-page">' +
+        '<style data-spa-style="projects">' +
+        '.projects-page{padding:var(--space-6);max-width:1200px;margin:0 auto;}' +
+        '.projects-header{margin-bottom:var(--space-6);}' +
+        '.projects-header h1{font-size:28px;margin:0 0 var(--space-2);color:var(--text-primary);}' +
+        '.projects-header p{color:var(--text-muted);margin:0;}' +
+        '.proj-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:var(--space-4);}' +
+        '.proj-card{display:flex;gap:var(--space-4);align-items:flex-start;background:var(--bg-card);border:1px solid var(--border-light);border-radius:var(--radius-lg);padding:var(--space-5);text-decoration:none;color:inherit;transition:border-color .15s,transform .15s;}' +
+        '.proj-card:hover{border-color:var(--accent-primary);transform:translateY(-2px);}' +
+        '.proj-card-icon{font-size:32px;flex-shrink:0;}' +
+        '.proj-card-body{flex:1;min-width:0;}' +
+        '.proj-card-title{display:flex;align-items:center;gap:var(--space-2);margin:0 0 var(--space-2);font-size:16px;color:var(--text-primary);}' +
+        '.proj-card-tier{font-size:10px;padding:2px 6px;border-radius:var(--radius-sm);font-weight:var(--font-weight-semibold);text-transform:uppercase;}' +
+        '.proj-tier-free{background:var(--bg-tertiary);color:var(--text-secondary);}' +
+        '.proj-tier-pro{background:rgba(168,85,247,.15);color:#a855f7;border:1px solid rgba(168,85,247,.3);}' +
+        '.proj-card-desc{color:var(--text-muted);font-size:var(--font-size-sm);margin:0 0 var(--space-3);line-height:1.5;}' +
+        '.proj-card-actions{display:flex;flex-wrap:wrap;gap:var(--space-1);}' +
+        '.proj-card-pill{padding:2px 8px;background:var(--bg-tertiary);color:var(--text-secondary);border-radius:var(--radius-md);font-size:11px;}' +
+        '.proj-card-arrow{color:var(--text-muted);font-size:18px;align-self:center;flex-shrink:0;transition:transform .15s;}' +
+        '.proj-card:hover .proj-card-arrow{color:var(--accent-primary);transform:translateX(4px);}' +
+        '</style>' +
+        '<header class="projects-header">' +
+        '<h1>📁 프로젝트</h1>' +
+        '<p>스킬 / MCP 서버 / 커스텀 에이전트 — 작업 도구 통합 hub</p>' +
+        '</header>' +
+        `<div class="proj-grid">${cards}</div>` +
+        '</div>';
+}
+
+const _listeners = [];
+
+function init() {
+    document.querySelectorAll('[data-projects-navigate]').forEach((card) => {
+        const handler = (ev) => {
+            ev.preventDefault();
+            const target = card.getAttribute('data-projects-navigate');
+            if (!target) return;
+            if (window.Router && typeof window.Router.navigate === 'function') {
+                window.Router.navigate(target);
+            } else {
+                window.location.href = target;
+            }
+        };
+        card.addEventListener('click', handler);
+        _listeners.push({ el: card, ev: 'click', fn: handler });
+    });
+}
+
+function cleanup() {
+    while (_listeners.length) {
+        const { el, ev, fn } = _listeners.pop();
+        try { el.removeEventListener(ev, fn); } catch (_e) { /* noop */ }
+    }
+}
+
+window.PageModules['projects'] = { getHTML, init, cleanup };
+
+const pageModule = window.PageModules['projects'];
+export default pageModule;
