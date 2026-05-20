@@ -279,9 +279,51 @@ export class DashboardServer {
             });
 
             this.server.listen(this.port, '0.0.0.0', () => {
+                // Phase 7 lifecycle supervisor 초기화 — listen 완료 후 1회.
+                // cli.ts (cluster) 와 server.ts (직접 실행) 모두 동작 보장.
+                void this.initLifecycleSupervisor();
                 resolve();
             });
         });
+    }
+
+    private async initLifecycleSupervisor(): Promise<void> {
+        try {
+            const [
+                { MCPLifecycleSupervisor, setLifecycleSupervisor, getLifecycleSupervisor },
+                { getUserMCPPool },
+                { McpCatalogRepository },
+                { ExternalMCPClient },
+                { getUnifiedDatabase },
+            ] = await Promise.all([
+                import('./mcp/lifecycle-supervisor'),
+                import('./mcp/user-pool'),
+                import('./data/repositories/mcp-catalog-repository'),
+                import('./mcp/external-client'),
+                import('./data/models/unified-database'),
+            ]);
+            if (getLifecycleSupervisor()) return;  // 중복 초기화 방지
+            const supervisor = new MCPLifecycleSupervisor({
+                userPool: getUserMCPPool(),
+                repo: new McpCatalogRepository(getUnifiedDatabase().getPool()),
+                clientFactory: (config) => new ExternalMCPClient({
+                    id: config.id,
+                    name: config.id,
+                    transport_type: config.transport_type,
+                    command: config.command ?? undefined,
+                    args: config.args as string[] | undefined,
+                    env: config.env ?? undefined,
+                    url: config.url ?? undefined,
+                    enabled: true,
+                    created_at: '',
+                    updated_at: '',
+                }),
+            });
+            setLifecycleSupervisor(supervisor);
+            console.log('✅ MCP Lifecycle Supervisor 초기화 완료');
+        } catch (err) {
+            console.error('⚠️  MCP Lifecycle Supervisor 초기화 실패 (graceful skip):', err);
+        }
     }
 
     /**
