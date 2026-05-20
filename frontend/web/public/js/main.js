@@ -26,7 +26,7 @@ import {
     debugLog, debugWarn, debugError,
     handleKeyDown,
     truncateFilename, formatFileSize, formatDate, relativeTime,
-    debounce, throttle, generateUUID, deepClone, DEBUG
+    debounce, throttle, generateUUID, deepClone
 } from './modules/utils.js';
 
 // 1-3. 인증 (state 의존)
@@ -39,7 +39,7 @@ import {
 // 1-4. UI (state 의존)
 import {
     applyTheme, toggleTheme, setTheme,
-    toggleSidebar, toggleMobileSidebar as uiToggleMobileSidebar,
+    toggleSidebar,
     openModal, closeModal,
     showSettings, closeSettings,
     showFileUpload, closeFileModal,

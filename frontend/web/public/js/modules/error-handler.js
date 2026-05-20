@@ -13,7 +13,7 @@
 import { getState, setState, addToMemory } from './state.js';
 import { addChatMessage } from './chat.js';
 import { showToast, showError, renderMarkdown, escapeHtml, scrollToBottom } from './ui.js';
-import { closeGuideModal } from './guide.js';
+// closeGuideModal import 제거 — error-handler 본문에서 사용 안 함 (main.js 가 직접 import)
 
 /**
  * 환영 화면의 기능 카드 클릭 시 해당 기능의 AI 환영 메시지 표시
