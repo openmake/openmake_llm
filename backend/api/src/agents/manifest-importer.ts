@@ -86,6 +86,32 @@ export class ManifestImporter {
             await this.insertBindings(client, skillId, input.manifest.version, input.manifest);
             await this.insertMcpBundles(client, skillId, input.manifest.version, input.manifest);
 
+            // 업로드 사용자의 채팅에 자동으로 노출되도록 user:{userId} 가상 agent 에 할당.
+            // agent_skills 테이블에는 skill 행이 없으므로 FK 우회를 위해 placeholder 행 INSERT
+            // (skill-repository 의 user-assign 패턴 동등).
+            // 참조: project_users_id_text 메모리 + system-prompt.buildManifestPrompt 의 JOIN 조건.
+            const userAgentId = `user:${input.createdBy}`;
+            await client.query(
+                `INSERT INTO agent_skills (id, name, description, content, category, is_public, created_by, created_at, updated_at)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
+                 ON CONFLICT (id) DO NOTHING`,
+                [
+                    skillId,
+                    input.manifest.name,
+                    input.manifest.description,
+                    input.prompt_md,
+                    input.manifest.category,
+                    isPublic,
+                    input.createdBy,
+                ],
+            );
+            await client.query(
+                `INSERT INTO agent_skill_assignments (agent_id, skill_id, priority)
+                 VALUES ($1, $2, 100)
+                 ON CONFLICT DO NOTHING`,
+                [userAgentId, skillId],
+            );
+
             await client.query('COMMIT');
             logger.info(
                 `manifest import 완료: ${skillId} v${input.manifest.version} ` +
