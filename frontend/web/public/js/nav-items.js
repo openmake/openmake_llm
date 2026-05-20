@@ -41,10 +41,13 @@ const NAV_ITEMS = {
     admin: [
         { href: '/admin.html', icon: '👥', iconify: 'lucide:users', label: '관리자', requireAuth: true, requireAdmin: true },
         // Phase R2 (2026-05-21): admin-metrics/audit/analytics/alerts/token-monitoring 5개 페이지를 /admin 의 섹션 탭으로 통합
-        // /password-change.html: Phase R1 (2026-05-21) — settings 탭으로 통합
-        // settings/external: 사이드바 nav 에서 hidden — settings 페이지의 톱니/avatar dropdown 이 진입점.
-        // spa-router 등록 유지 위해 entry 보존 (settings 의 integrations 탭이 /external.html 로 navigate)
+        // settings 및 그 sub-탭들: 사이드바 nav 에서 hidden. settings 페이지의 톱니/avatar dropdown
+        // 이 settings 진입점. settings 의 5탭 (account/api-keys/usage/integrations) 은 각자 페이지로
+        // navigate 하므로 spa-router 라우트 등록 위해 entry 보존.
         { href: '/settings.html', icon: '⚙️', iconify: 'lucide:settings', label: '설정', cssFiles: ['/css/settings.css?v=4'], excludeFromSidebar: true },
+        { href: '/password-change.html', icon: '🔑', iconify: 'lucide:key-round', label: '비밀번호 변경', requireAuth: true, excludeFromSidebar: true },
+        { href: '/api-keys.html', icon: '🗝️', iconify: 'lucide:key', label: 'API 키', requireAuth: true, excludeFromSidebar: true },
+        { href: '/usage.html', icon: '📈', iconify: 'lucide:bar-chart-2', label: '사용량', requireAuth: true, excludeFromSidebar: true },
         { href: '/external.html', icon: '🔗', iconify: 'lucide:link', label: '외부 연동', requireAuth: true, minTier: 'pro', excludeFromSidebar: true }
     ]
 };
