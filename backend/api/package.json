@@ -6,7 +6,7 @@
     "scripts": {
         "build": "tsc && npm run copy-agent-data && npm run sync-frontend && npm run build-info",
         "copy-agent-data": "cp -r src/agents/data dist/agents/data",
-        "sync-frontend": "cp -r ../../frontend/web/public/* dist/public/",
+        "sync-frontend": "rsync -a --delete ../../frontend/web/public/ dist/public/",
         "build-info": "node -e \"const{execSync}=require('child_process');const fs=require('fs');const i={buildTime:new Date().toISOString(),gitHash:execSync('git rev-parse --short HEAD').toString().trim(),gitDate:execSync('git log -1 --format=%cd --date=short').toString().trim()};fs.writeFileSync('dist/build-info.json',JSON.stringify(i));console.log('build-info:',i);\"",
         "dev": "ts-node --files src/server.ts",
         "start": "node dist/server.js",
