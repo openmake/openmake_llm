@@ -50,6 +50,9 @@ import { recordMetricsAndVerify as recordMetricsAndVerifyFn } from './chat-servi
 import { ProviderRouter } from '../providers/provider-router';
 import { runProviderGate } from './chat-service/provider-gate';
 import { isPersistableUserId } from '../utils/user-id-validation';
+import { mergeToolsWithSkills } from './chat-service/tool-merger';
+import type { ActiveSkillBinding } from './chat-service/tool-merger';
+import { getSkillManager } from '../agents/skill-manager';
 
 // Re-export all types so consumers importing from ChatService don't break
 export type {
@@ -93,6 +96,12 @@ export class ChatService {
     private currentEnabledTools: Record<string, boolean> | undefined = undefined;
     /** 현재 실행 계획 (requiredTools 강제 포함에 사용) */
     private currentExecutionPlan: ExecutionPlan | undefined = undefined;
+    /**
+     * 현재 채팅의 활성 skill tool_bindings (manifest 모델, 021 마이그레이션 산출물).
+     * agent 선택 직후 SkillManager.getActiveSkillBindings 로 채워짐.
+     * 빈 배열이면 머지 결과 = 기존 동작 (profileRequired ∪ userToggled).
+     */
+    private currentSkillBindings: ActiveSkillBinding[] = [];
 
     /** 단일 LLM 직접 호출 전략 */
     private readonly directStrategy: DirectStrategy;
@@ -178,31 +187,50 @@ export class ChatService {
         const userTierForTools = this.currentUserContext?.tier || 'free';
         const allTools = toolRouter.getLLMTools(userTierForTools) as ToolDefinition[];
 
-        // enabledTools가 전달된 경우, 사용자가 명시적으로 활성화한 도구만 허용
-        // enabledTools가 없으면 레거시 호환: 전체 허용 (API 클라이언트 등)
-        if (this.currentEnabledTools !== undefined) {
-            const filtered = allTools.filter(t => this.currentEnabledTools![t.function.name] === true);
+        // enabledTools가 없으면 레거시 호환: 전체 허용 (API 클라이언트 등). skill binding 적용도 skip.
+        if (this.currentEnabledTools === undefined) return allTools;
 
-            // requiredTools 강제 포함: 프로파일이 요구하는 도구는 사용자 토글과 무관하게 포함
-            // 예: Vision 프로파일은 vision 도구가 항상 필요함
-            const requiredTools = this.currentExecutionPlan?.requiredTools;
-            if (requiredTools && requiredTools.length > 0) {
-                for (const reqToolName of requiredTools) {
-                    const alreadyIncluded = filtered.some(t => t.function.name.includes(reqToolName));
-                    if (!alreadyIncluded) {
-                        const requiredTool = allTools.find(t => t.function.name.includes(reqToolName));
-                        if (requiredTool) {
-                            filtered.push(requiredTool);
-                            logger.info(`requiredTools 강제 포함: ${requiredTool.function.name}`);
-                        }
-                    }
-                }
-            }
+        // 사용자가 명시적으로 활성화한 도구만 추출
+        const userToggled = allTools.filter(t => this.currentEnabledTools![t.function.name] === true);
 
-            logger.debug(`MCP 도구 필터링: ${allTools.length}개 중 ${filtered.length}개 활성화`);
-            return filtered;
+        // profile.requiredTools (Vision 프로파일 등) 의 토큰 매칭 → 실제 도구 이름으로 확장
+        const profileRequiredNames = (this.currentExecutionPlan?.requiredTools ?? [])
+            .flatMap(tokenOrName => {
+                // tokenOrName 이 정확한 도구 이름이면 그대로, 아니면 포함 검색
+                if (allTools.some(t => t.function.name === tokenOrName)) return [tokenOrName];
+                const matched = allTools.find(t => t.function.name.includes(tokenOrName));
+                return matched ? [matched.function.name] : [];
+            });
+
+        const merged = mergeToolsWithSkills({
+            allTools,
+            userToggled,
+            profileRequired: profileRequiredNames,
+            skillBindings: this.currentSkillBindings,
+        });
+
+        logger.debug(
+            `MCP 도구 머지: all=${allTools.length}, userToggled=${userToggled.length}, ` +
+            `profileRequired=${profileRequiredNames.length}, skillBindings=${this.currentSkillBindings.length}, ` +
+            `merged=${merged.length}`,
+        );
+        return merged;
+    }
+
+    /**
+     * 현재 채팅의 활성 skill bindings 를 캐시.
+     * agent 선택 직후 호출하여 getAllowedTools() 가 동기 머지 가능하도록 함.
+     * manifest 마이그레이션 부재 시 빈 배열 (graceful).
+     */
+    private async loadSkillBindings(agentId: string): Promise<void> {
+        const rawUserId = this.currentUserContext?.userId;
+        const userId = rawUserId !== undefined ? String(rawUserId) : undefined;
+        try {
+            this.currentSkillBindings = await getSkillManager().getActiveSkillBindings(agentId, userId);
+        } catch (e) {
+            logger.debug('skill bindings 로드 실패 — 빈 배열 사용', e);
+            this.currentSkillBindings = [];
         }
-        return allTools;
     }
 
     /**
@@ -536,6 +564,10 @@ export class ChatService {
         // buildContextForLLM + resolveModel + 동기 단계가 진행되는 동안
         // LLM 라우팅 호출이 끝나 있다면 추가 대기 없음.
         const { agentSelection, agentSystemMessage, selectedAgent } = await agentPromise;
+
+        // skill tool_bindings 캐시 — manifest 모델 (021 마이그레이션) 의 binding 을
+        // getAllowedTools() 의 동기 머지에서 사용. agentId 가 결정된 직후 호출.
+        await this.loadSkillBindings(selectedAgent.id);
 
         let currentHistory: ChatMessage[] = [];
         let combinedSystemPrompt = agentSystemMessage
