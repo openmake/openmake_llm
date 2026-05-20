@@ -47,7 +47,7 @@
     <script src="vendor/katex.min.js" defer></script>
     <!-- Diagram Rendering: Mermaid (self-hosted, defer) -->
     <script src="vendor/mermaid.min.js" defer></script>
-    <script src="guide_content.js" defer></script>
+    <!-- guide_content.js: 2026-05-21 제거 — 사용 가이드 시스템 폐기 -->
 
 
     <style>
@@ -339,20 +339,6 @@
                 <div class="modal-footer">
                     <button class="btn" onclick="resetSettings()">🔄 초기화</button>
                     <button class="btn btn-primary" onclick="saveSettings()">💾 설정 저장</button>
-                </div>
-            </div>
-        </div>
-
-        <!-- 가이드 모달 -->
-        <div class="modal" id="guideModal">
-            <div class="modal-content guide-modal-content">
-                <div class="modal-header">
-                    <h3 class="modal-title" id="guideTitle">📖 사용자 가이드</h3>
-                    <button class="modal-close" onclick="closeGuideModal()">&times;</button>
-                </div>
-                <div class="modal-body" id="guideBody"></div>
-                <div class="modal-footer">
-                    <p id="guideFooter" class="guide-footer-text"></p>
                 </div>
             </div>
         </div>

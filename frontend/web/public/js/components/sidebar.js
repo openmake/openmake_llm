@@ -76,8 +76,8 @@ class SharedSidebar {
             { href: '/custom-agents.html', icon: '🤖', label: '커스텀 에이전트', requireAuth: true },
             // /memory.html: 2026-05-19 MemoryService 제거 시 폐기
             { href: '/usage.html', icon: '📈', label: 'API 사용량', requireAuth: true },
-            { href: '/agent-learning.html', icon: '🎓', label: '에이전트 학습', requireAuth: true },
-            { href: '/guide.html', icon: '📖', label: '사용 가이드' }
+            { href: '/agent-learning.html', icon: '🎓', label: '에이전트 학습', requireAuth: true }
+            // /guide.html: 2026-05-21 제거 — 사용 가이드 시스템 폐기
         ];
 
         const adminItems = navData ? navData.admin.map(item => ({ ...item })) : [

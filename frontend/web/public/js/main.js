@@ -111,7 +111,7 @@ import {
 } from './modules/error-handler.js';
 
 // 1-14. 가이드 (ui 의존)
-import { showUserGuide, closeGuideModal, useMode } from './modules/guide.js';
+// modules/guide.js: 2026-05-21 제거 — 사용 가이드 전체 시스템 폐기
 
 // NOTE: sanitize.js는 ES export가 없으며 window.purifyHTML/sanitizeHTML로 전역 노출됨
 // side-effect import로 로드하여 window 전역에 등록
@@ -629,13 +629,9 @@ window.startFeatureChat = startFeatureChat;
 window.handleCommand = handleCommand;
 window.showHelpAndMessage = showHelpAndMessage;
 window.performWebSearch = performWebSearch;
-window.useMode = useMode;
 // showHelpPopup/hideHelpPopup/hideHelpPopupDelayed/closeHelpPopup window 등록:
 // 2026-05-19 stub 처리된 deprecated 함수, 사용처 0 — 제거
-
-// 가이드
-window.showUserGuide = showUserGuide;
-window.closeGuideModal = closeGuideModal;
+// useMode / showUserGuide / closeGuideModal: 2026-05-21 사용 가이드 시스템 폐기로 제거
 
 // 앱 초기화 (main.js 자체)
 window.initApp = initApp;

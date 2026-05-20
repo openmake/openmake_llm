@@ -86,11 +86,7 @@ declare global {
         handleCommand?: (cmd: string) => void;
         showHelpAndMessage?: (msg: string) => void;
         performWebSearch?: (q: string) => void;
-        useMode?: (mode: string) => void;
-
-        // guide
-        showUserGuide?: () => void;
-        closeGuideModal?: () => void;
+        // useMode / showUserGuide / closeGuideModal: 2026-05-21 사용 가이드 시스템 폐기
 
         // sanitize
         purifyHTML?: (html: string) => string;

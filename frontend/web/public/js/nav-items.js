@@ -28,7 +28,7 @@ const NAV_ITEMS = {
     menu: [
         // / (채팅): 2026-05-21 제거 — 사이드바 상단의 "새 대화" 버튼 + 로고 클릭이 채팅 진입 경로 대체
         { href: '/history.html', icon: '📜', iconify: 'lucide:scroll-text', label: '히스토리', requireAuth: true },
-        { href: '/guide.html', icon: '📖', iconify: 'lucide:book-open', label: '사용 가이드' },
+        // /guide.html: 2026-05-21 제거 — 사용 가이드 전체 시스템 폐기
         { href: '/developer.html', icon: '📖', iconify: 'lucide:code-2', label: 'API 문서' },
         { href: '/research.html', icon: '🔬', iconify: 'lucide:flask-conical', label: '딥 리서치', requireAuth: true, minTier: 'pro' },
         // /documents.html, /memory.html: 2026-05-19 제거

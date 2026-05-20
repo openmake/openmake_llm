@@ -205,7 +205,7 @@ export function setupStaticFiles(app: Application, dirname: string): void {
         'research', 'custom-agents',
         'agent-learning', 'usage', 'analytics', 'admin-metrics',
         'admin', 'audit', 'external', 'alerts', 'memory', 'settings',
-        'password-change', 'history', 'guide', 'developer', 'api-keys',
+        'password-change', 'history', 'developer', 'api-keys',
         'skill-library'
     ]);
 

@@ -48,11 +48,8 @@ function handleCommand(command) {
     const cmd = command.toLowerCase().trim();
 
     if (cmd === '/help') {
-        if (typeof window.showUserGuide === 'function') {
-            window.showUserGuide();
-        } else {
-            showHelpAndMessage();
-        }
+        // showUserGuide modal: 2026-05-21 사용 가이드 시스템 폐기 — fallback 만 유지
+        showHelpAndMessage();
         return true;
     }
 
