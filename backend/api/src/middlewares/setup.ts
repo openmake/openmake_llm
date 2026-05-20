@@ -228,7 +228,13 @@ export function setupStaticFiles(app: Application, dirname: string): void {
 
     for (const filePath of [...allHtmlFiles, ...allJsFiles]) {
         const content = fs.readFileSync(filePath, 'utf8');
-        const hashes = collectCspAttributeHashes(content);
+        // JS source 안의 inject 된 onclick 은 `onclick=\"...\"` 같은 escape 형태로 저장됨.
+        // CSP 해시는 runtime unescape 된 onclick string 의 hash 가 필요하므로
+        // JS 파일은 backslash-quote 를 unescape 한 뒤 regex 적용.
+        const processedContent = filePath.toLowerCase().endsWith('.js')
+            ? content.replace(/\\"/g, '"').replace(/\\'/g, "'")
+            : content;
+        const hashes = collectCspAttributeHashes(processedContent);
         hashes.scriptAttr.forEach((hash) => scriptAttrHashes.add(hash));
         hashes.styleAttr.forEach((hash) => styleAttrHashes.add(hash));
     }
