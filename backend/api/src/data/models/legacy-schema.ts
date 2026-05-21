@@ -358,7 +358,9 @@ CREATE TABLE IF NOT EXISTS agent_skills (
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW(),
     source_repo TEXT,
-    source_path TEXT
+    source_path TEXT,
+    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('draft','active','archived')),
+    manifest_meta JSONB
 );
 
 CREATE TABLE IF NOT EXISTS agent_skill_assignments (
