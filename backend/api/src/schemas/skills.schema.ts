@@ -40,6 +40,49 @@ export const searchSkillsQuerySchema = z.object({
     sortBy: z.enum(['newest', 'name', 'category', 'updated']).optional().default('newest'),
     limit: z.coerce.number().int().min(1).max(200).optional().default(20),
     offset: z.coerce.number().int().min(0).optional().default(0),
+    status: z.enum(['draft', 'active', 'all']).default('active'),
 });
 
 export type SearchSkillsQuery = z.infer<typeof searchSkillsQuerySchema>;
+
+// ============================================================
+// Skill Creator (Phase 1) — 자동 생성 + draft 워크플로
+// ============================================================
+
+export const SKILL_CATEGORIES = [
+    'general', 'coding', 'writing', 'analysis', 'creative', 'education',
+    'business', 'science', 'technology', 'finance', 'healthcare', 'legal',
+    'engineering', 'media', 'social-welfare', 'government', 'real-estate',
+    'energy', 'logistics', 'hospitality', 'agriculture', 'productivity',
+    'communication', 'system',
+] as const;
+
+export const autoCreateSkillSchema = z.object({
+    purpose: z.string().min(5).max(500),
+    target: z.enum(['user', 'system']).optional().default('user'),
+    category: z.enum(SKILL_CATEGORIES).optional(),
+    examples: z.array(z.string().max(500)).max(5).optional(),
+    hints: z.string().max(1000).optional(),
+});
+
+export type AutoCreateSkillInput = z.infer<typeof autoCreateSkillSchema>;
+
+export const draftsQuerySchema = z.object({
+    target: z.enum(['user', 'system', 'all']).default('user'),
+    limit: z.coerce.number().int().positive().max(100).default(50),
+    offset: z.coerce.number().int().nonnegative().default(0),
+});
+
+export type DraftsQuery = z.infer<typeof draftsQuerySchema>;
+
+// LLM 응답 검증 (SkillCreatorService 가 사용)
+export const llmSkillManifestSchema = z.object({
+    name: z.string().min(5).max(100),
+    description: z.string().min(10).max(500),
+    category: z.enum(SKILL_CATEGORIES).default('general'),
+    content: z.string().min(200).max(20000),
+    triggers: z.array(z.string().max(50)).max(20).optional().default([]),
+    tags: z.array(z.string().max(30)).max(10).optional().default([]),
+});
+
+export type LlmSkillManifest = z.infer<typeof llmSkillManifestSchema>;
