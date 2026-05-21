@@ -21,6 +21,7 @@
 
 import { createLogger } from '../utils/logger';
 import type { Agent, AgentCategory } from './types';
+import type { SkillRepository } from '../data/repositories/skill-repository';
 import industryAgentsJson from './industry-agents.json';
 import {
     getCategoryGuidelines,
@@ -377,9 +378,50 @@ export async function seedAgentSkills(): Promise<void> {
             errorCount++;
         }
 
+        // system-skill-author-guide 시드 (LLM 에게 create_skill 도구 사용 안내)
+        try {
+            await seedSystemSkillAuthorGuide(repo);
+        } catch (err) {
+            logger.error('skill-author-guide 시딩 실패', err);
+            errorCount++;
+        }
+
         logger.info(`✅ 에이전트 스킬 시딩 완료: ${seededCount}개 성공, ${errorCount}개 실패`);
     } catch (err) {
         logger.error('❌ 에이전트 스킬 시딩 초기화 실패:', err);
         // 시딩 실패는 서버 시작을 막지 않음
     }
+}
+
+/**
+ * Skill Author Guide system-skill 시드 (멱등 upsert).
+ * LLM 에게 create_skill 도구 사용을 안내. 모든 사용자 세션에 자동 활성
+ * (isPublic=true, createdBy=null).
+ *
+ * 부팅 시 seedAgentSkills() 의 끝부분에서 호출.
+ *
+ * @param repo - SkillRepository 인스턴스 (호출자가 이미 생성한 것 재사용)
+ */
+export async function seedSystemSkillAuthorGuide(repo: SkillRepository): Promise<void> {
+    const content = `# 스킬 생성 도구 사용 안내
+
+사용자가 다음 의도를 보이면 \`create_skill\` 도구를 호출하라:
+- "X 분야 (전문) 스킬 만들어줘"
+- "X 에 대한 에이전트 스킬 등록해줘"
+- "이런 작업 자주 하니까 skill 로 만들어"
+
+호출 시 \`purpose\` (사용자가 원하는 분야/기능) 를 명확히 전달.
+\`target='system'\` 은 admin 만 가능 (그 외는 자동 'user' 로 강등됨).
+
+도구 응답은 draft 상태이며, 사용자가 검토 카드에서 [저장] 클릭해야 활성화됨.`;
+
+    await repo.upsertSystemSkill('system-skill-author-guide', {
+        name: 'Skill Author Guide',
+        description: 'LLM 에게 자동 스킬 생성 도구 사용을 안내',
+        content,
+        category: 'system',
+        isPublic: true,
+        sourcePath: 'agents/prompts/skill-author-system-prompt.ts',
+    });
+    logger.info('[SkillSeeder] system-skill-author-guide upserted');
 }
