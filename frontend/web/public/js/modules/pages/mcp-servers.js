@@ -22,6 +22,11 @@
  */
 'use strict';
 
+import {
+    renderMcpServerDraftCard,
+    handleMcpServerDraftAction,
+} from '../../components/mcp-server-draft-card.js';
+
 // sanitize.js 는 ES export 없음 — window.escapeHTML 전역으로 노출됨.
 // 본 모듈은 window.escapeHTML 또는 fallback inline escape 사용.
 const escapeHTML = (str) => {
@@ -38,6 +43,7 @@ const STATE = {
     catalog: [],
     myServers: [],
     instances: [],
+    drafts: [],
     selectedServerForInstances: '',
     currentTemplate: null,
 };
@@ -389,17 +395,46 @@ function getHTML() {
         '.mcp-page-spa .mcp-card{background:var(--bg-card);border:1px solid var(--border-light);border-radius:var(--radius-lg);padding:var(--space-5);}' +
         '</style>' +
         '<div class="mcp-page-spa">' +
-        '<header class="mcp-header"><h1>🔌 MCP 서버</h1><p style="color:var(--text-muted);">로컬 도구를 LLM 이 사용할 수 있도록 연결합니다.</p></header>' +
+        '<header class="mcp-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:var(--space-3);">' +
+            '<div><h1>🔌 MCP 서버</h1><p style="color:var(--text-muted);margin:0;">로컬 도구를 LLM 이 사용할 수 있도록 연결합니다.</p></div>' +
+            '<button class="btn-primary" id="mcp-import-from-git-btn" type="button">📥 Git 에서 가져오기</button>' +
+        '</header>' +
         '<div class="mcp-tabs" role="tablist">' +
         '<button class="mcp-tab active" data-tab="catalog">📚 카탈로그</button>' +
         '<button class="mcp-tab" data-tab="my-servers">👤 내 서버</button>' +
         '<button class="mcp-tab" data-tab="instances">📊 인스턴스 상태</button>' +
         '</div>' +
         '<section id="mcp-panel-catalog" class="mcp-tab-panel active"><div id="mcp-catalog-grid" class="mcp-grid"><div class="mcp-loading">로딩 중…</div></div></section>' +
-        '<section id="mcp-panel-my-servers" class="mcp-tab-panel"><div class="mcp-toolbar"><button class="mcp-tab" id="mcp-refresh-my-servers">새로고침</button></div><div id="mcp-my-servers-grid" class="mcp-grid"><div class="mcp-loading">로딩 중…</div></div></section>' +
+        '<section id="mcp-panel-my-servers" class="mcp-tab-panel">' +
+            '<div class="mcp-toolbar"><button class="mcp-tab" id="mcp-refresh-my-servers">새로고침</button><button class="mcp-tab" id="mcp-refresh-drafts">draft 새로고침</button></div>' +
+            '<div id="mcp-drafts-section" style="margin-bottom:var(--space-5);">' +
+                '<h3 style="margin:var(--space-2) 0;">📥 검토 대기 (draft)</h3>' +
+                '<div id="mcp-drafts-container" class="mcp-grid"><div class="mcp-loading">로딩 중…</div></div>' +
+            '</div>' +
+            '<h3 style="margin:var(--space-2) 0;">👤 활성 서버</h3>' +
+            '<div id="mcp-my-servers-grid" class="mcp-grid"><div class="mcp-loading">로딩 중…</div></div>' +
+        '</section>' +
         '<section id="mcp-panel-instances" class="mcp-tab-panel"><div class="mcp-toolbar"><select id="mcp-instance-server-select" class="mcp-select"><option value="">서버 선택…</option></select><button class="mcp-tab" id="mcp-refresh-instances">새로고침</button></div><div id="mcp-instances-container"><div class="mcp-empty">서버를 선택하세요.</div></div></section>' +
         '</div>' +
         '<div id="mcp-register-modal" class="mcp-modal" role="dialog" aria-modal="true"><div class="mcp-modal-content"><h3 id="mcp-modal-title">서버 등록</h3><p id="mcp-modal-desc" style="color:var(--text-muted);"></p><div id="mcp-modal-fields"></div><div class="mcp-modal-actions"><button class="btn-secondary" data-close-mcp-modal>취소</button><button class="btn-primary" id="mcp-modal-submit">등록</button></div></div></div>' +
+        '<div id="mcp-import-modal" class="mcp-modal" role="dialog" aria-modal="true">' +
+            '<div class="mcp-modal-content">' +
+                '<h3>📥 Git URL 에서 MCP server 가져오기</h3>' +
+                '<p style="color:var(--text-muted);">저장소의 <code>MCPSERVER.md</code> 매니페스트를 fetch → 검증 → draft 로 저장합니다. 승인 전까지 spawn 되지 않습니다.</p>' +
+                '<div class="mcp-modal-fields">' +
+                    '<label style="display:block;margin:var(--space-2) 0;">Git URL ' +
+                        '<input id="mcp-import-git-url" type="text" placeholder="https://github.com/owner/repo 또는 owner/repo" style="width:100%;padding:var(--space-2);margin-top:var(--space-1);">' +
+                    '</label>' +
+                    '<label style="display:block;margin:var(--space-2) 0;">Access Token (private repo 만 필요, 옵션) ' +
+                        '<input id="mcp-import-access-token" type="password" placeholder="ghp_..." style="width:100%;padding:var(--space-2);margin-top:var(--space-1);">' +
+                    '</label>' +
+                '</div>' +
+                '<div class="mcp-modal-actions">' +
+                    '<button class="btn-secondary" data-close-mcp-import-modal>취소</button>' +
+                    '<button class="btn-primary" id="mcp-import-submit">가져오기</button>' +
+                '</div>' +
+            '</div>' +
+        '</div>' +
         '</div>';
 }
 
@@ -424,13 +459,24 @@ function init() {
             if (sid) handleServerAction(sid, action);
         } else if (target.hasAttribute('data-close-mcp-modal')) {
             closeRegisterModal();
+        } else if (target.hasAttribute('data-close-mcp-import-modal')) {
+            closeImportModal();
         }
     };
     addListener(root, 'click', delegateHandler);
 
-    document.getElementById('mcp-modal-submit') && addListener(document.getElementById('mcp-modal-submit'), 'click', submitRegister);
-    document.getElementById('mcp-refresh-my-servers') && addListener(document.getElementById('mcp-refresh-my-servers'), 'click', loadMyServers);
-    document.getElementById('mcp-refresh-instances') && addListener(document.getElementById('mcp-refresh-instances'), 'click', () => loadInstances(STATE.selectedServerForInstances));
+    const modalSubmit = document.getElementById('mcp-modal-submit');
+    if (modalSubmit) addListener(modalSubmit, 'click', submitRegister);
+    const refreshMyServers = document.getElementById('mcp-refresh-my-servers');
+    if (refreshMyServers) addListener(refreshMyServers, 'click', loadMyServers);
+    const refreshDrafts = document.getElementById('mcp-refresh-drafts');
+    if (refreshDrafts) addListener(refreshDrafts, 'click', loadDrafts);
+    const refreshInstances = document.getElementById('mcp-refresh-instances');
+    if (refreshInstances) addListener(refreshInstances, 'click', () => loadInstances(STATE.selectedServerForInstances));
+    const importBtn = document.getElementById('mcp-import-from-git-btn');
+    if (importBtn) addListener(importBtn, 'click', openImportModal);
+    const importSubmit = document.getElementById('mcp-import-submit');
+    if (importSubmit) addListener(importSubmit, 'click', submitImport);
 
     const sel = document.getElementById('mcp-instance-server-select');
     if (sel) {
@@ -440,10 +486,125 @@ function init() {
         });
     }
 
-    const escHandler = (ev) => { if (ev.key === 'Escape') closeRegisterModal(); };
+    const escHandler = (ev) => {
+        if (ev.key === 'Escape') {
+            closeRegisterModal();
+            closeImportModal();
+        }
+    };
     addListener(document, 'keydown', escHandler);
 
     loadCatalog();
+    loadDrafts();
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Phase 4 — Git URL → MCPSERVER.md → draft 워크플로
+// ────────────────────────────────────────────────────────────────────
+
+async function loadDrafts() {
+    const container = document.getElementById('mcp-drafts-container');
+    if (!container) return;
+    try {
+        const data = await fetchJson('/api/mcp/servers/drafts');
+        STATE.drafts = Array.isArray(data && data.data) ? data.data : [];
+        renderDrafts();
+    } catch (e) {
+        container.innerHTML = `<div class="mcp-empty" style="color:var(--text-muted);">draft 조회 실패: ${escapeHTML(e.message || e)}</div>`;
+    }
+}
+
+function renderDrafts() {
+    const container = document.getElementById('mcp-drafts-container');
+    if (!container) return;
+    container.innerHTML = '';
+    if (STATE.drafts.length === 0) {
+        container.innerHTML = '<div class="mcp-empty" style="color:var(--text-muted);">대기 중인 draft 가 없습니다.</div>';
+        return;
+    }
+    for (const row of STATE.drafts) {
+        // listDrafts 반환은 raw mcp_servers row — manifest_meta / args / env 모두 포함
+        const draft = {
+            serverId: row.id,
+            name: row.name,
+            description: (row.manifest_meta && row.manifest_meta.description) || '',
+            category: (row.manifest_meta && row.manifest_meta.category) || 'general',
+            transport_type: row.transport_type,
+            command: row.command,
+            url: row.url,
+            args: row.args,
+            env: row.env,
+            manifest_meta: row.manifest_meta,
+        };
+        const card = renderMcpServerDraftCard(draft, {
+            mode: 'full',
+            onAction: async (action, serverId, ctx) => {
+                // approve 시 placeholder env 가 있으면 사용자 입력 prompt
+                const ctxAug = Object.assign({}, ctx);
+                if (action === 'approve' && Array.isArray(ctx.requiredEnv) && ctx.requiredEnv.length > 0) {
+                    const overrides = {};
+                    for (const key of ctx.requiredEnv) {
+                        const cur = (ctx.draft.env || {})[key];
+                        if (cur && !/^\$\{.+\}$/.test(String(cur))) continue;
+                        const v = window.prompt(`required_env: ${key}\n(현재값 placeholder: ${cur || '(없음)'})\n실제 값을 입력하세요`, '');
+                        if (v == null) return;  // 사용자 취소
+                        if (v) overrides[key] = v;
+                    }
+                    ctxAug.envOverrides = overrides;
+                }
+                await handleMcpServerDraftAction(action, serverId, ctxAug, { onToast: toast });
+                await loadDrafts();
+                await loadMyServers();
+            },
+        });
+        container.appendChild(card);
+    }
+}
+
+function openImportModal() {
+    const modal = document.getElementById('mcp-import-modal');
+    if (!modal) return;
+    modal.classList.add('active');
+    const input = document.getElementById('mcp-import-git-url');
+    if (input) { input.value = ''; input.focus(); }
+}
+
+function closeImportModal() {
+    const modal = document.getElementById('mcp-import-modal');
+    if (modal) modal.classList.remove('active');
+}
+
+async function submitImport() {
+    const gitUrlEl = document.getElementById('mcp-import-git-url');
+    const tokenEl = document.getElementById('mcp-import-access-token');
+    const gitUrl = (gitUrlEl && gitUrlEl.value || '').trim();
+    if (!gitUrl) { toast('Git URL 을 입력하세요', 'warning'); return; }
+    const body = { gitUrl };
+    if (tokenEl && tokenEl.value) body.accessToken = tokenEl.value.trim();
+
+    try {
+        const data = await fetchJson('/api/mcp/servers/import-from-git', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+        const result = data && data.data;
+        if (result && result.selectionRequired) {
+            toast(`다중 후보 (${result.candidates.length}). 단일 후보로 가져오려면 gitPath 를 명시하세요.`, 'info');
+            return;
+        }
+        if (result && result.deduped) {
+            toast('동일 URL 의 기존 draft 가 있습니다. 재사용됨.', 'info');
+        } else {
+            toast('MCP server draft 가 생성되었습니다.', 'success');
+        }
+        closeImportModal();
+        // 내 서버 탭으로 이동 + draft 새로고침
+        switchTab('my-servers');
+        await loadDrafts();
+    } catch (e) {
+        toast('가져오기 실패: ' + (e.message || e), 'error');
+    }
 }
 
 function cleanup() {
@@ -455,6 +616,7 @@ function cleanup() {
     STATE.catalog = [];
     STATE.myServers = [];
     STATE.instances = [];
+    STATE.drafts = [];
     STATE.selectedServerForInstances = '';
     STATE.currentTemplate = null;
 }

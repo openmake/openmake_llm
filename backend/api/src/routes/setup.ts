@@ -26,6 +26,7 @@ import {
     skillsRouter,
     mcpRouter,
     mcpCatalogRouter,
+    mcpServerIngestRouter,
     usageRouter,
     nodesRouter,
     setNodesCluster,
@@ -48,6 +49,9 @@ import { getConfig } from '../config';
 import { success } from '../utils/api-response';
 import { getPool } from '../data/models/unified-database';
 import { csrfProtectionMiddleware, csrfTokenIssuer } from '../middlewares/csrf-protection';
+import { GitFetcher } from '../agents/git-ingest/git-fetcher';
+import { LLMClient } from '../llm/client';
+import { MCP_INGEST } from '../config/constants';
 
 
 
@@ -144,6 +148,23 @@ export function setupApiRoutes(
     app.use('/api/monitoring', tokenMonitoringRouter);
     app.use('/api/mcp', mcpRouter);
     app.use('/api/mcp', mcpCatalogRouter);
+    const e2eMcpMock = process.env.MCP_INGEST_E2E_MOCK === 'true';
+    // E2E 픽스처 모드 — 실제 GitHub API 호출 회피.
+    // require() 로 lazy load 하여 production 번들에 mock 코드가 포함되지 않게 함.
+    const mcpFetcherFactory = e2eMcpMock
+        ? (() => {
+            const { MockGitFetcher } = require('../agents/git-ingest/__mocks__/mock-git-fetcher');
+            return () => new MockGitFetcher();
+        })()
+        : (opts: { accessToken?: string }) => new GitFetcher({
+            accessToken: opts.accessToken,
+            timeoutMs: MCP_INGEST.gitFetchTimeoutMs,
+        });
+    app.use('/api/mcp/servers', mcpServerIngestRouter({
+        pool: getPool(),
+        fetcherFactory: mcpFetcherFactory,
+        llmClientFactory: (model: string) => new LLMClient(model ? { model } : {}),
+    }));
     app.use('/api/debug-queue', debugQueueRouter);
 
     // 부트스트랩 서비스 초기화

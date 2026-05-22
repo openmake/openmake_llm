@@ -15,6 +15,7 @@ export { default as skillsRouter } from './skills.routes';
 export { default as modelRouter } from './model.routes';
 export { mcpRouter } from './mcp.routes';
 export { mcpCatalogRouter } from './mcp-catalog.routes';
+export { mcpServerIngestRouter } from './mcp-server-ingest.routes';
 
 // 🆕 리팩토링된 라우트
 export { default as chatRouter, setClusterManager as setChatCluster } from './chat.routes';

@@ -68,6 +68,11 @@ const API_ENDPOINTS = Object.freeze({
 
     // ── MCP ───────────────────────────────────────
     MCP_SERVERS: '/api/mcp/servers',   // + /:serverId, /:serverId/connect, /:serverId/disconnect
+    // MCP Server Ingest (Phase 4) — Git URL → MCPSERVER.md → draft
+    MCP_SERVERS_IMPORT_FROM_GIT: '/api/mcp/servers/import-from-git',
+    MCP_SERVERS_DRAFTS: '/api/mcp/servers/drafts',
+    MCP_SERVERS_APPROVE: (serverId) => `/api/mcp/servers/${encodeURIComponent(serverId)}/approve`,
+    MCP_SERVERS_REJECT: (serverId) => `/api/mcp/servers/${encodeURIComponent(serverId)}/reject`,
 
     // ── External Integrations ─────────────────────
     EXTERNAL: '/api/external',         // + /:serviceType, /:connectionId/files
