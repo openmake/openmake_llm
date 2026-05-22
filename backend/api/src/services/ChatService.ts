@@ -22,18 +22,16 @@ import { createLogger } from '../utils/logger';
 import { AGENTS, getAgentById, type AgentSelection } from '../agents';
 import type { DiscussionProgress } from '../agents/discussion-engine';
 import { getPromptConfig } from '../chat/prompt';
-import { adjustOptionsForModel, checkModelCapability } from '../chat/model-selector';
-import { assessComplexity, GV_SKIP_THRESHOLD } from '../chat/complexity-assessor';
+import { checkModelCapability } from '../chat/model-selector';
+import { assessComplexity } from '../chat/complexity-assessor';
 import { detectFastPath } from '../chat/fast-path-detector';
-import { CONCISE_RESPONSE_DIRECTIVE, TOKEN_BUDGETS } from '../config/llm-parameters';
-import { BUDGET_HINTS, CAPACITY } from '../config/runtime-limits';
 import { withSpan } from '../observability/otel';
 import type { ExecutionPlan } from '../chat/profile-resolver';
 import type { UserTier } from '../data/user-manager';
 import type { UserContext } from '../mcp/user-sandbox';
 import { getUnifiedMCPClient } from '../mcp/unified-client';
 import { LLMClient } from '../llm';
-import { getGptOssTaskPreset, type ChatMessage, type ToolDefinition, type ModelOptions } from '../llm';
+import { type ChatMessage, type ToolDefinition, type ModelOptions } from '../llm';
 import type { ResearchProgress } from './DeepResearchService';
 import { AgentLoopStrategy, DeepResearchStrategy, DirectStrategy, DiscussionStrategy, GenerateVerifyStrategy, ThinkingStrategy } from './chat-strategies';
 import { formatResearchResult, formatDiscussionResult } from './chat-service-formatters';
@@ -57,6 +55,10 @@ import {
     type ExternalProviderDeps,
     type StreamFromExternalContext,
 } from './chat-service/external-provider';
+import {
+    buildChatOptions,
+    assembleHistoryWithSummary,
+} from './chat-service/options-and-history';
 
 // Re-export all types so consumers importing from ChatService don't break
 export type {
@@ -535,35 +537,15 @@ export class ChatService {
         // P1-2: 복잡도 기반 토큰 예산을 routingLog에 기록
         routingLog.routeDecision.tokenBudget = preComplexity.recommendedTokenBudget;
 
-        let chatOptions = adjustOptionsForModel(
-            modelSelection.model,
-            { ...modelSelection.options, ...(promptConfig.options || {}) },
-            modelSelection.queryType,
-            preComplexity.score
-        );
-
-        if (docId) {
-            const docPreset = getGptOssTaskPreset('document');
-            chatOptions = { ...docPreset, ...chatOptions };
-        }
-
-        // Thinking ON 시 num_predict 최소 보장.
-        // 배경: Ollama /api/chat 응답은 message.content 와 message.thinking 이
-        //      같은 num_predict 토큰 풀을 공유. 작은 cap에서 thinking 모델이
-        //      사고에 토큰을 다 쓰면 실제 응답이 비어 나오는 잘림 발생.
-        //      (예: chat/korean → tokenBudget 512, thinking이 2000+ 토큰 소비
-        //       → message.content 빈 응답 → empty-response 에러)
-        if (thinkingMode === true) {
-            const minTokens = TOKEN_BUDGETS.THINKING_MIN_TOKENS;
-            const current = chatOptions.num_predict;
-            if (current === undefined || current === null || (current > 0 && current < minTokens)) {
-                logger.info(
-                    `[ChatService] Thinking 활성 — num_predict 보강: ${current ?? 'undefined'} → ${minTokens}`
-                );
-                chatOptions = { ...chatOptions, num_predict: minTokens };
-                routingLog.routeDecision.tokenBudget = minTokens;
-            }
-        }
+        // chat options 조립 — helper module 위임 (model+complexity+doc+thinking 보강)
+        const chatOptions = buildChatOptions({
+            modelSelection,
+            promptOptions: promptConfig.options,
+            preComplexityScore: preComplexity.score,
+            docId,
+            thinkingMode,
+            routingLog,
+        });
 
         const currentImages = [...(images || []), ...documentImages];
 
@@ -583,58 +565,20 @@ export class ChatService {
         // getAllowedTools() 의 동기 머지에서 사용. agentId 가 결정된 직후 호출.
         await this.loadSkillBindings(selectedAgent.id);
 
-        let currentHistory: ChatMessage[] = [];
-        let combinedSystemPrompt = agentSystemMessage
+        const combinedSystemPrompt = agentSystemMessage
             ? `${agentSystemMessage}\n\n---\n\n${promptConfig.systemPrompt}`
             : promptConfig.systemPrompt;
 
-        // P1-1: 저복잡도 쿼리에 간결한 응답 지시어 주입
-        if (preComplexity.score < GV_SKIP_THRESHOLD) {
-            combinedSystemPrompt += `\n\n${CONCISE_RESPONSE_DIRECTIVE}`;
-        }
-
-        if (history && history.length > 0) {
-            // 긴 히스토리 자동 요약 (토큰 비용 절감)
-            let effectiveHistory = history;
-            try {
-                const { summarizeHistory } = await import('../chat/history-summarizer');
-                const summarized = await summarizeHistory(history, modelSelection.model);
-                if (summarized.wasSummarized) {
-                    logger.info(`히스토리 요약 적용: ${summarized.originalCount}개 → ${summarized.summarizedCount}개`);
-                }
-                effectiveHistory = summarized.messages;
-            } catch (sumError) {
-                logger.warn('히스토리 요약 실패 (원본 유지):', sumError);
-            }
-
-            currentHistory = [
-                { role: 'system', content: combinedSystemPrompt },
-                ...effectiveHistory.map((h) => ({
-                    role: h.role as ChatMessage['role'],
-                    content: h.content,
-                    images: h.images,
-                })),
-            ];
-        } else {
-            currentHistory = [{ role: 'system', content: combinedSystemPrompt }];
-        }
-
-        // 동적 토큰 예산 프롬프트: 잔여 예산 부족 시 간결 지시 주입
-        // Anthropic 하네스 원칙: "토큰 예산 인식 프롬프트 제어"
-        if (preComplexity.recommendedTokenBudget > 0) {
-            const estimatedUsed = currentHistory.reduce((sum, m) => sum + (m.content?.length ?? 0), 0) / CAPACITY.TOKEN_TO_CHAR_RATIO;
-            const remaining = 1 - (estimatedUsed / preComplexity.recommendedTokenBudget);
-            if (remaining < BUDGET_HINTS.LOW_BUDGET_THRESHOLD && remaining > 0) {
-                const hint = (languagePolicy?.resolvedLanguage === 'ko') ? BUDGET_HINTS.HINT_KO : BUDGET_HINTS.HINT_EN;
-                currentHistory[0].content += `\n\n${hint}`;
-                logger.info(`💡 토큰 예산 부족 (잔여 ${(remaining * 100).toFixed(0)}%) → 간결 지시 주입`);
-            }
-        }
-
-        currentHistory.push({
-            role: 'user',
-            content: finalEnhancedMessage,
-            ...(currentImages.length > 0 && { images: currentImages }),
+        // history assembly + system prompt + budget hint + user message — helper module 위임
+        const { currentHistory } = await assembleHistoryWithSummary({
+            history,
+            combinedSystemPrompt,
+            preComplexityScore: preComplexity.score,
+            finalEnhancedMessage,
+            currentImages,
+            recommendedTokenBudget: preComplexity.recommendedTokenBudget,
+            languagePolicy,
+            model: modelSelection.model,
         });
 
         // ── Step 5: 전략 선택 및 실행 (GV → AgentLoop 폴백) ──
