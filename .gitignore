@@ -99,7 +99,6 @@ bunfig.toml
 tests/
 *.test.ts
 *.spec.ts
-jest.config.js
 playwright.config.ts
 .eslintignore
 .eslintrc.json
