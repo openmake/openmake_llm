@@ -20,10 +20,8 @@ import { getApiUsageTracker } from '../llm';
 import { success } from '../utils/api-response';
 import { requireAuth } from '../auth';
 import { asyncHandler } from '../utils/error-handler';
-import { createLogger } from '../utils/logger';
 
 const router = Router();
-const logger = createLogger('UsageRoutes');
 
 // API 사용량 조회에 인증 필수
 router.use(requireAuth);

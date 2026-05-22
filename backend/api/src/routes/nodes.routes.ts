@@ -23,10 +23,8 @@ import { asyncHandler } from '../utils/error-handler';
 import { requireAuth, requireAdmin } from '../auth';
 import { validate } from '../middlewares/validation';
 import { addClusterNodeSchema } from '../schemas/nodes.schema';
-import { createLogger } from '../utils/logger';
 
 const router = Router();
-const logger = createLogger('NodesRoutes');
 
 // 클러스터 노드 관리는 관리자 전용
 router.use(requireAuth, requireAdmin);

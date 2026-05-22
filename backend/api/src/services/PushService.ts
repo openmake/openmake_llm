@@ -1,7 +1,5 @@
 import { getPool } from '../data/models/unified-database';
-import { createLogger } from '../utils/logger';
 
-const logger = createLogger('PushService');
 
 export interface PushSubscription {
     endpoint: string;

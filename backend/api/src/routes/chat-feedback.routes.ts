@@ -21,7 +21,6 @@ import { getPool } from '../data/models/unified-database';
 import { validate } from '../middlewares/validation';
 import { chatFeedbackSchema } from '../schemas/chat-feedback.schema';
 import { createLogger } from '../utils/logger';
-import { FEEDBACK_IMPORTANCE } from '../config/runtime-limits';
 
 const router = Router();
 const logger = createLogger('ChatFeedbackRoutes');

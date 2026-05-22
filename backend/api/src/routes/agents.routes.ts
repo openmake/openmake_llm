@@ -11,7 +11,6 @@
  */
 
 import { Router, Request, Response } from 'express';
-import { createLogger } from '../utils/logger';
 import { getAllAgents, getAgentById, getAgentCategories, getAgentStats } from '../agents';
 import { getAgentLearningSystem } from '../agents/learning';
 import { getCustomAgentBuilder } from '../agents/custom-builder';
@@ -37,7 +36,6 @@ import { AGENT_CREATOR } from '../config/constants';
 import { LLMClient } from '../llm/client';
 import { getUnifiedDatabase } from '../data/models/unified-database';
 
-const logger = createLogger('AgentRoutes');
 const router = Router();
 
 // ================================================

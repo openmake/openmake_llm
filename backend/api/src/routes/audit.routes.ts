@@ -20,7 +20,6 @@
  */
 
 import { Router, Request, Response } from 'express';
-import { createLogger } from '../utils/logger';
 import { success } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
 import { validate } from '../middlewares/validation';
@@ -28,7 +27,6 @@ import { createAuditSchema } from '../schemas/audit.schema';
 import { requireAuth, requireAdmin } from '../auth';
 import { getAuditService } from '../services/AuditService';
 
-const logger = createLogger('AuditRoutes');
 const router = Router();
 const auditService = getAuditService();
 

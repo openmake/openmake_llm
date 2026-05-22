@@ -27,10 +27,8 @@ import { validate } from '../middlewares/validation';
 import { chatRequestSchema } from '../schemas';
 import { ChatRequestHandler, ChatRequestError } from '../chat/request-handler';
 import { getConversationDB } from '../data/conversation-db';
-import { createLogger } from '../utils/logger';
 
 const router = Router();
-const logger = createLogger('ChatRoutes');
 let clusterManager: ClusterManager;
 
 /**

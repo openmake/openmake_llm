@@ -316,7 +316,7 @@ export class ChatService {
         executionPlan?: ExecutionPlan,
         onSkillsActivated?: (skillNames: string[]) => void,
         onThinking?: (thinking: string) => void,
-        onSystemEvent?: SystemEventCallback,
+        _onSystemEvent?: SystemEventCallback,
     ): Promise<string> {
         const {
             message,

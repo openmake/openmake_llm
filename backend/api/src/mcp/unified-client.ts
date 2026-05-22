@@ -24,7 +24,6 @@
  */
 
 import { MCPServer, createMCPServer } from './server';
-import { applySequentialThinking } from './sequential-thinking';
 import { MCPToolResult, MCPRequest, MCPResponse } from './types';
 import { UserTier } from '../data/user-manager';
 import { canUseTool, getToolsForTier } from './tool-tiers';

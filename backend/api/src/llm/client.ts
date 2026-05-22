@@ -203,7 +203,7 @@ export class LLMClient {
     }
 
     /** vLLM 미지원 — 호환을 위해 빈 응답 반환 */
-    async showModel(model: string, _verbose?: boolean): Promise<ShowModelResponse> {
+    async showModel(_model: string, _verbose?: boolean): Promise<ShowModelResponse> {
         return {
             modelfile: '',
             parameters: '',
