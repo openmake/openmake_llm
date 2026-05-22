@@ -33,6 +33,9 @@ export const updateSkillSchema = z.object({
 export type UpdateSkillInput = z.infer<typeof updateSkillSchema>;
 
 // GET /api/agents/skills query params — 스킬 검색
+// status 필터는 의도적으로 미지원: draft 조회는 GET /api/agents/skills/drafts 전용 엔드포인트
+// (admin 가드가 있는 곳) 으로만 가능. 여기서 ?status=draft 를 허용하면 is_public=TRUE 인
+// system draft 가 일반 사용자에게 노출될 수 있음.
 export const searchSkillsQuerySchema = z.object({
     search: z.string().max(200).optional(),
     category: z.string().max(100).optional(),
@@ -40,7 +43,6 @@ export const searchSkillsQuerySchema = z.object({
     sortBy: z.enum(['newest', 'name', 'category', 'updated']).optional().default('newest'),
     limit: z.coerce.number().int().min(1).max(200).optional().default(20),
     offset: z.coerce.number().int().min(0).optional().default(0),
-    status: z.enum(['draft', 'active', 'all']).default('active'),
 });
 
 export type SearchSkillsQuery = z.infer<typeof searchSkillsQuerySchema>;

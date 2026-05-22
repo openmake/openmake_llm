@@ -11,7 +11,8 @@
  *
  * @module agents/skill-manager
  * @description
- * - CRUD: createSkill(), updateSkill(), deleteSkill(), getAllSkills()
+ * - CRUD: createSkill(), updateSkill(), deleteSkill(), searchSkills()
+ * - Status workflow: updateStatus(), listDrafts()
  * - 연결: assignSkillToAgent(), removeSkillFromAgent(), getSkillsForAgent()
  * - 주입: buildSkillPrompt() - 에이전트 시스템 프롬프트에 스킬 내용 삽입
  * - 소유권: getSkillOwner() - 스킬 소유자 확인
@@ -30,6 +31,9 @@ export type {
     UpdateSkillInput,
     SkillSearchOptions,
     SkillSearchResult,
+    SkillStatus,
+    DraftListOptions,
+    DraftListResult,
 } from '../data/repositories/skill-repository';
 
 import type {
@@ -38,6 +42,9 @@ import type {
     UpdateSkillInput,
     SkillSearchOptions,
     SkillSearchResult,
+    SkillStatus,
+    DraftListOptions,
+    DraftListResult,
 } from '../data/repositories/skill-repository';
 
 const logger = createLogger('SkillManager');
@@ -113,11 +120,6 @@ export class SkillManager {
         return repo.getSkillById(id);
     }
 
-    async getAllSkills(userId?: string): Promise<AgentSkill[]> {
-        const repo = await this.ensureInitialized();
-        return repo.getAllSkills(userId);
-    }
-
     async searchSkills(options: SkillSearchOptions): Promise<SkillSearchResult> {
         const repo = await this.ensureInitialized();
         return repo.searchSkills(options);
@@ -130,6 +132,22 @@ export class SkillManager {
     async getSkillOwner(skillId: string): Promise<string | null> {
         const repo = await this.ensureInitialized();
         return repo.getSkillOwner(skillId);
+    }
+
+    // ------------------------------------------------
+    // Status workflow (draft → active → archived)
+    // ------------------------------------------------
+
+    async updateStatus(id: string, status: SkillStatus, actor?: { userId: string; userRole: string }): Promise<AgentSkill | null> {
+        const repo = await this.ensureInitialized();
+        const updated = await repo.updateStatus(id, status, actor);
+        if (updated) logger.info(`스킬 status 변경: ${id} → ${status} (by ${actor?.userId ?? 'system'})`);
+        return updated;
+    }
+
+    async listDrafts(options: DraftListOptions): Promise<DraftListResult> {
+        const repo = await this.ensureInitialized();
+        return repo.listDrafts(options);
     }
 
     // ------------------------------------------------

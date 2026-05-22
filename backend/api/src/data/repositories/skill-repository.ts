@@ -24,6 +24,24 @@ export interface AgentSkill {
     updatedAt: Date;
     sourceRepo?: string;
     sourcePath?: string;
+    status?: 'draft' | 'active' | 'archived';
+    manifestMeta?: Record<string, unknown>;
+}
+
+export type SkillStatus = 'draft' | 'active' | 'archived';
+
+export interface DraftListOptions {
+    target?: 'user' | 'system' | 'all';
+    userId?: string;
+    limit?: number;
+    offset?: number;
+}
+
+export interface DraftListResult {
+    drafts: AgentSkill[];
+    total: number;
+    limit: number;
+    offset: number;
 }
 
 export interface AgentSkillAssignment {
@@ -60,6 +78,8 @@ export interface SkillSearchOptions {
     sortBy?: 'newest' | 'name' | 'category' | 'updated';
     limit?: number;
     offset?: number;
+    /** 'draft' | 'active' | 'all'. 기본값 'active' — 일반 라이브러리에는 draft 노출 금지. */
+    status?: 'draft' | 'active' | 'all';
 }
 
 export interface SkillSearchResult {
@@ -193,7 +213,7 @@ export class SkillRepository extends BaseRepository {
 
     async getSkillById(id: string): Promise<AgentSkill | null> {
         const result = await this.query(
-            `SELECT id, name, description, content, category, is_public, created_by, created_at, updated_at, source_repo, source_path
+            `SELECT id, name, description, content, category, is_public, created_by, created_at, updated_at, source_repo, source_path, status, manifest_meta
              FROM agent_skills
              WHERE id = $1`,
             [id]
@@ -204,24 +224,6 @@ export class SkillRepository extends BaseRepository {
         }
 
         return this.rowToSkill(result.rows[0]);
-    }
-
-    async getAllSkills(userId?: string): Promise<AgentSkill[]> {
-        let sql = `SELECT id, name, description, content, category, is_public, created_by, created_at, updated_at, source_repo, source_path
-                   FROM agent_skills`;
-        const params: QueryParam[] = [];
-
-        if (userId) {
-            sql += ' WHERE created_by = $1 OR is_public = TRUE';
-            params.push(userId);
-        } else {
-            sql += ' WHERE is_public = TRUE';
-        }
-
-        sql += ' ORDER BY created_at DESC, id ASC';
-
-        const result = await this.query(sql, params);
-        return result.rows.map((row) => this.rowToSkill(row));
     }
 
     async searchSkills(options: SkillSearchOptions): Promise<SkillSearchResult> {
@@ -255,6 +257,14 @@ export class SkillRepository extends BaseRepository {
             paramIdx += 1;
         }
 
+        // status 필터: 기본 'active'. 'all' 이면 필터 없음, 'draft' 면 draft 만.
+        const statusFilter = options.status ?? 'active';
+        if (statusFilter !== 'all') {
+            conditions.push(`status = $${paramIdx}`);
+            params.push(statusFilter);
+            paramIdx += 1;
+        }
+
         const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
         const sortMap: Record<NonNullable<SkillSearchOptions['sortBy']>, string> = {
@@ -279,7 +289,7 @@ export class SkillRepository extends BaseRepository {
 
         const dataParams: QueryParam[] = [...params, limit, offset];
         const dataResult = await this.query(
-            `SELECT id, name, description, content, category, is_public, created_by, created_at, updated_at, source_repo, source_path
+            `SELECT id, name, description, content, category, is_public, created_by, created_at, updated_at, source_repo, source_path, status, manifest_meta
              FROM agent_skills
              ${whereClause}
              ORDER BY ${orderBy}
@@ -316,9 +326,11 @@ export class SkillRepository extends BaseRepository {
      */
     async upsertSystemSkill(id: string, input: CreateSkillInput): Promise<AgentSkill> {
         const nowIso = new Date().toISOString();
+        // 시스템 스킬 재시드 = active 강제. 누군가 system skill 을 archived 로 바꿔도
+        // 부트스트랩 재실행 시 자동 복구됨 (시스템 스킬은 늘 active 가 invariant).
         const result = await this.query(
-            `INSERT INTO agent_skills (id, name, description, content, category, is_public, created_by, created_at, updated_at, source_repo, source_path)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+            `INSERT INTO agent_skills (id, name, description, content, category, is_public, created_by, created_at, updated_at, source_repo, source_path, status)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'active')
              ON CONFLICT (id) DO UPDATE
              SET name = EXCLUDED.name,
                  description = EXCLUDED.description,
@@ -326,8 +338,9 @@ export class SkillRepository extends BaseRepository {
                  category = EXCLUDED.category,
                  is_public = EXCLUDED.is_public,
                  updated_at = EXCLUDED.updated_at,
-                 source_path = EXCLUDED.source_path
-             RETURNING id, name, description, content, category, is_public, created_by, created_at, updated_at, source_repo, source_path`,
+                 source_path = EXCLUDED.source_path,
+                 status = 'active'
+             RETURNING id, name, description, content, category, is_public, created_by, created_at, updated_at, source_repo, source_path, status, manifest_meta`,
             [
                 id,
                 input.name,
@@ -401,15 +414,18 @@ export class SkillRepository extends BaseRepository {
         }
 
         const whereClause = conditions.join(' OR ');
+        // status='active' 필터: 채팅 시스템 프롬프트 주입 경로에 draft/archived 가 섞이지 않도록 차단
         const result = await this.query(
             `SELECT s.id, s.name, s.description, s.content, s.category, s.is_public,
                     s.created_by, s.created_at, s.updated_at, s.source_repo, s.source_path,
+                    s.status, s.manifest_meta,
                     MIN(a.priority) AS priority
              FROM agent_skills s
              JOIN agent_skill_assignments a ON s.id = a.skill_id
-             WHERE ${whereClause}
+             WHERE (${whereClause}) AND s.status = 'active'
              GROUP BY s.id, s.name, s.description, s.content, s.category, s.is_public,
-                      s.created_by, s.created_at, s.updated_at, s.source_repo, s.source_path
+                      s.created_by, s.created_at, s.updated_at, s.source_repo, s.source_path,
+                      s.status, s.manifest_meta
              ORDER BY MIN(a.priority) ASC, s.name ASC
              LIMIT $${params.length + 1}`,
             [...params, 15]
@@ -474,19 +490,97 @@ export class SkillRepository extends BaseRepository {
     }
 
     /**
-     * 사용자 개인 할당 스킬 전체 목록 반환
+     * 사용자 개인 할당 스킬 전체 목록 반환.
+     * draft/archived 는 의도적으로 제외 — 사용자 할당 목록은 활성 스킬만 표시.
      */
     async getUserSkills(userId: string): Promise<AgentSkill[]> {
         const result = await this.query(
             `SELECT s.id, s.name, s.description, s.content, s.category, s.is_public,
-                    s.created_by, s.created_at, s.updated_at, s.source_repo, s.source_path
+                    s.created_by, s.created_at, s.updated_at, s.source_repo, s.source_path,
+                    s.status, s.manifest_meta
              FROM agent_skills s
              JOIN agent_skill_assignments a ON s.id = a.skill_id
-             WHERE a.agent_id = $1
+             WHERE a.agent_id = $1 AND s.status = 'active'
              ORDER BY a.priority ASC, s.name ASC`,
             [`user:${userId}`]
         );
         return result.rows.map((row) => this.rowToSkill(row));
+    }
+
+    /**
+     * 스킬 status 를 변경합니다 (draft → active 승인, draft → archived 거절 등).
+     * actor 가 주어지면 소유권을 검증합니다. 시스템 스킬(createdBy=null) 은 admin 만 변경 가능.
+     */
+    async updateStatus(id: string, status: SkillStatus, actor?: ActorContext): Promise<AgentSkill | null> {
+        const existing = await this.getSkillById(id);
+        if (!existing) {
+            return null;
+        }
+
+        if (actor) {
+            if (existing.createdBy) {
+                assertResourceOwnerOrAdmin(existing.createdBy, actor.userId, actor.userRole);
+            } else if (actor.userRole !== 'admin') {
+                throw new Error('ADMIN_REQUIRED: 시스템 스킬 status 변경은 관리자만 가능합니다');
+            }
+        }
+
+        const nowIso = new Date().toISOString();
+        await this.query(
+            `UPDATE agent_skills SET status = $1, updated_at = $2 WHERE id = $3`,
+            [status, nowIso, id]
+        );
+        return this.getSkillById(id);
+    }
+
+    /**
+     * draft 상태 스킬 목록 (페이지네이션).
+     * target='user' → 본인 draft 만. 'system' → admin 이 본 system draft (createdBy IS NULL).
+     * 'all' → admin 이 전체 draft (소유자 무관).
+     */
+    async listDrafts(options: DraftListOptions): Promise<DraftListResult> {
+        const conditions: string[] = [`status = 'draft'`];
+        const params: QueryParam[] = [];
+        let paramIdx = 1;
+
+        const target = options.target ?? 'user';
+        if (target === 'user') {
+            if (!options.userId) {
+                throw new Error('listDrafts: target=user 는 userId 필수');
+            }
+            conditions.push(`created_by = $${paramIdx}`);
+            params.push(options.userId);
+            paramIdx += 1;
+        } else if (target === 'system') {
+            conditions.push(`created_by IS NULL`);
+        }
+        // target === 'all' → 추가 조건 없음
+
+        const whereClause = `WHERE ${conditions.join(' AND ')}`;
+        const limit = Math.min(options.limit ?? 50, 100);
+        const offset = Math.max(0, options.offset ?? 0);
+
+        const countResult = await this.query<CountRow>(
+            `SELECT COUNT(*) AS total FROM agent_skills ${whereClause}`,
+            params
+        );
+
+        const dataParams: QueryParam[] = [...params, limit, offset];
+        const dataResult = await this.query(
+            `SELECT id, name, description, content, category, is_public, created_by, created_at, updated_at, source_repo, source_path, status, manifest_meta
+             FROM agent_skills
+             ${whereClause}
+             ORDER BY created_at DESC, id ASC
+             LIMIT $${paramIdx} OFFSET $${paramIdx + 1}`,
+            dataParams
+        );
+
+        return {
+            drafts: dataResult.rows.map((row) => this.rowToSkill(row)),
+            total: parseInt(countResult.rows[0]?.total ?? '0', 10),
+            limit,
+            offset,
+        };
     }
 
     async getSkillOwner(skillId: string): Promise<string | null> {
@@ -508,6 +602,8 @@ export class SkillRepository extends BaseRepository {
         const createdBy = row.created_by;
         const sourceRepo = row.source_repo;
         const sourcePath = row.source_path;
+        const status = row.status;
+        const manifestMeta = row.manifest_meta;
 
         return {
             id: this.toStringValue(row.id),
@@ -521,6 +617,8 @@ export class SkillRepository extends BaseRepository {
             updatedAt: this.toDateValue(row.updated_at),
             sourceRepo: typeof sourceRepo === 'string' ? sourceRepo : undefined,
             sourcePath: typeof sourcePath === 'string' ? sourcePath : undefined,
+            status: status === 'draft' || status === 'active' || status === 'archived' ? status : undefined,
+            manifestMeta: manifestMeta && typeof manifestMeta === 'object' ? manifestMeta as Record<string, unknown> : undefined,
         };
     }
 
