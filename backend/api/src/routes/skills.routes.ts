@@ -250,8 +250,15 @@ router.post('/upload', requireAuth, skillUpload.single('file'), asyncHandler(asy
 
 /**
  * POST /api/agents/skills/auto-create
+ *
  * 자연어 purpose 를 받아 LLM 으로 스킬 매니페스트 생성 → status='draft' 저장.
  * 동일 promptHash 24h 내 재요청은 dedupe 되어 기존 draft 반환.
+ *
+ * 응답 형식 — Accept 헤더로 분기:
+ *   - `Accept: text/event-stream` → SSE 스트림 (heartbeat + 최종 result event)
+ *       LLM 호출이 60~120s 걸리는 동안 proxy idle timeout 방어. 클라이언트는
+ *       progress 이벤트로 UX 표시 가능.
+ *   - 그 외 (default JSON) → 기존 blocking REST 응답 (호환 유지)
  */
 router.post('/auto-create', requireAuth, skillCreateMonthlyLimiter, skillCreateBurstLimiter, validate(autoCreateSkillSchema), asyncHandler(async (req: Request, res: Response) => {
     // Feature flag gate — 빠른 disable (env 변경 후 재시작) 가능
@@ -276,6 +283,43 @@ router.post('/auto-create', requireAuth, skillCreateMonthlyLimiter, skillCreateB
         llmClientFactory: (model: string) => new LLMClient(model ? { model } : {}),
     });
 
+    const wantsSSE = (req.headers.accept || '').includes('text/event-stream');
+
+    if (wantsSSE) {
+        // SSE 모드: heartbeat 로 connection 유지 + 최종 결과는 'result' event
+        res.setHeader('Content-Type', 'text/event-stream');
+        res.setHeader('Cache-Control', 'no-cache, no-transform');
+        res.setHeader('Connection', 'keep-alive');
+        res.setHeader('X-Accel-Buffering', 'no');  // nginx 버퍼링 비활성
+        res.flushHeaders?.();
+
+        // 5s 마다 SSE 주석 라인 (heartbeat) — proxy idle timeout 차단
+        const heartbeat = setInterval(() => {
+            try { res.write(`: heartbeat ${Date.now()}\n\n`); } catch { /* noop */ }
+        }, 5_000);
+        // 시작 이벤트 — frontend 가 "생성 중..." UX 띄울 수 있게
+        res.write(`event: progress\ndata: ${JSON.stringify({ phase: 'llm_call_started', ts: Date.now() })}\n\n`);
+
+        try {
+            const result = await service.create({ userId, isAdmin, purpose, target, category, examples, hints });
+            clearInterval(heartbeat);
+            logger.info(`auto-create draft (SSE): ${result.skillId} (user=${userId}, deduped=${result.deduped})`);
+            res.write(`event: result\ndata: ${JSON.stringify({ success: true, status: result.deduped ? 200 : 201, data: result })}\n\n`);
+            res.end();
+        } catch (e) {
+            clearInterval(heartbeat);
+            const msg = e instanceof Error ? e.message : String(e);
+            const code = msg.startsWith('DRAFT_LIMIT_EXCEEDED') ? 'DRAFT_LIMIT_EXCEEDED'
+                : msg.startsWith('LLM_PARSE_FAIL') ? 'LLM_PARSE_FAIL'
+                : 'INTERNAL_ERROR';
+            const httpStatus = code === 'DRAFT_LIMIT_EXCEEDED' ? 429 : code === 'LLM_PARSE_FAIL' ? 502 : 500;
+            res.write(`event: error\ndata: ${JSON.stringify({ success: false, status: httpStatus, error: { code, message: msg } })}\n\n`);
+            res.end();
+        }
+        return;
+    }
+
+    // JSON 모드 (기존 동작 — 호환 유지)
     try {
         const result = await service.create({
             userId,
