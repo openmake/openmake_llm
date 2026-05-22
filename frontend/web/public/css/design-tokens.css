@@ -68,6 +68,14 @@
     --bg-primary: var(--bg-sidebar);         /* #12122a — primary bg alias */
     --success-rgb: 163, 230, 53;            /* rgba(var(--success-rgb), 0.x) 사용 */
 
+    /* ------- Bright Semantic (Tailwind v3 톤 — Brutalist 와 별개) ------- */
+    /* Brutalist 의 lime/yellow 보다 채도 ↓ 색이 필요한 곳 (badges, status indicators, model-selector 등) */
+    /* R5.2 audit (2026-05-22): skill-library.css / model-selector.css 의 hardcoded #22c55e/#eab308/#5078dc 를 통합 */
+    --success-bright: #22c55e;               /* tailwind green-500 — status badge, user 마커 */
+    --warning-bright: #eab308;               /* tailwind yellow-500 — DRAFT badge */
+    --accent-indigo: #5078dc;                /* model-selector 브랜드 — accent-blue 와 별개 톤 */
+    --danger-bright: #dc2626;                /* tailwind red-600 — destructive action 강조 */
+
     /* ------- Background Colors (Dark Theme — Deep Saturated Navy) ------- */
     --bg-app: #1a1a2e;
     --bg-main: #1a1a2e;

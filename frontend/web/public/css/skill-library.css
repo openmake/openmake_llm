@@ -499,7 +499,7 @@
 }
 .skill-draft-card__badge-draft {
     background: rgba(234, 179, 8, 0.12);
-    color: #eab308;
+    color: var(--warning-bright, #eab308);
     border-color: rgba(234, 179, 8, 0.25);
 }
 .skill-draft-card__badge-system {
@@ -509,7 +509,7 @@
 }
 .skill-draft-card__badge-user {
     background: rgba(34, 197, 94, 0.12);
-    color: #22c55e;
+    color: var(--success-bright, #22c55e);
     border-color: rgba(34, 197, 94, 0.25);
 }
 .skill-draft-card__badge-deduped {
