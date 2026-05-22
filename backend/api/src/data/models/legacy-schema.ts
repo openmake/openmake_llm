@@ -192,9 +192,15 @@ CREATE TABLE IF NOT EXISTS custom_agents (
     max_tokens INTEGER,
     created_by TEXT REFERENCES users(id) ON DELETE CASCADE,
     enabled BOOLEAN DEFAULT TRUE,
+    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('draft','active','archived')),
+    manifest_meta JSONB,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+CREATE INDEX IF NOT EXISTS idx_custom_agents_status_created_by
+    ON custom_agents (status, created_by)
+    WHERE status = 'draft';
 
 -- custom_agents 이후에 정의하여 FK 참조 가능
 CREATE TABLE IF NOT EXISTS agent_feedback (

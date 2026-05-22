@@ -32,3 +32,28 @@ export function scanForSkillManifests(tree: TreeEntry[], explicitPath?: string):
         .filter(e => MANIFEST_PATTERNS.some(re => re.test(e.path)))
         .map(e => ({ path: e.path, sha: e.sha, size: e.size }));
 }
+
+/**
+ * AGENT.md 후보 탐지 (Phase 3).
+ *
+ * 자동 탐지 규칙:
+ *   1. 명시 explicitPath 지정 시 그것만
+ *   2. root AGENT.md
+ *   3. *.AGENT.md / *.agent.md
+ *   4. agents/ 하위의 *.md
+ */
+const AGENT_MANIFEST_PATTERNS = [
+    /^AGENT\.md$/i,
+    /\.agent\.md$/i,
+    /^agents\/.+\.md$/i,
+];
+
+export function scanForAgentManifests(tree: TreeEntry[], explicitPath?: string): ManifestCandidate[] {
+    if (explicitPath) {
+        const hit = tree.find(e => e.path === explicitPath);
+        return hit ? [{ path: hit.path, sha: hit.sha, size: hit.size }] : [];
+    }
+    return tree
+        .filter(e => AGENT_MANIFEST_PATTERNS.some(re => re.test(e.path)))
+        .map(e => ({ path: e.path, sha: e.sha, size: e.size }));
+}
