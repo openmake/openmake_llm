@@ -153,6 +153,11 @@ export interface ChatRequestParams {
     onSkillsActivated?: (skillNames: string[]) => void;
     /** 시스템 이벤트 콜백 - 자동 토론 활성화 등 메타 알림 (UI에서 토스트로 표시) */
     onSystemEvent?: SystemEventCallback;
+    /**
+     * MCP tool 호출이 resource content 를 반환했을 때 호출되는 콜백.
+     * frontend 인라인 카드 UI (예: skill-draft) 렌더링을 트리거.
+     */
+    onMcpToolResult?: (event: { toolName: string; resources: Array<{ uri: string; mimeType?: string; text?: string }> }) => void;
 }
 
 /**
@@ -588,6 +593,7 @@ export class ChatRequestHandler {
             onSkillsActivated,
             params.onThinking,
             onSystemEvent,
+            params.onMcpToolResult,
         );
 
         const endTime = Date.now();

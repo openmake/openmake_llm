@@ -134,6 +134,13 @@ export interface MCPToolResult {
         data?: string;
         /** MIME 타입 (type='image' 또는 'resource'일 때) */
         mimeType?: string;
+        /** 리소스 참조 (type='resource'일 때) — URI + 직렬화 payload */
+        resource?: {
+            uri: string;
+            mimeType?: string;
+            text?: string;
+            blob?: string;
+        };
     }>;
     /** 에러 발생 여부 (true이면 content에 에러 메시지 포함) */
     isError?: boolean;

@@ -64,6 +64,8 @@ export interface StrategyExecutorParams {
     currentUserContext: UserContext | null;
     /** 허용된 도구 목록을 반환하는 콜백 */
     getAllowedTools: () => ToolDefinition[];
+    /** MCP tool resource content 콜백 (frontend 인라인 카드 표시용, 선택) */
+    onMcpToolResult?: (event: { toolName: string; resources: Array<{ uri: string; mimeType?: string; text?: string }> }) => void;
 }
 
 /**
@@ -83,7 +85,7 @@ export async function selectAndExecuteStrategy(params: StrategyExecutorParams): 
         supportsTools, supportsThinking, thinkingMode, thinkingLevel,
         languagePolicy, streamToken, abortSignal, checkAborted, format,
         generateVerifyStrategy, agentLoopStrategy, thinkingStrategy,
-        client, currentUserContext, getAllowedTools,
+        client, currentUserContext, getAllowedTools, onMcpToolResult,
     } = params;
 
     // P3-A: 사후 검증용 추적 변수
@@ -225,6 +227,7 @@ export async function selectAndExecuteStrategy(params: StrategyExecutorParams): 
         supportsTools, supportsThinking, thinkingMode, thinkingLevel,
         executionPlan, currentUserContext, getAllowedTools,
         onToken: wrappedStreamToken, abortSignal, checkAborted, format,
+        onMcpToolResult,
         executionState,
         fallbackHint,
     });

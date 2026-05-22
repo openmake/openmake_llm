@@ -88,23 +88,46 @@ export const createSkillTool: MCPToolDefinition<CreateSkillArgs> = {
                 hints: args.hints,
             });
 
-            const summary = [
-                `스킬 draft 생성 완료${result.deduped ? ' (24시간 내 동일 요청 — 기존 draft 재사용)' : ''}`,
-                ``,
-                `- ID: ${result.skillId}`,
-                `- 이름: ${result.name}`,
-                `- 설명: ${result.description}`,
-                `- 카테고리: ${result.category}`,
-                `- 대상: ${result.target}${result.warnings.includes('ADMIN_REQUIRED') ? ' (관리자 권한 없음 → user 로 변경됨)' : ''}`,
-                `- 상태: draft (승인 필요)`,
-                `- 트리거: ${result.triggers.join(', ') || '(없음)'}`,
-                `- 미리보기: ${result.contentPreview}${result.contentPreview.length >= 300 ? '...' : ''}`,
-                ``,
-                `검토 후 /api/agents/skills/${result.skillId}/approve 로 활성화하세요.`,
-            ].join('\n');
+            // Frontend (chat.js) 가 인라인 카드로 렌더링할 수 있도록 resource content 동봉.
+            // URI prefix `openmake://skill-draft/` 가 frontend 의 감지 패턴.
+            const previewCard = {
+                kind: 'skill-draft' as const,
+                skillId: result.skillId,
+                name: result.name,
+                description: result.description,
+                category: result.category,
+                target: result.target,
+                contentPreview: result.contentPreview,
+                triggers: result.triggers,
+                createdAt: result.manifestMeta.createdAt,
+                modelUsed: result.modelUsed,
+                tokensUsed: result.tokensUsed,
+                deduped: result.deduped,
+            };
+            const assistantText = result.deduped
+                ? `24시간 내 동일 요청이라 기존 draft "${result.name}" 를 재사용했습니다. 아래 카드에서 검토·승인하세요.`
+                : `"${result.name}" draft 를 생성했습니다 (status=draft). 아래 카드에서 검토·승인하세요.`;
+            const warningSuffix = result.warnings.includes('ADMIN_REQUIRED')
+                ? '\n\n⚠ 관리자 권한이 없어 target=user 로 변경되었습니다.'
+                : '';
+
+            // LLM 이 다음 turn 의 context 로 받는 텍스트 (간결한 fallback)
+            const llmText = `Created skill draft ${result.skillId} (name="${result.name}", category=${result.category}, status=draft).`;
 
             logger.info(`MCP create_skill: ${result.skillId} (user=${userId}, deduped=${result.deduped})`);
-            return { content: [{ type: 'text', text: summary }] };
+            return {
+                content: [
+                    { type: 'text', text: llmText },
+                    {
+                        type: 'resource',
+                        resource: {
+                            uri: `openmake://skill-draft/${result.skillId}`,
+                            mimeType: 'application/json',
+                            text: JSON.stringify({ previewCard, assistantText: assistantText + warningSuffix }),
+                        },
+                    },
+                ],
+            };
         } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
             logger.warn(`MCP create_skill 실패: ${msg}`);

@@ -312,6 +312,18 @@ export async function handleChatMessage(
             onDiscussionProgress: (progress) => ws.send(JSON.stringify({ type: 'discussion_progress', progress })),
             onResearchProgress: (progress) => ws.send(JSON.stringify({ type: 'research_progress', progress })),
             onSkillsActivated: (skillNames) => ws.send(JSON.stringify({ type: 'skills_activated', skillNames })),
+            // MCP tool 호출 결과의 resource content 를 frontend 로 emit
+            // (예: create_skill → openmake://skill-draft/{id} → chat.js 가 인라인 카드 렌더)
+            onMcpToolResult: (event) => {
+                if (ws.readyState === ws.OPEN) {
+                    ws.send(JSON.stringify({
+                        type: 'mcp_tool_result',
+                        toolName: event.toolName,
+                        resources: event.resources,
+                        messageId,
+                    }));
+                }
+            },
             // 시스템 이벤트 (자동 토론 활성화 등 메타 알림) — UI 토스트 분리 표시
             onSystemEvent: (event) => {
                 if (ws.readyState === ws.OPEN) {

@@ -35,6 +35,15 @@ export interface ChatContext {
     abortSignal?: AbortSignal;
     /** 중단 상태를 확인하고 'ABORTED' 에러를 throw하는 헬퍼 함수 */
     checkAborted?: () => void;
+    /**
+     * MCP tool 호출이 resource content 를 반환했을 때 호출되는 콜백.
+     * ws-chat-handler 가 frontend 로 `mcp_tool_result` WS 메시지로 emit.
+     * 인라인 UI (예: skill-draft card) 표시용. text content 만 있는 호출은 트리거 안 됨.
+     */
+    onMcpToolResult?: (event: {
+        toolName: string;
+        resources: Array<{ uri: string; mimeType?: string; text?: string }>;
+    }) => void;
 }
 
 /**

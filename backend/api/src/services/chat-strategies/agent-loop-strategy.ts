@@ -661,6 +661,19 @@ export class AgentLoopStrategy implements ChatStrategy<AgentLoopStrategyContext,
         try {
             const toolRouter = getUnifiedMCPClient().getToolRouter();
             const result = await toolRouter.executeTool(toolName, toolArgs, context.currentUserContext ?? undefined);
+
+            // resource content 감지 → frontend 인라인 카드 콜백 (ChatContext.onMcpToolResult)
+            if (context.onMcpToolResult && Array.isArray(result.content)) {
+                const resources = result.content
+                    .filter((c): c is { type: 'resource'; resource: { uri: string; mimeType?: string; text?: string } } =>
+                        c.type === 'resource' && !!c.resource && typeof c.resource.uri === 'string')
+                    .map(c => ({ uri: c.resource.uri, mimeType: c.resource.mimeType, text: c.resource.text }));
+                if (resources.length > 0) {
+                    try { context.onMcpToolResult({ toolName, resources }); }
+                    catch (e) { logger.warn(`onMcpToolResult 콜백 실패: ${e instanceof Error ? e.message : String(e)}`); }
+                }
+            }
+
             if (result.isError) {
                 return `Error executing tool: ${result.content.map((c: { text?: string }) => c.text).join('\n')}`;
             }
