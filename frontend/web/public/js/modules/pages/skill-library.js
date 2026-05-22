@@ -780,7 +780,7 @@
             if (!grid) return;
             grid.innerHTML = '<div class="sl-loading"><div class="sl-spinner"></div></div>';
             try {
-                const res = await window.authFetch(API_ENDPOINTS.AGENTS_SKILLS + '/drafts?target=user&limit=50');
+                const res = await window.authFetch(API_ENDPOINTS.AGENTS_SKILLS_DRAFTS + '?target=user&limit=50');
                 const data = await res.json();
                 if (!res.ok || !data.success) throw new Error(data.error?.message || data.message || 'draft 로드 실패');
                 drafts = (data.data && Array.isArray(data.data.drafts)) ? data.data.drafts : [];
@@ -909,7 +909,7 @@
             if (btn) { btn.disabled = true; btn.dataset.origText = btn.innerHTML; btn.innerHTML = '<span class="iconify" data-icon="lucide:loader-2"></span> 생성 중...'; }
 
             try {
-                const res = await window.authFetch(API_ENDPOINTS.AGENTS_SKILLS + '/auto-create', {
+                const res = await window.authFetch(API_ENDPOINTS.AGENTS_SKILLS_AUTO_CREATE, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ purpose, category, examples, hints, target }),
@@ -941,7 +941,7 @@
         approveDraft: async function (skillId) {
             if (!confirm('이 draft 를 승인하시겠습니까?\n\n⚠ 승인 후 이 스킬의 content 가 채팅의 system prompt 에 주입됩니다. AI 가 작성한 텍스트이므로 의심스러운 지시문(예: "이전 지시를 무시하라", 시스템 페르소나 변경 등)이 포함돼 있지 않은지 미리보기로 확인하세요.')) return;
             try {
-                const res = await window.authFetch(`${API_ENDPOINTS.AGENTS_SKILLS}/${encodeURIComponent(skillId)}/approve`, { method: 'POST' });
+                const res = await window.authFetch(API_ENDPOINTS.AGENTS_SKILLS_APPROVE(skillId), { method: 'POST' });
                 const data = await res.json().catch(() => ({}));
                 if (!res.ok || !data.success) {
                     const msg = data?.error?.message || data?.error || data?.detail || res.statusText;
@@ -960,7 +960,7 @@
         rejectDraft: async function (skillId) {
             if (!confirm('이 draft 를 거절하시겠습니까? archived 상태로 보관됩니다 (영구 삭제 아님).')) return;
             try {
-                const res = await window.authFetch(`${API_ENDPOINTS.AGENTS_SKILLS}/${encodeURIComponent(skillId)}/reject`, { method: 'POST' });
+                const res = await window.authFetch(API_ENDPOINTS.AGENTS_SKILLS_REJECT(skillId), { method: 'POST' });
                 const data = await res.json().catch(() => ({}));
                 if (!res.ok || !data.success) {
                     const msg = data?.error?.message || data?.error || data?.detail || res.statusText;
