@@ -410,6 +410,40 @@ async function handleServerAction(serverId, action) {
     }
 }
 
+// Phase 5.2: instances 탭 활성 시 N초 polling timer
+let _instancePollTimer = null;
+const INSTANCE_POLL_INTERVAL_MS = 15_000;
+
+function startInstancePoll() {
+    if (_instancePollTimer) return;
+    _instancePollTimer = setInterval(() => {
+        if (STATE.activeTab === 'instances' && STATE.selectedServerForInstances) {
+            loadInstances(STATE.selectedServerForInstances);
+        }
+    }, INSTANCE_POLL_INTERVAL_MS);
+}
+
+function stopInstancePoll() {
+    if (_instancePollTimer) {
+        clearInterval(_instancePollTimer);
+        _instancePollTimer = null;
+    }
+}
+
+async function runHealthCheck() {
+    const serverId = STATE.selectedServerForInstances;
+    if (!serverId) { toast('서버를 먼저 선택하세요', 'warning'); return; }
+    try {
+        const data = await fetchJson(`/api/mcp/servers/${encodeURIComponent(serverId)}/instances/health-check`, { method: 'POST' });
+        const r = (data && (data.data?.result || data.result)) || {};
+        const msg = `검증 완료 — alive ${r.verified ?? 0} / 사망 마킹 ${r.declaredDead ?? 0}${r.missingPid ? ` / pid 없음 ${r.missingPid}` : ''}`;
+        toast(msg, r.declaredDead > 0 ? 'warning' : 'success');
+        await loadInstances(serverId);
+    } catch (e) {
+        toast(`health check 실패: ${e.message}`, 'error');
+    }
+}
+
 function switchTab(tabName) {
     STATE.activeTab = tabName;
     document.querySelectorAll('.mcp-tab').forEach(b => {
@@ -419,7 +453,12 @@ function switchTab(tabName) {
         p.classList.toggle('active', p.id === `mcp-panel-${tabName}`);
     });
     if (tabName === 'my-servers') loadMyServers();
-    else if (tabName === 'instances') loadInstances(STATE.selectedServerForInstances);
+    else if (tabName === 'instances') {
+        loadInstances(STATE.selectedServerForInstances);
+        startInstancePoll();
+    } else {
+        stopInstancePoll();
+    }
 }
 
 function getHTML() {
@@ -454,7 +493,7 @@ function getHTML() {
             '<h3 style="margin:var(--space-2) 0;">👤 활성 서버</h3>' +
             '<div id="mcp-my-servers-grid" class="mcp-grid"><div class="mcp-loading">로딩 중…</div></div>' +
         '</section>' +
-        '<section id="mcp-panel-instances" class="mcp-tab-panel"><div class="mcp-toolbar"><select id="mcp-instance-server-select" class="mcp-select"><option value="">서버 선택…</option></select><button class="mcp-tab" id="mcp-refresh-instances">새로고침</button></div><div id="mcp-instances-container"><div class="mcp-empty">서버를 선택하세요.</div></div></section>' +
+        '<section id="mcp-panel-instances" class="mcp-tab-panel"><div class="mcp-toolbar"><select id="mcp-instance-server-select" class="mcp-select"><option value="">서버 선택…</option></select><button class="mcp-tab" id="mcp-refresh-instances">새로고침</button><button class="mcp-tab" id="mcp-health-check-btn" title="running 상태인 instance 의 pid 검증">🩺 Health check</button><span style="margin-left:auto;font-size:0.85em;color:var(--text-muted);">15초마다 자동 갱신</span></div><div id="mcp-instances-container"><div class="mcp-empty">서버를 선택하세요.</div></div></section>' +
         '</div>' +
         '<div id="mcp-register-modal" class="mcp-modal" role="dialog" aria-modal="true"><div class="mcp-modal-content"><h3 id="mcp-modal-title">서버 등록</h3><p id="mcp-modal-desc" style="color:var(--text-muted);"></p><div id="mcp-modal-fields"></div><div class="mcp-modal-actions"><button class="btn-secondary" data-close-mcp-modal>취소</button><button class="btn-primary" id="mcp-modal-submit">등록</button></div></div></div>' +
         '<div id="mcp-import-modal" class="mcp-modal" role="dialog" aria-modal="true">' +
@@ -513,6 +552,8 @@ function init() {
     if (refreshDrafts) addListener(refreshDrafts, 'click', loadDrafts);
     const refreshInstances = document.getElementById('mcp-refresh-instances');
     if (refreshInstances) addListener(refreshInstances, 'click', () => loadInstances(STATE.selectedServerForInstances));
+    const healthBtn = document.getElementById('mcp-health-check-btn');
+    if (healthBtn) addListener(healthBtn, 'click', runHealthCheck);
     const importBtn = document.getElementById('mcp-import-from-git-btn');
     if (importBtn) addListener(importBtn, 'click', openImportModal);
     const importSubmit = document.getElementById('mcp-import-submit');
@@ -648,8 +689,9 @@ async function submitImport() {
 }
 
 function cleanup() {
+    stopInstancePoll();
     for (const { target, event, handler } of _listeners) {
-        try { target.removeEventListener(event, handler); } catch (_e) { /* noop */ }
+        try { target.removeEventListener(event, handler); } catch { /* noop */ }
     }
     _listeners = [];
     STATE.activeTab = 'catalog';
