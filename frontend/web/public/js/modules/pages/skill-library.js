@@ -908,27 +908,81 @@
             const btn = document.getElementById('btnSubmitAutoCreate');
             if (btn) { btn.disabled = true; btn.dataset.origText = btn.innerHTML; btn.innerHTML = '<span class="iconify" data-icon="lucide:loader-2"></span> 생성 중...'; }
 
+            // SSE 모드 — backend 의 long-running LLM 호출 (60~120s) 동안 proxy idle drop 방어 + 진행 UX
             try {
                 const res = await window.authFetch(API_ENDPOINTS.AGENTS_SKILLS_AUTO_CREATE, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' },
                     body: JSON.stringify({ purpose, category, examples, hints, target }),
                 });
-                const data = await res.json().catch(() => ({}));
-                if (!res.ok || !data.success) {
-                    const msg = data?.error?.message || data?.error || data?.detail || data?.message || res.statusText;
+                if (!res.ok) {
+                    const errData = await res.json().catch(() => ({}));
+                    const msg = errData?.error?.message || errData?.error || errData?.detail || res.statusText;
                     if (window.showToast) window.showToast(`생성 실패: ${msg}`, 'error');
                     return;
                 }
-                const result = data.data || {};
+
+                // Content-Type 분기: SSE 면 stream 파싱, 아니면 기존 JSON 호환
+                const ct = (res.headers.get('Content-Type') || '').toLowerCase();
+                let result = null;
+                let errorPayload = null;
+
+                if (ct.includes('text/event-stream')) {
+                    // SSE reader — 'event: <name>\ndata: <json>\n\n' 청크 파싱
+                    const reader = res.body.getReader();
+                    const decoder = new TextDecoder();
+                    let buffer = '';
+                    while (true) {
+                        const { value, done } = await reader.read();
+                        if (done) break;
+                        buffer += decoder.decode(value, { stream: true });
+                        const events = buffer.split('\n\n');
+                        buffer = events.pop() || '';
+                        for (const raw of events) {
+                            const lines = raw.split('\n');
+                            let evName = 'message';
+                            let dataStr = '';
+                            for (const ln of lines) {
+                                if (ln.startsWith(':')) continue; // 주석 (heartbeat)
+                                if (ln.startsWith('event:')) evName = ln.slice(6).trim();
+                                else if (ln.startsWith('data:')) dataStr += ln.slice(5).trim();
+                            }
+                            if (!dataStr) continue;
+                            try {
+                                const payload = JSON.parse(dataStr);
+                                if (evName === 'progress') {
+                                    // 진행 표시 — 버튼 라벨 갱신
+                                    if (btn) btn.innerHTML = '<span class="iconify" data-icon="lucide:loader-2"></span> LLM 호출 중...';
+                                } else if (evName === 'result') {
+                                    result = payload.data;
+                                } else if (evName === 'error') {
+                                    errorPayload = payload.error || { message: '알 수 없는 오류' };
+                                }
+                            } catch (_e) { /* malformed event chunk — 무시 */ }
+                        }
+                    }
+                } else {
+                    // Fallback: JSON 응답 (구버전 backend 호환)
+                    const data = await res.json().catch(() => ({}));
+                    if (data.success) result = data.data;
+                    else errorPayload = data.error;
+                }
+
+                if (errorPayload) {
+                    if (window.showToast) window.showToast(`생성 실패: ${errorPayload.message || JSON.stringify(errorPayload)}`, 'error');
+                    return;
+                }
+                if (!result) {
+                    if (window.showToast) window.showToast('응답을 받았으나 result 가 비어있습니다', 'error');
+                    return;
+                }
+
                 if (window.showToast) {
                     const note = result.deduped ? ' (24시간 내 동일 요청 — 기존 draft 재사용)' : '';
                     window.showToast(`Draft 생성 완료: ${result.name || result.skillId}${note}`, 'success');
                 }
                 this.closeAutoCreateModal();
-                // drafts 탭 새로고침
                 await this.loadDrafts();
-                // drafts 탭으로 자동 이동
                 const draftsTab = document.querySelector('.sl-tab[data-sl-tab="drafts"]');
                 if (draftsTab) draftsTab.click();
             } catch (e) {
