@@ -12,27 +12,27 @@ import { Router, type Request, type Response } from 'express';
 import { requireAuth, requireAdmin } from '../auth';
 import { asyncHandler } from '../utils/error-handler';
 import { success } from '../utils/api-response';
-import { McpCatalogRepository } from '../data/repositories/mcp-catalog-repository';
+import { McpAdminMonitoringRepository } from '../data/repositories/mcp-admin-monitoring-repository';
 import { getUnifiedDatabase } from '../data/models/unified-database';
 
 export const mcpAdminMonitoringRouter = Router();
 mcpAdminMonitoringRouter.use(requireAuth, requireAdmin);
 
 mcpAdminMonitoringRouter.get('/monitoring/summary', asyncHandler(async (_req: Request, res: Response) => {
-    const repo = new McpCatalogRepository(getUnifiedDatabase().getPool());
+    const repo = new McpAdminMonitoringRepository(getUnifiedDatabase().getPool());
     const summary = await repo.getGlobalInstanceSummary();
     res.json(success({ summary }));
 }));
 
 mcpAdminMonitoringRouter.get('/monitoring/top-crashed', asyncHandler(async (req: Request, res: Response) => {
     const limit = Math.min(Math.max(parseInt(String(req.query.limit ?? '10'), 10) || 10, 1), 50);
-    const repo = new McpCatalogRepository(getUnifiedDatabase().getPool());
+    const repo = new McpAdminMonitoringRepository(getUnifiedDatabase().getPool());
     const items = await repo.getTopCrashedServers(limit);
     res.json(success({ items, limit }));
 }));
 
 mcpAdminMonitoringRouter.get('/monitoring/crash-trend', asyncHandler(async (_req: Request, res: Response) => {
-    const repo = new McpCatalogRepository(getUnifiedDatabase().getPool());
+    const repo = new McpAdminMonitoringRepository(getUnifiedDatabase().getPool());
     const timeline = await repo.getCrashTrendByHour();
     res.json(success({ timeline }));
 }));
