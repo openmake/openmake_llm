@@ -255,7 +255,8 @@ const messageHandlers = {
     /**
      * MCP tool 호출 결과의 resource content — 인라인 카드 렌더링.
      * 현재 지원하는 resource URI prefix:
-     *   - openmake://skill-draft/{id}  → skill-draft-card 컴포넌트
+     *   - openmake://skill-draft/{id}  → skill-draft-card 컴포넌트 (Phase 1.5/2.5)
+     *   - openmake://agent-draft/{id}  → agent-draft-card 컴포넌트 (Phase 3.5)
      * 다른 prefix 는 무시 (확장 시 분기 추가).
      *
      * Payload: { type: 'mcp_tool_result', toolName, resources: [{ uri, mimeType?, text? }], messageId }
@@ -264,18 +265,38 @@ const messageHandlers = {
         if (!Array.isArray(data?.resources) || data.resources.length === 0) return;
         for (const res of data.resources) {
             const uri = res && res.uri;
-            if (typeof uri !== 'string' || !uri.startsWith('openmake://skill-draft/')) continue;
+            if (typeof uri !== 'string') continue;
+
+            const isSkillDraft = uri.startsWith('openmake://skill-draft/');
+            const isAgentDraft = uri.startsWith('openmake://agent-draft/');
+            if (!isSkillDraft && !isAgentDraft) continue;
+
             try {
                 const payload = JSON.parse(res.text || '{}');
                 const previewCard = payload.previewCard;
-                if (!previewCard || previewCard.kind !== 'skill-draft') continue;
-                const { renderSkillDraftCard, handleSkillDraftAction } = await import('/js/components/skill-draft-card.js?v=1');
-                const card = renderSkillDraftCard(previewCard, {
-                    mode: 'inline',
-                    onAction: (action, skillId) => handleSkillDraftAction(action, skillId, {
-                        onToast: (msg, type) => window.showToast && window.showToast(msg, type),
-                    }),
-                });
+                if (!previewCard) continue;
+
+                let card;
+                if (isSkillDraft && previewCard.kind === 'skill-draft') {
+                    const { renderSkillDraftCard, handleSkillDraftAction } = await import('/js/components/skill-draft-card.js?v=1');
+                    card = renderSkillDraftCard(previewCard, {
+                        mode: 'inline',
+                        onAction: (action, skillId) => handleSkillDraftAction(action, skillId, {
+                            onToast: (msg, type) => window.showToast && window.showToast(msg, type),
+                        }),
+                    });
+                } else if (isAgentDraft && previewCard.kind === 'agent-draft') {
+                    const { renderAgentDraftCard, handleAgentDraftAction } = await import('/js/components/agent-draft-card.js?v=1');
+                    card = renderAgentDraftCard(previewCard, {
+                        mode: 'inline',
+                        onAction: (action, agentId) => handleAgentDraftAction(action, agentId, {
+                            onToast: (msg, type) => window.showToast && window.showToast(msg, type),
+                        }),
+                    });
+                } else {
+                    continue;
+                }
+
                 // 현재 assistant 메시지 컨테이너에 추가 (state.currentAssistantMessage)
                 const assistantEl = (typeof getState === 'function') ? getState('currentAssistantMessage') : null;
                 const target = assistantEl?.querySelector?.('.message-content') || assistantEl;
@@ -294,7 +315,7 @@ const messageHandlers = {
                     (target || card.parentNode)?.appendChild(p);
                 }
             } catch (e) {
-                console.warn('[WS mcp_tool_result] skill-draft resource 처리 실패:', e);
+                console.warn('[WS mcp_tool_result] draft resource 처리 실패:', e);
             }
         }
     },

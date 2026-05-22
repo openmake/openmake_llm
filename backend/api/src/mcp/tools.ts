@@ -122,6 +122,8 @@ import { webScraperTools } from './web-scraper-tools';
 import { createSkillTool } from './skill-creator-tool';
 // Git URL → Skill 매니페스트 ingest (Phase 2.5) — GitHub URL → draft
 import { importSkillFromGitTool } from './git-ingest-tool';
+// Git URL → Agent 매니페스트 ingest (Phase 3.5) — chained skill ingest 포함
+import { importAgentFromGitTool } from './agent-ingest-tool';
 
 /**
  * 전체 내장 도구 배열
@@ -143,4 +145,5 @@ export const builtInTools: MCPToolDefinition[] = [
     ...webScraperTools,
     createSkillTool as MCPToolDefinition,
     importSkillFromGitTool as MCPToolDefinition,
+    importAgentFromGitTool as MCPToolDefinition,
 ];
