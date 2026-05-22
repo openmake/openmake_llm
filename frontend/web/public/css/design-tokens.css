@@ -23,23 +23,14 @@
     --accent-primary: #c061ff;
     --accent-primary-hover: #a855f7;
     --accent-primary-light: rgba(192, 97, 255, 0.15);
-    --accent-primary-glow: rgba(192, 97, 255, 0.25);
 
     /* ------- Secondary Accents (High Saturation) ------- */
-    --accent-blue: #4cc9f0;
-    --accent-blue-light: rgba(76, 201, 240, 0.15);
     --accent-purple: #bd52eb;
-    --accent-purple-light: rgba(189, 82, 235, 0.15);
     --accent-cyan: #06d6a0;
-    --accent-pink: #ff6b6b;
     --accent-orange: #ff9f1c;
 
     /* ------- Solid Fills (No gradients in brutalism) ------- */
     --gradient-primary: #c061ff;
-    --gradient-accent: #ff6b6b;
-    --gradient-subtle: rgba(192, 97, 255, 0.08);
-    --gradient-glow: none;
-    --gradient-hero: none;
 
     /* ------- Brutal Surface (replaces glassmorphism) ------- */
     --glass-bg: var(--bg-secondary);
@@ -49,7 +40,6 @@
 
     /* ------- Hard Shadows (replaces glow effects) ------- */
     --glow-primary: 4px 4px 0 rgba(192, 97, 255, 0.4);
-    --glow-accent: 4px 4px 0 rgba(255, 107, 107, 0.4);
     --glow-input-focus: 0 0 0 3px rgba(192, 97, 255, 0.2);
 
     /* ------- Semantic Colors (Bright, Brutalist) ------- */
@@ -97,11 +87,9 @@
     --border-light: #3d3d6b;
     --border-medium: #4d4d7a;
     --border-strong: #6060a0;
-    --border-accent: var(--accent-primary);
 
     /* ------- Neo Brutalism Border System ------- */
     --border-width: 2px;
-    --border-width-thick: 3px;
     --border-color: #000000;
 
     /* ------- Shadow (Hard Offset — No Blur) ------- */
@@ -109,13 +97,11 @@
     --shadow-md: 4px 4px 0 #000;
     --shadow-lg: 6px 6px 0 #000;
     --shadow-xl: 8px 8px 0 #000;
-    --shadow-glow: 4px 4px 0 #000;
 
     /* ------- Neo Brutalism Shadow System ------- */
     --shadow-brutal-sm: 2px 2px 0 #000;
     --shadow-brutal: 4px 4px 0 #000;
     --shadow-brutal-lg: 6px 6px 0 #000;
-    --shadow-brutal-hover: 6px 6px 0 #000;
     --shadow-brutal-active: 1px 1px 0 #000;
 
     /* ------- Typography ------- */
@@ -145,12 +131,9 @@
     --font-weight-semibold: 600;
     --font-weight-bold: 700;
 
-    --line-height-tight: 1.25;
     --line-height-normal: 1.5;
-    --line-height-relaxed: 1.75;
 
     /* ------- Spacing ------- */
-    --space-0: 0;
     --space-1: 0.25rem;
     /* 4px */
     --space-2: 0.5rem;
@@ -173,23 +156,19 @@
     /* 64px */
 
     /* ------- Border Radius (Minimal — Brutalist) ------- */
-    --radius-none: 0;
     --radius-sm: 4px;
     --radius-md: 6px;
     --radius-lg: 8px;
     --radius-xl: 8px;
-    --radius-2xl: 10px;
     --radius-full: 9999px;
 
     /* ------- Sidebar ------- */
     --sidebar-width: 260px;
-    --sidebar-collapsed-width: 0;
 
     /* ------- Transitions (Snappy) ------- */
     --transition-fast: 100ms ease;
     --transition-normal: 150ms ease;
     --transition-slow: 200ms ease;
-    --transition-bounce: cubic-bezier(0.4, 0, 0.2, 1);
 
     /* ------- Legacy Aliases (style.css 호환) ------- */
     --accent-glow: #c061ff;
@@ -201,10 +180,8 @@
     --anim-duration-fast: 150ms;
     --anim-duration-normal: 300ms;
     --anim-duration-slow: 500ms;
-    --anim-duration-slower: 800ms;
 
     --anim-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
-    --anim-ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
     --anim-ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
     --anim-ease-bounce: cubic-bezier(0.68, -0.55, 0.265, 1.55);
 }
@@ -220,7 +197,6 @@
     --accent-primary: #7c3aed;
     --accent-primary-hover: #6d28d9;
     --accent-primary-light: rgba(124, 58, 237, 0.12);
-    --accent-primary-glow: rgba(124, 58, 237, 0.25);
 
     /* ------- Solid Fill ------- */
     --gradient-primary: #7c3aed;
@@ -258,11 +234,9 @@
     --shadow-md: 4px 4px 0 #1a1a2e;
     --shadow-lg: 6px 6px 0 #1a1a2e;
     --shadow-xl: 8px 8px 0 #1a1a2e;
-    --shadow-glow: 4px 4px 0 #1a1a2e;
     --shadow-brutal: 4px 4px 0 #1a1a2e;
     --shadow-brutal-sm: 2px 2px 0 #1a1a2e;
     --shadow-brutal-lg: 6px 6px 0 #1a1a2e;
-    --shadow-brutal-hover: 6px 6px 0 #1a1a2e;
     --shadow-brutal-active: 1px 1px 0 #1a1a2e;
 
     /* ------- Hard Shadows (replaces glows) ------- */
