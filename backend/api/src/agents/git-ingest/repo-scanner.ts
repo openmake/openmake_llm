@@ -57,3 +57,29 @@ export function scanForAgentManifests(tree: TreeEntry[], explicitPath?: string):
         .filter(e => AGENT_MANIFEST_PATTERNS.some(re => re.test(e.path)))
         .map(e => ({ path: e.path, sha: e.sha, size: e.size }));
 }
+
+/**
+ * MCPSERVER.md 후보 탐지 (Phase 4).
+ *
+ * 자동 탐지 규칙:
+ *   1. 명시 explicitPath 지정 시 그것만
+ *   2. root MCPSERVER.md (대소문자 무관)
+ *   3. *.mcpserver.md / *.MCPSERVER.md / *.mcp-server.md
+ *   4. mcp-servers/ 하위의 *.md
+ */
+const MCP_SERVER_MANIFEST_PATTERNS = [
+    /^MCPSERVER\.md$/i,
+    /\.mcpserver\.md$/i,
+    /\.mcp-server\.md$/i,
+    /^mcp-servers\/.+\.md$/i,
+];
+
+export function scanForMcpServerManifests(tree: TreeEntry[], explicitPath?: string): ManifestCandidate[] {
+    if (explicitPath) {
+        const hit = tree.find(e => e.path === explicitPath);
+        return hit ? [{ path: hit.path, sha: hit.sha, size: hit.size }] : [];
+    }
+    return tree
+        .filter(e => MCP_SERVER_MANIFEST_PATTERNS.some(re => re.test(e.path)))
+        .map(e => ({ path: e.path, sha: e.sha, size: e.size }));
+}
