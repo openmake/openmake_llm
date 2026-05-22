@@ -43,6 +43,8 @@ const STATE = {
     catalog: [],
     myServers: [],
     instances: [],
+    instanceMetrics: null,
+    instancesSummary: null,
     drafts: [],
     selectedServerForInstances: '',
     currentTemplate: null,
@@ -194,24 +196,62 @@ async function loadInstances(serverId) {
     const container = document.getElementById('mcp-instances-container');
     if (!container) return;
     if (!serverId) {
+        STATE.instanceMetrics = null;
         container.innerHTML = `<div class="mcp-empty">서버를 선택하세요.</div>`;
         return;
     }
     container.innerHTML = `<div class="mcp-loading">로딩 중…</div>`;
     try {
-        const data = await fetchJson(`/api/mcp/servers/${encodeURIComponent(serverId)}/instances`);
-        STATE.instances = (data && (data.data?.instances || data.instances)) || [];
+        const [instData, metricsData] = await Promise.all([
+            fetchJson(`/api/mcp/servers/${encodeURIComponent(serverId)}/instances`),
+            fetchJson(`/api/mcp/servers/${encodeURIComponent(serverId)}/metrics`).catch(() => null),
+        ]);
+        STATE.instances = (instData && (instData.data?.instances || instData.instances)) || [];
+        STATE.instanceMetrics = (metricsData && (metricsData.data?.metrics || metricsData.metrics)) || null;
         renderInstances();
     } catch (e) {
         container.innerHTML = `<div class="mcp-empty">불러오기 실패: ${escapeHTML(e.message)}</div>`;
     }
 }
 
+function formatUptime(sec) {
+    if (sec == null) return '-';
+    const s = Math.abs(sec);
+    if (s < 60) return `${s.toFixed(1)}초`;
+    if (s < 3600) return `${(s / 60).toFixed(1)}분`;
+    if (s < 86400) return `${(s / 3600).toFixed(1)}시간`;
+    return `${(s / 86400).toFixed(1)}일`;
+}
+
 function renderInstances() {
     const container = document.getElementById('mcp-instances-container');
     if (!container) return;
+
+    const m = STATE.instanceMetrics;
+    const metricsHtml = m ? `
+        <div class="mcp-metrics-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:var(--space-3);margin-bottom:var(--space-4);">
+            <div class="mcp-metric-card" style="background:var(--bg-card);padding:var(--space-3);border-radius:var(--radius-md);border:1px solid var(--border-light);">
+                <div style="font-size:0.85em;color:var(--text-muted);">현재 활성</div>
+                <div style="font-size:1.8em;font-weight:700;color:${m.currentRunning > 0 ? 'var(--success-bright,#22c55e)' : 'var(--text-muted)'};">${escapeHTML(String(m.currentRunning))}</div>
+            </div>
+            <div class="mcp-metric-card" style="background:var(--bg-card);padding:var(--space-3);border-radius:var(--radius-md);border:1px solid var(--border-light);">
+                <div style="font-size:0.85em;color:var(--text-muted);">총 spawn</div>
+                <div style="font-size:1.8em;font-weight:700;">${escapeHTML(String(m.totalSpawned))}</div>
+            </div>
+            <div class="mcp-metric-card" style="background:var(--bg-card);padding:var(--space-3);border-radius:var(--radius-md);border:1px solid var(--border-light);">
+                <div style="font-size:0.85em;color:var(--text-muted);">24h crash</div>
+                <div style="font-size:1.8em;font-weight:700;color:${m.crashed24h > 0 ? 'var(--danger-bright,#dc2626)' : 'var(--text-muted)'};">${escapeHTML(String(m.crashed24h))}</div>
+            </div>
+            <div class="mcp-metric-card" style="background:var(--bg-card);padding:var(--space-3);border-radius:var(--radius-md);border:1px solid var(--border-light);">
+                <div style="font-size:0.85em;color:var(--text-muted);">평균 uptime</div>
+                <div style="font-size:1.4em;font-weight:600;">${escapeHTML(formatUptime(m.avgUptimeSec))}</div>
+            </div>
+        </div>
+        ${m.lastErrorMessage ? `<div style="background:var(--danger-bg,#fee2e2);color:var(--danger,#991b1b);padding:var(--space-3);border-radius:var(--radius-md);margin-bottom:var(--space-3);"><b>최근 에러:</b> ${escapeHTML(m.lastErrorMessage)} <span style="color:var(--text-muted);">(${escapeHTML(m.lastErrorAt || '')})</span></div>` : ''}
+    ` : '';
+
     if (STATE.instances.length === 0) {
-        container.innerHTML = `<div class="mcp-empty">이 서버의 인스턴스 기록이 없습니다.</div>`;
+        container.innerHTML = metricsHtml + `<div class="mcp-empty">이 서버의 인스턴스 기록이 없습니다.</div>`;
         return;
     }
     const rows = STATE.instances.map(i => `
@@ -224,7 +264,7 @@ function renderInstances() {
             <td>${escapeHTML(i.last_error || '-')}</td>
         </tr>
     `).join('');
-    container.innerHTML = `
+    container.innerHTML = metricsHtml + `
         <table class="mcp-instance-table">
             <thead>
                 <tr>

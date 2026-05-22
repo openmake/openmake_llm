@@ -268,6 +268,96 @@ export class McpCatalogRepository {
         return result.rows;
     }
 
+    // ────────────────────────────────────────────────────────────
+    // Phase 5: instance metrics (read-only aggregation)
+    // ────────────────────────────────────────────────────────────
+
+    /**
+     * 단일 서버의 lifecycle metrics — 사용자별 격리.
+     *
+     * - currentRunning: 현재 status='running' 또는 'starting' 인 instance 수
+     * - totalSpawned: 누적 transition row 수 (append-only INSERT)
+     * - crashed24h: 최근 24h 내 status='crashed' 발생 수
+     * - avgUptimeSec: 완료된 instance (stopped + crashed) 의 평균 uptime 초
+     * - lastErrorAt / lastErrorMessage: 가장 최근 crashed 의 시각 + 메시지
+     */
+    async getServerInstanceMetrics(
+        serverId: string,
+        userId: string,
+    ): Promise<{
+        currentRunning: number;
+        totalSpawned: number;
+        crashed24h: number;
+        avgUptimeSec: number | null;
+        lastErrorAt: string | null;
+        lastErrorMessage: string | null;
+    }> {
+        const r = await this.pool.query<{
+            current_running: string;
+            total_spawned: string;
+            crashed_24h: string;
+            avg_uptime_sec: string | null;
+            last_error_at: string | null;
+            last_error_message: string | null;
+        }>(
+            `SELECT
+                COUNT(*) FILTER (WHERE status IN ('starting','running'))::text AS current_running,
+                COUNT(*)::text AS total_spawned,
+                COUNT(*) FILTER (WHERE status='crashed' AND started_at > NOW() - INTERVAL '24 hours')::text AS crashed_24h,
+                AVG(EXTRACT(EPOCH FROM (stopped_at - started_at)))
+                    FILTER (WHERE stopped_at IS NOT NULL)::text AS avg_uptime_sec,
+                MAX(started_at) FILTER (WHERE status='crashed')::text AS last_error_at,
+                (SELECT last_error FROM mcp_server_instances
+                  WHERE mcp_server_id = $1 AND user_id = $2 AND status='crashed'
+                  ORDER BY started_at DESC LIMIT 1) AS last_error_message
+              FROM mcp_server_instances
+              WHERE mcp_server_id = $1 AND user_id = $2`,
+            [serverId, userId],
+        );
+        const row = r.rows[0];
+        return {
+            currentRunning: parseInt(row?.current_running || '0', 10),
+            totalSpawned: parseInt(row?.total_spawned || '0', 10),
+            crashed24h: parseInt(row?.crashed_24h || '0', 10),
+            avgUptimeSec: row?.avg_uptime_sec ? parseFloat(row.avg_uptime_sec) : null,
+            lastErrorAt: row?.last_error_at || null,
+            lastErrorMessage: row?.last_error_message || null,
+        };
+    }
+
+    /**
+     * 사용자의 모든 서버 통합 summary.
+     */
+    async getUserInstancesSummary(userId: string): Promise<{
+        totalServers: number;
+        currentRunning: number;
+        totalSpawned: number;
+        crashed24h: number;
+    }> {
+        const r = await this.pool.query<{
+            total_servers: string;
+            current_running: string;
+            total_spawned: string;
+            crashed_24h: string;
+        }>(
+            `SELECT
+                (SELECT COUNT(DISTINCT id)::text FROM mcp_servers WHERE user_id = $1) AS total_servers,
+                COUNT(*) FILTER (WHERE status IN ('starting','running'))::text AS current_running,
+                COUNT(*)::text AS total_spawned,
+                COUNT(*) FILTER (WHERE status='crashed' AND started_at > NOW() - INTERVAL '24 hours')::text AS crashed_24h
+              FROM mcp_server_instances
+              WHERE user_id = $1`,
+            [userId],
+        );
+        const row = r.rows[0];
+        return {
+            totalServers: parseInt(row?.total_servers || '0', 10),
+            currentRunning: parseInt(row?.current_running || '0', 10),
+            totalSpawned: parseInt(row?.total_spawned || '0', 10),
+            crashed24h: parseInt(row?.crashed_24h || '0', 10),
+        };
+    }
+
     async recordInstanceTransition(
         serverId: string,
         userId: string,
