@@ -103,6 +103,13 @@ export class ChatService {
      */
     private currentSkillBindings: ActiveSkillBinding[] = [];
 
+    /**
+     * 현재 채팅의 MCP tool resource content 콜백.
+     * processMessage 진입 시 저장, executeExternalTool / agent-loop-strategy 가 공유.
+     * tool 결과에 type='resource' content 가 있으면 invoke → ws-chat-handler 가 frontend 로 emit.
+     */
+    private currentMcpToolResultCallback?: (event: { toolName: string; resources: Array<{ uri: string; mimeType?: string; text?: string }> }) => void;
+
     /** 단일 LLM 직접 호출 전략 */
     private readonly directStrategy: DirectStrategy;
     /** Generate-Verify 생성-검증 전략 */
@@ -265,7 +272,10 @@ export class ChatService {
         onSkillsActivated?: (skillNames: string[]) => void,
         onThinking?: (thinking: string) => void,
         onSystemEvent?: SystemEventCallback,
+        onMcpToolResult?: (event: { toolName: string; resources: Array<{ uri: string; mimeType?: string; text?: string }> }) => void,
     ): Promise<string> {
+        // MCP tool resource content 콜백을 인스턴스 상태로 저장 — executeExternalTool 및 strategy 가 공유
+        this.currentMcpToolResultCallback = onMcpToolResult;
         // 채팅 요청 전체를 root span으로 추적 (모든 LLM/도구 호출이 자식 span으로 자동 연결)
         return withSpan(
             'chat-service',
@@ -737,6 +747,7 @@ export class ChatService {
             client: this.client,
             currentUserContext: this.currentUserContext,
             getAllowedTools: () => this.getAllowedTools(),
+            onMcpToolResult: this.currentMcpToolResultCallback,
         });
     }
 
@@ -1064,6 +1075,18 @@ export class ChatService {
                 role: 'guest' as const,
             };
             const result = await mcpClient.executeToolWithContext(toolName, toolArgs, userCtx);
+
+            // resource content 가 있으면 frontend 인라인 카드 표시용 콜백 invoke
+            if (this.currentMcpToolResultCallback && Array.isArray(result.content)) {
+                const resources = result.content
+                    .filter((c): c is { type: 'resource'; resource: { uri: string; mimeType?: string; text?: string } } =>
+                        c.type === 'resource' && !!c.resource && typeof c.resource.uri === 'string')
+                    .map(c => ({ uri: c.resource.uri, mimeType: c.resource.mimeType, text: c.resource.text }));
+                if (resources.length > 0) {
+                    try { this.currentMcpToolResultCallback({ toolName, resources }); }
+                    catch (e) { logger.warn(`onMcpToolResult 콜백 실패: ${e instanceof Error ? e.message : String(e)}`); }
+                }
+            }
 
             // MCPToolResult → 문자열 직렬화
             if (result.isError) {

@@ -41,6 +41,8 @@
     let localSkills = [];
     let userAssignedIds = new Set(); // 사용자 개인 할당 스킬 ID 집합
     let editingSkillId = null; // 현재 편집 중인 스킬 ID (null = 새 스킬)
+    let drafts = []; // AI 자동 생성 draft 목록
+    let draftsLoaded = false; // drafts 탭 첫 진입 시에만 자동 로드
 
     let localFilters = {
         search: '',
@@ -62,6 +64,7 @@
         <p>로컬에 설치된 에이전트 스킬을 관리합니다.</p>
         <div class="sl-tabs" role="tablist">
             <button class="sl-tab active" data-sl-tab="local" role="tab" aria-selected="true">내 스킬</button>
+            <button class="sl-tab" data-sl-tab="drafts" role="tab" aria-selected="false">AI 자동 생성 (Drafts)</button>
         </div>
     </div>
 
@@ -105,6 +108,93 @@
                 <div class="sl-loading"><div class="sl-spinner"></div></div>
             </div>
             <div id="localPagination" class="sl-pagination"></div>
+        </div>
+
+        <!-- AI 자동 생성 (Drafts) 탭 -->
+        <div class="sl-pane" id="sl-pane-drafts" role="tabpanel">
+            <div class="sl-toolbar">
+                <div class="sl-search-group" style="flex:1">
+                    <p style="margin:0;color:var(--text-secondary,#a0a0a0);font-size:0.9rem">
+                        자연어로 스킬의 목적을 설명하면 AI 가 매니페스트를 자동 작성합니다. 검토 후 승인하면 활성화됩니다.
+                    </p>
+                </div>
+                <button class="sl-btn sl-btn-primary" id="btnOpenAutoCreate">
+                    <span class="iconify" data-icon="lucide:sparkles"></span> AI 로 새 스킬 만들기
+                </button>
+            </div>
+
+            <div class="skill-row skill-row-header" role="row" aria-hidden="false">
+                <div class="skill-row-meta">카테고리</div>
+                <div class="skill-row-main">이름 · 설명</div>
+                <div class="skill-row-side">생성 정보</div>
+                <div class="skill-row-actions">작업</div>
+            </div>
+
+            <div id="draftsGrid" class="skill-grid">
+                <div class="sl-empty">"AI 로 새 스킬 만들기" 버튼을 눌러 시작하세요.</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- AI 자동 생성 모달 -->
+    <div class="sl-modal-overlay" id="slAutoCreateModal">
+        <div class="sl-modal">
+            <h2>AI 자동 스킬 생성</h2>
+            <div class="sl-form-group">
+                <label class="sl-form-label" for="acPurpose">목적 / 역할 <span style="color:var(--danger-color,#ef4444)">*</span></label>
+                <textarea id="acPurpose" class="sl-form-textarea" rows="2" placeholder="예: 한국 의료법 자문 — 의료기기법·약사법·임상시험 규정에 답변" maxlength="500"></textarea>
+                <small style="color:var(--text-secondary);font-size:0.8rem">5~500자. 만들고자 하는 스킬이 어떤 일을 해야 하는지.</small>
+            </div>
+            <div class="sl-form-group">
+                <label class="sl-form-label" for="acCategory">카테고리 (선택)</label>
+                <select id="acCategory" class="sl-form-select">
+                    <option value="">자동 결정</option>
+                    <option value="general">일반</option>
+                    <option value="coding">코딩</option>
+                    <option value="writing">글쓰기</option>
+                    <option value="analysis">분석</option>
+                    <option value="creative">창작</option>
+                    <option value="education">교육</option>
+                    <option value="business">비즈니스</option>
+                    <option value="science">과학</option>
+                    <option value="technology">기술/IT</option>
+                    <option value="finance">금융</option>
+                    <option value="healthcare">의료/건강</option>
+                    <option value="legal">법률</option>
+                    <option value="engineering">엔지니어링</option>
+                    <option value="media">미디어</option>
+                    <option value="social-welfare">사회/복지</option>
+                    <option value="government">공공/정부</option>
+                    <option value="real-estate">부동산</option>
+                    <option value="energy">에너지/환경</option>
+                    <option value="logistics">물류/운송</option>
+                    <option value="hospitality">관광/서비스</option>
+                    <option value="agriculture">농업/식품</option>
+                    <option value="productivity">생산성</option>
+                    <option value="communication">커뮤니케이션</option>
+                </select>
+            </div>
+            <div class="sl-form-group">
+                <label class="sl-form-label" for="acExamples">예시 질문/작업 (선택, 한 줄당 하나, 최대 5개)</label>
+                <textarea id="acExamples" class="sl-form-textarea" rows="4" placeholder="의료기기 인증 절차를 알려줘&#10;임상시험 IRB 승인 요건은?&#10;..."></textarea>
+            </div>
+            <div class="sl-form-group">
+                <label class="sl-form-label" for="acHints">추가 지침 (선택, 최대 1000자)</label>
+                <textarea id="acHints" class="sl-form-textarea" rows="2" placeholder="예: 한국법만 다루고, 출처를 명시할 것" maxlength="1000"></textarea>
+            </div>
+            <div class="sl-form-group" id="acTargetGroup" style="display:none">
+                <label class="sl-form-label" for="acTarget">대상 (관리자 전용)</label>
+                <select id="acTarget" class="sl-form-select">
+                    <option value="user">user — 본인 전용</option>
+                    <option value="system">system — 전역 공개</option>
+                </select>
+            </div>
+            <div class="sl-modal-actions">
+                <button class="sl-btn sl-btn-secondary" onclick="sl_closeAutoCreate()">취소</button>
+                <button class="sl-btn sl-btn-primary" id="btnSubmitAutoCreate" onclick="sl_submitAutoCreate()">
+                    <span class="iconify" data-icon="lucide:sparkles"></span> 생성하기
+                </button>
+            </div>
         </div>
     </div>
     <!-- 인라인 스킬 편집 모달 -->
@@ -186,15 +276,22 @@
 
             // Cleanup globals
             ['sl_openNewSkill', 'sl_editSkill', 'sl_deleteSkill', 'sl_exportSkill',
-             'sl_changeLocalPage', 'sl_toggleUserSkill', 'sl_saveSkill', 'sl_closeSkillModal'].forEach(key => {
+             'sl_changeLocalPage', 'sl_toggleUserSkill', 'sl_saveSkill', 'sl_closeSkillModal',
+             'sl_openAutoCreate', 'sl_closeAutoCreate', 'sl_submitAutoCreate',
+             'sl_approveDraft', 'sl_rejectDraft'].forEach(key => {
                 try { delete window[key]; } catch (e) {}
             });
+
+            // Reset draft state for next session
+            drafts = [];
+            draftsLoaded = false;
 
             // Close any open dropdowns
             document.querySelectorAll('.skill-card-dropdown.open').forEach(el => el.classList.remove('open'));
         },
 
         setupTabs: function () {
+            const self = this;
             document.querySelectorAll('.sl-tab').forEach(tab => {
                 tab.addEventListener('click', function () {
                     const target = this.dataset.slTab;
@@ -207,6 +304,10 @@
                     document.querySelectorAll('.sl-pane').forEach(p => {
                         p.classList.toggle('active', p.id === 'sl-pane-' + target);
                     });
+                    // drafts 탭 첫 진입 시 자동 로드
+                    if (target === 'drafts' && !draftsLoaded) {
+                        self.loadDrafts();
+                    }
                 });
             });
         },
@@ -309,6 +410,11 @@
                 }
             });
 
+            // AI 자동 생성 버튼
+            document.getElementById('btnOpenAutoCreate')?.addEventListener('click', () => {
+                self.openAutoCreateModal();
+            });
+
             // 글로벌 함수 노출
             window.sl_openNewSkill = this.openNewSkillModal.bind(this);
             window.sl_editSkill = this.editLocalSkill.bind(this);
@@ -322,6 +428,12 @@
             window.sl_toggleUserSkill = this.toggleUserSkill.bind(this);
             window.sl_saveSkill = this.saveSkillFromModal.bind(this);
             window.sl_closeSkillModal = this.closeSkillModal.bind(this);
+            // AI 자동 생성 / draft 관리 함수
+            window.sl_openAutoCreate = this.openAutoCreateModal.bind(this);
+            window.sl_closeAutoCreate = this.closeAutoCreateModal.bind(this);
+            window.sl_submitAutoCreate = this.submitAutoCreate.bind(this);
+            window.sl_approveDraft = this.approveDraft.bind(this);
+            window.sl_rejectDraft = this.rejectDraft.bind(this);
         },
 
         loadLocalCategories: async function () {
@@ -656,6 +768,209 @@
                     if (typeof fn === 'function' && !Number.isNaN(page)) fn(page);
                 });
                 container.dataset.delegated = '1';
+            }
+        },
+
+        // -------------------------------------------------------
+        // AI 자동 생성 (Drafts)
+        // -------------------------------------------------------
+
+        loadDrafts: async function () {
+            const grid = document.getElementById('draftsGrid');
+            if (!grid) return;
+            grid.innerHTML = '<div class="sl-loading"><div class="sl-spinner"></div></div>';
+            try {
+                const res = await window.authFetch(API_ENDPOINTS.AGENTS_SKILLS_DRAFTS + '?target=user&limit=50');
+                const data = await res.json();
+                if (!res.ok || !data.success) throw new Error(data.error?.message || data.message || 'draft 로드 실패');
+                drafts = (data.data && Array.isArray(data.data.drafts)) ? data.data.drafts : [];
+                draftsLoaded = true;
+                this.renderDrafts();
+            } catch (e) {
+                const esc = window.escapeHtml || (s => s);
+                grid.innerHTML = `<div class="sl-error">${esc(e.message || String(e))}</div>`;
+            }
+        },
+
+        renderDrafts: function () {
+            const grid = document.getElementById('draftsGrid');
+            if (!grid) return;
+            const esc = window.escapeHtml || (s => s);
+
+            if (drafts.length === 0) {
+                grid.innerHTML = '<div class="sl-empty">생성된 draft 가 없습니다. "AI 로 새 스킬 만들기" 버튼을 눌러 시작하세요.</div>';
+                return;
+            }
+
+            grid.innerHTML = drafts.map(d => {
+                const meta = d.manifestMeta || {};
+                const model = esc(meta.model || '-');
+                const tokens = (meta.tokensUsed != null) ? meta.tokensUsed : '-';
+                const createdAt = d.createdAt ? new Date(d.createdAt).toLocaleString() : '-';
+                const triggers = Array.isArray(meta.triggers) && meta.triggers.length > 0
+                    ? meta.triggers.slice(0, 3).map(t => `<span class="sl-badge">${esc(String(t))}</span>`).join(' ')
+                    : '';
+                const promptText = (meta.userPrompt && typeof meta.userPrompt === 'string') ? meta.userPrompt : '';
+                return `
+                <div class="skill-row">
+                    <div class="skill-row-meta">
+                        <span class="skill-card-badge">${esc(categoryLabel(d.category))}</span>
+                        <span class="sl-badge" style="background:rgba(234,179,8,0.12);color:#eab308;border-color:rgba(234,179,8,0.25);margin-left:0.4rem">DRAFT</span>
+                    </div>
+                    <div class="skill-row-main">
+                        <h3 class="skill-row-title" title="${esc(d.name)}">${esc(d.name)}</h3>
+                        <p class="skill-row-desc" title="${esc(d.description || '')}">${esc(d.description || '설명 없음')}</p>
+                        ${promptText ? `<small style="display:block;margin-top:0.3rem;color:var(--text-secondary,#a0a0a0);font-size:0.75rem">요청: ${esc(promptText.slice(0,120))}${promptText.length > 120 ? '…' : ''}</small>` : ''}
+                        ${triggers ? `<div style="margin-top:0.3rem">${triggers}</div>` : ''}
+                    </div>
+                    <div class="skill-row-side" style="font-size:0.78rem;color:var(--text-secondary,#a0a0a0)">
+                        <div>모델: ${model}</div>
+                        <div>토큰: ${esc(String(tokens))}</div>
+                        <div>${esc(createdAt)}</div>
+                    </div>
+                    <div class="skill-row-actions" style="display:flex;gap:0.4rem;align-items:center">
+                        <button class="sl-btn sl-btn-secondary" data-draft-action="preview" data-draft-id="${esc(d.id)}" title="미리보기">
+                            <span class="iconify" data-icon="lucide:eye"></span>
+                        </button>
+                        <button class="sl-btn sl-btn-primary" data-draft-action="approve" data-draft-id="${esc(d.id)}">
+                            <span class="iconify" data-icon="lucide:check"></span> 승인
+                        </button>
+                        <button class="sl-btn sl-btn-secondary" data-draft-action="reject" data-draft-id="${esc(d.id)}" title="거절 (archived 로 보관)">
+                            <span class="iconify" data-icon="lucide:x"></span>
+                        </button>
+                    </div>
+                </div>`;
+            }).join('');
+
+            // 이벤트 위임 — inline onclick 회피 (CSP/XSS)
+            if (!grid.dataset.delegated) {
+                grid.addEventListener('click', (e) => {
+                    const btn = e.target.closest('[data-draft-action]');
+                    if (!btn) return;
+                    const id = btn.dataset.draftId;
+                    const action = btn.dataset.draftAction;
+                    if (action === 'approve') sl_approveDraft(id);
+                    else if (action === 'reject') sl_rejectDraft(id);
+                    else if (action === 'preview') {
+                        const d = drafts.find(x => x.id === id);
+                        if (d) {
+                            // 기존 편집 모달 재사용 — preview-only (저장 시 PUT 으로 active 스킬 수정됨)
+                            const titleEl = document.getElementById('slSkillModalTitle');
+                            if (titleEl) titleEl.textContent = 'Draft 미리보기 (저장 시 active 로 즉시 반영)';
+                            document.getElementById('slSkillName').value = d.name || '';
+                            document.getElementById('slSkillDesc').value = d.description || '';
+                            document.getElementById('slSkillCategory').value = d.category || 'general';
+                            document.getElementById('slSkillContent').value = d.content || '';
+                            editingSkillId = d.id;
+                            document.getElementById('slSkillModal')?.classList.add('open');
+                        }
+                    }
+                });
+                grid.dataset.delegated = '1';
+            }
+        },
+
+        openAutoCreateModal: function () {
+            const modal = document.getElementById('slAutoCreateModal');
+            if (!modal) return;
+            document.getElementById('acPurpose').value = '';
+            document.getElementById('acCategory').value = '';
+            document.getElementById('acExamples').value = '';
+            document.getElementById('acHints').value = '';
+            // admin 만 target 노출 — currentUser 가 있으면 role 확인
+            const isAdmin = (window.currentUser && window.currentUser.role === 'admin');
+            const targetGroup = document.getElementById('acTargetGroup');
+            if (targetGroup) targetGroup.style.display = isAdmin ? 'block' : 'none';
+            if (isAdmin) document.getElementById('acTarget').value = 'user';
+            modal.classList.add('open');
+        },
+
+        closeAutoCreateModal: function () {
+            const modal = document.getElementById('slAutoCreateModal');
+            if (modal) modal.classList.remove('open');
+        },
+
+        submitAutoCreate: async function () {
+            const purpose = (document.getElementById('acPurpose').value || '').trim();
+            if (purpose.length < 5) {
+                if (window.showToast) window.showToast('목적은 5자 이상 입력하세요', 'error');
+                return;
+            }
+            const category = document.getElementById('acCategory').value || undefined;
+            const examplesText = (document.getElementById('acExamples').value || '').trim();
+            const examples = examplesText
+                ? examplesText.split('\n').map(s => s.trim()).filter(Boolean).slice(0, 5)
+                : undefined;
+            const hints = (document.getElementById('acHints').value || '').trim() || undefined;
+            const isAdmin = (window.currentUser && window.currentUser.role === 'admin');
+            const target = isAdmin ? (document.getElementById('acTarget').value || 'user') : undefined;
+
+            const btn = document.getElementById('btnSubmitAutoCreate');
+            if (btn) { btn.disabled = true; btn.dataset.origText = btn.innerHTML; btn.innerHTML = '<span class="iconify" data-icon="lucide:loader-2"></span> 생성 중...'; }
+
+            try {
+                const res = await window.authFetch(API_ENDPOINTS.AGENTS_SKILLS_AUTO_CREATE, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ purpose, category, examples, hints, target }),
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok || !data.success) {
+                    const msg = data?.error?.message || data?.error || data?.detail || data?.message || res.statusText;
+                    if (window.showToast) window.showToast(`생성 실패: ${msg}`, 'error');
+                    return;
+                }
+                const result = data.data || {};
+                if (window.showToast) {
+                    const note = result.deduped ? ' (24시간 내 동일 요청 — 기존 draft 재사용)' : '';
+                    window.showToast(`Draft 생성 완료: ${result.name || result.skillId}${note}`, 'success');
+                }
+                this.closeAutoCreateModal();
+                // drafts 탭 새로고침
+                await this.loadDrafts();
+                // drafts 탭으로 자동 이동
+                const draftsTab = document.querySelector('.sl-tab[data-sl-tab="drafts"]');
+                if (draftsTab) draftsTab.click();
+            } catch (e) {
+                if (window.showToast) window.showToast('오류: ' + (e?.message || String(e)), 'error');
+            } finally {
+                if (btn) { btn.disabled = false; btn.innerHTML = btn.dataset.origText || '<span class="iconify" data-icon="lucide:sparkles"></span> 생성하기'; }
+            }
+        },
+
+        approveDraft: async function (skillId) {
+            if (!confirm('이 draft 를 승인하시겠습니까?\n\n⚠ 승인 후 이 스킬의 content 가 채팅의 system prompt 에 주입됩니다. AI 가 작성한 텍스트이므로 의심스러운 지시문(예: "이전 지시를 무시하라", 시스템 페르소나 변경 등)이 포함돼 있지 않은지 미리보기로 확인하세요.')) return;
+            try {
+                const res = await window.authFetch(API_ENDPOINTS.AGENTS_SKILLS_APPROVE(skillId), { method: 'POST' });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok || !data.success) {
+                    const msg = data?.error?.message || data?.error || data?.detail || res.statusText;
+                    if (window.showToast) window.showToast(`승인 실패: ${msg}`, 'error');
+                    return;
+                }
+                if (window.showToast) window.showToast('승인 완료 — 활성 스킬로 전환되었습니다.', 'success');
+                await this.loadDrafts();
+                await this.loadLocalSkills();
+                await this.loadLocalCategories();
+            } catch (e) {
+                if (window.showToast) window.showToast('오류: ' + (e?.message || String(e)), 'error');
+            }
+        },
+
+        rejectDraft: async function (skillId) {
+            if (!confirm('이 draft 를 거절하시겠습니까? archived 상태로 보관됩니다 (영구 삭제 아님).')) return;
+            try {
+                const res = await window.authFetch(API_ENDPOINTS.AGENTS_SKILLS_REJECT(skillId), { method: 'POST' });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok || !data.success) {
+                    const msg = data?.error?.message || data?.error || data?.detail || res.statusText;
+                    if (window.showToast) window.showToast(`거절 실패: ${msg}`, 'error');
+                    return;
+                }
+                if (window.showToast) window.showToast('거절됨 (archived).', 'success');
+                await this.loadDrafts();
+            } catch (e) {
+                if (window.showToast) window.showToast('오류: ' + (e?.message || String(e)), 'error');
             }
         }
     };

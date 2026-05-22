@@ -118,6 +118,8 @@ export const analyzeImageTool: MCPToolDefinition = {
 import { webSearchTools } from './web-search';
 // 웹 스크래핑 MCP 도구 가져오기 (Firecrawl 대체 — API 키 불필요, 항상 활성)
 import { webScraperTools } from './web-scraper-tools';
+// Skill Creator 도구 (Phase 1) — 자연어 purpose → LLM 매니페스트 → draft
+import { createSkillTool } from './skill-creator-tool';
 
 /**
  * 전체 내장 도구 배열
@@ -137,4 +139,5 @@ export const builtInTools: MCPToolDefinition[] = [
     analyzeImageTool,
     ...webSearchTools,
     ...webScraperTools,
+    createSkillTool as MCPToolDefinition,
 ];

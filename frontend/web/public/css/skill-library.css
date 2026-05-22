@@ -468,3 +468,96 @@
     margin-top: 1.25rem; padding-top: 1rem;
     border-top: 1px solid var(--border-color, #334155);
 }
+
+/* ============================================================
+ * Skill Draft Card — 채팅 inline + 라이브러리 공용 컴포넌트
+ * (components/skill-draft-card.js 가 렌더)
+ * ============================================================ */
+.skill-draft-card {
+    background: var(--bg-secondary, #0f172a);
+    border: 1px solid var(--border-color, #334155);
+    border-radius: var(--radius-lg, 12px);
+    padding: 1rem 1.1rem;
+    margin: 0.75rem 0;
+    color: var(--text-primary, #f1f5f9);
+}
+.skill-draft-card--inline {
+    /* 채팅 메시지 안에서는 약간 여백 줄임 */
+    margin: 0.5rem 0 0.75rem;
+    border-left: 3px solid var(--accent-primary, #a855f7);
+}
+.skill-draft-card__header {
+    display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap;
+    margin-bottom: 0.5rem;
+}
+.skill-draft-card__badge {
+    font-size: 0.72rem; padding: 0.15rem 0.55rem;
+    border-radius: 999px; line-height: 1.4;
+    background: rgba(168, 85, 247, 0.12);
+    color: var(--accent-primary, #a855f7);
+    border: 1px solid rgba(168, 85, 247, 0.25);
+}
+.skill-draft-card__badge-draft {
+    background: rgba(234, 179, 8, 0.12);
+    color: #eab308;
+    border-color: rgba(234, 179, 8, 0.25);
+}
+.skill-draft-card__badge-system {
+    background: rgba(59, 130, 246, 0.12);
+    color: var(--info-color, #3b82f6);
+    border-color: rgba(59, 130, 246, 0.25);
+}
+.skill-draft-card__badge-user {
+    background: rgba(34, 197, 94, 0.12);
+    color: #22c55e;
+    border-color: rgba(34, 197, 94, 0.25);
+}
+.skill-draft-card__badge-deduped {
+    background: rgba(148, 163, 184, 0.12);
+    color: var(--text-secondary, #94a3b8);
+    border-color: rgba(148, 163, 184, 0.25);
+}
+.skill-draft-card__title {
+    margin: 0 0 0.3rem; font-size: 1rem; font-weight: 600;
+    color: var(--text-primary, #fff);
+}
+.skill-draft-card__desc {
+    margin: 0 0 0.5rem; font-size: 0.85rem; line-height: 1.5;
+    color: var(--text-secondary, #94a3b8);
+}
+.skill-draft-card__meta {
+    font-size: 0.75rem; color: var(--text-secondary, #94a3b8);
+    margin-bottom: 0.5rem;
+}
+.skill-draft-card__triggers {
+    display: flex; flex-wrap: wrap; gap: 0.3rem;
+    margin: 0.5rem 0;
+}
+.skill-draft-card__preview {
+    margin: 0.5rem 0; font-size: 0.8rem;
+}
+.skill-draft-card__preview summary {
+    cursor: pointer; color: var(--accent-primary, #a855f7);
+    font-weight: 500;
+}
+.skill-draft-card__content {
+    max-height: 200px; overflow: auto;
+    background: var(--bg-primary, #0a0a0a);
+    border: 1px solid var(--border-color, #334155);
+    border-radius: var(--radius-md, 6px);
+    padding: 0.5rem 0.75rem;
+    font-family: ui-monospace, 'SF Mono', Monaco, monospace;
+    font-size: 0.78rem; line-height: 1.5;
+    color: var(--text-primary, #f1f5f9);
+    white-space: pre-wrap; word-break: break-word;
+    margin-top: 0.4rem;
+}
+.skill-draft-card__actions {
+    display: flex; gap: 0.4rem; flex-wrap: wrap;
+    margin-top: 0.75rem;
+    padding-top: 0.6rem;
+    border-top: 1px dashed var(--border-color, #334155);
+}
+.skill-draft-card__actions .sl-btn-sm {
+    font-size: 0.78rem; padding: 0.3rem 0.7rem;
+}

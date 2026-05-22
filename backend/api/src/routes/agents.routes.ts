@@ -305,6 +305,16 @@ router.get('/:agentId/skills', requireAuth, asyncHandler(async (req: Request, re
  */
 router.post('/:agentId/skills/:skillId', requireAuth, validate(assignSkillSchema), asyncHandler(async (req: Request, res: Response) => {
     const { agentId, skillId } = req.params;
+    // status 가드: 활성 스킬만 할당 허용 (draft/archived 차단)
+    const skill = await getSkillManager().getSkillById(skillId);
+    if (!skill) {
+        res.status(404).json(notFound('스킬'));
+        return;
+    }
+    if (skill.status && skill.status !== 'active') {
+        res.status(409).json({ error: 'SKILL_NOT_ACTIVE', detail: `status=${skill.status} 인 스킬은 할당할 수 없습니다.` });
+        return;
+    }
     const priority = Number(req.body.priority ?? 0);
     await getSkillManager().assignSkillToAgent(agentId, skillId, priority);
     res.json(success({ assigned: true }));

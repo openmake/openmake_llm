@@ -42,12 +42,14 @@ export const TOOL_TIERS: Record<UserTier, string[]> = {
         'web_search',           // 웹 검색
         'vision_ocr',           // 이미지 OCR
         'analyze_image',        // 이미지 분석
+        'create_skill',         // 자연어 → 스킬 draft 생성 (서비스 내부에 50 drafts/user + 24h dedupe 안전장치)
         'noapi-google-search::*', // 외부: Google 검색
     ],
     pro: [
         'web_search',
         'vision_ocr',
         'analyze_image',
+        'create_skill',         // 자연어 → 스킬 draft 생성
         'web_scrape',           // 웹 스크래핑
         'web_map',              // URL 매핑
         'web_crawl',            // 웹 크롤링
