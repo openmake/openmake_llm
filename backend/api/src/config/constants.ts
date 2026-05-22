@@ -145,6 +145,86 @@ export const AGENT_CREATOR = {
     maxDraftsPerUser: parseInt(process.env.AGENT_CREATOR_MAX_DRAFTS_PER_USER || '20', 10),
 } as const;
 
+// ============================================================
+// MCP_INGEST — Phase 4 MCP server manifest ingest 설정
+// ============================================================
+
+interface RiskyCommandRule {
+    severity: 'error' | 'warn';
+    rule: string;
+    pattern: RegExp;
+    message: string;
+}
+
+/**
+ * MCP_INGEST — MCPSERVER.md Git ingest 파이프라인 설정.
+ *
+ * 환경변수 오버라이드:
+ *   - MCP_INGEST_ENABLED=false           (기본 true)
+ *   - MCP_INGEST_MAX_DRAFTS_PER_USER=20  (기본 20)
+ *   - MCP_INGEST_DEDUPE_HOURS=24         (기본 24)
+ *   - MCP_INGEST_FETCH_TIMEOUT_MS=15000  (기본 15000)
+ *   - MCP_INGEST_MAX_FILE_SIZE_BYTES=262144 (기본 256KB)
+ *   - MCP_INGEST_ADMIN_GLOBAL=true       (기본 true — admin 만 global 등록 허용)
+ *
+ * riskyCommandPatterns 는 ConventionChecker 가 command/args 검사 시 적용.
+ *   severity='error' → 자동 승인 차단
+ *   severity='warn'  → 경고만 (사용자가 명시 동의로 진행 가능)
+ */
+export const MCP_INGEST = {
+    enabled: process.env.MCP_INGEST_ENABLED !== 'false',
+    maxDraftsPerUser: parseInt(process.env.MCP_INGEST_MAX_DRAFTS_PER_USER || '20', 10),
+    dedupeWindowHours: parseInt(process.env.MCP_INGEST_DEDUPE_HOURS || '24', 10),
+    gitFetchTimeoutMs: parseInt(process.env.MCP_INGEST_FETCH_TIMEOUT_MS || '15000', 10),
+    gitMaxFileSizeBytes: parseInt(process.env.MCP_INGEST_MAX_FILE_SIZE_BYTES || '262144', 10),
+    adminCanRegisterGlobal: process.env.MCP_INGEST_ADMIN_GLOBAL !== 'false',
+
+    riskyCommandPatterns: [
+        {
+            severity: 'error',
+            rule: 'shell-pipe-execution',
+            pattern: /curl\s+[^|]+\|\s*(sh|bash|zsh)/i,
+            message: 'curl | sh 패턴 — 원격 스크립트를 검증 없이 실행하는 위험',
+        },
+        {
+            severity: 'error',
+            rule: 'wget-pipe-execution',
+            pattern: /wget\s+[^|]+\|\s*(sh|bash|zsh)/i,
+            message: 'wget | sh 패턴 — 원격 스크립트를 검증 없이 실행하는 위험',
+        },
+        {
+            severity: 'error',
+            rule: 'rm-rf-root',
+            pattern: /rm\s+-rf?\s+(\/|~|\$HOME)/,
+            message: 'rm -rf / 또는 홈 디렉토리 삭제 시도',
+        },
+        {
+            severity: 'error',
+            rule: 'sensitive-file-read',
+            pattern: /\/(etc\/passwd|etc\/shadow|etc\/sudoers)|~\/\.ssh\/|~\/\.aws\/credentials/,
+            message: '시스템 자격증명/비밀 파일 접근 시도',
+        },
+        {
+            severity: 'error',
+            rule: 'base64-exec',
+            pattern: /base64\s+(-d|--decode)[^|]*\|\s*(sh|bash|zsh|python|node)/i,
+            message: 'base64 디코드 후 즉시 실행 — 난독화된 코드 실행',
+        },
+        {
+            severity: 'warn',
+            rule: 'absolute-tmp-binary',
+            pattern: /^\/(tmp|var\/tmp)\//,
+            message: '/tmp 또는 /var/tmp 경로의 바이너리 실행 — 사용자가 의도한 것인지 확인',
+        },
+        {
+            severity: 'warn',
+            rule: 'unverified-npm-scope',
+            pattern: /@[a-z0-9_-]{1,5}\//,
+            message: '짧은 npm 스코프 — typosquat 가능성 (예: @aws 대신 @aws- 같은 가짜 패키지)',
+        },
+    ] as RiskyCommandRule[],
+};
+
 // ============================================
 // 모델 선택
 // ============================================
