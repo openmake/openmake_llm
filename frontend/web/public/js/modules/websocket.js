@@ -37,7 +37,7 @@ function connectWebSocket() {
             existingWs.onerror = null;
             existingWs.onmessage = null;
             existingWs.close();
-        } catch (e) {
+        } catch {
             // 이미 닫힌 상태일 수 있음 — 무시
         }
         setState('ws', null);
@@ -71,7 +71,7 @@ function connectWebSocket() {
         setState('isSending', false);
         try {
             hideAbortButton();
-        } catch (e) {
+        } catch {
             // DOM 접근 에러 무시
         }
 

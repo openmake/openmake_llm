@@ -86,7 +86,6 @@ export const AUTH_CONFIG = {
 // 애플리케이션 메타 정보
 // ============================================
 
-// eslint-disable-next-line @typescript-eslint/no-var-requires
 const rootPkg = require('../../../../package.json') as { version: string };
 
 /**
