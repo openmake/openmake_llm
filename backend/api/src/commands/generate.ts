@@ -125,7 +125,7 @@ async function saveToFile(content: string, filename: string): Promise<void> {
         const absolutePath = path.resolve(filename);
         fs.writeFileSync(absolutePath, codeToSave.trim());
         console.log(chalk.green(`\n✅ 파일 저장됨: ${absolutePath}\n`));
-    } catch (error) {
+    } catch {
         console.log(chalk.red(`\n❌ 파일 저장 실패\n`));
     }
 }

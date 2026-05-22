@@ -386,7 +386,7 @@ export class DiscussionStrategy implements ChatStrategy<DiscussionStrategyContex
             const { performWebSearch } = await import('../../mcp');
             webSearchFn = performWebSearch;
             logger.info('🔍 웹 검색 사실 검증 활성화');
-        } catch (e) {
+        } catch {
             logger.warn('웹 검색 모듈 로드 실패, 사실 검증 비활성화');
         }
 

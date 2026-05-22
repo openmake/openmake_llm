@@ -64,7 +64,7 @@ export class MultiNodeClient {
                         allModels.set(model.name, model);
                     }
                 }
-            } catch (e) {
+            } catch {
                 // 노드 오류 무시
             }
         }
@@ -100,7 +100,7 @@ export class MultiNodeClient {
             try {
                 client.setModel(model);
                 return await client.generate(prompt, options, onToken);
-            } catch (e) {
+            } catch {
                 logger.warn(`노드 ${node.name} 오류, 재시도 중...`);
                 // 다음 노드 시도
             }
@@ -136,7 +136,7 @@ export class MultiNodeClient {
             try {
                 client.setModel(model);
                 return await client.chat(messages, options, onToken);
-            } catch (e) {
+            } catch {
                 logger.warn(`노드 ${node.name} 오류, 재시도 중...`);
             }
         }
