@@ -45,6 +45,7 @@ export const TOOL_TIERS: Record<UserTier, string[]> = {
         'create_skill',         // 자연어 → 스킬 draft 생성 (서비스 내부에 50 drafts/user + 24h dedupe 안전장치)
         'import_skill_from_git', // Git URL → 스킬 draft (rate limiter + draft 상한 공유)
         'import_agent_from_git', // Git URL → agent draft (chained skill ingest 포함, 20 drafts/user)
+        'import_mcp_server_from_git', // Git URL → MCP server draft (3중 잠금, RL_MCP_INGEST 5/hr free)
         'noapi-google-search::*', // 외부: Google 검색
     ],
     pro: [
@@ -54,6 +55,7 @@ export const TOOL_TIERS: Record<UserTier, string[]> = {
         'create_skill',         // 자연어 → 스킬 draft 생성
         'import_skill_from_git', // Git URL → 스킬 draft
         'import_agent_from_git', // Git URL → agent draft
+        'import_mcp_server_from_git', // Git URL → MCP server draft
         'web_scrape',           // 웹 스크래핑
         'web_map',              // URL 매핑
         'web_crawl',            // 웹 크롤링
