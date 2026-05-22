@@ -14,7 +14,7 @@ import {
     AgentSelection,
     AgentPhase
 } from './types';
-import { AGENTS, industryData, getAgentById } from './agent-data';
+import { AGENTS, industryData } from './agent-data';
 import { analyzeTopicIntent, TOPIC_CATEGORIES } from './topic-analyzer';
 import { createLogger } from '../utils/logger';
 import { getEnhancedKeywords, getKeywordIDF, getSynonyms, getCategoryWeight } from './enhanced-keywords';

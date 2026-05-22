@@ -28,10 +28,8 @@ import { getApiUsageTracker } from '../llm';
 import { success } from '../utils/api-response';
 import { requireAuth, requireAdmin } from '../auth';
 import { asyncHandler } from '../utils/error-handler';
-import { createLogger } from '../utils/logger';
 import { MODEL_PRICING, TOKEN_COST } from '../config/pricing';
 
-const logger = createLogger('TokenMonitoringRoutes');
 
 const router = Router();
 

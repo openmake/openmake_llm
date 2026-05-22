@@ -139,7 +139,7 @@ export const researchTool: MCPToolDefinition = {
                     progress,
                     startTime: activeResearches.get(sessionId)?.startTime || Date.now()
                 });
-            }).then((result) => {
+            }).then(() => {
                 logger.info(`[DeepResearch MCP] 완료: ${sessionId}`);
                 // 완료 후 일정 시간 후 정리
                 setTimeout(() => activeResearches.delete(sessionId), CLEANUP_INTERVALS.RESEARCH_SESSION_MS); // 5분 후 정리

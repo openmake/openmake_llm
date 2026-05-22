@@ -316,7 +316,7 @@ class MetricsCollector extends EventEmitter {
             counters: Object.fromEntries(this.counters),
             gauges: Object.fromEntries(this.gauges),
             histograms: Object.fromEntries(
-                Array.from(this.metrics.entries()).map(([key, values]) => [
+                Array.from(this.metrics.keys()).map((key) => [
                     key,
                     this.getHistogramStats(key)
                 ])

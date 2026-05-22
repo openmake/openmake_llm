@@ -446,10 +446,8 @@ export class AgentLoopStrategy implements ChatStrategy<AgentLoopStrategyContext,
                 context.onToken(char);
             }
 
-            let fixedResponse = '';
             const fixResult = await this.directStrategy.execute({
                 onToken: (token) => {
-                    fixedResponse += token;
                     context.onToken(token);
                 },
                 abortSignal: context.abortSignal,

@@ -31,7 +31,6 @@
  */
 
 import { Router, Request, Response } from 'express';
-import { createLogger } from '../utils/logger';
 import { getApiUsageTracker } from '../llm';
 import { getCacheSystem } from '../cache';
 import { getClassificationCacheStats } from '../chat/llm-classifier';
@@ -44,7 +43,6 @@ import { success } from '../utils/api-response';
 import { requireAuth, requireAdmin } from '../auth';
 import { asyncHandler } from '../utils/error-handler';
 
-const logger = createLogger('MetricsRoutes');
 const router = Router();
 
 // 시스템 메트릭은 관리자 전용

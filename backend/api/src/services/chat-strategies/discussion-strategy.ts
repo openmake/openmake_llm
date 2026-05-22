@@ -19,8 +19,7 @@ import type { ChatMessage } from '../../llm';
 import type { ChatStrategy, ChatResult, DiscussionStrategyContext } from './types';
 import { createLogger } from '../../utils/logger';
 import { sanitizePromptInput } from '../../utils/input-sanitizer';
-import { isPersistableUserId } from '../../utils/user-id-validation';
-import { CONTEXT_LIMITS, DISCUSSION_TOKEN_BUDGET, MODEL_CONTEXT_DEFAULTS } from '../../config/runtime-limits';
+import { DISCUSSION_TOKEN_BUDGET, MODEL_CONTEXT_DEFAULTS } from '../../config/runtime-limits';
 import { LLM_TEMPERATURES } from '../../config/llm-parameters';
 import { resolvePromptLocale, type PromptLocaleCode } from '../../chat/language-policy';
 import { withSpan } from '../../observability/otel';
@@ -241,7 +240,7 @@ export class DiscussionStrategy implements ChatStrategy<DiscussionStrategyContex
 
     /** 토론 실행 본체 — withSpan으로 wrap된 execute에서 호출 */
     private async executeInternal(context: DiscussionStrategyContext): Promise<ChatResult> {
-        const { message, docId, history, webSearchContext, images, userId, userLanguagePreference } = context.req;
+        const { message, history, webSearchContext, images, userLanguagePreference } = context.req;
         const locale = resolvePromptLocale(userLanguagePreference || 'en');
         const localized = DISCUSSION_STRATEGY_LOCALE_TEXTS[locale];
 
