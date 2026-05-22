@@ -202,7 +202,7 @@
 }
 
 .model-selector-search:focus {
-    border-color: #5078dc;
+    border-color: var(--accent-indigo, #5078dc);
     box-shadow: 0 0 0 2px rgba(80, 120, 220, 0.15);
 }
 
@@ -235,7 +235,7 @@
 
 .badge-free {
     background: rgba(34, 197, 94, 0.15);
-    color: #22c55e;
+    color: var(--success-bright, #22c55e);
     border: 1px solid rgba(34, 197, 94, 0.3);
 }
 
@@ -257,7 +257,7 @@
     transition: border-color 0.15s, box-shadow 0.15s;
 }
 .model-selector-or-card:hover {
-    border-color: #5078dc;
+    border-color: var(--accent-indigo, #5078dc);
     box-shadow: 0 2px 8px rgba(80,120,220,0.18);
 }
 .or-card-header {
@@ -272,7 +272,7 @@
 .or-card-stats {
     display: flex; gap: 10px; font-size: 11px; margin-bottom: 4px;
 }
-.or-stat-free { color: #22c55e; font-weight: 600; }
+.or-stat-free { color: var(--success-bright, #22c55e); font-weight: 600; }
 .or-stat-paid { color: var(--text-muted); }
 .or-card-selected {
     font-size: 11px; color: var(--text-primary); padding: 4px 8px;
@@ -281,7 +281,7 @@
 }
 .or-card-action {
     margin-top: 6px; font-size: 12px; font-weight: 600;
-    color: #5078dc; text-align: right;
+    color: var(--accent-indigo, #5078dc); text-align: right;
 }
 
 /* ─── ModelListModal — OpenRouter 367+ 모델 전체 화면 모달 ─── */
@@ -317,7 +317,7 @@
     border: 1px solid var(--border-light); border-radius: 4px;
     background: var(--bg-primary); color: var(--text-primary); outline: none;
 }
-.mlm-search:focus { border-color: #5078dc; box-shadow: 0 0 0 2px rgba(80,120,220,0.2); }
+.mlm-search:focus { border-color: var(--accent-indigo, #5078dc); box-shadow: 0 0 0 2px rgba(80,120,220,0.2); }
 .mlm-list { flex: 1 1 auto; overflow-y: auto; padding: 4px 0; }
 .mlm-subgroup {
     padding: 6px 14px 4px; font-size: 11px; font-weight: 600;
@@ -333,7 +333,7 @@
 }
 .mlm-row:hover { background: var(--bg-tertiary); }
 .mlm-row.active { background: rgba(80,120,220,0.08); font-weight: 600; }
-.mlm-row .check { color: #5078dc; margin-right: 4px; }
+.mlm-row .check { color: var(--accent-indigo, #5078dc); margin-right: 4px; }
 .mlm-row-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mlm-row-id {
     font-family: ui-monospace, SFMono-Regular, monospace;
