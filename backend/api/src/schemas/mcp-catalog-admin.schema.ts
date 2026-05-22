@@ -34,14 +34,14 @@ export const createCatalogTemplateSchema = z.object({
 }).superRefine((data, ctx) => {
     if (data.transport_type === 'stdio' && !data.command_template) {
         ctx.addIssue({
-            code: z.ZodIssueCode.custom,
+            code: 'custom',
             message: 'stdio transport 는 command_template 필수',
             path: ['command_template'],
         });
     }
     if ((data.transport_type === 'sse' || data.transport_type === 'streamable-http') && !data.url_template) {
         ctx.addIssue({
-            code: z.ZodIssueCode.custom,
+            code: 'custom',
             message: `${data.transport_type} transport 는 url_template 필수`,
             path: ['url_template'],
         });

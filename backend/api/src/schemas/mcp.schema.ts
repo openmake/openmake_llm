@@ -37,19 +37,19 @@ export const mcpServerCreateSchema = z.object({
     command: secureOptionalTextSchema({ minLength: 1, maxLength: 1000, fieldName: 'command', allowNewLines: false, detectMaliciousPatterns: false, specialCharacterRatioLimit: 0.95 }),
     args: z.array(secureTextSchema({ maxLength: 500, fieldName: 'args', allowNewLines: false, detectMaliciousPatterns: false, specialCharacterRatioLimit: 0.95 })).max(50).optional(),
     env: z.record(z.string(), z.string()).optional(),
-    url: z.string().url('유효한 URL을 입력하세요').optional(),
+    url: z.url('유효한 URL을 입력하세요').optional(),
     enabled: z.boolean().optional().default(true)
 }).superRefine((data, ctx) => {
     if (data.transport_type === 'stdio' && !data.command) {
         ctx.addIssue({
-            code: z.ZodIssueCode.custom,
+            code: 'custom',
             message: 'stdio transport에는 command가 필요합니다',
             path: ['command']
         });
     }
     if ((data.transport_type === 'sse' || data.transport_type === 'streamable-http') && !data.url) {
         ctx.addIssue({
-            code: z.ZodIssueCode.custom,
+            code: 'custom',
             message: `${data.transport_type} transport에는 url이 필요합니다`,
             path: ['url']
         });
