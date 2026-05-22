@@ -120,6 +120,8 @@ import { webSearchTools } from './web-search';
 import { webScraperTools } from './web-scraper-tools';
 // Skill Creator 도구 (Phase 1) — 자연어 purpose → LLM 매니페스트 → draft
 import { createSkillTool } from './skill-creator-tool';
+// Git URL → Skill 매니페스트 ingest (Phase 2.5) — GitHub URL → draft
+import { importSkillFromGitTool } from './git-ingest-tool';
 
 /**
  * 전체 내장 도구 배열
@@ -140,4 +142,5 @@ export const builtInTools: MCPToolDefinition[] = [
     ...webSearchTools,
     ...webScraperTools,
     createSkillTool as MCPToolDefinition,
+    importSkillFromGitTool as MCPToolDefinition,
 ];
