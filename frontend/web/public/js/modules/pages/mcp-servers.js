@@ -465,12 +465,18 @@ function init() {
     };
     addListener(root, 'click', delegateHandler);
 
-    document.getElementById('mcp-modal-submit') && addListener(document.getElementById('mcp-modal-submit'), 'click', submitRegister);
-    document.getElementById('mcp-refresh-my-servers') && addListener(document.getElementById('mcp-refresh-my-servers'), 'click', loadMyServers);
-    document.getElementById('mcp-refresh-drafts') && addListener(document.getElementById('mcp-refresh-drafts'), 'click', loadDrafts);
-    document.getElementById('mcp-refresh-instances') && addListener(document.getElementById('mcp-refresh-instances'), 'click', () => loadInstances(STATE.selectedServerForInstances));
-    document.getElementById('mcp-import-from-git-btn') && addListener(document.getElementById('mcp-import-from-git-btn'), 'click', openImportModal);
-    document.getElementById('mcp-import-submit') && addListener(document.getElementById('mcp-import-submit'), 'click', submitImport);
+    const modalSubmit = document.getElementById('mcp-modal-submit');
+    if (modalSubmit) addListener(modalSubmit, 'click', submitRegister);
+    const refreshMyServers = document.getElementById('mcp-refresh-my-servers');
+    if (refreshMyServers) addListener(refreshMyServers, 'click', loadMyServers);
+    const refreshDrafts = document.getElementById('mcp-refresh-drafts');
+    if (refreshDrafts) addListener(refreshDrafts, 'click', loadDrafts);
+    const refreshInstances = document.getElementById('mcp-refresh-instances');
+    if (refreshInstances) addListener(refreshInstances, 'click', () => loadInstances(STATE.selectedServerForInstances));
+    const importBtn = document.getElementById('mcp-import-from-git-btn');
+    if (importBtn) addListener(importBtn, 'click', openImportModal);
+    const importSubmit = document.getElementById('mcp-import-submit');
+    if (importSubmit) addListener(importSubmit, 'click', submitImport);
 
     const sel = document.getElementById('mcp-instance-server-select');
     if (sel) {

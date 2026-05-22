@@ -151,7 +151,6 @@ export function setupApiRoutes(
     const e2eMcpMock = process.env.MCP_INGEST_E2E_MOCK === 'true';
     // E2E 픽스처 모드 — 실제 GitHub API 호출 회피.
     // require() 로 lazy load 하여 production 번들에 mock 코드가 포함되지 않게 함.
-    /* eslint-disable @typescript-eslint/no-var-requires */
     const mcpFetcherFactory = e2eMcpMock
         ? (() => {
             const { MockGitFetcher } = require('../agents/git-ingest/__mocks__/mock-git-fetcher');
@@ -161,7 +160,6 @@ export function setupApiRoutes(
             accessToken: opts.accessToken,
             timeoutMs: MCP_INGEST.gitFetchTimeoutMs,
         });
-    /* eslint-enable @typescript-eslint/no-var-requires */
     app.use('/api/mcp/servers', mcpServerIngestRouter({
         pool: getPool(),
         fetcherFactory: mcpFetcherFactory,
