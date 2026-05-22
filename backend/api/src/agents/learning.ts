@@ -88,7 +88,7 @@ export class AgentLearningSystem {
         logger.info('에이전트 학습 시스템 초기화됨');
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
+     
     private getPool(): import('pg').Pool {
         const { getPool } = require('../data/models/unified-database') as { getPool: () => import('pg').Pool };
         return getPool();

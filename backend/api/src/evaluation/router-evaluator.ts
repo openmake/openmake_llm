@@ -169,7 +169,7 @@ function computePassRateByCategory(results: CaseResult[]): EvaluationSummary['pa
  */
 function defaultAgentCategoryLookup(agentId: string): string | undefined {
     // require로 lazy load — circular import 방지 + 테스트 시 쉽게 mock 가능
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
+     
     const { AGENTS } = require('../agents');
     return AGENTS[agentId]?.category;
 }

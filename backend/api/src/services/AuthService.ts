@@ -155,7 +155,7 @@ export class AuthService {
      * OAuth 사용자 생성 또는 반환
      */
     async findOrCreateOAuthUser(email: string, provider: 'google' | 'github'): Promise<AuthResult> {
-        let user = await this.userManager.getUserByEmail(email);
+        const user = await this.userManager.getUserByEmail(email);
         let publicUser = user ? await this.userManager.getUserById(user.id) : null;
 
         if (!publicUser) {
