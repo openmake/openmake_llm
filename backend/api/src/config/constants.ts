@@ -106,6 +106,28 @@ export const APP_VERSION: string = rootPkg.version;
 export const APP_USER_AGENT = 'OpenMake-AI';
 
 // ============================================
+// Skill Creator (Phase 1) feature flags
+// ============================================
+
+/**
+ * Skill Creator (Phase 1) — 자연어 prompt → LLM → SKILL 매니페스트 → draft 워크플로
+ * 의 런타임 설정 객체. `.env` 의 SKILL_* 변수를 named constant 로 외부화.
+ *
+ * 사용 위치:
+ *   - skills.routes.ts: /auto-create 진입 가드 (enabled, userTierEnabled)
+ *   - skill-creator.ts: LLM 모델 / fallback / draft 상한 (authorModel/authorFallback/maxDraftsPerUser)
+ *   - cleanup 스크립트 (예정): draftTtlDays
+ */
+export const SKILL_CREATOR = {
+    enabled: process.env.SKILL_CREATOR_ENABLED !== 'false',
+    userTierEnabled: process.env.SKILL_CREATOR_USER_TIER_ENABLED !== 'false',
+    authorModel: process.env.SKILL_AUTHOR_MODEL || '',
+    authorFallback: process.env.SKILL_AUTHOR_FALLBACK === 'true',
+    draftTtlDays: parseInt(process.env.SKILL_DRAFT_TTL_DAYS || '30', 10),
+    maxDraftsPerUser: parseInt(process.env.SKILL_AUTO_CREATE_MAX_DRAFTS_PER_USER || '50', 10),
+} as const;
+
+// ============================================
 // 모델 선택
 // ============================================
 

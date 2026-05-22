@@ -44,6 +44,7 @@ import {
 import { assignSkillSchema } from '../schemas/agents.schema';
 import { SkillCreatorService } from '../agents/skill-creator';
 import { LLMClient } from '../llm/client';
+import { SKILL_CREATOR } from '../config/constants';
 
 const logger = createLogger('SkillsRoutes');
 const router = Router();
@@ -205,12 +206,21 @@ router.post('/upload', requireAuth, skillUpload.single('file'), asyncHandler(asy
  * 동일 promptHash 24h 내 재요청은 dedupe 되어 기존 draft 반환.
  */
 router.post('/auto-create', requireAuth, validate(autoCreateSkillSchema), asyncHandler(async (req: Request, res: Response) => {
+    // Feature flag gate — 빠른 disable (env 변경 후 재시작) 가능
+    if (!SKILL_CREATOR.enabled) {
+        res.status(503).json({ success: false, error: { code: 'FEATURE_DISABLED', message: 'Skill Creator 기능이 비활성화 상태입니다.' } });
+        return;
+    }
     const userId = (req.user && 'userId' in req.user ? (req.user as { userId: string }).userId : req.user?.id?.toString());
     if (!userId) {
         res.status(401).json(unauthorized('인증 필요'));
         return;
     }
     const isAdmin = req.user?.role === 'admin';
+    if (!SKILL_CREATOR.userTierEnabled && !isAdmin) {
+        res.status(503).json({ success: false, error: { code: 'FEATURE_ADMIN_ONLY', message: '현재 admin 만 사용 가능합니다.' } });
+        return;
+    }
     const { purpose, target, category, examples, hints } = req.body;
 
     const service = new SkillCreatorService({
