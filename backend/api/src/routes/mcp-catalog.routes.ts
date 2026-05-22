@@ -95,6 +95,34 @@ mcpCatalogRouter.get('/servers/:id/instances', requireAuth, asyncHandler(async (
     res.json(success({ instances: instances.filter(i => i.mcp_server_id === server.id) }));
 }));
 
+// GET /api/mcp/servers/:id/metrics — Phase 5: aggregate instance metrics
+mcpCatalogRouter.get('/servers/:id/metrics', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+    const userId = String(req.user?.id ?? '');
+    const role = req.user?.role ?? 'user';
+    const actor = { id: userId, role };
+    const repo = new McpCatalogRepository(getUnifiedDatabase().getPool());
+    const server = await repo.getServerById(req.params.id);
+    if (!server) {
+        res.status(404).json(notFound('서버'));
+        return;
+    }
+    if (!canStartStopServer(actor, server)) {
+        res.status(403).json(forbidden('조회 권한 없음'));
+        return;
+    }
+    const ownerId = server.user_id ?? actor.id;
+    const metrics = await repo.getServerInstanceMetrics(req.params.id, ownerId);
+    res.json(success({ metrics }));
+}));
+
+// GET /api/mcp/instances/summary — Phase 5: 사용자 전체 통합 summary
+mcpCatalogRouter.get('/instances/summary', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+    const userId = String(req.user?.id ?? '');
+    const repo = new McpCatalogRepository(getUnifiedDatabase().getPool());
+    const summary = await repo.getUserInstancesSummary(userId);
+    res.json(success({ summary }));
+}));
+
 // POST /api/mcp/servers/:id/start — DB 상태만 'starting' 으로 기록
 // 실제 spawn 은 Phase 7 lifecycle-supervisor 가 처리.
 mcpCatalogRouter.post('/servers/:id/start', requireAuth, asyncHandler(async (req: Request, res: Response) => {
