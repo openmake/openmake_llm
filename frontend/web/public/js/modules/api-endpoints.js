@@ -45,6 +45,11 @@ const API_ENDPOINTS = Object.freeze({
     // Skill Creator (Phase 1) — auto-create / drafts / approve / reject
     AGENTS_SKILLS_AUTO_CREATE: '/api/agents/skills/auto-create',
     AGENTS_SKILLS_IMPORT_FROM_GIT: '/api/agents/skills/import-from-git',
+    // Agent Creator (Phase 3) — Git URL → AGENT.md → draft
+    AGENTS_CUSTOM_IMPORT_FROM_GIT: '/api/agents/custom/import-from-git',
+    AGENTS_CUSTOM_DRAFTS: '/api/agents/custom/drafts',
+    AGENTS_CUSTOM_APPROVE: (agentId) => `/api/agents/custom/${encodeURIComponent(agentId)}/approve`,
+    AGENTS_CUSTOM_REJECT: (agentId) => `/api/agents/custom/${encodeURIComponent(agentId)}/reject`,
     AGENTS_SKILLS_DRAFTS: '/api/agents/skills/drafts',
     AGENTS_SKILLS_APPROVE: (skillId) => `/api/agents/skills/${encodeURIComponent(skillId)}/approve`,
     AGENTS_SKILLS_REJECT: (skillId) => `/api/agents/skills/${encodeURIComponent(skillId)}/reject`,
