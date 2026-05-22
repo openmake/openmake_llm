@@ -23,7 +23,7 @@ const McpBundleSchema = z.object({
         command: z.string().optional(),
         args: z.array(z.string()).optional(),
         env: z.record(z.string(), z.string()).optional(),
-        url: z.string().url().optional(),
+        url: z.url().optional(),
     }),
     lifecycle: z.enum(['per_chat', 'per_session', 'long_lived']).default('per_chat'),
 });
@@ -36,7 +36,7 @@ export const SkillManifestFrontmatterSchema = z.object({
     is_public: z.boolean().default(false),
     tool_bindings: z.array(ToolBindingSchema).max(64).default([]),
     mcp_bundles: z.array(McpBundleSchema).max(8).default([]),
-    source_repo: z.string().url().optional(),
+    source_repo: z.url().optional(),
     source_path: z.string().max(256).optional(),
 });
 

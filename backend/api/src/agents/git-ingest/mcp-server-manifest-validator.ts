@@ -28,14 +28,14 @@ export const mcpServerManifestFrontmatterSchema = z.object({
     args: z.array(z.string().max(500)).max(50).optional(),
     env: z.record(z.string(), z.string().max(2000)).optional(),
     required_env: z.array(z.string().min(1).max(200)).max(50).optional(),
-    url: z.string().url().optional(),
+    url: z.url().optional(),
     version: z.string().regex(
         /^\d+\.\d+\.\d+(-[A-Za-z0-9.-]+)?(\+[A-Za-z0-9.-]+)?$/,
         'version 은 semver (예: 1.0.0) 형식이어야 합니다',
     ),
     author: z.string().max(200).optional(),
     license: z.string().max(100).optional(),
-    homepage: z.string().url().optional(),
+    homepage: z.url().optional(),
     required_capabilities: z.array(z.string().max(50)).max(20).optional(),
     security_metadata: z.object({
         network_access: z.boolean().optional(),
@@ -46,14 +46,14 @@ export const mcpServerManifestFrontmatterSchema = z.object({
 }).superRefine((data, ctx) => {
     if (data.transport_type === 'stdio' && !data.command) {
         ctx.addIssue({
-            code: z.ZodIssueCode.custom,
+            code: 'custom',
             message: 'stdio transport 는 command 필수',
             path: ['command'],
         });
     }
     if ((data.transport_type === 'sse' || data.transport_type === 'streamable-http') && !data.url) {
         ctx.addIssue({
-            code: z.ZodIssueCode.custom,
+            code: 'custom',
             message: `${data.transport_type} transport 는 url 필수`,
             path: ['url'],
         });
@@ -63,7 +63,7 @@ export const mcpServerManifestFrontmatterSchema = z.object({
         for (const key of data.required_env) {
             if (!envKeys.has(key)) {
                 ctx.addIssue({
-                    code: z.ZodIssueCode.custom,
+                    code: 'custom',
                     message: `required_env '${key}' 가 env 에 정의되지 않음 (placeholder 마커 필요)`,
                     path: ['required_env'],
                 });

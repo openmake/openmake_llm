@@ -125,7 +125,7 @@ export function secureTextSchema(options: SecureTextOptions = {}) {
 
                 if (detection.detected) {
                     ctx.addIssue({
-                        code: z.ZodIssueCode.custom,
+                        code: 'custom',
                         message: `${fieldName}에 허용되지 않는 보안 패턴이 감지되었습니다`,
                     });
                 }
@@ -133,14 +133,14 @@ export function secureTextSchema(options: SecureTextOptions = {}) {
 
             if (!allowHtmlLikeContent && /<[^>]+>/.test(value)) {
                 ctx.addIssue({
-                    code: z.ZodIssueCode.custom,
+                    code: 'custom',
                     message: `${fieldName}에 HTML 태그 형태의 입력은 허용되지 않습니다`,
                 });
             }
 
             if (hasExcessiveSpecialCharacters(value, specialCharacterRatioLimit)) {
                 ctx.addIssue({
-                    code: z.ZodIssueCode.custom,
+                    code: 'custom',
                     message: `${fieldName}에 비정상적으로 많은 특수문자가 포함되어 있습니다`,
                 });
             }

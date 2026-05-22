@@ -35,7 +35,7 @@ export const addResearchStepSchema = z.object({
     stepType: z.enum(['search', 'analysis', 'synthesis']),
     query: secureOptionalTextSchema({ maxLength: 1000, fieldName: 'query', detectMaliciousPatterns: false }),
     result: secureOptionalTextSchema({ maxLength: 50000, fieldName: 'result', allowHtmlLikeContent: true, detectMaliciousPatterns: false }),
-    sources: z.array(z.string().url()).optional(),
+    sources: z.array(z.url()).optional(),
     status: z.enum(['pending', 'completed', 'failed']).optional().default('pending')
 });
 
@@ -47,7 +47,7 @@ export const updateResearchSessionSchema = z.object({
     progress: z.number().min(0).max(100).optional(),
     summary: secureOptionalTextSchema({ maxLength: 10000, fieldName: 'summary', allowHtmlLikeContent: true, detectMaliciousPatterns: false }),
     keyFindings: z.array(secureTextSchema({ maxLength: 1000, fieldName: 'keyFindings', detectMaliciousPatterns: false })).optional(),
-    sources: z.array(z.string().url()).optional()
+    sources: z.array(z.url()).optional()
 });
 
 /**

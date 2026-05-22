@@ -60,7 +60,7 @@ export const addExternalFileSchema = z.object({
     fileName: z.string().min(1, 'fileName은 필수입니다').max(500),
     fileType: z.string().max(100).optional(),
     fileSize: z.number().int().min(0).optional(),
-    webUrl: z.string().url().max(2000).optional(),
+    webUrl: z.url().max(2000).optional(),
     cachedContent: z.string().max(1_000_000).optional(),
 });
 
