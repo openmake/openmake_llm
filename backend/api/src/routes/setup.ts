@@ -26,6 +26,7 @@ import {
     skillsRouter,
     mcpRouter,
     mcpCatalogRouter,
+    mcpServerIngestRouter,
     usageRouter,
     nodesRouter,
     setNodesCluster,
@@ -48,6 +49,9 @@ import { getConfig } from '../config';
 import { success } from '../utils/api-response';
 import { getPool } from '../data/models/unified-database';
 import { csrfProtectionMiddleware, csrfTokenIssuer } from '../middlewares/csrf-protection';
+import { GitFetcher } from '../agents/git-ingest/git-fetcher';
+import { LLMClient } from '../llm/client';
+import { MCP_INGEST } from '../config/constants';
 
 
 
@@ -144,6 +148,14 @@ export function setupApiRoutes(
     app.use('/api/monitoring', tokenMonitoringRouter);
     app.use('/api/mcp', mcpRouter);
     app.use('/api/mcp', mcpCatalogRouter);
+    app.use('/api/mcp/servers', mcpServerIngestRouter({
+        pool: getPool(),
+        fetcherFactory: (opts) => new GitFetcher({
+            accessToken: opts.accessToken,
+            timeoutMs: MCP_INGEST.gitFetchTimeoutMs,
+        }),
+        llmClientFactory: (model: string) => new LLMClient(model ? { model } : {}),
+    }));
     app.use('/api/debug-queue', debugQueueRouter);
 
     // 부트스트랩 서비스 초기화
