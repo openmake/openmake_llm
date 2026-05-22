@@ -128,6 +128,11 @@ export const SKILL_CREATOR = {
     // E2E test seam — true 면 LLM 호출 우회, 결정론적 mock 매니페스트 반환.
     // 운영 환경에서는 절대 true 설정 금지 (보안 + 데이터 무결성).
     authorMock: process.env.SKILL_AUTHOR_MOCK === 'true',
+    // Git URL ingest (Phase 2) — POST /api/agents/skills/import-from-git
+    gitIngestEnabled: process.env.SKILL_CREATOR_GIT_INGEST_ENABLED !== 'false',
+    gitFetchTimeout: parseInt(process.env.SKILL_CREATOR_GIT_FETCH_TIMEOUT_MS || '30000', 10),
+    gitMaxFileSize: parseInt(process.env.SKILL_CREATOR_GIT_MAX_FILE_SIZE || '262144', 10),
+    gitMaxFilesPerRepo: parseInt(process.env.SKILL_CREATOR_GIT_MAX_FILES_PER_REPO || '50', 10),
 } as const;
 
 // ============================================
