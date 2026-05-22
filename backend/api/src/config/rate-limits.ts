@@ -125,8 +125,11 @@ export const RL_MCP = {
  *
  * 적용: POST /api/agents/skills/auto-create
  */
+// 주의: express-rate-limit MemoryStore 는 windowMs <= 2^31-1 (≈24.85일) 만 허용.
+// 30일 windowMs 는 setTimeout 32-bit overflow 발생 → 보수적으로 20일로 설정.
+// (월간 quota 의미는 그대로 보존, limits 도 동일).
 export const RL_SKILL_CREATE = {
-    windowMs: 30 * 24 * 60 * 60 * 1000,  // 30일
+    windowMs: 20 * 24 * 60 * 60 * 1000,  // 20일 (max 24.85일 미만)
     limits: {
         free: Number(process.env.RL_SKILL_CREATE_FREE) || 10,
         pro: Number(process.env.RL_SKILL_CREATE_PRO) || 50,
