@@ -45,6 +45,54 @@ import { assignSkillSchema } from '../schemas/agents.schema';
 import { SkillCreatorService } from '../agents/skill-creator';
 import { LLMClient } from '../llm/client';
 import { SKILL_CREATOR } from '../config/constants';
+import { RL_SKILL_CREATE, RL_SKILL_CREATE_SHORT } from '../config/rate-limits';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
+
+// ────────────────────────────────────────────────────────────────────
+// Skill Creator Rate Limiters (월간 quota + 시간당 burst, tier 별 차등)
+// req.user.tier 가 없으면 'free' 로 폴백.
+// ────────────────────────────────────────────────────────────────────
+type SkillTier = 'free' | 'pro' | 'enterprise' | 'admin';
+
+function resolveTier(req: Request): SkillTier {
+    const role = req.user?.role;
+    if (role === 'admin') return 'admin';
+    const tier = (req.user && 'tier' in req.user ? (req.user as { tier?: string }).tier : undefined) ?? 'free';
+    return (tier === 'pro' || tier === 'enterprise') ? tier : 'free';
+}
+
+function skillCreateKeyGen(prefix: string) {
+    return (req: Request): string => {
+        const uid = req.user
+            ? ('userId' in req.user ? (req.user as { userId: string }).userId : req.user.id?.toString())
+            : undefined;
+        return uid ? `${prefix}:user:${uid}` : `${prefix}:ip:${ipKeyGenerator(req.ip || 'unknown')}`;
+    };
+}
+
+const skillCreateMonthlyLimiter = rateLimit({
+    windowMs: RL_SKILL_CREATE.windowMs,
+    limit: (req: Request): number => RL_SKILL_CREATE.limits[resolveTier(req)],
+    keyGenerator: skillCreateKeyGen('skill-create'),
+    standardHeaders: true,
+    legacyHeaders: false,
+    handler: (_req: Request, res: Response): void => {
+        res.status(429).json({ success: false, error: { code: 'RATE_LIMITED', message: '월간 스킬 생성 한도를 초과했습니다.' } });
+    },
+    skipFailedRequests: true,  // LLM 실패 시 quota 차감 안 함
+});
+
+const skillCreateBurstLimiter = rateLimit({
+    windowMs: RL_SKILL_CREATE_SHORT.windowMs,
+    limit: (req: Request): number => RL_SKILL_CREATE_SHORT.limits[resolveTier(req)],
+    keyGenerator: skillCreateKeyGen('skill-create-burst'),
+    standardHeaders: true,
+    legacyHeaders: false,
+    handler: (_req: Request, res: Response): void => {
+        res.status(429).json({ success: false, error: { code: 'RATE_LIMITED', message: '단시간 내 너무 많은 요청 (burst). 잠시 후 다시 시도하세요.' } });
+    },
+    skipFailedRequests: true,
+});
 
 const logger = createLogger('SkillsRoutes');
 const router = Router();
@@ -205,7 +253,7 @@ router.post('/upload', requireAuth, skillUpload.single('file'), asyncHandler(asy
  * 자연어 purpose 를 받아 LLM 으로 스킬 매니페스트 생성 → status='draft' 저장.
  * 동일 promptHash 24h 내 재요청은 dedupe 되어 기존 draft 반환.
  */
-router.post('/auto-create', requireAuth, validate(autoCreateSkillSchema), asyncHandler(async (req: Request, res: Response) => {
+router.post('/auto-create', requireAuth, skillCreateMonthlyLimiter, skillCreateBurstLimiter, validate(autoCreateSkillSchema), asyncHandler(async (req: Request, res: Response) => {
     // Feature flag gate — 빠른 disable (env 변경 후 재시작) 가능
     if (!SKILL_CREATOR.enabled) {
         res.status(503).json({ success: false, error: { code: 'FEATURE_DISABLED', message: 'Skill Creator 기능이 비활성화 상태입니다.' } });

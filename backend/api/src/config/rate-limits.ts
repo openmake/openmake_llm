@@ -114,6 +114,38 @@ export const RL_MCP = {
 } as const;
 
 /**
+ * Skill Creator (Phase 1) 레이트 리밋
+ *
+ * LLM 호출은 비용 높음 + draft 상한이 50/user 라 도배 자체는 불가능하지만
+ * 단시간 burst 차단을 위한 이중 제한 (월간 quota + 시간당 burst).
+ *
+ * Tier 별 차등:
+ *   - free / pro / enterprise / admin 순으로 점진 완화
+ *   - 미들웨어가 req.user.tier 보고 동적으로 결정
+ *
+ * 적용: POST /api/agents/skills/auto-create
+ */
+export const RL_SKILL_CREATE = {
+    windowMs: 30 * 24 * 60 * 60 * 1000,  // 30일
+    limits: {
+        free: Number(process.env.RL_SKILL_CREATE_FREE) || 10,
+        pro: Number(process.env.RL_SKILL_CREATE_PRO) || 50,
+        enterprise: Number(process.env.RL_SKILL_CREATE_ENTERPRISE) || 1000,
+        admin: Number(process.env.RL_SKILL_CREATE_ADMIN) || 1000,
+    },
+} as const;
+
+export const RL_SKILL_CREATE_SHORT = {
+    windowMs: 60 * 60 * 1000,  // 1시간 burst 방어
+    limits: {
+        free: Number(process.env.RL_SKILL_CREATE_SHORT_FREE) || 5,
+        pro: Number(process.env.RL_SKILL_CREATE_SHORT_PRO) || 10,
+        enterprise: Number(process.env.RL_SKILL_CREATE_SHORT_ENTERPRISE) || 50,
+        admin: Number(process.env.RL_SKILL_CREATE_SHORT_ADMIN) || 50,
+    },
+} as const;
+
+/**
  * API 키 관리 레이트 리밋
  */
 export const RL_API_KEY_MGMT = {
