@@ -115,6 +115,27 @@ mcpCatalogRouter.get('/servers/:id/metrics', requireAuth, asyncHandler(async (re
     res.json(success({ metrics }));
 }));
 
+// POST /api/mcp/servers/:id/instances/health-check — Phase 5.2: pid 기반 alive 검증
+mcpCatalogRouter.post('/servers/:id/instances/health-check', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+    const userId = String(req.user?.id ?? '');
+    const role = req.user?.role ?? 'user';
+    const actor = { id: userId, role };
+    const repo = new McpCatalogRepository(getUnifiedDatabase().getPool());
+    const server = await repo.getServerById(req.params.id);
+    if (!server) {
+        res.status(404).json(notFound('서버'));
+        return;
+    }
+    if (!canStartStopServer(actor, server)) {
+        res.status(403).json(forbidden('조회 권한 없음'));
+        return;
+    }
+    const ownerId = server.user_id ?? actor.id;
+    const result = await repo.verifyRunningInstancesByPid(req.params.id, ownerId);
+    logger.info(`health-check ${req.params.id}: verified=${result.verified} declaredDead=${result.declaredDead} missingPid=${result.missingPid}`);
+    res.json(success({ result }));
+}));
+
 // GET /api/mcp/instances/summary — Phase 5: 사용자 전체 통합 summary
 mcpCatalogRouter.get('/instances/summary', requireAuth, asyncHandler(async (req: Request, res: Response) => {
     const userId = String(req.user?.id ?? '');

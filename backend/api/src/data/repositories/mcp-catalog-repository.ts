@@ -326,6 +326,61 @@ export class McpCatalogRepository {
     }
 
     /**
+     * Phase 5.2: status='running' 또는 'starting' 인 instance 의 pid 가
+     * 실제 alive 한지 process.kill(pid, 0) 으로 검증. 죽었으면 status='crashed'
+     * + last_error='process not alive (health check)' UPDATE.
+     *
+     * pid 가 null 인 row 는 검증 불가 → 그대로 둠 (signal-based 검증 불가).
+     *
+     * 반환: { verified, declaredDead, missingPid } 카운트.
+     */
+    async verifyRunningInstancesByPid(
+        serverId: string,
+        userId: string,
+    ): Promise<{ verified: number; declaredDead: number; missingPid: number }> {
+        const r = await this.pool.query<{ id: string; pid: number | null }>(
+            `SELECT id, pid FROM mcp_server_instances
+              WHERE mcp_server_id = $1 AND user_id = $2
+                AND status IN ('starting', 'running')`,
+            [serverId, userId],
+        );
+        let verified = 0;
+        let declaredDead = 0;
+        let missingPid = 0;
+        for (const row of r.rows) {
+            if (row.pid == null) {
+                missingPid++;
+                continue;
+            }
+            let alive = false;
+            try {
+                // signal 0 — non-disruptive aliveness probe.
+                // ESRCH (no such process) → dead. EPERM → alive (외부 권한).
+                process.kill(row.pid, 0);
+                alive = true;
+            } catch (e) {
+                const code = (e as NodeJS.ErrnoException).code;
+                if (code === 'EPERM') alive = true; // 외부 권한 — 보수적으로 alive
+                else alive = false;
+            }
+            if (alive) {
+                verified++;
+            } else {
+                declaredDead++;
+                await this.pool.query(
+                    `UPDATE mcp_server_instances
+                        SET status = 'crashed',
+                            stopped_at = NOW(),
+                            last_error = COALESCE(last_error, 'process not alive (health check)')
+                      WHERE id = $1`,
+                    [row.id],
+                );
+            }
+        }
+        return { verified, declaredDead, missingPid };
+    }
+
+    /**
      * 사용자의 모든 서버 통합 summary.
      */
     async getUserInstancesSummary(userId: string): Promise<{
