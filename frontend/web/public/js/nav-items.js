@@ -44,6 +44,7 @@ const NAV_ITEMS = {
     admin: [
         { href: '/admin.html', icon: '👥', iconify: 'lucide:users', label: '관리자', requireAuth: true, requireAdmin: true },
         { href: '/admin-mcp-catalog.html', icon: '🔌', iconify: 'lucide:server-cog', label: 'MCP 카탈로그', requireAuth: true, requireAdmin: true },
+        { href: '/admin-mcp-monitoring.html', icon: '📊', iconify: 'lucide:activity', label: 'MCP 모니터링', requireAuth: true, requireAdmin: true },
         // Phase R2 (2026-05-21): admin-metrics/audit/analytics/alerts/token-monitoring 5개 페이지를 /admin 의 섹션 탭으로 통합
         // settings 및 그 sub-탭들: 사이드바 nav 에서 hidden. settings 페이지의 톱니/avatar dropdown
         // 이 settings 진입점. settings 의 5탭 (account/api-keys/usage/integrations) 은 각자 페이지로

@@ -28,6 +28,7 @@ import {
     mcpCatalogRouter,
     mcpServerIngestRouter,
     mcpCatalogAdminRouter,
+    mcpAdminMonitoringRouter,
     usageRouter,
     nodesRouter,
     setNodesCluster,
@@ -167,6 +168,7 @@ export function setupApiRoutes(
         llmClientFactory: (model: string) => new LLMClient(model ? { model } : {}),
     }));
     app.use('/api/admin/mcp', mcpCatalogAdminRouter);
+    app.use('/api/admin/mcp', mcpAdminMonitoringRouter);
     app.use('/api/debug-queue', debugQueueRouter);
 
     // 부트스트랩 서비스 초기화
