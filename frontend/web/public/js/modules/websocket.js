@@ -253,6 +253,52 @@ const messageHandlers = {
         }
     },
     /**
+     * MCP tool 호출 결과의 resource content — 인라인 카드 렌더링.
+     * 현재 지원하는 resource URI prefix:
+     *   - openmake://skill-draft/{id}  → skill-draft-card 컴포넌트
+     * 다른 prefix 는 무시 (확장 시 분기 추가).
+     *
+     * Payload: { type: 'mcp_tool_result', toolName, resources: [{ uri, mimeType?, text? }], messageId }
+     */
+    'mcp_tool_result': async (data) => {
+        if (!Array.isArray(data?.resources) || data.resources.length === 0) return;
+        for (const res of data.resources) {
+            const uri = res && res.uri;
+            if (typeof uri !== 'string' || !uri.startsWith('openmake://skill-draft/')) continue;
+            try {
+                const payload = JSON.parse(res.text || '{}');
+                const previewCard = payload.previewCard;
+                if (!previewCard || previewCard.kind !== 'skill-draft') continue;
+                const { renderSkillDraftCard, handleSkillDraftAction } = await import('/js/components/skill-draft-card.js?v=1');
+                const card = renderSkillDraftCard(previewCard, {
+                    mode: 'inline',
+                    onAction: (action, skillId) => handleSkillDraftAction(action, skillId, {
+                        onToast: (msg, type) => window.showToast && window.showToast(msg, type),
+                    }),
+                });
+                // 현재 assistant 메시지 컨테이너에 추가 (state.currentAssistantMessage)
+                const assistantEl = (typeof getState === 'function') ? getState('currentAssistantMessage') : null;
+                const target = assistantEl?.querySelector?.('.message-content') || assistantEl;
+                if (target) {
+                    target.appendChild(card);
+                } else {
+                    // fallback — chat 영역의 마지막 메시지 끝에 붙임
+                    const last = document.querySelector('.chat-messages .message.assistant:last-child .message-content')
+                        || document.querySelector('.chat-messages .message.assistant:last-child');
+                    if (last) last.appendChild(card);
+                }
+                if (payload.assistantText) {
+                    const p = document.createElement('p');
+                    p.className = 'skill-draft-card__assistant-text';
+                    p.textContent = payload.assistantText;
+                    (target || card.parentNode)?.appendChild(p);
+                }
+            } catch (e) {
+                console.warn('[WS mcp_tool_result] skill-draft resource 처리 실패:', e);
+            }
+        }
+    },
+    /**
      * 시스템 이벤트 (백엔드 onSystemEvent 콜백)
      * 형식: { type: 'system_event', payload: { type, message, metadata? } }
      * 자동 토론 활성화 등 메타 알림을 우측 상단 토스트로 표시.
