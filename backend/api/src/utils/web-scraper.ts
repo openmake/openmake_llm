@@ -258,7 +258,7 @@ function parseHtmlToMarkdown(html: string, url: string, onlyMainContent: boolean
 
     if (onlyMainContent) {
         // Readability로 메인 콘텐츠 추출
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         const reader = new Readability(document as any);
         const article = reader.parse();
 

@@ -59,7 +59,9 @@ export interface AuthUser {
 
 // Request 타입 확장
 // user는 PublicUser (DB 조회) 또는 AuthUser (JWT 직접 추출) 가능
+// declaration merging 위한 namespace 사용 — ES module syntax 로 대체 불가.
 declare global {
+    // eslint-disable-next-line @typescript-eslint/no-namespace
     namespace Express {
         interface Request {
             /** 인증된 사용자 정보 - PublicUser(DB) 또는 AuthUser(JWT) */

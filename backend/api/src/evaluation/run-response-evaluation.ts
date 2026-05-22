@@ -167,7 +167,7 @@ async function main() {
     if (useReal) {
         // Lazy load: ChatService/LLMClient 등 LLM 의존성은 --real 모드에서만 필요
         // (mock 모드 회귀 시 web-scraper 등 무관한 모듈이 컴파일되는 비용 회피)
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
+         
         const { createRealResponseGenerator } = require('./real-response-generator') as
             typeof import('./real-response-generator');
         generator = createRealResponseGenerator({

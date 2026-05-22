@@ -414,7 +414,7 @@ export class AnalyticsSystem {
 
         // 모델별 비용 (에이전트 통계에서 추정)
         const modelCosts: { model: string; cost: number; percentage: number }[] = [];
-        let totalCost = weeklyCost || 1;
+        const totalCost = weeklyCost || 1;
 
         const todayModels = summary.today.modelUsage || {};
         for (const [model, count] of Object.entries(todayModels)) {
