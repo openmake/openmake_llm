@@ -26,7 +26,7 @@ import { adjustOptionsForModel, checkModelCapability } from '../chat/model-selec
 import { assessComplexity, GV_SKIP_THRESHOLD } from '../chat/complexity-assessor';
 import { detectFastPath } from '../chat/fast-path-detector';
 import { CONCISE_RESPONSE_DIRECTIVE, TOKEN_BUDGETS } from '../config/llm-parameters';
-import { BUDGET_HINTS, CAPACITY, EXTERNAL_LLM_TOOL_BLACKLIST } from '../config/runtime-limits';
+import { BUDGET_HINTS, CAPACITY } from '../config/runtime-limits';
 import { withSpan } from '../observability/otel';
 import type { ExecutionPlan } from '../chat/profile-resolver';
 import type { UserTier } from '../data/user-manager';
@@ -49,10 +49,14 @@ import { resolveLanguagePolicy as resolveLanguagePolicyFn } from './chat-service
 import { recordMetricsAndVerify as recordMetricsAndVerifyFn } from './chat-service/metrics-recorder';
 import { ProviderRouter } from '../providers/provider-router';
 import { runProviderGate } from './chat-service/provider-gate';
-import { isPersistableUserId } from '../utils/user-id-validation';
 import { mergeToolsWithSkills } from './chat-service/tool-merger';
 import type { ActiveSkillBinding } from './chat-service/tool-merger';
 import { getSkillManager } from '../agents/skill-manager';
+import {
+    streamFromExternalProvider as streamFromExternalProviderFn,
+    type ExternalProviderDeps,
+    type StreamFromExternalContext,
+} from './chat-service/external-provider';
 
 // Re-export all types so consumers importing from ChatService don't break
 export type {
@@ -843,317 +847,30 @@ export class ChatService {
         return this.lastProviderUsage;
     }
 
-    /**
-     * 외부 provider(anthropic 등) 직접 스트리밍 호출 — strategy 우회.
-     *
-     * Ollama 전용 기능(Discussion / DeepResearch / Tool Loop / Generate-Verify) 은
-     * 외부 provider 에서 동작 보장이 어렵고 비용/지연 영향이 크므로 Phase 3 에서는
-     * 단일 streamChat 호출 + 토큰 콜백 + 사용량 기록으로 한정.
-     * Phase 5 에서 frontend 가 외부 모델 선택 시 해당 토글들을 disable 처리한다.
-     */
+    // ────────────────────────────────────────────────────────────
+    // External provider facade — 실제 구현은 chat-service/external-provider.ts
+    // ────────────────────────────────────────────────────────────
+
+    private externalProviderDeps(): ExternalProviderDeps {
+        return {
+            providerRouter: this.providerRouter,
+            currentUserContext: this.currentUserContext,
+            mcpToolResultCallback: this.currentMcpToolResultCallback,
+            onUsage: (usage) => { this.lastProviderUsage = usage; },
+            allowedTools: this.getAllowedTools(),
+        };
+    }
+
     private async streamFromExternalProvider(
         resolved: import('../providers/provider-router').ResolvedProvider,
         req: ChatMessageRequest,
         onToken: (token: string, thinking?: string) => void,
-        ctx: {
-            agentSystemMessage?: string;
-            enhancedMessage?: string;       // buildContextForLLM 결과 (문서 + 웹검색 통합)
-            resolvedLanguage?: string;
-        } = {},
+        ctx: StreamFromExternalContext = {},
     ): Promise<string> {
-        const messages: ChatMessage[] = [];
-
-        // System prompt — agent 페르소나 + 언어 + (legacy) webSearchContext 통합
-        const systemPromptParts: string[] = [];
-
-        // 1. Agent 페르소나 (Software Engineer / Financial Analyst 등 전문가 system message)
-        if (ctx.agentSystemMessage) {
-            systemPromptParts.push(ctx.agentSystemMessage);
-        }
-
-        // 2. 언어 정책 — userLanguagePreference 또는 languagePolicy.resolvedLanguage
-        const langCode = ctx.resolvedLanguage || req.userLanguagePreference;
-        if (langCode) {
-            const langMap: Record<string, string> = {
-                ko: '한국어', en: 'English', ja: '日本語', zh: '中文',
-                es: 'Español', fr: 'Français', de: 'Deutsch',
-            };
-            const langName = langMap[langCode] || langCode;
-            systemPromptParts.push(`Respond in ${langName}.`);
-        }
-
-        // 3. webSearchContext fallback (enhancedMessage 가 없는 경로 호환)
-        // enhancedMessage 가 있으면 이미 buildContextForLLM 이 검색결과 통합했으므로 중복 방지.
-        if (!ctx.enhancedMessage && req.webSearchContext) {
-            systemPromptParts.push(
-                '아래 웹검색 결과를 바탕으로 정확한 답변을 제공하세요. 결과에 없는 정보는 추측하지 말고 모른다고 답하세요.\n\n' +
-                req.webSearchContext,
-            );
-        }
-
-        // 4. 현재 사용 중인 모델 정보 — 사용자가 "어떤 모델 쓰고 있어?" 같은 질문 시 답변할 수 있도록
-        // self-introspection 가능. fullId (provider:model) 형식으로 명확히 전달.
-        systemPromptParts.push(
-            `[현재 사용 중인 모델: ${resolved.fullId}] ` +
-            `사용자가 모델/provider 정보를 묻는 경우 위 식별자를 그대로 알려주세요.`,
-        );
-
-        if (systemPromptParts.length > 0) {
-            messages.push({ role: 'system', content: systemPromptParts.join('\n\n') });
-        }
-
-        for (const h of req.history ?? []) {
-            const role = h.role === 'user' || h.role === 'assistant' || h.role === 'system'
-                ? h.role
-                : 'user';
-            messages.push({
-                role,
-                content: h.content,
-                ...(h.images ? { images: h.images } : {}),
-            });
-        }
-
-        // user message — buildContextForLLM 결과 (문서 + 웹검색 통합) 가 있으면 그걸 사용
-        messages.push({
-            role: 'user',
-            content: ctx.enhancedMessage || req.message,
-            ...(req.images ? { images: req.images } : {}),
-        });
-
-        // Provider capabilities 확인.
-        const caps = resolved.provider.getCapabilities(resolved.modelId);
-
-        // ── Vision capability gating (2026-05-19) ──
-        // 이미지가 첨부됐지만 모델이 vision 미지원이면 400 으로 명시적 거절.
-        // 이전엔 silent 무시였으나 vLLM Multimodal spec 상 이미지 payload 는 vision 모델로만
-        // 라우팅해야 함. 운영자는 OMK_VISION_MODEL 환경변수로 별도 vision 모델 분기 가능.
-        const hasImages = (req.images && req.images.length > 0)
-            || (req.history ?? []).some((h) => h.images && h.images.length > 0);
-        if (hasImages && !caps.vision) {
-            const err = new Error(
-                `Model '${resolved.fullId}' does not support vision input (capabilities.vision=false). ` +
-                'Use a vision-capable model or remove images from the request.',
-            );
-            (err as Error & { statusCode?: number }).statusCode = 400;
-            throw err;
-        }
-
-        // ── Phase 6: Tool Calling Agent Loop (외부 LLM) ──
-        // EXTERNAL_LLM_TOOL_BLACKLIST: vision 모델 위임용 stub 도구는 외부 경로에서 제외
-        const tools = caps.toolCalling
-            ? this.getAllowedTools().filter((t) => !EXTERNAL_LLM_TOOL_BLACKLIST.includes(t.function.name))
-            : [];
-
-        const startedAt = Date.now();
-        let errorCode: string | null = null;
-        let result: import('../providers/i-provider').ChatStreamResult | undefined;
-        let inputTokensTotal = 0;
-        let outputTokensTotal = 0;
-        // OpenRouter 가 응답에 직접 노출하는 cost (USD micros) — multi-turn 누적.
-        // 전체 turn 중 한 번이라도 직접 cost 가 들어오면 카탈로그 fallback 보다 우선.
-        let directCostUsdMicrosTotal: number | undefined;
-        const MAX_TOOL_TURNS = 5;
-
-        try {
-            for (let turn = 0; turn < MAX_TOOL_TURNS; turn++) {
-                result = await resolved.provider.streamChat(
-                    {
-                        messages,
-                        modelId: resolved.modelId,
-                        // thinkingMode 사용자 명시 토글을 provider 까지 전파.
-                        // local-llm-provider 가 advancedOptions.think 로 매핑 → reasoning-adapter 가
-                        // chat_template_kwargs.enable_thinking 으로 변환 (vLLM EXAONE/Qwen3).
-                        // fast-path 매칭 시 request-handler 에서 이미 false 로 강제 OFF.
-                        thinking: req.thinkingMode === true,
-                        ...(tools.length > 0 ? { tools } : {}),
-                        ...(req.abortSignal ? { abortSignal: req.abortSignal } : {}),
-                    },
-                    {
-                        onToken: (token) => onToken(token, undefined),
-                        onThinking: (thinking) => onToken('', thinking),
-                        onUsage: (usage) => {
-                            this.lastProviderUsage = usage;
-                            inputTokensTotal += usage.prompt_eval_count ?? 0;
-                            outputTokensTotal += usage.eval_count ?? 0;
-                            if (usage.cost_usd_micros !== undefined) {
-                                directCostUsdMicrosTotal = (directCostUsdMicrosTotal ?? 0) + usage.cost_usd_micros;
-                            }
-                        },
-                    },
-                );
-
-                if (!result.toolCalls || result.toolCalls.length === 0) {
-                    break; // 도구 호출 없음 — 최종 응답
-                }
-
-                logger.info(`🛠️ 외부 LLM tool calls (turn ${turn + 1}): ${result.toolCalls.length}개`);
-
-                // assistant message 추가 (tool_calls 포함) — provider 발급 id 보존.
-                messages.push({
-                    role: 'assistant',
-                    content: result.content || '',
-                    tool_calls: result.toolCalls.map((tc) => ({
-                        type: 'function' as const,
-                        id: tc.id,
-                        function: {
-                            name: tc.name,
-                            arguments: tc.args as Record<string, unknown>,
-                        },
-                    })),
-                });
-
-                // 각 tool 실행 후 tool result 추가 — tool_call_id 로 위 assistant.tool_calls[].id 와 매칭.
-                for (const tc of result.toolCalls) {
-                    const toolResult = await this.executeExternalTool(tc.name, tc.args as Record<string, unknown>);
-                    messages.push({
-                        role: 'tool',
-                        content: toolResult,
-                        tool_name: tc.name,
-                        tool_call_id: tc.id,
-                    });
-                }
-                // 다음 turn 으로 (LLM 이 도구 결과 받아 최종 응답 생성)
-            }
-            if (!result) throw new Error('streamChat 호출 결과 없음');
-        } catch (err) {
-            errorCode = err && typeof err === 'object' && 'code' in err
-                ? String((err as { code: unknown }).code)
-                : 'UPSTREAM_ERROR';
-            this.recordExternalUsageFireAndForget({
-                userId: req.userId,
-                resolved,
-                inputTokens: inputTokensTotal,
-                outputTokens: outputTokensTotal,
-                durationMs: Date.now() - startedAt,
-                errorCode,
-                ...(directCostUsdMicrosTotal !== undefined ? { directCostUsdMicros: directCostUsdMicrosTotal } : {}),
-            });
-            throw err;
-        }
-
-        logger.info(
-            `외부 provider 호출 완료: ${resolved.fullId} ` +
-            `(in=${inputTokensTotal}, out=${outputTokensTotal}, tools=${tools.length})`,
-        );
-
-        // 사용량 적재 (성공 호출, fire-and-forget — DB 실패가 응답을 막지 않도록)
-        // multi-turn loop 통해 누적된 토큰 + provider 직접 cost (있으면 우선) 사용
-        this.recordExternalUsageFireAndForget({
-            userId: req.userId,
-            resolved,
-            inputTokens: inputTokensTotal,
-            outputTokens: outputTokensTotal,
-            durationMs: Date.now() - startedAt,
-            finishReason: result.finishReason,
-            ...(directCostUsdMicrosTotal !== undefined ? { directCostUsdMicros: directCostUsdMicrosTotal } : {}),
-        });
-
-        return result.content;
+        return streamFromExternalProviderFn(this.externalProviderDeps(), resolved, req, onToken, ctx);
     }
 
-    /**
-     * 외부 LLM Tool Calling — MCP 도구를 직접 실행하여 결과 반환.
-     * UnifiedMCPClient.executeToolWithContext 통해 user sandbox + tier 권한 체크.
-     */
-    private async executeExternalTool(
-        toolName: string,
-        toolArgs: Record<string, unknown>,
-    ): Promise<string> {
-        try {
-            // tier 권한 체크 — AgentLoopStrategy 와 동일 정책
-            if (this.currentUserContext) {
-                const { canUseTool } = await import('../mcp/tool-tiers');
-                if (!canUseTool(this.currentUserContext.tier, toolName)) {
-                    return `🔒 권한 없음: "${toolName}" 도구는 ${this.currentUserContext.tier} 등급에서 사용 불가`;
-                }
-            }
-
-            const mcpClient = getUnifiedMCPClient();
-            const userCtx = this.currentUserContext || {
-                userId: 'guest',
-                tier: 'free' as const,
-                role: 'guest' as const,
-            };
-            const result = await mcpClient.executeToolWithContext(toolName, toolArgs, userCtx);
-
-            // resource content 가 있으면 frontend 인라인 카드 표시용 콜백 invoke
-            if (this.currentMcpToolResultCallback && Array.isArray(result.content)) {
-                const resources = result.content
-                    .filter((c): c is { type: 'resource'; resource: { uri: string; mimeType?: string; text?: string } } =>
-                        c.type === 'resource' && !!c.resource && typeof c.resource.uri === 'string')
-                    .map(c => ({ uri: c.resource.uri, mimeType: c.resource.mimeType, text: c.resource.text }));
-                if (resources.length > 0) {
-                    try { this.currentMcpToolResultCallback({ toolName, resources }); }
-                    catch (e) { logger.warn(`onMcpToolResult 콜백 실패: ${e instanceof Error ? e.message : String(e)}`); }
-                }
-            }
-
-            // MCPToolResult → 문자열 직렬화
-            if (result.isError) {
-                return `Error: ${typeof result.content === 'string' ? result.content : JSON.stringify(result.content)}`;
-            }
-            if (typeof result.content === 'string') return result.content;
-            return JSON.stringify(result.content).slice(0, 8000);
-        } catch (err) {
-            const msg = err instanceof Error ? err.message : String(err);
-            logger.warn(`외부 LLM 도구 실행 실패 (${toolName}): ${msg}`);
-            return `Error: ${msg}`;
-        }
-    }
-
-    private recordExternalUsageFireAndForget(input: {
-        userId: string | undefined;
-        resolved: import('../providers/provider-router').ResolvedProvider;
-        inputTokens: number;
-        outputTokens: number;
-        durationMs: number;
-        finishReason?: string;
-        errorCode?: string | null;
-        /**
-         * Provider 가 응답에 직접 노출한 cost (OpenRouter 'usage.cost' micros 누적).
-         * 제공되면 카탈로그 fallback (computeCostMicros) 보다 우선 사용 — 정확도 향상.
-         */
-        directCostUsdMicros?: number;
-    }): void {
-        // FK 가드: 'guest'/'anon-*'/'anonymous' sentinel 은 users 테이블에 없어 FK 위반.
-        // isPersistableUserId 가 type-guard 로 narrowing → 이후 userId 는 string 보장.
-        // 비인증 사용자의 외부 provider 호출은 사용량 추적 대상 외 (quota/billing 미적용).
-        if (!isPersistableUserId(input.userId) || !this.providerRouter) return;
-        const repo = this.providerRouter.getExternalKeysRepo();
-        if (!repo) return;
-        const userId = input.userId;
-
-        // Cost 결정: provider 직접 cost 우선 → 없으면 카탈로그 fallback.
-        let costUsdMicros: number;
-        if (input.directCostUsdMicros !== undefined && input.directCostUsdMicros >= 0) {
-            costUsdMicros = input.directCostUsdMicros;
-        } else {
-            // 카탈로그 단가표 (config/external-pricing.ts) — circular import 방지 위해 lazy require
-            const { computeCostMicros } = require('../config/external-pricing') as
-                typeof import('../config/external-pricing');
-            costUsdMicros = computeCostMicros(
-                input.resolved.providerId,
-                input.resolved.modelId,
-                input.inputTokens,
-                input.outputTokens,
-            );
-        }
-
-        repo.recordUsage({
-            userId,
-            providerId: input.resolved.providerId,
-            modelId: input.resolved.modelId,
-            inputTokens: input.inputTokens,
-            outputTokens: input.outputTokens,
-            costUsdMicros,
-            durationMs: input.durationMs,
-            finishReason: input.finishReason,
-            errorCode: input.errorCode ?? undefined,
-        }).then(() => {
-            return repo.touchLastUsed(userId, input.resolved.providerId);
-        }).catch((err) => {
-            logger.warn(`외부 사용량 기록 실패: ${err instanceof Error ? err.message : err}`);
-        });
-    }
-
+    // executeExternalTool / recordExternalUsageFireAndForget 은 streamFromExternalProvider
+    // 안에서만 호출됨 — 본 ChatService 의 facade 는 streamFromExternalProvider 만 노출.
+    // 두 helper 는 external-provider.ts 안에서 직접 호출.
 }
