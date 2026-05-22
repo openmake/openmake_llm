@@ -45,6 +45,9 @@ import { assignSkillSchema } from '../schemas/agents.schema';
 import { SkillCreatorService } from '../agents/skill-creator';
 import { LLMClient } from '../llm/client';
 import { SKILL_CREATOR } from '../config/constants';
+import { importFromGitSchema } from '../schemas/git-ingest.schema';
+import { GitIngestService } from '../agents/git-ingest/git-ingest-service';
+import { GitFetcher } from '../agents/git-ingest/git-fetcher';
 import { RL_SKILL_CREATE, RL_SKILL_CREATE_SHORT } from '../config/rate-limits';
 import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 
@@ -346,6 +349,91 @@ router.post('/auto-create', requireAuth, skillCreateMonthlyLimiter, skillCreateB
         res.status(500).json({ error: msg });
     }
 }));
+
+/**
+ * POST /api/agents/skills/import-from-git
+ *
+ * GitHub URL 에서 SKILL.md 매니페스트를 fetch → validate → draft 저장.
+ * Phase 2 (Git URL ingest). 응답 모드:
+ *   - 'Accept: text/event-stream' → SSE (heartbeat + progress + result/error)
+ *   - 그 외 → JSON blocking (기본)
+ *
+ * 다중 후보 (gitPath 미지정 + tree 에 SKILL.md 여러 개) 시 selectionRequired:true
+ * 로 후보 목록 반환 — 사용자가 gitPath 명시 후 재호출.
+ */
+router.post('/import-from-git', requireAuth, skillCreateMonthlyLimiter, skillCreateBurstLimiter, validate(importFromGitSchema), asyncHandler(async (req: Request, res: Response) => {
+    if (!SKILL_CREATOR.enabled) {
+        res.status(503).json({ success: false, error: { code: 'FEATURE_DISABLED' } });
+        return;
+    }
+    if (!SKILL_CREATOR.gitIngestEnabled) {
+        res.status(503).json({ success: false, error: { code: 'FEATURE_DISABLED', message: 'Git ingest 가 비활성화 상태입니다.' } });
+        return;
+    }
+    const userId = (req.user && 'userId' in req.user ? (req.user as { userId: string }).userId : req.user?.id?.toString());
+    if (!userId) { res.status(401).json(unauthorized('인증 필요')); return; }
+    const isAdmin = req.user?.role === 'admin';
+    const { gitUrl, gitRef, gitPath, accessToken, target, category } = req.body;
+
+    const service = new GitIngestService({
+        pool: getUnifiedDatabase().getPool(),
+        llmClientFactory: (model: string) => new LLMClient(model ? { model } : {}),
+        fetcherFactory: (opts) => new GitFetcher({ accessToken: opts.accessToken, timeoutMs: SKILL_CREATOR.gitFetchTimeout }),
+    });
+
+    const wantsSSE = (req.headers.accept || '').includes('text/event-stream');
+
+    if (wantsSSE) {
+        res.setHeader('Content-Type', 'text/event-stream');
+        res.setHeader('Cache-Control', 'no-cache, no-transform');
+        res.setHeader('Connection', 'keep-alive');
+        res.setHeader('X-Accel-Buffering', 'no');
+        res.flushHeaders?.();
+        const heartbeat = setInterval(() => { try { res.write(`: heartbeat ${Date.now()}\n\n`); } catch { /* noop */ } }, 5_000);
+        res.write(`event: progress\ndata: ${JSON.stringify({ phase: 'fetch_started', ts: Date.now() })}\n\n`);
+        try {
+            const result = await service.import({ userId, isAdmin, gitUrl, gitRef, gitPath, accessToken, target, category });
+            clearInterval(heartbeat);
+            const ok = 'selectionRequired' in result && result.selectionRequired
+                ? 200
+                : ('deduped' in result && result.deduped ? 200 : 201);
+            res.write(`event: result\ndata: ${JSON.stringify({ success: true, status: ok, data: result })}\n\n`);
+            res.end();
+        } catch (e) {
+            clearInterval(heartbeat);
+            const msg = e instanceof Error ? e.message : String(e);
+            const code = msg.split(':')[0];
+            const httpStatus = mapGitIngestErrorToStatus(code);
+            res.write(`event: error\ndata: ${JSON.stringify({ success: false, status: httpStatus, error: { code, message: msg } })}\n\n`);
+            res.end();
+        }
+        return;
+    }
+
+    try {
+        const result = await service.import({ userId, isAdmin, gitUrl, gitRef, gitPath, accessToken, target, category });
+        const ok = 'selectionRequired' in result && result.selectionRequired
+            ? 200
+            : ('deduped' in result && result.deduped ? 200 : 201);
+        res.status(ok).json(success(result));
+    } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        const code = msg.split(':')[0];
+        const httpStatus = mapGitIngestErrorToStatus(code);
+        res.status(httpStatus).json({ success: false, error: { code, message: msg } });
+    }
+}));
+
+function mapGitIngestErrorToStatus(code: string): number {
+    switch (code) {
+        case 'INVALID_GIT_URL': case 'INVALID_REF': case 'MANIFEST_INVALID': return 400;
+        case 'REPO_NOT_FOUND': return 404;
+        case 'NO_SKILL_FOUND': return 422;
+        case 'GITHUB_RATE_LIMITED': case 'DRAFT_LIMIT_EXCEEDED': return 429;
+        case 'FILE_TOO_LARGE': case 'UPSTREAM_FETCH_FAIL': return 502;
+        default: return 500;
+    }
+}
 
 /**
  * GET /api/agents/skills/drafts
