@@ -141,6 +141,27 @@
         <div class="sl-modal">
             <h2>AI 자동 스킬 생성</h2>
             <div class="sl-form-group">
+                <label class="sl-form-label">생성 방식</label>
+                <div style="display:flex; gap:0.5rem">
+                    <button type="button" class="sl-btn sl-btn-sm sl-btn-mode active" data-ac-mode="prompt">자연어 prompt</button>
+                    <button type="button" class="sl-btn sl-btn-sm sl-btn-mode" data-ac-mode="git">Git URL 가져오기</button>
+                </div>
+            </div>
+            <div class="sl-form-group" id="acGitUrlGroup" style="display:none">
+                <label class="sl-form-label" for="acGitUrl">Git URL <span style="color:var(--danger-color,#ef4444)">*</span></label>
+                <input type="text" id="acGitUrl" class="sl-form-input" placeholder="https://github.com/owner/repo 또는 owner/repo" maxlength="500">
+                <small style="color:var(--text-secondary);font-size:0.8rem">GitHub public repo. private/rate-limit 우회: 아래 access token 옵션</small>
+            </div>
+            <div class="sl-form-group" id="acGitPathGroup" style="display:none">
+                <label class="sl-form-label" for="acGitPath">파일 경로 (선택)</label>
+                <input type="text" id="acGitPath" class="sl-form-input" placeholder="skills/legal.SKILL.md (미지정 시 자동 스캔)" maxlength="500">
+            </div>
+            <div class="sl-form-group" id="acGitTokenGroup" style="display:none">
+                <label class="sl-form-label" for="acGitToken">GitHub access token (선택)</label>
+                <input type="password" id="acGitToken" class="sl-form-input" placeholder="ghp_..." maxlength="200">
+                <small style="color:var(--text-secondary);font-size:0.8rem">요청 한정, DB 미저장</small>
+            </div>
+            <div class="sl-form-group">
                 <label class="sl-form-label" for="acPurpose">목적 / 역할 <span style="color:var(--danger-color,#ef4444)">*</span></label>
                 <textarea id="acPurpose" class="sl-form-textarea" rows="2" placeholder="예: 한국 의료법 자문 — 의료기기법·약사법·임상시험 규정에 답변" maxlength="500"></textarea>
                 <small style="color:var(--text-secondary);font-size:0.8rem">5~500자. 만들고자 하는 스킬이 어떤 일을 해야 하는지.</small>
@@ -413,6 +434,25 @@
             // AI 자동 생성 버튼
             document.getElementById('btnOpenAutoCreate')?.addEventListener('click', () => {
                 self.openAutoCreateModal();
+            });
+
+            // AI 자동 생성 모달 — mode 토글 (prompt ↔ git)
+            document.querySelectorAll('[data-ac-mode]').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const mode = btn.dataset.acMode;
+                    document.querySelectorAll('[data-ac-mode]').forEach(b => b.classList.toggle('active', b === btn));
+                    // prompt 필드들 토글
+                    ['acPurpose', 'acExamples', 'acHints'].forEach(id => {
+                        const el = document.getElementById(id);
+                        const group = el?.closest('.sl-form-group');
+                        if (group) group.style.display = mode === 'prompt' ? '' : 'none';
+                    });
+                    // git 필드들 토글
+                    ['acGitUrlGroup', 'acGitPathGroup', 'acGitTokenGroup'].forEach(id => {
+                        const el = document.getElementById(id);
+                        if (el) el.style.display = mode === 'git' ? '' : 'none';
+                    });
+                });
             });
 
             // 글로벌 함수 노출
@@ -877,6 +917,18 @@
             document.getElementById('acCategory').value = '';
             document.getElementById('acExamples').value = '';
             document.getElementById('acHints').value = '';
+            const gitUrl = document.getElementById('acGitUrl'); if (gitUrl) gitUrl.value = '';
+            const gitPath = document.getElementById('acGitPath'); if (gitPath) gitPath.value = '';
+            const gitToken = document.getElementById('acGitToken'); if (gitToken) gitToken.value = '';
+            // mode 초기화: prompt 활성
+            document.querySelectorAll('[data-ac-mode]').forEach(b => b.classList.toggle('active', b.dataset.acMode === 'prompt'));
+            ['acGitUrlGroup', 'acGitPathGroup', 'acGitTokenGroup'].forEach(id => {
+                const el = document.getElementById(id); if (el) el.style.display = 'none';
+            });
+            ['acPurpose', 'acExamples', 'acHints'].forEach(id => {
+                const el = document.getElementById(id); const g = el?.closest('.sl-form-group');
+                if (g) g.style.display = '';
+            });
             // admin 만 target 노출 — currentUser 가 있으면 role 확인
             const isAdmin = (window.currentUser && window.currentUser.role === 'admin');
             const targetGroup = document.getElementById('acTargetGroup');
@@ -891,6 +943,11 @@
         },
 
         submitAutoCreate: async function () {
+            // mode 분기 — git URL 모드면 별도 함수
+            const activeMode = document.querySelector('[data-ac-mode].active')?.dataset.acMode || 'prompt';
+            if (activeMode === 'git') {
+                return this.submitImportFromGit();
+            }
             const purpose = (document.getElementById('acPurpose').value || '').trim();
             if (purpose.length < 5) {
                 if (window.showToast) window.showToast('목적은 5자 이상 입력하세요', 'error');
@@ -980,6 +1037,109 @@
                 if (window.showToast) {
                     const note = result.deduped ? ' (24시간 내 동일 요청 — 기존 draft 재사용)' : '';
                     window.showToast(`Draft 생성 완료: ${result.name || result.skillId}${note}`, 'success');
+                }
+                this.closeAutoCreateModal();
+                await this.loadDrafts();
+                const draftsTab = document.querySelector('.sl-tab[data-sl-tab="drafts"]');
+                if (draftsTab) draftsTab.click();
+            } catch (e) {
+                if (window.showToast) window.showToast('오류: ' + (e?.message || String(e)), 'error');
+            } finally {
+                if (btn) { btn.disabled = false; btn.innerHTML = btn.dataset.origText || '<span class="iconify" data-icon="lucide:sparkles"></span> 생성하기'; }
+            }
+        },
+
+        // Phase 2 — Git URL ingest
+        submitImportFromGit: async function () {
+            const gitUrl = (document.getElementById('acGitUrl').value || '').trim();
+            if (gitUrl.length < 3) {
+                if (window.showToast) window.showToast('Git URL 을 입력하세요', 'error');
+                return;
+            }
+            const gitPath = (document.getElementById('acGitPath').value || '').trim() || undefined;
+            const accessToken = (document.getElementById('acGitToken').value || '').trim() || undefined;
+            const category = document.getElementById('acCategory').value || undefined;
+            const isAdmin = (window.currentUser && window.currentUser.role === 'admin');
+            const target = isAdmin ? (document.getElementById('acTarget').value || 'user') : undefined;
+
+            const btn = document.getElementById('btnSubmitAutoCreate');
+            if (btn) { btn.disabled = true; btn.dataset.origText = btn.innerHTML; btn.innerHTML = '<span class="iconify" data-icon="lucide:loader-2"></span> Git 가져오는 중...'; }
+
+            try {
+                const res = await window.authFetch(API_ENDPOINTS.AGENTS_SKILLS_IMPORT_FROM_GIT, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' },
+                    body: JSON.stringify({ gitUrl, gitPath, accessToken, target, category }),
+                });
+                if (!res.ok) {
+                    const errData = await res.json().catch(() => ({}));
+                    if (window.showToast) window.showToast('가져오기 실패: ' + (errData?.error?.message || res.statusText), 'error');
+                    return;
+                }
+                const ct = (res.headers.get('Content-Type') || '').toLowerCase();
+                let result = null;
+                let errorPayload = null;
+
+                if (ct.includes('text/event-stream')) {
+                    const reader = res.body.getReader();
+                    const decoder = new TextDecoder();
+                    let buffer = '';
+                    while (true) {
+                        const { value, done } = await reader.read();
+                        if (done) break;
+                        buffer += decoder.decode(value, { stream: true });
+                        const events = buffer.split('\n\n'); buffer = events.pop() || '';
+                        for (const raw of events) {
+                            const lines = raw.split('\n');
+                            let evName = 'message'; let dataStr = '';
+                            for (const ln of lines) {
+                                if (ln.startsWith(':')) continue;
+                                if (ln.startsWith('event:')) evName = ln.slice(6).trim();
+                                else if (ln.startsWith('data:')) dataStr += ln.slice(5).trim();
+                            }
+                            if (!dataStr) continue;
+                            try {
+                                const payload = JSON.parse(dataStr);
+                                if (evName === 'progress' && btn) {
+                                    const phase = payload.phase || '';
+                                    btn.innerHTML = `<span class="iconify" data-icon="lucide:loader-2"></span> ${phase}...`;
+                                } else if (evName === 'result') {
+                                    result = payload.data;
+                                } else if (evName === 'error') {
+                                    errorPayload = payload.error;
+                                }
+                            } catch (_e) { /* malformed */ }
+                        }
+                    }
+                } else {
+                    const data = await res.json().catch(() => ({}));
+                    if (data.success) result = data.data;
+                    else errorPayload = data.error;
+                }
+
+                if (errorPayload) {
+                    if (window.showToast) window.showToast('가져오기 실패: ' + (errorPayload.message || errorPayload.code), 'error');
+                    return;
+                }
+                if (!result) {
+                    if (window.showToast) window.showToast('응답이 비어있습니다', 'error');
+                    return;
+                }
+                if (result.selectionRequired) {
+                    // multi-candidate — 사용자 선택 받아 재호출
+                    const choice = window.prompt(
+                        `여러 SKILL.md 후보가 발견됐습니다. 가져올 파일 번호를 선택하세요:\n\n` +
+                        result.candidates.map((c, i) => `${i + 1}. ${c.path}`).join('\n'),
+                        '1'
+                    );
+                    const idx = parseInt(choice, 10) - 1;
+                    if (Number.isNaN(idx) || idx < 0 || idx >= result.candidates.length) return;
+                    document.getElementById('acGitPath').value = result.candidates[idx].path;
+                    return this.submitImportFromGit();
+                }
+                if (window.showToast) {
+                    const note = result.deduped ? ' (24시간 내 동일 ref/path — 기존 draft 재사용)' : '';
+                    window.showToast(`Draft 가져옴: ${result.name}${note}`, 'success');
                 }
                 this.closeAutoCreateModal();
                 await this.loadDrafts();
