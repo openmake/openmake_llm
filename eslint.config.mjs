@@ -61,4 +61,20 @@ export default [
       ],
     },
   },
+  // Declarative data file 예외 — locale / OpenAPI spec / test fixture 은
+  // 자연 크기가 큼. max-lines 룰은 logic file 가독성 정책이라 적용 부적합.
+  {
+    files: [
+      "**/__tests__/**/*.test.ts",
+      "**/*.test.ts",
+      "**/locales/**/*.ts",
+      "backend/api/src/**/*locales*.ts",
+      "backend/api/src/chat/language-policy.ts",
+      "backend/api/src/chat/prompt-templates.ts",
+      "backend/api/src/swagger/paths-*.ts",
+    ],
+    rules: {
+      "max-lines": "off",
+    },
+  },
 ];
