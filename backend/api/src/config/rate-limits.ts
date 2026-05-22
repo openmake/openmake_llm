@@ -149,6 +149,25 @@ export const RL_SKILL_CREATE_SHORT = {
 } as const;
 
 /**
+ * MCP server Git ingest (Phase 4) 레이트 리밋.
+ *
+ * 적용: POST /api/mcp/servers/import-from-git
+ * 비용: Git tree fetch + MCPSERVER.md fetch + LLM 컨벤션 audit + DB INSERT.
+ *
+ * 정책: 사용자당 시간당 N건 (tier 별 차등). draft 상한 (MCP_INGEST.maxDraftsPerUser=20)
+ *       과 함께 이중 보호.
+ */
+export const RL_MCP_INGEST = {
+    windowMs: 60 * 60 * 1000,  // 1시간
+    limits: {
+        free: Number(process.env.RL_MCP_INGEST_FREE) || 5,
+        pro: Number(process.env.RL_MCP_INGEST_PRO) || 15,
+        enterprise: Number(process.env.RL_MCP_INGEST_ENTERPRISE) || 50,
+        admin: Number(process.env.RL_MCP_INGEST_ADMIN) || 50,
+    },
+} as const;
+
+/**
  * API 키 관리 레이트 리밋
  */
 export const RL_API_KEY_MGMT = {
@@ -207,6 +226,7 @@ const _windowMsInvariant = [
     { name: 'RL_API_KEY_MGMT', cfg: RL_API_KEY_MGMT },
     { name: 'RL_SKILL_CREATE', cfg: RL_SKILL_CREATE },
     { name: 'RL_SKILL_CREATE_SHORT', cfg: RL_SKILL_CREATE_SHORT },
+    { name: 'RL_MCP_INGEST', cfg: RL_MCP_INGEST },
     { name: 'RL_PUSH', cfg: RL_PUSH },
     { name: 'RL_ADMIN', cfg: RL_ADMIN },
 ];
