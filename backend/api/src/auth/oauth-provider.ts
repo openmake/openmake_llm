@@ -360,7 +360,7 @@ export class OAuthManager {
                         });
                         const primaryEmail = emailResponse.data.find((e: { primary?: boolean; email?: string }) => e.primary);
                         email = primaryEmail?.email || '';
-                    } catch (e) {
+                    } catch {
                         logger.warn('GitHub 이메일 조회 실패');
                     }
                 }

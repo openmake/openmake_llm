@@ -219,7 +219,7 @@ program
                     const size = (model.size / 1024 / 1024 / 1024).toFixed(1);
                     console.log(chalk.white(`   • ${model.name}`) + chalk.gray(` (${size} GB)`));
                 }
-            } catch (e) {
+            } catch {
                 console.log(chalk.yellow('\n⚠️ 모델 목록 조회 실패'));
             }
         } else {

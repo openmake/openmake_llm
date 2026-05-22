@@ -67,7 +67,7 @@ export function loadClusterConfig(): ClusterConfig {
                 name: 'primary'
             };
             return { ...DEFAULT_CONFIG, nodes: [node] };
-        } catch (e) {
+        } catch {
             // URL 파싱 실패
         }
     }
@@ -84,7 +84,7 @@ export function loadClusterConfig(): ClusterConfig {
                 name: 'llm-proxy',
             };
             return { ...DEFAULT_CONFIG, nodes: [node] };
-        } catch (e) {
+        } catch {
             // URL 파싱 실패 — DEFAULT_CONFIG (빈 nodes) 폴백
         }
     }

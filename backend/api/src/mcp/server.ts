@@ -220,7 +220,7 @@ export class MCPServer {
                 const request: MCPRequest = JSON.parse(line);
                 const response = await this.handleRequest(request);
                 console.log(JSON.stringify(response));
-            } catch (error) {
+            } catch {
                 const errorResponse: MCPResponse = {
                     jsonrpc: '2.0',
                     id: 0,
