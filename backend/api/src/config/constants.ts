@@ -135,6 +135,16 @@ export const SKILL_CREATOR = {
     gitMaxFilesPerRepo: parseInt(process.env.SKILL_CREATOR_GIT_MAX_FILES_PER_REPO || '50', 10),
 } as const;
 
+/**
+ * Agent Creator (Phase 3) — Git URL → AGENT.md → draft 워크플로 의 런타임 설정.
+ */
+export const AGENT_CREATOR = {
+    enabled: process.env.AGENT_CREATOR_ENABLED !== 'false',
+    userTierEnabled: process.env.AGENT_CREATOR_USER_TIER_ENABLED !== 'false',
+    gitIngestEnabled: process.env.AGENT_CREATOR_GIT_INGEST_ENABLED !== 'false',
+    maxDraftsPerUser: parseInt(process.env.AGENT_CREATOR_MAX_DRAFTS_PER_USER || '20', 10),
+} as const;
+
 // ============================================
 // 모델 선택
 // ============================================

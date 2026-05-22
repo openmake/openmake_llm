@@ -19,6 +19,7 @@ import { success, badRequest, notFound } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
 import { getSkillManager } from '../agents/skill-manager';
 import { requireAuth } from '../auth';
+import { unauthorized } from '../utils/api-response';
 import { validate } from '../middlewares/validation';
 import {
     createAgentSchema,
@@ -28,6 +29,13 @@ import {
     abTestStartSchema,
     assignSkillSchema
 } from '../schemas/agents.schema';
+import { importAgentFromGitSchema } from '../schemas/agent-ingest.schema';
+import { AgentIngestService } from '../agents/git-ingest/agent-ingest-service';
+import { GitFetcher } from '../agents/git-ingest/git-fetcher';
+import { CustomAgentRepository } from '../data/repositories/custom-agent-repository';
+import { AGENT_CREATOR } from '../config/constants';
+import { LLMClient } from '../llm/client';
+import { getUnifiedDatabase } from '../data/models/unified-database';
 
 const logger = createLogger('AgentRoutes');
 const router = Router();
@@ -361,6 +369,161 @@ router.get('/:id', asyncHandler(async (req: Request, res: Response) => {
     }
 
     res.json(success(agent));
+}));
+
+// ================================================
+// Phase 3 — Git URL → Agent ingest (draft 워크플로)
+// ================================================
+
+function mapAgentIngestErrorToStatus(code: string): number {
+    switch (code) {
+        case 'INVALID_GIT_URL': case 'INVALID_REF': case 'INVALID_AGENT_MANIFEST': case 'INVALID_AGENT_TYPE': return 400;
+        case 'REPO_NOT_FOUND': return 404;
+        case 'NO_AGENT_FOUND': return 422;
+        case 'GITHUB_RATE_LIMITED': case 'DRAFT_LIMIT_EXCEEDED': return 429;
+        case 'FILE_TOO_LARGE': case 'UPSTREAM_FETCH_FAIL': return 502;
+        default: return 500;
+    }
+}
+
+/**
+ * POST /api/agents/custom/import-from-git
+ *
+ * GitHub URL 에서 AGENT.md 매니페스트를 fetch → validate → chained skill
+ * ingest → ConventionChecker → custom_agents INSERT (status='draft').
+ *
+ * Accept: text/event-stream → SSE / 그 외 → JSON.
+ */
+router.post('/custom/import-from-git', requireAuth, validate(importAgentFromGitSchema), asyncHandler(async (req: Request, res: Response) => {
+    if (!AGENT_CREATOR.enabled || !AGENT_CREATOR.gitIngestEnabled) {
+        res.status(503).json({ success: false, error: { code: 'FEATURE_DISABLED' } });
+        return;
+    }
+    const userId = (req.user && 'userId' in req.user ? (req.user as { userId: string }).userId : req.user?.id?.toString());
+    if (!userId) { res.status(401).json(unauthorized('인증 필요')); return; }
+    const isAdmin = req.user?.role === 'admin';
+    if (!AGENT_CREATOR.userTierEnabled && !isAdmin) {
+        res.status(503).json({ success: false, error: { code: 'FEATURE_ADMIN_ONLY' } });
+        return;
+    }
+    const { gitUrl, gitRef, gitPath, accessToken, category } = req.body;
+    const service = new AgentIngestService({
+        pool: getUnifiedDatabase().getPool(),
+        llmClientFactory: (model: string) => new LLMClient(model ? { model } : {}),
+        fetcherFactory: (opts) => new GitFetcher({ accessToken: opts.accessToken }),
+    });
+
+    const wantsSSE = (req.headers.accept || '').includes('text/event-stream');
+    if (wantsSSE) {
+        res.setHeader('Content-Type', 'text/event-stream');
+        res.setHeader('Cache-Control', 'no-cache, no-transform');
+        res.setHeader('Connection', 'keep-alive');
+        res.setHeader('X-Accel-Buffering', 'no');
+        res.flushHeaders?.();
+        const heartbeat = setInterval(() => { try { res.write(`: heartbeat ${Date.now()}\n\n`); } catch { /* noop */ } }, 5_000);
+        res.write(`event: progress\ndata: ${JSON.stringify({ phase: 'fetch_started', ts: Date.now() })}\n\n`);
+        try {
+            const result = await service.import({ userId, isAdmin, gitUrl, gitRef, gitPath, accessToken, category });
+            clearInterval(heartbeat);
+            const ok = ('selectionRequired' in result && result.selectionRequired) || ('deduped' in result && result.deduped) ? 200 : 201;
+            res.write(`event: result\ndata: ${JSON.stringify({ success: true, status: ok, data: result })}\n\n`);
+            res.end();
+        } catch (e) {
+            clearInterval(heartbeat);
+            const msg = e instanceof Error ? e.message : String(e);
+            const code = msg.split(':')[0];
+            const httpStatus = mapAgentIngestErrorToStatus(code);
+            res.write(`event: error\ndata: ${JSON.stringify({ success: false, status: httpStatus, error: { code, message: msg } })}\n\n`);
+            res.end();
+        }
+        return;
+    }
+    try {
+        const result = await service.import({ userId, isAdmin, gitUrl, gitRef, gitPath, accessToken, category });
+        const ok = ('selectionRequired' in result && result.selectionRequired) || ('deduped' in result && result.deduped) ? 200 : 201;
+        res.status(ok).json(success(result));
+    } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        const code = msg.split(':')[0];
+        const httpStatus = mapAgentIngestErrorToStatus(code);
+        res.status(httpStatus).json({ success: false, error: { code, message: msg } });
+    }
+}));
+
+/**
+ * GET /api/agents/custom/drafts — 본인 draft agent 목록 (admin 은 target=all 가능)
+ */
+router.get('/custom/drafts', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+    const userId = (req.user && 'userId' in req.user ? (req.user as { userId: string }).userId : req.user?.id?.toString());
+    if (!userId) { res.status(401).json(unauthorized('인증 필요')); return; }
+    const isAdmin = req.user?.role === 'admin';
+    const target = String(req.query.target ?? 'user') as 'user' | 'system' | 'all';
+    if ((target === 'system' || target === 'all') && !isAdmin) {
+        res.status(403).json({ error: 'ADMIN_REQUIRED', detail: `target=${target} 는 관리자 전용` });
+        return;
+    }
+    const repo = new CustomAgentRepository(getUnifiedDatabase().getPool());
+    const result = await repo.listDrafts({
+        target,
+        userId: target === 'user' ? userId : undefined,
+        limit: req.query.limit ? Number(req.query.limit) : undefined,
+        offset: req.query.offset ? Number(req.query.offset) : undefined,
+    });
+    res.json(success(result));
+}));
+
+/**
+ * POST /api/agents/custom/:agentId/approve — draft → active (enabled=true)
+ */
+router.post('/custom/:agentId/approve', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+    const { agentId } = req.params;
+    const userId = (req.user && 'userId' in req.user ? (req.user as { userId: string }).userId : req.user?.id?.toString());
+    if (!userId) { res.status(401).json(unauthorized('인증 필요')); return; }
+    const repo = new CustomAgentRepository(getUnifiedDatabase().getPool());
+    const existing = await repo.getById(agentId);
+    if (!existing) { res.status(404).json(notFound('agent')); return; }
+    if (existing.status !== 'draft') {
+        res.status(409).json({ error: 'NOT_DRAFT', detail: `현재 status=${existing.status}` });
+        return;
+    }
+    try {
+        const updated = await repo.updateStatus(agentId, 'active', { userId, userRole: req.user?.role || 'user' });
+        res.json(success(updated));
+    } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        if (msg.includes('ADMIN_REQUIRED') || msg.includes('소유자')) {
+            res.status(403).json({ error: 'FORBIDDEN', detail: msg });
+            return;
+        }
+        res.status(500).json({ error: msg });
+    }
+}));
+
+/**
+ * POST /api/agents/custom/:agentId/reject — draft → archived
+ */
+router.post('/custom/:agentId/reject', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+    const { agentId } = req.params;
+    const userId = (req.user && 'userId' in req.user ? (req.user as { userId: string }).userId : req.user?.id?.toString());
+    if (!userId) { res.status(401).json(unauthorized('인증 필요')); return; }
+    const repo = new CustomAgentRepository(getUnifiedDatabase().getPool());
+    const existing = await repo.getById(agentId);
+    if (!existing) { res.status(404).json(notFound('agent')); return; }
+    if (existing.status !== 'draft') {
+        res.status(409).json({ error: 'NOT_DRAFT', detail: `현재 status=${existing.status}` });
+        return;
+    }
+    try {
+        const updated = await repo.updateStatus(agentId, 'archived', { userId, userRole: req.user?.role || 'user' });
+        res.json(success(updated));
+    } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        if (msg.includes('ADMIN_REQUIRED') || msg.includes('소유자')) {
+            res.status(403).json({ error: 'FORBIDDEN', detail: msg });
+            return;
+        }
+        res.status(500).json({ error: msg });
+    }
 }));
 
 export default router;
