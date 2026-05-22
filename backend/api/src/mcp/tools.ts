@@ -124,6 +124,8 @@ import { createSkillTool } from './skill-creator-tool';
 import { importSkillFromGitTool } from './git-ingest-tool';
 // Git URL → Agent 매니페스트 ingest (Phase 3.5) — chained skill ingest 포함
 import { importAgentFromGitTool } from './agent-ingest-tool';
+// Git URL → MCP server 매니페스트 ingest (Phase 4.5) — 3중 잠금 draft + 위험 명령 차단
+import { importMcpServerFromGitTool } from './mcp-server-ingest-tool';
 
 /**
  * 전체 내장 도구 배열
@@ -146,4 +148,5 @@ export const builtInTools: MCPToolDefinition[] = [
     createSkillTool as MCPToolDefinition,
     importSkillFromGitTool as MCPToolDefinition,
     importAgentFromGitTool as MCPToolDefinition,
+    importMcpServerFromGitTool as MCPToolDefinition,
 ];

@@ -255,8 +255,9 @@ const messageHandlers = {
     /**
      * MCP tool 호출 결과의 resource content — 인라인 카드 렌더링.
      * 현재 지원하는 resource URI prefix:
-     *   - openmake://skill-draft/{id}  → skill-draft-card 컴포넌트 (Phase 1.5/2.5)
-     *   - openmake://agent-draft/{id}  → agent-draft-card 컴포넌트 (Phase 3.5)
+     *   - openmake://skill-draft/{id}       → skill-draft-card 컴포넌트 (Phase 1.5/2.5)
+     *   - openmake://agent-draft/{id}       → agent-draft-card 컴포넌트 (Phase 3.5)
+     *   - openmake://mcp-server-draft/{id}  → mcp-server-draft-card 컴포넌트 (Phase 4.5)
      * 다른 prefix 는 무시 (확장 시 분기 추가).
      *
      * Payload: { type: 'mcp_tool_result', toolName, resources: [{ uri, mimeType?, text? }], messageId }
@@ -269,7 +270,8 @@ const messageHandlers = {
 
             const isSkillDraft = uri.startsWith('openmake://skill-draft/');
             const isAgentDraft = uri.startsWith('openmake://agent-draft/');
-            if (!isSkillDraft && !isAgentDraft) continue;
+            const isMcpServerDraft = uri.startsWith('openmake://mcp-server-draft/');
+            if (!isSkillDraft && !isAgentDraft && !isMcpServerDraft) continue;
 
             try {
                 const payload = JSON.parse(res.text || '{}');
@@ -292,6 +294,29 @@ const messageHandlers = {
                         onAction: (action, agentId) => handleAgentDraftAction(action, agentId, {
                             onToast: (msg, type) => window.showToast && window.showToast(msg, type),
                         }),
+                    });
+                } else if (isMcpServerDraft && previewCard.kind === 'mcp-server-draft') {
+                    const { renderMcpServerDraftCard, handleMcpServerDraftAction } = await import('/js/components/mcp-server-draft-card.js?v=1');
+                    card = renderMcpServerDraftCard(previewCard, {
+                        mode: 'inline',
+                        onAction: (action, serverId, ctx) => {
+                            // 채팅 인라인에서는 envOverrides UI 가 어려움 — required_env 있으면 mcp-servers 페이지로 안내
+                            const augCtx = Object.assign({}, ctx);
+                            if (action === 'approve' && Array.isArray(ctx.requiredEnv) && ctx.requiredEnv.length > 0) {
+                                const overrides = {};
+                                for (const key of ctx.requiredEnv) {
+                                    const cur = (ctx.draft.env || {})[key];
+                                    if (cur && !/^\$\{.+\}$/.test(String(cur))) continue;
+                                    const v = window.prompt(`required_env: ${key}\n실제 값을 입력하세요 (취소하면 승인 중단)`, '');
+                                    if (v == null) return;
+                                    if (v) overrides[key] = v;
+                                }
+                                augCtx.envOverrides = overrides;
+                            }
+                            handleMcpServerDraftAction(action, serverId, augCtx, {
+                                onToast: (msg, type) => window.showToast && window.showToast(msg, type),
+                            });
+                        },
                     });
                 } else {
                     continue;
