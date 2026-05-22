@@ -61,12 +61,12 @@ import { MCP_INGEST } from '../config/constants';
  *
  * @param app - Express 애플리케이션 인스턴스
  * @param cluster - Ollama 클러스터 매니저
- * @param broadcast - WebSocket 브로드캐스트 함수
+ * @param _broadcast - WebSocket 브로드캐스트 함수 (현 라우터 셋업에서 미사용, 시그너처 호환용)
  */
 export function setupApiRoutes(
     app: Application,
     cluster: ClusterManager,
-    broadcast: (data: Record<string, unknown>) => void
+    _broadcast: (data: Record<string, unknown>) => void
 ): void {
     // Silence browser favicon / apple-touch-icon requests to avoid 404 log noise
     app.get('/favicon.ico', (_req: Request, res: Response) => res.status(204).end());

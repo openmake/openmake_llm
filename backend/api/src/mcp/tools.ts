@@ -58,7 +58,7 @@ export const visionOcrTool: MCPToolDefinition = {
             required: []
         }
     },
-    handler: async (args): Promise<MCPToolResult> => {
+    handler: async (_args): Promise<MCPToolResult> => {
         // 실제 OCR은 ChatService에서 비전 모델을 통해 처리됨
         // 이 핸들러는 MCP 도구 형식 호환용으로만 사용
         return {
@@ -104,7 +104,7 @@ export const analyzeImageTool: MCPToolDefinition = {
             required: []
         }
     },
-    handler: async (args): Promise<MCPToolResult> => {
+    handler: async (_args): Promise<MCPToolResult> => {
         return {
             content: [{
                 type: 'text',
