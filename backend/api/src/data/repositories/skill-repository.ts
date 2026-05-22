@@ -11,6 +11,8 @@
 
 import { BaseRepository, QueryParam } from './base-repository';
 import { assertResourceOwnerOrAdmin } from '../../auth/ownership';
+import { rowToSkill } from './skill-row-mapper';
+import { SkillAssignmentRepository } from './skill-assignment-repository';
 
 export interface AgentSkill {
     id: string;
@@ -93,9 +95,6 @@ interface CountRow {
     total: string;
 }
 
-interface SkillIdRow {
-    skill_id: string;
-}
 
 interface SkillOwnerRow {
     created_by: string | null;
@@ -223,7 +222,7 @@ export class SkillRepository extends BaseRepository {
             return null;
         }
 
-        return this.rowToSkill(result.rows[0]);
+        return rowToSkill(result.rows[0]);
     }
 
     async searchSkills(options: SkillSearchOptions): Promise<SkillSearchResult> {
@@ -298,7 +297,7 @@ export class SkillRepository extends BaseRepository {
         );
 
         return {
-            skills: dataResult.rows.map((row) => this.rowToSkill(row)),
+            skills: dataResult.rows.map((row) => rowToSkill(row)),
             total: parseInt(countResult.rows[0]?.total ?? '0', 10),
             limit,
             offset,
@@ -356,7 +355,7 @@ export class SkillRepository extends BaseRepository {
             ]
         );
         if (result.rows.length > 0) {
-            return this.rowToSkill(result.rows[0]);
+            return rowToSkill(result.rows[0]);
         }
         // fallback (should not normally happen)
         return {
@@ -371,140 +370,36 @@ export class SkillRepository extends BaseRepository {
         };
     }
 
+    // ────────────────────────────────────────────────────────────
+    // Assignment facade — 실제 구현은 SkillAssignmentRepository.
+    // 기존 호출자가 SkillRepository 하나만 사용해 둘 다 호출 가능.
+    // ────────────────────────────────────────────────────────────
+    private get assignments(): SkillAssignmentRepository {
+        return new SkillAssignmentRepository(this.pool);
+    }
     async assignSkillToAgent(agentId: string, skillId: string, priority: number = 0): Promise<void> {
-        await this.query(
-            `INSERT INTO agent_skill_assignments (agent_id, skill_id, priority, created_at)
-             VALUES ($1, $2, $3, NOW())
-             ON CONFLICT (agent_id, skill_id) DO UPDATE
-             SET priority = EXCLUDED.priority`,
-            [agentId, skillId, priority]
-        );
+        return this.assignments.assignSkillToAgent(agentId, skillId, priority);
     }
-
     async removeSkillFromAgent(agentId: string, skillId: string): Promise<void> {
-        await this.query(
-            'DELETE FROM agent_skill_assignments WHERE agent_id = $1 AND skill_id = $2',
-            [agentId, skillId]
-        );
+        return this.assignments.removeSkillFromAgent(agentId, skillId);
     }
-
-    /**
-     * 에이전트에 연결된 스킬 목록 반환
-     * 특정 에이전트 스킬 + '__global__' 가상 에이전트에 할당된 스킬 모두 포함.
-     * userId가 주어지면 'user:{userId}' 패턴의 개인 스킬도 포함.
-     * 중복 방지: 같은 스킬이 여러 곳에 할당된 경우 낙은 priority 우선.
-     */
     async getSkillsForAgent(agentId: string, userId?: string, agentCategory?: string): Promise<AgentSkill[]> {
-        // 1. 에이전트 고유 스킬 + __global__ 스킬 (제한 없음)
-        const conditions: string[] = ['a.agent_id = $1', "a.agent_id = '__global__'"];
-        const params: QueryParam[] = [agentId];
-
-        // 2. 개인 스킬: 에이전트 카테고리와 일치하는 스킬만 포함 (최대 10개)
-        //    카테고리 불일치 스킬은 프롬프트 오염 방지를 위해 제외
-        if (userId) {
-            if (agentCategory) {
-                // 카테고리 매칭: 개인 스킬 중 에이전트 카테고리와 동일한 것만
-                conditions.push(`(a.agent_id = $${params.length + 1} AND s.category = $${params.length + 2})`);
-                params.push(`user:${userId}`, agentCategory);
-            } else {
-                // 카테고리 불명 시 개인 스킬 포함하되 10개 제한은 ORDER/LIMIT으로 처리
-                conditions.push(`a.agent_id = $${params.length + 1}`);
-                params.push(`user:${userId}`);
-            }
-        }
-
-        const whereClause = conditions.join(' OR ');
-        // status='active' 필터: 채팅 시스템 프롬프트 주입 경로에 draft/archived 가 섞이지 않도록 차단
-        const result = await this.query(
-            `SELECT s.id, s.name, s.description, s.content, s.category, s.is_public,
-                    s.created_by, s.created_at, s.updated_at, s.source_repo, s.source_path,
-                    s.status, s.manifest_meta,
-                    MIN(a.priority) AS priority
-             FROM agent_skills s
-             JOIN agent_skill_assignments a ON s.id = a.skill_id
-             WHERE (${whereClause}) AND s.status = 'active'
-             GROUP BY s.id, s.name, s.description, s.content, s.category, s.is_public,
-                      s.created_by, s.created_at, s.updated_at, s.source_repo, s.source_path,
-                      s.status, s.manifest_meta
-             ORDER BY MIN(a.priority) ASC, s.name ASC
-             LIMIT $${params.length + 1}`,
-            [...params, 15]
-        );
-        return result.rows.map((row) => this.rowToSkill(row));
+        return this.assignments.getSkillsForAgent(agentId, userId, agentCategory);
     }
-
-    /**
-     * 에이전트에 연결된 스킬 ID 목록 반환 (__global__ 포함, userId 개인 스킬 포함)
-     */
     async getSkillIdsForAgent(agentId: string, userId?: string): Promise<string[]> {
-        const conditions: string[] = ['agent_id = $1', "agent_id = '__global__'"];
-        const params: QueryParam[] = [agentId];
-
-        if (userId) {
-            conditions.push('agent_id = $2');
-            params.push(`user:${userId}`);
-        }
-
-        const whereClause = conditions.join(' OR ');
-        const result = await this.query<SkillIdRow>(
-            `SELECT DISTINCT skill_id
-             FROM agent_skill_assignments
-             WHERE ${whereClause}`,
-            params
-        );
-        return result.rows.map((row) => row.skill_id);
+        return this.assignments.getSkillIdsForAgent(agentId, userId);
     }
-
-    /**
-     * 사용자 개인 스킬 할당 (user:{userId} 가상 에이전트 ID 패턴)
-     */
     async assignSkillToUser(userId: string, skillId: string, priority: number = 0): Promise<void> {
-        await this.query(
-            `INSERT INTO agent_skill_assignments (agent_id, skill_id, priority, created_at)
-             VALUES ($1, $2, $3, NOW())
-             ON CONFLICT (agent_id, skill_id) DO UPDATE
-             SET priority = EXCLUDED.priority`,
-            [`user:${userId}`, skillId, priority]
-        );
+        return this.assignments.assignSkillToUser(userId, skillId, priority);
     }
-
-    /**
-     * 사용자 개인 스킬 할당 해제
-     */
     async removeSkillFromUser(userId: string, skillId: string): Promise<void> {
-        await this.query(
-            'DELETE FROM agent_skill_assignments WHERE agent_id = $1 AND skill_id = $2',
-            [`user:${userId}`, skillId]
-        );
+        return this.assignments.removeSkillFromUser(userId, skillId);
     }
-
-    /**
-     * 사용자 개인 할당 스킬 ID 목록 반환
-     */
     async getUserSkillIds(userId: string): Promise<string[]> {
-        const result = await this.query<SkillIdRow>(
-            `SELECT skill_id FROM agent_skill_assignments WHERE agent_id = $1`,
-            [`user:${userId}`]
-        );
-        return result.rows.map((row) => row.skill_id);
+        return this.assignments.getUserSkillIds(userId);
     }
-
-    /**
-     * 사용자 개인 할당 스킬 전체 목록 반환.
-     * draft/archived 는 의도적으로 제외 — 사용자 할당 목록은 활성 스킬만 표시.
-     */
     async getUserSkills(userId: string): Promise<AgentSkill[]> {
-        const result = await this.query(
-            `SELECT s.id, s.name, s.description, s.content, s.category, s.is_public,
-                    s.created_by, s.created_at, s.updated_at, s.source_repo, s.source_path,
-                    s.status, s.manifest_meta
-             FROM agent_skills s
-             JOIN agent_skill_assignments a ON s.id = a.skill_id
-             WHERE a.agent_id = $1 AND s.status = 'active'
-             ORDER BY a.priority ASC, s.name ASC`,
-            [`user:${userId}`]
-        );
-        return result.rows.map((row) => this.rowToSkill(row));
+        return this.assignments.getUserSkills(userId);
     }
 
     /**
@@ -576,7 +471,7 @@ export class SkillRepository extends BaseRepository {
         );
 
         return {
-            drafts: dataResult.rows.map((row) => this.rowToSkill(row)),
+            drafts: dataResult.rows.map((row) => rowToSkill(row)),
             total: parseInt(countResult.rows[0]?.total ?? '0', 10),
             limit,
             offset,
@@ -598,55 +493,7 @@ export class SkillRepository extends BaseRepository {
         return result.rows[0].created_by;
     }
 
-    private rowToSkill(row: Record<string, unknown>): AgentSkill {
-        const createdBy = row.created_by;
-        const sourceRepo = row.source_repo;
-        const sourcePath = row.source_path;
-        const status = row.status;
-        const manifestMeta = row.manifest_meta;
-
-        return {
-            id: this.toStringValue(row.id),
-            name: this.toStringValue(row.name),
-            description: this.toStringValue(row.description, ''),
-            content: this.toStringValue(row.content),
-            category: this.toStringValue(row.category, 'general'),
-            isPublic: this.toBooleanValue(row.is_public, false),
-            createdBy: typeof createdBy === 'string' ? createdBy : undefined,
-            createdAt: this.toDateValue(row.created_at),
-            updatedAt: this.toDateValue(row.updated_at),
-            sourceRepo: typeof sourceRepo === 'string' ? sourceRepo : undefined,
-            sourcePath: typeof sourcePath === 'string' ? sourcePath : undefined,
-            status: status === 'draft' || status === 'active' || status === 'archived' ? status : undefined,
-            manifestMeta: manifestMeta && typeof manifestMeta === 'object' ? manifestMeta as Record<string, unknown> : undefined,
-        };
-    }
-
     private escapeILike(str: string): string {
         return str.replace(/[%_]/g, '\\$&');
-    }
-
-    private toStringValue(value: unknown, fallback: string = ''): string {
-        if (typeof value === 'string') {
-            return value;
-        }
-        return fallback;
-    }
-
-    private toBooleanValue(value: unknown, fallback: boolean): boolean {
-        if (typeof value === 'boolean') {
-            return value;
-        }
-        return fallback;
-    }
-
-    private toDateValue(value: unknown): Date {
-        if (value instanceof Date) {
-            return value;
-        }
-        if (typeof value === 'string' || typeof value === 'number') {
-            return new Date(value);
-        }
-        return new Date(0);
     }
 }
