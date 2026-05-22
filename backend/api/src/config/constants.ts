@@ -125,6 +125,9 @@ export const SKILL_CREATOR = {
     authorFallback: process.env.SKILL_AUTHOR_FALLBACK === 'true',
     draftTtlDays: parseInt(process.env.SKILL_DRAFT_TTL_DAYS || '30', 10),
     maxDraftsPerUser: parseInt(process.env.SKILL_AUTO_CREATE_MAX_DRAFTS_PER_USER || '50', 10),
+    // E2E test seam — true 면 LLM 호출 우회, 결정론적 mock 매니페스트 반환.
+    // 운영 환경에서는 절대 true 설정 금지 (보안 + 데이터 무결성).
+    authorMock: process.env.SKILL_AUTHOR_MOCK === 'true',
 } as const;
 
 // ============================================

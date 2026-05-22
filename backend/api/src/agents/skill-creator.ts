@@ -209,6 +209,25 @@ export class SkillCreatorService {
         tokensUsed: number;
         modelTier: 'system' | 'user-fallback';
     }> {
+        // E2E test seam — SKILL_AUTHOR_MOCK=true 면 LLM 호출 우회 + 결정론적 매니페스트.
+        // 운영 환경에서는 반드시 false (기본값). CI/E2E 전용.
+        if (process.env.SKILL_AUTHOR_MOCK === 'true') {
+            const purposeSlug = (input.purpose || 'mock-skill').slice(0, 30).replace(/[<>"&]/g, '');
+            return {
+                manifest: {
+                    name: `Mock Skill: ${purposeSlug}`,
+                    description: `결정론적 mock 응답 — purpose 첫 30자 echo. 실제 LLM 호출 없음 (SKILL_AUTHOR_MOCK=true).`,
+                    category: (input.category as LlmSkillManifest['category']) || 'general',
+                    content: `## Mock Skill Content\n\nThis is a deterministic mock manifest for E2E testing.\n\nUser purpose: ${input.purpose}\n\n${'A'.repeat(300)}`,
+                    triggers: ['mock', 'test', 'e2e'],
+                    tags: ['mock-skill', 'e2e-fixture'],
+                },
+                modelUsed: 'mock',
+                tokensUsed: 0,
+                modelTier: 'system',
+            };
+        }
+
         const userPrompt = this.buildUserPrompt(input);
         const fallbackEnabled = process.env.SKILL_AUTHOR_FALLBACK === 'true';
         let modelTier: 'system' | 'user-fallback' = 'system';
