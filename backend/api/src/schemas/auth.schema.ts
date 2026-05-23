@@ -32,7 +32,12 @@ export const registerSchema = z.object({
     username: secureTextSchema({ minLength: 3, maxLength: 50, fieldName: '사용자명', allowNewLines: false }),
     email: z.string().trim().email('유효한 이메일 주소를 입력하세요'),
     password: z.string().min(8, '새 비밀번호는 8자 이상이어야 합니다'),
-    role: z.enum(['admin', 'user', 'guest']).optional().default('user')
+    role: z.enum(['admin', 'user', 'guest']).optional().default('user'),
+    // GDPR Phase A Fix 4 — Article 7 affirmative consent. literal(true) 강제 — false/누락 시 validation fail.
+    agreedToTerms: z.literal(true, { message: '이용약관에 동의해야 합니다' }),
+    agreedToPrivacy: z.literal(true, { message: '개인정보 처리방침에 동의해야 합니다' }),
+    // 동의 시점의 사용자 locale (consent_logs 저장용). 미지정 시 'ko' 폴백.
+    consentLocale: z.string().min(2).max(10).optional().default('ko'),
 });
 
 /**
