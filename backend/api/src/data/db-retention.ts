@@ -83,6 +83,27 @@ async function runRetention(): Promise<void> {
             logger.info(`[DbRetention] 외부 모델 캐시 stale ${cacheResult.rowCount}건 정리 완료`);
         }
 
+        // 6. GDPR Phase C Fix 9 — consent_logs PII 익명화 (Article 5(1)(c) data minimization)
+        // granted/version/granted_at 은 보존 (Article 7(1) consent demonstrability 유지),
+        // ip_address/user_agent 만 NULL 처리. row 삭제 안 함 — 동의 이력 사실 자체는 영구 보존,
+        // CASCADE 는 사용자 탈퇴 시에만 적용.
+        const consentRetentionDays = parseInt(
+            process.env.CONSENT_PII_RETENTION_DAYS ?? '90',
+            10,
+        );
+        if (Number.isFinite(consentRetentionDays) && consentRetentionDays > 0) {
+            const consentResult = await pool.query(
+                `UPDATE consent_logs
+                 SET ip_address = NULL, user_agent = NULL
+                 WHERE granted_at < NOW() - ($1 || ' days')::interval
+                   AND (ip_address IS NOT NULL OR user_agent IS NOT NULL)`,
+                [consentRetentionDays.toString()]
+            );
+            if ((consentResult.rowCount ?? 0) > 0) {
+                logger.info(`[DbRetention] consent_logs PII 익명화 ${consentResult.rowCount}건 완료 (${consentRetentionDays}일 초과)`);
+            }
+        }
+
     } catch (err) {
         logger.error('[DbRetention] 정리 작업 중 오류 발생:', err);
     }
