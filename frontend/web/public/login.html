@@ -455,10 +455,37 @@
                         <input type="password" id="registerPasswordConfirm" class="form-input" placeholder="••••••••"
                             required>
                     </div>
+                    <!-- GDPR Phase A Fix 4 — 약관 동의 -->
+                    <div class="form-group" style="display: flex; flex-direction: column; gap: 6px;">
+                        <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                            <input type="checkbox" id="agreePrivacy" required>
+                            <span><a href="#" onclick="event.preventDefault(); showPolicyModal('privacy')">개인정보 처리방침</a>에 동의합니다 (필수)</span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                            <input type="checkbox" id="agreeTerms" required>
+                            <span><a href="#" onclick="event.preventDefault(); showPolicyModal('terms')">이용약관</a>에 동의합니다 (필수)</span>
+                        </label>
+                    </div>
                     <button type="submit" class="btn btn-primary" id="registerBtn">
                         가입하기
                     </button>
                 </form>
+            </div>
+
+            <!-- GDPR Phase A Fix 3 — Policy modal -->
+            <div id="policyModal" class="modal-overlay" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;">
+                <div style="background: var(--surface, #fff); max-width: 720px; width: 90%; max-height: 80vh; border-radius: 8px; display: flex; flex-direction: column; box-shadow: 0 8px 24px rgba(0,0,0,0.2);">
+                    <div style="padding: 16px 20px; border-bottom: 1px solid var(--border, #e5e5e5); display: flex; justify-content: space-between; align-items: center;">
+                        <h3 id="policyModalTitle" style="margin: 0;">정책 문서</h3>
+                        <button type="button" onclick="closePolicyModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; line-height: 1;">×</button>
+                    </div>
+                    <div id="policyModalBody" style="padding: 20px; overflow-y: auto; flex: 1;">
+                        <p>로딩 중...</p>
+                    </div>
+                    <div style="padding: 12px 20px; border-top: 1px solid var(--border, #e5e5e5); text-align: right;">
+                        <button type="button" class="btn btn-secondary" onclick="closePolicyModal()">닫기</button>
+                    </div>
+                </div>
             </div>
 
             <!-- 구분선 -->
@@ -713,13 +740,28 @@
                 return;
             }
 
+            // GDPR Phase A Fix 4 — 약관 동의 검증 (HTML required 가 1차, defensive 2차)
+            const agreedToPrivacy = document.getElementById('agreePrivacy').checked;
+            const agreedToTerms = document.getElementById('agreeTerms').checked;
+            if (!agreedToPrivacy || !agreedToTerms) {
+                showError('개인정보 처리방침과 이용약관에 모두 동의해주세요');
+                return;
+            }
+
             setLoading('registerBtn', true);
 
             try {
                 const res = await fetch(`${API_BASE}/api/auth/register`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ username, email, password })
+                    body: JSON.stringify({
+                        username,
+                        email,
+                        password,
+                        agreedToTerms,
+                        agreedToPrivacy,
+                        consentLocale: (navigator.language || 'ko').split('-')[0],
+                    })
                 });
 
                 const data = await res.json();
@@ -739,6 +781,38 @@
             } finally {
                 setLoading('registerBtn', false);
             }
+        }
+
+        // GDPR Phase A Fix 3 — Policy modal: backend route 에서 markdown 조회 + marked.js 렌더링
+        async function showPolicyModal(type) {
+            const modal = document.getElementById('policyModal');
+            const title = document.getElementById('policyModalTitle');
+            const body = document.getElementById('policyModalBody');
+            title.textContent = type === 'privacy' ? '개인정보 처리방침' : '이용약관';
+            body.innerHTML = '<p>로딩 중...</p>';
+            modal.style.display = 'flex';
+            try {
+                const locale = (navigator.language || 'ko').split('-')[0];
+                const res = await fetch(`${API_BASE}/api/policies/${type}/${locale}`);
+                const data = await res.json();
+                if (!res.ok || !data.success) {
+                    body.innerHTML = `<p style="color: var(--danger, #d00);">정책 문서를 불러오지 못했습니다. (${(data.error && data.error.message) || res.status})</p>`;
+                    return;
+                }
+                // marked.js 가 전역으로 loaded 되어 있다면 사용, 아니면 plain text 표시
+                const md = data.data.content || '';
+                if (window.marked && typeof window.marked.parse === 'function') {
+                    body.innerHTML = window.marked.parse(md);
+                } else {
+                    body.innerHTML = `<pre style="white-space: pre-wrap; font-family: inherit;">${md.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))}</pre>`;
+                }
+            } catch (e) {
+                body.innerHTML = `<p style="color: var(--danger, #d00);">정책 문서 조회 실패: ${e.message}</p>`;
+            }
+        }
+
+        function closePolicyModal() {
+            document.getElementById('policyModal').style.display = 'none';
         }
 
         function continueAsGuest() {
