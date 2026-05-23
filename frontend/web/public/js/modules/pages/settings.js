@@ -377,26 +377,30 @@
                 function resetSettings() { if (confirm('모든 설정을 초기화하시겠습니까?')) { safeStorage.removeItem(SK.THEME || 'theme'); safeStorage.removeItem(SK.SELECTED_MODEL || 'selectedModel'); safeStorage.removeItem(SK.MCP_SETTINGS || 'mcpSettings'); safeStorage.removeItem(SK.GENERAL_SETTINGS || 'generalSettings'); location.reload(); } }
 
                 async function exportData() {
+                    // GDPR Phase B Fix 6 (B6) — Article 20 right to data portability.
+                    // 전체 사용자 데이터 (conversations + manifests + agents + memories) JSON export.
+                    // 백엔드가 Content-Disposition attachment 로 즉시 다운로드 응답.
                     try {
-                        var res = await fetch(API_ENDPOINTS.CHAT_SESSIONS + '?limit=500', { credentials: 'include' });
-                        if (!res.ok) throw new Error('서버 응답 오류: ' + res.status);
-                        var data = await res.json();
-                        var payload = data.data || data;
-                        var sessions = payload.sessions || [];
-                        if (sessions.length === 0) {
-                            (typeof showToast === 'function' ? showToast('내보낼 대화 기록이 없습니다.', 'warning') : console.warn('내보낼 대화 기록이 없습니다.'));
+                        var res = await fetch(API_ENDPOINTS.USER_EXPORT, { credentials: 'include' });
+                        if (res.status === 429) {
+                            var rateData = await res.json().catch(function () { return null; });
+                            var rateMsg = (rateData && rateData.error && rateData.error.message) || '데이터 export 시간당 한도를 초과했습니다.';
+                            (typeof showToast === 'function' ? showToast(rateMsg, 'warning') : console.warn(rateMsg));
                             return;
                         }
-                        var blob = new Blob([JSON.stringify(sessions, null, 2)], { type: 'application/json' });
+                        if (!res.ok) throw new Error('서버 응답 오류: ' + res.status);
+                        // Content-Disposition 헤더로 다운로드 처리 — blob 받아서 anchor 클릭
+                        var blob = await res.blob();
                         var url = URL.createObjectURL(blob);
                         var a = document.createElement('a');
                         a.href = url;
-                        a.download = 'openmake_chat_export_' + new Date().toISOString().slice(0, 10) + '.json';
+                        // 백엔드가 filename 헤더 명시했지만 anchor download 속성도 fallback 으로 설정
+                        a.download = 'openmake_full_export_' + new Date().toISOString().slice(0, 10) + '.json';
                         document.body.appendChild(a);
                         a.click();
                         a.remove();
                         URL.revokeObjectURL(url);
-                        (typeof showToast === 'function' ? showToast(sessions.length + '개 대화가 내보내기되었습니다.', 'success') : console.log('Export complete'));
+                        (typeof showToast === 'function' ? showToast('전체 데이터를 내보냈습니다.', 'success') : console.log('Export complete'));
                     } catch (e) {
                         console.error('데이터 내보내기 실패:', e);
                         (typeof showToast === 'function' ? showToast('데이터 내보내기에 실패했습니다.', 'error') : console.error('데이터 내보내기 실패'));
