@@ -15,6 +15,7 @@ import * as fs from 'fs';
 
 import v1Router from './v1';
 import { tokenMonitoringRouter } from './token-monitoring.routes';
+import { createPoliciesRouter } from './policies.routes';
 import debugQueueRouter from './debug-queue.routes';
 import { default as chatRouter, setClusterManager as setChatCluster } from './chat.routes';
 import { setClusterManager as setOpenAICompatCluster } from './openai-compat.routes';
@@ -189,6 +190,8 @@ export function setupApiRoutes(
     app.use('/api/cluster', createClusterController(cluster));
     app.use('/api/auth', createAuthController(getConfig().port));
     app.use('/api/admin', createAdminController());
+    // GDPR Phase A Fix 3 — Policy 문서 다국어 서빙
+    app.use('/api/policies', createPoliciesRouter());
 
     // 클러스터 의존성 주입
     setChatCluster(cluster);

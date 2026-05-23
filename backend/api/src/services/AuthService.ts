@@ -11,14 +11,47 @@ import { generateToken } from '../auth';
 import { createLogger } from '../utils/logger';
 import { getConfig } from '../config/env';
 import { PASSWORD_POLICY } from '../config/runtime-limits';
+import { getPool } from '../data/models/unified-database';
 
 const log = createLogger('AuthService');
+
+/**
+ * 현재 정책 버전 — 정책 markdown frontmatter 와 동기 유지.
+ * 신규 정책 publish 시 bump (Phase B 의 재동의 prompt 와 연동 예정).
+ */
+const CURRENT_POLICY_VERSION = '1.0';
+
+/**
+ * GDPR Phase A Fix 4 helper — 회원가입 시 privacy_policy + terms_of_service
+ * 동의 이력 2 row INSERT (consent_logs).
+ */
+async function recordConsents(
+    userId: string,
+    locale: string,
+    ip?: string,
+    userAgent?: string,
+): Promise<void> {
+    const pool = getPool();
+    await pool.query(
+        `INSERT INTO consent_logs (user_id, consent_type, consent_version, consent_locale, granted, ip_address, user_agent)
+         VALUES ($1, 'privacy_policy', $2, $3, TRUE, $4, $5),
+                ($1, 'terms_of_service', $2, $3, TRUE, $4, $5)`,
+        [userId, CURRENT_POLICY_VERSION, locale, ip || null, userAgent || null],
+    );
+}
 
 export interface RegisterRequest {
     username?: string;
     email: string;
     password: string;
     role?: 'admin' | 'user' | 'guest';
+    // GDPR Phase A Fix 4 — controller 가 zod schema 검증 후 전달
+    agreedToTerms?: boolean;
+    agreedToPrivacy?: boolean;
+    consentLocale?: string;
+    // controller 가 req.ip / req.headers['user-agent'] 캡처 후 전달 (consent_logs 저장)
+    consentIp?: string;
+    consentUserAgent?: string;
 }
 
 export interface LoginRequest {
@@ -98,6 +131,24 @@ export class AuthService {
 
         if (!user) {
             return { success: false, error: '이미 등록된 이메일입니다' };
+        }
+
+        // GDPR Phase A Fix 4 — consent_logs INSERT.
+        // controller 가 zod schema (agreedToTerms/agreedToPrivacy literal(true)) 검증 후 호출하므로
+        // 본 service 진입 시점에 두 값은 true 보장. defensive 로 확인 후 INSERT.
+        if (data.agreedToTerms && data.agreedToPrivacy) {
+            try {
+                await recordConsents(
+                    user.id,
+                    data.consentLocale || 'ko',
+                    data.consentIp,
+                    data.consentUserAgent,
+                );
+            } catch (consentErr) {
+                // consent 기록 실패는 회원가입 자체를 막지 않음 (사용자 영향 최소화).
+                // 단 audit/모니터링 위해 error 로깅 — 운영자가 인지하면 후속 보정 가능.
+                log.error(`[GDPR] consent_logs INSERT 실패 (user_id=${user.id}):`, consentErr);
+            }
         }
 
         log.info(`회원가입 완료: ${email}`);

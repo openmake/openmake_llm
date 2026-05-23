@@ -72,7 +72,14 @@ export class AuthController {
     private async register(req: Request, res: Response): Promise<void> {
         try {
             const authService = getAuthService();
-            const result = await authService.register(req.body);
+            // GDPR Phase A Fix 4 — req.body 의 consent 필드 + IP/UA 캡처 후 service 에 전달.
+            // zod registerSchema 가 agreedToTerms/agreedToPrivacy 의 literal(true) 검증 (router 단계),
+            // controller 는 IP/UA 만 추가 주입.
+            const result = await authService.register({
+                ...req.body,
+                consentIp: req.ip,
+                consentUserAgent: req.headers['user-agent'],
+            });
 
             if (!result.success) {
                 const isConflict = result.error?.includes('이미 등록된');
