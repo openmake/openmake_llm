@@ -174,6 +174,14 @@
         '<a href="/password-change.html" class="s-btn s-btn-primary" style="text-decoration:none;">\uD83D\uDD11 \uBE44\uBC00\uBC88\uD638 \uBCC0\uACBD</a>' +
         '<a href="/admin.html" class="s-btn s-btn-secondary" id="adminLink" style="text-decoration:none;display:none;">\uD83D\uDC65 \uC0AC\uC6A9\uC790 \uAD00\uB9AC</a>' +
         '</div>' +
+        // GDPR Phase B Fix 6 (B7) \u2014 \uB3D9\uC758 \uAD00\uB9AC \uC139\uC158
+        '<div class="setting-row" style="margin-top: 16px; border-top: 1px solid var(--border, #e5e5e5); padding-top: 16px;">' +
+        '<div class="setting-info">' +
+        '<h4>\uB3D9\uC758 \uAD00\uB9AC <span style="font-size: 0.85em; color: var(--text-muted, #888);">(GDPR Article 7)</span></h4>' +
+        '<p>\uAC1C\uC778\uC815\uBCF4 \uCC98\uB9AC\uBC29\uCE68 / \uC774\uC6A9\uC57D\uAD00 \uB3D9\uC758 \uC0C1\uD0DC \uBC0F \uCCA0\uD68C</p>' +
+        '</div>' +
+        '</div>' +
+        '<div id="consentList" style="margin-top: 8px;">\uB85C\uB529 \uC911...</div>' +
         '</div>' +
         '</div>' +
 
@@ -419,8 +427,69 @@
                     if (loggedIn && accountCard) {
                         accountCard.style.display = '';
                         if (isAdmin() && adminLink) adminLink.style.display = '';
+                        loadConsents();
                     }
                 })();
+
+                // GDPR Phase B Fix 6 (B7) — 동의 상태 조회 + 철회 UI
+                async function loadConsents() {
+                    var listEl = document.getElementById('consentList');
+                    if (!listEl) return;
+                    try {
+                        var res = await window.authFetch(window.API_ENDPOINTS.USER_CONSENT);
+                        var data = await res.json();
+                        if (!res.ok || !data.success) {
+                            listEl.innerHTML = '<p style="color: var(--danger, #d00); font-size: 0.9em;">동의 상태 조회 실패</p>';
+                            return;
+                        }
+                        var consents = data.data.consents || [];
+                        listEl.innerHTML = consents.map(function (c) {
+                            var typeLabel = c.type === 'privacy_policy' ? '개인정보 처리방침' : '이용약관';
+                            var statusBadge = c.granted
+                                ? '<span style="color: var(--success, #2a8); font-weight: 600;">✓ 동의됨</span>'
+                                : '<span style="color: var(--text-muted, #888);">철회됨</span>';
+                            var versionInfo = c.version ? ' v' + esc(c.version) : '';
+                            var dateInfo = c.granted_at ? ' (' + new Date(c.granted_at).toLocaleString() + ')' : '';
+                            var withdrawBtn = c.granted
+                                ? '<button class="s-btn s-btn-secondary" style="margin-left: 8px; font-size: 0.85em; padding: 4px 10px;" data-consent-withdraw="' + esc(c.type) + '">철회</button>'
+                                : '';
+                            return '<div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--border-subtle, #f0f0f0);">'
+                                + '<div><strong>' + typeLabel + '</strong>' + versionInfo + ' &nbsp;' + statusBadge + '<div style="font-size: 0.85em; color: var(--text-muted, #888);">' + dateInfo + '</div></div>'
+                                + '<div>' + withdrawBtn + '</div>'
+                                + '</div>';
+                        }).join('');
+                        // 철회 button event delegation
+                        listEl.querySelectorAll('[data-consent-withdraw]').forEach(function (btn) {
+                            btn.addEventListener('click', function () {
+                                withdrawConsent(btn.dataset.consentWithdraw);
+                            });
+                        });
+                    } catch (e) {
+                        listEl.innerHTML = '<p style="color: var(--danger, #d00); font-size: 0.9em;">동의 상태 조회 실패: ' + esc(String(e.message || e)) + '</p>';
+                    }
+                }
+
+                async function withdrawConsent(type) {
+                    var label = type === 'privacy_policy' ? '개인정보 처리방침' : '이용약관';
+                    if (!confirm(label + ' 동의를 철회하시겠습니까?\n\n다음 로그인 시 재동의가 필요할 수 있습니다.')) return;
+                    try {
+                        var res = await window.authFetch(window.API_ENDPOINTS.USER_CONSENT_WITHDRAW, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ type: type }),
+                        });
+                        var data = await res.json();
+                        if (res.ok && data.success) {
+                            if (window.showToast) window.showToast(label + ' 동의가 철회되었습니다', 'success');
+                            loadConsents();  // refresh
+                        } else {
+                            var msg = (data.error && typeof data.error === 'object') ? data.error.message : data.error;
+                            if (window.showToast) window.showToast(msg || '철회 실패', 'error');
+                        }
+                    } catch (e) {
+                        if (window.showToast) window.showToast('철회 실패: ' + (e.message || e), 'error');
+                    }
+                }
 
                 // 사용자 등급(tier) 판별 — 백엔드 tool-tiers.ts의 getDefaultTierForRole 동기화
                 function getUserTier() {

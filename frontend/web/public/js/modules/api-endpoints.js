@@ -116,6 +116,10 @@ const API_ENDPOINTS = Object.freeze({
     V1_CHAT: '/api/v1/chat',
     V1_MODELS: '/api/v1/models',
     V1_USAGE: '/api/v1/usage',
+
+    // ── GDPR Consent (Phase B Fix 6/7) ───────────
+    USER_CONSENT: '/api/users/me/consent',
+    USER_CONSENT_WITHDRAW: '/api/users/me/consent/withdraw',
 });
 
 // Expose globally for IIFE page modules
