@@ -120,6 +120,8 @@ const API_ENDPOINTS = Object.freeze({
     // ── GDPR Consent (Phase B Fix 6/7) ───────────
     USER_CONSENT: '/api/users/me/consent',
     USER_CONSENT_WITHDRAW: '/api/users/me/consent/withdraw',
+    // ── GDPR Data Export (Phase B Fix 6 / B6) ────
+    USER_EXPORT: '/api/users/me/export',
 });
 
 // Expose globally for IIFE page modules

@@ -201,6 +201,23 @@ export const RL_ADMIN = {
     userLimit: Number(process.env.RL_ADMIN_USER) || 150,
 } as const;
 
+/**
+ * GDPR Article 20 데이터 export 레이트 리밋.
+ *
+ * 적용: GET /api/users/me/export
+ * 비용: 5개 카테고리 SELECT 병렬 + JSON 직렬화 (사용자 데이터 ~MB 단위)
+ * 정책: 시간당 사용자별 N회 — 정상 사용 충분, 악용/실수 반복 방어
+ */
+export const RL_GDPR_EXPORT = {
+    windowMs: 60 * 60 * 1000,  // 1시간
+    limits: {
+        free: Number(process.env.RL_EXPORT_FREE) || 2,
+        pro: Number(process.env.RL_EXPORT_PRO) || 5,
+        enterprise: Number(process.env.RL_EXPORT_ENTERPRISE) || 10,
+        admin: Number(process.env.RL_EXPORT_ADMIN) || 100,
+    },
+} as const;
+
 // ============================================
 // 32-bit signed int invariant (module-load 검증)
 // ============================================
@@ -229,6 +246,7 @@ const _windowMsInvariant = [
     { name: 'RL_MCP_INGEST', cfg: RL_MCP_INGEST },
     { name: 'RL_PUSH', cfg: RL_PUSH },
     { name: 'RL_ADMIN', cfg: RL_ADMIN },
+    { name: 'RL_GDPR_EXPORT', cfg: RL_GDPR_EXPORT },
 ];
 for (const { name, cfg } of _windowMsInvariant) {
     if (cfg.windowMs > SAFE_32BIT_MS) {
