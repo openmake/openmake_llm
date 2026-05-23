@@ -62,9 +62,12 @@ const DEFAULT_LOCAL_MODELS: LocalModelEntry[] = [
     {
         id: 'qwen3.6-35b-a3b-1m',
         displayName: 'Qwen 3.6 (1M context)',
-        description: '대용량 문서/research — 1M context',
+        description: '대용량 문서/research — 1M context (서버 PC 의 8004 가동 시에만)',
         role: 'chat',
         contextLength: 1048576,
+        // 8004 백엔드가 선택적 — 기본 비활성. 운영자가 8004 가동 후 startup
+        // health check (probeLocalModelAvailability) 가 available=true 로 전환.
+        available: false,
     },
     {
         id: 'gemma-4-31b',
@@ -134,4 +137,73 @@ export function getLocalEmbeddingModels(): LocalModelEntry[] {
  */
 export function resetLocalModelsCache(): void {
     _cached = null;
+}
+
+/**
+ * 서버 PC proxy 의 `/v1/models` 호출 → 실제 응답 model ID 와 카탈로그 매칭 →
+ * available 플래그 동적 갱신.
+ *
+ * 동작:
+ *   - proxy 미가용 (네트워크 fail, timeout): 카탈로그 그대로 유지 (보수적)
+ *   - 모델 id 가 응답에 있으면 available=true, 없으면 available=false
+ *   - 응답에 있지만 카탈로그에 없는 모델은 무시 (등록 안 됨)
+ *
+ * 호출처: server.ts 의 startup sequence (validateModels 와 병행 또는 대체)
+ *
+ * @param llmBaseUrl proxy base URL (예: http://rockyhan.duckdns.org:13401)
+ * @param apiKey proxy API key (LLM_API_KEY)
+ * @param timeoutMs HTTP timeout (default 5초)
+ */
+export async function probeLocalModelAvailability(
+    llmBaseUrl: string,
+    apiKey: string | undefined,
+    timeoutMs: number = 5000,
+): Promise<{ probed: boolean; available: string[]; missing: string[] }> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const url = llmBaseUrl.replace(/\/$/, '') + '/v1/models';
+
+    try {
+        const res = await fetch(url, {
+            headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : {},
+            signal: controller.signal,
+        });
+        if (!res.ok) {
+            logger.warn(`probe ${url} → ${res.status}, 카탈로그 변경 없음`);
+            return { probed: false, available: [], missing: [] };
+        }
+        const json = await res.json() as { data?: Array<{ id: string }> };
+        const proxyIds = new Set((json.data || []).map(m => m.id));
+
+        const list = getLocalModels();
+        const available: string[] = [];
+        const missing: string[] = [];
+        for (const m of list) {
+            // 정확 매칭 + tag-stripped 매칭 ('bge-m3' ↔ 'bge-m3:latest' 등)
+            const inProxy = proxyIds.has(m.id)
+                || Array.from(proxyIds).some(pid => pid.split(':')[0] === m.id);
+
+            // **demote-only 정책**: 카탈로그의 explicit `available: false` 는 보존
+            // (proxy 가 model 명만 등록하고 실제 backend 미가동 시 — qwen3.6-1m 8004 케이스).
+            // proxy 에서 사라진 모델만 demote — 운영자가 명시적으로 활성화하지 않은 한 promote 안 함.
+            if (m.available === false) {
+                missing.push(m.id);
+                continue;
+            }
+            if (inProxy) {
+                m.available = true;
+                available.push(m.id);
+            } else {
+                m.available = false;
+                missing.push(m.id);
+            }
+        }
+        logger.info(`probe 결과: available=${available.length} (${available.join(',')}) missing=${missing.length} (${missing.join(',')})`);
+        return { probed: true, available, missing };
+    } catch (e) {
+        logger.warn(`probe ${url} 실패 — 카탈로그 변경 없음: ${e instanceof Error ? e.message : e}`);
+        return { probed: false, available: [], missing: [] };
+    } finally {
+        clearTimeout(timer);
+    }
 }
