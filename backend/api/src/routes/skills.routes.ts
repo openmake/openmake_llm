@@ -40,7 +40,6 @@ import {
     searchSkillsQuerySchema,
     autoCreateSkillSchema,
 } from '../schemas/skills.schema';
-import { assignSkillSchema } from '../schemas/agents.schema';
 import { SkillCreatorService } from '../agents/skill-creator';
 import { LLMClient } from '../llm/client';
 import { SKILL_CREATOR } from '../config/constants';
@@ -102,6 +101,10 @@ const router = Router();
 // Draft 워크플로 (GET /drafts, POST /:skillId/approve|reject) sub-router
 import skillsDraftsRouter from './skills-drafts.routes';
 router.use('/', skillsDraftsRouter);
+
+// 사용자 개인 스킬 할당 (GET /user-assigned, POST/DELETE /:skillId/user-assign)
+import skillsUserAssignRouter from './skills-user-assign.routes';
+router.use('/', skillsUserAssignRouter);
 
 // .SKILL 업로드 multer (memoryStorage, 256KB 제한, P5-D7)
 const skillUpload = multer({
@@ -437,71 +440,6 @@ function mapGitIngestErrorToStatus(code: string): number {
         default: return 500;
     }
 }
-
-
-// ================================================
-// 사용자 개인 스킬 할당
-// ================================================
-
-/**
- * GET /api/agents/skills/user-assigned
- * 현재 로그인 사용자의 개인 할당 스킬 목록
- */
-router.get('/user-assigned', requireAuth, asyncHandler(async (req: Request, res: Response) => {
-    const userId = (req.user && 'userId' in req.user ? (req.user as { userId: string }).userId : req.user?.id?.toString());
-    if (!userId) {
-        res.status(401).json(unauthorized('인증 필요'));
-        return;
-    }
-    const skills = await getSkillManager().getUserSkills(userId);
-    res.json(success(skills));
-}));
-
-/**
- * POST /api/agents/skills/:skillId/user-assign
- * 개인 스킬 할당 (사용자 스코프)
- */
-router.post('/:skillId/user-assign', requireAuth, validate(assignSkillSchema), asyncHandler(async (req: Request, res: Response) => {
-    const { skillId } = req.params;
-    const userId = (req.user && 'userId' in req.user ? (req.user as { userId: string }).userId : req.user?.id?.toString());
-    if (!userId) {
-        res.status(401).json(unauthorized('인증 필요'));
-        return;
-    }
-
-    const skill = await getSkillManager().getSkillById(skillId);
-    if (!skill) {
-        res.status(404).json(notFound('스킬'));
-        return;
-    }
-    if (skill.status && skill.status !== 'active') {
-        res.status(409).json({ error: 'SKILL_NOT_ACTIVE', detail: `status=${skill.status} 인 스킬은 할당할 수 없습니다. 먼저 승인하세요.` });
-        return;
-    }
-
-    const priority: number = typeof req.body?.priority === 'number' ? req.body.priority : 0;
-    await getSkillManager().assignSkillToUser(userId, skillId, priority);
-    logger.info(`개인 스킬 할당: userId=${userId}, skillId=${skillId}`);
-    res.json(success({ assigned: true, skillId, userId }));
-}));
-
-/**
- * DELETE /api/agents/skills/:skillId/user-assign
- * 개인 스킬 할당 해제
- */
-router.delete('/:skillId/user-assign', requireAuth, asyncHandler(async (req: Request, res: Response) => {
-    const { skillId } = req.params;
-    const userId = (req.user && 'userId' in req.user ? (req.user as { userId: string }).userId : req.user?.id?.toString());
-    if (!userId) {
-        res.status(401).json(unauthorized('인증 필요'));
-        return;
-    }
-
-    await getSkillManager().removeSkillFromUser(userId, skillId);
-    logger.info(`개인 스킬 할당 해제: userId=${userId}, skillId=${skillId}`);
-    res.json(success({ unassigned: true, skillId, userId }));
-}));
-
 /**
  * PUT /api/agents/skills/:skillId
  * 스킬 수정 (소유권 검증 포함)
