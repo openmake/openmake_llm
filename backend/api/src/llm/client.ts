@@ -169,6 +169,8 @@ export class LLMClient {
             format?: FormatOption;
             system?: string;
             keep_alive?: string | number;
+            /** chat() 와 동일 — fast-fail / warmup timeout 등 caller abort 전달 경로 */
+            signal?: AbortSignal;
         },
     ): Promise<{ response: string; metrics?: UsageMetrics }> {
         const messages: ChatMessage[] = [];
@@ -187,6 +189,7 @@ export class LLMClient {
             {
                 ...(advancedOptions?.think !== undefined && { think: advancedOptions.think }),
                 ...(advancedOptions?.format && { format: advancedOptions.format }),
+                ...(advancedOptions?.signal && { signal: advancedOptions.signal }),
             },
         );
         return { response: result.content, metrics: result.metrics };
