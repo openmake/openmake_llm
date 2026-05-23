@@ -140,70 +140,176 @@ export function resetLocalModelsCache(): void {
 }
 
 /**
- * 서버 PC proxy 의 `/v1/models` 호출 → 실제 응답 model ID 와 카탈로그 매칭 →
- * available 플래그 동적 갱신.
+ * 단일 chat 모델 connectivity ping — 1 token completion 호출.
+ * 200 응답 + completion content/reasoning 있으면 가용.
+ * 500 / timeout / connection error 면 미가용.
+ */
+async function pingChatModel(
+    baseUrl: string,
+    apiKey: string | undefined,
+    modelId: string,
+    timeoutMs: number,
+): Promise<{ ok: boolean; reason?: string }> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+        const res = await fetch(baseUrl.replace(/\/$/, '') + '/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
+            },
+            body: JSON.stringify({
+                model: modelId,
+                messages: [{ role: 'user', content: 'hi' }],
+                max_tokens: 1,
+                stream: false,
+                // thinking 모델은 reasoning 으로 토큰 소비 → enable_thinking=false 강제
+                chat_template_kwargs: { enable_thinking: false },
+            }),
+            signal: controller.signal,
+        });
+        if (!res.ok) {
+            return { ok: false, reason: `HTTP ${res.status}` };
+        }
+        // 200 이면 가용 — content 가 비었더라도 backend 도달 자체가 검증됨
+        return { ok: true };
+    } catch (e) {
+        return { ok: false, reason: e instanceof Error ? e.message : String(e) };
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
+/**
+ * 단일 embedding 모델 connectivity ping — 1 string embedding 호출.
+ */
+async function pingEmbeddingModel(
+    baseUrl: string,
+    apiKey: string | undefined,
+    modelId: string,
+    timeoutMs: number,
+): Promise<{ ok: boolean; reason?: string }> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+        const res = await fetch(baseUrl.replace(/\/$/, '') + '/v1/embeddings', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
+            },
+            body: JSON.stringify({ model: modelId, input: 'hi' }),
+            signal: controller.signal,
+        });
+        if (!res.ok) {
+            return { ok: false, reason: `HTTP ${res.status}` };
+        }
+        return { ok: true };
+    } catch (e) {
+        return { ok: false, reason: e instanceof Error ? e.message : String(e) };
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
+/**
+ * 서버 PC proxy 의 실제 가용성 검증 — 2단계 probe.
+ *
+ * Stage 1: `/v1/models` 호출 → 등록된 모델 ID 매칭 (빠른 fail)
+ * Stage 2: 매칭된 모델 별 1-token chat/embedding ping → backend 실제 connectivity 검증
+ *
+ * Stage 1 만으로는 부족한 이유:
+ *   - LiteLLM/vLLM proxy 의 `/v1/models` 는 config 기반 model 등록만 반환
+ *   - backend (예: 8004 vLLM 인스턴스) 미가동이어도 model 명은 list 에 노출
+ *   - 클라이언트가 "모델 있는 줄 알고" 호출 → 500 InternalServerError
+ *   - 1m 모델 (qwen3.6-35b-a3b-1m / 8004) 케이스가 정확히 이 패턴
+ *
+ * Stage 2 가 connectivity 까지 검증해 실제 호출 가능한 모델만 카탈로그 활성화.
+ *
+ * 비용:
+ *   - chat ping: model 수 × 1 request × max_tokens=1 ≈ 모델당 수십 ms
+ *   - embedding ping: 1 string × 1024-dim 응답 ≈ 수십 ms
+ *   - 전체: 5-6 모델 × ~50ms = 시작 시 ~300ms (병렬화 시 ~50ms)
  *
  * 동작:
- *   - proxy 미가용 (네트워크 fail, timeout): 카탈로그 그대로 유지 (보수적)
- *   - 모델 id 가 응답에 있으면 available=true, 없으면 available=false
- *   - 응답에 있지만 카탈로그에 없는 모델은 무시 (등록 안 됨)
- *
- * 호출처: server.ts 의 startup sequence (validateModels 와 병행 또는 대체)
+ *   - probe 미가용 (네트워크 timeout, proxy 미가용): 카탈로그 그대로 유지 (보수적)
+ *   - Stage 2 ping 실패한 모델: available=false (demote)
+ *   - 카탈로그의 explicit available=false 모델: ping 시도조차 안 함 (운영자가 명시적 비활성)
  *
  * @param llmBaseUrl proxy base URL (예: http://rockyhan.duckdns.org:13401)
  * @param apiKey proxy API key (LLM_API_KEY)
- * @param timeoutMs HTTP timeout (default 5초)
+ * @param timeoutMs ping 호출 timeout (default 8초)
  */
 export async function probeLocalModelAvailability(
     llmBaseUrl: string,
     apiKey: string | undefined,
-    timeoutMs: number = 5000,
-): Promise<{ probed: boolean; available: string[]; missing: string[] }> {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
-    const url = llmBaseUrl.replace(/\/$/, '') + '/v1/models';
-
+    timeoutMs: number = 8000,
+): Promise<{ probed: boolean; available: string[]; missing: string[]; skipped: string[] }> {
+    // Stage 1: /v1/models 빠른 fail
+    const modelsUrl = llmBaseUrl.replace(/\/$/, '') + '/v1/models';
+    const stage1Controller = new AbortController();
+    const stage1Timer = setTimeout(() => stage1Controller.abort(), Math.min(timeoutMs, 5000));
+    let proxyIds: Set<string>;
     try {
-        const res = await fetch(url, {
+        const res = await fetch(modelsUrl, {
             headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : {},
-            signal: controller.signal,
+            signal: stage1Controller.signal,
         });
         if (!res.ok) {
-            logger.warn(`probe ${url} → ${res.status}, 카탈로그 변경 없음`);
-            return { probed: false, available: [], missing: [] };
+            logger.warn(`probe stage1 ${modelsUrl} → ${res.status}, 카탈로그 변경 없음`);
+            return { probed: false, available: [], missing: [], skipped: [] };
         }
         const json = await res.json() as { data?: Array<{ id: string }> };
-        const proxyIds = new Set((json.data || []).map(m => m.id));
-
-        const list = getLocalModels();
-        const available: string[] = [];
-        const missing: string[] = [];
-        for (const m of list) {
-            // 정확 매칭 + tag-stripped 매칭 ('bge-m3' ↔ 'bge-m3:latest' 등)
-            const inProxy = proxyIds.has(m.id)
-                || Array.from(proxyIds).some(pid => pid.split(':')[0] === m.id);
-
-            // **demote-only 정책**: 카탈로그의 explicit `available: false` 는 보존
-            // (proxy 가 model 명만 등록하고 실제 backend 미가동 시 — qwen3.6-1m 8004 케이스).
-            // proxy 에서 사라진 모델만 demote — 운영자가 명시적으로 활성화하지 않은 한 promote 안 함.
-            if (m.available === false) {
-                missing.push(m.id);
-                continue;
-            }
-            if (inProxy) {
-                m.available = true;
-                available.push(m.id);
-            } else {
-                m.available = false;
-                missing.push(m.id);
-            }
-        }
-        logger.info(`probe 결과: available=${available.length} (${available.join(',')}) missing=${missing.length} (${missing.join(',')})`);
-        return { probed: true, available, missing };
+        proxyIds = new Set((json.data || []).map(m => m.id));
     } catch (e) {
-        logger.warn(`probe ${url} 실패 — 카탈로그 변경 없음: ${e instanceof Error ? e.message : e}`);
-        return { probed: false, available: [], missing: [] };
+        logger.warn(`probe stage1 실패 — 카탈로그 변경 없음: ${e instanceof Error ? e.message : e}`);
+        return { probed: false, available: [], missing: [], skipped: [] };
     } finally {
-        clearTimeout(timer);
+        clearTimeout(stage1Timer);
     }
+
+    // Stage 2: chat/embedding 별 1-token ping (병렬)
+    const list = getLocalModels();
+    const skipped: string[] = [];
+    const pingTargets: LocalModelEntry[] = [];
+    for (const m of list) {
+        if (m.available === false) {
+            skipped.push(m.id);
+            continue;
+        }
+        const inProxy = proxyIds.has(m.id)
+            || Array.from(proxyIds).some(pid => pid.split(':')[0] === m.id);
+        if (!inProxy) {
+            m.available = false;
+            skipped.push(m.id);
+            continue;
+        }
+        pingTargets.push(m);
+    }
+
+    const pingResults = await Promise.all(pingTargets.map(async m => {
+        const r = m.role === 'embedding'
+            ? await pingEmbeddingModel(llmBaseUrl, apiKey, m.id, timeoutMs)
+            : await pingChatModel(llmBaseUrl, apiKey, m.id, timeoutMs);
+        return { model: m, result: r };
+    }));
+
+    const available: string[] = [];
+    const missing: string[] = [];
+    for (const { model, result } of pingResults) {
+        if (result.ok) {
+            model.available = true;
+            available.push(model.id);
+        } else {
+            model.available = false;
+            missing.push(`${model.id} (${result.reason})`);
+        }
+    }
+    logger.info(
+        `probe 완료: available=${available.length} [${available.join(',')}] ` +
+        `missing=${missing.length} [${missing.join(' | ')}] ` +
+        `skipped=${skipped.length} [${skipped.join(',')}]`,
+    );
+    return { probed: true, available, missing, skipped };
 }
