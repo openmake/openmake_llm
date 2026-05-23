@@ -239,3 +239,11 @@ for (const { name, cfg } of _windowMsInvariant) {
         );
     }
 }
+
+/**
+ * 테스트 전용 — invariant 에 등록된 RL_* 이름 목록 반환.
+ * 신규 RL_* 가 invariant 등록에서 누락되는 회귀를 jest 로 차단.
+ */
+export function getRegisteredInvariantNames(): string[] {
+    return _windowMsInvariant.map(e => e.name);
+}
