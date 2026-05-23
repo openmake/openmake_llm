@@ -329,3 +329,65 @@ export async function probeLocalModelAvailability(
     );
     return { probed: true, available, missing, skipped };
 }
+
+/**
+ * 동일 model 의 동시 reprobe 방지용 in-flight 가드.
+ * N 개 concurrent fallback 이 같은 model 에 대해 N 개 reprobe 를 동시에
+ * 실행하는 것을 방지 (advisor 함정 1).
+ */
+const inflightReprobes = new Set<string>();
+
+/**
+ * 단일 모델 재검사 — fast-fail/connection-error 로 runtime demote 된 모델이
+ * 즉시 회복(예: 운영자가 backend 재기동) 했는지 확인 + 카탈로그 promote.
+ *
+ * 호출 의도: `tryFallbackAfterFailure` 에서 demote 직후 fire-and-forget.
+ * 다음 polling cycle (5분) 까지 stale 상태로 남는 것을 줄여, false positive
+ * (일시적 slow → fast-fail) 회복을 단축한다.
+ *
+ * Promotion 정책 (advisor 함정 3):
+ *   - `unavailableReason` 이 `"runtime:"` prefix 일 때만 promote 가능
+ *   - 그 외 (config 기본값 `available: false`, "explicit disabled",
+ *     "proxy 카탈로그 미등록", startup probe 의 "HTTP 5xx" 등) 는 운영자/probe
+ *     관할 — 단일 ping 성공만으로 운영자 의도를 뒤집지 않음
+ *
+ * 부수효과 (모두 동기 카탈로그 mutation):
+ *   - ping 성공 + runtime-demote → `available=true`, `unavailableReason=undefined`
+ *   - ping 실패 → `unavailableReason` 만 갱신 (이미 false)
+ *   - 가드 충돌 (이미 in-flight) / config-demote → no-op
+ */
+export async function reprobeSingleModel(
+    modelId: string,
+    baseUrl: string,
+    apiKey: string | undefined,
+    timeoutMs: number = 5000,
+): Promise<void> {
+    if (inflightReprobes.has(modelId)) return;
+
+    const entry = getLocalModels().find(m => m.id === modelId);
+    if (!entry) return;
+
+    // config-demote 또는 startup-probe-demote 는 promote 권한 없음 — early return
+    const reason = entry.unavailableReason ?? '';
+    if (entry.available === false && !reason.startsWith('runtime:')) {
+        return;
+    }
+
+    inflightReprobes.add(modelId);
+    try {
+        const r = entry.role === 'embedding'
+            ? await pingEmbeddingModel(baseUrl, apiKey, modelId, timeoutMs)
+            : await pingChatModel(baseUrl, apiKey, modelId, timeoutMs);
+        if (r.ok) {
+            entry.available = true;
+            entry.unavailableReason = undefined;
+            logger.info(`[Reprobe] ${modelId} UP — promote (was: ${reason || 'n/a'})`);
+        } else {
+            // 여전히 down — reason 만 갱신 (available 은 이미 false)
+            entry.unavailableReason = `runtime: ${r.reason || 'reprobe-failed'}`;
+            logger.debug(`[Reprobe] ${modelId} still DOWN — ${r.reason}`);
+        }
+    } finally {
+        inflightReprobes.delete(modelId);
+    }
+}

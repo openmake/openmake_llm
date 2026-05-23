@@ -23,7 +23,8 @@
  * @module providers/local-llm-fallback
  */
 import { createLogger } from '../utils/logger';
-import { getLocalModels, type LocalModelEntry } from '../config/local-models';
+import { getLocalModels, reprobeSingleModel, type LocalModelEntry } from '../config/local-models';
+import { getConfig } from '../config/env';
 
 const logger = createLogger('LocalLLMFallback');
 
@@ -83,6 +84,18 @@ export function tryFallbackAfterFailure(
         failedEntry.available = false;
         failedEntry.unavailableReason = `runtime: ${check.reason}`;
         logger.warn(`demote ${failedModelId} — ${check.reason}`);
+
+        // 1-a) Fire-and-forget single-model re-probe — backend 즉시 회복 케이스 (운영자 재기동,
+        //      일시적 slow 후 회복) 의 false-positive 회복을 polling cycle (5분) 보다 빨리 감지.
+        //      user-response 크리티컬 경로 영향 0 (await 안 함).
+        try {
+            const cfg = getConfig();
+            void reprobeSingleModel(failedModelId, cfg.llmBaseUrl, cfg.llmApiKey)
+                .catch(e => logger.debug(`[Reprobe ${failedModelId}] error: ${e instanceof Error ? e.message : e}`));
+        } catch (cfgErr) {
+            // getConfig 가 cold-init 미완 등으로 실패해도 fallback 자체는 진행
+            logger.debug(`[Reprobe] getConfig 실패 — reprobe skip: ${cfgErr instanceof Error ? cfgErr.message : cfgErr}`);
+        }
     }
 
     // 2) chat 외 (embedding) 은 dim 다를 위험 — fallback 안 함
