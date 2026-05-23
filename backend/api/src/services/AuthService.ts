@@ -12,14 +12,9 @@ import { createLogger } from '../utils/logger';
 import { getConfig } from '../config/env';
 import { PASSWORD_POLICY } from '../config/runtime-limits';
 import { getPool } from '../data/models/unified-database';
+import { CURRENT_POLICY_VERSION } from '../config/policy';
 
 const log = createLogger('AuthService');
-
-/**
- * 현재 정책 버전 — 정책 markdown frontmatter 와 동기 유지.
- * 신규 정책 publish 시 bump (Phase B 의 재동의 prompt 와 연동 예정).
- */
-const CURRENT_POLICY_VERSION = '1.0';
 
 /**
  * GDPR Phase A Fix 4 helper — 회원가입 시 privacy_policy + terms_of_service
