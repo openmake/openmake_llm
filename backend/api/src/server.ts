@@ -252,18 +252,31 @@ export class DashboardServer {
 
         // 모델 워밍업: LiteLLM 헬스체크 + 첫 토큰 호출로 vLLM 캐시 워밍.
         // 비동기, 실패해도 서버 시작은 계속.
+        //
+        // Fast-fail: LLM_WARMUP_TIMEOUT_MS (default 10s) 내 미수신 시 abort.
+        // LLMClient 의 LLM_TIMEOUT (default 120s) 보다 짧음 — 워밍업 hang 시 boot 지연 방지.
+        // 정상 cold-load 는 80-81ms (실측), 10s 는 ~120 배 여유.
         (async () => {
+            const { LLMClient } = await import('./llm');
+            const cfg = getConfig();
+            const warmupClient = new LLMClient({ model: cfg.llmDefaultModel });
+            const controller = new AbortController();
+            const warmupTimer = setTimeout(() => controller.abort(), cfg.llmWarmupTimeoutMs);
+            warmupTimer.unref?.();
+            const t0 = Date.now();
             try {
-                const { LLMClient } = await import('./llm');
-                const cfg = getConfig();
-                const warmupClient = new LLMClient({ model: cfg.llmDefaultModel });
-                const t0 = Date.now();
-                await warmupClient.generate(' ', { num_predict: 1 });
+                await warmupClient.generate(' ', { num_predict: 1 }, undefined, undefined, {
+                    signal: controller.signal,
+                });
                 const elapsed = Date.now() - t0;
                 console.log(`[Server] 모델 워밍업 완료 — ${cfg.llmDefaultModel} (${elapsed}ms)`);
             } catch (err) {
-                const message = err instanceof Error ? err.message : String(err);
-                console.warn('[Server] 모델 워밍업 실패 (무시, 첫 사용자 요청 시 콜드 로딩 발생 가능):', message);
+                const elapsed = Date.now() - t0;
+                const aborted = controller.signal.aborted;
+                const reason = aborted ? `timeout ${cfg.llmWarmupTimeoutMs}ms` : (err instanceof Error ? err.message : String(err));
+                console.warn(`[Server] 모델 워밍업 실패 (무시, 첫 사용자 요청 시 콜드 로딩 발생 가능) — ${reason} (${elapsed}ms)`);
+            } finally {
+                clearTimeout(warmupTimer);
             }
         })();
 

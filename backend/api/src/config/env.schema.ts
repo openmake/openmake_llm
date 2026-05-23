@@ -100,6 +100,9 @@ export const envSchema = z
         LLM_TIMEOUT: positiveIntWithDefault(120000).refine((value) => value <= 600000, {
             message: 'LLM_TIMEOUT must be between 1 and 600000 milliseconds',
         }),
+        LLM_WARMUP_TIMEOUT_MS: positiveIntWithDefault(10000).refine((value) => value <= 60000, {
+            message: 'LLM_WARMUP_TIMEOUT_MS must be between 1 and 60000 milliseconds',
+        }),
         LLM_HOURLY_TOKEN_LIMIT: nonNegativeIntWithDefault(300000),
         LLM_WEEKLY_TOKEN_LIMIT: nonNegativeIntWithDefault(5000000),
         /**

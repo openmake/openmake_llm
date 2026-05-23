@@ -48,6 +48,7 @@ export interface EnvConfig {
     llmApiKey: string;
     llmDefaultModel: string;
     llmTimeout: number;
+    llmWarmupTimeoutMs: number;
     llmHourlyTokenLimit: number;
     llmWeeklyTokenLimit: number;
     /** vLLM `--reasoning-parser` 미설정 환경 등에서 extra_body.reasoning_effort 거절 방지 토글. */
@@ -171,6 +172,7 @@ const DEFAULT_CONFIG: EnvConfig = {
     llmApiKey: 'sk-no-key',
     llmDefaultModel: 'qwen2.5-7b',
     llmTimeout: 120000,
+    llmWarmupTimeoutMs: 10000,
     llmHourlyTokenLimit: 300000,
     llmWeeklyTokenLimit: 5000000,
     llmEnableReasoningEffort: false,
@@ -380,6 +382,7 @@ export function loadConfig(): EnvConfig {
         LLM_API_KEY: env('LLM_API_KEY'),
         LLM_DEFAULT_MODEL: env('LLM_DEFAULT_MODEL'),
         LLM_TIMEOUT: env('LLM_TIMEOUT'),
+        LLM_WARMUP_TIMEOUT_MS: env('LLM_WARMUP_TIMEOUT_MS'),
         LLM_HOURLY_TOKEN_LIMIT: env('LLM_HOURLY_TOKEN_LIMIT'),
         LLM_WEEKLY_TOKEN_LIMIT: env('LLM_WEEKLY_TOKEN_LIMIT'),
         LLM_ENABLE_REASONING_EFFORT: env('LLM_ENABLE_REASONING_EFFORT'),
@@ -484,6 +487,7 @@ export function loadConfig(): EnvConfig {
         llmApiKey: parsed.LLM_API_KEY ?? DEFAULT_CONFIG.llmApiKey,
         llmDefaultModel: parsed.LLM_DEFAULT_MODEL ?? DEFAULT_CONFIG.llmDefaultModel,
         llmTimeout: parsed.LLM_TIMEOUT ?? DEFAULT_CONFIG.llmTimeout,
+        llmWarmupTimeoutMs: parsed.LLM_WARMUP_TIMEOUT_MS ?? DEFAULT_CONFIG.llmWarmupTimeoutMs,
         llmHourlyTokenLimit: parsed.LLM_HOURLY_TOKEN_LIMIT ?? DEFAULT_CONFIG.llmHourlyTokenLimit,
         llmWeeklyTokenLimit: parsed.LLM_WEEKLY_TOKEN_LIMIT ?? DEFAULT_CONFIG.llmWeeklyTokenLimit,
         llmEnableReasoningEffort: (parsed.LLM_ENABLE_REASONING_EFFORT ?? 'false').toLowerCase() === 'true',
