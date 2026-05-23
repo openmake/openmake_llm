@@ -33,6 +33,18 @@ const withdrawSchema = z.object({
     type: z.enum(VALID_CONSENT_TYPES),
 });
 
+const grantSchema = z.object({
+    type: z.enum(VALID_CONSENT_TYPES),
+    version: z.string().min(1).max(20),
+    locale: z.string().min(2).max(10).optional().default('ko'),
+});
+
+/**
+ * Phase A 의 CURRENT_POLICY_VERSION 과 동기 — Phase A AuthService.ts:22
+ * Single source of truth 로 별도 export 모듈 분리는 후속 (현재 const 동기 유지).
+ */
+const CURRENT_POLICY_VERSION = '1.0';
+
 interface ConsentStatus {
     type: ConsentType;
     version: string | null;
@@ -144,6 +156,62 @@ export function createConsentController(): Router {
         } catch (err) {
             log.error('[Consent withdraw] error:', err);
             res.status(500).json(internalError('동의 철회 실패'));
+        }
+    });
+
+    /**
+     * GET /api/users/me/consent/status — 재동의 필요 여부 (Phase B Fix 7).
+     * 사용자의 latest granted=true row 의 version 과 CURRENT_POLICY_VERSION 비교.
+     * 사용자가 한 번도 동의 안 했거나 (Phase A 이전 가입), 버전 불일치, 또는 철회
+     * 상태면 needsConsent=true + 해당 type 들 반환.
+     */
+    router.get('/status', requireAuth, async (req: Request, res: Response): Promise<void> => {
+        try {
+            const userId = getUserId(req);
+            if (!userId) {
+                res.status(400).json(badRequest('user id 추출 실패'));
+                return;
+            }
+            const consents = await getCurrentConsents(userId);
+            const pendingTypes: ConsentType[] = consents
+                .filter(c => !c.granted || c.version !== CURRENT_POLICY_VERSION)
+                .map(c => c.type);
+            res.json(success({
+                needsConsent: pendingTypes.length > 0,
+                currentVersion: CURRENT_POLICY_VERSION,
+                pendingTypes,
+                consents,  // 현재 상태도 함께 반환 (UI 가 details 표시)
+            }));
+        } catch (err) {
+            log.error('[Consent status] error:', err);
+            res.status(500).json(internalError('동의 상태 확인 실패'));
+        }
+    });
+
+    /**
+     * POST /api/users/me/consent — 재동의 (granted=true 새 row INSERT).
+     * 재동의 prompt 에서 호출. PR-3 의 회원가입 INSERT 와 동일 형식.
+     */
+    router.post('/', requireAuth, validate(grantSchema), async (req: Request, res: Response): Promise<void> => {
+        try {
+            const userId = getUserId(req);
+            if (!userId) {
+                res.status(400).json(badRequest('user id 추출 실패'));
+                return;
+            }
+            const { type, version, locale } = req.body as { type: ConsentType; version: string; locale: string };
+
+            const pool = getPool();
+            await pool.query(
+                `INSERT INTO consent_logs (user_id, consent_type, consent_version, consent_locale, granted, ip_address, user_agent)
+                 VALUES ($1, $2, $3, $4, TRUE, $5, $6)`,
+                [userId, type, version, locale, req.ip || null, req.headers['user-agent'] || null],
+            );
+            log.info(`[Consent grant] user=${userId} type=${type} version=${version}`);
+            res.json(success({ granted: true, type, version }));
+        } catch (err) {
+            log.error('[Consent grant] error:', err);
+            res.status(500).json(internalError('동의 기록 실패'));
         }
     });
 
