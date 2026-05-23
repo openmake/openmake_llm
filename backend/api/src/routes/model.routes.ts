@@ -19,6 +19,7 @@ import { asyncHandler } from '../utils/error-handler';
 import { createLogger } from '../utils/logger';
 import { getModelForRole } from '../config/model-roles';
 import { MODEL_CAPABILITY_PRESETS } from '../config/model-defaults';
+import { getLocalChatModels } from '../config/local-models';
 import { requireAuth, requireAdmin, optionalAuth } from '../auth';
 import { getModelHealthMonitor } from '../services/model-health-monitor';
 import { ExternalKeysRepository } from '../data/repositories/external-keys-repo';
@@ -72,19 +73,6 @@ router.get('/model', asyncHandler(async (_req: Request, res: Response) => {
  * capabilities 는 MODEL_CAPABILITY_PRESETS 의 가장 긴 prefix 매칭으로 조회합니다.
  */
 router.get('/models', optionalAuth, asyncHandler(async (req: Request, res: Response) => {
-    const chatModel = getModelForRole('chat');
-
-    // MODEL_CAPABILITY_PRESETS에서 가장 긴 prefix 매칭으로 capabilities 조회
-    const lower = chatModel.toLowerCase();
-    let caps = { toolCalling: true, thinking: false, vision: false, streaming: true };
-    let bestPrefix = '';
-    for (const [prefix, presetCaps] of Object.entries(MODEL_CAPABILITY_PRESETS)) {
-        if (lower.includes(prefix) && prefix.length > bestPrefix.length) {
-            bestPrefix = prefix;
-            caps = presetCaps;
-        }
-    }
-
     type ModelEntry = {
         name: string;
         modelId: string;
@@ -102,20 +90,49 @@ router.get('/models', optionalAuth, asyncHandler(async (req: Request, res: Respo
         pricing?: { input: number; output: number };
     };
 
-    const models: ModelEntry[] = [{
-        name: chatModel,
-        modelId: buildFullModelId('local-llm', chatModel),
-        description: `Local LLM model (${chatModel})`,
-        provider: 'local-llm',
-        capabilities: {
-            executionStrategy: 'single',
-            thinking: caps.thinking ? 'medium' : 'off',
-            discussion: false,
-            vision: caps.vision,
-            toolCalling: caps.toolCalling,
-            streaming: caps.streaming,
-        },
-    }];
+    /** model id → MODEL_CAPABILITY_PRESETS longest-prefix 매칭. */
+    function capsFor(modelId: string) {
+        const lower = modelId.toLowerCase();
+        let caps = { toolCalling: true, thinking: false, vision: false, streaming: true };
+        let bestPrefix = '';
+        for (const [prefix, presetCaps] of Object.entries(MODEL_CAPABILITY_PRESETS)) {
+            if (lower.includes(prefix) && prefix.length > bestPrefix.length) {
+                bestPrefix = prefix;
+                caps = presetCaps;
+            }
+        }
+        return caps;
+    }
+
+    // Local models catalog — config/local-models.ts (서버 proxy 가 model 명으로 라우팅)
+    // 기본 chat 모델 (OMK_CHAT_MODEL 또는 LLM_DEFAULT_MODEL) 을 첫 entry 로 (UI 정렬 호환).
+    const defaultChat = getModelForRole('chat');
+    const chatModels = getLocalChatModels();
+    const ordered = [
+        ...chatModels.filter(m => m.id === defaultChat),
+        ...chatModels.filter(m => m.id !== defaultChat),
+    ];
+
+    const models: ModelEntry[] = ordered.map((m): ModelEntry => {
+        const caps = capsFor(m.id);
+        const ctxNote = m.contextLength
+            ? ` · ${(m.contextLength / 1024).toFixed(0)}K`
+            : '';
+        return {
+            name: m.displayName || m.id,
+            modelId: buildFullModelId('local-llm', m.id),
+            description: `${m.description}${ctxNote}`,
+            provider: 'local-llm',
+            capabilities: {
+                executionStrategy: 'single',
+                thinking: caps.thinking ? 'medium' : 'off',
+                discussion: false,
+                vision: caps.vision,
+                toolCalling: caps.toolCalling,
+                streaming: caps.streaming,
+            },
+        };
+    });
 
     // 인증된 사용자는 외부 provider 키 등록분도 추가.
     // optionalAuth 가 PublicUser(id) 를 req.user 에 부착 — JWT payload(userId)가 아님.
@@ -208,7 +225,7 @@ router.get('/models', optionalAuth, asyncHandler(async (req: Request, res: Respo
     }
 
     res.json(success({
-        defaultModel: buildFullModelId('local-llm', chatModel),
+        defaultModel: buildFullModelId('local-llm', defaultChat),
         models,
     }));
 }));
