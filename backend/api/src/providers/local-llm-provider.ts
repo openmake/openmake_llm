@@ -140,15 +140,38 @@ export class LocalLLMProvider implements IProvider {
             }
         }
 
+        // Fast-fail timeout — retried=false 호출에 한해 짧은 timeout 으로 응답 미수신 시 즉시 reject.
+        // 정상 모델은 TTFT 가 수백 ms 이내 — default 5s 안전.
+        // user signal (opts.abortSignal) 과는 완전 분리된 자체 Promise 사용 (자체 abort 를 user
+        // abort 로 오인하여 fallback 을 건너뛰는 함정 방지).
+        const FAST_FAIL_MS = retried ? 0 : parseInt(process.env.LLM_FAST_FAIL_TIMEOUT_MS || '5000', 10);
+        let fastFailTimer: NodeJS.Timeout | null = null;
+        const fastFailPromise = FAST_FAIL_MS > 0
+            ? new Promise<never>((_, reject) => {
+                fastFailTimer = setTimeout(
+                    () => reject(new Error(`FAST_FAIL_TIMEOUT_EXCEEDED (${FAST_FAIL_MS}ms)`)),
+                    FAST_FAIL_MS,
+                );
+                fastFailTimer.unref?.();
+            })
+            : null;
+
         try {
             // LLMClient.chat 의 onToken 콜백은 (token, thinking?) 합쳐서 받음.
             // IProvider 의 분리된 onToken / onThinking 으로 매핑.
+            //
+            // Fast-fail 은 TTFT(첫 토큰 수신) 만 race — 첫 토큰 도착 시 timer 취소하여
+            // long-response (긴 답변) 가 5초 넘어도 잘리지 않도록 한다.
             const onTokenCombined = (token: string, thinking?: string): void => {
+                if (fastFailTimer && (token || thinking)) {
+                    clearTimeout(fastFailTimer);
+                    fastFailTimer = null;
+                }
                 if (thinking) callbacks.onThinking?.(thinking);
                 if (token) callbacks.onToken?.(token);
             };
 
-            const result = await this.client.chat(
+            const chatPromise = this.client.chat(
                 opts.messages,
                 {
                     temperature: opts.temperature,
@@ -162,6 +185,11 @@ export class LocalLLMProvider implements IProvider {
                     tools: opts.tools,
                 },
             );
+
+            const result = fastFailPromise
+                ? await Promise.race([chatPromise, fastFailPromise])
+                : await chatPromise;
+            if (fastFailTimer) clearTimeout(fastFailTimer);
 
             // 사용량 메트릭 — UsageMetrics 타입 그대로 노출 (prompt_eval_count/eval_count).
             const usage: UsageMetrics = result.metrics ?? {};
@@ -190,7 +218,10 @@ export class LocalLLMProvider implements IProvider {
                         : 'stop',
             };
         } catch (err) {
-            // 사용자 abort 는 fallback 안 함 (즉시 throw)
+            if (fastFailTimer) clearTimeout(fastFailTimer);
+
+            // 사용자 abort 는 fallback 안 함 (즉시 throw).
+            // 자체 fast-fail timeout 은 opts.abortSignal 을 건드리지 않으므로 여기 분기에 안 걸림.
             if (opts.abortSignal?.aborted) {
                 const message = err instanceof Error ? err.message : String(err);
                 throw new ProviderError('UPSTREAM_ERROR', `LLM 호출이 중단되었습니다: ${message}`, err);

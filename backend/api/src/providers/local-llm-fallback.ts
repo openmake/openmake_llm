@@ -33,6 +33,9 @@ const logger = createLogger('LocalLLMFallback');
  */
 function isFallbackableError(err: unknown): { ok: boolean; reason: string } {
     const msg = err instanceof Error ? err.message : String(err);
+    if (/FAST_FAIL_TIMEOUT/i.test(msg)) {
+        return { ok: true, reason: 'fast-fail-timeout' };
+    }
     if (/ECONNREFUSED|ECONNRESET|ETIMEDOUT|EHOSTUNREACH|fetch failed|UPSTREAM_ERROR/i.test(msg)) {
         return { ok: true, reason: 'connection-error' };
     }
