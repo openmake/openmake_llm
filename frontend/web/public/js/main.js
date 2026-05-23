@@ -130,6 +130,7 @@ import { UnifiedSidebar } from './components/unified-sidebar.js?v=7';
 
 // 1-18. 모바일 FAB 메뉴
 import { init as initMobileFab } from './modules/mobile-fab.js';
+import { checkReconsent } from './modules/consent-prompt.js';
 
 
 
@@ -481,6 +482,10 @@ async function initApp() {
 
     // 12. SPA 라우터 시작
     Router.start();
+
+    // 12-a. GDPR Phase B Fix 7 — 재동의 prompt 체크 (auth 완료 후, 비차단).
+    // 로그인 안 한 경우 / 동의 필요 없는 경우 즉시 return (no-op).
+    checkReconsent().catch(function (e) { console.warn('[App] reconsent check failed:', e); });
 
     // 라우터 네비게이션 시 사이드바 활성 대화 업데이트
     Router.onAfterNavigate(function (info) {
