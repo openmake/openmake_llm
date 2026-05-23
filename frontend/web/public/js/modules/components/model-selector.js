@@ -262,13 +262,28 @@ function renderDropdown() {
             for (const m of groups[pid]) {
                 const isActive = m.modelId === selected;
                 const isOllama = pid === 'ollama';
-                const disabled = isOllama && !_isAdmin && !isActive;
+                // 가용성 — backend 가 available: false 면 서버 backend 미가동/장애.
+                // 클릭 차단 + dimmed + tooltip 으로 사유 표시.
+                const unavailable = m.available === false;
+                const disabledByRole = isOllama && !_isAdmin && !isActive;
+                const disabled = disabledByRole || unavailable;
+                const reason = unavailable
+                    ? (m.unavailableReason || 'unavailable')
+                    : '';
+                const badge = unavailable
+                    ? ' <span style="opacity:0.6;font-size:0.8em;">🔴 ' + escText(reason) + '</span>'
+                    : '';
+                const tooltip = unavailable
+                    ? ' title="현재 사용 불가: ' + escAttr(reason) + '"'
+                    : '';
                 html +=
                     '<div class="model-selector-option' +
                     (isActive ? ' active' : '') +
                     (disabled ? ' disabled' : '') +
-                    '" data-model-id="' + escAttr(m.modelId) + '" data-provider="' + escAttr(pid) + '">' +
-                    '<span>' + (isActive ? '<span class="check">✓ </span>' : '') + escText(m.name) + '</span>' +
+                    (unavailable ? ' unavailable' : '') +
+                    '" data-model-id="' + escAttr(m.modelId) + '" data-provider="' + escAttr(pid) + '"' +
+                    tooltip + '>' +
+                    '<span>' + (isActive ? '<span class="check">✓ </span>' : '') + escText(m.name) + badge + '</span>' +
                     '</div>';
             }
         }

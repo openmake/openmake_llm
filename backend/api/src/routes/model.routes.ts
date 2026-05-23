@@ -86,6 +86,10 @@ router.get('/models', optionalAuth, asyncHandler(async (req: Request, res: Respo
             toolCalling: boolean;
             streaming: boolean;
         };
+        /** 가용성 — 로컬 모델 startup probe 결과. false 면 UI 에서 dimmed. */
+        available?: boolean;
+        /** 비가용 사유 — UI tooltip. */
+        unavailableReason?: string;
         isFree?: boolean;
         pricing?: { input: number; output: number };
     };
@@ -106,8 +110,9 @@ router.get('/models', optionalAuth, asyncHandler(async (req: Request, res: Respo
 
     // Local models catalog — config/local-models.ts (서버 proxy 가 model 명으로 라우팅)
     // 기본 chat 모델 (OMK_CHAT_MODEL 또는 LLM_DEFAULT_MODEL) 을 첫 entry 로 (UI 정렬 호환).
+    // includeUnavailable=true: probe 결과 unavailable 모델도 응답에 포함 (UI dimmed 표시).
     const defaultChat = getModelForRole('chat');
-    const chatModels = getLocalChatModels();
+    const chatModels = getLocalChatModels({ includeUnavailable: true });
     const ordered = [
         ...chatModels.filter(m => m.id === defaultChat),
         ...chatModels.filter(m => m.id !== defaultChat),
@@ -118,7 +123,7 @@ router.get('/models', optionalAuth, asyncHandler(async (req: Request, res: Respo
         const ctxNote = m.contextLength
             ? ` · ${(m.contextLength / 1024).toFixed(0)}K`
             : '';
-        return {
+        const entry: ModelEntry = {
             name: m.displayName || m.id,
             modelId: buildFullModelId('local-llm', m.id),
             description: `${m.description}${ctxNote}`,
@@ -132,6 +137,11 @@ router.get('/models', optionalAuth, asyncHandler(async (req: Request, res: Respo
                 streaming: caps.streaming,
             },
         };
+        if (m.available === false) {
+            entry.available = false;
+            entry.unavailableReason = m.unavailableReason || 'unavailable';
+        }
+        return entry;
     });
 
     // 인증된 사용자는 외부 provider 키 등록분도 추가.

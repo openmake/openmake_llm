@@ -39,8 +39,10 @@ export interface LocalModelEntry {
     role: LocalModelRole;
     /** context window (tokens) — UI 표시 + selector 우선순위 보조 */
     contextLength?: number;
-    /** 선택적 — false 면 selector 에서 hidden (가용성 동적 체크 후속) */
+    /** 가용성 — false 면 selector 에서 dimmed (probe 결과 또는 explicit) */
     available?: boolean;
+    /** 가용성 실패 사유 — UI tooltip 표시용 */
+    unavailableReason?: string;
 }
 
 /**
@@ -119,17 +121,27 @@ export function getLocalModels(): LocalModelEntry[] {
 }
 
 /**
- * chat 역할 모델만 반환 — selector 표시용.
+ * chat 역할 모델 반환.
+ * @param opts.includeUnavailable true 면 available=false 모델도 포함 (UI dimmed 표시용)
  */
-export function getLocalChatModels(): LocalModelEntry[] {
-    return getLocalModels().filter(m => m.role === 'chat' && m.available !== false);
+export function getLocalChatModels(opts: { includeUnavailable?: boolean } = {}): LocalModelEntry[] {
+    return getLocalModels().filter(m => {
+        if (m.role !== 'chat') return false;
+        if (opts.includeUnavailable) return true;
+        return m.available !== false;
+    });
 }
 
 /**
- * embedding 역할 모델만 반환 — embed() 호출용.
+ * embedding 역할 모델 반환 — embed() 호출용.
+ * @param opts.includeUnavailable true 면 available=false 모델도 포함
  */
-export function getLocalEmbeddingModels(): LocalModelEntry[] {
-    return getLocalModels().filter(m => m.role === 'embedding' && m.available !== false);
+export function getLocalEmbeddingModels(opts: { includeUnavailable?: boolean } = {}): LocalModelEntry[] {
+    return getLocalModels().filter(m => {
+        if (m.role !== 'embedding') return false;
+        if (opts.includeUnavailable) return true;
+        return m.available !== false;
+    });
 }
 
 /**
@@ -275,6 +287,7 @@ export async function probeLocalModelAvailability(
     const pingTargets: LocalModelEntry[] = [];
     for (const m of list) {
         if (m.available === false) {
+            if (!m.unavailableReason) m.unavailableReason = 'explicit disabled';
             skipped.push(m.id);
             continue;
         }
@@ -282,6 +295,7 @@ export async function probeLocalModelAvailability(
             || Array.from(proxyIds).some(pid => pid.split(':')[0] === m.id);
         if (!inProxy) {
             m.available = false;
+            m.unavailableReason = 'proxy 카탈로그 미등록';
             skipped.push(m.id);
             continue;
         }
@@ -300,9 +314,11 @@ export async function probeLocalModelAvailability(
     for (const { model, result } of pingResults) {
         if (result.ok) {
             model.available = true;
+            model.unavailableReason = undefined;
             available.push(model.id);
         } else {
             model.available = false;
+            model.unavailableReason = result.reason || 'unknown';
             missing.push(`${model.id} (${result.reason})`);
         }
     }
