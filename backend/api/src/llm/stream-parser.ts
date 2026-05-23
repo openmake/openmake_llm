@@ -167,6 +167,7 @@ export async function streamChat(
     request: ChatRequest,
     onToken: (token: string, thinking?: string) => void,
     extraBody?: Record<string, unknown>,
+    signal?: AbortSignal,
 ): Promise<ChatMessage & { metrics?: UsageMetrics }> {
     const tools = request.tools ? toOpenAITools(request.tools) : undefined;
     const responseFormat = toResponseFormat(request.format);
@@ -179,7 +180,7 @@ export async function streamChat(
         ...(tools ? { tools, ...(request.tool_choice !== undefined && { tool_choice: request.tool_choice }) } : {}),
         ...(responseFormat && { response_format: responseFormat }),
         ...(extraBody ?? {}),
-    } as never);
+    } as never, signal ? { signal } : undefined);
 
     let content = '';
     let thinking = '';
@@ -332,6 +333,7 @@ export async function nonStreamChat(
     openai: OpenAI,
     request: ChatRequest,
     extraBody?: Record<string, unknown>,
+    signal?: AbortSignal,
 ): Promise<ChatMessage & { metrics?: UsageMetrics }> {
     const tools = request.tools ? toOpenAITools(request.tools) : undefined;
     const responseFormat = toResponseFormat(request.format);
@@ -343,7 +345,7 @@ export async function nonStreamChat(
         ...(tools ? { tools, ...(request.tool_choice !== undefined && { tool_choice: request.tool_choice }) } : {}),
         ...(responseFormat && { response_format: responseFormat }),
         ...(extraBody ?? {}),
-    } as never);
+    } as never, signal ? { signal } : undefined);
 
     const r = response as unknown as OpenAIChatResponse;
     const choice0 = r.choices[0];
