@@ -56,7 +56,66 @@ export async function startAllSchedulers(): Promise<void> {
     //    Cloud 모델 재도입 시 이 줄의 주석을 해제하여 즉시 복구 가능.
     // startModelHealthScheduler();
 
+    // 7. 로컬 모델 가용성 polling — startup probe 이후 backend 장애 동적 감지
+    startLocalModelProbeScheduler();
+
     logger.info('모든 백그라운드 스케줄러 시작 완료');
+}
+
+/**
+ * 로컬 모델 가용성 polling 스케줄러.
+ *
+ * 동작:
+ *   - 서버 startup probe (server.ts) 이후 N분마다 probeLocalModelAvailability 재실행
+ *   - 카탈로그의 `available` 플래그 자동 갱신
+ *   - 상태 전환 시 (up → down, down → up) info 로그
+ *
+ * 환경변수:
+ *   - LLM_MODEL_PROBE_INTERVAL_MS (default 5분)
+ *   - 0 또는 음수 시 스케줄러 비활성 (startup probe 만 사용)
+ */
+function startLocalModelProbeScheduler(): void {
+    const intervalMs = parseInt(process.env.LLM_MODEL_PROBE_INTERVAL_MS || '300000', 10);
+    if (!intervalMs || intervalMs <= 0) {
+        logger.debug('LocalModelProbeScheduler 비활성 (LLM_MODEL_PROBE_INTERVAL_MS <= 0)');
+        return;
+    }
+
+    // 상태 전환 감지 위한 직전 스냅샷
+    let prevAvailable: Set<string> | null = null;
+
+    const runProbe = async () => {
+        try {
+            const { probeLocalModelAvailability } = await import('../config/local-models');
+            const { getConfig } = await import('../config/env');
+            const cfg = getConfig();
+            const r = await probeLocalModelAvailability(cfg.llmBaseUrl, cfg.llmApiKey);
+            if (!r.probed) return;
+
+            const currentAvailable = new Set(r.available);
+            if (prevAvailable) {
+                const newlyDown = [...prevAvailable].filter(id => !currentAvailable.has(id));
+                const newlyUp = [...currentAvailable].filter(id => !prevAvailable!.has(id));
+                if (newlyDown.length > 0) {
+                    logger.warn(`[LocalModelProbe] DOWN: ${newlyDown.join(', ')}`);
+                }
+                if (newlyUp.length > 0) {
+                    logger.info(`[LocalModelProbe] UP: ${newlyUp.join(', ')}`);
+                }
+                if (newlyDown.length === 0 && newlyUp.length === 0) {
+                    logger.debug(`[LocalModelProbe] 변경 없음 (available=${r.available.length})`);
+                }
+            }
+            prevAvailable = currentAvailable;
+        } catch (err) {
+            logger.error('[LocalModelProbe] polling 실패:', err);
+        }
+    };
+
+    const timer = setInterval(runProbe, intervalMs);
+    timer.unref();
+    activeTimers.push(timer);
+    logger.debug(`LocalModelProbeScheduler 시작 완료 (주기 ${intervalMs / 1000}s)`);
 }
 
 /**
