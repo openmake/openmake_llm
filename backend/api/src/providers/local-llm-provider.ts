@@ -58,6 +58,27 @@ const FALLBACK_CAPABILITIES: ProviderCapabilities = {
 };
 
 /**
+ * 두 AbortSignal 을 합쳐 어느 한쪽이 abort 되면 결과 signal 도 abort.
+ * `AbortSignal.any` (Node 19+) 의 수동 구현 — Node 18 호환.
+ *
+ * 분기 정확성은 호출처가 원본 a/b 의 aborted 상태를 별도로 검사하여 보장.
+ */
+function combineSignals(a?: AbortSignal, b?: AbortSignal): AbortSignal | undefined {
+    if (!a) return b;
+    if (!b) return a;
+    if (a.aborted || b.aborted) {
+        const c = new AbortController();
+        c.abort();
+        return c.signal;
+    }
+    const combined = new AbortController();
+    const onAbort = (): void => combined.abort();
+    a.addEventListener('abort', onAbort, { once: true });
+    b.addEventListener('abort', onAbort, { once: true });
+    return combined.signal;
+}
+
+/**
  * IProvider 구현 — LLMClient 를 위임 호출하는 어댑터.
  */
 export class LocalLLMProvider implements IProvider {
@@ -140,18 +161,25 @@ export class LocalLLMProvider implements IProvider {
             }
         }
 
-        // Fast-fail timeout — retried=false 호출에 한해 짧은 timeout 으로 응답 미수신 시 즉시 reject.
+        // Fast-fail timeout — retried=false 호출에 한해 짧은 timeout 으로 TTFT race.
         // 정상 모델은 TTFT 가 수백 ms 이내 — default 5s 안전.
-        // user signal (opts.abortSignal) 과는 완전 분리된 자체 Promise 사용 (자체 abort 를 user
-        // abort 로 오인하여 fallback 을 건너뛰는 함정 방지).
+        //
+        // 2단 메커니즘:
+        //  1) fastFailController.abort() → SDK request cancel (upstream HTTP 즉시 종료, orphan 방지)
+        //  2) Promise.race reject → catch 진입 (SDK 의 mid-stream abort 는 silent 종료라
+        //     race 없이는 fallback 미발동)
+        //
+        // user signal (opts.abortSignal) 과는 별도 controller — 자체 abort 를 user abort 로
+        // 오인하여 fallback 을 건너뛰는 함정 방지.
         const FAST_FAIL_MS = retried ? 0 : parseInt(process.env.LLM_FAST_FAIL_TIMEOUT_MS || '5000', 10);
+        const fastFailController = FAST_FAIL_MS > 0 ? new AbortController() : null;
         let fastFailTimer: NodeJS.Timeout | null = null;
-        const fastFailPromise = FAST_FAIL_MS > 0
+        const fastFailPromise = fastFailController
             ? new Promise<never>((_, reject) => {
-                fastFailTimer = setTimeout(
-                    () => reject(new Error(`FAST_FAIL_TIMEOUT_EXCEEDED (${FAST_FAIL_MS}ms)`)),
-                    FAST_FAIL_MS,
-                );
+                fastFailTimer = setTimeout(() => {
+                    fastFailController.abort();
+                    reject(new Error(`FAST_FAIL_TIMEOUT_EXCEEDED (${FAST_FAIL_MS}ms)`));
+                }, FAST_FAIL_MS);
                 fastFailTimer.unref?.();
             })
             : null;
@@ -183,6 +211,11 @@ export class LocalLLMProvider implements IProvider {
                         ? true
                         : opts.thinking,
                     tools: opts.tools,
+                    // user signal (opts.abortSignal) + self fast-fail signal 결합 전달 — 어느 쪽이
+                    // abort 해도 SDK upstream 즉시 종료. catch 분기는 원본 signal 의 aborted 로 구분.
+                    ...((fastFailController || opts.abortSignal)
+                        ? { signal: combineSignals(fastFailController?.signal, opts.abortSignal) }
+                        : {}),
                 },
             );
 
@@ -220,18 +253,23 @@ export class LocalLLMProvider implements IProvider {
         } catch (err) {
             if (fastFailTimer) clearTimeout(fastFailTimer);
 
-            // 사용자 abort 는 fallback 안 함 (즉시 throw).
-            // 자체 fast-fail timeout 은 opts.abortSignal 을 건드리지 않으므로 여기 분기에 안 걸림.
+            // [분기 1] user abort — 항상 즉시 throw
             if (opts.abortSignal?.aborted) {
                 const message = err instanceof Error ? err.message : String(err);
                 throw new ProviderError('UPSTREAM_ERROR', `LLM 호출이 중단되었습니다: ${message}`, err);
             }
 
-            // Per-request fallback: backend connectivity 실패 시 같은 role 다른 모델로 1회 재시도.
-            // retried=true 면 이미 fallback 시도 — 무한 loop 방지 위해 throw.
+            // [분기 2] self fast-fail abort — SDK 가 'Request was aborted' 등 임의 메시지로 throw 해도
+            // controller.signal.aborted 가 ground truth. SDK 메시지 의존 회피 (버전 간 불안정).
+            const selfAborted = fastFailController?.signal.aborted ?? false;
+            const errForFallback = selfAborted
+                ? new Error(`FAST_FAIL_TIMEOUT_EXCEEDED (${FAST_FAIL_MS}ms, self-abort)`)
+                : err;
+
+            // [분기 3] retried=false 면 fallback 시도. self-aborted 는 강제 fallbackable 로 위장.
             if (!retried) {
                 const { tryFallbackAfterFailure } = await import('./local-llm-fallback');
-                const fallbackOpts = tryFallbackAfterFailure(opts.modelId, err);
+                const fallbackOpts = tryFallbackAfterFailure(opts.modelId, errForFallback);
                 if (fallbackOpts) {
                     logger.warn(
                         `[streamChat] ${opts.modelId} 실패 → fallback ${fallbackOpts.fallbackModelId} 재시도`,

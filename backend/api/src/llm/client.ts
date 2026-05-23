@@ -106,6 +106,8 @@ export class LLMClient {
             tools?: ToolDefinition[];
             tool_choice?: 'auto' | 'none' | 'required' | { type: 'function'; function: { name: string } };
             keep_alive?: string | number;
+            /** OpenAI SDK request cancel — abort 시 upstream HTTP 요청 즉시 종료 (orphan 방지) */
+            signal?: AbortSignal;
         },
     ): Promise<ChatMessage & { metrics?: UsageMetrics }> {
         this.checkQuota();
@@ -126,8 +128,8 @@ export class LLMClient {
             'llm.chat',
             async (span) => {
                 const result = onToken
-                    ? await streamChat(this.openai, request, onToken, extraBody)
-                    : await nonStreamChat(this.openai, request, extraBody);
+                    ? await streamChat(this.openai, request, onToken, extraBody, advancedOptions?.signal)
+                    : await nonStreamChat(this.openai, request, extraBody, advancedOptions?.signal);
                 const totalTokens =
                     (result.metrics?.prompt_eval_count ?? 0) + (result.metrics?.eval_count ?? 0);
                 if (totalTokens > 0) getApiUsageTracker().record(totalTokens);
