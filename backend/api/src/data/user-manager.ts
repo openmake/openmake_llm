@@ -433,6 +433,19 @@ class UserManagerImpl {
             await client.query('DELETE FROM custom_agents WHERE created_by = $1', [userId]);
             await client.query('DELETE FROM agent_skills WHERE created_by = $1', [userId]);
 
+            // ── 1-a. [GDPR Phase A Fix 1] skill_manifests system 전환 차단 ──
+            // skill_manifests.created_by FK 는 ON DELETE SET NULL 정책 — 사용자 삭제 시
+            // manifest 가 system 소유 (created_by=NULL) 로 자동 전환되어 다른 사용자에게
+            // implicit grant 됨 (memory: project_users_fk_cascade_policy.md 의 NULL=system 시맨틱).
+            // 사용자가 사전 동의 없이 본인 manifest 가 공유되는 것을 차단하기 위해 SET NULL
+            // 자동 발동 직전에 is_public=false 강제. is_public=false + created_by=NULL 인
+            // manifest 는 searchSkills 필터에서 어떤 사용자에게도 노출 안 됨 (사실상 dead row).
+            // 운영자 의도적 system manifest (Phase A 시작 시점부터 새로 생성된 것) 는 영향 없음.
+            await client.query(
+                'UPDATE skill_manifests SET is_public = FALSE WHERE created_by = $1 AND is_public = TRUE',
+                [userId],
+            );
+
             // ── 2. 사용자 데이터 정리 ──
             await client.query('DELETE FROM user_memories WHERE user_id = $1', [userId]);
 
