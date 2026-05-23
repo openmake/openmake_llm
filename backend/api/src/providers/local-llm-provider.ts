@@ -116,13 +116,28 @@ export class LocalLLMProvider implements IProvider {
         opts: ChatStreamOptions,
         callbacks: ChatStreamCallbacks,
     ): Promise<ChatStreamResult> {
-        // LLMClient 는 생성 시 config.model 이 고정된다.
-        // opts.modelId 가 다르면 회귀 방지를 위해 warning 만 남긴다.
+        return this.streamChatOnce(opts, callbacks, /* retried */ false);
+    }
+
+    /**
+     * 단일 호출 시도 + 실패 시 1회 fallback 재시도.
+     * retried=true 면 fallback 시도 자체 — 재진입 막음.
+     */
+    private async streamChatOnce(
+        opts: ChatStreamOptions,
+        callbacks: ChatStreamCallbacks,
+        retried: boolean,
+    ): Promise<ChatStreamResult> {
+        // opts.modelId 가 client.model 과 다르면 client.setModel 로 동기화 (fallback retry 시).
         if (opts.modelId !== this.client.model) {
-            logger.warn(
-                `[streamChat] modelId mismatch — requested='${opts.modelId}', client='${this.client.model}'. ` +
-                'client 모델로 진행합니다.',
-            );
+            if (retried) {
+                this.client.setModel(opts.modelId);
+            } else {
+                logger.warn(
+                    `[streamChat] modelId mismatch — requested='${opts.modelId}', client='${this.client.model}'. ` +
+                    'client 모델로 진행합니다.',
+                );
+            }
         }
 
         try {
@@ -175,14 +190,31 @@ export class LocalLLMProvider implements IProvider {
                         : 'stop',
             };
         } catch (err) {
+            // 사용자 abort 는 fallback 안 함 (즉시 throw)
+            if (opts.abortSignal?.aborted) {
+                const message = err instanceof Error ? err.message : String(err);
+                throw new ProviderError('UPSTREAM_ERROR', `LLM 호출이 중단되었습니다: ${message}`, err);
+            }
+
+            // Per-request fallback: backend connectivity 실패 시 같은 role 다른 모델로 1회 재시도.
+            // retried=true 면 이미 fallback 시도 — 무한 loop 방지 위해 throw.
+            if (!retried) {
+                const { tryFallbackAfterFailure } = await import('./local-llm-fallback');
+                const fallbackOpts = tryFallbackAfterFailure(opts.modelId, err);
+                if (fallbackOpts) {
+                    logger.warn(
+                        `[streamChat] ${opts.modelId} 실패 → fallback ${fallbackOpts.fallbackModelId} 재시도`,
+                    );
+                    return this.streamChatOnce(
+                        { ...opts, modelId: fallbackOpts.fallbackModelId },
+                        callbacks,
+                        true,
+                    );
+                }
+            }
+
             const message = err instanceof Error ? err.message : String(err);
-            throw new ProviderError(
-                'UPSTREAM_ERROR',
-                opts.abortSignal?.aborted
-                    ? `LLM 호출이 중단되었습니다: ${message}`
-                    : `LLM 호출 실패: ${message}`,
-                err,
-            );
+            throw new ProviderError('UPSTREAM_ERROR', `LLM 호출 실패: ${message}`, err);
         }
     }
 
