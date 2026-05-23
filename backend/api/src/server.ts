@@ -35,6 +35,7 @@ import { setupSecurity, setupStaticFiles, setupParsersAndLimiting, setupErrorHan
 import { setupApiRoutes } from './routes/setup';
 import { getConfig } from './config';
 import { validateModels } from './config/model-roles';
+import { probeLocalModelAvailability } from './config/local-models';
 import { startAllSchedulers, stopAllSchedulers } from './schedulers';
 
 /**
@@ -174,6 +175,16 @@ export class DashboardServer {
         } catch (err) {
             console.error('[Server] 모델 검증 실패 — Fail-Fast:', err);
             process.exit(1);
+        }
+
+        // 로컬 모델 가용성 동적 probe — proxy 의 /v1/models 호출하여 카탈로그의
+        // available 플래그 갱신 (선택적 모델 자동 활성/비활성).
+        // probe 실패 시 카탈로그 default 유지 (보수적).
+        try {
+            const cfg = getConfig();
+            await probeLocalModelAvailability(cfg.llmBaseUrl, cfg.llmApiKey);
+        } catch (err) {
+            console.warn('[Server] 로컬 모델 가용성 probe 실패 (계속 진행):', err);
         }
 
         // ConversationDB / UserManager 초기화 완료 보장 (race condition 방지)
