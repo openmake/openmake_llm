@@ -15,10 +15,7 @@
  * - 싱글톤 접근: getUnifiedDatabase(), getPool()
  */
 
-import { Pool, QueryResult, type PoolConfig } from 'pg';
-import * as fs from 'fs';
-import * as path from 'path';
-import { withRetry } from '../retry-wrapper';
+import { Pool, type PoolConfig } from 'pg';
 import { getConfig } from '../../config/env';
 import { DB_POOL_TIMEOUTS } from '../../config/timeouts';
 import { createLogger } from '../../utils/logger';
@@ -30,43 +27,10 @@ import {
     ResearchRepository,
     UserRepository
 } from '../repositories';
-import { LEGACY_SCHEMA } from './legacy-schema';
+import { initSchema as initSchemaFn } from './schema-initializer';
 
 const logger = createLogger('UnifiedDB');
 
-type SpanLike = {
-    setAttribute: (key: string, value: string | number | boolean) => SpanLike;
-};
-
-type WithSpanLike = <T>(
-    tracerName: string,
-    spanName: string,
-    fn: (span: SpanLike) => Promise<T>,
-    options?: { kind?: number; attributes?: Record<string, string | number | boolean> }
-) => Promise<T>;
-
-let cachedWithSpan: WithSpanLike | null | undefined;
-
-function getWithSpan(): WithSpanLike | null {
-    if (cachedWithSpan !== undefined) {
-        return cachedWithSpan;
-    }
-
-    try {
-        const otelModule = require('../../observability/otel') as { withSpan?: WithSpanLike };
-        cachedWithSpan = typeof otelModule.withSpan === 'function' ? otelModule.withSpan : null;
-    } catch (err) {
-        logger.debug('[UnifiedDB] OTel withSpan load skipped', err);
-        cachedWithSpan = null;
-    }
-
-    return cachedWithSpan;
-}
-
-/** SQL 쿼리 파라미터 타입 - $1, $2 등의 플레이스홀더에 바인딩되는 값 */
-type QueryParam = string | number | boolean | null | undefined;
-
-const SCHEMA_FILE_RELATIVE_PATH = 'services/database/init/002-schema.sql';
 
 // ============================================
 // 엔티티 타입 (unified-database.types.ts에서 import + re-export)
@@ -169,7 +133,7 @@ export class UnifiedDatabase {
         });
 
         // 스키마 초기화 — Promise를 보관하여 초기 쿼리가 스키마 완료를 대기할 수 있도록 함
-        this.schemaReady = this.initSchema().catch(err => {
+        this.schemaReady = initSchemaFn(this.pool).catch((err: unknown) => {
             logger.error('[UnifiedDB] Schema init failed:', err);
         }) as Promise<void>;
 
@@ -183,57 +147,7 @@ export class UnifiedDatabase {
         logger.info('[UnifiedDB] PostgreSQL Pool initialized');
     }
 
-    private async initSchema(): Promise<void> {
-        const { schema, source } = this.getSchemaSql();
-        logger.info(`[UnifiedDB] Initializing schema from ${source}`);
-        await withRetry(
-            () => this.pool.query(schema),
-            { operation: 'initialize schema from SQL source' }
-        );
-        // Migration: fix agent_usage_logs FK to use SET NULL on delete
-        try {
-            await this.retryQuery(`
-                ALTER TABLE agent_usage_logs DROP CONSTRAINT IF EXISTS agent_usage_logs_session_id_fkey;
-                ALTER TABLE agent_usage_logs ADD CONSTRAINT agent_usage_logs_session_id_fkey
-                    FOREIGN KEY (session_id) REFERENCES conversation_sessions(id) ON DELETE SET NULL;
-            `);
-        } catch (_e: unknown) {
-            // Constraint may already be correct — ignore
-        }
-
-        // pg_trgm GIN 인덱스 생성 시도 (LEGACY_SCHEMA 폴백 시에도 적용)
-        try {
-            await this.pool.query(`CREATE EXTENSION IF NOT EXISTS pg_trgm`);
-            await this.pool.query(`CREATE INDEX IF NOT EXISTS idx_memories_key_trgm ON user_memories USING gin (key gin_trgm_ops)`);
-            await this.pool.query(`CREATE INDEX IF NOT EXISTS idx_memories_value_trgm ON user_memories USING gin (value gin_trgm_ops)`);
-            logger.info('[UnifiedDB] pg_trgm 트라이그램 인덱스 생성 완료');
-        } catch (_e: unknown) {
-            logger.info('[UnifiedDB] pg_trgm 인덱스 생성 건너뜀 (확장 미지원 환경)');
-        }
-    }
-
-    private getSchemaSql(): { schema: string; source: string } {
-        const candidatePaths = [
-            path.resolve(process.cwd(), SCHEMA_FILE_RELATIVE_PATH),
-            path.resolve(__dirname, '../../../../../services/database/init/002-schema.sql'),
-            path.resolve(__dirname, '../../../../services/database/init/002-schema.sql')
-        ];
-
-        for (const filePath of candidatePaths) {
-            try {
-                const schema = fs.readFileSync(filePath, 'utf8');
-                return { schema, source: `file:${filePath}` };
-            } catch (error: unknown) {
-                const err = error as NodeJS.ErrnoException;
-                if (err.code !== 'ENOENT') {
-                    logger.warn(`[UnifiedDB] Failed reading schema file at ${filePath}:`, err);
-                }
-            }
-        }
-
-        logger.warn('[UnifiedDB] Schema SQL file not found; falling back to LEGACY_SCHEMA');
-        return { schema: LEGACY_SCHEMA, source: 'inline:LEGACY_SCHEMA' };
-    }
+    // initSchema / getSchemaSql 은 data/models/schema-initializer.ts 로 분리.
 
     /**
      * 스키마 초기화 완료를 보장하는 헬퍼
@@ -250,33 +164,8 @@ export class UnifiedDatabase {
         return this.pool;
     }
 
-    /**
-     * 재시도 가능한 쿼리 래퍼
-     * 일시적 연결 오류 시 자동 재시도 (지수 백오프)
-     */
-    private retryQuery(text: string, params?: QueryParam[]): Promise<QueryResult<Record<string, unknown>>> {
-        const withSpan = getWithSpan();
-
-        if (!withSpan) {
-            return withRetry(
-                () => this.pool.query(text, params),
-                { operation: text.substring(0, 50) }
-            );
-        }
-
-        return withSpan('UnifiedDB', 'db.query', async (span) => {
-            span.setAttribute('db.system', 'postgresql');
-            span.setAttribute('db.statement', text.substring(0, 200));
-
-            const result = await withRetry(
-                () => this.pool.query(text, params),
-                { operation: text.substring(0, 50) }
-            );
-
-            span.setAttribute('db.rows_affected', result.rowCount ?? 0);
-            return result;
-        });
-    }
+    // retryQuery 는 모든 사용처가 repository 위임으로 이행되어 dead code — 제거.
+    // base-repository.ts 의 query() 가 동일한 withRetry 패턴 제공.
 
     // ===== 사용자 관리 =====
 
