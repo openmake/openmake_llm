@@ -23,6 +23,7 @@ import { validate } from '../middlewares/validation';
 import { getPool } from '../data/models/unified-database';
 import { createLogger } from '../utils/logger';
 import { success, internalError, badRequest } from '../utils/api-response';
+import { CURRENT_POLICY_VERSION } from '../config/policy';
 
 const log = createLogger('ConsentController');
 
@@ -38,12 +39,6 @@ const grantSchema = z.object({
     version: z.string().min(1).max(20),
     locale: z.string().min(2).max(10).optional().default('ko'),
 });
-
-/**
- * Phase A 의 CURRENT_POLICY_VERSION 과 동기 — Phase A AuthService.ts:22
- * Single source of truth 로 별도 export 모듈 분리는 후속 (현재 const 동기 유지).
- */
-const CURRENT_POLICY_VERSION = '1.0';
 
 interface ConsentStatus {
     type: ConsentType;
