@@ -59,6 +59,8 @@ export class AdminController {
         this.router.get('/alerts/history', this.listAlertHistory.bind(this));
         // alert_history CSV export (운영자 reporting/compliance)
         this.router.get('/alerts/export', this.exportAlertHistoryCsv.bind(this));
+        // alert_history 통계 (대시보드 요약 카드용)
+        this.router.get('/alerts/stats', this.getAlertStats.bind(this));
         // alert_history acknowledge (확인 처리) — 운영자 ID/시간 기록
         this.router.post('/alerts/:id/acknowledge', this.acknowledgeAlert.bind(this));
 
@@ -562,6 +564,73 @@ export class AdminController {
         } catch (error) {
             log.error('[Admin AlertHistory] 오류:', error);
             res.status(500).json(internalError('알림 이력 조회 실패'));
+        }
+    }
+
+    /**
+     * GET /api/admin/alerts/stats — alert_history 대시보드 요약 통계.
+     *
+     * 응답 schema:
+     *   - todayCriticalCount: 오늘 0시 이후 critical 개수
+     *   - pendingAckCount: 전체 acknowledged=false 개수 (모든 severity)
+     *   - last7Days: [{ date: 'YYYY-MM-DD', total, info, warning, critical }] × 7
+     *   - severityTotals: { info, warning, critical } — 지난 7일 합계
+     *
+     * 4 query 병렬 실행. 운영자 dashboard 진입 시 초당 호출 가능 — 가벼움 우선.
+     */
+    private async getAlertStats(_req: Request, res: Response): Promise<void> {
+        try {
+            const { getPool } = await import('../data/models/unified-database');
+            const pool = getPool();
+
+            const [todayCrit, pendingAck, trend, severityTotals] = await Promise.all([
+                pool.query<{ count: string }>(
+                    `SELECT COUNT(*)::text AS count FROM alert_history
+                     WHERE severity = 'critical' AND created_at >= date_trunc('day', NOW())`,
+                ),
+                pool.query<{ count: string }>(
+                    `SELECT COUNT(*)::text AS count FROM alert_history WHERE acknowledged = FALSE`,
+                ),
+                pool.query<{ date: string; total: string; info: string; warning: string; critical: string }>(
+                    `SELECT to_char(date_trunc('day', d), 'YYYY-MM-DD') AS date,
+                            COUNT(a.*)::text AS total,
+                            COUNT(*) FILTER (WHERE a.severity = 'info')::text AS info,
+                            COUNT(*) FILTER (WHERE a.severity = 'warning')::text AS warning,
+                            COUNT(*) FILTER (WHERE a.severity = 'critical')::text AS critical
+                     FROM generate_series(date_trunc('day', NOW()) - INTERVAL '6 days',
+                                          date_trunc('day', NOW()), INTERVAL '1 day') AS d
+                     LEFT JOIN alert_history a
+                       ON date_trunc('day', a.created_at) = d
+                     GROUP BY d
+                     ORDER BY d ASC`,
+                ),
+                pool.query<{ severity: string; count: string }>(
+                    `SELECT severity, COUNT(*)::text AS count FROM alert_history
+                     WHERE created_at >= NOW() - INTERVAL '7 days'
+                     GROUP BY severity`,
+                ),
+            ]);
+
+            const severityMap: Record<string, number> = { info: 0, warning: 0, critical: 0 };
+            for (const r of severityTotals.rows) {
+                severityMap[r.severity] = parseInt(r.count, 10);
+            }
+
+            res.json(success({
+                todayCriticalCount: parseInt(todayCrit.rows[0]?.count ?? '0', 10),
+                pendingAckCount: parseInt(pendingAck.rows[0]?.count ?? '0', 10),
+                last7Days: trend.rows.map(r => ({
+                    date: r.date,
+                    total: parseInt(r.total, 10),
+                    info: parseInt(r.info, 10),
+                    warning: parseInt(r.warning, 10),
+                    critical: parseInt(r.critical, 10),
+                })),
+                severityTotals: severityMap,
+            }));
+        } catch (error) {
+            log.error('[Admin AlertStats] 오류:', error);
+            res.status(500).json(internalError('알림 통계 조회 실패'));
         }
     }
 
