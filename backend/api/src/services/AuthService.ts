@@ -13,6 +13,7 @@ import { getConfig } from '../config/env';
 import { PASSWORD_POLICY } from '../config/runtime-limits';
 import { getPool } from '../data/models/unified-database';
 import { CURRENT_POLICY_VERSION } from '../config/policy';
+import { getAgeThreshold, calculateAge } from '../config/age-thresholds';
 
 const log = createLogger('AuthService');
 
@@ -47,6 +48,9 @@ export interface RegisterRequest {
     // controller 가 req.ip / req.headers['user-agent'] 캡처 후 전달 (consent_logs 저장)
     consentIp?: string;
     consentUserAgent?: string;
+    // GDPR Phase D — 14세 미만 셀프 동의
+    birthDate?: string;       // ISO YYYY-MM-DD
+    guardianEmail?: string;   // 미달 연령 시 필수
 }
 
 export interface LoginRequest {
@@ -126,6 +130,47 @@ export class AuthService {
 
         if (!user) {
             return { success: false, error: '이미 등록된 이메일입니다' };
+        }
+
+        // GDPR Phase D — 14세 미만 셀프 동의 흐름.
+        // birthDate 가 있으면 연령 계산 → locale 별 임계값 미달 시 guardianEmail 필수 +
+        // is_active=false + minor_status='minor_pending' + guardian_consent_pending INSERT.
+        if (data.birthDate) {
+            try {
+                const age = calculateAge(data.birthDate);
+                const locale = data.consentLocale || 'ko';
+                const threshold = getAgeThreshold(locale);
+
+                if (age < threshold) {
+                    if (!data.guardianEmail) {
+                        // user 는 이미 생성 — 정리 후 fail
+                        await this.userManager.deleteUser(user.id);
+                        return { success: false, error: `${threshold}세 미만 가입 시 법정대리인 이메일이 필요합니다` };
+                    }
+                    const pool = getPool();
+                    await pool.query(
+                        `UPDATE users SET birth_date = $2, minor_status = 'minor_pending', is_active = FALSE WHERE id = $1`,
+                        [user.id, data.birthDate],
+                    );
+                    await pool.query(
+                        `INSERT INTO guardian_consent_pending (user_id, guardian_email, status)
+                         VALUES ($1, $2, 'pending')`,
+                        [user.id, data.guardianEmail],
+                    );
+                    log.info(`[GDPR-D] 14세 미만 가입 대기 user=${user.id} locale=${locale} age=${age} threshold=${threshold}`);
+                    // consent_logs 는 아래에서 동일 처리 — 동의 기록은 보존 (verify 후에도 reuse)
+                } else {
+                    // 성인 — birth_date 만 저장 (minor_status='adult' 는 default)
+                    const pool = getPool();
+                    await pool.query(
+                        `UPDATE users SET birth_date = $2 WHERE id = $1`,
+                        [user.id, data.birthDate],
+                    );
+                }
+            } catch (ageErr) {
+                log.error(`[GDPR-D] 연령 처리 실패 (user_id=${user.id}):`, ageErr);
+                // 연령 처리 실패해도 가입 자체는 진행 (사용자 영향 최소화). 단 운영자가 audit 필요.
+            }
         }
 
         // GDPR Phase A Fix 4 — consent_logs INSERT.

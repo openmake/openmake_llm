@@ -38,6 +38,10 @@ export const registerSchema = z.object({
     agreedToPrivacy: z.literal(true, { message: '개인정보 처리방침에 동의해야 합니다' }),
     // 동의 시점의 사용자 locale (consent_logs 저장용). 미지정 시 'ko' 폴백.
     consentLocale: z.string().min(2).max(10).optional().default('ko'),
+    // GDPR Phase D — 14세 미만 셀프 동의 흐름. 필수.
+    birthDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, '생년월일은 YYYY-MM-DD 형식이어야 합니다'),
+    // 14세 미만 시 server-side enforce — locale 별 임계값 미달 시 필수.
+    guardianEmail: z.string().email().optional(),
 });
 
 /**
