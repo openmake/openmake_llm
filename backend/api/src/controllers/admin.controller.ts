@@ -355,6 +355,10 @@ export class AdminController {
                         details: { newRole: role, targetEmail: user.email },
                         ipAddress: req.ip,
                         userAgent: req.headers['user-agent'],
+                        actor: {
+                            email: 'email' in req.user! ? (req.user as { email?: string }).email : undefined,
+                            role: 'role' in req.user! ? (req.user as { role?: string }).role : undefined,
+                        },
                     });
                 } catch (e) { log.warn('[audit] user.role_changed 기록 실패:', e); }
             })();
@@ -429,6 +433,10 @@ export class AdminController {
                         resourceId: userId,
                         ipAddress: req.ip,
                         userAgent: req.headers['user-agent'],
+                        actor: {
+                            email: 'email' in req.user! ? (req.user as { email?: string }).email : undefined,
+                            role: 'role' in req.user! ? (req.user as { role?: string }).role : undefined,
+                        },
                     });
                 } catch (e) { log.warn('[audit] user.deleted 기록 실패:', e); }
             })();

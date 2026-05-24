@@ -106,6 +106,8 @@ export class AuthController {
                         },
                         ipAddress: req.ip,
                         userAgent: req.headers['user-agent'],
+                        // 신규 가입자 본인 = actor (admin 아님)
+                        actor: { email: result.user?.email, role: result.user?.role },
                     });
                 } catch (e) { log.warn('[audit] user.register 기록 실패:', e); }
             })();
@@ -136,6 +138,8 @@ export class AuthController {
                             details: { email: req.body?.email, reason: result.error },
                             ipAddress: req.ip,
                             userAgent: req.headers['user-agent'],
+                            // 실패 — req.user 없음. 시도한 email 만 actor 로 표시.
+                            actor: { email: req.body?.email },
                         });
                     } catch (e) { log.warn('[audit] login.failed 기록 실패:', e); }
                 })();
@@ -245,6 +249,10 @@ export class AuthController {
                         resourceId: String(user.id),
                         ipAddress: req.ip,
                         userAgent: req.headers['user-agent'],
+                        actor: {
+                            email: user.email,
+                            role: 'role' in user ? (user as { role?: string }).role : undefined,
+                        },
                     });
                 } catch (e) { log.warn('[audit] password.changed 기록 실패:', e); }
             })();

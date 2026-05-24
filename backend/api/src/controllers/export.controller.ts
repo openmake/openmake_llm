@@ -163,6 +163,10 @@ export function createExportController(): Router {
                         details: (data._meta as { counts?: unknown })?.counts as Record<string, unknown> | undefined,
                         ipAddress: req.ip,
                         userAgent: req.headers['user-agent'],
+                        actor: {
+                            email: req.user && 'email' in req.user ? (req.user as { email?: string }).email : undefined,
+                            role: req.user && 'role' in req.user ? (req.user as { role?: string }).role : undefined,
+                        },
                     });
                 } catch (e) { log.warn('[audit] export.requested 기록 실패:', e); }
             })();
