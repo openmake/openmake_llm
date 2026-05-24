@@ -57,6 +57,8 @@ export class AdminController {
 
         // GDPR Phase D follow-up — alert_history 조회 (admin dashboard 용)
         this.router.get('/alerts/history', this.listAlertHistory.bind(this));
+        // alert_history CSV export (운영자 reporting/compliance)
+        this.router.get('/alerts/export', this.exportAlertHistoryCsv.bind(this));
         // alert_history acknowledge (확인 처리) — 운영자 ID/시간 기록
         this.router.post('/alerts/:id/acknowledge', this.acknowledgeAlert.bind(this));
 
@@ -560,6 +562,76 @@ export class AdminController {
         } catch (error) {
             log.error('[Admin AlertHistory] 오류:', error);
             res.status(500).json(internalError('알림 이력 조회 실패'));
+        }
+    }
+
+    /**
+     * GET /api/admin/alerts/export — alert_history CSV download.
+     *
+     * 동일 filter (type/severity/acknowledged/startDate/endDate) 지원.
+     * 무거운 query 방어: ALERT_CSV_MAX_ROWS env (default 10000) 강제 limit.
+     * 출력: UTF-8 BOM + RFC 4180 escape — PR #91 의 audit export 와 동일 패턴.
+     */
+    private async exportAlertHistoryCsv(req: Request, res: Response): Promise<void> {
+        try {
+            const maxRows = parseInt(process.env.ALERT_CSV_MAX_ROWS ?? '10000', 10);
+            const type = req.query.type ? String(req.query.type) : null;
+            const severity = req.query.severity ? String(req.query.severity) : null;
+            const startDate = req.query.startDate ? String(req.query.startDate) : null;
+            const endDate = req.query.endDate ? String(req.query.endDate) : null;
+            const ackParam = req.query.acknowledged !== undefined ? String(req.query.acknowledged) : null;
+
+            const conditions: string[] = [];
+            const params: unknown[] = [];
+            let idx = 1;
+            if (type) { conditions.push(`type = $${idx++}`); params.push(type); }
+            if (severity) { conditions.push(`severity = $${idx++}`); params.push(severity); }
+            if (startDate) { conditions.push(`created_at >= $${idx++}`); params.push(startDate); }
+            if (endDate) { conditions.push(`created_at <= $${idx++}`); params.push(endDate); }
+            if (ackParam === 'true') { conditions.push(`acknowledged = TRUE`); }
+            else if (ackParam === 'false') { conditions.push(`acknowledged = FALSE`); }
+            const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+
+            const { getPool } = await import('../data/models/unified-database');
+            const pool = getPool();
+            const r = await pool.query(
+                `SELECT id, created_at, type, severity, title, message,
+                        acknowledged, acknowledged_by, acknowledged_at, data
+                 FROM alert_history ${whereClause}
+                 ORDER BY created_at DESC
+                 LIMIT $${idx}`,
+                [...params, maxRows],
+            );
+
+            // RFC 4180: 모든 필드를 "" 로 감싸고 내부 " 를 "" 로 escape
+            const esc = (v: unknown): string => {
+                if (v === null || v === undefined) return '""';
+                const s = typeof v === 'string' ? v : (v instanceof Date ? v.toISOString() : JSON.stringify(v));
+                return `"${s.replace(/"/g, '""')}"`;
+            };
+
+            const header = ['id', 'created_at', 'type', 'severity', 'title', 'message', 'acknowledged', 'acknowledged_by', 'acknowledged_at', 'data'].join(',');
+            const rows = (r.rows as Array<Record<string, unknown>>).map(row => [
+                esc(row.id),
+                esc(row.created_at),
+                esc(row.type),
+                esc(row.severity),
+                esc(row.title),
+                esc(row.message),
+                esc(row.acknowledged ? 'true' : 'false'),
+                esc(row.acknowledged_by),
+                esc(row.acknowledged_at),
+                esc(row.data),
+            ].join(','));
+            const csv = '﻿' + [header, ...rows].join('\n');
+
+            const date = new Date().toISOString().slice(0, 10);
+            res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+            res.setHeader('Content-Disposition', `attachment; filename="alert_history_${date}.csv"`);
+            res.send(csv);
+        } catch (error) {
+            log.error('[Admin AlertExport] 오류:', error);
+            res.status(500).json(internalError('알림 이력 CSV export 실패'));
         }
     }
 

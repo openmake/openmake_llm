@@ -110,6 +110,7 @@
                             <select id="filterAlertAck"><option value="">전체</option><option value="false">미확인만</option><option value="true">확인됨만</option></select>
                         </div>
                         <button class="btn-primary" onclick="loadAlertHistory(1)">조회</button>
+                        <button class="btn-secondary" onclick="exportAlertsCsv()" title="현재 필터 조건으로 최대 10000건 CSV 다운로드">📥 CSV</button>
                     </div>
                     <div id="alertCount" class="log-count"></div>
                     <div class="table-wrapper">
@@ -313,6 +314,35 @@
                     }
                 }
 
+                async function exportAlertsCsv() {
+                    const type = document.getElementById('filterAlertType').value.trim();
+                    const severity = document.getElementById('filterAlertSeverity').value;
+                    const ack = document.getElementById('filterAlertAck').value;
+                    let url = '/api/admin/alerts/export';
+                    const params = [];
+                    if (type) params.push('type=' + encodeURIComponent(type));
+                    if (severity) params.push('severity=' + encodeURIComponent(severity));
+                    if (ack === 'true' || ack === 'false') params.push('acknowledged=' + ack);
+                    if (params.length) url += '?' + params.join('&');
+                    try {
+                        const res = await window.authFetch(url);
+                        if (!res.ok) { showToast('CSV export 실패: HTTP ' + res.status, 'error'); return; }
+                        const blob = await res.blob();
+                        const blobUrl = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = blobUrl;
+                        a.download = 'alert_history_' + new Date().toISOString().slice(0, 10) + '.csv';
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        URL.revokeObjectURL(blobUrl);
+                        showToast('CSV 다운로드 완료', 'success');
+                    } catch (e) {
+                        console.error('[Audit] alert CSV export 실패:', e);
+                        showToast('CSV export 실패', 'error');
+                    }
+                }
+
                 async function acknowledgeAlert(id, btn) {
                     if (btn) { btn.disabled = true; btn.textContent = '...'; }
                     try {
@@ -349,6 +379,7 @@
                 if (typeof loadAlertHistory === 'function') window.loadAlertHistory = loadAlertHistory;
                 if (typeof exportLogsCsv === 'function') window.exportLogsCsv = exportLogsCsv;
                 if (typeof acknowledgeAlert === 'function') window.acknowledgeAlert = acknowledgeAlert;
+                if (typeof exportAlertsCsv === 'function') window.exportAlertsCsv = exportAlertsCsv;
             } catch (e) {
                 console.error('[PageModule:audit] init error:', e);
             }
@@ -367,6 +398,7 @@
             try { delete window.loadAlertHistory; } catch (e) { }
             try { delete window.exportLogsCsv; } catch (e) { }
             try { delete window.acknowledgeAlert; } catch (e) { }
+            try { delete window.exportAlertsCsv; } catch (e) { }
             try { delete window.__alertHistoryLoaded; } catch (e) { }
         }
     };
