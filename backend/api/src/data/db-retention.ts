@@ -10,6 +10,9 @@
  * - oauth_states                    : 10분 이상 경과한 OAuth state 삭제
  * - external_provider_usage         : EXTERNAL_USAGE_RETENTION_DAYS(기본 90일) 보존
  * - external_provider_models_cache  : 7일 이상 stale 항목 정리 (TTL 만료 후 누적 방지)
+ * - consent_logs                    : CONSENT_PII_RETENTION_DAYS(기본 90일) 초과 ip/ua NULL (GDPR Article 5(1)(c))
+ * - audit_logs                      : AUDIT_PII_RETENTION_DAYS(기본 90일) 초과 ip/ua NULL + details.actor 제거
+ * - alert_history                   : ALERT_PII_RETENTION_DAYS(기본 90일) 초과 data.actor/ipAddress/userAgent 제거
  *
  * @module data/db-retention
  */
@@ -101,6 +104,50 @@ async function runRetention(): Promise<void> {
             );
             if ((consentResult.rowCount ?? 0) > 0) {
                 logger.info(`[DbRetention] consent_logs PII 익명화 ${consentResult.rowCount}건 완료 (${consentRetentionDays}일 초과)`);
+            }
+        }
+
+        // 7. audit_logs PII 익명화 (Article 5(1)(c) data minimization)
+        // 보존: action / user_id / resource_* / timestamp (Article 30 record of processing)
+        // 제거: ip_address / user_agent column + details.actor (PR #87 의 email/role)
+        // 행 삭제 안 함 — audit 사실 자체는 영구 보존, PII 만 제거.
+        const auditRetentionDays = parseInt(
+            process.env.AUDIT_PII_RETENTION_DAYS ?? '90',
+            10,
+        );
+        if (Number.isFinite(auditRetentionDays) && auditRetentionDays > 0) {
+            const auditResult = await pool.query(
+                `UPDATE audit_logs
+                 SET ip_address = NULL,
+                     user_agent = NULL,
+                     details = COALESCE(details, '{}'::jsonb) - 'actor'
+                 WHERE timestamp < NOW() - ($1 || ' days')::interval
+                   AND (ip_address IS NOT NULL OR user_agent IS NOT NULL OR (details ? 'actor'))`,
+                [auditRetentionDays.toString()]
+            );
+            if ((auditResult.rowCount ?? 0) > 0) {
+                logger.info(`[DbRetention] audit_logs PII 익명화 ${auditResult.rowCount}건 완료 (${auditRetentionDays}일 초과)`);
+            }
+        }
+
+        // 8. alert_history PII 익명화 (Article 5(1)(c) data minimization)
+        // 보존: type / severity / title / message / created_at / acknowledged_*
+        // 제거: data.actor (email/role) + data.ipAddress + data.userAgent
+        // data.userId 는 audit 식별성에 필수라 보존.
+        const alertRetentionDays = parseInt(
+            process.env.ALERT_PII_RETENTION_DAYS ?? '90',
+            10,
+        );
+        if (Number.isFinite(alertRetentionDays) && alertRetentionDays > 0) {
+            const alertResult = await pool.query(
+                `UPDATE alert_history
+                 SET data = COALESCE(data, '{}'::jsonb) - 'actor' - 'ipAddress' - 'userAgent'
+                 WHERE created_at < NOW() - ($1 || ' days')::interval
+                   AND (data ? 'actor' OR data ? 'ipAddress' OR data ? 'userAgent')`,
+                [alertRetentionDays.toString()]
+            );
+            if ((alertResult.rowCount ?? 0) > 0) {
+                logger.info(`[DbRetention] alert_history PII 익명화 ${alertResult.rowCount}건 완료 (${alertRetentionDays}일 초과)`);
             }
         }
 
