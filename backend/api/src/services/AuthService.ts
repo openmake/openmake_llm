@@ -70,6 +70,8 @@ export interface AuthResult {
     error?: string;
     user?: PublicUser;
     token?: string;
+    // GDPR Phase D — 14세 미만 가입 시 활성화 대기 표시
+    pendingGuardianConsent?: boolean;
 }
 
 /**
@@ -135,6 +137,7 @@ export class AuthService {
         // GDPR Phase D — 14세 미만 셀프 동의 흐름.
         // birthDate 가 있으면 연령 계산 → locale 별 임계값 미달 시 guardianEmail 필수 +
         // is_active=false + minor_status='minor_pending' + guardian_consent_pending INSERT.
+        let pendingGuardianConsent = false;
         if (data.birthDate) {
             try {
                 const age = calculateAge(data.birthDate);
@@ -158,6 +161,7 @@ export class AuthService {
                         [user.id, data.guardianEmail],
                     );
                     log.info(`[GDPR-D] 14세 미만 가입 대기 user=${user.id} locale=${locale} age=${age} threshold=${threshold}`);
+                    pendingGuardianConsent = true;
                     // consent_logs 는 아래에서 동일 처리 — 동의 기록은 보존 (verify 후에도 reuse)
                 } else {
                     // 성인 — birth_date 만 저장 (minor_status='adult' 는 default)
@@ -191,8 +195,8 @@ export class AuthService {
             }
         }
 
-        log.info(`회원가입 완료: ${email}`);
-        return { success: true, user };
+        log.info(`회원가입 완료: ${email}${pendingGuardianConsent ? ' (guardian consent pending)' : ''}`);
+        return { success: true, user, ...(pendingGuardianConsent ? { pendingGuardianConsent: true } : {}) };
     }
 
     /**
