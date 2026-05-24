@@ -212,6 +212,27 @@ export class AlertSystem {
     }
 
     /**
+     * 특정 alert key 의 cooldown 을 제거합니다.
+     *
+     * 운영자가 ack 처리한 경우 호출 — 동일 type+severity 의 다음 발생을 즉시 통보.
+     * 일반 cooldown 정책 (severity 별 60/15/1분) 우회. ack 후 incident 재발생 시
+     * 운영자가 바로 인지해야 하는 시나리오 (예: critical 가 1분 cooldown 이라도
+     * ack 한 직후 같은 critical 다시 발생하면 즉시 통보).
+     *
+     * @param type - 알림 이벤트 타입
+     * @param severity - 심각도 레벨 (key 형식: `${type}:${severity}`)
+     * @returns 제거된 cooldown 이 있었으면 true, 없었으면 false (이미 만료/미발동)
+     */
+    clearCooldown(type: AlertType | string, severity: AlertSeverity): boolean {
+        const alertKey = `${type}:${severity}`;
+        const had = this.lastAlerts.delete(alertKey);
+        if (had) {
+            logger.info(`[AlertSystem] cooldown cleared: ${alertKey}`);
+        }
+        return had;
+    }
+
+    /**
      * 알림을 발송합니다.
      *
      * 쿨다운 기간 내 동일 타입/심각도의 알림은 무시됩니다.

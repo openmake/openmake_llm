@@ -678,6 +678,13 @@ export class AdminController {
                 return;
             }
 
+            // ack 성공 시 해당 alert key 의 cooldown clear → 재발생 시 즉시 통보
+            // (incident 처리 후 같은 critical 재발 시 1분 cooldown 도 우회)
+            try {
+                const { getAlertSystem } = await import('../monitoring/alerts');
+                getAlertSystem().clearCooldown(r.rows[0].type as string, r.rows[0].severity as 'info' | 'warning' | 'critical');
+            } catch (e) { log.warn('[ack] cooldown clear 실패:', e); }
+
             // audit_logs INSERT — fire-and-forget (CRITICAL_ACTIONS whitelist 외라 alert 자체는 안 보냄)
             void (async () => {
                 try {
