@@ -91,6 +91,24 @@ export class AuthController {
                 return;
             }
 
+            // GDPR follow-up — user.register audit
+            void (async () => {
+                try {
+                    const { getAuditService } = await import('../services/AuditService');
+                    await getAuditService().logAudit({
+                        action: 'user.register',
+                        userId: result.user?.id,
+                        resourceType: 'user',
+                        resourceId: result.user?.id,
+                        details: {
+                            email: result.user?.email,
+                            pendingGuardianConsent: result.pendingGuardianConsent || false,
+                        },
+                        ipAddress: req.ip,
+                        userAgent: req.headers['user-agent'],
+                    });
+                } catch (e) { log.warn('[audit] user.register 기록 실패:', e); }
+            })();
             res.json(success(result));
         } catch (error) {
             log.error('[Register] 오류:', error);
@@ -108,6 +126,19 @@ export class AuthController {
             const result = await authService.login(req.body);
 
             if (!result.success) {
+                // GDPR follow-up — login.failed audit + brute-force 감지
+                void (async () => {
+                    try {
+                        const { getAuditService } = await import('../services/AuditService');
+                        await getAuditService().logAudit({
+                            action: 'login.failed',
+                            resourceType: 'auth',
+                            details: { email: req.body?.email, reason: result.error },
+                            ipAddress: req.ip,
+                            userAgent: req.headers['user-agent'],
+                        });
+                    } catch (e) { log.warn('[audit] login.failed 기록 실패:', e); }
+                })();
                 res.status(401).json(unauthorized(result.error || '로그인에 실패했습니다'));
                 return;
             }
@@ -203,6 +234,20 @@ export class AuthController {
                 return;
             }
 
+            // GDPR follow-up — password.changed audit (warning severity, AlertSystem 자동)
+            void (async () => {
+                try {
+                    const { getAuditService } = await import('../services/AuditService');
+                    await getAuditService().logAudit({
+                        action: 'password.changed',
+                        userId: String(user.id),
+                        resourceType: 'user',
+                        resourceId: String(user.id),
+                        ipAddress: req.ip,
+                        userAgent: req.headers['user-agent'],
+                    });
+                } catch (e) { log.warn('[audit] password.changed 기록 실패:', e); }
+            })();
             res.json(success(result));
         } catch (error) {
             log.error('[ChangePassword] 오류:', error);
