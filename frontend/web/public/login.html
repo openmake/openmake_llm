@@ -455,6 +455,17 @@
                         <input type="password" id="registerPasswordConfirm" class="form-input" placeholder="••••••••"
                             required>
                     </div>
+                    <!-- GDPR Phase D — 14세 미만 셀프 동의 (locale 별 임계값) -->
+                    <div class="form-group">
+                        <label class="form-label" for="registerBirthDate">생년월일</label>
+                        <input type="date" id="registerBirthDate" class="form-input" required>
+                        <span class="form-hint">정확한 생년월일을 입력하세요. 미성년자는 법정대리인 동의가 필요할 수 있습니다.</span>
+                    </div>
+                    <div class="form-group" id="guardianEmailGroup" style="display:none;">
+                        <label class="form-label" for="registerGuardianEmail">법정대리인 이메일</label>
+                        <input type="email" id="registerGuardianEmail" class="form-input" placeholder="parent@example.com">
+                        <span class="form-hint">법정대리인의 동의 확인을 위해 운영자가 별도 연락합니다. 가입 후 활성화 대기 상태가 됩니다.</span>
+                    </div>
                     <!-- GDPR Phase A Fix 4 — 약관 동의 -->
                     <div class="form-group" style="display: flex; flex-direction: column; gap: 6px;">
                         <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
@@ -704,6 +715,41 @@
             }
         }
 
+        // GDPR Phase D — locale 별 연령 임계값 (backend config/age-thresholds.ts 와 동기 유지)
+        const AGE_THRESHOLDS = {
+            ko: 14,
+            en: 16, de: 16, fr: 16, it: 16, es: 16, nl: 16, pt: 16,
+            sv: 16, da: 16, no: 16, fi: 16,
+            pl: 16, cs: 16, hu: 16, ro: 16, bg: 16, sk: 16, sl: 16, hr: 16,
+        };
+        const DEFAULT_AGE_THRESHOLD = 13;
+
+        function calculateAge(birthDateIso) {
+            const birth = new Date(birthDateIso + 'T00:00:00Z');
+            if (isNaN(birth.getTime())) return -1;
+            const now = new Date();
+            let age = now.getUTCFullYear() - birth.getUTCFullYear();
+            const m = now.getUTCMonth() - birth.getUTCMonth();
+            const d = now.getUTCDate() - birth.getUTCDate();
+            if (m < 0 || (m === 0 && d < 0)) age--;
+            return age;
+        }
+
+        // birthDate 입력 변화 시 guardianEmail input 동적 표시
+        function setupBirthDateListener() {
+            const bd = document.getElementById('registerBirthDate');
+            const guardianGroup = document.getElementById('guardianEmailGroup');
+            if (!bd || !guardianGroup) return;
+            bd.addEventListener('change', function () {
+                if (!bd.value) { guardianGroup.style.display = 'none'; return; }
+                const age = calculateAge(bd.value);
+                const locale = (navigator.language || 'ko').split('-')[0];
+                const threshold = AGE_THRESHOLDS[locale] || DEFAULT_AGE_THRESHOLD;
+                guardianGroup.style.display = age < threshold ? '' : 'none';
+            });
+        }
+        document.addEventListener('DOMContentLoaded', setupBirthDateListener);
+
         async function handleRegister(e) {
             e.preventDefault();
             hideMessages();
@@ -748,25 +794,49 @@
                 return;
             }
 
+            // GDPR Phase D — birthDate + locale 별 임계값 미달 시 guardianEmail 필수
+            const birthDate = document.getElementById('registerBirthDate').value;
+            if (!birthDate) {
+                showError('생년월일을 입력하세요');
+                return;
+            }
+            const consentLocale = (navigator.language || 'ko').split('-')[0];
+            const age = calculateAge(birthDate);
+            const threshold = AGE_THRESHOLDS[consentLocale] || DEFAULT_AGE_THRESHOLD;
+            const isMinor = age < threshold;
+            let guardianEmail;
+            if (isMinor) {
+                guardianEmail = document.getElementById('registerGuardianEmail').value.trim();
+                if (!guardianEmail) {
+                    showError(`${threshold}세 미만 가입 시 법정대리인 이메일이 필요합니다`);
+                    return;
+                }
+            }
+
             setLoading('registerBtn', true);
 
             try {
+                const body = {
+                    username, email, password,
+                    agreedToTerms, agreedToPrivacy, consentLocale,
+                    birthDate,
+                };
+                if (guardianEmail) body.guardianEmail = guardianEmail;
                 const res = await fetch(`${API_BASE}/api/auth/register`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        username,
-                        email,
-                        password,
-                        agreedToTerms,
-                        agreedToPrivacy,
-                        consentLocale: (navigator.language || 'ko').split('-')[0],
-                    })
+                    body: JSON.stringify(body)
                 });
 
                 const data = await res.json();
 
                 if (res.ok && data.success) {
+                    // GDPR Phase D — 14세 미만 가입 시 pendingGuardianConsent 응답
+                    if (data.data && data.data.pendingGuardianConsent) {
+                        showSuccess('회원가입이 접수되었습니다. 법정대리인 동의 확인 후 활성화됩니다. 운영자가 별도 연락 드립니다.');
+                        // login 자동 전환 안 함 (활성화 전에는 로그인 불가)
+                        return;
+                    }
                     showSuccess('회원가입 완료! 로그인해주세요.');
                     setTimeout(() => {
                         switchTab('login');
