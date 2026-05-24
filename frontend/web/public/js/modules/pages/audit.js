@@ -18,7 +18,7 @@
         getHTML: function () {
             return '<div class="page-audit">' +
                 '<style data-spa-style="audit">' +
-                ".filter-bar { display:flex; gap:var(--space-3); align-items:flex-end; flex-wrap:wrap; margin-bottom:var(--space-5); background:var(--bg-card); border:1px solid var(--border-light); border-radius:var(--radius-lg); padding:var(--space-4); }\n        .filter-bar .fg { display:flex; flex-direction:column; gap:var(--space-1); }\n        .filter-bar label { color:var(--text-muted); font-size:var(--font-size-sm); font-weight:var(--font-weight-semibold); }\n        .filter-bar select, .filter-bar input { padding:var(--space-2) var(--space-3); background:var(--bg-secondary); border:1px solid var(--border-light); border-radius:var(--radius-md); color:var(--text-primary); font-size:14px; }\n        .filter-bar .btn-primary { padding:var(--space-2) var(--space-4); background:var(--accent-primary); color:#fff; border:none; border-radius:var(--radius-md); cursor:pointer; font-weight:var(--font-weight-semibold); align-self:flex-end; }\n        .table-wrapper { overflow-x:auto; background:var(--bg-card); border:1px solid var(--border-light); border-radius:var(--radius-lg); }\n        .log-table { width:100%; border-collapse:collapse; min-width:700px; }\n        .log-table th { text-align:left; padding:var(--space-3); color:var(--text-muted); font-size:var(--font-size-sm); font-weight:var(--font-weight-semibold); border-bottom:2px solid var(--border-light); position:sticky; top:0; background:var(--bg-secondary); }\n        .log-table td { padding:var(--space-3); border-bottom:1px solid var(--border-light); color:var(--text-secondary); font-size:var(--font-size-sm); vertical-align:top; }\n        .log-table tr:hover { background:var(--bg-tertiary); cursor:pointer; }\n        .badge { display:inline-block; padding:2px 8px; border-radius:var(--radius-md); font-size:11px; font-weight:var(--font-weight-semibold); }\n        .badge-auth { background:var(--accent-primary); color:#fff; }\n        .badge-create { background:var(--success); color:#fff; }\n        .badge-delete { background:var(--danger); color:#fff; }\n        .badge-update { background:var(--warning); color:#000; }\n        .badge-default { background:var(--bg-tertiary); color:var(--text-secondary); }\n        .badge-severity-info { background:var(--info,#3b82f6); color:#fff; }\n        .badge-severity-warning { background:var(--warning,#f59e0b); color:#000; }\n        .badge-severity-critical { background:var(--danger,#ef4444); color:#fff; animation: badgePulse 1.5s ease-in-out infinite; }\n        @keyframes badgePulse { 0%,100% { box-shadow:0 0 0 0 rgba(239,68,68,.6); } 50% { box-shadow:0 0 0 4px rgba(239,68,68,0); } }\n        .detail-cell { max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text-muted); }\n        .log-count { color:var(--text-muted); font-size:var(--font-size-sm); margin-bottom:var(--space-3); }\n        .empty-state { text-align:center; padding:var(--space-8); color:var(--text-muted); }\n        .empty-state h2 { color:var(--text-secondary); margin-bottom:var(--space-3); }\n\n        .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:1000; justify-content:center; align-items:center; }\n        .modal-overlay.open { display:flex; }\n        .modal { background:var(--bg-card); border:1px solid var(--border-light); border-radius:var(--radius-lg); width:90%; max-width:650px; max-height:90vh; overflow-y:auto; padding:var(--space-6); }\n        .modal h2 { margin:0 0 var(--space-4); color:var(--text-primary); }\n        .detail-block { background:var(--bg-secondary); padding:var(--space-4); border-radius:var(--radius-md); overflow-x:auto; }\n        .detail-block pre { margin:0; color:var(--text-primary); font-size:var(--font-size-sm); white-space:pre-wrap; word-break:break-all; font-family:'Courier New',monospace; }\n        .detail-row { margin-bottom:var(--space-3); }\n        .detail-label { color:var(--text-muted); font-size:var(--font-size-sm); font-weight:var(--font-weight-semibold); margin-bottom:var(--space-1); }\n        .detail-value { color:var(--text-primary); }\n        .modal-actions { display:flex; gap:var(--space-3); justify-content:flex-end; margin-top:var(--space-5); }\n        .modal-actions button { padding:var(--space-2) var(--space-4); border:none; border-radius:var(--radius-md); cursor:pointer; font-weight:var(--font-weight-semibold); }\n        .btn-secondary { background:var(--bg-tertiary); color:var(--text-primary); border:1px solid var(--border-light) !important; }\n        .toast { position:fixed; bottom:20px; right:20px; padding:var(--space-3) var(--space-5); border-radius:var(--radius-md); color:#fff; z-index:2000; opacity:0; transition:opacity .3s; }\n        .toast.show { opacity:1; } .toast.success { background:var(--success); } .toast.error { background:var(--danger); }\n        .loading { text-align:center; padding:var(--space-6); color:var(--text-muted); }" +
+                ".filter-bar { display:flex; gap:var(--space-3); align-items:flex-end; flex-wrap:wrap; margin-bottom:var(--space-5); background:var(--bg-card); border:1px solid var(--border-light); border-radius:var(--radius-lg); padding:var(--space-4); }\n        .filter-bar .fg { display:flex; flex-direction:column; gap:var(--space-1); }\n        .filter-bar label { color:var(--text-muted); font-size:var(--font-size-sm); font-weight:var(--font-weight-semibold); }\n        .filter-bar select, .filter-bar input { padding:var(--space-2) var(--space-3); background:var(--bg-secondary); border:1px solid var(--border-light); border-radius:var(--radius-md); color:var(--text-primary); font-size:14px; }\n        .filter-bar .btn-primary { padding:var(--space-2) var(--space-4); background:var(--accent-primary); color:#fff; border:none; border-radius:var(--radius-md); cursor:pointer; font-weight:var(--font-weight-semibold); align-self:flex-end; }\n        .table-wrapper { overflow-x:auto; background:var(--bg-card); border:1px solid var(--border-light); border-radius:var(--radius-lg); }\n        .log-table { width:100%; border-collapse:collapse; min-width:700px; }\n        .log-table th { text-align:left; padding:var(--space-3); color:var(--text-muted); font-size:var(--font-size-sm); font-weight:var(--font-weight-semibold); border-bottom:2px solid var(--border-light); position:sticky; top:0; background:var(--bg-secondary); }\n        .log-table td { padding:var(--space-3); border-bottom:1px solid var(--border-light); color:var(--text-secondary); font-size:var(--font-size-sm); vertical-align:top; }\n        .log-table tr:hover { background:var(--bg-tertiary); cursor:pointer; }\n        .badge { display:inline-block; padding:2px 8px; border-radius:var(--radius-md); font-size:11px; font-weight:var(--font-weight-semibold); }\n        .badge-auth { background:var(--accent-primary); color:#fff; }\n        .badge-create { background:var(--success); color:#fff; }\n        .badge-delete { background:var(--danger); color:#fff; }\n        .badge-update { background:var(--warning); color:#000; }\n        .badge-default { background:var(--bg-tertiary); color:var(--text-secondary); }\n        .badge-severity-info { background:var(--info,#3b82f6); color:#fff; }\n        .badge-severity-warning { background:var(--warning,#f59e0b); color:#000; }\n        .badge-severity-critical { background:var(--danger,#ef4444); color:#fff; animation: badgePulse 1.5s ease-in-out infinite; }\n        @keyframes badgePulse { 0%,100% { box-shadow:0 0 0 0 rgba(239,68,68,.6); } 50% { box-shadow:0 0 0 4px rgba(239,68,68,0); } }\n        .ack-btn { padding:2px 8px; border:1px solid var(--accent-primary); background:transparent; color:var(--accent-primary); border-radius:var(--radius-md); cursor:pointer; font-size:11px; font-weight:var(--font-weight-semibold); }\n        .ack-btn:hover { background:var(--accent-primary); color:#fff; }\n        .alert-row-acked { opacity:0.55; }\n        .alert-row-acked td { color:var(--text-muted); }\n        .ack-info { font-size:11px; color:var(--text-muted); white-space:nowrap; }\n        .detail-cell { max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text-muted); }\n        .log-count { color:var(--text-muted); font-size:var(--font-size-sm); margin-bottom:var(--space-3); }\n        .empty-state { text-align:center; padding:var(--space-8); color:var(--text-muted); }\n        .empty-state h2 { color:var(--text-secondary); margin-bottom:var(--space-3); }\n\n        .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:1000; justify-content:center; align-items:center; }\n        .modal-overlay.open { display:flex; }\n        .modal { background:var(--bg-card); border:1px solid var(--border-light); border-radius:var(--radius-lg); width:90%; max-width:650px; max-height:90vh; overflow-y:auto; padding:var(--space-6); }\n        .modal h2 { margin:0 0 var(--space-4); color:var(--text-primary); }\n        .detail-block { background:var(--bg-secondary); padding:var(--space-4); border-radius:var(--radius-md); overflow-x:auto; }\n        .detail-block pre { margin:0; color:var(--text-primary); font-size:var(--font-size-sm); white-space:pre-wrap; word-break:break-all; font-family:'Courier New',monospace; }\n        .detail-row { margin-bottom:var(--space-3); }\n        .detail-label { color:var(--text-muted); font-size:var(--font-size-sm); font-weight:var(--font-weight-semibold); margin-bottom:var(--space-1); }\n        .detail-value { color:var(--text-primary); }\n        .modal-actions { display:flex; gap:var(--space-3); justify-content:flex-end; margin-top:var(--space-5); }\n        .modal-actions button { padding:var(--space-2) var(--space-4); border:none; border-radius:var(--radius-md); cursor:pointer; font-weight:var(--font-weight-semibold); }\n        .btn-secondary { background:var(--bg-tertiary); color:var(--text-primary); border:1px solid var(--border-light) !important; }\n        .toast { position:fixed; bottom:20px; right:20px; padding:var(--space-3) var(--space-5); border-radius:var(--radius-md); color:#fff; z-index:2000; opacity:0; transition:opacity .3s; }\n        .toast.show { opacity:1; } .toast.success { background:var(--success); } .toast.error { background:var(--danger); }\n        .loading { text-align:center; padding:var(--space-6); color:var(--text-muted); }" +
                 '<\/style>' +
                 "<header class=\"page-header\">\n                <button class=\"mobile-menu-btn\" onclick=\"toggleMobileSidebar(event)\">&#9776;</button>\n                <h1>감사 로그</h1>\n            </header>\n            <div class=\"content-area\" id=\"app\">\n                <div class=\"loading\">권한 확인 중...</div>\n            </div>\n<div class=\"modal-overlay\" id=\"detailModal\">\n        <div class=\"modal\">\n            <h2>로그 상세</h2>\n            <div id=\"detailContent\"></div>\n            <div class=\"modal-actions\"><button class=\"btn-secondary\" onclick=\"closeDetail()\">닫기</button></div>\n        </div>\n    </div>\n<div id=\"toast\" class=\"toast\"></div>" +
                 '<\/div>';
@@ -106,12 +106,15 @@
                         <div class="fg"><label for="filterAlertLimit">페이지 크기</label>
                             <select id="filterAlertLimit"><option value="50" selected>50개</option><option value="100">100개</option><option value="200">200개</option></select>
                         </div>
+                        <div class="fg"><label for="filterAlertAck">확인 상태</label>
+                            <select id="filterAlertAck"><option value="">전체</option><option value="false">미확인만</option><option value="true">확인됨만</option></select>
+                        </div>
                         <button class="btn-primary" onclick="loadAlertHistory(1)">조회</button>
                     </div>
                     <div id="alertCount" class="log-count"></div>
                     <div class="table-wrapper">
                         <table class="log-table">
-                            <thead><tr><th>시간</th><th>심각도</th><th>type</th><th>제목</th><th>메시지</th></tr></thead>
+                            <thead><tr><th>시간</th><th>심각도</th><th>type</th><th>제목</th><th>메시지</th><th>확인</th></tr></thead>
                             <tbody id="alertBody"></tbody>
                         </table>
                     </div>
@@ -268,13 +271,15 @@
                 async function loadAlertHistory(page = 1) {
                     const type = document.getElementById('filterAlertType').value.trim();
                     const severity = document.getElementById('filterAlertSeverity').value;
+                    const ack = document.getElementById('filterAlertAck').value;
                     const limit = parseInt(document.getElementById('filterAlertLimit').value, 10);
                     const offset = (page - 1) * limit;
                     let url = '/api/admin/alerts/history?limit=' + limit + '&offset=' + offset;
                     if (type) url += '&type=' + encodeURIComponent(type);
                     if (severity) url += '&severity=' + encodeURIComponent(severity);
+                    if (ack === 'true' || ack === 'false') url += '&acknowledged=' + ack;
                     const body = document.getElementById('alertBody');
-                    body.innerHTML = '<tr><td colspan="5"><div class="loading">불러오는 중...</div></td></tr>';
+                    body.innerHTML = '<tr><td colspan="6"><div class="loading">불러오는 중...</div></td></tr>';
                     try {
                         const res = await authFetch(url);
                         const payload = res.data || {};
@@ -283,22 +288,47 @@
                         document.getElementById('alertCount').textContent = '총 ' + total + '건 (현재 ' + history.length + '건 표시)';
                         renderPaginationInto('alertPagination', total, page, limit, (p) => loadAlertHistory(p));
                         if (!history.length) {
-                            body.innerHTML = '<tr><td colspan="5"><div class="empty-state"><h2>알림 이력이 없습니다</h2></div></td></tr>';
+                            body.innerHTML = '<tr><td colspan="6"><div class="empty-state"><h2>알림 이력이 없습니다</h2></div></td></tr>';
                             return;
                         }
                         const severityColor = { info: 'badge-severity-info', warning: 'badge-severity-warning', critical: 'badge-severity-critical' };
-                        body.innerHTML = history.map(a => `
-                            <tr>
+                        body.innerHTML = history.map(a => {
+                            const ackCell = a.acknowledged
+                                ? `<div class="ack-info">✓ by ${esc(a.acknowledged_by || '-')}<br>${a.acknowledged_at ? new Date(a.acknowledged_at).toLocaleString('ko') : ''}</div>`
+                                : `<button class="ack-btn" onclick="acknowledgeAlert(${a.id}, this)">✓ 확인</button>`;
+                            const rowClass = a.acknowledged ? 'alert-row-acked' : '';
+                            return `
+                            <tr class="${rowClass}">
                                 <td style="white-space:nowrap">${new Date(a.created_at).toLocaleString('ko')}</td>
                                 <td><span class="badge ${severityColor[a.severity] || 'badge-default'}">${esc(a.severity)}</span></td>
                                 <td>${esc(a.type)}</td>
                                 <td>${esc(a.title)}</td>
                                 <td class="detail-cell">${esc(a.message)}</td>
-                            </tr>
-                        `).join('');
+                                <td>${ackCell}</td>
+                            </tr>`;
+                        }).join('');
                     } catch (e) {
-                        body.innerHTML = '<tr><td colspan="5"><div class="empty-state"><h2>알림 이력 로드 실패</h2></div></td></tr>';
+                        body.innerHTML = '<tr><td colspan="6"><div class="empty-state"><h2>알림 이력 로드 실패</h2></div></td></tr>';
                         showToast('로드 실패', 'error');
+                    }
+                }
+
+                async function acknowledgeAlert(id, btn) {
+                    if (btn) { btn.disabled = true; btn.textContent = '...'; }
+                    try {
+                        const res = await authFetch('/api/admin/alerts/' + id + '/acknowledge', { method: 'POST' });
+                        if (res && (res.success !== false)) {
+                            showToast('확인 처리됨', 'success');
+                            // 현재 page 재로딩 — pagination 위치 유지를 위해 1 페이지로 단순 처리
+                            loadAlertHistory(1);
+                        } else {
+                            showToast('확인 실패', 'error');
+                            if (btn) { btn.disabled = false; btn.textContent = '✓ 확인'; }
+                        }
+                    } catch (e) {
+                        console.error('[Audit] ack 실패:', e);
+                        showToast('확인 실패', 'error');
+                        if (btn) { btn.disabled = false; btn.textContent = '✓ 확인'; }
                     }
                 }
 
@@ -318,6 +348,7 @@
                 if (typeof switchAuditSubTab === 'function') window.switchAuditSubTab = switchAuditSubTab;
                 if (typeof loadAlertHistory === 'function') window.loadAlertHistory = loadAlertHistory;
                 if (typeof exportLogsCsv === 'function') window.exportLogsCsv = exportLogsCsv;
+                if (typeof acknowledgeAlert === 'function') window.acknowledgeAlert = acknowledgeAlert;
             } catch (e) {
                 console.error('[PageModule:audit] init error:', e);
             }
@@ -335,6 +366,7 @@
             try { delete window.switchAuditSubTab; } catch (e) { }
             try { delete window.loadAlertHistory; } catch (e) { }
             try { delete window.exportLogsCsv; } catch (e) { }
+            try { delete window.acknowledgeAlert; } catch (e) { }
             try { delete window.__alertHistoryLoaded; } catch (e) { }
         }
     };

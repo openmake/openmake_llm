@@ -57,6 +57,8 @@ export class AdminController {
 
         // GDPR Phase D follow-up — alert_history 조회 (admin dashboard 용)
         this.router.get('/alerts/history', this.listAlertHistory.bind(this));
+        // alert_history acknowledge (확인 처리) — 운영자 ID/시간 기록
+        this.router.post('/alerts/:id/acknowledge', this.acknowledgeAlert.bind(this));
 
         // 관리자용 대화 목록 (모든 사용자 대화 조회)
         this.router.get('/stats', this.getStats.bind(this));
@@ -524,6 +526,8 @@ export class AdminController {
             const severity = req.query.severity ? String(req.query.severity) : null;
             const startDate = req.query.startDate ? String(req.query.startDate) : null;
             const endDate = req.query.endDate ? String(req.query.endDate) : null;
+            // acknowledged 필터: 'true'/'false' string, 미설정 시 전체
+            const ackParam = req.query.acknowledged !== undefined ? String(req.query.acknowledged) : null;
 
             const conditions: string[] = [];
             const params: unknown[] = [];
@@ -532,6 +536,8 @@ export class AdminController {
             if (severity) { conditions.push(`severity = $${idx++}`); params.push(severity); }
             if (startDate) { conditions.push(`created_at >= $${idx++}`); params.push(startDate); }
             if (endDate) { conditions.push(`created_at <= $${idx++}`); params.push(endDate); }
+            if (ackParam === 'true') { conditions.push(`acknowledged = TRUE`); }
+            else if (ackParam === 'false') { conditions.push(`acknowledged = FALSE`); }
             const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
 
             const { getPool } = await import('../data/models/unified-database');
@@ -543,7 +549,8 @@ export class AdminController {
             const total = parseInt(totalRes.rows[0]?.count ?? '0', 10);
 
             const dataRes = await pool.query(
-                `SELECT id, type, severity, title, message, data, created_at
+                `SELECT id, type, severity, title, message, data, created_at,
+                        acknowledged, acknowledged_by, acknowledged_at
                  FROM alert_history ${whereClause}
                  ORDER BY created_at DESC
                  LIMIT $${idx++} OFFSET $${idx++}`,
@@ -553,6 +560,76 @@ export class AdminController {
         } catch (error) {
             log.error('[Admin AlertHistory] 오류:', error);
             res.status(500).json(internalError('알림 이력 조회 실패'));
+        }
+    }
+
+    /**
+     * POST /api/admin/alerts/:id/acknowledge — alert_history 행 ack 처리.
+     * 이미 ack 된 row 는 idempotent (no-op, 기존 ack 정보 그대로 반환).
+     * 운영자 ID + 시간 기록으로 알림 처리 추적.
+     */
+    private async acknowledgeAlert(req: Request, res: Response): Promise<void> {
+        try {
+            const id = parseInt(req.params.id, 10);
+            if (!Number.isFinite(id) || id <= 0) {
+                res.status(400).json(badRequest('잘못된 alert id'));
+                return;
+            }
+            const userId = req.user && 'id' in req.user ? String((req.user as { id?: string | number }).id) : null;
+            if (!userId) {
+                res.status(401).json({ success: false, error: { code: 'UNAUTHORIZED', message: '인증 필요' } });
+                return;
+            }
+
+            const { getPool } = await import('../data/models/unified-database');
+            const pool = getPool();
+            // acknowledged=FALSE 인 row 만 UPDATE — 중복 ack 시 정보 덮어쓰기 방지
+            const r = await pool.query(
+                `UPDATE alert_history
+                 SET acknowledged = TRUE, acknowledged_by = $1, acknowledged_at = NOW()
+                 WHERE id = $2 AND acknowledged = FALSE
+                 RETURNING id, type, severity, title, acknowledged, acknowledged_by, acknowledged_at`,
+                [userId, id],
+            );
+            if (r.rowCount === 0) {
+                // 이미 ack 됐거나 id 없음 — 현재 상태 조회 후 반환 (idempotent)
+                const cur = await pool.query(
+                    `SELECT id, type, severity, title, acknowledged, acknowledged_by, acknowledged_at
+                     FROM alert_history WHERE id = $1`,
+                    [id],
+                );
+                if (cur.rowCount === 0) {
+                    res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'alert 없음' } });
+                    return;
+                }
+                res.json(success({ alert: cur.rows[0], alreadyAcknowledged: true }));
+                return;
+            }
+
+            // audit_logs INSERT — fire-and-forget (CRITICAL_ACTIONS whitelist 외라 alert 자체는 안 보냄)
+            void (async () => {
+                try {
+                    const { getAuditService } = await import('../services/AuditService');
+                    await getAuditService().logAudit({
+                        action: 'alert.acknowledged',
+                        userId,
+                        resourceType: 'alert',
+                        resourceId: String(id),
+                        details: { type: r.rows[0].type, severity: r.rows[0].severity },
+                        ipAddress: req.ip,
+                        userAgent: req.headers['user-agent'],
+                        actor: {
+                            email: req.user && 'email' in req.user ? (req.user as { email?: string }).email : undefined,
+                            role: req.user && 'role' in req.user ? (req.user as { role?: string }).role : undefined,
+                        },
+                    });
+                } catch (e) { log.warn('[audit] alert.acknowledged 기록 실패:', e); }
+            })();
+
+            res.json(success({ alert: r.rows[0], alreadyAcknowledged: false }));
+        } catch (error) {
+            log.error('[Admin AlertAck] 오류:', error);
+            res.status(500).json(internalError('알림 확인 처리 실패'));
         }
     }
 
