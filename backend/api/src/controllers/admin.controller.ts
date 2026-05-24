@@ -51,6 +51,10 @@ export class AdminController {
         this.router.put('/users/:id/tier', this.changeUserTier.bind(this));
         this.router.delete('/users/:id', this.deleteUser.bind(this));
 
+        // GDPR Phase D — 14세 미만 셀프 동의 admin endpoint
+        this.router.get('/guardian-consent-pending', this.listGuardianPending.bind(this));
+        this.router.post('/users/:id/guardian-verify', this.verifyGuardianConsent.bind(this));
+
         // 관리자용 대화 목록 (모든 사용자 대화 조회)
         this.router.get('/stats', this.getStats.bind(this));
         this.router.get('/conversations/export', this.exportConversations.bind(this));
@@ -399,6 +403,71 @@ export class AdminController {
         } catch (error) {
             log.error('[Admin Delete User] 오류:', error);
             res.status(500).json(internalError('사용자 삭제 실패'));
+        }
+    }
+
+    /**
+     * GET /api/admin/guardian-consent-pending — 14세 미만 가입 대기 list (GDPR Phase D)
+     */
+    private async listGuardianPending(_req: Request, res: Response): Promise<void> {
+        try {
+            const { getPool } = await import('../data/models/unified-database');
+            const r = await getPool().query(
+                `SELECT g.id, g.user_id, g.guardian_email, g.status, g.created_at,
+                        u.username, u.email AS user_email, u.birth_date
+                 FROM guardian_consent_pending g
+                 JOIN users u ON u.id = g.user_id
+                 WHERE g.status = 'pending'
+                 ORDER BY g.created_at ASC
+                 LIMIT 200`,
+            );
+            res.json(success({ pending: r.rows }));
+        } catch (error) {
+            log.error('[Admin Guardian List] 오류:', error);
+            res.status(500).json(internalError('보류 list 조회 실패'));
+        }
+    }
+
+    /**
+     * POST /api/admin/users/:id/guardian-verify — 14세 미만 동의 verify (GDPR Phase D)
+     * body: { decision: 'verified' | 'rejected', reason?: string }
+     */
+    private async verifyGuardianConsent(req: Request, res: Response): Promise<void> {
+        try {
+            const userId = req.params.id;
+            const { decision, reason } = req.body as { decision?: string; reason?: string };
+            if (decision !== 'verified' && decision !== 'rejected') {
+                res.status(400).json(badRequest('decision 은 verified 또는 rejected 여야 합니다'));
+                return;
+            }
+            const adminId = String('userId' in req.user! ? req.user!.userId : req.user!.id);
+            const { getPool } = await import('../data/models/unified-database');
+            const pool = getPool();
+
+            const upd = await pool.query(
+                `UPDATE guardian_consent_pending
+                 SET status = $2, reason = $3, verified_at = NOW(), verified_by_admin_id = $4
+                 WHERE user_id = $1 AND status = 'pending'
+                 RETURNING id`,
+                [userId, decision, reason || null, adminId],
+            );
+            if (upd.rowCount === 0) {
+                res.status(404).json(badRequest('보류 row 없음 또는 이미 처리됨'));
+                return;
+            }
+
+            await pool.query(
+                `UPDATE users
+                 SET minor_status = $2, is_active = $3
+                 WHERE id = $1`,
+                [userId, decision === 'verified' ? 'minor_verified' : 'minor_rejected', decision === 'verified'],
+            );
+
+            log.info(`[GDPR-D] guardian verify user=${userId} decision=${decision} admin=${adminId}`);
+            res.json(success({ user_id: userId, decision }));
+        } catch (error) {
+            log.error('[Admin Guardian Verify] 오류:', error);
+            res.status(500).json(internalError('동의 verify 실패'));
         }
     }
 
