@@ -127,6 +127,68 @@ export class AuditService {
             logger.error('Failed to create audit log:', error);
             throw error;
         }
+
+        // GDPR Phase D follow-up — critical event 시 fire-and-forget AlertSystem.
+        // whitelist 만 alert 발송 (chat 등 빈도 높은 event 는 skip).
+        const severity = CRITICAL_ACTIONS[input.action];
+        if (severity) {
+            void sendAlertForAction(input, severity);
+        }
+    }
+}
+
+/**
+ * Critical event whitelist — audit_logs INSERT 시 자동 AlertSystem 호출 대상.
+ * severity 별로 channel 영향: info 는 console 만 (spam 방어), warning+ 는 webhook 도 발송.
+ */
+const CRITICAL_ACTIONS: Record<string, 'info' | 'warning' | 'critical'> = {
+    // GDPR Article 17 (right to erasure) — admin 의 사용자 삭제
+    'user.deleted': 'critical',
+    // 권한 변화 — admin 승격/박탈
+    'user.role_changed': 'critical',
+    // 보안 변화
+    'password.changed': 'warning',
+    // GDPR Article 7(3) — 동의 철회
+    'consent.withdrawn': 'warning',
+    // GDPR Article 20 — 데이터 export 요청 (operator 인지용)
+    'export.requested': 'warning',
+    // 기존 ApiKeyService 패턴 정합
+    'api_key.revoked': 'warning',
+    // info 는 audit 만 (alert webhook 안 보냄)
+    'api_key.created': 'info',
+    'user.register': 'info',
+    'consent.granted': 'info',
+    'login.failed': 'info',
+};
+
+/**
+ * AlertSystem 으로 critical event 알림. info 는 webhook 안 보내고 console 만.
+ * warning+ 는 channel 전체 (console + webhook + email if configured).
+ */
+async function sendAlertForAction(
+    input: CreateAuditLogInput,
+    severity: 'info' | 'warning' | 'critical',
+): Promise<void> {
+    try {
+        const { getAlertSystem } = await import('../monitoring/alerts');
+        // alert type 은 AlertType enum 에 등록된 것만 valid — 동적이라 string cast.
+        // AuditService 의 whitelist 가 SoT.
+        await getAlertSystem().sendAlert(
+            input.action.replace(/\./g, '_') as never,
+            severity,
+            `[audit] ${input.action} by ${input.userId || 'system'}`,
+            `Resource: ${input.resourceType ?? '-'}/${input.resourceId ?? '-'}`,
+            {
+                userId: input.userId,
+                resourceType: input.resourceType,
+                resourceId: input.resourceId,
+                ipAddress: input.ipAddress,
+                userAgent: input.userAgent,
+                ...(input.details ?? {}),
+            },
+        );
+    } catch (err) {
+        logger.error(`[AuditAlert] sendAlert 실패 (action=${input.action}):`, err);
     }
 }
 

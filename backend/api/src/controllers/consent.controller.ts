@@ -147,6 +147,20 @@ export function createConsentController(): Router {
                 [userId, type, version, locale, req.ip || null, req.headers['user-agent'] || null],
             );
             log.info(`[Consent withdraw] user=${userId} type=${type}`);
+            // GDPR Article 7(3) — consent.withdrawn audit (warning, AlertSystem 자동)
+            void (async () => {
+                try {
+                    const { getAuditService } = await import('../services/AuditService');
+                    await getAuditService().logAudit({
+                        action: 'consent.withdrawn',
+                        userId,
+                        resourceType: 'consent',
+                        resourceId: type,
+                        ipAddress: req.ip,
+                        userAgent: req.headers['user-agent'],
+                    });
+                } catch (e) { log.warn('[audit] consent.withdrawn 기록 실패:', e); }
+            })();
             res.json(success({ withdrawn: true, type }));
         } catch (err) {
             log.error('[Consent withdraw] error:', err);
@@ -203,6 +217,21 @@ export function createConsentController(): Router {
                 [userId, type, version, locale, req.ip || null, req.headers['user-agent'] || null],
             );
             log.info(`[Consent grant] user=${userId} type=${type} version=${version}`);
+            // consent.granted audit (info, console 만 — webhook 안 보냄)
+            void (async () => {
+                try {
+                    const { getAuditService } = await import('../services/AuditService');
+                    await getAuditService().logAudit({
+                        action: 'consent.granted',
+                        userId,
+                        resourceType: 'consent',
+                        resourceId: type,
+                        details: { version, locale },
+                        ipAddress: req.ip,
+                        userAgent: req.headers['user-agent'],
+                    });
+                } catch (e) { log.warn('[audit] consent.granted 기록 실패:', e); }
+            })();
             res.json(success({ granted: true, type, version }));
         } catch (err) {
             log.error('[Consent grant] error:', err);

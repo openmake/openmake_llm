@@ -339,6 +339,22 @@ export class AdminController {
             }
 
             log.info(`사용자 역할 변경: ${user.email} -> ${role}`);
+            // user.role_changed audit (critical, AlertSystem 자동) — admin 권한 변화 가시성
+            void (async () => {
+                try {
+                    const adminId = String('userId' in req.user! ? req.user!.userId : req.user!.id);
+                    const { getAuditService } = await import('../services/AuditService');
+                    await getAuditService().logAudit({
+                        action: 'user.role_changed',
+                        userId: adminId,
+                        resourceType: 'user',
+                        resourceId: userId,
+                        details: { newRole: role, targetEmail: user.email },
+                        ipAddress: req.ip,
+                        userAgent: req.headers['user-agent'],
+                    });
+                } catch (e) { log.warn('[audit] user.role_changed 기록 실패:', e); }
+            })();
             res.json(success({ user }));
         } catch (error) {
             log.error('[Admin Change Role] 오류:', error);
@@ -399,6 +415,20 @@ export class AdminController {
             }
 
             log.info(`사용자 삭제: ID ${userId}`);
+            // GDPR Article 17 — user.deleted audit (critical, AlertSystem 자동)
+            void (async () => {
+                try {
+                    const { getAuditService } = await import('../services/AuditService');
+                    await getAuditService().logAudit({
+                        action: 'user.deleted',
+                        userId: currentUserId,  // admin actor
+                        resourceType: 'user',
+                        resourceId: userId,
+                        ipAddress: req.ip,
+                        userAgent: req.headers['user-agent'],
+                    });
+                } catch (e) { log.warn('[audit] user.deleted 기록 실패:', e); }
+            })();
             res.json(success({ deleted: true }));
         } catch (error) {
             log.error('[Admin Delete User] 오류:', error);

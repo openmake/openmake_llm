@@ -151,6 +151,21 @@ export function createExportController(): Router {
             }
             const data = await collectUserData(userId);
             log.info(`[Export] user=${userId} sessions=${(data._meta as { counts: { conversationSessions: number } }).counts.conversationSessions}`);
+            // GDPR Article 20 — export.requested audit (warning, AlertSystem 자동)
+            void (async () => {
+                try {
+                    const { getAuditService } = await import('../services/AuditService');
+                    await getAuditService().logAudit({
+                        action: 'export.requested',
+                        userId,
+                        resourceType: 'user_data_export',
+                        resourceId: userId,
+                        details: (data._meta as { counts?: unknown })?.counts as Record<string, unknown> | undefined,
+                        ipAddress: req.ip,
+                        userAgent: req.headers['user-agent'],
+                    });
+                } catch (e) { log.warn('[audit] export.requested 기록 실패:', e); }
+            })();
 
             // Content-Disposition 으로 즉시 download. JSON response 가 아닌 attachment 로 처리.
             const date = new Date().toISOString().slice(0, 10);
