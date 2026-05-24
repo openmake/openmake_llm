@@ -75,7 +75,7 @@ done
 # ─── 4. NAV_ITEMS ↔ pages/*.js 동기화 검증 ───
 # nav-items.js 의 모든 href: '/<name>.html' entry 는 pages/<name>.js 모듈이 존재해야 함
 # (spa-router.js 가 자동으로 dynamic import 시도 — 누락 시 콘솔 에러)
-echo "  [4/5] NAV_ITEMS ↔ pages 모듈 동기화 검증..."
+echo "  [4/6] NAV_ITEMS ↔ pages 모듈 동기화 검증..."
 NAV_FILE="$PUBLIC_DIR/js/nav-items.js"
 NAV_ERRORS=0
 if [ -f "$NAV_FILE" ]; then
@@ -96,8 +96,38 @@ else
     echo -e "  ${YELLOW}⚠ nav-items.js 미발견 — 스킵${NC}"
 fi
 
-# ─── 5. ES Module 문법 검증: export/import가 있는 JS 파일의 모듈 파싱 ───
-echo "  [5/5] ES Module 문법 검증 (V8 파서)..."
+# ─── 5. NAV_ITEMS ↔ backend SPA_PAGES 동기화 검증 ───
+# nav-items.js 의 모든 href: '/<name>.html' 은 backend 의 SPA_PAGES Set 에도 등록되어야 함
+# (누락 시 backend 가 404 반환 — SPA fallback 미동작. PR #96 의 버그 재발 방지)
+echo "  [5/6] NAV_ITEMS ↔ backend SPA_PAGES 동기화 검증..."
+SETUP_FILE="$PROJECT_ROOT/../../backend/api/src/middlewares/setup.ts"
+SPA_ERRORS=0
+if [ -f "$NAV_FILE" ] && [ -f "$SETUP_FILE" ]; then
+    # nav-items.js 의 page name 추출 (.html 확장자 떼고)
+    nav_pages=$(grep -E "href: '/[a-z0-9-]+\.html'" "$NAV_FILE" \
+        | sed -E "s/^.*href: '\/([^']+)\.html'.*$/\1/" | sort -u)
+    # backend SPA_PAGES Set 블록 내 single-quoted 문자열 추출
+    spa_pages=$(awk '/const SPA_PAGES = new Set\(\[/,/\]\);/' "$SETUP_FILE" \
+        | grep -oE "'[a-z0-9-]+'" | tr -d "'" | sort -u)
+    # nav 에 있는데 SPA_PAGES 에 없는 entry 검사
+    missing=$(comm -23 <(echo "$nav_pages") <(echo "$spa_pages"))
+    if [ -n "$missing" ]; then
+        while IFS= read -r p; do
+            [ -z "$p" ] && continue
+            echo -e "  ${RED}✗ NAV entry '/$p.html' 가 backend SPA_PAGES 에 누락 — 404 발생${NC}"
+            echo -e "    ${RED}수정: backend/api/src/middlewares/setup.ts 의 SPA_PAGES Set 에 '$p' 추가${NC}"
+            SPA_ERRORS=$((SPA_ERRORS + 1))
+        done <<< "$missing"
+    fi
+    if [ $SPA_ERRORS -gt 0 ]; then
+        ERRORS=$((ERRORS + SPA_ERRORS))
+    fi
+else
+    [ ! -f "$SETUP_FILE" ] && echo -e "  ${YELLOW}⚠ backend setup.ts 미발견 — 스킵${NC}"
+fi
+
+# ─── 6. ES Module 문법 검증: export/import가 있는 JS 파일의 모듈 파싱 ───
+echo "  [6/6] ES Module 문법 검증 (V8 파서)..."
 MODULE_ERRORS=0
 for f in "$PUBLIC_DIR"/js/modules/*.js "$PUBLIC_DIR"/js/modules/pages/*.js "$PUBLIC_DIR"/js/components/*.js "$PUBLIC_DIR"/js/spa-router.js "$PUBLIC_DIR"/js/nav-items.js; do
     if [ -f "$f" ]; then
