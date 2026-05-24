@@ -89,8 +89,16 @@ interface AlertConfig {
         /** 알림 수신자 이메일 목록 */
         recipients: string[];
     };
-    /** Webhook 발송 URL */
+    /** Webhook 발송 URL (단일, 전체 severity 공통) */
     webhookUrl?: string;
+    /**
+     * Severity 별 webhook URL — channel 분리 시 사용. env 자동 활성:
+     *   - OPERATOR_WEBHOOK_URL_CRITICAL  (없으면 OPERATOR_WEBHOOK_URL fallback)
+     *   - OPERATOR_WEBHOOK_URL_WARNING   (없으면 OPERATOR_WEBHOOK_URL fallback)
+     *   - OPERATOR_WEBHOOK_URL_INFO      (없으면 미발송 — info 는 console 만 default)
+     * resolve 우선순위: severity-specific > legacy webhookUrl.
+     */
+    webhookUrlBySeverity?: { info?: string; warning?: string; critical?: string };
     /** 알림 발동 임계값 설정 */
     thresholds: {
         /** 할당량 경고 임계값 (%, 기본 70%) */
@@ -145,9 +153,14 @@ export class AlertSystem {
     constructor(config?: Partial<AlertConfig>) {
         // env-driven defaults — config 미지정 시 환경변수로 자동 활성.
         // OPERATOR_WEBHOOK_URL (Slack/Discord incoming webhook) 가 있으면 webhook 채널 자동 추가.
+        // severity 별 URL (CRITICAL/WARNING/INFO) 우선, 없으면 legacy 단일 URL fallback.
         const envWebhookUrl = process.env.OPERATOR_WEBHOOK_URL?.trim();
+        const envWebhookCritical = process.env.OPERATOR_WEBHOOK_URL_CRITICAL?.trim();
+        const envWebhookWarning = process.env.OPERATOR_WEBHOOK_URL_WARNING?.trim();
+        const envWebhookInfo = process.env.OPERATOR_WEBHOOK_URL_INFO?.trim();
+        const anyWebhook = envWebhookUrl || envWebhookCritical || envWebhookWarning || envWebhookInfo;
         const defaultChannels: ('console' | 'email' | 'webhook')[] = ['console'];
-        if (envWebhookUrl) defaultChannels.push('webhook');
+        if (anyWebhook) defaultChannels.push('webhook');
 
         this.config = {
             enabled: config?.enabled ?? true,
@@ -161,6 +174,13 @@ export class AlertSystem {
             cooldownMinutes: config?.cooldownMinutes ?? 15,
             emailConfig: config?.emailConfig,
             webhookUrl: config?.webhookUrl ?? envWebhookUrl,
+            webhookUrlBySeverity: config?.webhookUrlBySeverity ?? {
+                // info 는 env 명시 시만 발송 (default 미설정 — Slack noise 차단)
+                info: envWebhookInfo,
+                // warning/critical 은 specific 우선, legacy fallback
+                warning: envWebhookWarning ?? envWebhookUrl,
+                critical: envWebhookCritical ?? envWebhookUrl,
+            },
             cooldownBySeverity: config?.cooldownBySeverity ?? {
                 info: parseInt(process.env.ALERT_COOLDOWN_INFO_MIN ?? '60', 10),
                 warning: parseInt(process.env.ALERT_COOLDOWN_WARNING_MIN ?? '15', 10),
@@ -332,13 +352,15 @@ export class AlertSystem {
      * Webhook으로 알림을 발송합니다.
      *
      * JSON 페이로드를 POST 요청으로 전송합니다.
-     * webhookUrl이 설정되지 않으면 무시합니다.
+     * severity-specific URL 우선 (webhookUrlBySeverity), 없으면 legacy webhookUrl fallback.
+     * 둘 다 미설정이면 무시 (info severity 의 일반적 패턴).
      *
      * @param alert - 알림 메시지 객체
      * @throws Webhook 응답이 2xx가 아닌 경우 에러
      */
     private async sendWebhookAlert(alert: AlertMessage): Promise<void> {
-        if (!this.config.webhookUrl) return;
+        const targetUrl = this.resolveWebhookUrl(alert.severity);
+        if (!targetUrl) return;
 
         const payload = {
             type: alert.type,
@@ -349,7 +371,7 @@ export class AlertSystem {
             timestamp: alert.timestamp.toISOString()
         };
 
-        const response = await fetch(this.config.webhookUrl, {
+        const response = await fetch(targetUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
@@ -359,7 +381,20 @@ export class AlertSystem {
             throw new Error(`Webhook 응답 오류: ${response.status}`);
         }
 
-        logger.info(`Webhook 알림 발송: ${alert.title}`);
+        logger.info(`Webhook 알림 발송 (severity=${alert.severity}): ${alert.title}`);
+    }
+
+    /**
+     * severity 에 맞는 webhook URL 을 해석합니다.
+     * severity-specific URL 우선, fallback 으로 legacy webhookUrl.
+     *
+     * @param severity - 알림 심각도
+     * @returns 해당 severity 의 webhook URL (또는 undefined — 미발송)
+     */
+    private resolveWebhookUrl(severity: AlertSeverity): string | undefined {
+        const bySeverity = this.config.webhookUrlBySeverity?.[severity];
+        if (bySeverity) return bySeverity;
+        return this.config.webhookUrl;
     }
 
     // ================================================
