@@ -162,6 +162,30 @@ export class AuthService {
                     );
                     log.info(`[GDPR-D] 14세 미만 가입 대기 user=${user.id} locale=${locale} age=${age} threshold=${threshold}`);
                     pendingGuardianConsent = true;
+                    // 운영자 알림 — AlertSystem (webhook/email/console 채널, env 자동 활성).
+                    // fire-and-forget: 사용자 응답 지연 방지.
+                    void (async () => {
+                        try {
+                            const { getAlertSystem } = await import('../monitoring/alerts');
+                            await getAlertSystem().sendAlert(
+                                'minor_pending_registered',
+                                'warning',
+                                '14세 미만 가입 대기 (Guardian Verify 필요)',
+                                `사용자 ${user.email} (${user.username || 'no-username'}) — locale=${locale}, age=${age} < ${threshold}. ` +
+                                `법정대리인 이메일: ${data.guardianEmail}. admin 페이지 "🛡️ 14세 미만 동의 보류" 에서 verify 필요.`,
+                                {
+                                    user_id: user.id,
+                                    user_email: user.email,
+                                    locale,
+                                    age,
+                                    threshold,
+                                    guardian_email: data.guardianEmail,
+                                },
+                            );
+                        } catch (alertErr) {
+                            log.error(`[GDPR-D] AlertSystem 호출 실패 (user=${user.id}):`, alertErr);
+                        }
+                    })();
                     // consent_logs 는 아래에서 동일 처리 — 동의 기록은 보존 (verify 후에도 reuse)
                 } else {
                     // 성인 — birth_date 만 저장 (minor_status='adult' 는 default)
