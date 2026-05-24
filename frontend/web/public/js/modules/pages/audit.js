@@ -82,6 +82,7 @@
                             <select id="filterLimit"><option value="50" selected>50개</option><option value="100">100개</option><option value="200">200개</option></select>
                         </div>
                         <button class="btn-primary" onclick="loadLogs(1)">조회</button>
+                        <button class="btn-secondary" onclick="exportLogsCsv()" title="현재 필터 조건으로 최대 10000건 CSV 다운로드">📥 CSV</button>
                     </div>
                     <div id="logCount" class="log-count"></div>
                     <div class="table-wrapper">
@@ -219,6 +220,34 @@
                     }
                 }
 
+                async function exportLogsCsv() {
+                    const action = document.getElementById('filterAction').value;
+                    const userId = document.getElementById('filterUser').value.trim();
+                    let url = API_ENDPOINTS.AUDIT + '/export';
+                    const params = [];
+                    if (action) params.push('action=' + encodeURIComponent(action));
+                    if (userId) params.push('userId=' + encodeURIComponent(userId));
+                    if (params.length) url += '?' + params.join('&');
+                    try {
+                        // window.authFetch 직접 사용 — 본 module 의 authFetch wrapper 는 항상 JSON.parse 라 binary 부적합
+                        const res = await window.authFetch(url);
+                        if (!res.ok) { showToast('CSV export 실패: HTTP ' + res.status, 'error'); return; }
+                        const blob = await res.blob();
+                        const blobUrl = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = blobUrl;
+                        a.download = 'audit_logs_' + new Date().toISOString().slice(0, 10) + '.csv';
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        URL.revokeObjectURL(blobUrl);
+                        showToast('CSV 다운로드 완료', 'success');
+                    } catch (e) {
+                        console.error('[Audit] CSV export 실패:', e);
+                        showToast('CSV export 실패', 'error');
+                    }
+                }
+
                 function openDetail(idx) {
                     const l = logs[idx];
                     if (!l) return;
@@ -288,6 +317,7 @@
                 if (typeof openDetail === 'function') window.openDetail = openDetail;
                 if (typeof switchAuditSubTab === 'function') window.switchAuditSubTab = switchAuditSubTab;
                 if (typeof loadAlertHistory === 'function') window.loadAlertHistory = loadAlertHistory;
+                if (typeof exportLogsCsv === 'function') window.exportLogsCsv = exportLogsCsv;
             } catch (e) {
                 console.error('[PageModule:audit] init error:', e);
             }
@@ -304,6 +334,7 @@
             try { delete window.openDetail; } catch (e) { }
             try { delete window.switchAuditSubTab; } catch (e) { }
             try { delete window.loadAlertHistory; } catch (e) { }
+            try { delete window.exportLogsCsv; } catch (e) { }
             try { delete window.__alertHistoryLoaded; } catch (e) { }
         }
     };
