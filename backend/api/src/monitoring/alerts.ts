@@ -38,7 +38,8 @@ type AlertType =
     | 'system_overload'
     | 'key_exhausted'
     | 'response_time_spike'
-    | 'error_rate_spike';
+    | 'error_rate_spike'
+    | 'minor_pending_registered';  // GDPR Phase D — 14세 미만 가입 대기
 
 /**
  * 알림 메시지 인터페이스
@@ -135,9 +136,15 @@ export class AlertSystem {
      * @param config - 알림 설정 (부분 지정 가능, 미지정 항목은 기본값 사용)
      */
     constructor(config?: Partial<AlertConfig>) {
+        // env-driven defaults — config 미지정 시 환경변수로 자동 활성.
+        // OPERATOR_WEBHOOK_URL (Slack/Discord incoming webhook) 가 있으면 webhook 채널 자동 추가.
+        const envWebhookUrl = process.env.OPERATOR_WEBHOOK_URL?.trim();
+        const defaultChannels: ('console' | 'email' | 'webhook')[] = ['console'];
+        if (envWebhookUrl) defaultChannels.push('webhook');
+
         this.config = {
             enabled: config?.enabled ?? true,
-            channels: config?.channels ?? ['console'],
+            channels: config?.channels ?? defaultChannels,
             thresholds: {
                 quotaWarningPercent: config?.thresholds?.quotaWarningPercent ?? 70,
                 quotaCriticalPercent: config?.thresholds?.quotaCriticalPercent ?? 90,
@@ -146,7 +153,7 @@ export class AlertSystem {
             },
             cooldownMinutes: config?.cooldownMinutes ?? 15,
             emailConfig: config?.emailConfig,
-            webhookUrl: config?.webhookUrl
+            webhookUrl: config?.webhookUrl ?? envWebhookUrl
         };
 
         // 이메일 전송기 설정
