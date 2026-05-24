@@ -55,6 +55,9 @@ export class AdminController {
         this.router.get('/guardian-consent-pending', this.listGuardianPending.bind(this));
         this.router.post('/users/:id/guardian-verify', this.verifyGuardianConsent.bind(this));
 
+        // GDPR Phase D follow-up — alert_history 조회 (admin dashboard 용)
+        this.router.get('/alerts/history', this.listAlertHistory.bind(this));
+
         // 관리자용 대화 목록 (모든 사용자 대화 조회)
         this.router.get('/stats', this.getStats.bind(this));
         this.router.get('/conversations/export', this.exportConversations.bind(this));
@@ -498,6 +501,50 @@ export class AdminController {
         } catch (error) {
             log.error('[Admin Guardian Verify] 오류:', error);
             res.status(500).json(internalError('동의 verify 실패'));
+        }
+    }
+
+    /**
+     * GET /api/admin/alerts/history — alert_history DB 조회 + pagination + filter.
+     * 쿼리: limit, offset, type, severity, startDate, endDate.
+     */
+    private async listAlertHistory(req: Request, res: Response): Promise<void> {
+        try {
+            const limit = Math.min(parseInt(String(req.query.limit ?? '50'), 10) || 50, 500);
+            const offset = parseInt(String(req.query.offset ?? '0'), 10) || 0;
+            const type = req.query.type ? String(req.query.type) : null;
+            const severity = req.query.severity ? String(req.query.severity) : null;
+            const startDate = req.query.startDate ? String(req.query.startDate) : null;
+            const endDate = req.query.endDate ? String(req.query.endDate) : null;
+
+            const conditions: string[] = [];
+            const params: unknown[] = [];
+            let idx = 1;
+            if (type) { conditions.push(`type = $${idx++}`); params.push(type); }
+            if (severity) { conditions.push(`severity = $${idx++}`); params.push(severity); }
+            if (startDate) { conditions.push(`created_at >= $${idx++}`); params.push(startDate); }
+            if (endDate) { conditions.push(`created_at <= $${idx++}`); params.push(endDate); }
+            const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+
+            const { getPool } = await import('../data/models/unified-database');
+            const pool = getPool();
+
+            const totalRes = await pool.query<{ count: string }>(
+                `SELECT COUNT(*)::text AS count FROM alert_history ${whereClause}`, params,
+            );
+            const total = parseInt(totalRes.rows[0]?.count ?? '0', 10);
+
+            const dataRes = await pool.query(
+                `SELECT id, type, severity, title, message, data, created_at
+                 FROM alert_history ${whereClause}
+                 ORDER BY created_at DESC
+                 LIMIT $${idx++} OFFSET $${idx++}`,
+                [...params, limit, offset],
+            );
+            res.json(success({ history: dataRes.rows, total, limit, offset }));
+        } catch (error) {
+            log.error('[Admin AlertHistory] 오류:', error);
+            res.status(500).json(internalError('알림 이력 조회 실패'));
         }
     }
 
