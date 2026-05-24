@@ -27,6 +27,15 @@ export interface CreateAuditLogInput {
     details?: Record<string, unknown>;
     ipAddress?: string;
     userAgent?: string;
+    /**
+     * Alert sender tracking (PR follow-up) — actor 의 풍부한 정보. sendAlertForAction 에서
+     * webhook payload 의 title/message 가독성 향상에 사용. DB INSERT 시 details 에 자동 병합.
+     */
+    actor?: {
+        email?: string;
+        username?: string;
+        role?: string;
+    };
 }
 
 export class AuditService {
@@ -114,12 +123,16 @@ export class AuditService {
     async logAudit(input: CreateAuditLogInput): Promise<void> {
         const db = getUnifiedDatabase();
         try {
+            // actor 정보를 details 에 병합 (DB 영속화 — webhook 외 audit 조회 시도 표시)
+            const mergedDetails = input.actor
+                ? { ...(input.details ?? {}), actor: input.actor }
+                : input.details;
             await db.logAudit({
                 action: input.action,
                 userId: input.userId,
                 resourceType: input.resourceType,
                 resourceId: input.resourceId,
-                details: input.details,
+                details: mergedDetails,
                 ipAddress: input.ipAddress,
                 userAgent: input.userAgent,
             });
@@ -173,12 +186,19 @@ async function sendAlertForAction(
         const { getAlertSystem } = await import('../monitoring/alerts');
         // alert type 은 AlertType enum 에 등록된 것만 valid — 동적이라 string cast.
         // AuditService 의 whitelist 가 SoT.
+        // Actor 정보 풍부화 — email > username > userId 우선순위로 표시명 + role 명시.
+        const actorDisplay = input.actor?.email
+            || input.actor?.username
+            || input.userId
+            || 'system';
+        const roleSuffix = input.actor?.role ? ` (${input.actor.role})` : '';
         await getAlertSystem().sendAlert(
             input.action.replace(/\./g, '_') as never,
             severity,
-            `[audit] ${input.action} by ${input.userId || 'system'}`,
-            `Resource: ${input.resourceType ?? '-'}/${input.resourceId ?? '-'}`,
+            `[audit] ${input.action} by ${actorDisplay}${roleSuffix}`,
+            `Resource: ${input.resourceType ?? '-'}/${input.resourceId ?? '-'} | IP: ${input.ipAddress ?? '-'}`,
             {
+                actor: input.actor,
                 userId: input.userId,
                 resourceType: input.resourceType,
                 resourceId: input.resourceId,

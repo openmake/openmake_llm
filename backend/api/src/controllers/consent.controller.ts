@@ -158,6 +158,10 @@ export function createConsentController(): Router {
                         resourceId: type,
                         ipAddress: req.ip,
                         userAgent: req.headers['user-agent'],
+                        actor: {
+                            email: req.user && 'email' in req.user ? (req.user as { email?: string }).email : undefined,
+                            role: req.user && 'role' in req.user ? (req.user as { role?: string }).role : undefined,
+                        },
                     });
                 } catch (e) { log.warn('[audit] consent.withdrawn 기록 실패:', e); }
             })();
@@ -229,6 +233,10 @@ export function createConsentController(): Router {
                         details: { version, locale },
                         ipAddress: req.ip,
                         userAgent: req.headers['user-agent'],
+                        actor: {
+                            email: req.user && 'email' in req.user ? (req.user as { email?: string }).email : undefined,
+                            role: req.user && 'role' in req.user ? (req.user as { role?: string }).role : undefined,
+                        },
                     });
                 } catch (e) { log.warn('[audit] consent.granted 기록 실패:', e); }
             })();
