@@ -67,21 +67,91 @@
 
                 function renderApp() {
                     document.getElementById('app').innerHTML = `
-                <div class="filter-bar">
-                    <div class="fg"><label for="filterAction">액션</label><select id="filterAction"><option value="">전체</option></select></div>
-                    <div class="fg"><label for="filterUser">사용자 ID</label><input type="text" id="filterUser" placeholder="사용자 ID"></div>
-                    <div class="fg"><label for="filterLimit">개수</label>
-                        <select id="filterLimit"><option value="50">50개</option><option value="100" selected>100개</option><option value="200">200개</option><option value="500">500개</option></select>
-                    </div>
-                    <button class="btn-primary" onclick="loadLogs()">조회</button>
+                <!-- Sub-tab nav: audit_logs / alert_history -->
+                <div class="filter-bar" style="margin-bottom: 0; border-bottom: 0; border-bottom-left-radius: 0; border-bottom-right-radius: 0; padding-bottom: 8px;">
+                    <button class="btn-primary subtab-btn" data-subtab="logs" onclick="switchAuditSubTab('logs')">📋 감사 로그</button>
+                    <button class="btn-secondary subtab-btn" data-subtab="alerts" onclick="switchAuditSubTab('alerts')" style="background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-light);">🔔 알림 이력</button>
                 </div>
-                <div id="logCount" class="log-count"></div>
-                <div class="table-wrapper">
-                    <table class="log-table">
-                        <thead><tr><th>시간</th><th>액션</th><th>사용자</th><th>세부정보</th><th>IP</th></tr></thead>
-                        <tbody id="logBody"><tr><td colspan="5"><div class="loading">불러오는 중...</div></td></tr></tbody>
-                    </table>
+
+                <!-- audit_logs panel -->
+                <div id="auditLogsPanel">
+                    <div class="filter-bar">
+                        <div class="fg"><label for="filterAction">액션</label><select id="filterAction"><option value="">전체</option></select></div>
+                        <div class="fg"><label for="filterUser">사용자 ID</label><input type="text" id="filterUser" placeholder="사용자 ID"></div>
+                        <div class="fg"><label for="filterLimit">페이지 크기</label>
+                            <select id="filterLimit"><option value="50" selected>50개</option><option value="100">100개</option><option value="200">200개</option></select>
+                        </div>
+                        <button class="btn-primary" onclick="loadLogs(1)">조회</button>
+                    </div>
+                    <div id="logCount" class="log-count"></div>
+                    <div class="table-wrapper">
+                        <table class="log-table">
+                            <thead><tr><th>시간</th><th>액션</th><th>사용자</th><th>세부정보</th><th>IP</th></tr></thead>
+                            <tbody id="logBody"><tr><td colspan="5"><div class="loading">불러오는 중...</div></td></tr></tbody>
+                        </table>
+                    </div>
+                    <div id="logPagination" style="margin-top: 16px; display: flex; justify-content: center; gap: 8px;"></div>
+                </div>
+
+                <!-- alert_history panel -->
+                <div id="alertHistoryPanel" style="display: none;">
+                    <div class="filter-bar">
+                        <div class="fg"><label for="filterAlertType">type</label><input type="text" id="filterAlertType" placeholder="예: user_deleted"></div>
+                        <div class="fg"><label for="filterAlertSeverity">심각도</label>
+                            <select id="filterAlertSeverity">
+                                <option value="">전체</option><option value="info">info</option><option value="warning">warning</option><option value="critical">critical</option>
+                            </select>
+                        </div>
+                        <div class="fg"><label for="filterAlertLimit">페이지 크기</label>
+                            <select id="filterAlertLimit"><option value="50" selected>50개</option><option value="100">100개</option><option value="200">200개</option></select>
+                        </div>
+                        <button class="btn-primary" onclick="loadAlertHistory(1)">조회</button>
+                    </div>
+                    <div id="alertCount" class="log-count"></div>
+                    <div class="table-wrapper">
+                        <table class="log-table">
+                            <thead><tr><th>시간</th><th>심각도</th><th>type</th><th>제목</th><th>메시지</th></tr></thead>
+                            <tbody id="alertBody"></tbody>
+                        </table>
+                    </div>
+                    <div id="alertPagination" style="margin-top: 16px; display: flex; justify-content: center; gap: 8px;"></div>
                 </div>`;
+                }
+
+                function switchAuditSubTab(tab) {
+                    document.querySelectorAll('.subtab-btn').forEach(b => {
+                        if (b.dataset.subtab === tab) {
+                            b.className = 'btn-primary subtab-btn';
+                            b.style.cssText = '';
+                        } else {
+                            b.className = 'btn-secondary subtab-btn';
+                            b.style.cssText = 'background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-light);';
+                        }
+                    });
+                    document.getElementById('auditLogsPanel').style.display = tab === 'logs' ? '' : 'none';
+                    document.getElementById('alertHistoryPanel').style.display = tab === 'alerts' ? '' : 'none';
+                    if (tab === 'alerts' && !window.__alertHistoryLoaded) {
+                        loadAlertHistory(1);
+                        window.__alertHistoryLoaded = true;
+                    }
+                }
+
+                // 페이지네이션 inline helper (admin.js renderPagination 패턴 차용)
+                function renderPaginationInto(containerId, total, currentPage, pageSize, onPageChange) {
+                    const el = document.getElementById(containerId);
+                    if (!el) return;
+                    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+                    if (totalPages <= 1) { el.innerHTML = ''; return; }
+                    let html = '';
+                    const prev = Math.max(1, currentPage - 1);
+                    const next = Math.min(totalPages, currentPage + 1);
+                    html += `<button class="btn-secondary" data-page="${prev}" ${currentPage === 1 ? 'disabled' : ''} style="padding: 4px 10px;">‹ 이전</button>`;
+                    html += `<span style="padding: 4px 12px; color: var(--text-muted);">${currentPage} / ${totalPages}</span>`;
+                    html += `<button class="btn-secondary" data-page="${next}" ${currentPage === totalPages ? 'disabled' : ''} style="padding: 4px 10px;">다음 ›</button>`;
+                    el.innerHTML = html;
+                    el.querySelectorAll('button[data-page]').forEach(btn => {
+                        btn.addEventListener('click', () => onPageChange(parseInt(btn.dataset.page, 10)));
+                    });
                 }
 
                 async function loadActions() {
@@ -100,20 +170,24 @@
                     } catch (e) { console.error('[Audit] 액션 목록 로드 실패:', e); }
                 }
 
-                async function loadLogs() {
+                async function loadLogs(page = 1) {
                     const action = document.getElementById('filterAction').value;
                     const userId = document.getElementById('filterUser').value.trim();
-                    const limit = document.getElementById('filterLimit').value;
-                    let url = API_ENDPOINTS.AUDIT + '?limit=' + limit;
+                    const limit = parseInt(document.getElementById('filterLimit').value, 10);
+                    const offset = (page - 1) * limit;
+                    let url = API_ENDPOINTS.AUDIT + '?limit=' + limit + '&offset=' + offset;
                     if (action) url += '&action=' + encodeURIComponent(action);
                     if (userId) url += '&userId=' + encodeURIComponent(userId);
                     const body = document.getElementById('logBody');
                     body.innerHTML = '<tr><td colspan="5"><div class="loading">불러오는 중...</div></td></tr>';
                     try {
                         const res = await authFetch(url);
-                        var rawLogs = res.data || res;
-                        logs = Array.isArray(rawLogs) ? rawLogs : [];
-                        document.getElementById('logCount').textContent = '총 ' + logs.length + '건';
+                        // 응답 schema: { logs, total } 또는 raw array (legacy)
+                        var payload = res.data || res;
+                        logs = Array.isArray(payload) ? payload : (payload.logs || []);
+                        var total = payload.total !== undefined ? payload.total : logs.length;
+                        document.getElementById('logCount').textContent = '총 ' + total + '건 (현재 ' + logs.length + '건 표시)';
+                        renderPaginationInto('logPagination', total, page, limit, (p) => loadLogs(p));
                         if (!logs.length) {
                             body.innerHTML = '<tr><td colspan="5"><div class="empty-state"><h2>감사 로그가 없습니다</h2></div></td></tr>';
                             return;
@@ -161,10 +235,48 @@
 
                 function closeDetail() { document.getElementById('detailModal').classList.remove('open'); }
 
+                // alert_history (PR #83/#84 의 critical event webhook 알림)
+                async function loadAlertHistory(page = 1) {
+                    const type = document.getElementById('filterAlertType').value.trim();
+                    const severity = document.getElementById('filterAlertSeverity').value;
+                    const limit = parseInt(document.getElementById('filterAlertLimit').value, 10);
+                    const offset = (page - 1) * limit;
+                    let url = '/api/admin/alerts/history?limit=' + limit + '&offset=' + offset;
+                    if (type) url += '&type=' + encodeURIComponent(type);
+                    if (severity) url += '&severity=' + encodeURIComponent(severity);
+                    const body = document.getElementById('alertBody');
+                    body.innerHTML = '<tr><td colspan="5"><div class="loading">불러오는 중...</div></td></tr>';
+                    try {
+                        const res = await authFetch(url);
+                        const payload = res.data || {};
+                        const history = payload.history || [];
+                        const total = payload.total ?? history.length;
+                        document.getElementById('alertCount').textContent = '총 ' + total + '건 (현재 ' + history.length + '건 표시)';
+                        renderPaginationInto('alertPagination', total, page, limit, (p) => loadAlertHistory(p));
+                        if (!history.length) {
+                            body.innerHTML = '<tr><td colspan="5"><div class="empty-state"><h2>알림 이력이 없습니다</h2></div></td></tr>';
+                            return;
+                        }
+                        const severityColor = { info: 'badge-auth', warning: 'badge-update', critical: 'badge-delete' };
+                        body.innerHTML = history.map(a => `
+                            <tr>
+                                <td style="white-space:nowrap">${new Date(a.created_at).toLocaleString('ko')}</td>
+                                <td><span class="badge ${severityColor[a.severity] || 'badge-default'}">${esc(a.severity)}</span></td>
+                                <td>${esc(a.type)}</td>
+                                <td>${esc(a.title)}</td>
+                                <td class="detail-cell">${esc(a.message)}</td>
+                            </tr>
+                        `).join('');
+                    } catch (e) {
+                        body.innerHTML = '<tr><td colspan="5"><div class="empty-state"><h2>알림 이력 로드 실패</h2></div></td></tr>';
+                        showToast('로드 실패', 'error');
+                    }
+                }
+
                 if (checkAdmin()) {
                     renderApp();
                     loadActions();
-                    loadLogs();
+                    loadLogs(1);
                 } else {
                     showToast('관리자 권한이 필요합니다.', 'warning');
                     if (typeof Router !== 'undefined') Router.navigate('/');
@@ -174,6 +286,8 @@
                 if (typeof closeDetail === 'function') window.closeDetail = closeDetail;
                 if (typeof loadLogs === 'function') window.loadLogs = loadLogs;
                 if (typeof openDetail === 'function') window.openDetail = openDetail;
+                if (typeof switchAuditSubTab === 'function') window.switchAuditSubTab = switchAuditSubTab;
+                if (typeof loadAlertHistory === 'function') window.loadAlertHistory = loadAlertHistory;
             } catch (e) {
                 console.error('[PageModule:audit] init error:', e);
             }
@@ -188,6 +302,9 @@
             try { delete window.closeDetail; } catch (e) { }
             try { delete window.loadLogs; } catch (e) { }
             try { delete window.openDetail; } catch (e) { }
+            try { delete window.switchAuditSubTab; } catch (e) { }
+            try { delete window.loadAlertHistory; } catch (e) { }
+            try { delete window.__alertHistoryLoaded; } catch (e) { }
         }
     };
 
