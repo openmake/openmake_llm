@@ -102,8 +102,15 @@ interface AlertConfig {
         /** 에러율 임계값 (%, 기본 10%) */
         errorRatePercent: number;
     };
-    /** 중복 알림 방지 쿨다운 시간 (분, 기본 15분) */
+    /** 중복 알림 방지 쿨다운 시간 (분, 기본 15분). severity 별 차등 사용 시 무시. */
     cooldownMinutes: number;
+    /**
+     * Severity 별 차등 쿨다운 (분). env 자동 활성:
+     *   - ALERT_COOLDOWN_INFO_MIN (default 60) — 빈도 높은 register/login_failed 등
+     *   - ALERT_COOLDOWN_WARNING_MIN (default 15) — 기본
+     *   - ALERT_COOLDOWN_CRITICAL_MIN (default 1) — user_deleted 등 즉시 알림
+     */
+    cooldownBySeverity?: { info: number; warning: number; critical: number };
 }
 
 /**
@@ -153,7 +160,12 @@ export class AlertSystem {
             },
             cooldownMinutes: config?.cooldownMinutes ?? 15,
             emailConfig: config?.emailConfig,
-            webhookUrl: config?.webhookUrl ?? envWebhookUrl
+            webhookUrl: config?.webhookUrl ?? envWebhookUrl,
+            cooldownBySeverity: config?.cooldownBySeverity ?? {
+                info: parseInt(process.env.ALERT_COOLDOWN_INFO_MIN ?? '60', 10),
+                warning: parseInt(process.env.ALERT_COOLDOWN_WARNING_MIN ?? '15', 10),
+                critical: parseInt(process.env.ALERT_COOLDOWN_CRITICAL_MIN ?? '1', 10),
+            }
         };
 
         // 이메일 전송기 설정
@@ -200,13 +212,14 @@ export class AlertSystem {
     ): Promise<void> {
         if (!this.config.enabled) return;
 
-        // 쿨다운 체크
+        // 쿨다운 체크 — severity 별 차등 cooldown (cooldownBySeverity 우선, fallback cooldownMinutes)
+        const cooldownMin = this.config.cooldownBySeverity?.[severity] ?? this.config.cooldownMinutes;
         const alertKey = `${type}:${severity}`;
         const lastAlert = this.lastAlerts.get(alertKey);
         if (lastAlert) {
             const elapsed = (Date.now() - lastAlert.getTime()) / 1000 / 60;
-            if (elapsed < this.config.cooldownMinutes) {
-                logger.debug(`알림 쿨다운 중: ${alertKey} (${this.config.cooldownMinutes - elapsed}분 남음)`);
+            if (elapsed < cooldownMin) {
+                logger.debug(`알림 쿨다운 중: ${alertKey} severity=${severity} (${(cooldownMin - elapsed).toFixed(1)}분 남음, cooldown=${cooldownMin}분)`);
                 return;
             }
         }
