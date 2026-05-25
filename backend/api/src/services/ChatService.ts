@@ -510,10 +510,42 @@ export class ChatService {
         // strategies 우회하지만 agent 페르소나 + buildContextForLLM 결과 + 언어 정책은 통합.
         // tool calling / thinking / discussion / deep research 는 여전히 미지원.
         if (externalResolved) {
-            const { agentSystemMessage: agentSysMsgForExternal } = await agentPromise;
-            // 2-arg streamToken 전달 — thinking 토큰이 onThinking SSE 채널로 정상 라우팅되도록.
-            // (1-arg onToken 전달 시 provider 의 reasoning 출력이 SSE token 채널에 빈 문자열로 흘러
-            //  사용자 UI 에 "답변 없음" 또는 reasoning 텍스트 노출 사고 발생.)
+            const { agentSystemMessage: industryAgentSysMsg } = await agentPromise;
+
+            // 2026-05-26 옵션 B 통합 (외부 provider 경로):
+            // Custom Agent (user_agents) 활성 시 산업 agent 라우팅 우회 + allowedSkills 주입.
+            // 내부 vLLM 경로의 effectiveAgentSysMsg + userAgentSkillPrompt 와 동일 로직.
+            let agentSysMsgForExternal = industryAgentSysMsg;
+            if (executionPlan && userId && userId !== 'guest') {
+                try {
+                    const externalUnifiedPlan = await getExecutionPlanBuilder().build({
+                        message: message || '',
+                        hasImages: (images && images.length > 0) || false,
+                        executionPlan,
+                        style: req.style,
+                        userAgentId: req.userAgentId,
+                        userId,
+                    });
+                    if (externalUnifiedPlan.userAgent) {
+                        let extSkillPrompt = '';
+                        if (externalUnifiedPlan.userAgent.allowedSkills.length > 0) {
+                            try {
+                                const { getSkillManager } = await import('../agents/skill-manager');
+                                extSkillPrompt = await getSkillManager().buildSkillPromptForIds(
+                                    externalUnifiedPlan.userAgent.allowedSkills,
+                                    userId,
+                                );
+                            } catch (e) {
+                                logger.warn('[external] user_agent skill 주입 실패 (silent):', e);
+                            }
+                        }
+                        agentSysMsgForExternal = `[Custom Agent: ${externalUnifiedPlan.userAgent.icon ?? '🤖'} ${externalUnifiedPlan.userAgent.name}]\n${externalUnifiedPlan.userAgent.systemPrompt}${extSkillPrompt}`;
+                    }
+                } catch (e) {
+                    logger.warn('[external] Custom Agent 통합 실패 (산업 agent fallback):', e);
+                }
+            }
+
             return await this.streamFromExternalProvider(externalResolved, req, streamToken, {
                 agentSystemMessage: agentSysMsgForExternal,
                 enhancedMessage: finalEnhancedMessage,
