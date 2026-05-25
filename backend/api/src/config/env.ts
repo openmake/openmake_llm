@@ -107,8 +107,9 @@ export interface EnvConfig {
     omkDomainAnalysis: string;
     omkDomainGeneral: string;
 
-    // Generate-Verify skip threshold
-    omkGvSkipThreshold: number;
+    // Generate-Verify skip threshold: 2026-05-26 cleanup — routing-config.ts 가
+    // process.env.OMK_GV_SKIP_THRESHOLD 직접 사용, config 객체 필드는 dead 였음.
+    // env.schema.ts 의 OMK_GV_SKIP_THRESHOLD 는 검증 일관성 위해 유지.
 
     // Language Policy
     enableDynamicResponseLanguage: boolean;
@@ -219,8 +220,6 @@ const DEFAULT_CONFIG: EnvConfig = {
     omkDomainAnalysis: '',
     omkDomainGeneral: '',
 
-    // Generate-Verify skip threshold (routing-config.ts가 process.env로 직접 소비)
-    omkGvSkipThreshold: 0.3,
 
     // Language Policy
     enableDynamicResponseLanguage: true,
@@ -527,9 +526,6 @@ export function loadConfig(): EnvConfig {
         omkDomainCreative: parsed.OMK_DOMAIN_CREATIVE ?? DEFAULT_CONFIG.omkDomainCreative,
         omkDomainAnalysis: parsed.OMK_DOMAIN_ANALYSIS ?? DEFAULT_CONFIG.omkDomainAnalysis,
         omkDomainGeneral: parsed.OMK_DOMAIN_GENERAL ?? DEFAULT_CONFIG.omkDomainGeneral,
-
-        // Generate-Verify skip threshold
-        omkGvSkipThreshold: parsed.OMK_GV_SKIP_THRESHOLD ?? DEFAULT_CONFIG.omkGvSkipThreshold,
 
         // Language Policy
         enableDynamicResponseLanguage: parsed.ENABLE_DYNAMIC_RESPONSE_LANGUAGE ?? DEFAULT_CONFIG.enableDynamicResponseLanguage,
