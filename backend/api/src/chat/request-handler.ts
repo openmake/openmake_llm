@@ -639,6 +639,11 @@ export class ChatRequestHandler {
                 .catch((err) => log.warn(`[RequestHandler] 사전 요약 백그라운드 실패 (무시): ${err instanceof Error ? err.message : err}`));
         }
 
+        // routingMeta.agentBypass 는 ChatService.handleChat 의 agentBypassed 조건과
+        // 동기화되어야 함 — drift 시 ChatMetrics 의 agent_bypass= 가 거짓 N 으로 표시됨.
+        // SSoT 는 ChatService 측이지만, 호출 시점에 ChatService 가 결과를 노출하지 않아
+        // 동일 식을 여기서 재계산. 조건 변경 시 양쪽 동시 수정 필수.
+        const userAgentBypass = !!(userAgentId && userContext.userId && userContext.userId !== 'guest');
         return {
             response,
             sessionId: currentSessionId,
@@ -648,7 +653,7 @@ export class ChatRequestHandler {
             finish_reason: 'stop',
             routingMeta: {
                 fastPath: fastPath.matched,
-                agentBypass: !!(params.apiKeyId || fastPath.matched),
+                agentBypass: !!(params.apiKeyId || fastPath.matched || userAgentBypass),
                 summaryCacheHit: cachedSummary !== null,
             },
         };
