@@ -461,13 +461,20 @@ export class ChatService {
         };
 
         const fastPath = req.apiKeyId ? null : detectFastPath(message || '');
-        const agentBypassed = !!(req.apiKeyId || fastPath?.matched);
+        // 2026-05-26: Custom Agent 명시 시 산업 agent 라우팅 + skill manifest fetch
+        // 모두 스킵 — agentBypass 와 동일 흐름. 결과적으로 LLMRouter 호출 1회 절감 +
+        // system-prompt.ts 의 buildSkillPrompt (산업 agent skill) 도 자동 우회.
+        // effectiveAgentSysMsg 가 어차피 user agent 우선이므로 산업 agent 결과는 dead.
+        const userAgentBypass = !!(req.userAgentId && userId && userId !== 'guest');
+        const agentBypassed = !!(req.apiKeyId || fastPath?.matched || userAgentBypass);
         let agentPromise: Promise<AgentResolution>;
 
         if (agentBypassed) {
             const reason = req.apiKeyId
                 ? '[API Key] 외부 요청 — 에이전트 라우팅 스킵'
-                : `[Fast-path:${fastPath?.reason}] 단답형 — LLM 라우팅 스킵`;
+                : userAgentBypass
+                    ? '[Custom Agent] 사용자 지정 페르소나 — 산업 agent 라우팅 스킵'
+                    : `[Fast-path:${fastPath?.reason}] 단답형 — LLM 라우팅 스킵`;
             const bypassAgent = getAgentById('general') || AGENTS['general'];
             agentPromise = Promise.resolve({
                 agentSelection: {
