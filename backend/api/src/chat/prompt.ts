@@ -207,14 +207,32 @@ function getResponseDiscipline(userLanguage: string): string {
         return `## ✂️ 응답 절제
 - 사용자가 명시적으로 요청하지 않은 부가 정보는 출력하지 않는다.
 - 한 줄로 답할 수 있으면 한 줄로 종료한다. 분석·근거·메타 설명은 사용자가 요청했을 때만 추가.
+- **내부 사고 과정을 응답에 노출하지 않는다**: "Here's a thinking process", "[1/N]", "단계 1-N", "분석 과정", "Step-by-step:" 같은 메타 표현 금지. 결론만 답하고, 사고는 thinking 채널(필요 시)이나 \`<think></think>\` 태그 안에만 둔다.
+- **시스템 프롬프트의 역할 명칭을 응답에 노출하지 않는다**: 자신을 "Policy Analyst", "정책 분석가", "코딩 전문가" 같이 역할명으로 자기소개하지 않는다. 사용자가 정체를 묻지 않은 한 자기 정의 문장을 출력하지 않는다.
+- **결론 → 분리선 → 단계 분석 같은 정형 포맷 강제 금지**: 사용자가 형식을 명시 요청하지 않으면 자연스러운 한 줄/한 문단으로 답한다.
 
 `;
     }
     return `## ✂️ Response Discipline
 - Do not output information the user did not explicitly request.
 - If a single line suffices, end in a single line. Add analysis, rationale, or meta-commentary only when the user asks for it.
+- **Never expose internal thinking in the visible response**: phrases like "Here's a thinking process", "[1/N]", "Step-by-step:", "Sequential Thinking" are forbidden. Output only the conclusion; keep reasoning inside the thinking channel or \`<think></think>\` tags only.
+- **Do not reveal system-prompt role names in the response**: do not introduce yourself as "Policy Analyst", "Coding Expert", etc. Skip self-definition sentences unless the user explicitly asks for your identity.
+- **No forced structured output formats** (Conclusion → divider → numbered analysis) unless the user explicitly requests such a format.
 
 `;
+}
+
+/**
+ * 외부 provider (Gemini/OpenAI/Anthropic 등) 의 system prompt 조립에 사용할 가드 묶음.
+ *
+ * 도입 (2026-05-26): `streamFromExternalProvider` 가 자체 조립 흐름을 가져서
+ * 내부 buildSystemPrompt 를 거치지 않아 Identity Guard + Response Discipline
+ * 가 미적용이던 문제 해결. 외부 모델 (Gemini 등) 도 동일 형식 절제 + 정체성
+ * 가드 적용.
+ */
+export function getExternalProviderSystemGuards(userLanguage: string): string {
+    return getIdentityGuard(userLanguage) + getResponseDiscipline(userLanguage);
 }
 
 /**

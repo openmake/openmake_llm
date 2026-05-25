@@ -16,6 +16,7 @@ import { createLogger } from '../../utils/logger';
 import { EXTERNAL_LLM_TOOL_BLACKLIST } from '../../config/runtime-limits';
 import { getUnifiedMCPClient } from '../../mcp/unified-client';
 import { isPersistableUserId } from '../../utils/user-id-validation';
+import { getExternalProviderSystemGuards } from '../../chat/prompt';
 import type { ChatMessage, ToolDefinition } from '../../llm';
 import type { ChatMessageRequest } from '../chat-service-types';
 import type { UserContext } from '../../mcp/user-sandbox';
@@ -55,6 +56,14 @@ export async function streamFromExternalProvider(
 ): Promise<string> {
     const messages: ChatMessage[] = [];
     const systemPromptParts: string[] = [];
+
+    // Phase 2026-05-26: 외부 provider 도 Identity Guard + Response Discipline 적용.
+    // 본 가드 미적용 시 Gemini/GPT 가 "Here's a thinking process", 단계 1-N,
+    // 자기 정체 노출 같은 verbose 형식을 그대로 출력 (사용자 보고 사례 해결).
+    const guards = getExternalProviderSystemGuards(ctx.resolvedLanguage || req.userLanguagePreference || 'en');
+    if (guards) {
+        systemPromptParts.push(guards.trim());
+    }
 
     if (ctx.agentSystemMessage) {
         systemPromptParts.push(ctx.agentSystemMessage);
