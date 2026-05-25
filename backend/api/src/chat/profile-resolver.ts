@@ -33,6 +33,11 @@ const logger = createLogger('ProfileResolver');
  * ChatService가 소비하는 구조체로,
  * 프로파일의 설정을 구체적인 실행 파라미터로 변환한 결과입니다.
  */
+/**
+ * ExecutionPlan — 2026-05-26 #I cleanup:
+ * dead 필드 6개 제거 (useToolCalling, agentLoopMax, loopStrategy,
+ * promptStrategy, contextStrategy, timeBudgetMs). 외부 호출처 0 확인 후 삭제.
+ */
 export interface ExecutionPlan {
     /** 원본 요청 모델명 (brand alias 또는 원본 모델) */
     requestedModel: string;
@@ -43,29 +48,11 @@ export interface ExecutionPlan {
     /** 실제 사용할 내부 엔진 모델 ID */
     resolvedEngine: string;
 
-    /** 도구 호출 활성화 여부 (single이 아닌 전략에서 활성화) */
-    useToolCalling: boolean;
-
-    /** 에이전트 루프 최대 반복 */
-    agentLoopMax: number;
-
-    /** 에이전트 루프 실행 방식 */
-    loopStrategy: 'parallel' | 'sequential' | 'auto';
-
     /** thinking 파라미터 (Gemini think 등) */
     thinkingLevel: 'off' | 'low' | 'medium' | 'high';
 
     /** 토론(Discussion) 활성화 */
     useDiscussion: boolean;
-
-    /** 프롬프트 전략 */
-    promptStrategy: 'auto' | 'force_coder' | 'force_reasoning' | 'force_creative' | 'none';
-
-    /** 컨텍스트 윈도우 전략 */
-    contextStrategy: 'full' | 'lite' | 'auto';
-
-    /** 시간 예산 (ms) — 0이면 무제한 */
-    timeBudgetMs: number;
 
     /** 필수 도구 목록 */
     requiredTools: string[];
@@ -112,14 +99,8 @@ export function buildExecutionPlan(
         requestedModel,
         profile: null,
         resolvedEngine: config.llmDefaultModel,
-        useToolCalling: false,
-        agentLoopMax: 5,
-        loopStrategy: 'auto',
         thinkingLevel: 'medium',
         useDiscussion: false,
-        promptStrategy: 'auto',
-        contextStrategy: 'auto',
-        timeBudgetMs: 0,
         requiredTools: [],
         isBrandModel: false,
         executionStrategy: 'single',

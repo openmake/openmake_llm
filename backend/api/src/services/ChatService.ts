@@ -581,7 +581,9 @@ export class ChatService {
         const supportsThinking = checkModelCapability(modelSelection.model, 'thinking');
         logger.debug(`모델 기능: tools=${supportsTools}, thinking=${supportsThinking}`);
 
-        const maxTurns = executionPlan?.agentLoopMax ?? 5;
+        // Phase #I cleanup (2026-05-26): agentLoopMax 필드 제거. profile-resolver 가
+        // 항상 5 반환했으므로 상수로 inline.
+        const maxTurns = 5;
 
         // ── 합류: Step 5 직전에 agent 결과 수신 ──
         // 병렬로 실행되던 resolveAgent() 의 결과를 여기서 await.
