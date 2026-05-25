@@ -61,6 +61,8 @@ export class AdminController {
         this.router.get('/alerts/export', this.exportAlertHistoryCsv.bind(this));
         // alert_history 통계 (대시보드 요약 카드용)
         this.router.get('/alerts/stats', this.getAlertStats.bind(this));
+        // LLM Model Pool routing 통계 (PR #98 follow-up)
+        this.router.get('/llm-pool/stats', this.getLlmPoolStats.bind(this));
         // alert_history acknowledge (확인 처리) — 운영자 ID/시간 기록
         this.router.post('/alerts/:id/acknowledge', this.acknowledgeAlert.bind(this));
 
@@ -564,6 +566,76 @@ export class AdminController {
         } catch (error) {
             log.error('[Admin AlertHistory] 오류:', error);
             res.status(500).json(internalError('알림 이력 조회 실패'));
+        }
+    }
+
+    /**
+     * GET /api/admin/llm-pool/stats — Model Pool routing 통계 (PR #98 follow-up).
+     *
+     * 응답:
+     *   - byModel: { 'qwen3.6-35b-a3b': N, 'qwen3.6-35b-a3b-1m': N, ... }
+     *   - bySource: { auto: N, auto_trimmed: N, auto_trimmed_reduced: N, manual: N, pool_disabled: N }
+     *   - largeModelRatioPct: 1M routing 비율 (%) — 30% 초과 시 margin 조정 검토
+     *   - last7Days: [{ date, default, large, total }] × 7
+     *
+     * 모두 지난 7일 데이터. 운영자가 LLM_POOL_DEFAULT_MARGIN_PCT 조정 의사결정용.
+     */
+    private async getLlmPoolStats(_req: Request, res: Response): Promise<void> {
+        try {
+            const { getPool } = await import('../data/models/unified-database');
+            const pool = getPool();
+
+            const [byModelRes, bySourceRes, trendRes] = await Promise.all([
+                pool.query<{ model: string; count: string }>(
+                    `SELECT model, COUNT(*)::text AS count FROM model_pool_metrics
+                     WHERE created_at >= NOW() - INTERVAL '7 days' GROUP BY model`,
+                ),
+                pool.query<{ source: string; count: string }>(
+                    `SELECT source, COUNT(*)::text AS count FROM model_pool_metrics
+                     WHERE created_at >= NOW() - INTERVAL '7 days' GROUP BY source`,
+                ),
+                pool.query<{ date: string; total: string; default_count: string; large_count: string }>(
+                    `SELECT to_char(date_trunc('day', d), 'YYYY-MM-DD') AS date,
+                            COUNT(m.*)::text AS total,
+                            COUNT(*) FILTER (WHERE m.model NOT LIKE '%-1m')::text AS default_count,
+                            COUNT(*) FILTER (WHERE m.model LIKE '%-1m')::text AS large_count
+                     FROM generate_series(date_trunc('day', NOW()) - INTERVAL '6 days',
+                                          date_trunc('day', NOW()), INTERVAL '1 day') AS d
+                     LEFT JOIN model_pool_metrics m ON date_trunc('day', m.created_at) = d
+                     GROUP BY d ORDER BY d ASC`,
+                ),
+            ]);
+
+            const byModel: Record<string, number> = {};
+            let totalCount = 0;
+            let largeCount = 0;
+            for (const r of byModelRes.rows) {
+                const n = parseInt(r.count, 10);
+                byModel[r.model] = n;
+                totalCount += n;
+                if (r.model.endsWith('-1m')) largeCount += n;
+            }
+
+            const bySource: Record<string, number> = {};
+            for (const r of bySourceRes.rows) {
+                bySource[r.source] = parseInt(r.count, 10);
+            }
+
+            res.json(success({
+                byModel,
+                bySource,
+                totalCount,
+                largeModelRatioPct: totalCount > 0 ? Math.round((largeCount / totalCount) * 1000) / 10 : 0,
+                last7Days: trendRes.rows.map(r => ({
+                    date: r.date,
+                    total: parseInt(r.total, 10),
+                    default: parseInt(r.default_count, 10),
+                    large: parseInt(r.large_count, 10),
+                })),
+            }));
+        } catch (error) {
+            log.error('[Admin LlmPoolStats] 오류:', error);
+            res.status(500).json(internalError('LLM pool 통계 조회 실패'));
         }
     }
 

@@ -71,6 +71,7 @@
                 <div class="filter-bar" style="margin-bottom: 0; border-bottom: 0; border-bottom-left-radius: 0; border-bottom-right-radius: 0; padding-bottom: 8px;">
                     <button class="btn-primary subtab-btn" data-subtab="logs" onclick="switchAuditSubTab('logs')">📋 감사 로그</button>
                     <button class="btn-secondary subtab-btn" data-subtab="alerts" onclick="switchAuditSubTab('alerts')" style="background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-light);">🔔 알림 이력</button>
+                    <button class="btn-secondary subtab-btn" data-subtab="pool" onclick="switchAuditSubTab('pool')" style="background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-light);">🤖 LLM Pool</button>
                 </div>
 
                 <!-- audit_logs panel -->
@@ -121,6 +122,12 @@
                         </table>
                     </div>
                     <div id="alertPagination" style="margin-top: 16px; display: flex; justify-content: center; gap: 8px;"></div>
+                </div>
+
+                <!-- LLM Pool panel (PR #98 follow-up) -->
+                <div id="llmPoolPanel" style="display: none;">
+                    <div id="llmPoolStatsRow" class="stats-row" style="display:none;"></div>
+                    <div class="log-count">지난 7일 LLM Model Pool routing 통계. 1M 비율 30% 초과 시 LLM_POOL_DEFAULT_MARGIN_PCT 조정 검토.</div>
                 </div>`;
                 }
 
@@ -136,7 +143,11 @@
                     });
                     document.getElementById('auditLogsPanel').style.display = tab === 'logs' ? '' : 'none';
                     document.getElementById('alertHistoryPanel').style.display = tab === 'alerts' ? '' : 'none';
-                    if (tab === 'alerts' && !window.__alertHistoryLoaded) {
+                    const poolPanel = document.getElementById('llmPoolPanel');
+                    if (poolPanel) poolPanel.style.display = tab === 'pool' ? '' : 'none';
+                    if (tab === 'pool') {
+                        loadLlmPoolStats();
+                    } else if (tab === 'alerts' && !window.__alertHistoryLoaded) {
                         loadAlertHistory(1);
                         loadAlertStats();
                         window.__alertHistoryLoaded = true;
@@ -319,6 +330,52 @@
                     }
                 }
 
+                async function loadLlmPoolStats() {
+                    const row = document.getElementById('llmPoolStatsRow');
+                    if (!row) return;
+                    try {
+                        const res = await authFetch('/api/admin/llm-pool/stats');
+                        const s = res.data || res;
+                        const trend = s.last7Days || [];
+                        const bySource = s.bySource || {};
+                        const trendMax = Math.max(1, ...trend.map(d => d.total || 0));
+                        const trendBars = trend.map(d => {
+                            const h = Math.max(2, Math.round(((d.total || 0) / trendMax) * 32));
+                            const cls = (d.large || 0) > (d.default || 0) ? 'bar critical' : 'bar';
+                            return `<div class="${cls}" style="height:${h}px" title="${d.date}: total ${d.total} (1m ${d.large}, default ${d.default})"></div>`;
+                        }).join('');
+                        const ratio = s.largeModelRatioPct || 0;
+                        const ratioCls = ratio > 30 ? 'danger' : (ratio > 15 ? 'warning' : 'muted');
+                        const total = s.totalCount || 0;
+                        const trimmedCount = (bySource.auto_trimmed || 0) + (bySource.auto_trimmed_reduced || 0);
+                        row.innerHTML = `
+                            <div class="stat-card">
+                                <div class="stat-card-label">7일 1M routing 비율</div>
+                                <div class="stat-card-value ${ratioCls}">${ratio}%</div>
+                                <div class="stat-card-sub">${total} 호출 중 ${total > 0 ? Math.round(ratio * total / 100) : 0}건</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-card-label">7일 truncate 발동</div>
+                                <div class="stat-card-value ${trimmedCount > 0 ? 'warning' : 'muted'}">${trimmedCount}</div>
+                                <div class="stat-card-sub">input truncate + max_tokens 축소 합계</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-card-label">7일 trend (1m=red)</div>
+                                <div class="stat-card-value muted" style="font-size:18px">총 ${total}건</div>
+                                <div class="stat-bars">${trendBars}</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-card-label">source 분포</div>
+                                <div class="stat-card-sub">auto ${bySource.auto || 0} / trimmed ${bySource.auto_trimmed || 0} / reduced ${bySource.auto_trimmed_reduced || 0} / manual ${bySource.manual || 0}</div>
+                            </div>
+                        `;
+                        row.style.display = 'grid';
+                    } catch (e) {
+                        console.error('[Audit] llm-pool stats 로드 실패:', e);
+                        row.style.display = 'none';
+                    }
+                }
+
                 async function loadAlertStats() {
                     const row = document.getElementById('alertStatsRow');
                     if (!row) return;
@@ -443,6 +500,7 @@
                 if (typeof acknowledgeAlert === 'function') window.acknowledgeAlert = acknowledgeAlert;
                 if (typeof exportAlertsCsv === 'function') window.exportAlertsCsv = exportAlertsCsv;
                 if (typeof loadAlertStats === 'function') window.loadAlertStats = loadAlertStats;
+                if (typeof loadLlmPoolStats === 'function') window.loadLlmPoolStats = loadLlmPoolStats;
             } catch (e) {
                 console.error('[PageModule:audit] init error:', e);
             }
@@ -463,6 +521,7 @@
             try { delete window.acknowledgeAlert; } catch (e) { }
             try { delete window.exportAlertsCsv; } catch (e) { }
             try { delete window.loadAlertStats; } catch (e) { }
+            try { delete window.loadLlmPoolStats; } catch (e) { }
             try { delete window.__alertHistoryLoaded; } catch (e) { }
         }
     };

@@ -131,6 +131,26 @@ export class LLMClient {
             );
         }
 
+        // 통계 영속화 — fire-and-forget (운영자 모니터링용, audit 패턴).
+        // 실패해도 chat 자체는 계속 진행.
+        void (async () => {
+            try {
+                const { getPool } = await import('../data/models/unified-database');
+                await getPool().query(
+                    `INSERT INTO model_pool_metrics (model, source, input_tokens, dropped_messages)
+                     VALUES ($1, $2, $3, $4)`,
+                    [
+                        poolDecision.model,
+                        poolDecision.source,
+                        poolDecision.inputTokens ?? null,
+                        poolDecision.droppedMessages ?? null,
+                    ],
+                );
+            } catch (err) {
+                logger.warn(`[ModelPool] metric INSERT 실패 (continue):`, err);
+            }
+        })();
+
         const effectiveMessages = poolDecision.adjustedMessages ?? messages;
         const effectiveOptions: ModelOptions | undefined = poolDecision.adjustedMaxTokens !== undefined
             ? { ...(options ?? {}), num_predict: poolDecision.adjustedMaxTokens }
