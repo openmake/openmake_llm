@@ -294,15 +294,20 @@ export function setupStaticFiles(app: Application, dirname: string): void {
         return injectNonceIntoHtml(html, nonce);
     };
 
-    const getIndexPath = (): string | null => resolveFilePath([
-        path.join(publicPath, 'index.html'),
-        path.join(fallbackPublicPath, 'index.html')
-    ]);
+    // 2026-05-26: HTML 서빙도 정적 파일과 동일하게 dev 환경에서는 소스 원본 우선.
+    const preferSourceHtml = process.env.NODE_ENV !== 'production'
+        || process.env.OMK_STATIC_PREFER_SOURCE === 'true';
+    const htmlSearchOrder = preferSourceHtml
+        ? [fallbackPublicPath, publicPath]
+        : [publicPath, fallbackPublicPath];
 
-    const getHtmlPath = (filename: string): string | null => resolveFilePath([
-        path.join(publicPath, filename),
-        path.join(fallbackPublicPath, filename)
-    ]);
+    const getIndexPath = (): string | null => resolveFilePath(
+        htmlSearchOrder.map(p => path.join(p, 'index.html'))
+    );
+
+    const getHtmlPath = (filename: string): string | null => resolveFilePath(
+        htmlSearchOrder.map(p => path.join(p, filename))
+    );
 
     // CSP 논스 생성 (모든 요청) — CSP 헤더는 HTML 응답에서만 설정
     app.use((_req: Request, res: Response, next: NextFunction) => {
@@ -419,17 +424,29 @@ export function setupStaticFiles(app: Application, dirname: string): void {
         }
     };
 
-    app.use(express.static(publicPath, {
-        etag: true,
-        lastModified: true,
-        setHeaders: staticHeaders
-    }));
+    // 2026-05-26: 정적 파일 우선순위 — Dev 환경에서는 frontend/web/public (소스 원본)
+    // 을 dist/public 보다 먼저 mount. 빌드(sync-frontend rsync) 안 해도 frontend
+    // 수정사항이 즉시 반영되도록. Production (NODE_ENV=production) 에서는 기존대로
+    // dist/public 우선 (빌드 산출물 = 디플로이 단위).
+    //
+    // env OMK_STATIC_PREFER_SOURCE=true 로 강제 override 가능 (production 에서도
+    // 긴급 hotfix 시).
+    const preferSource = process.env.NODE_ENV !== 'production'
+        || process.env.OMK_STATIC_PREFER_SOURCE === 'true';
 
-    app.use(express.static(fallbackPublicPath, {
+    const staticOpts = {
         etag: true,
         lastModified: true,
         setHeaders: staticHeaders
-    }));
+    };
+
+    if (preferSource) {
+        app.use(express.static(fallbackPublicPath, staticOpts));  // 소스 원본 우선
+        app.use(express.static(publicPath, staticOpts));           // dist 폴백
+    } else {
+        app.use(express.static(publicPath, staticOpts));            // dist 우선 (production)
+        app.use(express.static(fallbackPublicPath, staticOpts));    // 소스 폴백
+    }
 }
 
 /**

@@ -437,18 +437,20 @@ export class OpenAICompatProvider implements IProvider {
                 ? { provider: opts.providerRouting }
                 : {};
 
-            // Gemini 2.5+ thinking 본문 leak 차단 — Gemini 가 OpenAI-compat 에서
-            // delta.reasoning 채널 미사용, thinking 토큰을 delta.content 에 합쳐서 보냄.
-            // extra_body 로 native API 의 thinking_config.thinking_budget=0 전달하여
-            // thinking 비활성. user 가 명시적으로 thinking_mode 요청한 경우만 유지.
-            // 2026-05-26: 사용자가 본 "The user is asking..." 영어 메타 thinking 본문
-            // leak 사고 해결.
+            // Gemini 2.5+ thinking 본문 leak 차단 (2026-05-26 v2).
+            // Gemini OpenAI-compat 는 delta.reasoning 채널 미사용 — thinking 을
+            // delta.content 에 합침. LiteLLM proxy 경유 시 extra_body 형식이 vendor
+            // 별로 다름. OpenRouter spec 의 reasoning.exclude 와 LiteLLM 의 Gemini
+            // 매핑 두 가지 동시 시도 — 모르는 옵션은 vendor 가 무시하므로 안전.
             const isGemini = this.id === 'gemini' || /^gemini-/.test(opts.modelId);
             const geminiThinkingDisable = isGemini ? {
+                // OpenRouter / 표준 reasoning 비활성화
+                reasoning: { exclude: true, max_tokens: 0 },
+                // LiteLLM Gemini passthrough — generation_config.thinking_config
                 extra_body: {
-                    extra_body: {
-                        google: { thinking_config: { thinking_budget: 0 } },
-                    },
+                    google: { thinking_config: { thinking_budget: 0, include_thoughts: false } },
+                    generation_config: { thinking_config: { thinking_budget: 0 } },
+                    thinking: { type: 'disabled' },
                 },
             } : {};
 
