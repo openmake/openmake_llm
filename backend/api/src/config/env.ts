@@ -54,14 +54,6 @@ export interface EnvConfig {
     /** vLLM `--reasoning-parser` 미설정 환경 등에서 extra_body.reasoning_effort 거절 방지 토글. */
     llmEnableReasoningEffort: boolean;
 
-    /**
-     * LLM classifier 우회 여부.
-     * - 'true' → 항상 우회 (regex/fast-path 만 사용)
-     * - 'false' → 항상 활성 (다중 모델 환경에서 분류 정밀도 우선)
-     * - undefined/'auto' → 단일 모델 환경(getModelPresets() 키 1개) 자동 감지
-     */
-    omkDisableLlmClassifier: 'true' | 'false' | 'auto';
-
     // Log
     logLevel: 'debug' | 'info' | 'warn' | 'error';
 
@@ -176,7 +168,6 @@ const DEFAULT_CONFIG: EnvConfig = {
     llmHourlyTokenLimit: 300000,
     llmWeeklyTokenLimit: 5000000,
     llmEnableReasoningEffort: false,
-    omkDisableLlmClassifier: 'auto' as const,
 
     // Log
     logLevel: 'info',
@@ -387,7 +378,6 @@ export function loadConfig(): EnvConfig {
         LLM_WEEKLY_TOKEN_LIMIT: env('LLM_WEEKLY_TOKEN_LIMIT'),
         LLM_ENABLE_REASONING_EFFORT: env('LLM_ENABLE_REASONING_EFFORT'),
         LLM_DISABLE_THINKING_BY_DEFAULT: env('LLM_DISABLE_THINKING_BY_DEFAULT'),
-        OMK_DISABLE_LLM_CLASSIFIER: env('OMK_DISABLE_LLM_CLASSIFIER'),
         LOG_LEVEL: env('LOG_LEVEL'),
         GEMINI_THINK_ENABLED: env('GEMINI_THINK_ENABLED'),
         GEMINI_THINK_LEVEL: env('GEMINI_THINK_LEVEL'),
@@ -491,13 +481,6 @@ export function loadConfig(): EnvConfig {
         llmHourlyTokenLimit: parsed.LLM_HOURLY_TOKEN_LIMIT ?? DEFAULT_CONFIG.llmHourlyTokenLimit,
         llmWeeklyTokenLimit: parsed.LLM_WEEKLY_TOKEN_LIMIT ?? DEFAULT_CONFIG.llmWeeklyTokenLimit,
         llmEnableReasoningEffort: (parsed.LLM_ENABLE_REASONING_EFFORT ?? 'false').toLowerCase() === 'true',
-
-        omkDisableLlmClassifier: ((): 'true' | 'false' | 'auto' => {
-            const raw = parsed.OMK_DISABLE_LLM_CLASSIFIER?.trim().toLowerCase();
-            if (raw === 'true') return 'true';
-            if (raw === 'false') return 'false';
-            return 'auto';
-        })(),
 
         // Log
         logLevel: parsed.LOG_LEVEL ?? DEFAULT_CONFIG.logLevel,

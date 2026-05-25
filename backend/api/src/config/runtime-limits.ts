@@ -383,13 +383,9 @@ export const LANGUAGE_THRESHOLDS = {
 
 /**
  * 인메모리 캐시 TTL 및 용량 설정
- * SemanticClassificationCache, CacheSystem, MemoryService에서 참조
+ * CacheSystem 에서 참조 (2026-05-26 Phase B Phase 2-A: 분류 캐시 필드 제거)
  */
 export const CACHE_CONFIG = {
-    /** L1 분류 캐시 TTL (ms) — 기본 30분 */
-    CLASSIFICATION_CACHE_TTL_MS: 30 * 60 * 1000,
-    /** L1 분류 캐시 최대 항목 수 */
-    CLASSIFICATION_CACHE_MAX_SIZE: 500,
     /** 쿼리 응답 캐시 TTL (ms) — 기본 10분 */
     QUERY_CACHE_TTL_MS: 10 * 60 * 1000,
     /** 쿼리 응답 캐시 최대 항목 수 */
@@ -877,25 +873,6 @@ export const CONFIDENCE_GATE = {
 } as const;
 
 // ============================================
-// Classification Disagreement Logging (분류 불일치 로깅)
-// ============================================
-
-/**
- * Regex vs LLM 분류 결과 불일치를 추적하는 설정
- *
- * Harness Engineering 원칙: Verify — 두 독립 분류기의 교차 검증으로
- * 분류 정확도 약점을 식별합니다.
- *
- * chat/llm-classifier.ts에서 참조
- */
-export const DISAGREEMENT_LOGGING = {
-    /** 불일치 로깅 활성화 여부 */
-    ENABLED: process.env.DISAGREEMENT_LOGGING_ENABLED !== 'false',
-    /** 불일치 결과를 구조화 로그에 포함할지 여부 */
-    INCLUDE_IN_METRICS: process.env.DISAGREEMENT_INCLUDE_METRICS !== 'false',
-} as const;
-
-// ============================================
 // Informed Fallback (폴백 시 실패 원인 전달)
 // ============================================
 
@@ -912,27 +889,6 @@ export const INFORMED_FALLBACK = {
     ENABLED: process.env.INFORMED_FALLBACK_ENABLED !== 'false',
     /** 메트릭 기록 여부 */
     INCLUDE_IN_METRICS: process.env.INFORMED_FALLBACK_INCLUDE_METRICS !== 'false',
-} as const;
-
-// ============================================
-// Contextual Classification (대화 이력 기반 분류 강화)
-// ============================================
-
-/**
- * LLM 분류기에 이전 대화 턴 컨텍스트를 제공하는 설정
- *
- * Harness Engineering 원칙: Inform — 분류기에 더 풍부한 컨텍스트를 제공하여
- * 대명사/지시어 기반 쿼리 분류 정확도 향상
- *
- * chat/llm-classifier.ts에서 참조
- */
-export const CONTEXTUAL_CLASSIFICATION = {
-    /** 대화 이력 기반 분류 활성화 여부 */
-    ENABLED: process.env.CONTEXTUAL_CLASSIFICATION_ENABLED !== 'false',
-    /** 분류기에 전달할 최대 이전 턴 수 */
-    MAX_HISTORY_TURNS: Number(process.env.CONTEXTUAL_CLASSIFICATION_MAX_TURNS || '3'),
-    /** 각 턴의 최대 문자 수 (너무 긴 컨텍스트 방지) */
-    MAX_CHARS_PER_TURN: Number(process.env.CONTEXTUAL_CLASSIFICATION_MAX_CHARS || '200'),
 } as const;
 
 // ============================================
@@ -956,33 +912,6 @@ export const ROUTING_VERIFICATION = {
     TOKEN_OVERUSE_RATIO: parseFloat(process.env.ROUTING_TOKEN_OVERUSE_RATIO || '1.5'),
     /** 검증 결과를 구조화 로그에 포함할지 여부 */
     INCLUDE_IN_METRICS: process.env.ROUTING_VERIFICATION_INCLUDE_METRICS !== 'false',
-} as const;
-
-// ============================================
-// Feedback Cache Correction (피드백 기반 캐시 교정)
-// ============================================
-
-/**
- * 사용자 피드백(thumbs_up/down)에 따라 분류 캐시를 교정하는 설정
- *
- * Harness Engineering 원칙: Correct — 사용자 피드백으로 캐시된 분류 결과를
- * 교정하여 향후 동일 쿼리의 라우팅 품질 개선
- *
- * chat/feedback-cache-corrector.ts에서 참조
- */
-export const FEEDBACK_CACHE_CORRECTION = {
-    /** 피드백 기반 캐시 교정 활성화 여부 */
-    ENABLED: process.env.FEEDBACK_CACHE_CORRECTION_ENABLED !== 'false',
-    /** thumbs_down 시 캐시 항목 무효화 여부 (false면 신뢰도만 감소) */
-    INVALIDATE_ON_NEGATIVE: process.env.FEEDBACK_CACHE_INVALIDATE !== 'false',
-    /** thumbs_up 시 신뢰도 부스트 값 (현재 신뢰도에 가산) */
-    POSITIVE_BOOST: parseFloat(process.env.FEEDBACK_POSITIVE_BOOST || '0.05'),
-    /** 동일 쿼리에 대한 교정 횟수 제한 (노이즈 방지) */
-    MAX_CORRECTIONS_PER_QUERY: Number(process.env.FEEDBACK_MAX_CORRECTIONS || '3'),
-    /** 교정 횟수 추적 윈도우 (ms, 기본 1시간) */
-    CORRECTION_WINDOW_MS: Number(process.env.FEEDBACK_CORRECTION_WINDOW_MS || '3600000'),
-    /** 메트릭 기록 여부 */
-    INCLUDE_IN_METRICS: process.env.FEEDBACK_CACHE_INCLUDE_METRICS !== 'false',
 } as const;
 
 export const GV_METRICS = {

@@ -185,11 +185,6 @@ export const envSchema = z
         // Security — Trusted Proxies (쉼표 구분 문자열, 기본: loopback,linklocal,uniquelocal)
         TRUSTED_PROXIES: z.string().optional(),
 
-        // 단일 모델 환경에서 LLM classifier round-trip 우회.
-        // true 시 selectOptimalModel()이 regex/fast-path만으로 QueryType 결정 → LLM 호출 0회.
-        // 분류 결과는 옵션 튜닝(temperature/top_p)에만 영향, 모델 선택에는 영향 없음.
-        // 명시 미지정 시 단일 모델 환경(MODEL_PRESETS 키 1개) 자동 감지하여 우회.
-        OMK_DISABLE_LLM_CLASSIFIER: z.string().optional(),
     })
     .superRefine((data, ctx) => {
         // dev/test 가 아닌 모든 환경 (production, staging, uat, qa, ...) 에서 시크릿 강제.
