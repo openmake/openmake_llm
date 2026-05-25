@@ -23,6 +23,7 @@ import { createLogger } from './logger';
 import { error as apiError, badRequest as apiBadRequest, ErrorCodes, ApiErrorResponse } from './api-response';
 import { QuotaExceededError } from '../errors/quota-exceeded.error';
 import { KeyExhaustionError } from '../errors/key-exhaustion.error';
+import { ContextOverflowError } from '../errors/context-overflow.error';
 
 const logger = createLogger('ErrorHandler');
 
@@ -189,6 +190,34 @@ export function errorHandler(
             resetTime: err.resetTime.toISOString(),
             totalKeys: err.totalKeys,
             keysInCooldown: err.keysInCooldown,
+        }));
+        return;
+    }
+
+    // ── ContextOverflowError → 413 (PR #98 model-pool 안전망 3단계) ──
+    if (err instanceof ContextOverflowError) {
+        logger.warn(`Context overflow: input=${err.inputTokens} limit=${err.limitTokens}`, { path: req.path });
+        // Audit + 자동 alert (CRITICAL_ACTIONS whitelist 매칭 — PR #84 패턴)
+        void (async () => {
+            try {
+                const { getAuditService } = await import('../services/AuditService');
+                await getAuditService().logAudit({
+                    action: 'chat.context_overflow',
+                    userId: req.user && 'id' in req.user ? String((req.user as { id?: string | number }).id) : undefined,
+                    resourceType: 'chat',
+                    details: { inputTokens: err.inputTokens, limitTokens: err.limitTokens, path: req.path },
+                    ipAddress: req.ip,
+                    userAgent: req.headers['user-agent'],
+                    actor: {
+                        email: req.user && 'email' in req.user ? (req.user as { email?: string }).email : undefined,
+                        role: req.user && 'role' in req.user ? (req.user as { role?: string }).role : undefined,
+                    },
+                });
+            } catch (e) { logger.warn('[audit] chat.context_overflow 기록 실패:', e); }
+        })();
+        res.status(413).json(apiError(ErrorCodes.PAYLOAD_TOO_LARGE, err.message, {
+            inputTokens: err.inputTokens,
+            limitTokens: err.limitTokens,
         }));
         return;
     }
