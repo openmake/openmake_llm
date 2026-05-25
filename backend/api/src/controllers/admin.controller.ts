@@ -621,6 +621,18 @@ export class AdminController {
                 bySource[r.source] = parseInt(r.count, 10);
             }
 
+            // Phase L (2026-05-26): LLM 자체 관측 강화 — usage-tracker 의 hourly/weekly
+            // quota 통합. LiteLLM /global/spend 가 비활성이므로 클라이언트 측 tracking 으로 대체.
+            const { getApiUsageTracker } = await import('../llm');
+            const quota = getApiUsageTracker().getQuotaStatus();
+
+            // model_pool_metrics 의 input_tokens 7일 합계 (대략적 prompt token 비용)
+            const tokensRes = await pool.query<{ sum: string | null }>(
+                `SELECT COALESCE(SUM(input_tokens), 0)::text AS sum FROM model_pool_metrics
+                 WHERE created_at >= NOW() - INTERVAL '7 days' AND input_tokens IS NOT NULL`,
+            );
+            const last7DaysInputTokens = parseInt(tokensRes.rows[0]?.sum ?? '0', 10);
+
             res.json(success({
                 byModel,
                 bySource,
@@ -632,6 +644,11 @@ export class AdminController {
                     default: parseInt(r.default_count, 10),
                     large: parseInt(r.large_count, 10),
                 })),
+                quota: {
+                    hourly: quota.hourly,
+                    weekly: quota.weekly,
+                },
+                last7DaysInputTokens,
             }));
         } catch (error) {
             log.error('[Admin LlmPoolStats] 오류:', error);

@@ -368,6 +368,32 @@
                                 <div class="stat-card-label">source 분포</div>
                                 <div class="stat-card-sub">auto ${bySource.auto || 0} / trimmed ${bySource.auto_trimmed || 0} / reduced ${bySource.auto_trimmed_reduced || 0} / manual ${bySource.manual || 0}</div>
                             </div>
+                            ${(() => {
+                                // Phase L (2026-05-26): LLM 자체 관측 — quota + 7일 입력 토큰
+                                const q = s.quota || {};
+                                const h = q.hourly || { used: 0, limit: 0 };
+                                const w = q.weekly || { used: 0, limit: 0 };
+                                const hPct = h.limit > 0 ? Math.round((h.used / h.limit) * 100) : 0;
+                                const wPct = w.limit > 0 ? Math.round((w.used / w.limit) * 100) : 0;
+                                const hCls = hPct >= 80 ? 'danger' : (hPct >= 50 ? 'warning' : 'muted');
+                                const wCls = wPct >= 80 ? 'danger' : (wPct >= 50 ? 'warning' : 'muted');
+                                const last7Tokens = (s.last7DaysInputTokens || 0).toLocaleString();
+                                return `<div class="stat-card">
+                                    <div class="stat-card-label">시간당 토큰 (in-mem)</div>
+                                    <div class="stat-card-value ${hCls}">${hPct}%</div>
+                                    <div class="stat-card-sub">${(h.used || 0).toLocaleString()} / ${(h.limit || 0).toLocaleString()}</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-card-label">주간 토큰 (in-mem)</div>
+                                    <div class="stat-card-value ${wCls}">${wPct}%</div>
+                                    <div class="stat-card-sub">${(w.used || 0).toLocaleString()} / ${(w.limit || 0).toLocaleString()}</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-card-label">7일 prompt 토큰 (DB)</div>
+                                    <div class="stat-card-value muted">${last7Tokens}</div>
+                                    <div class="stat-card-sub">model_pool_metrics 추정</div>
+                                </div>`;
+                            })()}
                         `;
                         row.style.display = 'grid';
                     } catch (e) {
