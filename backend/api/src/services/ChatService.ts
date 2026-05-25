@@ -40,7 +40,8 @@ import type { LanguagePolicyDecision } from '../chat/language-policy';
 import { createRoutingLogEntry, type RoutingDecisionLog } from '../chat/routing-logger';
 import type { ChatMessageRequest, SystemEventCallback } from './chat-service-types';
 import { buildContextForLLM } from './chat-service/context-builder';
-import { resolveModel } from './chat-service/model-resolver';
+import { getExecutionPlanBuilder } from '../chat/execution-plan-builder';
+import type { UnifiedExecutionPlan } from '../chat/execution-plan-types';
 import { selectAndExecuteStrategy } from './chat-service/strategy-executor';
 import { resolveAgent as resolveAgentFn } from './chat-service/agent-resolver';
 import { resolveLanguagePolicy as resolveLanguagePolicyFn } from './chat-service/language-resolver';
@@ -504,10 +505,18 @@ export class ChatService {
             });
         }
 
-        // ── Step 4: 쿼리 분류 + 옵션 튜닝 (Pure Manual 모드) ──
+        // ── Step 4: 통합 실행 계획 구성 (Phase B Routing Unification — Phase 1 위임) ──
+        // ExecutionPlanBuilder 가 buildExecutionPlan + resolveModel 을 내부 호출.
+        // Phase 1 동안 외부 동작 동일 — modelSelection 추출 후 기존 흐름 유지.
+        // 참고: docs/superpowers/plans/2026-05-25-routing-unification-phase-b.md
         const promptConfig = getPromptConfig(message, languagePolicy?.resolvedLanguage);
         const hasImages = (images && images.length > 0) || documentImages.length > 0;
-        const modelSelection = await this.resolveModel(message || '', hasImages);
+        const unifiedPlan: UnifiedExecutionPlan = await getExecutionPlanBuilder().build({
+            message: message || '',
+            hasImages,
+            executionPlan,
+        });
+        const modelSelection = unifiedPlan.modelSelection;
 
         // ── 라우팅 결정 로그 갱신 ──
         routingLog.queryFeatures.queryType = modelSelection.queryType;
@@ -651,16 +660,6 @@ export class ChatService {
         });
     }
 
-    /**
-     * 쿼리 분류 + 옵션 튜닝 (Pure Manual 모드 — 모델 변경 없음).
-     * 실제 로직은 chat-service/model-resolver.ts 에 위임합니다.
-     */
-    private async resolveModel(
-        message: string,
-        hasImages: boolean,
-    ): Promise<import('../chat/model-selector').ModelSelection> {
-        return resolveModel({ message, hasImages });
-    }
 
     /**
      * ExecutionStrategy 기반 응답 전략을 선택하고 실행합니다.
