@@ -78,7 +78,12 @@ export class ExecutionPlanBuilder {
         };
     }
 
-    private async loadUserAgent(
+    /**
+     * Custom Agent 단독 로딩 — 외부 provider 분기 등 full build() 가 필요 없는
+     * 경로 (modelSelection·capacityDecision·aliasDerived 미사용) 에서 user agent
+     * 정보만 빠르게 얻기 위한 public helper.
+     */
+    async loadUserAgent(
         userAgentId: string | undefined,
         userId: string | undefined,
     ): Promise<ResolvedUserAgent | null> {

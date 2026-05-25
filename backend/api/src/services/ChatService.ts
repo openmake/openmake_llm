@@ -514,32 +514,27 @@ export class ChatService {
 
             // 2026-05-26 옵션 B 통합 (외부 provider 경로):
             // Custom Agent (user_agents) 활성 시 산업 agent 라우팅 우회 + allowedSkills 주입.
-            // 내부 vLLM 경로의 effectiveAgentSysMsg + userAgentSkillPrompt 와 동일 로직.
+            // 2026-05-26 cleanup: 전체 build() 대신 loadUserAgent 단독 호출 —
+            // 외부 provider 가 자체 model 처리하므로 modelSelection / capacityDecision /
+            // aliasDerived* 등 다른 build 결과는 미사용 (over-fetch 제거).
             let agentSysMsgForExternal = industryAgentSysMsg;
-            if (executionPlan && userId && userId !== 'guest') {
+            if (req.userAgentId && userId && userId !== 'guest') {
                 try {
-                    const externalUnifiedPlan = await getExecutionPlanBuilder().build({
-                        message: message || '',
-                        hasImages: (images && images.length > 0) || false,
-                        executionPlan,
-                        style: req.style,
-                        userAgentId: req.userAgentId,
-                        userId,
-                    });
-                    if (externalUnifiedPlan.userAgent) {
+                    const userAgent = await getExecutionPlanBuilder().loadUserAgent(req.userAgentId, userId);
+                    if (userAgent) {
                         let extSkillPrompt = '';
-                        if (externalUnifiedPlan.userAgent.allowedSkills.length > 0) {
+                        if (userAgent.allowedSkills.length > 0) {
                             try {
                                 const { getSkillManager } = await import('../agents/skill-manager');
                                 extSkillPrompt = await getSkillManager().buildSkillPromptForIds(
-                                    externalUnifiedPlan.userAgent.allowedSkills,
+                                    userAgent.allowedSkills,
                                     userId,
                                 );
                             } catch (e) {
                                 logger.warn('[external] user_agent skill 주입 실패 (silent):', e);
                             }
                         }
-                        agentSysMsgForExternal = `[Custom Agent: ${externalUnifiedPlan.userAgent.icon ?? '🤖'} ${externalUnifiedPlan.userAgent.name}]\n${externalUnifiedPlan.userAgent.systemPrompt}${extSkillPrompt}`;
+                        agentSysMsgForExternal = `[Custom Agent: ${userAgent.icon ?? '🤖'} ${userAgent.name}]\n${userAgent.systemPrompt}${extSkillPrompt}`;
                     }
                 } catch (e) {
                     logger.warn('[external] Custom Agent 통합 실패 (산업 agent fallback):', e);
