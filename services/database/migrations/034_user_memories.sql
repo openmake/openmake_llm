@@ -14,6 +14,12 @@
 --   - source='batch' — 일괄 추출 (Phase 3-C, 미래)
 --
 -- max-per-user 정책은 application layer (env USER_MEMORY_MAX_COUNT, default 50)
+--
+-- ⚠️ legacy MemoryService (2026-05-19 폐기) 의 user_memories 테이블 정리:
+-- 운영 DB 에 옛 스키마 (category/key/value/importance/...) 가 row 0 으로 잔존.
+-- 코드는 모두 제거됐고 데이터 없음 → DROP CASCADE 후 신규 스키마 재생성.
+
+DROP TABLE IF EXISTS user_memories CASCADE;
 
 CREATE TABLE IF NOT EXISTS user_memories (
     id            TEXT PRIMARY KEY,                       -- uuid

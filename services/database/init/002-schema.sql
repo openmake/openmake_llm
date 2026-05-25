@@ -131,31 +131,12 @@ CREATE TABLE IF NOT EXISTS alert_history (
 );
 
 -- ============================================
--- 장기 메모리 시스템 테이블
+-- 장기 메모리 시스템 테이블 (legacy MemoryService — 2026-05-19 폐기)
 -- ============================================
-
-CREATE TABLE IF NOT EXISTS user_memories (
-    id TEXT PRIMARY KEY,
-    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    category TEXT NOT NULL CHECK(category IN ('preference', 'fact', 'project', 'relationship', 'skill', 'context')),
-    key TEXT NOT NULL,
-    value TEXT NOT NULL,
-    importance REAL DEFAULT 0.5,
-    access_count INTEGER DEFAULT 0,
-    last_accessed TIMESTAMPTZ,
-    source_session_id TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW(),
-    expires_at TIMESTAMPTZ,
-    UNIQUE(user_id, category, key)
-);
-
-CREATE TABLE IF NOT EXISTS memory_tags (
-    id SERIAL PRIMARY KEY,
-    memory_id TEXT NOT NULL REFERENCES user_memories(id) ON DELETE CASCADE,
-    tag TEXT NOT NULL,
-    UNIQUE(memory_id, tag)
-);
+-- user_memories / memory_tags 는 2026-05-19 MemoryService 폐기와 함께 제거됨.
+-- 2026-05-26 mainstream gap closure Phase 3-A 에서 user_memories 가
+-- 신규 스키마 (content/source/is_active/accessed_at) 로 재도입됨 —
+-- migration 034_user_memories.sql 에 정의. 본 init 파일에서는 정의 안 함.
 
 -- ============================================
 -- Deep Research 테이블
@@ -268,11 +249,8 @@ CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON conversation_sessions(user_id);
 
--- Memory indexes
-CREATE INDEX IF NOT EXISTS idx_memories_user ON user_memories(user_id);
-CREATE INDEX IF NOT EXISTS idx_memories_category ON user_memories(category);
-CREATE INDEX IF NOT EXISTS idx_memories_importance ON user_memories(importance DESC);
-CREATE INDEX IF NOT EXISTS idx_memory_tags_memory ON memory_tags(memory_id);
+-- Memory indexes — 2026-05-19 MemoryService 폐기 + 2026-05-26 신규 스키마는
+-- migration 034 가 자체 인덱스 정의 → 본 init 파일에서는 정의 안 함.
 
 -- Research indexes
 CREATE INDEX IF NOT EXISTS idx_research_user ON research_sessions(user_id);
