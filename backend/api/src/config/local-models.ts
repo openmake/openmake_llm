@@ -64,12 +64,13 @@ const DEFAULT_LOCAL_MODELS: LocalModelEntry[] = [
     {
         id: 'qwen3.6-35b-a3b-1m',
         displayName: 'Qwen 3.6 (1M context)',
-        description: '대용량 문서/research — 1M context (서버 PC 의 8004 가동 시에만)',
+        description: '대용량 문서/research — 1M context (LiteLLM gateway 가 항상 노출)',
         role: 'chat',
         contextLength: 1048576,
-        // 8004 백엔드가 선택적 — 기본 비활성. 운영자가 8004 가동 후 startup
-        // health check (probeLocalModelAvailability) 가 available=true 로 전환.
-        available: false,
+        // LiteLLM gateway 가 /v1/models 응답에 항상 포함 → 클라이언트는 always available 가정.
+        // 내부 8004 vLLM 다운 시는 LiteLLM router 가 에러 응답 (기존 LLMClient 에러 처리 cought).
+        // ModelPool routing 의 자동 1M 전환을 위해 available 보장 필요.
+        available: true,
     },
     {
         id: 'gemma-4-31b',
