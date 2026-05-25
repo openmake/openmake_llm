@@ -71,6 +71,10 @@
                 '<div class="ma-form-group"><label>이름 (1~80자)</label><input type="text" id="maName" maxlength="80" placeholder="예: 마케팅 카피라이터"></div>' +
                 '<div class="ma-form-group"><label>설명 (선택, ~500자)</label><input type="text" id="maDesc" maxlength="500" placeholder="짧은 설명"></div>' +
                 '<div class="ma-form-group"><label>System Prompt (1~8000자) — 매 대화 시 prepend</label><textarea id="maSystemPrompt" maxlength="8000" placeholder="당신은 ...입니다. 다음 원칙을 따릅니다: ..."></textarea></div>' +
+                '<div class="ma-form-group">' +
+                '<label>연결할 스킬 <span style="color:var(--text-muted);font-weight:normal;font-size:11px">(선택. 체크된 스킬의 prompt_md 가 채팅 시 자동 주입됨)</span></label>' +
+                '<div id="maSkillList" style="max-height:200px;overflow-y:auto;border:1px solid var(--border-light);border-radius:6px;padding:8px;background:var(--bg-secondary);"><div style="color:var(--text-muted);font-size:var(--font-size-sm);text-align:center;padding:8px;">스킬 로드 중...</div></div>' +
+                '</div>' +
                 '<div class="ma-modal-actions">' +
                 '<button class="ma-btn-secondary" id="maCancelBtn">취소</button>' +
                 '<button class="ma-btn-danger" id="maDeleteBtn" style="display:none">삭제</button>' +
@@ -88,6 +92,49 @@
             let editingId = null;
             let selectedEmoji = '🤖';
             let agents = [];
+            let availableSkills = [];  // public + 본인 소유 skill 목록 (캐시)
+
+            /**
+             * 사용자 가용 skill 목록 조회 + 모달 multi-select 렌더링.
+             * GET /api/agents/skills 는 userId 자동 전달 (RBAC) — public OR created_by=me 만.
+             */
+            async function loadAvailableSkills() {
+                try {
+                    const res = await authFetch('/api/agents/skills?limit=200');
+                    const data = await res.json();
+                    const result = data && data.data;
+                    availableSkills = (result && (result.items || result.skills || result)) || [];
+                    if (!Array.isArray(availableSkills)) availableSkills = [];
+                } catch (e) {
+                    console.warn('[my-agents] skill 목록 로드 실패:', e);
+                    availableSkills = [];
+                }
+            }
+
+            function renderSkillList(selectedIds) {
+                const listEl = document.getElementById('maSkillList');
+                if (!listEl) return;
+                if (availableSkills.length === 0) {
+                    listEl.innerHTML = '<div style="color:var(--text-muted);font-size:var(--font-size-sm);text-align:center;padding:8px;">사용 가능한 스킬이 없습니다. /skill-library.html 에서 추가하세요.</div>';
+                    return;
+                }
+                const ids = new Set(Array.isArray(selectedIds) ? selectedIds : []);
+                listEl.innerHTML = availableSkills.map(function(s) {
+                    const checked = ids.has(s.id) ? 'checked' : '';
+                    const catBadge = s.category ? ' <span style="background:var(--bg-tertiary);color:var(--text-muted);font-size:10px;padding:1px 5px;border-radius:3px;margin-left:4px;">' + esc(s.category) + '</span>' : '';
+                    const pubMark = s.is_public ? ' 🌐' : '';
+                    return '<label style="display:flex;align-items:flex-start;gap:8px;padding:6px;border-radius:4px;cursor:pointer;hover:background:var(--bg-tertiary);">' +
+                        '<input type="checkbox" class="ma-skill-cb" data-skill-id="' + esc(s.id) + '" ' + checked + ' style="margin-top:3px;flex-shrink:0;">' +
+                        '<div style="flex:1;min-width:0;">' +
+                        '<div style="font-size:var(--font-size-sm);font-weight:600;color:var(--text-primary);">' + esc(s.name) + pubMark + catBadge + '</div>' +
+                        (s.description ? '<div style="font-size:11px;color:var(--text-muted);margin-top:2px;">' + esc(s.description) + '</div>' : '') +
+                        '</div></label>';
+                }).join('');
+            }
+
+            function getSelectedSkillIds() {
+                return Array.from(document.querySelectorAll('.ma-skill-cb:checked')).map(function(c){ return c.getAttribute('data-skill-id'); });
+            }
 
             function initEmojiPicker() {
                 const picker = document.getElementById('maEmojiPicker');
@@ -139,6 +186,7 @@
                 const modal = document.getElementById('maEditorModal');
                 document.getElementById('maEditorTitle').textContent = id ? 'Agent 편집' : '새 Agent';
                 document.getElementById('maDeleteBtn').style.display = id ? '' : 'none';
+                let preselectedSkills = [];
                 if (id) {
                     const a = agents.find(function(x){ return x.id === id; });
                     if (!a) return;
@@ -146,6 +194,7 @@
                     document.getElementById('maName').value = a.name || '';
                     document.getElementById('maDesc').value = a.description || '';
                     document.getElementById('maSystemPrompt').value = a.system_prompt || '';
+                    preselectedSkills = Array.isArray(a.allowed_skills) ? a.allowed_skills : [];
                 } else {
                     selectedEmoji = '🤖';
                     document.getElementById('maName').value = '';
@@ -153,6 +202,7 @@
                     document.getElementById('maSystemPrompt').value = '';
                 }
                 initEmojiPicker();
+                renderSkillList(preselectedSkills);
                 modal.classList.add('open');
             }
             function closeEditor() { document.getElementById('maEditorModal').classList.remove('open'); }
@@ -163,7 +213,8 @@
                 const systemPrompt = document.getElementById('maSystemPrompt').value.trim();
                 if (!name) { showToast('이름을 입력하세요', 'error'); return; }
                 if (!systemPrompt) { showToast('System Prompt 를 입력하세요', 'error'); return; }
-                const body = { name: name, description: description || null, systemPrompt: systemPrompt, icon: selectedEmoji };
+                const allowedSkills = getSelectedSkillIds();
+                const body = { name: name, description: description || null, systemPrompt: systemPrompt, icon: selectedEmoji, allowedSkills: allowedSkills };
                 try {
                     const url = editingId ? '/api/users/me/agents/' + encodeURIComponent(editingId) : '/api/users/me/agents';
                     const method = editingId ? 'PUT' : 'POST';
@@ -204,6 +255,7 @@
                 closeEditor();
             });
             loadAgents();
+            loadAvailableSkills();  // 모달 열 때 즉시 렌더링되도록 사전 캐시
         },
 
         cleanup: function() {

@@ -214,6 +214,45 @@ export class SkillManager {
      */
     async buildSkillPrompt(agentId: string, userId?: string, agentCategory?: string): Promise<string> {
         const skills = await this.getSkillsForAgent(agentId, userId, agentCategory);
+        return this.formatSkillsAsPrompt(skills);
+    }
+
+    /**
+     * Custom Agent (#A 2026-05-26) \u2014 \uc0ac\uc6a9\uc790 \uc815\uc758 agent \uc758 allowed_skills \ubc30\uc5f4\ub85c
+     * skill prompt \uad6c\uc131. \uc0b0\uc5c5 agent \uc758 buildSkillPrompt \uc640 \ub3d9\uc77c \ud615\uc2dd.
+     *
+     * @param skillIds - user_agents.allowed_skills \uc758 skill_manifests id \ubc30\uc5f4
+     * @param userId - skill_permissions / is_public \uac00\uc2dc\uc131 \uac80\uc99d\uc6a9
+     * @returns prepend \ud560 skill prompt \ube14\ub85d (skill 0\uac1c \ub610\ub294 \ubaa8\ub450 \ubbf8\uc811\uadfc \uad8c\ud55c \uc2dc \ube48 \ubb38\uc790\uc5f4)
+     */
+    async buildSkillPromptForIds(skillIds: string[], userId?: string): Promise<string> {
+        if (!Array.isArray(skillIds) || skillIds.length === 0) return '';
+        const repo = await this.ensureInitialized();
+        const skills: (AgentSkill | null)[] = await Promise.all(
+            skillIds.map(async (id): Promise<AgentSkill | null> => {
+                try {
+                    const s = await repo.getSkillById(id);
+                    if (!s) return null;
+                    // \uad8c\ud55c \uac80\uc99d \u2014 public \ub610\ub294 \ubcf8\uc778 \uc18c\uc720\ub9cc (manifest \uad8c\ud55c \uccb4\uacc4\ub294 \ubbf8\uc138\ud654 \uac00\ub2a5)
+                    const meta = s as AgentSkill & { is_public?: boolean; created_by?: string };
+                    const isPublic = meta.is_public !== false;
+                    const isOwner = userId !== undefined && meta.created_by === userId;
+                    if (!isPublic && !isOwner) return null;
+                    return s;
+                } catch {
+                    return null;
+                }
+            }),
+        );
+        const validSkills = skills.filter((s): s is AgentSkill => s !== null);
+        return this.formatSkillsAsPrompt(validSkills);
+    }
+
+    /**
+     * AgentSkill \ubc30\uc5f4\uc744 system prompt \ube14\ub85d\uc73c\ub85c \ud3ec\ub9f7.
+     * buildSkillPrompt / buildSkillPromptForIds \uacf5\ud1b5 helper.
+     */
+    private formatSkillsAsPrompt(skills: AgentSkill[]): string {
         if (skills.length === 0) return '';
         const skillBlocks = skills
             .map(s => {

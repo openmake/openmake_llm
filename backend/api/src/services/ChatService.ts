@@ -637,8 +637,24 @@ export class ChatService {
         // Phase 2 Custom Agent (2026-05-26): user agent system prompt 가 있으면
         // 18 산업 agentSystemMessage 자리에 우선 적용 (사용자 명시 의도 존중).
         // 산업 agent 와 user agent 동시 활성 불가 — user 명시 시 우회.
+        // 2026-05-26 옵션 B: Custom Agent 의 allowed_skills 를 skill manifest 로 fetch +
+        // system prompt 에 prepend. 산업 agent 의 buildSkillPrompt 와 동일 형식
+        // (<skill_context name="..."> 블록). 권한: public 또는 본인 소유만.
+        let userAgentSkillPrompt = '';
+        if (unifiedPlan.userAgent && unifiedPlan.userAgent.allowedSkills.length > 0) {
+            try {
+                const { getSkillManager } = await import('../agents/skill-manager');
+                userAgentSkillPrompt = await getSkillManager().buildSkillPromptForIds(
+                    unifiedPlan.userAgent.allowedSkills,
+                    userId && userId !== 'guest' ? userId : undefined,
+                );
+            } catch (e) {
+                logger.warn('user_agent skill 주입 실패 (silent fallback):', e);
+            }
+        }
+
         const effectiveAgentSysMsg = unifiedPlan.userAgent
-            ? `[Custom Agent: ${unifiedPlan.userAgent.icon ?? '🤖'} ${unifiedPlan.userAgent.name}]\n${unifiedPlan.userAgent.systemPrompt}`
+            ? `[Custom Agent: ${unifiedPlan.userAgent.icon ?? '🤖'} ${unifiedPlan.userAgent.name}]\n${unifiedPlan.userAgent.systemPrompt}${userAgentSkillPrompt}`
             : agentSystemMessage;
 
         const baseCombined = effectiveAgentSysMsg
