@@ -23,6 +23,9 @@ import type {
 } from './types';
 import { buildImageDataUrl } from '../utils/image-mime';
 import { parseReasoningTags } from './reasoning-tag-parser';
+import { createLogger } from '../utils/logger';
+
+const log = createLogger('StreamParser');
 
 /**
  * Fallback 메시지: vLLM reasoning 모델(EXAONE/Qwen3 등) 이 reasoning 토큰만으로
@@ -316,6 +319,12 @@ export async function streamChat(
         }
     }
 
+    // 사후 안전망 — finish_reason='length' = max_tokens 도달로 응답 절단됨.
+    // ModelPool 의 proactive routing 이 max_tokens 충분히 확보 못한 신호.
+    if (finishReason === 'length') {
+        log.warn(`[ModelPool] response truncated at max_tokens — model=${request.model} completion_tokens=${completionTokens}`);
+    }
+
     return {
         role: 'assistant',
         content: finalContent,
@@ -381,6 +390,11 @@ export async function nonStreamChat(
         if (finishReason === 'length') {
             finalContent += '\n\n' + FALLBACK_REASONING_ONLY_NOTICE;
         }
+    }
+
+    // 사후 안전망 (nonStream) — Section 5.6
+    if (finishReason === 'length') {
+        log.warn(`[ModelPool] response truncated at max_tokens — model=${request.model} completion_tokens=${r.usage?.completion_tokens ?? '?'}`);
     }
 
     return {
