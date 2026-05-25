@@ -231,24 +231,8 @@ export class DashboardServer {
         // ⚙️ P2-3: 모든 백그라운드 스케줄러 통합 실행
         startAllSchedulers();
 
-        // 시맨틱 분류 캐시 워밍 (비동기, 서버 시작 차단 안 함, 최대 3회 재시도)
-        const warmWithRetry = async (attempts = 3) => {
-            for (let i = 1; i <= attempts; i++) {
-                try {
-                    const { warmClassificationCache } = await import('./chat/llm-classifier');
-                    await warmClassificationCache();
-                    console.log(`[Server] 캐시 워밍 완료 (시도 ${i}/${attempts})`);
-                    return;
-                } catch (err) {
-                    const delay = Math.pow(2, i) * 1000;
-                    console.error(`[Server] 캐시 워밍 실패 (시도 ${i}/${attempts}):`, err);
-                    if (i < attempts) {
-                        await new Promise(resolve => setTimeout(resolve, delay));
-                    }
-                }
-            }
-        };
-        warmWithRetry().catch(err => console.error('[Server] 캐시 워밍 최종 실패:', err));
+        // Phase B Phase 2-A (2026-05-26): LLM classifier 제거 — 분류 캐시 워밍 코드 삭제.
+        // 분류는 regex + fast-path 단일 경로로 round-trip 0회.
 
         // 모델 워밍업: LiteLLM 헬스체크 + 첫 토큰 호출로 vLLM 캐시 워밍.
         // 비동기, 실패해도 서버 시작은 계속.

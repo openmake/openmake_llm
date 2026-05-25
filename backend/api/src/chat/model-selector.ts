@@ -39,8 +39,6 @@ import type { QueryType, ModelSelection } from './model-selector-types';
 export { classifyQuery } from './query-classifier';
 // Import classifyQuery for internal use (via separate name to avoid conflict)
 import { classifyQuery as _classifyQuery } from './query-classifier';
-// Import LLM classifier
-import { classifyWithLLM, getConfidenceThreshold, logDisagreementIfAny } from './llm-classifier';
 // Fast-path: 짧은 인사·단답형 즉시 분기
 import { detectFastPath } from './fast-path-detector';
 
@@ -56,74 +54,38 @@ export { ModelPreset, getModelPresets } from '../config/model-presets';
 /**
  * 질문 유형을 분류하고 단일 로컬 모델(llmDefaultModel)로 응답합니다.
  *
+ * Phase B Phase 2-A (2026-05-26): LLM classifier 분기 제거 — fast-path + regex
+ * 만 사용. LLM round-trip 0회 보장. classifier 결과는 옵션 튜닝
+ * (QUERY_TYPE_PARAMS) 에만 영향하고 model 결정에는 미사용 (Pure Manual 모드)
+ * 이라서 LLM 호출 비용 ROI 가 낮았던 4 layer 중 Layer 1 을 제거.
+ *
  * @param query - 사용자 질문 텍스트
  * @param hasImages - 이미지 첨부 여부 (true면 vision 유형으로 강제 전환)
- * @param history - 이전 대화 히스토리
  * @returns 모델 선택 결과
  */
-/**
- * LLM classifier 우회가 활성인지 결정.
- *
- * 결정 순서:
- *  1. env `OMK_DISABLE_LLM_CLASSIFIER=true` → 항상 우회
- *  2. env `OMK_DISABLE_LLM_CLASSIFIER=false` → 항상 활성
- *  3. 미지정/'auto' → 단일 모델 환경(getModelPresets() 키 1개) 자동 감지
- *
- * 단일 모델 환경에서 LLM classifier 결과는 옵션 튜닝(QUERY_TYPE_PARAMS) 에만 영향
- * — 모델 라우팅에 영향이 없으므로 regex 분류로 대체해도 사용자 응답 모델 동일.
- */
-function shouldBypassLlmClassifier(): boolean {
-    const config = getConfig();
-    if (config.omkDisableLlmClassifier === 'true') return true;
-    if (config.omkDisableLlmClassifier === 'false') return false;
-    return Object.keys(getModelPresets()).length <= 1;
-}
-
 export async function selectOptimalModel(
     query: string,
     hasImages?: boolean,
-    history?: Array<{ role: string; content: string }>,
 ): Promise<ModelSelection> {
     const config = getConfig();
 
     let classifiedType: QueryType;
     let classifiedConfidence: number;
+    let classifierSource: 'regex' | 'cache' | 'llm';
 
-    // ── Short-circuit 1: Fast-path (인사·단답형) — LLM/regex 모두 우회 ──
+    // ── Short-circuit 1: Fast-path (인사·단답형) ──
     const fastPath = detectFastPath(query);
     if (fastPath.matched) {
         classifiedType = 'chat';
         classifiedConfidence = 1.0;
-        logger.info(`Fast-path 매칭(${fastPath.reason}) — classifier 우회, queryType=chat`);
-    } else if (shouldBypassLlmClassifier()) {
-        // ── Short-circuit 2: 단일 모델 환경 — regex 분류만 (LLM round-trip 0회) ──
+        classifierSource = 'regex';
+        logger.info(`Fast-path 매칭(${fastPath.reason}) — queryType=chat`);
+    } else {
+        // ── Regex 분류 (단일 경로) ──
         const regexResult = _classifyQuery(query);
         classifiedType = regexResult.type;
         classifiedConfidence = regexResult.confidence;
-        logger.debug(`단일 모델 모드 — regex 분류 (LLM classifier 우회): ${classifiedType} (${(classifiedConfidence * 100).toFixed(0)}%)`);
-    } else {
-        // ── 다중 모델 환경: 기존 LLM classifier 경로 유지 ──
-        try {
-            const llmResult = await classifyWithLLM(query, history);
-            if (llmResult && llmResult.confidence >= getConfidenceThreshold()) {
-                classifiedType = llmResult.type;
-                classifiedConfidence = llmResult.confidence;
-                const regexCheck = _classifyQuery(query);
-                logDisagreementIfAny(
-                    query, llmResult.type, llmResult.confidence,
-                    regexCheck.type, regexCheck.confidence,
-                    classifiedType, llmResult.source === 'cache' ? 'cache' : 'llm',
-                );
-            } else {
-                const regexResult = _classifyQuery(query);
-                classifiedType = regexResult.type;
-                classifiedConfidence = regexResult.confidence;
-            }
-        } catch {
-            const regexResult = _classifyQuery(query);
-            classifiedType = regexResult.type;
-            classifiedConfidence = regexResult.confidence;
-        }
+        classifierSource = 'regex';
     }
 
     if (hasImages) {
@@ -148,6 +110,8 @@ export async function selectOptimalModel(
         supportsToolCalling: true,
         supportsThinking: true,
         supportsVision: true,
+        classifiedConfidence,
+        classifierSource,
     };
 }
 

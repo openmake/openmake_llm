@@ -20,10 +20,7 @@ import { FeedbackRepository } from '../data/repositories/feedback-repository';
 import { getPool } from '../data/models/unified-database';
 import { validate } from '../middlewares/validation';
 import { chatFeedbackSchema } from '../schemas/chat-feedback.schema';
-import { createLogger } from '../utils/logger';
-
 const router = Router();
-const logger = createLogger('ChatFeedbackRoutes');
 
 
 /**
@@ -64,21 +61,9 @@ router.post(
             routingMetadata: safeMetadata,
         });
 
-        // P3-B: 피드백 기반 분류 캐시 교정 (fire-and-forget)
-        if (signal === 'thumbs_down' || signal === 'thumbs_up') {
-            (async () => {
-                const { correctOnNegativeFeedback, boostOnPositiveFeedback } = await import('../chat/feedback-cache-corrector');
-                const query = safeMetadata?.queryType; // queryType을 프록시로 사용
-                if (signal === 'thumbs_down') {
-                    await correctOnNegativeFeedback(query, safeMetadata?.queryType);
-                } else {
-                    await boostOnPositiveFeedback(query, safeMetadata?.queryType);
-                }
-            })().catch(e => logger.debug('피드백 캐시 교정 실패 (무시):', e));
-        }
-
-        // 피드백 → 장기 메모리 기록: 2026-05-19 MemoryService 폐기와 함께 제거.
-        // 피드백 신호 자체는 보존 (DB audit log 또는 cache corrector 가 처리).
+        // Phase B Phase 2-A (2026-05-26): 피드백 기반 분류 캐시 교정 제거.
+        // LLM classifier 와 함께 feedback-cache-corrector 삭제됨.
+        // 피드백 신호 자체는 DB (FeedbackRepository.recordFeedback) 에 보존.
 
         res.json(success({ recorded: true }));
     })

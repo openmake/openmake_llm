@@ -33,7 +33,6 @@
 import { Router, Request, Response } from 'express';
 import { getApiUsageTracker } from '../llm';
 import { getCacheSystem } from '../cache';
-import { getClassificationCacheStats } from '../chat/llm-classifier';
 import { getAlertSystem } from '../monitoring/alerts';
 import { getAnalyticsSystem } from '../monitoring/analytics';
 import { ClusterManager } from '../cluster/manager';
@@ -235,18 +234,14 @@ router.get('/alerts', asyncHandler(async (req: Request, res: Response) => {
 /**
  * GET /api/cache/stats
  * 캐시 통계 조회
+ *
+ * Phase B Phase 2-A (2026-05-26): classificationCache 항목 제거. LLM classifier
+ * 가 삭제되어 분류 캐시도 미운영. queryCache (응답 캐시) 만 노출.
  */
 router.get('/cache/stats', asyncHandler(async (req: Request, res: Response) => {
     const cache = getCacheSystem();
-    const classificationStats = getClassificationCacheStats();
     res.json(success({
         queryCache: cache.getStats(),
-        classificationCache: {
-            ...classificationStats,
-            status: classificationStats.hitRate >= 70 ? 'healthy'
-                  : classificationStats.hitRate >= 40 ? 'warming'
-                  : 'cold',
-        },
     }));
 }));
 

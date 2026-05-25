@@ -39,7 +39,8 @@ export { recordChatMetrics } from '../chat-service-metrics';
 
 // ── Extracted Submodules ─────────────────────────────
 export { buildContextForLLM, type BuildContextParams, type BuildContextResult } from './context-builder';
-export { resolveModel, type ResolveModelParams } from './model-resolver';
+// model-resolver: 2026-05-26 제거 (Phase B Phase 2-A) — ExecutionPlanBuilder 가
+// chat/execution-plan-builder.ts 에서 통합 처리.
 export { selectAndExecuteStrategy, type StrategyExecutorParams } from './strategy-executor';
 // memory-extractor: 2026-05-19 제거 (MemoryService 폐기)
 export { resolveAgent, type AgentResolutionResult } from './agent-resolver';
