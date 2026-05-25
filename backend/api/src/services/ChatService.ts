@@ -43,6 +43,7 @@ import { buildContextForLLM } from './chat-service/context-builder';
 import { getExecutionPlanBuilder } from '../chat/execution-plan-builder';
 import type { UnifiedExecutionPlan } from '../chat/execution-plan-types';
 import { applyStyle } from '../chat/style';
+import { normalizeBrandAlias, logAliasHitIfAny } from '../chat/brand-alias-normalizer';
 import { selectAndExecuteStrategy } from './chat-service/strategy-executor';
 import { resolveAgent as resolveAgentFn } from './chat-service/agent-resolver';
 import { resolveLanguagePolicy as resolveLanguagePolicyFn } from './chat-service/language-resolver';
@@ -394,16 +395,30 @@ export class ChatService {
             req.userLanguagePreference = languagePolicy.resolvedLanguage;
         }
 
-        // 토론 모드: 사용자 명시 토글(`discussionMode === true`)만 활성화 트리거.
-        // 단일 로컬 모델 전환(2026-05-06) 후 Brand Model 프로파일이 모두 제거되어
-        // `decideDiscussionActivation()` 의 자동 분기는 모두 false 반환 → 함수 호출 자체 제거.
-        // 향후 자동 토론 활성화가 필요하면 새 정책으로 재설계 (이전 구현 참조: discussion-router.ts).
-        if (discussionMode === true) {
+        // Phase D (2026-05-26): brand alias normalization — discussion/thinking 분기 이전.
+        // 외부 OpenAI 호환 클라이언트가 'openmake_llm_pro' 등을 보냈을 때 직교 축 자동 적용.
+        // build() 안에서도 동일 normalize 호출하지만 빠른 모드 분기 (discussion/research) 가
+        // 먼저라서 여기서도 적용. normalize 는 순수 함수라 중복 호출 cost 0.
+        const aliasNorm = normalizeBrandAlias(
+            executionPlan?.requestedModel,
+            (await import('../config/env')).getConfig().llmDefaultModel,
+        );
+        logAliasHitIfAny(aliasNorm);
+        const effectiveDiscussionMode = discussionMode === true || aliasNorm.discussionMode === true;
+        const effectiveThinkingMode = req.thinkingMode === true || aliasNorm.thinkingMode === true;
+
+        // 토론 모드: 사용자 명시 토글 또는 alias-derived (Pro alias).
+        if (effectiveDiscussionMode) {
             return this.processMessageWithDiscussion(req, onToken, onDiscussionProgress);
         }
 
         if (deepResearchMode) {
             return this.processMessageWithDeepResearch(req, onToken, onResearchProgress);
+        }
+
+        // alias-derived thinking 을 req 에 reflect (downstream 처리)
+        if (effectiveThinkingMode && req.thinkingMode !== true) {
+            req.thinkingMode = true;
         }
 
         const startTime = Date.now();

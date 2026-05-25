@@ -33,6 +33,14 @@ export interface UnifiedExecutionPlan extends ExecutionPlan {
 
     /** Phase 2 Custom Agent (2026-05-26): 해석된 사용자 agent. 미설정 시 null */
     userAgent: ResolvedUserAgent | null;
+
+    /**
+     * Phase D (2026-05-26): brand alias 가 derive 한 mode toggle.
+     * ChatService 는 req.thinkingMode || aliasDerived.thinkingMode 식으로 OR 합성.
+     * 사용자 명시 toggle 우선.
+     */
+    aliasDerivedThinkingMode: boolean;
+    aliasDerivedDiscussionMode: boolean;
 }
 
 export interface BuildPlanInput {
