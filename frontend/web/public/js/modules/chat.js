@@ -78,6 +78,98 @@ function hideAbortButton() {
 }
 
 /**
+ * Phase 3-A (2026-05-26): slash command 처리.
+ * 지원: /remember <사실>, /forget <id|all>, /memories
+ * 처리됨 (true 반환) 시 caller 는 LLM 호출 스킵.
+ *
+ * @param {string} message - 사용자 입력
+ * @returns {Promise<boolean>} 처리 여부
+ */
+async function handleSlashCommand(message) {
+    const m = message.trim();
+    const showToast = window.showToast || function(t){ console.log(t); };
+
+    // /remember <fact>
+    if (m === '/remember' || m === '/remember help') {
+        addChatMessage('assistant', '📝 사용법: `/remember <기억할 사실>` — 예: `/remember 나는 한국어로 답변 받기를 선호함`\n다른 명령: `/memories` (목록), `/forget all` (전체 삭제), `/forget <id>` (개별 삭제)');
+        return true;
+    }
+    if (m.startsWith('/remember ')) {
+        const content = m.slice('/remember '.length).trim();
+        if (!content) { showToast('기억할 내용을 입력하세요', 'error'); return true; }
+        try {
+            const res = await window.authFetch('/api/users/me/memories', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ content })
+            });
+            const data = await res.json();
+            if (!res.ok) {
+                const msg = (data && data.error && data.error.message) || '저장 실패';
+                addChatMessage('assistant', `❌ ${msg}`);
+                return true;
+            }
+            addChatMessage('assistant', `🧠 기억했습니다: "${content}"\n이후 모든 대화에서 이 사실이 system prompt 에 prepend 됩니다.`);
+        } catch (e) {
+            addChatMessage('assistant', `❌ 저장 실패: ${e.message || e}`);
+        }
+        return true;
+    }
+
+    // /memories — 목록
+    if (m === '/memories') {
+        try {
+            const res = await window.authFetch('/api/users/me/memories');
+            const data = await res.json();
+            const memories = (data && data.data && data.data.memories) || [];
+            if (!memories.length) {
+                addChatMessage('assistant', '🧠 저장된 memory 가 없습니다. `/remember <사실>` 로 추가하세요.');
+                return true;
+            }
+            const lines = memories.map((m, i) => `${i + 1}. \`${m.id.slice(0, 8)}\` — ${m.content}`).join('\n');
+            addChatMessage('assistant', `🧠 저장된 memory (${memories.length}개):\n${lines}`);
+        } catch (e) {
+            addChatMessage('assistant', `❌ 조회 실패: ${e.message || e}`);
+        }
+        return true;
+    }
+
+    // /forget all / /forget <id-prefix>
+    if (m === '/forget all') {
+        if (!confirm('모든 memory 를 삭제하시겠습니까?')) return true;
+        try {
+            const res = await window.authFetch('/api/users/me/memories', { method: 'DELETE' });
+            const data = await res.json();
+            const count = (data && data.data && data.data.deleted) || 0;
+            addChatMessage('assistant', `🧠 ${count}개 memory 삭제됨.`);
+        } catch (e) {
+            addChatMessage('assistant', `❌ 삭제 실패: ${e.message || e}`);
+        }
+        return true;
+    }
+    if (m.startsWith('/forget ')) {
+        const idPrefix = m.slice('/forget '.length).trim();
+        if (!idPrefix) return true;
+        try {
+            // ID prefix 매칭 위해 우선 list 조회 → 해당 id 찾기
+            const listRes = await window.authFetch('/api/users/me/memories');
+            const listData = await listRes.json();
+            const memories = (listData && listData.data && listData.data.memories) || [];
+            const target = memories.find(m => m.id.startsWith(idPrefix));
+            if (!target) { addChatMessage('assistant', `❌ id prefix "${idPrefix}" 와 일치하는 memory 없음`); return true; }
+            const res = await window.authFetch('/api/users/me/memories/' + encodeURIComponent(target.id), { method: 'DELETE' });
+            if (!res.ok) { addChatMessage('assistant', '❌ 삭제 실패'); return true; }
+            addChatMessage('assistant', `🧠 삭제됨: "${target.content}"`);
+        } catch (e) {
+            addChatMessage('assistant', `❌ 삭제 실패: ${e.message || e}`);
+        }
+        return true;
+    }
+
+    return false;  // 미인식 slash command — 일반 메시지로 처리
+}
+
+/**
  * 사용자 메시지 전송
  * 입력창 내용과 첨부 파일을 WebSocket을 통해 서버에 전송합니다.
  * 모델 선택, 웹 검색, 사고 모드, 문서 컨텍스트 등 옵션을 포함합니다.
@@ -93,6 +185,18 @@ async function sendMessage() {
     if (!message && attachedFiles.length === 0) return;
 
     setState('isSending', true);
+
+    // Phase 3-A (2026-05-26): slash command 처리 — /remember, /forget, /memories
+    // chat 흐름과 분리, LLM 호출 없음. claude.ai/ChatGPT Memory 동등.
+    if (message.startsWith('/')) {
+        const handled = await handleSlashCommand(message);
+        if (handled) {
+            input.value = '';
+            input.style.height = 'auto';
+            setState('isSending', false);
+            return;
+        }
+    }
 
     // 환영 화면 숨기기
     const welcomeScreen = document.getElementById('welcomeScreen');

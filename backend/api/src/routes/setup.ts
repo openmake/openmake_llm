@@ -20,6 +20,7 @@ import { createConsentController } from '../controllers/consent.controller';
 import { createExportController } from '../controllers/export.controller';
 import { createUserPreferencesController } from '../controllers/user-preferences.controller';
 import { createUserAgentsController } from '../controllers/user-agents.controller';
+import { createUserMemoriesController } from '../controllers/user-memories.controller';
 import debugQueueRouter from './debug-queue.routes';
 import { default as chatRouter, setClusterManager as setChatCluster } from './chat.routes';
 import { setClusterManager as setOpenAICompatCluster } from './openai-compat.routes';
@@ -204,6 +205,8 @@ export function setupApiRoutes(
     app.use('/api/users/me', createUserPreferencesController());
     // Custom Agents — 사용자 정의 페르소나 (claude.ai Projects / ChatGPT Custom GPTs 동등, 2026-05-26)
     app.use('/api/users/me/agents', createUserAgentsController());
+    // Cross-conversation Memory — explicit /remember (claude.ai/ChatGPT Memory 동등, 2026-05-26)
+    app.use('/api/users/me/memories', createUserMemoriesController());
 
     // 클러스터 의존성 주입
     setChatCluster(cluster);

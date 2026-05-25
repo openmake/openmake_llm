@@ -582,6 +582,7 @@ export class ChatService {
         // T1~T9 분석의 inter-turn verbosity 해결책. NULL/빈 문자열은 자동 스킵.
         // 인증된 사용자 (userId 명시) 에만 적용 — guest 세션은 미적용.
         let customInstructionsBlock = '';
+        let memoryBlock = '';
         if (userId && userId !== 'guest') {
             try {
                 const { UserRepository } = await import('../data/repositories/user-repository');
@@ -592,8 +593,27 @@ export class ChatService {
                     customInstructionsBlock = `## 👤 User Custom Instructions\n${ci.trim()}\n\n---\n\n`;
                 }
             } catch (e) {
-                // 조회 실패 시 silent fallback — chat 응답 차단 금지
                 logger.warn('custom_instructions 조회 실패 (계속 진행):', e);
+            }
+
+            // Cross-conversation Memory prepend (2026-05-26 Phase 3-A).
+            // /remember 로 저장된 explicit memory 를 최신 50개까지 prepend.
+            // claude.ai/ChatGPT Memory 동등. 조회 실패 시 silent fallback.
+            try {
+                const { UserMemoryRepository } = await import('../data/repositories/user-memory-repository');
+                const { getPool } = await import('../data/models/unified-database');
+                const memRepo = new UserMemoryRepository(getPool());
+                const memories = await memRepo.listActiveByUser(userId, 50);
+                if (memories.length > 0) {
+                    const lines = memories.map((m, i) => `${i + 1}. ${m.content}`).join('\n');
+                    memoryBlock = `## 🧠 User Memory (cross-conversation)\n${lines}\n\n---\n\n`;
+                    // 접근 시점 갱신 — fire-and-forget
+                    void memRepo.touchAccessed(memories.map(m => m.id)).catch(e =>
+                        logger.warn('memory touch 실패 (무시):', e),
+                    );
+                }
+            } catch (e) {
+                logger.warn('user_memories 조회 실패 (계속 진행):', e);
             }
         }
 
@@ -609,7 +629,7 @@ export class ChatService {
             : promptConfig.systemPrompt;
         // Phase A (2026-05-26): per-session Style 축 적용. default 일 때는 overhead 0.
         const styledBase = applyStyle(baseCombined, unifiedPlan.style, languagePolicy?.resolvedLanguage || 'en');
-        const combinedSystemPrompt = customInstructionsBlock + styledBase;
+        const combinedSystemPrompt = memoryBlock + customInstructionsBlock + styledBase;
 
         // history assembly + system prompt + budget hint + user message — helper module 위임
         const { currentHistory } = await assembleHistoryWithSummary({
