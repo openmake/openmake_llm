@@ -16,6 +16,7 @@
 import type { ExecutionPlan } from './profile-resolver';
 import type { ModelSelection } from './model-selector-types';
 import type { ModelPoolDecision } from '../llm/model-pool';
+import type { Style } from './style';
 
 export interface UnifiedExecutionPlan extends ExecutionPlan {
     /** Layer 1+3 결과 — 분류된 queryType + 옵션 + 모델 ID */
@@ -26,6 +27,9 @@ export interface UnifiedExecutionPlan extends ExecutionPlan {
      * Phase 1 동안에는 null (LLMClient.chat 시점에 결정).
      */
     capacityDecision: ModelPoolDecision | null;
+
+    /** Phase A (2026-05-26): 응답 스타일 축 결과 */
+    style: Style;
 }
 
 export interface BuildPlanInput {
@@ -40,4 +44,7 @@ export interface BuildPlanInput {
      * Phase 1 에서는 builder 가 그대로 흡수. Phase 2 부터 builder 가 직접 구성.
      */
     executionPlan?: ExecutionPlan;
+
+    /** Phase A (2026-05-26): per-session 응답 스타일 (concise/default/verbose) */
+    style?: Style;
 }

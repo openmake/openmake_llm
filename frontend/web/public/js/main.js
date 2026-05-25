@@ -88,6 +88,7 @@ import {
 // 1-10. 모드 토글 (state 의존)
 import {
     toggleDiscussionMode, toggleThinkingMode, toggleDeepResearch,
+    cycleResponseStyle, updateResponseStyleButton,
     showDiscussionProgress, showResearchProgress
 } from './modules/modes.js';
 
@@ -611,8 +612,19 @@ window.addToChatHistory = addToChatHistory;
 window.toggleDiscussionMode = toggleDiscussionMode;
 window.toggleThinkingMode = toggleThinkingMode;
 window.toggleDeepResearch = toggleDeepResearch;
+window.cycleResponseStyle = cycleResponseStyle;
+window.updateResponseStyleButton = updateResponseStyleButton;
 window.showDiscussionProgress = showDiscussionProgress;
 window.showResearchProgress = showResearchProgress;
+
+// 초기 응답 스타일 버튼 상태 동기화 (페이지 로드 시 1회)
+if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => updateResponseStyleButton());
+    } else {
+        updateResponseStyleButton();
+    }
+}
 
 
 // 클러스터

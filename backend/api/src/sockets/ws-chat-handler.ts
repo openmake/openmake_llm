@@ -294,6 +294,7 @@ export async function handleChatMessage(
             deepResearchMode: msg.deepResearchMode === true,
             thinkingMode: msg.thinkingMode === true,
             thinkingLevel: (msg.thinkingLevel || 'high') as 'low' | 'medium' | 'high',
+            style: msg.style,
             // 사용자가 명시적으로 false 보낼 때만 본문 저장 차단. 미지정/true → 저장 (기본 보존)
             saveHistory: msg.saveHistory !== false,
             // 메모리 학습 — saveHistory 와 독립. 명시 false 만 차단, 기본 활성

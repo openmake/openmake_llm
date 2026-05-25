@@ -117,6 +117,8 @@ export const chatRequestSchema = z.object({
     tool_choice: toolChoiceSchema.optional(),
     /** 구조화된 출력 형식: 'json' 또는 JSON Schema 객체 */
     format: z.union([z.literal('json'), z.record(z.string(), z.unknown())]).optional(),
+    /** Phase A (2026-05-26): 응답 스타일 (concise/default/verbose). 미지정 시 'default' */
+    style: z.enum(['concise', 'default', 'verbose']).optional(),
 });
 
 /** 채팅 요청 TypeScript 타입 (Zod 스키마로부터 추론) */

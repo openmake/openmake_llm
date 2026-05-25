@@ -47,6 +47,8 @@ export interface WSMessage {
     language?: string;
     /** 구조화된 출력 형식 (Ollama format 파라미터: 'json' 또는 JSON Schema 객체) */
     format?: 'json' | Record<string, unknown>;
+    /** Phase A (2026-05-26): 응답 스타일 (concise/default/verbose) */
+    style?: 'concise' | 'default' | 'verbose';
     [key: string]: unknown;
 }
 

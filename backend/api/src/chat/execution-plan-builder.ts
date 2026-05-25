@@ -16,6 +16,7 @@
 
 import { buildExecutionPlan } from './profile-resolver';
 import { selectOptimalModel } from './model-selector';
+import { normalizeStyle } from './style';
 import { createLogger } from '../utils/logger';
 import type {
     BuildPlanInput,
@@ -33,15 +34,17 @@ export class ExecutionPlanBuilder {
      * Phase 2-B: capacityDecision 계산 흡수.
      */
     async build(input: BuildPlanInput): Promise<UnifiedExecutionPlan> {
-        const { message, hasImages, executionPlan } = input;
+        const { message, hasImages, executionPlan, style: rawStyle } = input;
 
         const profilePlan = executionPlan ?? buildExecutionPlan('');
         const modelSelection = await selectOptimalModel(message, hasImages);
+        const style = normalizeStyle(rawStyle);
 
         logger.debug(
             `build: queryType=${modelSelection.queryType} ` +
             `model=${modelSelection.model} ` +
             `strategy=${profilePlan.executionStrategy} ` +
+            `style=${style} ` +
             `requestedModel=${profilePlan.requestedModel}`,
         );
 
@@ -49,6 +52,7 @@ export class ExecutionPlanBuilder {
             ...profilePlan,
             modelSelection,
             capacityDecision: null,
+            style,
         };
     }
 }

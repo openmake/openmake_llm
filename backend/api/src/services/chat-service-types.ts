@@ -213,4 +213,10 @@ export interface ChatMessageRequest {
     userLanguagePreference?: string;
     /** 구조화된 출력 형식 (Ollama format 파라미터: 'json' 또는 JSON Schema 객체) */
     format?: import('../llm').FormatOption;
+    /**
+     * 응답 스타일 (Phase A 2026-05-26): 'concise' | 'default' | 'verbose'.
+     * 미지정/잘못된 값은 'default' 로 정규화. system prompt prepend 으로 작동.
+     * Custom Instructions 와는 독립 (Style 은 per-session, CI 는 영구).
+     */
+    style?: import('../chat/style').Style;
 }

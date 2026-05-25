@@ -112,6 +112,11 @@ export interface ChatRequestParams {
     /** 사고 수준 */
     thinkingLevel?: 'low' | 'medium' | 'high';
     /**
+     * 응답 스타일 (Phase A 2026-05-26): 'concise' | 'default' | 'verbose'.
+     * system prompt prepend 으로 작동. Custom Instructions 와 독립.
+     */
+    style?: import('./style').Style;
+    /**
      * 메시지 본문을 conversation_messages 에 저장할지 여부.
      * undefined/true → 저장 (기본). false → 본문 저장 스킵, audit log 만 기록.
      * settings.html saveHistoryToggle 과 연결.
@@ -440,6 +445,7 @@ export class ChatRequestHandler {
             deepResearchMode,
             thinkingMode,
             thinkingLevel,
+            style,
             saveHistory,
             enabledTools,
             tools,
@@ -569,6 +575,7 @@ export class ChatRequestHandler {
             deepResearchMode,
             thinkingMode: mergedThinkingMode,
             thinkingLevel: mergedThinkingLevel,
+            style,
             userId: userContext.userId,
             apiKeyId: params.apiKeyId,
             userRole: userContext.userRole,

@@ -282,16 +282,58 @@ function showResearchProgress(progress) {
         }, 2000);
     }
 }
+/**
+ * Phase A (2026-05-26): 응답 스타일 (Concise/Default/Verbose) cycle 토글.
+ * claude.ai Style dropdown 동등 — system prompt prepend 으로 작동.
+ * Custom Instructions (영구) 와 독립, per-session 적용.
+ *
+ * 3개 chip 형태 대신 단일 버튼 cycle 패턴 채택:
+ *   ⚡ Concise → 📝 Default → 📚 Verbose → ⚡ Concise ...
+ * 버튼 1개로 UI 공간 절약 + 명시적 chip 3개 대비 cognitive load 낮음.
+ */
+const STYLE_CYCLE = ['default', 'concise', 'verbose'];
+const STYLE_META = {
+    default: { icon: '📝', label: '기본', tooltip: '응답 스타일: 기본 (균형)' },
+    concise: { icon: '⚡', label: '간결', tooltip: '응답 스타일: 간결 (핵심만)' },
+    verbose: { icon: '📚', label: '상세', tooltip: '응답 스타일: 상세 (근거·예시 포함)' }
+};
+
+function cycleResponseStyle() {
+    const current = getState('responseStyle') || 'default';
+    const idx = STYLE_CYCLE.indexOf(current);
+    const next = STYLE_CYCLE[(idx + 1) % STYLE_CYCLE.length];
+    setState('responseStyle', next);
+    updateResponseStyleButton();
+    const meta = STYLE_META[next];
+    showToast(`${meta.icon} ${meta.tooltip}`, 'info');
+}
+
+function updateResponseStyleButton() {
+    const btn = document.getElementById('responseStyleBtn');
+    if (!btn) return;
+    const current = getState('responseStyle') || 'default';
+    const meta = STYLE_META[current];
+    btn.textContent = meta.icon;
+    btn.title = meta.tooltip;
+    btn.dataset.style = current;
+    // default 가 아닐 때만 active 시각 표시
+    btn.classList.toggle('active', current !== 'default');
+}
+
 // 전역 노옥 (레거시 호환)
 window.toggleDiscussionMode = toggleDiscussionMode;
 window.toggleThinkingMode = toggleThinkingMode;
 window.toggleDeepResearch = toggleDeepResearch;
+window.cycleResponseStyle = cycleResponseStyle;
+window.updateResponseStyleButton = updateResponseStyleButton;
 window.showDiscussionProgress = showDiscussionProgress;
 window.showResearchProgress = showResearchProgress;
 export {
     toggleDiscussionMode,
     toggleThinkingMode,
     toggleDeepResearch,
+    cycleResponseStyle,
+    updateResponseStyleButton,
     showDiscussionProgress,
     showResearchProgress
 };

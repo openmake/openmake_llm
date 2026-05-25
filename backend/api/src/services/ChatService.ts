@@ -42,6 +42,7 @@ import type { ChatMessageRequest, SystemEventCallback } from './chat-service-typ
 import { buildContextForLLM } from './chat-service/context-builder';
 import { getExecutionPlanBuilder } from '../chat/execution-plan-builder';
 import type { UnifiedExecutionPlan } from '../chat/execution-plan-types';
+import { applyStyle } from '../chat/style';
 import { selectAndExecuteStrategy } from './chat-service/strategy-executor';
 import { resolveAgent as resolveAgentFn } from './chat-service/agent-resolver';
 import { resolveLanguagePolicy as resolveLanguagePolicyFn } from './chat-service/language-resolver';
@@ -515,6 +516,7 @@ export class ChatService {
             message: message || '',
             hasImages,
             executionPlan,
+            style: req.style,
         });
         const modelSelection = unifiedPlan.modelSelection;
 
@@ -596,7 +598,9 @@ export class ChatService {
         const baseCombined = agentSystemMessage
             ? `${agentSystemMessage}\n\n---\n\n${promptConfig.systemPrompt}`
             : promptConfig.systemPrompt;
-        const combinedSystemPrompt = customInstructionsBlock + baseCombined;
+        // Phase A (2026-05-26): per-session Style 축 적용. default 일 때는 overhead 0.
+        const styledBase = applyStyle(baseCombined, unifiedPlan.style, languagePolicy?.resolvedLanguage || 'en');
+        const combinedSystemPrompt = customInstructionsBlock + styledBase;
 
         // history assembly + system prompt + budget hint + user message — helper module 위임
         const { currentHistory } = await assembleHistoryWithSummary({
