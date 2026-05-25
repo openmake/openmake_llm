@@ -35,7 +35,18 @@
                 ".ma-card .meta { color:var(--text-muted); font-size:11px; }\n" +
                 ".ma-card-actions { display:flex; gap:var(--space-2); margin-top:auto; }\n" +
                 ".ma-card-actions button { padding:var(--space-1) var(--space-3); border:1px solid var(--border-light); border-radius:var(--radius-md); background:var(--bg-tertiary); color:var(--text-secondary); cursor:pointer; font-size:var(--font-size-sm); }\n" +
-                ".ma-empty { text-align:center; padding:var(--space-8); color:var(--text-muted); }\n" +
+                ".ma-empty { text-align:center; padding:var(--space-8); color:var(--text-muted); grid-column:1/-1; }\n" +
+                ".ma-guide { grid-column:1/-1; max-width:600px; margin:var(--space-6) auto; padding:var(--space-6); background:var(--bg-card); border:1px solid var(--border-light); border-radius:var(--radius-lg); text-align:left; }\n" +
+                ".ma-guide h2 { text-align:center; color:var(--text-primary); margin:0 0 var(--space-2); font-size:var(--font-size-lg); }\n" +
+                ".ma-guide .sub { text-align:center; color:var(--text-muted); margin:0 0 var(--space-5); font-size:var(--font-size-sm); }\n" +
+                ".ma-guide section { margin-bottom:var(--space-4); }\n" +
+                ".ma-guide section h3 { margin:0 0 var(--space-2); color:var(--text-secondary); font-size:11px; font-weight:var(--font-weight-semibold); text-transform:uppercase; letter-spacing:.5px; }\n" +
+                ".ma-guide ol, .ma-guide ul { margin:0; padding-left:var(--space-5); color:var(--text-primary); }\n" +
+                ".ma-guide li { margin-bottom:var(--space-1); font-size:var(--font-size-sm); line-height:1.6; }\n" +
+                ".ma-guide .examples { display:flex; flex-direction:column; gap:var(--space-2); }\n" +
+                ".ma-guide .ex-item { padding:var(--space-2) var(--space-3); background:var(--bg-tertiary); border-radius:var(--radius-md); font-size:var(--font-size-sm); color:var(--text-primary); }\n" +
+                ".ma-guide .cta { display:block; margin:var(--space-5) auto 0; padding:var(--space-3) var(--space-5); background:var(--accent-primary); color:#fff; border:none; border-radius:var(--radius-md); font-weight:var(--font-weight-semibold); cursor:pointer; font-size:var(--font-size-md); }\n" +
+                ".ma-guide .cta:hover { opacity:.9; }\n" +
                 ".ma-modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:1000; justify-content:center; align-items:center; }\n" +
                 ".ma-modal-overlay.open { display:flex; }\n" +
                 ".ma-modal { background:var(--bg-card); border:1px solid var(--border-light); border-radius:var(--radius-lg); width:90%; max-width:680px; max-height:90vh; overflow-y:auto; padding:var(--space-6); }\n" +
@@ -158,7 +169,33 @@
                     const data = await res.json();
                     agents = (data && data.data && data.data.agents) || [];
                     if (!agents.length) {
-                        listEl.innerHTML = '<div class="ma-empty"><h2>아직 Agent 가 없습니다</h2><p>+ 새 Agent 를 눌러 첫 페르소나를 만드세요.</p></div>';
+                        listEl.innerHTML = '<div class="ma-guide">' +
+                            '<h2>🤖 아직 Agent 가 없어요</h2>' +
+                            '<p class="sub">Custom Agent 로 본인 전용 페르소나를 만들고 채팅 입력창 우측 dropdown 에서 선택해 사용할 수 있습니다.</p>' +
+                            '<section><h3>할 수 있는 것</h3><ul>' +
+                                '<li>시스템 프롬프트로 페르소나·말투·역할 고정</li>' +
+                                '<li>산업 agent 자동 라우팅 우회 — 본인 페르소나가 우선</li>' +
+                                '<li>스킬 다중 선택으로 도메인 지식 자동 주입</li>' +
+                            '</ul></section>' +
+                            '<section><h3>생성 단계</h3><ol>' +
+                                '<li>위의 <strong>+ 새 Agent</strong> 또는 아래 버튼 클릭</li>' +
+                                '<li>아이콘·이름·짧은 설명 입력</li>' +
+                                '<li><strong>System Prompt</strong> 작성 (페르소나 정의·원칙·말투 등)</li>' +
+                                '<li>(선택) 활용할 스킬 다중 선택 — prompt_md 가 자동 주입됨</li>' +
+                                '<li>저장 → 채팅 입력창 우측 dropdown 에서 즉시 사용</li>' +
+                            '</ol></section>' +
+                            '<section><h3>예시 페르소나</h3><div class="examples">' +
+                                '<div class="ex-item">🤝 <strong>한국 노동시장 분석가</strong> — labor-economist 스킬 연결, 1차/2차 시장 관점 강조</div>' +
+                                '<div class="ex-item">🐍 <strong>Python TDD 코치</strong> — 테스트 먼저, 함수 작성 시 docstring·타입 힌트 필수</div>' +
+                                '<div class="ex-item">🎨 <strong>UX 카피라이터</strong> — 간결한 한국어, 명령형보다 권유형 어투</div>' +
+                            '</div></section>' +
+                            '<button class="cta" id="maGuideCta">+ 새 Agent 만들기</button>' +
+                            '</div>';
+                        const cta = document.getElementById('maGuideCta');
+                        if (cta) cta.addEventListener('click', function(){
+                            const newBtn = document.getElementById('maNewBtn');
+                            if (newBtn) newBtn.click();
+                        });
                         return;
                     }
                     listEl.innerHTML = agents.map(function(a){
