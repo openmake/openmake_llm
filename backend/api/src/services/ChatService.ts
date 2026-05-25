@@ -517,6 +517,8 @@ export class ChatService {
             hasImages,
             executionPlan,
             style: req.style,
+            userAgentId: req.userAgentId,
+            userId,
         });
         const modelSelection = unifiedPlan.modelSelection;
 
@@ -595,8 +597,15 @@ export class ChatService {
             }
         }
 
-        const baseCombined = agentSystemMessage
-            ? `${agentSystemMessage}\n\n---\n\n${promptConfig.systemPrompt}`
+        // Phase 2 Custom Agent (2026-05-26): user agent system prompt 가 있으면
+        // 18 산업 agentSystemMessage 자리에 우선 적용 (사용자 명시 의도 존중).
+        // 산업 agent 와 user agent 동시 활성 불가 — user 명시 시 우회.
+        const effectiveAgentSysMsg = unifiedPlan.userAgent
+            ? `[Custom Agent: ${unifiedPlan.userAgent.icon ?? '🤖'} ${unifiedPlan.userAgent.name}]\n${unifiedPlan.userAgent.systemPrompt}`
+            : agentSystemMessage;
+
+        const baseCombined = effectiveAgentSysMsg
+            ? `${effectiveAgentSysMsg}\n\n---\n\n${promptConfig.systemPrompt}`
             : promptConfig.systemPrompt;
         // Phase A (2026-05-26): per-session Style 축 적용. default 일 때는 overhead 0.
         const styledBase = applyStyle(baseCombined, unifiedPlan.style, languagePolicy?.resolvedLanguage || 'en');

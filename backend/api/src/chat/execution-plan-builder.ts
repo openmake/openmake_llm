@@ -21,6 +21,7 @@ import { createLogger } from '../utils/logger';
 import type {
     BuildPlanInput,
     UnifiedExecutionPlan,
+    ResolvedUserAgent,
 } from './execution-plan-types';
 
 const logger = createLogger('ExecutionPlanBuilder');
@@ -34,17 +35,22 @@ export class ExecutionPlanBuilder {
      * Phase 2-B: capacityDecision 계산 흡수.
      */
     async build(input: BuildPlanInput): Promise<UnifiedExecutionPlan> {
-        const { message, hasImages, executionPlan, style: rawStyle } = input;
+        const { message, hasImages, executionPlan, style: rawStyle, userAgentId, userId } = input;
 
         const profilePlan = executionPlan ?? buildExecutionPlan('');
         const modelSelection = await selectOptimalModel(message, hasImages);
         const style = normalizeStyle(rawStyle);
+
+        // Phase 2 Custom Agent (2026-05-26): userAgentId 명시 시 소유권 검증 후 prepend.
+        // 조회 실패 시 silent fallback — chat 흐름 차단 금지.
+        const userAgent = await this.loadUserAgent(userAgentId, userId);
 
         logger.debug(
             `build: queryType=${modelSelection.queryType} ` +
             `model=${modelSelection.model} ` +
             `strategy=${profilePlan.executionStrategy} ` +
             `style=${style} ` +
+            `userAgent=${userAgent?.name ?? 'none'} ` +
             `requestedModel=${profilePlan.requestedModel}`,
         );
 
@@ -53,7 +59,37 @@ export class ExecutionPlanBuilder {
             modelSelection,
             capacityDecision: null,
             style,
+            userAgent,
         };
+    }
+
+    private async loadUserAgent(
+        userAgentId: string | undefined,
+        userId: string | undefined,
+    ): Promise<ResolvedUserAgent | null> {
+        if (!userAgentId || !userId || userId === 'guest') return null;
+        try {
+            const { UserAgentRepository } = await import('../data/repositories/user-agent-repository');
+            const { getPool } = await import('../data/models/unified-database');
+            const repo = new UserAgentRepository(getPool());
+            const agent = await repo.getByIdForUser(userAgentId, userId);
+            if (!agent || !agent.is_active) return null;
+            // usage_count 증가는 fire-and-forget — chat 흐름 차단 금지
+            void repo.incrementUsage(agent.id).catch(e =>
+                logger.warn('user_agent usage_count 증가 실패 (무시):', e),
+            );
+            return {
+                id: agent.id,
+                name: agent.name,
+                systemPrompt: agent.system_prompt,
+                allowedTools: Array.isArray(agent.allowed_tools) ? agent.allowed_tools : [],
+                allowedSkills: Array.isArray(agent.allowed_skills) ? agent.allowed_skills : [],
+                icon: agent.icon,
+            };
+        } catch (e) {
+            logger.warn('user_agent 조회 실패 (silent fallback):', e);
+            return null;
+        }
     }
 }
 

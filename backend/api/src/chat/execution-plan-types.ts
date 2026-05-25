@@ -30,6 +30,9 @@ export interface UnifiedExecutionPlan extends ExecutionPlan {
 
     /** Phase A (2026-05-26): 응답 스타일 축 결과 */
     style: Style;
+
+    /** Phase 2 Custom Agent (2026-05-26): 해석된 사용자 agent. 미설정 시 null */
+    userAgent: ResolvedUserAgent | null;
 }
 
 export interface BuildPlanInput {
@@ -47,4 +50,26 @@ export interface BuildPlanInput {
 
     /** Phase A (2026-05-26): per-session 응답 스타일 (concise/default/verbose) */
     style?: Style;
+
+    /**
+     * 사용자 정의 Custom Agent id (2026-05-26).
+     * 명시 시 18 산업 agent 자동 라우팅 우회 + agent.system_prompt prepend.
+     */
+    userAgentId?: string;
+
+    /** Custom Agent 조회 시 인증된 user id (소유권 검증) */
+    userId?: string;
+}
+
+/**
+ * Phase 2 Custom Agent (2026-05-26) — builder 가 ChatService 에 전달하는
+ * agent 데이터. system prompt prepend + tool/skill 화이트리스트 반영.
+ */
+export interface ResolvedUserAgent {
+    id: string;
+    name: string;
+    systemPrompt: string;
+    allowedTools: string[];
+    allowedSkills: string[];
+    icon: string | null;
 }

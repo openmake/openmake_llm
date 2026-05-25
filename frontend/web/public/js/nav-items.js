@@ -37,6 +37,9 @@ const NAV_ITEMS = {
         { href: '/skill-library.html', icon: '📦', iconify: 'lucide:package', label: '스킬 라이브러리', requireAuth: true, minTier: 'pro', cssFiles: ['/css/skill-library.css?v=5'], excludeFromSidebar: true },
         { href: '/mcp-servers.html', icon: '🔌', iconify: 'lucide:plug', label: 'MCP 서버', requireAuth: true, excludeFromSidebar: true },
         { href: '/custom-agents.html', icon: '🤖', iconify: 'lucide:bot', label: '커스텀 에이전트', requireAuth: true, minTier: 'pro', excludeFromSidebar: true },
+        // /my-agents.html (2026-05-26 Phase 2): 사용자 본인 Custom Agent (claude.ai Projects 동등).
+        // custom-agents 와 분리 — DB user_agents 테이블 + 본인 권한.
+        { href: '/my-agents.html', icon: '👤', iconify: 'lucide:user-cog', label: '내 Agent', requireAuth: true },
         // /usage.html, /api-keys.html: Phase R1 (2026-05-21) — settings 탭으로 통합
         { href: '/agent-learning.html', icon: '🎓', iconify: 'lucide:graduation-cap', label: '에이전트 학습', requireAuth: true, minTier: 'pro' }
         // /cluster.html: 2026-05-21 제거 — admin → 통합 모니터링 → "클러스터 노드 정보" section 과 중복

@@ -626,6 +626,56 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
     }
 }
 
+/**
+ * Phase 2 (2026-05-26): 사용자 Custom Agent dropdown 선택 핸들러.
+ * 빈 값 → 자동 라우팅 (18 산업 agent 자동 선택). agent id → 명시 적용.
+ */
+window.setUserAgent = function(agentId) {
+    try {
+        const { setState } = require('./modules/state.js');
+        setState('selectedUserAgentId', agentId || null);
+    } catch (e) {
+        // ESM 환경 — state 모듈은 이미 import 되어 window 글로벌 헬퍼로 노출됨
+        if (window.setState) window.setState('selectedUserAgentId', agentId || null);
+        else if (typeof window.__STATE__ === 'object') window.__STATE__.selectedUserAgentId = agentId || null;
+    }
+};
+
+/**
+ * 채팅 입력 영역의 user agent <select> 옵션을 백엔드 목록으로 채움.
+ * 로그인 사용자만 호출. 401/비로그인 시 silent fallback.
+ */
+window.loadUserAgentSelect = async function() {
+    const sel = document.getElementById('userAgentSelect');
+    if (!sel) return;
+    try {
+        const res = await window.authFetch('/api/users/me/agents');
+        if (!res.ok) return;
+        const data = await res.json();
+        const agents = (data && data.data && data.data.agents) || [];
+        // 기존 동적 옵션 제거 (자동 옵션 유지)
+        Array.from(sel.querySelectorAll('option[data-dynamic="1"]')).forEach(o => o.remove());
+        agents.filter(a => a.is_active).forEach(a => {
+            const opt = document.createElement('option');
+            opt.value = a.id;
+            opt.textContent = (a.icon || '🤖') + ' ' + a.name;
+            opt.dataset.dynamic = '1';
+            sel.appendChild(opt);
+        });
+    } catch (e) {
+        // silent — 채팅 흐름은 자동 라우팅 fallback
+    }
+};
+
+// 페이지 로드 시 1회 + 로그인 직후 갱신 (auth.js 에서 호출)
+if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => window.loadUserAgentSelect && window.loadUserAgentSelect());
+    } else {
+        if (window.loadUserAgentSelect) window.loadUserAgentSelect();
+    }
+}
+
 
 // 클러스터
 window.updateClusterInfo = updateClusterInfo;

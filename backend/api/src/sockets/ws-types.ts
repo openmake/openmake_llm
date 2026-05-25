@@ -49,6 +49,8 @@ export interface WSMessage {
     format?: 'json' | Record<string, unknown>;
     /** Phase A (2026-05-26): 응답 스타일 (concise/default/verbose) */
     style?: 'concise' | 'default' | 'verbose';
+    /** Phase 2 Custom Agent (2026-05-26): 사용자 정의 agent id */
+    userAgentId?: string;
     [key: string]: unknown;
 }
 

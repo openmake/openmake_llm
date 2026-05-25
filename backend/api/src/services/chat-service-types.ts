@@ -219,4 +219,10 @@ export interface ChatMessageRequest {
      * Custom Instructions 와는 독립 (Style 은 per-session, CI 는 영구).
      */
     style?: import('../chat/style').Style;
+    /**
+     * 사용자 정의 Custom Agent id (Phase 2 mainstream gap closure 2026-05-26).
+     * 명시 시 18 산업 agent 자동 라우팅 우회 + agent.system_prompt prepend.
+     * claude.ai Projects / ChatGPT Custom GPTs 동등.
+     */
+    userAgentId?: string;
 }

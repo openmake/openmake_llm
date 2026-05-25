@@ -1,0 +1,216 @@
+/**
+ * ============================================
+ * My Agents Page — 사용자별 Custom Agent CRUD
+ * ============================================
+ * claude.ai Projects / ChatGPT Custom GPTs 동등.
+ * /api/users/me/agents 백엔드 호출 + 본인 전용 agent 목록·생성·편집·삭제.
+ * 채팅 입력 영역의 user agent dropdown 과 함께 작동.
+ *
+ * 운영자 정의 시스템 agent (custom-agents.html) 와 별개 — DB 테이블
+ * (user_agents) + 권한 (소유자만 접근) + UI 모두 분리.
+ *
+ * @module pages/my-agents
+ * @see backend/api/src/controllers/user-agents.controller.ts
+ */
+'use strict';
+    window.PageModules = window.PageModules || {};
+    let _intervals = [];
+    let _timeouts = [];
+
+    function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+
+    const EMOJIS = ['🤖','🧠','💡','📝','🎨','🔬','📊','🛠️','💻','🎯','🔍','📚','✨','🌟','🎓','💼','🏗️','⚡','🔮','🧪'];
+
+    window.PageModules['my-agents'] = {
+        getHTML: function() {
+            return '<div class="page-my-agents">' +
+                '<style data-spa-style="my-agents">' +
+                ".ma-toolbar { display:flex; gap:var(--space-3); align-items:center; flex-wrap:wrap; margin-bottom:var(--space-5); }\n" +
+                ".ma-toolbar .btn-primary { padding:var(--space-2) var(--space-4); background:var(--accent-primary); color:#fff; border:none; border-radius:var(--radius-md); cursor:pointer; font-weight:var(--font-weight-semibold); }\n" +
+                ".ma-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:var(--space-4); }\n" +
+                ".ma-card { background:var(--bg-card); border:1px solid var(--border-light); border-radius:var(--radius-lg); padding:var(--space-5); display:flex; flex-direction:column; gap:var(--space-2); }\n" +
+                ".ma-card-icon { font-size:2.5rem; }\n" +
+                ".ma-card h3 { margin:0; color:var(--text-primary); font-size:var(--font-size-md); }\n" +
+                ".ma-card .desc { color:var(--text-muted); font-size:var(--font-size-sm); display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; min-height:32px; }\n" +
+                ".ma-card .meta { color:var(--text-muted); font-size:11px; }\n" +
+                ".ma-card-actions { display:flex; gap:var(--space-2); margin-top:auto; }\n" +
+                ".ma-card-actions button { padding:var(--space-1) var(--space-3); border:1px solid var(--border-light); border-radius:var(--radius-md); background:var(--bg-tertiary); color:var(--text-secondary); cursor:pointer; font-size:var(--font-size-sm); }\n" +
+                ".ma-empty { text-align:center; padding:var(--space-8); color:var(--text-muted); }\n" +
+                ".ma-modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:1000; justify-content:center; align-items:center; }\n" +
+                ".ma-modal-overlay.open { display:flex; }\n" +
+                ".ma-modal { background:var(--bg-card); border:1px solid var(--border-light); border-radius:var(--radius-lg); width:90%; max-width:680px; max-height:90vh; overflow-y:auto; padding:var(--space-6); }\n" +
+                ".ma-form-group { margin-bottom:var(--space-4); }\n" +
+                ".ma-form-group label { display:block; margin-bottom:var(--space-2); color:var(--text-secondary); font-size:var(--font-size-sm); font-weight:var(--font-weight-semibold); }\n" +
+                ".ma-form-group input, .ma-form-group textarea { width:100%; padding:var(--space-3); background:var(--bg-secondary); border:1px solid var(--border-light); border-radius:var(--radius-md); color:var(--text-primary); font-size:14px; box-sizing:border-box; }\n" +
+                ".ma-form-group textarea { min-height:140px; font-family:inherit; resize:vertical; }\n" +
+                ".ma-emoji-picker { display:flex; flex-wrap:wrap; gap:var(--space-2); }\n" +
+                ".ma-emoji-opt { font-size:1.5rem; cursor:pointer; padding:var(--space-1); border-radius:var(--radius-md); border:2px solid transparent; }\n" +
+                ".ma-emoji-opt.selected { border-color:var(--accent-primary); background:var(--bg-tertiary); }\n" +
+                ".ma-modal-actions { display:flex; gap:var(--space-3); justify-content:flex-end; margin-top:var(--space-5); }\n" +
+                ".ma-modal-actions button { padding:var(--space-2) var(--space-4); border:none; border-radius:var(--radius-md); cursor:pointer; font-weight:var(--font-weight-semibold); }\n" +
+                ".ma-btn-save { background:var(--accent-primary); color:#fff; }\n" +
+                ".ma-btn-secondary { background:var(--bg-tertiary); color:var(--text-primary); border:1px solid var(--border-light) !important; }\n" +
+                ".ma-btn-danger { background:var(--danger); color:#fff; }\n" +
+                '</style>' +
+                '<header class="page-header">' +
+                '<button class="mobile-menu-btn" onclick="toggleMobileSidebar(event)">&#9776;</button>' +
+                '<h1>내 Agent</h1>' +
+                '</header>' +
+                '<div class="content-area">' +
+                '<div class="ma-toolbar">' +
+                '<button class="btn-primary" id="maNewBtn">+ 새 Agent</button>' +
+                '<span style="color:var(--text-muted);font-size:var(--font-size-sm)">claude.ai Projects / ChatGPT Custom GPTs 동등 — 본인 전용 페르소나</span>' +
+                '</div>' +
+                '<div id="maList" class="ma-grid"><div class="ma-empty">불러오는 중...</div></div>' +
+                '</div>' +
+
+                '<div class="ma-modal-overlay" id="maEditorModal">' +
+                '<div class="ma-modal">' +
+                '<h2 id="maEditorTitle">새 Agent</h2>' +
+                '<div class="ma-form-group"><label>아이콘</label><div class="ma-emoji-picker" id="maEmojiPicker"></div></div>' +
+                '<div class="ma-form-group"><label>이름 (1~80자)</label><input type="text" id="maName" maxlength="80" placeholder="예: 마케팅 카피라이터"></div>' +
+                '<div class="ma-form-group"><label>설명 (선택, ~500자)</label><input type="text" id="maDesc" maxlength="500" placeholder="짧은 설명"></div>' +
+                '<div class="ma-form-group"><label>System Prompt (1~8000자) — 매 대화 시 prepend</label><textarea id="maSystemPrompt" maxlength="8000" placeholder="당신은 ...입니다. 다음 원칙을 따릅니다: ..."></textarea></div>' +
+                '<div class="ma-modal-actions">' +
+                '<button class="ma-btn-secondary" id="maCancelBtn">취소</button>' +
+                '<button class="ma-btn-danger" id="maDeleteBtn" style="display:none">삭제</button>' +
+                '<button class="ma-btn-save" id="maSaveBtn">저장</button>' +
+                '</div>' +
+                '</div>' +
+                '</div>' +
+                '</div>';
+        },
+
+        init: function() {
+            const authFetch = window.authFetch;
+            const showToast = window.showToast || function(m){ console.log(m); };
+
+            let editingId = null;
+            let selectedEmoji = '🤖';
+            let agents = [];
+
+            function initEmojiPicker() {
+                const picker = document.getElementById('maEmojiPicker');
+                if (!picker) return;
+                picker.innerHTML = EMOJIS.map(function(e){ return '<span class="ma-emoji-opt" data-emoji="' + esc(e) + '">' + esc(e) + '</span>'; }).join('');
+                picker.querySelectorAll('.ma-emoji-opt').forEach(function(el){
+                    el.addEventListener('click', function(){
+                        selectedEmoji = el.getAttribute('data-emoji');
+                        picker.querySelectorAll('.ma-emoji-opt').forEach(function(o){ o.classList.remove('selected'); });
+                        el.classList.add('selected');
+                    });
+                });
+                picker.querySelector('[data-emoji="' + selectedEmoji + '"]').classList.add('selected');
+            }
+
+            async function loadAgents() {
+                const listEl = document.getElementById('maList');
+                if (!listEl) return;
+                try {
+                    const res = await authFetch('/api/users/me/agents');
+                    const data = await res.json();
+                    agents = (data && data.data && data.data.agents) || [];
+                    if (!agents.length) {
+                        listEl.innerHTML = '<div class="ma-empty"><h2>아직 Agent 가 없습니다</h2><p>+ 새 Agent 를 눌러 첫 페르소나를 만드세요.</p></div>';
+                        return;
+                    }
+                    listEl.innerHTML = agents.map(function(a){
+                        return '<div class="ma-card" data-id="' + esc(a.id) + '">' +
+                            '<div class="ma-card-icon">' + esc(a.icon || '🤖') + '</div>' +
+                            '<h3>' + esc(a.name) + '</h3>' +
+                            '<div class="desc">' + esc(a.description || '') + '</div>' +
+                            '<div class="meta">사용 ' + (a.usage_count || 0) + '회</div>' +
+                            '<div class="ma-card-actions"><button data-action="edit">편집</button><button data-action="delete">삭제</button></div>' +
+                            '</div>';
+                    }).join('');
+                    listEl.querySelectorAll('.ma-card').forEach(function(card){
+                        const id = card.getAttribute('data-id');
+                        card.querySelector('[data-action="edit"]').addEventListener('click', function(){ openEditor(id); });
+                        card.querySelector('[data-action="delete"]').addEventListener('click', function(){ deleteAgent(id); });
+                    });
+                } catch (e) {
+                    console.error('[my-agents] load 실패:', e);
+                    listEl.innerHTML = '<div class="ma-empty">로드 실패</div>';
+                }
+            }
+
+            function openEditor(id) {
+                editingId = id || null;
+                const modal = document.getElementById('maEditorModal');
+                document.getElementById('maEditorTitle').textContent = id ? 'Agent 편집' : '새 Agent';
+                document.getElementById('maDeleteBtn').style.display = id ? '' : 'none';
+                if (id) {
+                    const a = agents.find(function(x){ return x.id === id; });
+                    if (!a) return;
+                    selectedEmoji = a.icon || '🤖';
+                    document.getElementById('maName').value = a.name || '';
+                    document.getElementById('maDesc').value = a.description || '';
+                    document.getElementById('maSystemPrompt').value = a.system_prompt || '';
+                } else {
+                    selectedEmoji = '🤖';
+                    document.getElementById('maName').value = '';
+                    document.getElementById('maDesc').value = '';
+                    document.getElementById('maSystemPrompt').value = '';
+                }
+                initEmojiPicker();
+                modal.classList.add('open');
+            }
+            function closeEditor() { document.getElementById('maEditorModal').classList.remove('open'); }
+
+            async function saveAgent() {
+                const name = document.getElementById('maName').value.trim();
+                const description = document.getElementById('maDesc').value.trim();
+                const systemPrompt = document.getElementById('maSystemPrompt').value.trim();
+                if (!name) { showToast('이름을 입력하세요', 'error'); return; }
+                if (!systemPrompt) { showToast('System Prompt 를 입력하세요', 'error'); return; }
+                const body = { name: name, description: description || null, systemPrompt: systemPrompt, icon: selectedEmoji };
+                try {
+                    const url = editingId ? '/api/users/me/agents/' + encodeURIComponent(editingId) : '/api/users/me/agents';
+                    const method = editingId ? 'PUT' : 'POST';
+                    const res = await authFetch(url, { method: method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+                    if (!res.ok) {
+                        const err = await res.json().catch(function(){ return {}; });
+                        showToast((err && err.error && err.error.message) || '저장 실패', 'error');
+                        return;
+                    }
+                    closeEditor();
+                    showToast(editingId ? 'Agent 갱신됨' : 'Agent 생성됨', 'success');
+                    loadAgents();
+                } catch (e) {
+                    console.error('[my-agents] save 실패:', e);
+                    showToast('저장 실패', 'error');
+                }
+            }
+
+            async function deleteAgent(id) {
+                if (!confirm('이 Agent 를 삭제하시겠습니까? (soft delete)')) return;
+                try {
+                    const res = await authFetch('/api/users/me/agents/' + encodeURIComponent(id), { method: 'DELETE' });
+                    if (!res.ok) { showToast('삭제 실패', 'error'); return; }
+                    showToast('Agent 삭제됨', 'success');
+                    loadAgents();
+                } catch (e) {
+                    console.error('[my-agents] delete 실패:', e);
+                    showToast('삭제 실패', 'error');
+                }
+            }
+
+            // 이벤트 바인딩
+            document.getElementById('maNewBtn').addEventListener('click', function(){ openEditor(null); });
+            document.getElementById('maCancelBtn').addEventListener('click', closeEditor);
+            document.getElementById('maSaveBtn').addEventListener('click', saveAgent);
+            document.getElementById('maDeleteBtn').addEventListener('click', function(){
+                if (editingId) deleteAgent(editingId);
+                closeEditor();
+            });
+            loadAgents();
+        },
+
+        cleanup: function() {
+            _intervals.forEach(function(i){ clearInterval(i); }); _intervals = [];
+            _timeouts.forEach(function(t){ clearTimeout(t); }); _timeouts = [];
+        }
+    };
+
+const { getHTML, init, cleanup } = window.PageModules['my-agents'];
+export default { getHTML, init, cleanup };

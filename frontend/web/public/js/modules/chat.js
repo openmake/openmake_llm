@@ -137,6 +137,8 @@ async function sendMessage() {
             deepResearchMode: getState('deepResearchMode') || false,
             // Phase A (2026-05-26): 응답 스타일 (concise/default/verbose)
             style: getState('responseStyle') || 'default',
+            // Phase 2 (2026-05-26): 사용자 Custom Agent (claude.ai Projects 동등). 빈값은 자동 라우팅
+            userAgentId: getState('selectedUserAgentId') || undefined,
             enabledTools: getState('mcpToolsEnabled') || {},
             sessionId: getState('currentChatId'), // 세션 ID 포함
             // 본문 저장 여부 — settings.html saveHistoryToggle 과 연결

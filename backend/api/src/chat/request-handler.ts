@@ -117,6 +117,11 @@ export interface ChatRequestParams {
      */
     style?: import('./style').Style;
     /**
+     * 사용자 정의 Custom Agent id (Phase 2 mainstream gap closure 2026-05-26).
+     * 명시 시 18 산업 agent 자동 라우팅 우회 + agent.system_prompt 적용.
+     */
+    userAgentId?: string;
+    /**
      * 메시지 본문을 conversation_messages 에 저장할지 여부.
      * undefined/true → 저장 (기본). false → 본문 저장 스킵, audit log 만 기록.
      * settings.html saveHistoryToggle 과 연결.
@@ -446,6 +451,7 @@ export class ChatRequestHandler {
             thinkingMode,
             thinkingLevel,
             style,
+            userAgentId,
             saveHistory,
             enabledTools,
             tools,
@@ -576,6 +582,7 @@ export class ChatRequestHandler {
             thinkingMode: mergedThinkingMode,
             thinkingLevel: mergedThinkingLevel,
             style,
+            userAgentId,
             userId: userContext.userId,
             apiKeyId: params.apiKeyId,
             userRole: userContext.userRole,

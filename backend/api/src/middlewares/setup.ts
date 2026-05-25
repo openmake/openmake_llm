@@ -207,7 +207,8 @@ export function setupStaticFiles(app: Application, dirname: string): void {
         'admin', 'audit', 'external', 'alerts', 'memory', 'settings',
         'password-change', 'history', 'developer', 'api-keys',
         'skill-library', 'projects',
-        'admin-mcp-catalog', 'admin-mcp-monitoring'
+        'admin-mcp-catalog', 'admin-mcp-monitoring',
+        'my-agents',  // 2026-05-26 Phase 2: 사용자 Custom Agent (claude.ai Projects 동등)
     ]);
 
     const publicPath = path.join(dirname, 'public');
