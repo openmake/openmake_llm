@@ -165,6 +165,8 @@ const CRITICAL_ACTIONS: Record<string, 'info' | 'warning' | 'critical'> = {
     'consent.withdrawn': 'warning',
     // GDPR Article 20 — 데이터 export 요청 (operator 인지용)
     'export.requested': 'warning',
+    // PR #98 model-pool 안전망 3단계 — 1M 도 초과 (드물지만 즉시 인지)
+    'chat.context_overflow': 'warning',
     // 기존 ApiKeyService 패턴 정합
     'api_key.revoked': 'warning',
     // info 는 audit 만 (alert webhook 안 보냄)
