@@ -30,6 +30,8 @@ export interface User {
     last_login?: string;
     /** 계정 활성화 상태 */
     is_active: boolean;
+    /** 사용자별 영구 system prompt 지시문 (claude.ai Custom Instructions 동등). 매 chat 요청 시 system prompt 앞에 prepend. NULL/빈문자열은 미적용. 최대 길이는 CUSTOM_INSTRUCTIONS_MAX_CHARS env (default 4000) */
+    custom_instructions?: string | null;
 }
 
 /**

@@ -90,6 +90,24 @@
         '</div>' +
         '</div>' +
 
+        // Custom Instructions card (2026-05-26) \u2014 \uC0AC\uC6A9\uC790\uBCC4 \uC601\uAD6C system prompt \uC9C0\uC2DC\uBB38
+        '<div class="s-card">' +
+        '<div class="s-card-header">' +
+        '<span class="s-card-icon">\uD83D\uDCDD</span>' +
+        '<span class="s-card-title">\uC0AC\uC6A9\uC790 \uC9C0\uC2DC\uBB38</span>' +
+        '</div>' +
+        '<div class="s-card-body">' +
+        '<div class="setting-row" style="flex-direction:column;align-items:stretch;gap:8px;">' +
+        '<div class="setting-info"><h4>Custom Instructions</h4><p>\uBAA8\uB4E0 \uCC44\uD305\uC5D0 \uC601\uAD6C \uC801\uC6A9\uB418\uB294 system prompt \uCD94\uAC00 \uC9C0\uC2DC\uBB38. \uC608: "\uD55C\uAD6D\uC5B4\uB85C \uC751\uB2F5", "\uD55C \uC904\uB85C \uB2F5\uB2F5\uD560 \uC218 \uC788\uB294 \uACBD\uC6B0 \uD55C \uC904\uB85C \uC885\uB8CC". (claude.ai / ChatGPT \uB3D9\uB4F1)</p></div>' +
+        '<textarea id="customInstructionsInput" class="s-textarea" rows="6" maxlength="4000" placeholder="\uC608: \uC0AC\uC6A9\uC790\uAC00 \uBA85\uC2DC\uC801\uC73C\uB85C \uC694\uCCAD\uD558\uC9C0 \uC54A\uC740 \uBD80\uAC00 \uC815\uBCF4\uB294 \uCD9C\uB825\uD558\uC9C0 \uC54A\uB294\uB2E4." style="width:100%;font-family:inherit;padding:8px;border:1px solid var(--border-light);border-radius:6px;background:var(--bg-tertiary);color:var(--text-primary);resize:vertical;"></textarea>' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;font-size:var(--font-size-xs);color:var(--text-muted);">' +
+        '<span><span id="customInstructionsCount">0</span> / 4000 \uC790</span>' +
+        '<button id="customInstructionsSaveBtn" class="s-btn s-btn-primary" style="font-size:var(--font-size-xs);padding:6px 14px;">\uC800\uC7A5</button>' +
+        '</div>' +
+        '</div>' +
+        '</div>' +
+        '</div>' +
+
         '<div class="s-card">' +
         '<div class="s-card-header">' +
         '<span class="s-card-icon">\uD83D\uDD27</span>' +
@@ -336,6 +354,60 @@
                     loadSettings();
                     loadApiKeyCount();
                     loadSystemInfo();
+                    initCustomInstructions();
+                }
+
+                /**
+                 * Custom Instructions card 초기화 — 서버에서 현재 값 로드 + 저장 핸들러 바인딩.
+                 * 인증 실패 / 비로그인 시 silent 비활성화.
+                 */
+                async function initCustomInstructions() {
+                    var input = document.getElementById('customInstructionsInput');
+                    var count = document.getElementById('customInstructionsCount');
+                    var saveBtn = document.getElementById('customInstructionsSaveBtn');
+                    if (!input || !count || !saveBtn) return;
+
+                    function updateCount() {
+                        count.textContent = String(input.value.length);
+                    }
+                    input.addEventListener('input', updateCount);
+
+                    // 현재 값 로드
+                    try {
+                        var res = await window.authFetch('/api/users/me/custom-instructions');
+                        var data = res.data || res;
+                        if (data && typeof data.customInstructions === 'string') {
+                            input.value = data.customInstructions;
+                        }
+                        updateCount();
+                    } catch (e) {
+                        console.warn('[settings] custom_instructions 로드 실패:', e);
+                    }
+
+                    saveBtn.addEventListener('click', async function() {
+                        saveBtn.disabled = true;
+                        var original = saveBtn.textContent;
+                        saveBtn.textContent = '저장 중...';
+                        try {
+                            var trimmed = input.value.trim();
+                            await window.authFetch('/api/users/me/custom-instructions', {
+                                method: 'PUT',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ customInstructions: trimmed.length > 0 ? trimmed : null }),
+                            });
+                            (typeof showToast === 'function')
+                                ? showToast('사용자 지시문이 저장되었습니다.', 'success')
+                                : alert('저장되었습니다.');
+                        } catch (e) {
+                            console.error('[settings] custom_instructions 저장 실패:', e);
+                            (typeof showToast === 'function')
+                                ? showToast('저장 실패: ' + (e && e.message ? e.message : '서버 오류'), 'error')
+                                : alert('저장 실패');
+                        } finally {
+                            saveBtn.disabled = false;
+                            saveBtn.textContent = original;
+                        }
+                    });
                 }
 
                 function setTheme(theme) { document.documentElement.setAttribute('data-theme', theme); safeStorage.setItem('theme', theme); }

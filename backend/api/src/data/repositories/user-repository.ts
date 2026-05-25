@@ -38,4 +38,27 @@ export class UserRepository extends BaseRepository {
         const result = await this.query<User>('SELECT * FROM users ORDER BY created_at DESC LIMIT $1', [limit]);
         return result.rows as User[];
     }
+
+    /**
+     * 사용자의 custom_instructions 만 가벼운 SELECT 로 조회 — chat 요청 hot path 용.
+     * 미설정/NULL 시 null 반환.
+     */
+    async getCustomInstructions(userId: string): Promise<string | null> {
+        const result = await this.query<{ custom_instructions: string | null }>(
+            'SELECT custom_instructions FROM users WHERE id = $1',
+            [userId],
+        );
+        return result.rows[0]?.custom_instructions ?? null;
+    }
+
+    /**
+     * 사용자의 custom_instructions 갱신. 빈 문자열은 NULL 로 정규화.
+     */
+    async updateCustomInstructions(userId: string, instructions: string | null): Promise<void> {
+        const normalized = instructions && instructions.trim().length > 0 ? instructions : null;
+        await this.query(
+            'UPDATE users SET custom_instructions = $1, updated_at = NOW() WHERE id = $2',
+            [normalized, userId],
+        );
+    }
 }

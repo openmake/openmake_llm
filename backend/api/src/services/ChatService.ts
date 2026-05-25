@@ -574,9 +574,29 @@ export class ChatService {
         // getAllowedTools() 의 동기 머지에서 사용. agentId 가 결정된 직후 호출.
         await this.loadSkillBindings(selectedAgent.id);
 
-        const combinedSystemPrompt = agentSystemMessage
+        // Custom Instructions prepend — 사용자별 영구 system prompt 지시문 (2026-05-26).
+        // T1~T9 분석의 inter-turn verbosity 해결책. NULL/빈 문자열은 자동 스킵.
+        // 인증된 사용자 (userId 명시) 에만 적용 — guest 세션은 미적용.
+        let customInstructionsBlock = '';
+        if (userId && userId !== 'guest') {
+            try {
+                const { UserRepository } = await import('../data/repositories/user-repository');
+                const { getPool } = await import('../data/models/unified-database');
+                const userRepo = new UserRepository(getPool());
+                const ci = await userRepo.getCustomInstructions(userId);
+                if (ci && ci.trim().length > 0) {
+                    customInstructionsBlock = `## 👤 User Custom Instructions\n${ci.trim()}\n\n---\n\n`;
+                }
+            } catch (e) {
+                // 조회 실패 시 silent fallback — chat 응답 차단 금지
+                logger.warn('custom_instructions 조회 실패 (계속 진행):', e);
+            }
+        }
+
+        const baseCombined = agentSystemMessage
             ? `${agentSystemMessage}\n\n---\n\n${promptConfig.systemPrompt}`
             : promptConfig.systemPrompt;
+        const combinedSystemPrompt = customInstructionsBlock + baseCombined;
 
         // history assembly + system prompt + budget hint + user message — helper module 위임
         const { currentHistory } = await assembleHistoryWithSummary({

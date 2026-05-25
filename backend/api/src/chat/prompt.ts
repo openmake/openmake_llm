@@ -192,6 +192,32 @@ function getIdentityGuard(userLanguage: string): string {
 }
 
 /**
+ * 응답 절제 가드 — 모든 페르소나 공통.
+ *
+ * 인-세션 verbosity (사용자가 묻지 않은 부가 정보를 자동 첨가하는 LLM 경향) 를
+ * 시스템 프롬프트 수준에서 차단. 사용자 직접 가치 외 출력 금지.
+ *
+ * 도입 배경 (2026-05-26): T1~T9 분석 루프에서 식별된 inter-turn verbosity
+ * 문제의 시스템 프롬프트 해결책 (claude.ai 의 Concise style 토글 동등).
+ * 사용자별 추가 지시는 `users.custom_instructions` 가 별도 prepend.
+ */
+function getResponseDiscipline(userLanguage: string): string {
+    const locale = resolvePromptLocale(userLanguage);
+    if (locale === 'ko') {
+        return `## ✂️ 응답 절제
+- 사용자가 명시적으로 요청하지 않은 부가 정보는 출력하지 않는다.
+- 한 줄로 답할 수 있으면 한 줄로 종료한다. 분석·근거·메타 설명은 사용자가 요청했을 때만 추가.
+
+`;
+    }
+    return `## ✂️ Response Discipline
+- Do not output information the user did not explicitly request.
+- If a single line suffices, end in a single line. Add analysis, rationale, or meta-commentary only when the user asks for it.
+
+`;
+}
+
+/**
  * 시스템 프롬프트를 빌드합니다.
  * includeBase=true이면 정체성 가드 + 공통 기반 프롬프트(COMMON_BASE_PROMPT) + 역할 프롬프트를 조합합니다.
  *
@@ -203,7 +229,7 @@ export function buildSystemPrompt(type: PromptType = 'assistant', includeBase: b
     // Use language-aware prompt builders for supported types
     const promptLocale = resolvePromptLocale(userLanguage);
     if (includeBase) {
-        const guard = getIdentityGuard(userLanguage);
+        const guard = getIdentityGuard(userLanguage) + getResponseDiscipline(userLanguage);
         let rolePrompt: string;
         switch (type) {
             case 'assistant':

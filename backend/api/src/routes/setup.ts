@@ -18,6 +18,7 @@ import { tokenMonitoringRouter } from './token-monitoring.routes';
 import { createPoliciesRouter } from './policies.routes';
 import { createConsentController } from '../controllers/consent.controller';
 import { createExportController } from '../controllers/export.controller';
+import { createUserPreferencesController } from '../controllers/user-preferences.controller';
 import debugQueueRouter from './debug-queue.routes';
 import { default as chatRouter, setClusterManager as setChatCluster } from './chat.routes';
 import { setClusterManager as setOpenAICompatCluster } from './openai-compat.routes';
@@ -198,6 +199,8 @@ export function setupApiRoutes(
     app.use('/api/users/me/consent', createConsentController());
     // GDPR Phase B Fix 6 (B6) — 사용자 전체 데이터 export (Article 20)
     app.use('/api/users/me/export', createExportController());
+    // Custom Instructions — 사용자별 영구 system prompt 지시문 (2026-05-26)
+    app.use('/api/users/me', createUserPreferencesController());
 
     // 클러스터 의존성 주입
     setChatCluster(cluster);
