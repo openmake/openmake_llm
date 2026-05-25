@@ -646,7 +646,12 @@ export class ChatService {
             : promptConfig.systemPrompt;
         // Phase A (2026-05-26): per-session Style 축 적용. default 일 때는 overhead 0.
         const styledBase = applyStyle(baseCombined, unifiedPlan.style, languagePolicy?.resolvedLanguage || 'en');
-        const combinedSystemPrompt = memoryBlock + customInstructionsBlock + styledBase;
+        // 2026-05-26: thinkingMode 활성 시 system prompt 로 사고 강도 유도.
+        // 기존 user-message wrap 방식 (Sequential Thinking) 은 vLLM/Gemini native
+        // reasoning 과 중복 + 본문 형식 오염을 일으켜 폐기됨.
+        const { getThinkingSystemGuidance } = await import('../mcp/sequential-thinking');
+        const thinkingGuidance = getThinkingSystemGuidance(effectiveThinkingMode);
+        const combinedSystemPrompt = memoryBlock + customInstructionsBlock + thinkingGuidance + styledBase;
 
         // history assembly + system prompt + budget hint + user message — helper module 위임
         const { currentHistory } = await assembleHistoryWithSummary({

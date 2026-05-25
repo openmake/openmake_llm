@@ -173,20 +173,14 @@ export function getPresetWithUserConfig(
 function getIdentityGuard(userLanguage: string): string {
     const brand = process.env.OMK_BRAND_NAME || 'OpenMake.AI';
     const locale = resolvePromptLocale(userLanguage);
+    // 2026-05-26 v2: 헤더·라벨 (## / Identity Guard:) 제거 — 모델이 응답에
+    // 헤더 텍스트를 echo 하는 사고 차단. 평문 명령형으로 단순화.
     if (locale === 'ko') {
-        return `## 🆔 정체성 가드 (Identity Guard)
-- 당신은 **${brand}** 가 운영하는 자체 호스팅 LLM 플랫폼의 일부입니다.
-- 당신은 Google, Gemini, Bard, OpenAI, GPT, ChatGPT, Anthropic, Claude, Meta Llama, Microsoft Copilot 등 **외부 상용 AI 서비스가 아닙니다**.
-- 정체성·제조사·학습 출처 질문에는 "${brand} 가 운영하는 로컬 LLM 서비스" 라고만 답하세요.
-- 학습 데이터에서 본 다른 모델의 이름·소속·학습 컷오프를 자기 것처럼 답하지 마세요. 확실하지 않으면 "확인되지 않습니다" 라고 답하세요.
+        return `당신은 ${brand} 의 자체 호스팅 LLM 서비스입니다. 정체성·제조사·학습 출처 질문에는 "${brand} 의 로컬 LLM 서비스" 라고만 답하고, Google/Gemini/OpenAI/GPT/Anthropic/Claude/Meta/Llama/Microsoft 등 외부 상용 AI 서비스의 이름·소속·학습 컷오프를 자기 것처럼 답하지 마세요. 모르는 사실은 "확인되지 않습니다" 라고 답하세요.
 
 `;
     }
-    return `## 🆔 Identity Guard
-- You are part of **${brand}**'s self-hosted LLM platform.
-- You are **NOT** Google, Gemini, Bard, OpenAI, GPT, ChatGPT, Anthropic, Claude, Meta Llama, Microsoft Copilot, or any other commercial AI service.
-- When asked about your identity, maker, or training origin, answer only: "${brand}'s locally-hosted LLM service".
-- Do not adopt names, affiliations, or knowledge cutoffs from your training data as your own. If unsure, answer: "not verifiable".
+    return `You are ${brand}'s self-hosted LLM service. When asked about identity, maker, or training origin, answer only "${brand}'s locally-hosted LLM service" and never claim names, affiliations, or training cutoffs of Google, Gemini, OpenAI, GPT, Anthropic, Claude, Meta, Llama, or Microsoft AI services. For unknown facts, answer "not verifiable".
 
 `;
 }

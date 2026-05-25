@@ -19,49 +19,50 @@
 import { THINKING_LIMITS } from '../config/runtime-limits';
 
 /**
- * Sequential Thinking을 채팅에 적용하기 위한 시스템 프롬프트
+ * Sequential Thinking을 채팅에 적용하기 위한 시스템 프롬프트.
+ *
+ * 2026-05-26 v2: 출력 형식 강제 (## 결론 → --- → [N/N]) **완전 제거**.
+ * vLLM `--reasoning-parser` (Qwen3/EXAONE) + Gemini thinking + Anthropic
+ * extended thinking 모두 사고 과정을 native reasoning 채널로 별도 전송하므로
+ * 본 prompt 가 본문 형식까지 강제하면 thinking 이 본문에 중복 노출됨.
+ *
+ * 본 prompt 는 사고 강도만 유도하고 본문은 결론만 출력하도록 지시.
  */
 export const SEQUENTIAL_THINKING_SYSTEM_PROMPT = `
-당신은 Sequential Thinking을 사용하여 문제를 단계별로 분석하는 AI 어시스턴트입니다.
-
-복잡한 질문에 답할 때 다음 프로세스를 따르세요:
-
-1. **문제 분해**: 질문을 여러 단계로 나눕니다
-2. **단계별 분석**: 각 단계를 순서대로 분석합니다
-3. **가설 생성**: 분석을 바탕으로 가설을 세웁니다
-4. **가설 검증**: 가설이 올바른지 확인합니다
-5. **수정 및 개선**: 필요한 경우 이전 단계를 수정합니다
-
-**중요: 답변 구조 규칙**
-반드시 **결론(최종 답변)을 맨 먼저** 제시하고, 그 아래에 사고 과정을 보여주세요.
-
-출력 순서:
-1. \`## 결론\` — 최종 답변을 먼저 명확하게 제시
-2. \`---\` — 구분선
-3. 사고 과정 — 각 단계를 [1/N], [2/N] 형식으로 표시
+복잡한 질문에는 충분히 깊게 사고하되, 사고 과정은 reasoning 채널(<think> 태그 또는 thinking 출력)에만 두고 사용자 응답 본문에는 결론만 자연스럽게 작성합니다. 사용자가 명시적으로 "단계별로 보여줘", "사고 과정을 보여줘" 같이 형식을 요청한 경우에만 본문에 단계 분석을 포함합니다. "## 결론", "---", "[N/N]", "Sequential Thinking", "Thinking Process:" 같은 헤더·메타 표현으로 본문을 시작하지 마세요.
 `;
 
 /**
  * 질문에 Sequential Thinking 시스템 프롬프트를 적용
  *
- * enableThinking=true일 때, 원본 질문에 단계별 사고 프로세스 안내를 추가합니다.
- * false이면 원본 질문을 그대로 반환합니다.
+ * 2026-05-26 v2: user message wrap 폐기. 시스템 프롬프트는 별도 system role
+ * 메시지로 전달되어야 하며 user 본문에 prepend 하지 않음. 본 함수는 backward
+ * compat 위해 시그니처 유지 — enableThinking=true 이어도 user message 는 그대로 반환.
+ *
+ * thinking 모드 실제 활성화는:
+ *   - vLLM: chat_template_kwargs.enable_thinking (LLMClient 자동 전달)
+ *   - Gemini OpenAI-compat: native reasoning
+ *   - Anthropic: thinking parameter
+ *   - System prompt 강도 유도: getThinkingSystemGuidance() 신규 helper 호출
  *
  * @param question - 원본 사용자 질문
- * @param enableThinking - Sequential Thinking 적용 여부 (기본값: true)
- * @returns Sequential Thinking 프롬프트가 적용된 질문 문자열
+ * @param enableThinking - Sequential Thinking 적용 여부 (호환용)
+ * @returns 원본 질문 그대로 반환 (wrap 폐기)
  */
-export function applySequentialThinking(question: string, enableThinking: boolean = true): string {
-    if (!enableThinking) {
-        return question;
-    }
+export function applySequentialThinking(question: string, _enableThinking: boolean = true): string {
+    // 2026-05-26 v2: user message wrap 폐기. system prompt 처리는 별도 경로로 이관.
+    return question;
+}
 
-    return `${SEQUENTIAL_THINKING_SYSTEM_PROMPT}
-
-사용자 질문: ${question}
-
-위 질문에 대해 먼저 최종 결론을 "## 결론" 제목으로 제시한 후, "---" 구분선 아래에 단계별 사고 과정을 [단계번호/총단계] 형식으로 보여주세요.
-`;
+/**
+ * thinking 모드 활성 시 system prompt 에 추가할 사고 강도 유도 텍스트.
+ *
+ * 신규 (2026-05-26): applySequentialThinking 의 user message wrap 을 폐기하면서
+ * thinking 유도가 필요한 경우 system prompt 로만 전달하기 위한 helper.
+ */
+export function getThinkingSystemGuidance(enableThinking: boolean): string {
+    if (!enableThinking) return '';
+    return SEQUENTIAL_THINKING_SYSTEM_PROMPT.trim() + '\n\n';
 }
 
 /**
