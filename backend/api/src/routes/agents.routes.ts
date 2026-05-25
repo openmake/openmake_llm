@@ -14,16 +14,13 @@ import { Router, Request, Response } from 'express';
 import { getAllAgents, getAgentById, getAgentCategories, getAgentStats } from '../agents';
 import { getAgentLearningSystem } from '../agents/learning';
 import { getCustomAgentBuilder } from '../agents/custom-builder';
-import { success, badRequest, notFound } from '../utils/api-response';
+import { success, notFound } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
 import { getSkillManager } from '../agents/skill-manager';
 import { requireAuth } from '../auth';
 import { unauthorized } from '../utils/api-response';
 import { validate } from '../middlewares/validation';
 import {
-    createAgentSchema,
-    updateAgentSchema,
-    cloneAgentSchema,
     agentFeedbackSchema,
     abTestStartSchema,
     assignSkillSchema
@@ -44,18 +41,15 @@ const router = Router();
 
 /**
  * GET /api/agents
- * 전체 에이전트 목록
+ * 전체 에이전트 목록 — 시스템 산업 agent (industry-agents.json) 만.
+ * (2026-05-26: CustomAgentBuilder 제거. draft 목록은 /custom/drafts 사용)
  */
 router.get('/', asyncHandler(async (req: Request, res: Response) => {
     const agents = getAllAgents();
-    const customBuilder = getCustomAgentBuilder();
-    const customAgents = customBuilder.getEnabledAgentsAsAgents();
-
     res.json(success({
-        agents: [...agents, ...customAgents],
-        total: agents.length + customAgents.length,
+        agents,
+        total: agents.length,
         systemAgents: agents.length,
-        customAgents: customAgents.length
     }));
 }));
 
@@ -76,105 +70,16 @@ router.get('/stats', asyncHandler(async (req: Request, res: Response) => {
 }));
 
 // ================================================
-// 커스텀 에이전트 CRUD (인증 필요)
+// 커스텀 에이전트 CRUD 제거 (2026-05-26)
+// CustomAgentBuilder 가 my-agents 도입으로 dead 가 되어 라우트 일괄 제거:
+//   - GET /custom, /custom/list  → /custom/drafts 가 대체
+//   - POST /custom               → 본인 페르소나는 POST /api/users/me/agents 사용
+//   - POST /custom/:id/clone     → 미사용
+//   - PUT  /custom/:id           → 미사용
+//   - DELETE /custom/:id         → POST /custom/:id/reject (status=archived) 가 대체
+// Phase 3 Git URL Ingest 워크플로 (/custom/drafts, /custom/import-from-git,
+// /custom/:id/approve, /custom/:id/reject) 는 별도 — 본 파일 하단 유지.
 // ================================================
-
-/**
- * GET /api/agents/custom/list
- * 커스텀 에이전트 목록
- */
-router.get('/custom/list', requireAuth, asyncHandler(async (req: Request, res: Response) => {
-    const customBuilder = getCustomAgentBuilder();
-    res.json(success(customBuilder.getAllCustomAgents()));
-}));
-
-/**
- * GET /api/agents/custom
- * 커스텀 에이전트 목록 (프론트엔드 호환 alias — /custom/list와 동일)
- */
-router.get('/custom', requireAuth, asyncHandler(async (req: Request, res: Response) => {
-    const customBuilder = getCustomAgentBuilder();
-    res.json(success(customBuilder.getAllCustomAgents()));
-}));
-
-/**
- * POST /api/agents/custom
- * 커스텀 에이전트 생성
- */
-router.post('/custom', requireAuth, validate(createAgentSchema), asyncHandler(async (req: Request, res: Response) => {
-    const { name, description, systemPrompt, keywords, category, emoji, temperature, maxTokens } = req.body;
-
-    const customBuilder = getCustomAgentBuilder();
-    const agent = await customBuilder.createAgent({
-        name,
-        description,
-        systemPrompt,
-        keywords: keywords || [],
-        category: category || 'custom',
-        emoji,
-        temperature,
-        maxTokens,
-        createdBy: (req.user && 'userId' in req.user ? req.user.userId : req.user?.id?.toString())
-    });
-
-    res.status(201).json(success(agent));
-}));
-
-/**
- * POST /api/agents/custom/:id/clone
- * 기존 에이전트 복제 (프론튴엔드 호환 경로 — /custom/clone/:id 와 동일)
- */
-router.post('/custom/:id/clone', requireAuth, validate(cloneAgentSchema), asyncHandler(async (req: Request, res: Response) => {
-    const sourceId = req.params.id;
-    const modifications = typeof req.body === 'object' && req.body !== null ? { ...(req.body as Record<string, unknown>) } : {};
-    modifications['createdBy'] = String(req.user?.id || '');
-
-    const customBuilder = getCustomAgentBuilder();
-    const cloned = await customBuilder.cloneAgent(sourceId, modifications);
-
-    if (!cloned) {
-        return res.status(400).json(badRequest('에이전트 복제 실패'));
-    }
-
-    res.status(201).json(success(cloned));
-}));
-
-/**
- * PUT /api/agents/custom/:id
- * 커스텀 에이전트 수정
- */
-router.put('/custom/:id', requireAuth, validate(updateAgentSchema), asyncHandler(async (req: Request, res: Response) => {
-    const agentId = req.params.id;
-    const updates = req.body;
-
-    const customBuilder = getCustomAgentBuilder();
-    const updated = await customBuilder.updateAgent(agentId, updates);
-
-    if (!updated) {
-        return res.status(404).json(notFound('에이전트'));
-    }
-
-    res.json(success(updated));
-}));
-
-/**
- * DELETE /api/agents/custom/:id
- * 커스텀 에이전트 삭제
- */
-router.delete('/custom/:id', requireAuth, asyncHandler(async (req: Request, res: Response) => {
-    const agentId = req.params.id;
-
-    const customBuilder = getCustomAgentBuilder();
-    const deleted = await customBuilder.deleteAgent(agentId);
-
-    if (!deleted) {
-        return res.status(404).json(notFound('에이전트'));
-    }
-
-    res.json(success({ message: '에이전트가 삭제되었습니다.' }));
-}));
-
-
 
 // ================================================
 // 피드백 통계 (/:id 라우트보다 먼저 등록해야 Express 라우트 매칭 충돌 방지)

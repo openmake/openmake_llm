@@ -73,7 +73,7 @@ class SharedSidebar {
             { href: '/cluster.html', icon: '🖥️', label: '클러스터', requireAuth: true },
             { href: '/history.html', icon: '📜', label: '대화 히스토리', requireAuth: true },
             { href: '/research.html', icon: '🔬', label: '딥 리서치', requireAuth: true },
-            { href: '/custom-agents.html', icon: '🤖', label: '커스텀 에이전트', requireAuth: true },
+            { href: '/custom-agents.html', icon: '📥', label: 'Agent Draft', requireAuth: true },
             // /memory.html: 2026-05-19 MemoryService 제거 시 폐기
             { href: '/usage.html', icon: '📈', label: 'API 사용량', requireAuth: true },
             { href: '/agent-learning.html', icon: '🎓', label: '에이전트 학습', requireAuth: true }

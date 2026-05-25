@@ -2,8 +2,9 @@
  * ============================================
  * Projects Page — claude.ai-style 카드 그리드 (Phase R3)
  * ============================================
- * skill-library / mcp-servers / custom-agents 3개 페이지의 통합 진입점.
- * 사용자가 단일 hub 에서 사용 가능한 도구/스킬/에이전트 카테고리 선택.
+ * skill-library / mcp-servers 진입점.
+ * 사용자가 단일 hub 에서 사용 가능한 도구/스킬 카테고리 선택.
+ * (Agent Draft 는 별도 /custom-agents — projects hub 에서 제외, 2026-05-26)
  *
  * @module pages/projects
  */
@@ -34,14 +35,6 @@ const CARDS = [
         desc: '로컬 도구 (파일 시스템, GitHub 등) 를 LLM 에 연결',
         tier: 'free',
         actions: ['카탈로그 선택', '사용자 등록', 'lifecycle 추적'],
-    },
-    {
-        href: '/custom-agents.html',
-        icon: '🤖',
-        title: '커스텀 에이전트',
-        desc: '도메인 특화 에이전트 정의 + 라우팅',
-        tier: 'pro',
-        actions: ['100 전문가', 'LLM 라우팅', '토론 엔진'],
     },
 ];
 
@@ -86,7 +79,7 @@ function getHTML() {
         '</style>' +
         '<header class="projects-header">' +
         '<h1>📁 프로젝트</h1>' +
-        '<p>스킬 / MCP 서버 / 커스텀 에이전트 — 작업 도구 통합 hub</p>' +
+        '<p>스킬 / MCP 서버 — 작업 도구 통합 hub</p>' +
         '</header>' +
         `<div class="proj-grid">${cards}</div>` +
         '</div>';

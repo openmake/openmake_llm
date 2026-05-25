@@ -33,12 +33,13 @@ const NAV_ITEMS = {
         { href: '/research.html', icon: '🔬', iconify: 'lucide:flask-conical', label: '딥 리서치', requireAuth: true, minTier: 'pro' },
         // /documents.html, /memory.html: 2026-05-19 제거
         { href: '/projects.html', icon: '📁', iconify: 'lucide:folder', label: '프로젝트', requireAuth: true },
-        // projects hub 의 3 카드 진입점 — 사이드바 nav 에서 hidden (projects 가 진입점), spa-router 라우트 등록 유지
+        // projects hub 의 2 카드 진입점 — 사이드바 nav 에서 hidden (projects 가 진입점), spa-router 라우트 등록 유지
         { href: '/skill-library.html', icon: '📦', iconify: 'lucide:package', label: '스킬 라이브러리', requireAuth: true, minTier: 'pro', cssFiles: ['/css/skill-library.css?v=5'], excludeFromSidebar: true },
         { href: '/mcp-servers.html', icon: '🔌', iconify: 'lucide:plug', label: 'MCP 서버', requireAuth: true, excludeFromSidebar: true },
-        { href: '/custom-agents.html', icon: '🤖', iconify: 'lucide:bot', label: '커스텀 에이전트', requireAuth: true, minTier: 'pro', excludeFromSidebar: true },
-        // /my-agents.html (2026-05-26 Phase 2): 사용자 본인 Custom Agent (claude.ai Projects 동등).
-        // custom-agents 와 분리 — DB user_agents 테이블 + 본인 권한.
+        // 2026-05-26: 기존 '커스텀 에이전트' CRUD 페이지 → Git URL Ingest 'Agent Draft' 검토 전용으로 재포지셔닝.
+        // 사용자 본인 페르소나는 /my-agents (DB user_agents) 로 일원화. excludeFromSidebar 유지 — sidebar 진입은 my-agents 만.
+        { href: '/custom-agents.html', icon: '📥', iconify: 'lucide:inbox', label: 'Agent Draft', requireAuth: true, excludeFromSidebar: true },
+        // /my-agents.html (2026-05-26 Phase 2): 사용자 본인 Custom Agent (claude.ai Projects 동등) — DB user_agents.
         { href: '/my-agents.html', icon: '👤', iconify: 'lucide:user-cog', label: '내 Agent', requireAuth: true },
         // /usage.html, /api-keys.html: Phase R1 (2026-05-21) — settings 탭으로 통합
         { href: '/agent-learning.html', icon: '🎓', iconify: 'lucide:graduation-cap', label: '에이전트 학습', requireAuth: true, minTier: 'pro' }
