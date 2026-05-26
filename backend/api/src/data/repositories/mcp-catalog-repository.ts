@@ -71,6 +71,21 @@ export class McpCatalogRepository {
         return result.rows[0] ?? null;
     }
 
+    /**
+     * 여러 catalog template 의 required_tier 만 batch 조회.
+     * tool-router 의 tier 게이트가 호출 — chat 흐름마다 N개 fetch 회피.
+     */
+    async getRequiredTiersByTemplateIds(ids: string[]): Promise<Map<string, string>> {
+        if (ids.length === 0) return new Map();
+        const result = await this.pool.query<{ id: string; required_tier: string }>(
+            `SELECT id, required_tier FROM mcp_server_catalog WHERE id = ANY($1)`,
+            [ids],
+        );
+        const map = new Map<string, string>();
+        for (const row of result.rows) map.set(row.id, row.required_tier);
+        return map;
+    }
+
     // Admin CRUD (Phase 4.6) 메서드 (listAllForAdmin / getCatalogTemplateForAdmin /
     // insert / update / deleteCatalogTemplate) 는 별도 module 로 분리:
     // → data/repositories/mcp-catalog-admin-repository.ts
@@ -97,6 +112,11 @@ export class McpCatalogRepository {
         const args = this.renderArgs(template, payload.args);
         const env = this.encryptEnv(template, payload.env);
         const url = this.renderUrl(template, payload.args);
+        // command_template 의 첫 토큰만 command 컬럼에 저장 (예: "npx -y firecrawl-mcp" → "npx").
+        // 나머지 토큰은 renderArgs 가 args 로 분리. child_process.spawn 은 command 가 단일 실행파일이어야 함.
+        const commandOnly = template.transport_type === 'stdio'
+            ? ((template.command_template ?? '').split(/\s+/).filter(Boolean)[0] ?? null)
+            : null;
 
         const result = await this.pool.query<UserMcpServerRow>(
             `INSERT INTO mcp_servers
@@ -111,7 +131,7 @@ export class McpCatalogRepository {
                 userId,
                 payload.name,
                 template.transport_type,
-                template.command_template ?? null,
+                commandOnly,
                 JSON.stringify(args),
                 JSON.stringify(env),
                 url,
