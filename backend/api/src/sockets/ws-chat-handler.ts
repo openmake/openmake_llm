@@ -408,7 +408,18 @@ export async function handleChatMessage(
             }
         }
 
-        ws.send(JSON.stringify({ type: 'done', messageId, metrics: { tokensPerSec, tokenCount } }));
+        // Phase 1.F.2 (2026-05-26): cleanedContent 를 done 페이로드에 동봉.
+        // 클라이언트가 token 단위로 누적한 raw 본문을 backend 의 placeholder 적용 본문으로
+        // reset 하기 위함. artifact 가 없으면 undefined — 변경 없음.
+        const cleanedContent = (result.artifacts && result.artifacts.length > 0)
+            ? result.response
+            : undefined;
+        ws.send(JSON.stringify({
+            type: 'done',
+            messageId,
+            metrics: { tokensPerSec, tokenCount },
+            ...(cleanedContent !== undefined ? { cleanedContent } : {}),
+        }));
 
     } catch (error: unknown) {
         // 중단 컨트롤러 정리

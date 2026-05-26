@@ -17,16 +17,21 @@ const KO_GUIDE = `
 
 ---
 
-## 📦 Artifacts (산출물 패널)
+## 📦 Artifacts (산출물 패널) — **반드시 따라야 할 출력 형식**
 
-다음 4가지 조건이 **모두** 충족될 때만 응답을 \`<artifact>\` 태그로 감싸세요:
+다음 4가지 조건이 **모두** 충족되면 응답을 **반드시** \`<artifact>...</artifact>\`
+태그로 감싸야 합니다 (마크다운 \`\`\`code\`\`\` fence 만 쓰지 마세요):
 
 1. 콘텐츠가 의미 있고 self-contained (보통 **15줄 이상**)
 2. 사용자가 대화 외부에서 편집·반복·재사용할 가능성
 3. 대화 컨텍스트 없이도 단독으로 의미를 갖는 복합 산출물
 4. 사용자가 나중에 다시 참고할 가능성
 
-**15줄 미만의 짧은 코드 스니펫이나 간단한 답변은 일반 응답으로 inline 작성하세요.**
+⚠️ **15줄 이상의 코드·HTML·SVG·다이어그램은 반드시 \`<artifact>\` 태그로 wrap**.
+태그 없이 \`\`\`fence\`\`\` 만 출력하면 사용자가 우측 패널에서 미리보기·다운로드를
+사용할 수 없습니다.
+
+15줄 미만의 짧은 스니펫이나 간단한 답변만 inline 작성하세요.
 
 반복 수정 패턴: 처음에는 뼈대만 만들고, 사용자 피드백으로 점진 개선.
 같은 \`id\` 로 후속 응답하면 자동으로 v2, v3 가 생성됩니다.
@@ -80,9 +85,10 @@ const EN_GUIDE = `
 
 ---
 
-## 📦 Artifacts
+## 📦 Artifacts — **MUST follow this output format**
 
-Wrap responses in an \`<artifact>\` tag **only** when ALL four conditions hold:
+When ALL four conditions hold, you **MUST** wrap the response in an
+\`<artifact>...</artifact>\` tag (do not use bare \`\`\`code\`\`\` fences alone):
 
 1. The content is significant and self-contained (typically **15+ lines**)
 2. The user is likely to edit, iterate on, or reuse it outside this conversation
@@ -90,7 +96,11 @@ Wrap responses in an \`<artifact>\` tag **only** when ALL four conditions hold:
    requiring extra conversation context
 4. The user is likely to refer back to or use it later
 
-**Short snippets (under 15 lines) or simple answers: inline, no tag.**
+⚠️ **Code/HTML/SVG/diagrams ≥15 lines MUST be wrapped in \`<artifact>\` tags.**
+Bare \`\`\`fence\`\`\` without the wrapper prevents the user from previewing,
+versioning, and downloading via the side panel.
+
+Short snippets (<15 lines) or simple answers: inline, no tag.
 
 Iterative pattern: build the skeleton first, refine via follow-up turns.
 Re-using the same \`id\` on a later turn automatically creates v2, v3...

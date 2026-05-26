@@ -149,6 +149,20 @@ const messageHandlers = {
         }
     },
     'done': (data) => {
+        // Phase 1.F.2 (2026-05-26): backend 가 artifact 추출로 본문을 정리한 경우,
+        // 클라이언트의 raw token 누적 본문을 cleanedContent 로 reset.
+        // [[artifact:id]] placeholder 는 시각 노이즈라 제거 — 카드는 별도 button 으로 이미 존재.
+        if (typeof data.cleanedContent === 'string') {
+            try {
+                const msgs = document.querySelectorAll('.message-content');
+                const lastMsg = msgs[msgs.length - 1];
+                if (lastMsg) {
+                    lastMsg.dataset.rawText = data.cleanedContent.replace(/\[\[artifact:[^\]]+\]\]\s*/g, '');
+                }
+            } catch (e) {
+                console.warn('[WebSocket] cleanedContent 적용 실패:', e);
+            }
+        }
         if (typeof finishAssistantMessage === 'function') {
             finishAssistantMessage(null, data.messageId || null);
         }
@@ -380,7 +394,14 @@ const messageHandlers = {
         if (!info || !info.id) return;
         try {
             openArtifactPanel(info);
-            const container = getState('currentAssistantMessageContent');
+            // 우선순위: state → 가장 마지막 .message-content (fallback).
+            // ws-handler 의 result.artifacts 발행은 done 직전 — token 종료 후 state 가 stale
+            // 일 수 있어 마지막 메시지 컨테이너를 직접 찾는 안전망 추가.
+            let container = getState('currentAssistantMessageContent');
+            if (!container) {
+                const all = document.querySelectorAll('.message-content');
+                container = all[all.length - 1] || null;
+            }
             if (container) insertArtifactCard(container, info);
         } catch (e) {
             console.error('[WebSocket] artifact_start 처리 실패:', e);
