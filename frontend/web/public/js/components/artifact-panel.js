@@ -29,6 +29,19 @@ let editMode = false;          // Phase 3 사용자 편집 모드
 let currentSessionId = null;
 export function setArtifactSessionId(sid) { currentSessionId = sid || null; }
 
+/**
+ * 인라인 카드의 hover tooltip 등이 본문 미리보기를 fetch 하기 위한 helper.
+ * artifactStore (모듈 내부 Map) 에서 최신 버전 본문 첫 N자 반환.
+ * 2026-05-26 Phase 3 (future 확장).
+ */
+export function getArtifactPreview(id, maxChars = 400) {
+    const list = artifactStore.get(id);
+    if (!list || list.length === 0) return '';
+    const latest = list[list.length - 1];
+    const text = String(latest.content || '');
+    return text.length > maxChars ? text.slice(0, maxChars) + '...' : text;
+}
+
 // ─── 패널 DOM 초기화 (lazy, body 에 한 번만 mount) ─────────────────────────
 
 function ensurePanel() {

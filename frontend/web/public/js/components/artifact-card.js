@@ -47,7 +47,30 @@ export function insertArtifactCard(container, info) {
             <span class="ac-meta">${escHtml(info.kind || 'artifact')}${info.lang ? ` · ${escHtml(info.lang)}` : ''}</span>
         </span>
         <span class="ac-arrow" aria-hidden="true">↗</span>
+        <span class="ac-tooltip" role="tooltip" aria-hidden="true">
+            <span class="ac-tooltip-header">${kindIcon(info.kind)} ${escHtml(info.title || info.id)}</span>
+            <span class="ac-tooltip-meta">${escHtml(info.kind || 'artifact')}${info.lang ? ` · ${escHtml(info.lang)}` : ''}</span>
+            <pre class="ac-tooltip-body" data-id="${escHtml(info.id)}">로딩 중...</pre>
+        </span>
     `;
+
+    // 2026-05-26 Phase 3 — hover 미리보기. lazy fetch (Map 캐시 + 모듈 store 접근).
+    let tooltipLoaded = false;
+    card.addEventListener('mouseenter', async () => {
+        if (tooltipLoaded) return;
+        tooltipLoaded = true;
+        const bodyEl = card.querySelector('.ac-tooltip-body');
+        if (!bodyEl) return;
+        try {
+            // artifact-panel 의 store 에서 최신 버전 본문 가져오기 (이미 streaming 으로 누적됨)
+            const mod = await import('./artifact-panel.js');
+            const content = mod.getArtifactPreview ? mod.getArtifactPreview(info.id, 400) : '';
+            bodyEl.textContent = content || '(본문 미수신)';
+        } catch (e) {
+            bodyEl.textContent = '(미리보기 불가)';
+        }
+    });
+
     card.addEventListener('click', () => {
         // 클릭 시 패널 포커스 (이미 열려 있어도 다시 open 호출 가능 — 같은 id 의 새 버전이 아니면 noop)
         // 단, 같은 id 의 기존 버전을 다시 표시하려면 별도 mechanism 필요 — 일단 패널이 그 id 를
@@ -112,6 +135,44 @@ function injectCardStyles() {
 .ac-arrow { color: var(--text-muted, #888); font-size: 14px; flex-shrink: 0; }
 .artifact-card:hover .ac-arrow {
     color: var(--accent-primary, #6366f1);
+}
+
+/* 2026-05-26 Phase 3 — hover tooltip 미리보기 */
+.artifact-card { position: relative; }
+.ac-tooltip {
+    position: absolute; bottom: calc(100% + 8px); left: 0;
+    width: min(420px, 80vw); max-height: 280px;
+    padding: 10px 12px;
+    background: var(--bg-card, #1a1a1a);
+    border: 1px solid var(--accent-primary, #6366f1);
+    border-radius: var(--radius-md, 6px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    z-index: 100;
+    opacity: 0; pointer-events: none;
+    transform: translateY(4px);
+    transition: opacity 0.15s, transform 0.15s;
+    display: flex; flex-direction: column; gap: 4px;
+    text-align: left;
+}
+.artifact-card:hover .ac-tooltip {
+    opacity: 1; pointer-events: auto; transform: translateY(0);
+}
+.ac-tooltip-header {
+    font-weight: var(--font-weight-semibold, 600);
+    color: var(--text-primary, #fff); font-size: 12px;
+}
+.ac-tooltip-meta {
+    color: var(--text-muted, #888); font-size: 10px; text-transform: uppercase;
+}
+.ac-tooltip-body {
+    margin: 4px 0 0; padding: 8px;
+    background: var(--bg-secondary, #0f0f0f);
+    border-radius: var(--radius-md, 6px);
+    font-family: 'JetBrains Mono', 'Courier New', monospace;
+    font-size: 11px; line-height: 1.4;
+    color: var(--text-secondary, #aaa);
+    white-space: pre-wrap; word-break: break-word;
+    max-height: 200px; overflow-y: auto;
 }
     `;
     document.head.appendChild(style);
