@@ -36,6 +36,7 @@ import type { MCPToolDefinition } from './types';
 import { builtInTools } from './tools';
 import type { UserTier } from '../data/user-manager';
 import { canUseTool } from './tool-tiers';
+import { MCP_CATALOG_TIER_ORDER, type CatalogTier } from '../config/tiers';
 import type { UserContext } from './user-sandbox';
 import { createLogger } from '../utils/logger';
 import { MCP_EXTERNAL_TOOL_LIMITS } from '../config/timeouts';
@@ -108,12 +109,6 @@ export class ToolRouter {
     private readonly catalogRepo?: Pick<McpCatalogRepository, 'getRequiredTiersByTemplateIds'>;
 
     /**
-     * catalog 의 required_tier 와 UserTier 비교를 위한 5단계 tier 순서.
-     * UserTier (3값) 는 이 순서의 부분집합이며, catalog 는 모든 5값을 가질 수 있다.
-     */
-    private static readonly TIER_ORDER = ['free', 'starter', 'standard', 'pro', 'enterprise'] as const;
-
-    /**
      * @param deps - optional 의존성. userPool/catalogRepo 둘 다 없으면 기존 (builtin + global external) 동작과 동일.
      */
     constructor(deps?: { userPool?: UserMCPPool; catalogRepo?: McpCatalogRepository }) {
@@ -184,13 +179,13 @@ export class ToolRouter {
         if (templateIds.length === 0) return entries;
 
         const tierMap = await this.catalogRepo.getRequiredTiersByTemplateIds(templateIds);
-        const userLevel = ToolRouter.TIER_ORDER.indexOf(userTier as typeof ToolRouter.TIER_ORDER[number]);
+        const userLevel = MCP_CATALOG_TIER_ORDER.indexOf(userTier as CatalogTier);
 
         return entries.filter(e => {
             if (!e.catalogTemplateId) return true;
             const required = tierMap.get(e.catalogTemplateId);
             if (!required) return true;
-            const requiredLevel = ToolRouter.TIER_ORDER.indexOf(required as typeof ToolRouter.TIER_ORDER[number]);
+            const requiredLevel = MCP_CATALOG_TIER_ORDER.indexOf(required as CatalogTier);
             return userLevel >= requiredLevel;
         });
     }

@@ -950,6 +950,9 @@ export class ChatService {
     // ────────────────────────────────────────────────────────────
 
     private async externalProviderDeps(): Promise<ExternalProviderDeps> {
+        // getAllowedTools 는 async (tool-router 가 userPool 도구를 비동기로 수집).
+        // 여기서 한 번 resolve 해 ExternalProviderDeps 의 동기 contract 를 유지한다.
+        // (selectAndExecuteStrategy 의 pre-resolve 패턴과 동일 — 단일 turn 내 도구 목록 immutable 가정.)
         return {
             providerRouter: this.providerRouter,
             currentUserContext: this.currentUserContext,

@@ -5,6 +5,7 @@
  */
 import type { UserMCPPool } from './user-pool';
 import type { MCPTool } from './types';
+import { MCP_NAMESPACE_SEPARATOR } from './types';
 
 export interface UserPoolToolEntry {
     tool: MCPTool;
@@ -13,8 +14,6 @@ export interface UserPoolToolEntry {
     catalogTemplateId?: string;
     originalToolName: string;
 }
-
-const NS_SEPARATOR = '::';
 
 export function collectUserPoolTools(pool: UserMCPPool, userId: string): UserPoolToolEntry[] {
     const entries: UserPoolToolEntry[] = [];
@@ -32,7 +31,7 @@ export function collectUserPoolTools(pool: UserMCPPool, userId: string): UserPoo
 
         for (const tool of tools) {
             entries.push({
-                tool: { ...tool, name: `${displayName}${NS_SEPARATOR}${tool.name}` },
+                tool: { ...tool, name: `${displayName}${MCP_NAMESPACE_SEPARATOR}${tool.name}` },
                 serverId,
                 displayName,
                 catalogTemplateId,

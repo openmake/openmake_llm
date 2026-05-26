@@ -14,6 +14,7 @@
  */
 import type { Pool } from 'pg';
 import { encryptToken, decryptToken } from '../../utils/token-crypto';
+import { MCP_CATALOG_TIER_ORDER } from '../../config/tiers';
 import { createLogger } from '../../utils/logger';
 import type {
     McpCatalogTemplate,
@@ -46,9 +47,8 @@ export class McpCatalogRepository {
     constructor(private pool: Pool) {}
 
     async listCatalog(userTier: string): Promise<McpCatalogTemplate[]> {
-        const tierOrder = ['free', 'starter', 'standard', 'pro', 'enterprise'];
-        const maxIdx = tierOrder.indexOf(userTier);
-        const allowedTiers = maxIdx < 0 ? ['free'] : tierOrder.slice(0, maxIdx + 1);
+        const maxIdx = MCP_CATALOG_TIER_ORDER.indexOf(userTier as typeof MCP_CATALOG_TIER_ORDER[number]);
+        const allowedTiers = maxIdx < 0 ? ['free'] : MCP_CATALOG_TIER_ORDER.slice(0, maxIdx + 1);
         const result = await this.pool.query<McpCatalogTemplate>(
             `SELECT id, display_name, description, transport_type, command_template,
                     args_schema, env_schema, url_template, required_tier, is_enabled

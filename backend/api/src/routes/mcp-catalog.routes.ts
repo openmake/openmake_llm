@@ -17,6 +17,8 @@ import { canRegisterServer, canStartStopServer } from './mcp-visibility';
 import { McpFromCatalogPayloadSchema } from '../schemas/mcp-catalog.schema';
 import type { McpFromCatalogPayload } from '../schemas/mcp-catalog.schema';
 import { getUnifiedDatabase } from '../data/models/unified-database';
+import { getLifecycleSupervisor } from '../mcp/lifecycle-supervisor';
+import { MCP_CATALOG_TIER_ORDER } from '../config/tiers';
 import { createLogger } from '../utils/logger';
 
 const logger = createLogger('McpCatalogRoutes');
@@ -50,11 +52,10 @@ mcpCatalogRouter.post(
         }
 
         // tier 검증
-        const tierOrder = ['free', 'starter', 'standard', 'pro', 'enterprise'];
-        const userTierIdx = tierOrder.indexOf(
-            (req.user && 'tier' in req.user ? (req.user as { tier?: string }).tier : 'free') ?? 'free',
+        const userTierIdx = MCP_CATALOG_TIER_ORDER.indexOf(
+            ((req.user && 'tier' in req.user ? (req.user as { tier?: string }).tier : 'free') ?? 'free') as typeof MCP_CATALOG_TIER_ORDER[number],
         );
-        const requiredTierIdx = tierOrder.indexOf(template.required_tier);
+        const requiredTierIdx = MCP_CATALOG_TIER_ORDER.indexOf(template.required_tier as typeof MCP_CATALOG_TIER_ORDER[number]);
         if (userTierIdx < requiredTierIdx) {
             res.status(403).json(forbidden(`이 템플릿은 ${template.required_tier} 티어 이상 필요`));
             return;
@@ -144,8 +145,7 @@ mcpCatalogRouter.get('/instances/summary', requireAuth, asyncHandler(async (req:
     res.json(success({ summary }));
 }));
 
-// POST /api/mcp/servers/:id/start — DB 상태만 'starting' 으로 기록
-// 실제 spawn 은 Phase 7 lifecycle-supervisor 가 처리.
+// POST /api/mcp/servers/:id/start — lifecycle-supervisor 를 통해 실제 spawn
 mcpCatalogRouter.post('/servers/:id/start', requireAuth, asyncHandler(async (req: Request, res: Response) => {
     const userId = String(req.user?.id ?? '');
     const role = req.user?.role ?? 'user';
@@ -160,11 +160,27 @@ mcpCatalogRouter.post('/servers/:id/start', requireAuth, asyncHandler(async (req
         res.status(403).json(forbidden('start 권한 없음'));
         return;
     }
-    await repo.recordInstanceTransition(server.id, actor.id, 'starting');
-    res.status(202).json(success({ status: 'starting', note: 'spawn 은 Phase 7 lifecycle-supervisor 의 책임' }));
+    // ownerId: user_private/user_shared 는 server.user_id, global 은 actor.id
+    // — supervisor 내부에서 owner 불일치 시 throw
+    const ownerId = server.user_id ?? actor.id;
+    const supervisor = getLifecycleSupervisor();
+    if (!supervisor) {
+        res.status(503).json({ ok: false, error: 'lifecycle-supervisor 미초기화' });
+        return;
+    }
+    try {
+        await supervisor.spawnUserServer(ownerId, server.id);
+        logger.info(`start 성공 s=${server.id} owner=${ownerId} actor=${actor.id}`);
+        res.status(202).json(success({ status: 'running' }));
+    } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        logger.error(`start 실패 s=${server.id}: ${msg}`);
+        await repo.recordInstanceTransition(server.id, actor.id, 'crashed', undefined, msg).catch(() => { /* noop */ });
+        res.status(500).json({ ok: false, error: msg });
+    }
 }));
 
-// POST /api/mcp/servers/:id/stop — DB 상태만 'stopped' 로 기록
+// POST /api/mcp/servers/:id/stop — lifecycle-supervisor 의 kill + DB 'stopped'
 mcpCatalogRouter.post('/servers/:id/stop', requireAuth, asyncHandler(async (req: Request, res: Response) => {
     const userId = String(req.user?.id ?? '');
     const role = req.user?.role ?? 'user';
@@ -179,6 +195,14 @@ mcpCatalogRouter.post('/servers/:id/stop', requireAuth, asyncHandler(async (req:
         res.status(403).json(forbidden('stop 권한 없음'));
         return;
     }
-    await repo.recordInstanceTransition(server.id, actor.id, 'stopped');
+    const ownerId = server.user_id ?? actor.id;
+    const supervisor = getLifecycleSupervisor();
+    if (supervisor) {
+        await supervisor.killUserServer(ownerId, server.id).catch(e => {
+            logger.warn(`kill 실패 s=${server.id}: ${e instanceof Error ? e.message : String(e)}`);
+        });
+    }
+    // killUserServer 가 pool 비어있을 때 일찍 return 하므로 transition 보장 위해 명시 호출
+    await repo.recordInstanceTransition(server.id, actor.id, 'stopped').catch(() => { /* noop */ });
     res.status(202).json(success({ status: 'stopped' }));
 }));

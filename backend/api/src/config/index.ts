@@ -6,5 +6,6 @@ export * from './pricing';
 export * from './external-services';
 export * from './model-defaults';
 export * from './tier-limits';
+export * from './tiers';
 export * from './llm-parameters';
 export * from './model-presets';
