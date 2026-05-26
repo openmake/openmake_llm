@@ -60,11 +60,9 @@ function enterUserMessageEdit(messageDiv) {
         const newText = ta.value.trim();
         if (!newText) return;
         // Phase 3.4 (2026-05-26): 부모 session 추적용 정보 보존.
-        // 현재 chat 의 sessionId 와 편집 대상 메시지 id 를 window 의 임시 변수로 전달.
-        // (state 매니저 import 회피 — chat.js 의 send 함수가 이것을 읽어 WS payload 에 포함)
+        // getState 를 chat-renderer 가 이미 import — 직접 호출 (이전 window.OmkState 우회 path 는 노출 안 됨).
         try {
-            const currentSession = (window.OmkState && window.OmkState.get && window.OmkState.get('currentChatId'))
-                || localStorage.getItem('currentChatId');
+            const currentSession = getState('currentChatId');
             window._pendingBranchFrom = {
                 sessionId: currentSession || null,
                 messageId: messageDiv?.id || null,
