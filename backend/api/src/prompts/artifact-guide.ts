@@ -90,8 +90,41 @@ sequenceDiagram
 </artifact>
 \`\`\`
 
+**예시 — Chart.js 데이터 시각화:**
+\`\`\`
+<artifact id="sales-2024" kind="chart" title="월별 판매량">
+{"type":"bar","data":{"labels":["1월","2월","3월"],"datasets":[{"label":"판매량","data":[120,190,300]}]}}
+</artifact>
+\`\`\`
+
+**예시 — CSV 표:**
+\`\`\`
+<artifact id="employees" kind="csv" title="직원 명단">
+이름,부서,연봉
+김철수,개발,5000
+이영희,디자인,4500
+</artifact>
+\`\`\`
+
+**예시 — React 컴포넌트:**
+\`\`\`
+<artifact id="counter" kind="react" title="카운터" lang="jsx">
+import { useState } from 'react';
+function App() {
+  const [n, setN] = useState(0);
+  return <button onClick={()=>setN(n+1)}>{n}</button>;
+}
+</artifact>
+\`\`\`
+
 태그 외부에는 산출물에 대한 짧은 설명/맥락만 작성하세요. 본문 자체를
-태그 밖에 중복 작성하면 사용자에게 두 번 표시됩니다.`;
+태그 밖에 중복 작성하면 사용자에게 두 번 표시됩니다.
+
+⚠️ **자주 발생하는 실수**:
+- ❌ \`\`\`python ... \`\`\` 만 출력 → ❌ artifact 패널에 안 들어감
+- ❌ <artifact id="..."> ... </artifact id> → ❌ 닫는 태그 형식 오류
+- ❌ \`<artifact>\` 외부에 같은 본문 중복 → ❌ 사용자 화면 중복 표시
+- ✅ 위 예시처럼 \`<artifact id="..." kind="..." title="...">본문</artifact>\` 형식 정확히`;
 
 const EN_GUIDE = `
 

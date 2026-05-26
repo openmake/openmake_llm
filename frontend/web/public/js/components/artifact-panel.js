@@ -326,7 +326,9 @@ function isLikelyTimeSeries(spec) {
 }
 
 /**
- * CSV artifact — PapaParse 로 파싱 후 표 + 다운로드.
+ * CSV artifact — PapaParse 파싱 후 정렬/검색 가능한 표.
+ * Phase 3.2 (2026-05-26): 헤더 검색 input + th 클릭 정렬 (asc/desc/none 3단)
+ * 외부 라이브러리 0 — 자체 구현 (TanStack Table 등 의존성 회피).
  */
 async function renderCsv(target, item) {
     await loadScriptOnce('/vendor/artifacts/papaparse.min.js', 'Papa');
@@ -334,28 +336,101 @@ async function renderCsv(target, item) {
         header: true,
         skipEmptyLines: true,
     });
+    const allRows = parsed.data;
+    const headers = allRows.length > 0 ? Object.keys(allRows[0]) : [];
+
     const wrap = document.createElement('div');
     wrap.className = 'ap-csv-wrap';
     if (parsed.errors && parsed.errors.length > 0) {
-        wrap.innerHTML += `<div class="ap-csv-warn">⚠ ${parsed.errors.length}개 파싱 경고</div>`;
+        wrap.insertAdjacentHTML('beforeend', `<div class="ap-csv-warn">⚠ ${parsed.errors.length}개 파싱 경고</div>`);
     }
+
+    // 검색 input
+    const searchWrap = document.createElement('div');
+    searchWrap.className = 'ap-csv-search';
+    searchWrap.innerHTML = '<input type="text" placeholder="🔎 표 검색 (모든 열 부분 일치)" class="ap-csv-search-input" />';
+    wrap.appendChild(searchWrap);
+
     const table = document.createElement('table');
     table.className = 'ap-csv-table';
-    if (parsed.data.length > 0) {
-        const headers = Object.keys(parsed.data[0]);
-        const thead = '<thead><tr>' + headers.map(h => `<th>${escHtml(h)}</th>`).join('') + '</tr></thead>';
-        const rows = parsed.data.slice(0, 500).map(row =>
-            '<tr>' + headers.map(h => `<td>${escHtml(row[h] ?? '')}</td>`).join('') + '</tr>'
-        ).join('');
-        table.innerHTML = thead + '<tbody>' + rows + '</tbody>';
-    }
     wrap.appendChild(table);
+
     const summary = document.createElement('div');
     summary.className = 'ap-csv-summary';
-    summary.textContent = `${parsed.data.length} 행 × ${Object.keys(parsed.data[0] || {}).length} 열 (최대 500행 표시)`;
     wrap.appendChild(summary);
+
     target.appendChild(wrap);
     target.className = 'ap-preview ap-csv';
+
+    // 정렬·필터 state (closure)
+    const state = {
+        sortKey: null,           // 현재 정렬 컬럼
+        sortDir: 'none',         // 'asc' | 'desc' | 'none'
+        filter: '',              // 검색 문자열
+    };
+
+    function renderTable() {
+        // 필터링
+        const filtered = state.filter
+            ? allRows.filter(row =>
+                headers.some(h => String(row[h] ?? '').toLowerCase().includes(state.filter.toLowerCase())))
+            : allRows;
+        // 정렬
+        let display = filtered;
+        if (state.sortKey && state.sortDir !== 'none') {
+            const dir = state.sortDir === 'asc' ? 1 : -1;
+            display = [...filtered].sort((a, b) => {
+                const va = a[state.sortKey], vb = b[state.sortKey];
+                const na = Number(va), nb = Number(vb);
+                if (!Number.isNaN(na) && !Number.isNaN(nb) && va !== '' && vb !== '') {
+                    return (na - nb) * dir;
+                }
+                return String(va ?? '').localeCompare(String(vb ?? '')) * dir;
+            });
+        }
+        // 최대 500 행 표시
+        const visible = display.slice(0, 500);
+
+        const thead = '<thead><tr>' + headers.map(h => {
+            const arrow = state.sortKey === h
+                ? (state.sortDir === 'asc' ? ' ▲' : state.sortDir === 'desc' ? ' ▼' : '')
+                : '';
+            return `<th class="ap-csv-th" data-key="${escAttr(h)}">${escHtml(h)}${arrow}</th>`;
+        }).join('') + '</tr></thead>';
+        const tbody = '<tbody>' + visible.map(row =>
+            '<tr>' + headers.map(h => `<td>${escHtml(row[h] ?? '')}</td>`).join('') + '</tr>'
+        ).join('') + '</tbody>';
+        table.innerHTML = thead + tbody;
+        summary.textContent =
+            `${display.length} 행 × ${headers.length} 열` +
+            (state.filter ? ` (전체 ${allRows.length} 중 필터 ${display.length})` : '') +
+            (visible.length < display.length ? ` — 최대 500행 표시` : '');
+
+        // th 정렬 토글
+        table.querySelectorAll('.ap-csv-th').forEach(th => {
+            th.addEventListener('click', () => {
+                const key = th.getAttribute('data-key');
+                if (state.sortKey !== key) {
+                    state.sortKey = key;
+                    state.sortDir = 'asc';
+                } else {
+                    // asc → desc → none → asc 의 순환
+                    state.sortDir = state.sortDir === 'asc' ? 'desc'
+                        : state.sortDir === 'desc' ? 'none' : 'asc';
+                    if (state.sortDir === 'none') state.sortKey = null;
+                }
+                renderTable();
+            });
+        });
+    }
+
+    // 검색 input 핸들러 (debounce 없이 직접 — 500행 정렬 비용 충분히 작음)
+    searchWrap.querySelector('.ap-csv-search-input').addEventListener('input', (e) => {
+        state.filter = e.target.value;
+        renderTable();
+    });
+
+    renderTable();
 }
 
 /**
@@ -996,9 +1071,21 @@ function injectStyles() {
 .ap-preview.ap-csv { padding: 0; background: transparent; border: none; }
 .ap-csv-wrap { background: var(--bg-secondary, #0f0f0f); border: 1px solid var(--border-light, #2a2a2a); border-radius: var(--radius-md, 6px); padding: 12px; max-height: 100%; overflow: auto; }
 .ap-csv-warn { font-size: 11px; color: var(--warning, #fbbf24); margin-bottom: 6px; }
+.ap-csv-search { margin-bottom: 8px; }
+.ap-csv-search-input {
+    width: 100%; padding: 6px 10px; box-sizing: border-box;
+    background: var(--bg-tertiary, #2a2a2a); color: var(--text-primary, #fff);
+    border: 1px solid var(--border-light, #2a2a2a); border-radius: var(--radius-md, 6px);
+    font-size: 12px; font-family: inherit;
+}
+.ap-csv-search-input:focus {
+    outline: none; border-color: var(--accent-primary, #6366f1);
+}
 .ap-csv-table { border-collapse: collapse; font-size: 12px; width: 100%; }
 .ap-csv-table th, .ap-csv-table td { border: 1px solid var(--border-light, #2a2a2a); padding: 4px 8px; text-align: left; }
 .ap-csv-table th { background: var(--bg-tertiary, #2a2a2a); font-weight: var(--font-weight-semibold, 600); }
+.ap-csv-th { cursor: pointer; user-select: none; }
+.ap-csv-th:hover { background: var(--accent-primary, #6366f1); color: #fff; }
 .ap-csv-summary { font-size: 11px; color: var(--text-muted, #888); margin-top: 6px; text-align: right; }
 .ap-preview.ap-slide { padding: 0; background: #000; border: none; }
 .ap-reveal { width: 100%; }
