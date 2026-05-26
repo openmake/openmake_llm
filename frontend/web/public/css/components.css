@@ -871,3 +871,65 @@
 }
 .admin-section-tab:hover { background: var(--bg-tertiary); color: var(--text-primary); }
 .admin-section-tab.active { background: var(--accent-primary); color: #fff; font-weight: var(--font-weight-semibold); }
+
+/* Phase 3.4 (2026-05-26) — 사용자 메시지 편집 → 새 대화 분기 */
+.message-actions-user {
+    display: none;
+    justify-content: flex-end;
+    gap: 4px;
+    margin-top: 4px;
+}
+.chat-message.user:hover .message-actions-user { display: flex; }
+.user-edit-btn {
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+    padding: 2px 8px;
+    cursor: pointer;
+    font-size: 11px;
+}
+.user-edit-btn:hover {
+    background: var(--accent-primary);
+    color: #fff;
+    border-color: var(--accent-primary);
+}
+.user-message-editor {
+    margin: 8px 0;
+    padding: 8px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--accent-primary);
+    border-radius: var(--radius-md);
+}
+.user-edit-textarea {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 8px;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+    font-family: inherit;
+    font-size: 14px;
+    line-height: 1.4;
+    resize: vertical;
+    min-height: 60px;
+}
+.user-edit-textarea:focus { outline: none; border-color: var(--accent-primary); }
+.user-edit-actions { display: flex; gap: 6px; margin-top: 6px; justify-content: flex-end; }
+.user-edit-actions button {
+    padding: 4px 12px;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    font-size: 12px;
+    border: 1px solid var(--border-light);
+}
+.user-edit-save {
+    background: var(--accent-primary);
+    color: #fff;
+    border-color: var(--accent-primary);
+}
+.user-edit-cancel {
+    background: var(--bg-card);
+    color: var(--text-secondary);
+}

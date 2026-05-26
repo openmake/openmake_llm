@@ -23,6 +23,59 @@ const SS = window.SafeStorage;
  * @param {string} content - 메시지 내용 (빈 문자열이면 로딩 상태 표시)
  * @returns {HTMLDivElement|null} 생성된 메시지 DOM 요소, 컨테이너 없으면 null
  */
+/**
+ * 사용자 메시지 편집 모드 진입 (Phase 3.4, 2026-05-26).
+ * message-content 를 textarea + 저장/취소 버튼으로 교체.
+ * 저장 시: 새 대화 시작 → chatInput.value 에 prefill → 자동 전송.
+ * Anthropic 공식: "Edit prior chat messages to create a different version"
+ */
+function enterUserMessageEdit(messageDiv) {
+    const content = messageDiv.querySelector('.message-content');
+    if (!content) return;
+    const original = content.dataset.originalText || content.textContent || '';
+
+    const editor = document.createElement('div');
+    editor.className = 'user-message-editor';
+    editor.innerHTML = `
+        <textarea class="user-edit-textarea" rows="3">${escapeHtml(original)}</textarea>
+        <div class="user-edit-actions">
+            <button class="user-edit-save">💬 새 대화로 보내기</button>
+            <button class="user-edit-cancel">취소</button>
+        </div>
+    `;
+    content.style.display = 'none';
+    const actions = messageDiv.querySelector('.message-actions-user');
+    if (actions) actions.style.display = 'none';
+    messageDiv.querySelector('.message-wrapper').insertBefore(editor, content);
+    const ta = editor.querySelector('.user-edit-textarea');
+    ta.focus();
+    ta.setSelectionRange(ta.value.length, ta.value.length);
+
+    editor.querySelector('.user-edit-cancel').addEventListener('click', () => {
+        editor.remove();
+        content.style.display = '';
+        if (actions) actions.style.display = '';
+    });
+    editor.querySelector('.user-edit-save').addEventListener('click', () => {
+        const newText = ta.value.trim();
+        if (!newText) return;
+        // 새 대화 버튼 트리거 (chat.js 의 newChat() 또는 동일 효과)
+        const newChatBtn = Array.from(document.querySelectorAll('button')).find(b =>
+            b.textContent?.includes('새 대화') || b.title?.includes('새 대화'));
+        if (newChatBtn) newChatBtn.click();
+        // 짧은 지연 후 chatInput 에 prefill + 자동 전송
+        setTimeout(() => {
+            const input = document.getElementById('chatInput');
+            if (!input) return;
+            input.value = newText;
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+            const sendBtn = Array.from(document.querySelectorAll('button')).find(b =>
+                b.title?.startsWith('전송'));
+            if (sendBtn) sendBtn.click();
+        }, 250);
+    });
+}
+
 function addChatMessage(role, content) {
     const container = document.getElementById('chatMessages');
     if (!container) return null;
@@ -35,13 +88,25 @@ function addChatMessage(role, content) {
     div.id = messageId;
 
     if (role === 'user') {
+        // 2026-05-26 Phase 3.4: 사용자 메시지 편집 → 새 대화 분기 (claude.ai 동등 UX).
+        // 편집 버튼은 message-wrapper 안 — message-content reset 영향 받지 않게 분리 위치.
         div.innerHTML = `
             <div class="message-wrapper">
-                <div class="message-content">${escapeHtml(content).replace(/\n/g, '<br>')}</div>
+                <div class="message-content" data-original-text="${escapeHtml(content)}">${escapeHtml(content).replace(/\n/g, '<br>')}</div>
+                <div class="message-actions message-actions-user">
+                    <button class="message-action-btn user-edit-btn" title="편집 → 새 대화로 분기">
+                        ✏️ 편집
+                    </button>
+                </div>
                 <div class="message-time">${timestamp}</div>
             </div>
             <div class="message-avatar">👤</div>
         `;
+        // 편집 버튼 핸들러
+        const editBtn = div.querySelector('.user-edit-btn');
+        if (editBtn) {
+            editBtn.addEventListener('click', () => enterUserMessageEdit(div));
+        }
     } else {
         div.innerHTML = `
             <div class="message-avatar">✨</div>
