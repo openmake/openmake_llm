@@ -309,7 +309,12 @@ export class WebSocketHandler {
                     try {
                         const mcpClient = getUnifiedMCPClient();
                         const toolRouter = mcpClient.getToolRouter();
-                        const allTools = toolRouter.getAllTools();
+                        const extWs = ws as ExtendedWebSocket;
+                        const userId = extWs._authenticatedUserId;
+                        const userTier = extWs._authenticatedUserTier;
+                        const allTools = userId && userTier
+                            ? await toolRouter.getAllTools({ userId, tier: userTier })
+                            : await toolRouter.getAllTools();
 
                         const agents = allTools.map(tool => {
                             // 외부 도구: mcp://serverName/toolName
