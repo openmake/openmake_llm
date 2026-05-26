@@ -54,7 +54,8 @@ function ensurePanel() {
             </div>
             <div class="ap-actions">
                 <button class="ap-act-copy" title="본문 복사">📋 복사</button>
-                <button class="ap-act-download" title="다운로드">⬇ 다운</button>
+                <button class="ap-act-download" title="원본 다운로드">⬇ 다운</button>
+                <button class="ap-act-pdf" title="미리보기를 PDF 로 저장 (pdf-lib + dom-to-image)">📄 PDF</button>
             </div>
         </footer>
     `;
@@ -73,6 +74,7 @@ function wireUp(root) {
     root.querySelector('.ap-vn-next').addEventListener('click', () => navVersion(+1));
     root.querySelector('.ap-act-copy').addEventListener('click', copyCurrent);
     root.querySelector('.ap-act-download').addEventListener('click', downloadCurrent);
+    root.querySelector('.ap-act-pdf').addEventListener('click', exportPdfCurrent);
 
     // 키보드: Esc / ←/→ — 패널이 열려 있을 때만
     document.addEventListener('keydown', (e) => {
@@ -230,12 +232,15 @@ async function renderPreview(target, item) {
 // ─── Phase 2 신규 렌더러 (lazy-loaded) ──────────────────────────────────────
 
 /**
- * Chart artifact — content 는 Chart.js 호환 JSON spec.
- * 예: {"type":"bar","data":{"labels":["A","B"],"datasets":[{"data":[1,2]}]}}
- * Chart.js v4 UMD self-hosted in vendor/artifacts/.
+ * Chart artifact — content 는 JSON spec.
+ * 두 엔진 dispatch (2026-05-26 Phase 2):
+ *   - spec.engine === 'uplot' OR spec 의 series[0].label 이 'time-series' 라벨이면 → uPlot (가벼움, 시계열 특화)
+ *   - 그 외 → Chart.js (일반 차트)
+ *
+ * Chart.js spec 예: {"type":"bar","data":{"labels":["A","B"],"datasets":[{"data":[1,2]}]}}
+ * uPlot   spec 예: {"engine":"uplot","data":[[1700000000,1700003600,...],[10,20,...]],"series":[{label:"time"},{label:"value"}]}
  */
 async function renderChart(target, item) {
-    await loadScriptOnce('/vendor/artifacts/chart.umd.min.js', 'Chart');
     let spec;
     try {
         spec = JSON.parse(item.content);
@@ -243,6 +248,35 @@ async function renderChart(target, item) {
         target.innerHTML = `<div class="ap-error">Chart spec JSON 파싱 실패: ${escHtml(e.message)}</div>`;
         return;
     }
+    const useUplot = spec.engine === 'uplot' || isLikelyTimeSeries(spec);
+
+    if (useUplot) {
+        await loadScriptOnce('/vendor/artifacts/uPlot.iife.min.js', 'uPlot');
+        await loadStyleOnce('/vendor/artifacts/uPlot.min.css');
+        const wrap = document.createElement('div');
+        wrap.className = 'ap-chart-wrap';
+        wrap.style.background = '#fff';
+        wrap.style.padding = '12px';
+        wrap.style.borderRadius = '6px';
+        target.appendChild(wrap);
+        target.className = 'ap-preview ap-chart';
+        try {
+            const opts = {
+                width: wrap.clientWidth || 600,
+                height: 360,
+                title: spec.title || '',
+                series: spec.series || [{}, { label: 'value', stroke: '#6366f1' }],
+                scales: spec.scales || { x: { time: true } },
+            };
+            new window.uPlot(opts, spec.data, wrap);
+        } catch (e) {
+            target.innerHTML = `<div class="ap-error">uPlot 렌더 실패: ${escHtml(e.message)}</div>`;
+        }
+        return;
+    }
+
+    // Chart.js (default)
+    await loadScriptOnce('/vendor/artifacts/chart.umd.min.js', 'Chart');
     const canvas = document.createElement('canvas');
     canvas.style.maxHeight = '600px';
     const wrap = document.createElement('div');
@@ -258,6 +292,25 @@ async function renderChart(target, item) {
     } catch (e) {
         target.innerHTML = `<div class="ap-error">Chart 렌더 실패: ${escHtml(e.message)}</div>`;
     }
+}
+
+/**
+ * Chart spec 이 시계열일 가능성을 휴리스틱으로 추정.
+ * - Chart.js 의 scales.x.type === 'time' / 'timeseries' 면 yes
+ * - data.labels 가 ISO 날짜 또는 큰 timestamp 면 yes
+ * - 그 외 false (Chart.js 가 더 적합)
+ */
+function isLikelyTimeSeries(spec) {
+    if (!spec || typeof spec !== 'object') return false;
+    const xType = spec.options?.scales?.x?.type || spec.scales?.x?.type;
+    if (xType === 'time' || xType === 'timeseries') return true;
+    const labels = spec.data?.labels;
+    if (Array.isArray(labels) && labels.length > 0) {
+        const first = labels[0];
+        if (typeof first === 'string' && /^\d{4}-\d{2}-\d{2}/.test(first)) return true;
+        if (typeof first === 'number' && first > 1e9) return true; // unix timestamp
+    }
+    return false;
 }
 
 /**
@@ -574,6 +627,74 @@ function flashAction(selector, msg) {
     const orig = btn.textContent;
     btn.textContent = msg;
     setTimeout(() => { btn.textContent = orig; }, 1200);
+}
+
+/**
+ * PDF export (Phase 2): 미리보기 영역을 PNG 로 캡처 → pdf-lib 로 A4 PDF 생성 → 다운로드.
+ * 통합 패턴 — code/markdown/svg/chart/mermaid 모두 시각적 결과 그대로 보존.
+ *
+ * 의존성:
+ *   - dom-to-image-more: DOM → PNG (lazy load)
+ *   - pdf-lib: PNG embed → PDF (lazy load)
+ */
+async function exportPdfCurrent() {
+    if (!currentId || !panelEl) return;
+    const item = artifactStore.get(currentId)?.[currentVersionIdx];
+    if (!item) return;
+    const previewEl = panelEl.querySelector('.ap-preview');
+    if (!previewEl) return;
+
+    flashAction('.ap-act-pdf', '생성 중...');
+    try {
+        // 미리보기 탭 활성화 (소스 탭이면 캡처 불가)
+        switchTab('preview');
+        // 다음 paint 까지 대기 (탭 전환 직후 캡처 race 방지)
+        await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+
+        await loadScriptOnce('/vendor/artifacts/dom-to-image-more.min.js', 'domtoimage');
+        await loadScriptOnce('/vendor/artifacts/pdf-lib.min.js', 'PDFLib');
+
+        // DOM → PNG dataURL
+        const pngDataUrl = await window.domtoimage.toPng(previewEl, {
+            bgcolor: '#ffffff',
+            quality: 0.95,
+        });
+
+        // PNG → PDF (A4 portrait, 595 × 842 pt)
+        const { PDFDocument } = window.PDFLib;
+        const pdfDoc = await PDFDocument.create();
+        const pngBytes = await fetch(pngDataUrl).then(r => r.arrayBuffer());
+        const pngImg = await pdfDoc.embedPng(pngBytes);
+        const page = pdfDoc.addPage([595, 842]);
+        const margin = 28;
+        const maxW = 595 - margin * 2;
+        const maxH = 842 - margin * 2;
+        // 비율 유지하며 페이지에 fit
+        const scale = Math.min(maxW / pngImg.width, maxH / pngImg.height, 1);
+        const w = pngImg.width * scale;
+        const h = pngImg.height * scale;
+        page.drawImage(pngImg, {
+            x: margin + (maxW - w) / 2,
+            y: 842 - margin - h,
+            width: w,
+            height: h,
+        });
+        const pdfBytes = await pdfDoc.save();
+
+        const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${currentId}-v${item.version}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        flashAction('.ap-act-pdf', '✓ 저장');
+    } catch (e) {
+        console.error('[Artifact] PDF export 실패:', e);
+        flashAction('.ap-act-pdf', '실패');
+    }
 }
 
 // ─── 유틸 ──────────────────────────────────────────────────────────────────

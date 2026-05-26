@@ -10,6 +10,14 @@
  * 호출 패턴 — ChatService 의 system prompt 조립 마지막에 append:
  *   combinedSystemPrompt + (artifactsEnabled ? getArtifactGuide(lang) : '')
  *
+ * 지원 KIND (2026-05-26):
+ *   Phase 1: markdown / code / html / svg / mermaid
+ *   Phase 2: chart / csv / slide / react
+ *
+ * 보류 (Phase 3 후보):
+ *   - excalidraw — Excalidraw 자체가 React 풀 환경 + ~2MB self-host 의존성 무거움.
+ *     손그림 스타일은 svg kind 로 대체 가능 (LLM 이 rough sketch SVG 출력).
+ *
  * @module prompts/artifact-guide
  */
 
