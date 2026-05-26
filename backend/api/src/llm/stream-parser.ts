@@ -373,11 +373,22 @@ export async function streamChat(
     let finalContent = reasoningSplit.content;
     let finalThinking = thinking;
     if (!finalContent && thinking && toolCalls.length === 0) {
-        finalContent = thinking;
-        finalThinking = '';
-        // 스트리밍 클라이언트는 reasoning 델타를 별도 채널(onToken thinking 인자)로 받았기에,
-        // content 채널에는 아무것도 보내지 않은 상태. 승격된 답변을 content 채널로 재방송.
-        onToken(thinking, undefined);
+        // 2026-05-26: recovery 분기 안에서도 CoT extractor 적용 — thinking 안에 CoT
+        // 패턴 ([Output], [Done.] 등) 이 있으면 결론만 추출. 없으면 thinking 전체.
+        const cotRec = extractCoTFromContent(thinking);
+        if (cotRec.detected && cotRec.answer) {
+            log.info(`[CoT-Extractor] recovery 경로 — thinking 내 CoT 분리 (answer=${cotRec.answer.length}B)`);
+            finalContent = cotRec.answer;
+            finalThinking = cotRec.thinking;  // thinking 채널 보존 (접이식 UI)
+            // 클라이언트의 raw 누적과 cleanedContent path 의 정정은 ChatRequestHandler 가 처리.
+            onToken(cotRec.answer, undefined);
+        } else {
+            finalContent = thinking;
+            finalThinking = '';
+            // 스트리밍 클라이언트는 reasoning 델타를 별도 채널(onToken thinking 인자)로 받았기에,
+            // content 채널에는 아무것도 보내지 않은 상태. 승격된 답변을 content 채널로 재방송.
+            onToken(thinking, undefined);
+        }
         if (finishReason === 'length') {
             finalContent += '\n\n' + FALLBACK_REASONING_ONLY_NOTICE;
             onToken('\n\n' + FALLBACK_REASONING_ONLY_NOTICE, undefined);
