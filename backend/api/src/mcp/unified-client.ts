@@ -30,7 +30,9 @@ import { canUseTool, getToolsForTier } from './tool-tiers';
 import { UserSandbox, UserContext } from './user-sandbox';
 import { ToolRouter } from './tool-router';
 import { MCPServerRegistry } from './server-registry';
-import type { UnifiedDatabase } from '../data/models/unified-database';
+import { getUserMCPPool } from './user-pool';
+import { McpCatalogRepository } from '../data/repositories/mcp-catalog-repository';
+import { getUnifiedDatabase, type UnifiedDatabase } from '../data/models/unified-database';
 import { createLogger } from '../utils/logger';
 
 const logger = createLogger('MCP');
@@ -68,7 +70,10 @@ export class UnifiedMCPClient {
      */
     constructor() {
         this.server = createMCPServer('openmake-unified-mcp', '1.0.0');
-        this.toolRouter = new ToolRouter();
+        this.toolRouter = new ToolRouter({
+            userPool: getUserMCPPool(),
+            catalogRepo: new McpCatalogRepository(getUnifiedDatabase().getPool()),
+        });
         this.serverRegistry = new MCPServerRegistry(this.toolRouter);
         logger.info(`통합 MCP 클라이언트 초기화 - ${this.getToolCount()}개 도구 등록됨`);
     }
