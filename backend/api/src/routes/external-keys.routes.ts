@@ -330,4 +330,35 @@ router.post('/:providerId/validate',
     }),
 );
 
+/**
+ * GET /api/external-keys/:providerId/models
+ * 사용자가 등록한 외부 provider 의 모델 카탈로그 조회 (cache 우선, miss 시 provider API 호출).
+ *
+ * 2026-05-26: Settings 의 "AI 모델" 카드에서 OpenRouter 등 외부 provider 의 사용 가능 모델을
+ * 표시하기 위한 endpoint. external_provider_models_cache 에서 빠르게 반환.
+ */
+router.get('/:providerId/models', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+    const userId = getUserId(req);
+    if (!userId) {
+        res.status(401).json(unauthorized('User ID not found.'));
+        return;
+    }
+    const providerId = req.params.providerId;
+    const pool = getPool();
+    const r = await pool.query<{ models_json: unknown; cached_at: Date }>(
+        'SELECT models_json, cached_at FROM external_provider_models_cache WHERE user_id = $1 AND provider_id = $2',
+        [userId, providerId]
+    );
+    if (r.rows.length === 0) {
+        res.json(success({ models: [], cached_at: null, source: 'empty' }));
+        return;
+    }
+    const row = r.rows[0];
+    res.json(success({
+        models: row.models_json,
+        cached_at: row.cached_at,
+        source: 'cache',
+    }));
+}));
+
 export default router;

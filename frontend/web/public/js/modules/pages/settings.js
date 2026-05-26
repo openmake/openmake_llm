@@ -135,6 +135,29 @@
         '</div>' +
         '</div>' +
 
+        // 2026-05-26 \u2014 AI \uBAA8\uB378 (Local + OpenRouter \uCE74\uD14C\uACE0\uB9AC\uBCC4 \uC120\uD0DD)
+        '<div class="s-card">' +
+        '<div class="s-card-header">' +
+        '<span class="s-card-icon">\uD83E\uDD16</span>' +
+        '<span class="s-card-title">AI \uBAA8\uB378</span>' +
+        '</div>' +
+        '<div class="s-card-body">' +
+        '<div class="s-info-line"><small>\uCC44\uD305 \uC2DC \uD638\uCD9C\uD560 \uBAA8\uB378\uC744 \uC120\uD0DD\uD569\uB2C8\uB2E4. \uD55C \uCC44\uD305\uB2F9 \uD558\uB098\uC758 provider \uB9CC \uC0AC\uC6A9\uB429\uB2C8\uB2E4 (Local OR OpenRouter, \uC0C1\uD638 \uBC30\uD0C0).</small></div>' +
+        '<div class="ai-model-section">' +
+        '<h4 class="ai-model-section-title">\uD83C\uDFE0 Local \uD638\uCD9C \uBAA8\uB378 (\uC790\uCCB4 vLLM \uC11C\uBC84)</h4>' +
+        '<div id="aiModelLocalList" class="ai-model-list"><div class="ai-model-loading">\uB85C\uB529 \uC911...</div></div>' +
+        '</div>' +
+        '<div class="ai-model-section">' +
+        '<h4 class="ai-model-section-title">\uD83C\uDF10 OpenRouter \uD638\uCD9C \uBAA8\uB378 <span class="ai-model-count" id="aiModelOpenrouterCount"></span></h4>' +
+        '<div class="ai-model-search-wrap">' +
+        '<input type="text" id="aiModelOpenrouterSearch" class="ai-model-search" placeholder="\uD83D\uDD0E \uBAA8\uB378 \uAC80\uC0C9 (\uC608: gemini, claude, gpt) \u2014 \uC778\uAE30 \uBAA8\uB378\uB9CC \uAE30\uBCF8 \uD45C\uC2DC, \uAC80\uC0C9\uC73C\uB85C \uC804\uCCB4 357+ \uBAA8\uB378 \uD0D0\uC0C9">' +
+        '</div>' +
+        '<div id="aiModelOpenrouterList" class="ai-model-list"><div class="ai-model-loading">\uB85C\uB529 \uC911...</div></div>' +
+        '</div>' +
+        '<div class="s-info-line"><small id="aiModelSelected">\uD604\uC7AC \uC120\uD0DD: <strong>(\uB85C\uB529 \uC911)</strong></small></div>' +
+        '</div>' +
+        '</div>' +
+
         // 2026-05-26 Phase 1.D \u2014 Capabilities (Anthropic Settings > Capabilities \uB3D9\uB4F1)
         '<div class="s-card">' +
         '<div class="s-card-header">' +
@@ -370,6 +393,136 @@
                     loadSystemInfo();
                     initCustomInstructions();
                     initArtifactsToggle();
+                    initAIModelPicker();
+                }
+
+                /**
+                 * AI 모델 picker (2026-05-26).
+                 * - Local: GET /api/models → 자체 vLLM 서버의 모델 목록
+                 * - OpenRouter: GET /api/external-keys/openrouter/models → cache 의 357+ 모델
+                 * - 선택 시 localStorage.selectedModel 영구 저장 (ModelSelector 동기화)
+                 */
+                async function initAIModelPicker() {
+                    const localListEl = document.getElementById('aiModelLocalList');
+                    const orListEl = document.getElementById('aiModelOpenrouterList');
+                    const orSearchEl = document.getElementById('aiModelOpenrouterSearch');
+                    const orCountEl = document.getElementById('aiModelOpenrouterCount');
+                    const selectedEl = document.getElementById('aiModelSelected');
+                    if (!localListEl) return;
+
+                    // 현재 선택된 모델 표시
+                    function refreshSelected() {
+                        const cur = safeStorage.getItem(SK.SELECTED_MODEL || 'selectedModel') || '(미설정 — 백엔드 default)';
+                        if (selectedEl) selectedEl.innerHTML = '현재 선택: <strong>' + cur + '</strong>';
+                    }
+                    refreshSelected();
+
+                    function renderRadioList(target, items, getId, getLabel, getDesc) {
+                        if (!items || items.length === 0) {
+                            target.innerHTML = '<div class="ai-model-empty">사용 가능한 모델 없음</div>';
+                            return;
+                        }
+                        const current = safeStorage.getItem(SK.SELECTED_MODEL || 'selectedModel') || '';
+                        target.innerHTML = items.map(function(m) {
+                            var id = getId(m);
+                            var label = getLabel(m);
+                            var desc = getDesc ? getDesc(m) : '';
+                            var checked = current === id ? 'checked' : '';
+                            return '<label class="ai-model-item">' +
+                                '<input type="radio" name="aiModelChoice" value="' + id.replace(/"/g, '&quot;') + '" ' + checked + '>' +
+                                '<span class="ai-model-item-body">' +
+                                '<span class="ai-model-item-label">' + label + '</span>' +
+                                (desc ? '<span class="ai-model-item-desc">' + desc + '</span>' : '') +
+                                '<code class="ai-model-item-id">' + id + '</code>' +
+                                '</span></label>';
+                        }).join('');
+                        // change 핸들러
+                        target.querySelectorAll('input[type="radio"]').forEach(function(input) {
+                            input.addEventListener('change', function() {
+                                if (!input.checked) return;
+                                const v = input.value;
+                                safeStorage.setItem(SK.SELECTED_MODEL || 'selectedModel', v);
+                                refreshSelected();
+                                if (typeof showToast === 'function') {
+                                    showToast('모델 선택: ' + v, 'success');
+                                }
+                                // 다른 list 의 라디오 해제 (mutual exclusive)
+                                document.querySelectorAll('input[name="aiModelChoice"]').forEach(function(i) {
+                                    if (i !== input && i.value !== v) i.checked = false;
+                                });
+                            });
+                        });
+                    }
+
+                    // Local 모델 fetch (authFetch 는 Response 객체 반환 — await res.json() 필요)
+                    try {
+                        var res1 = await window.authFetch('/api/models');
+                        var json1 = await res1.json();
+                        var data1 = json1.data || json1 || {};
+                        var localModels = (data1.models || []).filter(function(m) { return m.provider === 'local-llm' || (m.modelId || '').startsWith('local-llm:'); });
+                        renderRadioList(localListEl,
+                            localModels,
+                            function(m) { return (m.modelId || '').replace(/^local-llm:/, ''); },
+                            function(m) { return m.name || m.modelId; },
+                            function(m) { return m.description || ''; }
+                        );
+                    } catch (e) {
+                        console.warn('[settings] local models 로드 실패:', e);
+                        localListEl.innerHTML = '<div class="ai-model-empty">로드 실패</div>';
+                    }
+
+                    // OpenRouter 모델 fetch (cache)
+                    var orAllModels = [];
+                    try {
+                        var res2 = await window.authFetch('/api/external-keys/openrouter/models');
+                        var json2 = await res2.json();
+                        var data2 = json2.data || json2 || {};
+                        orAllModels = Array.isArray(data2.models) ? data2.models : [];
+                        if (orCountEl) orCountEl.textContent = '(' + orAllModels.length + '개)';
+                        renderOR(orAllModels.slice(0, 30));  // 초기 30개만
+                    } catch (e) {
+                        console.warn('[settings] openrouter models 로드 실패:', e);
+                        orListEl.innerHTML = '<div class="ai-model-empty">로드 실패 (외부 키 미등록)</div>';
+                    }
+
+                    function renderOR(items) {
+                        renderRadioList(orListEl,
+                            items,
+                            // fullId 가 이미 'openrouter:' prefix 포함 (백엔드 cache 형식)
+                            function(m) { return m.fullId || ('openrouter:' + (m.id || m.modelId || m.name)); },
+                            function(m) { return m.displayName || m.name || m.id; },
+                            function(m) {
+                                var parts = [];
+                                if (m.capabilities) {
+                                    var caps = [];
+                                    if (m.capabilities.vision) caps.push('vision');
+                                    if (m.capabilities.thinking) caps.push('thinking');
+                                    if (m.capabilities.toolCalling) caps.push('tools');
+                                    if (caps.length) parts.push(caps.join('·'));
+                                }
+                                if (m.isFree) {
+                                    parts.push('무료');
+                                } else if (m.pricing && m.pricing.input != null) {
+                                    parts.push('$' + parseFloat(m.pricing.input).toFixed(2) + '/M in');
+                                }
+                                return parts.join(' · ');
+                            }
+                        );
+                    }
+
+                    // OpenRouter 검색
+                    if (orSearchEl) {
+                        orSearchEl.addEventListener('input', function(e) {
+                            var q = e.target.value.trim().toLowerCase();
+                            if (!q) { renderOR(orAllModels.slice(0, 30)); return; }
+                            var filtered = orAllModels.filter(function(m) {
+                                var idstr = (m.id || m.fullId || '').toLowerCase();
+                                var labelstr = (m.displayName || m.name || '').toLowerCase();
+                                return idstr.includes(q) || labelstr.includes(q);
+                            }).slice(0, 100);
+                            renderOR(filtered);
+                        });
+                    }
                 }
 
                 /**
