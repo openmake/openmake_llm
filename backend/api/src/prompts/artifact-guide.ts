@@ -13,10 +13,7 @@
  * 지원 KIND (2026-05-26):
  *   Phase 1: markdown / code / html / svg / mermaid
  *   Phase 2: chart / csv / slide / react
- *
- * 보류 (Phase 3 후보):
- *   - excalidraw — Excalidraw 자체가 React 풀 환경 + ~2MB self-host 의존성 무거움.
- *     손그림 스타일은 svg kind 로 대체 가능 (LLM 이 rough sketch SVG 출력).
+ *   Phase 3: excalidraw (RoughJS 기반 손그림 다이어그램 — Excalidraw React 의존성 회피)
  *
  * @module prompts/artifact-guide
  */
@@ -61,6 +58,8 @@ const KO_GUIDE = `
 - \`csv\` — CSV 데이터 (헤더 행 포함, 표로 자동 렌더)
 - \`slide\` — Markdown 슬라이드 (각 슬라이드를 \`---\` 로 구분, Reveal.js)
 - \`react\` — JSX/TSX 컴포넌트 (반드시 \`export default function App()\` 또는 \`const App = ...\` 으로 정의)
+- \`excalidraw\` — 손그림 스타일 다이어그램 JSON (RoughJS 렌더):
+  \`{"shapes":[{"type":"rectangle","x":40,"y":40,"width":140,"height":80,"label":"User"},{"type":"arrow","points":[[180,80],[260,220]],"label":"query"}],"width":600,"height":400}\`
 
 **예시 — Python 코드:**
 \`\`\`

@@ -237,8 +237,88 @@ async function renderPreview(target, item) {
     if (kind === 'csv') return renderCsv(target, item);
     if (kind === 'slide') return renderSlide(target, item);
     if (kind === 'react') return renderReact(target, item);
+    if (kind === 'excalidraw') return renderExcalidraw(target, item);
     // fallback 으로 code 처럼 표시
     return renderCode(target, item);
+}
+
+/**
+ * Excalidraw artifact (Phase 3, 2026-05-26) — RoughJS 기반 손그림 다이어그램.
+ * Excalidraw 본체 (React + 2MB+) 회피 — LLM 이 도형 JSON 만 출력하고 우리가 SVG 렌더.
+ *
+ * content JSON 형식:
+ *   {"shapes":[
+ *     {"type":"rectangle","x":40,"y":40,"width":140,"height":80,"label":"User"},
+ *     {"type":"ellipse","x":250,"y":200,"width":100,"height":60,"label":"DB"},
+ *     {"type":"arrow","points":[[180,80],[260,220]],"label":"query"}
+ *   ],"width":600,"height":400}
+ */
+async function renderExcalidraw(target, item) {
+    await loadScriptOnce('/vendor/artifacts/rough.umd.min.js', 'rough');
+    let spec;
+    try { spec = JSON.parse(item.content); } catch (e) {
+        target.innerHTML = `<div class="ap-error">Excalidraw spec JSON 파싱 실패: ${escHtml(e.message)}</div>`;
+        return;
+    }
+    const width = spec.width || 600;
+    const height = spec.height || 400;
+    const svgNs = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(svgNs, 'svg');
+    svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+    svg.setAttribute('width', '100%');
+    svg.style.maxHeight = '600px';
+    svg.style.background = '#fff';
+    target.appendChild(svg);
+    target.className = 'ap-preview ap-excalidraw';
+
+    try {
+        const rc = window.rough.svg(svg);
+        const shapes = Array.isArray(spec.shapes) ? spec.shapes : [];
+        const drawOpts = { stroke: '#1f2937', strokeWidth: 1.5, roughness: 1.6 };
+        for (const s of shapes) {
+            let node = null;
+            if (s.type === 'rectangle' || s.type === 'rect') {
+                node = rc.rectangle(s.x || 0, s.y || 0, s.width || 100, s.height || 60, drawOpts);
+            } else if (s.type === 'ellipse' || s.type === 'circle') {
+                node = rc.ellipse((s.x || 0) + (s.width || 80) / 2, (s.y || 0) + (s.height || 60) / 2,
+                    s.width || 80, s.height || 60, drawOpts);
+            } else if (s.type === 'line' && Array.isArray(s.points) && s.points.length >= 2) {
+                node = rc.line(s.points[0][0], s.points[0][1], s.points[1][0], s.points[1][1], drawOpts);
+            } else if (s.type === 'arrow' && Array.isArray(s.points) && s.points.length >= 2) {
+                const [from, to] = s.points;
+                node = rc.line(from[0], from[1], to[0], to[1], drawOpts);
+                svg.appendChild(node);
+                // arrow head
+                const angle = Math.atan2(to[1] - from[1], to[0] - from[0]);
+                const arrLen = 10;
+                const a1x = to[0] - arrLen * Math.cos(angle - Math.PI / 6);
+                const a1y = to[1] - arrLen * Math.sin(angle - Math.PI / 6);
+                const a2x = to[0] - arrLen * Math.cos(angle + Math.PI / 6);
+                const a2y = to[1] - arrLen * Math.sin(angle + Math.PI / 6);
+                svg.appendChild(rc.line(to[0], to[1], a1x, a1y, drawOpts));
+                svg.appendChild(rc.line(to[0], to[1], a2x, a2y, drawOpts));
+                node = null; // 이미 append 함
+            }
+            if (node) svg.appendChild(node);
+            // 라벨
+            if (s.label) {
+                const cx = (s.x || (s.points ? s.points[0][0] : 0)) + (s.width || 0) / 2;
+                const cy = (s.y || (s.points ? s.points[0][1] : 0)) + (s.height || 0) / 2;
+                const text = document.createElementNS(svgNs, 'text');
+                text.setAttribute('x', String(cx));
+                text.setAttribute('y', String(cy));
+                text.setAttribute('text-anchor', 'middle');
+                text.setAttribute('dominant-baseline', 'middle');
+                text.setAttribute('font-family', "'Comic Sans MS', cursive");
+                text.setAttribute('font-size', '14');
+                text.setAttribute('fill', '#1f2937');
+                text.textContent = s.label;
+                svg.appendChild(text);
+            }
+        }
+    } catch (e) {
+        target.innerHTML = `<div class="ap-error">Excalidraw 렌더 실패: ${escHtml(e.message)}</div>`;
+    }
 }
 
 // ─── Phase 2 신규 렌더러 (lazy-loaded) ──────────────────────────────────────
@@ -369,6 +449,12 @@ async function renderCsv(target, item) {
         filter: '',              // 검색 문자열
     };
 
+    // 가상 스크롤 임계 (Phase 3, 2026-05-26): 1000행 초과 시 viewport 안 행만 render.
+    // IntersectionObserver 기반 — 큰 데이터셋 (~10K행) 도 부드러운 스크롤.
+    const VIRTUAL_THRESHOLD = 1000;
+    const ROW_HEIGHT_PX = 26; // 평균 한 행 높이 (CSS 와 정렬)
+    const VIEWPORT_BUFFER = 20; // 위/아래 여유 행
+
     function renderTable() {
         // 필터링
         const filtered = state.filter
@@ -388,23 +474,71 @@ async function renderCsv(target, item) {
                 return String(va ?? '').localeCompare(String(vb ?? '')) * dir;
             });
         }
-        // 최대 500 행 표시
-        const visible = display.slice(0, 500);
 
+        const useVirtual = display.length > VIRTUAL_THRESHOLD;
         const thead = '<thead><tr>' + headers.map(h => {
             const arrow = state.sortKey === h
                 ? (state.sortDir === 'asc' ? ' ▲' : state.sortDir === 'desc' ? ' ▼' : '')
                 : '';
             return `<th class="ap-csv-th" data-key="${escAttr(h)}">${escHtml(h)}${arrow}</th>`;
         }).join('') + '</tr></thead>';
-        const tbody = '<tbody>' + visible.map(row =>
-            '<tr>' + headers.map(h => `<td>${escHtml(row[h] ?? '')}</td>`).join('') + '</tr>'
-        ).join('') + '</tbody>';
-        table.innerHTML = thead + tbody;
-        summary.textContent =
-            `${display.length} 행 × ${headers.length} 열` +
-            (state.filter ? ` (전체 ${allRows.length} 중 필터 ${display.length})` : '') +
-            (visible.length < display.length ? ` — 최대 500행 표시` : '');
+
+        if (!useVirtual) {
+            // 일반 path — 1000행 이하
+            const visible = display.slice(0, 1000);
+            const tbody = '<tbody>' + visible.map(row =>
+                '<tr>' + headers.map(h => `<td>${escHtml(row[h] ?? '')}</td>`).join('') + '</tr>'
+            ).join('') + '</tbody>';
+            table.innerHTML = thead + tbody;
+            summary.textContent =
+                `${display.length} 행 × ${headers.length} 열` +
+                (state.filter ? ` (전체 ${allRows.length} 중 필터 ${display.length})` : '');
+        } else {
+            // 가상 스크롤 path — 큰 데이터셋
+            table.innerHTML = thead;
+            const tbody = document.createElement('tbody');
+            tbody.className = 'ap-csv-virtual-tbody';
+            // 스크롤 area: scroller wrapper 가 전체 높이 차지, tbody 안에 실제 rows 만
+            tbody.style.position = 'relative';
+            tbody.style.display = 'block';
+            // 전체 높이 spacer
+            const spacer = document.createElement('tr');
+            spacer.className = 'ap-csv-spacer';
+            spacer.style.cssText = `height:${display.length * ROW_HEIGHT_PX}px; display:block; pointer-events:none;`;
+            tbody.appendChild(spacer);
+            // visible rows container (absolute positioned)
+            const visibleContainer = document.createElement('tr');
+            visibleContainer.className = 'ap-csv-vis-rows';
+            visibleContainer.style.cssText = 'position:absolute; top:0; left:0; right:0; display:block;';
+            tbody.appendChild(visibleContainer);
+            table.appendChild(tbody);
+
+            // scroll 컨테이너 = wrap (ap-csv-wrap) — overflow scrollY 가 거기
+            const renderVisible = () => {
+                const wrapRect = wrap.getBoundingClientRect();
+                const scrollTop = wrap.scrollTop;
+                const start = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT_PX) - VIEWPORT_BUFFER);
+                const visibleCount = Math.ceil(wrapRect.height / ROW_HEIGHT_PX) + VIEWPORT_BUFFER * 2;
+                const end = Math.min(display.length, start + visibleCount);
+                visibleContainer.style.transform = `translateY(${start * ROW_HEIGHT_PX}px)`;
+                const slice = display.slice(start, end);
+                visibleContainer.innerHTML = slice.map(row =>
+                    `<tr style="display:flex; height:${ROW_HEIGHT_PX}px;">` +
+                    headers.map(h => `<td style="flex:1; min-width:80px;">${escHtml(row[h] ?? '')}</td>`).join('') +
+                    '</tr>'
+                ).join('');
+            };
+            renderVisible();
+            // 스크롤 listener (debounced via requestAnimationFrame)
+            let rafId = null;
+            wrap.addEventListener('scroll', () => {
+                if (rafId) cancelAnimationFrame(rafId);
+                rafId = requestAnimationFrame(renderVisible);
+            }, { passive: true });
+            summary.textContent =
+                `${display.length} 행 × ${headers.length} 열 (가상 스크롤)` +
+                (state.filter ? ` — 전체 ${allRows.length} 중 필터 ${display.length}` : '');
+        }
 
         // th 정렬 토글
         table.querySelectorAll('.ap-csv-th').forEach(th => {
@@ -414,7 +548,6 @@ async function renderCsv(target, item) {
                     state.sortKey = key;
                     state.sortDir = 'asc';
                 } else {
-                    // asc → desc → none → asc 의 순환
                     state.sortDir = state.sortDir === 'asc' ? 'desc'
                         : state.sortDir === 'desc' ? 'none' : 'asc';
                     if (state.sortDir === 'none') state.sortKey = null;
@@ -757,7 +890,7 @@ function updateEditButton() {
     }
 }
 
-function enterEditUI() {
+async function enterEditUI() {
     if (!panelEl || !currentId) return;
     const list = artifactStore.get(currentId);
     if (!list) return;
@@ -765,6 +898,8 @@ function enterEditUI() {
 
     const codePane = panelEl.querySelector('.ap-code');
     codePane.innerHTML = '';
+
+    // textarea (CodeMirror 가 이걸 hijack 해서 editor 로 변환)
     const textarea = document.createElement('textarea');
     textarea.className = 'ap-edit-textarea';
     textarea.value = item.content;
@@ -779,16 +914,67 @@ function enterEditUI() {
     `;
     codePane.appendChild(actionRow);
 
+    // CodeMirror 5 lazy load + 모드 fetch + editor mount
+    // 실패 시 plain textarea 로 fallback (graceful)
+    let cmInstance = null;
+    try {
+        await loadStyleOnce('/vendor/artifacts/codemirror/codemirror.min.css');
+        await loadStyleOnce('/vendor/artifacts/codemirror/material-darker.css');
+        await loadScriptOnce('/vendor/artifacts/codemirror/codemirror.min.js', 'CodeMirror');
+        const modeName = cmModeFor(item.kind, item.lang);
+        if (modeName) {
+            await loadScriptOnce(`/vendor/artifacts/codemirror/mode-${modeName}.js`);
+        }
+        cmInstance = window.CodeMirror.fromTextArea(textarea, {
+            mode: cmModeMime(modeName),
+            theme: 'material-darker',
+            lineNumbers: true,
+            indentUnit: 2,
+            lineWrapping: true,
+            viewportMargin: Infinity,
+        });
+        // panel 의 ap-code 영역 안에서 적절한 높이로
+        cmInstance.setSize('100%', '420px');
+        cmInstance.focus();
+    } catch (e) {
+        console.warn('[Artifact] CodeMirror lazy load 실패 — plain textarea 사용:', e);
+        textarea.focus();
+    }
+
     actionRow.querySelector('.ap-edit-save-btn').addEventListener('click', async () => {
-        const newContent = textarea.value;
+        const newContent = cmInstance ? cmInstance.getValue() : textarea.value;
         await saveEditedArtifact(newContent);
     });
     actionRow.querySelector('.ap-edit-cancel-btn').addEventListener('click', () => {
+        if (cmInstance) cmInstance.toTextArea(); // CodeMirror 정리
         editMode = false;
         renderCurrent();
         updateEditButton();
     });
-    textarea.focus();
+}
+
+/** artifact kind/lang → CodeMirror 5 mode 파일명 */
+function cmModeFor(kind, lang) {
+    if (kind === 'markdown') return 'markdown';
+    if (kind === 'html' || kind === 'svg') return 'xml';
+    if (kind === 'mermaid') return null; // mermaid 별도 mode 없음 — plain
+    if (kind === 'react') return 'javascript';
+    if (kind !== 'code') return null;
+    const langLow = (lang || '').toLowerCase();
+    if (['python', 'py'].includes(langLow)) return 'python';
+    if (['javascript', 'js', 'typescript', 'ts', 'jsx', 'tsx', 'json'].includes(langLow)) return 'javascript';
+    if (['html', 'xml', 'svg'].includes(langLow)) return 'xml';
+    if (['css', 'scss', 'sass'].includes(langLow)) return 'css';
+    if (['markdown', 'md'].includes(langLow)) return 'markdown';
+    return null;
+}
+function cmModeMime(modeName) {
+    if (modeName === 'python') return 'text/x-python';
+    if (modeName === 'javascript') return 'text/javascript';
+    if (modeName === 'xml') return 'application/xml';
+    if (modeName === 'css') return 'text/css';
+    if (modeName === 'markdown') return 'text/x-markdown';
+    return 'text/plain';
 }
 
 async function saveEditedArtifact(newContent) {
@@ -1109,6 +1295,17 @@ function injectStyles() {
 .ap-edit-save-btn { background: var(--accent-primary, #6366f1) !important; color: #fff !important; }
 .ap-edit-save-btn:disabled { opacity: 0.6; cursor: default; }
 .ap-act-edit.ap-edit-saving { background: var(--accent-primary, #6366f1); color: #fff; }
+
+/* CodeMirror 5 통합 — material-darker 와 우리 design token 정렬 */
+.ap-code .CodeMirror {
+    height: 420px !important;
+    border: 1px solid var(--accent-primary, #6366f1);
+    border-radius: var(--radius-md, 6px);
+    font-family: 'JetBrains Mono', 'Courier New', monospace;
+    font-size: 13px;
+    line-height: 1.5;
+}
+.ap-code .CodeMirror-scroll { padding-top: 4px; padding-bottom: 4px; }
     `;
     document.head.appendChild(style);
 }
