@@ -271,7 +271,13 @@ export function setupStaticFiles(app: Application, dirname: string): void {
 
         return [
             `default-src 'self'`,
-            `script-src 'self' ${nonceSource} ${CDN_DOMAINS[0]} ${CDN_DOMAINS[1]}`,
+            // 'wasm-unsafe-eval' (2026-05-26 Phase 2): Artifacts 의 React kind 가 esbuild-wasm 으로
+            // JSX/TSX 를 인-브라우저 transform. WebAssembly 인스턴스화에 필요 — eval 자체 허용 아님,
+            // wasm 모듈만 실행 가능. 임의 JS eval 은 여전히 차단.
+            `script-src 'self' 'wasm-unsafe-eval' ${nonceSource} ${CDN_DOMAINS[0]} ${CDN_DOMAINS[1]}`,
+            // worker-src: esbuild-wasm 이 blob: URL 로 Worker 생성 가능 (worker:false 옵션 fallback 대비).
+            // self + blob 만 허용 — 외부 도메인 워커 차단 유지.
+            `worker-src 'self' blob:`,
             `style-src 'self' 'unsafe-inline' ${CDN_DOMAINS[0]} ${CDN_DOMAINS[1]} ${CDN_DOMAINS[2]}`,
             `script-src-attr ${scriptSrcAttrDirective}`,
             `style-src-attr ${styleSrcAttrDirective}`,

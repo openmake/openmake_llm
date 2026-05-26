@@ -406,7 +406,10 @@ async function renderReact(target, item) {
         await loadScriptOnce('/vendor/artifacts/esbuild-browser.js', 'esbuild');
         esbuild = window.esbuild;
         if (!window._esbuildInitialized) {
-            await esbuild.initialize({ wasmURL: '/vendor/artifacts/esbuild.wasm' });
+            // worker: false — 우리 CSP 가 'script-src' 에 blob: 미허용 (helmet 기본).
+            // worker 비활성 시 main thread 실행 — JSX 소량 transform 은 ms 단위, UI freeze 영향 무시 가능.
+            // 대안: helmet CSP 에 worker-src 'self' blob: 추가 — 별도 PR.
+            await esbuild.initialize({ wasmURL: '/vendor/artifacts/esbuild.wasm', worker: false });
             window._esbuildInitialized = true;
         }
     } catch (e) {
