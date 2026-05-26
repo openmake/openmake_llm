@@ -43,12 +43,16 @@ const KO_GUIDE = `
 </artifact>
 \`\`\`
 
-**KIND 종류 (Phase 1)**:
+**KIND 종류**:
 - \`markdown\` — 보고서, 가이드, 문서
 - \`code\` — 코드 (lang 필수: python/js/ts/go/rust/...)
 - \`html\` — 단일 HTML 페이지 (script/style 포함 가능)
-- \`svg\` — SVG 이미지
+- \`svg\` — SVG 이미지 (손그림 스타일도 SVG 로)
 - \`mermaid\` — 다이어그램 (flowchart, sequence, gantt, classDiagram 등)
+- \`chart\` — Chart.js JSON spec (예: {"type":"bar","data":{"labels":[...],"datasets":[...]}})
+- \`csv\` — CSV 데이터 (헤더 행 포함, 표로 자동 렌더)
+- \`slide\` — Markdown 슬라이드 (각 슬라이드를 \`---\` 로 구분, Reveal.js)
+- \`react\` — JSX/TSX 컴포넌트 (반드시 \`export default function App()\` 또는 \`const App = ...\` 으로 정의)
 
 **예시 — Python 코드:**
 \`\`\`

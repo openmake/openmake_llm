@@ -218,8 +218,236 @@ async function renderPreview(target, item) {
     if (kind === 'html') return renderHtml(target, item);
     if (kind === 'svg') return renderSvg(target, item);
     if (kind === 'mermaid') return renderMermaid(target, item);
-    // Phase 2 종류는 fallback 으로 code 처럼 표시
+    // Phase 2 (2026-05-26): 신규 종류 — lazy load 패턴
+    if (kind === 'chart') return renderChart(target, item);
+    if (kind === 'csv') return renderCsv(target, item);
+    if (kind === 'slide') return renderSlide(target, item);
+    if (kind === 'react') return renderReact(target, item);
+    // fallback 으로 code 처럼 표시
     return renderCode(target, item);
+}
+
+// ─── Phase 2 신규 렌더러 (lazy-loaded) ──────────────────────────────────────
+
+/**
+ * Chart artifact — content 는 Chart.js 호환 JSON spec.
+ * 예: {"type":"bar","data":{"labels":["A","B"],"datasets":[{"data":[1,2]}]}}
+ * Chart.js v4 UMD self-hosted in vendor/artifacts/.
+ */
+async function renderChart(target, item) {
+    await loadScriptOnce('/vendor/artifacts/chart.umd.min.js', 'Chart');
+    let spec;
+    try {
+        spec = JSON.parse(item.content);
+    } catch (e) {
+        target.innerHTML = `<div class="ap-error">Chart spec JSON 파싱 실패: ${escHtml(e.message)}</div>`;
+        return;
+    }
+    const canvas = document.createElement('canvas');
+    canvas.style.maxHeight = '600px';
+    const wrap = document.createElement('div');
+    wrap.className = 'ap-chart-wrap';
+    wrap.style.background = '#fff';
+    wrap.style.padding = '12px';
+    wrap.style.borderRadius = '6px';
+    wrap.appendChild(canvas);
+    target.appendChild(wrap);
+    target.className = 'ap-preview ap-chart';
+    try {
+        new window.Chart(canvas, spec);
+    } catch (e) {
+        target.innerHTML = `<div class="ap-error">Chart 렌더 실패: ${escHtml(e.message)}</div>`;
+    }
+}
+
+/**
+ * CSV artifact — PapaParse 로 파싱 후 표 + 다운로드.
+ */
+async function renderCsv(target, item) {
+    await loadScriptOnce('/vendor/artifacts/papaparse.min.js', 'Papa');
+    const parsed = window.Papa.parse(item.content.trim(), {
+        header: true,
+        skipEmptyLines: true,
+    });
+    const wrap = document.createElement('div');
+    wrap.className = 'ap-csv-wrap';
+    if (parsed.errors && parsed.errors.length > 0) {
+        wrap.innerHTML += `<div class="ap-csv-warn">⚠ ${parsed.errors.length}개 파싱 경고</div>`;
+    }
+    const table = document.createElement('table');
+    table.className = 'ap-csv-table';
+    if (parsed.data.length > 0) {
+        const headers = Object.keys(parsed.data[0]);
+        const thead = '<thead><tr>' + headers.map(h => `<th>${escHtml(h)}</th>`).join('') + '</tr></thead>';
+        const rows = parsed.data.slice(0, 500).map(row =>
+            '<tr>' + headers.map(h => `<td>${escHtml(row[h] ?? '')}</td>`).join('') + '</tr>'
+        ).join('');
+        table.innerHTML = thead + '<tbody>' + rows + '</tbody>';
+    }
+    wrap.appendChild(table);
+    const summary = document.createElement('div');
+    summary.className = 'ap-csv-summary';
+    summary.textContent = `${parsed.data.length} 행 × ${Object.keys(parsed.data[0] || {}).length} 열 (최대 500행 표시)`;
+    wrap.appendChild(summary);
+    target.appendChild(wrap);
+    target.className = 'ap-preview ap-csv';
+}
+
+/**
+ * Slide artifact — Reveal.js + Marp-like syntax.
+ * content: 슬라이드는 '---' 로 구분된 Markdown.
+ */
+async function renderSlide(target, item) {
+    await loadStyleOnce('/vendor/artifacts/reveal/reveal.css');
+    await loadStyleOnce('/vendor/artifacts/reveal/theme-black.css');
+    await loadScriptOnce('/vendor/artifacts/reveal/reveal.js', 'Reveal');
+    if (typeof window.marked === 'undefined') {
+        // 매우 드문 경우 — vendor/marked 가 이미 글로벌이지만 방어
+        target.innerHTML = `<pre>${escHtml(item.content)}</pre>`;
+        return;
+    }
+
+    // '---' 구분자로 슬라이드 분리, 각 슬라이드를 marked 로 HTML 변환
+    const slides = item.content.split(/^---\s*$/m).map(s => s.trim()).filter(s => s.length > 0);
+    const slidesHtml = slides.map(md => {
+        const raw = window.marked.parse(md, { breaks: true, gfm: true });
+        const clean = typeof window.DOMPurify !== 'undefined'
+            ? window.DOMPurify.sanitize(raw, { USE_PROFILES: { html: true } })
+            : raw;
+        return `<section>${clean}</section>`;
+    }).join('\n');
+
+    const container = document.createElement('div');
+    container.className = 'reveal ap-reveal';
+    container.style.height = '500px';
+    container.innerHTML = `<div class="slides">${slidesHtml}</div>`;
+    target.appendChild(container);
+    target.className = 'ap-preview ap-slide';
+
+    try {
+        // Reveal 인스턴스는 패널 인스턴스마다 새로 — 다른 artifact 와 충돌 방지
+        const reveal = new window.Reveal(container, {
+            embedded: true,
+            controls: true,
+            progress: true,
+            hash: false,
+            keyboard: false, // ←/→ 는 패널의 버전 nav 와 충돌 — 명시적 비활성
+            width: '100%',
+            height: '100%',
+        });
+        reveal.initialize();
+    } catch (e) {
+        target.innerHTML = `<div class="ap-error">Slide 렌더 실패: ${escHtml(e.message)}</div>`;
+    }
+}
+
+/**
+ * React artifact — esbuild-wasm 로 JSX/TSX 번들 후 iframe 에서 실행.
+ * import map 으로 react@18 / react-dom@18 을 esm.sh 에서 fetch.
+ * 보안: iframe sandbox='allow-scripts', CSP 강제.
+ */
+async function renderReact(target, item) {
+    target.innerHTML = '<div class="ap-loading">esbuild-wasm 로딩 중... (~3MB, 첫 사용 시 한 번만)</div>';
+    let esbuild;
+    try {
+        await loadScriptOnce('/vendor/artifacts/esbuild-browser.js', 'esbuild');
+        esbuild = window.esbuild;
+        if (!window._esbuildInitialized) {
+            await esbuild.initialize({ wasmURL: '/vendor/artifacts/esbuild.wasm' });
+            window._esbuildInitialized = true;
+        }
+    } catch (e) {
+        target.innerHTML = `<div class="ap-error">esbuild 초기화 실패: ${escHtml(e.message)}</div>`;
+        return;
+    }
+
+    // JSX 번들
+    let bundledCode;
+    try {
+        const result = await esbuild.transform(item.content, {
+            loader: 'tsx',
+            jsx: 'automatic',
+            jsxImportSource: 'react',
+            target: 'es2020',
+            format: 'esm',
+        });
+        bundledCode = result.code;
+    } catch (e) {
+        target.innerHTML = `<div class="ap-error">JSX 변환 실패: ${escHtml(e.message)}</div>`;
+        return;
+    }
+
+    // iframe 으로 격리 실행. importmap 으로 react / react-dom 을 esm.sh 에서 fetch.
+    target.innerHTML = '';
+    const iframe = document.createElement('iframe');
+    iframe.setAttribute('sandbox', 'allow-scripts');
+    iframe.setAttribute('referrerpolicy', 'no-referrer');
+    iframe.className = 'ap-iframe';
+    iframe.style.background = '#fff';
+    target.appendChild(iframe);
+    target.className = 'ap-preview ap-react';
+
+    iframe.srcdoc = `<!doctype html>
+<html><head>
+<meta charset="utf-8">
+<style>body{font-family:system-ui,sans-serif;padding:12px;}</style>
+<script type="importmap">
+{ "imports": {
+    "react": "https://esm.sh/react@18.3.1",
+    "react/jsx-runtime": "https://esm.sh/react@18.3.1/jsx-runtime",
+    "react-dom": "https://esm.sh/react-dom@18.3.1",
+    "react-dom/client": "https://esm.sh/react-dom@18.3.1/client"
+} }
+</script>
+</head><body>
+<div id="root"></div>
+<script type="module">
+try {
+  ${bundledCode}
+  // bundledCode 가 export default Component 또는 ReactDOM.render() 호출이라 가정
+  // 보통 esbuild 결과는 named exports + default — 가장 흔한 패턴: render 직접 호출
+  if (typeof App !== 'undefined' && App) {
+    const { createRoot } = await import('react-dom/client');
+    const React = await import('react');
+    createRoot(document.getElementById('root')).render(React.createElement(App));
+  }
+} catch (err) {
+  document.getElementById('root').innerHTML = '<pre style="color:#ef4444;">React 실행 오류: ' + (err && err.message ? err.message : err) + '</pre>';
+}
+</script>
+</body></html>`;
+}
+
+// ─── lazy load helpers ──────────────────────────────────────────────────────
+
+const loadedScripts = new Set();
+const loadedStyles = new Set();
+
+function loadScriptOnce(src, globalCheck) {
+    if (loadedScripts.has(src)) return Promise.resolve();
+    if (globalCheck && typeof window[globalCheck] !== 'undefined') {
+        loadedScripts.add(src);
+        return Promise.resolve();
+    }
+    return new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = src;
+        s.onload = () => { loadedScripts.add(src); resolve(); };
+        s.onerror = () => reject(new Error(`Failed to load ${src}`));
+        document.head.appendChild(s);
+    });
+}
+
+function loadStyleOnce(href) {
+    if (loadedStyles.has(href)) return Promise.resolve();
+    return new Promise((resolve, reject) => {
+        const link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = href;
+        link.onload = () => { loadedStyles.add(href); resolve(); };
+        link.onerror = () => reject(new Error(`Failed to load ${href}`));
+        document.head.appendChild(link);
+    });
 }
 
 async function renderMarkdown(target, item) {
@@ -506,6 +734,20 @@ function injectStyles() {
     border-radius: var(--radius-md, 6px); cursor: pointer; font-size: 12px;
 }
 .ap-actions button:hover { background: var(--accent-primary, #6366f1); color: #fff; }
+
+/* Phase 2 신규 kind 스타일 */
+.ap-preview.ap-chart { padding: 0; background: transparent; border: none; }
+.ap-preview.ap-csv { padding: 0; background: transparent; border: none; }
+.ap-csv-wrap { background: var(--bg-secondary, #0f0f0f); border: 1px solid var(--border-light, #2a2a2a); border-radius: var(--radius-md, 6px); padding: 12px; max-height: 100%; overflow: auto; }
+.ap-csv-warn { font-size: 11px; color: var(--warning, #fbbf24); margin-bottom: 6px; }
+.ap-csv-table { border-collapse: collapse; font-size: 12px; width: 100%; }
+.ap-csv-table th, .ap-csv-table td { border: 1px solid var(--border-light, #2a2a2a); padding: 4px 8px; text-align: left; }
+.ap-csv-table th { background: var(--bg-tertiary, #2a2a2a); font-weight: var(--font-weight-semibold, 600); }
+.ap-csv-summary { font-size: 11px; color: var(--text-muted, #888); margin-top: 6px; text-align: right; }
+.ap-preview.ap-slide { padding: 0; background: #000; border: none; }
+.ap-reveal { width: 100%; }
+.ap-preview.ap-react { padding: 0; background: transparent; border: none; }
+.ap-loading { text-align: center; padding: 24px; color: var(--text-muted, #888); }
     `;
     document.head.appendChild(style);
 }
