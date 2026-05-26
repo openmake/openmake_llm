@@ -701,7 +701,30 @@ export class ChatService {
         // reasoning 과 중복 + 본문 형식 오염을 일으켜 폐기됨.
         const { getThinkingSystemGuidance } = await import('../mcp/sequential-thinking');
         const thinkingGuidance = getThinkingSystemGuidance(effectiveThinkingMode);
-        const combinedSystemPrompt = memoryBlock + customInstructionsBlock + thinkingGuidance + styledBase;
+
+        // Artifacts guide (2026-05-26 Phase 1.C): self-contained 산출물 wrap 지시.
+        // 사용자별 on/off 토글 (Anthropic Settings > Capabilities 동등). 기본 true.
+        // guest 세션은 사용자 설정이 없으므로 기본 활성 (안전한 기본값).
+        let artifactGuideBlock = '';
+        try {
+            let enabled = true;
+            if (userId && userId !== 'guest') {
+                const { UserRepository } = await import('../data/repositories/user-repository');
+                const { getPool } = await import('../data/models/unified-database');
+                const userRepo = new UserRepository(getPool());
+                enabled = await userRepo.getArtifactsEnabled(userId);
+            }
+            if (enabled) {
+                const { getArtifactGuide } = await import('../prompts/artifact-guide');
+                artifactGuideBlock = getArtifactGuide(languagePolicy?.resolvedLanguage || 'en');
+            }
+        } catch (e) {
+            logger.warn('artifacts_enabled 조회 실패 (기본 활성으로 진행):', e);
+            const { getArtifactGuide } = await import('../prompts/artifact-guide');
+            artifactGuideBlock = getArtifactGuide(languagePolicy?.resolvedLanguage || 'en');
+        }
+
+        const combinedSystemPrompt = memoryBlock + customInstructionsBlock + thinkingGuidance + styledBase + artifactGuideBlock;
 
         // history assembly + system prompt + budget hint + user message — helper module 위임
         const { currentHistory } = await assembleHistoryWithSummary({

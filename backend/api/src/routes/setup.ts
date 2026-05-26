@@ -48,6 +48,7 @@ import {
     chatFeedbackRouter,
     apiKeysRouter,
     externalKeysRouter,
+    artifactsRouter,
 } from './index';
 import { setupSwaggerRoutes } from '../swagger';
 import { createClusterController, createHealthController, createAuthController, createAdminController, createSessionController } from '../controllers';
@@ -176,6 +177,8 @@ export function setupApiRoutes(
     app.use('/api/admin/mcp', mcpCatalogAdminRouter);
     app.use('/api/admin/mcp', mcpAdminMonitoringRouter);
     app.use('/api/debug-queue', debugQueueRouter);
+    // Artifacts (2026-05-26 Phase 1): GET/DELETE /api/sessions/:sid/artifacts/*
+    app.use('/api', artifactsRouter);
 
     // 부트스트랩 서비스 초기화
     bootstrapServices();

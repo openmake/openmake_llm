@@ -48,6 +48,8 @@ import { LocalLLMProvider } from '../providers/local-llm-provider';
 import { ProviderRouter } from '../providers/provider-router';
 import { ExternalKeysRepository } from '../data/repositories/external-keys-repo';
 import { getPool } from '../data/models/unified-database';
+import { extractAndStripArtifacts } from '../llm/artifact-parser';
+import { ArtifactRepository, ArtifactSizeError, type ArtifactKind } from '../data/repositories/artifact-repository';
 const log = createLogger('ChatRequestHandler');
 
 // ============================================
@@ -609,18 +611,55 @@ export class ChatRequestHandler {
         const endTime = Date.now();
         const responseTime = endTime - startTime;
 
-        // 6. AI 응답 저장
+        // 6. Artifacts 후처리 (2026-05-26): 응답에서 `<artifact>...</artifact>` 블록 분리.
+        // - artifacts 테이블에 영속화 (같은 id 면 version 자동 증가)
+        // - message 본문은 [[artifact:id]] placeholder 로 정리 — 다음 턴 prompt 에 본문 미포함
+        //   (Anthropic 의 "edits won't change Claude's memory" 패턴 자동 충족)
+        // 실패는 silent — chat 흐름 차단 금지.
+        let cleanedResponse = response;
+        try {
+            const { cleanedContent, artifacts } = extractAndStripArtifacts(response);
+            if (artifacts.length > 0) {
+                const repo = new ArtifactRepository(getPool());
+                const userIdForDb = typeof userContext.userId === 'string' ? userContext.userId : null;
+                for (const a of artifacts) {
+                    try {
+                        const row = await repo.insertArtifact({
+                            artifactId: a.id,
+                            sessionId: currentSessionId,
+                            userId: userIdForDb,
+                            kind: a.kind as ArtifactKind,
+                            title: a.title,
+                            language: a.lang,
+                            content: a.content,
+                        });
+                        log.info(`[Artifact] saved id=${a.id} v=${row.version} kind=${a.kind} bytes=${a.content.length}`);
+                    } catch (e) {
+                        if (e instanceof ArtifactSizeError) {
+                            log.warn(`[Artifact] 20MB 초과 — id=${a.id} skip`);
+                        } else {
+                            log.warn(`[Artifact] INSERT 실패 id=${a.id}: ${e instanceof Error ? e.message : e}`);
+                        }
+                    }
+                }
+                cleanedResponse = cleanedContent;
+            }
+        } catch (e) {
+            log.warn(`[Artifact] 후처리 실패 (continue): ${e instanceof Error ? e.message : e}`);
+        }
+
+        // 7. AI 응답 저장 — placeholder 적용된 cleanedResponse 사용
         await ChatRequestHandler.saveAssistantMessage(
             currentSessionId,
             auditUserId,
-            response,
+            cleanedResponse,
             maskedModel,
             responseTime,
             persistContent,
         );
 
-        // 7. 다음 턴을 위한 사전 요약 (백그라운드, fire-and-forget)
-        // 새 history = 기존 + user message + assistant response.
+        // 8. 다음 턴을 위한 사전 요약 (백그라운드, fire-and-forget)
+        // 새 history = 기존 + user message + cleanedResponse (placeholder 포함).
         // 길이가 임계값 이상일 때만 요약 LLM 호출. 실패는 무시 (다음 턴이 inline fallback).
         // 캐시는 ChatRequest 시 cached.length === request.history.length 정확 일치만 사용.
         const newHistoryLength = (history?.length ?? 0) + 2;
@@ -628,7 +667,7 @@ export class ChatRequestHandler {
             const newHistory = [
                 ...(history ?? []),
                 { role: 'user', content: message },
-                { role: 'assistant', content: response },
+                { role: 'assistant', content: cleanedResponse },
             ];
             void summarizeHistory(newHistory, maskedModel)
                 .then((s) => {
@@ -645,7 +684,7 @@ export class ChatRequestHandler {
         // 동일 식을 여기서 재계산. 조건 변경 시 양쪽 동시 수정 필수.
         const userAgentBypass = !!(userAgentId && userContext.userId && userContext.userId !== 'guest');
         return {
-            response,
+            response: cleanedResponse,
             sessionId: currentSessionId,
             model: maskedModel,
             executionPlan: plan,

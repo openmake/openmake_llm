@@ -149,6 +149,43 @@ export class ArtifactStreamParser {
 }
 
 /**
+ * Post-hoc 추출: 완성된 응답 본문에서 `<artifact>...</artifact>` 블록을 분리.
+ *
+ * ws-handler 의 incremental parser 와 grammar 동일하지만, 책임 분리 패턴 —
+ * incremental = UX (token vs artifact 분리해서 ws.send),
+ * post-hoc    = 영속화 (artifact 본문 → DB INSERT, message 본문은 placeholder 로 정리).
+ *
+ * cleanedContent: `<artifact ...>...</artifact>` → `[[artifact:id]]` placeholder
+ * artifacts: 추출된 본문 + 메타 목록 (DB INSERT 입력)
+ *
+ * @example
+ *   const { cleanedContent, artifacts } = extractAndStripArtifacts(rawAssistant);
+ *   for (const a of artifacts) await repo.insertArtifact({ ...a, sessionId, userId });
+ *   await saveAssistantMessage(cleanedContent);
+ */
+export interface ExtractedArtifact extends ArtifactInfo {
+    content: string;
+}
+
+const ARTIFACT_BLOCK_PATTERN = /<artifact\s+([^>]*)>([\s\S]*?)<\/artifact>/gi;
+
+export function extractAndStripArtifacts(raw: string): {
+    cleanedContent: string;
+    artifacts: ExtractedArtifact[];
+} {
+    if (!raw || raw.indexOf('<artifact') === -1) {
+        return { cleanedContent: raw, artifacts: [] };
+    }
+    const artifacts: ExtractedArtifact[] = [];
+    const cleaned = raw.replace(ARTIFACT_BLOCK_PATTERN, (_match, attrs: string, body: string) => {
+        const info = parseAttrs(attrs);
+        artifacts.push({ ...info, content: body.trim() });
+        return `[[artifact:${info.id}]]`;
+    });
+    return { cleanedContent: cleaned, artifacts };
+}
+
+/**
  * 시작 태그 속성 문자열 파싱. 견고하지 않은 LLM 출력에도 대응:
  *   id="..." kind=...  title='...' lang="js"
  *   id=todo-app kind=react title="Todo App"

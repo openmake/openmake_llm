@@ -34,6 +34,8 @@ export { default as agentsMonitoringRouter } from './agents-monitoring.routes';
 export { default as auditRouter } from './audit.routes';
 export { default as researchRouter } from './research.routes';
 export { default as externalRouter } from './external.routes';
+// 🆕 Artifacts (2026-05-26 Phase 1): claude.ai-style 산출물 영속화
+export { default as artifactsRouter } from './artifacts.routes';
 
 // 🆕 Push 알림 라우트
 export { pushRouter } from './push.routes';
