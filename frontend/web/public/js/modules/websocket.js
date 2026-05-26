@@ -22,6 +22,47 @@ import {
 } from '../components/artifact-panel.js';
 import { insertArtifactCard } from '../components/artifact-card.js';
 
+/**
+ * 2026-05-26 Phase 3 — 분기된 세션 배너 표시.
+ * session metadata 의 parentSessionId 가 있으면 채팅 상단에 "🔀 분기된 대화" 배너 + 부모로 이동 link.
+ * GET /api/sessions/:sid/meta — backend 가 metadata jsonb 노출.
+ */
+async function checkAndRenderBranchBanner(sessionId) {
+    if (!sessionId) return;
+    try {
+        const fetchFn = window.authFetch || fetch;
+        const res = await fetchFn(`/api/sessions/${encodeURIComponent(sessionId)}/meta`);
+        const data = await (res.json ? res.json() : Promise.resolve(res));
+        const meta = (data && data.data && data.data.metadata) || (data && data.metadata) || null;
+        // 기존 배너 제거 (새 session 진입 시)
+        const old = document.querySelector('.branch-banner');
+        if (old) old.remove();
+        if (!meta || !meta.parentSessionId) return;
+        const mainEl = document.getElementById('chatMessages')?.parentElement
+            || document.getElementById('chatMessages');
+        if (!mainEl) return;
+        const banner = document.createElement('div');
+        banner.className = 'branch-banner';
+        banner.innerHTML = `
+            🔀 <strong>분기된 대화</strong> — 사용자 메시지 편집으로 새로 시작됨
+            <button class="branch-banner-back" data-parent="${meta.parentSessionId}">← 원본 대화로 돌아가기</button>
+        `;
+        mainEl.insertBefore(banner, mainEl.firstChild);
+        banner.querySelector('.branch-banner-back').addEventListener('click', () => {
+            // 부모 sessionId 로 router 이동 — chat.js 의 selectChat(id) 사용
+            const pid = meta.parentSessionId;
+            if (typeof window.selectChat === 'function') {
+                window.selectChat(pid);
+            } else {
+                // fallback: 직접 history.pushState
+                location.href = `/?session=${encodeURIComponent(pid)}`;
+            }
+        });
+    } catch (e) {
+        debugLog('[WebSocket] branch banner 조회 실패 (무시):', e);
+    }
+}
+
 /** @type {number} 현재 재연결 시도 횟수 */
 let reconnectAttempts = 0;
 /** @type {number} 최대 재연결 시도 횟수 */
@@ -249,8 +290,10 @@ const messageHandlers = {
         if (data.sessionId) {
             debugLog('[WebSocket] 세션 생성됨:', data.sessionId);
             setState('currentChatId', data.sessionId);
-            // 2026-05-26 Phase 3: artifact 편집 POST 호출 시 필요한 sessionId 전파.
             try { setArtifactSessionId(data.sessionId); } catch (_e) { /* noop */ }
+            // 2026-05-26 Phase 3 future #1: 분기된 세션이면 배너 표시.
+            // session metadata 조회 → parentSessionId 있으면 채팅 상단에 link.
+            checkAndRenderBranchBanner(data.sessionId);
         }
     },
     'stats': (data) => {

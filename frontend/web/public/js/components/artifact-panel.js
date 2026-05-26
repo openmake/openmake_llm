@@ -463,10 +463,35 @@ async function renderCsv(target, item) {
     };
 
     // 가상 스크롤 임계 (Phase 3, 2026-05-26): 1000행 초과 시 viewport 안 행만 render.
-    // IntersectionObserver 기반 — 큰 데이터셋 (~10K행) 도 부드러운 스크롤.
+    // 동적 행 높이 (future #2, 2026-05-26): 행 별 높이 측정 + prefix sum 으로 위치 계산.
+    // 다중 줄 셀이 있어도 정확한 가상 스크롤 — 단순 ROW_HEIGHT 고정 한계 해소.
     const VIRTUAL_THRESHOLD = 1000;
-    const ROW_HEIGHT_PX = 26; // 평균 한 행 높이 (CSS 와 정렬)
-    const VIEWPORT_BUFFER = 20; // 위/아래 여유 행
+    const DEFAULT_ROW_HEIGHT_PX = 26; // 측정 전 추정값
+    const VIEWPORT_BUFFER = 20;
+    // 행 높이 측정 결과 cache (rowIdx → height). 측정 후 prefix sum 으로 위치 계산.
+    const rowHeights = new Map();
+    function getRowHeight(idx) { return rowHeights.get(idx) ?? DEFAULT_ROW_HEIGHT_PX; }
+    function getRowTop(idx) {
+        let sum = 0;
+        for (let i = 0; i < idx; i++) sum += getRowHeight(i);
+        return sum;
+    }
+    function getTotalHeight(count) {
+        // 측정된 것 + 미측정 분 default
+        let sum = 0;
+        for (let i = 0; i < count; i++) sum += getRowHeight(i);
+        return sum;
+    }
+    function findRowAtScroll(scrollTop, count) {
+        // binary-ish: 미측정 행은 default 높이로. linear scan (count 만행이라 OK).
+        let acc = 0;
+        for (let i = 0; i < count; i++) {
+            const h = getRowHeight(i);
+            if (acc + h > scrollTop) return i;
+            acc += h;
+        }
+        return count - 1;
+    }
 
     function renderTable() {
         // 필터링
@@ -507,49 +532,62 @@ async function renderCsv(target, item) {
                 `${display.length} 행 × ${headers.length} 열` +
                 (state.filter ? ` (전체 ${allRows.length} 중 필터 ${display.length})` : '');
         } else {
-            // 가상 스크롤 path — 큰 데이터셋
+            // 가상 스크롤 path — 큰 데이터셋 + 동적 행 높이 (Phase 3 future #2)
+            rowHeights.clear(); // 새 정렬/필터 시 측정 cache reset
             table.innerHTML = thead;
             const tbody = document.createElement('tbody');
             tbody.className = 'ap-csv-virtual-tbody';
-            // 스크롤 area: scroller wrapper 가 전체 높이 차지, tbody 안에 실제 rows 만
             tbody.style.position = 'relative';
             tbody.style.display = 'block';
-            // 전체 높이 spacer
+            // spacer (전체 추정 높이 — 측정 진행에 따라 갱신)
             const spacer = document.createElement('tr');
             spacer.className = 'ap-csv-spacer';
-            spacer.style.cssText = `height:${display.length * ROW_HEIGHT_PX}px; display:block; pointer-events:none;`;
+            spacer.style.cssText = `display:block; pointer-events:none;`;
+            spacer.style.height = `${getTotalHeight(display.length)}px`;
             tbody.appendChild(spacer);
-            // visible rows container (absolute positioned)
             const visibleContainer = document.createElement('tr');
             visibleContainer.className = 'ap-csv-vis-rows';
             visibleContainer.style.cssText = 'position:absolute; top:0; left:0; right:0; display:block;';
             tbody.appendChild(visibleContainer);
             table.appendChild(tbody);
 
-            // scroll 컨테이너 = wrap (ap-csv-wrap) — overflow scrollY 가 거기
             const renderVisible = () => {
                 const wrapRect = wrap.getBoundingClientRect();
                 const scrollTop = wrap.scrollTop;
-                const start = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT_PX) - VIEWPORT_BUFFER);
-                const visibleCount = Math.ceil(wrapRect.height / ROW_HEIGHT_PX) + VIEWPORT_BUFFER * 2;
+                const start = Math.max(0, findRowAtScroll(scrollTop, display.length) - VIEWPORT_BUFFER);
+                const visibleCount = Math.ceil(wrapRect.height / DEFAULT_ROW_HEIGHT_PX) + VIEWPORT_BUFFER * 2;
                 const end = Math.min(display.length, start + visibleCount);
-                visibleContainer.style.transform = `translateY(${start * ROW_HEIGHT_PX}px)`;
+                visibleContainer.style.transform = `translateY(${getRowTop(start)}px)`;
                 const slice = display.slice(start, end);
-                visibleContainer.innerHTML = slice.map(row =>
-                    `<tr style="display:flex; height:${ROW_HEIGHT_PX}px;">` +
-                    headers.map(h => `<td style="flex:1; min-width:80px;">${escHtml(row[h] ?? '')}</td>`).join('') +
-                    '</tr>'
-                ).join('');
+                visibleContainer.innerHTML = slice.map((row, i) => {
+                    const idx = start + i;
+                    return `<tr data-row-idx="${idx}" style="display:flex;">` +
+                        headers.map(h => `<td style="flex:1; min-width:80px;">${escHtml(row[h] ?? '')}</td>`).join('') +
+                        '</tr>';
+                }).join('');
+                // 렌더 후 각 행 실제 높이 측정 (동적 행 높이)
+                let heightsChanged = false;
+                visibleContainer.querySelectorAll('tr[data-row-idx]').forEach(tr => {
+                    const idx = parseInt(tr.getAttribute('data-row-idx'), 10);
+                    const h = tr.offsetHeight;
+                    if (h > 0 && rowHeights.get(idx) !== h) {
+                        rowHeights.set(idx, h);
+                        heightsChanged = true;
+                    }
+                });
+                // 높이 측정에 따른 spacer/total 갱신 (한 번만)
+                if (heightsChanged) {
+                    spacer.style.height = `${getTotalHeight(display.length)}px`;
+                }
             };
             renderVisible();
-            // 스크롤 listener (debounced via requestAnimationFrame)
             let rafId = null;
             wrap.addEventListener('scroll', () => {
                 if (rafId) cancelAnimationFrame(rafId);
                 rafId = requestAnimationFrame(renderVisible);
             }, { passive: true });
             summary.textContent =
-                `${display.length} 행 × ${headers.length} 열 (가상 스크롤)` +
+                `${display.length} 행 × ${headers.length} 열 (동적 가상 스크롤)` +
                 (state.filter ? ` — 전체 ${allRows.length} 중 필터 ${display.length}` : '');
         }
 

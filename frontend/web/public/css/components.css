@@ -933,3 +933,29 @@
     background: var(--bg-card);
     color: var(--text-secondary);
 }
+
+/* Phase 3 future #1 (2026-05-26) — 분기된 대화 배너 */
+.branch-banner {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 8px 12px;
+    padding: 8px 14px;
+    background: var(--bg-card);
+    border: 1px solid var(--accent-primary);
+    border-left: 4px solid var(--accent-primary);
+    border-radius: var(--radius-md);
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+.branch-banner-back {
+    margin-left: auto;
+    padding: 4px 10px;
+    background: var(--accent-primary);
+    color: #fff;
+    border: none;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    font-size: 12px;
+}
+.branch-banner-back:hover { opacity: 0.85; }

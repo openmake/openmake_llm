@@ -19,6 +19,39 @@ import { requireAuth } from '../auth';
 const router = Router();
 
 /**
+ * GET /api/sessions/:sid/meta
+ * Session metadata 조회 — 분기된 대화의 parentSessionId 등.
+ * Phase 3 (2026-05-26): 분기 UI 가 채팅 진입 시 metadata 확인하여 배너 표시.
+ *
+ * 본질적으로 conversation_sessions row 의 metadata jsonb 만 반환.
+ */
+router.get('/sessions/:sid/meta', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+    const sessionId = req.params.sid;
+    const userId = req.user && 'userId' in req.user ? (req.user as { userId: string }).userId : req.user?.id?.toString();
+    const isAdmin = req.user?.role === 'admin';
+
+    const pool = getPool();
+    const r = await pool.query<{ user_id: string | null; metadata: Record<string, unknown> | null; title: string | null }>(
+        'SELECT user_id, metadata, title FROM conversation_sessions WHERE id = $1',
+        [sessionId]
+    );
+    if (r.rows.length === 0) {
+        res.status(404).json(notFound('session'));
+        return;
+    }
+    const row = r.rows[0];
+    if (!isAdmin && row.user_id && row.user_id !== userId) {
+        res.status(403).json({ error: 'FORBIDDEN', detail: 'not owner' });
+        return;
+    }
+    res.json(success({
+        sessionId,
+        title: row.title,
+        metadata: row.metadata || null,
+    }));
+}));
+
+/**
  * GET /api/sessions/:sid/artifacts
  * 세션의 모든 artifact — id 별 최신 버전만 반환 (패널 초기 로드용).
  *
