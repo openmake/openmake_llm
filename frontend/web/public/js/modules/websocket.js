@@ -18,6 +18,7 @@ import {
     openArtifactPanel,
     appendArtifactChunk,
     finalizeArtifact,
+    setArtifactSessionId,
 } from '../components/artifact-panel.js';
 import { insertArtifactCard } from '../components/artifact-card.js';
 
@@ -248,6 +249,8 @@ const messageHandlers = {
         if (data.sessionId) {
             debugLog('[WebSocket] 세션 생성됨:', data.sessionId);
             setState('currentChatId', data.sessionId);
+            // 2026-05-26 Phase 3: artifact 편집 POST 호출 시 필요한 sessionId 전파.
+            try { setArtifactSessionId(data.sessionId); } catch (_e) { /* noop */ }
         }
     },
     'stats': (data) => {

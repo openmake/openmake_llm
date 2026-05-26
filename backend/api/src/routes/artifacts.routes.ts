@@ -87,6 +87,71 @@ router.get('/sessions/:sid/artifacts/:aid/v/:version', requireAuth, asyncHandler
 }));
 
 /**
+ * POST /api/sessions/:sid/artifacts/:aid
+ * 사용자 직접 편집 — 새 버전 INSERT (version 자동 증가).
+ * body: { kind, title, content, language?, deps? }
+ * Anthropic 공식 동작 동등: "edits won't change Claude's memory" — 본 endpoint 호출은
+ * artifacts 테이블에만 영향, conversation_messages / next-turn prompt 와는 분리.
+ */
+router.post('/sessions/:sid/artifacts/:aid', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+    const { sid, aid } = req.params;
+    const body = req.body as {
+        kind?: string;
+        title?: string;
+        content?: string;
+        language?: string | null;
+        deps?: Record<string, unknown> | null;
+    };
+    if (typeof body.content !== 'string' || body.content.length === 0) {
+        res.status(400).json({ error: 'INVALID_BODY', detail: 'content (string) 필수' });
+        return;
+    }
+    const userId = req.user && 'userId' in req.user ? (req.user as { userId: string }).userId : req.user?.id?.toString();
+    const isAdmin = req.user?.role === 'admin';
+
+    const repo = new ArtifactRepository(getPool());
+    // 기존 버전 fetch — 소유권 + 메타 (kind/title 기본값) 가져오기
+    const existing = await repo.listVersionsByArtifactId(sid, aid);
+    if (existing.length === 0) {
+        res.status(404).json(notFound('artifact'));
+        return;
+    }
+    if (!isAdmin && existing[0].user_id !== userId) {
+        res.status(403).json({ error: 'FORBIDDEN', detail: 'not owner' });
+        return;
+    }
+    const latest = existing[existing.length - 1];
+
+    try {
+        const row = await repo.insertArtifact({
+            artifactId: aid,
+            sessionId: sid,
+            userId: userId || null,
+            kind: (body.kind as never) || latest.kind,
+            title: body.title || latest.title,
+            language: body.language ?? latest.language,
+            content: body.content,
+            deps: body.deps ?? latest.deps,
+        });
+        res.json(success({
+            id: row.artifact_id,
+            kind: row.kind,
+            title: row.title,
+            lang: row.language,
+            version: row.version,
+            content: row.content,
+        }));
+    } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        if (msg.includes('20MB')) {
+            res.status(413).json({ error: 'TOO_LARGE', detail: msg });
+            return;
+        }
+        res.status(500).json({ error: 'INSERT_FAILED', detail: msg });
+    }
+}));
+
+/**
  * DELETE /api/sessions/:sid/artifacts/:aid
  * 특정 artifact 의 모든 버전 삭제 (cascade).
  */

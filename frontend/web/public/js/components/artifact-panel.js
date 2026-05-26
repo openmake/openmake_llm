@@ -21,6 +21,13 @@ const artifactStore = new Map();
 let currentId = null;          // 현재 패널에 표시 중인 artifact id
 let currentVersionIdx = 0;     // 현재 보고 있는 버전 (0-indexed within array)
 let panelEl = null;            // 패널 DOM root
+let editMode = false;          // Phase 3 사용자 편집 모드
+
+// 채팅 sessionId — POST 새 버전 호출 시 필요.
+// chat.js 가 setState('currentChatId', ...) 로 관리하지만 ES module 의존성 회피 위해
+// 모듈 진입점에 setter 함수 노출 + WS handler 가 호출.
+let currentSessionId = null;
+export function setArtifactSessionId(sid) { currentSessionId = sid || null; }
 
 // ─── 패널 DOM 초기화 (lazy, body 에 한 번만 mount) ─────────────────────────
 
@@ -53,6 +60,7 @@ function ensurePanel() {
                 <button class="ap-vn-next" aria-label="다음 버전" title="다음 버전 (→)">▶</button>
             </div>
             <div class="ap-actions">
+                <button class="ap-act-edit" title="편집 (새 버전 생성)">✏️ 편집</button>
                 <button class="ap-act-copy" title="본문 복사">📋 복사</button>
                 <button class="ap-act-download" title="원본 다운로드">⬇ 다운</button>
                 <button class="ap-act-pdf" title="미리보기를 PDF 로 저장 (pdf-lib + dom-to-image)">📄 PDF</button>
@@ -72,6 +80,7 @@ function wireUp(root) {
     });
     root.querySelector('.ap-vn-prev').addEventListener('click', () => navVersion(-1));
     root.querySelector('.ap-vn-next').addEventListener('click', () => navVersion(+1));
+    root.querySelector('.ap-act-edit').addEventListener('click', toggleEditMode);
     root.querySelector('.ap-act-copy').addEventListener('click', copyCurrent);
     root.querySelector('.ap-act-download').addEventListener('click', downloadCurrent);
     root.querySelector('.ap-act-pdf').addEventListener('click', exportPdfCurrent);
@@ -193,8 +202,11 @@ function renderCurrent() {
     if (!list) return;
     const item = list[currentVersionIdx];
 
-    // Code View 탭은 항상 raw 본문
-    const codeEl = panelEl.querySelector('.ap-code code');
+    // Code View 탭은 항상 raw 본문. enterEditUI 가 codePane 의 innerHTML 을 textarea+버튼으로
+    // 교체했을 수 있어 매번 <code> 재생성 (2026-05-26 Phase 3 편집 후 정상 복원).
+    const codePane = panelEl.querySelector('.ap-code');
+    codePane.innerHTML = '<code></code>';
+    const codeEl = codePane.querySelector('code');
     codeEl.textContent = item.content;
     if (typeof window.hljs !== 'undefined' && item.kind === 'code' && item.lang) {
         codeEl.className = `language-${escAttr(item.lang)}`;
@@ -633,6 +645,126 @@ function flashAction(selector, msg) {
 }
 
 /**
+ * Phase 3 — 사용자 편집 모드 토글.
+ * Code View 탭의 <code> 를 <textarea> 로 교체. 저장 시 POST /api/sessions/:sid/artifacts/:aid
+ * 호출하여 새 버전 INSERT (version 자동 증가). 미리보기 자동 갱신.
+ */
+function toggleEditMode() {
+    if (!panelEl || !currentId) return;
+    if (editMode) {
+        // 편집 종료 (저장 없이) — UI 만 복원
+        editMode = false;
+        renderCurrent();
+        updateEditButton();
+        return;
+    }
+    if (!currentSessionId) {
+        flashAction('.ap-act-edit', '세션 미설정');
+        return;
+    }
+    editMode = true;
+    switchTab('code');
+    updateEditButton();
+    enterEditUI();
+}
+
+function updateEditButton() {
+    const btn = panelEl?.querySelector('.ap-act-edit');
+    if (!btn) return;
+    if (editMode) {
+        btn.textContent = '💾 저장';
+        btn.title = '새 버전으로 저장';
+        btn.classList.add('ap-edit-saving');
+    } else {
+        btn.textContent = '✏️ 편집';
+        btn.title = '편집 (새 버전 생성)';
+        btn.classList.remove('ap-edit-saving');
+    }
+}
+
+function enterEditUI() {
+    if (!panelEl || !currentId) return;
+    const list = artifactStore.get(currentId);
+    if (!list) return;
+    const item = list[currentVersionIdx];
+
+    const codePane = panelEl.querySelector('.ap-code');
+    codePane.innerHTML = '';
+    const textarea = document.createElement('textarea');
+    textarea.className = 'ap-edit-textarea';
+    textarea.value = item.content;
+    textarea.spellcheck = false;
+    codePane.appendChild(textarea);
+
+    const actionRow = document.createElement('div');
+    actionRow.className = 'ap-edit-actions';
+    actionRow.innerHTML = `
+        <button class="ap-edit-save-btn">💾 새 버전으로 저장</button>
+        <button class="ap-edit-cancel-btn">취소</button>
+    `;
+    codePane.appendChild(actionRow);
+
+    actionRow.querySelector('.ap-edit-save-btn').addEventListener('click', async () => {
+        const newContent = textarea.value;
+        await saveEditedArtifact(newContent);
+    });
+    actionRow.querySelector('.ap-edit-cancel-btn').addEventListener('click', () => {
+        editMode = false;
+        renderCurrent();
+        updateEditButton();
+    });
+    textarea.focus();
+}
+
+async function saveEditedArtifact(newContent) {
+    if (!currentId || !currentSessionId) return;
+    const list = artifactStore.get(currentId);
+    if (!list) return;
+    const item = list[currentVersionIdx];
+
+    const saveBtn = panelEl.querySelector('.ap-edit-save-btn');
+    if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = '저장 중...'; }
+    try {
+        const url = `/api/sessions/${encodeURIComponent(currentSessionId)}/artifacts/${encodeURIComponent(currentId)}`;
+        const fetchFn = window.authFetch || fetch;
+        const res = await fetchFn(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                kind: item.kind,
+                title: item.title,
+                language: item.lang,
+                content: newContent,
+            }),
+        });
+        const data = await (res.json ? res.json() : Promise.resolve(res));
+        const saved = data && data.data ? data.data : data;
+        if (!saved || !saved.version) throw new Error('서버 응답 형식 오류');
+
+        // 새 버전을 store 에 push + 현재 표시 이동
+        list.push({
+            kind: saved.kind,
+            title: saved.title,
+            lang: saved.lang,
+            content: saved.content,
+            version: saved.version,
+        });
+        currentVersionIdx = list.length - 1;
+        editMode = false;
+        updateEditButton();
+        refreshHeader();
+        refreshVersionNav();
+        renderCurrent();
+        switchTab('preview');
+        flashAction('.ap-act-edit', `✓ v${saved.version}`);
+    } catch (e) {
+        console.error('[Artifact] 편집 저장 실패:', e);
+        if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = '재시도'; }
+        flashAction('.ap-act-edit', '실패');
+    }
+}
+
+/**
  * PDF export (Phase 2): 미리보기 영역을 PNG 로 캡처 → pdf-lib 로 A4 PDF 생성 → 다운로드.
  * 통합 패턴 — code/markdown/svg/chart/mermaid 모두 시각적 결과 그대로 보존.
  *
@@ -872,6 +1004,24 @@ function injectStyles() {
 .ap-reveal { width: 100%; }
 .ap-preview.ap-react { padding: 0; background: transparent; border: none; }
 .ap-loading { text-align: center; padding: 24px; color: var(--text-muted, #888); }
+
+/* Phase 3 사용자 편집 모드 */
+.ap-edit-textarea {
+    width: 100%; min-height: 320px; box-sizing: border-box;
+    padding: 12px; border: 1px solid var(--accent-primary, #6366f1);
+    border-radius: var(--radius-md, 6px); background: var(--bg-secondary, #0f0f0f);
+    color: var(--text-primary, #fff); font-family: 'JetBrains Mono', 'Courier New', monospace;
+    font-size: 13px; line-height: 1.5; resize: vertical;
+}
+.ap-edit-actions { display: flex; gap: 8px; margin-top: 8px; }
+.ap-edit-actions button {
+    padding: 6px 14px; border: 1px solid var(--border-light, #2a2a2a);
+    border-radius: var(--radius-md, 6px); cursor: pointer; font-size: 12px;
+    background: var(--bg-tertiary, #2a2a2a); color: var(--text-primary, #fff);
+}
+.ap-edit-save-btn { background: var(--accent-primary, #6366f1) !important; color: #fff !important; }
+.ap-edit-save-btn:disabled { opacity: 0.6; cursor: default; }
+.ap-act-edit.ap-edit-saving { background: var(--accent-primary, #6366f1); color: #fff; }
     `;
     document.head.appendChild(style);
 }
