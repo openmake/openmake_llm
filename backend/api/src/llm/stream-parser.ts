@@ -24,6 +24,7 @@ import type {
 import { buildImageDataUrl } from '../utils/image-mime';
 import { parseReasoningTags } from './reasoning-tag-parser';
 import { ArtifactStreamParser, type ArtifactStreamCallbacks } from './artifact-parser';
+import { extractCoTFromContent } from './cot-extractor';
 import { createLogger } from '../utils/logger';
 
 const log = createLogger('StreamParser');
@@ -341,6 +342,30 @@ export async function streamChat(
         thinking = thinking ? `${thinking}\n${reasoningSplit.thinking}` : reasoningSplit.thinking;
     }
 
+    // 2026-05-26: 평문 CoT 안전망 (Qwen3.6 등 reasoning 모델이 <think> 태그 없이 영문
+    // chain-of-thought 를 평문으로 출력하는 case 대응. vLLM `--reasoning-parser qwen3`
+    // flag 가 서버에 없을 때의 클라이언트 측 fallback).
+    //
+    // 흐름:
+    //   1. content 시작에 "Here's a thinking process" 같은 sentinel 매칭 시 CoT 의심
+    //   2. 결론 마커 ([Output], Final:, Output: 등) 이후 = 실제 답변
+    //   3. 그 앞 = thinking 채널로 라우팅 → frontend 의 🤔 접이식 UI 활용
+    //
+    // heuristic 이라 false-positive 가능 — sentinel hit 안 되면 변경 없음 (안전).
+    const cot = extractCoTFromContent(reasoningSplit.content);
+    if (cot.detected) {
+        log.info(`[CoT-Extractor] 평문 chain-of-thought 감지 — thinking 채널로 분리 (answer=${cot.answer.length}B, thinking=${cot.thinking.length}B)`);
+        // streaming 클라이언트는 이미 raw content 받은 상태. final cleanup 에서 thinking 으로
+        // 옮기되, UI 측은 응답 완료 후 cleanedContent path (done 페이로드) 또는 history
+        // re-render 시점에 정정. content 채널로 재방송하지 않음 (이미 송신됨).
+        thinking = thinking ? `${thinking}\n${cot.thinking}` : cot.thinking;
+        // 단, streaming 으로 thinking 채널에 onToken('', x) 보내 frontend 접이식 UI 활성화
+        if (cot.thinking) onToken('', cot.thinking);
+        // reasoningSplit.content 를 정리된 answer 로 치환 — saveAssistantMessage 와 다음 턴
+        // history 가 깨끗한 본문만 보유
+        reasoningSplit.content = cot.answer;
+    }
+
     // Reasoning-channel recovery (vLLM 운영자 reasoning-parser 오설정 워크어라운드):
     // 일부 vLLM 빌드는 enable_thinking=false 요청을 받고도 EXAONE 출력 전체를 reasoning
     // 채널로 라우팅하여 content=null 을 반환. 이 경우 reasoning 을 본 답변으로 승격하여
@@ -416,9 +441,17 @@ export async function nonStreamChat(
     // vLLM 0.21+ reasoning 모델은 `message.reasoning_content` 로도 thinking 전달 — 두 필드 모두 수신.
     const reasoningSplit = parseReasoningTags(msg.content ?? '');
     const serverReasoning = msg.reasoning ?? msg.reasoning_content;
-    const combinedThinking = serverReasoning
+    let combinedThinking = serverReasoning
         ? (reasoningSplit.thinking ? `${serverReasoning}\n${reasoningSplit.thinking}` : serverReasoning)
         : reasoningSplit.thinking;
+
+    // 2026-05-26: 평문 CoT 안전망 (non-stream 동일 — streamChat 의 동일 원칙).
+    const cotNS = extractCoTFromContent(reasoningSplit.content);
+    if (cotNS.detected) {
+        log.info(`[CoT-Extractor] non-stream 평문 CoT 감지 (answer=${cotNS.answer.length}B, thinking=${cotNS.thinking.length}B)`);
+        combinedThinking = combinedThinking ? `${combinedThinking}\n${cotNS.thinking}` : cotNS.thinking;
+        reasoningSplit.content = cotNS.answer;
+    }
 
     // Reasoning-channel recovery (non-stream 동일 — streamChat 의 동일 원칙 적용).
     // content 비어있고 reasoning 만 채워진 경우 reasoning 을 본 답변으로 승격.
