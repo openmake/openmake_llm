@@ -135,6 +135,20 @@
         '</div>' +
         '</div>' +
 
+        // 2026-05-26 Phase 1.D \u2014 Capabilities (Anthropic Settings > Capabilities \uB3D9\uB4F1)
+        '<div class="s-card">' +
+        '<div class="s-card-header">' +
+        '<span class="s-card-icon">\u2728</span>' +
+        '<span class="s-card-title">Capabilities</span>' +
+        '</div>' +
+        '<div class="s-card-body">' +
+        '<div class="setting-row">' +
+        '<div class="setting-info"><h4>Artifacts</h4><p>\uBCF5\uD569 \uC0B0\uCD9C\uBB3C (\uCF54\uB4DC\u00B7HTML\u00B7\uB2E4\uC774\uC5B4\uADF8\uB7A8\u00B7\uBB38\uC11C \uB4F1) \uC744 \uCC44\uD305 \uC6B0\uCE21 \uD328\uB110\uC5D0 \uD45C\uC2DC\uD558\uC5EC \uBBF8\uB9AC\uBCF4\uAE30\u00B7\uBCF5\uC0AC\u00B7\uB2E4\uC6B4\uB85C\uB4DC\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4. \uB044\uBA74 \uC591\uC2DD \uADF8\uB300\uB85C \uBCF8\uBB38\uC5D0 inline \uD45C\uC2DC.</p></div>' +
+        '<label class="toggle"><input type="checkbox" checked id="artifactsEnabledToggle"><span class="toggle-slider"></span></label>' +
+        '</div>' +
+        '</div>' +
+        '</div>' +
+
         '<div class="s-card">' +
         '<div class="s-card-header">' +
         '<span class="s-card-icon">\uD83D\uDCBE</span>' +
@@ -355,6 +369,42 @@
                     loadApiKeyCount();
                     loadSystemInfo();
                     initCustomInstructions();
+                    initArtifactsToggle();
+                }
+
+                /**
+                 * Artifacts on/off 토글 (2026-05-26 Phase 1.D).
+                 * 토글 변경 즉시 PUT — 별도 저장 버튼 없음 (claude.ai Settings > Capabilities 패턴).
+                 */
+                async function initArtifactsToggle() {
+                    var toggle = document.getElementById('artifactsEnabledToggle');
+                    if (!toggle) return;
+                    try {
+                        var res = await window.authFetch('/api/users/me/artifacts-enabled');
+                        var data = (res && res.data) || res || {};
+                        toggle.checked = data.artifactsEnabled !== false; // 기본 true
+                    } catch (e) {
+                        console.warn('[settings] artifacts_enabled 로드 실패:', e);
+                    }
+                    toggle.addEventListener('change', async function() {
+                        var enabled = toggle.checked;
+                        try {
+                            await window.authFetch('/api/users/me/artifacts-enabled', {
+                                method: 'PUT',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ artifactsEnabled: enabled }),
+                            });
+                            if (typeof showToast === 'function') {
+                                showToast('Artifacts ' + (enabled ? '활성' : '비활성') + '됨', 'success');
+                            }
+                        } catch (e) {
+                            console.error('[settings] artifacts_enabled 저장 실패:', e);
+                            toggle.checked = !enabled; // 롤백
+                            if (typeof showToast === 'function') {
+                                showToast('설정 저장 실패', 'error');
+                            }
+                        }
+                    });
                 }
 
                 /**

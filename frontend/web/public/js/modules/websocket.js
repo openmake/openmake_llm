@@ -13,6 +13,13 @@ import { getState, setState } from './state.js';
 import { hideAbortButton } from './chat.js';
 import { debugLog, debugWarn } from './utils.js';
 import { showSystemToast } from './system-toast.js';
+// 2026-05-26 Phase 1.D Artifacts
+import {
+    openArtifactPanel,
+    appendArtifactChunk,
+    finalizeArtifact,
+} from '../components/artifact-panel.js';
+import { insertArtifactCard } from '../components/artifact-card.js';
 
 /** @type {number} 현재 재연결 시도 횟수 */
 let reconnectAttempts = 0;
@@ -361,7 +368,36 @@ const messageHandlers = {
         } catch (e) {
             console.error('[WebSocket] showSystemToast 호출 실패:', e);
         }
-    }
+    },
+
+    /**
+     * Artifacts (2026-05-26 Phase 1.D) — LLM 응답의 <artifact> 블록.
+     * Server: ArtifactStreamParser 가 incremental 분리 → 3종 이벤트 dispatch.
+     * Client: 우측 패널 슬라이드 + 인라인 카드 + 본문 streaming.
+     */
+    'artifact_start': (data) => {
+        const info = data.artifact;
+        if (!info || !info.id) return;
+        try {
+            openArtifactPanel(info);
+            const container = getState('currentAssistantMessageContent');
+            if (container) insertArtifactCard(container, info);
+        } catch (e) {
+            console.error('[WebSocket] artifact_start 처리 실패:', e);
+        }
+    },
+    'artifact_chunk': (data) => {
+        if (!data.id) return;
+        try { appendArtifactChunk(data.id, data.delta || ''); } catch (e) {
+            console.error('[WebSocket] artifact_chunk 처리 실패:', e);
+        }
+    },
+    'artifact_end': (data) => {
+        if (!data.id) return;
+        try { finalizeArtifact(data.id); } catch (e) {
+            console.error('[WebSocket] artifact_end 처리 실패:', e);
+        }
+    },
 };
 
 /**

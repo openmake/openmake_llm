@@ -98,5 +98,51 @@ export function createUserPreferencesController(): Router {
         },
     );
 
+    /**
+     * GET /api/users/me/artifacts-enabled — Anthropic Settings > Capabilities 동등.
+     * 미설정 시 기본 true (Repository 의 DEFAULT TRUE).
+     */
+    router.get('/artifacts-enabled', requireAuth, async (req: Request, res: Response) => {
+        const userId = getUserId(req);
+        if (!userId) {
+            res.status(401).json(unauthorized('사용자 식별 실패'));
+            return;
+        }
+        try {
+            const repo = new UserRepository(getPool());
+            const enabled = await repo.getArtifactsEnabled(userId);
+            res.json(success({ artifactsEnabled: enabled }));
+        } catch (err) {
+            log.error('artifacts_enabled 조회 실패:', err);
+            res.status(500).json(internalError('설정 조회 실패'));
+        }
+    });
+
+    /**
+     * PUT /api/users/me/artifacts-enabled
+     * body: { artifactsEnabled: boolean }
+     */
+    router.put('/artifacts-enabled', requireAuth, async (req: Request, res: Response) => {
+        const userId = getUserId(req);
+        if (!userId) {
+            res.status(401).json(unauthorized('사용자 식별 실패'));
+            return;
+        }
+        const body = req.body as { artifactsEnabled?: unknown };
+        if (typeof body.artifactsEnabled !== 'boolean') {
+            res.status(400).json({ error: 'INVALID_BODY', detail: 'artifactsEnabled (boolean) 필수' });
+            return;
+        }
+        try {
+            const repo = new UserRepository(getPool());
+            await repo.updateArtifactsEnabled(userId, body.artifactsEnabled);
+            log.info(`artifacts_enabled 갱신: userId=${userId} value=${body.artifactsEnabled}`);
+            res.json(success({ saved: true, artifactsEnabled: body.artifactsEnabled }));
+        } catch (err) {
+            log.error('artifacts_enabled 갱신 실패:', err);
+            res.status(500).json(internalError('설정 저장 실패'));
+        }
+    });
+
     return router;
 }
