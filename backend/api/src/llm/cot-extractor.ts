@@ -32,6 +32,26 @@ const COT_START_SENTINELS = [
     /^Reasoning[:\s]/i,
     /^Thinking[:\s]/i,
     /^Self-Correction\/Refinement/i,
+    /^The user is (asking|wanting|requesting)/i,
+    /^The user wants/i,
+    /^Looking at (the|this) (question|prompt|search)/i,
+    /^First,?\s+I (need to|must|should)/i,
+    /^I need to (check|analyze|determine|verify)/i,
+    /^Okay,?\s+(let|so|the)/i,
+];
+
+/** CoT 본문 마커 — 응답 중간/끝에 이런 메타 라인이 보이면 CoT 신뢰도 ↑.
+ *  시작 sentinel 만으로 부족할 때 사용 (다양한 시작 패턴 cover). */
+const COT_INNER_MARKERS = [
+    /\bConstraint check\b[:\s]/i,
+    /\bSelf-Correction\b/i,
+    /\bVerify (Constraints?|the answer)\b/i,
+    /\bFormulate Response\b/i,
+    /\bFinal Output Generation\b/i,
+    /\bOutput matches\b/i,
+    /\[Done\.?\]/i,
+    /\[Proceeds\]/i,
+    /\bProceed\.?✅/i,
 ];
 
 /** 결론 마커 — sentinel 발견 시 이 마커 이후가 실제 답변.
@@ -75,7 +95,10 @@ export function extractCoTFromContent(content: string): CotExtractResult {
     }
     const prefix = content.slice(0, 400);
     const sentinelHit = COT_START_SENTINELS.some(re => re.test(prefix));
-    if (!sentinelHit) {
+    // 2026-05-26 보강: 시작 sentinel 매칭 실패해도 본문에 reasoning meta 마커가
+    // 2개 이상 있으면 CoT 로 판단. Qwen3.6 의 다양한 시작 패턴 cover.
+    const innerHits = COT_INNER_MARKERS.filter(re => re.test(content)).length;
+    if (!sentinelHit && innerHits < 2) {
         return { detected: false, answer: content, thinking: '' };
     }
 
