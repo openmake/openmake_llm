@@ -198,10 +198,14 @@ export class ChatService {
      *
      * @returns 사용 가능한 도구 정의 배열
      */
-    private getAllowedTools(): ToolDefinition[] {
+    private async getAllowedTools(): Promise<ToolDefinition[]> {
         const toolRouter = getUnifiedMCPClient().getToolRouter();
         const userTierForTools = this.currentUserContext?.tier || 'free';
-        const allTools = toolRouter.getLLMTools(userTierForTools) as ToolDefinition[];
+        const rawUserId = this.currentUserContext?.userId;
+        const userIdStr = rawUserId !== undefined && rawUserId !== null ? String(rawUserId) : undefined;
+        const allTools = userIdStr
+            ? await toolRouter.getLLMTools(userTierForTools, { userId: userIdStr, tier: userTierForTools }) as ToolDefinition[]
+            : await toolRouter.getLLMTools(userTierForTools) as ToolDefinition[];
 
         // enabledTools가 없으면 레거시 호환: 전체 허용 (API 클라이언트 등). skill binding 적용도 skip.
         if (this.currentEnabledTools === undefined) return allTools;
@@ -834,6 +838,9 @@ export class ChatService {
         checkAborted: () => void;
         format?: import('../llm').FormatOption;
     }): Promise<void> {
+        // 사용자 컨텍스트 + skill bindings + enabledTools 는 이 시점에 이미 고정되어 있으므로
+        // 도구 목록을 한 번 pre-resolve 한 뒤 sync 콜백 형태로 전달 (chat-strategies 계약 유지).
+        const resolvedAllowedTools = await this.getAllowedTools();
         return selectAndExecuteStrategy({
             ...params,
             generateVerifyStrategy: this.generateVerifyStrategy,
@@ -841,7 +848,7 @@ export class ChatService {
             thinkingStrategy: this.thinkingStrategy,
             client: this.client,
             currentUserContext: this.currentUserContext,
-            getAllowedTools: () => this.getAllowedTools(),
+            getAllowedTools: () => resolvedAllowedTools,
             onMcpToolResult: this.currentMcpToolResultCallback,
         });
     }
@@ -942,13 +949,13 @@ export class ChatService {
     // External provider facade — 실제 구현은 chat-service/external-provider.ts
     // ────────────────────────────────────────────────────────────
 
-    private externalProviderDeps(): ExternalProviderDeps {
+    private async externalProviderDeps(): Promise<ExternalProviderDeps> {
         return {
             providerRouter: this.providerRouter,
             currentUserContext: this.currentUserContext,
             mcpToolResultCallback: this.currentMcpToolResultCallback,
             onUsage: (usage) => { this.lastProviderUsage = usage; },
-            allowedTools: this.getAllowedTools(),
+            allowedTools: await this.getAllowedTools(),
         };
     }
 
@@ -958,7 +965,7 @@ export class ChatService {
         onToken: (token: string, thinking?: string) => void,
         ctx: StreamFromExternalContext = {},
     ): Promise<string> {
-        return streamFromExternalProviderFn(this.externalProviderDeps(), resolved, req, onToken, ctx);
+        return streamFromExternalProviderFn(await this.externalProviderDeps(), resolved, req, onToken, ctx);
     }
 
     // executeExternalTool / recordExternalUsageFireAndForget 은 streamFromExternalProvider

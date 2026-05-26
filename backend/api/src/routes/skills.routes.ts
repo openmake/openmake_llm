@@ -219,7 +219,7 @@ router.post('/upload', requireAuth, skillUpload.single('file'), asyncHandler(asy
 
     const toolRouter = getUnifiedMCPClient().getToolRouter();
     const userTier: UserTier = ((req.user && 'tier' in req.user ? (req.user as { tier?: UserTier }).tier : 'free') ?? 'free') as UserTier;
-    const availableTools = toolRouter.getLLMTools(userTier).map((t: { function: { name: string } }) => t.function.name);
+    const availableTools = (await toolRouter.getLLMTools(userTier, { userId, tier: userTier })).map((t: { function: { name: string } }) => t.function.name);
     const availableToolNames = new Set<string>(availableTools);
 
     const validation = await validateManifest(parsed, { availableToolNames });
