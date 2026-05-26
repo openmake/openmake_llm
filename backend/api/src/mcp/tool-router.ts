@@ -39,6 +39,9 @@ import { canUseTool } from './tool-tiers';
 import type { UserContext } from './user-sandbox';
 import { createLogger } from '../utils/logger';
 import { MCP_EXTERNAL_TOOL_LIMITS } from '../config/timeouts';
+import type { UserMCPPool } from './user-pool';
+import type { McpCatalogRepository } from '../data/repositories/mcp-catalog-repository';
+import { collectUserPoolTools, type UserPoolToolEntry } from './user-pool-tools';
 
 const logger = createLogger('ToolRouter');
 
@@ -98,14 +101,37 @@ export class ToolRouter {
     /** 외부 도구 실행기: serverId → ExternalToolExecutor 함수 */
     private externalExecutors: Map<string, ExternalToolExecutor> = new Map();
 
+    /** Phase 7: 사용자 풀 (lifecycle-supervisor 가 채운 ExternalMCPClient 인스턴스) */
+    private readonly userPool?: UserMCPPool;
+
+    /** Phase 7: catalog template required_tier 재조회용 (chat 흐름에서 호출 시점 검증) */
+    private readonly catalogRepo?: Pick<McpCatalogRepository, 'getRequiredTiersByTemplateIds'>;
+
+    /**
+     * catalog 의 required_tier 와 UserTier 비교를 위한 5단계 tier 순서.
+     * UserTier (3값) 는 이 순서의 부분집합이며, catalog 는 모든 5값을 가질 수 있다.
+     */
+    private static readonly TIER_ORDER = ['free', 'starter', 'standard', 'pro', 'enterprise'] as const;
+
+    /**
+     * @param deps - optional 의존성. userPool/catalogRepo 둘 다 없으면 기존 (builtin + global external) 동작과 동일.
+     */
+    constructor(deps?: { userPool?: UserMCPPool; catalogRepo?: McpCatalogRepository }) {
+        this.userPool = deps?.userPool;
+        this.catalogRepo = deps?.catalogRepo;
+    }
+
     /**
      * 모든 도구(내장+외부) MCPTool 목록 반환
      *
      * 내장 도구는 원본 이름, 외부 도구는 네임스페이스 적용된 이름을 사용합니다.
+     * userContext 가 주어지고 userPool 이 주입돼 있으면, 해당 사용자의 풀 도구를
+     * displayName::tool 네임스페이스로 함께 수집하고 catalog tier 게이트로 필터링합니다.
      *
+     * @param userContext - optional. 있으면 userPool 도구 + tier 재검증 적용.
      * @returns 전체 도구 목록 (MCPTool 배열)
      */
-    getAllTools(): MCPTool[] {
+    async getAllTools(userContext?: { userId: string; tier: UserTier }): Promise<MCPTool[]> {
         const tools: MCPTool[] = [];
 
         // 내장 도구
@@ -121,6 +147,13 @@ export class ToolRouter {
             });
         }
 
+        // Phase 7: 사용자 풀 도구 — userContext + userPool 둘 다 있을 때만
+        if (userContext && this.userPool) {
+            const userEntries = collectUserPoolTools(this.userPool, userContext.userId);
+            const allowed = await this.filterByTier(userEntries, userContext.tier);
+            for (const entry of allowed) tools.push(entry.tool);
+        }
+
         return tools;
     }
 
@@ -130,10 +163,36 @@ export class ToolRouter {
      * canUseTool()을 사용하여 해당 tier에서 접근 가능한 도구만 반환합니다.
      *
      * @param tier - 사용자 등급 ('free' | 'pro' | 'enterprise')
+     * @param userContext - optional. getAllTools 로 전달되어 userPool 도구도 포함시킴.
      * @returns 해당 등급에서 사용 가능한 도구 목록
      */
-    getToolsForTier(tier: UserTier): MCPTool[] {
-        return this.getAllTools().filter(tool => canUseTool(tier, tool.name));
+    async getToolsForTier(tier: UserTier, userContext?: { userId: string; tier: UserTier }): Promise<MCPTool[]> {
+        const all = await this.getAllTools(userContext);
+        return all.filter(tool => canUseTool(tier, tool.name));
+    }
+
+    /**
+     * catalog_template_id 가 있는 entry 만 tier 게이트로 검사.
+     * - catalogRepo 미주입 시 전부 통과 (게이트 비활성 fallback)
+     * - catalogTemplateId 없는 entry (direct 등록) 는 그대로 통과
+     * - tierMap 에 없는 template (DB 미존재) 는 보수적으로 통과 (catalog 누락은 게이트 책임 아님)
+     */
+    private async filterByTier(entries: UserPoolToolEntry[], userTier: UserTier): Promise<UserPoolToolEntry[]> {
+        if (!this.catalogRepo) return entries;
+
+        const templateIds = [...new Set(entries.map(e => e.catalogTemplateId).filter(Boolean))] as string[];
+        if (templateIds.length === 0) return entries;
+
+        const tierMap = await this.catalogRepo.getRequiredTiersByTemplateIds(templateIds);
+        const userLevel = ToolRouter.TIER_ORDER.indexOf(userTier as typeof ToolRouter.TIER_ORDER[number]);
+
+        return entries.filter(e => {
+            if (!e.catalogTemplateId) return true;
+            const required = tierMap.get(e.catalogTemplateId);
+            if (!required) return true;
+            const requiredLevel = ToolRouter.TIER_ORDER.indexOf(required as typeof ToolRouter.TIER_ORDER[number]);
+            return userLevel >= requiredLevel;
+        });
     }
 
     /**
@@ -242,8 +301,8 @@ export class ToolRouter {
      * @param tier - 사용자 등급
      * @returns OpenAI 호환 tools 배열
      */
-    getLLMTools(tier: UserTier): LLMTool[] {
-        const tools = this.getToolsForTier(tier);
+    async getLLMTools(tier: UserTier, userContext?: { userId: string; tier: UserTier }): Promise<LLMTool[]> {
+        const tools = await this.getToolsForTier(tier, userContext);
         return tools.map(tool => ({
             type: 'function' as const,
             function: {
@@ -259,8 +318,8 @@ export class ToolRouter {
     }
 
     /** @deprecated Use getLLMTools(). 호환 alias — P9 에서 제거 예정. */
-    getOllamaTools(tier: UserTier): LLMTool[] {
-        return this.getLLMTools(tier);
+    async getOllamaTools(tier: UserTier, userContext?: { userId: string; tier: UserTier }): Promise<LLMTool[]> {
+        return this.getLLMTools(tier, userContext);
     }
 
     /**
