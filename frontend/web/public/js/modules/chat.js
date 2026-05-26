@@ -245,6 +245,10 @@ async function sendMessage() {
             userAgentId: getState('selectedUserAgentId') || undefined,
             enabledTools: getState('mcpToolsEnabled') || {},
             sessionId: getState('currentChatId'), // 세션 ID 포함
+            // Phase 3.4 (2026-05-26): 메시지 편집 분기 — chat-renderer 의 enterUserMessageEdit 가 설정
+            ...(window._pendingBranchFrom && window._pendingBranchFrom.sessionId
+                ? { branchFromSessionId: window._pendingBranchFrom.sessionId, branchFromMessageId: window._pendingBranchFrom.messageId || undefined }
+                : {}),
             // 본문 저장 여부 — settings.html saveHistoryToggle 과 연결
             // false 면 백엔드는 conversation_messages INSERT 스킵, audit log 만 기록
             saveHistory: (JSON.parse(SS.getItem(STORAGE_KEY_GENERAL_SETTINGS) || '{}').saveHistory) !== false,
@@ -292,6 +296,8 @@ async function sendMessage() {
         if (parsedUser.tier) payload.userTier = parsedUser.tier;
 
         sendWsMessage(payload);
+        // Phase 3.4 (2026-05-26): 분기 정보 사용 직후 clear — 다음 메시지에 누적 방지
+        if (window._pendingBranchFrom) { try { delete window._pendingBranchFrom; } catch (_e) {} }
 
     } catch (error) {
         console.error('[Chat] 전송 오류:', error);

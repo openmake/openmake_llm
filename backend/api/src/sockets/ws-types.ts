@@ -51,6 +51,9 @@ export interface WSMessage {
     style?: 'concise' | 'default' | 'verbose';
     /** Phase 2 Custom Agent (2026-05-26): 사용자 정의 agent id */
     userAgentId?: string;
+    /** Phase 3.4 (2026-05-26): 메시지 편집 분기 — 새 session 의 부모 추적 */
+    branchFromSessionId?: string;
+    branchFromMessageId?: string;
     [key: string]: unknown;
 }
 

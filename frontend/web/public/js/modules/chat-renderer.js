@@ -59,11 +59,21 @@ function enterUserMessageEdit(messageDiv) {
     editor.querySelector('.user-edit-save').addEventListener('click', () => {
         const newText = ta.value.trim();
         if (!newText) return;
-        // 새 대화 버튼 트리거 (chat.js 의 newChat() 또는 동일 효과)
+        // Phase 3.4 (2026-05-26): 부모 session 추적용 정보 보존.
+        // 현재 chat 의 sessionId 와 편집 대상 메시지 id 를 window 의 임시 변수로 전달.
+        // (state 매니저 import 회피 — chat.js 의 send 함수가 이것을 읽어 WS payload 에 포함)
+        try {
+            const currentSession = (window.OmkState && window.OmkState.get && window.OmkState.get('currentChatId'))
+                || localStorage.getItem('currentChatId');
+            window._pendingBranchFrom = {
+                sessionId: currentSession || null,
+                messageId: messageDiv?.id || null,
+            };
+        } catch (_e) { /* state 접근 실패 무시 */ }
+
         const newChatBtn = Array.from(document.querySelectorAll('button')).find(b =>
             b.textContent?.includes('새 대화') || b.title?.includes('새 대화'));
         if (newChatBtn) newChatBtn.click();
-        // 짧은 지연 후 chatInput 에 prefill + 자동 전송
         setTimeout(() => {
             const input = document.getElementById('chatInput');
             if (!input) return;

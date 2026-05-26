@@ -326,6 +326,9 @@ export async function handleChatMessage(
             thinkingLevel: (msg.thinkingLevel || 'high') as 'low' | 'medium' | 'high',
             style: msg.style,
             userAgentId: msg.userAgentId,
+            // Phase 3.4 (2026-05-26): 메시지 편집 분기 — 새 session 생성 시 부모 추적
+            branchFromSessionId: typeof msg.branchFromSessionId === 'string' ? msg.branchFromSessionId : undefined,
+            branchFromMessageId: typeof msg.branchFromMessageId === 'string' ? msg.branchFromMessageId : undefined,
             // 사용자가 명시적으로 false 보낼 때만 본문 저장 차단. 미지정/true → 저장 (기본 보존)
             saveHistory: msg.saveHistory !== false,
             // 메모리 학습 — saveHistory 와 독립. 명시 false 만 차단, 기본 활성

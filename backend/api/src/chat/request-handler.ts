@@ -166,6 +166,13 @@ export interface ChatRequestParams {
      * frontend 인라인 카드 UI (예: skill-draft) 렌더링을 트리거.
      */
     onMcpToolResult?: (event: { toolName: string; resources: Array<{ uri: string; mimeType?: string; text?: string }> }) => void;
+    /**
+     * Phase 3.4 (2026-05-26) 메시지 편집 분기:
+     * 새 session 생성 시 부모 session 추적 (conversation_sessions.metadata.parentSessionId).
+     * 분기된 대화의 "원본으로 돌아가기" 기능 + 사이드바 그룹화 등에 활용.
+     */
+    branchFromSessionId?: string;
+    branchFromMessageId?: string;
 }
 
 /**
@@ -337,20 +344,33 @@ export class ChatRequestHandler {
         authenticatedUserId: string | null,
         message: string,
         anonSessionId?: string,
+        // 2026-05-26 Phase 3.4 fork: 메시지 편집 분기 시 부모 세션 추적 (metadata 에 저장).
+        branchMeta?: { parentSessionId?: string; parentMessageId?: string },
     ): Promise<string> {
         if (sessionId) {
             return sessionId;
         }
 
         const conversationDb = getConversationDB();
+        const metadata: Record<string, unknown> | undefined = branchMeta && branchMeta.parentSessionId
+            ? {
+                parentSessionId: branchMeta.parentSessionId,
+                ...(branchMeta.parentMessageId ? { parentMessageId: branchMeta.parentMessageId } : {}),
+                forkedAt: new Date().toISOString(),
+            }
+            : undefined;
+
         const session = await conversationDb.createSession(
             authenticatedUserId || undefined,
             message.substring(0, 30),
-            undefined,
+            metadata,
             anonSessionId,
         );
 
-        log.info(`새 세션 생성: ${session.id}, userId: ${authenticatedUserId || 'null'}, anonSessionId: ${anonSessionId || 'none'}`);
+        log.info(
+            `새 세션 생성: ${session.id}, userId: ${authenticatedUserId || 'null'}, anonSessionId: ${anonSessionId || 'none'}` +
+            (branchMeta?.parentSessionId ? ` ← branch from ${branchMeta.parentSessionId}` : '')
+        );
         return session.id;
     }
 
@@ -489,12 +509,15 @@ export class ChatRequestHandler {
             ChatRequestHandler.createClient(clusterManager, engineModel, nodeId)
             ?? createDirectClient({ model: engineModel });
 
-        // 3. 세션 확보
+        // 3. 세션 확보 (Phase 3.4: branchFromSessionId 명시 시 metadata.parentSessionId 저장)
         const currentSessionId = await ChatRequestHandler.ensureSession(
             sessionId,
             userContext.authenticatedUserId,
             message,
             userContext.anonSessionId,
+            params.branchFromSessionId
+                ? { parentSessionId: params.branchFromSessionId, parentMessageId: params.branchFromMessageId }
+                : undefined,
         );
 
         // 4. 사용자 메시지 저장
