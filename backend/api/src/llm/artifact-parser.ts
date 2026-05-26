@@ -168,21 +168,60 @@ export interface ExtractedArtifact extends ArtifactInfo {
 }
 
 const ARTIFACT_BLOCK_PATTERN = /<artifact\s+([^>]*)>([\s\S]*?)<\/artifact>/gi;
+// Fallback: ```LANG\n...\n``` (lang 그룹 1, 본문 그룹 2). 길이 임계값 (≥15줄) 은 Anthropic 공식 기준.
+const FENCE_FALLBACK_PATTERN = /```([a-zA-Z0-9_+\-#.]+)?\n([\s\S]*?)\n```/g;
+const FENCE_MIN_LINES = 15;
 
 export function extractAndStripArtifacts(raw: string): {
     cleanedContent: string;
     artifacts: ExtractedArtifact[];
 } {
-    if (!raw || raw.indexOf('<artifact') === -1) {
-        return { cleanedContent: raw, artifacts: [] };
-    }
+    if (!raw) return { cleanedContent: raw, artifacts: [] };
     const artifacts: ExtractedArtifact[] = [];
-    const cleaned = raw.replace(ARTIFACT_BLOCK_PATTERN, (_match, attrs: string, body: string) => {
-        const info = parseAttrs(attrs);
-        artifacts.push({ ...info, content: body.trim() });
-        return `[[artifact:${info.id}]]`;
+
+    // 1) 명시적 <artifact> 태그 추출 (LLM 이 instruction follow 한 경우).
+    let cleaned = raw;
+    if (raw.indexOf('<artifact') !== -1) {
+        cleaned = cleaned.replace(ARTIFACT_BLOCK_PATTERN, (_match, attrs: string, body: string) => {
+            const info = parseAttrs(attrs);
+            artifacts.push({ ...info, content: body.trim() });
+            return `[[artifact:${info.id}]]`;
+        });
+    }
+
+    // 2) Fallback: instruction follow 실패 시 — 긴 code fence (≥15줄) 도 artifact 로 자동 변환.
+    //    Qwen 35B 등이 시스템 프롬프트의 XML 태그 가이드를 무시하고 raw fence 만 출력하는 경우 대응.
+    //    auto- 접두사 id 로 명시적 artifact 와 구분.
+    let fenceIdx = 0;
+    cleaned = cleaned.replace(FENCE_FALLBACK_PATTERN, (match, lang: string | undefined, body: string) => {
+        const lineCount = body.split('\n').length;
+        if (lineCount < FENCE_MIN_LINES) return match; // 짧은 fence 는 inline 유지
+        fenceIdx += 1;
+        const langNorm = (lang || '').toLowerCase().slice(0, 40) || null;
+        const id = `auto-${slug(langNorm || 'code')}-${Date.now().toString(36)}-${fenceIdx}`;
+        const title = titleFor(langNorm, body);
+        artifacts.push({
+            id,
+            kind: 'code',
+            title,
+            lang: langNorm,
+            content: body.trim(),
+        });
+        return `[[artifact:${id}]]`;
     });
+
     return { cleanedContent: cleaned, artifacts };
+}
+
+function slug(s: string): string {
+    return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 30) || 'code';
+}
+
+/** code fence 첫 함수/클래스 이름을 title 후보로 추출 — 못 찾으면 lang + 'snippet'. */
+function titleFor(lang: string | null, body: string): string {
+    const m = body.match(/^\s*(?:def|function|class|fn|func|public|private|static|export)\s+([a-zA-Z_][a-zA-Z0-9_]*)/m);
+    if (m) return m[1];
+    return lang ? `${lang} snippet` : 'code';
 }
 
 /**

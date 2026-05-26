@@ -219,6 +219,13 @@ export interface ChatResult {
     finish_reason?: 'stop' | 'tool_calls';
     /** 경로 분기 측정 메타 (TTFB 분석용, 일반 채팅 응답에만 포함) */
     routingMeta?: RoutingMeta;
+    /**
+     * Artifacts (2026-05-26): 응답에서 추출된 artifact 목록.
+     * - 명시적 `<artifact>` 태그 → 그대로 변환
+     * - Fallback: 긴 (≥15줄) code fence → 자동 artifact 변환 (Qwen instruction-follow 실패 대응)
+     * ws-handler 가 done 직전 WS 이벤트로 발행 → 클라이언트 패널 자동 오픈.
+     */
+    artifacts?: Array<{ id: string; kind: string; title: string; lang: string | null; version: number; content: string }>;
 }
 
 // ============================================
@@ -614,9 +621,9 @@ export class ChatRequestHandler {
         // 6. Artifacts 후처리 (2026-05-26): 응답에서 `<artifact>...</artifact>` 블록 분리.
         // - artifacts 테이블에 영속화 (같은 id 면 version 자동 증가)
         // - message 본문은 [[artifact:id]] placeholder 로 정리 — 다음 턴 prompt 에 본문 미포함
-        //   (Anthropic 의 "edits won't change Claude's memory" 패턴 자동 충족)
-        // 실패는 silent — chat 흐름 차단 금지.
+        // - 추출된 artifact 목록을 result.artifacts 로 노출 → ws-handler 가 WS 이벤트로 발행
         let cleanedResponse = response;
+        const extractedArtifacts: ChatResult['artifacts'] = [];
         try {
             const { cleanedContent, artifacts } = extractAndStripArtifacts(response);
             if (artifacts.length > 0) {
@@ -634,6 +641,14 @@ export class ChatRequestHandler {
                             content: a.content,
                         });
                         log.info(`[Artifact] saved id=${a.id} v=${row.version} kind=${a.kind} bytes=${a.content.length}`);
+                        extractedArtifacts.push({
+                            id: row.artifact_id,
+                            kind: row.kind,
+                            title: row.title,
+                            lang: row.language,
+                            version: row.version,
+                            content: row.content,
+                        });
                     } catch (e) {
                         if (e instanceof ArtifactSizeError) {
                             log.warn(`[Artifact] 20MB 초과 — id=${a.id} skip`);
@@ -685,6 +700,7 @@ export class ChatRequestHandler {
         const userAgentBypass = !!(userAgentId && userContext.userId && userContext.userId !== 'guest');
         return {
             response: cleanedResponse,
+            artifacts: extractedArtifacts.length > 0 ? extractedArtifacts : undefined,
             sessionId: currentSessionId,
             model: maskedModel,
             executionPlan: plan,

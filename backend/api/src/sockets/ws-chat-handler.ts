@@ -393,6 +393,21 @@ export async function handleChatMessage(
         // Artifact parser flush — 닫는 태그 없이 끝난 partial 도 emit (defensive).
         artifactStreamParser.flush();
 
+        // Fallback artifacts (2026-05-26): incremental parser 가 못 잡은 raw code fence 가
+        // 후처리에서 추출됐을 수 있음 — request-handler 의 result.artifacts 를 WS 로 발행.
+        // 클라이언트는 동일한 artifact_start/chunk/end 시퀀스로 패널 자동 오픈.
+        if (result.artifacts && result.artifacts.length > 0 && ws.readyState === ws.OPEN) {
+            for (const a of result.artifacts) {
+                ws.send(JSON.stringify({
+                    type: 'artifact_start',
+                    artifact: { id: a.id, kind: a.kind, title: a.title, lang: a.lang },
+                    messageId,
+                }));
+                ws.send(JSON.stringify({ type: 'artifact_chunk', id: a.id, delta: a.content, messageId }));
+                ws.send(JSON.stringify({ type: 'artifact_end', id: a.id, messageId }));
+            }
+        }
+
         ws.send(JSON.stringify({ type: 'done', messageId, metrics: { tokensPerSec, tokenCount } }));
 
     } catch (error: unknown) {
