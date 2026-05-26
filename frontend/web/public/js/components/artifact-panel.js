@@ -62,6 +62,13 @@ function ensurePanel() {
             </div>
             <button class="ap-close" aria-label="패널 닫기" title="닫기 (Esc)">✕</button>
         </header>
+        <div class="ap-search-bar" hidden>
+            <input type="text" class="ap-search-input" placeholder="🔎 패널 안 검색 (Ctrl+F)" />
+            <span class="ap-search-count">0/0</span>
+            <button class="ap-search-prev" title="이전 (Shift+Enter)">▲</button>
+            <button class="ap-search-next" title="다음 (Enter)">▼</button>
+            <button class="ap-search-close" title="닫기 (Esc)">✕</button>
+        </div>
         <div class="ap-body">
             <div class="ap-preview" data-pane="preview"></div>
             <pre class="ap-code" data-pane="code" hidden><code></code></pre>
@@ -99,16 +106,26 @@ function wireUp(root) {
     root.querySelector('.ap-act-pdf').addEventListener('click', exportPdfCurrent);
 
     // 키보드: Esc / ←/→ — 패널이 열려 있을 때만
+    // Phase 3 보완 C.6 (2026-05-26): Ctrl/Cmd+F → 패널 안 텍스트 검색
     document.addEventListener('keydown', (e) => {
         if (!root.classList.contains('open')) return;
         if (e.key === 'Escape') {
-            closePanel();
+            // 검색바 열려 있으면 검색바만 닫기, 아니면 패널 닫기
+            const searchBar = root.querySelector('.ap-search-bar');
+            if (searchBar && !searchBar.hidden) {
+                closeSearchBar();
+            } else {
+                closePanel();
+            }
             e.preventDefault();
         } else if (e.key === 'ArrowLeft' && !inEditableEl(e.target)) {
             navVersion(-1);
             e.preventDefault();
         } else if (e.key === 'ArrowRight' && !inEditableEl(e.target)) {
             navVersion(+1);
+            e.preventDefault();
+        } else if ((e.ctrlKey || e.metaKey) && e.key === 'f' && !inEditableEl(e.target)) {
+            openSearchBar();
             e.preventDefault();
         }
     });
@@ -167,6 +184,107 @@ export function closeArtifactPanel() {
 
 function closePanel() {
     if (panelEl) panelEl.classList.remove('open');
+}
+
+// ─── Phase 3 보완 C.6 (2026-05-26): 패널 안 검색 ─────────────────────────────
+
+let searchState = { matches: [], current: -1, originalHTML: null, pane: null };
+
+function openSearchBar() {
+    if (!panelEl) return;
+    const bar = panelEl.querySelector('.ap-search-bar');
+    if (!bar) return;
+    bar.hidden = false;
+    const input = bar.querySelector('.ap-search-input');
+    input.focus();
+    input.select();
+    // 이벤트 핸들러 한 번만 attach
+    if (!bar.dataset.wired) {
+        bar.dataset.wired = '1';
+        input.addEventListener('input', () => doSearch(input.value));
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                if (e.shiftKey) navMatch(-1);
+                else navMatch(+1);
+                e.preventDefault();
+            }
+        });
+        bar.querySelector('.ap-search-prev').addEventListener('click', () => navMatch(-1));
+        bar.querySelector('.ap-search-next').addEventListener('click', () => navMatch(+1));
+        bar.querySelector('.ap-search-close').addEventListener('click', closeSearchBar);
+    }
+    // 현재 활성 pane (preview 또는 code) 의 원본 HTML 저장
+    const visiblePane = panelEl.querySelector('.ap-preview:not([hidden])')
+        || panelEl.querySelector('.ap-code:not([hidden])');
+    searchState.pane = visiblePane;
+    searchState.originalHTML = visiblePane ? visiblePane.innerHTML : null;
+}
+
+function closeSearchBar() {
+    if (!panelEl) return;
+    const bar = panelEl.querySelector('.ap-search-bar');
+    if (bar) bar.hidden = true;
+    // 검색 highlight 복원
+    if (searchState.pane && searchState.originalHTML != null) {
+        searchState.pane.innerHTML = searchState.originalHTML;
+    }
+    searchState = { matches: [], current: -1, originalHTML: null, pane: null };
+}
+
+function doSearch(needle) {
+    if (!panelEl) return;
+    const bar = panelEl.querySelector('.ap-search-bar');
+    const counter = bar?.querySelector('.ap-search-count');
+    // 매번 원본 HTML 복원 후 다시 highlight
+    if (!searchState.pane) return;
+    if (searchState.originalHTML != null) {
+        searchState.pane.innerHTML = searchState.originalHTML;
+    }
+    searchState.matches = [];
+    searchState.current = -1;
+    if (!needle) { if (counter) counter.textContent = '0/0'; return; }
+
+    // textContent walker — text node 만 변환 (HTML 태그 보존)
+    const walker = document.createTreeWalker(searchState.pane, NodeFilter.SHOW_TEXT, null);
+    const nodes = [];
+    let n;
+    while ((n = walker.nextNode())) nodes.push(n);
+    const re = new RegExp(needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+    nodes.forEach(node => {
+        const text = node.nodeValue;
+        if (!re.test(text)) return;
+        re.lastIndex = 0;
+        const frag = document.createDocumentFragment();
+        let lastIdx = 0, m;
+        while ((m = re.exec(text)) !== null) {
+            if (m.index > lastIdx) frag.appendChild(document.createTextNode(text.slice(lastIdx, m.index)));
+            const mark = document.createElement('mark');
+            mark.className = 'ap-search-hit';
+            mark.textContent = m[0];
+            frag.appendChild(mark);
+            searchState.matches.push(mark);
+            lastIdx = m.index + m[0].length;
+        }
+        if (lastIdx < text.length) frag.appendChild(document.createTextNode(text.slice(lastIdx)));
+        node.parentNode.replaceChild(frag, node);
+    });
+    if (counter) counter.textContent = `${searchState.matches.length ? 1 : 0}/${searchState.matches.length}`;
+    if (searchState.matches.length > 0) navMatch(+1, true);
+}
+
+function navMatch(dir, isInitial = false) {
+    if (searchState.matches.length === 0) return;
+    if (isInitial) {
+        searchState.current = 0;
+    } else {
+        searchState.current = (searchState.current + dir + searchState.matches.length) % searchState.matches.length;
+    }
+    searchState.matches.forEach(m => m.classList.remove('ap-search-active'));
+    const active = searchState.matches[searchState.current];
+    active.classList.add('ap-search-active');
+    active.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const counter = panelEl?.querySelector('.ap-search-count');
+    if (counter) counter.textContent = `${searchState.current + 1}/${searchState.matches.length}`;
 }
 
 function switchTab(tab) {
@@ -1228,7 +1346,25 @@ function injectStyles() {
     z-index: 1200; color: var(--text-primary, #fff);
 }
 .artifact-panel.open { transform: translateX(0); }
-@media (max-width: 768px) { .artifact-panel { width: 100vw; } }
+@media (max-width: 768px) {
+    .artifact-panel { width: 100vw; }
+    /* Phase 3 보완 C.5 (2026-05-26) — 모바일 UX */
+    .ap-header { flex-wrap: wrap; gap: 8px; padding: 10px 12px; }
+    .ap-title-wrap { flex: 1 1 100%; order: 1; }
+    .ap-title { max-width: none; }
+    .ap-tabs { order: 2; flex: 1; }
+    .ap-close { order: 3; }
+    .ap-tab { padding: 6px 14px; font-size: 14px; }       /* touch target 44px 가까이 */
+    .ap-body { padding: 12px; }
+    .ap-footer { flex-wrap: wrap; gap: 8px; padding: 8px 12px; }
+    .ap-actions { flex-wrap: wrap; gap: 4px; }
+    .ap-actions button { padding: 6px 10px; font-size: 12px; }
+    .ap-version-nav button { width: 32px; height: 32px; }  /* touch target ↑ */
+    .ap-code { max-height: 60vh; }
+    .ap-edit-textarea { min-height: 200px; font-size: 14px; }
+    /* CodeMirror 모바일 글자 크기 ↑ */
+    .ap-code .CodeMirror { font-size: 14px; height: 60vh !important; }
+}
 
 .ap-header {
     display: flex; align-items: center; gap: 12px;
@@ -1256,6 +1392,36 @@ function injectStyles() {
     font-size: 18px; cursor: pointer; padding: 4px 8px; border-radius: 4px;
 }
 .ap-close:hover { background: var(--bg-tertiary, #2a2a2a); color: var(--text-primary, #fff); }
+
+/* Phase 3 보완 C.6 (2026-05-26) — 패널 안 검색 */
+.ap-search-bar {
+    display: flex; align-items: center; gap: 6px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border-light, #2a2a2a);
+    background: var(--bg-tertiary, #0f0f0f);
+}
+.ap-search-input {
+    flex: 1; padding: 4px 10px;
+    background: var(--bg-secondary, #0f0f0f);
+    color: var(--text-primary, #fff);
+    border: 1px solid var(--border-light, #2a2a2a);
+    border-radius: var(--radius-md, 6px);
+    font-size: 12px; font-family: inherit;
+}
+.ap-search-input:focus { outline: none; border-color: var(--accent-primary, #6366f1); }
+.ap-search-count {
+    color: var(--text-muted, #888); font-size: 11px; min-width: 50px; text-align: center;
+}
+.ap-search-bar button {
+    background: transparent;
+    border: 1px solid var(--border-light, #2a2a2a);
+    color: var(--text-secondary, #aaa);
+    width: 26px; height: 26px;
+    border-radius: 4px; cursor: pointer; font-size: 11px;
+}
+.ap-search-bar button:hover { background: var(--bg-card, #1a1a1a); }
+mark.ap-search-hit { background: rgba(252, 211, 77, 0.4); color: inherit; border-radius: 2px; }
+mark.ap-search-active { background: var(--accent-primary, #6366f1); color: #fff; }
 
 .ap-body { flex: 1; overflow-y: auto; padding: 16px; min-height: 0; }
 .ap-preview {
