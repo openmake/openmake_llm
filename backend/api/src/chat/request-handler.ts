@@ -510,14 +510,38 @@ export class ChatRequestHandler {
             ?? createDirectClient({ model: engineModel });
 
         // 3. 세션 확보 (Phase 3.4: branchFromSessionId 명시 시 metadata.parentSessionId 저장)
+        // Phase 3 보완 D.3 (2026-05-26): branchFromSessionId 의 ownership 검증 —
+        // 다른 사용자의 sessionId 가 parent 로 저장되지 않도록. 검증 실패 시 silent skip + warn.
+        let validatedBranchMeta: { parentSessionId: string; parentMessageId?: string } | undefined;
+        if (params.branchFromSessionId && userContext.authenticatedUserId) {
+            try {
+                const { getPool } = await import('../data/models/unified-database');
+                const r = await getPool().query<{ user_id: string | null }>(
+                    'SELECT user_id FROM conversation_sessions WHERE id = $1',
+                    [params.branchFromSessionId]
+                );
+                const ownerUid = r.rows[0]?.user_id;
+                if (ownerUid && ownerUid === userContext.authenticatedUserId) {
+                    validatedBranchMeta = {
+                        parentSessionId: params.branchFromSessionId,
+                        parentMessageId: params.branchFromMessageId,
+                    };
+                } else {
+                    log.warn(`branchFromSessionId 권한 거부: parent.user=${ownerUid} != actor=${userContext.authenticatedUserId} — branch metadata 미저장`);
+                }
+            } catch (e) {
+                log.warn(`branchFromSessionId 권한 검증 실패 (continue, branch 무시): ${e instanceof Error ? e.message : e}`);
+            }
+        } else if (params.branchFromSessionId) {
+            // 비인증 사용자 — branch 정보 무시 (anon session 분기는 의미 없음)
+            log.warn(`branchFromSessionId 무시 — 비인증 사용자 (anon session)`);
+        }
         const currentSessionId = await ChatRequestHandler.ensureSession(
             sessionId,
             userContext.authenticatedUserId,
             message,
             userContext.anonSessionId,
-            params.branchFromSessionId
-                ? { parentSessionId: params.branchFromSessionId, parentMessageId: params.branchFromMessageId }
-                : undefined,
+            validatedBranchMeta,
         );
 
         // 4. 사용자 메시지 저장

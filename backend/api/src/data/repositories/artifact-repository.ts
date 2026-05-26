@@ -28,6 +28,9 @@ export type ArtifactKind =
     | 'excalidraw';
 
 export const ARTIFACT_MAX_BYTES = 20 * 1024 * 1024; // 20MB — Anthropic 공식 한도와 동일
+// Phase 3 보완 F.2 (2026-05-26): 사용자당 row 누적 한도. 초과 시 가장 오래된 row 자동 archive.
+// 무한 grow 방지 — 운영 모니터링 항목. env 로 override 가능.
+export const ARTIFACT_MAX_PER_USER = parseInt(process.env.ARTIFACT_MAX_PER_USER || '500', 10);
 
 export interface ArtifactRow {
     pk_id: number;
@@ -73,6 +76,27 @@ export class ArtifactRepository extends BaseRepository {
         const contentBytes = Buffer.byteLength(input.content, 'utf-8');
         if (contentBytes > ARTIFACT_MAX_BYTES) {
             throw new ArtifactSizeError(contentBytes);
+        }
+
+        // Phase 3 보완 F.2 (2026-05-26): 사용자당 누적 한도 초과 시 가장 오래된 row pk_id 자동 삭제.
+        // 운영 측면 — 무한 grow 방지. userId null (anon/system) 은 skip.
+        if (input.userId) {
+            const cnt = await this.query<{ total: string }>(
+                'SELECT COUNT(*)::text AS total FROM artifacts WHERE user_id = $1',
+                [input.userId]
+            );
+            const total = parseInt(cnt.rows[0]?.total ?? '0', 10);
+            if (total >= ARTIFACT_MAX_PER_USER) {
+                // 가장 오래된 N 개 삭제 (한 번에 정리)
+                const excess = total - ARTIFACT_MAX_PER_USER + 1;
+                await this.query(
+                    `DELETE FROM artifacts WHERE pk_id IN (
+                        SELECT pk_id FROM artifacts WHERE user_id = $1
+                        ORDER BY created_at ASC LIMIT $2
+                    )`,
+                    [input.userId, excess]
+                );
+            }
         }
 
         // 같은 session + artifact_id 의 최신 version 조회

@@ -415,9 +415,17 @@ export function setupStaticFiles(app: Application, dirname: string): void {
             res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
         } else if (filePath.endsWith('.css')) {
             res.setHeader('Content-Type', 'text/css; charset=utf-8');
+        } else if (filePath.endsWith('.wasm')) {
+            res.setHeader('Content-Type', 'application/wasm');
         }
 
-        if (filePath.endsWith('.html')) {
+        // Phase 3 보완 F.5 (2026-05-26): vendor/ 안의 자산은 버전 고정 immutable —
+        // 1년 캐시 + immutable hint 로 CDN/브라우저 캐시 적극 활용. esbuild.wasm 11MB 등
+        // 큰 자산이 매 요청마다 ETag 검증 (no-cache) 하던 비효율 해소.
+        const isVendor = filePath.includes('/vendor/') || filePath.includes('\\vendor\\');
+        if (isVendor && /\.(js|css|wasm|woff|woff2|ttf)$/i.test(filePath)) {
+            res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        } else if (filePath.endsWith('.html')) {
             res.setHeader('Cache-Control', 'no-cache');
         } else if (filePath.endsWith('.js') || filePath.endsWith('.css')) {
             // no-cache = 항상 서버에 revalidate (etag/lastModified로 304 응답)

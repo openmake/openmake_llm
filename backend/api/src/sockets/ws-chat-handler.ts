@@ -267,9 +267,21 @@ export async function handleChatMessage(
 
         // 토큰 콜백에서 중단 여부 체크 (WS 고유)
         // Artifacts streaming parser (2026-05-26) — token chunk 마다 `<artifact>` XML 태그 incremental 검출.
-        // 같은 grammar 의 post-hoc DB INSERT 후처리는 ChatRequestHandler 측에서 별도 수행 (책임 분리).
         // - tokenCallback (아래) 보다 먼저 선언 — TS use-before-declaration 안전.
         // - parser callbacks 가 ws.send 직접 발행 (token / artifact_start/chunk/end).
+        // Phase 3 보완 B.3 (2026-05-26): artifact_chunk WS 메시지 폭주 방지 — 토큰 단위 1회/메시지를
+        // ID 별 50ms 윈도우로 buffer 후 합쳐서 1회 dispatch. 큰 artifact (~MB) 시 message rate 1/20.
+        const ARTIFACT_CHUNK_FLUSH_MS = 50;
+        const chunkBuffers = new Map<string, { delta: string; timer: ReturnType<typeof setTimeout> | null }>();
+        const flushArtifactChunk = (id: string) => {
+            const buf = chunkBuffers.get(id);
+            if (!buf || !buf.delta) return;
+            if (ws.readyState === ws.OPEN) {
+                ws.send(JSON.stringify({ type: 'artifact_chunk', id, delta: buf.delta, messageId }));
+            }
+            buf.delta = '';
+            if (buf.timer) { clearTimeout(buf.timer); buf.timer = null; }
+        };
         const artifactStreamParser = new ArtifactStreamParser({
             onContent: (delta) => {
                 if (ws.readyState === ws.OPEN) {
@@ -282,11 +294,18 @@ export async function handleChatMessage(
                 }
             },
             onArtifactChunk: (id, delta) => {
-                if (ws.readyState === ws.OPEN) {
-                    ws.send(JSON.stringify({ type: 'artifact_chunk', id, delta, messageId }));
+                // throttle: 50ms 윈도우에 도착하는 delta 를 합쳐서 한 번에 dispatch
+                let buf = chunkBuffers.get(id);
+                if (!buf) { buf = { delta: '', timer: null }; chunkBuffers.set(id, buf); }
+                buf.delta += delta;
+                if (!buf.timer) {
+                    buf.timer = setTimeout(() => flushArtifactChunk(id), ARTIFACT_CHUNK_FLUSH_MS);
                 }
             },
             onArtifactEnd: (id) => {
+                // end 전 미flush 잔여 강제 dispatch
+                flushArtifactChunk(id);
+                chunkBuffers.delete(id);
                 if (ws.readyState === ws.OPEN) {
                     ws.send(JSON.stringify({ type: 'artifact_end', id, messageId }));
                 }

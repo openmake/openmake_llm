@@ -429,7 +429,20 @@ async function renderCsv(target, item) {
         header: true,
         skipEmptyLines: true,
     });
-    const allRows = parsed.data;
+    // 보안 (Phase 3 보완 A.5, 2026-05-26): PapaParse 결과의 첫 row 가 `__proto__` 등 위험 키를
+    // 가질 경우 Object.keys / 동적 접근 시 prototype pollution. 안전한 키만 추출 + 위험 키 제거.
+    const SAFE_KEY = /^[^\s]+$/; // 단순 휴리스틱 — 공백 없는 일반 키만
+    const DANGEROUS_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+    const allRows = parsed.data.map(row => {
+        if (!row || typeof row !== 'object') return {};
+        const clean = Object.create(null); // prototype-less object
+        for (const k of Object.keys(row)) {
+            if (DANGEROUS_KEYS.has(k)) continue;
+            if (!SAFE_KEY.test(k)) continue;
+            clean[k] = row[k];
+        }
+        return clean;
+    });
     const headers = allRows.length > 0 ? Object.keys(allRows[0]) : [];
 
     const wrap = document.createElement('div');
@@ -967,7 +980,12 @@ async function enterEditUI() {
 
     // CodeMirror 5 lazy load + 모드 fetch + editor mount
     // 실패 시 plain textarea 로 fallback (graceful)
+    // Phase 3 보완 C.4 (2026-05-26): 첫 진입 ~3초 동안 spinner 표시.
     let cmInstance = null;
+    const spinner = document.createElement('div');
+    spinner.className = 'ap-edit-loading';
+    spinner.textContent = '⏳ 편집기 로딩 중... (첫 진입 시만 ~3초)';
+    codePane.insertBefore(spinner, textarea);
     try {
         await loadStyleOnce('/vendor/artifacts/codemirror/codemirror.min.css');
         await loadStyleOnce('/vendor/artifacts/codemirror/material-darker.css');
@@ -976,6 +994,7 @@ async function enterEditUI() {
         if (modeName) {
             await loadScriptOnce(`/vendor/artifacts/codemirror/mode-${modeName}.js`);
         }
+        spinner.remove();
         cmInstance = window.CodeMirror.fromTextArea(textarea, {
             mode: cmModeMime(modeName),
             theme: 'material-darker',
@@ -989,6 +1008,7 @@ async function enterEditUI() {
         cmInstance.focus();
     } catch (e) {
         console.warn('[Artifact] CodeMirror lazy load 실패 — plain textarea 사용:', e);
+        if (spinner.parentNode) spinner.remove();
         textarea.focus();
     }
 
@@ -1357,6 +1377,11 @@ function injectStyles() {
     line-height: 1.5;
 }
 .ap-code .CodeMirror-scroll { padding-top: 4px; padding-bottom: 4px; }
+.ap-edit-loading {
+    padding: 12px; text-align: center; color: var(--text-muted, #888);
+    font-size: 12px; background: var(--bg-tertiary, #2a2a2a);
+    border-radius: var(--radius-md, 6px); margin-bottom: 8px;
+}
     `;
     document.head.appendChild(style);
 }
