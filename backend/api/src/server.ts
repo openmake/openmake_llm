@@ -316,7 +316,7 @@ export class DashboardServer {
                 repo: new McpCatalogRepository(getUnifiedDatabase().getPool()),
                 clientFactory: (config) => new ExternalMCPClient({
                     id: config.id,
-                    name: config.id,
+                    name: config.name ?? config.id,
                     transport_type: config.transport_type,
                     command: config.command ?? undefined,
                     args: config.args as string[] | undefined,
@@ -325,6 +325,7 @@ export class DashboardServer {
                     enabled: true,
                     created_at: '',
                     updated_at: '',
+                    catalog_template_id: config.catalog_template_id ?? undefined,
                 }),
             });
             setLifecycleSupervisor(supervisor);
@@ -509,7 +510,7 @@ if (require.main === module) {
                     repo: new McpCatalogRepository(getUnifiedDatabase().getPool()),
                     clientFactory: (config) => new ExternalMCPClient({
                         id: config.id,
-                        name: config.id,
+                        name: config.name ?? config.id,
                         transport_type: config.transport_type,
                         command: config.command ?? undefined,
                         args: config.args as string[] | undefined,
@@ -518,6 +519,7 @@ if (require.main === module) {
                         enabled: true,
                         created_at: '',
                         updated_at: '',
+                        catalog_template_id: config.catalog_template_id ?? undefined,
                     }),
                 });
                 setLifecycleSupervisor(supervisor);

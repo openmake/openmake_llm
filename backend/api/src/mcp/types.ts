@@ -258,6 +258,8 @@ export interface MCPServerConfig {
     created_at: string;
     /** 서버 수정 시각 (ISO 8601) */
     updated_at: string;
+    /** 카탈로그 템플릿 ID (tier 게이트 판정에 사용, mcp_server_catalog.id 참조) */
+    catalog_template_id?: string;
 }
 
 /**

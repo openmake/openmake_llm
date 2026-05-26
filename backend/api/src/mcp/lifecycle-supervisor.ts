@@ -26,12 +26,14 @@ export type McpLifecycle = 'per_chat' | 'per_session' | 'long_lived';
 export interface ServerSpawnConfig {
     id: string;
     user_id: string;
+    name: string;
     transport_type: 'stdio' | 'sse' | 'streamable-http';
     command?: string | null;
     args?: unknown[] | null;
     env?: Record<string, string> | null;
     url?: string | null;
     lifecycle?: McpLifecycle;
+    catalog_template_id?: string;
 }
 
 export type ClientFactory = (config: ServerSpawnConfig) => ExternalMCPClient;
@@ -156,12 +158,14 @@ export class MCPLifecycleSupervisor implements LifecycleSupervisor {
         const config: ServerSpawnConfig = {
             id: server.id,
             user_id: userId,
+            name: server.name,
             transport_type: server.transport_type,
             command: server.command,
             args: server.args,
             env,
             url: server.url,
             lifecycle,
+            catalog_template_id: server.catalog_template_id ?? undefined,
         };
 
         await this.repo.recordInstanceTransition(serverId, userId, 'starting').catch(() => { /* noop */ });
