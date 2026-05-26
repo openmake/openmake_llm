@@ -19,8 +19,14 @@ import { openArtifactPanel } from './artifact-panel.js';
 export function insertArtifactCard(container, info) {
     if (!container || !info || !info.id) return null;
 
+    // 카드를 message-content 가 아닌 그 부모 (메시지 wrapper) 에 삽입.
+    // 이유: chat-renderer.js 의 appendToken 이 매 token 마다
+    // `content.textContent = fullText` 로 innerHTML 전체를 reset 하기 때문 —
+    // message-content 내부에 카드를 두면 streaming 중에 사라짐.
+    const target = container.parentElement || container;
+
     // 같은 id 카드가 이미 있으면 (v2 등) 새로 만들지 않고 기존 카드 강조
-    const existing = container.querySelector(`.artifact-card[data-id="${cssEsc(info.id)}"]`);
+    const existing = target.querySelector(`.artifact-card[data-id="${cssEsc(info.id)}"]`);
     if (existing) {
         existing.classList.add('artifact-card-updated');
         setTimeout(() => existing.classList.remove('artifact-card-updated'), 1500);
@@ -48,7 +54,7 @@ export function insertArtifactCard(container, info) {
         // 보여주고 있지 않으면 그대로. 향후 panel API 의 focus(id) 추가 검토.
         openArtifactPanel({ id: info.id, kind: info.kind, title: info.title, lang: info.lang });
     });
-    container.appendChild(card);
+    target.appendChild(card);
     return card;
 }
 

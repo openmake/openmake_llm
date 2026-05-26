@@ -152,12 +152,27 @@ const messageHandlers = {
         // Phase 1.F.2 (2026-05-26): backend 가 artifact 추출로 본문을 정리한 경우,
         // 클라이언트의 raw token 누적 본문을 cleanedContent 로 reset.
         // [[artifact:id]] placeholder 는 시각 노이즈라 제거 — 카드는 별도 button 으로 이미 존재.
+        //
+        // 1.F.2 검증 중 버그 발견 (2026-05-26): chat-renderer 의 finishAssistantMessage 가
+        // `dataset.rawText || textContent` falsy fallback 을 사용. cleaned 가 빈 문자열이면
+        // 이미 token 으로 렌더된 textContent 가 fallback 되어 reset 이 무효. 두 가지 해결:
+        //   (a) cleaned 가 비었으면 innerHTML 도 직접 clear
+        //   (b) cleaned 가 비었으면 finishAssistantMessage 호출 자체 skip (innerHTML 보존도 안 함)
+        // 본 patch 는 (a) — finishAssistantMessage 로직 자체는 건드리지 않고 표시만 정정.
         if (typeof data.cleanedContent === 'string') {
             try {
                 const msgs = document.querySelectorAll('.message-content');
                 const lastMsg = msgs[msgs.length - 1];
                 if (lastMsg) {
-                    lastMsg.dataset.rawText = data.cleanedContent.replace(/\[\[artifact:[^\]]+\]\]\s*/g, '');
+                    const cleaned = data.cleanedContent.replace(/\[\[artifact:[^\]]+\]\]\s*/g, '');
+                    lastMsg.dataset.rawText = cleaned;
+                    if (cleaned.trim() === '') {
+                        // artifact 본문만 있고 일반 텍스트가 없는 응답 — message-content 는 카드만 보이게 비움.
+                        // 카드 button 자식들은 보존 (innerHTML reset 시 사라지지 않도록 분리 처리).
+                        const cards = lastMsg.querySelectorAll('.artifact-card');
+                        lastMsg.innerHTML = '';
+                        cards.forEach(c => lastMsg.appendChild(c));
+                    }
                 }
             } catch (e) {
                 console.warn('[WebSocket] cleanedContent 적용 실패:', e);
