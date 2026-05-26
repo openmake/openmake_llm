@@ -23,6 +23,7 @@ import type {
 } from './types';
 import { buildImageDataUrl } from '../utils/image-mime';
 import { parseReasoningTags } from './reasoning-tag-parser';
+import { ArtifactStreamParser, type ArtifactStreamCallbacks } from './artifact-parser';
 import { createLogger } from '../utils/logger';
 
 const log = createLogger('StreamParser');
@@ -171,6 +172,13 @@ export async function streamChat(
     onToken: (token: string, thinking?: string) => void,
     extraBody?: Record<string, unknown>,
     signal?: AbortSignal,
+    /**
+     * 2026-05-26 Artifacts: 토큰 스트림에서 `<artifact>` 태그를 분리.
+     * 제공 시 artifact 본문은 onToken 으로 가지 않고 onArtifact* 콜백으로만 발행.
+     * 메시지 content 에는 `[[artifact:id]]` placeholder 만 남음.
+     * 미제공 시 기존 동작 그대로 (backward compat).
+     */
+    artifactCallbacks?: ArtifactStreamCallbacks,
 ): Promise<ChatMessage & { metrics?: UsageMetrics }> {
     const tools = request.tools ? toOpenAITools(request.tools) : undefined;
     const responseFormat = toResponseFormat(request.format);
@@ -188,6 +196,27 @@ export async function streamChat(
     let content = '';
     let thinking = '';
     const toolBuffers = new Map<number, { id: string; name: string; jsonBuffer: string }>();
+
+    // Artifact parser — callbacks 제공 시 token 스트림을 본문/artifact 채널로 분리.
+    // parser.onContent → 기존 onToken 으로 위임 (UI 가 즉시 보는 일반 토큰)
+    // parser.onArtifactStart → 메시지 본문에 `[[artifact:id]]` placeholder 삽입 + 상위 콜백 발행
+    // parser.onArtifactChunk/End → 상위 콜백만 (UI 의 우측 패널)
+    const artifactParser: ArtifactStreamParser | null = artifactCallbacks
+        ? new ArtifactStreamParser({
+            onContent: (delta) => {
+                content += delta;
+                onToken(delta, undefined);
+            },
+            onArtifactStart: (info) => {
+                const placeholder = `[[artifact:${info.id}]]`;
+                content += placeholder;
+                onToken(placeholder, undefined);
+                artifactCallbacks.onArtifactStart(info);
+            },
+            onArtifactChunk: artifactCallbacks.onArtifactChunk,
+            onArtifactEnd: artifactCallbacks.onArtifactEnd,
+        })
+        : null;
     let promptTokens: number | undefined;
     let completionTokens: number | undefined;
     let finishReason: string | null = null;
@@ -224,8 +253,12 @@ export async function streamChat(
                     }
                     inReasoning = false;
                     if (contentPart) {
-                        content += contentPart;
-                        onToken(contentPart, undefined);
+                        if (artifactParser) {
+                            artifactParser.feed(contentPart);
+                        } else {
+                            content += contentPart;
+                            onToken(contentPart, undefined);
+                        }
                     }
                     pendingReasoning = '';
                 } else if (pendingReasoning.length > THINK_CLOSE.length) {
@@ -236,8 +269,12 @@ export async function streamChat(
                     pendingReasoning = pendingReasoning.slice(-THINK_CLOSE.length);
                 }
             } else {
-                content += incoming;
-                onToken(incoming, undefined);
+                if (artifactParser) {
+                    artifactParser.feed(incoming);
+                } else {
+                    content += incoming;
+                    onToken(incoming, undefined);
+                }
             }
         }
         // vLLM 0.21+ 는 reasoning 모델 출력을 `delta.reasoning_content` 로 보냄 (EXAONE/Qwen3).
@@ -279,6 +316,9 @@ export async function streamChat(
         onToken('', pendingReasoning);
         pendingReasoning = '';
     }
+
+    // Artifact parser flush — 닫는 태그 없이 끝난 partial 도 emit
+    artifactParser?.flush();
 
     const toolCalls: ChatMessage['tool_calls'] = [];
     for (const buf of toolBuffers.values()) {
