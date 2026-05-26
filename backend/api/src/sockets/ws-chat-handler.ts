@@ -17,6 +17,7 @@ import { createLogger } from '../utils/logger';
 import { WSMessage, ExtendedWebSocket } from './ws-types';
 import { detectLanguage, type SupportedLanguageCode } from '../chat/language-policy';
 import { getStaleDataWarning } from '../config/stale-data-warning';
+import { ArtifactStreamParser, type ArtifactInfo } from '../llm/artifact-parser';
 
 // 다국어 시사 키워드 맵
 const CURRENT_EVENTS_KEYWORDS: Record<string, string[]> = {
@@ -265,6 +266,33 @@ export async function handleChatMessage(
         partialAssistantResponse = '';
 
         // 토큰 콜백에서 중단 여부 체크 (WS 고유)
+        // Artifacts streaming parser (2026-05-26) — token chunk 마다 `<artifact>` XML 태그 incremental 검출.
+        // 같은 grammar 의 post-hoc DB INSERT 후처리는 ChatRequestHandler 측에서 별도 수행 (책임 분리).
+        // - tokenCallback (아래) 보다 먼저 선언 — TS use-before-declaration 안전.
+        // - parser callbacks 가 ws.send 직접 발행 (token / artifact_start/chunk/end).
+        const artifactStreamParser = new ArtifactStreamParser({
+            onContent: (delta) => {
+                if (ws.readyState === ws.OPEN) {
+                    ws.send(JSON.stringify({ type: 'token', token: delta, messageId }));
+                }
+            },
+            onArtifactStart: (info: ArtifactInfo) => {
+                if (ws.readyState === ws.OPEN) {
+                    ws.send(JSON.stringify({ type: 'artifact_start', artifact: info, messageId }));
+                }
+            },
+            onArtifactChunk: (id, delta) => {
+                if (ws.readyState === ws.OPEN) {
+                    ws.send(JSON.stringify({ type: 'artifact_chunk', id, delta, messageId }));
+                }
+            },
+            onArtifactEnd: (id) => {
+                if (ws.readyState === ws.OPEN) {
+                    ws.send(JSON.stringify({ type: 'artifact_end', id, messageId }));
+                }
+            },
+        });
+
         const tokenCallback = (token: string) => {
             if (abortController.signal.aborted) {
                 throw new Error('ABORTED');
@@ -278,7 +306,9 @@ export async function handleChatMessage(
             tokenCount++;
             partialAssistantResponse += token;
 
-            ws.send(JSON.stringify({ type: 'token', token, messageId }));
+            // Artifacts (2026-05-26): incremental XML 태그 분리.
+            // parser callbacks 가 ws.send 발행 — token 은 'token', artifact 는 'artifact_*'.
+            artifactStreamParser.feed(token);
         };
 
         // ChatRequestHandler.processChat으로 통합 처리
@@ -360,6 +390,9 @@ export async function handleChatMessage(
             `agent_bypass=${rm?.agentBypass ? 'Y' : 'N'} cache_hit=${rm?.summaryCacheHit ? 'Y' : 'N'} ` +
             `tokens=${tokenCount} tps=${tokensPerSec} total=${result.responseTime}ms model=${selectedModel}`
         );
+        // Artifact parser flush — 닫는 태그 없이 끝난 partial 도 emit (defensive).
+        artifactStreamParser.flush();
+
         ws.send(JSON.stringify({ type: 'done', messageId, metrics: { tokensPerSec, tokenCount } }));
 
     } catch (error: unknown) {
