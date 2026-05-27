@@ -29,6 +29,16 @@ const logger = createLogger('ErrorHandler');
 
 const SENSITIVE_KEY_PATTERNS = ['password', 'token', 'api_key', 'secret', 'key', 'authorization', 'auth', 'credential'];
 
+type RequestAuditUser = {
+    id?: string | number;
+    email?: string;
+    role?: string;
+};
+
+type RequestWithAuditUser = Request & {
+    user?: RequestAuditUser;
+};
+
 function sanitizeForLog(obj: Record<string, unknown>): Record<string, unknown> {
     return Object.fromEntries(
         Object.entries(obj).map(([k, v]) => {
@@ -197,20 +207,21 @@ export function errorHandler(
     // ── ContextOverflowError → 413 (PR #98 model-pool 안전망 3단계) ──
     if (err instanceof ContextOverflowError) {
         logger.warn(`Context overflow: input=${err.inputTokens} limit=${err.limitTokens}`, { path: req.path });
+        const auditUser = (req as RequestWithAuditUser).user;
         // Audit + 자동 alert (CRITICAL_ACTIONS whitelist 매칭 — PR #84 패턴)
         void (async () => {
             try {
                 const { getAuditService } = await import('../services/AuditService');
                 await getAuditService().logAudit({
                     action: 'chat.context_overflow',
-                    userId: req.user && 'id' in req.user ? String((req.user as { id?: string | number }).id) : undefined,
+                    userId: auditUser?.id ? String(auditUser.id) : undefined,
                     resourceType: 'chat',
                     details: { inputTokens: err.inputTokens, limitTokens: err.limitTokens, path: req.path },
                     ipAddress: req.ip,
                     userAgent: req.headers['user-agent'],
                     actor: {
-                        email: req.user && 'email' in req.user ? (req.user as { email?: string }).email : undefined,
-                        role: req.user && 'role' in req.user ? (req.user as { role?: string }).role : undefined,
+                        email: auditUser?.email,
+                        role: auditUser?.role,
                     },
                 });
             } catch (e) { logger.warn('[audit] chat.context_overflow 기록 실패:', e); }

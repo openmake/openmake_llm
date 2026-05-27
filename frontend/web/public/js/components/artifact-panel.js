@@ -71,7 +71,7 @@ function ensurePanel() {
         </div>
         <div class="ap-body">
             <div class="ap-preview" data-pane="preview"></div>
-            <pre class="ap-code" data-pane="code" hidden><code></code></pre>
+            <div class="ap-code" data-pane="code" hidden></div>
         </div>
         <footer class="ap-footer">
             <div class="ap-version-nav">
@@ -333,18 +333,10 @@ function renderCurrent() {
     if (!list) return;
     const item = list[currentVersionIdx];
 
-    // Code View 탭은 항상 raw 본문. enterEditUI 가 codePane 의 innerHTML 을 textarea+버튼으로
-    // 교체했을 수 있어 매번 <code> 재생성 (2026-05-26 Phase 3 편집 후 정상 복원).
+    // Code View 탭 — 코드 에디터 시각 (줄번호 + outline + syntax highlight).
+    // enterEditUI 가 innerHTML 을 textarea+버튼으로 교체할 수 있어 매번 통째로 재생성.
     const codePane = panelEl.querySelector('.ap-code');
-    codePane.innerHTML = '<code></code>';
-    const codeEl = codePane.querySelector('code');
-    codeEl.textContent = item.content;
-    if (typeof window.hljs !== 'undefined' && item.kind === 'code' && item.lang) {
-        codeEl.className = `language-${escAttr(item.lang)}`;
-        try { window.hljs.highlightElement(codeEl); } catch (_e) { /* noop */ }
-    } else {
-        codeEl.className = '';
-    }
+    renderCodeView(codePane, item);
 
     // Preview 탭은 kind 별 렌더러 dispatch
     const previewEl = panelEl.querySelector('.ap-preview');
@@ -927,17 +919,230 @@ async function renderMarkdown(target, item) {
     }
 }
 
-async function renderCode(target, item) {
+/**
+ * Code View 탭 렌더러 (2026-05-26 정정).
+ * 코드 에디터 시각 — 줄번호 + outline 사이드바 + syntax highlight.
+ * 미리보기 탭 (renderCode) 와 명확히 차별: 여긴 "코드 읽기", 미리보기는 "실행 결과".
+ */
+function renderCodeView(target, item) {
+    target.innerHTML = '';
+    // 기존 .ap-code CSS (padding 12px, border, max-height) 를 오버라이드 — outline + 줄번호 레이아웃 위해
+    target.style.cssText = 'padding:0; border:none; background:var(--bg-secondary,#0f0f0f); border-radius:var(--radius-md,6px); overflow:hidden; height:100%; display:flex;';
+    const content = item.content || '';
+    const lang = item.kind === 'code' ? item.lang : '';
+
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'display:flex; flex:1; min-height:0; min-width:0; gap:0;';
+
+    // 좌측 outline 사이드바 (Python/JS/TS/Go/Rust 만)
+    const outline = extractCodeOutline(content, lang);
+    if (outline.length > 0) {
+        const sideEl = document.createElement('div');
+        sideEl.style.cssText = 'flex:0 0 200px; border-right:1px solid var(--border-light,#2a2a2a); padding:10px 0; overflow:auto; background:var(--bg-tertiary,#0a0a0a); font-size:12px;';
+        sideEl.innerHTML = '<div style="font-weight:600; color:var(--text-secondary,#888); padding:0 14px 8px; font-size:10px; letter-spacing:0.6px;">📑 OUTLINE</div>' +
+            outline.map(o => {
+                const kindColor = o.kind === 'class' ? '#a78bfa' : (o.kind === 'type' ? '#22d3ee' : '#34d399');
+                return `<a class="ap-cv-outline-item" href="#" data-line="${o.line}" style="display:flex; align-items:center; gap:6px; padding:4px 14px; text-decoration:none; color:var(--text-primary,#fff); font-family:'JetBrains Mono',monospace;">` +
+                    `<span style="display:inline-block; min-width:30px; padding:1px 4px; font-size:9px; font-weight:600; border-radius:3px; color:#000; background:${kindColor}; text-align:center; text-transform:uppercase;">${o.kind}</span>` +
+                    `<span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escHtml(o.name)}</span>` +
+                    `<span style="color:var(--text-muted,#666); font-size:10px;">${o.line}</span></a>`;
+            }).join('');
+        wrap.appendChild(sideEl);
+    }
+
+    // 우측: 줄번호 + code
+    const codeWrap = document.createElement('div');
+    codeWrap.style.cssText = 'flex:1; display:flex; overflow:auto; min-width:0;';
+    const lines = content.split('\n');
+    const lineNumsEl = document.createElement('div');
+    lineNumsEl.style.cssText = "flex:0 0 auto; padding:12px 10px; color:var(--text-muted,#666); font-family:'JetBrains Mono',monospace; font-size:13px; text-align:right; user-select:none; white-space:pre; line-height:1.6;";
+    lineNumsEl.innerHTML = lines.map((_, i) => `<span data-line="${i + 1}" style="display:block;">${i + 1}</span>`).join('');
+    const codeContentEl = document.createElement('div');
+    codeContentEl.style.cssText = 'flex:1; min-width:0;';
     const pre = document.createElement('pre');
+    pre.style.cssText = "margin:0; padding:12px 14px 12px 4px; font-family:'JetBrains Mono',monospace; font-size:13px; line-height:1.6; white-space:pre; background:transparent;";
     const code = document.createElement('code');
-    code.textContent = item.content;
-    if (item.lang) code.className = `language-${escAttr(item.lang)}`;
+    code.textContent = content;
+    if (lang) code.className = `language-${escAttr(lang)}`;
     pre.appendChild(code);
-    target.appendChild(pre);
-    target.className = 'ap-preview ap-code-only';
-    if (typeof window.hljs !== 'undefined' && item.lang) {
+    codeContentEl.appendChild(pre);
+    codeWrap.appendChild(lineNumsEl);
+    codeWrap.appendChild(codeContentEl);
+    wrap.appendChild(codeWrap);
+
+    target.appendChild(wrap);
+    if (typeof window.hljs !== 'undefined' && lang) {
         try { window.hljs.highlightElement(code); } catch (_e) { /* noop */ }
     }
+
+    // outline 클릭 → 줄로 스크롤 + 강조
+    wrap.querySelectorAll('.ap-cv-outline-item').forEach(a => {
+        a.addEventListener('mouseenter', () => { a.style.background = 'var(--bg-secondary,#1a1a1a)'; });
+        a.addEventListener('mouseleave', () => { a.style.background = ''; });
+        a.addEventListener('click', (e) => {
+            e.preventDefault();
+            const line = parseInt(a.getAttribute('data-line'), 10);
+            const lineNumEl = lineNumsEl.querySelector(`[data-line="${line}"]`);
+            if (lineNumEl) {
+                lineNumEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                lineNumEl.style.background = 'var(--warning,#fbbf24)';
+                lineNumEl.style.color = '#000';
+                setTimeout(() => { lineNumEl.style.background = ''; lineNumEl.style.color = ''; }, 1500);
+            }
+        });
+    });
+}
+
+/**
+ * 미리보기 탭의 code kind 렌더러 (2026-05-26 정정).
+ * "미리보기 = 실행 결과" 의 의도에 맞춰:
+ *   - lang === 'html' / 'svg' → iframe 실행 (renderHtml/renderSvg 위임)
+ *   - 그 외 (Python/Go/Rust 등) → 메타 카드 + outline + "Code View 탭에서 전체 코드 확인" 안내
+ *
+ * 코드 자체는 Code View 탭에 줄번호 + outline 으로 표시되므로 여기는 "이 코드가 무엇인지" 의 요약.
+ */
+async function renderCode(target, item) {
+    const lang = (item.lang || '').toLowerCase();
+    const content = item.content || '';
+
+    // 인터랙티브 lang → iframe 실행으로 위임
+    if (lang === 'html') return renderHtml(target, { ...item, kind: 'html' });
+    if (lang === 'svg') return renderSvg(target, { ...item, kind: 'svg' });
+
+    // 그 외 — 코드 메타 카드
+    target.className = 'ap-preview ap-code-meta';
+    target.innerHTML = '';
+
+    const lines = content.split('\n');
+    const lineCount = lines.length;
+    const nonBlank = lines.filter(l => l.trim().length > 0).length;
+    const outline = extractCodeOutline(content, lang);
+    const classCount = outline.filter(o => o.kind === 'class' || o.kind === 'type').length;
+    const fnCount = outline.filter(o => o.kind === 'fn' || o.kind === 'def').length;
+
+    const langBadge = LANG_BADGES[lang] || { icon: '📄', label: lang || 'text', color: '#6366f1' };
+
+    const card = document.createElement('div');
+    card.style.cssText = 'max-width:560px; margin:32px auto; padding:24px; background:var(--bg-secondary,#0f0f0f); border:1px solid var(--border-light,#2a2a2a); border-radius:12px; color:var(--text-primary,#fff); font-family:system-ui,-apple-system,sans-serif;';
+
+    card.innerHTML = `
+        <div style="display:flex; align-items:center; gap:12px; margin-bottom:20px;">
+            <div style="width:48px; height:48px; border-radius:10px; background:${langBadge.color}22; display:flex; align-items:center; justify-content:center; font-size:24px;">${langBadge.icon}</div>
+            <div>
+                <div style="font-size:18px; font-weight:600;">${escHtml(langBadge.label)}</div>
+                <div style="font-size:12px; color:var(--text-muted,#888); margin-top:2px;">코드 아티팩트</div>
+            </div>
+        </div>
+
+        <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-bottom:20px;">
+            ${statTile('전체 줄', lineCount)}
+            ${statTile('코드 줄', nonBlank)}
+            ${statTile('함수', fnCount)}
+            ${statTile('클래스', classCount)}
+        </div>
+
+        ${outline.length > 0 ? `
+        <div style="margin-bottom:20px;">
+            <div style="font-size:11px; font-weight:600; color:var(--text-secondary,#888); letter-spacing:0.6px; margin-bottom:8px;">📑 STRUCTURE</div>
+            <div style="background:var(--bg-tertiary,#0a0a0a); border-radius:8px; padding:10px 14px; max-height:200px; overflow:auto; font-family:'JetBrains Mono',monospace; font-size:12px;">
+                ${outline.map(o => {
+                    const kc = o.kind === 'class' ? '#a78bfa' : (o.kind === 'type' ? '#22d3ee' : '#34d399');
+                    return `<div style="display:flex; align-items:center; gap:8px; padding:3px 0;">
+                        <span style="display:inline-block; min-width:32px; padding:1px 6px; font-size:9px; font-weight:600; border-radius:3px; color:#000; background:${kc}; text-align:center; text-transform:uppercase;">${o.kind}</span>
+                        <span style="flex:1;">${escHtml(o.name)}</span>
+                        <span style="color:var(--text-muted,#666); font-size:10px;">L${o.line}</span>
+                    </div>`;
+                }).join('')}
+            </div>
+        </div>` : ''}
+
+        <div style="padding:12px 14px; background:var(--bg-tertiary,#0a0a0a); border-radius:8px; font-size:13px; color:var(--text-secondary,#aaa); line-height:1.5;">
+            <div style="margin-bottom:6px;">ℹ️ <strong>${escHtml(langBadge.label)}</strong> 는 브라우저에서 직접 실행할 수 없습니다.</div>
+            <div>전체 코드는 우측 상단 <strong style="color:var(--accent-primary,#6366f1);">[Code View]</strong> 탭에서 줄번호와 함께 확인하세요.</div>
+        </div>
+    `;
+    target.appendChild(card);
+}
+
+function statTile(label, value) {
+    return `<div style="background:var(--bg-tertiary,#0a0a0a); border-radius:6px; padding:10px 8px; text-align:center;">
+        <div style="font-size:20px; font-weight:600; color:var(--text-primary,#fff);">${value}</div>
+        <div style="font-size:10px; color:var(--text-muted,#888); margin-top:2px; text-transform:uppercase; letter-spacing:0.5px;">${label}</div>
+    </div>`;
+}
+
+const LANG_BADGES = {
+    python: { icon: '🐍', label: 'Python', color: '#3776ab' },
+    py: { icon: '🐍', label: 'Python', color: '#3776ab' },
+    javascript: { icon: '🟨', label: 'JavaScript', color: '#f7df1e' },
+    js: { icon: '🟨', label: 'JavaScript', color: '#f7df1e' },
+    typescript: { icon: '🔷', label: 'TypeScript', color: '#3178c6' },
+    ts: { icon: '🔷', label: 'TypeScript', color: '#3178c6' },
+    tsx: { icon: '⚛️', label: 'TSX', color: '#3178c6' },
+    jsx: { icon: '⚛️', label: 'JSX', color: '#61dafb' },
+    go: { icon: '🐹', label: 'Go', color: '#00add8' },
+    rust: { icon: '🦀', label: 'Rust', color: '#ce422b' },
+    rs: { icon: '🦀', label: 'Rust', color: '#ce422b' },
+    java: { icon: '☕', label: 'Java', color: '#f89820' },
+    kotlin: { icon: '🅺', label: 'Kotlin', color: '#7f52ff' },
+    swift: { icon: '🍎', label: 'Swift', color: '#fa7343' },
+    ruby: { icon: '💎', label: 'Ruby', color: '#cc342d' },
+    php: { icon: '🐘', label: 'PHP', color: '#777bb4' },
+    cpp: { icon: '⚙️', label: 'C++', color: '#00599c' },
+    c: { icon: '⚙️', label: 'C', color: '#a8b9cc' },
+    csharp: { icon: '#️⃣', label: 'C#', color: '#239120' },
+    sql: { icon: '🗄️', label: 'SQL', color: '#e48e00' },
+    bash: { icon: '🖥️', label: 'Bash', color: '#4eaa25' },
+    sh: { icon: '🖥️', label: 'Shell', color: '#4eaa25' },
+    yaml: { icon: '📋', label: 'YAML', color: '#cb171e' },
+    json: { icon: '📋', label: 'JSON', color: '#000000' },
+    xml: { icon: '📋', label: 'XML', color: '#0060ac' },
+};
+
+/**
+ * 함수/클래스 이름 추출 (Python/JS/TS 위주).
+ * 예: "def foo()" → { kind: 'def', name: 'foo', line: 5 }
+ *     "class Bar:" → { kind: 'class', name: 'Bar', line: 3 }
+ */
+function extractCodeOutline(content, lang) {
+    const langLow = (lang || '').toLowerCase();
+    const patterns = [];
+    if (['python', 'py'].includes(langLow)) {
+        patterns.push(
+            { re: /^\s*(async\s+)?def\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/, kind: 'def', nameGroup: 2 },
+            { re: /^\s*class\s+([a-zA-Z_][a-zA-Z0-9_]*)/, kind: 'class', nameGroup: 1 }
+        );
+    } else if (['javascript', 'js', 'typescript', 'ts', 'jsx', 'tsx'].includes(langLow)) {
+        patterns.push(
+            { re: /^\s*(export\s+)?(async\s+)?function\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*\(/, kind: 'fn', nameGroup: 3 },
+            { re: /^\s*(export\s+)?class\s+([a-zA-Z_$][a-zA-Z0-9_$]*)/, kind: 'class', nameGroup: 2 },
+            { re: /^\s*(export\s+)?(const|let|var)\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*=\s*(async\s+)?\(/, kind: 'fn', nameGroup: 3 }
+        );
+    } else if (['go'].includes(langLow)) {
+        patterns.push(
+            { re: /^\s*func\s+(\([^)]*\)\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*\(/, kind: 'fn', nameGroup: 2 },
+            { re: /^\s*type\s+([A-Za-z_][A-Za-z0-9_]*)\s+(struct|interface)/, kind: 'type', nameGroup: 1 }
+        );
+    } else if (['rust', 'rs'].includes(langLow)) {
+        patterns.push(
+            { re: /^\s*(pub\s+)?fn\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*[<(]/, kind: 'fn', nameGroup: 2 },
+            { re: /^\s*(pub\s+)?(struct|enum|trait)\s+([A-Za-z_][A-Za-z0-9_]*)/, kind: 'type', nameGroup: 3 }
+        );
+    }
+    if (patterns.length === 0) return [];
+    const out = [];
+    const lines = content.split('\n');
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        for (const p of patterns) {
+            const m = p.re.exec(line);
+            if (m) {
+                out.push({ kind: p.kind, name: m[p.nameGroup], line: i + 1 });
+                break;
+            }
+        }
+    }
+    return out;
 }
 
 async function renderHtml(target, item) {
@@ -1080,6 +1285,8 @@ async function enterEditUI() {
 
     const codePane = panelEl.querySelector('.ap-code');
     codePane.innerHTML = '';
+    // renderCodeView 가 인라인 style 로 flex 레이아웃을 적용했을 수 있어 reset (textarea 모드는 단순 block)
+    codePane.style.cssText = '';
 
     // textarea (CodeMirror 가 이걸 hijack 해서 editor 로 변환)
     const textarea = document.createElement('textarea');

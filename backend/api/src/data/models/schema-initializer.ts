@@ -54,7 +54,7 @@ export function getSchemaSql(): { schema: string; source: string } {
  *
  * 1. schema SQL 적용 (idempotent — IF NOT EXISTS)
  * 2. agent_usage_logs FK 보정 (ON DELETE SET NULL)
- * 3. pg_trgm 확장 + GIN 인덱스 (user_memories.key/value)
+ * 3. pg_trgm 확장 + GIN 인덱스 (user_memories.content)
  *
  * 멱등 — 재실행 안전.
  */
@@ -83,8 +83,7 @@ export async function initSchema(pool: Pool): Promise<void> {
     // pg_trgm GIN 인덱스 (확장 미지원 환경에서는 skip)
     try {
         await pool.query(`CREATE EXTENSION IF NOT EXISTS pg_trgm`);
-        await pool.query(`CREATE INDEX IF NOT EXISTS idx_memories_key_trgm ON user_memories USING gin (key gin_trgm_ops)`);
-        await pool.query(`CREATE INDEX IF NOT EXISTS idx_memories_value_trgm ON user_memories USING gin (value gin_trgm_ops)`);
+        await pool.query(`CREATE INDEX IF NOT EXISTS idx_user_memories_content_trgm ON user_memories USING gin (content gin_trgm_ops)`);
         logger.info('pg_trgm 트라이그램 인덱스 생성 완료');
     } catch {
         logger.info('pg_trgm 인덱스 생성 건너뜀 (확장 미지원 환경)');

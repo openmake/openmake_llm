@@ -31,7 +31,8 @@ import { requireAuth, optionalAuth } from '../auth';
 import { success, badRequest, unauthorized, forbidden, notFound, internalError } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
 import { getUnifiedDatabase } from '../data/models/unified-database';
-import type { MCPTransportType } from '../mcp/types';
+import type { MCPTransportType, MCPConnectionStatus } from '../mcp/types';
+import { getLifecycleSupervisor } from '../mcp/lifecycle-supervisor';
 import { createLogger } from '../utils/logger';
 import { validate } from '../middlewares/validation';
 import { mcpToolExecuteSchema, mcpServerCreateSchema } from '../schemas/mcp.schema';
@@ -115,16 +116,27 @@ export const mcpRouter = Router();
       const allServers = await repo.listUserServers(userId);
       const filtered = allServers.filter(s => canViewServer(actor, s));
 
+      // 이중 풀 통합:
+      //   - global: server-registry.connections (admin 등록 서버)
+      //   - user_private / user_shared: lifecycle-supervisor 의 UserMCPPool
+      // 둘 다 조회해 effective status 산출 — userPool 우선 (사용자 server 가 global 과 id 충돌 시).
       const registry = getUnifiedMCPClient().getServerRegistry();
       const statuses = registry.getAllStatuses();
+      const supervisor = getLifecycleSupervisor();
       const serversWithStatus = filtered.map(server => {
-          const status = statuses.find(s => s.serverId === server.id);
+          const regStatus = statuses.find(s => s.serverId === server.id);
+          let userStatus: MCPConnectionStatus | undefined;
+          if (server.user_id && supervisor) {
+              const client = supervisor.getUserClient(server.user_id, server.id);
+              if (client) userStatus = client.getStatus();
+          }
+          const effective = userStatus || regStatus;
           return {
               ...server,
-              connectionStatus: status?.status || 'disconnected',
-              toolCount: status?.toolCount || 0,
-              lastPing: status?.lastPing || null,
-              connectionError: status?.error || null,
+              connectionStatus: effective?.status || 'disconnected',
+              toolCount: effective?.toolCount || 0,
+              lastPing: effective?.lastPing || null,
+              connectionError: effective?.error || null,
           };
       });
 

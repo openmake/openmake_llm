@@ -273,6 +273,7 @@ export async function handleChatMessage(
         // ID 별 50ms 윈도우로 buffer 후 합쳐서 1회 dispatch. 큰 artifact (~MB) 시 message rate 1/20.
         const ARTIFACT_CHUNK_FLUSH_MS = 50;
         const chunkBuffers = new Map<string, { delta: string; timer: ReturnType<typeof setTimeout> | null }>();
+        const streamedArtifactIds = new Set<string>();
         const flushArtifactChunk = (id: string) => {
             const buf = chunkBuffers.get(id);
             if (!buf || !buf.delta) return;
@@ -289,6 +290,7 @@ export async function handleChatMessage(
                 }
             },
             onArtifactStart: (info: ArtifactInfo) => {
+                streamedArtifactIds.add(info.id);
                 if (ws.readyState === ws.OPEN) {
                     ws.send(JSON.stringify({ type: 'artifact_start', artifact: info, messageId }));
                 }
@@ -417,9 +419,10 @@ export async function handleChatMessage(
 
         // Fallback artifacts (2026-05-26): incremental parser 가 못 잡은 raw code fence 가
         // 후처리에서 추출됐을 수 있음 — request-handler 의 result.artifacts 를 WS 로 발행.
+        // 명시적 <artifact> 는 위 스트리밍 parser 가 이미 보냈으므로 중복 replay 하지 않음.
         // 클라이언트는 동일한 artifact_start/chunk/end 시퀀스로 패널 자동 오픈.
         if (result.artifacts && result.artifacts.length > 0 && ws.readyState === ws.OPEN) {
-            for (const a of result.artifacts) {
+            for (const a of result.artifacts.filter((artifact) => !streamedArtifactIds.has(artifact.id))) {
                 ws.send(JSON.stringify({
                     type: 'artifact_start',
                     artifact: { id: a.id, kind: a.kind, title: a.title, lang: a.lang },

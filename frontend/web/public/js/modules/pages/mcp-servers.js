@@ -102,6 +102,16 @@ function statusBadge(status) {
     return `<span class="badge ${cls}">${safe}</span>`;
 }
 
+function renderMcpRowHeader(sideLabel, actionLabel) {
+    return `
+        <div class="skill-row skill-row-header mcp-row-header" role="row" aria-hidden="false">
+            <div class="skill-row-meta mcp-row-meta">유형</div>
+            <div class="skill-row-main">이름 · 설명</div>
+            <div class="skill-row-side mcp-row-side">${escapeHTML(sideLabel)}</div>
+            <div class="skill-row-actions mcp-row-actions">${escapeHTML(actionLabel)}</div>
+        </div>`;
+}
+
 async function loadCatalog() {
     const grid = document.getElementById('mcp-catalog-grid');
     if (!grid) return;
@@ -123,15 +133,20 @@ function renderCatalog() {
         return;
     }
     grid.innerHTML = STATE.catalog.map(t => `
-        <div class="mcp-card">
-            <h3>${escapeHTML(t.display_name)}</h3>
-            <div class="mcp-meta">
+        <div class="skill-row mcp-row">
+            <div class="skill-row-meta mcp-row-meta">
                 ${tierBadge(t.required_tier)}
                 <span class="badge badge-cat">${escapeHTML(t.transport_type)}</span>
             </div>
-            <div class="mcp-desc">${escapeHTML(t.description || '')}</div>
-            <div class="mcp-actions">
-                <button data-action="register" data-template-id="${escapeHTML(t.id)}">등록하기</button>
+            <div class="skill-row-main">
+                <h3 class="skill-row-title" title="${escapeHTML(t.display_name)}">${escapeHTML(t.display_name)}</h3>
+                <p class="skill-row-desc" title="${escapeHTML(t.description || '')}">${escapeHTML(t.description || '설명이 없습니다.')}</p>
+            </div>
+            <div class="skill-row-side mcp-row-side">
+                <code class="mcp-inline-code" title="${escapeHTML(t.id)}">${escapeHTML(t.id)}</code>
+            </div>
+            <div class="skill-row-actions mcp-row-actions">
+                <button class="sl-btn sl-btn-primary sl-btn-sm" data-action="register" data-template-id="${escapeHTML(t.id)}">등록</button>
             </div>
         </div>
     `).join('');
@@ -165,20 +180,25 @@ function renderMyServers() {
         const templateLine = s.catalog_template_id
             ? `template: <code>${escapeHTML(s.catalog_template_id)}</code>`
             : '';
-        const toolLine = s.toolCount ? `<br>도구 ${escapeHTML(String(s.toolCount))}개` : '';
+        const toolLine = s.toolCount ? `도구 ${escapeHTML(String(s.toolCount))}개` : '';
+        const desc = [templateLine, toolLine].filter(Boolean).join(' · ') || '직접 등록된 MCP 서버';
         return `
-        <div class="mcp-card">
-            <h3>${escapeHTML(s.name)}</h3>
-            <div class="mcp-meta">
+        <div class="skill-row mcp-row">
+            <div class="skill-row-meta mcp-row-meta">
                 ${visibilityBadge(s.visibility)}
                 <span class="badge badge-cat">${escapeHTML(s.transport_type)}</span>
+            </div>
+            <div class="skill-row-main">
+                <h3 class="skill-row-title" title="${escapeHTML(s.name)}">${escapeHTML(s.name)}</h3>
+                <p class="skill-row-desc" title="${escapeHTML(desc.replace(/<[^>]+>/g, ''))}">${desc}</p>
+            </div>
+            <div class="skill-row-side mcp-row-side">
                 <span class="badge ${connClass}">${escapeHTML(conn)}</span>
             </div>
-            <div class="mcp-desc">${templateLine}${toolLine}</div>
-            <div class="mcp-actions">
-                <button data-action="start" data-server-id="${escapeHTML(s.id)}">▶ 시작</button>
-                <button data-action="stop" data-server-id="${escapeHTML(s.id)}">⏸ 중지</button>
-                ${isOwner ? `<button class="btn-danger" data-action="delete" data-server-id="${escapeHTML(s.id)}">🗑 삭제</button>` : ''}
+            <div class="skill-row-actions mcp-row-actions">
+                <button class="sl-btn sl-btn-outline sl-btn-sm" data-action="start" data-server-id="${escapeHTML(s.id)}">시작</button>
+                <button class="sl-btn sl-btn-outline sl-btn-sm" data-action="stop" data-server-id="${escapeHTML(s.id)}">중지</button>
+                ${isOwner ? `<button class="sl-btn sl-btn-sm mcp-btn-danger" data-action="delete" data-server-id="${escapeHTML(s.id)}">삭제</button>` : ''}
             </div>
         </div>`;
     }).join('');
@@ -291,15 +311,20 @@ function openRegisterModal(templateId) {
 }
 
 function renderTemplateFields(template) {
+    const req = (isReq) => isReq ? ' <span style="color:var(--danger,#ef4444);">*</span>' : '';
+    const hint = (text) => text
+        ? `<small style="display:block;color:var(--text-muted);font-size:0.75rem;margin:-0.2rem 0 0.4rem;line-height:1.4;">${text}</small>`
+        : '';
+
     let html = `
-        <div class="mcp-field">
-            <label for="mcp-field-name">서버 이름 *</label>
-            <div class="field-desc">영숫자/언더스코어/하이픈만 (예: my-filesystem)</div>
-            <input type="text" id="mcp-field-name" pattern="[a-zA-Z0-9_-]+" required>
+        <div class="sl-form-group">
+            <label class="sl-form-label" for="mcp-field-name">서버 이름${req(true)}</label>
+            ${hint('영숫자 / 언더스코어 / 하이픈만 사용 (예: my-filesystem)')}
+            <input class="sl-form-input" type="text" id="mcp-field-name" pattern="[a-zA-Z0-9_-]+" placeholder="my-server-name" required>
         </div>
-        <div class="mcp-field">
-            <label for="mcp-field-visibility">공개 범위</label>
-            <select id="mcp-field-visibility">
+        <div class="sl-form-group">
+            <label class="sl-form-label" for="mcp-field-visibility">공개 범위</label>
+            <select class="sl-form-select" id="mcp-field-visibility">
                 <option value="user_private" selected>👤 나만 (private)</option>
                 <option value="user_shared">🤝 공유 (shared)</option>
             </select>
@@ -311,13 +336,12 @@ function renderTemplateFields(template) {
     for (const [key, prop] of Object.entries(argsProps)) {
         const safeKey = escapeHTML(key);
         const title = escapeHTML(prop.title || key);
-        const desc = prop.description ? `<div class="field-desc">${escapeHTML(prop.description)}</div>` : '';
         const isReq = argsRequired.has(key);
         html += `
-            <div class="mcp-field">
-                <label for="mcp-arg-${safeKey}">${title}${isReq ? ' *' : ''}</label>
-                ${desc}
-                <input type="text" id="mcp-arg-${safeKey}" data-arg-key="${safeKey}" ${isReq ? 'required' : ''}>
+            <div class="sl-form-group">
+                <label class="sl-form-label" for="mcp-arg-${safeKey}">${title}${req(isReq)}</label>
+                ${hint(prop.description ? escapeHTML(prop.description) : '')}
+                <input class="sl-form-input" type="text" id="mcp-arg-${safeKey}" data-arg-key="${safeKey}" ${isReq ? 'required' : ''}>
             </div>`;
     }
 
@@ -326,17 +350,16 @@ function renderTemplateFields(template) {
     for (const [key, prop] of Object.entries(envProps)) {
         const safeKey = escapeHTML(key);
         const title = escapeHTML(prop.title || key);
-        const desc = prop.description ? `<div class="field-desc">${escapeHTML(prop.description)}</div>` : '';
         const isReq = envRequired.has(key);
         const isSecret = prop.secret === true;
         const inputType = isSecret ? 'password' : 'text';
         const placeholder = isSecret ? 'placeholder="(비밀)"' : '';
-        const lockIcon = isSecret ? ' 🔒' : '';
+        const lockIcon = isSecret ? ' <span class="iconify" data-icon="lucide:lock" style="font-size:0.75rem;vertical-align:middle;color:var(--text-muted);"></span>' : '';
         html += `
-            <div class="mcp-field">
-                <label for="mcp-env-${safeKey}">${title}${isReq ? ' *' : ''}${lockIcon}</label>
-                ${desc}
-                <input type="${inputType}" id="mcp-env-${safeKey}" data-env-key="${safeKey}" ${isReq ? 'required' : ''} ${placeholder}>
+            <div class="sl-form-group">
+                <label class="sl-form-label" for="mcp-env-${safeKey}">${title}${req(isReq)}${lockIcon}</label>
+                ${hint(prop.description ? escapeHTML(prop.description) : '')}
+                <input class="sl-form-input" type="${inputType}" id="mcp-env-${safeKey}" data-env-key="${safeKey}" ${isReq ? 'required' : ''} ${placeholder}>
             </div>`;
     }
     return html;
@@ -464,53 +487,89 @@ function switchTab(tabName) {
 function getHTML() {
     return '<div id="mcp-page-root-spa">' +
         '<style data-spa-style="mcp-servers">' +
-        '.mcp-page-spa{padding:var(--space-5);max-width:1200px;margin:0 auto;}' +
-        '.mcp-page-spa .mcp-tabs{display:flex;gap:var(--space-2);margin-bottom:var(--space-4);border-bottom:1px solid var(--border-light);}' +
-        '.mcp-page-spa .mcp-tab{padding:var(--space-3) var(--space-4);background:transparent;border:none;border-bottom:2px solid transparent;cursor:pointer;color:var(--text-secondary);}' +
+        '.mcp-page-spa{max-width:1200px;margin:0 auto;width:100%;}' +
+        '.mcp-page-spa .mcp-tabs{display:flex;gap:0;margin:0 var(--space-5,1.25rem);border-bottom:1px solid var(--border-color);}' +
+        '.mcp-page-spa .mcp-tab{padding:.75rem 1.25rem;background:transparent;border:none;border-bottom:2px solid transparent;cursor:pointer;color:var(--text-secondary);font-weight:500;font-size:.9rem;}' +
+        '.mcp-page-spa .mcp-tab:hover{color:var(--text-primary);}' +
         '.mcp-page-spa .mcp-tab.active{color:var(--accent-primary);border-bottom-color:var(--accent-primary);font-weight:var(--font-weight-semibold);}' +
         '.mcp-page-spa .mcp-tab-panel{display:none;}' +
         '.mcp-page-spa .mcp-tab-panel.active{display:block;}' +
-        '.mcp-page-spa .mcp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:var(--space-4);}' +
-        '.mcp-page-spa .mcp-card{background:var(--bg-card);border:1px solid var(--border-light);border-radius:var(--radius-lg);padding:var(--space-5);}' +
+        '.mcp-page-spa .mcp-list{display:flex;flex-direction:column;gap:.5rem;}' +
+        '.mcp-page-spa .mcp-row-meta{flex-basis:190px;flex-wrap:wrap;align-content:center;}' +
+        '.mcp-page-spa .mcp-row-side{flex-basis:190px;min-width:0;}' +
+        '.mcp-page-spa .mcp-row-actions{flex-basis:180px;gap:.4rem;flex-wrap:wrap;align-content:center;}' +
+        '.mcp-page-spa .mcp-row-actions .sl-btn{white-space:nowrap;}' +
+        '.mcp-page-spa .mcp-inline-code{max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-secondary);font-size:.76rem;}' +
+        '.mcp-page-spa .mcp-toolbar{display:flex;gap:var(--space-2);align-items:center;flex-wrap:wrap;margin-bottom:var(--space-4);}' +
+        '.mcp-page-spa .mcp-btn-danger{background:transparent;color:var(--danger);border:1px solid var(--danger);}' +
+        '.mcp-page-spa .mcp-empty,.mcp-page-spa .mcp-loading{padding:3rem;text-align:center;color:var(--text-secondary);}' +
+        '.mcp-page-spa .badge{display:inline-flex;align-items:center;width:max-content;padding:.15rem .5rem;border-radius:999px;border:1px solid var(--border-light);font-size:.7rem;font-weight:var(--font-weight-semibold);line-height:1.35;}' +
+        '.mcp-page-spa .badge-tier-free,.mcp-page-spa .badge-vis-private,.mcp-page-spa .badge-status-stopped,.mcp-page-spa .badge-cat{background:var(--bg-tertiary);color:var(--text-secondary);}' +
+        '.mcp-page-spa .badge-tier-pro{background:rgba(var(--primary-rgb,80,120,220),.12);color:var(--accent-primary);border-color:var(--accent-primary);}' +
+        '.mcp-page-spa .badge-tier-enterprise,.mcp-page-spa .badge-status-starting{background:var(--warning-light);color:var(--warning);border-color:var(--warning);}' +
+        '.mcp-page-spa .badge-vis-global{background:rgba(var(--primary-rgb,80,120,220),.12);color:var(--info-color,var(--accent-primary));border-color:var(--info-color,var(--accent-primary));}' +
+        '.mcp-page-spa .badge-vis-shared,.mcp-page-spa .badge-status-running{background:var(--success-light);color:var(--success);border-color:var(--success);}' +
+        '.mcp-page-spa .badge-status-crashed{background:var(--danger-light);color:var(--danger);border-color:var(--danger);}' +
+        '.mcp-page-spa .mcp-instance-table{width:100%;border-collapse:collapse;background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-md);overflow:hidden;}' +
+        '.mcp-page-spa .mcp-instance-table th,.mcp-page-spa .mcp-instance-table td{padding:var(--space-3) var(--space-4);text-align:left;border-bottom:1px solid var(--border-light);font-size:var(--font-size-sm);}' +
+        '.mcp-page-spa .mcp-instance-table th{background:var(--bg-secondary);color:var(--text-secondary);font-weight:var(--font-weight-semibold);}' +
+        /* 모달은 skill-library.css 의 .sl-modal-overlay/.sl-modal/.sl-form-* 재사용 — 추가 inline CSS 불필요 */
+        '.mcp-page-spa .sl-modal h2 .iconify{font-size:1.05em;vertical-align:-2px;margin-right:.35rem;color:var(--accent-primary);}' +
+        '.mcp-page-spa .sl-modal code{background:var(--bg-secondary);padding:.1rem .35rem;border-radius:var(--radius-sm,4px);font-size:.78rem;color:var(--text-secondary);}' +
+        '.mcp-page-spa .sl-modal .sl-form-input:focus,.mcp-page-spa .sl-modal .sl-form-select:focus,.mcp-page-spa .sl-modal .sl-form-textarea:focus{outline:none;border-color:var(--accent-primary);}' +
+        '@media (max-width:720px){.mcp-page-spa .mcp-row-actions{flex-basis:auto;justify-content:flex-start}.mcp-page-spa .mcp-row-side{flex-basis:auto}.mcp-page-spa .mcp-row-meta{flex-basis:auto}}' +
         '</style>' +
-        '<div class="mcp-page-spa">' +
-        '<header class="mcp-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:var(--space-3);">' +
-            '<div><h1>🔌 MCP 서버</h1><p style="color:var(--text-muted);margin:0;">로컬 도구를 LLM 이 사용할 수 있도록 연결합니다.</p></div>' +
-            '<button class="btn-primary" id="mcp-import-from-git-btn" type="button">📥 Git 에서 가져오기</button>' +
+        '<div class="mcp-page-spa sl-page">' +
+        '<header class="sl-header" style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:var(--space-3);">' +
+            '<div><h1><span class="iconify" data-icon="lucide:plug"></span>MCP 서버</h1><p>로컬 도구를 LLM 이 사용할 수 있도록 연결합니다.</p></div>' +
+            '<button class="sl-btn sl-btn-primary" id="mcp-import-from-git-btn" type="button"><span class="iconify" data-icon="lucide:git-branch"></span> Git 에서 가져오기</button>' +
         '</header>' +
         '<div class="mcp-tabs" role="tablist">' +
-        '<button class="mcp-tab active" data-tab="catalog">📚 카탈로그</button>' +
-        '<button class="mcp-tab" data-tab="my-servers">👤 내 서버</button>' +
-        '<button class="mcp-tab" data-tab="instances">📊 인스턴스 상태</button>' +
+        '<button class="mcp-tab active" data-tab="catalog">카탈로그</button>' +
+        '<button class="mcp-tab" data-tab="my-servers">내 서버</button>' +
+        '<button class="mcp-tab" data-tab="instances">인스턴스 상태</button>' +
         '</div>' +
-        '<section id="mcp-panel-catalog" class="mcp-tab-panel active"><div id="mcp-catalog-grid" class="mcp-grid"><div class="mcp-loading">로딩 중…</div></div></section>' +
+        '<div class="sl-tab-content">' +
+        '<section id="mcp-panel-catalog" class="mcp-tab-panel active">' + renderMcpRowHeader('템플릿', '작업') + '<div id="mcp-catalog-grid" class="mcp-list"><div class="mcp-loading">로딩 중…</div></div></section>' +
         '<section id="mcp-panel-my-servers" class="mcp-tab-panel">' +
-            '<div class="mcp-toolbar"><button class="mcp-tab" id="mcp-refresh-my-servers">새로고침</button><button class="mcp-tab" id="mcp-refresh-drafts">draft 새로고침</button></div>' +
+            '<div class="mcp-toolbar"><button class="sl-btn sl-btn-outline sl-btn-sm" id="mcp-refresh-my-servers">새로고침</button><button class="sl-btn sl-btn-outline sl-btn-sm" id="mcp-refresh-drafts">draft 새로고침</button></div>' +
             '<div id="mcp-drafts-section" style="margin-bottom:var(--space-5);">' +
                 '<h3 style="margin:var(--space-2) 0;">📥 검토 대기 (draft)</h3>' +
-                '<div id="mcp-drafts-container" class="mcp-grid"><div class="mcp-loading">로딩 중…</div></div>' +
+                '<div id="mcp-drafts-container" class="mcp-list"><div class="mcp-loading">로딩 중…</div></div>' +
             '</div>' +
             '<h3 style="margin:var(--space-2) 0;">👤 활성 서버</h3>' +
-            '<div id="mcp-my-servers-grid" class="mcp-grid"><div class="mcp-loading">로딩 중…</div></div>' +
+            renderMcpRowHeader('상태', '작업') +
+            '<div id="mcp-my-servers-grid" class="mcp-list"><div class="mcp-loading">로딩 중…</div></div>' +
         '</section>' +
-        '<section id="mcp-panel-instances" class="mcp-tab-panel"><div class="mcp-toolbar"><select id="mcp-instance-server-select" class="mcp-select"><option value="">서버 선택…</option></select><button class="mcp-tab" id="mcp-refresh-instances">새로고침</button><button class="mcp-tab" id="mcp-health-check-btn" title="running 상태인 instance 의 pid 검증">🩺 Health check</button><span style="margin-left:auto;font-size:0.85em;color:var(--text-muted);">15초마다 자동 갱신</span></div><div id="mcp-instances-container"><div class="mcp-empty">서버를 선택하세요.</div></div></section>' +
+        '<section id="mcp-panel-instances" class="mcp-tab-panel"><div class="mcp-toolbar"><select id="mcp-instance-server-select" class="sl-select"><option value="">서버 선택…</option></select><button class="sl-btn sl-btn-outline sl-btn-sm" id="mcp-refresh-instances">새로고침</button><button class="sl-btn sl-btn-outline sl-btn-sm" id="mcp-health-check-btn" title="running 상태인 instance 의 pid 검증">Health check</button><span style="margin-left:auto;font-size:0.85em;color:var(--text-muted);">15초마다 자동 갱신</span></div><div id="mcp-instances-container"><div class="mcp-empty">서버를 선택하세요.</div></div></section>' +
         '</div>' +
-        '<div id="mcp-register-modal" class="mcp-modal" role="dialog" aria-modal="true"><div class="mcp-modal-content"><h3 id="mcp-modal-title">서버 등록</h3><p id="mcp-modal-desc" style="color:var(--text-muted);"></p><div id="mcp-modal-fields"></div><div class="mcp-modal-actions"><button class="btn-secondary" data-close-mcp-modal>취소</button><button class="btn-primary" id="mcp-modal-submit">등록</button></div></div></div>' +
-        '<div id="mcp-import-modal" class="mcp-modal" role="dialog" aria-modal="true">' +
-            '<div class="mcp-modal-content">' +
-                '<h3>📥 Git URL 에서 MCP server 가져오기</h3>' +
-                '<p style="color:var(--text-muted);">저장소의 <code>MCPSERVER.md</code> 매니페스트를 fetch → 검증 → draft 로 저장합니다. 승인 전까지 spawn 되지 않습니다.</p>' +
-                '<div class="mcp-modal-fields">' +
-                    '<label style="display:block;margin:var(--space-2) 0;">Git URL ' +
-                        '<input id="mcp-import-git-url" type="text" placeholder="https://github.com/owner/repo 또는 owner/repo" style="width:100%;padding:var(--space-2);margin-top:var(--space-1);">' +
-                    '</label>' +
-                    '<label style="display:block;margin:var(--space-2) 0;">Access Token (private repo 만 필요, 옵션) ' +
-                        '<input id="mcp-import-access-token" type="password" placeholder="ghp_..." style="width:100%;padding:var(--space-2);margin-top:var(--space-1);">' +
-                    '</label>' +
+        '</div>' +
+        '<div id="mcp-register-modal" class="sl-modal-overlay" role="dialog" aria-modal="true">' +
+            '<div class="sl-modal">' +
+                '<h2 id="mcp-modal-title"><span class="iconify" data-icon="lucide:plug"></span>서버 등록</h2>' +
+                '<p id="mcp-modal-desc" style="color:var(--text-muted);margin:-0.75rem 0 1.25rem;font-size:.85rem;line-height:1.5;"></p>' +
+                '<div id="mcp-modal-fields"></div>' +
+                '<div class="sl-modal-actions">' +
+                    '<button type="button" class="sl-btn sl-btn-secondary" data-close-mcp-modal>취소</button>' +
+                    '<button type="button" class="sl-btn sl-btn-primary" id="mcp-modal-submit">등록</button>' +
                 '</div>' +
-                '<div class="mcp-modal-actions">' +
-                    '<button class="btn-secondary" data-close-mcp-import-modal>취소</button>' +
-                    '<button class="btn-primary" id="mcp-import-submit">가져오기</button>' +
+            '</div>' +
+        '</div>' +
+        '<div id="mcp-import-modal" class="sl-modal-overlay" role="dialog" aria-modal="true">' +
+            '<div class="sl-modal">' +
+                '<h2><span class="iconify" data-icon="lucide:git-branch"></span>Git URL 에서 MCP server 가져오기</h2>' +
+                '<p style="color:var(--text-muted);margin:-0.75rem 0 1.25rem;font-size:.85rem;line-height:1.5;">저장소의 <code>MCPSERVER.md</code> 매니페스트를 fetch → 검증 → draft 로 저장합니다. 승인 전까지 spawn 되지 않습니다.</p>' +
+                '<div class="sl-form-group">' +
+                    '<label class="sl-form-label" for="mcp-import-git-url">Git URL <span style="color:var(--danger,#ef4444);">*</span></label>' +
+                    '<input class="sl-form-input" id="mcp-import-git-url" type="text" placeholder="https://github.com/owner/repo 또는 owner/repo">' +
+                '</div>' +
+                '<div class="sl-form-group">' +
+                    '<label class="sl-form-label" for="mcp-import-access-token">Access Token <small style="font-weight:normal;color:var(--text-muted);">(private repo 만 필요, 옵션)</small></label>' +
+                    '<input class="sl-form-input" id="mcp-import-access-token" type="password" placeholder="ghp_...">' +
+                '</div>' +
+                '<div class="sl-modal-actions">' +
+                    '<button type="button" class="sl-btn sl-btn-secondary" data-close-mcp-import-modal>취소</button>' +
+                    '<button type="button" class="sl-btn sl-btn-primary" id="mcp-import-submit">가져오기</button>' +
                 '</div>' +
             '</div>' +
         '</div>' +
@@ -645,14 +704,14 @@ function renderDrafts() {
 function openImportModal() {
     const modal = document.getElementById('mcp-import-modal');
     if (!modal) return;
-    modal.classList.add('active');
+    modal.classList.add('open');
     const input = document.getElementById('mcp-import-git-url');
     if (input) { input.value = ''; input.focus(); }
 }
 
 function closeImportModal() {
     const modal = document.getElementById('mcp-import-modal');
-    if (modal) modal.classList.remove('active');
+    if (modal) modal.classList.remove('open');
 }
 
 async function submitImport() {

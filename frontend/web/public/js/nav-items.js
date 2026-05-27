@@ -35,7 +35,7 @@ const NAV_ITEMS = {
         { href: '/projects.html', icon: '📁', iconify: 'lucide:folder', label: '프로젝트', requireAuth: true },
         // projects hub 의 2 카드 진입점 — 사이드바 nav 에서 hidden (projects 가 진입점), spa-router 라우트 등록 유지
         { href: '/skill-library.html', icon: '📦', iconify: 'lucide:package', label: '스킬 라이브러리', requireAuth: true, minTier: 'pro', cssFiles: ['/css/skill-library.css?v=5'], excludeFromSidebar: true },
-        { href: '/mcp-servers.html', icon: '🔌', iconify: 'lucide:plug', label: 'MCP 서버', requireAuth: true, excludeFromSidebar: true },
+        { href: '/mcp-servers.html', icon: '🔌', iconify: 'lucide:plug', label: 'MCP 서버', requireAuth: true, cssFiles: ['/css/skill-library.css?v=5'], excludeFromSidebar: true },
         // 2026-05-26: 기존 '커스텀 에이전트' CRUD 페이지 → Git URL Ingest 'Agent Draft' 검토 전용으로 재포지셔닝.
         // 사용자 본인 페르소나는 /my-agents (DB user_agents) 로 일원화. excludeFromSidebar 유지 — sidebar 진입은 my-agents 만.
         { href: '/custom-agents.html', icon: '📥', iconify: 'lucide:inbox', label: 'Agent Draft', requireAuth: true, excludeFromSidebar: true },

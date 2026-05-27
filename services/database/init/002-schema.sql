@@ -131,12 +131,21 @@ CREATE TABLE IF NOT EXISTS alert_history (
 );
 
 -- ============================================
--- 장기 메모리 시스템 테이블 (legacy MemoryService — 2026-05-19 폐기)
+-- 장기 메모리 시스템 테이블
 -- ============================================
--- user_memories / memory_tags 는 2026-05-19 MemoryService 폐기와 함께 제거됨.
--- 2026-05-26 mainstream gap closure Phase 3-A 에서 user_memories 가
--- 신규 스키마 (content/source/is_active/accessed_at) 로 재도입됨 —
--- migration 034_user_memories.sql 에 정의. 본 init 파일에서는 정의 안 함.
+-- migration 034_user_memories.sql 과 동일한 현행 스키마.
+-- legacy MemoryService 의 category/key/value/importance 스키마는 폐기됨.
+CREATE TABLE IF NOT EXISTS user_memories (
+    id            TEXT PRIMARY KEY,
+    user_id       TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    content       TEXT NOT NULL,
+    source        TEXT NOT NULL DEFAULT 'explicit'
+                    CHECK (source IN ('explicit', 'candidate', 'batch')),
+    is_active     BOOLEAN NOT NULL DEFAULT TRUE,
+    accessed_at   TIMESTAMPTZ,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 
 -- ============================================
 -- Deep Research 테이블
@@ -249,8 +258,9 @@ CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON conversation_sessions(user_id);
 
--- Memory indexes — 2026-05-19 MemoryService 폐기 + 2026-05-26 신규 스키마는
--- migration 034 가 자체 인덱스 정의 → 본 init 파일에서는 정의 안 함.
+-- Memory indexes — migration 034_user_memories.sql 과 동일한 현행 인덱스.
+CREATE INDEX IF NOT EXISTS idx_user_memories_user_active
+    ON user_memories(user_id, is_active, created_at DESC) WHERE is_active = TRUE;
 
 -- Research indexes
 CREATE INDEX IF NOT EXISTS idx_research_user ON research_sessions(user_id);
@@ -268,8 +278,7 @@ DO $$ BEGIN
     IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_trgm') THEN
         BEGIN
             EXECUTE 'CREATE INDEX IF NOT EXISTS idx_messages_content_trgm ON conversation_messages USING gin (content gin_trgm_ops)';
-            EXECUTE 'CREATE INDEX IF NOT EXISTS idx_memories_key_trgm ON user_memories USING gin (key gin_trgm_ops)';
-            EXECUTE 'CREATE INDEX IF NOT EXISTS idx_memories_value_trgm ON user_memories USING gin (value gin_trgm_ops)';
+            EXECUTE 'CREATE INDEX IF NOT EXISTS idx_user_memories_content_trgm ON user_memories USING gin (content gin_trgm_ops)';
             RAISE NOTICE '[pg_trgm] 트라이그램 인덱스 생성 완료';
         EXCEPTION WHEN OTHERS THEN
             RAISE NOTICE '[pg_trgm] 인덱스 생성 실패 (shared library 문제) — 건너뜀: %', SQLERRM;
@@ -471,7 +480,6 @@ CREATE INDEX IF NOT EXISTS idx_sessions_updated_at ON conversation_sessions(upda
 -- Composite indexes for common query patterns
 CREATE INDEX IF NOT EXISTS idx_sessions_user_updated ON conversation_sessions(user_id, updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_messages_session_created ON conversation_messages(session_id, created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_memories_user_category ON user_memories(user_id, category);
 CREATE INDEX IF NOT EXISTS idx_audit_user_created ON audit_logs(user_id, timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_research_user_created ON research_sessions(user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_research_steps_session_number ON research_steps(session_id, step_number);

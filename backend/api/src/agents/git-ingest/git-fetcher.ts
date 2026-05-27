@@ -65,11 +65,20 @@ export class GitFetcher {
     /** branch/tag/SHA → 완전한 commit SHA. 7+ chars hex 면 그대로 반환 (GitHub 자동 확장). */
     async resolveRef(owner: string, repo: string, ref: string): Promise<string> {
         if (/^[0-9a-f]{7,40}$/i.test(ref)) return ref;
-        const refOrHead = ref === 'HEAD' || ref === 'main' || ref === 'master' ? ref : ref;
-        const res = await this.req(`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/git/refs/heads/${encodeURIComponent(refOrHead)}`);
+        // GitHub API 는 `/git/refs/heads/HEAD` 를 인식 못 함 (404). HEAD 면 default_branch 조회 후 그 이름으로 재시도.
+        const effectiveRef = ref === 'HEAD' || !ref ? await this.getDefaultBranch(owner, repo) : ref;
+        const res = await this.req(`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/git/refs/heads/${encodeURIComponent(effectiveRef)}`);
         const data = await res.json() as { object?: { sha: string } };
         if (!data.object?.sha) throw new Error(`INVALID_REF: ${ref}`);
         return data.object.sha;
+    }
+
+    /** 저장소의 default branch (예: main, master) 이름 조회 */
+    async getDefaultBranch(owner: string, repo: string): Promise<string> {
+        const res = await this.req(`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`);
+        const data = await res.json() as { default_branch?: string };
+        if (!data.default_branch) throw new Error(`NO_DEFAULT_BRANCH: ${owner}/${repo}`);
+        return data.default_branch;
     }
 
     /** 저장소 전체 tree (blob entries only) */

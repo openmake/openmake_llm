@@ -17,7 +17,7 @@
  *
  * @module routes/mcp-server-ingest.routes
  */
-import { Router, type Request, type Response } from 'express';
+import { Router, type NextFunction, type Request, type Response } from 'express';
 import type { Pool } from 'pg';
 import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import type { LLMClient } from '../llm/client';
@@ -31,6 +31,7 @@ import { McpServerDraftRepository } from '../data/repositories/mcp-server-draft-
 import { RL_MCP_INGEST } from '../config/rate-limits';
 import { MCP_INGEST } from '../config/constants';
 import { createLogger } from '../utils/logger';
+import { requireAuth } from '../auth';
 
 const logger = createLogger('McpServerIngestRoutes');
 
@@ -90,8 +91,18 @@ function extractUserId(req: Request): string | undefined {
     return undefined;
 }
 
+function requireMcpIngestAuth(req: Request, res: Response, next: NextFunction): void {
+    if (extractUserId(req)) {
+        next();
+        return;
+    }
+    requireAuth(req, res, next).catch(next);
+}
+
 export function mcpServerIngestRouter(deps: McpServerIngestRouterDeps): Router {
     const router = Router();
+
+    router.use(requireMcpIngestAuth);
 
     router.post('/import-from-git', mcpIngestLimiter, async (req: Request, res: Response) => {
         try {
