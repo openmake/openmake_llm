@@ -94,12 +94,27 @@ import {
             var id = payload.defaultModel
                 || (Array.isArray(payload.models) && payload.models[0] && (payload.models[0].modelId || payload.models[0].id || payload.models[0].name));
             if (!id || typeof id !== 'string') return;
-            if (id.indexOf(':') > -1) id = id.split(':').pop();  // 'local-llm:xxx' → 'xxx'
-            if (id === getDocModel()) return;
+            if (id.indexOf(':') > -1) id = id.slice(id.indexOf(':') + 1);  // provider prefix 제거 ('local-llm:xxx' → 'xxx', 모델 id 내부 콜론 보존)
+            if (!id || id === getDocModel()) return;
             setDocModel(id);
             var contentEl = document.querySelector('.dev-content');
             if (contentEl) {
+                // 재렌더 전 사용자가 선택한 코드 탭 상태 보존 (buildContentHTML 결정적 → code-group 순서 일치)
+                var activeLangs = Array.prototype.map.call(document.querySelectorAll('.code-group'), function (g) {
+                    var t = g.querySelector('.code-tab.active');
+                    return t ? t.getAttribute('data-lang') : null;
+                });
                 contentEl.outerHTML = buildContentHTML();
+                var newGroups = document.querySelectorAll('.code-group');
+                activeLangs.forEach(function (lang, i) {
+                    if (!lang || !newGroups[i]) return;
+                    newGroups[i].querySelectorAll('.code-tab').forEach(function (t) {
+                        t.classList.toggle('active', t.getAttribute('data-lang') === lang);
+                    });
+                    newGroups[i].querySelectorAll('.code-content').forEach(function (c) {
+                        c.classList.toggle('active', c.getAttribute('data-lang') === lang);
+                    });
+                });
                 setupScrollspy();
             }
         } catch (e) { /* fetch 실패 → fallback 모델 유지 */ }
