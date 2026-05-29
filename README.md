@@ -1,11 +1,7 @@
-<p align="center">
-  <img src="screenshot-main.png" alt="OpenMake LLM" width="800" />
-</p>
-
 <h1 align="center">OpenMake LLM</h1>
 
 <p align="center">
-  <strong>Self-hosted AI assistant platform with local Ollama + OpenRouter cloud routing</strong>
+  <strong>Self-hosted AI assistant platform with a vLLM/LiteLLM backend + OpenRouter cloud routing</strong>
 </p>
 
 <p align="center">
@@ -21,12 +17,12 @@
 
 OpenMake LLM is a **self-hosted AI assistant** you run on your own machine. It combines:
 
-- **Local Ollama** for fast, private inference
+- **Self-hosted vLLM backend** behind a **LiteLLM proxy** (OpenAI-compatible) for fast, private local inference — default model `qwen3.6-35b-a3b` with 262K↔1M context routing
 - **OpenRouter** as a single cloud gateway to 367+ models (GPT-5, Claude, Gemini, Llama, DeepSeek 등) — bring your own API key
 - **100 specialist agents** across 18 industry categories — each with curated prompts
-- **16 built-in tools** (web search/scrape, vision OCR, deep research, filesystem, sequential thinking 등) via MCP
-- **Document RAG** — upload files, ask questions grounded in your data
-- **OpenAI-compatible API** — drop-in replacement endpoint at `/api/v1/chat/completions`
+- **7 brand model profiles** (Default, Pro, Fast, Think, Code, Vision, Auto) routed by a regex classifier + fast-path detector
+- **13 built-in tools** (web search/scrape, vision OCR, deep research, skill/agent/MCP-server import 등) via MCP, with tier-based access
+- **OpenAI-compatible API** — drop-in endpoint at `/api/v1/chat/completions`
 
 No SaaS. No telemetry to third parties. Your data stays on your hardware (or your own database).
 
@@ -38,7 +34,7 @@ No SaaS. No telemetry to third parties. Your data stays on your hardware (or you
 
 ### 1. Prerequisites
 
-You need: **Node.js v20+**, **PostgreSQL v14+**, and **Ollama**. See the [Detailed Install](#detailed-install-by-platform) section below if you don't have these yet.
+You need: **Node.js v20+**, **PostgreSQL v14+**, and access to a **vLLM + LiteLLM** OpenAI-compatible endpoint (local or remote — launch scripts are in `scripts/vllm/`). See the [Detailed Install](#detailed-install-by-platform) section below if you don't have these yet.
 
 ### 2. Clone & install
 
@@ -61,14 +57,17 @@ cp .env.example .env
 | `JWT_SECRET` | 64-char hex for auth tokens | `openssl rand -hex 32` |
 | `API_KEY_PEPPER` | 64-char hex for API key hashing | `openssl rand -hex 32` |
 | `ADMIN_PASSWORD` | Initial admin password | Min 8 chars, 1 upper + 1 digit + 1 symbol |
-| `OLLAMA_API_KEY_1` | Ollama Cloud key (for `:cloud` models) | https://ollama.com/settings |
+| `LLM_BASE_URL` | vLLM/LiteLLM proxy endpoint | e.g. `http://localhost:4000` (local) or your LiteLLM URL |
 
 > **TOKEN_ENCRYPTION_KEY** is also strongly recommended (`openssl rand -hex 32`) — encrypts external LLM keys in the DB. Required if you want users to register OpenRouter keys.
 
-### 4. Pull the embedding model & start
+### 4. Start the LLM backend & app
 
 ```bash
-ollama pull nomic-embed-text         # one-time, ~274MB
+# Start vLLM + LiteLLM (server PC — see scripts/vllm/ for systemd units)
+bash scripts/vllm/qwen-serve.sh                                  # :8002 (default chat, 262K)
+litellm --config scripts/vllm/litellm.config.yaml --port 4000    # OpenAI-compatible proxy
+
 npm run dev                           # API + frontend (concurrent)
 ```
 
@@ -90,13 +89,13 @@ After login, here's how to actually use the platform:
 
 ### A. Send your first chat (no setup needed)
 
-Type a message in the input box and hit Enter. The default Ollama model (`gemma4:e4b`) responds in real-time over WebSocket.
+Type a message in the input box and hit Enter. The default model (`qwen3.6-35b-a3b`, served by vLLM) responds in real-time over WebSocket.
 
 ### B. Switch to a more powerful model
 
 1. Open **Settings** (sidebar) → **AI 모델** card → **기본 모델**
 2. The unified ModelSelector dropdown appears with two groups:
-   - 🖥️ **Ollama 로컬** — your local + Ollama Cloud models (`:cloud` suffix)
+   - 🖥️ **로컬 LLM** — models served by your vLLM/LiteLLM backend
    - 🌐 **OpenRouter** — 367+ cloud routed models (requires key registration, see C)
 3. Click any local model to switch immediately
 
@@ -117,22 +116,17 @@ The selected model is used for all subsequent chats. Per-call usage and cost (US
 
 Open the **에이전트** panel and pick one of the 100 specialists (e.g., **Software Engineer**, **Financial Analyst**, **Medical Researcher**). The agent injects domain-specific system prompts before your message.
 
-### E. Upload documents for RAG
+### E. Use built-in tools
 
-Open **문서** (Documents) tab → drag-and-drop a PDF/text file. Future chats can reference the file's content (RAG-grounded answers).
+Type messages that hint at tool use, or open the **Skill Library** to see available capabilities. 13 built-in tools, tier-gated (Free / Pro / Enterprise):
 
-### F. Use built-in tools
+- `web_search` / `fact_check` / `extract_webpage` / `research_topic` — Google CSE-backed search + research (Free)
+- `vision_ocr` / `analyze_image` — image understanding (Free)
+- `create_skill` / `import_skill_from_git` / `import_agent_from_git` / `import_mcp_server_from_git` — natural-language & Git draft import (Free)
+- `web_scrape` / `web_map` / `web_crawl` — web scraping, no API key (free 3-tier fallback) (Pro)
+- Enterprise tier unlocks all external MCP tools (PostgreSQL, Python REPL, Playwright Browser, Knowledge Graph Memory 등)
 
-Type messages that hint at tool use, or open the **Skill Library** to see available capabilities:
-
-- `web_search` — Google CSE-backed search
-- `web_scrape` / `web_map` / `web_crawl` — Firecrawl-powered web scraping
-- `vision_ocr` / `analyze_image` — image understanding
-- `research` (deep research) — multi-step autonomous research with topic decomposition
-- `fs_read_file` / `fs_write_file` / `fs_list_directory` — sandboxed filesystem (per-user)
-- And 7 more (sequential thinking, get_research_status, configure_research 등)
-
-Tools are tier-gated (Free / Pro / Enterprise) — check the Skill Library for your access level.
+Check the Skill Library for your access level.
 
 ---
 
@@ -145,9 +139,6 @@ Tools are tier-gated (Free / Pro / Enterprise) — check the Skill Library for y
 # Homebrew approach
 brew install node postgresql@16
 brew services start postgresql@16
-
-# Ollama: download from https://ollama.com/download (or `brew install ollama`)
-ollama --version
 
 # Create database
 psql postgres <<EOF
@@ -173,11 +164,9 @@ sudo apt-get install -y postgresql postgresql-contrib
 sudo systemctl start postgresql
 sudo -u postgres psql -c "CREATE USER openmake WITH PASSWORD 'change_me';"
 sudo -u postgres psql -c "CREATE DATABASE openmake_llm OWNER openmake;"
-
-# Ollama
-curl -fsSL https://ollama.com/install.sh | sh
-ollama serve &
 ```
+
+> The LLM backend (vLLM + LiteLLM) runs separately — typically on a GPU server. See `scripts/vllm/` for launch scripts and systemd units, and set `LLM_BASE_URL` to its proxy endpoint.
 
 </details>
 
@@ -195,8 +184,7 @@ wsl --install -d Ubuntu
 **Native Windows:**
 1. Node.js LTS — https://nodejs.org/
 2. PostgreSQL — https://www.postgresql.org/download/windows/ (remember the `postgres` superuser password)
-3. Ollama — https://ollama.com/download
-4. Generate hex secrets: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
+3. Generate hex secrets: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
 
 </details>
 
@@ -208,7 +196,7 @@ wsl --install -d Ubuntu
 | Hardware | Apple M4, 16GB RAM |
 | Node.js | v25.8.0 |
 | PostgreSQL | v16.13 (Homebrew) |
-| Ollama | v0.18.3 |
+| LLM backend | vLLM 0.22 + LiteLLM 1.86 (remote GPU server) |
 | Playwright (E2E) | v1.58.0 |
 
 ---
@@ -242,7 +230,7 @@ curl http://localhost:52416/health
 
 ## Configuration Reference
 
-All settings are in `.env`. Full template: [`.env.example`](.env.example) (51 variables).
+All settings are in `.env`. Full template: [`.env.example`](.env.example) (70+ variables).
 
 ### Required (5)
 
@@ -252,7 +240,7 @@ All settings are in `.env`. Full template: [`.env.example`](.env.example) (51 va
 | `JWT_SECRET` | 64-hex string for JWT signing (`openssl rand -hex 32`) |
 | `API_KEY_PEPPER` | 64-hex string for API key hashing |
 | `ADMIN_PASSWORD` | Initial admin account password (8+ chars, mixed) |
-| `OLLAMA_API_KEY_1` | Ollama Cloud key — required only if you use `:cloud` models |
+| `LLM_BASE_URL` | vLLM/LiteLLM OpenAI-compatible proxy endpoint (e.g. `http://localhost:4000`) |
 
 ### Recommended (production)
 
@@ -304,26 +292,27 @@ Missing values just mean rankings won't show your app — functionality unaffect
 ┌─────────────────────────▼───────────────────────────────────┐
 │  Backend — Express 5 + TypeScript (strict mode, ES2022)     │
 │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌────────────────┐  │
-│  │ 26 REST  │ │  Auth    │ │ MCP Tool │ │ WebSocket      │  │
+│  │ 32 REST  │ │  Auth    │ │ MCP Tool │ │ WebSocket      │  │
 │  │ Routes   │ │  JWT/    │ │ Router   │ │ Streaming      │  │
-│  │          │ │ OAuth    │ │ (16 BIs) │ │                │  │
+│  │          │ │ OAuth    │ │ (13 BIs) │ │                │  │
 │  └────┬─────┘ └──────────┘ └──────────┘ └────────────────┘  │
 │  ┌────▼──────────────────────────────────────────────────┐  │
-│  │  Chat Pipeline                                         │  │
-│  │  Query → Classifier → Semantic Cache → Model Selector  │  │
-│  │       → Domain Router → Context Builder → Stream       │  │
+│  │  Chat Pipeline (2-layer)                               │  │
+│  │  ExecutionPlanBuilder (regex classify + fast-path +    │  │
+│  │   profile) → Strategy dispatch → LLMClient.chat        │  │
+│  │   (262K↔1M model pool) → Stream                        │  │
 │  └───────────────────────────────────────────────────────┘  │
 │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌────────────────┐  │
-│  │ 100      │ │ Deep     │ │ RAG +    │ │ Monitoring +   │  │
-│  │ Agents   │ │ Research │ │ Memory   │ │ Analytics      │  │
+│  │ 100      │ │ Deep     │ │ Model    │ │ Monitoring +   │  │
+│  │ Agents   │ │ Research │ │ Pool     │ │ Analytics      │  │
 │  └──────────┘ └──────────┘ └──────────┘ └────────────────┘  │
 └─────────────────────────┬───────────────────────────────────┘
               ┌───────────┼───────────┬─────────────┐
               ▼           ▼           ▼             ▼
         ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐
-        │PostgreSQL│ │  Ollama  │ │  Ollama  │ │OpenRouter│
-        │  (raw    │ │  (local) │ │ (cloud)  │ │ (BYO key)│
-        │   SQL)   │ │          │ │          │ │ 367+ mdls│
+        │PostgreSQL│ │   vLLM   │ │ LiteLLM  │ │OpenRouter│
+        │  (raw    │ │  (local  │ │  proxy   │ │ (BYO key)│
+        │   SQL)   │ │   GPU)   │ │ (OpenAI) │ │ 367+ mdls│
         └──────────┘ └──────────┘ └──────────┘ └──────────┘
 ```
 
@@ -338,16 +327,15 @@ Missing values just mean rankings won't show your app — functionality unaffect
 
 ### Model role architecture
 
-OpenMake LLM splits LLM responsibility into **4 roles** (set independently via env vars):
+OpenMake LLM splits LLM responsibility into roles (set independently via env vars; `OMK_*_MODEL` preferred, legacy `OLLAMA_DEFAULT_MODEL` still honored as a chat fallback):
 
 | Role | Env var | Default | Purpose |
 |---|---|---|---|
-| `chat` | `OLLAMA_DEFAULT_MODEL` | `gemma4:e4b` | Primary user-facing conversation |
-| `classifier` | `OMK_CLASSIFIER_MODEL` | (chat fallback) | Intent classification + semantic cache key |
+| `chat` | `OMK_CHAT_MODEL` / `LLM_DEFAULT_MODEL` | `qwen3.6-35b-a3b` | Primary user-facing conversation |
+| `classifier` | `OMK_CLASSIFIER_MODEL` | (chat fallback) | Optional model-assisted intent hints (routing is regex-first) |
 | `router` | `OMK_ROUTER_MODEL` | (chat fallback) | Agent/skill routing decisions |
-| `embedding` | `OMK_EMBEDDING_MODEL` | `nomic-embed-text:latest` | Vector embeddings for RAG + semantic search |
 
-You can mix small fast models (classifier/router) with a powerful chat model — typical setup keeps embedding always local while chat goes cloud.
+On top of roles, **7 brand model profiles** (Default, Pro, Fast, Think, Code, Vision, Auto) are resolved per request by `ExecutionPlanBuilder`. The embedding role and the vector/semantic-cache infrastructure were removed in the 2026-05 migration.
 
 ### External LLM — OpenRouter (BYO Key)
 
@@ -404,7 +392,7 @@ User keys (DB) → ExternalKeysRepository.decryptKey()
 | 🌾 Agriculture (3) | Agricultural Scientist, Food Scientist, Agribusiness Consultant |
 | 🌟 Special (7) | Ethicist, Futurist, Systems Thinker, Behavioral Economist, Crisis Manager, Negotiation Expert, Fact Checker |
 
-Routing combines **keyword matching** (fast path) with **LLM classifier** (semantic, fallback). Both can be bypassed by selecting an agent manually.
+Routing combines **keyword matching** (fast path) with a **regex classifier**. Both can be bypassed by selecting an agent manually.
 
 </details>
 
@@ -434,7 +422,7 @@ Generate a key at **Settings → API 키 관리**. Use this to integrate any Ope
 
 | Endpoint | Method | Auth | Purpose |
 |---|---|---|---|
-| `/api/models` | GET | optional | List models (Ollama + OpenRouter when authenticated) |
+| `/api/models` | GET | optional | List models (local vLLM + OpenRouter when authenticated) |
 | `/api/external-keys` | GET | JWT | Provider catalog + user-registered key metadata |
 | `/api/external-keys/:provider` | POST/DELETE | JWT | Register / delete OpenRouter key |
 | `/api/external-keys/:provider/validate` | POST | JWT | Live key validation (latency reported) |
@@ -442,7 +430,6 @@ Generate a key at **Settings → API 키 관리**. Use this to integrate any Ope
 | `/api/external-keys/usage/summary?days=N` | GET | JWT | N-day aggregate per provider (max 90) |
 | `/api/api-keys` | GET/POST/DELETE | JWT | OpenMake's own API key management |
 | `/api/research/start` | POST | JWT | Start a deep-research session |
-| `/api/documents` | POST | JWT | Upload a file for RAG |
 
 Interactive Swagger docs: **http://localhost:52416/api/docs** (development).
 
@@ -453,26 +440,26 @@ Interactive Swagger docs: **http://localhost:52416/api/docs** (development).
 ```
 openmake_llm/
 ├── backend/api/src/
-│   ├── routes/                # 26 REST routes
-│   ├── services/              # ChatService, RAG, Memory, Embedding, DeepResearch, ...
-│   ├── chat/                  # Pipeline: classifier, model-selector, semantic-cache, prompts
+│   ├── routes/                # 32 REST routes
+│   ├── services/              # ChatService, AuthService, DeepResearch, Audit, Push, ...
+│   ├── chat/                  # Pipeline: execution-plan-builder, query-classifier (regex), model-selector, prompts
 │   ├── agents/                # Industry agents (100), keyword router, discussion engine
-│   ├── mcp/                   # Tool router, 16 built-in tools, external MCP client, sandbox
+│   ├── mcp/                   # Tool router, 13 built-in tools, external MCP client, sandbox
 │   ├── auth/                  # JWT, OAuth, API key utilities, RBAC, scope middleware
 │   ├── data/                  # PostgreSQL repositories, migration runner
-│   ├── providers/             # IProvider abstractions: Ollama, Anthropic, OpenAI-compat
+│   ├── providers/             # IProvider abstractions: local-llm, Anthropic, OpenAI-compat
 │   ├── sockets/               # WebSocket chat handler with auth/origin validation
 │   ├── config/                # Environment schema, runtime limits, model defaults
 │   ├── monitoring/            # Token usage analytics
-│   ├── ollama/                # Ollama client wrapper + cluster
-│   └── cluster/               # Multi-node Ollama load balancing
+│   ├── llm/                   # vLLM/LiteLLM client (LLMClient), agent-loop, model-pool
+│   └── cluster/               # vLLM/LiteLLM node routing (health check, circuit breaker)
 │
 ├── frontend/web/public/
 │   ├── js/modules/
-│   │   ├── pages/             # 23 SPA page modules
+│   │   ├── pages/             # 23 SPA page modules (incl. 2 developer-doc helpers)
 │   │   │                       # Settings hosts the unified ModelSelector
 │   │   ├── components/
-│   │   │   ├── model-selector.js       # Dropdown — Ollama group + OpenRouter card
+│   │   │   ├── model-selector.js       # Dropdown — local-LLM group + OpenRouter card
 │   │   │   ├── model-list-modal.js     # Full-screen 367+ OpenRouter model browser
 │   │   │   ├── add-key-modal.js        # OpenRouter key registration form
 │   │   │   ├── usage-modal.js          # Per-provider usage + cost table
@@ -480,10 +467,10 @@ openmake_llm/
 │   │   └── (chat, auth, state, websocket, sanitize, ...)
 │   └── css/                   # Design tokens + component styles
 │
-├── services/database/migrations/    # SQL migration files (15 total)
+├── services/database/migrations/    # SQL migration files (34+ total)
 │   ├── 016_external_provider_integration.sql  # 3 tables: keys + usage + cache
-│   ├── 017_drop_uir_schema.sql                # Legacy UIR cleanup
-│   └── 018_keep_only_openrouter.sql           # Catalog reduction (2026-05-08)
+│   ├── 020_drop_memory_documents.sql          # RAG/Memory/document removal
+│   └── 034_user_memories.sql                  # /remember cross-conversation memory
 │
 ├── tests/                     # E2E (Playwright)
 └── ecosystem.config.js        # PM2 production config
@@ -552,14 +539,13 @@ Source files must stay under **600 lines** (CI-enforced). Split large files by r
 | Error | Cause | Fix |
 |---|---|---|
 | `ECONNREFUSED ...5432` | PostgreSQL not running | `brew services start postgresql@16` (macOS) / `sudo systemctl start postgresql` (Linux) |
-| `ECONNREFUSED ...11434` | Ollama not running | Launch the Ollama app or `ollama serve` |
+| `ECONNREFUSED ...4000` / `:13401` | vLLM/LiteLLM proxy unreachable | Start LiteLLM (`litellm --config scripts/vllm/litellm.config.yaml`); verify `LLM_BASE_URL` |
 | `JWT_SECRET must be at least 32 characters` | Missing `.env` config | `openssl rand -hex 32` → set in `.env` |
 | Login fails: "Invalid credentials" | Wrong email/password | Check `DEFAULT_ADMIN_EMAIL` + `ADMIN_PASSWORD` |
-| Chat returns no response (cloud model) | Missing Ollama Cloud key | Set `OLLAMA_API_KEY_1` |
+| Chat returns no response (local model) | LLM backend unreachable | Verify `LLM_BASE_URL` and that vLLM/LiteLLM is running |
 | `password authentication failed` | DB credentials mismatch | `DATABASE_URL` user/pass must match what you created in PostgreSQL |
 | `EADDRINUSE :::52416` | Port already in use | `lsof -i :52416` → kill or change `PORT` in `.env` |
 | `npm install` fails on `node-gyp` | Missing build tools | macOS: `xcode-select --install` · Linux: `apt install build-essential` · Windows: use WSL2 |
-| `nomic-embed-text` errors on first chat | Model not pulled | `ollama pull nomic-embed-text` |
 | OpenRouter shows only 6 models | Backend cache stale or rebuild needed | `npm run build` + PM2 restart. Or `DELETE FROM external_provider_models_cache` |
 | Modal too small / clipped | Browser CSS cache stale | Hard refresh (Cmd+Shift+R) or open in incognito |
 | Settings page: ModelSelector won't mount | One of 4 modal modules failed to import | Check DevTools Console: `[settings] ModelSelector mount 실패` |
@@ -603,15 +589,13 @@ PR checklist:
 |---|---|
 | **SPA** | Single Page Application — the browser loads one HTML and updates content dynamically |
 | **MCP** | Model Context Protocol — standard for letting AI use external tools (web, files, etc.) |
-| **RAG** | Retrieval-Augmented Generation — AI grounded in your uploaded documents |
 | **JWT** | JSON Web Token — secure token format for login sessions |
 | **RBAC** | Role-Based Access Control — permissions by role |
 | **WebSocket** | Real-time bidirectional protocol used for streaming chat |
-| **Semantic Cache** | Caches AI responses by meaning, similar questions get instant answers |
-| **Ollama** | Open-source LLM runtime — local + cloud routing |
+| **vLLM** | High-throughput LLM serving engine that runs the local models |
+| **LiteLLM** | OpenAI-compatible proxy in front of vLLM (and external providers) |
 | **OpenRouter** | Single-key gateway to 367+ cloud LLMs (GPT-5, Claude, Gemini, Llama, ...) |
 | **BYO Key** | Bring Your Own Key — users register their own provider keys, billed to their account |
-| **Embedding** | Numerical vector for similarity search (used in RAG + semantic cache) |
 
 </details>
 
