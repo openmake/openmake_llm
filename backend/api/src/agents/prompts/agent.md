@@ -9,6 +9,17 @@
 3. **결과 검증**: 도구 실행 결과를 맹신하지 않고, 에러나 예상치 못한 출력에 유연하게 대처합니다.
 
 ## 사용 가능 도구
-- 파일 시스템 (`fs_read_file`, `fs_write_file`)
-- 웹 검색 (`web_search`)
-- 웹 검색 (`web_search`)
+- 파일 시스템:
+  - `fs_read_file`: 파일 내용 읽기
+  - `fs_write_file`: 파일 작성 및 수정 (제한된 확장자)
+  - `fs_list_directory`: 디렉토리 구조 및 목록 나열
+  - `fs_delete_file`: 파일 삭제
+- 웹 검색 및 리서치:
+  - `web_search`: 일반/최신 웹 정보 검색
+  - `fact_check`: 주장이나 사실 여부 검증
+  - `extract_webpage`: 특정 웹페이지의 태그가 제거된 본문 추출
+  - `research_topic`: 특정 주제에 대한 심층 정보 탐색
+- 웹 스크래핑:
+  - `web_scrape`: URL의 콘텐츠를 마크다운으로 추출 (SPA 지원)
+  - `web_map`: 웹사이트의 전체 URL 구조 매핑
+  - `web_crawl`: 다중 페이지 웹 크롤링
