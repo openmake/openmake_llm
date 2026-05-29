@@ -12,6 +12,8 @@
  */
 'use strict';
 
+import { fetchModelsPayload } from '../models-api.js';
+
 const STORAGE_KEY = 'selectedModel';
 
 // 디버그 로그 — console 만 (page overlay 제거됨, PR #20).
@@ -122,14 +124,12 @@ async function authFetch(url, opts) {
 
 async function loadData() {
     try {
-        const [modelsRes, providersRes] = await Promise.all([
-            authFetch('/api/models'),
+        const [modelsData, providersRes] = await Promise.all([
+            fetchModelsPayload(),
             authFetch('/api/external-keys'),
         ]);
-        if (modelsRes.ok) {
-            const json = await modelsRes.json();
-            const data = json.data || json;
-            _models = data.models || [];
+        if (modelsData) {
+            _models = modelsData.models || [];
         }
         if (providersRes.ok) {
             _isAuthenticated = true;

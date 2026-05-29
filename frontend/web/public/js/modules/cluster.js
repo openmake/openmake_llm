@@ -14,6 +14,7 @@ import { getState, setState } from './state.js';
 import { escapeHtml, showToast } from './ui.js';
 import { isAdmin } from './auth.js';
 import { STORAGE_KEY_SELECTED_MODEL } from './constants.js';
+import { fetchModelsPayload, pickDefaultModelId } from './models-api.js';
 
 /**
  * 백엔드 /api/models 응답 캐시 (모듈 스코프)
@@ -28,21 +29,14 @@ let CACHED_MODELS = null;
  */
 async function fetchAvailableModels() {
     if (CACHED_MODELS) return CACHED_MODELS;
-    try {
-        const res = await fetch(API_ENDPOINTS.MODELS, { credentials: 'include' });
-        if (!res.ok) return [];
-        const raw = await res.json();
-        const data = raw.data || raw;
-        if (!data.models || data.models.length === 0) return [];
-        CACHED_MODELS = data.models.map(m => ({
-            id: m.modelId || m.name,
-            name: m.name,
-            desc: m.description || ''
-        }));
-        return CACHED_MODELS;
-    } catch (e) {
-        return [];
-    }
+    const payload = await fetchModelsPayload();
+    if (!payload || payload.models.length === 0) return [];
+    CACHED_MODELS = payload.models.map(m => ({
+        id: m.modelId || m.name,
+        name: m.name,
+        desc: m.description || ''
+    }));
+    return CACHED_MODELS;
 }
 
 /**
@@ -305,26 +299,21 @@ async function loadModelInfo() {
     activeModelName.textContent = '로딩 중...';
 
     try {
-        const response = await fetch(API_ENDPOINTS.MODELS, { credentials: 'include' });
-        if (response.ok) {
-            const data = await response.json();
-            const payload = data.data || data;
+        const payload = await fetchModelsPayload();
+        if (!payload) throw new Error('모델 API 응답 오류');
 
-            if (!payload.models || payload.models.length === 0) {
-                activeModelName.textContent = '모델 없음';
-                return;
-            }
-
-            const savedModel = localStorage.getItem(STORAGE_KEY_SELECTED_MODEL);
-            const defaultModelId = payload.defaultModel || (payload.models[0].modelId || payload.models[0].name);
-            const activeModel = payload.models.find(m => {
-                const modelId = m.modelId || m.name;
-                return savedModel ? modelId === savedModel : modelId === defaultModelId;
-            }) || payload.models[0];
-            activeModelName.textContent = activeModel.name;
-        } else {
-            throw new Error('모델 API 응답 오류');
+        if (payload.models.length === 0) {
+            activeModelName.textContent = '모델 없음';
+            return;
         }
+
+        const savedModel = localStorage.getItem(STORAGE_KEY_SELECTED_MODEL);
+        const defaultModelId = pickDefaultModelId(payload);
+        const activeModel = payload.models.find(m => {
+            const modelId = m.modelId || m.name;
+            return savedModel ? modelId === savedModel : modelId === defaultModelId;
+        }) || payload.models[0];
+        activeModelName.textContent = activeModel.name;
     } catch (error) {
         console.error('[Settings] 모델 정보 조회 실패:', error);
         activeModelName.textContent = '연결 실패';

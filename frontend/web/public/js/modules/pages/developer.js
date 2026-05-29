@@ -27,6 +27,7 @@ import {
     getDocModel,
     setDocModel
 } from './developer-sections.js';
+import { getDefaultModelId } from '../models-api.js';
 
     window.PageModules = window.PageModules || {};
     /** @type {number[]} setInterval ID 배열 (cleanup용) */
@@ -87,15 +88,10 @@ import {
      */
     async function refreshDocModel() {
         try {
-            var raw = await (window.authFetch ? window.authFetch('/api/models') : fetch('/api/models'));
-            if (raw && typeof raw.ok === 'boolean' && !raw.ok) return;
-            var data = (raw && typeof raw.json === 'function') ? await raw.json() : raw;
-            var payload = (data && data.data) || data || {};
-            var id = payload.defaultModel
-                || (Array.isArray(payload.models) && payload.models[0] && (payload.models[0].modelId || payload.models[0].id || payload.models[0].name));
-            if (!id || typeof id !== 'string') return;
-            if (id.indexOf(':') > -1) id = id.slice(id.indexOf(':') + 1);  // provider prefix 제거 ('local-llm:xxx' → 'xxx', 모델 id 내부 콜론 보존)
-            if (!id || id === getDocModel()) return;
+            var id = await getDefaultModelId();
+            if (!id) return;
+            if (id.indexOf(':') > -1) id = id.slice(id.indexOf(':') + 1);  // 표시용: provider prefix 제거 ('local-llm:xxx' → 'xxx', 모델 id 내부 콜론 보존)
+            if (id === getDocModel()) return;
             setDocModel(id);
             var contentEl = document.querySelector('.dev-content');
             if (contentEl) {
