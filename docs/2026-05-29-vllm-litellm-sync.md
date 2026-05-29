@@ -92,7 +92,7 @@ Python 3.12.3, torch 2.11.0+cu130, transformers 5.8.1.
 
 1. 🔴 **LiteLLM config 서버 복사** — 동기화한 `scripts/vllm/litellm.config.yaml`을
    서버 `/home/smith/vllm/litellm.config.yaml`로 복사 + LiteLLM 재기동해야 반영됨
-2. **커밋/푸시** — 아직 미실행 (사용자 결정 대기)
+2. **커밋/푸시** — ✅ 코드 변경 커밋 완료 (`4c30f19` Qwen-1M/BGE-M3 지원, `7fb2dc8`). 원격 push 여부는 운영자 판단.
 3. ❓ **LiteLLM DB 미연결** — 의도 여부 확인 권장 (자체 추적 사용 중이면 무방)
 4. ❓ **systemd 미사용** — 갱신한 `.service`는 향후 도입 시 reference (현재 tmux 추정)
 5. ⚠️ vLLM 0.22.0rc3은 RC + venv 버전 skew(0.22 vs 0.21) — 안정성 민감 시 통일/GA 대기 고려
@@ -110,4 +110,4 @@ Python 3.12.3, torch 2.11.0+cu130, transformers 5.8.1.
       scripts/vllm-plugins/{exaone_tool_parser.py, test_exaone_tool_parser.py}
 ```
 
-> 모든 변경은 로컬 작업 트리에만 존재 (커밋/푸시 안 함).
+> 코드/저장소 변경은 커밋 완료 (`4c30f19`, `7fb2dc8`). 본 문서는 완료된 작업 로그이며, repo 루트 정리 시 docs/ 아카이브 이동 또는 삭제 후보.
