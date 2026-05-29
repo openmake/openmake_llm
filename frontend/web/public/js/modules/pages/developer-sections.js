@@ -5,6 +5,16 @@
 import { getCodeBlock } from './developer-helpers.js';
 
 /**
+ * 문서 예제에 사용할 모델 ID — 단일 소스 (하드코딩 금지).
+ * developer.js init() 가 `/api/models` 의 defaultModel(백엔드 LLM_DEFAULT_MODEL 반영)로
+ * 갱신한 뒤 콘텐츠를 재렌더한다. fetch 실패/미인증 시 아래 fallback 을 사용.
+ * @returns {string}
+ */
+let _docModel = 'qwen3.6-35b-a3b';
+export function getDocModel() { return _docModel; }
+export function setDocModel(id) { if (id && typeof id === 'string') _docModel = id; }
+
+/**
  * 1. Introduction 섹션
  * @returns {string} HTML 문자열
  */
@@ -51,7 +61,7 @@ export function renderAuthSection() {
 export function renderModelsSection() {
     return '<section id="models" class="dev-section">' +
         '<h2>Available Models</h2>' +
-        '<p>OpenMake LLM runs on a single locally-hosted Ollama model. Use the <code>GET /api/models</code> endpoint to retrieve the active model and its capabilities at runtime.</p>' +
+        '<p>OpenMake LLM runs on a self-hosted vLLM backend exposed through an OpenAI-compatible gateway. Use the <code>GET /api/models</code> endpoint to retrieve the active model and its capabilities at runtime.</p>' +
 
         '<div class="alert-info" style="margin-top: 1rem; padding: 0.75rem 1rem; border-left: 3px solid var(--info); background: var(--bg-tertiary); border-radius: 4px;">' +
         '<strong>Note:</strong> The model identifier is determined by the server configuration. ' +
@@ -93,7 +103,7 @@ export function renderChatSection() {
             '  -H "X-API-Key: omk_live_sk_..." \\\n' +
             '  -d \'{\n' +
             '    "message": "Hello!",\n' +
-            '    "model": "gemma4:e4b"\n' +
+            '    "model": "' + _docModel + '"\n' +
             '  }\'',
             'python',
             'import requests\n\n' +
@@ -104,7 +114,7 @@ export function renderChatSection() {
             '}\n' +
             'data = {\n' +
             '    "message": "Hello!",\n' +
-            '    "model": "gemma4:e4b"\n' +
+            '    "model": "' + _docModel + '"\n' +
             '}\n' +
             'response = requests.post(url, headers=headers, json=data)\n' +
             'print(response.json())',
@@ -117,7 +127,7 @@ export function renderChatSection() {
             '  },\n' +
             '  body: JSON.stringify({\n' +
             '    message: "Hello!",\n' +
-            '    model: "gemma4:e4b"\n' +
+            '    model: "' + _docModel + '"\n' +
             '  })\n' +
             '});\n' +
             'const data = await response.json();'
@@ -131,7 +141,7 @@ export function renderChatSection() {
             '  "data": {\n' +
             '    "response": "Hello! How can I help you today?",\n' +
             '    "sessionId": "sess_a1b2c3d4...",\n' +
-            '    "model": "gemma4:e4b",\n' +
+            '    "model": "' + _docModel + '",\n' +
             '    "finish_reason": "stop"\n' +
             '  }\n' +
             '}',
@@ -142,7 +152,7 @@ export function renderChatSection() {
             '  "data": {\n' +
             '    "response": "Hello! How can I help you today?",\n' +
             '    "sessionId": "sess_a1b2c3d4...",\n' +
-            '    "model": "gemma4:e4b",\n' +
+            '    "model": "' + _docModel + '",\n' +
             '    "finish_reason": "stop"\n' +
             '  }\n' +
             '}',
@@ -153,7 +163,7 @@ export function renderChatSection() {
             '  data: {\n' +
             '    response: "Hello! How can I help you today?",\n' +
             '    sessionId: "sess_a1b2c3d4...",\n' +
-            '    model: "gemma4:e4b",\n' +
+            '    model: "' + _docModel + '",\n' +
             '    finish_reason: "stop"\n' +
             '  }\n' +
             '}'
@@ -186,7 +196,7 @@ export function renderOpenAICompatSection() {
             '    api_key="omk_live_sk_..."\n' +
             ')\n\n' +
             'response = client.chat.completions.create(\n' +
-            '    model="gemma4:e4b",\n' +
+            '    model="' + _docModel + '",\n' +
             '    messages=[\n' +
             '        {"role": "user", "content": "Hello!"}\n' +
             '    ]\n' +
@@ -199,7 +209,7 @@ export function renderOpenAICompatSection() {
             '  apiKey: "omk_live_sk_..."\n' +
             '});\n\n' +
             'const response = await client.chat.completions.create({\n' +
-            '  model: "gemma4:e4b",\n' +
+            '  model: "' + _docModel + '",\n' +
             '  messages: [\n' +
             '    { role: "user", content: "Hello!" }\n' +
             '  ]\n' +
@@ -210,7 +220,7 @@ export function renderOpenAICompatSection() {
             '  -H "Content-Type: application/json" \\\n' +
             '  -H "Authorization: Bearer omk_live_sk_..." \\\n' +
             '  -d \'{\n' +
-            '    "model": "gemma4:e4b",\n' +
+            '    "model": "' + _docModel + '",\n' +
             '    "messages": [\n' +
             '      {"role": "user", "content": "Hello!"}\n' +
             '    ]\n' +
@@ -244,7 +254,7 @@ export function renderOpenAICompatSection() {
             '  "id": "chatcmpl-abc123def456...",\n' +
             '  "object": "chat.completion",\n' +
             '  "created": 1709827200,\n' +
-            '  "model": "gemma4:e4b",\n' +
+            '  "model": "' + _docModel + '",\n' +
             '  "choices": [\n' +
             '    {\n' +
             '      "index": 0,\n' +
@@ -264,7 +274,7 @@ export function renderOpenAICompatSection() {
             'python',
             '# response object\n' +
             'response.id           # "chatcmpl-abc123def456..."\n' +
-            'response.model        # "gemma4:e4b"\n' +
+            'response.model        # "' + _docModel + '"\n' +
             'response.choices[0].message.content\n' +
             '                      # "Hello! How can I help you today?"\n' +
             'response.choices[0].finish_reason\n' +
@@ -276,7 +286,7 @@ export function renderOpenAICompatSection() {
             '  id: "chatcmpl-abc123def456...",\n' +
             '  object: "chat.completion",\n' +
             '  created: 1709827200,\n' +
-            '  model: "gemma4:e4b",\n' +
+            '  model: "' + _docModel + '",\n' +
             '  choices: [{\n' +
             '    index: 0,\n' +
             '    message: { role: "assistant", content: "Hello! ..." },\n' +
@@ -296,7 +306,7 @@ export function renderOpenAICompatSection() {
             '  -H "Content-Type: application/json" \\\n' +
             '  -H "Authorization: Bearer omk_live_sk_..." \\\n' +
             '  -d \'{\n' +
-            '    "model": "gemma4:e4b",\n' +
+            '    "model": "' + _docModel + '",\n' +
             '    "stream": true,\n' +
             '    "messages": [\n' +
             '      {"role": "user", "content": "Tell me a joke"}\n' +
@@ -304,7 +314,7 @@ export function renderOpenAICompatSection() {
             '  }\'',
             'python',
             'stream = client.chat.completions.create(\n' +
-            '    model="gemma4:e4b",\n' +
+            '    model="' + _docModel + '",\n' +
             '    messages=[{"role": "user", "content": "Tell me a joke"}],\n' +
             '    stream=True\n' +
             ')\n\n' +
@@ -314,7 +324,7 @@ export function renderOpenAICompatSection() {
             '        print(delta.content, end="", flush=True)',
             'typescript',
             'const stream = await client.chat.completions.create({\n' +
-            '  model: "gemma4:e4b",\n' +
+            '  model: "' + _docModel + '",\n' +
             '  messages: [{ role: "user", content: "Tell me a joke" }],\n' +
             '  stream: true\n' +
             '});\n\n' +
@@ -329,12 +339,12 @@ export function renderOpenAICompatSection() {
         getCodeBlock(
             'curl',
             '// First chunk (role)\n' +
-            'data: {"id":"chatcmpl-abc...","object":"chat.completion.chunk","created":1709827200,"model":"gemma4:e4b","choices":[{"index":0,"delta":{"role":"assistant"},"finish_reason":null}]}\n\n' +
+            'data: {"id":"chatcmpl-abc...","object":"chat.completion.chunk","created":1709827200,"model":"' + _docModel + '","choices":[{"index":0,"delta":{"role":"assistant"},"finish_reason":null}]}\n\n' +
             '// Content chunks\n' +
-            'data: {"id":"chatcmpl-abc...","object":"chat.completion.chunk","created":1709827200,"model":"gemma4:e4b","choices":[{"index":0,"delta":{"content":"Hello"},"finish_reason":null}]}\n\n' +
-            'data: {"id":"chatcmpl-abc...","object":"chat.completion.chunk","created":1709827200,"model":"gemma4:e4b","choices":[{"index":0,"delta":{"content":"!"},"finish_reason":null}]}\n\n' +
+            'data: {"id":"chatcmpl-abc...","object":"chat.completion.chunk","created":1709827200,"model":"' + _docModel + '","choices":[{"index":0,"delta":{"content":"Hello"},"finish_reason":null}]}\n\n' +
+            'data: {"id":"chatcmpl-abc...","object":"chat.completion.chunk","created":1709827200,"model":"' + _docModel + '","choices":[{"index":0,"delta":{"content":"!"},"finish_reason":null}]}\n\n' +
             '// Final chunk\n' +
-            'data: {"id":"chatcmpl-abc...","object":"chat.completion.chunk","created":1709827200,"model":"gemma4:e4b","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}\n\n' +
+            'data: {"id":"chatcmpl-abc...","object":"chat.completion.chunk","created":1709827200,"model":"' + _docModel + '","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}\n\n' +
             'data: [DONE]',
             'python',
             '# Each chunk object:\n' +
@@ -348,7 +358,7 @@ export function renderOpenAICompatSection() {
             '  id: "chatcmpl-abc...",\n' +
             '  object: "chat.completion.chunk",\n' +
             '  created: 1709827200,\n' +
-            '  model: "gemma4:e4b",\n' +
+            '  model: "' + _docModel + '",\n' +
             '  choices: [{\n' +
             '    index: 0,\n' +
             '    delta: { content: "Hello" },  // partial text\n' +
@@ -367,7 +377,7 @@ export function renderOpenAICompatSection() {
             '  -H "Content-Type: application/json" \\\n' +
             '  -H "Authorization: Bearer omk_live_sk_..." \\\n' +
             '  -d \'{\n' +
-            '    "model": "gemma4:e4b",\n' +
+            '    "model": "' + _docModel + '",\n' +
             '    "messages": [\n' +
             '      {"role": "user", "content": "What is the weather in Seoul?"}\n' +
             '    ],\n' +
@@ -390,7 +400,7 @@ export function renderOpenAICompatSection() {
             '  }\'',
             'python',
             'response = client.chat.completions.create(\n' +
-            '    model="gemma4:e4b",\n' +
+            '    model="' + _docModel + '",\n' +
             '    messages=[\n' +
             '        {"role": "user", "content": "What is the weather in Seoul?"}\n' +
             '    ],\n' +
@@ -416,7 +426,7 @@ export function renderOpenAICompatSection() {
             '    print(tool_calls[0].function.arguments)  # {"location": "Seoul"}',
             'typescript',
             'const response = await client.chat.completions.create({\n' +
-            '  model: "gemma4:e4b",\n' +
+            '  model: "' + _docModel + '",\n' +
             '  messages: [\n' +
             '    { role: "user", content: "What is the weather in Seoul?" }\n' +
             '  ],\n' +
@@ -450,7 +460,7 @@ export function renderOpenAICompatSection() {
             '{\n' +
             '  "id": "chatcmpl-abc123...",\n' +
             '  "object": "chat.completion",\n' +
-            '  "model": "gemma4:e4b",\n' +
+            '  "model": "' + _docModel + '",\n' +
             '  "choices": [{\n' +
             '    "index": 0,\n' +
             '    "message": {\n' +
@@ -478,7 +488,7 @@ export function renderOpenAICompatSection() {
             '})\n\n' +
             '# Continue the conversation\n' +
             'final = client.chat.completions.create(\n' +
-            '    model="gemma4:e4b",\n' +
+            '    model="' + _docModel + '",\n' +
             '    messages=messages\n' +
             ')',
             'typescript',
@@ -491,7 +501,7 @@ export function renderOpenAICompatSection() {
             '});\n\n' +
             '// Continue the conversation\n' +
             'const final = await client.chat.completions.create({\n' +
-            '  model: "gemma4:e4b",\n' +
+            '  model: "' + _docModel + '",\n' +
             '  messages\n' +
             '});'
         ) +
@@ -523,26 +533,26 @@ export function renderOpenAICompatSection() {
             '  "object": "list",\n' +
             '  "data": [\n' +
             '    {\n' +
-            '      "id": "gemma4:e4b",\n' +
+            '      "id": "' + _docModel + '",\n' +
             '      "object": "model",\n' +
             '      "created": 1709827200,\n' +
-            '      "owned_by": "ollama-local",\n' +
-            '      "name": "gemma4:e4b",\n' +
-            '      "description": "로컬 LLM 모델 (gemma4:e4b)"\n' +
+            '      "owned_by": "local-llm",\n' +
+            '      "name": "' + _docModel + '",\n' +
+            '      "description": "로컬 LLM 모델 (' + _docModel + ')"\n' +
             '    }\n' +
             '  ]\n' +
             '}',
             'python',
             '# models object\n' +
             'models.object    # "list"\n' +
-            'models.data[0].id         # "gemma4:e4b"\n' +
-            'models.data[0].owned_by   # "ollama-local"',
+            'models.data[0].id         # "' + _docModel + '"\n' +
+            'models.data[0].owned_by   # "local-llm"',
             'typescript',
             '// models object\n' +
             '{\n' +
             '  object: "list",\n' +
             '  data: [\n' +
-            '    { id: "gemma4:e4b", object: "model", created: 1709827200, owned_by: "ollama-local" }\n' +
+            '    { id: "' + _docModel + '", object: "model", created: 1709827200, owned_by: "local-llm" }\n' +
             '  ]\n' +
             '}'
         ) +
@@ -806,7 +816,38 @@ export function renderErrorsSection() {
 export function renderSdksSection() {
     return '<section id="sdks" class="dev-section">' +
         '<h2>SDKs & Libraries</h2>' +
-        '<p>Official SDKs for Python and Node.js are coming soon. In the meantime, you can use any standard HTTP client to access the API.</p>' +
+        '<p>OpenMake LLM is OpenAI-compatible, so there is no OpenMake-specific SDK to install. Use the official OpenAI SDKs (or any OpenAI-compatible client) and point the base URL at OpenMake with your OpenMake API key.</p>' +
+        '<p style="font-size: var(--font-size-sm);">Install: <code>pip install openai</code> (Python) &nbsp;·&nbsp; <code>npm install openai</code> (Node.js).</p>' +
+        getCodeBlock(
+            'python',
+            'from openai import OpenAI\n\n' +
+            'client = OpenAI(\n' +
+            '    base_url="' + window.location.origin + '/api/v1",\n' +
+            '    api_key="omk_live_sk_..."\n' +
+            ')\n\n' +
+            'resp = client.chat.completions.create(\n' +
+            '    model="' + _docModel + '",\n' +
+            '    messages=[{"role": "user", "content": "Hello!"}]\n' +
+            ')\n' +
+            'print(resp.choices[0].message.content)',
+            'typescript',
+            'import OpenAI from "openai";\n\n' +
+            'const client = new OpenAI({\n' +
+            '  baseURL: "' + window.location.origin + '/api/v1",\n' +
+            '  apiKey: "omk_live_sk_..."\n' +
+            '});\n\n' +
+            'const resp = await client.chat.completions.create({\n' +
+            '  model: "' + _docModel + '",\n' +
+            '  messages: [{ role: "user", content: "Hello!" }]\n' +
+            '});\n' +
+            'console.log(resp.choices[0].message.content);',
+            'curl',
+            'curl ' + window.location.origin + '/api/v1/chat/completions \\\n' +
+            '  -H "Authorization: Bearer omk_live_sk_..." \\\n' +
+            '  -H "Content-Type: application/json" \\\n' +
+            '  -d \'{"model": "' + _docModel + '", "messages": [{"role": "user", "content": "Hello!"}]}\''
+        ) +
+        '<p style="margin-top: var(--space-4); font-size: var(--font-size-sm);">Streaming, tool calling, and other parameters follow the OpenAI API spec (see <strong>OpenAI Compatibility</strong> above). Higher-level libraries such as LangChain, LlamaIndex, and the Vercel AI SDK also work by overriding the base URL.</p>' +
         '</section>';
 }
 

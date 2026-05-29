@@ -23,7 +23,9 @@ import {
     renderUsageSection,
     renderRateLimitsSection,
     renderErrorsSection,
-    renderSdksSection
+    renderSdksSection,
+    getDocModel,
+    setDocModel
 } from './developer-sections.js';
 
     window.PageModules = window.PageModules || {};
@@ -31,6 +33,77 @@ import {
     let _intervals = [];
     /** @type {IntersectionObserver|null} 스크롤 관찰자 */
     let _observer = null;
+
+    /** 문서 본문(.dev-content) HTML 생성 — 모델명은 _docModel(단일 소스) 사용 */
+    function buildContentHTML() {
+        return '<div class="dev-content">' +
+            renderIntroSection() +
+            renderAuthSection() +
+            renderModelsSection() +
+            renderChatSection() +
+            renderOpenAICompatSection() +
+            renderApiKeysSection() +
+            renderUsageSection() +
+            renderRateLimitsSection() +
+            renderErrorsSection() +
+            renderSdksSection() +
+            '</div>';
+    }
+
+    /** Scrollspy(IntersectionObserver) 설정 — 재렌더 시 재호출 가능 (기존 observer disconnect 후 재관찰) */
+    function setupScrollspy() {
+        if (_observer) { _observer.disconnect(); _observer = null; }
+        var sections = document.querySelectorAll('.dev-section');
+        var navLinks = document.querySelectorAll('.dev-sidebar-link');
+        if (window.IntersectionObserver && sections.length > 0) {
+            _observer = new IntersectionObserver(function(entries) {
+                requestAnimationFrame(function() {
+                    entries.forEach(function(entry) {
+                        if (entry.isIntersecting) {
+                            var id = entry.target.getAttribute('id');
+                            navLinks.forEach(function(link) {
+                                link.classList.remove('active');
+                                if (link.getAttribute('href') === '#' + id) {
+                                    link.classList.add('active');
+                                    var parent = link.closest('.dev-sidebar-sub');
+                                    if (parent) {
+                                        var parentLink = parent.parentElement.querySelector('a');
+                                        if (parentLink) parentLink.classList.add('active');
+                                    }
+                                }
+                            });
+                        }
+                    });
+                });
+            }, { threshold: 0.2, rootMargin: "-10% 0px -70% 0px" });
+            sections.forEach(function(section) { _observer.observe(section); });
+        }
+    }
+
+    /**
+     * 문서 예제 모델명을 백엔드 실제 default 모델로 동적 갱신.
+     * `/api/models`(→ 백엔드 LLM_DEFAULT_MODEL/model-pool 반영)에서 defaultModel 조회 →
+     * setDocModel() → .dev-content 재렌더. 실패/미인증 시 fallback 유지.
+     */
+    async function refreshDocModel() {
+        try {
+            var raw = await (window.authFetch ? window.authFetch('/api/models') : fetch('/api/models'));
+            if (raw && typeof raw.ok === 'boolean' && !raw.ok) return;
+            var data = (raw && typeof raw.json === 'function') ? await raw.json() : raw;
+            var payload = (data && data.data) || data || {};
+            var id = payload.defaultModel
+                || (Array.isArray(payload.models) && payload.models[0] && (payload.models[0].modelId || payload.models[0].id || payload.models[0].name));
+            if (!id || typeof id !== 'string') return;
+            if (id.indexOf(':') > -1) id = id.split(':').pop();  // 'local-llm:xxx' → 'xxx'
+            if (id === getDocModel()) return;
+            setDocModel(id);
+            var contentEl = document.querySelector('.dev-content');
+            if (contentEl) {
+                contentEl.outerHTML = buildContentHTML();
+                setupScrollspy();
+            }
+        } catch (e) { /* fetch 실패 → fallback 모델 유지 */ }
+    }
 
     window.PageModules['developer'] = {
         getHTML: function() {
@@ -129,18 +202,7 @@ import {
                 '</nav>';
 
             // CONTENT GENERATION
-            var content = '<div class="dev-content">' +
-                renderIntroSection() +
-                renderAuthSection() +
-                renderModelsSection() +
-                renderChatSection() +
-                renderOpenAICompatSection() +
-                renderApiKeysSection() +
-                renderUsageSection() +
-                renderRateLimitsSection() +
-                renderErrorsSection() +
-                renderSdksSection() +
-                '</div>';
+            var content = buildContentHTML();
 
             return '<div class="page-developer">' + styles + '<div class="dev-layout">' + sidebar + content + '</div></div>';
         },
@@ -187,38 +249,9 @@ import {
                 });
             }
 
-            // Scrollspy Logic
-            var sections = document.querySelectorAll('.dev-section');
-            var navLinks = document.querySelectorAll('.dev-sidebar-link');
-
-            if (window.IntersectionObserver && sections.length > 0) {
-                _observer = new IntersectionObserver(function(entries) {
-                    // requestAnimationFrame으로 래핑하여 iOS Safari 레이아웃 스래싱 방지
-                    requestAnimationFrame(function() {
-                        entries.forEach(function(entry) {
-                            if (entry.isIntersecting) {
-                                var id = entry.target.getAttribute('id');
-                                navLinks.forEach(function(link) {
-                                    link.classList.remove('active');
-                                    if (link.getAttribute('href') === '#' + id) {
-                                        link.classList.add('active');
-                                        // Expand parent submenu if exists
-                                        var parent = link.closest('.dev-sidebar-sub');
-                                        if (parent) {
-                                            var parentLink = parent.parentElement.querySelector('a');
-                                            if (parentLink) parentLink.classList.add('active');
-                                        }
-                                    }
-                                });
-                            }
-                        });
-                    });
-                }, { threshold: 0.2, rootMargin: "-10% 0px -70% 0px" });
-
-                sections.forEach(function(section) {
-                    _observer.observe(section);
-                });
-            }
+            // Scrollspy 설정 + 문서 예제 모델을 백엔드 default 모델로 동적 반영
+            setupScrollspy();
+            refreshDocModel();
         },
 
         cleanup: function() {

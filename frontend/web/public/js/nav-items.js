@@ -3,7 +3,7 @@
  * Navigation Items - 사이드바 메뉴 데이터 소스
  * ============================================
  * 사이드바 메뉴 항목의 단일 소스 (Single Source of Truth).
- * index.html과 sidebar.js 모두 이 데이터를 참조합니다.
+ * components/unified-sidebar.js 가 이 데이터를 참조하여 렌더링합니다.
  * 새 페이지 추가 시 이 파일만 수정하면 됩니다.
  *
  * @module nav-items

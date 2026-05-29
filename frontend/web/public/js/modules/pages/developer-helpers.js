@@ -24,28 +24,33 @@ export function escapeHtml(unsafe) {
  * @returns {string} 구문 강조된 HTML 문자열
  */
 export function highlight(code, lang) {
-    var html = escapeHtml(code);
-    // Comments
-    html = html.replace(/(\#.*$|\/\/.*$)/gm, '<span class="tok-com">$1</span>');
-    // Strings
-    html = html.replace(/(&quot;.*?&quot;|'.*?')/g, '<span class="tok-str">$1</span>');
-    // Numbers
-    html = html.replace(/\b(\d+)\b/g, '<span class="tok-num">$1</span>');
-    // Keywords (basic set)
-    var keywords = 'import|from|const|let|var|function|return|if|else|await|async|try|catch|true|false|null|undefined|class|new';
-    var keyRegex = new RegExp('\\b(' + keywords + ')\\b', 'g');
-    html = html.replace(keyRegex, '<span class="tok-key">$1</span>');
-    // Methods/Functions (basic)
-    html = html.replace(/\b([a-zA-Z0-9_]+)(?=\()/g, '<span class="tok-func">$1</span>');
-    // Punctuation (JSON/JS objects)
-    html = html.replace(/([\{\}\[\]\,\:])/g, '<span class="tok-punc">$1</span>');
-
-    // Language specific
+    var esc = escapeHtml(code);
+    // 단일 패스 토크나이저 — 삽입한 <span class="..."> 마크업을 후속 패스가 재매칭하던
+    // 버그(특히 'class' 키워드가 span 속성을 깨던 문제) 방지. 좌→우 1회 스캔, 문자열/주석은 원자적.
+    // 각 패턴은 capture group 1개씩 (내부는 (?:...) 비캡처) — group index ↔ patterns index 정렬.
+    var patterns = [
+        { cls: 'tok-com', src: '#.*|\\/\\/.*' },
+        { cls: 'tok-str', src: '&quot;.*?&quot;|&#039;.*?&#039;' },
+    ];
     if (lang === 'curl') {
-        html = html.replace(/(GET|POST|PUT|PATCH|DELETE)/g, '<span class="tok-key">$1</span>');
-        html = html.replace(/(-H|-d|-X)/g, '<span class="tok-param">$1</span>');
+        patterns.push({ cls: 'tok-key', src: '\\b(?:GET|POST|PUT|PATCH|DELETE)\\b' });
+        patterns.push({ cls: 'tok-param', src: '-H|-d|-X' });
     }
-    return html;
+    patterns.push({ cls: 'tok-key', src: '\\b(?:import|from|const|let|var|function|return|if|else|await|async|try|catch|true|false|null|undefined|class|new)\\b' });
+    patterns.push({ cls: 'tok-num', src: '\\b\\d+(?:\\.\\d+)?\\b' });
+    patterns.push({ cls: 'tok-func', src: '[a-zA-Z_]\\w*(?=\\()' });
+    patterns.push({ cls: 'tok-punc', src: '[{}\\[\\],:]' });
+
+    var master = new RegExp(patterns.map(function (p) { return '(' + p.src + ')'; }).join('|'), 'g');
+    return esc.replace(master, function () {
+        var args = arguments;
+        for (var i = 0; i < patterns.length; i++) {
+            if (args[i + 1] !== undefined) {
+                return '<span class="' + patterns[i].cls + '">' + args[i + 1] + '</span>';
+            }
+        }
+        return args[0];
+    });
 }
 
 /**
