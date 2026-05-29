@@ -7,7 +7,7 @@
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License" /></a>
   <img src="https://img.shields.io/badge/version-1.5.6-green.svg" alt="Version" />
-  <img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen.svg" alt="Node" />
+  <img src="https://img.shields.io/badge/node-%3E%3D22-brightgreen.svg" alt="Node" />
   <img src="https://img.shields.io/badge/TypeScript-strict-blue.svg" alt="TypeScript" />
 </p>
 
@@ -34,7 +34,7 @@ No SaaS. No telemetry to third parties. Your data stays on your hardware (or you
 
 ### 1. Prerequisites
 
-You need: **Node.js v20+**, **PostgreSQL v14+**, and access to a **vLLM + LiteLLM** OpenAI-compatible endpoint (local or remote — launch scripts are in `scripts/vllm/`). See the [Detailed Install](#detailed-install-by-platform) section below if you don't have these yet.
+You need: **Node.js v22+**, **PostgreSQL v14+**, and access to a **vLLM + LiteLLM** OpenAI-compatible endpoint (local or remote — launch scripts are in `scripts/vllm/`). See the [Detailed Install](#detailed-install-by-platform) section below if you don't have these yet.
 
 ### 2. Clone & install
 
@@ -155,8 +155,8 @@ Set `DATABASE_URL=postgresql://openmake:change_me@localhost:5432/openmake_llm` i
 <summary><b>Linux (Ubuntu/Debian)</b></summary>
 
 ```bash
-# Node.js 20+
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+# Node.js 22+
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
 sudo apt-get install -y nodejs
 
 # PostgreSQL
@@ -511,7 +511,7 @@ npm run test:e2e:ui
 
 ### File-size guard
 
-Source files must stay under **600 lines** (CI-enforced). Split large files by responsibility — see existing patterns in `backend/api/src/chat/` and `backend/api/src/mcp/`.
+Backend logic files must stay under **600 lines** (CI Gate 3 — fails the build on violation). Declarative files are exempt: type definitions (`types.ts`), config/limit tables (`runtime-limits.ts`), and prompt/locale/policy data (`prompt-templates.ts`, `language-policy.ts`, `*-locales.ts`, `*-guidelines.ts`, `*-data-*.ts`). Split large logic files by responsibility — see patterns in `backend/api/src/chat/` and `backend/api/src/mcp/`.
 
 ---
 

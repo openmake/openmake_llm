@@ -25,7 +25,8 @@
     "keywords": [
         "ai",
         "assistant",
-        "ollama",
+        "vllm",
+        "litellm",
         "llm"
     ],
     "author": "",
