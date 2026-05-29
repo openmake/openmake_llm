@@ -96,7 +96,7 @@ export function createContextBuilder(config: DiscussionConfig): {
         maxHistoryTokens: DISCUSSION_TOKEN_BUDGET.COMPACT.maxHistoryTokens,
         maxWebSearchTokens: DISCUSSION_TOKEN_BUDGET.COMPACT.maxWebSearchTokens,
         maxMemoryTokens: DISCUSSION_TOKEN_BUDGET.COMPACT.maxMemoryTokens,
-        maxImageDescriptionTokens: 500
+        maxImageDescriptionTokens: DISCUSSION_TOKEN_BUDGET.COMPACT.maxImageDescriptionTokens
     };
     
     const limits: TokenLimits = {

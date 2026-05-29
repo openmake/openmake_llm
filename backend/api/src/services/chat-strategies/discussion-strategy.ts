@@ -19,7 +19,7 @@ import type { ChatMessage } from '../../llm';
 import type { ChatStrategy, ChatResult, DiscussionStrategyContext } from './types';
 import { createLogger } from '../../utils/logger';
 import { sanitizePromptInput } from '../../utils/input-sanitizer';
-import { DISCUSSION_TOKEN_BUDGET, MODEL_CONTEXT_DEFAULTS } from '../../config/runtime-limits';
+import { DISCUSSION_TOKEN_BUDGET, MODEL_CONTEXT_DEFAULTS, DISCUSSION_STREAM_ABORT_CHECK_INTERVAL } from '../../config/runtime-limits';
 import { LLM_TEMPERATURES } from '../../config/llm-parameters';
 import { resolvePromptLocale, type PromptLocaleCode } from '../../chat/language-policy';
 import { withSpan } from '../../observability/otel';
@@ -373,7 +373,7 @@ export class DiscussionStrategy implements ChatStrategy<DiscussionStrategyContex
                     maxHistoryTokens: DISCUSSION_TOKEN_BUDGET.DEFAULT.maxHistoryTokens,
                     maxWebSearchTokens: DISCUSSION_TOKEN_BUDGET.DEFAULT.maxWebSearchTokens,
                     maxMemoryTokens: DISCUSSION_TOKEN_BUDGET.DEFAULT.maxMemoryTokens,
-                    maxImageDescriptionTokens: 500,
+                    maxImageDescriptionTokens: DISCUSSION_TOKEN_BUDGET.DEFAULT.maxImageDescriptionTokens,
                 },
             },
             context.onProgress
@@ -416,7 +416,7 @@ export class DiscussionStrategy implements ChatStrategy<DiscussionStrategyContex
         const formattedResponse = context.formatDiscussionResult(result);
 
         // 포맷팅된 결과를 스트리밍 전송 (100자마다 abort 체크 — 매 문자 체크는 오버헤드)
-        const ABORT_CHECK_INTERVAL = 100;
+        const ABORT_CHECK_INTERVAL = DISCUSSION_STREAM_ABORT_CHECK_INTERVAL;
         for (let i = 0; i < formattedResponse.length; i++) {
             if (i % ABORT_CHECK_INTERVAL === 0) {
                 checkAborted();

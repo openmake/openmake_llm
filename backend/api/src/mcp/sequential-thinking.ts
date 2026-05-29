@@ -22,7 +22,7 @@ import { THINKING_LIMITS } from '../config/runtime-limits';
  * Sequential Thinking을 채팅에 적용하기 위한 시스템 프롬프트.
  *
  * 2026-05-26 v2: 출력 형식 강제 (## 결론 → --- → [N/N]) **완전 제거**.
- * vLLM `--reasoning-parser` (Qwen3/EXAONE) + Gemini thinking + Anthropic
+ * vLLM `--reasoning-parser` (Qwen3) + Gemini thinking + Anthropic
  * extended thinking 모두 사고 과정을 native reasoning 채널로 별도 전송하므로
  * 본 prompt 가 본문 형식까지 강제하면 thinking 이 본문에 중복 노출됨.
  *

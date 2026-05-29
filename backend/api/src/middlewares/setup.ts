@@ -300,12 +300,10 @@ export function setupStaticFiles(app: Application, dirname: string): void {
         return injectNonceIntoHtml(html, nonce);
     };
 
-    // 2026-05-26: HTML 서빙도 정적 파일과 동일하게 dev 환경에서는 소스 원본 우선.
-    const preferSourceHtml = process.env.NODE_ENV !== 'production'
-        || process.env.OMK_STATIC_PREFER_SOURCE === 'true';
-    const htmlSearchOrder = preferSourceHtml
-        ? [fallbackPublicPath, publicPath]
-        : [publicPath, fallbackPublicPath];
+    // 프론트엔드는 빌드 없는 순수 JS — 단일 원본(frontend/web/public)에서 직접 서빙.
+    // (2026-05-29) dist/public 복사 단계(sync-frontend) 제거 → 원본 수정 즉시 반영.
+    // HTML 도 소스 우선, 잔존 dist 는 폴백(없으면 no-op).
+    const htmlSearchOrder = [fallbackPublicPath, publicPath];
 
     const getIndexPath = (): string | null => resolveFilePath(
         htmlSearchOrder.map(p => path.join(p, 'index.html'))
@@ -438,29 +436,18 @@ export function setupStaticFiles(app: Application, dirname: string): void {
         }
     };
 
-    // 2026-05-26: 정적 파일 우선순위 — Dev 환경에서는 frontend/web/public (소스 원본)
-    // 을 dist/public 보다 먼저 mount. 빌드(sync-frontend rsync) 안 해도 frontend
-    // 수정사항이 즉시 반영되도록. Production (NODE_ENV=production) 에서는 기존대로
-    // dist/public 우선 (빌드 산출물 = 디플로이 단위).
-    //
-    // env OMK_STATIC_PREFER_SOURCE=true 로 강제 override 가능 (production 에서도
-    // 긴급 hotfix 시).
-    const preferSource = process.env.NODE_ENV !== 'production'
-        || process.env.OMK_STATIC_PREFER_SOURCE === 'true';
-
+    // 프론트엔드 단일 원본 서빙 — 소스(frontend/web/public)에서 직접 (dev/prod 동일).
+    // 빌드 없는 순수 JS 라 복사 불필요 → dist/public 복사 단계(sync-frontend)는
+    // 2026-05-29 제거. 원본 수정이 sync/build 없이 즉시 반영됨.
+    // dist/public 은 더 이상 생성되지 않으며, 잔존분이 있으면 폴백으로만 동작(없으면 no-op).
     const staticOpts = {
         etag: true,
         lastModified: true,
         setHeaders: staticHeaders
     };
 
-    if (preferSource) {
-        app.use(express.static(fallbackPublicPath, staticOpts));  // 소스 원본 우선
-        app.use(express.static(publicPath, staticOpts));           // dist 폴백
-    } else {
-        app.use(express.static(publicPath, staticOpts));            // dist 우선 (production)
-        app.use(express.static(fallbackPublicPath, staticOpts));    // 소스 폴백
-    }
+    app.use(express.static(fallbackPublicPath, staticOpts));  // 소스 원본 (단일 출처)
+    app.use(express.static(publicPath, staticOpts));           // dist 잔존 폴백 (없으면 no-op)
 }
 
 /**

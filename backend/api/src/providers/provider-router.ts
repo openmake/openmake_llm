@@ -119,7 +119,7 @@ export class ProviderRouter {
 
         // Canonical provider id 'local-llm' — vLLM/LiteLLM 진입점.
         // parseFullModelId 가 legacy 'ollama:' 를 'local-llm' 으로 normalize 하므로
-        // 옛 모델 ID 'ollama:exaone4.5-...' 도 자동으로 이 분기로 들어옴.
+        // 옛 모델 ID 'ollama:qwen3.6-...' 도 자동으로 이 분기로 들어옴.
         if (providerId === 'local-llm') {
             return {
                 provider: this.deps.localProvider,

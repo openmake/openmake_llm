@@ -11,17 +11,10 @@ import type { ResearchConfig, ResearchProgress } from '../deep-research-types';
 import { scrapePage } from '../../utils/web-scraper';
 import { getUnifiedDatabase } from '../../data/models/unified-database';
 import { createLogger } from '../../utils/logger';
-import { RESEARCH_DEFAULTS } from '../../config/runtime-limits';
+import { RESEARCH_DEFAULTS, SCRAPE_ABORT_BUFFER_MS } from '../../config/runtime-limits';
 import { normalizeUrl } from '../deep-research-utils';
 
 const logger = createLogger('DeepResearch:ContentScraper');
-
-/**
- * scrapeTimeoutMs 외부에 추가로 부여하는 abort 안전 마진.
- * 외부 scrape 함수의 자체 timeout 보다 약간 늦게 abort 하여,
- * 함수가 자연스럽게 타임아웃 응답을 반환할 시간을 확보한다.
- */
-const SCRAPE_ABORT_BUFFER_MS = 1000;
 
 /**
  * 단일 URL 스크래핑

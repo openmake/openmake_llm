@@ -30,10 +30,10 @@ import { createLogger } from '../utils/logger';
 const log = createLogger('StreamParser');
 
 /**
- * Fallback 메시지: vLLM reasoning 모델(EXAONE/Qwen3 등) 이 reasoning 토큰만으로
+ * Fallback 메시지: vLLM reasoning 모델(Qwen3 등) 이 reasoning 토큰만으로
  * max_tokens 를 소진하여 `content` 가 `null|""` 로 반환된 경우 사용자에게 노출.
  *
- * 발생 조건 (vLLM 0.21+ EXAONE 4.5):
+ * 발생 조건 (vLLM 0.21+ Qwen3 reasoning):
  *   finish_reason="length", message.content=null, message.reasoning_content="...".
  * 해결책: max_tokens(num_predict) 증가 또는 `LLM_DISABLE_THINKING_BY_DEFAULT=true`.
  */
@@ -48,7 +48,7 @@ type OpenAIChatChunk = {
             content?: string;
             /** OpenAI/일부 vLLM 빌드의 reasoning 필드 */
             reasoning?: string;
-            /** vLLM 0.21+ EXAONE/Qwen3 reasoning 모델의 thinking 토큰 필드 */
+            /** vLLM 0.21+ Qwen3 reasoning 모델의 thinking 토큰 필드 */
             reasoning_content?: string;
             tool_calls?: Array<{
                 index: number;
@@ -67,7 +67,7 @@ type OpenAIChatResponse = {
             content?: string | null;
             /** OpenAI/일부 vLLM 빌드의 reasoning 필드 */
             reasoning?: string;
-            /** vLLM 0.21+ EXAONE/Qwen3 reasoning 모델의 thinking 필드 */
+            /** vLLM 0.21+ Qwen3 reasoning 모델의 thinking 필드 */
             reasoning_content?: string;
             tool_calls?: Array<{
                 id: string;
@@ -161,7 +161,7 @@ function applyOptionsToRequest(options?: ChatRequest['options']): Record<string,
     if (options.num_predict !== undefined) params.max_tokens = options.num_predict;
     if (options.seed !== undefined) params.seed = options.seed;
     if (options.stop !== undefined) params.stop = options.stop;
-    // OpenAI/vLLM native penalty 파라미터 — EXAONE 4.5 카드 권장 (presence_penalty=1.5).
+    // OpenAI/vLLM native penalty 파라미터 (presence_penalty / frequency_penalty).
     if (options.presence_penalty !== undefined) params.presence_penalty = options.presence_penalty;
     if (options.frequency_penalty !== undefined) params.frequency_penalty = options.frequency_penalty;
     return params;
@@ -224,7 +224,7 @@ export async function streamChat(
 
     // Streaming-time `</think>` boundary split (vLLM `--reasoning-parser` 미설정 환경 대응).
     //
-    // EXAONE 4.5 chat_template 은 assistant turn 시작 토큰으로 `<think>` 를 *프롬프트에 prepend*
+    // 일부 reasoning chat_template 은 assistant turn 시작 토큰으로 `<think>` 를 *프롬프트에 prepend*
     // 하므로 모델 출력 스트림에는 여는 태그 없이 reasoning 본문 → `</think>` → 답변 순으로
     // 흘러나옴. 서버에 reasoning-parser 가 없으면 이 전체가 `delta.content` 로 도착하여,
     // 후처리 split 만으로는 *이미 UI 에 그려진 reasoning* 을 되돌릴 수 없음.
@@ -278,7 +278,7 @@ export async function streamChat(
                 }
             }
         }
-        // vLLM 0.21+ 는 reasoning 모델 출력을 `delta.reasoning_content` 로 보냄 (EXAONE/Qwen3).
+        // vLLM 0.21+ 는 reasoning 모델 출력을 `delta.reasoning_content` 로 보냄 (Qwen3).
         // 일부 빌드는 `delta.reasoning` 도 사용 — 두 필드 모두 수신하여 호환.
         const reasoningDelta = choice?.delta?.reasoning ?? choice?.delta?.reasoning_content;
         if (reasoningDelta) {
@@ -334,7 +334,7 @@ export async function streamChat(
     }
 
     // Defensive client-side reasoning-tag split (2026-05-19):
-    // vLLM 에 `--reasoning-parser deepseek_r1` 가 미설정이면 EXAONE 등의 `<think>...</think>`
+    // vLLM 에 `--reasoning-parser` 가 미설정이면 reasoning 모델의 `<think>...</think>`
     // 가 content 로 흘러나옴. 응답 최종 단계에서 분리하여 *저장되는 message* 는 clean 한
     // 본문만 보유 (chat history, 다음 턴 컨텍스트, UI 디스플레이 모두 정상화).
     const reasoningSplit = parseReasoningTags(content);
@@ -367,7 +367,7 @@ export async function streamChat(
     }
 
     // Reasoning-channel recovery (vLLM 운영자 reasoning-parser 오설정 워크어라운드):
-    // 일부 vLLM 빌드는 enable_thinking=false 요청을 받고도 EXAONE 출력 전체를 reasoning
+    // 일부 vLLM 빌드는 enable_thinking=false 요청을 받고도 모델 출력 전체를 reasoning
     // 채널로 라우팅하여 content=null 을 반환. 이 경우 reasoning 을 본 답변으로 승격하여
     // 사용자에게 빈 화면이 보이지 않도록 한다. finish_reason="length" 면 절단 안내도 부착.
     let finalContent = reasoningSplit.content;

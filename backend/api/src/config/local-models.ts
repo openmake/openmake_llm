@@ -49,9 +49,10 @@ export interface LocalModelEntry {
  * 기본 카탈로그 — 사용자 환경 (2026-05 기준):
  *   - qwen3.6-35b-a3b      : 기본 채팅 (262K)
  *   - qwen3.6-35b-a3b-1m   : 대용량 context (1M, 선택적)
- *   - gemma-4-31b          : Vision + 32K
  *   - gpt-3.5-turbo        : OpenAI 호환 alias (→ qwen3.6 라우팅)
- *   - bge-m3               : embedding (multilingual, 1024-dim)
+ *
+ * (embedding 모델 bge-m3 은 2026-05-29 카탈로그에서 제거 — 앱 소비처 0건.
+ *  embedding 인프라(role, ping, helpers)는 재도입 대비 보존. 라이브 :8003 은 운영자 별도 관리.)
  */
 const DEFAULT_LOCAL_MODELS: LocalModelEntry[] = [
     {
@@ -73,23 +74,10 @@ const DEFAULT_LOCAL_MODELS: LocalModelEntry[] = [
         available: true,
     },
     {
-        id: 'gemma-4-31b',
-        displayName: 'Gemma 4 (31B)',
-        description: 'Vision + 32K context',
-        role: 'chat',
-        contextLength: 32768,
-    },
-    {
         id: 'gpt-3.5-turbo',
         displayName: 'GPT-3.5 (alias)',
         description: 'OpenAI 호환 alias → Qwen 3.6 로 라우팅',
         role: 'chat',
-    },
-    {
-        id: 'bge-m3',
-        displayName: 'BGE-M3',
-        description: 'Multilingual embedding (1024-dim)',
-        role: 'embedding',
     },
 ];
 

@@ -14,7 +14,7 @@ const logger = createLogger('OpenAICompatService');
  *   - audio_url: 오디오 URL (vLLM 오디오 모델 전용)
  *   - input_audio: base64 인라인 오디오 (OpenAI 호환 형식)
  *
- * exaone4.5-33b-awq (현 default) 는 vision/audio 미지원이라 ChatService 의
+ * qwen3.6-35b-a3b (현 default) 는 vision/audio 미지원이라 ChatService 의
  * vision gating 이 거절. 향후 vision/audio 모델 도입 시 즉시 활용 가능하도록 타입 정의.
  */
 export type OpenAIContentPart =
@@ -122,7 +122,7 @@ export class OpenAICompatService {
                     images.push(m ? m[1] : url);
                 }
             } else {
-                // video_url / audio_url / input_audio — 현 default 모델 (exaone4.5-33b-awq, vision:false)
+                // video_url / audio_url / input_audio — 현 default 모델 (qwen3.6-35b-a3b, vision:false)
                 // 은 지원 안 함. ChatService 의 vision gating 이 이미지/오디오 첨부 시 400 throw 하므로
                 // 여기선 silent drop 대신 warn 로깅으로 운영자가 인지 가능하게.
                 // 향후 vision/audio 모델 도입 시 별도 mediaPart 필드로 라우팅 코드 추가 필요.

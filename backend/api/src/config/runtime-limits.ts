@@ -41,6 +41,7 @@ export const DISCUSSION_TOKEN_BUDGET = {
         maxHistoryTokens: 2000,
         maxWebSearchTokens: 2000,
         maxMemoryTokens: 1500,
+        maxImageDescriptionTokens: parseInt(process.env.DISCUSSION_MAX_IMAGE_DESC_TOKENS || '500', 10),
     },
     /** 요약/보조 Discussion 컨텍스트 토큰 예산 */
     COMPACT: {
@@ -49,8 +50,15 @@ export const DISCUSSION_TOKEN_BUDGET = {
         maxHistoryTokens: 2000,
         maxWebSearchTokens: 1500,
         maxMemoryTokens: 1000,
+        maxImageDescriptionTokens: parseInt(process.env.DISCUSSION_MAX_IMAGE_DESC_TOKENS || '500', 10),
     },
 } as const;
+
+/** Discussion 결과 스트리밍 시 abort 체크 간격 (문자 N개마다) */
+export const DISCUSSION_STREAM_ABORT_CHECK_INTERVAL = parseInt(process.env.DISCUSSION_ABORT_CHECK_INTERVAL || '100', 10);
+
+/** Deep Research 스크랩 abort 안전마진 (scrapeTimeoutMs 에 더함, ms) */
+export const SCRAPE_ABORT_BUFFER_MS = parseInt(process.env.SCRAPE_ABORT_BUFFER_MS || '1000', 10);
 
 // ============================================
 // 대화 히스토리 요약 설정
@@ -398,6 +406,10 @@ export const CACHE_CONFIG = {
     MEMORY_CACHE_TTL_MS: 5 * 60 * 1000,
     /** 메모리 서비스 컨텍스트 캐시 최대 항목 수 */
     MEMORY_CACHE_MAX_SIZE: 200,
+    /** 히스토리 요약 캐시 최대 항목 수 */
+    HISTORY_SUMMARY_MAX_ENTRIES: parseInt(process.env.HISTORY_SUMMARY_MAX_ENTRIES || '500', 10),
+    /** 히스토리 요약 캐시 TTL (ms) — 기본 30분 */
+    HISTORY_SUMMARY_TTL_MS: parseInt(process.env.HISTORY_SUMMARY_TTL_MS || String(30 * 60_000), 10),
 } as const;
 
 // ============================================
@@ -784,6 +796,14 @@ export const THINKING_LIMITS = {
     CRITICAL_THRESHOLD: parseFloat(process.env.THINKING_CRITICAL_THRESHOLD || '0.2'),
     /** 폴백 시 최소 보장 턴 수 (ThinkingStrategy 실패 → AgentLoop 폴백 시 최소 이만큼 보장) */
     FALLBACK_MIN_TURNS: parseInt(process.env.THINKING_FALLBACK_MIN_TURNS || '2', 10),
+    /** 스트리밍 버퍼 overflow 임계 (문자) — 초과 시 끝부분만 보존 */
+    BUFFER_OVERFLOW_THRESHOLD: parseInt(process.env.THINKING_BUFFER_OVERFLOW_CHARS || '200', 10),
+    /** 버퍼 overflow 시 보존할 끝부분 길이 (문자) */
+    BUFFER_TRIM_SIZE: parseInt(process.env.THINKING_BUFFER_TRIM_CHARS || '50', 10),
+    /** 결론 섹션 추출 최대 길이 (문자) */
+    CONCLUSION_MAX_CHARS: parseInt(process.env.THINKING_CONCLUSION_MAX_CHARS || '500', 10),
+    /** 추론 과정 추출 최대 길이 (문자) */
+    REASONING_MAX_CHARS: parseInt(process.env.THINKING_REASONING_MAX_CHARS || '1500', 10),
 } as const;
 
 // ============================================

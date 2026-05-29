@@ -24,7 +24,8 @@ const log = createLogger('AuthOAuthController');
 // 🔒 Phase 2 보안 패치 2026-02-07: OAuth State 저장소 (CSRF 방어용)
 // 🔒 Phase 3 패치 2026-02-13: 인메모리 Map → DB 저장으로 변경 (클러스터/재시작 안전)
 // PostgreSQL을 사용하여 프로세스 간 공유 가능, 서버 재시작에도 유지됨
-const STATE_TTL_MS = 5 * 60 * 1000; // 5분
+const STATE_TTL_MS = Number(process.env.OAUTH_STATE_TTL_MS) || 5 * 60 * 1000; // 기본 5분
+const STATE_CLEANUP_INTERVAL_MS = Number(process.env.OAUTH_STATE_CLEANUP_INTERVAL_MS) || 60 * 1000; // 기본 60초
 
 // 인메모리 폴백: DB 연결 실패 시 임시 사용 (단일 프로세스 한정)
 const oauthStatesFallback = new Map<string, { provider: string; createdAt: number }>();
@@ -80,7 +81,7 @@ const oauthCleanupTimer = setInterval(() => {
             oauthCleanupInFlight = false;
         }
     })();
-}, 60 * 1000);
+}, STATE_CLEANUP_INTERVAL_MS);
 // BUG-R3-002: unref() - 타이머가 프로세스 종료를 막지 않도록 설정
 if ((oauthCleanupTimer as NodeJS.Timeout & { unref?: () => void }).unref) {
     (oauthCleanupTimer as NodeJS.Timeout & { unref: () => void }).unref();

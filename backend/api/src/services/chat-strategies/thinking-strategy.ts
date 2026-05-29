@@ -146,8 +146,8 @@ export class ThinkingStrategy implements ChatStrategy<ThinkingStrategyContext, T
             }
 
             // 버퍼 overflow 방지
-            if (currentBuffer.length > 200) {
-                currentBuffer = currentBuffer.slice(-50);
+            if (currentBuffer.length > THINKING_LIMITS.BUFFER_OVERFLOW_THRESHOLD) {
+                currentBuffer = currentBuffer.slice(-THINKING_LIMITS.BUFFER_TRIM_SIZE);
             }
 
             originalOnToken(token, thinking);
@@ -265,10 +265,10 @@ async function verifyConclusionConsistency(
             // 결론 섹션이 없으면 검증 스킵 (통과 처리)
             return true;
         }
-        const conclusion = conclusionMatch[1].trim().substring(0, 500);
-        const reasoning = response.substring(response.indexOf('---') + 3).trim().substring(0, 1500);
+        const conclusion = conclusionMatch[1].trim().substring(0, THINKING_LIMITS.CONCLUSION_MAX_CHARS);
+        const reasoning = response.substring(response.indexOf('---') + 3).trim().substring(0, THINKING_LIMITS.REASONING_MAX_CHARS);
 
-        if (!reasoning || reasoning.length < 50) {
+        if (!reasoning || reasoning.length < THINKING_LIMITS.MIN_STEP_CONTENT_CHARS) {
             return true; // 사고 과정이 너무 짧으면 스킵
         }
 

@@ -1,15 +1,15 @@
 [Unit]
-Description=OpenMake vLLM qwen3.6-35b-a3b (262K) @ :8002
+Description=OpenMake vLLM qwen3.6-35b-a3b-1m (1M) @ :8004
 After=network.target
 
 [Service]
 Type=simple
 User=smith
-# qwen3.6 는 rebuild venv 필요 — serve 스크립트가 PATH 의 vllm 을 사용
+# qwen3.6 rebuild venv (262K 인스턴스와 동일 venv/가중치, served-name·context 만 상이)
 Environment=PATH=/home/smith/vllm/rebuild/vllm_env/bin:/usr/local/bin:/usr/bin:/bin
 Environment=VLLM_API_KEY=sk-vllm
 WorkingDirectory=/home/smith/openmake_llm
-ExecStart=/home/smith/openmake_llm/scripts/vllm/qwen-serve.sh
+ExecStart=/home/smith/openmake_llm/scripts/vllm/qwen-1m-serve.sh
 Restart=on-failure
 RestartSec=10
 

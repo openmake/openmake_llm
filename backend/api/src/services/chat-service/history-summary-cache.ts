@@ -12,6 +12,7 @@
  * @module services/chat-service/history-summary-cache
  */
 import { createLogger } from '../../utils/logger';
+import { CACHE_CONFIG } from '../../config/runtime-limits';
 
 const logger = createLogger('HistorySummaryCache');
 
@@ -27,8 +28,8 @@ interface CacheEntry {
     expiresAt: number;
 }
 
-const MAX_ENTRIES = 500;
-const TTL_MS = 30 * 60_000;
+const MAX_ENTRIES = CACHE_CONFIG.HISTORY_SUMMARY_MAX_ENTRIES;
+const TTL_MS = CACHE_CONFIG.HISTORY_SUMMARY_TTL_MS;
 
 class HistorySummaryCache {
     private store = new Map<string, CacheEntry>();

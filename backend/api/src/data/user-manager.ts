@@ -36,8 +36,24 @@ export const USER_ROLES = {
     GUEST: 'guest',
 } as const satisfies Record<string, UserRole>;
 
+/** UserRole 값 목록 — validation/iteration SoT (인라인 문자열 배열 금지, CLAUDE.md No-Hardcoding) */
+export const USER_ROLE_VALUES = Object.values(USER_ROLES) as readonly UserRole[];
+
+/** 문자열이 유효한 UserRole 인지 검사하는 타입 가드 */
+export function isUserRole(value: string | null | undefined): value is UserRole {
+    return value != null && (USER_ROLE_VALUES as readonly string[]).includes(value);
+}
+
 // MCP 도구 접근 등급
 export type UserTier = 'free' | 'pro' | 'enterprise';
+
+/** UserTier 값 목록 — validation SoT (MCP 카탈로그 tiers.ts 5-tier 와 별개 도메인) */
+export const USER_TIER_VALUES: readonly UserTier[] = ['free', 'pro', 'enterprise'];
+
+/** 문자열이 유효한 UserTier 인지 검사하는 타입 가드 */
+export function isUserTier(value: string | null | undefined): value is UserTier {
+    return value != null && (USER_TIER_VALUES as readonly string[]).includes(value);
+}
 
 /**
  * 외부 노출용 사용자 정보 (password_hash 제외)

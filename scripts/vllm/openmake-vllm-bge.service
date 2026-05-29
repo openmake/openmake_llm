@@ -1,0 +1,17 @@
+[Unit]
+Description=OpenMake vLLM bge-m3 embedding @ :8003
+After=network.target
+
+[Service]
+Type=simple
+User=smith
+# bge-m3 는 embedding 전용 venv (qwen rebuild venv 와 별도)
+Environment=PATH=/home/smith/vllm/vllm_env/bin:/usr/local/bin:/usr/bin:/bin
+Environment=VLLM_API_KEY=sk-vllm
+WorkingDirectory=/home/smith/openmake_llm
+ExecStart=/home/smith/openmake_llm/scripts/vllm/bge-m3-serve.sh
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

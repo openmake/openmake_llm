@@ -186,8 +186,8 @@ export interface IProvider {
  * normalize 됩니다. 운영 중 저장된 모델 ID, 외부 클라이언트 호환을 위한 grace period.
  *
  * @example
- *   parseFullModelId('local-llm:exaone4.5-33b-awq') → { providerId: 'local-llm', modelId: 'exaone4.5-33b-awq' }
- *   parseFullModelId('ollama:exaone4.5-33b-awq')   → { providerId: 'local-llm', modelId: 'exaone4.5-33b-awq' }  // legacy alias
+ *   parseFullModelId('local-llm:qwen3.6-35b-a3b') → { providerId: 'local-llm', modelId: 'qwen3.6-35b-a3b' }
+ *   parseFullModelId('ollama:qwen3.6-35b-a3b')   → { providerId: 'local-llm', modelId: 'qwen3.6-35b-a3b' }  // legacy alias
  *   parseFullModelId('anthropic:claude-sonnet-4-5') → { providerId: 'anthropic', modelId: 'claude-sonnet-4-5' }
  *
  * @throws Error if format is invalid

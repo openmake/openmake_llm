@@ -317,51 +317,6 @@ export const MODEL_PRESETS = {
         mirostat_tau: 2.5,
         mirostat_eta: 0.05
     },
-
-    // ============================================
-    // EXAONE 4.5 프리셋 (HF 모델 카드 공식 권장값)
-    // ============================================
-    // 공식 출처: https://huggingface.co/LGAI-EXAONE/EXAONE-4.5-33B-AWQ
-    // - General:     temperature=1.0, top_p=0.95, presence_penalty=1.5
-    // - OCR/한국어:  temperature=0.6, top_p=0.95, top_k=20, presence_penalty=1.5
-    //
-    // GB10 hardware (Grace Blackwell, 128GB unified memory, ~1 PF FP4, bandwidth-bound)
-    // 최적화: max_tokens 8192 (256K 가능하나 컴퓨트 한계로 짧게 운영). reasoning 길이
-    // 고려해서 GPT_OSS 보다 큼.
-
-    /** EXAONE 4.5 일반 목적 — HF 카드 공식 (presence_penalty=1.5 핵심) */
-    EXAONE_45_GENERAL: {
-        temperature: 1.0,
-        top_p: 0.95,
-        presence_penalty: 1.5,
-        num_predict: 8192,
-    },
-
-    /** EXAONE 4.5 한국어/OCR/문서 — HF 카드 공식 한국어 권장 */
-    EXAONE_45_KOREAN: {
-        temperature: 0.6,
-        top_p: 0.95,
-        top_k: 20,
-        presence_penalty: 1.5,
-        num_predict: 8192,
-    },
-
-    /** EXAONE 4.5 코드/JSON — 결정성 우선 (카드 권장값 조정) */
-    EXAONE_45_CODE: {
-        temperature: 0.3,
-        top_p: 0.9,
-        top_k: 20,
-        presence_penalty: 1.5,
-        num_predict: 8192,
-    },
-
-    /** EXAONE 4.5 reasoning 강화 — thinking 모드 + max_tokens 확대 */
-    EXAONE_45_REASONING: {
-        temperature: 1.0,
-        top_p: 0.95,
-        presence_penalty: 1.5,
-        num_predict: 16384,
-    },
 };
 
 // ============================================

@@ -1,13 +1,15 @@
 [Unit]
-Description=OpenMake LiteLLM Proxy
-After=network.target openmake-vllm-qwen.service openmake-vllm-exaone.service
+Description=OpenMake LiteLLM Proxy @ :13401
+After=network.target openmake-vllm-qwen.service openmake-vllm-qwen-1m.service openmake-vllm-bge.service
 
 [Service]
 Type=simple
-User=openmake
-EnvironmentFile=/etc/openmake/litellm.env
-WorkingDirectory=/opt/openmake_llm
-ExecStart=/home/openmake/vllm-env/bin/litellm --config /opt/openmake_llm/scripts/vllm/litellm.config.yaml --port 4000
+User=smith
+# config 는 repo 의 scripts/vllm/litellm.config.yaml 을 /home/smith/vllm/ 로 복사해 사용.
+# litellm 은 :13401 에 직접 바인딩 (리버스 프록시 없음) — 외부 LLM_BASE_URL 과 동일 포트.
+# master_key(LITELLM_MASTER_KEY) + 선택적 DATABASE_URL 은 아래 env 파일로 주입 (없으면 무시).
+EnvironmentFile=-/home/smith/vllm/litellm.env
+ExecStart=/home/smith/vllm/litellm_env/bin/litellm --config /home/smith/vllm/litellm.config.yaml --port 13401 --host 0.0.0.0
 Restart=on-failure
 RestartSec=10
 

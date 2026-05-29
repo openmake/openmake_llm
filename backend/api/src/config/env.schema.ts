@@ -96,7 +96,7 @@ export const envSchema = z
         // LLM Backend (vLLM via LiteLLM proxy)
         LLM_BASE_URL: z.url().default('http://localhost:4000'),
         LLM_API_KEY: z.string().default('sk-no-key'),
-        LLM_DEFAULT_MODEL: z.string().min(1).default('qwen2.5-7b'),
+        LLM_DEFAULT_MODEL: z.string().min(1).default('qwen3.6-35b-a3b'),
         LLM_TIMEOUT: positiveIntWithDefault(120000).refine((value) => value <= 600000, {
             message: 'LLM_TIMEOUT must be between 1 and 600000 milliseconds',
         }),
@@ -114,13 +114,13 @@ export const envSchema = z
          */
         LLM_ENABLE_REASONING_EFFORT: z.string().default('false'),
         /**
-         * EXAONE 4.5 / Qwen3 의 `extra_body.chat_template_kwargs.enable_thinking` 토글.
+         * Qwen3 등 reasoning 모델의 `extra_body.chat_template_kwargs.enable_thinking` 토글.
          *
-         * EXAONE 4.5 카드 명시: `enable_thinking=True` 가 *기본값* → 매 응답 reasoning 발생.
-         * GB10 (Grace Blackwell, ~1 PF FP4) 환경에서 컴퓨트 한계로 TTFB 8s+ 발생.
+         * reasoning 모델은 `enable_thinking` 기본값에 따라 매 응답 reasoning 을 발생시켜
+         * GB10 (Grace Blackwell, ~1 PF FP4) 환경에서 컴퓨트 한계로 TTFB 8s+ 가 발생할 수 있음.
          *
          * 기본 'true' (DISABLE thinking by default) — 명시적 think 옵션이 있을 때만 활성화.
-         * 측정: EXAONE 4.5 + GB10 기준 TTFB 8.2s → 3.1s 단축 (62%).
+         * 측정: reasoning 모델 + GB10 기준 TTFB 8.2s → 3.1s 단축 (62%).
          */
         LLM_DISABLE_THINKING_BY_DEFAULT: z.string().default('false'),
         // LLM_EMBEDDING_MODEL / LLM_EMBEDDING_BASE_URL: 2026-05-19 제거 (vector cache/semantic router 폐기)

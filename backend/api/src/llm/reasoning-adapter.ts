@@ -24,7 +24,7 @@ export function thinkToReasoningEffort(t: ThinkOption | undefined): 'low' | 'med
  *
  * 두 가지 extra_body 키를 지원:
  *   1. `reasoning_effort` — OpenAI 표준. `LLM_ENABLE_REASONING_EFFORT=true` 시 활성.
- *   2. `chat_template_kwargs.enable_thinking` — vLLM/EXAONE/Qwen3 reasoning 모델용.
+ *   2. `chat_template_kwargs.enable_thinking` — vLLM/Qwen3 reasoning 모델용.
  *
  * `enable_thinking` 결정 규칙 (우선순위 순):
  *   a) `think === false`  → enable_thinking=false 를 *항상* 명시 전송. 메타 LLM 호출
@@ -33,9 +33,9 @@ export function thinkToReasoningEffort(t: ThinkOption | undefined): 'low' | 'med
  *   b) `think === true|'low'|'medium'|'high'`  → enable_thinking=true.
  *   c) `think === undefined`  → env `LLM_DISABLE_THINKING_BY_DEFAULT=true` 일 때만
  *      enable_thinking=false 를 보냄 (서버 기본값 오버라이드). 그렇지 않으면 미전송
- *      (서버/모델 chat_template 의 기본값 — EXAONE 4.5 는 기본 ON).
+ *      (서버/모델 chat_template 의 기본값 — 일부 reasoning 모델은 기본 ON).
  *
- * 측정: EXAONE 4.5 기준 TTFB 8.2s → 3.1s (reasoning OFF, 62% 단축).
+ * 측정: reasoning 모델 기준 TTFB 8.2s → 3.1s (reasoning OFF, 62% 단축).
  * vLLM 0.21+ 에서 chat_template 이 `enable_thinking` 변수를 인식해야 작동.
  */
 export function buildExtraBody(t: ThinkOption | undefined): Record<string, unknown> | undefined {

@@ -3,7 +3,7 @@
  * Reasoning Tag Parser — vLLM `--reasoning-parser` 미설정 환경의 defensive 안전망
  * ============================================================
  *
- * EXAONE 4.5, DeepSeek R1, Qwen3, Granite 3.2 등 reasoning 모델은 chat_template 에서
+ * DeepSeek R1, Qwen3, Granite 3.2 등 reasoning 모델은 chat_template 에서
  * assistant turn 의 시작 토큰으로 `<think>` 를 prepend 합니다. 모델은 reasoning 후
  * `</think>` 닫고 본문을 이어 씁니다.
  *

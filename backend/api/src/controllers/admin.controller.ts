@@ -6,7 +6,7 @@
  */
 
 import { Request, Response, Router } from 'express';
-import { getUserManager, UserRole, UserTier } from '../data/user-manager';
+import { getUserManager, UserRole, USER_ROLES, isUserRole, isUserTier } from '../data/user-manager';
 import { getPool } from '../data/models/unified-database';
 import { requireAuth, requireAdmin } from '../auth';
 import { createLogger } from '../utils/logger';
@@ -251,8 +251,7 @@ export class AdminController {
                 res.status(400).json(badRequest('비밀번호는 6자 이상이어야 합니다'));
                 return;
             }
-            const validRoles = ['admin', 'user', 'guest'];
-            const userRole = validRoles.includes(role ?? '') ? (role as 'admin' | 'user' | 'guest') : 'user';
+            const userRole: UserRole = isUserRole(role) ? role : USER_ROLES.USER;
 
             const newUser = await userManager.createUser({ username, email, password, role: userRole });
             if (!newUser) {
@@ -337,7 +336,7 @@ export class AdminController {
             const userId = req.params.id;
             const { role } = req.body;
 
-            if (!['admin', 'user', 'guest'].includes(role)) {
+            if (!isUserRole(role)) {
                 res.status(400).json(badRequest('유효하지 않은 역할입니다'));
                 return;
             }
@@ -386,13 +385,12 @@ export class AdminController {
             const userId = req.params.id;
             const { tier } = req.body;
 
-            const validTiers: UserTier[] = ['free', 'pro', 'enterprise'];
-            if (!tier || !validTiers.includes(tier as UserTier)) {
+            if (!isUserTier(tier)) {
                 res.status(400).json(badRequest('유효하지 않은 등급입니다 (free, pro, enterprise)'));
                 return;
             }
 
-            const user = await userManager.changeTier(userId, tier as UserTier);
+            const user = await userManager.changeTier(userId, tier);
 
             if (!user) {
                 res.status(404).json(notFound('사용자'));

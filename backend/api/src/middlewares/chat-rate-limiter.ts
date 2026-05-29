@@ -20,7 +20,7 @@ interface RateLimitEntry {
 // In-memory cache (hot reads, synced with DB)
 const rateLimitCache = new Map<string, RateLimitEntry>();
 const CLEANUP_INTERVAL_MS = 60_000;
-const MAX_ENTRIES = 10000;
+const MAX_ENTRIES = Number(process.env.CHAT_RATE_LIMIT_CACHE_MAX) || 10000;
 
 // ===== DB operations =====
 
@@ -126,10 +126,10 @@ export function stopChatRateLimitCleanup(): void {
 const DAILY_LIMITS: Record<string, number> = {
     admin: Infinity,
     enterprise: Infinity,
-    pro: 1000,
-    free: 100,
-    user: 100,
-    guest: 20
+    pro: Number(process.env.CHAT_DAILY_LIMIT_PRO) || 1000,
+    free: Number(process.env.CHAT_DAILY_LIMIT_FREE) || 100,
+    user: Number(process.env.CHAT_DAILY_LIMIT_USER) || 100,
+    guest: Number(process.env.CHAT_DAILY_LIMIT_GUEST) || 20
 };
 
 function getNextMidnightUTC(): number {

@@ -134,8 +134,7 @@ export interface ModelOptions {
     seed?: number;
     /**
      * OpenAI presence_penalty — 이미 등장한 토큰 재출현 억제 (-2.0 ~ 2.0, 양수 일수록 다양성 ↑).
-     * EXAONE 4.5 모델 카드 권장값: 1.5 (반복 응답 방지). vLLM/OpenAI native param.
-     * @see https://huggingface.co/LGAI-EXAONE/EXAONE-4.5-33B-AWQ
+     * 반복 응답 방지용 (일부 모델 카드 권장 ~1.5). vLLM/OpenAI native param.
      */
     presence_penalty?: number;
     /**

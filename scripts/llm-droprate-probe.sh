@@ -4,16 +4,16 @@
 # ============================================================
 #
 # 목적
-#   동일 prompt 를 N 회 반복 호출하여 EXAONE 4.x (또는 다른 모델) 의
-#   tool calling 실패 모드 분포를 정량 측정. C (vLLM plugin) 도입의
+#   동일 prompt 를 N 회 반복 호출하여 대상 모델의
+#   tool calling 실패 모드 분포를 정량 측정. tool-parser 보강 도입의
 #   *의사결정 근거* (drop rate ≥ 10% 면 즉시 진행, 1% 미만이면 보류 등).
 #
 # 사용
-#   # 기본 (N=30, exaone4.5-33b-awq, 외부 서버 직접)
+#   # 기본 (N=30, qwen3.6-35b-a3b, 외부 서버 직접)
 #   ./scripts/llm-droprate-probe.sh
 #
 #   # 환경 변수 오버라이드
-#   ENDPOINT=http://localhost:8002 N=50 MODEL=exaone4.5-33b-awq \
+#   ENDPOINT=http://localhost:8002 N=50 MODEL=qwen3.6-35b-a3b \
 #     ./scripts/llm-droprate-probe.sh
 #
 #   # 다른 prompt
@@ -59,7 +59,7 @@ done
 # ─── 설정 (env 오버라이드 가능) ───────────────────────────────
 ENDPOINT="${ENDPOINT:-${_ENV_LLM_BASE_URL:-http://localhost:8002}}"
 API_KEY="${API_KEY:-sk-vllm}"
-MODEL="${MODEL:-exaone4.5-33b-awq}"
+MODEL="${MODEL:-qwen3.6-35b-a3b}"
 N="${N:-30}"
 PROMPT="${PROMPT:-서울 날씨를 알려줘}"
 TIMEOUT_SEC="${TIMEOUT_SEC:-60}"

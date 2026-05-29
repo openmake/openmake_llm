@@ -1,13 +1,39 @@
+# ============================================================
+# LiteLLM Proxy config — 운영 서버 (rockyhan) 라이브 토폴로지 기준
+# ============================================================
+# 2026-05-29 동기화: 운영 LiteLLM /model/info 응답을 그대로 전사.
+#   qwen3.6-35b-a3b      → vLLM :8002 (기본 채팅, 262K)
+#   qwen3.6-35b-a3b-1m   → vLLM :8004 (대용량 context, 1M)
+#   bge-m3               → vLLM :8003 (multilingual embedding)
+#   gpt-3.5-turbo        → :8002 alias (OpenAI 호환 클라이언트 → qwen3.6 라우팅)
+#
+# 각 model_name 은 클라이언트(LLM_BASE_URL)가 body.model 로 호출하는 식별자.
+# litellm_params.model 의 openai/<name> 은 vLLM 의 --served-model-name 과 일치해야 함
+# (HF weights 경로가 아니라 served name). 실제 vLLM serve 명령은 *-serve.sh 참고.
+
 model_list:
-  - model_name: qwen2.5-7b
+  - model_name: qwen3.6-35b-a3b
     litellm_params:
-      model: openai/Qwen/Qwen2.5-7B-Instruct
-      api_base: http://localhost:8001/v1
+      model: openai/qwen3.6-35b-a3b
+      api_base: http://localhost:8002/v1
       api_key: os.environ/VLLM_API_KEY
 
-  - model_name: exaone4.5-33b-awq
+  - model_name: qwen3.6-35b-a3b-1m
     litellm_params:
-      model: openai/LGAI-EXAONE/EXAONE-4.5-33B-AWQ
+      model: openai/qwen3.6-35b-a3b-1m
+      api_base: http://localhost:8004/v1
+      api_key: os.environ/VLLM_API_KEY
+
+  - model_name: bge-m3
+    litellm_params:
+      model: openai/bge-m3
+      api_base: http://localhost:8003/v1
+      api_key: os.environ/VLLM_API_KEY
+
+  # OpenAI 호환 alias — 표준 model ID 로 호출 시 qwen3.6-35b-a3b 로 라우팅
+  - model_name: gpt-3.5-turbo
+    litellm_params:
+      model: openai/qwen3.6-35b-a3b
       api_base: http://localhost:8002/v1
       api_key: os.environ/VLLM_API_KEY
 
