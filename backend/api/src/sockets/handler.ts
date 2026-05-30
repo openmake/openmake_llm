@@ -47,6 +47,7 @@ import { handleChatMessage } from './ws-chat-handler';
 import { withSpan } from '../observability/otel';
 import { runWithRequestContext } from '../utils/request-context';
 import { getConfig } from '../config';
+import { WsConnectionGuard } from './ws-connection-guard';
 
 const log = createLogger('WebSocketHandler');
 
@@ -63,13 +64,10 @@ export class WebSocketHandler {
     private clients: Set<WebSocket> = new Set();
     /** broadcast 시 backpressure 임계 초과 횟수 — terminate 임계 도달 시 강제 종료 */
     private slowClientCounters: WeakMap<WebSocket, number> = new WeakMap();
-    private userConnections: Map<string, Set<WebSocket>> = new Map();
-    private ipConnectionAttempts: Map<string, number[]> = new Map();
-    private userConnectionAttempts: Map<string, number[]> = new Map();
+    /** 연결 수락 제어(IP/user rate limit + user 레지스트리) — ws-connection-guard.ts */
+    private guard = new WsConnectionGuard();
     /** 하트비트 인터벌 타이머 (30초 주기) */
     private heartbeatInterval: ReturnType<typeof setInterval> | null = null;
-    /** Rate limit Map 정리 인터벌 (60초 주기) */
-    private rateLimitCleanupInterval: ReturnType<typeof setInterval> | null = null;
 
     /**
      * WebSocketHandler 생성자
@@ -84,7 +82,7 @@ export class WebSocketHandler {
         this.setupConnection();
         this.setupClusterEvents();
         this.startHeartbeat();
-        this.startRateLimitCleanup();
+        this.guard.startCleanup();
     }
 
     /**
@@ -122,7 +120,7 @@ export class WebSocketHandler {
                 .map(o => o.trim())
                 .filter(o => o.length > 0 && o !== '*');
             if (!validateWebSocketOrigin(origin, originAllowlist)) {
-                const clientIpForLog = this.getClientIp(req);
+                const clientIpForLog = this.guard.getClientIp(req);
                 log.warn(`[WS] Origin 거부: origin=${origin ?? '<none>'}, ip=${clientIpForLog}`);
                 try {
                     ws.send(JSON.stringify({ type: 'error', message: '허용되지 않은 Origin입니다.' }));
@@ -137,21 +135,21 @@ export class WebSocketHandler {
             const auth = await authenticateWebSocket(req, log);
 
             const extWs = ws as ExtendedWebSocket;
-            const clientIp = this.getClientIp(req);
+            const clientIp = this.guard.getClientIp(req);
 
-            if (this.isRateLimited(this.ipConnectionAttempts, clientIp, WS_LIMITS.CONNECTION_RATE_MAX_PER_IP)) {
+            if (this.guard.isIpRateLimited(clientIp)) {
                 ws.send(JSON.stringify({ type: 'error', message: '연결 요청이 너무 많습니다. 잠시 후 다시 시도해주세요.' }));
                 ws.close(1008, 'connection_rate_limited');
                 return;
             }
 
-            if (auth.userId && this.isRateLimited(this.userConnectionAttempts, auth.userId, WS_LIMITS.CONNECTION_RATE_MAX_PER_USER)) {
+            if (auth.userId && this.guard.isUserRateLimited(auth.userId)) {
                 ws.send(JSON.stringify({ type: 'error', message: '사용자 연결 요청 한도를 초과했습니다. 잠시 후 다시 시도해주세요.' }));
                 ws.close(1008, 'user_connection_rate_limited');
                 return;
             }
 
-            if (auth.userId && this.getActiveConnectionsForUser(auth.userId) >= WS_LIMITS.MAX_CONNECTIONS_PER_USER) {
+            if (auth.userId && this.guard.getActiveConnectionsForUser(auth.userId) >= WS_LIMITS.MAX_CONNECTIONS_PER_USER) {
                 ws.send(JSON.stringify({ type: 'error', message: '동시 WebSocket 세션 한도를 초과했습니다. 기존 세션을 종료 후 다시 시도해주세요.' }));
                 ws.close(1008, 'connection_limit_exceeded');
                 return;
@@ -178,7 +176,7 @@ export class WebSocketHandler {
             extWs._messageTimestamps = [];
             extWs._lastExpiryWarningAtMs = 0;
 
-            this.registerUserConnection(extWs);
+            this.guard.registerUser(extWs);
 
             if (this.isTokenExpired(extWs)) {
                 ws.send(JSON.stringify({ type: 'error', message: '인증 토큰이 만료되었습니다. 다시 로그인해주세요.' }));
@@ -461,93 +459,9 @@ export class WebSocketHandler {
         }
     }
 
-    private getClientIp(req: IncomingMessage): string {
-        const trustedProxies = getConfig().trustedProxies;
-        const remoteAddr = req.socket?.remoteAddress || 'unknown';
-
-        // 신뢰 프록시 설정이 있고, 직접 연결 IP가 신뢰 범위인 경우만 X-Forwarded-For 사용
-        if (trustedProxies.length > 0 && this.isTrustedProxy(remoteAddr, trustedProxies)) {
-            const xForwardedFor = req.headers['x-forwarded-for'];
-            if (typeof xForwardedFor === 'string' && xForwardedFor.length > 0) {
-                return xForwardedFor.split(',')[0].trim();
-            }
-            if (Array.isArray(xForwardedFor) && xForwardedFor.length > 0) {
-                return xForwardedFor[0];
-            }
-        }
-
-        return remoteAddr;
-    }
-
-    private isTrustedProxy(ip: string, trusted: string[]): boolean {
-        if (trusted.includes('loopback') && (ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1')) {
-            return true;
-        }
-        if (trusted.includes('linklocal') && (ip.startsWith('169.254.') || ip.startsWith('fe80:'))) {
-            return true;
-        }
-        if (trusted.includes('uniquelocal')) {
-            // RFC1918 IPv4: 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16 + IPv6 ULA fc00::/7
-            if (ip.startsWith('10.') || ip.startsWith('192.168.') || ip.startsWith('fc') || ip.startsWith('fd')) {
-                return true;
-            }
-            // bug_003: 172.x는 두 번째 옥텟이 16-31 범위(/12)만 RFC1918 사설. 172.0.0.0/8 전체 매칭은 XFF 스푸핑 취약점
-            const match172 = ip.match(/^172\.(\d+)\./);
-            if (match172) {
-                const second = parseInt(match172[1], 10);
-                if (second >= 16 && second <= 31) {
-                    return true;
-                }
-            }
-        }
-        return trusted.includes(ip);
-    }
-
-    private cleanupOldAttempts(map: Map<string, number[]>, key: string): number[] {
-        const now = Date.now();
-        const attempts = map.get(key) || [];
-        const filtered = attempts.filter(ts => now - ts <= WS_LIMITS.CONNECTION_RATE_WINDOW_MS);
-        map.set(key, filtered);
-        return filtered;
-    }
-
-    private isRateLimited(map: Map<string, number[]>, key: string, maxAttempts: number): boolean {
-        const attempts = this.cleanupOldAttempts(map, key);
-        attempts.push(Date.now());
-        map.set(key, attempts);
-        return attempts.length > maxAttempts;
-    }
-
-    private getActiveConnectionsForUser(userId: string): number {
-        const connections = this.userConnections.get(userId);
-        return connections ? connections.size : 0;
-    }
-
-    private registerUserConnection(extWs: ExtendedWebSocket): void {
-        const userId = extWs._authenticatedUserId;
-        if (!userId) {
-            return;
-        }
-        const existing = this.userConnections.get(userId) || new Set<WebSocket>();
-        existing.add(extWs);
-        this.userConnections.set(userId, existing);
-    }
-
     private unregisterConnection(ws: WebSocket): void {
         this.clients.delete(ws);
-        const extWs = ws as ExtendedWebSocket;
-        const userId = extWs._authenticatedUserId;
-        if (!userId) {
-            return;
-        }
-        const existing = this.userConnections.get(userId);
-        if (!existing) {
-            return;
-        }
-        existing.delete(ws);
-        if (existing.size === 0) {
-            this.userConnections.delete(userId);
-        }
+        this.guard.unregisterUser(ws);
     }
 
     private touchActivity(extWs: ExtendedWebSocket): void {
@@ -587,48 +501,6 @@ export class WebSocketHandler {
     }
 
     /**
-     * Rate limit Map 주기적 정리 (60초 주기)
-     * 연결 시도 기록에서 윈도우 시간이 지난 항목을 제거하여 메모리 누수 방지
-     */
-    private startRateLimitCleanup(): void {
-        this.rateLimitCleanupInterval = setInterval(() => {
-            const now = Date.now();
-            for (const [key, attempts] of this.ipConnectionAttempts) {
-                const filtered = attempts.filter(ts => now - ts <= WS_LIMITS.CONNECTION_RATE_WINDOW_MS);
-                if (filtered.length === 0) {
-                    this.ipConnectionAttempts.delete(key);
-                } else {
-                    this.ipConnectionAttempts.set(key, filtered);
-                }
-            }
-            for (const [key, attempts] of this.userConnectionAttempts) {
-                const filtered = attempts.filter(ts => now - ts <= WS_LIMITS.CONNECTION_RATE_WINDOW_MS);
-                if (filtered.length === 0) {
-                    this.userConnectionAttempts.delete(key);
-                } else {
-                    this.userConnectionAttempts.set(key, filtered);
-                }
-            }
-
-            // Map 크기 제한: 메모리 고갈 DoS 방지
-            const MAX_TRACKING_ENTRIES = 10000;
-            for (const map of [this.ipConnectionAttempts, this.userConnectionAttempts]) {
-                if (map.size > MAX_TRACKING_ENTRIES) {
-                    const entriesToDelete = map.size - MAX_TRACKING_ENTRIES;
-                    const iterator = map.keys();
-                    for (let i = 0; i < entriesToDelete; i++) {
-                        const key = iterator.next().value;
-                        if (key) map.delete(key);
-                    }
-                }
-            }
-        }, WS_LIMITS.CONNECTION_RATE_WINDOW_MS);
-        if (this.rateLimitCleanupInterval && typeof this.rateLimitCleanupInterval === 'object' && 'unref' in this.rateLimitCleanupInterval) {
-            (this.rateLimitCleanupInterval as NodeJS.Timeout).unref();
-        }
-    }
-
-    /**
      * 하트비트 및 정리 타이머 중지 (서버 종료 시 호출)
      */
     public stopHeartbeat(): void {
@@ -636,10 +508,7 @@ export class WebSocketHandler {
             clearInterval(this.heartbeatInterval);
             this.heartbeatInterval = null;
         }
-        if (this.rateLimitCleanupInterval) {
-            clearInterval(this.rateLimitCleanupInterval);
-            this.rateLimitCleanupInterval = null;
-        }
+        this.guard.stopCleanup();
     }
 
     /**
