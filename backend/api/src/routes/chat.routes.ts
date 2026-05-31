@@ -27,7 +27,9 @@ import { validate } from '../middlewares/validation';
 import { chatRequestSchema } from '../schemas';
 import { ChatRequestHandler, ChatRequestError } from '../chat/request-handler';
 import { getConversationDB } from '../data/conversation-db';
+import { createLogger } from '../utils/logger';
 
+const logger = createLogger('ChatRoutes');
 const router = Router();
 let clusterManager: ClusterManager;
 
@@ -199,6 +201,11 @@ router.post('/stream', optionalApiKey, optionalAuth, chatRateLimiter, validate(c
         }
         res.end();
     } catch (error) {
+        if (error instanceof ChatRequestError) {
+            logger.warn(`[stream] ChatRequestError: ${error.message}`);
+        } else {
+            logger.error('[stream] 스트리밍 처리 실패:', error);
+        }
         if (!aborted) {
             if (error instanceof ChatRequestError) {
                 res.write(`data: ${JSON.stringify({ error: error.message })}\n\n`);

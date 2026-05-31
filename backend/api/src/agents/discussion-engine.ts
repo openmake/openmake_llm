@@ -34,7 +34,7 @@ import { createContextBuilder } from './discussion-context';
 import { createLogger } from '../utils/logger';
 import { resolvePromptLocale } from '../chat/language-policy';
 import { parallelBatch } from '../workflow/graph-engine';
-import { DISCUSSION_CONFIDENCE, DISCUSSION_CONSISTENCY } from '../config/runtime-limits';
+import { DISCUSSION_CONFIDENCE, DISCUSSION_CONSISTENCY, DISCUSSION_CONCURRENCY } from '../config/runtime-limits';
 /** 토론 엔진에서 사용하는 웹 검색 결과 최소 인터페이스 */
 export interface DiscussionSearchResult {
     title: string;
@@ -374,7 +374,7 @@ Rules:
                         });
                         return generateAgentOpinion(agent, topic, previousForRound);
                     },
-                    { concurrency: experts.length }
+                    { concurrency: Math.min(experts.length, DISCUSSION_CONCURRENCY.MAX_PARALLEL_AGENTS) }
                 );
             } catch (error) {
                 logger.error(`Round ${round + 1} parallel execution failed:`, error);

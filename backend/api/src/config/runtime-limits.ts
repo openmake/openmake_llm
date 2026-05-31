@@ -338,6 +338,19 @@ export const DISCUSSION_CONSISTENCY = {
 } as const;
 
 /**
+ * Discussion 멀티에이전트 동시 실행 상한
+ * 라운드 내 에이전트 의견 수집(parallelBatch)의 in-flight LLM 호출 수를 제한합니다.
+ * maxAgents=0(무제한, 엔진 내 20 cap) 설정 시에도 동시 요청이 폭증하지 않도록 보호합니다.
+ * 기본값 5는 현재 유효 상한(strategy maxAgents=5)과 동일 — 기존 동작 불변.
+ *
+ * agents/discussion-engine.ts에서 참조
+ */
+export const DISCUSSION_CONCURRENCY = {
+    /** 라운드 내 동시 에이전트 LLM 호출 최대 수 */
+    MAX_PARALLEL_AGENTS: parseInt(process.env.DISCUSSION_MAX_PARALLEL_AGENTS || '5', 10),
+} as const;
+
+/**
  * LLM 라우터 신뢰도 기본값
  * agents/llm-router.ts에서 참조
  */
