@@ -23,18 +23,18 @@ function logDebug(msg) {
 }
 
 const PROVIDER_LABELS = {
-    ollama: '🖥️ 로컬 LLM',
+    'local-llm': '🖥️ 로컬 LLM',
     openrouter: '🌐 OpenRouter',
 };
 
-const PROVIDER_ORDER = ['ollama', 'openrouter'];
+const PROVIDER_ORDER = ['local-llm', 'openrouter'];
 
 /**
  * 중복 dedup 시 우선순위 — 같은 canonical 모델이 여러 provider 에서 노출되면 우선순위 높은 1개만 유지.
  * Tasks 1-7 (2026-05-08) 이후 외부 provider 가 OpenRouter 단독이라 실질적 dedup 은 없지만 코드 경로 보존.
  */
 const PROVIDER_DEDUP_PRIORITY = {
-    ollama: 100,
+    'local-llm': 100,
     openrouter: 50,
 };
 
@@ -47,10 +47,10 @@ const PROVIDER_DEDUP_PRIORITY = {
  *   - 'anthropic:claude-sonnet-4-6'   → 'anthropic/claude-sonnet-4-6'
  *   - 'openrouter:anthropic/claude-sonnet-4.6' → 'anthropic/claude-sonnet-4.6'
  *     (4-6 vs 4.6 표기 차이는 별개 모델로 취급 — false positive 방지)
- *   - 'ollama:gemma4:e4b'             → 'ollama/gemma4:e4b'
+ *   - 'local-llm:qwen3.6-35b-a3b'     → 'local-llm/qwen3.6-35b-a3b'
  */
 function canonicalModelKey(model) {
-    const provider = model.provider || 'ollama';
+    const provider = model.provider || 'local-llm';
     let id = model.modelId || '';
     const prefix = provider + ':';
     if (id.startsWith(prefix)) id = id.slice(prefix.length);
@@ -72,8 +72,8 @@ function dedupModels(models) {
         const key = canonicalModelKey(m);
         const cur = winner.get(key);
         if (!cur) { winner.set(key, m); continue; }
-        const curPri = PROVIDER_DEDUP_PRIORITY[cur.provider || 'ollama'] ?? 0;
-        const newPri = PROVIDER_DEDUP_PRIORITY[m.provider || 'ollama'] ?? 0;
+        const curPri = PROVIDER_DEDUP_PRIORITY[cur.provider || 'local-llm'] ?? 0;
+        const newPri = PROVIDER_DEDUP_PRIORITY[m.provider || 'local-llm'] ?? 0;
         if (newPri > curPri) winner.set(key, m);
     }
     return Array.from(winner.values());
@@ -130,14 +130,6 @@ async function loadData() {
         ]);
         if (modelsData) {
             _models = modelsData.models || [];
-            // vLLM 마이그레이션(2026-05) 후 backend 는 로컬 provider 를 'local-llm' 으로 반환하지만,
-            // 본 컴포넌트는 로컬 그룹 키로 레거시 'ollama' 를 쓴다 (PROVIDER_ORDER/그룹핑/외부판별
-            // `!== 'ollama'` 전반). 정규화하지 않으면 로컬 그룹이 PROVIDER_ORDER 에 없어 드롭다운에서
-            // 누락되고, 외부 키 등록 후 로컬로 되돌아갈 항목이 사라진다. modelId 는 그대로 두고
-            // 표시용 provider 키만 'ollama' 로 정규화 (선택/전송엔 modelId 사용 — 영향 없음).
-            for (const m of _models) {
-                if (m.provider === 'local-llm') m.provider = 'ollama';
-            }
         }
         if (providersRes.ok) {
             _isAuthenticated = true;
@@ -156,7 +148,7 @@ async function loadData() {
 
     // Frontend fallback inject — backend 응답에 외부 모델 미포함 시 등록된 키 기준 보강.
     // backend dist 가 옛 코드일 때도 사용자가 즉시 모델 선택 가능 (streamChat 은 정상 작동).
-    const externalProviders = new Set(_models.filter(m => (m.provider || 'ollama') !== 'ollama').map(m => m.provider));
+    const externalProviders = new Set(_models.filter(m => (m.provider || 'local-llm') !== 'local-llm').map(m => m.provider));
     for (const p of _providers) {
         if (!p.user_key) continue;
         if (externalProviders.has(p.provider_id)) continue; // 이미 backend 가 합산
@@ -211,10 +203,10 @@ function renderTrigger() {
     const selected = getSelectedModel();
     const model = _models.find(m => m.modelId === selected);
     const displayName = model ? model.name : (selected || '모델 선택');
-    const provider = model ? (model.provider || 'ollama') : null;
+    const provider = model ? (model.provider || 'local-llm') : null;
     // provider 별 아이콘 — 어떤 LLM 사용 중인지 한눈에
     const PROVIDER_ICONS = {
-        ollama: '🖥️',
+        'local-llm': '🖥️',
         openrouter: '🌐',
     };
     const icon = provider && PROVIDER_ICONS[provider] ? PROVIDER_ICONS[provider] : '📋';
@@ -224,7 +216,7 @@ function renderTrigger() {
             '<span class="icon">' + icon + '</span>' +
             '<span class="name">' + escText(displayName) + '</span>' +
             '<span class="arrow">▾</span>';
-        if (provider && provider !== 'ollama') {
+        if (provider && provider !== 'local-llm') {
             trigger.title = '현재 사용 중: ' + provider + ' / ' + displayName;
         } else {
             trigger.title = '모델 선택 — 클릭하여 변경';
@@ -235,14 +227,15 @@ function renderTrigger() {
 function groupModelsByProvider() {
     const groups = {};
     for (const m of _models) {
-        const provider = m.provider || 'ollama';
+        const provider = m.provider || 'local-llm';
         if (!groups[provider]) groups[provider] = [];
         groups[provider].push(m);
     }
-    if (!_isAdmin && groups.ollama && groups.ollama.length > 1) {
+    const local = groups['local-llm'];
+    if (!_isAdmin && local && local.length > 1) {
         const selected = getSelectedModel();
-        const active = groups.ollama.find(m => m.modelId === selected) || groups.ollama[0];
-        groups.ollama = [active];
+        const active = local.find(m => m.modelId === selected) || local[0];
+        groups['local-llm'] = [active];
     }
     return groups;
 }
@@ -269,11 +262,11 @@ function renderDropdown() {
                 '</div>';
             for (const m of groups[pid]) {
                 const isActive = m.modelId === selected;
-                const isOllama = pid === 'ollama';
+                const isLocal = pid === 'local-llm';
                 // 가용성 — backend 가 available: false 면 서버 backend 미가동/장애.
                 // 클릭 차단 + dimmed + tooltip 으로 사유 표시.
                 const unavailable = m.available === false;
-                const disabledByRole = isOllama && !_isAdmin && !isActive;
+                const disabledByRole = isLocal && !_isAdmin && !isActive;
                 const disabled = disabledByRole || unavailable;
                 const reason = unavailable
                     ? (m.unavailableReason || 'unavailable')
@@ -317,7 +310,7 @@ function renderDropdown() {
         html = '<div style="padding:12px;color:var(--text-muted);text-align:center">사용 가능한 모델 없음</div>';
     }
 
-    const hasExternal = _models.some(m => (m.provider || 'ollama') !== 'ollama');
+    const hasExternal = _models.some(m => (m.provider || 'local-llm') !== 'local-llm');
     const registeredButMissing = _isAuthenticated &&
         _providers.some(p => p.user_key) && !hasExternal;
 
@@ -407,7 +400,7 @@ function bindOpenRouterCardHandler(dropdown) {
             if (window.showToast) window.showToast('모달 로드 실패 — 페이지 새로고침 필요', 'error');
             return;
         }
-        const orModels = _models.filter(m => (m.provider || 'ollama') === 'openrouter');
+        const orModels = _models.filter(m => (m.provider || 'local-llm') === 'openrouter');
         window.ModelListModal.open({
             models: orModels,
             selected: getSelectedModel(),
@@ -577,7 +570,7 @@ export async function mount(targetElement) {
     // 자동 진단 — 등록된 키 vs 합산된 외부 모델 일치 여부
     const registeredKeys = _providers.filter(p => p.user_key).map(p => p.provider_id);
     const externalModelsByProvider = {};
-    _models.filter(m => (m.provider || 'ollama') !== 'ollama').forEach(m => {
+    _models.filter(m => (m.provider || 'local-llm') !== 'local-llm').forEach(m => {
         externalModelsByProvider[m.provider] = (externalModelsByProvider[m.provider] || 0) + 1;
     });
     if (registeredKeys.length > 0) {

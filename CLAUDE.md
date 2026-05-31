@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 OpenMake LLM is a self-hosted AI assistant platform with multi-model orchestration. LLM backend는 **vLLM serve + LiteLLM proxy** 조합을 OpenAI 호환 API 로 호출하며 (2026-05-18 Ollama 제거 마이그레이션 완료), 외부 provider (Anthropic, OpenAI 호환 등) 도 동일 추상화로 라우팅합니다. 7 brand model profiles (Default, Pro, Fast, Think, Code, Vision, Auto) 를 지원하고, LLM classifier + 2-layer semantic cache 로 쿼리를 라우팅합니다.
 
-> **Legacy 식별자 보존**: `SdkType = 'ollama' | 'anthropic' | 'openai-compatible'` 의 `'ollama'` 는 DB CHECK 제약 + ExternalKeysRepo 호환 위해 **의도적으로 유지**되며, `providers/i-provider.ts` 의 `parseFullModelId` 가 `'ollama'` → `'local-llm'` 으로 자동 normalize 합니다. 응답 필드명(`prompt_eval_count`, `eval_count` 등) 도 호출자 호환 위해 `stream-parser.ts` 에서 OpenAI usage → Ollama-style 로 매핑합니다.
+> **Legacy 모델 ID 입력 호환**: provider 식별자 canonical 은 `'local-llm'` 이며 `SdkType = 'local-llm' | 'anthropic' | 'openai-compatible'` 입니다. (2026-05-31 정리: `'ollama'` 를 SdkType 에서 제거 — 외부 키 DB CHECK 제약은 `('anthropic','openai-compatible')` 만 허용하고 [`016` 마이그레이션] 로컬 provider 는 외부 키 테이블에 저장되지 않으므로 `'ollama'` 가 애초에 불필요했음. 과거 "DB CHECK 호환용 유지"라는 서술은 부정확했음.) 단, 과거 저장된 `'ollama:<model>'` **model ID 입력**은 `providers/i-provider.ts` 의 `parseFullModelId` 가 `'local-llm'` 으로 자동 normalize 하여 무중단 호환하며, `provider-gate.ts` 의 `KNOWN_FULLID_PREFIXES` 도 레거시 `'ollama:'` prefix 를 입력으로 수용합니다. 응답 필드명(`prompt_eval_count`, `eval_count` 등) 도 호출자 호환 위해 `stream-parser.ts` 에서 OpenAI usage → Ollama-style 로 매핑합니다.
 
 ## Build & Run Commands
 
@@ -83,7 +83,7 @@ The server entry point is `server.ts`. Key directories:
 | `middlewares/` | Security (helmet, CORS), rate limiters (per-route), static files, error handling |
 | `errors/` | 도메인별 커스텀 에러 클래스 |
 | `llm/` | vLLM/LiteLLM client public API: `LLMClient` (canonical, 2026-05-19 `OllamaClient` alias 제거), agent-loop, usage-tracker, reasoning-adapter, reasoning-tag-parser, stream-parser, web-search-adapter, **model-pool** (262K↔1M proactive routing) |
-| `providers/` | LLM provider 추상화: `i-provider.ts` (SdkType `'ollama' \| 'anthropic' \| 'openai-compatible'`), `local-llm-provider.ts`, `anthropic-provider.ts`, `openai-compat-provider.ts`, `provider-router.ts` |
+| `providers/` | LLM provider 추상화: `i-provider.ts` (SdkType `'local-llm' \| 'anthropic' \| 'openai-compatible'`), `local-llm-provider.ts`, `anthropic-provider.ts`, `openai-compat-provider.ts`, `provider-router.ts` |
 | `cluster/` | vLLM/LiteLLM 노드 클러스터 라우팅 (health check, circuit breaker, multi-client, node-selector). `server.ts` 부팅 시 `getClusterManager()` 로 활성화 |
 | `monitoring/` | Analytics + alerts system |
 | `observability/` | OpenTelemetry tracing/metrics |
@@ -271,6 +271,6 @@ Environment variables loaded from `.env` at project root (see `.env.example`). K
 | **Phase B Phase 2-A** | Phase B 머지 완료 — query-classifier를 regex+fast-path 전용으로 단순화 | 2026-05-26 |
 | **Phase D** | Brand Alias Normalizer 도입 (7 legacy alias → 직교 축 자동 매핑 backward-compat layer) | 2026-05-26 |
 | **Phase F** | Legacy brand alias 410 Gone 응답 폐기 예정 (30일 운영 관찰 후 진행) | TBD |
-| **Ollama 제거** | vLLM serve + LiteLLM proxy 전환 완료. SdkType `'ollama'` 는 DB CHECK 제약 호환용으로만 보존 | 2026-05-18 |
+| **Ollama 제거** | vLLM serve + LiteLLM proxy 전환 완료. (2026-05-31 후속 정리: SdkType `'ollama'`→`'local-llm'`, 프론트 ModelSelector·strategy 라우팅의 레거시 `'ollama'` 분기 제거. 레거시 `'ollama:'` model ID 입력만 `parseFullModelId` normalize 로 호환) | 2026-05-18 |
 | **RAG 폐기** | RAG/임베딩/MemoryService/문서 처리 전체 제거 | 2026-03 |
 | **vector cache·semantic router 폐기** | semantic cache, vector cache, MemoryService, 문서 첨부 기능 제거 | 2026-05 |

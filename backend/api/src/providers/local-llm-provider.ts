@@ -15,7 +15,8 @@
  * 주의:
  * - PROVIDER_ID 는 canonical 'local-llm' (vLLM/LiteLLM 진입점). buildFullModelId/parseFullModelId
  *   가 legacy 'ollama' 입력을 자동 normalize 하므로 운영 중 저장된 'ollama:<model>' 도 무중단 호환.
- * - sdkType 은 legacy 'ollama' 유지 — DB CHECK 제약 + ExternalKeysRepo 호환. 별도 마이그레이션 phase 에서 변경.
+ * - sdkType 도 canonical 'local-llm' (2026-05 vLLM 마이그레이션 잔재 정리). 로컬 provider 는 외부 키
+ *   테이블에 저장되지 않아 DB CHECK('anthropic'|'openai-compatible')와 무관 — 'ollama' 불필요.
  *
  * @module providers/local-llm-provider
  */
@@ -83,7 +84,7 @@ function combineSignals(a?: AbortSignal, b?: AbortSignal): AbortSignal | undefin
  */
 export class LocalLLMProvider implements IProvider {
     readonly id = PROVIDER_ID;
-    readonly sdkType: SdkType = 'ollama';  // legacy sdkType 식별자 유지
+    readonly sdkType: SdkType = 'local-llm';
     readonly displayName = PROVIDER_DISPLAY_NAME;
 
     constructor(private client: LLMClient) {}

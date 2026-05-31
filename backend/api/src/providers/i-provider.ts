@@ -24,11 +24,13 @@ import type { ChatMessage, ToolDefinition, UsageMetrics } from '../llm';
  */
 /**
  * SDK 타입 식별자 — provider 의 native SDK 종류.
- * 'ollama' 는 legacy 명칭으로 유지 (DB CHECK 제약, ExternalKeysRepo 호환). 신규 추가 시 'local-llm' 보다는
- * 'vllm' / 'openai-compatible' 등 SDK 단위 식별자 사용 권장. parseFullModelId 가 model ID prefix
- * 'ollama:' → 'local-llm:' 로 normalize 하는 것과는 별개 — sdkType 은 *어댑터 내부 식별자*.
+ * 로컬 vLLM/LiteLLM 진입점은 canonical 'local-llm'. ('ollama' 는 2026-05 vLLM 마이그레이션으로
+ * 제거 — 외부 키 DB CHECK 는 'anthropic'|'openai-compatible' 만 허용하며 로컬 provider 는 외부 키
+ * 테이블에 저장되지 않으므로 sdkType 에 'ollama' 가 필요 없었다.) 저장된 legacy 'ollama:' model ID
+ * 입력은 parseFullModelId 가 'local-llm' 으로 normalize 하여 무중단 호환된다 — 그건 모델 ID prefix
+ * 정규화이고 sdkType(어댑터 내부 식별자)과는 별개.
  */
-export type SdkType = 'ollama' | 'anthropic' | 'openai-compatible';
+export type SdkType = 'local-llm' | 'anthropic' | 'openai-compatible';
 
 /**
  * 모델별 지원 능력 플래그
@@ -147,7 +149,7 @@ export interface ChatStreamResult {
  * Provider 어댑터 인터페이스 — 모든 LLM 제공자 어댑터가 구현해야 할 표준 계약
  */
 export interface IProvider {
-    /** Provider 식별자 (예: 'ollama', 'anthropic', 'groq') — fullId 의 prefix 와 일치 */
+    /** Provider 식별자 (예: 'local-llm', 'anthropic', 'openrouter') — fullId 의 prefix 와 일치 */
     readonly id: string;
     /** 사용 SDK 타입 */
     readonly sdkType: SdkType;
