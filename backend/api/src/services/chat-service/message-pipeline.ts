@@ -78,6 +78,16 @@ export async function runMessagePipeline(svc: ChatService,
 
     // ── Provider Gate: 모델 ID 검증 (strategy 실행 이전 조기 차단) ──
     // 외부 provider(anthropic 등) 분기 시 strategy 우회하여 직접 streamChat 호출.
+    //
+    // 라우팅 규칙 (2026-05-31 회귀 수정):
+    //  - 외부 provider (providerId !== 'local-llm') → 항상 streamFromExternalProvider (변경 없음)
+    //  - 로컬 (providerId === 'local-llm') → LOCAL_STRATEGY_PATH_ENABLED 플래그로 게이트.
+    //      OFF(기본): 현행 유지 — 외부 dispatch (2026-05-19 'ollama'→'local-llm' normalize 회귀
+    //                 이후의 동작). strategy 계층 우회.
+    //      ON: strategy 경로 복귀 (ThinkingStrategy/GV/AgentLoop/ExecutionPlanBuilder).
+    //  ※ e56c4a5(P3.6) 의 원래 가드는 `!== 'ollama'` 였으나 normalize 로 항상 참이 되어
+    //    로컬까지 외부 dispatch 로 새던 버그. 플래그로 안전하게 단계적 복귀.
+    const localStrategyPathEnabled = (await import('../../config/env')).getConfig().localStrategyPathEnabled;
     let externalResolved: import('../../providers/provider-router').ResolvedProvider | null = null;
     if (svc.providerRouter) {
         const resolved = await runProviderGate(svc.providerRouter, {
@@ -85,11 +95,13 @@ export async function runMessagePipeline(svc: ChatService,
             fallbackModel: svc.client.model,
             ctx: { userId: req.userId, userRole: req.userRole },
         });
-        if (resolved.providerId !== 'ollama') {
+        const isLocal = resolved.providerId === 'local-llm';
+        if (!isLocal || !localStrategyPathEnabled) {
             externalResolved = resolved;
             // 외부 LLM 도 컨텍스트 정합성 확보 — agent 페르소나 + buildContextForLLM 결과 통합
             // 단 thinking/tool-calling 등 strategies 전용 기능은 여전히 우회
         }
+        // isLocal && localStrategyPathEnabled → externalResolved=null → 아래 strategy 경로
     }
 
     // ── 보안 사전 검사 ──

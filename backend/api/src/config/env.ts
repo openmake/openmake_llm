@@ -53,6 +53,8 @@ export interface EnvConfig {
     llmWeeklyTokenLimit: number;
     /** vLLM `--reasoning-parser` 미설정 환경 등에서 extra_body.reasoning_effort 거절 방지 토글. */
     llmEnableReasoningEffort: boolean;
+    /** 로컬(local-llm) 채팅을 strategy 계층으로 라우팅할지 토글 (기본 false=현행 외부 dispatch). */
+    localStrategyPathEnabled: boolean;
 
     // Log
     logLevel: 'debug' | 'info' | 'warn' | 'error';
@@ -169,6 +171,7 @@ const DEFAULT_CONFIG: EnvConfig = {
     llmHourlyTokenLimit: 300000,
     llmWeeklyTokenLimit: 5000000,
     llmEnableReasoningEffort: false,
+    localStrategyPathEnabled: false,
 
     // Log
     logLevel: 'info',
@@ -376,6 +379,7 @@ export function loadConfig(): EnvConfig {
         LLM_HOURLY_TOKEN_LIMIT: env('LLM_HOURLY_TOKEN_LIMIT'),
         LLM_WEEKLY_TOKEN_LIMIT: env('LLM_WEEKLY_TOKEN_LIMIT'),
         LLM_ENABLE_REASONING_EFFORT: env('LLM_ENABLE_REASONING_EFFORT'),
+        LOCAL_STRATEGY_PATH_ENABLED: env('LOCAL_STRATEGY_PATH_ENABLED'),
         LLM_DISABLE_THINKING_BY_DEFAULT: env('LLM_DISABLE_THINKING_BY_DEFAULT'),
         LOG_LEVEL: env('LOG_LEVEL'),
         GEMINI_THINK_ENABLED: env('GEMINI_THINK_ENABLED'),
@@ -480,6 +484,7 @@ export function loadConfig(): EnvConfig {
         llmHourlyTokenLimit: parsed.LLM_HOURLY_TOKEN_LIMIT ?? DEFAULT_CONFIG.llmHourlyTokenLimit,
         llmWeeklyTokenLimit: parsed.LLM_WEEKLY_TOKEN_LIMIT ?? DEFAULT_CONFIG.llmWeeklyTokenLimit,
         llmEnableReasoningEffort: (parsed.LLM_ENABLE_REASONING_EFFORT ?? 'false').toLowerCase() === 'true',
+        localStrategyPathEnabled: (parsed.LOCAL_STRATEGY_PATH_ENABLED ?? 'false').toLowerCase() === 'true',
 
         // Log
         logLevel: parsed.LOG_LEVEL ?? DEFAULT_CONFIG.logLevel,

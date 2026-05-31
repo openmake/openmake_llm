@@ -130,6 +130,14 @@ async function loadData() {
         ]);
         if (modelsData) {
             _models = modelsData.models || [];
+            // vLLM 마이그레이션(2026-05) 후 backend 는 로컬 provider 를 'local-llm' 으로 반환하지만,
+            // 본 컴포넌트는 로컬 그룹 키로 레거시 'ollama' 를 쓴다 (PROVIDER_ORDER/그룹핑/외부판별
+            // `!== 'ollama'` 전반). 정규화하지 않으면 로컬 그룹이 PROVIDER_ORDER 에 없어 드롭다운에서
+            // 누락되고, 외부 키 등록 후 로컬로 되돌아갈 항목이 사라진다. modelId 는 그대로 두고
+            // 표시용 provider 키만 'ollama' 로 정규화 (선택/전송엔 modelId 사용 — 영향 없음).
+            for (const m of _models) {
+                if (m.provider === 'local-llm') m.provider = 'ollama';
+            }
         }
         if (providersRes.ok) {
             _isAuthenticated = true;
@@ -608,13 +616,29 @@ export function refresh(opts) {
             );
             if (newModelsForProvider.length > 0) {
                 const firstNew = newModelsForProvider[0];
-                setSelectedModel(firstNew.modelId);
-                logDebug('자동 선택: ' + firstNew.modelId + ' (' + newModelsForProvider.length + ' new models)');
-                if (window.showToast) {
-                    window.showToast(
-                        '✓ ' + opts.afterRegisterProviderId + ' 등록 완료 — ' +
-                        newModelsForProvider.length + '개 모델 사용 가능. "' + firstNew.name + '" 자동 선택됨.'
-                    );
+                // 외부 키 등록은 모델을 '사용 가능'하게만 만들고, active 모델 변경은
+                // 사용자의 명시 선택 시에만 일어나야 한다. 기존에 유효한 선택이 있으면
+                // 등록만으로 덮어쓰지 않고 유지한다 (미선택 상태에서만 자동 선택).
+                const saved = localStorage.getItem(STORAGE_KEY);
+                const hasValidSelection = !!saved && _models.some(m => m.modelId === saved);
+                if (hasValidSelection) {
+                    logDebug('기존 선택 유지: ' + saved + ' (등록된 새 모델 자동선택 안 함)');
+                    if (window.showToast) {
+                        window.showToast(
+                            '✓ ' + opts.afterRegisterProviderId + ' 등록 완료 — ' +
+                            newModelsForProvider.length + '개 모델 사용 가능. 현재 모델(' + saved +
+                            ') 유지 — 변경하려면 드롭다운에서 선택하세요.'
+                        );
+                    }
+                } else {
+                    setSelectedModel(firstNew.modelId);
+                    logDebug('자동 선택(미선택 상태): ' + firstNew.modelId + ' (' + newModelsForProvider.length + ' new models)');
+                    if (window.showToast) {
+                        window.showToast(
+                            '✓ ' + opts.afterRegisterProviderId + ' 등록 완료 — ' +
+                            newModelsForProvider.length + '개 모델 사용 가능. "' + firstNew.name + '" 자동 선택됨.'
+                        );
+                    }
                 }
             } else {
                 if (window.showToast) {

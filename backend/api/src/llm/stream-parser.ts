@@ -237,12 +237,29 @@ export async function streamChat(
     const THINK_CLOSE = '</think>';
     let pendingReasoning = '';
     let inReasoning = kwargs.enable_thinking !== false;
+    // 서버가 `--reasoning-parser` 로 reasoning 을 `delta.reasoning_content` 필드로 분리해
+    // 보내는 환경인지 여부. 한 번이라도 reasoning 필드를 받으면 true 로 고정되며, 이때
+    // `delta.content` 는 이미 reasoning 이 제거된 clean 답변이므로 `<think>` 태그 기반
+    // content-splitter(inReasoning)를 비활성화한다. 두 메커니즘은 서버 설정에 따라 상호
+    // 배타적이며, 동시 활성 시 답변 content 가 pendingReasoning 으로 흡수→thinking 오분류→
+    // recovery 가 reasoning+답변 전체를 content 로 승격하는 누수가 발생한다.
+    let usesReasoningField = false;
 
     for await (const raw of stream as unknown as AsyncIterable<OpenAIChatChunk>) {
         const choice = raw.choices?.[0];
+        // vLLM 0.21+ 는 reasoning 모델 출력을 `delta.reasoning_content` 로 보냄 (Qwen3).
+        // 일부 빌드는 `delta.reasoning` 도 사용 — 두 필드 모두 수신하여 호환.
+        // content 블록보다 먼저 처리하여, 같은 청크에 reasoning+content 가 공존해도
+        // usesReasoningField 플래그가 content 평가 이전에 세팅되도록 한다.
+        const reasoningDelta = choice?.delta?.reasoning ?? choice?.delta?.reasoning_content;
+        if (reasoningDelta) {
+            usesReasoningField = true;
+            thinking += reasoningDelta;
+            onToken('', reasoningDelta);
+        }
         if (choice?.delta?.content) {
             const incoming = choice.delta.content;
-            if (inReasoning) {
+            if (inReasoning && !usesReasoningField) {
                 pendingReasoning += incoming;
                 const closeIdx = pendingReasoning.indexOf(THINK_CLOSE);
                 if (closeIdx >= 0) {
@@ -277,13 +294,6 @@ export async function streamChat(
                     onToken(incoming, undefined);
                 }
             }
-        }
-        // vLLM 0.21+ 는 reasoning 모델 출력을 `delta.reasoning_content` 로 보냄 (Qwen3).
-        // 일부 빌드는 `delta.reasoning` 도 사용 — 두 필드 모두 수신하여 호환.
-        const reasoningDelta = choice?.delta?.reasoning ?? choice?.delta?.reasoning_content;
-        if (reasoningDelta) {
-            thinking += reasoningDelta;
-            onToken('', reasoningDelta);
         }
         if (choice?.delta?.tool_calls) {
             for (const tc of choice.delta.tool_calls) {

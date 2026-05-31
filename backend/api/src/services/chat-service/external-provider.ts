@@ -79,10 +79,20 @@ export async function streamFromExternalProvider(
         systemPromptParts.push(`Respond in ${langName}.`);
     }
 
-    if (!ctx.enhancedMessage && req.webSearchContext) {
+    // 웹검색 컨텍스트가 있을 때 grounding + 반-환각 지시를 시스템 프롬프트에 보강한다.
+    // enhancedMessage(user turn)에 검색 컨텍스트가 이미 포함된 경로(message-pipeline)에서는
+    // 지시문만 추가해 중복 주입을 피하고, 직접 경로(enhancedMessage 미설정)에서는
+    // 지시 + 컨텍스트를 함께 넣는다. fast 모드(thinking OFF) 모델이 주입 컨텍스트를
+    // 무시하고 단정적 오답을 내는 것을 완화 — 최신 사실이 검색 결과에 없으면 추측 대신
+    // 불확실성을 인정하도록 유도 (system 채널이라 응답 절제 가드보다 우선 적용).
+    if (req.webSearchContext) {
+        const groundingDirective =
+            '제공된 웹 검색 결과를 최우선 근거로 삼아 정확히 답변하세요. 검색 결과에 없는 사실' +
+            '(특히 최신 인물·직위·날짜 등 시의성 정보)은 추측하지 말고, 확인되지 않으면 모른다고 답하세요.';
         systemPromptParts.push(
-            '아래 웹검색 결과를 바탕으로 정확한 답변을 제공하세요. 결과에 없는 정보는 추측하지 말고 모른다고 답하세요.\n\n' +
-            req.webSearchContext,
+            ctx.enhancedMessage
+                ? groundingDirective
+                : `${groundingDirective}\n\n${req.webSearchContext}`,
         );
     }
 
