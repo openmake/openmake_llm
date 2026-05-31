@@ -176,9 +176,12 @@ async function loadData() {
 }
 
 function getSelectedModel() {
-    return localStorage.getItem(STORAGE_KEY)
-        || (_models[0] && _models[0].modelId)
-        || '';
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) return saved;
+    // 미선택(첫 방문 등) 시 로컬(local-llm) 모델을 우선 기본값으로 — 외부 키 등록으로
+    // 목록 순서가 바뀌어도 외부 모델이 기본이 되지 않도록 견고화.
+    const local = _models.find(m => (m.provider || 'local-llm') === 'local-llm');
+    return (local && local.modelId) || (_models[0] && _models[0].modelId) || '';
 }
 
 function setSelectedModel(modelId) {
