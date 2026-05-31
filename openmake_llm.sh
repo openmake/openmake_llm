@@ -346,9 +346,13 @@ cmd_stop() {
 }
 
 cmd_restart() {
-    cmd_stop
-    sleep 2
-    cmd_start
+    # 문서 명세대로 PM2 앱만 재시작 (의존성 Postgres/Redis는 그대로 유지).
+    # 코드 반영이 필요하면 deploy 사용.
+    preflight
+    start_app
+    echo ""
+    log_ok "OpenMake LLM 앱 재시작 완료 (의존성은 유지)"
+    show_status
 }
 
 # ── build / migrate / deploy ───────────────────────────────────────────────────

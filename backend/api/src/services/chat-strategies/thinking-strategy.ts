@@ -16,7 +16,7 @@
 import type { ChatStrategy, ChatResult, AgentLoopStrategyContext } from './types';
 import type { AgentLoopStrategy } from './agent-loop-strategy';
 import { createLogger } from '../../utils/logger';
-import { THINKING_LIMITS, CAPACITY, REASONING_SANDWICH } from '../../config/runtime-limits';
+import { THINKING_LIMITS, CAPACITY } from '../../config/runtime-limits';
 import { LLMClient } from '../../llm';
 
 const logger = createLogger('ThinkingStrategy');
@@ -34,9 +34,6 @@ export interface ThinkingStrategyContext extends AgentLoopStrategyContext {
 /**
  * ThinkingStrategy 결과
  */
-/** Reasoning Sandwich 페이즈 타입 */
-export type SandwichPhase = 'plan' | 'exec' | 'verify';
-
 export interface ThinkingStrategyResult extends ChatResult {
     /** 실제 수행된 사고 단계 수 */
     thinkingSteps: number;
@@ -46,9 +43,6 @@ export interface ThinkingStrategyResult extends ChatResult {
     conclusionForced: boolean;
     /** 결론-과정 일관성 검증 통과 여부 (VERIFY_CONCLUSION=true 시에만) */
     verificationPassed?: boolean;
-    /** Reasoning Sandwich 적용 여부 및 페이즈 전환 이력 */
-    sandwichApplied?: boolean;
-    sandwichTransitions?: Array<{ step: number; phase: SandwichPhase; level: string }>;
 }
 
 /**
@@ -69,43 +63,43 @@ export class ThinkingStrategy implements ChatStrategy<ThinkingStrategyContext, T
         let thinkingSteps = 0;
         let conclusionForced = false;
 
-        // ── Reasoning Sandwich 상태 초기화 ──
-        const sandwichEnabled = REASONING_SANDWICH.ENABLED;
-        const sandwichTransitions: Array<{ step: number; phase: SandwichPhase; level: string }> = [];
-        let currentPhase: SandwichPhase = 'plan';
+        // 네이티브 추론 모델 여부 — supportsThinking 은 Qwen3.6(DeepSeek R1 style
+        // reasoning) 처럼 모델이 자체 reasoning 채널에서 단계별 사고를 수행하는 모델을
+        // 가리킨다 (config/model-defaults.ts capability 프리셋). 이 경우 프롬프트 기반
+        // CoT(Sprint Contract) 주입은 ① 네이티브 추론을 답변 본문에 한 번 더 재현하게
+        // 하는 중복이고 ② chat/prompt.ts 의 "내부 사고 과정 노출 금지" 규칙과 충돌한다.
+        const nativeReasoningActive = context.supportsThinking === true;
 
         // ExecutionState 초기화 (외부에서 전달받았으면 공유, 없으면 새로 생성)
         if (!context.executionState) {
             context.executionState = { turnsUsed: 0, startTime };
         }
 
-        // Sandwich 초기 레벨 설정 (plan 페이즈)
-        if (sandwichEnabled) {
-            sandwichTransitions.push({ step: 0, phase: 'plan', level: REASONING_SANDWICH.PLAN_LEVEL });
-            logger.info(`🥪 Reasoning Sandwich 활성: plan=${REASONING_SANDWICH.PLAN_LEVEL}, exec=${REASONING_SANDWICH.EXEC_LEVEL}, verify=${REASONING_SANDWICH.VERIFY_LEVEL}`);
-        }
-
-        // 예산 인식 시스템 프롬프트 주입 (원본 히스토리 오염 방지를 위해 복사)
-        const budgetHint = buildBudgetAwarePrompt(context.userLanguage);
+        // 예산 인식 시스템 프롬프트 주입 (원본 히스토리 오염 방지를 위해 복사).
+        // 네이티브 추론 모델에서는 이중 추론 방지를 위해 주입을 생략한다. 추론 길이
+        // 제어는 서버측 max-model-len / num_predict 가 담당하고, 예산 초과 안전망은
+        // thinking 채널 토큰 누적(thinkingCharsUsed) 으로 그대로 유지된다.
         const historyCopy = [...context.currentHistory];
-        if (historyCopy.length > 0 && historyCopy[0].role === 'system') {
-            historyCopy[0] = {
-                ...historyCopy[0],
-                content: historyCopy[0].content + `\n\n${budgetHint}`,
-            };
+        if (!nativeReasoningActive) {
+            const budgetHint = buildBudgetAwarePrompt(context.userLanguage);
+            if (historyCopy.length > 0 && historyCopy[0].role === 'system') {
+                historyCopy[0] = {
+                    ...historyCopy[0],
+                    content: historyCopy[0].content + `\n\n${budgetHint}`,
+                };
+            }
+        } else {
+            logger.info('🧠 네이티브 추론 모델 감지 — Sprint Contract 프롬프트 주입 생략 (이중 추론 방지)');
         }
 
-        // AgentLoop에 전달할 컨텍스트 (참조형으로 thinkingLevel 동적 변경 가능)
+        // AgentLoop에 전달할 컨텍스트
         const agentContext: AgentLoopStrategyContext = {
             ...context,
             currentHistory: historyCopy,
-            thinkingLevel: sandwichEnabled ? REASONING_SANDWICH.PLAN_LEVEL : context.thinkingLevel,
+            thinkingLevel: context.thinkingLevel,
             maxTurns: Math.min(context.maxTurns, THINKING_LIMITS.MAX_STEPS),
             onToken: undefined as unknown as (token: string, thinking?: string) => void, // 아래에서 할당
         };
-
-        // 페이즈 역행 방지를 위한 우선순위 맵
-        const PHASE_ORDER: Record<SandwichPhase, number> = { plan: 0, exec: 1, verify: 2 };
 
         // 단계 추적용 래퍼: 스트리밍 토큰을 가로채서 단계/예산 추적
         const stepPattern = /\[(\d+)\/(\d+)\]/;
@@ -125,22 +119,9 @@ export class ThinkingStrategy implements ChatStrategy<ThinkingStrategyContext, T
             const match = currentBuffer.match(stepPattern);
             if (match) {
                 const stepNum = parseInt(match[1], 10);
-                const maxStep = parseInt(match[2], 10);
                 if (stepNum > thinkingSteps) {
                     thinkingSteps = stepNum;
                     logger.info(`🧠 Thinking Step ${stepNum}: ${thinkingCharsUsed}/${THINKING_LIMITS.MAX_THINK_CHARS} chars`);
-
-                    // ── Reasoning Sandwich: 페이즈 전환 (단방향만 허용) ──
-                    if (sandwichEnabled && maxStep > 0) {
-                        const newPhase = determineSandwichPhase(stepNum, maxStep);
-                        if (PHASE_ORDER[newPhase] > PHASE_ORDER[currentPhase]) {
-                            currentPhase = newPhase;
-                            const newLevel = getSandwichLevel(newPhase);
-                            agentContext.thinkingLevel = newLevel;
-                            sandwichTransitions.push({ step: stepNum, phase: newPhase, level: newLevel });
-                            logger.info(`🥪 Sandwich 페이즈 전환: ${newPhase} (level=${newLevel}) at step ${stepNum}/${maxStep}`);
-                        }
-                    }
                 }
                 currentBuffer = '';
             }
@@ -183,8 +164,7 @@ export class ThinkingStrategy implements ChatStrategy<ThinkingStrategyContext, T
         const elapsed = Date.now() - startTime;
         logger.info(
             `✅ Thinking 완료: ${thinkingSteps}단계, ${thinkingCharsUsed}자, ${elapsed}ms, 결론강제=${conclusionForced}` +
-            (verificationPassed != null ? `, 검증=${verificationPassed}` : '') +
-            (sandwichEnabled ? `, 🥪 Sandwich 전환=${sandwichTransitions.length}회` : '')
+            (verificationPassed != null ? `, 검증=${verificationPassed}` : '')
         );
 
         return {
@@ -196,51 +176,12 @@ export class ThinkingStrategy implements ChatStrategy<ThinkingStrategyContext, T
                 conclusionForced,
                 thinkingElapsedMs: elapsed,
                 verificationPassed,
-                ...(sandwichEnabled && {
-                    sandwichApplied: true,
-                    sandwichTransitions: sandwichTransitions.length,
-                }),
             },
             thinkingSteps,
             thinkingCharsUsed,
             conclusionForced,
             verificationPassed,
-            sandwichApplied: sandwichEnabled,
-            sandwichTransitions: sandwichEnabled ? sandwichTransitions : undefined,
         };
-    }
-}
-
-/**
- * Reasoning Sandwich: 현재 단계에 해당하는 페이즈를 결정합니다.
- *
- * - plan: 처음 PLAN_STEPS_RATIO 구간 (기본 20%)
- * - verify: 마지막 VERIFY_STEPS_RATIO 구간 (기본 10%)
- * - exec: 그 사이 구간
- *
- * @param currentStep - 현재 단계 번호 (1-based)
- * @param maxSteps - 전체 단계 수
- * @returns 현재 페이즈
- */
-function determineSandwichPhase(currentStep: number, maxSteps: number): SandwichPhase {
-    const progress = currentStep / maxSteps;
-    if (progress <= REASONING_SANDWICH.PLAN_STEPS_RATIO) {
-        return 'plan';
-    }
-    if (progress > 1 - REASONING_SANDWICH.VERIFY_STEPS_RATIO) {
-        return 'verify';
-    }
-    return 'exec';
-}
-
-/**
- * 페이즈에 해당하는 추론 레벨을 반환합니다.
- */
-function getSandwichLevel(phase: SandwichPhase): 'low' | 'medium' | 'high' {
-    switch (phase) {
-        case 'plan': return REASONING_SANDWICH.PLAN_LEVEL;
-        case 'exec': return REASONING_SANDWICH.EXEC_LEVEL;
-        case 'verify': return REASONING_SANDWICH.VERIFY_LEVEL;
     }
 }
 

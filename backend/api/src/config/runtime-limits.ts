@@ -745,36 +745,6 @@ export const TRACE_ANALYZER = {
     INCLUDE_IN_METRICS: process.env.TRACE_INCLUDE_METRICS !== 'false',
 } as const;
 
-// ============================================
-// Reasoning Sandwich (단계별 추론 레벨 최적화)
-// ============================================
-
-/**
- * Reasoning Sandwich 패턴: 계획/실행/검증 단계별 추론 레벨 분리
- *
- * Harness Engineering 원칙: Inform — 단계별로 적절한 추론 깊이를 할당하여
- * 토큰 비용을 절감하면서 성능을 향상시킵니다.
- *
- * LangChain 사례: 전체 xhigh(53.9%) vs Sandwich(63.6%)
- * https://blog.langchain.com/improving-deep-agents-with-harness-engineering/
- *
- * services/chat-strategies/thinking-strategy.ts에서 참조
- */
-export const REASONING_SANDWICH = {
-    /** Reasoning Sandwich 활성화 여부 */
-    ENABLED: process.env.REASONING_SANDWICH_ENABLED !== 'false',
-    /** 계획 단계 추론 레벨 (높은 추론으로 정확한 계획 수립) */
-    PLAN_LEVEL: (process.env.REASONING_PLAN_LEVEL || 'high') as 'low' | 'medium' | 'high',
-    /** 실행 단계 추론 레벨 (중간 추론으로 비용 절감) */
-    EXEC_LEVEL: (process.env.REASONING_EXEC_LEVEL || 'medium') as 'low' | 'medium' | 'high',
-    /** 검증 단계 추론 레벨 (높은 추론으로 정확한 검증) */
-    VERIFY_LEVEL: (process.env.REASONING_VERIFY_LEVEL || 'high') as 'low' | 'medium' | 'high',
-    /** 전체 단계 중 계획 단계 비율 (0.0~1.0, 처음 N% 단계) */
-    PLAN_STEPS_RATIO: parseFloat(process.env.REASONING_PLAN_RATIO || '0.2'),
-    /** 전체 단계 중 검증 단계 비율 (0.0~1.0, 마지막 N% 단계) */
-    VERIFY_STEPS_RATIO: parseFloat(process.env.REASONING_VERIFY_RATIO || '0.1'),
-} as const;
-
 export const THINKING_LIMITS = {
     /** 최대 사고 단계 수 (초과 시 결론 강제) */
     MAX_STEPS: parseInt(process.env.THINKING_MAX_STEPS || '10', 10),
