@@ -68,6 +68,8 @@ export interface EnvConfig {
     // External services
     googleApiKey: string;
     googleCseId: string;
+    naverClientId: string;
+    naverClientSecret: string;
     githubToken: string;
 
     // Documents
@@ -185,6 +187,8 @@ const DEFAULT_CONFIG: EnvConfig = {
     // External services
     googleApiKey: '',
     googleCseId: '',
+    naverClientId: '',
+    naverClientSecret: '',
     githubToken: '',
 
     // Documents
@@ -388,6 +392,8 @@ export function loadConfig(): EnvConfig {
         GEMINI_WEB_SEARCH_ENABLED: env('GEMINI_WEB_SEARCH_ENABLED'),
         GOOGLE_API_KEY: env('GOOGLE_API_KEY'),
         GOOGLE_CSE_ID: env('GOOGLE_CSE_ID'),
+        NAVER_CLIENT_ID: env('NAVER_CLIENT_ID'),
+        NAVER_CLIENT_SECRET: env('NAVER_CLIENT_SECRET'),
         GITHUB_TOKEN: env('GITHUB_TOKEN'),
         DOCUMENT_TTL_HOURS: env('DOCUMENT_TTL_HOURS'),
         MAX_UPLOADED_DOCUMENTS: env('MAX_UPLOADED_DOCUMENTS'),
@@ -498,6 +504,8 @@ export function loadConfig(): EnvConfig {
         // External services
         googleApiKey: parsed.GOOGLE_API_KEY ?? DEFAULT_CONFIG.googleApiKey,
         googleCseId: parsed.GOOGLE_CSE_ID ?? DEFAULT_CONFIG.googleCseId,
+        naverClientId: parsed.NAVER_CLIENT_ID ?? DEFAULT_CONFIG.naverClientId,
+        naverClientSecret: parsed.NAVER_CLIENT_SECRET ?? DEFAULT_CONFIG.naverClientSecret,
         githubToken: parsed.GITHUB_TOKEN ?? DEFAULT_CONFIG.githubToken,
 
         // Documents

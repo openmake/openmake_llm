@@ -17,6 +17,10 @@ import { getSearchLocale } from '../../i18n/search-locale';
 const GOOGLE_API_KEY = getConfig().googleApiKey;
 /** Google Custom Search Engine ID */
 const GOOGLE_CSE_ID = getConfig().googleCseId;
+/** Naver 검색 API Client ID (웹문서 검색) */
+const NAVER_CLIENT_ID = getConfig().naverClientId;
+/** Naver 검색 API Client Secret */
+const NAVER_CLIENT_SECRET = getConfig().naverClientSecret;
 /** Logger instance */
 const logger = createLogger('WebSearch');
 
@@ -276,60 +280,125 @@ export async function searchDuckDuckGoAPI(query: string): Promise<SearchResult[]
 }
 
 /**
- * 네이버 뉴스 검색 (모바일 페이지 스크래핑)
+ * 네이버 뉴스 검색 (공식 검색 API)
  *
- * 네이버 모바일 뉴스 검색 페이지를 파싱하여 최신 뉴스를 검색합니다.
- * 한국 뉴스 전용, 최대 5건 반환.
+ * `openapi.naver.com/v1/search/news.json` 을 호출하여 한국어 뉴스를 검색합니다.
+ * `sort=date` 로 최신순 정렬 — 시의성 사실(현직 인물·최신 이슈) 커버리지를 강화하여
+ * 웹문서(webkr) 검색이 약한 "현재 상태" 질의를 보완합니다. pubDate 를 freshness 스코어링에 활용.
+ * (2026-06-01 모바일 페이지 스크래핑 → 공식 API 전환. NAVER_CLIENT_ID/SECRET 인증 필요,
+ *  키 미설정 시 빈 배열 graceful. 한도 25,000회/일, Client ID 별 합산.)
  *
  * @param query - 검색 쿼리
- * @returns SearchResult 배열 (실패 시 빈 배열)
+ * @param maxResults - 최대 결과 수 (기본값: 5, API 제한: 최대 100)
+ * @returns SearchResult 배열 (키 미설정/실패 시 빈 배열)
  */
-export async function searchNaverNews(query: string): Promise<SearchResult[]> {
+export async function searchNaverNews(query: string, maxResults: number = 5): Promise<SearchResult[]> {
     const results: SearchResult[] = [];
 
+    if (!NAVER_CLIENT_ID || !NAVER_CLIENT_SECRET) {
+        return results;
+    }
+
     try {
-        // 네이버 뉴스 검색 (모바일 페이지, 더 간단한 구조)
-        const url = `https://m.search.naver.com/search.naver?where=m_news&query=${encodeURIComponent(query)}&sm=mtb_nmr`;
+        const display = Math.min(Math.max(maxResults, 1), 100);
+        const url = `https://openapi.naver.com/v1/search/news.json?query=${encodeURIComponent(query)}&display=${display}&sort=date`;
 
         const response = await fetch(url, {
             headers: {
-                'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15'
-            }
+                'X-Naver-Client-Id': NAVER_CLIENT_ID,
+                'X-Naver-Client-Secret': NAVER_CLIENT_SECRET,
+            },
         });
 
-        if (!response.ok) return results;
-
-        const html = await response.text();
-
-        // 모바일 뉴스 결과 파싱 (더 단순한 구조)
-        const patterns = [
-            /<a[^>]*class="[^"]*news_tit[^"]*"[^>]*href="([^"]+)"[^>]*>([^<]+)/gi,
-            /<a[^>]*href="([^"]+)"[^>]*class="[^"]*tit[^"]*"[^>]*>([^<]+)/gi
-        ];
-
-        const seenUrls = new Set<string>();
-
-        for (const pattern of patterns) {
-            let match;
-            while ((match = pattern.exec(html)) !== null && results.length < 5) {
-                const linkUrl = match[1];
-                const title = match[2].replace(/&[^;]+;/g, '').trim();
-
-                if (!seenUrls.has(linkUrl) && linkUrl.startsWith('http') && title.length > 5) {
-                    seenUrls.add(linkUrl);
-                    results.push({
-                        title,
-                        url: linkUrl,
-                        snippet: '',
-                        source: 'naver.com'
-                    });
-                }
-            }
+        if (!response.ok) {
+            // 403 = 등록 앱에 '검색' API 미설정 (개발자센터 > Application > API 설정에서 활성화).
+            logger.error(`네이버 뉴스 API 오류: ${response.status}${response.status === 403 ? ' (앱 검색 API 미설정 가능성)' : ''}`);
+            return results;
         }
 
+        const data = await response.json() as { items?: Array<{ title?: string; link?: string; originallink?: string; description?: string; pubDate?: string }> };
+
+        if (data.items) {
+            for (const item of data.items) {
+                results.push({
+                    title: stripNaverTags(item.title || ''),
+                    url: item.link || item.originallink || '',
+                    snippet: stripNaverTags(item.description || ''),
+                    source: 'naver.com',
+                    ...(item.pubDate ? { date: item.pubDate } : {}),
+                });
+            }
+        }
         logger.info(`네이버 뉴스: ${results.length}개`);
     } catch (e) {
         logger.error('네이버 뉴스 실패:', e instanceof Error ? e.message : String(e));
+    }
+
+    return results;
+}
+
+/**
+ * Naver 검색 결과의 하이라이트 `<b>` 태그 + XML 엔티티 제거.
+ *
+ * Naver 검색 API 는 검색어 일치 부분을 `<b>...</b>` 로 감싸고 `&lt;` 등 엔티티를 포함합니다.
+ *
+ * @param text - Naver API title/description 원문
+ * @returns 태그·엔티티가 제거된 평문
+ */
+function stripNaverTags(text: string): string {
+    return decodeXmlEntities(text.replace(/<\/?b>/gi, '')).trim();
+}
+
+/**
+ * 네이버 웹문서 검색 (공식 검색 API)
+ *
+ * `openapi.naver.com/v1/search/webkr.json` 을 호출하여 한국어 웹 문서를 검색합니다.
+ * 모바일 스크래핑(searchNaverNews)과 달리 안정적이며, NAVER_CLIENT_ID/SECRET 인증이 필요합니다.
+ * 키 미설정 시 빈 배열 반환 (graceful). API 한도 25,000회/일 (Client ID 별 합산).
+ *
+ * @param query - 검색 쿼리
+ * @param maxResults - 최대 결과 수 (기본값: 10, API 제한: 최대 100)
+ * @returns SearchResult 배열 (키 미설정/실패 시 빈 배열)
+ */
+export async function searchNaverWeb(query: string, maxResults: number = 10): Promise<SearchResult[]> {
+    const results: SearchResult[] = [];
+
+    if (!NAVER_CLIENT_ID || !NAVER_CLIENT_SECRET) {
+        return results;
+    }
+
+    try {
+        const display = Math.min(Math.max(maxResults, 1), 100);
+        const url = `https://openapi.naver.com/v1/search/webkr.json?query=${encodeURIComponent(query)}&display=${display}`;
+
+        const response = await fetch(url, {
+            headers: {
+                'X-Naver-Client-Id': NAVER_CLIENT_ID,
+                'X-Naver-Client-Secret': NAVER_CLIENT_SECRET,
+            },
+        });
+
+        if (!response.ok) {
+            // 403 = 등록 앱에 '검색' API 미설정 (개발자센터 > Application > API 설정에서 활성화).
+            logger.error(`네이버 웹문서 API 오류: ${response.status}${response.status === 403 ? ' (앱 검색 API 미설정 가능성)' : ''}`);
+            return results;
+        }
+
+        const data = await response.json() as { items?: Array<{ title?: string; link?: string; description?: string }> };
+
+        if (data.items) {
+            for (const item of data.items) {
+                results.push({
+                    title: stripNaverTags(item.title || ''),
+                    url: item.link || '',
+                    snippet: stripNaverTags(item.description || ''),
+                    source: 'naver.com',
+                });
+            }
+        }
+        logger.info(`네이버 웹문서: ${results.length}개`);
+    } catch (e) {
+        logger.error('네이버 웹문서 실패:', e instanceof Error ? e.message : String(e));
     }
 
     return results;

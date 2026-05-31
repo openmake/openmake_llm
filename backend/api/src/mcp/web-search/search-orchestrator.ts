@@ -15,7 +15,8 @@ import {
     searchWikipedia,
     searchGoogleNews,
     searchDuckDuckGoAPI,
-    searchNaverNews
+    searchNaverNews,
+    searchNaverWeb
 } from './providers';
 import { createLogger } from '../../utils/logger';
 import { SEARCH_RELIABILITY } from '../../config/runtime-limits';
@@ -54,7 +55,8 @@ export async function performWebSearch(query: string, options: { maxResults?: nu
         searchWikipedia(query, language),
         searchGoogleNews(query, language),
         searchDuckDuckGoAPI(query),
-        ...(language === 'ko' ? [searchNaverNews(query)] : [])
+        // 한국어 쿼리: 네이버 뉴스(모바일 스크래핑) + 웹문서(공식 검색 API) 병렬 수집
+        ...(language === 'ko' ? [searchNaverNews(query), searchNaverWeb(query)] : [])
     ];
 
     const allSearchResults = await Promise.all(searchPromises);
@@ -62,7 +64,8 @@ export async function performWebSearch(query: string, options: { maxResults?: nu
     const wikiResults = allSearchResults[1] || [];
     const newsResults = allSearchResults[2] || [];
     const ddgResults = allSearchResults[3] || [];
-    const naverResults = allSearchResults[4] || [];
+    // index 4 이후는 전부 네이버 소스(뉴스+웹문서) — 개수 변동에 견고하게 합산
+    const naverResults = allSearchResults.slice(4).flat();
 
     // 결과 합치기 (우선순위: 뉴스 > Naver > Google > Wikipedia > DDG)
     const allResults = [

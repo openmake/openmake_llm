@@ -144,6 +144,8 @@ export const envSchema = z
         // External
         GOOGLE_API_KEY: z.string().default(''),
         GOOGLE_CSE_ID: z.string().default(''),
+        NAVER_CLIENT_ID: z.string().default(''),
+        NAVER_CLIENT_SECRET: z.string().default(''),
         GITHUB_TOKEN: z.string().default(''),
         VAPID_PUBLIC_KEY: z.string().default(''),
         VAPID_PRIVATE_KEY: z.string().default(''),
