@@ -1006,8 +1006,9 @@ export const AGENT_TASK_LIMITS = {
     TOTAL_TIMEOUT_MS: 5 * 60 * 1000,
     /** 누적 토큰 상한 (input + output) — runaway 토큰 폭주 방지. */
     MAX_TOTAL_TOKENS: 200_000,
-    /** 검색류 도구 호출 횟수 하드 상한 — 초과 시 다음 턴부터 검색 도구를 제거해 강제 종합. */
-    MAX_SEARCH_CALLS: 5,
+    /** 검색류 도구 호출 횟수 하드 상한 — 초과 시 다음 턴부터 검색 도구를 제거해 강제 종합.
+     *  AGENT_MAX_SEARCH_CALLS 환경변수로 오버라이드 가능 (기본 5). */
+    MAX_SEARCH_CALLS: parseInt(process.env.AGENT_MAX_SEARCH_CALLS || '5', 10),
     /** 검색/정보수집 도구 식별 키워드 (tool name 에 포함되면 검색류로 카운트) */
     SEARCH_TOOL_KEYWORDS: ['search', 'visit_page', 'research', 'firecrawl', 'scrape', 'crawl', 'fetch'] as readonly string[],
 } as const;
