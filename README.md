@@ -284,7 +284,7 @@ Missing values just mean rankings won't show your app — functionality unaffect
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │  Frontend — Vanilla JS SPA (no framework, no JS build step) │
-│  • 23 page modules, ES module imports                        │
+│  • 24 page modules, ES module imports                        │
 │  • WebSocket streaming + REST                                │
 │  • XSS defense via sanitize.js                               │
 └─────────────────────────┬───────────────────────────────────┘
@@ -456,7 +456,7 @@ openmake_llm/
 │
 ├── frontend/web/public/
 │   ├── js/modules/
-│   │   ├── pages/             # 23 SPA page modules (incl. 2 developer-doc helpers)
+│   │   ├── pages/             # 24 SPA page modules (incl. 2 developer-doc helpers)
 │   │   │                       # Settings hosts the unified ModelSelector
 │   │   ├── components/
 │   │   │   ├── model-selector.js       # Dropdown — local-LLM group + OpenRouter card

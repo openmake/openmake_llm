@@ -50,8 +50,6 @@ npm run eval:routing:strict
 | `OMK_EVAL_REAL_TIMEOUT_MS` | `60000` | --real 모드 케이스당 timeout (ms) |
 | `OMK_EVAL_REAL_MAX_TOKENS` | `2000` | --real 모드 케이스당 추정 토큰 한도 |
 | `OMK_EVAL_REAL_DEFAULT_LIMIT` | `5` | --real 모드 기본 케이스 수 (--limit 미지정 시) |
-| `OMK_SEMANTIC_ROUTER_ENABLED` | `(eval:augmented가 강제 true)` | semantic 인덱스 활성화 |
-| `OMK_EMBEDDING_MODEL` | `nomic-embed-text` | Ollama 임베딩 모델 |
 
 ## 출력
 
@@ -117,7 +115,7 @@ npm run eval:routing:strict
 ### eval:response
 - mock 모드는 `MOCK_RESPONSE_RULES` 룰셋 검증 (평가기 자체 동작 확인)
 - `--real` 모드는 ChatService를 직접 호출하여 실제 LLM 응답 평가
-  - **경고**: 실제 LLM 비용 발생, Ollama API 키 필요 (`.env` 의 `OLLAMA_API_KEY_*`)
+  - **경고**: 실제 LLM 비용 발생, LLM API 키 필요 (`.env` 의 `LLM_API_KEY`)
   - 운영 사고 방지 4중 가드:
     1. `--real` 명시적 플래그가 있어야만 활성 (기본은 `--mock`)
     2. `--limit N` 또는 `OMK_EVAL_REAL_DEFAULT_LIMIT` (기본 5건)
