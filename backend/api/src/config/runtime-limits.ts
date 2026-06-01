@@ -684,6 +684,12 @@ export const SEARCH_RELIABILITY = {
     RELEVANCE_WEIGHT: 0.6,
     /** 신뢰도 가중치 (정렬 시) */
     RELIABILITY_WEIGHT: 0.4,
+    /**
+     * 도메인당 최대 결과 수 (소스 다양성 보호).
+     * 단일 provider/도메인(예: news.google.com)이 결과를 도배해 다양성이 붕괴하는 것을 방지.
+     * 0 이하면 비활성(무제한). env override: SEARCH_MAX_PER_DOMAIN. 기본 5.
+     */
+    MAX_PER_DOMAIN: Number(process.env.SEARCH_MAX_PER_DOMAIN) || 5,
 } as const;
 
 // ============================================

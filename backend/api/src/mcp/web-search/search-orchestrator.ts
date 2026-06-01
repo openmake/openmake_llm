@@ -100,7 +100,42 @@ export async function performWebSearch(query: string, options: { maxResults?: nu
 
     scored.sort((a, b) => b.combinedScore - a.combinedScore);
 
-    return scored.map(s => s.result).slice(0, maxResults);
+    return applyPerDomainCap(
+        scored.map(s => s.result),
+        maxResults,
+        SEARCH_RELIABILITY.MAX_PER_DOMAIN,
+    );
+}
+
+/**
+ * 도메인당 상한을 적용해 소스 다양성을 보호한다.
+ * 단일 도메인(예: news.google.com RSS)이 결과를 도배해 다양성이 붕괴하는 것을 방지.
+ *
+ * @param sorted - **점수 내림차순으로 정렬된** 결과 (상위부터 도메인별 cap 만큼 채택)
+ * @param maxResults - 최종 최대 개수
+ * @param cap - 도메인당 상한. 0 이하면 비활성(기존 동작 = 단순 slice)
+ * @returns 도메인당 cap 이하로 제한된 상위 결과 (최대 maxResults)
+ */
+export function applyPerDomainCap(sorted: SearchResult[], maxResults: number, cap: number): SearchResult[] {
+    if (cap <= 0) {
+        return sorted.slice(0, maxResults);
+    }
+    const perDomain = new Map<string, number>();
+    const selected: SearchResult[] = [];
+    for (const result of sorted) {
+        if (selected.length >= maxResults) break;
+        let domain = '';
+        try {
+            domain = new URL(result.url).hostname.toLowerCase().replace(/^www\./, '');
+        } catch { /* URL 파싱 실패 → 도메인 캡 미적용으로 통과 */ }
+        if (domain) {
+            const n = perDomain.get(domain) ?? 0;
+            if (n >= cap) continue;
+            perDomain.set(domain, n + 1);
+        }
+        selected.push(result);
+    }
+    return selected;
 }
 
 /**
