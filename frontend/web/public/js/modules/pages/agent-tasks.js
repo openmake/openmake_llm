@@ -16,6 +16,7 @@
     var _listeners = [];
     var _currentTaskId = null;
     var _hasActive = false;
+    var _notified = {};  // taskId → 완료 알림 중복 방지
 
     var _statusLabels = { pending:'대기중', running:'진행중', completed:'완료', failed:'실패', cancelled:'취소됨' };
     var _stepLabels = { plan:'📋 계획', assistant:'생각', assistant_tool_call:'도구 호출', tool_result:'도구 결과' };
@@ -72,6 +73,10 @@
         var goalEl = document.getElementById('goal');
         var goal = goalEl ? goalEl.value.trim() : '';
         if (!goal) { _showToast('목표를 입력하세요', 'error'); return; }
+        // 완료 알림용 브라우저 권한 요청 (사용자 제스처 컨텍스트에서 1회)
+        if (window.Notification && Notification.permission === 'default') {
+            try { Notification.requestPermission(); } catch (e) { /* noop */ }
+        }
 
         _authFetch(_ep(), {
             method: 'POST',
@@ -206,10 +211,27 @@
             _loadTasks();  // progress bar 미생성 상태 — 1회 재렌더로 생성
             return;
         }
-        if (p.status === 'running' || p.status === 'pending') _hasActive = true;
+        if (p.status === 'running' || p.status === 'pending') {
+            _hasActive = true;
+        } else {
+            _notifyDone(p, card);  // 완료/실패/취소 — in-app 알림
+        }
         // 상세 모달이 이 작업을 보고 있으면 스텝 갱신 (이벤트 시에만 GET)
         var dm = document.getElementById('detailModal');
         if (_currentTaskId === p.taskId && dm && dm.classList.contains('open')) _refreshDetail();
+    }
+
+    // 작업 종료 알림 — toast + (권한 허용 시) 브라우저 Notification. taskId 당 1회.
+    function _notifyDone(p, card) {
+        if (!p || !p.taskId || _notified[p.taskId]) return;
+        _notified[p.taskId] = true;
+        var labels = { completed:'완료', failed:'실패', cancelled:'취소' };
+        var goal = card && card.querySelector('h3') ? card.querySelector('h3').textContent : '';
+        var msg = '에이전트 작업이 ' + (labels[p.status] || p.status) + '되었습니다';
+        _showToast(msg + (goal ? ': ' + goal : ''), p.status === 'failed' ? 'error' : 'success');
+        if (window.Notification && Notification.permission === 'granted') {
+            try { new Notification('OpenMake 에이전트 작업', { body: msg + (goal ? '\n' + goal : '') }); } catch (e) { /* noop */ }
+        }
     }
 
     window.PageModules['agent-tasks'] = {
@@ -352,6 +374,7 @@
             window.onAgentTaskProgress = null;
             _currentTaskId = null;
             _hasActive = false;
+            _notified = {};
         }
     };
 
