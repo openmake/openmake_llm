@@ -187,8 +187,9 @@ function _renderAgentTaskCard(t) {
     if (t.progress > 0 && t.status === 'running') {
         html += '<div style="height:5px;background:var(--bg-tertiary);border-radius:3px;margin-top:8px;overflow:hidden;"><div style="height:100%;background:var(--accent-primary);width:' + t.progress + '%;transition:width .3s;"></div></div>';
     }
+    if (t.result) html += '<div style="margin-top:8px;white-space:pre-wrap;font-size:14px;line-height:1.6;">' + esc(t.result) + '</div>';
     if (t.error) html += '<div style="margin-top:8px;color:var(--danger);font-size:13px;">' + esc(t.error) + '</div>';
-    html += '<div style="margin-top:8px;"><a href="/agent-tasks.html" style="font-size:12px;color:var(--accent-primary);">작업 페이지에서 결과 보기 →</a></div></div>';
+    html += '<div style="margin-top:8px;"><a href="/agent-tasks.html" style="font-size:12px;color:var(--accent-primary);">작업 페이지에서 단계 보기 →</a></div></div>';
     return html;
 }
 
@@ -198,7 +199,19 @@ function _ensureChatTaskProgressHandler() {
         const card = document.querySelector('[data-agent-task-id="' + p.taskId + '"]');
         if (!card) return;
         const content = card.querySelector('.message-content') || card;
-        content.innerHTML = _renderAgentTaskCard({ status: p.status, progress: p.progress, goal: card.dataset.agentTaskGoal || '' });
+        const goal = card.dataset.agentTaskGoal || '';
+        const terminal = (p.status === 'completed' || p.status === 'failed' || p.status === 'cancelled');
+        if (terminal) {
+            // 완료/실패/취소 — 결과를 가져와 카드에 직접 표시 (WS payload엔 result가 없음)
+            window.authFetch('/api/agent-tasks/' + p.taskId).then(r => r.json()).then(res => {
+                const t = (res.data && res.data.task) || {};
+                content.innerHTML = _renderAgentTaskCard({ status: p.status, progress: 100, goal: goal, result: t.result, error: t.error });
+            }).catch(() => {
+                content.innerHTML = _renderAgentTaskCard({ status: p.status, progress: 100, goal: goal });
+            });
+        } else {
+            content.innerHTML = _renderAgentTaskCard({ status: p.status, progress: p.progress, goal: goal });
+        }
     };
 }
 
