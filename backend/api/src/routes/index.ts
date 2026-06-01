@@ -33,6 +33,7 @@ export { default as agentsMonitoringRouter } from './agents-monitoring.routes';
 // 🆕 신규 도메인 라우트
 export { default as auditRouter } from './audit.routes';
 export { default as researchRouter } from './research.routes';
+export { default as agentTaskRouter } from './agent-task.routes';
 export { default as externalRouter } from './external.routes';
 // 🆕 Artifacts (2026-05-26 Phase 1): claude.ai-style 산출물 영속화
 export { default as artifactsRouter } from './artifacts.routes';

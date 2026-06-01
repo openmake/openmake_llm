@@ -993,3 +993,18 @@ export const EXTERNAL_LLM_TOOL_BLACKLIST: readonly string[] = [
     'analyze_image',
 ] as const;
 
+/**
+ * 자율 에이전트 작업 (AgentTaskService) runaway 가드 한계.
+ * 백그라운드 detached 실행이라 사람이 지켜보지 않으므로 토큰/시간 폭주 방지가 필수.
+ */
+export const AGENT_TASK_LIMITS = {
+    /** 사용자 지정 max_turns 의 절대 상한 */
+    MAX_TURNS_CEILING: 20,
+    /** 기본 최대 턴 수 */
+    DEFAULT_MAX_TURNS: 10,
+    /** 작업 전체 타임아웃 (ms) */
+    TOTAL_TIMEOUT_MS: 5 * 60 * 1000,
+    /** 누적 토큰 상한 (input + output) */
+    MAX_TOTAL_TOKENS: 200_000,
+} as const;
+

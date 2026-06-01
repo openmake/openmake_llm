@@ -65,6 +65,9 @@ const API_ENDPOINTS = Object.freeze({
     // ── Research ──────────────────────────────────
     RESEARCH_SESSIONS: '/api/research/sessions',   // + /:id, /:id/steps
 
+    // ── Agent Tasks ───────────────────────────────
+    AGENT_TASKS: '/api/agent-tasks',               // + /:id, /:id/steps, /:id/execute, /:id/cancel
+
 
     // ── MCP ───────────────────────────────────────
     MCP_SERVERS: '/api/mcp/servers',   // + /:serverId, /:serverId/connect, /:serverId/disconnect

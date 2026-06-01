@@ -80,6 +80,16 @@ export async function initSchema(pool: Pool): Promise<void> {
         // Constraint may already be correct — ignore
     }
 
+    // 좀비 작업 정리: 이전 프로세스에서 running 이던 AgentTask 는 in-memory 루프가
+    // 사라져 복구 불가 → failed 로 마킹하여 프론트의 무한 polling 을 방지한다.
+    try {
+        await pool.query(
+            `UPDATE agent_tasks SET status = 'failed', error = 'server restarted', completed_at = NOW() WHERE status = 'running'`,
+        );
+    } catch {
+        // 테이블 미존재(최초 부팅) 등 — 무시
+    }
+
     // pg_trgm GIN 인덱스 (확장 미지원 환경에서는 skip)
     try {
         await pool.query(`CREATE EXTENSION IF NOT EXISTS pg_trgm`);

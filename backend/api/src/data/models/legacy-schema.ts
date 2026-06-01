@@ -290,6 +290,34 @@ CREATE TABLE IF NOT EXISTS research_steps (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS agent_tasks (
+    id TEXT PRIMARY KEY,
+    user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
+    goal TEXT NOT NULL,
+    status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'running', 'completed', 'failed', 'cancelled')),
+    progress INTEGER DEFAULT 0,
+    current_turn INTEGER DEFAULT 0,
+    max_turns INTEGER DEFAULT 10,
+    model TEXT,
+    result TEXT,
+    error TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    completed_at TIMESTAMPTZ
+);
+
+CREATE TABLE IF NOT EXISTS agent_task_steps (
+    id SERIAL PRIMARY KEY,
+    task_id TEXT NOT NULL REFERENCES agent_tasks(id) ON DELETE CASCADE,
+    step_number INTEGER NOT NULL,
+    step_type TEXT NOT NULL,
+    tool_name TEXT,
+    content TEXT,
+    messages_snapshot JSONB,
+    status TEXT DEFAULT 'completed',
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS external_connections (
     id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -393,6 +421,10 @@ CREATE INDEX IF NOT EXISTS idx_memory_tags_memory ON memory_tags(memory_id);
 CREATE INDEX IF NOT EXISTS idx_research_user ON research_sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_research_status ON research_sessions(status);
 CREATE INDEX IF NOT EXISTS idx_research_steps_session ON research_steps(session_id);
+
+CREATE INDEX IF NOT EXISTS idx_agent_tasks_user ON agent_tasks(user_id);
+CREATE INDEX IF NOT EXISTS idx_agent_tasks_status ON agent_tasks(status);
+CREATE INDEX IF NOT EXISTS idx_agent_task_steps_task ON agent_task_steps(task_id);
 
 CREATE INDEX IF NOT EXISTS idx_connections_user ON external_connections(user_id);
 CREATE INDEX IF NOT EXISTS idx_connections_service ON external_connections(service_type);

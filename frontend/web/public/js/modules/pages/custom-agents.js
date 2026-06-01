@@ -69,7 +69,7 @@
                 "<div class=\"content-area\">\n" +
                 "  <div class=\"info-banner\">\n" +
                 "    Git URL 에서 가져온 Agent 정의 (AGENT.md) 목록입니다. 채팅 중 MCP agent-ingest 도구 또는 아래 버튼으로 추가하고, 여기서 검토·보관합니다.<br>\n" +
-                "    본인이 직접 만드는 페르소나는 <a href=\"/my-agents.html\">내 Agent</a> 메뉴를 사용하세요.\n" +
+                "    본인이 직접 만드는 페르소나는 <a href=\"/settings.html\">설정 → 내 Agent</a> 에서 관리하세요.\n" +
                 "  </div>\n" +
                 "  <div class=\"toolbar\">\n" +
                 "    <button class=\"btn-primary\" id=\"btnImportGit\">🔗 Git URL 에서 가져오기</button>\n" +

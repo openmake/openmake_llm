@@ -159,6 +159,40 @@ export interface ResearchStep {
 }
 
 // ============================================
+// 자율 에이전트 작업 (Agent Task) 인터페이스
+// ============================================
+
+export type AgentTaskStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
+
+export interface AgentTask {
+    id: string;
+    user_id?: string;
+    goal: string;
+    status: AgentTaskStatus;
+    progress: number;
+    current_turn: number;
+    max_turns: number;
+    model?: string;
+    result?: string;
+    error?: string;
+    created_at: string;
+    updated_at: string;
+    completed_at?: string;
+}
+
+export interface AgentTaskStep {
+    id: number;
+    task_id: string;
+    step_number: number;
+    step_type: string;
+    tool_name?: string;
+    content?: string;
+    messages_snapshot?: unknown;
+    status: string;
+    created_at: string;
+}
+
+// ============================================
 // 외부 서비스 통합 인터페이스
 // ============================================
 

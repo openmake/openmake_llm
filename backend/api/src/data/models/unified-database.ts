@@ -25,6 +25,7 @@ import {
     ConversationRepository,
     ExternalRepository,
     ResearchRepository,
+    AgentTaskRepository,
     UserRepository
 } from '../repositories';
 import { initSchema as initSchemaFn } from './schema-initializer';
@@ -53,6 +54,9 @@ import type {
     ApiKeyTier,
     UserApiKey,
     UserApiKeyPublic,
+    AgentTask,
+    AgentTaskStatus,
+    AgentTaskStep,
 } from './unified-database.types';
 import { API_KEY_TIER_LIMITS as _API_KEY_TIER_LIMITS } from './unified-database.types';
 
@@ -106,6 +110,9 @@ export class UnifiedDatabase {
     /** 딥 리서치 데이터 접근 Repository */
     private readonly researchRepository: ResearchRepository;
 
+    /** 자율 에이전트 작업 데이터 접근 Repository */
+    private readonly agentTaskRepository: AgentTaskRepository;
+
     /** API Key 관리 데이터 접근 Repository */
     private readonly apiKeyRepository: ApiKeyRepository;
 
@@ -140,6 +147,7 @@ export class UnifiedDatabase {
         this.userRepository = new UserRepository(this.pool);
         this.conversationRepository = new ConversationRepository(this.pool);
         this.researchRepository = new ResearchRepository(this.pool);
+        this.agentTaskRepository = new AgentTaskRepository(this.pool);
         this.apiKeyRepository = new ApiKeyRepository(this.pool);
         this.auditRepository = new AuditRepository(this.pool);
         this.externalRepository = new ExternalRepository(this.pool);
@@ -327,6 +335,58 @@ export class UnifiedDatabase {
 
     async deleteResearchSession(sessionId: string): Promise<void> {
         return this.researchRepository.deleteSessionWithSteps(sessionId);
+    }
+
+    // ============================================
+    // 🤖 자율 에이전트 작업 메서드
+    // ============================================
+
+    async createAgentTask(params: {
+        id: string;
+        userId?: string;
+        goal: string;
+        maxTurns?: number;
+        model?: string;
+    }): Promise<void> {
+        return this.agentTaskRepository.createAgentTask(params);
+    }
+
+    async getAgentTask(taskId: string): Promise<AgentTask | undefined> {
+        return this.agentTaskRepository.getAgentTask(taskId);
+    }
+
+    async updateAgentTask(taskId: string, updates: {
+        status?: AgentTaskStatus;
+        progress?: number;
+        currentTurn?: number;
+        result?: string;
+        error?: string;
+    }): Promise<void> {
+        return this.agentTaskRepository.updateAgentTask(taskId, updates);
+    }
+
+    async addAgentTaskStep(params: {
+        taskId: string;
+        stepNumber: number;
+        stepType: string;
+        toolName?: string;
+        content?: string;
+        messagesSnapshot?: unknown;
+        status?: string;
+    }): Promise<void> {
+        return this.agentTaskRepository.addAgentTaskStep(params);
+    }
+
+    async getAgentTaskSteps(taskId: string): Promise<AgentTaskStep[]> {
+        return this.agentTaskRepository.getAgentTaskSteps(taskId);
+    }
+
+    async getUserAgentTasks(userId: string, limit: number = 20): Promise<AgentTask[]> {
+        return this.agentTaskRepository.getUserAgentTasks(userId, limit);
+    }
+
+    async deleteAgentTask(taskId: string): Promise<void> {
+        return this.agentTaskRepository.deleteAgentTaskWithSteps(taskId);
     }
 
     // ============================================

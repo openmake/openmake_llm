@@ -22,9 +22,8 @@
     const EMOJIS = ['🤖','🧠','💡','📝','🎨','🔬','📊','🛠️','💻','🎯','🔍','📚','✨','🌟','🎓','💼','🏗️','⚡','🔮','🧪'];
 
     window.PageModules['my-agents'] = {
-        getHTML: function() {
-            return '<div class="page-my-agents">' +
-                '<style data-spa-style="my-agents">' +
+        getSectionHTML: function() {
+            return '<style data-spa-style="my-agents">' +
                 ".ma-toolbar { display:flex; gap:var(--space-3); align-items:center; flex-wrap:wrap; margin-bottom:var(--space-5); }\n" +
                 ".ma-toolbar .btn-primary { padding:var(--space-2) var(--space-4); background:var(--accent-primary); color:#fff; border:none; border-radius:var(--radius-md); cursor:pointer; font-weight:var(--font-weight-semibold); }\n" +
                 ".ma-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:var(--space-4); }\n" +
@@ -63,18 +62,11 @@
                 ".ma-btn-secondary { background:var(--bg-tertiary); color:var(--text-primary); border:1px solid var(--border-light) !important; }\n" +
                 ".ma-btn-danger { background:var(--danger); color:#fff; }\n" +
                 '</style>' +
-                '<header class="page-header">' +
-                '<button class="mobile-menu-btn" onclick="toggleMobileSidebar(event)">&#9776;</button>' +
-                '<h1>내 Agent</h1>' +
-                '</header>' +
-                '<div class="content-area">' +
                 '<div class="ma-toolbar">' +
                 '<button class="btn-primary" id="maNewBtn">+ 새 Agent</button>' +
                 '<span style="color:var(--text-muted);font-size:var(--font-size-sm)">claude.ai Projects / ChatGPT Custom GPTs 동등 — 본인 전용 페르소나</span>' +
                 '</div>' +
                 '<div id="maList" class="ma-grid"><div class="ma-empty">불러오는 중...</div></div>' +
-                '</div>' +
-
                 '<div class="ma-modal-overlay" id="maEditorModal">' +
                 '<div class="ma-modal">' +
                 '<h2 id="maEditorTitle">새 Agent</h2>' +
@@ -92,6 +84,17 @@
                 '<button class="ma-btn-save" id="maSaveBtn">저장</button>' +
                 '</div>' +
                 '</div>' +
+                '</div>';
+        },
+
+        getHTML: function() {
+            return '<div class="page-my-agents">' +
+                '<header class="page-header">' +
+                '<button class="mobile-menu-btn" onclick="toggleMobileSidebar(event)">&#9776;</button>' +
+                '<h1>내 Agent</h1>' +
+                '</header>' +
+                '<div class="content-area">' +
+                window.PageModules['my-agents'].getSectionHTML() +
                 '</div>' +
                 '</div>';
         },
@@ -301,5 +304,5 @@
         }
     };
 
-const { getHTML, init, cleanup } = window.PageModules['my-agents'];
-export default { getHTML, init, cleanup };
+const { getHTML, init, cleanup, getSectionHTML } = window.PageModules['my-agents'];
+export default { getHTML, init, cleanup, getSectionHTML };

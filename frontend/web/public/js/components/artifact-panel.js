@@ -51,6 +51,7 @@ function ensurePanel() {
     panelEl.className = 'artifact-panel';
     panelEl.setAttribute('aria-label', 'Artifact panel');
     panelEl.innerHTML = `
+        <div class="ap-resizer" role="separator" aria-label="패널 너비 조정" title="드래그하여 너비 조정"></div>
         <header class="ap-header">
             <span class="ap-title-wrap">
                 <span class="ap-emoji" aria-hidden="true">📦</span>
@@ -60,6 +61,7 @@ function ensurePanel() {
                 <button class="ap-tab ap-tab-active" data-tab="preview">미리보기</button>
                 <button class="ap-tab" data-tab="code">Code View</button>
             </div>
+            <button class="ap-maximize" aria-label="전체화면 토글" title="전체화면 (넓게 보기)">⛶</button>
             <button class="ap-close" aria-label="패널 닫기" title="닫기 (Esc)">✕</button>
         </header>
         <div class="ap-search-bar" hidden>
@@ -90,11 +92,87 @@ function ensurePanel() {
     document.body.appendChild(panelEl);
     injectStyles();
     wireUp(panelEl);
+    restorePanelSize(panelEl);
     return panelEl;
+}
+
+// ─── 패널 너비/전체화면 (드래그 리사이즈 + localStorage 영속) ─────────────────
+const AP_WIDTH_KEY = 'artifactPanelWidth';   // px (number)
+const AP_MAX_KEY = 'artifactPanelMaximized';  // '1' | '0'
+const AP_MIN_WIDTH = 360;                     // 최소 너비 (px)
+const apMaxWidth = () => Math.round(window.innerWidth * 0.9); // 최대 90vw
+
+function clampPanelWidth(px) {
+    return Math.max(AP_MIN_WIDTH, Math.min(px, apMaxWidth()));
+}
+
+// 저장된 너비/전체화면 상태 복원. 첫 사용자는 CSS 기본값(min(720px,50vw)) 유지.
+function restorePanelSize(root) {
+    try {
+        if (localStorage.getItem(AP_MAX_KEY) === '1') {
+            root.classList.add('maximized');
+            updateMaximizeBtn(root, true);
+            return;
+        }
+        const saved = parseInt(localStorage.getItem(AP_WIDTH_KEY) || '', 10);
+        if (Number.isFinite(saved) && saved > 0) {
+            root.style.width = clampPanelWidth(saved) + 'px';
+        }
+    } catch { /* localStorage 차단 환경 — 기본값 유지 */ }
+}
+
+function toggleMaximize(root) {
+    const max = root.classList.toggle('maximized');
+    try { localStorage.setItem(AP_MAX_KEY, max ? '1' : '0'); } catch { /* noop */ }
+    updateMaximizeBtn(root, max);
+}
+
+function updateMaximizeBtn(root, max) {
+    const btn = root.querySelector('.ap-maximize');
+    if (!btn) return;
+    btn.classList.toggle('active', max);
+    btn.title = max ? '전체화면 해제 (원래 크기)' : '전체화면 (넓게 보기)';
+}
+
+// 좌측 grip 드래그로 너비 조절. 패널은 right:0 고정이라 너비 = innerWidth - clientX.
+function wireResizer(root) {
+    const resizer = root.querySelector('.ap-resizer');
+    if (!resizer) return;
+    let dragging = false;
+    resizer.addEventListener('pointerdown', (e) => {
+        if (root.classList.contains('maximized')) return; // 전체화면 중엔 리사이즈 무시
+        dragging = true;
+        resizer.setPointerCapture(e.pointerId);
+        root.classList.add('ap-resizing'); // 드래그 중 iframe pointer-events 차단
+        e.preventDefault();
+    });
+    resizer.addEventListener('pointermove', (e) => {
+        if (!dragging) return;
+        root.style.width = clampPanelWidth(window.innerWidth - e.clientX) + 'px';
+    });
+    const end = (e) => {
+        if (!dragging) return;
+        dragging = false;
+        try { resizer.releasePointerCapture(e.pointerId); } catch { /* noop */ }
+        root.classList.remove('ap-resizing');
+        const px = parseInt(root.style.width, 10);
+        if (Number.isFinite(px)) {
+            try { localStorage.setItem(AP_WIDTH_KEY, String(px)); } catch { /* noop */ }
+        }
+    };
+    resizer.addEventListener('pointerup', end);
+    resizer.addEventListener('pointercancel', end);
+    // 더블클릭 → 기본 너비로 리셋
+    resizer.addEventListener('dblclick', () => {
+        root.style.width = '';
+        try { localStorage.removeItem(AP_WIDTH_KEY); } catch { /* noop */ }
+    });
 }
 
 function wireUp(root) {
     root.querySelector('.ap-close').addEventListener('click', closePanel);
+    root.querySelector('.ap-maximize').addEventListener('click', () => toggleMaximize(root));
+    wireResizer(root);
     root.querySelectorAll('.ap-tab').forEach((t) => {
         t.addEventListener('click', () => switchTab(t.getAttribute('data-tab')));
     });
@@ -1553,8 +1631,30 @@ function injectStyles() {
     z-index: 1200; color: var(--text-primary, #fff);
 }
 .artifact-panel.open { transform: translateX(0); }
+.artifact-panel.maximized { width: 100vw !important; }
+/* 좌측 드래그 그립 — 너비 조정 */
+.ap-resizer {
+    position: absolute; top: 0; left: 0; width: 7px; height: 100%;
+    cursor: ew-resize; z-index: 5;
+    background: transparent; transition: background 0.15s ease;
+}
+.ap-resizer:hover, .artifact-panel.ap-resizing .ap-resizer {
+    background: var(--accent-primary, #6366f1);
+}
+.artifact-panel.maximized .ap-resizer { display: none; }
+/* 드래그 중 iframe/preview 가 포인터를 가로채지 않도록 */
+.artifact-panel.ap-resizing iframe,
+.artifact-panel.ap-resizing .ap-preview { pointer-events: none; }
+.ap-maximize {
+    background: transparent; border: none; color: var(--text-muted, #888);
+    font-size: 16px; cursor: pointer; padding: 4px 8px; border-radius: 4px;
+}
+.ap-maximize:hover { background: var(--bg-tertiary, #2a2a2a); color: var(--text-primary, #fff); }
+.ap-maximize.active { color: var(--accent-primary, #6366f1); }
 @media (max-width: 768px) {
     .artifact-panel { width: 100vw; }
+    .ap-resizer { display: none; }
+    .ap-maximize { display: none; }
     /* Phase 3 보완 C.5 (2026-05-26) — 모바일 UX */
     .ap-header { flex-wrap: wrap; gap: 8px; padding: 10px 12px; }
     .ap-title-wrap { flex: 1 1 100%; order: 1; }

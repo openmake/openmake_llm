@@ -108,6 +108,17 @@
         '</div>' +
         '</div>' +
 
+        // \uB0B4 Agent card (Custom Agents \uC784\uBCA0\uB4DC, 2026-06-01) \u2014 \uC0AC\uC6A9\uC790 \uC9C0\uC2DC\uBB38 \uC544\uB798 \uBC30\uCE58. my-agents \uBAA8\uB4C8 \uC7AC\uC0AC\uC6A9.
+        '<div class="s-card">' +
+        '<div class="s-card-header">' +
+        '<span class="s-card-icon">\uD83E\uDD16</span>' +
+        '<span class="s-card-title">\uB0B4 Agent</span>' +
+        '</div>' +
+        '<div class="s-card-body">' +
+        '<div id="settingsMyAgentsMount"><div style="color:var(--text-muted);text-align:center;padding:16px;">\uBD88\uB7EC\uC624\uB294 \uC911...</div></div>' +
+        '</div>' +
+        '</div>' +
+
         '<div class="s-card">' +
         '<div class="s-card-header">' +
         '<span class="s-card-icon">\uD83D\uDD27</span>' +
@@ -369,6 +380,7 @@
                     loadApiKeyCount();
                     loadSystemInfo();
                     initCustomInstructions();
+                    initMyAgentsSection();
                     initArtifactsToggle();
                 }
 
@@ -458,6 +470,31 @@
                             saveBtn.textContent = original;
                         }
                     });
+                }
+
+                /**
+                 * 내 Agent (Custom Agents) 섹션 임베드 — my-agents 페이지 모듈을 재사용.
+                 * .s-card 의 backdrop-filter 가 position:fixed 모달의 containing block 이
+                 * 되어 클리핑되는 문제를 피하려 에디터 모달을 document.body 로 이동.
+                 */
+                async function initMyAgentsSection() {
+                    var mount = document.getElementById('settingsMyAgentsMount');
+                    if (!mount) return;
+                    // 재진입 시 body 에 남은 이전 모달 제거 (cleanup 누락 대비)
+                    var staleModal = document.getElementById('maEditorModal');
+                    if (staleModal && staleModal.parentNode === document.body) staleModal.remove();
+                    try {
+                        var m = await import('/js/modules/pages/my-agents.js');
+                        var mod = (m && m.default) || (window.PageModules && window.PageModules['my-agents']);
+                        if (!mod || typeof mod.getSectionHTML !== 'function') return;
+                        mount.innerHTML = mod.getSectionHTML();
+                        var modal = mount.querySelector('#maEditorModal');
+                        if (modal) document.body.appendChild(modal);
+                        mod.init();
+                    } catch (e) {
+                        console.warn('[settings] 내 Agent 섹션 임베드 실패:', e);
+                        mount.innerHTML = '<div style="color:var(--text-muted);text-align:center;padding:16px;">내 Agent 섹션을 불러오지 못했습니다.</div>';
+                    }
                 }
 
                 function setTheme(theme) { document.documentElement.setAttribute('data-theme', theme); safeStorage.setItem('theme', theme); }
@@ -793,6 +830,11 @@
             } catch (e) {
                 console.warn('[settings] ModelSelector unmount 실패:', e);
             }
+            // 내 Agent 섹션이 body 로 이동시킨 에디터 모달 제거 (orphan 방지)
+            try {
+                var maModal = document.getElementById('maEditorModal');
+                if (maModal && maModal.parentNode === document.body) maModal.remove();
+            } catch (e) { }
             // Remove onclick-exposed globals
             try { delete window.exportData; } catch (e) { }
             try { delete window.clearHistory; } catch (e) { }

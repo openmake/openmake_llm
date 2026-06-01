@@ -41,6 +41,7 @@ import {
     agentsMonitoringRouter,
     auditRouter,
     researchRouter,
+    agentTaskRouter,
     externalRouter,
     pushRouter,
     modelRouter,
@@ -235,6 +236,7 @@ export function setupApiRoutes(
     app.use('/api/agents-monitoring', agentsMonitoringRouter);
     app.use('/api/audit', auditRouter);
     app.use('/api/research', researchRouter);
+    app.use('/api/agent-tasks', agentTaskRouter);
     app.use('/api/external', externalRouter);
     app.use('/api/push', pushRouter);
     app.use('/api/docs', developerDocsRouter);

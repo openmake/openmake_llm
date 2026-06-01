@@ -177,6 +177,37 @@ CREATE TABLE IF NOT EXISTS research_steps (
     status TEXT DEFAULT 'pending',
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- ============================================
+-- 자율 에이전트 작업 (Agent Tasks) — 백그라운드 도구 루프 + 복구
+-- ============================================
+CREATE TABLE IF NOT EXISTS agent_tasks (
+    id TEXT PRIMARY KEY,
+    user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
+    goal TEXT NOT NULL,
+    status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'running', 'completed', 'failed', 'cancelled')),
+    progress INTEGER DEFAULT 0,
+    current_turn INTEGER DEFAULT 0,
+    max_turns INTEGER DEFAULT 10,
+    model TEXT,
+    result TEXT,
+    error TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    completed_at TIMESTAMPTZ
+);
+
+CREATE TABLE IF NOT EXISTS agent_task_steps (
+    id SERIAL PRIMARY KEY,
+    task_id TEXT NOT NULL REFERENCES agent_tasks(id) ON DELETE CASCADE,
+    step_number INTEGER NOT NULL,
+    step_type TEXT NOT NULL,
+    tool_name TEXT,
+    content TEXT,
+    messages_snapshot JSONB,
+    status TEXT DEFAULT 'completed',
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
 -- ============================================
 -- 외부 서비스 통합 테이블
 -- ============================================
@@ -266,6 +297,11 @@ CREATE INDEX IF NOT EXISTS idx_user_memories_user_active
 CREATE INDEX IF NOT EXISTS idx_research_user ON research_sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_research_status ON research_sessions(status);
 CREATE INDEX IF NOT EXISTS idx_research_steps_session ON research_steps(session_id);
+
+-- Agent task indexes
+CREATE INDEX IF NOT EXISTS idx_agent_tasks_user ON agent_tasks(user_id);
+CREATE INDEX IF NOT EXISTS idx_agent_tasks_status ON agent_tasks(status);
+CREATE INDEX IF NOT EXISTS idx_agent_task_steps_task ON agent_task_steps(task_id);
 
 
 -- External indexes

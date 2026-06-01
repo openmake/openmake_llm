@@ -48,9 +48,9 @@ export function renderAuthSection() {
         '<li style="margin-bottom: 8px;"><strong>Query Parameter:</strong> <code>?api_key=omk_live_...</code></li>' +
         '</ol>' +
 
-        getCodeBlock('curl', 'curl ' + window.location.origin + '/api/v1/models \\\n  -H "X-API-Key: omk_live_sk_xxxxxxxxxxxxxxxxxxxx"',
-                     'python', 'import requests\n\nheaders = {"X-API-Key": "omk_live_sk_xxxxxxxxxxxxxxxxxxxx"}\nresponse = requests.get("' + window.location.origin + '/api/v1/models", headers=headers)',
-                     'typescript', 'const response = await fetch("' + window.location.origin + '/api/v1/models", {\n  headers: {\n    "X-API-Key": "omk_live_sk_xxxxxxxxxxxxxxxxxxxx"\n  }\n});') +
+        getCodeBlock('curl', 'curl ' + window.location.origin + '/api/v1/models \\\n  -H "X-API-Key: omk_live_xxxxxxxxxxxxxxxxxxxx"',
+                     'python', 'import requests\n\nheaders = {"X-API-Key": "omk_live_xxxxxxxxxxxxxxxxxxxx"}\nresponse = requests.get("' + window.location.origin + '/api/v1/models", headers=headers)',
+                     'typescript', 'const response = await fetch("' + window.location.origin + '/api/v1/models", {\n  headers: {\n    "X-API-Key": "omk_live_xxxxxxxxxxxxxxxxxxxx"\n  }\n});') +
         '</section>';
 }
 
@@ -100,7 +100,7 @@ export function renderChatSection() {
             'curl',
             'curl ' + window.location.origin + '/api/v1/chat \\\n' +
             '  -H "Content-Type: application/json" \\\n' +
-            '  -H "X-API-Key: omk_live_sk_..." \\\n' +
+            '  -H "X-API-Key: omk_live_..." \\\n' +
             '  -d \'{\n' +
             '    "message": "Hello!",\n' +
             '    "model": "' + _docModel + '"\n' +
@@ -109,7 +109,7 @@ export function renderChatSection() {
             'import requests\n\n' +
             'url = "' + window.location.origin + '/api/v1/chat"\n' +
             'headers = {\n' +
-            '    "X-API-Key": "omk_live_sk_...",\n' +
+            '    "X-API-Key": "omk_live_...",\n' +
             '    "Content-Type": "application/json"\n' +
             '}\n' +
             'data = {\n' +
@@ -123,7 +123,7 @@ export function renderChatSection() {
             '  method: "POST",\n' +
             '  headers: {\n' +
             '    "Content-Type": "application/json",\n' +
-            '    "X-API-Key": "omk_live_sk_..."\n' +
+            '    "X-API-Key": "omk_live_..."\n' +
             '  },\n' +
             '  body: JSON.stringify({\n' +
             '    message: "Hello!",\n' +
@@ -193,7 +193,7 @@ export function renderOpenAICompatSection() {
             'from openai import OpenAI\n\n' +
             'client = OpenAI(\n' +
             '    base_url="' + window.location.origin + '/api/v1",\n' +
-            '    api_key="omk_live_sk_..."\n' +
+            '    api_key="omk_live_..."\n' +
             ')\n\n' +
             'response = client.chat.completions.create(\n' +
             '    model="' + _docModel + '",\n' +
@@ -206,7 +206,7 @@ export function renderOpenAICompatSection() {
             'import OpenAI from "openai";\n\n' +
             'const client = new OpenAI({\n' +
             '  baseURL: "' + window.location.origin + '/api/v1",\n' +
-            '  apiKey: "omk_live_sk_..."\n' +
+            '  apiKey: "omk_live_..."\n' +
             '});\n\n' +
             'const response = await client.chat.completions.create({\n' +
             '  model: "' + _docModel + '",\n' +
@@ -218,7 +218,7 @@ export function renderOpenAICompatSection() {
             'curl',
             'curl ' + window.location.origin + '/api/v1/chat/completions \\\n' +
             '  -H "Content-Type: application/json" \\\n' +
-            '  -H "Authorization: Bearer omk_live_sk_..." \\\n' +
+            '  -H "Authorization: Bearer omk_live_..." \\\n' +
             '  -d \'{\n' +
             '    "model": "' + _docModel + '",\n' +
             '    "messages": [\n' +
@@ -304,7 +304,7 @@ export function renderOpenAICompatSection() {
             'curl',
             'curl ' + window.location.origin + '/api/v1/chat/completions \\\n' +
             '  -H "Content-Type: application/json" \\\n' +
-            '  -H "Authorization: Bearer omk_live_sk_..." \\\n' +
+            '  -H "Authorization: Bearer omk_live_..." \\\n' +
             '  -d \'{\n' +
             '    "model": "' + _docModel + '",\n' +
             '    "stream": true,\n' +
@@ -375,7 +375,7 @@ export function renderOpenAICompatSection() {
             'curl',
             'curl ' + window.location.origin + '/api/v1/chat/completions \\\n' +
             '  -H "Content-Type: application/json" \\\n' +
-            '  -H "Authorization: Bearer omk_live_sk_..." \\\n' +
+            '  -H "Authorization: Bearer omk_live_..." \\\n' +
             '  -d \'{\n' +
             '    "model": "' + _docModel + '",\n' +
             '    "messages": [\n' +
@@ -514,7 +514,7 @@ export function renderOpenAICompatSection() {
         getCodeBlock(
             'curl',
             'curl ' + window.location.origin + '/api/v1/models \\\n' +
-            '  -H "Authorization: Bearer omk_live_sk_..."',
+            '  -H "Authorization: Bearer omk_live_..."',
             'python',
             'models = client.models.list()\n' +
             'for model in models.data:\n' +
@@ -709,9 +709,9 @@ export function renderUsageSection() {
         '<p>Get current usage statistics for the billing period.</p>' +
         getCodeBlock(
             'curl',
-            'curl ' + window.location.origin + '/api/v1/usage \\\n  -H "X-API-Key: omk_live_sk_..."',
-            'python', 'requests.get("' + window.location.origin + '/api/v1/usage", headers={"X-API-Key": "omk_live_sk_..."})',
-            'typescript', 'fetch("' + window.location.origin + '/api/v1/usage", {\n  headers: { "X-API-Key": "omk_live_sk_..." }\n})'
+            'curl ' + window.location.origin + '/api/v1/usage \\\n  -H "X-API-Key: omk_live_..."',
+            'python', 'requests.get("' + window.location.origin + '/api/v1/usage", headers={"X-API-Key": "omk_live_..."})',
+            'typescript', 'fetch("' + window.location.origin + '/api/v1/usage", {\n  headers: { "X-API-Key": "omk_live_..." }\n})'
         ) +
 
         '<h3>Response</h3>' +
@@ -755,9 +755,9 @@ export function renderUsageSection() {
         '<p>Get daily usage breakdown. The <code>days</code> query parameter controls the lookback period (default: 7).</p>' +
         getCodeBlock(
             'curl',
-            'curl "' + window.location.origin + '/api/v1/usage/daily?days=7" \\\n  -H "X-API-Key: omk_live_sk_..."',
-            'python', 'requests.get("' + window.location.origin + '/api/v1/usage/daily?days=7", headers={"X-API-Key": "omk_live_sk_..."})',
-            'typescript', 'fetch("' + window.location.origin + '/api/v1/usage/daily?days=7", {\n  headers: { "X-API-Key": "omk_live_sk_..." }\n})'
+            'curl "' + window.location.origin + '/api/v1/usage/daily?days=7" \\\n  -H "X-API-Key: omk_live_..."',
+            'python', 'requests.get("' + window.location.origin + '/api/v1/usage/daily?days=7", headers={"X-API-Key": "omk_live_..."})',
+            'typescript', 'fetch("' + window.location.origin + '/api/v1/usage/daily?days=7", {\n  headers: { "X-API-Key": "omk_live_..." }\n})'
         ) +
         '</section>';
 }
@@ -823,7 +823,7 @@ export function renderSdksSection() {
             'from openai import OpenAI\n\n' +
             'client = OpenAI(\n' +
             '    base_url="' + window.location.origin + '/api/v1",\n' +
-            '    api_key="omk_live_sk_..."\n' +
+            '    api_key="omk_live_..."\n' +
             ')\n\n' +
             'resp = client.chat.completions.create(\n' +
             '    model="' + _docModel + '",\n' +
@@ -834,7 +834,7 @@ export function renderSdksSection() {
             'import OpenAI from "openai";\n\n' +
             'const client = new OpenAI({\n' +
             '  baseURL: "' + window.location.origin + '/api/v1",\n' +
-            '  apiKey: "omk_live_sk_..."\n' +
+            '  apiKey: "omk_live_..."\n' +
             '});\n\n' +
             'const resp = await client.chat.completions.create({\n' +
             '  model: "' + _docModel + '",\n' +
@@ -843,7 +843,7 @@ export function renderSdksSection() {
             'console.log(resp.choices[0].message.content);',
             'curl',
             'curl ' + window.location.origin + '/api/v1/chat/completions \\\n' +
-            '  -H "Authorization: Bearer omk_live_sk_..." \\\n' +
+            '  -H "Authorization: Bearer omk_live_..." \\\n' +
             '  -H "Content-Type: application/json" \\\n' +
             '  -d \'{"model": "' + _docModel + '", "messages": [{"role": "user", "content": "Hello!"}]}\''
         ) +

@@ -202,13 +202,13 @@ export function setupParsersAndLimiting(app: Application): void {
  */
 export function setupStaticFiles(app: Application, dirname: string): void {
     const SPA_PAGES = new Set([
-        'research', 'custom-agents', 'mcp-servers',
+        'research', 'agent-tasks', 'custom-agents', 'mcp-servers',
         'agent-learning', 'usage', 'analytics', 'admin-metrics',
         'admin', 'audit', 'external', 'alerts', 'memory', 'settings',
         'password-change', 'history', 'developer', 'api-keys',
         'skill-library', 'projects',
         'admin-mcp-catalog', 'admin-mcp-monitoring',
-        'my-agents',  // 2026-05-26 Phase 2: 사용자 Custom Agent (claude.ai Projects 동등)
+        // 'my-agents' standalone 페이지 폐기 (2026-06-01) — Settings 임베드로 일원화.
     ]);
 
     const publicPath = path.join(dirname, 'public');
