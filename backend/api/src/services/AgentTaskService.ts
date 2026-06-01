@@ -177,16 +177,19 @@ export class AgentTaskService {
             });
             logger.info(`[AgentTask] 턴 상한 종료: ${taskId} (${turnCeiling} 턴)`);
         } catch (err) {
-            const kind = err instanceof AgentTaskAbort ? err.kind : 'failed';
-            const cancelled = kind === 'aborted';
+            // signal.aborted 가 true 면 client.chat() 호출 도중 던져진 AbortError
+            // ("Request was aborted") 도 사용자 취소로 분류 — 턴 사이 abort 뿐 아니라
+            // LLM 호출 중간 취소도 cancelled 로 일관 처리.
+            const aborted = signal.aborted || (err instanceof AgentTaskAbort && err.kind === 'aborted');
+            const kind = aborted ? 'aborted' : (err instanceof AgentTaskAbort ? err.kind : 'failed');
             const msg = err instanceof Error ? err.message : String(err);
             await db
                 .updateAgentTask(taskId, {
-                    status: cancelled ? 'cancelled' : 'failed',
-                    error: kind === 'failed' ? msg : kind,
+                    status: aborted ? 'cancelled' : 'failed',
+                    error: aborted ? kind : msg,
                 })
                 .catch((e) => logger.warn(`[AgentTask] 상태 갱신 실패: ${e}`));
-            logger.warn(`[AgentTask] ${cancelled ? '취소' : '실패'}: ${taskId} — ${kind}: ${msg}`);
+            logger.warn(`[AgentTask] ${aborted ? '취소' : '실패'}: ${taskId} — ${kind}: ${msg}`);
         } finally {
             AgentTaskService.running.delete(taskId);
         }
