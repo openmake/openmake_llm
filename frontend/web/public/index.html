@@ -171,6 +171,10 @@
                                         title="Deep Research (심층 연구)">
                                         <iconify-icon icon="lucide:flask-conical"></iconify-icon>
                                     </button>
+                                    <button class="action-btn" id="agentTaskBtn" onclick="toggleAgentTask()"
+                                        title="에이전트 작업 (백그라운드 자율 수행)">
+                                        <iconify-icon icon="lucide:bot"></iconify-icon>
+                                    </button>
                                     <button class="action-btn" id="responseStyleBtn" onclick="cycleResponseStyle()"
                                         title="응답 스타일: 기본 (균형)" data-style="default">📝</button>
                                     <select class="action-btn" id="userAgentSelect" onchange="setUserAgent(this.value)"

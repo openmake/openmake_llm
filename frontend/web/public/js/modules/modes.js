@@ -320,7 +320,25 @@ function updateResponseStyleButton() {
     btn.classList.toggle('active', current !== 'default');
 }
 
+function toggleAgentTask() {
+    const newValue = !getState('agentTaskMode');
+    setState('agentTaskMode', newValue);
+    const btn = document.getElementById('agentTaskBtn');
+    if (btn) {
+        btn.classList.toggle('active', newValue);
+        btn.title = newValue ? '에이전트 작업 모드 ON (전송 시 백그라운드 자율 수행)' : '에이전트 작업 (백그라운드 자율 수행)';
+    }
+    // 다른 모드와 배타 — 켜질 때 deepResearch/discussion 끔
+    if (newValue) {
+        setState('deepResearchMode', false);
+        setState('discussionMode', false);
+        const dr = document.getElementById('deepResearchBtn'); if (dr) dr.classList.remove('active');
+        const dc = document.getElementById('discussionModeBtn'); if (dc) dc.classList.remove('active');
+    }
+}
+
 // 전역 노옥 (레거시 호환)
+window.toggleAgentTask = toggleAgentTask;
 window.toggleDiscussionMode = toggleDiscussionMode;
 window.toggleThinkingMode = toggleThinkingMode;
 window.toggleDeepResearch = toggleDeepResearch;

@@ -175,6 +175,52 @@ async function handleSlashCommand(message) {
  * 모델 선택, 웹 검색, 사고 모드, 문서 컨텍스트 등 옵션을 포함합니다.
  * @returns {Promise<void>}
  */
+// ── Stage 3: 채팅 내 에이전트 작업 라우팅 (백엔드 채팅 파이프라인 미경유, agent-task API 재사용) ──
+function _renderAgentTaskCard(t) {
+    const labels = { pending: '대기중', running: '진행중', completed: '완료', failed: '실패', cancelled: '취소' };
+    const esc = (s) => { const d = document.createElement('div'); d.textContent = (s == null ? '' : String(s)); return d.innerHTML; };
+    let html = '<div class="agent-task-chat-card" style="border:1px solid var(--border-light);border-radius:8px;padding:12px;">' +
+        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">' +
+        '<iconify-icon icon="lucide:bot"></iconify-icon><strong>에이전트 작업</strong>' +
+        '<span style="margin-left:auto;font-size:11px;padding:2px 8px;border-radius:6px;background:var(--bg-tertiary);">' + (labels[t.status] || esc(t.status)) + '</span></div>' +
+        '<div style="color:var(--text-secondary);font-size:13px;">' + esc(t.goal) + '</div>';
+    if (t.progress > 0 && t.status === 'running') {
+        html += '<div style="height:5px;background:var(--bg-tertiary);border-radius:3px;margin-top:8px;overflow:hidden;"><div style="height:100%;background:var(--accent-primary);width:' + t.progress + '%;transition:width .3s;"></div></div>';
+    }
+    if (t.error) html += '<div style="margin-top:8px;color:var(--danger);font-size:13px;">' + esc(t.error) + '</div>';
+    html += '<div style="margin-top:8px;"><a href="/agent-tasks.html" style="font-size:12px;color:var(--accent-primary);">작업 페이지에서 결과 보기 →</a></div></div>';
+    return html;
+}
+
+function _ensureChatTaskProgressHandler() {
+    window.onAgentTaskProgress = function(p) {
+        if (!p || !p.taskId) return;
+        const card = document.querySelector('[data-agent-task-id="' + p.taskId + '"]');
+        if (!card) return;
+        const content = card.querySelector('.message-content') || card;
+        content.innerHTML = _renderAgentTaskCard({ status: p.status, progress: p.progress, goal: card.dataset.agentTaskGoal || '' });
+    };
+}
+
+async function _startAgentTaskFromChat(goal) {
+    _ensureChatTaskProgressHandler();
+    const cardDiv = addChatMessage('assistant', '');
+    cardDiv.dataset.agentTaskGoal = goal;
+    const content = cardDiv.querySelector('.message-content');
+    if (content) content.innerHTML = _renderAgentTaskCard({ status: 'pending', progress: 0, goal: goal });
+    try {
+        const created = await window.authFetch('/api/agent-tasks', { method: 'POST', body: JSON.stringify({ goal: goal }) }).then(r => r.json());
+        const task = (created.data && created.data.task) || created.data;
+        if (!task || !task.id) throw new Error('생성 실패');
+        cardDiv.dataset.agentTaskId = task.id;
+        if (content) content.innerHTML = _renderAgentTaskCard({ status: 'running', progress: 1, goal: goal });
+        await window.authFetch('/api/agent-tasks/' + task.id + '/execute', { method: 'POST' });
+    } catch (e) {
+        console.error('[Chat] 에이전트 작업 시작 실패:', e);
+        if (content) content.innerHTML = _renderAgentTaskCard({ status: 'failed', progress: 0, goal: goal, error: '작업 시작에 실패했습니다' });
+    }
+}
+
 async function sendMessage() {
     const input = document.getElementById('chatInput');
     const message = input.value.trim();
@@ -215,6 +261,13 @@ async function sendMessage() {
     // 입력창 초기화
     input.value = '';
     input.style.height = 'auto';
+
+    // 에이전트 작업 모드 — ws chat 대신 백그라운드 자율 작업으로 라우팅 (채팅 파이프라인 미경유)
+    if (getState('agentTaskMode')) {
+        await _startAgentTaskFromChat(message);
+        setState('isSending', false);
+        return;
+    }
 
     // AI 응답 메시지 생성
     const assistantDiv = addChatMessage('assistant', '');
