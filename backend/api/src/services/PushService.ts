@@ -1,4 +1,6 @@
 import { getPool } from '../data/models/unified-database';
+import webPush from 'web-push';
+import { getVapidKeys } from '../utils/vapid';
 
 
 export interface PushSubscription {
@@ -70,6 +72,31 @@ export class PushService {
                 createdAt: new Date(r.created_at),
             };
         });
+    }
+
+    /**
+     * user 의 모든 활성 구독에 web push 알림 발송. VAPID 미설정 시 no-op.
+     * 410 Gone / 404 (만료 구독)은 자동 정리. fire-and-forget 호출 전제.
+     */
+    async sendPush(userId: string, payload: { title: string; body: string; url?: string }): Promise<void> {
+        const { publicKey, privateKey } = getVapidKeys(); // setVapidDetails 보장
+        if (!publicKey || !privateKey) return; // VAPID 미설정 — 발송 불가, no-op
+        const subs = await this.getActiveSubscriptions(userId);
+        if (subs.length === 0) return;
+        const data = JSON.stringify(payload);
+        await Promise.all(subs.map(async (sub) => {
+            try {
+                await webPush.sendNotification(
+                    { endpoint: sub.endpoint, keys: { p256dh: sub.keys.p256dh, auth: sub.keys.auth } },
+                    data,
+                );
+            } catch (err) {
+                const code = (err as { statusCode?: number })?.statusCode;
+                if (code === 410 || code === 404) {
+                    await this.unsubscribe(userId, sub.endpoint).catch(() => { /* noop */ });
+                }
+            }
+        }));
     }
 
     async listStoredSubscriptions(): Promise<StoredPushSubscription[]> {

@@ -22,6 +22,7 @@ import { getUnifiedDatabase } from '../data/models/unified-database';
 import { AGENT_TASK_LIMITS } from '../config/runtime-limits';
 import { emitAgentTaskProgress } from '../utils/event-bus';
 import { getAgentTaskSystemPrompt } from '../prompts/agent-task-prompt';
+import { getPushService } from './PushService';
 import { createLogger } from '../utils/logger';
 import type { UserContext } from '../mcp/user-sandbox';
 
@@ -117,6 +118,16 @@ export class AgentTaskService {
             curTurn = u.currentTurn ?? curTurn;
             await db.updateAgentTask(taskId, u);
             emitAgentTaskProgress({ userId, taskId, status: curStatus, progress: curProgress, currentTurn: curTurn });
+            // terminal 상태 → web push (페이지가 닫혀 있어도 알림). fire-and-forget, VAPID 미설정 시 no-op.
+            if (u.status === 'completed' || u.status === 'failed' || u.status === 'cancelled') {
+                const label = u.status === 'completed' ? '완료' : u.status === 'failed' ? '실패' : '취소';
+                const shortGoal = goal.length > 60 ? goal.slice(0, 60) + '…' : goal;
+                void getPushService().sendPush(userId, {
+                    title: 'OpenMake 에이전트 작업',
+                    body: `작업이 ${label}되었습니다: ${shortGoal}`,
+                    url: '/agent-tasks.html',
+                }).catch(() => { /* noop */ });
+            }
         };
 
         AgentTaskService.running.set(taskId, this);

@@ -73,9 +73,13 @@
         var goalEl = document.getElementById('goal');
         var goal = goalEl ? goalEl.value.trim() : '';
         if (!goal) { _showToast('목표를 입력하세요', 'error'); return; }
-        // 완료 알림용 브라우저 권한 요청 (사용자 제스처 컨텍스트에서 1회)
-        if (window.Notification && Notification.permission === 'default') {
-            try { Notification.requestPermission(); } catch (e) { /* noop */ }
+        // 완료 알림용 브라우저 권한 요청 + web push 구독 (사용자 제스처 컨텍스트)
+        if (window.Notification) {
+            if (Notification.permission === 'default') {
+                try { Notification.requestPermission().then(function() { _ensurePushSubscription(); }); } catch (e) { /* noop */ }
+            } else if (Notification.permission === 'granted') {
+                _ensurePushSubscription();
+            }
         }
 
         _authFetch(_ep(), {
@@ -247,6 +251,41 @@
         if (window.Notification && Notification.permission === 'granted') {
             try { new Notification('OpenMake 에이전트 작업', { body: msg + (goal ? '\n' + goal : '') }); } catch (e) { /* noop */ }
         }
+    }
+
+    // web push 구독 (권한 허용 시 1회) — 페이지가 닫혀 있어도 완료 알림 수신
+    function _ensurePushSubscription() {
+        if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+        if (!window.Notification || Notification.permission !== 'granted') return;
+        navigator.serviceWorker.register('/push-sw.js').then(function(reg) {
+            return reg.pushManager.getSubscription().then(function(existing) {
+                if (existing) return existing;
+                return _authFetch('/api/push/vapid-key').then(function(vres) {
+                    var vapidKey = (vres.data && vres.data.publicKey) || vres.publicKey;
+                    if (!vapidKey) throw new Error('no vapid key');
+                    return reg.pushManager.subscribe({
+                        userVisibleOnly: true,
+                        applicationServerKey: _urlB64ToUint8Array(vapidKey),
+                    });
+                });
+            });
+        }).then(function(sub) {
+            if (!sub) return;
+            var json = sub.toJSON();
+            return _authFetch('/api/push/subscribe', {
+                method: 'POST',
+                body: JSON.stringify({ endpoint: json.endpoint, keys: json.keys }),
+            });
+        }).catch(function(e) { console.warn('[AgentTasks] push 구독 실패:', e); });
+    }
+
+    function _urlB64ToUint8Array(base64String) {
+        var padding = '='.repeat((4 - base64String.length % 4) % 4);
+        var base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+        var raw = atob(base64);
+        var arr = new Uint8Array(raw.length);
+        for (var i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
+        return arr;
     }
 
     window.PageModules['agent-tasks'] = {
