@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-OpenMake LLM is a self-hosted AI assistant platform with multi-model orchestration. LLM backend는 **vLLM serve + LiteLLM proxy** 조합을 OpenAI 호환 API 로 호출하며 (2026-05-18 Ollama 제거 마이그레이션 완료), 외부 provider (Anthropic, OpenAI 호환 등) 도 동일 추상화로 라우팅합니다. 7 brand model profiles (Default, Pro, Fast, Think, Code, Vision, Auto) 를 지원하고, LLM classifier + 2-layer semantic cache 로 쿼리를 라우팅합니다.
+OpenMake LLM is a self-hosted AI assistant platform with multi-model orchestration. LLM backend는 **vLLM serve + LiteLLM proxy** 조합을 OpenAI 호환 API 로 호출하며 (2026-05-18 Ollama 제거 마이그레이션 완료), 외부 provider (Anthropic, OpenAI 호환 등) 도 동일 추상화로 라우팅합니다. 7 brand model profiles (Default, Pro, Fast, Think, Code, Vision, Auto) 를 지원하고, ExecutionPlanBuilder (regex + fast-path 분류) 로 쿼리를 라우팅합니다.
 
 > **Legacy 모델 ID 입력 호환**: provider 식별자 canonical 은 `'local-llm'` 이며 `SdkType = 'local-llm' | 'anthropic' | 'openai-compatible'` 입니다. (2026-05-31 정리: `'ollama'` 를 SdkType 에서 제거 — 외부 키 DB CHECK 제약은 `('anthropic','openai-compatible')` 만 허용하고 [`016` 마이그레이션] 로컬 provider 는 외부 키 테이블에 저장되지 않으므로 `'ollama'` 가 애초에 불필요했음. 과거 "DB CHECK 호환용 유지"라는 서술은 부정확했음.) 단, 과거 저장된 `'ollama:<model>'` **model ID 입력**은 `providers/i-provider.ts` 의 `parseFullModelId` 가 `'local-llm'` 으로 자동 normalize 하여 무중단 호환하며, `provider-gate.ts` 의 `KNOWN_FULLID_PREFIXES` 도 레거시 `'ollama:'` prefix 를 입력으로 수용합니다. 응답 필드명(`prompt_eval_count`, `eval_count` 등) 도 호출자 호환 위해 `stream-parser.ts` 에서 OpenAI usage → Ollama-style 로 매핑합니다.
 
@@ -19,7 +19,7 @@ npm run dev
 
 # Backend only
 npm run dev:api          # ts-node src/server.ts
-npm run build:backend    # tsc + sync frontend assets
+npm run build:backend    # tsc + copy-agent-data + build-info
 
 # Frontend only
 npm run dev:frontend     # vite dev server
@@ -76,7 +76,7 @@ The server entry point is `server.ts`. Key directories:
 | `auth/` | JWT auth, OAuth provider, API key utils, ownership, scope middleware |
 | `security/` | SSRF guard, additional security primitives beyond `auth/` |
 | `data/` | PostgreSQL via `pg` (raw SQL, parameterized queries), conversation DB, migrations, repositories |
-| `storage/` | Document storage layer (binary/blob, embedding artifacts) |
+| `storage/` | Key-Value Store 추상화 (memory/redis — OAuth state, rate limiting 등) |
 | `cache/` | LRU 기반 캐시 인프라 (CacheSystem singleton) |
 | `config/` | Environment config, constants, runtime limits, timeouts, pricing, model defaults, external providers |
 | `schemas/` | Zod 입력 검증 스키마 (REST/WebSocket payload) |
@@ -84,7 +84,7 @@ The server entry point is `server.ts`. Key directories:
 | `errors/` | 도메인별 커스텀 에러 클래스 |
 | `llm/` | vLLM/LiteLLM client public API: `LLMClient` (canonical, 2026-05-19 `OllamaClient` alias 제거), agent-loop, usage-tracker, reasoning-adapter, reasoning-tag-parser, stream-parser, web-search-adapter, **model-pool** (262K↔1M proactive routing) |
 | `providers/` | LLM provider 추상화: `i-provider.ts` (SdkType `'local-llm' \| 'anthropic' \| 'openai-compatible'`), `local-llm-provider.ts`, `anthropic-provider.ts`, `openai-compat-provider.ts`, `provider-router.ts` |
-| `cluster/` | vLLM/LiteLLM 노드 클러스터 라우팅 (health check, circuit breaker, multi-client, node-selector). `server.ts` 부팅 시 `getClusterManager()` 로 활성화 |
+| `cluster/` | vLLM/LiteLLM 노드 클러스터 라우팅 (health check, circuit breaker, node-selector). `server.ts` 부팅 시 `getClusterManager()` 로 활성화 |
 | `monitoring/` | Analytics + alerts system |
 | `observability/` | OpenTelemetry tracing/metrics |
 | `evaluation/` | 모델 평가 파이프라인 |
@@ -106,7 +106,7 @@ SPA with vanilla JS ES Modules. No build step for JS - files are served directly
 | Path | Purpose |
 |---|---|
 | `js/modules/` | Core modules: chat, websocket, auth, state, settings, sanitize, api-client, models-api (`/api/models` 공유 클라이언트 SoT) |
-| `js/modules/pages/` | 23 page module 파일 (admin, analytics, audit, research, etc.; developer-helpers/sections 2개는 헬퍼) — `js/modules/nav-items.js` 와 동기화 필수 (validate-modules.sh 자동 검증) |
+| `js/modules/pages/` | 24 page module 파일 (admin, analytics, audit, research, agent-tasks, etc.; developer-helpers/sections 2개는 헬퍼) — `js/modules/nav-items.js` 와 동기화 필수 (validate-modules.sh 자동 검증) |
 | `css/` | CSS with design tokens |
 
 #### Frontend 개발 패턴
@@ -128,7 +128,7 @@ SPA with vanilla JS ES Modules. No build step for JS - files are served directly
 - **MCP Tools**: 13 built-in tools (`mcp/tools.ts` `builtInTools`) with tier-based access (Free/Pro/Enterprise). Web scraping tools (web_scrape, web_map, web_crawl) are always active (no API key required).
 - **Frontend Security**: XSS defense via `sanitize.js`. All user content must be sanitized.
 - **Audit ↔ Alert 통합**: `AuditService.logAudit` 가 SoT. CRITICAL_ACTIONS whitelist 매칭 시 자동 `sendAlert` (controller 직접 호출 금지).
-- **User Customization 4 축 (2026-05-26 claude.ai 패턴 정렬)**: ① **Model** (ModelSelector dropdown) ② **Style** (Concise/Default/Verbose cycle button — `chat/style.ts` + system prompt prepend) ③ **Mode** (Discussion/Thinking/DeepResearch/Web 토글) ④ **Custom Instructions** (Settings 영구 textarea — `users.custom_instructions`). system prompt 조립 순서: `memoryBlock + customInstructionsBlock + style(agent? + base)`. Custom Agents (claude.ai Projects 동등) 는 산업 agent 자동 라우팅 우회 + `user_agents.system_prompt` 사용. Cross-conversation Memory (claude.ai/ChatGPT Memory 동등) 는 `/remember` slash command 로 explicit 저장 → `user_memories` 영속 → system prompt 가장 앞에 prepend.
+- **User Customization 4 축 (2026-05-26 claude.ai 패턴 정렬)**: ① **Model** (ModelSelector dropdown) ② **Style** (Concise/Default/Verbose cycle button — `chat/style.ts` + system prompt prepend) ③ **Mode** (Discussion/Thinking/DeepResearch/Web/Agent Task 토글) ④ **Custom Instructions** (Settings 영구 textarea — `users.custom_instructions`). system prompt 조립 순서: `memoryBlock + customInstructionsBlock + style(agent? + base)`. Custom Agents (claude.ai Projects 동등) 는 산업 agent 자동 라우팅 우회 + `user_agents.system_prompt` 사용. Cross-conversation Memory (claude.ai/ChatGPT Memory 동등) 는 `/remember` slash command 로 explicit 저장 → `user_memories` 영속 → system prompt 가장 앞에 prepend.
 - **Brand Alias Normalizer (Phase D 2026-05-26)**: 7 legacy brand alias (`openmake_llm_pro/_fast/_think/_code/_vision/_auto`) 를 직교 축으로 자동 매핑하는 backward-compat layer. `chat/brand-alias-normalizer.ts`. Phase F (alias 410 폐기) 는 30일 운영 관찰 후.
 - **에러 처리 전략**: `errors/` 디렉토리의 도메인별 커스텀 에러 클래스 사용. HTTP 상태코드 매핑은 `middlewares/error-handler.ts` 가 담당 (`ContextOverflowError` → 413, Auth 에러 → 401/403). 비즈니스 로직에서 `res.status()` 직접 호출 금지 — 에러를 throw 하여 middleware 가 처리하게 할 것. `AppError(message, statusCode, code)` 패턴 사용.
 
