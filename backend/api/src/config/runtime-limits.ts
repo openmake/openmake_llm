@@ -1004,7 +1004,7 @@ export const AGENT_TASK_LIMITS = {
     DEFAULT_MAX_TURNS: 10,
     /** 작업 전체 타임아웃 (ms) */
     TOTAL_TIMEOUT_MS: 5 * 60 * 1000,
-    /** 누적 토큰 상한 (input + output) */
-    MAX_TOTAL_TOKENS: 200_000,
+    /** 누적 토큰 상한 (input + output). 토큰 한도 폐기(2026-06-02) — 사실상 무제한. */
+    MAX_TOTAL_TOKENS: 100_000_000,
 } as const;
 
