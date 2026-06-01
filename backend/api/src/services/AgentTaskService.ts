@@ -133,6 +133,11 @@ export class AgentTaskService {
                 });
                 totalTokens +=
                     (result.metrics?.prompt_eval_count ?? 0) + (result.metrics?.eval_count ?? 0);
+                // 토큰 상한을 호출 직후 즉시 검사 — 큰 도구 결과로 컨텍스트가 부풀어
+                // 한도를 넘겼을 때 다음 턴까지 기다리지 않고 바로 중단(runaway 방어 강화).
+                if (totalTokens > AGENT_TASK_LIMITS.MAX_TOTAL_TOKENS) {
+                    throw new AgentTaskAbort('token_limit');
+                }
 
                 conversation.push({
                     role: 'assistant',

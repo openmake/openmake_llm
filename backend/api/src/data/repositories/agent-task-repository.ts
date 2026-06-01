@@ -95,7 +95,7 @@ export class AgentTaskRepository extends BaseRepository {
         );
     }
 
-    async getAgentTaskSteps(taskId: string, limit: number = 200): Promise<AgentTaskStep[]> {
+    async getAgentTaskSteps(taskId: string, limit: number = 1000): Promise<AgentTaskStep[]> {
         const result = await this.query<AgentTaskStep>(
             'SELECT * FROM agent_task_steps WHERE task_id = $1 ORDER BY step_number ASC LIMIT $2',
             [taskId, limit]
