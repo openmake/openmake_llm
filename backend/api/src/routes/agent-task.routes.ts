@@ -27,6 +27,7 @@ import { validate } from '../middlewares/validation';
 import { getUnifiedDatabase } from '../data/models/unified-database';
 import { v4 as uuidv4 } from 'uuid';
 import { AgentTaskService } from '../services/AgentTaskService';
+import type { ChatMessage } from '../llm/types';
 import { AGENT_TASK_LIMITS } from '../config/runtime-limits';
 import { createAgentTaskSchema } from '../schemas/agent-task.schema';
 
@@ -49,6 +50,12 @@ async function loadOwnedTask(req: Request, res: Response, taskId: string) {
     }
     assertResourceOwnerOrAdmin(String(task.user_id), String(req.user!.id), req.user!.role || 'user');
     return task;
+}
+
+/** 응답용 변환: 큰 checkpoint 필드 제거 + resumable 플래그(중단된 작업에 체크포인트 존재) */
+function toPublicTask(t: Record<string, unknown>) {
+    const { checkpoint, ...rest } = t;
+    return { ...rest, resumable: !!checkpoint && t.status === 'failed' };
 }
 
 /**
@@ -78,7 +85,7 @@ router.post('/', validate(createAgentTaskSchema), asyncHandler(async (req: Reque
 router.get('/', asyncHandler(async (req: Request, res: Response) => {
     const db = getUnifiedDatabase();
     const tasks = await db.getUserAgentTasks(String(req.user!.id));
-    res.json(success({ tasks, total: tasks.length }));
+    res.json(success({ tasks: tasks.map(t => toPublicTask(t as unknown as Record<string, unknown>)), total: tasks.length }));
 }));
 
 /**
@@ -90,7 +97,7 @@ router.get('/:taskId', asyncHandler(async (req: Request, res: Response) => {
     if (!task) return;
     const db = getUnifiedDatabase();
     const steps = await db.getAgentTaskSteps(req.params.taskId);
-    res.json(success({ task, steps }));
+    res.json(success({ task: toPublicTask(task as unknown as Record<string, unknown>), steps }));
 }));
 
 /**
@@ -164,6 +171,50 @@ router.post('/:taskId/cancel', asyncHandler(async (req: Request, res: Response) 
         return res.json(success({ message: '작업이 취소되었습니다.', taskId: task.id }));
     }
     return res.status(400).json(badRequest('실행 중이거나 대기 중인 작업이 아닙니다.'));
+}));
+
+/**
+ * POST /api/agent-tasks/:taskId/resume
+ * 서버 재시작 등으로 중단된 작업을 end-of-turn checkpoint 에서 이어서 실행 (detached)
+ */
+router.post('/:taskId/resume', asyncHandler(async (req: Request, res: Response) => {
+    const task = await loadOwnedTask(req, res, req.params.taskId);
+    if (!task) return;
+
+    if (task.status === 'running') {
+        return res.status(400).json(badRequest('이미 실행 중인 작업입니다.'));
+    }
+    const cp = task.checkpoint as { conversation?: unknown[]; completedTurn?: number } | null | undefined;
+    if (!cp || !Array.isArray(cp.conversation) || cp.conversation.length === 0) {
+        return res.status(400).json(badRequest('이어할 체크포인트가 없는 작업입니다.'));
+    }
+
+    const tier: UserTier = (req.user && 'tier' in req.user)
+        ? (req.user as { tier: UserTier }).tier
+        : 'free';
+    const role: UserRole = (req.user!.role as UserRole) || 'user';
+    const db = getUnifiedDatabase();
+    const steps = await db.getAgentTaskSteps(task.id);
+
+    const service = new AgentTaskService();
+    service.execute({
+        taskId: task.id,
+        goal: task.goal,
+        userId: String(req.user!.id),
+        userTier: tier,
+        userRole: role,
+        maxTurns: task.max_turns,
+        resume: {
+            conversation: cp.conversation as ChatMessage[],
+            fromTurn: (cp.completedTurn ?? 0) + 1,
+            fromStep: steps.length,
+        },
+    }).catch((error) => {
+        logger.error(`[AgentTaskRoutes] 이어하기 실패: ${error}`);
+    });
+
+    logger.info(`[AgentTaskRoutes] 작업 이어하기: ${task.id} (turn ${(cp.completedTurn ?? 0) + 1})`);
+    res.status(202).json(success({ message: '작업을 이어서 시작했습니다.', taskId: task.id }));
 }));
 
 /**

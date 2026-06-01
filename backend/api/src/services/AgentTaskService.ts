@@ -45,6 +45,12 @@ export interface AgentTaskRunInput {
     userTier: UserTier;
     userRole: UserRole;
     maxTurns: number;
+    /** resume(이어하기): 기존 end-of-turn checkpoint 에서 복원 */
+    resume?: {
+        conversation: ChatMessage[];
+        fromTurn: number;
+        fromStep: number;
+    };
 }
 
 export class AgentTaskService {
@@ -88,12 +94,16 @@ export class AgentTaskService {
 
         const userCtx: UserContext = { userId, tier: userTier, role: userRole };
 
-        const conversation: ChatMessage[] = [
-            { role: 'system', content: getAgentTaskSystemPrompt() },
-            { role: 'user', content: goal },
-        ];
+        // resume: 기존 checkpoint(완전한 end-of-turn conversation)에서 복원, 아니면 새로 시작.
+        const conversation: ChatMessage[] = input.resume
+            ? [...input.resume.conversation]
+            : [
+                { role: 'system', content: getAgentTaskSystemPrompt() },
+                { role: 'user', content: goal },
+            ];
+        const startTurn = input.resume?.fromTurn ?? 0;
 
-        let stepNumber = 0;
+        let stepNumber = input.resume?.fromStep ?? 0;
         let totalTokens = 0;
         let curStatus = 'pending';
         let curProgress = 0;
@@ -119,7 +129,7 @@ export class AgentTaskService {
                 tier: userTier,
             })) as unknown as ToolDefinition[];
 
-            for (let turn = 0; turn < turnCeiling; turn++) {
+            for (let turn = startTurn; turn < turnCeiling; turn++) {
                 this.assertWithinLimits(signal, startedAt, totalTokens);
 
                 await update({
@@ -147,8 +157,8 @@ export class AgentTaskService {
 
                 const hasToolCalls = !!result.tool_calls && result.tool_calls.length > 0;
 
-                // 체크포인트: assistant 턴 (messages_snapshot 은 Stage 2 resume 대비)
-                // 첫 턴은 목표 분해 계획(plan)으로 표시 — 시스템 프롬프트가 계획 우선 작성을 유도.
+                // 스텝 기록(display용). 첫 턴은 목표 분해 계획(plan)으로 표시.
+                // resume 복원 상태(turn>0)는 plan 이 아님 — 중간 재개이므로 자동 제외됨.
                 const stepType = turn === 0
                     ? 'plan'
                     : (hasToolCalls ? 'assistant_tool_call' : 'assistant');
@@ -157,7 +167,6 @@ export class AgentTaskService {
                     stepNumber: stepNumber++,
                     stepType,
                     content: result.content,
-                    messagesSnapshot: conversation,
                 });
 
                 if (!hasToolCalls) {
@@ -189,6 +198,11 @@ export class AgentTaskService {
                         content: toolResult,
                     });
                 }
+
+                // end-of-turn 체크포인트: tool 결과까지 포함된 완전한 conversation + 완료 턴 번호.
+                // 이 시점의 conversation 은 tool_call_id 가 매칭된 valid 상태라 그대로 resume 가능.
+                // (현재 모든 도구가 idempotent-read 라 턴 재실행 안전 — write 도구 추가 시 gate 필요)
+                await db.updateAgentTask(taskId, { checkpoint: { conversation, completedTurn: turn } });
             }
 
             // 턴 상한 도달 — 마지막 assistant 내용을 결과로 보존

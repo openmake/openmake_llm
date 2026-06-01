@@ -80,8 +80,16 @@ export async function initSchema(pool: Pool): Promise<void> {
         // Constraint may already be correct — ignore
     }
 
+    // agent_tasks resume: end-of-turn conversation 체크포인트 컬럼 (기존 DB ALTER, 멱등)
+    try {
+        await pool.query(`ALTER TABLE agent_tasks ADD COLUMN IF NOT EXISTS checkpoint JSONB`);
+    } catch {
+        // 테이블 미존재(최초 부팅) 등 — 무시
+    }
+
     // 좀비 작업 정리: 이전 프로세스에서 running 이던 AgentTask 는 in-memory 루프가
     // 사라져 복구 불가 → failed 로 마킹하여 프론트의 무한 polling 을 방지한다.
+    // checkpoint 가 있으면 프론트에서 '이어하기(resume)' 가능 (status=failed + error='server restarted').
     try {
         await pool.query(
             `UPDATE agent_tasks SET status = 'failed', error = 'server restarted', completed_at = NOW() WHERE status = 'running'`,

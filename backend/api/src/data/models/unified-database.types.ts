@@ -175,6 +175,7 @@ export interface AgentTask {
     model?: string;
     result?: string;
     error?: string;
+    checkpoint?: unknown;
     created_at: string;
     updated_at: string;
     completed_at?: string;

@@ -301,6 +301,7 @@ CREATE TABLE IF NOT EXISTS agent_tasks (
     model TEXT,
     result TEXT,
     error TEXT,
+    checkpoint JSONB,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW(),
     completed_at TIMESTAMPTZ

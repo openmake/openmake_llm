@@ -125,9 +125,11 @@
         var dc = document.getElementById('detailContent');
         if (dc) dc.innerHTML = html;
 
-        // 취소 버튼은 진행 중일 때만 노출
+        // 취소 버튼은 진행 중일 때만, 이어하기 버튼은 중단된(resumable) 작업에만 노출
         var btnCancel = document.getElementById('btnCancelTask');
         if (btnCancel) btnCancel.style.display = (task.status === 'running' || task.status === 'pending') ? '' : 'none';
+        var btnResume = document.getElementById('btnResumeTask');
+        if (btnResume) btnResume.style.display = task.resumable ? '' : 'none';
     }
 
     function _openTask(id) {
@@ -168,6 +170,19 @@
         }).catch(function(e) {
             console.error('[AgentTasks] 취소 실패:', e);
             _showToast('취소 실패', 'error');
+        });
+    }
+
+    function _resumeTask() {
+        if (!_currentTaskId) return;
+        _authFetch(_ep() + '/' + _currentTaskId + '/resume', { method: 'POST' }).then(function() {
+            _showToast('작업을 이어서 시작했습니다');
+            delete _notified[_currentTaskId];  // 재완료 시 다시 알림 허용
+            _refreshDetail();
+            _loadTasks();
+        }).catch(function(e) {
+            console.error('[AgentTasks] 이어하기 실패:', e);
+            _showToast('이어하기 실패', 'error');
         });
     }
 
@@ -301,6 +316,7 @@
                         '<div id="detailContent"></div>' +
                         '<div class="modal-actions">' +
                             '<button class="btn-secondary" id="btnCloseDetail">닫기</button>' +
+                            '<button class="btn-primary" id="btnResumeTask" style="display:none">이어하기</button>' +
                             '<button class="btn-warning" id="btnCancelTask">중단</button>' +
                             '<button class="btn-danger" id="btnDeleteTask">삭제</button>' +
                         '</div>' +
@@ -350,6 +366,13 @@
                 var cancelHandler = function() { _cancelTask(); };
                 btnCancel.addEventListener('click', cancelHandler);
                 _listeners.push({ el: btnCancel, type: 'click', fn: cancelHandler });
+            }
+
+            var btnResume = document.getElementById('btnResumeTask');
+            if (btnResume) {
+                var resumeHandler = function() { _resumeTask(); };
+                btnResume.addEventListener('click', resumeHandler);
+                _listeners.push({ el: btnResume, type: 'click', fn: resumeHandler });
             }
 
             var btnDelete = document.getElementById('btnDeleteTask');

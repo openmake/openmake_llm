@@ -361,6 +361,7 @@ export class UnifiedDatabase {
         currentTurn?: number;
         result?: string;
         error?: string;
+        checkpoint?: unknown;
     }): Promise<void> {
         return this.agentTaskRepository.updateAgentTask(taskId, updates);
     }

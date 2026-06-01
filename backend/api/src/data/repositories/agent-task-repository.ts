@@ -38,6 +38,7 @@ export class AgentTaskRepository extends BaseRepository {
         currentTurn?: number;
         result?: string;
         error?: string;
+        checkpoint?: unknown;
     }): Promise<void> {
         const sets: string[] = ['updated_at = NOW()'];
         const params: QueryParam[] = [];
@@ -65,6 +66,10 @@ export class AgentTaskRepository extends BaseRepository {
         if (updates.error !== undefined) {
             sets.push(`error = $${paramIdx++}`);
             params.push(updates.error);
+        }
+        if (updates.checkpoint !== undefined) {
+            sets.push(`checkpoint = $${paramIdx++}`);
+            params.push(JSON.stringify(updates.checkpoint));
         }
 
         params.push(taskId);
