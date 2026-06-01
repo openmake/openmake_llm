@@ -9,25 +9,6 @@
  * @module config/routing-config
  */
 
-import { getModelForRole } from './model-roles';
-
-// ── LLM Classifier 설정 ──────────────────────────────────────
-
-/** 분류용 모델 — model-roles 레지스트리 경유 */
-export const CLASSIFIER_MODEL = getModelForRole('classifier');
-
-/** LLM 분류 최소 신뢰도 임계값 - 이 값 미만이면 regex fallback (env: OMK_CONFIDENCE_THRESHOLD) */
-export const CONFIDENCE_THRESHOLD =
-    Number(process.env.OMK_CONFIDENCE_THRESHOLD ?? '0.7');
-
-/** LLM 분류기 temperature (결정적 응답용) (env: OMK_CLASSIFIER_TEMPERATURE) */
-export const CLASSIFIER_TEMPERATURE =
-    Number(process.env.OMK_CLASSIFIER_TEMPERATURE ?? '0.1');
-
-/** LLM 분류기 컨텍스트 토큰 수 (env: OMK_CLASSIFIER_NUM_CTX) */
-export const CLASSIFIER_NUM_CTX =
-    Number(process.env.OMK_CLASSIFIER_NUM_CTX ?? '1024');
-
 // ── LLM Router 설정 ──────────────────────────────────────────
 
 /** LLM 라우터 temperature (결정적 응답용) (env: OMK_ROUTER_TEMPERATURE) */

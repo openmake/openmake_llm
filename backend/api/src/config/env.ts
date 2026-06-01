@@ -103,13 +103,8 @@ export interface EnvConfig {
     // HTTPS 없는 production 환경에서 cookieSecure=false 를 명시적으로 허용 (opt-out)
     allowInsecureCookies: boolean;
 
-    // Pipeline Profile — Cost Tier & Domain Routing (P2)
+    // Pipeline Profile — Cost Tier (P2)
     omkCostTierDefault: string;
-    omkDomainCode: string;
-    omkDomainMath: string;
-    omkDomainCreative: string;
-    omkDomainAnalysis: string;
-    omkDomainGeneral: string;
 
     // Generate-Verify skip threshold: 2026-05-26 cleanup — routing-config.ts 가
     // process.env.OMK_GV_SKIP_THRESHOLD 직접 사용, config 객체 필드는 dead 였음.
@@ -219,13 +214,8 @@ const DEFAULT_CONFIG: EnvConfig = {
     cookieSecure: false,
     allowInsecureCookies: false,
 
-    // Pipeline Profile — Cost Tier & Domain Routing (P2)
+    // Pipeline Profile — Cost Tier (P2)
     omkCostTierDefault: 'premium',
-    omkDomainCode: '',
-    omkDomainMath: '',
-    omkDomainCreative: '',
-    omkDomainAnalysis: '',
-    omkDomainGeneral: '',
 
 
     // Language Policy
@@ -408,13 +398,8 @@ export function loadConfig(): EnvConfig {
         API_KEY_MAX_PER_USER: env('API_KEY_MAX_PER_USER'),
         TOKEN_ENCRYPTION_KEY: env('TOKEN_ENCRYPTION_KEY'),
 
-        // P2: Cost Tier & Domain Routing
+        // P2: Cost Tier
         OMK_COST_TIER_DEFAULT: env('OMK_COST_TIER_DEFAULT'),
-        OMK_DOMAIN_CODE: env('OMK_DOMAIN_CODE'),
-        OMK_DOMAIN_MATH: env('OMK_DOMAIN_MATH'),
-        OMK_DOMAIN_CREATIVE: env('OMK_DOMAIN_CREATIVE'),
-        OMK_DOMAIN_ANALYSIS: env('OMK_DOMAIN_ANALYSIS'),
-        OMK_DOMAIN_GENERAL: env('OMK_DOMAIN_GENERAL'),
 
         // Language Policy
         ENABLE_DYNAMIC_RESPONSE_LANGUAGE: env('ENABLE_DYNAMIC_RESPONSE_LANGUAGE'),
@@ -532,13 +517,8 @@ export function loadConfig(): EnvConfig {
         apiKeyMaxPerUser: parsed.API_KEY_MAX_PER_USER ?? DEFAULT_CONFIG.apiKeyMaxPerUser,
         tokenEncryptionKey: parsed.TOKEN_ENCRYPTION_KEY ?? DEFAULT_CONFIG.tokenEncryptionKey,
 
-        // Pipeline Profile — Cost Tier & Domain Routing (P2)
+        // Pipeline Profile — Cost Tier (P2)
         omkCostTierDefault: parsed.OMK_COST_TIER_DEFAULT ?? DEFAULT_CONFIG.omkCostTierDefault,
-        omkDomainCode: parsed.OMK_DOMAIN_CODE ?? DEFAULT_CONFIG.omkDomainCode,
-        omkDomainMath: parsed.OMK_DOMAIN_MATH ?? DEFAULT_CONFIG.omkDomainMath,
-        omkDomainCreative: parsed.OMK_DOMAIN_CREATIVE ?? DEFAULT_CONFIG.omkDomainCreative,
-        omkDomainAnalysis: parsed.OMK_DOMAIN_ANALYSIS ?? DEFAULT_CONFIG.omkDomainAnalysis,
-        omkDomainGeneral: parsed.OMK_DOMAIN_GENERAL ?? DEFAULT_CONFIG.omkDomainGeneral,
 
         // Language Policy
         enableDynamicResponseLanguage: parsed.ENABLE_DYNAMIC_RESPONSE_LANGUAGE ?? DEFAULT_CONFIG.enableDynamicResponseLanguage,
