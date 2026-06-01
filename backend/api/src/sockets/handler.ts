@@ -45,6 +45,7 @@ import { WEBSOCKET_TIMEOUTS, WS_LIMITS } from '../config/timeouts';
 import { WS_SECURITY } from '../config/security';
 import { handleChatMessage } from './ws-chat-handler';
 import { withSpan } from '../observability/otel';
+import { getEventBus, AGENT_TASK_PROGRESS, type AgentTaskProgressEvent } from '../utils/event-bus';
 import { runWithRequestContext } from '../utils/request-context';
 import { getConfig } from '../config';
 import { WsConnectionGuard } from './ws-connection-guard';
@@ -83,6 +84,7 @@ export class WebSocketHandler {
         this.setupClusterEvents();
         this.startHeartbeat();
         this.guard.startCleanup();
+        this.subscribeAgentTaskEvents();
     }
 
     /**
@@ -563,6 +565,39 @@ export class WebSocketHandler {
                 `broadcast backpressure: skipped=${skipped}, terminated=${terminated} ` +
                 `(threshold=${threshold}B, terminateAfter=${terminateAfter})`
             );
+        }
+    }
+
+    /**
+     * EventBus 의 에이전트 작업 진행 이벤트를 구독해 owner user 의 ws 로 relay.
+     * ⚠️ 생성자에서 1회만 호출 (단일 인스턴스). per-connection 구독 금지 — 리스너 누수 방지.
+     * AgentTaskService 는 ws 를 모르고 emit 만 하므로 실행은 소켓과 완전히 분리된다.
+     */
+    private subscribeAgentTaskEvents(): void {
+        getEventBus().on(AGENT_TASK_PROGRESS, (ev: AgentTaskProgressEvent) => {
+            this.sendToUser(ev.userId, {
+                type: 'agent_task_progress',
+                taskId: ev.taskId,
+                status: ev.status,
+                progress: ev.progress,
+                currentTurn: ev.currentTurn,
+            });
+        });
+    }
+
+    /**
+     * 특정 user 의 모든 활성 ws 연결에 메시지 전송 (진행상황 relay).
+     * 연결이 없으면 no-op — 발행자는 누가 듣는지 신경 쓰지 않는다 (순수 read-overlay).
+     */
+    public sendToUser(userId: string, data: Record<string, unknown>): void {
+        if (!userId) return;
+        const connections = this.guard.getUserConnections(userId);
+        if (connections.size === 0) return;
+        const message = JSON.stringify(data);
+        for (const client of connections) {
+            if (client.readyState === WebSocket.OPEN) {
+                client.send(message);
+            }
         }
     }
 }

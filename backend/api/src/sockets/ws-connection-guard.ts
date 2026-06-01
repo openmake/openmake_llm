@@ -96,6 +96,11 @@ export class WsConnectionGuard {
         return connections ? connections.size : 0;
     }
 
+    /** user 의 활성 ws 연결 Set (없으면 빈 Set) — 진행상황 relay(sendToUser) 용 */
+    getUserConnections(userId: string): Set<WebSocket> {
+        return this.userConnections.get(userId) ?? new Set();
+    }
+
     registerUser(extWs: ExtendedWebSocket): void {
         const userId = extWs._authenticatedUserId;
         if (!userId) {

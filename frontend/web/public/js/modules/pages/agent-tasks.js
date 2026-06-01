@@ -184,6 +184,34 @@
         if (_currentTaskId && dm && dm.classList.contains('open')) _refreshDetail();
     }
 
+    // WS(agent_task_progress) 진행 이벤트로 카드를 GET 없이 in-place 갱신 (순수 overlay).
+    // payload 에 status/progress/currentTurn 이 실려 있어 추가 API 호출 없이 반영한다.
+    function _applyProgress(p) {
+        if (!p || !p.taskId) return;
+        var card = document.querySelector('.task-card[data-task-id="' + p.taskId + '"]');
+        if (!card) { _loadTasks(); return; }  // 목록에 없는 새 작업 — 1회 재렌더
+        var badge = card.querySelector('.badge');
+        if (badge && p.status) {
+            badge.className = 'badge badge-' + p.status;
+            badge.textContent = _statusLabels[p.status] || p.status;
+        }
+        var spans = card.querySelectorAll('.task-meta span');
+        if (spans[1] && p.currentTurn != null) {
+            spans[1].textContent = spans[1].textContent.replace(/턴\s*\d+/, '턴 ' + p.currentTurn);
+        }
+        var bar = card.querySelector('.progress-fill');
+        if (bar && p.progress != null) {
+            bar.style.width = p.progress + '%';
+        } else if (p.progress > 0) {
+            _loadTasks();  // progress bar 미생성 상태 — 1회 재렌더로 생성
+            return;
+        }
+        if (p.status === 'running' || p.status === 'pending') _hasActive = true;
+        // 상세 모달이 이 작업을 보고 있으면 스텝 갱신 (이벤트 시에만 GET)
+        var dm = document.getElementById('detailModal');
+        if (_currentTaskId === p.taskId && dm && dm.classList.contains('open')) _refreshDetail();
+    }
+
     window.PageModules['agent-tasks'] = {
         getHTML: function() {
             return '<div class="page-agent-tasks">' +
@@ -310,8 +338,10 @@
             }
 
             _loadTasks();
-            // 진행 중 작업/열린 상세를 주기적으로 갱신 (백그라운드 복구 가시화)
-            _intervals.push(setInterval(_pollTick, 3000));
+            // WS(agent_task_progress)가 실시간 갱신을 담당 — polling 은 느린 safety net(25s).
+            // WS 미수신(연결 끊김 등) 시 복구용. DB 가 진실의 원천(DB-primary).
+            window.onAgentTaskProgress = _applyProgress;
+            _intervals.push(setInterval(_pollTick, 25000));
         },
 
         cleanup: function() {
@@ -319,6 +349,7 @@
             _intervals = [];
             _listeners.forEach(function(l) { l.el.removeEventListener(l.type, l.fn); });
             _listeners = [];
+            window.onAgentTaskProgress = null;
             _currentTaskId = null;
             _hasActive = false;
         }

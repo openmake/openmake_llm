@@ -20,6 +20,7 @@ import { getModelForRole } from '../config/model-roles';
 import { getUnifiedMCPClient } from '../mcp/unified-client';
 import { getUnifiedDatabase } from '../data/models/unified-database';
 import { AGENT_TASK_LIMITS } from '../config/runtime-limits';
+import { emitAgentTaskProgress } from '../utils/event-bus';
 import { getAgentTaskSystemPrompt } from '../prompts/agent-task-prompt';
 import { createLogger } from '../utils/logger';
 import type { UserContext } from '../mcp/user-sandbox';
@@ -94,10 +95,23 @@ export class AgentTaskService {
 
         let stepNumber = 0;
         let totalTokens = 0;
+        let curStatus = 'pending';
+        let curProgress = 0;
+        let curTurn = 0;
+
+        // DB 갱신 + 진행상황 발행(fire-and-forget). ws 계층이 구독해 owner user 에게 relay.
+        // ws 를 직접 참조하지 않으므로 소켓 연결 여부와 무관하게 실행은 끝까지 진행된다.
+        const update = async (u: Parameters<typeof db.updateAgentTask>[1]): Promise<void> => {
+            curStatus = (u.status ?? curStatus) as string;
+            curProgress = u.progress ?? curProgress;
+            curTurn = u.currentTurn ?? curTurn;
+            await db.updateAgentTask(taskId, u);
+            emitAgentTaskProgress({ userId, taskId, status: curStatus, progress: curProgress, currentTurn: curTurn });
+        };
 
         AgentTaskService.running.set(taskId, this);
         try {
-            await db.updateAgentTask(taskId, { status: 'running', progress: 2 });
+            await update({ status: 'running', progress: 2 });
 
             // tier 기반 허용 도구 목록 (LLMTool ≈ ToolDefinition)
             const tools = (await mcp.getToolRouter().getLLMTools(userTier, {
@@ -108,7 +122,7 @@ export class AgentTaskService {
             for (let turn = 0; turn < turnCeiling; turn++) {
                 this.assertWithinLimits(signal, startedAt, totalTokens);
 
-                await db.updateAgentTask(taskId, {
+                await update({
                     currentTurn: turn + 1,
                     progress: Math.min(95, 5 + Math.round((turn / turnCeiling) * 90)),
                 });
@@ -142,7 +156,7 @@ export class AgentTaskService {
                 });
 
                 if (!hasToolCalls) {
-                    await db.updateAgentTask(taskId, {
+                    await update({
                         status: 'completed',
                         progress: 100,
                         result: result.content,
@@ -174,7 +188,7 @@ export class AgentTaskService {
 
             // 턴 상한 도달 — 마지막 assistant 내용을 결과로 보존
             const lastAssistant = [...conversation].reverse().find((m) => m.role === 'assistant');
-            await db.updateAgentTask(taskId, {
+            await update({
                 status: 'completed',
                 progress: 100,
                 result: (lastAssistant?.content as string) || '(최대 턴에 도달하여 종료되었습니다.)',
@@ -187,12 +201,10 @@ export class AgentTaskService {
             const aborted = signal.aborted || (err instanceof AgentTaskAbort && err.kind === 'aborted');
             const kind = aborted ? 'aborted' : (err instanceof AgentTaskAbort ? err.kind : 'failed');
             const msg = err instanceof Error ? err.message : String(err);
-            await db
-                .updateAgentTask(taskId, {
-                    status: aborted ? 'cancelled' : 'failed',
-                    error: aborted ? kind : msg,
-                })
-                .catch((e) => logger.warn(`[AgentTask] 상태 갱신 실패: ${e}`));
+            await update({
+                status: aborted ? 'cancelled' : 'failed',
+                error: aborted ? kind : msg,
+            }).catch((e) => logger.warn(`[AgentTask] 상태 갱신 실패: ${e}`));
             logger.warn(`[AgentTask] ${aborted ? '취소' : '실패'}: ${taskId} — ${kind}: ${msg}`);
         } finally {
             AgentTaskService.running.delete(taskId);

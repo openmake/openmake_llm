@@ -329,6 +329,12 @@ const messageHandlers = {
             showResearchProgress(data.progress);
         }
     },
+    'agent_task_progress': (data) => {
+        // 에이전트 작업 진행 — agent-tasks 페이지가 등록한 핸들러로 전달 (순수 overlay)
+        if (typeof window.onAgentTaskProgress === 'function') {
+            window.onAgentTaskProgress(data);
+        }
+    },
     'thinking': (data) => {
         if (typeof appendThinkingToken === 'function') {
             appendThinkingToken(data.token);
