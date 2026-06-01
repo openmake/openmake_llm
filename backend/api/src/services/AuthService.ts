@@ -111,7 +111,7 @@ export class AuthService {
      * 회원가입
      */
     async register(data: RegisterRequest): Promise<AuthResult> {
-        const { username, email, password, role } = data;
+        const { username, email, password } = data;
 
         // 유효성 검사
         if (!email || !password) {
@@ -127,6 +127,14 @@ export class AuthService {
         if (!emailRegex.test(email)) {
             return { success: false, error: '유효한 이메일 주소를 입력하세요' };
         }
+
+        // 보안: 역할은 클라이언트 입력(data.role)을 신뢰하지 않고 ADMIN_EMAILS allowlist 로만 결정한다.
+        // (self-register 로 role:'admin' 을 보내 권한 상승하던 취약점 차단 — OAuth 경로와 동일 정책.)
+        const adminEmails = getConfig().adminEmails
+            .split(',')
+            .map(e => e.toLowerCase().trim())
+            .filter(e => e);
+        const role = adminEmails.includes(email.toLowerCase()) ? USER_ROLES.ADMIN : USER_ROLES.USER;
 
         const user = await this.userManager.createUser({ username, email, password, role });
 

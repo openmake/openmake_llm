@@ -26,13 +26,13 @@ export const loginSchema = z.object({
  * @property {string} username - 사용자명 (3~50자, 필수)
  * @property {string} email - 이메일 주소 (유효한 이메일 형식, 필수)
  * @property {string} password - 비밀번호 (8자 이상, 필수)
- * @property {string} [role] - 사용자 역할 (admin/user/guest, 기본값: user)
+ * (role 은 클라이언트가 지정 불가 — 서버가 ADMIN_EMAILS allowlist 로만 결정)
  */
 export const registerSchema = z.object({
     username: secureTextSchema({ minLength: 3, maxLength: 50, fieldName: '사용자명', allowNewLines: false }),
     email: z.string().trim().email('유효한 이메일 주소를 입력하세요'),
     password: z.string().min(8, '새 비밀번호는 8자 이상이어야 합니다'),
-    role: z.enum(['admin', 'user', 'guest']).optional().default('user'),
+    // 보안: role 은 클라이언트가 지정할 수 없다 (권한 상승 방지). 서버가 ADMIN_EMAILS allowlist 로만 결정.
     // GDPR Phase A Fix 4 — Article 7 affirmative consent. literal(true) 강제 — false/누락 시 validation fail.
     agreedToTerms: z.literal(true, { message: '이용약관에 동의해야 합니다' }),
     agreedToPrivacy: z.literal(true, { message: '개인정보 처리방침에 동의해야 합니다' }),
