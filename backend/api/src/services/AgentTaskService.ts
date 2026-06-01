@@ -129,10 +129,14 @@ export class AgentTaskService {
                 const hasToolCalls = !!result.tool_calls && result.tool_calls.length > 0;
 
                 // 체크포인트: assistant 턴 (messages_snapshot 은 Stage 2 resume 대비)
+                // 첫 턴은 목표 분해 계획(plan)으로 표시 — 시스템 프롬프트가 계획 우선 작성을 유도.
+                const stepType = turn === 0
+                    ? 'plan'
+                    : (hasToolCalls ? 'assistant_tool_call' : 'assistant');
                 await db.addAgentTaskStep({
                     taskId,
                     stepNumber: stepNumber++,
-                    stepType: hasToolCalls ? 'assistant_tool_call' : 'assistant',
+                    stepType,
                     content: result.content,
                     messagesSnapshot: conversation,
                 });
