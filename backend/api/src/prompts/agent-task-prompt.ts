@@ -16,6 +16,10 @@ export function getAgentTaskSystemPrompt(): string {
         '- After each tool result, reason about the next step.',
         '- If new information shows the plan needs changing, revise it and briefly say what changed.',
         '- Do NOT call tools unnecessarily; prefer the fewest steps that achieve the goal.',
+        '- For research / information-gathering goals: once you have gathered enough material',
+        '  (about 3-5 searches), STOP searching and move on to synthesizing and writing the',
+        '  final deliverable. NEVER keep searching indefinitely — gathering is not the goal,',
+        '  producing the finished output is.',
         '- When the goal is fully achieved, give a clear FINAL answer and do NOT call any more tools.',
         'Always answer in the same language the goal is written in.',
     ].join('\n');

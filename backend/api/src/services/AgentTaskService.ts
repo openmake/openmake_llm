@@ -31,6 +31,12 @@ const logger = createLogger('AgentTaskService');
 type UserTier = 'free' | 'pro' | 'enterprise';
 type UserRole = 'admin' | 'user' | 'guest';
 
+/** tool name 이 검색/정보수집류인지 (키워드 포함 여부) — 검색 폭주 하드 제한용 */
+function isSearchTool(name: string): boolean {
+    const n = name.toLowerCase();
+    return AGENT_TASK_LIMITS.SEARCH_TOOL_KEYWORDS.some((k) => n.includes(k));
+}
+
 /** 루프 종료 사유를 명확히 구분하기 위한 내부 에러 */
 export class AgentTaskAbort extends Error {
     constructor(public readonly kind: 'aborted' | 'timeout' | 'token_limit') {
@@ -106,6 +112,8 @@ export class AgentTaskService {
 
         let stepNumber = input.resume?.fromStep ?? 0;
         let totalTokens = 0;
+        let searchCalls = 0;
+        let searchLimitNotified = false;
         let curStatus = 'pending';
         let curProgress = 0;
         let curTurn = 0;
@@ -148,8 +156,22 @@ export class AgentTaskService {
                     progress: Math.min(95, 5 + Math.round((turn / turnCeiling) * 90)),
                 });
 
+                // 검색류 도구 호출이 한도를 넘으면 검색 도구를 제거해 강제로 종합/작성 단계로 유도.
+                // 프롬프트 지시를 LLM 이 무시하더라도 도구 자체가 사라지므로 검색 폭주가 끊긴다.
+                const overSearchLimit = searchCalls >= AGENT_TASK_LIMITS.MAX_SEARCH_CALLS;
+                const effectiveTools = overSearchLimit
+                    ? tools.filter((t) => !isSearchTool(t.function.name))
+                    : tools;
+                if (overSearchLimit && !searchLimitNotified) {
+                    conversation.push({
+                        role: 'user',
+                        content: '검색 횟수 한도에 도달했습니다. 더 이상 검색하지 말고, 지금까지 수집한 정보만으로 최종 결과물(예: 블로그 초안)을 완성해 작성하세요.',
+                    });
+                    searchLimitNotified = true;
+                }
+
                 const result = await this.client.chat(conversation, undefined, undefined, {
-                    tools,
+                    tools: effectiveTools,
                     signal,
                 });
                 totalTokens +=
@@ -194,6 +216,7 @@ export class AgentTaskService {
                 for (const tc of result.tool_calls!) {
                     if (signal.aborted) throw new AgentTaskAbort('aborted');
                     const name = tc.function.name;
+                    if (isSearchTool(name)) searchCalls++;
                     const toolResult = await this.runTool(mcp, name, tc.function.arguments ?? {}, userCtx);
                     conversation.push({
                         role: 'tool',
