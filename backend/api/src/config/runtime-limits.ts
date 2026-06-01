@@ -265,6 +265,30 @@ export const RESEARCH_DEPTH_LOOPS: Record<string, number> = {
     deep: 4,
 };
 
+/**
+ * Deep Research 인용 검증 (A3)
+ *
+ * 보고서 본문의 각 주장 문장이 유효한 소스 인덱스를 가리키는 인용 마커
+ * (`[출처 N]` / `[Source N]` / `[N]`)를 동반하는지 **결정적(LLM 비용 0)**으로 측정.
+ *
+ * 측정 범위 = "인용 마커의 존재 + 소스 범위 유효성"뿐.
+ * 인용된 소스가 실제로 주장을 뒷받침하는지(groundedness)는 **측정하지 않는다** (LLM-as-judge 영역, A3 범위 밖).
+ *
+ * services/deep-research/citation-verifier.ts 및 evaluation/citation-evaluator.ts 에서 공유.
+ */
+export const DEEP_RESEARCH_CITATION = {
+    /** 목표 인용 커버리지 (0.0~1.0). 미달 시 경고/플래그 */
+    TARGET_COVERAGE: parseFloat(process.env.DEEP_RESEARCH_CITATION_TARGET || '0.95'),
+    /** 주장 문장으로 인정할 최소 길이 (헤더/불릿 스캐폴딩 잔여 제거용) */
+    MIN_CLAIM_CHARS: 15,
+    /** 보고서 step 에 기록할 미인용 문장 샘플 최대 개수 */
+    MAX_UNCITED_SAMPLES: 10,
+    /** enforce 모드: true 면 미달 시 메타 플래그(본문은 변형하지 않음). 기본 measure-only */
+    ENFORCE: process.env.DEEP_RESEARCH_CITATION_ENFORCE === 'true',
+    /** SECTION_HEADERS.references 외, 모델이 변형해 쓰는 참고자료 섹션 헤더 보조 목록 */
+    EXTRA_REFERENCE_HEADERS: ['참고문헌', '주', '출처', '각주', 'Sources', 'Bibliography', 'Citations'],
+} as const;
+
 // ============================================
 // 모델 컨텍스트 윈도우 기본값
 // ============================================

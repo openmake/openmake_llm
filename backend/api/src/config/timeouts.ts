@@ -34,8 +34,13 @@ export const LLM_TIMEOUTS = {
     SYNTHESIS_PER_CHUNK_TIMEOUT_MS: 120000,
     /** Deep Research 청크 병합 타임아웃 (ms) */
     SYNTHESIS_MERGE_TIMEOUT_MS: 180000,
-    /** Deep Research 최종 보고서 생성 타임아웃 (ms) */
-    REPORT_GENERATION_TIMEOUT_MS: 300000,
+    /**
+     * Deep Research 최종 보고서 생성 타임아웃 (ms).
+     * 대형 프롬프트(다수 소스)·장문 출력으로 전역 LLM_TIMEOUT보다 길어야 한다.
+     * 보고서 생성 LLM 호출에 **전용 클라이언트의 SDK 타임아웃**으로 적용됨(report-generator).
+     * env override: DEEP_RESEARCH_REPORT_TIMEOUT_MS. 기본 600000(10분).
+     */
+    REPORT_GENERATION_TIMEOUT_MS: Number(process.env.DEEP_RESEARCH_REPORT_TIMEOUT_MS) || 600000,
 } as const;
 
 // ============================================

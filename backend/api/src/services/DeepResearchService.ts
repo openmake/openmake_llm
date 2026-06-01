@@ -29,7 +29,7 @@ import {
     setGlobalConfig
 } from './deep-research-types';
 
-import { deduplicateSources, getLoopProgressRange } from './deep-research-utils';
+import { deduplicateSources, getLoopProgressRange, computeResearchMetrics } from './deep-research-utils';
 import { getResearchMessage } from './deep-research-prompts';
 
 // Pipeline stage functions
@@ -111,10 +111,12 @@ export class DeepResearchService {
             const scrapedUrls = new Set<string>();
             const usedQueries = new Set<string>();
             const allFindings: string[] = [];
+            let completedLoops = 0;
 
             for (let loop = 0; loop < this.config.maxLoops; loop++) {
                 this.throwIfAborted();
                 const loopNumber = loop + 1;
+                completedLoops = loopNumber;
                 const loopRange = getLoopProgressRange(loop, this.config.maxLoops);
 
                 this.reportProgress(
@@ -284,6 +286,31 @@ export class DeepResearchService {
 
             const duration = Date.now() - startTime;
             logger.info(`[DeepResearch] 완료: ${topic} (${duration}ms)`);
+
+            // 단계8: deep-research 결정적 메트릭 (LLM 비용 0, measure-only). 본문/결과 비변형.
+            try {
+                const metrics = computeResearchMetrics({
+                    sources: finalSources,
+                    scrapedCount: scrapedUrls.size,
+                    loopsExecuted: completedLoops,
+                    durationMs: duration
+                });
+                logger.info(
+                    `[DeepResearch] 메트릭: sources=${metrics.sourceCount} domains=${metrics.uniqueDomains} `
+                    + `diversity=${(metrics.sourceDiversity * 100).toFixed(0)}% scraped=${metrics.scrapedCount} `
+                    + `loops=${metrics.loopsExecuted} ${metrics.durationMs}ms`
+                );
+                await db.addResearchStep({
+                    sessionId,
+                    stepNumber: 2000,
+                    stepType: 'report',
+                    query: '리서치 메트릭',
+                    result: JSON.stringify(metrics),
+                    status: 'completed'
+                });
+            } catch (metricsErr) {
+                logger.warn(`[DeepResearch] 메트릭 기록 스킵(오류): ${metricsErr instanceof Error ? metricsErr.message : String(metricsErr)}`);
+            }
 
             return {
                 sessionId,

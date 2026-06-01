@@ -1,0 +1,42 @@
+{
+  "version": "1.0.0",
+  "description": "Deep Research 인용 커버리지 회귀 코퍼스. 실제 보고서 calibration(형식 혼재 [출처 N]/[N]/[Source N], References 섹션) 기반의 결정적 fixture. LLM/네트워크 의존 없음.",
+  "cases": [
+    {
+      "id": "cit-001-fully-cited-ko",
+      "sourceCount": 5,
+      "report": "## 종합 요약\n\n원격 근무는 집중 업무에 유리하다 [출처 1]. 사무실 근무는 대면 협업에 강점이 있다 [출처 2]. 하이브리드 모델이 둘의 균형을 제공한다 [출처 3].\n\n## 참고 자료\n[1] A 보고서 - https://a.com\n[2] B 보고서 - https://b.com",
+      "expected": { "totalClaims": 3, "citedClaims": 3, "coverageRounded": 1.0, "invalidCount": 0, "skipped": false }
+    },
+    {
+      "id": "cit-002-partial-ko",
+      "sourceCount": 5,
+      "report": "원격 근무는 생산성을 높인다 [출처 1]. 그러나 고립감이 단점으로 지적된다 [출처 2]. 일부 직무는 대면이 필수적이다. 결국 균형이 중요하다는 결론이다.",
+      "expected": { "totalClaims": 4, "citedClaims": 2, "coverageRounded": 0.5, "invalidCount": 0, "skipped": false }
+    },
+    {
+      "id": "cit-003-numeric-form",
+      "sourceCount": 50,
+      "report": "제도는 2021년 민간주도로 개편되었다 [10]. 확인 절차는 45일 이내 소요된다 [32]. 창업 3년 이내 기업은 세제 혜택을 받는다 [37].",
+      "expected": { "totalClaims": 3, "citedClaims": 3, "coverageRounded": 1.0, "invalidCount": 0, "skipped": false }
+    },
+    {
+      "id": "cit-004-invalid-citation",
+      "sourceCount": 5,
+      "report": "이 주장은 유효한 소스를 가진다 [출처 2]. 하지만 이 주장은 존재하지 않는 소스를 인용한다 [출처 9].",
+      "expected": { "totalClaims": 2, "citedClaims": 2, "coverageRounded": 1.0, "invalidCount": 1, "skipped": false }
+    },
+    {
+      "id": "cit-005-fallback",
+      "sourceCount": 0,
+      "report": "리서치 실패: 연결 오류가 발생했습니다.",
+      "expected": { "skipped": true }
+    },
+    {
+      "id": "cit-006-english",
+      "sourceCount": 10,
+      "report": "## Executive Summary\n\nRemote work improves deep-focus productivity [Source 1]. In-office work strengthens spontaneous collaboration [Source 2]. The hybrid model balances both needs effectively.\n\n## References\n[1] Report A - https://a.com",
+      "expected": { "totalClaims": 3, "citedClaims": 2, "coverageRounded": 0.6667, "invalidCount": 0, "skipped": false }
+    }
+  ]
+}

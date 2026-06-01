@@ -6,7 +6,7 @@
  * @module services/deep-research/report-generator
  */
 
-import type { LLMClient } from '../../llm';
+import { type LLMClient, createClient } from '../../llm';
 import type { SearchResult } from '../../mcp/web-search';
 import type { ResearchConfig, SubTopic } from '../deep-research-types';
 import { getUnifiedDatabase } from '../../data/models/unified-database';
@@ -16,6 +16,8 @@ import { LLM_TEMPERATURES } from '../../config/llm-parameters';
 import { LLM_TIMEOUTS } from '../../config/timeouts';
 import { deduplicateSources, extractBulletLikeFindings } from '../deep-research-utils';
 import { SECTION_HEADERS, getReportPrompt, getResearchMessage } from '../deep-research-prompts';
+import { verifyCitations } from './citation-verifier';
+import { DEEP_RESEARCH_CITATION } from '../../config/runtime-limits';
 
 const logger = createLogger('DeepResearch:ReportGenerator');
 
@@ -123,15 +125,15 @@ export async function generateReport(params: {
 
     const prompt = getReportPrompt(config.language, topic, subTopicGuide, meaningfulFindings, sourceList);
 
-    // 보고서 생성에 타임아웃 적용
-    const reportController = new AbortController();
-    const reportTimeout = setTimeout(
-        () => reportController.abort(),
-        LLM_TIMEOUTS.REPORT_GENERATION_TIMEOUT_MS,
-    );
+    // 보고서 생성은 대형 프롬프트·장문 출력으로 전역 LLM_TIMEOUT(SDK)을 초과한다(라이브 검증 확인).
+    // → 전용 긴 타임아웃 클라이언트 사용. (기존 reportController.signal 은 chat 에 전달되지 않아 무효였음)
+    const reportClient = createClient({
+        model: client.model,
+        timeout: LLM_TIMEOUTS.REPORT_GENERATION_TIMEOUT_MS,
+    });
 
     try {
-        const response = await client.chat([
+        const response = await reportClient.chat([
             { role: 'user', content: prompt }
         ], { temperature: LLM_TEMPERATURES.RESEARCH_SYNTHESIS });
         throwIfAborted();
@@ -168,6 +170,41 @@ export async function generateReport(params: {
             status: 'completed'
         });
 
+        // A3: 인용 커버리지 측정 (결정적, LLM 비용 0). 본문은 변형하지 않고 메타만 기록.
+        try {
+            const citation = verifyCitations(content, uniqueSources.length);
+            if (!citation.skipped) {
+                const pct = citation.coverage !== null ? (citation.coverage * 100).toFixed(1) : 'N/A';
+                const belowTarget = citation.meetsTarget === false;
+                const logMsg = `[DeepResearch] 인용 커버리지: ${pct}% (${citation.citedClaims}/${citation.totalClaims}) `
+                    + `invalid=${citation.invalidCitations.length} target=${(DEEP_RESEARCH_CITATION.TARGET_COVERAGE * 100).toFixed(0)}%`;
+                if (belowTarget && DEEP_RESEARCH_CITATION.ENFORCE) {
+                    logger.warn(`${logMsg} — 목표 미달 (ENFORCE)`);
+                } else if (belowTarget) {
+                    logger.info(`${logMsg} — 목표 미달`);
+                } else {
+                    logger.info(logMsg);
+                }
+                await db.addResearchStep({
+                    sessionId,
+                    stepNumber: 1000,
+                    stepType: 'report',
+                    query: '인용 검증',
+                    result: JSON.stringify({
+                        coverage: citation.coverage,
+                        citedClaims: citation.citedClaims,
+                        totalClaims: citation.totalClaims,
+                        invalidCitations: citation.invalidCitations,
+                        meetsTarget: citation.meetsTarget,
+                        uncitedSamples: citation.uncitedSamples,
+                    }),
+                    status: belowTarget && DEEP_RESEARCH_CITATION.ENFORCE ? 'failed' : 'completed'
+                });
+            }
+        } catch (verifyErr) {
+            logger.warn(`[DeepResearch] 인용 검증 스킵(오류): ${verifyErr instanceof Error ? verifyErr.message : String(verifyErr)}`);
+        }
+
         return { summary: content, keyFindings };
     } catch (error) {
         logger.error(`[DeepResearch] 보고서 생성 실패: ${error instanceof Error ? error.message : String(error)}`);
@@ -177,8 +214,6 @@ export async function generateReport(params: {
             return { summary: fallback, keyFindings: extractBulletLikeFindings(meaningfulFindings.join('\n')) };
         }
         return { summary: getResearchMessage('reportFailed', config.language), keyFindings: [] };
-    } finally {
-        clearTimeout(reportTimeout);
     }
 }
 

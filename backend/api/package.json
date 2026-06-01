@@ -17,7 +17,8 @@
         "eval:routing:strict": "OMK_EVAL_PASS_THRESHOLD=1.0 ts-node src/evaluation/run-evaluation.ts",
         "eval:augmented": "ts-node src/evaluation/run-augmented-evaluation.ts",
         "eval:response": "ts-node src/evaluation/run-response-evaluation.ts",
-        "eval:all": "npm run eval:routing && npm run eval:response"
+        "eval:citation": "ts-node src/evaluation/run-citation-evaluation.ts",
+        "eval:all": "npm run eval:routing && npm run eval:response && npm run eval:citation"
     },
     "dependencies": {
         "@anthropic-ai/sdk": "^0.95.1",

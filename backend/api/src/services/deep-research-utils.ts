@@ -35,6 +35,64 @@ export function normalizeUrl(url: string): string {
         .toLowerCase();
 }
 
+/**
+ * URL 에서 등록 도메인(host, www 제거)을 추출. 파싱 불가 시 null.
+ */
+export function extractDomain(url: string): string | null {
+    try {
+        const u = new URL(/^https?:\/\//.test(url) ? url : `https://${url}`);
+        const host = u.hostname.toLowerCase().replace(/^www\./, '');
+        // 등록 도메인은 점을 포함한다. 단일 라벨('garbage' 등)은 URL 파싱은 통과하나 도메인 아님.
+        return host.includes('.') ? host : null;
+    } catch {
+        return null;
+    }
+}
+
+/** Deep Research 결정적 메트릭 (단계8, LLM 비용 0) */
+export interface ResearchMetrics {
+    /** 최종 고유 소스 수 */
+    sourceCount: number;
+    /** 고유 도메인 수 */
+    uniqueDomains: number;
+    /** 소스 다양성 = uniqueDomains / sourceCount (0..1). 소스 0이면 0 */
+    sourceDiversity: number;
+    /** 스크래핑된 URL 수 */
+    scrapedCount: number;
+    /** 실제 실행된 루프 수 */
+    loopsExecuted: number;
+    /** 전체 소요 시간 (ms) */
+    durationMs: number;
+}
+
+/**
+ * deep-research 실행의 결정적 메트릭 산출 (LLM 비용 0, measure-only).
+ * groundedness 등 LLM-judge 메트릭은 별도(단계8 후속) — 여기선 산술 가능한 것만.
+ */
+export function computeResearchMetrics(params: {
+    sources: SearchResult[];
+    scrapedCount: number;
+    loopsExecuted: number;
+    durationMs: number;
+}): ResearchMetrics {
+    const { sources, scrapedCount, loopsExecuted, durationMs } = params;
+    const domains = new Set<string>();
+    for (const s of sources) {
+        const d = extractDomain(s.url);
+        if (d) domains.add(d);
+    }
+    const sourceCount = sources.length;
+    const uniqueDomains = domains.size;
+    return {
+        sourceCount,
+        uniqueDomains,
+        sourceDiversity: sourceCount > 0 ? uniqueDomains / sourceCount : 0,
+        scrapedCount,
+        loopsExecuted,
+        durationMs,
+    };
+}
+
 export function clampImportance(value: number | undefined): number {
     if (typeof value !== 'number' || Number.isNaN(value)) {
         return 3;
