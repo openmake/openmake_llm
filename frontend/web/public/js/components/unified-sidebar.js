@@ -718,7 +718,18 @@ UnifiedSidebar.prototype._renderPageNav = function () {
         }).join('');
     }
 
-    var html = '<div class="us-nav-section us-nav-section-menu">' + renderItems(NAV.menu || []) + '</div>';
+    var menuHtml = renderItems(NAV.menu || []);
+    if (!menuHtml && !isLoggedIn) {
+        // 비로그인: page-nav 항목이 전부 requireAuth 라 비므로 빈 박스 대신 로그인 유도 CTA.
+        // 기존 avatar→/login.html 풀 내비게이션 플로우와 동일 (SPA data-page-nav 아님).
+        menuHtml = '<a class="us-nav-link us-login-cta" href="/login.html">' +
+            '<span class="us-nav-icon">🔑</span>' +
+            '<span class="us-label">로그인하기</span>' +
+            '</a>';
+    }
+    var html = menuHtml
+        ? '<div class="us-nav-section us-nav-section-menu">' + menuHtml + '</div>'
+        : '';
     var adminHtml = renderItems(NAV.admin || []);
     if (adminHtml) {
         html += '<div class="us-nav-section us-nav-section-admin">' +
