@@ -18,7 +18,7 @@ import { success } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
 import { createLogger } from '../utils/logger';
 import { getModelForRole } from '../config/model-roles';
-import { MODEL_CAPABILITY_PRESETS } from '../config/model-defaults';
+import { matchCapabilityPreset, FALLBACK_CAPABILITIES } from '../config/model-defaults';
 import { getLocalChatModels } from '../config/local-models';
 import { requireAuth, requireAdmin, optionalAuth } from '../auth';
 import { getModelHealthMonitor } from '../services/model-health-monitor';
@@ -94,18 +94,9 @@ router.get('/models', optionalAuth, asyncHandler(async (req: Request, res: Respo
         pricing?: { input: number; output: number };
     };
 
-    /** model id → MODEL_CAPABILITY_PRESETS longest-prefix 매칭. */
+    /** model id → 공유 매처(startsWith-longest)로 capability 조회; 미정의 시 보수적 FALLBACK. */
     function capsFor(modelId: string) {
-        const lower = modelId.toLowerCase();
-        let caps = { toolCalling: true, thinking: false, vision: false, streaming: true };
-        let bestPrefix = '';
-        for (const [prefix, presetCaps] of Object.entries(MODEL_CAPABILITY_PRESETS)) {
-            if (lower.includes(prefix) && prefix.length > bestPrefix.length) {
-                bestPrefix = prefix;
-                caps = presetCaps;
-            }
-        }
-        return caps;
+        return matchCapabilityPreset(modelId) ?? FALLBACK_CAPABILITIES;
     }
 
     // Local models catalog — config/local-models.ts (서버 proxy 가 model 명으로 라우팅)
