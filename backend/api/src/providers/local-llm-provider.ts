@@ -34,7 +34,7 @@ import {
 import { ProviderError } from './provider-errors';
 import type { LLMClient } from '../llm';
 import type { ToolCall, UsageMetrics } from '../llm';
-import { MODEL_CAPABILITY_PRESETS } from '../config/model-defaults';
+import { matchCapabilityPreset, FALLBACK_CAPABILITIES } from '../config/model-defaults';
 import { createLogger } from '../utils/logger';
 
 const logger = createLogger('LocalLLMProvider');
@@ -47,16 +47,6 @@ const PROVIDER_DISPLAY_NAME = 'Local LLM';
 
 const DEFAULT_CONTEXT_WINDOW = 8192;
 const DEFAULT_OUTPUT_LIMIT = 4096;
-
-/**
- * 어댑터 내부의 보수적 기본 capabilities — PRESETS 미정의 모델에 사용.
- */
-const FALLBACK_CAPABILITIES: ProviderCapabilities = {
-    streaming: true,
-    toolCalling: false,
-    thinking: false,
-    vision: false,
-};
 
 /**
  * 두 AbortSignal 을 합쳐 어느 한쪽이 abort 되면 결과 signal 도 abort.
@@ -89,22 +79,10 @@ export class LocalLLMProvider implements IProvider {
 
     constructor(private client: LLMClient) {}
 
-    /**
-     * 모델 ID 의 prefix(첫 ':' 앞 segment)를 키로 PRESETS 룩업.
-     * 미정의 시 보수적 기본값을 반환한다.
-     */
+    /** modelId 를 공유 매처(startsWith-longest)로 룩업; 미정의 시 보수적 FALLBACK. */
     getCapabilities(modelId: string): ProviderCapabilities {
-        const prefix = modelId.split(':')[0];
-        const preset = MODEL_CAPABILITY_PRESETS[prefix];
-        if (!preset) {
-            return { ...FALLBACK_CAPABILITIES };
-        }
-        return {
-            streaming: preset.streaming,
-            toolCalling: preset.toolCalling,
-            thinking: preset.thinking,
-            vision: preset.vision,
-        };
+        const caps = matchCapabilityPreset(modelId);
+        return caps ? { ...caps } : { ...FALLBACK_CAPABILITIES };
     }
 
     async listModels(): Promise<ProviderModel[]> {
