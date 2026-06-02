@@ -31,7 +31,7 @@ const _RELOAD_GUARD_WINDOW = 3000; // 3초 이내 동일 경로 리디렉트 감
 const _RELOAD_GUARD_MAX = 3;       // 최대 허용 횟수
 
 // 캐시 버스터 — 배포 시 deploy-frontend.sh가 이 값을 업데이트
-const _moduleVersion = 17;
+const _moduleVersion = 18;
 
 // ─── 상수 ──────────────────────────────────────────
 const CHAT_PATH = '/';
@@ -690,6 +690,10 @@ function registerFromNavItems() {
             iconify: item.iconify || ''
         });
     });
+    // settings \uD0ED\uC73C\uB85C \uC774\uC804\uB41C \uD398\uC774\uC9C0 \u2014 nav-items \uC5D0\uC11C \uC81C\uAC70\uB410\uC73C\uB098 \uB77C\uC6B0\uD2B8 \uBCF4\uC874 (\uC9C1\uC811 URL \u00B7 settings navigate)
+    Router.register('/developer.html', { moduleName: 'developer', moduleFile: '/js/modules/pages/developer.js', cssFiles: [], requireAuth: false, requireAdmin: false, minTier: null, title: 'API \uBB38\uC11C', icon: '\uD83D\uDCD6', iconify: 'lucide:code-2' });
+    Router.register('/projects.html', { moduleName: 'projects', moduleFile: '/js/modules/pages/projects.js', cssFiles: [], requireAuth: true, requireAdmin: false, minTier: null, title: '\uD504\uB85C\uC81D\uD2B8', icon: '\uD83D\uDCC1', iconify: 'lucide:folder' });
+
     log('\uB77C\uC6B0\uD2B8 \uC790\uB3D9 \uB4F1\uB85D \uC644\uB8CC:', _routes.size, '\uAC1C');
 }
 

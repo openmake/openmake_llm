@@ -32,6 +32,8 @@
         '<button class="settings-tab" data-settings-tab="api-keys" data-navigate="/api-keys.html" role="tab">\uD83D\uDD11 API \uD0A4</button>' +
         '<button class="settings-tab" data-settings-tab="usage" data-navigate="/usage.html" role="tab">\uD83D\uDCC8 \uC0AC\uC6A9\uB7C9</button>' +
         '<button class="settings-tab" data-settings-tab="integrations" data-navigate="/external.html" role="tab">\uD83D\uDD17 \uC678\uBD80\uC5F0\uB3D9</button>' +
+        '<button class="settings-tab" data-settings-tab="developer" data-navigate="/developer.html" role="tab">\uD83D\uDCD6 API \uBB38\uC11C</button>' +
+        '<button class="settings-tab" data-settings-tab="projects" data-navigate="/projects.html" role="tab">\uD83D\uDCC1 \uD504\uB85C\uC81D\uD2B8</button>' +
         '</nav>' +
 
         '<div class="s-card">' +

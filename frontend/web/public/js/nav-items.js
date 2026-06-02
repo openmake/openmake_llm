@@ -29,11 +29,11 @@ const NAV_ITEMS = {
         // / (채팅): 2026-05-21 제거 — 사이드바 상단의 "새 대화" 버튼 + 로고 클릭이 채팅 진입 경로 대체
         { href: '/history.html', icon: '📜', iconify: 'lucide:scroll-text', label: '히스토리', requireAuth: true },
         // /guide.html: 2026-05-21 제거 — 사용 가이드 전체 시스템 폐기
-        { href: '/developer.html', icon: '📖', iconify: 'lucide:code-2', label: 'API 문서' },
+        // /developer.html (API 문서): 2026-06-02 settings 탭으로 이전 — nav 제거, 라우트는 spa-router 에 보존
         { href: '/research.html', icon: '🔬', iconify: 'lucide:flask-conical', label: '딥 리서치', requireAuth: true, minTier: 'pro' },
         { href: '/agent-tasks.html', icon: '🤖', iconify: 'lucide:bot', label: '에이전트 작업', requireAuth: true },
         // /documents.html, /memory.html: 2026-05-19 제거
-        { href: '/projects.html', icon: '📁', iconify: 'lucide:folder', label: '프로젝트', requireAuth: true },
+        // /projects.html (프로젝트): 2026-06-02 settings 탭으로 이전 — nav 제거, 라우트는 spa-router 에 보존
         // projects hub 의 2 카드 진입점 — 사이드바 nav 에서 hidden (projects 가 진입점), spa-router 라우트 등록 유지
         { href: '/skill-library.html', icon: '📦', iconify: 'lucide:package', label: '스킬 라이브러리', requireAuth: true, minTier: 'pro', cssFiles: ['/css/skill-library.css?v=5'], excludeFromSidebar: true },
         { href: '/mcp-servers.html', icon: '🔌', iconify: 'lucide:plug', label: 'MCP 서버', requireAuth: true, cssFiles: ['/css/skill-library.css?v=5'], excludeFromSidebar: true },
