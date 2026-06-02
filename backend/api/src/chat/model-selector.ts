@@ -27,7 +27,7 @@ import { MODEL_CONTEXT_DEFAULTS } from '../config/runtime-limits';
 import { QUERY_TYPE_PARAMS, LLM_TOP_P } from '../config/llm-parameters';
 import { recommendTokenBudget } from './complexity-assessor';
 import { getModelPresets } from '../config/model-presets';
-import { MODEL_CAPABILITY_PRESETS } from '../config/model-defaults';
+import { matchCapabilityPreset } from '../config/model-defaults';
 
 const logger = createLogger('ModelSelector');
 
@@ -141,16 +141,11 @@ export function checkModelCapability(
         }
     }
 
-    // 2차: MODEL_CAPABILITY_PRESETS에서 프리픽스 매칭 (longest match 우선)
-    // Auto-Routing 맵의 모델(kimi, deepseek, cogito 등)이 프리셋에 없을 때 사용
-    let bestMatch: { prefix: string; caps: typeof MODEL_CAPABILITY_PRESETS[string] } | null = null;
-    for (const [prefix, caps] of Object.entries(MODEL_CAPABILITY_PRESETS)) {
-        if (lowerModel.includes(prefix) && (!bestMatch || prefix.length > bestMatch.prefix.length)) {
-            bestMatch = { prefix, caps };
-        }
-    }
-    if (bestMatch) {
-        return bestMatch.caps[capability];
+    // 2차: 공유 매처(startsWith-longest, matchCapabilityPreset)로 프리셋 조회.
+    // Auto-Routing 맵의 모델(kimi, deepseek, cogito 등)이 프리셋에 없으면 3차로 폴백.
+    const presetCaps = matchCapabilityPreset(lowerModel);
+    if (presetCaps) {
+        return presetCaps[capability];
     }
 
     // 3차: 알 수 없는 모델은 보수적 기본값 반환
