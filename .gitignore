@@ -30,12 +30,14 @@ Thumbs.db
 # Testing
 coverage/
 .jest-cache/
+test-results/
 
 # Vite
 .vite/
 
 # AI Skills (large repos, installed via npx)
 .gemini/
+.antigravitycli/
 .agent/
 .spawner/
 .claude/
@@ -72,7 +74,11 @@ backend/api/.ollama-cluster.json
 
 # Screenshots (may contain personal info)
 *.png
+*.jpg
+*.jpeg
 !frontend/web/public/**/*.png
+!frontend/web/public/**/*.jpg
+!frontend/web/public/**/*.jpeg
 !screenshot-main.png
 !skill-library-current.png
 
