@@ -485,11 +485,15 @@ async function executeNavigation(path, options) {
 
     // ─── History 상태 업데이트 ───────────
     if (!isPopstate) {
+        // 딥링크 보존: 원본 path 의 query/hash(?tab= 등)를 normalizedPath 에 붙여 표시 URL 로 사용.
+        // 라우트 매칭은 normalizedPath 가 담당하고, location.search 는 모듈 init 시점까지 유지된다.
+        var _qsIdx = path.search(/[?#]/);
+        var displayUrl = _qsIdx >= 0 ? normalizedPath + path.slice(_qsIdx) : normalizedPath;
         var stateObj = { path: normalizedPath };
         if (replace) {
-            window.history.replaceState(stateObj, '', normalizedPath);
+            window.history.replaceState(stateObj, '', displayUrl);
         } else {
-            window.history.pushState(stateObj, '', normalizedPath);
+            window.history.pushState(stateObj, '', displayUrl);
         }
     }
 
@@ -858,11 +862,12 @@ var Router = {
         window.addEventListener('popstate', handlePopstate);
         document.addEventListener('click', handleGlobalClick);
 
-        // 현재 URL 처리 (초기 로드)
+        // 현재 URL 처리 (초기 로드) — query/hash 보존하여 딥링크(?tab= 등)가 모듈 init 까지 유지되게 함
         var currentPath = normalizePath(window.location.pathname);
+        var rawPath = window.location.pathname + window.location.search + window.location.hash;
 
-        // 초기 history 상태 설정
-        window.history.replaceState({ path: currentPath }, '', currentPath);
+        // 초기 history 상태 설정 (query 보존)
+        window.history.replaceState({ path: currentPath }, '', rawPath);
 
         // 로그인 후 리디렉트 처리
         var redirectPath = sessionStorage.getItem('redirectAfterLogin');
@@ -871,8 +876,8 @@ var Router = {
             log('\uB85C\uADF8\uC778 \uD6C4 \uB9AC\uB514\uB809\uD2B8:', redirectPath);
             executeNavigation(redirectPath, { replace: true });
         } else {
-            // 현재 경로로 네비게이션
-            executeNavigation(currentPath, { replace: true });
+            // 현재 경로로 네비게이션 (query 보존 — 딥링크 ?tab= 등)
+            executeNavigation(rawPath, { replace: true });
         }
 
         log('\uB77C\uC6B0\uD130 \uC2DC\uC791\uB428. \uB4F1\uB85D\uB41C \uB77C\uC6B0\uD2B8:', _routes.size);
