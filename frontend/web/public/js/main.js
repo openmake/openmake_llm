@@ -69,9 +69,9 @@ import {
     sendMessage, addChatMessage, appendToken,
     finishAssistantMessage, copyMessage, regenerateMessage,
     newChat as chatNewChat, useSuggestion, abortChat
-} from './modules/chat.js?v=20';
+} from './modules/chat.js?v=21';
 // 메시지 신고 (B+ Phase B5) — 디버깅용 본문 임시 보관 요청
-import { reportMessage } from './modules/chat-actions.js?v=20';
+import { reportMessage } from './modules/chat-actions.js?v=21';
 
 // 1-8. 세션 관리 (state, auth 의존)
 import {
@@ -119,7 +119,7 @@ import {
 import './modules/sanitize.js';
 
 // 1-15. 네비게이션 데이터
-import { NAV_ITEMS } from './nav-items.js?v=6';
+import { NAV_ITEMS } from './nav-items.js?v=7';
 
 // 1-16. SPA 라우터
 import { Router, SafeStorage } from './spa-router.js?v=17';

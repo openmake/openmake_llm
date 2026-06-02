@@ -15,7 +15,7 @@
     <link href="vendor/pretendard/pretendard.css" rel="stylesheet">
     <!-- Performance: Preload hints -->
     <link rel="preload" href="/css/design-tokens.css?v=10" as="style">
-    <link rel="modulepreload" href="/js/spa-router.js?v=17" crossorigin>
+    <link rel="modulepreload" href="/js/spa-router.js?v=18" crossorigin>
     <link rel="modulepreload" href="/js/modules/auth.js" crossorigin>
     <!-- 디자인 시스템 CSS (순서 중요!) -->
     <link rel="stylesheet" href="css/design-tokens.css?v=10">
@@ -230,7 +230,7 @@
                         <div class="upload-content">
                             <span class="upload-icon">📁</span>
                             <p>파일을 드래그하거나 클릭하여 선택</p>
-                            <input type="file" id="fileInput" name="fileInput" aria-label="파일 선택" hidden>
+                            <input type="file" id="fileInput" name="fileInput" aria-label="이미지 선택" accept="image/png,image/jpeg,image/webp,image/gif" multiple hidden>
                         </div>
                     </div>
                 </div>
@@ -360,7 +360,9 @@
     <script type="module" src="js/modules/api-endpoints.js?v=16"></script>
     <script type="module" src="js/modules/api-client.js?v=16"></script>
 
-    <script type="module" src="js/main.js?v=36"></script>
+    <script type="module" src="js/main.js?v=38"></script>
+    <!-- 채팅 이미지 첨부 (fileInput → base64 → attachedFiles → 미리보기). self-init -->
+    <script type="module" src="js/modules/file-attach.js?v=1"></script>
 </body>
 
 </html>
