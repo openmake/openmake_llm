@@ -47,7 +47,8 @@ async function handleFiles(fileList) {
         }
         try {
             const base64 = await fileToBase64(f);
-            next.push({ id: genId(), name: f.name, type: f.type, isImage: true, base64 });
+            // objectUrl: 썸네일용 blob 참조 (매 렌더 base64→data URL 재직렬화/재디코드 회피). 제거 시 revoke.
+            next.push({ id: genId(), name: f.name, type: f.type, isImage: true, base64, objectUrl: URL.createObjectURL(f) });
         } catch (e) {
             window.showError?.(`파일을 읽지 못했습니다: ${f.name}`);
         }
@@ -73,7 +74,7 @@ export function renderAttachedPreview() {
 
         const thumb = document.createElement('img');
         thumb.className = 'attached-chip-thumb';
-        thumb.src = `data:${f.type};base64,${f.base64}`;
+        thumb.src = f.objectUrl || `data:${f.type};base64,${f.base64}`;
         thumb.alt = f.name;
 
         const name = document.createElement('span');
@@ -93,11 +94,15 @@ export function renderAttachedPreview() {
 }
 
 export function removeAttachedFile(id) {
-    setState('attachedFiles', (getState('attachedFiles') || []).filter((f) => f.id !== id));
+    const files = getState('attachedFiles') || [];
+    const target = files.find((f) => f.id === id);
+    if (target?.objectUrl) URL.revokeObjectURL(target.objectUrl); // blob 참조 해제
+    setState('attachedFiles', files.filter((f) => f.id !== id));
     renderAttachedPreview();
 }
 
 export function clearAttachedFiles() {
+    (getState('attachedFiles') || []).forEach((f) => { if (f.objectUrl) URL.revokeObjectURL(f.objectUrl); });
     setState('attachedFiles', []);
     renderAttachedPreview();
 }
