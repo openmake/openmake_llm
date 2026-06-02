@@ -25,8 +25,17 @@ import { getAgentTaskSystemPrompt } from '../prompts/agent-task-prompt';
 import { getPushService } from './PushService';
 import { createLogger } from '../utils/logger';
 import type { UserContext } from '../mcp/user-sandbox';
+import { getSkillManager } from '../agents/skill-manager';
+import { mergeToolsWithSkills, type ActiveSkillBinding } from './chat-service/tool-merger';
 
 const logger = createLogger('AgentTaskService');
+
+/**
+ * Agent Task 는 페르소나/산업 agent 를 우회하므로 고유 agentId 가 없다.
+ * 스킬 스코프 조회 시 어떤 실제 agent_id(산업 agent id · uuid · __global__ · user:*)
+ * 와도 겹치지 않는 sentinel 을 넘겨, __global__ + user:{userId} 스킬만 매칭시킨다.
+ */
+const AGENT_TASK_SKILL_AGENT_ID = '__agent_task__';
 
 type UserTier = 'free' | 'pro' | 'enterprise';
 type UserRole = 'admin' | 'user' | 'guest';
@@ -102,10 +111,13 @@ export class AgentTaskService {
         const userCtx: UserContext = { userId, tier: userTier, role: userRole };
 
         // resume: 기존 checkpoint(완전한 end-of-turn conversation)에서 복원, 아니면 새로 시작.
+        // 새 시작 시 system 프롬프트에 활성 스킬(global+user)의 지식(prompt_md)을 주입한다.
+        // resume 의 system 은 old checkpoint 그대로이므로, 작업 중 스킬이 바뀌면 지식(system)과
+        // 도구 바인딩(매 실행 fresh)이 갈릴 수 있다 — 무해, 재개 일관성을 위한 의도된 동작.
         const conversation: ChatMessage[] = input.resume
             ? [...input.resume.conversation]
             : [
-                { role: 'system', content: getAgentTaskSystemPrompt() },
+                { role: 'system', content: getAgentTaskSystemPrompt() + (await this.buildSkillPromptBlock(userId)) },
                 { role: 'user', content: goal },
             ];
         const startTurn = input.resume?.fromTurn ?? 0;
@@ -143,10 +155,24 @@ export class AgentTaskService {
             await update({ status: 'running', progress: 2 });
 
             // tier 기반 허용 도구 목록 (LLMTool ≈ ToolDefinition)
-            const tools = (await mcp.getToolRouter().getLLMTools(userTier, {
+            const tierTools = (await mcp.getToolRouter().getLLMTools(userTier, {
                 userId,
                 tier: userTier,
             })) as unknown as ToolDefinition[];
+
+            // 활성 스킬(global+user)의 tool_bindings 를 머지. allTools=tierTools 이므로
+            // allowed/required 는 tier 안에서만 해석되어 tier 를 못 뚫고(escalation 방지),
+            // base 가 전체 tier 도구라 실효는 사실상 denied(특정 도구 차단)뿐이다.
+            // 조회 실패는 작업을 실패시키지 않고 빈 바인딩으로 흡수.
+            let skillBindings: ActiveSkillBinding[] = [];
+            try {
+                skillBindings = await getSkillManager().getActiveSkillBindings(AGENT_TASK_SKILL_AGENT_ID, userId);
+            } catch (e) {
+                logger.debug('[AgentTask] 스킬 도구 바인딩 조회 실패 — 빈 배열', e);
+            }
+            const tools = skillBindings.length > 0
+                ? mergeToolsWithSkills({ allTools: tierTools, userToggled: tierTools, profileRequired: [], skillBindings })
+                : tierTools;
 
             for (let turn = startTurn; turn < turnCeiling; turn++) {
                 this.assertWithinLimits(signal, startedAt, totalTokens);
@@ -272,6 +298,21 @@ export class AgentTaskService {
         }
         if (totalTokens > AGENT_TASK_LIMITS.MAX_TOTAL_TOKENS) {
             throw new AgentTaskAbort('token_limit');
+        }
+    }
+
+    /**
+     * 활성 스킬(global + user)의 prompt_md 지식 블록을 만든다.
+     * execute 의 status 머신(try)이 켜지기 전에 호출되므로 절대 throw 하지 않는다 —
+     * 실패/부재 시 '' 를 반환해 task row 가 stuck 되지 않게 한다.
+     */
+    private async buildSkillPromptBlock(userId: string): Promise<string> {
+        try {
+            const block = await getSkillManager().buildManifestPrompt(AGENT_TASK_SKILL_AGENT_ID, userId);
+            return block ?? '';
+        } catch (e) {
+            logger.debug('[AgentTask] 스킬 프롬프트 주입 실패 — 무시', e);
+            return '';
         }
     }
 
