@@ -67,3 +67,34 @@ export const MODEL_CAPABILITY_PRESETS: Readonly<Record<string, ModelCapabilities
         streaming: true,
     },
 } as const;
+
+/**
+ * 보수적 기본 capabilities — 프리셋 미매칭 모델의 게이팅/표시 기본값 (SoT).
+ */
+export const FALLBACK_CAPABILITIES: ModelCapabilities = {
+    toolCalling: false,
+    thinking: false,
+    vision: false,
+    streaming: true,
+};
+
+/**
+ * modelId → MODEL_CAPABILITY_PRESETS 매칭 (lowercase + startsWith-longest).
+ * 매칭 없으면 null — 기본값은 호출자가 결정한다.
+ *
+ * `exact-우선 → prefix-longest` 는 `pure prefix-longest` 와 동치이므로 단일 규칙으로 통일.
+ * `startsWith` 는 `includes` 와 달리 중간-substring 오매칭(게이팅 over-grant)을 배제하면서
+ * suffixed variant(예: '-1m', '-2m')는 동일하게 커버한다.
+ */
+export function matchCapabilityPreset(modelId: string): ModelCapabilities | null {
+    const lower = modelId.toLowerCase();
+    let best: ModelCapabilities | null = null;
+    let bestLen = -1;
+    for (const [prefix, caps] of Object.entries(MODEL_CAPABILITY_PRESETS)) {
+        if (lower.startsWith(prefix) && prefix.length > bestLen) {
+            best = caps;
+            bestLen = prefix.length;
+        }
+    }
+    return best;
+}
