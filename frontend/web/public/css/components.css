@@ -512,12 +512,14 @@
     background: var(--bg-hover);
 }
 
+/* 내부 탭(.tabs .tab) — admin 사용자 섹션 전용. 상위 섹션 탭(.admin-section-tab: accent 채움)과
+   위계 구분 위해 active 를 옅은 배경 + accent 텍스트의 종속 스타일로 차별화. */
 .tab.active {
-    background: var(--accent-primary);
-    color: white;
-    box-shadow: var(--shadow-sm);
-    border: 1px solid rgba(0,0,0,0.1);
-    font-weight: var(--font-weight-bold);
+    background: var(--bg-tertiary);
+    color: var(--accent-primary);
+    box-shadow: none;
+    border: 1px solid var(--border-light);
+    font-weight: var(--font-weight-semibold);
 }
 
 /* ==========================================
