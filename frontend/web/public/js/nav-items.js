@@ -46,7 +46,9 @@ const NAV_ITEMS = {
         // /cluster.html: 2026-05-21 제거 — admin → 통합 모니터링 → "클러스터 노드 정보" section 과 중복
     ],
     admin: [
-        { href: '/admin.html', icon: '👥', iconify: 'lucide:users', label: '관리자', requireAuth: true, requireAdmin: true },
+        // dashboard.css: 2026-06-03 복원 — Phase R2 통합 시 누락된 link. admin.js(사용자)/admin-metrics(통합 모니터링)의
+        // .dashboard-grid·.metric-card·.node-grid 등이 이 CSS 의존. 라우트 이탈 시 removeModuleCSS 로 unload 되어 non-admin 페이지 무영향.
+        { href: '/admin.html', icon: '👥', iconify: 'lucide:users', label: '관리자', requireAuth: true, requireAdmin: true, cssFiles: ['/css/pages/dashboard.css?v=1'] },
         // MCP 카탈로그/모니터링: 2026-06-03 admin 섹션 탭(/admin.html?tab=mcp-catalog|mcp-monitoring)으로 흡수 — Phase R2 완성.
         // 사이드바 nav 에서 hidden, standalone 라우트는 spa-router 직접 접근/북마크용으로 보존.
         { href: '/admin-mcp-catalog.html', icon: '🔌', iconify: 'lucide:server-cog', label: 'MCP 카탈로그', requireAuth: true, requireAdmin: true, excludeFromSidebar: true },

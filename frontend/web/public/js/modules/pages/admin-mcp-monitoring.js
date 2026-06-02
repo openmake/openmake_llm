@@ -102,6 +102,12 @@ function renderTrend() {
         el.innerHTML = '<div class="mcp-empty" style="color:var(--text-muted);">데이터 없음.</div>';
         return;
     }
+    // 타임라인 항목은 있으나 24h 동안 spawn 활동이 전혀 없으면 빈 막대(height:0) 대신 안내 표시
+    const totalSpawn = STATE.trend.reduce(function (sum, t) { return sum + (t.spawned || 0); }, 0);
+    if (totalSpawn === 0) {
+        el.innerHTML = '<div class="mcp-empty" style="color:var(--text-muted);text-align:center;padding:var(--space-6);background:var(--bg-card);border:1px solid var(--border-light);border-radius:var(--radius-md);">최근 24시간 spawn 활동이 없습니다.</div>';
+        return;
+    }
     const maxSpawn = Math.max(1, ...STATE.trend.map(t => t.spawned));
     el.innerHTML = `
         <div class="mcpmon-trend-bars">
