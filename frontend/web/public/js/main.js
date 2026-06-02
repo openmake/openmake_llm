@@ -658,7 +658,7 @@ window.loadUserAgentSelect = async function() {
         agents.filter(a => a.is_active).forEach(a => {
             const opt = document.createElement('option');
             opt.value = a.id;
-            opt.textContent = (a.icon || '🤖') + ' ' + a.name;
+            opt.textContent = (a.icon || '🎭') + ' ' + a.name;
             opt.dataset.dynamic = '1';
             sel.appendChild(opt);
         });
