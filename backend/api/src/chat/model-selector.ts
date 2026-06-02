@@ -133,19 +133,21 @@ export function checkModelCapability(
 ): boolean {
     const lowerModel = modelName.toLowerCase();
 
-    // 1차: 모델명으로 프리셋 찾기 (정확한 매칭)
+    // 1차: 모델별 정확한 프리셋 (preset-authoritative — startsWith-longest 공유 매처).
+    // 카탈로그 모델의 실제 capability 가 generic profile 보다 우선한다. 이로써
+    // checkModelCapability 가 게이팅 경로(getCapabilities)와 동일한 SoT 를 따른다.
+    const presetCaps = matchCapabilityPreset(lowerModel);
+    if (presetCaps) {
+        return presetCaps[capability];
+    }
+
+    // 2차: profile fallback (generic 'local-llm' 프리셋) — preset 미등록이나
+    // defaultModel 과 관련된 모델명에 대한 포괄 기본값.
     for (const preset of Object.values(getModelPresets())) {
         if (preset.defaultModel.toLowerCase().includes(lowerModel) ||
             lowerModel.includes(preset.defaultModel.split(':')[0].toLowerCase())) {
             return preset.capabilities[capability];
         }
-    }
-
-    // 2차: 공유 매처(startsWith-longest, matchCapabilityPreset)로 프리셋 조회.
-    // Auto-Routing 맵의 모델(kimi, deepseek, cogito 등)이 프리셋에 없으면 3차로 폴백.
-    const presetCaps = matchCapabilityPreset(lowerModel);
-    if (presetCaps) {
-        return presetCaps[capability];
     }
 
     // 3차: 알 수 없는 모델은 보수적 기본값 반환
