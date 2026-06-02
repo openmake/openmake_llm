@@ -137,10 +137,10 @@ SPA with vanilla JS ES Modules. No build step for JS - files are served directly
 마이그레이션 파일은 `services/database/migrations/` 에 관리하며, 초기 스키마는 `services/database/init/` 에 위치한다.
 
 - **파일 네이밍**: `NNN_description.sql` 형식 (예: `001_add_user_memories.sql`). NNN은 3자리 순번, 순서 충돌 금지.
-- **마이그레이션 적용**: 서버 기동 시 자동 적용. 수동 실행: `psql $DATABASE_URL -f services/database/migrations/NNN_xxx.sql`
+- **마이그레이션 적용**: `server.ts` 부팅은 `init/002-schema.sql`(schema-initializer)만 자동 적용하며, `migrations/` 는 **자동 적용되지 않는다**. CLI 로 수동 적용: `npx ts-node backend/api/src/data/migrations/cli.ts migrate` (`... status` 로 미적용 확인). `MigrationRunner.applyPending` 이 `migration_versions` 테이블로 이력 추적 (version = `filename.split('_')[0]`). (운영 서버 PC 엔 `psql` 미설치 — DB 진단은 node `pg` Client 사용)
 - **멱등 작성 원칙**: `CREATE TABLE IF NOT EXISTS`, `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` 등 재실행 안전하게 작성.
 - **컬럼/테이블 삭제**: 즉시 DROP 금지 — 애플리케이션 코드 참조 제거 후 다음 배포에서 DROP 마이그레이션 적용 (2단계 배포).
-- **롤백**: 롤백 스크립트를 `NNN_xxx_rollback.sql` 로 함께 제공 권장.
+- **롤백**: 롤백 스크립트는 **`migrations/rollbacks/NNN_xxx.sql`** 하위 디렉토리에 둔다. ⚠️ runner 의 파일 필터 정규식 `^\d+_[a-zA-Z0-9_-]+\.sql$` 이 `NNN_xxx_rollback.sql` 도 마이그레이션으로 스캔하므로, `migrations/` 루트에 두면 forward 와 **같은 version(`NNN`)으로 같은 부팅에 실행되어 방금 적용한 것을 되돌린다** (정렬상 `.sql` < `_rollback`). `rollbacks/` 하위는 비재귀 `readdirSync` 에서 제외되어 안전.
 
 ## Configuration
 
