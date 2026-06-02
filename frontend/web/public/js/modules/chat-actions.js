@@ -137,6 +137,7 @@ function newChat() {
     setState('conversationMemory', []);
     setState('currentChatId', null);
     setState('attachedFiles', []);
+    window.clearAttachedFiles?.(); // #attachments 미리보기 칩도 클리어 — state↔DOM 동기화 (file-attach.js)
     setState('activeDocumentContext', null);
 
     // 새 대화 시작 시 활성 스킬 상태 초기화
