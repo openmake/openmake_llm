@@ -32,6 +32,9 @@ coverage/
 .jest-cache/
 test-results/
 
+# Runtime cache artifacts
+backend/api/cache/
+
 # Vite
 .vite/
 
