@@ -39,6 +39,23 @@ export const MODEL_CAPABILITY_PRESETS: Readonly<Record<string, ModelCapabilities
         vision: false,
         streaming: true,
     },
+    // ⚠️ getCapabilities 는 `modelId.split(':')[0]` 로 매칭하므로 위 'qwen3.6' 키는
+    //   실제 modelId('qwen3.6-35b-a3b')와 안 맞아 FALLBACK 이 쓰여 왔다(죽은 키).
+    //   서버 vLLM vision 활성화(--language-model-only 제거)에 맞춰 실 modelId 키로 vision 만 켠다.
+    //   toolCalling/thinking 은 기존 FALLBACK 동작 그대로 유지(회귀 0) — 'qwen3.6' 죽은 키의
+    //   toolCalling/thinking 의도 복원은 별도 이슈.
+    'qwen3.6-35b-a3b': {
+        toolCalling: false,
+        thinking: false,
+        vision: true,
+        streaming: true,
+    },
+    'qwen3.6-35b-a3b-1m': {
+        toolCalling: false,
+        thinking: false,
+        vision: true,
+        streaming: true,
+    },
     /**
      * OpenAI 호환 alias — proxy 가 qwen3.6-35b-a3b 으로 라우팅.
      * 외부 도구 / OpenAI SDK 호환 클라이언트가 표준 model ID 로 호출 가능.
