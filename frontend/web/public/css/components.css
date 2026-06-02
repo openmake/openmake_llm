@@ -965,3 +965,52 @@
     color: var(--text-muted);
     font-size: 12px;
 }
+
+/* 채팅 이미지 첨부 미리보기 (file-attach.js) — #attachments 컨테이너 + 칩 */
+.attachments {
+    display: none;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 8px 0 0;
+}
+.attached-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    max-width: 200px;
+    padding: 4px 6px 4px 4px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-sm);
+}
+.attached-chip-thumb {
+    width: 32px;
+    height: 32px;
+    object-fit: cover;
+    border-radius: 4px;
+    flex-shrink: 0;
+}
+.attached-chip-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text-primary);
+}
+.attached-chip-remove {
+    flex-shrink: 0;
+    width: 18px;
+    height: 18px;
+    padding: 0;
+    line-height: 1;
+    border: none;
+    border-radius: 50%;
+    background: var(--border-light);
+    color: var(--text-primary);
+    cursor: pointer;
+    font-size: 14px;
+}
+.attached-chip-remove:hover {
+    background: var(--danger);
+    color: #fff;
+}

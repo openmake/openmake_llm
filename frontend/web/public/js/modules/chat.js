@@ -362,6 +362,8 @@ async function sendMessage() {
         if (parsedUser.tier) payload.userTier = parsedUser.tier;
 
         sendWsMessage(payload);
+        // 전송 후 첨부 이미지 클리어 — 다음 메시지에 누적 방지 (file-attach.js)
+        window.clearAttachedFiles?.();
         // Phase 3.4 (2026-05-26): 분기 정보 사용 직후 clear — 다음 메시지에 누적 방지
         if (window._pendingBranchFrom) { try { delete window._pendingBranchFrom; } catch (_e) {} }
 
