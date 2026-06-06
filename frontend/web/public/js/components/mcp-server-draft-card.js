@@ -73,7 +73,7 @@ export function renderMcpServerDraftCard(draft, opts) {
 
     el.innerHTML =
         '<div class="skill-draft-card__header">' +
-            '<span class="skill-draft-card__badge skill-draft-card__badge-draft">🔌 MCP DRAFT</span>' +
+            '<span class="skill-draft-card__badge skill-draft-card__badge-draft"><iconify-icon icon=lucide:plug></iconify-icon> MCP DRAFT</span>' +
             '<span class="sl-badge skill-draft-card__badge-user">' + esc(draft.transportType || draft.transport_type || 'stdio') + '</span>' +
             dedupedBadge +
         '</div>' +

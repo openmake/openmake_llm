@@ -78,9 +78,9 @@ export function open(triggerEl, ctx) {
     _menu.style.top = (rect.bottom + window.scrollY + 4) + 'px';
     _menu.style.left = Math.max(8, rect.left + window.scrollX - 100) + 'px';
     _menu.innerHTML =
-        '<div class="menu-item" data-action="validate">🔍 검증</div>' +
-        '<div class="menu-item" data-action="usage">📊 사용량</div>' +
-        '<div class="menu-item" data-action="delete" style="color:var(--danger)">🗑️ 삭제</div>';
+        '<div class="menu-item" data-action="validate"><iconify-icon icon=lucide:search-check></iconify-icon> 검증</div>' +
+        '<div class="menu-item" data-action="usage"><iconify-icon icon=lucide:bar-chart-2></iconify-icon> 사용량</div>' +
+        '<div class="menu-item" data-action="delete" style="color:var(--danger)"><iconify-icon icon=lucide:trash-2></iconify-icon> 삭제</div>';
     _menu.style.display = 'block';
 
     setTimeout(() => {

@@ -88,7 +88,7 @@ function render() {
     var html =
         '<div class="mlm-box">' +
         '<div class="mlm-header">' +
-        '<h3>🌐 OpenRouter 모델 — ' +
+        '<h3><iconify-icon icon=lucide:globe></iconify-icon> OpenRouter 모델 — ' +
         (_searchQuery ? fcount + ' / ' + total : total) +
         ' 개</h3>' +
         '<button type="button" class="mlm-close" data-action="close" aria-label="닫기">&times;</button>' +
@@ -104,7 +104,7 @@ function render() {
         for (var i = 0; i < free.length; i++) html += renderRow(free[i]);
     }
     if (paid.length > 0) {
-        html += '<div class="mlm-subgroup">💰 유료 (' + paid.length + ')</div>';
+        html += '<div class="mlm-subgroup"><iconify-icon icon=lucide:banknote></iconify-icon> 유료 (' + paid.length + ')</div>';
         for (var j = 0; j < paid.length; j++) html += renderRow(paid[j]);
     }
     if (free.length === 0 && paid.length === 0) {
@@ -113,7 +113,7 @@ function render() {
 
     html += '</div>' +
         '<div class="mlm-footer">' +
-        '<span class="mlm-hint">💡 클릭하여 선택. ESC 또는 우상단 ✕ 으로 닫기.</span>' +
+        '<span class="mlm-hint"><iconify-icon icon=lucide:lightbulb></iconify-icon> 클릭하여 선택. ESC 또는 우상단 ✕ 으로 닫기.</span>' +
         '</div>' +
         '</div>';
 

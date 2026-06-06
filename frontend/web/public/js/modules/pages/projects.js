@@ -22,7 +22,7 @@ const escapeHTML = (str) => {
 const CARDS = [
     {
         href: '/skill-library.html',
-        icon: '📦',
+        icon: '<iconify-icon icon=lucide:package></iconify-icon>',
         title: '스킬 라이브러리',
         desc: '재사용 가능한 매니페스트 + 도구 바인딩 (Anthropic Skills 동형)',
         tier: 'pro',
@@ -78,7 +78,7 @@ function getHTML() {
         '.proj-card:hover .proj-card-arrow{color:var(--accent-primary);transform:translateX(4px);}' +
         '</style>' +
         '<header class="projects-header">' +
-        '<h1>📁 프로젝트</h1>' +
+        '<h1><iconify-icon icon=lucide:folder></iconify-icon> 프로젝트</h1>' +
         '<p>스킬 / MCP 서버 — 작업 도구 통합 hub</p>' +
         '</header>' +
         `<div class="proj-grid">${cards}</div>` +

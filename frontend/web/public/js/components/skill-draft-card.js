@@ -47,8 +47,8 @@ export function renderSkillDraftCard(draft, opts) {
     el.dataset.target = draft.target || 'user';
 
     const targetBadge = draft.target === 'system'
-        ? '<span class="sl-badge skill-draft-card__badge-system">🔒 시스템</span>'
-        : '<span class="sl-badge skill-draft-card__badge-user">👤 본인</span>';
+        ? '<span class="sl-badge skill-draft-card__badge-system"><iconify-icon icon=lucide:lock></iconify-icon> 시스템</span>'
+        : '<span class="sl-badge skill-draft-card__badge-user"><iconify-icon icon=lucide:user></iconify-icon> 본인</span>';
 
     const dedupedBadge = draft.deduped
         ? '<span class="sl-badge skill-draft-card__badge-deduped" title="24시간 내 동일 요청으로 기존 draft 재사용">↻ 재사용</span>'
@@ -77,7 +77,7 @@ export function renderSkillDraftCard(draft, opts) {
 
     el.innerHTML =
         '<div class="skill-draft-card__header">' +
-            '<span class="skill-draft-card__badge skill-draft-card__badge-draft">📝 초안</span>' +
+            '<span class="skill-draft-card__badge skill-draft-card__badge-draft"><iconify-icon icon=lucide:file-text></iconify-icon> 초안</span>' +
             targetBadge +
             dedupedBadge +
         '</div>' +

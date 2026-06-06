@@ -35,7 +35,7 @@ export function renderAgentDraftCard(draft, opts) {
           '</div>'
         : '';
     const conv = Array.isArray(draft.conventionFindings) && draft.conventionFindings.length > 0
-        ? '<div class="skill-draft-card__meta" style="color:#eab308">⚠ 컨벤션 검출 ' + draft.conventionFindings.length + '건</div>'
+        ? '<div class="skill-draft-card__meta" style="color:#eab308"><iconify-icon icon=lucide:triangle-alert></iconify-icon> 컨벤션 검출 ' + draft.conventionFindings.length + '건</div>'
         : '';
     const dedupedBadge = draft.deduped
         ? '<span class="sl-badge skill-draft-card__badge-deduped" title="dedupe — 기존 draft 재사용">↻ 재사용</span>'
@@ -47,7 +47,7 @@ export function renderAgentDraftCard(draft, opts) {
 
     el.innerHTML =
         '<div class="skill-draft-card__header">' +
-            '<span class="skill-draft-card__badge skill-draft-card__badge-draft">🤖 AGENT DRAFT</span>' +
+            '<span class="skill-draft-card__badge skill-draft-card__badge-draft"><iconify-icon icon=lucide:bot></iconify-icon> AGENT DRAFT</span>' +
             '<span class="sl-badge skill-draft-card__badge-user">' + esc(draft.emoji || '🤖') + '</span>' +
             dedupedBadge +
         '</div>' +

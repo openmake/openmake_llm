@@ -54,7 +54,7 @@ export async function open(opts) {
     _modal.innerHTML =
         '<div class="ek-modal-box wide">' +
         '<div class="ek-modal-box-header">' +
-        '<h3>📊 외부 LLM 사용량' + (opts.providerId ? ' — ' + escText(opts.providerId) : '') + '</h3>' +
+        '<h3><iconify-icon icon=lucide:bar-chart-2></iconify-icon> 외부 LLM 사용량' + (opts.providerId ? ' — ' + escText(opts.providerId) : '') + '</h3>' +
         '<button type="button" class="ek-modal-box-close" data-action="close">&times;</button>' +
         '</div>' +
         '<div class="ek-modal-box-body scrollable" id="usage-modal-body">' +
@@ -95,7 +95,7 @@ export async function open(opts) {
             if (totalsByProvider.length > 0) {
                 summaryHtml =
                     '<div style="margin-bottom:12px;padding:8px 12px;background:var(--bg-tertiary);border-radius:6px;font-size:12px">' +
-                    '<div style="color:var(--text-muted);margin-bottom:6px">📅 최근 30일 provider별 누계</div>' +
+                    '<div style="color:var(--text-muted);margin-bottom:6px"><iconify-icon icon=lucide:calendar></iconify-icon> 최근 30일 provider별 누계</div>' +
                     '<table style="width:100%;font-size:12px"><tbody>' +
                     totalsByProvider.map((t) =>
                         '<tr>' +
@@ -112,7 +112,7 @@ export async function open(opts) {
 
     body.innerHTML = summaryHtml +
         '<div style="margin-bottom:12px;color:var(--text-secondary);font-size:var(--font-size-sm)">' +
-        '🕒 직전 ' + rows.length + '건 — 입력 ' + totalIn.toLocaleString() + ' / 출력 ' + totalOut.toLocaleString() +
+        '<iconify-icon icon=lucide:clock></iconify-icon> 직전 ' + rows.length + '건 — 입력 ' + totalIn.toLocaleString() + ' / 출력 ' + totalOut.toLocaleString() +
         ' 토큰, 비용 <b>' + escText(fmtUsd(totalCost)) +
         '</b> <span style="color:var(--text-muted);font-size:11px">(추정 — 정확한 청구는 각 provider 콘솔)</span></div>' +
         '<table style="width:100%;border-collapse:collapse;font-size:13px">' +

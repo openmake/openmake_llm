@@ -1034,3 +1034,7 @@
 .ak-hero-icon iconify-icon { font-size: 3rem; width: 3rem; height: 3rem; color: var(--accent-primary); }
 .empty-state-icon iconify-icon, .ak-empty-icon iconify-icon { font-size: 2.5rem; width: 2.5rem; height: 2.5rem; color: var(--text-muted); }
 .service-icon iconify-icon { font-size: 1.6rem; width: 1.6rem; height: 1.6rem; }
+/* 컴포넌트 badge/헤딩/메뉴 라인 아이콘 정렬·크기 */
+[class*="badge"] iconify-icon { font-size: 0.92em; width: 0.92em; height: 0.92em; vertical-align: -1px; margin-right: 2px; }
+h2 iconify-icon, h3 iconify-icon { vertical-align: -2px; margin-right: 4px; }
+.model-action-menu div iconify-icon, .mlm-subgroup iconify-icon { font-size: 15px; width: 15px; height: 15px; vertical-align: -2px; margin-right: 4px; }
