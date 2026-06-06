@@ -67,6 +67,17 @@ function buildCommands() {
 
     const actions = [
         { icon: '＋', label: '새 대화', hint: '⌘N', run: function () { if (typeof window.newChat === 'function') window.newChat(); else if (window.Router) window.Router.navigate('/'); } },
+        { icon: '🔍', label: '대화 검색', run: function () {
+            try { if (window.sidebar && typeof window.sidebar.setState === 'function') window.sidebar.setState('full'); } catch (e) {}
+            setTimeout(function () { var i = document.getElementById('sidebarSearch'); if (i) { i.focus(); i.select && i.select(); } }, 60);
+        } },
+        { icon: '⮃', label: '모델 선택 / 전환', run: function () {
+            var t = document.querySelector('.model-selector-trigger');
+            if (t) { t.click(); return; }
+            // 셀렉터가 현재 화면에 없으면(비채팅 등) 채팅 홈으로 이동 후 재시도
+            if (window.Router) window.Router.navigate('/');
+            setTimeout(function () { var t2 = document.querySelector('.model-selector-trigger'); if (t2) t2.click(); }, 400);
+        } },
         { icon: '◐', label: '테마 전환 (다크 / 라이트)', run: function () { if (typeof window.toggleTheme === 'function') window.toggleTheme(); } },
         { icon: '⚙', label: '설정 열기', run: function () { if (window.Router) window.Router.navigate('/settings.html'); } }
     ];
