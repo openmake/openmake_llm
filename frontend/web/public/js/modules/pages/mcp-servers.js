@@ -487,7 +487,7 @@ function switchTab(tabName) {
 function getHTML() {
     return '<div id="mcp-page-root-spa">' +
         '<style data-spa-style="mcp-servers">' +
-        '.mcp-page-spa{max-width:1200px;margin:0 auto;width:100%;}' +
+        '.mcp-page-spa{width:100%;}' + /* 전체 폭 — settings·skill-library 와 가로 폭 일치 (2026-06-07) */
         '.mcp-page-spa .mcp-tabs{display:flex;gap:0;margin:0 var(--space-5,1.25rem);border-bottom:1px solid var(--border-color);}' +
         '.mcp-page-spa .mcp-tab{padding:.75rem 1.25rem;background:transparent;border:none;border-bottom:2px solid transparent;cursor:pointer;color:var(--text-secondary);font-weight:500;font-size:.9rem;}' +
         '.mcp-page-spa .mcp-tab:hover{color:var(--text-primary);}' +

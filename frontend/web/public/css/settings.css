@@ -14,9 +14,9 @@
 }
 
 .settings-container {
-    /* 전체 폭 — skill-library 등 관리 페이지와 가로 폭 일치 (2026-06-07) */
+    /* 전체 폭 + 가로 패딩 20px(space-5) — skill-library·mcp-servers 와 콘텐츠 폭/가장자리 일치 (2026-06-07) */
     width: 100%;
-    padding: var(--space-8) var(--space-6);
+    padding: var(--space-8) var(--space-5);
 }
 
 /* ==================== Hero Section ==================== */
