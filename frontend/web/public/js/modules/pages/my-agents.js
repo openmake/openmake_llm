@@ -19,7 +19,8 @@
 
     function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
 
-    const EMOJIS = ['🤖','🧠','💡','📝','🎨','🔬','📊','🛠️','💻','🎯','🔍','📚','✨','🌟','🎓','💼','🏗️','⚡','🔮','🧪'];
+    const EMOJIS = ['bot','brain','lightbulb','file-text','palette','flask-conical','bar-chart-3','wrench','code','target','search','book','sparkles','star','graduation-cap','briefcase','building-2','zap','wand-2','test-tube'];
+    function maIcon(v){ v = v || 'bot'; if (/^[a-z][a-z0-9-]+$/.test(v)) return '<iconify-icon icon=lucide:'+v+'></iconify-icon>'; var d=document.createElement('div'); d.textContent=v; return d.innerHTML; }
 
     window.PageModules['my-agents'] = {
         getSectionHTML: function() {
@@ -104,7 +105,7 @@
             const showToast = window.showToast || function(m){ console.log(m); };
 
             let editingId = null;
-            let selectedEmoji = '🤖';
+            let selectedEmoji = 'bot';
             let agents = [];
             let availableSkills = [];  // public + 본인 소유 skill 목록 (캐시)
 
@@ -136,7 +137,7 @@
                 listEl.innerHTML = availableSkills.map(function(s) {
                     const checked = ids.has(s.id) ? 'checked' : '';
                     const catBadge = s.category ? ' <span style="background:var(--bg-tertiary);color:var(--text-muted);font-size:10px;padding:1px 5px;border-radius:3px;margin-left:4px;">' + esc(s.category) + '</span>' : '';
-                    const pubMark = s.is_public ? ' 🌐' : '';
+                    const pubMark = s.is_public ? ' <iconify-icon icon=lucide:globe></iconify-icon>' : '';
                     return '<label style="display:flex;align-items:flex-start;gap:8px;padding:6px;border-radius:4px;cursor:pointer;hover:background:var(--bg-tertiary);">' +
                         '<input type="checkbox" class="ma-skill-cb" data-skill-id="' + esc(s.id) + '" ' + checked + ' style="margin-top:3px;flex-shrink:0;">' +
                         '<div style="flex:1;min-width:0;">' +
@@ -153,7 +154,7 @@
             function initEmojiPicker() {
                 const picker = document.getElementById('maEmojiPicker');
                 if (!picker) return;
-                picker.innerHTML = EMOJIS.map(function(e){ return '<span class="ma-emoji-opt" data-emoji="' + esc(e) + '">' + esc(e) + '</span>'; }).join('');
+                picker.innerHTML = EMOJIS.map(function(e){ return '<span class="ma-emoji-opt" data-emoji="' + esc(e) + '"><iconify-icon icon=lucide:' + esc(e) + '></iconify-icon></span>'; }).join('');
                 picker.querySelectorAll('.ma-emoji-opt').forEach(function(el){
                     el.addEventListener('click', function(){
                         selectedEmoji = el.getAttribute('data-emoji');
@@ -173,7 +174,7 @@
                     agents = (data && data.data && data.data.agents) || [];
                     if (!agents.length) {
                         listEl.innerHTML = '<div class="ma-guide">' +
-                            '<h2>🤖 아직 Agent 가 없어요</h2>' +
+                            '<h2><iconify-icon icon=lucide:bot></iconify-icon> 아직 Agent 가 없어요</h2>' +
                             '<p class="sub">Custom Agent 로 본인 전용 페르소나를 만들고 채팅 입력창 우측 dropdown 에서 선택해 사용할 수 있습니다.</p>' +
                             '<section><h3>할 수 있는 것</h3><ul>' +
                                 '<li>시스템 프롬프트로 페르소나·말투·역할 고정</li>' +
@@ -188,9 +189,9 @@
                                 '<li>저장 → 채팅 입력창 우측 dropdown 에서 즉시 사용</li>' +
                             '</ol></section>' +
                             '<section><h3>예시 페르소나</h3><div class="examples">' +
-                                '<div class="ex-item">🤝 <strong>한국 노동시장 분석가</strong> — labor-economist 스킬 연결, 1차/2차 시장 관점 강조</div>' +
-                                '<div class="ex-item">🐍 <strong>Python TDD 코치</strong> — 테스트 먼저, 함수 작성 시 docstring·타입 힌트 필수</div>' +
-                                '<div class="ex-item">🎨 <strong>UX 카피라이터</strong> — 간결한 한국어, 명령형보다 권유형 어투</div>' +
+                                '<div class="ex-item"><iconify-icon icon=lucide:users></iconify-icon> <strong>한국 노동시장 분석가</strong> — labor-economist 스킬 연결, 1차/2차 시장 관점 강조</div>' +
+                                '<div class="ex-item"><iconify-icon icon=lucide:code></iconify-icon> <strong>Python TDD 코치</strong> — 테스트 먼저, 함수 작성 시 docstring·타입 힌트 필수</div>' +
+                                '<div class="ex-item"><iconify-icon icon=lucide:palette></iconify-icon> <strong>UX 카피라이터</strong> — 간결한 한국어, 명령형보다 권유형 어투</div>' +
                             '</div></section>' +
                             '<button class="cta" id="maGuideCta">+ 새 Agent 만들기</button>' +
                             '</div>';
@@ -203,7 +204,7 @@
                     }
                     listEl.innerHTML = agents.map(function(a){
                         return '<div class="ma-card" data-id="' + esc(a.id) + '">' +
-                            '<div class="ma-card-icon">' + esc(a.icon || '🤖') + '</div>' +
+                            '<div class="ma-card-icon">' + maIcon(a.icon) + '</div>' +
                             '<h3>' + esc(a.name) + '</h3>' +
                             '<div class="desc">' + esc(a.description || '') + '</div>' +
                             '<div class="meta">사용 ' + (a.usage_count || 0) + '회</div>' +
@@ -230,13 +231,13 @@
                 if (id) {
                     const a = agents.find(function(x){ return x.id === id; });
                     if (!a) return;
-                    selectedEmoji = a.icon || '🤖';
+                    selectedEmoji = a.icon || 'bot';
                     document.getElementById('maName').value = a.name || '';
                     document.getElementById('maDesc').value = a.description || '';
                     document.getElementById('maSystemPrompt').value = a.system_prompt || '';
                     preselectedSkills = Array.isArray(a.allowed_skills) ? a.allowed_skills : [];
                 } else {
-                    selectedEmoji = '🤖';
+                    selectedEmoji = 'bot';
                     document.getElementById('maName').value = '';
                     document.getElementById('maDesc').value = '';
                     document.getElementById('maSystemPrompt').value = '';

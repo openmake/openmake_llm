@@ -1038,3 +1038,8 @@
 [class*="badge"] iconify-icon { font-size: 0.92em; width: 0.92em; height: 0.92em; vertical-align: -1px; margin-right: 2px; }
 h2 iconify-icon, h3 iconify-icon { vertical-align: -2px; margin-right: 4px; }
 .model-action-menu div iconify-icon, .mlm-subgroup iconify-icon { font-size: 15px; width: 15px; height: 15px; vertical-align: -2px; margin-right: 4px; }
+/* 아바타 라인 아이콘 피커 (my-agents) */
+.ma-emoji-picker .ma-emoji-opt { display:inline-grid; place-items:center; width:38px; height:38px; }
+.ma-emoji-opt iconify-icon { font-size:20px; width:20px; height:20px; }
+.ma-card-icon iconify-icon { font-size:1.5rem; width:1.5rem; height:1.5rem; color:var(--accent-primary); }
+.ex-item iconify-icon { font-size:14px; vertical-align:-2px; margin-right:4px; }
