@@ -626,3 +626,9 @@
 @media (max-width: 640px) {
     .settings-tab { flex-basis: calc(50% - var(--space-2)); }
 }
+
+/* 이모지 → lucide 라인 아이콘 통일 — 사이즈/정렬 (currentColor 상속) */
+.settings-hero-icon iconify-icon { font-size: 3rem; }
+.settings-tab iconify-icon { font-size: 15px; width: 15px; height: 15px; vertical-align: -2px; margin-right: 5px; }
+.s-card-icon iconify-icon { font-size: 1.4rem; }
+.tier-plan-icon iconify-icon { font-size: 1.8rem; }

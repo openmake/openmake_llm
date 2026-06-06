@@ -20,25 +20,25 @@
     var HTML =
         '<div class="settings-container">' +
         '<div class="settings-hero">' +
-        '<span class="settings-hero-icon">\u2699\uFE0F</span>' +
+        '<span class="settings-hero-icon"><iconify-icon icon=lucide:settings></iconify-icon></span>' +
         '<h1>\uC124\uC815</h1>' +
         '<p>\uC571 \uD658\uACBD \uBC0F AI \uBAA8\uB378 \uC124\uC815</p>' +
         '</div>' +
 
         // Phase R1: claude.ai-style \uC88C\uCE21 \uD0ED \uC2DC\uC2A4\uD15C \u2014 5\uAC1C \uBD84\uC0B0 \uD398\uC774\uC9C0 \uD1B5\uD569 \uC9C4\uC785\uC810
         '<nav class="settings-tabs" role="tablist" aria-label="Settings sections">' +
-        '<button class="settings-tab active" data-settings-tab="preferences" role="tab" aria-selected="true">\u2699\uFE0F \uD658\uACBD\uC124\uC815</button>' +
-        '<button class="settings-tab" data-settings-tab="account" data-navigate="/password-change.html" role="tab">\uD83D\uDC64 \uACC4\uC815</button>' +
-        '<button class="settings-tab" data-settings-tab="api-keys" data-navigate="/api-keys.html" role="tab">\uD83D\uDD11 API \uD0A4</button>' +
-        '<button class="settings-tab" data-settings-tab="usage" data-navigate="/usage.html" role="tab">\uD83D\uDCC8 \uC0AC\uC6A9\uB7C9</button>' +
-        '<button class="settings-tab" data-settings-tab="integrations" data-navigate="/external.html" role="tab">\uD83D\uDD17 \uC678\uBD80\uC5F0\uB3D9</button>' +
-        '<button class="settings-tab" data-settings-tab="developer" data-navigate="/developer.html" role="tab">\uD83D\uDCD6 API \uBB38\uC11C</button>' +
-        '<button class="settings-tab" data-settings-tab="projects" data-navigate="/projects.html" role="tab">\uD83D\uDCC1 \uD504\uB85C\uC81D\uD2B8</button>' +
+        '<button class="settings-tab active" data-settings-tab="preferences" role="tab" aria-selected="true"><iconify-icon icon=lucide:settings></iconify-icon> \uD658\uACBD\uC124\uC815</button>' +
+        '<button class="settings-tab" data-settings-tab="account" data-navigate="/password-change.html" role="tab"><iconify-icon icon=lucide:user></iconify-icon> \uACC4\uC815</button>' +
+        '<button class="settings-tab" data-settings-tab="api-keys" data-navigate="/api-keys.html" role="tab"><iconify-icon icon=lucide:key></iconify-icon> API \uD0A4</button>' +
+        '<button class="settings-tab" data-settings-tab="usage" data-navigate="/usage.html" role="tab"><iconify-icon icon=lucide:bar-chart-2></iconify-icon> \uC0AC\uC6A9\uB7C9</button>' +
+        '<button class="settings-tab" data-settings-tab="integrations" data-navigate="/external.html" role="tab"><iconify-icon icon=lucide:link></iconify-icon> \uC678\uBD80\uC5F0\uB3D9</button>' +
+        '<button class="settings-tab" data-settings-tab="developer" data-navigate="/developer.html" role="tab"><iconify-icon icon=lucide:book-open></iconify-icon> API \uBB38\uC11C</button>' +
+        '<button class="settings-tab" data-settings-tab="projects" data-navigate="/projects.html" role="tab"><iconify-icon icon=lucide:folder></iconify-icon> \uD504\uB85C\uC81D\uD2B8</button>' +
         '</nav>' +
 
         '<div class="s-card">' +
         '<div class="s-card-header">' +
-        '<span class="s-card-icon">\uD83C\uDFA8</span>' +
+        '<span class="s-card-icon"><iconify-icon icon=lucide:palette></iconify-icon></span>' +
         '<span class="s-card-title">\uC678\uAD00</span>' +
         '</div>' +
         '<div class="s-card-body">' +
@@ -53,7 +53,7 @@
         '<div class="setting-row">' +
         '<div class="setting-info"><h4>\uC5B8\uC5B4</h4><p>AI \uC751\uB2F5 \uC5B8\uC5B4\uB97C \uC120\uD0DD\uD569\uB2C8\uB2E4. \uC790\uB3D9 \uAC10\uC9C0 \uC2DC \uC0AC\uC6A9\uC790 \uBA54\uC2DC\uC9C0 \uC5B8\uC5B4\uB85C \uC751\uB2F5\uD569\uB2C8\uB2E4.</p></div>' +
 '<select id="langSelect" class="s-select">' +
-'<option value="">\uD83C\uDF10 \uC790\uB3D9 \uAC10\uC9C0 (Auto-detect)</option>' +
+'<option value=""><iconify-icon icon=lucide:globe></iconify-icon> \uC790\uB3D9 \uAC10\uC9C0 (Auto-detect)</option>' +
 '<option value="ko">\uD55C\uAD6D\uC5B4</option>' +
         '<option value="en">English</option>' +
         '<option value="ja">\u65E5\u672C\u8A9E</option>' +
@@ -81,7 +81,7 @@
 
         '<div class="s-card">' +
         '<div class="s-card-header">' +
-        '<span class="s-card-icon">\uD83E\uDD16</span>' +
+        '<span class="s-card-icon"><iconify-icon icon=lucide:bot></iconify-icon></span>' +
         '<span class="s-card-title">AI \uBAA8\uB378</span>' +
         '</div>' +
         '<div class="s-card-body">' +
@@ -95,7 +95,7 @@
         // Custom Instructions card (2026-05-26) \u2014 \uC0AC\uC6A9\uC790\uBCC4 \uC601\uAD6C system prompt \uC9C0\uC2DC\uBB38
         '<div class="s-card">' +
         '<div class="s-card-header">' +
-        '<span class="s-card-icon">\uD83D\uDCDD</span>' +
+        '<span class="s-card-icon"><iconify-icon icon=lucide:file-text></iconify-icon></span>' +
         '<span class="s-card-title">\uC0AC\uC6A9\uC790 \uC9C0\uC2DC\uBB38</span>' +
         '</div>' +
         '<div class="s-card-body">' +
@@ -113,7 +113,7 @@
         // \uB0B4 Agent card (Custom Agents \uC784\uBCA0\uB4DC, 2026-06-01) \u2014 \uC0AC\uC6A9\uC790 \uC9C0\uC2DC\uBB38 \uC544\uB798 \uBC30\uCE58. my-agents \uBAA8\uB4C8 \uC7AC\uC0AC\uC6A9.
         '<div class="s-card">' +
         '<div class="s-card-header">' +
-        '<span class="s-card-icon">\uD83E\uDD16</span>' +
+        '<span class="s-card-icon"><iconify-icon icon=lucide:bot></iconify-icon></span>' +
         '<span class="s-card-title">\uB0B4 Agent</span>' +
         '</div>' +
         '<div class="s-card-body">' +
@@ -123,7 +123,7 @@
 
         '<div class="s-card">' +
         '<div class="s-card-header">' +
-        '<span class="s-card-icon">\uD83D\uDD27</span>' +
+        '<span class="s-card-icon"><iconify-icon icon=lucide:wrench></iconify-icon></span>' +
         '<span class="s-card-title">MCP \uB3C4\uAD6C</span>' +
         '</div>' +
         '<div class="s-card-body">' +
@@ -140,7 +140,7 @@
 
         '<div class="s-card">' +
         '<div class="s-card-header">' +
-        '<span class="s-card-icon">\u2B50</span>' +
+        '<span class="s-card-icon"><iconify-icon icon=lucide:star></iconify-icon></span>' +
         '<span class="s-card-title">\uAD6C\uB3C5 \uD50C\uB79C</span>' +
         '</div>' +
         '<div class="s-card-body">' +
@@ -151,7 +151,7 @@
         // 2026-05-26 Phase 1.D \u2014 Capabilities (Anthropic Settings > Capabilities \uB3D9\uB4F1)
         '<div class="s-card">' +
         '<div class="s-card-header">' +
-        '<span class="s-card-icon">\u2728</span>' +
+        '<span class="s-card-icon"><iconify-icon icon=lucide:sparkles></iconify-icon></span>' +
         '<span class="s-card-title">Capabilities</span>' +
         '</div>' +
         '<div class="s-card-body">' +
@@ -164,7 +164,7 @@
 
         '<div class="s-card">' +
         '<div class="s-card-header">' +
-        '<span class="s-card-icon">\uD83D\uDCBE</span>' +
+        '<span class="s-card-icon"><iconify-icon icon=lucide:hard-drive></iconify-icon></span>' +
         '<span class="s-card-title">\uB370\uC774\uD130</span>' +
         '</div>' +
         '<div class="s-card-body">' +
@@ -177,15 +177,15 @@
         '<label class="toggle"><input type="checkbox" checked id="memoryLearningToggle"><span class="toggle-slider"></span></label>' +
         '</div>' +
         '<div class="s-btn-row">' +
-        '<button class="s-btn s-btn-secondary" onclick="exportData()">\uD83D\uDCE5 \uB370\uC774\uD130 \uB0B4\uBCF4\uB0B4\uAE30</button>' +
-        '<button class="s-btn s-btn-danger" onclick="clearHistory()">\uD83D\uDDD1\uFE0F \uAE30\uB85D \uC0AD\uC81C</button>' +
+        '<button class="s-btn s-btn-secondary" onclick="exportData()"><iconify-icon icon=lucide:download></iconify-icon> \uB370\uC774\uD130 \uB0B4\uBCF4\uB0B4\uAE30</button>' +
+        '<button class="s-btn s-btn-danger" onclick="clearHistory()"><iconify-icon icon=lucide:trash-2></iconify-icon>\uFE0F \uAE30\uB85D \uC0AD\uC81C</button>' +
         '</div>' +
         '</div>' +
         '</div>' +
 
         '<div class="s-card">' +
         '<div class="s-card-header">' +
-        '<span class="s-card-icon">\uD83D\uDD10</span>' +
+        '<span class="s-card-icon"><iconify-icon icon=lucide:lock></iconify-icon></span>' +
         '<span class="s-card-title">API \uD0A4 \uAD00\uB9AC</span>' +
         '</div>' +
         '<div class="s-card-body">' +
@@ -197,15 +197,15 @@
         '<span id="apiKeyCount" style="font-size:var(--font-size-sm); color:var(--text-muted); white-space:nowrap;"></span>' +
         '</div>' +
         '<div class="s-btn-row">' +
-        '<a href="/api-keys.html" class="s-btn s-btn-primary" style="text-decoration:none;">\uD83D\uDD11 API \uD0A4 \uAD00\uB9AC</a>' +
-        '<a href="/developer.html" class="s-btn s-btn-secondary" style="text-decoration:none;">\uD83D\uDCCB API \uBB38\uC11C</a>' +
+        '<a href="/api-keys.html" class="s-btn s-btn-primary" style="text-decoration:none;"><iconify-icon icon=lucide:key></iconify-icon> API \uD0A4 \uAD00\uB9AC</a>' +
+        '<a href="/developer.html" class="s-btn s-btn-secondary" style="text-decoration:none;"><iconify-icon icon=lucide:clipboard-list></iconify-icon> API \uBB38\uC11C</a>' +
         '</div>' +
         '</div>' +
         '</div>' +
 
         '<div class="s-card" id="accountCard" style="display:none;">' +
         '<div class="s-card-header">' +
-        '<span class="s-card-icon">\uD83D\uDC64</span>' +
+        '<span class="s-card-icon"><iconify-icon icon=lucide:user></iconify-icon></span>' +
         '<span class="s-card-title">\uACC4\uC815 \uAD00\uB9AC</span>' +
         '</div>' +
         '<div class="s-card-body">' +
@@ -216,8 +216,8 @@
         '</div>' +
         '</div>' +
         '<div class="s-btn-row">' +
-        '<a href="/password-change.html" class="s-btn s-btn-primary" style="text-decoration:none;">\uD83D\uDD11 \uBE44\uBC00\uBC88\uD638 \uBCC0\uACBD</a>' +
-        '<a href="/admin.html" class="s-btn s-btn-secondary" id="adminLink" style="text-decoration:none;display:none;">\uD83D\uDC65 \uC0AC\uC6A9\uC790 \uAD00\uB9AC</a>' +
+        '<a href="/password-change.html" class="s-btn s-btn-primary" style="text-decoration:none;"><iconify-icon icon=lucide:key></iconify-icon> \uBE44\uBC00\uBC88\uD638 \uBCC0\uACBD</a>' +
+        '<a href="/admin.html" class="s-btn s-btn-secondary" id="adminLink" style="text-decoration:none;display:none;"><iconify-icon icon=lucide:users></iconify-icon> \uC0AC\uC6A9\uC790 \uAD00\uB9AC</a>' +
         '</div>' +
         // GDPR Phase B Fix 6 (B7) \u2014 \uB3D9\uC758 \uAD00\uB9AC \uC139\uC158
         '<div class="setting-row" style="margin-top: 16px; border-top: 1px solid var(--border, #e5e5e5); padding-top: 16px;">' +
@@ -232,7 +232,7 @@
 
         '<div class="s-card">' +
         '<div class="s-card-header">' +
-        '<span class="s-card-icon">\u2139\uFE0F</span>' +
+        '<span class="s-card-icon"><iconify-icon icon=lucide:info></iconify-icon></span>' +
         '<span class="s-card-title">\uC2DC\uC2A4\uD15C \uC815\uBCF4</span>' +
         '</div>' +
         '<div class="s-card-body">' +
@@ -246,8 +246,8 @@
         '</div>' +
 
         '<div class="s-footer">' +
-        '<button class="s-btn s-btn-primary" onclick="saveSettings()">\uD83D\uDCBE \uC124\uC815 \uC800\uC7A5</button>' +
-        '<button class="s-btn s-btn-secondary" onclick="resetSettings()">\u21A9\uFE0F \uCD08\uAE30\uD654</button>' +
+        '<button class="s-btn s-btn-primary" onclick="saveSettings()"><iconify-icon icon=lucide:hard-drive></iconify-icon> \uC124\uC815 \uC800\uC7A5</button>' +
+        '<button class="s-btn s-btn-secondary" onclick="resetSettings()"><iconify-icon icon=lucide:undo-2></iconify-icon> \uCD08\uAE30\uD654</button>' +
         '</div>' +
         '</div>' +
         '<div id="toast" class="toast"></div>';
@@ -755,15 +755,15 @@
                     var userTier = getUserTier();
                     var plans = [
                         {
-                            tier: 'free', name: 'Free', price: '무료', icon: '🆓',
+                            tier: 'free', name: 'Free', price: '무료', icon: '<iconify-icon icon=lucide:gift></iconify-icon>',
                             features: ['기본 AI 채팅', '웹 검색', '이미지 분석/OCR']
                         },
                         {
-                            tier: 'pro', name: 'Pro', price: 'PRO', icon: '⚡',
+                            tier: 'pro', name: 'Pro', price: 'PRO', icon: '<iconify-icon icon=lucide:zap></iconify-icon>',
                             features: ['Free 전체 기능', '웹 스크래핑 (3종)', '외부 MCP 도구 연동']
                         },
                         {
-                            tier: 'enterprise', name: 'Enterprise', price: 'ENTERPRISE', icon: '🏢',
+                            tier: 'enterprise', name: 'Enterprise', price: 'ENTERPRISE', icon: '<iconify-icon icon=lucide:building-2></iconify-icon>',
                             features: ['Pro 전체 기능', '팩트 체크 / 웹페이지 추출', '주제 연구 / 모든 도구 접근']
                         }
                     ];
@@ -779,7 +779,7 @@
                         } else {
                             var isUpgrade = TIER_LEVEL[plan.tier] > TIER_LEVEL[userTier];
                             var btnClass = isUpgrade ? 'tier-plan-btn tier-plan-btn-upgrade' : 'tier-plan-btn tier-plan-btn-downgrade';
-                            var btnText = isUpgrade ? '\u2B06 \uC5C5\uADF8\uB808\uC774\uB4DC' : '\u2B07 \uB2E4\uC6B4\uADF8\uB808\uC774\uB4DC';
+                            var btnText = isUpgrade ? '<iconify-icon icon=lucide:arrow-up></iconify-icon> \uC5C5\uADF8\uB808\uC774\uB4DC' : '<iconify-icon icon=lucide:arrow-down></iconify-icon> \uB2E4\uC6B4\uADF8\uB808\uC774\uB4DC';
                             buttonHtml = '<button class="' + btnClass + '" onclick="window.changeTier(\'' + plan.tier + '\')">' + btnText + '</button>';
                         }
 

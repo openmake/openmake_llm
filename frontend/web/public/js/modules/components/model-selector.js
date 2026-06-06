@@ -382,7 +382,7 @@ function renderOpenRouterGroup(models, selected) {
             '</div>';
     }
 
-    html += '<div class="or-card-action">📋 전체 모델 보기 →</div>' +
+    html += '<div class="or-card-action"><iconify-icon icon=lucide:list></iconify-icon> 전체 모델 보기 →</div>' +
         '</div>';
 
     return html;
@@ -501,7 +501,7 @@ export async function mount(targetElement) {
     _container.className = 'model-selector';
     _container.innerHTML =
         '<button type="button" class="model-selector-trigger" data-action="toggle">' +
-        '<span class="icon">📋</span><span class="name">로딩 중...</span><span class="arrow">▾</span>' +
+        '<span class="icon"><iconify-icon icon=lucide:cpu></iconify-icon></span><span class="name">로딩 중...</span><span class="arrow">▾</span>' +
         '</button>' +
         '<div class="model-selector-dropdown"></div>';
     targetElement.appendChild(_container);

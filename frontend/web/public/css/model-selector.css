@@ -347,3 +347,7 @@
     background: var(--bg-secondary); flex-shrink: 0;
 }
 .mlm-hint { font-size: 11px; color: var(--text-muted); }
+
+/* 이모지 → lucide 라인 아이콘 (trigger/액션) */
+.model-selector-trigger .icon iconify-icon { font-size: 16px; width: 16px; height: 16px; vertical-align: -2px; }
+.or-card-action iconify-icon { font-size: 14px; width: 14px; height: 14px; vertical-align: -2px; margin-right: 3px; }
