@@ -161,7 +161,7 @@
             '<div class="ak-container">' +
                 // Hero Section
                 '<div class="ak-hero">' +
-                    '<span class="ak-hero-icon">\uD83D\uDD11</span>' + // 🔑
+                    '<span class="ak-hero-icon"><iconify-icon icon=lucide:key></iconify-icon></span>' + // <iconify-icon icon=lucide:key></iconify-icon>
                     '<h1>API 키 관리</h1>' +
                     '<p>외부 서비스 연동을 위한 API 키를 안전하게 관리하세요.</p>' +
                 '</div>' +
@@ -204,7 +204,7 @@
                             '&nbsp;&nbsp;-d <span class="ak-code-string">\'{"message":"Hello!","model":"openmake_llm"}\'</span>' +
                         '</div>' +
                         '<div style="margin-top:var(--space-4); text-align:right;">' +
-                            '<a href="/developer.html" style="color:var(--accent-primary); text-decoration:none; font-size:var(--font-size-sm); font-weight:var(--font-weight-medium);">📄 전체 API 문서 보기 &rarr;</a>' +
+                            '<a href="/developer.html" style="color:var(--accent-primary); text-decoration:none; font-size:var(--font-size-sm); font-weight:var(--font-weight-medium);"><iconify-icon icon=lucide:file-text></iconify-icon> 전체 API 문서 보기 &rarr;</a>' +
                         '</div>' +
                     '</div>' +
                 '</div>' +
@@ -218,7 +218,7 @@
                     '</div>' +
                     '<div class="ak-new-key-body">' +
                         '<div class="ak-warning-text">' +
-                            '<span>\u26A0\uFE0F</span>' + // ⚠️
+                            '<span><iconify-icon icon=lucide:triangle-alert></iconify-icon></span>' + // <iconify-icon icon=lucide:triangle-alert></iconify-icon>
                             '이 키는 한 번만 표시됩니다! 지금 복사해주세요.' +
                         '</div>' +
                         '<div id="fullKeyDisplay" class="ak-full-key-display"></div>' +
@@ -287,7 +287,7 @@
             if (keys.length === 0) {
                 wrapper.innerHTML = 
                     '<div class="ak-empty">' +
-                        '<div class="ak-empty-icon">\uD83D\uDCC1</div>' +
+                        '<div class="ak-empty-icon"><iconify-icon icon=lucide:inbox></iconify-icon></div>' +
                         '<h3>아직 생성된 API 키가 없습니다</h3>' +
                         '<p>새 키를 생성하여 API 연동을 시작하세요.</p>' +
                     '</div>';
@@ -319,17 +319,17 @@
                             '</div>' +
                             '<div class="ak-actions">' +
                                 '<button class="ak-btn ak-btn-secondary ak-btn-sm" data-action="rotate" data-key-id="' + esc(key.id) + '" title="키 재발급">' +
-                                    '\uD83D\uDD04 재발급' +
+                                    '<iconify-icon icon=lucide:refresh-cw></iconify-icon> 재발급' +
                                 '</button>' +
                                 '<button class="ak-btn ak-btn-danger ak-btn-sm" data-action="delete" data-key-id="' + esc(key.id) + '" title="삭제">' +
-                                    '\uD83D\uDDD1\uFE0F 삭제' +
+                                    '<iconify-icon icon=lucide:trash-2></iconify-icon> 삭제' +
                                 '</button>' +
                             '</div>' +
                         '</div>' +
                         '<div class="ak-key-value-row">' +
                             '<span style="color:var(--text-muted); font-size:12px;">TOKEN</span>' +
                             '<span class="ak-key-value">' + esc(prefix) + '****************' + esc(last4) + '</span>' +
-                            '<button class="ak-btn ak-btn-secondary ak-btn-icon" data-action="copy" data-copy-text="' + esc(prefix) + '...' + esc(last4) + '" title="복사" style="margin-left:auto;">\uD83D\uDCCB</button>' +
+                            '<button class="ak-btn ak-btn-secondary ak-btn-icon" data-action="copy" data-copy-text="' + esc(prefix) + '...' + esc(last4) + '" title="복사" style="margin-left:auto;"><iconify-icon icon=lucide:copy></iconify-icon></button>' +
                         '</div>' +
                     '</div>';
             });
@@ -348,7 +348,7 @@
 
         } catch (e) {
             console.warn(e);
-            wrapper.innerHTML = '<div style="padding:var(--space-8); text-align:center; color:var(--danger);">\u26A0\uFE0F 키 목록을 불러오지 못했습니다.<br><small>' + esc(e.message) + '</small></div>';
+            wrapper.innerHTML = '<div style="padding:var(--space-8); text-align:center; color:var(--danger);"><iconify-icon icon=lucide:triangle-alert></iconify-icon> 키 목록을 불러오지 못했습니다.<br><small>' + esc(e.message) + '</small></div>';
         }
     }
 

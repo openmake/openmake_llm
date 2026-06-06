@@ -20,7 +20,7 @@
                 '<style data-spa-style="history">' +
                 ".session-card {\n            background: var(--bg-card);\n            border-radius: var(--radius-lg);\n            padding: var(--space-5);\n            border: 1px solid var(--border-light);\n            cursor: pointer;\n            transition: all 0.2s;\n            margin-bottom: var(--space-3);\n        }\n\n        .session-card:hover {\n            border-color: var(--accent-primary);\n        }\n\n        .session-header {\n            display: flex;\n            justify-content: space-between;\n            align-items: center;\n        }\n\n        .session-title {\n            font-weight: var(--font-weight-semibold);\n        }\n\n        .session-meta {\n            display: flex;\n            gap: var(--space-4);\n            font-size: var(--font-size-sm);\n            color: var(--text-muted);\n            margin-top: var(--space-2);\n        }\n\n        .session-preview {\n            margin-top: var(--space-3);\n            padding-top: var(--space-3);\n            border-top: 1px solid var(--border-light);\n            color: var(--text-muted);\n            font-size: var(--font-size-sm);\n            line-height: 1.5;\n        }\n\n        .messages-panel {\n            display: none;\n            margin-top: var(--space-4);\n            padding: var(--space-4);\n            background: var(--bg-secondary);\n            border-radius: var(--radius-md);\n        }\n\n        .messages-panel.show {\n            display: block;\n        }\n\n        .message {\n            padding: var(--space-3);\n            margin-bottom: var(--space-2);\n            border-radius: var(--radius-md);\n        }\n\n        .message.user {\n            background: var(--accent-primary-light);\n        }\n\n        .message.assistant {\n            background: var(--bg-tertiary);\n        }\n\n        .message-role {\n            font-size: var(--font-size-xs);\n            color: var(--text-muted);\n            margin-bottom: var(--space-1);\n            text-transform: uppercase;\n        }" +
                 '<\/style>' +
-                "<div class=\"page-content\">\n                <div class=\"container container-xl\">\n                    <header class=\"page-header\">\n                        <div>\n                            <h1 class=\"page-title page-title-gradient\">📜 대화 히스토리</h1>\n                            <p class=\"page-subtitle\">이전 대화 기록 조회</p>\n                        </div>\n                        <div class=\"page-actions\">\n                            <button class=\"btn btn-secondary\" onclick=\"exportHistory()\">📥 내보내기</button>\n                            <button class=\"btn btn-primary\" onclick=\"loadSessions()\">🔄 새로고침</button>\n                        </div>\n                    </header>\n\n                    <div class=\"search-bar\" style=\"margin-bottom: var(--space-6);\">\n                        <input type=\"date\" id=\"filterDate\" class=\"form-input\" style=\"width: auto;\"\n                            onchange=\"loadSessions()\">\n                        <input type=\"text\" id=\"searchQuery\" class=\"form-input\" style=\"max-width: 300px;\"\n                            placeholder=\"검색어 입력...\" onkeyup=\"debounceSearch()\">\n                        <select id=\"sortOrder\" class=\"form-select\" style=\"width: auto;\" onchange=\"loadSessions()\">\n                            <option value=\"desc\">최신순</option>\n                            <option value=\"asc\">오래된순</option>\n                        </select>\n                    </div>\n\n                    <div id=\"sessionsList\">\n                        <div class=\"empty-state\">\n                            <div class=\"empty-state-icon\">🔄</div>\n                            <div class=\"empty-state-title\">대화 기록을 불러오는 중...</div>\n                        </div>\n                    </div>\n                </div>\n            </div>\n\n<div id=\"toast\" class=\"toast\"></div>" +
+                "<div class=\"page-content\">\n                <div class=\"container container-xl\">\n                    <header class=\"page-header\">\n                        <div>\n                            <h1 class=\"page-title page-title-gradient\"><iconify-icon icon=lucide:scroll-text></iconify-icon> 대화 히스토리</h1>\n                            <p class=\"page-subtitle\">이전 대화 기록 조회</p>\n                        </div>\n                        <div class=\"page-actions\">\n                            <button class=\"btn btn-secondary\" onclick=\"exportHistory()\"><iconify-icon icon=lucide:download></iconify-icon> 내보내기</button>\n                            <button class=\"btn btn-primary\" onclick=\"loadSessions()\"><iconify-icon icon=lucide:refresh-cw></iconify-icon> 새로고침</button>\n                        </div>\n                    </header>\n\n                    <div class=\"search-bar\" style=\"margin-bottom: var(--space-6);\">\n                        <input type=\"date\" id=\"filterDate\" class=\"form-input\" style=\"width: auto;\"\n                            onchange=\"loadSessions()\">\n                        <input type=\"text\" id=\"searchQuery\" class=\"form-input\" style=\"max-width: 300px;\"\n                            placeholder=\"검색어 입력...\" onkeyup=\"debounceSearch()\">\n                        <select id=\"sortOrder\" class=\"form-select\" style=\"width: auto;\" onchange=\"loadSessions()\">\n                            <option value=\"desc\">최신순</option>\n                            <option value=\"asc\">오래된순</option>\n                        </select>\n                    </div>\n\n                    <div id=\"sessionsList\">\n                        <div class=\"empty-state\">\n                            <div class=\"empty-state-icon\"><iconify-icon icon=lucide:refresh-cw></iconify-icon></div>\n                            <div class=\"empty-state-title\">대화 기록을 불러오는 중...</div>\n                        </div>\n                    </div>\n                </div>\n            </div>\n\n<div id=\"toast\" class=\"toast\"></div>" +
                 '<\/div>';
         },
 
@@ -46,7 +46,7 @@
                     const list = document.getElementById('sessionsList');
                     // 로딩 표시가 없으면 추가
                     if (!allSessions.length) {
-                        list.innerHTML = '<div class="empty-state"><div class="empty-state-icon">🔄</div><div class="empty-state-title">대화 기록을 불러오는 중...</div></div>';
+                        list.innerHTML = '<div class="empty-state"><div class="empty-state-icon"><iconify-icon icon=lucide:refresh-cw></iconify-icon></div><div class="empty-state-title">대화 기록을 불러오는 중...</div></div>';
                     }
 
                     try {
@@ -61,7 +61,7 @@
                             allSessions = payload.sessions;
                             renderSessions();
                         } else {
-                            list.innerHTML = '<div class="empty-state"><div class="empty-state-icon">❌</div><div class="empty-state-title">데이터를 불러올 수 없습니다</div></div>';
+                            list.innerHTML = '<div class="empty-state"><div class="empty-state-icon"><iconify-icon icon=lucide:search-x></iconify-icon></div><div class="empty-state-title">데이터를 불러올 수 없습니다</div></div>';
                         }
                     } catch (e) {
                         console.error('세션 로드 실패:', e);
@@ -94,7 +94,7 @@
                     });
 
                     if (filtered.length === 0) {
-                        list.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📭</div><div class="empty-state-title">대화 기록이 없습니다</div></div>';
+                        list.innerHTML = '<div class="empty-state"><div class="empty-state-icon"><iconify-icon icon=lucide:inbox></iconify-icon></div><div class="empty-state-title">대화 기록이 없습니다</div></div>';
                         return;
                     }
 
@@ -105,7 +105,7 @@
                         <span class="session-meta">${formatDate(s.updatedAt || s.createdAt)}</span>
                     </div>
                     <div class="session-meta">
-                        <span>\uD83D\uDCAC ${escapeHtml(s.model || 'Unknown Model')}</span>
+                        <span><iconify-icon icon=lucide:message-square></iconify-icon> ${escapeHtml(s.model || 'Unknown Model')}</span>
                     </div>
                     ${s.preview ? `<div class="session-preview">${escapeHtml(s.preview)}</div>` : ''}
                 </div>

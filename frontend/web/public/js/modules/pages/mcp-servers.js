@@ -90,9 +90,9 @@ function tierBadge(tier) {
 }
 
 function visibilityBadge(vis) {
-    if (vis === 'global') return `<span class="badge badge-vis-global">🌐 전역</span>`;
-    if (vis === 'user_shared') return `<span class="badge badge-vis-shared">🤝 공유</span>`;
-    return `<span class="badge badge-vis-private">👤 나만</span>`;
+    if (vis === 'global') return `<span class="badge badge-vis-global"><iconify-icon icon=lucide:globe></iconify-icon> 전역</span>`;
+    if (vis === 'user_shared') return `<span class="badge badge-vis-shared"><iconify-icon icon=lucide:share-2></iconify-icon> 공유</span>`;
+    return `<span class="badge badge-vis-private"><iconify-icon icon=lucide:user></iconify-icon> 나만</span>`;
 }
 
 function statusBadge(status) {
@@ -325,8 +325,8 @@ function renderTemplateFields(template) {
         <div class="sl-form-group">
             <label class="sl-form-label" for="mcp-field-visibility">공개 범위</label>
             <select class="sl-form-select" id="mcp-field-visibility">
-                <option value="user_private" selected>👤 나만 (private)</option>
-                <option value="user_shared">🤝 공유 (shared)</option>
+                <option value="user_private" selected><iconify-icon icon=lucide:user></iconify-icon> 나만 (private)</option>
+                <option value="user_shared"><iconify-icon icon=lucide:share-2></iconify-icon> 공유 (shared)</option>
             </select>
         </div>
     `;
@@ -534,10 +534,10 @@ function getHTML() {
         '<section id="mcp-panel-my-servers" class="mcp-tab-panel">' +
             '<div class="mcp-toolbar"><button class="sl-btn sl-btn-outline sl-btn-sm" id="mcp-refresh-my-servers">새로고침</button><button class="sl-btn sl-btn-outline sl-btn-sm" id="mcp-refresh-drafts">draft 새로고침</button></div>' +
             '<div id="mcp-drafts-section" style="margin-bottom:var(--space-5);">' +
-                '<h3 style="margin:var(--space-2) 0;">📥 검토 대기 (draft)</h3>' +
+                '<h3 style="margin:var(--space-2) 0;"><iconify-icon icon=lucide:inbox></iconify-icon> 검토 대기 (draft)</h3>' +
                 '<div id="mcp-drafts-container" class="mcp-list"><div class="mcp-loading">로딩 중…</div></div>' +
             '</div>' +
-            '<h3 style="margin:var(--space-2) 0;">👤 활성 서버</h3>' +
+            '<h3 style="margin:var(--space-2) 0;"><iconify-icon icon=lucide:user></iconify-icon> 활성 서버</h3>' +
             renderMcpRowHeader('상태', '작업') +
             '<div id="mcp-my-servers-grid" class="mcp-list"><div class="mcp-loading">로딩 중…</div></div>' +
         '</section>' +

@@ -212,7 +212,7 @@
             </div>
             <!-- GDPR Phase B Fix 5 — 탈퇴 시 manifest 처리 안내 -->
             <div class="sl-form-group" style="background: var(--surface-secondary, #f7f7f7); padding: 10px 12px; border-radius: 6px; font-size: 0.85em; color: var(--text-muted, #666); line-height: 1.5;">
-                💡 <strong>탈퇴 시 안내</strong>: 본인 manifest 는 계정 삭제 시 <code>is_public</code> 이 자동으로 false 처리되어 다른 사용자에게 노출되지 않습니다 (Phase A Fix 1). 운영자가 system manifest 로 publish 한 경우에만 영구 공개됩니다.
+                <iconify-icon icon=lucide:lightbulb></iconify-icon> <strong>탈퇴 시 안내</strong>: 본인 manifest 는 계정 삭제 시 <code>is_public</code> 이 자동으로 false 처리되어 다른 사용자에게 노출되지 않습니다 (Phase A Fix 1). 운영자가 system manifest 로 publish 한 경우에만 영구 공개됩니다.
             </div>
             <div class="sl-modal-actions">
                 <button class="sl-btn sl-btn-secondary" onclick="sl_closeAutoCreate()">취소</button>
@@ -574,11 +574,11 @@
             grid.innerHTML = localSkills.map(skill => {
                 const isUserAssigned = userAssignedIds.has(skill.id);
                 const userBadge = isUserAssigned
-                    ? '<span class="sl-badge" style="background:rgba(168,85,247,0.12);color:var(--accent-primary);border-color:rgba(168,85,247,0.25);margin-left:0.4rem" title="나에게만 적용된 스킬">👤 나만</span>'
+                    ? '<span class="sl-badge" style="background:rgba(168,85,247,0.12);color:var(--accent-primary);border-color:rgba(168,85,247,0.25);margin-left:0.4rem" title="나에게만 적용된 스킬"><iconify-icon icon=lucide:user></iconify-icon> 나만</span>'
                     : '';
-                const toggleLabel = isUserAssigned ? '👤 나만 적용 해제' : '👤 나만 적용';
+                const toggleLabel = isUserAssigned ? '<iconify-icon icon=lucide:user></iconify-icon> 나만 적용 해제' : '<iconify-icon icon=lucide:user></iconify-icon> 나만 적용';
                 const isSystemSkill = !skill.createdBy;
-                const systemBadge = isSystemSkill ? '<span class="sl-badge" style="background:rgba(59,130,246,0.12);color:var(--info-color,#3b82f6);border-color:rgba(59,130,246,0.25);margin-left:0.4rem" title="시스템 스킬">🔒 시스템</span>' : '';
+                const systemBadge = isSystemSkill ? '<span class="sl-badge" style="background:rgba(59,130,246,0.12);color:var(--info-color,#3b82f6);border-color:rgba(59,130,246,0.25);margin-left:0.4rem" title="시스템 스킬"><iconify-icon icon=lucide:lock></iconify-icon> 시스템</span>' : '';
                 const visibilityBadge = skill.isPublic
                     ? '<span class="sl-badge sl-badge-success">Public</span>'
                     : '<span class="sl-badge sl-badge-secondary"><span class="iconify" data-icon="lucide:lock" style="font-size:10px;vertical-align:middle"></span> Private</span>';
@@ -1157,7 +1157,7 @@
         },
 
         approveDraft: async function (skillId) {
-            if (!confirm('이 draft 를 승인하시겠습니까?\n\n⚠ 승인 후 이 스킬의 content 가 채팅의 system prompt 에 주입됩니다. AI 가 작성한 텍스트이므로 의심스러운 지시문(예: "이전 지시를 무시하라", 시스템 페르소나 변경 등)이 포함돼 있지 않은지 미리보기로 확인하세요.')) return;
+            if (!confirm('이 draft 를 승인하시겠습니까?\n\n<iconify-icon icon=lucide:triangle-alert></iconify-icon> 승인 후 이 스킬의 content 가 채팅의 system prompt 에 주입됩니다. AI 가 작성한 텍스트이므로 의심스러운 지시문(예: "이전 지시를 무시하라", 시스템 페르소나 변경 등)이 포함돼 있지 않은지 미리보기로 확인하세요.')) return;
             try {
                 const res = await window.authFetch(API_ENDPOINTS.AGENTS_SKILLS_APPROVE(skillId), { method: 'POST' });
                 const data = await res.json().catch(() => ({}));

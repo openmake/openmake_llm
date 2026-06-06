@@ -64,7 +64,7 @@
                 '<\/style>' +
                 "<header class=\"page-header\">\n" +
                 "  <button class=\"mobile-menu-btn\" onclick=\"toggleMobileSidebar(event)\">&#9776;</button>\n" +
-                "  <h1>📥 Agent Draft</h1>\n" +
+                "  <h1><iconify-icon icon=lucide:inbox></iconify-icon> Agent Draft</h1>\n" +
                 "</header>\n" +
                 "<div class=\"content-area\">\n" +
                 "  <div class=\"info-banner\">\n" +
@@ -72,7 +72,7 @@
                 "    본인이 직접 만드는 페르소나는 <a href=\"/settings.html\">설정 → 내 Agent</a> 에서 관리하세요.\n" +
                 "  </div>\n" +
                 "  <div class=\"toolbar\">\n" +
-                "    <button class=\"btn-primary\" id=\"btnImportGit\">🔗 Git URL 에서 가져오기</button>\n" +
+                "    <button class=\"btn-primary\" id=\"btnImportGit\"><iconify-icon icon=lucide:link></iconify-icon> Git URL 에서 가져오기</button>\n" +
                 "  </div>\n" +
                 "  <div id=\"agentList\" class=\"agent-grid\"><div class=\"loading\">불러오는 중...</div></div>\n" +
                 "</div>\n" +
@@ -98,7 +98,7 @@
                 "    <div class=\"form-group\"><label>GitHub access token (선택)</label><input type=\"password\" id=\"aiGitToken\" placeholder=\"ghp_...\" maxlength=\"200\"></div>\n" +
                 "    <div class=\"modal-actions\">\n" +
                 "      <button class=\"btn-secondary\" id=\"btnCloseImport\">취소</button>\n" +
-                "      <button class=\"btn-save\" id=\"btnSubmitImport\">🔗 가져오기</button>\n" +
+                "      <button class=\"btn-save\" id=\"btnSubmitImport\"><iconify-icon icon=lucide:link></iconify-icon> 가져오기</button>\n" +
                 "    </div>\n" +
                 "  </div>\n" +
                 "</div>\n" +
@@ -136,7 +136,7 @@
                     const el = document.getElementById('agentList');
                     if (!el) return;
                     if (!drafts.length) {
-                        el.innerHTML = '<div class="empty-state"><h2>아직 Agent Draft 가 없습니다</h2><p>위의 <strong>🔗 Git URL 에서 가져오기</strong> 또는 채팅 중 LLM 의 <code>agent-ingest</code> 도구로 추가할 수 있습니다.</p></div>';
+                        el.innerHTML = '<div class="empty-state"><h2>아직 Agent Draft 가 없습니다</h2><p>위의 <strong><iconify-icon icon=lucide:link></iconify-icon> Git URL 에서 가져오기</strong> 또는 채팅 중 LLM 의 <code>agent-ingest</code> 도구로 추가할 수 있습니다.</p></div>';
                         return;
                     }
                     el.innerHTML = drafts.map(a => {
@@ -148,7 +148,7 @@
                             '<div class="agent-meta">' +
                                 '<span class="badge badge-draft">draft</span>' +
                                 (a.category ? '<span class="badge badge-cat">' + esc(a.category) + '</span>' : '') +
-                                (src ? '<span class="badge badge-cat" title="' + esc(src) + '">📦 git</span>' : '') +
+                                (src ? '<span class="badge badge-cat" title="' + esc(src) + '"><iconify-icon icon=lucide:package></iconify-icon> git</span>' : '') +
                             '</div>' +
                             '<div class="card-actions">' +
                                 '<button data-action="detail">상세</button>' +
@@ -276,7 +276,7 @@
                     } catch (e) {
                         showToast('오류: ' + (e?.message || String(e)), 'error');
                     } finally {
-                        if (btn) { btn.disabled = false; btn.innerHTML = btn.dataset.origText || '🔗 가져오기'; }
+                        if (btn) { btn.disabled = false; btn.innerHTML = btn.dataset.origText || '<iconify-icon icon=lucide:link></iconify-icon> 가져오기'; }
                     }
                 }
 

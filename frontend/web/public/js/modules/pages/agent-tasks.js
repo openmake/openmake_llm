@@ -19,7 +19,7 @@
     var _notified = {};  // taskId → 완료 알림 중복 방지
 
     var _statusLabels = { pending:'대기중', running:'진행중', completed:'완료', failed:'실패', cancelled:'취소됨' };
-    var _stepLabels = { plan:'📋 계획', assistant:'생각', assistant_tool_call:'도구 호출', tool_result:'도구 결과' };
+    var _stepLabels = { plan:'<iconify-icon icon=lucide:clipboard-list></iconify-icon> 계획', assistant:'생각', assistant_tool_call:'도구 호출', tool_result:'도구 결과' };
 
     function _ep() { return (window.API_ENDPOINTS && window.API_ENDPOINTS.AGENT_TASKS) || '/api/agent-tasks'; }
 
