@@ -60,6 +60,8 @@ function ensurePanel() {
             <div class="ap-tabs">
                 <button class="ap-tab ap-tab-active" data-tab="preview">미리보기</button>
                 <button class="ap-tab" data-tab="code">Code View</button>
+                <button class="ap-tab" data-tab="reasoning">🧠 추론</button>
+                <button class="ap-tab" data-tab="tools">🛠 도구</button>
             </div>
             <button class="ap-maximize" aria-label="전체화면 토글" title="전체화면 (넓게 보기)">⛶</button>
             <button class="ap-close" aria-label="패널 닫기" title="닫기 (Esc)">✕</button>
@@ -74,6 +76,8 @@ function ensurePanel() {
         <div class="ap-body">
             <div class="ap-preview" data-pane="preview"></div>
             <div class="ap-code" data-pane="code" hidden></div>
+            <div class="ap-reasoning" data-pane="reasoning" hidden><div class="ap-ctx-empty">아직 추론이 없습니다. Thinking 모드 응답 시 여기에 표시됩니다.</div></div>
+            <div class="ap-tools" data-pane="tools" hidden><div class="ap-ctx-empty">호출된 도구가 없습니다.</div></div>
         </div>
         <footer class="ap-footer">
             <div class="ap-version-nav">
@@ -258,6 +262,56 @@ export function closeArtifactPanel() {
     closePanel();
 }
 
+// ─── Context 통합: 추론 / 도구 미러 (Chat-first 우측 패널 탭) ─────────────────
+// 기존 인라인 렌더(.thinking-block 등)는 그대로 두고, 패널에 '미러'만 한다(비파괴).
+let _reasonLastTs = 0;
+let _reasonBuf = '';
+const REASON_GAP_MS = 4000; // 이 간격 이상 끊기면 새 응답 턴으로 보고 리셋
+
+export function appendReasoningToken(token) {
+    if (token == null) return;
+    ensurePanel();
+    const pane = panelEl.querySelector('[data-pane="reasoning"]');
+    if (!pane) return;
+    const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+    if (now - _reasonLastTs > REASON_GAP_MS) { _reasonBuf = ''; }
+    _reasonLastTs = now;
+    _reasonBuf += String(token);
+    pane.textContent = _reasonBuf; // plain text — XSS-safe
+    pane.scrollTop = pane.scrollHeight;
+}
+
+export function setToolEntry(name, detail) {
+    ensurePanel();
+    const pane = panelEl.querySelector('[data-pane="tools"]');
+    if (!pane) return;
+    const empty = pane.querySelector('.ap-ctx-empty');
+    if (empty) empty.remove();
+    const row = document.createElement('div');
+    row.className = 'ap-tool-entry';
+    const nm = document.createElement('div');
+    nm.className = 'ap-tool-name';
+    nm.textContent = '🛠 ' + (name || 'tool');
+    row.appendChild(nm);
+    if (detail) {
+        const d = document.createElement('div');
+        d.className = 'ap-tool-detail';
+        d.textContent = String(detail);
+        row.appendChild(d);
+    }
+    pane.appendChild(row);
+    pane.scrollTop = pane.scrollHeight;
+}
+
+export function openContextPanel(tab) {
+    ensurePanel();
+    panelEl.classList.add('open');
+    switchTab(tab === 'tools' ? 'tools' : 'reasoning');
+}
+
+// ⌘K·외부에서 열기 위해 전역 노출
+if (typeof window !== 'undefined') { window.openContextPanel = openContextPanel; }
+
 // ─── 내부: 패널 컨트롤 ───────────────────────────────────────────────────────
 
 function closePanel() {
@@ -371,8 +425,15 @@ function switchTab(tab) {
         const active = t.getAttribute('data-tab') === tab;
         t.classList.toggle('ap-tab-active', active);
     });
-    panelEl.querySelector('[data-pane="preview"]').hidden = tab !== 'preview';
-    panelEl.querySelector('[data-pane="code"]').hidden = tab !== 'code';
+    // 모든 pane 일반 토글 (preview/code/reasoning/tools)
+    panelEl.querySelectorAll('[data-pane]').forEach((p) => {
+        p.hidden = p.getAttribute('data-pane') !== tab;
+    });
+    // 아티팩트 전용 chrome(버전 네비/편집·복사·다운·PDF footer)은 preview/code 에서만 노출
+    const isArtifact = (tab === 'preview' || tab === 'code');
+    const footer = panelEl.querySelector('.ap-footer');
+    if (footer) footer.style.display = isArtifact ? '' : 'none';
+    if (!isArtifact) { const sb = panelEl.querySelector('.ap-search-bar'); if (sb) sb.hidden = true; }
 }
 
 function navVersion(delta) {
@@ -1731,6 +1792,19 @@ mark.ap-search-hit { background: rgba(252, 211, 77, 0.4); color: inherit; border
 mark.ap-search-active { background: var(--accent-primary, #ff6a3d); color: #fff; }
 
 .ap-body { flex: 1; overflow-y: auto; padding: 16px; min-height: 0; }
+/* Context 탭 — 추론 / 도구 */
+.ap-reasoning {
+    white-space: pre-wrap; font-family: var(--font-sans, sans-serif);
+    font-size: 13.5px; line-height: 1.75; color: var(--text-secondary, #b9b1a2);
+}
+.ap-tools { font-size: 13.5px; }
+.ap-ctx-empty { color: var(--text-muted, #867d6e); font-size: 13px; text-align: center; padding: 48px 16px; }
+.ap-tool-entry {
+    border: 1px solid var(--border-light, #2a2a2a); border-radius: var(--radius-md, 11px);
+    padding: 11px 13px; margin-bottom: 10px; background: var(--bg-secondary, #1a1815);
+}
+.ap-tool-name { font-weight: 600; color: var(--text-primary, #f3ede1); font-size: 13px; }
+.ap-tool-detail { font-family: var(--font-mono, monospace); font-size: 11.5px; color: var(--text-muted, #867d6e); margin-top: 5px; white-space: pre-wrap; word-break: break-all; }
 .ap-preview {
     background: var(--bg-secondary, #0f0f0f);
     border: 1px solid var(--border-light, #2a2a2a);

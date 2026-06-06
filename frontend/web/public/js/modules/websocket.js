@@ -19,6 +19,8 @@ import {
     appendArtifactChunk,
     finalizeArtifact,
     setArtifactSessionId,
+    appendReasoningToken,
+    setToolEntry,
 } from '../components/artifact-panel.js';
 import { insertArtifactCard } from '../components/artifact-card.js';
 
@@ -339,6 +341,8 @@ const messageHandlers = {
         if (typeof appendThinkingToken === 'function') {
             appendThinkingToken(data.token);
         }
+        // 우측 컨텍스트 패널 '추론' 탭으로 미러 (인라인 렌더는 그대로)
+        try { appendReasoningToken(data.token); } catch (e) { /* 패널 미초기화 무시 */ }
     },
     /**
      * MCP tool 호출 결과의 resource content — 인라인 카드 렌더링.
@@ -352,6 +356,8 @@ const messageHandlers = {
      */
     'mcp_tool_result': async (data) => {
         if (!Array.isArray(data?.resources) || data.resources.length === 0) return;
+        // 우측 컨텍스트 패널 '도구' 탭으로 미러 (인라인 카드 렌더는 그대로)
+        try { setToolEntry(data.toolName, data.resources.map((r) => r && r.uri).filter(Boolean).join('\n')); } catch (e) { /* noop */ }
         for (const res of data.resources) {
             const uri = res && res.uri;
             if (typeof uri !== 'string') continue;

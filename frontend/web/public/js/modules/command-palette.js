@@ -78,6 +78,8 @@ function buildCommands() {
             if (window.Router) window.Router.navigate('/');
             setTimeout(function () { var t2 = document.querySelector('.model-selector-trigger'); if (t2) t2.click(); }, 400);
         } },
+        { icon: '🧠', label: '추론 패널 열기', run: function () { if (typeof window.openContextPanel === 'function') window.openContextPanel('reasoning'); } },
+        { icon: '🛠', label: '도구 패널 열기', run: function () { if (typeof window.openContextPanel === 'function') window.openContextPanel('tools'); } },
         { icon: '◐', label: '테마 전환 (다크 / 라이트)', run: function () { if (typeof window.toggleTheme === 'function') window.toggleTheme(); } },
         { icon: '⚙', label: '설정 열기', run: function () { if (window.Router) window.Router.navigate('/settings.html'); } }
     ];
