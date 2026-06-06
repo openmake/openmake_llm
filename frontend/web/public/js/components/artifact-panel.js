@@ -54,14 +54,14 @@ function ensurePanel() {
         <div class="ap-resizer" role="separator" aria-label="패널 너비 조정" title="드래그하여 너비 조정"></div>
         <header class="ap-header">
             <span class="ap-title-wrap">
-                <span class="ap-emoji" aria-hidden="true">📦</span>
+                <span class="ap-emoji" aria-hidden="true"><iconify-icon icon=lucide:package></iconify-icon></span>
                 <h2 class="ap-title">Artifact</h2>
             </span>
             <div class="ap-tabs">
                 <button class="ap-tab ap-tab-active" data-tab="preview">미리보기</button>
                 <button class="ap-tab" data-tab="code">Code View</button>
-                <button class="ap-tab" data-tab="reasoning">🧠 추론</button>
-                <button class="ap-tab" data-tab="tools">🛠 도구</button>
+                <button class="ap-tab" data-tab="reasoning"><iconify-icon icon=lucide:brain></iconify-icon> 추론</button>
+                <button class="ap-tab" data-tab="tools"><iconify-icon icon=lucide:wrench></iconify-icon> 도구</button>
             </div>
             <button class="ap-maximize" aria-label="전체화면 토글" title="전체화면 (넓게 보기)"><iconify-icon icon=lucide:maximize></iconify-icon></button>
             <button class="ap-close" aria-label="패널 닫기" title="닫기 (Esc)"><iconify-icon icon=lucide:x></iconify-icon></button>
@@ -291,7 +291,10 @@ export function setToolEntry(name, detail) {
     row.className = 'ap-tool-entry';
     const nm = document.createElement('div');
     nm.className = 'ap-tool-name';
-    nm.textContent = '🛠 ' + (name || 'tool');
+    const nmIcon = document.createElement('iconify-icon');
+    nmIcon.setAttribute('icon', 'lucide:wrench');
+    nm.appendChild(nmIcon);
+    nm.appendChild(document.createTextNode(' ' + (name || 'tool')));
     row.appendChild(nm);
     if (detail) {
         const d = document.createElement('div');
@@ -1196,7 +1199,7 @@ async function renderCode(target, item) {
         </div>` : ''}
 
         <div style="padding:12px 14px; background:var(--bg-tertiary,#0a0a0a); border-radius:8px; font-size:13px; color:var(--text-secondary,#aaa); line-height:1.5;">
-            <div style="margin-bottom:6px;">ℹ️ <strong>${escHtml(langBadge.label)}</strong> 는 브라우저에서 직접 실행할 수 없습니다.</div>
+            <div style="margin-bottom:6px;"><iconify-icon icon=lucide:info></iconify-icon> <strong>${escHtml(langBadge.label)}</strong> 는 브라우저에서 직접 실행할 수 없습니다.</div>
             <div>전체 코드는 우측 상단 <strong style="color:var(--accent-primary,#ff6a3d);">[Code View]</strong> 탭에서 줄번호와 함께 확인하세요.</div>
         </div>
     `;
@@ -1448,7 +1451,7 @@ async function enterEditUI() {
     let cmInstance = null;
     const spinner = document.createElement('div');
     spinner.className = 'ap-edit-loading';
-    spinner.textContent = '⏳ 편집기 로딩 중... (첫 진입 시만 ~3초)';
+    spinner.textContent = '편집기 로딩 중... (첫 진입 시만 ~3초)';
     codePane.insertBefore(spinner, textarea);
     try {
         await loadStyleOnce('/vendor/artifacts/codemirror/codemirror.min.css');

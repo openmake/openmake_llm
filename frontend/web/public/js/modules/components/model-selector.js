@@ -365,15 +365,15 @@ function renderOpenRouterGroup(models, selected) {
         '<span class="or-card-count">' + totalCount + ' 모델</span>' +
         '</div>' +
         '<div class="or-card-stats">' +
-        '<span class="or-stat or-stat-free">🆓 무료 ' + free.length + '</span>' +
-        '<span class="or-stat or-stat-paid">💰 유료 ' + paid.length + '</span>' +
+        '<span class="or-stat or-stat-free"><iconify-icon icon=lucide:gift></iconify-icon> 무료 ' + free.length + '</span>' +
+        '<span class="or-stat or-stat-paid"><iconify-icon icon=lucide:dollar-sign></iconify-icon> 유료 ' + paid.length + '</span>' +
         '</div>';
 
     if (selectedOR) {
         html += '<div class="or-card-selected">' +
             '✓ 선택됨: ' + escText(selectedOR.name) +
             (selectedOR.isFree
-                ? ' <span class="badge badge-free">🆓 FREE</span>'
+                ? ' <span class="badge badge-free"><iconify-icon icon=lucide:gift></iconify-icon> FREE</span>'
                 : (selectedOR.pricing
                     ? ' <span class="price">$' +
                         (selectedOR.pricing.input || 0).toFixed(2) + ' / $' +
@@ -640,7 +640,7 @@ export function refresh(opts) {
                 if (window.showToast) {
                     window.showToast(
                         '' + opts.afterRegisterProviderId + ' 등록은 됐지만 모델 목록 미수신. ' +
-                        '드롭다운을 다시 열어 확인하거나 검증(⋮ → 🔍)을 시도하세요.',
+                        '드롭다운을 다시 열어 확인하거나 ⋮ 메뉴의 검증을 시도하세요.',
                         'error',
                     );
                 }

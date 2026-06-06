@@ -227,13 +227,13 @@ function showUserStatusBadge(isAuthenticated, isGuest) {
     if (isAuthenticated) {
         const SS = window.SafeStorage;
         const user = JSON.parse(SS.getItem(STORAGE_KEY_USER) || '{}');
-        userInfo.innerHTML = `<span style="color: var(--success);">👤 ${escapeHtml(user.email || user.username || '사용자')}</span>`;
+        userInfo.innerHTML = `<span style="color: var(--success);"><iconify-icon icon="lucide:user"></iconify-icon> ${escapeHtml(user.email || user.username || '사용자')}</span>`;
         userInfo.style.display = 'block';
     } else if (isGuest) {
-        userInfo.innerHTML = `<span style="color: var(--info);">👤 게스트</span>`;
+        userInfo.innerHTML = `<span style="color: var(--info);"><iconify-icon icon="lucide:user"></iconify-icon> 게스트</span>`;
         userInfo.style.display = 'block';
     } else {
-        userInfo.innerHTML = `<span style="color: var(--warning);">⚠️ 비로그인</span>`;
+        userInfo.innerHTML = `<span style="color: var(--warning);"><iconify-icon icon="lucide:user-x"></iconify-icon> 비로그인</span>`;
         userInfo.style.display = 'block';
     }
 }
@@ -311,7 +311,7 @@ function renderAgentList(agents) {
 
     list.innerHTML = agents.map(agent => `
         <div class="agent-item" title="${escapeHtml(agent.url)}">
-            <span class="agent-icon">${agent.url.startsWith('local://') ? '🤖' : '🌐'}</span>
+            <span class="agent-icon">${agent.url.startsWith('local://') ? '<iconify-icon icon="lucide:bot"></iconify-icon>' : '<iconify-icon icon="lucide:globe"></iconify-icon>'}</span>
             <span class="agent-name">${escapeHtml(agent.name || agent.url.replace('local://', ''))}</span>
             <span class="agent-status-dot online"></span>
         </div>

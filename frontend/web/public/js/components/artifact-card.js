@@ -83,10 +83,10 @@ export function insertArtifactCard(container, info) {
 
 function kindIcon(kind) {
     const map = {
-        markdown: '📝', code: '💻', html: '🌐', svg: '🖼️', mermaid: '📊',
-        react: '⚛️', chart: '📈', csv: '📊', slide: '🎞️', excalidraw: '✏️',
+        markdown: 'file-text', code: 'code', html: 'globe', svg: 'image', mermaid: 'git-branch',
+        react: 'atom', chart: 'line-chart', csv: 'table', slide: 'presentation', excalidraw: 'pencil',
     };
-    return map[kind] || '📦';
+    return `<iconify-icon icon="lucide:${map[kind] || 'package'}"></iconify-icon>`;
 }
 
 function escHtml(s) {

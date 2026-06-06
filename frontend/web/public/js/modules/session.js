@@ -229,7 +229,7 @@ function addRestoredAssistantMessage(content) {
     }
 
     div.innerHTML = `
-        <div class="message-avatar">✨</div>
+        <div class="message-avatar"><iconify-icon icon="lucide:sparkles"></iconify-icon></div>
         <div class="message-wrapper">
             <div class="message-content">${renderedContent}</div>
             <div class="message-actions">

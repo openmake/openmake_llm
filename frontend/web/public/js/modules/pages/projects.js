@@ -30,7 +30,7 @@ const CARDS = [
     },
     {
         href: '/mcp-servers.html',
-        icon: '🔌',
+        icon: '<iconify-icon icon=lucide:plug></iconify-icon>',
         title: 'MCP 서버',
         desc: '로컬 도구 (파일 시스템, GitHub 등) 를 LLM 에 연결',
         tier: 'free',
@@ -42,7 +42,7 @@ function renderCard(card) {
     const actions = card.actions.map((a) => `<span class="proj-card-pill">${escapeHTML(a)}</span>`).join('');
     return `
         <a class="proj-card" href="${escapeHTML(card.href)}" data-projects-navigate="${escapeHTML(card.href)}">
-            <div class="proj-card-icon">${escapeHTML(card.icon)}</div>
+            <div class="proj-card-icon">${card.icon}</div>
             <div class="proj-card-body">
                 <h3 class="proj-card-title">${escapeHTML(card.title)}
                     <span class="proj-card-tier proj-tier-${escapeHTML(card.tier)}">${escapeHTML(card.tier)}</span>
@@ -65,7 +65,8 @@ function getHTML() {
         '.proj-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:var(--space-4);}' +
         '.proj-card{display:flex;gap:var(--space-4);align-items:flex-start;background:var(--bg-card);border:1px solid var(--border-light);border-radius:var(--radius-lg);padding:var(--space-5);text-decoration:none;color:inherit;transition:border-color .15s,transform .15s;}' +
         '.proj-card:hover{border-color:var(--accent-primary);transform:translateY(-2px);}' +
-        '.proj-card-icon{font-size:32px;flex-shrink:0;}' +
+        '.proj-card-icon{font-size:32px;flex-shrink:0;color:var(--accent-primary);}' +
+        '.proj-card-icon iconify-icon{font-size:32px;}' +
         '.proj-card-body{flex:1;min-width:0;}' +
         '.proj-card-title{display:flex;align-items:center;gap:var(--space-2);margin:0 0 var(--space-2);font-size:16px;color:var(--text-primary);}' +
         '.proj-card-tier{font-size:10px;padding:2px 6px;border-radius:var(--radius-sm);font-weight:var(--font-weight-semibold);text-transform:uppercase;}' +

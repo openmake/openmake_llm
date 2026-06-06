@@ -46,7 +46,7 @@ async function checkAndRenderBranchBanner(sessionId) {
         const banner = document.createElement('div');
         banner.className = 'branch-banner';
         banner.innerHTML = `
-            🔀 <strong>분기된 대화</strong> — 사용자 메시지 편집으로 새로 시작됨
+            <iconify-icon icon="lucide:git-branch"></iconify-icon> <strong>분기된 대화</strong> — 사용자 메시지 편집으로 새로 시작됨
             <button class="branch-banner-back" data-parent="${meta.parentSessionId}">← 원본 대화로 돌아가기</button>
         `;
         mainEl.insertBefore(banner, mainEl.firstChild);
@@ -258,7 +258,7 @@ const messageHandlers = {
     'aborted': () => {
         debugLog('[WebSocket] 응답 생성 중단됨');
         if (typeof finishAssistantMessage === 'function') {
-            finishAssistantMessage('⏹️ 응답 생성이 중단되었습니다.');
+            finishAssistantMessage('응답 생성이 중단되었습니다.');
         }
         if (typeof showToast === 'function') {
             showToast('응답 생성이 중단되었습니다.', 'info');
@@ -269,7 +269,7 @@ const messageHandlers = {
     'debug_retained': (data) => {
         const ttlHours = typeof data.ttlHours === 'number' ? data.ttlHours : 24;
         const expiresAt = data.expiresAt ? new Date(data.expiresAt).toLocaleString() : '';
-        const message = `🔍 오류 재현용으로 본문이 임시 저장되었습니다 (${ttlHours}시간 후 자동 삭제${expiresAt ? `: ${expiresAt}` : ''}).`;
+        const message = `오류 재현용으로 본문이 임시 저장되었습니다 (${ttlHours}시간 후 자동 삭제${expiresAt ? `: ${expiresAt}` : ''}).`;
         debugLog('[WebSocket] debug_retained:', data.captureId, 'expires:', data.expiresAt);
         if (typeof showToast === 'function') {
             showToast(message, 'info');

@@ -55,7 +55,7 @@ function buildCommands() {
             if (it.minTier && !admin && tier < (TIER_LEVEL[it.minTier] || 0)) return;
             cmds.push({
                 group: groupLabel,
-                icon: it.icon || '•',
+                icon: it.iconify || 'lucide:circle',
                 label: it.label,
                 run: function () { if (window.Router) window.Router.navigate(it.href); }
             });
@@ -63,28 +63,28 @@ function buildCommands() {
     });
 
     // 채팅(홈) — NAV_ITEMS 에 없으므로 명시 추가
-    cmds.unshift({ group: '이동', icon: '💬', label: '채팅', run: function () { if (window.Router) window.Router.navigate('/'); } });
+    cmds.unshift({ group: '이동', icon: 'lucide:message-circle', label: '채팅', run: function () { if (window.Router) window.Router.navigate('/'); } });
 
     const actions = [
-        { icon: '＋', label: '새 대화', hint: '⌘N', run: function () { if (typeof window.newChat === 'function') window.newChat(); else if (window.Router) window.Router.navigate('/'); } },
-        { icon: '🔍', label: '대화 검색', run: function () {
+        { icon: 'lucide:plus', label: '새 대화', hint: '⌘N', run: function () { if (typeof window.newChat === 'function') window.newChat(); else if (window.Router) window.Router.navigate('/'); } },
+        { icon: 'lucide:search', label: '대화 검색', run: function () {
             try { if (window.sidebar && typeof window.sidebar.setState === 'function') window.sidebar.setState('full'); } catch (e) {}
             setTimeout(function () { var i = document.getElementById('sidebarSearch'); if (i) { i.focus(); i.select && i.select(); } }, 60);
         } },
-        { icon: '⮃', label: '모델 선택 / 전환', run: function () {
+        { icon: 'lucide:arrow-left-right', label: '모델 선택 / 전환', run: function () {
             var t = document.querySelector('.model-selector-trigger');
             if (t) { t.click(); return; }
             // 셀렉터가 현재 화면에 없으면(비채팅 등) 채팅 홈으로 이동 후 재시도
             if (window.Router) window.Router.navigate('/');
             setTimeout(function () { var t2 = document.querySelector('.model-selector-trigger'); if (t2) t2.click(); }, 400);
         } },
-        { icon: '🧠', label: '추론 패널 열기', run: function () { if (typeof window.openContextPanel === 'function') window.openContextPanel('reasoning'); } },
-        { icon: '🛠', label: '도구 패널 열기', run: function () { if (typeof window.openContextPanel === 'function') window.openContextPanel('tools'); } },
-        { icon: '◐', label: '테마 전환 (다크 / 라이트)', run: function () { if (typeof window.toggleTheme === 'function') window.toggleTheme(); } },
-        { icon: '⚙', label: '설정 열기', run: function () { if (window.Router) window.Router.navigate('/settings.html'); } }
+        { icon: 'lucide:brain', label: '추론 패널 열기', run: function () { if (typeof window.openContextPanel === 'function') window.openContextPanel('reasoning'); } },
+        { icon: 'lucide:wrench', label: '도구 패널 열기', run: function () { if (typeof window.openContextPanel === 'function') window.openContextPanel('tools'); } },
+        { icon: 'lucide:contrast', label: '테마 전환 (다크 / 라이트)', run: function () { if (typeof window.toggleTheme === 'function') window.toggleTheme(); } },
+        { icon: 'lucide:settings', label: '설정 열기', run: function () { if (window.Router) window.Router.navigate('/settings.html'); } }
     ];
     if (authed) {
-        actions.push({ icon: '⏻', label: '로그아웃', run: function () { if (typeof window.logout === 'function') window.logout(); } });
+        actions.push({ icon: 'lucide:power', label: '로그아웃', run: function () { if (typeof window.logout === 'function') window.logout(); } });
     }
     actions.forEach(function (a) { cmds.push({ group: '액션', icon: a.icon, label: a.label, hint: a.hint, run: a.run }); });
 
@@ -113,9 +113,9 @@ function renderList() {
         row.className = 'cmdk-row' + (i === selIdx ? ' sel' : '');
         row.setAttribute('role', 'option');
 
-        const ic = document.createElement('span');
+        const ic = document.createElement('iconify-icon');
         ic.className = 'ic';
-        ic.textContent = c.icon;
+        ic.setAttribute('icon', c.icon);
         row.appendChild(ic);
 
         const lbl = document.createElement('span');

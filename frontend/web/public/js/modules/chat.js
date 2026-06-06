@@ -91,7 +91,7 @@ async function handleSlashCommand(message) {
 
     // /remember <fact>
     if (m === '/remember' || m === '/remember help') {
-        addChatMessage('assistant', '📝 사용법: `/remember <기억할 사실>` — 예: `/remember 나는 한국어로 답변 받기를 선호함`\n다른 명령: `/memories` (목록), `/forget all` (전체 삭제), `/forget <id>` (개별 삭제)');
+        addChatMessage('assistant', '사용법: `/remember <기억할 사실>` — 예: `/remember 나는 한국어로 답변 받기를 선호함`\n다른 명령: `/memories` (목록), `/forget all` (전체 삭제), `/forget <id>` (개별 삭제)');
         return true;
     }
     if (m.startsWith('/remember ')) {
@@ -106,12 +106,12 @@ async function handleSlashCommand(message) {
             const data = await res.json();
             if (!res.ok) {
                 const msg = (data && data.error && data.error.message) || '저장 실패';
-                addChatMessage('assistant', `❌ ${msg}`);
+                addChatMessage('assistant', `${msg}`);
                 return true;
             }
-            addChatMessage('assistant', `🧠 기억했습니다: "${content}"\n이후 모든 대화에서 이 사실이 system prompt 에 prepend 됩니다.`);
+            addChatMessage('assistant', `기억했습니다: "${content}"\n이후 모든 대화에서 이 사실이 system prompt 에 prepend 됩니다.`);
         } catch (e) {
-            addChatMessage('assistant', `❌ 저장 실패: ${e.message || e}`);
+            addChatMessage('assistant', `저장 실패: ${e.message || e}`);
         }
         return true;
     }
@@ -123,13 +123,13 @@ async function handleSlashCommand(message) {
             const data = await res.json();
             const memories = (data && data.data && data.data.memories) || [];
             if (!memories.length) {
-                addChatMessage('assistant', '🧠 저장된 memory 가 없습니다. `/remember <사실>` 로 추가하세요.');
+                addChatMessage('assistant', '저장된 memory 가 없습니다. `/remember <사실>` 로 추가하세요.');
                 return true;
             }
             const lines = memories.map((m, i) => `${i + 1}. \`${m.id.slice(0, 8)}\` — ${m.content}`).join('\n');
-            addChatMessage('assistant', `🧠 저장된 memory (${memories.length}개):\n${lines}`);
+            addChatMessage('assistant', `저장된 memory (${memories.length}개):\n${lines}`);
         } catch (e) {
-            addChatMessage('assistant', `❌ 조회 실패: ${e.message || e}`);
+            addChatMessage('assistant', `조회 실패: ${e.message || e}`);
         }
         return true;
     }
@@ -141,9 +141,9 @@ async function handleSlashCommand(message) {
             const res = await window.authFetch('/api/users/me/memories', { method: 'DELETE' });
             const data = await res.json();
             const count = (data && data.data && data.data.deleted) || 0;
-            addChatMessage('assistant', `🧠 ${count}개 memory 삭제됨.`);
+            addChatMessage('assistant', `${count}개 memory 삭제됨.`);
         } catch (e) {
-            addChatMessage('assistant', `❌ 삭제 실패: ${e.message || e}`);
+            addChatMessage('assistant', `삭제 실패: ${e.message || e}`);
         }
         return true;
     }
@@ -156,12 +156,12 @@ async function handleSlashCommand(message) {
             const listData = await listRes.json();
             const memories = (listData && listData.data && listData.data.memories) || [];
             const target = memories.find(m => m.id.startsWith(idPrefix));
-            if (!target) { addChatMessage('assistant', `❌ id prefix "${idPrefix}" 와 일치하는 memory 없음`); return true; }
+            if (!target) { addChatMessage('assistant', `id prefix "${idPrefix}" 와 일치하는 memory 없음`); return true; }
             const res = await window.authFetch('/api/users/me/memories/' + encodeURIComponent(target.id), { method: 'DELETE' });
-            if (!res.ok) { addChatMessage('assistant', '❌ 삭제 실패'); return true; }
-            addChatMessage('assistant', `🧠 삭제됨: "${target.content}"`);
+            if (!res.ok) { addChatMessage('assistant', '삭제 실패'); return true; }
+            addChatMessage('assistant', `삭제됨: "${target.content}"`);
         } catch (e) {
-            addChatMessage('assistant', `❌ 삭제 실패: ${e.message || e}`);
+            addChatMessage('assistant', `삭제 실패: ${e.message || e}`);
         }
         return true;
     }

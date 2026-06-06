@@ -32,7 +32,7 @@ function ensureModal() {
     el.innerHTML = `
         <div style="background: var(--surface, #fff); color: var(--text, #000); max-width: 720px; width: 90%; max-height: 80vh; border-radius: 8px; display: flex; flex-direction: column; box-shadow: 0 8px 24px rgba(0,0,0,0.3);">
             <div style="padding: 16px 20px; border-bottom: 1px solid var(--border, #e5e5e5);">
-                <h3 style="margin: 0;">📋 정책 업데이트 — 재동의 필요</h3>
+                <h3 style="margin: 0;"><iconify-icon icon="lucide:clipboard-list"></iconify-icon> 정책 업데이트 — 재동의 필요</h3>
                 <p style="margin: 6px 0 0 0; color: var(--text-muted, #888); font-size: 0.9em;">
                     아래 정책에 동의가 필요합니다. 서비스 사용을 계속하려면 동의해 주세요.
                 </p>

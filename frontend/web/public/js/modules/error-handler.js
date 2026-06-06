@@ -25,7 +25,7 @@ function startFeatureChat(feature) {
         coding: '안녕하세요! 코딩 에이전트입니다. 코드 작성, 디버깅, 코드 리뷰 등을 도와드립니다. 어떤 코딩 작업을 도와드릴까요?',
         document: '안녕하세요! 문서 작성 도우미입니다. 블로그 글, 보고서 초안, 이메일 등을 작성해 드립니다. 어떤 문서를 작성할까요?',
         data: '안녕하세요! 데이터 분석 에이전트입니다. 데이터 시각화, 통계 분석, 인사이트 도출을 도와드립니다. 어떤 데이터를 분석할까요?',
-        chat: '안녕하세요! 무엇이든 물어보세요. 저는 다양한 질문에 답변하고 도움을 드릴 수 있습니다. 😊'
+        chat: '안녕하세요! 무엇이든 물어보세요. 저는 다양한 질문에 답변하고 도움을 드릴 수 있습니다.'
     };
 
     const welcomeScreen = document.getElementById('welcomeScreen');
@@ -92,12 +92,12 @@ function showHelpAndMessage() {
     const div = document.createElement('div');
     div.className = 'chat-message assistant';
     div.innerHTML = `
-        <div class="message-avatar">✨</div>
+        <div class="message-avatar"><iconify-icon icon="lucide:sparkles"></iconify-icon></div>
         <div class="message-wrapper">
             <div class="message-content help-message">
-                <h3 style="margin-bottom: 16px; color: var(--accent-primary);">💡 OpenMake.Ai 사용 가이드</h3>
+                <h3 style="margin-bottom: 16px; color: var(--accent-primary);"><iconify-icon icon="lucide:lightbulb"></iconify-icon> OpenMake.Ai 사용 가이드</h3>
                 <div style="margin-bottom: 16px;">
-                    <h4 style="margin-bottom: 8px;">🎯 자동 프롬프트 감지</h4>
+                    <h4 style="margin-bottom: 8px;"><iconify-icon icon="lucide:target"></iconify-icon> 자동 프롬프트 감지</h4>
                     <p style="margin-bottom: 8px; color: var(--text-secondary);">질문 유형에 따라 자동으로 최적의 모드가 선택됩니다:</p>
                     <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
                         <thead><tr style="background: var(--bg-tertiary);">
@@ -106,18 +106,18 @@ function showHelpAndMessage() {
                             <th style="padding: 8px; text-align: left; border-bottom: 1px solid var(--border-color);">프롬프트</th>
                         </tr></thead>
                         <tbody>
-                            <tr><td style="padding: 6px 8px;">🧮 수학/비교</td><td style="padding: 6px 8px;">"크다", "비교", "계산"</td><td style="padding: 6px 8px;"><code>reasoning</code></td></tr>
-                            <tr><td style="padding: 6px 8px;">💻 코드 작성</td><td style="padding: 6px 8px;">"코드", "함수", "개발"</td><td style="padding: 6px 8px;"><code>coder</code></td></tr>
-                            <tr><td style="padding: 6px 8px;">🚀 프로젝트 생성</td><td style="padding: 6px 8px;">"만들어", "앱", "프로젝트"</td><td style="padding: 6px 8px;"><code>generator</code></td></tr>
-                            <tr><td style="padding: 6px 8px;">🔍 코드 리뷰</td><td style="padding: 6px 8px;">"검토", "리뷰"</td><td style="padding: 6px 8px;"><code>reviewer</code></td></tr>
-                            <tr><td style="padding: 6px 8px;">📚 개념 설명</td><td style="padding: 6px 8px;">"설명", "뭐야"</td><td style="padding: 6px 8px;"><code>explainer</code></td></tr>
-                            <tr><td style="padding: 6px 8px;">🤖 도구 호출</td><td style="padding: 6px 8px;">"검색", "찾아", "도구"</td><td style="padding: 6px 8px;"><code>agent</code></td></tr>
-                            <tr><td style="padding: 6px 8px;">💬 일반 대화</td><td style="padding: 6px 8px;">그 외</td><td style="padding: 6px 8px;"><code>assistant</code></td></tr>
+                            <tr><td style="padding: 6px 8px;"><iconify-icon icon="lucide:calculator"></iconify-icon> 수학/비교</td><td style="padding: 6px 8px;">"크다", "비교", "계산"</td><td style="padding: 6px 8px;"><code>reasoning</code></td></tr>
+                            <tr><td style="padding: 6px 8px;"><iconify-icon icon="lucide:code"></iconify-icon> 코드 작성</td><td style="padding: 6px 8px;">"코드", "함수", "개발"</td><td style="padding: 6px 8px;"><code>coder</code></td></tr>
+                            <tr><td style="padding: 6px 8px;"><iconify-icon icon="lucide:rocket"></iconify-icon> 프로젝트 생성</td><td style="padding: 6px 8px;">"만들어", "앱", "프로젝트"</td><td style="padding: 6px 8px;"><code>generator</code></td></tr>
+                            <tr><td style="padding: 6px 8px;"><iconify-icon icon="lucide:search-code"></iconify-icon> 코드 리뷰</td><td style="padding: 6px 8px;">"검토", "리뷰"</td><td style="padding: 6px 8px;"><code>reviewer</code></td></tr>
+                            <tr><td style="padding: 6px 8px;"><iconify-icon icon="lucide:book-open"></iconify-icon> 개념 설명</td><td style="padding: 6px 8px;">"설명", "뭐야"</td><td style="padding: 6px 8px;"><code>explainer</code></td></tr>
+                            <tr><td style="padding: 6px 8px;"><iconify-icon icon="lucide:bot"></iconify-icon> 도구 호출</td><td style="padding: 6px 8px;">"검색", "찾아", "도구"</td><td style="padding: 6px 8px;"><code>agent</code></td></tr>
+                            <tr><td style="padding: 6px 8px;"><iconify-icon icon="lucide:message-circle"></iconify-icon> 일반 대화</td><td style="padding: 6px 8px;">그 외</td><td style="padding: 6px 8px;"><code>assistant</code></td></tr>
                         </tbody>
                     </table>
                 </div>
                 <div style="margin-bottom: 16px;">
-                    <h4 style="margin-bottom: 8px;">⌨️ 사용 가능한 명령어</h4>
+                    <h4 style="margin-bottom: 8px;"><iconify-icon icon="lucide:keyboard"></iconify-icon> 사용 가능한 명령어</h4>
                     <ul style="list-style: none; padding: 0; margin: 0;">
                         <li style="padding: 4px 0;"><code>/help</code> - 이 도움말 표시</li>
                         <li style="padding: 4px 0;"><code>/clear</code> - 대화 초기화</li>
@@ -125,7 +125,7 @@ function showHelpAndMessage() {
                     </ul>
                 </div>
                 <div style="margin-bottom: 16px;">
-                    <h4 style="margin-bottom: 8px;">🔧 프롬프트 모드</h4>
+                    <h4 style="margin-bottom: 8px;"><iconify-icon icon="lucide:wrench"></iconify-icon> 프롬프트 모드</h4>
                     <div style="display: flex; flex-wrap: wrap; gap: 6px;">
                         <span class="mode-tag">assistant</span>
                         <span class="mode-tag">reasoning</span>
@@ -179,7 +179,7 @@ async function performWebSearch(query, model) {
                 if (payload.sources && payload.sources.length > 0) {
                     const sourcesDiv = document.createElement('div');
                     sourcesDiv.style.cssText = 'margin-top: 12px; padding: 10px; background: #f8f9fa; border-radius: 8px; font-size: 13px;';
-                    sourcesDiv.innerHTML = '<b>📚 검색 출처:</b><br>' + payload.sources.map((s, i) =>
+                    sourcesDiv.innerHTML = '<b><iconify-icon icon="lucide:book-open"></iconify-icon> 검색 출처:</b><br>' + payload.sources.map((s, i) =>
                         `<a href="${escapeHtml(s.url)}" target="_blank" rel="noopener noreferrer" style="color: #0369a1; display: block; margin-top: 4px;">[${i + 1}] ${escapeHtml(s.title || new URL(s.url).hostname)}</a>`
                     ).join('');
                     content.appendChild(sourcesDiv);

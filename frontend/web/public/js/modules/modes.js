@@ -46,7 +46,7 @@ function toggleDiscussionMode() {
         }
         showToast('멀티 에이전트 토론 모드 활성화 (웹 검색 비활성화됨)', 'info');
     } else {
-        showToast(newValue ? '🎯 멀티 에이전트 토론 모드 활성화' : '💬 일반 모드로 전환', 'info');
+        showToast(newValue ? '멀티 에이전트 토론 모드 활성화' : '일반 모드로 전환', 'info');
     }
     saveMCPSettings();
     updateMCPToolTogglesUI();
@@ -76,7 +76,7 @@ function toggleThinkingMode() {
         btn.classList.toggle('active', newValue);
         btn.title = newValue ? `Thinking 모드 활성화 (${thinkingLevel})` : 'Thinking 모드 비활성화';
     }
-    showToast(newValue ? `🧠 Thinking 모드 활성화 (레벨: ${thinkingLevel})` : '💬 일반 모드로 전환', 'info');
+    showToast(newValue ? `Thinking 모드 활성화 (레벨: ${thinkingLevel})` : '일반 모드로 전환', 'info');
 }
 
 /**
@@ -158,10 +158,10 @@ function showDiscussionProgress(progress) {
                 @keyframes slideUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
                 @keyframes pulse { 0% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.1); opacity: 0.8; } 100% { transform: scale(1); opacity: 1; } }
             </style>
-            <div class="progress-icon">🎯</div>
+            <div class="progress-icon"><iconify-icon icon="lucide:users"></iconify-icon></div>
             <div class="progress-content">
                 <div class="progress-header">
-                    <span>🎯 멀티 에이전트 토론 (v2)</span>
+                    <span><iconify-icon icon="lucide:users"></iconify-icon> 멀티 에이전트 토론 (v2)</span>
                     <span class="progress-percent">0%</span>
                 </div>
                 <div class="progress-bar-bg"><div class="progress-fill"></div></div>
@@ -236,10 +236,10 @@ function showResearchProgress(progress) {
                 #researchProgress .stage-badge { font-size: 0.65rem; padding: 2px 6px; background: var(--bg-tertiary); border: 1px solid var(--border-light); border-radius: 8px; color: var(--accent-primary); font-weight: 500; }
                 @keyframes researchPulse { 0% { transform: scale(1) rotate(0deg); opacity: 1; } 25% { transform: scale(1.1) rotate(5deg); opacity: 0.9; } 50% { transform: scale(1) rotate(0deg); opacity: 1; } 75% { transform: scale(1.1) rotate(-5deg); opacity: 0.9; } 100% { transform: scale(1) rotate(0deg); opacity: 1; } }
             </style>
-            <div class="progress-icon">🔬</div>
+            <div class="progress-icon"><iconify-icon icon="lucide:flask-conical"></iconify-icon></div>
             <div class="progress-content">
                 <div class="progress-header">
-                    <span>🔬 Deep Research</span>
+                    <span><iconify-icon icon="lucide:flask-conical"></iconify-icon> Deep Research</span>
                     <span class="stage-badge">준비중</span>
                     <span class="progress-percent">0%</span>
                 </div>
@@ -293,9 +293,9 @@ function showResearchProgress(progress) {
  */
 const STYLE_CYCLE = ['default', 'concise', 'verbose'];
 const STYLE_META = {
-    default: { icon: '📝', label: '기본', tooltip: '응답 스타일: 기본 (균형)' },
-    concise: { icon: '⚡', label: '간결', tooltip: '응답 스타일: 간결 (핵심만)' },
-    verbose: { icon: '📚', label: '상세', tooltip: '응답 스타일: 상세 (근거·예시 포함)' }
+    default: { icon: 'pencil', label: '기본', tooltip: '응답 스타일: 기본 (균형)' },
+    concise: { icon: 'zap', label: '간결', tooltip: '응답 스타일: 간결 (핵심만)' },
+    verbose: { icon: 'book-open', label: '상세', tooltip: '응답 스타일: 상세 (근거·예시 포함)' }
 };
 
 function cycleResponseStyle() {
@@ -305,7 +305,7 @@ function cycleResponseStyle() {
     setState('responseStyle', next);
     updateResponseStyleButton();
     const meta = STYLE_META[next];
-    showToast(`${meta.icon} ${meta.tooltip}`, 'info');
+    showToast(meta.tooltip, 'info');
 }
 
 function updateResponseStyleButton() {
@@ -313,7 +313,7 @@ function updateResponseStyleButton() {
     if (!btn) return;
     const current = getState('responseStyle') || 'default';
     const meta = STYLE_META[current];
-    btn.textContent = meta.icon;
+    btn.innerHTML = '<iconify-icon icon="lucide:' + meta.icon + '"></iconify-icon>';
     btn.title = meta.tooltip;
     btn.dataset.style = current;
     // default 가 아닐 때만 active 시각 표시

@@ -217,7 +217,7 @@
                     const gitPath = (document.getElementById('aiGitPath').value || '').trim() || undefined;
                     const accessToken = (document.getElementById('aiGitToken').value || '').trim() || undefined;
                     const btn = document.getElementById('btnSubmitImport');
-                    if (btn) { btn.disabled = true; btn.dataset.origText = btn.innerHTML; btn.innerHTML = '⏳ 가져오는 중...'; }
+                    if (btn) { btn.disabled = true; btn.dataset.origText = btn.innerHTML; btn.innerHTML = '<iconify-icon icon="lucide:loader-circle"></iconify-icon> 가져오는 중...'; }
                     try {
                         const res = await window.authFetch(API_ENDPOINTS.AGENTS_CUSTOM_IMPORT_FROM_GIT || '/api/agents/custom/import-from-git', {
                             method: 'POST',
@@ -248,7 +248,7 @@
                                 try {
                                     const payload = JSON.parse(dataStr);
                                     if (evName === 'progress' && btn) {
-                                        btn.innerHTML = '⏳ ' + (payload.phase || '') + '...';
+                                        btn.innerHTML = '<iconify-icon icon="lucide:loader-circle"></iconify-icon> ' + (payload.phase || '') + '...';
                                     } else if (evName === 'result') {
                                         result = payload.data;
                                     } else if (evName === 'error') {

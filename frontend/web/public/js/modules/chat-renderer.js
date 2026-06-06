@@ -39,7 +39,7 @@ function enterUserMessageEdit(messageDiv) {
     editor.innerHTML = `
         <textarea class="user-edit-textarea" rows="3">${escapeHtml(original)}</textarea>
         <div class="user-edit-actions">
-            <button class="user-edit-save">💬 새 대화로 보내기</button>
+            <button class="user-edit-save"><iconify-icon icon="lucide:message-square-plus"></iconify-icon> 새 대화로 보내기</button>
             <button class="user-edit-cancel">취소</button>
         </div>
     `;
@@ -103,12 +103,12 @@ function addChatMessage(role, content) {
                 <div class="message-content" data-original-text="${escapeHtml(content)}">${escapeHtml(content).replace(/\n/g, '<br>')}</div>
                 <div class="message-actions message-actions-user">
                     <button class="message-action-btn user-edit-btn" title="편집 → 새 대화로 분기">
-                        ✏️ 편집
+                        <iconify-icon icon="lucide:pencil"></iconify-icon> 편집
                     </button>
                 </div>
                 <div class="message-time">${timestamp}</div>
             </div>
-            <div class="message-avatar">👤</div>
+            <div class="message-avatar"><iconify-icon icon="lucide:user"></iconify-icon></div>
         `;
         // 편집 버튼 핸들러
         const editBtn = div.querySelector('.user-edit-btn');
@@ -117,7 +117,7 @@ function addChatMessage(role, content) {
         }
     } else {
         div.innerHTML = `
-            <div class="message-avatar">✨</div>
+            <div class="message-avatar"><iconify-icon icon="lucide:sparkles"></iconify-icon></div>
             <div class="message-wrapper">
                 <div class="message-content">${content || '<span class="loading-spinner"></span> 생각 중...'}</div>
                 <div class="message-actions">
@@ -147,7 +147,7 @@ function addChatMessage(role, content) {
                         </svg>
                     </button>
                     <button class="message-action-btn" data-action="report" data-msg-id="${messageId}" title="문제 신고 (디버깅용 7일 보관)">
-                        🚩
+                        <iconify-icon icon="lucide:flag"></iconify-icon>
                     </button>
                 </div>
                 <div class="message-time" id="${messageId}-time">${timestamp}</div>
@@ -429,7 +429,7 @@ function finishAssistantMessage(errorMessage = null, serverMessageId = null) {
             }).join('');
             const attrEl = document.createElement('div');
             attrEl.className = 'message-attribution';
-            attrEl.innerHTML = '<span class="attribution-label">✶ 스킬 적용</span><div class="attribution-chips">' + chips + '</div>';
+            attrEl.innerHTML = '<span class="attribution-label"><iconify-icon icon="lucide:sparkles"></iconify-icon> 스킬 적용</span><div class="attribution-chips">' + chips + '</div>';
             wrapper.insertBefore(attrEl, timeEl);
         }
         setState('activeSkillNames', null);
