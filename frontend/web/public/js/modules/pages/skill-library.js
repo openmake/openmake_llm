@@ -859,7 +859,7 @@
                 <div class="skill-row">
                     <div class="skill-row-meta">
                         <span class="skill-card-badge">${esc(categoryLabel(d.category))}</span>
-                        <span class="sl-badge" style="background:rgba(234,179,8,0.12);color:#eab308;border-color:rgba(234,179,8,0.25);margin-left:0.4rem">DRAFT</span>
+                        <span class="sl-badge" style="background:var(--warning-light);color:var(--warning);border-color:rgba(232,176,75,0.25);margin-left:0.4rem">DRAFT</span>
                     </div>
                     <div class="skill-row-main">
                         <h3 class="skill-row-title" title="${esc(d.name)}">${esc(d.name)}</h3>

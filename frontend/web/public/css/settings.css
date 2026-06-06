@@ -29,12 +29,13 @@
     font-size: 3rem;
     margin-bottom: var(--space-4);
     display: block;
-    filter: drop-shadow(2px 2px 0 rgba(0, 0, 0, 0.5));
+    filter: drop-shadow(0 2px 8px rgba(0,0,0,0.35));
 }
 
 .settings-hero h1 {
+    font-family: var(--font-serif); /* editorial 헤딩 */
     font-size: var(--font-size-3xl);
-    font-weight: var(--font-weight-bold);
+    font-weight: var(--font-weight-semibold);
     background: var(--gradient-primary);
     -webkit-background-clip: text;
     background-clip: text;

@@ -171,18 +171,21 @@
 }
 
 .stat-value {
-    font-size: var(--font-size-3xl);
-    font-weight: var(--font-weight-bold);
+    font-family: var(--font-serif); /* Fraunces — editorial 수치 (Latin-safe) */
+    font-size: var(--font-size-4xl);
+    font-weight: var(--font-weight-semibold);
+    letter-spacing: -0.02em;
     color: var(--accent-primary);
     line-height: 1.2;
 }
 
 .stat-label {
+    font-family: var(--font-mono); /* technical 마이크로 라벨 */
     font-size: var(--font-size-xs);
     color: var(--text-muted);
     margin-top: var(--space-1);
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.08em;
 }
 
 .stat-change {

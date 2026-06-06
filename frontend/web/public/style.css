@@ -93,7 +93,7 @@ body {
 .sidebar-logo {
     width: 140px;
     height: auto;
-    filter: drop-shadow(4px 4px 0 #000);
+    filter: drop-shadow(0 4px 12px rgba(0,0,0,0.45));
 }
 
 /* Sidebar Navigation */
@@ -216,7 +216,11 @@ body {
     display: flex;
     flex-direction: column;
     height: 100%;
-    background: var(--bg-main);
+    /* 무드 연출 — 코너 소프트 글로우 (다크 캔버스 깊이감) */
+    background:
+        radial-gradient(1100px 600px at 100% -10%, rgba(255, 106, 61, 0.05), transparent 60%),
+        radial-gradient(820px 480px at -8% 4%, rgba(107, 165, 201, 0.035), transparent 55%),
+        var(--bg-main);
     position: relative;
     overflow: hidden;
 }
@@ -276,15 +280,15 @@ body {
 .welcome-logo img {
     width: 90px;
     margin-bottom: 28px;
-    filter: drop-shadow(4px 4px 0 rgba(0,0,0,0.5));
+    filter: drop-shadow(0 4px 12px rgba(0,0,0,0.4));
 }
 
 .welcome-title {
-    font-family: 'Outfit', sans-serif;
-    font-size: 2.8rem;
-    font-weight: 800;
+    font-family: var(--font-serif); /* Fraunces+Noto Serif KR — editorial 히어로 */
+    font-size: 3rem;
+    font-weight: 600;
     margin-bottom: 16px;
-    letter-spacing: -0.03em;
+    letter-spacing: -0.02em;
     color: var(--text-primary);
     background: none;
     -webkit-text-fill-color: initial;
@@ -434,7 +438,7 @@ body {
 
 .chat-drop-overlay-content svg {
     stroke: var(--accent-primary);
-    filter: drop-shadow(4px 4px 0 rgba(0,0,0,0.5));
+    filter: drop-shadow(0 4px 12px rgba(0,0,0,0.4));
 }
 
 .chat-drop-overlay-content p {
@@ -957,9 +961,9 @@ body {
     bottom: 3px;
     background: white;
     border-radius: 50%;
-    border: 1px solid #000;
+    border: 1px solid var(--border-color);
     transition: 0.2s;
-    box-shadow: 1px 1px 0 #000;
+    box-shadow: var(--shadow-sm);
 }
 
 .toggle-switch input:checked+.toggle-slider {

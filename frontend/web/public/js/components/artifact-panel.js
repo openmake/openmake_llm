@@ -558,7 +558,7 @@ async function renderChart(target, item) {
                 width: wrap.clientWidth || 600,
                 height: 360,
                 title: spec.title || '',
-                series: spec.series || [{}, { label: 'value', stroke: '#6366f1' }],
+                series: spec.series || [{}, { label: 'value', stroke: '#ff6a3d' }],
                 scales: spec.scales || { x: { time: true } },
             };
             new window.uPlot(opts, spec.data, wrap);
@@ -1098,7 +1098,7 @@ async function renderCode(target, item) {
     const classCount = outline.filter(o => o.kind === 'class' || o.kind === 'type').length;
     const fnCount = outline.filter(o => o.kind === 'fn' || o.kind === 'def').length;
 
-    const langBadge = LANG_BADGES[lang] || { icon: '📄', label: lang || 'text', color: '#6366f1' };
+    const langBadge = LANG_BADGES[lang] || { icon: '📄', label: lang || 'text', color: '#ff6a3d' };
 
     const card = document.createElement('div');
     card.style.cssText = 'max-width:560px; margin:32px auto; padding:24px; background:var(--bg-secondary,#0f0f0f); border:1px solid var(--border-light,#2a2a2a); border-radius:12px; color:var(--text-primary,#fff); font-family:system-ui,-apple-system,sans-serif;';
@@ -1136,7 +1136,7 @@ async function renderCode(target, item) {
 
         <div style="padding:12px 14px; background:var(--bg-tertiary,#0a0a0a); border-radius:8px; font-size:13px; color:var(--text-secondary,#aaa); line-height:1.5;">
             <div style="margin-bottom:6px;">ℹ️ <strong>${escHtml(langBadge.label)}</strong> 는 브라우저에서 직접 실행할 수 없습니다.</div>
-            <div>전체 코드는 우측 상단 <strong style="color:var(--accent-primary,#6366f1);">[Code View]</strong> 탭에서 줄번호와 함께 확인하세요.</div>
+            <div>전체 코드는 우측 상단 <strong style="color:var(--accent-primary,#ff6a3d);">[Code View]</strong> 탭에서 줄번호와 함께 확인하세요.</div>
         </div>
     `;
     target.appendChild(card);
@@ -1639,7 +1639,7 @@ function injectStyles() {
     background: transparent; transition: background 0.15s ease;
 }
 .ap-resizer:hover, .artifact-panel.ap-resizing .ap-resizer {
-    background: var(--accent-primary, #6366f1);
+    background: var(--accent-primary, #ff6a3d);
 }
 .artifact-panel.maximized .ap-resizer { display: none; }
 /* 드래그 중 iframe/preview 가 포인터를 가로채지 않도록 */
@@ -1650,7 +1650,7 @@ function injectStyles() {
     font-size: 16px; cursor: pointer; padding: 4px 8px; border-radius: 4px;
 }
 .ap-maximize:hover { background: var(--bg-tertiary, #2a2a2a); color: var(--text-primary, #fff); }
-.ap-maximize.active { color: var(--accent-primary, #6366f1); }
+.ap-maximize.active { color: var(--accent-primary, #ff6a3d); }
 @media (max-width: 768px) {
     .artifact-panel { width: 100vw; }
     .ap-resizer { display: none; }
@@ -1691,8 +1691,8 @@ function injectStyles() {
     border-radius: var(--radius-md, 6px); cursor: pointer; font-size: 13px;
 }
 .ap-tab-active {
-    background: var(--accent-primary, #6366f1); color: #fff;
-    border-color: var(--accent-primary, #6366f1);
+    background: var(--accent-primary, #ff6a3d); color: #fff;
+    border-color: var(--accent-primary, #ff6a3d);
 }
 .ap-close {
     background: transparent; border: none; color: var(--text-muted, #888);
@@ -1715,7 +1715,7 @@ function injectStyles() {
     border-radius: var(--radius-md, 6px);
     font-size: 12px; font-family: inherit;
 }
-.ap-search-input:focus { outline: none; border-color: var(--accent-primary, #6366f1); }
+.ap-search-input:focus { outline: none; border-color: var(--accent-primary, #ff6a3d); }
 .ap-search-count {
     color: var(--text-muted, #888); font-size: 11px; min-width: 50px; text-align: center;
 }
@@ -1728,7 +1728,7 @@ function injectStyles() {
 }
 .ap-search-bar button:hover { background: var(--bg-card, #1a1a1a); }
 mark.ap-search-hit { background: rgba(252, 211, 77, 0.4); color: inherit; border-radius: 2px; }
-mark.ap-search-active { background: var(--accent-primary, #6366f1); color: #fff; }
+mark.ap-search-active { background: var(--accent-primary, #ff6a3d); color: #fff; }
 
 .ap-body { flex: 1; overflow-y: auto; padding: 16px; min-height: 0; }
 .ap-preview {
@@ -1794,7 +1794,7 @@ mark.ap-search-active { background: var(--accent-primary, #6366f1); color: #fff;
     color: var(--text-primary, #fff); padding: 4px 10px;
     border-radius: var(--radius-md, 6px); cursor: pointer; font-size: 12px;
 }
-.ap-actions button:hover { background: var(--accent-primary, #6366f1); color: #fff; }
+.ap-actions button:hover { background: var(--accent-primary, #ff6a3d); color: #fff; }
 
 /* Phase 2 신규 kind 스타일 */
 .ap-preview.ap-chart { padding: 0; background: transparent; border: none; }
@@ -1809,13 +1809,13 @@ mark.ap-search-active { background: var(--accent-primary, #6366f1); color: #fff;
     font-size: 12px; font-family: inherit;
 }
 .ap-csv-search-input:focus {
-    outline: none; border-color: var(--accent-primary, #6366f1);
+    outline: none; border-color: var(--accent-primary, #ff6a3d);
 }
 .ap-csv-table { border-collapse: collapse; font-size: 12px; width: 100%; }
 .ap-csv-table th, .ap-csv-table td { border: 1px solid var(--border-light, #2a2a2a); padding: 4px 8px; text-align: left; }
 .ap-csv-table th { background: var(--bg-tertiary, #2a2a2a); font-weight: var(--font-weight-semibold, 600); }
 .ap-csv-th { cursor: pointer; user-select: none; }
-.ap-csv-th:hover { background: var(--accent-primary, #6366f1); color: #fff; }
+.ap-csv-th:hover { background: var(--accent-primary, #ff6a3d); color: #fff; }
 .ap-csv-summary { font-size: 11px; color: var(--text-muted, #888); margin-top: 6px; text-align: right; }
 .ap-preview.ap-slide { padding: 0; background: #000; border: none; }
 .ap-reveal { width: 100%; }
@@ -1825,7 +1825,7 @@ mark.ap-search-active { background: var(--accent-primary, #6366f1); color: #fff;
 /* Phase 3 사용자 편집 모드 */
 .ap-edit-textarea {
     width: 100%; min-height: 320px; box-sizing: border-box;
-    padding: 12px; border: 1px solid var(--accent-primary, #6366f1);
+    padding: 12px; border: 1px solid var(--accent-primary, #ff6a3d);
     border-radius: var(--radius-md, 6px); background: var(--bg-secondary, #0f0f0f);
     color: var(--text-primary, #fff); font-family: 'JetBrains Mono', 'Courier New', monospace;
     font-size: 13px; line-height: 1.5; resize: vertical;
@@ -1836,14 +1836,14 @@ mark.ap-search-active { background: var(--accent-primary, #6366f1); color: #fff;
     border-radius: var(--radius-md, 6px); cursor: pointer; font-size: 12px;
     background: var(--bg-tertiary, #2a2a2a); color: var(--text-primary, #fff);
 }
-.ap-edit-save-btn { background: var(--accent-primary, #6366f1) !important; color: #fff !important; }
+.ap-edit-save-btn { background: var(--accent-primary, #ff6a3d) !important; color: #fff !important; }
 .ap-edit-save-btn:disabled { opacity: 0.6; cursor: default; }
-.ap-act-edit.ap-edit-saving { background: var(--accent-primary, #6366f1); color: #fff; }
+.ap-act-edit.ap-edit-saving { background: var(--accent-primary, #ff6a3d); color: #fff; }
 
 /* CodeMirror 5 통합 — material-darker 와 우리 design token 정렬 */
 .ap-code .CodeMirror {
     height: 420px !important;
-    border: 1px solid var(--accent-primary, #6366f1);
+    border: 1px solid var(--accent-primary, #ff6a3d);
     border-radius: var(--radius-md, 6px);
     font-family: 'JetBrains Mono', 'Courier New', monospace;
     font-size: 13px;

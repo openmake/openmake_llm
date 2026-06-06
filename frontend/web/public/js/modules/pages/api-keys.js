@@ -50,7 +50,7 @@
         
         // Hero Section
         '.ak-hero { text-align: center; margin-bottom: var(--space-10); }' +
-        '.ak-hero-icon { font-size: 3rem; margin-bottom: var(--space-4); display: block; filter: drop-shadow(2px 2px 0 rgba(0,0,0,0.5)); }' +
+        '.ak-hero-icon { font-size: 3rem; margin-bottom: var(--space-4); display: block; filter: drop-shadow(0 2px 8px rgba(0,0,0,0.35)); }' +
         '.ak-hero h1 {' +
             'font-size: var(--font-size-3xl); font-weight: var(--font-weight-bold);' +
             'background: var(--gradient-primary); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;' +

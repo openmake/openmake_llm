@@ -230,11 +230,17 @@
 }
 
 .us-brand-text {
-    font-size: 0.95rem;
-    font-weight: 700;
+    font-family: var(--font-serif); /* Fraunces — Latin 워드마크 */
+    font-size: 1.18rem;
+    font-weight: 600;
     color: var(--text-primary);
-    letter-spacing: 0.5px;
+    letter-spacing: -0.02em;
     white-space: nowrap;
+}
+.us-brand-text i {
+    font-style: italic;
+    font-weight: 400;
+    color: var(--accent-primary);
 }
 
 /* ─── New Chat Button ──────────────────────── */
@@ -507,7 +513,7 @@
 [data-theme="light"] .us-user-menu {
     background: #ffffff;
     border-color: #000;
-    box-shadow: 4px 4px 0 #000;
+    box-shadow: var(--shadow-md);
 }
 
 [data-theme="light"] .us-menu-header {
@@ -536,7 +542,7 @@
     font-size: 0.8125rem;
     font-weight: 700;
     flex-shrink: 0;
-    border: var(--border-width) solid #000;
+    border: var(--border-width) solid var(--border-color);
 }
 
 .us-user-name {
@@ -636,7 +642,7 @@
 
 [data-theme="light"] .unified-sidebar.us-hover-expanded {
     background: #fdfbf7;
-    box-shadow: 6px 6px 0 #000;
+    box-shadow: var(--shadow-lg);
     border-right-color: #000;
 }
 
@@ -650,7 +656,7 @@
     background: #fff;
     border-color: #000;
     color: #000;
-    box-shadow: 2px 2px 0 #000;
+    box-shadow: var(--shadow-sm);
 }
 
 [data-theme="light"] .us-brand-text {
@@ -661,12 +667,12 @@
     background: #fff;
     border-color: #000;
     color: #000;
-    box-shadow: 2px 2px 0 #000;
+    box-shadow: var(--shadow-sm);
 }
 
 [data-theme="light"] .us-new-chat:hover {
     background: #eee;
-    box-shadow: 4px 4px 0 #000;
+    box-shadow: var(--shadow-md);
 }
 
 [data-theme="light"] .us-doc-link {
@@ -681,7 +687,7 @@
 [data-theme="light"] .us-search {
     background: #fff;
     border-color: #000;
-    box-shadow: 2px 2px 0 #000;
+    box-shadow: var(--shadow-sm);
 }
 
 [data-theme="light"] .us-search-input {
@@ -691,13 +697,13 @@
 [data-theme="light"] .us-conv-item:hover {
     background: #fff;
     border-color: #000;
-    box-shadow: 2px 2px 0 #000;
+    box-shadow: var(--shadow-sm);
 }
 
 [data-theme="light"] .us-conv-item.active {
     background: #f0f0f0;
     border-color: #000;
-    border-left-color: #7c3aed;
+    border-left-color: var(--accent-primary);
 }
 
 [data-theme="light"] .us-conv-title {
@@ -725,7 +731,7 @@
     background: #fff;
     border-color: #000;
     color: #000;
-    box-shadow: 2px 2px 0 #000;
+    box-shadow: var(--shadow-sm);
 }
 
 [data-theme="light"] .us-conversations::-webkit-scrollbar-thumb {
@@ -733,7 +739,7 @@
 }
 
 [data-theme="light"] .us-conversations::-webkit-scrollbar-thumb:hover {
-    background: #7c3aed;
+    background: var(--accent-primary);
 }
 
 /* ─── Mobile ───────────────────────────────── */
@@ -833,10 +839,11 @@
 }
 
 .us-nav-section-label {
-    font-size: 0.65rem;
-    font-weight: 700;
+    font-family: var(--font-mono); /* technical 마이크로 라벨 */
+    font-size: 0.62rem;
+    font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.09em;
+    letter-spacing: 0.14em;
     color: var(--text-muted);
     padding: 8px 10px 2px;
     flex-shrink: 0;
@@ -872,13 +879,29 @@
     transition: background .15s, color .15s;
     cursor: pointer;
 }
-.us-nav-link:hover { background: var(--bg-tertiary)); color: var(--text-primary); }
-.us-nav-link.active { background: rgba(99,102,241,0.15); color: var(--accent-primary); }
-.unified-sidebar[data-state="icon"] .us-page-nav { padding: 6px 4px; }
+.us-nav-link:hover { background: var(--bg-tertiary); color: var(--text-primary); }
+.us-nav-link.active { background: var(--accent-primary-light); color: var(--accent-primary); }
+.unified-sidebar[data-state="icon"] .us-page-nav { padding: 6px 4px; max-height: none; border-bottom: none; }
 .unified-sidebar[data-state="icon"] .us-nav-link .us-label,
 .unified-sidebar[data-state="icon"] .us-nav-section-label { display: none; }
+/* 레일(icon) 폴리시 — nav 아이콘을 중앙 정렬 pill 로, active 는 ember */
+.unified-sidebar[data-state="icon"] .us-nav-link {
+    justify-content: center;
+    padding: 9px 0;
+    margin: 1px 2px;
+    border-radius: 10px;
+    font-size: 17px;
+}
+.unified-sidebar[data-state="icon"] .us-nav-icon { font-size: 17px; }
+.unified-sidebar[data-state="icon"] .us-tier-badge { display: none; }
 .unified-sidebar.us-hover-expanded .us-nav-link .us-label,
 .unified-sidebar.us-hover-expanded .us-nav-section-label { display: inline; }
+/* active 페이지 nav — ember (고 specificity 로 상태 규칙 우선) */
+.unified-sidebar .us-page-nav .us-nav-link.active {
+    background: var(--accent-primary-light);
+    color: var(--accent-primary);
+    font-weight: 600;
+}
 
 .us-nav-divider {
     height: 1px;

@@ -42,8 +42,10 @@
 }
 
 .metric-card-value {
-    font-size: var(--font-size-3xl);
-    font-weight: var(--font-weight-bold);
+    font-family: var(--font-serif); /* Fraunces — 숫자(Latin-safe) editorial 수치 */
+    font-size: var(--font-size-4xl);
+    font-weight: var(--font-weight-semibold);
+    letter-spacing: -0.02em;
     color: var(--text-primary);
     margin-bottom: var(--space-2);
 }
