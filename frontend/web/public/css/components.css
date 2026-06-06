@@ -1027,3 +1027,7 @@
     background: var(--danger);
     color: #fff;
 }
+
+/* 대시보드 stat 카드 아이콘 + 페이지 헤딩 라인 아이콘 (글로벌 20px override) */
+.stat-icon iconify-icon { font-size: 1.5rem; width: 1.5rem; height: 1.5rem; color: var(--text-muted); }
+.page-header h1 iconify-icon, .page-title iconify-icon { font-size: 0.82em; width: 0.82em; height: 0.82em; vertical-align: -1px; color: var(--accent-primary); }
