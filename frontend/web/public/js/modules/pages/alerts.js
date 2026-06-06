@@ -35,7 +35,7 @@
         }
         function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 
-        const SEVERITY_ICONS = { info: 'ℹ️', warning: '⚠️', critical: '🚨' };
+        const SEVERITY_ICONS = { info: '<iconify-icon icon=lucide:info></iconify-icon>', warning: '<iconify-icon icon=lucide:alert-triangle></iconify-icon>', critical: '<iconify-icon icon=lucide:siren></iconify-icon>' };
         const SEVERITY_BADGE = { info: 'badge-info', warning: 'badge-warning', critical: 'badge-critical' };
         const TYPE_LABELS = {
             quota_warning: '할당량 경고', quota_critical: '할당량 위험', api_error: 'API 오류',
@@ -65,7 +65,7 @@
             }
             el.innerHTML = filtered.map(a => `
                 <div class="alert-item">
-                    <div class="alert-icon">${SEVERITY_ICONS[a.severity] || 'ℹ️'}</div>
+                    <div class="alert-icon">${SEVERITY_ICONS[a.severity] || '<iconify-icon icon=lucide:info></iconify-icon>'}</div>
                     <div class="alert-body">
                         <div class="alert-header">
                             <span class="badge ${SEVERITY_BADGE[a.severity] || 'badge-info'}">${a.severity}</span>

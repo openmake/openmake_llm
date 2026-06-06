@@ -219,7 +219,7 @@ function getHTML() {
         '</style>' +
         '<div class="amc-page">' +
         '<header style="display:flex;justify-content:space-between;align-items:center;margin-bottom:var(--space-4);">' +
-            '<div><h1>🔌 MCP 카탈로그 관리</h1><p style="color:var(--text-muted);margin:0;">사용자가 from-catalog 로 설치 가능한 MCP 서버 템플릿을 관리합니다.</p></div>' +
+            '<div><h1>MCP 카탈로그 관리</h1><p style="color:var(--text-muted);margin:0;">사용자가 from-catalog 로 설치 가능한 MCP 서버 템플릿을 관리합니다.</p></div>' +
             '<button class="btn btn-primary" id="amc-new-btn" type="button">+ 새 템플릿</button>' +
         '</header>' +
         '<table class="amc-table"><thead><tr><th>ID</th><th>이름</th><th>Transport</th><th>요구 Tier</th><th>상태</th><th>작업</th></tr></thead>' +

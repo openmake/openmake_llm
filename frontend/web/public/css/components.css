@@ -879,6 +879,11 @@
 /* 탭 라인 아이콘(iconify) — 텍스트와 인라인, currentColor 상속 */
 .admin-section-tab iconify-icon,
 .tabs .tab iconify-icon { font-size: 15px; width: 15px; height: 15px; vertical-align: -2px; margin-right: 2px; }
+/* 버튼·서브탭·섹션/카드 헤딩의 라인 아이콘 정렬·크기 (이모지→iconify 통일) */
+.btn iconify-icon,
+.subtab-btn iconify-icon { font-size: 16px; width: 16px; height: 16px; vertical-align: -2px; margin-right: 3px; }
+.section-icon iconify-icon,
+.card-icon iconify-icon { font-size: 18px; width: 18px; height: 18px; }
 
 /* Phase 3.4 (2026-05-26) — 사용자 메시지 편집 → 새 대화 분기 */
 .message-actions-user {
