@@ -231,14 +231,14 @@ function appendToken(token) {
             content.textContent = conclusionText;
             var indicator = document.createElement('div');
             indicator.style.cssText = 'color: var(--text-muted); font-style: italic; margin-top: 12px; font-size: 0.85em;';
-            indicator.textContent = '\uD83D\uDCAD \uC0AC\uACE0 \uACFC\uC815 \uAE30\uB85D \uC911... (' + stepCount + '\uB2E8\uACC4 \uC9C4\uD589)';
+            indicator.textContent = '\uC0AC\uACE0 \uACFC\uC815 \uAE30\uB85D \uC911... (' + stepCount + '\uB2E8\uACC4 \uC9C4\uD589)';
             content.appendChild(indicator);
         } else if (streamConclusionIdx !== -1) {
             // 사고가 먼저 (구 형식), 결론 마커 발견 → 결론 부분 표시
             content.textContent = fullText.substring(streamConclusionIdx);
         } else {
             // 사고 진행 중, 아직 결론 없음
-            content.innerHTML = '<div style="color: var(--text-muted); font-style: italic;">\uD83E\uDD14 \uBD84\uC11D \uC911... (' + stepCount + '\uB2E8\uACC4 \uC9C4\uD589)</div>';
+            content.innerHTML = '<div style="color: var(--text-muted); font-style: italic;"><iconify-icon icon="lucide:brain"></iconify-icon> \uBD84\uC11D \uC911... (' + stepCount + '\uB2E8\uACC4 \uC9C4\uD589)</div>';
         }
     } else {
         // 사고 단계 없음 → 전체 텍스트 표시
@@ -268,7 +268,7 @@ function appendThinkingToken(token) {
         thinkingEl = document.createElement('details');
         thinkingEl.className = 'thinking-trace';
         thinkingEl.open = false;
-        thinkingEl.innerHTML = '<summary style="cursor:pointer;color:var(--text-muted);font-size:0.85em;margin-bottom:8px;">\uD83E\uDD14 \uCD94\uB860 \uACFC\uC815 \uBCF4\uAE30</summary><pre class="thinking-content" style="white-space:pre-wrap;font-size:0.82em;color:var(--text-muted);background:var(--bg-tertiary);padding:12px;border-radius:var(--radius-md);max-height:300px;overflow-y:auto;"></pre>';
+        thinkingEl.innerHTML = '<summary style="cursor:pointer;color:var(--text-muted);font-size:0.85em;margin-bottom:8px;"><iconify-icon icon="lucide:brain"></iconify-icon> \uCD94\uB860 \uACFC\uC815 \uBCF4\uAE30</summary><pre class="thinking-content" style="white-space:pre-wrap;font-size:0.82em;color:var(--text-muted);background:var(--bg-tertiary);padding:12px;border-radius:var(--radius-md);max-height:300px;overflow-y:auto;"></pre>';
         content.prepend(thinkingEl);
     }
 
@@ -383,7 +383,7 @@ function finishAssistantMessage(errorMessage = null, serverMessageId = null) {
 
         // 마크다운 렌더링: 접힌 사고 과정 상단, 결론 하단 (이미지 레이아웃)
         if (thinkingProcess && finalAnswer) {
-            content.innerHTML = '<details class="thinking-block"><summary>\uD83D\uDCAD \uBD84\uC11D \uACFC\uC815 \uBCF4\uAE30 (\uB2E8\uACC4 1-' + stepCount + ')</summary><div class="thinking-content"></div></details><div class="final-answer"></div>';
+            content.innerHTML = '<details class="thinking-block"><summary><iconify-icon icon="lucide:brain"></iconify-icon> \uBD84\uC11D \uACFC\uC815 \uBCF4\uAE30 (\uB2E8\uACC4 1-' + stepCount + ')</summary><div class="thinking-content"></div></details><div class="final-answer"></div>';
 
             var thinkingContent = content.querySelector('.thinking-content');
             var finalContent = content.querySelector('.final-answer');

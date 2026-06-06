@@ -278,7 +278,7 @@
 
     async function loadApiKeys() {
         var wrapper = document.getElementById('apiKeyListWrapper');
-        wrapper.innerHTML = '<div style="padding:var(--space-8); text-align:center; color:var(--text-secondary);">\u23F3 키 목록을 불러오는 중...</div>';
+        wrapper.innerHTML = '<div style="padding:var(--space-8); text-align:center; color:var(--text-secondary);"><iconify-icon icon="lucide:loader-circle"></iconify-icon> 키 목록을 불러오는 중...</div>';
 
         try {
             var res = await apiFetch(API_ENDPOINTS.API_KEYS);

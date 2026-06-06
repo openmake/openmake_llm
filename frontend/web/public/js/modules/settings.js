@@ -25,14 +25,14 @@ const SS = window.SafeStorage;
 var MCP_TOOL_CATALOG = [
     {
         category: '추론',
-        emoji: '🧠',
+        emoji: '<iconify-icon icon="lucide:brain"></iconify-icon>',
         tools: [
             { name: 'sequential_thinking', label: 'Sequential Thinking', description: '단계별 추론 프로세스를 적용합니다', minTier: 'free' }
         ]
     },
     {
         category: '모드',
-        emoji: '🎯',
+        emoji: '<iconify-icon icon="lucide:target"></iconify-icon>',
         tools: [
             { name: 'discussion_mode', label: '멀티 에이전트 토론', description: '여러 AI 모델이 토론하여 최적의 답변을 생성합니다', minTier: 'free' },
             { name: 'deep_research', label: 'Deep Research', description: '자동으로 심층 연구를 수행합니다', minTier: 'free' }
@@ -40,7 +40,7 @@ var MCP_TOOL_CATALOG = [
     },
     {
         category: '비전',
-        emoji: '👁️',
+        emoji: '<iconify-icon icon="lucide:eye"></iconify-icon>',
         tools: [
             { name: 'vision_ocr', label: '이미지 OCR', description: '이미지에서 텍스트를 추출합니다', minTier: 'free' },
             { name: 'analyze_image', label: '이미지 분석', description: '이미지 내용을 분석합니다', minTier: 'free' }
@@ -48,7 +48,7 @@ var MCP_TOOL_CATALOG = [
     },
     {
         category: '웹 검색',
-        emoji: '🌐',
+        emoji: '<iconify-icon icon="lucide:globe"></iconify-icon>',
         tools: [
             { name: 'web_search', label: '웹 검색', description: '실시간 웹 검색을 수행합니다', minTier: 'free' },
             { name: 'fact_check', label: '팩트 체크', description: '정보의 사실 여부를 검증합니다', minTier: 'enterprise' },
@@ -58,7 +58,7 @@ var MCP_TOOL_CATALOG = [
     },
     {
         category: '스크래핑',
-        emoji: '🌐',
+        emoji: '<iconify-icon icon="lucide:network"></iconify-icon>',
         tools: [
             { name: 'web_scrape', label: '웹 스크래핑', description: '웹페이지를 마크다운으로 스크래핑합니다', minTier: 'pro' },
             { name: 'web_map', label: 'URL 매핑', description: '웹사이트 URL 구조를 매핑합니다', minTier: 'pro' },
