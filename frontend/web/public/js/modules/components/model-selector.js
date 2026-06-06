@@ -23,8 +23,8 @@ function logDebug(msg) {
 }
 
 const PROVIDER_LABELS = {
-    'local-llm': '🖥️ 로컬 LLM',
-    openrouter: '🌐 OpenRouter',
+    'local-llm': '<iconify-icon icon=lucide:monitor></iconify-icon> 로컬 LLM',
+    openrouter: '<iconify-icon icon=lucide:globe></iconify-icon> OpenRouter',
 };
 
 const PROVIDER_ORDER = ['local-llm', 'openrouter'];
@@ -209,10 +209,10 @@ function renderTrigger() {
     const provider = model ? (model.provider || 'local-llm') : null;
     // provider 별 아이콘 — 어떤 LLM 사용 중인지 한눈에
     const PROVIDER_ICONS = {
-        'local-llm': '🖥️',
-        openrouter: '🌐',
+        'local-llm': '<iconify-icon icon=lucide:monitor></iconify-icon>',
+        openrouter: '<iconify-icon icon=lucide:globe></iconify-icon>',
     };
-    const icon = provider && PROVIDER_ICONS[provider] ? PROVIDER_ICONS[provider] : '📋';
+    const icon = provider && PROVIDER_ICONS[provider] ? PROVIDER_ICONS[provider] : '<iconify-icon icon=lucide:cpu></iconify-icon>';
     const trigger = _container.querySelector('.model-selector-trigger');
     if (trigger) {
         trigger.innerHTML =
@@ -298,7 +298,7 @@ function renderDropdown() {
         const unregistered = _providers.filter(p => p.enabled && !registered.has(p.provider_id));
         if (unregistered.length > 0) {
             html += '<div class="model-selector-separator"></div>';
-            html += '<div class="model-selector-optgroup-label">➕ 새 LLM 키 등록</div>';
+            html += '<div class="model-selector-optgroup-label"><iconify-icon icon=lucide:plus></iconify-icon> 새 LLM 키 등록</div>';
             for (const p of unregistered) {
                 html +=
                     '<div class="model-selector-add-option" data-action="add-key" data-provider="' +
@@ -320,13 +320,13 @@ function renderDropdown() {
     if (_isAuthenticated && !hasExternal && !registeredButMissing) {
         html =
             '<div style="padding:8px 12px;font-size:11px;color:var(--text-muted);background:var(--bg-tertiary);border-bottom:1px solid var(--border-light);line-height:1.5">' +
-            '💡 외부 LLM 사용 — 아래 <b>"+ 새 LLM 키 등록"</b>에서 OpenRouter 키 입력 시 모델이 위쪽에 자동 추가됩니다.' +
+            '<iconify-icon icon=lucide:lightbulb></iconify-icon> 외부 LLM 사용 — 아래 <b>"+ 새 LLM 키 등록"</b>에서 OpenRouter 키 입력 시 모델이 위쪽에 자동 추가됩니다.' +
             '</div>' + html;
     } else if (registeredButMissing) {
         const registered = _providers.filter(p => p.user_key).map(p => p.provider_id).join(', ');
         html =
             '<div style="padding:10px 12px;font-size:11px;color:var(--danger);background:rgba(220,38,38,0.08);border-bottom:1px solid var(--border-light);line-height:1.5">' +
-            '⚠️ 등록된 키 [<b>' + escText(registered) + '</b>]가 있지만 모델 합산 실패. ' +
+            '<iconify-icon icon=lucide:triangle-alert></iconify-icon> 등록된 키 [<b>' + escText(registered) + '</b>]가 있지만 모델 합산 실패. ' +
             '<br>운영자 조치: <code>pm2 restart openmake-api</code> + ' +
             '<code>DELETE FROM external_provider_models_cache</code>' +
             '</div>' + html;
@@ -360,7 +360,7 @@ function renderOpenRouterGroup(models, selected) {
     let html = '<div class="model-selector-or-card" data-action="open-list-modal" ' +
         'title="클릭하여 전체 ' + totalCount + ' 모델 검색·선택">' +
         '<div class="or-card-header">' +
-        '<span class="or-card-icon">🌐</span>' +
+        '<span class="or-card-icon"><iconify-icon icon=lucide:globe></iconify-icon></span>' +
         '<span class="or-card-title">OpenRouter</span>' +
         '<span class="or-card-count">' + totalCount + ' 모델</span>' +
         '</div>' +

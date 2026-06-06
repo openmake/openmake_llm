@@ -1182,7 +1182,7 @@ async function renderCode(target, item) {
 
         ${outline.length > 0 ? `
         <div style="margin-bottom:20px;">
-            <div style="font-size:11px; font-weight:600; color:var(--text-secondary,#888); letter-spacing:0.6px; margin-bottom:8px;">📑 STRUCTURE</div>
+            <div style="font-size:11px; font-weight:600; color:var(--text-secondary,#888); letter-spacing:0.6px; margin-bottom:8px;"><iconify-icon icon=lucide:list-tree></iconify-icon> STRUCTURE</div>
             <div style="background:var(--bg-tertiary,#0a0a0a); border-radius:8px; padding:10px 14px; max-height:200px; overflow:auto; font-family:'JetBrains Mono',monospace; font-size:12px;">
                 ${outline.map(o => {
                     const kc = o.kind === 'class' ? '#a78bfa' : (o.kind === 'type' ? '#22d3ee' : '#34d399');
@@ -1406,11 +1406,11 @@ function updateEditButton() {
     const btn = panelEl?.querySelector('.ap-act-edit');
     if (!btn) return;
     if (editMode) {
-        btn.textContent = '💾 저장';
+        btn.innerHTML = '<iconify-icon icon=lucide:save></iconify-icon> 저장';
         btn.title = '새 버전으로 저장';
         btn.classList.add('ap-edit-saving');
     } else {
-        btn.textContent = '✏️ 편집';
+        btn.innerHTML = '<iconify-icon icon=lucide:pencil></iconify-icon> 편집';
         btn.title = '편집 (새 버전 생성)';
         btn.classList.remove('ap-edit-saving');
     }
@@ -1437,7 +1437,7 @@ async function enterEditUI() {
     const actionRow = document.createElement('div');
     actionRow.className = 'ap-edit-actions';
     actionRow.innerHTML = `
-        <button class="ap-edit-save-btn">💾 새 버전으로 저장</button>
+        <button class="ap-edit-save-btn"><iconify-icon icon=lucide:save></iconify-icon> 새 버전으로 저장</button>
         <button class="ap-edit-cancel-btn">취소</button>
     `;
     codePane.appendChild(actionRow);
