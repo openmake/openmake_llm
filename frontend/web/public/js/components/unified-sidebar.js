@@ -717,8 +717,12 @@ UnifiedSidebar.prototype._renderPageNav = function () {
 
     function renderItems(items) {
         return items.filter(passesFilter).map(function (item) {
+            // 라인 아이콘(iconify) 우선 — 채팅창 액션 아이콘과 동일 스타일. 없으면 이모지 fallback.
+            var ic = item.iconify
+                ? '<iconify-icon icon="' + esc(item.iconify) + '" aria-hidden="true"></iconify-icon>'
+                : esc(item.icon || '');
             return '<a class="us-nav-link" href="' + esc(item.href) + '" data-page-nav>' +
-                '<span class="us-nav-icon">' + esc(item.icon || '') + '</span>' +
+                '<span class="us-nav-icon">' + ic + '</span>' +
                 '<span class="us-label">' + esc(item.label) + '</span>' +
                 '</a>';
         }).join('');
@@ -729,7 +733,7 @@ UnifiedSidebar.prototype._renderPageNav = function () {
         // 비로그인: page-nav 항목이 전부 requireAuth 라 비므로 빈 박스 대신 로그인 유도 CTA.
         // 기존 avatar→/login.html 풀 내비게이션 플로우와 동일 (SPA data-page-nav 아님).
         menuHtml = '<a class="us-nav-link us-login-cta" href="/login.html">' +
-            '<span class="us-nav-icon">🔑</span>' +
+            '<span class="us-nav-icon"><iconify-icon icon="lucide:log-in" aria-hidden="true"></iconify-icon></span>' +
             '<span class="us-label">로그인하기</span>' +
             '</a>';
     }
