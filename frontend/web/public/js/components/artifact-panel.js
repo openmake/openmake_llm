@@ -63,15 +63,15 @@ function ensurePanel() {
                 <button class="ap-tab" data-tab="reasoning">🧠 추론</button>
                 <button class="ap-tab" data-tab="tools">🛠 도구</button>
             </div>
-            <button class="ap-maximize" aria-label="전체화면 토글" title="전체화면 (넓게 보기)">⛶</button>
-            <button class="ap-close" aria-label="패널 닫기" title="닫기 (Esc)">✕</button>
+            <button class="ap-maximize" aria-label="전체화면 토글" title="전체화면 (넓게 보기)"><iconify-icon icon=lucide:maximize></iconify-icon></button>
+            <button class="ap-close" aria-label="패널 닫기" title="닫기 (Esc)"><iconify-icon icon=lucide:x></iconify-icon></button>
         </header>
         <div class="ap-search-bar" hidden>
             <input type="text" class="ap-search-input" placeholder="🔎 패널 안 검색 (Ctrl+F)" />
             <span class="ap-search-count">0/0</span>
             <button class="ap-search-prev" title="이전 (Shift+Enter)">▲</button>
             <button class="ap-search-next" title="다음 (Enter)">▼</button>
-            <button class="ap-search-close" title="닫기 (Esc)">✕</button>
+            <button class="ap-search-close" title="닫기 (Esc)"><iconify-icon icon=lucide:x></iconify-icon></button>
         </div>
         <div class="ap-body">
             <div class="ap-preview" data-pane="preview"></div>
@@ -86,10 +86,10 @@ function ensurePanel() {
                 <button class="ap-vn-next" aria-label="다음 버전" title="다음 버전 (→)">▶</button>
             </div>
             <div class="ap-actions">
-                <button class="ap-act-edit" title="편집 (새 버전 생성)">✏️ 편집</button>
-                <button class="ap-act-copy" title="본문 복사">📋 복사</button>
-                <button class="ap-act-download" title="원본 다운로드">⬇ 다운</button>
-                <button class="ap-act-pdf" title="미리보기를 PDF 로 저장 (pdf-lib + dom-to-image)">📄 PDF</button>
+                <button class="ap-act-edit" title="편집 (새 버전 생성)"><iconify-icon icon=lucide:pencil></iconify-icon> 편집</button>
+                <button class="ap-act-copy" title="본문 복사"><iconify-icon icon=lucide:copy></iconify-icon> 복사</button>
+                <button class="ap-act-download" title="원본 다운로드"><iconify-icon icon=lucide:download></iconify-icon> 다운</button>
+                <button class="ap-act-pdf" title="미리보기를 PDF 로 저장 (pdf-lib + dom-to-image)"><iconify-icon icon=lucide:file-text></iconify-icon> PDF</button>
             </div>
         </footer>
     `;
@@ -452,7 +452,7 @@ function refreshHeader() {
     const list = artifactStore.get(currentId);
     if (!list) return;
     const item = list[currentVersionIdx];
-    panelEl.querySelector('.ap-emoji').textContent = kindIcon(item.kind);
+    panelEl.querySelector('.ap-emoji').innerHTML = kindIcon(item.kind);
     panelEl.querySelector('.ap-title').textContent = item.title || 'Artifact';
 }
 
@@ -1078,7 +1078,7 @@ function renderCodeView(target, item) {
     if (outline.length > 0) {
         const sideEl = document.createElement('div');
         sideEl.style.cssText = 'flex:0 0 200px; border-right:1px solid var(--border-light,#2a2a2a); padding:10px 0; overflow:auto; background:var(--bg-tertiary,#0a0a0a); font-size:12px;';
-        sideEl.innerHTML = '<div style="font-weight:600; color:var(--text-secondary,#888); padding:0 14px 8px; font-size:10px; letter-spacing:0.6px;">📑 OUTLINE</div>' +
+        sideEl.innerHTML = '<div style="font-weight:600; color:var(--text-secondary,#888); padding:0 14px 8px; font-size:10px; letter-spacing:0.6px;"><iconify-icon icon=lucide:list-tree></iconify-icon> OUTLINE</div>' +
             outline.map(o => {
                 const kindColor = o.kind === 'class' ? '#a78bfa' : (o.kind === 'type' ? '#22d3ee' : '#34d399');
                 return `<a class="ap-cv-outline-item" href="#" data-line="${o.line}" style="display:flex; align-items:center; gap:6px; padding:4px 14px; text-decoration:none; color:var(--text-primary,#fff); font-family:'JetBrains Mono',monospace;">` +
@@ -1166,7 +1166,7 @@ async function renderCode(target, item) {
 
     card.innerHTML = `
         <div style="display:flex; align-items:center; gap:12px; margin-bottom:20px;">
-            <div style="width:48px; height:48px; border-radius:10px; background:${langBadge.color}22; display:flex; align-items:center; justify-content:center; font-size:24px;">${langBadge.icon}</div>
+            <div style="width:48px; height:48px; border-radius:10px; background:${langBadge.color}22; display:flex; align-items:center; justify-content:center; font-size:24px;"><iconify-icon icon=lucide:file-code></iconify-icon></div>
             <div>
                 <div style="font-size:18px; font-weight:600;">${escHtml(langBadge.label)}</div>
                 <div style="font-size:12px; color:var(--text-muted,#888); margin-top:2px;">코드 아티팩트</div>
@@ -1632,10 +1632,10 @@ async function exportPdfCurrent() {
 
 function kindIcon(kind) {
     const map = {
-        markdown: '📝', code: '💻', html: '🌐', svg: '🖼️', mermaid: '📊',
-        react: '⚛️', chart: '📈', csv: '📊', slide: '🎞️', excalidraw: '✏️',
+        markdown: 'file-text', code: 'code', html: 'globe', svg: 'image', mermaid: 'git-fork',
+        react: 'atom', chart: 'bar-chart-3', csv: 'table', slide: 'presentation', excalidraw: 'pencil',
     };
-    return map[kind] || '📦';
+    return '<iconify-icon icon=lucide:' + (map[kind] || 'package') + '></iconify-icon>';
 }
 
 function mimeFor(kind, lang) {
@@ -1740,7 +1740,7 @@ function injectStyles() {
     border-bottom: 1px solid var(--border-light, #2a2a2a);
 }
 .ap-title-wrap { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; min-width: 0; }
-.ap-emoji { font-size: 22px; }
+.ap-emoji { font-size: 22px; } .ap-emoji iconify-icon { font-size:22px; width:22px; height:22px; } .ap-maximize iconify-icon,.ap-close iconify-icon { font-size:16px; width:16px; height:16px; } .ap-act-edit iconify-icon,.ap-act-copy iconify-icon,.ap-act-download iconify-icon,.ap-act-pdf iconify-icon { font-size:14px; width:14px; height:14px; vertical-align:-2px; margin-right:3px; }
 .ap-title {
     margin: 0; font-size: 15px; font-weight: var(--font-weight-semibold, 600);
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px;
