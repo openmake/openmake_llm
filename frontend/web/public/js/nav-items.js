@@ -57,7 +57,7 @@ const NAV_ITEMS = {
         // settings 및 그 sub-탭들: 사이드바 nav 에서 hidden. settings 페이지의 톱니/avatar dropdown
         // 이 settings 진입점. settings 의 5탭 (account/api-keys/usage/integrations) 은 각자 페이지로
         // navigate 하므로 spa-router 라우트 등록 위해 entry 보존.
-        { href: '/settings.html', icon: '⚙️', iconify: 'lucide:settings', label: '설정', cssFiles: ['/css/settings.css?v=16'], excludeFromSidebar: true },
+        { href: '/settings.html', icon: '⚙️', iconify: 'lucide:settings', label: '설정', cssFiles: ['/css/settings.css?v=17'], excludeFromSidebar: true },
         { href: '/password-change.html', icon: '🔑', iconify: 'lucide:key-round', label: '비밀번호 변경', requireAuth: true, excludeFromSidebar: true },
         { href: '/api-keys.html', icon: '🗝️', iconify: 'lucide:key', label: 'API 키', requireAuth: true, excludeFromSidebar: true },
         { href: '/usage.html', icon: '📈', iconify: 'lucide:bar-chart-2', label: '사용량', requireAuth: true, excludeFromSidebar: true },

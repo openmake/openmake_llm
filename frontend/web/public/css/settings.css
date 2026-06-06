@@ -632,3 +632,15 @@
 .settings-tab iconify-icon { font-size: 15px; width: 15px; height: 15px; vertical-align: -2px; margin-right: 5px; }
 .s-card-icon iconify-icon { font-size: 1.4rem; }
 .tier-plan-icon iconify-icon { font-size: 1.8rem; }
+
+/* ── 인라인 임베드 패널 (Phase R3) — 페이지 모듈을 settings 탭에 마운트 ── */
+.settings-embed-loading { padding: var(--space-8, 32px); text-align: center; color: var(--text-secondary); }
+/* 임베드된 페이지의 페이지-레벨 chrome 은 settings 패널 안에서 중복/순환 → 숨김 */
+#settingsEmbedPanel .page-header,
+#settingsEmbedPanel .back-link,
+#settingsEmbedPanel .mobile-menu-btn { display: none; }
+/* 페이지 전용 풀폭 레이아웃을 패널 폭에 맞춤 */
+#settingsEmbedPanel .content-area { padding: 0; max-width: none; }
+#settingsEmbedPanel .page-usage,
+#settingsEmbedPanel .page-api-keys,
+#settingsEmbedPanel .page-developer { padding: 0; }

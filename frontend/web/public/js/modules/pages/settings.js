@@ -28,13 +28,13 @@
         // Phase R1: claude.ai-style \uC88C\uCE21 \uD0ED \uC2DC\uC2A4\uD15C \u2014 5\uAC1C \uBD84\uC0B0 \uD398\uC774\uC9C0 \uD1B5\uD569 \uC9C4\uC785\uC810
         '<nav class="settings-tabs" role="tablist" aria-label="Settings sections">' +
         '<button class="settings-tab active" data-settings-tab="preferences" role="tab" aria-selected="true"><iconify-icon icon=lucide:settings></iconify-icon> \uD658\uACBD\uC124\uC815</button>' +
-        '<button class="settings-tab" data-settings-tab="account" data-navigate="/password-change.html" role="tab"><iconify-icon icon=lucide:user></iconify-icon> \uACC4\uC815</button>' +
-        '<button class="settings-tab" data-settings-tab="api-keys" data-navigate="/api-keys.html" role="tab"><iconify-icon icon=lucide:key></iconify-icon> API \uD0A4</button>' +
-        '<button class="settings-tab" data-settings-tab="usage" data-navigate="/usage.html" role="tab"><iconify-icon icon=lucide:bar-chart-2></iconify-icon> \uC0AC\uC6A9\uB7C9</button>' +
-        '<button class="settings-tab" data-settings-tab="integrations" data-navigate="/external.html" role="tab"><iconify-icon icon=lucide:link></iconify-icon> \uC678\uBD80\uC5F0\uB3D9</button>' +
-        '<button class="settings-tab" data-settings-tab="developer" data-navigate="/developer.html" role="tab"><iconify-icon icon=lucide:book-open></iconify-icon> API \uBB38\uC11C</button>' +
-        '<button class="settings-tab" data-settings-tab="projects" data-navigate="/projects.html" role="tab"><iconify-icon icon=lucide:folder></iconify-icon> \uD504\uB85C\uC81D\uD2B8</button>' +
+        '<button class="settings-tab" data-settings-tab="account" role="tab"><iconify-icon icon=lucide:user></iconify-icon> \uACC4\uC815</button>' +
+        '<button class="settings-tab" data-settings-tab="api-keys" role="tab"><iconify-icon icon=lucide:key></iconify-icon> API \uD0A4</button>' +
+        '<button class="settings-tab" data-settings-tab="usage" role="tab"><iconify-icon icon=lucide:bar-chart-2></iconify-icon> \uC0AC\uC6A9\uB7C9</button>' +
+        '<button class="settings-tab" data-settings-tab="developer" role="tab"><iconify-icon icon=lucide:book-open></iconify-icon> API \uBB38\uC11C</button>' +
+        '<button class="settings-tab" data-settings-tab="projects" role="tab"><iconify-icon icon=lucide:folder></iconify-icon> \uD504\uB85C\uC81D\uD2B8</button>' +
         '</nav>' +
+        '<div class="settings-panel" data-settings-panel="preferences">' +
 
         '<div class="s-card">' +
         '<div class="s-card-header">' +
@@ -249,6 +249,8 @@
         '<button class="s-btn s-btn-primary" onclick="saveSettings()"><iconify-icon icon=lucide:hard-drive></iconify-icon> \uC124\uC815 \uC800\uC7A5</button>' +
         '<button class="s-btn s-btn-secondary" onclick="resetSettings()"><iconify-icon icon=lucide:undo-2></iconify-icon> \uCD08\uAE30\uD654</button>' +
         '</div>' +
+        '</div>' + // /settings-panel[preferences]
+        '<div class="settings-panel" id="settingsEmbedPanel" data-settings-panel="embed" style="display:none;"></div>' +
         '</div>' +
         '<div id="toast" class="toast"></div>';
 
@@ -341,18 +343,61 @@
                     }
                 }
 
-                // Phase R1: settings 탭 클릭 핸들러 — claude.ai-style nav 통합
+                // Phase R3: settings 탭 = 인라인 임베드 허브. preferences 는 인라인 패널,
+                // 나머지 탭은 페이지 모듈({getHTML,init,cleanup})을 임베드 패널에 동적 마운트.
+                // 표준 라우트(/usage.html 등)는 그대로 유지 — settings 는 임베드만 추가.
                 (function initSettingsTabs() {
-                    document.querySelectorAll('.settings-tab[data-navigate]').forEach(function (btn) {
+                    var EMBED_MODULES = {
+                        'account': '/js/modules/pages/password-change.js',
+                        'api-keys': '/js/modules/pages/api-keys.js',
+                        'usage': '/js/modules/pages/usage.js',
+                        'developer': '/js/modules/pages/developer.js',
+                        'projects': '/js/modules/pages/projects.js'
+                    };
+                    var prefPanel = document.querySelector('[data-settings-panel="preferences"]');
+                    var embedPanel = document.getElementById('settingsEmbedPanel');
+                    var tabs = document.querySelectorAll('.settings-tab');
+                    var _embedded = null; // 현재 임베드된 모듈 (탭 전환 시 cleanup 대상)
+
+                    function teardownEmbed() {
+                        if (_embedded && typeof _embedded.cleanup === 'function') {
+                            try { _embedded.cleanup(); } catch (e) { console.warn('[settings] embed cleanup 실패:', e); }
+                        }
+                        _embedded = null;
+                        if (embedPanel) embedPanel.innerHTML = '';
+                    }
+
+                    function activate(tabName) {
+                        tabs.forEach(function (t) {
+                            var on = t.getAttribute('data-settings-tab') === tabName;
+                            t.classList.toggle('active', on);
+                            t.setAttribute('aria-selected', on ? 'true' : 'false');
+                        });
+                        teardownEmbed();
+                        if (tabName === 'preferences' || !EMBED_MODULES[tabName]) {
+                            if (prefPanel) prefPanel.style.display = '';
+                            if (embedPanel) embedPanel.style.display = 'none';
+                            return;
+                        }
+                        if (prefPanel) prefPanel.style.display = 'none';
+                        if (!embedPanel) return;
+                        embedPanel.style.display = '';
+                        embedPanel.innerHTML = '<div class="settings-embed-loading">불러오는 중…</div>';
+                        import(EMBED_MODULES[tabName]).then(function (mod) {
+                            var pm = (mod && mod.default) || mod;
+                            if (!pm || typeof pm.getHTML !== 'function') { embedPanel.innerHTML = '<div class="settings-embed-loading">로드 실패</div>'; return; }
+                            embedPanel.innerHTML = pm.getHTML();
+                            _embedded = pm;
+                            if (typeof pm.init === 'function') { try { pm.init(); } catch (e) { console.error('[settings] embed init 실패:', e); } }
+                        }).catch(function (e) {
+                            embedPanel.innerHTML = '<div class="settings-embed-loading">로드 실패: ' + (e && e.message ? e.message : e) + '</div>';
+                        });
+                    }
+
+                    tabs.forEach(function (btn) {
                         btn.addEventListener('click', function (ev) {
                             ev.preventDefault();
-                            var target = btn.getAttribute('data-navigate');
-                            if (!target) return;
-                            if (window.Router && typeof window.Router.navigate === 'function') {
-                                window.Router.navigate(target);
-                            } else {
-                                window.location.href = target;
-                            }
+                            activate(btn.getAttribute('data-settings-tab'));
                         });
                     });
                 })();
