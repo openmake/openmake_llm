@@ -14,8 +14,8 @@
 }
 
 .settings-container {
-    max-width: 680px;
-    margin: 0 auto;
+    /* 전체 폭 — skill-library 등 관리 페이지와 가로 폭 일치 (2026-06-07) */
+    width: 100%;
     padding: var(--space-8) var(--space-6);
 }
 

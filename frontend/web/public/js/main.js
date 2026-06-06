@@ -119,7 +119,7 @@ import {
 import './modules/sanitize.js';
 
 // 1-15. 네비게이션 데이터
-import { NAV_ITEMS } from './nav-items.js?v=9';
+import { NAV_ITEMS } from './nav-items.js?v=10';
 
 // 1-16. SPA 라우터
 import { Router, SafeStorage } from './spa-router.js?v=17';
