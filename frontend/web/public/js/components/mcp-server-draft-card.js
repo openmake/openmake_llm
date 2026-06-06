@@ -118,7 +118,7 @@ export async function handleMcpServerDraftAction(action, serverId, ctx, callback
             toast('위험 명령 패턴이 감지되어 승인할 수 없습니다.', 'error');
             return;
         }
-        if (!confirmFn('이 MCP server draft 를 승인하시겠습니까?\n\n⚠ 승인 후 enabled=true 로 활성화되며 LifecycleSupervisor 가 spawn 합니다. command/args 가 사용자 시스템에서 실행되니 미리보기로 검토하세요.')) return;
+        if (!confirmFn('이 MCP server draft 를 승인하시겠습니까?\n\n승인 후 enabled=true 로 활성화되며 LifecycleSupervisor 가 spawn 합니다. command/args 가 사용자 시스템에서 실행되니 미리보기로 검토하세요.')) return;
         const url = typeof API.MCP_SERVERS_APPROVE === 'function' ? API.MCP_SERVERS_APPROVE(serverId) : '/api/mcp/servers/' + encodeURIComponent(serverId) + '/approve';
         const body = {};
         if (ctx && ctx.envOverrides) body.envOverrides = ctx.envOverrides;

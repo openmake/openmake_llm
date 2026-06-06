@@ -94,7 +94,7 @@ function render() {
         '<button type="button" class="mlm-close" data-action="close" aria-label="닫기">&times;</button>' +
         '</div>' +
         '<div class="mlm-search-row">' +
-        '<input type="text" class="mlm-search" placeholder="🔍 모델 검색 (id 또는 이름)" ' +
+        '<input type="text" class="mlm-search" placeholder="모델 검색 (id 또는 이름)" ' +
         'value="' + escAttr(_searchQuery) + '" autofocus />' +
         '</div>' +
         '<div class="mlm-list">';

@@ -193,7 +193,7 @@ async function loadSession(sessionId) {
             });
 
             scrollToBottom();
-            showToast('💬 대화를 불러왔습니다', 'success');
+            showToast('대화를 불러왔습니다', 'success');
         }
     } catch (error) {
         console.error('[ChatHistory] 세션 로드 실패:', error);
@@ -307,7 +307,7 @@ async function deleteSession(sessionId) {
                 newChat();
             }
             loadChatSessions();
-            showToast('🗑️ 대화가 삭제되었습니다', 'info');
+            showToast('대화가 삭제되었습니다', 'info');
         }
     } catch (error) {
         console.error('[ChatHistory] 세션 삭제 실패:', error);

@@ -191,7 +191,7 @@ function setSelectedModel(modelId) {
         console.warn('[ModelSelector] localStorage 쓰기 실패 (incognito?):', e);
     }
     renderTrigger();
-    if (window.showToast) window.showToast('🤖 모델 변경됨: ' + modelId);
+    if (window.showToast) window.showToast('모델 변경됨: ' + modelId);
     if (typeof window.applyModelCapabilityToggles === 'function') {
         try {
             window.applyModelCapabilityToggles(modelId);
@@ -584,7 +584,7 @@ export async function mount(targetElement) {
                 : '0건'));
         const missing = registeredKeys.filter(p => !externalModelsByProvider[p]);
         if (missing.length > 0) {
-            logDebug('⚠️ 키 [' + missing.join(', ') + '] 모델 미합산 — 가능 원인:');
+            logDebug('키 [' + missing.join(', ') + '] 모델 미합산 — 가능 원인:');
             logDebug('  1. PM2 재시작 안 됨 (새 fallback 코드 미적용)');
             logDebug('  2. external_provider_models_cache stale 빈 배열');
             logDebug('  3. provider /v1/models endpoint 응답 실패');
@@ -621,7 +621,7 @@ export function refresh(opts) {
                     logDebug('기존 선택 유지: ' + saved + ' (등록된 새 모델 자동선택 안 함)');
                     if (window.showToast) {
                         window.showToast(
-                            '✓ ' + opts.afterRegisterProviderId + ' 등록 완료 — ' +
+                            '' + opts.afterRegisterProviderId + ' 등록 완료 — ' +
                             newModelsForProvider.length + '개 모델 사용 가능. 현재 모델(' + saved +
                             ') 유지 — 변경하려면 드롭다운에서 선택하세요.'
                         );
@@ -631,7 +631,7 @@ export function refresh(opts) {
                     logDebug('자동 선택(미선택 상태): ' + firstNew.modelId + ' (' + newModelsForProvider.length + ' new models)');
                     if (window.showToast) {
                         window.showToast(
-                            '✓ ' + opts.afterRegisterProviderId + ' 등록 완료 — ' +
+                            '' + opts.afterRegisterProviderId + ' 등록 완료 — ' +
                             newModelsForProvider.length + '개 모델 사용 가능. "' + firstNew.name + '" 자동 선택됨.'
                         );
                     }
@@ -639,7 +639,7 @@ export function refresh(opts) {
             } else {
                 if (window.showToast) {
                     window.showToast(
-                        '⚠️ ' + opts.afterRegisterProviderId + ' 등록은 됐지만 모델 목록 미수신. ' +
+                        '' + opts.afterRegisterProviderId + ' 등록은 됐지만 모델 목록 미수신. ' +
                         '드롭다운을 다시 열어 확인하거나 검증(⋮ → 🔍)을 시도하세요.',
                         'error',
                     );

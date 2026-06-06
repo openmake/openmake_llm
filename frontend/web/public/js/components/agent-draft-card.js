@@ -79,7 +79,7 @@ export async function handleAgentDraftAction(action, agentId, callbacks) {
     const fetch_ = window.authFetch || window.fetch;
 
     if (action === 'approve') {
-        if (!confirmFn('이 agent draft 를 승인하시겠습니까?\n\n⚠ 승인 후 system_prompt 가 채팅의 system role 에 주입됩니다. AI 가 작성/수집한 텍스트라 prompt injection 위험이 있으니 미리보기로 확인하세요.')) return;
+        if (!confirmFn('이 agent draft 를 승인하시겠습니까?\n\n승인 후 system_prompt 가 채팅의 system role 에 주입됩니다. AI 가 작성/수집한 텍스트라 prompt injection 위험이 있으니 미리보기로 확인하세요.')) return;
         const url = typeof API.AGENTS_CUSTOM_APPROVE === 'function' ? API.AGENTS_CUSTOM_APPROVE(agentId) : '/api/agents/custom/' + encodeURIComponent(agentId) + '/approve';
         const r = await fetch_(url, { method: 'POST', credentials: 'include' });
         const data = await r.json().catch(() => ({}));

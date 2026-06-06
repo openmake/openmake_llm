@@ -241,7 +241,7 @@ async function reportMessage(messageId) {
         }
         const json = await res.json();
         const ttlDays = json?.data?.ttlDays || 7;
-        showToast(`✅ 신고 접수됨 (${ttlDays}일 보관)`, 'success');
+        showToast(`신고 접수됨 (${ttlDays}일 보관)`, 'success');
     } catch (e) {
         console.error('신고 실패:', e);
         showToast('신고 전송 실패', 'error');

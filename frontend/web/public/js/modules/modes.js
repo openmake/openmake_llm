@@ -44,7 +44,7 @@ function toggleDiscussionMode() {
         if (webSearchBtn) {
             webSearchBtn.classList.remove('active');
         }
-        showToast('🎯 멀티 에이전트 토론 모드 활성화 (웹 검색 비활성화됨)', 'info');
+        showToast('멀티 에이전트 토론 모드 활성화 (웹 검색 비활성화됨)', 'info');
     } else {
         showToast(newValue ? '🎯 멀티 에이전트 토론 모드 활성화' : '💬 일반 모드로 전환', 'info');
     }
@@ -109,9 +109,9 @@ function toggleDeepResearch() {
             const discussionBtn = document.getElementById('discussionModeBtn');
             if (discussionBtn) discussionBtn.classList.remove('active');
         }
-        showToast('🔬 Deep Research 모드 활성화\n주제를 입력하면 자동으로 심층 연구를 수행합니다.', 'info');
+        showToast('Deep Research 모드 활성화\n주제를 입력하면 자동으로 심층 연구를 수행합니다.', 'info');
     } else {
-        showToast('💬 일반 모드로 전환', 'info');
+        showToast('일반 모드로 전환', 'info');
     }
     saveMCPSettings();
     updateMCPToolTogglesUI();

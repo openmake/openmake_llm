@@ -67,7 +67,7 @@ function ensurePanel() {
             <button class="ap-close" aria-label="패널 닫기" title="닫기 (Esc)"><iconify-icon icon=lucide:x></iconify-icon></button>
         </header>
         <div class="ap-search-bar" hidden>
-            <input type="text" class="ap-search-input" placeholder="🔎 패널 안 검색 (Ctrl+F)" />
+            <input type="text" class="ap-search-input" placeholder="패널 안 검색 (Ctrl+F)" />
             <span class="ap-search-count">0/0</span>
             <button class="ap-search-prev" title="이전 (Shift+Enter)">▲</button>
             <button class="ap-search-next" title="다음 (Enter)">▼</button>
@@ -697,13 +697,13 @@ async function renderCsv(target, item) {
     const wrap = document.createElement('div');
     wrap.className = 'ap-csv-wrap';
     if (parsed.errors && parsed.errors.length > 0) {
-        wrap.insertAdjacentHTML('beforeend', `<div class="ap-csv-warn">⚠ ${parsed.errors.length}개 파싱 경고</div>`);
+        wrap.insertAdjacentHTML('beforeend', `<div class="ap-csv-warn">${parsed.errors.length}개 파싱 경고</div>`);
     }
 
     // 검색 input
     const searchWrap = document.createElement('div');
     searchWrap.className = 'ap-csv-search';
-    searchWrap.innerHTML = '<input type="text" placeholder="🔎 표 검색 (모든 열 부분 일치)" class="ap-csv-search-input" />';
+    searchWrap.innerHTML = '<input type="text" placeholder="표 검색 (모든 열 부분 일치)" class="ap-csv-search-input" />';
     wrap.appendChild(searchWrap);
 
     const table = document.createElement('table');

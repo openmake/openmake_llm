@@ -123,7 +123,7 @@ export async function handleSkillDraftAction(action, skillId, callbacks) {
     const fetch_ = window.authFetch || window.fetch;
 
     if (action === 'approve') {
-        if (!confirmFn('이 draft 를 승인하시겠습니까?\n\n⚠ 승인 후 채팅 system prompt 에 주입됩니다. AI 가 작성한 텍스트라 의심스러운 지시문이 없는지 라이브러리 미리보기로 확인하세요.')) return;
+        if (!confirmFn('이 draft 를 승인하시겠습니까?\n\n승인 후 채팅 system prompt 에 주입됩니다. AI 가 작성한 텍스트라 의심스러운 지시문이 없는지 라이브러리 미리보기로 확인하세요.')) return;
         const url = typeof API.AGENTS_SKILLS_APPROVE === 'function'
             ? API.AGENTS_SKILLS_APPROVE(skillId)
             : '/api/agents/skills/' + encodeURIComponent(skillId) + '/approve';

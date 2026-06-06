@@ -176,7 +176,7 @@ async function updateModelSelect() {
         localStorage.setItem('selectedModel', this.value);
         const model = models.find(m => m.id === this.value);
         const displayName = model ? model.name : this.value;
-        showToast(`🤖 모델 변경됨: ${displayName}`);
+        showToast(`모델 변경됨: ${displayName}`);
         applyModelCapabilityToggles(this.value);
     };
 }
@@ -282,7 +282,7 @@ async function selectModel(modelId) {
     const models = await fetchAvailableModels();
     const model = models.find(m => m.id === modelId);
     const displayName = model ? model.name : modelId;
-    showToast(`🤖 모델 선택됨: ${displayName}`);
+    showToast(`모델 선택됨: ${displayName}`);
 }
 
 /**

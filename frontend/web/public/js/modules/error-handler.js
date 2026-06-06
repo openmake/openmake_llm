@@ -57,7 +57,7 @@ function handleCommand(command) {
         if (typeof window.newChat === 'function') {
             window.newChat();
         }
-        showToast('💬 대화가 초기화되었습니다');
+        showToast('대화가 초기화되었습니다');
         return true;
     }
 
@@ -65,10 +65,10 @@ function handleCommand(command) {
         const mode = cmd.substring(6).trim();
         const validModes = ['assistant', 'reasoning', 'coder', 'reviewer', 'explainer', 'generator', 'agent'];
         if (validModes.includes(mode)) {
-            showToast(`🎯 프롬프트 모드: ${mode}`);
+            showToast(`프롬프트 모드: ${mode}`);
             return true;
         } else {
-            showToast(`❌ 알 수 없는 모드. 사용 가능: ${validModes.join(', ')}`);
+            showToast(`알 수 없는 모드. 사용 가능: ${validModes.join(', ')}`);
             return true;
         }
     }
