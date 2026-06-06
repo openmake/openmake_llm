@@ -171,18 +171,21 @@
 }
 
 .stat-value {
-    font-size: var(--font-size-3xl);
-    font-weight: var(--font-weight-bold);
+    font-family: var(--font-serif); /* Fraunces — editorial 수치 (Latin-safe) */
+    font-size: var(--font-size-4xl);
+    font-weight: var(--font-weight-semibold);
+    letter-spacing: -0.02em;
     color: var(--accent-primary);
     line-height: 1.2;
 }
 
 .stat-label {
+    font-family: var(--font-mono); /* technical 마이크로 라벨 */
     font-size: var(--font-size-xs);
     color: var(--text-muted);
     margin-top: var(--space-1);
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.08em;
 }
 
 .stat-change {
@@ -873,6 +876,14 @@
 }
 .admin-section-tab:hover { background: var(--bg-tertiary); color: var(--text-primary); }
 .admin-section-tab.active { background: var(--accent-primary); color: #fff; font-weight: var(--font-weight-semibold); }
+/* 탭 라인 아이콘(iconify) — 텍스트와 인라인, currentColor 상속 */
+.admin-section-tab iconify-icon,
+.tabs .tab iconify-icon { font-size: 15px; width: 15px; height: 15px; vertical-align: -2px; margin-right: 2px; }
+/* 버튼·서브탭·섹션/카드 헤딩의 라인 아이콘 정렬·크기 (이모지→iconify 통일) */
+.btn iconify-icon,
+.subtab-btn iconify-icon { font-size: 16px; width: 16px; height: 16px; vertical-align: -2px; margin-right: 3px; }
+.section-icon iconify-icon,
+.card-icon iconify-icon { font-size: 18px; width: 18px; height: 18px; }
 
 /* Phase 3.4 (2026-05-26) — 사용자 메시지 편집 → 새 대화 분기 */
 .message-actions-user {

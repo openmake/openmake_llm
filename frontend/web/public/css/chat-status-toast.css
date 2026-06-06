@@ -5,7 +5,7 @@
     gap: 8px;
     padding: 6px 12px;
     margin: 4px 0;
-    background: rgba(192, 97, 255, 0.1);
+    background: var(--accent-primary-light);
     border: 1.5px solid var(--accent-primary);
     border-radius: 6px;
     font-size: 0.85rem;

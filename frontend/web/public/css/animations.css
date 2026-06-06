@@ -480,7 +480,7 @@
     background: var(--accent-primary);
     border-radius: 50%;
     animation: thinkingDot 1.4s ease-in-out infinite;
-    border: 1px solid #000;
+    border: 1px solid var(--border-color);
 }
 
 .thinking-indicator .dot:nth-child(1) {

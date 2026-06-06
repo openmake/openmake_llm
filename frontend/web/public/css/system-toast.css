@@ -49,9 +49,9 @@
     background: var(--bg-card, #252547);
     color: var(--text-primary, #f0f0f2);
     border: var(--border-width, 2px) solid var(--border-color, #000);
-    border-left: 4px solid var(--accent-primary, #c061ff);
+    border-left: 4px solid var(--accent-primary, #ff6a3d);
     border-radius: var(--radius-md, 6px);
-    box-shadow: var(--shadow-brutal, 4px 4px 0 #000);
+    box-shadow: var(--shadow-brutal, var(--shadow-md));
     font-family: var(--font-sans);
     font-size: var(--font-size-sm, 0.875rem);
     line-height: var(--line-height-normal, 1.5);
@@ -60,7 +60,7 @@
 
 /* type별 액센트 색상 분기 (좌측 보더만 변경) */
 .system-toast--auto-discussion-activated {
-    border-left-color: var(--accent-purple, #bd52eb);
+    border-left-color: var(--accent-purple, #f2994a);
 }
 .system-toast--info {
     border-left-color: var(--info, #4cc9f0);
@@ -158,5 +158,5 @@
 /* 라이트 테마 호환 (light-theme 변수 자동 적용) */
 [data-theme='light'] .system-toast {
     background: var(--bg-card, #ffffff);
-    color: var(--text-primary, #1a1a2e);
+    color: var(--text-primary, #131210);
 }

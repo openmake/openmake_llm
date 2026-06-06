@@ -38,7 +38,7 @@
                 ".agent-meta { display:flex; gap:var(--space-2); align-items:center; flex-wrap:wrap; font-size:var(--font-size-sm); }\n" +
                 ".badge { display:inline-block; padding:2px 8px; border-radius:var(--radius-md); font-size:11px; font-weight:var(--font-weight-semibold); }\n" +
                 ".badge-cat { background:var(--bg-tertiary); color:var(--text-secondary); }\n" +
-                ".badge-draft { background:rgba(168,85,247,.15); color:#a855f7; }\n" +
+                ".badge-draft { background:var(--warning-light); color:var(--warning); }\n" +
                 ".card-actions { display:flex; gap:var(--space-2); margin-top:var(--space-3); }\n" +
                 ".card-actions button { padding:var(--space-1) var(--space-3); border:1px solid var(--border-light); border-radius:var(--radius-md); background:var(--bg-tertiary); color:var(--text-secondary); cursor:pointer; font-size:var(--font-size-sm); }\n" +
                 ".card-actions button:hover { border-color:var(--accent-primary); color:var(--text-primary); }\n" +

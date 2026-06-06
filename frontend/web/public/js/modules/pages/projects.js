@@ -70,7 +70,7 @@ function getHTML() {
         '.proj-card-title{display:flex;align-items:center;gap:var(--space-2);margin:0 0 var(--space-2);font-size:16px;color:var(--text-primary);}' +
         '.proj-card-tier{font-size:10px;padding:2px 6px;border-radius:var(--radius-sm);font-weight:var(--font-weight-semibold);text-transform:uppercase;}' +
         '.proj-tier-free{background:var(--bg-tertiary);color:var(--text-secondary);}' +
-        '.proj-tier-pro{background:rgba(168,85,247,.15);color:#a855f7;border:1px solid rgba(168,85,247,.3);}' +
+        '.proj-tier-pro{background:var(--accent-primary-light);color:var(--accent-primary);border:1px solid var(--border-color);}' +
         '.proj-card-desc{color:var(--text-muted);font-size:var(--font-size-sm);margin:0 0 var(--space-3);line-height:1.5;}' +
         '.proj-card-actions{display:flex;flex-wrap:wrap;gap:var(--space-1);}' +
         '.proj-card-pill{padding:2px 8px;background:var(--bg-tertiary);color:var(--text-secondary);border-radius:var(--radius-md);font-size:11px;}' +

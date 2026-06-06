@@ -11,9 +11,9 @@
     width: 48px;
     height: 48px;
     background: var(--accent-primary);
-    border: 2px solid #000;
+    border: 1px solid var(--border-color);
     border-radius: 50%;
-    box-shadow: 3px 3px 0 #000;
+    box-shadow: var(--shadow-md);
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -33,7 +33,7 @@
     background: var(--bg-sidebar);
     border: 2px solid var(--border-light);
     border-radius: 8px;
-    box-shadow: 4px 4px 0 #000;
+    box-shadow: var(--shadow-md);
     padding: 6px;
     min-width: 140px;
     flex-direction: column;

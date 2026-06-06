@@ -7,13 +7,13 @@
         content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover">
     <title>로그인 - OpenMake.Ai</title>
     <link rel="icon" type="image/png" href="/logo.png">
-    <meta name="theme-color" content="#c061ff">
+    <meta name="theme-color" content="#131210">
 
     <!-- 통합 디자인 시스템 -->
     <link rel="preconnect" href="https://cdn.jsdelivr.net">
     <link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css"
         rel="stylesheet">
-    <link rel="stylesheet" href="/css/design-tokens.css">
+    <link rel="stylesheet" href="/css/design-tokens.css?v=20">
 
 
 
@@ -68,7 +68,7 @@
             height: 100px;
             border-radius: 50%;
             object-fit: cover;
-            box-shadow: 4px 4px 0 #000;
+            box-shadow: var(--shadow-md);
             border: 2px solid var(--border-light);
         }
 
@@ -93,7 +93,7 @@
             border: 2px solid var(--border-light);
             border-radius: 8px;
             padding: 32px 28px;
-            box-shadow: 6px 6px 0 #000;
+            box-shadow: var(--shadow-lg);
         }
 
         /* 탭 */
@@ -122,7 +122,7 @@
         .tab.active {
             background: var(--bg-tertiary);
             color: var(--text-primary);
-            box-shadow: 2px 2px 0 #000;
+            box-shadow: var(--shadow-sm);
         }
 
         .tab:hover:not(.active) {
@@ -352,12 +352,12 @@
 
         [data-theme="light"] .login-card {
             background: #ffffff;
-            border: 2px solid #1a1a2e;
-            box-shadow: 4px 4px 0 #1a1a2e;
+            border: 1px solid var(--border-color);
+            box-shadow: var(--shadow-md);
         }
 
         [data-theme="light"] .login-avatar img {
-            box-shadow: 4px 4px 0 #1a1a2e;
+            box-shadow: var(--shadow-md);
         }
 
         /* 반응형 */

@@ -69,9 +69,9 @@
                     document.getElementById('app').innerHTML = `
                 <!-- Sub-tab nav: audit_logs / alert_history -->
                 <div class="filter-bar" style="margin-bottom: 0; border-bottom: 0; border-bottom-left-radius: 0; border-bottom-right-radius: 0; padding-bottom: 8px;">
-                    <button class="btn-primary subtab-btn" data-subtab="logs" onclick="switchAuditSubTab('logs')">📋 감사 로그</button>
-                    <button class="btn-secondary subtab-btn" data-subtab="alerts" onclick="switchAuditSubTab('alerts')" style="background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-light);">🔔 알림 이력</button>
-                    <button class="btn-secondary subtab-btn" data-subtab="pool" onclick="switchAuditSubTab('pool')" style="background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-light);">🤖 LLM Pool</button>
+                    <button class="btn-primary subtab-btn" data-subtab="logs" onclick="switchAuditSubTab('logs')"><iconify-icon icon=lucide:clipboard-list></iconify-icon> 감사 로그</button>
+                    <button class="btn-secondary subtab-btn" data-subtab="alerts" onclick="switchAuditSubTab('alerts')" style="background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-light);"><iconify-icon icon=lucide:bell></iconify-icon> 알림 이력</button>
+                    <button class="btn-secondary subtab-btn" data-subtab="pool" onclick="switchAuditSubTab('pool')" style="background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-light);"><iconify-icon icon=lucide:cpu></iconify-icon> LLM Pool</button>
                 </div>
 
                 <!-- audit_logs panel -->
@@ -83,7 +83,7 @@
                             <select id="filterLimit"><option value="50" selected>50개</option><option value="100">100개</option><option value="200">200개</option></select>
                         </div>
                         <button class="btn-primary" onclick="loadLogs(1)">조회</button>
-                        <button class="btn-secondary" onclick="exportLogsCsv()" title="현재 필터 조건으로 최대 10000건 CSV 다운로드">📥 CSV</button>
+                        <button class="btn-secondary" onclick="exportLogsCsv()" title="현재 필터 조건으로 최대 10000건 CSV 다운로드"><iconify-icon icon=lucide:download></iconify-icon> CSV</button>
                     </div>
                     <div id="logCount" class="log-count"></div>
                     <div class="table-wrapper">
@@ -112,7 +112,7 @@
                             <select id="filterAlertAck"><option value="">전체</option><option value="false">미확인만</option><option value="true">확인됨만</option></select>
                         </div>
                         <button class="btn-primary" onclick="loadAlertHistory(1)">조회</button>
-                        <button class="btn-secondary" onclick="exportAlertsCsv()" title="현재 필터 조건으로 최대 10000건 CSV 다운로드">📥 CSV</button>
+                        <button class="btn-secondary" onclick="exportAlertsCsv()" title="현재 필터 조건으로 최대 10000건 CSV 다운로드"><iconify-icon icon=lucide:download></iconify-icon> CSV</button>
                     </div>
                     <div id="alertCount" class="log-count"></div>
                     <div class="table-wrapper">

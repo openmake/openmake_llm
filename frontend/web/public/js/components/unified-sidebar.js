@@ -18,7 +18,7 @@
 /** @enum {string} 사이드바 상태 열거 */
 var STATES = { FULL: 'full', ICON: 'icon', HIDDEN: 'hidden' };
 /** @type {string} localStorage 키 */
-var LS_KEY = 'sidebar-state';
+var LS_KEY = 'sidebar-state-v2'; // v2: rail-first(icon) 기본값 롤아웃 — 이전 'full' 선호 1회 리셋
 /** @type {number} 호버 확장 대기 시간 (ms) */
 var HOVER_DELAY = 300;
 /** @type {number} 검색 디바운스 시간 (ms) */
@@ -108,7 +108,7 @@ var GROUP_LABELS = {
 function UnifiedSidebar(containerId) {
     this.containerId = containerId || 'sidebar';
     this.el = null;
-    this.state = STATES.FULL;
+    this.state = STATES.ICON; // Chat-first 구조: 슬림 레일 기본 (toggle 로 full 확장, hover 로 임시 확장)
     this.conversations = [];
     this.filteredConversations = null;
     this.activeConversationId = null;
@@ -142,8 +142,8 @@ UnifiedSidebar.prototype.init = function () {
     // 데스크톱에서 hidden 상태 방어: 데스크톱에서는 toggle이 full↔icon만
     // 지원하므로 hidden이 저장되어 있으면 full로 복원
     if (!isMobile() && this.state === STATES.HIDDEN) {
-        this.state = STATES.FULL;
-        localStorage.setItem(LS_KEY, STATES.FULL);
+        this.state = STATES.ICON;
+        localStorage.setItem(LS_KEY, STATES.ICON);
     }
 
     // HTML 생성
@@ -162,6 +162,12 @@ UnifiedSidebar.prototype.init = function () {
 
     // 페이지 nav 렌더 (NAV_ITEMS.menu + admin) — tier/admin 권한 필터링
     this._renderPageNav();
+
+    // 라우트 변경 시 레일 active nav 갱신 (⌘K·링크·프로그램 네비 모두 포함)
+    if (window.Router && typeof window.Router.onAfterNavigate === 'function') {
+        var selfNav = this;
+        window.Router.onAfterNavigate(function (info) { selfNav._markActiveNav(info && info.to); });
+    }
 
     // 대화 목록 로드
     this.loadConversations();
@@ -189,7 +195,7 @@ UnifiedSidebar.prototype._renderHTML = function () {
         // Logo (click → 채팅으로 이동, 세션 유지)
         '<a href="/" class="us-logo" data-us-home>' +
         '<img src="/logo.png" alt="OpenMake.AI" />' +
-        '<span class="us-brand-text">OpenMake.AI</span>' +
+        '<span class="us-brand-text">OpenMake<i>.AI</i></span>' +
         '</a>' +
         // New Chat
         '<button class="us-new-chat">' +
@@ -711,8 +717,12 @@ UnifiedSidebar.prototype._renderPageNav = function () {
 
     function renderItems(items) {
         return items.filter(passesFilter).map(function (item) {
+            // 라인 아이콘(iconify) 우선 — 채팅창 액션 아이콘과 동일 스타일. 없으면 이모지 fallback.
+            var ic = item.iconify
+                ? '<iconify-icon icon="' + esc(item.iconify) + '" aria-hidden="true"></iconify-icon>'
+                : esc(item.icon || '');
             return '<a class="us-nav-link" href="' + esc(item.href) + '" data-page-nav>' +
-                '<span class="us-nav-icon">' + esc(item.icon || '') + '</span>' +
+                '<span class="us-nav-icon">' + ic + '</span>' +
                 '<span class="us-label">' + esc(item.label) + '</span>' +
                 '</a>';
         }).join('');
@@ -723,7 +733,7 @@ UnifiedSidebar.prototype._renderPageNav = function () {
         // 비로그인: page-nav 항목이 전부 requireAuth 라 비므로 빈 박스 대신 로그인 유도 CTA.
         // 기존 avatar→/login.html 풀 내비게이션 플로우와 동일 (SPA data-page-nav 아님).
         menuHtml = '<a class="us-nav-link us-login-cta" href="/login.html">' +
-            '<span class="us-nav-icon">🔑</span>' +
+            '<span class="us-nav-icon"><iconify-icon icon="lucide:log-in" aria-hidden="true"></iconify-icon></span>' +
             '<span class="us-label">로그인하기</span>' +
             '</a>';
     }
@@ -755,6 +765,21 @@ UnifiedSidebar.prototype._renderPageNav = function () {
             }
             // Router 없으면 기본 동작 (페이지 이동)
         });
+    });
+
+    // 현재 라우트에 해당하는 nav 링크 active 표시
+    this._markActiveNav();
+};
+
+// 현재 경로와 일치하는 페이지 nav 링크에 .active 토글 (레일 active 인디케이터)
+UnifiedSidebar.prototype._markActiveNav = function (path) {
+    if (!this.el) return;
+    var cur = path || (window.location && window.location.pathname) || '/';
+    if (cur === '/index.html') cur = '/';
+    var links = this.el.querySelectorAll('.us-page-nav .us-nav-link[href]');
+    links.forEach(function (a) {
+        var hp = (a.getAttribute('href') || '').split('?')[0].split('#')[0];
+        a.classList.toggle('active', hp === cur && cur !== '/');
     });
 };
 

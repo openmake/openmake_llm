@@ -60,6 +60,8 @@ function ensurePanel() {
             <div class="ap-tabs">
                 <button class="ap-tab ap-tab-active" data-tab="preview">미리보기</button>
                 <button class="ap-tab" data-tab="code">Code View</button>
+                <button class="ap-tab" data-tab="reasoning">🧠 추론</button>
+                <button class="ap-tab" data-tab="tools">🛠 도구</button>
             </div>
             <button class="ap-maximize" aria-label="전체화면 토글" title="전체화면 (넓게 보기)">⛶</button>
             <button class="ap-close" aria-label="패널 닫기" title="닫기 (Esc)">✕</button>
@@ -74,6 +76,8 @@ function ensurePanel() {
         <div class="ap-body">
             <div class="ap-preview" data-pane="preview"></div>
             <div class="ap-code" data-pane="code" hidden></div>
+            <div class="ap-reasoning" data-pane="reasoning" hidden><div class="ap-ctx-empty">아직 추론이 없습니다. Thinking 모드 응답 시 여기에 표시됩니다.</div></div>
+            <div class="ap-tools" data-pane="tools" hidden><div class="ap-ctx-empty">호출된 도구가 없습니다.</div></div>
         </div>
         <footer class="ap-footer">
             <div class="ap-version-nav">
@@ -258,6 +262,56 @@ export function closeArtifactPanel() {
     closePanel();
 }
 
+// ─── Context 통합: 추론 / 도구 미러 (Chat-first 우측 패널 탭) ─────────────────
+// 기존 인라인 렌더(.thinking-block 등)는 그대로 두고, 패널에 '미러'만 한다(비파괴).
+let _reasonLastTs = 0;
+let _reasonBuf = '';
+const REASON_GAP_MS = 4000; // 이 간격 이상 끊기면 새 응답 턴으로 보고 리셋
+
+export function appendReasoningToken(token) {
+    if (token == null) return;
+    ensurePanel();
+    const pane = panelEl.querySelector('[data-pane="reasoning"]');
+    if (!pane) return;
+    const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+    if (now - _reasonLastTs > REASON_GAP_MS) { _reasonBuf = ''; }
+    _reasonLastTs = now;
+    _reasonBuf += String(token);
+    pane.textContent = _reasonBuf; // plain text — XSS-safe
+    pane.scrollTop = pane.scrollHeight;
+}
+
+export function setToolEntry(name, detail) {
+    ensurePanel();
+    const pane = panelEl.querySelector('[data-pane="tools"]');
+    if (!pane) return;
+    const empty = pane.querySelector('.ap-ctx-empty');
+    if (empty) empty.remove();
+    const row = document.createElement('div');
+    row.className = 'ap-tool-entry';
+    const nm = document.createElement('div');
+    nm.className = 'ap-tool-name';
+    nm.textContent = '🛠 ' + (name || 'tool');
+    row.appendChild(nm);
+    if (detail) {
+        const d = document.createElement('div');
+        d.className = 'ap-tool-detail';
+        d.textContent = String(detail);
+        row.appendChild(d);
+    }
+    pane.appendChild(row);
+    pane.scrollTop = pane.scrollHeight;
+}
+
+export function openContextPanel(tab) {
+    ensurePanel();
+    panelEl.classList.add('open');
+    switchTab(tab === 'tools' ? 'tools' : 'reasoning');
+}
+
+// ⌘K·외부에서 열기 위해 전역 노출
+if (typeof window !== 'undefined') { window.openContextPanel = openContextPanel; }
+
 // ─── 내부: 패널 컨트롤 ───────────────────────────────────────────────────────
 
 function closePanel() {
@@ -371,8 +425,15 @@ function switchTab(tab) {
         const active = t.getAttribute('data-tab') === tab;
         t.classList.toggle('ap-tab-active', active);
     });
-    panelEl.querySelector('[data-pane="preview"]').hidden = tab !== 'preview';
-    panelEl.querySelector('[data-pane="code"]').hidden = tab !== 'code';
+    // 모든 pane 일반 토글 (preview/code/reasoning/tools)
+    panelEl.querySelectorAll('[data-pane]').forEach((p) => {
+        p.hidden = p.getAttribute('data-pane') !== tab;
+    });
+    // 아티팩트 전용 chrome(버전 네비/편집·복사·다운·PDF footer)은 preview/code 에서만 노출
+    const isArtifact = (tab === 'preview' || tab === 'code');
+    const footer = panelEl.querySelector('.ap-footer');
+    if (footer) footer.style.display = isArtifact ? '' : 'none';
+    if (!isArtifact) { const sb = panelEl.querySelector('.ap-search-bar'); if (sb) sb.hidden = true; }
 }
 
 function navVersion(delta) {
@@ -558,7 +619,7 @@ async function renderChart(target, item) {
                 width: wrap.clientWidth || 600,
                 height: 360,
                 title: spec.title || '',
-                series: spec.series || [{}, { label: 'value', stroke: '#6366f1' }],
+                series: spec.series || [{}, { label: 'value', stroke: '#ff6a3d' }],
                 scales: spec.scales || { x: { time: true } },
             };
             new window.uPlot(opts, spec.data, wrap);
@@ -1098,7 +1159,7 @@ async function renderCode(target, item) {
     const classCount = outline.filter(o => o.kind === 'class' || o.kind === 'type').length;
     const fnCount = outline.filter(o => o.kind === 'fn' || o.kind === 'def').length;
 
-    const langBadge = LANG_BADGES[lang] || { icon: '📄', label: lang || 'text', color: '#6366f1' };
+    const langBadge = LANG_BADGES[lang] || { icon: '📄', label: lang || 'text', color: '#ff6a3d' };
 
     const card = document.createElement('div');
     card.style.cssText = 'max-width:560px; margin:32px auto; padding:24px; background:var(--bg-secondary,#0f0f0f); border:1px solid var(--border-light,#2a2a2a); border-radius:12px; color:var(--text-primary,#fff); font-family:system-ui,-apple-system,sans-serif;';
@@ -1136,7 +1197,7 @@ async function renderCode(target, item) {
 
         <div style="padding:12px 14px; background:var(--bg-tertiary,#0a0a0a); border-radius:8px; font-size:13px; color:var(--text-secondary,#aaa); line-height:1.5;">
             <div style="margin-bottom:6px;">ℹ️ <strong>${escHtml(langBadge.label)}</strong> 는 브라우저에서 직접 실행할 수 없습니다.</div>
-            <div>전체 코드는 우측 상단 <strong style="color:var(--accent-primary,#6366f1);">[Code View]</strong> 탭에서 줄번호와 함께 확인하세요.</div>
+            <div>전체 코드는 우측 상단 <strong style="color:var(--accent-primary,#ff6a3d);">[Code View]</strong> 탭에서 줄번호와 함께 확인하세요.</div>
         </div>
     `;
     target.appendChild(card);
@@ -1639,7 +1700,7 @@ function injectStyles() {
     background: transparent; transition: background 0.15s ease;
 }
 .ap-resizer:hover, .artifact-panel.ap-resizing .ap-resizer {
-    background: var(--accent-primary, #6366f1);
+    background: var(--accent-primary, #ff6a3d);
 }
 .artifact-panel.maximized .ap-resizer { display: none; }
 /* 드래그 중 iframe/preview 가 포인터를 가로채지 않도록 */
@@ -1650,7 +1711,7 @@ function injectStyles() {
     font-size: 16px; cursor: pointer; padding: 4px 8px; border-radius: 4px;
 }
 .ap-maximize:hover { background: var(--bg-tertiary, #2a2a2a); color: var(--text-primary, #fff); }
-.ap-maximize.active { color: var(--accent-primary, #6366f1); }
+.ap-maximize.active { color: var(--accent-primary, #ff6a3d); }
 @media (max-width: 768px) {
     .artifact-panel { width: 100vw; }
     .ap-resizer { display: none; }
@@ -1691,8 +1752,8 @@ function injectStyles() {
     border-radius: var(--radius-md, 6px); cursor: pointer; font-size: 13px;
 }
 .ap-tab-active {
-    background: var(--accent-primary, #6366f1); color: #fff;
-    border-color: var(--accent-primary, #6366f1);
+    background: var(--accent-primary, #ff6a3d); color: #fff;
+    border-color: var(--accent-primary, #ff6a3d);
 }
 .ap-close {
     background: transparent; border: none; color: var(--text-muted, #888);
@@ -1715,7 +1776,7 @@ function injectStyles() {
     border-radius: var(--radius-md, 6px);
     font-size: 12px; font-family: inherit;
 }
-.ap-search-input:focus { outline: none; border-color: var(--accent-primary, #6366f1); }
+.ap-search-input:focus { outline: none; border-color: var(--accent-primary, #ff6a3d); }
 .ap-search-count {
     color: var(--text-muted, #888); font-size: 11px; min-width: 50px; text-align: center;
 }
@@ -1728,9 +1789,22 @@ function injectStyles() {
 }
 .ap-search-bar button:hover { background: var(--bg-card, #1a1a1a); }
 mark.ap-search-hit { background: rgba(252, 211, 77, 0.4); color: inherit; border-radius: 2px; }
-mark.ap-search-active { background: var(--accent-primary, #6366f1); color: #fff; }
+mark.ap-search-active { background: var(--accent-primary, #ff6a3d); color: #fff; }
 
 .ap-body { flex: 1; overflow-y: auto; padding: 16px; min-height: 0; }
+/* Context 탭 — 추론 / 도구 */
+.ap-reasoning {
+    white-space: pre-wrap; font-family: var(--font-sans, sans-serif);
+    font-size: 13.5px; line-height: 1.75; color: var(--text-secondary, #b9b1a2);
+}
+.ap-tools { font-size: 13.5px; }
+.ap-ctx-empty { color: var(--text-muted, #867d6e); font-size: 13px; text-align: center; padding: 48px 16px; }
+.ap-tool-entry {
+    border: 1px solid var(--border-light, #2a2a2a); border-radius: var(--radius-md, 11px);
+    padding: 11px 13px; margin-bottom: 10px; background: var(--bg-secondary, #1a1815);
+}
+.ap-tool-name { font-weight: 600; color: var(--text-primary, #f3ede1); font-size: 13px; }
+.ap-tool-detail { font-family: var(--font-mono, monospace); font-size: 11.5px; color: var(--text-muted, #867d6e); margin-top: 5px; white-space: pre-wrap; word-break: break-all; }
 .ap-preview {
     background: var(--bg-secondary, #0f0f0f);
     border: 1px solid var(--border-light, #2a2a2a);
@@ -1794,7 +1868,7 @@ mark.ap-search-active { background: var(--accent-primary, #6366f1); color: #fff;
     color: var(--text-primary, #fff); padding: 4px 10px;
     border-radius: var(--radius-md, 6px); cursor: pointer; font-size: 12px;
 }
-.ap-actions button:hover { background: var(--accent-primary, #6366f1); color: #fff; }
+.ap-actions button:hover { background: var(--accent-primary, #ff6a3d); color: #fff; }
 
 /* Phase 2 신규 kind 스타일 */
 .ap-preview.ap-chart { padding: 0; background: transparent; border: none; }
@@ -1809,13 +1883,13 @@ mark.ap-search-active { background: var(--accent-primary, #6366f1); color: #fff;
     font-size: 12px; font-family: inherit;
 }
 .ap-csv-search-input:focus {
-    outline: none; border-color: var(--accent-primary, #6366f1);
+    outline: none; border-color: var(--accent-primary, #ff6a3d);
 }
 .ap-csv-table { border-collapse: collapse; font-size: 12px; width: 100%; }
 .ap-csv-table th, .ap-csv-table td { border: 1px solid var(--border-light, #2a2a2a); padding: 4px 8px; text-align: left; }
 .ap-csv-table th { background: var(--bg-tertiary, #2a2a2a); font-weight: var(--font-weight-semibold, 600); }
 .ap-csv-th { cursor: pointer; user-select: none; }
-.ap-csv-th:hover { background: var(--accent-primary, #6366f1); color: #fff; }
+.ap-csv-th:hover { background: var(--accent-primary, #ff6a3d); color: #fff; }
 .ap-csv-summary { font-size: 11px; color: var(--text-muted, #888); margin-top: 6px; text-align: right; }
 .ap-preview.ap-slide { padding: 0; background: #000; border: none; }
 .ap-reveal { width: 100%; }
@@ -1825,7 +1899,7 @@ mark.ap-search-active { background: var(--accent-primary, #6366f1); color: #fff;
 /* Phase 3 사용자 편집 모드 */
 .ap-edit-textarea {
     width: 100%; min-height: 320px; box-sizing: border-box;
-    padding: 12px; border: 1px solid var(--accent-primary, #6366f1);
+    padding: 12px; border: 1px solid var(--accent-primary, #ff6a3d);
     border-radius: var(--radius-md, 6px); background: var(--bg-secondary, #0f0f0f);
     color: var(--text-primary, #fff); font-family: 'JetBrains Mono', 'Courier New', monospace;
     font-size: 13px; line-height: 1.5; resize: vertical;
@@ -1836,14 +1910,14 @@ mark.ap-search-active { background: var(--accent-primary, #6366f1); color: #fff;
     border-radius: var(--radius-md, 6px); cursor: pointer; font-size: 12px;
     background: var(--bg-tertiary, #2a2a2a); color: var(--text-primary, #fff);
 }
-.ap-edit-save-btn { background: var(--accent-primary, #6366f1) !important; color: #fff !important; }
+.ap-edit-save-btn { background: var(--accent-primary, #ff6a3d) !important; color: #fff !important; }
 .ap-edit-save-btn:disabled { opacity: 0.6; cursor: default; }
-.ap-act-edit.ap-edit-saving { background: var(--accent-primary, #6366f1); color: #fff; }
+.ap-act-edit.ap-edit-saving { background: var(--accent-primary, #ff6a3d); color: #fff; }
 
 /* CodeMirror 5 통합 — material-darker 와 우리 design token 정렬 */
 .ap-code .CodeMirror {
     height: 420px !important;
-    border: 1px solid var(--accent-primary, #6366f1);
+    border: 1px solid var(--accent-primary, #ff6a3d);
     border-radius: var(--radius-md, 6px);
     font-family: 'JetBrains Mono', 'Courier New', monospace;
     font-size: 13px;

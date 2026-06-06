@@ -484,7 +484,7 @@
 .skill-draft-card--inline {
     /* 채팅 메시지 안에서는 약간 여백 줄임 */
     margin: 0.5rem 0 0.75rem;
-    border-left: 3px solid var(--accent-primary, #a855f7);
+    border-left: 3px solid var(--accent-primary, #ff6a3d);
 }
 .skill-draft-card__header {
     display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap;
@@ -493,9 +493,9 @@
 .skill-draft-card__badge {
     font-size: 0.72rem; padding: 0.15rem 0.55rem;
     border-radius: 999px; line-height: 1.4;
-    background: rgba(168, 85, 247, 0.12);
-    color: var(--accent-primary, #a855f7);
-    border: 1px solid rgba(168, 85, 247, 0.25);
+    background: var(--accent-primary-light);
+    color: var(--accent-primary, #ff6a3d);
+    border: 1px solid var(--accent-primary-light);
 }
 .skill-draft-card__badge-draft {
     background: rgba(234, 179, 8, 0.12);
@@ -537,7 +537,7 @@
     margin: 0.5rem 0; font-size: 0.8rem;
 }
 .skill-draft-card__preview summary {
-    cursor: pointer; color: var(--accent-primary, #a855f7);
+    cursor: pointer; color: var(--accent-primary, #ff6a3d);
     font-weight: 500;
 }
 .skill-draft-card__content {

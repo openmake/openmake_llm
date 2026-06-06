@@ -35,8 +35,8 @@ const NAV_ITEMS = {
         // /documents.html, /memory.html: 2026-05-19 제거
         // /projects.html (프로젝트): 2026-06-02 settings 탭으로 이전 — nav 제거, 라우트는 spa-router 에 보존
         // projects hub 의 2 카드 진입점 — 사이드바 nav 에서 hidden (projects 가 진입점), spa-router 라우트 등록 유지
-        { href: '/skill-library.html', icon: '📦', iconify: 'lucide:package', label: '스킬 라이브러리', requireAuth: true, minTier: 'pro', cssFiles: ['/css/skill-library.css?v=5'], excludeFromSidebar: true },
-        { href: '/mcp-servers.html', icon: '🔌', iconify: 'lucide:plug', label: 'MCP 서버', requireAuth: true, cssFiles: ['/css/skill-library.css?v=5'], excludeFromSidebar: true },
+        { href: '/skill-library.html', icon: '📦', iconify: 'lucide:package', label: '스킬 라이브러리', requireAuth: true, minTier: 'pro', cssFiles: ['/css/skill-library.css?v=15'], excludeFromSidebar: true },
+        { href: '/mcp-servers.html', icon: '🔌', iconify: 'lucide:plug', label: 'MCP 서버', requireAuth: true, cssFiles: ['/css/skill-library.css?v=15'], excludeFromSidebar: true },
         // 2026-05-26: 기존 '커스텀 에이전트' CRUD 페이지 → Git URL Ingest 'Agent Draft' 검토 전용으로 재포지셔닝.
         // 사용자 본인 페르소나(Custom Agent)는 Settings '사용자 지시문' 아래 '내 Agent' 섹션으로 일원화 (2026-06-01).
         { href: '/custom-agents.html', icon: '📥', iconify: 'lucide:inbox', label: 'Agent Draft', requireAuth: true, excludeFromSidebar: true },
@@ -48,7 +48,7 @@ const NAV_ITEMS = {
     admin: [
         // dashboard.css: 2026-06-03 복원 — Phase R2 통합 시 누락된 link. admin.js(사용자)/admin-metrics(통합 모니터링)의
         // .dashboard-grid·.metric-card·.node-grid 등이 이 CSS 의존. 라우트 이탈 시 removeModuleCSS 로 unload 되어 non-admin 페이지 무영향.
-        { href: '/admin.html', icon: '👥', iconify: 'lucide:users', label: '관리자', requireAuth: true, requireAdmin: true, cssFiles: ['/css/pages/dashboard.css?v=1'] },
+        { href: '/admin.html', icon: '👥', iconify: 'lucide:users', label: '관리자', requireAuth: true, requireAdmin: true, cssFiles: ['/css/pages/dashboard.css?v=12'] },
         // MCP 카탈로그/모니터링: 2026-06-03 admin 섹션 탭(/admin.html?tab=mcp-catalog|mcp-monitoring)으로 흡수 — Phase R2 완성.
         // 사이드바 nav 에서 hidden, standalone 라우트는 spa-router 직접 접근/북마크용으로 보존.
         { href: '/admin-mcp-catalog.html', icon: '🔌', iconify: 'lucide:server-cog', label: 'MCP 카탈로그', requireAuth: true, requireAdmin: true, excludeFromSidebar: true },
@@ -57,7 +57,7 @@ const NAV_ITEMS = {
         // settings 및 그 sub-탭들: 사이드바 nav 에서 hidden. settings 페이지의 톱니/avatar dropdown
         // 이 settings 진입점. settings 의 5탭 (account/api-keys/usage/integrations) 은 각자 페이지로
         // navigate 하므로 spa-router 라우트 등록 위해 entry 보존.
-        { href: '/settings.html', icon: '⚙️', iconify: 'lucide:settings', label: '설정', cssFiles: ['/css/settings.css?v=4'], excludeFromSidebar: true },
+        { href: '/settings.html', icon: '⚙️', iconify: 'lucide:settings', label: '설정', cssFiles: ['/css/settings.css?v=15'], excludeFromSidebar: true },
         { href: '/password-change.html', icon: '🔑', iconify: 'lucide:key-round', label: '비밀번호 변경', requireAuth: true, excludeFromSidebar: true },
         { href: '/api-keys.html', icon: '🗝️', iconify: 'lucide:key', label: 'API 키', requireAuth: true, excludeFromSidebar: true },
         { href: '/usage.html', icon: '📈', iconify: 'lucide:bar-chart-2', label: '사용량', requireAuth: true, excludeFromSidebar: true },
