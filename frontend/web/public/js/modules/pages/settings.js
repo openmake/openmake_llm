@@ -238,15 +238,6 @@
         init: async function () {
             try {
                 var safeStorage = window.SafeStorage;
-                // 관리자 확인 헬퍼
-                function isAdmin() {
-                    const savedUser = safeStorage.getItem(SK.USER || 'user');
-                    if (!savedUser) return false;
-                    try {
-                        const user = JSON.parse(savedUser);
-                        return user.role === 'admin' || user.role === 'administrator';
-                    } catch (e) { return false; }
-                }
 
                 async function loadApiKeyCount() {
                     var el = document.getElementById('apiKeyCount');
