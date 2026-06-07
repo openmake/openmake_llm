@@ -127,7 +127,7 @@ import { Router, SafeStorage } from './spa-router.js?v=17';
 // 1-17. 컴포넌트 (사이드바)
 // AdminPanel: 2026-05-21 제거 — R1~R3 통합 이후 11 항목 중 9개 stale.
 // 사이드바 톱니 버튼은 직접 /settings.html navigate (unified-sidebar.js).
-import { UnifiedSidebar } from './components/unified-sidebar.js?v=9';
+import { UnifiedSidebar } from './components/unified-sidebar.js?v=10';
 
 // 1-18. 모바일 FAB 메뉴
 import { init as initMobileFab } from './modules/mobile-fab.js';

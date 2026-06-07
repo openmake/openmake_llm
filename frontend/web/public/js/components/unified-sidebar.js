@@ -216,6 +216,11 @@ UnifiedSidebar.prototype._renderHTML = function () {
         '<div class="us-conversations" role="list" aria-label="Conversation list">' +
         '<div class="us-loading"><div class="us-loading-spinner"></div></div>' +
         '</div>' +
+        // 모든 대화 보기 → history 페이지 (전체 목록 + 고급 필터)
+        '<a href="/history.html" class="us-show-more" data-us-history title="모든 대화 보기">' +
+        '<iconify-icon icon="lucide:scroll-text" aria-hidden="true"></iconify-icon>' +
+        '<span class="us-label">모든 대화 보기</span>' +
+        '</a>' +
         // User section
         '<div class="us-user-section">' +
         // Dropdown Menu
@@ -268,6 +273,22 @@ UnifiedSidebar.prototype._bindEvents = function () {
                 window.Router.navigate('/');
             } else {
                 window.location.href = '/';
+            }
+            if (isMobile()) {
+                self.setState(STATES.HIDDEN);
+            }
+        });
+    }
+
+    // 모든 대화 보기 → history 페이지
+    var historyLink = this.el.querySelector('a.us-show-more[data-us-history]');
+    if (historyLink) {
+        historyLink.addEventListener('click', function (ev) {
+            ev.preventDefault();
+            if (window.Router && typeof window.Router.navigate === 'function') {
+                window.Router.navigate('/history.html');
+            } else {
+                window.location.href = '/history.html';
             }
             if (isMobile()) {
                 self.setState(STATES.HIDDEN);
