@@ -101,16 +101,10 @@
 }
 
 /* ─── Hover-Expand Overlay ─────────────────── */
+/* hover peek: 오버레이 대신 in-flow 확장 → 콘텐츠를 밀어냄(가려지지 않음).
+   base 의 position:relative + flex-shrink:0 + transition:width 를 그대로 사용. */
 .unified-sidebar.us-hover-expanded {
-    position: absolute;
-    top: 0;
-    left: 0;
     width: 280px;
-    height: 100%;
-    z-index: 100;
-    background: var(--bg-sidebar);
-    border-right: var(--border-width) solid var(--border-light);
-    box-shadow: var(--shadow-lg);
 }
 
 .unified-sidebar.us-hover-expanded .us-label,
