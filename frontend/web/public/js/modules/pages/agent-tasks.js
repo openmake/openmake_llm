@@ -88,8 +88,15 @@
         }).then(function(res) {
             var task = (res.data && res.data.task) || res.data;
             if (!task || !task.id) throw new Error('no task id');
+            // 선택된 스킬 범위(없으면 빈 배열 → 백엔드가 전체 사용)
+            var allowedSkills = [].slice.call(document.querySelectorAll('.skill-chip.active'))
+                .map(function(c) { return c.getAttribute('data-skill-id'); })
+                .filter(Boolean);
             // 생성 직후 백그라운드 실행 시작 (detached — 응답 202 즉시 반환)
-            return _authFetch(_ep() + '/' + task.id + '/execute', { method: 'POST' }).then(function() {
+            return _authFetch(_ep() + '/' + task.id + '/execute', {
+                method: 'POST',
+                body: JSON.stringify({ allowedSkills: allowedSkills })
+            }).then(function() {
                 if (goalEl) goalEl.value = '';
                 _showToast('작업이 시작되었습니다. 창을 닫아도 계속 진행됩니다.');
                 _loadTasks();
@@ -98,6 +105,30 @@
             console.error('[AgentTasks] 생성/실행 실패:', e);
             _showToast('시작 실패', 'error');
         });
+    }
+
+    // 스킬 범위 picker — 사용자가 가진 스킬을 칩으로 노출(선택 시 그 스킬만 사용)
+    function _loadSkillScope() {
+        var API = window.API_ENDPOINTS || {};
+        var url = (API.AGENTS_SKILLS || '/api/agents/skills') + '?limit=50';
+        _authFetch(url).then(function(res) {
+            var list = (res && res.data && res.data.skills) || [];
+            var chips = document.getElementById('skillScopeChips');
+            var scope = document.getElementById('skillScope');
+            if (!list.length || !chips || !scope) return;
+            chips.innerHTML = list.map(function(s) {
+                return '<button type="button" class="skill-chip" data-skill-id="' + _esc(s.id) + '" aria-pressed="false">' + _esc(s.name || s.id) + '</button>';
+            }).join('');
+            scope.style.display = '';
+            var clickH = function(e) {
+                var c = e.target.closest('.skill-chip');
+                if (!c) return;
+                var on = c.classList.toggle('active');
+                c.setAttribute('aria-pressed', on ? 'true' : 'false');
+            };
+            chips.addEventListener('click', clickH);
+            _listeners.push({ el: chips, type: 'click', fn: clickH });
+        }).catch(function() { /* 스킬 로드 실패 — picker 숨김 유지(전체 스킬 기본) */ });
     }
 
     function _renderDetail(task, steps) {
@@ -338,6 +369,13 @@
                 '.page-agent-tasks .toast.success { background:var(--success); }' +
                 '.page-agent-tasks .toast.error { background:var(--danger); }' +
                 '.page-agent-tasks .loading { text-align:center; padding:var(--space-6); color:var(--text-muted); }' +
+                '.page-agent-tasks .skill-scope { margin:calc(-1 * var(--space-2)) 0 var(--space-4); }' +
+                '.page-agent-tasks .skill-scope-label { display:flex; align-items:center; gap:6px; font-size:var(--font-size-sm); color:var(--text-secondary); margin-bottom:var(--space-2); }' +
+                '.page-agent-tasks .skill-scope-label span { color:var(--text-muted); font-size:12px; font-weight:400; }' +
+                '.page-agent-tasks .skill-scope-chips { display:flex; flex-wrap:wrap; gap:var(--space-2); }' +
+                '.page-agent-tasks .skill-chip { padding:4px 12px; background:var(--bg-tertiary); border:1px solid var(--border-light); border-radius:var(--radius-md); color:var(--text-secondary); font-size:var(--font-size-sm); cursor:pointer; transition:all .15s; }' +
+                '.page-agent-tasks .skill-chip:hover { border-color:var(--accent-primary); }' +
+                '.page-agent-tasks .skill-chip.active { background:var(--accent-primary); color:#fff; border-color:var(--accent-primary); }' +
                 '</style>' +
                 '<header class="page-header">' +
                     '<h1>에이전트 작업</h1>' +
@@ -346,6 +384,10 @@
                     '<div class="new-task">' +
                         '<div class="form-group" style="flex:4"><label for="goal">목표</label><textarea id="goal" placeholder="예: 최신 AI 에이전트 동향을 조사해서 요약해줘"></textarea></div>' +
                         '<button class="btn-primary" id="btnStartTask">작업 시작</button>' +
+                    '</div>' +
+                    '<div class="skill-scope" id="skillScope" style="display:none;">' +
+                        '<div class="skill-scope-label"><iconify-icon icon="lucide:package"></iconify-icon> 스킬 범위 <span>(선택하면 해당 스킬만 사용 · 미선택 시 전체)</span></div>' +
+                        '<div class="skill-scope-chips" id="skillScopeChips" role="group" aria-label="스킬 범위 선택"></div>' +
                     '</div>' +
                     '<div id="taskList" class="task-list"><div class="loading">불러오는 중...</div></div>' +
                 '</div>' +
@@ -382,6 +424,8 @@
                 goalInput.addEventListener('keydown', keyHandler);
                 _listeners.push({ el: goalInput, type: 'keydown', fn: keyHandler });
             }
+
+            _loadSkillScope();
 
             var taskList = document.getElementById('taskList');
             if (taskList) {

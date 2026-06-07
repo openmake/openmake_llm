@@ -61,6 +61,9 @@ export interface AgentTaskRunInput {
     userTier: UserTier;
     userRole: UserRole;
     maxTurns: number;
+    /** 이 실행에서 사용할 스킬 범위(skill_id 목록). 지정 시 활성 스킬 바인딩을 이 집합으로 제한.
+     *  미지정/빈 배열이면 사용자 전체 활성 스킬 사용(기존 동작). */
+    allowedSkills?: string[];
     /** resume(이어하기): 기존 end-of-turn checkpoint 에서 복원 */
     resume?: {
         conversation: ChatMessage[];
@@ -101,7 +104,7 @@ export class AgentTaskService {
      * 모든 종료 경로에서 agent_tasks 상태를 갱신한다.
      */
     async execute(input: AgentTaskRunInput): Promise<void> {
-        const { taskId, goal, userId, userTier, userRole, maxTurns } = input;
+        const { taskId, goal, userId, userTier, userRole, maxTurns, allowedSkills } = input;
         const db = getUnifiedDatabase();
         const mcp = getUnifiedMCPClient();
         const signal = this.abortController.signal;
@@ -169,6 +172,14 @@ export class AgentTaskService {
                 skillBindings = await getSkillManager().getActiveSkillBindings(AGENT_TASK_SKILL_AGENT_ID, userId);
             } catch (e) {
                 logger.debug('[AgentTask] 스킬 도구 바인딩 조회 실패 — 빈 배열', e);
+            }
+            // 스킬 범위 지정 시(allowedSkills): 활성 바인딩을 해당 skill_id 집합으로 제한.
+            // 미지정/빈 배열이면 전체 사용(기존 동작).
+            if (allowedSkills && allowedSkills.length > 0) {
+                const allow = new Set(allowedSkills);
+                const before = skillBindings.length;
+                skillBindings = skillBindings.filter((b) => allow.has(b.skill_id));
+                logger.debug(`[AgentTask] 스킬 범위 제한: ${before} → ${skillBindings.length} (allowedSkills=${allowedSkills.length})`);
             }
             const tools = skillBindings.length > 0
                 ? mergeToolsWithSkills({ allTools: tierTools, userToggled: tierTools, profileRequired: [], skillBindings })

@@ -132,6 +132,13 @@ router.post('/:taskId/execute', asyncHandler(async (req: Request, res: Response)
         : 'free';
     const role: UserRole = (req.user!.role as UserRole) || 'user';
 
+    // 스킬 범위(allowedSkills): 이 실행에서 쓸 skill_id 목록 — 옵션. 문자열 배열만 수용,
+    // 최대 50개로 캡. 미지정이면 전체 활성 스킬 사용(기존 동작).
+    const rawSkills = (req.body as { allowedSkills?: unknown })?.allowedSkills;
+    const allowedSkills = Array.isArray(rawSkills)
+        ? rawSkills.filter((s): s is string => typeof s === 'string' && s.length > 0 && s.length <= 200).slice(0, 50)
+        : undefined;
+
     // 백그라운드 detached 실행 (응답은 즉시 반환). AgentTaskService 가 자체
     // AbortController 를 소유하므로 ws.close 와 무관하게 끝까지 진행한다.
     const service = new AgentTaskService();
@@ -142,6 +149,7 @@ router.post('/:taskId/execute', asyncHandler(async (req: Request, res: Response)
         userTier: tier,
         userRole: role,
         maxTurns: task.max_turns,
+        allowedSkills,
     }).catch((error) => {
         logger.error(`[AgentTaskRoutes] 작업 실행 실패: ${error}`);
     });
