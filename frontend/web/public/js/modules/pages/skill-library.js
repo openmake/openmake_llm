@@ -77,10 +77,10 @@
                         <span class="sl-input-icon iconify" data-icon="lucide:search"></span>
                         <input type="text" id="localSearchInput" class="sl-input" placeholder="스킬 검색...">
                     </div>
-                    <select id="localCategoryFilter" class="sl-select">
+                    <select id="localCategoryFilter" class="sl-select" aria-label="카테고리 필터">
                         <option value="">모든 카테고리</option>
                     </select>
-                    <select id="localSortSelect" class="sl-select">
+                    <select id="localSortSelect" class="sl-select" aria-label="정렬">
                         <option value="newest">최신순</option>
                         <option value="updated">업데이트순</option>
                         <option value="name">이름순</option>

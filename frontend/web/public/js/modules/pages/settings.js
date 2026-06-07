@@ -44,7 +44,7 @@
         '<div class="s-card-body">' +
         '<div class="setting-row">' +
         '<div class="setting-info"><h4>\uD14C\uB9C8</h4><p>\uC571\uC758 \uC0C9\uC0C1 \uD14C\uB9C8\uB97C \uC120\uD0DD\uD569\uB2C8\uB2E4</p></div>' +
-        '<select id="themeSelect" class="s-select" onchange="setTheme(this.value)">' +
+        '<select id="themeSelect" class="s-select" aria-label="테마 선택" onchange="setTheme(this.value)">' +
         '<option value="dark">\uB2E4\uD06C \uBAA8\uB4DC</option>' +
         '<option value="light">\uB77C\uC774\uD2B8 \uBAA8\uB4DC</option>' +
         '<option value="system">\uC2DC\uC2A4\uD15C \uC124\uC815</option>' +
@@ -52,7 +52,7 @@
         '</div>' +
         '<div class="setting-row">' +
         '<div class="setting-info"><h4>\uC5B8\uC5B4</h4><p>AI \uC751\uB2F5 \uC5B8\uC5B4\uB97C \uC120\uD0DD\uD569\uB2C8\uB2E4. \uC790\uB3D9 \uAC10\uC9C0 \uC2DC \uC0AC\uC6A9\uC790 \uBA54\uC2DC\uC9C0 \uC5B8\uC5B4\uB85C \uC751\uB2F5\uD569\uB2C8\uB2E4.</p></div>' +
-'<select id="langSelect" class="s-select">' +
+'<select id="langSelect" class="s-select" aria-label="언어 선택">' +
 '<option value=""><iconify-icon icon=lucide:globe></iconify-icon> \uC790\uB3D9 \uAC10\uC9C0 (Auto-detect)</option>' +
 '<option value="ko">\uD55C\uAD6D\uC5B4</option>' +
         '<option value="en">English</option>' +
