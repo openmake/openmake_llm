@@ -20,7 +20,7 @@
                 '<style data-spa-style="password-change">' +
                 ".form-wrapper { max-width:480px; margin:0 auto; }\n        .form-card { background:var(--bg-card); border:1px solid var(--border-light); border-radius:var(--radius-lg); padding:var(--space-6); }\n        .form-card h2 { margin:0 0 var(--space-5); color:var(--text-primary); text-align:center; font-size:1.3rem; }\n        .form-group { margin-bottom:var(--space-4); }\n        .form-group label { display:block; margin-bottom:var(--space-2); color:var(--text-secondary); font-size:var(--font-size-sm); font-weight:var(--font-weight-semibold); }\n        .input-wrap { position:relative; }\n        .input-wrap input { width:100%; padding:var(--space-3); padding-right:44px; background:var(--bg-secondary); border:1px solid var(--border-light); border-radius:var(--radius-md); color:var(--text-primary); font-size:14px; box-sizing:border-box; }\n        .input-wrap input:focus { outline:none; border-color:var(--accent-primary); }\n        .toggle-pw { position:absolute; right:12px; top:50%; transform:translateY(-50%); background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:16px; padding:0; }\n        .strength-bar { height:4px; background:var(--bg-tertiary); border-radius:2px; margin-top:var(--space-2); overflow:hidden; }\n        .strength-fill { height:100%; border-radius:2px; transition:width .3s, background .3s; }\n        .strength-label { font-size:12px; margin-top:var(--space-1); }\n        .strength-weak { color:var(--danger); }\n        .strength-medium { color:var(--warning); }\n        .strength-strong { color:var(--success); }\n        .rules-list { margin-top:var(--space-2); list-style:none; padding:0; }\n        .rules-list li { font-size:12px; color:var(--text-muted); padding:2px 0; display:flex; align-items:center; gap:var(--space-2); }\n        .rules-list li.pass { color:var(--success); }\n        .rules-list li.fail { color:var(--text-muted); }\n        .rule-icon { width:14px; text-align:center; }\n        .btn-submit { width:100%; padding:var(--space-3); background:var(--accent-primary); color:#fff; border:none; border-radius:var(--radius-md); cursor:pointer; font-size:15px; font-weight:var(--font-weight-bold); margin-top:var(--space-4); transition:opacity .2s; }\n        .btn-submit:disabled { opacity:0.5; cursor:not-allowed; }\n        .btn-submit:not(:disabled):hover { opacity:0.9; }\n        .back-link { display:block; text-align:center; margin-top:var(--space-4); color:var(--text-muted); font-size:var(--font-size-sm); text-decoration:none; }\n        .back-link:hover { color:var(--accent-primary); }\n        .toast { position:fixed; bottom:20px; right:20px; padding:var(--space-3) var(--space-5); border-radius:var(--radius-md); color:#fff; z-index:2000; opacity:0; transition:opacity .3s; }\n        .toast.show { opacity:1; } .toast.success { background:var(--success); } .toast.error { background:var(--danger); }" +
                 '<\/style>' +
-                "<header class=\"page-header\">\n                <button class=\"mobile-menu-btn\" onclick=\"toggleMobileSidebar(event)\">&#9776;</button>\n                <h1>비밀번호 변경</h1>\n            </header>\n            <div class=\"content-area\">\n                <div class=\"form-wrapper\">\n                    <div class=\"form-card\">\n                        <h2><iconify-icon icon=lucide:lock-keyhole></iconify-icon> 비밀번호 변경</h2>\n                        <form id=\"pwForm\" autocomplete=\"off\">\n                            <div class=\"form-group\">\n                                <label for=\"currentPw\">현재 비밀번호</label>\n                                <div class=\"input-wrap\">\n                                    <input type=\"password\" id=\"currentPw\" required placeholder=\"현재 비밀번호 입력\" autocomplete=\"current-password\">\n                                    <button type=\"button\" class=\"toggle-pw\" onclick=\"toggleVis('currentPw', this)\"><iconify-icon icon=lucide:eye></iconify-icon></button>\n                                </div>\n                            </div>\n                            <div class=\"form-group\">\n                                <label for=\"newPw\">새 비밀번호</label>\n                                <div class=\"input-wrap\">\n                                    <input type=\"password\" id=\"newPw\" required placeholder=\"새 비밀번호 입력\" autocomplete=\"new-password\" oninput=\"checkStrength()\">\n                                    <button type=\"button\" class=\"toggle-pw\" onclick=\"toggleVis('newPw', this)\"><iconify-icon icon=lucide:eye></iconify-icon></button>\n                                </div>\n                                <div class=\"strength-bar\"><div class=\"strength-fill\" id=\"strengthFill\" style=\"width:0\"></div></div>\n                                <div class=\"strength-label\" id=\"strengthLabel\"></div>\n                                <ul class=\"rules-list\" id=\"rulesList\">\n                                    <li class=\"fail\" id=\"rule-len\"><span class=\"rule-icon\">✗</span> 최소 8자 이상</li>\n                                    <li class=\"fail\" id=\"rule-case\"><span class=\"rule-icon\">✗</span> 대소문자 포함</li>\n                                    <li class=\"fail\" id=\"rule-num\"><span class=\"rule-icon\">✗</span> 숫자 포함</li>\n                                    <li class=\"fail\" id=\"rule-special\"><span class=\"rule-icon\">✗</span> 특수문자 포함</li>\n                                </ul>\n                            </div>\n                            <div class=\"form-group\">\n                                <label for=\"confirmPw\">새 비밀번호 확인</label>\n                                <div class=\"input-wrap\">\n                                    <input type=\"password\" id=\"confirmPw\" required placeholder=\"새 비밀번호 다시 입력\" autocomplete=\"new-password\" oninput=\"checkMatch()\">\n                                    <button type=\"button\" class=\"toggle-pw\" onclick=\"toggleVis('confirmPw', this)\"><iconify-icon icon=lucide:eye></iconify-icon></button>\n                                </div>\n                                <div class=\"strength-label\" id=\"matchLabel\"></div>\n                            </div>\n                            <button type=\"submit\" class=\"btn-submit\" id=\"submitBtn\" disabled>비밀번호 변경</button>\n                        </form>\n                        <a href=\"/settings.html\" class=\"back-link\">← 설정으로 돌아가기</a>\n                    </div>\n                </div>\n            </div>\n\n<div id=\"toast\" class=\"toast\"></div>" +
+                "<header class=\"page-header\">\n                <button class=\"mobile-menu-btn\" onclick=\"toggleMobileSidebar(event)\">&#9776;</button>\n                <h1>비밀번호 변경</h1>\n            </header>\n            <div class=\"content-area\">\n                <div class=\"form-wrapper\">\n                    <div class=\"form-card\">\n                        <h2><iconify-icon icon=lucide:lock-keyhole></iconify-icon> 비밀번호 변경</h2>\n                        <form id=\"pwForm\" autocomplete=\"off\">\n                            <div class=\"form-group\">\n                                <label for=\"currentPw\">현재 비밀번호</label>\n                                <div class=\"input-wrap\">\n                                    <input type=\"password\" id=\"currentPw\" required placeholder=\"현재 비밀번호 입력\" autocomplete=\"current-password\">\n                                    <button type=\"button\" class=\"toggle-pw\" onclick=\"toggleVis('currentPw', this)\"><iconify-icon icon=lucide:eye></iconify-icon></button>\n                                </div>\n                            </div>\n                            <div class=\"form-group\">\n                                <label for=\"newPw\">새 비밀번호</label>\n                                <div class=\"input-wrap\">\n                                    <input type=\"password\" id=\"newPw\" required placeholder=\"새 비밀번호 입력\" autocomplete=\"new-password\" oninput=\"checkStrength()\">\n                                    <button type=\"button\" class=\"toggle-pw\" onclick=\"toggleVis('newPw', this)\"><iconify-icon icon=lucide:eye></iconify-icon></button>\n                                </div>\n                                <div class=\"strength-bar\"><div class=\"strength-fill\" id=\"strengthFill\" style=\"width:0\"></div></div>\n                                <div class=\"strength-label\" id=\"strengthLabel\"></div>\n                                <ul class=\"rules-list\" id=\"rulesList\">\n                                    <li class=\"fail\" id=\"rule-len\"><span class=\"rule-icon\">✗</span> 최소 8자 이상</li>\n                                    <li class=\"fail\" id=\"rule-case\"><span class=\"rule-icon\">✗</span> 대소문자 포함</li>\n                                    <li class=\"fail\" id=\"rule-num\"><span class=\"rule-icon\">✗</span> 숫자 포함</li>\n                                    <li class=\"fail\" id=\"rule-special\"><span class=\"rule-icon\">✗</span> 특수문자 포함</li>\n                                </ul>\n                            </div>\n                            <div class=\"form-group\">\n                                <label for=\"confirmPw\">새 비밀번호 확인</label>\n                                <div class=\"input-wrap\">\n                                    <input type=\"password\" id=\"confirmPw\" required placeholder=\"새 비밀번호 다시 입력\" autocomplete=\"new-password\" oninput=\"checkMatch()\">\n                                    <button type=\"button\" class=\"toggle-pw\" onclick=\"toggleVis('confirmPw', this)\"><iconify-icon icon=lucide:eye></iconify-icon></button>\n                                </div>\n                                <div class=\"strength-label\" id=\"matchLabel\"></div>\n                            </div>\n                            <button type=\"submit\" class=\"btn-submit\" id=\"submitBtn\" disabled>비밀번호 변경</button>\n                        </form>\n                        <a href=\"/settings.html\" class=\"back-link\">← 설정으로 돌아가기</a>\n                    </div>\n                    <div class=\"form-card\" style=\"margin-top:16px;\">\n                        <h2><iconify-icon icon=lucide:user></iconify-icon> 계정 관리</h2>\n                        <a href=\"/admin.html\" id=\"acctAdminLink\" class=\"back-link\" style=\"display:none;color:var(--accent-primary);margin-top:0;\"><iconify-icon icon=lucide:users></iconify-icon> 사용자 관리</a>\n                        <div class=\"form-group\" style=\"border-top:1px solid var(--border-light);padding-top:16px;margin-top:8px;margin-bottom:0;\">\n                            <label>동의 관리 <span style=\"font-weight:400;color:var(--text-muted);font-size:0.85em;\">(GDPR Article 7)</span></label>\n                            <p style=\"font-size:12px;color:var(--text-muted);margin:0 0 8px;\">개인정보 처리방침 / 이용약관 동의 상태 및 철회</p>\n                            <div id=\"consentList\">로딩 중...</div>\n                        </div>\n                    </div>\n                </div>\n            </div>\n\n<div id=\"toast\" class=\"toast\"></div>" +
                 '<\/div>';
         },
 
@@ -133,6 +133,70 @@
                         btn.textContent = '비밀번호 변경';
                     }
                 });
+
+                // ── 계정 관리: 사용자 관리 링크(관리자) + GDPR 동의 관리 ──
+                if (typeof window.isAdmin === 'function' && window.isAdmin()) {
+                    var adminLink = document.getElementById('acctAdminLink');
+                    if (adminLink) adminLink.style.display = '';
+                }
+
+                async function loadConsents() {
+                    var listEl = document.getElementById('consentList');
+                    if (!listEl) return;
+                    try {
+                        var res = await authFetch(window.API_ENDPOINTS.USER_CONSENT);
+                        var data = await res.json();
+                        if (!res.ok || !data.success) {
+                            listEl.innerHTML = '<p style="color: var(--danger); font-size: 0.9em;">동의 상태 조회 실패</p>';
+                            return;
+                        }
+                        var consents = (data.data && data.data.consents) || [];
+                        listEl.innerHTML = consents.map(function (c) {
+                            var typeLabel = c.type === 'privacy_policy' ? '개인정보 처리방침' : '이용약관';
+                            var statusBadge = c.granted
+                                ? '<span style="color: var(--success); font-weight: 600;">✓ 동의됨</span>'
+                                : '<span style="color: var(--text-muted);">철회됨</span>';
+                            var versionInfo = c.version ? ' v' + esc(c.version) : '';
+                            var dateInfo = c.granted_at ? ' (' + new Date(c.granted_at).toLocaleString() + ')' : '';
+                            var withdrawBtn = c.granted
+                                ? '<button class="btn-submit" style="margin:0;width:auto;font-size:0.85em;padding:4px 10px;" data-consent-withdraw="' + esc(c.type) + '">철회</button>'
+                                : '';
+                            return '<div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--border-light);">'
+                                + '<div><strong>' + typeLabel + '</strong>' + versionInfo + ' &nbsp;' + statusBadge + '<div style="font-size: 0.85em; color: var(--text-muted);">' + dateInfo + '</div></div>'
+                                + '<div>' + withdrawBtn + '</div>'
+                                + '</div>';
+                        }).join('');
+                        listEl.querySelectorAll('[data-consent-withdraw]').forEach(function (btn) {
+                            btn.addEventListener('click', function () { withdrawConsent(btn.dataset.consentWithdraw); });
+                        });
+                    } catch (e) {
+                        listEl.innerHTML = '<p style="color: var(--danger); font-size: 0.9em;">동의 상태 조회 실패: ' + esc(String(e.message || e)) + '</p>';
+                    }
+                }
+
+                async function withdrawConsent(type) {
+                    var label = type === 'privacy_policy' ? '개인정보 처리방침' : '이용약관';
+                    if (!confirm(label + ' 동의를 철회하시겠습니까?\n\n다음 로그인 시 재동의가 필요할 수 있습니다.')) return;
+                    try {
+                        var res = await authFetch(window.API_ENDPOINTS.USER_CONSENT_WITHDRAW, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ type: type }),
+                        });
+                        var data = await res.json();
+                        if (res.ok && data.success) {
+                            showToast(label + ' 동의가 철회되었습니다', 'success');
+                            loadConsents();
+                        } else {
+                            var msg = (data.error && typeof data.error === 'object') ? data.error.message : data.error;
+                            showToast(msg || '철회 실패', 'error');
+                        }
+                    } catch (e) {
+                        showToast('철회 실패: ' + (e.message || e), 'error');
+                    }
+                }
+
+                loadConsents();
 
                 // Expose onclick-referenced functions globally
                 if (typeof toggleVis === 'function') window.toggleVis = toggleVis;
