@@ -205,7 +205,7 @@ async function toggleTemplate(id) {
 function getHTML() {
     return '<div id="admin-mcp-catalog-root">' +
         '<style data-spa-style="admin-mcp-catalog">' +
-        '.amc-page{padding:var(--space-5);max-width:1200px;margin:0 auto;}' +
+        '.amc-page{padding:var(--space-5);width:100%;}' +
         '.amc-toolbar{display:flex;gap:var(--space-3);margin-bottom:var(--space-4);align-items:center;}' +
         '.amc-table{width:100%;border-collapse:collapse;}' +
         '.amc-table th,.amc-table td{padding:var(--space-3);border-bottom:1px solid var(--border-light);text-align:left;}' +

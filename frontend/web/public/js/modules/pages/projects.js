@@ -66,7 +66,7 @@ function getHTML() {
     const cards = CARDS.map(renderCard).join('');
     return '<div class="projects-page">' +
         '<style data-spa-style="projects">' +
-        '.projects-page{padding:var(--space-6);max-width:1200px;margin:0 auto;}' +
+        '.projects-page{padding:var(--space-5);width:100%;}' +
         '.projects-header{margin-bottom:var(--space-6);}' +
         '.projects-header h1{font-size:28px;margin:0 0 var(--space-2);color:var(--text-primary);}' +
         '.projects-header p{color:var(--text-muted);margin:0;}' +

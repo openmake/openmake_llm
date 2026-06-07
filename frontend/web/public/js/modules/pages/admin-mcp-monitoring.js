@@ -146,7 +146,7 @@ async function loadAll() {
 function getHTML() {
     return '<div id="mcpmon-root">' +
         '<style data-spa-style="admin-mcp-monitoring">' +
-        '.mcpmon-page{padding:var(--space-5);max-width:1200px;margin:0 auto;}' +
+        '.mcpmon-page{padding:var(--space-5);width:100%;}' +
         '.mcpmon-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:var(--space-3);}' +
         '.mcpmon-card{background:var(--bg-card);padding:var(--space-4);border-radius:var(--radius-md);border:1px solid var(--border-light);}' +
         '.mcpmon-card-label{font-size:0.85em;color:var(--text-muted);margin-bottom:var(--space-1);}' +
