@@ -11,7 +11,6 @@
  *
  * @module chat/execution-plan-builder
  * @see chat/execution-plan-types
- * @see docs/superpowers/plans/2026-05-25-routing-unification-phase-b.md
  */
 
 import { buildExecutionPlan } from './profile-resolver';

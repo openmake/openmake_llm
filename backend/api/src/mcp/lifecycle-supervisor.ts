@@ -12,7 +12,6 @@
  *
  * 자동 재시작 (P7-D8): off by default — crash 시 풀 제거만, 명시적 /start 만 재시작.
  *
- * 참조: docs/superpowers/plans/2026-05-20-phase7-lifecycle-supervisor.md §5
  */
 import type { UserMCPPool } from './user-pool';
 import type { ExternalMCPClient } from './external-client';

@@ -5,7 +5,6 @@
  *   - mcp.routes.ts        : 기존 servers CRUD (admin global + user 등록 visibility 분기)
  *   - mcp-catalog.routes.ts: 카탈로그 select → from-catalog 등록 + lifecycle 조회
  *
- * 참조: docs/superpowers/plans/2026-05-20-phase6-mcp-user-isolation.md §8
  */
 import { Router, Request, Response } from 'express';
 import { requireAuth } from '../auth';

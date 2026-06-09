@@ -4,7 +4,6 @@
  * 모든 임계값은 env 로 운영 조정 가능. effective capacity 는 derived
  * (nominal * (1 - margin/100)) — 운영자가 margin 만 조정해도 자동 반영.
  *
- * 자세한 정책: docs/superpowers/specs/2026-05-25-llm-model-pool-design.md
  *
  * @module config/model-pool
  */

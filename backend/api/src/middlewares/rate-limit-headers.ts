@@ -11,7 +11,6 @@
  *   x-ratelimit-reset-requests: RPM 리셋 시각
  *   x-ratelimit-reset-tokens: TPM 리셋 시각
  * 
- * @see docs/api/API_KEY_SERVICE_PLAN.md §4 Rate Limiting
  */
 
 import { Request, Response, NextFunction } from 'express';

@@ -16,7 +16,6 @@
  * 관련 의미 (Concise/Fast 등) 를 본 모듈이 흡수.
  *
  * @module chat/style
- * @see docs/superpowers/plans/2026-05-26-brand-profile-decomposition.md
  */
 
 import { resolvePromptLocale } from './language-policy';

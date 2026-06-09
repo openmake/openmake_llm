@@ -5,7 +5,6 @@
  *   final = (profileRequired ∪ skill.required ∪ userToggled ∪ skill.allowed) \ skill.denied
  *   단 required 는 denied 가 있어도 살아남음 (강제 의도 우선).
  *
- * 참조: docs/superpowers/plans/2026-05-20-phase5-skill-upload.md §7
  */
 import type { ToolDefinition } from '../../llm/types';
 

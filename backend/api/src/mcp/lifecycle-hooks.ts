@@ -5,7 +5,6 @@
  *   - supervisor 미초기화 시 silent skip (서버 부팅 직후 또는 테스트 환경)
  *   - hook 실패는 logger.warn 만 — 인증/채팅 흐름을 막지 않음 (graceful)
  *
- * 참조: docs/superpowers/plans/2026-05-20-phase7-lifecycle-supervisor.md §7.4.1
  */
 import { getLifecycleSupervisor } from './lifecycle-supervisor';
 import { createLogger } from '../utils/logger';

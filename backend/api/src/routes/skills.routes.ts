@@ -192,7 +192,6 @@ router.post('/', requireAuth, validate(createSkillSchema), asyncHandler(async (r
  *   - 트랜잭션으로 skill_manifests + skill_tool_bindings + skill_mcp_bundles 저장
  *   - 중복 (id, version) 시 checksum 비교: 동일하면 멱등, 다르면 에러
  *
- * 참조: docs/superpowers/plans/2026-05-20-phase5-skill-upload.md §6
  */
 router.post('/upload', requireAuth, skillUpload.single('file'), asyncHandler(async (req: Request, res: Response) => {
     const file = req.file;

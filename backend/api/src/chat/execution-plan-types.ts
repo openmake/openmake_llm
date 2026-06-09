@@ -10,7 +10,6 @@
  *
  * @module chat/execution-plan-types
  * @see chat/execution-plan-builder
- * @see docs/superpowers/plans/2026-05-25-routing-unification-phase-b.md
  */
 
 import type { ExecutionPlan } from './profile-resolver';

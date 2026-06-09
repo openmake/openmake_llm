@@ -13,7 +13,6 @@
  * - requireScope(): 단일 scope 필수 미들웨어
  * - requireAnyScope(): 복수 scope 중 하나 이상 필수 (OR 조건)
  *
- * @see docs/api/API_KEY_SERVICE_PLAN.md
  */
 
 import { Request, Response, NextFunction } from 'express';

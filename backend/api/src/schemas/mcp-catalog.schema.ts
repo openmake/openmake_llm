@@ -1,7 +1,6 @@
 /**
  * MCP 카탈로그 / from-catalog / instance Zod 스키마.
  *
- * 참조: docs/superpowers/plans/2026-05-20-phase6-mcp-user-isolation.md §5.2.1
  */
 import { z } from 'zod';
 

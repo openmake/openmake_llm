@@ -9,7 +9,6 @@
  *   - 동일 (userId, serverId) 에 대한 동시 add 는 외부 (LifecycleSupervisor)
  *     의 책임으로 단일 진입점 보장 — 여기서는 race 방어 안 함
  *
- * 참조: docs/superpowers/plans/2026-05-20-phase7-lifecycle-supervisor.md §4
  */
 import type { ExternalMCPClient } from './external-client';
 import { createLogger } from '../utils/logger';

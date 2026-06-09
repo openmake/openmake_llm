@@ -13,7 +13,6 @@
  * - GET /api/docs/api-reference   - API Reference 마크다운 원문 (JSON 래핑)
  * - GET /api/docs/quickstart      - Quick Start 가이드 (인라인 JSON)
  *
- * @see docs/api/API_KEY_SERVICE_PLAN.md Phase 5
  */
 
 import { Router, Request, Response } from 'express';

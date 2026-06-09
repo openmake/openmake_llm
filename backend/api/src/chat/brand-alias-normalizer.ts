@@ -14,7 +14,6 @@
  * Phase D (30일 후) 에서 alias 적중 시 HTTP 410 으로 전환 예정.
  *
  * @module chat/brand-alias-normalizer
- * @see docs/superpowers/plans/2026-05-26-brand-profile-decomposition.md
  */
 
 import { createLogger } from '../utils/logger';

@@ -288,7 +288,6 @@ export async function runMessagePipeline(svc: ChatService,
     // ── Step 4: 통합 실행 계획 구성 (Phase B Routing Unification — Phase 1 위임) ──
     // ExecutionPlanBuilder 가 buildExecutionPlan + resolveModel 을 내부 호출.
     // Phase 1 동안 외부 동작 동일 — modelSelection 추출 후 기존 흐름 유지.
-    // 참고: docs/superpowers/plans/2026-05-25-routing-unification-phase-b.md
     const promptConfig = getPromptConfig(message, languagePolicy?.resolvedLanguage);
     const hasImages = (images && images.length > 0) || documentImages.length > 0;
     const unifiedPlan: UnifiedExecutionPlan = await getExecutionPlanBuilder().build({

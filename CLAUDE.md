@@ -162,7 +162,7 @@ Environment variables loaded from `.env` at project root (see `.env.example`). K
 - `GEMINI_API_KEY` (FIRECRAWL_API_KEY 는 2026-05-26 제거 — `utils/web-scraper.ts` 가 무료 3단계 fallback 으로 대체)
 - Google OAuth: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`
 
-**운영자 배포 가이드**: `docs/superpowers/plans/2026-05-20-vllm-server-setup.md` (주의: `.gitignore` 제외 규칙으로 인해 Git 저장소에는 존재하지 않으며, 실제 GPU 운영 서버 PC의 `/home/smith/openmake_llm/docs/...` 경로에만 로컬 보관되어 있습니다). 
+**운영자 배포 가이드**: GPU 운영 서버 PC의 `/home/smith/openmake_llm/docs/superpowers/plans/2026-05-20-vllm-server-setup.md` 에만 보관 (이 저장소에는 없음 — 로컬 `docs/` 디렉토리는 2026-06-10 정리됨). 
 - **서버 PC 배포 절차**:
   1. 레포지토리의 `scripts/vllm/litellm.config.yaml`을 `/home/smith/vllm/litellm.config.yaml`로 복사합니다. (앱 데이터베이스 연동용 `database_url: os.environ/DATABASE_URL` 설정 포함)
   2. `/home/smith/vllm/litellm.env` 파일을 생성하여 `LITELLM_MASTER_KEY`와 `DATABASE_URL`을 설정합니다.

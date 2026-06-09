@@ -7,7 +7,6 @@
  *
  * Pure Manual 호환: options.model 명시 시 routing 우회.
  *
- * 자세한 정책: docs/superpowers/specs/2026-05-25-llm-model-pool-design.md
  *
  * @module llm/model-pool
  */

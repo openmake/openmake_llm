@@ -4,7 +4,6 @@
  * YAML frontmatter (`---...---`) 에 들어가는 필드를 검증한다.
  * 사용처: agents/manifest-validator.ts.
  *
- * 참조: docs/superpowers/plans/2026-05-20-phase5-skill-upload.md §4.1.2
  */
 import { z } from 'zod';
 

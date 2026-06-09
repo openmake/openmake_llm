@@ -278,7 +278,6 @@ export class SkillManager {
      * \ubcf8 \uba54\uc11c\ub4dc \ub3c4\uc785\uc740 \ubb34\uc601\ud5a5. ChatService.mergeToolsWithSkills() \uac00 \ube48 \ubc30\uc5f4\uc774\uba74
      * \uae30\uc874 \ub3d9\uc791 \uadf8\ub300\ub85c.
      *
-     * @see docs/superpowers/plans/2026-05-20-phase5-skill-upload.md \u00a77
      */
     /**
      * Manifest 모델 (021 마이그레이션) 의 prompt_md 를 시스템 프롬프트 블록으로 구성.
@@ -289,7 +288,6 @@ export class SkillManager {
      * manifest 테이블 부재 시 null 반환 (graceful) — system-prompt 가 legacy
      * `buildSkillPrompt` 로 fallback.
      *
-     * @see docs/superpowers/plans/2026-05-20-phase5-skill-upload.md §7.5
      */
     async buildManifestPrompt(agentId: string, userId?: string, agentCategory?: string): Promise<string | null> {
         let pool: Pool;

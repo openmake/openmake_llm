@@ -7,7 +7,6 @@
  *
  * checksum 은 prompt_md 의 sha256 — manifest_yaml 의 normalization 이슈 회피 (P5-D8).
  *
- * 참조: docs/superpowers/plans/2026-05-20-phase5-skill-upload.md §4.1.4
  */
 import * as yaml from 'js-yaml';
 import { createHash } from 'crypto';

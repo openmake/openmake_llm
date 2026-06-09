@@ -7,7 +7,6 @@
  * 표준 RateLimit 헤더 반환:
  *   RateLimit-Limit, RateLimit-Remaining, RateLimit-Reset
  * 
- * @see docs/api/API_KEY_SERVICE_PLAN.md §4 Rate Limiting
  */
 
 import rateLimit, { ipKeyGenerator } from 'express-rate-limit';

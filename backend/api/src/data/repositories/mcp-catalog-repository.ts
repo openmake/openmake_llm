@@ -10,7 +10,6 @@
  *   - listUserServers: 본인 + global visibility 서버 반환 (env 는 응답 시 *** 마스킹)
  *   - recordInstanceTransition: lifecycle-supervisor (Phase 7) 가 호출
  *
- * 참조: docs/superpowers/plans/2026-05-20-phase6-mcp-user-isolation.md §5.2.2
  */
 import type { Pool } from 'pg';
 import { encryptToken, decryptToken } from '../../utils/token-crypto';

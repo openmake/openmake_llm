@@ -13,7 +13,6 @@
  * - listAvailableModels(): 외부 API용 모델 목록 반환 (현재 빈 배열)
  *
  * @see services/ChatService.ts - ExecutionPlan 소비자
- * @see docs/api/API_KEY_SERVICE_PLAN.md 9절
  */
 
 import type { ExecutionStrategy } from './pipeline-profile';

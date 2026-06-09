@@ -14,7 +14,6 @@
  *   - manifest.name 의 slug + user prefix → `user-{userId}-{slug}`
  *   - (admin 의 시스템 skill 은 별도 importer 또는 직접 SQL — 본 importer 는 사용자 업로드 전용)
  *
- * 참조: docs/superpowers/plans/2026-05-20-phase5-skill-upload.md §5
  */
 import type { Pool, PoolClient } from 'pg';
 import type { SkillManifestFrontmatter } from '../schemas/skill-manifest.schema';
