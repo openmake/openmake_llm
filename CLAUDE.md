@@ -106,7 +106,7 @@ SPA with vanilla JS ES Modules. No build step for JS - files are served directly
 | Path | Purpose |
 |---|---|
 | `js/modules/` | Core modules: chat, websocket, auth, state, settings, sanitize, api-client, models-api (`/api/models` 공유 클라이언트 SoT) |
-| `js/modules/pages/` | 24 page module 파일 (admin, analytics, audit, research, agent-tasks, etc.; developer-helpers/sections 2개는 헬퍼) — `js/nav-items.js` 와 동기화 필수 (validate-modules.sh 자동 검증) |
+| `js/modules/pages/` | 23 page module 파일 (admin, analytics, audit, research, agent-tasks, etc.; developer-helpers/sections 2개는 헬퍼) — `js/nav-items.js` 와 동기화 필수 (validate-modules.sh 자동 검증) |
 | `css/` | CSS with design tokens |
 
 #### Frontend 개발 패턴

@@ -204,7 +204,7 @@ export function setupStaticFiles(app: Application, dirname: string): void {
     const SPA_PAGES = new Set([
         'research', 'agent-tasks', 'custom-agents', 'mcp-servers',
         'agent-learning', 'usage', 'analytics', 'admin-metrics',
-        'admin', 'audit', 'external', 'alerts', 'memory', 'settings',
+        'admin', 'audit', 'alerts', 'memory', 'settings',
         'password-change', 'history', 'developer', 'api-keys',
         'skill-library', 'projects',
         'admin-mcp-catalog', 'admin-mcp-monitoring',
@@ -337,10 +337,6 @@ export function setupStaticFiles(app: Application, dirname: string): void {
         next();
     });
 
-    // external.html: settings 의 integrations 탭에서 navigate 되는 외부 서비스 연동 페이지.
-    // SPA_PAGES 에 포함되어 위 fallback 으로 index.html 응답 → spa-router 가
-    // pages/external.js 동적 import. (별도 handler 였던 무한 redirect 루프 제거)
-
     // COOP 활성 여부 — HTTP/비-localhost origin (예: rasplay.tplinkdns.com:52416) 에서는
     // 브라우저가 헤더를 무시하면서 경고 로그를 매 요청마다 출력함 ("URL's origin was untrustworthy").
     // 정책 효과는 HTTPS 환경에서만 유효하므로, OMK_COOP_ENABLED=true 일 때만 send.
@@ -376,7 +372,7 @@ export function setupStaticFiles(app: Application, dirname: string): void {
 
     app.get(/^\/([a-z0-9-]+)\.html$/, (req: Request, res: Response, next: NextFunction) => {
         const filename = req.params[0] ? `${req.params[0]}.html` : '';
-        if (!filename || filename === 'external.html') {
+        if (!filename) {
             return next();
         }
 

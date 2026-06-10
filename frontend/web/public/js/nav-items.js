@@ -60,8 +60,8 @@ const NAV_ITEMS = {
         { href: '/settings.html', icon: '⚙️', iconify: 'lucide:settings', label: '설정', cssFiles: ['/css/settings.css?v=19'], excludeFromSidebar: true },
         { href: '/password-change.html', icon: '🔑', iconify: 'lucide:key-round', label: '비밀번호 변경', requireAuth: true, excludeFromSidebar: true },
         { href: '/api-keys.html', icon: '🗝️', iconify: 'lucide:key', label: 'API 키', requireAuth: true, excludeFromSidebar: true },
-        { href: '/usage.html', icon: '📈', iconify: 'lucide:bar-chart-2', label: '사용량', requireAuth: true, excludeFromSidebar: true },
-        { href: '/external.html', icon: '🔗', iconify: 'lucide:link', label: '외부 연동', requireAuth: true, minTier: 'pro', excludeFromSidebar: true }
+        { href: '/usage.html', icon: '📈', iconify: 'lucide:bar-chart-2', label: '사용량', requireAuth: true, excludeFromSidebar: true }
+        // /external.html (외부 MCP 서버 관리): 2026-06-10 제거 — settings external 탭 제거 후 진입점 없는 고아 페이지, mcp-servers.html 로 대체
     ]
 };
 
