@@ -14,6 +14,8 @@ export default [
       "playwright.config.ts",
       "tests/e2e/**",
       "**/*.d.ts",
+      "mcp-venv/**",
+      "coverage/**",
     ],
   },
   ...tseslint.configs.recommended,

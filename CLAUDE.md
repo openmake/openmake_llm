@@ -106,14 +106,14 @@ SPA with vanilla JS ES Modules. No build step for JS - files are served directly
 | Path | Purpose |
 |---|---|
 | `js/modules/` | Core modules: chat, websocket, auth, state, settings, sanitize, api-client, models-api (`/api/models` 공유 클라이언트 SoT) |
-| `js/modules/pages/` | 24 page module 파일 (admin, analytics, audit, research, agent-tasks, etc.; developer-helpers/sections 2개는 헬퍼) — `js/modules/nav-items.js` 와 동기화 필수 (validate-modules.sh 자동 검증) |
+| `js/modules/pages/` | 24 page module 파일 (admin, analytics, audit, research, agent-tasks, etc.; developer-helpers/sections 2개는 헬퍼) — `js/nav-items.js` 와 동기화 필수 (validate-modules.sh 자동 검증) |
 | `css/` | CSS with design tokens |
 
 #### Frontend 개발 패턴
 
 - **상태 관리**: 중앙 집중식 `StateManager` (`js/modules/state.js`). 컴포넌트 간 공유 상태는 반드시 StateManager를 통해 읽고 씀 — 전역 변수 직접 사용 금지.
 - **WebSocket 연결**: `js/modules/websocket.js` 가 단일 연결을 관리 (자동 재연결 포함). 채팅 메시지 전송/수신은 백엔드 `ws-chat-handler.ts` 와 페어로 동작.
-- **새 페이지 추가 절차**: ① `js/modules/pages/` 에 모듈 파일 추가 → ② `js/modules/nav-items.js` 에 네비게이션 항목 등록 → ③ `npm run build:frontend` (`validate-modules.sh`) 로 동기화 검증.
+- **새 페이지 추가 절차**: ① `js/modules/pages/` 에 모듈 파일 추가 → ② `js/nav-items.js` 에 네비게이션 항목 등록 → ③ `npm run build:frontend` (`validate-modules.sh`) 로 동기화 검증.
 - **XSS 방어**: 모든 사용자 입력 및 LLM 출력은 `sanitize.js` 를 통해 렌더링. `innerHTML` 직접 사용 금지 — `sanitize.js` 의 안전한 렌더링 헬퍼 사용.
 - **API 호출**: `js/modules/api-client.js` 를 통해서만 백엔드 REST API 호출. `fetch` 직접 호출 금지.
 
