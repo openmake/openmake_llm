@@ -130,8 +130,15 @@ export async function validateOutboundUrl(rawUrl: string, resolver: DnsResolver 
 function createPinnedAgent(pinnedAddress: string, ipFamily: 4 | 6): Agent {
     return new Agent({
         connect: {
-            lookup: (_hostname, _options, callback) => {
-                callback(null, pinnedAddress, ipFamily);
+            lookup: (_hostname, options, callback) => {
+                // Node 22.2x undici는 happy-eyeballs 연결을 위해 all:true 로 lookup 을
+                // 호출하고 LookupAddress 배열을 기대한다 — 단일 (address, family) 형태로만
+                // 응답하면 "Invalid IP address: undefined" 로 모든 연결이 실패한다.
+                if (options?.all) {
+                    callback(null, [{ address: pinnedAddress, family: ipFamily }], ipFamily);
+                } else {
+                    callback(null, pinnedAddress, ipFamily);
+                }
             },
         },
     });
