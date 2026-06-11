@@ -187,7 +187,13 @@ function _renderAgentTaskCard(t) {
     if (t.progress > 0 && t.status === 'running') {
         html += '<div style="height:5px;background:var(--bg-tertiary);border-radius:3px;margin-top:8px;overflow:hidden;"><div style="height:100%;background:var(--accent-primary);width:' + t.progress + '%;transition:width .3s;"></div></div>';
     }
-    if (t.result) html += '<div style="margin-top:8px;white-space:pre-wrap;font-size:14px;line-height:1.6;">' + esc(t.result) + '</div>';
+    // result 의 [[artifact:id]] 플레이스홀더 제거 — 결과물은 배지 + 상세 모달에서 확인
+    const cleanedResult = String(t.result || '').replace(/\[\[artifact:[^\]]+\]\]/g, '').trim();
+    if (cleanedResult) html += '<div style="margin-top:8px;white-space:pre-wrap;font-size:14px;line-height:1.6;">' + esc(cleanedResult) + '</div>';
+    if (t.artifactCount > 0) {
+        html += '<div style="margin-top:8px;padding:8px 10px;background:var(--bg-tertiary);border-radius:6px;font-size:13px;color:var(--text-primary);">' +
+            '<iconify-icon icon="lucide:file-text"></iconify-icon> 결과물 ' + t.artifactCount + '개 — 카드를 클릭해 확인하세요</div>';
+    }
     if (t.error) html += '<div style="margin-top:8px;color:var(--danger);font-size:13px;">' + esc(t.error) + '</div>';
     html += '<div style="margin-top:8px;"><a href="/agent-tasks.html" style="font-size:12px;color:var(--accent-primary);">작업 페이지에서 단계 보기 →</a></div></div>';
     return html;
@@ -206,7 +212,9 @@ function _ensureChatTaskProgressHandler() {
             // 완료/실패/취소 — 결과를 가져와 카드에 직접 표시 (WS payload엔 result가 없음)
             window.authFetch('/api/agent-tasks/' + p.taskId).then(r => r.json()).then(res => {
                 const t = (res.data && res.data.task) || {};
-                content.innerHTML = _renderAgentTaskCard({ status: p.status, progress: 100, goal: goal, result: t.result, error: t.error });
+                const steps = (res.data && res.data.steps) || [];
+                const artifactCount = steps.filter(s => s.step_type === 'artifact').length;
+                content.innerHTML = _renderAgentTaskCard({ status: p.status, progress: 100, goal: goal, result: t.result, error: t.error, artifactCount: artifactCount });
             }).catch(() => {
                 content.innerHTML = _renderAgentTaskCard({ status: p.status, progress: 100, goal: goal });
             });

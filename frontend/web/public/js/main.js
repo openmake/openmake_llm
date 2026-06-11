@@ -70,7 +70,7 @@ import {
     finishAssistantMessage, copyMessage, regenerateMessage,
     newChat as chatNewChat, useSuggestion, abortChat,
     restoreRunningAgentTaskCards
-} from './modules/chat.js?v=23';
+} from './modules/chat.js?v=24';
 // 메시지 신고 (B+ Phase B5) — 디버깅용 본문 임시 보관 요청
 import { reportMessage } from './modules/chat-actions.js?v=21';
 

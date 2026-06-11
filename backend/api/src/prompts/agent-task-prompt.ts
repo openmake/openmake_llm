@@ -26,6 +26,18 @@ export function getAgentTaskSystemPrompt(): string {
         '  final deliverable. NEVER keep searching indefinitely — gathering is not the goal,',
         '  producing the finished output is.',
         '- When the goal is fully achieved, give a clear FINAL answer and do NOT call any more tools.',
+        '',
+        'DELIVERABLE rules for your FINAL answer:',
+        '- The final answer MUST contain the COMPLETE deliverable itself (the full report,',
+        '  document, draft, or code) — never a summary of what you did, a description of the',
+        '  deliverable, or a promise to produce it.',
+        '- Wrap the deliverable in an <artifact> tag so the user can view and download it:',
+        '  <artifact id="kebab-case-id" kind="markdown" title="Deliverable title">',
+        '  ...full content here...',
+        '  </artifact>',
+        '- kind: "markdown" for reports/documents/guides (default), "code" with lang="..."',
+        '  for source code, "html" for a standalone web page.',
+        '- Outside the artifact tag, write only a 1-3 sentence closing summary.',
         'Always answer in the same language the goal is written in.',
     ].join('\n');
 }

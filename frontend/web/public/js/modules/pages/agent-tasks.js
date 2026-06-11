@@ -17,6 +17,7 @@
     var _currentTaskId = null;
     var _hasActive = false;
     var _notified = {};  // taskId → 완료 알림 중복 방지
+    var _detailArtifacts = [];  // 현재 상세 모달의 결과물(아티팩트) — 복사/다운로드 위임 핸들러용
 
     var _statusLabels = { pending:'대기중', running:'진행중', completed:'완료', failed:'실패', cancelled:'취소됨' };
     var _stepLabels = { plan:'<iconify-icon icon=lucide:clipboard-list></iconify-icon> 계획', assistant:'생각', assistant_tool_call:'도구 호출', tool_result:'도구 결과' };
@@ -131,9 +132,34 @@
         }).catch(function() { /* 스킬 로드 실패 — picker 숨김 유지(전체 스킬 기본) */ });
     }
 
+    // 아티팩트 파일 확장자 매핑 (다운로드 파일명)
+    var _artifactExt = { markdown: 'md', code: 'txt', html: 'html', svg: 'svg', mermaid: 'mmd', chart: 'json', csv: 'csv', react: 'jsx', slide: 'html', excalidraw: 'json' };
+
+    /** step_type='artifact' 스텝(content=JSON)을 파싱 — 실패 행은 무시 */
+    function _parseArtifactSteps(steps) {
+        var out = [];
+        (steps || []).forEach(function(st) {
+            if (st.step_type !== 'artifact' || !st.content) return;
+            try {
+                var a = JSON.parse(st.content);
+                if (a && a.content) out.push(a);
+            } catch (e) { /* malformed artifact step 무시 */ }
+        });
+        return out;
+    }
+
+    /** result 본문의 [[artifact:id]] 플레이스홀더 제거 (아티팩트는 별도 섹션으로 렌더) */
+    function _stripArtifactMarkers(text) {
+        return String(text || '').replace(/\[\[artifact:[^\]]+\]\]/g, '').trim();
+    }
+
     function _renderDetail(task, steps) {
         var dt = document.getElementById('detailTitle');
         if (dt) dt.textContent = task.goal;
+
+        var artifacts = _parseArtifactSteps(steps);
+        _detailArtifacts = artifacts;
+        var timelineSteps = (steps || []).filter(function(st) { return st.step_type !== 'artifact'; });
 
         var html = '<div class="task-meta" style="margin-bottom:var(--space-4)">' +
             '<span class="badge badge-' + _esc(task.status) + '">' + (_statusLabels[task.status] || task.status) + '</span>' +
@@ -141,17 +167,35 @@
             '<span>진행률: ' + (task.progress || 0) + '%</span>' +
         '</div>';
 
-        if (task.result) html += '<div class="detail-section"><h3>결과</h3><p style="white-space:pre-wrap">' + _esc(task.result) + '</p></div>';
+        // 결과물(아티팩트) — 가장 위에 크게. markdown 은 렌더, 그 외는 소스 표시 + 다운로드
+        if (artifacts.length) {
+            html += '<div class="detail-section"><h3>결과물</h3>' + artifacts.map(function(a, i) {
+                return '<div class="artifact-box">' +
+                    '<div class="artifact-head">' +
+                        '<span class="step-tool">' + _esc(a.kind || 'markdown') + '</span>' +
+                        '<strong>' + _esc(a.title || '결과물') + '</strong>' +
+                        '<span class="artifact-actions">' +
+                            '<button type="button" data-art-copy="' + i + '">복사</button>' +
+                            '<button type="button" data-art-dl="' + i + '">다운로드</button>' +
+                        '</span>' +
+                    '</div>' +
+                    '<div class="artifact-body" data-art-body="' + i + '"></div>' +
+                '</div>';
+            }).join('') + '</div>';
+        }
+
+        var cleanedResult = _stripArtifactMarkers(task.result);
+        if (cleanedResult) html += '<div class="detail-section"><h3>' + (artifacts.length ? '요약' : '결과') + '</h3><div class="result-md" id="taskResultMd"></div></div>';
         if (task.error) html += '<div class="detail-section"><h3>오류</h3><p class="err-text">' + _esc(task.error) + '</p></div>';
 
-        if (steps && steps.length) {
+        if (timelineSteps.length) {
             html += '<div class="detail-section"><h3>실행 단계</h3><div class="steps-timeline">';
-            html += steps.map(function(st) {
+            html += timelineSteps.map(function(st) {
                 return '<div class="step-item">' +
                     '<span class="step-num">#' + st.step_number + '</span> ' +
                     '<span class="step-type">' + (_stepLabels[st.step_type] || _esc(st.step_type)) + '</span>' +
                     (st.tool_name ? ' <span class="step-tool">' + _esc(st.tool_name) + '</span>' : '') +
-                    (st.content ? '<div class="step-result">' + _esc(st.content) + '</div>' : '') +
+                    (st.content ? '<div class="step-result">' + _esc(_stripArtifactMarkers(st.content)) + '</div>' : '') +
                 '</div>';
             }).join('');
             html += '</div></div>';
@@ -159,6 +203,22 @@
 
         var dc = document.getElementById('detailContent');
         if (dc) dc.innerHTML = html;
+
+        // innerHTML 주입 후 본문 렌더 — markdown 은 renderMarkdown(sanitize 포함), 그 외 kind 는 escaped 소스
+        artifacts.forEach(function(a, i) {
+            var body = dc ? dc.querySelector('[data-art-body="' + i + '"]') : null;
+            if (!body) return;
+            if ((a.kind || 'markdown') === 'markdown' && typeof window.renderMarkdown === 'function') {
+                window.renderMarkdown(body, a.content);
+            } else {
+                body.innerHTML = '<pre class="artifact-src">' + _esc(a.content) + '</pre>';
+            }
+        });
+        var resultEl = document.getElementById('taskResultMd');
+        if (resultEl && cleanedResult) {
+            if (typeof window.renderMarkdown === 'function') window.renderMarkdown(resultEl, cleanedResult);
+            else resultEl.textContent = cleanedResult;
+        }
 
         // 취소 버튼은 진행 중일 때만, 이어하기 버튼은 중단된(resumable) 작업에만 노출
         var btnCancel = document.getElementById('btnCancelTask');
@@ -194,6 +254,33 @@
         var dm = document.getElementById('detailModal');
         if (dm) dm.classList.remove('open');
         _currentTaskId = null;
+        _detailArtifacts = [];
+    }
+
+    /** 결과물 복사/다운로드 — #detailContent 위임 클릭 핸들러 (innerHTML 재렌더에도 유지) */
+    function _onDetailContentClick(e) {
+        var copyBtn = e.target.closest('[data-art-copy]');
+        var dlBtn = e.target.closest('[data-art-dl]');
+        var idx = copyBtn ? Number(copyBtn.getAttribute('data-art-copy')) : (dlBtn ? Number(dlBtn.getAttribute('data-art-dl')) : -1);
+        var artifact = idx >= 0 ? _detailArtifacts[idx] : null;
+        if (!artifact) return;
+        if (copyBtn) {
+            navigator.clipboard.writeText(artifact.content).then(function() {
+                _showToast('결과물이 클립보드에 복사되었습니다');
+            }).catch(function() { _showToast('복사 실패', 'error'); });
+            return;
+        }
+        var ext = _artifactExt[artifact.kind] || 'txt';
+        var safeName = String(artifact.title || 'deliverable').replace(/[\\/:*?"<>|]/g, '_').slice(0, 80);
+        var blob = new Blob([artifact.content], { type: 'text/plain;charset=utf-8' });
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = safeName + '.' + ext;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
     }
 
     function _cancelTask() {
@@ -351,6 +438,17 @@
                 '.page-agent-tasks .detail-section { margin-bottom:var(--space-5); }' +
                 '.page-agent-tasks .detail-section h3 { color:var(--text-secondary); font-size:var(--font-size-sm); margin-bottom:var(--space-2); text-transform:uppercase; letter-spacing:.5px; }' +
                 '.page-agent-tasks .detail-section p { color:var(--text-primary); line-height:1.6; }' +
+                '.page-agent-tasks .artifact-box { border:1px solid var(--border-light); border-radius:var(--radius-md); margin-bottom:var(--space-4); overflow:hidden; }' +
+                '.page-agent-tasks .artifact-head { display:flex; align-items:center; gap:var(--space-2); padding:var(--space-2) var(--space-3); background:var(--bg-secondary); border-bottom:1px solid var(--border-light); }' +
+                '.page-agent-tasks .artifact-head strong { flex:1; color:var(--text-primary); font-size:var(--font-size-sm); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }' +
+                '.page-agent-tasks .artifact-actions { display:flex; gap:var(--space-2); }' +
+                '.page-agent-tasks .artifact-actions button { padding:2px 10px; background:var(--bg-tertiary); border:1px solid var(--border-light); border-radius:var(--radius-md); color:var(--text-secondary); font-size:11px; cursor:pointer; }' +
+                '.page-agent-tasks .artifact-actions button:hover { border-color:var(--accent-primary); color:var(--text-primary); }' +
+                '.page-agent-tasks .artifact-body { padding:var(--space-4); max-height:480px; overflow-y:auto; color:var(--text-primary); line-height:1.65; }' +
+                '.page-agent-tasks .artifact-body h1, .page-agent-tasks .artifact-body h2, .page-agent-tasks .artifact-body h3 { color:var(--text-primary); margin:var(--space-3) 0 var(--space-2); }' +
+                '.page-agent-tasks .artifact-body table { border-collapse:collapse; } .page-agent-tasks .artifact-body td, .page-agent-tasks .artifact-body th { border:1px solid var(--border-light); padding:4px 10px; }' +
+                '.page-agent-tasks .artifact-src { margin:0; white-space:pre-wrap; word-break:break-all; font-size:var(--font-size-sm); color:var(--text-secondary); }' +
+                '.page-agent-tasks .result-md { color:var(--text-primary); line-height:1.65; }' +
                 '.page-agent-tasks .err-text { color:var(--danger); }' +
                 '.page-agent-tasks .steps-timeline { border-left:2px solid var(--border-light); padding-left:var(--space-5); }' +
                 '.page-agent-tasks .step-item { margin-bottom:var(--space-4); position:relative; }' +
@@ -437,6 +535,12 @@
                 _listeners.push({ el: taskList, type: 'click', fn: cardClickHandler });
             }
 
+            var detailContent = document.getElementById('detailContent');
+            if (detailContent) {
+                detailContent.addEventListener('click', _onDetailContentClick);
+                _listeners.push({ el: detailContent, type: 'click', fn: _onDetailContentClick });
+            }
+
             var btnClose = document.getElementById('btnCloseDetail');
             if (btnClose) {
                 var closeHandler = function() { _closeDetail(); };
@@ -490,6 +594,7 @@
             _currentTaskId = null;
             _hasActive = false;
             _notified = {};
+            _detailArtifacts = [];
         }
     };
 

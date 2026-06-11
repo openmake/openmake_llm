@@ -22,6 +22,7 @@ import { getUnifiedDatabase } from '../data/models/unified-database';
 import { AGENT_TASK_LIMITS } from '../config/runtime-limits';
 import { emitAgentTaskProgress } from '../utils/event-bus';
 import { getAgentTaskSystemPrompt } from '../prompts/agent-task-prompt';
+import { extractAndStripArtifacts, type ExtractedArtifact } from '../llm/artifact-parser';
 import { getPushService } from './PushService';
 import { createLogger } from '../utils/logger';
 import type { UserContext } from '../mcp/user-sandbox';
@@ -227,6 +228,11 @@ export class AgentTaskService {
 
                 const hasToolCalls = !!result.tool_calls && result.tool_calls.length > 0;
 
+                // 최종 답변 턴이면 deliverable(<artifact> 태그) 추출 — 스텝/result 는
+                // cleaned 본문으로 기록하고, 아티팩트는 step_type='artifact' 행으로 영속화.
+                const extracted = hasToolCalls ? null : extractAndStripArtifacts(result.content ?? '');
+                const stepContent = extracted ? extracted.cleanedContent : result.content;
+
                 // 스텝 기록(display용). 첫 턴은 목표 분해 계획(plan)으로 표시.
                 // resume 복원 상태(turn>0)는 plan 이 아님 — 중간 재개이므로 자동 제외됨.
                 const stepType = turn === 0
@@ -236,16 +242,17 @@ export class AgentTaskService {
                     taskId,
                     stepNumber: stepNumber++,
                     stepType,
-                    content: result.content,
+                    content: stepContent,
                 });
 
                 if (!hasToolCalls) {
+                    stepNumber = await this.persistArtifactSteps(taskId, extracted!.artifacts, stepNumber);
                     await update({
                         status: 'completed',
                         progress: 100,
-                        result: result.content,
+                        result: stepContent,
                     });
-                    logger.info(`[AgentTask] 완료: ${taskId} (${turn + 1} 턴, ${totalTokens} 토큰)`);
+                    logger.info(`[AgentTask] 완료: ${taskId} (${turn + 1} 턴, ${totalTokens} 토큰, 아티팩트 ${extracted!.artifacts.length}개)`);
                     return;
                 }
 
@@ -276,12 +283,15 @@ export class AgentTaskService {
                 await db.updateAgentTask(taskId, { checkpoint: { conversation, completedTurn: turn } });
             }
 
-            // 턴 상한 도달 — 마지막 assistant 내용을 결과로 보존
+            // 턴 상한 도달 — 마지막 assistant 내용을 결과로 보존 (deliverable 태그가 있으면 추출)
             const lastAssistant = [...conversation].reverse().find((m) => m.role === 'assistant');
+            const lastRaw = (lastAssistant?.content as string) || '(최대 턴에 도달하여 종료되었습니다.)';
+            const lastExtracted = extractAndStripArtifacts(lastRaw);
+            stepNumber = await this.persistArtifactSteps(taskId, lastExtracted.artifacts, stepNumber);
             await update({
                 status: 'completed',
                 progress: 100,
-                result: (lastAssistant?.content as string) || '(최대 턴에 도달하여 종료되었습니다.)',
+                result: lastExtracted.cleanedContent || lastRaw,
             });
             logger.info(`[AgentTask] 턴 상한 종료: ${taskId} (${turnCeiling} 턴)`);
         } catch (err) {
@@ -299,6 +309,33 @@ export class AgentTaskService {
         } finally {
             AgentTaskService.running.delete(taskId);
         }
+    }
+
+    /**
+     * 최종 답변에서 추출한 deliverable 아티팩트를 step_type='artifact' 행으로 영속화.
+     * content 는 ExtractedArtifact JSON (id/kind/title/lang/content) — 프론트 상세 모달이 파싱해 렌더.
+     * 저장 실패는 작업을 실패시키지 않는다 (result 본문은 이미 보존됨).
+     */
+    private async persistArtifactSteps(
+        taskId: string,
+        artifacts: ExtractedArtifact[],
+        stepNumber: number
+    ): Promise<number> {
+        const db = getUnifiedDatabase();
+        for (const artifact of artifacts) {
+            try {
+                await db.addAgentTaskStep({
+                    taskId,
+                    stepNumber: stepNumber++,
+                    stepType: 'artifact',
+                    toolName: artifact.kind,
+                    content: JSON.stringify(artifact),
+                });
+            } catch (e) {
+                logger.warn(`[AgentTask] 아티팩트 스텝 저장 실패: ${taskId} — ${e}`);
+            }
+        }
+        return stepNumber;
     }
 
     /** runaway 가드 — 한도 초과 시 종류별 AgentTaskAbort throw */
