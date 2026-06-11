@@ -28,8 +28,9 @@ export type ResponseGenerator = (query: string, language?: string) => Promise<st
  *
  * 통과 조건:
  * - mustContain: 모든 substring이 응답에 포함
+ * - mustContainAny: 목록 중 하나 이상의 substring이 응답에 포함 (OR)
  * - mustNotContain: 어떤 substring도 응답에 포함되지 않음
- * - 두 조건 동시 명시 시 둘 다 만족 (AND)
+ * - 복수 조건 동시 명시 시 모두 만족 (AND)
  */
 export async function evaluateResponseCase(
     goldenCase: GoldenCase,
@@ -41,20 +42,16 @@ export async function evaluateResponseCase(
 
         const missing = (goldenCase.mustContain ?? []).filter((s) => !response.includes(s));
         const forbidden = (goldenCase.mustNotContain ?? []).filter((s) => response.includes(s));
+        const anyList = goldenCase.mustContainAny ?? [];
+        const anyMissed = anyList.length > 0 && !anyList.some((s) => response.includes(s));
 
-        let passed = true;
-        let failureReason: string | undefined;
+        const reasons: string[] = [];
+        if (missing.length > 0) reasons.push(`누락 substring=[${missing.join(',')}]`);
+        if (anyMissed) reasons.push(`OR 후보 substring 모두 누락=[${anyList.join(',')}]`);
+        if (forbidden.length > 0) reasons.push(`금지 substring이 응답에 포함=[${forbidden.join(',')}]`);
 
-        if (missing.length > 0 && forbidden.length > 0) {
-            passed = false;
-            failureReason = `누락 substring=[${missing.join(',')}], 금지 substring 포함=[${forbidden.join(',')}]`;
-        } else if (missing.length > 0) {
-            passed = false;
-            failureReason = `누락 substring=[${missing.join(',')}]`;
-        } else if (forbidden.length > 0) {
-            passed = false;
-            failureReason = `금지 substring이 응답에 포함=[${forbidden.join(',')}]`;
-        }
+        const passed = reasons.length === 0;
+        const failureReason = passed ? undefined : reasons.join(', ');
 
         return {
             caseId: goldenCase.id,
@@ -64,6 +61,7 @@ export async function evaluateResponseCase(
             actual: { responseLength: response.length, missing, forbidden },
             expected: {
                 mustContain: goldenCase.mustContain ?? [],
+                mustContainAny: anyList,
                 mustNotContain: goldenCase.mustNotContain ?? [],
             },
             durationMs: Date.now() - start,

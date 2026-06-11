@@ -33,6 +33,8 @@ export interface GoldenCase {
     expectedCategories?: string[];
     /** 응답에 반드시 포함되어야 할 substring 목록 (response-pattern용) */
     mustContain?: string[];
+    /** 응답에 하나 이상 포함되면 통과하는 substring 목록 — OR 조건 (예: 거절 표현 변형 "cannot"|"can't"|"unable") */
+    mustContainAny?: string[];
     /** 응답에 절대 포함되어서는 안 될 substring 목록 (response-pattern용) */
     mustNotContain?: string[];
     /** 쿼리 언어 (다국어 분석용) */

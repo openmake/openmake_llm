@@ -28,6 +28,7 @@ const goldenCaseSchema = z.object({
     expectedCategory: z.string().optional(),
     expectedCategories: z.array(z.string().min(1)).min(1).optional(),
     mustContain: z.array(z.string()).optional(),
+    mustContainAny: z.array(z.string().min(1)).min(1).optional(),
     mustNotContain: z.array(z.string()).optional(),
     language: z.string().optional(),
     tags: z.array(z.string()).optional(),
@@ -68,7 +69,7 @@ export function loadGoldenDataset(filePath: string = DEFAULT_DATASET_PATH): Gold
 /**
  * 카테고리별 의미적 제약 검증
  * - routing-accuracy: expectedAgentId 또는 expectedCategory 중 하나 필수
- * - response-pattern: mustContain 또는 mustNotContain 중 하나 필수
+ * - response-pattern: mustContain / mustContainAny / mustNotContain 중 하나 필수
  */
 function validateCaseSemantics(dataset: GoldenDataset): void {
     const errors: string[] = [];
@@ -81,8 +82,8 @@ function validateCaseSemantics(dataset: GoldenDataset): void {
                 errors.push(`${c.id}: routing-accuracy 카테고리는 expectedAgentId(s) 또는 expectedCategory(s) 필요`);
             }
         }
-        if (c.category === 'response-pattern' && !c.mustContain?.length && !c.mustNotContain?.length) {
-            errors.push(`${c.id}: response-pattern 카테고리는 mustContain 또는 mustNotContain 필요`);
+        if (c.category === 'response-pattern' && !c.mustContain?.length && !c.mustContainAny?.length && !c.mustNotContain?.length) {
+            errors.push(`${c.id}: response-pattern 카테고리는 mustContain, mustContainAny 또는 mustNotContain 필요`);
         }
     }
 
