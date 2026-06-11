@@ -21,7 +21,7 @@ import { getUnifiedMCPClient } from '../mcp/unified-client';
 import { getUnifiedDatabase } from '../data/models/unified-database';
 import { AGENT_TASK_LIMITS } from '../config/runtime-limits';
 import { emitAgentTaskProgress } from '../utils/event-bus';
-import { getAgentTaskSystemPrompt } from '../prompts/agent-task-prompt';
+import { getAgentTaskSystemPrompt, getAgentTaskDeliverableNudge } from '../prompts/agent-task-prompt';
 import { extractAndStripArtifacts, type ExtractedArtifact } from '../llm/artifact-parser';
 import { getPushService } from './PushService';
 import { createLogger } from '../utils/logger';
@@ -208,9 +208,17 @@ export class AgentTaskService {
                     searchLimitNotified = true;
                 }
 
+                // per-call abort: 작업 잔여 예산을 호출에도 바인딩 — 응답이 hang 되면
+                // 턴 사이 assertWithinLimits 까지 도달하지 못하므로 호출 자체를 끊는다.
+                const remainingMs = Math.max(
+                    1_000,
+                    AGENT_TASK_LIMITS.TOTAL_TIMEOUT_MS - (Date.now() - startedAt)
+                );
+                const callSignal = AbortSignal.any([signal, AbortSignal.timeout(remainingMs)]);
+
                 const result = await this.client.chat(conversation, undefined, undefined, {
                     tools: effectiveTools,
-                    signal,
+                    signal: callSignal,
                 });
                 totalTokens +=
                     (result.metrics?.prompt_eval_count ?? 0) + (result.metrics?.eval_count ?? 0);
@@ -246,6 +254,12 @@ export class AgentTaskService {
                 });
 
                 if (!hasToolCalls) {
+                    // 턴 0 계획-만 가드: 도구가 필요 없는 목표에서 모델이 계획만 쓰고 멈추면
+                    // 결과물 없이 종료된다 — deliverable(artifact) 이 없으면 1회 재촉 후 계속.
+                    if (turn === startTurn && extracted!.artifacts.length === 0) {
+                        conversation.push({ role: 'user', content: getAgentTaskDeliverableNudge() });
+                        continue;
+                    }
                     stepNumber = await this.persistArtifactSteps(taskId, extracted!.artifacts, stepNumber);
                     await update({
                         status: 'completed',

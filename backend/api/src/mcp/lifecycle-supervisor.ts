@@ -72,7 +72,10 @@ export class MCPLifecycleSupervisor implements LifecycleSupervisor {
         const servers = await this.repo.listUserServers(userId);
         const targets = servers.filter(s =>
             s.user_id === userId &&
-            (s as ServerWithLifecycle).lifecycle === 'per_session' &&
+            // lifecycle 미지정(컬럼 부재) 서버는 per_session 으로 간주 — safeSpawn 의
+            // 기본값(?? 'per_session')과 동일 규칙. strict 비교만 하면 from-catalog 로
+            // 등록된 auto_spawn 서버가 재시작/재로그인 후 영원히 복구되지 않는다.
+            (((s as ServerWithLifecycle).lifecycle ?? 'per_session') === 'per_session') &&
             s.auto_spawn === true &&
             s.enabled === true,
         );
@@ -149,6 +152,10 @@ export class MCPLifecycleSupervisor implements LifecycleSupervisor {
     }
 
     private async safeSpawn(userId: string, serverId: string): Promise<ExternalMCPClient> {
+        // 멱등 가드 — 이미 풀에 살아있는 클라이언트가 있으면 재spawn 하지 않는다
+        // (로그인 반복 시 자식 프로세스 중복 생성/누수 방지).
+        const existing = this.userPool.get(userId, serverId);
+        if (existing) return existing;
         const server = await this.repo.getServerById(serverId);
         if (!server) throw new Error(`server not found: ${serverId}`);
         const env = await this.repo.decryptEnvForSpawn(serverId);

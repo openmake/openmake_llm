@@ -987,8 +987,9 @@ export const AGENT_TASK_LIMITS = {
     MAX_TURNS_CEILING: 20,
     /** 기본 최대 턴 수 */
     DEFAULT_MAX_TURNS: 10,
-    /** 작업 전체 타임아웃 (ms) */
-    TOTAL_TIMEOUT_MS: 5 * 60 * 1000,
+    /** 작업 전체 타임아웃 (ms) — AGENT_TASK_TIMEOUT_MS 환경변수로 오버라이드.
+     *  기본 10분: HTML/디자인 등 장문 deliverable 생성은 단일 LLM 호출이 수 분 걸릴 수 있음. */
+    TOTAL_TIMEOUT_MS: parseInt(process.env.AGENT_TASK_TIMEOUT_MS || '', 10) || 10 * 60 * 1000,
     /** 누적 토큰 상한 (input + output) — runaway 토큰 폭주 방지. */
     MAX_TOTAL_TOKENS: 200_000,
     /** 검색류 도구 호출 횟수 하드 상한 — 초과 시 다음 턴부터 검색 도구를 제거해 강제 종합.

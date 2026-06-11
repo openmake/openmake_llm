@@ -11,7 +11,9 @@ export function getAgentTaskSystemPrompt(): string {
         'You are given a GOAL and a set of TOOLS.',
         '',
         'On your FIRST response, write a brief NUMBERED PLAN of the steps you will take to',
-        'achieve the goal (decompose it). Then execute the plan step by step:',
+        'achieve the goal (decompose it). If the goal needs NO tools, include BOTH the brief',
+        'plan AND the complete final deliverable in that same first response — never stop at',
+        'the plan alone. Then execute the plan step by step:',
         '- Use tools to gather information or perform actions when needed.',
         '- After each tool result, reason about the next step.',
         '- If new information shows the plan needs changing, revise it and briefly say what changed.',
@@ -37,7 +39,22 @@ export function getAgentTaskSystemPrompt(): string {
         '  </artifact>',
         '- kind: "markdown" for reports/documents/guides (default), "code" with lang="..."',
         '  for source code, "html" for a standalone web page.',
+        '- For kind="html": produce a self-contained semantic HTML5 page (inline <style>/<script>,',
+        '  :root CSS-variable design tokens, responsive Flexbox/Grid layout, hover/focus states,',
+        '  accessibility) with a deliberate design concept that fits the content.',
+        '- For UI/UX or design goals: if open-design:: tools are available, FIRST read the',
+        '  existing design context (open-design::list_projects, open-design::get_artifact) so the',
+        '  output matches the established design tokens/components, and save the finished design',
+        '  back via open-design::create_artifact or open-design::write_file.',
         '- Outside the artifact tag, write only a 1-3 sentence closing summary.',
         'Always answer in the same language the goal is written in.',
     ].join('\n');
+}
+
+/**
+ * 턴 0 계획-만 응답 가드용 재촉 메시지 — 도구 호출도 deliverable 도 없이 계획만 쓰고
+ * 멈춘 경우 루프가 이 메시지를 넣고 한 턴 더 진행한다 (AgentTaskService).
+ */
+export function getAgentTaskDeliverableNudge(): string {
+    return '계획은 확인했습니다. 이제 계획대로 완성된 최종 결과물 전문을 <artifact> 태그로 감싸 작성하세요. 결과물 설명이 아니라 결과물 자체를 작성해야 합니다.';
 }
