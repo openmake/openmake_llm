@@ -219,6 +219,10 @@ export class AgentTaskService {
                 const result = await this.client.chat(conversation, undefined, undefined, {
                     tools: effectiveTools,
                     signal: callSignal,
+                    // reasoning OFF — qwen3.6 가 디자인/장문 작업에서 수만 토큰의 thinking 을
+                    // 생성해 토큰 한도를 소진하고 deliverable 을 못 쓰는 폭주 차단.
+                    // 도구 루프의 단계별 reasoning 은 대화 구조 자체가 대신한다.
+                    think: false,
                 });
                 totalTokens +=
                     (result.metrics?.prompt_eval_count ?? 0) + (result.metrics?.eval_count ?? 0);
