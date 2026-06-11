@@ -27,6 +27,12 @@
       "expected": { "totalClaims": 2, "citedClaims": 2, "coverageRounded": 1.0, "invalidCount": 1, "skipped": false }
     },
     {
+      "id": "cit-007-comma-group",
+      "sourceCount": 25,
+      "report": "PostgreSQL 17은 새로운 기준을 제시하는 릴리스로 평가된다 [출처 19, 출처 20]. 복제 지연이 크게 줄었다 [출처 1, 2]. 처리량이 13% 향상되었다 [Source 3, Source 5]. 이 문장은 인용이 없는 일반론이라 미인용으로 집계되어야 한다.",
+      "expected": { "totalClaims": 4, "citedClaims": 3, "coverageRounded": 0.75, "invalidCount": 0, "skipped": false }
+    },
+    {
       "id": "cit-005-fallback",
       "sourceCount": 0,
       "report": "리서치 실패: 연결 오류가 발생했습니다.",

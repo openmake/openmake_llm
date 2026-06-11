@@ -209,8 +209,8 @@ export const RESEARCH_DEFAULTS = {
     MAX_SEARCH_RESULTS: 200,
     /** 최대 전체 소스 수 */
     MAX_TOTAL_SOURCES: 50,
-    /** 루프당 최대 스크래핑 수 */
-    MAX_SCRAPE_PER_LOOP: 10,
+    /** 루프당 최대 스크래핑 수 (env: DEEP_RESEARCH_MAX_SCRAPE_PER_LOOP) */
+    MAX_SCRAPE_PER_LOOP: parseInt(process.env.DEEP_RESEARCH_MAX_SCRAPE_PER_LOOP || '15', 10),
     /** 스크래핑 동시 배치 크기 (jsdom CPU 부하 제어) */
     SCRAPE_BATCH_SIZE: 3,
     /** 청크 크기 (소스 개수 기준) */

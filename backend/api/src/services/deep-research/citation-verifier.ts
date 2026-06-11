@@ -42,10 +42,12 @@ export interface CitationReport {
 
 /**
  * 인용 마커 정규식
- * - `[출처 9]`, `[Source 9]`, `[참고 9]`, `[9]`, `[ 9 ]` 모두 매칭 (실제 보고서 형식 혼재 대응)
- * - 그룹 1 = 소스 번호
+ * - `[출처 9]`, `[Source 9]`, `[참고 9]`, `[9]`, `[ 9 ]` 매칭 (실제 보고서 형식 혼재 대응)
+ * - 쉼표 병기 `[출처 1, 출처 3]`, `[Source 1, 3]`, `[1, 2]` 도 한 그룹으로 매칭 —
+ *   괄호당 단일 번호만 인정하면 병기 인용 문장이 미인용으로 오집계된다 (2026-06-11 실측).
  */
-const CITATION_RE = /\[\s*(?:출처|참고|각주|source|ref)?\s*(\d+)\s*\]/gi;
+const CITATION_RE = /\[\s*(?:출처|참고|각주|source|ref)?\s*\d+(?:\s*,\s*(?:출처|참고|각주|source|ref)?\s*\d+)*\s*\]/gi;
+const CITATION_NUM_RE = /\d+/g;
 
 /**
  * 참고자료(References) 섹션 헤더 후보 — SECTION_HEADERS.references(전 언어) + 보조 목록.
@@ -122,11 +124,13 @@ function splitClaims(text: string): string[] {
         .filter(s => s.length >= DEEP_RESEARCH_CITATION.MIN_CLAIM_CHARS);
 }
 
-/** 한 문장에서 인용 번호를 모두 추출 */
+/** 한 문장에서 인용 번호를 모두 추출 (쉼표 병기 그룹은 번호 단위로 전개) */
 function extractCitationNumbers(sentence: string): number[] {
     const nums: number[] = [];
     for (const match of sentence.matchAll(CITATION_RE)) {
-        nums.push(parseInt(match[1], 10));
+        for (const n of match[0].match(CITATION_NUM_RE) ?? []) {
+            nums.push(parseInt(n, 10));
+        }
     }
     return nums;
 }

@@ -25,7 +25,7 @@ export interface ResearchConfig {
     language: string;              // 출력 언어 (ISO 639-1 코드, 예: 'ko', 'en', 'ja')
     maxTotalSources: number;     // 목표 고유 소스 수 (기본: 80)
     scrapeFullContent: boolean;  // 풀 콘텐츠 스크래핑 여부 (기본: true)
-    maxScrapePerLoop: number;    // 루프당 최대 스크래핑 수 (기본: 15)
+    maxScrapePerLoop: number;    // 루프당 최대 스크래핑 수 (기본: 15, env DEEP_RESEARCH_MAX_SCRAPE_PER_LOOP)
     scrapeTimeoutMs: number;     // 개별 스크래핑 타임아웃 (기본: 15000)
     chunkSize: number;           // 중간 요약용 청크 사이즈 (기본: 10)
 }
