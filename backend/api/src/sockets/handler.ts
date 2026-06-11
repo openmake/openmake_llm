@@ -44,6 +44,7 @@ import { authenticateWebSocket, refreshWebSocketAuthentication, validateWebSocke
 import { WEBSOCKET_TIMEOUTS, WS_LIMITS } from '../config/timeouts';
 import { WS_SECURITY } from '../config/security';
 import { handleChatMessage } from './ws-chat-handler';
+import { handleRequestAgents } from './ws-agents-handler';
 import { withSpan } from '../observability/otel';
 import { getEventBus, AGENT_TASK_PROGRESS, type AgentTaskProgressEvent } from '../utils/event-bus';
 import { runWithRequestContext } from '../utils/request-context';
@@ -304,49 +305,10 @@ export class WebSocketHandler {
                     }));
                     break;
 
-                case 'request_agents': {
-                    // MCP 도구 목록을 에이전트 형식으로 반환 (내장 + 외부)
-                    try {
-                        const mcpClient = getUnifiedMCPClient();
-                        const toolRouter = mcpClient.getToolRouter();
-                        const extWs = ws as ExtendedWebSocket;
-                        const userId = extWs._authenticatedUserId;
-                        const userTier = extWs._authenticatedUserTier;
-                        const allTools = userId && userTier
-                            ? await toolRouter.getAllTools({ userId, tier: userTier })
-                            : await toolRouter.getAllTools();
-
-                        const agents = allTools.map(tool => {
-                            // 외부 도구: mcp://serverName/toolName
-                            if (toolRouter.isExternalTool(tool.name)) {
-                                const [serverName, ...rest] = tool.name.split('::');
-                                const originalName = rest.join('::');
-                                return {
-                                    url: `mcp://${serverName}/${originalName}`,
-                                    name: tool.name,
-                                    description: tool.description,
-                                    external: true,
-                                };
-                            }
-                            // 내장 도구: local://toolName
-                            return {
-                                url: `local://${tool.name}`,
-                                name: tool.name,
-                                description: tool.description,
-                                external: false,
-                            };
-                        });
-
-                        ws.send(JSON.stringify({
-                            type: 'agents',
-                            agents
-                        }));
-                        log.debug(`[WS] 에이전트 목록 전송: ${agents.length}개 (내장: ${agents.filter(a => !a.external).length}, 외부: ${agents.filter(a => a.external).length})`);
-                    } catch (e: unknown) {
-                        log.error('[WS] 에이전트 목록 조회 실패:', (e instanceof Error ? e.message : String(e)));
-                    }
+                case 'request_agents':
+                    // MCP 도구 목록을 에이전트 형식으로 반환 (내장 + 외부) — ws-agents-handler.ts
+                    await handleRequestAgents(ws, log);
                     break;
-                }
 
                 case 'chat':
                     await this.handleChat(ws, typedMsg);
