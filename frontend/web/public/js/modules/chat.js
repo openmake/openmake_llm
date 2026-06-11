@@ -236,6 +236,37 @@ async function _startAgentTaskFromChat(goal) {
     }
 }
 
+/**
+ * 새로고침/재방문 시 진행 중(running) 에이전트 작업 카드를 채팅 영역에 복원합니다.
+ * 카드 복원 후 WS 진행 이벤트(onAgentTaskProgressChat)가 이어서 갱신하므로
+ * 새로고침으로 카드가 사라져도 진행과정을 계속 확인할 수 있습니다.
+ */
+async function restoreRunningAgentTaskCards() {
+    if (typeof window.authFetch !== 'function') return;
+    try {
+        const res = await window.authFetch('/api/agent-tasks');
+        if (!res.ok) return; // 미인증/게스트 등 — 조용히 스킵
+        const body = await res.json();
+        const tasks = (body.data && body.data.tasks) || [];
+        const running = tasks.filter(t => t.status === 'running');
+        if (running.length === 0) return;
+        _ensureChatTaskProgressHandler();
+        const welcomeScreen = document.getElementById('welcomeScreen');
+        if (welcomeScreen) welcomeScreen.style.display = 'none';
+        for (const t of running) {
+            // 이미 카드가 있으면 중복 생성 금지 (SPA 재진입 등)
+            if (document.querySelector('[data-agent-task-id="' + t.id + '"]')) continue;
+            const cardDiv = addChatMessage('assistant', '');
+            cardDiv.dataset.agentTaskId = t.id;
+            cardDiv.dataset.agentTaskGoal = t.goal || '';
+            const content = cardDiv.querySelector('.message-content');
+            if (content) content.innerHTML = _renderAgentTaskCard({ status: t.status, progress: t.progress || 0, goal: t.goal || '' });
+        }
+    } catch (e) {
+        console.error('[Chat] 에이전트 작업 카드 복원 실패:', e);
+    }
+}
+
 async function sendMessage() {
     const input = document.getElementById('chatInput');
     const message = input.value.trim();
@@ -396,6 +427,7 @@ window.abortChat = abortChat;
 
 export {
     sendMessage,
+    restoreRunningAgentTaskCards,
     addChatMessage,
     appendToken,
     appendThinkingToken,

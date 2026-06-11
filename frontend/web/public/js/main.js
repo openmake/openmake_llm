@@ -68,8 +68,9 @@ import {
 import {
     sendMessage, addChatMessage, appendToken,
     finishAssistantMessage, copyMessage, regenerateMessage,
-    newChat as chatNewChat, useSuggestion, abortChat
-} from './modules/chat.js?v=21';
+    newChat as chatNewChat, useSuggestion, abortChat,
+    restoreRunningAgentTaskCards
+} from './modules/chat.js?v=22';
 // 메시지 신고 (B+ Phase B5) — 디버깅용 본문 임시 보관 요청
 import { reportMessage } from './modules/chat-actions.js?v=21';
 
@@ -432,6 +433,9 @@ async function initApp() {
 
     // 6. 대화 히스토리 로드
     loadChatSessions();
+
+    // 6-1. 진행 중 에이전트 작업 카드 복원 (새로고침 후에도 진행과정 확인)
+    restoreRunningAgentTaskCards();
 
     // 7. 모바일 사이드바 초기화
     initMobileSidebar();
