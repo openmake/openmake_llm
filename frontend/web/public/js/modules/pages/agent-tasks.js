@@ -346,7 +346,7 @@
                 '.page-agent-tasks .empty-state h2 { color:var(--text-secondary); margin-bottom:var(--space-3); }' +
                 '.page-agent-tasks .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:1000; justify-content:center; align-items:center; }' +
                 '.page-agent-tasks .modal-overlay.open { display:flex; }' +
-                '.page-agent-tasks .modal { background:var(--bg-card); border:1px solid var(--border-light); border-radius:var(--radius-lg); width:90%; max-width:700px; max-height:90vh; overflow-y:auto; padding:var(--space-6); }' +
+                '.page-agent-tasks .modal { display:block; position:static; height:auto; background:var(--bg-card); border:1px solid var(--border-light); border-radius:var(--radius-lg); width:90%; max-width:700px; max-height:90vh; overflow-y:auto; padding:var(--space-6); }' +
                 '.page-agent-tasks .modal h2 { margin:0 0 var(--space-4); color:var(--text-primary); }' +
                 '.page-agent-tasks .detail-section { margin-bottom:var(--space-5); }' +
                 '.page-agent-tasks .detail-section h3 { color:var(--text-secondary); font-size:var(--font-size-sm); margin-bottom:var(--space-2); text-transform:uppercase; letter-spacing:.5px; }' +
@@ -466,6 +466,15 @@
             }
 
             _loadTasks();
+
+            // 채팅 작업 카드 딥링크 — pendingAgentTaskId 가 있으면 해당 작업 상세 자동 오픈
+            var pendingId = null;
+            try {
+                pendingId = sessionStorage.getItem('pendingAgentTaskId');
+                if (pendingId) sessionStorage.removeItem('pendingAgentTaskId');
+            } catch (e) { /* storage 차단 환경 무시 */ }
+            if (pendingId) _openTask(pendingId);
+
             // WS(agent_task_progress)가 실시간 갱신을 담당 — polling 은 느린 safety net(25s).
             // WS 미수신(연결 끊김 등) 시 복구용. DB 가 진실의 원천(DB-primary).
             window.onAgentTaskProgress = _applyProgress;

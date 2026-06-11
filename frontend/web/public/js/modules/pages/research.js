@@ -182,7 +182,7 @@
                 '.page-research .empty-state h2 { color:var(--text-secondary); margin-bottom:var(--space-3); }' +
                 '.page-research .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:1000; justify-content:center; align-items:center; }' +
                 '.page-research .modal-overlay.open { display:flex; }' +
-                '.page-research .modal { background:var(--bg-card); border:1px solid var(--border-light); border-radius:var(--radius-lg); width:90%; max-width:700px; max-height:90vh; overflow-y:auto; padding:var(--space-6); }' +
+                '.page-research .modal { display:block; position:static; height:auto; background:var(--bg-card); border:1px solid var(--border-light); border-radius:var(--radius-lg); width:90%; max-width:700px; max-height:90vh; overflow-y:auto; padding:var(--space-6); }' +
                 '.page-research .modal h2 { margin:0 0 var(--space-4); color:var(--text-primary); }' +
                 '.page-research .detail-section { margin-bottom:var(--space-5); }' +
                 '.page-research .detail-section h3 { color:var(--text-secondary); font-size:var(--font-size-sm); margin-bottom:var(--space-2); text-transform:uppercase; letter-spacing:.5px; }' +

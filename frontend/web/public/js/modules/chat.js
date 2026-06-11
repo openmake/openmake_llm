@@ -216,9 +216,26 @@ function _ensureChatTaskProgressHandler() {
     };
 }
 
+/**
+ * 채팅 작업 카드 클릭 → 작업 페이지로 이동 + 해당 작업 상세 모달 자동 오픈 (딥링크).
+ * 카드 어디를 눌러도 결과를 재확인할 수 있게 한다. taskId 는 클릭 시점의 dataset 에서 읽는다.
+ */
+function _attachAgentTaskCardClick(cardDiv) {
+    cardDiv.style.cursor = 'pointer';
+    cardDiv.addEventListener('click', function (e) {
+        const id = cardDiv.dataset.agentTaskId;
+        if (!id) return;
+        try { sessionStorage.setItem('pendingAgentTaskId', id); } catch (_e) { /* storage 차단 환경 무시 */ }
+        if (e.target.closest('a')) return; // 내부 링크는 라우터 기본 동작 (pendingId 만 저장)
+        if (window.Router && typeof window.Router.navigate === 'function') window.Router.navigate('/agent-tasks.html');
+        else location.href = '/agent-tasks.html';
+    });
+}
+
 async function _startAgentTaskFromChat(goal) {
     _ensureChatTaskProgressHandler();
     const cardDiv = addChatMessage('assistant', '');
+    _attachAgentTaskCardClick(cardDiv);
     cardDiv.dataset.agentTaskGoal = goal;
     const content = cardDiv.querySelector('.message-content');
     if (content) content.innerHTML = _renderAgentTaskCard({ status: 'pending', progress: 0, goal: goal });
@@ -257,6 +274,7 @@ async function restoreRunningAgentTaskCards() {
             // 이미 카드가 있으면 중복 생성 금지 (SPA 재진입 등)
             if (document.querySelector('[data-agent-task-id="' + t.id + '"]')) continue;
             const cardDiv = addChatMessage('assistant', '');
+            _attachAgentTaskCardClick(cardDiv);
             cardDiv.dataset.agentTaskId = t.id;
             cardDiv.dataset.agentTaskGoal = t.goal || '';
             const content = cardDiv.querySelector('.message-content');

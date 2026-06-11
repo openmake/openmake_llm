@@ -46,7 +46,7 @@
                 ".empty-state h2 { color:var(--text-secondary); margin-bottom:var(--space-3); }\n" +
                 ".modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:1000; justify-content:center; align-items:center; }\n" +
                 ".modal-overlay.open { display:flex; }\n" +
-                ".modal { background:var(--bg-card); border:1px solid var(--border-light); border-radius:var(--radius-lg); width:90%; max-width:700px; max-height:90vh; overflow-y:auto; padding:var(--space-6); }\n" +
+                ".modal { display:block; position:static; height:auto; background:var(--bg-card); border:1px solid var(--border-light); border-radius:var(--radius-lg); width:90%; max-width:700px; max-height:90vh; overflow-y:auto; padding:var(--space-6); }\n" +
                 ".modal h2 { margin:0 0 var(--space-4); color:var(--text-primary); }\n" +
                 ".form-group { margin-bottom:var(--space-4); }\n" +
                 ".form-group label { display:block; margin-bottom:var(--space-2); color:var(--text-secondary); font-size:var(--font-size-sm); font-weight:var(--font-weight-semibold); }\n" +
