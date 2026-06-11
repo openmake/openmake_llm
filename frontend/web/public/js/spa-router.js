@@ -333,7 +333,8 @@ function showPageView() {
         pageContent.style.display = '';
         // Re-trigger fade-in animation
         pageContent.style.animation = 'none';
-        pageContent.offsetHeight; // force reflow
+        // eslint-disable-next-line @typescript-eslint/no-unused-expressions -- 강제 reflow 트리거 (의도된 side-effect read)
+        pageContent.offsetHeight;
         pageContent.style.animation = '';
     }
 }

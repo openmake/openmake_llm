@@ -126,7 +126,7 @@
                 let convSearchTimeout;
 
                 async function checkAuth() {
-                    if (!_userStr) { (typeof Router !== 'undefined' && Router.navigate('/')); return false; }
+                    if (!_userStr) { if (typeof Router !== 'undefined') Router.navigate('/'); return false; }
                     try {
                         const res = await authFetch(API_ENDPOINTS.AUTH_ME);
                         const data = await res.json();
@@ -140,7 +140,7 @@
                         }
                         return true;
                     } catch (e) {
-                        (typeof Router !== 'undefined' && Router.navigate('/'));
+                        if (typeof Router !== 'undefined') Router.navigate('/');
                         return false;
                     }
                 }

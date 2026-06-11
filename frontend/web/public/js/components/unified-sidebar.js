@@ -165,6 +165,7 @@ UnifiedSidebar.prototype.init = function () {
 
     // 라우트 변경 시 레일 active nav 갱신 (⌘K·링크·프로그램 네비 모두 포함)
     if (window.Router && typeof window.Router.onAfterNavigate === 'function') {
+        // eslint-disable-next-line @typescript-eslint/no-this-alias -- ES5 prototype 컴포넌트 스타일 유지
         var selfNav = this;
         window.Router.onAfterNavigate(function (info) { selfNav._markActiveNav(info && info.to); });
     }
@@ -246,6 +247,7 @@ UnifiedSidebar.prototype._renderHTML = function () {
 // ─── 이벤트 바인딩 ─────────────────────────────────
 
 UnifiedSidebar.prototype._bindEvents = function () {
+    // eslint-disable-next-line @typescript-eslint/no-this-alias -- ES5 prototype 컴포넌트 스타일 유지
     var self = this;
 
     // 토글 버튼
@@ -539,6 +541,7 @@ UnifiedSidebar.prototype.toggle = function () {
 // ─── 대화 목록 ─────────────────────────────────────
 
 UnifiedSidebar.prototype.loadConversations = function () {
+    // eslint-disable-next-line @typescript-eslint/no-this-alias -- ES5 prototype 컴포넌트 스타일 유지
     var self = this;
     var fetchFn = window.authFetch || window.fetch;
 
@@ -591,6 +594,7 @@ UnifiedSidebar.prototype._renderConversations = function (conversations) {
 
     var html = '';
     var groupOrder = ['today', 'yesterday', 'week', 'older'];
+    // eslint-disable-next-line @typescript-eslint/no-this-alias -- ES5 prototype 컴포넌트 스타일 유지
     var self = this;
 
     groupOrder.forEach(function (groupKey) {
@@ -771,6 +775,7 @@ UnifiedSidebar.prototype._renderPageNav = function () {
     container.innerHTML = html;
 
     // SPA 라우터 통합 — 클릭 시 페이지 전환
+    // eslint-disable-next-line @typescript-eslint/no-this-alias -- ES5 prototype 컴포넌트 스타일 유지
     var self = this;
     container.querySelectorAll('[data-page-nav]').forEach(function (link) {
         link.addEventListener('click', function (e) {

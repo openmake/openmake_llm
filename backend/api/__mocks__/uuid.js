@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports -- Jest manual mock은 CJS로 로드되는 의도된 shim (pure-ESM uuid 대응) */
 const crypto = require('crypto');
 module.exports = {
     v4: () => crypto.randomUUID(),

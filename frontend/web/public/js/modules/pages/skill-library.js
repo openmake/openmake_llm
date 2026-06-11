@@ -316,10 +316,9 @@
         },
 
         setupTabs: function () {
-            const self = this;
             document.querySelectorAll('.sl-tab').forEach(tab => {
-                tab.addEventListener('click', function () {
-                    const target = this.dataset.slTab;
+                tab.addEventListener('click', () => {
+                    const target = tab.dataset.slTab;
                     // Update tab buttons
                     document.querySelectorAll('.sl-tab').forEach(t => {
                         t.classList.toggle('active', t.dataset.slTab === target);
@@ -331,7 +330,7 @@
                     });
                     // drafts 탭 첫 진입 시 자동 로드
                     if (target === 'drafts' && !draftsLoaded) {
-                        self.loadDrafts();
+                        this.loadDrafts();
                     }
                 });
             });
@@ -349,11 +348,10 @@
         },
 
         setupEventListeners: function () {
-            const self = this;
 
             // New skill button
             document.getElementById('btnNewSkill')?.addEventListener('click', () => {
-                self.openNewSkillModal();
+                this.openNewSkillModal();
             });
 
             // .SKILL 매니페스트 업로드
@@ -393,7 +391,7 @@
                     } else {
                         if (window.showToast) window.showToast(`업로드 완료: ${skillId} v${ver} (도구 ${payload?.bindings_count ?? 0}개)`, 'success');
                     }
-                    self.loadLocalSkills();
+                    this.loadLocalSkills();
                 } catch (e) {
                     if (window.showToast) window.showToast('업로드 중 오류: ' + (e?.message || e), 'error');
                 } finally {
@@ -404,14 +402,14 @@
             // 로컬 스킬 탭 검색/필터
             const localSearch = document.getElementById('localSearchInput');
             if (localSearch) {
-                const debouncedSearch = window.debounce ? window.debounce(function (e) {
+                const debouncedSearch = window.debounce ? window.debounce((e) => {
                     localFilters.search = e.target.value;
                     localFilters.page = 1;
-                    self.loadLocalSkills();
-                }, 500) : function (e) {
+                    this.loadLocalSkills();
+                }, 500) : (e) => {
                     localFilters.search = e.target.value;
                     localFilters.page = 1;
-                    self.loadLocalSkills();
+                    this.loadLocalSkills();
                 };
                 localSearch.addEventListener('input', debouncedSearch);
             }
@@ -419,13 +417,13 @@
             document.getElementById('localCategoryFilter')?.addEventListener('change', (e) => {
                 localFilters.category = e.target.value;
                 localFilters.page = 1;
-                self.loadLocalSkills();
+                this.loadLocalSkills();
             });
 
             document.getElementById('localSortSelect')?.addEventListener('change', (e) => {
                 localFilters.sortBy = e.target.value;
                 localFilters.page = 1;
-                self.loadLocalSkills();
+                this.loadLocalSkills();
             });
 
             // Global dropdown close on outside click
@@ -437,7 +435,7 @@
 
             // AI 자동 생성 버튼
             document.getElementById('btnOpenAutoCreate')?.addEventListener('click', () => {
-                self.openAutoCreateModal();
+                this.openAutoCreateModal();
             });
 
             // AI 자동 생성 모달 — mode 토글 (prompt ↔ git)
@@ -467,7 +465,7 @@
             window.sl_changeLocalPage = (p) => {
                 const maxPage = Math.ceil(localFilters.total / localFilters.limit) || 1;
                 localFilters.page = Math.min(Math.max(1, p), maxPage);
-                self.loadLocalSkills();
+                this.loadLocalSkills();
             };
             window.sl_toggleUserSkill = this.toggleUserSkill.bind(this);
             window.sl_saveSkill = this.saveSkillFromModal.bind(this);

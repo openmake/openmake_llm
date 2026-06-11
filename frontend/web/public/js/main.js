@@ -635,14 +635,7 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
  * 빈 값 → 자동 라우팅 (18 산업 agent 자동 선택). agent id → 명시 적용.
  */
 window.setUserAgent = function(agentId) {
-    try {
-        const { setState } = require('./modules/state.js');
-        setState('selectedUserAgentId', agentId || null);
-    } catch (e) {
-        // ESM 환경 — state 모듈은 이미 import 되어 window 글로벌 헬퍼로 노출됨
-        if (window.setState) window.setState('selectedUserAgentId', agentId || null);
-        else if (typeof window.__STATE__ === 'object') window.__STATE__.selectedUserAgentId = agentId || null;
-    }
+    setState('selectedUserAgentId', agentId || null);
 };
 
 /**

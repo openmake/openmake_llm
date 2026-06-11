@@ -469,14 +469,12 @@
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({ customInstructions: trimmed.length > 0 ? trimmed : null }),
                             });
-                            (typeof showToast === 'function')
-                                ? showToast('사용자 지시문이 저장되었습니다.', 'success')
-                                : alert('저장되었습니다.');
+                            if (typeof showToast === 'function') showToast('사용자 지시문이 저장되었습니다.', 'success');
+                            else alert('저장되었습니다.');
                         } catch (e) {
                             console.error('[settings] custom_instructions 저장 실패:', e);
-                            (typeof showToast === 'function')
-                                ? showToast('저장 실패: ' + (e && e.message ? e.message : '서버 오류'), 'error')
-                                : alert('저장 실패');
+                            if (typeof showToast === 'function') showToast('저장 실패: ' + (e && e.message ? e.message : '서버 오류'), 'error');
+                            else alert('저장 실패');
                         } finally {
                             saveBtn.disabled = false;
                             saveBtn.textContent = original;
@@ -524,7 +522,8 @@
                         saveHistory: document.getElementById('saveHistoryToggle').checked,
                         memoryLearning: (document.getElementById('memoryLearningToggle') || { checked: true }).checked
                     }));
-                    (typeof showToast === 'function' ? showToast('설정이 저장되었습니다.', 'warning') : console.warn('설정이 저장되었습니다.'));
+                    if (typeof showToast === 'function') showToast('설정이 저장되었습니다.', 'warning');
+                    else console.warn('설정이 저장되었습니다.');
                 }
 
                 function loadSettings() {
@@ -556,7 +555,8 @@
                         if (res.status === 429) {
                             var rateData = await res.json().catch(function () { return null; });
                             var rateMsg = (rateData && rateData.error && rateData.error.message) || '데이터 export 시간당 한도를 초과했습니다.';
-                            (typeof showToast === 'function' ? showToast(rateMsg, 'warning') : console.warn(rateMsg));
+                            if (typeof showToast === 'function') showToast(rateMsg, 'warning');
+                            else console.warn(rateMsg);
                             return;
                         }
                         if (!res.ok) throw new Error('서버 응답 오류: ' + res.status);
@@ -571,10 +571,12 @@
                         a.click();
                         a.remove();
                         URL.revokeObjectURL(url);
-                        (typeof showToast === 'function' ? showToast('전체 데이터를 내보냈습니다.', 'success') : console.log('Export complete'));
+                        if (typeof showToast === 'function') showToast('전체 데이터를 내보냈습니다.', 'success');
+                        else console.log('Export complete');
                     } catch (e) {
                         console.error('데이터 내보내기 실패:', e);
-                        (typeof showToast === 'function' ? showToast('데이터 내보내기에 실패했습니다.', 'error') : console.error('데이터 내보내기 실패'));
+                        if (typeof showToast === 'function') showToast('데이터 내보내기에 실패했습니다.', 'error');
+                        else console.error('데이터 내보내기 실패');
                     }
                 }
 
@@ -585,10 +587,12 @@
                         if (!res.ok) throw new Error('서버 응답 오류: ' + res.status);
                         var data = await res.json();
                         var count = (data.data && data.data.count) || 0;
-                        (typeof showToast === 'function' ? showToast(count + '개 대화 기록이 삭제되었습니다.', 'success') : console.log('History cleared'));
+                        if (typeof showToast === 'function') showToast(count + '개 대화 기록이 삭제되었습니다.', 'success');
+                        else console.log('History cleared');
                     } catch (e) {
                         console.error('대화 기록 삭제 실패:', e);
-                        (typeof showToast === 'function' ? showToast('대화 기록 삭제에 실패했습니다.', 'error') : console.error('대화 기록 삭제 실패'));
+                        if (typeof showToast === 'function') showToast('대화 기록 삭제에 실패했습니다.', 'error');
+                        else console.error('대화 기록 삭제 실패');
                     }
                 }
 

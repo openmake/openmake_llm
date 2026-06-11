@@ -37,8 +37,9 @@
                     const user = SS.getItem(SK.USER || 'user');
                     const isGuest = SS.getItem(SK.IS_GUEST || 'isGuest') === 'true';
                     if (!user || isGuest) {
-                        (typeof showToast === 'function' ? showToast('이 페이지는 로그인이 필요합니다.', 'warning') : console.warn('이 페이지는 로그인이 필요합니다.'));
-                        (typeof Router !== 'undefined' && Router.navigate('/'));
+                        if (typeof showToast === 'function') showToast('이 페이지는 로그인이 필요합니다.', 'warning');
+                        else console.warn('이 페이지는 로그인이 필요합니다.');
+                        if (typeof Router !== 'undefined') Router.navigate('/');
                     }
                 })();
 
@@ -120,7 +121,7 @@
                     // 메인 채팅 화면으로 이동하며 세션 ID 전달
                     // Router.navigate strips query strings via normalizePath, so use sessionStorage
                     sessionStorage.setItem('pendingSessionId', id);
-                    (typeof Router !== 'undefined' && Router.navigate('/'));
+                    if (typeof Router !== 'undefined') Router.navigate('/');
                 }
 
                 function formatDate(dateStr) {
@@ -145,7 +146,8 @@
 
                 function exportHistory() {
                     if (allSessions.length === 0) {
-                        (typeof showToast === 'function' ? showToast('내보낼 데이터가 없습니다.', 'warning') : console.warn('내보낼 데이터가 없습니다.'));
+                        if (typeof showToast === 'function') showToast('내보낼 데이터가 없습니다.', 'warning');
+                        else console.warn('내보낼 데이터가 없습니다.');
                         return;
                     }
                     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(allSessions, null, 2));

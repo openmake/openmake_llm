@@ -40,8 +40,9 @@
 
                 // 로그인 확인 (OAuth 쿠키 세션 포함)
                 if (!SS.getItem(SK.USER || 'user')) {
-                    (typeof showToast === 'function' ? showToast('로그인이 필요합니다.', 'warning') : console.warn('로그인이 필요합니다.'));
-                    (typeof Router !== 'undefined' && Router.navigate('/'));
+                    if (typeof showToast === 'function') showToast('로그인이 필요합니다.', 'warning');
+                    else console.warn('로그인이 필요합니다.');
+                    if (typeof Router !== 'undefined') Router.navigate('/');
                 }
 
                 function toggleVis(id, btn) {

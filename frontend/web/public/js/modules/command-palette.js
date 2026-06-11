@@ -69,7 +69,7 @@ function buildCommands() {
         { icon: 'lucide:plus', label: '새 대화', hint: '⌘N', run: function () { if (typeof window.newChat === 'function') window.newChat(); else if (window.Router) window.Router.navigate('/'); } },
         { icon: 'lucide:search', label: '대화 검색', run: function () {
             try { if (window.sidebar && typeof window.sidebar.setState === 'function') window.sidebar.setState('full'); } catch (e) {}
-            setTimeout(function () { var i = document.getElementById('sidebarSearch'); if (i) { i.focus(); i.select && i.select(); } }, 60);
+            setTimeout(function () { var i = document.getElementById('sidebarSearch'); if (i) { i.focus(); if (i.select) i.select(); } }, 60);
         } },
         { icon: 'lucide:arrow-left-right', label: '모델 선택 / 전환', run: function () {
             var t = document.querySelector('.model-selector-trigger');
