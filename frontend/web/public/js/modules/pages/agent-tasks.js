@@ -204,12 +204,27 @@
         var dc = document.getElementById('detailContent');
         if (dc) dc.innerHTML = html;
 
-        // innerHTML 주입 후 본문 렌더 — markdown 은 renderMarkdown(sanitize 포함), 그 외 kind 는 escaped 소스
+        // innerHTML 주입 후 본문 렌더 — markdown 은 renderMarkdown(sanitize 포함),
+        // html 은 sandbox iframe 미리보기(artifact-panel 과 동일 보안 모델: allow-scripts만,
+        // same-origin 비활성 → 부모 cookie/storage 접근 불가), svg 는 DOMPurify 위생화,
+        // 그 외 kind 는 escaped 소스.
         artifacts.forEach(function(a, i) {
             var body = dc ? dc.querySelector('[data-art-body="' + i + '"]') : null;
             if (!body) return;
-            if ((a.kind || 'markdown') === 'markdown' && typeof window.renderMarkdown === 'function') {
+            var kind = a.kind || 'markdown';
+            if (kind === 'markdown' && typeof window.renderMarkdown === 'function') {
                 window.renderMarkdown(body, a.content);
+            } else if (kind === 'html') {
+                var iframe = document.createElement('iframe');
+                iframe.setAttribute('sandbox', 'allow-scripts');
+                iframe.setAttribute('referrerpolicy', 'no-referrer');
+                iframe.className = 'artifact-html-frame';
+                iframe.srcdoc = a.content;
+                body.innerHTML = '';
+                body.classList.add('artifact-body-frame');
+                body.appendChild(iframe);
+            } else if (kind === 'svg' && typeof window.DOMPurify !== 'undefined') {
+                body.innerHTML = window.DOMPurify.sanitize(a.content, { USE_PROFILES: { svg: true, svgFilters: true } });
             } else {
                 body.innerHTML = '<pre class="artifact-src">' + _esc(a.content) + '</pre>';
             }
@@ -448,6 +463,8 @@
                 '.page-agent-tasks .artifact-body h1, .page-agent-tasks .artifact-body h2, .page-agent-tasks .artifact-body h3 { color:var(--text-primary); margin:var(--space-3) 0 var(--space-2); }' +
                 '.page-agent-tasks .artifact-body table { border-collapse:collapse; } .page-agent-tasks .artifact-body td, .page-agent-tasks .artifact-body th { border:1px solid var(--border-light); padding:4px 10px; }' +
                 '.page-agent-tasks .artifact-src { margin:0; white-space:pre-wrap; word-break:break-all; font-size:var(--font-size-sm); color:var(--text-secondary); }' +
+                '.page-agent-tasks .artifact-body-frame { padding:0; }' +
+                '.page-agent-tasks .artifact-html-frame { display:block; width:100%; height:480px; border:0; background:#fff; }' +
                 '.page-agent-tasks .result-md { color:var(--text-primary); line-height:1.65; }' +
                 '.page-agent-tasks .err-text { color:var(--danger); }' +
                 '.page-agent-tasks .steps-timeline { border-left:2px solid var(--border-light); padding-left:var(--space-5); }' +

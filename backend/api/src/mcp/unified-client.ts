@@ -230,7 +230,10 @@ export class UnifiedMCPClient {
         }
 
         logger.info(`🔧 도구 실행: ${toolName} (user: ${context.userId}, tier: ${context.tier})`);
-        return this.executeTool(toolName, sandboxedArgs);
+        // toolRouter 직접 호출 — JSON-RPC 래퍼(executeTool)는 context 채널이 없어
+        // 사용자 스코프 내장 도구(agent_task_* 등)와 user-pool 외부 도구에 userId 가
+        // 전달되지 않는다. 에이전트 루프(runTool)와 동일한 canonical 경로.
+        return this.toolRouter.executeTool(toolName, sandboxedArgs, context);
     }
 
     // ============================================

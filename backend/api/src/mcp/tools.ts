@@ -18,6 +18,7 @@
  */
 
 import { MCPToolDefinition, MCPToolResult } from './types';
+import { agentTaskTools } from './agent-task-tools';
 
 // ============================================
 // Vision Tools (OCR / Image Analysis)
@@ -145,6 +146,7 @@ export const builtInTools: MCPToolDefinition[] = [
     analyzeImageTool,
     ...webSearchTools,
     ...webScraperTools,
+    ...agentTaskTools,
     createSkillTool as MCPToolDefinition,
     importSkillFromGitTool as MCPToolDefinition,
     importAgentFromGitTool as MCPToolDefinition,

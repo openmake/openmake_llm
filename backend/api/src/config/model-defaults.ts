@@ -41,18 +41,19 @@ export const MODEL_CAPABILITY_PRESETS: Readonly<Record<string, ModelCapabilities
     },
     // ⚠️ getCapabilities 는 `modelId.split(':')[0]` 로 매칭하므로 위 'qwen3.6' 키는
     //   실제 modelId('qwen3.6-35b-a3b')와 안 맞아 FALLBACK 이 쓰여 왔다(죽은 키).
-    //   서버 vLLM vision 활성화(--language-model-only 제거)에 맞춰 실 modelId 키로 vision 만 켠다.
-    //   toolCalling/thinking 은 기존 FALLBACK 동작 그대로 유지(회귀 0) — 'qwen3.6' 죽은 키의
-    //   toolCalling/thinking 의도 복원은 별도 이슈.
+    //   2026-06-12: toolCalling 의도 복원 — 서버 vLLM 은 `--tool-call-parser qwen3_coder` 로
+    //   구동 중이고 AgentTaskService 의 도구 루프가 동일 모델에서 검증됨. false 로 남아
+    //   있으면 채팅 경로(external dispatch)가 모든 MCP 도구를 caps 게이트에서 제거해
+    //   채팅 도구 호출이 전면 불능이 된다 (tools=0).
     'qwen3.6-35b-a3b': {
-        toolCalling: false,
-        thinking: false,
+        toolCalling: true,
+        thinking: true,
         vision: true,
         streaming: true,
     },
     'qwen3.6-35b-a3b-1m': {
-        toolCalling: false,
-        thinking: false,
+        toolCalling: true,
+        thinking: true,
         vision: true,
         streaming: true,
     },

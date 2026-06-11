@@ -26,6 +26,7 @@ import type { ExecutionPlan } from '../chat/profile-resolver';
 import type { UserTier } from '../data/user-manager';
 import type { UserContext } from '../mcp/user-sandbox';
 import { getUnifiedMCPClient } from '../mcp/unified-client';
+import { CHAT_ALWAYS_ON_TOOL_NAMES } from '../mcp/agent-task-tools';
 import { LLMClient } from '../llm';
 import { type ChatMessage, type ToolDefinition, type ModelOptions } from '../llm';
 import type { ResearchProgress } from './DeepResearchService';
@@ -205,12 +206,18 @@ export class ChatService {
             skillBindings: reqCtx.skillBindings,
         });
 
+        // 본인 데이터 읽기 전용 도구(에이전트 작업 조회)는 토글 없이 항상 제공 —
+        // "에이전트 작업 결과 보여줘" 같은 요청이 설정과 무관하게 동작해야 한다.
+        const alwaysOn = allTools.filter(t =>
+            CHAT_ALWAYS_ON_TOOL_NAMES.includes(t.function.name) &&
+            !merged.some(m => m.function.name === t.function.name));
+
         logger.debug(
             `MCP 도구 머지: all=${allTools.length}, userToggled=${userToggled.length}, ` +
             `profileRequired=${profileRequiredNames.length}, skillBindings=${reqCtx.skillBindings.length}, ` +
-            `merged=${merged.length}`,
+            `merged=${merged.length}, alwaysOn=${alwaysOn.length}`,
         );
-        return merged;
+        return [...merged, ...alwaysOn];
     }
 
     /**
