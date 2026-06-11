@@ -103,9 +103,6 @@ export interface EnvConfig {
     // HTTPS 없는 production 환경에서 cookieSecure=false 를 명시적으로 허용 (opt-out)
     allowInsecureCookies: boolean;
 
-    // Pipeline Profile — Cost Tier (P2)
-    omkCostTierDefault: string;
-
     // Generate-Verify skip threshold: 2026-05-26 cleanup — routing-config.ts 가
     // process.env.OMK_GV_SKIP_THRESHOLD 직접 사용, config 객체 필드는 dead 였음.
     // env.schema.ts 의 OMK_GV_SKIP_THRESHOLD 는 검증 일관성 위해 유지.
@@ -213,10 +210,6 @@ const DEFAULT_CONFIG: EnvConfig = {
     // Cookie Security
     cookieSecure: false,
     allowInsecureCookies: false,
-
-    // Pipeline Profile — Cost Tier (P2)
-    omkCostTierDefault: 'premium',
-
 
     // Language Policy
     enableDynamicResponseLanguage: true,
@@ -398,9 +391,6 @@ export function loadConfig(): EnvConfig {
         API_KEY_MAX_PER_USER: env('API_KEY_MAX_PER_USER'),
         TOKEN_ENCRYPTION_KEY: env('TOKEN_ENCRYPTION_KEY'),
 
-        // P2: Cost Tier
-        OMK_COST_TIER_DEFAULT: env('OMK_COST_TIER_DEFAULT'),
-
         // Language Policy
         ENABLE_DYNAMIC_RESPONSE_LANGUAGE: env('ENABLE_DYNAMIC_RESPONSE_LANGUAGE'),
         DEFAULT_RESPONSE_LANGUAGE: env('DEFAULT_RESPONSE_LANGUAGE'),
@@ -516,9 +506,6 @@ export function loadConfig(): EnvConfig {
         apiKeyPepper: parsed.API_KEY_PEPPER ?? DEFAULT_CONFIG.apiKeyPepper,
         apiKeyMaxPerUser: parsed.API_KEY_MAX_PER_USER ?? DEFAULT_CONFIG.apiKeyMaxPerUser,
         tokenEncryptionKey: parsed.TOKEN_ENCRYPTION_KEY ?? DEFAULT_CONFIG.tokenEncryptionKey,
-
-        // Pipeline Profile — Cost Tier (P2)
-        omkCostTierDefault: parsed.OMK_COST_TIER_DEFAULT ?? DEFAULT_CONFIG.omkCostTierDefault,
 
         // Language Policy
         enableDynamicResponseLanguage: parsed.ENABLE_DYNAMIC_RESPONSE_LANGUAGE ?? DEFAULT_CONFIG.enableDynamicResponseLanguage,

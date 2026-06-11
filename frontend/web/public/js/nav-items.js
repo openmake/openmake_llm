@@ -55,8 +55,8 @@ const NAV_ITEMS = {
         { href: '/admin-mcp-monitoring.html', icon: '📊', iconify: 'lucide:activity', label: 'MCP 모니터링', requireAuth: true, requireAdmin: true, excludeFromSidebar: true },
         // Phase R2 (2026-05-21): admin-metrics/audit/analytics/alerts/token-monitoring 5개 페이지를 /admin 의 섹션 탭으로 통합
         // settings 및 그 sub-탭들: 사이드바 nav 에서 hidden. settings 페이지의 톱니/avatar dropdown
-        // 이 settings 진입점. settings 의 5탭 (account/api-keys/usage/integrations) 은 각자 페이지로
-        // navigate 하므로 spa-router 라우트 등록 위해 entry 보존.
+        // 이 settings 진입점. settings 탭은 페이지 모듈을 인라인 임베드하므로 아래 entry 들은
+        // standalone 직접 접근/북마크용 spa-router 라우트 등록 위해 보존.
         { href: '/settings.html', icon: '⚙️', iconify: 'lucide:settings', label: '설정', cssFiles: ['/css/settings.css?v=19'], excludeFromSidebar: true },
         { href: '/password-change.html', icon: '🔑', iconify: 'lucide:key-round', label: '비밀번호 변경', requireAuth: true, excludeFromSidebar: true },
         { href: '/api-keys.html', icon: '🗝️', iconify: 'lucide:key', label: 'API 키', requireAuth: true, excludeFromSidebar: true },

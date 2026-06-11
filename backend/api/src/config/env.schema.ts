@@ -165,9 +165,6 @@ export const envSchema = z
         // Swagger
         SWAGGER_BASE_URL: z.string().default(''),
 
-        // P2: Cost Tier
-        OMK_COST_TIER_DEFAULT: z.enum(['economy', 'standard', 'premium']).default('premium'),
-
         // Generate-Verify skip threshold
         // routing-config.ts가 process.env로 직접 소비하지만
         // 스키마 일관성을 위해 명시적으로 등록

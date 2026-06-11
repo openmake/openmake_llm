@@ -72,8 +72,6 @@ export const DB_POOL_TIMEOUTS = {
 export const CLEANUP_INTERVALS = {
     /** 문서 스토어 정리 주기 (ms) — 10분 */
     DOCUMENT_STORE_MS: 10 * 60 * 1000,
-    /** OAuth state 정리 주기 (ms) — 5분 */
-    OAUTH_STATE_MS: 5 * 60 * 1000,
     /** Deep Research 세션 정리 대기 (ms) — 5분 */
     RESEARCH_SESSION_MS: 5 * 60 * 1000,
     /** Analytics 세션 정리 주기 (ms) — 1시간 */
