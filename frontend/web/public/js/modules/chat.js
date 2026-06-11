@@ -194,7 +194,8 @@ function _renderAgentTaskCard(t) {
 }
 
 function _ensureChatTaskProgressHandler() {
-    window.onAgentTaskProgress = function(p) {
+    // 채팅 전용 슬롯 — agent-tasks 페이지의 window.onAgentTaskProgress 와 분리 (덮어쓰기/cleanup null 충돌 방지)
+    window.onAgentTaskProgressChat = function(p) {
         if (!p || !p.taskId) return;
         const card = document.querySelector('[data-agent-task-id="' + p.taskId + '"]');
         if (!card) return;
@@ -227,7 +228,8 @@ async function _startAgentTaskFromChat(goal) {
         if (!task || !task.id) throw new Error('생성 실패');
         cardDiv.dataset.agentTaskId = task.id;
         if (content) content.innerHTML = _renderAgentTaskCard({ status: 'running', progress: 1, goal: goal });
-        await window.authFetch('/api/agent-tasks/' + task.id + '/execute', { method: 'POST' });
+        const execRes = await window.authFetch('/api/agent-tasks/' + task.id + '/execute', { method: 'POST' });
+        if (!execRes.ok) throw new Error('실행 요청 실패 (HTTP ' + execRes.status + ')');
     } catch (e) {
         console.error('[Chat] 에이전트 작업 시작 실패:', e);
         if (content) content.innerHTML = _renderAgentTaskCard({ status: 'failed', progress: 0, goal: goal, error: '작업 시작에 실패했습니다' });

@@ -280,14 +280,6 @@ const messageHandlers = {
             renderAgentList(data.agents);
         }
     },
-    'document_progress': (data) => {
-        debugLog('[WebSocket] 문서 진행 이벤트 수신:', data.stage, data.message, data.progress);
-        if (typeof showDocumentProgress === 'function') {
-            showDocumentProgress(data);
-        } else {
-            debugWarn('[WebSocket] showDocumentProgress 함수를 찾을 수 없음');
-        }
-    },
     'session_created': (data) => {
         if (data.sessionId) {
             debugLog('[WebSocket] 세션 생성됨:', data.sessionId);
@@ -332,9 +324,14 @@ const messageHandlers = {
         }
     },
     'agent_task_progress': (data) => {
-        // 에이전트 작업 진행 — agent-tasks 페이지가 등록한 핸들러로 전달 (순수 overlay)
+        // 에이전트 작업 진행 — agent-tasks 페이지 핸들러와 채팅 카드 핸들러에 각각 전달 (순수 overlay)
+        // 슬롯 분리 이유: SPA 동일 document 에서 agent-tasks 페이지 init/cleanup 이
+        // 단일 슬롯을 덮어쓰거나 null 로 해제하면 채팅 카드 진행 갱신이 끊긴다.
         if (typeof window.onAgentTaskProgress === 'function') {
             window.onAgentTaskProgress(data);
+        }
+        if (typeof window.onAgentTaskProgressChat === 'function') {
+            window.onAgentTaskProgressChat(data);
         }
     },
     'thinking': (data) => {
