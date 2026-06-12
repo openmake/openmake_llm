@@ -393,6 +393,25 @@ export const FILE_ATTACH_LIMITS = {
 } as const;
 
 /**
+ * 채팅 메시지 내 URL 자동 분석 한도 (2026-06-13)
+ * 사용자 메시지에서 URL 감지 시 LLM 호출 전 scrapePage 로 본문을 가져와
+ * fileContext 채널로 주입한다 (결정적 사전 분석 — 환각 방지).
+ * 실패/시간 초과 시 안내 문구만 주입하고 모델 tool loop(web_scrape)에 위임.
+ *
+ * sockets/ws-chat-handler.ts에서 참조
+ */
+export const URL_ANALYZE_LIMITS = {
+    /** 기능 on/off (기본 on — 'false' 명시 시에만 비활성) */
+    ENABLED: process.env.URL_ANALYZE_ENABLED !== 'false',
+    /** 메시지당 분석할 URL 최대 개수 (초과분은 무시) */
+    MAX_URLS: parseInt(process.env.URL_ANALYZE_MAX_URLS || '3', 10),
+    /** URL당 주입 본문 최대 글자 수 (초과분 절단) */
+    MAX_CHARS_PER_URL: parseInt(process.env.URL_ANALYZE_MAX_CHARS_PER_URL || '50000', 10),
+    /** URL당 스크래핑 대기 상한 (ms) — 초과 시 해당 URL 은 실패 처리 (TTFB 보호) */
+    TIMEOUT_MS: parseInt(process.env.URL_ANALYZE_TIMEOUT_MS || '8000', 10),
+} as const;
+
+/**
  * LLM 라우터 신뢰도 기본값
  * agents/llm-router.ts에서 참조
  */

@@ -19,7 +19,16 @@ import { CURRENT_EVENTS_KEYWORDS, WEB_SEARCH_TEMPLATES, WS_ERROR_MESSAGES, WS_PR
 import { detectLanguage, type SupportedLanguageCode } from '../chat/language-policy';
 import { getStaleDataWarning } from '../config/stale-data-warning';
 import { ArtifactStreamParser, type ArtifactInfo } from '../llm/artifact-parser';
-import { FILE_ATTACH_LIMITS } from '../config/runtime-limits';
+import { FILE_ATTACH_LIMITS, URL_ANALYZE_LIMITS } from '../config/runtime-limits';
+
+/**
+ * 메시지 본문에서 http(s) URL 을 추출하는 패턴.
+ * 공백/꺾쇠/따옴표/닫는 괄호 전까지를 URL 로 간주한다 (마크다운 링크 대응).
+ */
+const MESSAGE_URL_PATTERN = /https?:\/\/[^\s<>"'\])]+/g;
+
+/** URL 끝에 붙은 문장부호 제거 (예: "...com." / "...com," / "...com)") */
+const URL_TRAILING_PUNCT_PATTERN = /[.,;:!?]+$/;
 
 /**
  * 첨부 파일 목록 → LLM 주입용 fileContext 문자열 구성.
@@ -64,6 +73,55 @@ export function buildFileContext(files: WSMessage['files']): string {
     const skipped = files.length - limited.length;
     return `\n\n## 📎 첨부 파일\n사용자가 첨부한 파일입니다. 답변 시 아래 내용을 참고하세요.\n\n${parts.join('\n\n')}` +
         (skipped > 0 ? `\n\n(첨부 ${files.length}개 중 ${FILE_ATTACH_LIMITS.MAX_FILES}개만 포함 — ${skipped}개 생략)` : '') + '\n';
+}
+
+/**
+ * 메시지 내 URL 을 감지해 본문을 스크랩 → LLM 주입용 컨텍스트 구성.
+ * - 현재 턴 메시지만 대상 (히스토리 재스크랩 방지)
+ * - URL_ANALYZE_LIMITS 캡: 개수 / URL당 글자 / URL당 타임아웃
+ * - SSRF 방어는 scrapePage 내부 validateOutboundUrl/safeFetch 가 담당
+ * - 실패 시 "접근 불가 — 추측 금지" 안내만 주입 (모델 tool loop 의 web_scrape 재시도 여지)
+ *
+ * @param message - 사용자 메시지
+ * @param log - 모듈 로거
+ * @returns 주입용 컨텍스트 문자열 (URL 없거나 비활성 시 '')
+ * (export 는 단위 테스트용 — 운영 호출자는 본 모듈의 handleChatMessage 뿐)
+ */
+export async function buildUrlContext(
+    message: string,
+    log: ReturnType<typeof createLogger>,
+): Promise<string> {
+    if (!URL_ANALYZE_LIMITS.ENABLED || !message) return '';
+
+    const matched = message.match(MESSAGE_URL_PATTERN);
+    if (!matched || matched.length === 0) return '';
+
+    // dedup + 끝 문장부호 제거 + 개수 캡
+    const urls = [...new Set(matched.map(u => u.replace(URL_TRAILING_PUNCT_PATTERN, '')))]
+        .slice(0, URL_ANALYZE_LIMITS.MAX_URLS);
+
+    const { scrapePage } = await import('../utils/web-scraper');
+
+    const results = await Promise.all(urls.map(async (url) => {
+        try {
+            const scraped = await Promise.race([
+                scrapePage(url, { timeoutMs: URL_ANALYZE_LIMITS.TIMEOUT_MS }),
+                new Promise<never>((_, reject) =>
+                    setTimeout(() => reject(new Error('URL_ANALYZE_TIMEOUT')), URL_ANALYZE_LIMITS.TIMEOUT_MS)),
+            ]);
+            const truncated = scraped.markdown.length > URL_ANALYZE_LIMITS.MAX_CHARS_PER_URL;
+            const body = truncated
+                ? scraped.markdown.slice(0, URL_ANALYZE_LIMITS.MAX_CHARS_PER_URL)
+                : scraped.markdown;
+            return `### ${url}\n제목: ${scraped.title || '(없음)'}\n\n${body}` +
+                (truncated ? `\n(본문이 길어 앞 ${URL_ANALYZE_LIMITS.MAX_CHARS_PER_URL.toLocaleString()}자만 포함됨)` : '');
+        } catch (e) {
+            log.warn(`[Chat] URL 분석 실패 (${url}): ${e instanceof Error ? e.message : e}`);
+            return `### ${url}\n(이 페이지는 가져오지 못했습니다 — 내용을 추측하지 말고, 필요 시 web_scrape 도구로 재시도하거나 접근 불가를 안내하세요)`;
+        }
+    }));
+
+    return `\n\n## 🔗 링크 분석\n사용자 메시지에 포함된 URL 의 실제 본문입니다. 답변 시 아래 내용을 근거로 사용하세요.\n\n${results.join('\n\n')}\n`;
 }
 
 /**
@@ -182,6 +240,14 @@ export async function handleChatMessage(
             log.info(`[Chat] 시사 질의 + 외부 데이터 부재 → 환각 방지 안전망 주입 (lang=${userLang}, explicitlyDisabled=${userExplicitlyDisabledSearch})`);
         }
 
+        // 메시지 내 URL 결정적 사전 분석 (2026-06-13) — 본문을 fileContext 채널에 합류.
+        // 모델의 web_scrape 도구 호출에만 맡기면 비결정적(미호출 시 환각) — 사전 주입으로 보장.
+        const urlContext = await buildUrlContext(message, log);
+        if (urlContext) {
+            log.info(`[Chat] URL 사전 분석 주입: ${urlContext.length}자`);
+        }
+        const attachContext = fileContext + urlContext;
+
         // WS 고유: 세션 생성 시 length < 10 체크 (노드 ID와 구별)
         validSessionId = (sessionId && sessionId.length >= 10) ? sessionId : undefined;
 
@@ -272,7 +338,7 @@ export async function handleChatMessage(
             images,
             sessionId: validSessionId,
             webSearchContext,
-            fileContext: fileContext || undefined,
+            fileContext: attachContext || undefined,
             discussionMode: msg.discussionMode === true,
             deepResearchMode: msg.deepResearchMode === true,
             thinkingMode: msg.thinkingMode === true,
