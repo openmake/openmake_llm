@@ -1737,6 +1737,10 @@ function injectStyles() {
     .ap-code .CodeMirror { font-size: 14px; height: 60vh !important; }
 }
 
+/* hidden pane 가드 — renderCodeView 등이 인라인 display 를 설정해도
+   hidden 속성(탭 전환)이 항상 이긴다. 미리보기 탭에서 code pane 노출 방지. */
+[data-pane][hidden] { display: none !important; }
+
 .ap-header {
     display: flex; align-items: center; gap: 12px;
     padding: 12px 16px;

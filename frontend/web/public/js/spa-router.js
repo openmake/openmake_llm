@@ -625,6 +625,12 @@ function handleGlobalClick(event) {
     // data-spa-ignore 속성 있으면 무시
     if (anchor.hasAttribute('data-spa-ignore')) return;
 
+    // download 앵커는 브라우저 기본 동작 (아티팩트/파일 다운로드 — 가로채면 다운로드가 navigate 로 바뀜)
+    if (anchor.hasAttribute('download')) return;
+
+    // blob:/data: 등 비 http(s) 스킴은 네비게이션 대상 아님
+    if (/^(blob|data|javascript):/i.test(href)) return;
+
     // target="_blank" 무시
     if (anchor.getAttribute('target') === '_blank') return;
 

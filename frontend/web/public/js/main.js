@@ -123,7 +123,7 @@ import './modules/sanitize.js';
 import { NAV_ITEMS } from './nav-items.js?v=11';
 
 // 1-16. SPA 라우터
-import { Router, SafeStorage } from './spa-router.js?v=29';
+import { Router, SafeStorage } from './spa-router.js?v=30';
 
 // 1-17. 컴포넌트 (사이드바)
 // AdminPanel: 2026-05-21 제거 — R1~R3 통합 이후 11 항목 중 9개 stale.
