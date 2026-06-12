@@ -64,6 +64,8 @@ export interface ChatRequestParams {
     sessionId?: string;
     /** 웹 검색 컨텍스트 */
     webSearchContext?: string;
+    /** 첨부 파일 컨텍스트 (텍스트 파일 내용/바이너리 메타 — transient, DB 미저장) */
+    fileContext?: string;
     /** 토론 모드 */
     discussionMode?: boolean;
     /** 딥 리서치 모드 */

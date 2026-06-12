@@ -1004,6 +1004,23 @@
     border-radius: 4px;
     flex-shrink: 0;
 }
+/* 비이미지 파일 칩 — 확장자 배지 (썸네일 자리 대체) */
+.attached-chip-filebadge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 4px;
+    flex-shrink: 0;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-light);
+    color: var(--text-muted);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    overflow: hidden;
+}
 .attached-chip-name {
     overflow: hidden;
     text-overflow: ellipsis;

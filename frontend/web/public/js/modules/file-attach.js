@@ -1,11 +1,13 @@
 /**
- * 채팅 이미지 첨부 모듈.
+ * 채팅 파일 첨부 모듈 (2026-06-12 전체 파일 타입 허용).
  *
- * fileInput 선택 → 이미지 검증 → base64(raw) 변환 → attachedFiles state → 입력창 미리보기 칩.
- * 전송은 chat.js 가 attachedFiles.filter(isImage).map(base64) → payload.images 로 처리(이미 구현).
- * 백엔드 external-provider 가 images 를 받아 provider 로 전달하며, vision 미지원 모델은 400 안내.
+ * fileInput 선택 → 타입 분기 → attachedFiles state → 입력창 미리보기 칩.
+ * - 이미지(png/jpeg/webp/gif): base64(raw) 변환 → chat.js 가 payload.images 로 전송 (vision 경로, 기존 유지)
+ * - 텍스트 파일(UTF-8 디코드 성공): 내용을 textContent 로 보관 → payload.files[].content 로 전송,
+ *   백엔드 ws-chat-handler 가 fileContext 로 LLM 에 주입
+ * - 바이너리(디코드 실패, pdf/zip 등): 첨부 허용하되 메타(name/type/size)만 전송 + 사용자 경고
  *
- * 이미지 전용(png/jpeg/webp/gif), 멀티 첨부. CSP 준수(인라인 onclick 금지 → addEventListener),
+ * 멀티 첨부. CSP 준수(인라인 onclick 금지 → addEventListener),
  * XSS 안전(파일명 textContent, 썸네일 src 는 자기 파일 data URL).
  *
  * @module modules/file-attach
@@ -13,7 +15,9 @@
 import { getState, setState } from './state.js';
 
 const MAX_FILE_BYTES = 10 * 1024 * 1024; // 10MB
-const ALLOWED_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
+const IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
+// 백엔드 FILE_ATTACH_LIMITS.MAX_CHARS_PER_FILE 와 동일 — 과대 WS 전송 방지용 클라이언트 캡
+const MAX_TEXT_CHARS = 100000;
 
 function genId() {
     return 'att-' + Math.random().toString(36).slice(2, 10);
@@ -33,23 +37,43 @@ function fileToBase64(file) {
     });
 }
 
+/**
+ * File → UTF-8 텍스트 디코드 시도.
+ * @returns {Promise<string|null>} 디코드 성공 시 텍스트(캡 적용), 바이너리면 null
+ */
+async function fileToText(file) {
+    const buf = await file.arrayBuffer();
+    try {
+        // fatal: 유효하지 않은 UTF-8 바이트 시퀀스(바이너리)에서 throw
+        const text = new TextDecoder('utf-8', { fatal: true }).decode(buf);
+        return text.length > MAX_TEXT_CHARS ? text.slice(0, MAX_TEXT_CHARS) : text;
+    } catch {
+        return null;
+    }
+}
+
 async function handleFiles(fileList) {
     const files = Array.from(fileList || []);
     const next = [...(getState('attachedFiles') || [])];
     for (const f of files) {
-        if (!ALLOWED_TYPES.includes(f.type)) {
-            window.showError?.(`이미지 형식만 지원합니다 (png/jpeg/webp/gif): ${f.name}`);
-            continue;
-        }
         if (f.size > MAX_FILE_BYTES) {
             window.showError?.(`파일이 너무 큽니다 (최대 10MB): ${f.name}`);
             continue;
         }
         try {
-            const base64 = await fileToBase64(f);
-            // objectUrl: 썸네일용 blob 참조 (매 렌더 base64→data URL 재직렬화/재디코드 회피). 제거 시 revoke.
-            next.push({ id: genId(), name: f.name, type: f.type, isImage: true, base64, objectUrl: URL.createObjectURL(f) });
-        } catch (e) {
+            if (IMAGE_TYPES.includes(f.type)) {
+                const base64 = await fileToBase64(f);
+                // objectUrl: 썸네일용 blob 참조 (매 렌더 base64→data URL 재직렬화/재디코드 회피). 제거 시 revoke.
+                next.push({ id: genId(), name: f.name, type: f.type, size: f.size, isImage: true, base64, objectUrl: URL.createObjectURL(f) });
+            } else {
+                const text = await fileToText(f);
+                if (text === null) {
+                    // 바이너리 — 첨부는 허용, 메타만 전달됨을 안내
+                    window.showError?.(`${f.name}: 내용을 읽을 수 없는 형식이라 파일명/형식만 AI에 전달됩니다`);
+                }
+                next.push({ id: genId(), name: f.name, type: f.type || 'application/octet-stream', size: f.size, isImage: false, textContent: text ?? undefined });
+            }
+        } catch {
             window.showError?.(`파일을 읽지 못했습니다: ${f.name}`);
         }
     }
@@ -57,7 +81,14 @@ async function handleFiles(fileList) {
     renderAttachedPreview();
 }
 
-/** attachedFiles → 입력창 위 썸네일 칩 렌더 */
+/** 파일명 → 확장자 배지 텍스트 (없으면 'FILE') */
+function fileExtBadge(name) {
+    const dot = String(name || '').lastIndexOf('.');
+    const ext = dot > 0 ? name.slice(dot + 1).toUpperCase() : '';
+    return ext && ext.length <= 5 ? ext : 'FILE';
+}
+
+/** attachedFiles → 입력창 위 미리보기 칩 렌더 (이미지: 썸네일, 그 외: 확장자 배지) */
 export function renderAttachedPreview() {
     const box = document.getElementById('attachments');
     if (!box) return;
@@ -72,10 +103,18 @@ export function renderAttachedPreview() {
         const chip = document.createElement('div');
         chip.className = 'attached-chip';
 
-        const thumb = document.createElement('img');
-        thumb.className = 'attached-chip-thumb';
-        thumb.src = f.objectUrl || `data:${f.type};base64,${f.base64}`;
-        thumb.alt = f.name;
+        if (f.isImage) {
+            const thumb = document.createElement('img');
+            thumb.className = 'attached-chip-thumb';
+            thumb.src = f.objectUrl || `data:${f.type};base64,${f.base64}`;
+            thumb.alt = f.name;
+            chip.appendChild(thumb);
+        } else {
+            const badge = document.createElement('span');
+            badge.className = 'attached-chip-filebadge';
+            badge.textContent = fileExtBadge(f.name); // XSS 안전
+            chip.appendChild(badge);
+        }
 
         const name = document.createElement('span');
         name.className = 'attached-chip-name';
@@ -88,7 +127,7 @@ export function renderAttachedPreview() {
         remove.textContent = '×';
         remove.addEventListener('click', () => removeAttachedFile(f.id)); // CSP 준수
 
-        chip.append(thumb, name, remove);
+        chip.append(name, remove);
         box.appendChild(chip);
     }
 }

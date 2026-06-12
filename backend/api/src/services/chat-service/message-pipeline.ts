@@ -48,6 +48,7 @@ export async function runMessagePipeline(svc: ChatService,
         docId,
         images,
         webSearchContext,
+        fileContext,
         discussionMode,
         deepResearchMode,
         thinkingMode,
@@ -240,7 +241,7 @@ export async function runMessagePipeline(svc: ChatService,
 
     // ── Step 3: 컨텍스트 구성 (웹검색) — agent 와 병렬 진행 ──
     const { finalEnhancedMessage, documentImages } = await svc.buildContextForLLM(
-        message || '', webSearchContext, thinkingMode, req.apiKeyId,
+        message || '', webSearchContext, thinkingMode, req.apiKeyId, fileContext,
     );
 
     // ── 외부 LLM 분기 (agent + context 통합 후) ──

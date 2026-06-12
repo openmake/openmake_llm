@@ -392,11 +392,17 @@ async function sendMessage() {
 
         // 파일이 첨부된 경우
         if (attachedFiles.length > 0) {
-            payload.files = attachedFiles.map(f => ({
-                id: f.docId || f.id,
-                name: f.filename || f.name,
-                type: f.type
-            }));
+            // 비이미지 파일: 텍스트는 content 포함 (백엔드 fileContext 주입), 바이너리는 메타만
+            payload.files = attachedFiles
+                .filter(f => !f.isImage)
+                .map(f => ({
+                    id: f.docId || f.id,
+                    name: f.filename || f.name,
+                    type: f.type,
+                    size: f.size,
+                    ...(f.textContent ? { content: f.textContent } : {})
+                }));
+            if (payload.files.length === 0) delete payload.files;
 
             // 이미지 파일의 base64 데이터를 images 배열로 전달
             const imageBase64List = attachedFiles

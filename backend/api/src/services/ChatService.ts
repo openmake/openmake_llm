@@ -354,9 +354,10 @@ export class ChatService {
         webSearchContext: string | undefined,
         thinkingMode: boolean | undefined,
         apiKeyId?: string,
+        fileContext?: string,
     ): Promise<{ finalEnhancedMessage: string; documentImages: string[] }> {
         return buildContextForLLM({
-            message, webSearchContext, thinkingMode, apiKeyId,
+            message, webSearchContext, fileContext, thinkingMode, apiKeyId,
             clientModel: this.client.model,
         });
     }

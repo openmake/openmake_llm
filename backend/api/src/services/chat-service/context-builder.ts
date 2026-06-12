@@ -21,6 +21,8 @@ export interface BuildContextParams {
     message: string;
     /** 웹검색 컨텍스트 */
     webSearchContext: string | undefined;
+    /** 첨부 파일 컨텍스트 (텍스트 파일 내용/바이너리 메타) */
+    fileContext?: string;
     /** Sequential Thinking 모드 활성화 여부 */
     thinkingMode: boolean | undefined;
     /** API Key ID (외부 서비스 요청 판별용, 현재 미사용 — 호환성 보존) */
@@ -46,11 +48,12 @@ export interface BuildContextResult {
  * @returns 최종 강화된 메시지와 (빈) 이미지 배열
  */
 export async function buildContextForLLM(params: BuildContextParams): Promise<BuildContextResult> {
-    const { message, webSearchContext, thinkingMode } = params;
+    const { message, webSearchContext, fileContext, thinkingMode } = params;
 
     const enhancedUserMessage = applySequentialThinking(message, thinkingMode === true);
 
     let finalEnhancedMessage = '';
+    if (fileContext) finalEnhancedMessage += fileContext;
     if (webSearchContext) finalEnhancedMessage += webSearchContext;
     finalEnhancedMessage += `\n## USER QUESTION\n${enhancedUserMessage}`;
 

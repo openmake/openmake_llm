@@ -254,8 +254,9 @@ export class DiscussionStrategy implements ChatStrategy<DiscussionStrategyContex
 
         logger.info('🎯 멀티 에이전트 토론 모드 시작');
 
-        // 1단계 문서 컨텍스트 추출: 2026-05-19 문서 첨부 폐기와 함께 제거.
-        const documentContext = '';
+        // 1단계 문서 컨텍스트: 첨부 파일 fileContext (2026-06-12) — 텍스트 파일 내용/바이너리 메타.
+        // (docId 기반 문서 첨부는 2026-05-19 폐기 — fileContext 는 per-message transient 채널)
+        const documentContext = context.req.fileContext || '';
         const documentImages: string[] = [];
 
         // 2단계: 대화 히스토리 변환 (프롬프트 인젝션 방어를 위해 content 정제)

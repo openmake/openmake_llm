@@ -19,6 +19,52 @@ import { CURRENT_EVENTS_KEYWORDS, WEB_SEARCH_TEMPLATES, WS_ERROR_MESSAGES, WS_PR
 import { detectLanguage, type SupportedLanguageCode } from '../chat/language-policy';
 import { getStaleDataWarning } from '../config/stale-data-warning';
 import { ArtifactStreamParser, type ArtifactInfo } from '../llm/artifact-parser';
+import { FILE_ATTACH_LIMITS } from '../config/runtime-limits';
+
+/**
+ * 첨부 파일 목록 → LLM 주입용 fileContext 문자열 구성.
+ * 텍스트 파일(content 있음)은 내용을 fenced block 으로, 바이너리는 메타만 기재.
+ * FILE_ATTACH_LIMITS 캡 적용 (개수/파일당 글자/합산 글자).
+ * (export 는 단위 테스트용 — 운영 호출자는 본 모듈의 handleChatMessage 뿐)
+ */
+export function buildFileContext(files: WSMessage['files']): string {
+    if (!Array.isArray(files) || files.length === 0) return '';
+
+    const limited = files.slice(0, FILE_ATTACH_LIMITS.MAX_FILES);
+    const parts: string[] = [];
+    let totalChars = 0;
+
+    for (const f of limited) {
+        if (!f || typeof f.name !== 'string') continue;
+        const name = f.name.slice(0, FILE_ATTACH_LIMITS.MAX_NAME_LENGTH);
+        const type = typeof f.type === 'string' ? f.type : 'unknown';
+
+        if (typeof f.content === 'string' && f.content.length > 0) {
+            const remaining = FILE_ATTACH_LIMITS.MAX_TOTAL_CHARS - totalChars;
+            if (remaining <= 0) {
+                parts.push(`### ${name} (${type})\n(전체 첨부 용량 한도 초과로 내용 생략)`);
+                continue;
+            }
+            const cap = Math.min(FILE_ATTACH_LIMITS.MAX_CHARS_PER_FILE, remaining);
+            const truncated = f.content.length > cap;
+            const body = truncated ? f.content.slice(0, cap) : f.content;
+            totalChars += body.length;
+            parts.push(
+                `### ${name} (${type})\n\`\`\`\n${body}\n\`\`\`` +
+                (truncated ? `\n(파일이 길어 앞 ${cap.toLocaleString()}자만 포함됨)` : '')
+            );
+        } else {
+            // 바이너리 또는 내용 미전송 — 메타만 전달
+            const sizeLabel = typeof f.size === 'number' ? `, ${(f.size / 1024).toFixed(1)}KB` : '';
+            parts.push(`### ${name} (${type}${sizeLabel})\n(바이너리 파일 — 내용을 읽을 수 없어 파일명/형식만 제공됨)`);
+        }
+    }
+
+    if (parts.length === 0) return '';
+    const skipped = files.length - limited.length;
+    return `\n\n## 📎 첨부 파일\n사용자가 첨부한 파일입니다. 답변 시 아래 내용을 참고하세요.\n\n${parts.join('\n\n')}` +
+        (skipped > 0 ? `\n\n(첨부 ${files.length}개 중 ${FILE_ATTACH_LIMITS.MAX_FILES}개만 포함 — ${skipped}개 생략)` : '') + '\n';
+}
 
 /**
  * AI 채팅 메시지를 처리합니다.
@@ -35,17 +81,20 @@ export async function handleChatMessage(
 ): Promise<void> {
     const { cluster, extWs, logger: log } = options;
 
-    // 파일 첨부/문서 docId: 2026-05-19 제거. images (base64) 만 직접 지원.
+    // 문서 docId: 2026-05-19 제거. images (base64 vision) + files (텍스트 내용/메타) 직접 지원.
     const hasImages = Array.isArray(msg.images) && msg.images.length > 0;
+    const hasFiles = Array.isArray(msg.files) && msg.files.length > 0;
     const hasMessage = typeof msg.message === 'string' && msg.message.trim() !== '';
 
-    if (!hasMessage && !hasImages) {
+    if (!hasMessage && !hasImages && !hasFiles) {
         ws.send(JSON.stringify({ type: 'error', message: '메시지가 필요합니다' }));
         return;
     }
 
     const { model, nodeId, history, sessionId, anonSessionId } = msg;
     const { images } = msg;
+    // 첨부 파일(이미지 외) → LLM 주입용 컨텍스트 (transient — DB 미저장, webSearchContext 와 동급 채널)
+    const fileContext = buildFileContext(msg.files);
     const message = (msg.message ?? '').trim();
 
     // 사용자 언어 감지 — 설정에서 선택한 언어를 우선, 없으면 메시지 기반 자동 감지
@@ -223,6 +272,7 @@ export async function handleChatMessage(
             images,
             sessionId: validSessionId,
             webSearchContext,
+            fileContext: fileContext || undefined,
             discussionMode: msg.discussionMode === true,
             deepResearchMode: msg.deepResearchMode === true,
             thinkingMode: msg.thinkingMode === true,

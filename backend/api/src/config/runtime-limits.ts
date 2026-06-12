@@ -375,6 +375,24 @@ export const DISCUSSION_CONCURRENCY = {
 } as const;
 
 /**
+ * 채팅 파일 첨부 한도 (2026-06-12 전체 파일 타입 허용)
+ * 이미지는 기존 images(vision) 경로, 텍스트 파일은 내용을 fileContext 로 LLM 에 주입.
+ * 바이너리(텍스트 디코드 불가)는 파일명/형식 메타만 전달.
+ *
+ * sockets/ws-chat-handler.ts에서 참조
+ */
+export const FILE_ATTACH_LIMITS = {
+    /** 메시지당 첨부 파일 최대 개수 */
+    MAX_FILES: parseInt(process.env.FILE_ATTACH_MAX_FILES || '10', 10),
+    /** 파일당 주입 텍스트 최대 글자 수 (초과분 절단) */
+    MAX_CHARS_PER_FILE: parseInt(process.env.FILE_ATTACH_MAX_CHARS_PER_FILE || '100000', 10),
+    /** 전체 첨부 합산 주입 텍스트 최대 글자 수 */
+    MAX_TOTAL_CHARS: parseInt(process.env.FILE_ATTACH_MAX_TOTAL_CHARS || '300000', 10),
+    /** 파일명 표시 최대 길이 (프롬프트 주입 시 절단) */
+    MAX_NAME_LENGTH: 200,
+} as const;
+
+/**
  * LLM 라우터 신뢰도 기본값
  * agents/llm-router.ts에서 참조
  */

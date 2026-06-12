@@ -39,8 +39,13 @@ export interface WSMessage {
      */
     memoryLearning?: boolean;
     enabledTools?: Record<string, boolean>;
-    /** 첨부 파일 목록 */
-    files?: Array<{ id: string; name: string; type: string }>;
+    /**
+     * 첨부 파일 목록 (2026-06-12 전체 파일 타입 허용).
+     * 텍스트 파일은 content 에 UTF-8 디코드 내용 포함 (fileContext 주입용),
+     * 바이너리는 content 없이 name/type/size 메타만 전달.
+     * 이미지는 content 없이 images(base64 vision) 경로로 별도 전송.
+     */
+    files?: Array<{ id: string; name: string; type: string; content?: string; size?: number }>;
     userRole?: string;
     userTier?: 'free' | 'pro' | 'enterprise';
     /** 사용자 선호 언어 (설정 페이지에서 선택) */
