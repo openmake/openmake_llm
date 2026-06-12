@@ -57,13 +57,14 @@ export const agentTaskGetTool: MCPToolDefinition = {
     tool: {
         name: 'agent_task_get',
         description:
-            '에이전트 작업 1건의 결과를 조회합니다 — 결과 요약(result)과 결과물 아티팩트(kind/title/content 전문) 포함. ' +
-            '사용자가 특정 작업의 결과물(예: 생성된 HTML/보고서)을 보여달라고 하면: ① agent_task_list 로 작업을 찾고 ' +
-            '② 이 도구로 아티팩트 content 를 받아 ③ 동일한 kind 의 <artifact> 태그로 재출력해 미리보기 패널에 띄우세요.',
+            '에이전트 작업 1건의 결과를 조회합니다 — 결과 요약(result)과 결과물 아티팩트 메타 포함. ' +
+            '사용자가 특정 작업의 결과물(예: 생성된 HTML/보고서)을 보여달라고 하면 agent_task_list 로 작업 id 를 찾아 이 도구를 호출하세요. ' +
+            '아티팩트 본문은 사용자 화면의 미리보기 패널에 자동으로 표시되므로, 본문을 답변에 다시 출력하지 말고 ' +
+            '무엇이 표시되었는지 한두 문장으로만 안내하세요. task_id 는 앞 8자리만 입력해도 됩니다.',
         inputSchema: {
             type: 'object',
             properties: {
-                task_id: { type: 'string', description: '조회할 작업 id (agent_task_list 의 id)' },
+                task_id: { type: 'string', description: '조회할 작업 id (agent_task_list 의 id, 앞 8자리 prefix 허용)' },
             },
             required: ['task_id'],
         },
@@ -71,16 +72,22 @@ export const agentTaskGetTool: MCPToolDefinition = {
     handler: async (args, context): Promise<MCPToolResult> => {
         const userId = context?.userId ? String(context.userId) : null;
         if (!userId) return textResult('로그인된 사용자만 에이전트 작업을 조회할 수 있습니다.', true);
-        const taskId = String(args.task_id || '');
+        const taskId = String(args.task_id || '').replace(/\.+$/, '').trim();
         if (!taskId) return textResult('task_id 가 필요합니다.', true);
 
         const db = getUnifiedDatabase();
-        const task = await db.getAgentTask(taskId);
+        let task = await db.getAgentTask(taskId);
+        // prefix 매칭 허용 — 모델이 목록의 축약 id("36170180...")를 그대로 넘기는 경우 대응
+        if (!task && taskId.length >= 6) {
+            const candidates = await db.getUserAgentTasks(userId);
+            const matched = candidates.filter((t) => String(t.id).startsWith(taskId));
+            if (matched.length === 1) task = await db.getAgentTask(String(matched[0]!.id));
+        }
         if (!task || String(task.user_id) !== userId) {
             return textResult('작업을 찾을 수 없습니다 (본인 작업만 조회 가능).', true);
         }
 
-        const steps = await db.getAgentTaskSteps(taskId);
+        const steps = await db.getAgentTaskSteps(String(task.id));
         const artifacts = steps
             .filter((s) => s.step_type === 'artifact' && s.content)
             .map((s) => {
@@ -88,9 +95,9 @@ export const agentTaskGetTool: MCPToolDefinition = {
                     const a = JSON.parse(s.content as string) as { id?: string; kind?: string; title?: string; lang?: string; content?: string };
                     const content = String(a.content ?? '');
                     return {
-                        id: a.id,
-                        kind: a.kind,
-                        title: a.title,
+                        id: a.id || 'agent-task-artifact',
+                        kind: a.kind || 'markdown',
+                        title: a.title || '결과물',
                         lang: a.lang,
                         content: content.length > MAX_ARTIFACT_CONTENT_CHARS
                             ? content.slice(0, MAX_ARTIFACT_CONTENT_CHARS) + '\n... (이하 생략)'
@@ -100,16 +107,33 @@ export const agentTaskGetTool: MCPToolDefinition = {
                     return null;
                 }
             })
-            .filter(Boolean);
+            .filter((a): a is NonNullable<typeof a> => a !== null);
 
-        return textResult(JSON.stringify({
+        // 아티팩트 본문은 resource 로 반환 — 채팅 경로의 mcp_tool_result 채널을 타고
+        // 프론트 아티팩트 패널에 즉시 렌더된다 (모델 재출력 불필요·결정적).
+        // 모델에게는 메타만 텍스트로 제공 (본문 재출력 방지 + 컨텍스트 절약).
+        const resourceContents = artifacts.map((a) => ({
+            type: 'resource' as const,
+            resource: {
+                uri: `openmake://agent-task-artifact/${task!.id}/${a.id}`,
+                mimeType: 'application/json',
+                text: JSON.stringify(a),
+            },
+        }));
+
+        const meta = JSON.stringify({
             id: task.id,
             goal: task.goal,
             status: task.status,
             result: task.result ?? null,
             error: task.error ?? null,
-            artifacts,
-        }));
+            artifacts: artifacts.map((a) => ({ id: a.id, kind: a.kind, title: a.title, chars: a.content.length })),
+            note: artifacts.length > 0
+                ? '아티팩트 본문은 사용자 화면의 미리보기 패널에 자동 표시되었습니다. 본문을 다시 출력하지 마세요.'
+                : '이 작업에는 아티팩트 결과물이 없습니다.',
+        });
+
+        return { content: [{ type: 'text', text: meta }, ...resourceContents] };
     },
 };
 

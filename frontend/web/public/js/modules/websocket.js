@@ -362,7 +362,31 @@ const messageHandlers = {
             const isSkillDraft = uri.startsWith('openmake://skill-draft/');
             const isAgentDraft = uri.startsWith('openmake://agent-draft/');
             const isMcpServerDraft = uri.startsWith('openmake://mcp-server-draft/');
-            if (!isSkillDraft && !isAgentDraft && !isMcpServerDraft) continue;
+            const isAgentTaskArtifact = uri.startsWith('openmake://agent-task-artifact/');
+            if (!isSkillDraft && !isAgentDraft && !isMcpServerDraft && !isAgentTaskArtifact) continue;
+
+            // 에이전트 작업 결과물 — agent_task_get 도구가 resource 로 실어 보낸 아티팩트를
+            // 패널에 즉시 렌더 (모델 재출력 없이 결정적 미리보기)
+            if (isAgentTaskArtifact) {
+                try {
+                    const a = JSON.parse(res.text || '{}');
+                    if (a && a.content) {
+                        const info = { id: a.id || 'agent-task-artifact', kind: a.kind || 'markdown', title: a.title || '에이전트 작업 결과물', lang: a.lang };
+                        openArtifactPanel(info);
+                        appendArtifactChunk(info.id, a.content);
+                        finalizeArtifact(info.id);
+                        let container = getState('currentAssistantMessageContent');
+                        if (!container) {
+                            const all = document.querySelectorAll('.message-content');
+                            container = all[all.length - 1] || null;
+                        }
+                        if (container) insertArtifactCard(container, info);
+                    }
+                } catch (e) {
+                    console.error('[WebSocket] agent-task-artifact 렌더 실패:', e);
+                }
+                continue;
+            }
 
             try {
                 const payload = JSON.parse(res.text || '{}');
