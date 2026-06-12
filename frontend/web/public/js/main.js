@@ -446,6 +446,12 @@ async function initApp() {
     // 8. 이벤트 리스너 등록
     setupEventListeners();
 
+    // 8-1. 채팅 본문 이미지 클릭 → 원본 새 탭 (CSS 가 480px 로 축소 표시하므로 원본 보기 동선 제공)
+    document.getElementById('chatMessages')?.addEventListener('click', (e) => {
+        const img = e.target.closest('.message-content img');
+        if (img && img.src) window.open(img.src, '_blank', 'noopener');
+    });
+
     // 9. URL 파라미터 체크 (세션 복원)
     const urlParams = new URLSearchParams(window.location.search);
     const sessionId = urlParams.get('sessionId') || urlParams.get('chat');

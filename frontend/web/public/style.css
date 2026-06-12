@@ -1051,6 +1051,16 @@ body {
 
 .message-content p { margin-bottom: 12px; }
 
+/* 채팅 본문 이미지 (generate_image 등) — 메시지 폭에 맞춤, 원본 크기 노출 방지 */
+.message-content img {
+    max-width: min(100%, 480px);
+    height: auto;
+    border-radius: var(--radius-md);
+    display: block;
+    margin: 8px 0;
+    cursor: zoom-in;
+}
+
 .message-content ul,
 .message-content ol {
     margin-left: 20px;
