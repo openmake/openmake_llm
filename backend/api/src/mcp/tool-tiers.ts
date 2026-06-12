@@ -60,6 +60,7 @@ export const TOOL_TIERS: Record<UserTier, string[]> = {
         'import_mcp_server_from_git', // Git URL → MCP server draft
         'agent_task_list',      // 본인 에이전트 작업 목록 조회
         'agent_task_get',       // 본인 에이전트 작업 결과/아티팩트 조회
+        'generate_image',       // FLUX.2 이미지 생성 (vLLM-Omni via LiteLLM)
         'web_scrape',           // 웹 스크래핑
         'web_map',              // URL 매핑
         'web_crawl',            // 웹 크롤링

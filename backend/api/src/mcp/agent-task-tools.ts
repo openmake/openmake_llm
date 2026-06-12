@@ -140,4 +140,4 @@ export const agentTaskGetTool: MCPToolDefinition = {
 export const agentTaskTools: MCPToolDefinition[] = [agentTaskListTool, agentTaskGetTool];
 
 /** 채팅에서 토글 없이 항상 제공되는 도구 이름 — ChatService.getAllowedTools 가 머지에 사용 */
-export const CHAT_ALWAYS_ON_TOOL_NAMES: string[] = [agentTaskListTool.tool.name, agentTaskGetTool.tool.name];
+export const CHAT_ALWAYS_ON_TOOL_NAMES: string[] = [agentTaskListTool.tool.name, agentTaskGetTool.tool.name, 'generate_image'];

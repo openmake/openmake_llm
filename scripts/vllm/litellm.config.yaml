@@ -37,6 +37,17 @@ model_list:
       api_base: http://localhost:8002/v1
       api_key: os.environ/VLLM_API_KEY
 
+  # 이미지 생성 — vLLM-Omni FLUX.2-klein-9B (:8005, /v1/images/generations)
+  # 2026-06-12: vllm-1m(:8004) 중지로 확보한 메모리에 배포 (1m 라우팅 실적 0건).
+  # serve: /home/smith/imagegen/venv/bin/vllm serve black-forest-labs/FLUX.2-klein-9B --omni
+  - model_name: flux2-klein
+    litellm_params:
+      model: openai/flux2-klein
+      api_base: http://localhost:8005/v1
+      api_key: os.environ/VLLM_API_KEY
+    model_info:
+      mode: image_generation
+
 general_settings:
   master_key: os.environ/LITELLM_MASTER_KEY
   database_url: os.environ/DATABASE_URL

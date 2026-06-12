@@ -117,3 +117,6 @@ playwright.config.ts
 SCHEMA_SOURCE_OF_TRUTH.md
 user-guide.md
 .omc/
+
+# AI 생성 이미지 (generate_image 도구 출력)
+frontend/web/public/generated/
