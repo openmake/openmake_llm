@@ -24,7 +24,7 @@ export function renderIntroSection() {
         '<p class="text-lg">Build AI-powered applications with the OpenMake LLM API. Our API is designed to be compatible with standard industry formats, making integration seamless.</p>' +
         '<div class="intro-card">' +
         '<h3 class="text-accent">Base URL</h3>' +
-        '<code style="font-size: 1.1em; background: var(--bg-tertiary); padding: var(--space-2) var(--space-4); border-radius: var(--radius-md); display: block; margin-top: var(--space-2);">' + window.location.origin + '/api/v1</code>' +
+        '<code style="font-size: var(--font-size-lg); background: var(--bg-tertiary); padding: var(--space-2) var(--space-4); border-radius: var(--radius-md); display: block; margin-top: var(--space-2);">' + window.location.origin + '/api/v1</code>' +
         '<p style="margin-top: var(--space-4); font-size: var(--font-size-sm);">All API requests require authentication. API requests without a valid API key will fail.</p>' +
         '</div>' +
         '</section>';
@@ -182,7 +182,7 @@ export function renderOpenAICompatSection() {
 
         '<div class="intro-card">' +
         '<h3 class="text-accent">OpenAI-Compatible Base URL</h3>' +
-        '<code style="font-size: 1.1em; background: var(--bg-tertiary); padding: var(--space-2) var(--space-4); border-radius: var(--radius-md); display: block; margin-top: var(--space-2);">' + window.location.origin + '/api/v1</code>' +
+        '<code style="font-size: var(--font-size-lg); background: var(--bg-tertiary); padding: var(--space-2) var(--space-4); border-radius: var(--radius-md); display: block; margin-top: var(--space-2);">' + window.location.origin + '/api/v1</code>' +
         '<p style="margin-top: var(--space-4); font-size: var(--font-size-sm);">Use your OpenMake API key as the API key parameter. The format is fully compatible with OpenAI client libraries.</p>' +
         '</div>' +
 

@@ -252,19 +252,19 @@ function renderInstances() {
         <div class="mcp-metrics-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:var(--space-3);margin-bottom:var(--space-4);">
             <div class="mcp-metric-card" style="background:var(--bg-card);padding:var(--space-3);border-radius:var(--radius-md);border:1px solid var(--border-light);">
                 <div style="font-size:var(--font-size-sm);color:var(--text-muted);">현재 활성</div>
-                <div style="font-size:1.8em;font-weight:700;color:${m.currentRunning > 0 ? 'var(--success-bright,#22c55e)' : 'var(--text-muted)'};">${escapeHTML(String(m.currentRunning))}</div>
+                <div style="font-size:var(--font-size-3xl);font-weight:700;color:${m.currentRunning > 0 ? 'var(--success-bright,#22c55e)' : 'var(--text-muted)'};">${escapeHTML(String(m.currentRunning))}</div>
             </div>
             <div class="mcp-metric-card" style="background:var(--bg-card);padding:var(--space-3);border-radius:var(--radius-md);border:1px solid var(--border-light);">
                 <div style="font-size:var(--font-size-sm);color:var(--text-muted);">총 spawn</div>
-                <div style="font-size:1.8em;font-weight:700;">${escapeHTML(String(m.totalSpawned))}</div>
+                <div style="font-size:var(--font-size-3xl);font-weight:700;">${escapeHTML(String(m.totalSpawned))}</div>
             </div>
             <div class="mcp-metric-card" style="background:var(--bg-card);padding:var(--space-3);border-radius:var(--radius-md);border:1px solid var(--border-light);">
                 <div style="font-size:var(--font-size-sm);color:var(--text-muted);">24h crash</div>
-                <div style="font-size:1.8em;font-weight:700;color:${m.crashed24h > 0 ? 'var(--danger-bright,#dc2626)' : 'var(--text-muted)'};">${escapeHTML(String(m.crashed24h))}</div>
+                <div style="font-size:var(--font-size-3xl);font-weight:700;color:${m.crashed24h > 0 ? 'var(--danger-bright,#dc2626)' : 'var(--text-muted)'};">${escapeHTML(String(m.crashed24h))}</div>
             </div>
             <div class="mcp-metric-card" style="background:var(--bg-card);padding:var(--space-3);border-radius:var(--radius-md);border:1px solid var(--border-light);">
                 <div style="font-size:var(--font-size-sm);color:var(--text-muted);">평균 uptime</div>
-                <div style="font-size:1.4em;font-weight:600;">${escapeHTML(formatUptime(m.avgUptimeSec))}</div>
+                <div style="font-size:var(--font-size-2xl);font-weight:600;">${escapeHTML(formatUptime(m.avgUptimeSec))}</div>
             </div>
         </div>
         ${m.lastErrorMessage ? `<div style="background:var(--danger-bg,#fee2e2);color:var(--danger,#991b1b);padding:var(--space-3);border-radius:var(--radius-md);margin-bottom:var(--space-3);"><b>최근 에러:</b> ${escapeHTML(m.lastErrorMessage)} <span style="color:var(--text-muted);">(${escapeHTML(m.lastErrorAt || '')})</span></div>` : ''}

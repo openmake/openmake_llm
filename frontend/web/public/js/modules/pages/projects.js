@@ -69,7 +69,7 @@ function getHTML() {
         '<style data-spa-style="projects">' +
         '.projects-page{padding:var(--space-5);width:100%;}' +
         '.projects-header{margin-bottom:var(--space-6);}' +
-        '.projects-header h1{font-size:28px;margin:0 0 var(--space-2);color:var(--text-primary);}' +
+        '.projects-header h1{font-size:var(--font-size-3xl);margin:0 0 var(--space-2);color:var(--text-primary);}' +
         '.projects-header p{color:var(--text-muted);margin:0;}' +
         '.proj-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:var(--space-4);}' +
         '.proj-card{display:flex;gap:var(--space-4);align-items:flex-start;background:var(--bg-card);border:1px solid var(--border-light);border-radius:var(--radius-lg);padding:var(--space-5);text-decoration:none;color:inherit;transition:border-color .15s,transform .15s;}' +
