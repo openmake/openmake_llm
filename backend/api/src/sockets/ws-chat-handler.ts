@@ -19,110 +19,7 @@ import { CURRENT_EVENTS_KEYWORDS, WEB_SEARCH_TEMPLATES, WS_ERROR_MESSAGES, WS_PR
 import { detectLanguage, type SupportedLanguageCode } from '../chat/language-policy';
 import { getStaleDataWarning } from '../config/stale-data-warning';
 import { ArtifactStreamParser, type ArtifactInfo } from '../llm/artifact-parser';
-import { FILE_ATTACH_LIMITS, URL_ANALYZE_LIMITS } from '../config/runtime-limits';
-
-/**
- * 메시지 본문에서 http(s) URL 을 추출하는 패턴.
- * 공백/꺾쇠/따옴표/닫는 괄호 전까지를 URL 로 간주한다 (마크다운 링크 대응).
- */
-const MESSAGE_URL_PATTERN = /https?:\/\/[^\s<>"'\])]+/g;
-
-/** URL 끝에 붙은 문장부호 제거 (예: "...com." / "...com," / "...com)") */
-const URL_TRAILING_PUNCT_PATTERN = /[.,;:!?]+$/;
-
-/**
- * 첨부 파일 목록 → LLM 주입용 fileContext 문자열 구성.
- * 텍스트 파일(content 있음)은 내용을 fenced block 으로, 바이너리는 메타만 기재.
- * FILE_ATTACH_LIMITS 캡 적용 (개수/파일당 글자/합산 글자).
- * (export 는 단위 테스트용 — 운영 호출자는 본 모듈의 handleChatMessage 뿐)
- */
-export function buildFileContext(files: WSMessage['files']): string {
-    if (!Array.isArray(files) || files.length === 0) return '';
-
-    const limited = files.slice(0, FILE_ATTACH_LIMITS.MAX_FILES);
-    const parts: string[] = [];
-    let totalChars = 0;
-
-    for (const f of limited) {
-        if (!f || typeof f.name !== 'string') continue;
-        const name = f.name.slice(0, FILE_ATTACH_LIMITS.MAX_NAME_LENGTH);
-        const type = typeof f.type === 'string' ? f.type : 'unknown';
-
-        if (typeof f.content === 'string' && f.content.length > 0) {
-            const remaining = FILE_ATTACH_LIMITS.MAX_TOTAL_CHARS - totalChars;
-            if (remaining <= 0) {
-                parts.push(`### ${name} (${type})\n(전체 첨부 용량 한도 초과로 내용 생략)`);
-                continue;
-            }
-            const cap = Math.min(FILE_ATTACH_LIMITS.MAX_CHARS_PER_FILE, remaining);
-            const truncated = f.content.length > cap;
-            const body = truncated ? f.content.slice(0, cap) : f.content;
-            totalChars += body.length;
-            parts.push(
-                `### ${name} (${type})\n\`\`\`\n${body}\n\`\`\`` +
-                (truncated ? `\n(파일이 길어 앞 ${cap.toLocaleString()}자만 포함됨)` : '')
-            );
-        } else {
-            // 바이너리 또는 내용 미전송 — 메타만 전달
-            const sizeLabel = typeof f.size === 'number' ? `, ${(f.size / 1024).toFixed(1)}KB` : '';
-            parts.push(`### ${name} (${type}${sizeLabel})\n(바이너리 파일 — 내용을 읽을 수 없어 파일명/형식만 제공됨)`);
-        }
-    }
-
-    if (parts.length === 0) return '';
-    const skipped = files.length - limited.length;
-    return `\n\n## 📎 첨부 파일\n사용자가 첨부한 파일입니다. 답변 시 아래 내용을 참고하세요.\n\n${parts.join('\n\n')}` +
-        (skipped > 0 ? `\n\n(첨부 ${files.length}개 중 ${FILE_ATTACH_LIMITS.MAX_FILES}개만 포함 — ${skipped}개 생략)` : '') + '\n';
-}
-
-/**
- * 메시지 내 URL 을 감지해 본문을 스크랩 → LLM 주입용 컨텍스트 구성.
- * - 현재 턴 메시지만 대상 (히스토리 재스크랩 방지)
- * - URL_ANALYZE_LIMITS 캡: 개수 / URL당 글자 / URL당 타임아웃
- * - SSRF 방어는 scrapePage 내부 validateOutboundUrl/safeFetch 가 담당
- * - 실패 시 "접근 불가 — 추측 금지" 안내만 주입 (모델 tool loop 의 web_scrape 재시도 여지)
- *
- * @param message - 사용자 메시지
- * @param log - 모듈 로거
- * @returns 주입용 컨텍스트 문자열 (URL 없거나 비활성 시 '')
- * (export 는 단위 테스트용 — 운영 호출자는 본 모듈의 handleChatMessage 뿐)
- */
-export async function buildUrlContext(
-    message: string,
-    log: ReturnType<typeof createLogger>,
-): Promise<string> {
-    if (!URL_ANALYZE_LIMITS.ENABLED || !message) return '';
-
-    const matched = message.match(MESSAGE_URL_PATTERN);
-    if (!matched || matched.length === 0) return '';
-
-    // dedup + 끝 문장부호 제거 + 개수 캡
-    const urls = [...new Set(matched.map(u => u.replace(URL_TRAILING_PUNCT_PATTERN, '')))]
-        .slice(0, URL_ANALYZE_LIMITS.MAX_URLS);
-
-    const { scrapePage } = await import('../utils/web-scraper');
-
-    const results = await Promise.all(urls.map(async (url) => {
-        try {
-            const scraped = await Promise.race([
-                scrapePage(url, { timeoutMs: URL_ANALYZE_LIMITS.TIMEOUT_MS }),
-                new Promise<never>((_, reject) =>
-                    setTimeout(() => reject(new Error('URL_ANALYZE_TIMEOUT')), URL_ANALYZE_LIMITS.TIMEOUT_MS)),
-            ]);
-            const truncated = scraped.markdown.length > URL_ANALYZE_LIMITS.MAX_CHARS_PER_URL;
-            const body = truncated
-                ? scraped.markdown.slice(0, URL_ANALYZE_LIMITS.MAX_CHARS_PER_URL)
-                : scraped.markdown;
-            return `### ${url}\n제목: ${scraped.title || '(없음)'}\n\n${body}` +
-                (truncated ? `\n(본문이 길어 앞 ${URL_ANALYZE_LIMITS.MAX_CHARS_PER_URL.toLocaleString()}자만 포함됨)` : '');
-        } catch (e) {
-            log.warn(`[Chat] URL 분석 실패 (${url}): ${e instanceof Error ? e.message : e}`);
-            return `### ${url}\n(이 페이지는 가져오지 못했습니다 — 내용을 추측하지 말고, 필요 시 web_scrape 도구로 재시도하거나 접근 불가를 안내하세요)`;
-        }
-    }));
-
-    return `\n\n## 🔗 링크 분석\n사용자 메시지에 포함된 URL 의 실제 본문입니다. 답변 시 아래 내용을 근거로 사용하세요.\n\n${results.join('\n\n')}\n`;
-}
+import { buildFileContext, buildUrlContext, getCachedAttachContext, appendCachedAttachContext } from '../services/chat-service/attach-context';
 
 /**
  * AI 채팅 메시지를 처리합니다.
@@ -151,8 +48,6 @@ export async function handleChatMessage(
 
     const { model, nodeId, history, sessionId, anonSessionId } = msg;
     const { images } = msg;
-    // 첨부 파일(이미지 외) → LLM 주입용 컨텍스트 (transient — DB 미저장, webSearchContext 와 동급 채널)
-    const fileContext = buildFileContext(msg.files);
     const message = (msg.message ?? '').trim();
 
     // 사용자 언어 감지 — 설정에서 선택한 언어를 우선, 없으면 메시지 기반 자동 감지
@@ -207,6 +102,24 @@ export async function handleChatMessage(
             return;
         }
 
+        // 첨부 파일(이미지 외) → LLM 주입용 컨텍스트 (transient — DB 미저장, webSearchContext 와 동급 채널)
+        // 레이트 리밋 통과 후 조립 — 거부될 요청에 최대 300k 자 문자열 조립 비용을 쓰지 않는다.
+        const fileContext = buildFileContext(msg.files);
+
+        // 딥 리서치 파이프라인은 fileContext 를 소비하지 않음 (research 전략은 message 만 사용).
+        // 무음 폐기 대신 명시 거부 — 첨부가 반영된 것처럼 보이는 UX 기만 방지 (2026-06-13)
+        if (msg.deepResearchMode === true && fileContext) {
+            ws.send(JSON.stringify({ type: 'error', message: '딥 리서치 모드에서는 파일 첨부를 지원하지 않습니다. 첨부를 제거하거나 일반 채팅으로 질문해 주세요.' }));
+            return;
+        }
+
+        // 메시지 내 URL 결정적 사전 분석 (2026-06-13) — 웹검색과 독립 I/O 이므로 병렬 시작.
+        // 모델의 web_scrape 도구 호출에만 맡기면 비결정적(미호출 시 환각) — 사전 주입으로 보장.
+        // 딥 리서치는 자체 검색·스크래핑 파이프라인이 URL 을 다루므로 사전 분석 생략.
+        const urlContextPromise = msg.deepResearchMode === true
+            ? Promise.resolve('')
+            : buildUrlContext(message);
+
         // 웹 검색: 사용자가 명시적으로 활성화했거나, 시사 관련 질문이 감지된 경우 수행
         const langKeywords = getLocalizedTemplate(CURRENT_EVENTS_KEYWORDS, userLang);
         const allKeywords = [...langKeywords, ...(CURRENT_EVENTS_KEYWORDS['en'] || [])];
@@ -240,9 +153,8 @@ export async function handleChatMessage(
             log.info(`[Chat] 시사 질의 + 외부 데이터 부재 → 환각 방지 안전망 주입 (lang=${userLang}, explicitlyDisabled=${userExplicitlyDisabledSearch})`);
         }
 
-        // 메시지 내 URL 결정적 사전 분석 (2026-06-13) — 본문을 fileContext 채널에 합류.
-        // 모델의 web_scrape 도구 호출에만 맡기면 비결정적(미호출 시 환각) — 사전 주입으로 보장.
-        const urlContext = await buildUrlContext(message, log);
+        // URL 사전 분석 결과 합류 (위에서 웹검색과 병렬 시작) — 본문을 fileContext 채널에 합류.
+        const urlContext = await urlContextPromise;
         if (urlContext) {
             log.info(`[Chat] URL 사전 분석 주입: ${urlContext.length}자`);
         }
@@ -250,6 +162,17 @@ export async function handleChatMessage(
 
         // WS 고유: 세션 생성 시 length < 10 체크 (노드 ID와 구별)
         validSessionId = (sessionId && sessionId.length >= 10) ? sessionId : undefined;
+
+        // 멀티턴 재주입 (2026-06-13): fileContext 는 transient(DB 미저장)라 다음 턴 히스토리에
+        // 없음 — 세션 캐시의 이전 턴 첨부/링크 컨텍스트를 앞에 합류해 후속 질문 근거를 유지.
+        // 딥 리서치는 fileContext 미소비라 제외.
+        const cachedAttachContext = (validSessionId && msg.deepResearchMode !== true)
+            ? getCachedAttachContext(validSessionId)
+            : '';
+        if (cachedAttachContext) {
+            log.info(`[Chat] 이전 턴 첨부 컨텍스트 재주입: ${cachedAttachContext.length}자`);
+        }
+        const effectiveAttachContext = cachedAttachContext + attachContext;
 
         // messageId 생성 (WS 고유: 토큰 스트리밍에 사용)
         const messageId = crypto.randomUUID
@@ -338,7 +261,7 @@ export async function handleChatMessage(
             images,
             sessionId: validSessionId,
             webSearchContext,
-            fileContext: attachContext || undefined,
+            fileContext: effectiveAttachContext || undefined,
             discussionMode: msg.discussionMode === true,
             deepResearchMode: msg.deepResearchMode === true,
             thinkingMode: msg.thinkingMode === true,
@@ -396,6 +319,13 @@ export async function handleChatMessage(
         // WS 고유: 새 세션 생성 알림
         if (!validSessionId) {
             ws.send(JSON.stringify({ type: 'session_created', sessionId: result.sessionId }));
+        }
+
+        // 이번 턴의 새 첨부 컨텍스트를 세션 캐시에 누적 — 첫 턴은 result.sessionId 로
+        // 새 세션 ID 확보 후 저장. saveHistory=false 면 서버 보관 자체를 생략 (프라이버시).
+        if (attachContext && msg.saveHistory !== false) {
+            const cacheSessionId = validSessionId || result.sessionId;
+            if (cacheSessionId) appendCachedAttachContext(cacheSessionId, attachContext);
         }
 
         const generationDuration = Date.now() - (firstTokenTime || generationStartTime);

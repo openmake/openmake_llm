@@ -412,6 +412,22 @@ export const URL_ANALYZE_LIMITS = {
 } as const;
 
 /**
+ * 세션 단위 첨부 컨텍스트 캐시 한도 (2026-06-13 멀티턴 재주입)
+ * fileContext(첨부 파일 + URL 사전 분석)는 DB 미저장(transient)이므로,
+ * 세션별 메모리 캐시로 후속 턴에 재주입해 근거 소실로 인한 환각 재발을 막는다.
+ *
+ * services/chat-service/attach-context.ts에서 참조
+ */
+export const ATTACH_CACHE_LIMITS = {
+    /** 캐시 보관 시간 (ms) — 마지막 접근 기준 갱신 */
+    TTL_MS: parseInt(process.env.ATTACH_CACHE_TTL_MS || '3600000', 10),
+    /** 동시 보관 세션 수 (LRU 초과분 제거) */
+    MAX_SESSIONS: parseInt(process.env.ATTACH_CACHE_MAX_SESSIONS || '500', 10),
+    /** 세션당 누적 컨텍스트 최대 글자 수 (초과 시 오래된 블록부터 제거) */
+    MAX_CHARS: parseInt(process.env.ATTACH_CACHE_MAX_CHARS || '400000', 10),
+} as const;
+
+/**
  * LLM 라우터 신뢰도 기본값
  * agents/llm-router.ts에서 참조
  */
