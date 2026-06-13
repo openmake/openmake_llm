@@ -65,7 +65,7 @@
 }
 .cmdk-in kbd {
     font-family: var(--font-mono);
-    font-size: 10px;
+    font-size: var(--font-size-xs);
     background: var(--bg-tertiary);
     border: 1px solid var(--border-light);
     border-radius: 5px;
@@ -84,7 +84,7 @@
 }
 .cmdk-gl {
     font-family: var(--font-mono);
-    font-size: 10px;
+    font-size: var(--font-size-xs);
     letter-spacing: 0.1em;
     text-transform: uppercase;
     color: var(--text-muted);
@@ -111,7 +111,7 @@
 }
 .cmdk-row .hint {
     font-family: var(--font-mono);
-    font-size: 10px;
+    font-size: var(--font-size-xs);
     color: var(--text-muted);
 }
 .cmdk-row.sel {
@@ -127,7 +127,7 @@
     padding: 10px 16px;
     border-top: 1px solid var(--border-light);
     font-family: var(--font-mono);
-    font-size: 10.5px;
+    font-size: var(--font-size-xs);
     color: var(--text-muted);
     flex-shrink: 0;
 }

@@ -342,7 +342,7 @@
 }
 .skill-card-footer small { color: var(--text-muted, #64748b); font-size: 0.75rem; }
 .sl-badge {
-    font-size: 0.7rem;
+    font-size: var(--font-size-xs);
     padding: 0.15rem 0.5rem;
     border-radius: 1rem;
     border: 1px solid;
@@ -491,7 +491,7 @@
     margin-bottom: 0.5rem;
 }
 .skill-draft-card__badge {
-    font-size: 0.72rem; padding: 0.15rem 0.55rem;
+    font-size: var(--font-size-xs); padding: 0.15rem 0.55rem;
     border-radius: 999px; line-height: 1.4;
     background: var(--accent-primary-light);
     color: var(--accent-primary, #ff6a3d);

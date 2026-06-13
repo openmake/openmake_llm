@@ -26,7 +26,7 @@
     text-overflow: ellipsis;
     white-space: nowrap;
 }
-.model-selector-trigger .arrow { color: var(--text-muted); font-size: 10px; flex-shrink: 0; }
+.model-selector-trigger .arrow { color: var(--text-muted); font-size: var(--font-size-xs); flex-shrink: 0; }
 
 .model-selector-dropdown {
     position: absolute;
@@ -48,7 +48,7 @@
 
 .model-selector-optgroup-label {
     padding: var(--space-2) var(--space-4) var(--space-1);
-    font-size: 11px;
+    font-size: var(--font-size-xs);
     font-weight: var(--font-weight-semibold);
     color: var(--text-muted);
     text-transform: uppercase;
@@ -208,7 +208,7 @@
 
 .model-selector-subgroup-label {
     padding: 4px 12px;
-    font-size: 11px;
+    font-size: var(--font-size-xs);
     font-weight: 600;
     color: var(--text-muted);
     background: var(--bg-secondary);
@@ -227,7 +227,7 @@
     display: inline-block;
     padding: 1px 6px;
     border-radius: 3px;
-    font-size: 10px;
+    font-size: var(--font-size-xs);
     font-weight: 700;
     line-height: 1.4;
     white-space: nowrap;
@@ -240,7 +240,7 @@
 }
 
 .price {
-    font-size: 10px;
+    font-size: var(--font-size-xs);
     color: var(--text-muted);
     white-space: nowrap;
     font-family: ui-monospace, SFMono-Regular, monospace;
@@ -266,16 +266,16 @@
 .or-card-icon { font-size: 16px; }
 .or-card-title { font-size: 13px; font-weight: 700; color: var(--text-primary); }
 .or-card-count {
-    margin-left: auto; font-size: 11px; color: var(--text-muted);
+    margin-left: auto; font-size: var(--font-size-xs); color: var(--text-muted);
     background: var(--bg-tertiary); padding: 1px 8px; border-radius: 10px;
 }
 .or-card-stats {
-    display: flex; gap: 10px; font-size: 11px; margin-bottom: 4px;
+    display: flex; gap: 10px; font-size: var(--font-size-xs); margin-bottom: 4px;
 }
 .or-stat-free { color: var(--success-bright, #22c55e); font-weight: 600; }
 .or-stat-paid { color: var(--text-muted); }
 .or-card-selected {
-    font-size: 11px; color: var(--text-primary); padding: 4px 8px;
+    font-size: var(--font-size-xs); color: var(--text-primary); padding: 4px 8px;
     background: rgba(34,197,94,0.08); border-radius: 4px; margin: 4px 0;
     display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
 }
@@ -320,7 +320,7 @@
 .mlm-search:focus { border-color: var(--accent-indigo, #5078dc); box-shadow: 0 0 0 2px rgba(80,120,220,0.2); }
 .mlm-list { flex: 1 1 auto; overflow-y: auto; padding: 4px 0; }
 .mlm-subgroup {
-    padding: 6px 14px 4px; font-size: 11px; font-weight: 600;
+    padding: 6px 14px 4px; font-size: var(--font-size-xs); font-weight: 600;
     color: var(--text-muted); background: var(--bg-secondary);
     text-transform: uppercase; letter-spacing: 0.5px;
     position: sticky; top: 0; z-index: 1;
@@ -337,7 +337,7 @@
 .mlm-row-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mlm-row-id {
     font-family: ui-monospace, SFMono-Regular, monospace;
-    font-size: 10px; color: var(--text-muted);
+    font-size: var(--font-size-xs); color: var(--text-muted);
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 220px;
 }
 .mlm-row-meta { flex-shrink: 0; }
@@ -346,7 +346,7 @@
     padding: 8px 14px; border-top: 1px solid var(--border-light);
     background: var(--bg-secondary); flex-shrink: 0;
 }
-.mlm-hint { font-size: 11px; color: var(--text-muted); }
+.mlm-hint { font-size: var(--font-size-xs); color: var(--text-muted); }
 
 /* 이모지 → lucide 라인 아이콘 (trigger/액션) */
 .model-selector-trigger .icon iconify-icon { font-size: 16px; width: 16px; height: 16px; vertical-align: -2px; }

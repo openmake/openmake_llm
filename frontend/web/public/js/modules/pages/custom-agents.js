@@ -36,7 +36,7 @@
                 ".agent-card h3 { margin:0 0 var(--space-2); color:var(--text-primary); display:flex; align-items:center; gap:var(--space-2); }\n" +
                 ".agent-card .desc { color:var(--text-muted); font-size:var(--font-size-sm); margin-bottom:var(--space-3); flex:1; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }\n" +
                 ".agent-meta { display:flex; gap:var(--space-2); align-items:center; flex-wrap:wrap; font-size:var(--font-size-sm); }\n" +
-                ".badge { display:inline-block; padding:2px 8px; border-radius:var(--radius-md); font-size:11px; font-weight:var(--font-weight-semibold); }\n" +
+                ".badge { display:inline-block; padding:2px 8px; border-radius:var(--radius-md); font-size: var(--font-size-xs); font-weight:var(--font-weight-semibold); }\n" +
                 ".badge-cat { background:var(--bg-tertiary); color:var(--text-secondary); }\n" +
                 ".badge-draft { background:var(--warning-light); color:var(--warning); }\n" +
                 ".card-actions { display:flex; gap:var(--space-2); margin-top:var(--space-3); }\n" +

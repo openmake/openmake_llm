@@ -159,7 +159,7 @@ function getHTML() {
         '.mcpmon-trend-bar{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;height:100%;}' +
         '.mcpmon-trend-fill{width:80%;background:var(--accent-indigo,#5078dc);border-radius:2px 2px 0 0;display:flex;flex-direction:column-reverse;min-height:1px;}' +
         '.mcpmon-trend-crash{width:100%;background:var(--danger-bright,#dc2626);}' +
-        '.mcpmon-trend-label{font-size:0.7em;color:var(--text-muted);margin-top:4px;}' +
+        '.mcpmon-trend-label{font-size: var(--font-size-xs);color:var(--text-muted);margin-top:4px;}' +
         '</style>' +
         '<div class="mcpmon-page">' +
         '<header style="display:flex;justify-content:space-between;align-items:center;margin-bottom:var(--space-4);">' +

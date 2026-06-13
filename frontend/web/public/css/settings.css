@@ -377,7 +377,7 @@
 /* ==================== Tier Badge ==================== */
 .tier-badge {
     display: inline-block;
-    font-size: 9px;
+    font-size: var(--font-size-xs);
     padding: 1px 6px;
     border-radius: 3px;
     font-weight: 700;

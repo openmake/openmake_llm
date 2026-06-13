@@ -355,7 +355,7 @@
 
 .us-group-label {
     padding: 8px 12px 4px;
-    font-size: 0.6875rem;
+    font-size: var(--font-size-xs);
     font-weight: 700;
     color: var(--text-muted);
     text-transform: uppercase;
@@ -834,7 +834,7 @@
 
 .us-nav-section-label {
     font-family: var(--font-mono); /* technical 마이크로 라벨 */
-    font-size: 0.62rem;
+    font-size: var(--font-size-xs);
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.14em;

@@ -169,7 +169,7 @@
                 '.page-research .session-card:hover { border-color:var(--accent-primary); }' +
                 '.page-research .session-card h3 { margin:0 0 var(--space-2); color:var(--text-primary); }' +
                 '.page-research .session-meta { display:flex; gap:var(--space-3); align-items:center; flex-wrap:wrap; font-size:var(--font-size-sm); color:var(--text-muted); }' +
-                '.page-research .badge { display:inline-block; padding:2px 10px; border-radius:var(--radius-md); font-size:11px; font-weight:var(--font-weight-semibold); }' +
+                '.page-research .badge { display:inline-block; padding:2px 10px; border-radius:var(--radius-md); font-size: var(--font-size-xs); font-weight:var(--font-weight-semibold); }' +
                 '.page-research .badge-pending { background:var(--bg-tertiary); color:var(--text-muted); }' +
                 '.page-research .badge-running { background:var(--accent-primary); color:#fff; animation:researchPulse 1.5s infinite; }' +
                 '.page-research .badge-completed { background:var(--success); color:#fff; }' +
@@ -192,7 +192,7 @@
                 '.page-research .step-item { margin-bottom:var(--space-4); position:relative; }' +
                 '.page-research .step-item::before { content:""; position:absolute; left:calc(-1 * var(--space-5) - 5px); top:4px; width:8px; height:8px; border-radius:50%; background:var(--accent-primary); }' +
                 '.page-research .step-num { font-weight:var(--font-weight-semibold); color:var(--accent-primary); }' +
-                '.page-research .step-type { background:var(--bg-tertiary); padding:2px 8px; border-radius:var(--radius-md); font-size:11px; color:var(--text-secondary); }' +
+                '.page-research .step-type { background:var(--bg-tertiary); padding:2px 8px; border-radius:var(--radius-md); font-size: var(--font-size-xs); color:var(--text-secondary); }' +
                 '.page-research .step-result { background:var(--bg-secondary); padding:var(--space-3); border-radius:var(--radius-md); margin-top:var(--space-2); font-size:var(--font-size-sm); color:var(--text-secondary); max-height:120px; overflow-y:auto; white-space:pre-wrap; }' +
                 '.page-research .modal-actions { display:flex; gap:var(--space-3); justify-content:flex-end; margin-top:var(--space-5); }' +
                 '.page-research .modal-actions button { padding:var(--space-2) var(--space-4); border:none; border-radius:var(--radius-md); cursor:pointer; font-weight:var(--font-weight-semibold); }' +

@@ -30,9 +30,9 @@
                 ".ma-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:var(--space-4); }\n" +
                 ".ma-card { background:var(--bg-card); border:1px solid var(--border-light); border-radius:var(--radius-lg); padding:var(--space-5); display:flex; flex-direction:column; gap:var(--space-2); }\n" +
                 ".ma-card-icon { font-size:2.5rem; }\n" +
-                ".ma-card h3 { margin:0; color:var(--text-primary); font-size:var(--font-size-md); }\n" +
+                ".ma-card h3 { margin:0; color:var(--text-primary); font-size:var(--font-size-base); }\n" +
                 ".ma-card .desc { color:var(--text-muted); font-size:var(--font-size-sm); display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; min-height:32px; }\n" +
-                ".ma-card .meta { color:var(--text-muted); font-size:11px; }\n" +
+                ".ma-card .meta { color:var(--text-muted); font-size: var(--font-size-xs); }\n" +
                 ".ma-card-actions { display:flex; gap:var(--space-2); margin-top:auto; }\n" +
                 ".ma-card-actions button { padding:var(--space-1) var(--space-3); border:1px solid var(--border-light); border-radius:var(--radius-md); background:var(--bg-tertiary); color:var(--text-secondary); cursor:pointer; font-size:var(--font-size-sm); }\n" +
                 ".ma-empty { text-align:center; padding:var(--space-8); color:var(--text-muted); grid-column:1/-1; }\n" +
@@ -40,12 +40,12 @@
                 ".ma-guide h2 { text-align:center; color:var(--text-primary); margin:0 0 var(--space-2); font-size:var(--font-size-lg); }\n" +
                 ".ma-guide .sub { text-align:center; color:var(--text-muted); margin:0 0 var(--space-5); font-size:var(--font-size-sm); }\n" +
                 ".ma-guide section { margin-bottom:var(--space-4); }\n" +
-                ".ma-guide section h3 { margin:0 0 var(--space-2); color:var(--text-secondary); font-size:11px; font-weight:var(--font-weight-semibold); text-transform:uppercase; letter-spacing:.5px; }\n" +
+                ".ma-guide section h3 { margin:0 0 var(--space-2); color:var(--text-secondary); font-size: var(--font-size-xs); font-weight:var(--font-weight-semibold); text-transform:uppercase; letter-spacing:.5px; }\n" +
                 ".ma-guide ol, .ma-guide ul { margin:0; padding-left:var(--space-5); color:var(--text-primary); }\n" +
                 ".ma-guide li { margin-bottom:var(--space-1); font-size:var(--font-size-sm); line-height:1.6; }\n" +
                 ".ma-guide .examples { display:flex; flex-direction:column; gap:var(--space-2); }\n" +
                 ".ma-guide .ex-item { padding:var(--space-2) var(--space-3); background:var(--bg-tertiary); border-radius:var(--radius-md); font-size:var(--font-size-sm); color:var(--text-primary); }\n" +
-                ".ma-guide .cta { display:block; margin:var(--space-5) auto 0; padding:var(--space-3) var(--space-5); background:var(--accent-primary); color:#fff; border:none; border-radius:var(--radius-md); font-weight:var(--font-weight-semibold); cursor:pointer; font-size:var(--font-size-md); }\n" +
+                ".ma-guide .cta { display:block; margin:var(--space-5) auto 0; padding:var(--space-3) var(--space-5); background:var(--accent-primary); color:#fff; border:none; border-radius:var(--radius-md); font-weight:var(--font-weight-semibold); cursor:pointer; font-size:var(--font-size-base); }\n" +
                 ".ma-guide .cta:hover { opacity:.9; }\n" +
                 ".ma-modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:1000; justify-content:center; align-items:center; }\n" +
                 ".ma-modal-overlay.open { display:flex; }\n" +
@@ -76,7 +76,7 @@
                 '<div class="ma-form-group"><label>설명 (선택, ~500자)</label><input type="text" id="maDesc" maxlength="500" placeholder="짧은 설명"></div>' +
                 '<div class="ma-form-group"><label>System Prompt (1~8000자) — 매 대화 시 prepend</label><textarea id="maSystemPrompt" maxlength="8000" placeholder="당신은 ...입니다. 다음 원칙을 따릅니다: ..."></textarea></div>' +
                 '<div class="ma-form-group">' +
-                '<label>연결할 스킬 <span style="color:var(--text-muted);font-weight:normal;font-size:11px">(선택. 체크된 스킬의 prompt_md 가 채팅 시 자동 주입됨)</span></label>' +
+                '<label>연결할 스킬 <span style="color:var(--text-muted);font-weight:normal;font-size: var(--font-size-xs)">(선택. 체크된 스킬의 prompt_md 가 채팅 시 자동 주입됨)</span></label>' +
                 '<div id="maSkillList" style="max-height:200px;overflow-y:auto;border:1px solid var(--border-light);border-radius:6px;padding:8px;background:var(--bg-secondary);"><div style="color:var(--text-muted);font-size:var(--font-size-sm);text-align:center;padding:8px;">스킬 로드 중...</div></div>' +
                 '</div>' +
                 '<div class="ma-modal-actions">' +
@@ -136,13 +136,13 @@
                 const ids = new Set(Array.isArray(selectedIds) ? selectedIds : []);
                 listEl.innerHTML = availableSkills.map(function(s) {
                     const checked = ids.has(s.id) ? 'checked' : '';
-                    const catBadge = s.category ? ' <span style="background:var(--bg-tertiary);color:var(--text-muted);font-size:10px;padding:1px 5px;border-radius:3px;margin-left:4px;">' + esc(s.category) + '</span>' : '';
+                    const catBadge = s.category ? ' <span style="background:var(--bg-tertiary);color:var(--text-muted);font-size: var(--font-size-xs);padding:1px 5px;border-radius:3px;margin-left:4px;">' + esc(s.category) + '</span>' : '';
                     const pubMark = s.is_public ? ' <iconify-icon icon=lucide:globe></iconify-icon>' : '';
                     return '<label style="display:flex;align-items:flex-start;gap:8px;padding:6px;border-radius:4px;cursor:pointer;hover:background:var(--bg-tertiary);">' +
                         '<input type="checkbox" class="ma-skill-cb" data-skill-id="' + esc(s.id) + '" ' + checked + ' style="margin-top:3px;flex-shrink:0;">' +
                         '<div style="flex:1;min-width:0;">' +
                         '<div style="font-size:var(--font-size-sm);font-weight:600;color:var(--text-primary);">' + esc(s.name) + pubMark + catBadge + '</div>' +
-                        (s.description ? '<div style="font-size:11px;color:var(--text-muted);margin-top:2px;">' + esc(s.description) + '</div>' : '') +
+                        (s.description ? '<div style="font-size: var(--font-size-xs);color:var(--text-muted);margin-top:2px;">' + esc(s.description) + '</div>' : '') +
                         '</div></label>';
                 }).join('');
             }
