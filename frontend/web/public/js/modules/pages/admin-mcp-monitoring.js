@@ -163,7 +163,7 @@ function getHTML() {
         '</style>' +
         '<div class="mcpmon-page">' +
         '<header style="display:flex;justify-content:space-between;align-items:center;margin-bottom:var(--space-4);">' +
-            '<div><h1>MCP 모니터링</h1><p style="color:var(--text-muted);margin:0;">전체 사용자의 MCP server lifecycle 통계 (30초 자동 갱신).</p></div>' +
+            '<div><h1 class="page-title">MCP 모니터링</h1><p class="page-subtitle" style="margin:0;">전체 사용자의 MCP server lifecycle 통계 (30초 자동 갱신).</p></div>' +
             '<button class="btn btn-primary" id="mcpmon-refresh" type="button"><iconify-icon icon=lucide:refresh-cw></iconify-icon> 새로고침</button>' +
         '</header>' +
         '<div id="mcpmon-summary"><div class="mcp-loading">로딩 중…</div></div>' +

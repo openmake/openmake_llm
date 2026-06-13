@@ -287,11 +287,18 @@
 }
 
 /* 페이지 메인 헤딩 — editorial 세리프 일괄 (Fraunces+Noto Serif KR). 대부분 페이지가 .page-header h1(bare) 사용 */
+/* 크기는 .page-title(3xl)이 담당 — bare h1 페이지는 .page-title 클래스를 붙여 통일.
+   (전역 #page-content h1 에 size 박으면 ID 특이성으로 .spa-page-nav-title 등 의도적 작은 h1을 덮어 회귀) */
 #page-content h1,
 .page-header h1 {
     font-family: var(--font-serif);
     font-weight: 600;
     letter-spacing: -0.01em;
+}
+/* .page-header 안의 bare h1을 .page-title(3xl)과 동일 크기로 통일.
+   클래스 특이성(0,0,1,1)이라 .spa-page-nav-title(back-nav, .page-header 밖)은 영향 없음. */
+.page-header h1 {
+    font-size: var(--font-size-3xl);
 }
 
 .page-subtitle {

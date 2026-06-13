@@ -293,6 +293,12 @@ body {
     overflow-wrap: break-word; /* 긴 영문/URL 줄바꿈 보장 */
 }
 
+/* 폼·버튼 요소는 font-family를 상속받지 않아(브라우저 UA 기본=Arial) 본문 폰트와 어긋남.
+   전역 inherit로 Pretendard 일괄 적용 — 한글 버튼/입력 폰트 일관성 보장. */
+button, input, select, textarea {
+    font-family: inherit;
+}
+
 /* 무드 연출 — 미세 그레인 텍스처 오버레이 (은은한 깊이감) */
 body::before {
     content: "";
