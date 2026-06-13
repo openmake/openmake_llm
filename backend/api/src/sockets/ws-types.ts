@@ -44,8 +44,9 @@ export interface WSMessage {
      * 텍스트 파일은 content 에 UTF-8 디코드 내용 포함 (fileContext 주입용),
      * 바이너리는 content 없이 name/type/size 메타만 전달.
      * 이미지는 content 없이 images(base64 vision) 경로로 별도 전송.
+     * truncated: 클라이언트가 전송 전 캡으로 내용을 절단했음 (절단 안내문 부착용).
      */
-    files?: Array<{ id: string; name: string; type: string; content?: string; size?: number }>;
+    files?: Array<{ id: string; name: string; type: string; content?: string; size?: number; truncated?: boolean }>;
     userRole?: string;
     userTier?: 'free' | 'pro' | 'enterprise';
     /** 사용자 선호 언어 (설정 페이지에서 선택) */

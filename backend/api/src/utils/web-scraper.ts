@@ -155,6 +155,11 @@ export async function scrapePage(url: string, options: ScrapeOptions = {}): Prom
     }
 
     // 2단계: Playwright fallback (SPA 사이트)
+    // 호출자가 이미 abort 한 경우 브라우저 기동 생략 (고아 Playwright 세션 방지).
+    // 취소는 사이트 장애가 아니므로 circuit breaker 실패로 집계하지 않는다.
+    if (options.signal?.aborted) {
+        throw new Error(`스크래핑 중단됨 (${url})`);
+    }
     try {
         const result = await scrapeWithPlaywright(url, timeoutMs, onlyMainContent);
         recordSuccess();

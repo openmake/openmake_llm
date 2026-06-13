@@ -16,8 +16,11 @@ import { getState, setState } from './state.js';
 
 const MAX_FILE_BYTES = 10 * 1024 * 1024; // 10MB
 const IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
-// 백엔드 FILE_ATTACH_LIMITS.MAX_CHARS_PER_FILE 와 동일 — 과대 WS 전송 방지용 클라이언트 캡
-const MAX_TEXT_CHARS = 100000;
+// 백엔드 FILE_ATTACH_LIMITS 기본값과 동일한 클라이언트 전송 캡 (WS maxPayload 1MB 보호).
+// 백엔드 캡은 env 오버라이드 가능 — 여기 값은 전송량 상한이며 절단 시 truncated 플래그로 안내 보장.
+const MAX_TEXT_CHARS = 100000;       // FILE_ATTACH_MAX_CHARS_PER_FILE 기본값
+const MAX_TOTAL_TEXT_CHARS = 300000; // FILE_ATTACH_MAX_TOTAL_CHARS 기본값
+const MAX_ATTACH_FILES = 10;         // FILE_ATTACH_MAX_FILES 기본값
 
 function genId() {
     return 'att-' + Math.random().toString(36).slice(2, 10);
@@ -39,14 +42,15 @@ function fileToBase64(file) {
 
 /**
  * File → UTF-8 텍스트 디코드 시도.
- * @returns {Promise<string|null>} 디코드 성공 시 텍스트(캡 적용), 바이너리면 null
+ * @returns {Promise<{text: string, truncated: boolean}|null>} 디코드 성공 시 텍스트(캡 적용)와 절단 여부, 바이너리면 null
  */
 async function fileToText(file) {
     const buf = await file.arrayBuffer();
     try {
         // fatal: 유효하지 않은 UTF-8 바이트 시퀀스(바이너리)에서 throw
         const text = new TextDecoder('utf-8', { fatal: true }).decode(buf);
-        return text.length > MAX_TEXT_CHARS ? text.slice(0, MAX_TEXT_CHARS) : text;
+        const truncated = text.length > MAX_TEXT_CHARS;
+        return { text: truncated ? text.slice(0, MAX_TEXT_CHARS) : text, truncated };
     } catch {
         return null;
     }
@@ -56,6 +60,10 @@ async function handleFiles(fileList) {
     const files = Array.from(fileList || []);
     const next = [...(getState('attachedFiles') || [])];
     for (const f of files) {
+        if (next.length >= MAX_ATTACH_FILES) {
+            window.showError?.(`첨부는 최대 ${MAX_ATTACH_FILES}개까지 가능합니다: ${f.name} 제외됨`);
+            continue;
+        }
         if (f.size > MAX_FILE_BYTES) {
             window.showError?.(`파일이 너무 큽니다 (최대 10MB): ${f.name}`);
             continue;
@@ -66,12 +74,29 @@ async function handleFiles(fileList) {
                 // objectUrl: 썸네일용 blob 참조 (매 렌더 base64→data URL 재직렬화/재디코드 회피). 제거 시 revoke.
                 next.push({ id: genId(), name: f.name, type: f.type, size: f.size, isImage: true, base64, objectUrl: URL.createObjectURL(f) });
             } else {
-                const text = await fileToText(f);
-                if (text === null) {
+                const decoded = await fileToText(f);
+                if (decoded === null) {
                     // 바이너리 — 첨부는 허용, 메타만 전달됨을 안내
                     window.showError?.(`${f.name}: 내용을 읽을 수 없는 형식이라 파일명/형식만 AI에 전달됩니다`);
+                    next.push({ id: genId(), name: f.name, type: f.type || 'application/octet-stream', size: f.size, isImage: false });
+                    continue;
                 }
-                next.push({ id: genId(), name: f.name, type: f.type || 'application/octet-stream', size: f.size, isImage: false, textContent: text ?? undefined });
+                // 합산 전송량 캡 — WS maxPayload(1MB) 초과로 소켓이 끊기는 것을 첨부 시점에 차단
+                let { text, truncated } = decoded;
+                const used = next.reduce((sum, x) => sum + (x.textContent ? x.textContent.length : 0), 0);
+                const remaining = MAX_TOTAL_TEXT_CHARS - used;
+                if (remaining <= 0) {
+                    window.showError?.(`첨부 텍스트 합산 한도(${MAX_TOTAL_TEXT_CHARS.toLocaleString()}자) 초과: ${f.name} 제외됨`);
+                    continue;
+                }
+                if (text.length > remaining) {
+                    text = text.slice(0, remaining);
+                    truncated = true;
+                }
+                if (truncated) {
+                    window.showError?.(`${f.name}: 파일이 길어 앞부분만 AI에 전달됩니다`);
+                }
+                next.push({ id: genId(), name: f.name, type: f.type || 'application/octet-stream', size: f.size, isImage: false, textContent: text, textTruncated: truncated });
             }
         } catch {
             window.showError?.(`파일을 읽지 못했습니다: ${f.name}`);
