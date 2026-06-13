@@ -122,7 +122,7 @@ function renderTrend() {
                 </div>`;
             }).join('')}
         </div>
-        <div style="font-size:0.85em;color:var(--text-muted);margin-top:var(--space-2);">파란색 = spawn 수 / 빨간색 = crash 비율 (각 bar 의 내부)</div>`;
+        <div style="font-size:var(--font-size-sm);color:var(--text-muted);margin-top:var(--space-2);">파란색 = spawn 수 / 빨간색 = crash 비율 (각 bar 의 내부)</div>`;
 }
 
 async function loadAll() {
@@ -149,12 +149,12 @@ function getHTML() {
         '.mcpmon-page{padding:var(--space-5);width:100%;}' +
         '.mcpmon-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:var(--space-3);}' +
         '.mcpmon-card{background:var(--bg-card);padding:var(--space-4);border-radius:var(--radius-md);border:1px solid var(--border-light);}' +
-        '.mcpmon-card-label{font-size:0.85em;color:var(--text-muted);margin-bottom:var(--space-1);}' +
+        '.mcpmon-card-label{font-size:var(--font-size-sm);color:var(--text-muted);margin-bottom:var(--space-1);}' +
         '.mcpmon-card-value{font-size:2em;font-weight:700;}' +
         '.mcpmon-section{margin-top:var(--space-6);}' +
         '.mcpmon-section h2{font-size:1.2em;margin-bottom:var(--space-3);}' +
         '.mcpmon-table{width:100%;border-collapse:collapse;}' +
-        '.mcpmon-table th,.mcpmon-table td{padding:var(--space-2) var(--space-3);border-bottom:1px solid var(--border-light);text-align:left;font-size:0.9em;}' +
+        '.mcpmon-table th,.mcpmon-table td{padding:var(--space-2) var(--space-3);border-bottom:1px solid var(--border-light);text-align:left;font-size:var(--font-size-sm);}' +
         '.mcpmon-trend-bars{display:flex;align-items:flex-end;gap:4px;height:160px;padding:var(--space-3);background:var(--bg-card);border-radius:var(--radius-md);border:1px solid var(--border-light);}' +
         '.mcpmon-trend-bar{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;height:100%;}' +
         '.mcpmon-trend-fill{width:80%;background:var(--accent-indigo,#5078dc);border-radius:2px 2px 0 0;display:flex;flex-direction:column-reverse;min-height:1px;}' +

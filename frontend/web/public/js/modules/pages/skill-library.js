@@ -211,7 +211,7 @@
                 </select>
             </div>
             <!-- GDPR Phase B Fix 5 — 탈퇴 시 manifest 처리 안내 -->
-            <div class="sl-form-group" style="background: var(--surface-secondary, #f7f7f7); padding: 10px 12px; border-radius: 6px; font-size: 0.85em; color: var(--text-muted, #666); line-height: 1.5;">
+            <div class="sl-form-group" style="background: var(--surface-secondary, #f7f7f7); padding: 10px 12px; border-radius: 6px; font-size: var(--font-size-sm); color: var(--text-muted, #666); line-height: 1.5;">
                 <iconify-icon icon=lucide:lightbulb></iconify-icon> <strong>탈퇴 시 안내</strong>: 본인 manifest 는 계정 삭제 시 <code>is_public</code> 이 자동으로 false 처리되어 다른 사용자에게 노출되지 않습니다 (Phase A Fix 1). 운영자가 system manifest 로 publish 한 경우에만 영구 공개됩니다.
             </div>
             <div class="sl-modal-actions">

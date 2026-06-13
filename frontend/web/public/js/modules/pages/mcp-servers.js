@@ -251,19 +251,19 @@ function renderInstances() {
     const metricsHtml = m ? `
         <div class="mcp-metrics-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:var(--space-3);margin-bottom:var(--space-4);">
             <div class="mcp-metric-card" style="background:var(--bg-card);padding:var(--space-3);border-radius:var(--radius-md);border:1px solid var(--border-light);">
-                <div style="font-size:0.85em;color:var(--text-muted);">현재 활성</div>
+                <div style="font-size:var(--font-size-sm);color:var(--text-muted);">현재 활성</div>
                 <div style="font-size:1.8em;font-weight:700;color:${m.currentRunning > 0 ? 'var(--success-bright,#22c55e)' : 'var(--text-muted)'};">${escapeHTML(String(m.currentRunning))}</div>
             </div>
             <div class="mcp-metric-card" style="background:var(--bg-card);padding:var(--space-3);border-radius:var(--radius-md);border:1px solid var(--border-light);">
-                <div style="font-size:0.85em;color:var(--text-muted);">총 spawn</div>
+                <div style="font-size:var(--font-size-sm);color:var(--text-muted);">총 spawn</div>
                 <div style="font-size:1.8em;font-weight:700;">${escapeHTML(String(m.totalSpawned))}</div>
             </div>
             <div class="mcp-metric-card" style="background:var(--bg-card);padding:var(--space-3);border-radius:var(--radius-md);border:1px solid var(--border-light);">
-                <div style="font-size:0.85em;color:var(--text-muted);">24h crash</div>
+                <div style="font-size:var(--font-size-sm);color:var(--text-muted);">24h crash</div>
                 <div style="font-size:1.8em;font-weight:700;color:${m.crashed24h > 0 ? 'var(--danger-bright,#dc2626)' : 'var(--text-muted)'};">${escapeHTML(String(m.crashed24h))}</div>
             </div>
             <div class="mcp-metric-card" style="background:var(--bg-card);padding:var(--space-3);border-radius:var(--radius-md);border:1px solid var(--border-light);">
-                <div style="font-size:0.85em;color:var(--text-muted);">평균 uptime</div>
+                <div style="font-size:var(--font-size-sm);color:var(--text-muted);">평균 uptime</div>
                 <div style="font-size:1.4em;font-weight:600;">${escapeHTML(formatUptime(m.avgUptimeSec))}</div>
             </div>
         </div>
@@ -541,7 +541,7 @@ function getHTML() {
             renderMcpRowHeader('상태', '작업') +
             '<div id="mcp-my-servers-grid" class="mcp-list"><div class="mcp-loading">로딩 중…</div></div>' +
         '</section>' +
-        '<section id="mcp-panel-instances" class="mcp-tab-panel"><div class="mcp-toolbar"><select id="mcp-instance-server-select" class="sl-select"><option value="">서버 선택…</option></select><button class="sl-btn sl-btn-outline sl-btn-sm" id="mcp-refresh-instances">새로고침</button><button class="sl-btn sl-btn-outline sl-btn-sm" id="mcp-health-check-btn" title="running 상태인 instance 의 pid 검증">Health check</button><span style="margin-left:auto;font-size:0.85em;color:var(--text-muted);">15초마다 자동 갱신</span></div><div id="mcp-instances-container"><div class="mcp-empty">서버를 선택하세요.</div></div></section>' +
+        '<section id="mcp-panel-instances" class="mcp-tab-panel"><div class="mcp-toolbar"><select id="mcp-instance-server-select" class="sl-select"><option value="">서버 선택…</option></select><button class="sl-btn sl-btn-outline sl-btn-sm" id="mcp-refresh-instances">새로고침</button><button class="sl-btn sl-btn-outline sl-btn-sm" id="mcp-health-check-btn" title="running 상태인 instance 의 pid 검증">Health check</button><span style="margin-left:auto;font-size:var(--font-size-sm);color:var(--text-muted);">15초마다 자동 갱신</span></div><div id="mcp-instances-container"><div class="mcp-empty">서버를 선택하세요.</div></div></section>' +
         '</div>' +
         '</div>' +
         '<div id="mcp-register-modal" class="sl-modal-overlay" role="dialog" aria-modal="true">' +

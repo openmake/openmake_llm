@@ -215,7 +215,7 @@ function getHTML() {
         '.amc-field{margin-bottom:var(--space-3);}' +
         '.amc-field label{display:block;margin-bottom:var(--space-1);font-weight:var(--font-weight-medium);}' +
         '.amc-field input,.amc-field select,.amc-field textarea{width:100%;padding:var(--space-2);border:1px solid var(--border-light);border-radius:var(--radius-md);background:var(--bg-input);color:var(--text-primary);}' +
-        '.amc-field textarea{min-height:120px;font-family: var(--font-mono);font-size:0.85em;}' +
+        '.amc-field textarea{min-height:120px;font-family: var(--font-mono);font-size:var(--font-size-sm);}' +
         '</style>' +
         '<div class="amc-page">' +
         '<header style="display:flex;justify-content:space-between;align-items:center;margin-bottom:var(--space-4);">' +

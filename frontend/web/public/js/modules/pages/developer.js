@@ -168,7 +168,7 @@ import { getDefaultModelId } from '../models-api.js';
                 '.param-table th { text-align: left; padding: var(--space-3); border-bottom: 1px solid var(--border-medium); color: var(--text-muted); font-weight: 600; }' +
                 '.param-table td { padding: var(--space-3); border-bottom: 1px solid var(--border-light); vertical-align: top; line-height: 1.6; }' +
                 '.param-name { font-family: var(--font-mono); color: var(--accent-primary); font-weight: 600; }' +
-                '.param-type { font-family: var(--font-mono); color: var(--text-muted); font-size: 0.85em; display: block; margin-top: 4px; }' +
+                '.param-type { font-family: var(--font-mono); color: var(--text-muted); font-size: var(--font-size-sm); display: block; margin-top: 4px; }' +
 
                 '.rate-table { width: 100%; border-collapse: separate; border-spacing: 0; border: 1px solid var(--border-light); border-radius: var(--radius-lg); overflow: hidden; margin: var(--space-6) 0; }' +
                 '.rate-table th, .rate-table td { padding: var(--space-3) var(--space-4); text-align: left; border-bottom: 1px solid var(--border-light); }' +

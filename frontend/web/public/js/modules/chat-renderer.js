@@ -230,7 +230,7 @@ function appendToken(token) {
             }
             content.textContent = conclusionText;
             var indicator = document.createElement('div');
-            indicator.style.cssText = 'color: var(--text-muted); font-style: italic; margin-top: 12px; font-size: 0.85em;';
+            indicator.style.cssText = 'color: var(--text-muted); font-style: italic; margin-top: 12px; font-size: var(--font-size-sm);';
             indicator.textContent = '\uC0AC\uACE0 \uACFC\uC815 \uAE30\uB85D \uC911... (' + stepCount + '\uB2E8\uACC4 \uC9C4\uD589)';
             content.appendChild(indicator);
         } else if (streamConclusionIdx !== -1) {
@@ -268,7 +268,7 @@ function appendThinkingToken(token) {
         thinkingEl = document.createElement('details');
         thinkingEl.className = 'thinking-trace';
         thinkingEl.open = false;
-        thinkingEl.innerHTML = '<summary style="cursor:pointer;color:var(--text-muted);font-size:0.85em;margin-bottom:8px;"><iconify-icon icon="lucide:brain"></iconify-icon> \uCD94\uB860 \uACFC\uC815 \uBCF4\uAE30</summary><pre class="thinking-content" style="white-space:pre-wrap;font-size:0.82em;color:var(--text-muted);background:var(--bg-tertiary);padding:12px;border-radius:var(--radius-md);max-height:300px;overflow-y:auto;"></pre>';
+        thinkingEl.innerHTML = '<summary style="cursor:pointer;color:var(--text-muted);font-size:var(--font-size-sm);margin-bottom:8px;"><iconify-icon icon="lucide:brain"></iconify-icon> \uCD94\uB860 \uACFC\uC815 \uBCF4\uAE30</summary><pre class="thinking-content" style="white-space:pre-wrap;font-size:var(--font-size-sm);color:var(--text-muted);background:var(--bg-tertiary);padding:12px;border-radius:var(--radius-md);max-height:300px;overflow-y:auto;"></pre>';
         content.prepend(thinkingEl);
     }
 
