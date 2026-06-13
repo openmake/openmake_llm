@@ -52,7 +52,7 @@
                 ".ma-modal { background:var(--bg-card); border:1px solid var(--border-light); border-radius:var(--radius-lg); width:90%; max-width:680px; max-height:90vh; overflow-y:auto; padding:var(--space-6); }\n" +
                 ".ma-form-group { margin-bottom:var(--space-4); }\n" +
                 ".ma-form-group label { display:block; margin-bottom:var(--space-2); color:var(--text-secondary); font-size:var(--font-size-sm); font-weight:var(--font-weight-semibold); }\n" +
-                ".ma-form-group input, .ma-form-group textarea { width:100%; padding:var(--space-3); background:var(--bg-secondary); border:1px solid var(--border-light); border-radius:var(--radius-md); color:var(--text-primary); font-size:14px; box-sizing:border-box; }\n" +
+                ".ma-form-group input, .ma-form-group textarea { width:100%; padding:var(--space-3); background:var(--bg-secondary); border:1px solid var(--border-light); border-radius:var(--radius-md); color:var(--text-primary); font-size:var(--font-size-sm); box-sizing:border-box; }\n" +
                 ".ma-form-group textarea { min-height:140px; font-family:inherit; resize:vertical; }\n" +
                 ".ma-emoji-picker { display:flex; flex-wrap:wrap; gap:var(--space-2); }\n" +
                 ".ma-emoji-opt { font-size:1.5rem; cursor:pointer; padding:var(--space-1); border-radius:var(--radius-md); border:2px solid transparent; }\n" +

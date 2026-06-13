@@ -114,7 +114,7 @@
         <div class="sl-pane" id="sl-pane-drafts" role="tabpanel">
             <div class="sl-toolbar">
                 <div class="sl-search-group" style="flex:1">
-                    <p style="margin:0;color:var(--text-secondary,#a0a0a0);font-size:0.9rem">
+                    <p style="margin:0;color:var(--text-secondary,#a0a0a0);font-size:var(--font-size-sm)">
                         자연어로 스킬의 목적을 설명하면 AI 가 매니페스트를 자동 작성합니다. 검토 후 승인하면 활성화됩니다.
                     </p>
                 </div>
@@ -150,7 +150,7 @@
             <div class="sl-form-group" id="acGitUrlGroup" style="display:none">
                 <label class="sl-form-label" for="acGitUrl">Git URL <span style="color:var(--danger-color,#ef4444)">*</span></label>
                 <input type="text" id="acGitUrl" class="sl-form-input" placeholder="https://github.com/owner/repo 또는 owner/repo" maxlength="500">
-                <small style="color:var(--text-secondary);font-size:0.8rem">GitHub public repo. private/rate-limit 우회: 아래 access token 옵션</small>
+                <small style="color:var(--text-secondary);font-size:var(--font-size-xs)">GitHub public repo. private/rate-limit 우회: 아래 access token 옵션</small>
             </div>
             <div class="sl-form-group" id="acGitPathGroup" style="display:none">
                 <label class="sl-form-label" for="acGitPath">파일 경로 (선택)</label>
@@ -159,12 +159,12 @@
             <div class="sl-form-group" id="acGitTokenGroup" style="display:none">
                 <label class="sl-form-label" for="acGitToken">GitHub access token (선택)</label>
                 <input type="password" id="acGitToken" class="sl-form-input" placeholder="ghp_..." maxlength="200">
-                <small style="color:var(--text-secondary);font-size:0.8rem">요청 한정, DB 미저장</small>
+                <small style="color:var(--text-secondary);font-size:var(--font-size-xs)">요청 한정, DB 미저장</small>
             </div>
             <div class="sl-form-group">
                 <label class="sl-form-label" for="acPurpose">목적 / 역할 <span style="color:var(--danger-color,#ef4444)">*</span></label>
                 <textarea id="acPurpose" class="sl-form-textarea" rows="2" placeholder="예: 한국 의료법 자문 — 의료기기법·약사법·임상시험 규정에 답변" maxlength="500"></textarea>
-                <small style="color:var(--text-secondary);font-size:0.8rem">5~500자. 만들고자 하는 스킬이 어떤 일을 해야 하는지.</small>
+                <small style="color:var(--text-secondary);font-size:var(--font-size-xs)">5~500자. 만들고자 하는 스킬이 어떤 일을 해야 하는지.</small>
             </div>
             <div class="sl-form-group">
                 <label class="sl-form-label" for="acCategory">카테고리 (선택)</label>
@@ -862,10 +862,10 @@
                     <div class="skill-row-main">
                         <h3 class="skill-row-title" title="${esc(d.name)}">${esc(d.name)}</h3>
                         <p class="skill-row-desc" title="${esc(d.description || '')}">${esc(d.description || '설명 없음')}</p>
-                        ${promptText ? `<small style="display:block;margin-top:0.3rem;color:var(--text-secondary,#a0a0a0);font-size:0.75rem">요청: ${esc(promptText.slice(0,120))}${promptText.length > 120 ? '…' : ''}</small>` : ''}
+                        ${promptText ? `<small style="display:block;margin-top:0.3rem;color:var(--text-secondary,#a0a0a0);font-size:var(--font-size-xs)">요청: ${esc(promptText.slice(0,120))}${promptText.length > 120 ? '…' : ''}</small>` : ''}
                         ${triggers ? `<div style="margin-top:0.3rem">${triggers}</div>` : ''}
                     </div>
-                    <div class="skill-row-side" style="font-size:0.78rem;color:var(--text-secondary,#a0a0a0)">
+                    <div class="skill-row-side" style="font-size:var(--font-size-xs);color:var(--text-secondary,#a0a0a0)">
                         <div>모델: ${model}</div>
                         <div>토큰: ${esc(String(tokens))}</div>
                         <div>${esc(createdAt)}</div>

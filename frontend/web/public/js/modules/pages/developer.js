@@ -149,7 +149,7 @@ import { getDefaultModelId } from '../models-api.js';
                 '.code-tab:hover { color: #fff; }' +
                 '.code-tab.active { color: var(--accent-primary); border-bottom: 2px solid var(--accent-primary); font-weight: 500; color: #fff; }' +
                 '.code-content-wrapper { position: relative; }' +
-                '.code-content { display: none; padding: var(--space-5); overflow-x: auto; font-family: var(--font-mono); font-size: 0.9rem; line-height: 1.5; color: #d4d4d4; }' +
+                '.code-content { display: none; padding: var(--space-5); overflow-x: auto; font-family: var(--font-mono); font-size: var(--font-size-sm); line-height: 1.5; color: #d4d4d4; }' +
                 '.code-content.active { display: block; }' +
                 '.copy-btn { position: absolute; top: var(--space-2); right: var(--space-2); background: var(--bg-tertiary); border: 1px solid var(--border-light); color: #ccc; padding: 4px 10px; border-radius: var(--radius-sm); cursor: pointer; font-size: var(--font-size-xs); opacity: 0; transition: all 0.2s; }' +
                 '.code-group:hover .copy-btn { opacity: 1; }' +

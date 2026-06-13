@@ -313,7 +313,7 @@ function openRegisterModal(templateId) {
 function renderTemplateFields(template) {
     const req = (isReq) => isReq ? ' <span style="color:var(--danger,#ef4444);">*</span>' : '';
     const hint = (text) => text
-        ? `<small style="display:block;color:var(--text-muted);font-size:0.75rem;margin:-0.2rem 0 0.4rem;line-height:1.4;">${text}</small>`
+        ? `<small style="display:block;color:var(--text-muted);font-size:var(--font-size-xs);margin:-0.2rem 0 0.4rem;line-height:1.4;">${text}</small>`
         : '';
 
     let html = `
@@ -354,7 +354,7 @@ function renderTemplateFields(template) {
         const isSecret = prop.secret === true;
         const inputType = isSecret ? 'password' : 'text';
         const placeholder = isSecret ? 'placeholder="(비밀)"' : '';
-        const lockIcon = isSecret ? ' <span class="iconify" data-icon="lucide:lock" style="font-size:0.75rem;vertical-align:middle;color:var(--text-muted);"></span>' : '';
+        const lockIcon = isSecret ? ' <span class="iconify" data-icon="lucide:lock" style="font-size:var(--font-size-xs);vertical-align:middle;color:var(--text-muted);"></span>' : '';
         html += `
             <div class="sl-form-group">
                 <label class="sl-form-label" for="mcp-env-${safeKey}">${title}${req(isReq)}${lockIcon}</label>
@@ -489,7 +489,7 @@ function getHTML() {
         '<style data-spa-style="mcp-servers">' +
         '.mcp-page-spa{width:100%;}' + /* 전체 폭 — settings·skill-library 와 가로 폭 일치 (2026-06-07) */
         '.mcp-page-spa .mcp-tabs{display:flex;gap:0;margin:0 var(--space-5,1.25rem);border-bottom:1px solid var(--border-color);}' +
-        '.mcp-page-spa .mcp-tab{padding:.75rem 1.25rem;background:transparent;border:none;border-bottom:2px solid transparent;cursor:pointer;color:var(--text-secondary);font-weight:500;font-size:.9rem;}' +
+        '.mcp-page-spa .mcp-tab{padding:.75rem 1.25rem;background:transparent;border:none;border-bottom:2px solid transparent;cursor:pointer;color:var(--text-secondary);font-weight:500;font-size:var(--font-size-sm);}' +
         '.mcp-page-spa .mcp-tab:hover{color:var(--text-primary);}' +
         '.mcp-page-spa .mcp-tab.active{color:var(--accent-primary);border-bottom-color:var(--accent-primary);font-weight:var(--font-weight-semibold);}' +
         '.mcp-page-spa .mcp-tab-panel{display:none;}' +
@@ -499,11 +499,11 @@ function getHTML() {
         '.mcp-page-spa .mcp-row-side{flex-basis:190px;min-width:0;}' +
         '.mcp-page-spa .mcp-row-actions{flex-basis:180px;gap:.4rem;flex-wrap:wrap;align-content:center;}' +
         '.mcp-page-spa .mcp-row-actions .sl-btn{white-space:nowrap;}' +
-        '.mcp-page-spa .mcp-inline-code{max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-secondary);font-size:.76rem;}' +
+        '.mcp-page-spa .mcp-inline-code{max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-secondary);font-size:var(--font-size-xs);}' +
         '.mcp-page-spa .mcp-toolbar{display:flex;gap:var(--space-2);align-items:center;flex-wrap:wrap;margin-bottom:var(--space-4);}' +
         '.mcp-page-spa .mcp-btn-danger{background:transparent;color:var(--danger);border:1px solid var(--danger);}' +
         '.mcp-page-spa .mcp-empty,.mcp-page-spa .mcp-loading{padding:3rem;text-align:center;color:var(--text-secondary);}' +
-        '.mcp-page-spa .badge{display:inline-flex;align-items:center;width:max-content;padding:.15rem .5rem;border-radius:999px;border:1px solid var(--border-light);font-size:.7rem;font-weight:var(--font-weight-semibold);line-height:1.35;}' +
+        '.mcp-page-spa .badge{display:inline-flex;align-items:center;width:max-content;padding:.15rem .5rem;border-radius:999px;border:1px solid var(--border-light);font-size:var(--font-size-xs);font-weight:var(--font-weight-semibold);line-height:1.35;}' +
         '.mcp-page-spa .badge-tier-free,.mcp-page-spa .badge-vis-private,.mcp-page-spa .badge-status-stopped,.mcp-page-spa .badge-cat{background:var(--bg-tertiary);color:var(--text-secondary);}' +
         '.mcp-page-spa .badge-tier-pro{background:rgba(var(--primary-rgb,80,120,220),.12);color:var(--accent-primary);border-color:var(--accent-primary);}' +
         '.mcp-page-spa .badge-tier-enterprise,.mcp-page-spa .badge-status-starting{background:var(--warning-light);color:var(--warning);border-color:var(--warning);}' +
@@ -515,7 +515,7 @@ function getHTML() {
         '.mcp-page-spa .mcp-instance-table th{background:var(--bg-secondary);color:var(--text-secondary);font-weight:var(--font-weight-semibold);}' +
         /* 모달은 skill-library.css 의 .sl-modal-overlay/.sl-modal/.sl-form-* 재사용 — 추가 inline CSS 불필요 */
         '.mcp-page-spa .sl-modal h2 .iconify{font-size:1.05em;vertical-align:-2px;margin-right:.35rem;color:var(--accent-primary);}' +
-        '.mcp-page-spa .sl-modal code{background:var(--bg-secondary);padding:.1rem .35rem;border-radius:var(--radius-sm,4px);font-size:.78rem;color:var(--text-secondary);}' +
+        '.mcp-page-spa .sl-modal code{background:var(--bg-secondary);padding:.1rem .35rem;border-radius:var(--radius-sm,4px);font-size:var(--font-size-xs);color:var(--text-secondary);}' +
         '.mcp-page-spa .sl-modal .sl-form-input:focus,.mcp-page-spa .sl-modal .sl-form-select:focus,.mcp-page-spa .sl-modal .sl-form-textarea:focus{outline:none;border-color:var(--accent-primary);}' +
         '@media (max-width:720px){.mcp-page-spa .mcp-row-actions{flex-basis:auto;justify-content:flex-start}.mcp-page-spa .mcp-row-side{flex-basis:auto}.mcp-page-spa .mcp-row-meta{flex-basis:auto}}' +
         '</style>' +
@@ -547,7 +547,7 @@ function getHTML() {
         '<div id="mcp-register-modal" class="sl-modal-overlay" role="dialog" aria-modal="true">' +
             '<div class="sl-modal">' +
                 '<h2 id="mcp-modal-title"><span class="iconify" data-icon="lucide:plug"></span>서버 등록</h2>' +
-                '<p id="mcp-modal-desc" style="color:var(--text-muted);margin:-0.75rem 0 1.25rem;font-size:.85rem;line-height:1.5;"></p>' +
+                '<p id="mcp-modal-desc" style="color:var(--text-muted);margin:-0.75rem 0 1.25rem;font-size:var(--font-size-sm);line-height:1.5;"></p>' +
                 '<div id="mcp-modal-fields"></div>' +
                 '<div class="sl-modal-actions">' +
                     '<button type="button" class="sl-btn sl-btn-secondary" data-close-mcp-modal>취소</button>' +
@@ -558,7 +558,7 @@ function getHTML() {
         '<div id="mcp-import-modal" class="sl-modal-overlay" role="dialog" aria-modal="true">' +
             '<div class="sl-modal">' +
                 '<h2><span class="iconify" data-icon="lucide:git-branch"></span>Git URL 에서 MCP server 가져오기</h2>' +
-                '<p style="color:var(--text-muted);margin:-0.75rem 0 1.25rem;font-size:.85rem;line-height:1.5;">저장소의 <code>MCPSERVER.md</code> 매니페스트를 fetch → 검증 → draft 로 저장합니다. 승인 전까지 spawn 되지 않습니다.</p>' +
+                '<p style="color:var(--text-muted);margin:-0.75rem 0 1.25rem;font-size:var(--font-size-sm);line-height:1.5;">저장소의 <code>MCPSERVER.md</code> 매니페스트를 fetch → 검증 → draft 로 저장합니다. 승인 전까지 spawn 되지 않습니다.</p>' +
                 '<div class="sl-form-group">' +
                     '<label class="sl-form-label" for="mcp-import-git-url">Git URL <span style="color:var(--danger,#ef4444);">*</span></label>' +
                     '<input class="sl-form-input" id="mcp-import-git-url" type="text" placeholder="https://github.com/owner/repo 또는 owner/repo">' +

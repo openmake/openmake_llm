@@ -275,7 +275,7 @@ function renderDropdown() {
                     ? (m.unavailableReason || 'unavailable')
                     : '';
                 const badge = unavailable
-                    ? ' <span style="opacity:0.6;font-size:0.8em;">🔴 ' + escText(reason) + '</span>'
+                    ? ' <span style="opacity:0.6;font-size:var(--font-size-xs);">🔴 ' + escText(reason) + '</span>'
                     : '';
                 const tooltip = unavailable
                     ? ' title="현재 사용 불가: ' + escAttr(reason) + '"'
@@ -319,13 +319,13 @@ function renderDropdown() {
 
     if (_isAuthenticated && !hasExternal && !registeredButMissing) {
         html =
-            '<div style="padding:8px 12px;font-size:11px;color:var(--text-muted);background:var(--bg-tertiary);border-bottom:1px solid var(--border-light);line-height:1.5">' +
+            '<div style="padding:8px 12px;font-size:var(--font-size-xs);color:var(--text-muted);background:var(--bg-tertiary);border-bottom:1px solid var(--border-light);line-height:1.5">' +
             '<iconify-icon icon=lucide:lightbulb></iconify-icon> 외부 LLM 사용 — 아래 <b>"+ 새 LLM 키 등록"</b>에서 OpenRouter 키 입력 시 모델이 위쪽에 자동 추가됩니다.' +
             '</div>' + html;
     } else if (registeredButMissing) {
         const registered = _providers.filter(p => p.user_key).map(p => p.provider_id).join(', ');
         html =
-            '<div style="padding:10px 12px;font-size:11px;color:var(--danger);background:rgba(220,38,38,0.08);border-bottom:1px solid var(--border-light);line-height:1.5">' +
+            '<div style="padding:10px 12px;font-size:var(--font-size-xs);color:var(--danger);background:rgba(220,38,38,0.08);border-bottom:1px solid var(--border-light);line-height:1.5">' +
             '<iconify-icon icon=lucide:triangle-alert></iconify-icon> 등록된 키 [<b>' + escText(registered) + '</b>]가 있지만 모델 합산 실패. ' +
             '<br>운영자 조치: <code>pm2 restart openmake-api</code> + ' +
             '<code>DELETE FROM external_provider_models_cache</code>' +

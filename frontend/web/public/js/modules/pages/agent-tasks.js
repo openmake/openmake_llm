@@ -486,7 +486,7 @@
                 '.page-agent-tasks .loading { text-align:center; padding:var(--space-6); color:var(--text-muted); }' +
                 '.page-agent-tasks .skill-scope { margin:calc(-1 * var(--space-2)) 0 var(--space-4); }' +
                 '.page-agent-tasks .skill-scope-label { display:flex; align-items:center; gap:6px; font-size:var(--font-size-sm); color:var(--text-secondary); margin-bottom:var(--space-2); }' +
-                '.page-agent-tasks .skill-scope-label span { color:var(--text-muted); font-size:12px; font-weight:400; }' +
+                '.page-agent-tasks .skill-scope-label span { color:var(--text-muted); font-size:var(--font-size-xs); font-weight:400; }' +
                 '.page-agent-tasks .skill-scope-chips { display:flex; flex-wrap:wrap; gap:var(--space-2); }' +
                 '.page-agent-tasks .skill-chip { padding:4px 12px; background:var(--bg-tertiary); border:1px solid var(--border-light); border-radius:var(--radius-md); color:var(--text-secondary); font-size:var(--font-size-sm); cursor:pointer; transition:all .15s; }' +
                 '.page-agent-tasks .skill-chip:hover { border-color:var(--accent-primary); }' +

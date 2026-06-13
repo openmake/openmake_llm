@@ -327,7 +327,7 @@
                             '</div>' +
                         '</div>' +
                         '<div class="ak-key-value-row">' +
-                            '<span style="color:var(--text-muted); font-size:12px;">TOKEN</span>' +
+                            '<span style="color:var(--text-muted); font-size:var(--font-size-xs);">TOKEN</span>' +
                             '<span class="ak-key-value">' + esc(prefix) + '****************' + esc(last4) + '</span>' +
                             '<button class="ak-btn ak-btn-secondary ak-btn-icon" data-action="copy" data-copy-text="' + esc(prefix) + '...' + esc(last4) + '" title="복사" style="margin-left:auto;"><iconify-icon icon=lucide:copy></iconify-icon></button>' +
                         '</div>' +
