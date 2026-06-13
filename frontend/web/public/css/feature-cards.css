@@ -58,14 +58,14 @@
 }
 
 .feature-title {
-    font-size: 0.95rem;
+    font-size: var(--font-size-base);
     font-weight: 700;
     color: var(--text-primary);
     margin-bottom: 4px;
 }
 
 .feature-desc {
-    font-size: 0.8rem;
+    font-size: var(--font-size-xs);
     color: var(--text-muted);
     margin-bottom: 12px;
     font-weight: 500;
@@ -76,7 +76,7 @@
     border: var(--border-width) solid var(--border-medium);
     border-radius: var(--radius-full);
     padding: 8px 16px;
-    font-size: 0.8rem;
+    font-size: var(--font-size-xs);
     font-weight: 700;
     color: var(--text-primary);
     cursor: pointer;
@@ -109,11 +109,11 @@
     }
 
     .feature-title {
-        font-size: 0.85rem;
+        font-size: var(--font-size-sm);
     }
 
     .feature-desc {
-        font-size: 0.75rem;
+        font-size: var(--font-size-xs);
     }
 }
 

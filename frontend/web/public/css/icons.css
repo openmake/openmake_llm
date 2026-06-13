@@ -15,14 +15,14 @@ iconify-icon {
     justify-content: center;
     vertical-align: middle;
     line-height: 1;
-    font-size: 20px;
+    font-size: var(--font-size-xl);
     width: 20px;
     height: 20px;
 }
 
 /* Action Button Icons (채팅 입력창 하단 버튼) */
 .action-btn iconify-icon {
-    font-size: 20px;
+    font-size: var(--font-size-xl);
     width: 20px;
     height: 20px;
 }
@@ -32,28 +32,28 @@ iconify-icon {
    ========================================== */
 .icon-xs,
 iconify-icon.icon-xs {
-    font-size: 14px;
+    font-size: var(--font-size-sm);
     width: 14px;
     height: 14px;
 }
 
 .icon-sm,
 iconify-icon.icon-sm {
-    font-size: 16px;
+    font-size: var(--font-size-base);
     width: 16px;
     height: 16px;
 }
 
 .icon-md,
 iconify-icon.icon-md {
-    font-size: 20px;
+    font-size: var(--font-size-xl);
     width: 20px;
     height: 20px;
 }
 
 .icon-lg,
 iconify-icon.icon-lg {
-    font-size: 24px;
+    font-size: var(--font-size-2xl);
     width: 24px;
     height: 24px;
 }
@@ -164,7 +164,7 @@ iconify-icon.icon-2xl {
     justify-content: center;
     width: 24px;
     height: 24px;
-    font-size: 18px;
+    font-size: var(--font-size-lg);
     flex-shrink: 0;
     transition: transform var(--transition-fast);
 }

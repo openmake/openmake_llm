@@ -14,7 +14,7 @@
     flex-shrink: 0;
 }
 .sl-header h1 {
-    font-size: 1.5rem;
+    font-size: var(--font-size-2xl);
     font-weight: 600;
     color: var(--text-primary, #fff);
     margin: 0 0 var(--space-2, 0.5rem);
@@ -25,7 +25,7 @@
 .sl-header p {
     color: var(--text-secondary, #94a3b8);
     margin-bottom: var(--space-3, 0.75rem);
-    font-size: 0.875rem;
+    font-size: var(--font-size-sm);
 }
 
 /* Tabs */
@@ -43,7 +43,7 @@
     border-bottom: 2px solid transparent;
     background: transparent;
     font-weight: 500;
-    font-size: 0.9rem;
+    font-size: var(--font-size-sm);
     transition: color 0.15s, border-color 0.15s;
 }
 .sl-tab:hover { color: var(--text-primary, #fff); }
@@ -88,7 +88,7 @@
     left: 0.75rem;
     color: var(--text-secondary, #94a3b8);
     pointer-events: none;
-    font-size: 0.875rem;
+    font-size: var(--font-size-sm);
 }
 .sl-input {
     width: 100%;
@@ -97,7 +97,7 @@
     border: 1px solid var(--border-light, #334155);
     border-radius: var(--radius-md, 6px);
     color: var(--text-primary, #fff);
-    font-size: 0.875rem;
+    font-size: var(--font-size-sm);
     box-sizing: border-box;
 }
 .sl-input::placeholder { color: var(--text-muted, #64748b); }
@@ -108,7 +108,7 @@
     border: 1px solid var(--border-light, #334155);
     border-radius: var(--radius-md, 6px);
     color: var(--text-primary, #fff);
-    font-size: 0.875rem;
+    font-size: var(--font-size-sm);
 }
 .sl-select:focus { outline: none; border-color: var(--accent-primary, #3b82f6); }
 
@@ -116,7 +116,7 @@
 .sl-btn {
     padding: 0.5rem 1rem;
     border-radius: var(--radius-md, 6px);
-    font-size: 0.875rem;
+    font-size: var(--font-size-sm);
     font-weight: 500;
     cursor: pointer;
     border: none;
@@ -130,7 +130,7 @@
 .sl-btn-secondary { background: var(--bg-tertiary, #2d3748); color: var(--text-primary, #fff); }
 .sl-btn-outline { background: transparent; color: var(--text-secondary, #94a3b8); border: 1px solid var(--border-light, #334155); }
 .sl-btn-outline:hover { color: var(--text-primary, #fff); border-color: var(--text-secondary, #94a3b8); }
-.sl-btn-sm { padding: 0.35rem 0.75rem; font-size: 0.8rem; }
+.sl-btn-sm { padding: 0.35rem 0.75rem; font-size: var(--font-size-xs); }
 
 /* List (가로 row 기반 — 카드 그리드에서 전환 2026-05-21) */
 .skill-grid {
@@ -169,7 +169,7 @@
 .skill-row-header {
     background-color: var(--bg-secondary);
     color: var(--text-muted);
-    font-size: 0.75rem;
+    font-size: var(--font-size-xs);
     font-weight: var(--font-weight-semibold, 600);
     text-transform: uppercase;
     letter-spacing: 0.04em;
@@ -196,7 +196,7 @@
     gap: 0.15rem;
 }
 .skill-row-title {
-    font-size: 0.95rem;
+    font-size: var(--font-size-base);
     font-weight: 600;
     color: var(--text-primary);
     margin: 0;
@@ -206,7 +206,7 @@
 }
 .skill-row-desc {
     color: var(--text-secondary);
-    font-size: 0.8rem;
+    font-size: var(--font-size-xs);
     line-height: 1.4;
     margin: 0;
     overflow: hidden;
@@ -220,7 +220,7 @@
 }
 .skill-row-date {
     color: var(--text-muted);
-    font-size: 0.75rem;
+    font-size: var(--font-size-xs);
     white-space: nowrap;
 }
 .skill-row-actions {
@@ -261,7 +261,7 @@
     margin-bottom: 0.5rem;
 }
 .skill-card-badge {
-    font-size: 0.75rem;
+    font-size: var(--font-size-xs);
     padding: 0.2rem 0.5rem;
     border-radius: 1rem;
     background: rgba(59,130,246,0.1);
@@ -279,7 +279,7 @@
     cursor: pointer;
     padding: 0.2rem 0.4rem;
     border-radius: 4px;
-    font-size: 1.1rem;
+    font-size: var(--font-size-lg);
     line-height: 1;
 }
 .skill-card-menu-btn:hover { background: var(--bg-tertiary, #2d3748); }
@@ -303,7 +303,7 @@
     padding: 0.5rem 0.75rem;
     color: var(--text-primary, #fff);
     text-decoration: none;
-    font-size: 0.875rem;
+    font-size: var(--font-size-sm);
 }
 .skill-card-dropdown a:hover { background: var(--bg-tertiary, #2d3748); }
 .skill-card-dropdown a.danger { color: var(--danger); }
@@ -313,7 +313,7 @@
     border-top: 1px solid var(--border-color, #334155);
 }
 .skill-card-title {
-    font-size: 1rem;
+    font-size: var(--font-size-base);
     font-weight: 600;
     color: var(--text-primary, #fff);
     margin-bottom: 0.4rem;
@@ -323,7 +323,7 @@
 }
 .skill-card-desc {
     color: var(--text-secondary, #94a3b8);
-    font-size: 0.8rem;
+    font-size: var(--font-size-xs);
     line-height: 1.5;
     flex-grow: 1;
     display: -webkit-box;
@@ -340,7 +340,7 @@
     padding-top: 0.75rem;
     margin-top: auto;
 }
-.skill-card-footer small { color: var(--text-muted, #64748b); font-size: 0.75rem; }
+.skill-card-footer small { color: var(--text-muted, #64748b); font-size: var(--font-size-xs); }
 .sl-badge {
     font-size: var(--font-size-xs);
     padding: 0.15rem 0.5rem;
@@ -383,7 +383,7 @@
     border-radius: var(--radius-md, 6px);
     color: var(--text-secondary, #94a3b8);
     cursor: pointer;
-    font-size: 0.8rem;
+    font-size: var(--font-size-xs);
 }
 .sl-page-btn:hover { border-color: var(--accent-primary, #3b82f6); color: var(--text-primary, #fff); }
 .sl-page-btn.active { background: var(--accent-primary, #3b82f6); border-color: var(--accent-primary, #3b82f6); color: #fff; }
@@ -403,7 +403,7 @@
     padding: 3rem;
     color: var(--text-secondary, #94a3b8);
     width: 100%;
-    font-size: 0.9rem;
+    font-size: var(--font-size-sm);
 }
 .sl-error {
     padding: 1rem 1.25rem;
@@ -411,7 +411,7 @@
     border: 1px solid rgba(248,113,113,0.25);
     border-radius: 0.5rem;
     color: var(--danger, #f87171);
-    font-size: 0.875rem;
+    font-size: var(--font-size-sm);
     width: 100%;
     box-sizing: border-box;
 }
@@ -447,9 +447,9 @@
     max-height: 90vh;
     overflow-y: auto;
 }
-.sl-modal h2 { margin: 0 0 1.25rem; font-size: 1.1rem; font-weight: 600; color: var(--text-primary, #fff); }
+.sl-modal h2 { margin: 0 0 1.25rem; font-size: var(--font-size-lg); font-weight: 600; color: var(--text-primary, #fff); }
 .sl-modal .sl-form-group { margin-bottom: 1rem; }
-.sl-modal .sl-form-label { display: block; font-size: 0.82rem; font-weight: 500; color: var(--text-secondary, #94a3b8); margin-bottom: 0.4rem; }
+.sl-modal .sl-form-label { display: block; font-size: var(--font-size-sm); font-weight: 500; color: var(--text-secondary, #94a3b8); margin-bottom: 0.4rem; }
 .sl-modal .sl-form-input,
 .sl-modal .sl-form-textarea,
 .sl-modal .sl-form-select {
@@ -458,11 +458,11 @@
     border-radius: var(--radius-md, 6px);
     padding: 0.5rem 0.75rem;
     color: var(--text-primary, #fff);
-    font-size: 0.875rem;
+    font-size: var(--font-size-sm);
     box-sizing: border-box;
 }
 .sl-modal .sl-form-textarea { resize: vertical; }
-.sl-modal .sl-form-textarea.mono { font-family: var(--font-mono); font-size: 0.82rem; }
+.sl-modal .sl-form-textarea.mono { font-family: var(--font-mono); font-size: var(--font-size-sm); }
 .sl-modal-actions {
     display: flex; gap: 0.75rem; justify-content: flex-end;
     margin-top: 1.25rem; padding-top: 1rem;
@@ -518,15 +518,15 @@
     border-color: rgba(148, 163, 184, 0.25);
 }
 .skill-draft-card__title {
-    margin: 0 0 0.3rem; font-size: 1rem; font-weight: 600;
+    margin: 0 0 0.3rem; font-size: var(--font-size-base); font-weight: 600;
     color: var(--text-primary, #fff);
 }
 .skill-draft-card__desc {
-    margin: 0 0 0.5rem; font-size: 0.85rem; line-height: 1.5;
+    margin: 0 0 0.5rem; font-size: var(--font-size-sm); line-height: 1.5;
     color: var(--text-secondary, #94a3b8);
 }
 .skill-draft-card__meta {
-    font-size: 0.75rem; color: var(--text-secondary, #94a3b8);
+    font-size: var(--font-size-xs); color: var(--text-secondary, #94a3b8);
     margin-bottom: 0.5rem;
 }
 .skill-draft-card__triggers {
@@ -534,7 +534,7 @@
     margin: 0.5rem 0;
 }
 .skill-draft-card__preview {
-    margin: 0.5rem 0; font-size: 0.8rem;
+    margin: 0.5rem 0; font-size: var(--font-size-xs);
 }
 .skill-draft-card__preview summary {
     cursor: pointer; color: var(--accent-primary, #ff6a3d);
@@ -547,7 +547,7 @@
     border-radius: var(--radius-md, 6px);
     padding: 0.5rem 0.75rem;
     font-family: var(--font-mono);
-    font-size: 0.78rem; line-height: 1.5;
+    font-size: var(--font-size-xs); line-height: 1.5;
     color: var(--text-primary, #f1f5f9);
     white-space: pre-wrap; word-break: break-word;
     margin-top: 0.4rem;
@@ -559,5 +559,5 @@
     border-top: 1px dashed var(--border-color, #334155);
 }
 .skill-draft-card__actions .sl-btn-sm {
-    font-size: 0.78rem; padding: 0.3rem 0.7rem;
+    font-size: var(--font-size-xs); padding: 0.3rem 0.7rem;
 }
