@@ -51,7 +51,7 @@
                 ".form-group { margin-bottom:var(--space-4); }\n" +
                 ".form-group label { display:block; margin-bottom:var(--space-2); color:var(--text-secondary); font-size:var(--font-size-sm); font-weight:var(--font-weight-semibold); }\n" +
                 ".form-group input, .form-group textarea { width:100%; padding:var(--space-3); background:var(--bg-secondary); border:1px solid var(--border-light); border-radius:var(--radius-md); color:var(--text-primary); font-size:14px; box-sizing:border-box; }\n" +
-                ".form-group textarea { min-height:160px; font-family:'Courier New',monospace; resize:vertical; }\n" +
+                ".form-group textarea { min-height:160px; font-family: var(--font-mono); resize:vertical; }\n" +
                 ".form-group textarea[readonly], .form-group input[readonly] { background:var(--bg-tertiary); color:var(--text-secondary); cursor:default; }\n" +
                 ".modal-actions { display:flex; gap:var(--space-3); justify-content:flex-end; margin-top:var(--space-5); flex-wrap:wrap; }\n" +
                 ".modal-actions button { padding:var(--space-2) var(--space-4); border:none; border-radius:var(--radius-md); cursor:pointer; font-weight:var(--font-weight-semibold); }\n" +

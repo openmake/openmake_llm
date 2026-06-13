@@ -462,7 +462,7 @@
     box-sizing: border-box;
 }
 .sl-modal .sl-form-textarea { resize: vertical; }
-.sl-modal .sl-form-textarea.mono { font-family: monospace; font-size: 0.82rem; }
+.sl-modal .sl-form-textarea.mono { font-family: var(--font-mono); font-size: 0.82rem; }
 .sl-modal-actions {
     display: flex; gap: 0.75rem; justify-content: flex-end;
     margin-top: 1.25rem; padding-top: 1rem;
@@ -546,7 +546,7 @@
     border: 1px solid var(--border-color, #334155);
     border-radius: var(--radius-md, 6px);
     padding: 0.5rem 0.75rem;
-    font-family: ui-monospace, 'SF Mono', Monaco, monospace;
+    font-family: var(--font-mono);
     font-size: 0.78rem; line-height: 1.5;
     color: var(--text-primary, #f1f5f9);
     white-space: pre-wrap; word-break: break-word;

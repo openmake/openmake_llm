@@ -154,7 +154,7 @@
     box-sizing: border-box;
     margin-top: 4px;
 }
-.ek-modal-box-body input[type="password"] { font-family: monospace; }
+.ek-modal-box-body input[type="password"] { font-family: var(--font-mono); }
 .ek-modal-box-footer {
     padding: var(--space-4) var(--space-5);
     border-top: 1px solid var(--border-light);
@@ -243,7 +243,7 @@
     font-size: var(--font-size-xs);
     color: var(--text-muted);
     white-space: nowrap;
-    font-family: ui-monospace, SFMono-Regular, monospace;
+    font-family: var(--font-mono);
 }
 
 /* OpenRouter 카드 — dropdown 안에서 모달 진입점 (전체 367 모델은 모달에서) */
@@ -336,7 +336,7 @@
 .mlm-row .check { color: var(--accent-indigo, #5078dc); margin-right: 4px; }
 .mlm-row-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mlm-row-id {
-    font-family: ui-monospace, SFMono-Regular, monospace;
+    font-family: var(--font-mono);
     font-size: var(--font-size-xs); color: var(--text-muted);
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 220px;
 }

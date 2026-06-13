@@ -104,7 +104,7 @@
         '.ak-key-name { font-size: var(--font-size-lg); font-weight: var(--font-weight-bold); color: var(--text-primary); margin-bottom: var(--space-1); }' +
         '.ak-key-meta { display: flex; gap: var(--space-3); font-size: var(--font-size-xs); color: var(--text-secondary); align-items: center; flex-wrap: wrap; }' +
         '.ak-key-value-row { display: flex; align-items: center; gap: var(--space-3); margin-top: var(--space-3); background: var(--bg-tertiary); padding: var(--space-3); border-radius: var(--radius-md); }' +
-        '.ak-key-value { font-family: monospace; color: var(--text-primary); font-size: var(--font-size-sm); letter-spacing: 0.5px; }' +
+        '.ak-key-value { font-family: var(--font-mono); color: var(--text-primary); font-size: var(--font-size-sm); letter-spacing: 0.5px; }' +
         '.ak-badge { padding: 2px 8px; border-radius: 12px; font-size: var(--font-size-xs); text-transform: uppercase; font-weight: bold; letter-spacing: 0.5px; }' +
         '.ak-badge-active { background: var(--bg-tertiary); color: var(--accent-cyan); border: 1px solid var(--accent-cyan); }' +
         '.ak-badge-inactive { background: var(--bg-tertiary); color: var(--text-muted); border: 1px solid var(--text-muted); }' +
@@ -117,7 +117,7 @@
         // Code Block
         '.ak-code-block {' +
             'background: #1e1e1e; padding: var(--space-4); border-radius: var(--radius-md);' +
-            'font-family: monospace; color: #d4d4d4; font-size: var(--font-size-xs); overflow-x: auto;' +
+            'font-family: var(--font-mono); color: #d4d4d4; font-size: var(--font-size-xs); overflow-x: auto;' +
             'border: 1px solid var(--glass-border); line-height: 1.5;' +
         '}' +
         '.ak-code-comment { color: #6a9955; }' +
@@ -142,7 +142,7 @@
         '.ak-warning-text { color: var(--warning); font-size: var(--font-size-sm); margin-bottom: var(--space-4); text-align: center; display: flex; align-items: center; justify-content: center; gap: var(--space-2); }' +
         '.ak-full-key-display {' +
             'background: black; border: 1px solid var(--border-light); padding: var(--space-4); border-radius: var(--radius-md);' +
-            'font-family: monospace; color: var(--success); font-size: var(--font-size-lg); word-break: break-all;' +
+            'font-family: var(--font-mono); color: var(--success); font-size: var(--font-size-lg); word-break: break-all;' +
             'margin-bottom: var(--space-6); text-align: center; user-select: all;' +
         '}' +
 
