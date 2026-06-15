@@ -26,10 +26,10 @@
     {
       "type": "analysis",
       "patterns": [
-        { "source": "\\b(분석|분석해|analyze|analysis)\\b", "flags": "i" },
-        { "source": "\\b(통계|데이터|차트|그래프|추세|패턴)\\b", "flags": "i" },
-        { "source": "\\b(비교|장단점|pros|cons|compare)\\b", "flags": "i" },
-        { "source": "\\b(어떻게\\s*생각|왜\\s*그런|이유가|원인이)\\b", "flags": "" },
+        { "source": "(분석|분석해|\\banalyze\\b|\\banalysis\\b)", "flags": "i" },
+        { "source": "(통계|데이터|차트|그래프|추세|패턴)", "flags": "i" },
+        { "source": "(비교|장단점|\\bpros\\b|\\bcons\\b|\\bcompare\\b)", "flags": "i" },
+        { "source": "(어떻게\\s*생각|왜\\s*그런|이유가|원인이)", "flags": "" },
         { "source": "\\b(why|reason|cause|impact|effect|how\\s+does)\\b", "flags": "i" }
       ],
       "keywords": [
@@ -43,9 +43,9 @@
     {
       "type": "creative",
       "patterns": [
-        { "source": "\\b(이야기|스토리|시나리오|소설|시)\\b.*\\b(작성|써|만들)\\b", "flags": "i" },
-        { "source": "\\b(작성|써|만들)\\b.*\\b(이야기|스토리|시나리오|소설|시)\\b", "flags": "i" },
-        { "source": "\\b(아이디어|브레인스토밍|창의|상상)\\b", "flags": "i" },
+        { "source": "(이야기|스토리|시나리오|소설|시).*(작성|써|만들)", "flags": "i" },
+        { "source": "(작성|써|만들).*(이야기|스토리|시나리오|소설|시)", "flags": "i" },
+        { "source": "(아이디어|브레인스토밍|창의|상상)", "flags": "i" },
         { "source": "\\b(creative|storytelling|fiction)\\b", "flags": "i" },
         { "source": "\\b(write|compose|draft|create)\\b.*\\b(poem|story|email|letter|essay|blog)\\b", "flags": "i" }
       ],
@@ -60,9 +60,9 @@
     {
       "type": "vision",
       "patterns": [
-        { "source": "\\b(이미지|사진|그림|picture|image|photo)\\b", "flags": "i" },
-        { "source": "\\b(보여|봐|보이는|look|see|show)\\b.*\\b(이미지|사진|그림)\\b", "flags": "i" },
-        { "source": "\\b(ocr|텍스트.*추출|extract.*text)\\b", "flags": "i" }
+        { "source": "(이미지|사진|그림|\\bpicture\\b|\\bimage\\b|\\bphoto\\b)", "flags": "i" },
+        { "source": "(보여|봐|보이는|\\blook\\b|\\bsee\\b|\\bshow\\b).*(이미지|사진|그림)", "flags": "i" },
+        { "source": "(\\bocr\\b|텍스트.*추출|extract.*text)", "flags": "i" }
       ],
       "keywords": [
         "이미지", "사진", "그림", "스크린샷", "캡처", "시각", "비전",
@@ -74,10 +74,10 @@
     {
       "type": "math",
       "patterns": [
-        { "source": "\\b(계산|수학|math|calculate|equation)\\b", "flags": "i" },
+        { "source": "(계산|수학|\\bmath\\b|\\bcalculate\\b|\\bequation\\b)", "flags": "i" },
         { "source": "\\d+\\s*[\\+\\-\\*\\/\\^]\\s*\\d+", "flags": "" },
-        { "source": "\\b(미적분|미분|적분|행렬|선형대수|통계)\\b", "flags": "i" },
-        { "source": "\\b(증명|proof|theorem|lemma|공리)\\b", "flags": "i" }
+        { "source": "(미적분|미분|적분|행렬|선형대수|통계)", "flags": "i" },
+        { "source": "(증명|\\bproof\\b|\\btheorem\\b|\\blemma\\b|공리)", "flags": "i" }
       ],
       "keywords": [
         "계산", "수학", "공식", "방정식", "미적분", "미분", "적분",
@@ -90,9 +90,9 @@
     {
       "type": "document",
       "patterns": [
-        { "source": "\\b(요약|summarize|summary)\\b", "flags": "i" },
-        { "source": "\\b(문서|document|pdf|docx)\\b", "flags": "i" },
-        { "source": "\\b(리포트|보고서|논문|report|paper)\\b", "flags": "i" }
+        { "source": "(요약|\\bsummarize\\b|\\bsummary\\b)", "flags": "i" },
+        { "source": "(문서|\\bdocument\\b|\\bpdf\\b|\\bdocx\\b)", "flags": "i" },
+        { "source": "(리포트|보고서|논문|\\breport\\b|\\bpaper\\b)", "flags": "i" }
       ],
       "keywords": [
         "요약", "요약해", "정리", "문서", "리포트", "보고서", "논문",
@@ -104,8 +104,8 @@
     {
       "type": "translation",
       "patterns": [
-        { "source": "\\b(번역|translate|translation)\\b", "flags": "i" },
-        { "source": "\\b(영어로|한국어로|일본어로|중국어로)\\b", "flags": "i" },
+        { "source": "(번역|\\btranslate\\b|\\btranslation\\b)", "flags": "i" },
+        { "source": "(영어로|한국어로|일본어로|중국어로)", "flags": "i" },
         { "source": "\\b(to english|to korean|to japanese)\\b", "flags": "i" }
       ],
       "keywords": [
@@ -125,10 +125,10 @@
     {
       "type": "chat",
       "patterns": [
-        { "source": "\\b(안녕|하이|헬로|hello|hi|hey)\\b", "flags": "i" },
+        { "source": "(안녕|하이|헬로|\\bhello\\b|\\bhi\\b|\\bhey\\b)", "flags": "i" },
         { "source": "\\?$", "flags": "" },
-        { "source": "\\b(추천|추천해|추천해줘|알려줘|설명해줘|도와줘|도움)\\b", "flags": "i" },
-        { "source": "\\b(어떤\\s*게\\s*좋|뭐가\\s*좋|뭘\\s*쓸|뭐\\s*쓰|어떻게\\s*해)\\b", "flags": "i" },
+        { "source": "(추천|추천해|추천해줘|알려줘|설명해줘|도와줘|도움)", "flags": "i" },
+        { "source": "(어떤\\s*게\\s*좋|뭐가\\s*좋|뭘\\s*쓸|뭐\\s*쓰|어떻게\\s*해)", "flags": "i" },
         { "source": "\\b(recommend|suggest|help|advice)\\b", "flags": "i" }
       ],
       "keywords": [
