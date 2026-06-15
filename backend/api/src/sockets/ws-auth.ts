@@ -102,7 +102,8 @@ export async function authenticateWebSocket(
         const authCookie = cookies.split(';')
             .map(c => c.trim())
             .find(c => c.startsWith('auth_token='));
-        const cookieToken = authCookie ? authCookie.split('=')[1] : null;
+        // split('=')[1] 은 토큰 값에 '=' 가 있으면(예: base64 패딩) 잘림 → 첫 '=' 이후 전체를 취함
+        const cookieToken = authCookie ? authCookie.slice(authCookie.indexOf('=') + 1) : null;
 
         // 2. Authorization 헤더에서 토큰 추출 (하위호환)
         const authHeader = req.headers.authorization || '';
