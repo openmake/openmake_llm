@@ -6,7 +6,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { createLogger } from '../utils/logger';
 // QuotaExceededError는 utils/error-handler.ts에서 통합 처리
-import { getConfig } from '../config';
+import { isOriginAllowed } from '../security/cors-policy';
 import { getAnalyticsSystem } from '../monitoring/analytics';
 
 const logger = createLogger('Middleware');
@@ -99,27 +99,19 @@ export function analyticsMiddleware(req: Request, res: Response, next: NextFunct
  * - server.ts의 CORS 설정과 일관성 유지
  */
 export function corsMiddleware(req: Request, res: Response, next: NextFunction) {
-    const allowedOrigins = getConfig().corsOrigins.split(',')
-        .map(o => o.trim())
-        .filter(o => {
-            if (!o) return false;
-            if (o === '*') return true;
-            if (!/^https?:\/\//i.test(o)) {
-                // 잘못된 CORS origin 형식은 무시 (http:// 또는 https://로 시작해야 함)
-                return false;
-            }
-            return true;
-        });
     const origin = req.headers.origin;
 
-    // 화이트리스트 기반 Origin 검증
-    if (origin && allowedOrigins.includes(origin)) {
-        res.header('Access-Control-Allow-Origin', origin);
+    // allowlist 기반 reflect — '*' 는 절대 reflect 하지 않음(credentials 환경).
+    // 허용된 Origin 일 때만 ACAO + credentials 헤더 부여. 미허용/누락 시 헤더 미부여 →
+    // 브라우저가 cross-origin 응답을 차단(거부). WS upgrade 검증과 동일 정책(security/cors-policy).
+    if (isOriginAllowed(origin)) {
+        res.header('Access-Control-Allow-Origin', origin as string);
+        res.header('Access-Control-Allow-Credentials', 'true');
+        res.header('Vary', 'Origin');
     }
 
     res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
     res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, X-API-Key');
-    res.header('Access-Control-Allow-Credentials', 'true');
 
     if (req.method === 'OPTIONS') {
         return res.sendStatus(204);

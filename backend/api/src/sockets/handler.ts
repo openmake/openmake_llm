@@ -40,7 +40,7 @@ import { ClusterManager } from '../cluster/manager';
 import { getUnifiedMCPClient } from '../mcp';
 import { createLogger } from '../utils/logger';
 import { WSMessage, ExtendedWebSocket } from './ws-types';
-import { authenticateWebSocket, refreshWebSocketAuthentication, validateWebSocketOrigin } from './ws-auth';
+import { authenticateWebSocket, refreshWebSocketAuthentication } from './ws-auth';
 import { WEBSOCKET_TIMEOUTS, WS_LIMITS } from '../config/timeouts';
 import { WS_SECURITY } from '../config/security';
 import { handleChatMessage } from './ws-chat-handler';
@@ -48,7 +48,7 @@ import { handleRequestAgents } from './ws-agents-handler';
 import { withSpan } from '../observability/otel';
 import { getEventBus, AGENT_TASK_PROGRESS, type AgentTaskProgressEvent } from '../utils/event-bus';
 import { runWithRequestContext } from '../utils/request-context';
-import { getConfig } from '../config';
+import { isOriginAllowed } from '../security/cors-policy';
 import { WsConnectionGuard } from './ws-connection-guard';
 
 const log = createLogger('WebSocketHandler');
@@ -119,10 +119,8 @@ export class WebSocketHandler {
             // CSWSH 방어: Origin 헤더 화이트리스트 검증
             // CORS는 WS upgrade에 적용되지 않으므로 서버가 직접 검증해야 한다.
             const origin = req.headers.origin;
-            const originAllowlist = getConfig().corsOrigins.split(',')
-                .map(o => o.trim())
-                .filter(o => o.length > 0 && o !== '*');
-            if (!validateWebSocketOrigin(origin, originAllowlist)) {
+            // REST CORS 와 동일한 allowlist 정책(security/cors-policy) 사용 — '*' reflect 금지, 정확 비교.
+            if (!isOriginAllowed(origin)) {
                 const clientIpForLog = this.guard.getClientIp(req);
                 log.warn(`[WS] Origin 거부: origin=${origin ?? '<none>'}, ip=${clientIpForLog}`);
                 try {

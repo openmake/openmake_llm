@@ -7,6 +7,7 @@ import { IncomingMessage } from 'http';
 import { verifyToken } from '../auth';
 import { getUserManager } from '../data/user-manager';
 import { createLogger } from '../utils/logger';
+import { isOriginAllowed } from '../security/cors-policy';
 
 export interface WebSocketAuthResult {
     userId: string | null;
@@ -157,8 +158,6 @@ export function validateWebSocketOrigin(
     origin: string | undefined,
     allowlist: string[]
 ): boolean {
-    if (!origin || origin.length === 0) {
-        return false;
-    }
-    return allowlist.some(allowed => allowed !== '*' && allowed === origin);
+    // REST/WS 정책 통일 — security/cors-policy.isOriginAllowed 로 위임 (정확 비교, '*' 불허).
+    return isOriginAllowed(origin, allowlist);
 }

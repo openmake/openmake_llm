@@ -311,6 +311,16 @@ export function validateConfig(config: EnvConfig): void {
         errors.push('API_KEY_PEPPER is required in production for API key hashing security');
     }
 
+    // CORS: 전역 credentials=true 환경이므로 와일드카드('*') Origin 은 CORS 스펙상 금지.
+    // 운영 환경에서 CORS_ORIGINS 에 '*' 가 있으면 부팅 중단 (명시적 allowlist 강제).
+    if (config.nodeEnv === 'production' &&
+        config.corsOrigins.split(',').map((o) => o.trim()).includes('*')) {
+        errors.push(
+            'CORS_ORIGINS must not contain a wildcard (*) in production. ' +
+            'credentials 기반 인증 환경에서는 명시적 Origin allowlist 가 필요합니다.'
+        );
+    }
+
     // Stage 2-H3: STORAGE_BACKEND=redis 선택 시 REDIS_URL 필수
     if (config.storageBackend === 'redis' && !config.redisUrl) {
         errors.push('REDIS_URL must be set when STORAGE_BACKEND=redis');
