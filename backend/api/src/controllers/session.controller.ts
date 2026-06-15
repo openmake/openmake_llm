@@ -200,6 +200,27 @@ export class SessionController {
               }
 
               const { role, content, model, tokensUsed, responseTime } = req.body;
+              // 입력 검증 — role 스푸핑('admin' 등)·통계 오염(음수/비정수 토큰) 방지
+              if (role !== 'user' && role !== 'assistant' && role !== 'system') {
+                  res.status(400).json(badRequest("role 은 'user' | 'assistant' | 'system' 이어야 합니다"));
+                  return;
+              }
+              if (typeof content !== 'string') {
+                  res.status(400).json(badRequest('content 는 문자열이어야 합니다'));
+                  return;
+              }
+              if (tokensUsed != null && (!Number.isInteger(tokensUsed) || tokensUsed < 0)) {
+                  res.status(400).json(badRequest('tokensUsed 는 0 이상의 정수여야 합니다'));
+                  return;
+              }
+              if (responseTime != null && (typeof responseTime !== 'number' || !Number.isFinite(responseTime) || responseTime < 0)) {
+                  res.status(400).json(badRequest('responseTime 은 0 이상의 숫자여야 합니다'));
+                  return;
+              }
+              if (model != null && typeof model !== 'string') {
+                  res.status(400).json(badRequest('model 은 문자열이어야 합니다'));
+                  return;
+              }
               const message = await conversationDb.saveMessage(sessionId, role, content, {
                   model, tokensUsed, responseTime
               });

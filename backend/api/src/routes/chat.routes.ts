@@ -59,7 +59,7 @@ router.post('/', optionalApiKey, optionalAuth, chatRateLimiter, validate(chatReq
     if (sessionId && isPersistableUserId(userContext.userId)) {
         const convDB = getConversationDB();
         const session = await convDB.getSession(sessionId);
-        if (session && session.userId && String(session.userId) !== String(userContext.userId)) {
+        if (session && String(session.userId) !== String(userContext.userId)) {
             res.status(403).json({ error: '이 세션에 접근할 권한이 없습니다' });
             return;
         }
@@ -139,7 +139,7 @@ router.post('/stream', optionalApiKey, optionalAuth, chatRateLimiter, validate(c
     if (sessionId && isPersistableUserId(userContext.userId)) {
         const convDB = getConversationDB();
         const session = await convDB.getSession(sessionId);
-        if (session && session.userId && String(session.userId) !== String(userContext.userId)) {
+        if (session && String(session.userId) !== String(userContext.userId)) {
             res.status(403).json({ error: '이 세션에 접근할 권한이 없습니다' });
             return;
         }
