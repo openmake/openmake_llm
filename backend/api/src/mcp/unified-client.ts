@@ -24,7 +24,7 @@
  */
 
 import { MCPServer, createMCPServer } from './server';
-import { MCPToolResult, MCPRequest, MCPResponse } from './types';
+import { MCPToolResult } from './types';
 import { UserTier } from '../data/user-manager';
 import { canUseTool, getToolsForTier } from './tool-tiers';
 import { UserSandbox, UserContext } from './user-sandbox';
@@ -120,37 +120,10 @@ export class UnifiedMCPClient {
         return categories;
     }
 
-    /**
-     * 도구 실행
-     */
-    async executeTool(toolName: string, args: Record<string, unknown>): Promise<MCPToolResult> {
-        const response = await this.server.handleRequest({
-            jsonrpc: '2.0',
-            id: Date.now(),
-            method: 'tools/call',
-            params: {
-                name: toolName,
-                arguments: args
-            }
-        });
-
-        if (response.error) {
-            return {
-                content: [{ type: 'text', text: response.error.message }],
-                isError: true
-            };
-        }
-
-        return response.result as MCPToolResult;
-    }
-
-    /**
-     * 외부 MCP 요청 처리 (SSE 핸들러용)
-     */
-    async handleMCPRequest(request: MCPRequest): Promise<MCPResponse> {
-        return this.server.handleRequest(request);
-    }
-
+    // (제거됨) executeTool() — tier/sanitize 검증 없이 server.handleRequest('tools/call') 를 호출하던
+    //   미사용 경로. canonical 은 executeToolWithContext (권한·sandbox·인자 sanitize 적용).
+    // (제거됨) handleMCPRequest() — 미구현 SSE 핸들러용 dead code. 네트워크로 MCP 를 노출하려면
+    //   handleRequest 진입점에 UserContext 존재 + canUseTool(tier) 검증을 먼저 강제할 것.
 
     /**
      * 상태 초기화
