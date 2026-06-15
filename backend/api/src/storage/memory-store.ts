@@ -39,8 +39,12 @@ export class MemoryStore implements KeyValueStore {
     }
 
     async incr(key: string): Promise<number> {
+        return this.incrBy(key, 1);
+    }
+
+    async incrBy(key: string, amount: number): Promise<number> {
         const current = await this.get<number>(key);
-        const next = (typeof current === 'number' ? current : 0) + 1;
+        const next = (typeof current === 'number' ? current : 0) + amount;
         const existing = this.store.get(key);
         this.store.set(key, { value: JSON.stringify(next), timer: existing?.timer });
         return next;

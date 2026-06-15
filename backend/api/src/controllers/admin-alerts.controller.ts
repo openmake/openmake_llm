@@ -60,13 +60,15 @@ export async function listAlertHistory(req: Request, res: Response): Promise<voi
 }
 
 /**
- * GET /api/admin/llm-pool/stats — Model Pool routing 통계 (PR #98 follow-up).
+ * GET /api/admin/llm-pool/stats — 단일 모델 context-fit 안전망 통계.
+ *
+ * (2026-06-15: 1M 노드 제거 — 1M routing 비율 대신 truncation 안전망 활동을 추적.)
  *
  * 응답:
- *   - byModel: { 'qwen3.6-35b-a3b': N, 'qwen3.6-35b-a3b-1m': N, ... }
+ *   - byModel: { 'qwen3.6-35b-a3b': N, ... }
  *   - bySource: { auto: N, auto_trimmed: N, auto_trimmed_reduced: N, manual: N, pool_disabled: N }
- *   - largeModelRatioPct: 1M routing 비율 (%) — 30% 초과 시 margin 조정 검토
- *   - last7Days: [{ date, default, large, total }] × 7
+ *   - trimmedRatioPct: truncation(auto_trimmed*) 발동 비율 (%) — 높으면 입력 과대/margin 검토
+ *   - last7Days: [{ date, total, trimmed }] × 7
  *
  * 모두 지난 7일 데이터. 운영자가 LLM_POOL_DEFAULT_MARGIN_PCT 조정 의사결정용.
  */
@@ -84,11 +86,10 @@ export async function getLlmPoolStats(_req: Request, res: Response): Promise<voi
                 `SELECT source, COUNT(*)::text AS count FROM model_pool_metrics
                  WHERE created_at >= NOW() - INTERVAL '7 days' GROUP BY source`,
             ),
-            pool.query<{ date: string; total: string; default_count: string; large_count: string }>(
+            pool.query<{ date: string; total: string; trimmed_count: string }>(
                 `SELECT to_char(date_trunc('day', d), 'YYYY-MM-DD') AS date,
                         COUNT(m.*)::text AS total,
-                        COUNT(*) FILTER (WHERE m.model NOT LIKE '%-1m')::text AS default_count,
-                        COUNT(*) FILTER (WHERE m.model LIKE '%-1m')::text AS large_count
+                        COUNT(*) FILTER (WHERE m.source LIKE 'auto_trimmed%')::text AS trimmed_count
                  FROM generate_series(date_trunc('day', NOW()) - INTERVAL '6 days',
                                       date_trunc('day', NOW()), INTERVAL '1 day') AS d
                  LEFT JOIN model_pool_metrics m ON date_trunc('day', m.created_at) = d
@@ -98,17 +99,18 @@ export async function getLlmPoolStats(_req: Request, res: Response): Promise<voi
 
         const byModel: Record<string, number> = {};
         let totalCount = 0;
-        let largeCount = 0;
         for (const r of byModelRes.rows) {
             const n = parseInt(r.count, 10);
             byModel[r.model] = n;
             totalCount += n;
-            if (r.model.endsWith('-1m')) largeCount += n;
         }
 
         const bySource: Record<string, number> = {};
+        let trimmedCount = 0;
         for (const r of bySourceRes.rows) {
-            bySource[r.source] = parseInt(r.count, 10);
+            const n = parseInt(r.count, 10);
+            bySource[r.source] = n;
+            if (r.source.startsWith('auto_trimmed')) trimmedCount += n;
         }
 
         // Phase L (2026-05-26): LLM 자체 관측 강화 — usage-tracker 의 hourly/weekly
@@ -127,12 +129,11 @@ export async function getLlmPoolStats(_req: Request, res: Response): Promise<voi
             byModel,
             bySource,
             totalCount,
-            largeModelRatioPct: totalCount > 0 ? Math.round((largeCount / totalCount) * 1000) / 10 : 0,
+            trimmedRatioPct: totalCount > 0 ? Math.round((trimmedCount / totalCount) * 1000) / 10 : 0,
             last7Days: trendRes.rows.map(r => ({
                 date: r.date,
                 total: parseInt(r.total, 10),
-                default: parseInt(r.default_count, 10),
-                large: parseInt(r.large_count, 10),
+                trimmed: parseInt(r.trimmed_count, 10),
             })),
             quota: {
                 hourly: quota.hourly,

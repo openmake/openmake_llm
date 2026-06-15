@@ -164,7 +164,18 @@ export class AgentLoopStrategy implements ChatStrategy<AgentLoopStrategyContext,
             });
 
             if (directResult.metrics) {
-                metrics = { ...directResult.metrics };
+                // 멀티턴 누적 — additive 토큰/시간 카운터는 합산 (이전엔 마지막 턴만 보존),
+                // 그 외 필드(model 명 등)는 최신 값 유지.
+                const m = directResult.metrics as Record<string, unknown>;
+                const ADDITIVE = ['prompt_eval_count', 'eval_count', 'total_duration',
+                    'load_duration', 'prompt_eval_duration', 'eval_duration'];
+                const merged: Record<string, unknown> = { ...metrics, ...m };
+                for (const key of ADDITIVE) {
+                    const prev = typeof metrics[key] === 'number' ? metrics[key] as number : 0;
+                    const cur = typeof m[key] === 'number' ? m[key] as number : 0;
+                    if (prev || cur) merged[key] = prev + cur;
+                }
+                metrics = merged;
             }
 
             context.currentHistory.push(directResult.assistantMessage);

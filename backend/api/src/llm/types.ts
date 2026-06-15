@@ -24,6 +24,8 @@ export interface LLMConfig {
     model: string;
     /** HTTP 요청 타임아웃 (밀리초) */
     timeout: number;
+    /** 요청 사용자 ID — per-user 토큰 쿼터 enforcement 용 (미설정 시 enforcement skip) */
+    userId?: string;
 }
 
 // OllamaConfig 호환 alias 제거됨 (2026-05-19): 0 callers 확인 후 제거. 신규 코드는 LLMConfig 사용.

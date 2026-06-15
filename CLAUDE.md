@@ -82,7 +82,7 @@ The server entry point is `server.ts`. Key directories:
 | `schemas/` | Zod 입력 검증 스키마 (REST/WebSocket payload) |
 | `middlewares/` | Security (helmet, CORS), rate limiters (per-route), static files, error handling |
 | `errors/` | 도메인별 커스텀 에러 클래스 |
-| `llm/` | vLLM/LiteLLM client public API: `LLMClient` (canonical, 2026-05-19 `OllamaClient` alias 제거), agent-loop, usage-tracker, reasoning-adapter, reasoning-tag-parser, stream-parser, web-search-adapter, **model-pool** (262K↔1M proactive routing) |
+| `llm/` | vLLM/LiteLLM client public API: `LLMClient` (canonical, 2026-05-19 `OllamaClient` alias 제거), agent-loop, usage-tracker, reasoning-adapter, reasoning-tag-parser, stream-parser, web-search-adapter, **model-pool** (단일 262K 모델 context-fit 안전망 — 2026-06-15 1M 노드 제거로 proactive routing 폐기) |
 | `providers/` | LLM provider 추상화: `i-provider.ts` (SdkType `'local-llm' \| 'anthropic' \| 'openai-compatible'`), `local-llm-provider.ts`, `anthropic-provider.ts`, `openai-compat-provider.ts`, `provider-router.ts` |
 | `cluster/` | vLLM/LiteLLM 노드 클러스터 라우팅 (health check, circuit breaker, node-selector). `server.ts` 부팅 시 `getClusterManager()` 로 활성화 |
 | `monitoring/` | Analytics + alerts system |
@@ -122,9 +122,9 @@ SPA with vanilla JS ES Modules. No build step for JS - files are served directly
 - **Database**: Raw SQL with `pg` Pool, parameterized queries (`$1, $2`), auto-generated schema on first launch. No ORM.
 - **Auth**: JWT access tokens in HttpOnly cookies. Google OAuth 2.0. RBAC roles. **LiteLLM master key 단일 운영** (Ollama 시절 5-key pool rotation 폐기, 2026-05-19).
 - **LLM Backend**: 서버 PC 에서 `vLLM serve` → `LiteLLM proxy :13401` 가 OpenAI 호환 endpoint 노출 (로컬 개발은 :4000). 클라이언트(`backend/api/src/llm/client.ts`) 는 `LLM_BASE_URL`/`LLM_API_KEY`/`LLM_DEFAULT_MODEL` env 로 접근. `LLMClient` 는 cluster-routed **per-request** (글로벌 singleton 금지).
-- **Chat Pipeline (2 Layer 구조, 2026-05-26 Phase B 머지)**: Query → **ExecutionPlanBuilder.build** (정책 — per-request 1회, regex+fast-path 분류 + profile 해석 + 옵션 조립) → strategies dispatch → **LLMClient.chat** (실행 — per-call, capacity routing 262K↔1M). 정책 ↔ 실행 계층은 SQL planner / executor 패턴 — 둘을 합치지 말 것 (per-call 동적 routing 정당).
+- **Chat Pipeline (2 Layer 구조, 2026-05-26 Phase B 머지)**: Query → **ExecutionPlanBuilder.build** (정책 — per-request 1회, regex+fast-path 분류 + profile 해석 + 옵션 조립) → strategies dispatch → **LLMClient.chat** (실행 — per-call, 단일 262K 모델 context-fit 안전망). 정책 ↔ 실행 계층은 SQL planner / executor 패턴 — 둘을 합치지 말 것.
   - **라우팅 분기 (`message-pipeline.ts`)**: 외부 provider(anthropic/openrouter) 채팅은 `streamFromExternalProvider` 직접 dispatch (6 strategies 우회, 자체 MCP tool loop 5턴 보유). **로컬(`local-llm`) 채팅은 `LOCAL_STRATEGY_PATH_ENABLED` 플래그로 게이트** — **기본 OFF: 로컬도 `streamFromExternalProvider` 로 dispatch (strategies 우회)**, ON: strategy 경로(ThinkingStrategy/GV/AgentLoop) 사용. (2026-05-19 `'ollama'→'local-llm'` normalize 가 `!== 'ollama'` 가드를 깨 로컬이 의도와 달리 strategies 를 우회하던 회귀를 플래그로 단계적 복구하는 중. 주의: 플래그 ON 시 도구 호출이 agent-loop(single·high-confidence) 경로에만 실리고 GV 는 도구 미전달 — 외부 dispatch 의 always-on tool loop 와 동작이 다름.)
-- **Model Pool**: `LLMClient.chat()` 진입 시 prompt token 추정 후 262K (default) ↔ 1M (large) proactive routing. ContextOverflowError → HTTP 413 + audit + 자동 webhook 알림. `model_pool_metrics` 테이블 영속화.
+- **Context-Fit 안전망 (구 Model Pool)**: `LLMClient.chat()` 진입 시 prompt token 추정(이미지 포함) 후 effective 262K 초과 시 안전망 — input truncate → max_tokens 축소 → 극단 시 ContextOverflowError → HTTP 413 + audit + 자동 webhook 알림. `model_pool_metrics` 테이블 영속화. (2026-06-15: 1M 노드 제거 — 262K↔1M proactive routing 폐기, 단일 모델 fit-to-262K 로 단순화.)
 - **MCP Tools**: 13 built-in tools (`mcp/tools.ts` `builtInTools`) with tier-based access (Free/Pro/Enterprise). Web scraping tools (web_scrape, web_map, web_crawl) are always active (no API key required).
 - **Frontend Security**: XSS defense via `sanitize.js`. All user content must be sanitized.
 - **Audit ↔ Alert 통합**: `AuditService.logAudit` 가 SoT. CRITICAL_ACTIONS whitelist 매칭 시 자동 `sendAlert` (controller 직접 호출 금지).
@@ -155,8 +155,8 @@ Environment variables loaded from `.env` at project root (see `.env.example`). K
 - `LLM_DEFAULT_MODEL` — proxy 카탈로그의 default model id (e.g. `qwen3.6-35b-a3b`)
 - `LLM_TIMEOUT` (chat), `LLM_FAST_FAIL_TIMEOUT_MS` (probe), `LLM_WARMUP_TIMEOUT_MS`
 - `LLM_LOCAL_MODELS_JSON` — proxy 모델 카탈로그 override (optional)
-- `LLM_POOL_*` — model pool routing (`LLM_POOL_ENABLED`, `LLM_POOL_DEFAULT_MODEL`, `LLM_POOL_LARGE_MODEL`, `LLM_POOL_DEFAULT_CTX=262144`, `LLM_POOL_LARGE_CTX=1048576`)
-- `LLM_HOURLY_TOKEN_LIMIT`, `LLM_WEEKLY_TOKEN_LIMIT`
+- `LLM_POOL_*` — 단일 모델 context-fit 안전망 (`LLM_POOL_ENABLED`, `LLM_POOL_DEFAULT_MODEL`, `LLM_POOL_DEFAULT_CTX=262144`, `LLM_POOL_DEFAULT_MARGIN_PCT`, `LLM_POOL_TOKENS_PER_IMAGE`)
+- `LLM_HOURLY_TOKEN_LIMIT`, `LLM_WEEKLY_TOKEN_LIMIT` — **per-user** 토큰 쿼터 (2026-06-15: 전역→per-user 전환, `llm/user-quota.ts` KVStore 기반 calendar-bucket. 멀티프로세스 정합엔 `STORAGE_BACKEND=redis` 필요. 전역 `usage-tracker` 는 dashboard 관측용으로만 잔존)
 
 **External Providers / Integrations**
 - `GEMINI_API_KEY` (FIRECRAWL_API_KEY 는 2026-05-26 제거 — `utils/web-scraper.ts` 가 무료 3단계 fallback 으로 대체)
@@ -166,14 +166,13 @@ Environment variables loaded from `.env` at project root (see `.env.example`). K
 - **서버 PC 배포 절차**:
   1. 레포지토리의 `scripts/vllm/litellm.config.yaml`을 `/home/smith/vllm/litellm.config.yaml`로 복사합니다. (앱 데이터베이스 연동용 `database_url: os.environ/DATABASE_URL` 설정 포함)
   2. `/home/smith/vllm/litellm.env` 파일을 생성하여 `LITELLM_MASTER_KEY`와 `DATABASE_URL`을 설정합니다.
-  3. `.service` 파일 4개를 `/etc/systemd/system/`으로 심링크 또는 복사합니다:
+  3. `.service` 파일 3개를 `/etc/systemd/system/`으로 심링크 또는 복사합니다:
      - `openmake-vllm-qwen.service` (262K context, 포트 8002)
-     - `openmake-vllm-qwen-1m.service` (1M context, 포트 8004)
      - `openmake-vllm-bge.service` (bge-m3 embedding, 포트 8003)
-     - `openmake-litellm.service` (LiteLLM proxy, 포트 13401, 앞선 3개 서비스 시작 후 기동)
-  4. `sudo systemctl daemon-reload`를 실행한 뒤, `sudo systemctl enable --now openmake-vllm-qwen openmake-vllm-qwen-1m openmake-vllm-bge openmake-litellm` 명령어로 가동합니다.
+     - `openmake-litellm.service` (LiteLLM proxy, 포트 13401, 앞선 2개 서비스 시작 후 기동)
+  4. `sudo systemctl daemon-reload`를 실행한 뒤, `sudo systemctl enable --now openmake-vllm-qwen openmake-vllm-bge openmake-litellm` 명령어로 가동합니다.
 - **가상환경 (venv) 구분**:
-  - Qwen (262K, 1M): `/home/smith/vllm/rebuild/vllm_env` (qwen3.6 지원 커스텀 빌드)
+  - Qwen (262K): `/home/smith/vllm/rebuild/vllm_env` (qwen3.6 지원 커스텀 빌드)
   - Embedding (bge-m3): `/home/smith/vllm/vllm_env` (임베딩 전용 독립 venv)
   - LiteLLM: `/home/smith/vllm/litellm_env` (LiteLLM 자체 실행용 venv)
 - **LiteLLM Alias 설정**: OpenAI 호환 클라이언트를 위해 `gpt-3.5-turbo` 호출 시 `qwen3.6-35b-a3b`로 자동 라우팅되도록 설정되어 있습니다.

@@ -311,7 +311,7 @@ export class ClusterManager extends EventEmitter {
      * // client.setModel()은 다른 요청에 영향을 주지 않음
      * ```
      */
-    createScopedClient(nodeId: string, model?: string): LLMClient | undefined {
+    createScopedClient(nodeId: string, model?: string, userId?: string): LLMClient | undefined {
         const baseClient = this.clients.get(nodeId);
         const node = this.nodes.get(nodeId);
         if (!baseClient || !node) return undefined;
@@ -320,6 +320,7 @@ export class ClusterManager extends EventEmitter {
         const scopedClient = createClient({
             baseUrl: `http://${node.host}:${node.port}`,
             model: model || baseClient.model,
+            ...(userId ? { userId } : {}),
         });
 
         return scopedClient;

@@ -1,0 +1,120 @@
+/* =============================================================
+   모바일 Composer 오버플로 시트 (Open Design 레퍼런스 기반)
+   데스크톱: 변화 없음 (.composer-overflow = display:contents 로 투명)
+   모바일 ≤640px: 보조 도구를 "더보기(⋯)" 시트로 접어 액션 바 가로
+                  스크롤 제거, 44px 터치 타겟 확보
+   토큰만 사용 — design-tokens.css 의 var(--*) 참조
+   ============================================================= */
+
+/* --- 데스크톱 기본값: 래퍼는 레이아웃에 영향 없음, 더보기 버튼 숨김 --- */
+.composer-overflow { display: contents; }
+.composer-more { display: none; }
+
+@media (max-width: 640px) {
+    /* focus-within transform 이 스태킹 컨텍스트를 만들어 시트를 가두므로 모바일에선 해제
+       (시트 z-index 30 이 scrim z-index 29 위로 올라오도록) */
+    .chat-input-container:focus-within { transform: none; }
+
+    /* 액션 바: 한 줄 유지, 가로 스크롤 제거 */
+    .input-actions {
+        overflow: visible;
+        flex-wrap: nowrap;
+        gap: 2px;
+    }
+    .left-actions {
+        gap: 2px;
+        min-width: 0;
+        flex: 1;
+    }
+
+    /* 더보기(⋯) 토글 — 모바일에서만 노출 */
+    .composer-more {
+        display: grid;
+        place-items: center;
+    }
+    .composer-more.on {
+        color: var(--accent-primary);
+        background: var(--accent-primary-light);
+    }
+
+    /* 44px 터치 타겟 (Open Design 표준) */
+    .left-actions .action-btn,
+    .right-actions .send-btn {
+        width: 44px;
+        height: 44px;
+        min-width: 44px;
+        min-height: 44px;
+        flex: none;
+        border-radius: var(--radius-md);
+    }
+
+    /* 보조 도구는 기본 숨김 — 시트가 열릴 때만 표시 */
+    .composer-overflow { display: none; }
+
+    .left-actions.overflow-open .composer-overflow {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: var(--space-2);
+        position: absolute;
+        left: var(--space-3);
+        right: var(--space-3);
+        bottom: calc(100% + 8px);
+        z-index: 30;
+        padding: var(--space-3);
+        background: var(--bg-tertiary);
+        border: 1px solid var(--border-medium);
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow-lg);
+    }
+
+    /* 시트 안 보조 항목: 아이콘 + 라벨 세로 타일 */
+    .left-actions.overflow-open .composer-secondary {
+        width: 100%;
+        height: auto;
+        min-height: 56px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        padding: var(--space-2);
+        border-radius: var(--radius-md);
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-light);
+        font-size: var(--font-size-xs);
+        color: var(--text-secondary);
+    }
+    .left-actions.overflow-open .composer-secondary[data-label]::after {
+        content: attr(data-label);
+        font-size: var(--font-size-xs);
+        color: var(--text-secondary);
+        line-height: 1.1;
+        text-align: center;
+    }
+    .left-actions.overflow-open .composer-secondary iconify-icon {
+        font-size: var(--font-size-xl);
+    }
+    /* 페르소나 select 는 시트 전체 폭 차지 */
+    .left-actions.overflow-open #userAgentSelect {
+        grid-column: 1 / -1;
+        min-height: 44px;
+        max-width: none !important;
+        flex-direction: row;
+    }
+    .left-actions.overflow-open #userAgentSelect::after { content: none; }
+
+    /* 시트 배경 dim (탭하면 닫힘) */
+    .composer-sheet-scrim {
+        display: none;
+        position: fixed;
+        inset: 0;
+        z-index: 29;
+        background: rgba(0, 0, 0, 0.4);
+    }
+    .composer-sheet-scrim.visible { display: block; }
+}
+
+/* 데스크톱(≥641px)에서는 스크림 항상 숨김 */
+@media (min-width: 641px) {
+    .composer-sheet-scrim { display: none !important; }
+}

@@ -71,6 +71,11 @@ export const SCRAPE_ABORT_BUFFER_MS = parseInt(process.env.SCRAPE_ABORT_BUFFER_M
 export const HISTORY_SUMMARIZER = {
     /** 요약을 트리거하는 최소 히스토리 메시지 수 */
     MIN_MESSAGES_TO_SUMMARIZE: 10,
+    /**
+     * 메시지 수가 적어도 누적 토큰이 이 값을 넘으면 요약 트리거 (거대 메시지 소수 대응).
+     * 개수 기준만으로는 긴 코드/문서 붙여넣기 2~3개를 놓침 — 토큰 기준 OR 조건.
+     */
+    MIN_TOKENS_TO_SUMMARIZE: Number(process.env.HISTORY_SUMMARIZE_MIN_TOKENS) || 24000,
     /** 요약 없이 그대로 유지할 최근 메시지 수 */
     RECENT_MESSAGES_TO_KEEP: 6,
     /** 요약 대상(오래된 메시지)의 최대 글자 수 (초과 시 잘라서 요약) */
@@ -649,6 +654,17 @@ export const PASSWORD_POLICY = {
  */
 export const JIT_MEMORY_MIN_IMPORTANCE = 0.2;
 
+/**
+ * System prompt 에 prepend 되는 사용자 컨텍스트(custom instructions + cross-conversation
+ * memory) 토큰 예산. 매 턴 고정 비용이므로 무제한 누적 시 context 잠식 → cap 필수.
+ */
+export const USER_CONTEXT_LIMITS = {
+    /** custom_instructions 블록 최대 토큰 (초과 시 head 보존 truncate) */
+    MAX_CUSTOM_INSTRUCTIONS_TOKENS: Number(process.env.USER_CTX_MAX_CI_TOKENS) || 2000,
+    /** cross-conversation memory 블록 전체 최대 토큰 (누적 budget) */
+    MAX_MEMORY_TOKENS: Number(process.env.USER_CTX_MAX_MEMORY_TOKENS) || 2000,
+} as const;
+
 export const TOOL_RESULT_COMPACTION = {
     /** 원문을 유지할 최근 도구 결과 수 (이전 결과는 컴팩션) */
     KEEP_RECENT: 2,
@@ -872,6 +888,23 @@ export const THINKING_LIMITS = {
  *
  * services/chat-strategies/agent-loop-strategy.ts에서 참조
  */
+/**
+ * Agent 도구 호출 루프 최대 턴 수 — 단일 SoT.
+ * (이전: external-provider.ts / message-pipeline.ts / agent-loop.ts 에 5/5/10 인라인 분산)
+ */
+export const AGENT_LOOP_LIMITS = {
+    /** 활성 경로(external dispatch + strategy agent-loop) 최대 도구 턴 */
+    MAX_TURNS: Number(process.env.AGENT_MAX_TURNS) || 5,
+    /** LLMClient.runAgentLoop 레거시 경로 기본 반복 (호출자 override 가능) */
+    LEGACY_MAX_ITERATIONS: Number(process.env.AGENT_LEGACY_MAX_ITERATIONS) || 10,
+    /**
+     * 루프 전체 wall-clock 예산 (ms). 턴 수와 별개로, 느린 도구가 매 턴 타임아웃
+     * 직전까지 걸려 단일 요청이 MAX_TURNS × LLM_TIMEOUT 까지 늘어지는 것을 차단.
+     * 초과 시 도구를 끄고 최종 응답을 유도. 0 이하 시 비활성.
+     */
+    MAX_WALL_CLOCK_MS: Number(process.env.AGENT_MAX_WALL_CLOCK_MS) || 180000,
+} as const;
+
 export const LOOP_DETECTION = {
     /** 동일 도구+인자 반복 감지 임계값 (이 횟수 도달 시 경고 메시지 주입) */
     SAME_CALL_WARN_AT: Number(process.env.LOOP_SAME_CALL_WARN) || 3,

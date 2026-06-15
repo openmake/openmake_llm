@@ -127,7 +127,7 @@
                 <!-- LLM Pool panel (PR #98 follow-up) -->
                 <div id="llmPoolPanel" style="display: none;">
                     <div id="llmPoolStatsRow" class="stats-row" style="display:none;"></div>
-                    <div class="log-count">지난 7일 LLM Model Pool routing 통계. 1M 비율 30% 초과 시 LLM_POOL_DEFAULT_MARGIN_PCT 조정 검토.</div>
+                    <div class="log-count">지난 7일 LLM context-fit 안전망 통계. truncation 비율 30% 초과 시 LLM_POOL_DEFAULT_MARGIN_PCT 조정 검토.</div>
                 </div>`;
                 }
 
@@ -341,16 +341,16 @@
                         const trendMax = Math.max(1, ...trend.map(d => d.total || 0));
                         const trendBars = trend.map(d => {
                             const h = Math.max(2, Math.round(((d.total || 0) / trendMax) * 32));
-                            const cls = (d.large || 0) > (d.default || 0) ? 'bar critical' : 'bar';
-                            return `<div class="${cls}" style="height:${h}px" title="${d.date}: total ${d.total} (1m ${d.large}, default ${d.default})"></div>`;
+                            const cls = (d.trimmed || 0) > 0 ? 'bar critical' : 'bar';
+                            return `<div class="${cls}" style="height:${h}px" title="${d.date}: total ${d.total} (trimmed ${d.trimmed})"></div>`;
                         }).join('');
-                        const ratio = s.largeModelRatioPct || 0;
+                        const ratio = s.trimmedRatioPct || 0;
                         const ratioCls = ratio > 30 ? 'danger' : (ratio > 15 ? 'warning' : 'muted');
                         const total = s.totalCount || 0;
                         const trimmedCount = (bySource.auto_trimmed || 0) + (bySource.auto_trimmed_reduced || 0);
                         row.innerHTML = `
                             <div class="stat-card">
-                                <div class="stat-card-label">7일 1M routing 비율</div>
+                                <div class="stat-card-label">7일 truncation 비율</div>
                                 <div class="stat-card-value ${ratioCls}">${ratio}%</div>
                                 <div class="stat-card-sub">${total} 호출 중 ${total > 0 ? Math.round(ratio * total / 100) : 0}건</div>
                             </div>
@@ -360,7 +360,7 @@
                                 <div class="stat-card-sub">input truncate + max_tokens 축소 합계</div>
                             </div>
                             <div class="stat-card">
-                                <div class="stat-card-label">7일 trend (1m=red)</div>
+                                <div class="stat-card-label">7일 trend (trimmed=red)</div>
                                 <div class="stat-card-value muted" style="font-size:var(--font-size-lg)">총 ${total}건</div>
                                 <div class="stat-bars">${trendBars}</div>
                             </div>

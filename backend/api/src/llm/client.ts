@@ -21,8 +21,8 @@ import OpenAI from 'openai';
 import { getConfig } from '../config';
 import { createLogger } from '../utils/logger';
 import { withSpan } from '../observability/otel';
-import { QuotaExceededError } from '../errors/quota-exceeded.error';
 import { getApiUsageTracker } from './usage-tracker';
+import { checkUserQuota, recordUserUsage } from './user-quota';
 import { streamChat, nonStreamChat } from './stream-parser';
 import { buildExtraBody } from './reasoning-adapter';
 import { selectModelByCapacity } from './model-pool';
@@ -79,23 +79,11 @@ export class LLMClient {
         this.config.model = model;
     }
 
-    private checkQuota(): void {
-        try {
-            const tracker = getApiUsageTracker();
-            const quota = tracker.getQuotaStatus();
-            if (quota.hourly.remaining <= 0 && quota.weekly.remaining <= 0) {
-                throw new QuotaExceededError('both', quota.weekly.used, quota.weekly.limit);
-            }
-            if (quota.hourly.remaining <= 0) {
-                throw new QuotaExceededError('hourly', quota.hourly.used, quota.hourly.limit);
-            }
-            if (quota.weekly.remaining <= 0) {
-                throw new QuotaExceededError('weekly', quota.weekly.used, quota.weekly.limit);
-            }
-        } catch (e) {
-            if (e instanceof QuotaExceededError) throw e;
-            logger.warn('Quota check failed (non-blocking):', e);
-        }
+    private async checkQuota(): Promise<void> {
+        // per-user enforcement (KVStore 기반, 멀티프로세스 정합). 전역 tracker 는
+        // record 경로에서 관측(dashboard)용으로만 누적 — "한 사용자 소진 시 전체 차단" 버그 제거.
+        // fail-open 은 checkUserQuota 내부 처리 (QuotaExceededError 만 throw).
+        await checkUserQuota(this.config.userId, Date.now());
     }
 
     async chat(
@@ -112,7 +100,7 @@ export class LLMClient {
             signal?: AbortSignal;
         },
     ): Promise<ChatMessage & { metrics?: UsageMetrics }> {
-        this.checkQuota();
+        await this.checkQuota();
 
         // Model Pool routing — this.config.model 이 pool default 와 같을 때만 자동 선택.
         // 다른 model 로 인스턴스화 됐으면 manual 우회 (사용자 명시 모델 존중).
@@ -177,7 +165,10 @@ export class LLMClient {
                     : await nonStreamChat(this.openai, request, extraBody, advancedOptions?.signal);
                 const totalTokens =
                     (result.metrics?.prompt_eval_count ?? 0) + (result.metrics?.eval_count ?? 0);
-                if (totalTokens > 0) getApiUsageTracker().record(totalTokens);
+                if (totalTokens > 0) {
+                    getApiUsageTracker().record(totalTokens);  // 전역 aggregate (dashboard 관측용)
+                    void recordUserUsage(this.config.userId, totalTokens, Date.now());  // per-user enforcement 누적
+                }
                 span.setAttribute('llm.prompt_eval_count', result.metrics?.prompt_eval_count ?? 0);
                 span.setAttribute('llm.eval_count', result.metrics?.eval_count ?? 0);
                 span.setAttribute('llm.response_chars', (result.content ?? '').length);

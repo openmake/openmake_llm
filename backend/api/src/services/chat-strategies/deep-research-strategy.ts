@@ -81,7 +81,7 @@ export class DeepResearchStrategy implements ChatStrategy<DeepResearchStrategyCo
 
         // 연구 실행 및 결과 포맷팅
         try {
-            const result = await researchService.executeResearch(sessionId, message, context.onProgress);
+            const result = await researchService.executeResearch(sessionId, message, context.onProgress, context.req.abortSignal);
             const formattedResponse = context.formatResearchResult(result);
 
             // 포맷팅된 보고서를 문자 단위로 스트리밍 전송

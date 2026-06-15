@@ -14,6 +14,7 @@
 import { LLMClient, createClient } from '../llm';
 import { createLogger } from '../utils/logger';
 import { HISTORY_SUMMARIZER } from '../config/runtime-limits';
+import { estimateTokens } from '../llm/model-pool';
 import { LLM_TEMPERATURES } from '../config/llm-parameters';
 import { SUMMARY_SYSTEM_PROMPT } from './prompt-templates';
 
@@ -49,7 +50,15 @@ export async function summarizeHistory(
 ): Promise<SummarizedHistory> {
     const originalCount = history.length;
 
-    if (originalCount < HISTORY_SUMMARIZER.MIN_MESSAGES_TO_SUMMARIZE) {
+    // 트리거: 메시지 개수 OR 누적 토큰 (거대 메시지 소수 대응 — count 단독은 놓침).
+    // 요약하려면 보존분(RECENT_MESSAGES_TO_KEEP) 외 오래된 메시지가 최소 1개는 있어야 함.
+    const totalTokens = history.reduce((sum, m) => sum + estimateTokens(m.content || ''), 0);
+    const countTrigger = originalCount >= HISTORY_SUMMARIZER.MIN_MESSAGES_TO_SUMMARIZE;
+    const tokenTrigger =
+        totalTokens >= HISTORY_SUMMARIZER.MIN_TOKENS_TO_SUMMARIZE &&
+        originalCount > HISTORY_SUMMARIZER.RECENT_MESSAGES_TO_KEEP;
+
+    if (!countTrigger && !tokenTrigger) {
         return {
             messages: history,
             wasSummarized: false,

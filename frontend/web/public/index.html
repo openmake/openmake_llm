@@ -14,24 +14,25 @@
     <!-- 한글 최적화 웹폰트 (self-hosted) -->
     <link href="vendor/pretendard/pretendard.css" rel="stylesheet">
     <!-- Performance: Preload hints -->
-    <link rel="preload" href="/css/design-tokens.css?v=21" as="style">
+    <link rel="preload" href="/css/design-tokens.css?v=22" as="style">
     <link rel="modulepreload" href="/js/spa-router.js?v=30" crossorigin>
     <link rel="modulepreload" href="/js/modules/auth.js" crossorigin>
     <!-- 디자인 시스템 CSS (순서 중요!) -->
-    <link rel="stylesheet" href="css/design-tokens.css?v=21">
-    <link rel="stylesheet" href="css/icons.css?v=18">
+    <link rel="stylesheet" href="css/design-tokens.css?v=22">
+    <link rel="stylesheet" href="css/icons.css?v=20">
 
     <link rel="stylesheet" href="css/animations.css?v=18">
-    <link rel="stylesheet" href="css/feature-cards.css?v=18">
-    <link rel="stylesheet" href="css/layout.css?v=20">
+    <link rel="stylesheet" href="css/feature-cards.css?v=20">
+    <link rel="stylesheet" href="css/layout.css?v=22">
     <link rel="stylesheet" href="css/components.css?v=30">
     <link rel="stylesheet" href="css/model-selector.css?v=19">
      <link rel="stylesheet" href="css/unified-sidebar.css?v=28">
-    <link rel="stylesheet" href="css/light-theme.css?v=18">
-    <link rel="stylesheet" href="style.css?v=21">
+    <link rel="stylesheet" href="css/light-theme.css?v=20">
+    <link rel="stylesheet" href="style.css?v=23">
     <link rel="stylesheet" href="css/chat-status-toast.css?v=2">
     <link rel="stylesheet" href="css/system-toast.css?v=11">
     <link rel="stylesheet" href="css/mobile-fab.css?v=2">
+    <link rel="stylesheet" href="css/mobile-composer.css?v=2">
     <link rel="stylesheet" href="css/command-palette.css?v=1">
     <!-- Iconify Icon Web Component (self-hosted, defer) -->
     <script src="vendor/iconify-icon.min.js" defer></script>
@@ -160,28 +161,39 @@
                                                 d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
                                         </svg>
                                     </button>
-                                    <button class="action-btn" id="discussionModeBtn" onclick="toggleDiscussionMode()"
-                                        title="멀티 에이전트 토론">
+                                    <button class="action-btn composer-more" id="composerMoreBtn" type="button"
+                                        title="더보기" aria-label="더 많은 도구" aria-expanded="false">
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+                                            stroke="currentColor" stroke-width="2">
+                                            <circle cx="5" cy="12" r="1.6" />
+                                            <circle cx="12" cy="12" r="1.6" />
+                                            <circle cx="19" cy="12" r="1.6" />
+                                        </svg>
+                                    </button>
+                                    <div class="composer-overflow" id="composerSheet" role="group" aria-label="추가 도구">
+                                    <button class="action-btn composer-secondary" id="discussionModeBtn" onclick="toggleDiscussionMode()"
+                                        title="멀티 에이전트 토론" data-label="토론">
                                         <iconify-icon icon="lucide:target"></iconify-icon>
                                     </button>
-                                    <button class="action-btn" id="thinkingModeBtn" onclick="toggleThinkingMode()"
-                                        title="Thinking 모드 (심층 추론)">
+                                    <button class="action-btn composer-secondary" id="thinkingModeBtn" onclick="toggleThinkingMode()"
+                                        title="Thinking 모드 (심층 추론)" data-label="Thinking">
                                         <iconify-icon icon="lucide:brain"></iconify-icon>
                                     </button>
-                                    <button class="action-btn" id="deepResearchBtn" onclick="toggleDeepResearch()"
-                                        title="Deep Research (심층 연구)">
+                                    <button class="action-btn composer-secondary" id="deepResearchBtn" onclick="toggleDeepResearch()"
+                                        title="Deep Research (심층 연구)" data-label="딥 리서치">
                                         <iconify-icon icon="lucide:flask-conical"></iconify-icon>
                                     </button>
-                                    <button class="action-btn" id="agentTaskBtn" onclick="toggleAgentTask()"
-                                        title="에이전트 작업 (백그라운드 자율 수행)">
+                                    <button class="action-btn composer-secondary" id="agentTaskBtn" onclick="toggleAgentTask()"
+                                        title="에이전트 작업 (백그라운드 자율 수행)" data-label="에이전트 작업">
                                         <iconify-icon icon="lucide:bot"></iconify-icon>
                                     </button>
-                                    <button class="action-btn" id="responseStyleBtn" onclick="cycleResponseStyle()"
-                                        title="응답 스타일: 기본 (균형)" data-style="default">📝</button>
-                                    <select class="action-btn" id="userAgentSelect" onchange="setUserAgent(this.value)"
+                                    <button class="action-btn composer-secondary" id="responseStyleBtn" onclick="cycleResponseStyle()"
+                                        title="응답 스타일: 기본 (균형)" data-style="default" data-label="응답 스타일">📝</button>
+                                    <select class="action-btn composer-secondary" id="userAgentSelect" onchange="setUserAgent(this.value)"
                                         title="페르소나 — 내가 만든 Agent를 이 대화에 적용" style="padding:4px 8px;background:var(--bg-tertiary);color:var(--text-primary);border:1px solid var(--border-light);border-radius:var(--radius-md);font-size:var(--font-size-sm);max-width:160px;">
                                         <option value="">🎭 페르소나 자동</option>
                                     </select>
+                                    </div>
                                 </div>
                                 <div class="right-actions">
                                     <div id="connectionStatus" class="connection-status">

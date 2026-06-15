@@ -651,7 +651,6 @@ body::before {
    모바일에서 solid 배경으로 일관성 유지
    ========================================== */
 @media (max-width: 768px) {
-    .sidebar,
     .glass-card,
     .glass-panel,
     .unified-sidebar.us-hover-expanded {

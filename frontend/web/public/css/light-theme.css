@@ -3,80 +3,7 @@
    Warm Paper + Hairline Borders + Soft Shadows + Ember Accent
    ======================================== */
 
-/* 라이트 테마 사이드바 */
-[data-theme="light"] .sidebar,
-.theme-light .sidebar {
-    background: var(--bg-app) !important;
-    border-right: 1px solid var(--border-color);
-}
-
-/* 사이드바 로고 컨테이너 - 라이트 */
-[data-theme="light"] .sidebar-logo-container,
-.theme-light .sidebar-logo-container {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    padding: 20px 16px;
-    margin-bottom: 8px;
-}
-
-[data-theme="light"] .sidebar-logo,
-.theme-light .sidebar-logo {
-    width: 70px;
-    height: 70px;
-    object-fit: contain;
-    margin-bottom: 8px;
-    filter: none;
-}
-
-/* 로고 아래 브랜드명 - 라이트 */
-[data-theme="light"] .sidebar-logo-container::after,
-.theme-light .sidebar-logo-container::after {
-    content: 'OpenMake.Ai';
-    font-family: var(--font-serif); /* Latin 전용 워드마크 */
-    font-size: var(--font-size-lg);
-    font-weight: 600;
-    color: var(--text-primary);
-    letter-spacing: 0;
-}
-
-/* 새 대화 버튼 - 라이트 테마 */
-[data-theme="light"] .sidebar-btn.new-chat,
-.theme-light .sidebar-btn.new-chat {
-    background: var(--bg-card);
-    border: 1px solid var(--border-color);
-    color: var(--text-primary);
-    border-radius: 10px;
-    padding: 12px 20px;
-    font-weight: 700;
-    box-shadow: var(--shadow-md);
-}
-
-[data-theme="light"] .sidebar-btn.new-chat:hover,
-.theme-light .sidebar-btn.new-chat:hover {
-    background: var(--bg-tertiary);
-    border-color: var(--border-strong);
-    transform: translate(-2px, -2px);
-    box-shadow: var(--shadow-lg);
-}
-
-[data-theme="light"] .sidebar-btn.new-chat:active,
-.theme-light .sidebar-btn.new-chat:active {
-    transform: translate(1px, 1px);
-    box-shadow: none;
-}
-
-/* 최근 대화 섹션 - 라이트 */
-[data-theme="light"] .history-label,
-.theme-light .history-label {
-    color: var(--text-secondary);
-    font-size: var(--font-size-xs);
-    font-weight: 800;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    padding: 8px 16px;
-}
-
+/* 최근 대화 항목 - 라이트 */
 [data-theme="light"] .history-item,
 .theme-light .history-item {
     color: var(--text-secondary);
@@ -95,98 +22,8 @@
     transform: translate(-2px, -2px);
 }
 
-/* 메뉴 네비게이션 - 라이트 */
-[data-theme="light"] .sidebar-nav-item,
-.theme-light .sidebar-nav-item {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 12px 16px;
-    margin: 2px 8px;
-    border-radius: 10px;
-    color: var(--text-secondary);
-    text-decoration: none;
-    font-size: var(--font-size-sm);
-    border: 2px solid transparent;
-    transition: all 0.2s ease;
-    font-weight: 600;
-}
-
-[data-theme="light"] .sidebar-nav-item:hover,
-.theme-light .sidebar-nav-item:hover {
-    background: var(--bg-card);
-    border-color: var(--border-strong);
-    color: var(--text-primary);
-    box-shadow: var(--shadow-sm);
-    transform: translate(-2px, -2px);
-}
-
-/* 활성 메뉴 - 파란색 배경 */
-[data-theme="light"] .sidebar-nav-item.active,
-.theme-light .sidebar-nav-item.active {
-    background: var(--accent-primary) !important;
-    color: var(--bg-card) !important;
-    font-weight: 700;
-    border: 1px solid var(--border-color);
-    box-shadow: var(--shadow-sm);
-}
-
-[data-theme="light"] .sidebar-nav-item.active .nav-icon,
-.theme-light .sidebar-nav-item.active .nav-icon {
-    color: var(--bg-card) !important;
-}
-
-[data-theme="light"] .sidebar-nav-item .nav-icon,
-.theme-light .sidebar-nav-item .nav-icon {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 24px;
-    height: 24px;
-    font-size: var(--font-size-lg);
-    color: var(--text-secondary);
-}
-
-/* 사용자 섹션 - 라이트 */
-[data-theme="light"] .user-section,
-.theme-light .user-section {
-    padding: 16px;
-    border-top: 1px solid var(--border-color);
-    margin-top: auto;
-    background: var(--bg-app);
-}
-
-[data-theme="light"] .sidebar-btn#loginBtn,
-.theme-light .sidebar-btn#loginBtn {
-    background: var(--bg-card);
-    border: 1px solid var(--border-color);
-    color: var(--text-primary);
-    border-radius: 8px;
-    padding: 10px 16px;
-    font-size: var(--font-size-sm);
-    width: 100%;
-    font-weight: 700;
-    box-shadow: var(--shadow-md);
-}
-
-[data-theme="light"] .sidebar-btn#loginBtn:hover,
-.theme-light .sidebar-btn#loginBtn:hover {
-    transform: translate(-2px, -2px);
-    box-shadow: var(--shadow-lg);
-}
-
-/* 사이드바 헤더 - 라이트 */
-[data-theme="light"] .sidebar-header,
-.theme-light .sidebar-header {
-    display: flex;
-    justify-content: space-between;
-    padding: 12px 16px;
-    border-bottom: 1px solid var(--border-color);
-}
-
-[data-theme="light"] .sidebar-toggle,
+/* 테마 토글 - 라이트 */
 [data-theme="light"] .theme-toggle,
-.theme-light .sidebar-toggle,
 .theme-light .theme-toggle {
     background: transparent;
     border: 2px solid transparent;
@@ -197,9 +34,7 @@
     transition: all 0.2s;
 }
 
-[data-theme="light"] .sidebar-toggle:hover,
 [data-theme="light"] .theme-toggle:hover,
-.theme-light .sidebar-toggle:hover,
 .theme-light .theme-toggle:hover {
     background: var(--bg-card);
     border-color: var(--border-strong);

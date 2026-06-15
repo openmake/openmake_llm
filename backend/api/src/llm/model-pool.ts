@@ -1,12 +1,12 @@
 /**
- * Model Pool — capacity 기반 proactive model routing.
+ * Model Context-Fit — 단일 chat 모델(262K)의 context overflow 안전망.
  *
- * 두 chat 모델 (qwen3.6-35b-a3b 262K / qwen3.6-35b-a3b-1m 1M) 사이에서
- * 입력 + 예상 출력 합산을 추정하여 자동 선택. 1M 도 부족 시 안전망 (input
- * truncate 우선, max_tokens 축소 fallback, 극단 시 에러).
+ * 입력 + 예상 출력 합산을 추정하여 effective 262K 초과 시 안전망 적용
+ * (input truncate 우선, max_tokens 축소 fallback, 극단 시 에러).
  *
- * Pure Manual 호환: options.model 명시 시 routing 우회.
+ * Pure Manual 호환: options.model 명시 시 우회.
  *
+ * (2026-06-15: 1M 노드 제거 — 262K↔1M proactive routing 폐기. 단일 모델 fit-to-262K 로 단순화.)
  *
  * @module llm/model-pool
  */
@@ -20,7 +20,7 @@ const SAFETY_BUFFER = 256;
 export interface ModelPoolDecision {
     /** 사용할 model ID (LLMClient.chat 에 body.model 로 전달) */
     model: string;
-    /** routing 소스 */
+    /** 결정 소스 */
     source: 'auto' | 'auto_trimmed' | 'auto_trimmed_reduced' | 'manual' | 'pool_disabled';
     /** truncate 적용 시 새 messages — 없으면 원본 사용 */
     adjustedMessages?: ChatMessage[];
@@ -54,10 +54,18 @@ export function estimateTokens(text: string): number {
     return Math.ceil(tokens * 1.05);
 }
 
-/** 모든 message 의 content + role/separator overhead (+4) 합. */
+/**
+ * 모든 message 의 content + role/separator overhead (+4) 합.
+ * Vision 이미지는 content 에 없으므로 이미지당 보수적 토큰(tokensPerImage)을 가산 —
+ * 누락 시 vision 요청이 262K 로 mis-routing 되어 overflow 할 수 있음.
+ */
 export function estimateMessageTokens(messages: ChatMessage[]): number {
     return messages.reduce(
-        (sum, m) => sum + estimateTokens(m.content || '') + 4,
+        (sum, m) =>
+            sum
+            + estimateTokens(m.content || '')
+            + (m.images?.length ? m.images.length * MODEL_POOL_CONFIG.tokensPerImage : 0)
+            + 4,
         0,
     );
 }
@@ -101,38 +109,30 @@ export function truncateMessagesPreservingSystem(
 }
 
 /**
- * 1M 모델 안전망 — output 보호 우선 점진차:
+ * 단일 모델(262K) context 안전망 — output 보호 우선 점진차:
  *   1단계: input truncate (system + 최근 N 보존)
  *   2단계: max_tokens 축소 (최소 MIN_OUTPUT_TOKENS 보장)
- *   3단계: 극단 (system 단독 990K+) — ContextOverflowError throw
+ *   3단계: 극단 (system 단독으로도 초과) — ContextOverflowError throw
+ *
+ * (호출 시점에 input + requested 가 effectiveDefault 를 이미 초과한 상태.)
  */
-export function reduceToFit1M(
+export function reduceToFit(
     messages: ChatMessage[],
     options: Pick<ModelOptions, 'num_predict'>,
-    inputTokens: number,
 ): ModelPoolDecision {
     const requested = options.num_predict ?? MODEL_POOL_CONFIG.routingMaxTokensDefault;
-    const effectiveLarge = MODEL_POOL_CONFIG.effectiveLarge;
+    const effective = MODEL_POOL_CONFIG.effectiveDefault;
     const minOutput = MODEL_POOL_CONFIG.minOutputTokens;
-
-    if (inputTokens + requested <= effectiveLarge) {
-        return {
-            model: MODEL_POOL_CONFIG.largeModel,
-            source: 'auto',
-            adjustedMessages: messages,
-            adjustedMaxTokens: requested,
-            inputTokens,
-        };
-    }
+    const model = MODEL_POOL_CONFIG.defaultModel;
 
     // 1단계: input truncate
-    const inputBudget = effectiveLarge - requested - SAFETY_BUFFER;
+    const inputBudget = effective - requested - SAFETY_BUFFER;
     const trimmed = truncateMessagesPreservingSystem(messages, inputBudget);
     const newInputTokens = estimateMessageTokens(trimmed);
 
-    if (newInputTokens + requested <= effectiveLarge) {
+    if (newInputTokens + requested <= effective) {
         return {
-            model: MODEL_POOL_CONFIG.largeModel,
+            model,
             source: 'auto_trimmed',
             adjustedMessages: trimmed,
             adjustedMaxTokens: requested,
@@ -142,10 +142,10 @@ export function reduceToFit1M(
     }
 
     // 2단계: max_tokens 축소
-    const available = effectiveLarge - newInputTokens - SAFETY_BUFFER;
+    const available = effective - newInputTokens - SAFETY_BUFFER;
     if (available >= minOutput) {
         return {
-            model: MODEL_POOL_CONFIG.largeModel,
+            model,
             source: 'auto_trimmed_reduced',
             adjustedMessages: trimmed,
             adjustedMaxTokens: available,
@@ -156,21 +156,21 @@ export function reduceToFit1M(
 
     // 3단계: 극단
     throw new ContextOverflowError(
-        `메시지가 1M 토큰 한계 초과 (input=${newInputTokens}, limit=${effectiveLarge}). 입력을 줄여주세요.`,
+        `메시지가 262K 토큰 한계 초과 (input=${newInputTokens}, limit=${effective}). 입력을 줄여주세요.`,
         newInputTokens,
-        effectiveLarge,
+        effective,
     );
 }
 
 /**
- * Main routing 함수 — LLMClient.chat() 진입에서 호출.
+ * Main context-fit 함수 — LLMClient.chat() 진입에서 호출.
  *
  * 흐름:
- *   1. options.model 명시 → manual (routing 우회)
- *   2. LLM_POOL_ENABLED=false → pool_disabled (default 모델)
- *   3. 자동 routing — inputTokens + estimatedOutput 합산 기반:
- *      - effective 262K 이하 → default 모델
- *      - 초과 → reduceToFit1M (1M + 안전망)
+ *   1. options.model 명시 → manual (우회)
+ *   2. LLM_POOL_ENABLED=false → pool_disabled (안전망 비활성, 원본 그대로)
+ *   3. inputTokens + estimatedOutput 합산 기반:
+ *      - effective 262K 이하 → 그대로 default 모델
+ *      - 초과 → reduceToFit (truncate/축소/overflow 안전망)
  */
 export function selectModelByCapacity(
     messages: ChatMessage[],
@@ -181,12 +181,12 @@ export function selectModelByCapacity(
         return { model: options.model, source: 'manual' };
     }
 
-    // 2. Pool 비활성
+    // 2. 안전망 비활성
     if (!MODEL_POOL_CONFIG.enabled) {
         return { model: MODEL_POOL_CONFIG.defaultModel, source: 'pool_disabled' };
     }
 
-    // 3. 자동 routing
+    // 3. context-fit
     const inputTokens = estimateMessageTokens(messages);
     const estimatedOutput = options.num_predict ?? MODEL_POOL_CONFIG.routingMaxTokensDefault;
     const required = inputTokens + estimatedOutput;
@@ -199,5 +199,5 @@ export function selectModelByCapacity(
         };
     }
 
-    return reduceToFit1M(messages, options, inputTokens);
+    return reduceToFit(messages, options);
 }

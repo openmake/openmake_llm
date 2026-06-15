@@ -143,14 +143,15 @@ export class ChatRequestHandler {
         clusterManager: ClusterManager,
         engineModel: string,
         nodeId?: string,
+        userId?: string,
     ): LLMClient | undefined {
         if (nodeId && nodeId.length < 10) {
-            return clusterManager.createScopedClient(nodeId, engineModel);
+            return clusterManager.createScopedClient(nodeId, engineModel, userId);
         }
 
         const bestNode = clusterManager.getBestNode(engineModel);
         return bestNode
-            ? clusterManager.createScopedClient(bestNode.id, engineModel)
+            ? clusterManager.createScopedClient(bestNode.id, engineModel, userId)
             : undefined;
     }
 
@@ -209,9 +210,11 @@ export class ChatRequestHandler {
         //    (OpenRouter/Anthropic 등) 로 dispatch 하는 경로까지 막혀 잘못된 차단이었음.
         //    fallback client 는 external provider 경로에선 *호출 안 되고* 생성만 됨 — 라우터가
         //    실제 dispatch 결정.
+        // per-user 토큰 쿼터 enforcement 용 userId (비인증 시 undefined → enforcement skip)
+        const quotaUserId = userContext.authenticatedUserId ?? undefined;
         const client =
-            ChatRequestHandler.createClient(clusterManager, engineModel, nodeId)
-            ?? createDirectClient({ model: engineModel });
+            ChatRequestHandler.createClient(clusterManager, engineModel, nodeId, quotaUserId)
+            ?? createDirectClient({ model: engineModel, ...(quotaUserId ? { userId: quotaUserId } : {}) });
 
         // 3. 세션 확보 (Phase 3.4: branchFromSessionId 명시 시 metadata.parentSessionId 저장)
         // Phase 3 보완 D.3 (2026-05-26): branchFromSessionId 의 ownership 검증 —

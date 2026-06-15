@@ -28,6 +28,8 @@ import { normalizeBrandAlias, logAliasHitIfAny } from '../../chat/brand-alias-no
 import { runProviderGate } from './provider-gate';
 import type { RequestContext } from './request-context';
 import { buildChatOptions, assembleHistoryWithSummary } from './options-and-history';
+import { estimateTokens } from '../../llm/model-pool';
+import { USER_CONTEXT_LIMITS, AGENT_LOOP_LIMITS } from '../../config/runtime-limits';
 
 const logger = createLogger('MessagePipeline');
 
@@ -253,7 +255,7 @@ export async function runMessagePipeline(svc: ChatService,
         // 2026-05-26 옵션 B 통합 (외부 provider 경로):
         // Custom Agent (user_agents) 활성 시 산업 agent 라우팅 우회 + allowedSkills 주입.
         // 2026-05-26 cleanup: 전체 build() 대신 loadUserAgent 단독 호출 —
-        // 외부 provider 가 자체 model 처리하므로 modelSelection / capacityDecision /
+        // 외부 provider 가 자체 model 처리하므로 modelSelection /
         // aliasDerived* 등 다른 build 결과는 미사용 (over-fetch 제거).
         let agentSysMsgForExternal = industryAgentSysMsg;
         if (req.userAgentId && userId && userId !== 'guest') {
@@ -345,9 +347,9 @@ export async function runMessagePipeline(svc: ChatService,
     const supportsThinking = checkModelCapability(modelSelection.model, 'thinking');
     logger.debug(`모델 기능: tools=${supportsTools}, thinking=${supportsThinking}`);
 
-    // Phase #I cleanup (2026-05-26): agentLoopMax 필드 제거. profile-resolver 가
-    // 항상 5 반환했으므로 상수로 inline.
-    const maxTurns = 5;
+    // Phase #I cleanup (2026-05-26): agentLoopMax 필드 제거.
+    // 2026-06-15: 인라인 리터럴 → AGENT_LOOP_LIMITS 단일 SoT 로 외부화.
+    const maxTurns = AGENT_LOOP_LIMITS.MAX_TURNS;
 
     // ── 합류: Step 5 직전에 agent 결과 수신 ──
     // 병렬로 실행되던 resolveAgent() 의 결과를 여기서 await.
@@ -371,7 +373,16 @@ export async function runMessagePipeline(svc: ChatService,
             const userRepo = new UserRepository(getPool());
             const ci = await userRepo.getCustomInstructions(userId);
             if (ci && ci.trim().length > 0) {
-                customInstructionsBlock = `## 👤 User Custom Instructions\n${ci.trim()}\n\n---\n\n`;
+                // 토큰 cap — 매 턴 고정 비용이므로 무제한 prepend 방지 (head 보존 truncate)
+                let ciText = ci.trim();
+                const maxCi = USER_CONTEXT_LIMITS.MAX_CUSTOM_INSTRUCTIONS_TOKENS;
+                if (estimateTokens(ciText) > maxCi) {
+                    // 대략 토큰당 char 비율로 head 자르고 안내 부착 (정확 토큰 재확인 불필요 — 보수적)
+                    const ratio = ciText.length / estimateTokens(ciText);
+                    ciText = ciText.slice(0, Math.floor(maxCi * ratio)).trimEnd() + ' …(생략됨)';
+                    logger.info(`custom_instructions 토큰 cap 적용 (>${maxCi})`);
+                }
+                customInstructionsBlock = `## 👤 User Custom Instructions\n${ciText}\n\n---\n\n`;
             }
         } catch (e) {
             logger.warn('custom_instructions 조회 실패 (계속 진행):', e);
@@ -386,10 +397,23 @@ export async function runMessagePipeline(svc: ChatService,
             const memRepo = new UserMemoryRepository(getPool());
             const memories = await memRepo.listActiveByUser(userId, 50);
             if (memories.length > 0) {
-                const lines = memories.map((m, i) => `${i + 1}. ${m.content}`).join('\n');
+                // 토큰 budget 누적 — 최신순으로 cap 도달 전까지만 포함 (무제한 prepend 방지)
+                const maxMem = USER_CONTEXT_LIMITS.MAX_MEMORY_TOKENS;
+                const kept: typeof memories = [];
+                let usedTokens = 0;
+                for (const m of memories) {
+                    const t = estimateTokens(m.content) + 4;
+                    if (usedTokens + t > maxMem && kept.length > 0) break;
+                    kept.push(m);
+                    usedTokens += t;
+                }
+                if (kept.length < memories.length) {
+                    logger.info(`user_memories 토큰 cap 적용 (${kept.length}/${memories.length}, >${maxMem} tok)`);
+                }
+                const lines = kept.map((m, i) => `${i + 1}. ${m.content}`).join('\n');
                 memoryBlock = `## 🧠 User Memory (cross-conversation)\n${lines}\n\n---\n\n`;
-                // 접근 시점 갱신 — fire-and-forget
-                void memRepo.touchAccessed(memories.map(m => m.id)).catch(e =>
+                // 접근 시점 갱신 — fire-and-forget (포함된 항목만)
+                void memRepo.touchAccessed(kept.map(m => m.id)).catch(e =>
                     logger.warn('memory touch 실패 (무시):', e),
                 );
             }

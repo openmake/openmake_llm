@@ -3,10 +3,9 @@
  * Unified Execution Plan — Phase B Routing Unification
  * ============================================================
  *
- * 기존 4 layer (LLM classifier / brand profile / model-resolver / model-pool)
- * 의 출력을 단일 구조체로 통합합니다. Phase 1 은 위임 단계 — 기존
- * `ExecutionPlan` 과 `ModelSelection` 을 그대로 포함합니다. Phase 2 에서
- * model-pool 의 `ModelPoolDecision` 을 흡수해 `capacityDecision` 이 채워집니다.
+ * 기존 layer (brand profile / model-resolver / classifier) 의 출력을 단일
+ * 구조체로 통합합니다. `ExecutionPlan` 과 `ModelSelection` 을 포함합니다.
+ * (capacity 결정은 LLMClient.chat per-call 에서 처리 — plan 에 포함하지 않음.)
  *
  * @module chat/execution-plan-types
  * @see chat/execution-plan-builder
@@ -14,18 +13,11 @@
 
 import type { ExecutionPlan } from './profile-resolver';
 import type { ModelSelection } from './model-selector-types';
-import type { ModelPoolDecision } from '../llm/model-pool';
 import type { Style } from './style';
 
 export interface UnifiedExecutionPlan extends ExecutionPlan {
     /** Layer 1+3 결과 — 분류된 queryType + 옵션 + 모델 ID */
     modelSelection: ModelSelection;
-
-    /**
-     * Layer 4 결과 — Phase 2-B 에서 채워짐.
-     * Phase 1 동안에는 null (LLMClient.chat 시점에 결정).
-     */
-    capacityDecision: ModelPoolDecision | null;
 
     /** Phase A (2026-05-26): 응답 스타일 축 결과 */
     style: Style;

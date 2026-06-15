@@ -19,6 +19,7 @@ import type {
     UsageMetrics,
 } from './types';
 import { createLogger } from '../utils/logger';
+import { AGENT_LOOP_LIMITS } from '../config/runtime-limits';
 
 const logger = createLogger('LLMAgentLoop');
 
@@ -50,7 +51,7 @@ export interface AgentLoopParams {
 
 export async function runAgentLoop(params: AgentLoopParams): Promise<AgentLoopResult> {
     const { client, tools, availableFunctions } = params;
-    const maxIterations = params.maxIterations ?? 10;
+    const maxIterations = params.maxIterations ?? AGENT_LOOP_LIMITS.LEGACY_MAX_ITERATIONS;
     const conversation: ChatMessage[] = [...params.messages];
     let iterations = 0;
     let lastMessage: ChatMessage & { metrics?: UsageMetrics } = {

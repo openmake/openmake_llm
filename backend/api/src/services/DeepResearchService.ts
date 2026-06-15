@@ -70,11 +70,22 @@ export class DeepResearchService {
     async executeResearch(
         sessionId: string,
         topic: string,
-        onProgress?: (progress: ResearchProgress) => void
+        onProgress?: (progress: ResearchProgress) => void,
+        externalSignal?: AbortSignal
     ): Promise<ResearchResult> {
         const startTime = Date.now();
         const db = getUnifiedDatabase();
         this.abortController = new AbortController();
+
+        // 외부 abort 신호(WS disconnect/명시적 stop)를 내부 컨트롤러에 연결.
+        // 미연결 시 클라이언트 종료 후에도 검색/스크래핑/합성 루프가 끝까지 리소스를 소진함.
+        if (externalSignal) {
+            if (externalSignal.aborted) {
+                this.abortController.abort();
+            } else {
+                externalSignal.addEventListener('abort', () => this.abortController?.abort(), { once: true });
+            }
+        }
 
         logger.info(`[DeepResearch] 시작: ${topic} (세션: ${sessionId})`);
 

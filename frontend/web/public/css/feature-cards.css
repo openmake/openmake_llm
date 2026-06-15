@@ -133,13 +133,6 @@
     color: var(--text-primary);
 }
 
-/* 라이트 테마 사이드바 */
-[data-theme="light"] .sidebar,
-.theme-light .sidebar {
-    background: var(--bg-sidebar);
-    border-right: var(--border-width) solid var(--border-light);
-}
-
 /* 라이트 테마 채팅 입력 */
 [data-theme="light"] .chat-input-container,
 .theme-light .chat-input-container {
@@ -177,18 +170,6 @@
     box-shadow: var(--shadow-lg);
     transform: translate(-2px, -2px);
     border-color: var(--border-strong);
-}
-
-/* 라이트 테마 새 대화 버튼 */
-[data-theme="light"] .sidebar-btn.new-chat,
-.theme-light .sidebar-btn.new-chat {
-    background: #4CAF50;
-    color: white;
-}
-
-[data-theme="light"] .sidebar-btn.new-chat:hover,
-.theme-light .sidebar-btn.new-chat:hover {
-    background: #45A049;
 }
 
 /* ========================================

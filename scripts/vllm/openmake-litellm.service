@@ -1,6 +1,6 @@
 [Unit]
 Description=OpenMake LiteLLM Proxy @ :13401
-After=network.target openmake-vllm-qwen.service openmake-vllm-qwen-1m.service openmake-vllm-bge.service
+After=network.target openmake-vllm-qwen.service openmake-vllm-bge.service
 
 [Service]
 Type=simple

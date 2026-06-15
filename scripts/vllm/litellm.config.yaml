@@ -3,7 +3,6 @@
 # ============================================================
 # 2026-05-29 동기화: 운영 LiteLLM /model/info 응답을 그대로 전사.
 #   qwen3.6-35b-a3b      → vLLM :8002 (기본 채팅, 262K)
-#   qwen3.6-35b-a3b-1m   → vLLM :8004 (대용량 context, 1M)
 #   bge-m3               → vLLM :8003 (multilingual embedding)
 #   gpt-3.5-turbo        → :8002 alias (OpenAI 호환 클라이언트 → qwen3.6 라우팅)
 #
@@ -16,12 +15,6 @@ model_list:
     litellm_params:
       model: openai/qwen3.6-35b-a3b
       api_base: http://localhost:8002/v1
-      api_key: os.environ/VLLM_API_KEY
-
-  - model_name: qwen3.6-35b-a3b-1m
-    litellm_params:
-      model: openai/qwen3.6-35b-a3b-1m
-      api_base: http://localhost:8004/v1
       api_key: os.environ/VLLM_API_KEY
 
   - model_name: bge-m3

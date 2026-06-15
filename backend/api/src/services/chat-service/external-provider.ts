@@ -13,7 +13,7 @@
  * @module services/chat-service/external-provider
  */
 import { createLogger } from '../../utils/logger';
-import { EXTERNAL_LLM_TOOL_BLACKLIST } from '../../config/runtime-limits';
+import { EXTERNAL_LLM_TOOL_BLACKLIST, LOOP_DETECTION, AGENT_LOOP_LIMITS } from '../../config/runtime-limits';
 import { getUnifiedMCPClient } from '../../mcp/unified-client';
 import { isPersistableUserId } from '../../utils/user-id-validation';
 import { getExternalProviderSystemGuards } from '../../chat/prompt';
@@ -145,16 +145,35 @@ export async function streamFromExternalProvider(
     let inputTokensTotal = 0;
     let outputTokensTotal = 0;
     let directCostUsdMicrosTotal: number | undefined;
-    const MAX_TOOL_TURNS = 5;
+    const MAX_TOOL_TURNS = AGENT_LOOP_LIMITS.MAX_TURNS;
+
+    // Doom-loop 가드 (strategy 경로의 detectLoop 경량 이식):
+    // 동일 도구 호출 배치가 연속 반복되면 도구를 끈 최종 턴으로 강제 전환해
+    // 남은 턴 낭비 + 컨텍스트 무한 누적을 차단한다. (5턴 예산상 BREAK_AT(5)는
+    // 도달 불가하므로 WARN_AT(3)를 조기 종료 트리거로 사용)
+    let lastBatchSig: string | null = null;
+    let repeatCount = 0;
+    let suppressTools = false;
 
     try {
         for (let turn = 0; turn < MAX_TOOL_TURNS; turn++) {
+            // Wall-clock 예산 가드 — 턴 수와 별개로 누적 시간 초과 시 도구 끄고 최종 응답 유도
+            if (!suppressTools && AGENT_LOOP_LIMITS.MAX_WALL_CLOCK_MS > 0
+                && Date.now() - startedAt > AGENT_LOOP_LIMITS.MAX_WALL_CLOCK_MS) {
+                logger.warn(`⏱️ 외부 LLM 루프 wall-clock 예산 초과 (${AGENT_LOOP_LIMITS.MAX_WALL_CLOCK_MS}ms) — 도구 비활성 최종 턴으로 전환`);
+                suppressTools = true;
+                messages.push({
+                    role: 'user',
+                    content: '처리 시간이 초과되었습니다. 추가 도구 호출 없이 현재까지 수집한 정보로 답변을 완성하세요.',
+                });
+            }
+            const turnTools = suppressTools ? [] : tools;
             result = await resolved.provider.streamChat(
                 {
                     messages,
                     modelId: resolved.modelId,
                     thinking: req.thinkingMode === true,
-                    ...(tools.length > 0 ? { tools } : {}),
+                    ...(turnTools.length > 0 ? { tools: turnTools } : {}),
                     ...(req.abortSignal ? { abortSignal: req.abortSignal } : {}),
                 },
                 {
@@ -171,8 +190,32 @@ export async function streamFromExternalProvider(
                 },
             );
 
-            if (!result.toolCalls || result.toolCalls.length === 0) {
+            if (suppressTools || !result.toolCalls || result.toolCalls.length === 0) {
                 break;
+            }
+
+            // 동일 도구 배치 연속 반복 감지 (name + args hash 정렬 후 비교)
+            const batchSig = result.toolCalls
+                .map((tc) => `${tc.name}:${JSON.stringify(tc.args).slice(0, LOOP_DETECTION.ARGS_HASH_MAX_LENGTH)}`)
+                .sort()
+                .join('|');
+            if (batchSig === lastBatchSig) {
+                repeatCount++;
+            } else {
+                repeatCount = 1;
+                lastBatchSig = batchSig;
+            }
+
+            if (repeatCount >= LOOP_DETECTION.SAME_CALL_WARN_AT) {
+                logger.warn(`🔁 외부 LLM doom-loop 감지 (동일 도구 배치 ${repeatCount}회 반복) — 도구 비활성 최종 턴으로 전환`);
+                // 반복된 도구 호출은 실행하지 않고 폐기 — 도구를 끈 다음 턴에서 최종 답변 유도.
+                // (assistant tool_calls 를 push 하지 않으므로 messages 정합성 유지)
+                suppressTools = true;
+                messages.push({
+                    role: 'user',
+                    content: '동일한 도구 호출이 반복되고 있습니다. 추가 도구 호출 없이 현재까지 수집한 정보로 답변을 완성하세요.',
+                });
+                continue;
             }
 
             logger.info(`🛠️ 외부 LLM tool calls (turn ${turn + 1}): ${result.toolCalls.length}개`);

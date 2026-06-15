@@ -6,7 +6,7 @@
  * 운영 컨텍스트:
  *   - LLM 은 외부 서버 PC 에서 vLLM/LiteLLM 으로 호스팅
  *   - 클라이언트 PC 는 단일 proxy endpoint (LLM_BASE_URL) 로 호출
- *   - proxy 가 model 명 기반으로 백엔드 라우팅 (server 의 8002/8003/8004/8005)
+ *   - proxy 가 model 명 기반으로 백엔드 라우팅 (server 의 8002/8003)
  *
  * 본 카탈로그는 클라이언트 PC 가 알아야 할 **모델 ID + role + 표시 정보** 만 정의.
  * 실제 endpoint host:port 는 proxy 가 캡슐화 — 클라이언트는 model 명만 사용.
@@ -48,7 +48,6 @@ export interface LocalModelEntry {
 /**
  * 기본 카탈로그 — 사용자 환경 (2026-05 기준):
  *   - qwen3.6-35b-a3b      : 기본 채팅 (262K)
- *   - qwen3.6-35b-a3b-1m   : 대용량 context (1M, 선택적)
  *   - gpt-3.5-turbo        : OpenAI 호환 alias (→ qwen3.6 라우팅)
  *
  * (embedding 모델 bge-m3 은 2026-05-29 카탈로그에서 제거 — 앱 소비처 0건.
@@ -61,17 +60,6 @@ const DEFAULT_LOCAL_MODELS: LocalModelEntry[] = [
         description: '기본 채팅 — 262K context',
         role: 'chat',
         contextLength: 262144,
-    },
-    {
-        id: 'qwen3.6-35b-a3b-1m',
-        displayName: 'Qwen 3.6 (1M context)',
-        description: '대용량 문서/research — 1M context (LiteLLM gateway 가 항상 노출)',
-        role: 'chat',
-        contextLength: 1048576,
-        // LiteLLM gateway 가 /v1/models 응답에 항상 포함 → 클라이언트는 always available 가정.
-        // 내부 8004 vLLM 다운 시는 LiteLLM router 가 에러 응답 (기존 LLMClient 에러 처리 cought).
-        // ModelPool routing 의 자동 1M 전환을 위해 available 보장 필요.
-        available: true,
     },
     {
         id: 'gpt-3.5-turbo',
@@ -222,9 +210,8 @@ async function pingEmbeddingModel(
  *
  * Stage 1 만으로는 부족한 이유:
  *   - LiteLLM/vLLM proxy 의 `/v1/models` 는 config 기반 model 등록만 반환
- *   - backend (예: 8004 vLLM 인스턴스) 미가동이어도 model 명은 list 에 노출
+ *   - backend vLLM 인스턴스 미가동이어도 model 명은 list 에 노출
  *   - 클라이언트가 "모델 있는 줄 알고" 호출 → 500 InternalServerError
- *   - 1m 모델 (qwen3.6-35b-a3b-1m / 8004) 케이스가 정확히 이 패턴
  *
  * Stage 2 가 connectivity 까지 검증해 실제 호출 가능한 모델만 카탈로그 활성화.
  *

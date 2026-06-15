@@ -156,28 +156,6 @@ iconify-icon.icon-2xl {
 }
 
 /* ==========================================
-   Nav Icon (For sidebar navigation)
-   ========================================== */
-.nav-icon {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 24px;
-    height: 24px;
-    font-size: var(--font-size-lg);
-    flex-shrink: 0;
-    transition: transform var(--transition-fast);
-}
-
-.sidebar-nav-item:hover .nav-icon {
-    transform: scale(1.1);
-}
-
-.sidebar-nav-item.active .nav-icon {
-    color: inherit;
-}
-
-/* ==========================================
    Icon String Mappings
    (Legacy emoji to Iconify conversion reference)
    

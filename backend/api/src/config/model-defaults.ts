@@ -30,8 +30,8 @@ export const MODEL_CAPABILITY_PRESETS: Readonly<Record<string, ModelCapabilities
      * - toolCalling: ✅ (vLLM `--tool-call-parser hermes` 호환)
      * - thinking: ✅ (DeepSeek R1 style reasoning)
      * - vision: ❌
-     * - context: 262K (기본), 1M (`qwen3.6-35b-a3b-1m` variant)
-     * 서버 PC 의 vLLM 8002 (기본) / 8004 (1m, 선택적) 백엔드.
+     * - context: 262K
+     * 서버 PC 의 vLLM 8002 백엔드.
      */
     'qwen3.6': {
         toolCalling: true,
@@ -46,12 +46,6 @@ export const MODEL_CAPABILITY_PRESETS: Readonly<Record<string, ModelCapabilities
     //   있으면 채팅 경로(external dispatch)가 모든 MCP 도구를 caps 게이트에서 제거해
     //   채팅 도구 호출이 전면 불능이 된다 (tools=0).
     'qwen3.6-35b-a3b': {
-        toolCalling: true,
-        thinking: true,
-        vision: true,
-        streaming: true,
-    },
-    'qwen3.6-35b-a3b-1m': {
         toolCalling: true,
         thinking: true,
         vision: true,
@@ -85,7 +79,7 @@ export const FALLBACK_CAPABILITIES: ModelCapabilities = {
  *
  * `exact-우선 → prefix-longest` 는 `pure prefix-longest` 와 동치이므로 단일 규칙으로 통일.
  * `startsWith` 는 `includes` 와 달리 중간-substring 오매칭(게이팅 over-grant)을 배제하면서
- * suffixed variant(예: '-1m', '-2m')는 동일하게 커버한다.
+ * suffixed variant(예: ':cloud', '-instruct')는 동일하게 커버한다.
  */
 export function matchCapabilityPreset(modelId: string): ModelCapabilities | null {
     const lower = modelId.toLowerCase();

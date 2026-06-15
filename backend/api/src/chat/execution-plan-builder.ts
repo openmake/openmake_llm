@@ -33,7 +33,7 @@ export class ExecutionPlanBuilder {
      *
      * Phase 1: 기존 두 함수 결과를 단순 머지.
      * Phase 2-A: classifier round-trip 제거 (regex only).
-     * Phase 2-B: capacityDecision 계산 흡수.
+     * (capacity 결정은 LLMClient.chat per-call 에서 처리 — plan 에 포함하지 않음.)
      */
     async build(input: BuildPlanInput): Promise<UnifiedExecutionPlan> {
         const { message, hasImages, executionPlan, style: rawStyle, userAgentId, userId } = input;
@@ -69,7 +69,6 @@ export class ExecutionPlanBuilder {
         return {
             ...profilePlan,
             modelSelection,
-            capacityDecision: null,
             style,
             userAgent,
             aliasDerivedThinkingMode: !!aliasResult.thinkingMode,
@@ -79,7 +78,7 @@ export class ExecutionPlanBuilder {
 
     /**
      * Custom Agent 단독 로딩 — 외부 provider 분기 등 full build() 가 필요 없는
-     * 경로 (modelSelection·capacityDecision·aliasDerived 미사용) 에서 user agent
+     * 경로 (modelSelection·aliasDerived 미사용) 에서 user agent
      * 정보만 빠르게 얻기 위한 public helper.
      */
     async loadUserAgent(

@@ -1,8 +1,8 @@
 /**
- * ContextOverflowError — 입력이 모든 모델의 effective capacity 초과 시 throw.
+ * ContextOverflowError — 입력이 모델 effective capacity(262K) 초과 시 throw.
  *
- * model-pool 의 1M 안전망 3단계 (system 단독 990K+ 초과) 에서 발생.
- * 운영자 알림 대상이 아닌 사용자 입력 검증 에러 — HTTP 400 응답 권장.
+ * model-pool 안전망 3단계 (truncate·max_tokens 축소로도 못 맞춤) 에서 발생.
+ * 사용자 입력 검증 에러 — error-handler 가 HTTP 413 응답 + audit(info, webhook 미발송).
  */
 export class ContextOverflowError extends Error {
     public readonly inputTokens: number;

@@ -30,6 +30,11 @@ export interface KeyValueStore {
     incr(key: string): Promise<number>;
 
     /**
+     * 원자적 N 증가. 키 없으면 0에서 시작. 반환값은 증가 후 값. (토큰 쿼터 누적용)
+     */
+    incrBy(key: string, amount: number): Promise<number>;
+
+    /**
      * 키 삭제. 없어도 에러 없이 no-op.
      */
     del(key: string): Promise<void>;

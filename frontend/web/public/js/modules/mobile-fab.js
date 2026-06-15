@@ -56,9 +56,64 @@ function createFab() {
     return container;
 }
 
+/**
+ * 모바일 Composer 오버플로 시트 — "더보기(⋯)" 토글로 보조 도구 접기/펼치기
+ * (CSS: mobile-composer.css, 마크업: index.html #composerMoreBtn / #composerSheet)
+ */
+function initComposerOverflow() {
+    const moreBtn = document.getElementById('composerMoreBtn');
+    const sheet = document.getElementById('composerSheet');
+    const leftActions = moreBtn && moreBtn.closest('.left-actions');
+    const inputContainer = leftActions && leftActions.closest('.input-container');
+    if (!moreBtn || !sheet || !leftActions || !inputContainer) return;
+
+    // 배경 dim (탭하면 닫힘)
+    const scrim = document.createElement('div');
+    scrim.className = 'composer-sheet-scrim';
+    inputContainer.appendChild(scrim);
+
+    function isOpen() { return leftActions.classList.contains('overflow-open'); }
+
+    function close() {
+        leftActions.classList.remove('overflow-open');
+        moreBtn.classList.remove('on');
+        moreBtn.setAttribute('aria-expanded', 'false');
+        scrim.classList.remove('visible');
+    }
+
+    function open() {
+        leftActions.classList.add('overflow-open');
+        moreBtn.classList.add('on');
+        moreBtn.setAttribute('aria-expanded', 'true');
+        scrim.classList.add('visible');
+    }
+
+    moreBtn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        if (isOpen()) { close(); } else { open(); }
+    });
+
+    // 시트 안 도구 선택 시 자동 닫힘
+    sheet.addEventListener('click', function (e) {
+        if (e.target.closest('button')) close();
+    });
+    sheet.addEventListener('change', close);
+
+    scrim.addEventListener('click', close);
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && isOpen()) close();
+    });
+    // 데스크톱 폭으로 넘어가면 시트 정리
+    window.addEventListener('resize', function () {
+        if (window.innerWidth > 640 && isOpen()) close();
+    });
+}
+
 export function init() {
     const fabContainer = createFab();
     document.body.appendChild(fabContainer);
+
+    initComposerOverflow();
 
     const fabBtn = fabContainer.querySelector('#fabBtn');
     const fabMenu = fabContainer.querySelector('#fabMenu');

@@ -4,7 +4,7 @@
 # ============================================================
 # 운영 서버(rockyhan) 실측 serve 명령 기준 (2026-05-29 동기화).
 # venv: /home/smith/vllm/rebuild/vllm_env (qwen3.6 지원 rebuild)
-# 가중치: 로컬 fp8 모델 디렉토리 (qwen3.6-35b-a3b-1m 과 동일 가중치 공유).
+# 가중치: 로컬 fp8 모델 디렉토리.
 set -euo pipefail
 
 MODEL_DIR="${QWEN_MODEL_DIR:-/home/smith/models/qwen3.6-35b-a3b-fp8}"

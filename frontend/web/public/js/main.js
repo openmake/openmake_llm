@@ -131,7 +131,7 @@ import { Router, SafeStorage } from './spa-router.js?v=30';
 import { UnifiedSidebar } from './components/unified-sidebar.js?v=10';
 
 // 1-18. 모바일 FAB 메뉴
-import { init as initMobileFab } from './modules/mobile-fab.js';
+import { init as initMobileFab } from './modules/mobile-fab.js?v=2';
 import { checkReconsent } from './modules/consent-prompt.js';
 
 

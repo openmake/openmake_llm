@@ -9,7 +9,6 @@
  * @module ui
  */
 
-import { getState, setState } from './state.js';
 import { STORAGE_KEY_THEME } from './constants.js';
 
 /**

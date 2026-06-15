@@ -28,11 +28,6 @@
                 function authFetch(url, opts = {}) {
             return window.authFetch(url, opts);
         }
-        function showToast(msg, type = 'success') {
-            const t = document.getElementById('toast');
-            t.textContent = msg; t.className = `toast ${type} show`;
-            setTimeout(() => t.classList.remove('show'), 2500);
-        }
         function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 
         const SEVERITY_ICONS = { info: '<iconify-icon icon=lucide:info></iconify-icon>', warning: '<iconify-icon icon=lucide:alert-triangle></iconify-icon>', critical: '<iconify-icon icon=lucide:siren></iconify-icon>' };
