@@ -10,16 +10,17 @@
         { "source": "\\b(react|vue|angular|node|express|django|flask|spring)\\b", "flags": "i" },
         { "source": "\\b(useState|useEffect|component|props|state)\\b", "flags": "i" },
         { "source": "\\b(SELECT|INSERT|UPDATE|DELETE|JOIN|WHERE|FROM)\\b", "flags": "" },
-        { "source": "at\\s+\\w+\\s+\\(.*:\\d+:\\d+\\)", "flags": "" }
+        { "source": "at\\s+\\w+\\s+\\(.*:\\d+:\\d+\\)", "flags": "" },
+        { "source": "\\b(api|git|sql|cli|sdk|npm)\\b", "flags": "i" }
       ],
       "keywords": [
         "코드", "코딩", "프로그래밍", "개발", "함수", "클래스", "버그", "에러",
-        "디버그", "컴파일", "구현", "api", "서버", "백엔드", "프론트엔드",
+        "디버그", "컴파일", "구현", "서버", "백엔드", "프론트엔드",
         "code", "function", "class", "debug", "error", "implement",
         "리팩토링", "최적화", "알고리즘", "자료구조", "라이브러리", "프레임워크",
         "react", "vue", "angular", "python", "javascript", "typescript",
         "컴포넌트", "component", "useState", "useEffect", "훅", "hook",
-        "docker", "kubernetes", "k8s", "ci/cd", "deploy", "pipeline", "devops", "git", "sql", "database", "query"
+        "docker", "kubernetes", "k8s", "ci/cd", "deploy", "pipeline", "devops", "database", "query"
       ],
       "weight": 1.2
     },
