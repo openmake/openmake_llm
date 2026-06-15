@@ -89,7 +89,7 @@ export class McpServerIngestService {
         const fetcher = this.opts.fetcherFactory({ accessToken: input.accessToken });
         const sha = await fetcher.resolveRef(owner, repo, input.gitRef ?? 'HEAD');
 
-        const tree = await fetcher.listTree(owner, repo, sha);
+        const tree = await fetcher.listTree(owner, repo, sha, SKILL_CREATOR.gitMaxTreeEntries);
         const candidates = scanForMcpServerManifests(tree.entries, input.gitPath);
         if (candidates.length === 0) {
             throw new Error(`NO_MCPSERVER_FOUND: tree 에 MCPSERVER.md 후보 없음 (gitUrl=${input.gitUrl}, ref=${sha})`);

@@ -134,6 +134,9 @@ export const SKILL_CREATOR = {
     gitFetchTimeout: parseInt(process.env.SKILL_CREATOR_GIT_FETCH_TIMEOUT_MS || '30000', 10),
     gitMaxFileSize: parseInt(process.env.SKILL_CREATOR_GIT_MAX_FILE_SIZE || '262144', 10),
     gitMaxFilesPerRepo: parseInt(process.env.SKILL_CREATOR_GIT_MAX_FILES_PER_REPO || '50', 10),
+    // tree(전체 blob) 엔트리 상한 — monorepo 등 거대 repo 의 JSON 파싱·스캔 DoS 방어용.
+    // gitMaxFilesPerRepo(처리 파일 수)와 별개로 listTree 단계에서 강제.
+    gitMaxTreeEntries: parseInt(process.env.SKILL_CREATOR_GIT_MAX_TREE_ENTRIES || '10000', 10),
 } as const;
 
 /**

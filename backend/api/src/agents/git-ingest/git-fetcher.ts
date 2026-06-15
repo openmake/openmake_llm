@@ -7,10 +7,6 @@
  *
  * @module agents/git-ingest/git-fetcher
  */
-import { createLogger } from '../../utils/logger';
-
-const logger = createLogger('GitFetcher');
-
 const GITHUB_API = 'https://api.github.com';
 
 export interface TreeEntry {
@@ -81,15 +77,24 @@ export class GitFetcher {
         return data.default_branch;
     }
 
-    /** 저장소 전체 tree (blob entries only) */
-    async listTree(owner: string, repo: string, sha: string): Promise<TreeResult> {
+    /**
+     * 저장소 전체 tree (blob entries only).
+     * @param maxEntries blob 엔트리 상한 — 초과/truncated 시 throw (거대 repo DoS 방어).
+     */
+    async listTree(owner: string, repo: string, sha: string, maxEntries: number = 10_000): Promise<TreeResult> {
         const res = await this.req(`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/git/trees/${encodeURIComponent(sha)}?recursive=1`);
         const data = await res.json() as { sha: string; tree: Array<{ path: string; sha: string; size?: number; type: string }>; truncated: boolean };
+        // GitHub 가 거대 tree(>100k entries / >7MB)에 truncated=true 를 주므로, 불완전+거대 tree 는 거부.
+        if (data.truncated) {
+            throw new Error(`REPO_TOO_LARGE: tree truncated by GitHub (${owner}/${repo}@${sha})`);
+        }
         const entries: TreeEntry[] = (data.tree || [])
             .filter(e => e.type === 'blob')
             .map(e => ({ path: e.path, sha: e.sha, size: e.size ?? 0, type: 'blob' as const }));
+        if (entries.length > maxEntries) {
+            throw new Error(`REPO_TOO_LARGE: ${entries.length} blobs > ${maxEntries} (${owner}/${repo})`);
+        }
         const rem = parseInt(readHeader(res.headers, 'x-ratelimit-remaining') || '0', 10) || 0;
-        if (data.truncated) logger.warn(`tree truncated: ${owner}/${repo}@${sha} (${entries.length} entries)`);
         return { sha: data.sha, entries, truncated: data.truncated, rateLimitRemaining: rem };
     }
 
@@ -100,8 +105,25 @@ export class GitFetcher {
         if (this.opts.accessToken) headers['Authorization'] = `Bearer ${this.opts.accessToken}`;
         const res = await fetch(rawUrl, { headers });
         if (!res.ok) throw new Error(`UPSTREAM_FETCH_FAIL: ${res.status} ${rawUrl}`);
+        // 1차: content-length 헤더로 빠른 차단 (있을 때만)
         const cl = parseInt(readHeader(res.headers, 'content-length') || '0', 10);
         if (cl > maxBytes) throw new Error(`FILE_TOO_LARGE: ${cl} > ${maxBytes} (${path})`);
-        return await res.text();
+        // 2차: 헤더가 없거나 거짓일 수 있으므로 스트림으로 누적 바이트 상한 강제 (OOM 방지).
+        const body = res.body as AsyncIterable<Uint8Array> | null;
+        if (body && typeof (body as { [Symbol.asyncIterator]?: unknown })[Symbol.asyncIterator] === 'function') {
+            const chunks: Uint8Array[] = [];
+            let total = 0;
+            for await (const chunk of body) {
+                total += chunk.length;
+                if (total > maxBytes) throw new Error(`FILE_TOO_LARGE: >${maxBytes} (${path})`);
+                chunks.push(chunk);
+            }
+            return Buffer.concat(chunks).toString('utf8');
+        }
+        // fallback: body 미제공(test mock 등) — 읽은 뒤 byte 길이 사후 검증
+        const text = await res.text();
+        const bytes = Buffer.byteLength(text, 'utf8');
+        if (bytes > maxBytes) throw new Error(`FILE_TOO_LARGE: ${bytes} > ${maxBytes} (${path})`);
+        return text;
     }
 }

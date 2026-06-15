@@ -97,7 +97,7 @@ export class AgentIngestService {
         const sha = await fetcher.resolveRef(owner, repo, input.gitRef ?? 'HEAD');
 
         // (3) tree → candidates
-        const tree = await fetcher.listTree(owner, repo, sha);
+        const tree = await fetcher.listTree(owner, repo, sha, SKILL_CREATOR.gitMaxTreeEntries);
         const candidates = scanForAgentManifests(tree.entries, input.gitPath);
         if (candidates.length === 0) {
             throw new Error(`NO_AGENT_FOUND: tree 에 AGENT.md 후보 없음 (gitUrl=${input.gitUrl}, ref=${sha})`);
