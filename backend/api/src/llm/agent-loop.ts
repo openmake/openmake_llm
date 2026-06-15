@@ -80,6 +80,9 @@ export async function runAgentLoop(params: AgentLoopParams): Promise<AgentLoopRe
                 prompt_eval_count:
                     (accumulated?.prompt_eval_count ?? 0) + (result.metrics.prompt_eval_count ?? 0),
                 eval_count: (accumulated?.eval_count ?? 0) + (result.metrics.eval_count ?? 0),
+                // 마지막 턴의 finish_reason 보존 — 'length'(max_tokens 절단) 신호가 누적 metrics 에서
+                // 사라지면 호출자가 잘린 답변을 정상 완료로 오인함.
+                ...(result.metrics.finish_reason !== undefined && { finish_reason: result.metrics.finish_reason }),
             };
         }
 

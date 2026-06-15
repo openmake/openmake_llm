@@ -1,6 +1,9 @@
 import { getPool } from '../data/models/unified-database';
 import webPush from 'web-push';
 import { getVapidKeys } from '../utils/vapid';
+import { createLogger } from '../utils/logger';
+
+const logger = createLogger('PushService');
 
 
 export interface PushSubscription {
@@ -94,6 +97,10 @@ export class PushService {
                 const code = (err as { statusCode?: number })?.statusCode;
                 if (code === 410 || code === 404) {
                     await this.unsubscribe(userId, sub.endpoint).catch(() => { /* noop */ });
+                } else {
+                    // 만료(410/404) 외 에러(VAPID 서명 오류, 타임아웃, 400 등)는 조용히 삼키지 않고 기록 —
+                    // 전 구독 발송이 실패해도 sendPush 는 정상 resolve 되므로 가시성이 없으면 디버깅 불가.
+                    logger.warn(`push 발송 실패 (user=${userId}, code=${code ?? 'n/a'}): ${(err as Error)?.message ?? err}`);
                 }
             }
         }));

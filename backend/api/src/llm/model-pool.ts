@@ -88,14 +88,13 @@ export function truncateMessagesPreservingSystem(
     const systemMsg = hasSystem ? messages[0] : null;
     const rest = hasSystem ? messages.slice(1) : messages;
 
-    const systemTokens = systemMsg
-        ? estimateTokens(systemMsg.content || '') + 4
-        : 0;
+    // 이미지 토큰까지 포함해야 overflow 판정(estimateMessageTokens)과 대칭 — vision 요청 과소절단 방지
+    const systemTokens = systemMsg ? estimateMessageTokens([systemMsg]) : 0;
 
     const kept: ChatMessage[] = [];
     let used = systemTokens;
     for (let i = rest.length - 1; i >= 0; i--) {
-        const tokens = estimateTokens(rest[i].content || '') + 4;
+        const tokens = estimateMessageTokens([rest[i]]);
         if (used + tokens > budgetTokens && kept.length > 0) break;
         kept.unshift(rest[i]);
         used += tokens;

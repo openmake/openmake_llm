@@ -180,9 +180,11 @@ export class CircuitBreaker {
      * 현재 서킷 상태를 반환합니다.
      */
     getState(): CircuitState {
-        // OPEN 상태에서 resetTimeout 경과 시 HALF_OPEN으로 자동 전환
+        // 순수 read — 부작용 없음. resetTimeout 경과한 OPEN 은 effective 상태로만 HALF_OPEN 을
+        // 반환하고, 실제 상태 전이(타이머/카운터 리셋)는 execute() 진입 시에만 수행한다.
+        // (대시보드 폴링·node-selector 의 단순 조회가 프로브 윈도우를 소비하던 문제 방지)
         if (this.state === 'OPEN' && Date.now() >= this.openedAt + this.config.resetTimeout) {
-            this.transitionTo('HALF_OPEN');
+            return 'HALF_OPEN';
         }
         return this.state;
     }
