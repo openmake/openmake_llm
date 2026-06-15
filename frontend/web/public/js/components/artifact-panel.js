@@ -902,7 +902,7 @@ async function renderSlide(target, item) {
         const raw = window.marked.parse(md, { breaks: true, gfm: true });
         const clean = typeof window.DOMPurify !== 'undefined'
             ? window.DOMPurify.sanitize(raw, { USE_PROFILES: { html: true } })
-            : raw;
+            : (typeof window.purifyHTML === 'function' ? window.purifyHTML(raw) : '');
         return `<section>${clean}</section>`;
     }).join('\n');
 
@@ -1050,7 +1050,7 @@ async function renderMarkdown(target, item) {
     const raw = window.marked.parse(item.content, { breaks: true, gfm: true });
     const clean = typeof window.DOMPurify !== 'undefined'
         ? window.DOMPurify.sanitize(raw, { USE_PROFILES: { html: true } })
-        : raw;
+        : (typeof window.purifyHTML === 'function' ? window.purifyHTML(raw) : '');
     target.innerHTML = clean;
     target.className = 'ap-preview ap-md';
     // 코드 블록 hljs 강조

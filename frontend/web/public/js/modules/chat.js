@@ -437,7 +437,13 @@ async function sendMessage() {
             throw new Error('메시지가 전송 한도(1MB)를 초과했습니다. 첨부 파일을 줄이거나 내용을 나눠 보내주세요.');
         }
 
-        sendWsMessage(payload);
+        const sent = sendWsMessage(payload);
+        if (!sent) {
+            // WS 미연결(재연결 중 등) — 무음 유실 방지. 스피너/isGenerating 고착을 풀고 안내.
+            // 첨부/분기 정보는 유지하여 재시도 가능하게 한다.
+            finishAssistantMessage('연결이 끊겨 메시지를 전송하지 못했습니다. 잠시 후 다시 시도해주세요.');
+            return;
+        }
         // 전송 후 첨부 이미지 클리어 — 다음 메시지에 누적 방지 (file-attach.js)
         window.clearAttachedFiles?.();
         // Phase 3.4 (2026-05-26): 분기 정보 사용 직후 clear — 다음 메시지에 누적 방지
