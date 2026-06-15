@@ -12,6 +12,7 @@ import { createLogger } from '../utils/logger';
 import { getConfig } from '../config/env';
 import { PASSWORD_POLICY } from '../config/runtime-limits';
 import { getPool } from '../data/models/unified-database';
+import { withTransaction } from '../data/retry-wrapper';
 import { CURRENT_POLICY_VERSION } from '../config/policy';
 import { getAgeThreshold, calculateAge } from '../config/age-thresholds';
 
@@ -158,16 +159,25 @@ export class AuthService {
                         await this.userManager.deleteUser(user.id);
                         return { success: false, error: `${threshold}세 미만 가입 시 법정대리인 이메일이 필요합니다` };
                     }
-                    const pool = getPool();
-                    await pool.query(
-                        `UPDATE users SET birth_date = $2, minor_status = 'minor_pending', is_active = FALSE WHERE id = $1`,
-                        [user.id, data.birthDate],
-                    );
-                    await pool.query(
-                        `INSERT INTO guardian_consent_pending (user_id, guardian_email, status)
-                         VALUES ($1, $2, 'pending')`,
-                        [user.id, data.guardianEmail],
-                    );
+                    // UPDATE(is_active=FALSE) + INSERT(동의 대기) 를 한 트랜잭션으로 묶어 원자성 보장.
+                    // 부분 실패 시 '로그인 불가 + 활성화 경로 없는' 고아 계정이 생기므로, 실패하면 user 를 롤백.
+                    try {
+                        await withTransaction(getPool(), async (client) => {
+                            await client.query(
+                                `UPDATE users SET birth_date = $2, minor_status = 'minor_pending', is_active = FALSE WHERE id = $1`,
+                                [user.id, data.birthDate],
+                            );
+                            await client.query(
+                                `INSERT INTO guardian_consent_pending (user_id, guardian_email, status)
+                                 VALUES ($1, $2, 'pending')`,
+                                [user.id, data.guardianEmail],
+                            );
+                        });
+                    } catch (txErr) {
+                        log.error(`[GDPR-D] 미성년 등록 트랜잭션 실패, user 롤백 (user=${user.id}):`, txErr);
+                        await this.userManager.deleteUser(user.id);
+                        return { success: false, error: '가입 처리 중 오류가 발생했습니다. 다시 시도해주세요.' };
+                    }
                     log.info(`[GDPR-D] 14세 미만 가입 대기 user=${user.id} locale=${locale} age=${age} threshold=${threshold}`);
                     pendingGuardianConsent = true;
                     // 운영자 알림 — AuditService.logAudit 가 SoT. CRITICAL_ACTIONS whitelist
