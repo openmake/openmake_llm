@@ -199,10 +199,14 @@ export async function executeToolCall(context: AgentLoopStrategyContext, toolCal
         }
     }
 
-    // 기타 도구: ToolRouter를 통해 MCP 도구로 실행
+    // 기타 도구: MCP 도구로 실행.
+    // 사용자 컨텍스트가 있으면 canonical 경로(executeToolWithContext)로 — sandbox 경로 변환 +
+    // 인자 sanitize(SQL/명령어 인젝션 차단)를 REST 경로와 동일하게 적용(defense-in-depth 정합).
     try {
-        const toolRouter = getUnifiedMCPClient().getToolRouter();
-        const result = await toolRouter.executeTool(toolName, toolArgs, context.currentUserContext ?? undefined);
+        const mcpClient = getUnifiedMCPClient();
+        const result = context.currentUserContext
+            ? await mcpClient.executeToolWithContext(toolName, toolArgs, context.currentUserContext)
+            : await mcpClient.getToolRouter().executeTool(toolName, toolArgs, undefined);
 
         // resource content 감지 → frontend 인라인 카드 콜백 (ChatContext.onMcpToolResult)
         if (context.onMcpToolResult && Array.isArray(result.content)) {

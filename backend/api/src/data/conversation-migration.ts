@@ -68,7 +68,7 @@ export async function migrateFromJson(): Promise<void> {
             const validUserIds = new Set<string>(userResult.rows.map((r) => r.id));
 
             for (const s of sessions) {
-                await client.query(
+                const sessionInsert = await client.query(
                     `INSERT INTO conversation_sessions (id, user_id, anon_session_id, title, created_at, updated_at, metadata)
                     VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT DO NOTHING`,
                     [
@@ -81,6 +81,9 @@ export async function migrateFromJson(): Promise<void> {
                         s.metadata ? JSON.stringify(s.metadata) : null
                     ]
                 );
+                // 세션이 이미 존재(rowCount=0)하면 이전 마이그레이션에서 처리된 것 — 메시지 재삽입 방지(멱등).
+                // conversation_messages 는 auto-id 라 자연키 충돌이 없어, 세션 단위로 중복을 막아야 함.
+                if (sessionInsert.rowCount === 0) continue;
                 if (Array.isArray(s.messages)) {
                     for (const m of s.messages) {
                         await client.query(
