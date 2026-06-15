@@ -29,8 +29,6 @@ import { SKILL_CREATOR } from '../../config/constants';
 
 const logger = createLogger('GitIngestService');
 
-const DEDUPE_WINDOW_HOURS = 24;
-
 export interface ImportInput extends ImportFromGitInput {
     userId: string;
     isAdmin: boolean;
@@ -132,7 +130,7 @@ export class GitIngestService {
             `SELECT id FROM agent_skills
                WHERE created_by = $1 AND status = 'draft'
                  AND manifest_meta->>'promptHash' = $2
-                 AND created_at > NOW() - INTERVAL '${DEDUPE_WINDOW_HOURS} hours'
+                 AND created_at > NOW() - INTERVAL '${SKILL_CREATOR.dedupeWindowHours} hours'
                LIMIT 1`,
             [input.userId, promptHash]
         );

@@ -127,6 +127,8 @@ export const SKILL_CREATOR = {
     // E2E test seam — true 면 LLM 호출 우회, 결정론적 mock 매니페스트 반환.
     // 운영 환경에서는 절대 true 설정 금지 (보안 + 데이터 무결성).
     authorMock: process.env.SKILL_AUTHOR_MOCK === 'true',
+    // 중복 draft 제거 윈도우 — 동일 소스 재-ingest 시 N시간 내 중복 차단 (skill/agent/git ingest 공용)
+    dedupeWindowHours: parseInt(process.env.SKILL_CREATOR_DEDUPE_WINDOW_HOURS || '24', 10),
     // Git URL ingest (Phase 2) — POST /api/agents/skills/import-from-git
     gitIngestEnabled: process.env.SKILL_CREATOR_GIT_INGEST_ENABLED !== 'false',
     gitFetchTimeout: parseInt(process.env.SKILL_CREATOR_GIT_FETCH_TIMEOUT_MS || '30000', 10),

@@ -15,6 +15,7 @@ import {
     type LlmSkillManifest,
 } from '../schemas/skills.schema';
 import SKILL_AUTHOR_SYSTEM_PROMPT from './prompts/skill-author-system-prompt';
+import { SKILL_CREATOR } from '../config/constants';
 import type { LLMClient } from '../llm/client';
 import type { ChatMessage } from '../llm/types';
 
@@ -70,7 +71,6 @@ export interface SkillCreatorOptions {
     llmClientFactory: (model: string) => LLMClient;
 }
 
-const DEDUPE_WINDOW_HOURS = 24;
 const MAX_DRAFTS_PER_USER = parseInt(
     process.env.SKILL_AUTO_CREATE_MAX_DRAFTS_PER_USER || '50', 10
 );
@@ -187,7 +187,7 @@ export class SkillCreatorService {
               WHERE created_by = $1
                 AND status = 'draft'
                 AND manifest_meta->>'promptHash' = $2
-                AND created_at > NOW() - INTERVAL '${DEDUPE_WINDOW_HOURS} hours'
+                AND created_at > NOW() - INTERVAL '${SKILL_CREATOR.dedupeWindowHours} hours'
               LIMIT 1`,
             [userId, promptHash]
         );

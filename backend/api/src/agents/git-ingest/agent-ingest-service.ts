@@ -32,7 +32,6 @@ import { SKILL_CREATOR } from '../../config/constants';
 
 const logger = createLogger('AgentIngestService');
 
-const DEDUPE_WINDOW_HOURS = 24;
 const MAX_DRAFT_AGENTS_PER_USER = parseInt(process.env.AGENT_CREATOR_MAX_DRAFTS_PER_USER || '20', 10);
 
 export interface SkillBindingResolution {
@@ -149,7 +148,7 @@ export class AgentIngestService {
             `SELECT id FROM custom_agents
                WHERE created_by = $1 AND status = 'draft'
                  AND manifest_meta->>'promptHash' = $2
-                 AND created_at > NOW() - INTERVAL '${DEDUPE_WINDOW_HOURS} hours'
+                 AND created_at > NOW() - INTERVAL '${SKILL_CREATOR.dedupeWindowHours} hours'
                LIMIT 1`,
             [input.userId, promptHash]
         );

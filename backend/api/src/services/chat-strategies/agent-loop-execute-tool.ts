@@ -10,7 +10,7 @@
  */
 import { canUseTool } from '../../mcp/tool-tiers';
 import { getUnifiedMCPClient } from '../../mcp/unified-client';
-import { VISION_OCR_SYSTEM_PROMPT, VISION_ANALYSIS_SYSTEM_PROMPT } from '../../prompts/vision-system';
+import { VISION_OCR_SYSTEM_PROMPT, VISION_ANALYSIS_SYSTEM_PROMPT, buildVisionOcrUserMessage } from '../../prompts/vision-system';
 import { LLM_TEMPERATURES } from '../../config/llm-parameters';
 import { TRUNCATION } from '../../config/runtime-limits';
 import type { AgentLoopStrategyContext } from './types';
@@ -132,7 +132,7 @@ export async function executeToolCall(context: AgentLoopStrategyContext, toolCal
                     { role: 'system', content: VISION_OCR_SYSTEM_PROMPT },
                     {
                         role: 'user',
-                        content: `이 이미지에서 모든 텍스트를 정확하게 추출해주세요. 원본 형식을 최대한 유지하세요.${language !== 'auto' ? ` 언어: ${language}` : ''}`,
+                        content: buildVisionOcrUserMessage(language),
                         images: [imageData],
                     },
                 ],

@@ -163,6 +163,8 @@ const CRITICAL_ACTIONS: Record<string, 'info' | 'warning' | 'critical'> = {
     'password.changed': 'warning',
     // GDPR Article 7(3) — 동의 철회
     'consent.withdrawn': 'warning',
+    // GDPR Phase D — 14세 미만 가입 대기 (operator 의 guardian verify 필요)
+    'minor_pending_registered': 'warning',
     // GDPR Article 20 — 데이터 export 요청 (operator 인지용)
     'export.requested': 'warning',
     // 기존 ApiKeyService 패턴 정합

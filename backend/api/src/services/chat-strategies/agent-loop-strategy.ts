@@ -24,6 +24,7 @@ import { EvalPipeline } from './eval-pipeline';
 import { ContextGC } from './context-gc';
 import { semanticCompact } from '../semantic-compactor';
 import { getChecklistPrompt, parseChecklistResult } from '../../prompts/checklist-system';
+import { DOOM_LOOP_TERMINATED_NOTICE, DOOM_LOOP_WARNING_NOTICE, buildPreCompletionFixPrompt } from '../../prompts/agent-loop-messages';
 import { executeToolCall } from './agent-loop-execute-tool';
 
 const logger = createLogger('AgentLoopStrategy');
@@ -237,7 +238,7 @@ export class AgentLoopStrategy implements ChatStrategy<AgentLoopStrategyContext,
                     // user role 사용: 일부 모델은 대화 중간 system role을 거부함
                     context.currentHistory.push({
                         role: 'user',
-                        content: '[System Notice] The same tool call has been repeated and the loop has been forcefully terminated. Based on results so far, provide the best possible answer to the user. Explain what approach failed and suggest alternatives.',
+                        content: DOOM_LOOP_TERMINATED_NOTICE,
                     });
                     // 마지막 1턴으로 요약 응답 생성
                     const summaryResult = await this.directStrategy.execute({
@@ -261,7 +262,7 @@ export class AgentLoopStrategy implements ChatStrategy<AgentLoopStrategyContext,
                     // user role 사용: 일부 모델은 대화 중간 system role을 거부함
                     context.currentHistory.push({
                         role: 'user',
-                        content: '[System Notice] You are repeating the same tool call with the same arguments. The previous approach is failing. Try a different tool, different arguments, or ask the user for more information.',
+                        content: DOOM_LOOP_WARNING_NOTICE,
                     });
                 }
 
@@ -444,7 +445,7 @@ export class AgentLoopStrategy implements ChatStrategy<AgentLoopStrategyContext,
             logger.info(`⚠️ PreCompletion Checklist 실패 (이슈: ${parsed.issues.length}개), 보충 수정 시도`);
 
             const issueList = parsed.issues.map((issue: string, i: number) => `${i + 1}. ${issue}`).join('\n');
-            const fixPrompt = `Your previous response had these issues:\n${issueList}\n\nProvide ONLY the corrections for these issues. Do not repeat the full response.`;
+            const fixPrompt = buildPreCompletionFixPrompt(issueList);
 
             context.currentHistory.push({ role: 'user', content: fixPrompt });
 
