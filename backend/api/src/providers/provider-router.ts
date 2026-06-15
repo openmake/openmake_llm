@@ -48,23 +48,20 @@ export interface ProviderRouterDeps {
 }
 
 /**
- * 외부 provider 인스턴스 생성 분기.
- *
- * 호출 시점에 해당 사용자의 키를 복호화하여 새 어댑터 인스턴스를 만든다.
- * 캐싱은 의도적으로 도입하지 않음 — 키 변경/삭제 즉시 반영, MVP 단계 단순성 우선.
+ * sdk_type → 외부 provider 인스턴스 팩토리 맵.
+ * 새 provider 추가 시 이 맵에 한 항목만 등록 (No-Hardcoding: switch/if 체인 금지 → Record lookup).
+ * 각 팩토리는 호출 시점에 복호화된 키로 새 어댑터를 만든다 (provider별 인자 구성·검증을 캡슐화).
  */
-async function instantiateExternalProvider(
-    providerId: string,
-    keyRow: ExternalApiKeyRow,
-    plaintextKey: string,
-): Promise<IProvider> {
-    if (keyRow.sdkType === 'anthropic') {
-        return new AnthropicProvider({
+const EXTERNAL_PROVIDER_FACTORIES: Record<
+    string,
+    (args: { providerId: string; keyRow: ExternalApiKeyRow; plaintextKey: string }) => IProvider
+> = {
+    anthropic: ({ keyRow, plaintextKey }) =>
+        new AnthropicProvider({
             apiKey: plaintextKey,
             baseUrl: keyRow.baseUrl,
-        });
-    }
-    if (keyRow.sdkType === 'openai-compatible') {
+        }),
+    'openai-compatible': ({ providerId, keyRow, plaintextKey }) => {
         if (!keyRow.baseUrl) {
             throw new ProviderError(
                 'NOT_SUPPORTED',
@@ -76,11 +73,28 @@ async function instantiateExternalProvider(
             apiKey: plaintextKey,
             baseUrl: keyRow.baseUrl,
         });
+    },
+};
+
+/**
+ * 외부 provider 인스턴스 생성.
+ *
+ * 호출 시점에 해당 사용자의 키를 복호화하여 새 어댑터 인스턴스를 만든다.
+ * 캐싱은 의도적으로 도입하지 않음 — 키 변경/삭제 즉시 반영, MVP 단계 단순성 우선.
+ */
+async function instantiateExternalProvider(
+    providerId: string,
+    keyRow: ExternalApiKeyRow,
+    plaintextKey: string,
+): Promise<IProvider> {
+    const factory = EXTERNAL_PROVIDER_FACTORIES[keyRow.sdkType];
+    if (!factory) {
+        throw new ProviderError(
+            'NOT_SUPPORTED',
+            `알 수 없는 sdk_type: ${keyRow.sdkType}`,
+        );
     }
-    throw new ProviderError(
-        'NOT_SUPPORTED',
-        `알 수 없는 sdk_type: ${keyRow.sdkType}`,
-    );
+    return factory({ providerId, keyRow, plaintextKey });
 }
 
 export class ProviderRouter {
