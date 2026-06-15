@@ -157,7 +157,9 @@ function toAnthropicMessages(
         if (msg.role === 'tool') {
             const block: AnthropicToolResultBlock = {
                 type: 'tool_result',
-                tool_use_id: msg.tool_name ?? 'unknown',
+                // 직전 assistant.tool_use.id 와 정확히 일치해야 함 (Anthropic API 요구).
+                // 실제 provider 발급 tool_call_id 우선, 레거시 fallback 으로 tool_name.
+                tool_use_id: msg.tool_call_id ?? msg.tool_name ?? 'unknown',
                 content: msg.content,
             };
             out.push({ role: 'user', content: [block] });
@@ -181,14 +183,15 @@ function toAnthropicMessages(
         }
 
         if (msg.role === 'assistant' && msg.tool_calls && msg.tool_calls.length > 0) {
-            for (const tc of msg.tool_calls) {
+            msg.tool_calls.forEach((tc, i) => {
                 blocks.push({
                     type: 'tool_use',
-                    id: `call_${tc.function.name}_${Date.now()}`,
+                    // tool_result.tool_use_id 와 매칭되도록 실제 발급 id 우선 (없으면 안정적 인덱스 기반).
+                    id: tc.id ?? `call_${tc.function.name}_${i}`,
                     name: tc.function.name,
                     input: tc.function.arguments,
                 });
-            }
+            });
         }
 
         out.push({
