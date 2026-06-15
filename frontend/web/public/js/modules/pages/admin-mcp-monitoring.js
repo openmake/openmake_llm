@@ -39,7 +39,7 @@ function toast(msg, type) {
 }
 
 async function fetchJson(path) {
-    const res = await fetch(path, { credentials: 'include' });
+    const res = await window.ApiClient.raw(path);
     let data = null;
     try { data = await res.json(); } catch { /* empty */ }
     if (!res.ok) {

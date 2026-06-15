@@ -51,9 +51,7 @@
                     }
 
                     try {
-                        const res = await fetch(API_ENDPOINTS.CHAT_SESSIONS + '?limit=100', {
-                            credentials: 'include'  // 하이퍼투글 쿠키 기반 인증
-                        });
+                        const res = await window.ApiClient.raw(API_ENDPOINTS.CHAT_SESSIONS + '?limit=100');
                         if (!res.ok) throw new Error('서버 응답 오류: ' + res.status);
                         const data = await res.json();
                         const payload = data.data || data;

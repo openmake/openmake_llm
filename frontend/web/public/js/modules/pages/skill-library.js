@@ -370,10 +370,9 @@
                 const fd = new FormData();
                 fd.append('file', file);
                 try {
-                    const res = await fetch('/api/agents/skills/upload', {
+                    const res = await window.ApiClient.raw('/api/agents/skills/upload', {
                         method: 'POST',
                         body: fd,
-                        credentials: 'include',
                     });
                     const data = await res.json().catch(() => ({}));
                     if (!res.ok) {

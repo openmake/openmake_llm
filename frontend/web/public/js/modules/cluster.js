@@ -115,9 +115,7 @@ function updateClusterStatus(text, online) {
  */
 async function fetchClusterInfoFallback() {
     try {
-        const response = await fetch(API_ENDPOINTS.CLUSTER, {
-            credentials: 'include'
-        });
+        const response = await window.ApiClient.raw(API_ENDPOINTS.CLUSTER);
         if (response.ok) {
             const data = await response.json();
             updateClusterInfo(data);

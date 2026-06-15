@@ -47,7 +47,7 @@ async function fetchJson(path, init) {
         opts.body = JSON.stringify(opts.body);
         opts.headers = Object.assign({}, opts.headers || {}, { 'Content-Type': 'application/json' });
     }
-    const res = await fetch(path, opts);
+    const res = await window.ApiClient.raw(path, opts);
     let data = null;
     try { data = await res.json(); } catch { /* empty */ }
     if (!res.ok) {

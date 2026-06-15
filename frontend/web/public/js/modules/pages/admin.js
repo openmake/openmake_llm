@@ -146,12 +146,9 @@
                 }
 
                 async function authFetch(url, options = {}) {
-                    return fetch(url, {
-                        ...options,
-                        credentials: 'include',
-                        // 인증은 credentials: 'include' 쿠키로 처리 — Bearer 헤더 불필요
-                        headers: { 'Content-Type': 'application/json', ...(options.headers || {}) }
-                    });
+                    // ApiClient.raw 경유 — credentials/Content-Type 일원화 + mutating 요청 CSRF 자동 주입
+                    // (admin 은 user 삭제·권한 변경 등 critical mutating 다수라 CSRF 보호 필수)
+                    return window.ApiClient.raw(url, options);
                 }
 
                 function switchTab(tab) {

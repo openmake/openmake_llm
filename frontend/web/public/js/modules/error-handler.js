@@ -161,10 +161,8 @@ async function performWebSearch(query, model) {
             content.innerHTML = '<span class="loading-spinner"></span> 웹에서 검색 중...';
         }
 
-        const res = await fetch(API_ENDPOINTS.WEB_SEARCH, {
+        const res = await window.ApiClient.raw(API_ENDPOINTS.WEB_SEARCH, {
             method: 'POST',
-            credentials: 'include',
-            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ query, model })
         });
 

@@ -263,7 +263,7 @@
                         }
                     } catch (e) { /* sessionStorage 미사용 — fetch fallback */ }
                     try {
-                        var res = await fetch(API_ENDPOINTS.API_KEYS, { credentials: 'include' });
+                        var res = await window.ApiClient.raw(API_ENDPOINTS.API_KEYS);
                         if (res.ok) {
                             var data = await res.json();
                             var count = (data.data && data.data.count) || 0;
@@ -281,7 +281,7 @@
 
                 async function loadSystemInfo() {
                     try {
-                        var res = await fetch('/health');
+                        var res = await window.ApiClient.raw('/health');
                         if (res.ok) {
                             var json = await res.json();
                             var d = json.data || json;
@@ -551,7 +551,7 @@
                     // 전체 사용자 데이터 (conversations + manifests + agents + memories) JSON export.
                     // 백엔드가 Content-Disposition attachment 로 즉시 다운로드 응답.
                     try {
-                        var res = await fetch(API_ENDPOINTS.USER_EXPORT, { credentials: 'include' });
+                        var res = await window.ApiClient.raw(API_ENDPOINTS.USER_EXPORT);
                         if (res.status === 429) {
                             var rateData = await res.json().catch(function () { return null; });
                             var rateMsg = (rateData && rateData.error && rateData.error.message) || '데이터 export 시간당 한도를 초과했습니다.';

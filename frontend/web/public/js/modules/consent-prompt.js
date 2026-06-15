@@ -54,17 +54,15 @@ function showModal() { ensureModal().style.display = 'flex'; }
 function hideModal() { if (_modalEl) _modalEl.style.display = 'none'; }
 
 async function fetchPolicy(type, locale) {
-    const res = await fetch(`${API}/policies/${type}/${locale}`, { credentials: 'include' });
+    const res = await window.ApiClient.raw(`${API}/policies/${type}/${locale}`);
     if (!res.ok) throw new Error(`policy fetch failed (${res.status})`);
     const data = await res.json();
     return data.data;  // { type, locale, version, content }
 }
 
 async function grantConsent(type, version, locale) {
-    const res = await fetch(`${API}/users/me/consent`, {
+    const res = await window.ApiClient.raw(`${API}/users/me/consent`, {
         method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type, version, locale }),
     });
     if (!res.ok) {
@@ -86,7 +84,7 @@ function renderContent(md) {
  */
 export async function checkReconsent() {
     try {
-        const statusRes = await fetch(`${API}/users/me/consent/status`, { credentials: 'include' });
+        const statusRes = await window.ApiClient.raw(`${API}/users/me/consent/status`);
         if (statusRes.status === 401 || statusRes.status === 403) return;  // 로그인 안 함
         if (!statusRes.ok) return;
         const statusData = await statusRes.json();

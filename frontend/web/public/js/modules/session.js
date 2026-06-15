@@ -57,7 +57,7 @@ async function loadChatSessions() {
             params.append('viewAll', 'true');
         }
 
-        const res = await fetch(`${API_ENDPOINTS.CHAT_SESSIONS}?${params}`, { credentials: 'include' });
+        const res = await window.ApiClient.raw(`${API_ENDPOINTS.CHAT_SESSIONS}?${params}`);
         if (!res.ok) {
             throw new Error(`HTTP ${res.status}: ${res.statusText}`);
         }
@@ -123,13 +123,8 @@ async function createNewSession(title) {
         const userStr = (window.SafeStorage ? window.SafeStorage.getItem(STORAGE_KEY_USER) : localStorage.getItem(STORAGE_KEY_USER));
         const anonSessionId = !userStr ? getOrCreateAnonymousSessionId() : undefined;
 
-        const headers = { 'Content-Type': 'application/json' };
-
-
-        const res = await fetch(API_ENDPOINTS.CHAT_SESSIONS, {
+        const res = await window.ApiClient.raw(API_ENDPOINTS.CHAT_SESSIONS, {
             method: 'POST',
-            credentials: 'include',
-            headers,
             body: JSON.stringify({ title, model, anonSessionId })
         });
         if (!res.ok) {
@@ -161,7 +156,7 @@ async function loadSession(sessionId) {
     }
 
     try {
-        const res = await fetch(`${API_ENDPOINTS.CHAT_SESSIONS}/${sessionId}/messages`);
+        const res = await window.ApiClient.raw(`${API_ENDPOINTS.CHAT_SESSIONS}/${sessionId}/messages`);
         if (!res.ok) {
             throw new Error(`HTTP ${res.status}: ${res.statusText}`);
         }
@@ -275,9 +270,8 @@ async function saveMessageToSession(role, content, options = {}) {
 
     if (currentSessionId) {
         try {
-            await fetch(`${API_ENDPOINTS.CHAT_SESSIONS}/${currentSessionId}/messages`, {
+            await window.ApiClient.raw(`${API_ENDPOINTS.CHAT_SESSIONS}/${currentSessionId}/messages`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ role, content, ...options })
             });
         } catch (error) {
@@ -296,7 +290,7 @@ async function deleteSession(sessionId) {
     if (!confirm('이 대화를 삭제하시겠습니까?')) return;
 
     try {
-        const res = await fetch(`${API_ENDPOINTS.CHAT_SESSIONS}/${sessionId}`, { method: 'DELETE' });
+        const res = await window.ApiClient.raw(`${API_ENDPOINTS.CHAT_SESSIONS}/${sessionId}`, { method: 'DELETE' });
         if (!res.ok) {
             throw new Error(`HTTP ${res.status}: ${res.statusText}`);
         }
