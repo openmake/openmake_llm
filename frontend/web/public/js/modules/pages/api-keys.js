@@ -39,35 +39,26 @@
 
     // CSS Styles
     var CSS = '' +
-        '.page-api-keys { position: relative; min-height: 100%; font-family: var(--font-sans); }' +
-        '.page-api-keys::before {' +
-            'content: ""; position: fixed; top: 0; left: 0; right: 0; bottom: 0;' +
-            'background: var(--bg-app);' +
-            'pointer-events: none; z-index: 0;' +
-        '}' +
-        '.page-api-keys > * { position: relative; z-index: 1; }' +
-        '.ak-container { max-width: 800px; margin: 0 auto; padding: var(--space-8) var(--space-6); }' +
+        '.page-api-keys { width: 100%; font-family: var(--font-sans); }' +
+        '.ak-container { width: 100%; padding: var(--space-5); }' +
         
         // Hero Section
-        '.ak-hero { text-align: center; margin-bottom: var(--space-10); }' +
-        '.ak-hero-icon { font-size: 3rem; margin-bottom: var(--space-4); display: block; filter: drop-shadow(0 2px 8px rgba(0,0,0,0.35)); }' +
+        '.ak-hero { text-align: left; margin-bottom: var(--space-6); }' +
+        '.ak-hero-icon { font-size: var(--font-size-2xl); margin-right: var(--space-2); display: inline; vertical-align: middle; color: var(--accent-primary); }' +
         '.ak-hero h1 {' +
-            'font-size: var(--font-size-3xl); font-weight: var(--font-weight-bold);' +
-            'background: var(--gradient-primary); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;' +
-            'margin-bottom: var(--space-2); letter-spacing: -0.02em;' +
+            'display: inline; font-size: var(--font-size-3xl); font-weight: var(--font-weight-bold);' +
+            'color: var(--text-primary); letter-spacing: -0.01em; vertical-align: middle;' +
         '}' +
-        '.ak-hero p { color: var(--text-secondary); font-size: var(--font-size-base); }' +
+        '.ak-hero p { color: var(--text-muted); font-size: var(--font-size-base); margin-top: var(--space-2); }' +
 
         // Glass Card Styles
         '.s-card {' +
-            'background: var(--glass-bg); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur);' +
-            'border: 1px solid var(--glass-border); border-radius: var(--radius-xl); padding: 0; margin-bottom: var(--space-6);' +
-            'box-shadow: var(--shadow-brutal); transition: all 0.3s cubic-bezier(0.4,0,0.2,1); overflow: hidden;' +
-            'animation: ak-slideUp 0.5s ease both;' +
+            'background: var(--bg-card); border: 1px solid var(--border-light); border-radius: var(--radius-lg);' +
+            'padding: 0; margin-bottom: var(--space-4); overflow: hidden; transition: border-color 0.15s ease;' +
         '}' +
         '.s-card-header {' +
             'display: flex; align-items: center; justify-content: space-between; padding: var(--space-5) var(--space-6);' +
-            'border-bottom: 1px solid var(--glass-border); position: relative;' +
+            'border-bottom: 1px solid var(--border-light); position: relative;' +
         '}' +
         '.s-card-header h3 { font-size: var(--font-size-lg); font-weight: var(--font-weight-semibold); color: var(--text-primary); margin: 0; }' +
         '.s-card-body { padding: var(--space-6); }' +
@@ -75,7 +66,7 @@
         // Input & Button Styles
         '.ak-input-group { display: flex; gap: var(--space-3); }' +
         '.ak-input {' +
-            'flex: 1; background: var(--bg-secondary); border: 1px solid var(--glass-border); border-radius: var(--radius-md);' +
+            'flex: 1; background: var(--bg-secondary); border: 1px solid var(--border-light); border-radius: var(--radius-md);' +
             'padding: var(--space-3) var(--space-4); color: var(--text-primary); font-size: var(--font-size-base);' +
             'transition: all 0.2s ease;' +
         '}' +
@@ -85,10 +76,10 @@
             'padding: var(--space-3) var(--space-5); border-radius: var(--radius-md); font-weight: var(--font-weight-medium);' +
             'cursor: pointer; transition: all 0.2s ease; border: none; font-size: var(--font-size-sm);' +
         '}' +
-        '.ak-btn-primary { background: var(--gradient-primary); color: white; box-shadow: var(--shadow-brutal); }' +
-        '.ak-btn-primary:hover { transform: translate(-2px, -2px); box-shadow: var(--shadow-brutal-lg); }' +
-        '.ak-btn-secondary { background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--glass-border); }' +
-        '.ak-btn-secondary:hover { background: var(--bg-hover, #323250); }' +
+        '.ak-btn-primary { background: var(--accent-primary); color: #fff; }' +
+        '.ak-btn-primary:hover { filter: brightness(1.1); }' +
+        '.ak-btn-secondary { background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-light); }' +
+        '.ak-btn-secondary:hover { border-color: var(--accent-primary); }' +
         '.ak-btn-danger { background: var(--bg-tertiary); color: var(--danger); border: 2px solid var(--danger); }' +
         '.ak-btn-danger:hover { background: var(--bg-hover, #323250); }' +
         '.ak-btn-icon { padding: var(--space-2); width: 32px; height: 32px; border-radius: var(--radius-md); }' +
@@ -96,7 +87,7 @@
         // Key List Items
         '.ak-key-item {' +
             'display: flex; flex-direction: column; gap: var(--space-4); padding: var(--space-5);' +
-            'border-bottom: 1px solid var(--glass-border); transition: background 0.2s ease;' +
+            'border-bottom: 1px solid var(--border-light); transition: background 0.2s ease;' +
         '}' +
         '.ak-key-item:last-child { border-bottom: none; }' +
         '.ak-key-item:hover { background: var(--bg-tertiary); }' +
@@ -118,7 +109,7 @@
         '.ak-code-block {' +
             'background: #1e1e1e; padding: var(--space-4); border-radius: var(--radius-md);' +
             'font-family: var(--font-mono); color: #d4d4d4; font-size: var(--font-size-xs); overflow-x: auto;' +
-            'border: 1px solid var(--glass-border); line-height: 1.5;' +
+            'border: 1px solid var(--border-light); line-height: 1.5;' +
         '}' +
         '.ak-code-comment { color: #6a9955; }' +
         '.ak-code-keyword { color: #569cd6; }' +
@@ -132,7 +123,7 @@
             'animation: ak-fadeIn 0.2s ease both;' +
         '}' +
         '.ak-new-key-modal {' +
-            'background: var(--bg-secondary); border: 1px solid var(--glass-border); border-radius: var(--radius-xl);' +
+            'background: var(--bg-secondary); border: 1px solid var(--border-light); border-radius: var(--radius-xl);' +
             'width: 100%; max-width: 500px; overflow: hidden; box-shadow: var(--shadow-xl);' +
             'animation: ak-scaleIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) both;' +
         '}' +
