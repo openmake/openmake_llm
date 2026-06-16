@@ -123,6 +123,8 @@ export function startSessionCleanupScheduler(intervalHours: number = 24) {
             logger.error('[ConversationDB] Cleanup error:', error);
         }
     }, intervalHours * 60 * 60 * 1000);
+    // 이 타이머만으로 프로세스가 살아있지 않도록 — 테스트/종료 시 이벤트 루프 차단 방지
+    cleanupTimer.unref();
 }
 
 /**

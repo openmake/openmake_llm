@@ -32,7 +32,7 @@
     "author": "",
     "license": "MIT",
     "engines": {
-        "node": ">=22"
+        "node": ">=22 <25"
     },
     "workspaces": [
         "backend/api",
@@ -40,7 +40,7 @@
     ],
     "devDependencies": {
         "@playwright/test": "^1.58.0",
-        "@types/node": "^20.10.0",
+        "@types/node": "^24.0.0",
         "@types/nodemailer": "^7.0.9",
         "@types/supertest": "^7.2.0",
         "typescript-eslint": "^8.56.1",

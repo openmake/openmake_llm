@@ -380,7 +380,15 @@ if (require.main === module) {
     // Graceful shutdown: SIGINT (Ctrl+C) + SIGTERM
     const GRACEFUL_SHUTDOWN_TIMEOUT_MS = 30000;
 
+    let isShuttingDown = false;
     const gracefulShutdown = async (signal: string, exitCode: number = 0) => {
+        // 재진입 가드 — shutdown 중 발생하는 2차 unhandledRejection/추가 시그널로
+        // 동일 정리 로직이 중복 실행(DB/MCP 이중 종료)되는 것을 방지.
+        if (isShuttingDown) {
+            console.log(`\n(이미 종료 진행 중 — '${signal}' 무시)`);
+            return;
+        }
+        isShuttingDown = true;
         console.log(`\n👋 ${signal} 수신 — 서버 종료 중...`);
 
         const shutdownWork = async () => {

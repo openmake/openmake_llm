@@ -50,23 +50,14 @@ const DEFAULT_OUTPUT_LIMIT = 4096;
 
 /**
  * 두 AbortSignal 을 합쳐 어느 한쪽이 abort 되면 결과 signal 도 abort.
- * `AbortSignal.any` (Node 19+) 의 수동 구현 — Node 18 호환.
+ * 표준 `AbortSignal.any` (Node 20.3+ 안정) 사용 — 이미 abort 된 signal 도 즉시 반영.
  *
  * 분기 정확성은 호출처가 원본 a/b 의 aborted 상태를 별도로 검사하여 보장.
  */
 function combineSignals(a?: AbortSignal, b?: AbortSignal): AbortSignal | undefined {
     if (!a) return b;
     if (!b) return a;
-    if (a.aborted || b.aborted) {
-        const c = new AbortController();
-        c.abort();
-        return c.signal;
-    }
-    const combined = new AbortController();
-    const onAbort = (): void => combined.abort();
-    a.addEventListener('abort', onAbort, { once: true });
-    b.addEventListener('abort', onAbort, { once: true });
-    return combined.signal;
+    return AbortSignal.any([a, b]);
 }
 
 /**
