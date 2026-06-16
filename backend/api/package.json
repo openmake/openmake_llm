@@ -55,7 +55,7 @@
         "jsonwebtoken": "^9.0.3",
         "lru-cache": "^7.18.3",
         "multer": "^2.0.2",
-        "nodemailer": "^7.0.13",
+        "nodemailer": "^9.0.0",
         "openai": "^6.37.0",
         "ora": "^9.2.0",
         "pdf-parse": "^2.4.5",
