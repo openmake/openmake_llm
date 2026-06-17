@@ -72,7 +72,8 @@
 ---
 
 ## P-4. Slash-Command 스킬 호출 라우팅 (효과 中 / 노력 中 / 위험 中) — ✅ v1 구현완료
-> v1: `chat/slash-command.ts`(순수 파서+해석+증강) + ws-chat-handler 단일 진입점 배선. `/skill-slug ...`가 active 스킬과 정확 매칭 시 컨텍스트 주입, 비슬래시/미매칭/오류는 passthrough(무영향). **v2(미구현)**: REST 경로 동일 배선, 프론트 자동완성 UI, 네임스페이스 충돌 방지 고도화.
+> v1: `chat/slash-command.ts`(순수 파서+해석+증강) + ws-chat-handler 단일 진입점 배선. `/skill-slug ...`가 active 스킬과 정확 매칭 시 컨텍스트 주입, 비슬래시/미매칭/오류는 passthrough(무영향).
+> **v2 처리**: REST 경로 동일 배선 = ⏸️ 트리거(REST 챗 실사용 시) · 프론트 자동완성 UI = ⏸️ 저우선 · 충돌방지 고도화 = ⏸️ 필요 시.
 
 **무엇**: `/skill-name` 입력 → 해당 스킬을 명시적으로 호출/주입. Claude Code의 skill 호출 UX.
 
@@ -84,11 +85,11 @@
 
 ---
 
-## P-5. Skill Dimensions 분해 (효과 中 / 노력 高 / 위험 高) — **비권장(현 시점)**
+## P-5. Skill Dimensions 분해 — ❌ 폐기
 
 **무엇**: 복합 스킬을 sub-skill 차원으로 분해(code-review를 8단계로 쪼개듯).
 
-**판단**: openmake_llm는 ~100 스킬의 단층 구조로 충분. 분해는 스킬 폭증·컨텍스트 관리 복잡도↑·실유스케이스 불명확. **현 규모에선 도입 비권장.** P-1/P-2가 이 효과의 실질 대안.
+**폐기 사유**: ~100 스킬 단층 구조로 충분. 분해는 스킬 폭증(100→300+)·컨텍스트 관리 복잡도↑·UX 혼란을 부르며, **방금 도입한 G1 Skill 과포화 가드와 정면 모순**. 이 효과가 필요한 경우는 이미 P-1/P-2(전문 리뷰 도구)가 대체. 재론 불요.
 
 ---
 
@@ -96,12 +97,13 @@
 
 - ✅ **파일 부분읽기 완전성 고지** (구현): `fs_read_file` 이 크기 제한 없이 전체를 반환 → 거대 파일이 다운스트림 context-fit 에서 조용히 잘리던 갭. `mcp/filesystem.ts` `applyReadLimit`(바이트 캡 `FS_READ_MAX_BYTES` + 잘림 명시 고지 + optional `max_bytes`). 멀티바이트 경계 안전.
 - ✅ **비동기 에이전트 중복방지** (최소 구현): `POST /api/agent-tasks` 생성 시 진행 중(running/pending) 작업 수를 조회해 응답에 `concurrentActive`/`warnings` 추가(additive, 생성은 막지 않음). 프론트는 미소비 시 무영향.
-- ⏸️ **token-usage 턴별 피드백 WS** (보류): `message-pipeline`+WS 이벤트+프론트 동반, 순수 UX·고노력·핵심 파이프라인 회귀이력 → Simplicity First 로 보류. 채택 시 별도 플랜.
+- ❌ **token-usage 턴별 피드백 WS** (폐기): `message-pipeline`+WS 이벤트+프론트 동반, **순수 UX·정확성/안전 가치 0·핵심 파이프라인 회귀위험**. 정 필요하면 파이프라인 손 안 대고 `usage-tracker`/`user-quota` 기반 가벼운 REST 폴링으로 대체(별건). WS 버전은 폐기.
 
 ---
 
-## 권장 진행 순서 — 완료 현황
-1. ✅ **P-2 Security-Review** → 2. ✅ **P-3 Plan Mode** → 3. ✅ **P-1 Code-Review** → 4. ✅ **P-4 Slash-Command** (모두 v1 구현·검증 완료).
-P-5는 보류(비권장), P-6은 미착수(개별 가치 판단 후).
+## 종료(CLOSED) 요약
+- ✅ **구현 완료(v1)**: P-2 → P-3 → P-1 → P-4 (모두 검증 완료). + G1~G3, P-6 핵심 2건(파일 완전성 고지·비동기 중복인지).
+- ❌ **폐기**: P-5 Skill Dimensions · token-usage WS · PR 코멘트 연동.
+- ⏸️ **트리거 기반(상시 로드맵 제외)**: 다중투표 적대검증(오탐 실측 시) · Agent Task plan 통합(자율 write 도구 추가 시) · REST 슬래시 배선(REST 챗 실사용 시) · 프론트 자동완성(저우선).
 
-**남은 후속**: 각 항목의 v2 확장(위 본문 참조) + P-6 부가 리마인더는 별도 채택 결정 시 상세 플랜으로 확장한다.
+**이 계획은 종료되었다.** 트리거 항목은 명시된 조건이 실제로 발생할 때 그 시점에 새 플랜으로 재개한다 — 지금 선제 구현하지 않는다(순편익 음수·회귀위험).
