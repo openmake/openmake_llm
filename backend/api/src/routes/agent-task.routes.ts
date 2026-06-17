@@ -67,15 +67,25 @@ router.post('/', validate(createAgentTaskSchema), asyncHandler(async (req: Reque
 
     const taskId = uuidv4();
     const db = getUnifiedDatabase();
+    const userId = String(req.user!.id);
+
+    // 비동기 에이전트 중복 인지(P-6): 이미 진행 중인 작업이 있으면 경고를 함께 반환 —
+    // 동일/유사 작업을 중복 실행하기 전에 사용자가 인지하도록(중단/취소 판단). 생성 자체는 막지 않음.
+    const existing = await db.getUserAgentTasks(userId);
+    const active = existing.filter(t => t.status === 'running' || t.status === 'pending');
+    const warnings = active.length > 0
+        ? [`진행 중인 에이전트 작업이 ${active.length}건 있습니다. 중복 실행이 아닌지 확인하세요.`]
+        : [];
+
     await db.createAgentTask({
         id: taskId,
-        userId: String(req.user!.id),
+        userId,
         goal,
         maxTurns: maxTurns ?? AGENT_TASK_LIMITS.DEFAULT_MAX_TURNS,
     });
 
     const task = await db.getAgentTask(taskId);
-    res.status(201).json(success({ task }));
+    res.status(201).json(success({ task, concurrentActive: active.length, warnings }));
 }));
 
 /**

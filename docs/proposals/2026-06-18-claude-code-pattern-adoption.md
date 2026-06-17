@@ -1,10 +1,15 @@
-# Claude Code 패턴 도입 — 대형 기능 설계 제안서
+# Claude Code 패턴 도입 — 대형 기능 설계 제안서  〔CLOSED〕
 
-> 작성일 2026-06-18 · 근거: Piebald-AI/claude-code-system-prompts(512개) ↔ openmake_llm 전체 소스 비교 분석
+> 작성일 2026-06-18 · **종료(closed) 2026-06-18** · 근거: Piebald-AI/claude-code-system-prompts(512개) ↔ openmake_llm 전체 소스 비교 분석
 >
-> **진행 현황(2026-06-18)**: P-2 ✅ · P-3 ✅ · P-1 ✅ · P-4 ✅ 구현 완료(v1). P-5 비권장(보류) · P-6 선택(미착수).
+> **최종 결정**:
+> - ✅ **완료(v1)**: P-1 Code-Review · P-2 Security-Review · P-3 Plan Mode · P-4 Slash-Command. (+ G1~G3, P-6 핵심 2건)
+> - ❌ **폐기**: P-5 Skill Dimensions(스킬 폭증·G1과 모순), token-usage WS(순수 UX·파이프라인 회귀위험), PR 코멘트 연동(챗 제품 부적합).
+> - ⏸️ **트리거 기반**(상시 로드맵에서 제거, 조건 충족 시에만 재론): 다중투표 적대검증 = v1 오탐 실측 시 / Agent Task plan 생명주기 통합 = 자율 write 도구 추가 시 / REST 슬래시 배선 = REST 챗 실사용 시.
+>
+> **비용/편익 판정 결과 남은 항목은 순편익이 음수이거나 투기적이라 상시 계획으로서는 종료한다.**
 
-본 문서는 비교 분석에서 "프롬프트/스티어링 수준을 넘어 **신규 서브시스템**이 필요"한 항목들의 설계 스케치다. P-1~P-4는 v1 구현이 완료되었고, 각 항목의 v2 확장은 아래 본문에 명시.
+본 문서는 비교 분석에서 "프롬프트/스티어링 수준을 넘어 **신규 서브시스템**이 필요"한 항목들의 설계 스케치다. P-1~P-4는 v1 구현이 완료되었고, 나머지는 위 최종 결정대로 폐기/트리거 기반으로 종료.
 
 이미 적용 완료된 소규모 항목(중복 아님): G1 Skill 과포화 가드, G2 agent_task_get trust-but-verify, G3 Skill triggers 활성화. 그리고 직전 작업의 F1 산출물 검증 게이트 / F2 자가개선 폐루프 / 에러 분류 / tool-call 관측성은 본 문서 범위 밖(이미 반영).
 
@@ -18,7 +23,8 @@
 ---
 
 ## P-1. Code-Review 다각도 서브에이전트 (효과 高 / 노력 高 / 위험 中) — ✅ v1 구현완료
-> v1: `code_review` MCP 도구(`mcp/code-review-tool.ts`, `services/code-review/`, `config/code-review.ts`) — 버그/성능/유지보수/에러처리/재사용 단일패스 + 결정론 후처리(스타일 nitpick 필터·신뢰도 게이트). 보안은 security_review 위임. **v2(미구현)**: 다중 투표 적대검증, diff/git ref 입력, GitHub PR 코멘트.
+> v1: `code_review` MCP 도구(`mcp/code-review-tool.ts`, `services/code-review/`, `config/code-review.ts`) — 버그/성능/유지보수/에러처리/재사용 단일패스 + 결정론 후처리(스타일 nitpick 필터·신뢰도 게이트). 보안은 security_review 위임.
+> **v2 처리**: 다중 투표 적대검증 = ⏸️ 트리거(오탐 실측 시) · diff/git ref 입력 = ⏸️ 트리거(요구 시) · GitHub PR 코멘트 = ❌ 폐기(챗 제품 부적합).
 
 **무엇**: PR/diff를 여러 독립 관점(정확성·보안·성능·타입·에러처리·재사용성)으로 병렬 검토 → 발견을 적대적으로 검증(확정/불확실/거짓양성 3-state) → 신뢰도 임계 이상만 리포트. Claude Code의 `agent-prompt-code-review-*` 8단계.
 
@@ -34,7 +40,8 @@
 ---
 
 ## P-2. Security-Review 서브에이전트 (효과 高 / 노력 高 / 위험 低) — ✅ v1 구현완료
-> v1: `security_review` MCP 도구(`mcp/security-review-tool.ts`, `services/security-review/`, `config/security-review.ts`) — 취약점 분류 + 거짓양성 룰셋 + 신뢰도 게이트. **v2(미구현)**: 다중 투표 적대검증, git/sandbox 파일 입력, PR 코멘트.
+> v1: `security_review` MCP 도구(`mcp/security-review-tool.ts`, `services/security-review/`, `config/security-review.ts`) — 취약점 분류 + 거짓양성 룰셋 + 신뢰도 게이트.
+> **v2 처리**: 다중 투표 적대검증 = ⏸️ 트리거(오탐 실측 시) · git/sandbox 파일 입력 = ⏸️ 트리거(요구 시) · PR 코멘트 = ❌ 폐기.
 
 **무엇**: 취약점 카테고리(SQLi/cmd injection/XSS/auth bypass/crypto/SSRF) 분류 + **거짓양성 필터 규칙셋** + 신뢰도 점수 → 고신뢰만 리포트. 읽기 전용이라 위험 낮음.
 
@@ -49,7 +56,8 @@
 ---
 
 ## P-3. Plan Mode (읽기 전용 설계 + 승인 게이트) (효과 中 / 노력 中 / 위험 低) — ✅ v1 구현완료
-> v1: `create_plan` MCP 도구(`mcp/plan-tool.ts`, `services/plan-mode/`, `config/plan-mode.ts`) — 단계별(작업+검증)·핵심파일·위험·미해결질문 구조화 계획. 승인 게이트=채팅 흐름. **v2(미구현)**: Agent Task 생명주기 통합(status `plan_pending_approval` + resume + 승인 UI).
+> v1: `create_plan` MCP 도구(`mcp/plan-tool.ts`, `services/plan-mode/`, `config/plan-mode.ts`) — 단계별(작업+검증)·핵심파일·위험·미해결질문 구조화 계획. 승인 게이트=채팅 흐름.
+> **v2 처리**: Agent Task 생명주기 통합(status `plan_pending_approval` + resume + 승인 UI) = ⏸️ 트리거(자율 작업에 write 도구 추가 시 — 그때 resume gate 필수해짐).
 
 **무엇**: 구현 전 읽기 전용 탐색 → 아키텍처/단계/Critical Files 계획 산출 → 사용자 승인 후 실행. Claude Code `agent-prompt-plan-mode-*`.
 
@@ -84,12 +92,11 @@
 
 ---
 
-## P-6. 부가 동적 리마인더 (효과 中~低 / 노력 中)
+## P-6. 부가 동적 리마인더 (개별 가치 판단 — 일부 구현)
 
-비교 분석에서 나온 나머지 동적 리마인더 후보(대부분 신규 상태추적 필요):
-- **비동기 에이전트 중복방지**: 진행 중 Agent Task의 작업 범위를 추적해 동일 범위 동시 실행 경고. (`lifecycle`/AgentTask 상태맵 필요 — 노력 中)
-- **token-usage 턴별 피드백 WS**: 남은 쿼터를 클라이언트에 실시간 표시. (`message-pipeline`+WS 이벤트+프론트 — 노력 高, UX 개선)
-- **파일 부분읽기 완전성 공개**: openmake_llm filesystem 도구가 페이지네이션을 하면 "X/Y줄 읽음" 고지. (현 도구가 페이지네이션 미사용이면 **N/A**)
+- ✅ **파일 부분읽기 완전성 고지** (구현): `fs_read_file` 이 크기 제한 없이 전체를 반환 → 거대 파일이 다운스트림 context-fit 에서 조용히 잘리던 갭. `mcp/filesystem.ts` `applyReadLimit`(바이트 캡 `FS_READ_MAX_BYTES` + 잘림 명시 고지 + optional `max_bytes`). 멀티바이트 경계 안전.
+- ✅ **비동기 에이전트 중복방지** (최소 구현): `POST /api/agent-tasks` 생성 시 진행 중(running/pending) 작업 수를 조회해 응답에 `concurrentActive`/`warnings` 추가(additive, 생성은 막지 않음). 프론트는 미소비 시 무영향.
+- ⏸️ **token-usage 턴별 피드백 WS** (보류): `message-pipeline`+WS 이벤트+프론트 동반, 순수 UX·고노력·핵심 파이프라인 회귀이력 → Simplicity First 로 보류. 채택 시 별도 플랜.
 
 ---
 

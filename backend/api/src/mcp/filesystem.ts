@@ -40,6 +40,39 @@ const ALLOWED_EXTENSIONS = new Set([
 ]);
 
 /**
+ * fs_read_file 기본 최대 바이트 (Harness 완전성 고지).
+ * 초과 시 앞부분만 반환하고 잘렸음을 명시 — 거대 파일이 다운스트림 context-fit 에서
+ * 조용히 잘려 모델이 "전체를 봤다"고 오인하는 것을 방지.
+ */
+const FS_READ_MAX_BYTES = Number(process.env.FS_READ_MAX_BYTES) || 100_000;
+
+/**
+ * 읽은 내용에 바이트 캡을 적용하고 잘림 여부를 고지한다 (순수 함수).
+ *
+ * @param content - 파일 전체 문자열
+ * @param maxBytes - 최대 바이트 (utf-8 기준)
+ * @returns 표시할 텍스트(잘렸으면 고지 문구 부가) + 메타
+ */
+export function applyReadLimit(
+    content: string,
+    maxBytes: number,
+): { text: string; truncated: boolean; totalBytes: number; shownBytes: number } {
+    const totalBytes = Buffer.byteLength(content, 'utf8');
+    if (totalBytes <= maxBytes) {
+        return { text: content, truncated: false, totalBytes, shownBytes: totalBytes };
+    }
+    // utf-8 경계 안전하게 자르기: 바이트 슬라이스 후 손상 가능 마지막 문자 제거
+    const buf = Buffer.from(content, 'utf8').subarray(0, maxBytes);
+    let shown = buf.toString('utf8');
+    // toString 이 불완전 멀티바이트를 U+FFFD 로 만들 수 있으므로 끝의 치환문자 제거
+    shown = shown.replace(/�+$/, '');
+    const shownBytes = Buffer.byteLength(shown, 'utf8');
+    const notice = `\n\n⚠️ [완전성 고지] 파일이 ${totalBytes} bytes 로 커서 앞 ${shownBytes} bytes 만 표시했습니다. ` +
+        `나머지는 표시되지 않았습니다 — 특정 부분이 필요하면 범위를 좁혀 다시 요청하거나 파일을 분할하세요.`;
+    return { text: shown + notice, truncated: true, totalBytes, shownBytes };
+}
+
+/**
  * 금지된 파일 경로 패턴
  *
  * 보안상 접근을 차단해야 하는 경로 패턴입니다.
@@ -155,12 +188,16 @@ export const readFileTool: MCPToolDefinition = {
                     type: 'string',
                     description: '인코딩 (기본: utf-8)',
                     default: 'utf-8'
+                },
+                max_bytes: {
+                    type: 'number',
+                    description: `반환 최대 바이트 (기본 ${FS_READ_MAX_BYTES}). 초과 시 앞부분만 표시하고 잘림을 고지합니다.`
                 }
             },
             required: ['path']
         }
     },
-    handler: (async (params: { path: string; encoding?: string }, context?: UserContext): Promise<MCPToolResult> => {
+    handler: (async (params: { path: string; encoding?: string; max_bytes?: number }, context?: UserContext): Promise<MCPToolResult> => {
         if (!context) {
             return {
                 content: [{ type: 'text', text: '사용자 컨텍스트가 필요합니다' }],
@@ -179,8 +216,12 @@ export const readFileTool: MCPToolDefinition = {
         try {
             const encoding = (params.encoding || 'utf-8') as BufferEncoding;
             const content = await fs.readFile(validation.resolvedPath!, { encoding });
+            const cap = typeof params.max_bytes === 'number' && params.max_bytes > 0
+                ? Math.floor(params.max_bytes)
+                : FS_READ_MAX_BYTES;
+            const { text } = applyReadLimit(content, cap);
             return {
-                content: [{ type: 'text', text: content }],
+                content: [{ type: 'text', text }],
                 isError: false
             };
         } catch (error: unknown) {
