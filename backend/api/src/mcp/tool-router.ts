@@ -40,6 +40,8 @@ import { MCP_CATALOG_TIER_ORDER, type CatalogTier } from '../config/tiers';
 import type { UserContext } from './user-sandbox';
 import { createLogger } from '../utils/logger';
 import { MCP_EXTERNAL_TOOL_LIMITS } from '../config/timeouts';
+import { withSpan } from '../observability/otel';
+import { classifyToolError, formatToolError } from './tool-error-classifier';
 import type { UserMCPPool } from './user-pool';
 import type { McpCatalogRepository } from '../data/repositories/mcp-catalog-repository';
 import { collectUserPoolTools, type UserPoolToolEntry } from './user-pool-tools';
@@ -197,94 +199,116 @@ export class ToolRouter {
      * 내장 도구 handler에 context를 전달하여, 도구가 사용자 정보를 참조할 수 있도록 합니다.
      */
     async executeTool(name: string, args: Record<string, unknown>, context?: UserContext): Promise<MCPToolResult> {
-        // 1. 외부 도구 확인 (:: 네임스페이스)
-        if (name.includes(MCP_NAMESPACE_SEPARATOR)) {
-            // 1a. 사용자별 풀 우선 검색 (Phase 7 LifecycleSupervisor 가 채운 인스턴스)
-            //     context.userId 가 있으면 user_private/user_shared 서버는 사용자 풀에서만 접근.
-            if (context?.userId) {
-                const [serverId, toolName] = name.split(MCP_NAMESPACE_SEPARATOR, 2);
-                if (serverId && toolName) {
-                    const { getUserMCPPool } = await import('./user-pool');
-                    const userClient = getUserMCPPool().get(String(context.userId), serverId);
-                    if (userClient) {
-                        try {
-                            return await Promise.race([
-                                userClient.callTool(toolName, args),
-                                new Promise<never>((_, reject) =>
-                                    setTimeout(() => reject(new Error(`외부 도구 타임아웃: ${name}`)), MCP_EXTERNAL_TOOL_LIMITS.EXECUTION_TIMEOUT_MS)
-                                ),
-                            ]);
-                        } catch (e) {
-                            const msg = e instanceof Error ? e.message : String(e);
-                            return { content: [{ type: 'text', text: `사용자 풀 도구 실행 실패 (${name}): ${msg}` }], isError: true };
-                        }
-                    }
-                }
-            }
+        // Harness Engineering: tool-call 관측성(span) + 에러 분류/교정 힌트를 단일 chokepoint 에 통합.
+        // - 모든 에러 반환은 fail() 을 통과 → category/retryable span 속성 + actionable hint 부가.
+        // - 성공/실패 모두 finalize() 로 정규화 (외부/내장 도구가 isError 를 반환하는 경우도 분류).
+        const isExternal = name.includes(MCP_NAMESPACE_SEPARATOR);
+        return withSpan('mcp.tool-router', `tool.execute:${name}`, async (span) => {
+            const startedAt = Date.now();
+            span.setAttribute('tool.name', name);
+            span.setAttribute('tool.external', isExternal);
 
-            // 1b. 전역 externalTools (visibility=global) fallback
-            const externalEntry = this.externalTools.get(name);
-            if (!externalEntry) {
-                return {
-                    content: [{ type: 'text', text: `외부 도구를 찾을 수 없습니다: ${name}` }],
-                    isError: true,
-                };
-            }
-
-            const executor = this.externalExecutors.get(externalEntry.serverId);
-            if (!executor) {
-                return {
-                    content: [{ type: 'text', text: `서버 "${externalEntry.serverName}"의 실행기를 찾을 수 없습니다.` }],
-                    isError: true,
-                };
-            }
-
-            // 외부 도구 실행 (타임아웃 + 출력 크기 제한 적용)
-            try {
-                const result = await Promise.race([
-                    executor(externalEntry.originalName, args),
-                    new Promise<never>((_, reject) =>
-                        setTimeout(() => reject(new Error(`외부 도구 타임아웃: ${name} (${MCP_EXTERNAL_TOOL_LIMITS.EXECUTION_TIMEOUT_MS}ms 초과)`)), MCP_EXTERNAL_TOOL_LIMITS.EXECUTION_TIMEOUT_MS)
-                    )
-                ]);
-
-                // 출력 크기 제한
-                if (result.content) {
-                    for (const item of result.content) {
-                        if ('text' in item && typeof item.text === 'string' && item.text.length > MCP_EXTERNAL_TOOL_LIMITS.MAX_OUTPUT_SIZE) {
-                            item.text = item.text.substring(0, MCP_EXTERNAL_TOOL_LIMITS.MAX_OUTPUT_SIZE) + '\n... (출력이 1MB를 초과하여 잘렸습니다)';
-                        }
-                    }
-                }
-
+            const ok = (result: MCPToolResult): MCPToolResult => {
+                span.setAttribute('tool.duration_ms', Date.now() - startedAt);
+                span.setAttribute('tool.success', true);
                 return result;
-            } catch (error) {
-                const message = error instanceof Error ? error.message : '외부 도구 실행 실패';
-                return {
-                    content: [{ type: 'text', text: message }],
-                    isError: true,
-                };
-            }
-        }
+            };
+            const fail = (rawMessage: string): MCPToolResult => {
+                const c = classifyToolError(rawMessage);
+                span.setAttribute('tool.duration_ms', Date.now() - startedAt);
+                span.setAttribute('tool.success', false);
+                span.setAttribute('tool.error_category', c.category);
+                span.setAttribute('tool.error_retryable', c.retryable);
+                logger.warn(`Tool error [${name}] category=${c.category} retryable=${c.retryable}: ${rawMessage}`);
+                return { content: [{ type: 'text', text: formatToolError(rawMessage, c) }], isError: true };
+            };
+            // 도구가 isError 결과를 반환하면 분류·교정해 정규화, 정상이면 그대로 통과.
+            const finalize = (result: MCPToolResult): MCPToolResult => {
+                if (result?.isError) {
+                    const text = (result.content ?? [])
+                        .map((c) => ('text' in c && typeof c.text === 'string' ? c.text : ''))
+                        .filter(Boolean)
+                        .join('\n') || '도구 실행 오류';
+                    return fail(text);
+                }
+                return ok(result);
+            };
 
-        // 2. 내장 도구 확인
-        const builtIn = builtInTools.find((def: MCPToolDefinition) => def.tool.name === name);
-        if (builtIn) {
-            try {
-                return await builtIn.handler(args, context);
-            } catch (error) {
-                const message = error instanceof Error ? error.message : String(error);
-                return {
-                    content: [{ type: 'text', text: `도구 실행 오류 (${name}): ${message}` }],
-                    isError: true,
-                };
-            }
-        }
+            // 1. 외부 도구 확인 (:: 네임스페이스)
+            if (isExternal) {
+                // 1a. 사용자별 풀 우선 검색 (Phase 7 LifecycleSupervisor 가 채운 인스턴스)
+                //     context.userId 가 있으면 user_private/user_shared 서버는 사용자 풀에서만 접근.
+                if (context?.userId) {
+                    const [serverId, toolName] = name.split(MCP_NAMESPACE_SEPARATOR, 2);
+                    if (serverId && toolName) {
+                        const { getUserMCPPool } = await import('./user-pool');
+                        const userClient = getUserMCPPool().get(String(context.userId), serverId);
+                        if (userClient) {
+                            try {
+                                const result = await Promise.race([
+                                    userClient.callTool(toolName, args),
+                                    new Promise<never>((_, reject) =>
+                                        setTimeout(() => reject(new Error(`외부 도구 타임아웃: ${name} (${MCP_EXTERNAL_TOOL_LIMITS.EXECUTION_TIMEOUT_MS}ms 초과)`)), MCP_EXTERNAL_TOOL_LIMITS.EXECUTION_TIMEOUT_MS)
+                                    ),
+                                ]);
+                                return finalize(result);
+                            } catch (e) {
+                                const msg = e instanceof Error ? e.message : String(e);
+                                return fail(`사용자 풀 도구 실행 실패 (${name}): ${msg}`);
+                            }
+                        }
+                    }
+                }
 
-        return {
-            content: [{ type: 'text', text: `도구를 찾을 수 없습니다: ${name}` }],
-            isError: true,
-        };
+                // 1b. 전역 externalTools (visibility=global) fallback
+                const externalEntry = this.externalTools.get(name);
+                if (!externalEntry) {
+                    return fail(`외부 도구를 찾을 수 없습니다: ${name}`);
+                }
+
+                const executor = this.externalExecutors.get(externalEntry.serverId);
+                if (!executor) {
+                    return fail(`서버 "${externalEntry.serverName}"의 실행기를 찾을 수 없습니다.`);
+                }
+
+                // 외부 도구 실행 (타임아웃 + 출력 크기 제한 적용)
+                try {
+                    const result = await Promise.race([
+                        executor(externalEntry.originalName, args),
+                        new Promise<never>((_, reject) =>
+                            setTimeout(() => reject(new Error(`외부 도구 타임아웃: ${name} (${MCP_EXTERNAL_TOOL_LIMITS.EXECUTION_TIMEOUT_MS}ms 초과)`)), MCP_EXTERNAL_TOOL_LIMITS.EXECUTION_TIMEOUT_MS)
+                        )
+                    ]);
+
+                    // 출력 크기 제한
+                    if (result.content) {
+                        for (const item of result.content) {
+                            if ('text' in item && typeof item.text === 'string' && item.text.length > MCP_EXTERNAL_TOOL_LIMITS.MAX_OUTPUT_SIZE) {
+                                item.text = item.text.substring(0, MCP_EXTERNAL_TOOL_LIMITS.MAX_OUTPUT_SIZE) + '\n... (출력이 1MB를 초과하여 잘렸습니다)';
+                            }
+                        }
+                    }
+
+                    return finalize(result);
+                } catch (error) {
+                    const message = error instanceof Error ? error.message : '외부 도구 실행 실패';
+                    return fail(message);
+                }
+            }
+
+            // 2. 내장 도구 확인
+            const builtIn = builtInTools.find((def: MCPToolDefinition) => def.tool.name === name);
+            if (builtIn) {
+                try {
+                    return finalize(await builtIn.handler(args, context));
+                } catch (error) {
+                    const message = error instanceof Error ? error.message : String(error);
+                    return fail(`도구 실행 오류 (${name}): ${message}`);
+                }
+            }
+
+            return fail(`도구를 찾을 수 없습니다: ${name}`);
+        });
     }
 
     /**

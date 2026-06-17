@@ -40,7 +40,7 @@ import { imageTools } from './image-tools';
 export const visionOcrTool: MCPToolDefinition = {
     tool: {
         name: 'vision_ocr',
-        description: '이미지에서 텍스트를 추출합니다 (OCR). 문서, 스크린샷, 사진 등에서 텍스트를 읽어옵니다.',
+        description: '이미지에서 텍스트를 추출합니다 (OCR). 문서·스크린샷·영수증·표지판 등에서 글자만 그대로 읽어야 할 때 사용하세요. 이미지의 내용을 설명·해석해야 하면 analyze_image를 사용하세요. image_path 또는 image_base64 중 하나가 필요합니다.',
         inputSchema: {
             type: 'object',
             properties: {
@@ -86,7 +86,7 @@ export const visionOcrTool: MCPToolDefinition = {
 export const analyzeImageTool: MCPToolDefinition = {
     tool: {
         name: 'analyze_image',
-        description: '이미지의 내용을 분석하고 설명합니다. 사진, 다이어그램, 차트 등을 분석합니다.',
+        description: '이미지의 내용을 분석하고 설명합니다. 사진·다이어그램·차트·UI 등 무엇이 담겼는지 이해·해석하거나 이미지에 대한 질문에 답할 때 사용하세요. 글자만 그대로 추출하려면 analyze 대신 vision_ocr를 사용하세요. image_path 또는 image_base64 중 하나가 필요합니다.',
         inputSchema: {
             type: 'object',
             properties: {
@@ -128,6 +128,12 @@ import { importSkillFromGitTool } from './git-ingest-tool';
 import { importAgentFromGitTool } from './agent-ingest-tool';
 // Git URL → MCP server 매니페스트 ingest (Phase 4.5) — 3중 잠금 draft + 위험 명령 차단
 import { importMcpServerFromGitTool } from './mcp-server-ingest-tool';
+// 보안 리뷰 (P-2) — 코드 취약점 분석 (읽기 전용)
+import { securityReviewTool } from './security-review-tool';
+// Plan Mode (P-3) — 구현 전 읽기 전용 실행 계획 생성
+import { createPlanTool } from './plan-tool';
+// 코드 리뷰 (P-1) — 다각도 코드 검토 (읽기 전용)
+import { codeReviewTool } from './code-review-tool';
 
 /**
  * 전체 내장 도구 배열
@@ -153,4 +159,7 @@ export const builtInTools: MCPToolDefinition[] = [
     importSkillFromGitTool as MCPToolDefinition,
     importAgentFromGitTool as MCPToolDefinition,
     importMcpServerFromGitTool as MCPToolDefinition,
+    securityReviewTool,
+    createPlanTool,
+    codeReviewTool,
 ];

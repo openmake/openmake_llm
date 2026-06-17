@@ -215,6 +215,17 @@ CREATE TABLE IF NOT EXISTS agent_feedback (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS agent_prompt_suggestions (
+    id TEXT PRIMARY KEY,
+    agent_id TEXT NOT NULL,
+    suggestion TEXT NOT NULL,
+    source_patterns TEXT,
+    quality_score INTEGER,
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_prompt_suggestions_agent ON agent_prompt_suggestions(agent_id, status);
+
 CREATE TABLE IF NOT EXISTS audit_logs (
     id SERIAL PRIMARY KEY,
     timestamp TIMESTAMPTZ DEFAULT NOW(),

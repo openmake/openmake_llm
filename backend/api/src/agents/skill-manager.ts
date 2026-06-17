@@ -52,6 +52,61 @@ const logger = createLogger('SkillManager');
 /** 스킬 내용 최대 길이 (프롬프트 인젝션 완화용) */
 const MAX_SKILL_CONTENT_LENGTH = 10_000;
 
+/**
+ * Skill 과포화 임계값 (Harness Engineering: 스킬은 5~10개로 집중·과확장 경계).
+ * 초과 시 비차단 경고만 — 컨텍스트 잠식을 운영자가 인지하도록 surface.
+ */
+const SKILL_OVERLOAD_MAX_ACTIVE = Number(process.env.SKILL_OVERLOAD_MAX_ACTIVE) || 12;
+const SKILL_OVERLOAD_MAX_TOTAL_CHARS = Number(process.env.SKILL_OVERLOAD_MAX_TOTAL_CHARS) || 50_000;
+
+/**
+ * 한 에이전트에 주입될 스킬 묶음의 과포화 여부를 평가합니다 (순수 함수).
+ * formatSkillsAsPrompt 에서 호출해 경고 로깅에 사용.
+ *
+ * @param skills - 주입 예정 스킬 (content 보유)
+ * @param limits - 임계값 (기본 env 값)
+ * @returns 활성 개수/누적 문자수/과포화 여부/사유
+ */
+export function assessSkillOverload(
+    skills: ReadonlyArray<{ content: string }>,
+    limits: { maxActive: number; maxTotalChars: number } = {
+        maxActive: SKILL_OVERLOAD_MAX_ACTIVE,
+        maxTotalChars: SKILL_OVERLOAD_MAX_TOTAL_CHARS,
+    },
+): { overloaded: boolean; activeCount: number; totalChars: number; reasons: string[] } {
+    const activeCount = skills.length;
+    const totalChars = skills.reduce((sum, s) => sum + (s.content?.length ?? 0), 0);
+    const reasons: string[] = [];
+    if (activeCount > limits.maxActive) {
+        reasons.push(`활성 스킬 ${activeCount}개 > 임계 ${limits.maxActive}개`);
+    }
+    if (totalChars > limits.maxTotalChars) {
+        reasons.push(`누적 스킬 content ${totalChars}자 > 임계 ${limits.maxTotalChars}자`);
+    }
+    return { overloaded: reasons.length > 0, activeCount, totalChars, reasons };
+}
+
+/** triggers 활성화에 사용할 노출 상한 (프롬프트 비대화 방지) */
+const SKILL_TRIGGER_HINT_MAX = Number(process.env.SKILL_TRIGGER_HINT_MAX) || 8;
+
+/**
+ * manifestMeta.triggers 를 스킬 블록에 넣을 "적용 상황" 힌트 문자열로 변환 (순수 함수).
+ * triggers 가 없거나 비면 빈 문자열(기존 동작과 동일).
+ *
+ * @param manifestMeta - 스킬 manifest 메타 (triggers 배열 보유 가능)
+ * @returns " (적용 상황: a, b, c)" 형태 또는 ''
+ */
+export function formatTriggerHint(manifestMeta?: Record<string, unknown>): string {
+    const raw = manifestMeta?.triggers;
+    if (!Array.isArray(raw)) return '';
+    const triggers = raw
+        .filter((t): t is string => typeof t === 'string' && t.trim().length > 0)
+        .map(t => t.trim().replace(/[<>"&]/g, ''))
+        .slice(0, SKILL_TRIGGER_HINT_MAX);
+    if (triggers.length === 0) return '';
+    return ` (적용 상황: ${triggers.join(', ')})`;
+}
+
 // ========================================
 // SkillManager 클래스
 // ========================================
@@ -254,13 +309,21 @@ export class SkillManager {
      */
     private formatSkillsAsPrompt(skills: AgentSkill[]): string {
         if (skills.length === 0) return '';
+        // Harness 과포화 가드 — 비차단 경고 (스킬은 계속 주입).
+        const overload = assessSkillOverload(skills);
+        if (overload.overloaded) {
+            logger.warn(`[Skill 과포화] ${overload.reasons.join('; ')} — 스킬 통합/축소 검토 권장`);
+        }
         const skillBlocks = skills
             .map(s => {
                 const content = s.content.length > MAX_SKILL_CONTENT_LENGTH
                     ? s.content.slice(0, MAX_SKILL_CONTENT_LENGTH) + '\n... (truncated)'
                     : s.content;
                 const safeName = s.name.replace(/[<>"&]/g, '');
-                return `<skill_context name="${safeName}">\n${content}\n</skill_context>`;
+                // triggers 활성화: manifestMeta.triggers 를 "적용 상황" 힌트로 노출 →
+                // 모델이 현재 질의가 이 스킬에 해당하는지 스스로 판단(description-steering).
+                const triggerHint = formatTriggerHint(s.manifestMeta);
+                return `<skill_context name="${safeName}">${triggerHint}\n${content}\n</skill_context>`;
             })
             .join('\n\n');
         return `\n\n## \uc801\uc6a9\ub41c \uc2a4\ud0ac\n${skillBlocks}`;

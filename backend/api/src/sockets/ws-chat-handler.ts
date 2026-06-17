@@ -17,6 +17,7 @@ import { createLogger } from '../utils/logger';
 import { WSMessage, ExtendedWebSocket } from './ws-types';
 import { CURRENT_EVENTS_KEYWORDS, WEB_SEARCH_TEMPLATES, WS_ERROR_MESSAGES, WS_PROVIDER_ERROR_MESSAGES, getLocalizedTemplate } from './ws-chat-locales';
 import { detectLanguage, type SupportedLanguageCode } from '../chat/language-policy';
+import { applySlashCommand } from '../chat/slash-command';
 import { getStaleDataWarning } from '../config/stale-data-warning';
 import { ArtifactStreamParser, type ArtifactInfo } from '../llm/artifact-parser';
 import { buildFileContext, buildUrlContext, getCachedAttachContext, appendCachedAttachContext } from '../services/chat-service/attach-context';
@@ -48,7 +49,10 @@ export async function handleChatMessage(
 
     const { model, nodeId, history, sessionId, anonSessionId } = msg;
     const { images } = msg;
-    const message = (msg.message ?? '').trim();
+    // 슬래시 명령(P-4): `/skill-slug ...` 가 active 스킬과 매칭되면 스킬 컨텍스트를 주입.
+    // 비슬래시/미매칭/비활성은 원문 그대로(무영향·무비용), 오류는 graceful(원문 유지).
+    const slashUserId = extWs._authenticatedUserId !== undefined ? String(extWs._authenticatedUserId) : undefined;
+    const message = await applySlashCommand((msg.message ?? '').trim(), { userId: slashUserId });
 
     // 사용자 언어 감지 — 설정에서 선택한 언어를 우선, 없으면 메시지 기반 자동 감지
     const userLangPreference = (typeof msg.language === 'string' && msg.language.trim()) ? msg.language.trim() as SupportedLanguageCode : undefined;

@@ -21,6 +21,13 @@ import { getSkillManager } from './skill-manager';
 import { getLanguageTemplate, type SupportedLanguageCode } from '../chat/language-policy';
 const logger = createLogger('AgentSystem');
 
+/**
+ * Harness 자가개선 주입 게이트 (기본 OFF).
+ * ON 시에만 관리자가 승인한 프롬프트 개선 제안을 시스템 프롬프트에 추가한다.
+ * 프로덕션 무변경 — 활성화는 승인된 제안 존재 + 이 플래그 둘 다 필요.
+ */
+const AGENT_IMPROVEMENT_INJECTION_ENABLED = process.env.AGENT_IMPROVEMENT_INJECTION_ENABLED === 'true';
+
 type PromptLanguageCode = 'ko' | 'en' | 'ja' | 'zh' | 'es' | 'de' | 'fr';
 
 interface AgentPromptTemplate {
@@ -293,6 +300,21 @@ ${applyPromptPlaceholders(promptTemplate.workingOn, { phase: getPhaseLabel(selec
             logger.warn(`파일 프롬프트 로드 실패: ${agent.name}`, e);
         }
     }
+
+    // 3. Harness 자가개선 주입 (flag OFF 기본) — 관리자 승인된 개선 지침만 just-in-time 으로 추가.
+    if (AGENT_IMPROVEMENT_INJECTION_ENABLED) {
+        try {
+            const { getAgentLearningSystem } = await import('./learning');
+            const additions = await getAgentLearningSystem().getApprovedPromptAdditions(agent.id);
+            if (additions.length > 0) {
+                result += `\n\n## 개선 지침 (운영 피드백 반영)\n${additions.map(a => `- ${a}`).join('\n')}\n`;
+                logger.info(`자기개선 지침 ${additions.length}건 주입됨: ${agent.name} (${agent.id})`);
+            }
+        } catch (e) {
+            logger.warn(`자기개선 지침 주입 실패 (continue): ${agent.name}`, e);
+        }
+    }
+
     return { prompt: result, skillNames };
 }
 

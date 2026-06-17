@@ -48,6 +48,7 @@ export const TOOL_TIERS: Record<UserTier, string[]> = {
         'import_mcp_server_from_git', // Git URL → MCP server draft (3중 잠금, RL_MCP_INGEST 5/hr free)
         'agent_task_list',      // 본인 에이전트 작업 목록 조회 (읽기 전용)
         'agent_task_get',       // 본인 에이전트 작업 결과/아티팩트 조회 (읽기 전용)
+        'create_plan',          // 구현 전 읽기 전용 실행 계획 생성 (P-3)
         'noapi-google-search::*', // 외부: Google 검색
     ],
     pro: [
@@ -64,6 +65,9 @@ export const TOOL_TIERS: Record<UserTier, string[]> = {
         'web_scrape',           // 웹 스크래핑
         'web_map',              // URL 매핑
         'web_crawl',            // 웹 크롤링
+        'security_review',      // 코드 보안 취약점 분석 (읽기 전용, P-2)
+        'create_plan',          // 구현 전 읽기 전용 실행 계획 생성 (P-3)
+        'code_review',          // 다각도 코드 리뷰 (읽기 전용, P-1)
         'noapi-google-search::*', // 외부: Google 검색
         'Knowledge Graph Memory::*', // 외부: 장기 기억
         'Playwright Browser::*',     // 외부: 브라우저 자동화

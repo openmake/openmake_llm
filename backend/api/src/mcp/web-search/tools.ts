@@ -23,11 +23,11 @@ import { performWebSearch } from './search-orchestrator';
 export const webSearchTool: MCPToolDefinition = {
     tool: {
         name: 'web_search',
-        description: '웹에서 최신 정보 검색',
+        description: '웹에서 최신 정보를 검색합니다. 학습 시점 이후의 최신 정보(뉴스·날씨·시세·최근 사건·버전 등)나 모델이 모르는 사실이 필요할 때 사용하세요. 여러 출처의 제목·URL·요약을 번호 목록으로 반환합니다. 특정 단일 페이지의 본문이 필요하면 extract_webpage를, 주장 진위 교차검증은 fact_check를 사용하세요.',
         inputSchema: {
             type: 'object',
             properties: {
-                query: { type: 'string', description: '검색어' }
+                query: { type: 'string', description: '검색어. 핵심 키워드 위주로 간결하게 작성 (예: "2026 환율 전망")' }
             },
             required: ['query']
         }
@@ -61,10 +61,10 @@ export const webSearchTool: MCPToolDefinition = {
 export const factCheckTool: MCPToolDefinition = {
     tool: {
         name: 'fact_check',
-        description: '사실 검증',
+        description: '특정 주장의 진위를 외부 출처로 교차검증합니다. 사용자나 모델이 단정한 사실이 맞는지 근거가 필요할 때 사용하세요. 주장과 관련된 출처 5건의 제목·URL을 반환합니다. 단순 정보 탐색은 web_search를 사용하세요.',
         inputSchema: {
             type: 'object',
-            properties: { claim: { type: 'string' } },
+            properties: { claim: { type: 'string', description: '검증할 주장 한 문장 (예: "한국의 2025년 합계출산율은 0.7명이다")' } },
             required: ['claim']
         }
     },
@@ -93,10 +93,10 @@ export const factCheckTool: MCPToolDefinition = {
 export const extractWebpageTool: MCPToolDefinition = {
     tool: {
         name: 'extract_webpage',
-        description: '웹페이지 콘텐츠 추출',
+        description: '이미 알고 있는 특정 URL의 본문 텍스트를 추출합니다(태그 제거, 최대 3000자). 검색으로 찾은 페이지나 사용자가 준 링크의 내용을 읽어야 할 때 사용하세요. 마크다운·SPA 렌더링이 필요하면 web_scrape를, URL을 먼저 찾아야 하면 web_search를 사용하세요.',
         inputSchema: {
             type: 'object',
-            properties: { url: { type: 'string' } },
+            properties: { url: { type: 'string', description: '추출할 웹페이지의 전체 URL (http/https)' } },
             required: ['url']
         }
     },
@@ -124,10 +124,10 @@ export const extractWebpageTool: MCPToolDefinition = {
 export const researchTopicTool: MCPToolDefinition = {
     tool: {
         name: 'research_topic',
-        description: '주제 연구',
+        description: '한 주제에 대해 다출처 자료를 폭넓게 수집합니다. 개요·배경 조사가 필요한 광범위한 주제일 때 사용하세요. 단발성 사실 조회는 web_search가 더 빠릅니다. 심층 다단계 리서치가 필요하면 deep research 모드를 사용하세요.',
         inputSchema: {
             type: 'object',
-            properties: { topic: { type: 'string' } },
+            properties: { topic: { type: 'string', description: '연구할 주제 (예: "고체 전해질 배터리 상용화 현황")' } },
             required: ['topic']
         }
     },

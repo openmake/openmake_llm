@@ -22,12 +22,17 @@
  * @see backend/api/src/llm/reasoning-tag-parser.ts (같은 패턴)
  */
 
+import { verifyArtifact, type ArtifactValidation } from './artifact-verifier';
+
 export interface ArtifactInfo {
     id: string;
     kind: string;
     title: string;
     lang: string | null;
 }
+
+/** 산출물 결정론 검증 게이트 on/off (기본 ON). 비차단 — 결과는 annotate 만 함. */
+const ARTIFACT_VERIFY_ENABLED = process.env.ARTIFACT_VERIFY_ENABLED !== 'false';
 
 export interface ArtifactStreamCallbacks {
     /** 일반 본문 토큰 (artifact 외부) */
@@ -165,6 +170,15 @@ export class ArtifactStreamParser {
  */
 export interface ExtractedArtifact extends ArtifactInfo {
     content: string;
+    /** 결정론 검증 결과 (게이트 ON 시 부착). 비차단 — 영속화/표시를 막지 않음. */
+    validation?: ArtifactValidation;
+}
+
+/** 추출된 artifact 에 결정론 검증 결과를 부착 (게이트 OFF 면 그대로 반환). */
+function attachValidation(a: ExtractedArtifact): ExtractedArtifact {
+    if (!ARTIFACT_VERIFY_ENABLED) return a;
+    a.validation = verifyArtifact({ kind: a.kind, lang: a.lang, content: a.content });
+    return a;
 }
 
 const ARTIFACT_BLOCK_PATTERN = /<artifact\s+([^>]*)>([\s\S]*?)<\/artifact>/gi;
@@ -184,7 +198,7 @@ export function extractAndStripArtifacts(raw: string): {
     if (raw.indexOf('<artifact') !== -1) {
         cleaned = cleaned.replace(ARTIFACT_BLOCK_PATTERN, (_match, attrs: string, body: string) => {
             const info = parseAttrs(attrs);
-            artifacts.push({ ...info, content: body.trim() });
+            artifacts.push(attachValidation({ ...info, content: body.trim() }));
             return `[[artifact:${info.id}]]`;
         });
     }
@@ -200,13 +214,13 @@ export function extractAndStripArtifacts(raw: string): {
         const langNorm = (lang || '').toLowerCase().slice(0, 40) || null;
         const id = `auto-${slug(langNorm || 'code')}-${Date.now().toString(36)}-${fenceIdx}`;
         const title = titleFor(langNorm, body);
-        artifacts.push({
+        artifacts.push(attachValidation({
             id,
             kind: 'code',
             title,
             lang: langNorm,
             content: body.trim(),
-        });
+        }));
         return `[[artifact:${id}]]`;
     });
 

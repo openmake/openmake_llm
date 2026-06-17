@@ -86,6 +86,19 @@ CREATE TABLE IF NOT EXISTS agent_feedback (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- 자기개선 프롬프트 제안 (Harness Engineering: 분석→영속화→승인→주입 루프)
+-- agent_id 는 산업/커스텀 agent id 혼용이라 FK 미설정. id = hash(agent_id+suggestion) 로 멱등.
+CREATE TABLE IF NOT EXISTS agent_prompt_suggestions (
+    id TEXT PRIMARY KEY,
+    agent_id TEXT NOT NULL,
+    suggestion TEXT NOT NULL,
+    source_patterns TEXT,
+    quality_score INTEGER,
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_prompt_suggestions_agent ON agent_prompt_suggestions(agent_id, status);
+
 -- 커스텀 에이전트 테이블
 CREATE TABLE IF NOT EXISTS custom_agents (
     id TEXT PRIMARY KEY,

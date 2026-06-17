@@ -353,8 +353,6 @@ export class AgentLearningSystem {
             const failurePatterns = this.analyzeFailurePatterns(agentId);
             if (failurePatterns.length === 0) continue;
 
-            // 자기개선 메모리 저장: 2026-05-19 MemoryService 폐기와 함께 제거.
-            // 품질/라우팅 힌트는 logger 만으로 기록 — 자동 보정은 후속 인프라 신설 필요.
             const patternsStr = failurePatterns
                 .slice(0, 3)
                 .map(p => `${p.pattern}(${p.count}건)`)
@@ -363,8 +361,14 @@ export class AgentLearningSystem {
                 `[자기개선] agent=${agentId} 품질=${quality.overallScore}/100 ` +
                 `추세=${quality.recentTrend} 실패패턴: ${patternsStr}`,
             );
+
+            // Harness 자가개선 루프: 분석 결과를 프롬프트 개선 제안으로 변환해 DB 에 영속화.
+            // status='pending' 으로 저장 → 관리자 승인 후에만 프롬프트에 주입(승인 게이트).
+            const improvement = this.suggestPromptImprovements(agentId, '');
+            const persisted = await this.persistSuggestions(agentId, improvement.suggestedAdditions, quality.overallScore, patternsStr);
+
             improvedAgents.push(agentId);
-            totalSuggestions += failurePatterns.length;
+            totalSuggestions += persisted || failurePatterns.length;
         }
 
         if (improvedAgents.length > 0) {
@@ -372,6 +376,64 @@ export class AgentLearningSystem {
         }
 
         return { improvedAgents, suggestions: totalSuggestions };
+    }
+
+    /**
+     * 프롬프트 개선 제안을 DB 에 영속화 (status='pending').
+     * id = sha1(agentId + suggestion) 로 멱등 — 같은 제안 반복 저장 방지(ON CONFLICT DO NOTHING).
+     * 테이블 부재 등 DB 오류는 graceful — 0 반환하고 사이클은 계속.
+     *
+     * @returns 영속화 시도한 제안 수 (실패 시 0)
+     */
+    private async persistSuggestions(
+        agentId: string,
+        suggestions: string[],
+        qualityScore: number,
+        sourcePatterns: string,
+    ): Promise<number> {
+        const unique = [...new Set(suggestions.filter(s => s && s.trim()))];
+        if (unique.length === 0) return 0;
+
+        try {
+            const pool = this.getPool();
+            for (const suggestion of unique) {
+                const id = `sug_${crypto.createHash('sha1').update(`${agentId}::${suggestion}`).digest('hex').slice(0, 24)}`;
+                await pool.query(
+                    `INSERT INTO agent_prompt_suggestions (id, agent_id, suggestion, source_patterns, quality_score, status)
+                     VALUES ($1, $2, $3, $4, $5, 'pending')
+                     ON CONFLICT (id) DO NOTHING`,
+                    [id, agentId, suggestion, sourcePatterns || null, qualityScore],
+                );
+            }
+            return unique.length;
+        } catch (error) {
+            logger.error('프롬프트 제안 DB 저장 실패 (graceful — 사이클 계속):', error);
+            return 0;
+        }
+    }
+
+    /**
+     * 관리자가 승인(status='approved')한 프롬프트 추가 지침을 조회합니다.
+     * 시스템 프롬프트 주입에 사용 — 승인 게이트를 통과한 제안만 반환.
+     * DB 오류/테이블 부재 시 빈 배열(graceful).
+     *
+     * @param agentId - 에이전트 id
+     * @param limit - 최대 개수 (기본 5 — 컨텍스트 절약)
+     */
+    async getApprovedPromptAdditions(agentId: string, limit: number = 5): Promise<string[]> {
+        try {
+            const pool = this.getPool();
+            const result = await pool.query(
+                `SELECT suggestion FROM agent_prompt_suggestions
+                 WHERE agent_id = $1 AND status = 'approved'
+                 ORDER BY created_at DESC LIMIT $2`,
+                [agentId, limit],
+            );
+            return result.rows.map((r: { suggestion: string }) => r.suggestion).filter(Boolean);
+        } catch (error) {
+            logger.error('승인된 프롬프트 제안 조회 실패 (graceful — 빈 배열):', error);
+            return [];
+        }
     }
 
     /**

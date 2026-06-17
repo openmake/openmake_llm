@@ -385,6 +385,10 @@ export class ChatRequestHandler {
                 const repo = new ArtifactRepository(getPool());
                 const userIdForDb = typeof userContext.userId === 'string' ? userContext.userId : null;
                 for (const a of artifacts) {
+                    // Harness 결정론 검증 게이트: 깨진 산출물을 비차단으로 surface (저장은 계속).
+                    if (a.validation && a.validation.checked && !a.validation.valid) {
+                        log.warn(`[Artifact] 구문 검증 실패 id=${a.id} kind=${a.kind} lang=${a.lang}: ${a.validation.issues.join('; ')}`);
+                    }
                     try {
                         const row = await repo.insertArtifact({
                             artifactId: a.id,
