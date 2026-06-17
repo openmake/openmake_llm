@@ -21,6 +21,15 @@
 
 import crypto from 'node:crypto';
 import { createLogger } from '../utils/logger';
+import {
+    type PromptSuggestionRow,
+    persistSuggestions as storePersistSuggestions,
+    getApprovedPromptAdditions as storeGetApprovedPromptAdditions,
+    listSuggestions as storeListSuggestions,
+    setSuggestionStatus as storeSetSuggestionStatus,
+} from './learning-suggestions-store';
+
+export type { PromptSuggestionRow };
 
 const logger = createLogger('AgentLearning');
 
@@ -391,49 +400,32 @@ export class AgentLearningSystem {
         qualityScore: number,
         sourcePatterns: string,
     ): Promise<number> {
-        const unique = [...new Set(suggestions.filter(s => s && s.trim()))];
-        if (unique.length === 0) return 0;
-
-        try {
-            const pool = this.getPool();
-            for (const suggestion of unique) {
-                const id = `sug_${crypto.createHash('sha1').update(`${agentId}::${suggestion}`).digest('hex').slice(0, 24)}`;
-                await pool.query(
-                    `INSERT INTO agent_prompt_suggestions (id, agent_id, suggestion, source_patterns, quality_score, status)
-                     VALUES ($1, $2, $3, $4, $5, 'pending')
-                     ON CONFLICT (id) DO NOTHING`,
-                    [id, agentId, suggestion, sourcePatterns || null, qualityScore],
-                );
-            }
-            return unique.length;
-        } catch (error) {
-            logger.error('프롬프트 제안 DB 저장 실패 (graceful — 사이클 계속):', error);
-            return 0;
-        }
+        return storePersistSuggestions(agentId, suggestions, qualityScore, sourcePatterns);
     }
 
     /**
-     * 관리자가 승인(status='approved')한 프롬프트 추가 지침을 조회합니다.
-     * 시스템 프롬프트 주입에 사용 — 승인 게이트를 통과한 제안만 반환.
-     * DB 오류/테이블 부재 시 빈 배열(graceful).
-     *
-     * @param agentId - 에이전트 id
-     * @param limit - 최대 개수 (기본 5 — 컨텍스트 절약)
+     * 관리자가 승인(status='approved')한 프롬프트 추가 지침을 조회 (시스템 프롬프트 주입용).
      */
     async getApprovedPromptAdditions(agentId: string, limit: number = 5): Promise<string[]> {
-        try {
-            const pool = this.getPool();
-            const result = await pool.query(
-                `SELECT suggestion FROM agent_prompt_suggestions
-                 WHERE agent_id = $1 AND status = 'approved'
-                 ORDER BY created_at DESC LIMIT $2`,
-                [agentId, limit],
-            );
-            return result.rows.map((r: { suggestion: string }) => r.suggestion).filter(Boolean);
-        } catch (error) {
-            logger.error('승인된 프롬프트 제안 조회 실패 (graceful — 빈 배열):', error);
-            return [];
-        }
+        return storeGetApprovedPromptAdditions(agentId, limit);
+    }
+
+    /**
+     * 프롬프트 제안 목록 조회 (관리자 검토용).
+     */
+    async listSuggestions(opts: {
+        status?: 'pending' | 'approved' | 'rejected' | 'all';
+        agentId?: string;
+        limit?: number;
+    } = {}): Promise<PromptSuggestionRow[]> {
+        return storeListSuggestions(opts);
+    }
+
+    /**
+     * 프롬프트 제안의 상태를 변경합니다 (관리자 승인/거부). 미존재 시 false, DB 오류는 throw.
+     */
+    async setSuggestionStatus(id: string, status: 'approved' | 'rejected'): Promise<boolean> {
+        return storeSetSuggestionStatus(id, status);
     }
 
     /**

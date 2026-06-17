@@ -42,6 +42,7 @@ import {
     auditRouter,
     researchRouter,
     agentTaskRouter,
+    agentSuggestionsRouter,
     externalRouter,
     pushRouter,
     modelRouter,
@@ -177,6 +178,8 @@ export function setupApiRoutes(
     }));
     app.use('/api/admin/mcp', mcpCatalogAdminRouter);
     app.use('/api/admin/mcp', mcpAdminMonitoringRouter);
+    // F2 자가개선 — 프롬프트 제안 검토/승인 (관리자)
+    app.use('/api/admin/agent-suggestions', agentSuggestionsRouter);
     app.use('/api/debug-queue', debugQueueRouter);
     // Artifacts (2026-05-26 Phase 1): GET/DELETE /api/sessions/:sid/artifacts/*
     app.use('/api', artifactsRouter);
