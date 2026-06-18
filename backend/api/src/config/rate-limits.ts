@@ -58,12 +58,17 @@ export const RL_CHAT = {
 } as const;
 
 /**
- * Research API 레이트 리밋 (LLM 멀티스텝 — 비용 높음)
+ * Research API 레이트 리밋.
+ *
+ * ipLimit/userLimit 은 endpointRules 에 안 걸리는 요청(주로 **GET 히스토리 조회** —
+ * 세션 목록/상세/스텝)의 기본 한도다. 조회는 빈번(페이지 진입·세션 클릭마다 호출)하므로
+ * 관대하게 둔다. 비용 높은 **실행(POST)** 은 researchLimit/deepLimit(endpointRules)로 별도 제한.
+ * (구 ip=10/user=15/15분은 조회까지 묶어, 세션 몇 번만 클릭해도 429 → 히스토리가 사라졌다.)
  */
 export const RL_RESEARCH = {
     windowMs: WINDOW_15M,
-    ipLimit: Number(process.env.RL_RESEARCH_IP) || 10,
-    userLimit: Number(process.env.RL_RESEARCH_USER) || 15,
+    ipLimit: Number(process.env.RL_RESEARCH_IP) || 60,
+    userLimit: Number(process.env.RL_RESEARCH_USER) || 120,
     researchLimit: Number(process.env.RL_RESEARCH_RESEARCH) || 10,
     deepLimit: Number(process.env.RL_RESEARCH_DEEP) || 6,
 } as const;
