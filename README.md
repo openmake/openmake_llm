@@ -155,8 +155,8 @@ Set `DATABASE_URL=postgresql://openmake:change_me@localhost:5432/openmake_llm` i
 <summary><b>Linux (Ubuntu/Debian)</b></summary>
 
 ```bash
-# Node.js 22+
-curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+# Node.js 24+
+curl -fsSL https://deb.nodesource.com/setup_24.x | sudo -E bash -
 sudo apt-get install -y nodejs
 
 # PostgreSQL

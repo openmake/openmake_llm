@@ -32,7 +32,7 @@
     "author": "",
     "license": "MIT",
     "engines": {
-        "node": ">=22 <25"
+        "node": ">=24 <25"
     },
     "workspaces": [
         "backend/api",

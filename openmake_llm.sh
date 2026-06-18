@@ -25,7 +25,7 @@
 # 환경 가정 (macOS + Homebrew):
 #   - PostgreSQL/Redis는 brew services로 관리
 #   - OpenMake LLM 앱은 PM2로 관리
-#   - mise / nvm 등으로 Node 22+ 활성화 상태
+#   - mise / nvm 등으로 Node 24+ 활성화 상태
 #
 # 종료 코드:
 #   0  성공
@@ -487,7 +487,7 @@ OpenMake LLM 통합 서비스 매니저
 환경 가정:
   - macOS + Homebrew (brew services로 dep 관리)
   - PM2 전역 설치 (npm i -g pm2)
-  - Node 22+ (mise/nvm으로 활성)
+  - Node 24+ (mise/nvm으로 활성)
 
 오버라이드 환경변수:
   PORT (기본 52416), POSTGRES_PORT (5432), REDIS_PORT (6379)
