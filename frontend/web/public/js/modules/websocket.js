@@ -188,6 +188,33 @@ const messageHandlers = {
             handleClusterEvent(data.event);
         }
     },
+    // Build ID handshake — 서버가 새로 배포되면 오래 켜둔 탭(SPA navigation 만 하고 F5 안 한 탭)이
+    // 구버전 JS 모듈을 계속 쓰는 문제를 차단. 자기 build ID(주입된 meta) 와 서버 buildId 가 다르면 자동 reload.
+    'build_id': (data) => {
+        try {
+            const serverBuildId = data && typeof data.buildId === 'string' ? data.buildId : '';
+            const myBuildId = document.querySelector('meta[name="build-id"]')?.content || '';
+            // 둘 다 truthy + 서로 다름 + 자기 것이 'dev'(개발 중) 가 아닐 때만 새 배포로 간주.
+            if (!serverBuildId || !myBuildId || myBuildId === serverBuildId || myBuildId === 'dev') {
+                return;
+            }
+            // 무한 reload 방지: 같은 serverBuildId 로 이미 reload 했다면 다시 reload 하지 않는다.
+            // (reload 후에도 meta 가 아직 구버전 HTML 캐시이면 또 트리거될 수 있으므로 sessionStorage 가드)
+            if (sessionStorage.getItem('reloadedForBuild') === serverBuildId) {
+                return;
+            }
+            sessionStorage.setItem('reloadedForBuild', serverBuildId);
+            if (typeof showSystemToast === 'function') {
+                showSystemToast({ type: 'info', message: '새 버전이 배포되어 새로고침합니다' });
+            } else {
+                console.info('[WebSocket] 새 버전 배포 감지 — 새로고침합니다');
+            }
+            // 토스트가 잠깐 보이도록 짧게 지연 후 reload.
+            setTimeout(() => location.reload(), 800);
+        } catch (e) {
+            console.warn('[WebSocket] build_id 처리 실패:', e);
+        }
+    },
     'token': (data) => {
         if (typeof appendToken === 'function') {
             appendToken(data.token);

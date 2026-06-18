@@ -37,6 +37,7 @@ import { requestIdMiddleware } from './request-id';
 import { errorHandler, notFoundHandler } from '../utils/error-handler';
 import { getConfig } from '../config';
 import { buildPermissionsPolicyHeader, HSTS_POLICY } from '../config/security';
+import { getBuildId } from '../config/build-id';
 
 interface CspLocals {
     cspNonce?: string;
@@ -293,11 +294,26 @@ export function setupStaticFiles(app: Application, dirname: string): void {
         ].join('; ');
     };
 
+    // 서버 build ID 를 <head> 에 meta 태그로 주입 — CSP 영향 없는 meta 만 사용(inline script 금지).
+    // 클라이언트(websocket.js)가 이 값을 자신의 build ID 로 삼아 서버 build_id 와 비교 → 구버전 탭 자동 reload.
+    const injectBuildIdMeta = (html: string): string => {
+        const buildId = getBuildId();
+        const escaped = buildId.replace(/"/g, '&quot;');
+        const metaTag = `<meta name="build-id" content="${escaped}">`;
+        if (html.includes('name="build-id"')) {
+            return html; // 이미 존재(예: 정적 빌드) — 중복 주입 방지
+        }
+        if (html.includes('</head>')) {
+            return html.replace('</head>', `    ${metaTag}\n</head>`);
+        }
+        return html;
+    };
+
     const readHtmlForResponse = (filePath: string, res: Response): string => {
         const html = fs.readFileSync(filePath, 'utf8');
         const nonce = getNonce(res);
         res.setHeader('Content-Security-Policy', buildCspHeader(nonce));
-        return injectNonceIntoHtml(html, nonce);
+        return injectBuildIdMeta(injectNonceIntoHtml(html, nonce));
     };
 
     // 프론트엔드는 빌드 없는 순수 JS — 단일 원본(frontend/web/public)에서 직접 서빙.

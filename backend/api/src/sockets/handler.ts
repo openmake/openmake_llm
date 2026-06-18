@@ -43,6 +43,7 @@ import { WSMessage, ExtendedWebSocket } from './ws-types';
 import { authenticateWebSocket, refreshWebSocketAuthentication } from './ws-auth';
 import { WEBSOCKET_TIMEOUTS, WS_LIMITS } from '../config/timeouts';
 import { WS_SECURITY } from '../config/security';
+import { getBuildId } from '../config/build-id';
 import { handleChatMessage } from './ws-chat-handler';
 import { handleRequestAgents } from './ws-agents-handler';
 import { withSpan } from '../observability/otel';
@@ -199,6 +200,10 @@ export class WebSocketHandler {
             const mcpClient = getUnifiedMCPClient();
             const stats = mcpClient.getStats();
             ws.send(JSON.stringify({ type: 'stats', stats }));
+
+            // Build ID handshake — 클라이언트가 자신의 build ID(meta[name=build-id])와 비교해
+            // 구버전 탭이면 자동 reload. 새 메시지 타입만 추가(기존 핸들러 영향 없음).
+            ws.send(JSON.stringify({ type: 'build_id', buildId: getBuildId() }));
 
             ws.on('close', () => {
                 this.unregisterConnection(ws);
