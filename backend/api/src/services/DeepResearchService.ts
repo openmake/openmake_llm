@@ -335,7 +335,12 @@ export class DeepResearchService {
                 duration
             };
         } catch (error) {
-            if (error instanceof Error && error.message === 'RESEARCH_ABORTED') {
+            // 중단 판별: 명시적 RESEARCH_ABORTED 외에도, 하위 레이어가 던지는 abort 계열
+            // (parallelBatch BATCH_ABORTED / graph WORKFLOW_ABORTED)을 cancelled 로 통합한다.
+            // signal.aborted 면 메시지와 무관하게 사용자 취소로 간주 (failed 오분류 방지).
+            const aborted = this.abortController?.signal.aborted
+                || (error instanceof Error && ['RESEARCH_ABORTED', 'BATCH_ABORTED', 'WORKFLOW_ABORTED'].includes(error.message));
+            if (aborted) {
                 await db.updateResearchSession(sessionId, {
                     status: 'cancelled',
                     summary: '리서치가 취소되었습니다.'

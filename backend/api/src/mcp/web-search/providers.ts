@@ -51,6 +51,19 @@ function searchFetch(url: string, externalSignal?: AbortSignal, init?: RequestIn
 }
 
 /**
+ * 검색 fetch 에러를 사람이 읽을 수 있게 기술 — timeout/abort 를 일반 실패와 구분한다.
+ * (12초 fetch timeout 으로 정상 응답이 잘리는 경우를 silent 실패와 구분해 진단 가능하게 함)
+ */
+function describeFetchError(e: unknown): string {
+    if (e instanceof Error) {
+        if (e.name === 'TimeoutError') return `timeout(${LLM_TIMEOUTS.WEB_SEARCH_FETCH_TIMEOUT_MS}ms 초과)`;
+        if (e.name === 'AbortError') return '요청 중단(abort)';
+        return e.message;
+    }
+    return String(e);
+}
+
+/**
  * XML 엔티티를 일반 문자로 디코딩
  *
  * Google News RSS 파싱에서 XML 엔티티를 처리합니다.
@@ -116,7 +129,7 @@ export async function searchGoogle(query: string, maxResults: number = 10, globa
         }
         logger.info(`Google: ${results.length}개`);
     } catch (e) {
-        logger.error('Google 실패:', e instanceof Error ? e.message : String(e));
+        logger.error('Google 실패:', describeFetchError(e));
     }
 
     return results;
@@ -162,7 +175,7 @@ export async function searchWikipedia(query: string, language: string = 'en', si
 
         logger.info(`Wikipedia: ${results.length}개`);
     } catch (e) {
-        logger.error('Wikipedia 실패:', e instanceof Error ? e.message : String(e));
+        logger.error('Wikipedia 실패:', describeFetchError(e));
     }
 
     return results;
@@ -234,7 +247,7 @@ export async function searchGoogleNews(query: string, language: string = 'en', s
 
         logger.info(`Google News: ${results.length}개`);
     } catch (e) {
-        logger.error('Google News 실패:', e instanceof Error ? e.message : String(e));
+        logger.error('Google News 실패:', describeFetchError(e));
     }
 
     return results;
@@ -293,7 +306,7 @@ export async function searchDuckDuckGoAPI(query: string, signal?: AbortSignal): 
 
         logger.info(`DuckDuckGo API: ${results.length}개`);
     } catch (e) {
-        logger.error('DuckDuckGo API 실패:', e instanceof Error ? e.message : String(e));
+        logger.error('DuckDuckGo API 실패:', describeFetchError(e));
     }
 
     return results;
@@ -351,7 +364,7 @@ export async function searchNaverNews(query: string, maxResults: number = 5, sig
         }
         logger.info(`네이버 뉴스: ${results.length}개`);
     } catch (e) {
-        logger.error('네이버 뉴스 실패:', e instanceof Error ? e.message : String(e));
+        logger.error('네이버 뉴스 실패:', describeFetchError(e));
     }
 
     return results;
@@ -418,7 +431,7 @@ export async function searchNaverWeb(query: string, maxResults: number = 10, sig
         }
         logger.info(`네이버 웹문서: ${results.length}개`);
     } catch (e) {
-        logger.error('네이버 웹문서 실패:', e instanceof Error ? e.message : String(e));
+        logger.error('네이버 웹문서 실패:', describeFetchError(e));
     }
 
     return results;

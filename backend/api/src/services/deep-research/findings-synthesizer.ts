@@ -29,6 +29,7 @@ import {
     getResearchMessage
 } from '../deep-research-prompts';
 import { parallelBatch } from '../../workflow/graph-engine';
+import { chatWithAbortTimeout } from './chat-with-timeout';
 
 const logger = createLogger('DeepResearch:FindingsSynthesizer');
 
@@ -103,38 +104,20 @@ export async function synthesizeFindings(params: {
                 ? getLightweightChunkSummaryPrompt(config.language, topic, chunkIndex, chunks.length, chunkContext)
                 : getChunkSummaryPrompt(config.language, topic, chunkIndex, chunks.length, chunkContext);
 
-            // 개별 청크 타임아웃 적용
-            const chunkController = new AbortController();
-            const timeoutHandle = setTimeout(
-                () => chunkController.abort(),
-                LLM_TIMEOUTS.SYNTHESIS_PER_CHUNK_TIMEOUT_MS,
-            );
-            // 외부 abort signal 전파
-            const forwardAbort = () => chunkController.abort();
-            if (abortSignal) {
-                if (abortSignal.aborted) { clearTimeout(timeoutHandle); throw new Error('RESEARCH_ABORTED'); }
-                abortSignal.addEventListener('abort', forwardAbort);
-            }
-
             try {
-                const response = await client.chat(
+                const response = await chatWithAbortTimeout(
+                    client,
                     [{ role: 'user', content: chunkPrompt }],
                     { temperature: LLM_TEMPERATURES.RESEARCH_SYNTHESIS },
-                    undefined,
-                    { signal: chunkController.signal },
+                    LLM_TIMEOUTS.SYNTHESIS_PER_CHUNK_TIMEOUT_MS,
+                    abortSignal,
                 );
                 throwIfAborted();
                 return response.content.trim();
             } catch (error) {
-                const msg = error instanceof Error ? error.message : String(error);
-                if (msg === 'RESEARCH_ABORTED') throw error;
-                logger.error(`[DeepResearch] 청크 요약 실패 (${chunkIndex + 1}/${chunks.length}): ${msg}`);
+                throwIfAborted();  // 외부 중단이면 RESEARCH_ABORTED 전파, timeout/기타면 강등
+                logger.error(`[DeepResearch] 청크 요약 실패 (${chunkIndex + 1}/${chunks.length}): ${error instanceof Error ? error.message : String(error)}`);
                 return '청크 요약 실패';
-            } finally {
-                clearTimeout(timeoutHandle);
-                if (abortSignal) {
-                    abortSignal.removeEventListener('abort', forwardAbort);
-                }
             }
         },
         {
@@ -161,6 +144,7 @@ export async function synthesizeFindings(params: {
 
     const keyPoints = extractBulletLikeFindings(mergedSummary);
 
+    throwIfAborted();  // abort 시 합성 스텝을 completed 로 오기록하지 않음
     await db.addResearchStep({
         sessionId,
         stepNumber: loopNumber * 100 + 100,
@@ -250,38 +234,22 @@ async function singleMerge(params: {
 
     const mergedPrompt = getMergePrompt(config.language, topic, summaries);
 
-    const mergeController = new AbortController();
-    const mergeTimeout = setTimeout(
-        () => mergeController.abort(),
-        LLM_TIMEOUTS.SYNTHESIS_MERGE_TIMEOUT_MS,
-    );
-    const forwardMergeAbort = () => mergeController.abort();
-    if (abortSignal) {
-        if (abortSignal.aborted) { clearTimeout(mergeTimeout); throw new Error('RESEARCH_ABORTED'); }
-        abortSignal.addEventListener('abort', forwardMergeAbort);
-    }
-
     try {
-        const response = await client.chat(
+        const response = await chatWithAbortTimeout(
+            client,
             [{ role: 'user', content: mergedPrompt }],
             { temperature: LLM_TEMPERATURES.RESEARCH_REPORT },
-            undefined,
-            { signal: mergeController.signal },
+            LLM_TIMEOUTS.SYNTHESIS_MERGE_TIMEOUT_MS,
+            abortSignal,
         );
         throwIfAborted();
         return response.content.trim();
     } catch (error) {
-        const msg = error instanceof Error ? error.message : String(error);
-        if (msg === 'RESEARCH_ABORTED') throw error;
-        logger.error(`[DeepResearch] 병합 실패: ${msg}`);
+        throwIfAborted();  // 외부 중단이면 RESEARCH_ABORTED 전파, timeout/기타면 폴백
+        logger.error(`[DeepResearch] 병합 실패: ${error instanceof Error ? error.message : String(error)}`);
         // 폴백: 청크 요약들을 합쳐서 반환
         const partialSummary = summaries.filter(s => s !== '청크 요약 실패').join('\n\n');
         return partialSummary || getResearchMessage('synthesisFailed', config.language);
-    } finally {
-        clearTimeout(mergeTimeout);
-        if (abortSignal) {
-            abortSignal.removeEventListener('abort', forwardMergeAbort);
-        }
     }
 }
 
@@ -306,32 +274,20 @@ export async function checkNeedsMoreInfo(params: {
 
     const prompt = getNeedMorePrompt(config.language, topic, currentFindings, sourceCount);
 
-    const controller = new AbortController();
-    const timeoutHandle = setTimeout(() => controller.abort(), LLM_TIMEOUTS.RESEARCH_NEED_MORE_TIMEOUT_MS);
-    const forwardAbort = () => controller.abort();
-    if (abortSignal) {
-        if (abortSignal.aborted) { clearTimeout(timeoutHandle); throw new Error('RESEARCH_ABORTED'); }
-        abortSignal.addEventListener('abort', forwardAbort);
-    }
-
     try {
-        const response = await client.chat(
+        const response = await chatWithAbortTimeout(
+            client,
             [{ role: 'user', content: prompt }],
             { temperature: LLM_TEMPERATURES.RESEARCH_FACT_CHECK },
-            undefined,
-            { signal: controller.signal },
+            LLM_TIMEOUTS.RESEARCH_NEED_MORE_TIMEOUT_MS,
+            abortSignal,
         );
         throwIfAborted();
 
         return response.content.toLowerCase().includes('yes');
     } catch (error) {
-        throwIfAborted();
+        throwIfAborted();  // 외부 중단이면 RESEARCH_ABORTED 전파, timeout/기타면 폴백
         logger.error(`[DeepResearch] 추가 정보 판단 실패: ${error instanceof Error ? error.message : String(error)}`);
         return sourceCount < config.maxTotalSources;
-    } finally {
-        clearTimeout(timeoutHandle);
-        if (abortSignal) {
-            abortSignal.removeEventListener('abort', forwardAbort);
-        }
     }
 }

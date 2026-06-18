@@ -15,6 +15,7 @@ import { LLM_TEMPERATURES } from '../../config/llm-parameters';
 import { LLM_TIMEOUTS } from '../../config/timeouts';
 import { clampImportance, buildFallbackSubTopics } from '../deep-research-utils';
 import { getDecomposePrompt, getResearchMessage } from '../deep-research-prompts';
+import { chatWithAbortTimeout } from './chat-with-timeout';
 
 const logger = createLogger('DeepResearch:TopicDecomposer');
 
@@ -34,20 +35,13 @@ export async function decomposeTopics(params: {
     throwIfAborted();
     const prompt = getDecomposePrompt(config.language, topic);
 
-    const controller = new AbortController();
-    const timeoutHandle = setTimeout(() => controller.abort(), LLM_TIMEOUTS.RESEARCH_DECOMPOSE_TIMEOUT_MS);
-    const forwardAbort = () => controller.abort();
-    if (abortSignal) {
-        if (abortSignal.aborted) { clearTimeout(timeoutHandle); throw new Error('RESEARCH_ABORTED'); }
-        abortSignal.addEventListener('abort', forwardAbort);
-    }
-
     try {
-        const response = await client.chat(
+        const response = await chatWithAbortTimeout(
+            client,
             [{ role: 'user', content: prompt }],
             { temperature: LLM_TEMPERATURES.RESEARCH_PLAN },
-            undefined,
-            { signal: controller.signal },
+            LLM_TIMEOUTS.RESEARCH_DECOMPOSE_TIMEOUT_MS,
+            abortSignal,
         );
         throwIfAborted();
 
@@ -98,13 +92,8 @@ export async function decomposeTopics(params: {
 
         return finalSubTopics;
     } catch (error) {
-        throwIfAborted();
+        throwIfAborted();  // 외부 중단이면 RESEARCH_ABORTED 전파, timeout/파싱 실패면 폴백
         logger.error(`[DeepResearch] 주제 분해 실패: ${error instanceof Error ? error.message : String(error)}`);
         return buildFallbackSubTopics(topic);
-    } finally {
-        clearTimeout(timeoutHandle);
-        if (abortSignal) {
-            abortSignal.removeEventListener('abort', forwardAbort);
-        }
     }
 }
