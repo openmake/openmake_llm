@@ -247,8 +247,8 @@ export const RESEARCH_STRATEGY_PARAMS = {
     SEARCH_API: 'all' as const,
     /** 최대 검색 결과 수 */
     MAX_SEARCH_RESULTS: 360,
-    /** 최대 전체 소스 수 */
-    MAX_TOTAL_SOURCES: 80,
+    /** 최대 전체 소스 수 — 합성·보고서 입력 규모를 좌우(과다 시 보고서 생성 지연). env override 가능. */
+    MAX_TOTAL_SOURCES: Number(process.env.DEEP_RESEARCH_MAX_TOTAL_SOURCES) || 50,
     /** 전체 콘텐츠 스크래핑 활성화 */
     SCRAPE_FULL_CONTENT: true,
     /** 루프당 최대 스크래핑 수 */

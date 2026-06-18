@@ -42,9 +42,10 @@ export const LLM_TIMEOUTS = {
      * Deep Research 최종 보고서 생성 타임아웃 (ms).
      * 대형 프롬프트(다수 소스)·장문 출력으로 전역 LLM_TIMEOUT보다 길어야 한다.
      * 보고서 생성 LLM 호출에 **전용 클라이언트의 SDK 타임아웃**으로 적용됨(report-generator).
-     * env override: DEEP_RESEARCH_REPORT_TIMEOUT_MS. 기본 600000(10분).
+     * env override: DEEP_RESEARCH_REPORT_TIMEOUT_MS. 기본 900000(15분) — 소스 축소(50)와 함께
+     * 정식 LLM 보고서가 timeout 으로 잘려 fallback 되지 않도록 여유 확보(평소엔 거의 미사용).
      */
-    REPORT_GENERATION_TIMEOUT_MS: Number(process.env.DEEP_RESEARCH_REPORT_TIMEOUT_MS) || 600000,
+    REPORT_GENERATION_TIMEOUT_MS: Number(process.env.DEEP_RESEARCH_REPORT_TIMEOUT_MS) || 900000,
 } as const;
 
 // ============================================
