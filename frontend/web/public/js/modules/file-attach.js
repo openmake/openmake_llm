@@ -14,10 +14,11 @@
  */
 import { getState, setState } from './state.js';
 
-const MAX_FILE_BYTES = 10 * 1024 * 1024; // 10MB
+const MAX_FILE_BYTES = 0; // 0 = 용량 제한 없음 (상한을 두려면 바이트 수로 설정)
 const IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
-// 백엔드 FILE_ATTACH_LIMITS 기본값과 동일한 클라이언트 전송 캡 (WS maxPayload 1MB 보호).
+// 백엔드 FILE_ATTACH_LIMITS 기본값과 동일한 클라이언트 텍스트 전송 캡 (과도한 텍스트 첨부 방어).
 // 백엔드 캡은 env 오버라이드 가능 — 여기 값은 전송량 상한이며 절단 시 truncated 플래그로 안내 보장.
+// (이미지/파일 바이트 용량은 MAX_FILE_BYTES=0=무제한; WS maxPayload 도 기본 무제한과 정합.)
 const MAX_TEXT_CHARS = 100000;       // FILE_ATTACH_MAX_CHARS_PER_FILE 기본값
 const MAX_TOTAL_TEXT_CHARS = 300000; // FILE_ATTACH_MAX_TOTAL_CHARS 기본값
 const MAX_ATTACH_FILES = 10;         // FILE_ATTACH_MAX_FILES 기본값
@@ -64,8 +65,9 @@ async function handleFiles(fileList) {
             window.showError?.(`첨부는 최대 ${MAX_ATTACH_FILES}개까지 가능합니다: ${f.name} 제외됨`);
             continue;
         }
-        if (f.size > MAX_FILE_BYTES) {
-            window.showError?.(`파일이 너무 큽니다 (최대 10MB): ${f.name}`);
+        // 용량 제한 없음(MAX_FILE_BYTES=0). 상한을 두려면 MAX_FILE_BYTES 를 양수로 설정.
+        if (MAX_FILE_BYTES > 0 && f.size > MAX_FILE_BYTES) {
+            window.showError?.(`파일이 너무 큽니다 (최대 ${Math.floor(MAX_FILE_BYTES / (1024 * 1024))}MB): ${f.name}`);
             continue;
         }
         try {
@@ -81,7 +83,8 @@ async function handleFiles(fileList) {
                     next.push({ id: genId(), name: f.name, type: f.type || 'application/octet-stream', size: f.size, isImage: false });
                     continue;
                 }
-                // 합산 전송량 캡 — WS maxPayload(1MB) 초과로 소켓이 끊기는 것을 첨부 시점에 차단
+                // 합산 텍스트 전송량 캡(MAX_TOTAL_TEXT_CHARS) — 과도한 텍스트로 WS 프레임이
+                // 백엔드 maxPayload(상한 설정 시) 를 넘겨 소켓이 끊기는 것을 첨부 시점에 차단
                 let { text, truncated } = decoded;
                 const used = next.reduce((sum, x) => sum + (x.textContent ? x.textContent.length : 0), 0);
                 const remaining = MAX_TOTAL_TEXT_CHARS - used;

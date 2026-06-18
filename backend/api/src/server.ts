@@ -34,6 +34,7 @@ import { getAnalyticsSystem } from './monitoring/analytics';
 import { setupSecurity, setupStaticFiles, setupParsersAndLimiting, setupErrorHandling } from './middlewares/setup';
 import { setupApiRoutes } from './routes/setup';
 import { getConfig } from './config';
+import { WS_LIMITS } from './config/timeouts';
 import { validateModels } from './config/model-roles';
 import { probeLocalModelAvailability } from './config/local-models';
 import { startAllSchedulers, stopAllSchedulers } from './schedulers';
@@ -93,7 +94,9 @@ export class DashboardServer {
         this.server = createServer(this.app);
         this.wss = new WebSocketServer({
             server: this.server,
-            maxPayload: 1 * 1024 * 1024
+            // 파일/이미지 업로드 용량 무제한 — 기본 0(=ws 무제한). 상한이 필요하면
+            // env WS_MAX_PAYLOAD_BYTES 로 바이트 지정.
+            maxPayload: WS_LIMITS.MAX_PAYLOAD_BYTES
         });
 
         this.setupRoutes();

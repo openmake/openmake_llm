@@ -176,6 +176,14 @@ export const WEBSOCKET_TIMEOUTS = {
  * sockets/handler.ts에서 참조
  */
 export const WS_LIMITS = {
+    /**
+     * WebSocket 프레임 최대 페이로드 (bytes). **0 = 무제한**(ws 는 maxPayload>0 일 때만 검사).
+     * 파일/이미지 업로드 용량 제한을 두지 않기 위해 기본 0(무제한). 단, 무제한은 거대 프레임이
+     * 서버 메모리를 한 번에 점유할 수 있으므로(OOM/DoS 여지), 운영상 상한이 필요하면
+     * 환경변수 WS_MAX_PAYLOAD_BYTES 에 바이트 수를 지정해 재설정한다(예: 67108864=64MB).
+     * 프론트 가드(chat.js WS_MAX_PAYLOAD_BYTES)도 0=무제한 sentinel 로 정합.
+     */
+    MAX_PAYLOAD_BYTES: process.env.WS_MAX_PAYLOAD_BYTES !== undefined ? Number(process.env.WS_MAX_PAYLOAD_BYTES) : 0,
     /** 사용자당 최대 동시 WebSocket 연결 수 */
     MAX_CONNECTIONS_PER_USER: Number(process.env.WS_MAX_CONNECTIONS_PER_USER) || 5,
     /** 연결 속도 제한 윈도우 (ms) — 기본 60초 */
