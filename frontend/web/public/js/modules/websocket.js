@@ -23,6 +23,7 @@ import {
     setToolEntry,
 } from '../components/artifact-panel.js';
 import { insertArtifactCard } from '../components/artifact-card.js';
+import { showToolStatus } from './chat-renderer.js';
 
 /**
  * 2026-05-26 Phase 3 — 분기된 세션 배너 표시.
@@ -354,6 +355,16 @@ const messageHandlers = {
      *
      * Payload: { type: 'mcp_tool_result', toolName, resources: [{ uri, mimeType?, text? }], messageId }
      */
+    /**
+     * MCP tool 호출 시작 — 진행 표시.
+     * 도구 실행 중 "생각 중..." 이 멈춘 듯 보이는 혼선 해소를 위해
+     * 현재 스트리밍 버블을 "🔍 {도구} 실행 중..." 으로 갱신.
+     * Payload: { type: 'mcp_tool_start', toolName, messageId }
+     */
+    'mcp_tool_start': (data) => {
+        if (!data || typeof data.toolName !== 'string') return;
+        try { showToolStatus(data.toolName); } catch (e) { /* 렌더 실패 무시 */ }
+    },
     'mcp_tool_result': async (data) => {
         if (!Array.isArray(data?.resources) || data.resources.length === 0) return;
         // 우측 컨텍스트 패널 '도구' 탭으로 미러 (인라인 카드 렌더는 그대로)

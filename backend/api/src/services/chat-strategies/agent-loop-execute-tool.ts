@@ -204,6 +204,11 @@ export async function executeToolCall(context: AgentLoopStrategyContext, toolCal
     // 인자 sanitize(SQL/명령어 인젝션 차단)를 REST 경로와 동일하게 적용(defense-in-depth 정합).
     try {
         const mcpClient = getUnifiedMCPClient();
+        // 도구 실행 시작 알림 — 실제 호출 직전. frontend "🔍 {도구} 실행 중" 진행 표시.
+        if (context.onMcpToolStart) {
+            try { context.onMcpToolStart({ toolName }); }
+            catch (e) { logger.warn(`onMcpToolStart 콜백 실패: ${e instanceof Error ? e.message : String(e)}`); }
+        }
         const result = context.currentUserContext
             ? await mcpClient.executeToolWithContext(toolName, toolArgs, context.currentUserContext)
             : await mcpClient.getToolRouter().executeTool(toolName, toolArgs, undefined);

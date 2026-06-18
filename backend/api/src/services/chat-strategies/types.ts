@@ -44,6 +44,12 @@ export interface ChatContext {
         toolName: string;
         resources: Array<{ uri: string; mimeType?: string; text?: string }>;
     }) => void;
+    /**
+     * MCP tool 호출이 시작될 때 호출되는 콜백.
+     * ws-chat-handler 가 frontend 로 `mcp_tool_start` WS 메시지로 emit.
+     * "🔍 {도구} 실행 중" 진행 표시용 ("생각 중..." 멈춤 혼선 해소).
+     */
+    onMcpToolStart?: (event: { toolName: string }) => void;
 }
 
 /**

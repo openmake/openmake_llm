@@ -96,6 +96,13 @@ export class ChatService {
      */
     private currentMcpToolResultCallback?: (event: { toolName: string; resources: Array<{ uri: string; mimeType?: string; text?: string }> }) => void;
 
+    /**
+     * 현재 채팅의 MCP tool 시작 콜백.
+     * processMessage 진입 시 저장, executeExternalTool / agent-loop-strategy 가 공유.
+     * 도구 호출 직전 invoke → ws-chat-handler 가 frontend 로 `mcp_tool_start` emit ("실행 중" 진행 표시).
+     */
+    private currentMcpToolStartCallback?: (event: { toolName: string }) => void;
+
     /** 단일 LLM 직접 호출 전략 */
     private readonly directStrategy: DirectStrategy;
     /** Generate-Verify 생성-검증 전략 */
@@ -269,9 +276,12 @@ export class ChatService {
         onThinking?: (thinking: string) => void,
         onSystemEvent?: SystemEventCallback,
         onMcpToolResult?: (event: { toolName: string; resources: Array<{ uri: string; mimeType?: string; text?: string }> }) => void,
+        onMcpToolStart?: (event: { toolName: string }) => void,
     ): Promise<string> {
         // MCP tool resource content 콜백을 인스턴스 상태로 저장 — executeExternalTool 및 strategy 가 공유
         this.currentMcpToolResultCallback = onMcpToolResult;
+        // MCP tool 시작 콜백 — 도구 실행 직전 진행 표시용 (동일 경로 공유)
+        this.currentMcpToolStartCallback = onMcpToolStart;
         // 채팅 요청 전체를 root span으로 추적 (모든 LLM/도구 호출이 자식 span으로 자동 연결)
         return withSpan(
             'chat-service',
@@ -401,6 +411,7 @@ export class ChatService {
             currentUserContext: params.reqCtx.userContext,
             getAllowedTools: () => resolvedAllowedTools,
             onMcpToolResult: this.currentMcpToolResultCallback,
+            onMcpToolStart: this.currentMcpToolStartCallback,
         });
     }
 
@@ -508,6 +519,7 @@ export class ChatService {
             providerRouter: this.providerRouter,
             currentUserContext: reqCtx.userContext,
             mcpToolResultCallback: this.currentMcpToolResultCallback,
+            mcpToolStartCallback: this.currentMcpToolStartCallback,
             onUsage: (usage) => { this.lastProviderUsage = usage; },
             allowedTools: await this.getAllowedTools(reqCtx),
         };

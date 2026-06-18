@@ -174,6 +174,50 @@ function addChatMessage(role, content) {
 }
 
 /**
+ * MCP 도구명 → 사용자 친화 라벨 + iconify(lucide) 아이콘 매핑.
+ * 앱에 이미 쓰인 아이콘만 사용 (CDN fetch + CSP 제약).
+ * 미등록 도구는 toolName 을 그대로 노출하되 escape 처리.
+ */
+const TOOL_STATUS_LABELS = {
+    web_search: { label: '웹 검색', icon: 'lucide:search' },
+    web_scrape: { label: '웹 검색', icon: 'lucide:search' },
+    web_map: { label: '웹 검색', icon: 'lucide:search' },
+    web_crawl: { label: '웹 검색', icon: 'lucide:search' },
+    sequential_thinking: { label: '추론', icon: 'lucide:wrench' },
+};
+
+/**
+ * MCP 도구 실행 시작 진행 표시.
+ * 현재 스트리밍 중인 assistant 버블의 "생각 중..." 영역(.loading-spinner)을
+ * "🔍 {친화 라벨} 실행 중..." 으로 갱신한다. 다음 토큰(appendToken)이 도착하면
+ * 스피너가 제거되며 본문으로 자연 대체되므로 원복 불필요.
+ * 도구가 여러 번 호출되면 최신 도구명으로 갱신된다.
+ * @param {string} toolName - 서버에서 전달된 MCP 도구명
+ * @returns {void}
+ */
+function showToolStatus(toolName) {
+    const content = getState('currentAssistantMessageContent');
+    if (!content) return;
+
+    // 이미 본문 토큰이 들어오기 시작했으면(스피너 없음) 진행 표시 갱신 생략.
+    const spinner = content.querySelector('.loading-spinner');
+    if (!spinner) return;
+
+    const mapping = (typeof toolName === 'string' && TOOL_STATUS_LABELS[toolName]) || null;
+    // 라벨은 raw 값 — 출력 직전 한 번만 escape (이중 이스케이프 방지).
+    const label = mapping ? mapping.label : String(toolName || '도구');
+    const icon = mapping ? mapping.icon : 'lucide:wrench';
+
+    // .loading-spinner 영역을 통째로 갱신 — appendToken 이 .loading-spinner 를
+    // querySelector 로 찾아 제거하므로 클래스/구조를 유지해야 한다.
+    // toolName 은 서버 도구명이지만 방어적으로 escape (CSP·XSS).
+    content.innerHTML =
+        '<span class="loading-spinner"></span> ' +
+        '<iconify-icon icon="' + icon + '"></iconify-icon> ' +
+        escapeHtml(label) + ' 실행 중...';
+}
+
+/**
  * 스트리밍 토큰 추가
  * WebSocket에서 수신된 토큰을 현재 AI 메시지에 누적 합산합니다.
  * 생각 과정([N/M] 패턴) 감지 시 진행 상태를 표시하고,
@@ -464,5 +508,6 @@ export {
     appendToken,
     appendThinkingToken,
     finishAssistantMessage,
+    showToolStatus,
     setHideAbortButton
 };

@@ -128,6 +128,11 @@ export interface ChatRequestParams {
      */
     onMcpToolResult?: (event: { toolName: string; resources: Array<{ uri: string; mimeType?: string; text?: string }> }) => void;
     /**
+     * MCP tool 호출이 시작될 때 호출되는 콜백.
+     * frontend "🔍 {도구} 실행 중" 진행 표시를 트리거 ("생각 중..." 멈춤 혼선 해소).
+     */
+    onMcpToolStart?: (event: { toolName: string }) => void;
+    /**
      * Phase 3.4 (2026-05-26) 메시지 편집 분기:
      * 새 session 생성 시 부모 session 추적 (conversation_sessions.metadata.parentSessionId).
      * 분기된 대화의 "원본으로 돌아가기" 기능 + 사이드바 그룹화 등에 활용.

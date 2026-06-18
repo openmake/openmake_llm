@@ -368,6 +368,7 @@ export class ChatRequestHandler {
             params.onThinking,
             onSystemEvent,
             params.onMcpToolResult,
+            params.onMcpToolStart,
         );
 
         const endTime = Date.now();
