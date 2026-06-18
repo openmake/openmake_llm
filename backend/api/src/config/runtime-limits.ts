@@ -12,19 +12,6 @@
 // 컨텍스트 윈도우 (문자 수)
 // ============================================
 
-/**
- * LLM 모델별 최대 컨텍스트 길이 (문자 수 기준)
- *
- * Gemini 계열은 100K 토큰 이상의 대형 컨텍스트를 지원하고,
- * 일반 모델은 약 30K 문자 수준에서 안정적으로 동작합니다.
- */
-export const CONTEXT_LIMITS = {
-    /** Gemini 모델 최대 컨텍스트 길이 (문자) */
-    GEMINI_MAX_CONTEXT_CHARS: 100000,
-    /** 일반 모델 최대 컨텍스트 길이 (문자) */
-    DEFAULT_MAX_CONTEXT_CHARS: 30000,
-} as const;
-
 // ============================================
 // 토큰 예산 (Discussion/Context Engineering)
 // ============================================
@@ -84,24 +71,6 @@ export const HISTORY_SUMMARIZER = {
     MAX_SUMMARY_TOKENS: 500,
     /** 요약 LLM 호출 타임아웃 (ms) */
     SUMMARY_TIMEOUT_MS: 15000,
-} as const;
-
-// ============================================
-// 문서 처리 크기
-// ============================================
-
-/**
- * 문서 분석/처리 시 사용하는 크기 제한
- */
-export const DOCUMENT_PROCESSING = {
-    /** 문서 텍스트 최대 처리 길이 (일반) */
-    MAX_TEXT_LENGTH: 30000,
-    /** 문서 텍스트 최대 처리 길이 (요약용) */
-    MAX_SUMMARY_TEXT_LENGTH: 28000,
-    /** 문서 미리보기 길이 (문자) */
-    PREVIEW_LENGTH: 500,
-    /** 이미지 리사이즈 최대 해상도 */
-    IMAGE_RESAMPLE_MAX: 3000,
 } as const;
 
 // ============================================
@@ -182,24 +151,8 @@ export const CAPACITY = {
     SEARCH_RESULT_MAX_DISPLAY: 10,
     /** Admin 대화 내보내기 SQL LIMIT */
     ADMIN_EXPORT_LIMIT: 10000,
-    /** 메모리 소프트 리밋 (기본 상한, 티어별 분기는 routes에서 처리) */
-    MEMORY_SOFT_LIMIT: 500,
     /** 토큰→문자 변환 비율 (한국어 기준 보수적 추정) */
     TOKEN_TO_CHAR_RATIO: 3,
-} as const;
-
-// ============================================
-// 메모리 감쇠 설정
-// ============================================
-
-/**
- * 메모리 중요도 감쇠에 사용하는 상수
- */
-export const MEMORY_DECAY = {
-    /** 감쇠 계수 (매 주기마다 importance에 곱함) */
-    DECAY_FACTOR: 0.95,
-    /** 감쇠 최저값 (importance가 이 값 이하로 내려가지 않음) */
-    DECAY_FLOOR: 0.1,
 } as const;
 
 // ============================================
@@ -322,21 +275,6 @@ export const MODEL_CONTEXT_DEFAULTS = {
 // ============================================
 
 /**
- * 피드백 중요도 기본값
- * routes/chat-feedback.routes.ts에서 참조
- */
-export const FEEDBACK_IMPORTANCE = {
-    /** 부정 피드백 중요도 */
-    NEGATIVE: 0.4,
-    /** 긍정 피드백 중요도 */
-    POSITIVE: 0.3,
-    /** 재생성 요청 중요도 */
-    REGENERATE: 0.35,
-    /** 메모리 저장 기본 중요도 */
-    MEMORY_DEFAULT: 0.5,
-} as const;
-
-/**
  * Discussion 응답 신뢰도 계산 파라미터
  * agents/discussion-engine.ts에서 참조
  */
@@ -439,23 +377,6 @@ export const ATTACH_CACHE_LIMITS = {
  * agents/llm-router.ts에서 참조
  */
 export const ROUTER_CONFIDENCE_FALLBACK = 0.85;
-
-/**
- * 메모리 카테고리별 중요도
- * services/MemoryService.ts에서 참조
- */
-export const MEMORY_IMPORTANCE_BY_CATEGORY: Record<string, number> = {
-    name: 0.9,
-    job: 0.8,
-    preference: 0.6,
-    project: 0.7,
-    technology: 0.7,
-    location: 0.6,
-    goal: 0.6,
-    schedule: 0.7,
-    language: 0.8,
-    organization: 0.7,
-};
 
 /**
  * 언어 감지 임계값
@@ -650,12 +571,6 @@ export const PASSWORD_POLICY = {
  * Anthropic 하네스 설계 원칙: "오래된 도구 결과를 요약/정리하여
  * 컨텍스트 윈도우의 신호 대 잡음 비율을 유지"
  */
-/**
- * JIT 메모리 필터링 최소 중요도
- * MemoryService.buildMemoryContext()에서 저품질 메모리 제외 시 사용
- */
-export const JIT_MEMORY_MIN_IMPORTANCE = 0.2;
-
 /**
  * System prompt 에 prepend 되는 사용자 컨텍스트(custom instructions + cross-conversation
  * memory) 토큰 예산. 매 턴 고정 비용이므로 무제한 누적 시 context 잠식 → cap 필수.
@@ -1025,23 +940,6 @@ export const GV_METRICS = {
     ENABLED: process.env.OMK_GV_METRICS_ENABLED !== 'false',
     /** 유의미한 수정으로 판단할 최소 변경 비율 (0.0~1.0) */
     SIGNIFICANT_CHANGE_RATIO: 0.1,
-} as const;
-
-/**
- * LLM HTTP 재시도 정책 (vLLM/LiteLLM)
- * 이전 OLLAMA_RETRY 의 의미 유지 — OpenAI SDK 가 자체 retry 도 수행하나,
- * 추가 안전망으로 본 상수도 호출자에서 참조 가능.
- */
-export const LLM_RETRY = {
-    /** 4xx/5xx 시 최대 재시도 횟수 */
-    MAX_FALLBACK_ATTEMPTS:
-        Number(process.env.OMK_LLM_MAX_FALLBACK_ATTEMPTS) || 3,
-    /** 네트워크 에러(ETIMEDOUT 등) 최대 재시도 횟수 */
-    MAX_NETWORK_RETRIES:
-        Number(process.env.OMK_LLM_MAX_NETWORK_RETRIES) || 2,
-    /** 지수 백오프 base 지연 (ms) — backoffMs = base * 2^retryCount */
-    NETWORK_BACKOFF_BASE_MS:
-        Number(process.env.OMK_LLM_NETWORK_BACKOFF_BASE_MS) || 1000,
 } as const;
 
 // ============================================

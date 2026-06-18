@@ -25,11 +25,3 @@
  */
 export type ExecutionStrategy = 'single' | 'generate-verify' | 'conditional-verify';
 
-/**
- * 사고(Thinking) 수준 - LLM의 내부 추론 깊이 제어
- * - 'off': 사고 과정 비활성화 (빠른 응답)
- * - 'low': 간단한 사고 과정
- * - 'medium': 중간 수준의 단계별 추론
- * - 'high': 심층적 Chain-of-Thought 추론
- */
-export type ThinkingLevel = 'off' | 'low' | 'medium' | 'high';

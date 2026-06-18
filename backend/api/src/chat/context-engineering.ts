@@ -47,10 +47,7 @@ import type {
 // Re-export XML helpers from context-xml-helpers
 export {
     xmlTag,
-    systemRulesSection,
-    contextSection,
-    examplesSection,
-    thinkingSection
+    examplesSection
 } from './context-xml-helpers';
 
 import { xmlTag, examplesSection } from './context-xml-helpers';
@@ -386,5 +383,3 @@ ${content.closing}
 </final_reminder>`;
     }
 }
-
-export default ContextEngineeringBuilder;

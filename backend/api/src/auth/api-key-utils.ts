@@ -70,56 +70,6 @@ export function hashApiKey(plainKey: string): string {
 }
 
 /**
- * API Key 타이밍-세이프 검증
- * 
- * 저장된 해시와 입력 키의 해시를 constant-time 비교
- * 길이가 다르면 dummy 비교로 타이밍 정보 노출 방지
- * 
- * @param storedHash DB에 저장된 해시
- * @param incomingKey 검증할 평문 키
- * @returns 일치 여부
- */
-export function verifyApiKey(storedHash: string, incomingKey: string): boolean {
-    const incomingHash = hashApiKey(incomingKey);
-
-    const bufferStored = Buffer.from(storedHash, 'utf-8');
-    const bufferIncoming = Buffer.from(incomingHash, 'utf-8');
-
-    // 길이가 다르면 dummy 비교 후 false 반환 (타이밍 공격 방지)
-    if (bufferStored.length !== bufferIncoming.length) {
-        const dummy = Buffer.alloc(bufferStored.length);
-        crypto.timingSafeEqual(bufferStored, dummy);
-        return false;
-    }
-
-    return crypto.timingSafeEqual(bufferStored, bufferIncoming);
-}
-
-/**
- * API Key 마스킹 (표시용)
- * omk_live_abcd...wxyz → omk_live_abcd****wxyz
- * 
- * @param plainKey 평문 API Key
- * @returns 마스킹된 키
- */
-export function maskApiKey(plainKey: string): string {
-    if (!plainKey.startsWith(API_KEY_PREFIX)) {
-        return '****';
-    }
-
-    const body = plainKey.slice(API_KEY_PREFIX.length);
-    if (body.length <= 8) {
-        return `${API_KEY_PREFIX}${'*'.repeat(body.length)}`;
-    }
-
-    const first4 = body.slice(0, 4);
-    const last4 = body.slice(-4);
-    const masked = '*'.repeat(body.length - 8);
-
-    return `${API_KEY_PREFIX}${first4}${masked}${last4}`;
-}
-
-/**
  * API Key에서 마지막 4자리 추출
  * @param plainKey 평문 API Key
  * @returns 마지막 4자

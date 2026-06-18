@@ -116,11 +116,3 @@ export function getProviderCatalogEntry(
     return EXTERNAL_PROVIDER_CATALOG.find((entry) => entry.id === providerId);
 }
 
-/**
- * 활성화된(enabled=true) provider 목록만 반환 — UI 의 사용 가능 카탈로그
- */
-export function getEnabledProviders(): ExternalProviderCatalogEntry[] {
-    return EXTERNAL_PROVIDER_CATALOG.filter((entry) => entry.enabled).slice().sort(
-        (a, b) => a.sortOrder - b.sortOrder,
-    );
-}

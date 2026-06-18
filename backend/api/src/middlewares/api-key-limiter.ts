@@ -2,7 +2,7 @@
  * API Key 기반 Rate Limiter
  * 
  * Per-key RPM (Requests Per Minute) 제한 + TPM (Tokens Per Minute) 이중 제한
- * Tier별 차등 한도 적용
+ * 모든 키 공통 단일 한도 적용 (남용 방지 — 구독 등급과 무관)
  * 
  * 표준 RateLimit 헤더 반환:
  *   RateLimit-Limit, RateLimit-Remaining, RateLimit-Reset

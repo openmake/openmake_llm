@@ -22,8 +22,6 @@ import { resolvePromptLocale } from './language-policy';
 
 export type Style = 'concise' | 'default' | 'verbose';
 
-export const VALID_STYLES: readonly Style[] = ['concise', 'default', 'verbose'] as const;
-
 /**
  * 사용자 입력의 style 필드를 검증 + 정규화. 미지원/null 은 'default'.
  */

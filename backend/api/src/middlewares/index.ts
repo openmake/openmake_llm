@@ -50,18 +50,6 @@ export function requestLogger(req: Request, res: Response, next: NextFunction) {
     next();
 }
 
-/**
- * 에러 로깅 미들웨어
- */
-export function errorLogger(err: Error, req: Request, res: Response, next: NextFunction) {
-    logger.error(`Error: ${err.message}`, {
-        stack: err.stack,
-        path: req.path,
-        method: req.method
-    });
-    next(err);
-}
-
 // ================================================
 // 분석 미들웨어
 // ================================================

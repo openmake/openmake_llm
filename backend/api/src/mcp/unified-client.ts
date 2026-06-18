@@ -141,13 +141,6 @@ export class UnifiedMCPClient {
     // ============================================
 
     /**
-     * 전체 도구 목록 반환 (제한 없음)
-     */
-    getToolListForUser(): string[] {
-        return this.getToolList();
-    }
-
-    /**
      * 사용자 컨텍스트로 도구 실행
      */
     async executeToolWithContext(

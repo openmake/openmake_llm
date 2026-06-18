@@ -25,10 +25,6 @@ export interface RoutingRouteDecision {
     primaryModel?: string;
     complexityScore?: number;
     complexitySignals?: string[];
-    /** P2-1: 적용된 비용 티어 */
-    costTier?: string;
-    /** P2-1: 비용 티어로 인한 다운그레이드 발생 여부 */
-    costTierDowngraded?: boolean;
     /** P2-2: 도메인 오버라이드된 엔진 */
     domainEngine?: string;
     /** P2-2: 매칭된 도메인 키 */
