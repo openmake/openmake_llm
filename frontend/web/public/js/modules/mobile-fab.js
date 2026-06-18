@@ -147,7 +147,13 @@ export function init() {
     fabContainer.querySelector('#fabSettings').addEventListener('click', function (e) {
         e.stopPropagation();
         closeMenu(fabMenu, fabBtn);
-        if (typeof window.showSettings === 'function') window.showSettings();
+        // 사이드바 톱니/avatar dropdown 과 동일하게 /settings.html 페이지로 진입.
+        // (showSettings() 는 레거시 #settingsModal 을 열어 새 설정 페이지와 내용이 어긋남)
+        if (window.Router && typeof window.Router.navigate === 'function') {
+            window.Router.navigate('/settings.html');
+        } else {
+            window.location.href = '/settings.html';
+        }
     });
 
     // 초기 상태 즉시 적용 (ResizeObserver는 최초 콜백 보장 안 함)

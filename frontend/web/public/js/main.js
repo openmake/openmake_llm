@@ -131,7 +131,7 @@ import { Router, SafeStorage } from './spa-router.js?v=30';
 import { UnifiedSidebar } from './components/unified-sidebar.js?v=10';
 
 // 1-18. 모바일 FAB 메뉴
-import { init as initMobileFab } from './modules/mobile-fab.js?v=2';
+import { init as initMobileFab } from './modules/mobile-fab.js?v=3';
 import { checkReconsent } from './modules/consent-prompt.js';
 
 
@@ -384,10 +384,15 @@ function setupEventListeners() {
             newChat();
         }
 
-        // Cmd/Ctrl + ,: 설정
+        // Cmd/Ctrl + ,: 설정 — 사이드바 톱니/avatar dropdown 과 동일하게 /settings.html 페이지로 진입
+        // (showSettings() 레거시 #settingsModal 은 새 설정 페이지와 내용이 어긋남)
         if ((e.metaKey || e.ctrlKey) && e.key === ',') {
             e.preventDefault();
-            showSettings();
+            if (window.Router && typeof window.Router.navigate === 'function') {
+                window.Router.navigate('/settings.html');
+            } else {
+                window.location.href = '/settings.html';
+            }
         }
     });
 
