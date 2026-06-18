@@ -14,7 +14,7 @@
  */
 
 import { Request, Response, NextFunction } from 'express';
-import { API_KEY_TIER_LIMITS, ApiKeyTier } from '../data/models/unified-database';
+import { API_KEY_LIMITS } from '../data/models/unified-database';
 
 /** 인메모리 TPM 카운터 (키 ID → { tokens, windowStart }) */
 const tpmCounters: Map<string, { tokens: number; windowStart: number }> = new Map();
@@ -57,8 +57,7 @@ export function rateLimitHeaders(req: Request, res: Response, next: NextFunction
         return;
     }
 
-    const tier: ApiKeyTier = req.apiKeyRecord.rate_limit_tier || 'free';
-    const limits = API_KEY_TIER_LIMITS[tier];
+    const limits = API_KEY_LIMITS;
     const keyId = req.apiKeyId;
     const now = Date.now();
 
@@ -112,11 +111,10 @@ export function recordTokenUsage(keyId: string, tokens: number): void {
  * TPM 한도 초과 여부 확인
  * 
  * @param keyId - API Key ID
- * @param tier - API Key 등급
  * @returns true이면 한도 초과
  */
-export function isTPMExceeded(keyId: string, tier: ApiKeyTier): boolean {
-    const limits = API_KEY_TIER_LIMITS[tier];
+export function isTPMExceeded(keyId: string): boolean {
+    const limits = API_KEY_LIMITS;
     const now = Date.now();
     const tpmCounter = getOrResetCounter(tpmCounters, keyId, () => ({
         tokens: 0,

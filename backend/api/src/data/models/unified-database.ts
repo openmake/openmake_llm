@@ -51,14 +51,13 @@ import type {
     ExternalConnection,
     ExternalFile,
     MCPServerRow,
-    ApiKeyTier,
     UserApiKey,
     UserApiKeyPublic,
     AgentTask,
     AgentTaskStatus,
     AgentTaskStep,
 } from './unified-database.types';
-import { API_KEY_TIER_LIMITS as _API_KEY_TIER_LIMITS } from './unified-database.types';
+import { API_KEY_LIMITS as _API_KEY_LIMITS } from './unified-database.types';
 
 export type {
     User,
@@ -75,11 +74,10 @@ export type {
     ExternalConnection,
     ExternalFile,
     MCPServerRow,
-    ApiKeyTier,
     UserApiKey,
     UserApiKeyPublic,
 };
-export { _API_KEY_TIER_LIMITS as API_KEY_TIER_LIMITS };
+export { _API_KEY_LIMITS as API_KEY_LIMITS };
 
 /**
  * 통합 데이터베이스 클래스 (PostgreSQL)
@@ -492,7 +490,6 @@ export class UnifiedDatabase {
         description?: string;
         scopes?: string[];
         allowedModels?: string[];
-        rateLimitTier?: ApiKeyTier;
         expiresAt?: string;
     }): Promise<UserApiKey> {
         return this.apiKeyRepository.createApiKey(params);
@@ -519,7 +516,6 @@ export class UnifiedDatabase {
         description?: string;
         scopes?: string[];
         allowedModels?: string[];
-        rateLimitTier?: ApiKeyTier;
         isActive?: boolean;
         expiresAt?: string | null;
     }): Promise<UserApiKey | undefined> {

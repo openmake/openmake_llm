@@ -8,7 +8,7 @@
  * - 키 해시 기반 인증 조회, 사용자별 키 목록
  */
 import { BaseRepository, QueryParam } from './base-repository';
-import type { ApiKeyTier, UserApiKey } from '../models/unified-database.types';
+import type { UserApiKey } from '../models/unified-database.types';
 
 export class ApiKeyRepository extends BaseRepository {
     async recordApiUsage(date: string, apiKeyId: string, requests: number, tokens: number, errors: number, avgResponseTime: number, models: Record<string, unknown>) {
@@ -48,13 +48,12 @@ export class ApiKeyRepository extends BaseRepository {
         description?: string;
         scopes?: string[];
         allowedModels?: string[];
-        rateLimitTier?: ApiKeyTier;
         expiresAt?: string;
     }): Promise<UserApiKey> {
         const result = await this.query<UserApiKey>(
-            `INSERT INTO user_api_keys 
-            (id, user_id, key_hash, key_prefix, last_4, name, description, scopes, allowed_models, rate_limit_tier, expires_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+            `INSERT INTO user_api_keys
+            (id, user_id, key_hash, key_prefix, last_4, name, description, scopes, allowed_models, expires_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
             RETURNING *`,
             [
                 params.id,
@@ -66,7 +65,6 @@ export class ApiKeyRepository extends BaseRepository {
                 params.description || null,
                 JSON.stringify(params.scopes || ['*']),
                 JSON.stringify(params.allowedModels || ['*']),
-                params.rateLimitTier || 'free',
                 params.expiresAt || null
             ]
         );
@@ -146,7 +144,6 @@ export class ApiKeyRepository extends BaseRepository {
         description?: string;
         scopes?: string[];
         allowedModels?: string[];
-        rateLimitTier?: ApiKeyTier;
         isActive?: boolean;
         expiresAt?: string | null;
     }): Promise<UserApiKey | undefined> {
@@ -169,10 +166,6 @@ export class ApiKeyRepository extends BaseRepository {
         if (updates.allowedModels !== undefined) {
             sets.push(`allowed_models = $${paramIdx++}`);
             params.push(JSON.stringify(updates.allowedModels));
-        }
-        if (updates.rateLimitTier !== undefined) {
-            sets.push(`rate_limit_tier = $${paramIdx++}`);
-            params.push(updates.rateLimitTier);
         }
         if (updates.isActive !== undefined) {
             sets.push(`is_active = $${paramIdx++}`);

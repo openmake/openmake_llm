@@ -626,22 +626,22 @@ export function renderApiKeysSection() {
 
         '<h3 id="update-key" style="margin-top:60px;">Update Key</h3>' +
         '<p><span class="endpoint-badge badge-patch">PATCH</span> <code>/api-keys/:id</code></p>' +
-        '<p>Update key metadata such as name, description, scopes, allowed models, rate limit tier, or active status.</p>' +
+        '<p>Update key metadata such as name, description, scopes, allowed models, or active status.</p>' +
         getCodeBlock(
             'curl',
             'curl -X PATCH ' + window.location.origin + '/api/api-keys/<key_id> \\\n' +
             '  -H "Authorization: Bearer <jwt_token>" \\\n' +
             '  -H "Content-Type: application/json" \\\n' +
-            '  -d \'{"name": "Updated Name", "rate_limit_tier": "standard"}\'',
+            '  -d \'{"name": "Updated Name", "is_active": true}\'',
             'python',
             'requests.patch("' + window.location.origin + '/api/api-keys/<key_id>",\n' +
             '    headers={"Authorization": "Bearer <jwt_token>"},\n' +
-            '    json={"name": "Updated Name", "rate_limit_tier": "standard"})',
+            '    json={"name": "Updated Name", "is_active": True})',
             'typescript',
             'await fetch("' + window.location.origin + '/api/api-keys/<key_id>", {\n' +
             '  method: "PATCH",\n' +
             '  headers: {"Authorization": "Bearer <jwt_token>", "Content-Type": "application/json"},\n' +
-            '  body: JSON.stringify({name: "Updated Name", rate_limit_tier: "standard"})\n' +
+            '  body: JSON.stringify({name: "Updated Name", is_active: true})\n' +
             '})'
         ) +
         '<h4>Request Body Parameters</h4>' +
@@ -650,7 +650,6 @@ export function renderApiKeysSection() {
         '<tr><td><code>description</code></td><td>string</td><td>Key description (max 500 chars)</td></tr>' +
         '<tr><td><code>scopes</code></td><td>string[]</td><td>Access scopes</td></tr>' +
         '<tr><td><code>allowed_models</code></td><td>string[]</td><td>Allowed model names</td></tr>' +
-        '<tr><td><code>rate_limit_tier</code></td><td>string</td><td>One of: free, starter, standard, enterprise</td></tr>' +
         '<tr><td><code>is_active</code></td><td>boolean</td><td>Enable or disable the key</td></tr>' +
         '<tr><td><code>expires_at</code></td><td>string|null</td><td>ISO 8601 datetime or null for no expiry</td></tr>' +
         '</tbody></table>' +
@@ -726,7 +725,10 @@ export function renderUsageSection() {
             '      "last_used_at": "2026-03-07T12:00:00.000Z"\n' +
             '    },\n' +
             '    "limits": {\n' +
-            '      "tier": "free"\n' +
+            '      "rpm": 300,\n' +
+            '      "tpm": 1000000,\n' +
+            '      "daily_requests": -1,\n' +
+            '      "monthly_requests": -1\n' +
             '    }\n' +
             '  }\n' +
             '}',
@@ -736,7 +738,7 @@ export function renderUsageSection() {
             '  "success": true,\n' +
             '  "data": {\n' +
             '    "usage": { "total_requests": 1234, "total_tokens": 567890, ... },\n' +
-            '    "limits": { "tier": "free" }\n' +
+            '    "limits": { "rpm": 300, "tpm": 1000000, "daily_requests": -1, "monthly_requests": -1 }\n' +
             '  }\n' +
             '}',
             'typescript',
@@ -745,7 +747,7 @@ export function renderUsageSection() {
             '  success: true,\n' +
             '  data: {\n' +
             '    usage: { total_requests: 1234, total_tokens: 567890, last_used_at: "..." },\n' +
-            '    limits: { tier: "free" }\n' +
+            '    limits: { rpm: 300, tpm: 1000000, daily_requests: -1, monthly_requests: -1 }\n' +
             '  }\n' +
             '}'
         ) +
@@ -769,14 +771,11 @@ export function renderUsageSection() {
 export function renderRateLimitsSection() {
     return '<section id="rate-limits" class="dev-section">' +
         '<h2>Rate Limits</h2>' +
-        '<p>API access is rate-limited based on your subscription tier.</p>' +
+        '<p>All API keys share a single rate limit (no tiers). Per-minute caps prevent abuse; daily and monthly request counts are unlimited.</p>' +
         '<table class="rate-table">' +
-        '<thead><tr><th>Tier</th><th>RPM</th><th>TPM</th><th>Daily Requests</th><th>Monthly Requests</th></tr></thead>' +
+        '<thead><tr><th>RPM</th><th>TPM</th><th>Daily Requests</th><th>Monthly Requests</th></tr></thead>' +
         '<tbody>' +
-        '<tr><td>Free (Tier 0)</td><td>10</td><td>10,000</td><td>100</td><td>1,000</td></tr>' +
-        '<tr><td>Starter (Tier 1)</td><td>30</td><td>50,000</td><td>500</td><td>10,000</td></tr>' +
-        '<tr><td>Standard (Tier 2)</td><td>60</td><td>100,000</td><td>3,000</td><td>100,000</td></tr>' +
-        '<tr><td>Enterprise (Tier 3)</td><td>300</td><td>1,000,000</td><td>Unlimited</td><td>Unlimited</td></tr>' +
+        '<tr><td>300</td><td>1,000,000</td><td>Unlimited</td><td>Unlimited</td></tr>' +
         '</tbody></table>' +
         '<h3>Rate Limit Headers</h3>' +
         '<p>Every response includes headers describing your current rate limit status:</p>' +

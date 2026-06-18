@@ -19,6 +19,7 @@
  * @requires apiKeyTPMLimiter - TPM(Tokens Per Minute) 이중 제한
  */
 import { Router } from 'express';
+import { API_KEY_LIMITS } from '../../data/models/unified-database';
 
 // Import existing routers
 import chatRouter from '../chat.routes';
@@ -83,7 +84,10 @@ v1Router.get('/usage', requireApiKey, asyncHandler(async (req, res) => {
             last_used_at: stats?.lastUsedAt ?? null,
         },
         limits: {
-            tier: keyRecord.rate_limit_tier || 'free',
+            rpm: API_KEY_LIMITS.rpm,
+            tpm: API_KEY_LIMITS.tpm,
+            daily_requests: API_KEY_LIMITS.dailyRequests,
+            monthly_requests: API_KEY_LIMITS.monthlyRequests,
         },
     }));
 }));
@@ -114,7 +118,10 @@ v1Router.get('/usage/daily', requireApiKey, asyncHandler(async (req, res) => {
             last_used_at: stats?.lastUsedAt ?? null,
         },
         limits: {
-            tier: keyRecord.rate_limit_tier || 'free',
+            rpm: API_KEY_LIMITS.rpm,
+            tpm: API_KEY_LIMITS.tpm,
+            daily_requests: API_KEY_LIMITS.dailyRequests,
+            monthly_requests: API_KEY_LIMITS.monthlyRequests,
         },
     }));
 }));
