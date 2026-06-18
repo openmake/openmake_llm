@@ -211,6 +211,15 @@ const RESEARCH_MESSAGES: Record<string, Record<string, string>> = {
         de: 'Abschlussbericht wird erstellt...',
         fr: 'Génération du rapport final en cours...',
     },
+    reportWriting: {
+        ko: '보고서 작성 중... ({chars}자)',
+        en: 'Writing report... ({chars} chars)',
+        ja: 'レポート作成中... ({chars}文字)',
+        zh: '正在撰写报告... ({chars}字)',
+        es: 'Redactando informe... ({chars} caracteres)',
+        de: 'Bericht wird verfasst... ({chars} Zeichen)',
+        fr: 'Rédaction du rapport... ({chars} caractères)',
+    },
     completed: {
         ko: '리서치 완료!',
         en: 'Research complete!',

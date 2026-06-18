@@ -15,7 +15,7 @@
 import { LLMClient, createClient } from '../llm';
 import type { SearchResult } from '../mcp/web-search';
 import { getModelForRole } from '../config/model-roles';
-import { RESEARCH_DEPTH_LOOPS } from '../config/runtime-limits';
+import { RESEARCH_DEPTH_LOOPS, RESEARCH_DEFAULTS } from '../config/runtime-limits';
 import { getUnifiedDatabase } from '../data/models/unified-database';
 import { isPersistableUserId } from '../utils/user-id-validation';
 import { createLogger } from '../utils/logger';
@@ -296,6 +296,12 @@ export class DeepResearchService {
                 sources: finalSources,
                 subTopics,
                 sessionId,
+                // 보고서 생성 진행 표시 — 85~99% 구간을 누적 글자 수로 채워 report 단계 공백 제거
+                onReportProgress: (chars) => {
+                    const frac = Math.min(chars / RESEARCH_DEFAULTS.REPORT_EXPECTED_CHARS, 1);
+                    const prog = 85 + frac * 14;
+                    this.reportProgress(onProgress, sessionId, 'running', this.config.maxLoops, this.config.maxLoops, 'report', prog, getResearchMessage('reportWriting', this.config.language, { chars }));
+                },
                 throwIfAborted: () => this.throwIfAborted()
             });
 
