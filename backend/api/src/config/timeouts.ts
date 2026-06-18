@@ -30,6 +30,10 @@ export const LLM_TIMEOUTS = {
     MEMORY_EXTRACTION_TIMEOUT_MS: 30000,
     /** Deep Research 주제 분해 타임아웃 (ms) */
     RESEARCH_DECOMPOSE_TIMEOUT_MS: 60000,
+    /** Deep Research 추가정보 필요 판단 LLM 호출 타임아웃 (ms) */
+    RESEARCH_NEED_MORE_TIMEOUT_MS: 30000,
+    /** 웹 검색 프로바이더 개별 fetch 타임아웃 (ms) — timeout 부재 시 Promise.all 무한 hang 방지 */
+    WEB_SEARCH_FETCH_TIMEOUT_MS: Number(process.env.WEB_SEARCH_FETCH_TIMEOUT_MS) || 12000,
     /** Deep Research 청크 합성 개별 타임아웃 (ms) — 전역 LLM_TIMEOUT과 독립 */
     SYNTHESIS_PER_CHUNK_TIMEOUT_MS: 120000,
     /** Deep Research 청크 병합 타임아웃 (ms) */

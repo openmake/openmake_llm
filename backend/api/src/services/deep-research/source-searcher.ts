@@ -84,7 +84,8 @@ export async function searchSubTopics(params: {
             try {
                 const results = await performWebSearch(query, {
                     maxResults: resultsPerQuery,
-                    language: config.language
+                    language: config.language,
+                    signal: abortSignal
                 });
 
                 const uniqueForQuery: SearchResult[] = [];

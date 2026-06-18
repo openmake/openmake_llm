@@ -102,6 +102,7 @@ export class DeepResearchService {
                 config: this.config,
                 topic,
                 sessionId,
+                abortSignal: this.abortController?.signal,
                 throwIfAborted: () => this.throwIfAborted()
             });
             await db.updateResearchSession(sessionId, { progress: 5 });
@@ -260,6 +261,7 @@ export class DeepResearchService {
                         topic,
                         currentFindings: allFindings,
                         sourceCount: sourcesAfterScrape.length,
+                        abortSignal: this.abortController?.signal,
                         throwIfAborted: () => this.throwIfAborted()
                     });
                     if (!needsMore) {

@@ -12,6 +12,7 @@ import { getUnifiedDatabase } from '../../data/models/unified-database';
 import { createLogger } from '../../utils/logger';
 import { CAPACITY } from '../../config/runtime-limits';
 import { LLM_TEMPERATURES } from '../../config/llm-parameters';
+import { LLM_TIMEOUTS } from '../../config/timeouts';
 import { clampImportance, buildFallbackSubTopics } from '../deep-research-utils';
 import { getDecomposePrompt, getResearchMessage } from '../deep-research-prompts';
 
@@ -25,17 +26,29 @@ export async function decomposeTopics(params: {
     config: ResearchConfig;
     topic: string;
     sessionId: string;
+    abortSignal?: AbortSignal;
     throwIfAborted: () => void;
 }): Promise<SubTopic[]> {
-    const { client, config, topic, sessionId, throwIfAborted } = params;
+    const { client, config, topic, sessionId, abortSignal, throwIfAborted } = params;
 
     throwIfAborted();
     const prompt = getDecomposePrompt(config.language, topic);
 
+    const controller = new AbortController();
+    const timeoutHandle = setTimeout(() => controller.abort(), LLM_TIMEOUTS.RESEARCH_DECOMPOSE_TIMEOUT_MS);
+    const forwardAbort = () => controller.abort();
+    if (abortSignal) {
+        if (abortSignal.aborted) { clearTimeout(timeoutHandle); throw new Error('RESEARCH_ABORTED'); }
+        abortSignal.addEventListener('abort', forwardAbort);
+    }
+
     try {
-        const response = await client.chat([
-            { role: 'user', content: prompt }
-        ], { temperature: LLM_TEMPERATURES.RESEARCH_PLAN });
+        const response = await client.chat(
+            [{ role: 'user', content: prompt }],
+            { temperature: LLM_TEMPERATURES.RESEARCH_PLAN },
+            undefined,
+            { signal: controller.signal },
+        );
         throwIfAborted();
 
         const jsonMatch = response.content.match(/\[[\s\S]*\]/);
@@ -85,7 +98,13 @@ export async function decomposeTopics(params: {
 
         return finalSubTopics;
     } catch (error) {
+        throwIfAborted();
         logger.error(`[DeepResearch] 주제 분해 실패: ${error instanceof Error ? error.message : String(error)}`);
         return buildFallbackSubTopics(topic);
+    } finally {
+        clearTimeout(timeoutHandle);
+        if (abortSignal) {
+            abortSignal.removeEventListener('abort', forwardAbort);
+        }
     }
 }

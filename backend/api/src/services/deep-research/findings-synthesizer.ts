@@ -117,9 +117,12 @@ export async function synthesizeFindings(params: {
             }
 
             try {
-                const response = await client.chat([
-                    { role: 'user', content: chunkPrompt }
-                ], { temperature: LLM_TEMPERATURES.RESEARCH_SYNTHESIS });
+                const response = await client.chat(
+                    [{ role: 'user', content: chunkPrompt }],
+                    { temperature: LLM_TEMPERATURES.RESEARCH_SYNTHESIS },
+                    undefined,
+                    { signal: chunkController.signal },
+                );
                 throwIfAborted();
                 return response.content.trim();
             } catch (error) {
@@ -259,9 +262,12 @@ async function singleMerge(params: {
     }
 
     try {
-        const response = await client.chat([
-            { role: 'user', content: mergedPrompt }
-        ], { temperature: LLM_TEMPERATURES.RESEARCH_REPORT });
+        const response = await client.chat(
+            [{ role: 'user', content: mergedPrompt }],
+            { temperature: LLM_TEMPERATURES.RESEARCH_REPORT },
+            undefined,
+            { signal: mergeController.signal },
+        );
         throwIfAborted();
         return response.content.trim();
     } catch (error) {
@@ -288,9 +294,10 @@ export async function checkNeedsMoreInfo(params: {
     topic: string;
     currentFindings: string[];
     sourceCount: number;
+    abortSignal?: AbortSignal;
     throwIfAborted: () => void;
 }): Promise<boolean> {
-    const { client, config, topic, currentFindings, sourceCount, throwIfAborted } = params;
+    const { client, config, topic, currentFindings, sourceCount, abortSignal, throwIfAborted } = params;
 
     throwIfAborted();
     if (sourceCount < RESEARCH_DEFAULTS.MAX_TOTAL_SOURCES * 0.6) {
@@ -299,15 +306,32 @@ export async function checkNeedsMoreInfo(params: {
 
     const prompt = getNeedMorePrompt(config.language, topic, currentFindings, sourceCount);
 
+    const controller = new AbortController();
+    const timeoutHandle = setTimeout(() => controller.abort(), LLM_TIMEOUTS.RESEARCH_NEED_MORE_TIMEOUT_MS);
+    const forwardAbort = () => controller.abort();
+    if (abortSignal) {
+        if (abortSignal.aborted) { clearTimeout(timeoutHandle); throw new Error('RESEARCH_ABORTED'); }
+        abortSignal.addEventListener('abort', forwardAbort);
+    }
+
     try {
-        const response = await client.chat([
-            { role: 'user', content: prompt }
-        ], { temperature: LLM_TEMPERATURES.RESEARCH_FACT_CHECK });
+        const response = await client.chat(
+            [{ role: 'user', content: prompt }],
+            { temperature: LLM_TEMPERATURES.RESEARCH_FACT_CHECK },
+            undefined,
+            { signal: controller.signal },
+        );
         throwIfAborted();
 
         return response.content.toLowerCase().includes('yes');
     } catch (error) {
+        throwIfAborted();
         logger.error(`[DeepResearch] 추가 정보 판단 실패: ${error instanceof Error ? error.message : String(error)}`);
         return sourceCount < config.maxTotalSources;
+    } finally {
+        clearTimeout(timeoutHandle);
+        if (abortSignal) {
+            abortSignal.removeEventListener('abort', forwardAbort);
+        }
     }
 }
