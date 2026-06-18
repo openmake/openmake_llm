@@ -224,6 +224,8 @@ export const RESEARCH_DEFAULTS = {
     SYNTHESIS_CONCURRENCY: 5,
     /** 전체 합성을 실행하기 위한 최소 콘텐츠 길이 (문자). 이 미만이면 경량 합성 */
     MIN_CONTENT_FOR_FULL_SYNTHESIS: 1000,
+    /** 보고서 생성 진행률 추정용 예상 출력 글자 수 (라이브 관측 ~20K자 기준, progress 표시 전용) */
+    REPORT_EXPECTED_CHARS: 20000,
     /** 검색 쿼리 최대 단어 수 (초과 시 잘림) */
     SEARCH_QUERY_MAX_WORDS: 10,
     /** 계층적 병합 전환 임계값 (청크 요약 수가 이 값 초과 시 재귀 병합) */

@@ -87,9 +87,11 @@ export async function generateReport(params: {
     sources: SearchResult[];
     subTopics: SubTopic[];
     sessionId: string;
+    /** 보고서 생성 진행 콜백 — 누적 생성 글자 수를 보고해 report 단계 progress 공백(체감 멈춤)을 제거 */
+    onReportProgress?: (charsGenerated: number) => void;
     throwIfAborted: () => void;
 }): Promise<{ summary: string; keyFindings: string[] }> {
-    const { client, config, topic, findings, sources, subTopics, sessionId, throwIfAborted } = params;
+    const { client, config, topic, findings, sources, subTopics, sessionId, onReportProgress, throwIfAborted } = params;
 
     throwIfAborted();
     const db = getUnifiedDatabase();
@@ -133,9 +135,17 @@ export async function generateReport(params: {
     });
 
     try {
-        const response = await reportClient.chat([
-            { role: 'user', content: prompt }
-        ], { temperature: LLM_TEMPERATURES.RESEARCH_SYNTHESIS });
+        // 스트리밍 호출 — 토큰이 흐르는 동안 진행을 보고(85% 공백 해소)하고, 누적 출력으로
+        // stall 여부를 가시화한다. onToken 모드에서도 client 는 최종 content 를 누적 반환한다.
+        let accumulatedChars = 0;
+        const response = await reportClient.chat(
+            [{ role: 'user', content: prompt }],
+            { temperature: LLM_TEMPERATURES.RESEARCH_SYNTHESIS },
+            (token) => {
+                accumulatedChars += token.length;
+                onReportProgress?.(accumulatedChars);
+            },
+        );
         throwIfAborted();
 
         const content = response.content;
