@@ -51,7 +51,8 @@ function buildReferencesBlock(sources: SearchResult[], refLabel: string): string
         .map((source, index) => {
             const domain = (source.source && source.source.trim()) || hostnameOf(source.url);
             const label = (source.title && source.title.trim()) || domain || `${refLabel} ${index + 1}`;
-            const suffix = domain ? ` (${domain})` : '';
+            // 도메인이 제목에 이미 포함돼 있으면 `(도메인)` 을 생략 — "제목 - 전자신문 (전자신문)" 중복 방지.
+            const suffix = domain && !label.includes(domain) ? ` (${domain})` : '';
             return source.url
                 ? `[${index + 1}] [${label}${suffix}](${source.url})`
                 : `[${index + 1}] ${label}${suffix}`;
