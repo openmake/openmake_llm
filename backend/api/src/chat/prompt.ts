@@ -37,7 +37,6 @@ import type { PromptLanguageCode } from './prompt-locales';
 export type { PromptLanguageCode } from './prompt-locales';
 
 // Re-export from prompt-templates (values + types separated)
-export { SYSTEM_PROMPTS, PromptCache, detectPromptType } from './prompt-templates';
 export type { PromptType } from './prompt-templates';
 import { detectPromptType } from './prompt-templates';
 import { getLocalizedSystemPrompt } from './prompt-templates';
