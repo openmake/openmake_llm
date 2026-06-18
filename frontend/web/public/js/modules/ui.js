@@ -236,6 +236,39 @@ function escapeHtml(str) {
  * @param {string} text - 마크다운 원본 텍스트
  * @returns {void}
  */
+/**
+ * 마크다운 정합성 보정 — 렌더 직전, 깨진 구조를 보수적으로 교정한다.
+ *
+ * LLM 출력(채팅·딥리서치 보고서·에이전트 결과)이 닫히지 않은 코드펜스를 내면
+ * 이후 본문 전체가 코드블록으로 먹혀 렌더가 붕괴한다. false positive 로 정상
+ * 텍스트를 망치지 않도록, 가장 흔하고 안전한 케이스(미닫힘 펜스)만 보정한다.
+ *
+ * @param {string} text 원본 마크다운
+ * @returns {string} 정합성 보정된 마크다운
+ */
+function normalizeMarkdown(text) {
+    if (typeof text !== 'string' || !text) return text;
+    let out = text;
+
+    // 줄 시작의 코드펜스(``` 또는 ~~~)만 카운트 — 인라인 백틱은 무시.
+    // 한 종류 펜스가 열려있는 동안 다른 종류 펜스는 본문으로 취급(토글하지 않음).
+    let backtickOpen = false;
+    let tildeOpen = false;
+    for (const line of out.split('\n')) {
+        const m = line.match(/^\s*(`{3,}|~{3,})/);
+        if (!m) continue;
+        if (m[1][0] === '`') {
+            if (!tildeOpen) backtickOpen = !backtickOpen;
+        } else if (!backtickOpen) {
+            tildeOpen = !tildeOpen;
+        }
+    }
+    if (backtickOpen) out += (out.endsWith('\n') ? '' : '\n') + '```';
+    else if (tildeOpen) out += (out.endsWith('\n') ? '' : '\n') + '~~~';
+
+    return out;
+}
+
 async function renderMarkdown(element, text) {
     if (typeof marked !== 'undefined') {
         try {
@@ -245,7 +278,8 @@ async function renderMarkdown(element, text) {
             });
 
             // KaTeX: 수식 표현식을 HTML로 변환 (marked 전에 처리)
-            let processed = text;
+            // 렌더 직전 마크다운 정합성 보정(미닫힘 코드펜스 등) 적용 — 모든 LLM 출력 공통 경로.
+            let processed = normalizeMarkdown(text);
             if (typeof katex !== 'undefined') {
                 // 블록 수식: $$...$$ (block math)
                 processed = processed.replace(/\$\$([\s\S]+?)\$\$/g, (_match, expr) => {
