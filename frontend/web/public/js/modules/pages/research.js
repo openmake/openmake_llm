@@ -102,21 +102,10 @@
                     '<span>\uC9C4\uD589\uB960: ' + (s.progress || 0) + '%</span>' +
                 '</div>';
 
-                if (s.summary) html += '<div class="detail-section"><h3>\uC694\uC57D</h3><p>' + _esc(s.summary) + '</p></div>';
-
-                var findings = s.key_findings || [];
-                if (findings.length) {
-                    html += '<div class="detail-section"><h3>\uC8FC\uC694 \uBC1C\uACAC</h3><ul>' +
-                        findings.map(function(f) { return '<li>' + _esc(f) + '</li>'; }).join('') +
-                    '</ul></div>';
-                }
-
-                var sources = s.sources || [];
-                if (sources.length) {
-                    html += '<div class="detail-section"><h3>\uCD9C\uCC98</h3><ul>' +
-                        sources.map(function(src) { return '<li>' + _esc(typeof src === 'string' ? src : JSON.stringify(src)) + '</li>'; }).join('') +
-                    '</ul></div>';
-                }
+                // summary \uB294 report-generator \uAC00 \uB9CC\uB4E0 \uC644\uC804\uD55C \uBCF4\uACE0\uC11C(\uC885\uD569\uC694\uC57D\u00B7\uC8FC\uC694\uBC1C\uACAC\u00B7\uC0C1\uC138\uBD84\uC11D\u00B7\uCC38\uACE0\uBB38\uD5CC
+                // \uB9C8\uD06C\uB2E4\uC6B4)\uB2E4. key_findings/sources \uB294 summary \uC5D0 \uC774\uBBF8 \uD3EC\uD568\uB418\uC5B4 \uC911\uBCF5\uC774\uBBC0\uB85C \uBCC4\uB3C4 \uC139\uC158\uC744
+                // \uB450\uC9C0 \uC54A\uACE0, \uCC44\uD305\uACFC \uB3D9\uC77C\uD55C renderMarkdown \uC73C\uB85C \uB80C\uB354\uD574 \uB9C8\uD06C\uB2E4\uC6B4 \uB9C1\uD06C\uAC00 raw \uB85C \uB178\uCD9C\uB418\uC9C0 \uC54A\uAC8C \uD55C\uB2E4.
+                html += '<div class="detail-section markdown-body" id="detailReport"></div>';
 
                 if (steps.length) {
                     html += '<div class="detail-section"><h3>\uC5F0\uAD6C \uB2E8\uACC4</h3><div class="steps-timeline">';
@@ -131,6 +120,18 @@
                 }
 
                 if (dc) dc.innerHTML = html;
+
+                // 보고서(마크다운) 렌더 — 채팅과 동일한 window.renderMarkdown(marked+purifyHTML) 재사용
+                var reportEl = document.getElementById('detailReport');
+                if (reportEl) {
+                    if (s.summary && typeof window.renderMarkdown === 'function') {
+                        window.renderMarkdown(reportEl, s.summary);
+                    } else if (s.summary) {
+                        reportEl.textContent = s.summary;
+                    } else {
+                        reportEl.innerHTML = '<p class="empty-state">보고서가 아직 없습니다.</p>';
+                    }
+                }
             });
         }).catch(function(e) {
             console.error('[Research] 세션 상세 로드 실패:', e);
