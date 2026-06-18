@@ -66,6 +66,8 @@ export interface StrategyExecutorParams {
     getAllowedTools: () => ToolDefinition[];
     /** MCP tool resource content 콜백 (frontend 인라인 카드 표시용, 선택) */
     onMcpToolResult?: (event: { toolName: string; resources: Array<{ uri: string; mimeType?: string; text?: string }> }) => void;
+    /** MCP tool 시작 콜백 (frontend "실행 중" 진행 표시용, 선택) */
+    onMcpToolStart?: (event: { toolName: string }) => void;
 }
 
 /**
@@ -85,7 +87,7 @@ export async function selectAndExecuteStrategy(params: StrategyExecutorParams): 
         supportsTools, supportsThinking, thinkingMode, thinkingLevel,
         languagePolicy, streamToken, abortSignal, checkAborted, format,
         generateVerifyStrategy, agentLoopStrategy, thinkingStrategy,
-        client, currentUserContext, getAllowedTools, onMcpToolResult,
+        client, currentUserContext, getAllowedTools, onMcpToolResult, onMcpToolStart,
     } = params;
 
     // P3-A: 사후 검증용 추적 변수
@@ -228,6 +230,7 @@ export async function selectAndExecuteStrategy(params: StrategyExecutorParams): 
         executionPlan, currentUserContext, getAllowedTools,
         onToken: wrappedStreamToken, abortSignal, checkAborted, format,
         onMcpToolResult,
+        onMcpToolStart,
         executionState,
         fallbackHint,
     });

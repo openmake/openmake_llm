@@ -32,6 +32,8 @@ export interface ExternalProviderDeps {
     currentUserContext: UserContext | null;
     /** MCP tool 호출 결과 inline 카드 콜백 (frontend 표시용) */
     mcpToolResultCallback?: (data: { toolName: string; resources: Array<{ uri: string; mimeType?: string; text?: string }> }) => void;
+    /** MCP tool 호출 시작 콜백 (frontend "실행 중" 진행 표시용) */
+    mcpToolStartCallback?: (data: { toolName: string }) => void;
     /** Provider usage 누적 — ChatService.lastProviderUsage setter */
     onUsage?: (usage: import('../../llm').UsageMetrics) => void;
     /** Allowed tools (tier + agent 매칭 후) */
@@ -300,6 +302,13 @@ export async function executeExternalTool(
             tier: 'free' as const,
             role: 'guest' as const,
         };
+        // 도구 실행 시작 알림 — 권한 체크 통과 후, 실제 호출 직전.
+        // frontend 가 "🔍 {도구} 실행 중" 진행 표시로 "생각 중..." 멈춤 혼선 해소.
+        if (deps.mcpToolStartCallback) {
+            try { deps.mcpToolStartCallback({ toolName }); }
+            catch (e) { logger.warn(`onMcpToolStart 콜백 실패: ${e instanceof Error ? e.message : String(e)}`); }
+        }
+
         const result = await mcpClient.executeToolWithContext(toolName, toolArgs, userCtx);
 
         if (deps.mcpToolResultCallback && Array.isArray(result.content)) {

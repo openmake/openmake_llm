@@ -305,6 +305,17 @@ export async function handleChatMessage(
                     }));
                 }
             },
+            // MCP tool 호출 시작 알림 — frontend "🔍 {도구} 실행 중" 진행 표시
+            // (도구 실행 중 "생각 중..." 이 멈춘 듯 보이는 혼선 해소)
+            onMcpToolStart: (event) => {
+                if (ws.readyState === ws.OPEN) {
+                    ws.send(JSON.stringify({
+                        type: 'mcp_tool_start',
+                        toolName: event.toolName,
+                        messageId,
+                    }));
+                }
+            },
             // 시스템 이벤트 (자동 토론 활성화 등 메타 알림) — UI 토스트 분리 표시
             onSystemEvent: (event) => {
                 if (ws.readyState === ws.OPEN) {
