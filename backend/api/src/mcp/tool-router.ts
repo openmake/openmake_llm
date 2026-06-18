@@ -10,7 +10,6 @@
  * @description
  * - 내장 도구와 외부 MCP 서버 도구의 통합 검색/실행
  * - '::' 네임스페이스 기반 외부 도구 라우팅 (예: "postgres::query")
- * - UserTier 기반 도구 접근 제어 (tool-tiers.ts 연동)
  * - Ollama 호환 도구 형식 변환 (getOllamaTools)
  * - 외부 서버 도구의 동적 등록/해제
  *
@@ -34,17 +33,13 @@ import type { MCPTool, MCPToolResult, ExternalToolEntry } from './types';
 import { MCP_NAMESPACE_SEPARATOR } from './types';
 import type { MCPToolDefinition } from './types';
 import { builtInTools } from './tools';
-import type { UserTier } from '../data/user-manager';
-import { canUseTool } from './tool-tiers';
-import { MCP_CATALOG_TIER_ORDER, type CatalogTier } from '../config/tiers';
 import type { UserContext } from './user-sandbox';
 import { createLogger } from '../utils/logger';
 import { MCP_EXTERNAL_TOOL_LIMITS } from '../config/timeouts';
 import { withSpan } from '../observability/otel';
 import { classifyToolError, formatToolError } from './tool-error-classifier';
 import type { UserMCPPool } from './user-pool';
-import type { McpCatalogRepository } from '../data/repositories/mcp-catalog-repository';
-import { collectUserPoolTools, type UserPoolToolEntry } from './user-pool-tools';
+import { collectUserPoolTools } from './user-pool-tools';
 
 const logger = createLogger('ToolRouter');
 
@@ -107,28 +102,24 @@ export class ToolRouter {
     /** Phase 7: 사용자 풀 (lifecycle-supervisor 가 채운 ExternalMCPClient 인스턴스) */
     private readonly userPool?: UserMCPPool;
 
-    /** Phase 7: catalog template required_tier 재조회용 (chat 흐름에서 호출 시점 검증) */
-    private readonly catalogRepo?: Pick<McpCatalogRepository, 'getRequiredTiersByTemplateIds'>;
-
     /**
-     * @param deps - optional 의존성. userPool/catalogRepo 둘 다 없으면 기존 (builtin + global external) 동작과 동일.
+     * @param deps - optional 의존성. userPool 없으면 기존 (builtin + global external) 동작과 동일.
      */
-    constructor(deps?: { userPool?: UserMCPPool; catalogRepo?: McpCatalogRepository }) {
+    constructor(deps?: { userPool?: UserMCPPool }) {
         this.userPool = deps?.userPool;
-        this.catalogRepo = deps?.catalogRepo;
     }
 
     /**
      * 모든 도구(내장+외부) MCPTool 목록 반환
      *
      * 내장 도구는 원본 이름, 외부 도구는 네임스페이스 적용된 이름을 사용합니다.
-     * userContext 가 주어지고 userPool 이 주입돼 있으면, 해당 사용자의 풀 도구를
-     * displayName::tool 네임스페이스로 함께 수집하고 catalog tier 게이트로 필터링합니다.
+     * userContext 가 주어지고 userPool 이 주입돼 있으면, 해당 사용자의 풀 도구도
+     * displayName::tool 네임스페이스로 함께 수집합니다 (제한 없이 전체 노출).
      *
-     * @param userContext - optional. 있으면 userPool 도구 + tier 재검증 적용.
+     * @param userContext - optional. 있으면 userPool 도구도 포함.
      * @returns 전체 도구 목록 (MCPTool 배열)
      */
-    async getAllTools(userContext?: { userId: string; tier: UserTier }): Promise<MCPTool[]> {
+    async getAllTools(userContext?: { userId: string }): Promise<MCPTool[]> {
         const tools: MCPTool[] = [];
 
         // 내장 도구
@@ -147,49 +138,10 @@ export class ToolRouter {
         // Phase 7: 사용자 풀 도구 — userContext + userPool 둘 다 있을 때만
         if (userContext && this.userPool) {
             const userEntries = collectUserPoolTools(this.userPool, userContext.userId);
-            const allowed = await this.filterByTier(userEntries, userContext.tier);
-            for (const entry of allowed) tools.push(entry.tool);
+            for (const entry of userEntries) tools.push(entry.tool);
         }
 
         return tools;
-    }
-
-    /**
-     * 사용자 등급별 필터링된 도구 목록
-     *
-     * canUseTool()을 사용하여 해당 tier에서 접근 가능한 도구만 반환합니다.
-     *
-     * @param tier - 사용자 등급 ('free' | 'pro' | 'enterprise')
-     * @param userContext - optional. getAllTools 로 전달되어 userPool 도구도 포함시킴.
-     * @returns 해당 등급에서 사용 가능한 도구 목록
-     */
-    async getToolsForTier(tier: UserTier, userContext?: { userId: string; tier: UserTier }): Promise<MCPTool[]> {
-        const all = await this.getAllTools(userContext);
-        return all.filter(tool => canUseTool(tier, tool.name));
-    }
-
-    /**
-     * catalog_template_id 가 있는 entry 만 tier 게이트로 검사.
-     * - catalogRepo 미주입 시 전부 통과 (게이트 비활성 fallback)
-     * - catalogTemplateId 없는 entry (direct 등록) 는 그대로 통과
-     * - tierMap 에 없는 template (DB 미존재) 는 보수적으로 통과 (catalog 누락은 게이트 책임 아님)
-     */
-    private async filterByTier(entries: UserPoolToolEntry[], userTier: UserTier): Promise<UserPoolToolEntry[]> {
-        if (!this.catalogRepo) return entries;
-
-        const templateIds = [...new Set(entries.map(e => e.catalogTemplateId).filter(Boolean))] as string[];
-        if (templateIds.length === 0) return entries;
-
-        const tierMap = await this.catalogRepo.getRequiredTiersByTemplateIds(templateIds);
-        const userLevel = MCP_CATALOG_TIER_ORDER.indexOf(userTier as CatalogTier);
-
-        return entries.filter(e => {
-            if (!e.catalogTemplateId) return true;
-            const required = tierMap.get(e.catalogTemplateId);
-            if (!required) return true;
-            const requiredLevel = MCP_CATALOG_TIER_ORDER.indexOf(required as CatalogTier);
-            return userLevel >= requiredLevel;
-        });
     }
 
     /**
@@ -315,13 +267,13 @@ export class ToolRouter {
      * LLM Function Calling 도구 형식으로 변환 (OpenAI 호환)
      *
      * MCPTool 형식을 vLLM/LiteLLM chat.completions.create({ tools }) 가 요구하는
-     * 형식으로 변환합니다. tier 에 따라 접근 가능한 도구만 포함됩니다.
+     * 형식으로 변환합니다. 모든 도구를 제한 없이 노출합니다.
      *
-     * @param tier - 사용자 등급
+     * @param userContext - optional. 있으면 userPool 도구도 포함.
      * @returns OpenAI 호환 tools 배열
      */
-    async getLLMTools(tier: UserTier, userContext?: { userId: string; tier: UserTier }): Promise<LLMTool[]> {
-        const tools = await this.getToolsForTier(tier, userContext);
+    async getLLMTools(userContext?: { userId: string }): Promise<LLMTool[]> {
+        const tools = await this.getAllTools(userContext);
         return tools.map(tool => ({
             type: 'function' as const,
             function: {
@@ -337,8 +289,8 @@ export class ToolRouter {
     }
 
     /** @deprecated Use getLLMTools(). 호환 alias — P9 에서 제거 예정. */
-    async getOllamaTools(tier: UserTier, userContext?: { userId: string; tier: UserTier }): Promise<LLMTool[]> {
-        return this.getLLMTools(tier, userContext);
+    async getOllamaTools(userContext?: { userId: string }): Promise<LLMTool[]> {
+        return this.getLLMTools(userContext);
     }
 
     /**

@@ -87,7 +87,6 @@ export class ChatRequestHandler {
             authenticatedUserId,
             anonSessionId,
             userRole: (req.user as { role?: string } | undefined)?.role as 'admin' | 'user' | 'guest' || 'guest',
-            userTier: 'free',
             userId: authenticatedUserId ?? anonSessionId,
         };
     }
@@ -97,7 +96,6 @@ export class ChatRequestHandler {
      *
      * @param wsAuthUserId - WebSocket 연결 인증 시 확인된 사용자 ID
      * @param wsAuthUserRole - 인증된 사용자 역할
-     * @param wsAuthUserTier - 인증된 사용자 등급
      * @param msgUserId - 메시지에 포함된 userId (fallback)
      * @param anonSessionId - 비로그인 세션 ID
      * @returns 사용자 컨텍스트
@@ -105,7 +103,6 @@ export class ChatRequestHandler {
     static resolveUserContextFromWebSocket(
         wsAuthUserId: string | null,
         wsAuthUserRole: 'admin' | 'user' | 'guest',
-        wsAuthUserTier: 'free' | 'pro' | 'enterprise',
         msgUserId?: string,
         anonSessionId?: string,
     ): ChatUserContext {
@@ -114,7 +111,6 @@ export class ChatRequestHandler {
             authenticatedUserId,
             anonSessionId,
             userRole: wsAuthUserRole,
-            userTier: wsAuthUserTier,
             userId: wsAuthUserId ?? msgUserId ?? anonSessionId,
         };
     }
@@ -350,7 +346,6 @@ export class ChatRequestHandler {
             userId: userContext.userId,
             apiKeyId: params.apiKeyId,
             userRole: userContext.userRole,
-            userTier: userContext.userTier,
             enabledTools,
             abortSignal,
             userLanguagePreference,

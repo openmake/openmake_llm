@@ -16,7 +16,6 @@ export const McpCatalogTemplateSchema = z.object({
     args_schema: z.record(z.string(), z.unknown()),
     env_schema: z.record(z.string(), z.unknown()),
     url_template: z.string().optional(),
-    required_tier: z.enum(['free', 'starter', 'standard', 'pro', 'enterprise']),
     is_enabled: z.boolean(),
 });
 export type McpCatalogTemplate = z.infer<typeof McpCatalogTemplateSchema>;

@@ -2,7 +2,7 @@
  * MCP 사용자 격리 + 카탈로그 + 인스턴스 lifecycle Repository.
  *
  * 핵심 동작:
- *   - listCatalog(tier): 사용자 tier 이하 템플릿만 반환
+ *   - listCatalog(): 활성화된 전체 템플릿 반환 (제한 없음)
  *   - createFromCatalog: 카탈로그 템플릿 + 사용자 입력 args/env → mcp_servers INSERT
  *     - args_schema 의 properties 기반 render → mcp_servers.args (JSONB)
  *     - env_schema 의 secret=true 필드는 token-crypto AES-256-GCM 암호화 (v1:...)
@@ -13,7 +13,6 @@
  */
 import type { Pool } from 'pg';
 import { encryptToken, decryptToken } from '../../utils/token-crypto';
-import { MCP_CATALOG_TIER_ORDER } from '../../config/tiers';
 import { createLogger } from '../../utils/logger';
 import type {
     McpCatalogTemplate,
@@ -45,16 +44,13 @@ export interface UserMcpServerRow {
 export class McpCatalogRepository {
     constructor(private pool: Pool) {}
 
-    async listCatalog(userTier: string): Promise<McpCatalogTemplate[]> {
-        const maxIdx = MCP_CATALOG_TIER_ORDER.indexOf(userTier as typeof MCP_CATALOG_TIER_ORDER[number]);
-        const allowedTiers = maxIdx < 0 ? ['free'] : MCP_CATALOG_TIER_ORDER.slice(0, maxIdx + 1);
+    async listCatalog(): Promise<McpCatalogTemplate[]> {
         const result = await this.pool.query<McpCatalogTemplate>(
             `SELECT id, display_name, description, transport_type, command_template,
-                    args_schema, env_schema, url_template, required_tier, is_enabled
+                    args_schema, env_schema, url_template, is_enabled
              FROM mcp_server_catalog
-             WHERE is_enabled = TRUE AND required_tier = ANY($1)
-             ORDER BY required_tier, display_name`,
-            [allowedTiers],
+             WHERE is_enabled = TRUE
+             ORDER BY display_name`,
         );
         return result.rows;
     }
@@ -62,27 +58,12 @@ export class McpCatalogRepository {
     async getCatalogTemplate(id: string): Promise<McpCatalogTemplate | null> {
         const result = await this.pool.query<McpCatalogTemplate>(
             `SELECT id, display_name, description, transport_type, command_template,
-                    args_schema, env_schema, url_template, required_tier, is_enabled
+                    args_schema, env_schema, url_template, is_enabled
              FROM mcp_server_catalog
              WHERE id = $1 AND is_enabled = TRUE`,
             [id],
         );
         return result.rows[0] ?? null;
-    }
-
-    /**
-     * 여러 catalog template 의 required_tier 만 batch 조회.
-     * tool-router 의 tier 게이트가 호출 — chat 흐름마다 N개 fetch 회피.
-     */
-    async getRequiredTiersByTemplateIds(ids: string[]): Promise<Map<string, string>> {
-        if (ids.length === 0) return new Map();
-        const result = await this.pool.query<{ id: string; required_tier: string }>(
-            `SELECT id, required_tier FROM mcp_server_catalog WHERE id = ANY($1)`,
-            [ids],
-        );
-        const map = new Map<string, string>();
-        for (const row of result.rows) map.set(row.id, row.required_tier);
-        return map;
     }
 
     // Admin CRUD (Phase 4.6) 메서드 (listAllForAdmin / getCatalogTemplateForAdmin /

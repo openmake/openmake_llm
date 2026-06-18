@@ -1,6 +1,6 @@
 /**
  * 채팅 요청 레이트 리미터
- * 사용자 역할/등급에 따른 일일 채팅 횟수 제한
+ * 사용자 역할에 따른 일일 채팅 횟수 제한 (남용 방지)
  *
  * Write-through cache pattern: PostgreSQL을 primary store로 사용하고,
  * in-memory Map을 hot read cache로 유지합니다.
@@ -122,12 +122,9 @@ export function stopChatRateLimitCleanup(): void {
     clearInterval(chatRateLimitCleanupInterval);
 }
 
-// 역할/등급별 일일 제한
+// 역할별 일일 제한 (남용 방지 — 구독 등급과 무관)
 const DAILY_LIMITS: Record<string, number> = {
     admin: Infinity,
-    enterprise: Infinity,
-    pro: Number(process.env.CHAT_DAILY_LIMIT_PRO) || 1000,
-    free: Number(process.env.CHAT_DAILY_LIMIT_FREE) || 100,
     user: Number(process.env.CHAT_DAILY_LIMIT_USER) || 100,
     guest: Number(process.env.CHAT_DAILY_LIMIT_GUEST) || 20
 };
@@ -140,10 +137,8 @@ function getNextMidnightUTC(): number {
     return tomorrow.getTime();
 }
 
-function getDailyLimit(role: string, tier?: string): number {
+function getDailyLimit(role: string): number {
     if (role === 'admin') return Infinity;
-    if (tier === 'enterprise') return Infinity;
-    if (tier && DAILY_LIMITS[tier] !== undefined) return DAILY_LIMITS[tier];
     return DAILY_LIMITS[role] || DAILY_LIMITS['guest'];
 }
 
@@ -158,8 +153,7 @@ export function chatRateLimiter(req: Request, res: Response, next: NextFunction)
         : (req.ip || 'unknown');
 
     const role = user?.role || 'guest';
-    const tier = (user && 'tier' in user) ? (user.tier as string) : undefined;
-    const limit = getDailyLimit(role, tier);
+    const limit = getDailyLimit(role);
 
     if (limit === Infinity) {
         next();
@@ -224,11 +218,10 @@ export function chatRateLimiter(req: Request, res: Response, next: NextFunction)
  */
 export async function checkChatRateLimit(
     userId: string | null,
-    role: string,
-    tier?: string
+    role: string
 ): Promise<string | null> {
     const key = userId || 'ws-anonymous';
-    const limit = getDailyLimit(role, tier);
+    const limit = getDailyLimit(role);
 
     if (limit === Infinity) return null;
 

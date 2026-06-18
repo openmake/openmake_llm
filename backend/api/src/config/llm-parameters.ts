@@ -366,16 +366,3 @@ export const GPT_OSS_TASK_PRESETS: Record<string, typeof MODEL_PRESETS[keyof typ
     json: MODEL_PRESETS.GPT_OSS_JSON,
 };
 
-// ============================================
-// 역할 → 도구 등급 매핑 (Record 룩업)
-// ============================================
-
-/**
- * 사용자 역할 → 기본 도구 등급 매핑
- * mcp/tool-tiers.ts의 getDefaultTierForRole()에서 참조
- */
-export const ROLE_TIER_MAP: Record<string, string> = {
-    admin: 'enterprise',
-    user: 'free',
-    guest: 'free',
-};

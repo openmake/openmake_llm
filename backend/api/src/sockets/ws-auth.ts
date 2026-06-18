@@ -1,18 +1,16 @@
 /**
  * WebSocket 인증 로직
- * Cookie/Bearer 기반 인증, verifyToken, 사용자 tier 조회를 담당합니다.
+ * Cookie/Bearer 기반 인증, verifyToken 을 담당합니다.
  * @module sockets/ws-auth
  */
 import { IncomingMessage } from 'http';
 import { verifyToken } from '../auth';
-import { getUserManager } from '../data/user-manager';
 import { createLogger } from '../utils/logger';
 import { isOriginAllowed } from '../security/cors-policy';
 
 export interface WebSocketAuthResult {
     userId: string | null;
     userRole: 'admin' | 'user' | 'guest';
-    userTier: 'free' | 'pro' | 'enterprise';
     tokenExpiresAtMs?: number | null;
     tokenIssuedAtMs?: number | null;
     tokenJti?: string | null;
@@ -37,7 +35,6 @@ async function resolveAuthFromToken(
         return {
             userId: null,
             userRole: 'guest',
-            userTier: 'free',
             tokenExpiresAtMs: null,
             tokenIssuedAtMs: null,
             tokenJti: null,
@@ -55,7 +52,6 @@ async function resolveAuthFromToken(
         return {
             userId: null,
             userRole: 'guest',
-            userTier: 'free',
             tokenExpiresAtMs,
             tokenIssuedAtMs,
             tokenJti: typeof decoded.jti === 'string' ? decoded.jti : null,
@@ -64,21 +60,9 @@ async function resolveAuthFromToken(
         };
     }
 
-    let wsAuthUserTier: 'free' | 'pro' | 'enterprise' = 'free';
-    try {
-        const userManager = getUserManager();
-        const wsUser = await userManager.getUserById(decoded.userId);
-        if (wsUser) {
-            wsAuthUserTier = wsUser.tier || 'free';
-        }
-    } catch (tierErr) {
-        logger.warn('[WS] 사용자 tier 조회 실패, 기본값 사용:', tierErr);
-    }
-
     return {
         userId: String(decoded.userId),
         userRole: (decoded.role as 'admin' | 'user' | 'guest') || 'user',
-        userTier: wsAuthUserTier,
         tokenExpiresAtMs,
         tokenIssuedAtMs,
         tokenJti: typeof decoded.jti === 'string' ? decoded.jti : null,
@@ -91,7 +75,7 @@ async function resolveAuthFromToken(
  * WebSocket 연결 시 Cookie/Bearer 토큰을 추출하고 인증을 수행합니다.
  * @param req - HTTP 업그레이드 요청
  * @param logger - 로거 인스턴스
- * @returns 인증된 사용자 정보 (userId, userRole, userTier)
+ * @returns 인증된 사용자 정보 (userId, userRole)
  */
 export async function authenticateWebSocket(
     req: IncomingMessage,
@@ -126,7 +110,6 @@ export async function authenticateWebSocket(
     return {
         userId: null,
         userRole: 'guest',
-        userTier: 'free',
         tokenExpiresAtMs: null,
         tokenIssuedAtMs: null,
         tokenJti: null,

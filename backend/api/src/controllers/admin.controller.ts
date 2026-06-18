@@ -6,7 +6,7 @@
  */
 
 import { Request, Response, Router } from 'express';
-import { getUserManager, UserRole, USER_ROLES, isUserRole, isUserTier } from '../data/user-manager';
+import { getUserManager, UserRole, USER_ROLES, isUserRole } from '../data/user-manager';
 import { getPool } from '../data/models/unified-database';
 import { requireAuth, requireAdmin } from '../auth';
 import { createLogger } from '../utils/logger';
@@ -49,7 +49,6 @@ export class AdminController {
         this.router.get('/users/stats', this.getUserStats.bind(this));
         this.router.put('/users/:id', this.updateUser.bind(this));
         this.router.put('/users/:id/role', this.changeUserRole.bind(this));
-        this.router.put('/users/:id/tier', this.changeUserTier.bind(this));
         this.router.delete('/users/:id', this.deleteUser.bind(this));
 
         // GDPR Phase D — 14세 미만 셀프 동의 admin endpoint
@@ -374,35 +373,6 @@ export class AdminController {
         } catch (error) {
             log.error('[Admin Change Role] 오류:', error);
             res.status(500).json(internalError('사용자 역할 변경 실패'));
-        }
-    }
-
-    /**
-     * PUT /api/admin/users/:id/tier - 사용자 등급 변경
-     */
-    private async changeUserTier(req: Request, res: Response): Promise<void> {
-        try {
-            const userManager = getUserManager();
-            const userId = req.params.id;
-            const { tier } = req.body;
-
-            if (!isUserTier(tier)) {
-                res.status(400).json(badRequest('유효하지 않은 등급입니다 (free, pro, enterprise)'));
-                return;
-            }
-
-            const user = await userManager.changeTier(userId, tier);
-
-            if (!user) {
-                res.status(404).json(notFound('사용자'));
-                return;
-            }
-
-            log.info(`사용자 등급 변경: ${user.email} -> ${tier}`);
-            res.json(success({ user }));
-        } catch (error) {
-            log.error('[Admin Change Tier] 오류:', error);
-            res.status(500).json(internalError('사용자 등급 변경 실패'));
         }
     }
 

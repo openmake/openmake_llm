@@ -90,7 +90,6 @@ export async function handleChatMessage(
         const userContext = ChatRequestHandler.resolveUserContextFromWebSocket(
             extWs._authenticatedUserId,
             extWs._authenticatedUserRole,
-            extWs._authenticatedUserTier,
             msg.userId as string | undefined,
             anonSessionId,
         );
@@ -99,7 +98,6 @@ export async function handleChatMessage(
         const rateLimitError = await checkChatRateLimit(
             extWs._authenticatedUserId,
             userContext.userRole,
-            userContext.userTier,
         );
         if (rateLimitError) {
             ws.send(JSON.stringify({ type: 'error', error: rateLimitError }));

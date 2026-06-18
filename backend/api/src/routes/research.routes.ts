@@ -5,7 +5,7 @@
  *
  * 자율적 다단계 리서치 에이전트의 세션 생성, 스텝 관리,
  * 비동기 실행, 결과 조회를 담당합니다.
- * Pro 이상 등급에서만 접근 가능하며, 소유권 기반 접근 제어를 적용합니다.
+ * 인증된 모든 사용자가 접근할 수 있으며, 소유권 기반 접근 제어를 적용합니다.
  *
  * @module routes/research.routes
  * @description
@@ -23,9 +23,9 @@
  * @requires UnifiedDatabase - 리서치 세션/스텝 DB 접근
  */
 
-import { Router, Request, Response, NextFunction } from 'express';
+import { Router, Request, Response } from 'express';
 import { createLogger } from '../utils/logger';
-import { success, badRequest, notFound, forbidden } from '../utils/api-response';
+import { success, badRequest, notFound } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
 import { requireAuth } from '../auth';
 import { assertResourceOwnerOrAdmin } from '../auth/ownership';
@@ -47,24 +47,6 @@ const router = Router();
 
 // All research endpoints require authentication
 router.use(requireAuth);
-
-// 딥 리서치는 Pro 이상의 등급 필요
-router.use((req: Request, res: Response, next: NextFunction): void => {
-    const userTier = (req.user && 'tier' in req.user) ? (req.user as { tier: string }).tier : 'free';
-    const userRole = req.user?.role;
-
-    // admin은 항상 허용
-    if (userRole === 'admin') {
-        next();
-        return;
-    }
-
-    if (userTier === 'free') {
-        res.status(403).json(forbidden('Pro 이상의 등급이 필요합니다'));
-        return;
-    }
-    next();
-});
 
 // ================================================
 // 리서치 세션 관리

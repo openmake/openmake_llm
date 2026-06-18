@@ -5,7 +5,7 @@
  *
  * MCP(Model Context Protocol) 설정 관리, 도구 목록 조회/실행,
  * 외부 MCP 서버 등록/연결/해제 등 MCP 생태계 전반을 관리합니다.
- * 도구 실행은 사용자 등급(tier) 기반 접근 제어를 적용합니다.
+ * 모든 도구가 제한 없이 노출됩니다.
  *
  * @module routes/mcp.routes
  * @description
@@ -53,18 +53,16 @@ export const mcpRouter = Router();
  });
 
  // ============================================
- // 도구 목록 및 실행 API (등급별 접근 제어)
+ // 도구 목록 및 실행 API
  // ============================================
 
- // 사용 가능한 도구 목록 조회 (GET) - 사용자 등급별 필터링
- mcpRouter.get('/tools', optionalAuth, (req: Request, res: Response) => {
+ // 사용 가능한 도구 목록 조회 (GET) - 전체 노출 (제한 없음)
+ mcpRouter.get('/tools', optionalAuth, (_req: Request, res: Response) => {
      try {
          const mcpClient = getUnifiedMCPClient();
-         const userTier = req.user?.tier || 'free';
+         const tools = mcpClient.getToolListForUser();
 
-         const tools = mcpClient.getToolListForUser(userTier);
-
-         res.json(success({ tools, tier: userTier, total: tools.length }));
+         res.json(success({ tools, total: tools.length }));
       } catch (error) {
           logger.error('[MCP Tools] 목록 조회 실패:', error);
           res.status(500).json(internalError('도구 목록을 불러오는 중 오류가 발생했습니다'));
@@ -87,11 +85,10 @@ export const mcpRouter = Router();
       // 사용자 컨텍스트 구성
       const context = {
           userId: user.id ?? 0,
-          tier: user.tier || 'free',
           role: user.role || 'user'
       };
 
-      // 권한 검증 후 도구 실행
+      // 도구 실행
       const result = await mcpClient.executeToolWithContext(name, args, context);
 
       if (result.isError) {

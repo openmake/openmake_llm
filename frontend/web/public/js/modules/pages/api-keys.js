@@ -287,23 +287,21 @@
 
             var html = '';
             keys.forEach(function(key) {
-                // Backend returns: is_active (bool), key_prefix, last_4, rate_limit_tier
+                // Backend returns: is_active (bool), key_prefix, last_4
                 var isActive = key.is_active !== false;
                 var isExpired = key.expires_at && new Date(key.expires_at) < new Date();
                 var statusClass = isExpired ? 'ak-badge-inactive' : (isActive ? 'ak-badge-active' : 'ak-badge-inactive');
                 var statusText = isExpired ? '만료됨' : (isActive ? '활성' : '비활성');
                 var prefix = key.key_prefix || 'omk_live_';
                 var last4 = key.last_4 || '****';
-                var tier = key.rate_limit_tier || 'free';
-                
-                html += 
+
+                html +=
                     '<div class="ak-key-item">' +
                         '<div class="ak-key-header">' +
                             '<div>' +
                                 '<div class="ak-key-name">' + esc(key.name) + '</div>' +
                                 '<div class="ak-key-meta">' +
                                     '<span class="ak-badge ' + statusClass + '">' + statusText + '</span>' +
-                                    '<span class="ak-badge ak-badge-inactive" style="background:var(--bg-tertiary); color:var(--accent-primary); border: 1px solid var(--accent-primary);">' + esc(tier) + '</span>' +
                                     '<span>생성: ' + formatDate(key.created_at) + '</span>' +
                                     (key.last_used_at ? '<span>마지막 사용: ' + formatDate(key.last_used_at) + '</span>' : '') +
                                 '</div>' +

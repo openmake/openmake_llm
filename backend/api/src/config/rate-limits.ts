@@ -124,9 +124,9 @@ export const RL_MCP = {
  * LLM 호출은 비용 높음 + draft 상한이 50/user 라 도배 자체는 불가능하지만
  * 단시간 burst 차단을 위한 이중 제한 (월간 quota + 시간당 burst).
  *
- * Tier 별 차등:
- *   - free / pro / enterprise / admin 순으로 점진 완화
- *   - 미들웨어가 req.user.tier 보고 동적으로 결정
+ * 역할별 차등 (남용 방지):
+ *   - user / admin 순으로 점진 완화
+ *   - 미들웨어가 req.user.role 보고 동적으로 결정
  *
  * 적용: POST /api/agents/skills/auto-create
  */
@@ -136,9 +136,7 @@ export const RL_MCP = {
 export const RL_SKILL_CREATE = {
     windowMs: 20 * 24 * 60 * 60 * 1000,  // 20일 (max 24.85일 미만)
     limits: {
-        free: Number(process.env.RL_SKILL_CREATE_FREE) || 10,
-        pro: Number(process.env.RL_SKILL_CREATE_PRO) || 50,
-        enterprise: Number(process.env.RL_SKILL_CREATE_ENTERPRISE) || 1000,
+        user: Number(process.env.RL_SKILL_CREATE_USER) || 50,
         admin: Number(process.env.RL_SKILL_CREATE_ADMIN) || 1000,
     },
 } as const;
@@ -146,9 +144,7 @@ export const RL_SKILL_CREATE = {
 export const RL_SKILL_CREATE_SHORT = {
     windowMs: 60 * 60 * 1000,  // 1시간 burst 방어
     limits: {
-        free: Number(process.env.RL_SKILL_CREATE_SHORT_FREE) || 5,
-        pro: Number(process.env.RL_SKILL_CREATE_SHORT_PRO) || 10,
-        enterprise: Number(process.env.RL_SKILL_CREATE_SHORT_ENTERPRISE) || 50,
+        user: Number(process.env.RL_SKILL_CREATE_SHORT_USER) || 10,
         admin: Number(process.env.RL_SKILL_CREATE_SHORT_ADMIN) || 50,
     },
 } as const;
@@ -159,15 +155,13 @@ export const RL_SKILL_CREATE_SHORT = {
  * 적용: POST /api/mcp/servers/import-from-git
  * 비용: Git tree fetch + MCPSERVER.md fetch + LLM 컨벤션 audit + DB INSERT.
  *
- * 정책: 사용자당 시간당 N건 (tier 별 차등). draft 상한 (MCP_INGEST.maxDraftsPerUser=20)
+ * 정책: 사용자당 시간당 N건 (역할별 차등 — 남용 방지). draft 상한 (MCP_INGEST.maxDraftsPerUser=20)
  *       과 함께 이중 보호.
  */
 export const RL_MCP_INGEST = {
     windowMs: 60 * 60 * 1000,  // 1시간
     limits: {
-        free: Number(process.env.RL_MCP_INGEST_FREE) || 5,
-        pro: Number(process.env.RL_MCP_INGEST_PRO) || 15,
-        enterprise: Number(process.env.RL_MCP_INGEST_ENTERPRISE) || 50,
+        user: Number(process.env.RL_MCP_INGEST_USER) || 15,
         admin: Number(process.env.RL_MCP_INGEST_ADMIN) || 50,
     },
 } as const;
@@ -216,9 +210,7 @@ export const RL_ADMIN = {
 export const RL_GDPR_EXPORT = {
     windowMs: 60 * 60 * 1000,  // 1시간
     limits: {
-        free: Number(process.env.RL_EXPORT_FREE) || 2,
-        pro: Number(process.env.RL_EXPORT_PRO) || 5,
-        enterprise: Number(process.env.RL_EXPORT_ENTERPRISE) || 10,
+        user: Number(process.env.RL_EXPORT_USER) || 5,
         admin: Number(process.env.RL_EXPORT_ADMIN) || 100,
     },
 } as const;

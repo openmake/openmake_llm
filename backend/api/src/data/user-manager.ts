@@ -12,7 +12,6 @@
  * - bcrypt 기반 비밀번호 해싱 (12 라운드) 및 검증
  * - 관리자 계정 자동 생성/마이그레이션 (ADMIN_PASSWORD 환경변수)
  * - 역할 기반 접근 제어 (admin/user/guest)
- * - MCP 도구 접근 등급 (free/pro/enterprise)
  * - 사용자 삭제 시 의존 레코드 순서대로 정리 (FK cascade)
  * - 싱글톤 접근: getUserManager()
  */
@@ -44,17 +43,6 @@ export function isUserRole(value: string | null | undefined): value is UserRole 
     return value != null && (USER_ROLE_VALUES as readonly string[]).includes(value);
 }
 
-// MCP 도구 접근 등급
-export type UserTier = 'free' | 'pro' | 'enterprise';
-
-/** UserTier 값 목록 — validation SoT (MCP 카탈로그 tiers.ts 5-tier 와 별개 도메인) */
-export const USER_TIER_VALUES: readonly UserTier[] = ['free', 'pro', 'enterprise'];
-
-/** 문자열이 유효한 UserTier 인지 검사하는 타입 가드 */
-export function isUserTier(value: string | null | undefined): value is UserTier {
-    return value != null && (USER_TIER_VALUES as readonly string[]).includes(value);
-}
-
 /**
  * 외부 노출용 사용자 정보 (password_hash 제외)
  * @interface PublicUser
@@ -68,8 +56,6 @@ export interface PublicUser {
     email: string;
     /** 사용자 역할 */
     role: UserRole;
-    /** MCP 도구 접근 등급 */
-    tier: UserTier;
     /** 계정 생성 일시 */
     created_at: string;
     /** 마지막 로그인 일시 */
@@ -91,8 +77,6 @@ export interface CreateUserInput {
     password: string;
     /** 사용자 역할 (기본값: 'user') */
     role?: UserRole;
-    /** MCP 접근 등급 (기본값: 'free', admin은 'enterprise') */
-    tier?: UserTier;
 }
 
 interface UserRow {
@@ -101,7 +85,6 @@ interface UserRow {
     password_hash: string;
     email: string | null;
     role: string;
-    tier: string | null;
     is_active: boolean;
     created_at: string;
     updated_at: string;
@@ -113,7 +96,7 @@ interface UserRow {
  *
  * @class UserManagerImpl
  * @description
- * - 초기화 시 스키마 마이그레이션 (tier 컬럼 추가) 및 관리자 계정 보장
+ * - 초기화 시 관리자 계정 보장
  * - bcrypt 12라운드 해싱으로 비밀번호 보호
  * - pg_advisory_xact_lock을 사용한 동시 사용자 생성 race condition 방지
  * - 사용자 삭제 시 FK 순서에 따른 의존 레코드 정리
@@ -136,18 +119,8 @@ class UserManagerImpl {
     }
 
     private async init(): Promise<void> {
-        await this.ensureSchema();
         await this.ensureAdminUser();
         await this.ensureSystemUser();
-    }
-
-    private async ensureSchema(): Promise<void> {
-        const pool = getPool();
-        try {
-            await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS tier TEXT DEFAULT \'free\'');
-        } catch {
-            // 이미 존재하는 경우 무시
-        }
     }
 
     private async ensureAdminUser(): Promise<void> {
@@ -171,8 +144,8 @@ class UserManagerImpl {
                 if (cfgAdminPassword) {
                     const passwordHash = await bcrypt.hash(cfgAdminPassword, BCRYPT_ROUNDS);
                     await pool.query(
-                        'UPDATE users SET role = $1, tier = $2, password_hash = $3, updated_at = $4 WHERE username = $5',
-                        ['admin', 'enterprise', passwordHash, new Date().toISOString(), adminEmail]
+                        'UPDATE users SET role = $1, password_hash = $2, updated_at = $3 WHERE username = $4',
+                        ['admin', passwordHash, new Date().toISOString(), adminEmail]
                     );
                     await pool.query('DELETE FROM users WHERE username = $1 AND role = $2', ['admin', 'admin']);
                     logger.info(`[UserManager] ✅ 관리자 권한 이전 완료: admin 삭제, ${adminEmail} → admin 역할`);
@@ -197,8 +170,8 @@ class UserManagerImpl {
                     if (cfgAdminPassword) {
                         const passwordHash = await bcrypt.hash(cfgAdminPassword, BCRYPT_ROUNDS);
                         await pool.query(
-                            'UPDATE users SET role = $1, tier = $2, password_hash = $3, updated_at = $4 WHERE username = $5',
-                            ['admin', 'enterprise', passwordHash, new Date().toISOString(), adminEmail]
+                            'UPDATE users SET role = $1, password_hash = $2, updated_at = $3 WHERE username = $4',
+                            ['admin', passwordHash, new Date().toISOString(), adminEmail]
                         );
                         logger.info(`[UserManager] ✅ ${adminEmail} 관리자 역할 부여 완료`);
                     }
@@ -248,10 +221,10 @@ class UserManagerImpl {
             const result = await pool.query('SELECT id FROM users WHERE id = $1', ['system']);
             if (result.rows.length > 0) return;
             await pool.query(
-                `INSERT INTO users (id, username, email, password_hash, role, tier, is_active)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7)
+                `INSERT INTO users (id, username, email, password_hash, role, is_active)
+                 VALUES ($1, $2, $3, $4, $5, $6)
                  ON CONFLICT (id) DO NOTHING`,
-                ['system', 'system', 'system@internal', '', 'user', 'enterprise', true]
+                ['system', 'system', 'system@internal', '', 'user', true]
             );
             logger.info('[UserManager] 시스템 내부 사용자 생성 완료');
         } catch (e) {
@@ -265,7 +238,6 @@ class UserManagerImpl {
             username: row.username,
             email: row.email || row.username,
             role: row.role as UserRole,
-            tier: (row.tier || 'free') as UserTier,
             is_active: !!row.is_active,
             created_at: row.created_at,
             last_login: row.last_login || undefined
@@ -277,7 +249,6 @@ class UserManagerImpl {
         // 중복 체크 (email 기반, fast path)
         const existing = await pool.query('SELECT id FROM users WHERE email = $1 OR username = $1', [input.email]);
         if (existing.rows.length > 0) return null;
-        const tier = input.tier || (input.role === 'admin' ? 'enterprise' : 'free');
         const role = input.role || 'user';
         // bcrypt 해시는 lock 바깥에서 수행 (시간소요 작업)
         const passwordHash = await bcrypt.hash(input.password, BCRYPT_ROUNDS);
@@ -295,9 +266,9 @@ class UserManagerImpl {
         const displayName = input.username || input.email;
         try {
             await pool.query(
-                `INSERT INTO users (id, username, password_hash, email, role, tier, is_active, created_at, updated_at)
-                 VALUES ($1, $2, $3, $4, $5, $6, TRUE, $7, $8)`,
-                [id, displayName, passwordHash, input.email, role, tier, now, now]
+                `INSERT INTO users (id, username, password_hash, email, role, is_active, created_at, updated_at)
+                 VALUES ($1, $2, $3, $4, $5, TRUE, $6, $7)`,
+                [id, displayName, passwordHash, input.email, role, now, now]
             );
 
             const result = await pool.query('SELECT * FROM users WHERE id = $1', [id]);
@@ -511,19 +482,6 @@ class UserManagerImpl {
         };
     }
 
-    // 사용자 tier 변경
-    async changeTier(userId: string, newTier: UserTier): Promise<PublicUser | null> {
-        const pool = getPool();
-        const result = await pool.query(
-            'UPDATE users SET tier = $1, updated_at = $2 WHERE id = $3',
-            [newTier, new Date().toISOString(), userId]
-        );
-        if ((result.rowCount || 0) === 0) return null;
-
-        const userResult = await pool.query('SELECT * FROM users WHERE id = $1', [userId]);
-        const row = userResult.rows[0] as UserRow | undefined;
-        return row ? this.rowToPublicUser(row) : null;
-    }
 }
 
 /** 싱글톤 인스턴스 */

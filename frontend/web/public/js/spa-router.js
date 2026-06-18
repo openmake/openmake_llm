@@ -426,31 +426,6 @@ async function executeNavigation(path, options) {
         targetRoute = _routes.get(CHAT_PATH) || null;
     }
 
-    // ─── 티어 가드 ─────────────────────
-    if (targetRoute && targetRoute.minTier) {
-        var TIER_LEVEL = { free: 0, pro: 1, enterprise: 2 };
-        var userTier = (function () {
-            try {
-                var SK = window.STORAGE_KEYS || {};
-                var SS = window.SafeStorage || window.localStorage;
-                var isGuest = SS.getItem(SK.GUEST_MODE || 'guestMode') === 'true' ||
-                    SS.getItem(SK.IS_GUEST || 'isGuest') === 'true' ||
-                    !SS.getItem(SK.USER || 'user');
-                if (isGuest) return 'free';
-                var savedUser = SS.getItem(SK.USER || 'user');
-                if (!savedUser) return 'free';
-                var user = JSON.parse(savedUser);
-                if (user.role === 'admin' || user.role === 'administrator') return 'enterprise';
-                return user.tier || 'free';
-            } catch (e) { return 'free'; }
-        })();
-        if ((TIER_LEVEL[userTier] || 0) < (TIER_LEVEL[targetRoute.minTier] || 0)) {
-            warn('티어 권한 부족, 채팅으로 리디렉트:', normalizedPath, '(필요:', targetRoute.minTier, '/ 현재:', userTier, ')');
-            normalizedPath = CHAT_PATH;
-            targetRoute = _routes.get(CHAT_PATH) || null;
-        }
-    }
-
     // ─── beforeNavigate 훅 ───────────────
     var navInfo = {
         from: previousRoute ? previousRoute.path : (window.location.pathname),
@@ -695,15 +670,14 @@ function registerFromNavItems() {
             cssFiles: item.cssFiles || [],
             requireAuth: !!item.requireAuth,
             requireAdmin: !!item.requireAdmin,
-            minTier: item.minTier || null,
             title: item.label || moduleName,
             icon: item.icon || '',
             iconify: item.iconify || ''
         });
     });
     // settings \uD0ED\uC73C\uB85C \uC774\uC804\uB41C \uD398\uC774\uC9C0 \u2014 nav-items \uC5D0\uC11C \uC81C\uAC70\uB410\uC73C\uB098 \uB77C\uC6B0\uD2B8 \uBCF4\uC874 (\uC9C1\uC811 URL \u00B7 settings navigate)
-    Router.register('/developer.html', { moduleName: 'developer', moduleFile: '/js/modules/pages/developer.js', cssFiles: [], requireAuth: false, requireAdmin: false, minTier: null, title: 'API \uBB38\uC11C', icon: '\uD83D\uDCD6', iconify: 'lucide:code-2' });
-    Router.register('/projects.html', { moduleName: 'projects', moduleFile: '/js/modules/pages/projects.js', cssFiles: [], requireAuth: true, requireAdmin: false, minTier: null, title: '\uD504\uB85C\uC81D\uD2B8', icon: '\uD83D\uDCC1', iconify: 'lucide:folder' });
+    Router.register('/developer.html', { moduleName: 'developer', moduleFile: '/js/modules/pages/developer.js', cssFiles: [], requireAuth: false, requireAdmin: false, title: 'API \uBB38\uC11C', icon: '\uD83D\uDCD6', iconify: 'lucide:code-2' });
+    Router.register('/projects.html', { moduleName: 'projects', moduleFile: '/js/modules/pages/projects.js', cssFiles: [], requireAuth: true, requireAdmin: false, title: '\uD504\uB85C\uC81D\uD2B8', icon: '\uD83D\uDCC1', iconify: 'lucide:folder' });
 
     log('\uB77C\uC6B0\uD2B8 \uC790\uB3D9 \uB4F1\uB85D \uC644\uB8CC:', _routes.size, '\uAC1C');
 }

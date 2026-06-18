@@ -11,7 +11,6 @@
 import { z } from 'zod';
 
 const TRANSPORT = z.enum(['stdio', 'sse', 'streamable-http']);
-const TIER = z.enum(['free', 'starter', 'standard', 'pro', 'enterprise']);
 
 // args_schema / env_schema 는 JSON Schema object — 깊은 검증은 admin 의 책임.
 // 여기서는 object 인지만 검증.
@@ -29,7 +28,6 @@ export const createCatalogTemplateSchema = z.object({
     args_schema: JSON_SCHEMA_OBJECT.optional(),
     env_schema: JSON_SCHEMA_OBJECT.optional(),
     url_template: z.string().max(500).optional().nullable(),
-    required_tier: TIER,
     is_enabled: z.boolean().optional(),
 }).superRefine((data, ctx) => {
     if (data.transport_type === 'stdio' && !data.command_template) {
@@ -58,7 +56,6 @@ export const updateCatalogTemplateSchema = z.object({
     args_schema: JSON_SCHEMA_OBJECT.optional(),
     env_schema: JSON_SCHEMA_OBJECT.optional(),
     url_template: z.string().max(500).nullable().optional(),
-    required_tier: TIER.optional(),
     is_enabled: z.boolean().optional(),
 });
 

@@ -13,7 +13,7 @@
  *   - blockedByConvention=true 인 draft 는 approve 거부 (409)
  *   - required_env 의 모든 키는 placeholder 가 아닌 값으로 채워져야 함 (422)
  *
- * Rate limit: RL_MCP_INGEST (tier 별 시간당 5-50건). import-from-git 만 적용.
+ * Rate limit: RL_MCP_INGEST (역할별 시간당 한도 — 남용 방지). import-from-git 만 적용.
  *
  * @module routes/mcp-server-ingest.routes
  */
@@ -41,13 +41,10 @@ export interface McpServerIngestRouterDeps {
     llmClientFactory: (model: string) => LLMClient;
 }
 
-type McpIngestTier = 'free' | 'pro' | 'enterprise' | 'admin';
+type McpIngestRole = 'user' | 'admin';
 
-function resolveTier(req: Request): McpIngestTier {
-    const role = req.user?.role;
-    if (role === 'admin') return 'admin';
-    const tier = (req.user && 'tier' in req.user ? (req.user as { tier?: string }).tier : undefined) ?? 'free';
-    return (tier === 'pro' || tier === 'enterprise') ? tier : 'free';
+function resolveIngestRole(req: Request): McpIngestRole {
+    return req.user?.role === 'admin' ? 'admin' : 'user';
 }
 
 function mcpIngestKey(req: Request): string {
@@ -59,7 +56,7 @@ function mcpIngestKey(req: Request): string {
 
 const mcpIngestLimiter = rateLimit({
     windowMs: RL_MCP_INGEST.windowMs,
-    limit: (req: Request): number => RL_MCP_INGEST.limits[resolveTier(req)],
+    limit: (req: Request): number => RL_MCP_INGEST.limits[resolveIngestRole(req)],
     keyGenerator: mcpIngestKey,
     standardHeaders: true,
     legacyHeaders: false,

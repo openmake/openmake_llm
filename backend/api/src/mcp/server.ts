@@ -170,10 +170,9 @@ export class MCPServer {
                     }
 
                     // ⚠️ 현재 이 진입점은 stdio CLI(`cli.js mcp`, 로컬 단일 사용자=신뢰) 전용이라
-                    // tier/context 검증 없이 핸들러를 호출한다. 향후 SSE/WebSocket/HTTP 로 네트워크
-                    // 노출 시에는 반드시 handleRequest 가 UserContext 를 받아 canUseTool(tier) 검증을
-                    // 먼저 강제해야 한다 (그렇지 않으면 tier 게이트 우회). 참고: services 경로는
-                    // UnifiedMCPClient.executeToolWithContext(권한·sandbox·sanitize)를 사용.
+                    // context 검증 없이 핸들러를 호출한다. 향후 SSE/WebSocket/HTTP 로 네트워크
+                    // 노출 시에는 반드시 handleRequest 가 UserContext 존재를 먼저 강제해야 한다.
+                    // 참고: services 경로는 UnifiedMCPClient.executeToolWithContext(sandbox·sanitize)를 사용.
                     const result = await toolDef.handler(toolArgs);
                     return {
                         jsonrpc: '2.0',

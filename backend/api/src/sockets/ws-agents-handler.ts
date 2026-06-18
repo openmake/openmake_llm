@@ -23,9 +23,8 @@ export async function handleRequestAgents(
         const toolRouter = mcpClient.getToolRouter();
         const extWs = ws as ExtendedWebSocket;
         const userId = extWs._authenticatedUserId;
-        const userTier = extWs._authenticatedUserTier;
-        const allTools = userId && userTier
-            ? await toolRouter.getAllTools({ userId, tier: userTier })
+        const allTools = userId
+            ? await toolRouter.getAllTools({ userId })
             : await toolRouter.getAllTools();
 
         const agents = allTools.map(tool => {

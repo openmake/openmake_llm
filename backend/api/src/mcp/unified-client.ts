@@ -9,7 +9,6 @@
  * @module mcp/unified-client
  * @description
  * - MCP 도구 실행 (내장 + 외부)
- * - 사용자 등급(tier) 기반 도구 접근 제어
  * - UserContext 기반 샌드박스 경로 변환
  * - Sequential Thinking 메시지 적용
  * - 외부 MCP 서버 초기화 (DB 연동)
@@ -25,14 +24,11 @@
 
 import { MCPServer, createMCPServer } from './server';
 import { MCPToolResult } from './types';
-import { UserTier } from '../data/user-manager';
-import { canUseTool, getToolsForTier } from './tool-tiers';
 import { UserSandbox, UserContext } from './user-sandbox';
 import { ToolRouter } from './tool-router';
 import { MCPServerRegistry } from './server-registry';
 import { getUserMCPPool } from './user-pool';
-import { McpCatalogRepository } from '../data/repositories/mcp-catalog-repository';
-import { getUnifiedDatabase, type UnifiedDatabase } from '../data/models/unified-database';
+import { type UnifiedDatabase } from '../data/models/unified-database';
 import { createLogger } from '../utils/logger';
 
 const logger = createLogger('MCP');
@@ -72,7 +68,6 @@ export class UnifiedMCPClient {
         this.server = createMCPServer('openmake-unified-mcp', '1.0.0');
         this.toolRouter = new ToolRouter({
             userPool: getUserMCPPool(),
-            catalogRepo: new McpCatalogRepository(getUnifiedDatabase().getPool()),
         });
         this.serverRegistry = new MCPServerRegistry(this.toolRouter);
         logger.info(`통합 MCP 클라이언트 초기화 - ${this.getToolCount()}개 도구 등록됨`);
@@ -120,10 +115,10 @@ export class UnifiedMCPClient {
         return categories;
     }
 
-    // (제거됨) executeTool() — tier/sanitize 검증 없이 server.handleRequest('tools/call') 를 호출하던
-    //   미사용 경로. canonical 은 executeToolWithContext (권한·sandbox·인자 sanitize 적용).
+    // (제거됨) executeTool() — sanitize 검증 없이 server.handleRequest('tools/call') 를 호출하던
+    //   미사용 경로. canonical 은 executeToolWithContext (sandbox·인자 sanitize 적용).
     // (제거됨) handleMCPRequest() — 미구현 SSE 핸들러용 dead code. 네트워크로 MCP 를 노출하려면
-    //   handleRequest 진입점에 UserContext 존재 + canUseTool(tier) 검증을 먼저 강제할 것.
+    //   handleRequest 진입점에 UserContext 존재 검증을 먼저 강제할 것.
 
     /**
      * 상태 초기화
@@ -142,41 +137,24 @@ export class UnifiedMCPClient {
     }
 
     // ============================================
-    // 사용자 등급별 도구 접근 제어
+    // 도구 목록 조회
     // ============================================
 
     /**
-     * 사용자 등급별 도구 목록 반환
+     * 전체 도구 목록 반환 (제한 없음)
      */
-    getToolListForUser(tier: UserTier): string[] {
-        const allTools = this.getToolList();
-        return getToolsForTier(tier, allTools);
+    getToolListForUser(): string[] {
+        return this.getToolList();
     }
 
     /**
-     * 특정 도구가 tier에서 사용 가능한지 확인
-     */
-    canUserAccessTool(tier: UserTier, toolName: string): boolean {
-        return canUseTool(tier, toolName);
-    }
-
-    /**
-     * 사용자 컨텍스트로 도구 실행 (권한 검증 포함)
+     * 사용자 컨텍스트로 도구 실행
      */
     async executeToolWithContext(
         toolName: string,
         args: Record<string, unknown>,
         context: UserContext
     ): Promise<MCPToolResult> {
-        // 권한 검증
-        if (!canUseTool(context.tier, toolName)) {
-            logger.warn(`⚠️ 도구 접근 거부: ${toolName} (tier: ${context.tier})`);
-            return {
-                content: [{ type: 'text', text: `권한 없음: ${context.tier} 등급에서는 ${toolName} 도구를 사용할 수 없습니다.` }],
-                isError: true
-            };
-        }
-
         // 파일 경로 인자가 있으면 샌드박스 경로로 변환
         let sandboxedArgs: Record<string, unknown>;
         try {
@@ -202,7 +180,7 @@ export class UnifiedMCPClient {
             };
         }
 
-        logger.info(`🔧 도구 실행: ${toolName} (user: ${context.userId}, tier: ${context.tier})`);
+        logger.info(`🔧 도구 실행: ${toolName} (user: ${context.userId})`);
         // toolRouter 직접 호출 — JSON-RPC 래퍼(executeTool)는 context 채널이 없어
         // 사용자 스코프 내장 도구(agent_task_* 등)와 user-pool 외부 도구에 userId 가
         // 전달되지 않는다. 에이전트 루프(runTool)와 동일한 canonical 경로.

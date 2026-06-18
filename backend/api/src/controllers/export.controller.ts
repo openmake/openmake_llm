@@ -28,7 +28,7 @@ import type { QueryResultRow } from 'pg';
 
 const log = createLogger('ExportController');
 
-type UserTier = 'free' | 'pro' | 'enterprise' | 'admin';
+type ExportRole = 'user' | 'admin';
 
 function getUserId(req: Request): string | null {
     if (!req.user) return null;
@@ -41,12 +41,10 @@ function getUserId(req: Request): string | null {
     return null;
 }
 
-function resolveTier(req: Request): UserTier {
-    if (!req.user) return 'free';
+function resolveExportRole(req: Request): ExportRole {
+    if (!req.user) return 'user';
     const role = ('role' in req.user ? (req.user as { role?: string }).role : undefined);
-    if (role === 'admin') return 'admin';
-    const tier = (req.user && 'tier' in req.user ? (req.user as { tier?: string }).tier : undefined) ?? 'free';
-    return (tier === 'pro' || tier === 'enterprise') ? tier : 'free';
+    return role === 'admin' ? 'admin' : 'user';
 }
 
 function exportKeyGen(req: Request): string {
@@ -56,7 +54,7 @@ function exportKeyGen(req: Request): string {
 
 const exportLimiter = rateLimit({
     windowMs: RL_GDPR_EXPORT.windowMs,
-    limit: (req: Request): number => RL_GDPR_EXPORT.limits[resolveTier(req)],
+    limit: (req: Request): number => RL_GDPR_EXPORT.limits[resolveExportRole(req)],
     keyGenerator: exportKeyGen,
     standardHeaders: true,
     legacyHeaders: false,

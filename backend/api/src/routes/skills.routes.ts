@@ -30,7 +30,6 @@ import { parseSkillFile, validateManifest } from '../agents/manifest-validator';
 import { ManifestImporter } from '../agents/manifest-importer';
 import { getUnifiedDatabase } from '../data/models/unified-database';
 import { getUnifiedMCPClient } from '../mcp/unified-client';
-import type { UserTier } from '../data/user-manager';
 import { requireAuth } from '../auth';
 import { assertResourceOwnerOrAdmin } from '../auth/ownership';
 import { validate, validateQuery } from '../middlewares/validation';
@@ -50,16 +49,12 @@ import { RL_SKILL_CREATE, RL_SKILL_CREATE_SHORT } from '../config/rate-limits';
 import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 
 // ────────────────────────────────────────────────────────────────────
-// Skill Creator Rate Limiters (월간 quota + 시간당 burst, tier 별 차등)
-// req.user.tier 가 없으면 'free' 로 폴백.
+// Skill Creator Rate Limiters (월간 quota + 시간당 burst, 역할별 차등 — 남용 방지)
 // ────────────────────────────────────────────────────────────────────
-type SkillTier = 'free' | 'pro' | 'enterprise' | 'admin';
+type SkillRole = 'user' | 'admin';
 
-function resolveTier(req: Request): SkillTier {
-    const role = req.user?.role;
-    if (role === 'admin') return 'admin';
-    const tier = (req.user && 'tier' in req.user ? (req.user as { tier?: string }).tier : undefined) ?? 'free';
-    return (tier === 'pro' || tier === 'enterprise') ? tier : 'free';
+function resolveSkillRole(req: Request): SkillRole {
+    return req.user?.role === 'admin' ? 'admin' : 'user';
 }
 
 function skillCreateKeyGen(prefix: string) {
@@ -73,7 +68,7 @@ function skillCreateKeyGen(prefix: string) {
 
 const skillCreateMonthlyLimiter = rateLimit({
     windowMs: RL_SKILL_CREATE.windowMs,
-    limit: (req: Request): number => RL_SKILL_CREATE.limits[resolveTier(req)],
+    limit: (req: Request): number => RL_SKILL_CREATE.limits[resolveSkillRole(req)],
     keyGenerator: skillCreateKeyGen('skill-create'),
     standardHeaders: true,
     legacyHeaders: false,
@@ -85,7 +80,7 @@ const skillCreateMonthlyLimiter = rateLimit({
 
 const skillCreateBurstLimiter = rateLimit({
     windowMs: RL_SKILL_CREATE_SHORT.windowMs,
-    limit: (req: Request): number => RL_SKILL_CREATE_SHORT.limits[resolveTier(req)],
+    limit: (req: Request): number => RL_SKILL_CREATE_SHORT.limits[resolveSkillRole(req)],
     keyGenerator: skillCreateKeyGen('skill-create-burst'),
     standardHeaders: true,
     legacyHeaders: false,
@@ -217,8 +212,7 @@ router.post('/upload', requireAuth, skillUpload.single('file'), asyncHandler(asy
     }
 
     const toolRouter = getUnifiedMCPClient().getToolRouter();
-    const userTier: UserTier = ((req.user && 'tier' in req.user ? (req.user as { tier?: UserTier }).tier : 'free') ?? 'free') as UserTier;
-    const availableTools = (await toolRouter.getLLMTools(userTier, { userId, tier: userTier })).map((t: { function: { name: string } }) => t.function.name);
+    const availableTools = (await toolRouter.getLLMTools({ userId })).map((t: { function: { name: string } }) => t.function.name);
     const availableToolNames = new Set<string>(availableTools);
 
     const validation = await validateManifest(parsed, { availableToolNames });

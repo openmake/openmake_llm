@@ -57,7 +57,6 @@ export async function runMessagePipeline(svc: ChatService,
         thinkingLevel,
         userId,
         userRole,
-        userTier,
         enabledTools,
         abortSignal,
         userLanguagePreference,
@@ -71,7 +70,7 @@ export async function runMessagePipeline(svc: ChatService,
     };
 
     const reqCtx: RequestContext = {
-        userContext: svc.buildUserContext(userId || 'guest', userRole, userTier),
+        userContext: svc.buildUserContext(userId || 'guest', userRole),
         // API Key 요청에서 enabledTools 미전달 시 내장 MCP 도구 비활성화
         // 외부 서비스(openmake 등)는 자체 도구 체계를 사용하므로 내장 도구 간섭 방지
         enabledTools: req.apiKeyId && !enabledTools ? {} : enabledTools,

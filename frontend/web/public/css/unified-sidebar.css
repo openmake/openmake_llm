@@ -890,7 +890,6 @@
 /* nav 라인 아이콘(iconify) 사이즈 — 채팅창 액션 아이콘과 동일 톤, currentColor 상속 */
 .us-nav-icon iconify-icon { font-size: 18px; width: 18px; height: 18px; }
 .unified-sidebar[data-state="icon"] .us-nav-icon iconify-icon { font-size: 19px; width: 19px; height: 19px; }
-.unified-sidebar[data-state="icon"] .us-tier-badge { display: none; }
 .unified-sidebar.us-hover-expanded .us-nav-link .us-label,
 .unified-sidebar.us-hover-expanded .us-nav-section-label { display: inline; }
 /* active 페이지 nav — ember (고 specificity 로 상태 규칙 우선) */

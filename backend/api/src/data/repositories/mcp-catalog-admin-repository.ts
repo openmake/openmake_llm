@@ -13,7 +13,6 @@ import type { Pool } from 'pg';
 import type { McpCatalogTemplate } from '../../schemas/mcp-catalog.schema';
 
 type TransportType = 'stdio' | 'sse' | 'streamable-http';
-type Tier = 'free' | 'starter' | 'standard' | 'pro' | 'enterprise';
 
 export interface InsertCatalogTemplateInput {
     id: string;
@@ -24,7 +23,6 @@ export interface InsertCatalogTemplateInput {
     args_schema?: Record<string, unknown>;
     env_schema?: Record<string, unknown>;
     url_template?: string | null;
-    required_tier: Tier;
     is_enabled?: boolean;
 }
 
@@ -36,7 +34,6 @@ export type UpdateCatalogTemplatePatch = Partial<{
     args_schema: Record<string, unknown>;
     env_schema: Record<string, unknown>;
     url_template: string | null;
-    required_tier: Tier;
     is_enabled: boolean;
 }>;
 
@@ -47,9 +44,9 @@ export class McpCatalogAdminRepository {
     async listAllForAdmin(): Promise<McpCatalogTemplate[]> {
         const result = await this.pool.query<McpCatalogTemplate>(
             `SELECT id, display_name, description, transport_type, command_template,
-                    args_schema, env_schema, url_template, required_tier, is_enabled
+                    args_schema, env_schema, url_template, is_enabled
              FROM mcp_server_catalog
-             ORDER BY is_enabled DESC, required_tier, id`,
+             ORDER BY is_enabled DESC, id`,
         );
         return result.rows;
     }
@@ -58,7 +55,7 @@ export class McpCatalogAdminRepository {
     async getCatalogTemplateForAdmin(id: string): Promise<McpCatalogTemplate | null> {
         const result = await this.pool.query<McpCatalogTemplate>(
             `SELECT id, display_name, description, transport_type, command_template,
-                    args_schema, env_schema, url_template, required_tier, is_enabled
+                    args_schema, env_schema, url_template, is_enabled
              FROM mcp_server_catalog
              WHERE id = $1`,
             [id],
@@ -70,11 +67,11 @@ export class McpCatalogAdminRepository {
         const result = await this.pool.query<McpCatalogTemplate>(
             `INSERT INTO mcp_server_catalog (
                 id, display_name, description, transport_type, command_template,
-                args_schema, env_schema, url_template, required_tier, is_enabled
+                args_schema, env_schema, url_template, is_enabled
              ) VALUES (
-                $1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8, $9, $10
+                $1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8, $9
              ) RETURNING id, display_name, description, transport_type, command_template,
-                        args_schema, env_schema, url_template, required_tier, is_enabled`,
+                        args_schema, env_schema, url_template, is_enabled`,
             [
                 input.id,
                 input.display_name,
@@ -84,7 +81,6 @@ export class McpCatalogAdminRepository {
                 JSON.stringify(input.args_schema ?? {}),
                 JSON.stringify(input.env_schema ?? {}),
                 input.url_template ?? null,
-                input.required_tier,
                 input.is_enabled ?? true,
             ],
         );
@@ -110,7 +106,6 @@ export class McpCatalogAdminRepository {
         if (patch.args_schema !== undefined) push('args_schema', JSON.stringify(patch.args_schema), '::jsonb');
         if (patch.env_schema !== undefined) push('env_schema', JSON.stringify(patch.env_schema), '::jsonb');
         if (patch.url_template !== undefined) push('url_template', patch.url_template);
-        if (patch.required_tier !== undefined) push('required_tier', patch.required_tier);
         if (patch.is_enabled !== undefined) push('is_enabled', patch.is_enabled);
         if (sets.length === 0) {
             return this.getCatalogTemplateForAdmin(id);
@@ -121,7 +116,7 @@ export class McpCatalogAdminRepository {
                 SET ${sets.join(', ')}
               WHERE id = $${idx}
               RETURNING id, display_name, description, transport_type, command_template,
-                        args_schema, env_schema, url_template, required_tier, is_enabled`,
+                        args_schema, env_schema, url_template, is_enabled`,
             params,
         );
         return result.rows[0] ?? null;
