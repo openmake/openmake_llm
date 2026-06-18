@@ -148,7 +148,7 @@ export function init() {
         e.stopPropagation();
         closeMenu(fabMenu, fabBtn);
         // 사이드바 톱니/avatar dropdown 과 동일하게 /settings.html 페이지로 진입.
-        // (showSettings() 는 레거시 #settingsModal 을 열어 새 설정 페이지와 내용이 어긋남)
+        // (레거시 #settingsModal 진입점은 제거됨 — 모든 설정 진입은 /settings.html 단일 경로)
         if (window.Router && typeof window.Router.navigate === 'function') {
             window.Router.navigate('/settings.html');
         } else {

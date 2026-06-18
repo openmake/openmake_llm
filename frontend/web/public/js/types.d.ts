@@ -40,8 +40,6 @@ declare global {
         closeMobileSidebar?: () => void;
         openModal?: (id: string) => void;
         closeModal?: (id: string) => void;
-        showSettings?: () => void;
-        closeSettings?: () => void;
         showFileUpload?: () => void;
         closeFileModal?: () => void;
 

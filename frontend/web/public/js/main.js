@@ -41,7 +41,6 @@ import {
     applyTheme, toggleTheme, setTheme,
     toggleSidebar,
     openModal, closeModal,
-    showSettings, closeSettings,
     showFileUpload, closeFileModal,
     showToast, showError,
     scrollToBottom, escapeHtml, renderMarkdown
@@ -131,7 +130,7 @@ import { Router, SafeStorage } from './spa-router.js?v=30';
 import { UnifiedSidebar } from './components/unified-sidebar.js?v=10';
 
 // 1-18. 모바일 FAB 메뉴
-import { init as initMobileFab } from './modules/mobile-fab.js?v=3';
+import { init as initMobileFab } from './modules/mobile-fab.js?v=4';
 import { checkReconsent } from './modules/consent-prompt.js';
 
 
@@ -385,7 +384,7 @@ function setupEventListeners() {
         }
 
         // Cmd/Ctrl + ,: 설정 — 사이드바 톱니/avatar dropdown 과 동일하게 /settings.html 페이지로 진입
-        // (showSettings() 레거시 #settingsModal 은 새 설정 페이지와 내용이 어긋남)
+        // (레거시 #settingsModal 진입점은 제거됨 — 모든 설정 진입은 /settings.html 단일 경로)
         if ((e.metaKey || e.ctrlKey) && e.key === ',') {
             e.preventDefault();
             if (window.Router && typeof window.Router.navigate === 'function') {
@@ -562,8 +561,6 @@ window.setTheme = setTheme;
 window.toggleSidebar = toggleSidebar;
 window.openModal = openModal;
 window.closeModal = closeModal;
-window.showSettings = showSettings;
-window.closeSettings = closeSettings;
 window.showFileUpload = showFileUpload;
 window.closeFileModal = closeFileModal;
 window.showToast = showToast;

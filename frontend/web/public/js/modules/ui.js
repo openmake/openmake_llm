@@ -134,26 +134,6 @@ function closeModal(modalId) {
 }
 
 /**
- * 설정 모달 열기
- * 모달을 열고 현재 모델 설정을 로드합니다.
- * @returns {void}
- */
-function showSettings() {
-    openModal('settingsModal');
-    if (typeof loadCurrentModel === 'function') {
-        loadCurrentModel();
-    }
-}
-
-/**
- * 설정 모달 닫기
- * @returns {void}
- */
-function closeSettings() {
-    closeModal('settingsModal');
-}
-
-/**
  * 파일 업로드 모달 열기
  * @returns {void}
  */
@@ -360,8 +340,6 @@ window.toggleSidebar = toggleSidebar;
 window.toggleMobileSidebar = toggleMobileSidebar;
 window.openModal = openModal;
 window.closeModal = closeModal;
-window.showSettings = showSettings;
-window.closeSettings = closeSettings;
 window.showFileUpload = showFileUpload;
 window.closeFileModal = closeFileModal;
 window.showToast = showToast;
@@ -379,8 +357,6 @@ export {
     toggleMobileSidebar,
     openModal,
     closeModal,
-    showSettings,
-    closeSettings,
     showFileUpload,
     closeFileModal,
     showToast,

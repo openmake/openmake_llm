@@ -250,122 +250,6 @@
             </div>
         </div>
 
-        <!-- 설정 모달 -->
-        <div class="modal" id="settingsModal">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h3 class="modal-title">⚙️ 설정</h3>
-                    <button class="modal-close" onclick="closeSettings()">&times;</button>
-                </div>
-                <div class="modal-body">
-                    <!-- LLM 모델 설정 -->
-                    <div class="settings-group">
-                        <span class="settings-label">🤖 현재 LLM 모델</span>
-                        <div class="settings-card" id="currentModelInfo">
-                            <div id="activeModelName">로딩 중...</div>
-                            <div style="font-size:12px;color:var(--text-muted);margin-top:6px">
-                                채팅 입력창 좌측의 모델 셀렉트에서 변경할 수 있습니다.
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- 테마 설정 -->
-                    <div class="settings-group">
-                        <span class="settings-label">🎨 테마 설정</span>
-                        <div class="btn-group">
-                            <button class="btn" id="theme-light" onclick="setTheme('light')">☀️ 라이트</button>
-                            <button class="btn" id="theme-dark" onclick="setTheme('dark')">🌙 다크</button>
-                            <button class="btn" id="theme-system" onclick="setTheme('system')">💻 시스템</button>
-                        </div>
-                    </div>
-
-                    <!-- MCP 설정 -->
-                    <div class="settings-group">
-                        <span class="settings-label">🔧 MCP 기능 확장</span>
-                        <div class="toggle-list">
-                            <div class="toggle-item">
-                                <div class="toggle-info">
-                                    <span class="toggle-icon">🧠</span>
-                                    <div>
-                                        <div class="toggle-label">Sequential Thinking</div>
-                                        <div class="toggle-desc">단계별 사고 추론 과정을 시각화합니다.</div>
-                                    </div>
-                                </div>
-                                <label class="toggle-switch">
-                                    <input type="checkbox" id="mcpThinking" checked
-                                        onchange="toggleMCPModule('thinking')">
-                                    <span class="toggle-slider"></span>
-                                </label>
-                            </div>
-                            <div class="toggle-item">
-                                <div class="toggle-info">
-                                    <span class="toggle-icon">🌐</span>
-                                    <div>
-                                        <div class="toggle-label">Web Search</div>
-                                        <div class="toggle-desc">실시간 웹 정보를 검색합니다.</div>
-                                    </div>
-                                </div>
-                                <label class="toggle-switch">
-                                    <input type="checkbox" id="mcpWebSearch" onchange="toggleMCPModule('webSearch')">
-                                    <span class="toggle-slider"></span>
-                                </label>
-                            </div>
-                            <div class="toggle-item">
-                                <div class="toggle-info">
-                                    <span class="toggle-icon">📄</span>
-                                    <div>
-                                        <div class="toggle-label">PDF & Document Tools</div>
-                                        <div class="toggle-desc">PDF 분석 및 텍스트 추출 기능입니다.</div>
-                                    </div>
-                                </div>
-                                <label class="toggle-switch">
-                                    <input type="checkbox" id="mcpPDF" checked onchange="toggleMCPModule('pdf')">
-                                    <span class="toggle-slider"></span>
-                                </label>
-                            </div>
-                            <div class="toggle-item">
-                                <div class="toggle-info">
-                                    <span class="toggle-icon">🐙</span>
-                                    <div>
-                                        <div class="toggle-label">GitHub Integration</div>
-                                        <div class="toggle-desc">코드 저장소 및 이슈 관리를 지원합니다.</div>
-                                    </div>
-                                </div>
-                                <label class="toggle-switch">
-                                    <input type="checkbox" id="mcpGithub" onchange="toggleMCPModule('github')">
-                                    <span class="toggle-slider"></span>
-                                </label>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- API 키 관리 -->
-                    <div class="settings-group">
-                        <span class="settings-label">🔐 API 키 관리</span>
-                        <div class="btn-group" style="flex-wrap:wrap; gap:8px;">
-                            <a href="/api-keys.html" class="btn" style="text-decoration:none;">🔑 OpenMake API 키</a>
-                            <a href="/developer.html" class="btn" style="text-decoration:none;">📋 API 문서</a>
-                        </div>
-                    </div>
-
-                    <!-- 클러스터 상태 -->
-                    <div class="settings-group">
-                        <div class="section-header" onclick="toggleSection('clusterSection')">
-                            <span>🌐 시스템 클러스터 상태</span>
-                            <span class="section-arrow">▼</span>
-                        </div>
-                        <div class="section-content" id="clusterSection">
-                            <div id="nodesList"></div>
-                        </div>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button class="btn" onclick="resetSettings()">🔄 초기화</button>
-                    <button class="btn btn-primary" onclick="saveSettings()">💾 설정 저장</button>
-                </div>
-            </div>
-        </div>
-
     </div> <!-- app 끝 -->
 
     <!-- 앱 엔트리 포인트 (ES Module — 모든 모듈을 main.js에서 import 및 초기화) -->
@@ -373,7 +257,7 @@
     <script type="module" src="js/modules/api-endpoints.js?v=26"></script>
     <script type="module" src="js/modules/api-client.js?v=26"></script>
 
-    <script type="module" src="js/main.js?v=58"></script>
+    <script type="module" src="js/main.js?v=59"></script>
     <!-- 채팅 이미지 첨부 (fileInput → base64 → attachedFiles → 미리보기). self-init -->
     <script type="module" src="js/modules/file-attach.js?v=12"></script>
     <!-- ⌘K 커맨드 팔레트 (Chat-first 구조 — 이동/액션 단일 진입점). self-init -->
