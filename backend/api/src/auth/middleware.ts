@@ -47,8 +47,6 @@ export interface AuthUser {
     email?: string;
     /** 사용자 역할 */
     role: UserRole;
-    /** MCP 도구 접근 등급 */
-    tier?: 'free' | 'pro' | 'enterprise';
     /** 계정 활성화 상태 */
     is_active?: boolean;
     /** 계정 생성 일시 */

@@ -17,7 +17,6 @@
  * - Types: MCP 프로토콜 타입 정의
  * - External MCP: 외부 서버 클라이언트, 레지스트리
  * - Tool Router: 내장/외부 도구 통합 라우팅
- * - Tool Tiers: 등급별 접근 제어
  * - User Sandbox: 사용자 데이터 격리
  * - Filesystem: 샌드박스 기반 파일시스템 도구
  */
@@ -89,14 +88,6 @@ export { MCP_NAMESPACE_SEPARATOR } from './types';
 export { ExternalMCPClient } from './external-client';
 export { ToolRouter } from './tool-router';
 export { MCPServerRegistry } from './server-registry';
-
-// 도구 등급별 접근 제어
-export {
-    TOOL_TIERS,
-    canUseTool,
-    getToolsForTier,
-    getDefaultTierForRole
-} from './tool-tiers';
 
 // 사용자 데이터 격리
 export {

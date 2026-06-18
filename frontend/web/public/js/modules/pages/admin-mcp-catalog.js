@@ -87,7 +87,6 @@ function renderTemplates() {
             <td><code>${escapeHTML(t.id)}</code></td>
             <td>${escapeHTML(t.display_name)}</td>
             <td>${escapeHTML(t.transport_type)}</td>
-            <td>${escapeHTML(t.required_tier)}</td>
             <td>${enabledBadge}</td>
             <td>
                 <button class="btn btn-secondary btn-sm" data-action="edit" data-id="${escapeHTML(t.id)}">수정</button>
@@ -114,7 +113,6 @@ function openEditor(template) {
     setVal('amc-transport-type', template ? template.transport_type : 'stdio');
     setVal('amc-command-template', template ? template.command_template : '');
     setVal('amc-url-template', template ? template.url_template : '');
-    setVal('amc-required-tier', template ? template.required_tier : 'free');
     setVal('amc-args-schema', JSON.stringify(template ? template.args_schema : {}, null, 2));
     setVal('amc-env-schema', JSON.stringify(template ? template.env_schema : {}, null, 2));
     const enabledEl = document.getElementById('amc-is-enabled');
@@ -150,7 +148,6 @@ async function submitEditor() {
         url_template: get('amc-url-template') || null,
         args_schema: argsSchema,
         env_schema: envSchema,
-        required_tier: get('amc-required-tier'),
         is_enabled: !!document.getElementById('amc-is-enabled').checked,
     };
 
@@ -222,8 +219,8 @@ function getHTML() {
             '<div><h1>MCP 카탈로그 관리</h1><p style="color:var(--text-muted);margin:0;">사용자가 from-catalog 로 설치 가능한 MCP 서버 템플릿을 관리합니다.</p></div>' +
             '<button class="btn btn-primary" id="amc-new-btn" type="button">+ 새 템플릿</button>' +
         '</header>' +
-        '<table class="amc-table"><thead><tr><th>ID</th><th>이름</th><th>Transport</th><th>요구 Tier</th><th>상태</th><th>작업</th></tr></thead>' +
-        '<tbody id="admin-mcp-catalog-tbody"><tr><td colspan="6">로딩 중…</td></tr></tbody></table>' +
+        '<table class="amc-table"><thead><tr><th>ID</th><th>이름</th><th>Transport</th><th>상태</th><th>작업</th></tr></thead>' +
+        '<tbody id="admin-mcp-catalog-tbody"><tr><td colspan="5">로딩 중…</td></tr></tbody></table>' +
         '</div>' +
         '<div id="admin-mcp-catalog-modal" class="amc-modal" role="dialog" aria-modal="true">' +
             '<div class="amc-modal-content">' +
@@ -234,7 +231,6 @@ function getHTML() {
                 '<div class="amc-field"><label>Transport</label><select id="amc-transport-type"><option value="stdio">stdio</option><option value="sse">sse</option><option value="streamable-http">streamable-http</option></select></div>' +
                 '<div class="amc-field"><label>Command template (stdio)</label><input id="amc-command-template" type="text" placeholder="npx -y @scope/package"></div>' +
                 '<div class="amc-field"><label>URL template (sse/streamable-http)</label><input id="amc-url-template" type="text" placeholder="https://..."></div>' +
-                '<div class="amc-field"><label>요구 Tier</label><select id="amc-required-tier"><option value="free">free</option><option value="starter">starter</option><option value="standard">standard</option><option value="pro">pro</option><option value="enterprise">enterprise</option></select></div>' +
                 '<div class="amc-field"><label>Args Schema (JSON)</label><textarea id="amc-args-schema">{}</textarea></div>' +
                 '<div class="amc-field"><label>Env Schema (JSON)</label><textarea id="amc-env-schema">{}</textarea></div>' +
                 '<div class="amc-field"><label><input id="amc-is-enabled" type="checkbox" checked> 활성</label></div>' +

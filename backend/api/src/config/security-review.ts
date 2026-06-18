@@ -11,7 +11,7 @@
 
 /** 보안 리뷰 운영 파라미터 */
 export const SECURITY_REVIEW_CONFIG = {
-    /** 도구 활성화 (기본 ON, tier 로 추가 게이트) */
+    /** 도구 활성화 (기본 ON) */
     enabled: process.env.SECURITY_REVIEW_ENABLED !== 'false',
     /** 분석 대상 코드 최대 바이트 (초과 시 거부 — 비용/컨텍스트 보호) */
     maxCodeBytes: Number(process.env.SECURITY_REVIEW_MAX_CODE_BYTES ?? 60_000),

@@ -1,7 +1,6 @@
 /**
  * UserMCPPool 순회 → 각 client 의 도구를 `displayName::tool` 네임스페이스로 수집.
  * 동일 user 내 server.name 충돌 시 두 번째부터 server.id 끝 6자리 suffix.
- * tier 게이트는 caller (tool-router) 가 catalog_template_id + required_tier 로 별도 처리.
  */
 import type { UserMCPPool } from './user-pool';
 import type { MCPTool } from './types';

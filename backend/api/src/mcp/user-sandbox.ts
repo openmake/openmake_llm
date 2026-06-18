@@ -340,8 +340,6 @@ export class UserSandbox {
 export interface UserContext {
     /** 사용자 고유 ID */
     userId: string | number;
-    /** 도구 접근 등급 */
-    tier: 'free' | 'pro' | 'enterprise';
     /** 사용자 역할 */
     role: 'admin' | 'user' | 'guest';
     /** 조직 ID (선택적, 멀티 테넌트용) */
@@ -355,16 +353,14 @@ export interface UserContext {
  * 클라이언트에서의 직접 생성은 보안상 금지됩니다.
  *
  * @param userId - 사용자 고유 ID
- * @param tier - 도구 접근 등급
  * @param role - 사용자 역할
  * @param orgId - 조직 ID (선택적)
  * @returns 새 UserContext 객체
  */
 export function createUserContext(
     userId: string | number,
-    tier: 'free' | 'pro' | 'enterprise',
     role: 'admin' | 'user' | 'guest',
     orgId?: string
 ): UserContext {
-    return { userId, tier, role, orgId };
+    return { userId, role, orgId };
 }

@@ -7,7 +7,6 @@
  *
  * @module services/chat-service-types
  */
-import type { UserTier } from '../data/user-manager';
 import type { LLMClient } from '../llm';
 
 /**
@@ -205,8 +204,6 @@ export interface ChatMessageRequest {
     apiKeyId?: string;
     /** 사용자 역할 (접근 권한 결정에 사용) */
     userRole?: 'admin' | 'user' | 'guest';
-    /** 사용자 구독 등급 (도구 접근 티어 결정에 사용) */
-    userTier?: UserTier;
     /** 사용자가 활성화한 MCP 도구 목록 (키: 도구명, 값: 활성화 여부) */
     enabledTools?: Record<string, boolean>;
     /** 요청 중단 시그널 (SSE 연결 종료 시 사용) */

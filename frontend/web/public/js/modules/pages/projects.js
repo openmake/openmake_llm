@@ -27,7 +27,6 @@ const CARDS = [
         icon: '<iconify-icon icon=lucide:package></iconify-icon>',
         title: '스킬 라이브러리',
         desc: '재사용 가능한 매니페스트 + 도구 바인딩 (Anthropic Skills 동형)',
-        tier: 'pro',
         actions: ['.SKILL 업로드', '커스텀 작성', '시스템 스킬'],
     },
     {
@@ -37,7 +36,6 @@ const CARDS = [
         icon: '<iconify-icon icon=lucide:plug></iconify-icon>',
         title: 'MCP 서버',
         desc: '로컬 도구 (파일 시스템, GitHub 등) 를 LLM 에 연결',
-        tier: 'free',
         actions: ['카탈로그 선택', '사용자 등록', 'lifecycle 추적'],
     },
 ];
@@ -48,9 +46,7 @@ function renderCard(card) {
         <a class="proj-card" href="${escapeHTML(card.href)}" data-projects-navigate="${escapeHTML(card.href)}">
             <div class="proj-card-icon">${card.icon}</div>
             <div class="proj-card-body">
-                <h3 class="proj-card-title">${escapeHTML(card.title)}
-                    <span class="proj-card-tier proj-tier-${escapeHTML(card.tier)}">${escapeHTML(card.tier)}</span>
-                </h3>
+                <h3 class="proj-card-title">${escapeHTML(card.title)}</h3>
                 <p class="proj-card-desc">${escapeHTML(card.desc)}</p>
                 <div class="proj-card-stats">
                     <span class="proj-card-count" data-count="${escapeHTML(card.key)}">—</span>
@@ -78,9 +74,6 @@ function getHTML() {
         '.proj-card-icon iconify-icon{font-size:32px;}' +
         '.proj-card-body{flex:1;min-width:0;}' +
         '.proj-card-title{display:flex;align-items:center;gap:var(--space-2);margin:0 0 var(--space-2);font-size:var(--font-size-base);color:var(--text-primary);}' +
-        '.proj-card-tier{font-size: var(--font-size-xs);padding:2px 6px;border-radius:var(--radius-sm);font-weight:var(--font-weight-semibold);text-transform:uppercase;}' +
-        '.proj-tier-free{background:var(--bg-tertiary);color:var(--text-secondary);}' +
-        '.proj-tier-pro{background:var(--accent-primary-light);color:var(--accent-primary);border:1px solid var(--border-color);}' +
         '.proj-card-desc{color:var(--text-muted);font-size:var(--font-size-sm);margin:0 0 var(--space-3);line-height:1.5;}' +
         '.proj-card-actions{display:flex;flex-wrap:wrap;gap:var(--space-1);}' +
         '.proj-card-pill{padding:2px 8px;background:var(--bg-tertiary);color:var(--text-secondary);border-radius:var(--radius-md);font-size: var(--font-size-xs);}' +

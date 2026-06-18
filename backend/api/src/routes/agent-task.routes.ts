@@ -37,7 +37,6 @@ const router = Router();
 // 모든 엔드포인트 인증 필요
 router.use(requireAuth);
 
-type UserTier = 'free' | 'pro' | 'enterprise';
 type UserRole = 'admin' | 'user' | 'guest';
 
 /** 소유권 검증 후 작업 반환 — 없거나 권한 없으면 응답 종료하고 undefined 반환 */
@@ -137,9 +136,6 @@ router.post('/:taskId/execute', asyncHandler(async (req: Request, res: Response)
         return res.status(400).json(badRequest('이미 완료된 작업입니다. 새 작업을 생성하세요.'));
     }
 
-    const tier: UserTier = (req.user && 'tier' in req.user)
-        ? (req.user as { tier: UserTier }).tier
-        : 'free';
     const role: UserRole = (req.user!.role as UserRole) || 'user';
 
     // 스킬 범위(allowedSkills): 이 실행에서 쓸 skill_id 목록 — 옵션. 문자열 배열만 수용,
@@ -156,7 +152,6 @@ router.post('/:taskId/execute', asyncHandler(async (req: Request, res: Response)
         taskId: task.id,
         goal: task.goal,
         userId: String(req.user!.id),
-        userTier: tier,
         userRole: role,
         maxTurns: task.max_turns,
         allowedSkills,
@@ -207,9 +202,6 @@ router.post('/:taskId/resume', asyncHandler(async (req: Request, res: Response) 
         return res.status(400).json(badRequest('이어할 체크포인트가 없는 작업입니다.'));
     }
 
-    const tier: UserTier = (req.user && 'tier' in req.user)
-        ? (req.user as { tier: UserTier }).tier
-        : 'free';
     const role: UserRole = (req.user!.role as UserRole) || 'user';
     const db = getUnifiedDatabase();
     const steps = await db.getAgentTaskSteps(task.id);
@@ -219,7 +211,6 @@ router.post('/:taskId/resume', asyncHandler(async (req: Request, res: Response) 
         taskId: task.id,
         goal: task.goal,
         userId: String(req.user!.id),
-        userTier: tier,
         userRole: role,
         maxTurns: task.max_turns,
         resume: {

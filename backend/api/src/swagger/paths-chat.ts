@@ -250,7 +250,6 @@ export const chatPaths = {
                                     id: { type: 'integer' },
                                     email: { type: 'string' },
                                     role: { type: 'string', enum: ['admin', 'user', 'guest'] },
-                                    tier: { type: 'string', enum: ['free', 'pro', 'enterprise'] },
                                     is_active: { type: 'boolean' },
                                     created_at: { type: 'string', format: 'date-time' }
                                 }

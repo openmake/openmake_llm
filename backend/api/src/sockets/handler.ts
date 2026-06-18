@@ -161,7 +161,6 @@ export class WebSocketHandler {
             // WebSocket 인스턴스에 인증 정보 및 중단 컨트롤러 저장
             extWs._authenticatedUserId = auth.userId;
             extWs._authenticatedUserRole = auth.userRole;
-            extWs._authenticatedUserTier = auth.userTier;
             extWs._abortController = null;
             // 🔒 Phase 2: heartbeat alive 플래그 초기화
             extWs._isAlive = true;
@@ -346,7 +345,6 @@ export class WebSocketHandler {
 
         extWs._authenticatedUserId = refreshed.userId;
         extWs._authenticatedUserRole = refreshed.userRole;
-        extWs._authenticatedUserTier = refreshed.userTier;
         extWs._authTokenExpiresAtMs = refreshed.tokenExpiresAtMs;
         extWs._authTokenIssuedAtMs = refreshed.tokenIssuedAtMs;
         extWs._authTokenJti = refreshed.tokenJti;

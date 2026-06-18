@@ -8,7 +8,6 @@
  *
  * @module services/chat-strategies/agent-loop-execute-tool
  */
-import { canUseTool } from '../../mcp/tool-tiers';
 import { getUnifiedMCPClient } from '../../mcp/unified-client';
 import { VISION_OCR_SYSTEM_PROMPT, VISION_ANALYSIS_SYSTEM_PROMPT, buildVisionOcrUserMessage } from '../../prompts/vision-system';
 import { LLM_TEMPERATURES } from '../../config/llm-parameters';
@@ -23,9 +22,8 @@ const logger = createLogger('AgentLoopExecuteTool');
  *
  * 실행 순서:
  * 1. 도구 호출 유효성 검사
- * 2. 사용자 티어 기반 접근 권한 검사
- * 3. 내장 도구 직접 처리 (web_search, web_fetch, vision_ocr, analyze_image)
- * 4. 기타 도구는 ToolRouter를 통해 MCP 도구로 실행
+ * 2. 내장 도구 직접 처리 (web_search, web_fetch, vision_ocr, analyze_image)
+ * 3. 기타 도구는 ToolRouter를 통해 MCP 도구로 실행
  *
  * @param context - AgentLoop 컨텍스트 (사용자 컨텍스트, 클라이언트 등)
  * @param toolCall - LLM이 요청한 도구 호출 정보
@@ -46,22 +44,7 @@ export async function executeToolCall(context: AgentLoopStrategyContext, toolCal
     const toolName = toolCall.function.name;
     const toolArgs = toolCall.function.arguments;
 
-    // 사용자 티어 기반 도구 접근 권한 검사
-    if (context.currentUserContext) {
-        const userTier = context.currentUserContext.tier;
-        if (!canUseTool(userTier, toolName)) {
-            const tierLabel = {
-                free: '무료',
-                pro: '프로',
-                enterprise: '엔터프라이즈',
-            }[userTier];
-
-            logger.warn(`⚠️ 도구 접근 거부: ${toolName} (tier: ${userTier})`);
-            return `🔒 권한 없음: ${tierLabel} 등급에서는 "${toolName}" 도구를 사용할 수 없습니다. 업그레이드가 필요합니다.`;
-        }
-    }
-
-    logger.info(`🔨 Executing Tool: ${toolName} (tier: ${context.currentUserContext?.tier || 'unknown'})`, toolArgs);
+    logger.info(`🔨 Executing Tool: ${toolName}`, toolArgs);
 
     // 내장 도구 직접 처리: web_search
     if (toolName === 'web_search') {

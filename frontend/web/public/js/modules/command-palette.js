@@ -11,8 +11,6 @@
  * @module command-palette
  */
 
-const TIER_LEVEL = { free: 0, pro: 1, enterprise: 2 };
-
 let scrimEl = null;
 let inputEl = null;
 let listEl = null;
@@ -33,17 +31,11 @@ function isAdminUser() {
     const u = currentUser();
     return !!(u && u.role === 'admin');
 }
-function userTierLevel() {
-    const u = currentUser();
-    return TIER_LEVEL[(u && (u.tier || u.plan)) || 'free'] || 0;
-}
-
 /** NAV_ITEMS + 액션으로 명령 목록 구성 (열릴 때마다 현재 권한 반영) */
 function buildCommands() {
     const cmds = [];
     const nav = window.NAV_ITEMS || { menu: [], admin: [] };
     const admin = isAdminUser();
-    const tier = userTierLevel();
     const authed = loggedIn();
 
     [['이동', nav.menu || []], ['관리', nav.admin || []]].forEach(function (pair) {
@@ -52,7 +44,6 @@ function buildCommands() {
             if (!it || !it.href) return;
             if (it.requireAdmin && !admin) return;
             if (it.requireAuth && !authed) return;
-            if (it.minTier && !admin && tier < (TIER_LEVEL[it.minTier] || 0)) return;
             cmds.push({
                 group: groupLabel,
                 icon: it.iconify || 'lucide:circle',

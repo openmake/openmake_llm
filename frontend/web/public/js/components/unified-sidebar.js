@@ -160,7 +160,7 @@ UnifiedSidebar.prototype.init = function () {
 
 
 
-    // 페이지 nav 렌더 (NAV_ITEMS.menu + admin) — tier/admin 권한 필터링
+    // 페이지 nav 렌더 (NAV_ITEMS.menu + admin) — admin 권한 필터링
     this._renderPageNav();
 
     // 라우트 변경 시 레일 active nav 갱신 (⌘K·링크·프로그램 네비 모두 포함)
@@ -238,7 +238,6 @@ UnifiedSidebar.prototype._renderHTML = function () {
         '</div>' +
         '<div class="us-user-avatar">?</div>' +
         '<span class="us-user-name us-label">\uC0AC\uC6A9\uC790</span>' +
-        '<span class="us-tier-badge" id="sidebarTierBadge"></span>' +
         '<button class="us-settings-btn" title="\uC124\uC815">' + ICONS.settings + '</button>' +
         '</div>' +
         '</div>';
@@ -707,7 +706,6 @@ UnifiedSidebar.prototype._closeUserMenu = function () {
  * NAV_ITEMS.menu + admin 을 권한별로 필터링하여 .us-page-nav 안에 렌더.
  * - requireAuth: 로그인 안 한 사용자는 숨김
  * - requireAdmin: admin role 만 표시
- * - minTier: 사용자 tier 가 부족하면 숨김
  */
 UnifiedSidebar.prototype._renderPageNav = function () {
     var container = this.el && this.el.querySelector('#usPageNav');
@@ -718,7 +716,6 @@ UnifiedSidebar.prototype._renderPageNav = function () {
         return;
     }
 
-    var TIER_LEVEL = { free: 0, starter: 1, standard: 2, pro: 3, enterprise: 4 };
     var rawUser = null;
     try {
         // STORAGE_KEY_USER = 'user' (constants.js:16) — 'openmake_user' 아님
@@ -727,14 +724,11 @@ UnifiedSidebar.prototype._renderPageNav = function () {
     } catch (_e) { rawUser = null; }
     var isLoggedIn = !!rawUser;
     var isAdmin = isLoggedIn && rawUser && (rawUser.role === 'admin' || rawUser.role === 'administrator');
-    var userTier = (isLoggedIn && rawUser && rawUser.tier) || 'free';
-    var userTierLevel = TIER_LEVEL[userTier] != null ? TIER_LEVEL[userTier] : 0;
 
     function passesFilter(item) {
         if (item.excludeFromSidebar) return false;
         if (item.requireAuth && !isLoggedIn) return false;
         if (item.requireAdmin && !isAdmin) return false;
-        if (item.minTier && (TIER_LEVEL[item.minTier] || 99) > userTierLevel) return false;
         return true;
     }
 
@@ -839,33 +833,6 @@ UnifiedSidebar.prototype._updateUserSection = function () {
             name.title = isGuest ? '\uD074\uB9AD\uD558\uC5EC \uB85C\uADF8\uC778' : '\uD074\uB9AD\uD558\uC5EC \uB85C\uADF8\uC778';
         }
     }
-    // 티어 배지 업데이트
-    this._updateTierBadge(user);
-};
-
-UnifiedSidebar.prototype._updateTierBadge = function (user) {
-    var badge = this.el.querySelector('#sidebarTierBadge');
-    if (!badge) return;
-
-    var tier = 'free';
-    if (user) {
-        if (user.role === 'admin' || user.role === 'administrator') {
-            tier = 'enterprise';
-        } else {
-            tier = user.tier || 'free';
-        }
-    }
-
-    var labels = { free: 'FREE', pro: 'PRO', enterprise: 'ENTERPRISE' };
-    var colors = {
-        free: 'var(--text-muted)',
-        pro: 'var(--accent-primary)',
-        enterprise: 'var(--accent-orange)'
-    };
-
-    badge.textContent = labels[tier] || 'FREE';
-    badge.style.cssText = 'font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;letter-spacing:0.5px;' +
-        'background:' + (colors[tier] || colors.free) + ';color:var(--bg-primary);margin-left:4px;';
 };
 
 // ─── 테마 토글 ─────────────────────────────────────
@@ -926,16 +893,5 @@ UnifiedSidebar.prototype.destroy = function () {
 // ─── 전역 노출 ────────────────────────────────────
 
 window.UnifiedSidebar = UnifiedSidebar;
-
-// 전역 티어 배지 업데이트 헬퍼 (auth.js에서 호출)
-window.updateSidebarTierBadge = function () {
-    if (window.sidebar && typeof window.sidebar._updateTierBadge === 'function') {
-        var user = typeof window.getCurrentUser === 'function' ? window.getCurrentUser() : null;
-        if (!user) {
-            try { user = JSON.parse(localStorage.getItem('user') || 'null'); } catch (e) { user = null; }
-        }
-        window.sidebar._updateTierBadge(user);
-    }
-};
 
 export { UnifiedSidebar };

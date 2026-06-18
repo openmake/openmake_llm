@@ -125,7 +125,6 @@ export function createRealResponseGenerator(
             history: [],
             userId: 'eval-real-runner',
             userRole: 'user',
-            userTier: 'free',
             // ChatService가 내장 MCP 도구를 활성화하지 않도록 빈 객체 전달
             // (apiKeyId 없이 enabledTools 미지정이면 전체 허용 → 평가 비용 폭증 위험)
             enabledTools: {},

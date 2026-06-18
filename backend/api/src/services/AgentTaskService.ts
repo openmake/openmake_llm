@@ -38,7 +38,6 @@ const logger = createLogger('AgentTaskService');
  */
 const AGENT_TASK_SKILL_AGENT_ID = '__agent_task__';
 
-type UserTier = 'free' | 'pro' | 'enterprise';
 type UserRole = 'admin' | 'user' | 'guest';
 
 /** tool name 이 검색/정보수집류인지 (키워드 포함 여부) — 검색 폭주 하드 제한용 */
@@ -59,7 +58,6 @@ export interface AgentTaskRunInput {
     taskId: string;
     goal: string;
     userId: string;
-    userTier: UserTier;
     userRole: UserRole;
     maxTurns: number;
     /** 이 실행에서 사용할 스킬 범위(skill_id 목록). 지정 시 활성 스킬 바인딩을 이 집합으로 제한.
@@ -105,14 +103,14 @@ export class AgentTaskService {
      * 모든 종료 경로에서 agent_tasks 상태를 갱신한다.
      */
     async execute(input: AgentTaskRunInput): Promise<void> {
-        const { taskId, goal, userId, userTier, userRole, maxTurns, allowedSkills } = input;
+        const { taskId, goal, userId, userRole, maxTurns, allowedSkills } = input;
         const db = getUnifiedDatabase();
         const mcp = getUnifiedMCPClient();
         const signal = this.abortController.signal;
         const startedAt = Date.now();
         const turnCeiling = Math.min(maxTurns, AGENT_TASK_LIMITS.MAX_TURNS_CEILING);
 
-        const userCtx: UserContext = { userId, tier: userTier, role: userRole };
+        const userCtx: UserContext = { userId, role: userRole };
 
         // resume: 기존 checkpoint(완전한 end-of-turn conversation)에서 복원, 아니면 새로 시작.
         // 새 시작 시 system 프롬프트에 활성 스킬(global+user)의 지식(prompt_md)을 주입한다.
@@ -158,15 +156,13 @@ export class AgentTaskService {
         try {
             await update({ status: 'running', progress: 2 });
 
-            // tier 기반 허용 도구 목록 (LLMTool ≈ ToolDefinition)
-            const tierTools = (await mcp.getToolRouter().getLLMTools(userTier, {
+            // 허용 도구 목록 (LLMTool ≈ ToolDefinition) — 전체 노출
+            const allTools = (await mcp.getToolRouter().getLLMTools({
                 userId,
-                tier: userTier,
             })) as unknown as ToolDefinition[];
 
-            // 활성 스킬(global+user)의 tool_bindings 를 머지. allTools=tierTools 이므로
-            // allowed/required 는 tier 안에서만 해석되어 tier 를 못 뚫고(escalation 방지),
-            // base 가 전체 tier 도구라 실효는 사실상 denied(특정 도구 차단)뿐이다.
+            // 활성 스킬(global+user)의 tool_bindings 를 머지.
+            // base 가 전체 도구라 실효는 사실상 denied(특정 도구 차단)뿐이다.
             // 조회 실패는 작업을 실패시키지 않고 빈 바인딩으로 흡수.
             let skillBindings: ActiveSkillBinding[] = [];
             try {
@@ -183,8 +179,8 @@ export class AgentTaskService {
                 logger.debug(`[AgentTask] 스킬 범위 제한: ${before} → ${skillBindings.length} (allowedSkills=${allowedSkills.length})`);
             }
             const tools = skillBindings.length > 0
-                ? mergeToolsWithSkills({ allTools: tierTools, userToggled: tierTools, profileRequired: [], skillBindings })
-                : tierTools;
+                ? mergeToolsWithSkills({ allTools, userToggled: allTools, profileRequired: [], skillBindings })
+                : allTools;
 
             for (let turn = startTurn; turn < turnCeiling; turn++) {
                 this.assertWithinLimits(signal, startedAt, totalTokens);
@@ -382,7 +378,7 @@ export class AgentTaskService {
         }
     }
 
-    /** 단일 도구 실행 — tier/sandbox 는 executeToolWithContext 가 처리. 실패는 문자열로 흡수 */
+    /** 단일 도구 실행 — sandbox 는 executeToolWithContext 가 처리. 실패는 문자열로 흡수 */
     private async runTool(
         mcp: ReturnType<typeof getUnifiedMCPClient>,
         name: string,

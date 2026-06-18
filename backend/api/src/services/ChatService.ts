@@ -23,7 +23,6 @@ import { AGENTS, type AgentSelection } from '../agents';
 import type { DiscussionProgress } from '../agents/discussion-engine';
 import { withSpan } from '../observability/otel';
 import type { ExecutionPlan } from '../chat/profile-resolver';
-import type { UserTier } from '../data/user-manager';
 import type { UserContext } from '../mcp/user-sandbox';
 import { getUnifiedMCPClient } from '../mcp/unified-client';
 import { CHAT_ALWAYS_ON_TOOL_NAMES } from '../mcp/agent-task-tools';
@@ -134,62 +133,34 @@ export class ChatService {
     }
 
     /**
-     * 사용자 등급을 결정합니다.
-     *
-     * admin 역할은 자동으로 enterprise 등급으로 승격되며,
-     * 명시적 등급이 제공되지 않으면 free 등급을 기본값으로 사용합니다.
-     *
-     * @param userRole - 사용자 역할
-     * @param explicitTier - 명시적으로 지정된 사용자 등급
-     * @returns 결정된 사용자 등급
-     */
-    private resolveUserTier(userRole?: 'admin' | 'user' | 'guest', explicitTier?: UserTier): UserTier {
-        if (userRole === 'admin') {
-            return 'enterprise';
-        }
-
-        if (explicitTier) {
-            return explicitTier;
-        }
-
-        return 'free';
-    }
-
-    /**
      * 현재 요청의 사용자 컨텍스트를 설정합니다.
-     *
-     * 도구 접근 권한 및 MCP 도구 티어 결정에 사용됩니다.
      *
      * @param userId - 사용자 ID
      * @param userRole - 사용자 역할
-     * @param userTier - 사용자 구독 등급
      */
-    buildUserContext(userId: string, userRole?: 'admin' | 'user' | 'guest', userTier?: UserTier): UserContext {
-        const tier = this.resolveUserTier(userRole, userTier);
-        logger.info(`사용자 컨텍스트 설정: userId=${userId}, role=${userRole}, tier=${tier}`);
+    buildUserContext(userId: string, userRole?: 'admin' | 'user' | 'guest'): UserContext {
+        logger.info(`사용자 컨텍스트 설정: userId=${userId}, role=${userRole}`);
         return {
             userId: userId || 'guest',
-            tier,
             role: userRole || 'guest',
         };
     }
 
     /**
-     * 현재 사용자 등급에 허용된 MCP 도구 목록을 조회합니다.
+     * 사용 가능한 MCP 도구 목록을 조회합니다.
      *
-     * ToolRouter를 통해 사용자 티어에 맞는 도구만 필터링하여 반환합니다.
+     * ToolRouter를 통해 전체 도구를 반환합니다 (제한 없음).
      * 프로파일의 requiredTools에 명시된 도구는 사용자 토글과 무관하게 강제 포함됩니다.
      *
      * @returns 사용 가능한 도구 정의 배열
      */
     private async getAllowedTools(reqCtx: RequestContext): Promise<ToolDefinition[]> {
         const toolRouter = getUnifiedMCPClient().getToolRouter();
-        const userTierForTools = reqCtx.userContext.tier || 'free';
         const rawUserId = reqCtx.userContext.userId;
         const userIdStr = rawUserId !== undefined && rawUserId !== null ? String(rawUserId) : undefined;
         const allTools = userIdStr
-            ? await toolRouter.getLLMTools(userTierForTools, { userId: userIdStr, tier: userTierForTools }) as ToolDefinition[]
-            : await toolRouter.getLLMTools(userTierForTools) as ToolDefinition[];
+            ? await toolRouter.getLLMTools({ userId: userIdStr }) as ToolDefinition[]
+            : await toolRouter.getLLMTools() as ToolDefinition[];
 
         // enabledTools가 없으면 레거시 호환: 전체 허용 (API 클라이언트 등). skill binding 적용도 skip.
         if (reqCtx.enabledTools === undefined) return allTools;
@@ -299,7 +270,6 @@ export class ChatService {
                 attributes: {
                     'chat.user_id': req.userId || 'guest',
                     'chat.user_role': req.userRole || 'guest',
-                    'chat.user_tier': req.userTier || 'free',
                     'chat.query_length': (req.message || '').length,
                     'chat.has_images': (req.images?.length ?? 0) > 0,
                     'chat.history_length': req.history?.length ?? 0,

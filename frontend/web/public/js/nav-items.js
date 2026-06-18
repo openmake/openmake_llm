@@ -17,7 +17,6 @@
  * @property {string} label - 메뉴 표시 이름
  * @property {boolean} [requireAuth] - 인증 필요 여부
  * @property {boolean} [requireAdmin] - 관리자 권한 필요 여부
- * @property {string} [minTier] - 최소 필요 티어 ('pro' | 'enterprise')
  */
 
 /**
@@ -32,19 +31,19 @@ const NAV_ITEMS = {
         { href: '/history.html', icon: '📜', iconify: 'lucide:scroll-text', label: '히스토리', requireAuth: true, excludeFromSidebar: true },
         // /guide.html: 2026-05-21 제거 — 사용 가이드 전체 시스템 폐기
         // /developer.html (API 문서): 2026-06-02 settings 탭으로 이전 — nav 제거, 라우트는 spa-router 에 보존
-        { href: '/research.html', icon: '🔬', iconify: 'lucide:flask-conical', label: '딥 리서치', requireAuth: true, minTier: 'pro' },
+        { href: '/research.html', icon: '🔬', iconify: 'lucide:flask-conical', label: '딥 리서치', requireAuth: true },
         { href: '/agent-tasks.html', icon: '🤖', iconify: 'lucide:bot', label: '에이전트 작업', requireAuth: true },
         // /documents.html, /memory.html: 2026-05-19 제거
         // /projects.html (프로젝트): 2026-06-02 settings 탭으로 이전 — nav 제거, 라우트는 spa-router 에 보존
         // projects hub 의 2 카드 진입점 — 사이드바 nav 에서 hidden (projects 가 진입점), spa-router 라우트 등록 유지
-        { href: '/skill-library.html', icon: '📦', iconify: 'lucide:package', label: '스킬 라이브러리', requireAuth: true, minTier: 'pro', cssFiles: ['/css/skill-library.css?v=15'], excludeFromSidebar: true },
+        { href: '/skill-library.html', icon: '📦', iconify: 'lucide:package', label: '스킬 라이브러리', requireAuth: true, cssFiles: ['/css/skill-library.css?v=15'], excludeFromSidebar: true },
         { href: '/mcp-servers.html', icon: '🔌', iconify: 'lucide:plug', label: 'MCP 서버', requireAuth: true, cssFiles: ['/css/skill-library.css?v=15'], excludeFromSidebar: true },
         // 2026-05-26: 기존 '커스텀 에이전트' CRUD 페이지 → Git URL Ingest 'Agent Draft' 검토 전용으로 재포지셔닝.
         // 사용자 본인 페르소나(Custom Agent)는 Settings '사용자 지시문' 아래 '내 Agent' 섹션으로 일원화 (2026-06-01).
         { href: '/custom-agents.html', icon: '📥', iconify: 'lucide:inbox', label: 'Agent Draft', requireAuth: true, excludeFromSidebar: true },
         // /my-agents.html standalone 페이지 폐기 (2026-06-01) — pages/my-agents.js 모듈은 Settings 임베드용으로 유지.
         // /usage.html, /api-keys.html: Phase R1 (2026-05-21) — settings 탭으로 통합
-        { href: '/agent-learning.html', icon: '🎓', iconify: 'lucide:graduation-cap', label: '에이전트 학습', requireAuth: true, minTier: 'pro' }
+        { href: '/agent-learning.html', icon: '🎓', iconify: 'lucide:graduation-cap', label: '에이전트 학습', requireAuth: true }
         // /cluster.html: 2026-05-21 제거 — admin → 통합 모니터링 → "클러스터 노드 정보" section 과 중복
     ],
     admin: [

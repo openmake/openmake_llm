@@ -32,10 +32,9 @@ import { z } from 'zod';
 import { requireAuth } from '../auth';
 import { validate } from '../middlewares/validation';
 import { asyncHandler } from '../utils/error-handler';
-import { success, notFound, badRequest, forbidden, unauthorized, rateLimited } from '../utils/api-response';
+import { success, notFound, badRequest, unauthorized, rateLimited } from '../utils/api-response';
 import { getApiKeyService, ApiKeyError } from '../services/ApiKeyService';
 import type { ApiKeyTier } from '../data/models/unified-database';
-import { API_KEY_QUOTA } from '../config/tier-limits';
 
 const router = Router();
 
@@ -113,19 +112,6 @@ router.post('/',
         }
 
         const service = getApiKeyService();
-
-        // 등급별 API 키 발급 수량 제한
-        const userTier = (req.user && 'tier' in req.user) ? (req.user as { tier: string }).tier : 'free';
-        const userRole = req.user?.role || 'user';
-        const keyLimit = userRole === 'admin' ? Infinity : (API_KEY_QUOTA[userTier] || API_KEY_QUOTA['free']);
-
-        if (keyLimit !== Infinity) {
-            const existingKeys = await service.listKeys(userId);
-            if (existingKeys.length >= keyLimit) {
-                res.status(403).json(forbidden(`API 키 발급 제한 초과 (${userTier}: 최대 ${keyLimit}개)`));
-                return;
-            }
-        }
 
         try {
             const result = await service.createKey({

@@ -48,7 +48,6 @@ export interface WSMessage {
      */
     files?: Array<{ id: string; name: string; type: string; content?: string; size?: number; truncated?: boolean }>;
     userRole?: string;
-    userTier?: 'free' | 'pro' | 'enterprise';
     /** 사용자 선호 언어 (설정 페이지에서 선택) */
     language?: string;
     /** 구조화된 출력 형식 (Ollama format 파라미터: 'json' 또는 JSON Schema 객체) */
@@ -70,7 +69,6 @@ export interface WSMessage {
 export interface ExtendedWebSocket extends WebSocket {
     _authenticatedUserId: string | null;
     _authenticatedUserRole: 'admin' | 'user' | 'guest';
-    _authenticatedUserTier: 'free' | 'pro' | 'enterprise';
     _abortController: AbortController | null;
     /** 🔒 Phase 2: heartbeat alive 플래그 */
     _isAlive: boolean;

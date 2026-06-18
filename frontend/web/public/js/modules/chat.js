@@ -431,7 +431,6 @@ async function sendMessage() {
         const parsedUser = storedUser ? JSON.parse(storedUser) : {};
         if (parsedUser.userId || parsedUser.id) payload.userId = parsedUser.userId || parsedUser.id;
         if (parsedUser.role) payload.userRole = parsedUser.role;
-        if (parsedUser.tier) payload.userTier = parsedUser.tier;
 
         // WS maxPayload 보호 — 초과 프레임은 서버가 연결을 끊어(1009) 메시지가 안내 없이
         // 유실되므로 전송 전에 차단한다 (첨부+히스토리 합산 대비 최종 백스톱)

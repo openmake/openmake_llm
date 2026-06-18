@@ -28,7 +28,7 @@ const logger = createLogger('ChatExternalProvider');
 export interface ExternalProviderDeps {
     /** Provider router — `getExternalKeysRepo()` 등 사용 */
     providerRouter?: ProviderRouter;
-    /** 현재 사용자 컨텍스트 — MCP tool tier 검사에 사용 */
+    /** 현재 사용자 컨텍스트 — MCP tool 실행 sandbox 에 사용 */
     currentUserContext: UserContext | null;
     /** MCP tool 호출 결과 inline 카드 콜백 (frontend 표시용) */
     mcpToolResultCallback?: (data: { toolName: string; resources: Array<{ uri: string; mimeType?: string; text?: string }> }) => void;
@@ -36,7 +36,7 @@ export interface ExternalProviderDeps {
     mcpToolStartCallback?: (data: { toolName: string }) => void;
     /** Provider usage 누적 — ChatService.lastProviderUsage setter */
     onUsage?: (usage: import('../../llm').UsageMetrics) => void;
-    /** Allowed tools (tier + agent 매칭 후) */
+    /** Allowed tools (agent 매칭 후) */
     allowedTools: ToolDefinition[];
 }
 
@@ -281,7 +281,7 @@ export async function streamFromExternalProvider(
 }
 
 /**
- * 외부 LLM Tool Calling — MCP 도구 실행 + user sandbox + tier 권한 체크.
+ * 외부 LLM Tool Calling — MCP 도구 실행 + user sandbox.
  */
 export async function executeExternalTool(
     deps: ExternalProviderDeps,
@@ -289,17 +289,9 @@ export async function executeExternalTool(
     toolArgs: Record<string, unknown>,
 ): Promise<string> {
     try {
-        if (deps.currentUserContext) {
-            const { canUseTool } = await import('../../mcp/tool-tiers');
-            if (!canUseTool(deps.currentUserContext.tier, toolName)) {
-                return `🔒 권한 없음: "${toolName}" 도구는 ${deps.currentUserContext.tier} 등급에서 사용 불가`;
-            }
-        }
-
         const mcpClient = getUnifiedMCPClient();
         const userCtx = deps.currentUserContext || {
             userId: 'guest',
-            tier: 'free' as const,
             role: 'guest' as const,
         };
         // 도구 실행 시작 알림 — 권한 체크 통과 후, 실제 호출 직전.

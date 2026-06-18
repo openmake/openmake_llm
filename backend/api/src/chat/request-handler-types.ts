@@ -25,8 +25,6 @@ export interface ChatUserContext {
     anonSessionId?: string;
     /** 사용자 역할 */
     userRole: 'admin' | 'user' | 'guest';
-    /** 사용자 등급 */
-    userTier: 'free' | 'pro' | 'enterprise';
     /**
      * 메모리/추적용 사용자 ID.
      * 인증 사용자 ID → 익명 세션 ID 순으로 채워지며, 둘 다 없으면 undefined.

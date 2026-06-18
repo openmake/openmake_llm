@@ -17,18 +17,16 @@ import { McpFromCatalogPayloadSchema } from '../schemas/mcp-catalog.schema';
 import type { McpFromCatalogPayload } from '../schemas/mcp-catalog.schema';
 import { getUnifiedDatabase } from '../data/models/unified-database';
 import { getLifecycleSupervisor } from '../mcp/lifecycle-supervisor';
-import { MCP_CATALOG_TIER_ORDER } from '../config/tiers';
 import { createLogger } from '../utils/logger';
 
 const logger = createLogger('McpCatalogRoutes');
 
 export const mcpCatalogRouter = Router();
 
-// GET /api/mcp/catalog — tier 기반 카탈로그
-mcpCatalogRouter.get('/catalog', requireAuth, asyncHandler(async (req: Request, res: Response) => {
-    const tier = (req.user && 'tier' in req.user ? (req.user as { tier?: string }).tier : 'free') ?? 'free';
+// GET /api/mcp/catalog — 전체 카탈로그 (제한 없음)
+mcpCatalogRouter.get('/catalog', requireAuth, asyncHandler(async (_req: Request, res: Response) => {
     const repo = new McpCatalogRepository(getUnifiedDatabase().getPool());
-    const templates = await repo.listCatalog(tier);
+    const templates = await repo.listCatalog();
     res.json(success({ templates, total: templates.length }));
 }));
 
@@ -47,16 +45,6 @@ mcpCatalogRouter.post(
         const template = await repo.getCatalogTemplate(payload.template_id);
         if (!template) {
             res.status(404).json(notFound('catalog template'));
-            return;
-        }
-
-        // tier 검증
-        const userTierIdx = MCP_CATALOG_TIER_ORDER.indexOf(
-            ((req.user && 'tier' in req.user ? (req.user as { tier?: string }).tier : 'free') ?? 'free') as typeof MCP_CATALOG_TIER_ORDER[number],
-        );
-        const requiredTierIdx = MCP_CATALOG_TIER_ORDER.indexOf(template.required_tier as typeof MCP_CATALOG_TIER_ORDER[number]);
-        if (userTierIdx < requiredTierIdx) {
-            res.status(403).json(forbidden(`이 템플릿은 ${template.required_tier} 티어 이상 필요`));
             return;
         }
 

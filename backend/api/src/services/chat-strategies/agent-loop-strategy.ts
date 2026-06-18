@@ -9,7 +9,6 @@
  * @module services/chat-strategies/agent-loop-strategy
  * @description
  * - DirectStrategy를 내부 빌딩 블록으로 사용하여 각 턴을 실행
- * - 도구 접근 권한 검사 (UserTier 기반 tool-tiers)
  * - 내장 도구 직접 처리: web_search, web_fetch, vision_ocr, analyze_image
  * - 기타 도구는 ToolRouter를 통해 MCP 도구로 실행
  * - maxTurns 제한으로 무한 루프 방지
