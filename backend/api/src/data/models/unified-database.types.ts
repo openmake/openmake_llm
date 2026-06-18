@@ -248,8 +248,6 @@ export interface MCPServerRow {
 // API Key 관리 인터페이스
 // ============================================
 
-export type ApiKeyTier = 'free' | 'starter' | 'standard' | 'enterprise';
-
 /**
  * 사용자 API Key 엔티티
  * 외부 개발자 API 접근을 위한 키 정보
@@ -274,8 +272,6 @@ export interface UserApiKey {
     scopes: string[];
     /** 접근 허용된 모델 목록 */
     allowed_models: string[];
-    /** Rate Limit 등급 (free/starter/standard/enterprise) */
-    rate_limit_tier: ApiKeyTier;
     /** 키 활성화 상태 */
     is_active: boolean;
     /** 마지막 사용 일시 */
@@ -302,7 +298,6 @@ export interface UserApiKeyPublic {
     description?: string;
     scopes: string[];
     allowed_models: string[];
-    rate_limit_tier: ApiKeyTier;
     is_active: boolean;
     last_used_at?: string;
     expires_at?: string;
@@ -312,15 +307,21 @@ export interface UserApiKeyPublic {
     total_tokens: number;
 }
 
-/** Rate limit tier 설정 */
-export const API_KEY_TIER_LIMITS: Record<ApiKeyTier, {
+/**
+ * 모든 API Key 에 공통 적용되는 단일 Rate Limit 한도.
+ *
+ * tier(free/starter/standard/enterprise) 차등은 제거됐다 — 모든 키가 동일한 한도를 공유한다.
+ * 순간 폭주(DoS)·비용 폭주 방지용으로 RPM/TPM 상한만 유지하고,
+ * 일·월 누적 요청 수는 무제한(-1)이다.
+ */
+export const API_KEY_LIMITS: {
     rpm: number;
     tpm: number;
     dailyRequests: number;
     monthlyRequests: number;
-}> = {
-    free: { rpm: 10, tpm: 10_000, dailyRequests: 100, monthlyRequests: 1_000 },
-    starter: { rpm: 30, tpm: 50_000, dailyRequests: 500, monthlyRequests: 10_000 },
-    standard: { rpm: 60, tpm: 100_000, dailyRequests: 3_000, monthlyRequests: 100_000 },
-    enterprise: { rpm: 300, tpm: 1_000_000, dailyRequests: -1, monthlyRequests: -1 }, // -1 = unlimited
+} = {
+    rpm: 300,
+    tpm: 1_000_000,
+    dailyRequests: -1, // -1 = unlimited
+    monthlyRequests: -1, // -1 = unlimited
 };

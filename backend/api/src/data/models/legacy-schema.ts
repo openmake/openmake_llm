@@ -382,7 +382,6 @@ CREATE TABLE IF NOT EXISTS user_api_keys (
     description TEXT,
     scopes JSONB DEFAULT '["*"]',
     allowed_models JSONB DEFAULT '["*"]',
-    rate_limit_tier TEXT NOT NULL DEFAULT 'free' CHECK(rate_limit_tier IN ('free', 'starter', 'standard', 'enterprise')),
     is_active BOOLEAN DEFAULT TRUE,
     last_used_at TIMESTAMPTZ,
     expires_at TIMESTAMPTZ,
@@ -452,7 +451,6 @@ CREATE INDEX IF NOT EXISTS idx_mcp_servers_enabled ON mcp_servers(enabled);
 CREATE INDEX IF NOT EXISTS idx_api_keys_user ON user_api_keys(user_id);
 CREATE INDEX IF NOT EXISTS idx_api_keys_hash ON user_api_keys(key_hash);
 CREATE INDEX IF NOT EXISTS idx_api_keys_active ON user_api_keys(user_id, is_active);
-CREATE INDEX IF NOT EXISTS idx_api_keys_tier ON user_api_keys(rate_limit_tier);
 
 CREATE INDEX IF NOT EXISTS idx_oauth_states_created ON oauth_states(created_at);
 

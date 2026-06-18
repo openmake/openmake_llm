@@ -34,7 +34,6 @@ import { validate } from '../middlewares/validation';
 import { asyncHandler } from '../utils/error-handler';
 import { success, notFound, badRequest, unauthorized, rateLimited } from '../utils/api-response';
 import { getApiKeyService, ApiKeyError } from '../services/ApiKeyService';
-import type { ApiKeyTier } from '../data/models/unified-database';
 
 const router = Router();
 
@@ -46,7 +45,6 @@ const router = Router();
  * @property {string} [description] - 키 설명 (최대 500자)
  * @property {string[]} [scopes] - 접근 범위 목록
  * @property {string[]} [allowed_models] - 허용 모델 목록
- * @property {string} [rate_limit_tier] - Rate Limit 등급 (free/starter/standard/enterprise)
  * @property {string} [expires_at] - 만료 일시 (ISO 8601 datetime)
  */
 const createApiKeySchema = z.object({
@@ -54,7 +52,6 @@ const createApiKeySchema = z.object({
     description: z.string().max(500).optional(),
     scopes: z.array(z.string()).optional(),
     allowed_models: z.array(z.string()).optional(),
-    rate_limit_tier: z.enum(['free', 'starter', 'standard', 'enterprise']).optional(),
     expires_at: z.string().datetime().optional(),
 });
 
@@ -64,7 +61,6 @@ const createApiKeySchema = z.object({
  * @property {string} [description] - 키 설명 (최대 500자)
  * @property {string[]} [scopes] - 접근 범위 목록
  * @property {string[]} [allowed_models] - 허용 모델 목록
- * @property {string} [rate_limit_tier] - Rate Limit 등급
  * @property {boolean} [is_active] - 활성화 상태
  * @property {string|null} [expires_at] - 만료 일시 (null = 무기한)
  */
@@ -73,7 +69,6 @@ const updateApiKeySchema = z.object({
     description: z.string().max(500).optional(),
     scopes: z.array(z.string()).optional(),
     allowed_models: z.array(z.string()).optional(),
-    rate_limit_tier: z.enum(['free', 'starter', 'standard', 'enterprise']).optional(),
     is_active: z.boolean().optional(),
     expires_at: z.string().datetime().nullable().optional(),
 });
@@ -120,7 +115,6 @@ router.post('/',
                 description: req.body.description,
                 scopes: req.body.scopes,
                 allowedModels: req.body.allowed_models,
-                rateLimitTier: req.body.rate_limit_tier as ApiKeyTier | undefined,
                 expiresAt: req.body.expires_at,
             });
 
@@ -211,7 +205,6 @@ router.patch('/:id',
             description: req.body.description,
             scopes: req.body.scopes,
             allowedModels: req.body.allowed_models,
-            rateLimitTier: req.body.rate_limit_tier as ApiKeyTier | undefined,
             isActive: req.body.is_active,
             expiresAt: req.body.expires_at,
         });

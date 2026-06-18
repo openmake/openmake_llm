@@ -8,7 +8,7 @@
  */
 
 import crypto from 'node:crypto';
-import { getUnifiedDatabase, UserApiKey, UserApiKeyPublic, ApiKeyTier } from '../data/models/unified-database';
+import { getUnifiedDatabase, UserApiKey, UserApiKeyPublic } from '../data/models/unified-database';
 import { generateApiKey, hashApiKey, extractLast4, API_KEY_PREFIX } from '../auth/api-key-utils';
 import { getConfig } from '../config/env';
 import { createLogger } from '../utils/logger';
@@ -22,7 +22,6 @@ export interface CreateApiKeyParams {
     description?: string;
     scopes?: string[];
     allowedModels?: string[];
-    rateLimitTier?: ApiKeyTier;
     expiresAt?: string;
 }
 
@@ -40,7 +39,6 @@ export interface UpdateApiKeyParams {
     description?: string;
     scopes?: string[];
     allowedModels?: string[];
-    rateLimitTier?: ApiKeyTier;
     isActive?: boolean;
     expiresAt?: string | null;
 }
@@ -58,7 +56,6 @@ function toPublic(key: UserApiKey): UserApiKeyPublic {
         description: key.description,
         scopes: key.scopes,
         allowed_models: key.allowed_models,
-        rate_limit_tier: key.rate_limit_tier,
         is_active: key.is_active,
         last_used_at: key.last_used_at,
         expires_at: key.expires_at,
@@ -110,15 +107,7 @@ export class ApiKeyService {
         const last4 = extractLast4(plainKey);
         const keyId = crypto.randomUUID();
 
-        // §7 Security: Free tier 30일 자동 만료 강제
-        let expiresAt = params.expiresAt;
-        const tier = params.rateLimitTier || 'free';
-        if (tier === 'free' && !expiresAt) {
-            const thirtyDaysFromNow = new Date();
-            thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
-            expiresAt = thirtyDaysFromNow.toISOString();
-            logger.info(`Free tier 키 자동 만료 설정: ${expiresAt}`);
-        }
+        const expiresAt = params.expiresAt;
 
         const created = await db.createApiKey({
             id: keyId,
@@ -130,7 +119,6 @@ export class ApiKeyService {
             description: params.description,
             scopes: params.scopes,
             allowedModels: params.allowedModels,
-            rateLimitTier: params.rateLimitTier,
             expiresAt,
         });
 
@@ -138,7 +126,6 @@ export class ApiKeyService {
 
         await this.audit('create', params.userId, keyId, {
             name: params.name,
-            tier: params.rateLimitTier || 'free',
             scopes: params.scopes,
         });
 
@@ -192,7 +179,6 @@ export class ApiKeyService {
             description: updates.description,
             scopes: updates.scopes,
             allowedModels: updates.allowedModels,
-            rateLimitTier: updates.rateLimitTier,
             isActive: updates.isActive,
             expiresAt: updates.expiresAt,
         });

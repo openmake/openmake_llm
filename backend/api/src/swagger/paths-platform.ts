@@ -341,7 +341,6 @@ export const platformPaths = {
                                 description: { type: 'string', maxLength: 500 },
                                 scopes: { type: 'array', items: { type: 'string' }, default: ['*'] },
                                 allowed_models: { type: 'array', items: { type: 'string' }, default: ['*'] },
-                                rate_limit_tier: { type: 'string', enum: ['free', 'starter', 'standard', 'enterprise'] },
                                 expires_at: { type: 'string', format: 'date-time' }
                             }
                         }
@@ -388,8 +387,7 @@ export const platformPaths = {
                             properties: {
                                 name: { type: 'string' },
                                 description: { type: 'string' },
-                                is_active: { type: 'boolean' },
-                                rate_limit_tier: { type: 'string', enum: ['free', 'starter', 'standard', 'enterprise'] }
+                                is_active: { type: 'boolean' }
                             }
                         }
                     }
