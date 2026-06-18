@@ -12,8 +12,10 @@ import { getUnifiedDatabase } from '../../data/models/unified-database';
 import { createLogger } from '../../utils/logger';
 import { CAPACITY } from '../../config/runtime-limits';
 import { LLM_TEMPERATURES } from '../../config/llm-parameters';
+import { LLM_TIMEOUTS } from '../../config/timeouts';
 import { clampImportance, buildFallbackSubTopics } from '../deep-research-utils';
 import { getDecomposePrompt, getResearchMessage } from '../deep-research-prompts';
+import { chatWithAbortTimeout } from './chat-with-timeout';
 
 const logger = createLogger('DeepResearch:TopicDecomposer');
 
@@ -25,17 +27,22 @@ export async function decomposeTopics(params: {
     config: ResearchConfig;
     topic: string;
     sessionId: string;
+    abortSignal?: AbortSignal;
     throwIfAborted: () => void;
 }): Promise<SubTopic[]> {
-    const { client, config, topic, sessionId, throwIfAborted } = params;
+    const { client, config, topic, sessionId, abortSignal, throwIfAborted } = params;
 
     throwIfAborted();
     const prompt = getDecomposePrompt(config.language, topic);
 
     try {
-        const response = await client.chat([
-            { role: 'user', content: prompt }
-        ], { temperature: LLM_TEMPERATURES.RESEARCH_PLAN });
+        const response = await chatWithAbortTimeout(
+            client,
+            [{ role: 'user', content: prompt }],
+            { temperature: LLM_TEMPERATURES.RESEARCH_PLAN },
+            LLM_TIMEOUTS.RESEARCH_DECOMPOSE_TIMEOUT_MS,
+            abortSignal,
+        );
         throwIfAborted();
 
         const jsonMatch = response.content.match(/\[[\s\S]*\]/);
@@ -85,6 +92,7 @@ export async function decomposeTopics(params: {
 
         return finalSubTopics;
     } catch (error) {
+        throwIfAborted();  // 외부 중단이면 RESEARCH_ABORTED 전파, timeout/파싱 실패면 폴백
         logger.error(`[DeepResearch] 주제 분해 실패: ${error instanceof Error ? error.message : String(error)}`);
         return buildFallbackSubTopics(topic);
     }

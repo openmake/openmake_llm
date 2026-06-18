@@ -11,6 +11,7 @@ import { SearchResult } from './types';
 import { getConfig } from '../../config/env';
 import { createLogger } from '../../utils/logger';
 import { CAPACITY } from '../../config/runtime-limits';
+import { LLM_TIMEOUTS } from '../../config/timeouts';
 import { getSearchLocale } from '../../i18n/search-locale';
 
 /** Google Custom Search API 키 */
@@ -28,6 +29,38 @@ const logger = createLogger('WebSearch');
 if (!GOOGLE_API_KEY || !GOOGLE_CSE_ID) {
     logger.warn('GOOGLE_API_KEY 또는 GOOGLE_CSE_ID가 설정되지 않았습니다.');
     logger.warn('Google 검색 기능이 비활성화됩니다. .env 파일에 설정하세요.');
+}
+
+/**
+ * 검색 프로바이더용 fetch — 개별 timeout 과 외부 abort signal 을 결합한다.
+ *
+ * provider fetch 에 timeout 이 없으면 응답을 물고 있는 검색 서버 하나가
+ * `performWebSearch` 의 `Promise.all` 을 무한정 멈추게 한다(Deep Research 멈춤 주원인).
+ * timeout(WEB_SEARCH_FETCH_TIMEOUT_MS) 또는 외부 중단 중 먼저 발생하는 쪽이 요청을 취소한다.
+ *
+ * @param url - 요청 URL
+ * @param externalSignal - 상위(연구 중단) abort signal (optional)
+ * @param init - 추가 fetch 옵션 (headers 등)
+ */
+function searchFetch(url: string, externalSignal?: AbortSignal, init?: RequestInit): Promise<Response> {
+    const timeoutSignal = AbortSignal.timeout(LLM_TIMEOUTS.WEB_SEARCH_FETCH_TIMEOUT_MS);
+    const signal = externalSignal
+        ? AbortSignal.any([externalSignal, timeoutSignal])
+        : timeoutSignal;
+    return fetch(url, { ...init, signal });
+}
+
+/**
+ * 검색 fetch 에러를 사람이 읽을 수 있게 기술 — timeout/abort 를 일반 실패와 구분한다.
+ * (12초 fetch timeout 으로 정상 응답이 잘리는 경우를 silent 실패와 구분해 진단 가능하게 함)
+ */
+function describeFetchError(e: unknown): string {
+    if (e instanceof Error) {
+        if (e.name === 'TimeoutError') return `timeout(${LLM_TIMEOUTS.WEB_SEARCH_FETCH_TIMEOUT_MS}ms 초과)`;
+        if (e.name === 'AbortError') return '요청 중단(abort)';
+        return e.message;
+    }
+    return String(e);
 }
 
 /**
@@ -59,7 +92,7 @@ function decodeXmlEntities(text: string): string {
  * @param language - 검색 언어 (기본값: 'en')
  * @returns SearchResult 배열 (API 키 미설정 또는 실패 시 빈 배열)
  */
-export async function searchGoogle(query: string, maxResults: number = 10, globalSearch: boolean = true, language: string = 'en'): Promise<SearchResult[]> {
+export async function searchGoogle(query: string, maxResults: number = 10, globalSearch: boolean = true, language: string = 'en', signal?: AbortSignal): Promise<SearchResult[]> {
     const results: SearchResult[] = [];
 
     if (!GOOGLE_API_KEY || !GOOGLE_CSE_ID) {
@@ -75,7 +108,7 @@ export async function searchGoogle(query: string, maxResults: number = 10, globa
             url += getSearchLocale(language).googleParams;
         }
 
-        const response = await fetch(url);
+        const response = await searchFetch(url, signal);
 
         if (!response.ok) {
             logger.error(`Google API 오류: ${response.status}`);
@@ -96,7 +129,7 @@ export async function searchGoogle(query: string, maxResults: number = 10, globa
         }
         logger.info(`Google: ${results.length}개`);
     } catch (e) {
-        logger.error('Google 실패:', e instanceof Error ? e.message : String(e));
+        logger.error('Google 실패:', describeFetchError(e));
     }
 
     return results;
@@ -112,7 +145,7 @@ export async function searchGoogle(query: string, maxResults: number = 10, globa
  * @param language - 검색 언어 (기본값: 'en')
  * @returns SearchResult 배열 (실패 시 빈 배열)
  */
-export async function searchWikipedia(query: string, language: string = 'en'): Promise<SearchResult[]> {
+export async function searchWikipedia(query: string, language: string = 'en', signal?: AbortSignal): Promise<SearchResult[]> {
     const results: SearchResult[] = [];
 
     try {
@@ -120,7 +153,7 @@ export async function searchWikipedia(query: string, language: string = 'en'): P
         const wikiDomain = getSearchLocale(language).wikiDomain;
         const url = `https://${wikiDomain}.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&format=json&srlimit=5&origin=*`;
 
-        const response = await fetch(url);
+        const response = await searchFetch(url, signal);
         if (!response.ok) return results;
 
         const data = await response.json() as {
@@ -142,7 +175,7 @@ export async function searchWikipedia(query: string, language: string = 'en'): P
 
         logger.info(`Wikipedia: ${results.length}개`);
     } catch (e) {
-        logger.error('Wikipedia 실패:', e instanceof Error ? e.message : String(e));
+        logger.error('Wikipedia 실패:', describeFetchError(e));
     }
 
     return results;
@@ -159,7 +192,7 @@ export async function searchWikipedia(query: string, language: string = 'en'): P
  * @param language - 검색 언어 (기본값: 'en')
  * @returns SearchResult 배열 (실패 시 빈 배열)
  */
-export async function searchGoogleNews(query: string, language: string = 'en'): Promise<SearchResult[]> {
+export async function searchGoogleNews(query: string, language: string = 'en', signal?: AbortSignal): Promise<SearchResult[]> {
     const results: SearchResult[] = [];
 
     try {
@@ -167,7 +200,7 @@ export async function searchGoogleNews(query: string, language: string = 'en'): 
         const newsParams = getSearchLocale(language).newsParams;
         const url = `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&${newsParams}`;
 
-        const response = await fetch(url);
+        const response = await searchFetch(url, signal);
         if (!response.ok) return results;
 
         const xml = (await response.text()).replace(/\u0000/g, '');
@@ -214,7 +247,7 @@ export async function searchGoogleNews(query: string, language: string = 'en'): 
 
         logger.info(`Google News: ${results.length}개`);
     } catch (e) {
-        logger.error('Google News 실패:', e instanceof Error ? e.message : String(e));
+        logger.error('Google News 실패:', describeFetchError(e));
     }
 
     return results;
@@ -229,12 +262,12 @@ export async function searchGoogleNews(query: string, language: string = 'en'): 
  * @param query - 검색 쿼리
  * @returns SearchResult 배열 (실패 시 빈 배열)
  */
-export async function searchDuckDuckGoAPI(query: string): Promise<SearchResult[]> {
+export async function searchDuckDuckGoAPI(query: string, signal?: AbortSignal): Promise<SearchResult[]> {
     const results: SearchResult[] = [];
 
     try {
         const url = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`;
-        const response = await fetch(url);
+        const response = await searchFetch(url, signal);
         if (!response.ok) return results;
 
         const data = await response.json() as {
@@ -273,7 +306,7 @@ export async function searchDuckDuckGoAPI(query: string): Promise<SearchResult[]
 
         logger.info(`DuckDuckGo API: ${results.length}개`);
     } catch (e) {
-        logger.error('DuckDuckGo API 실패:', e instanceof Error ? e.message : String(e));
+        logger.error('DuckDuckGo API 실패:', describeFetchError(e));
     }
 
     return results;
@@ -292,7 +325,7 @@ export async function searchDuckDuckGoAPI(query: string): Promise<SearchResult[]
  * @param maxResults - 최대 결과 수 (기본값: 5, API 제한: 최대 100)
  * @returns SearchResult 배열 (키 미설정/실패 시 빈 배열)
  */
-export async function searchNaverNews(query: string, maxResults: number = 5): Promise<SearchResult[]> {
+export async function searchNaverNews(query: string, maxResults: number = 5, signal?: AbortSignal): Promise<SearchResult[]> {
     const results: SearchResult[] = [];
 
     if (!NAVER_CLIENT_ID || !NAVER_CLIENT_SECRET) {
@@ -303,7 +336,7 @@ export async function searchNaverNews(query: string, maxResults: number = 5): Pr
         const display = Math.min(Math.max(maxResults, 1), 100);
         const url = `https://openapi.naver.com/v1/search/news.json?query=${encodeURIComponent(query)}&display=${display}&sort=date`;
 
-        const response = await fetch(url, {
+        const response = await searchFetch(url, signal, {
             headers: {
                 'X-Naver-Client-Id': NAVER_CLIENT_ID,
                 'X-Naver-Client-Secret': NAVER_CLIENT_SECRET,
@@ -331,7 +364,7 @@ export async function searchNaverNews(query: string, maxResults: number = 5): Pr
         }
         logger.info(`네이버 뉴스: ${results.length}개`);
     } catch (e) {
-        logger.error('네이버 뉴스 실패:', e instanceof Error ? e.message : String(e));
+        logger.error('네이버 뉴스 실패:', describeFetchError(e));
     }
 
     return results;
@@ -360,7 +393,7 @@ function stripNaverTags(text: string): string {
  * @param maxResults - 최대 결과 수 (기본값: 10, API 제한: 최대 100)
  * @returns SearchResult 배열 (키 미설정/실패 시 빈 배열)
  */
-export async function searchNaverWeb(query: string, maxResults: number = 10): Promise<SearchResult[]> {
+export async function searchNaverWeb(query: string, maxResults: number = 10, signal?: AbortSignal): Promise<SearchResult[]> {
     const results: SearchResult[] = [];
 
     if (!NAVER_CLIENT_ID || !NAVER_CLIENT_SECRET) {
@@ -371,7 +404,7 @@ export async function searchNaverWeb(query: string, maxResults: number = 10): Pr
         const display = Math.min(Math.max(maxResults, 1), 100);
         const url = `https://openapi.naver.com/v1/search/webkr.json?query=${encodeURIComponent(query)}&display=${display}`;
 
-        const response = await fetch(url, {
+        const response = await searchFetch(url, signal, {
             headers: {
                 'X-Naver-Client-Id': NAVER_CLIENT_ID,
                 'X-Naver-Client-Secret': NAVER_CLIENT_SECRET,
@@ -398,7 +431,7 @@ export async function searchNaverWeb(query: string, maxResults: number = 10): Pr
         }
         logger.info(`네이버 웹문서: ${results.length}개`);
     } catch (e) {
-        logger.error('네이버 웹문서 실패:', e instanceof Error ? e.message : String(e));
+        logger.error('네이버 웹문서 실패:', describeFetchError(e));
     }
 
     return results;

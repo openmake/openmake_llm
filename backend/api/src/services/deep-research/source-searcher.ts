@@ -84,8 +84,12 @@ export async function searchSubTopics(params: {
             try {
                 const results = await performWebSearch(query, {
                     maxResults: resultsPerQuery,
-                    language: config.language
+                    language: config.language,
+                    signal: abortSignal
                 });
+                // abort 시 performWebSearch 는 빈/부분 결과를 반환하므로, 검색 스텝을
+                // completed 로 오기록하지 않도록 결과 처리 전에 중단을 확인한다.
+                throwIfAborted();
 
                 const uniqueForQuery: SearchResult[] = [];
                 for (const result of results) {

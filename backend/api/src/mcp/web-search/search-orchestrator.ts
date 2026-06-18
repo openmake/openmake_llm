@@ -41,22 +41,23 @@ const logger = createLogger('WebSearch');
  *
  * 변경 이력: 2026-05-19 — Ollama Cloud /api/web_search 폐기로 useOllamaFirst/searchOllamaWebSearch 제거.
  */
-export async function performWebSearch(query: string, options: { maxResults?: number; globalSearch?: boolean; language?: string } = {}): Promise<SearchResult[]> {
-    const { maxResults = 30, globalSearch = true, language = 'en' } = options;
+export async function performWebSearch(query: string, options: { maxResults?: number; globalSearch?: boolean; language?: string; signal?: AbortSignal } = {}): Promise<SearchResult[]> {
+    const { maxResults = 30, globalSearch = true, language = 'en', signal } = options;
 
     // 고볼륨 모드: maxResults > 15이면 모든 소스에서 병렬 수집 (Deep Research 용)
     const highVolumeMode = maxResults > 15;
 
     logger.info(`쿼리: ${query} (maxResults: ${maxResults}, highVolume: ${highVolumeMode})`);
 
-    // 모든 소스에서 병렬 검색
+    // 모든 소스에서 병렬 검색 — 각 provider 는 자체 fetch timeout + 외부 abort signal 로
+    // hang 을 방지하므로 Promise.all 이 무한정 멈추지 않는다.
     const searchPromises: Promise<SearchResult[]>[] = [
-        searchGoogle(query, 10, globalSearch, language),
-        searchWikipedia(query, language),
-        searchGoogleNews(query, language),
-        searchDuckDuckGoAPI(query),
+        searchGoogle(query, 10, globalSearch, language, signal),
+        searchWikipedia(query, language, signal),
+        searchGoogleNews(query, language, signal),
+        searchDuckDuckGoAPI(query, signal),
         // 한국어 쿼리: 네이버 뉴스(모바일 스크래핑) + 웹문서(공식 검색 API) 병렬 수집
-        ...(language === 'ko' ? [searchNaverNews(query), searchNaverWeb(query)] : [])
+        ...(language === 'ko' ? [searchNaverNews(query, 5, signal), searchNaverWeb(query, 10, signal)] : [])
     ];
 
     const allSearchResults = await Promise.all(searchPromises);
