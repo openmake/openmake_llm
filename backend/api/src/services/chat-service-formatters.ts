@@ -33,23 +33,11 @@ export function formatResearchResult(result: {
     totalSteps: number;
     duration: number;
 }): string {
-    const sections = [
-        `# 🔬 심층 연구 보고서: ${result.topic}`,
-        '',
-        '## 📋 종합 요약',
-        result.summary,
-        '',
-        '## 🔍 주요 발견사항',
-        ...result.keyFindings.map((finding, i) => `${i + 1}. ${finding}`),
-        '',
-        '## 📚 참고 자료',
-        ...result.sources.map((source, i) => `[${i + 1}] [${source.title}](${source.url})`),
-        '',
-        '---',
-        `*총 ${result.totalSteps}단계 연구, ${result.sources.length}개 소스 분석, ${(result.duration / 1000).toFixed(1)}초 소요*`,
-    ];
-
-    return sections.join('\n');
+    // result.summary 는 report-generator 가 만든 **완전한 보고서**(제목·종합요약·주요발견·상세분석·
+    // 참고문헌 포함). 과거엔 이를 "종합 요약"에 통째로 넣고 keyFindings/sources 를 또 붙여 삼중
+    // 중복(+ raw URL 참고문헌)이 됐다. 이제 보고서를 그대로 출력하고 메타 라인만 덧붙인다.
+    const meta = `*총 ${result.totalSteps}단계 연구, ${result.sources.length}개 소스 분석, ${(result.duration / 1000).toFixed(1)}초 소요*`;
+    return `${(result.summary || '').trim()}\n\n---\n${meta}`;
 }
 
 /**

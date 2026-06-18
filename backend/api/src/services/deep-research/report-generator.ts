@@ -27,6 +27,39 @@ interface MarkdownSection {
 }
 
 /**
+ * URL 에서 표시용 호스트명 추출 (www. 제거). 실패 시 빈 문자열.
+ */
+function hostnameOf(url: string): string {
+    try {
+        return new URL(url).hostname.replace(/^www\./, '');
+    } catch {
+        return '';
+    }
+}
+
+/**
+ * 참고문헌 블록을 코드로 생성 — `[N] [제목 (도메인)](url)` 마크다운 링크.
+ *
+ * LLM 에 raw URL 을 맡기면 Google News redirect 등 거대 base64 URL 이 그대로 노출되므로,
+ * 본문(인용 [출처 N])과 번호가 일치하는 참고문헌을 코드로 단일 생성한다.
+ *
+ * @param sources 중복 제거된 소스 목록 (본문 인용 N 과 같은 순서)
+ * @param refLabel 라벨 fallback 용 references 헤더 텍스트
+ */
+function buildReferencesBlock(sources: SearchResult[], refLabel: string): string {
+    return sources
+        .map((source, index) => {
+            const domain = (source.source && source.source.trim()) || hostnameOf(source.url);
+            const label = (source.title && source.title.trim()) || domain || `${refLabel} ${index + 1}`;
+            const suffix = domain ? ` (${domain})` : '';
+            return source.url
+                ? `[${index + 1}] [${label}${suffix}](${source.url})`
+                : `[${index + 1}] ${label}${suffix}`;
+        })
+        .join('\n');
+}
+
+/**
  * 마크다운을 ## 헤더 기준으로 분할 (regex 의존 제거)
  */
 function splitMarkdownSections(content: string): MarkdownSection[] {
@@ -121,6 +154,9 @@ export async function generateReport(params: {
         .map((source, index) => `[${index + 1}] ${source.title} - ${source.url}`)
         .join('\n');
 
+    // 섹션 헤더 (본문 코드 참고문헌 재생성 + fallback 보고서 공용)
+    const h = SECTION_HEADERS[config.language] || SECTION_HEADERS['en']!;
+
     const subTopicGuide = subTopics
         .map((subTopic, index) => `${index + 1}. ${subTopic.title}`)
         .join('\n');
@@ -148,7 +184,13 @@ export async function generateReport(params: {
         );
         throwIfAborted();
 
-        const content = response.content;
+        // LLM 이 생성한 참고문헌(## References) 섹션을 제거하고, 코드로 sources 를
+        // 마크다운 링크 `[제목 (도메인)](url)` 로 재생성한다 — Google News 등 raw redirect URL 의
+        // base64 노출을 방지하고, 본문 [출처 N] 인용과 번호를 일치시킨다.
+        const rawContent = response.content;
+        const refIdx = rawContent.indexOf(`## ${h.references}`);
+        const reportBody = (refIdx >= 0 ? rawContent.slice(0, refIdx) : rawContent).trimEnd();
+        const content = `${reportBody}\n\n## ${h.references}\n\n${buildReferencesBlock(uniqueSources, h.references)}`;
 
         // 마크다운 섹션 파싱 — ## 헤더 기반 분할 (regex보다 안정적)
         const sections = splitMarkdownSections(content);
@@ -218,9 +260,9 @@ export async function generateReport(params: {
         return { summary: content, keyFindings };
     } catch (error) {
         logger.error(`[DeepResearch] 보고서 생성 실패: ${error instanceof Error ? error.message : String(error)}`);
-        // fallback: 합성 결과를 간단한 보고서 형태로 조합
+        // fallback: 합성 결과를 간단한 보고서 형태로 조합 (참고문헌도 코드 마크다운 링크 사용)
         if (meaningfulFindings.length > 0) {
-            const fallback = buildFallbackReport(config.language, topic, meaningfulFindings, sourceList);
+            const fallback = buildFallbackReport(config.language, topic, meaningfulFindings, buildReferencesBlock(uniqueSources, h.references));
             return { summary: fallback, keyFindings: extractBulletLikeFindings(meaningfulFindings.join('\n')) };
         }
         return { summary: getResearchMessage('reportFailed', config.language), keyFindings: [] };
