@@ -15,7 +15,7 @@
  */
 import { v4 as uuidv4 } from 'uuid';
 import { getUnifiedDatabase } from '../../data/models/unified-database';
-import { DeepResearchService } from '../DeepResearchService';
+import { DeepResearchService, type ResearchResult } from '../DeepResearchService';
 import type { ChatStrategy, ChatResult, DeepResearchStrategyContext } from './types';
 import { createLogger } from '../../utils/logger';
 import { isPersistableUserId } from '../../utils/user-id-validation';
@@ -80,8 +80,11 @@ export class DeepResearchStrategy implements ChatStrategy<DeepResearchStrategyCo
         });
 
         // 연구 실행 및 결과 포맷팅
+        // result 는 try 밖에 보존 — executeResearch 성공(보고서 완성) 후 스트리밍 단계에서
+        // 중단/오류가 나도 completed 세션을 failed 로 덮어쓰지 않기 위함.
+        let result: ResearchResult | undefined;
         try {
-            const result = await researchService.executeResearch(sessionId, message, context.onProgress, context.req.abortSignal);
+            result = await researchService.executeResearch(sessionId, message, context.onProgress, context.req.abortSignal);
             const formattedResponse = context.formatResearchResult(result);
 
             // 포맷팅된 보고서를 문자 단위로 스트리밍 전송
@@ -93,6 +96,16 @@ export class DeepResearchStrategy implements ChatStrategy<DeepResearchStrategyCo
 
             return { response: formattedResponse };
         } catch (error) {
+            // executeResearch 가 보고서를 완성한 뒤(result 존재) 스트리밍 단계에서 중단/오류가 난 경우:
+            // 보고서는 이미 completed 로 DB 에 저장돼 있으므로 failed 로 덮어쓰지 않는다.
+            // (장시간 연구 중 사용자가 다른 대화로 전환 → WS 스트리밍 abort 시 결과 유실 방지)
+            if (result) {
+                logger.info('🔬 Deep Research 보고서 완성 후 스트리밍 중단 — completed 유지');
+                const formattedResponse = context.formatResearchResult(result);
+                try { for (const char of formattedResponse) context.onToken(char); } catch { /* 연결 종료 무시 */ }
+                return { response: formattedResponse };
+            }
+
             const isAborted = error instanceof Error && error.message === 'RESEARCH_ABORTED';
             if (isAborted) {
                 logger.info('🔬 Deep Research 사용자 취소');
@@ -108,9 +121,7 @@ export class DeepResearchStrategy implements ChatStrategy<DeepResearchStrategyCo
                 ? '연구가 취소되었습니다.'
                 : '연구 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.';
 
-            for (const char of fallbackResponse) {
-                context.onToken(char);
-            }
+            try { for (const char of fallbackResponse) context.onToken(char); } catch { /* 연결 종료 무시 */ }
 
             return { response: fallbackResponse };
         }
