@@ -131,7 +131,7 @@ function createPinnedAgent(pinnedAddress: string, ipFamily: 4 | 6): Agent {
     return new Agent({
         connect: {
             lookup: (_hostname, options, callback) => {
-                // Node 22.2x undici는 happy-eyeballs 연결을 위해 all:true 로 lookup 을
+                // Node 24 undici는 happy-eyeballs 연결을 위해 all:true 로 lookup 을
                 // 호출하고 LookupAddress 배열을 기대한다 — 단일 (address, family) 형태로만
                 // 응답하면 "Invalid IP address: undefined" 로 모든 연결이 실패한다.
                 if (options?.all) {
