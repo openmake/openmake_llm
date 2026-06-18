@@ -11,7 +11,7 @@
  * @description
  * - POST   /api/mcp/terminal              - 터미널 실행 (비활성화, HTTP 410)
  * - POST   /api/mcp/terminal              - 터미널 실행 (비활성화, HTTP 410)
- * - GET    /api/mcp/tools                 - 사용 가능한 도구 목록 (등급별 필터링)
+ * - GET    /api/mcp/tools                 - 사용 가능한 도구 목록 (전체 노출)
  * - POST   /api/mcp/tools/:name/execute   - 도구 실행 (인증, 컨텍스트 기반 권한)
  * - GET    /api/mcp/servers               - 외부 MCP 서버 목록 + 연결 상태 (인증)
  * - POST   /api/mcp/servers               - 새 외부 서버 등록 (관리자)
@@ -60,7 +60,7 @@ export const mcpRouter = Router();
  mcpRouter.get('/tools', optionalAuth, (_req: Request, res: Response) => {
      try {
          const mcpClient = getUnifiedMCPClient();
-         const tools = mcpClient.getToolListForUser();
+         const tools = mcpClient.getToolList();
 
          res.json(success({ tools, total: tools.length }));
       } catch (error) {

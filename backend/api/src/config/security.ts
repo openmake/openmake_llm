@@ -15,23 +15,11 @@ export const SSRF_LIMITS = {
     REQUEST_TIMEOUT_MS: 30_000,
 } as const;
 
-export type BlacklistFailMode = 'open' | 'safe';
-
-export const BLACKLIST_POLICY = {
-    /** 기본값: 기존 동작 유지 (가용성 우선) — additive 변경 */
-    DEFAULT_FAIL_MODE: 'open' as BlacklistFailMode,
-} as const;
-
 export const WS_SECURITY = {
     /** 연결 거부 시 표준 WebSocket close code (Policy Violation) */
     ORIGIN_REJECTED_CLOSE_CODE: 1008,
     /** close frame reason phrase */
     ORIGIN_REJECTED_REASON: 'origin_rejected',
-} as const;
-
-export const COOKIE_POLICY = {
-    /** production 환경에서 cookieSecure=false 허용 여부 */
-    ALLOW_INSECURE_IN_PRODUCTION: false,
 } as const;
 
 /**
@@ -56,14 +44,6 @@ export const RATE_LIMIT_POLICY = {
     TTL_WINDOW_MULTIPLIER: 2,
     /** Admin은 일반 사용자 limit × 이 배수까지 허용 (완전 우회 방지) */
     ADMIN_MULTIPLIER: 5,
-} as const;
-
-/**
- * OAuth state nonce 생성 정책.
- */
-export const OAUTH_NONCE_POLICY = {
-    /** CSRF 방지용 nonce 바이트 수 (32 = 256bit 엔트로피, hex 64자) */
-    BYTES: 32,
 } as const;
 
 /**
@@ -141,8 +121,6 @@ export const STORAGE_POLICY = {
     /** OAuth state nonce 수명 — CSRF 검증 유효 기간 */
     OAUTH_STATE_TTL_MS: 10 * 60 * 1000,
 } as const;
-
-export type CsrfMode = 'off' | 'warn' | 'enforce';
 
 export const CSRF_POLICY = {
     /** 쿠키 이름 (JS 읽기 가능, non-HttpOnly — Double-Submit Cookie 패턴 요건) */

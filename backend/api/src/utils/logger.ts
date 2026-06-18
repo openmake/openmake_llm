@@ -102,5 +102,3 @@ export function createLogger(category: string) {
         error: (msg: string, meta?: unknown) => logger.error(`[${category}] ${msg}`, meta)
     };
 }
-
-export default logger;

@@ -205,7 +205,3 @@ export function getCacheSystem(): CacheSystem {
     }
     return cacheInstance;
 }
-
-export function createCacheSystem(options?: CacheOptions): CacheSystem {
-    return new CacheSystem(options);
-}

@@ -13,12 +13,6 @@ import type { GoldenDataset, GoldenCase, EvaluationCategory } from './types';
 
 const logger = createLogger('DatasetLoader');
 
-const EVALUATION_CATEGORIES: EvaluationCategory[] = [
-    'routing-accuracy',
-    'topic-classification',
-    'response-pattern',
-];
-
 const goldenCaseSchema = z.object({
     id: z.string().min(1),
     category: z.enum(['routing-accuracy', 'topic-classification', 'response-pattern']),
@@ -108,5 +102,3 @@ export function filterCasesByCategory(
 export function filterCasesByTag(dataset: GoldenDataset, tag: string): GoldenCase[] {
     return dataset.cases.filter((c) => c.tags?.includes(tag));
 }
-
-export const SUPPORTED_CATEGORIES = EVALUATION_CATEGORIES;

@@ -8,7 +8,6 @@
  */
 
 import ora, { Ora } from 'ora';
-import chalk from 'chalk';
 
 export class Spinner {
     private spinner: Ora;
@@ -53,12 +52,4 @@ export class Spinner {
 
 export function createSpinner(text?: string): Spinner {
     return new Spinner(text);
-}
-
-export function showTyping(): void {
-    process.stdout.write(chalk.gray.dim('▌'));
-}
-
-export function clearTyping(): void {
-    process.stdout.write('\r\x1b[K');
 }

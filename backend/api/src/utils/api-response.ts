@@ -49,9 +49,6 @@ export interface ApiErrorResponse {
     meta?: ResponseMeta;
 }
 
-/** 통합 API 응답 타입 */
-export type ApiResponse<T = unknown> = ApiSuccessResponse<T> | ApiErrorResponse;
-
 /** 응답 메타데이터 */
 export interface ResponseMeta {
     timestamp: string;
@@ -100,8 +97,6 @@ export const ErrorCodes = {
     MODEL_NOT_AVAILABLE: 'MODEL_NOT_AVAILABLE',
     DOCUMENT_PROCESSING_FAILED: 'DOCUMENT_PROCESSING_FAILED',
 } as const;
-
-export type ErrorCode = typeof ErrorCodes[keyof typeof ErrorCodes];
 
 // ===== Helper Functions =====
 

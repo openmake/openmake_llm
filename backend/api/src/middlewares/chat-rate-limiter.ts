@@ -115,13 +115,6 @@ if (
     chatRateLimitCleanupInterval.unref();
 }
 
-/**
- * Graceful shutdown 시 채팅 레이트 리미터 cleanup interval을 중지합니다.
- */
-export function stopChatRateLimitCleanup(): void {
-    clearInterval(chatRateLimitCleanupInterval);
-}
-
 // 역할별 일일 제한 (남용 방지 — 구독 등급과 무관)
 const DAILY_LIMITS: Record<string, number> = {
     admin: Infinity,

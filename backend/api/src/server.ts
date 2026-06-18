@@ -359,20 +359,6 @@ export class DashboardServer {
     }
 }
 
-/**
- * DashboardServer 인스턴스를 생성하는 팩토리 함수
- * 
- * @param options - 서버 초기화 옵션
- * @returns DashboardServer 인스턴스
- * 
- * @example
- * const server = createDashboardServer({ port: 3000 });
- * await server.start();
- */
-export function createDashboardServer(options?: DashboardOptions): DashboardServer {
-    return new DashboardServer(options);
-}
-
 // ============================================
 // Auto-start when executed directly (npm run dev:api)
 // ============================================

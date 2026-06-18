@@ -25,42 +25,6 @@ export const ROUTER_NUM_PREDICT =
 export const GV_SKIP_THRESHOLD =
     Number(process.env.OMK_GV_SKIP_THRESHOLD ?? process.env.OMK_A2A_SKIP_THRESHOLD ?? '0.3');
 
-/**
- * 토론(Discussion) 자동 활성화 임계값
- * Pro 프로파일(useDiscussion=true)에서 사용자가 discussionMode를 명시하지 않았을 때,
- * 복잡도 점수가 이 값 이상이면 자동으로 토론 모드 활성화.
- * 보수적 시작: 0.7 (단순/중간 질의 자동 토론 방지)
- * env: OMK_DISCUSSION_AUTO_THRESHOLD
- */
-export const DISCUSSION_AUTO_THRESHOLD =
-    Number(process.env.OMK_DISCUSSION_AUTO_THRESHOLD ?? '0.7');
-
-/**
- * Auto 프로파일 전용 토론 자동 활성화 임계값
- * Auto 프로파일은 useDiscussion=false 고정이지만, 매우 복잡한 질의에 한해
- * 토론을 자동 활성화. Pro(0.7)보다 훨씬 보수적인 0.9로 시작.
- * "편하게 쓰는 모드"라는 사용자 기대를 깨지 않도록 정말 필요한 경우만 발동.
- * env: OMK_DISCUSSION_AUTO_MODE_THRESHOLD
- */
-export const DISCUSSION_AUTO_MODE_THRESHOLD =
-    Number(process.env.OMK_DISCUSSION_AUTO_MODE_THRESHOLD ?? '0.9');
-
-/**
- * 토론 자동 활성화 기능 토글
- * false면 사용자가 discussionMode=true를 명시한 경우에만 토론 실행 (기존 동작)
- * env: OMK_DISCUSSION_AUTO_ENABLED (기본 true)
- */
-export const DISCUSSION_AUTO_ENABLED =
-    (process.env.OMK_DISCUSSION_AUTO_ENABLED ?? 'true') === 'true';
-
-/**
- * Auto 프로파일에서 토론 자동 활성화 토글
- * 기본 false (Auto는 보수적 — Pro와 달리 사용자가 토론 비용을 명시 동의하지 않음)
- * env: OMK_DISCUSSION_AUTO_MODE_ENABLED
- */
-export const DISCUSSION_AUTO_MODE_ENABLED =
-    (process.env.OMK_DISCUSSION_AUTO_MODE_ENABLED ?? 'false') === 'true';
-
 /** 복잡도 시작 점수 */
 export const COMPLEXITY_NEUTRAL_SCORE = 0.5;
 

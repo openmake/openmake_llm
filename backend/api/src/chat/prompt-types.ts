@@ -4,7 +4,7 @@
  * ============================================================
  * 
  * prompt.ts에서 사용하는 타입/인터페이스 정의를 분리한 모듈입니다.
- * UserPromptConfig, PromptType, GEMINI_PARAMS 등을 정의합니다.
+ * UserPromptConfig, PromptType 등을 정의합니다.
  * 
  * @module chat/prompt-types
  * @see chat/prompt - 이 타입들을 사용하는 메인 모듈
@@ -16,8 +16,7 @@
 // ============================================================
 
 /**
- * 사용자 설정 가능 프롬프트 옵션 인터페이스
- * buildSystemPromptWithConfig() 및 getPresetWithUserConfig()에서 사용됩니다.
+ * 사용자 설정 가능 프롬프트 옵션 인터페이스 (temperature, 접두/접미사 등).
  */
 export interface UserPromptConfig {
     /** 온도 설정 (0.0-1.0, 높을수록 창의적) */

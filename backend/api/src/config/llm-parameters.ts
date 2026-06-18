@@ -96,18 +96,6 @@ export const LLM_TOP_P = {
     ANTI_DEGENERATION_PRESENCE_PENALTY: 1.5,
 } as const;
 
-// ============================================
-// Predict 제한 (num_predict)
-// ============================================
-
-/**
- * 용도별 최대 토큰 생성 수 제한
- */
-export const LLM_PREDICT_LIMITS = {
-    /** 메모리 추출 시 최대 토큰 */
-    MEMORY_EXTRACTION: Number(process.env.LLM_PREDICT_MEMORY_EXTRACTION) || 512,
-} as const;
-
 /**
  * 복잡도 기반 토큰 예산 (num_predict 동적 제어)
  *

@@ -458,6 +458,3 @@ export const deepResearchTools: MCPToolDefinition[] = [
     getResearchStatusTool,
     configureResearchTool
 ];
-
-// 개별 도구도 export
-export { researchTool as research, getResearchStatusTool as getStatus, configureResearchTool as configure };

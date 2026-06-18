@@ -10,7 +10,6 @@
  * @description
  * - 내장 도구와 외부 MCP 서버 도구의 통합 검색/실행
  * - '::' 네임스페이스 기반 외부 도구 라우팅 (예: "postgres::query")
- * - Ollama 호환 도구 형식 변환 (getOllamaTools)
  * - 외부 서버 도구의 동적 등록/해제
  *
  * @example
@@ -286,11 +285,6 @@ export class ToolRouter {
                 },
             },
         }));
-    }
-
-    /** @deprecated Use getLLMTools(). 호환 alias — P9 에서 제거 예정. */
-    async getOllamaTools(userContext?: { userId: string }): Promise<LLMTool[]> {
-        return this.getLLMTools(userContext);
     }
 
     /**

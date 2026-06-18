@@ -128,19 +128,6 @@ export class DatabaseError extends AppError {
 }
 
 /**
- * Standard error response interface
- * @deprecated Use ApiErrorResponse from api-response.ts instead
- */
-export interface ErrorResponse {
-    success: false;
-    error: string;
-    code?: string;
-    details?: string[];
-    timestamp: string;
-    stack?: string;
-}
-
-/**
  * Format error for response (#24 연동: 표준 ApiErrorResponse 형식)
  */
 function formatError(err: Error, includeStack: boolean): ApiErrorResponse & { stack?: string } {

@@ -226,5 +226,3 @@ export const envSchema = z
             });
         }
     });
-
-export type ParsedEnv = z.infer<typeof envSchema>;

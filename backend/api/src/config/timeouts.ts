@@ -107,26 +107,6 @@ export const CIRCUIT_BREAKER_DEFAULTS = {
 } as const;
 
 // ============================================
-// 연결 풀 타임아웃
-// ============================================
-
-/**
- * Ollama 연결 풀 관련 타임아웃
- */
-export const CONNECTION_POOL_TIMEOUTS = {
-    /** 연결 요청 타임아웃 (ms) */
-    REQUEST_TIMEOUT_MS: 30000,
-    /** 헬스체크 주기 (ms) — 30초 */
-    HEALTH_CHECK_INTERVAL_MS: 30000,
-    /** 유휴 연결 최대 허용 시간 (ms) — 1분 */
-    MAX_IDLE_TIME_MS: 60000,
-    /** 연결 획득 대기 타임아웃 (ms) */
-    ACQUIRE_TIMEOUT_MS: 5000,
-    /** 개별 헬스체크 요청 타임아웃 (ms) */
-    HEALTH_CHECK_TIMEOUT_MS: 5000,
-} as const;
-
-// ============================================
 // 쿼터 관련 재시도 시간
 // ============================================
 
