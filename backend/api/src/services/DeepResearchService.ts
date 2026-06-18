@@ -225,6 +225,18 @@ export class DeepResearchService {
                     sessionId,
                     loopNumber,
                     abortSignal: this.abortController?.signal,
+                    // 합성 진행 세분화 — synthesizeStart~End 구간을 청크(85%)+병합(나머지)으로 채워
+                    // 긴 progress 공백(체감 멈춤)을 제거한다.
+                    onChunkProgress: (completed, total, phase) => {
+                        const span = loopRange.synthesizeEnd - loopRange.synthesizeStart;
+                        const prog = phase === 'merge'
+                            ? loopRange.synthesizeStart + span * 0.85
+                            : loopRange.synthesizeStart + span * 0.85 * (total > 0 ? completed / total : 1);
+                        const msg = phase === 'merge'
+                            ? getResearchMessage('loopSynthMerging', this.config.language, { loop: loopNumber })
+                            : getResearchMessage('loopSynthChunk', this.config.language, { loop: loopNumber, completed, total });
+                        this.reportProgress(onProgress, sessionId, 'running', loopNumber, this.config.maxLoops, 'synthesize', prog, msg);
+                    },
                     throwIfAborted: () => this.throwIfAborted()
                 });
                 allFindings.push(synthesis.summary);

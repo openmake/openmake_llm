@@ -319,6 +319,9 @@ const messageHandlers = {
     },
     'research_progress': (data) => {
         debugLog('[WebSocket] 리서치 진행:', data.progress);
+        // 채팅 메시지 영역의 인라인 진행 카드로 렌더/갱신 (Agent Task 카드와 동등 UX).
+        // sessionId 기준 단일 카드 — 완료/실패/취소 시에도 카드는 히스토리에 남는다.
+        // (구 input 위 미니바 → 인라인 카드 전환, modes.js showResearchProgress)
         if (typeof showResearchProgress === 'function') {
             showResearchProgress(data.progress);
         }

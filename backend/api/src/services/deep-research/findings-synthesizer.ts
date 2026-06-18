@@ -57,9 +57,11 @@ export async function synthesizeFindings(params: {
     sessionId: string;
     loopNumber: number;
     abortSignal?: AbortSignal;
+    /** 합성 진행 콜백 — 청크 요약 완료 수 / 병합 진입을 보고해 progress 공백(체감 멈춤)을 제거 */
+    onChunkProgress?: (completed: number, total: number, phase: 'chunk' | 'merge') => void;
     throwIfAborted: () => void;
 }): Promise<SynthesisResult> {
-    const { client, config, topic, searchResults, sessionId, loopNumber, abortSignal, throwIfAborted } = params;
+    const { client, config, topic, searchResults, sessionId, loopNumber, abortSignal, onChunkProgress, throwIfAborted } = params;
 
     throwIfAborted();
     const db = getUnifiedDatabase();
@@ -122,7 +124,9 @@ export async function synthesizeFindings(params: {
         },
         {
             concurrency: RESEARCH_DEFAULTS.SYNTHESIS_CONCURRENCY,
-            signal: abortSignal
+            signal: abortSignal,
+            // 청크 요약 완료마다 진행 보고 — 합성 단계의 긴 progress 공백 제거
+            onItemComplete: (completed, total) => onChunkProgress?.(completed, total, 'chunk'),
         }
     );
 
@@ -136,6 +140,8 @@ export async function synthesizeFindings(params: {
     }
 
     // ── 계층적 Map-Reduce 병합 ──
+    // 청크 요약 완료 → 병합 단계 진입 알림 (병합 LLM 호출도 progress 공백이 길어 체감 멈춤 유발)
+    onChunkProgress?.(chunks.length, chunks.length, 'merge');
     // 청크 요약 수가 MAP_REDUCE_THRESHOLD 초과 시 재귀적 병합 수행
     const mergedSummary = await hierarchicalMerge({
         client, config, topic, summaries: chunkSummaries,
