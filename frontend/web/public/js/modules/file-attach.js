@@ -14,7 +14,7 @@
  */
 import { getState, setState } from './state.js';
 
-const MAX_FILE_BYTES = 10 * 1024 * 1024; // 10MB
+const MAX_FILE_BYTES = 0; // 0 = 용량 제한 없음 (상한을 두려면 바이트 수로 설정)
 const IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
 // 백엔드 FILE_ATTACH_LIMITS 기본값과 동일한 클라이언트 전송 캡 (WS maxPayload 1MB 보호).
 // 백엔드 캡은 env 오버라이드 가능 — 여기 값은 전송량 상한이며 절단 시 truncated 플래그로 안내 보장.
@@ -64,8 +64,9 @@ async function handleFiles(fileList) {
             window.showError?.(`첨부는 최대 ${MAX_ATTACH_FILES}개까지 가능합니다: ${f.name} 제외됨`);
             continue;
         }
-        if (f.size > MAX_FILE_BYTES) {
-            window.showError?.(`파일이 너무 큽니다 (최대 10MB): ${f.name}`);
+        // 용량 제한 없음(MAX_FILE_BYTES=0). 상한을 두려면 MAX_FILE_BYTES 를 양수로 설정.
+        if (MAX_FILE_BYTES > 0 && f.size > MAX_FILE_BYTES) {
+            window.showError?.(`파일이 너무 큽니다 (최대 ${Math.floor(MAX_FILE_BYTES / (1024 * 1024))}MB): ${f.name}`);
             continue;
         }
         try {

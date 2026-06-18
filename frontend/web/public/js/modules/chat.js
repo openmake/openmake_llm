@@ -24,8 +24,10 @@ const SS = window.SafeStorage;
 const SEND_ICON_SVG = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13M22 2L15 22L11 13L2 9L22 2Z"/></svg>`;
 const ABORT_ICON_SVG = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>`;
 
-// 백엔드 server.ts WebSocketServer maxPayload 와 동일 — 초과 프레임은 서버가 연결을 끊으므로 전송 전 차단
-const WS_MAX_PAYLOAD_BYTES = 1024 * 1024;
+// 0 = 용량 제한 없음 (백엔드 WS_LIMITS.MAX_PAYLOAD_BYTES 도 기본 0=무제한과 정합).
+// 백엔드에 상한을 두면(env WS_MAX_PAYLOAD_BYTES) 그보다 약간 낮은 바이트로 설정해
+// 서버 1009 끊김 전에 클라이언트가 먼저 안내하도록 한다.
+const WS_MAX_PAYLOAD_BYTES = 0;
 
 /** 스크린 리더용 상태 공지 (P1-14 접근성) */
 function announceA11y(message) {
@@ -431,10 +433,14 @@ async function sendMessage() {
         if (parsedUser.role) payload.userRole = parsedUser.role;
         if (parsedUser.tier) payload.userTier = parsedUser.tier;
 
-        // WS maxPayload(1MB, 백엔드 server.ts) 보호 — 초과 프레임은 서버가 연결을 끊어(1009)
-        // 메시지가 안내 없이 유실되므로 전송 전에 차단한다 (첨부+히스토리 합산 대비 최종 백스톱)
-        if (new TextEncoder().encode(JSON.stringify(payload)).length > WS_MAX_PAYLOAD_BYTES) {
-            throw new Error('메시지가 전송 한도(1MB)를 초과했습니다. 첨부 파일을 줄이거나 내용을 나눠 보내주세요.');
+        // WS maxPayload 보호 — 초과 프레임은 서버가 연결을 끊어(1009) 메시지가 안내 없이
+        // 유실되므로 전송 전에 차단한다 (첨부+히스토리 합산 대비 최종 백스톱)
+        if (WS_MAX_PAYLOAD_BYTES > 0) {
+            const payloadBytes = new TextEncoder().encode(JSON.stringify(payload)).length;
+            if (payloadBytes > WS_MAX_PAYLOAD_BYTES) {
+                const limitMB = Math.floor(WS_MAX_PAYLOAD_BYTES / (1024 * 1024));
+                throw new Error(`메시지가 전송 한도(${limitMB}MB)를 초과했습니다. 첨부 이미지/파일을 줄이거나 내용을 나눠 보내주세요.`);
+            }
         }
 
         const sent = sendWsMessage(payload);
