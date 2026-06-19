@@ -15,11 +15,9 @@
 
 [data-theme="light"] .history-item:hover,
 .theme-light .history-item:hover {
-    background: var(--bg-card);
-    border-color: var(--border-strong);
+    background: var(--bg-tertiary);
+    border-color: transparent;
     color: var(--text-primary);
-    box-shadow: var(--shadow-sm);
-    transform: translate(-2px, -2px);
 }
 
 /* 테마 토글 - 라이트 */
@@ -36,11 +34,9 @@
 
 [data-theme="light"] .theme-toggle:hover,
 .theme-light .theme-toggle:hover {
-    background: var(--bg-card);
-    border-color: var(--border-strong);
+    background: var(--bg-tertiary);
+    border-color: transparent;
     color: var(--text-primary);
-    box-shadow: var(--shadow-sm);
-    transform: translate(-2px, -2px);
 }
 
 /* ========================================
@@ -91,16 +87,15 @@
    ======================================== */
 [data-theme="light"] .chat-input-container,
 .theme-light .chat-input-container {
-    background: var(--bg-card);
-    border: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-medium);
     box-shadow: var(--shadow-md);
 }
 
 [data-theme="light"] .chat-input-container:focus-within,
 .theme-light .chat-input-container:focus-within {
-    border-color: var(--accent-primary);
-    box-shadow: var(--glow-input-focus);
-    transform: translate(-2px, -2px);
+    border-color: var(--ember-line);
+    box-shadow: 0 0 0 3px var(--ember-soft), var(--shadow-md);
 }
 
 /* 라이트 테마 - 채팅 드래그 앤 드롭 오버레이 */
@@ -147,20 +142,19 @@
     color: var(--text-muted);
 }
 
-/* 전송 버튼 - 파란색 -> 보라색 */
+/* 전송 버튼 - ember fill */
 [data-theme="light"] .send-btn,
 .theme-light .send-btn {
     background: var(--accent-primary);
-    color: var(--bg-card);
-    border: 1px solid var(--border-color);
-    box-shadow: var(--shadow-sm);
+    color: var(--ember-ink);
+    border: 1px solid transparent;
+    box-shadow: var(--ember-glow);
 }
 
 [data-theme="light"] .send-btn:hover,
 .theme-light .send-btn:hover {
     background: var(--accent-primary-hover);
-    transform: translate(-2px, -2px);
-    box-shadow: var(--shadow-md);
+    transform: translateY(-1px);
 }
 
 [data-theme="light"] .send-btn.abort-mode,
@@ -182,19 +176,16 @@
 
 [data-theme="light"] .action-btn:hover,
 .theme-light .action-btn:hover {
-    background: var(--bg-card);
-    border-color: var(--border-strong);
+    background: var(--bg-surface-3);
+    border-color: transparent;
     color: var(--text-primary);
-    box-shadow: var(--shadow-sm);
-    transform: translate(-2px, -2px);
 }
 
 [data-theme="light"] .action-btn.active,
 .theme-light .action-btn.active {
-    color: var(--accent-primary);
-    background: var(--accent-primary-light);
-    border-color: var(--accent-primary);
-    box-shadow: var(--shadow-sm);
+    color: var(--accent-primary-hover);
+    background: var(--ember-soft);
+    border-color: var(--ember-line);
 }
 
 /* ========================================

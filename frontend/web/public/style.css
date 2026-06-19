@@ -39,16 +39,13 @@ body {
 }
 
 .theme-toggle:hover {
-    background: var(--bg-hover);
-    border-color: var(--border-light);
-    color: var(--accent-primary);
-    box-shadow: var(--shadow-sm);
-    transform: translate(-2px, -2px);
+    background: var(--bg-tertiary);
+    border-color: transparent;
+    color: var(--text-primary);
 }
 
 .theme-toggle:active {
-    transform: translate(0, 0);
-    box-shadow: none;
+    background: var(--bg-surface-3);
 }
 
 /* Main Content Area */
@@ -58,10 +55,9 @@ body {
     display: flex;
     flex-direction: column;
     height: 100%;
-    /* 무드 연출 — 코너 소프트 글로우 (다크 캔버스 깊이감) */
+    /* 무드 연출 — ember 코너 aura (시안: 우상단 미묘한 radial) */
     background:
-        radial-gradient(1100px 600px at 100% -10%, rgba(255, 106, 61, 0.05), transparent 60%),
-        radial-gradient(820px 480px at -8% 4%, rgba(107, 165, 201, 0.035), transparent 55%),
+        radial-gradient(900px 460px at 78% -8%, var(--ember-soft), transparent 62%),
         var(--bg-main);
     position: relative;
     overflow: hidden;
@@ -127,18 +123,27 @@ body {
 
 .welcome-title {
     font-family: var(--font-serif); /* Fraunces+Noto Serif KR — editorial 히어로 */
-    font-size: 3rem;
-    font-weight: 600;
+    font-size: clamp(34px, 4vw, 46px);
+    font-weight: 500;
+    line-height: 1.06;
     margin-bottom: 16px;
-    letter-spacing: -0.02em;
+    letter-spacing: -0.025em;
     color: var(--text-primary);
     background: none;
     -webkit-text-fill-color: initial;
 }
 
+/* 시안 greeting accent — 일부 단어를 italic ember 로 강조 (라틴/한글 모두 안전) */
+.welcome-title .accent,
+.welcome-title em {
+    font-style: italic;
+    color: var(--accent-primary);
+}
+
 .welcome-subtitle {
     color: var(--text-secondary);
-    font-size: 1.15rem;
+    font-size: 1.05rem;
+    line-height: 1.6;
     margin-bottom: 48px;
     max-width: 500px;
     font-weight: 500;
@@ -163,10 +168,8 @@ body {
 
 .model-selector:hover,
 .model-selector:focus {
-    border-color: var(--accent-primary);
+    border-color: var(--border-strong);
     color: var(--text-primary);
-    transform: translate(-2px, -2px);
-    box-shadow: var(--shadow-md);
 }
 
 /* Chat Input Container */
@@ -179,18 +182,17 @@ body {
 }
 
 .chat-input-container {
-    background: var(--bg-card);
+    background: var(--bg-secondary);
     border: var(--border-width) solid var(--border-medium);
-    border-radius: var(--radius-xl);
+    border-radius: var(--r-xl);
     padding: 8px 16px;
     box-shadow: var(--shadow-md);
-    transition: all 0.2s;
+    transition: border-color 0.2s, box-shadow 0.2s;
 }
 
 .chat-input-container:focus-within {
-    border-color: var(--accent-primary);
-    box-shadow: var(--shadow-lg);
-    transform: translate(-1px, -1px);
+    border-color: var(--ember-line);
+    box-shadow: 0 0 0 3px var(--ember-soft), var(--shadow-md);
 }
 
 .input-wrapper textarea {
@@ -283,42 +285,37 @@ body {
 }
 
 .action-btn:hover {
-    background: var(--bg-hover);
+    background: var(--bg-surface-3);
     color: var(--text-primary);
-    border-color: var(--border-light);
-    box-shadow: var(--shadow-sm);
-    transform: translate(-2px, -2px);
+    border-color: transparent;
 }
 
 .action-btn:active {
-    transform: translate(0, 0);
-    box-shadow: none;
+    background: var(--bg-tertiary);
 }
 
 .action-btn.active {
-    color: var(--accent-primary);
-    background: var(--bg-tertiary);
-    border-color: var(--accent-primary);
+    color: var(--accent-primary-hover);
+    background: var(--ember-soft);
+    border-color: var(--ember-line);
 }
 
 .send-btn {
     background: var(--accent-primary);
-    color: #ffffff;
+    color: var(--ember-ink);
     padding: 10px;
-    border: var(--border-width) solid var(--border-dark);
-    box-shadow: var(--shadow-sm);
-    transition: all 0.2s ease;
+    border: var(--border-width) solid transparent;
+    box-shadow: var(--ember-glow);
+    transition: background 0.2s ease, transform 0.2s ease;
 }
 
 .send-btn:hover {
-    transform: translate(-2px, -2px);
-    box-shadow: var(--shadow-md);
-    background: var(--accent-glow);
+    transform: translateY(-1px);
+    background: var(--accent-primary-hover);
 }
 
 .send-btn:active {
-    transform: translate(1px, 1px);
-    box-shadow: none;
+    transform: translateY(0);
 }
 
 /* Abort mode */

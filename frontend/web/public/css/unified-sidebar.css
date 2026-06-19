@@ -194,16 +194,13 @@
 .us-toggle-btn:hover,
 .us-theme-btn:hover {
     background: var(--bg-tertiary);
-    border-color: var(--border-light);
+    border-color: transparent;
     color: var(--text-primary);
-    transform: translate(-2px, -2px);
-    box-shadow: var(--shadow-sm);
 }
 
 .us-toggle-btn:active,
 .us-theme-btn:active {
-    transform: translate(0, 0);
-    box-shadow: none;
+    background: var(--bg-surface-3);
 }
 
 /* ─── Logo ─────────────────────────────────── */
@@ -242,31 +239,29 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 10px 16px;
+    padding: 11px 14px;
     margin: 4px 12px 8px;
-    background: var(--bg-card);
-    border: var(--border-width) solid var(--border-light);
-    color: var(--text-primary);
-    border-radius: var(--radius-md);
+    background: var(--accent-primary);
+    border: var(--border-width) solid transparent;
+    color: var(--ember-ink);
+    border-radius: var(--r-md);
     font-size: var(--font-size-sm);
     font-weight: 600;
+    letter-spacing: -0.01em;
     font-family: var(--font-sans);
     cursor: pointer;
     transition: all 200ms ease;
     flex-shrink: 0;
-    box-shadow: var(--shadow-sm);
+    box-shadow: var(--ember-glow);
 }
 
 .us-new-chat:hover {
-    background: var(--bg-tertiary);
-    border-color: var(--border-medium);
-    transform: translate(-2px, -2px);
-    box-shadow: var(--shadow-md);
+    background: var(--accent-primary-hover);
+    transform: translateY(-1px);
 }
 
 .us-new-chat:active {
-    transform: translate(1px, 1px);
-    box-shadow: none;
+    transform: translateY(0);
 }
 
 .us-new-chat svg {
@@ -312,11 +307,16 @@
     gap: 8px;
     margin: 0 12px 8px;
     padding: 8px 12px;
-    background: var(--bg-tertiary);
-    border: var(--border-width) solid var(--border-light);
-    border-radius: var(--radius-sm);
+    background: var(--bg-sidebar);
+    border: var(--border-width) solid var(--border-medium);
+    border-radius: var(--r-sm);
     flex-shrink: 0;
-    box-shadow: var(--shadow-sm);
+    transition: border-color 200ms ease, box-shadow 200ms ease;
+}
+
+.us-search:focus-within {
+    border-color: var(--ember-line);
+    box-shadow: 0 0 0 3px var(--ember-soft);
 }
 
 .us-search svg {
@@ -354,12 +354,13 @@
 }
 
 .us-group-label {
-    padding: 8px 12px 4px;
-    font-size: var(--font-size-xs);
-    font-weight: 700;
-    color: var(--text-muted);
+    padding: 8px 12px 6px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--text-faint);
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.12em;
 }
 
 .us-conv-item {
@@ -367,24 +368,30 @@
     align-items: center;
     padding: 9px 12px;
     margin: 1px 4px;
-    border-radius: var(--radius-sm);
+    border-radius: var(--r-sm);
     cursor: pointer;
-    transition: all 150ms ease;
+    transition: background 150ms ease, color 150ms ease;
     overflow: hidden;
-    border: var(--border-width) solid transparent;
+    position: relative;
 }
 
 .us-conv-item:hover {
-    background: var(--bg-card);
-    border-color: var(--border-light);
-    transform: translate(-2px, -2px);
-    box-shadow: var(--shadow-sm);
+    background: var(--bg-tertiary);
 }
 
 .us-conv-item.active {
-    background: var(--bg-active);
-    border-color: var(--border-light);
-    border-left: 4px solid var(--accent-primary);
+    background: var(--bg-tertiary);
+}
+
+.us-conv-item.active::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 8px;
+    bottom: 8px;
+    width: 2px;
+    border-radius: 2px;
+    background: var(--accent-primary);
 }
 
 .us-conv-item.active .us-conv-title {
@@ -505,22 +512,22 @@
 
 /* Light Theme Adjustments */
 [data-theme="light"] .us-user-menu {
-    background: #ffffff;
-    border-color: #000;
+    background: var(--bg-elevated);
+    border-color: var(--border-medium);
     box-shadow: var(--shadow-md);
 }
 
 [data-theme="light"] .us-menu-header {
-    border-bottom-color: #000;
+    border-bottom-color: var(--border-light);
 }
 
 [data-theme="light"] .us-menu-item:hover {
-    background: #f0f0f0;
-    color: #000;
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
 }
 
 [data-theme="light"] .us-menu-item.logout:hover {
-    background: #ff4d4d;
+    background: var(--danger);
     color: #fff;
 }
 
@@ -566,10 +573,8 @@
 
 .us-settings-btn:hover {
     background: var(--bg-tertiary);
-    border-color: var(--border-light);
+    border-color: transparent;
     color: var(--text-primary);
-    transform: translate(-2px, -2px);
-    box-shadow: var(--shadow-sm);
 }
 
 /* ─── Empty State ──────────────────────────── */
@@ -630,106 +635,98 @@
 
 /* ─── Light Theme ──────────────────────────── */
 [data-theme="light"] .unified-sidebar {
-    background: #fdfbf7;
-    border-right-color: #000;
+    background: var(--bg-sidebar);
+    border-right-color: var(--border-light);
 }
 
 [data-theme="light"] .unified-sidebar.us-hover-expanded {
-    background: #fdfbf7;
+    background: var(--bg-sidebar);
     box-shadow: var(--shadow-lg);
-    border-right-color: #000;
+    border-right-color: var(--border-light);
 }
 
 [data-theme="light"] .us-toggle-btn,
 [data-theme="light"] .us-theme-btn {
-    color: #000;
+    color: var(--text-secondary);
 }
 
 [data-theme="light"] .us-toggle-btn:hover,
 [data-theme="light"] .us-theme-btn:hover {
-    background: #fff;
-    border-color: #000;
-    color: #000;
-    box-shadow: var(--shadow-sm);
+    background: var(--bg-tertiary);
+    border-color: transparent;
+    color: var(--text-primary);
 }
 
 [data-theme="light"] .us-brand-text {
-    color: #000;
+    color: var(--text-primary);
 }
 
 [data-theme="light"] .us-new-chat {
-    background: #fff;
-    border-color: #000;
-    color: #000;
-    box-shadow: var(--shadow-sm);
+    background: var(--accent-primary);
+    border-color: transparent;
+    color: var(--ember-ink);
+    box-shadow: var(--ember-glow);
 }
 
 [data-theme="light"] .us-new-chat:hover {
-    background: #eee;
-    box-shadow: var(--shadow-md);
+    background: var(--accent-primary-hover);
 }
 
 [data-theme="light"] .us-doc-link {
-    color: #555;
+    color: var(--text-secondary);
 }
 
 [data-theme="light"] .us-doc-link:hover {
-    color: #000;
-    background: #eee;
+    color: var(--text-primary);
+    background: var(--bg-tertiary);
 }
 
 [data-theme="light"] .us-search {
-    background: #fff;
-    border-color: #000;
-    box-shadow: var(--shadow-sm);
+    background: var(--bg-elevated);
+    border-color: var(--border-medium);
 }
 
 [data-theme="light"] .us-search-input {
-    color: #000;
+    color: var(--text-primary);
 }
 
 [data-theme="light"] .us-conv-item:hover {
-    background: #fff;
-    border-color: #000;
-    box-shadow: var(--shadow-sm);
+    background: var(--bg-tertiary);
 }
 
 [data-theme="light"] .us-conv-item.active {
-    background: #f0f0f0;
-    border-color: #000;
-    border-left-color: var(--accent-primary);
+    background: var(--bg-tertiary);
 }
 
 [data-theme="light"] .us-conv-title {
-    color: #333;
+    color: var(--text-secondary);
 }
 
 [data-theme="light"] .us-conv-item.active .us-conv-title {
-    color: #000;
+    color: var(--text-primary);
 }
 
 [data-theme="light"] .us-user-section {
-    background: #fdfbf7;
-    border-top-color: #000;
+    background: var(--bg-sidebar);
+    border-top-color: var(--border-light);
 }
 
 [data-theme="light"] .us-user-name {
-    color: #000;
+    color: var(--text-primary);
 }
 
 [data-theme="light"] .us-settings-btn {
-    color: #000;
+    color: var(--text-secondary);
 }
 
 [data-theme="light"] .us-settings-btn:hover {
-    background: #fff;
-    border-color: #000;
-    color: #000;
-    box-shadow: var(--shadow-sm);
+    background: var(--bg-tertiary);
+    border-color: transparent;
+    color: var(--text-primary);
 }
 
 [data-theme="light"] .us-conversations::-webkit-scrollbar-thumb {
-    background: #000;
+    background: var(--border-strong);
 }
 
 [data-theme="light"] .us-conversations::-webkit-scrollbar-thumb:hover {
@@ -791,29 +788,31 @@
 .us-nav-item {
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 7px 10px;
-    border-radius: var(--radius-md);
+    gap: 11px;
+    padding: 9px 10px;
+    border-radius: var(--r-sm);
     cursor: pointer;
     text-decoration: none;
     color: var(--text-secondary);
     font-size: var(--font-size-sm);
     font-weight: 500;
-    transition: background 0.15s, color 0.15s;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
     white-space: nowrap;
     overflow: hidden;
     min-height: 34px;
     flex-shrink: 0;
+    border: var(--border-width) solid transparent;
 }
 
 .us-nav-item:hover {
-    background: var(--bg-hover);
+    background: var(--bg-tertiary);
     color: var(--text-primary);
 }
 
 .us-nav-item.active {
-    background: rgba(99, 102, 241, 0.15);
-    color: var(--accent-primary);
+    background: var(--ember-soft);
+    color: var(--accent-primary-hover);
+    border-color: var(--ember-line);
 }
 
 .us-nav-icon {
@@ -834,12 +833,12 @@
 
 .us-nav-section-label {
     font-family: var(--font-mono); /* technical 마이크로 라벨 */
-    font-size: var(--font-size-xs);
-    font-weight: 600;
+    font-size: 10px;
+    font-weight: 500;
     text-transform: uppercase;
-    letter-spacing: 0.14em;
-    color: var(--text-muted);
-    padding: 8px 10px 2px;
+    letter-spacing: 0.16em;
+    color: var(--text-faint);
+    padding: 8px 10px 4px;
     flex-shrink: 0;
 }
 
@@ -894,9 +893,10 @@
 .unified-sidebar.us-hover-expanded .us-nav-section-label { display: inline; }
 /* active 페이지 nav — ember (고 specificity 로 상태 규칙 우선) */
 .unified-sidebar .us-page-nav .us-nav-link.active {
-    background: var(--accent-primary-light);
-    color: var(--accent-primary);
+    background: var(--ember-soft);
+    color: var(--accent-primary-hover);
     font-weight: 600;
+    box-shadow: inset 0 0 0 1px var(--ember-line);
 }
 
 .us-nav-divider {
