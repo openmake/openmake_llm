@@ -160,50 +160,62 @@
         getHTML: function() {
             return '<div class="page-research">' +
                 '<style data-spa-style="research">' +
+                /* page header */
+                '.page-research .page-header h1 { font-family:var(--font-serif); }' +
+                /* new-research form */
                 '.page-research .new-research { background:var(--bg-card); border:1px solid var(--border-light); border-radius:var(--radius-lg); padding:var(--space-5); margin-bottom:var(--space-5); display:flex; gap:var(--space-3); align-items:flex-end; flex-wrap:wrap; }' +
                 '.page-research .new-research .form-group { flex:1; min-width:200px; margin:0; }' +
                 '.page-research .new-research label { display:block; margin-bottom:var(--space-2); color:var(--text-secondary); font-size:var(--font-size-sm); font-weight:var(--font-weight-semibold); }' +
                 '.page-research .new-research input, .page-research .new-research select { width:100%; padding:var(--space-3); background:var(--bg-secondary); border:1px solid var(--border-light); border-radius:var(--radius-md); color:var(--text-primary); box-sizing:border-box; }' +
-                '.page-research .btn-primary { padding:var(--space-3) var(--space-5); background:var(--accent-primary); color:#fff; border:none; border-radius:var(--radius-md); cursor:pointer; font-weight:var(--font-weight-semibold); white-space:nowrap; }' +
+                /* buttons */
+                '.page-research .btn-primary { padding:var(--space-3) var(--space-5); background:var(--accent-primary); color:var(--ember-ink); border:none; border-radius:var(--radius-md); cursor:pointer; font-weight:var(--font-weight-semibold); white-space:nowrap; }' +
+                '.page-research .btn-secondary { background:var(--bg-tertiary); color:var(--text-primary); border:1px solid var(--border-light) !important; }' +
+                '.page-research .btn-danger { background:var(--danger); color:var(--text-on-danger,#fff); }' +
+                /* session list */
                 '.page-research .session-list { display:flex; flex-direction:column; gap:var(--space-4); }' +
                 '.page-research .session-card { background:var(--bg-card); border:1px solid var(--border-light); border-radius:var(--radius-lg); padding:var(--space-5); cursor:pointer; transition:border-color .2s; }' +
                 '.page-research .session-card:hover { border-color:var(--accent-primary); }' +
                 '.page-research .session-card h3 { margin:0 0 var(--space-2); color:var(--text-primary); }' +
                 '.page-research .session-meta { display:flex; gap:var(--space-3); align-items:center; flex-wrap:wrap; font-size:var(--font-size-sm); color:var(--text-muted); }' +
-                '.page-research .badge { display:inline-block; padding:2px 10px; border-radius:var(--radius-md); font-size: var(--font-size-xs); font-weight:var(--font-weight-semibold); }' +
+                /* badges */
+                '.page-research .badge { display:inline-block; padding:2px 10px; border-radius:var(--radius-md); font-size:var(--font-size-xs); font-weight:var(--font-weight-semibold); }' +
                 '.page-research .badge-pending { background:var(--bg-tertiary); color:var(--text-muted); }' +
-                '.page-research .badge-running { background:var(--accent-primary); color:#fff; animation:researchPulse 1.5s infinite; }' +
-                '.page-research .badge-completed { background:var(--success); color:#fff; }' +
-                '.page-research .badge-failed { background:var(--danger); color:#fff; }' +
-                '.page-research .badge-cancelled { background:var(--warning); color:#000; }' +
+                '.page-research .badge-running { background:var(--ember-soft); color:var(--accent-primary); border:1px solid var(--ember-line); animation:researchPulse 1.5s infinite; }' +
+                '.page-research .badge-completed { background:var(--success-soft,rgba(95,185,125,.13)); color:var(--success); border:1px solid rgba(95,185,125,.3); }' +
+                '.page-research .badge-failed { background:rgba(229,84,78,.13); color:var(--danger); border:1px solid rgba(229,84,78,.3); }' +
+                '.page-research .badge-cancelled { background:var(--bg-tertiary); color:var(--warning); border:1px solid var(--warning); }' +
                 '@keyframes researchPulse { 0%,100%{opacity:1} 50%{opacity:.6} }' +
+                /* progress */
                 '.page-research .progress-bar { height:6px; background:var(--bg-tertiary); border-radius:3px; margin-top:var(--space-2); overflow:hidden; }' +
                 '.page-research .progress-fill { height:100%; background:var(--accent-primary); border-radius:3px; transition:width .3s; }' +
+                /* empty / loading */
                 '.page-research .empty-state { text-align:center; padding:var(--space-8); color:var(--text-muted); }' +
                 '.page-research .empty-state h2 { color:var(--text-secondary); margin-bottom:var(--space-3); }' +
+                '.page-research .loading { text-align:center; padding:var(--space-6); color:var(--text-muted); }' +
+                /* modal */
                 '.page-research .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:1000; justify-content:center; align-items:center; }' +
                 '.page-research .modal-overlay.open { display:flex; }' +
                 '.page-research .modal { display:block; position:static; height:auto; background:var(--bg-card); border:1px solid var(--border-light); border-radius:var(--radius-lg); width:90%; max-width:700px; max-height:90vh; overflow-y:auto; padding:var(--space-6); }' +
-                '.page-research .modal h2 { margin:0 0 var(--space-4); color:var(--text-primary); }' +
+                '.page-research .modal h2 { margin:0 0 var(--space-4); color:var(--text-primary); font-family:var(--font-serif); }' +
+                '.page-research .modal-actions { display:flex; gap:var(--space-3); justify-content:flex-end; margin-top:var(--space-5); }' +
+                '.page-research .modal-actions button { padding:var(--space-2) var(--space-4); border:none; border-radius:var(--radius-md); cursor:pointer; font-weight:var(--font-weight-semibold); }' +
+                /* detail sections */
                 '.page-research .detail-section { margin-bottom:var(--space-5); }' +
                 '.page-research .detail-section h3 { color:var(--text-secondary); font-size:var(--font-size-sm); margin-bottom:var(--space-2); text-transform:uppercase; letter-spacing:.5px; }' +
                 '.page-research .detail-section p, .page-research .detail-section li { color:var(--text-primary); line-height:1.6; }' +
                 '.page-research .detail-section ul { padding-left:var(--space-5); }' +
+                /* steps timeline — ARCHETYPE C 정렬 */
                 '.page-research .steps-timeline { border-left:2px solid var(--border-light); padding-left:var(--space-5); }' +
                 '.page-research .step-item { margin-bottom:var(--space-4); position:relative; }' +
                 '.page-research .step-item::before { content:""; position:absolute; left:calc(-1 * var(--space-5) - 5px); top:4px; width:8px; height:8px; border-radius:50%; background:var(--accent-primary); }' +
-                '.page-research .step-num { font-weight:var(--font-weight-semibold); color:var(--accent-primary); }' +
-                '.page-research .step-type { background:var(--bg-tertiary); padding:2px 8px; border-radius:var(--radius-md); font-size: var(--font-size-xs); color:var(--text-secondary); }' +
-                '.page-research .step-result { background:var(--bg-secondary); padding:var(--space-3); border-radius:var(--radius-md); margin-top:var(--space-2); font-size:var(--font-size-sm); color:var(--text-secondary); max-height:120px; overflow-y:auto; white-space:pre-wrap; }' +
-                '.page-research .modal-actions { display:flex; gap:var(--space-3); justify-content:flex-end; margin-top:var(--space-5); }' +
-                '.page-research .modal-actions button { padding:var(--space-2) var(--space-4); border:none; border-radius:var(--radius-md); cursor:pointer; font-weight:var(--font-weight-semibold); }' +
-                '.page-research .btn-secondary { background:var(--bg-tertiary); color:var(--text-primary); border:1px solid var(--border-light) !important; }' +
-                '.page-research .btn-danger { background:var(--danger); color:#fff; }' +
-                '.page-research .toast { position:fixed; bottom:20px; right:20px; padding:var(--space-3) var(--space-5); border-radius:var(--radius-md); color:#fff; z-index:2000; opacity:0; transition:opacity .3s; }' +
+                '.page-research .step-num { font-family:var(--font-mono); font-weight:var(--font-weight-semibold); color:var(--accent-primary); }' +
+                '.page-research .step-type { background:var(--bg-tertiary); padding:2px 8px; border-radius:var(--radius-md); font-size:var(--font-size-xs); color:var(--text-secondary); }' +
+                '.page-research .step-result { background:var(--bg-sidebar); border:1px solid var(--border-light); padding:var(--space-3); border-radius:var(--radius-md); margin-top:var(--space-2); font-size:var(--font-size-sm); color:var(--text-secondary); max-height:120px; overflow-y:auto; white-space:pre-wrap; }' +
+                /* toast */
+                '.page-research .toast { position:fixed; bottom:20px; right:20px; padding:var(--space-3) var(--space-5); border-radius:var(--radius-md); z-index:2000; opacity:0; transition:opacity .3s; }' +
                 '.page-research .toast.show { opacity:1; }' +
-                '.page-research .toast.success { background:var(--success); }' +
-                '.page-research .toast.error { background:var(--danger); }' +
-                '.page-research .loading { text-align:center; padding:var(--space-6); color:var(--text-muted); }' +
+                '.page-research .toast.success { background:var(--success); color:var(--text-on-success,#0c1a10); }' +
+                '.page-research .toast.error { background:var(--danger); color:var(--text-on-danger,#fff); }' +
                 '</style>' +
                 '<header class="page-header">' +
                     '<h1>\uB525 \uB9AC\uC11C\uCE58</h1>' +

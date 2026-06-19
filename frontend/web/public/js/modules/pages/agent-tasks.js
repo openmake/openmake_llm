@@ -425,72 +425,85 @@
         getHTML: function() {
             return '<div class="page-agent-tasks">' +
                 '<style data-spa-style="agent-tasks">' +
-                '.page-agent-tasks .new-task { background:var(--bg-card); border:1px solid var(--border-light); border-radius:var(--radius-lg); padding:var(--space-5); margin-bottom:var(--space-5); display:flex; gap:var(--space-3); align-items:flex-end; flex-wrap:wrap; }' +
-                '.page-agent-tasks .new-task .form-group { flex:1; min-width:200px; margin:0; }' +
-                '.page-agent-tasks .new-task label { display:block; margin-bottom:var(--space-2); color:var(--text-secondary); font-size:var(--font-size-sm); font-weight:var(--font-weight-semibold); }' +
-                '.page-agent-tasks .new-task textarea { width:100%; min-height:48px; padding:var(--space-3); background:var(--bg-secondary); border:1px solid var(--border-light); border-radius:var(--radius-md); color:var(--text-primary); box-sizing:border-box; resize:vertical; font-family:inherit; }' +
-                '.page-agent-tasks .btn-primary { padding:var(--space-3) var(--space-5); background:var(--accent-primary); color:#fff; border:none; border-radius:var(--radius-md); cursor:pointer; font-weight:var(--font-weight-semibold); white-space:nowrap; }' +
-                '.page-agent-tasks .task-list { display:flex; flex-direction:column; gap:var(--space-4); }' +
-                '.page-agent-tasks .task-card { background:var(--bg-card); border:1px solid var(--border-light); border-radius:var(--radius-lg); padding:var(--space-5); cursor:pointer; transition:border-color .2s; }' +
-                '.page-agent-tasks .task-card:hover { border-color:var(--accent-primary); }' +
-                '.page-agent-tasks .task-card h3 { margin:0 0 var(--space-2); color:var(--text-primary); font-size:var(--font-size-base); }' +
-                '.page-agent-tasks .task-meta { display:flex; gap:var(--space-3); align-items:center; flex-wrap:wrap; font-size:var(--font-size-sm); color:var(--text-muted); }' +
-                '.page-agent-tasks .badge { display:inline-block; padding:2px 10px; border-radius:var(--radius-md); font-size: var(--font-size-xs); font-weight:var(--font-weight-semibold); }' +
-                '.page-agent-tasks .badge-pending { background:var(--bg-tertiary); color:var(--text-muted); }' +
-                '.page-agent-tasks .badge-running { background:var(--accent-primary); color:#fff; animation:agentPulse 1.5s infinite; }' +
-                '.page-agent-tasks .badge-completed { background:var(--success); color:#fff; }' +
-                '.page-agent-tasks .badge-failed { background:var(--danger); color:#fff; }' +
-                '.page-agent-tasks .badge-cancelled { background:var(--warning); color:#000; }' +
-                '@keyframes agentPulse { 0%,100%{opacity:1} 50%{opacity:.6} }' +
-                '.page-agent-tasks .progress-bar { height:6px; background:var(--bg-tertiary); border-radius:3px; margin-top:var(--space-2); overflow:hidden; }' +
-                '.page-agent-tasks .progress-fill { height:100%; background:var(--accent-primary); border-radius:3px; transition:width .3s; }' +
-                '.page-agent-tasks .empty-state { text-align:center; padding:var(--space-8); color:var(--text-muted); }' +
-                '.page-agent-tasks .empty-state h2 { color:var(--text-secondary); margin-bottom:var(--space-3); }' +
-                '.page-agent-tasks .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:1000; justify-content:center; align-items:center; }' +
-                '.page-agent-tasks .modal-overlay.open { display:flex; }' +
-                '.page-agent-tasks .modal { display:block; position:static; height:auto; background:var(--bg-card); border:1px solid var(--border-light); border-radius:var(--radius-lg); width:90%; max-width:700px; max-height:90vh; overflow-y:auto; padding:var(--space-6); }' +
-                '.page-agent-tasks .modal h2 { margin:0 0 var(--space-4); color:var(--text-primary); }' +
-                '.page-agent-tasks .detail-section { margin-bottom:var(--space-5); }' +
-                '.page-agent-tasks .detail-section h3 { color:var(--text-secondary); font-size:var(--font-size-sm); margin-bottom:var(--space-2); text-transform:uppercase; letter-spacing:.5px; }' +
-                '.page-agent-tasks .detail-section p { color:var(--text-primary); line-height:1.6; }' +
-                '.page-agent-tasks .artifact-box { border:1px solid var(--border-light); border-radius:var(--radius-md); margin-bottom:var(--space-4); overflow:hidden; }' +
-                '.page-agent-tasks .artifact-head { display:flex; align-items:center; gap:var(--space-2); padding:var(--space-2) var(--space-3); background:var(--bg-secondary); border-bottom:1px solid var(--border-light); }' +
-                '.page-agent-tasks .artifact-head strong { flex:1; color:var(--text-primary); font-size:var(--font-size-sm); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }' +
-                '.page-agent-tasks .artifact-actions { display:flex; gap:var(--space-2); }' +
-                '.page-agent-tasks .artifact-actions button { padding:2px 10px; background:var(--bg-tertiary); border:1px solid var(--border-light); border-radius:var(--radius-md); color:var(--text-secondary); font-size: var(--font-size-xs); cursor:pointer; }' +
-                '.page-agent-tasks .artifact-actions button:hover { border-color:var(--accent-primary); color:var(--text-primary); }' +
-                '.page-agent-tasks .artifact-body { padding:var(--space-4); max-height:480px; overflow-y:auto; color:var(--text-primary); line-height:1.65; }' +
-                '.page-agent-tasks .artifact-body h1, .page-agent-tasks .artifact-body h2, .page-agent-tasks .artifact-body h3 { color:var(--text-primary); margin:var(--space-3) 0 var(--space-2); }' +
-                '.page-agent-tasks .artifact-body table { border-collapse:collapse; } .page-agent-tasks .artifact-body td, .page-agent-tasks .artifact-body th { border:1px solid var(--border-light); padding:4px 10px; }' +
-                '.page-agent-tasks .artifact-src { margin:0; white-space:pre-wrap; word-break:break-all; font-size:var(--font-size-sm); color:var(--text-secondary); }' +
-                '.page-agent-tasks .artifact-body-frame { padding:0; }' +
-                '.page-agent-tasks .artifact-html-frame { display:block; width:100%; height:480px; border:0; background:#fff; }' +
-                '.page-agent-tasks .result-md { color:var(--text-primary); line-height:1.65; }' +
-                '.page-agent-tasks .err-text { color:var(--danger); }' +
-                '.page-agent-tasks .steps-timeline { border-left:2px solid var(--border-light); padding-left:var(--space-5); }' +
-                '.page-agent-tasks .step-item { margin-bottom:var(--space-4); position:relative; }' +
-                '.page-agent-tasks .step-item::before { content:""; position:absolute; left:calc(-1 * var(--space-5) - 5px); top:4px; width:8px; height:8px; border-radius:50%; background:var(--accent-primary); }' +
-                '.page-agent-tasks .step-num { font-weight:var(--font-weight-semibold); color:var(--accent-primary); }' +
-                '.page-agent-tasks .step-type { background:var(--bg-tertiary); padding:2px 8px; border-radius:var(--radius-md); font-size: var(--font-size-xs); color:var(--text-secondary); }' +
-                '.page-agent-tasks .step-tool { background:var(--accent-primary); color:#fff; padding:2px 8px; border-radius:var(--radius-md); font-size: var(--font-size-xs); }' +
-                '.page-agent-tasks .step-result { background:var(--bg-secondary); padding:var(--space-3); border-radius:var(--radius-md); margin-top:var(--space-2); font-size:var(--font-size-sm); color:var(--text-secondary); max-height:160px; overflow-y:auto; white-space:pre-wrap; }' +
-                '.page-agent-tasks .modal-actions { display:flex; gap:var(--space-3); justify-content:flex-end; margin-top:var(--space-5); }' +
-                '.page-agent-tasks .modal-actions button { padding:var(--space-2) var(--space-4); border:none; border-radius:var(--radius-md); cursor:pointer; font-weight:var(--font-weight-semibold); }' +
-                '.page-agent-tasks .btn-secondary { background:var(--bg-tertiary); color:var(--text-primary); border:1px solid var(--border-light) !important; }' +
-                '.page-agent-tasks .btn-warning { background:var(--warning); color:#000; }' +
-                '.page-agent-tasks .btn-danger { background:var(--danger); color:#fff; }' +
-                '.page-agent-tasks .toast { position:fixed; bottom:20px; right:20px; padding:var(--space-3) var(--space-5); border-radius:var(--radius-md); color:#fff; z-index:2000; opacity:0; transition:opacity .3s; }' +
-                '.page-agent-tasks .toast.show { opacity:1; }' +
-                '.page-agent-tasks .toast.success { background:var(--success); }' +
-                '.page-agent-tasks .toast.error { background:var(--danger); }' +
-                '.page-agent-tasks .loading { text-align:center; padding:var(--space-6); color:var(--text-muted); }' +
-                '.page-agent-tasks .skill-scope { margin:calc(-1 * var(--space-2)) 0 var(--space-4); }' +
-                '.page-agent-tasks .skill-scope-label { display:flex; align-items:center; gap:6px; font-size:var(--font-size-sm); color:var(--text-secondary); margin-bottom:var(--space-2); }' +
-                '.page-agent-tasks .skill-scope-label span { color:var(--text-muted); font-size:var(--font-size-xs); font-weight:400; }' +
-                '.page-agent-tasks .skill-scope-chips { display:flex; flex-wrap:wrap; gap:var(--space-2); }' +
-                '.page-agent-tasks .skill-chip { padding:4px 12px; background:var(--bg-tertiary); border:1px solid var(--border-light); border-radius:var(--radius-md); color:var(--text-secondary); font-size:var(--font-size-sm); cursor:pointer; transition:all .15s; }' +
-                '.page-agent-tasks .skill-chip:hover { border-color:var(--accent-primary); }' +
-                '.page-agent-tasks .skill-chip.active { background:var(--accent-primary); color:#fff; border-color:var(--accent-primary); }' +
+                /* ── Agent Tasks — Graphite & Ember II (Archetype B) ── */
+                /* 입력 영역 */
+                '.page-agent-tasks .new-task{background:var(--bg-card);border:1px solid var(--border-light);border-radius:var(--radius-lg);padding:var(--space-5);margin-bottom:var(--space-5);display:flex;gap:var(--space-3);align-items:flex-end;flex-wrap:wrap;}' +
+                '.page-agent-tasks .new-task .form-group{flex:1;min-width:200px;margin:0;}' +
+                '.page-agent-tasks .new-task label{display:block;margin-bottom:var(--space-2);font-family:var(--font-mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--text-faint,var(--text-muted));font-weight:500;}' +
+                '.page-agent-tasks .new-task textarea{width:100%;min-height:48px;padding:var(--space-3);background:var(--bg-sidebar,var(--bg-secondary));border:1px solid var(--border-strong,var(--border-light));border-radius:var(--radius-sm,8px);color:var(--text-primary);box-sizing:border-box;resize:vertical;font-family:inherit;}' +
+                '.page-agent-tasks .btn-primary{padding:var(--space-3) var(--space-5);background:var(--accent-primary);color:var(--btn-text,#1a0f08);border:none;border-radius:var(--radius-md);cursor:pointer;font-weight:600;white-space:nowrap;}' +
+                /* 태스크 리스트 & 카드 — .gc 패턴 */
+                '.page-agent-tasks .task-list{display:flex;flex-direction:column;gap:var(--space-3);}' +
+                '.page-agent-tasks .task-card{background:var(--bg-card);border:1px solid var(--border-light);border-radius:var(--radius-lg);padding:var(--space-5);cursor:pointer;transition:transform .2s,box-shadow .2s,border-color .2s;}' +
+                '.page-agent-tasks .task-card:hover{transform:translateY(-2px);box-shadow:var(--shadow-md,0 4px 16px -4px rgba(0,0,0,.45));border-color:var(--border-strong,var(--accent-primary));}' +
+                '.page-agent-tasks .task-card h3{margin:0 0 var(--space-2);color:var(--text-primary);font-size:var(--font-size-base);font-weight:600;}' +
+                /* 메타 — mono 10px faint, .gm 패턴 */
+                '.page-agent-tasks .task-meta{display:flex;gap:var(--space-3);align-items:center;flex-wrap:wrap;font-family:var(--font-mono);font-size:10px;color:var(--text-faint,var(--text-muted));}' +
+                /* 배지 — soft 패턴, mono 10px */
+                '.page-agent-tasks .badge{display:inline-flex;align-items:center;padding:3px 8px;border-radius:var(--radius-full,999px);font-family:var(--font-mono);font-size:10px;font-weight:600;border:1px solid;}' +
+                '.page-agent-tasks .badge-pending{background:var(--bg-tertiary);color:var(--text-secondary);border-color:var(--border-light);}' +
+                '.page-agent-tasks .badge-running{background:var(--ember-soft,rgba(255,106,61,.13));color:var(--accent-primary);border-color:var(--ember-line,rgba(255,106,61,.32));animation:agentPulse 1.5s infinite;}' +
+                '.page-agent-tasks .badge-completed{background:var(--success-light,rgba(95,185,125,.13));color:var(--success);border-color:var(--success);}' +
+                '.page-agent-tasks .badge-failed{background:var(--danger-light,rgba(229,84,78,.13));color:var(--danger);border-color:var(--danger);}' +
+                '.page-agent-tasks .badge-cancelled{background:var(--warning-light,rgba(232,176,75,.13));color:var(--warning);border-color:var(--warning);}' +
+                '@keyframes agentPulse{0%,100%{opacity:1}50%{opacity:.6}}' +
+                /* 진행 바 — ember 컬러 */
+                '.page-agent-tasks .progress-bar{height:6px;background:var(--bg-tertiary);border-radius:3px;margin-top:var(--space-2);overflow:hidden;}' +
+                '.page-agent-tasks .progress-fill{height:100%;background:var(--accent-primary);border-radius:3px;transition:width .3s;}' +
+                '.page-agent-tasks .empty-state{text-align:center;padding:var(--space-8);color:var(--text-faint,var(--text-muted));}' +
+                '.page-agent-tasks .empty-state h2{color:var(--text-secondary);margin-bottom:var(--space-3);}' +
+                '.page-agent-tasks .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:1000;justify-content:center;align-items:center;}' +
+                '.page-agent-tasks .modal-overlay.open{display:flex;}' +
+                '.page-agent-tasks .modal{display:block;position:static;height:auto;background:var(--bg-card);border:1px solid var(--border-light);border-radius:var(--radius-lg);width:90%;max-width:700px;max-height:90vh;overflow-y:auto;padding:var(--space-6);}' +
+                '.page-agent-tasks .modal h2{margin:0 0 var(--space-4);color:var(--text-primary);}' +
+                '.page-agent-tasks .detail-section{margin-bottom:var(--space-5);}' +
+                /* 섹션 제목 — mono uppercase faint */
+                '.page-agent-tasks .detail-section h3{font-family:var(--font-mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--text-faint,var(--text-muted));margin-bottom:var(--space-2);font-weight:500;}' +
+                '.page-agent-tasks .detail-section p{color:var(--text-primary);line-height:1.6;}' +
+                /* 결과물(아티팩트) 박스 */
+                '.page-agent-tasks .artifact-box{border:1px solid var(--border-light);border-radius:var(--radius-md);margin-bottom:var(--space-4);overflow:hidden;}' +
+                '.page-agent-tasks .artifact-head{display:flex;align-items:center;gap:var(--space-2);padding:var(--space-2) var(--space-3);background:var(--bg-tertiary);border-bottom:1px solid var(--border-light);}' +
+                '.page-agent-tasks .artifact-head strong{flex:1;color:var(--text-primary);font-size:var(--font-size-sm);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}' +
+                '.page-agent-tasks .artifact-actions{display:flex;gap:var(--space-2);}' +
+                '.page-agent-tasks .artifact-actions button{padding:2px 10px;background:var(--bg-card);border:1px solid var(--border-light);border-radius:var(--radius-md);color:var(--text-secondary);font-family:var(--font-mono);font-size:10px;cursor:pointer;}' +
+                '.page-agent-tasks .artifact-actions button:hover{border-color:var(--accent-primary);color:var(--text-primary);}' +
+                '.page-agent-tasks .artifact-body{padding:var(--space-4);max-height:480px;overflow-y:auto;color:var(--text-primary);line-height:1.65;}' +
+                '.page-agent-tasks .artifact-body h1,.page-agent-tasks .artifact-body h2,.page-agent-tasks .artifact-body h3{color:var(--text-primary);margin:var(--space-3) 0 var(--space-2);}' +
+                '.page-agent-tasks .artifact-body table{border-collapse:collapse;}.page-agent-tasks .artifact-body td,.page-agent-tasks .artifact-body th{border:1px solid var(--border-light);padding:4px 10px;}' +
+                /* 테이블 th — mono uppercase */
+                '.page-agent-tasks .artifact-body th{font-family:var(--font-mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--text-faint,var(--text-muted));font-weight:500;}' +
+                '.page-agent-tasks .artifact-src{margin:0;white-space:pre-wrap;word-break:break-all;font-size:var(--font-size-sm);color:var(--text-secondary);}' +
+                '.page-agent-tasks .artifact-body-frame{padding:0;}' +
+                /* iframe 내 HTML 아티팩트는 자체 light 배경 필요 — sandboxed 환경 */
+                '.page-agent-tasks .artifact-html-frame{display:block;width:100%;height:480px;border:0;background:var(--artifact-html-bg,#fff);}' +
+                '.page-agent-tasks .result-md{color:var(--text-primary);line-height:1.65;}' +
+                '.page-agent-tasks .err-text{color:var(--danger);}' +
+                /* 타임라인 — ember accent */
+                '.page-agent-tasks .steps-timeline{border-left:2px solid var(--ember-line,var(--border-light));padding-left:var(--space-5);}' +
+                '.page-agent-tasks .step-item{margin-bottom:var(--space-4);position:relative;}' +
+                '.page-agent-tasks .step-item::before{content:"";position:absolute;left:calc(-1 * var(--space-5) - 5px);top:4px;width:8px;height:8px;border-radius:50%;background:var(--accent-primary);}' +
+                '.page-agent-tasks .step-num{font-weight:600;color:var(--accent-primary);font-family:var(--font-mono);}' +
+                '.page-agent-tasks .step-type{background:var(--bg-tertiary);padding:2px 8px;border-radius:var(--radius-md);font-family:var(--font-mono);font-size:10px;color:var(--text-secondary);}' +
+                '.page-agent-tasks .step-tool{background:var(--ember-soft,rgba(255,106,61,.13));color:var(--accent-primary);border:1px solid var(--ember-line,rgba(255,106,61,.32));padding:2px 8px;border-radius:var(--radius-md);font-family:var(--font-mono);font-size:10px;}' +
+                '.page-agent-tasks .step-result{background:var(--bg-sidebar,var(--bg-secondary));padding:var(--space-3);border-radius:var(--radius-md);margin-top:var(--space-2);font-size:var(--font-size-sm);color:var(--text-secondary);max-height:160px;overflow-y:auto;white-space:pre-wrap;}' +
+                '.page-agent-tasks .modal-actions{display:flex;gap:var(--space-3);justify-content:flex-end;margin-top:var(--space-5);}' +
+                '.page-agent-tasks .modal-actions button{padding:var(--space-2) var(--space-4);border:none;border-radius:var(--radius-md);cursor:pointer;font-weight:600;}' +
+                '.page-agent-tasks .btn-secondary{background:var(--bg-tertiary);color:var(--text-primary);border:1px solid var(--border-light) !important;}' +
+                '.page-agent-tasks .btn-warning{background:var(--warning-light,rgba(232,176,75,.13));color:var(--warning);border:1px solid var(--warning) !important;}' +
+                '.page-agent-tasks .btn-danger{background:var(--danger-light,rgba(229,84,78,.13));color:var(--danger);border:1px solid var(--danger) !important;}' +
+                '.page-agent-tasks .toast{position:fixed;bottom:20px;right:20px;padding:var(--space-3) var(--space-5);border-radius:var(--radius-md);color:var(--text-primary);z-index:2000;opacity:0;transition:opacity .3s;border:1px solid;}' +
+                '.page-agent-tasks .toast.show{opacity:1;}' +
+                '.page-agent-tasks .toast.success{background:var(--success-light,rgba(95,185,125,.13));color:var(--success);border-color:var(--success);}' +
+                '.page-agent-tasks .toast.error{background:var(--danger-light,rgba(229,84,78,.13));color:var(--danger);border-color:var(--danger);}' +
+                '.page-agent-tasks .loading{text-align:center;padding:var(--space-6);color:var(--text-faint,var(--text-muted));}' +
+                /* 스킬 범위 — .chip 패턴 */
+                '.page-agent-tasks .skill-scope{margin:calc(-1 * var(--space-2)) 0 var(--space-4);}' +
+                '.page-agent-tasks .skill-scope-label{display:flex;align-items:center;gap:6px;font-family:var(--font-mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--text-faint,var(--text-muted));margin-bottom:var(--space-2);}' +
+                '.page-agent-tasks .skill-scope-label span{color:var(--text-faint,var(--text-muted));font-size:10px;font-weight:400;}' +
+                '.page-agent-tasks .skill-scope-chips{display:flex;flex-wrap:wrap;gap:var(--space-2);}' +
+                '.page-agent-tasks .skill-chip{padding:6px 12px;background:transparent;border:1px solid var(--border-strong,var(--border-light));border-radius:var(--radius-full,999px);color:var(--text-secondary);font-size:12px;cursor:pointer;transition:all .15s;}' +
+                '.page-agent-tasks .skill-chip:hover{border-color:var(--accent-primary);color:var(--text-primary);}' +
+                '.page-agent-tasks .skill-chip.active{background:var(--ember-soft,rgba(255,106,61,.13));color:var(--accent-primary);border-color:var(--ember-line,rgba(255,106,61,.32));}' +
                 '</style>' +
                 '<header class="page-header">' +
                     '<h1>에이전트 작업</h1>' +

@@ -76,12 +76,12 @@
             'padding: var(--space-3) var(--space-5); border-radius: var(--radius-md); font-weight: var(--font-weight-medium);' +
             'cursor: pointer; transition: all 0.2s ease; border: none; font-size: var(--font-size-sm);' +
         '}' +
-        '.ak-btn-primary { background: var(--accent-primary); color: #fff; }' +
+        '.ak-btn-primary { background: var(--accent-primary); color: var(--btn-text,#1a0f08); }' +
         '.ak-btn-primary:hover { filter: brightness(1.1); }' +
         '.ak-btn-secondary { background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-light); }' +
         '.ak-btn-secondary:hover { border-color: var(--accent-primary); }' +
         '.ak-btn-danger { background: var(--bg-tertiary); color: var(--danger); border: 2px solid var(--danger); }' +
-        '.ak-btn-danger:hover { background: var(--bg-hover, #323250); }' +
+        '.ak-btn-danger:hover { background: var(--danger-light,rgba(229,84,78,.13)); }' +
         '.ak-btn-icon { padding: var(--space-2); width: 32px; height: 32px; border-radius: var(--radius-md); }' +
 
         // Key List Items
@@ -96,43 +96,45 @@
         '.ak-key-meta { display: flex; gap: var(--space-3); font-size: var(--font-size-xs); color: var(--text-secondary); align-items: center; flex-wrap: wrap; }' +
         '.ak-key-value-row { display: flex; align-items: center; gap: var(--space-3); margin-top: var(--space-3); background: var(--bg-tertiary); padding: var(--space-3); border-radius: var(--radius-md); }' +
         '.ak-key-value { font-family: var(--font-mono); color: var(--text-primary); font-size: var(--font-size-sm); letter-spacing: 0.5px; }' +
-        '.ak-badge { padding: 2px 8px; border-radius: 12px; font-size: var(--font-size-xs); text-transform: uppercase; font-weight: bold; letter-spacing: 0.5px; }' +
-        '.ak-badge-active { background: var(--bg-tertiary); color: var(--accent-cyan); border: 1px solid var(--accent-cyan); }' +
-        '.ak-badge-inactive { background: var(--bg-tertiary); color: var(--text-muted); border: 1px solid var(--text-muted); }' +
+        /* 배지 — mono 10px, radius-full, ember/soft 패턴 */
+        '.ak-badge { padding: 3px 8px; border-radius: var(--radius-full,999px); font-family: var(--font-mono); font-size: 10px; text-transform: uppercase; font-weight: 600; letter-spacing: .06em; border: 1px solid; display:inline-flex; align-items:center; gap:4px; }' +
+        '.ak-badge-active { background: var(--ember-soft,rgba(255,106,61,.13)); color: var(--accent-primary); border-color: var(--ember-line,rgba(255,106,61,.32)); }' +
+        '.ak-badge-inactive { background: var(--bg-tertiary); color: var(--text-muted); border-color: var(--border-light); }' +
         '.ak-actions { display: flex; gap: var(--space-2); margin-top: var(--space-4); }' +
 
         // Empty State
         '.ak-empty { text-align: center; padding: var(--space-8); color: var(--text-muted); }' +
         '.ak-empty-icon { font-size: 3rem; margin-bottom: var(--space-4); opacity: 0.5; }' +
 
-        // Code Block
+        // Code Block — ember 토큰 기반 (하드코딩 #1e1e1e, #d4d4d4, #6a9955, #569cd6, #ce9178 제거)
         '.ak-code-block {' +
-            'background: #1e1e1e; padding: var(--space-4); border-radius: var(--radius-md);' +
-            'font-family: var(--font-mono); color: #d4d4d4; font-size: var(--font-size-xs); overflow-x: auto;' +
-            'border: 1px solid var(--border-light); line-height: 1.5;' +
+            'background: var(--bg-sidebar,var(--bg-secondary)); padding: var(--space-4); border-radius: var(--radius-md);' +
+            'font-family: var(--font-mono); color: var(--text-secondary); font-size: var(--font-size-xs); overflow-x: auto;' +
+            'border: 1px solid var(--border-strong,var(--border-light)); line-height: 1.5;' +
         '}' +
-        '.ak-code-comment { color: #6a9955; }' +
-        '.ak-code-keyword { color: #569cd6; }' +
-        '.ak-code-string { color: #ce9178; }' +
+        '.ak-code-comment { color: var(--success); }' +
+        '.ak-code-keyword { color: var(--accent-primary); }' +
+        '.ak-code-string { color: var(--warning); }' +
 
-        // Modal/Banner for New Key
+        // Modal/Banner for New Key — ember 토큰 기반 (하드코딩 rgba(0,0,0,0.7), black, white 제거)
         '.ak-new-key-overlay {' +
             'position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 9999;' +
-            'background: rgba(0,0,0,0.7);' +
+            'background: rgba(0,0,0,.65);' +
             'display: flex; align-items: center; justify-content: center; padding: var(--space-4);' +
             'animation: ak-fadeIn 0.2s ease both;' +
         '}' +
         '.ak-new-key-modal {' +
-            'background: var(--bg-secondary); border: 1px solid var(--border-light); border-radius: var(--radius-xl);' +
-            'width: 100%; max-width: 500px; overflow: hidden; box-shadow: var(--shadow-xl);' +
+            'background: var(--bg-card); border: 1px solid var(--border-light); border-radius: var(--radius-xl);' +
+            'width: 100%; max-width: 500px; overflow: hidden; box-shadow: var(--shadow-xl,0 18px 50px -12px rgba(0,0,0,.65));' +
             'animation: ak-scaleIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) both;' +
         '}' +
-        '.ak-new-key-header { background: var(--gradient-primary); padding: var(--space-5); text-align: center; }' +
-        '.ak-new-key-header h2 { color: white; font-size: var(--font-size-xl); margin: 0; font-weight: bold; }' +
+        /* 모달 헤더 — ember-soft + ember-line border (gradient-primary 하드코딩 대체) */
+        '.ak-new-key-header { background: var(--ember-soft,rgba(255,106,61,.13)); border-bottom: 1px solid var(--ember-line,rgba(255,106,61,.32)); padding: var(--space-5); text-align: center; }' +
+        '.ak-new-key-header h2 { color: var(--text-primary); font-size: var(--font-size-xl); margin: 0; font-weight: 600; }' +
         '.ak-new-key-body { padding: var(--space-6); }' +
         '.ak-warning-text { color: var(--warning); font-size: var(--font-size-sm); margin-bottom: var(--space-4); text-align: center; display: flex; align-items: center; justify-content: center; gap: var(--space-2); }' +
         '.ak-full-key-display {' +
-            'background: black; border: 1px solid var(--border-light); padding: var(--space-4); border-radius: var(--radius-md);' +
+            'background: var(--bg-sidebar,var(--bg-secondary)); border: 1px solid var(--border-strong,var(--border-light)); padding: var(--space-4); border-radius: var(--radius-md);' +
             'font-family: var(--font-mono); color: var(--success); font-size: var(--font-size-lg); word-break: break-all;' +
             'margin-bottom: var(--space-6); text-align: center; user-select: all;' +
         '}' +

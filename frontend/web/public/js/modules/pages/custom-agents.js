@@ -24,43 +24,57 @@
         getHTML: function() {
             return '<div class="page-custom-agents">' +
                 '<style data-spa-style="custom-agents">' +
-                ".toolbar { display:flex; gap:var(--space-3); align-items:center; flex-wrap:wrap; margin-bottom:var(--space-5); }\n" +
-                ".toolbar .btn-primary { padding:var(--space-2) var(--space-4); background:var(--accent-primary); color:#fff; border:none; border-radius:var(--radius-md); cursor:pointer; font-weight:var(--font-weight-semibold); }\n" +
-                ".info-banner { background:var(--bg-card); border:1px solid var(--border-light); border-left:3px solid var(--accent-primary); border-radius:var(--radius-md); padding:var(--space-3) var(--space-4); margin-bottom:var(--space-4); color:var(--text-secondary); font-size:var(--font-size-sm); }\n" +
-                ".info-banner a { color:var(--accent-primary); text-decoration:none; font-weight:var(--font-weight-semibold); }\n" +
-                ".info-banner a:hover { text-decoration:underline; }\n" +
-                ".agent-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:var(--space-4); }\n" +
-                ".agent-card { background:var(--bg-card); border:1px solid var(--border-light); border-radius:var(--radius-lg); padding:var(--space-5); cursor:pointer; transition:border-color .2s; display:flex; flex-direction:column; }\n" +
-                ".agent-card:hover { border-color:var(--accent-primary); }\n" +
-                ".agent-emoji { font-size:2.5rem; margin-bottom:var(--space-3); }\n" +
-                ".agent-card h3 { margin:0 0 var(--space-2); color:var(--text-primary); display:flex; align-items:center; gap:var(--space-2); }\n" +
-                ".agent-card .desc { color:var(--text-muted); font-size:var(--font-size-sm); margin-bottom:var(--space-3); flex:1; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }\n" +
-                ".agent-meta { display:flex; gap:var(--space-2); align-items:center; flex-wrap:wrap; font-size:var(--font-size-sm); }\n" +
-                ".badge { display:inline-block; padding:2px 8px; border-radius:var(--radius-md); font-size: var(--font-size-xs); font-weight:var(--font-weight-semibold); }\n" +
-                ".badge-cat { background:var(--bg-tertiary); color:var(--text-secondary); }\n" +
-                ".badge-draft { background:var(--warning-light); color:var(--warning); }\n" +
-                ".card-actions { display:flex; gap:var(--space-2); margin-top:var(--space-3); }\n" +
-                ".card-actions button { padding:var(--space-1) var(--space-3); border:1px solid var(--border-light); border-radius:var(--radius-md); background:var(--bg-tertiary); color:var(--text-secondary); cursor:pointer; font-size:var(--font-size-sm); }\n" +
-                ".card-actions button:hover { border-color:var(--accent-primary); color:var(--text-primary); }\n" +
-                ".empty-state { text-align:center; padding:var(--space-8); color:var(--text-muted); grid-column:1/-1; }\n" +
-                ".empty-state h2 { color:var(--text-secondary); margin-bottom:var(--space-3); }\n" +
-                ".modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:1000; justify-content:center; align-items:center; }\n" +
-                ".modal-overlay.open { display:flex; }\n" +
-                ".modal { display:block; position:static; height:auto; background:var(--bg-card); border:1px solid var(--border-light); border-radius:var(--radius-lg); width:90%; max-width:700px; max-height:90vh; overflow-y:auto; padding:var(--space-6); }\n" +
-                ".modal h2 { margin:0 0 var(--space-4); color:var(--text-primary); }\n" +
-                ".form-group { margin-bottom:var(--space-4); }\n" +
-                ".form-group label { display:block; margin-bottom:var(--space-2); color:var(--text-secondary); font-size:var(--font-size-sm); font-weight:var(--font-weight-semibold); }\n" +
-                ".form-group input, .form-group textarea { width:100%; padding:var(--space-3); background:var(--bg-secondary); border:1px solid var(--border-light); border-radius:var(--radius-md); color:var(--text-primary); font-size:var(--font-size-sm); box-sizing:border-box; }\n" +
-                ".form-group textarea { min-height:160px; font-family: var(--font-mono); resize:vertical; }\n" +
-                ".form-group textarea[readonly], .form-group input[readonly] { background:var(--bg-tertiary); color:var(--text-secondary); cursor:default; }\n" +
-                ".modal-actions { display:flex; gap:var(--space-3); justify-content:flex-end; margin-top:var(--space-5); flex-wrap:wrap; }\n" +
-                ".modal-actions button { padding:var(--space-2) var(--space-4); border:none; border-radius:var(--radius-md); cursor:pointer; font-weight:var(--font-weight-semibold); }\n" +
-                ".btn-secondary { background:var(--bg-tertiary); color:var(--text-primary); border:1px solid var(--border-light) !important; }\n" +
-                ".btn-save { background:var(--accent-primary); color:#fff; }\n" +
-                ".btn-danger { background:var(--danger); color:#fff; }\n" +
-                ".toast { position:fixed; bottom:20px; right:20px; padding:var(--space-3) var(--space-5); border-radius:var(--radius-md); color:#fff; z-index:2000; opacity:0; transition:opacity .3s; }\n" +
-                ".toast.show { opacity:1; } .toast.success { background:var(--success); } .toast.error { background:var(--danger); }\n" +
-                ".loading { text-align:center; padding:var(--space-6); color:var(--text-muted); }" +
+                /* ── Custom Agents (Agent Draft) — Graphite & Ember II (Archetype B) ── */
+                /* 툴바 — .toolbar 패턴 */
+                ".page-custom-agents .toolbar{display:flex;gap:var(--space-3);align-items:center;flex-wrap:wrap;margin-bottom:var(--space-4);}" +
+                ".page-custom-agents .toolbar .btn-primary{padding:var(--space-2) var(--space-4);background:var(--accent-primary);color:var(--btn-text,#1a0f08);border:none;border-radius:var(--radius-sm,8px);cursor:pointer;font-weight:600;font-size:var(--font-size-sm);display:inline-flex;align-items:center;gap:6px;}" +
+                /* 안내 배너 — ember-line 왼쪽 강조 */
+                ".page-custom-agents .info-banner{background:var(--bg-card);border:1px solid var(--border-light);border-left:3px solid var(--accent-primary);border-radius:var(--radius-md);padding:var(--space-3) var(--space-4);margin-bottom:var(--space-4);color:var(--text-secondary);font-size:var(--font-size-sm);}" +
+                ".page-custom-agents .info-banner a{color:var(--accent-primary);text-decoration:none;font-weight:600;}" +
+                ".page-custom-agents .info-banner a:hover{text-decoration:underline;}" +
+                /* 에이전트 그리드 — .grid 패턴 3-up */
+                ".page-custom-agents .agent-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;}" +
+                /* 에이전트 카드 — .gc 패턴 */
+                ".page-custom-agents .agent-card{background:var(--bg-card);border:1px solid var(--border-light);border-radius:var(--radius-lg);padding:var(--space-4);cursor:pointer;transition:transform .2s,box-shadow .2s,border-color .2s;display:flex;flex-direction:column;gap:9px;}" +
+                ".page-custom-agents .agent-card:hover{transform:translateY(-2px);box-shadow:var(--shadow-md,0 4px 16px -4px rgba(0,0,0,.45));border-color:var(--border-strong,var(--accent-primary));}" +
+                /* 아이콘칩 — .gi 패턴: ember-soft */
+                ".page-custom-agents .agent-emoji{font-size:2rem;width:34px;height:34px;display:grid;place-items:center;background:var(--ember-soft,rgba(255,106,61,.13));border-radius:var(--radius-md,9px);}" +
+                ".page-custom-agents .agent-card h3{margin:0;color:var(--text-primary);font-weight:600;font-size:var(--font-size-base);display:flex;align-items:center;gap:var(--space-2);}" +
+                /* 설명 — .gd 패턴 */
+                ".page-custom-agents .agent-card .desc{color:var(--text-secondary);font-size:12.5px;margin-bottom:0;flex:1;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:1.55;}" +
+                /* 메타 — .gf 푸터 패턴 */
+                ".page-custom-agents .agent-meta{display:flex;gap:var(--space-2);align-items:center;flex-wrap:wrap;padding-top:4px;border-top:1px solid var(--border-light);}" +
+                /* 배지 — soft 패턴, mono 10px, radius-full */
+                ".page-custom-agents .badge{display:inline-flex;align-items:center;padding:3px 8px;border-radius:var(--radius-full,999px);font-family:var(--font-mono);font-size:10px;font-weight:600;border:1px solid;}" +
+                ".page-custom-agents .badge-cat{background:var(--bg-tertiary);color:var(--text-secondary);border-color:var(--border-light);}" +
+                ".page-custom-agents .badge-draft{background:var(--warning-light,rgba(232,176,75,.13));color:var(--warning);border-color:var(--warning);}" +
+                /* 카드 액션 버튼 */
+                ".page-custom-agents .card-actions{display:flex;gap:var(--space-2);}" +
+                ".page-custom-agents .card-actions button{padding:var(--space-1) var(--space-3);border:1px solid var(--border-light);border-radius:var(--radius-md);background:var(--bg-tertiary);color:var(--text-secondary);cursor:pointer;font-size:var(--font-size-sm);transition:border-color .15s,color .15s;}" +
+                ".page-custom-agents .card-actions button:hover{border-color:var(--accent-primary);color:var(--text-primary);}" +
+                ".page-custom-agents .empty-state{text-align:center;padding:var(--space-8);color:var(--text-faint,var(--text-muted));grid-column:1/-1;}" +
+                ".page-custom-agents .empty-state h2{color:var(--text-secondary);margin-bottom:var(--space-3);}" +
+                /* 모달 */
+                ".page-custom-agents .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:1000;justify-content:center;align-items:center;}" +
+                ".page-custom-agents .modal-overlay.open{display:flex;}" +
+                ".page-custom-agents .modal{display:block;position:static;height:auto;background:var(--bg-card);border:1px solid var(--border-light);border-radius:var(--radius-lg);width:90%;max-width:700px;max-height:90vh;overflow-y:auto;padding:var(--space-6);}" +
+                ".page-custom-agents .modal h2{margin:0 0 var(--space-4);color:var(--text-primary);}" +
+                ".page-custom-agents .form-group{margin-bottom:var(--space-4);}" +
+                ".page-custom-agents .form-group label{display:block;margin-bottom:var(--space-2);font-family:var(--font-mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--text-faint,var(--text-muted));font-weight:500;}" +
+                ".page-custom-agents .form-group input,.page-custom-agents .form-group textarea{width:100%;padding:var(--space-3);background:var(--bg-sidebar,var(--bg-secondary));border:1px solid var(--border-strong,var(--border-light));border-radius:var(--radius-sm,8px);color:var(--text-primary);font-size:var(--font-size-sm);box-sizing:border-box;}" +
+                ".page-custom-agents .form-group textarea{min-height:160px;font-family:var(--font-mono);resize:vertical;}" +
+                ".page-custom-agents .form-group textarea[readonly],.page-custom-agents .form-group input[readonly]{background:var(--bg-tertiary);color:var(--text-secondary);cursor:default;}" +
+                ".page-custom-agents .modal-actions{display:flex;gap:var(--space-3);justify-content:flex-end;margin-top:var(--space-5);flex-wrap:wrap;}" +
+                ".page-custom-agents .modal-actions button{padding:var(--space-2) var(--space-4);border:none;border-radius:var(--radius-md);cursor:pointer;font-weight:600;}" +
+                ".page-custom-agents .btn-secondary{background:var(--bg-tertiary);color:var(--text-primary);border:1px solid var(--border-light) !important;}" +
+                ".page-custom-agents .btn-save{background:var(--accent-primary);color:var(--btn-text,#1a0f08);}" +
+                ".page-custom-agents .btn-danger{background:var(--danger-light,rgba(229,84,78,.13));color:var(--danger);border:1px solid var(--danger) !important;}" +
+                /* 토스트 — ember/soft 패턴 */
+                ".page-custom-agents .toast{position:fixed;bottom:20px;right:20px;padding:var(--space-3) var(--space-5);border-radius:var(--radius-md);color:var(--text-primary);z-index:2000;opacity:0;transition:opacity .3s;border:1px solid;}" +
+                ".page-custom-agents .toast.show{opacity:1;}" +
+                ".page-custom-agents .toast.success{background:var(--success-light,rgba(95,185,125,.13));color:var(--success);border-color:var(--success);}" +
+                ".page-custom-agents .toast.error{background:var(--danger-light,rgba(229,84,78,.13));color:var(--danger);border-color:var(--danger);}" +
+                ".page-custom-agents .loading{text-align:center;padding:var(--space-6);color:var(--text-faint,var(--text-muted));}" +
                 '<\/style>' +
                 "<header class=\"page-header\">\n" +
                 "  <button class=\"mobile-menu-btn\" onclick=\"toggleMobileSidebar(event)\">&#9776;</button>\n" +
