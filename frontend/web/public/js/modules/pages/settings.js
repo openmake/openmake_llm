@@ -337,7 +337,10 @@
                         if (!embedPanel) return;
                         embedPanel.style.display = '';
                         embedPanel.innerHTML = '<div class="settings-embed-loading">불러오는 중…</div>';
-                        import(EMBED_MODULES[tabName]).then(function (mod) {
+                        // Vite 빌드 시 변수 경로 import 누락 방지 — spa-router 의 glob 로더 경유
+                        // (직접 서빙 환경에서는 동적 import(url) 로 폴백).
+                        var _loadPage = window.loadPageModule || function (s) { return import(s); };
+                        _loadPage(EMBED_MODULES[tabName]).then(function (mod) {
                             var pm = (mod && mod.default) || mod;
                             if (!pm || typeof pm.getHTML !== 'function') { embedPanel.innerHTML = '<div class="settings-embed-loading">로드 실패</div>'; return; }
                             embedPanel.innerHTML = pm.getHTML();

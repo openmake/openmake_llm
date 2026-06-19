@@ -5,7 +5,7 @@
     "private": true,
     "scripts": {
         "dev": "vite",
-        "build": "bash scripts/validate-modules.sh",
+        "build": "bash scripts/validate-modules.sh && vite build && bash scripts/verify-dist-hash.sh",
         "preview": "vite preview"
     },
     "dependencies": {

@@ -55,7 +55,7 @@ Jest config: test files in `backend/api/src/**/__tests__/**/*.test.ts`, `backend
 ### Monorepo Structure (npm workspaces)
 
 - **`backend/api/`** - Express 5 + TypeScript API server (CommonJS output, ES2022 target, strict mode)
-- **`frontend/web/`** - Vanilla JS SPA with ES Modules (no framework, Vite for dev)
+- **`frontend/web/`** - Vanilla JS SPA with ES Modules (no framework; Vite content-hash 번들 빌드 → `dist` 서빙)
 - **`data/`** - Shared data layer (referenced from backend)
 - **`scripts/`** - Build, deploy, migration, and CI scripts
 - **`tests/`** - E2E tests (Playwright)
@@ -257,9 +257,10 @@ Environment variables loaded from `.env` at project root (see `.env.example`). K
 
 ### SPA 프레임워크 / 대형 프론트엔드 라이브러리 (영구 금지)
 
-- `React`, `Vue`, `Angular`, `Svelte` 등 SPA 프레임워크 **도입 금지** — Vanilla JS ES Modules 유지
+- `React`, `Vue`, `Angular`, `Svelte` 등 SPA 프레임워크 **도입 금지** — 소스는 Vanilla JS ES Modules 유지
 - `jQuery`, `Lodash` 등 대형 유틸 라이브러리 신규 추가 금지
-- 근거: 번들 없는 직접 서빙 구조 유지, 빌드 파이프라인 단순화
+- 근거: 프레임워크 없는 순수 ESM 소스 유지.
+- **운영 배포는 Vite content-hash 번들로 전환 (2026-06-19, 방침 변경)**: 과거 "번들 없는 직접 서빙"은 ES module-map 캐시(오래된 탭) + 하위 import 캐시 버스터 미전파로 stale 모듈 문제가 반복돼, content-hash asset pipeline 으로 근본 해결. Vite 는 **번들러로만** 사용(프레임워크 도입 아님). 소스(`frontend/web/public`)는 여전히 프레임워크 없는 순수 ESM 이며, `npm run build:frontend`(validate-modules → vite build → verify-dist-hash)로 `frontend/web/dist` 에 hash asset 생성. 운영 서빙: dist 우선(없으면 public 폴백), `index.html` no-cache + `/assets/*.<hash>` immutable + WS build ID handshake 자동 reload(`config/build-id.ts`).
 
 ## Phase 용어집
 
