@@ -477,10 +477,11 @@ function getHTML() {
     return '<div id="mcp-page-root-spa">' +
         '<style data-spa-style="mcp-servers">' +
         '.mcp-page-spa{width:100%;}' + /* 전체 폭 — settings·skill-library 와 가로 폭 일치 (2026-06-07) */
-        '.mcp-page-spa .mcp-tabs{display:flex;gap:0;margin:0 var(--space-5,1.25rem);border-bottom:1px solid var(--border-color);}' +
-        '.mcp-page-spa .mcp-tab{padding:.75rem 1.25rem;background:transparent;border:none;border-bottom:2px solid transparent;cursor:pointer;color:var(--text-secondary);font-weight:500;font-size:var(--font-size-sm);}' +
+        /* ── MCP Servers — Graphite & Ember II (Archetype B) ── */
+        '.mcp-page-spa .mcp-tabs{display:flex;gap:0;margin:0 var(--space-5,1.25rem);border-bottom:1px solid var(--border-light);}' +
+        '.mcp-page-spa .mcp-tab{padding:.75rem 1.25rem;background:transparent;border:none;border-bottom:2px solid transparent;cursor:pointer;color:var(--text-faint,var(--text-muted));font-weight:500;font-size:var(--font-size-sm);transition:color .15s;}' +
         '.mcp-page-spa .mcp-tab:hover{color:var(--text-primary);}' +
-        '.mcp-page-spa .mcp-tab.active{color:var(--accent-primary);border-bottom-color:var(--accent-primary);font-weight:var(--font-weight-semibold);}' +
+        '.mcp-page-spa .mcp-tab.active{color:var(--accent-primary);border-bottom-color:var(--accent-primary);font-weight:600;}' +
         '.mcp-page-spa .mcp-tab-panel{display:none;}' +
         '.mcp-page-spa .mcp-tab-panel.active{display:block;}' +
         '.mcp-page-spa .mcp-list{display:flex;flex-direction:column;gap:.5rem;}' +
@@ -488,19 +489,24 @@ function getHTML() {
         '.mcp-page-spa .mcp-row-side{flex-basis:190px;min-width:0;}' +
         '.mcp-page-spa .mcp-row-actions{flex-basis:180px;gap:.4rem;flex-wrap:wrap;align-content:center;}' +
         '.mcp-page-spa .mcp-row-actions .sl-btn{white-space:nowrap;}' +
-        '.mcp-page-spa .mcp-inline-code{max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-secondary);font-size:var(--font-size-xs);}' +
+        /* 카탈로그 ID — mono 10px faint */
+        '.mcp-page-spa .mcp-inline-code{max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:var(--font-mono);font-size:10px;color:var(--text-faint,var(--text-muted));}' +
+        /* 툴바 — Archetype B .toolbar */
         '.mcp-page-spa .mcp-toolbar{display:flex;gap:var(--space-2);align-items:center;flex-wrap:wrap;margin-bottom:var(--space-4);}' +
         '.mcp-page-spa .mcp-btn-danger{background:transparent;color:var(--danger);border:1px solid var(--danger);}' +
-        '.mcp-page-spa .mcp-empty,.mcp-page-spa .mcp-loading{padding:3rem;text-align:center;color:var(--text-secondary);}' +
-        '.mcp-page-spa .badge{display:inline-flex;align-items:center;width:max-content;padding:.15rem .5rem;border-radius:999px;border:1px solid var(--border-light);font-size:var(--font-size-xs);font-weight:var(--font-weight-semibold);line-height:1.35;}' +
-        '.mcp-page-spa .badge-vis-private,.mcp-page-spa .badge-status-stopped,.mcp-page-spa .badge-cat{background:var(--bg-tertiary);color:var(--text-secondary);}' +
-        '.mcp-page-spa .badge-status-starting{background:var(--warning-light);color:var(--warning);border-color:var(--warning);}' +
-        '.mcp-page-spa .badge-vis-global{background:rgba(var(--primary-rgb,80,120,220),.12);color:var(--info-color,var(--accent-primary));border-color:var(--info-color,var(--accent-primary));}' +
-        '.mcp-page-spa .badge-vis-shared,.mcp-page-spa .badge-status-running{background:var(--success-light);color:var(--success);border-color:var(--success);}' +
-        '.mcp-page-spa .badge-status-crashed{background:var(--danger-light);color:var(--danger);border-color:var(--danger);}' +
-        '.mcp-page-spa .mcp-instance-table{width:100%;border-collapse:collapse;background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-md);overflow:hidden;}' +
+        '.mcp-page-spa .mcp-empty,.mcp-page-spa .mcp-loading{padding:3rem;text-align:center;color:var(--text-faint,var(--text-muted));}' +
+        /* 배지 — ember/success/warning/danger soft 패턴, mono 10px */
+        '.mcp-page-spa .badge{display:inline-flex;align-items:center;width:max-content;padding:.15rem .5rem;border-radius:var(--radius-full,999px);border:1px solid var(--border-light);font-family:var(--font-mono);font-size:10px;font-weight:600;line-height:1.35;}' +
+        '.mcp-page-spa .badge-vis-private,.mcp-page-spa .badge-status-stopped,.mcp-page-spa .badge-cat{background:var(--bg-tertiary);color:var(--text-secondary);border-color:var(--border-light);}' +
+        '.mcp-page-spa .badge-status-starting{background:var(--warning-light,rgba(232,176,75,.13));color:var(--warning);border-color:var(--warning);}' +
+        '.mcp-page-spa .badge-vis-global{background:var(--ember-soft,rgba(255,106,61,.13));color:var(--accent-primary);border-color:var(--ember-line,rgba(255,106,61,.32));}' +
+        '.mcp-page-spa .badge-vis-shared,.mcp-page-spa .badge-status-running{background:var(--success-light,rgba(95,185,125,.13));color:var(--success);border-color:var(--success);}' +
+        '.mcp-page-spa .badge-status-crashed{background:var(--danger-light,rgba(229,84,78,.13));color:var(--danger);border-color:var(--danger);}' +
+        /* 인스턴스 테이블 — th mono uppercase, tr hover */
+        '.mcp-page-spa .mcp-instance-table{width:100%;border-collapse:collapse;background:var(--bg-card);border:1px solid var(--border-light);border-radius:var(--radius-md);overflow:hidden;}' +
         '.mcp-page-spa .mcp-instance-table th,.mcp-page-spa .mcp-instance-table td{padding:var(--space-3) var(--space-4);text-align:left;border-bottom:1px solid var(--border-light);font-size:var(--font-size-sm);}' +
-        '.mcp-page-spa .mcp-instance-table th{background:var(--bg-secondary);color:var(--text-secondary);font-weight:var(--font-weight-semibold);}' +
+        '.mcp-page-spa .mcp-instance-table th{font-family:var(--font-mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--text-faint,var(--text-muted));font-weight:500;background:transparent;}' +
+        '.mcp-page-spa .mcp-instance-table tr:hover td{background:var(--bg-tertiary);}' +
         /* 모달은 skill-library.css 의 .sl-modal-overlay/.sl-modal/.sl-form-* 재사용 — 추가 inline CSS 불필요 */
         '.mcp-page-spa .sl-modal h2 .iconify{font-size:1.05em;vertical-align:-2px;margin-right:.35rem;color:var(--accent-primary);}' +
         '.mcp-page-spa .sl-modal code{background:var(--bg-secondary);padding:.1rem .35rem;border-radius:var(--radius-sm,4px);font-size:var(--font-size-xs);color:var(--text-secondary);}' +

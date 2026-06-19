@@ -11,9 +11,9 @@
 
 .dashboard-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    gap: var(--space-5);
-    margin-bottom: var(--space-8);
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    gap: var(--s3, 12px);
+    margin-bottom: var(--space-5);
 }
 
 /* ==========================================
@@ -23,8 +23,8 @@
 .metric-card {
     background: var(--bg-card);
     border: var(--border-width) solid var(--border-light);
-    border-radius: var(--radius-md);
-    padding: var(--space-5);
+    border-radius: var(--r-lg, var(--radius-lg));
+    padding: var(--space-4);
     box-shadow: var(--shadow-sm);
 }
 
@@ -36,7 +36,10 @@
 }
 
 .metric-card-title {
-    font-size: var(--font-size-sm);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
     color: var(--text-muted);
     font-weight: var(--font-weight-medium);
 }
@@ -51,7 +54,9 @@
 }
 
 .metric-card-change {
-    font-size: var(--font-size-xs);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    margin-top: var(--space-2);
     display: flex;
     align-items: center;
     gap: var(--space-1);
