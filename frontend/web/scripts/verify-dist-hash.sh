@@ -14,11 +14,12 @@ if [ ! -f "$INDEX" ]; then
   exit 1
 fi
 
-# 1) index.html 이 hash 없는 직접 JS(`js/main.js`, `js/modules/...`) 또는 `?v=` 쿼리를 참조하면 실패.
-#    Vite entry 는 /assets/<name>.<hash>.js 만 참조해야 한다. (vendor/ 직접 script 는 허용)
-if grep -nE 'src="[^"]*\.js\?v=|src="/?js/main\.js|src="/?js/modules/|src="/?js/spa-router\.js' "$INDEX"; then
-  echo "[verify-dist-hash] FAIL: index.html 이 hash 없는 직접 JS / ?v= 쿼리를 참조합니다." >&2
-  echo "  → Vite 번들(/assets/*.<hash>.js) 만 참조해야 합니다." >&2
+# 1) index.html 이 hash 없는 직접 JS/CSS(`js/main.js`, `js/modules/...`) 또는 `?v=` 캐시버스터
+#    쿼리를 script src / link href 어디서든 참조하면 실패. Vite entry 는 /assets/<name>.<hash>.*
+#    만 참조해야 한다. (vendor/ 직접 script·link 는 hash 없이 허용 — ?v= 만 없으면 OK)
+if grep -nE '(src|href)="[^"]*\?v=|src="/?js/main\.js|src="/?js/modules/|src="/?js/spa-router\.js' "$INDEX"; then
+  echo "[verify-dist-hash] FAIL: index.html 이 hash 없는 직접 JS / ?v= 캐시버스터 쿼리(script src 또는 link href)를 참조합니다." >&2
+  echo "  → Vite 번들(/assets/*.<hash>.{js,css}) 만 참조해야 합니다." >&2
   exit 1
 fi
 

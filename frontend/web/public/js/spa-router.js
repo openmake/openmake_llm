@@ -265,8 +265,8 @@ function removeModuleCSS(moduleName) {
  * **빌드 타임에 객체 리터럴 `{ './modules/pages/x.js': () => import('...') }` 로 치환**하여
  * 23개 페이지 모듈을 모두 그래프에 포함 + content-hash code-split 한다.
  *
- * 직접 서빙(빌드 없음) 환경에서는 `import.meta.glob` 이 `undefined` 이므로
- * try/catch + typeof 가드로 안전하게 `null` 이 되고, `loadModule` 이 기존
+ * 직접 서빙(빌드 없음) 환경에서는 `import.meta.glob` 이 `undefined` 이므로 호출 시
+ * TypeError 가 발생하고, try/catch 로 안전하게 `null` 이 되어 `loadModule` 이 기존
  * 동적 `import(url)` 경로로 폴백한다 (런타임 동작 동일 — 무중단 호환).
  *
  * 키 형식: './modules/pages/<name>.js' (glob 패턴 상대경로 기준)
@@ -274,12 +274,15 @@ function removeModuleCSS(moduleName) {
  */
 var _pageGlob = null;
 try {
-    // import.meta.glob 은 Vite 빌드 타임 매크로. 직접 서빙 시 undefined → 폴백.
-    if (typeof import.meta.glob === 'function') {
-        _pageGlob = import.meta.glob('./modules/pages/*.js');
-    }
+    // import.meta.glob 은 Vite 빌드 타임 매크로 — 빌드 시 객체 리터럴로 치환된다.
+    // ⚠️ `typeof import.meta.glob === 'function'` 가드를 쓰면 안 된다: Vite 는 glob() **호출**만
+    //   치환하고 bare `import.meta.glob` 참조는 그대로 두므로, 빌드 결과에서도 런타임 undefined →
+    //   가드 false → glob 미할당이 되어 페이지 청크가 전부 dead 가 된다(직접서빙 폴백으로 빠져
+    //   dist-only 배포 시 404, 또는 public 소스를 ?v= 로 서빙해 content-hash 가 무효화됨).
+    // 직접 서빙(non-Vite)에서는 import.meta.glob 이 undefined → 호출 시 TypeError → catch → null.
+    _pageGlob = import.meta.glob('./modules/pages/*.js');
 } catch (_globErr) {
-    // 직접 서빙 환경 — import.meta.glob 미지원. 동적 import(url) 폴백 사용.
+    // 직접 서빙 환경 — import.meta.glob 미지원(undefined 호출 → TypeError). 동적 import(url) 폴백.
     _pageGlob = null;
 }
 
