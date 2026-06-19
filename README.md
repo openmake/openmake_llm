@@ -21,7 +21,7 @@ OpenMake LLM is a **self-hosted AI assistant** you run on your own machine. It c
 - **OpenRouter** as a single cloud gateway to 367+ models (GPT-5, Claude, Gemini, Llama, DeepSeek 등) — bring your own API key
 - **100 specialist agents** across 18 industry categories — each with curated prompts
 - **7 brand model profiles** (Default, Pro, Fast, Think, Code, Vision, Auto) routed by a regex classifier + fast-path detector
-- **13 built-in tools** (web search/scrape, vision OCR, deep research, skill/agent/MCP-server import 등) via MCP, with tier-based access
+- **13 built-in tools** (web search/scrape, vision OCR, deep research, skill/agent/MCP-server import 등) via MCP — available to every user (no tier gating)
 - **OpenAI-compatible API** — drop-in endpoint at `/api/v1/chat/completions`
 
 No SaaS. No telemetry to third parties. Your data stays on your hardware (or your own database).
@@ -118,13 +118,13 @@ Open the **에이전트** panel and pick one of the 100 specialists (e.g., **Sof
 
 ### E. Use built-in tools
 
-Type messages that hint at tool use, or open the **Skill Library** to see available capabilities. 13 built-in tools, tier-gated (Free / Pro / Enterprise):
+Type messages that hint at tool use, or open the **Skill Library** to see available capabilities. 13 built-in tools — all available to every user (no tier gating):
 
-- `web_search` / `fact_check` / `extract_webpage` / `research_topic` — Google CSE-backed search + research (Free)
-- `vision_ocr` / `analyze_image` — image understanding (Free)
-- `create_skill` / `import_skill_from_git` / `import_agent_from_git` / `import_mcp_server_from_git` — natural-language & Git draft import (Free)
-- `web_scrape` / `web_map` / `web_crawl` — web scraping, no API key (free 3-tier fallback) (Pro)
-- Enterprise tier unlocks all external MCP tools (PostgreSQL, Python REPL, Playwright Browser, Knowledge Graph Memory 등)
+- `web_search` / `fact_check` / `extract_webpage` / `research_topic` — Google CSE-backed search + research
+- `vision_ocr` / `analyze_image` — image understanding
+- `create_skill` / `import_skill_from_git` / `import_agent_from_git` / `import_mcp_server_from_git` — natural-language & Git draft import
+- `web_scrape` / `web_map` / `web_crawl` — web scraping, no API key (free 3-tier fallback)
+- All external MCP tools (PostgreSQL, Python REPL, Playwright Browser, Knowledge Graph Memory 등) are unlocked for everyone
 
 Check the Skill Library for your access level.
 
@@ -204,7 +204,7 @@ wsl --install -d Ubuntu
 ## Production Deployment
 
 ```bash
-# Build (TypeScript → JavaScript + sync frontend assets to dist)
+# Build (backend TypeScript → JS in backend/api/dist; frontend → Vite content-hash bundle in frontend/web/dist)
 npm run build
 
 # Apply database migrations (idempotent — safe to re-run)
@@ -215,7 +215,7 @@ pm2 start ecosystem.config.js
 # or: npm start
 ```
 
-> **`npm run build` is required** before `npm start` — it compiles TypeScript to `backend/api/dist/` and copies frontend static assets. Update the `cwd` path in `ecosystem.config.js` to match your deploy location.
+> **`npm run build` is required** before `npm start` — it compiles backend TypeScript to `backend/api/dist/` and builds the frontend into `frontend/web/dist` (Vite content-hash bundle; served dist-first with `frontend/web/public` fallback). Update the `cwd` path in `ecosystem.config.js` to match your deploy location.
 
 > **Migrations are NOT auto-applied on server start** — run `cli.ts migrate` explicitly during deploy. The runner is idempotent and tracks applied versions in `migration_versions` table.
 
@@ -283,7 +283,7 @@ Missing values just mean rankings won't show your app — functionality unaffect
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│  Frontend — Vanilla JS SPA (no framework, no JS build step) │
+│  Frontend — Vanilla JS SPA (no framework; Vite hash bundle) │
 │  • 24 page modules, ES module imports                        │
 │  • WebSocket streaming + REST                                │
 │  • XSS defense via sanitize.js                               │
@@ -319,8 +319,8 @@ Missing values just mean rankings won't show your app — functionality unaffect
 ### Tech stack
 
 - **Backend**: Express 5, TypeScript strict, CommonJS output, ES2022, `pg` (raw SQL, no ORM)
-- **Frontend**: Vanilla JS ES Modules — no React/Vue, Vite for dev only
-- **Auth**: JWT in HttpOnly cookies, Google OAuth 2.0, RBAC (admin/user/guest), 3 user tiers (Free/Pro/Enterprise)
+- **Frontend**: Vanilla JS ES Modules — no React/Vue; Vite content-hash bundle (dist served, `public/` fallback)
+- **Auth**: JWT in HttpOnly cookies, Google OAuth 2.0, RBAC (admin/user/guest) — all features unrestricted (subscription tiers removed)
 - **Process**: PM2 (production)
 - **Observability**: OpenTelemetry traces
 - **Security**: helmet, CORS allowlist, AES-256-GCM for sensitive data, SSRF guard for outbound URLs
@@ -521,7 +521,7 @@ Backend logic files must stay under **600 lines** (CI Gate 3 — fails the build
 - **OAuth**: Google OAuth 2.0 social login
 - **API keys**: HMAC-SHA-256 hashed with `API_KEY_PEPPER`, scope-based access
 - **External LLM keys**: AES-256-GCM encrypted (key from `TOKEN_ENCRYPTION_KEY`)
-- **RBAC**: admin / user / guest roles + Free/Pro/Enterprise tiers (gates MCP tools)
+- **RBAC**: admin / user / guest roles — all features available to every user (subscription/tool tiers removed)
 - **Rate limiting**: per-route advanced rate limiter with separate read/write limits
 - **XSS defense**: content sanitization in `sanitize.js`
 - **CORS**: explicit origin allowlist via `CORS_ORIGINS`
