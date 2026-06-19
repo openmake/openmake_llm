@@ -13,6 +13,7 @@
  * - consent_logs                    : CONSENT_PII_RETENTION_DAYS(기본 90일) 초과 ip/ua NULL (GDPR Article 5(1)(c))
  * - audit_logs                      : AUDIT_PII_RETENTION_DAYS(기본 90일) 초과 ip/ua NULL + details.actor 제거
  * - alert_history                   : ALERT_PII_RETENTION_DAYS(기본 90일) 초과 data.actor/ipAddress/userAgent 제거
+ * - mcp_server_instances            : MCP_INSTANCE_RETENTION_DAYS(기본 30일) 초과 transition 이력 삭제 (각 server·user 의 최신 transition 은 보존)
  *
  * @module data/db-retention
  */
@@ -148,6 +149,30 @@ async function runRetention(): Promise<void> {
             );
             if ((alertResult.rowCount ?? 0) > 0) {
                 logger.info(`[DbRetention] alert_history PII 익명화 ${alertResult.rowCount}건 완료 (${alertRetentionDays}일 초과)`);
+            }
+        }
+
+        // 9. mcp_server_instances 전이 이력 정리 — append-only 이력(매 lifecycle 전이마다 INSERT)이
+        // 무한 증가하는 것을 방지. 각 (mcp_server_id, user_id) 의 최신 transition row 는 무조건 보존하여
+        // current_running 계산(최신 transition 기준, PR #127)의 정확성을 유지하고,
+        // 그 외 N일(기본 30) 초과 이력만 삭제한다.
+        const mcpInstanceRetentionDays = parseInt(
+            process.env.MCP_INSTANCE_RETENTION_DAYS ?? '30',
+            10,
+        );
+        if (Number.isFinite(mcpInstanceRetentionDays) && mcpInstanceRetentionDays > 0) {
+            const mcpResult = await pool.query(
+                `DELETE FROM mcp_server_instances
+                 WHERE started_at < NOW() - ($1 || ' days')::interval
+                   AND id NOT IN (
+                       SELECT DISTINCT ON (mcp_server_id, user_id) id
+                       FROM mcp_server_instances
+                       ORDER BY mcp_server_id, user_id, started_at DESC
+                   )`,
+                [mcpInstanceRetentionDays.toString()]
+            );
+            if ((mcpResult.rowCount ?? 0) > 0) {
+                logger.info(`[DbRetention] MCP 인스턴스 이력 ${mcpResult.rowCount}건 정리 완료 (${mcpInstanceRetentionDays}일 초과, 최신 transition 보존)`);
             }
         }
 
