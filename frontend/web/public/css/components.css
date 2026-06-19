@@ -125,6 +125,7 @@
 
 .card:hover {
     border-color: var(--border-medium);
+    box-shadow: var(--shadow-md);
 }
 
 .card-interactive:hover {
@@ -166,31 +167,33 @@
 
 /* Stat Card */
 .stat-card {
-    text-align: center;
+    text-align: left;
     min-width: 120px;
 }
 
 .stat-value {
     font-family: var(--font-serif); /* Fraunces — editorial 수치 (Latin-safe) */
-    font-size: var(--font-size-4xl);
-    font-weight: var(--font-weight-semibold);
+    font-size: var(--font-size-2xl);
+    font-weight: var(--font-weight-medium);
     letter-spacing: -0.02em;
-    color: var(--accent-primary);
-    line-height: 1.2;
+    color: var(--text-primary);
+    line-height: 1;
+    margin-top: var(--space-2);
 }
 
 .stat-label {
     font-family: var(--font-mono); /* technical 마이크로 라벨 */
-    font-size: var(--font-size-xs);
+    font-size: 10px;
     color: var(--text-muted);
-    margin-top: var(--space-1);
+    margin-top: 0;
     text-transform: uppercase;
-    letter-spacing: 0.08em;
+    letter-spacing: 0.06em;
 }
 
 .stat-change {
-    font-size: var(--font-size-xs);
-    margin-top: var(--space-2);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    margin-top: var(--space-1);
 }
 
 .stat-change.positive {
@@ -356,37 +359,44 @@
 .badge {
     display: inline-flex;
     align-items: center;
-    padding: var(--space-1) var(--space-2);
+    gap: 4px;
+    padding: 3px 8px;
+    font-family: var(--font-mono);
     font-size: var(--font-size-xs);
     font-weight: var(--font-weight-bold);
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-full);
     line-height: 1;
     border: 1px solid currentColor;
 }
 
 .badge-primary {
-    background: var(--accent-primary-light);
-    color: var(--accent-primary);
+    background: var(--ember-soft);
+    color: var(--accent-primary-hover);
+    border-color: var(--ember-line);
 }
 
 .badge-success {
     background: var(--success-light);
     color: var(--success);
+    border-color: rgba(95, 185, 125, 0.3);
 }
 
 .badge-warning {
     background: var(--warning-light);
     color: var(--warning);
+    border-color: rgba(232, 176, 75, 0.3);
 }
 
 .badge-danger {
     background: var(--danger-light);
     color: var(--danger);
+    border-color: rgba(229, 84, 78, 0.3);
 }
 
 .badge-info {
     background: var(--info-light);
     color: var(--info);
+    border-color: rgba(107, 165, 201, 0.3);
 }
 
 /* ==========================================
@@ -468,16 +478,17 @@
 
 .table th {
     background: var(--bg-secondary);
+    font-family: var(--font-mono);
     font-size: var(--font-size-xs);
-    font-weight: var(--font-weight-bold);
+    font-weight: var(--font-weight-medium);
     color: var(--text-muted);
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.07em;
     border-bottom: var(--border-width) solid var(--border-light);
 }
 
 .table tr:hover td {
-    background: var(--bg-hover);
+    background: var(--bg-tertiary);
 }
 
 .table tr:last-child td {

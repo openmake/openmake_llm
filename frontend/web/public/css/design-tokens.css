@@ -60,6 +60,19 @@
     --info: #6ba5c9;
     --info-light: rgba(107, 165, 201, 0.15);
 
+    /* ------- Semantic Soft Aliases (시안 -soft suffix 정렬) ------- */
+    --positive-soft: var(--success-light);
+    --warning-soft: var(--warning-light);
+    --danger-soft: var(--danger-light);
+    --info-soft: var(--info-light);
+
+    /* ------- Data Visualization Palette (시안 --viz-1~5) ------- */
+    --viz-1: #ff6a3d;
+    --viz-2: #f2994a;
+    --viz-3: #e8b04b;
+    --viz-4: #9bb06a;
+    --viz-5: #5fb97d;
+
     /* ------- Semantic Aliases (호환성) ------- */
     --accent-success: var(--success);        /* success 색상 alias */
     --error: var(--danger);                  /* error/danger 색상 alias */
@@ -106,6 +119,7 @@
     --shadow-md: 0 6px 22px -8px rgba(0, 0, 0, 0.55), 0 2px 6px -2px rgba(0, 0, 0, 0.4); /* 시안 --sh-md */
     --shadow-lg: 0 24px 60px -18px rgba(0, 0, 0, 0.7);                                  /* 시안 --sh-lg */
     --shadow-xl: 0 28px 70px -16px rgba(0, 0, 0, 0.75), 0 10px 24px -10px rgba(0, 0, 0, 0.55);
+    --shadow-ember: 0 8px 28px -8px rgba(255, 106, 61, 0.4);
 
     /* ------- Shadow Aliases (brutal → soft) ------- */
     --shadow-brutal-sm: var(--shadow-sm);
