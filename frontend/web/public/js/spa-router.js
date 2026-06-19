@@ -258,8 +258,66 @@ function removeModuleCSS(moduleName) {
 // ─── ES Module 동적 로딩 ────────────────────────────
 
 /**
+ * 페이지 모듈 glob 맵 (Vite 빌드 전용)
+ *
+ * Vite 는 완전 변수 경로 `import(variable)` 를 정적 분석하지 못해 페이지 모듈이
+ * 번들에서 누락된다. `import.meta.glob('./modules/pages/*.js')` 는 Vite 가
+ * **빌드 타임에 객체 리터럴 `{ './modules/pages/x.js': () => import('...') }` 로 치환**하여
+ * 23개 페이지 모듈을 모두 그래프에 포함 + content-hash code-split 한다.
+ *
+ * 직접 서빙(빌드 없음) 환경에서는 `import.meta.glob` 이 `undefined` 이므로
+ * try/catch + typeof 가드로 안전하게 `null` 이 되고, `loadModule` 이 기존
+ * 동적 `import(url)` 경로로 폴백한다 (런타임 동작 동일 — 무중단 호환).
+ *
+ * 키 형식: './modules/pages/<name>.js' (glob 패턴 상대경로 기준)
+ * @type {Record<string, () => Promise<object>>|null}
+ */
+var _pageGlob = null;
+try {
+    // import.meta.glob 은 Vite 빌드 타임 매크로. 직접 서빙 시 undefined → 폴백.
+    if (typeof import.meta.glob === 'function') {
+        _pageGlob = import.meta.glob('./modules/pages/*.js');
+    }
+} catch (_globErr) {
+    // 직접 서빙 환경 — import.meta.glob 미지원. 동적 import(url) 폴백 사용.
+    _pageGlob = null;
+}
+
+/**
+ * 모듈 파일 절대경로(`/js/modules/pages/x.js`)를 glob 맵 키(`./modules/pages/x.js`)로 변환
+ * @param {string} src
+ * @returns {string} glob 맵 키
+ */
+function _toGlobKey(src) {
+    // '/js/modules/pages/research.js' → './modules/pages/research.js'
+    return src.replace(/^\/js\//, './').replace(/^js\//, './');
+}
+
+/**
+ * glob 맵에 해당 모듈이 있으면 lazy loader 로 로드, 없으면 동적 import(url) 폴백.
+ * admin.js / settings.js 등 다른 모듈에서도 재사용하도록 export 한다.
+ *
+ * @param {string} src - 모듈 파일 경로 (예: '/js/modules/pages/research.js')
+ * @returns {Promise<object>} import 결과 module namespace
+ */
+async function _importPageModule(src) {
+    var globKey = _pageGlob ? _toGlobKey(src) : null;
+    if (_pageGlob && globKey && _pageGlob[globKey]) {
+        // Vite 빌드 — glob lazy loader (hash 번들)
+        return _pageGlob[globKey]();
+    }
+    // 직접 서빙 — 캐시버스터 쿼리 동적 import
+    var moduleUrl = src + '?v=' + _moduleVersion;
+    return import(/* @vite-ignore */ moduleUrl);
+}
+
+/**
  * ES Module dynamic import()로 페이지 모듈 로드
- * @param {string} src - 모듈 파일 경로
+ *
+ * Vite 빌드 환경: `_pageGlob` 맵의 lazy loader 사용 → hash 번들 참조.
+ * 직접 서빙 환경: 기존 `import(src + '?v=N')` 폴백.
+ *
+ * @param {string} src - 모듈 파일 경로 (예: '/js/modules/pages/research.js')
  * @returns {Promise<object>} 모듈의 default export ({ getHTML, init, cleanup })
  */
 async function loadModule(src) {
@@ -269,8 +327,7 @@ async function loadModule(src) {
     }
 
     try {
-        var moduleUrl = src + '?v=' + _moduleVersion;
-        var mod = await import(moduleUrl);
+        var mod = await _importPageModule(src);
         var pageModule = mod.default || mod;
         _loadedModules.set(src, pageModule);
         log('모듈 로드 완료:', src);
@@ -893,9 +950,23 @@ var Router = {
     }
 };
 
+/**
+ * 페이지 모듈을 Vite glob 맵(빌드) 또는 동적 import(직접 서빙)로 로드한다.
+ * admin.js 의 SUB_SECTION_MODULES / settings.js 의 EMBED_MODULES 처럼
+ * `/js/modules/pages/*.js` 를 변수 경로로 import 하던 코드가 이 헬퍼를 거치면
+ * Vite 빌드 시 누락 없이 hash 번들로 묶인다.
+ *
+ * @param {string} src - 모듈 파일 절대경로 (예: '/js/modules/pages/audit.js')
+ * @returns {Promise<object>} import 결과 module namespace ({ default, ... })
+ */
+function loadPageModule(src) {
+    return _importPageModule(src);
+}
+
 // ─── 전역 노출 ────────────────────────────────────
 window.Router = Router;
 window.SPARouter = Router; // 별칭
+window.loadPageModule = loadPageModule; // admin/settings 등 비-라우터 임베드 로더용
 
 // ─── ES Module Exports ─────────────────────────────
-export { Router, SafeStorage };
+export { Router, SafeStorage, loadPageModule };

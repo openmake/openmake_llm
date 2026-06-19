@@ -54,7 +54,10 @@
                 if (_subModuleCache[section] && _subModuleCache[section].initialized) return;
                 if (!_subModuleCache[section] || !_subModuleCache[section].module) {
                     try {
-                        const mod = await import(SUB_SECTION_MODULES[section]);
+                        // Vite 빌드 시 변수 경로 import 누락 방지 — spa-router 의 glob 로더 경유
+                        // (직접 서빙 환경에서는 동적 import(url) 로 폴백).
+                        const _loadPage = window.loadPageModule || ((s) => import(s));
+                        const mod = await _loadPage(SUB_SECTION_MODULES[section]);
                         const pageModule = mod.default || mod;
                         _subModuleCache[section] = { module: pageModule, initialized: false };
                     } catch (e) {

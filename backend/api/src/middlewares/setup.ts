@@ -214,6 +214,8 @@ export function setupStaticFiles(app: Application, dirname: string): void {
 
     const publicPath = path.join(dirname, 'public');
     const fallbackPublicPath = path.join(dirname, '../../../frontend/web/public');
+    // Vite content-hash 빌드 산출물 — 있으면 최우선 서빙(hash asset 참조 index.html).
+    const viteDistPath = path.join(dirname, '../../../frontend/web/dist');
 
     const allHtmlFiles = [
         ...listHtmlFiles(publicPath),
@@ -313,13 +315,14 @@ export function setupStaticFiles(app: Application, dirname: string): void {
         const html = fs.readFileSync(filePath, 'utf8');
         const nonce = getNonce(res);
         res.setHeader('Content-Security-Policy', buildCspHeader(nonce));
+        // HTML 은 hash asset manifest 진입점 — 항상 재검증(no-cache)해 최신 asset 참조를 보장.
+        res.setHeader('Cache-Control', 'no-cache');
         return injectBuildIdMeta(injectNonceIntoHtml(html, nonce));
     };
 
-    // 프론트엔드는 빌드 없는 순수 JS — 단일 원본(frontend/web/public)에서 직접 서빙.
-    // (2026-05-29) dist/public 복사 단계(sync-frontend) 제거 → 원본 수정 즉시 반영.
-    // HTML 도 소스 우선, 잔존 dist 는 폴백(없으면 no-op).
-    const htmlSearchOrder = [fallbackPublicPath, publicPath];
+    // 프론트엔드 서빙 우선순위: Vite dist(content-hash) → 소스(public, 폴백) → dist/public(잔존).
+    // dist 가 있으면 hash asset 참조 index.html 을 서빙하고, 없으면 소스 직접 서빙으로 무중단 폴백.
+    const htmlSearchOrder = [viteDistPath, fallbackPublicPath, publicPath];
 
     const getIndexPath = (): string | null => resolveFilePath(
         htmlSearchOrder.map(p => path.join(p, 'index.html'))
@@ -433,7 +436,9 @@ export function setupStaticFiles(app: Application, dirname: string): void {
         // 1년 캐시 + immutable hint 로 CDN/브라우저 캐시 적극 활용. esbuild.wasm 11MB 등
         // 큰 자산이 매 요청마다 ETag 검증 (no-cache) 하던 비효율 해소.
         const isVendor = filePath.includes('/vendor/') || filePath.includes('\\vendor\\');
-        if (isVendor && /\.(js|css|wasm|woff|woff2|ttf)$/i.test(filePath)) {
+        // Vite content-hash 자산(/assets/*.<hash>.*) — 내용이 바뀌면 파일명이 바뀌므로 immutable 안전.
+        const isHashedAsset = filePath.includes('/assets/') || filePath.includes('\\assets\\');
+        if ((isVendor || isHashedAsset) && /\.(js|css|wasm|woff|woff2|ttf|png|jpg|jpeg|svg|gif|webp)$/i.test(filePath)) {
             res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
         } else if (filePath.endsWith('.html')) {
             res.setHeader('Cache-Control', 'no-cache');
@@ -458,8 +463,9 @@ export function setupStaticFiles(app: Application, dirname: string): void {
         setHeaders: staticHeaders
     };
 
-    app.use(express.static(fallbackPublicPath, staticOpts));  // 소스 원본 (단일 출처)
-    app.use(express.static(publicPath, staticOpts));           // dist 잔존 폴백 (없으면 no-op)
+    app.use(express.static(viteDistPath, staticOpts));         // Vite dist 우선 (hash asset, immutable)
+    app.use(express.static(fallbackPublicPath, staticOpts));   // 소스 원본 폴백 (dist 없을 때)
+    app.use(express.static(publicPath, staticOpts));           // dist/public 잔존 폴백 (없으면 no-op)
 }
 
 /**

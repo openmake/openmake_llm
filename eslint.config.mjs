@@ -6,6 +6,7 @@ export default [
       "**/dist/**",
       "**/build/**",
       "**/node_modules/**",
+      "**/.claude/**",
       "**/*.min.js",
       "frontend/web/public/vendor/**",
       "frontend/web/public/js/vendor/**",
