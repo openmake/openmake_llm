@@ -87,7 +87,7 @@ const JAILBREAK_PATTERNS: RegExp[] = [
  * PII(개인식별정보) 탐지 패턴
  *
  * 한국 특화 패턴 + 범용 패턴을 포함합니다.
- * 감지 시 warn 수준으로 처리하며, redactPII()로 마스킹 가능합니다.
+ * 감지 시 warn 수준으로 처리합니다.
  */
 const PII_PATTERNS: { pattern: RegExp; label: string }[] = [
     { pattern: /\d{6}-[1-4]\d{6}/, label: 'Korean resident registration number' },
@@ -238,37 +238,4 @@ export function postResponseCheck(
         passed: violations.length === 0,
         violations,
     };
-}
-
-/**
- * PII 마스킹 처리 (로깅 목적 전용)
- *
- * 텍스트에서 개인식별정보를 마스킹 문자열로 대체합니다.
- * 실제 데이터 저장/전송이 아닌 로그 기록 시 사용하세요.
- *
- * 마스킹 대상:
- * - 한국 주민등록번호 → [주민번호 마스킹]
- * - 신용카드 번호 → [카드번호 마스킹]
- * - 한국 휴대폰 번호 → [전화번호 마스킹]
- *
- * @param text - 마스킹할 원본 텍스트
- * @returns PII가 마스킹된 텍스트
- *
- * @example
- * const safe = redactPII('주민번호 880101-1234567');
- * // → '주민번호 [주민번호 마스킹]'
- */
-export function redactPII(text: string): string {
-    let redacted = text;
-
-    // 한국 주민등록번호 마스킹
-    redacted = redacted.replace(/\d{6}-[1-4]\d{6}/g, '[주민번호 마스킹]');
-
-    // 신용카드 번호 마스킹
-    redacted = redacted.replace(/\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}/g, '[카드번호 마스킹]');
-
-    // 한국 휴대폰 번호 마스킹
-    redacted = redacted.replace(/010-?\d{4}-?\d{4}/g, '[전화번호 마스킹]');
-
-    return redacted;
 }
