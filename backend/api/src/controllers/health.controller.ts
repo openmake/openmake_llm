@@ -12,6 +12,7 @@ import { ClusterManager, getClusterManager } from '../cluster/manager';
 import { getPool } from '../data/models/unified-database';
 import { success } from '../utils/api-response';
 import { DB_POOL_TIMEOUTS } from '../config/timeouts';
+import { getBuildInfo } from '../config/build-id';
 
 // package.json에서 버전을 한 번만 읽어 캐시
 const pkgJsonPath = path.resolve(__dirname, '../../package.json');
@@ -19,19 +20,6 @@ let _cachedVersion = '1.0.0';
 try {
     const pkg = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf-8'));
     _cachedVersion = pkg.version || '1.0.0';
-} catch { /* fallback */ }
-
-// 빌드 정보 파일 (deploy 시 자동 생성됨)
-const buildInfoPath = path.resolve(__dirname, '../build-info.json');
-let _buildInfo: { buildTime: string; gitHash: string; gitDate: string } = {
-    buildTime: new Date().toISOString(),
-    gitHash: 'unknown',
-    gitDate: 'unknown'
-};
-try {
-    if (fs.existsSync(buildInfoPath)) {
-        _buildInfo = JSON.parse(fs.readFileSync(buildInfoPath, 'utf-8'));
-    }
 } catch { /* fallback */ }
 
 /**
@@ -80,7 +68,7 @@ export class HealthController {
                 totalNodes: stats.totalNodes,
                 totalModels: stats.totalModels
             },
-            build: _buildInfo
+            build: getBuildInfo()
         }));
     }
 

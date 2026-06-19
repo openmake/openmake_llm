@@ -89,11 +89,13 @@ function copyStaticDirs() {
             const distDir = resolve(__dirname, 'dist');
 
             // 디렉토리 단위 복사 대상 (vendor·정적 이미지·런타임 동적 CSS 등)
+            // ⚠️ 'generated'(런타임 사용자 생성 이미지)는 제외 — 빌드 시점 스냅샷이 되면 dist 우선
+            //   서빙으로 배포 후 새 업로드가 shadow 되거나 이름충돌 시 stale 본을 준다. dist 에 없으면
+            //   setup.ts 의 public 폴백이 live source(public/generated)를 서빙한다.
             const dirs = [
                 'vendor',
                 'images',
                 'icons',
-                'generated',
                 'policies',
                 'css', // 런타임 동적 주입(loadModuleCSS)이 /css/* 절대경로로 fetch
             ];

@@ -216,6 +216,17 @@ export function setupStaticFiles(app: Application, dirname: string): void {
     const fallbackPublicPath = path.join(dirname, '../../../frontend/web/public');
     // Vite content-hash 빌드 산출물 — 있으면 최우선 서빙(hash asset 참조 index.html).
     const viteDistPath = path.join(dirname, '../../../frontend/web/dist');
+    // dist 무결성 검사(부팅 1회): index.html + assets/*.js 가 모두 있어야 dist 를 우선한다.
+    // 부분/손상 빌드(index.html 만 있고 assets 누락)면 dist 를 건너뛰고 public 직접 서빙으로
+    // 폴백해 /assets/*.hash.js 404 blank(전체 페이지 깨짐)를 방지한다.
+    const viteDistValid = (() => {
+        try {
+            const assetsDir = path.join(viteDistPath, 'assets');
+            return fs.existsSync(path.join(viteDistPath, 'index.html'))
+                && fs.existsSync(assetsDir)
+                && fs.readdirSync(assetsDir).some(f => f.endsWith('.js'));
+        } catch { return false; }
+    })();
 
     const allHtmlFiles = [
         ...listHtmlFiles(publicPath),
@@ -322,7 +333,9 @@ export function setupStaticFiles(app: Application, dirname: string): void {
 
     // 프론트엔드 서빙 우선순위: Vite dist(content-hash) → 소스(public, 폴백) → dist/public(잔존).
     // dist 가 있으면 hash asset 참조 index.html 을 서빙하고, 없으면 소스 직접 서빙으로 무중단 폴백.
-    const htmlSearchOrder = [viteDistPath, fallbackPublicPath, publicPath];
+    const htmlSearchOrder = viteDistValid
+        ? [viteDistPath, fallbackPublicPath, publicPath]
+        : [fallbackPublicPath, publicPath];
 
     const getIndexPath = (): string | null => resolveFilePath(
         htmlSearchOrder.map(p => path.join(p, 'index.html'))
@@ -463,8 +476,10 @@ export function setupStaticFiles(app: Application, dirname: string): void {
         setHeaders: staticHeaders
     };
 
-    app.use(express.static(viteDistPath, staticOpts));         // Vite dist 우선 (hash asset, immutable)
-    app.use(express.static(fallbackPublicPath, staticOpts));   // 소스 원본 폴백 (dist 없을 때)
+    if (viteDistValid) {
+        app.use(express.static(viteDistPath, staticOpts));     // Vite dist 우선 (hash asset, immutable)
+    }
+    app.use(express.static(fallbackPublicPath, staticOpts));   // 소스 원본 폴백 (dist 없거나 부분빌드일 때)
     app.use(express.static(publicPath, staticOpts));           // dist/public 잔존 폴백 (없으면 no-op)
 }
 

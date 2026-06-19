@@ -198,9 +198,17 @@ const messageHandlers = {
             if (!serverBuildId || !myBuildId || myBuildId === serverBuildId || myBuildId === 'dev') {
                 return;
             }
-            // 무한 reload 방지: 같은 serverBuildId 로 이미 reload 했다면 다시 reload 하지 않는다.
-            // (reload 후에도 meta 가 아직 구버전 HTML 캐시이면 또 트리거될 수 있으므로 sessionStorage 가드)
+            // 무한 reload 방지 + stale wedge 완화: 같은 serverBuildId 로 이미 reload 했는데 또
+            // 불일치면, HTML 이 stale 캐시(프록시/CDN 이 index.html no-cache 를 무시하는 등)라
+            // reload 를 반복해도 갱신되지 않는 상황이다. 자동 reload 를 멈추고 사용자에게 수동
+            // 하드 새로고침을 (build 당) 1회 안내해 영구 stale 고착을 푼다.
             if (sessionStorage.getItem('reloadedForBuild') === serverBuildId) {
+                if (sessionStorage.getItem('staleReloadWarned') !== serverBuildId) {
+                    sessionStorage.setItem('staleReloadWarned', serverBuildId);
+                    if (typeof showSystemToast === 'function') {
+                        showSystemToast({ type: 'warning', message: '새 버전이 있으나 캐시로 갱신되지 않았습니다. Ctrl+Shift+R(Mac: Cmd+Shift+R)로 강제 새로고침하세요.' });
+                    }
+                }
                 return;
             }
             sessionStorage.setItem('reloadedForBuild', serverBuildId);
