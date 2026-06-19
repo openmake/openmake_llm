@@ -188,7 +188,11 @@ export class McpCatalogRepository {
             last_error_message: string | null;
         }>(
             `SELECT
-                COUNT(*) FILTER (WHERE status IN ('starting','running'))::text AS current_running,
+                (CASE WHEN (
+                    SELECT status FROM mcp_server_instances
+                    WHERE mcp_server_id = $1 AND user_id = $2
+                    ORDER BY started_at DESC LIMIT 1
+                ) = 'running' THEN 1 ELSE 0 END)::text AS current_running,
                 COUNT(*)::text AS total_spawned,
                 COUNT(*) FILTER (WHERE status='crashed' AND started_at > NOW() - INTERVAL '24 hours')::text AS crashed_24h,
                 AVG(EXTRACT(EPOCH FROM (stopped_at - started_at)))
