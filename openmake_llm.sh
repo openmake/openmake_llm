@@ -14,7 +14,7 @@
 #   ./openmake_llm.sh start      # 의존성 → 앱 순서로 기동 (빌드/마이그레이션 X)
 #   ./openmake_llm.sh stop       # 앱 → 의존성 역순으로 정지
 #   ./openmake_llm.sh restart    # PM2 앱만 재시작 (코드 반영 X — 환경변수 변경 등)
-#   ./openmake_llm.sh build      # npm run build (TypeScript + frontend sync)
+#   ./openmake_llm.sh build      # npm run build (backend tsc + frontend Vite content-hash 번들 → dist)
 #   ./openmake_llm.sh migrate    # DB 마이그레이션 적용 (status로 사전 확인 권장)
 #   ./openmake_llm.sh deploy     # build + migrate + restart (코드 변경 운영 반영)
 #                                # 옵션: --yes (확인 skip), --no-migrate (마이그 생략)
@@ -207,9 +207,11 @@ start_redis() {
 start_app() {
     log_step "Layer 3/3: OpenMake LLM (PM2)"
 
-    # build 산출물 확인 — 미빌드 시 안내
-    if [[ ! -f "$SCRIPT_DIR/backend/api/dist/cli.js" ]]; then
-        log_warn "빌드 산출물 없음 — 'npm run build' 먼저 실행 필요"
+    # build 산출물 확인 — 백엔드(dist/cli.js) + 프론트(Vite content-hash dist/assets) 둘 다 필요.
+    # 프론트 dist 가 없으면 setup.ts 의 public 폴백으로 동작은 하나 content-hash 캐시버스터가
+    # 미적용되므로(페이지 모듈이 소스 ?v= 서빙) 함께 빌드한다.
+    if [[ ! -f "$SCRIPT_DIR/backend/api/dist/cli.js" ]] || [[ ! -d "$SCRIPT_DIR/frontend/web/dist/assets" ]]; then
+        log_warn "빌드 산출물 없음(backend dist/cli.js 또는 frontend Vite dist/assets) — 'npm run build' 먼저 실행 필요"
         log_info "수행 중: cd $SCRIPT_DIR && npm run build"
         ( cd "$SCRIPT_DIR" && npm run build ) || {
             log_err "빌드 실패"
@@ -357,7 +359,7 @@ cmd_restart() {
 
 # ── build / migrate / deploy ───────────────────────────────────────────────────
 cmd_build() {
-    log_step "npm run build (TypeScript 컴파일 + frontend sync)"
+    log_step "npm run build (backend tsc + frontend Vite content-hash 번들 → frontend/web/dist)"
     if ! ( cd "$SCRIPT_DIR" && npm run build ); then
         log_err "빌드 실패 — 후속 작업 중단"
         return 2
@@ -474,7 +476,7 @@ OpenMake LLM 통합 서비스 매니저
   restart   PM2 앱만 재시작 (코드 반영 X — 환경변수 변경 등)
 
 코드 변경 반영:
-  build     npm run build (TypeScript + frontend sync)
+  build     npm run build (backend tsc + frontend Vite content-hash 번들)
   migrate   DB 마이그레이션 (status → migrate)
   deploy    build + migrate + restart 통합 (코드 변경 운영 반영)
             옵션: --yes (확인 프롬프트 skip), --no-migrate (마이그 생략)
