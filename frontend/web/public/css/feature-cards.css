@@ -23,29 +23,32 @@
 }
 
 .feature-card {
-    background: var(--bg-card);
+    background: var(--bg-secondary);
     border: var(--border-width) solid var(--border-light);
-    border-radius: var(--radius-lg);
+    border-radius: var(--r-lg);
     padding: 20px 16px;
     text-align: center;
     cursor: pointer;
-    transition: all 0.2s cubic-bezier(0.2, 0, 0, 1);
-    box-shadow: var(--shadow-sm);
+    transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+                box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+                border-color 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: none;
 }
 
 .feature-card:hover {
-    transform: translate(-2px, -2px);
-    box-shadow: var(--shadow-lg);
-    border-color: var(--accent-primary);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+    border-color: var(--border-strong);
 }
 
 .feature-icon {
     width: 64px;
     height: 64px;
     margin: 0 auto 12px;
-    background: var(--bg-secondary);
-    border: 1px solid var(--border-light);
-    border-radius: var(--radius-md);
+    background: var(--ember-soft);
+    border: 1px solid var(--ember-line);
+    border-radius: var(--r-md);
+    color: var(--accent-primary-hover);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -86,10 +89,10 @@
 
 .feature-btn:hover {
     background: var(--accent-primary);
-    color: white;
-    border-color: var(--border-strong);
+    color: var(--ember-ink);
+    border-color: transparent;
     box-shadow: var(--shadow-md);
-    transform: translate(-2px, -2px);
+    transform: translateY(-1px);
 }
 
 /* 모바일 반응형 */
@@ -154,21 +157,21 @@
 .theme-light .send-btn:hover {
     background: var(--accent-primary-hover);
     box-shadow: var(--shadow-md);
-    transform: translate(-2px, -2px);
+    transform: translateY(-1px);
 }
 
 /* 라이트 테마 카드 스타일 */
 [data-theme="light"] .feature-card,
 .theme-light .feature-card {
-    background: var(--bg-card);
+    background: var(--bg-secondary);
     border: var(--border-width) solid var(--border-light);
-    box-shadow: var(--shadow-sm);
+    box-shadow: none;
 }
 
 [data-theme="light"] .feature-card:hover,
 .theme-light .feature-card:hover {
-    box-shadow: var(--shadow-lg);
-    transform: translate(-2px, -2px);
+    box-shadow: var(--shadow-md);
+    transform: translateY(-2px);
     border-color: var(--border-strong);
 }
 
@@ -177,24 +180,24 @@
    ======================================== */
 [data-theme="dark"] .feature-card,
 .theme-dark .feature-card {
-    background: var(--bg-card);
+    background: var(--bg-secondary);
     border: var(--border-width) solid var(--border-light);
-    border-radius: 16px;
-    box-shadow: var(--shadow-sm);
+    border-radius: var(--r-lg);
+    box-shadow: none;
 }
 
 [data-theme="dark"] .feature-card:hover,
 .theme-dark .feature-card:hover {
-    border-color: var(--accent-primary);
-    box-shadow: var(--shadow-lg);
-    transform: translate(-2px, -2px);
+    border-color: var(--border-strong);
+    box-shadow: var(--shadow-md);
+    transform: translateY(-2px);
 }
 
-/* 다크 모드 - 아이콘 배경 */
+/* 다크 모드 - 아이콘 배경 (ember-soft) */
 [data-theme="dark"] .feature-icon,
 .theme-dark .feature-icon {
-    background: var(--bg-secondary) !important;
-    border: 1px solid var(--border-light);
+    background: var(--ember-soft) !important;
+    border: 1px solid var(--ember-line);
 }
 
 [data-theme="dark"] .feature-icon img,
@@ -227,20 +230,20 @@
 [data-theme="dark"] .feature-btn:hover,
 .theme-dark .feature-btn:hover {
     background: var(--accent-primary);
-    color: #FFFFFF !important;
-    border-color: var(--border-strong);
+    color: var(--ember-ink) !important;
+    border-color: transparent;
     box-shadow: var(--shadow-md);
-    transform: translate(-2px, -2px);
+    transform: translateY(-1px);
 }
 
 /* ========================================
    라이트 모드 기능 카드 스타일 (투명 아이콘 제거)
    ======================================== */
-/* 라이트 모드 - 아이콘 배경 */
+/* 라이트 모드 - 아이콘 배경 (ember-soft) */
 [data-theme="light"] .feature-icon,
 .theme-light .feature-icon {
-    background: var(--bg-secondary) !important;
-    border: 1px solid var(--border-light);
+    background: var(--ember-soft) !important;
+    border: 1px solid var(--ember-line);
 }
 
 [data-theme="light"] .feature-icon img,
@@ -271,8 +274,8 @@
 [data-theme="light"] .feature-btn:hover,
 .theme-light .feature-btn:hover {
     background: var(--accent-primary);
-    color: #FFFFFF;
-    border-color: var(--border-strong);
+    color: var(--ember-ink);
+    border-color: transparent;
     box-shadow: var(--shadow-md);
-    transform: translate(-2px, -2px);
+    transform: translateY(-1px);
 }

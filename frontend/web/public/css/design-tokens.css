@@ -23,8 +23,8 @@
 :root {
     /* ------- Primary Accent (Ember 시그니처) ------- */
     --accent-primary: #ff6a3d;
-    --accent-primary-hover: #ff855c;
-    --accent-primary-light: rgba(255, 106, 61, 0.13);
+    --accent-primary-hover: #ff8b63;        /* 시안 --ember-hi */
+    --accent-primary-light: rgba(255, 106, 61, 0.12);
 
     /* ------- Secondary Accents (warm + cool 보조) ------- */
     --accent-purple: #f2994a;   /* 레거시 이름 유지, 값은 warm amber */
@@ -41,8 +41,14 @@
     --glass-blur: none;
 
     /* ------- Soft Glow (ember) ------- */
-    --glow-primary: 0 8px 28px -8px rgba(255, 106, 61, 0.4);
-    --glow-input-focus: 0 0 0 3px rgba(255, 106, 61, 0.2);
+    --glow-primary: 0 8px 30px -10px rgba(255, 106, 61, 0.45);
+    --glow-input-focus: 0 0 0 3px rgba(255, 106, 61, 0.12);
+
+    /* ------- Ember System (시안 "Graphite & Ember II" 신규 토큰) ------- */
+    --ember-ink: #1a0d06;                          /* ember fill 위 텍스트(다크 잉크) */
+    --ember-soft: rgba(255, 106, 61, 0.12);        /* ember 연한 배경(active/on 상태) */
+    --ember-line: rgba(255, 106, 61, 0.30);        /* ember 보더(active/focus ring) */
+    --ember-glow: 0 8px 30px -10px rgba(255, 106, 61, 0.45);  /* ember 부유 그림자 */
 
     /* ------- Semantic Colors (액센트와 분리) ------- */
     --success: #5fb97d;
@@ -66,37 +72,40 @@
     --accent-indigo: #6ba5c9;                /* model-selector 보조 톤 */
     --danger-bright: #e5544e;                /* destructive action 강조 */
 
-    /* ------- Background Colors (Dark — Warm Graphite) ------- */
-    --bg-app: #131210;
-    --bg-main: #131210;
-    --bg-sidebar: #100f0d;
-    --bg-secondary: #1a1815;
-    --bg-card: #1a1815;
-    --bg-tertiary: #221f1b;
+    /* ------- Background Colors (Dark — Warm Graphite, 시안 매핑) ------- */
+    --bg-app: #100f0d;          /* 시안 --canvas */
+    --bg-main: #100f0d;         /* 시안 --canvas */
+    --bg-sidebar: #0c0b09;      /* 시안 --surface-inset (사이드바=inset) */
+    --bg-secondary: #171511;    /* 시안 --surface-1 */
+    --bg-card: #171511;         /* 시안 --surface-1 */
+    --bg-tertiary: #1d1b16;     /* 시안 --surface-2 */
+    --bg-surface-3: #26231d;    /* 시안 --surface-3 (가장 떠있는 표면) */
+    --bg-elevated: #1a1813;     /* 시안 --elevated */
     --bg-hover: rgba(245, 238, 225, 0.05);
-    --bg-active: rgba(255, 106, 61, 0.13);
+    --bg-active: rgba(255, 106, 61, 0.12);
     --bg-overlay: rgba(10, 9, 8, 0.9);
 
-    /* ------- Text Colors (Warm Bone) ------- */
-    --text-primary: #f3ede1;
-    --text-secondary: #b9b1a2;
-    --text-muted: #867d6e;
+    /* ------- Text Colors (Warm Bone, 시안 매핑) ------- */
+    --text-primary: #f4eee2;    /* 시안 --tx-1 */
+    --text-secondary: #b6ad9d;  /* 시안 --tx-2 */
+    --text-muted: #857c6d;      /* 시안 --tx-3 */
+    --text-faint: #5a5349;      /* 시안 --tx-4 (라벨/메타 최하위 톤) */
     --text-inverse: #1a0f08;
 
-    /* ------- Border Colors (Hairline) ------- */
-    --border-light: rgba(245, 238, 225, 0.08);
-    --border-medium: rgba(245, 238, 225, 0.12);
-    --border-strong: rgba(245, 238, 225, 0.18);
+    /* ------- Border Colors (Hairline, 시안 매핑) ------- */
+    --border-light: rgba(245, 238, 225, 0.07);   /* 시안 --line */
+    --border-medium: rgba(245, 238, 225, 0.12);  /* 시안 --line-2 */
+    --border-strong: rgba(245, 238, 225, 0.18);  /* 시안 --line-3 */
 
     /* ------- Border System (Hairline) ------- */
     --border-width: 1px;
     --border-color: rgba(245, 238, 225, 0.10);
 
-    /* ------- Shadow (Soft Layered) ------- */
-    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
-    --shadow-md: 0 4px 16px -4px rgba(0, 0, 0, 0.45), 0 2px 6px -2px rgba(0, 0, 0, 0.4);
-    --shadow-lg: 0 18px 50px -12px rgba(0, 0, 0, 0.65), 0 6px 18px -8px rgba(0, 0, 0, 0.5);
-    --shadow-xl: 0 28px 70px -16px rgba(0, 0, 0, 0.7), 0 10px 24px -10px rgba(0, 0, 0, 0.55);
+    /* ------- Shadow (Soft Layered, 시안 매핑 — no glow) ------- */
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);                                          /* 시안 --sh-sm */
+    --shadow-md: 0 6px 22px -8px rgba(0, 0, 0, 0.55), 0 2px 6px -2px rgba(0, 0, 0, 0.4); /* 시안 --sh-md */
+    --shadow-lg: 0 24px 60px -18px rgba(0, 0, 0, 0.7);                                  /* 시안 --sh-lg */
+    --shadow-xl: 0 28px 70px -16px rgba(0, 0, 0, 0.75), 0 10px 24px -10px rgba(0, 0, 0, 0.55);
 
     /* ------- Shadow Aliases (brutal → soft) ------- */
     --shadow-brutal-sm: var(--shadow-sm);
@@ -157,12 +166,31 @@
     --space-16: 4rem;
     /* 64px */
 
-    /* ------- Border Radius (Restrained) ------- */
+    /* ------- Spacing ramp · 4px base (시안 --s1~--s9, 기존 --space-* 와 공존) ------- */
+    --s1: 4px;
+    --s2: 8px;
+    --s3: 12px;
+    --s4: 16px;
+    --s5: 20px;
+    --s6: 24px;
+    --s7: 32px;
+    --s8: 48px;
+    --s9: 64px;
+
+    /* ------- Border Radius (Restrained, 시안 매핑) ------- */
     --radius-sm: 6px;
     --radius-md: 8px;
     --radius-lg: 12px;
     --radius-xl: 16px;
     --radius-full: 9999px;
+
+    /* ------- Radii ramp (시안 --r-xs~--r-full) ------- */
+    --r-xs: 6px;
+    --r-sm: 9px;
+    --r-md: 12px;
+    --r-lg: 16px;
+    --r-xl: 22px;
+    --r-full: 999px;
 
     /* ------- Sidebar ------- */
     --sidebar-width: 260px;
@@ -195,56 +223,65 @@
 .theme-light {
     /* ===== "BONE" — LIGHT THEME ===== */
 
-    /* ------- Accent Colors (Deep Ember) ------- */
+    /* ------- Accent Colors (Deep Ember, 시안 매핑) ------- */
     --accent-primary: #e0512a;
-    --accent-primary-hover: #c8431f;
+    --accent-primary-hover: #c8431f;        /* 시안 light --ember-hi */
     --accent-primary-light: rgba(224, 81, 42, 0.10);
 
     /* ------- Accent Fill ------- */
     --gradient-primary: #e0512a;
 
-    /* ------- Background Colors (Warm Bone Paper) ------- */
-    --bg-app: #f6f1e8;
-    --bg-main: #f6f1e8;
-    --bg-sidebar: #efe8db;
-    --bg-secondary: #efe9de;
-    --bg-card: #ffffff;
-    --bg-tertiary: #e7ded0;
-    --bg-hover: rgba(40, 30, 20, 0.04);
-    --bg-active: rgba(224, 81, 42, 0.10);
-    --bg-overlay: rgba(246, 241, 232, 0.95);
+    /* ------- Ember System (시안 light 매핑) ------- */
+    --ember-ink: #ffffff;
+    --ember-soft: rgba(224, 81, 42, 0.10);
+    --ember-line: rgba(224, 81, 42, 0.28);
+    --ember-glow: 0 8px 26px -12px rgba(224, 81, 42, 0.4);
 
-    /* ------- Text Colors (Warm Ink) ------- */
-    --text-primary: #241f17;
-    --text-secondary: #5c5347;
-    --text-muted: #8a7f6c;
+    /* ------- Background Colors (Warm Bone Paper, 시안 매핑) ------- */
+    --bg-app: #f3eee4;          /* 시안 light --canvas */
+    --bg-main: #f3eee4;         /* 시안 light --canvas */
+    --bg-sidebar: #ece5d7;      /* 시안 light --surface-inset */
+    --bg-secondary: #fbf8f1;    /* 시안 light --surface-1 */
+    --bg-card: #fbf8f1;         /* 시안 light --surface-1 */
+    --bg-tertiary: #efe9dc;     /* 시안 light --surface-3 */
+    --bg-surface-3: #efe9dc;    /* 시안 light --surface-3 */
+    --bg-elevated: #fffdf8;     /* 시안 light --elevated/--surface-2 */
+    --bg-hover: rgba(60, 48, 32, 0.05);
+    --bg-active: rgba(224, 81, 42, 0.10);
+    --bg-overlay: rgba(243, 238, 228, 0.95);
+
+    /* ------- Text Colors (Warm Ink, 시안 매핑) ------- */
+    --text-primary: #231d14;    /* 시안 light --tx-1 */
+    --text-secondary: #5f5749;  /* 시안 light --tx-2 */
+    --text-muted: #8a7f6c;      /* 시안 light --tx-3 */
+    --text-faint: #aaa08c;      /* 시안 light --tx-4 */
     --text-inverse: #ffffff;
 
-    /* ------- Border Colors (Hairline) ------- */
-    --border-light: rgba(40, 30, 20, 0.10);
-    --border-medium: rgba(40, 30, 20, 0.14);
-    --border-strong: rgba(40, 30, 20, 0.20);
-    --border-color: rgba(40, 30, 20, 0.12);
-    --border-dark: rgba(40, 30, 20, 0.14);
+    /* ------- Border Colors (Hairline, 시안 매핑) ------- */
+    --border-light: rgba(60, 48, 32, 0.10);   /* 시안 light --line */
+    --border-medium: rgba(60, 48, 32, 0.16);  /* 시안 light --line-2 */
+    --border-strong: rgba(60, 48, 32, 0.24);  /* 시안 light --line-3 */
+    --border-color: rgba(60, 48, 32, 0.12);
+    --border-dark: rgba(60, 48, 32, 0.16);
 
     /* ------- Surface (Solid) ------- */
     --glass-bg: #ffffff;
     --glass-bg-hover: #f3ede1;
     --glass-border: rgba(40, 30, 20, 0.12);
 
-    /* ------- Shadow (Soft Layered — Warm) ------- */
-    --shadow-sm: 0 1px 2px rgba(60, 45, 30, 0.12);
-    --shadow-md: 0 4px 16px -4px rgba(60, 45, 30, 0.16), 0 2px 6px -2px rgba(60, 45, 30, 0.12);
-    --shadow-lg: 0 18px 50px -12px rgba(60, 45, 30, 0.22), 0 6px 18px -8px rgba(60, 45, 30, 0.16);
-    --shadow-xl: 0 28px 70px -16px rgba(60, 45, 30, 0.26), 0 10px 24px -10px rgba(60, 45, 30, 0.18);
+    /* ------- Shadow (Soft Layered — Warm, 시안 light 매핑) ------- */
+    --shadow-sm: 0 1px 2px rgba(80, 60, 40, 0.08);                                       /* 시안 light --sh-sm */
+    --shadow-md: 0 8px 24px -10px rgba(80, 60, 40, 0.18), 0 2px 6px -2px rgba(80, 60, 40, 0.1); /* 시안 light --sh-md */
+    --shadow-lg: 0 24px 60px -18px rgba(80, 60, 40, 0.22);                               /* 시안 light --sh-lg */
+    --shadow-xl: 0 28px 70px -16px rgba(80, 60, 40, 0.26), 0 10px 24px -10px rgba(80, 60, 40, 0.18);
     --shadow-brutal: var(--shadow-md);
     --shadow-brutal-sm: var(--shadow-sm);
     --shadow-brutal-lg: var(--shadow-lg);
     --shadow-brutal-active: var(--shadow-sm);
 
     /* ------- Soft Glow (ember) ------- */
-    --glow-primary: 0 8px 28px -8px rgba(224, 81, 42, 0.35);
-    --glow-input-focus: 0 0 0 3px rgba(224, 81, 42, 0.15);
+    --glow-primary: 0 8px 26px -12px rgba(224, 81, 42, 0.4);
+    --glow-input-focus: 0 0 0 3px rgba(224, 81, 42, 0.10);
 
     /* ------- Bright Semantic (light 톤 보정) ------- */
     --success-bright: #3f9e63;
@@ -306,11 +343,11 @@ body::before {
     inset: 0;
     pointer-events: none;
     z-index: 9998;
-    opacity: 0.022;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    opacity: 0.02;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 [data-theme="light"] body::before,
-.theme-light body::before { opacity: 0.018; }
+.theme-light body::before { opacity: 0.015; }
 
 /* ==========================================
    유틸리티 클래스
@@ -625,10 +662,10 @@ body::before {
     background: var(--border-strong);
 }
 
-/* Selection */
+/* Selection (시안: ember-soft 배경 + ember-hi 텍스트) */
 ::selection {
-    background: var(--accent-primary-light);
-    color: var(--text-primary);
+    background: var(--ember-soft);
+    color: var(--accent-primary-hover);
 }
 
 /* Focus Ring */

@@ -757,7 +757,7 @@
     display: inline-flex;
     align-items: center;
     padding: 2px 8px;
-    background: var(--accent-primary-light, rgba(99,102,241,0.08));
+    background: var(--accent-primary-light, rgba(255,106,61,0.12));
     border: 1.5px solid var(--accent-primary);
     border-radius: 10px;
     font-size: var(--font-size-xs);
