@@ -101,7 +101,8 @@
     left: var(--space-6);
     right: var(--space-6);
     height: 1px;
-    background: var(--accent-primary);
+    background: var(--ember-line);
+    opacity: 0.6;
 }
 
 .s-card-icon {
@@ -445,22 +446,22 @@
     gap: var(--space-2);
     margin: 0 0 var(--space-5);
     padding: var(--space-2);
-    background: var(--bg-card);
+    background: var(--bg-sidebar);
     border: 1px solid var(--border-light);
-    border-radius: var(--radius-lg);
+    border-radius: var(--r-lg);
 }
 .settings-tab {
     flex: 1;
     min-width: 120px;
     padding: var(--space-3) var(--space-4);
     background: transparent;
-    border: none;
-    border-radius: var(--radius-md);
+    border: 1px solid transparent;
+    border-radius: var(--r-md);
     color: var(--text-secondary);
     font-size: var(--font-size-sm);
     font-weight: var(--font-weight-medium);
     cursor: pointer;
-    transition: background .15s, color .15s;
+    transition: background .15s, color .15s, border-color .15s;
     text-align: center;
 }
 .settings-tab:hover {
@@ -468,8 +469,9 @@
     color: var(--text-primary);
 }
 .settings-tab.active {
-    background: var(--accent-primary);
-    color: #fff;
+    background: var(--ember-soft);
+    color: var(--accent-primary-hover);
+    border: 1px solid var(--ember-line);
     font-weight: var(--font-weight-semibold);
 }
 @media (max-width: 640px) {

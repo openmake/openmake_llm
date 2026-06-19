@@ -48,8 +48,8 @@
 }
 .sl-tab:hover { color: var(--text-primary, #fff); }
 .sl-tab.active {
-    color: var(--accent-primary, #3b82f6);
-    border-bottom-color: var(--accent-primary, #3b82f6);
+    color: var(--accent-primary-hover);
+    border-bottom-color: var(--accent-primary);
 }
 
 /* Tab panes */
@@ -152,8 +152,8 @@
     overflow: hidden;
 }
 .skill-row:hover {
-    border-color: var(--accent-primary);
-    background-color: var(--bg-hover, rgba(255,255,255,0.02));
+    border-color: var(--ember-line);
+    background-color: var(--bg-hover);
 }
 /* 영역 공통: padding + 영역 사이 좌측 divider (첫 영역 제외) */
 .skill-row > * {
@@ -169,10 +169,11 @@
 .skill-row-header {
     background-color: var(--bg-secondary);
     color: var(--text-muted);
-    font-size: var(--font-size-xs);
-    font-weight: var(--font-weight-semibold, 600);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: var(--font-weight-medium);
     text-transform: uppercase;
-    letter-spacing: 0.04em;
+    letter-spacing: 0.07em;
     margin-bottom: 0.5rem;
     cursor: default;
 }
@@ -242,17 +243,18 @@
 
 /* Legacy card classes (다른 곳 호환) */
 .skill-card {
-    background-color: var(--bg-card, #1e293b);
-    border: 1px solid var(--border-color, #334155);
-    border-radius: 0.5rem;
-    padding: 1.25rem;
-    transition: border-color 0.2s, transform 0.2s;
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: var(--r-lg);
+    padding: var(--s4);
+    gap: var(--s2);
+    transition: border-color 0.2s, box-shadow 0.2s;
     display: flex;
     flex-direction: column;
 }
 .skill-card:hover {
-    border-color: var(--accent-primary, #3b82f6);
-    transform: translateY(-2px);
+    border-color: var(--ember-line);
+    box-shadow: var(--shadow-md);
 }
 .skill-card-top {
     display: flex;
@@ -261,13 +263,15 @@
     margin-bottom: 0.5rem;
 }
 .skill-card-badge {
-    font-size: var(--font-size-xs);
-    padding: 0.2rem 0.5rem;
-    border-radius: 1rem;
-    background: rgba(59,130,246,0.1);
-    color: var(--accent-primary, #3b82f6);
-    border: 1px solid rgba(59,130,246,0.2);
-    display: inline-block;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    padding: 2px 7px;
+    border-radius: var(--r-full);
+    background: var(--ember-soft);
+    color: var(--accent-primary-hover);
+    border: 1px solid var(--ember-line);
+    display: inline-flex;
+    align-items: center;
 }
 .skill-card-menu {
     position: relative;
@@ -336,8 +340,9 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    border-top: 1px solid var(--border-color, #334155);
-    padding-top: 0.75rem;
+    gap: var(--s2);
+    border-top: 1px solid var(--border-light);
+    padding-top: var(--s2);
     margin-top: auto;
 }
 .skill-card-footer small { color: var(--text-muted, #64748b); font-size: var(--font-size-xs); }
@@ -347,8 +352,8 @@
     border-radius: 1rem;
     border: 1px solid;
 }
-.sl-badge-success { background: rgba(34,197,94,0.1); color: var(--success, #4ade80); border-color: rgba(34,197,94,0.25); }
-.sl-badge-secondary { background: rgba(148,163,184,0.1); color: var(--text-secondary, #94a3b8); border-color: rgba(148,163,184,0.2); }
+.sl-badge-success { background: var(--success-light); color: var(--success); border-color: rgba(95, 185, 125, 0.3); }
+.sl-badge-secondary { background: var(--bg-tertiary); color: var(--text-secondary); border-color: var(--border-medium); }
 
 /* MP search toolbar */
 .sl-mp-search {

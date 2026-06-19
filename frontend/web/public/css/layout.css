@@ -131,8 +131,9 @@
 
 .grid-stats {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: var(--space-4);
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: var(--s3);
+    margin-bottom: var(--s3);
 }
 
 .grid-2 {
@@ -177,8 +178,8 @@
 .section-title {
     font-family: var(--font-serif); /* editorial 섹션 타이틀 */
     font-size: var(--font-size-xl);
-    font-weight: 600;
-    letter-spacing: -0.01em;
+    font-weight: var(--font-weight-medium);
+    letter-spacing: -0.02em;
     color: var(--text-primary);
 }
 
@@ -222,9 +223,9 @@
 .search-input {
     width: 100%;
     padding: var(--space-3) var(--space-4) var(--space-3) var(--space-10);
-    background: var(--bg-tertiary);
-    border: var(--border-width, 2px) solid var(--border-medium);
-    border-radius: var(--radius-md);
+    background: var(--bg-sidebar);
+    border: 1px solid var(--border-medium);
+    border-radius: var(--r-sm);
     color: var(--text-primary);
     font-size: var(--font-size-sm);
     transition: all var(--transition-fast);
@@ -257,11 +258,18 @@
     box-shadow: var(--shadow-sm);
 }
 
-.filter-btn:hover,
+.filter-btn:hover {
+    background: var(--bg-tertiary);
+    border-color: var(--border-strong);
+    color: var(--text-primary);
+    transform: translate(-2px, -2px);
+    box-shadow: var(--shadow-md);
+}
+
 .filter-btn.active {
-    background: var(--accent-primary);
-    border-color: #000;
-    color: white;
+    background: var(--ember-soft);
+    border-color: var(--ember-line);
+    color: var(--accent-primary-hover);
     transform: translate(-2px, -2px);
     box-shadow: var(--shadow-md);
 }

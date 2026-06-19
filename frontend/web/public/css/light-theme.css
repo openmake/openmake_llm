@@ -334,3 +334,27 @@
 .theme-light .status-dot.stop {
     background: var(--danger);
 }
+
+/* ========================================
+   G&E II 신규 토큰 — 라이트 테마 대응값
+   (design-tokens.css 에 추가된 토큰 오버라이드)
+   ======================================== */
+
+[data-theme="light"],
+.theme-light {
+    /* ------- Semantic Soft Aliases (라이트: opacity 살짝 낮춤) ------- */
+    --positive-soft: rgba(63, 158, 99, 0.12);
+    --warning-soft: rgba(201, 138, 30, 0.12);
+    --danger-soft: rgba(200, 57, 47, 0.12);
+    --info-soft: rgba(80, 130, 160, 0.12);
+
+    /* ------- Data Visualization Palette (라이트: 채도 유지, 명도 약간 낮춤) ------- */
+    --viz-1: #e0512a;
+    --viz-2: #c97c1e;
+    --viz-3: #c09030;
+    --viz-4: #5a8040;
+    --viz-5: #3f9e63;
+
+    /* ------- Shadow Ember (라이트: rgba opacity 낮춤) ------- */
+    --shadow-ember: 0 8px 28px -8px rgba(224, 81, 42, 0.28);
+}
