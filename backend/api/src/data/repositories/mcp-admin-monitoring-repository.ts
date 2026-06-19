@@ -52,7 +52,11 @@ export class McpAdminMonitoringRepository {
             `SELECT
                 (SELECT COUNT(*)::text FROM mcp_servers) AS total_servers,
                 (SELECT COUNT(DISTINCT user_id)::text FROM mcp_server_instances) AS total_users,
-                COUNT(*) FILTER (WHERE status IN ('starting','running'))::text AS current_running,
+                (SELECT COUNT(*) FROM (
+                    SELECT DISTINCT ON (mcp_server_id, user_id) status
+                    FROM mcp_server_instances
+                    ORDER BY mcp_server_id, user_id, started_at DESC
+                ) cur WHERE cur.status = 'running')::text AS current_running,
                 COUNT(*)::text AS total_spawned,
                 COUNT(*) FILTER (WHERE status='crashed' AND started_at > NOW() - INTERVAL '24 hours')::text AS crashed_24h,
                 COUNT(*) FILTER (WHERE started_at > NOW() - INTERVAL '24 hours')::text AS spawned_24h
