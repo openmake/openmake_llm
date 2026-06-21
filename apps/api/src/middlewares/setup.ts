@@ -152,6 +152,38 @@ export function setupSecurity(app: Application): void {
         res.setHeader('Cache-Control', 'no-store');
         next();
     });
+
+    // 보안 헤더 (helmet) + Permissions-Policy — 모든 응답에 적용.
+    // ⚠️ 이전엔 setupStaticFiles 끝에 있었으나, FRONTEND_REDIRECT_URL 설정 시 그 함수가 early-return
+    //    하면서 helmet 등록이 통째로 스킵됐다 → 운영 배포에서 COOP·HSTS·frameguard·Permissions-Policy
+    //    등 보안 헤더가 전면 누락(API 응답에 X-Powered-By 노출). 정적 서빙과 무관하므로 항상 실행되는
+    //    setupSecurity 로 이동 (body parser 가 같은 early-return 버그로 setupParsersAndLimiting 으로
+    //    옮겨진 것과 동일한 수정). setupSecurity 는 server.ts 에서 라우트 마운트보다 먼저 호출된다.
+    // COOP 효과는 HTTPS 환경에서만 유효 — OMK_COOP_ENABLED=true 일 때만 send (외부 공개=Tailscale Funnel HTTPS).
+    const coopEnabled = process.env.OMK_COOP_ENABLED === 'true';
+    app.use(helmet({
+        contentSecurityPolicy: false,
+        crossOriginEmbedderPolicy: false,
+        crossOriginResourcePolicy: { policy: 'cross-origin' },
+        // COOP — 프론트 window.open은 모두 same-origin, 외부 링크는 rel="noopener" 격리됨.
+        // same-origin 정책은 Spectre-class 완화 + cross-origin popup opener 분리.
+        crossOriginOpenerPolicy: coopEnabled ? { policy: 'same-origin' } : false,
+        originAgentCluster: false,
+        // HSTS_POLICY 상수 (helmet 기본 180일 → 2년). preload 미포함은 의도(롤백 가능성 유지).
+        strictTransportSecurity: {
+            maxAge: HSTS_POLICY.MAX_AGE_SECONDS,
+            includeSubDomains: HSTS_POLICY.INCLUDE_SUBDOMAINS,
+            preload: HSTS_POLICY.PRELOAD,
+        },
+    }));
+
+    // Permissions-Policy — helmet 기본 미포함. powerful browser API 전면 차단(clipboard-write만 self).
+    // 빌드 시점 상수이므로 클로저 밖에서 1회 계산.
+    const permissionsPolicyHeader = buildPermissionsPolicyHeader();
+    app.use((_req: Request, res: Response, next: NextFunction) => {
+        res.setHeader('Permissions-Policy', permissionsPolicyHeader);
+        next();
+    });
 }
 
 /**
@@ -398,38 +430,8 @@ export function setupStaticFiles(app: Application, dirname: string): void {
         next();
     });
 
-    // COOP 활성 여부 — HTTP/비-localhost origin (예: rasplay.tplinkdns.com:52416) 에서는
-    // 브라우저가 헤더를 무시하면서 경고 로그를 매 요청마다 출력함 ("URL's origin was untrustworthy").
-    // 정책 효과는 HTTPS 환경에서만 유효하므로, OMK_COOP_ENABLED=true 일 때만 send.
-    // 기본 false — HTTPS 도입 (Caddy/Cloudflare Tunnel 등) 시 명시적 활성화.
-    const coopEnabled = process.env.OMK_COOP_ENABLED === 'true';
-    app.use(helmet({
-        contentSecurityPolicy: false,
-        crossOriginEmbedderPolicy: false,
-        crossOriginResourcePolicy: { policy: 'cross-origin' },
-        // Stage 2-M6: COOP — 프론트 스캔 결과 window.open은 모두 same-origin이고
-        // 외부 링크는 <a target=_blank rel="noopener noreferrer">로 이미 opener 격리됨.
-        // same-origin 정책은 Spectre-class 공격 완화 + cross-origin popup opener 분리.
-        // HTTP 환경에서는 비활성 (브라우저가 untrustworthy origin 으로 무시 + 경고만 발생).
-        crossOriginOpenerPolicy: coopEnabled ? { policy: 'same-origin' } : false,
-        originAgentCluster: false,
-        // Stage 2-M6: HSTS_POLICY 상수 사용 (helmet 기본 180일 → 2년).
-        // preload 미포함은 의도 — 롤백 가능성 유지.
-        strictTransportSecurity: {
-            maxAge: HSTS_POLICY.MAX_AGE_SECONDS,
-            includeSubDomains: HSTS_POLICY.INCLUDE_SUBDOMAINS,
-            preload: HSTS_POLICY.PRELOAD,
-        },
-    }));
-
-    // Stage 2-M5: Permissions-Policy — helmet 기본 미포함. powerful browser API 전면 차단.
-    // 프론트 실 사용 중인 clipboard-write만 (self) 허용, 그 외 camera/microphone/geolocation/usb/payment 등 ().
-    // 값은 빌드 시점 상수이므로 응답마다 재계산 피하기 위해 클로저 밖에서 1회 계산.
-    const permissionsPolicyHeader = buildPermissionsPolicyHeader();
-    app.use((_req: Request, res: Response, next: NextFunction) => {
-        res.setHeader('Permissions-Policy', permissionsPolicyHeader);
-        next();
-    });
+    // (helmet + Permissions-Policy 는 setupSecurity 로 이동 — FRONTEND_REDIRECT_URL early-return 시
+    //  보안 헤더가 스킵되던 버그 수정. 이 함수는 legacy 정적 서빙 전용으로 남는다.)
 
     app.get(/^\/([a-z0-9-]+)\.html$/, (req: Request, res: Response, next: NextFunction) => {
         const filename = req.params[0] ? `${req.params[0]}.html` : '';
