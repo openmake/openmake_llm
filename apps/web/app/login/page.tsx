@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowRight, LoaderCircle } from "lucide-react";
+import Image from "next/image";
 import { ApiClient, ApiError } from "@/lib/api-client";
 import { Button } from "@/components/ui/primitives";
 
@@ -42,9 +43,14 @@ export default function LoginPage() {
     <div className="grid min-h-dvh place-items-center bg-app px-4">
       <div className="w-full max-w-sm">
         <div className="mb-7 flex flex-col items-center text-center">
-          <div className="grid h-12 w-12 place-items-center rounded-xl bg-accent text-xl font-bold text-accent-fg shadow-2">
-            O
-          </div>
+          <Image
+            src="/logo.png"
+            alt="OpenMake"
+            width={48}
+            height={48}
+            className="h-12 w-12 rounded-xl object-contain"
+            priority
+          />
           <h1 className="mt-4 text-2xl font-bold text-fg">OpenMake.Ai</h1>
           <p className="mt-1 text-sm text-muted">로그인하고 계속하세요</p>
         </div>

@@ -82,6 +82,10 @@ backend/api/.ollama-cluster.json
 !frontend/web/public/**/*.png
 !frontend/web/public/**/*.jpg
 !frontend/web/public/**/*.jpeg
+!apps/web/public/**/*.png
+!apps/web/public/**/*.jpg
+!apps/web/public/**/*.jpeg
+!apps/web/app/icon.png
 !screenshot-main.png
 !skill-library-current.png
 
