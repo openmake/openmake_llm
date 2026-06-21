@@ -296,6 +296,12 @@ class UserManagerImpl {
         return this.rowToPublicUser(row);
     }
 
+    /** OAuth 등 authenticate 를 거치지 않는 로그인 경로에서 last_login 갱신용. */
+    async updateLastLogin(userId: string): Promise<void> {
+        const pool = getPool();
+        await pool.query('UPDATE users SET last_login = $1 WHERE id = $2', [new Date().toISOString(), userId]);
+    }
+
     async getUserById(id: string): Promise<PublicUser | null> {
         const pool = getPool();
         const result = await pool.query('SELECT * FROM users WHERE id = $1', [id]);

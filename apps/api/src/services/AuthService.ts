@@ -329,6 +329,7 @@ export class AuthService {
             }
         }
 
+        await this.userManager.updateLastLogin(publicUser.id);
         const token = generateToken(publicUser);
         log.info(`[OAuth] ${provider} 로그인 성공: ${email}`);
 
