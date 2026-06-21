@@ -75,6 +75,26 @@ export function Composer() {
   return (
     <div className="mx-auto w-full max-w-3xl px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
       <div className="rounded-xl border border-border bg-surface shadow-2">
+        {/* 모드 토글 — 가로 스크롤 칩 (OD lumen 모바일 시안: 컴포저 상단) */}
+        <div className="flex items-center gap-1.5 overflow-x-auto px-3 pt-2.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {TOGGLES.map((t) => (
+            <button
+              key={t.key}
+              onClick={() => toggle(t.key)}
+              title={t.label}
+              className={cn(
+                "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition",
+                t.on
+                  ? "border-accent bg-accent-soft text-accent"
+                  : "border-border text-muted hover:bg-surface-2 hover:text-fg",
+              )}
+            >
+              <t.icon className="h-3.5 w-3.5" />
+              {t.label}
+            </button>
+          ))}
+        </div>
+
         <textarea
           ref={taRef}
           value={text}
@@ -91,11 +111,11 @@ export function Composer() {
           }}
           rows={1}
           placeholder="메시지를 입력하거나 / 로 스킬을 호출하세요..."
-          className="block w-full resize-none bg-transparent px-4 pt-3.5 text-sm text-fg outline-none placeholder:text-faint"
+          className="block w-full resize-none bg-transparent px-4 pt-2.5 text-sm text-fg outline-none placeholder:text-faint"
         />
 
+        {/* 하단: 모델 셀렉터 + 스타일 + 전송 */}
         <div className="flex items-center gap-1.5 px-2.5 pb-2.5 pt-1">
-          {/* 모델 셀렉터 */}
           <select
             value={selectedModel}
             onChange={(e) => setSelectedModel(e.target.value)}
@@ -108,41 +128,19 @@ export function Composer() {
             ))}
           </select>
 
-          {/* 모드 토글 */}
-          <div className="flex flex-wrap items-center gap-1">
-            {TOGGLES.map((t) => (
-              <button
-                key={t.key}
-                onClick={() => toggle(t.key)}
-                title={t.label}
-                className={cn(
-                  "inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium transition",
-                  t.on
-                    ? "bg-accent-soft text-accent"
-                    : "text-muted hover:bg-surface-2 hover:text-fg",
-                )}
-              >
-                <t.icon className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">{t.label}</span>
-              </button>
-            ))}
-          </div>
-
-          {/* 스타일 cycle */}
           <button
             onClick={cycleStyle}
-            className="ml-auto rounded-md px-2 py-1.5 text-xs font-medium capitalize text-muted hover:bg-surface-2 hover:text-fg"
+            className="rounded-md px-2 py-1.5 text-xs font-medium capitalize text-muted hover:bg-surface-2 hover:text-fg"
             title="응답 스타일"
           >
             {style}
           </button>
 
-          {/* 전송 / 중단 */}
           {isGenerating ? (
             <button
               onClick={abort}
               aria-label="중단"
-              className="grid h-8 w-8 place-items-center rounded-md bg-surface-3 text-fg transition hover:bg-border-strong"
+              className="ml-auto grid h-8 w-8 place-items-center rounded-md bg-surface-3 text-fg transition hover:bg-border-strong"
             >
               <Square className="h-3.5 w-3.5 fill-current" />
             </button>
@@ -151,7 +149,7 @@ export function Composer() {
               onClick={submit}
               disabled={!text.trim()}
               aria-label="전송"
-              className="grid h-8 w-8 place-items-center rounded-md bg-accent text-accent-fg transition hover:bg-accent-hover disabled:opacity-40"
+              className="ml-auto grid h-8 w-8 place-items-center rounded-md bg-accent text-accent-fg transition hover:bg-accent-hover disabled:opacity-40"
             >
               <ArrowUp className="h-4 w-4" />
             </button>

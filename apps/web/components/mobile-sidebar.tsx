@@ -2,29 +2,33 @@
 
 import { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
-import { Menu, X } from "lucide-react";
+import Link from "next/link";
+import { MessageSquare, Telescope, Sparkles, Menu, X } from "lucide-react";
 import { Sidebar } from "./sidebar";
+import { cn } from "@/lib/utils";
 
-/** 모바일(<lg) 사이드바 드로어 + 햄버거 토글. 데스크탑은 layout 의 고정 사이드바 사용. */
+/** OD lumen 모바일 시안: 하단 탭바(44px+ 터치 타깃) + "메뉴" 탭으로 전체 드로어. 데스크탑(lg)은 고정 사이드바. */
+const TABS = [
+  { label: "채팅", href: "/", icon: MessageSquare },
+  { label: "리서치", href: "/research", icon: Telescope },
+  { label: "에이전트", href: "/agent-tasks", icon: Sparkles },
+];
+
 export function MobileSidebar() {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
 
-  // 라우트 이동 시 자동 닫기
+  // 라우트 이동 시 드로어 자동 닫기
   useEffect(() => setOpen(false), [pathname]);
+
+  const isActive = (href: string) =>
+    href === "/" ? pathname === "/" : pathname.startsWith(href);
 
   return (
     <>
-      <button
-        onClick={() => setOpen(true)}
-        aria-label="메뉴 열기"
-        className="fixed left-3 top-[max(0.75rem,env(safe-area-inset-top))] z-30 grid h-9 w-9 place-items-center rounded-md border border-border bg-surface text-fg shadow-1 lg:hidden"
-      >
-        <Menu className="h-[18px] w-[18px]" />
-      </button>
-
+      {/* 전체 메뉴 드로어 ("메뉴" 탭으로 열림) */}
       {open && (
-        <div className="fixed inset-0 z-40 lg:hidden">
+        <div className="fixed inset-0 z-50 lg:hidden">
           <div
             className="absolute inset-0 bg-black/40"
             onClick={() => setOpen(false)}
@@ -41,6 +45,31 @@ export function MobileSidebar() {
           </div>
         </div>
       )}
+
+      {/* 하단 탭바 (모바일 전용) */}
+      <nav className="fixed inset-x-0 bottom-0 z-30 flex items-stretch border-t border-border bg-surface pb-[env(safe-area-inset-bottom)] lg:hidden">
+        {TABS.map((t) => (
+          <Link
+            key={t.href}
+            href={t.href}
+            className={cn(
+              "flex min-h-[52px] flex-1 flex-col items-center justify-center gap-0.5 text-[11px] font-medium transition",
+              isActive(t.href) ? "text-accent" : "text-muted hover:text-fg",
+            )}
+          >
+            <t.icon className="h-5 w-5" />
+            {t.label}
+          </Link>
+        ))}
+        <button
+          onClick={() => setOpen(true)}
+          aria-label="전체 메뉴"
+          className="flex min-h-[52px] flex-1 flex-col items-center justify-center gap-0.5 text-[11px] font-medium text-muted transition hover:text-fg"
+        >
+          <Menu className="h-5 w-5" />
+          메뉴
+        </button>
+      </nav>
     </>
   );
 }

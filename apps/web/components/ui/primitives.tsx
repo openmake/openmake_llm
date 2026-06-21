@@ -112,7 +112,7 @@ export function PageHeader({
   actions?: React.ReactNode;
 }) {
   return (
-    <div className="flex items-start justify-between gap-4 border-b border-border pl-14 pr-6 py-5 lg:px-6">
+    <div className="flex items-start justify-between gap-4 border-b border-border px-6 py-5">
       <div className="min-w-0">
         <h1 className="truncate text-xl font-bold text-fg">{title}</h1>
         {description && <p className="mt-1 truncate text-sm text-muted">{description}</p>}
