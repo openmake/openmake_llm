@@ -133,6 +133,9 @@ export class WebSocketHandler {
                 return;
             }
 
+            // 모니터링: WS 연결 origin 로그 — 외부(rasplay) 채팅이 백엔드까지 도달하는지 추적용.
+            log.info(`[WS] 연결 허용 origin=${origin ?? '<none>'}`);
+
             // WebSocket 연결 인증
             const auth = await authenticateWebSocket(req, log);
 
