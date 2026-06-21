@@ -20,7 +20,10 @@ import {
   PageHeader,
 } from "@/components/ui/primitives";
 import type { ApiSuccess } from "@openmake/shared-types";
+import { useQuery } from "@tanstack/react-query";
 import { ApiClient, ApiError } from "@/lib/api-client";
+import { useAppStore } from "@/lib/store";
+import { fetchModels } from "@/lib/models-api";
 import { cn } from "@/lib/utils";
 
 /* ── 탭 정의 ────────────────────────────────────────────── */
@@ -35,14 +38,6 @@ const TABS: { id: TabId; label: string; icon: LucideIcon }[] = [
   { id: "security", label: "보안", icon: ShieldCheck },
 ];
 
-const MODEL_PROFILES = [
-  { value: "default", label: "Default (Auto)" },
-  { value: "pro", label: "Pro" },
-  { value: "fast", label: "Fast" },
-  { value: "think", label: "Think" },
-  { value: "code", label: "Code" },
-  { value: "vision", label: "Vision" },
-];
 
 const RESPONSE_STYLES = [
   { value: "concise", label: "간결" },
@@ -146,7 +141,17 @@ export default function SettingsPage() {
   const [tab, setTab] = useState<TabId>("general");
 
   // 일반 / 모델
-  const [defaultModel, setDefaultModel] = useState("default");
+  const selectedModel = useAppStore((s) => s.selectedModel);
+  const setSelectedModel = useAppStore((s) => s.setSelectedModel);
+  const { data: modelsData } = useQuery({
+    queryKey: ["models"],
+    queryFn: fetchModels,
+    staleTime: 60_000,
+  });
+  const modelOptions = (modelsData?.models ?? []).map((m) => ({
+    value: m.modelId,
+    label: m.name + (m.isFree ? " · 무료" : ""),
+  }));
   const [responseStyle, setResponseStyle] =
     useState<(typeof RESPONSE_STYLES)[number]["value"]>("default");
   const [language, setLanguage] = useState("");
@@ -399,13 +404,17 @@ export default function SettingsPage() {
                 </CardHeader>
                 <CardContent className="py-0">
                   <FieldRow
-                    title="기본 모델 프로파일"
-                    description="새 대화에 기본으로 사용할 모델 프로파일입니다."
+                    title="기본 모델"
+                    description="새 대화에 사용할 모델입니다. 로컬 vLLM + 등록한 외부 LLM(API 키 페이지)."
                   >
                     <Select
-                      value={defaultModel}
-                      onChange={setDefaultModel}
-                      options={MODEL_PROFILES}
+                      value={selectedModel}
+                      onChange={setSelectedModel}
+                      options={
+                        modelOptions.length
+                          ? modelOptions
+                          : [{ value: "", label: "모델 로딩…" }]
+                      }
                     />
                   </FieldRow>
                   <FieldRow
