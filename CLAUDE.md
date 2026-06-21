@@ -26,15 +26,15 @@ npm run dev:frontend     # vite dev server
 npm run build:frontend   # validate-modules.sh
 
 # Production
-npm start                # node backend/api/dist/server.js
-node backend/api/dist/cli.js cluster --port 52416   # vLLM 노드 라우팅 cluster 서브커맨드
+npm start                # node apps/api/dist/server.js
+node apps/api/dist/cli.js cluster --port 52416   # vLLM 노드 라우팅 cluster 서브커맨드
 ```
 
 ## Testing
 
 ```bash
-# Unit tests (Jest, ts-jest) — root 스크립트는 backend/api workspace 로 위임
-npm test                           # = npm test --workspace=backend/api
+# Unit tests (Jest, ts-jest) — root 스크립트는 apps/api workspace 로 위임
+npm test                           # = npm test --workspace=apps/api
 
 # Single test file
 npx jest path/to/file.test.ts
@@ -48,19 +48,19 @@ npm run test:e2e:ui                # interactive UI mode
 npm run lint                       # eslint .ts,.tsx,.js,.jsx
 ```
 
-Jest config: test files in `backend/api/src/**/__tests__/**/*.test.ts`, `backend/api/src/**/*.test.ts`, and `tests/unit/**/*.test.ts`. Module alias `@/` maps to `backend/api/src/`. Playwright tests are in `tests/e2e/`.
+Jest config: test files in `apps/api/src/**/__tests__/**/*.test.ts`, `apps/api/src/**/*.test.ts`, and `tests/unit/**/*.test.ts`. Module alias `@/` maps to `apps/api/src/`. Playwright tests are in `tests/e2e/`.
 
 ## Architecture
 
 ### Monorepo Structure (npm workspaces)
 
-- **`backend/api/`** - Express 5 + TypeScript API server (CommonJS output, ES2022 target, strict mode)
-- **`frontend/web/`** - Vanilla JS SPA with ES Modules (no framework; Vite content-hash 번들 빌드 → `dist` 서빙)
+- **`apps/api/`** - Express 5 + TypeScript API server (CommonJS output, ES2022 target, strict mode)
+- **`apps/legacy-web/`** - Vanilla JS SPA with ES Modules (no framework; Vite content-hash 번들 빌드 → `dist` 서빙)
 - **`data/`** - Shared data layer (referenced from backend)
 - **`scripts/`** - Build, deploy, migration, and CI scripts
 - **`tests/`** - E2E tests (Playwright)
 
-### Backend (`backend/api/src/`)
+### Backend (`apps/api/src/`)
 
 The server entry point is `server.ts`. Key directories:
 
@@ -99,7 +99,7 @@ The server entry point is `server.ts`. Key directories:
 | `utils/` | 공용 유틸 (logger, api-response, error-handler, token-crypto, ...) |
 | `types/` | 글로벌 type 정의 |
 
-### Frontend (`frontend/web/public/`)
+### Frontend (`apps/legacy-web/public/`)
 
 SPA with vanilla JS ES Modules. No build step for JS - files are served directly.
 
@@ -121,7 +121,7 @@ SPA with vanilla JS ES Modules. No build step for JS - files are served directly
 
 - **Database**: Raw SQL with `pg` Pool, parameterized queries (`$1, $2`), auto-generated schema on first launch. No ORM.
 - **Auth**: JWT access tokens in HttpOnly cookies. Google OAuth 2.0. RBAC roles. **LiteLLM master key 단일 운영** (Ollama 시절 5-key pool rotation 폐기, 2026-05-19).
-- **LLM Backend**: 서버 PC 에서 `vLLM serve` → `LiteLLM proxy :13401` 가 OpenAI 호환 endpoint 노출 (로컬 개발은 :4000). 클라이언트(`backend/api/src/llm/client.ts`) 는 `LLM_BASE_URL`/`LLM_API_KEY`/`LLM_DEFAULT_MODEL` env 로 접근. `LLMClient` 는 cluster-routed **per-request** (글로벌 singleton 금지).
+- **LLM Backend**: 서버 PC 에서 `vLLM serve` → `LiteLLM proxy :13401` 가 OpenAI 호환 endpoint 노출 (로컬 개발은 :4000). 클라이언트(`apps/api/src/llm/client.ts`) 는 `LLM_BASE_URL`/`LLM_API_KEY`/`LLM_DEFAULT_MODEL` env 로 접근. `LLMClient` 는 cluster-routed **per-request** (글로벌 singleton 금지).
 - **Chat Pipeline (2 Layer 구조, 2026-05-26 Phase B 머지)**: Query → **ExecutionPlanBuilder.build** (정책 — per-request 1회, regex+fast-path 분류 + profile 해석 + 옵션 조립) → strategies dispatch → **LLMClient.chat** (실행 — per-call, 단일 262K 모델 context-fit 안전망). 정책 ↔ 실행 계층은 SQL planner / executor 패턴 — 둘을 합치지 말 것.
   - **라우팅 분기 (`message-pipeline.ts`)**: 외부 provider(anthropic/openrouter) 채팅은 `streamFromExternalProvider` 직접 dispatch (6 strategies 우회, 자체 MCP tool loop 5턴 보유). **로컬(`local-llm`) 채팅은 `LOCAL_STRATEGY_PATH_ENABLED` 플래그로 게이트** — **기본 OFF: 로컬도 `streamFromExternalProvider` 로 dispatch (strategies 우회)**, ON: strategy 경로(ThinkingStrategy/GV/AgentLoop) 사용. (2026-05-19 `'ollama'→'local-llm'` normalize 가 `!== 'ollama'` 가드를 깨 로컬이 의도와 달리 strategies 를 우회하던 회귀를 플래그로 단계적 복구하는 중. 주의: 플래그 ON 시 도구 호출이 agent-loop(single·high-confidence) 경로에만 실리고 GV 는 도구 미전달 — 외부 dispatch 의 always-on tool loop 와 동작이 다름.)
 - **Context-Fit 안전망 (구 Model Pool)**: `LLMClient.chat()` 진입 시 prompt token 추정(이미지 포함) 후 effective 262K 초과 시 안전망 — input truncate → max_tokens 축소 → 극단 시 ContextOverflowError → HTTP 413 + audit + 자동 webhook 알림. `model_pool_metrics` 테이블 영속화. (2026-06-15: 1M 노드 제거 — 262K↔1M proactive routing 폐기, 단일 모델 fit-to-262K 로 단순화.)
@@ -134,10 +134,10 @@ SPA with vanilla JS ES Modules. No build step for JS - files are served directly
 
 ### DB 마이그레이션
 
-마이그레이션 파일은 `services/database/migrations/` 에 관리하며, 초기 스키마는 `services/database/init/` 에 위치한다.
+마이그레이션 파일은 `db/migrations/` 에 관리하며, 초기 스키마는 `db/init/` 에 위치한다.
 
 - **파일 네이밍**: `NNN_description.sql` 형식 (예: `001_add_user_memories.sql`). NNN은 3자리 순번, 순서 충돌 금지.
-- **마이그레이션 적용**: `server.ts` 부팅은 `init/002-schema.sql`(schema-initializer)만 자동 적용하며, `migrations/` 는 **자동 적용되지 않는다**. CLI 로 수동 적용: `npx ts-node backend/api/src/data/migrations/cli.ts migrate` (`... status` 로 미적용 확인). `MigrationRunner.applyPending` 이 `migration_versions` 테이블로 이력 추적 (version = `filename.split('_')[0]`). (운영 서버 PC 엔 `psql` 미설치 — DB 진단은 node `pg` Client 사용)
+- **마이그레이션 적용**: `server.ts` 부팅은 `init/002-schema.sql`(schema-initializer)만 자동 적용하며, `migrations/` 는 **자동 적용되지 않는다**. CLI 로 수동 적용: `npx ts-node apps/api/src/data/migrations/cli.ts migrate` (`... status` 로 미적용 확인). `MigrationRunner.applyPending` 이 `migration_versions` 테이블로 이력 추적 (version = `filename.split('_')[0]`). (운영 서버 PC 엔 `psql` 미설치 — DB 진단은 node `pg` Client 사용)
 - **멱등 작성 원칙**: `CREATE TABLE IF NOT EXISTS`, `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` 등 재실행 안전하게 작성.
 - **컬럼/테이블 삭제**: 즉시 DROP 금지 — 애플리케이션 코드 참조 제거 후 다음 배포에서 DROP 마이그레이션 적용 (2단계 배포).
 - **롤백**: 롤백 스크립트는 **`migrations/rollbacks/NNN_xxx.sql`** 하위 디렉토리에 둔다. ⚠️ runner 의 파일 필터 정규식 `^\d+_[a-zA-Z0-9_-]+\.sql$` 이 `NNN_xxx_rollback.sql` 도 마이그레이션으로 스캔하므로, `migrations/` 루트에 두면 forward 와 **같은 version(`NNN`)으로 같은 부팅에 실행되어 방금 적용한 것을 되돌린다** (정렬상 `.sql` < `_rollback`). `rollbacks/` 하위는 비재귀 `readdirSync` 에서 제외되어 안전.
@@ -194,7 +194,7 @@ Environment variables loaded from `.env` at project root (see `.env.example`). K
 
 - [ ] `npm run lint` 통과
 - [ ] `npm test` (백엔드 유닛 테스트) 통과
-- [ ] 라우팅/응답 변경 시: `npm --workspace backend/api run eval:routing` + `eval:response` 실행
+- [ ] 라우팅/응답 변경 시: `npm --workspace apps/api run eval:routing` + `eval:response` 실행
 - [ ] DB 스키마 변경 시: 마이그레이션 파일 포함 (순번 충돌 확인)
 - [ ] 환경변수 추가 시: `.env.example` 업데이트
 - [ ] UI 변경 시: 스크린샷 첨부
@@ -241,13 +241,12 @@ Environment variables loaded from `.env` at project root (see `.env.example`). K
 
 이 프로젝트에서 **영구적으로 금지**된 기술/도구 목록. 어떤 상황에서도 도입하거나 제안하지 않는다.
 
-### Docker / 컨테이너 (영구 금지)
+### Docker / 컨테이너 (2026-06-21 방침 변경 — 부분 허용)
 
-- `Dockerfile`, `docker-compose.yml`, `.dockerignore` 등 Docker 관련 파일 **생성 금지**
-- Docker 기반 배포, 개발 환경, CI/CD 파이프라인 **제안 금지**
-- 컨테이너 런타임(Docker, Podman, containerd 등) 관련 설정/코드 **추가 금지**
-- 배포 방식: **PM2 + 직접 배포**만 사용
-- 근거: 프로젝트 방침에 의한 영구 제외 (CI 파이프라인에도 명시됨)
+- **DB(PostgreSQL) 등 인프라 의존성의 Docker 분리 운영 허용** (2026-06-21 영구 금지 해제). `docker-compose.yml` 로 DB/Redis 같은 stateful 의존성을 컨테이너로 운영 가능.
+- 애플리케이션(apps/api, frontend) 배포는 여전히 **PM2 + 직접 배포** 유지 — 앱 자체를 컨테이너화하지는 않는다(필요 시 별도 합의).
+- Docker 는 **인프라 의존성 격리 도구로만** 사용. 근거: DB 를 호스트 brew 설치 대신 버전 고정·격리·이식 가능한 컨테이너로 운영하기 위함.
+- **현황 (2026-06-21)**: openmake_llm DB/Redis 는 **docker 단독 운영**으로 전환 완료 (`brew postgresql@16` 제거). compose·데이터 위치: `/Volumes/MAC_APP/docker/openmake_llm/` (데이터 bind mount `data/postgres`). Docker 전역 데이터(이미지/VM)는 `DataFolder=/Volumes/MAC_APP/docker/DockerDesktop`. 앱 연동은 `DATABASE_URL`(127.0.0.1:5432) 무변경, `openmake_llm.sh` 는 `DB_RUNTIME=docker` 가 기본. `psql`/`pg_dump` CLI 는 brew 제거와 함께 사라졌으므로 DB 직접 접근은 `docker exec -it openmake-postgres psql ...` 또는 `brew install libpq`.
 
 ### ORM / 쿼리 빌더 (영구 금지)
 
@@ -255,12 +254,11 @@ Environment variables loaded from `.env` at project root (see `.env.example`). K
 - 데이터베이스 접근: **Raw SQL + parameterized queries** (`$1, $2`) 만 허용
 - 근거: 기존 `pg` Pool 기반 레이어와의 정합성 유지, 쿼리 투명성 보장
 
-### SPA 프레임워크 / 대형 프론트엔드 라이브러리 (영구 금지)
+### 프론트엔드 프레임워크 (2026-06-21 방침 변경)
 
-- `React`, `Vue`, `Angular`, `Svelte` 등 SPA 프레임워크 **도입 금지** — 소스는 Vanilla JS ES Modules 유지
-- `jQuery`, `Lodash` 등 대형 유틸 라이브러리 신규 추가 금지
-- 근거: 프레임워크 없는 순수 ESM 소스 유지.
-- **운영 배포는 Vite content-hash 번들로 전환 (2026-06-19, 방침 변경)**: 과거 "번들 없는 직접 서빙"은 ES module-map 캐시(오래된 탭) + 하위 import 캐시 버스터 미전파로 stale 모듈 문제가 반복돼, content-hash asset pipeline 으로 근본 해결. Vite 는 **번들러로만** 사용(프레임워크 도입 아님). 소스(`frontend/web/public`)는 여전히 프레임워크 없는 순수 ESM 이며, `npm run build:frontend`(validate-modules → vite build → verify-dist-hash)로 `frontend/web/dist` 에 hash asset 생성. 운영 서빙: dist 우선(없으면 public 폴백), `index.html` no-cache + `/assets/*.<hash>` immutable + WS build ID handshake 자동 reload(`config/build-id.ts`).
+- **모든 프론트엔드 프레임워크·라이브러리 도입 허용** — React, Next.js, Tailwind CSS, Vue, Angular, Svelte, jQuery, Lodash 등 2026-06-21 영구 금지 전면 해제. 신규 UI 또는 점진적 마이그레이션에 자유롭게 사용 가능.
+- 기존 `apps/legacy-web/` 의 Vanilla JS ES Modules 소스는 신규 스택과 공존하거나 점진적으로 이전한다.
+- **운영 배포는 Vite content-hash 번들로 전환 (2026-06-19, 방침 변경)**: 과거 "번들 없는 직접 서빙"은 ES module-map 캐시(오래된 탭) + 하위 import 캐시 버스터 미전파로 stale 모듈 문제가 반복돼, content-hash asset pipeline 으로 근본 해결. Vite 는 **번들러로만** 사용(프레임워크 도입 아님). 소스(`apps/legacy-web/public`)는 여전히 프레임워크 없는 순수 ESM 이며, `npm run build:frontend`(validate-modules → vite build → verify-dist-hash)로 `apps/legacy-web/dist` 에 hash asset 생성. 운영 서빙: dist 우선(없으면 public 폴백), `index.html` no-cache + `/assets/*.<hash>` immutable + WS build ID handshake 자동 reload(`config/build-id.ts`).
 
 ## Phase 용어집
 

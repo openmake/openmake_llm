@@ -1,0 +1,294 @@
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
+import { RefreshCw } from "lucide-react";
+import {
+  Button,
+  Badge,
+  PageHeader,
+  StatCard,
+  Card,
+  CardHeader,
+  CardTitle,
+  CardContent,
+  Table,
+  Th,
+  Td,
+} from "@/components/ui/primitives";
+import type { ApiSuccess as ApiEnvelope } from "@openmake/shared-types";
+import { ApiClient } from "@/lib/api-client";
+
+/* ── 백엔드 응답 타입 (admin 전용) ───────────────────────── */
+interface ApiMonitoringSummary {
+  totalServers: number;
+  totalUsers: number;
+  currentRunning: number;
+  totalSpawned: number;
+  crashed24h: number;
+  crashRate24hPct: number | null;
+}
+
+interface SummaryView {
+  activeServers: string;
+  totalCalls: string;
+  avgLatency: string;
+  errorRate: string;
+}
+
+/* ── 타입 ────────────────────────────────────────────────── */
+interface ServerUsage {
+  name: string;
+  calls: number;
+  errorRate: number; // 0~1
+}
+
+type LogStatus = "success" | "error";
+
+interface ToolLog {
+  id: number;
+  time: string;
+  server: string;
+  tool: string;
+  durationMs: number;
+  status: LogStatus;
+}
+
+/* ── 목업 데이터 ──────────────────────────────────────────
+ * 요약 StatCard 4개 중 "활성 서버"·"총 spawn(=총 도구 호출 칸)"·"에러율" 은
+ * GET /api/admin/mcp/monitoring/summary 로 실연동. "평균 지연" 은 백엔드에
+ * 해당 메트릭이 없어 목업 유지. 서버별 호출 분포·도구 실행 로그는 백엔드에
+ * per-call/per-tool 집계 엔드포인트가 없어 목업 유지. (아래 주석 참조)
+ */
+const SUMMARY: SummaryView = {
+  activeServers: "4",
+  totalCalls: "12,840",
+  avgLatency: "186ms",
+  errorRate: "1.4%",
+};
+
+const SERVER_USAGE: ServerUsage[] = [
+  { name: "github", calls: 5210, errorRate: 0.008 },
+  { name: "filesystem", calls: 4120, errorRate: 0.002 },
+  { name: "slack-events", calls: 2380, errorRate: 0.021 },
+  { name: "postgres-prod", calls: 980, errorRate: 0.064 },
+  { name: "weather-api", calls: 150, errorRate: 0.12 },
+];
+
+const LOGS: ToolLog[] = [
+  {
+    id: 1,
+    time: "14:32:08",
+    server: "github",
+    tool: "search_issues",
+    durationMs: 212,
+    status: "success",
+  },
+  {
+    id: 2,
+    time: "14:31:55",
+    server: "filesystem",
+    tool: "read_file",
+    durationMs: 9,
+    status: "success",
+  },
+  {
+    id: 3,
+    time: "14:31:40",
+    server: "postgres-prod",
+    tool: "query",
+    durationMs: 1240,
+    status: "error",
+  },
+  {
+    id: 4,
+    time: "14:31:12",
+    server: "slack-events",
+    tool: "send_message",
+    durationMs: 84,
+    status: "success",
+  },
+  {
+    id: 5,
+    time: "14:30:58",
+    server: "github",
+    tool: "create_pr",
+    durationMs: 340,
+    status: "success",
+  },
+  {
+    id: 6,
+    time: "14:30:31",
+    server: "weather-api",
+    tool: "get_forecast",
+    durationMs: 0,
+    status: "error",
+  },
+];
+
+const maxCalls = Math.max(...SERVER_USAGE.map((s) => s.calls));
+
+/** 요약 통계 조회 — 실패(401/네트워크) 시 null 반환하여 호출측이 목업 유지. */
+async function fetchSummaryView(): Promise<SummaryView | null> {
+  try {
+    const res = await ApiClient.get<
+      ApiEnvelope<{ summary: ApiMonitoringSummary }>
+    >("/api/admin/mcp/monitoring/summary");
+    const s = res?.data?.summary;
+    if (!s) return null;
+    return {
+      activeServers: String(s.currentRunning),
+      // 백엔드엔 "총 도구 호출" 메트릭이 없어 누적 spawn 수로 대체 표시
+      totalCalls: s.totalSpawned.toLocaleString("ko-KR"),
+      // 평균 지연 메트릭 없음 — 목업 값 유지
+      avgLatency: SUMMARY.avgLatency,
+      errorRate:
+        s.crashRate24hPct != null ? `${s.crashRate24hPct.toFixed(1)}%` : "—",
+    };
+  } catch {
+    // 401(비admin)·실패 → null (목업 유지)
+    return null;
+  }
+}
+
+export default function McpMonitoringPage() {
+  const [summary, setSummary] = useState<SummaryView>(SUMMARY);
+
+  const refresh = useCallback(async () => {
+    const view = await fetchSummaryView();
+    if (view) setSummary(view);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const tick = async () => {
+      const view = await fetchSummaryView();
+      if (!cancelled && view) setSummary(view);
+    };
+    void tick();
+    const id = setInterval(() => void tick(), 30_000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, []);
+
+  return (
+    <>
+      <PageHeader
+        title="MCP 모니터링"
+        description="전체 MCP 서버의 호출 추이와 도구 실행 로그를 모니터링합니다."
+        actions={
+          <Button variant="outline" size="sm" onClick={refresh}>
+            <RefreshCw className="h-4 w-4" />
+            새로고침
+          </Button>
+        }
+      />
+
+      <div className="min-h-0 flex-1 overflow-y-auto p-6">
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          <StatCard
+            label="활성 서버"
+            value={summary.activeServers}
+            delta="전체 5개 중"
+          />
+          <StatCard
+            label="총 도구 호출"
+            value={summary.totalCalls}
+            delta="+8.2% 24h"
+            deltaTone="success"
+          />
+          <StatCard label="평균 지연" value={summary.avgLatency} />
+          <StatCard
+            label="에러율"
+            value={summary.errorRate}
+            delta="+0.3% 24h"
+            deltaTone="danger"
+          />
+        </div>
+
+        <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-5">
+          {/* 서버별 호출 추이 — 순수 CSS 바 차트.
+              백엔드에 per-server 호출/에러율 집계 엔드포인트가 없어 목업 유지. */}
+          <Card className="lg:col-span-2">
+            <CardHeader>
+              <CardTitle>서버별 호출 분포</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {SERVER_USAGE.map((s) => {
+                const pct = (s.calls / maxCalls) * 100;
+                const highErr = s.errorRate >= 0.05;
+                return (
+                  <div key={s.name}>
+                    <div className="mb-1 flex items-center justify-between text-xs">
+                      <span className="font-mono text-fg-2">{s.name}</span>
+                      <span className="text-faint">
+                        {s.calls.toLocaleString("ko-KR")}회 ·{" "}
+                        <span className={highErr ? "text-danger" : "text-muted"}>
+                          {(s.errorRate * 100).toFixed(1)}%
+                        </span>
+                      </span>
+                    </div>
+                    <div className="h-2 overflow-hidden rounded-pill bg-surface-2">
+                      <div
+                        className={
+                          "h-full rounded-pill " +
+                          (highErr ? "bg-warn" : "bg-accent")
+                        }
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </CardContent>
+          </Card>
+
+          {/* 최근 도구 실행 로그.
+              백엔드에 per-tool 실행 로그 엔드포인트가 없어 목업 유지. */}
+          <Card className="lg:col-span-3">
+            <CardHeader>
+              <CardTitle>최근 도구 실행 로그</CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              <Table>
+                <thead>
+                  <tr>
+                    <Th>시각</Th>
+                    <Th>서버</Th>
+                    <Th>도구</Th>
+                    <Th className="text-right">소요</Th>
+                    <Th>상태</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {LOGS.map((l) => (
+                    <tr key={l.id} className="transition hover:bg-surface-2">
+                      <Td className="font-mono text-faint">{l.time}</Td>
+                      <Td className="font-mono text-fg-2">{l.server}</Td>
+                      <Td className="font-mono text-fg-2">{l.tool}</Td>
+                      <Td className="text-right font-mono">
+                        {l.status === "error" ? (
+                          <span className="text-faint">—</span>
+                        ) : (
+                          `${l.durationMs}ms`
+                        )}
+                      </Td>
+                      <Td>
+                        <Badge
+                          tone={l.status === "success" ? "success" : "danger"}
+                        >
+                          {l.status === "success" ? "성공" : "실패"}
+                        </Badge>
+                      </Td>
+                    </tr>
+                  ))}
+                </tbody>
+              </Table>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </>
+  );
+}

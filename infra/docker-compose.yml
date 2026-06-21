@@ -1,0 +1,61 @@
+# OpenMake LLM — 인프라 의존성(DB/Redis) Docker 분리 운영
+#
+# 목적: 호스트 brew(postgresql@16, redis) 대신 버전 고정·격리·이식 가능한 컨테이너로 운영.
+# 애플리케이션(backend/api, frontend)은 여전히 PM2 + 직접 배포 (이 compose 에 포함하지 않음).
+#
+# 사용:
+#   docker compose up -d                 # DB+Redis 기동
+#   docker compose ps                    # 상태
+#   docker compose logs -f postgres      # 로그
+#   docker compose down                  # 정지 (볼륨 유지)
+#   docker compose down -v               # 정지 + 데이터 볼륨 삭제(주의)
+#
+# 선행: .env 에 POSTGRES_PASSWORD 를 DATABASE_URL 의 비밀번호와 동일하게 설정.
+#   (DATABASE_URL=postgresql://openmake:<PW>@127.0.0.1:5432/openmake_llm ↔ POSTGRES_PASSWORD=<PW>)
+#
+# 초기화: 빈 볼륨 첫 기동 시 services/database/init/*.sql(001→002→003) 자동 실행.
+#   단 migrations/(033, 041 등)는 자동 적용 안 됨 → 기동 후:
+#     npx ts-node backend/api/src/data/migrations/cli.ts migrate
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: openmake-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-openmake}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD 를 .env 에 설정하세요 (DATABASE_URL 비번과 동일)}
+      POSTGRES_DB: ${POSTGRES_DB:-openmake_llm}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - openmake_pgdata:/var/lib/postgresql/data
+      # init 스크립트 (첫 기동·빈 볼륨에서만 실행). read-only 마운트.
+      - ../db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-openmake} -d ${POSTGRES_DB:-openmake_llm}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    shm_size: 256mb
+
+  redis:
+    image: redis:7-alpine
+    container_name: openmake-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - openmake_redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  openmake_pgdata:
+    name: openmake_pgdata
+  openmake_redisdata:
+    name: openmake_redisdata

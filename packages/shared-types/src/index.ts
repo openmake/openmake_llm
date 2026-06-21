@@ -1,0 +1,111 @@
+/**
+ * @openmake/shared-types — 프론트(apps/web) ↔ 백엔드(apps/api) 공통 타입 계약.
+ *
+ * 백엔드 응답 래퍼(api-response)와 핵심 도메인 모델을 한 곳에서 정의해
+ * 프론트/백엔드가 동일 타입을 import 하도록 한다. (API 계약을 코드로 강제)
+ *
+ * 외부 분리 서버는 이 타입 계약 밖에 있다(설계 유지):
+ *   - LLM 추론/임베딩 → 외부 vLLM/LiteLLM (OpenAI 호환 API)
+ *   - DB → docker 분리 운영
+ */
+
+/* ── API 응답 래퍼 (backend utils/api-response 와 1:1) ───────────────── */
+export interface ApiMeta {
+  timestamp: string;
+}
+
+export interface ApiSuccess<T> {
+  success: true;
+  data: T;
+  meta: ApiMeta;
+}
+
+export interface ApiErrorBody {
+  code: string;
+  message: string;
+  details?: unknown;
+}
+
+export interface ApiFailure {
+  success: false;
+  error: ApiErrorBody;
+  meta: ApiMeta;
+}
+
+export type ApiResponse<T> = ApiSuccess<T> | ApiFailure;
+
+/* ── 도메인 모델 ─────────────────────────────────────────────────────── */
+export type UserRole = "admin" | "user" | "guest";
+
+export interface User {
+  id: string;
+  email: string;
+  username?: string;
+  role: UserRole;
+  is_active?: boolean;
+  created_at?: string;
+  last_login?: string;
+}
+
+export interface ConversationSession {
+  id: string;
+  title?: string;
+  user_id?: string | null;
+  model?: string;
+  messageCount?: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export type ChatRole = "user" | "assistant" | "system";
+
+export interface ChatMessage {
+  role: ChatRole;
+  content: string;
+  model?: string;
+  tokens?: number;
+  images?: string[];
+  created_at?: string;
+}
+
+export interface Project {
+  id: string;
+  user_id: string;
+  name: string;
+  description?: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+/* ── WebSocket 채팅 프로토콜 (sockets/ws-chat-handler 와 페어) ───────── */
+export interface WsChatRequest {
+  type: "chat";
+  message: string;
+  model?: string;
+  history?: Array<{ role: ChatRole; content: string }>;
+  sessionId?: string | null;
+  images?: string[];
+  webSearch?: boolean;
+  deepResearchMode?: boolean;
+  enabledTools?: Record<string, boolean>;
+}
+
+export type WsServerEvent =
+  | { type: "token"; token: string }
+  | { type: "session_created"; sessionId: string }
+  | { type: "done"; sessionId?: string; totalTokens?: number }
+  | { type: "aborted"; message?: string }
+  | { type: "error"; message: string }
+  | { type: "init"; data?: unknown };
+
+/* ── 응답 페이로드 헬퍼 타입 ─────────────────────────────────────────── */
+export interface SessionsPayload {
+  sessions: ConversationSession[];
+}
+export interface ProjectsPayload {
+  projects: Project[];
+}
+export interface MePayload {
+  user: User;
+}

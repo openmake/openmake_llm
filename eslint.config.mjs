@@ -8,8 +8,6 @@ export default [
       "**/node_modules/**",
       "**/.claude/**",
       "**/*.min.js",
-      "frontend/web/public/vendor/**",
-      "frontend/web/public/js/vendor/**",
       "jest.config.js",
       "ecosystem.config.js",
       "playwright.config.ts",
@@ -45,25 +43,6 @@ export default [
       ],
     },
   },
-  {
-    files: ["frontend/web/public/**/*.js"],
-    languageOptions: {
-      ecmaVersion: 2022,
-      sourceType: "module",
-    },
-    rules: {
-      "no-undef": "off",
-      "@typescript-eslint/no-unused-vars": [
-        "warn",
-        {
-          argsIgnorePattern: "^_",
-          varsIgnorePattern: "^_",
-          caughtErrorsIgnorePattern: "^_",
-          destructuredArrayIgnorePattern: "^_",
-        },
-      ],
-    },
-  },
   // Declarative data file 예외 — locale / OpenAPI spec / test fixture 은
   // 자연 크기가 큼. max-lines 룰은 logic file 가독성 정책이라 적용 부적합.
   {
@@ -71,10 +50,10 @@ export default [
       "**/__tests__/**/*.test.ts",
       "**/*.test.ts",
       "**/locales/**/*.ts",
-      "backend/api/src/**/*locales*.ts",
-      "backend/api/src/chat/language-policy.ts",
-      "backend/api/src/chat/prompt-templates.ts",
-      "backend/api/src/swagger/paths-*.ts",
+      "apps/api/src/**/*locales*.ts",
+      "apps/api/src/chat/language-policy.ts",
+      "apps/api/src/chat/prompt-templates.ts",
+      "apps/api/src/swagger/paths-*.ts",
     ],
     rules: {
       "max-lines": "off",
