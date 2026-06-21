@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ScrollText } from "lucide-react";
+import { ScrollText, Download } from "lucide-react";
 import {
   PageHeader,
   Card,
   CardContent,
   Badge,
+  Button,
   Table,
   Th,
   Td,
@@ -136,9 +137,19 @@ export default function AdminAuditPage() {
         title="감사 로그"
         description="시스템 전반의 보안·관리 활동 기록입니다."
         actions={
-          <Badge tone="neutral">
-            <ScrollText className="h-3.5 w-3.5" /> {filtered.length}건
-          </Badge>
+          <div className="flex items-center gap-2">
+            <Badge tone="neutral">
+              <ScrollText className="h-3.5 w-3.5" /> {filtered.length}건
+            </Badge>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => { window.location.href = "/api/audit/export"; }}
+            >
+              <Download className="h-4 w-4" />
+              CSV 내보내기
+            </Button>
+          </div>
         }
       />
 

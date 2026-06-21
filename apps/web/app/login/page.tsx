@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowRight, LoaderCircle } from "lucide-react";
 import { ApiClient, ApiError } from "@/lib/api-client";
@@ -122,6 +123,13 @@ export default function LoginPage() {
           >
             게스트로 계속하기
           </button>
+
+          <p className="mt-4 text-center text-xs text-muted">
+            계정이 없으신가요?{" "}
+            <Link href="/register" className="font-medium text-accent hover:underline">
+              회원가입
+            </Link>
+          </p>
         </form>
       </div>
     </div>

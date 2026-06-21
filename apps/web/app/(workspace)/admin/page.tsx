@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Shield, Users, Boxes, Gauge, ArrowRight } from "lucide-react";
+import { Shield, Users, Boxes, Gauge, ArrowRight, Pencil, Trash2, Plus, X, Loader2 } from "lucide-react";
 import {
   PageHeader,
   StatCard,
@@ -11,6 +11,7 @@ import {
   CardTitle,
   CardContent,
   Badge,
+  Button,
   Table,
   Th,
   Td,
@@ -20,10 +21,17 @@ import { ApiClient } from "@/lib/api-client";
 interface AdminUser {
   id: string;
   email: string;
+  name?: string;
   role: "admin" | "user" | "guest";
   is_active: boolean;
   created_at: string;
   last_login?: string | null;
+}
+
+interface GuardianPending {
+  id: string;
+  email: string;
+  created_at: string;
 }
 
 const ROLE_LABEL: Record<string, string> = {
@@ -37,7 +45,6 @@ const ROLE_TONE: Record<string, "danger" | "success" | "neutral"> = {
   guest: "neutral",
 };
 
-// /api/admin/users·/users/stats·/stats 실데이터로 교체, 401/실패 시 폴백 목업.
 const MOCK_USERS: AdminUser[] = [
   { id: "u_1042", email: "minji.kim@openmake.io", role: "user", is_active: true, created_at: "2026-06-19T09:12:00Z", last_login: "2026-06-21T02:30:00Z" },
   { id: "u_1041", email: "devops@partner.co.kr", role: "admin", is_active: true, created_at: "2026-06-18T15:40:00Z", last_login: "2026-06-20T22:05:00Z" },
@@ -58,9 +65,261 @@ const QUICK_LINKS = [
   { href: "/admin/metrics", title: "시스템 상태", desc: "노드·서비스 헬스 모니터링", icon: Gauge },
 ];
 
+/* ── 모달 공통 래퍼 ─────────────────────────────────────────── */
+function Modal({ onClose, children }: { onClose: () => void; children: React.ReactNode }) {
+  const backdropRef = useRef<HTMLDivElement>(null);
+  return (
+    <div
+      role="dialog"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+      ref={backdropRef}
+      onClick={(ev) => { if (ev.target === backdropRef.current) onClose(); }}
+    >
+      <div className="relative mx-4 w-full max-w-md rounded-lg bg-surface p-6 shadow-xl">
+        <button
+          onClick={onClose}
+          className="absolute right-4 top-4 text-faint hover:text-fg"
+          aria-label="닫기"
+        >
+          <X className="h-4 w-4" />
+        </button>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+const inputCls = "h-9 w-full rounded-md border border-border bg-surface-2 px-3 text-sm text-fg placeholder:text-faint focus:border-accent focus:outline-none";
+const selectCls = "h-9 w-full rounded-md border border-border bg-surface-2 px-3 text-sm text-fg focus:border-accent focus:outline-none";
+const labelCls = "block text-xs font-medium text-fg-2 mb-1";
+
+/* ── 생성 모달 ───────────────────────────────────────────────── */
+function CreateUserModal({
+  onClose,
+  onCreated,
+}: {
+  onClose: () => void;
+  onCreated: () => void;
+}) {
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [role, setRole] = useState<"admin" | "user" | "guest">("user");
+  const [password, setPassword] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleSubmit(ev: React.FormEvent) {
+    ev.preventDefault();
+    setSubmitting(true);
+    setError("");
+    try {
+      await ApiClient.post("/api/admin/users", { name: name || undefined, email, role, password });
+      onCreated();
+      onClose();
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "생성 실패. 다시 시도해 주세요.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <Modal onClose={onClose}>
+      <h2 className="mb-4 text-base font-semibold text-fg">사용자 추가</h2>
+      <form onSubmit={handleSubmit} className="space-y-3">
+        <div>
+          <label className={labelCls}>이름 (선택)</label>
+          <input className={inputCls} value={name} onChange={(e) => setName(e.target.value)} placeholder="홍길동" />
+        </div>
+        <div>
+          <label className={labelCls}>이메일 *</label>
+          <input className={inputCls} type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="user@example.com" />
+        </div>
+        <div>
+          <label className={labelCls}>역할 *</label>
+          <select className={selectCls} value={role} onChange={(e) => setRole(e.target.value as "admin" | "user" | "guest")}>
+            <option value="user">사용자</option>
+            <option value="admin">관리자</option>
+            <option value="guest">게스트</option>
+          </select>
+        </div>
+        <div>
+          <label className={labelCls}>비밀번호 *</label>
+          <input className={inputCls} type="password" required value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" />
+        </div>
+        {error && <p className="text-xs text-danger">{error}</p>}
+        <div className="flex justify-end gap-2 pt-2">
+          <Button type="button" variant="outline" size="sm" onClick={onClose}>취소</Button>
+          <Button type="submit" size="sm" disabled={submitting}>
+            {submitting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+            생성
+          </Button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+/* ── 편집 모달 ───────────────────────────────────────────────── */
+function EditUserModal({
+  user,
+  onClose,
+  onUpdated,
+}: {
+  user: AdminUser;
+  onClose: () => void;
+  onUpdated: () => void;
+}) {
+  const [role, setRole] = useState<"admin" | "user" | "guest">(user.role);
+  const [isActive, setIsActive] = useState(user.is_active);
+  const [password, setPassword] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleSubmit(ev: React.FormEvent) {
+    ev.preventDefault();
+    setSubmitting(true);
+    setError("");
+    try {
+      const body: Record<string, unknown> = { role, is_active: isActive };
+      if (password) body.password = password;
+      await ApiClient.put(`/api/admin/users/${user.id}`, body);
+      onUpdated();
+      onClose();
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "수정 실패. 다시 시도해 주세요.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <Modal onClose={onClose}>
+      <h2 className="mb-1 text-base font-semibold text-fg">사용자 편집</h2>
+      <p className="mb-4 text-xs text-muted">{user.email}</p>
+      <form onSubmit={handleSubmit} className="space-y-3">
+        <div>
+          <label className={labelCls}>역할</label>
+          <select className={selectCls} value={role} onChange={(e) => setRole(e.target.value as "admin" | "user" | "guest")}>
+            <option value="user">사용자</option>
+            <option value="admin">관리자</option>
+            <option value="guest">게스트</option>
+          </select>
+        </div>
+        <div>
+          <label className={labelCls}>상태</label>
+          <select className={selectCls} value={isActive ? "active" : "inactive"} onChange={(e) => setIsActive(e.target.value === "active")}>
+            <option value="active">활성</option>
+            <option value="inactive">비활성</option>
+          </select>
+        </div>
+        <div>
+          <label className={labelCls}>새 비밀번호 (선택)</label>
+          <input className={inputCls} type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="변경하지 않으려면 비워두세요" />
+        </div>
+        {error && <p className="text-xs text-danger">{error}</p>}
+        <div className="flex justify-end gap-2 pt-2">
+          <Button type="button" variant="outline" size="sm" onClick={onClose}>취소</Button>
+          <Button type="submit" size="sm" disabled={submitting}>
+            {submitting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+            저장
+          </Button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+/* ── 삭제 확인 모달 ─────────────────────────────────────────── */
+function DeleteUserModal({
+  user,
+  onClose,
+  onDeleted,
+}: {
+  user: AdminUser;
+  onClose: () => void;
+  onDeleted: () => void;
+}) {
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleDelete() {
+    setSubmitting(true);
+    setError("");
+    try {
+      await ApiClient.del(`/api/admin/users/${user.id}`);
+      onDeleted();
+      onClose();
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "삭제 실패. 다시 시도해 주세요.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <Modal onClose={onClose}>
+      <h2 className="mb-2 text-base font-semibold text-fg">사용자 삭제</h2>
+      <p className="mb-1 text-sm text-fg-2">정말 삭제하시겠습니까?</p>
+      <p className="mb-4 text-xs text-muted font-mono">{user.email}</p>
+      {error && <p className="mb-3 text-xs text-danger">{error}</p>}
+      <div className="flex justify-end gap-2">
+        <Button variant="outline" size="sm" onClick={onClose} disabled={submitting}>취소</Button>
+        <Button variant="danger" size="sm" onClick={handleDelete} disabled={submitting}>
+          {submitting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+          삭제
+        </Button>
+      </div>
+    </Modal>
+  );
+}
+
 export default function AdminPage() {
   const [users, setUsers] = useState<AdminUser[]>(MOCK_USERS);
   const [stats, setStats] = useState({ total: 1042, active: 318, today: 4821, status: "정상" });
+  const [guardianPending, setGuardianPending] = useState<GuardianPending[]>([]);
+  const [approvingIds, setApprovingIds] = useState<Set<string>>(new Set());
+
+  // Modal state
+  const [showCreate, setShowCreate] = useState(false);
+  const [editUser, setEditUser] = useState<AdminUser | null>(null);
+  const [deleteUser, setDeleteUser] = useState<AdminUser | null>(null);
+
+  async function loadUsers() {
+    try {
+      const res = await ApiClient.get<{ data?: { users?: AdminUser[] }; users?: AdminUser[] }>("/api/admin/users?limit=8");
+      const list = (res.data?.users || (res as { users?: AdminUser[] }).users) ?? [];
+      if (list.length) setUsers(list);
+    } catch {
+      /* 목업 유지 */
+    }
+  }
+
+  async function loadGuardianPending() {
+    try {
+      const res = await ApiClient.get<{ data?: { users?: GuardianPending[] }; users?: GuardianPending[] }>("/api/admin/guardian-consent-pending");
+      const list = (res.data?.users || (res as { users?: GuardianPending[] }).users) ?? [];
+      setGuardianPending(list);
+    } catch {
+      /* 미표시 */
+    }
+  }
+
+  async function approveGuardian(id: string) {
+    setApprovingIds((prev) => new Set(prev).add(id));
+    try {
+      await ApiClient.post(`/api/admin/users/${id}/guardian-verify`, {});
+      setGuardianPending((prev) => prev.filter((u) => u.id !== id));
+    } catch {
+      /* 실패 시 목록 유지 */
+    } finally {
+      setApprovingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    }
+  }
 
   useEffect(() => {
     let alive = true;
@@ -73,15 +332,15 @@ export default function AdminPage() {
         ]);
         if (!alive) return;
         if (u.status === "fulfilled") {
-          const list = (u.value.data?.users || u.value.users) ?? [];
+          const list = (u.value.data?.users || (u.value as { users?: AdminUser[] }).users) ?? [];
           if (list.length) setUsers(list);
         }
         if (us.status === "fulfilled") {
           const p = us.value.data ?? (us.value as Record<string, number>);
           setStats((s) => ({
             ...s,
-            total: p.totalUsers ?? s.total,
-            active: p.activeUsers ?? s.active,
+            total: (p as Record<string, number>).totalUsers ?? s.total,
+            active: (p as Record<string, number>).activeUsers ?? s.active,
           }));
         }
         if (st.status === "fulfilled") {
@@ -92,6 +351,7 @@ export default function AdminPage() {
         /* 목업 유지 */
       }
     })();
+    void loadGuardianPending();
     return () => {
       alive = false;
     };
@@ -103,9 +363,15 @@ export default function AdminPage() {
         title="관리자 대시보드"
         description="사용자, 모델, 시스템 상태를 한 곳에서 관리합니다."
         actions={
-          <Badge tone="danger">
-            <Shield className="h-3.5 w-3.5" /> 관리자 전용
-          </Badge>
+          <div className="flex items-center gap-2">
+            <Badge tone="danger">
+              <Shield className="h-3.5 w-3.5" /> 관리자 전용
+            </Badge>
+            <Button size="sm" onClick={() => setShowCreate(true)}>
+              <Plus className="h-4 w-4" />
+              사용자 추가
+            </Button>
+          </div>
         }
       />
 
@@ -155,6 +421,7 @@ export default function AdminPage() {
                   <Th>상태</Th>
                   <Th>가입일</Th>
                   <Th>마지막 로그인</Th>
+                  <Th>액션</Th>
                 </tr>
               </thead>
               <tbody>
@@ -170,13 +437,95 @@ export default function AdminPage() {
                     </Td>
                     <Td>{fmtDate(u.created_at)}</Td>
                     <Td className="text-muted">{u.last_login ? fmtDate(u.last_login) : "-"}</Td>
+                    <Td>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => setEditUser(u)}
+                          aria-label="편집"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => setDeleteUser(u)}
+                          aria-label="삭제"
+                          className="text-danger hover:text-danger"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </Td>
                   </tr>
                 ))}
               </tbody>
             </Table>
           </CardContent>
         </Card>
+
+        {/* M8: 미성년자 동의 보류 섹션 */}
+        {guardianPending.length > 0 && (
+          <Card className="mt-6">
+            <CardHeader>
+              <CardTitle>미성년자 동의 보류</CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              <Table>
+                <thead>
+                  <tr>
+                    <Th>이메일</Th>
+                    <Th>가입일</Th>
+                    <Th>액션</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {guardianPending.map((u) => (
+                    <tr key={u.id}>
+                      <Td className="text-fg">{u.email}</Td>
+                      <Td className="text-muted">{fmtDate(u.created_at)}</Td>
+                      <Td>
+                        <Button
+                          size="sm"
+                          disabled={approvingIds.has(u.id)}
+                          onClick={() => approveGuardian(u.id)}
+                        >
+                          {approvingIds.has(u.id) && (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          )}
+                          승인
+                        </Button>
+                      </Td>
+                    </tr>
+                  ))}
+                </tbody>
+              </Table>
+            </CardContent>
+          </Card>
+        )}
       </div>
+
+      {showCreate && (
+        <CreateUserModal
+          onClose={() => setShowCreate(false)}
+          onCreated={loadUsers}
+        />
+      )}
+      {editUser && (
+        <EditUserModal
+          user={editUser}
+          onClose={() => setEditUser(null)}
+          onUpdated={loadUsers}
+        />
+      )}
+      {deleteUser && (
+        <DeleteUserModal
+          user={deleteUser}
+          onClose={() => setDeleteUser(null)}
+          onDeleted={loadUsers}
+        />
+      )}
     </>
   );
 }

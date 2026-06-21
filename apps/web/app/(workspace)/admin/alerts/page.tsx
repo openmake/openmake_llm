@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Bell, Plus, AlertTriangle, AlertCircle, Info } from "lucide-react";
+import { Bell, Plus, AlertTriangle, AlertCircle, Info, Check } from "lucide-react";
 import {
   PageHeader,
   Card,
@@ -92,6 +92,24 @@ interface ApiAlert {
 export default function AdminAlertsPage() {
   const [rules, setRules] = useState<AlertRule[]>(RULES);
   const [events, setEvents] = useState<AlertEvent[]>(MOCK_EVENTS);
+  const [acknowledged, setAcknowledged] = useState<Set<string>>(new Set());
+  const [ackLoading, setAckLoading] = useState<Set<string>>(new Set());
+
+  async function handleAcknowledge(id: string) {
+    setAckLoading((prev) => new Set(prev).add(id));
+    try {
+      await ApiClient.post(`/api/admin/alerts/${id}/acknowledge`, {});
+      setAcknowledged((prev) => new Set(prev).add(id));
+    } catch {
+      /* 실패 시 현상 유지 */
+    } finally {
+      setAckLoading((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    }
+  }
 
   useEffect(() => {
     let alive = true;
@@ -178,8 +196,10 @@ export default function AdminAlertsPage() {
               <ol className="relative space-y-4 border-l border-border pl-5">
                 {events.map((e) => {
                   const Icon = SEV_ICON[e.severity];
+                  const isAcked = acknowledged.has(e.id);
+                  const isAcking = ackLoading.has(e.id);
                   return (
-                    <li key={e.id} className="relative">
+                    <li key={e.id} className={cn("relative", isAcked && "opacity-50")}>
                       <span
                         className={cn(
                           "absolute -left-[27px] flex h-5 w-5 items-center justify-center rounded-full bg-surface",
@@ -188,9 +208,27 @@ export default function AdminAlertsPage() {
                       >
                         <Icon className="h-3.5 w-3.5" />
                       </span>
-                      <div className="flex items-center gap-2">
-                        <Badge tone={SEV_TONE[e.severity]}>{SEV_LABEL[e.severity]}</Badge>
-                        <span className="font-mono text-[11px] text-faint">{fmt(e.timestamp)}</span>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <Badge tone={SEV_TONE[e.severity]}>{SEV_LABEL[e.severity]}</Badge>
+                          <span className="font-mono text-[11px] text-faint">{fmt(e.timestamp)}</span>
+                          {isAcked && (
+                            <Badge tone="success">
+                              <Check className="h-3 w-3" />
+                              확인됨
+                            </Badge>
+                          )}
+                        </div>
+                        {!isAcked && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={isAcking}
+                            onClick={() => handleAcknowledge(e.id)}
+                          >
+                            확인
+                          </Button>
+                        )}
                       </div>
                       <p className="mt-1 text-sm leading-relaxed text-fg-2">{e.message}</p>
                     </li>

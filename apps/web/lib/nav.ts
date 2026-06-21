@@ -61,6 +61,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: "설정", href: "/settings", icon: Settings },
       { label: "API 키", href: "/api-keys", icon: KeyRound },
       { label: "사용량", href: "/usage", icon: BarChart3 },
+      { label: "개발자 문서", href: "/developer", icon: ScrollText },
     ],
   },
   {
@@ -71,6 +72,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: "감사 로그", href: "/admin/audit", icon: ScrollText },
       { label: "메트릭", href: "/admin/metrics", icon: Gauge },
       { label: "알림", href: "/admin/alerts", icon: Bell },
+      { label: "MCP 카탈로그 관리", href: "/admin/mcp-catalog", icon: Boxes },
     ],
   },
 ];

@@ -37,7 +37,10 @@ export class ApiError extends Error {
 
 const MUTATING = new Set<string>(MUTATING_METHODS);
 
-async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+/** 401 자동 refresh 를 건너뛸 endpoint 목록 (무한루프 방지). */
+const SKIP_REFRESH_ENDPOINTS = ["/api/auth/refresh", "/api/auth/login", "/api/auth/me"];
+
+async function request<T>(endpoint: string, options: RequestInit = {}, _isRetry = false): Promise<T> {
   const method = (options.method || "GET").toUpperCase();
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -52,6 +55,22 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
   const text = await res.text();
   const json = text ? (JSON.parse(text) as ApiResponse<T> | T) : null;
   if (!res.ok) {
+    // 401 자동 refresh: 재시도 아니고, 건너뛸 endpoint 가 아닌 경우에만 1회 시도.
+    if (
+      res.status === 401 &&
+      !_isRetry &&
+      !SKIP_REFRESH_ENDPOINTS.some((ep) => endpoint === ep || endpoint.startsWith(ep + "?"))
+    ) {
+      try {
+        await fetch("/api/auth/refresh", { method: "POST", credentials: "include" });
+        return request<T>(endpoint, options, true);
+      } catch {
+        /* refresh 실패 → 아래 리다이렉트로 진행 */
+      }
+      if (typeof window !== "undefined" && window.location.pathname !== "/login") {
+        window.location.href = "/login";
+      }
+    }
     const body = json as { error?: { message?: string }; message?: string } | null;
     throw new ApiError(res.status, body?.error?.message || body?.message || `요청 실패 (${res.status})`, json);
   }

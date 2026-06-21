@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { Plus, Search } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
+import { Plus, Search, LogOut } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import type { ApiSuccess } from "@openmake/shared-types";
 import { useAppStore } from "@/lib/store";
@@ -20,8 +20,19 @@ interface SessionRow {
 
 export function Sidebar() {
   const pathname = usePathname();
-  const { clearChat, auth } = useAppStore();
+  const router = useRouter();
+  const { clearChat, auth, setAuth } = useAppStore();
   const user = auth.currentUser;
+
+  const logout = async () => {
+    try {
+      await ApiClient.post("/api/auth/logout");
+    } catch {
+      /* 실패해도 진행 */
+    }
+    setAuth({ currentUser: null, isGuestMode: true });
+    router.push("/login");
+  };
 
   // 최근 대화 — /api/chat/conversations ({data:{sessions:[]}}). 실패/빈이면 목록 숨김.
   const { data: sessions = [] } = useQuery<SessionRow[]>({
@@ -125,6 +136,16 @@ export function Sidebar() {
           </p>
         </div>
         <ThemeToggle />
+        {user && (
+          <button
+            type="button"
+            onClick={() => void logout()}
+            aria-label="로그아웃"
+            className="grid h-8 w-8 place-items-center rounded-md text-muted transition hover:bg-surface-3 hover:text-danger"
+          >
+            <LogOut className="h-4 w-4" />
+          </button>
+        )}
       </div>
     </aside>
   );

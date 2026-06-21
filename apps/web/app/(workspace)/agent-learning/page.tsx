@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { GraduationCap, ThumbsUp, ThumbsDown } from "lucide-react";
+import { GraduationCap, ThumbsUp, ThumbsDown, Loader2 } from "lucide-react";
 import {
   Badge,
   PageHeader,
@@ -14,12 +14,39 @@ import {
 import type { ApiSuccess as ApiEnvelope } from "@openmake/shared-types";
 import { ApiClient } from "@/lib/api-client";
 
-/* ── 백엔드 응답 타입 (GET /api/agents/feedback/stats) ─────── */
+/* ── 백엔드 응답 타입 ────────────────────────────────────── */
 interface ApiFeedbackStats {
   totalFeedbacks: number;
   avgRating: number;
   topAgents?: { agentId: string; score: number }[];
   worstAgents?: { agentId: string; score: number }[];
+}
+
+interface ApiQualityScore {
+  agentId: string;
+  score?: number;
+  totalFeedbacks?: number;
+  avgRating?: number;
+  [key: string]: unknown;
+}
+
+interface ApiFailurePattern {
+  pattern?: string;
+  count?: number;
+  [key: string]: unknown;
+}
+
+interface ApiImprovement {
+  suggestion?: string;
+  priority?: string;
+  [key: string]: unknown;
+}
+
+interface ApiSystemAgent {
+  id: string;
+  name: string;
+  emoji?: string;
+  category?: string;
 }
 
 /* ── 타입 ────────────────────────────────────────────────── */
@@ -33,96 +60,182 @@ interface LearningItem {
   status: LearningStatus;
 }
 
-/* ── 목업 데이터 ──────────────────────────────────────────
- * "수집 피드백" StatCard 는 GET /api/agents/feedback/stats 의 totalFeedbacks
- * 로 실연동. "반영 개선"·"대기" 는 백엔드에 해당 집계가 없어 목업 유지.
- * 하단 "학습 항목" 리스트(topic+👍/👎+상태)도 백엔드에 동등 엔드포인트가
- * 없어 목업 유지. (stats 는 topAgents/worstAgents 만 제공 — 형태 불일치)
- */
-const SUMMARY = {
-  collected: "1,284",
-  applied: "37",
-  pending: "12",
-};
-
-const ITEMS: LearningItem[] = [
-  {
-    id: 1,
-    topic: "코드 리뷰 응답의 근거 인용 강화",
-    positive: 142,
-    negative: 18,
-    status: "applied",
-  },
-  {
-    id: 2,
-    topic: "한국어 존댓말 일관성 유지",
-    positive: 98,
-    negative: 7,
-    status: "applied",
-  },
-  {
-    id: 3,
-    topic: "딥 리서치 출처 신뢰도 표기",
-    positive: 64,
-    negative: 21,
-    status: "reviewing",
-  },
-  {
-    id: 4,
-    topic: "장문 요약 시 핵심 누락 감소",
-    positive: 51,
-    negative: 33,
-    status: "reviewing",
-  },
-  {
-    id: 5,
-    topic: "도구 호출 실패 시 사용자 안내 개선",
-    positive: 29,
-    negative: 44,
-    status: "pending",
-  },
-  {
-    id: 6,
-    topic: "수치 계산 검산 단계 추가",
-    positive: 18,
-    negative: 12,
-    status: "pending",
-  },
+/* ── 목업 데이터 ──────────────────────────────────────────── */
+const ITEMS_FALLBACK: LearningItem[] = [
+  { id: 1, topic: "코드 리뷰 응답의 근거 인용 강화", positive: 142, negative: 18, status: "applied" },
+  { id: 2, topic: "한국어 존댓말 일관성 유지", positive: 98, negative: 7, status: "applied" },
+  { id: 3, topic: "딥 리서치 출처 신뢰도 표기", positive: 64, negative: 21, status: "reviewing" },
+  { id: 4, topic: "장문 요약 시 핵심 누락 감소", positive: 51, negative: 33, status: "reviewing" },
+  { id: 5, topic: "도구 호출 실패 시 사용자 안내 개선", positive: 29, negative: 44, status: "pending" },
+  { id: 6, topic: "수치 계산 검산 단계 추가", positive: 18, negative: 12, status: "pending" },
 ];
 
-const STATUS_META: Record<
-  LearningStatus,
-  { label: string; tone: "success" | "warn" | "neutral" }
-> = {
+const STATUS_META: Record<LearningStatus, { label: string; tone: "success" | "warn" | "neutral" }> = {
   applied: { label: "반영됨", tone: "success" },
   reviewing: { label: "검토 중", tone: "warn" },
   pending: { label: "대기", tone: "neutral" },
 };
 
+/* ── 에이전트별 품질 패널 ─────────────────────────────────── */
+function AgentDetailPanel({ agentId }: { agentId: string }) {
+  const [quality, setQuality] = useState<ApiQualityScore | null>(null);
+  const [failures, setFailures] = useState<ApiFailurePattern[]>([]);
+  const [improvements, setImprovements] = useState<ApiImprovement[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!agentId) return;
+    let cancelled = false;
+    setLoading(true);
+    (async () => {
+      try {
+        const [qRes, fRes, iRes] = await Promise.allSettled([
+          ApiClient.get<ApiEnvelope<ApiQualityScore>>(`/api/agents/${agentId}/quality`),
+          ApiClient.get<ApiEnvelope<ApiFailurePattern[]>>(`/api/agents/${agentId}/failures`),
+          ApiClient.get<ApiEnvelope<ApiImprovement[]>>(`/api/agents/${agentId}/improvements`),
+        ]);
+        if (cancelled) return;
+        if (qRes.status === "fulfilled") setQuality(qRes.value?.data ?? null);
+        if (fRes.status === "fulfilled") {
+          const d = fRes.value?.data;
+          setFailures(Array.isArray(d) ? d : []);
+        }
+        if (iRes.status === "fulfilled") {
+          const d = iRes.value?.data;
+          setImprovements(Array.isArray(d) ? d : []);
+        }
+      } catch {
+        // 실패 시 빈 상태 유지
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [agentId]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center gap-2 py-8 text-sm text-muted">
+        <Loader2 className="h-4 w-4 animate-spin" />
+        에이전트 데이터 불러오는 중...
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid gap-4 sm:grid-cols-3">
+      {/* 품질 점수 */}
+      <Card>
+        <CardHeader><CardTitle>품질 점수</CardTitle></CardHeader>
+        <CardContent>
+          {quality ? (
+            <div className="space-y-2">
+              {typeof quality.score === "number" && (
+                <div className="flex items-end gap-1">
+                  <span className="text-3xl font-bold text-fg">{quality.score.toFixed(1)}</span>
+                  <span className="mb-1 text-xs text-muted">/10</span>
+                </div>
+              )}
+              {typeof quality.totalFeedbacks === "number" && (
+                <p className="text-xs text-muted">총 피드백 {quality.totalFeedbacks}건</p>
+              )}
+              {typeof quality.avgRating === "number" && (
+                <p className="text-xs text-muted">평균 평점 {quality.avgRating.toFixed(2)}</p>
+              )}
+              {typeof quality.score !== "number" && typeof quality.totalFeedbacks !== "number" && (
+                <p className="text-xs text-muted">품질 데이터 없음</p>
+              )}
+            </div>
+          ) : (
+            <p className="text-xs text-muted">데이터 없음</p>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* 실패 패턴 */}
+      <Card>
+        <CardHeader><CardTitle>실패 패턴</CardTitle></CardHeader>
+        <CardContent>
+          {failures.length === 0 ? (
+            <p className="text-xs text-muted">기록된 실패 패턴 없음</p>
+          ) : (
+            <ul className="space-y-2">
+              {failures.slice(0, 4).map((f, i) => (
+                <li key={i} className="text-xs text-fg-2">
+                  {f.pattern ? (
+                    <span>{f.pattern}{f.count != null && <span className="ml-1 text-faint">({f.count}회)</span>}</span>
+                  ) : (
+                    <span className="text-faint font-mono">{JSON.stringify(f)}</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* 개선 제안 */}
+      <Card>
+        <CardHeader><CardTitle>개선 제안</CardTitle></CardHeader>
+        <CardContent>
+          {improvements.length === 0 ? (
+            <p className="text-xs text-muted">개선 제안 없음</p>
+          ) : (
+            <ul className="space-y-2">
+              {improvements.slice(0, 4).map((item, i) => (
+                <li key={i} className="flex items-start gap-2 text-xs">
+                  {item.priority && (
+                    <Badge tone={item.priority === "high" ? "danger" : item.priority === "medium" ? "warn" : "neutral"}>
+                      {item.priority}
+                    </Badge>
+                  )}
+                  <span className="text-fg-2">{item.suggestion ?? JSON.stringify(item)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 export default function AgentLearningPage() {
-  const [items] = useState<LearningItem[]>(ITEMS);
-  const [collected, setCollected] = useState<string>(SUMMARY.collected);
+  const [items] = useState<LearningItem[]>(ITEMS_FALLBACK);
+  const [collected, setCollected] = useState("1,284");
+  const [agents, setAgents] = useState<ApiSystemAgent[]>([]);
+  const [selectedAgentId, setSelectedAgentId] = useState<string>("");
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const res = await ApiClient.get<ApiEnvelope<ApiFeedbackStats>>(
-          "/api/agents/feedback/stats",
-        );
+        // 피드백 통계
+        const statsRes = await ApiClient.get<ApiEnvelope<ApiFeedbackStats>>("/api/agents/feedback/stats");
         if (cancelled) return;
-        const stats = res?.data;
+        const stats = statsRes?.data;
         if (stats && typeof stats.totalFeedbacks === "number") {
           setCollected(stats.totalFeedbacks.toLocaleString("ko-KR"));
         }
       } catch {
-        // 401·실패 → 목업 값 유지 (데모)
+        // 목업 값 유지
+      }
+
+      try {
+        // 시스템 에이전트 목록 (드롭다운용)
+        const agentsRes = await ApiClient.get<ApiEnvelope<{ agents: ApiSystemAgent[] }>>("/api/agents");
+        if (cancelled) return;
+        const list = agentsRes?.data?.agents ?? [];
+        setAgents(list);
+        if (list.length > 0 && !selectedAgentId) {
+          setSelectedAgentId(list[0].id);
+        }
+      } catch {
+        // 드롭다운 없이 진행
       }
     })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    return () => { cancelled = true; };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <>
@@ -132,17 +245,35 @@ export default function AgentLearningPage() {
       />
 
       <div className="min-h-0 flex-1 overflow-y-auto p-6">
+        {/* 요약 통계 */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <StatCard
-            label="수집 피드백"
-            value={collected}
-            delta="+126 이번 주"
-            deltaTone="success"
-          />
-          <StatCard label="반영 개선" value={SUMMARY.applied} />
-          <StatCard label="대기" value={SUMMARY.pending} />
+          <StatCard label="수집 피드백" value={collected} delta="+126 이번 주" deltaTone="success" />
+          <StatCard label="반영 개선" value="37" />
+          <StatCard label="대기" value="12" />
         </div>
 
+        {/* 에이전트별 품질 패널 */}
+        {agents.length > 0 && (
+          <div className="mt-6">
+            <div className="mb-4 flex items-center gap-3">
+              <h2 className="text-sm font-semibold text-fg">에이전트 상세 분석</h2>
+              <select
+                value={selectedAgentId}
+                onChange={(e) => setSelectedAgentId(e.target.value)}
+                className="h-8 rounded-md border border-border bg-surface px-2 text-xs text-fg outline-none focus:border-accent"
+              >
+                {agents.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.emoji ? `${a.emoji} ` : ""}{a.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {selectedAgentId && <AgentDetailPanel agentId={selectedAgentId} />}
+          </div>
+        )}
+
+        {/* 학습 항목 리스트 */}
         <Card className="mt-6">
           <CardHeader>
             <CardTitle>학습 항목</CardTitle>
@@ -167,9 +298,7 @@ export default function AgentLearningPage() {
                         <GraduationCap className="h-4 w-4" />
                       </span>
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-medium text-fg">
-                          {it.topic}
-                        </p>
+                        <p className="truncate text-sm font-medium text-fg">{it.topic}</p>
                         <div className="mt-1 flex items-center gap-3 text-xs">
                           <span className="inline-flex items-center gap-1 text-success">
                             <ThumbsUp className="h-3 w-3" />
