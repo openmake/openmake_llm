@@ -17,6 +17,12 @@ function resolveWsUrl(): string {
   const env = process.env.NEXT_PUBLIC_WS_URL;
   if (env) return env;
   const proto = location.protocol === "https:" ? "wss:" : "ws:";
+  // Next dev 직접(:3000, Caddy 미경유)일 때만 백엔드 WS 포트(:52416)로 직접 연결.
+  // 그 외(Caddy 경유 :33000 — 로컬 테스트/외부 공개)는 same-origin → Caddy 가 WS upgrade 를
+  // 백엔드로 프록시한다. (Next.js rewrites 는 WS 를 프록시하지 못하므로 프록시 계층이 필수.)
+  if (location.port === "3000") {
+    return `${proto}//${location.hostname}:52416`;
+  }
   return `${proto}//${location.host}`;
 }
 

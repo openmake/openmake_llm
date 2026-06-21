@@ -1,0 +1,45 @@
+# ============================================================
+# OpenMake LLM — 외부 공개용 리버스 프록시 (Caddy)
+# ============================================================
+# 목적: 외부(rasplay.tplinkdns.com:33000)에서 프론트 + REST + WebSocket 을
+#       단일 origin 으로 접근. 백엔드(52416)는 외부에 직접 노출하지 않는다.
+#
+# 토폴로지:
+#   [외부 브라우저 rasplay.tplinkdns.com:33000]
+#        → [라우터 포트포워딩 33000 → 이 Mac:33000]
+#        → [Caddy :33000]  ──┬─ WS upgrade ─→ 백엔드 Express WS (localhost:52416)
+#                            ├─ /api/*      ─→ 백엔드 REST       (localhost:52416)
+#                            └─ 그 외        ─→ Next.js 페이지/정적 (localhost:3000)
+#
+# 실행:
+#   brew install caddy
+#   caddy run --config /Volumes/MAC_APP/openmake_llm/scripts/caddy/Caddyfile
+#   # 또는 백그라운드: brew services 로 등록하거나 `caddy start`
+#
+# 라우터 설정:
+#   외부 33000 → 이 Mac 의 LAN IP:33000 (기존 33000→3000 을 33000→33000 으로 변경)
+#
+# 주의:
+#   - Caddy reverse_proxy 는 X-Forwarded-Host/Proto/For 를 자동 전달 →
+#     백엔드 buildRedirectUri(OAuth) 가 rasplay:33000 을 올바르게 인식한다.
+#   - WS origin(http://rasplay.tplinkdns.com:33000)은 백엔드 CORS_ORIGINS 에 등록되어 있어야 한다(완료).
+#   - HTTP 운영(HTTPS 아님)이므로 `:33000` 으로 명시 — Caddy 자동 HTTPS 비활성.
+#     추후 도메인+TLS 도입 시 `rasplay.tplinkdns.com` 블록 + `tls` 로 전환 권장.
+
+:33000 {
+	# ── 채팅 WebSocket upgrade → 백엔드 Express WS ──
+	# 단, Next.js dev 의 HMR WebSocket(/_next/*)은 제외해야 한다 — 이를 백엔드로 보내면
+	# 클라이언트 HMR 연결이 깨져 hydration/Fast Refresh 가 동작하지 않는다(앱 인터랙션 전체 정지).
+	@chatws {
+		header Connection *Upgrade*
+		header Upgrade    websocket
+		not path /_next/*
+	}
+	reverse_proxy @chatws localhost:52416
+
+	# ── REST API → 백엔드 직접 (same-origin, x-forwarded-host 전달) ──
+	reverse_proxy /api/* localhost:52416
+
+	# ── 그 외(Next.js 페이지·정적 자산·HMR) ──
+	reverse_proxy localhost:3000
+}

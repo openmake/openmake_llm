@@ -229,6 +229,23 @@ function buildRedirectUri(req: Request, provider: 'google' | 'github', serverPor
 }
 
 /**
+ * OAuth 로그인 성공 후 리다이렉트 (Set-Cookie 동반).
+ *
+ * 302 redirect 대신 200 HTML(meta refresh)로 응답한다 — Next.js dev rewrites(프록시)가
+ * 3xx 응답의 Set-Cookie 헤더를 브라우저로 전파하지 못해 외부 접속 시 로그인 세션이
+ * 게스트로 떨어지던 문제를 우회한다. 200 응답의 Set-Cookie 는 정상 전파됨.
+ * path 는 내부 고정 경로만 전달 (open redirect / XSS 불가).
+ */
+function sendOAuthSuccessRedirect(res: Response, path: string): void {
+    res.status(200).type('html').send(
+        '<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8">' +
+        `<meta http-equiv="refresh" content="0;url=${path}">` +
+        '<title>로그인 완료</title></head>' +
+        `<body style="font-family:sans-serif">로그인 완료. 이동 중…<br><a href="${path}">계속하기</a></body></html>`,
+    );
+}
+
+/**
  * OAuth 인증 관련 API 컨트롤러
  *
  * @class AuthOAuthController
@@ -385,7 +402,7 @@ export class AuthOAuthController {
 
             setTokenCookie(res, result.token);
             setRefreshTokenCookie(res, generateRefreshToken(result.user));
-            res.redirect('/?auth=callback');
+            sendOAuthSuccessRedirect(res, '/?auth=callback');
         } catch (error) {
             log.error('[OAuth Google Callback] 오류:', error);
             res.redirect('/login.html?error=oauth_failed');
@@ -480,7 +497,7 @@ export class AuthOAuthController {
 
             setTokenCookie(res, result.token);
             setRefreshTokenCookie(res, generateRefreshToken(result.user));
-            res.redirect('/?auth=callback');
+            sendOAuthSuccessRedirect(res, '/?auth=callback');
         } catch (error) {
             log.error('[OAuth GitHub Callback] 오류:', error);
             res.redirect('/login.html?error=oauth_failed');
