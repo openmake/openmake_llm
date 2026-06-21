@@ -135,7 +135,9 @@ export async function handleChatMessage(
         if (!userExplicitlyDisabledSearch && (userWebSearchEnabled || isCurrentEventsQuery)) {
             try {
                 const { performWebSearch } = await import('../mcp');
-                const searchResults = await performWebSearch(message, { maxResults: 5, language: userLang });
+                // maxResults 8: 신뢰도 정렬상 Wikipedia 가 상위를 점유해 최신 뉴스가 5개 cut 에서
+                // 누락되던 문제 완화 — 상위 8개로 늘려 News/Naver(최신 시사)가 LLM 컨텍스트에 포함되게 한다.
+                const searchResults = await performWebSearch(message, { maxResults: 8, language: userLang });
                 if (searchResults.length > 0) {
                     const tpl = getLocalizedTemplate(WEB_SEARCH_TEMPLATES, userLang);
                     webSearchContext = `\n\n## \uD83D\uDD0D ${tpl.header} (${new Date().toLocaleDateString(tpl.locale)} )\n` +
