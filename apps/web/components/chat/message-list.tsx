@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import Image from "next/image";
 import { useAppStore } from "@/lib/store";
 import { Markdown } from "./markdown";
 import { cn } from "@/lib/utils";
@@ -16,9 +17,13 @@ export function MessageList() {
   if (chatHistory.length === 0) {
     return (
       <div className="flex h-full flex-col items-center justify-center px-6 text-center">
-        <div className="grid h-14 w-14 place-items-center rounded-2xl bg-accent text-2xl font-bold text-accent-fg shadow-2">
-          O
-        </div>
+        <Image
+          src="/logo.png"
+          alt="OpenMake"
+          width={56}
+          height={56}
+          className="h-14 w-14 rounded-2xl object-contain"
+        />
         <h2 className="mt-5 text-2xl font-bold text-fg">무엇을 도와드릴까요?</h2>
         <p className="mt-2 max-w-md text-sm text-muted">
           멀티모델 오케스트레이션 · MCP 도구 · 딥 리서치 · 자율 에이전트.
