@@ -5,6 +5,8 @@ export default [
     ignores: [
       "**/dist/**",
       "**/build/**",
+      "**/.next/**",
+      "apps/web/**",
       "**/node_modules/**",
       "**/.claude/**",
       "**/*.min.js",
