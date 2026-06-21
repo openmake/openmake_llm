@@ -1,9 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import { useQuery } from "@tanstack/react-query";
 import {
   ArrowUp,
   Globe,
+  KeyRound,
   MessagesSquare,
   Sparkles,
   Square,
@@ -12,21 +15,21 @@ import {
 } from "lucide-react";
 import { useAppStore } from "@/lib/store";
 import { useChatSocket } from "@/lib/use-chat-socket";
+import { fetchModels } from "@/lib/models-api";
 import { cn } from "@/lib/utils";
-
-const MODELS = [
-  { id: "default", label: "Auto" },
-  { id: "pro", label: "Pro" },
-  { id: "fast", label: "Fast" },
-  { id: "think", label: "Think" },
-  { id: "code", label: "Code" },
-  { id: "vision", label: "Vision" },
-];
 
 export function Composer() {
   const { sendChat, abort } = useChatSocket();
   const [text, setText] = useState("");
   const taRef = useRef<HTMLTextAreaElement>(null);
+
+  // 로컬 vLLM + 등록된 외부 LLM(OpenRouter 등) 통합 모델 목록
+  const { data: modelsData } = useQuery({
+    queryKey: ["models"],
+    queryFn: fetchModels,
+    staleTime: 60_000,
+  });
+  const models = modelsData?.models ?? [];
 
   const {
     isGenerating,
@@ -43,6 +46,16 @@ export function Composer() {
     cycleStyle,
     setInputDraft,
   } = useAppStore();
+
+  // 모델 목록 로드 시 현재 selectedModel 이 목록에 없으면 defaultModel 로 동기화
+  useEffect(() => {
+    if (!modelsData) return;
+    if (!modelsData.models.some((m) => m.modelId === selectedModel)) {
+      setSelectedModel(modelsData.defaultModel);
+    }
+    // selectedModel 변동마다 재실행 불필요 — 목록 로드 시점에만 보정
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modelsData]);
 
   const submit = () => {
     if (!text.trim() || isGenerating) return;
@@ -114,19 +127,31 @@ export function Composer() {
           className="block w-full resize-none bg-transparent px-4 pt-2.5 text-sm text-fg outline-none placeholder:text-faint"
         />
 
-        {/* 하단: 모델 셀렉터 + 스타일 + 전송 */}
+        {/* 하단: 모델 셀렉터(로컬 + 외부 LLM) + 키 관리 + 스타일 + 전송 */}
         <div className="flex items-center gap-1.5 px-2.5 pb-2.5 pt-1">
           <select
             value={selectedModel}
             onChange={(e) => setSelectedModel(e.target.value)}
-            className="rounded-md border border-border bg-surface-2 px-2 py-1.5 text-xs font-medium text-fg outline-none"
+            title="모델 선택 (로컬 + 등록한 외부 LLM)"
+            className="max-w-[40%] truncate rounded-md border border-border bg-surface-2 px-2 py-1.5 text-xs font-medium text-fg outline-none"
           >
-            {MODELS.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.label}
+            {models.length === 0 && <option value="">모델 로딩…</option>}
+            {models.map((m) => (
+              <option key={m.modelId} value={m.modelId}>
+                {m.name}
+                {m.isFree ? " · 무료" : ""}
+                {m.available === false ? " (불가)" : ""}
               </option>
             ))}
           </select>
+
+          <Link
+            href="/api-keys"
+            title="외부 LLM(OpenRouter 등) 키 등록·관리"
+            className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-muted transition hover:bg-surface-2 hover:text-fg"
+          >
+            <KeyRound className="h-4 w-4" />
+          </Link>
 
           <button
             onClick={cycleStyle}
