@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ArrowUp,
   Globe,
@@ -37,9 +37,11 @@ export function Composer() {
     agentTaskMode,
     selectedModel,
     style,
+    inputDraft,
     toggle,
     setSelectedModel,
     cycleStyle,
+    setInputDraft,
   } = useAppStore();
 
   const submit = () => {
@@ -48,6 +50,19 @@ export function Composer() {
     setText("");
     if (taRef.current) taRef.current.style.height = "auto";
   };
+
+  // 빠른 시작 카드(message-list)에서 설정한 draft 를 textarea 에 prefill 후 소비.
+  useEffect(() => {
+    if (!inputDraft) return;
+    setText(inputDraft);
+    setInputDraft("");
+    const ta = taRef.current;
+    if (ta) {
+      ta.focus();
+      ta.style.height = "auto";
+      ta.style.height = Math.min(ta.scrollHeight, 200) + "px";
+    }
+  }, [inputDraft, setInputDraft]);
 
   const TOGGLES = [
     { key: "discussionMode" as const, on: discussionMode, icon: MessagesSquare, label: "토론" },

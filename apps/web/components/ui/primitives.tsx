@@ -49,7 +49,7 @@ export function Card({
   return (
     <div
       className={cn(
-        "rounded-lg border border-border bg-surface shadow-1",
+        "rounded-lg border border-border bg-surface shadow-1 overflow-hidden",
         className,
       )}
       {...props}
@@ -156,7 +156,7 @@ export function StatCard({
 export function Table({ children }: { children: React.ReactNode }) {
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-sm">{children}</table>
+      <table className="min-w-full text-sm">{children}</table>
     </div>
   );
 }
