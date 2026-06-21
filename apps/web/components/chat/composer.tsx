@@ -1,12 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import {
   ArrowUp,
   Globe,
-  KeyRound,
   MessagesSquare,
   Sparkles,
   Square,
@@ -29,8 +27,6 @@ export function Composer() {
     queryFn: fetchModels,
     staleTime: 60_000,
   });
-  const models = modelsData?.models ?? [];
-
   const {
     isGenerating,
     thinkingEnabled,
@@ -127,32 +123,8 @@ export function Composer() {
           className="block w-full resize-none bg-transparent px-4 pt-2.5 text-sm text-fg outline-none placeholder:text-faint"
         />
 
-        {/* 하단: 모델 셀렉터(로컬 + 외부 LLM) + 키 관리 + 스타일 + 전송 */}
+        {/* 하단: 스타일 + 전송 (모델 선택은 설정 → 기본 모델에서, 채팅창엔 모델명 비표시) */}
         <div className="flex items-center gap-1.5 px-2.5 pb-2.5 pt-1">
-          <select
-            value={selectedModel}
-            onChange={(e) => setSelectedModel(e.target.value)}
-            title="모델 선택 (로컬 + 등록한 외부 LLM)"
-            className="max-w-[40%] truncate rounded-md border border-border bg-surface-2 px-2 py-1.5 text-xs font-medium text-fg outline-none"
-          >
-            {models.length === 0 && <option value="">모델 로딩…</option>}
-            {models.map((m) => (
-              <option key={m.modelId} value={m.modelId}>
-                {m.name}
-                {m.isFree ? " · 무료" : ""}
-                {m.available === false ? " (불가)" : ""}
-              </option>
-            ))}
-          </select>
-
-          <Link
-            href="/api-keys"
-            title="외부 LLM(OpenRouter 등) 키 등록·관리"
-            className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-muted transition hover:bg-surface-2 hover:text-fg"
-          >
-            <KeyRound className="h-4 w-4" />
-          </Link>
-
           <button
             onClick={cycleStyle}
             className="rounded-md px-2 py-1.5 text-xs font-medium capitalize text-muted hover:bg-surface-2 hover:text-fg"
