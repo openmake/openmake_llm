@@ -33,6 +33,72 @@ import { USER_CONTEXT_LIMITS, AGENT_LOOP_LIMITS } from '../../config/runtime-lim
 
 const logger = createLogger('MessagePipeline');
 
+/**
+ * Cross-conversation Memory(/remember) + Custom Instructions 블록을 조립한다.
+ * strategy 경로와 외부 provider 경로 양쪽에서 동일하게 호출 (claude.ai Memory/CI 동등).
+ * 인증 사용자(userId 명시)만 적용 — guest 미적용. 각 조회 실패 시 빈 블록(graceful fallback).
+ *
+ * 회귀 배경: 과거 strategy 경로에만 인라인되어 있어, 외부 provider 분기
+ * (LOCAL_STRATEGY_PATH OFF 기본이라 로컬 채팅 포함)에서 memory/custom instructions 가
+ * 전혀 주입되지 않던 버그를 헬퍼 추출로 양 경로 대칭화.
+ */
+async function buildUserContextBlocks(
+    userId: string | undefined,
+): Promise<{ memoryBlock: string; customInstructionsBlock: string }> {
+    let customInstructionsBlock = '';
+    let memoryBlock = '';
+    if (userId && userId !== 'guest') {
+        try {
+            const { UserRepository } = await import('../../data/repositories/user-repository');
+            const { getPool } = await import('../../data/models/unified-database');
+            const userRepo = new UserRepository(getPool());
+            const ci = await userRepo.getCustomInstructions(userId);
+            if (ci && ci.trim().length > 0) {
+                // 토큰 cap — 매 턴 고정 비용이므로 무제한 prepend 방지 (head 보존 truncate)
+                let ciText = ci.trim();
+                const maxCi = USER_CONTEXT_LIMITS.MAX_CUSTOM_INSTRUCTIONS_TOKENS;
+                if (estimateTokens(ciText) > maxCi) {
+                    const ratio = ciText.length / estimateTokens(ciText);
+                    ciText = ciText.slice(0, Math.floor(maxCi * ratio)).trimEnd() + ' …(생략됨)';
+                    logger.info(`custom_instructions 토큰 cap 적용 (>${maxCi})`);
+                }
+                customInstructionsBlock = `## 👤 User Custom Instructions\n${ciText}\n\n---\n\n`;
+            }
+        } catch (e) {
+            logger.warn('custom_instructions 조회 실패 (계속 진행):', e);
+        }
+
+        try {
+            const { UserMemoryRepository } = await import('../../data/repositories/user-memory-repository');
+            const { getPool } = await import('../../data/models/unified-database');
+            const memRepo = new UserMemoryRepository(getPool());
+            const memories = await memRepo.listActiveByUser(userId, 50);
+            if (memories.length > 0) {
+                const maxMem = USER_CONTEXT_LIMITS.MAX_MEMORY_TOKENS;
+                const kept: typeof memories = [];
+                let usedTokens = 0;
+                for (const m of memories) {
+                    const t = estimateTokens(m.content) + 4;
+                    if (usedTokens + t > maxMem && kept.length > 0) break;
+                    kept.push(m);
+                    usedTokens += t;
+                }
+                if (kept.length < memories.length) {
+                    logger.info(`user_memories 토큰 cap 적용 (${kept.length}/${memories.length}, >${maxMem} tok)`);
+                }
+                const lines = kept.map((m, i) => `${i + 1}. ${m.content}`).join('\n');
+                memoryBlock = `## 🧠 User Memory (cross-conversation)\n${lines}\n\n---\n\n`;
+                void memRepo.touchAccessed(kept.map(m => m.id)).catch(e =>
+                    logger.warn('memory touch 실패 (무시):', e),
+                );
+            }
+        } catch (e) {
+            logger.warn('user_memories 조회 실패 (계속 진행):', e);
+        }
+    }
+    return { memoryBlock, customInstructionsBlock };
+}
+
 export async function runMessagePipeline(svc: ChatService, 
     req: ChatMessageRequest,
     onToken: (token: string) => void,
@@ -249,7 +315,19 @@ export async function runMessagePipeline(svc: ChatService,
     // strategies 우회하지만 agent 페르소나 + buildContextForLLM 결과 + 언어 정책은 통합.
     // tool calling / thinking / discussion / deep research 는 여전히 미지원.
     if (externalResolved) {
-        const { agentSystemMessage: industryAgentSysMsg } = await agentPromise;
+        const { agentSystemMessage: industryAgentSysMsg, selectedAgent } = await agentPromise;
+
+        // skill tool_bindings 캐시 — 외부 provider 경로(LOCAL_STRATEGY_PATH OFF 기본이라 로컬 포함)도
+        // getAllowedTools() 동기 머지가 skill required/allowed/denied 를 반영하도록 한다.
+        // (회귀: loadSkillBindings 가 아래 strategy 경로(Step 5 합류 직후)에만 있어, 외부 분기는
+        //  skillBindings=[] 인 채 머지되어 skill 의 도구 바인딩이 전부 무시되던 버그.)
+        await svc.loadSkillBindings(selectedAgent.id, reqCtx);
+
+        // Memory + Custom Instructions — strategy 경로와 동일하게 외부 provider 경로에도 주입.
+        // (회귀: 과거 외부 분기가 memory/CI 조립 코드(strategy 경로 하단)에 도달 못 해
+        //  /remember 메모리·커스텀 지시가 기본 채팅에서 전혀 적용되지 않던 버그.)
+        const { memoryBlock: extMemoryBlock, customInstructionsBlock: extCustomInstructionsBlock } =
+            await buildUserContextBlocks(userId);
 
         // 2026-05-26 옵션 B 통합 (외부 provider 경로):
         // Custom Agent (user_agents) 활성 시 산업 agent 라우팅 우회 + allowedSkills 주입.
@@ -284,6 +362,8 @@ export async function runMessagePipeline(svc: ChatService,
             agentSystemMessage: agentSysMsgForExternal,
             enhancedMessage: finalEnhancedMessage,
             resolvedLanguage: languagePolicy?.resolvedLanguage,
+            memoryBlock: extMemoryBlock,
+            customInstructionsBlock: extCustomInstructionsBlock,
         }, reqCtx);
     }
 
@@ -360,66 +440,9 @@ export async function runMessagePipeline(svc: ChatService,
     // getAllowedTools() 의 동기 머지에서 사용. agentId 가 결정된 직후 호출.
     await svc.loadSkillBindings(selectedAgent.id, reqCtx);
 
-    // Custom Instructions prepend — 사용자별 영구 system prompt 지시문 (2026-05-26).
-    // T1~T9 분석의 inter-turn verbosity 해결책. NULL/빈 문자열은 자동 스킵.
-    // 인증된 사용자 (userId 명시) 에만 적용 — guest 세션은 미적용.
-    let customInstructionsBlock = '';
-    let memoryBlock = '';
-    if (userId && userId !== 'guest') {
-        try {
-            const { UserRepository } = await import('../../data/repositories/user-repository');
-            const { getPool } = await import('../../data/models/unified-database');
-            const userRepo = new UserRepository(getPool());
-            const ci = await userRepo.getCustomInstructions(userId);
-            if (ci && ci.trim().length > 0) {
-                // 토큰 cap — 매 턴 고정 비용이므로 무제한 prepend 방지 (head 보존 truncate)
-                let ciText = ci.trim();
-                const maxCi = USER_CONTEXT_LIMITS.MAX_CUSTOM_INSTRUCTIONS_TOKENS;
-                if (estimateTokens(ciText) > maxCi) {
-                    // 대략 토큰당 char 비율로 head 자르고 안내 부착 (정확 토큰 재확인 불필요 — 보수적)
-                    const ratio = ciText.length / estimateTokens(ciText);
-                    ciText = ciText.slice(0, Math.floor(maxCi * ratio)).trimEnd() + ' …(생략됨)';
-                    logger.info(`custom_instructions 토큰 cap 적용 (>${maxCi})`);
-                }
-                customInstructionsBlock = `## 👤 User Custom Instructions\n${ciText}\n\n---\n\n`;
-            }
-        } catch (e) {
-            logger.warn('custom_instructions 조회 실패 (계속 진행):', e);
-        }
-
-        // Cross-conversation Memory prepend (2026-05-26 Phase 3-A).
-        // /remember 로 저장된 explicit memory 를 최신 50개까지 prepend.
-        // claude.ai/ChatGPT Memory 동등. 조회 실패 시 silent fallback.
-        try {
-            const { UserMemoryRepository } = await import('../../data/repositories/user-memory-repository');
-            const { getPool } = await import('../../data/models/unified-database');
-            const memRepo = new UserMemoryRepository(getPool());
-            const memories = await memRepo.listActiveByUser(userId, 50);
-            if (memories.length > 0) {
-                // 토큰 budget 누적 — 최신순으로 cap 도달 전까지만 포함 (무제한 prepend 방지)
-                const maxMem = USER_CONTEXT_LIMITS.MAX_MEMORY_TOKENS;
-                const kept: typeof memories = [];
-                let usedTokens = 0;
-                for (const m of memories) {
-                    const t = estimateTokens(m.content) + 4;
-                    if (usedTokens + t > maxMem && kept.length > 0) break;
-                    kept.push(m);
-                    usedTokens += t;
-                }
-                if (kept.length < memories.length) {
-                    logger.info(`user_memories 토큰 cap 적용 (${kept.length}/${memories.length}, >${maxMem} tok)`);
-                }
-                const lines = kept.map((m, i) => `${i + 1}. ${m.content}`).join('\n');
-                memoryBlock = `## 🧠 User Memory (cross-conversation)\n${lines}\n\n---\n\n`;
-                // 접근 시점 갱신 — fire-and-forget (포함된 항목만)
-                void memRepo.touchAccessed(kept.map(m => m.id)).catch(e =>
-                    logger.warn('memory touch 실패 (무시):', e),
-                );
-            }
-        } catch (e) {
-            logger.warn('user_memories 조회 실패 (계속 진행):', e);
-        }
-    }
+    // Custom Instructions + Cross-conversation Memory prepend (2026-05-26).
+    // 헬퍼로 추출되어 외부 provider 분기와 동일 로직 사용 (claude.ai Memory/CI 동등).
+    const { memoryBlock, customInstructionsBlock } = await buildUserContextBlocks(userId);
 
     // Phase 2 Custom Agent (2026-05-26): user agent system prompt 가 있으면
     // 18 산업 agentSystemMessage 자리에 우선 적용 (사용자 명시 의도 존중).

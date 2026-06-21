@@ -44,6 +44,10 @@ export interface StreamFromExternalContext {
     agentSystemMessage?: string;
     enhancedMessage?: string;
     resolvedLanguage?: string;
+    /** Cross-conversation Memory 블록 (claude.ai Memory 동등). 시스템 프롬프트 앞쪽에 prepend. */
+    memoryBlock?: string;
+    /** Custom Instructions 블록 (사용자 영구 지시). 시스템 프롬프트 앞쪽에 prepend. */
+    customInstructionsBlock?: string;
 }
 
 /**
@@ -58,6 +62,16 @@ export async function streamFromExternalProvider(
 ): Promise<string> {
     const messages: ChatMessage[] = [];
     const systemPromptParts: string[] = [];
+
+    // Memory + Custom Instructions 를 시스템 프롬프트 앞쪽에 배치 (strategy 경로의
+    // combinedSystemPrompt = memoryBlock + customInstructionsBlock + ... 순서와 동일).
+    // claude.ai Memory/Custom Instructions 동등 — 사용자 맥락을 가드/페르소나보다 먼저 노출.
+    if (ctx.memoryBlock) {
+        systemPromptParts.push(ctx.memoryBlock.trim());
+    }
+    if (ctx.customInstructionsBlock) {
+        systemPromptParts.push(ctx.customInstructionsBlock.trim());
+    }
 
     // Phase 2026-05-26: 외부 provider 도 Identity Guard + Response Discipline 적용.
     // 본 가드 미적용 시 Gemini/GPT 가 "Here's a thinking process", 단계 1-N,
