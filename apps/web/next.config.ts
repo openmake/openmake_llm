@@ -19,6 +19,10 @@ const nextConfig: NextConfig = {
     "@openmake/api-client",
     "@openmake/config",
   ],
+  // Next 16 dev: 외부 origin(rasplay) 에서 /_next/* (HMR 등) 접근을 기본 차단 → HMR WS 실패로
+  // 클라이언트 hydration 이 죽어 게스트로 표시됨. 외부 공개 dev 접속을 허용한다.
+  // (운영은 next build + next start 권장 — production 은 HMR 자체가 없어 이 문제 무관.)
+  allowedDevOrigins: ["rasplay.tplinkdns.com", "localhost", "127.0.0.1"],
   async rewrites() {
     return [
       { source: "/api/:path*", destination: `${API_PROXY_TARGET}/api/:path*` },
