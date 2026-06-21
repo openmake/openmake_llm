@@ -33,6 +33,9 @@ interface AppState {
   isGenerating: boolean;
   /** empty state 빠른 시작 카드 → composer prefill 용 드래프트 */
   inputDraft: string;
+  /** 현재 응답에 선택된 에이전트 + 활성 스킬 (ws agent_selected / skills_activated) */
+  activeAgent: { name: string; emoji?: string } | null;
+  activeSkills: string[];
 
   // 모드 토글 (기존 state.js)
   thinkingEnabled: boolean;
@@ -56,6 +59,8 @@ interface AppState {
   setStreaming: (v: boolean) => void;
   setCurrentSessionId: (id: string | null) => void;
   setInputDraft: (t: string) => void;
+  setActiveAgent: (a: { name: string; emoji?: string } | null) => void;
+  setActiveSkills: (s: string[]) => void;
   clearChat: () => void;
 
   toggle: (
@@ -78,6 +83,8 @@ export const useAppStore = create<AppState>((set) => ({
   currentSessionId: null,
   isGenerating: false,
   inputDraft: "",
+  activeAgent: null,
+  activeSkills: [],
 
   thinkingEnabled: true,
   discussionMode: false,
@@ -115,7 +122,10 @@ export const useAppStore = create<AppState>((set) => ({
     }),
   setCurrentSessionId: (id) => set({ currentSessionId: id }),
   setInputDraft: (t) => set({ inputDraft: t }),
-  clearChat: () => set({ chatHistory: [], currentSessionId: null }),
+  setActiveAgent: (a) => set({ activeAgent: a }),
+  setActiveSkills: (s) => set({ activeSkills: s }),
+  clearChat: () =>
+    set({ chatHistory: [], currentSessionId: null, activeAgent: null, activeSkills: [] }),
 
   toggle: (key) => set((s) => ({ [key]: !s[key] }) as Partial<AppState>),
   setSelectedModel: (m) => set({ selectedModel: m }),

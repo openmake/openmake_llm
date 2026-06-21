@@ -1,4 +1,5 @@
 import { MessageList } from "@/components/chat/message-list";
+import { ActiveContext } from "@/components/chat/active-context";
 import { Composer } from "@/components/chat/composer";
 
 export default function ChatPage() {
@@ -18,6 +19,7 @@ export default function ChatPage() {
         <MessageList />
       </div>
 
+      <ActiveContext />
       <Composer />
     </>
   );
