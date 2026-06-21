@@ -101,11 +101,56 @@ export async function performWebSearch(query: string, options: { maxResults?: nu
 
     scored.sort((a, b) => b.combinedScore - a.combinedScore);
 
-    return applyPerDomainCap(
-        scored.map(s => s.result),
+    const sortedResults = scored.map(s => s.result);
+    const ranked = applyPerDomainCap(
+        sortedResults,
         maxResults,
         SEARCH_RELIABILITY.MAX_PER_DOMAIN,
     );
+
+    // 사실성 보강: 백과/레퍼런스 소스가 컷오프에서 누락되면 보장 포함 (현직 인물·직책 등 사실 질문 정확도)
+    return ensureReferenceResults(ranked, sortedResults, maxResults);
+}
+
+/**
+ * 백과/레퍼런스 소스(REFERENCE_DOMAINS)를 최종 결과에 최소 개수 보장한다.
+ *
+ * relevance 가 수집 순서 기반이라 백과 결과가 뉴스 가십에 밀려 top-N 컷오프에서 잘리는 문제를
+ * 보정한다. 부족분만큼 점수 상위 백과 결과를 **앞쪽**에 삽입(LLM 우선 노출)하고,
+ * maxResults 한도를 유지하기 위해 비-레퍼런스 결과를 뒤에서 밀어낸다.
+ *
+ * @param ranked - applyPerDomainCap 적용 후 최종 후보 (점수 내림차순)
+ * @param sortedResults - 점수 내림차순 전체 결과 풀
+ * @param maxResults - 최종 최대 개수
+ */
+export function ensureReferenceResults(
+    ranked: SearchResult[],
+    sortedResults: SearchResult[],
+    maxResults: number,
+): SearchResult[] {
+    const min = SEARCH_RELIABILITY.MIN_REFERENCE_RESULTS;
+    if (min <= 0) return ranked;
+
+    const isReference = (r: SearchResult): boolean => {
+        try {
+            const host = new URL(r.url).hostname.toLowerCase();
+            return SEARCH_RELIABILITY.REFERENCE_DOMAINS.some(d => host.includes(d));
+        } catch {
+            return false;
+        }
+    };
+
+    const have = ranked.filter(isReference).length;
+    if (have >= min) return ranked;
+
+    const inRanked = new Set(ranked.map(r => r.url));
+    const additions = sortedResults
+        .filter(r => isReference(r) && !inRanked.has(r.url))
+        .slice(0, min - have);
+    if (additions.length === 0) return ranked;
+
+    // 백과를 앞에 배치 → 비-레퍼런스 결과는 뒤에서 밀려남 (maxResults 유지)
+    return [...additions, ...ranked].slice(0, maxResults);
 }
 
 /**

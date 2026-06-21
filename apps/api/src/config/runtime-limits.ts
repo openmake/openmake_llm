@@ -661,6 +661,15 @@ export const SEARCH_RELIABILITY = {
      * 0 이하면 비활성(무제한). env override: SEARCH_MAX_PER_DOMAIN. 기본 5.
      */
     MAX_PER_DOMAIN: Number(process.env.SEARCH_MAX_PER_DOMAIN) || 5,
+    /**
+     * 백과/레퍼런스 도메인 (사실성 보강 대상).
+     * 랭킹은 수집 순서(relevance) 가중이 커서 백과가 뉴스 가십에 밀려 컷오프되는 문제가 있다.
+     * 현직 인물·직책 같은 사실 질문에서 백과 본문(예: "제21대 대선 이재명 당선")이 LLM 입력에서
+     * 누락되지 않도록, 최종 결과에 최소 MIN_REFERENCE_RESULTS 개를 보장 포함한다.
+     */
+    REFERENCE_DOMAINS: ['wikipedia.org', 'namu.wiki', 'britannica.com'] as readonly string[],
+    /** 최종 결과에 보장 포함할 백과/레퍼런스 최소 개수. 0 이하면 비활성. env: SEARCH_MIN_REFERENCE. 기본 4. */
+    MIN_REFERENCE_RESULTS: Number(process.env.SEARCH_MIN_REFERENCE ?? 4),
 } as const;
 
 // ============================================
