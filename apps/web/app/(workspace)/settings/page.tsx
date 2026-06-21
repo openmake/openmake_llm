@@ -20,11 +20,11 @@ import {
   PageHeader,
 } from "@/components/ui/primitives";
 import type { ApiSuccess } from "@openmake/shared-types";
-import { ApiClient } from "@/lib/api-client";
+import { ApiClient, ApiError } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 
 /* ── 탭 정의 ────────────────────────────────────────────── */
-type TabId = "general" | "model" | "interface" | "notifications" | "privacy";
+type TabId = "general" | "model" | "interface" | "notifications" | "privacy" | "security";
 
 const TABS: { id: TabId; label: string; icon: LucideIcon }[] = [
   { id: "general", label: "일반", icon: Settings },
@@ -32,6 +32,7 @@ const TABS: { id: TabId; label: string; icon: LucideIcon }[] = [
   { id: "interface", label: "인터페이스", icon: Palette },
   { id: "notifications", label: "알림", icon: Bell },
   { id: "privacy", label: "개인정보", icon: ShieldCheck },
+  { id: "security", label: "보안", icon: ShieldCheck },
 ];
 
 const MODEL_PROFILES = [
@@ -157,14 +158,101 @@ export default function SettingsPage() {
   // 알림
   const [emailAlerts, setEmailAlerts] = useState(true);
   const [pushAlerts, setPushAlerts] = useState(false);
+  const [pushSupported, setPushSupported] = useState<boolean | null>(null);
+  const [pushSwReady, setPushSwReady] = useState(false);
+  const [pushLoading, setPushLoading] = useState(false);
 
   // 개인정보
   const [saveHistory, setSaveHistory] = useState(true);
   const [memoryLearning, setMemoryLearning] = useState(true);
 
+  // 보안 — 비밀번호 변경
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [pwSaving, setPwSaving] = useState(false);
+  const [pwMessage, setPwMessage] = useState<{ text: string; ok: boolean } | null>(null);
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<string | null>(null);
+
+  // 푸시 지원 여부 및 현재 구독 상태 초기화
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const supported =
+      "serviceWorker" in navigator && "PushManager" in window;
+    setPushSupported(supported);
+    if (!supported) return;
+
+    navigator.serviceWorker.ready
+      .then((reg) => {
+        setPushSwReady(true);
+        return reg.pushManager.getSubscription();
+      })
+      .then((sub) => {
+        if (sub) setPushAlerts(true);
+      })
+      .catch(() => {
+        // SW 등록 안 됨
+      });
+  }, []);
+
+  function urlBase64ToUint8Array(base64String: string): ArrayBuffer {
+    const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+    const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+    const rawData = atob(base64);
+    const arr = new Uint8Array(rawData.length);
+    for (let i = 0; i < rawData.length; i++) {
+      arr[i] = rawData.charCodeAt(i);
+    }
+    return arr.buffer;
+  }
+
+  async function handlePushToggle(on: boolean) {
+    if (typeof window === "undefined") return;
+    setPushLoading(true);
+    try {
+      if (on) {
+        const permission = await Notification.requestPermission();
+        if (permission !== "granted") {
+          setPushLoading(false);
+          return;
+        }
+        const reg = await navigator.serviceWorker.ready;
+        let sub = await reg.pushManager.getSubscription();
+        if (!sub) {
+          const vapidRes = await ApiClient.get<{ data: { publicKey: string } }>(
+            "/api/push/vapid-key",
+          );
+          const key = vapidRes?.data?.publicKey;
+          if (!key) throw new Error("VAPID key 없음");
+          sub = await reg.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: urlBase64ToUint8Array(key),
+          });
+        }
+        const json = sub.toJSON();
+        await ApiClient.post("/api/push/subscribe", {
+          endpoint: sub.endpoint,
+          keys: json.keys,
+        });
+        setPushAlerts(true);
+      } else {
+        const reg = await navigator.serviceWorker.ready;
+        const sub = await reg.pushManager.getSubscription();
+        if (sub) {
+          await sub.unsubscribe();
+          await ApiClient.post("/api/push/unsubscribe", { endpoint: sub.endpoint });
+        }
+        setPushAlerts(false);
+      }
+    } catch (err) {
+      console.error("push toggle error", err);
+    } finally {
+      setPushLoading(false);
+    }
+  }
 
   // custom-instructions 만 실제 API 연동 (나머지는 로컬/목업)
   useEffect(() => {
@@ -200,6 +288,31 @@ export default function SettingsPage() {
       setSavedAt(null);
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handlePasswordChange() {
+    if (newPassword !== confirmPassword) {
+      setPwMessage({ text: "새 비밀번호가 일치하지 않습니다.", ok: false });
+      return;
+    }
+    if (newPassword.length < 8) {
+      setPwMessage({ text: "새 비밀번호는 8자 이상이어야 합니다.", ok: false });
+      return;
+    }
+    setPwSaving(true);
+    setPwMessage(null);
+    try {
+      await ApiClient.put("/api/auth/password", { currentPassword, newPassword });
+      setPwMessage({ text: "비밀번호가 변경되었습니다.", ok: true });
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : "비밀번호 변경에 실패했습니다.";
+      setPwMessage({ text: msg, ok: false });
+    } finally {
+      setPwSaving(false);
     }
   }
 
@@ -363,7 +476,25 @@ export default function SettingsPage() {
                     title="푸시 알림"
                     description="브라우저 푸시로 실시간 알림을 받습니다."
                   >
-                    <Toggle checked={pushAlerts} onChange={setPushAlerts} />
+                    {pushSupported === false ? (
+                      <p className="text-xs text-muted">
+                        이 브라우저는 푸시 알림을 지원하지 않습니다.
+                      </p>
+                    ) : pushSupported === true && !pushSwReady ? (
+                      <p className="text-xs text-muted">
+                        서비스 워커가 등록되지 않아 푸시 알림을 사용할 수 없습니다.
+                      </p>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <Toggle
+                          checked={pushAlerts}
+                          onChange={(v) => void handlePushToggle(v)}
+                        />
+                        {pushLoading && (
+                          <Loader2 className="h-4 w-4 animate-spin text-muted" />
+                        )}
+                      </div>
+                    )}
                   </FieldRow>
                 </CardContent>
               </Card>
@@ -390,6 +521,68 @@ export default function SettingsPage() {
                   >
                     <Toggle checked={saveHistory} onChange={setSaveHistory} />
                   </FieldRow>
+                </CardContent>
+              </Card>
+            )}
+
+            {tab === "security" && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>비밀번호 변경</CardTitle>
+                </CardHeader>
+                <CardContent className="py-0">
+                  {pwMessage && (
+                    <div
+                      className={cn(
+                        "my-4 rounded-md px-3 py-2 text-xs",
+                        pwMessage.ok
+                          ? "bg-success-soft text-success"
+                          : "bg-danger-soft text-danger",
+                      )}
+                    >
+                      {pwMessage.text}
+                    </div>
+                  )}
+                  <FieldRow title="현재 비밀번호">
+                    <input
+                      type="password"
+                      value={currentPassword}
+                      onChange={(e) => setCurrentPassword(e.target.value)}
+                      placeholder="••••••••"
+                      className="h-9 w-full rounded-md border border-border-strong bg-surface px-3 text-sm text-fg outline-none transition focus:border-accent"
+                    />
+                  </FieldRow>
+                  <FieldRow title="새 비밀번호" description="8자 이상">
+                    <input
+                      type="password"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      placeholder="••••••••"
+                      className="h-9 w-full rounded-md border border-border-strong bg-surface px-3 text-sm text-fg outline-none transition focus:border-accent"
+                    />
+                  </FieldRow>
+                  <FieldRow title="새 비밀번호 확인">
+                    <input
+                      type="password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      placeholder="••••••••"
+                      className="h-9 w-full rounded-md border border-border-strong bg-surface px-3 text-sm text-fg outline-none transition focus:border-accent"
+                    />
+                  </FieldRow>
+                  <div className="py-4">
+                    <Button
+                      onClick={() => void handlePasswordChange()}
+                      disabled={pwSaving || !currentPassword || !newPassword || !confirmPassword}
+                    >
+                      {pwSaving ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Save className="h-4 w-4" />
+                      )}
+                      비밀번호 변경
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
             )}

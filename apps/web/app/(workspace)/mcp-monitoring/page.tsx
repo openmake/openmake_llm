@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, AlertTriangle } from "lucide-react";
 import {
   Button,
   Badge,
@@ -33,6 +33,19 @@ interface SummaryView {
   totalCalls: string;
   avgLatency: string;
   errorRate: string;
+}
+
+/* ── 추가 타입 ───────────────────────────────────────────── */
+interface TopCrashedItem {
+  server_name: string;
+  crash_count: number;
+  last_crash_at: string;
+}
+
+interface CrashTrendItem {
+  hour: string;
+  spawned: number;
+  crashed: number;
 }
 
 /* ── 타입 ────────────────────────────────────────────────── */
@@ -152,10 +165,30 @@ async function fetchSummaryView(): Promise<SummaryView | null> {
 
 export default function McpMonitoringPage() {
   const [summary, setSummary] = useState<SummaryView>(SUMMARY);
+  const [topCrashed, setTopCrashed] = useState<TopCrashedItem[]>([]);
+  const [crashTrend, setCrashTrend] = useState<CrashTrendItem[]>([]);
+
+  async function loadExtraStats() {
+    try {
+      const [tc, ct] = await Promise.allSettled([
+        ApiClient.get<ApiEnvelope<{ items: TopCrashedItem[]; limit: number }>>(
+          "/api/admin/mcp/monitoring/top-crashed?limit=10",
+        ),
+        ApiClient.get<ApiEnvelope<{ timeline: CrashTrendItem[] }>>(
+          "/api/admin/mcp/monitoring/crash-trend",
+        ),
+      ]);
+      if (tc.status === "fulfilled") setTopCrashed(tc.value?.data?.items ?? []);
+      if (ct.status === "fulfilled") setCrashTrend(ct.value?.data?.timeline ?? []);
+    } catch {
+      /* 비관리자/실패 시 빈 상태 유지 */
+    }
+  }
 
   const refresh = useCallback(async () => {
     const view = await fetchSummaryView();
     if (view) setSummary(view);
+    await loadExtraStats();
   }, []);
 
   useEffect(() => {
@@ -165,6 +198,7 @@ export default function McpMonitoringPage() {
       if (!cancelled && view) setSummary(view);
     };
     void tick();
+    void loadExtraStats();
     const id = setInterval(() => void tick(), 30_000);
     return () => {
       cancelled = true;
@@ -285,6 +319,92 @@ export default function McpMonitoringPage() {
                   ))}
                 </tbody>
               </Table>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* M5: Top 크래시 서버 + 크래시 추이 */}
+        <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <Card>
+            <CardHeader>
+              <CardTitle>Top 크래시 서버</CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              {topCrashed.length === 0 ? (
+                <p className="px-5 py-8 text-center text-sm text-muted">데이터 없음</p>
+              ) : (
+                <Table>
+                  <thead>
+                    <tr>
+                      <Th>서버</Th>
+                      <Th className="text-right">크래시</Th>
+                      <Th>마지막 크래시</Th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {topCrashed.map((item) => (
+                      <tr key={item.server_name} className="transition hover:bg-surface-2">
+                        <Td>
+                          <div className="flex items-center gap-2">
+                            <AlertTriangle className="h-3.5 w-3.5 text-warn" />
+                            <span className="font-mono text-xs text-fg-2">{item.server_name}</span>
+                          </div>
+                        </Td>
+                        <Td className="text-right font-mono text-danger">{item.crash_count}</Td>
+                        <Td className="text-xs text-muted">
+                          {item.last_crash_at
+                            ? new Date(item.last_crash_at).toLocaleString("ko-KR", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })
+                            : "—"}
+                        </Td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>크래시 추이 (24h)</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {crashTrend.length === 0 ? (
+                <p className="py-8 text-center text-sm text-muted">데이터 없음</p>
+              ) : (
+                <div className="space-y-2">
+                  {crashTrend.map((item) => {
+                    const maxVal = Math.max(...crashTrend.map((t) => t.spawned), 1);
+                    const spawnedPct = (item.spawned / maxVal) * 100;
+                    const crashedPct = item.spawned > 0 ? (item.crashed / item.spawned) * 100 : 0;
+                    return (
+                      <div key={item.hour}>
+                        <div className="mb-0.5 flex items-center justify-between text-[11px]">
+                          <span className="font-mono text-muted">{item.hour}</span>
+                          <span className="text-faint">
+                            spawn {item.spawned} ·{" "}
+                            <span className={item.crashed > 0 ? "text-danger" : "text-muted"}>
+                              crash {item.crashed}
+                            </span>
+                          </span>
+                        </div>
+                        <div className="relative h-2 overflow-hidden rounded-pill bg-surface-2">
+                          <div
+                            className="absolute inset-y-0 left-0 rounded-pill bg-accent opacity-60"
+                            style={{ width: `${spawnedPct}%` }}
+                          />
+                          {item.crashed > 0 && (
+                            <div
+                              className="absolute inset-y-0 left-0 rounded-pill bg-danger"
+                              style={{ width: `${crashedPct * spawnedPct / 100}%` }}
+                            />
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>

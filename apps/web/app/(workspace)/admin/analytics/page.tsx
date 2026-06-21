@@ -9,6 +9,9 @@ import {
   CardHeader,
   CardTitle,
   CardContent,
+  Table,
+  Th,
+  Td,
 } from "@/components/ui/primitives";
 import { cn } from "@/lib/utils";
 import { ApiClient } from "@/lib/api-client";
@@ -84,6 +87,31 @@ function fmtTokens(n: number): string {
 const PERIOD_DAYS: Record<Period, number> = { "7d": 7, "30d": 30, "90d": 90 };
 const WEEKDAY = ["일", "월", "화", "수", "목", "금", "토"];
 
+/* ── 비용/행동/에이전트 섹션 타입 ──────────────────────────── */
+interface CostData {
+  dailyCost: number;
+  weeklyCost: number;
+  projectedMonthlyCost: number;
+  modelCosts: { model: string; cost: number; percentage: number }[];
+}
+interface BehaviorData {
+  peakHours: { hour: number; requests: number }[];
+  avgSessionLength: number;
+  topQueries: { query: string; count: number }[];
+  avgQueriesPerSession: number;
+}
+interface AgentRow {
+  agentId: string;
+  agentName: string;
+  totalRequests: number;
+  avgResponseTime: number;
+  successRate: number;
+  avgTokens: number;
+  popularity: number;
+}
+
+function fmtCost(n: number) { return `$${n.toFixed(4)}`; }
+
 export default function AdminAnalyticsPage() {
   const [period, setPeriod] = useState<Period>("7d");
   // 실데이터 오버레이 (가능한 지표만): null 이면 목업 SUMMARY 사용
@@ -92,6 +120,10 @@ export default function AdminAnalyticsPage() {
   // 실데이터 차트: null 이면 목업 DAILY / MODEL_USAGE 사용
   const [liveDaily, setLiveDaily] = useState<{ label: string; value: number }[] | null>(null);
   const [liveModels, setLiveModels] = useState<{ name: string; pct: number; color: string }[] | null>(null);
+  // 추가 섹션 데이터
+  const [costData, setCostData] = useState<CostData | null>(null);
+  const [behaviorData, setBehaviorData] = useState<BehaviorData | null>(null);
+  const [agentsData, setAgentsData] = useState<AgentRow[] | null>(null);
 
   const daily = liveDaily ?? DAILY[period];
   const sum = SUMMARY[period];
@@ -122,6 +154,23 @@ export default function AdminAnalyticsPage() {
     return () => {
       alive = false;
     };
+  }, []);
+
+  // 비용/행동/에이전트 데이터 로드 (마운트 1회)
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const [costRes, behaviorRes, agentsRes] = await Promise.allSettled([
+        ApiClient.get<{ data: CostData }>("/api/metrics/analytics/cost"),
+        ApiClient.get<{ data: BehaviorData }>("/api/metrics/analytics/behavior"),
+        ApiClient.get<{ data: AgentRow[] }>("/api/metrics/analytics/agents"),
+      ]);
+      if (!alive) return;
+      if (costRes.status === "fulfilled") setCostData(costRes.value?.data ?? null);
+      if (behaviorRes.status === "fulfilled") setBehaviorData(behaviorRes.value?.data ?? null);
+      if (agentsRes.status === "fulfilled") setAgentsData(agentsRes.value?.data ?? null);
+    })();
+    return () => { alive = false; };
   }, []);
 
   // 기간별 일별 대화량 + 모델 비중 실데이터 로드
@@ -271,6 +320,129 @@ export default function AdminAnalyticsPage() {
             </CardContent>
           </Card>
         </div>
+
+        {/* 비용 분석 */}
+        {costData && (
+          <Card className="mt-6">
+            <CardHeader>
+              <CardTitle>비용 분석</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <StatCard label="일일 비용" value={fmtCost(costData.dailyCost)} />
+                <StatCard label="주간 비용" value={fmtCost(costData.weeklyCost)} />
+                <StatCard label="월간 예상 비용" value={fmtCost(costData.projectedMonthlyCost)} />
+              </div>
+              {costData.modelCosts.length > 0 && (
+                <Table>
+                  <thead>
+                    <tr>
+                      <Th>모델</Th>
+                      <Th className="text-right">비용</Th>
+                      <Th className="text-right">비중</Th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {costData.modelCosts.map((m) => (
+                      <tr key={m.model}>
+                        <Td className="font-medium text-fg">{m.model}</Td>
+                        <Td className="text-right font-mono text-fg-2">{fmtCost(m.cost)}</Td>
+                        <Td className="text-right font-mono text-muted">{m.percentage.toFixed(1)}%</Td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* 사용자 행동 */}
+        {behaviorData && (
+          <Card className="mt-6">
+            <CardHeader>
+              <CardTitle>사용자 행동</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <StatCard
+                  label="평균 세션 길이"
+                  value={`${Math.round(behaviorData.avgSessionLength)}분`}
+                />
+                <StatCard
+                  label="세션당 평균 쿼리"
+                  value={behaviorData.avgQueriesPerSession.toFixed(1)}
+                />
+              </div>
+              {behaviorData.peakHours.length > 0 && (
+                <div>
+                  <p className="mb-2 text-xs font-medium text-fg-2">피크 시간대 Top 3</p>
+                  <div className="flex flex-wrap gap-2">
+                    {behaviorData.peakHours.slice(0, 3).map((h) => (
+                      <span
+                        key={h.hour}
+                        className="rounded-md border border-border bg-surface-2 px-2.5 py-1 text-xs text-fg"
+                      >
+                        {String(h.hour).padStart(2, "0")}시 · {h.requests.toLocaleString()} 요청
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {behaviorData.topQueries.length > 0 && (
+                <div>
+                  <p className="mb-2 text-xs font-medium text-fg-2">자주 묻는 쿼리 Top 5</p>
+                  <ol className="space-y-1">
+                    {behaviorData.topQueries.slice(0, 5).map((q, i) => (
+                      <li key={i} className="flex items-center gap-2 text-xs text-fg-2">
+                        <span className="w-4 shrink-0 font-mono text-faint">{i + 1}.</span>
+                        <span className="truncate">{q.query}</span>
+                        <span className="ml-auto shrink-0 font-mono text-muted">{q.count}</span>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* 에이전트 성능 */}
+        {agentsData && agentsData.length > 0 && (
+          <Card className="mt-6">
+            <CardHeader>
+              <CardTitle>에이전트 성능</CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              <Table>
+                <thead>
+                  <tr>
+                    <Th>에이전트</Th>
+                    <Th className="text-right">요청 수</Th>
+                    <Th className="text-right">성공률</Th>
+                    <Th className="text-right">평균 응답</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {agentsData.map((a) => (
+                    <tr key={a.agentId}>
+                      <Td className="font-medium text-fg">{a.agentName}</Td>
+                      <Td className="text-right font-mono text-fg-2">
+                        {a.totalRequests.toLocaleString()}
+                      </Td>
+                      <Td className="text-right font-mono text-fg-2">
+                        {(a.successRate * 100).toFixed(1)}%
+                      </Td>
+                      <Td className="text-right font-mono text-fg-2">
+                        {Math.round(a.avgResponseTime)}ms
+                      </Td>
+                    </tr>
+                  ))}
+                </tbody>
+              </Table>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </>
   );

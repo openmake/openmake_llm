@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Search, Boxes, Download } from "lucide-react";
+import { Search, Boxes, Download, Loader2 } from "lucide-react";
 import {
   Button,
   Badge,
@@ -106,6 +106,8 @@ export default function McpCatalogPage() {
   const [loading, setLoading] = useState(true);
   // 실데이터는 toolCount 를 제공하지 않으므로 도구 수 배지를 숨긴다.
   const [showToolCount, setShowToolCount] = useState(true);
+  const [installing, setInstalling] = useState<Record<string, boolean>>({});
+  const [installError, setInstallError] = useState<Record<string, string>>({});
 
   useEffect(() => {
     let cancelled = false;
@@ -129,6 +131,31 @@ export default function McpCatalogPage() {
       cancelled = true;
     };
   }, []);
+
+  async function handleInstall(e: CatalogEntry) {
+    setInstalling((prev) => ({ ...prev, [e.id]: true }));
+    setInstallError((prev) => ({ ...prev, [e.id]: "" }));
+    try {
+      await ApiClient.post("/api/mcp/servers", {
+        name: e.name,
+        transport_type: "stdio",
+        catalog_template_id: e.id,
+        visibility: "global",
+      });
+      setEntries((prev) =>
+        prev.map((item) =>
+          item.id === e.id ? { ...item, installed: true } : item,
+        ),
+      );
+    } catch {
+      setInstallError((prev) => ({
+        ...prev,
+        [e.id]: "설치 실패. 다시 시도해 주세요.",
+      }));
+    } finally {
+      setInstalling((prev) => ({ ...prev, [e.id]: false }));
+    }
+  }
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -192,23 +219,36 @@ export default function McpCatalogPage() {
                     {e.description}
                   </p>
 
-                  <div className="flex items-center justify-between border-t border-border pt-3">
-                    {showToolCount ? (
-                      <Badge tone="neutral">도구 {e.toolCount}개</Badge>
-                    ) : (
-                      <Badge tone="neutral">
-                        <span className="font-mono">{e.provider}</span>
-                      </Badge>
-                    )}
-                    {e.installed ? (
-                      <Button variant="outline" size="sm" disabled>
-                        설치됨
-                      </Button>
-                    ) : (
-                      <Button size="sm">
-                        <Download className="h-4 w-4" />
-                        설치
-                      </Button>
+                  <div className="flex flex-col gap-2 border-t border-border pt-3">
+                    <div className="flex items-center justify-between">
+                      {showToolCount ? (
+                        <Badge tone="neutral">도구 {e.toolCount}개</Badge>
+                      ) : (
+                        <Badge tone="neutral">
+                          <span className="font-mono">{e.provider}</span>
+                        </Badge>
+                      )}
+                      {e.installed ? (
+                        <Button variant="outline" size="sm" disabled>
+                          설치됨
+                        </Button>
+                      ) : (
+                        <Button
+                          size="sm"
+                          disabled={installing[e.id]}
+                          onClick={() => handleInstall(e)}
+                        >
+                          {installing[e.id] ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Download className="h-4 w-4" />
+                          )}
+                          설치
+                        </Button>
+                      )}
+                    </div>
+                    {installError[e.id] && (
+                      <p className="text-xs text-danger">{installError[e.id]}</p>
                     )}
                   </div>
                 </CardContent>

@@ -57,6 +57,22 @@ const TIMESERIES = Array.from({ length: 24 }, (_, h) => ({
 
 type Cat = { id?: string; name?: string; status?: string; latency?: number | string };
 
+/* ── 에이전트 메트릭 타입 ───────────────────────────────────── */
+interface AgentMetric {
+  agentId: string;
+  requests: number;
+  successCount: number;
+  totalResponseTime: number;
+  totalTokens: number;
+}
+interface AgentSummary {
+  totalAgents: number;
+  totalRequests: number;
+  avgSuccessRate: number;
+  avgResponseTime: number;
+  mostUsedAgent: string | null;
+}
+
 const STATUS_MAP: Record<string, NodeStatus> = {
   online: "online",
   offline: "offline",
@@ -69,6 +85,8 @@ export default function AdminMetricsPage() {
   const [nodes, setNodes] = useState<NodeRow[]>(NODES);
   const [cpu, setCpu] = useState<string | null>(null);
   const [mem, setMem] = useState<{ value: string; delta: string } | null>(null);
+  const [agentSummary, setAgentSummary] = useState<AgentSummary | null>(null);
+  const [agentMetrics, setAgentMetrics] = useState<AgentMetric[] | null>(null);
   const maxV = Math.max(...TIMESERIES.map((t) => t.value));
 
   const load = useCallback(async () => {
@@ -115,6 +133,20 @@ export default function AdminMetricsPage() {
             value: `${(sys.memory.used / 1024).toFixed(1)} GB`,
             delta: `총 ${(sys.memory.total / 1024).toFixed(1)} GB 중`,
           });
+        }
+      }
+      // 에이전트 메트릭 로드
+      const [agentSummaryRes, agentMetricsRes] = await Promise.allSettled([
+        ApiClient.get<{ data: { summary: AgentSummary } }>("/api/agents-monitoring/summary"),
+        ApiClient.get<{ data: { metrics: Record<string, AgentMetric> } }>("/api/agents-monitoring/metrics"),
+      ]);
+      if (agentSummaryRes.status === "fulfilled") {
+        setAgentSummary(agentSummaryRes.value?.data?.summary ?? null);
+      }
+      if (agentMetricsRes.status === "fulfilled") {
+        const raw = agentMetricsRes.value?.data?.metrics;
+        if (raw) {
+          setAgentMetrics(Object.values(raw));
         }
       }
     } catch {
@@ -208,6 +240,74 @@ export default function AdminMetricsPage() {
             </Table>
           </CardContent>
         </Card>
+        {/* 에이전트 메트릭 */}
+        {(agentSummary || (agentMetrics && agentMetrics.length > 0)) && (
+          <Card className="mt-6">
+            <CardHeader>
+              <CardTitle>에이전트 메트릭</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {agentSummary && (
+                <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+                  <StatCard
+                    label="총 에이전트"
+                    value={String(agentSummary.totalAgents)}
+                  />
+                  <StatCard
+                    label="총 요청"
+                    value={agentSummary.totalRequests.toLocaleString()}
+                  />
+                  <StatCard
+                    label="평균 성공률"
+                    value={`${(agentSummary.avgSuccessRate * 100).toFixed(1)}%`}
+                  />
+                  <StatCard
+                    label="평균 응답시간"
+                    value={`${Math.round(agentSummary.avgResponseTime)}ms`}
+                  />
+                </div>
+              )}
+              {agentMetrics && agentMetrics.length > 0 && (
+                <Table>
+                  <thead>
+                    <tr>
+                      <Th>에이전트 ID</Th>
+                      <Th className="text-right">요청 수</Th>
+                      <Th className="text-right">성공률</Th>
+                      <Th className="text-right">평균 응답시간</Th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {agentMetrics.map((m) => {
+                      const successRate =
+                        m.requests > 0
+                          ? Math.round((m.successCount / m.requests) * 100)
+                          : 0;
+                      const avgRt =
+                        m.requests > 0
+                          ? Math.round(m.totalResponseTime / m.requests)
+                          : 0;
+                      return (
+                        <tr key={m.agentId}>
+                          <Td className="font-mono text-xs text-fg">{m.agentId}</Td>
+                          <Td className="text-right font-mono text-fg-2">
+                            {m.requests.toLocaleString()}
+                          </Td>
+                          <Td className="text-right font-mono text-fg-2">
+                            {successRate}%
+                          </Td>
+                          <Td className="text-right font-mono text-fg-2">
+                            {avgRt}ms
+                          </Td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        )}
       </div>
     </>
   );

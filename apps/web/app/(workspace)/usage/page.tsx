@@ -63,6 +63,172 @@ function modelBar(name: string): string {
 const fmtNum = (n?: number) =>
   n != null ? Number(n).toLocaleString("ko-KR") : "-";
 const fmtMs = (n?: number) => (n != null && n > 0 ? `${Math.round(n)}ms` : "-");
+const fmtCost = (n?: number) =>
+  n != null ? `$${n.toFixed(4)}` : "-";
+
+/* ── 시스템 토큰 모니터링 섹션 (관리자 전용) ────────────────── */
+interface MonitoringCosts {
+  today: {
+    totalCost: number;
+    byModel: Record<string, number>;
+    totalTokens: number;
+    totalRequests: number;
+  };
+  weekly: {
+    totalTokens: number;
+    totalRequests: number;
+    estimatedCost: number;
+  };
+  priceTable: Record<string, { input: number; output: number }>;
+}
+
+interface MonitoringDailyDatasets {
+  requests: number[];
+  tokens: number[];
+  errors: number[];
+  avgResponseTime: number[];
+}
+
+interface MonitoringDaily {
+  labels: string[];
+  datasets: MonitoringDailyDatasets;
+}
+
+interface MonitoringHourly {
+  labels: string[];
+  datasets: { requests: number[]; tokens: number[] };
+}
+
+function SystemTokenMonitor() {
+  const [costs, setCosts] = useState<MonitoringCosts | null>(null);
+  const [daily, setDaily] = useState<MonitoringDaily | null>(null);
+  const [hourly, setHourly] = useState<MonitoringHourly | null>(null);
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const [costsRes, dailyRes, hourlyRes] = await Promise.all([
+          ApiClient.get<{ data: MonitoringCosts }>("/api/monitoring/costs"),
+          ApiClient.get<{ data: MonitoringDaily }>("/api/monitoring/usage/daily?days=7"),
+          ApiClient.get<{ data: MonitoringHourly }>("/api/monitoring/usage/hourly"),
+        ]);
+        if (!alive) return;
+        setCosts(costsRes?.data ?? null);
+        setDaily(dailyRes?.data ?? null);
+        setHourly(hourlyRes?.data ?? null);
+        setVisible(true);
+      } catch {
+        // 401/비관리자 → 섹션 숨김
+      }
+    })();
+    return () => { alive = false; };
+  }, []);
+
+  if (!visible) return null;
+
+  const maxDailyTokens = Math.max(
+    1,
+    ...(daily?.datasets.tokens ?? []),
+  );
+  const maxHourlyTokens = Math.max(
+    1,
+    ...(hourly?.datasets.tokens ?? []),
+  );
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>시스템 토큰 모니터링</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        {/* 비용 StatCard 4개 */}
+        {costs && (
+          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+            <StatCard
+              label="오늘 비용"
+              value={fmtCost(costs.today.totalCost)}
+            />
+            <StatCard
+              label="오늘 토큰"
+              value={fmtNum(costs.today.totalTokens)}
+            />
+            <StatCard
+              label="주간 토큰"
+              value={fmtNum(costs.weekly.totalTokens)}
+            />
+            <StatCard
+              label="주간 예상 비용"
+              value={fmtCost(costs.weekly.estimatedCost)}
+            />
+          </div>
+        )}
+
+        {/* 일별 토큰 바 차트 */}
+        {daily && daily.labels.length > 0 && (
+          <div>
+            <p className="mb-3 text-xs font-medium text-fg-2">일별 토큰 (최근 7일)</p>
+            <div className="flex h-36 items-end gap-1.5">
+              {daily.labels.map((label, i) => {
+                const tokens = daily.datasets.tokens[i] ?? 0;
+                const pct = Math.max(2, Math.round((tokens / maxDailyTokens) * 100));
+                return (
+                  <div
+                    key={label}
+                    className="group flex h-full flex-1 flex-col items-center justify-end gap-1"
+                    title={`${label} · ${fmtNum(tokens)} 토큰`}
+                  >
+                    <span className="text-[10px] text-faint opacity-0 transition group-hover:opacity-100">
+                      {fmtNum(tokens)}
+                    </span>
+                    <div
+                      className="w-full rounded-t bg-accent-soft transition group-hover:bg-accent"
+                      style={{ height: `${pct}%` }}
+                    />
+                    <span className="font-mono text-[9px] text-faint">
+                      {label.slice(-5)}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* 시간별 토큰 바 차트 */}
+        {hourly && hourly.labels.length > 0 && (
+          <div>
+            <p className="mb-3 text-xs font-medium text-fg-2">시간별 토큰</p>
+            <div className="flex h-28 items-end gap-0.5">
+              {hourly.labels.map((label, i) => {
+                const tokens = hourly.datasets.tokens[i] ?? 0;
+                const pct = Math.max(2, Math.round((tokens / maxHourlyTokens) * 100));
+                return (
+                  <div
+                    key={label}
+                    className="group flex h-full flex-1 flex-col items-center justify-end gap-0.5"
+                    title={`${label} · ${fmtNum(tokens)} 토큰`}
+                  >
+                    <div
+                      className="w-full rounded-t bg-success-soft transition group-hover:bg-success"
+                      style={{ height: `${pct}%` }}
+                    />
+                    {i % 4 === 0 && (
+                      <span className="font-mono text-[8px] text-faint">
+                        {label}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
 
 /* ── 목업 (비로그인/오류 폴백) ──────────────────────────── */
 function mockDaily(): DailyRow[] {
@@ -224,6 +390,9 @@ export default function UsagePage() {
                   )}
                 </CardContent>
               </Card>
+
+              {/* 시스템 토큰 모니터링 */}
+              <SystemTokenMonitor />
 
               {/* 모델별 사용 비중 */}
               <Card>
