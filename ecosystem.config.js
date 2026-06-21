@@ -69,8 +69,9 @@ module.exports = {
         // 선행: `npm run build:frontend-next` 로 apps/web/.next 생성 필요.
         name: 'openmake-next',
         cwd: __dirname + '/apps/web',
-        script: 'npm',
-        args: 'start -- -p 3000',
+        // npm 을 fork 하면 pm2 ProcessContainerFork 가 crash → next 바이너리를 직접 node 로 실행.
+        script: './node_modules/next/dist/bin/next',
+        args: 'start -p 3000',
         env: {
             NODE_ENV: 'production',
             PORT: 3000,
