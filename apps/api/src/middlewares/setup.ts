@@ -158,6 +158,17 @@ export function setupSecurity(app: Application): void {
  * Rate limiting, CORS, 로깅 미들웨어를 설정합니다.
  */
 export function setupParsersAndLimiting(app: Application): void {
+    // Body parsers + cookie parser — 라우트 마운트(setupApiRoutes)보다 먼저 등록되어야 한다.
+    // ⚠️ 이전엔 setupStaticFiles 끝에 있었으나, FRONTEND_REDIRECT_URL 설정 시 그 함수가
+    //    early return 하면서 express.json·cookieParser 등록이 통째로 스킵됐다.
+    //    → 모든 POST req.body=undefined(400), OAuth 후 req.cookies 미파싱(/me 401) 회귀.
+    //    body parser 는 정적 서빙과 무관하므로 여기(parsers)로 이동해 항상 등록되게 한다.
+    app.use('/api/chat', express.json({ limit: '10mb' }));
+    app.use('/api/documents', express.json({ limit: '50mb' }));
+    app.use('/api/', express.json({ limit: '1mb' }));
+    app.use(express.json({ limit: '1mb' }));
+    app.use(cookieParser());
+
     // 신뢰할 수 있는 프록시 설정 — X-Forwarded-For 헤더 검증
     const trustedProxies = getConfig().trustedProxies;
     if (trustedProxies.length > 0) {
@@ -445,12 +456,6 @@ export function setupStaticFiles(app: Application, dirname: string): void {
         return res.send(readHtmlForResponse(indexPath, res));
     });
 
-    // Route-specific body size limits (security hardening)
-    app.use('/api/chat', express.json({ limit: '10mb' }));
-    app.use('/api/documents', express.json({ limit: '50mb' }));
-    app.use('/api/', express.json({ limit: '1mb' }));
-    app.use(express.json({ limit: '1mb' }));
-    app.use(cookieParser());
 
     const staticHeaders = (res: ServerResponse, filePath: string) => {
         if (filePath.endsWith('.html')) {

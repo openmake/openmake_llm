@@ -8,6 +8,7 @@ import type { ApiSuccess } from "@openmake/shared-types";
 import { useAppStore } from "@/lib/store";
 import { NAV_GROUPS } from "@/lib/nav";
 import { ApiClient } from "@/lib/api-client";
+import Image from "next/image";
 import { ThemeToggle } from "./theme-toggle";
 import { cn } from "@/lib/utils";
 
@@ -52,9 +53,13 @@ export function Sidebar() {
   return (
     <aside className="flex h-full w-[264px] flex-col border-r border-border bg-surface-2/60">
       <div className="flex items-center gap-2 px-4 pt-4">
-        <div className="grid h-7 w-7 place-items-center rounded-md bg-accent text-accent-fg">
-          <span className="text-sm font-bold">O</span>
-        </div>
+        <Image
+          src="/logo.png"
+          alt="OpenMake"
+          width={28}
+          height={28}
+          className="h-7 w-7 rounded-md object-contain"
+        />
         <span className="text-sm font-semibold text-fg">OpenMake</span>
       </div>
 
