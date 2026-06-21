@@ -136,11 +136,11 @@ export default function McpCatalogPage() {
     setInstalling((prev) => ({ ...prev, [e.id]: true }));
     setInstallError((prev) => ({ ...prev, [e.id]: "" }));
     try {
-      await ApiClient.post("/api/mcp/servers", {
-        name: e.name,
-        transport_type: "stdio",
-        catalog_template_id: e.id,
-        visibility: "global",
+      // 카탈로그 설치 전용 라우트 — 백엔드가 template_id 로 command/args/env 를 채운다.
+      // (일반 POST /servers 는 stdio 시 command 필수라 400 — from-catalog 가 정답)
+      await ApiClient.post("/api/mcp/servers/from-catalog", {
+        template_id: e.id,
+        name: e.id.replace(/[^a-zA-Z0-9_-]/g, "-"), // name 은 영숫자/_/- 만 허용
       });
       setEntries((prev) =>
         prev.map((item) =>
