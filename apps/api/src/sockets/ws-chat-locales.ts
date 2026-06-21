@@ -19,7 +19,7 @@ export const CURRENT_EVENTS_KEYWORDS: Record<string, string[]> = {
 
 // 다국어 웹 검색 컨텍스트 템플릿
 export const WEB_SEARCH_TEMPLATES: Record<string, { header: string; instruction: string; sourceLabel: string; contentLabel: string; locale: string }> = {
-    ko: { header: '웹 검색 결과', instruction: '다음은 최신 웹 검색 결과입니다. 이 정보를 우선적으로 참고하여 답변하세요:', sourceLabel: '출처', contentLabel: '내용', locale: 'ko-KR' },
+    ko: { header: '웹 검색 결과', instruction: '다음은 최신 웹 검색 결과입니다. 당신의 사전 학습 지식보다 이 검색 결과를 절대적으로 우선하세요. 특히 현직 인물·직책·날짜처럼 시점에 민감한 사실은 검색 결과만 신뢰하고, 학습 데이터의 오래된 정보(예: 과거 대통령·과거 직책)는 무시하세요:', sourceLabel: '출처', contentLabel: '내용', locale: 'ko-KR' },
     en: { header: 'Web Search Results', instruction: 'Below are the latest web search results. Please prioritize this information in your response:', sourceLabel: 'Source', contentLabel: 'Content', locale: 'en-US' },
     ja: { header: 'ウェブ検索結果', instruction: '以下は最新のウェブ検索結果です。回答の際にこの情報を優先的に参考にしてください:', sourceLabel: '出典', contentLabel: '内容', locale: 'ja-JP' },
     zh: { header: '网络搜索结果', instruction: '以下是最新的网络搜索结果，请优先参考这些信息进行回答:', sourceLabel: '来源', contentLabel: '内容', locale: 'zh-CN' },
