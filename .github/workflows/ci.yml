@@ -50,12 +50,11 @@ jobs:
         with:
           bun-version: latest
 
+      # 모노레포 npm workspaces — 루트 npm ci 한 번이면 모든 workspace 설치 + hoisting.
+      # (apps/api 에서 중복 npm ci 하면 hoisting 이 깨져 web-scraper 의 playwright-core
+      #  dynamic import 가 tsc 에서 TS2307 로 실패함 — 루트 설치만 유지)
       - name: Install dependencies
         run: npm ci
-
-      - name: Install backend dependencies
-        run: npm ci
-        working-directory: apps/api
 
       # ─── Gate 1: Bun Test ───
       # agent-loop.test.ts 제외 (Ollama 실제 연결 시도로 CI에서 hang 발생)
