@@ -2,12 +2,21 @@
 
 import { useEffect, useRef } from "react";
 import Image from "next/image";
+import { MessagesSquare, Telescope, Brain, Sparkles } from "lucide-react";
 import { useAppStore } from "@/lib/store";
 import { Markdown } from "./markdown";
 import { cn } from "@/lib/utils";
 
+const QUICK_STARTS = [
+  { icon: MessagesSquare, label: "요약하기", prompt: "다음 내용을 요약해 줘:\n\n" },
+  { icon: Telescope, label: "리서치", prompt: "다음 주제를 깊이 리서치해 줘:\n\n" },
+  { icon: Brain, label: "단계별 분석", prompt: "다음 문제를 단계별로 분석해 줘:\n\n" },
+  { icon: Sparkles, label: "브레인스토밍", prompt: "다음에 대해 브레인스토밍하자:\n\n" },
+];
+
 export function MessageList() {
   const chatHistory = useAppStore((s) => s.chatHistory);
+  const setInputDraft = useAppStore((s) => s.setInputDraft);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -29,6 +38,19 @@ export function MessageList() {
           멀티모델 오케스트레이션 · MCP 도구 · 딥 리서치 · 자율 에이전트.
           아래에 질문을 입력하거나 <span className="font-mono text-accent">/</span> 로 스킬을 호출하세요.
         </p>
+
+        <div className="mt-7 grid w-full max-w-md grid-cols-2 gap-2.5">
+          {QUICK_STARTS.map((q) => (
+            <button
+              key={q.label}
+              onClick={() => setInputDraft(q.prompt)}
+              className="flex items-center gap-2.5 rounded-xl border border-border bg-surface px-3.5 py-3 text-left text-sm font-medium text-fg transition hover:border-border-strong hover:bg-surface-2"
+            >
+              <q.icon className="h-4 w-4 shrink-0 text-accent" />
+              <span className="truncate">{q.label}</span>
+            </button>
+          ))}
+        </div>
       </div>
     );
   }
