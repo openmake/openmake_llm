@@ -12,7 +12,7 @@ export default function WorkspaceLayout({
         <Sidebar />
       </div>
       <MobileSidebar />
-      <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
+      <main className="flex min-w-0 flex-1 flex-col overflow-hidden pb-[calc(3.25rem+env(safe-area-inset-bottom))] lg:pb-0">
         {children}
       </main>
     </div>
