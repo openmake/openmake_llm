@@ -68,7 +68,16 @@ jobs:
           TEST_ERRORS=""
           CI_EXCLUDE="agent-loop.test.ts"
 
-          for f in src/__tests__/*.test.ts; do
+          # 테스트는 git-ignored(로컬 보관 방침) — repo 에 파일이 없으면 게이트 skip.
+          # 로컬/향후 포함 시 자동 실행. 글롭 비매치를 literal 로 돌리지 않도록 nullglob 적용.
+          shopt -s nullglob
+          TEST_FILES=(src/__tests__/*.test.ts)
+          if [ ${#TEST_FILES[@]} -eq 0 ]; then
+            echo "ℹ️ 테스트 파일 없음 (git-ignored, 로컬 npm test 전용) — Bun Test 게이트 skip"
+            exit 0
+          fi
+
+          for f in "${TEST_FILES[@]}"; do
             fname=$(basename "$f")
             case "$fname" in $CI_EXCLUDE) continue ;; esac
             if timeout 30 bun test --timeout 15000 "$f" > /dev/null 2>&1; then
