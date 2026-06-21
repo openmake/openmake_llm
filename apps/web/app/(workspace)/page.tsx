@@ -4,12 +4,12 @@ import { Composer } from "@/components/chat/composer";
 export default function ChatPage() {
   return (
     <>
-      <header className="flex h-14 items-center justify-between border-b border-border px-5">
-        <div>
-          <h1 className="text-sm font-semibold text-fg">새 대화</h1>
-          <p className="text-xs text-faint">워크스페이스 · 채팅</p>
+      <header className="flex h-14 items-center justify-between border-b border-border pl-14 pr-4 lg:px-5">
+        <div className="min-w-0">
+          <h1 className="truncate text-sm font-semibold text-fg">새 대화</h1>
+          <p className="truncate text-xs text-faint">워크스페이스 · 채팅</p>
         </div>
-        <span className="rounded-md bg-surface-2 px-2 py-1 font-mono text-xs text-muted">
+        <span className="shrink-0 rounded-md bg-surface-2 px-2 py-1 font-mono text-xs text-muted">
           Lumen
         </span>
       </header>

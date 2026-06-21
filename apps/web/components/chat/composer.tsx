@@ -99,6 +99,7 @@ export function Composer() {
               <button
                 key={t.key}
                 onClick={() => toggle(t.key)}
+                title={t.label}
                 className={cn(
                   "inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium transition",
                   t.on
@@ -107,7 +108,7 @@ export function Composer() {
                 )}
               >
                 <t.icon className="h-3.5 w-3.5" />
-                {t.label}
+                <span className="hidden sm:inline">{t.label}</span>
               </button>
             ))}
           </div>
