@@ -1,0 +1,209 @@
+/* Pretendard 는 layout.tsx 의 <link>(public/vendor) 로 로드 — Turbopack 은 CSS @import 의
+   public 절대경로를 빌드 시 해석하지 못하므로 link 태그를 사용. */
+@import "tailwindcss";
+
+/* =========================================================================
+   Lumen 디자인 토큰 — 라이트 퍼스트 + 코발트 액센트 + 풀 다크 카운터파트
+   출처: OD 시안 openmake-newdesign-2026 디자인 시스템 패널
+   ========================================================================= */
+:root {
+  --bg: #f7f8fa;
+  --surface: #ffffff;
+  --surface-2: #f1f3f6;
+  --surface-3: #e9ecf1;
+  --fg: #14161c;
+  --fg-2: #3a3f4a;
+  --muted: #626b7a;
+  --faint: #8a93a1;
+  --border: #e4e7ec;
+  --border-strong: #cfd4dc;
+
+  --accent: #2f6bff;
+  --accent-hover: #235be6;
+  --accent-press: #1b4cc9;
+  --accent-fg: #ffffff;
+  --accent-soft: #eaf1ff;
+  --accent-ring: rgba(47, 107, 255, 0.32);
+
+  --success: #149a6b;
+  --success-soft: #e2f5ee;
+  --warn: #b5730a;
+  --warn-soft: #fbefd8;
+  --danger: #d5392f;
+  --danger-soft: #fbe6e4;
+
+  /* 7 모델 프로파일 컬러 */
+  --m-default: #2f6bff;
+  --m-pro: #6e56e8;
+  --m-fast: #149a6b;
+  --m-think: #b5730a;
+  --m-code: #0e8fa8;
+  --m-vision: #c7387e;
+  --m-auto: #5b6472;
+
+  --r-xs: 6px;
+  --r-sm: 8px;
+  --r-md: 10px;
+  --r-lg: 14px;
+  --r-xl: 20px;
+  --r-pill: 999px;
+
+  --sh-1: 0 1px 2px rgba(20, 22, 28, 0.05), 0 1px 1px rgba(20, 22, 28, 0.04);
+  --sh-2: 0 4px 12px rgba(20, 30, 55, 0.08), 0 1px 3px rgba(20, 30, 55, 0.06);
+  --sh-3: 0 18px 48px rgba(18, 28, 52, 0.16), 0 4px 12px rgba(18, 28, 52, 0.08);
+
+  --sans: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont,
+    system-ui, sans-serif;
+  --mono: var(--font-jbm), "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo,
+    monospace;
+}
+
+[data-theme="dark"] {
+  --bg: #0e1014;
+  --surface: #15181e;
+  --surface-2: #1b1f27;
+  --surface-3: #222732;
+  --fg: #eceef2;
+  --fg-2: #c3c9d2;
+  --muted: #97a0ae;
+  --faint: #6b7480;
+  --border: #262b34;
+  --border-strong: #353c48;
+
+  --accent: #5b8cff;
+  --accent-hover: #6e9aff;
+  --accent-press: #4a7bf0;
+  --accent-fg: #0b1220;
+  --accent-soft: rgba(91, 140, 255, 0.14);
+  --accent-ring: rgba(91, 140, 255, 0.36);
+
+  --success: #3fbd8c;
+  --success-soft: rgba(63, 189, 140, 0.14);
+  --warn: #e0a040;
+  --warn-soft: rgba(224, 160, 64, 0.14);
+  --danger: #f1685e;
+  --danger-soft: rgba(241, 104, 94, 0.14);
+
+  --m-default: #5b8cff;
+  --m-pro: #9986ff;
+  --m-fast: #3fbd8c;
+  --m-think: #e0a040;
+  --m-code: #3dbfd8;
+  --m-vision: #e876ad;
+  --m-auto: #8a93a1;
+
+  --sh-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --sh-2: 0 6px 16px rgba(0, 0, 0, 0.45);
+  --sh-3: 0 20px 50px rgba(0, 0, 0, 0.6), 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+/* =========================================================================
+   Tailwind v4 theme 매핑 — 토큰을 유틸리티로 노출
+   (bg-surface, text-fg, text-muted, border-border, bg-accent, rounded-md, shadow-2 ...)
+   ========================================================================= */
+@theme inline {
+  --color-app: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-fg: var(--fg);
+  --color-fg-2: var(--fg-2);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-press: var(--accent-press);
+  --color-accent-fg: var(--accent-fg);
+  --color-accent-soft: var(--accent-soft);
+
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+
+  --color-m-default: var(--m-default);
+  --color-m-pro: var(--m-pro);
+  --color-m-fast: var(--m-fast);
+  --color-m-think: var(--m-think);
+  --color-m-code: var(--m-code);
+  --color-m-vision: var(--m-vision);
+  --color-m-auto: var(--m-auto);
+
+  --radius-xs: var(--r-xs);
+  --radius-sm: var(--r-sm);
+  --radius-md: var(--r-md);
+  --radius-lg: var(--r-lg);
+  --radius-xl: var(--r-xl);
+  --radius-pill: var(--r-pill);
+
+  --shadow-1: var(--sh-1);
+  --shadow-2: var(--sh-2);
+  --shadow-3: var(--sh-3);
+
+  --font-sans: var(--sans);
+  --font-mono: var(--mono);
+}
+
+* {
+  border-color: var(--border);
+}
+
+html {
+  color-scheme: light;
+}
+[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: var(--accent-soft);
+}
+
+/* 코드 하이라이트 (rehype-highlight / highlight.js) — Lumen 토큰 기반, 라이트/다크 자동 */
+.hljs-comment,
+.hljs-quote {
+  color: var(--faint);
+  font-style: italic;
+}
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-built_in {
+  color: var(--m-pro);
+}
+.hljs-string,
+.hljs-attr,
+.hljs-regexp {
+  color: var(--success);
+}
+.hljs-number,
+.hljs-literal {
+  color: var(--warn);
+}
+.hljs-title,
+.hljs-title.function_,
+.hljs-section {
+  color: var(--accent);
+}
+.hljs-type,
+.hljs-class .hljs-title {
+  color: var(--m-code);
+}
+.hljs-variable,
+.hljs-template-variable,
+.hljs-tag,
+.hljs-name {
+  color: var(--m-vision);
+}

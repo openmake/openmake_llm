@@ -111,7 +111,6 @@ tests/
 playwright.config.ts
 .eslintignore
 .eslintrc.json
-.github/workflows/
 
 # Dev Documentation
 SCHEMA_SOURCE_OF_TRUTH.md

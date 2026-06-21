@@ -21,7 +21,7 @@
 module.exports = {
     apps: [{
         name: 'openmake-llm',
-        script: 'backend/api/dist/cli.js',
+        script: 'apps/api/dist/cli.js',
         args: 'cluster --port 52416',
         cwd: __dirname,
         
@@ -63,5 +63,30 @@ module.exports = {
         env_production: {
             NODE_ENV: 'production',
         },
+    }, {
+        // ── Next.js 프론트엔드 (Lumen) ──────────────────────────────
+        // 운영: Nginx 가 / 를 이 앱(:3000)으로, /api·/ws 를 openmake-llm(:52416)으로 프록시.
+        // 선행: `npm run build:frontend-next` 로 apps/web/.next 생성 필요.
+        name: 'openmake-next',
+        cwd: __dirname + '/apps/web',
+        script: 'npm',
+        args: 'start -- -p 3000',
+        env: {
+            NODE_ENV: 'production',
+            PORT: 3000,
+            // 운영은 same-origin Nginx 프록시이므로 WS 도 same-origin(미설정 시 location.host).
+            // API_PROXY_TARGET 은 dev 전용(.env.local). 운영에서 Next rewrites 를 쓰려면 여기서 지정.
+        },
+        instances: 1,
+        exec_mode: 'fork',
+        autorestart: true,
+        max_restarts: 10,
+        min_uptime: '10s',
+        restart_delay: 3000,
+        max_memory_restart: '1G',
+        error_file: '/tmp/openmake-next-error.log',
+        out_file: '/tmp/openmake-next-out.log',
+        merge_logs: true,
+        log_date_format: 'YYYY-MM-DD HH:mm:ss',
     }],
 };

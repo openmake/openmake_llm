@@ -1,0 +1,15 @@
+{
+  "name": "@openmake/api-client",
+  "version": "1.5.6",
+  "private": true,
+  "description": "shared-types 기반 타입 안전 API 클라이언트 (브라우저, apps/web 용)",
+  "types": "src/index.ts",
+  "main": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@openmake/shared-types": "1.5.6",
+    "@openmake/config": "1.5.6"
+  }
+}

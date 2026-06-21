@@ -3,8 +3,8 @@
 # OpenMake LLM 통합 서비스 매니저
 # ==============================================================================
 # 3계층 의존성을 순차 기동/정지/상태확인:
-#   Layer 1: PostgreSQL@16   (DATABASE_URL=127.0.0.1:5432)
-#   Layer 2: Redis           (REDIS_URL=localhost:6379)
+#   Layer 1: PostgreSQL      (docker 컨테이너 — DATABASE_URL=127.0.0.1:5432)
+#   Layer 2: Redis           (docker 컨테이너 — REDIS_URL=localhost:6379)
 #   Layer 3: OpenMake LLM    (PM2 — ecosystem.config.js, PORT=52416)
 #
 # NOTE: LLM 추론은 외부 서버(vLLM/LiteLLM, OpenAI 호환 API)로 위임되어
@@ -22,14 +22,15 @@
 #   ./openmake_llm.sh logs       # OpenMake LLM 실시간 로그
 #   ./openmake_llm.sh health     # /health 엔드포인트 응답 확인
 #
-# 환경 가정 (macOS + Homebrew):
-#   - PostgreSQL/Redis는 brew services로 관리
+# 환경 가정 (macOS):
+#   - PostgreSQL/Redis는 docker compose 로 관리 (2026-06-21 brew postgresql@16 제거 → docker 단독)
+#     · compose 위치: /Volumes/MAC_APP/docker/openmake_llm/ (COMPOSE_FILE env 로 override 가능)
 #   - OpenMake LLM 앱은 PM2로 관리
 #   - mise / nvm 등으로 Node 24+ 활성화 상태
 #
 # 종료 코드:
 #   0  성공
-#   1  의존성 누락 (brew/pm2/curl 미설치)
+#   1  의존성 누락 (docker/pm2/curl 미설치)
 #   2  서비스 기동/정지 실패
 #   3  health check 실패
 # ==============================================================================
@@ -38,10 +39,14 @@ set -euo pipefail
 readonly SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 readonly APP_NAME="openmake-llm"
 readonly APP_PORT="${PORT:-52416}"
-readonly POSTGRES_FORMULA="postgresql@16"
-readonly REDIS_FORMULA="redis"
 readonly POSTGRES_PORT="${POSTGRES_PORT:-5432}"
 readonly REDIS_PORT="${REDIS_PORT:-6379}"
+# DB/Redis 는 docker compose 로 운영 (2026-06-21 brew postgresql@16 제거 → docker 단독).
+# COMPOSE_FILE 로 compose 위치 지정. 우선순위: 셸 환경변수 > .env > 기본값(스크립트 경로).
+# (.env 는 COMPOSE_FILE 한 줄만 추출, 전체 source 안 함)
+_compose_file_env=""
+[[ -f "$SCRIPT_DIR/.env" ]] && _compose_file_env="$(grep -E '^COMPOSE_FILE=' "$SCRIPT_DIR/.env" 2>/dev/null | tail -1 | cut -d= -f2- | tr -d ' ')"
+readonly COMPOSE_FILE="${COMPOSE_FILE:-${_compose_file_env:-$SCRIPT_DIR/docker-compose.yml}}"
 readonly HEALTH_RETRIES=15
 readonly HEALTH_INTERVAL=2
 
@@ -79,7 +84,7 @@ require_cmd() {
 
 preflight() {
     local missing=0
-    for cmd in brew pm2 curl node; do
+    for cmd in docker pm2 curl node; do
         if ! command -v "$cmd" >/dev/null 2>&1; then
             log_err "필수 명령 미설치: $cmd"
             missing=1
@@ -148,59 +153,36 @@ wait_for_app_with_logs() {
     return 1
 }
 
-# ── brew 서비스 헬퍼 ──────────────────────────────────────────────────────────
-brew_service_status() {
-    # "started" | "stopped" | "error" | "none" 반환
-    local name="$1"
-    brew services list 2>/dev/null | awk -v n="$name" '$1==n {print $2; exit}'
-}
-
-ensure_brew_started() {
-    local name="$1"
-    local label="$2"
-    local status
-    status="$(brew_service_status "$name")"
-    case "$status" in
-        started)
-            log_ok "$label 이미 실행 중 ($name)"
-            ;;
-        ""|none|stopped|error)
-            log_info "$label 시작 중 (brew services start $name)"
-            if ! brew services start "$name" >/dev/null 2>&1; then
-                log_err "$label 시작 실패. brew services list 확인 필요"
-                return 2
-            fi
-            ;;
-        *)
-            log_warn "$label 알 수 없는 상태: $status — start 시도"
-            brew services start "$name" >/dev/null 2>&1 || true
-            ;;
-    esac
-}
-
-ensure_brew_stopped() {
-    local name="$1"
-    local label="$2"
-    local status
-    status="$(brew_service_status "$name")"
-    if [[ "$status" == "started" ]]; then
-        log_info "$label 정지 중 (brew services stop $name)"
-        brew services stop "$name" >/dev/null 2>&1 || log_warn "$label 정지 명령 실패 (이미 정지일 수 있음)"
+# ── docker compose 헬퍼 (DB/Redis 운영) ──────────────────────────────────────
+ensure_docker_service() {
+    # $1=up|down  $2=service  $3=label
+    local action="$1" svc="$2" label="$3"
+    if ! command -v docker >/dev/null 2>&1; then
+        log_err "docker 미설치 — docker 를 설치하세요 (DB/Redis 는 docker compose 로 운영)"
+        return 2
+    fi
+    if [[ "$action" == "up" ]]; then
+        log_info "$label 시작 중 (docker compose up -d $svc)"
+        if ! docker compose -f "$COMPOSE_FILE" up -d "$svc" >/dev/null 2>&1; then
+            log_err "$label docker 기동 실패 — docker compose -f $COMPOSE_FILE logs $svc 확인"
+            return 2
+        fi
     else
-        log_ok "$label 이미 정지 ($name, status=$status)"
+        log_info "$label 정지 중 (docker compose stop $svc)"
+        docker compose -f "$COMPOSE_FILE" stop "$svc" >/dev/null 2>&1 || log_warn "$label docker 정지 실패(이미 정지일 수 있음)"
     fi
 }
 
 # ── 3계층 액션 ────────────────────────────────────────────────────────────────
 start_postgres() {
     log_step "Layer 1/3: PostgreSQL"
-    ensure_brew_started "$POSTGRES_FORMULA" "PostgreSQL"
+    ensure_docker_service up postgres "PostgreSQL"
     wait_for_port "$POSTGRES_PORT" "PostgreSQL"
 }
 
 start_redis() {
     log_step "Layer 2/3: Redis"
-    ensure_brew_started "$REDIS_FORMULA" "Redis"
+    ensure_docker_service up redis "Redis"
     wait_for_port "$REDIS_PORT" "Redis"
 }
 
@@ -210,7 +192,7 @@ start_app() {
     # build 산출물 확인 — 백엔드(dist/cli.js) + 프론트(Vite content-hash dist/assets) 둘 다 필요.
     # 프론트 dist 가 없으면 setup.ts 의 public 폴백으로 동작은 하나 content-hash 캐시버스터가
     # 미적용되므로(페이지 모듈이 소스 ?v= 서빙) 함께 빌드한다.
-    if [[ ! -f "$SCRIPT_DIR/backend/api/dist/cli.js" ]] || [[ ! -d "$SCRIPT_DIR/frontend/web/dist/assets" ]]; then
+    if [[ ! -f "$SCRIPT_DIR/apps/api/dist/cli.js" ]] || [[ ! -d "$SCRIPT_DIR/apps/legacy-web/dist/assets" ]]; then
         log_warn "빌드 산출물 없음(backend dist/cli.js 또는 frontend Vite dist/assets) — 'npm run build' 먼저 실행 필요"
         log_info "수행 중: cd $SCRIPT_DIR && npm run build"
         ( cd "$SCRIPT_DIR" && npm run build ) || {
@@ -249,12 +231,12 @@ stop_app() {
 
 stop_redis() {
     log_step "정지 2/3: Redis"
-    ensure_brew_stopped "$REDIS_FORMULA" "Redis"
+    ensure_docker_service down redis "Redis"
 }
 
 stop_postgres() {
     log_step "정지 3/3: PostgreSQL"
-    ensure_brew_stopped "$POSTGRES_FORMULA" "PostgreSQL"
+    ensure_docker_service down postgres "PostgreSQL"
 }
 
 # ── 상태 / 헬스 ───────────────────────────────────────────────────────────────
@@ -272,16 +254,16 @@ print_status_row() {
 show_status() {
     log_step "OpenMake LLM 서비스 상태"
 
-    # PostgreSQL
+    # PostgreSQL (docker)
     if port_listening "$POSTGRES_PORT"; then
-        print_status_row "PostgreSQL ($POSTGRES_PORT)" "ok" "$(brew_service_status "$POSTGRES_FORMULA")"
+        print_status_row "PostgreSQL ($POSTGRES_PORT)" "ok" "docker"
     else
         print_status_row "PostgreSQL ($POSTGRES_PORT)" "fail" "포트 미응답"
     fi
 
-    # Redis
+    # Redis (docker)
     if port_listening "$REDIS_PORT"; then
-        print_status_row "Redis ($REDIS_PORT)" "ok" "$(brew_service_status "$REDIS_FORMULA")"
+        print_status_row "Redis ($REDIS_PORT)" "ok" "docker"
     else
         print_status_row "Redis ($REDIS_PORT)" "fail" "포트 미응답"
     fi
@@ -359,7 +341,7 @@ cmd_restart() {
 
 # ── build / migrate / deploy ───────────────────────────────────────────────────
 cmd_build() {
-    log_step "npm run build (backend tsc + frontend Vite content-hash 번들 → frontend/web/dist)"
+    log_step "npm run build (backend tsc + frontend Vite content-hash 번들 → apps/legacy-web/dist)"
     if ! ( cd "$SCRIPT_DIR" && npm run build ); then
         log_err "빌드 실패 — 후속 작업 중단"
         return 2
@@ -379,13 +361,13 @@ cmd_migrate() {
     fi
 
     log_info "현재 마이그레이션 상태 조회"
-    if ! ( cd "$SCRIPT_DIR/backend/api" && npx ts-node src/data/migrations/cli.ts status ); then
+    if ! ( cd "$SCRIPT_DIR/apps/api" && npx ts-node src/data/migrations/cli.ts status ); then
         log_err "마이그레이션 status 조회 실패"
         return 2
     fi
     echo ""
     log_info "마이그레이션 적용 중"
-    if ! ( cd "$SCRIPT_DIR/backend/api" && npx ts-node src/data/migrations/cli.ts migrate ); then
+    if ! ( cd "$SCRIPT_DIR/apps/api" && npx ts-node src/data/migrations/cli.ts migrate ); then
         log_err "마이그레이션 적용 실패 — 후속 작업 중단"
         return 2
     fi
@@ -482,12 +464,12 @@ OpenMake LLM 통합 서비스 매니저
             옵션: --yes (확인 프롬프트 skip), --no-migrate (마이그 생략)
 
 관측:
-  status    모든 계층 상태 확인 (포트 + brew + PM2)
+  status    모든 계층 상태 확인 (포트 + docker + PM2)
   health    /health 엔드포인트 호출 확인
   logs      OpenMake LLM 실시간 로그 (PM2)
 
 환경 가정:
-  - macOS + Homebrew (brew services로 dep 관리)
+  - macOS (DB/Redis 는 docker compose, 앱은 PM2 로 관리)
   - PM2 전역 설치 (npm i -g pm2)
   - Node 24+ (mise/nvm으로 활성)
 

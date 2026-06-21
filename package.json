@@ -2,25 +2,25 @@
     "name": "openmake",
     "version": "1.5.6",
     "description": "OpenMake - AI Assistant Platform",
-    "main": "backend/api/dist/server.js",
+    "main": "apps/api/dist/server.js",
     "scripts": {
-        "build": "npm run build:backend && npm run build:frontend",
+        "build": "npm run build:backend && npm run build:frontend-next",
         "build:database": "echo 'No separate database build needed'",
-        "build:backend": "cd backend/api && npm run build",
-        "build:frontend": "cd frontend/web && npm run build",
+        "build:backend": "cd apps/api && npm run build",
+        "build:frontend-next": "cd apps/web && npm run build",
         "build:all": "npm run build",
-        "dev": "concurrently \"npm run dev:api\" \"npm run dev:frontend\"",
-        "dev:api": "cd backend/api && npm run dev",
-        "dev:frontend": "cd frontend/web && npm run dev",
-        "start": "node backend/api/dist/server.js",
-        "start:api": "node backend/api/dist/server.js",
-        "test": "npm test --workspace=backend/api",
-        "test:backend": "npm test --workspace=backend/api",
+        "dev": "concurrently \"npm run dev:api\" \"npm run dev:frontend-next\"",
+        "dev:api": "cd apps/api && npm run dev",
+        "dev:frontend-next": "cd apps/web && npm run dev",
+        "start": "node apps/api/dist/server.js",
+        "start:api": "node apps/api/dist/server.js",
+        "test": "npm test --workspace=apps/api",
+        "test:backend": "npm test --workspace=apps/api",
         "test:e2e": "npx playwright test",
         "test:e2e:ui": "npx playwright test --ui",
         "lint": "eslint .",
         "clean": "rm -rf */dist **/dist",
-        "version": "node -e \"const v=require('./package.json').version;const fs=require('fs');['backend/api/package.json','frontend/web/package.json'].forEach(f=>{const p=JSON.parse(fs.readFileSync(f,'utf8'));p.version=v;fs.writeFileSync(f,JSON.stringify(p,null,4)+'\\n')});console.log('✅ 모든 workspace 버전 동기화 완료:',v)\" && git add backend/api/package.json frontend/web/package.json"
+        "version": "node -e \"const v=require('./package.json').version;const fs=require('fs');['apps/api/package.json','apps/web/package.json'].forEach(f=>{const p=JSON.parse(fs.readFileSync(f,'utf8'));p.version=v;fs.writeFileSync(f,JSON.stringify(p,null,4)+'\\n')});console.log('✅ 모든 workspace 버전 동기화 완료:',v)\" && git add apps/api/package.json apps/web/package.json"
     },
     "keywords": [
         "ai",
@@ -35,8 +35,9 @@
         "node": ">=24 <25"
     },
     "workspaces": [
-        "backend/api",
-        "frontend/web"
+        "apps/api",
+        "apps/web",
+        "packages/*"
     ],
     "devDependencies": {
         "@playwright/test": "^1.58.0",
