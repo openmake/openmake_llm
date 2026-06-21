@@ -302,13 +302,29 @@ export function isAdmin(role: UserRole): boolean {
 }
 
 /**
+ * 쿠키 Secure 플래그 결정.
+ *
+ * COOKIE_SECURE=true 를 기본으로 따르되, 로컬 개발(localhost/127.0.0.1, 평문 http)에서는
+ * Secure 를 끈다 — 브라우저는 http 에서 Secure 쿠키를 저장·전송하지 않아 로컬 로그인이 깨지기
+ * 때문. req.hostname 은 trust proxy 로 x-forwarded-host 를 반영하므로 외부 Funnel 은 ts.net →
+ * Secure 유지, 로컬만 완화된다(운영 Funnel 동작 불변). COOKIE_SECURE=false 면 항상 false.
+ */
+function resolveCookieSecure(res: Response): boolean {
+    if (!getConfig().cookieSecure) {
+        return false;
+    }
+    const host = res.req?.hostname;
+    return host !== 'localhost' && host !== '127.0.0.1';
+}
+
+/**
  * 토큰을 httpOnly 쿠키에 설정
  * 🔒 Phase 2: 액세스 토큰 쿠키 (15분 만료)
  */
 export function setTokenCookie(res: Response, token: string): void {
     res.cookie('auth_token', token, {
         httpOnly: true,
-        secure: getConfig().cookieSecure,
+        secure: resolveCookieSecure(res),
         sameSite: 'lax',
         maxAge: AUTH_CONFIG.ACCESS_TOKEN_MAX_AGE_MS, // 15분 (액세스 토큰 수명과 일치)
         path: '/'
@@ -321,7 +337,7 @@ export function setTokenCookie(res: Response, token: string): void {
 export function setRefreshTokenCookie(res: Response, refreshToken: string): void {
     res.cookie('refresh_token', refreshToken, {
         httpOnly: true,
-        secure: getConfig().cookieSecure,
+        secure: resolveCookieSecure(res),
         sameSite: 'lax',
         maxAge: AUTH_CONFIG.REFRESH_TOKEN_MAX_AGE_MS, // 7일
         path: '/api/auth/refresh' // 리프레시 엔드포인트에서만 전송
