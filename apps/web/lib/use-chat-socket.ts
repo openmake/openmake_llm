@@ -30,6 +30,8 @@ export function useChatSocket() {
     appendToken,
     setStreaming,
     setCurrentSessionId,
+    setActiveAgent,
+    setActiveSkills,
   } = useAppStore();
 
   const connect = useCallback(() => {
@@ -72,8 +74,14 @@ export function useChatSocket() {
           });
           setStreaming(false);
           break;
+        case "agent_selected":
+          setActiveAgent({ name: data.agent.name, emoji: data.agent.emoji });
+          break;
+        case "skills_activated":
+          setActiveSkills(data.skillNames);
+          break;
         default:
-          break; // init / research_progress / agent_selected / token_warning 등은 추후
+          break; // init / research_progress / token_warning 등은 추후
       }
     };
 
@@ -106,6 +114,8 @@ export function useChatSocket() {
       if (!message.trim() || s.isGenerating) return;
 
       appendMessage({ role: "user", content: message, images });
+      setActiveAgent(null); // 새 질문 — 이전 에이전트/스킬 표시 초기화
+      setActiveSkills([]);
       setStreaming(true); // assistant placeholder 는 첫 token 에서 생성, isGenerating=true
 
       const payload: WsChatRequest = {
@@ -121,7 +131,7 @@ export function useChatSocket() {
       };
       wsRef.current?.send(JSON.stringify(payload));
     },
-    [appendMessage, setStreaming],
+    [appendMessage, setStreaming, setActiveAgent, setActiveSkills],
   );
 
   const abort = useCallback(() => {

@@ -97,7 +97,19 @@ export type WsServerEvent =
   | { type: "done"; sessionId?: string; totalTokens?: number }
   | { type: "aborted"; message?: string }
   | { type: "error"; message: string }
-  | { type: "init"; data?: unknown };
+  | { type: "init"; data?: unknown }
+  | {
+      type: "agent_selected";
+      agent: {
+        type: string;
+        name: string;
+        emoji?: string;
+        phase?: string;
+        reason?: string;
+        confidence?: number;
+      };
+    }
+  | { type: "skills_activated"; skillNames: string[] };
 
 /* ── 응답 페이로드 헬퍼 타입 ─────────────────────────────────────────── */
 export interface SessionsPayload {
