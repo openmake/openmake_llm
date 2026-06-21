@@ -249,7 +249,13 @@ export async function runMessagePipeline(svc: ChatService,
     // strategies 우회하지만 agent 페르소나 + buildContextForLLM 결과 + 언어 정책은 통합.
     // tool calling / thinking / discussion / deep research 는 여전히 미지원.
     if (externalResolved) {
-        const { agentSystemMessage: industryAgentSysMsg } = await agentPromise;
+        const { agentSystemMessage: industryAgentSysMsg, selectedAgent } = await agentPromise;
+
+        // skill tool_bindings 캐시 — 외부 provider 경로(LOCAL_STRATEGY_PATH OFF 기본이라 로컬 포함)도
+        // getAllowedTools() 동기 머지가 skill required/allowed/denied 를 반영하도록 한다.
+        // (회귀: loadSkillBindings 가 아래 strategy 경로(Step 5 합류 직후)에만 있어, 외부 분기는
+        //  skillBindings=[] 인 채 머지되어 skill 의 도구 바인딩이 전부 무시되던 버그.)
+        await svc.loadSkillBindings(selectedAgent.id, reqCtx);
 
         // 2026-05-26 옵션 B 통합 (외부 provider 경로):
         // Custom Agent (user_agents) 활성 시 산업 agent 라우팅 우회 + allowedSkills 주입.
