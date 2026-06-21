@@ -73,7 +73,7 @@ export function Composer() {
   ];
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 pb-4">
+    <div className="mx-auto w-full max-w-3xl px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
       <div className="rounded-xl border border-border bg-surface shadow-2">
         <textarea
           ref={taRef}

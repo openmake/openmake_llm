@@ -18,7 +18,7 @@ export function MobileSidebar() {
       <button
         onClick={() => setOpen(true)}
         aria-label="메뉴 열기"
-        className="fixed left-3 top-3 z-30 grid h-9 w-9 place-items-center rounded-md border border-border bg-surface text-fg shadow-1 lg:hidden"
+        className="fixed left-3 top-[max(0.75rem,env(safe-area-inset-top))] z-30 grid h-9 w-9 place-items-center rounded-md border border-border bg-surface text-fg shadow-1 lg:hidden"
       >
         <Menu className="h-[18px] w-[18px]" />
       </button>
