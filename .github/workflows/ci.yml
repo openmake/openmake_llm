@@ -1,0 +1,244 @@
+# ==============================================================
+# GitHub Actions CI Pipeline — scripts/ci-test.sh 미러링
+# ==============================================================
+# 6 게이트: Bun Test → TypeScript Build → File Size Guard → ESLint → Routing Eval → Response Eval
+# Docker 사용 없음 (프로젝트 방침 영구 제외)
+# ==============================================================
+
+name: CI
+
+on:
+  push:
+    branches: [main, develop, refactor/monorepo-apps-packages]
+  pull_request:
+    branches: [main, develop]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_ENV: test
+  JWT_SECRET: ci-test-secret-for-testing-only
+
+jobs:
+  ci:
+    name: CI Gate (Test → Build → Size → Lint)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    # GITHUB_TOKEN 권한 명시 (PR 코멘트 게시용)
+    # - contents: read  → 체크아웃에 필요
+    # - pull-requests: write → PR 코멘트 작성/업데이트
+    # 주의: fork에서 올라온 PR은 보안상 항상 read-only 토큰만 발급됨 → sticky 코멘트 step이 403으로 silent skip됨
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: '.node-version'
+          cache: 'npm'
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install backend dependencies
+        run: npm ci
+        working-directory: apps/api
+
+      # ─── Gate 1: Bun Test ───
+      # agent-loop.test.ts 제외 (Ollama 실제 연결 시도로 CI에서 hang 발생)
+      # 각 파일을 개별 bun test 프로세스로 실행하여 mock 격리 보장
+      - name: "Gate 1: Bun Test (per-file isolation)"
+        working-directory: apps/api
+        run: |
+          TEST_FAILED=0
+          TEST_PASSED=0
+          TEST_ERRORS=""
+          CI_EXCLUDE="agent-loop.test.ts"
+
+          for f in src/__tests__/*.test.ts; do
+            fname=$(basename "$f")
+            case "$fname" in $CI_EXCLUDE) continue ;; esac
+            if timeout 30 bun test --timeout 15000 "$f" > /dev/null 2>&1; then
+              TEST_PASSED=$((TEST_PASSED + 1))
+            else
+              TEST_FAILED=$((TEST_FAILED + 1))
+              TEST_ERRORS="$TEST_ERRORS $fname"
+            fi
+          done
+
+          echo "✅ $TEST_PASSED passed, ❌ $TEST_FAILED failed"
+          if [ $TEST_FAILED -gt 0 ]; then
+            echo "실패 파일:$TEST_ERRORS"
+            exit 1
+          fi
+
+      # ─── Gate 2: TypeScript Build ───
+      - name: "Gate 2: TypeScript Build"
+        run: npm run build
+
+      # ─── Gate 3: File Size Guard (max 600 lines) ───
+      - name: "Gate 3: File Size Guard"
+        run: |
+          MAX_LINES=600
+          VIOLATIONS=""
+          while IFS= read -r f; do
+            lines=$(grep -c '' "$f" 2>/dev/null || echo 0)
+            if [ "$lines" -gt "$MAX_LINES" ]; then
+              VIOLATIONS="$VIOLATIONS\n  $f ($lines lines)"
+            fi
+          done < <(find apps/api/src -name '*.ts' -not -path '*/dist/*' -not -path '*__tests__*' -not -name '*.test.*' -not -name '*.d.ts' -not -name '*-locales.ts' -not -name '*-data-*.ts' -not -name '*-guidelines.ts' -not -name 'types.ts' -not -name 'runtime-limits.ts' -not -name 'prompt-templates.ts' -not -name 'language-policy.ts')
+          if [ -n "$VIOLATIONS" ]; then
+            echo "Files exceeding $MAX_LINES lines:$VIOLATIONS"
+            exit 1
+          fi
+          echo "All source files within $MAX_LINES line limit"
+
+      # ─── Gate 4: ESLint ───
+      - name: "Gate 4: ESLint"
+        run: npm run lint
+
+      # ─── Gate 5: Routing Evaluation ───
+      # 키워드 라우터 정확도 회귀 검출. 베이스라인 50% 임계값 미만 시 차단.
+      # eval:augmented는 Ollama embedding 호출 필요로 CI에서 제외 (수동/스테이징 실행)
+      - name: "Gate 5: Routing Evaluation (Golden Dataset)"
+        working-directory: apps/api
+        env:
+          OMK_EVAL_PASS_THRESHOLD: '0.5'
+        run: npm run eval:routing
+
+      # ─── Gate 6: Response Pattern Evaluation (mock) ───
+      # 응답 패턴 평가기 자체 동작 + mock generator 룰셋 회귀 검출.
+      # --real 모드는 LLM 비용 발생으로 별도 워크플로우(미구현)
+      - name: "Gate 6: Response Pattern Evaluation (mock)"
+        working-directory: apps/api
+        env:
+          OMK_EVAL_RESPONSE_THRESHOLD: '0.5'
+        run: npm run eval:response
+
+      # 평가 결과 아티팩트 업로드 (PR 회귀 추적용)
+      - name: Upload evaluation artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: evaluation-results-${{ github.sha }}
+          path: apps/api/logs/*-evaluation-*.json
+          if-no-files-found: ignore
+          retention-days: 30
+
+      # ─── PR 평가 회귀 리포트 코멘트 (sticky) ───
+      # PR 이벤트일 때만 동작. Routing/Response 평가 JSON에서 통과율을 읽어 마크다운 표 생성.
+      # actions/github-script(@v7, GitHub 공식)로 PR 코멘트 listComments → marker 검색 → update or create.
+      # if: always() — 평가 게이트가 실패(exit 1)해도 회귀 리포트는 게시되어야 한다 (회귀 가시성 확보).
+      - name: "Post evaluation pass-rate comment (PR only)"
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        env:
+          ROUTING_BASELINE: ${{ env.OMK_EVAL_PASS_THRESHOLD || '0.5' }}
+          RESPONSE_BASELINE: ${{ env.OMK_EVAL_RESPONSE_THRESHOLD || '0.5' }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+
+            const LOGS_DIR = 'apps/api/logs';
+            // 동일 PR에 코멘트가 누적되지 않도록 식별용 HTML 마커
+            const MARKER = '<!-- eval-regression-report -->';
+            const commit = (context.sha || '').slice(0, 7);
+
+            // 가장 최근의 평가 JSON 파일 한 개를 prefix 기준으로 찾는다.
+            // - prefix 'evaluation-' 만 매치하기 위해 'response-evaluation-' 은 제외 (Gate 5 결과)
+            // - prefix 'response-evaluation-' 은 Gate 6 결과
+            // 파일이 없으면 null 반환하여 행을 누락 처리 (코멘트는 그래도 게시).
+            function findLatest(prefix, exclude) {
+              if (!fs.existsSync(LOGS_DIR)) return null;
+              const candidates = fs.readdirSync(LOGS_DIR)
+                .filter((f) => f.startsWith(prefix) && f.endsWith('.json'))
+                .filter((f) => !exclude || !f.startsWith(exclude))
+                .map((f) => {
+                  const full = path.join(LOGS_DIR, f);
+                  return { full, mtime: fs.statSync(full).mtimeMs };
+                })
+                .sort((a, b) => b.mtime - a.mtime);
+              return candidates[0]?.full || null;
+            }
+
+            function loadEval(file) {
+              if (!file) return null;
+              try {
+                return JSON.parse(fs.readFileSync(file, 'utf8'));
+              } catch (err) {
+                core.warning(`평가 JSON 파싱 실패: ${file} — ${err.message}`);
+                return null;
+              }
+            }
+
+            function fmtPct(rate) {
+              if (typeof rate !== 'number') return 'n/a';
+              return `${(rate * 100).toFixed(1)}%`;
+            }
+
+            const routingFile = findLatest('evaluation-', 'response-evaluation-');
+            const responseFile = findLatest('response-evaluation-', null);
+            const routing = loadEval(routingFile);
+            const response = loadEval(responseFile);
+
+            const routingBaseline = parseFloat(process.env.ROUTING_BASELINE || '0.5');
+            const responseBaseline = parseFloat(process.env.RESPONSE_BASELINE || '0.5');
+
+            function row(label, data, baseline) {
+              if (!data) {
+                return `| ${label} | n/a | n/a | ${fmtPct(baseline)} | 결과 파일 없음 |`;
+              }
+              const passed = data.passRate >= baseline ? '✅' : '❌';
+              return `| ${label} | ${fmtPct(data.passRate)} | ${data.passedCases}/${data.totalCases} | ${fmtPct(baseline)} | ${passed} |`;
+            }
+
+            const body = [
+              MARKER,
+              `## 평가 회귀 리포트 (\`${commit}\`)`,
+              '',
+              '| 평가 | 통과율 | 통과/전체 | 베이스라인 | 상태 |',
+              '|---|---|---|---|---|',
+              row('Routing (Gate 5)', routing, routingBaseline),
+              row('Response (Gate 6)', response, responseBaseline),
+              '',
+              `- 데이터셋 버전: routing=\`${routing?.datasetVersion ?? 'n/a'}\`, response=\`${response?.datasetVersion ?? 'n/a'}\``,
+              `- 베이스라인은 \`OMK_EVAL_PASS_THRESHOLD\` / \`OMK_EVAL_RESPONSE_THRESHOLD\` 환경변수 기준 (이력 비교 아님)`,
+              `- 상세 결과: Actions 실행의 \`evaluation-results-${context.sha}\` 아티팩트 참조`,
+            ].join('\n');
+
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+
+            // marker가 포함된 기존 코멘트를 찾아 update; 없으면 create. 페이지네이션 처리.
+            const existing = await github.paginate(
+              github.rest.issues.listComments,
+              { owner, repo, issue_number, per_page: 100 },
+            );
+            const previous = existing.find((c) => c.body && c.body.includes(MARKER));
+
+            if (previous) {
+              await github.rest.issues.updateComment({
+                owner, repo, comment_id: previous.id, body,
+              });
+              core.info(`평가 회귀 코멘트 업데이트 완료: comment_id=${previous.id}`);
+            } else {
+              await github.rest.issues.createComment({
+                owner, repo, issue_number, body,
+              });
+              core.info('평가 회귀 코멘트 신규 생성 완료');
+            }
