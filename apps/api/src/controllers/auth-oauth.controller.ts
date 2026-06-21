@@ -190,11 +190,17 @@ function validateAndConsumeStateFallback(state: string, expectedProvider: string
  */
 function buildRedirectUri(req: Request, provider: 'google' | 'github', serverPort: number): string {
     const configuredUri = getConfig().oauthRedirectUri;
-    const requestHost = req.get('host') || `localhost:${serverPort}`;
+    // 외부 접속은 리버스 프록시(Next.js rewrites / Nginx)를 거치므로 req.get('host') 는
+    // 프록시 destination(예: localhost:52416)이 되어 redirect_uri 가 외부 주소로 생성되지 않는다.
+    // 원본 Host(예: rasplay.tplinkdns.com:33000)는 x-forwarded-host 에 담기므로 이를 우선 사용해
+    // Google Console 등록 URI 와 일치시켜 redirect_uri_mismatch 를 방지한다. (trust proxy 신뢰 + Google 승인목록 2차검증)
+    const forwardedHost = req.get('x-forwarded-host');
+    const requestHost = (forwardedHost ? forwardedHost.split(',')[0].trim() : req.get('host')) || `localhost:${serverPort}`;
     const forwardedProto = req.get('x-forwarded-proto');
     const requestProtocol = (forwardedProto ? forwardedProto.split(',')[0].trim() : req.protocol) || 'http';
 
     const dynamicRedirectUri = `${requestProtocol}://${requestHost}/api/auth/callback/${provider}`;
+    log.info(`[OAuth] host 해석: x-forwarded-host=${forwardedHost ?? '(none)'}, raw-host=${req.get('host') ?? '(none)'}, 사용=${requestHost}`);
 
     // OAUTH_REDIRECT_URI가 명시적으로 설정된 경우 우선 사용하되,
     // 현재 요청 Host와 불일치하면 동적 URI를 사용해 redirect_uri_mismatch를 방지합니다.
