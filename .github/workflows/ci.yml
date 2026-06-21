@@ -9,7 +9,7 @@ name: CI
 
 on:
   push:
-    branches: [main, develop, refactor/monorepo-apps-packages]
+    branches: [main, develop]
   pull_request:
     branches: [main, develop]
 
