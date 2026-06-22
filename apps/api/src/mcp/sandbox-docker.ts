@@ -112,13 +112,13 @@ export function buildDockerArgs(input: SandboxInput, cfg: SandboxConfig): string
     a.push('--cap-drop', 'ALL', '--security-opt', 'no-new-privileges');
     a.push('--pids-limit', String(cfg.pidsLimit), '--memory', cfg.memory);
     a.push('--user', cfg.user);
-    a.push('-v', `${cfg.cacheVolume}:/home/mcp/.cache`);
+    a.push('-v', `${cfg.cacheVolume}:/home/node/.cache`);
     // host.docker.internal 매핑 (Linux 호환 — Docker Desktop 은 기본 제공이나 무해)
     a.push('--add-host', 'host.docker.internal:host-gateway');
-    a.push('-w', '/home/mcp');
-    a.push('-e', 'HOME=/home/mcp');
-    a.push('-e', 'NPM_CONFIG_CACHE=/home/mcp/.cache/npm');
-    a.push('-e', 'UV_CACHE_DIR=/home/mcp/.cache/uv');
+    a.push('-w', '/home/node');
+    a.push('-e', 'HOME=/home/node');
+    a.push('-e', 'NPM_CONFIG_CACHE=/home/node/.cache/npm');
+    a.push('-e', 'UV_CACHE_DIR=/home/node/.cache/uv');
     // 서버 config.env 만 컨테이너에 주입 (호스트 env 미상속)
     for (const [k, v] of Object.entries(input.env ?? {})) {
         a.push('-e', `${k}=${rewriteLoopback(String(v))}`);

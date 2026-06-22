@@ -8,7 +8,7 @@
 #   docker build -t openmake-mcp-runtime:latest infra/mcp-runtime
 #
 # 캐시 볼륨(npx/uvx 재다운로드 방지)은 sandbox-docker.ts 가 런타임에 자동 마운트:
-#   -v openmake-mcp-cache:/home/mcp/.cache   (named volume, 자동 생성)
+#   -v openmake-mcp-cache:/home/node/.cache   (named volume, 자동 생성)
 FROM node:22-slim
 
 # uv (uvx) + python — uvx 계열 MCP 서버용. uv 는 /usr/local/bin 에 설치(비-root 도 사용 가능).
@@ -18,13 +18,17 @@ RUN apt-get update \
     && apt-get purge -y curl \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# 비-root 실행 사용자 (sandbox-docker 의 --user 1000:1000 과 일치)
-RUN useradd --create-home --uid 1000 mcp
-USER mcp
-WORKDIR /home/mcp
-ENV HOME=/home/mcp \
-    NPM_CONFIG_CACHE=/home/mcp/.cache/npm \
-    UV_CACHE_DIR=/home/mcp/.cache/uv
+# node:22 이미지 기본 제공 'node' 유저(uid 1000) 사용 — sandbox-docker 의 --user 1000:1000 과 일치.
+# (useradd 로 새 uid 1000 생성하면 node 와 충돌해 실패하므로 기존 유저 재사용)
+USER node
+WORKDIR /home/node
+ENV HOME=/home/node \
+    NPM_CONFIG_CACHE=/home/node/.cache/npm \
+    UV_CACHE_DIR=/home/node/.cache/uv
+# .cache 를 node 소유로 미리 생성 — named volume(openmake-mcp-cache)이 빈 채로 처음
+# 마운트될 때 이 디렉토리의 소유권(node:1000)을 상속해 uid 1000 이 캐시를 쓸 수 있게 함.
+# (생성 안 하면 볼륨이 root 소유로 만들어져 npx/uvx 캐시 쓰기가 실패)
+RUN mkdir -p /home/node/.cache/npm /home/node/.cache/uv
 
 # 진입점 없음 — sandbox-docker 가 `docker run ... <image> <command> <args>` 로
 # 실행할 MCP command(npx/uvx/바이너리)를 직접 지정한다.
