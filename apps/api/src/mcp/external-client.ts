@@ -299,8 +299,13 @@ export class ExternalMCPClient extends EventEmitter {
                 return new StdioClientTransport({
                     command: this.config.command,
                     args: this.config.args || [],
+                    // 🔒 보안: process.env 전체 상속 금지 — 외부(승인) MCP 서버가 호스트 비밀
+                    //   (DATABASE_URL/JWT_SECRET/TOKEN_ENCRYPTION_KEY/LLM_API_KEY/GOOGLE_* 등)에
+                    //   접근하던 누출을 차단. SDK 가 getDefaultEnvironment()(PATH/HOME 등 안전
+                    //   부분집합)를 base 로 병합하므로, 서버가 명시 설정한 env 만 추가 전달한다.
+                    //   (host env 가 필요한 서버는 config.env 에 해당 키를 명시해야 함 — 명시적 opt-in)
                     env: this.config.env
-                        ? { ...process.env, ...this.config.env } as Record<string, string>
+                        ? { ...this.config.env } as Record<string, string>
                         : undefined,
                     stderr: 'pipe',
                 });
