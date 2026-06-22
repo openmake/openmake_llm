@@ -204,7 +204,37 @@ export class UnifiedMCPClient {
         // toolRouter 직접 호출 — JSON-RPC 래퍼(executeTool)는 context 채널이 없어
         // 사용자 스코프 내장 도구(agent_task_* 등)와 user-pool 외부 도구에 userId 가
         // 전달되지 않는다. 에이전트 루프(runTool)와 동일한 canonical 경로.
-        return this.toolRouter.executeTool(toolName, sandboxedArgs, context);
+        const startedAt = Date.now();
+        const result = await this.toolRouter.executeTool(toolName, sandboxedArgs, context);
+        // tool call 감사 영속화 (fire-and-forget·비차단). 공개 운영 포렌식용.
+        void this.auditToolCall(toolName, context, result, Date.now() - startedAt);
+        return result;
+    }
+
+    /** MCP tool call 을 audit_logs 에 영속화. action='mcp_tool_call' 은 CRITICAL_ACTIONS 미포함 → 알림 없음. */
+    private async auditToolCall(
+        toolName: string, context: UserContext, result: MCPToolResult, durationMs: number,
+    ): Promise<void> {
+        try {
+            const { getAuditService } = await import('../services/AuditService');
+            const isExternal = toolName.includes('::');
+            const rawUid = context.userId !== undefined && context.userId !== null ? String(context.userId) : undefined;
+            // audit_logs.user_id 는 users FK — 게스트('guest')는 user_id=null 로 넣고 details 에 표시(FK 위반 방지).
+            const isRealUser = rawUid !== undefined && rawUid !== 'guest';
+            await getAuditService().logAudit({
+                action: 'mcp_tool_call',
+                userId: isRealUser ? rawUid : undefined,
+                resourceType: isExternal ? 'mcp_external_tool' : 'mcp_builtin_tool',
+                resourceId: toolName,
+                details: {
+                    isError: result?.isError === true,
+                    durationMs,
+                    server: isExternal ? toolName.split('::')[0] : 'builtin',
+                    role: context.role,
+                    actorId: rawUid ?? 'guest',
+                },
+            });
+        } catch (e) { logger.debug(`audit 기록 실패(무시): ${e instanceof Error ? e.message : String(e)}`); }
     }
 
     // ============================================

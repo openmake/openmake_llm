@@ -53,10 +53,15 @@ export interface SandboxConfig {
     /** resolve 된 docker 절대경로 또는 null(미발견) */
     dockerPath: string | null;
     image: string;
+    /** per-server 캐시 볼륨 prefix — 실제 볼륨은 `${cacheVolume}-${serverId}` (상호 오염 차단) */
     cacheVolume: string;
     memory: string;
     pidsLimit: number;
+    /** CPU 상한 (CPU DoS 방어) */
+    cpus: string;
     user: string;
+    /** read-only rootfs + tmpfs (opt-in — 일부 서버가 home 외 쓰기 시 깨질 수 있어 기본 off) */
+    readonly: boolean;
 }
 
 let dockerCache: { key: string; value: string | null } | null = null;
@@ -95,12 +100,21 @@ export function defaultSandboxConfig(): SandboxConfig {
         cacheVolume: process.env.MCP_SANDBOX_CACHE_VOLUME || 'openmake-mcp-cache',
         memory: process.env.MCP_SANDBOX_MEMORY || '512m',
         pidsLimit: Number(process.env.MCP_SANDBOX_PIDS_LIMIT) || 256,
+        cpus: process.env.MCP_SANDBOX_CPUS || '1.0',
         user: process.env.MCP_SANDBOX_USER || '1000:1000',
+        readonly: process.env.MCP_SANDBOX_READONLY === 'true',
     };
+}
+
+/** docker 볼륨/식별자 안전화. */
+function sanitizeId(id: string): string {
+    return id.replace(/[^A-Za-z0-9._-]/g, '_') || 'unknown';
 }
 
 /** 컨테이너 내 127.0.0.1/localhost → host.docker.internal (내부 서비스 접속 보정). */
 const LOOPBACK_RE = /\b(?:127\.0\.0\.1|localhost)\b/g;
+/** loopback 참조 여부 검사용 (non-global — .test() 상태 누적 방지). */
+const LOOPBACK_TEST = /(?:127\.0\.0\.1|localhost)/;
 export function rewriteLoopback(s: string): string {
     return s.replace(LOOPBACK_RE, 'host.docker.internal');
 }
@@ -108,14 +122,21 @@ export function rewriteLoopback(s: string): string {
 /** PURE: docker run 인자 조립 (유닛테스트 대상). */
 export function buildDockerArgs(input: SandboxInput, cfg: SandboxConfig): string[] {
     const net = (input.network ?? 'full') === 'none' ? 'none' : 'bridge';
+    // per-server 캐시 볼륨 — 컨테이너 간 캐시(공급망) 상호 오염 차단.
+    const cacheVol = `${cfg.cacheVolume}-${sanitizeId(input.serverId)}`;
+    // 내부 서비스(127.0.0.1/localhost) 를 참조하는 서버에만 host.docker.internal 부여 —
+    // 그 외 서버가 호스트 내부 서비스에 도달하는 over-grant 차단.
+    const referencesLoopback = LOOPBACK_TEST.test(
+        [input.command, ...input.args.map(String), ...Object.values(input.env ?? {}).map(String)].join(' '),
+    );
     const a: string[] = ['run', '--rm', '-i', '--init'];
     a.push('--network', net);
     a.push('--cap-drop', 'ALL', '--security-opt', 'no-new-privileges');
-    a.push('--pids-limit', String(cfg.pidsLimit), '--memory', cfg.memory);
+    a.push('--pids-limit', String(cfg.pidsLimit), '--memory', cfg.memory, '--cpus', cfg.cpus);
     a.push('--user', cfg.user);
-    a.push('-v', `${cfg.cacheVolume}:/home/node/.cache`);
-    // host.docker.internal 매핑 (Linux 호환 — Docker Desktop 은 기본 제공이나 무해)
-    a.push('--add-host', 'host.docker.internal:host-gateway');
+    if (cfg.readonly) a.push('--read-only', '--tmpfs', '/tmp:rw,exec', '--tmpfs', '/run:rw');
+    a.push('-v', `${cacheVol}:/home/node/.cache`);
+    if (referencesLoopback) a.push('--add-host', 'host.docker.internal:host-gateway');
     a.push('-w', '/home/node');
     a.push('-e', 'HOME=/home/node');
     a.push('-e', 'NPM_CONFIG_CACHE=/home/node/.cache/npm');
