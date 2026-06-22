@@ -260,8 +260,8 @@ export interface MCPServerConfig {
     updated_at: string;
     /** 카탈로그 템플릿 ID (mcp_server_catalog.id 참조) */
     catalog_template_id?: string;
-    /** stdio docker 샌드박스 네트워크 정책 ('full'=bridge | 'none'=--network none). DB sandbox_network 컬럼. */
-    sandbox_network?: 'full' | 'none';
+    /** stdio docker 샌드박스 정책 ('full'=bridge | 'none'=--network none | 'host'=비격리 호스트 실행). DB sandbox_network 컬럼. */
+    sandbox_network?: 'full' | 'none' | 'host';
 }
 
 /**
