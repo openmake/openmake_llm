@@ -1,0 +1,150 @@
+/**
+ * ============================================================
+ * MCP Sandbox (Docker) — 외부 MCP stdio 서버 컨테이너 격리
+ * ============================================================
+ *
+ * 외부(import·승인) MCP 서버를 호스트 자식 프로세스로 직접 spawn 하던 것을,
+ * `docker run` 으로 감싸 컨테이너(Linux)로 격리한다. bubblewrap 과 달리
+ * **macOS(Docker Desktop) 포함 docker 가 있는 모든 호스트에서 실제 격리**가 동작한다.
+ * 단일 후킹: external-client createTransport 가 command/args 를 이 함수로 감싼다.
+ *
+ * 격리(컨테이너 기본):
+ *  - 파일시스템: 호스트 경로 미마운트 → 호스트 FS·비밀 접근 불가(컨테이너 기본 격리).
+ *  - env: config.env 만 `-e` 로 주입(호스트 env 미상속 — #151 과 동일 원칙, 더 강력).
+ *  - 네트워크: full(bridge) | none(--unshare 대신 --network none). 서버별 정책.
+ *  - 권한: --cap-drop ALL + no-new-privileges + 비-root user + pids/memory 상한(cgroups).
+ *  - 내부 loopback(127.0.0.1/localhost) → host.docker.internal 자동 치환
+ *    (컨테이너의 127.0.0.1 은 호스트가 아니므로 DB 등 내부 서비스 접속 인자 보정).
+ *
+ * 안전/호환:
+ *  - 게이트 미충족(flag off / docker 부재) → 원본 그대로 no-op + 경고(graceful).
+ *  - 런타임 이미지(node+uv)는 사전 빌드 필요: infra/mcp-runtime/Dockerfile.
+ *
+ * @module mcp/sandbox-docker
+ */
+import * as fs from 'fs';
+import * as path from 'path';
+import { createLogger } from '../utils/logger';
+
+const logger = createLogger('McpSandbox');
+
+export type SandboxNetwork = 'full' | 'none';
+
+export interface SandboxInput {
+    command: string;
+    args: string[];
+    serverId: string;
+    network?: SandboxNetwork;
+    /** 컨테이너에 -e 로 주입할 env (서버 config.env). 호스트 env 는 상속하지 않는다. */
+    env?: Record<string, string>;
+}
+
+export interface SandboxResult {
+    command: string;
+    args: string[];
+    /** 실제 docker 로 감쌌는지 (false = no-op 통과) */
+    sandboxed: boolean;
+}
+
+/** 게이트/프로파일 입력 — 테스트 주입 가능(순수성). */
+export interface SandboxConfig {
+    enabled: boolean;
+    /** resolve 된 docker 절대경로 또는 null(미발견) */
+    dockerPath: string | null;
+    image: string;
+    cacheVolume: string;
+    memory: string;
+    pidsLimit: number;
+    user: string;
+}
+
+let dockerCache: { key: string; value: string | null } | null = null;
+/** PATH 또는 절대경로에서 docker 바이너리 탐색 (memoize). */
+function resolveDocker(dockerPath: string): string | null {
+    if (dockerCache && dockerCache.key === dockerPath) return dockerCache.value;
+    let resolved: string | null = null;
+    try {
+        if (dockerPath.includes('/')) {
+            resolved = fs.existsSync(dockerPath) ? dockerPath : null;
+        } else {
+            const dirs = (process.env.PATH || '').split(path.delimiter);
+            // Docker Desktop(macOS) 기본 경로 보강
+            const extra = ['/usr/local/bin', '/opt/homebrew/bin'];
+            for (const dir of [...dirs, ...extra]) {
+                if (!dir) continue;
+                const candidate = path.join(dir, dockerPath);
+                if (fs.existsSync(candidate)) { resolved = candidate; break; }
+            }
+        }
+    } catch {
+        resolved = null;
+    }
+    dockerCache = { key: dockerPath, value: resolved };
+    return resolved;
+}
+
+/** 환경에서 SandboxConfig 조립 (No-Hardcoding — env override). */
+export function defaultSandboxConfig(): SandboxConfig {
+    const enabled = process.env.MCP_SANDBOX_ENABLED === 'true';
+    const dockerPath = enabled ? resolveDocker(process.env.MCP_SANDBOX_DOCKER_PATH || 'docker') : null;
+    return {
+        enabled,
+        dockerPath,
+        image: process.env.MCP_SANDBOX_IMAGE || 'openmake-mcp-runtime:latest',
+        cacheVolume: process.env.MCP_SANDBOX_CACHE_VOLUME || 'openmake-mcp-cache',
+        memory: process.env.MCP_SANDBOX_MEMORY || '512m',
+        pidsLimit: Number(process.env.MCP_SANDBOX_PIDS_LIMIT) || 256,
+        user: process.env.MCP_SANDBOX_USER || '1000:1000',
+    };
+}
+
+/** 컨테이너 내 127.0.0.1/localhost → host.docker.internal (내부 서비스 접속 보정). */
+const LOOPBACK_RE = /\b(?:127\.0\.0\.1|localhost)\b/g;
+export function rewriteLoopback(s: string): string {
+    return s.replace(LOOPBACK_RE, 'host.docker.internal');
+}
+
+/** PURE: docker run 인자 조립 (유닛테스트 대상). */
+export function buildDockerArgs(input: SandboxInput, cfg: SandboxConfig): string[] {
+    const net = (input.network ?? 'full') === 'none' ? 'none' : 'bridge';
+    const a: string[] = ['run', '--rm', '-i', '--init'];
+    a.push('--network', net);
+    a.push('--cap-drop', 'ALL', '--security-opt', 'no-new-privileges');
+    a.push('--pids-limit', String(cfg.pidsLimit), '--memory', cfg.memory);
+    a.push('--user', cfg.user);
+    a.push('-v', `${cfg.cacheVolume}:/home/mcp/.cache`);
+    // host.docker.internal 매핑 (Linux 호환 — Docker Desktop 은 기본 제공이나 무해)
+    a.push('--add-host', 'host.docker.internal:host-gateway');
+    a.push('-w', '/home/mcp');
+    a.push('-e', 'HOME=/home/mcp');
+    a.push('-e', 'NPM_CONFIG_CACHE=/home/mcp/.cache/npm');
+    a.push('-e', 'UV_CACHE_DIR=/home/mcp/.cache/uv');
+    // 서버 config.env 만 컨테이너에 주입 (호스트 env 미상속)
+    for (const [k, v] of Object.entries(input.env ?? {})) {
+        a.push('-e', `${k}=${rewriteLoopback(String(v))}`);
+    }
+    a.push(cfg.image);
+    a.push(rewriteLoopback(input.command), ...input.args.map((x) => rewriteLoopback(String(x))));
+    return a;
+}
+
+const warned = new Set<string>();
+function warnOnce(key: string, msg: string): void {
+    if (warned.has(key)) return;
+    warned.add(key);
+    logger.warn(msg);
+}
+
+/**
+ * 외부 MCP stdio command 를 docker run 으로 감싼다. 게이트 미충족 시 원본 그대로(no-op).
+ * sandboxed=true 이면 env 는 args(-e)에 baked 되므로 호출자는 StdioClientTransport env 를 비워야 한다.
+ */
+export function buildSandboxedCommand(input: SandboxInput, cfg: SandboxConfig = defaultSandboxConfig()): SandboxResult {
+    if (!cfg.enabled) return { command: input.command, args: input.args, sandboxed: false };
+    if (!cfg.dockerPath) {
+        warnOnce('docker', 'docker 바이너리를 찾지 못해 MCP 샌드박스 미적용(비격리 실행). Docker 설치/실행 확인 필요.');
+        return { command: input.command, args: input.args, sandboxed: false };
+    }
+    const dockerArgs = buildDockerArgs(input, cfg);
+    return { command: cfg.dockerPath, args: dockerArgs, sandboxed: true };
+}

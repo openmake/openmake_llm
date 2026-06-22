@@ -245,7 +245,8 @@ Environment variables loaded from `.env` at project root (see `.env.example`). K
 
 - **DB(PostgreSQL) 등 인프라 의존성의 Docker 분리 운영 허용** (2026-06-21 영구 금지 해제). `docker-compose.yml` 로 DB/Redis 같은 stateful 의존성을 컨테이너로 운영 가능.
 - 애플리케이션(apps/api, frontend) 배포는 여전히 **PM2 + 직접 배포** 유지 — 앱 자체를 컨테이너화하지는 않는다(필요 시 별도 합의).
-- Docker 는 **인프라 의존성 격리 도구로만** 사용. 근거: DB 를 호스트 brew 설치 대신 버전 고정·격리·이식 가능한 컨테이너로 운영하기 위함.
+- Docker 는 **인프라 의존성 격리 + 외부 MCP 서버 OS 격리** 도구로 사용. 근거: ① DB 를 호스트 brew 설치 대신 버전 고정·격리·이식 가능한 컨테이너로 운영, ② 외부(승인) MCP stdio 서버를 호스트 프로세스 대신 컨테이너로 격리해 호스트 FS·비밀·네트워크 접근을 차단.
+- **MCP 샌드박스 (2026-06-23 정책 확장)**: 외부 MCP stdio 서버를 `docker run` 으로 감싸 격리(`apps/api/src/mcp/sandbox-docker.ts`, 단일 후킹 `external-client.ts` createTransport). 런타임 이미지 `infra/mcp-runtime/Dockerfile`(node+uv 단일 이미지). bubblewrap(Linux 전용) 방식은 폐기 — **운영 호스트가 macOS(Mac mini, Docker Desktop)** 라 bwrap 미동작, Docker 는 Linux VM 으로 macOS 포함 실제 격리 가능하기 때문. `MCP_SANDBOX_ENABLED` 플래그, 서버별 `mcp_servers.sandbox_network`(full/none), 컨테이너 내 127.0.0.1→`host.docker.internal` 자동 치환. **이는 "앱 컨테이너화"가 아니라 앱이 spawn 하는 외부 프로세스의 격리** — 정책상 허용 범위.
 - **현황 (2026-06-21)**: openmake_llm DB/Redis 는 **docker 단독 운영**으로 전환 완료 (`brew postgresql@16` 제거). compose·데이터 위치: `/Volumes/MAC_APP/docker/openmake_llm/` (데이터 bind mount `data/postgres`). Docker 전역 데이터(이미지/VM)는 `DataFolder=/Volumes/MAC_APP/docker/DockerDesktop`. 앱 연동은 `DATABASE_URL`(127.0.0.1:5432) 무변경, `openmake_llm.sh` 는 `DB_RUNTIME=docker` 가 기본. `psql`/`pg_dump` CLI 는 brew 제거와 함께 사라졌으므로 DB 직접 접근은 `docker exec -it openmake-postgres psql ...` 또는 `brew install libpq`.
 
 ### ORM / 쿼리 빌더 (영구 금지)
