@@ -40,6 +40,26 @@ const MUTATING = new Set<string>(MUTATING_METHODS);
 /** 401 자동 refresh 를 건너뛸 endpoint 목록 (무한루프 방지). */
 const SKIP_REFRESH_ENDPOINTS = ["/api/auth/refresh", "/api/auth/login", "/api/auth/me"];
 
+/**
+ * Single-flight refresh: 동시에 401 이 난 여러 요청이 각자 /api/auth/refresh 를 호출하면
+ * 서버 토큰 로테이션이 경합(첫 호출이 회전·기존 토큰 블랙리스트 → 나머지는 블랙리스트된
+ * 토큰으로 401 → clearTokenCookie 로 세션 쿠키 wipe)해 세션이 죽는다.
+ * 진행 중인 refresh 가 있으면 그 Promise 를 공유해 /refresh 가 단 1회만 나가도록 한다.
+ */
+let refreshInFlight: Promise<boolean> | null = null;
+
+function refreshOnce(): Promise<boolean> {
+  if (!refreshInFlight) {
+    refreshInFlight = fetch("/api/auth/refresh", { method: "POST", credentials: "include" })
+      .then((r) => r.ok)
+      .catch(() => false)
+      .finally(() => {
+        refreshInFlight = null;
+      });
+  }
+  return refreshInFlight;
+}
+
 async function request<T>(endpoint: string, options: RequestInit = {}, _isRetry = false): Promise<T> {
   const method = (options.method || "GET").toUpperCase();
   const headers: Record<string, string> = {
@@ -61,11 +81,9 @@ async function request<T>(endpoint: string, options: RequestInit = {}, _isRetry 
       !_isRetry &&
       !SKIP_REFRESH_ENDPOINTS.some((ep) => endpoint === ep || endpoint.startsWith(ep + "?"))
     ) {
-      try {
-        await fetch("/api/auth/refresh", { method: "POST", credentials: "include" });
+      const refreshed = await refreshOnce();
+      if (refreshed) {
         return request<T>(endpoint, options, true);
-      } catch {
-        /* refresh 실패 → 아래 리다이렉트로 진행 */
       }
       if (typeof window !== "undefined" && window.location.pathname !== "/login") {
         window.location.href = "/login";
