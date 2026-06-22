@@ -134,6 +134,8 @@ import { securityReviewTool } from './security-review-tool';
 import { createPlanTool } from './plan-tool';
 // 코드 리뷰 (P-1) — 다각도 코드 검토 (읽기 전용)
 import { codeReviewTool } from './code-review-tool';
+// 스킬 자동 호출 (LLM self-select) — 카탈로그는 getAllowedTools 가 description 에 주입
+import { loadSkillTool } from './load-skill-tool';
 
 /**
  * 전체 내장 도구 배열
@@ -162,4 +164,5 @@ export const builtInTools: MCPToolDefinition[] = [
     securityReviewTool,
     createPlanTool,
     codeReviewTool,
+    loadSkillTool as MCPToolDefinition,
 ];
