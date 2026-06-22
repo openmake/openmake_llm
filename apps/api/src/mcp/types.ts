@@ -260,6 +260,8 @@ export interface MCPServerConfig {
     updated_at: string;
     /** 카탈로그 템플릿 ID (mcp_server_catalog.id 참조) */
     catalog_template_id?: string;
+    /** stdio bwrap 샌드박스 네트워크 정책 ('full' 기본 | 'none'=--unshare-net). DB sandbox_network 컬럼. */
+    sandbox_network?: 'full' | 'none';
 }
 
 /**

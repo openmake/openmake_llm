@@ -48,6 +48,7 @@ function rowToConfig(row: MCPServerRow): MCPServerConfig {
         enabled: row.enabled,
         created_at: row.created_at,
         updated_at: row.updated_at,
+        sandbox_network: row.sandbox_network === 'none' ? 'none' : 'full',
     };
 }
 

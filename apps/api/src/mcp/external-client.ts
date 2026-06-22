@@ -26,6 +26,7 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
 import type { MCPServerConfig, MCPConnectionStatus, MCPTool, MCPToolResult } from './types';
+import { buildSandboxedCommand } from './sandbox-bwrap';
 import { createLogger } from '../utils/logger';
 
 const logger = createLogger('ExternalMCP');
@@ -296,9 +297,19 @@ export class ExternalMCPClient extends EventEmitter {
                 if (!this.config.command) {
                     throw new Error(`stdio transport requires "command" for server "${this.config.name}"`);
                 }
-                return new StdioClientTransport({
+                // 🔒 OS 격리: bwrap 으로 command/args 를 감싼다(게이트 미충족 시 원본 no-op).
+                const sb = buildSandboxedCommand({
                     command: this.config.command,
                     args: this.config.args || [],
+                    serverId: this.config.id,
+                    network: this.config.sandbox_network ?? 'full',
+                });
+                if (sb.sandboxed) {
+                    logger.info(`MCP 서버 "${this.config.name}" bwrap 격리 적용 (net=${this.config.sandbox_network ?? 'full'})`);
+                }
+                return new StdioClientTransport({
+                    command: sb.command,
+                    args: sb.args,
                     // 🔒 보안: process.env 전체 상속 금지 — 외부(승인) MCP 서버가 호스트 비밀
                     //   (DATABASE_URL/JWT_SECRET/TOKEN_ENCRYPTION_KEY/LLM_API_KEY/GOOGLE_* 등)에
                     //   접근하던 누출을 차단. SDK 가 getDefaultEnvironment()(PATH/HOME 등 안전
