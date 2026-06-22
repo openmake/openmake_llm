@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { WsChatRequest, WsServerEvent } from "@openmake/shared-types";
+import type { WsChatRequest, WsServerEvent, WsAttachedFile } from "@openmake/shared-types";
 import { useAppStore } from "./store";
 
 /**
@@ -115,11 +115,16 @@ export function useChatSocket() {
   }, [connect]);
 
   const sendChat = useCallback(
-    (message: string, images?: string[]) => {
+    (message: string, images?: string[], files?: WsAttachedFile[]) => {
       const s = useAppStore.getState();
-      if (!message.trim() || s.isGenerating) return;
+      const hasFiles = Array.isArray(files) && files.length > 0;
+      // 텍스트가 비어도 첨부 파일만으로 전송 가능
+      if ((!message.trim() && !hasFiles) || s.isGenerating) return;
 
-      appendMessage({ role: "user", content: message, images });
+      // 첨부만 있고 본문이 비면 파일명을 표시용 본문으로 사용
+      const displayContent =
+        message.trim() || (hasFiles ? `📎 ${files!.map((f) => f.name).join(", ")}` : "");
+      appendMessage({ role: "user", content: displayContent, images });
       setActiveAgent(null); // 새 질문 — 이전 에이전트/스킬 표시 초기화
       setActiveSkills([]);
       setStreaming(true); // assistant placeholder 는 첫 token 에서 생성, isGenerating=true
@@ -131,6 +136,7 @@ export function useChatSocket() {
         history: s.chatHistory.map((m) => ({ role: m.role, content: m.content })),
         sessionId: s.currentSessionId,
         images: images ?? [],
+        files: files ?? [],
         webSearch: s.webSearchEnabled,
         deepResearchMode: s.deepResearchMode,
         enabledTools: s.mcpToolsEnabled,
