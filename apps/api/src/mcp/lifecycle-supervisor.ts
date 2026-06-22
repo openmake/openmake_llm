@@ -33,7 +33,7 @@ export interface ServerSpawnConfig {
     url?: string | null;
     lifecycle?: McpLifecycle;
     catalog_template_id?: string;
-    sandbox_network?: 'full' | 'none';
+    sandbox_network?: 'full' | 'none' | 'host';
 }
 
 export type ClientFactory = (config: ServerSpawnConfig) => ExternalMCPClient;
@@ -173,7 +173,7 @@ export class MCPLifecycleSupervisor implements LifecycleSupervisor {
             url: server.url,
             lifecycle,
             catalog_template_id: server.catalog_template_id ?? undefined,
-            sandbox_network: (server as ServerWithLifecycle).sandbox_network === 'none' ? 'none' : 'full',
+            sandbox_network: (() => { const n = (server as ServerWithLifecycle).sandbox_network; return n === 'none' || n === 'host' ? n : 'full'; })(),
         };
 
         await this.repo.recordInstanceTransition(serverId, userId, 'starting').catch(() => { /* noop */ });

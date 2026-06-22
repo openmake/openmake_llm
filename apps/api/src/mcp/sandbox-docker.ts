@@ -28,7 +28,8 @@ import { createLogger } from '../utils/logger';
 
 const logger = createLogger('McpSandbox');
 
-export type SandboxNetwork = 'full' | 'none';
+/** 'full'=bridge, 'none'=--network none, 'host'=컨테이너 없이 호스트 직접 실행(opt-out) */
+export type SandboxNetwork = 'full' | 'none' | 'host';
 
 export interface SandboxInput {
     command: string;
@@ -140,6 +141,9 @@ function warnOnce(key: string, msg: string): void {
  * sandboxed=true 이면 env 는 args(-e)에 baked 되므로 호출자는 StdioClientTransport env 를 비워야 한다.
  */
 export function buildSandboxedCommand(input: SandboxInput, cfg: SandboxConfig = defaultSandboxConfig()): SandboxResult {
+    // per-server opt-out — 호스트 설치 바이너리 의존 등으로 컨테이너 미동작인 신뢰 서버는
+    // sandbox_network='host' 로 비격리 호스트 실행 (플래그 ON 여부와 무관).
+    if (input.network === 'host') return { command: input.command, args: input.args, sandboxed: false };
     if (!cfg.enabled) return { command: input.command, args: input.args, sandboxed: false };
     if (!cfg.dockerPath) {
         warnOnce('docker', 'docker 바이너리를 찾지 못해 MCP 샌드박스 미적용(비격리 실행). Docker 설치/실행 확인 필요.');

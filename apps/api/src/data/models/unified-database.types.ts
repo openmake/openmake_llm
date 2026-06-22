@@ -243,7 +243,7 @@ export interface MCPServerRow {
     created_at: string;
     updated_at: string;
     /** stdio docker 샌드박스 네트워크 정책 ('full'|'none'). 042 마이그레이션. */
-    sandbox_network?: 'full' | 'none' | null;
+    sandbox_network?: 'full' | 'none' | 'host' | null;
 }
 
 // ============================================
