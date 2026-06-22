@@ -105,6 +105,14 @@ export interface WsChatRequest {
   enabledTools?: Record<string, boolean>;
 }
 
+/** 아티팩트 메타 — 백엔드 llm/artifact-parser.ts ArtifactInfo 와 동일 계약. */
+export interface ArtifactMeta {
+  id: string;
+  kind: string;
+  title: string;
+  lang: string | null;
+}
+
 export type WsServerEvent =
   | { type: "token"; token: string }
   | { type: "session_created"; sessionId: string }
@@ -123,7 +131,11 @@ export type WsServerEvent =
         confidence?: number;
       };
     }
-  | { type: "skills_activated"; skillNames: string[] };
+  | { type: "skills_activated"; skillNames: string[] }
+  // 아티팩트 스트리밍 (백엔드 ws-chat-handler.ts 송출)
+  | { type: "artifact_start"; artifact: ArtifactMeta; messageId?: string }
+  | { type: "artifact_chunk"; id: string; delta: string; messageId?: string }
+  | { type: "artifact_end"; id: string; messageId?: string };
 
 /* ── 응답 페이로드 헬퍼 타입 ─────────────────────────────────────────── */
 export interface SessionsPayload {

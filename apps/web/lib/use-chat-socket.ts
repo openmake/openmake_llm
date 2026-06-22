@@ -38,6 +38,9 @@ export function useChatSocket() {
     setCurrentSessionId,
     setActiveAgent,
     setActiveSkills,
+    startArtifact,
+    appendArtifactDelta,
+    endArtifact,
   } = useAppStore();
 
   const connect = useCallback(() => {
@@ -85,6 +88,15 @@ export function useChatSocket() {
           break;
         case "skills_activated":
           setActiveSkills(data.skillNames);
+          break;
+        case "artifact_start":
+          startArtifact(data.artifact);
+          break;
+        case "artifact_chunk":
+          appendArtifactDelta(data.id, data.delta);
+          break;
+        case "artifact_end":
+          endArtifact(data.id);
           break;
         default:
           break; // init / research_progress / token_warning 등은 추후
