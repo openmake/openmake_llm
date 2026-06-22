@@ -3,8 +3,9 @@
  * @description Cross-conversation memory (claude.ai / ChatGPT Memory 동등).
  *
  * 도입 (2026-05-26): mainstream gap closure Phase 3-A.
- * 사용자가 `/remember <사실>` slash command 로 저장한 항목을 다음 대화의
+ * 사용자가 REST `POST /api/users/me/memories` 로 저장한 항목을 다음 대화의
  * system prompt 에 prepend. auto-extraction 없음 (vLLM 부담 0).
+ * ⚠️ 채팅 입력 `/remember` 슬래시 명령은 미구현(slash-command.ts 는 스킬 매칭 전용).
  *
  * @see db/migrations/034_user_memories.sql
  */
