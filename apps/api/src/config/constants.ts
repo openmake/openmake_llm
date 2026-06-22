@@ -62,8 +62,15 @@ export const SERVER_CONFIG = {
  * 익명 세션 최대 유지 시간을 정의합니다.
  */
 // JWT + Cookie 만료 시간 단일 소스 (L4 보안 수정: 단위 혼용 방지)
-const ACCESS_TOKEN_DURATION_MINUTES = 15;
-const REFRESH_TOKEN_DURATION_DAYS = 7;
+// access 토큰 수명은 env override 가능 (기본 15분은 WS 미-refresh 환경에서 잦은 만료를 유발 →
+// ACCESS_TOKEN_MINUTES 로 연장 가능). refresh 토큰은 7일 유지.
+// 양의 유한수만 허용 — 0·음수·NaN 은 기본값으로 폴백 (예: "-5m" 만료로 즉시 만료된 토큰이 발급되는 것을 방지).
+const positiveEnvNumber = (raw: string | undefined, fallback: number): number => {
+    const n = Number(raw);
+    return Number.isFinite(n) && n > 0 ? n : fallback;
+};
+const ACCESS_TOKEN_DURATION_MINUTES = positiveEnvNumber(process.env.ACCESS_TOKEN_MINUTES, 15);
+const REFRESH_TOKEN_DURATION_DAYS = positiveEnvNumber(process.env.REFRESH_TOKEN_DAYS, 7);
 
 export const AUTH_CONFIG = {
     /** 세션 정리 주기 (밀리초) - 24시간 */

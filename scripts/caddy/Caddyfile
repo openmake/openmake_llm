@@ -43,3 +43,17 @@
 	# ── 그 외(Next.js 페이지·정적 자산·HMR) ──
 	reverse_proxy localhost:3000
 }
+
+# ============================================================
+# 외부 공개 = Tailscale Funnel (2026-06-22)
+# ============================================================
+# rasplay.tplinkdns.com 직접 HTTPS 는 불가:
+#   - TP-Link DDNS 라 DNS 존 제어 불가 → Let's Encrypt DNS-01 불가
+#   - 가정회선 80/443 인바운드 차단 → HTTP-01 / TLS-ALPN-01 불가
+# 따라서 과거의 `rasplay.tplinkdns.com { ... }` wss 우회 블록(자동 HTTPS)은 인증서 발급이
+# 영구 실패하여 폐기했다. 대신 Tailscale Funnel 이 공개 443 에서 TLS 를 종단한 뒤
+# 위 :33000 Caddy 로 평문 프록시하며, 외부 트래픽도 결국 이 :33000 블록(@chatws 라우팅)을
+# 그대로 탄다 (Next HMR /_next/* 제외 가드 포함):
+#   tailscale set --shields-up=false        # Funnel 전제
+#   tailscale funnel --bg 33000             # → https://<machine>.<tailnet>.ts.net
+# OAuth redirect URI 는 .env 의 OAUTH_REDIRECT_URI(=ts.net https) 로 고정한다.
