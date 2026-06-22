@@ -329,6 +329,7 @@ export class DashboardServer {
                     created_at: '',
                     updated_at: '',
                     catalog_template_id: config.catalog_template_id ?? undefined,
+                    sandbox_network: config.sandbox_network ?? 'full',
                 }),
             });
             setLifecycleSupervisor(supervisor);
@@ -517,6 +518,7 @@ if (require.main === module) {
                         created_at: '',
                         updated_at: '',
                         catalog_template_id: config.catalog_template_id ?? undefined,
+                        sandbox_network: config.sandbox_network ?? 'full',
                     }),
                 });
                 setLifecycleSupervisor(supervisor);
