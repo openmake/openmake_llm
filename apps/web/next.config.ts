@@ -28,6 +28,22 @@ const nextConfig: NextConfig = {
       { source: "/api/:path*", destination: `${API_PROXY_TARGET}/api/:path*` },
     ];
   },
+  // 보안 헤더 (전역). 아티팩트 라이브 렌더는 sandbox iframe(null-origin)이 1차 경계이고,
+  // 여기 헤더는 앱 자체 보호(클릭재킹·MIME 스니핑·레퍼러). 전체 script-src CSP 는 Next 의
+  // 인라인 hydration 때문에 nonce 배선이 필요해 별도 하드닝 단계로 분리한다.
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: [
+          { key: "X-Frame-Options", value: "SAMEORIGIN" },
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          { key: "Content-Security-Policy", value: "frame-ancestors 'self'" },
+        ],
+      },
+    ];
+  },
 };
 
 export default nextConfig;

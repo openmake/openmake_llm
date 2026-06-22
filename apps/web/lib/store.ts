@@ -16,6 +16,20 @@ export interface ChatMessage extends Pick<SharedChatMessage, "role" | "content" 
 
 export type { ChatRole };
 
+/**
+ * 아티팩트 (claude.ai-style 산출물). 백엔드 ws artifact_* 스트림으로 누적되거나
+ * REST GET /api/sessions/:sid/artifacts 로 복원된다.
+ */
+export interface Artifact {
+  id: string;
+  kind: string;
+  title: string;
+  lang: string | null;
+  content: string;
+  /** 스트리밍 진행 중 (artifact_start ~ artifact_end) */
+  streaming?: boolean;
+}
+
 export type ChatStyle = "concise" | "default" | "verbose";
 
 /** store 인증 사용자 — shared-types User 의 표시용 부분집합 (name 은 username 매핑). */
@@ -36,6 +50,11 @@ interface AppState {
   /** 현재 응답에 선택된 에이전트 + 활성 스킬 (ws agent_selected / skills_activated) */
   activeAgent: { name: string; emoji?: string } | null;
   activeSkills: string[];
+
+  // 아티팩트
+  artifacts: Artifact[];
+  activeArtifactId: string | null;
+  artifactPanelOpen: boolean;
 
   // 모드 토글 (기존 state.js)
   thinkingEnabled: boolean;
@@ -63,6 +82,14 @@ interface AppState {
   setActiveSkills: (s: string[]) => void;
   clearChat: () => void;
 
+  // 아티팩트 actions
+  startArtifact: (meta: Omit<Artifact, "content" | "streaming">) => void;
+  appendArtifactDelta: (id: string, delta: string) => void;
+  endArtifact: (id: string) => void;
+  setActiveArtifact: (id: string | null) => void;
+  setArtifactPanelOpen: (v: boolean) => void;
+  setArtifacts: (list: Artifact[]) => void;
+
   toggle: (
     key:
       | "thinkingEnabled"
@@ -85,6 +112,10 @@ export const useAppStore = create<AppState>((set) => ({
   inputDraft: "",
   activeAgent: null,
   activeSkills: [],
+
+  artifacts: [],
+  activeArtifactId: null,
+  artifactPanelOpen: false,
 
   thinkingEnabled: true,
   discussionMode: false,
@@ -125,7 +156,43 @@ export const useAppStore = create<AppState>((set) => ({
   setActiveAgent: (a) => set({ activeAgent: a }),
   setActiveSkills: (s) => set({ activeSkills: s }),
   clearChat: () =>
-    set({ chatHistory: [], currentSessionId: null, activeAgent: null, activeSkills: [] }),
+    set({
+      chatHistory: [],
+      currentSessionId: null,
+      activeAgent: null,
+      activeSkills: [],
+      artifacts: [],
+      activeArtifactId: null,
+      artifactPanelOpen: false,
+    }),
+
+  startArtifact: (meta) =>
+    set((s) => {
+      const existing = s.artifacts.findIndex((a) => a.id === meta.id);
+      const next: Artifact = { ...meta, content: "", streaming: true };
+      const artifacts =
+        existing >= 0
+          ? s.artifacts.map((a, i) => (i === existing ? next : a))
+          : [...s.artifacts, next];
+      return { artifacts, activeArtifactId: meta.id, artifactPanelOpen: true };
+    }),
+  appendArtifactDelta: (id, delta) =>
+    set((s) => ({
+      artifacts: s.artifacts.map((a) =>
+        a.id === id ? { ...a, content: a.content + delta } : a,
+      ),
+    })),
+  endArtifact: (id) =>
+    set((s) => ({
+      artifacts: s.artifacts.map((a) => (a.id === id ? { ...a, streaming: false } : a)),
+    })),
+  setActiveArtifact: (id) => set({ activeArtifactId: id }),
+  setArtifactPanelOpen: (v) => set({ artifactPanelOpen: v }),
+  setArtifacts: (list) =>
+    set((s) => ({
+      artifacts: list,
+      activeArtifactId: list.length > 0 ? (s.activeArtifactId ?? list[list.length - 1].id) : null,
+    })),
 
   toggle: (key) => set((s) => ({ [key]: !s[key] }) as Partial<AppState>),
   setSelectedModel: (m) => set({ selectedModel: m }),
