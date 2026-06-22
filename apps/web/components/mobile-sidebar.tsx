@@ -3,8 +3,9 @@
 import { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
-import { MessageSquare, Telescope, Sparkles, Menu, X } from "lucide-react";
+import { MessageSquare, Telescope, Sparkles, Menu, X, LogIn } from "lucide-react";
 import { Sidebar } from "./sidebar";
+import { useAppStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 
 /** OD lumen 모바일 시안: 하단 탭바(44px+ 터치 타깃) + "메뉴" 탭으로 전체 드로어. 데스크탑(lg)은 고정 사이드바. */
@@ -17,6 +18,7 @@ const TABS = [
 export function MobileSidebar() {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
+  const user = useAppStore((s) => s.auth.currentUser);
 
   // 라우트 이동 시 드로어 자동 닫기
   useEffect(() => setOpen(false), [pathname]);
@@ -61,6 +63,15 @@ export function MobileSidebar() {
             {t.label}
           </Link>
         ))}
+        {!user && (
+          <Link
+            href="/login"
+            className="flex min-h-[52px] flex-1 flex-col items-center justify-center gap-0.5 text-[11px] font-medium text-muted transition hover:text-fg"
+          >
+            <LogIn className="h-5 w-5" />
+            로그인
+          </Link>
+        )}
         <button
           onClick={() => setOpen(true)}
           aria-label="전체 메뉴"
