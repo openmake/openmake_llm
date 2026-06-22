@@ -52,7 +52,7 @@ export function Sidebar() {
 
   return (
     <aside className="flex h-full w-[264px] flex-col border-r border-border bg-surface-2/60">
-      <div className="flex items-center gap-2 px-4 pt-4">
+      <Link href="/" className="flex items-center gap-2 px-4 pt-4 transition hover:opacity-80">
         <Image
           src="/logo.png"
           alt="OpenMake"
@@ -61,7 +61,7 @@ export function Sidebar() {
           className="h-7 w-7 rounded-md object-contain"
         />
         <span className="text-sm font-semibold text-fg">OpenMake</span>
-      </div>
+      </Link>
 
       <div className="px-3 pt-3">
         <Link
@@ -129,17 +129,30 @@ export function Sidebar() {
       </nav>
 
       <div className="flex items-center gap-2.5 border-t border-border px-3 py-3">
-        <div className="grid h-8 w-8 place-items-center rounded-full bg-m-pro/15 text-xs font-bold text-m-pro">
-          {user?.name?.[0] ?? "G"}
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium text-fg">
-            {user?.name ?? "게스트"}
-          </p>
-          <p className="truncate text-xs text-faint">
-            {user ? `${user.role} · 자가호스팅` : "로그인 안 됨"}
-          </p>
-        </div>
+        {user ? (
+          <div className="flex min-w-0 flex-1 items-center gap-2.5">
+            <div className="grid h-8 w-8 place-items-center rounded-full bg-m-pro/15 text-xs font-bold text-m-pro">
+              {user.name?.[0] ?? "G"}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium text-fg">{user.name ?? "게스트"}</p>
+              <p className="truncate text-xs text-faint">{user.role} · 자가호스팅</p>
+            </div>
+          </div>
+        ) : (
+          <Link
+            href="/login"
+            className="flex min-w-0 flex-1 items-center gap-2.5 rounded-md transition hover:opacity-80"
+          >
+            <div className="grid h-8 w-8 place-items-center rounded-full bg-m-pro/15 text-xs font-bold text-m-pro">
+              G
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium text-fg">게스트</p>
+              <p className="truncate text-xs text-faint">로그인 안 됨</p>
+            </div>
+          </Link>
+        )}
         <ThemeToggle />
         {user && (
           <button
