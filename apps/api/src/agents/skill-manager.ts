@@ -46,6 +46,7 @@ import type {
     DraftListOptions,
     DraftListResult,
 } from '../data/repositories/skill-repository';
+import { slugify } from '../chat/slash-command';
 
 const logger = createLogger('SkillManager');
 
@@ -58,6 +59,11 @@ const MAX_SKILL_CONTENT_LENGTH = 10_000;
  */
 const SKILL_OVERLOAD_MAX_ACTIVE = Number(process.env.SKILL_OVERLOAD_MAX_ACTIVE) || 12;
 const SKILL_OVERLOAD_MAX_TOTAL_CHARS = Number(process.env.SKILL_OVERLOAD_MAX_TOTAL_CHARS) || 50_000;
+
+/** 스킬 자동 호출(LLM self-select) 카탈로그/선택 상한 — env override (No-Hardcoding). */
+const SKILL_CATALOG_MAX_ITEMS = Number(process.env.SKILL_CATALOG_MAX_ITEMS) || 200;
+const SKILL_CATALOG_DESC_MAX = Number(process.env.SKILL_CATALOG_DESC_MAX) || 120;
+const SKILL_AUTO_SELECT_TOP_K = Number(process.env.SKILL_AUTO_SELECT_TOP_K) || 3;
 
 /**
  * 한 에이전트에 주입될 스킬 묶음의 과포화 여부를 평가합니다 (순수 함수).
@@ -288,10 +294,11 @@ export class SkillManager {
                 try {
                     const s = await repo.getSkillById(id);
                     if (!s) return null;
-                    // \uad8c\ud55c \uac80\uc99d \u2014 public \ub610\ub294 \ubcf8\uc778 \uc18c\uc720\ub9cc (manifest \uad8c\ud55c \uccb4\uacc4\ub294 \ubbf8\uc138\ud654 \uac00\ub2a5)
-                    const meta = s as AgentSkill & { is_public?: boolean; created_by?: string };
-                    const isPublic = meta.is_public !== false;
-                    const isOwner = userId !== undefined && meta.created_by === userId;
+                    // \uad8c\ud55c \uac80\uc99d \u2014 public \ub610\ub294 \ubcf8\uc778 \uc18c\uc720\ub9cc (manifest \uad8c\ud55c \uccb4\uacc4\ub294 \ubbf8\uc138\ud654 \uac00\ub2a5).
+                    // rowToSkill \uc740 camelCase \ub9e4\ud551(isPublic \uae30\ubcf8 false)\uc774\ubbc0\ub85c snake_case \ub85c \uc77d\uc73c\uba74
+                    // \ud56d\uc0c1 undefined\u2192\uacf5\uac1c\ub85c \uc624\ud310\ud574 \ube44\uacf5\uac1c \uc2a4\ud0ac\uc774 \ub178\ucd9c\ub41c\ub2e4(2026-06-22 \uc218\uc815).
+                    const isPublic = s.isPublic === true;
+                    const isOwner = userId !== undefined && s.createdBy === userId;
                     if (!isPublic && !isOwner) return null;
                     return s;
                 } catch {
@@ -301,6 +308,57 @@ export class SkillManager {
         );
         const validSkills = skills.filter((s): s is AgentSkill => s !== null);
         return this.formatSkillsAsPrompt(validSkills);
+    }
+
+    /**
+     * active \uc2a4\ud0ac\uc744 "\uc774\ub984: \uc124\uba85" \ud55c \uc904 \uce74\ud0c8\ub85c\uadf8\ub85c \uc9c1\ub82c\ud654 (LLM self-select \uc6a9).
+     * load_skill \ub3c4\uad6c description \uc5d0 \uc2e4\ub824 \ubaa8\ub378\uc774 \uad00\ub828 \uc2a4\ud0ac\uc744 \uc2a4\uc2a4\ub85c \uace0\ub974\uac8c \ud55c\ub2e4.
+     *
+     * @param opts.excludeIds \uc774\ubbf8 \uc8fc\uc785\ub41c \ubc14\uc778\ub529 \uc2a4\ud0ac \u2014 \uc774\uc911 \ub178\ucd9c \ubc29\uc9c0(dedup)
+     */
+    async buildSkillCatalog(opts: { excludeIds?: ReadonlySet<string> } = {}): Promise<{ catalog: string; count: number }> {
+        const repo = await this.ensureInitialized();
+        const result = await repo.searchSkills({ status: 'active', sortBy: 'name', limit: SKILL_CATALOG_MAX_ITEMS });
+        const lines: string[] = [];
+        for (const s of result.skills) {
+            if (opts.excludeIds?.has(s.id)) continue;
+            const safeName = s.name.replace(/[<>"&]/g, '');
+            const desc = (s.description ?? '').replace(/\s+/g, ' ').trim().slice(0, SKILL_CATALOG_DESC_MAX);
+            lines.push(desc ? `- ${safeName}: ${desc}` : `- ${safeName}`);
+        }
+        return { catalog: lines.join('\n'), count: lines.length };
+    }
+
+    /**
+     * \uc2a4\ud0ac \uc774\ub984 \ubaa9\ub85d \u2192 \uc804\uccb4 content \uc8fc\uc785 \ud504\ub86c\ud504\ud2b8. load_skill \ub3c4\uad6c \ud578\ub4e4\ub7ec\uc6a9.
+     * \uc774\ub984\uc740 \uce74\ud0c8\ub85c\uadf8\uc758 \uc815\ud655\ud55c \uc774\ub984(\ub300\uc18c\ubb38\uc790 \ubb34\uad00) \ub610\ub294 slug \uc640 \ub9e4\uce6d. topK \ub85c \uc0c1\ud55c.
+     * \uad8c\ud55c: public \ub610\ub294 \ubcf8\uc778 \uc18c\uc720 \uc2a4\ud0ac\ub9cc \ub178\ucd9c(buildSkillPromptForIds \uc640 \ub3d9\uc77c \uaddc\uce59).
+     */
+    async buildSkillPromptForNames(
+        names: string[], userId?: string, topK: number = SKILL_AUTO_SELECT_TOP_K,
+    ): Promise<{ prompt: string; matched: string[] }> {
+        if (!Array.isArray(names) || names.length === 0) return { prompt: '', matched: [] };
+        const repo = await this.ensureInitialized();
+        const result = await repo.searchSkills({ status: 'active', limit: SKILL_CATALOG_MAX_ITEMS });
+        const wanted = names.slice(0, Math.max(1, topK)).map((n) => String(n).toLowerCase().trim()).filter(Boolean);
+        const seen = new Set<string>();
+        const picked: AgentSkill[] = [];
+        for (const w of wanted) {
+            // slug 매칭은 slug 가 비지 않을 때만 — 순수 한글 이름은 slugify 가 '' 라
+            // ''==='' 로 서로 오매칭되므로(예: '전기 엔지니어' vs '보고서') 정확 이름 매칭으로 폴백.
+            const wSlug = slugify(w);
+            const hit = result.skills.find((s) =>
+                !seen.has(s.id) && (
+                    s.name.toLowerCase() === w ||
+                    (wSlug.length > 0 && slugify(s.name) === wSlug)
+                ));
+            if (hit) { seen.add(hit.id); picked.push(hit); }
+        }
+        // 권한: public(isPublic) 또는 본인 소유(createdBy). rowToSkill 은 camelCase 매핑이며
+        // isPublic 기본 false 이므로 명시적 true 만 공개로 취급.
+        const visible = picked.filter((s) =>
+            s.isPublic === true || (userId !== undefined && s.createdBy === userId));
+        return { prompt: this.formatSkillsAsPrompt(visible), matched: visible.map((s) => s.name) };
     }
 
     /**

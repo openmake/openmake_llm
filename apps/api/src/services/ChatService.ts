@@ -26,6 +26,7 @@ import type { ExecutionPlan } from '../chat/profile-resolver';
 import type { UserContext } from '../mcp/user-sandbox';
 import { getUnifiedMCPClient } from '../mcp/unified-client';
 import { CHAT_ALWAYS_ON_TOOL_NAMES } from '../mcp/agent-task-tools';
+import { LOAD_SKILL_TOOL_NAME } from '../mcp/load-skill-tool';
 import { LLMClient } from '../llm';
 import { type ChatMessage, type ToolDefinition, type ModelOptions } from '../llm';
 import type { ResearchProgress } from './DeepResearchService';
@@ -163,7 +164,7 @@ export class ChatService {
             : await toolRouter.getLLMTools() as ToolDefinition[];
 
         // enabledTools가 없으면 레거시 호환: 전체 허용 (API 클라이언트 등). skill binding 적용도 skip.
-        if (reqCtx.enabledTools === undefined) return allTools;
+        if (reqCtx.enabledTools === undefined) return this.applySkillCatalog(allTools, allTools, reqCtx);
 
         // 사용자가 명시적으로 활성화한 도구만 추출
         const userToggled = allTools.filter(t => reqCtx.enabledTools![t.function.name] === true);
@@ -195,7 +196,48 @@ export class ChatService {
             `profileRequired=${profileRequiredNames.length}, skillBindings=${reqCtx.skillBindings.length}, ` +
             `merged=${merged.length}, alwaysOn=${alwaysOn.length}`,
         );
-        return [...merged, ...alwaysOn];
+        return this.applySkillCatalog([...merged, ...alwaysOn], allTools, reqCtx);
+    }
+
+    /**
+     * 스킬 자동 호출(LLM self-select) — load_skill 도구에 active 스킬 카탈로그를 주입한다.
+     *
+     * - SKILL_AUTO_SELECT_ENABLED!='true' (기본): load_skill 을 노출 목록에서 제거(기능 OFF).
+     * - ON: active 스킬을 "이름: 설명" 카탈로그로 만들어 load_skill description 에 붙여
+     *   request-scoped 로 교체. 모델이 카탈로그에서 관련 스킬을 골라 load_skill 호출.
+     * - 이미 주입된 바인딩 스킬(reqCtx.skillBindings)은 카탈로그에서 제외(dedup).
+     * - 카탈로그가 비거나 오류면 load_skill 제거(graceful) — 채팅 흐름 무영향.
+     *
+     * @param tools   노출 후보 도구 목록(merge 결과)
+     * @param allTools toolRouter 전체 도구 — load_skill 기본 정의(파라미터 스키마) 확보용
+     */
+    private async applySkillCatalog(
+        tools: ToolDefinition[], allTools: ToolDefinition[], reqCtx: RequestContext,
+    ): Promise<ToolDefinition[]> {
+        const without = tools.filter((t) => t.function.name !== LOAD_SKILL_TOOL_NAME);
+        if (process.env.SKILL_AUTO_SELECT_ENABLED !== 'true') return without;
+
+        const base = allTools.find((t) => t.function.name === LOAD_SKILL_TOOL_NAME);
+        if (!base) return without; // load_skill 미등록 — 노출 안 함
+
+        try {
+            const excludeIds = new Set(reqCtx.skillBindings.map((b) => b.skill_id));
+            const { catalog, count } = await getSkillManager().buildSkillCatalog({ excludeIds });
+            if (count === 0) return without;
+
+            const augmented: ToolDefinition = {
+                type: 'function',
+                function: {
+                    name: LOAD_SKILL_TOOL_NAME,
+                    description: `${base.function.description}\n\n## Skill Library (${count})\n${catalog}`,
+                    parameters: base.function.parameters,
+                },
+            };
+            return [...without, augmented];
+        } catch (e) {
+            logger.warn('스킬 카탈로그 주입 실패 (load_skill 제외):', e);
+            return without;
+        }
     }
 
     /**
