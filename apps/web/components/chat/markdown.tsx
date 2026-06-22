@@ -11,7 +11,7 @@ import rehypeHighlight from "rehype-highlight";
  */
 export function Markdown({ content }: { content: string }) {
   return (
-    <div className="prose-chat">
+    <div className="prose-chat break-words">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         rehypePlugins={[rehypeHighlight]}
@@ -21,8 +21,14 @@ export function Markdown({ content }: { content: string }) {
               {...props}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-accent underline underline-offset-2 hover:text-accent-hover"
+              className="break-all text-accent underline underline-offset-2 hover:text-accent-hover"
             />
+          ),
+          // 넓은 표는 가로 스크롤 컨테이너로 감싸 모바일에서 페이지 전체가 넘치지 않게 한다.
+          table: ({ children }) => (
+            <div className="my-3 overflow-x-auto">
+              <table className="w-full border-collapse text-sm">{children}</table>
+            </div>
           ),
           code: ({ className, children, ...props }) => {
             const isBlock = /language-/.test(className ?? "");
