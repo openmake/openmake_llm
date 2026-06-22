@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Telescope,
   Plus,
@@ -195,44 +195,118 @@ const STAGE_LABEL: Record<StageStatus, string> = {
   pending: "대기",
 };
 
+/** depth 백엔드 enum(basic/deep/comprehensive) ↔ UI 라벨. */
+const DEPTH_OPTIONS: { value: "basic" | "deep" | "comprehensive"; label: string }[] = [
+  { value: "basic", label: "빠른 검색" },
+  { value: "deep", label: "표준 (심층)" },
+  { value: "comprehensive", label: "종합 (최대)" },
+];
+
+const TERMINAL: ApiResearchStatus[] = ["completed", "failed", "cancelled"];
+
 export default function ResearchPage() {
   const [topic, setTopic] = useState("");
+  const [depth, setDepth] = useState<"basic" | "deep" | "comprehensive">("deep");
+  const [busy, setBusy] = useState(false);
   // 최신 세션이 있으면 그것으로 진행/소스/메트릭 표시. 없거나 실패 시 목업 폴백.
   const [stages, setStages] = useState<Stage[]>(STAGES);
   const [sources, setSources] = useState<Source[]>(SOURCES);
   const [metrics, setMetrics] = useState<Metric[]>(METRICS);
   const [status, setStatus] = useState<ApiResearchStatus | null>(null);
+  const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const aliveRef = useRef(true);
+
+  // 세션 → 화면 상태 반영 (초기 로드 + 폴링 공용).
+  const applySession = (s: ApiResearchSession) => {
+    const srcUrls = s.sources ?? [];
+    setStages(deriveStages(s));
+    setSources(srcUrls.map(urlToSource));
+    setStatus(s.status);
+    setMetrics([
+      { label: "분석 소스", value: String(srcUrls.length) },
+      { label: "주요 발견", value: String(s.key_findings?.length ?? 0) },
+      { label: "진행률", value: `${Math.round(s.progress)}%` },
+      { label: "깊이", value: s.depth },
+    ]);
+  };
+
+  // 진행 중인 세션을 폴링 — 완료/실패/취소면 중단.
+  const poll = async (sid: string) => {
+    if (!aliveRef.current) return;
+    try {
+      const res = await ApiClient.get<ApiSuccess<{ session: ApiResearchSession }>>(
+        `/api/research/sessions/${sid}`,
+      );
+      const s = res?.data?.session;
+      if (s && aliveRef.current) {
+        applySession(s);
+        if (!TERMINAL.includes(s.status)) {
+          pollRef.current = setTimeout(() => poll(sid), 2500);
+        }
+      }
+    } catch {
+      /* 일시 실패 — 다음 틱에 재시도 */
+      if (aliveRef.current) pollRef.current = setTimeout(() => poll(sid), 4000);
+    }
+  };
 
   useEffect(() => {
-    let cancelled = false;
+    aliveRef.current = true;
     (async () => {
       try {
         const res = await ApiClient.get<ResearchSessionsResponse>(
           "/api/research/sessions?limit=20",
         );
-        if (cancelled) return;
         const latest = res?.data?.sessions?.[0];
-        if (!latest) return; // 세션 없음: 목업 폴백 유지
-        const srcUrls = latest.sources ?? [];
-        setStages(deriveStages(latest));
-        setSources(srcUrls.map(urlToSource));
-        setStatus(latest.status);
-        setMetrics([
-          { label: "분석 소스", value: String(srcUrls.length) },
-          { label: "주요 발견", value: String(latest.key_findings?.length ?? 0) },
-          { label: "진행률", value: `${Math.round(latest.progress)}%` },
-          { label: "깊이", value: latest.depth },
-        ]);
+        if (!latest || !aliveRef.current) return;
+        applySession(latest);
+        if (!TERMINAL.includes(latest.status)) poll(latest.id); // 진행 중이면 이어서 폴링
       } catch {
         // 401·네트워크 실패: 목업 폴백 유지
       }
     })();
     return () => {
-      cancelled = true;
+      aliveRef.current = false;
+      if (pollRef.current) clearTimeout(pollRef.current);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const isRunning = status === "running" || status === "pending";
+
+  // 리서치 시작 — 세션 생성 → 비동기 실행 → 폴링.
+  const startResearch = async () => {
+    const t = topic.trim();
+    if (!t || busy || isRunning) return;
+    setBusy(true);
+    try {
+      const created = await ApiClient.post<ApiSuccess<{ session: ApiResearchSession }>>(
+        "/api/research/sessions",
+        { topic: t, depth },
+      );
+      const sid = created?.data?.session?.id;
+      if (!sid) throw new Error("세션 생성 실패");
+      await ApiClient.post(`/api/research/sessions/${sid}/execute`, {});
+      setStatus("running");
+      setStages(STAGES.map((s, i) => ({ ...s, status: i === 0 ? "running" : "pending" })));
+      if (pollRef.current) clearTimeout(pollRef.current);
+      poll(sid);
+    } catch {
+      /* 실패 — 상태 유지 */
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // 새 리서치 — 폼/화면 초기화.
+  const newResearch = () => {
+    if (pollRef.current) clearTimeout(pollRef.current);
+    setTopic("");
+    setStatus(null);
+    setStages(STAGES);
+    setSources(SOURCES);
+    setMetrics(METRICS);
+  };
 
   return (
     <>
@@ -240,7 +314,7 @@ export default function ResearchPage() {
         title="딥 리서치"
         description="자율 다단계 리서치 에이전트가 질문 분해부터 인용 보고서까지 합성합니다."
         actions={
-          <Button size="sm">
+          <Button size="sm" onClick={newResearch}>
             <Plus className="h-4 w-4" />새 리서치
           </Button>
         }
@@ -259,6 +333,9 @@ export default function ResearchPage() {
                 <input
                   value={topic}
                   onChange={(e) => setTopic(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") startResearch();
+                  }}
                   placeholder="연구하고 싶은 주제를 입력하세요..."
                   className="h-9 w-full bg-transparent text-sm text-fg outline-none placeholder:text-faint"
                 />
@@ -268,15 +345,21 @@ export default function ResearchPage() {
               <label className="mb-2 block text-xs font-medium text-fg-2">
                 깊이
               </label>
-              <select className="h-9 w-full rounded-md border border-border-strong bg-surface-2 px-3 text-sm text-fg outline-none">
-                <option value="quick">빠른 검색</option>
-                <option value="standard">표준</option>
-                <option value="deep">심층</option>
+              <select
+                value={depth}
+                onChange={(e) => setDepth(e.target.value as typeof depth)}
+                className="h-9 w-full rounded-md border border-border-strong bg-surface-2 px-3 text-sm text-fg outline-none"
+              >
+                {DEPTH_OPTIONS.map((d) => (
+                  <option key={d.value} value={d.value}>
+                    {d.label}
+                  </option>
+                ))}
               </select>
             </div>
-            <Button size="md" disabled={!topic.trim()}>
+            <Button size="md" disabled={!topic.trim() || busy || isRunning} onClick={startResearch}>
               <Telescope className="h-4 w-4" />
-              리서치 시작
+              {busy ? "시작 중…" : isRunning ? "진행 중…" : "리서치 시작"}
             </Button>
           </div>
         </Card>
