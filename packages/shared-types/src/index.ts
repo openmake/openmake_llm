@@ -79,6 +79,18 @@ export interface Project {
 }
 
 /* ── WebSocket 채팅 프로토콜 (sockets/ws-chat-handler 와 페어) ───────── */
+/** 첨부 텍스트 파일 (백엔드 ws-chat-handler files[] · attach-context AttachedFileInput 호환) */
+export interface WsAttachedFile {
+  id: string;
+  name: string;
+  type: string;
+  /** 텍스트 내용 (바이너리는 미전송). 클라이언트가 캡 초과 시 절단 */
+  content?: string;
+  size?: number;
+  /** 전송 전 캡으로 내용을 절단했음 */
+  truncated?: boolean;
+}
+
 export interface WsChatRequest {
   type: "chat";
   message: string;
@@ -86,6 +98,8 @@ export interface WsChatRequest {
   history?: Array<{ role: ChatRole; content: string }>;
   sessionId?: string | null;
   images?: string[];
+  /** 첨부 텍스트 파일 — 백엔드가 fileContext 채널로 LLM 에 주입 */
+  files?: WsAttachedFile[];
   webSearch?: boolean;
   deepResearchMode?: boolean;
   enabledTools?: Record<string, boolean>;
