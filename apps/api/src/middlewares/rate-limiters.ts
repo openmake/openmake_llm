@@ -11,6 +11,7 @@ import {
 } from '../config/rate-limits';
 import { getKeyValueStore } from '../storage';
 import { STORAGE_POLICY, RATE_LIMIT_POLICY } from '../config/security';
+import { ARTIFACT_EXEC } from '../config/artifact-exec';
 
 // ================================================
 // 타입 정의
@@ -438,4 +439,14 @@ export const adminLimiter = createAdvancedRateLimiter({
     ipLimit: RL_ADMIN.ipLimit,
     userLimit: RL_ADMIN.userLimit,
     message: 'Admin API 요청이 너무 많습니다. 잠시 후 다시 시도하세요.',
+});
+
+/**
+ * 아티팩트 코드 실행 레이트 리미터 — 컨테이너 실행은 비용이 커 보수적으로 제한.
+ */
+export const artifactExecLimiter = createAdvancedRateLimiter({
+    windowMs: ARTIFACT_EXEC.rateWindowMs,
+    ipLimit: ARTIFACT_EXEC.rateIpLimit,
+    userLimit: ARTIFACT_EXEC.rateUserLimit,
+    message: '코드 실행 요청이 너무 많습니다. 잠시 후 다시 시도하세요.',
 });

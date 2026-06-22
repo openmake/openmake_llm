@@ -15,6 +15,10 @@ import { getPool } from '../data/models/unified-database';
 import { success, notFound } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
 import { requireAuth } from '../auth';
+import { artifactExecLimiter } from '../middlewares/rate-limiters';
+import { executeArtifactCode, ArtifactExecError } from '../services/artifact-exec-service';
+import { ARTIFACT_EXEC } from '../config/artifact-exec';
+import { getAuditService } from '../services/AuditService';
 
 const router = Router();
 
@@ -205,6 +209,54 @@ router.delete('/sessions/:sid/artifacts/:aid', requireAuth, asyncHandler(async (
     }
     const deleted = await repo.deleteByArtifactId(sid, aid);
     res.json(success({ deleted }));
+}));
+
+/**
+ * POST /api/artifacts/execute
+ * code 아티팩트(python/js)를 Docker 컨테이너 샌드박스에서 one-shot 실행하고 출력을 반환.
+ * body: { lang, code } → { runtime, stdout, stderr, exitCode, durationMs, timedOut, truncated }
+ *
+ * 보안: requireAuth + per-user rate limit + network none 컨테이너 + timeout + 자원상한 + audit.
+ */
+router.post('/artifacts/execute', requireAuth, artifactExecLimiter, asyncHandler(async (req: Request, res: Response) => {
+    const body = req.body as { lang?: unknown; code?: unknown };
+    const lang = typeof body.lang === 'string' ? body.lang : '';
+    const code = typeof body.code === 'string' ? body.code : '';
+    if (!lang || !code) {
+        res.status(400).json({ error: 'INVALID_BODY', detail: 'lang, code (string) 필수' });
+        return;
+    }
+    if (Buffer.byteLength(code, 'utf8') > ARTIFACT_EXEC.codeMaxBytes) {
+        res.status(413).json({ error: 'CODE_TOO_LARGE', detail: `최대 ${ARTIFACT_EXEC.codeMaxBytes} bytes` });
+        return;
+    }
+
+    const userId = req.user && 'userId' in req.user ? (req.user as { userId: string }).userId : req.user?.id?.toString();
+    try {
+        const result = await executeArtifactCode(lang, code);
+        // 실행 audit (인증 사용자 — userId FK 안전)
+        void getAuditService().logAudit({
+            action: 'artifact_execute',
+            userId,
+            details: {
+                lang,
+                runtime: result.runtime,
+                exitCode: result.exitCode,
+                durationMs: result.durationMs,
+                timedOut: result.timedOut,
+                truncated: result.truncated,
+                codeBytes: Buffer.byteLength(code, 'utf8'),
+            },
+            actor: { email: req.user?.email, role: req.user?.role },
+        });
+        res.json(success(result));
+    } catch (e) {
+        if (e instanceof ArtifactExecError) {
+            res.status(e.statusCode).json({ error: e.code, detail: e.message });
+            return;
+        }
+        throw e;
+    }
 }));
 
 export default router;
