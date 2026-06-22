@@ -1,11 +1,56 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import Image from "next/image";
-import { MessagesSquare, Telescope, Brain, Sparkles } from "lucide-react";
+import { MessagesSquare, Telescope, Brain, Sparkles, FileCode2 } from "lucide-react";
 import { useAppStore } from "@/lib/store";
 import { Markdown } from "./markdown";
 import { cn } from "@/lib/utils";
+
+const ARTIFACT_PLACEHOLDER = /\[\[artifact:([^\]]+)\]\]/g;
+
+/** 영속화된 `[[artifact:id]]` placeholder 를 클릭 가능한 아티팩트 칩으로 렌더. */
+function ArtifactChip({ id }: { id: string }) {
+  const artifacts = useAppStore((s) => s.artifacts);
+  const setActiveArtifact = useAppStore((s) => s.setActiveArtifact);
+  const setArtifactPanelOpen = useAppStore((s) => s.setArtifactPanelOpen);
+  const title = artifacts.find((a) => a.id === id)?.title ?? "아티팩트";
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        setActiveArtifact(id);
+        setArtifactPanelOpen(true);
+      }}
+      className="my-1 inline-flex items-center gap-1.5 rounded-md border border-border bg-surface-2 px-2.5 py-1.5 text-sm font-medium text-fg-2 transition hover:bg-surface-3 hover:text-fg"
+    >
+      <FileCode2 className="h-4 w-4 text-accent" />
+      {title}
+    </button>
+  );
+}
+
+/** assistant 본문 — `[[artifact:id]]` placeholder 를 칩으로, 나머지는 Markdown 으로. */
+function AssistantContent({ content }: { content: string }) {
+  if (!content.includes("[[artifact:")) return <Markdown content={content} />;
+  const nodes: ReactNode[] = [];
+  let last = 0;
+  let m: RegExpExecArray | null;
+  const re = new RegExp(ARTIFACT_PLACEHOLDER);
+  let idx = 0;
+  while ((m = re.exec(content)) !== null) {
+    if (m.index > last) {
+      const text = content.slice(last, m.index).trim();
+      if (text) nodes.push(<Markdown key={`t${idx}`} content={text} />);
+    }
+    nodes.push(<ArtifactChip key={`a${idx}`} id={m[1]} />);
+    last = m.index + m[0].length;
+    idx += 1;
+  }
+  const tail = content.slice(last).trim();
+  if (tail) nodes.push(<Markdown key="tail" content={tail} />);
+  return <>{nodes}</>;
+}
 
 const QUICK_STARTS = [
   { icon: MessagesSquare, label: "요약하기", prompt: "다음 내용을 요약해 줘:\n\n" },
@@ -78,7 +123,7 @@ export function MessageList() {
             <div className="min-w-0 flex-1">
               <p className="mb-1 text-xs font-medium text-muted">OpenMake</p>
               <div className="text-sm leading-relaxed text-fg">
-                <Markdown content={m.content} />
+                <AssistantContent content={m.content} />
                 {m.streaming && (
                   <span className="ml-0.5 inline-block h-4 w-1.5 animate-pulse bg-accent align-text-bottom" />
                 )}

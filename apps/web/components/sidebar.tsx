@@ -6,6 +6,7 @@ import { Plus, Search, LogOut } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import type { ApiSuccess } from "@openmake/shared-types";
 import { useAppStore } from "@/lib/store";
+import type { ChatRole } from "@/lib/store";
 import { NAV_GROUPS } from "@/lib/nav";
 import { ApiClient } from "@/lib/api-client";
 import Image from "next/image";
@@ -22,8 +23,31 @@ interface SessionRow {
 export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
-  const { clearChat, auth, setAuth } = useAppStore();
+  const { clearChat, auth, setAuth, setChatHistory, setCurrentSessionId, setArtifacts } =
+    useAppStore();
   const user = auth.currentUser;
+  const currentSessionId = useAppStore((s) => s.currentSessionId);
+
+  // 지난 대화 클릭 → 해당 세션 메시지 로드 + 채팅 화면으로 전환.
+  const openSession = async (sid?: string) => {
+    if (!sid) return;
+    setArtifacts([]); // 이전 세션 아티팩트 비움 → 패널이 새 세션 것 재복원
+    setCurrentSessionId(sid);
+    try {
+      const res = await ApiClient.get<
+        ApiSuccess<{ messages?: Array<{ role: string; content: string; images?: string[] }> }>
+      >(`/api/chat/sessions/${sid}/messages`);
+      const msgs = res?.data?.messages ?? [];
+      setChatHistory(() =>
+        msgs
+          .filter((m) => m.role === "user" || m.role === "assistant" || m.role === "system")
+          .map((m) => ({ role: m.role as ChatRole, content: m.content, images: m.images })),
+      );
+    } catch {
+      /* 조회 실패 — 무시 */
+    }
+    if (pathname !== "/") router.push("/");
+  };
 
   const logout = async () => {
     try {
@@ -116,13 +140,26 @@ export function Sidebar() {
               최근 대화
             </p>
             <ul className="space-y-0.5">
-              {sessions.slice(0, 20).map((s, i) => (
-                <li key={s.id ?? s.sessionId ?? i}>
-                  <button className="w-full truncate rounded-md px-2.5 py-1.5 text-left text-sm text-muted transition hover:bg-surface-3 hover:text-fg">
-                    {s.title ?? s.name ?? "제목 없는 대화"}
-                  </button>
-                </li>
-              ))}
+              {sessions.slice(0, 20).map((s, i) => {
+                const sid = s.id ?? s.sessionId;
+                const active = !!sid && sid === currentSessionId;
+                return (
+                  <li key={sid ?? i}>
+                    <button
+                      type="button"
+                      onClick={() => openSession(sid)}
+                      className={cn(
+                        "w-full truncate rounded-md px-2.5 py-1.5 text-left text-sm transition",
+                        active
+                          ? "bg-accent-soft font-medium text-accent"
+                          : "text-muted hover:bg-surface-3 hover:text-fg",
+                      )}
+                    >
+                      {s.title ?? s.name ?? "제목 없는 대화"}
+                    </button>
+                  </li>
+                );
+              })}
             </ul>
           </div>
         )}
