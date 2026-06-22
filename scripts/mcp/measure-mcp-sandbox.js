@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * measure-mcp-sandbox.js — 외부 MCP stdio 서버 bwrap 격리 호환성 재측정 (read-only)
+ * measure-mcp-sandbox.js — 외부 MCP stdio 서버 docker 격리 호환성 재측정 (read-only)
  *
  * 목적: MCP_SANDBOX_ENABLED=true 활성화 전, 운영 DB에 등록된 stdio MCP 서버의
  *   command/args/env 를 점검해 (1) 격리 호환성 위험을 분류하고 (2) 서버별
@@ -10,8 +10,9 @@
  * 실행 (운영 서버, repo 루트에서 — DATABASE_URL 이 .env 또는 환경에 있어야 함):
  *   node scripts/mcp/measure-mcp-sandbox.js
  *
- * 근거: docs/superpowers/plans/2026-06-22-mcp-sandbox-bubblewrap.md
- *   - 네트워크는 bwrap 한계상 binary: full(공유) | none(--unshare-net)
+ * 근거: sandbox-docker.ts (docker run 격리). 네트워크는 서버별 full(bridge) | none(--network none).
+ *   - 내부 loopback(127.0.0.1/localhost)은 host.docker.internal 로 자동 치환되므로
+ *     internal-net 서버도 net=full 이면 호스트 내부 서비스 접속 가능(full 유지).
  *   - 대부분 MCP 는 외부 API 호출 → 기본 'full'. 임의 코드 실행 등 net 불필요
  *     고위험 서버만 'none' 후보(예: Python REPL).
  */
@@ -67,7 +68,7 @@ function classify(s) {
             console.log('등록된 stdio MCP 서버가 없습니다.');
             return;
         }
-        console.log(`\n외부 MCP stdio 서버 ${rows.length}개 — bwrap 격리 호환성 재측정`);
+        console.log(`\n외부 MCP stdio 서버 ${rows.length}개 — docker 격리 호환성 재측정`);
         console.log('='.repeat(72));
 
         const updates = [];
@@ -94,8 +95,9 @@ function classify(s) {
             console.log('   /* 아래는 추천일 뿐. 각 서버가 실제로 네트워크 불필요한지 확인 후 적용 */');
             for (const u of updates) console.log('   ' + u);
         }
-        console.log('\n⚠️  bwrap 한계: 네트워크는 full/none 만 가능. "외부 허용+내부 loopback 차단"은');
-        console.log('    Phase 2(netns+nftables) 별도 작업. internal-net flag 서버는 full 유지 필수.');
+        console.log('\nℹ️  docker 네트워크: 서버별 full(bridge) | none(--network none).');
+        console.log('    internal-net flag 서버는 full 유지(127.0.0.1→host.docker.internal 자동 치환으로 호스트 DB 접속).');
+        console.log('    선행: 런타임 이미지 빌드 — docker build -t openmake-mcp-runtime:latest infra/mcp-runtime');
     } catch (e) {
         console.error('ERR:', e.message);
         process.exit(1);

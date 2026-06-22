@@ -36,7 +36,7 @@ const logger = createLogger('MCP');
 /**
  * 도구 인자 위험 패턴 룰 (best-effort defense-in-depth).
  *
- * ⚠️ 이 검증은 1차 격리 경계가 아니다 — 실제 격리는 bubblewrap OS 샌드박스(PR #153,
+ * ⚠️ 이 검증은 1차 격리 경계가 아니다 — 실제 격리는 docker OS 샌드박스(sandbox-docker.ts,
  *    MCP_SANDBOX_ENABLED) + 외부 MCP spawn env 비밀 차단(PR #151)이 담당한다.
  *    값 본문 전수 스캔은 정상 인자(검색어·코드 본문 등) 오탐이 커 의도적으로 하지 않고,
  *    "위험 의미가 분명한 key 이름"에만 좁은 패턴을 적용한다.
@@ -272,7 +272,7 @@ export class UnifiedMCPClient {
      * 도구 인자에서 위험한 패턴을 검증/차단 (best-effort defense-in-depth).
      *
      * 위험 의미가 분명한 key(sql/query/command·cmd/url 류 + path/file 류)에만 좁은 패턴을
-     * 적용한다. 실제 격리 경계는 bubblewrap(PR #153)·spawn env 차단(PR #151)이며, 이 함수는
+     * 적용한다. 실제 격리 경계는 docker 샌드박스(sandbox-docker.ts)·spawn env 차단(PR #151)이며, 이 함수는
      * 보조 휴리스틱이다. 상세는 모듈 상단 DANGEROUS_ARG_RULES 주석 참고.
      * 경로 인자의 샌드박스 매핑은 applySandboxPaths()에서 별도 처리.
      */
