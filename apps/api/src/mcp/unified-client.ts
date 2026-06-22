@@ -34,13 +34,40 @@ import { createLogger } from '../utils/logger';
 const logger = createLogger('MCP');
 
 /**
- * 통합 MCP 클라이언트
+ * 도구 인자 위험 패턴 룰 (best-effort defense-in-depth).
  *
- * 애플리케이션 전체에서 MCP 기능을 사용하기 위한 통합 인터페이스입니다.
- * getUnifiedMCPClient()로 싱글톤 인스턴스를 사용합니다.
+ * ⚠️ 이 검증은 1차 격리 경계가 아니다 — 실제 격리는 bubblewrap OS 샌드박스(PR #153,
+ *    MCP_SANDBOX_ENABLED) + 외부 MCP spawn env 비밀 차단(PR #151)이 담당한다.
+ *    값 본문 전수 스캔은 정상 인자(검색어·코드 본문 등) 오탐이 커 의도적으로 하지 않고,
+ *    "위험 의미가 분명한 key 이름"에만 좁은 패턴을 적용한다.
  *
- * @class UnifiedMCPClient
+ * 개선(2026-06-22): 기존엔 key 가 정확히 sql/query/command/cmd/url/href 일 때만 검사해
+ *   file_path·user_command 같은 변형과 path/file 류 key 는 전부 무검사였다. key 를
+ *   snake_case 경계(_ 또는 양끝) 매칭으로 넓히고, path/file key 에 민감파일 접근 패턴을 추가.
+ *   (주의: 'query' 에 SQL DDL 키워드 패턴은 웹검색 등에서 오탐 가능 — 기존 동작 보존 차원 유지.)
  */
+const SENSITIVE_FILE_RE = /(\.env\b|\.ssh\b|id_rsa|id_ed25519|\.aws\/credentials|\/etc\/(shadow|passwd|sudoers)|\.pem\b|\.p12\b|private[_-]?key)/i;
+const DANGEROUS_ARG_RULES: ReadonlyArray<{ label: string; keyRe: RegExp; patterns: RegExp[] }> = [
+    { label: 'SQL', keyRe: /(?:^|_)(sql|query)(?:_|$)/i, patterns: [/\b(DROP|ALTER|TRUNCATE|EXEC|EXECUTE|GRANT|REVOKE)\b/i] },
+    { label: 'shell', keyRe: /(?:^|_)(command|cmd)(?:_|$)/i, patterns: [/[;&|`$(){}]/] },
+    { label: 'URL scheme', keyRe: /(?:^|_)(url|href|uri|link|endpoint)(?:_|$)/i, patterns: [/^(file|data|javascript|vbscript):/i] },
+    { label: 'sensitive-path', keyRe: /(?:^|_)(path|file|filepath|filename|dir|directory|source|dest|destination)(?:_|$)/i, patterns: [SENSITIVE_FILE_RE] },
+];
+
+/**
+ * 단일 인자(key, string value)가 위험 패턴에 걸리는지 검사 (순수, 테스트 가능).
+ * @returns 위반 라벨 또는 null. key 는 호출자가 소문자화하지 않아도 됨(내부 처리).
+ */
+export function detectDangerousArg(key: string, value: string): string | null {
+    const k = key.toLowerCase();
+    for (const rule of DANGEROUS_ARG_RULES) {
+        if (!rule.keyRe.test(k)) continue;
+        for (const p of rule.patterns) {
+            if (p.test(value)) return rule.label;
+        }
+    }
+    return null;
+}
 
 /**
  * 통합 MCP 클라이언트
@@ -242,10 +269,12 @@ export class UnifiedMCPClient {
     }
 
     /**
-     * 도구 인자에서 위험한 패턴을 검증/차단
+     * 도구 인자에서 위험한 패턴을 검증/차단 (best-effort defense-in-depth).
      *
-     * SQL, 명령어, URL 등 비경로 인자에 대한 기본 보안 검증을 수행합니다.
-     * 경로 인자는 applySandboxPaths()에서 별도 처리됩니다.
+     * 위험 의미가 분명한 key(sql/query/command·cmd/url 류 + path/file 류)에만 좁은 패턴을
+     * 적용한다. 실제 격리 경계는 bubblewrap(PR #153)·spawn env 차단(PR #151)이며, 이 함수는
+     * 보조 휴리스틱이다. 상세는 모듈 상단 DANGEROUS_ARG_RULES 주석 참고.
+     * 경로 인자의 샌드박스 매핑은 applySandboxPaths()에서 별도 처리.
      */
     private sanitizeToolArgs(
         args: Record<string, unknown>,
@@ -253,25 +282,11 @@ export class UnifiedMCPClient {
     ): Record<string, unknown> {
         const result = { ...args };
 
-        const DANGEROUS_PATTERNS: Record<string, RegExp[]> = {
-            sql: [/\b(DROP|ALTER|TRUNCATE|EXEC|EXECUTE|GRANT|REVOKE)\b/i],
-            query: [/\b(DROP|ALTER|TRUNCATE|EXEC|EXECUTE|GRANT|REVOKE)\b/i],
-            command: [/[;&|`$(){}]/],
-            cmd: [/[;&|`$(){}]/],
-            url: [/^(file|data|javascript|vbscript):/i],
-            href: [/^(file|data|javascript|vbscript):/i],
-        };
-
         for (const [key, value] of Object.entries(result)) {
             if (typeof value !== 'string') continue;
-
-            const patterns = DANGEROUS_PATTERNS[key.toLowerCase()];
-            if (!patterns) continue;
-
-            for (const pattern of patterns) {
-                if (pattern.test(value)) {
-                    throw new Error(`차단된 도구 인자: ${key} (도구: ${toolName}) — 위험한 패턴 감지`);
-                }
+            const violation = detectDangerousArg(key, value);
+            if (violation) {
+                throw new Error(`차단된 도구 인자: ${key} (도구: ${toolName}) — 위험한 패턴 감지 [${violation}]`);
             }
         }
 
