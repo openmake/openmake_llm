@@ -30,5 +30,12 @@ ENV HOME=/home/node \
 # (생성 안 하면 볼륨이 root 소유로 만들어져 npx/uvx 캐시 쓰기가 실패)
 RUN mkdir -p /home/node/.cache/npm /home/node/.cache/uv
 
+# net=none(네트워크 차단) 격리 대상 서버 사전설치 — Python REPL(arbitrary code 실행)을
+# 컨테이너로 격리하면 런타임 uvx 다운로드가 불가하므로 이미지에 미리 설치한다.
+# uv tool install 은 /home/node/.local 에 self-contained venv 로 설치 →
+# 런타임에 볼륨 마운트되는 /home/node/.cache 와 분리되어 net=none(오프라인)에도 동작.
+RUN uv tool install mcp-python-repl
+ENV PATH=/home/node/.local/bin:${PATH}
+
 # 진입점 없음 — sandbox-docker 가 `docker run ... <image> <command> <args>` 로
-# 실행할 MCP command(npx/uvx/바이너리)를 직접 지정한다.
+# 실행할 MCP command(npx/uvx/바이너리/사전설치 바이너리)를 직접 지정한다.
