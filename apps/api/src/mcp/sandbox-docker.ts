@@ -65,8 +65,8 @@ export interface SandboxConfig {
 }
 
 let dockerCache: { key: string; value: string | null } | null = null;
-/** PATH 또는 절대경로에서 docker 바이너리 탐색 (memoize). */
-function resolveDocker(dockerPath: string): string | null {
+/** PATH 또는 절대경로에서 docker 바이너리 탐색 (memoize). 아티팩트 실행 서비스도 재사용. */
+export function resolveDocker(dockerPath: string): string | null {
     if (dockerCache && dockerCache.key === dockerPath) return dockerCache.value;
     let resolved: string | null = null;
     try {

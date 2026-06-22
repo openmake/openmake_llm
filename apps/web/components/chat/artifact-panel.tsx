@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { X, Code2, Eye, Copy, Check } from "lucide-react";
+import { X, Code2, Eye, Copy, Check, Play, Loader2 } from "lucide-react";
 import { useAppStore } from "@/lib/store";
 import type { Artifact } from "@/lib/store";
-import { ApiClient } from "@/lib/api-client";
+import { ApiClient, ApiError } from "@/lib/api-client";
 import { isIframeKind, buildArtifactSrcDoc } from "@/lib/artifact-render";
 import { ArtifactFrame } from "./artifact-frame";
 import { Markdown } from "./markdown";
@@ -17,6 +17,102 @@ interface PersistedArtifact {
   title: string | null;
   language: string | null;
   content: string;
+}
+
+/** 컨테이너 실행 결과(POST /api/artifacts/execute). */
+interface ExecResult {
+  runtime: string;
+  stdout: string;
+  stderr: string;
+  exitCode: number | null;
+  durationMs: number;
+  timedOut: boolean;
+  truncated: boolean;
+}
+
+/** 서버 실행 가능 언어 (백엔드 ARTIFACT_EXEC_RUNTIMES 와 정합). */
+const RUNNABLE_LANGS = new Set(["python", "py", "python3", "javascript", "js", "node", "nodejs"]);
+
+function CodeArtifactView({ artifact }: { artifact: Artifact }) {
+  const lang = (artifact.lang ?? "").toLowerCase().trim();
+  const runnable = RUNNABLE_LANGS.has(lang);
+  const [running, setRunning] = useState(false);
+  const [result, setResult] = useState<ExecResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const run = async () => {
+    setRunning(true);
+    setError(null);
+    setResult(null);
+    try {
+      const res = await ApiClient.post<{ data: ExecResult }>("/api/artifacts/execute", {
+        lang,
+        code: artifact.content,
+      });
+      setResult(res.data);
+    } catch (e) {
+      if (e instanceof ApiError) {
+        if (e.status === 503) setError("코드 실행 기능이 비활성화되어 있습니다.");
+        else if (e.status === 429) setError("실행 요청이 너무 많습니다. 잠시 후 다시 시도하세요.");
+        else if (e.status === 400) setError("지원하지 않는 언어입니다.");
+        else if (e.status === 413) setError("코드가 너무 큽니다.");
+        else setError(e.message);
+      } else {
+        setError("실행에 실패했습니다.");
+      }
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  return (
+    <div className="flex h-full flex-col">
+      {runnable && (
+        <div className="flex items-center gap-2 border-b border-border px-3 py-1.5">
+          <button
+            type="button"
+            onClick={run}
+            disabled={running}
+            className="flex items-center gap-1.5 rounded-md bg-accent px-2.5 py-1 text-xs font-medium text-accent-fg transition hover:bg-accent-hover disabled:opacity-60"
+          >
+            {running ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
+            {running ? "실행 중…" : "실행"}
+          </button>
+          <span className="text-[11px] text-faint">샌드박스(네트워크 차단) · {lang}</span>
+        </div>
+      )}
+      <div className="min-h-0 flex-1 overflow-auto px-3">
+        <Markdown content={"```" + (lang || "") + "\n" + artifact.content + "\n```"} />
+        {error && (
+          <div className="mb-3 rounded-md border border-danger/40 bg-danger/10 px-3 py-2 text-xs text-danger">
+            {error}
+          </div>
+        )}
+        {result && (
+          <div className="mb-3 rounded-md border border-border bg-surface-2">
+            <div className="flex items-center gap-2 border-b border-border px-3 py-1.5 text-[11px] text-muted">
+              <span>출력</span>
+              <span className="font-mono">exit={result.exitCode ?? "—"}</span>
+              <span className="font-mono">{result.durationMs}ms</span>
+              {result.timedOut && <span className="text-danger">시간 초과</span>}
+              {result.truncated && <span className="text-faint">잘림</span>}
+            </div>
+            {result.stdout && (
+              <pre className="overflow-x-auto px-3 py-2 text-xs text-fg-2">{result.stdout}</pre>
+            )}
+            {result.stderr && (
+              <pre className="overflow-x-auto border-t border-border px-3 py-2 text-xs text-danger">
+                {result.stderr}
+              </pre>
+            )}
+            {!result.stdout && !result.stderr && (
+              <p className="px-3 py-2 text-xs text-faint">(출력 없음)</p>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 function CsvTable({ content }: { content: string }) {
@@ -73,13 +169,7 @@ function ArtifactBody({ artifact, view }: { artifact: Artifact; view: "preview" 
     );
   }
   if (kind === "csv") return <CsvTable content={content} />;
-  if (kind === "code") {
-    return (
-      <div className="h-full overflow-auto px-3">
-        <Markdown content={"```" + (lang ?? "") + "\n" + content + "\n```"} />
-      </div>
-    );
-  }
+  if (kind === "code") return <CodeArtifactView artifact={artifact} />;
   if (isIframeKind(kind)) {
     return <ArtifactFrame srcDoc={buildArtifactSrcDoc(kind, content)} title={artifact.title} />;
   }
