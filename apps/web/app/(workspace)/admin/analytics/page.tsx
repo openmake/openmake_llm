@@ -92,7 +92,7 @@ interface CostData {
   dailyCost: number;
   weeklyCost: number;
   projectedMonthlyCost: number;
-  modelCosts: { model: string; cost: number; percentage: number }[];
+  costByModel: { model: string; cost: number; percentage: number }[];
 }
 interface BehaviorData {
   peakHours: { hour: number; requests: number }[];
@@ -333,7 +333,7 @@ export default function AdminAnalyticsPage() {
                 <StatCard label="주간 비용" value={fmtCost(costData.weeklyCost)} />
                 <StatCard label="월간 예상 비용" value={fmtCost(costData.projectedMonthlyCost)} />
               </div>
-              {costData.modelCosts.length > 0 && (
+              {costData.costByModel.length > 0 && (
                 <Table>
                   <thead>
                     <tr>
@@ -343,7 +343,7 @@ export default function AdminAnalyticsPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {costData.modelCosts.map((m) => (
+                    {costData.costByModel.map((m) => (
                       <tr key={m.model}>
                         <Td className="font-medium text-fg">{m.model}</Td>
                         <Td className="text-right font-mono text-fg-2">{fmtCost(m.cost)}</Td>
