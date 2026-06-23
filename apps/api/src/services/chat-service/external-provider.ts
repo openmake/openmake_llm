@@ -13,7 +13,7 @@
  * @module services/chat-service/external-provider
  */
 import { createLogger } from '../../utils/logger';
-import { EXTERNAL_LLM_TOOL_BLACKLIST, LOOP_DETECTION, AGENT_LOOP_LIMITS } from '../../config/runtime-limits';
+import { EXTERNAL_LLM_TOOL_BLACKLIST, LOOP_DETECTION, AGENT_LOOP_LIMITS, MAX_TOOL_RESULT_CHARS } from '../../config/runtime-limits';
 import { getUnifiedMCPClient } from '../../mcp/unified-client';
 import { isPersistableUserId } from '../../utils/user-id-validation';
 import { getExternalProviderSystemGuards } from '../../chat/prompt';
@@ -332,7 +332,7 @@ export async function executeExternalTool(
             return `Error: ${typeof result.content === 'string' ? result.content : JSON.stringify(result.content)}`;
         }
         if (typeof result.content === 'string') return result.content;
-        return JSON.stringify(result.content).slice(0, 8000);
+        return JSON.stringify(result.content).slice(0, MAX_TOOL_RESULT_CHARS);
     } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         logger.warn(`외부 LLM 도구 실행 실패 (${toolName}): ${msg}`);

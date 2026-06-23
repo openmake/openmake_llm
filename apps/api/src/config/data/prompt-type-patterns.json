@@ -1,0 +1,73 @@
+{
+  "_comment": "detectPromptType 가중치 분류 테이블 (No-Hardcoding: query-patterns.json 과 동일 패턴으로 외부화). 모든 pattern 은 source+flags 로 RegExp 컴파일. agentConfigs 순서는 동점 priority tiebreak 안정성을 위해 의미 있음(변경 주의).",
+  "minScore": 2,
+  "securityPriorityScore": 3,
+  "agentConfigs": [
+    { "type": "security", "priority": 10, "keywords": [
+      { "source": "보안|security", "flags": "i", "weight": 3 },
+      { "source": "취약점|vulnerability|hack|해킹", "flags": "i", "weight": 3 },
+      { "source": "injection|xss|csrf|owasp", "flags": "i", "weight": 4 },
+      { "source": "인증|인가|auth|permission", "flags": "i", "weight": 2 },
+      { "source": "encrypt|개인정보|privacy|firewall", "flags": "i", "weight": 2 }
+    ]},
+    { "type": "coder", "priority": 8, "keywords": [
+      { "source": "코드|code|프로그래밍|programming", "flags": "i", "weight": 2 },
+      { "source": "typescript|javascript|python|go|rust|java|swift", "flags": "i", "weight": 3 },
+      { "source": "함수|function|클래스|class|변수|variable", "flags": "i", "weight": 2 },
+      { "source": "debug|fix|버그|에러|error", "flags": "i", "weight": 2 },
+      { "source": "api|rest|graphql", "flags": "i", "weight": 2 }
+    ]},
+    { "type": "generator", "priority": 7, "keywords": [
+      { "source": "프로젝트.*만들|create.*project|build.*app", "flags": "i", "weight": 4 },
+      { "source": "scaffold|boilerplate|템플릿|template", "flags": "i", "weight": 3 },
+      { "source": "아키텍처|architecture|설계|구조", "flags": "i", "weight": 2 }
+    ]},
+    { "type": "reviewer", "priority": 7, "keywords": [
+      { "source": "리뷰|review|코드.*검토", "flags": "i", "weight": 4 },
+      { "source": "refactor|리팩토링|개선|최적화", "flags": "i", "weight": 2 },
+      { "source": "audit|점검|검사", "flags": "i", "weight": 2 }
+    ]},
+    { "type": "reasoning", "priority": 6, "keywords": [
+      { "source": "계산|수학|math|숫자", "flags": "i", "weight": 3 },
+      { "source": "왜.*인가|why|어떻게|how", "flags": "i", "weight": 2 },
+      { "source": "분석|analyze|추론|reason|논리|logic", "flags": "i", "weight": 3 },
+      { "source": "증명|prove|비교|크다|작다", "flags": "i", "weight": 2 }
+    ]},
+    { "type": "translator", "priority": 5, "keywords": [
+      { "source": "번역|translate", "flags": "i", "weight": 4 },
+      { "source": "영어.*로|한국어.*로|일본어|중국어", "flags": "i", "weight": 3 },
+      { "source": "뜻|meaning|expression", "flags": "i", "weight": 2 }
+    ]},
+    { "type": "writer", "priority": 5, "keywords": [
+      { "source": "작성|글써|write", "flags": "i", "weight": 2 },
+      { "source": "블로그|포스트|이메일|mail|essay", "flags": "i", "weight": 3 },
+      { "source": "시|소설|대본|script|content", "flags": "i", "weight": 2 }
+    ]},
+    { "type": "researcher", "priority": 4, "keywords": [
+      { "source": "리서치|research|조사|investigate", "flags": "i", "weight": 3 },
+      { "source": "데이터|data|통계|statistics", "flags": "i", "weight": 2 },
+      { "source": "뉴스|news|정보|info", "flags": "i", "weight": 1 }
+    ]},
+    { "type": "consultant", "priority": 4, "keywords": [
+      { "source": "조언|추천|advice|recommend", "flags": "i", "weight": 2 },
+      { "source": "전략|strategy|계획|plan|roadmap", "flags": "i", "weight": 3 },
+      { "source": "상담|consult|해결", "flags": "i", "weight": 2 }
+    ]},
+    { "type": "explainer", "priority": 3, "keywords": [
+      { "source": "설명|explain|알려|tell me", "flags": "i", "weight": 2 },
+      { "source": "뭐야|무엇|what is", "flags": "i", "weight": 2 },
+      { "source": "원리|정의|개념|concept", "flags": "i", "weight": 2 }
+    ]},
+    { "type": "agent", "priority": 2, "keywords": [
+      { "source": "검색|search|찾아|find", "flags": "i", "weight": 2 },
+      { "source": "도구|tool|실행|execute|run", "flags": "i", "weight": 3 },
+      { "source": "날씨|쇼핑|예약|booking", "flags": "i", "weight": 2 }
+    ]},
+    { "type": "assistant", "priority": 1, "keywords": [] }
+  ],
+  "specialBonuses": [
+    { "type": "coder", "source": "api|lib|module|github|이슈|pr", "flags": "i", "bonus": 2 },
+    { "type": "researcher", "source": "최신|뉴스|검색|사례|exa", "flags": "i", "bonus": 2 },
+    { "type": "security", "source": "취약점|해킹|보안|vulnerability", "flags": "i", "bonus": 2 }
+  ]
+}

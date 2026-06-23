@@ -119,7 +119,7 @@ export async function searchSubTopics(params: {
             }
         },
         {
-            concurrency: 5,
+            concurrency: RESEARCH_DEFAULTS.SEARCH_CONCURRENCY,
             signal: abortSignal
         }
     );

@@ -12,6 +12,7 @@
  */
 
 import { resolvePromptLocale } from './language-policy';
+import promptTypePatternsData from '../config/data/prompt-type-patterns.json';
 import type { PromptLocaleCode } from './language-policy';
 
 // ============================================================
@@ -501,163 +502,56 @@ export class PromptCache {
  * @param question - 사용자 질문 텍스트
  * @returns 감지된 프롬프트 역할 유형
  */
+// 분류 테이블을 모듈 로드 시 1회 컴파일 (config/data/prompt-type-patterns.json).
+const PROMPT_TYPE_CONFIGS: { type: PromptType; priority: number; keywords: { pattern: RegExp; weight: number }[] }[] =
+    promptTypePatternsData.agentConfigs.map((c) => ({
+        type: c.type as PromptType,
+        priority: c.priority,
+        keywords: c.keywords.map((k) => ({ pattern: new RegExp(k.source, k.flags), weight: k.weight })),
+    }));
+const PROMPT_TYPE_BONUSES: { type: PromptType; pattern: RegExp; bonus: number }[] =
+    promptTypePatternsData.specialBonuses.map((b) => ({
+        type: b.type as PromptType,
+        pattern: new RegExp(b.source, b.flags),
+        bonus: b.bonus,
+    }));
+const PROMPT_TYPE_MIN_SCORE = promptTypePatternsData.minScore;
+const PROMPT_TYPE_SECURITY_SCORE = promptTypePatternsData.securityPriorityScore;
+
 export function detectPromptType(question: string): PromptType {
     const lowerQ = question.toLowerCase();
 
-    // ============================================
-    // 가중치 기반 스코어링 알고리즘 (Weighted Scoring)
-    // ============================================
-
-    interface AgentKeyword {
-        pattern: RegExp;
-        weight: number;
-    }
-
-    interface AgentConfig {
-        keywords: AgentKeyword[];
-        priority: number; // 동점 시 우선순위
-    }
-
-    const agentConfigs: Record<PromptType, AgentConfig> = {
-        security: {
-            keywords: [
-                { pattern: /보안|security/i, weight: 3 },
-                { pattern: /취약점|vulnerability|hack|해킹/i, weight: 3 },
-                { pattern: /injection|xss|csrf|owasp/i, weight: 4 },
-                { pattern: /인증|인가|auth|permission/i, weight: 2 },
-                { pattern: /encrypt|개인정보|privacy|firewall/i, weight: 2 }
-            ],
-            priority: 10 // 보안은 최우선
-        },
-        coder: {
-            keywords: [
-                { pattern: /코드|code|프로그래밍|programming/i, weight: 2 },
-                { pattern: /typescript|javascript|python|go|rust|java|swift/i, weight: 3 },
-                { pattern: /함수|function|클래스|class|변수|variable/i, weight: 2 },
-                { pattern: /debug|fix|버그|에러|error/i, weight: 2 },
-                { pattern: /api|rest|graphql/i, weight: 2 }
-            ],
-            priority: 8
-        },
-        generator: {
-            keywords: [
-                { pattern: /프로젝트.*만들|create.*project|build.*app/i, weight: 4 },
-                { pattern: /scaffold|boilerplate|템플릿|template/i, weight: 3 },
-                { pattern: /아키텍처|architecture|설계|구조/i, weight: 2 }
-            ],
-            priority: 7
-        },
-        reviewer: {
-            keywords: [
-                { pattern: /리뷰|review|코드.*검토/i, weight: 4 },
-                { pattern: /refactor|리팩토링|개선|최적화/i, weight: 2 },
-                { pattern: /audit|점검|검사/i, weight: 2 }
-            ],
-            priority: 7
-        },
-        reasoning: {
-            keywords: [
-                { pattern: /계산|수학|math|숫자/i, weight: 3 },
-                { pattern: /왜.*인가|why|어떻게|how/i, weight: 2 },
-                { pattern: /분석|analyze|추론|reason|논리|logic/i, weight: 3 },
-                { pattern: /증명|prove|비교|크다|작다/i, weight: 2 }
-            ],
-            priority: 6
-        },
-        translator: {
-            keywords: [
-                { pattern: /번역|translate/i, weight: 4 },
-                { pattern: /영어.*로|한국어.*로|일본어|중국어/i, weight: 3 },
-                { pattern: /뜻|meaning|expression/i, weight: 2 }
-            ],
-            priority: 5
-        },
-        writer: {
-            keywords: [
-                { pattern: /작성|글써|write/i, weight: 2 },
-                { pattern: /블로그|포스트|이메일|mail|essay/i, weight: 3 },
-                { pattern: /시|소설|대본|script|content/i, weight: 2 }
-            ],
-            priority: 5
-        },
-        researcher: {
-            keywords: [
-                { pattern: /리서치|research|조사|investigate/i, weight: 3 },
-                { pattern: /데이터|data|통계|statistics/i, weight: 2 },
-                { pattern: /뉴스|news|정보|info/i, weight: 1 }
-            ],
-            priority: 4
-        },
-        consultant: {
-            keywords: [
-                { pattern: /조언|추천|advice|recommend/i, weight: 2 },
-                { pattern: /전략|strategy|계획|plan|roadmap/i, weight: 3 },
-                { pattern: /상담|consult|해결/i, weight: 2 }
-            ],
-            priority: 4
-        },
-        explainer: {
-            keywords: [
-                { pattern: /설명|explain|알려|tell me/i, weight: 2 },
-                { pattern: /뭐야|무엇|what is/i, weight: 2 },
-                { pattern: /원리|정의|개념|concept/i, weight: 2 }
-            ],
-            priority: 3
-        },
-        agent: {
-            keywords: [
-                { pattern: /검색|search|찾아|find/i, weight: 2 },
-                { pattern: /도구|tool|실행|execute|run/i, weight: 3 },
-                { pattern: /날씨|쇼핑|예약|booking/i, weight: 2 }
-            ],
-            priority: 2
-        },
-        assistant: {
-            keywords: [], // 기본값, 스코어 0
-            priority: 1
-        }
-    };
-
-    // 각 에이전트별 스코어 계산
+    // 가중치 기반 스코어링 — 분류 테이블은 config/data/prompt-type-patterns.json 에서 로드
+    // (No-Hardcoding: regex/weight/priority 인라인 금지, query-patterns.json 과 동일 패턴).
     const scores: { type: PromptType; score: number; priority: number }[] = [];
-
-    for (const [agentType, config] of Object.entries(agentConfigs)) {
+    for (const config of PROMPT_TYPE_CONFIGS) {
         let score = 0;
         for (const kw of config.keywords) {
-            if (kw.pattern.test(lowerQ)) {
-                score += kw.weight;
-            }
+            if (kw.pattern.test(lowerQ)) score += kw.weight;
         }
-
-        // 특별 가중치: 도구 사용 의도가 명확한 경우
-        if (agentType === 'coder' && /api|lib|module|github|이슈|pr/i.test(lowerQ)) score += 2;
-        if (agentType === 'researcher' && /최신|뉴스|검색|사례|exa/i.test(lowerQ)) score += 2;
-        if (agentType === 'security' && /취약점|해킹|보안|vulnerability/i.test(lowerQ)) score += 2;
-
-        scores.push({
-            type: agentType as PromptType,
-            score,
-            priority: config.priority
-        });
+        scores.push({ type: config.type, score, priority: config.priority });
     }
 
-    // 스코어 내림차순 정렬 (동점 시 priority로)
-    scores.sort((a, b) => {
-        if (b.score !== a.score) return b.score - a.score;
-        return b.priority - a.priority;
-    });
+    // 특별 가중치 (도구 사용 의도가 명확한 경우 등)
+    for (const bonus of PROMPT_TYPE_BONUSES) {
+        if (bonus.pattern.test(lowerQ)) {
+            const s = scores.find(x => x.type === bonus.type);
+            if (s) s.score += bonus.bonus;
+        }
+    }
 
-    // 최고 스코어가 2점 미만이면 기본 assistant (더 엄격한 기준)
-    if (scores[0].score < 2) {
+    // 스코어 내림차순 정렬 (동점 시 priority로). Array.sort 는 안정 정렬이라
+    // 동점·동priority 는 PROMPT_TYPE_CONFIGS(=JSON) 순서가 유지된다.
+    scores.sort((a, b) => (b.score !== a.score ? b.score - a.score : b.priority - a.priority));
+
+    if (scores[0].score < PROMPT_TYPE_MIN_SCORE) {
         return 'assistant';
     }
-
-    // 보안 질문은 스코어가 조금이라도 있으면 우선 순위 대폭 상승
+    // 보안 질문은 스코어가 임계 이상이면 우선
     const securityScore = scores.find(s => s.type === 'security');
-    if (securityScore && securityScore.score >= 3) {
+    if (securityScore && securityScore.score >= PROMPT_TYPE_SECURITY_SCORE) {
         return 'security';
     }
-
     return scores[0].type;
 }
 
