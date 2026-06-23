@@ -1007,6 +1007,31 @@ export const EXTERNAL_LLM_TOOL_BLACKLIST: readonly string[] = [
 ] as const;
 
 /**
+ * 명시적 아티팩트 생성 요청 턴에서 억제할 always-on 도구.
+ *
+ * 측정 근거 (2026-06-23 통제실험): "아티팩트로 html5 ... 작성해" 요청에서 qwen3.6 이
+ * `<artifact>` 산출물을 쓰는 대신 always-on 도구(generate_image / agent_task_list /
+ * agent_task_get)를 간헐 호출(~33%)해 아티팩트 생성이 실패(빈 응답). 동일 프롬프트로
+ * 도구를 제거하면 3/3 정상 생성됨. artifact-guide 시스템 프롬프트(주입돼 있음)로는 막지
+ * 못함 → 도구 레벨 조정. 이 도구들은 아티팩트 "생성"에 불필요하므로 명시적 아티팩트
+ * 요청 턴에서만 제외한다(이미지/에이전트 작업 조회 등 비-아티팩트 요청은 무영향).
+ *
+ * 값은 mcp/agent-task-tools.ts CHAT_ALWAYS_ON_TOOL_NAMES 와 일치 — always-on 으로
+ * 무조건 주입되는 도구들이 곧 distractor 이기 때문.
+ */
+export const ARTIFACT_REQUEST_SUPPRESSED_TOOLS: readonly string[] = [
+    'generate_image',
+    'agent_task_list',
+    'agent_task_get',
+] as const;
+
+/** 사용자 메시지가 명시적 아티팩트 생성 요청인지 판정하는 키워드 패턴. */
+export const ARTIFACT_INTENT_PATTERNS: readonly RegExp[] = [
+    /아티팩트/i,
+    /\bartifact\b/i,
+] as const;
+
+/**
  * 자율 에이전트 작업 (AgentTaskService) runaway 가드 한계.
  * 백그라운드 detached 실행이라 사람이 지켜보지 않으므로 토큰/시간 폭주 방지가 필수.
  */

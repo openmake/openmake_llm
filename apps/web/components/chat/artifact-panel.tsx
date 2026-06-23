@@ -5,7 +5,7 @@ import { X, Code2, Eye, Copy, Check, Play, Loader2 } from "lucide-react";
 import { useAppStore } from "@/lib/store";
 import type { Artifact } from "@/lib/store";
 import { ApiClient, ApiError } from "@/lib/api-client";
-import { isIframeKind, buildArtifactSrcDoc } from "@/lib/artifact-render";
+import { buildArtifactSrcDoc, previewKindFor } from "@/lib/artifact-render";
 import { ArtifactFrame } from "./artifact-frame";
 import { Markdown } from "./markdown";
 import { cn } from "@/lib/utils";
@@ -169,10 +169,12 @@ function ArtifactBody({ artifact, view }: { artifact: Artifact; view: "preview" 
     );
   }
   if (kind === "csv") return <CsvTable content={content} />;
-  if (kind === "code") return <CodeArtifactView artifact={artifact} />;
-  if (isIframeKind(kind)) {
-    return <ArtifactFrame srcDoc={buildArtifactSrcDoc(kind, content)} title={artifact.title} />;
+  // 미리보기 가능(html/svg/mermaid/chart/react) — kind=code+웹 lang(예: ```html 펜스) 포함
+  const previewKind = previewKindFor(kind, lang);
+  if (previewKind) {
+    return <ArtifactFrame srcDoc={buildArtifactSrcDoc(previewKind, content)} title={artifact.title} />;
   }
+  if (kind === "code") return <CodeArtifactView artifact={artifact} />;
   // 미지원 kind → 코드 폴백
   return (
     <div className="h-full overflow-auto px-3">
@@ -240,7 +242,7 @@ export function ArtifactPanel() {
     }
   };
 
-  const canToggle = isIframeKind(active.kind) && !active.streaming;
+  const canToggle = previewKindFor(active.kind, active.lang) !== null && !active.streaming;
 
   return (
     <aside className="fixed inset-0 z-40 flex w-full flex-col border-border bg-surface lg:static lg:inset-auto lg:z-auto lg:w-[44%] lg:max-w-[560px] lg:border-l">
