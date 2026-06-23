@@ -5,7 +5,6 @@
  *
  * 만료된 DB 레코드를 주기적으로 정리합니다.
  * 대상 테이블:
- * - uploaded_documents              : expires_at 기준 만료 문서 삭제
  * - token_blacklist                 : expires_at(ms epoch) 기준 만료 토큰 삭제
  * - oauth_states                    : 10분 이상 경과한 OAuth state 삭제
  * - external_provider_usage         : EXTERNAL_USAGE_RETENTION_DAYS(기본 90일) 보존
@@ -35,15 +34,7 @@ async function runRetention(): Promise<void> {
         const db = getUnifiedDatabase();
         const pool = db.getPool();
 
-        // 1. 만료된 업로드 문서 삭제
-        const docResult = await pool.query(
-            `DELETE FROM uploaded_documents WHERE expires_at < NOW()`
-        );
-        if ((docResult.rowCount ?? 0) > 0) {
-            logger.info(`[DbRetention] 만료 문서 ${docResult.rowCount}건 삭제 완료`);
-        }
-
-        // 2. 만료된 토큰 블랙리스트 항목 삭제 (expires_at은 ms epoch)
+        // 만료된 토큰 블랙리스트 항목 삭제 (expires_at은 ms epoch)
         const now = Date.now();
         const tokenResult = await pool.query(
             `DELETE FROM token_blacklist WHERE expires_at < $1`,
