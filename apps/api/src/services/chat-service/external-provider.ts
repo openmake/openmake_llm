@@ -187,6 +187,11 @@ export async function streamFromExternalProvider(
     let repeatCount = 0;
     let suppressTools = false;
 
+    // generate_image 결과의 이미지 마크다운 추적 — 일부 모델(qwen 등)이 도구 지시("마크다운
+    // 그대로 포함")를 누락해 생성된 이미지가 채팅에 표시되지 않는 문제 보정용.
+    // 루프 종료 후 최종 응답에 누락돼 있으면 결정적으로 첨부한다.
+    const generatedImageMarkdowns: string[] = [];
+
     try {
         for (let turn = 0; turn < MAX_TOOL_TURNS; turn++) {
             // Wall-clock 예산 가드 — 턴 수와 별개로 누적 시간 초과 시 도구 끄고 최종 응답 유도
@@ -267,6 +272,12 @@ export async function streamFromExternalProvider(
 
             for (const tc of result.toolCalls) {
                 const toolResult = await executeExternalTool(deps, tc.name, tc.args as Record<string, unknown>);
+                if (tc.name === 'generate_image') {
+                    const m = toolResult.match(/!\[[^\]]*\]\(\/generated\/[^)]+\)/);
+                    if (m && !generatedImageMarkdowns.includes(m[0])) {
+                        generatedImageMarkdowns.push(m[0]);
+                    }
+                }
                 messages.push({
                     role: 'tool',
                     content: toolResult,
@@ -307,7 +318,22 @@ export async function streamFromExternalProvider(
         ...(directCostUsdMicrosTotal !== undefined ? { directCostUsdMicros: directCostUsdMicrosTotal } : {}),
     });
 
-    return result.content;
+    // generate_image 가 성공했으나 LLM 이 최종 응답에 이미지 마크다운을 누락한 경우 결정적 첨부.
+    // (qwen 등 로컬 모델이 도구 지시를 따르지 않아 생성 이미지가 채팅에 표시 안 되던 문제 보정.
+    //  onToken = 라이브 스트림, 반환값 = 저장 히스토리 — 양쪽에 반영해 reload 후에도 유지.)
+    let finalContent = result.content || '';
+    const missingImages = generatedImageMarkdowns.filter((md) => {
+        const pathMatch = md.match(/\(([^)]+)\)/);
+        return !pathMatch || !finalContent.includes(pathMatch[1]);
+    });
+    if (missingImages.length > 0) {
+        const appended = (finalContent.trim() ? '\n\n' : '') + missingImages.join('\n\n');
+        onToken(appended, undefined);
+        finalContent += appended;
+        logger.info(`🖼️ 생성 이미지 ${missingImages.length}개 자동 첨부 (LLM 응답 누락 보정)`);
+    }
+
+    return finalContent;
 }
 
 /**
