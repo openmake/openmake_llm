@@ -30,8 +30,40 @@ function ArtifactChip({ id }: { id: string }) {
   );
 }
 
+/** 스트리밍 중 길어지는 미완성 코드 펜스 → "아티팩트 생성 중" 표시 (완료 시 칩/패널로 대체). */
+function ArtifactBuilding() {
+  return (
+    <span className="my-1 inline-flex items-center gap-1.5 rounded-md border border-border bg-surface-2 px-2.5 py-1.5 text-sm font-medium text-fg-2">
+      <FileCode2 className="h-4 w-4 animate-pulse text-accent" />
+      아티팩트 생성 중…
+    </span>
+  );
+}
+
 /** assistant 본문 — `[[artifact:id]]` placeholder 를 칩으로, 나머지는 Markdown 으로. */
-function AssistantContent({ content }: { content: string }) {
+function AssistantContent({ content, streaming }: { content: string; streaming?: boolean }) {
+  // 스트리밍 중 닫히지 않은(길어지는) 코드 펜스는 fence-fallback 으로 아티팩트가 될 가능성이 높다.
+  // 원시 코드를 71초간 흘리는 대신 "생성 중" 인디케이터로 즉시 피드백 (완료 시 칩/패널로 교체).
+  // 명시적 <artifact> 태그 경로는 ws 가 이미 라이브 패널을 열므로 여기 대상 아님.
+  if (streaming && !content.includes("[[artifact:")) {
+    const fenceCount = (content.match(/```/g) || []).length;
+    if (fenceCount % 2 === 1) {
+      const lastOpen = content.lastIndexOf("```");
+      const fenceOpen = content.slice(lastOpen, lastOpen + 24);
+      // 렌더 가능한 lang(html/svg/mermaid/chart/react)은 즉시, 일반 코드는 길어질 때(≥12줄) 표시.
+      const renderable = /```\s*(html|svg|mermaid|chart|jsx|tsx|react)/i.test(fenceOpen);
+      const openLines = content.slice(lastOpen).split("\n").length;
+      if (renderable || openLines >= 12) {
+        const before = content.slice(0, lastOpen).trim();
+        return (
+          <>
+            {before && <Markdown content={before} />}
+            <ArtifactBuilding />
+          </>
+        );
+      }
+    }
+  }
   if (!content.includes("[[artifact:")) return <Markdown content={content} />;
   const nodes: ReactNode[] = [];
   let last = 0;
@@ -123,7 +155,7 @@ export function MessageList() {
             <div className="min-w-0 flex-1">
               <p className="mb-1 text-xs font-medium text-muted">OpenMake</p>
               <div className="text-sm leading-relaxed text-fg">
-                <AssistantContent content={m.content} />
+                <AssistantContent content={m.content} streaming={m.streaming} />
                 {m.streaming && (
                   <span className="ml-0.5 inline-block h-4 w-1.5 animate-pulse bg-accent align-text-bottom" />
                 )}
