@@ -23,6 +23,32 @@ export function isIframeKind(kind: string): boolean {
   return IFRAME_KINDS.has(kind);
 }
 
+/**
+ * code 아티팩트의 lang → 미리보기 렌더 kind 매핑.
+ * LLM 이 ```html 같은 마크다운 펜스를 쓰면 backend fence-fallback 이 kind="code"+lang 으로
+ * 저장하므로(예: kind=code lang=html), 그 경우에도 미리보기 iframe 으로 렌더하기 위함.
+ */
+const CODE_LANG_PREVIEW: Record<string, string> = {
+  html: "html",
+  htm: "html",
+  svg: "svg",
+  mermaid: "mermaid",
+  mmd: "mermaid",
+  jsx: "react",
+  tsx: "react",
+};
+
+/**
+ * 이 아티팩트를 미리보기 iframe 으로 렌더할 kind 를 반환(없으면 null).
+ * - isIframeKind(kind) 면 그 kind
+ * - kind="code" 인데 lang 이 웹 렌더 가능(html/svg/mermaid/jsx/tsx)이면 매핑 kind
+ */
+export function previewKindFor(kind: string, lang: string | null | undefined): string | null {
+  if (isIframeKind(kind)) return kind;
+  if (kind === "code" && lang) return CODE_LANG_PREVIEW[lang.toLowerCase().trim()] ?? null;
+  return null;
+}
+
 /** HTML 텍스트 노드 이스케이프 (mermaid 소스 등 텍스트를 안전하게 삽입). */
 function escapeHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");

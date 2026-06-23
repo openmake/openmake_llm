@@ -13,7 +13,7 @@
  * @module services/chat-service/external-provider
  */
 import { createLogger } from '../../utils/logger';
-import { EXTERNAL_LLM_TOOL_BLACKLIST, LOOP_DETECTION, AGENT_LOOP_LIMITS, MAX_TOOL_RESULT_CHARS } from '../../config/runtime-limits';
+import { EXTERNAL_LLM_TOOL_BLACKLIST, LOOP_DETECTION, AGENT_LOOP_LIMITS, MAX_TOOL_RESULT_CHARS, ARTIFACT_REQUEST_SUPPRESSED_TOOLS, ARTIFACT_INTENT_PATTERNS } from '../../config/runtime-limits';
 import { getUnifiedMCPClient } from '../../mcp/unified-client';
 import { isPersistableUserId } from '../../utils/user-id-validation';
 import { getExternalProviderSystemGuards } from '../../chat/prompt';
@@ -151,9 +151,17 @@ export async function streamFromExternalProvider(
         throw err;
     }
 
+    // 명시적 아티팩트 생성 요청이면 distractor always-on 도구(generate_image 등)를 제외해
+    // 모델이 도구 호출 대신 <artifact> 산출물을 쓰도록 유도 (2026-06-23 통제실험 근거).
+    const wantsArtifact = ARTIFACT_INTENT_PATTERNS.some((re) => re.test(req.message ?? ''));
     const tools = caps.toolCalling
-        ? deps.allowedTools.filter((t) => !EXTERNAL_LLM_TOOL_BLACKLIST.includes(t.function.name))
+        ? deps.allowedTools.filter((t) =>
+            !EXTERNAL_LLM_TOOL_BLACKLIST.includes(t.function.name)
+            && !(wantsArtifact && ARTIFACT_REQUEST_SUPPRESSED_TOOLS.includes(t.function.name)))
         : [];
+    if (wantsArtifact && caps.toolCalling) {
+        logger.info(`[Artifact] 명시적 아티팩트 요청 감지 — distractor 도구 억제 (잔여 도구 ${tools.length}종)`);
+    }
 
     const startedAt = Date.now();
     let errorCode: string | null = null;
