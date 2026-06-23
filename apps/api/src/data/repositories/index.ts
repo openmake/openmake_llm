@@ -11,4 +11,3 @@ export { FeedbackRepository } from './feedback-repository';
 export { SkillRepository } from './skill-repository';
 // KBRepository: 2026-05-19 제거 (kb.routes 와 함께)
 export { PromptTemplateRepository } from './prompt-template-repository';
-export { ProjectRepository } from './project-repository';
