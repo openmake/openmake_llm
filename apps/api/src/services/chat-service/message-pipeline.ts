@@ -99,7 +99,31 @@ async function buildUserContextBlocks(
     return { memoryBlock, customInstructionsBlock };
 }
 
-export async function runMessagePipeline(svc: ChatService, 
+/**
+ * Artifacts guide 블록 빌드 (사용자 artifacts_enabled 토글 반영, 기본 활성).
+ * ⚠️ external(local 기본) 경로와 strategy 경로 양쪽에서 호출 — 한쪽만 넣으면
+ * 로컬 채팅 LLM 이 가이드를 못 받아 <artifact> 태그/디자인시스템을 무시한다
+ * ([[외부 경로 skill/memory 누락]] 와 동일 클래스의 누락 방지).
+ */
+async function buildArtifactGuideBlock(userId: string | undefined, language: string): Promise<string> {
+    try {
+        let enabled = true;
+        if (userId && userId !== 'guest') {
+            const { UserRepository } = await import('../../data/repositories/user-repository');
+            const { getPool } = await import('../../data/models/unified-database');
+            enabled = await new UserRepository(getPool()).getArtifactsEnabled(userId);
+        }
+        if (!enabled) return '';
+        const { getArtifactGuide } = await import('../../prompts/artifact-guide');
+        return getArtifactGuide(language);
+    } catch (e) {
+        logger.warn('artifacts_enabled 조회 실패 (기본 활성으로 진행):', e);
+        const { getArtifactGuide } = await import('../../prompts/artifact-guide');
+        return getArtifactGuide(language);
+    }
+}
+
+export async function runMessagePipeline(svc: ChatService,
     req: ChatMessageRequest,
     onToken: (token: string) => void,
     onAgentSelected?: (agent: { type: string; name: string; emoji?: string; phase?: string; reason?: string; confidence?: number }) => void,
@@ -358,12 +382,16 @@ export async function runMessagePipeline(svc: ChatService,
             }
         }
 
+        // ⚠️ artifact-guide 를 external(로컬 기본) 경로에도 주입 — 안 그러면 로컬 채팅 LLM 이
+        //    가이드(디자인시스템·<artifact> 형식)를 못 받아 fence-fallback 으로만 동작.
+        const extArtifactGuide = await buildArtifactGuideBlock(userId, languagePolicy?.resolvedLanguage || 'en');
         return await svc.streamFromExternalProvider(externalResolved, req, streamToken, {
             agentSystemMessage: agentSysMsgForExternal,
             enhancedMessage: finalEnhancedMessage,
             resolvedLanguage: languagePolicy?.resolvedLanguage,
             memoryBlock: extMemoryBlock,
             customInstructionsBlock: extCustomInstructionsBlock,
+            artifactGuideBlock: extArtifactGuide,
         }, reqCtx);
     }
 
@@ -481,24 +509,7 @@ export async function runMessagePipeline(svc: ChatService,
     // Artifacts guide (2026-05-26 Phase 1.C): self-contained 산출물 wrap 지시.
     // 사용자별 on/off 토글 (Anthropic Settings > Capabilities 동등). 기본 true.
     // guest 세션은 사용자 설정이 없으므로 기본 활성 (안전한 기본값).
-    let artifactGuideBlock = '';
-    try {
-        let enabled = true;
-        if (userId && userId !== 'guest') {
-            const { UserRepository } = await import('../../data/repositories/user-repository');
-            const { getPool } = await import('../../data/models/unified-database');
-            const userRepo = new UserRepository(getPool());
-            enabled = await userRepo.getArtifactsEnabled(userId);
-        }
-        if (enabled) {
-            const { getArtifactGuide } = await import('../../prompts/artifact-guide');
-            artifactGuideBlock = getArtifactGuide(languagePolicy?.resolvedLanguage || 'en');
-        }
-    } catch (e) {
-        logger.warn('artifacts_enabled 조회 실패 (기본 활성으로 진행):', e);
-        const { getArtifactGuide } = await import('../../prompts/artifact-guide');
-        artifactGuideBlock = getArtifactGuide(languagePolicy?.resolvedLanguage || 'en');
-    }
+    const artifactGuideBlock = await buildArtifactGuideBlock(userId, languagePolicy?.resolvedLanguage || 'en');
 
     const combinedSystemPrompt = memoryBlock + customInstructionsBlock + thinkingGuidance + styledBase + artifactGuideBlock;
 

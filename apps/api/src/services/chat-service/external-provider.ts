@@ -48,6 +48,8 @@ export interface StreamFromExternalContext {
     memoryBlock?: string;
     /** Custom Instructions 블록 (사용자 영구 지시). 시스템 프롬프트 앞쪽에 prepend. */
     customInstructionsBlock?: string;
+    /** Artifacts guide (디자인시스템·<artifact> 형식 지시). 가드/페르소나 뒤에 append. */
+    artifactGuideBlock?: string;
 }
 
 /**
@@ -83,6 +85,12 @@ export async function streamFromExternalProvider(
 
     if (ctx.agentSystemMessage) {
         systemPromptParts.push(ctx.agentSystemMessage);
+    }
+
+    // Artifacts guide (디자인시스템·<artifact> 형식). strategy 경로의 combinedSystemPrompt
+    // 끝(... + artifactGuideBlock)과 동일하게 마지막에 append.
+    if (ctx.artifactGuideBlock) {
+        systemPromptParts.push(ctx.artifactGuideBlock.trim());
     }
 
     const langCode = ctx.resolvedLanguage || req.userLanguagePreference;
