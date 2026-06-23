@@ -77,15 +77,14 @@ function chromeBar(input: BuildInput): string {
 </div>`;
 }
 
-/** 뷰어 오리진에 self-host 된 라이브러리 경로. */
+/**
+ * 뷰어 오리진에 self-host 된 라이브러리 경로.
+ * bootstrap.js(우리 코드)는 변경되므로 캐시버스팅 버전 부여 — /vendor 가 immutable 캐시라
+ * 버전 없이는 갱신이 전파되지 않는다. bootstrap.js 수정 시 BOOTSTRAP_VERSION 을 올린다.
+ */
+const BOOTSTRAP_VERSION = '5';
 const VENDOR = {
-    mermaid: '/vendor/mermaid.min.js',
-    chart: '/vendor/chart.umd.min.js',
-    react: '/vendor/react.production.min.js',
-    reactDom: '/vendor/react-dom.production.min.js',
-    babel: '/vendor/babel.min.js',
-    marked: '/vendor/marked.min.js',
-    bootstrap: '/vendor/bootstrap.js',
+    bootstrap: `/vendor/bootstrap.js?v=${BOOTSTRAP_VERSION}`,
 };
 
 /**
