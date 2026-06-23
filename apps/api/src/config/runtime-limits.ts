@@ -173,6 +173,8 @@ export const RESEARCH_DEFAULTS = {
     SCRAPE_BATCH_SIZE: 3,
     /** 청크 크기 (소스 개수 기준) */
     CHUNK_SIZE: 6,
+    /** 검색 fan-out 동시실행 수 (env: RESEARCH_SEARCH_CONCURRENCY) */
+    SEARCH_CONCURRENCY: parseInt(process.env.RESEARCH_SEARCH_CONCURRENCY || '5', 10),
     /** 합성 병렬 동시실행 수 */
     SYNTHESIS_CONCURRENCY: 5,
     /** 전체 합성을 실행하기 위한 최소 콘텐츠 길이 (문자). 이 미만이면 경량 합성 */
@@ -596,6 +598,9 @@ export const TOOL_RESULT_COMPACTION = {
     /** 의미론적 요약 대상 최소 길이 (이보다 짧으면 단순 절단) */
     SEMANTIC_THRESHOLD_CHARS: 500,
 } as const;
+
+/** 도구 결과를 LLM 컨텍스트로 주입할 때 단일 결과 최대 문자 수 (외부 provider · agent task 공용). */
+export const MAX_TOOL_RESULT_CHARS = parseInt(process.env.MAX_TOOL_RESULT_CHARS || '8000', 10);
 
 // ============================================
 // GV 품질 측정

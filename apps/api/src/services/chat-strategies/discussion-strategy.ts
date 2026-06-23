@@ -19,7 +19,7 @@ import type { ChatMessage } from '../../llm';
 import type { ChatStrategy, ChatResult, DiscussionStrategyContext } from './types';
 import { createLogger } from '../../utils/logger';
 import { sanitizePromptInput } from '../../utils/input-sanitizer';
-import { DISCUSSION_TOKEN_BUDGET, MODEL_CONTEXT_DEFAULTS, DISCUSSION_STREAM_ABORT_CHECK_INTERVAL } from '../../config/runtime-limits';
+import { DISCUSSION_TOKEN_BUDGET, MODEL_CONTEXT_DEFAULTS, DISCUSSION_STREAM_ABORT_CHECK_INTERVAL, DISCUSSION_CONCURRENCY } from '../../config/runtime-limits';
 import { LLM_TEMPERATURES } from '../../config/llm-parameters';
 import { resolvePromptLocale, type PromptLocaleCode } from '../../chat/language-policy';
 import { withSpan } from '../../observability/otel';
@@ -351,7 +351,7 @@ export class DiscussionStrategy implements ChatStrategy<DiscussionStrategyContex
         const discussionEngine = createDiscussionEngine(
             generateResponse,
             {
-                maxAgents: 5,
+                maxAgents: DISCUSSION_CONCURRENCY.MAX_PARALLEL_AGENTS,
                 enableCrossReview: true,
                 enableDeepThinking: true,
                 userLanguage: userLanguagePreference,

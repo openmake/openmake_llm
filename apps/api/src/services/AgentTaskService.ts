@@ -19,7 +19,7 @@ import type { ChatMessage, ToolDefinition } from '../llm/types';
 import { getModelForRole } from '../config/model-roles';
 import { getUnifiedMCPClient } from '../mcp/unified-client';
 import { getUnifiedDatabase } from '../data/models/unified-database';
-import { AGENT_TASK_LIMITS } from '../config/runtime-limits';
+import { AGENT_TASK_LIMITS, MAX_TOOL_RESULT_CHARS } from '../config/runtime-limits';
 import { emitAgentTaskProgress } from '../utils/event-bus';
 import { getAgentTaskSystemPrompt, getAgentTaskDeliverableNudge } from '../prompts/agent-task-prompt';
 import { extractAndStripArtifacts, type ExtractedArtifact } from '../llm/artifact-parser';
@@ -388,7 +388,7 @@ export class AgentTaskService {
         try {
             const r = await mcp.executeToolWithContext(name, args, userCtx);
             const text =
-                typeof r.content === 'string' ? r.content : JSON.stringify(r.content).slice(0, 8000);
+                typeof r.content === 'string' ? r.content : JSON.stringify(r.content).slice(0, MAX_TOOL_RESULT_CHARS);
             return r.isError ? `Error: ${text}` : text;
         } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
