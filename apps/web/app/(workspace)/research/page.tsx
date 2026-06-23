@@ -11,6 +11,7 @@ import {
   FileText,
   Link,
   TriangleAlert,
+  ChevronDown,
 } from "lucide-react";
 import {
   Button,
@@ -183,17 +184,6 @@ const STAGE_ICON: Record<StageStatus, typeof Circle> = {
   pending: Circle,
 };
 
-const STAGE_TONE: Record<StageStatus, "success" | "accent" | "neutral"> = {
-  done: "success",
-  running: "accent",
-  pending: "neutral",
-};
-
-const STAGE_LABEL: Record<StageStatus, string> = {
-  done: "완료",
-  running: "진행중",
-  pending: "대기",
-};
 
 /** depth 백엔드 enum(basic/deep/comprehensive) ↔ UI 라벨. */
 const DEPTH_OPTIONS: { value: "basic" | "deep" | "comprehensive"; label: string }[] = [
@@ -230,6 +220,7 @@ export default function ResearchPage() {
   const [topic, setTopic] = useState("");
   const [depth, setDepth] = useState<"basic" | "deep" | "comprehensive">("deep");
   const [busy, setBusy] = useState(false);
+  const [sourcesOpen, setSourcesOpen] = useState(false);
   // 최신 세션이 있으면 그것으로 진행/소스/메트릭 표시. 없거나 실패 시 목업 폴백.
   const [stages, setStages] = useState<Stage[]>(STAGES);
   const [sources, setSources] = useState<Source[]>(SOURCES);
@@ -406,168 +397,20 @@ export default function ResearchPage() {
           </div>
         </Card>
 
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_300px]">
-          {/* 좌측: 진행 단계 + 소스. min-w-0 — grid item 기본 min-width:auto 가 긴 URL 로
-              컬럼을 넓혀 truncate 무력화·가로 오버플로를 일으키는 것을 차단. */}
-          <div className="min-w-0 space-y-6">
-            <Card>
+        {/* 보고서 중심 레이아웃: 좌측 지난 리서치 레일 + 메인(진행 stepper · 메트릭 · 보고서 · 소스) */}
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[260px_1fr]">
+          {/* 좌측 레일: 지난 리서치 (min-w-0 로 긴 주제 truncate) */}
+          <div className="min-w-0">
+            <Card className="lg:sticky lg:top-0">
               <CardHeader className="flex items-center justify-between">
-                <CardTitle>리서치 진행</CardTitle>
-                {status && !isRunning ? (
-                  <Badge tone={status === "completed" ? "success" : "neutral"}>
-                    {status === "completed" ? "완료" : "종료"}
-                  </Badge>
+                <CardTitle>지난 리서치</CardTitle>
+                <span className="font-mono text-xs text-faint">{sessionList.length}</span>
+              </CardHeader>
+              <CardContent className="max-h-[60vh] space-y-1.5 overflow-y-auto">
+                {sessionList.length === 0 ? (
+                  <p className="py-4 text-center text-xs text-muted">아직 리서치가 없습니다.</p>
                 ) : (
-                  <Badge tone="accent">
-                    <LoaderCircle className="h-3 w-3 animate-spin" />
-                    진행중
-                  </Badge>
-                )}
-              </CardHeader>
-              <CardContent>
-                <ol className="relative space-y-5 border-l border-border pl-6">
-                  {stages.map((stage) => {
-                    const Icon = STAGE_ICON[stage.status];
-                    return (
-                      <li key={stage.key} className="relative">
-                        <span
-                          className={cn(
-                            "absolute -left-[31px] grid h-5 w-5 place-items-center rounded-full bg-surface",
-                            stage.status === "done" && "text-success",
-                            stage.status === "running" && "text-accent",
-                            stage.status === "pending" && "text-faint",
-                          )}
-                        >
-                          <Icon
-                            className={cn(
-                              "h-4 w-4",
-                              stage.status === "running" && "animate-spin",
-                            )}
-                          />
-                        </span>
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium text-fg">
-                            {stage.label}
-                          </span>
-                          <Badge tone={STAGE_TONE[stage.status]}>
-                            {STAGE_LABEL[stage.status]}
-                          </Badge>
-                        </div>
-                        <p className="mt-0.5 text-xs text-muted">{stage.desc}</p>
-                      </li>
-                    );
-                  })}
-                </ol>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="flex items-center justify-between">
-                <CardTitle>수집 소스</CardTitle>
-                <span className="font-mono text-xs text-faint">
-                  {sources.length}건
-                </span>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                {sources.map((s) => (
-                  <div
-                    key={s.id}
-                    className="flex items-start gap-3 rounded-md border border-border bg-surface-2 px-3 py-2.5"
-                  >
-                    <Link className="mt-0.5 h-4 w-4 flex-shrink-0 text-faint" />
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm text-fg">{s.title}</p>
-                      <p className="truncate font-mono text-xs text-faint">
-                        {s.domain}
-                      </p>
-                    </div>
-                    {s.verified ? (
-                      <Badge tone="success">검증됨</Badge>
-                    ) : (
-                      <Badge tone="warn">미검증</Badge>
-                    )}
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* 우측: 메트릭 + 보고서 + 지난 리서치 */}
-          <div className="min-w-0 space-y-3">
-            <Card>
-              <CardHeader>
-                <CardTitle>메트릭</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {metrics.map((m) => (
-                  <div
-                    key={m.label}
-                    className="flex items-center justify-between"
-                  >
-                    <span className="flex items-center gap-1.5 text-sm text-muted">
-                      {m.tone === "warn" && (
-                        <TriangleAlert className="h-3.5 w-3.5 text-warn" />
-                      )}
-                      {m.label}
-                    </span>
-                    <span
-                      className={cn(
-                        "font-mono text-sm font-semibold",
-                        m.tone === "warn" ? "text-warn" : "text-fg",
-                      )}
-                    >
-                      {m.value}
-                    </span>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-
-            {/* 보고서 — 활성 세션의 요약 + 주요 발견 */}
-            <Card>
-              <CardHeader>
-                <CardTitle>보고서</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {activeSession?.summary || (activeSession?.key_findings?.length ?? 0) > 0 ? (
-                  <div className="space-y-3">
-                    {activeSession?.summary && (
-                      <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-fg-2">
-                        {activeSession.summary}
-                      </p>
-                    )}
-                    {(activeSession?.key_findings?.length ?? 0) > 0 && (
-                      <div className="space-y-1.5">
-                        <p className="text-xs font-medium text-fg-2">주요 발견</p>
-                        <ul className="space-y-1">
-                          {activeSession!.key_findings!.map((f, i) => (
-                            <li key={i} className="flex gap-2 text-xs text-muted">
-                              <CircleCheck className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-success" />
-                              <span className="break-words">{f}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2 text-sm text-muted">
-                    <FileText className="h-4 w-4 text-faint" />
-                    보고서는 합성 완료 후 표시됩니다.
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* 지난 리서치 — 클릭 시 해당 세션 로드 (에이전트 작업 목록과 동일 패턴) */}
-            {sessionList.length > 0 && (
-              <Card>
-                <CardHeader className="flex items-center justify-between">
-                  <CardTitle>지난 리서치</CardTitle>
-                  <span className="font-mono text-xs text-faint">{sessionList.length}건</span>
-                </CardHeader>
-                <CardContent className="space-y-1.5">
-                  {sessionList.map((s) => (
+                  sessionList.map((s) => (
                     <button
                       key={s.id}
                       type="button"
@@ -589,10 +432,143 @@ export default function ResearchPage() {
                         <span>{Math.round(s.progress)}%</span>
                       </div>
                     </button>
+                  ))
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* 메인: 진행 stepper · 메트릭 · 보고서 · 수집 소스 */}
+          <div className="min-w-0 space-y-5">
+            {/* 진행 단계 — 가로 compact stepper */}
+            <Card className="p-4">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-3">
+                {stages.map((stage, i) => {
+                  const Icon = STAGE_ICON[stage.status];
+                  return (
+                    <div key={stage.key} className="flex items-center gap-2">
+                      <span
+                        className={cn(
+                          "flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium",
+                          stage.status === "done" && "bg-success-soft text-success",
+                          stage.status === "running" && "bg-accent-soft text-accent",
+                          stage.status === "pending" && "bg-surface-2 text-faint",
+                        )}
+                        title={stage.desc}
+                      >
+                        <Icon className={cn("h-3.5 w-3.5", stage.status === "running" && "animate-spin")} />
+                        {stage.label}
+                      </span>
+                      {i < stages.length - 1 && (
+                        <span className="hidden h-px w-5 bg-border sm:block" />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </Card>
+
+            {/* 메트릭 — 가로 인라인 stat strip */}
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {metrics.map((m) => (
+                <Card key={m.label} className="p-3">
+                  <p className="flex items-center gap-1 text-[11px] text-muted">
+                    {m.tone === "warn" && <TriangleAlert className="h-3 w-3 text-warn" />}
+                    {m.label}
+                  </p>
+                  <p
+                    className={cn(
+                      "mt-0.5 font-mono text-lg font-semibold",
+                      m.tone === "warn" ? "text-warn" : "text-fg",
+                    )}
+                  >
+                    {m.value}
+                  </p>
+                </Card>
+              ))}
+            </div>
+
+            {/* 보고서 — 메인 산출물, 넓게 */}
+            <Card>
+              <CardHeader className="flex items-center justify-between">
+                <CardTitle>보고서</CardTitle>
+                {activeSession && (
+                  <Badge tone={STATUS_TONE[activeSession.status]}>
+                    {STATUS_LABEL[activeSession.status]}
+                  </Badge>
+                )}
+              </CardHeader>
+              <CardContent>
+                {activeSession?.summary || (activeSession?.key_findings?.length ?? 0) > 0 ? (
+                  <div className="space-y-4">
+                    {activeSession?.summary && (
+                      <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-fg-2">
+                        {activeSession.summary}
+                      </p>
+                    )}
+                    {(activeSession?.key_findings?.length ?? 0) > 0 && (
+                      <div className="space-y-2 border-t border-border pt-3">
+                        <p className="text-xs font-semibold text-fg-2">주요 발견</p>
+                        <ul className="space-y-1.5">
+                          {activeSession!.key_findings!.map((f, i) => (
+                            <li key={i} className="flex gap-2 text-sm text-fg-2">
+                              <CircleCheck className="mt-0.5 h-4 w-4 flex-shrink-0 text-success" />
+                              <span className="break-words">{f}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 py-6 text-sm text-muted">
+                    <FileText className="h-4 w-4 text-faint" />
+                    {isRunning ? "리서치 진행 중 — 합성 완료 후 보고서가 표시됩니다." : "보고서는 합성 완료 후 표시됩니다."}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* 수집 소스 — 접기 (기본 접힘, 길어지지 않게) */}
+            <Card>
+              <button
+                type="button"
+                onClick={() => setSourcesOpen((v) => !v)}
+                className="flex w-full items-center justify-between px-5 py-4"
+              >
+                <span className="flex items-center gap-2 text-sm font-semibold text-fg">
+                  수집 소스
+                  <span className="font-mono text-xs text-faint">{sources.length}건</span>
+                </span>
+                <ChevronDown
+                  className={cn(
+                    "h-4 w-4 text-faint transition-transform",
+                    sourcesOpen && "rotate-180",
+                  )}
+                />
+              </button>
+              {sourcesOpen && (
+                <CardContent className="max-h-[50vh] space-y-2 overflow-y-auto pt-0">
+                  {sources.map((s) => (
+                    <div
+                      key={s.id}
+                      className="flex items-start gap-3 rounded-md border border-border bg-surface-2 px-3 py-2.5"
+                    >
+                      <Link className="mt-0.5 h-4 w-4 flex-shrink-0 text-faint" />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm text-fg">{s.title}</p>
+                        <p className="truncate font-mono text-xs text-faint">{s.domain}</p>
+                      </div>
+                      {s.verified ? (
+                        <Badge tone="success">검증됨</Badge>
+                      ) : (
+                        <Badge tone="warn">미검증</Badge>
+                      )}
+                    </div>
                   ))}
                 </CardContent>
-              </Card>
-            )}
+              )}
+            </Card>
           </div>
         </div>
       </div>
