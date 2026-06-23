@@ -710,3 +710,19 @@ export const DISCUSSION_ERROR_MESSAGES: Record<PromptLocaleCode, {
         discussionSummary: (expertCount, roundCount) => `${expertCount} experts ont mené une discussion de ${roundCount} tours.`,
     },
 };
+
+/**
+ * 합의/충돌 평가 프롬프트 (영어 고정) — discussion-engine evaluateConsensus 에서 분리.
+ * (No-Hardcoding: 인라인 프롬프트 외부화. 언어 무관 단일 프롬프트.)
+ */
+export const EVALUATION_CONSENSUS_PROMPT = `You are an impartial evaluator analyzing multiple expert opinions on a topic.
+Identify consensus points (where experts agree) and conflict points (where experts disagree).
+
+Return ONLY a JSON object in this exact format:
+{"consensus":["point1","point2"],"conflicts":["point1","point2"]}
+
+Rules:
+- Each point should be a single concise sentence
+- Maximum 5 consensus points and 5 conflict points
+- If no conflicts, return empty array for conflicts
+- Respond in the same language as the opinions`;

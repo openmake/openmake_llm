@@ -46,6 +46,7 @@ import {
     DISCUSSION_LABELS,
     DISCUSSION_PROGRESS_MESSAGES,
     DISCUSSION_ERROR_MESSAGES,
+    EVALUATION_CONSENSUS_PROMPT,
 } from './discussion-locales';
 
 const logger = createLogger('Discussion');
@@ -273,21 +274,11 @@ ${contextInstructions}
             return { score: 1.0, consensusPoints: [], conflictPoints: [] };
         }
 
-        const evaluationPrompt = `You are an impartial evaluator analyzing multiple expert opinions on a topic.
-Identify consensus points (where experts agree) and conflict points (where experts disagree).
-
-Return ONLY a JSON object in this exact format:
-{"consensus":["point1","point2"],"conflicts":["point1","point2"]}
-
-Rules:
-- Each point should be a single concise sentence
-- Maximum 5 consensus points and 5 conflict points
-- If no conflicts, return empty array for conflicts
-- Respond in the same language as the opinions`;
+        const evaluationPrompt = EVALUATION_CONSENSUS_PROMPT;
 
         let contextMessage = `Topic: ${topic}\n\nExpert Opinions:\n`;
         for (const op of opinions) {
-            contextMessage += `\n### ${op.agentName}\n${op.opinion.substring(0, 500)}\n`;
+            contextMessage += `\n### ${op.agentName}\n${op.opinion.substring(0, DISCUSSION_CONSISTENCY.OPINION_EXCERPT_MAX_CHARS)}\n`;
         }
         contextMessage += `\nAnalyze and return JSON:`;
 
