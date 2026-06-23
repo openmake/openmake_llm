@@ -302,6 +302,8 @@ export const DISCUSSION_CONSISTENCY = {
     ENABLED: process.env.ENABLE_CONSISTENCY_SCORE !== 'false',
     /** 측정 최소 에이전트 수 (미만이면 스킵) */
     MIN_AGENTS: 3,
+    /** 평가 입력에 포함할 의견 발췌 최대 문자 수 */
+    OPINION_EXCERPT_MAX_CHARS: parseInt(process.env.DISCUSSION_OPINION_EXCERPT_MAX_CHARS || '500', 10),
     /** Evaluator LLM 최대 토큰 */
     EVALUATOR_MAX_TOKENS: 300,
     /** 최소 일관성 점수 (미달 시 경고 플래그) */
