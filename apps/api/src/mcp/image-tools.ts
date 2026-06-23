@@ -27,7 +27,7 @@ const IMAGE_GEN_TIMEOUT_MS = parseInt(process.env.IMAGE_GEN_TIMEOUT_MS || '', 10
 /** 허용 size 화이트리스트 (OpenAI images API 형식) */
 const ALLOWED_SIZES = new Set(['1024x1024', '768x1024', '1024x768', '512x512']);
 
-/** 생성 이미지 저장 디렉토리 — frontend 단일 원본 서빙 경로 (dist 기준 ../../../frontend/...) */
+/** 생성 이미지 저장 디렉토리 — 백엔드가 /generated/* 로 노출하는 정적 경로 (apps/legacy-web/public/generated) */
 function resolveGeneratedDir(): string {
     return path.resolve(__dirname, '../../../../apps/legacy-web/public/generated');
 }

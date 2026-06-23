@@ -26,6 +26,10 @@ const nextConfig: NextConfig = {
   async rewrites() {
     return [
       { source: "/api/:path*", destination: `${API_PROXY_TARGET}/api/:path*` },
+      // 생성 이미지(generate_image 도구 출력) — 백엔드가 /generated/* 로 서빙한다.
+      // 채팅 마크다운이 root-relative `/generated/...` 를 참조하므로, Next origin 에서
+      // 백엔드로 프록시해 외부 프록시(Caddy) 라우팅에 의존하지 않고 이미지가 도달하게 한다.
+      { source: "/generated/:path*", destination: `${API_PROXY_TARGET}/generated/:path*` },
     ];
   },
   // 보안 헤더 (전역). 아티팩트 라이브 렌더는 sandbox iframe(null-origin)이 1차 경계이고,

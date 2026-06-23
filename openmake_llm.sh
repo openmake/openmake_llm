@@ -341,7 +341,7 @@ cmd_restart() {
 
 # ── build / migrate / deploy ───────────────────────────────────────────────────
 cmd_build() {
-    log_step "npm run build (backend tsc + frontend Vite content-hash 번들 → apps/legacy-web/dist)"
+    log_step "npm run build (backend tsc + apps/web Next.js 빌드)"
     if ! ( cd "$SCRIPT_DIR" && npm run build ); then
         log_err "빌드 실패 — 후속 작업 중단"
         return 2
