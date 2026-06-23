@@ -12,6 +12,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import {
+  Badge,
   Button,
   Card,
   CardHeader,
@@ -416,6 +417,18 @@ export default function SettingsPage() {
                           : [{ value: "", label: "모델 로딩…" }]
                       }
                     />
+                  </FieldRow>
+                  <FieldRow
+                    title="이미지 생성"
+                    description="채팅에서 그림/이미지를 요청하면 자동으로 사용됩니다. 별도 선택은 필요 없습니다."
+                  >
+                    {modelsData?.imageModel ? (
+                      <Badge tone="neutral">
+                        <span className="font-mono">{modelsData.imageModel}</span>
+                      </Badge>
+                    ) : (
+                      <span className="text-sm text-muted">미설정</span>
+                    )}
                   </FieldRow>
                   <FieldRow
                     title="응답 스타일"

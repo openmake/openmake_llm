@@ -225,9 +225,14 @@ router.get('/models', optionalAuth, asyncHandler(async (req: Request, res: Respo
         }
     }
 
+    // 이미지 생성 모델 — 채팅 모델이 아니라 generate_image 도구가 IMAGE_GEN_MODEL 로 호출.
+    // UI 는 이 값으로 "이미지 생성 가능" 표시만 한다 (채팅 셀렉터 옵션 아님). 미설정 시 null.
+    const imageModel = process.env.IMAGE_GEN_MODEL?.trim() || null;
+
     res.json(success({
         defaultModel: buildFullModelId('local-llm', defaultChat),
         models,
+        imageModel,
     }));
 }));
 

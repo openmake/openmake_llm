@@ -14,6 +14,8 @@ export interface ModelEntry {
 export interface ModelsPayload {
   defaultModel: string;
   models: ModelEntry[];
+  /** 이미지 생성 모델 (IMAGE_GEN_MODEL). 채팅 모델 아님 — generate_image 도구 전용. 미설정 시 null. */
+  imageModel?: string | null;
 }
 
 /**
