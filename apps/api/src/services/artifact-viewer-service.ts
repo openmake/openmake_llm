@@ -185,14 +185,19 @@ ${dataIsland}
     return { html, needsUnsafeEval };
 }
 
-/** strict CSP 본문 — scriptSrc 만 종류별로 다름. */
+/**
+ * strict CSP 본문 — scriptSrc 만 종류별로 다름.
+ * 신뢰 CDN(안 B)을 script/style/img/font 에 허용하되 connect-src 는 'none' 유지
+ * (데이터 유출·임의 호스트 fetch 차단). Three.js 등 CDN 라이브러리 렌더 가능.
+ */
 function cspContent(scriptSrc: string): string {
+    const cdn = ARTIFACT_VIEWER.trustedCdns.length ? ' ' + ARTIFACT_VIEWER.trustedCdns.join(' ') : '';
     return [
         "default-src 'none'",
-        `script-src ${scriptSrc}`,
-        "style-src 'self' 'unsafe-inline'",
-        "img-src 'self' data:",
-        "font-src 'self' data:",
+        `script-src ${scriptSrc}${cdn}`,
+        `style-src 'self' 'unsafe-inline'${cdn}`,
+        `img-src 'self' data:${cdn}`,
+        `font-src 'self' data:${cdn}`,
         "media-src data:",
         "connect-src 'none'",
         "object-src 'none'",

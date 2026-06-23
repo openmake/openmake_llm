@@ -38,6 +38,16 @@ export const ARTIFACT_VIEWER = {
 
     /** react(JSX) 런타임 변환은 babel eval 필요 → 해당 종류만 'unsafe-eval' 완화. */
     reactNeedsUnsafeEval: true,
+
+    /**
+     * 신뢰 CDN 화이트리스트 (안 B) — script/style/img/font 소스로만 허용.
+     * connect-src 는 여전히 'none' (fetch/XHR/WebSocket 데이터 유출 차단) — 핵심 보호 유지.
+     * Three.js/D3/Chart 등 외부 라이브러리에 의존하는 아티팩트가 공유 뷰어에서도 렌더되도록.
+     * space 구분 env override.
+     */
+    trustedCdns: (process.env.ARTIFACT_VIEWER_TRUSTED_CDNS
+        || 'https://cdnjs.cloudflare.com https://unpkg.com https://cdn.jsdelivr.net')
+        .split(/\s+/).filter(Boolean),
 } as const;
 
 /** publish 한 artifact 의 뷰어 디렉토리 절대경로. */
