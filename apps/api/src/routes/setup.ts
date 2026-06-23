@@ -15,7 +15,6 @@ import * as fs from 'fs';
 
 import v1Router from './v1';
 import { tokenMonitoringRouter } from './token-monitoring.routes';
-import { createPoliciesRouter } from './policies.routes';
 import { createConsentController } from '../controllers/consent.controller';
 import { createExportController } from '../controllers/export.controller';
 import { createUserPreferencesController } from '../controllers/user-preferences.controller';
@@ -202,8 +201,6 @@ export function setupApiRoutes(
     app.use('/api/cluster', createClusterController(cluster));
     app.use('/api/auth', createAuthController(getConfig().port));
     app.use('/api/admin', createAdminController());
-    // GDPR Phase A Fix 3 — Policy 문서 다국어 서빙
-    app.use('/api/policies', createPoliciesRouter());
     // GDPR Phase B Fix 6 (B7) — 동의 조회/철회 API
     app.use('/api/users/me/consent', createConsentController());
     // GDPR Phase B Fix 6 (B6) — 사용자 전체 데이터 export (Article 20)
