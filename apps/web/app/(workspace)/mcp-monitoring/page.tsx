@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { RefreshCw, AlertTriangle } from "lucide-react";
+import { CLIENT_TIMING } from "@/lib/config";
 import {
   Button,
   Badge,
@@ -199,7 +200,7 @@ export default function McpMonitoringPage() {
     };
     void tick();
     void loadExtraStats();
-    const id = setInterval(() => void tick(), 30_000);
+    const id = setInterval(() => void tick(), CLIENT_TIMING.MCP_MONITORING_REFRESH_MS);
     return () => {
       cancelled = true;
       clearInterval(id);

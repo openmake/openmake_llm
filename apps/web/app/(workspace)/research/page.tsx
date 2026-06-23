@@ -25,6 +25,7 @@ import {
 import { cn } from "@/lib/utils";
 import type { ApiSuccess } from "@openmake/shared-types";
 import { ApiClient } from "@/lib/api-client";
+import { CLIENT_TIMING } from "@/lib/config";
 
 /* ── 타입 ────────────────────────────────────────────────── */
 type StageStatus = "done" | "running" | "pending";
@@ -265,12 +266,12 @@ export default function ResearchPage() {
       if (s && aliveRef.current) {
         applySession(s);
         if (!TERMINAL.includes(s.status)) {
-          pollRef.current = setTimeout(() => poll(sid), 2500);
+          pollRef.current = setTimeout(() => poll(sid), CLIENT_TIMING.RESEARCH_POLL_MS);
         }
       }
     } catch {
       /* 일시 실패 — 다음 틱에 재시도 */
-      if (aliveRef.current) pollRef.current = setTimeout(() => poll(sid), 4000);
+      if (aliveRef.current) pollRef.current = setTimeout(() => poll(sid), CLIENT_TIMING.RESEARCH_POLL_RETRY_MS);
     }
   };
 
