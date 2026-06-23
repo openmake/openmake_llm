@@ -68,16 +68,6 @@ export interface ChatMessage {
   created_at?: string;
 }
 
-export interface Project {
-  id: string;
-  user_id: string;
-  name: string;
-  description?: string | null;
-  is_active: boolean;
-  created_at: string;
-  updated_at: string;
-}
-
 /* ── WebSocket 채팅 프로토콜 (sockets/ws-chat-handler 와 페어) ───────── */
 /** 첨부 텍스트 파일 (백엔드 ws-chat-handler files[] · attach-context AttachedFileInput 호환) */
 export interface WsAttachedFile {
@@ -140,9 +130,6 @@ export type WsServerEvent =
 /* ── 응답 페이로드 헬퍼 타입 ─────────────────────────────────────────── */
 export interface SessionsPayload {
   sessions: ConversationSession[];
-}
-export interface ProjectsPayload {
-  projects: Project[];
 }
 export interface MePayload {
   user: User;
