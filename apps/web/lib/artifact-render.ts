@@ -98,14 +98,25 @@ export function buildArtifactSrcDoc(kind: string, content: string): string {
       );
     }
     case "react": {
-      // export default 제거 → Babel(text/babel) 은 ES module export 미지원. App 정의 후 렌더.
-      const code = escapeScript(content.replace(/export\s+default\s+/g, ""));
+      // 브라우저 단일파일 — ES import/export 불가. ① export default·import 제거(regex 는 여기서 처리)
+      // ② Babel JS API + classic JSX runtime(React.createElement) — automatic 은 jsx-runtime import 를
+      //    삽입해 "Cannot use import statement" 로 깨짐 ③ 훅을 전역 React 에서 별칭.
+      const stripped = content
+        .replace(/export\s+default\s+/g, "")
+        .replace(/^[ \t]*import\s+[^\n;]+;?[ \t]*$/gm, "");
+      const codeJson = escapeScript(JSON.stringify(stripped));
       return doc(
         `<script src="${CDN.react}"></script><script src="${CDN.reactDom}"></script><script src="${CDN.babel}"></script>${BASE_STYLE}`,
-        `<div id="root"></div><script type="text/babel" data-presets="react,typescript">
-${code}
-try{ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(App));}
-catch(e){document.getElementById('root').innerHTML='<pre>렌더 오류: '+e.message+'</pre>';}
+        `<div id="root"></div><script>
+(function(){
+  try{
+    var prelude="const {useState,useEffect,useRef,useMemo,useCallback,useContext,useReducer,useLayoutEffect,Fragment,createElement}=React;\\n";
+    var out=Babel.transform(prelude+${codeJson},{presets:[["react",{runtime:"classic"}],"typescript"],filename:"a.tsx"}).code;
+    var App=new Function("React","ReactDOM",out+"\\n;return typeof App!=='undefined'?App:null;")(React,ReactDOM);
+    if(!App){document.getElementById('root').innerHTML='<pre>App 컴포넌트를 찾을 수 없음 (export default function App 필요)</pre>';return;}
+    ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(App));
+  }catch(e){document.getElementById('root').innerHTML='<pre>렌더 오류: '+e.message+'</pre>';}
+})();
 </script>`,
       );
     }
