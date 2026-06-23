@@ -19,6 +19,7 @@ import { CURRENT_EVENTS_KEYWORDS, WEB_SEARCH_TEMPLATES, WS_ERROR_MESSAGES, WS_PR
 import { detectLanguage, type SupportedLanguageCode } from '../chat/language-policy';
 import { applySlashCommand } from '../chat/slash-command';
 import { getStaleDataWarning } from '../config/stale-data-warning';
+import { WS_LIMITS } from '../config/timeouts';
 import { ArtifactStreamParser, type ArtifactInfo } from '../llm/artifact-parser';
 import { buildFileContext, buildUrlContext, getCachedAttachContext, appendCachedAttachContext } from '../services/chat-service/attach-context';
 
@@ -194,8 +195,8 @@ export async function handleChatMessage(
         // - tokenCallback (아래) 보다 먼저 선언 — TS use-before-declaration 안전.
         // - parser callbacks 가 ws.send 직접 발행 (token / artifact_start/chunk/end).
         // Phase 3 보완 B.3 (2026-05-26): artifact_chunk WS 메시지 폭주 방지 — 토큰 단위 1회/메시지를
-        // ID 별 50ms 윈도우로 buffer 후 합쳐서 1회 dispatch. 큰 artifact (~MB) 시 message rate 1/20.
-        const ARTIFACT_CHUNK_FLUSH_MS = 50;
+        // ID 별 throttle 윈도우(WS_LIMITS.ARTIFACT_CHUNK_FLUSH_MS)로 buffer 후 합쳐서 1회 dispatch.
+        const ARTIFACT_CHUNK_FLUSH_MS = WS_LIMITS.ARTIFACT_CHUNK_FLUSH_MS;
         const chunkBuffers = new Map<string, { delta: string; timer: ReturnType<typeof setTimeout> | null }>();
         const streamedArtifactIds = new Set<string>();
         const flushArtifactChunk = (id: string) => {

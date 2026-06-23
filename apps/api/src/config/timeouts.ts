@@ -165,6 +165,11 @@ export const WS_LIMITS = {
      * 프론트 가드(chat.js WS_MAX_PAYLOAD_BYTES)도 0=무제한 sentinel 로 정합.
      */
     MAX_PAYLOAD_BYTES: process.env.WS_MAX_PAYLOAD_BYTES !== undefined ? Number(process.env.WS_MAX_PAYLOAD_BYTES) : 0,
+    /**
+     * 단일 메시지 문자열 최대 길이(chars). MAX_PAYLOAD_BYTES(0=무제한 sentinel)와 별개로,
+     * 메시지 핸들러가 raw.length 로 거대 텍스트 프레임을 즉시 거부하는 가드. 기본 1MB(chars).
+     */
+    MAX_MESSAGE_CHARS: parseInt(process.env.WS_MAX_MESSAGE_CHARS || String(1024 * 1024), 10),
     /** 사용자당 최대 동시 WebSocket 연결 수 */
     MAX_CONNECTIONS_PER_USER: Number(process.env.WS_MAX_CONNECTIONS_PER_USER) || 5,
     /** 연결 속도 제한 윈도우 (ms) — 기본 60초 */
@@ -192,6 +197,8 @@ export const WS_LIMITS = {
      * 기본 5회 — 일시적 네트워크 spike 는 허용, 만성적 stall 은 정리.
      */
     BROADCAST_BACKPRESSURE_TERMINATE_AFTER: Number(process.env.WS_BROADCAST_BACKPRESSURE_TERMINATE_AFTER) || 5,
+    /** artifact_chunk 스트리밍 throttle 윈도우(ms) — 토큰 단위 delta 를 합쳐 메시지 폭주 방지. */
+    ARTIFACT_CHUNK_FLUSH_MS: parseInt(process.env.WS_ARTIFACT_CHUNK_FLUSH_MS || '50', 10),
 } as const;
 
 // ============================================

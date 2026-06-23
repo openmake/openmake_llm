@@ -22,8 +22,11 @@ import { isTPMExceeded } from './rate-limit-headers';
  * - limit: 모든 키 공통 단일 한도 (tier 차등 제거)
  * - windowMs: 1분 (RPM)
  */
+/** retry-after(초) — RPM 윈도우에서 파생. */
+const API_KEY_RETRY_AFTER_SECONDS = Math.ceil(API_KEY_LIMITS.windowMs / 1000);
+
 export const apiKeyRateLimiter = rateLimit({
-    windowMs: 60 * 1000, // 1분
+    windowMs: API_KEY_LIMITS.windowMs,
     limit: (): number => API_KEY_LIMITS.rpm,
 
     // API Key ID 기반 분리 (키마다 독립적 카운터)
@@ -44,7 +47,7 @@ export const apiKeyRateLimiter = rateLimit({
             ErrorCodes.RATE_LIMITED,
             'Rate limit exceeded. Please wait before making more requests.',
             {
-                retry_after_seconds: 60,
+                retry_after_seconds: API_KEY_RETRY_AFTER_SECONDS,
                 documentation_url: '/developer#rate-limits'
             }
         ));
@@ -75,7 +78,7 @@ export function apiKeyTPMLimiter(req: Request, res: Response, next: NextFunction
             {
                 type: 'tokens_per_minute',
                 limit: API_KEY_LIMITS.tpm,
-                retry_after_seconds: 60,
+                retry_after_seconds: API_KEY_RETRY_AFTER_SECONDS,
                 documentation_url: '/developer#rate-limits'
             }
         ));

@@ -238,7 +238,7 @@ export class WebSocketHandler {
                         }
 
                         const raw = data.toString();
-                        if (raw.length > 1024 * 1024) {
+                        if (raw.length > WS_LIMITS.MAX_MESSAGE_CHARS) {
                             ws.send(JSON.stringify({ type: 'error', message: '메시지가 너무 큽니다' }));
                             return;
                         }
