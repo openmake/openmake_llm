@@ -149,6 +149,24 @@ export class ArtifactRepository extends BaseRepository {
     }
 
     /**
+     * 사용자의 모든 artifact — (session_id, artifact_id) 별 최신 버전만 (gallery 용).
+     * 세션 경계를 넘어 사용자가 만든 전체 논리 artifact 목록을 최근순으로 반환.
+     */
+    async listLatestByUser(userId: string): Promise<ArtifactRow[]> {
+        const r = await this.query<ArtifactRow>(
+            `SELECT DISTINCT ON (session_id, artifact_id)
+                pk_id, artifact_id, version, session_id, message_id, user_id,
+                kind, title, language, content, deps, created_at
+             FROM artifacts
+             WHERE user_id = $1
+             ORDER BY session_id, artifact_id, version DESC`,
+            [userId]
+        );
+        // 최근 생성순 정렬 (DISTINCT ON 정렬과 분리)
+        return r.rows.sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
+    }
+
+    /**
      * 특정 artifact 의 모든 버전 — 좌우 화살표 history 탐색용.
      */
     async listVersionsByArtifactId(sessionId: string, artifactId: string): Promise<ArtifactRow[]> {
