@@ -121,6 +121,15 @@ SCHEMA_SOURCE_OF_TRUTH.md
 user-guide.md
 .omc/
 
+# 운영 무관 개발 전용 문서/지침 (저장소 미추적, 로컬 보존)
+/docs/
+/CLAUDE.md
+/AGENTS.md
+/README.md
+/apps/web/CLAUDE.md
+/apps/web/AGENTS.md
+/apps/web/README.md
+
 # AI 생성 이미지 (generate_image 도구 출력)
 frontend/web/public/generated/
 
