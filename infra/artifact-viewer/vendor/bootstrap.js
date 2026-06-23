@@ -99,18 +99,18 @@
           /* global Babel, React, ReactDOM */
           // 브라우저 단일파일 — ES import 불가. ① 사용자 import 제거 ② 훅을 전역 React 에서 별칭
           // ③ classic JSX runtime(React.createElement) 강제 — automatic 은 jsx-runtime import 를 삽입해 깨짐.
-          var src = content.replace(/export\s+default\s+/g, "");
+          // export default 를 변수로 캡처(컴포넌트 이름 무관) + import 제거.
+          var src = content.replace(/export\s+default\s+/g, "\n__artifactDefault = ");
           src = src.replace(/^[ \t]*import\s+[^\n;]+;?[ \t]*$/gm, "");
-          var prelude = "const {useState,useEffect,useRef,useMemo,useCallback,useContext,useReducer,useLayoutEffect,Fragment,createElement}=React;\n";
+          var prelude = "var __artifactDefault;const {useState,useEffect,useRef,useMemo,useCallback,useContext,useReducer,useLayoutEffect,Fragment,createElement}=React;\n";
           var out = Babel.transform(prelude + src, {
             presets: [["react", { runtime: "classic" }], "typescript"],
             filename: "artifact.tsx",
           }).code;
-          // App 컴포넌트를 정의/반환 (react 종류만 meta CSP 에 'unsafe-eval' 부여)
-          var factory = new Function("React", "ReactDOM", out + "\n;return typeof App!=='undefined'?App:null;");
-          var App = factory(React, ReactDOM);
-          if (!App) return fail("react: App 컴포넌트를 찾을 수 없음 (export default function App 필요)");
-          ReactDOM.createRoot(mount).render(React.createElement(App));
+          var factory = new Function("React", "ReactDOM", out + "\n;return __artifactDefault||(typeof App!=='undefined'?App:null);");
+          var Comp = factory(React, ReactDOM);
+          if (!Comp) return fail("react: 컴포넌트를 찾을 수 없음 (export default 필요)");
+          ReactDOM.createRoot(mount).render(React.createElement(Comp));
         }).catch(function (e) { fail("react: " + e.message); });
         break;
       }

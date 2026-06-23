@@ -101,8 +101,9 @@ export function buildArtifactSrcDoc(kind: string, content: string): string {
       // 브라우저 단일파일 — ES import/export 불가. ① export default·import 제거(regex 는 여기서 처리)
       // ② Babel JS API + classic JSX runtime(React.createElement) — automatic 은 jsx-runtime import 를
       //    삽입해 "Cannot use import statement" 로 깨짐 ③ 훅을 전역 React 에서 별칭.
+      // export default 를 변수로 캡처(컴포넌트 이름 무관) + import 제거.
       const stripped = content
-        .replace(/export\s+default\s+/g, "")
+        .replace(/export\s+default\s+/g, "\n__artifactDefault = ")
         .replace(/^[ \t]*import\s+[^\n;]+;?[ \t]*$/gm, "");
       const codeJson = escapeScript(JSON.stringify(stripped));
       return doc(
@@ -110,11 +111,11 @@ export function buildArtifactSrcDoc(kind: string, content: string): string {
         `<div id="root"></div><script>
 (function(){
   try{
-    var prelude="const {useState,useEffect,useRef,useMemo,useCallback,useContext,useReducer,useLayoutEffect,Fragment,createElement}=React;\\n";
+    var prelude="var __artifactDefault;const {useState,useEffect,useRef,useMemo,useCallback,useContext,useReducer,useLayoutEffect,Fragment,createElement}=React;\\n";
     var out=Babel.transform(prelude+${codeJson},{presets:[["react",{runtime:"classic"}],"typescript"],filename:"a.tsx"}).code;
-    var App=new Function("React","ReactDOM",out+"\\n;return typeof App!=='undefined'?App:null;")(React,ReactDOM);
-    if(!App){document.getElementById('root').innerHTML='<pre>App 컴포넌트를 찾을 수 없음 (export default function App 필요)</pre>';return;}
-    ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(App));
+    var Comp=new Function("React","ReactDOM",out+"\\n;return __artifactDefault||(typeof App!=='undefined'?App:null);")(React,ReactDOM);
+    if(!Comp){document.getElementById('root').innerHTML='<pre>컴포넌트를 찾을 수 없음 (export default 필요)</pre>';return;}
+    ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(Comp));
   }catch(e){document.getElementById('root').innerHTML='<pre>렌더 오류: '+e.message+'</pre>';}
 })();
 </script>`,
