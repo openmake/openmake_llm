@@ -23,6 +23,7 @@ import {
     rowToSession
 } from './conversation-types';
 import { loadMessagesForSessions } from './conversation-messages';
+import { CONVERSATION_LIMITS } from '../config/runtime-limits';
 
 const logger = createLogger('ConversationSessions');
 
@@ -110,7 +111,7 @@ export async function getSession(id: string): Promise<ConversationSession | unde
 
     const msgResult = await pool.query(
         'SELECT * FROM conversation_messages WHERE session_id = $1 ORDER BY created_at ASC LIMIT $2',
-        [id, 500]
+        [id, CONVERSATION_LIMITS.SESSION_DETAIL_MESSAGES]
     );
 
     const messages = (msgResult.rows as MessageRow[]).map(mr => rowToMessage(mr));
@@ -120,7 +121,7 @@ export async function getSession(id: string): Promise<ConversationSession | unde
 /**
  * 사용자 ID로 세션 목록 조회
  */
-export async function getSessionsByUserId(userId: string, limit: number = 50): Promise<ConversationSession[]> {
+export async function getSessionsByUserId(userId: string, limit: number = CONVERSATION_LIMITS.SESSION_LIST_DEFAULT): Promise<ConversationSession[]> {
     const pool = getPool();
     const result = await pool.query(
         'SELECT * FROM conversation_sessions WHERE user_id = $1 ORDER BY updated_at DESC LIMIT $2',
@@ -129,13 +130,13 @@ export async function getSessionsByUserId(userId: string, limit: number = 50): P
 
     // list view: 세션당 최근 50개만 — 5K+ 메시지 사용자의 메모리 spike 방지.
     // single-session detail 은 getSession() 의 LIMIT 500 으로 별도 로드.
-    return loadMessagesForSessions(result.rows as SessionRow[], { maxMessagesPerSession: 50 });
+    return loadMessagesForSessions(result.rows as SessionRow[], { maxMessagesPerSession: CONVERSATION_LIMITS.LIST_MESSAGES_PER_SESSION });
 }
 
 /**
  * 익명 세션 ID로 세션 목록 조회
  */
-export async function getSessionsByAnonId(anonSessionId: string, limit: number = 50): Promise<ConversationSession[]> {
+export async function getSessionsByAnonId(anonSessionId: string, limit: number = CONVERSATION_LIMITS.SESSION_LIST_DEFAULT): Promise<ConversationSession[]> {
     const pool = getPool();
     const result = await pool.query(
         'SELECT * FROM conversation_sessions WHERE anon_session_id = $1 ORDER BY updated_at DESC LIMIT $2',
@@ -144,13 +145,13 @@ export async function getSessionsByAnonId(anonSessionId: string, limit: number =
 
     // list view: 세션당 최근 50개만 — 5K+ 메시지 사용자의 메모리 spike 방지.
     // single-session detail 은 getSession() 의 LIMIT 500 으로 별도 로드.
-    return loadMessagesForSessions(result.rows as SessionRow[], { maxMessagesPerSession: 50 });
+    return loadMessagesForSessions(result.rows as SessionRow[], { maxMessagesPerSession: CONVERSATION_LIMITS.LIST_MESSAGES_PER_SESSION });
 }
 
 /**
  * 전체 세션 목록 조회
  */
-export async function getAllSessions(limit: number = 100): Promise<ConversationSession[]> {
+export async function getAllSessions(limit: number = CONVERSATION_LIMITS.SESSION_LIST_ALL_DEFAULT): Promise<ConversationSession[]> {
     const pool = getPool();
     const result = await pool.query(
         'SELECT * FROM conversation_sessions ORDER BY updated_at DESC LIMIT $1',
@@ -159,13 +160,13 @@ export async function getAllSessions(limit: number = 100): Promise<ConversationS
 
     // list view: 세션당 최근 50개만 — 5K+ 메시지 사용자의 메모리 spike 방지.
     // single-session detail 은 getSession() 의 LIMIT 500 으로 별도 로드.
-    return loadMessagesForSessions(result.rows as SessionRow[], { maxMessagesPerSession: 50 });
+    return loadMessagesForSessions(result.rows as SessionRow[], { maxMessagesPerSession: CONVERSATION_LIMITS.LIST_MESSAGES_PER_SESSION });
 }
 
 /**
  * 하위 호환성: guest이면 전체, 그 외는 사용자별 조회
  */
-export async function getSessions(userId: string, limit: number = 50): Promise<ConversationSession[]> {
+export async function getSessions(userId: string, limit: number = CONVERSATION_LIMITS.SESSION_LIST_DEFAULT): Promise<ConversationSession[]> {
     if (!isPersistableUserId(userId)) {
         return getAllSessions(limit);
     }

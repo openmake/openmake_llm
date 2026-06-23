@@ -319,11 +319,13 @@ export interface UserApiKeyPublic {
 export const API_KEY_LIMITS: {
     rpm: number;
     tpm: number;
+    windowMs: number;
     dailyRequests: number;
     monthlyRequests: number;
 } = {
     rpm: 300,
     tpm: 1_000_000,
+    windowMs: parseInt(process.env.API_KEY_RATE_WINDOW_MS || '60000', 10), // RPM/TPM 윈도우(기본 1분)
     dailyRequests: -1, // -1 = unlimited
     monthlyRequests: -1, // -1 = unlimited
 };

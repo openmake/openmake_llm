@@ -16,12 +16,13 @@ import { createLogger } from '../utils/logger';
 
 const logger = createLogger('ClusterConfig');
 
+// 매직넘버 금지 — env 오버라이드 지원(미설정 시 기본값).
 const DEFAULT_CONFIG: ClusterConfig = {
     name: 'llm-cluster',
-    discoveryPort: 52415,
+    discoveryPort: parseInt(process.env.CLUSTER_DISCOVERY_PORT || '52415', 10),
     dashboardPort: SERVER_CONFIG.DEFAULT_PORT,
-    heartbeatInterval: 5000,
-    nodeTimeout: 15000,
+    heartbeatInterval: parseInt(process.env.CLUSTER_HEARTBEAT_INTERVAL_MS || '5000', 10),
+    nodeTimeout: parseInt(process.env.CLUSTER_NODE_TIMEOUT_MS || '15000', 10),
     nodes: []
 };
 

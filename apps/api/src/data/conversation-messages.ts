@@ -9,6 +9,7 @@
  */
 
 import { getPool } from './models/unified-database';
+import { CONVERSATION_LIMITS } from '../config/runtime-limits';
 import { withRetry, withTransaction } from './retry-wrapper';
 import {
     ConversationMessage,
@@ -82,8 +83,8 @@ export async function loadMessagesForSessions(
 /**
  * 세션의 메시지 목록 조회
  */
-export async function getMessages(sessionId: string, limit: number = 200): Promise<ConversationMessage[]> {
-    const safeLimit = Math.min(limit || 200, 1000);
+export async function getMessages(sessionId: string, limit: number = CONVERSATION_LIMITS.MESSAGES_DEFAULT): Promise<ConversationMessage[]> {
+    const safeLimit = Math.min(limit || CONVERSATION_LIMITS.MESSAGES_DEFAULT, CONVERSATION_LIMITS.MESSAGES_MAX);
     const pool = getPool();
     const result = await pool.query(
         'SELECT * FROM conversation_messages WHERE session_id = $1 ORDER BY created_at ASC LIMIT $2',

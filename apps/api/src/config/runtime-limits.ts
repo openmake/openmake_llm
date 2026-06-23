@@ -447,6 +447,10 @@ export const RETRY_DEFAULTS = {
     BASE_DELAY_MS: 500,
     /** 최대 딜레이 (ms) */
     MAX_DELAY_MS: 5000,
+    /** 느린 쿼리 경고 임계값 (ms) — 초과 시 [Performance] warn 로그 */
+    SLOW_QUERY_WARN_MS: parseInt(process.env.DB_SLOW_QUERY_WARN_MS || '1000', 10),
+    /** 백오프 jitter 최대값 (ms) — thundering herd 완화 */
+    JITTER_MAX_MS: parseInt(process.env.DB_RETRY_JITTER_MAX_MS || '100', 10),
 } as const;
 
 // ============================================
@@ -601,6 +605,22 @@ export const TOOL_RESULT_COMPACTION = {
 
 /** 도구 결과를 LLM 컨텍스트로 주입할 때 단일 결과 최대 문자 수 (외부 provider · agent task 공용). */
 export const MAX_TOOL_RESULT_CHARS = parseInt(process.env.MAX_TOOL_RESULT_CHARS || '8000', 10);
+
+/** 대화 조회 limit (conversation-sessions / conversation-messages). */
+export const CONVERSATION_LIMITS = {
+    /** getSession() 단일 세션 상세의 메시지 로드 상한 */
+    SESSION_DETAIL_MESSAGES: parseInt(process.env.CONVERSATION_SESSION_DETAIL_MESSAGES || '500', 10),
+    /** 세션 목록 기본 조회 수 (user/anon) */
+    SESSION_LIST_DEFAULT: parseInt(process.env.CONVERSATION_SESSION_LIST_DEFAULT || '50', 10),
+    /** getMessages() 기본 조회 수 */
+    MESSAGES_DEFAULT: parseInt(process.env.CONVERSATION_MESSAGES_DEFAULT || '200', 10),
+    /** getMessages() 최대 조회 상한(cap) */
+    MESSAGES_MAX: parseInt(process.env.CONVERSATION_MESSAGES_MAX || '1000', 10),
+    /** 목록 view 에서 세션당 로드할 최근 메시지 수 (대용량 사용자 메모리 spike 방지) */
+    LIST_MESSAGES_PER_SESSION: parseInt(process.env.CONVERSATION_LIST_MESSAGES_PER_SESSION || '50', 10),
+    /** getAllSessions() 전체 세션 목록 기본 조회 수 */
+    SESSION_LIST_ALL_DEFAULT: parseInt(process.env.CONVERSATION_SESSION_LIST_ALL_DEFAULT || '100', 10),
+} as const;
 
 // ============================================
 // GV 품질 측정

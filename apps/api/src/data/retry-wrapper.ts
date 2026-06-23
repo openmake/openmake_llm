@@ -98,7 +98,7 @@ export async function withRetry<T>(
             // 성공 로그 (첫 시도가 아닌 경우만 또는 특정 시간 초과 시 상세 로깅 가능)
             if (attempt > 0) {
                 logger.info(`[Retry] 쿼리 성공: ${operation} (시도: ${attempt + 1}/${maxRetries + 1}, 소요시간: ${duration}ms)`);
-            } else if (duration > 1000) {
+            } else if (duration > RETRY_DEFAULTS.SLOW_QUERY_WARN_MS) {
                 logger.warn(`[Performance] 느린 쿼리 감지: ${operation} (${duration}ms)`);
             } else {
                 logger.debug(`[Performance] 쿼리 완료: ${operation} (${duration}ms)`);
@@ -122,7 +122,7 @@ export async function withRetry<T>(
 
             // 지수 백오프 + jitter
             const delay = Math.min(
-                baseDelayMs * Math.pow(2, attempt) + Math.random() * 100,
+                baseDelayMs * Math.pow(2, attempt) + Math.random() * RETRY_DEFAULTS.JITTER_MAX_MS,
                 maxDelayMs
             );
 
