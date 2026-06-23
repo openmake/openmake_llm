@@ -7,7 +7,7 @@ import { useQuery } from "@tanstack/react-query";
 import type { ApiSuccess } from "@openmake/shared-types";
 import { useAppStore } from "@/lib/store";
 import type { ChatRole } from "@/lib/store";
-import { NAV_GROUPS } from "@/lib/nav";
+import { visibleNavGroups } from "@/lib/nav";
 import { ApiClient } from "@/lib/api-client";
 import Image from "next/image";
 import { ThemeToggle } from "./theme-toggle";
@@ -108,7 +108,7 @@ export function Sidebar() {
       </div>
 
       <nav className="mt-3 flex-1 overflow-y-auto px-3 pb-3">
-        {NAV_GROUPS.map((group) => (
+        {visibleNavGroups(user?.role ?? "guest").map((group) => (
           <div key={group.title} className="pt-3">
             <p className="px-1 pb-1 text-[11px] font-medium uppercase tracking-wider text-faint">
               {group.title}

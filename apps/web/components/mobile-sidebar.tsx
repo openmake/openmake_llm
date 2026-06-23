@@ -6,19 +6,22 @@ import Link from "next/link";
 import { MessageSquare, Telescope, Sparkles, Menu, X, LogIn } from "lucide-react";
 import { Sidebar } from "./sidebar";
 import { useAppStore } from "@/lib/store";
+import { NAV_ROLE_RANK, type NavRole } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 
 /** OD lumen 모바일 시안: 하단 탭바(44px+ 터치 타깃) + "메뉴" 탭으로 전체 드로어. 데스크탑(lg)은 고정 사이드바. */
-const TABS = [
-  { label: "채팅", href: "/", icon: MessageSquare },
-  { label: "리서치", href: "/research", icon: Telescope },
-  { label: "에이전트", href: "/agent-tasks", icon: Sparkles },
+const TABS: { label: string; href: string; icon: typeof MessageSquare; minRole: NavRole }[] = [
+  { label: "채팅", href: "/", icon: MessageSquare, minRole: "guest" },
+  { label: "리서치", href: "/research", icon: Telescope, minRole: "user" },
+  { label: "에이전트", href: "/agent-tasks", icon: Sparkles, minRole: "user" },
 ];
 
 export function MobileSidebar() {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
   const user = useAppStore((s) => s.auth.currentUser);
+  const roleRank = NAV_ROLE_RANK[user?.role ?? "guest"];
+  const tabs = TABS.filter((t) => roleRank >= NAV_ROLE_RANK[t.minRole]);
 
   // 라우트 이동 시 드로어 자동 닫기
   useEffect(() => setOpen(false), [pathname]);
@@ -50,7 +53,7 @@ export function MobileSidebar() {
 
       {/* 하단 탭바 (모바일 전용) */}
       <nav className="fixed inset-x-0 bottom-0 z-30 flex items-stretch border-t border-border bg-surface pb-[env(safe-area-inset-bottom)] lg:hidden">
-        {TABS.map((t) => (
+        {tabs.map((t) => (
           <Link
             key={t.href}
             href={t.href}
