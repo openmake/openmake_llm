@@ -25,10 +25,12 @@ import { executeArtifactCode, ArtifactExecError } from '../services/artifact-exe
 import { ARTIFACT_EXEC } from '../config/artifact-exec';
 import { ARTIFACT_VIEWER } from '../config/artifact-viewer';
 import {
-    exportPublication,
     removePublication,
     mintAccessToken,
     authorizeViewer,
+    resolveAuthorLabel,
+    exportPublicationViewer,
+    composeShareUrl,
 } from '../services/artifact-viewer-service';
 import { getAuditService } from '../services/AuditService';
 
@@ -289,50 +291,9 @@ router.post('/artifacts/execute', requireAuth, artifactExecLimiter, asyncHandler
 
 // ============================================================
 // Artifact Publications — Claude Code Artifacts 동등 공유(publish/share/gallery)
+// 헬퍼(resolveAuthorLabel / exportPublicationViewer / composeShareUrl)는
+// services/artifact-viewer-service 로 추출 (파일 크기 가드).
 // ============================================================
-
-/**
- * 작성자 표시명 조회 (username 우선, 없으면 email 앞부분).
- */
-async function resolveAuthorLabel(ownerUserId: string): Promise<string> {
-    const r = await getPool().query<{ username: string | null; email: string | null }>(
-        'SELECT username, email FROM users WHERE id = $1',
-        [ownerUserId]
-    );
-    const row = r.rows[0];
-    if (!row) return 'Unknown';
-    return row.username || (row.email ? row.email.split('@')[0] : 'Unknown');
-}
-
-type PubRow = import('../data/repositories/artifact-publication-repository').ArtifactPublicationRow;
-type ArtRow = import('../data/repositories/artifact-repository').ArtifactRow;
-
-/** publish 된 artifact 의 노출 버전(shared_version ?? 최신)을 self-contained HTML 로 export. */
-async function exportPublicationViewer(pub: PubRow, versions: ArtRow[]): Promise<void> {
-    if (!ARTIFACT_VIEWER.enabled || versions.length === 0) return;
-    const target = (pub.shared_version != null
-        ? versions.find(v => v.version === pub.shared_version)
-        : versions[versions.length - 1]) ?? versions[versions.length - 1];
-    const author = await resolveAuthorLabel(pub.owner_user_id);
-    await exportPublication({
-        pubId: pub.publication_id,
-        kind: target.kind,
-        lang: target.language,
-        content: target.content,
-        title: pub.title || target.title,
-        icon: pub.icon,
-        author,
-        version: target.version,
-    });
-}
-
-/** 공유용 안정 URL — link visibility 만 토큰 포함 stable URL 제공. 그 외는 /open 으로 per-user 발급. */
-function composeShareUrl(pub: PubRow): string | null {
-    if (pub.visibility === 'link' && pub.share_token) {
-        return `${ARTIFACT_VIEWER.origin}/a/${pub.publication_id}/?k=${encodeURIComponent(pub.share_token)}`;
-    }
-    return null;
-}
 
 /**
  * POST /api/sessions/:sid/artifacts/:aid/publish

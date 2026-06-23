@@ -18,7 +18,9 @@
 import { createHash, createHmac, timingSafeEqual } from 'crypto';
 import { promises as fs } from 'fs';
 import { ARTIFACT_VIEWER, viewerArtifactDir } from '../config/artifact-viewer';
-import type { ArtifactVisibility } from '../data/repositories/artifact-publication-repository';
+import { getPool } from '../data/models/unified-database';
+import type { ArtifactVisibility, ArtifactPublicationRow } from '../data/repositories/artifact-publication-repository';
+import type { ArtifactRow } from '../data/repositories/artifact-repository';
 import { createLogger } from '../utils/logger';
 
 const logger = createLogger('ArtifactViewer');
@@ -220,6 +222,44 @@ export async function exportPublication(input: BuildInput): Promise<void> {
 export async function removePublication(pubId: string): Promise<void> {
     await fs.rm(viewerArtifactDir(pubId), { recursive: true, force: true });
     logger.info(`뷰어 제거: pub=${pubId}`);
+}
+
+/** 작성자 표시명 (username 우선, 없으면 email 앞부분). */
+export async function resolveAuthorLabel(ownerUserId: string): Promise<string> {
+    const r = await getPool().query<{ username: string | null; email: string | null }>(
+        'SELECT username, email FROM users WHERE id = $1',
+        [ownerUserId],
+    );
+    const row = r.rows[0];
+    if (!row) return 'Unknown';
+    return row.username || (row.email ? row.email.split('@')[0] : 'Unknown');
+}
+
+/** publish 된 artifact 의 노출 버전(shared_version ?? 최신)을 self-contained HTML 로 export. */
+export async function exportPublicationViewer(pub: ArtifactPublicationRow, versions: ArtifactRow[]): Promise<void> {
+    if (!ARTIFACT_VIEWER.enabled || versions.length === 0) return;
+    const target = (pub.shared_version != null
+        ? versions.find(v => v.version === pub.shared_version)
+        : versions[versions.length - 1]) ?? versions[versions.length - 1];
+    const author = await resolveAuthorLabel(pub.owner_user_id);
+    await exportPublication({
+        pubId: pub.publication_id,
+        kind: target.kind,
+        lang: target.language,
+        content: target.content,
+        title: pub.title || target.title,
+        icon: pub.icon,
+        author,
+        version: target.version,
+    });
+}
+
+/** 공유용 안정 URL — link visibility 만 토큰 포함 stable URL. 그 외는 /open 으로 per-user 발급. */
+export function composeShareUrl(pub: ArtifactPublicationRow): string | null {
+    if (pub.visibility === 'link' && pub.share_token) {
+        return `${ARTIFACT_VIEWER.origin}/a/${pub.publication_id}/?k=${encodeURIComponent(pub.share_token)}`;
+    }
+    return null;
 }
 
 // ── 접근토큰 (authenticated/private) — HMAC, 쿠키 교차오리진 회피 ──
