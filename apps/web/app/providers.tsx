@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import type { ApiSuccess, MePayload } from "@openmake/shared-types";
 import { ApiClient } from "@/lib/api-client";
 import { useAppStore } from "@/lib/store";
+import { CLIENT_TIMING } from "@/lib/config";
 
 /**
  * 앱 마운트 시 /api/auth/me 로 현재 로그인 사용자를 store 에 동기화.
@@ -40,7 +41,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
     () =>
       new QueryClient({
-        defaultOptions: { queries: { staleTime: 30_000, retry: 1 } },
+        defaultOptions: { queries: { staleTime: CLIENT_TIMING.QUERY_STALE_MS, retry: 1 } },
       }),
   );
 

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { WsChatRequest, WsServerEvent, WsAttachedFile } from "@openmake/shared-types";
 import { useAppStore } from "./store";
+import { CLIENT_TIMING } from "./config";
 
 /**
  * 채팅 WebSocket hook — 백엔드 sockets/ws-chat-handler.ts 프로토콜.
@@ -108,7 +109,10 @@ export function useChatSocket() {
       setStreaming(false);
       // 지수 백오프 재연결 (최대 10회)
       if (reconnectRef.current < 10) {
-        const delay = Math.min(1000 * 2 ** reconnectRef.current, 10000);
+        const delay = Math.min(
+          CLIENT_TIMING.WS_RECONNECT_BASE_MS * 2 ** reconnectRef.current,
+          CLIENT_TIMING.WS_RECONNECT_MAX_MS,
+        );
         reconnectRef.current += 1;
         setTimeout(connect, delay);
       }
