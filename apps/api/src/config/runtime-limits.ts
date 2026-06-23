@@ -606,6 +606,12 @@ export const TOOL_RESULT_COMPACTION = {
 /** 도구 결과를 LLM 컨텍스트로 주입할 때 단일 결과 최대 문자 수 (외부 provider · agent task 공용). */
 export const MAX_TOOL_RESULT_CHARS = parseInt(process.env.MAX_TOOL_RESULT_CHARS || '8000', 10);
 
+/** Git-ingest 컨벤션 검사 시 LLM 입력 truncation 캡. */
+export const CONVENTION_CHECK_LIMITS = {
+    MANIFEST_YAML_MAX_CHARS: parseInt(process.env.CONVENTION_CHECK_YAML_MAX || '4000', 10),
+    PROMPT_BODY_MAX_CHARS: parseInt(process.env.CONVENTION_CHECK_BODY_MAX || '8000', 10),
+} as const;
+
 /** 대화 조회 limit (conversation-sessions / conversation-messages). */
 export const CONVERSATION_LIMITS = {
     /** getSession() 단일 세션 상세의 메시지 로드 상한 */
