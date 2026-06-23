@@ -9,6 +9,7 @@
 import type { LLMClient } from '../../llm/client';
 import type { ChatMessage } from '../../llm/types';
 import { createLogger } from '../../utils/logger';
+import { CONVENTION_CHECK_LIMITS } from '../../config/runtime-limits';
 import { MCP_INGEST } from '../../config/constants';
 
 const logger = createLogger('ConventionChecker');
@@ -47,7 +48,7 @@ export class ConventionChecker {
     constructor(private llm: Pick<LLMClient, 'chat'>) {}
 
     async check(manifestYaml: string, promptBody: string): Promise<ConventionCheckResult> {
-        const userContent = `## YAML frontmatter\n\`\`\`yaml\n${manifestYaml.slice(0, 4000)}\n\`\`\`\n\n## Body\n${promptBody.slice(0, 8000)}`;
+        const userContent = `## YAML frontmatter\n\`\`\`yaml\n${manifestYaml.slice(0, CONVENTION_CHECK_LIMITS.MANIFEST_YAML_MAX_CHARS)}\n\`\`\`\n\n## Body\n${promptBody.slice(0, CONVENTION_CHECK_LIMITS.PROMPT_BODY_MAX_CHARS)}`;
         const messages: ChatMessage[] = [
             { role: 'system', content: SYSTEM_PROMPT },
             { role: 'user', content: userContent },
