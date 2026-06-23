@@ -121,14 +121,6 @@ CREATE TABLE IF NOT EXISTS api_key_failures (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS uploaded_documents (
-    doc_id TEXT PRIMARY KEY,
-    document JSONB NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    last_accessed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    expires_at TIMESTAMPTZ NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_uploaded_documents_expires ON uploaded_documents(expires_at);
 
 -- [P3 UNUSED] token_daily_stats: 미사용 테이블. ApiUsageTracker가 현재 인메모리 전용으로 동작. 미래 DB 용 write-through 시 활성화 예정.
 CREATE TABLE IF NOT EXISTS token_daily_stats (
@@ -264,13 +256,6 @@ CREATE TABLE IF NOT EXISTS user_memories (
     updated_at TIMESTAMPTZ DEFAULT NOW(),
     expires_at TIMESTAMPTZ,
     UNIQUE(user_id, category, key)
-);
-
-CREATE TABLE IF NOT EXISTS memory_tags (
-    id SERIAL PRIMARY KEY,
-    memory_id TEXT NOT NULL REFERENCES user_memories(id) ON DELETE CASCADE,
-    tag TEXT NOT NULL,
-    UNIQUE(memory_id, tag)
 );
 
 CREATE TABLE IF NOT EXISTS research_sessions (
@@ -426,7 +411,6 @@ CREATE INDEX IF NOT EXISTS idx_memories_user ON user_memories(user_id);
 CREATE INDEX IF NOT EXISTS idx_memories_category ON user_memories(category);
 CREATE INDEX IF NOT EXISTS idx_memories_importance ON user_memories(importance DESC);
 CREATE INDEX IF NOT EXISTS idx_memories_user_category ON user_memories(user_id, category);
-CREATE INDEX IF NOT EXISTS idx_memory_tags_memory ON memory_tags(memory_id);
 
 CREATE INDEX IF NOT EXISTS idx_research_user ON research_sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_research_status ON research_sessions(status);
