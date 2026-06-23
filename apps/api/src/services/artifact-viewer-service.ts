@@ -82,7 +82,7 @@ function chromeBar(input: BuildInput): string {
  * bootstrap.js(우리 코드)는 변경되므로 캐시버스팅 버전 부여 — /vendor 가 immutable 캐시라
  * 버전 없이는 갱신이 전파되지 않는다. bootstrap.js 수정 시 BOOTSTRAP_VERSION 을 올린다.
  */
-const BOOTSTRAP_VERSION = '5';
+const BOOTSTRAP_VERSION = '6';
 const VENDOR = {
     bootstrap: `/vendor/bootstrap.js?v=${BOOTSTRAP_VERSION}`,
 };
