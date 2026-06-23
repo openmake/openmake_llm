@@ -97,8 +97,15 @@
           return load("/vendor/babel.min.js");
         }).then(function () {
           /* global Babel, React, ReactDOM */
+          // 브라우저 단일파일 — ES import 불가. ① 사용자 import 제거 ② 훅을 전역 React 에서 별칭
+          // ③ classic JSX runtime(React.createElement) 강제 — automatic 은 jsx-runtime import 를 삽입해 깨짐.
           var src = content.replace(/export\s+default\s+/g, "");
-          var out = Babel.transform(src, { presets: ["react", "typescript"], filename: "artifact.tsx" }).code;
+          src = src.replace(/^[ \t]*import\s+[^\n;]+;?[ \t]*$/gm, "");
+          var prelude = "const {useState,useEffect,useRef,useMemo,useCallback,useContext,useReducer,useLayoutEffect,Fragment,createElement}=React;\n";
+          var out = Babel.transform(prelude + src, {
+            presets: [["react", { runtime: "classic" }], "typescript"],
+            filename: "artifact.tsx",
+          }).code;
           // App 컴포넌트를 정의/반환 (react 종류만 meta CSP 에 'unsafe-eval' 부여)
           var factory = new Function("React", "ReactDOM", out + "\n;return typeof App!=='undefined'?App:null;");
           var App = factory(React, ReactDOM);
