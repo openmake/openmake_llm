@@ -1,12 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { X, Code2, Eye, Copy, Check, Play, Loader2 } from "lucide-react";
+import { X, Code2, Eye, Copy, Check, Play, Loader2, Download, Share2 } from "lucide-react";
 import { useAppStore } from "@/lib/store";
 import type { Artifact } from "@/lib/store";
 import { ApiClient, ApiError } from "@/lib/api-client";
+import type { ApiSuccess } from "@openmake/shared-types";
 import { buildArtifactSrcDoc, previewKindFor } from "@/lib/artifact-render";
 import { ArtifactFrame } from "./artifact-frame";
+import { ArtifactShareModal } from "./artifact-share-modal";
+import { downloadArtifact } from "@/lib/artifact-download";
 import { Markdown } from "./markdown";
 import { cn } from "@/lib/utils";
 
@@ -194,6 +197,10 @@ export function ArtifactPanel() {
 
   const [view, setView] = useState<"preview" | "code">("preview");
   const [copied, setCopied] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+  // 버전 피커 — 활성 artifact 의 전체 버전 + 표시중 버전 override.
+  const [versions, setVersions] = useState<{ version: number }[]>([]);
+  const [override, setOverride] = useState<{ version: number; artifact: Artifact } | null>(null);
 
   // 세션 진입 시 영속 아티팩트 복원 (메모리에 없을 때만 — 라이브 스트림 보호)
   useEffect(() => {
@@ -230,11 +237,53 @@ export function ArtifactPanel() {
 
   const active = artifacts.find((a) => a.id === activeArtifactId) ?? artifacts[artifacts.length - 1];
 
+  // 활성 artifact 변경 시 버전 목록 로드 + override 초기화.
+  useEffect(() => {
+    setOverride(null);
+    setVersions([]);
+    if (!currentSessionId || !active || active.streaming) return;
+    let alive = true;
+    (async () => {
+      try {
+        const res = await ApiClient.get<ApiSuccess<{ versions: { version: number }[] }>>(
+          `/api/sessions/${encodeURIComponent(currentSessionId)}/artifacts/${encodeURIComponent(active.id)}/versions`,
+        );
+        if (alive) setVersions(res.data?.versions ?? []);
+      } catch {
+        /* 미저장/미인증 — 버전 피커 숨김 */
+      }
+    })();
+    return () => { alive = false; };
+    // active.id 만 의존 (content 변경 시 재조회 불필요)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentSessionId, active?.id]);
+
+  const selectVersion = async (v: number) => {
+    if (!currentSessionId || !active) return;
+    const latest = versions.length ? versions[versions.length - 1].version : v;
+    if (v === latest) { setOverride(null); return; }
+    try {
+      const res = await ApiClient.get<ApiSuccess<{ kind: string; title: string; language: string | null; content: string; version: number }>>(
+        `/api/sessions/${encodeURIComponent(currentSessionId)}/artifacts/${encodeURIComponent(active.id)}/v/${v}`,
+      );
+      const d = res.data;
+      setOverride({ version: v, artifact: { id: active.id, kind: d.kind, title: d.title, lang: d.language, content: d.content } });
+    } catch {
+      /* noop */
+    }
+  };
+
   if (!open || !active) return null;
+
+  // 표시 대상 — 버전 override 가 있으면 그 버전, 없으면 최신(store).
+  const shown = override?.artifact ?? active;
+  const latestVersion = versions.length ? versions[versions.length - 1].version : null;
+  const shownVersion = override?.version ?? latestVersion;
+  const canShare = !!currentSessionId && !active.streaming;
 
   const copy = async () => {
     try {
-      await navigator.clipboard.writeText(active.content);
+      await navigator.clipboard.writeText(shown.content);
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {
@@ -242,17 +291,31 @@ export function ArtifactPanel() {
     }
   };
 
-  const canToggle = previewKindFor(active.kind, active.lang) !== null && !active.streaming;
+  const canToggle = previewKindFor(shown.kind, shown.lang) !== null && !active.streaming;
 
   return (
     <aside className="fixed inset-0 z-40 flex w-full flex-col border-border bg-surface lg:static lg:inset-auto lg:z-auto lg:w-[44%] lg:max-w-[560px] lg:border-l">
       <div className="flex items-center gap-2 border-b border-border px-3 py-2.5">
         <span className="rounded bg-surface-2 px-1.5 py-0.5 font-mono text-[11px] text-muted">
-          {active.kind}
-          {active.lang ? `·${active.lang}` : ""}
+          {shown.kind}
+          {shown.lang ? `·${shown.lang}` : ""}
         </span>
-        <span className="min-w-0 flex-1 truncate text-sm font-medium text-fg">{active.title}</span>
+        <span className="min-w-0 flex-1 truncate text-sm font-medium text-fg">{shown.title}</span>
         {active.streaming && <span className="text-[11px] text-faint">생성 중…</span>}
+        {versions.length > 1 && shownVersion != null && (
+          <select
+            value={shownVersion}
+            onChange={(e) => selectVersion(Number(e.target.value))}
+            aria-label="버전 선택"
+            className="rounded border border-border bg-surface-2 px-1.5 py-1 text-[11px] text-muted"
+          >
+            {versions.map((v) => (
+              <option key={v.version} value={v.version}>
+                v{v.version}{v.version === latestVersion ? " (최신)" : ""}
+              </option>
+            ))}
+          </select>
+        )}
         {canToggle && (
           <button
             type="button"
@@ -261,6 +324,24 @@ export function ArtifactPanel() {
             className="grid h-7 w-7 place-items-center rounded text-muted transition hover:bg-surface-3 hover:text-fg"
           >
             {view === "preview" ? <Code2 className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={() => downloadArtifact({ title: shown.title, kind: shown.kind, lang: shown.lang, content: shown.content })}
+          aria-label="다운로드"
+          className="grid h-7 w-7 place-items-center rounded text-muted transition hover:bg-surface-3 hover:text-fg"
+        >
+          <Download className="h-4 w-4" />
+        </button>
+        {canShare && (
+          <button
+            type="button"
+            onClick={() => setShareOpen(true)}
+            aria-label="공유"
+            className="grid h-7 w-7 place-items-center rounded text-muted transition hover:bg-surface-3 hover:text-fg"
+          >
+            <Share2 className="h-4 w-4" />
           </button>
         )}
         <button
@@ -281,6 +362,14 @@ export function ArtifactPanel() {
         </button>
       </div>
 
+      {shareOpen && currentSessionId && (
+        <ArtifactShareModal
+          sessionId={currentSessionId}
+          artifactId={active.id}
+          onCloseAction={() => setShareOpen(false)}
+        />
+      )}
+
       {artifacts.length > 1 && (
         <div className="flex gap-1 overflow-x-auto border-b border-border px-2 py-1.5">
           {artifacts.map((a) => (
@@ -300,7 +389,7 @@ export function ArtifactPanel() {
       )}
 
       <div className="min-h-0 flex-1 overflow-hidden">
-        <ArtifactBody artifact={active} view={canToggle ? view : "preview"} />
+        <ArtifactBody artifact={shown} view={canToggle ? view : "preview"} />
       </div>
     </aside>
   );

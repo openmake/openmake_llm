@@ -1,0 +1,42 @@
+# Artifact Viewer — 별도 오리진 엄격 CSP 정적 뷰어 (C안)
+#
+# 정책: 앱은 PM2, 인프라·격리는 Docker (CLAUDE.md). 이 컨테이너는 정적 HTML 서빙 전용.
+# 데이터: 백엔드(PM2 호스트)가 ./data 에 self-contained HTML 을 기록 → nginx 가 read-only 서빙.
+#
+# 기동: docker compose -f infra/artifact-viewer/docker-compose.yml up -d
+# 사전: ./fetch-vendor.sh 로 ./data/vendor 에 라이브러리 + bootstrap.js 준비.
+
+services:
+  artifact-viewer:
+    image: nginx:alpine
+    container_name: openmake-artifact-viewer
+    ports:
+      - "8088:80"
+    volumes:
+      # 백엔드가 기록하는 데이터 디렉토리 (config/artifact-viewer.ts dataDir 와 동일 경로)
+      - /Volumes/MAC_APP/docker/openmake_llm/artifact-viewer/data:/srv:ro
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    # auth_request 가 호스트 백엔드(:52416)에 도달해야 함 → host-gateway 매핑.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx
+      - /var/run
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
+      - NET_BIND_SERVICE
+    restart: unless-stopped
+    networks:
+      - viewer_net
+
+networks:
+  viewer_net:
+    driver: bridge
