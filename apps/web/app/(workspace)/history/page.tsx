@@ -1,10 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Clock, Search, MessageSquare } from "lucide-react";
 import type { ApiSuccess } from "@openmake/shared-types";
 import { Badge, PageHeader, Card } from "@/components/ui/primitives";
 import { ApiClient } from "@/lib/api-client";
+import { useAppStore } from "@/lib/store";
+import type { ChatRole } from "@/lib/store";
 
 /* ── 타입 ────────────────────────────────────────────────── */
 type DateGroup = "today" | "yesterday" | "week" | "older";
@@ -129,9 +132,31 @@ const GROUP_LABEL: Record<DateGroup, string> = {
 const GROUP_ORDER: DateGroup[] = ["today", "yesterday", "week", "older"];
 
 export default function HistoryPage() {
+  const router = useRouter();
+  const { setChatHistory, setCurrentSessionId, setArtifacts } = useAppStore();
   const [sessions, setSessions] = useState<Session[]>(SESSIONS);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
+
+  // 대화 클릭 → 해당 세션 메시지 로드 + 채팅 화면으로 전환 (sidebar openSession 과 동일 패턴).
+  const openSession = async (sid: string) => {
+    setArtifacts([]); // 이전 세션 아티팩트 비움 → 패널이 새 세션 것 재복원
+    setCurrentSessionId(sid);
+    try {
+      const res = await ApiClient.get<
+        ApiSuccess<{ messages?: Array<{ role: string; content: string; images?: string[] }> }>
+      >(`/api/chat/sessions/${sid}/messages`);
+      const msgs = res?.data?.messages ?? [];
+      setChatHistory(() =>
+        msgs
+          .filter((m) => m.role === "user" || m.role === "assistant" || m.role === "system")
+          .map((m) => ({ role: m.role as ChatRole, content: m.content, images: m.images })),
+      );
+    } catch {
+      /* 조회 실패 — 무시 */
+    }
+    router.push("/");
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -214,6 +239,7 @@ export default function HistoryPage() {
                   {g.items.map((s) => (
                     <Card
                       key={s.id}
+                      onClick={() => void openSession(s.id)}
                       className="flex cursor-pointer items-start gap-3 p-4 transition hover:border-border-strong hover:shadow-2"
                     >
                       <div className="mt-0.5 grid h-8 w-8 flex-shrink-0 place-items-center rounded-md bg-surface-2 text-faint">
