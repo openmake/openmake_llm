@@ -115,6 +115,7 @@ export interface ArtifactMeta {
 
 export type WsServerEvent =
   | { type: "token"; token: string }
+  | { type: "thinking"; token: string; messageId?: string }
   | { type: "session_created"; sessionId: string }
   | { type: "done"; sessionId?: string; totalTokens?: number }
   | { type: "aborted"; message?: string }
