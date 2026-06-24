@@ -68,6 +68,10 @@ export interface ChatRequestParams {
     discussionMode?: boolean;
     /** 딥 리서치 모드 */
     deepResearchMode?: boolean;
+    /** 이미지 생성 모드 — ON 이면 메시지를 프롬프트로 이미지를 직접 생성 */
+    imageMode?: boolean;
+    /** 아티팩트 모드 — ON 이면 <artifact> 산출물 생성 유도 */
+    artifactMode?: boolean;
     /** 사고 모드 */
     thinkingMode?: boolean;
     /** 사고 수준 */

@@ -155,6 +155,8 @@ export function useChatSocket() {
         files: files ?? [],
         webSearch: s.webSearchEnabled,
         deepResearchMode: s.deepResearchMode,
+        imageMode: s.imageMode,
+        artifactMode: s.artifactMode,
         enabledTools: s.mcpToolsEnabled,
       };
       wsRef.current?.send(JSON.stringify(payload));

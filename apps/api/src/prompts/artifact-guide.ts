@@ -292,3 +292,16 @@ the artifact body outside — the user will see it twice.`;
 export function getArtifactGuide(language?: string): string {
     return language === 'ko' ? KO_GUIDE : EN_GUIDE;
 }
+
+/**
+ * 아티팩트 모드 강제 지시 — 사용자가 컴포저의 '아티팩트' 토글을 명시적으로 켰을 때
+ * artifact guide 뒤에 추가한다. 가이드의 "기본값"(10줄 이상 권장)보다 강한 enforce 로,
+ * 모델이 산문/코드펜스로 끝내지 않고 반드시 <artifact> 산출물을 생성하도록 유도한다.
+ *
+ * @param language - 사용자 resolvedLanguage ('ko' | 'en' | ...). 미지정 시 영어.
+ */
+export function getArtifactForceDirective(language?: string): string {
+    return language === 'ko'
+        ? '\n\n## ⚠️ 아티팩트 모드 ON (사용자 명시)\n사용자가 아티팩트 모드를 켰습니다. 이번 답변의 핵심 산출물(코드·HTML·SVG·다이어그램·차트·표·슬라이드·react·문서)은 길이와 무관하게 **반드시** 위 형식의 `<artifact ...>...</artifact>` 태그 블록으로 생성하세요. 코드펜스(```)나 산문 설명만으로 끝내지 마세요. 태그 밖에는 짧은 설명만 쓰세요.'
+        : '\n\n## ⚠️ Artifact mode ON (user-enabled)\nThe user enabled artifact mode. Regardless of length, you MUST wrap the main deliverable (code, HTML, SVG, diagram, chart, table, slide, react, or document) in an `<artifact ...>...</artifact>` block as specified above. Do not finish with only a code fence (```) or prose. Keep text outside the tag brief.';
+}

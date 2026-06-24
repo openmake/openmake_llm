@@ -92,6 +92,10 @@ export interface WsChatRequest {
   files?: WsAttachedFile[];
   webSearch?: boolean;
   deepResearchMode?: boolean;
+  /** 이미지 생성 모드 — ON 이면 메시지를 프롬프트로 이미지를 직접 생성 */
+  imageMode?: boolean;
+  /** 아티팩트 모드 — ON 이면 모델이 <artifact> 산출물을 생성하도록 유도 */
+  artifactMode?: boolean;
   enabledTools?: Record<string, boolean>;
 }
 

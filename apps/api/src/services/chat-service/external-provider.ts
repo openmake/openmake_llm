@@ -159,9 +159,11 @@ export async function streamFromExternalProvider(
         throw err;
     }
 
-    // 명시적 아티팩트 생성 요청이면 distractor always-on 도구(generate_image 등)를 제외해
-    // 모델이 도구 호출 대신 <artifact> 산출물을 쓰도록 유도 (2026-06-23 통제실험 근거).
-    const wantsArtifact = ARTIFACT_INTENT_PATTERNS.some((re) => re.test(req.message ?? ''));
+    // 명시적 아티팩트 생성 요청(사용자 아티팩트 토글 또는 메시지 패턴)이면 distractor
+    // always-on 도구(generate_image 등)를 제외해 모델이 도구 호출 대신 <artifact> 산출물을
+    // 쓰도록 유도 (2026-06-23 통제실험 근거).
+    const wantsArtifact = req.artifactMode === true
+        || ARTIFACT_INTENT_PATTERNS.some((re) => re.test(req.message ?? ''));
     const tools = caps.toolCalling
         ? deps.allowedTools.filter((t) =>
             !EXTERNAL_LLM_TOOL_BLACKLIST.includes(t.function.name)
