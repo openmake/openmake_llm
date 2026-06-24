@@ -12,6 +12,8 @@ import {
   Brain,
   Image as ImageIcon,
   FileCode2,
+  SlidersHorizontal,
+  Check,
   Paperclip,
   X,
 } from "lucide-react";
@@ -43,6 +45,8 @@ export function Composer() {
   const { sendChat, abort } = useChatSocket();
   const [text, setText] = useState("");
   const [files, setFiles] = useState<WsAttachedFile[]>([]);
+  // 모드 시트(모바일 최적화) — 7개 토글을 가로스크롤 칩 대신 '도구' 버튼 + 시트로 수납
+  const [modeSheetOpen, setModeSheetOpen] = useState(false);
   const taRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -133,6 +137,16 @@ export function Composer() {
     }
   }, [inputDraft, setInputDraft]);
 
+  // 모드 시트: Escape 로 닫기
+  useEffect(() => {
+    if (!modeSheetOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setModeSheetOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [modeSheetOpen]);
+
   const TOGGLES = [
     { key: "discussionMode" as const, on: discussionMode, icon: MessagesSquare, label: "토론" },
     { key: "thinkingEnabled" as const, on: thinkingEnabled, icon: Brain, label: "Thinking" },
@@ -142,26 +156,78 @@ export function Composer() {
     { key: "imageMode" as const, on: imageMode, icon: ImageIcon, label: "이미지" },
     { key: "artifactMode" as const, on: artifactMode, icon: FileCode2, label: "아티팩트" },
   ];
+  const activeModeCount = TOGGLES.filter((t) => t.on).length;
 
   return (
     <div className="mx-auto w-full max-w-3xl px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
-      <div className="rounded-xl border border-border bg-surface shadow-2">
-        {/* 모드 토글 — 가로 스크롤 칩 (OD lumen 모바일 시안: 컴포저 상단) */}
-        <div className="flex items-center gap-1.5 overflow-x-auto px-3 pt-2.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {TOGGLES.map((t) => (
+      <div className="relative rounded-xl border border-border bg-surface shadow-2">
+        {/* 모드 시트 — 컴포저 위로 떠오르는 바텀시트(모바일 최적화). 7개 모드를 세로 리스트로
+            수납해 바가 가로 스크롤/넘침 없이 동작한다. (OD openmake-mobile '+' 시트 패턴) */}
+        {modeSheetOpen && (
+          <>
+            <div
+              className="fixed inset-0 z-30"
+              onClick={() => setModeSheetOpen(false)}
+              aria-hidden
+            />
+            <div className="absolute bottom-full left-0 right-0 z-40 mb-2 rounded-xl border border-border bg-surface-2 p-1.5 shadow-lg">
+              <div className="mx-auto mb-1.5 h-1 w-9 rounded-full bg-border-strong" aria-hidden />
+              <p className="px-2 pb-1 text-[11px] font-medium uppercase tracking-wide text-faint">
+                모드
+              </p>
+              {TOGGLES.map((t) => (
+                <button
+                  key={t.key}
+                  type="button"
+                  onClick={() => toggle(t.key)}
+                  className={cn(
+                    "flex min-h-[44px] w-full items-center gap-3 rounded-lg px-3 text-sm transition",
+                    t.on ? "text-accent" : "text-fg-2 hover:bg-surface-3",
+                  )}
+                >
+                  <t.icon className="h-[18px] w-[18px] shrink-0" />
+                  <span className="flex-1 text-left">{t.label}</span>
+                  {t.on && <Check className="h-4 w-4 shrink-0 text-accent" />}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+
+        {/* 모드 트리거 '도구' + 활성 모드 칩(flex-wrap) — 가로 스크롤 없음 */}
+        <div className="flex flex-wrap items-center gap-1.5 px-3 pt-2.5">
+          <button
+            type="button"
+            onClick={() => setModeSheetOpen((v) => !v)}
+            aria-expanded={modeSheetOpen}
+            aria-label="모드 선택"
+            className={cn(
+              "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition",
+              activeModeCount > 0
+                ? "border-accent bg-accent-soft text-accent"
+                : "border-border text-muted hover:bg-surface-2 hover:text-fg",
+            )}
+          >
+            <SlidersHorizontal className="h-3.5 w-3.5" />
+            도구
+            {activeModeCount > 0 && (
+              <span className="grid h-4 min-w-4 place-items-center rounded-full bg-accent px-1 text-[10px] font-bold text-accent-fg">
+                {activeModeCount}
+              </span>
+            )}
+          </button>
+
+          {TOGGLES.filter((t) => t.on).map((t) => (
             <button
               key={t.key}
+              type="button"
               onClick={() => toggle(t.key)}
-              title={t.label}
-              className={cn(
-                "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition",
-                t.on
-                  ? "border-accent bg-accent-soft text-accent"
-                  : "border-border text-muted hover:bg-surface-2 hover:text-fg",
-              )}
+              title={`${t.label} 끄기`}
+              className="inline-flex shrink-0 items-center gap-1 rounded-full border border-accent bg-accent-soft px-2.5 py-1 text-xs font-medium text-accent transition hover:opacity-80"
             >
               <t.icon className="h-3.5 w-3.5" />
               {t.label}
+              <X className="h-3 w-3 opacity-70" />
             </button>
           ))}
         </div>
