@@ -44,9 +44,9 @@ export interface StreamFromExternalContext {
     agentSystemMessage?: string;
     enhancedMessage?: string;
     resolvedLanguage?: string;
-    /** Cross-conversation Memory 블록 (claude.ai Memory 동등). 시스템 프롬프트 앞쪽에 prepend. */
+    /** Cross-conversation Memory 블록 (claude.ai Memory 동등). DYNAMIC BOUNDARY 뒤(세션별 영역)에 배치. */
     memoryBlock?: string;
-    /** Custom Instructions 블록 (사용자 영구 지시). 시스템 프롬프트 앞쪽에 prepend. */
+    /** Custom Instructions 블록 (사용자 영구 지시). DYNAMIC BOUNDARY 뒤(세션별 영역)에 배치. */
     customInstructionsBlock?: string;
     /** Artifacts guide (디자인시스템·<artifact> 형식 지시). 가드/페르소나 뒤에 append. */
     artifactGuideBlock?: string;
@@ -65,16 +65,11 @@ export async function streamFromExternalProvider(
     const messages: ChatMessage[] = [];
     const systemPromptParts: string[] = [];
 
-    // Memory + Custom Instructions 를 시스템 프롬프트 앞쪽에 배치 (strategy 경로의
-    // combinedSystemPrompt = memoryBlock + customInstructionsBlock + ... 순서와 동일).
-    // claude.ai Memory/Custom Instructions 동등 — 사용자 맥락을 가드/페르소나보다 먼저 노출.
-    if (ctx.memoryBlock) {
-        systemPromptParts.push(ctx.memoryBlock.trim());
-    }
-    if (ctx.customInstructionsBlock) {
-        systemPromptParts.push(ctx.customInstructionsBlock.trim());
-    }
-
+    // ════════════════════════════════════════════════════════════════════
+    // 정적 헌법 (CACHE PREFIX) — 모든 요청 공통이라 prefix caching hit 을 극대화한다.
+    // 가변 데이터를 이 앞에 두면 prefix 가 매 요청 달라져 vLLM/OpenRouter 캐시가 무효화되므로,
+    // 정적 콘텐츠(가드·아티팩트 가이드)를 반드시 시스템 프롬프트 맨 앞에 배치한다. (Cache-aware 원칙)
+    // ════════════════════════════════════════════════════════════════════
     // Phase 2026-05-26: 외부 provider 도 Identity Guard + Response Discipline 적용.
     // 본 가드 미적용 시 Gemini/GPT 가 "Here's a thinking process", 단계 1-N,
     // 자기 정체 노출 같은 verbose 형식을 그대로 출력 (사용자 보고 사례 해결).
@@ -82,15 +77,23 @@ export async function streamFromExternalProvider(
     if (guards) {
         systemPromptParts.push(guards.trim());
     }
+    // Artifacts guide (디자인시스템·<artifact> 형식) — 정적.
+    if (ctx.artifactGuideBlock) {
+        systemPromptParts.push(ctx.artifactGuideBlock.trim());
+    }
 
+    // ──────────────────── DYNAMIC BOUNDARY ────────────────────
+    // 아래는 요청/사용자/세션별 가변 콘텐츠. prefix 캐시 보존을 위해 반드시 정적 헌법 뒤에 배치한다.
+    // system 채널이라 위치가 뒤여도(최근일수록 attention↑) 사용자 맥락(memory/custom)의 우선순위는 유지된다.
     if (ctx.agentSystemMessage) {
         systemPromptParts.push(ctx.agentSystemMessage);
     }
-
-    // Artifacts guide (디자인시스템·<artifact> 형식). strategy 경로의 combinedSystemPrompt
-    // 끝(... + artifactGuideBlock)과 동일하게 마지막에 append.
-    if (ctx.artifactGuideBlock) {
-        systemPromptParts.push(ctx.artifactGuideBlock.trim());
+    // Cross-conversation Memory + Custom Instructions (claude.ai Memory/Custom Instructions 동등).
+    if (ctx.memoryBlock) {
+        systemPromptParts.push(ctx.memoryBlock.trim());
+    }
+    if (ctx.customInstructionsBlock) {
+        systemPromptParts.push(ctx.customInstructionsBlock.trim());
     }
 
     const langCode = ctx.resolvedLanguage || req.userLanguagePreference;
