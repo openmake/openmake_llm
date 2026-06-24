@@ -28,13 +28,39 @@ function resolveWsUrl(): string {
   return `${proto}//${location.host}`;
 }
 
+/** 에이전트 작업 메시지 마크다운 — 상태에 따라 진행바/완료/실패를 렌더. */
+function renderAgentTaskMessage(
+  goal: string,
+  status: string,
+  currentTurn: number,
+  progress: number,
+  result?: string,
+): string {
+  const head = `🤖 **에이전트 작업**${goal ? `\n\n**목표:** ${goal}` : ""}`;
+  if (status === "completed") {
+    return `${head}\n\n✅ **완료**\n\n---\n\n${result?.trim() || "_(결과 본문 없음)_"}`;
+  }
+  if (status === "failed" || status === "cancelled") {
+    const label = status === "failed" ? "실패" : "취소됨";
+    return `${head}\n\n❌ **${label}**${result?.trim() ? `\n\n---\n\n${result.trim()}` : ""}`;
+  }
+  // pending / running
+  const pct = Math.max(0, Math.min(100, Math.round(progress || 0)));
+  const filled = Math.round(pct / 10);
+  const bar = "▓".repeat(filled) + "░".repeat(10 - filled);
+  return `${head}\n\n⏳ \`${bar}\` ${pct}% · 턴 ${currentTurn ?? 0}`;
+}
+
 export function useChatSocket() {
   const wsRef = useRef<WebSocket | null>(null);
   const [connected, setConnected] = useState(false);
   const reconnectRef = useRef(0);
+  // 에이전트 작업 taskId → 목표(goal) — agent_task_progress 렌더에 사용
+  const agentGoalsRef = useRef<Map<string, string>>(new Map());
 
   const {
     appendMessage,
+    setChatHistory,
     appendToken,
     setStreaming,
     setCurrentSessionId,
@@ -100,6 +126,43 @@ export function useChatSocket() {
         case "artifact_end":
           endArtifact(data.id);
           break;
+        case "agent_task_progress": {
+          // 에이전트 작업 진행상황을 해당 메시지에 라이브 반영. 완료/실패 시 결과 본문 조회.
+          const { taskId, status, progress, currentTurn } = data;
+          const goal = agentGoalsRef.current.get(taskId) ?? "";
+          const terminal =
+            status === "completed" || status === "failed" || status === "cancelled";
+          if (terminal) {
+            void (async () => {
+              let result = "";
+              try {
+                const r = await ApiClient.get<{ data: { task: { result?: string } } }>(
+                  `/api/agent-tasks/${taskId}`,
+                );
+                result = r?.data?.task?.result ?? "";
+              } catch {
+                /* 결과 조회 실패 — 상태만 표시 */
+              }
+              setChatHistory((prev) =>
+                prev.map((m) =>
+                  m.taskId === taskId
+                    ? { ...m, content: renderAgentTaskMessage(goal, status, currentTurn, progress, result) }
+                    : m,
+                ),
+              );
+              agentGoalsRef.current.delete(taskId);
+            })();
+          } else {
+            setChatHistory((prev) =>
+              prev.map((m) =>
+                m.taskId === taskId
+                  ? { ...m, content: renderAgentTaskMessage(goal, status, currentTurn, progress) }
+                  : m,
+              ),
+            );
+          }
+          break;
+        }
         default:
           break; // init / research_progress / token_warning 등은 추후
       }
@@ -186,14 +249,14 @@ export function useChatSocket() {
         );
         const taskId = created?.data?.task?.id;
         if (!taskId) throw new Error("작업 생성 응답에 taskId 가 없습니다");
-        await ApiClient.post(`/api/agent-tasks/${taskId}/execute`);
+        // 진행상황 메시지 — agent_task_progress 이벤트로 taskId 로 식별해 라이브 업데이트.
+        agentGoalsRef.current.set(taskId, goal);
         appendMessage({
           role: "assistant",
-          content:
-            "🤖 **에이전트 작업을 시작했습니다.**\n\n" +
-            `**목표:** ${goal}\n\n` +
-            "자율 에이전트가 백그라운드에서 작업을 수행합니다. 진행 상황과 결과는 **에이전트 작업** 페이지에서 확인하세요.",
+          taskId,
+          content: renderAgentTaskMessage(goal, "pending", 0, 0),
         });
+        await ApiClient.post(`/api/agent-tasks/${taskId}/execute`);
       } catch (e) {
         appendMessage({
           role: "assistant",

@@ -133,7 +133,15 @@ export type WsServerEvent =
   // 아티팩트 스트리밍 (백엔드 ws-chat-handler.ts 송출)
   | { type: "artifact_start"; artifact: ArtifactMeta; messageId?: string }
   | { type: "artifact_chunk"; id: string; delta: string; messageId?: string }
-  | { type: "artifact_end"; id: string; messageId?: string };
+  | { type: "artifact_end"; id: string; messageId?: string }
+  // 에이전트 작업 진행상황 (백엔드 sockets/handler.ts agent_task_progress relay)
+  | {
+      type: "agent_task_progress";
+      taskId: string;
+      status: string;
+      progress: number;
+      currentTurn: number;
+    };
 
 /* ── 응답 페이로드 헬퍼 타입 ─────────────────────────────────────────── */
 export interface SessionsPayload {
