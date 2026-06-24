@@ -42,7 +42,7 @@ function readFileText(file: File): Promise<string> {
 }
 
 export function Composer() {
-  const { sendChat, abort } = useChatSocket();
+  const { sendChat, abort, startAgentTask } = useChatSocket();
   const [text, setText] = useState("");
   const [files, setFiles] = useState<WsAttachedFile[]>([]);
   // 모드 시트(모바일 최적화) — 7개 토글을 가로스크롤 칩 대신 '도구' 버튼 + 시트로 수납
@@ -118,7 +118,12 @@ export function Composer() {
 
   const submit = () => {
     if ((!text.trim() && files.length === 0) || isGenerating) return;
-    sendChat(text.trim(), undefined, files.length ? files : undefined);
+    if (agentTaskMode) {
+      // 에이전트 토글 ON — 메시지를 목표로 자율 에이전트 작업 실행 (REST). 첨부는 미지원.
+      void startAgentTask(text.trim());
+    } else {
+      sendChat(text.trim(), undefined, files.length ? files : undefined);
+    }
     setText("");
     setFiles([]);
     if (taRef.current) taRef.current.style.height = "auto";

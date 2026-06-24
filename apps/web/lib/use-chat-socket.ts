@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { WsChatRequest, WsServerEvent, WsAttachedFile } from "@openmake/shared-types";
 import { useAppStore } from "./store";
+import { ApiClient } from "./api-client";
 import { CLIENT_TIMING } from "./config";
 
 /**
@@ -155,6 +156,8 @@ export function useChatSocket() {
         files: files ?? [],
         webSearch: s.webSearchEnabled,
         deepResearchMode: s.deepResearchMode,
+        discussionMode: s.discussionMode,
+        thinkingMode: s.thinkingEnabled,
         imageMode: s.imageMode,
         artifactMode: s.artifactMode,
         enabledTools: s.mcpToolsEnabled,
@@ -168,5 +171,38 @@ export function useChatSocket() {
     wsRef.current?.send(JSON.stringify({ type: "abort" }));
   }, []);
 
-  return { connected, sendChat, abort };
+  // 에이전트 토글 ON: 메시지를 목표(goal)로 자율 에이전트 작업을 생성·실행한다.
+  // (채팅 WS 가 아니라 REST POST /api/agent-tasks + /execute — 진행상황은 '에이전트 작업' 페이지)
+  const startAgentTask = useCallback(
+    async (message: string) => {
+      const goal = message.trim();
+      const s = useAppStore.getState();
+      if (!goal || s.isGenerating) return;
+      appendMessage({ role: "user", content: goal });
+      try {
+        const created = await ApiClient.post<{ data: { task: { id: string } } }>(
+          "/api/agent-tasks",
+          { goal },
+        );
+        const taskId = created?.data?.task?.id;
+        if (!taskId) throw new Error("작업 생성 응답에 taskId 가 없습니다");
+        await ApiClient.post(`/api/agent-tasks/${taskId}/execute`);
+        appendMessage({
+          role: "assistant",
+          content:
+            "🤖 **에이전트 작업을 시작했습니다.**\n\n" +
+            `**목표:** ${goal}\n\n` +
+            "자율 에이전트가 백그라운드에서 작업을 수행합니다. 진행 상황과 결과는 **에이전트 작업** 페이지에서 확인하세요.",
+        });
+      } catch (e) {
+        appendMessage({
+          role: "assistant",
+          content: `에이전트 작업을 시작하지 못했습니다: ${e instanceof Error ? e.message : String(e)}`,
+        });
+      }
+    },
+    [appendMessage],
+  );
+
+  return { connected, sendChat, abort, startAgentTask };
 }

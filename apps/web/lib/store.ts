@@ -121,7 +121,7 @@ export const useAppStore = create<AppState>((set) => ({
   activeArtifactId: null,
   artifactPanelOpen: false,
 
-  thinkingEnabled: true,
+  thinkingEnabled: false, // opt-in — ON 시 매 응답 thinking(지연·비용↑). 사용자가 필요할 때 켬
   discussionMode: false,
   deepResearchMode: false,
   webSearchEnabled: false,
