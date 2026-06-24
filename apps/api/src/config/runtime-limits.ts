@@ -332,13 +332,36 @@ export const DISCUSSION_CONCURRENCY = {
  */
 export const FILE_ATTACH_LIMITS = {
     /** 메시지당 첨부 파일 최대 개수 */
-    MAX_FILES: parseInt(process.env.FILE_ATTACH_MAX_FILES || '10', 10),
+    MAX_FILES: parseInt(process.env.FILE_ATTACH_MAX_FILES || '50', 10),
     /** 파일당 주입 텍스트 최대 글자 수 (초과분 절단) */
-    MAX_CHARS_PER_FILE: parseInt(process.env.FILE_ATTACH_MAX_CHARS_PER_FILE || '100000', 10),
-    /** 전체 첨부 합산 주입 텍스트 최대 글자 수 */
-    MAX_TOTAL_CHARS: parseInt(process.env.FILE_ATTACH_MAX_TOTAL_CHARS || '300000', 10),
+    MAX_CHARS_PER_FILE: parseInt(process.env.FILE_ATTACH_MAX_CHARS_PER_FILE || '2000000', 10),
+    /** 전체 첨부 합산 주입 텍스트 최대 글자 수 (최종 컨텍스트 적합화는 LLMClient context-fit 안전망이 담당) */
+    MAX_TOTAL_CHARS: parseInt(process.env.FILE_ATTACH_MAX_TOTAL_CHARS || '10000000', 10),
     /** 파일명 표시 최대 길이 (프롬프트 주입 시 절단) */
     MAX_NAME_LENGTH: 200,
+} as const;
+
+/**
+ * 문서 첨부 텍스트 추출 한도 (2026-06-24)
+ * PDF 는 opendataloader-pdf(Java CLI, JVM spawn), 그 외 office 포맷(docx/xlsx/pptx/odt 등)은
+ * officeparser(순수 Node) 로 base64 원본을 텍스트로 추출해 fileContext 채널에 주입한다.
+ * JVM spawn 은 느리므로 PDF 는 별도 타임아웃을 둔다.
+ *
+ * services/chat-service/doc-extractor.ts 에서 참조
+ */
+export const DOC_EXTRACT_LIMITS = {
+    /** 기능 on/off (기본 on — 'false' 명시 시에만 비활성) */
+    ENABLED: process.env.DOC_EXTRACT_ENABLED !== 'false',
+    /** 추출 입력 1개 최대 바이트 (base64 디코드 후 원본 크기). 초과 시 추출 생략 → 메타만 */
+    MAX_BYTES_PER_FILE: parseInt(process.env.DOC_EXTRACT_MAX_BYTES_PER_FILE || String(30 * 1024 * 1024), 10),
+    /** PDF(opendataloader, JVM) 추출 타임아웃 (ms) */
+    PDF_TIMEOUT_MS: parseInt(process.env.DOC_EXTRACT_PDF_TIMEOUT_MS || '60000', 10),
+    /** office(officeparser) 추출 타임아웃 (ms) */
+    OFFICE_TIMEOUT_MS: parseInt(process.env.DOC_EXTRACT_OFFICE_TIMEOUT_MS || '30000', 10),
+    /** opendataloader 로 처리할 확장자 (PDF 전용 — 고품질 레이아웃 인식) */
+    PDF_EXTS: ['pdf'] as readonly string[],
+    /** officeparser 로 처리할 확장자 */
+    OFFICE_EXTS: ['docx', 'xlsx', 'pptx', 'odt', 'odp', 'ods', 'rtf'] as readonly string[],
 } as const;
 
 /**

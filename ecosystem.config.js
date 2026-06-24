@@ -29,6 +29,10 @@ module.exports = {
         env: {
             NODE_ENV: 'production',
             PORT: 52416,
+            // 문서 첨부 추출(opendataloader-pdf)은 Java 11+ 가 필요하다.
+            // pm2 프로세스가 JVM 을 찾도록 JAVA_HOME 과 PATH 에 openjdk@17 을 주입.
+            JAVA_HOME: '/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home',
+            PATH: '/opt/homebrew/opt/openjdk@17/bin:' + (process.env.PATH || ''),
         },
         
         // 프로세스 관리

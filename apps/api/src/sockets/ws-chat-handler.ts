@@ -107,6 +107,12 @@ export async function handleChatMessage(
 
         // 첨부 파일(이미지 외) → LLM 주입용 컨텍스트 (transient — DB 미저장, webSearchContext 와 동급 채널)
         // 레이트 리밋 통과 후 조립 — 거부될 요청에 최대 300k 자 문자열 조립 비용을 쓰지 않는다.
+        // 바이너리 문서(PDF/docx/xlsx/pptx 등)는 base64(data)를 텍스트로 추출해 content 를 채운다.
+        // (무거운 파서는 첨부가 있을 때만 lazy 로딩)
+        if (hasFiles) {
+            const { extractAttachedDocuments } = await import('../services/chat-service/doc-extractor');
+            await extractAttachedDocuments(msg.files);
+        }
         const fileContext = buildFileContext(msg.files);
 
         // 딥 리서치 파이프라인은 fileContext 를 소비하지 않음 (research 전략은 message 만 사용).

@@ -46,11 +46,12 @@ export interface WSMessage {
     /**
      * 첨부 파일 목록 (2026-06-12 전체 파일 타입 허용).
      * 텍스트 파일은 content 에 UTF-8 디코드 내용 포함 (fileContext 주입용),
-     * 바이너리는 content 없이 name/type/size 메타만 전달.
+     * 문서 바이너리(PDF/docx/xlsx/pptx 등)는 data 에 base64 원본 포함 → 백엔드 doc-extractor 가 content 로 추출,
+     * 그 외 바이너리는 content/data 없이 name/type/size 메타만 전달.
      * 이미지는 content 없이 images(base64 vision) 경로로 별도 전송.
      * truncated: 클라이언트가 전송 전 캡으로 내용을 절단했음 (절단 안내문 부착용).
      */
-    files?: Array<{ id: string; name: string; type: string; content?: string; size?: number; truncated?: boolean }>;
+    files?: Array<{ id: string; name: string; type: string; content?: string; data?: string; size?: number; truncated?: boolean }>;
     userRole?: string;
     /** 사용자 선호 언어 (설정 페이지에서 선택) */
     language?: string;

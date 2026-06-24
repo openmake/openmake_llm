@@ -23,6 +23,8 @@ export interface AttachedFileInput {
     type?: string;
     /** 텍스트 파일 내용 (바이너리는 미전송). 빈 문자열은 빈 파일로 취급 */
     content?: string;
+    /** 추출 대상 바이너리 문서의 base64 원본. doc-extractor 가 content 로 추출 후 제거 */
+    data?: string;
     size?: number;
     /** 클라이언트가 전송 전 캡으로 내용을 절단했음 (절단 안내문 부착용) */
     truncated?: boolean;
@@ -113,7 +115,10 @@ export function buildFileContext(files: AttachedFileInput[] | undefined): string
 
     if (parts.length === 0) return '';
     const skipped = files.length - limited.length;
-    return `\n\n## 📎 첨부 파일\n사용자가 첨부한 파일입니다. 답변 시 아래 내용을 참고하세요.\n\n${parts.join('\n\n')}` +
+    // 헤더는 단정적으로 — PDF/문서는 이미 텍스트로 추출·디코드되어 아래에 그대로 들어있다.
+    // 모델이 "원본을 도구로 읽어야 한다"고 오해해 "파일을 읽을 수 없다/도구가 없다"는 사족을
+    // 붙이는 것을 방지한다 (추출 텍스트를 최종 내용으로 신뢰하도록 명시).
+    return `\n\n## 📎 첨부 파일\n아래는 사용자가 첨부한 파일의 내용입니다. PDF·오피스 문서·텍스트가 이미 추출·디코드되어 그대로 제공됩니다 — 이 내용을 직접 읽고 답변에 사용하세요. 파일을 열기 위한 별도 도구 호출은 필요 없으며, "파일을 읽을 수 없다"거나 분석 도구 부재를 언급하지 마세요.\n\n${parts.join('\n\n')}` +
         (skipped > 0 ? `\n\n(첨부 ${files.length}개 중 ${FILE_ATTACH_LIMITS.MAX_FILES}개만 포함 — ${skipped}개 생략)` : '') + '\n';
 }
 

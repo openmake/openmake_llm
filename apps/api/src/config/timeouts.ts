@@ -167,9 +167,12 @@ export const WS_LIMITS = {
     MAX_PAYLOAD_BYTES: process.env.WS_MAX_PAYLOAD_BYTES !== undefined ? Number(process.env.WS_MAX_PAYLOAD_BYTES) : 0,
     /**
      * 단일 메시지 문자열 최대 길이(chars). MAX_PAYLOAD_BYTES(0=무제한 sentinel)와 별개로,
-     * 메시지 핸들러가 raw.length 로 거대 텍스트 프레임을 즉시 거부하는 가드. 기본 1MB(chars).
+     * 메시지 핸들러가 raw.length 로 거대 텍스트 프레임을 즉시 거부하는 가드.
+     * 주의: raw 는 message+files+images(base64) 전체 JSON payload 이므로, 파일/이미지 첨부
+     * 용량이 이 값에 합산된다. 첨부 제한 완화를 위해 기본 64MB(chars). base64 이미지 수 MB·
+     * 대용량 텍스트 첨부를 수용한다(최종 컨텍스트 적합화는 LLMClient context-fit 안전망이 담당).
      */
-    MAX_MESSAGE_CHARS: parseInt(process.env.WS_MAX_MESSAGE_CHARS || String(1024 * 1024), 10),
+    MAX_MESSAGE_CHARS: parseInt(process.env.WS_MAX_MESSAGE_CHARS || String(64 * 1024 * 1024), 10),
     /** 사용자당 최대 동시 WebSocket 연결 수 */
     MAX_CONNECTIONS_PER_USER: Number(process.env.WS_MAX_CONNECTIONS_PER_USER) || 5,
     /** 연결 속도 제한 윈도우 (ms) — 기본 60초 */
