@@ -12,6 +12,8 @@ import type {
 export interface ChatMessage extends Pick<SharedChatMessage, "role" | "content" | "images"> {
   /** 스트리밍 진행 중 여부 (assistant 메시지) */
   streaming?: boolean;
+  /** 에이전트 작업 메시지 — agent_task_progress 로 라이브 업데이트되는 메시지 식별자 */
+  taskId?: string;
 }
 
 export type { ChatRole };
@@ -121,7 +123,7 @@ export const useAppStore = create<AppState>((set) => ({
   activeArtifactId: null,
   artifactPanelOpen: false,
 
-  thinkingEnabled: true,
+  thinkingEnabled: false, // opt-in — ON 시 매 응답 thinking(지연·비용↑). 사용자가 필요할 때 켬
   discussionMode: false,
   deepResearchMode: false,
   webSearchEnabled: false,
