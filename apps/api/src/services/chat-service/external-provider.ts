@@ -159,9 +159,11 @@ export async function streamFromExternalProvider(
         throw err;
     }
 
-    // 명시적 아티팩트 생성 요청이면 distractor always-on 도구(generate_image 등)를 제외해
-    // 모델이 도구 호출 대신 <artifact> 산출물을 쓰도록 유도 (2026-06-23 통제실험 근거).
-    const wantsArtifact = ARTIFACT_INTENT_PATTERNS.some((re) => re.test(req.message ?? ''));
+    // 명시적 아티팩트 생성 요청(사용자 아티팩트 토글 또는 메시지 패턴)이면 distractor
+    // always-on 도구(generate_image 등)를 제외해 모델이 도구 호출 대신 <artifact> 산출물을
+    // 쓰도록 유도 (2026-06-23 통제실험 근거).
+    const wantsArtifact = req.artifactMode === true
+        || ARTIFACT_INTENT_PATTERNS.some((re) => re.test(req.message ?? ''));
     const tools = caps.toolCalling
         ? deps.allowedTools.filter((t) =>
             !EXTERNAL_LLM_TOOL_BLACKLIST.includes(t.function.name)
@@ -186,6 +188,11 @@ export async function streamFromExternalProvider(
     let lastBatchSig: string | null = null;
     let repeatCount = 0;
     let suppressTools = false;
+
+    // generate_image 결과의 이미지 마크다운 추적 — 일부 모델(qwen 등)이 도구 지시("마크다운
+    // 그대로 포함")를 누락해 생성된 이미지가 채팅에 표시되지 않는 문제 보정용.
+    // 루프 종료 후 최종 응답에 누락돼 있으면 결정적으로 첨부한다.
+    const generatedImageMarkdowns: string[] = [];
 
     try {
         for (let turn = 0; turn < MAX_TOOL_TURNS; turn++) {
@@ -267,6 +274,12 @@ export async function streamFromExternalProvider(
 
             for (const tc of result.toolCalls) {
                 const toolResult = await executeExternalTool(deps, tc.name, tc.args as Record<string, unknown>);
+                if (tc.name === 'generate_image') {
+                    const m = toolResult.match(/!\[[^\]]*\]\(\/generated\/[^)]+\)/);
+                    if (m && !generatedImageMarkdowns.includes(m[0])) {
+                        generatedImageMarkdowns.push(m[0]);
+                    }
+                }
                 messages.push({
                     role: 'tool',
                     content: toolResult,
@@ -307,7 +320,22 @@ export async function streamFromExternalProvider(
         ...(directCostUsdMicrosTotal !== undefined ? { directCostUsdMicros: directCostUsdMicrosTotal } : {}),
     });
 
-    return result.content;
+    // generate_image 가 성공했으나 LLM 이 최종 응답에 이미지 마크다운을 누락한 경우 결정적 첨부.
+    // (qwen 등 로컬 모델이 도구 지시를 따르지 않아 생성 이미지가 채팅에 표시 안 되던 문제 보정.
+    //  onToken = 라이브 스트림, 반환값 = 저장 히스토리 — 양쪽에 반영해 reload 후에도 유지.)
+    let finalContent = result.content || '';
+    const missingImages = generatedImageMarkdowns.filter((md) => {
+        const pathMatch = md.match(/\(([^)]+)\)/);
+        return !pathMatch || !finalContent.includes(pathMatch[1]);
+    });
+    if (missingImages.length > 0) {
+        const appended = (finalContent.trim() ? '\n\n' : '') + missingImages.join('\n\n');
+        onToken(appended, undefined);
+        finalContent += appended;
+        logger.info(`🖼️ 생성 이미지 ${missingImages.length}개 자동 첨부 (LLM 응답 누락 보정)`);
+    }
+
+    return finalContent;
 }
 
 /**

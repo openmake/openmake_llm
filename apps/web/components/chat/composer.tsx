@@ -10,6 +10,8 @@ import {
   Square,
   Telescope,
   Brain,
+  Image as ImageIcon,
+  FileCode2,
   Paperclip,
   X,
 } from "lucide-react";
@@ -89,6 +91,8 @@ export function Composer() {
     deepResearchMode,
     webSearchEnabled,
     agentTaskMode,
+    imageMode,
+    artifactMode,
     selectedModel,
     style,
     inputDraft,
@@ -135,6 +139,8 @@ export function Composer() {
     { key: "deepResearchMode" as const, on: deepResearchMode, icon: Telescope, label: "딥 리서치" },
     { key: "webSearchEnabled" as const, on: webSearchEnabled, icon: Globe, label: "웹" },
     { key: "agentTaskMode" as const, on: agentTaskMode, icon: Sparkles, label: "에이전트" },
+    { key: "imageMode" as const, on: imageMode, icon: ImageIcon, label: "이미지" },
+    { key: "artifactMode" as const, on: artifactMode, icon: FileCode2, label: "아티팩트" },
   ];
 
   return (

@@ -269,6 +269,8 @@ export async function handleChatMessage(
             fileContext: effectiveAttachContext || undefined,
             discussionMode: msg.discussionMode === true,
             deepResearchMode: msg.deepResearchMode === true,
+            imageMode: msg.imageMode === true,
+            artifactMode: msg.artifactMode === true,
             thinkingMode: msg.thinkingMode === true,
             thinkingLevel: (msg.thinkingLevel || 'high') as 'low' | 'medium' | 'high',
             style: msg.style,

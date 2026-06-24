@@ -62,6 +62,8 @@ interface AppState {
   deepResearchMode: boolean;
   webSearchEnabled: boolean;
   agentTaskMode: boolean;
+  imageMode: boolean;
+  artifactMode: boolean;
   mcpToolsEnabled: Record<string, boolean>;
 
   // 모델 / 스타일
@@ -96,7 +98,9 @@ interface AppState {
       | "discussionMode"
       | "deepResearchMode"
       | "webSearchEnabled"
-      | "agentTaskMode",
+      | "agentTaskMode"
+      | "imageMode"
+      | "artifactMode",
   ) => void;
   setSelectedModel: (m: string) => void;
   cycleStyle: () => void;
@@ -122,6 +126,8 @@ export const useAppStore = create<AppState>((set) => ({
   deepResearchMode: false,
   webSearchEnabled: false,
   agentTaskMode: false,
+  imageMode: false,
+  artifactMode: false,
   mcpToolsEnabled: {},
 
   selectedModel: "default",

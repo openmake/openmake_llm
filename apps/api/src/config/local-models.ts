@@ -46,26 +46,25 @@ export interface LocalModelEntry {
 }
 
 /**
- * 기본 카탈로그 — 사용자 환경 (2026-05 기준):
- *   - qwen3.6-35b-a3b      : 기본 채팅 (262K)
- *   - gpt-3.5-turbo        : OpenAI 호환 alias (→ qwen3.6 라우팅)
+ * 기본 카탈로그 — 로컬 채팅 모델은 실질적으로 **단일** (qwen3.6-35b-a3b, 262K).
+ * UI(모델 셀렉터)에는 'Local LLM' 단일 항목으로 표기한다.
  *
+ * gpt-3.5-turbo 는 LiteLLM proxy 의 OpenAI 호환 alias(→ qwen3.6 라우팅)로,
+ * 외부 OpenAI SDK 클라이언트 호환 전용이라 앱 UI 카탈로그에는 노출하지 않는다
+ * (litellm.config.yaml 에만 존재 · capability preset 은 model-defaults.ts 에 유지).
+ *
+ * 이미지 생성 모델 flux2-klein 은 채팅 모델이 아니라 `generate_image` 도구가
+ * `IMAGE_GEN_MODEL` 로 호출하므로 본 채팅 카탈로그에 없음 (이미지 전용).
  * (embedding 모델 bge-m3 은 2026-05-29 카탈로그에서 제거 — 앱 소비처 0건.
- *  embedding 인프라(role, ping, helpers)는 재도입 대비 보존. 라이브 :8003 은 운영자 별도 관리.)
+ *  embedding 인프라는 재도입 대비 보존. 라이브 :8003 은 운영자 별도 관리.)
  */
 const DEFAULT_LOCAL_MODELS: LocalModelEntry[] = [
     {
         id: 'qwen3.6-35b-a3b',
-        displayName: 'Qwen 3.6 (35B-A3B)',
-        description: '기본 채팅 — 262K context',
+        displayName: 'Local LLM',
+        description: '로컬 vLLM (Qwen 3.6, 35B-A3B)',
         role: 'chat',
         contextLength: 262144,
-    },
-    {
-        id: 'gpt-3.5-turbo',
-        displayName: 'GPT-3.5 (alias)',
-        description: 'OpenAI 호환 alias → Qwen 3.6 로 라우팅',
-        role: 'chat',
     },
 ];
 

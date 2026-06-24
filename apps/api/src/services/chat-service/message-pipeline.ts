@@ -16,6 +16,7 @@ import { getPromptConfig } from '../../chat/prompt';
 import { checkModelCapability } from '../../chat/model-selector';
 import { assessComplexity } from '../../chat/complexity-assessor';
 import { detectFastPath } from '../../chat/fast-path-detector';
+import { generateImageInline } from './image-mode';
 import type { ExecutionPlan } from '../../chat/profile-resolver';
 import type { ResearchProgress } from '../DeepResearchService';
 import { preRequestCheck } from '../../chat/security-hooks';
@@ -229,6 +230,12 @@ export async function runMessagePipeline(svc: ChatService,
     const effectiveDiscussionMode = discussionMode === true || aliasNorm.discussionMode === true;
     const effectiveThinkingMode = req.thinkingMode === true || aliasNorm.thinkingMode === true;
 
+    // 이미지 생성 모드: 토글 ON 이면 메시지를 프롬프트로 이미지를 직접 생성한다 (결정적 경로 —
+    // LLM 의 도구 호출 결정에 의존하지 않아 일부 모델이 이미지를 안 그리는 문제를 회피).
+    if (req.imageMode === true && (req.message ?? '').trim()) {
+        return generateImageInline((req.message ?? '').trim(), onToken);
+    }
+
     // 토론 모드: 사용자 명시 토글 또는 alias-derived (Pro alias).
     if (effectiveDiscussionMode) {
         return svc.processMessageWithDiscussion(req, onToken, onDiscussionProgress);
@@ -384,7 +391,14 @@ export async function runMessagePipeline(svc: ChatService,
 
         // ⚠️ artifact-guide 를 external(로컬 기본) 경로에도 주입 — 안 그러면 로컬 채팅 LLM 이
         //    가이드(디자인시스템·<artifact> 형식)를 못 받아 fence-fallback 으로만 동작.
-        const extArtifactGuide = await buildArtifactGuideBlock(userId, languagePolicy?.resolvedLanguage || 'en');
+        const extLang = languagePolicy?.resolvedLanguage || 'en';
+        let extArtifactGuide = await buildArtifactGuideBlock(userId, extLang);
+        // 아티팩트 토글 ON: 가이드 "기본값"보다 강한 강제 지시 추가 (qwen 등이 산문으로
+        // 끝내지 않고 반드시 <artifact> 산출물을 내도록 유도).
+        if (req.artifactMode === true && extArtifactGuide) {
+            const { getArtifactForceDirective } = await import('../../prompts/artifact-guide');
+            extArtifactGuide += getArtifactForceDirective(extLang);
+        }
         return await svc.streamFromExternalProvider(externalResolved, req, streamToken, {
             agentSystemMessage: agentSysMsgForExternal,
             enhancedMessage: finalEnhancedMessage,

@@ -8,20 +8,17 @@
  * 사용처:
  *   - AuthService.recordConsents() — 회원가입 시 consent_logs INSERT
  *   - ConsentController.GET /status — 사용자 latest 동의 version vs 현재 비교
- *   - ConsentController.POST / — 재동의 INSERT (frontend 가 정책 file frontmatter
- *     version 을 직접 보내지만, server 검증 또는 default 로 사용 가능)
+ *   - ConsentController.POST / — 재동의 INSERT
  *
- * Markdown 파일의 frontmatter `version: "1.0"` 과 **동기 유지 필수**.
- * 신규 정책 publish 시:
- *   1. `apps/legacy-web/public/policies/{type}.{locale}.md` frontmatter version bump
- *   2. 본 상수 bump
- *   3. PM2 reload — 기존 사용자가 다음 로그인 시 재동의 prompt 자동 표시 (Phase B Fix 7)
+ * ⚠️ 정책 Markdown 서빙은 폐기됨 — 정책 본문 .md 파일(구 `frontend/web/public/policies/`)과
+ * 이를 서빙하던 `policies.routes.ts` 는 제거됐다(파일: 6d99860 모노레포 재편 / 라우트: 15becc4 deadcode 정리).
+ * 현재 앱에는 정책 본문을 표시하는 UI 가 없고, 이 상수만 consent_logs 의 동의 version SoT 로 남는다.
+ * 정책 변경 시: 본 상수 bump → PM2 reload (기존 사용자 다음 로그인 시 재동의 prompt 자동 표시).
  *
  * @module config/policy
  */
 
 /**
- * 현재 운영 중인 Privacy Policy + Terms of Service 의 버전.
- * Markdown frontmatter 와 동기 유지 (`apps/legacy-web/public/policies/*.md`).
+ * 현재 운영 중인 Privacy Policy + Terms of Service 의 동의 version (consent_logs SoT).
  */
 export const CURRENT_POLICY_VERSION = '1.0';

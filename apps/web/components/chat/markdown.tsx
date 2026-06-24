@@ -24,6 +24,17 @@ export function Markdown({ content }: { content: string }) {
               className="break-all text-accent underline underline-offset-2 hover:text-accent-hover"
             />
           ),
+          // 생성 이미지(![](/generated/...)) 등 마크다운 이미지 — 동적 src 라 next/image
+          // 대신 <img> 사용. 가로 넘침 방지 + 라운드 보더.
+          img: ({ ...props }) => (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              {...props}
+              alt={props.alt || ""}
+              loading="lazy"
+              className="my-2 max-w-full rounded-lg border border-border"
+            />
+          ),
           // 넓은 표는 가로 스크롤 컨테이너로 감싸 모바일에서 페이지 전체가 넘치지 않게 한다.
           table: ({ children }) => (
             <div className="my-3 overflow-x-auto">
