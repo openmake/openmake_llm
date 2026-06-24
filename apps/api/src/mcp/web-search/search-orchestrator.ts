@@ -16,7 +16,8 @@ import {
     searchGoogleNews,
     searchDuckDuckGoAPI,
     searchNaverNews,
-    searchNaverWeb
+    searchNaverWeb,
+    searchSearxng
 } from './providers';
 import { createLogger } from '../../utils/logger';
 import { SEARCH_RELIABILITY } from '../../config/runtime-limits';
@@ -56,6 +57,7 @@ export async function performWebSearch(query: string, options: { maxResults?: nu
         searchWikipedia(query, language, signal),
         searchGoogleNews(query, language, signal),
         searchDuckDuckGoAPI(query, signal),
+        searchSearxng(query, 15, language, signal),   // SearXNG 메타검색 (항상, index 4)
         // 한국어 쿼리: 네이버 뉴스(모바일 스크래핑) + 웹문서(공식 검색 API) 병렬 수집
         ...(language === 'ko' ? [searchNaverNews(query, 5, signal), searchNaverWeb(query, 10, signal)] : [])
     ];
@@ -65,11 +67,13 @@ export async function performWebSearch(query: string, options: { maxResults?: nu
     const wikiResults = allSearchResults[1] || [];
     const newsResults = allSearchResults[2] || [];
     const ddgResults = allSearchResults[3] || [];
-    // index 4 이후는 전부 네이버 소스(뉴스+웹문서) — 개수 변동에 견고하게 합산
-    const naverResults = allSearchResults.slice(4).flat();
+    const searxngResults = allSearchResults[4] || [];
+    // index 5 이후는 전부 네이버 소스(뉴스+웹문서) — 개수 변동에 견고하게 합산
+    const naverResults = allSearchResults.slice(5).flat();
 
-    // 결과 합치기 (우선순위: 뉴스 > Naver > Google > Wikipedia > DDG)
+    // 결과 합치기 (우선순위: SearXNG 메타 > 뉴스 > Naver > Google > Wikipedia > DDG)
     const allResults = [
+        ...searxngResults,         // SearXNG 메타검색 (70+ 엔진 집계, 관련도 높음)
         ...newsResults,            // 뉴스 (최신 사실 정보)
         ...naverResults,           // 네이버 뉴스 (한국어만)
         ...googleResults,          // Google 검색
@@ -86,7 +90,7 @@ export async function performWebSearch(query: string, options: { maxResults?: nu
         return true;
     });
 
-    logger.info(`총 ${uniqueResults.length}개 (Google:${googleResults.length}, Wiki:${wikiResults.length}, News:${newsResults.length}, DDG:${ddgResults.length}, Naver:${naverResults.length})`);
+    logger.info(`총 ${uniqueResults.length}개 (SearXNG:${searxngResults.length}, Google:${googleResults.length}, Wiki:${wikiResults.length}, News:${newsResults.length}, DDG:${ddgResults.length}, Naver:${naverResults.length})`);
 
     // 시점 민감 쿼리(preferRecent) 랭킹 보정용 — 뉴스 소스(News/Naver) URL 집합.
     const newsUrlSet = preferRecent
