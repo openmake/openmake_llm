@@ -12,12 +12,15 @@ import * as os from 'os';
 import * as path from 'path';
 import * as fs from 'fs/promises';
 import * as crypto from 'crypto';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
 import { createLogger } from '../../utils/logger';
 import { DOC_EXTRACT_LIMITS, FILE_ATTACH_LIMITS } from '../../config/runtime-limits';
 import type { AttachedFileInput } from './attach-context';
 import type { SupportedFileType } from 'officeparser';
 
 const logger = createLogger('DocExtractor');
+const execFileAsync = promisify(execFile);
 
 /** 파일명에서 소문자 확장자 추출 ('' = 확장자 없음) */
 function extOf(name: string): string {
@@ -50,9 +53,58 @@ async function extractPdf(buf: Buffer): Promise<string> {
             DOC_EXTRACT_LIMITS.PDF_TIMEOUT_MS,
             'PDF',
         );
-        return typeof out === 'string' ? out : '';
+        const text = typeof out === 'string' ? out : '';
+        // 텍스트 레이어가 충분하면 그대로 사용. 추출량이 매우 적으면 스캔본(이미지 PDF)으로
+        // 보고 OCR 폴백 — opendataloader 는 OCR 미지원이므로 officeparser+tesseract 로 재시도.
+        if (text.trim().length >= DOC_EXTRACT_LIMITS.PDF_MIN_TEXT_CHARS || !DOC_EXTRACT_LIMITS.OCR_ENABLED) {
+            return text;
+        }
+        logger.info(`[DocExtract] PDF 텍스트 레이어 부족(${text.trim().length}자) — 스캔본 의심, OCR 폴백 시도`);
+        try {
+            const ocrText = await extractPdfOcr(buf);
+            return ocrText.trim().length > text.trim().length ? ocrText : text;
+        } catch (e) {
+            logger.warn(`[DocExtract] PDF OCR 폴백 실패: ${e instanceof Error ? e.message : e}`);
+            return text;
+        }
     } finally {
         await fs.unlink(tmp).catch(() => { /* noop */ });
+    }
+}
+
+/**
+ * 스캔본 PDF → text (sips 로 페이지 래스터화 후 tesseract.js OCR).
+ * officeparser 의 PDF OCR 은 페이지를 통째로 래스터화하지 않아(임베드 이미지 객체만 처리)
+ * 스캔본을 못 읽으므로, macOS 내장 sips 로 PDF→PNG 변환 후 tesseract 로 직접 인식한다.
+ * (운영 서버가 macOS 확정 — opendataloader JVM 과 동일하게 환경 종속. 다중 페이지 PDF 는
+ * sips 가 첫 페이지만 변환하므로 첫 페이지 위주로 인식된다.)
+ */
+async function extractPdfOcr(buf: Buffer): Promise<string> {
+    const id = crypto.randomUUID();
+    const tmpPdf = path.join(os.tmpdir(), `om-ocr-${id}.pdf`);
+    const tmpPng = path.join(os.tmpdir(), `om-ocr-${id}.png`);
+    await fs.writeFile(tmpPdf, buf);
+    try {
+        // PDF → PNG 래스터화 (macOS sips)
+        await execFileAsync('sips', ['-s', 'format', 'png', tmpPdf, '--out', tmpPng], {
+            timeout: DOC_EXTRACT_LIMITS.PDF_TIMEOUT_MS,
+        });
+        // tesseract.js OCR (officeparser 의 트랜지티브 의존 — 별도 설치 불필요)
+        const { createWorker } = await import('tesseract.js');
+        const worker = await createWorker(DOC_EXTRACT_LIMITS.OCR_LANGS);
+        try {
+            const { data } = await withTimeout(
+                worker.recognize(tmpPng),
+                DOC_EXTRACT_LIMITS.OCR_TIMEOUT_MS,
+                'PDF OCR',
+            );
+            return data.text || '';
+        } finally {
+            await worker.terminate();
+        }
+    } finally {
+        await fs.unlink(tmpPdf).catch(() => { /* noop */ });
+        await fs.unlink(tmpPng).catch(() => { /* noop */ });
     }
 }
 

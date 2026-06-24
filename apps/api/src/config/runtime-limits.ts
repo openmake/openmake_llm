@@ -362,6 +362,14 @@ export const DOC_EXTRACT_LIMITS = {
     PDF_EXTS: ['pdf'] as readonly string[],
     /** officeparser 로 처리할 확장자 */
     OFFICE_EXTS: ['docx', 'xlsx', 'pptx', 'odt', 'odp', 'ods', 'rtf'] as readonly string[],
+    /** 스캔본 PDF OCR 폴백 on/off (기본 on — opendataloader 가 텍스트를 못 뽑으면 officeparser+tesseract 로 재시도) */
+    OCR_ENABLED: process.env.DOC_EXTRACT_OCR_ENABLED !== 'false',
+    /** opendataloader 추출 텍스트가 이 글자 수 미만이면 스캔본(이미지 PDF)으로 보고 OCR 폴백 */
+    PDF_MIN_TEXT_CHARS: parseInt(process.env.DOC_EXTRACT_PDF_MIN_TEXT_CHARS || '16', 10),
+    /** OCR(tesseract) 타임아웃 (ms) — 페이지 렌더+인식이 느리므로 길게 */
+    OCR_TIMEOUT_MS: parseInt(process.env.DOC_EXTRACT_OCR_TIMEOUT_MS || '120000', 10),
+    /** OCR 언어 (tesseract 코드, '+' 로 다중 — 기본 영어+한국어) */
+    OCR_LANGS: process.env.DOC_EXTRACT_OCR_LANGS || 'eng+kor',
 } as const;
 
 /**
