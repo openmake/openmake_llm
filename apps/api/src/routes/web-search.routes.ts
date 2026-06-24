@@ -27,9 +27,10 @@ import { buildExecutionPlan } from '../chat/profile-resolver';
 import { requireAuth } from '../auth';
 import { validate } from '../middlewares/validation';
 import { webSearchSchema } from '../schemas/web-search.schema';
-import { CAPACITY } from '../config/runtime-limits';
+import { CAPACITY, WEB_SEARCH_INJECTION } from '../config/runtime-limits';
 import { LLM_TEMPERATURES } from '../config/llm-parameters';
 import { buildWebSearchPrompt } from '../prompts/web-search-system';
+import { formatSearchSources } from '../mcp/web-search/format-sources';
 
 const logger = createLogger('WebSearchRoutes');
 
@@ -91,11 +92,14 @@ router.post('/web-search', requireAuth, validate(webSearchSchema), asyncHandler(
           return;
       }
 
-     // 2. 검색 결과를 기반으로 LLM에 사실 검증 요청
+     // 2. 검색 결과를 기반으로 LLM에 사실 검증 요청 (주입 캡: format-sources 단일 지점)
      const sourcesContext = searchResults.length > 0
-         ? searchResults.map((r: { title?: string; url?: string; snippet?: string }, i: number) =>
-             `[출처 ${i + 1}] ${r.title}\n   URL: ${r.url}\n   내용: ${r.snippet || '(내용 없음)'}`
-         ).join('\n\n')
+         ? formatSearchSources(searchResults, {
+             maxResults: WEB_SEARCH_INJECTION.MAX_RESULTS,
+             maxSnippetChars: WEB_SEARCH_INJECTION.MAX_SNIPPET_CHARS,
+             labeled: true,
+             emptySnippet: '(내용 없음)',
+         })
          : '(검색 결과 없음)';
 
      const searchPrompt = buildWebSearchPrompt(query, sourcesContext, new Date().toLocaleDateString());
