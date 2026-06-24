@@ -18,6 +18,8 @@ import { gfm } from 'turndown-plugin-gfm';
 import { safeFetch, validateOutboundUrl } from '../security/ssrf-guard';
 import { createLogger } from './logger';
 import { LLM_TIMEOUTS } from '../config/timeouts';
+import { SCRAPER_CONFIG, browserHeaders } from '../config/web-scraper';
+import { resolveStructuredSource, resolveBlockedSource, tryRssFallback } from './web-scraper-handlers';
 
 const logger = createLogger('WebScraper');
 
@@ -142,6 +144,28 @@ export async function scrapePage(url: string, options: ScrapeOptions = {}): Prom
     const timeoutMs = options.timeoutMs ?? LLM_TIMEOUTS.WEB_SCRAPE_TIMEOUT_MS;
     const onlyMainContent = options.onlyMainContent !== false;
 
+    // 0단계: 구조화 공개 소스 (YouTube oEmbed · HN Algolia) — 매칭 시 우선 사용
+    try {
+        const structured = await resolveStructuredSource(url);
+        if (structured && structured.markdown.trim().length > 0) {
+            recordSuccess();
+            return structured;
+        }
+    } catch (error) {
+        logger.warn(`[${url}] 구조화 소스 실패: ${error instanceof Error ? error.message : String(error)}`);
+    }
+
+    // 0b단계: 차단 사이트 우회 (Reddit 등 — impersonate 활성 시에만, 기본 OFF)
+    try {
+        const blocked = await resolveBlockedSource(url);
+        if (blocked && blocked.markdown.trim().length > 0) {
+            recordSuccess();
+            return blocked;
+        }
+    } catch (error) {
+        logger.warn(`[${url}] 차단우회 실패: ${error instanceof Error ? error.message : String(error)}`);
+    }
+
     // 1단계: safeFetch + Readability
     try {
         const result = await scrapeWithFetch(url, timeoutMs, onlyMainContent, options.signal);
@@ -162,14 +186,28 @@ export async function scrapePage(url: string, options: ScrapeOptions = {}): Prom
     }
     try {
         const result = await scrapeWithPlaywright(url, timeoutMs, onlyMainContent);
-        recordSuccess();
-        return result;
+        if (result.markdown.trim().length > 0) {
+            recordSuccess();
+            return result;
+        }
+        logger.info(`[${url}] Playwright 결과 비어있음 → RSS 폴백`);
     } catch (error) {
-        recordFailure();
-        throw new Error(
-            `스크래핑 실패 (${url}): ${error instanceof Error ? error.message : String(error)}`
-        );
+        logger.warn(`[${url}] Playwright 실패: ${error instanceof Error ? error.message : String(error)}`);
     }
+
+    // 3단계: RSS 폴백 (본문 추출 전부 실패/빈 결과)
+    try {
+        const rss = await tryRssFallback(url);
+        if (rss && rss.markdown.trim().length > 0) {
+            recordSuccess();
+            return rss;
+        }
+    } catch (error) {
+        logger.warn(`[${url}] RSS 폴백 실패: ${error instanceof Error ? error.message : String(error)}`);
+    }
+
+    recordFailure();
+    throw new Error(`스크래핑 실패 (${url}): 모든 단계(구조화·차단우회·fetch·playwright·rss) 실패`);
 }
 
 // ============================================
@@ -193,11 +231,7 @@ async function scrapeWithFetch(
 
     try {
         const response = await safeFetch(url, {
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (compatible; OpenMakeBot/1.0)',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
-            },
+            headers: browserHeaders(),
             signal: controller.signal,
         });
 
@@ -308,7 +342,7 @@ export async function mapSiteUrls(url: string, options: MapOptions = {}): Promis
     try {
         const sitemapUrl = `${baseOrigin}/sitemap.xml`;
         const response = await safeFetch(sitemapUrl, {
-            headers: { 'User-Agent': 'Mozilla/5.0 (compatible; OpenMakeBot/1.0)' },
+            headers: { 'User-Agent': SCRAPER_CONFIG.USER_AGENT },
         });
 
         if (response.ok) {
@@ -330,7 +364,7 @@ export async function mapSiteUrls(url: string, options: MapOptions = {}): Promis
     if (urls.size < limit) {
         try {
             const response = await safeFetch(url, {
-                headers: { 'User-Agent': 'Mozilla/5.0 (compatible; OpenMakeBot/1.0)' },
+                headers: { 'User-Agent': SCRAPER_CONFIG.USER_AGENT },
             });
 
             if (response.ok) {
