@@ -41,8 +41,8 @@ const logger = createLogger('WebSearch');
  *
  * 변경 이력: 2026-05-19 — Ollama Cloud /api/web_search 폐기로 useOllamaFirst/searchOllamaWebSearch 제거.
  */
-export async function performWebSearch(query: string, options: { maxResults?: number; globalSearch?: boolean; language?: string; signal?: AbortSignal } = {}): Promise<SearchResult[]> {
-    const { maxResults = 30, globalSearch = true, language = 'en', signal } = options;
+export async function performWebSearch(query: string, options: { maxResults?: number; globalSearch?: boolean; language?: string; signal?: AbortSignal; preferRecent?: boolean } = {}): Promise<SearchResult[]> {
+    const { maxResults = 30, globalSearch = true, language = 'en', signal, preferRecent = false } = options;
 
     // 고볼륨 모드: maxResults > 15이면 모든 소스에서 병렬 수집 (Deep Research 용)
     const highVolumeMode = maxResults > 15;
@@ -88,14 +88,27 @@ export async function performWebSearch(query: string, options: { maxResults?: nu
 
     logger.info(`총 ${uniqueResults.length}개 (Google:${googleResults.length}, Wiki:${wikiResults.length}, News:${newsResults.length}, DDG:${ddgResults.length}, Naver:${naverResults.length})`);
 
+    // 시점 민감 쿼리(preferRecent) 랭킹 보정용 — 뉴스 소스(News/Naver) URL 집합.
+    const newsUrlSet = preferRecent
+        ? new Set([...newsResults, ...naverResults].map(r => r.url))
+        : null;
+
     // 신뢰도 스코어링 및 정렬
     const scored = uniqueResults.map((result, index) => {
         const reliability = scoreSearchResult(result);
         result.qualityScore = reliability;
         // 기존 순서 기반 관련도 (1.0 → 0.0, 상위일수록 높음)
         const relevance = 1 - (index / Math.max(uniqueResults.length, 1));
-        const combinedScore = relevance * SEARCH_RELIABILITY.RELEVANCE_WEIGHT
+        let combinedScore = relevance * SEARCH_RELIABILITY.RELEVANCE_WEIGHT
             + reliability * SEARCH_RELIABILITY.RELIABILITY_WEIGHT;
+        // 시점 민감 쿼리: 위키 과거 문서 디랭크 + 최신 뉴스 가산 (현직 인물·직책 정확도 개선)
+        if (preferRecent) {
+            if (/wikipedia\.org/i.test(result.url)) {
+                combinedScore -= SEARCH_RELIABILITY.RECENCY_WIKI_PENALTY;
+            } else if (newsUrlSet?.has(result.url)) {
+                combinedScore += SEARCH_RELIABILITY.RECENCY_NEWS_BOOST;
+            }
+        }
         return { result, combinedScore };
     });
 
@@ -108,6 +121,12 @@ export async function performWebSearch(query: string, options: { maxResults?: nu
         SEARCH_RELIABILITY.MAX_PER_DOMAIN,
     );
 
+    // 시점 민감 쿼리(preferRecent)에서는 위키 강제 보장을 건너뛴다 — 위키 srsearch 가 과거
+    // 인물/사건 문서(예: '윤석열 정부')를 반환해, penalty 로 디랭크한 위키가 ensureReferenceResults
+    // 로 다시 상위 삽입되면 최신 사실(현직 인물)을 가린다. 일반 쿼리는 기존대로 백과 보장.
+    if (preferRecent) {
+        return ranked;
+    }
     // 사실성 보강: 백과/레퍼런스 소스가 컷오프에서 누락되면 보장 포함 (현직 인물·직책 등 사실 질문 정확도)
     return ensureReferenceResults(ranked, sortedResults, maxResults);
 }
