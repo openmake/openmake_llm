@@ -78,6 +78,9 @@ export async function handleChatMessage(
     let validSessionId: string | undefined;
     let tokenCount = 0;
     let partialAssistantResponse = '';
+    // LLM 호출 관측(TTFT/TTLT)을 성공·에러 양쪽에서 기록하기 위해 try 외부 선언.
+    let firstTokenTime = 0;
+    let generationStartTime = 0;
 
     try {
         // 모델 결정 (자동 선택 또는 사용자 지정)
@@ -192,8 +195,8 @@ export async function handleChatMessage(
 
         // 토큰 생성 메트릭 추적 (tokenCount, partialAssistantResponse 는 catch 접근을 위해 try 외부 선언)
         tokenCount = 0;
-        let firstTokenTime = 0;
-        const generationStartTime = Date.now();
+        firstTokenTime = 0;
+        generationStartTime = Date.now();
         partialAssistantResponse = '';
 
         // 토큰 콜백에서 중단 여부 체크 (WS 고유)
@@ -361,10 +364,24 @@ export async function handleChatMessage(
         // 운영 측정용 단일 라인 로그: TTFB + 경로 분기 플래그 + 토큰 처리량.
         // grep 패턴: "[ChatMetrics]" 로 추출, 컬럼 파싱으로 분기별 p50/p95 분석 가능.
         const rm = result.routingMeta;
+        // 평문(하위호환 grep) + 구조화 meta(집계/대시보드용 — 성공/에러 통일 스키마 event=chat_llm_call).
         log.info(
             `[ChatMetrics] ttfb=${ttfb}ms fp=${rm?.fastPath ? 'Y' : 'N'} ` +
             `agent_bypass=${rm?.agentBypass ? 'Y' : 'N'} cache_hit=${rm?.summaryCacheHit ? 'Y' : 'N'} ` +
-            `tokens=${tokenCount} tps=${tokensPerSec} total=${result.responseTime}ms model=${selectedModel}`
+            `tokens=${tokenCount} tps=${tokensPerSec} total=${result.responseTime}ms model=${selectedModel}`,
+            {
+                event: 'chat_llm_call',
+                status: 'success',
+                model: selectedModel,
+                ttft_ms: ttfb,
+                ttlt_ms: generationDuration,
+                total_ms: result.responseTime,
+                tokens: tokenCount,
+                tps: Number(tokensPerSec),
+                fast_path: !!rm?.fastPath,
+                agent_bypass: !!rm?.agentBypass,
+                summary_cache_hit: !!rm?.summaryCacheHit,
+            },
         );
         // Artifact parser flush — 닫는 태그 없이 끝난 partial 도 emit (defensive).
         artifactStreamParser.flush();
@@ -408,6 +425,17 @@ export async function handleChatMessage(
             // aborted 메시지는 handleAbort에서 이미 전송됨
             return;
         }
+
+        // 구조화 LLM 호출 이벤트 (성공 경로와 통일 스키마 event=chat_llm_call — 에러 가시성/집계용).
+        // firstTokenTime>0 이면 토큰 수신 중 실패, 0 이면 첫 토큰 전(요청/연결 단계) 실패.
+        log.warn('[ChatMetrics] LLM 호출 실패', {
+            event: 'chat_llm_call',
+            status: 'error',
+            model: selectedModel,
+            ttft_ms: firstTokenTime > 0 ? firstTokenTime - generationStartTime : -1,
+            tokens: tokenCount,
+            error_type: error instanceof Error ? error.constructor.name : 'Unknown',
+        });
 
         /** WebSocket 에러 응답 페이로드 */
         interface ChatWSErrorPayload {
