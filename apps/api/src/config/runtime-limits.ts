@@ -720,6 +720,14 @@ export const SEARCH_RELIABILITY = {
     /** 신뢰도 가중치 (정렬 시) */
     RELIABILITY_WEIGHT: 0.4,
     /**
+     * 시점 민감 쿼리(현직 인물·직책 등)에서 위키피디아 결과에 적용하는 디랭크 페널티.
+     * 위키 srsearch 는 과거 인물/사건 문서(예: '윤석열 정부', '10·26 사건')를 상위 반환해
+     * 최신 뉴스보다 위로 올라오는 문제가 있어, preferRecent 시 위키를 낮춰 최신 뉴스를 우선한다.
+     */
+    RECENCY_WIKI_PENALTY: Number(process.env.SEARCH_RECENCY_WIKI_PENALTY) || 0.5,
+    /** 시점 민감 쿼리에서 뉴스 소스(News/Naver 뉴스)에 적용하는 가산점 (최신 사실 우선). */
+    RECENCY_NEWS_BOOST: Number(process.env.SEARCH_RECENCY_NEWS_BOOST) || 0.3,
+    /**
      * 도메인당 최대 결과 수 (소스 다양성 보호).
      * 단일 provider/도메인(예: news.google.com)이 결과를 도배해 다양성이 붕괴하는 것을 방지.
      * 0 이하면 비활성(무제한). env override: SEARCH_MAX_PER_DOMAIN. 기본 5.

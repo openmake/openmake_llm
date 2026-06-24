@@ -16,7 +16,8 @@ import {
     searchGoogleNews,
     searchDuckDuckGoAPI,
     searchNaverNews,
-    searchNaverWeb
+    searchNaverWeb,
+    searchSearxng
 } from './providers';
 import { createLogger } from '../../utils/logger';
 import { SEARCH_RELIABILITY } from '../../config/runtime-limits';
@@ -41,8 +42,8 @@ const logger = createLogger('WebSearch');
  *
  * 변경 이력: 2026-05-19 — Ollama Cloud /api/web_search 폐기로 useOllamaFirst/searchOllamaWebSearch 제거.
  */
-export async function performWebSearch(query: string, options: { maxResults?: number; globalSearch?: boolean; language?: string; signal?: AbortSignal } = {}): Promise<SearchResult[]> {
-    const { maxResults = 30, globalSearch = true, language = 'en', signal } = options;
+export async function performWebSearch(query: string, options: { maxResults?: number; globalSearch?: boolean; language?: string; signal?: AbortSignal; preferRecent?: boolean } = {}): Promise<SearchResult[]> {
+    const { maxResults = 30, globalSearch = true, language = 'en', signal, preferRecent = false } = options;
 
     // 고볼륨 모드: maxResults > 15이면 모든 소스에서 병렬 수집 (Deep Research 용)
     const highVolumeMode = maxResults > 15;
@@ -56,6 +57,7 @@ export async function performWebSearch(query: string, options: { maxResults?: nu
         searchWikipedia(query, language, signal),
         searchGoogleNews(query, language, signal),
         searchDuckDuckGoAPI(query, signal),
+        searchSearxng(query, 15, language, signal),   // SearXNG 메타검색 (항상, index 4)
         // 한국어 쿼리: 네이버 뉴스(모바일 스크래핑) + 웹문서(공식 검색 API) 병렬 수집
         ...(language === 'ko' ? [searchNaverNews(query, 5, signal), searchNaverWeb(query, 10, signal)] : [])
     ];
@@ -65,11 +67,13 @@ export async function performWebSearch(query: string, options: { maxResults?: nu
     const wikiResults = allSearchResults[1] || [];
     const newsResults = allSearchResults[2] || [];
     const ddgResults = allSearchResults[3] || [];
-    // index 4 이후는 전부 네이버 소스(뉴스+웹문서) — 개수 변동에 견고하게 합산
-    const naverResults = allSearchResults.slice(4).flat();
+    const searxngResults = allSearchResults[4] || [];
+    // index 5 이후는 전부 네이버 소스(뉴스+웹문서) — 개수 변동에 견고하게 합산
+    const naverResults = allSearchResults.slice(5).flat();
 
-    // 결과 합치기 (우선순위: 뉴스 > Naver > Google > Wikipedia > DDG)
+    // 결과 합치기 (우선순위: SearXNG 메타 > 뉴스 > Naver > Google > Wikipedia > DDG)
     const allResults = [
+        ...searxngResults,         // SearXNG 메타검색 (70+ 엔진 집계, 관련도 높음)
         ...newsResults,            // 뉴스 (최신 사실 정보)
         ...naverResults,           // 네이버 뉴스 (한국어만)
         ...googleResults,          // Google 검색
@@ -86,7 +90,12 @@ export async function performWebSearch(query: string, options: { maxResults?: nu
         return true;
     });
 
-    logger.info(`총 ${uniqueResults.length}개 (Google:${googleResults.length}, Wiki:${wikiResults.length}, News:${newsResults.length}, DDG:${ddgResults.length}, Naver:${naverResults.length})`);
+    logger.info(`총 ${uniqueResults.length}개 (SearXNG:${searxngResults.length}, Google:${googleResults.length}, Wiki:${wikiResults.length}, News:${newsResults.length}, DDG:${ddgResults.length}, Naver:${naverResults.length})`);
+
+    // 시점 민감 쿼리(preferRecent) 랭킹 보정용 — 뉴스 소스(News/Naver) URL 집합.
+    const newsUrlSet = preferRecent
+        ? new Set([...newsResults, ...naverResults].map(r => r.url))
+        : null;
 
     // 신뢰도 스코어링 및 정렬
     const scored = uniqueResults.map((result, index) => {
@@ -94,8 +103,16 @@ export async function performWebSearch(query: string, options: { maxResults?: nu
         result.qualityScore = reliability;
         // 기존 순서 기반 관련도 (1.0 → 0.0, 상위일수록 높음)
         const relevance = 1 - (index / Math.max(uniqueResults.length, 1));
-        const combinedScore = relevance * SEARCH_RELIABILITY.RELEVANCE_WEIGHT
+        let combinedScore = relevance * SEARCH_RELIABILITY.RELEVANCE_WEIGHT
             + reliability * SEARCH_RELIABILITY.RELIABILITY_WEIGHT;
+        // 시점 민감 쿼리: 위키 과거 문서 디랭크 + 최신 뉴스 가산 (현직 인물·직책 정확도 개선)
+        if (preferRecent) {
+            if (/wikipedia\.org/i.test(result.url)) {
+                combinedScore -= SEARCH_RELIABILITY.RECENCY_WIKI_PENALTY;
+            } else if (newsUrlSet?.has(result.url)) {
+                combinedScore += SEARCH_RELIABILITY.RECENCY_NEWS_BOOST;
+            }
+        }
         return { result, combinedScore };
     });
 
@@ -108,6 +125,12 @@ export async function performWebSearch(query: string, options: { maxResults?: nu
         SEARCH_RELIABILITY.MAX_PER_DOMAIN,
     );
 
+    // 시점 민감 쿼리(preferRecent)에서는 위키 강제 보장을 건너뛴다 — 위키 srsearch 가 과거
+    // 인물/사건 문서(예: '윤석열 정부')를 반환해, penalty 로 디랭크한 위키가 ensureReferenceResults
+    // 로 다시 상위 삽입되면 최신 사실(현직 인물)을 가린다. 일반 쿼리는 기존대로 백과 보장.
+    if (preferRecent) {
+        return ranked;
+    }
     // 사실성 보강: 백과/레퍼런스 소스가 컷오프에서 누락되면 보장 포함 (현직 인물·직책 등 사실 질문 정확도)
     return ensureReferenceResults(ranked, sortedResults, maxResults);
 }

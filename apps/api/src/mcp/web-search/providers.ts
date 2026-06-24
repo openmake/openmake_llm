@@ -436,3 +436,45 @@ export async function searchNaverWeb(query: string, maxResults: number = 10, sig
 
     return results;
 }
+
+// ============================================================
+// SearXNG 메타검색 (자가호스팅 docker, API key 불필요 — Google CSE 무료 대체)
+// 70+ 검색엔진을 집계해 관련도 높은 결과를 제공. SEARXNG_URL 미설정 시 비활성.
+// ============================================================
+const SEARXNG_URL = (process.env.SEARXNG_URL || '').replace(/\/$/, '');
+
+interface SearxngItem { title?: string; url?: string; content?: string }
+
+/** SearXNG JSON API 검색 (loopback 내부 서비스라 safeFetch 아닌 직접 fetch). */
+export async function searchSearxng(
+    query: string,
+    maxResults: number,
+    language: string,
+    externalSignal?: AbortSignal,
+): Promise<SearchResult[]> {
+    if (!SEARXNG_URL) return [];
+    const results: SearchResult[] = [];
+    try {
+        const langParam = language && language !== 'en' ? `&language=${encodeURIComponent(language)}` : '';
+        const url = `${SEARXNG_URL}/search?q=${encodeURIComponent(query)}&format=json${langParam}`;
+        const response = await searchFetch(url, externalSignal);
+        if (!response.ok) {
+            logger.warn(`SearXNG 검색 실패: HTTP ${response.status}`);
+            return results;
+        }
+        const data = await response.json() as { results?: SearxngItem[] };
+        for (const item of (data.results || []).slice(0, maxResults)) {
+            if (!item.url) continue;
+            results.push({
+                title: item.title || '',
+                url: item.url,
+                snippet: item.content || '',
+                source: 'searxng',
+            });
+        }
+        logger.info(`SearXNG: ${results.length}개`);
+    } catch (e) {
+        logger.warn(`SearXNG 검색 실패: ${describeFetchError(e)}`);
+    }
+    return results;
+}
