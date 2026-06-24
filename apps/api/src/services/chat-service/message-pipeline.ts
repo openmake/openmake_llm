@@ -525,7 +525,10 @@ export async function runMessagePipeline(svc: ChatService,
     // guest 세션은 사용자 설정이 없으므로 기본 활성 (안전한 기본값).
     const artifactGuideBlock = await buildArtifactGuideBlock(userId, languagePolicy?.resolvedLanguage || 'en');
 
-    const combinedSystemPrompt = memoryBlock + customInstructionsBlock + thinkingGuidance + styledBase + artifactGuideBlock;
+    // Cache-aware 조립: 정적 헌법(styledBase·artifactGuide)을 prefix 앞에, 동적(thinking·memory·custom)을
+    // DYNAMIC BOUNDARY 뒤에 두어 vLLM/OpenRouter prefix 캐시 hit 을 극대화한다. (external-provider 경로와 동일 정책)
+    const combinedSystemPrompt = [styledBase, artifactGuideBlock, thinkingGuidance, memoryBlock, customInstructionsBlock]
+        .map((s) => s.trim()).filter(Boolean).join('\n\n');
 
     // history assembly + system prompt + budget hint + user message — helper module 위임
     const { currentHistory } = await assembleHistoryWithSummary({
