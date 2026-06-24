@@ -76,6 +76,8 @@ export interface WsAttachedFile {
   type: string;
   /** 텍스트 내용 (바이너리는 미전송). 클라이언트가 캡 초과 시 절단 */
   content?: string;
+  /** 추출 대상 바이너리 문서(PDF/docx/xlsx/pptx 등)의 base64 원본. 백엔드가 텍스트로 추출해 content 를 채운다 */
+  data?: string;
   size?: number;
   /** 전송 전 캡으로 내용을 절단했음 */
   truncated?: boolean;

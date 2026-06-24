@@ -24,12 +24,20 @@ import { fetchModels } from "@/lib/models-api";
 import { cn } from "@/lib/utils";
 
 // 클라이언트 첨부 캡 — 백엔드 FILE_ATTACH_LIMITS 기본값과 일치(서버가 재절단하므로 advisory).
-const MAX_FILES = 10;
-const MAX_CHARS_PER_FILE = 100_000;
-const MAX_TOTAL_CHARS = 300_000;
-// 텍스트로 읽을 수 있는 확장자(바이너리는 미전송 — 백엔드 계약). vision 이미지는 별도 채널.
-const TEXT_ACCEPT =
-  ".txt,.md,.markdown,.json,.csv,.tsv,.log,.xml,.yaml,.yml,.html,.htm,.css,.js,.jsx,.ts,.tsx,.py,.java,.go,.rs,.c,.cpp,.h,.sh,.sql,.env,.ini,.toml,text/*";
+const MAX_FILES = 50;
+const MAX_IMAGES = 20;
+const MAX_CHARS_PER_FILE = 2_000_000;
+const MAX_TOTAL_CHARS = 10_000_000;
+// 모든 파일 타입 허용(accept 미지정). 처리 분기:
+//  - 이미지(image/*) → base64 data URL → vision 채널(images)
+//  - 문서(EXTRACT_EXTS: PDF/Word/Excel/PowerPoint 등) → base64 원본(data) → 백엔드가 텍스트 추출
+//  - 그 외 → 텍스트로 읽어 content (바이너리는 깨질 수 있으나 백엔드가 메타로 처리)
+const EXTRACT_EXTS = ["pdf", "docx", "xlsx", "pptx", "odt", "odp", "ods", "rtf"];
+
+const extOf = (name: string): string => {
+  const i = name.lastIndexOf(".");
+  return i >= 0 ? name.slice(i + 1).toLowerCase() : "";
+};
 
 /** 파일을 텍스트로 읽는다(바이너리는 깨질 수 있으나 백엔드가 처리). */
 function readFileText(file: File): Promise<string> {
@@ -41,46 +49,97 @@ function readFileText(file: File): Promise<string> {
   });
 }
 
+/** 이미지를 base64 data URL 로 읽는다(vision 채널 전송용). */
+function readFileDataURL(file: File): Promise<string> {
+  return new Promise((resolve) => {
+    const r = new FileReader();
+    r.onload = () => resolve(typeof r.result === "string" ? r.result : "");
+    r.onerror = () => resolve("");
+    r.readAsDataURL(file);
+  });
+}
+
+/** 문서 바이너리를 순수 base64(data URL prefix 제외)로 읽는다(백엔드 추출용). */
+function readFileBase64(file: File): Promise<string> {
+  return new Promise((resolve) => {
+    const r = new FileReader();
+    r.onload = () => {
+      const s = typeof r.result === "string" ? r.result : "";
+      const comma = s.indexOf(",");
+      resolve(comma >= 0 ? s.slice(comma + 1) : "");
+    };
+    r.onerror = () => resolve("");
+    r.readAsDataURL(file);
+  });
+}
+
 export function Composer() {
   const { sendChat, abort, startAgentTask } = useChatSocket();
   const [text, setText] = useState("");
   const [files, setFiles] = useState<WsAttachedFile[]>([]);
+  // 이미지 첨부 — base64 data URL 로 vision 채널 전송. 미리보기/제거를 위해 메타와 함께 보관.
+  const [images, setImages] = useState<{ id: string; name: string; dataUrl: string }[]>([]);
+  // 드래그앤드롭 오버레이 표시 상태
+  const [dragging, setDragging] = useState(false);
   // 모드 시트(모바일 최적화) — 7개 토글을 가로스크롤 칩 대신 '도구' 버튼 + 시트로 수납
   const [modeSheetOpen, setModeSheetOpen] = useState(false);
   const taRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // 선택한 파일들을 텍스트로 읽어 캡 적용 후 첨부 목록에 추가
+  // 선택/드롭한 파일들을 타입별로 분기해 첨부 목록에 추가.
+  // 이미지 → base64 vision, 그 외 → 텍스트(캡 적용). 모든 파일 타입 허용.
   const addFiles = async (list: FileList | null) => {
     if (!list || list.length === 0) return;
-    const next = [...files];
-    let total = next.reduce((n, f) => n + (f.content?.length ?? 0), 0);
+    const nextFiles = [...files];
+    const nextImages = [...images];
+    let total = nextFiles.reduce((n, f) => n + (f.content?.length ?? 0), 0);
     for (const file of Array.from(list)) {
-      if (next.length >= MAX_FILES || total >= MAX_TOTAL_CHARS) break;
-      let content = await readFileText(file);
-      let truncated = false;
-      if (content.length > MAX_CHARS_PER_FILE) {
-        content = content.slice(0, MAX_CHARS_PER_FILE);
-        truncated = true;
+      if (file.type.startsWith("image/")) {
+        if (nextImages.length >= MAX_IMAGES) continue;
+        const dataUrl = await readFileDataURL(file);
+        if (!dataUrl) continue;
+        nextImages.push({ id: crypto.randomUUID(), name: file.name.slice(0, 200), dataUrl });
+      } else if (EXTRACT_EXTS.includes(extOf(file.name))) {
+        // 문서(PDF/Word/Excel/PPT 등) → base64 원본 전송, 백엔드가 텍스트 추출
+        if (nextFiles.length >= MAX_FILES) continue;
+        const data = await readFileBase64(file);
+        if (!data) continue;
+        nextFiles.push({
+          id: crypto.randomUUID(),
+          name: file.name.slice(0, 200),
+          type: file.type || "application/octet-stream",
+          data,
+          size: file.size,
+        });
+      } else {
+        if (nextFiles.length >= MAX_FILES || total >= MAX_TOTAL_CHARS) continue;
+        let content = await readFileText(file);
+        let truncated = false;
+        if (content.length > MAX_CHARS_PER_FILE) {
+          content = content.slice(0, MAX_CHARS_PER_FILE);
+          truncated = true;
+        }
+        if (total + content.length > MAX_TOTAL_CHARS) {
+          content = content.slice(0, Math.max(0, MAX_TOTAL_CHARS - total));
+          truncated = true;
+        }
+        total += content.length;
+        nextFiles.push({
+          id: crypto.randomUUID(),
+          name: file.name.slice(0, 200),
+          type: file.type || "text/plain",
+          content,
+          size: file.size,
+          truncated,
+        });
       }
-      if (total + content.length > MAX_TOTAL_CHARS) {
-        content = content.slice(0, Math.max(0, MAX_TOTAL_CHARS - total));
-        truncated = true;
-      }
-      total += content.length;
-      next.push({
-        id: crypto.randomUUID(),
-        name: file.name.slice(0, 200),
-        type: file.type || "text/plain",
-        content,
-        size: file.size,
-        truncated,
-      });
     }
-    setFiles(next);
+    setFiles(nextFiles);
+    setImages(nextImages);
   };
 
   const removeFile = (id: string) => setFiles((prev) => prev.filter((f) => f.id !== id));
+  const removeImage = (id: string) => setImages((prev) => prev.filter((i) => i.id !== id));
 
   // 로컬 vLLM + 등록된 외부 LLM(OpenRouter 등) 통합 모델 목록
   const { data: modelsData } = useQuery({
@@ -117,15 +176,20 @@ export function Composer() {
   }, [modelsData]);
 
   const submit = () => {
-    if ((!text.trim() && files.length === 0) || isGenerating) return;
+    if ((!text.trim() && files.length === 0 && images.length === 0) || isGenerating) return;
     if (agentTaskMode) {
       // 에이전트 토글 ON — 메시지를 목표로 자율 에이전트 작업 실행 (REST). 첨부는 미지원.
       void startAgentTask(text.trim());
     } else {
-      sendChat(text.trim(), undefined, files.length ? files : undefined);
+      sendChat(
+        text.trim(),
+        images.length ? images.map((i) => i.dataUrl) : undefined,
+        files.length ? files : undefined,
+      );
     }
     setText("");
     setFiles([]);
+    setImages([]);
     if (taRef.current) taRef.current.style.height = "auto";
   };
 
@@ -165,7 +229,34 @@ export function Composer() {
 
   return (
     <div className="mx-auto w-full max-w-3xl px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
-      <div className="relative rounded-xl border border-border bg-surface shadow-2">
+      <div
+        className={cn(
+          "relative rounded-xl border bg-surface shadow-2 transition-colors",
+          dragging ? "border-accent ring-2 ring-accent/40" : "border-border",
+        )}
+        onDragOver={(e) => {
+          e.preventDefault();
+          if (!dragging) setDragging(true);
+        }}
+        onDragLeave={(e) => {
+          // 자식으로의 dragleave 무시 — 컴포저 경계를 실제로 벗어날 때만 해제
+          if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+          setDragging(false);
+        }}
+        onDrop={(e) => {
+          e.preventDefault();
+          setDragging(false);
+          void addFiles(e.dataTransfer.files);
+        }}
+      >
+        {dragging && (
+          <div className="pointer-events-none absolute inset-0 z-50 grid place-items-center rounded-xl border-2 border-dashed border-accent bg-surface/85 backdrop-blur-sm">
+            <div className="flex items-center gap-2 text-sm font-medium text-accent">
+              <Paperclip className="h-4 w-4" />
+              여기에 파일을 놓아 첨부
+            </div>
+          </div>
+        )}
         {/* 모드 시트 — 컴포저 위로 떠오르는 바텀시트(모바일 최적화). 7개 모드를 세로 리스트로
             수납해 바가 가로 스크롤/넘침 없이 동작한다. (OD openmake-mobile '+' 시트 패턴) */}
         {modeSheetOpen && (
@@ -237,9 +328,27 @@ export function Composer() {
           ))}
         </div>
 
-        {/* 첨부 파일 칩 */}
-        {files.length > 0 && (
+        {/* 첨부 칩 — 이미지 썸네일 + 텍스트/파일 칩 */}
+        {(files.length > 0 || images.length > 0) && (
           <div className="flex flex-wrap gap-1.5 px-3 pt-2">
+            {images.map((img) => (
+              <span
+                key={img.id}
+                title={img.name}
+                className="relative inline-flex h-12 w-12 shrink-0 overflow-hidden rounded-md border border-border bg-surface-2"
+              >
+                {/* data URL 미리보기 — next/image 비대상(로컬 base64). eslint-disable 의도적. */}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={img.dataUrl} alt={img.name} className="h-full w-full object-cover" />
+                <button
+                  onClick={() => removeImage(img.id)}
+                  aria-label={`${img.name} 첨부 제거`}
+                  className="absolute right-0 top-0 grid h-4 w-4 place-items-center rounded-bl bg-bg/70 text-muted hover:text-fg"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            ))}
             {files.map((f) => (
               <span
                 key={f.id}
@@ -287,7 +396,6 @@ export function Composer() {
             ref={fileInputRef}
             type="file"
             multiple
-            accept={TEXT_ACCEPT}
             className="hidden"
             onChange={(e) => {
               void addFiles(e.target.files);
@@ -296,9 +404,8 @@ export function Composer() {
           />
           <button
             onClick={() => fileInputRef.current?.click()}
-            disabled={files.length >= MAX_FILES}
             className="grid h-8 w-8 place-items-center rounded-md text-muted transition hover:bg-surface-2 hover:text-fg disabled:opacity-40"
-            title={files.length >= MAX_FILES ? `최대 ${MAX_FILES}개까지 첨부` : "파일 첨부 (텍스트)"}
+            title="파일 첨부 (드래그앤드롭 지원 · 모든 형식)"
             aria-label="파일 첨부"
           >
             <Paperclip className="h-4 w-4" />
@@ -323,7 +430,7 @@ export function Composer() {
           ) : (
             <button
               onClick={submit}
-              disabled={!text.trim() && files.length === 0}
+              disabled={!text.trim() && files.length === 0 && images.length === 0}
               aria-label="전송"
               className="ml-auto grid h-8 w-8 place-items-center rounded-md bg-accent text-accent-fg transition hover:bg-accent-hover disabled:opacity-40"
             >

@@ -21,10 +21,11 @@
         "eval:all": "npm run eval:routing && npm run eval:response && npm run eval:citation"
     },
     "dependencies": {
-        "@openmake/shared-types": "1.5.6",
         "@anthropic-ai/sdk": "^0.95.1",
         "@modelcontextprotocol/sdk": "^1.25.3",
         "@mozilla/readability": "^0.6.0",
+        "@opendataloader/pdf": "^2.4.7",
+        "@openmake/shared-types": "1.5.6",
         "@opentelemetry/api": "^1.9.1",
         "@opentelemetry/exporter-trace-otlp-http": "^0.219.0",
         "@opentelemetry/instrumentation-express": "^0.67.0",
@@ -53,6 +54,7 @@
         "lru-cache": "^7.18.3",
         "multer": "^2.0.2",
         "nodemailer": "^9.0.0",
+        "officeparser": "^7.2.1",
         "openai": "^6.37.0",
         "ora": "^9.2.0",
         "pg": "^8.18.0",

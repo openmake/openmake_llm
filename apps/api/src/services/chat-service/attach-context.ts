@@ -23,6 +23,8 @@ export interface AttachedFileInput {
     type?: string;
     /** 텍스트 파일 내용 (바이너리는 미전송). 빈 문자열은 빈 파일로 취급 */
     content?: string;
+    /** 추출 대상 바이너리 문서의 base64 원본. doc-extractor 가 content 로 추출 후 제거 */
+    data?: string;
     size?: number;
     /** 클라이언트가 전송 전 캡으로 내용을 절단했음 (절단 안내문 부착용) */
     truncated?: boolean;
