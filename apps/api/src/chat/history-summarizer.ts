@@ -44,6 +44,20 @@ interface SummarizedHistory {
  * @param model - 요약에 사용할 모델명
  * @returns 압축된 히스토리 배열과 메타데이터
  */
+// 히스토리 요약 LLM 호출이 연속 실패하면 차단한다 (하네스 원칙⑥ Latch — 매 요청 실패를
+// 반복해 지연·비용을 낭비하는 것을 방지). web-scraper circuit breaker 와 동형.
+const SUMMARIZE_BREAKER = { failures: 0, openedAt: 0 };
+const SUMMARIZE_BREAKER_THRESHOLD = 3;
+const SUMMARIZE_BREAKER_RESET_MS = 5 * 60 * 1000;
+function summarizeBreakerOpen(): boolean {
+    if (SUMMARIZE_BREAKER.failures < SUMMARIZE_BREAKER_THRESHOLD) return false;
+    if (Date.now() - SUMMARIZE_BREAKER.openedAt > SUMMARIZE_BREAKER_RESET_MS) {
+        SUMMARIZE_BREAKER.failures = 0; // 리셋 윈도우 경과 → 재시도 허용
+        return false;
+    }
+    return true;
+}
+
 export async function summarizeHistory(
     history: HistoryMessage[],
     model: string
@@ -59,6 +73,17 @@ export async function summarizeHistory(
         originalCount > HISTORY_SUMMARIZER.RECENT_MESSAGES_TO_KEEP;
 
     if (!countTrigger && !tokenTrigger) {
+        return {
+            messages: history,
+            wasSummarized: false,
+            originalCount,
+            summarizedCount: originalCount,
+        };
+    }
+
+    // circuit breaker: 연속 요약 실패 시 압축을 건너뛰고 원본을 사용한다 (채팅 진행 우선).
+    if (summarizeBreakerOpen()) {
+        logger.warn('히스토리 요약 circuit OPEN — 압축 건너뜀(원본 유지)');
         return {
             messages: history,
             wasSummarized: false,
@@ -104,6 +129,7 @@ export async function summarizeHistory(
             }
         );
 
+        SUMMARIZE_BREAKER.failures = 0; // LLM 호출 성공 → circuit 복구
         const summary = result.content?.trim();
         if (!summary || summary.length < 20) {
             logger.warn('히스토리 요약 결과가 너무 짧음 — 원본 유지');
@@ -137,6 +163,12 @@ export async function summarizeHistory(
         };
     } catch (error) {
         const errMsg = error instanceof Error ? error.message : String(error);
+        // 연속 실패 누적 → threshold 도달 시 circuit OPEN (이후 RESET_MS 동안 압축 skip)
+        SUMMARIZE_BREAKER.failures += 1;
+        if (SUMMARIZE_BREAKER.failures >= SUMMARIZE_BREAKER_THRESHOLD) {
+            SUMMARIZE_BREAKER.openedAt = Date.now();
+            logger.warn(`히스토리 요약 ${SUMMARIZE_BREAKER.failures}회 연속 실패 — circuit OPEN (${SUMMARIZE_BREAKER_RESET_MS / 1000}s)`);
+        }
         logger.warn(`히스토리 요약 실패 (원본 유지): ${errMsg}`);
         return {
             messages: history,
