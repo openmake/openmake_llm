@@ -22,6 +22,7 @@ import { getStaleDataWarning } from '../config/stale-data-warning';
 import { WS_LIMITS } from '../config/timeouts';
 import { ArtifactStreamParser, type ArtifactInfo } from '../llm/artifact-parser';
 import { buildFileContext, buildUrlContext, getCachedAttachContext, appendCachedAttachContext } from '../services/chat-service/attach-context';
+import { WEB_SEARCH_INJECTION } from '../config/runtime-limits';
 
 /**
  * AI 채팅 메시지를 처리합니다.
@@ -150,9 +151,14 @@ export async function handleChatMessage(
                 const searchResults = await performWebSearch(message, { maxResults: 12, language: userLang, preferRecent: isCurrentEventsQuery });
                 if (searchResults.length > 0) {
                     const tpl = getLocalizedTemplate(WEB_SEARCH_TEMPLATES, userLang);
+                    // TTFT \uAC1C\uC120: \uC218\uC9D1\uC740 \uB109\uB109\uD788(\uB7AD\uD0B9 \uD480), LLM \uC8FC\uC785\uC740 \uC0C1\uC704 N + snippet \uAE38\uC774 \uCEA1.
+                    const injected = searchResults.slice(0, WEB_SEARCH_INJECTION.MAX_RESULTS);
                     webSearchContext = `\n\n## \uD83D\uDD0D ${tpl.header} (${new Date().toLocaleDateString(tpl.locale)} )\n` +
                         `${tpl.instruction}\n\n` +
-                        searchResults.map((r: { title?: string; url?: string; snippet?: string }, i: number) => `[${tpl.sourceLabel} ${i + 1}] ${r.title}\n   URL: ${r.url}\n${r.snippet ? `   ${tpl.contentLabel}: ${r.snippet}\n` : ''}`).join('\n') + '\n';
+                        injected.map((r: { title?: string; url?: string; snippet?: string }, i: number) => {
+                            const snip = (r.snippet || '').slice(0, WEB_SEARCH_INJECTION.MAX_SNIPPET_CHARS);
+                            return `[${tpl.sourceLabel} ${i + 1}] ${r.title}\n   URL: ${r.url}\n${snip ? `   ${tpl.contentLabel}: ${snip}\n` : ''}`;
+                        }).join('\n') + '\n';
                 }
             } catch (e) {
                 log.error('[Chat] 웹 검색 실패:', e);

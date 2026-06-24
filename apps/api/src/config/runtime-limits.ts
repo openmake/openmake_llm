@@ -408,6 +408,21 @@ export const ATTACH_CACHE_LIMITS = {
 } as const;
 
 /**
+ * 채팅 웹검색 결과의 LLM 컨텍스트 주입 한도 (2026-06-25 TTFT 개선)
+ * 검색은 다소스 수집(랭킹 풀)을 위해 넉넉히 하되, LLM 에 실제 주입하는 양은 캡한다.
+ * 큰 검색 컨텍스트가 prompt prefill 을 키워 TTFT(첫 토큰)를 늘리는 것을 막는다 —
+ * SearXNG·위키 디랭크로 상위 결과 품질이 좋아져 적은 수로도 정답을 유지한다.
+ *
+ * sockets/ws-chat-handler.ts 에서 참조
+ */
+export const WEB_SEARCH_INJECTION = {
+    /** LLM 컨텍스트에 주입할 상위 결과 수 (수집은 더 많이 하되 주입은 캡) */
+    MAX_RESULTS: parseInt(process.env.WEB_SEARCH_INJECT_MAX_RESULTS || '6', 10),
+    /** 결과당 주입 snippet 최대 글자 수 (초과 절단) */
+    MAX_SNIPPET_CHARS: parseInt(process.env.WEB_SEARCH_INJECT_MAX_SNIPPET || '300', 10),
+} as const;
+
+/**
  * LLM 라우터 신뢰도 기본값
  * agents/llm-router.ts에서 참조
  */
