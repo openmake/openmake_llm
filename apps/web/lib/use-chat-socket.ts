@@ -62,6 +62,7 @@ export function useChatSocket() {
     appendMessage,
     setChatHistory,
     appendToken,
+    appendThinking,
     setStreaming,
     setCurrentSessionId,
     setActiveAgent,
@@ -93,6 +94,9 @@ export function useChatSocket() {
       switch (data.type) {
         case "token":
           if (data.token) appendToken(data.token);
+          break;
+        case "thinking":
+          if (data.token) appendThinking(data.token);
           break;
         case "session_created":
           if (data.sessionId) setCurrentSessionId(data.sessionId);

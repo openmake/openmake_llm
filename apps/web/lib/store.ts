@@ -14,6 +14,8 @@ export interface ChatMessage extends Pick<SharedChatMessage, "role" | "content" 
   streaming?: boolean;
   /** 에이전트 작업 메시지 — agent_task_progress 로 라이브 업데이트되는 메시지 식별자 */
   taskId?: string;
+  /** 추론(thinking) 내용 — ws thinking 이벤트로 누적, 화면에 접이식 블록으로 표시 */
+  reasoning?: string;
 }
 
 export type { ChatRole };
@@ -79,6 +81,7 @@ interface AppState {
   setChatHistory: (fn: (prev: ChatMessage[]) => ChatMessage[]) => void;
   appendMessage: (m: ChatMessage) => void;
   appendToken: (token: string) => void;
+  appendThinking: (token: string) => void;
   setStreaming: (v: boolean) => void;
   setCurrentSessionId: (id: string | null) => void;
   setInputDraft: (t: string) => void;
@@ -123,7 +126,7 @@ export const useAppStore = create<AppState>((set) => ({
   activeArtifactId: null,
   artifactPanelOpen: false,
 
-  thinkingEnabled: false, // opt-in — ON 시 매 응답 thinking(지연·비용↑). 사용자가 필요할 때 켬
+  thinkingEnabled: true, // 기본 ON — tool calling 중 추론(thinking) 과정을 화면에 노출
   discussionMode: false,
   deepResearchMode: false,
   webSearchEnabled: false,
@@ -147,6 +150,18 @@ export const useAppStore = create<AppState>((set) => ({
         hist[hist.length - 1] = { ...last, content: last.content + token };
       } else {
         hist.push({ role: "assistant", content: token, streaming: true });
+      }
+      return { chatHistory: hist };
+    }),
+  appendThinking: (token) =>
+    set((s) => {
+      const hist = [...s.chatHistory];
+      const last = hist[hist.length - 1];
+      if (last && last.role === "assistant" && last.streaming) {
+        hist[hist.length - 1] = { ...last, reasoning: (last.reasoning || "") + token };
+      } else {
+        // thinking 은 보통 답변 토큰보다 먼저 도착 — assistant placeholder 를 생성해 누적
+        hist.push({ role: "assistant", content: "", reasoning: token, streaming: true });
       }
       return { chatHistory: hist };
     }),

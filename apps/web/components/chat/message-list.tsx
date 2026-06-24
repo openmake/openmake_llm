@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, type ReactNode } from "react";
 import Image from "next/image";
-import { MessagesSquare, Telescope, Brain, Sparkles, FileCode2 } from "lucide-react";
+import { MessagesSquare, Telescope, Brain, Sparkles, FileCode2, ChevronRight } from "lucide-react";
 import { useAppStore } from "@/lib/store";
 import { Markdown } from "./markdown";
 import { cn } from "@/lib/utils";
@@ -84,6 +84,42 @@ function AssistantContent({ content, streaming }: { content: string; streaming?:
   return <>{nodes}</>;
 }
 
+/**
+ * 질문 전송 후 첫 토큰이 오기 전까지(LLM 분석/생각 중) 표시하는 진행 인디케이터.
+ * 선택된 에이전트·활성 스킬이 있으면 함께 노출해 어떤 상태인지 인지시킨다.
+ */
+function ThinkingIndicator({
+  agent,
+  skills,
+}: {
+  agent: { name: string; emoji?: string } | null;
+  skills: string[];
+}) {
+  const label = agent
+    ? `${agent.emoji ? agent.emoji + " " : ""}${agent.name}가 분석 중`
+    : skills.length > 0
+      ? `${skills.join(", ")} 적용 중`
+      : "분석 중";
+  return (
+    <div className="flex gap-3">
+      <div className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-md bg-accent text-xs font-bold text-accent-fg">
+        AI
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="mb-1 text-xs font-medium text-muted">OpenMake</p>
+        <div className="flex items-center gap-2 text-sm text-muted">
+          <span className="flex gap-1" aria-hidden>
+            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted [animation-delay:0ms]" />
+            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted [animation-delay:150ms]" />
+            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted [animation-delay:300ms]" />
+          </span>
+          <span>{label}…</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const QUICK_STARTS = [
   { icon: MessagesSquare, label: "요약하기", prompt: "다음 내용을 요약해 줘:\n\n" },
   { icon: Telescope, label: "리서치", prompt: "다음 주제를 깊이 리서치해 줘:\n\n" },
@@ -94,11 +130,19 @@ const QUICK_STARTS = [
 export function MessageList() {
   const chatHistory = useAppStore((s) => s.chatHistory);
   const setInputDraft = useAppStore((s) => s.setInputDraft);
+  const isGenerating = useAppStore((s) => s.isGenerating);
+  const activeAgent = useAppStore((s) => s.activeAgent);
+  const activeSkills = useAppStore((s) => s.activeSkills);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  // 응답이 진행 중인데 아직 스트리밍 중인 assistant 메시지가 없으면(첫 토큰 전) "분석 중" 표시
+  const last = chatHistory[chatHistory.length - 1];
+  const showThinking =
+    isGenerating && !(last?.role === "assistant" && last?.streaming);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [chatHistory]);
+  }, [chatHistory, showThinking]);
 
   if (chatHistory.length === 0) {
     return (
@@ -154,6 +198,18 @@ export function MessageList() {
             </div>
             <div className="min-w-0 flex-1">
               <p className="mb-1 text-xs font-medium text-muted">OpenMake</p>
+              {m.reasoning && (
+                <details className="group mb-2 rounded-lg border border-border bg-surface-2/60 text-xs">
+                  <summary className="flex cursor-pointer select-none items-center gap-1.5 px-3 py-1.5 font-medium text-muted list-none [&::-webkit-details-marker]:hidden">
+                    <ChevronRight className="h-3.5 w-3.5 shrink-0 transition-transform group-open:rotate-90" />
+                    <Brain className="h-3.5 w-3.5 text-accent" />
+                    생각 과정
+                  </summary>
+                  <div className="whitespace-pre-wrap px-3 pb-2.5 pt-1 leading-relaxed text-muted">
+                    {m.reasoning}
+                  </div>
+                </details>
+              )}
               <div className="text-sm leading-relaxed text-fg">
                 <AssistantContent content={m.content} streaming={m.streaming} />
                 {m.streaming && (
@@ -164,6 +220,7 @@ export function MessageList() {
           </div>
         ),
       )}
+      {showThinking && <ThinkingIndicator agent={activeAgent} skills={activeSkills} />}
       <div ref={bottomRef} className={cn("h-px")} />
     </div>
   );
