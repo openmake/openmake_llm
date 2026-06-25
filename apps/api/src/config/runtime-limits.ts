@@ -425,6 +425,8 @@ function parseInjectLimit(raw: string | undefined, def: number): number {
 }
 
 export const WEB_SEARCH_INJECTION = {
+    /** 검색 수집(랭킹 풀) 폭 — performWebSearch 가 모을 결과 수. 주입 캡보다 크게 잡아 디랭크 여지 확보. 최소 1 */
+    COLLECT_MAX_RESULTS: Math.max(1, parseInjectLimit(process.env.WEB_SEARCH_COLLECT_MAX_RESULTS, 12)),
     /** LLM 컨텍스트에 주입할 상위 결과 수 (수집은 더 많이 하되 주입은 캡). 0 = 무제한 */
     MAX_RESULTS: parseInjectLimit(process.env.WEB_SEARCH_INJECT_MAX_RESULTS, 6),
     /** 결과당 주입 snippet 최대 글자 수 (초과 절단). 0 = 무제한(절단 안 함) */

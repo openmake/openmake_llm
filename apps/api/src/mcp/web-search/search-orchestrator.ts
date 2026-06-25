@@ -20,7 +20,7 @@ import {
     searchSearxng
 } from './providers';
 import { createLogger } from '../../utils/logger';
-import { SEARCH_RELIABILITY, WEB_SEARCH_INJECTION } from '../../config/runtime-limits';
+import { SEARCH_RELIABILITY } from '../../config/runtime-limits';
 import { formatSearchSources } from './format-sources';
 
 const logger = createLogger('WebSearch');
@@ -269,10 +269,9 @@ function scoreSearchResult(result: SearchResult): number {
  * @returns 포맷팅된 사실 검증 프롬프트 문자열
  */
 export function createFactCheckPrompt(claim: string, searchResults: SearchResult[]): string {
-    const sources = formatSearchSources(searchResults, {
-        maxResults: WEB_SEARCH_INJECTION.MAX_RESULTS,
-        maxSnippetChars: WEB_SEARCH_INJECTION.MAX_SNIPPET_CHARS,
-    });
+    // 사실 검증은 grounding 정확도가 핵심이므로 캡 미적용 — 전체 결과 + full snippet 주입.
+    // (chat 주입의 TTFT 캡과 달리 결정적 근거가 잘려 누락되면 검증 품질이 떨어진다.)
+    const sources = formatSearchSources(searchResults);
 
     return `## Web Search Results (${new Date().toLocaleDateString()})
 ${sources || '검색 결과 없음'}

@@ -47,14 +47,17 @@ export function formatSearchSources(results: SourceLike[], opts: FormatSourcesOp
     const lines = limited.map((r, i) => {
         let snip = r.snippet || '';
         if (maxSnippetChars > 0 && snip.length > maxSnippetChars) {
-            snip = snip.slice(0, maxSnippetChars) + snippetSuffix;
+            // 코드포인트 단위로 잘라 surrogate pair(이모지·astral 문자) 중간 분할 방지
+            snip = [...snip].slice(0, maxSnippetChars).join('') + snippetSuffix;
         } else if (snip && snippetSuffix) {
             snip = snip + snippetSuffix;
         }
         const tag = labeled ? `[${sourceWord} ${i + 1}]` : `[${i + 1}]`;
         const urlLine = labeled ? `   URL: ${r.url}` : `   ${r.url}`;
+        // snippet 도 placeholder 도 없으면 내용 라인 자체를 생략 (빈 '내용: ' 라벨 누수 방지)
+        const content = snip || emptySnippet;
         const contentLine = labeled
-            ? `\n   ${contentWord}: ${snip || emptySnippet}`
+            ? (content ? `\n   ${contentWord}: ${content}` : '')
             : (snip ? `\n   ${snip}` : '');
         return `${tag} ${r.title}\n${urlLine}${contentLine}`;
     });

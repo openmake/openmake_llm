@@ -12,6 +12,7 @@ import { getUnifiedMCPClient } from '../../mcp/unified-client';
 import { VISION_OCR_SYSTEM_PROMPT, VISION_ANALYSIS_SYSTEM_PROMPT, buildVisionOcrUserMessage } from '../../prompts/vision-system';
 import { LLM_TEMPERATURES } from '../../config/llm-parameters';
 import { TRUNCATION } from '../../config/runtime-limits';
+import { formatSearchSources } from '../../mcp/web-search/format-sources';
 import type { AgentLoopStrategyContext } from './types';
 import { createLogger } from '../../utils/logger';
 
@@ -54,9 +55,10 @@ export async function executeToolCall(context: AgentLoopStrategyContext, toolCal
             const response = await context.client.webSearch(query, maxResults);
 
             if (response.results && response.results.length > 0) {
-                const formatted = response.results.map((r, i) =>
-                    `[${i + 1}] ${r.title}\n    ${r.url}\n    ${r.content?.substring(0, TRUNCATION.WEB_SNIPPET_MAX) || ''}...`
-                ).join('\n\n');
+                const formatted = formatSearchSources(
+                    response.results.map(r => ({ title: r.title, url: r.url, snippet: r.content })),
+                    { maxSnippetChars: TRUNCATION.WEB_SNIPPET_MAX, snippetSuffix: '...' },
+                );
                 return `🔍 웹 검색 결과 (${response.results.length}개):\n\n${formatted}`;
             }
             return '검색 결과가 없습니다.';
