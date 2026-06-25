@@ -145,12 +145,19 @@ router.post('/:providerId',
             }
         }
 
+        // base_url 미입력 시 catalog 기본 endpoint 로 폴백 — 빈 base_url 은 model.routes 의
+        // `&& keyRow.baseUrl` 게이트에서 스킵돼 등록한 외부 모델이 노출되지 않으므로 반드시 채운다.
+        const resolvedBaseUrl =
+            typeof req.body.base_url === 'string' && req.body.base_url.trim()
+                ? req.body.base_url.trim()
+                : (catalogEntry.defaultBaseUrl ?? null);
+
         const row = await getRepo().upsert({
             userId,
             providerId,
             sdkType: req.body.sdk_type,
             displayName: req.body.display_name,
-            baseUrl: req.body.base_url ?? null,
+            baseUrl: resolvedBaseUrl,
             apiKey: req.body.api_key,
         });
 
