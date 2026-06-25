@@ -1,0 +1,50 @@
+{
+  "_comment": "classifyAnswerIntent 가중치 분류 테이블 (No-Hardcoding: prompt-type-patterns.json 과 동일 패턴). intent 별 keyword 매칭으로 cross-cutting intent(decision/comparison/troubleshooting/summary/drafting)를 우선 식별. 미달 시 promptTypeFallback 으로 detectPromptType→intent 매핑. 순서는 동점 tiebreak 안정성에 의미 있음.",
+  "minScore": 2,
+  "intentConfigs": [
+    { "intent": "comparison", "priority": 9, "keywords": [
+      { "source": "비교|compare|comparison", "flags": "i", "weight": 3 },
+      { "source": "차이|difference|diff\\b", "flags": "i", "weight": 2 },
+      { "source": "\\bvs\\b|대비|어느.*것|어느.*게|중.*뭐|중.*어떤|중.*골라", "flags": "i", "weight": 3 },
+      { "source": "장단점|pros.*cons|trade.?off", "flags": "i", "weight": 2 }
+    ]},
+    { "intent": "troubleshooting", "priority": 8, "keywords": [
+      { "source": "에러|error|버그|bug|오류", "flags": "i", "weight": 3 },
+      { "source": "안.?돼|안.?되|동작.*안|작동.*안|not work|doesn.?t work|fail", "flags": "i", "weight": 3 },
+      { "source": "디버그|debug|고치|fix|해결.*안", "flags": "i", "weight": 2 },
+      { "source": "왜.*안|왜.*못|why.*not", "flags": "i", "weight": 2 }
+    ]},
+    { "intent": "decision", "priority": 7, "keywords": [
+      { "source": "결정|decide|decision|선택|choose", "flags": "i", "weight": 3 },
+      { "source": "해야.*할까|할까요|좋을까|나을까|추천.*해|should i|recommend", "flags": "i", "weight": 3 },
+      { "source": "도입.*할|적용.*할|채택", "flags": "i", "weight": 2 }
+    ]},
+    { "intent": "technical_design", "priority": 6, "keywords": [
+      { "source": "설계|design|아키텍처|architecture|구조", "flags": "i", "weight": 3 },
+      { "source": "어떻게.*구현|어떻게.*만들|how.*build|how.*implement", "flags": "i", "weight": 3 },
+      { "source": "어떻게.*해결|어떻게.*처리|approach", "flags": "i", "weight": 2 }
+    ]},
+    { "intent": "summary", "priority": 5, "keywords": [
+      { "source": "요약|정리.*해|summarize|summary|tl;?dr", "flags": "i", "weight": 3 },
+      { "source": "핵심.*만|간단히.*정리|brief", "flags": "i", "weight": 2 }
+    ]},
+    { "intent": "drafting", "priority": 5, "keywords": [
+      { "source": "작성.*해|써.?줘|초안|draft|작문", "flags": "i", "weight": 3 },
+      { "source": "이메일.*써|문서.*작성|글.*써|write.*a", "flags": "i", "weight": 2 }
+    ]}
+  ],
+  "promptTypeFallback": {
+    "reasoning": "decision",
+    "consultant": "decision",
+    "coder": "technical_design",
+    "generator": "technical_design",
+    "reviewer": "troubleshooting",
+    "security": "technical_design",
+    "explainer": "explanation",
+    "researcher": "summary",
+    "writer": "drafting",
+    "translator": "drafting",
+    "assistant": "explanation",
+    "agent": "explanation"
+  }
+}

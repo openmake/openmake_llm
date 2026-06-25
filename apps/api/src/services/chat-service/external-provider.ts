@@ -53,6 +53,8 @@ export interface StreamFromExternalContext {
     artifactGuideBlock?: string;
     /** 응답 스타일 (concise/default/verbose). 정적 prefix 맨 앞에 style guard prepend. default 면 overhead 0. */
     style?: Style;
+    /** 답변 형식 가드 (구조적 질문에 결론-우선·표·실행항목 분리). prose/concise 면 빈 문자열. */
+    answerFormatBlock?: string;
 }
 
 /**
@@ -88,6 +90,10 @@ export async function streamFromExternalProvider(
     const guards = getExternalProviderSystemGuards(ctx.resolvedLanguage || req.userLanguagePreference || 'en');
     if (guards) {
         systemPromptParts.push(guards.trim());
+    }
+    // 답변 형식 가드 (구조적 질문) — 정적 prefix. prose/concise 면 빈 문자열이라 미주입.
+    if (ctx.answerFormatBlock) {
+        systemPromptParts.push(ctx.answerFormatBlock.trim());
     }
     // Artifacts guide (디자인시스템·<artifact> 형식) — 정적.
     if (ctx.artifactGuideBlock) {

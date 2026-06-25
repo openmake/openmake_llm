@@ -26,6 +26,9 @@ import { chatRateLimiter } from '../middlewares/chat-rate-limiter';
 import { validate } from '../middlewares/validation';
 import { chatRequestSchema } from '../schemas';
 import { ChatRequestHandler, ChatRequestError } from '../chat/request-handler';
+import { createClient } from '../llm/client';
+import { parseFullModelId } from '../providers/i-provider';
+import { composeStructuredAnswer, type StructuredChatFn } from '../services/answer-composer';
 import { getConversationDB } from '../data/conversation-db';
 import { createLogger } from '../utils/logger';
 
@@ -216,5 +219,61 @@ router.post('/stream', optionalApiKey, optionalAuth, chatRateLimiter, validate(c
         res.end();
     }
 });
+
+/**
+ * POST /api/chat/structured
+ * 구조화 답변 API (비스트리밍, opt-in) — Response Formatter Layer.
+ * Answer Planner → JSON Schema(strict) 출력 → Validator → formatAnswer 마크다운 조립.
+ * 스트리밍 기본 경로(/stream)와 별개 — 완성형 카드/리포트가 필요한 호출 전용.
+ * 응답: { intent, structured(StructuredAnswer JSON), markdown }.
+ */
+router.post('/structured', optionalApiKey, optionalAuth, chatRateLimiter, asyncHandler(async (req: Request, res: Response) => {
+    const { message } = req.body;
+    if (typeof message !== 'string' || !message.trim()) {
+        res.status(400).json({ error: 'message 는 필수입니다' });
+        return;
+    }
+
+    const userContext = ChatRequestHandler.resolveUserContextFromRequest(req);
+    if (!userContext) {
+        res.status(401).json(unauthorized('인증이 필요합니다'));
+        return;
+    }
+
+    const userLanguage: string = req.body.userLanguage || 'ko';
+
+    // 모델명 정규화 — 프론트는 'local-llm:qwen3.6-35b-a3b' 같은 full id 를 보내므로
+    // provider prefix 를 벗겨 LiteLLM 카탈로그 이름으로 변환한다. 외부 provider 나
+    // 'default' 는 env 기본 모델(LLM_DEFAULT_MODEL)로 폴백(이 엔드포인트는 로컬 전용).
+    let model: string | undefined;
+    const rawModel = req.body.model;
+    if (typeof rawModel === 'string' && rawModel && rawModel !== 'default') {
+        if (rawModel.includes(':')) {
+            const parsed = parseFullModelId(rawModel);
+            if (parsed.providerId === 'local-llm') model = parsed.modelId;
+        } else {
+            model = rawModel;
+        }
+    }
+
+    const client = createClient({
+        ...(model ? { model } : {}),
+        ...(isPersistableUserId(userContext.userId) ? { userId: String(userContext.userId) } : {}),
+    });
+
+    // 주입되는 LLM 호출 — 비스트리밍(onToken 미전달) + json_schema strict.
+    const chat: StructuredChatFn = async (messages, format) => {
+        const result = await client.chat(messages, undefined, undefined, { format });
+        return result.content ?? '';
+    };
+
+    const composed = await composeStructuredAnswer({ message, userLanguage, chat });
+    res.json(success({
+        intent: composed.intent,
+        structured: composed.structured,
+        markdown: composed.markdown,
+        model: client.model,
+    }));
+}));
 
 export default router;

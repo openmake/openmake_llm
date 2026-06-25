@@ -17,6 +17,28 @@ export interface ChatMessage extends Pick<SharedChatMessage, "role" | "content" 
   taskId?: string;
   /** 추론(thinking) 내용 — ws thinking 이벤트로 누적, 화면에 접이식 블록으로 표시 */
   reasoning?: string;
+  /** 구조화 답변 데이터 (structuredMode=true 시 REST /api/chat/structured 응답). 있으면 카드 UI 로 렌더. */
+  structured?: StructuredAnswerData;
+}
+
+/**
+ * 구조화 답변 (백엔드 schemas/structured-answer.schema.ts StructuredAnswer 대응).
+ * structuredMode 에서 POST /api/chat/structured 가 반환. content 에는 동일 내용의 markdown 도 함께 저장된다.
+ */
+export interface StructuredAnswerData {
+  intent: string;
+  title: string;
+  conclusion: string;
+  summary?: string;
+  sections: {
+    heading: string;
+    body: string;
+    bullets?: string[];
+    table?: { headers: string[]; rows: string[][] };
+  }[];
+  risks?: string[];
+  action_items?: string[];
+  confidence: "high" | "medium" | "low";
 }
 
 export type { ChatRole };
@@ -69,6 +91,8 @@ interface AppState {
   agentTaskMode: boolean;
   imageMode: boolean;
   artifactMode: boolean;
+  /** 구조화 답변 모드 — ON 시 메시지를 REST /api/chat/structured 로 보내 카드 UI 로 렌더(비스트리밍). */
+  structuredMode: boolean;
   mcpToolsEnabled: Record<string, boolean>;
 
   // 모델 / 스타일
@@ -106,7 +130,8 @@ interface AppState {
       | "webSearchEnabled"
       | "agentTaskMode"
       | "imageMode"
-      | "artifactMode",
+      | "artifactMode"
+      | "structuredMode",
   ) => void;
   setSelectedModel: (m: string) => void;
   cycleStyle: () => void;
@@ -144,6 +169,7 @@ export const useAppStore = create<AppState>()(
   agentTaskMode: false,
   imageMode: false,
   artifactMode: false,
+  structuredMode: false,
   mcpToolsEnabled: {},
 
   selectedModel: "default",

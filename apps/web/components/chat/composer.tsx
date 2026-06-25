@@ -12,6 +12,7 @@ import {
   Brain,
   Image as ImageIcon,
   FileCode2,
+  LayoutList,
   SlidersHorizontal,
   Check,
   Paperclip,
@@ -74,7 +75,7 @@ function readFileBase64(file: File): Promise<string> {
 }
 
 export function Composer() {
-  const { sendChat, abort, startAgentTask } = useChatSocket();
+  const { sendChat, abort, startAgentTask, sendStructured } = useChatSocket();
   const [text, setText] = useState("");
   const [files, setFiles] = useState<WsAttachedFile[]>([]);
   // 이미지 첨부 — base64 data URL 로 vision 채널 전송. 미리보기/제거를 위해 메타와 함께 보관.
@@ -156,6 +157,7 @@ export function Composer() {
     agentTaskMode,
     imageMode,
     artifactMode,
+    structuredMode,
     selectedModel,
     style,
     inputDraft,
@@ -180,6 +182,9 @@ export function Composer() {
     if (agentTaskMode) {
       // 에이전트 토글 ON — 메시지를 목표로 자율 에이전트 작업 실행 (REST). 첨부는 미지원.
       void startAgentTask(text.trim());
+    } else if (structuredMode) {
+      // 구조화 답변 토글 ON — REST /api/chat/structured (비스트리밍, 카드 렌더). 첨부는 미지원.
+      void sendStructured(text.trim());
     } else {
       sendChat(
         text.trim(),
@@ -224,6 +229,7 @@ export function Composer() {
     { key: "agentTaskMode" as const, on: agentTaskMode, icon: Sparkles, label: "에이전트" },
     { key: "imageMode" as const, on: imageMode, icon: ImageIcon, label: "이미지" },
     { key: "artifactMode" as const, on: artifactMode, icon: FileCode2, label: "아티팩트" },
+    { key: "structuredMode" as const, on: structuredMode, icon: LayoutList, label: "구조화 답변" },
   ];
   const activeModeCount = TOGGLES.filter((t) => t.on).length;
 

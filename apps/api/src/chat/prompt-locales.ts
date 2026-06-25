@@ -397,3 +397,32 @@ export const RESPONSE_DISCIPLINE_TEXTS: Record<'ko' | 'en', string> = {
 
 `,
 };
+
+/**
+ * 답변 형식 가드 (ko/en) — 구조적 답변이 적합한 질문(의사결정·비교·문제해결·기술설계
+ * 등)에만 prepend 되는 형식 디렉티브. 일상 질문에는 주입되지 않아 RESPONSE_DISCIPLINE_TEXTS
+ * 의 산문 기본값을 침범하지 않는다 (chat/answer-format.ts 의 profile 게이트로 제어).
+ *
+ * 도입 (2026-06-26): 답변 스타일 일관성 개선 — 결론-우선·문단 절제·표/실행항목 분리.
+ * 스트리밍 보존을 위해 JSON 구조화 출력이 아닌 프롬프트 레이어로 구현.
+ */
+export const ANSWER_FORMAT_TEXTS: Record<'ko' | 'en', string> = {
+    ko: `## 📐 답변 형식
+이 질문은 구조적 답변이 적합합니다. 아래 형식을 따르되, 질문에 맞지 않는 항목은 억지로 적용하지 않습니다.
+- **결론을 가장 먼저** 한두 문장으로 제시한다. 사용자가 핵심 답을 즉시 확인할 수 있게 한다.
+- 한 문단은 3문장을 넘지 않는다. 같은 의미의 문장을 반복하지 않는다.
+- 선택지·항목을 비교할 때는 표로 정리한다.
+- 의사결정 질문이면 권고안 하나를 먼저 제시한 뒤 근거를 댄다.
+- 실행이 필요하면 마지막에 '다음 실행' 항목으로 분리한다.
+
+`,
+    en: `## 📐 Answer Format
+This question calls for a structured answer. Follow the format below, but skip any item that does not fit the question.
+- **State the conclusion first** in one or two sentences, so the user sees the core answer immediately.
+- Keep each paragraph to three sentences or fewer. Do not repeat the same point.
+- When comparing options or items, organize them in a table.
+- For decision questions, give one recommendation first, then the rationale.
+- If action is required, separate it into a "Next steps" list at the end.
+
+`,
+};
