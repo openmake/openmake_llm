@@ -76,6 +76,8 @@ export function useChatSocket() {
   const reconnectRef = useRef(0);
   // 에이전트 작업 taskId → 목표(goal) — agent_task_progress 렌더에 사용
   const agentGoalsRef = useRef<Map<string, string>>(new Map());
+  // 구조화 답변(REST) 진행 중 AbortController — abort() 가 취소할 수 있게 보관
+  const structuredAbortRef = useRef<AbortController | null>(null);
 
   const {
     appendMessage,
@@ -256,6 +258,8 @@ export function useChatSocket() {
 
   const abort = useCallback(() => {
     wsRef.current?.send(JSON.stringify({ type: "abort" }));
+    // 구조화 답변(REST) 진행 중이면 fetch 도 취소
+    structuredAbortRef.current?.abort();
   }, []);
 
   // 에이전트 토글 ON: 메시지를 목표(goal)로 자율 에이전트 작업을 생성·실행한다.
@@ -301,14 +305,16 @@ export function useChatSocket() {
       if (!msg || s.isGenerating) return;
       appendMessage({ role: "user", content: msg });
       setStreaming(true);
+      const controller = new AbortController();
+      structuredAbortRef.current = controller;
       try {
         const res = await ApiClient.post<{
           data: { intent: string; structured: StructuredAnswerData; markdown: string };
-        }>("/api/chat/structured", {
-          message: msg,
-          model: s.selectedModel,
-          anonSessionId: getAnonSessionId(),
-        });
+        }>(
+          "/api/chat/structured",
+          { message: msg, model: s.selectedModel, anonSessionId: getAnonSessionId() },
+          { signal: controller.signal },
+        );
         const data = res?.data;
         appendMessage({
           role: "assistant",
@@ -316,11 +322,15 @@ export function useChatSocket() {
           structured: data?.structured,
         });
       } catch (e) {
+        const aborted = e instanceof DOMException && e.name === "AbortError";
         appendMessage({
           role: "assistant",
-          content: `구조화 답변을 생성하지 못했습니다: ${e instanceof Error ? e.message : String(e)}`,
+          content: aborted
+            ? "_(구조화 답변 생성을 중단했습니다.)_"
+            : `구조화 답변을 생성하지 못했습니다: ${e instanceof Error ? e.message : String(e)}`,
         });
       } finally {
+        structuredAbortRef.current = null;
         setStreaming(false);
       }
     },

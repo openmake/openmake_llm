@@ -28,6 +28,11 @@ import { chatRequestSchema } from '../schemas';
 import { ChatRequestHandler, ChatRequestError } from '../chat/request-handler';
 import { createClient } from '../llm/client';
 import { parseFullModelId } from '../providers/i-provider';
+import { ProviderRouter } from '../providers/provider-router';
+import { ProviderError } from '../providers/provider-errors';
+import { LocalLLMProvider } from '../providers/local-llm-provider';
+import { ExternalKeysRepository } from '../data/repositories/external-keys-repo';
+import { getPool } from '../data/models/unified-database';
 import { composeStructuredAnswer, type StructuredChatFn } from '../services/answer-composer';
 import { getConversationDB } from '../data/conversation-db';
 import { createLogger } from '../utils/logger';
@@ -242,38 +247,86 @@ router.post('/structured', optionalApiKey, optionalAuth, chatRateLimiter, asyncH
 
     const userLanguage: string = req.body.userLanguage || 'ko';
 
-    // 모델명 정규화 — 프론트는 'local-llm:qwen3.6-35b-a3b' 같은 full id 를 보내므로
-    // provider prefix 를 벗겨 LiteLLM 카탈로그 이름으로 변환한다. 외부 provider 나
-    // 'default' 는 env 기본 모델(LLM_DEFAULT_MODEL)로 폴백(이 엔드포인트는 로컬 전용).
-    let model: string | undefined;
+    // 사용자 중단(abort) — 클라이언트가 fetch 를 취소하면 req 가 close 되어 upstream LLM 호출도 끊는다.
+    const abortController = new AbortController();
+    let settled = false;
+    req.on('close', () => { if (!settled) abortController.abort(); });
+
+    // 모델 full id 정규화 — 프론트는 'local-llm:qwen3.6-35b-a3b' / 'anthropic:claude-...' 형식을 보낸다.
+    // 'default'·미지정·prefix 없는 경우는 로컬 기본 모델로 폴백.
     const rawModel = req.body.model;
-    if (typeof rawModel === 'string' && rawModel && rawModel !== 'default') {
-        if (rawModel.includes(':')) {
-            const parsed = parseFullModelId(rawModel);
-            if (parsed.providerId === 'local-llm') model = parsed.modelId;
-        } else {
-            model = rawModel;
-        }
+    const fullId = (typeof rawModel === 'string' && rawModel && rawModel !== 'default')
+        ? (rawModel.includes(':') ? rawModel : `local-llm:${rawModel}`)
+        : null;
+
+    const ctxUserId = isPersistableUserId(userContext.userId) ? String(userContext.userId) : undefined;
+    const parsed = fullId ? parseFullModelId(fullId) : { providerId: 'local-llm', modelId: '' };
+
+    let chat: StructuredChatFn;
+    let usedModel: string;
+
+    try {
+    if (parsed.providerId === 'local-llm') {
+        // 로컬(LiteLLM) — json_schema strict 로 최고 신뢰성. (provider 추상화는 format 미지원)
+        const client = createClient({
+            ...(parsed.modelId ? { model: parsed.modelId } : {}),
+            ...(ctxUserId ? { userId: ctxUserId } : {}),
+        });
+        usedModel = client.model;
+        chat = async (messages, format) => {
+            const result = await client.chat(messages, undefined, undefined, {
+                format,
+                signal: abortController.signal,
+            });
+            return result.content ?? '';
+        };
+    } else {
+        // 외부 provider(Anthropic/OpenRouter 등) — provider 추상화는 json_schema 미지원이라
+        // streamChat 을 집계(비스트리밍)하고 JSON 은 프롬프트 + Validator/재시도로 받는다.
+        const localProvider = new LocalLLMProvider(createClient());
+        const providerRouter = new ProviderRouter({
+            localProvider,
+            externalKeysRepo: new ExternalKeysRepository(getPool()),
+        });
+        // 외부 키는 실제(영속) user id 로만 조회 — 게스트(anon)는 ctxUserId=undefined → GUEST_NOT_ALLOWED.
+        const resolved = await providerRouter.resolve(fullId as string, { userId: ctxUserId });
+        usedModel = resolved.fullId;
+        chat = async (messages) => {
+            const result = await resolved.provider.streamChat(
+                { messages, modelId: resolved.modelId, abortSignal: abortController.signal },
+                {}, // 토큰 콜백 불필요 — 누적 결과(content)만 사용
+            );
+            return result.content ?? '';
+        };
     }
 
-    const client = createClient({
-        ...(model ? { model } : {}),
-        ...(isPersistableUserId(userContext.userId) ? { userId: String(userContext.userId) } : {}),
-    });
-
-    // 주입되는 LLM 호출 — 비스트리밍(onToken 미전달) + json_schema strict.
-    const chat: StructuredChatFn = async (messages, format) => {
-        const result = await client.chat(messages, undefined, undefined, { format });
-        return result.content ?? '';
-    };
-
-    const composed = await composeStructuredAnswer({ message, userLanguage, chat });
-    res.json(success({
-        intent: composed.intent,
-        structured: composed.structured,
-        markdown: composed.markdown,
-        model: client.model,
-    }));
+        const composed = await composeStructuredAnswer({ message, userLanguage, chat });
+        settled = true;
+        res.json(success({
+            intent: composed.intent,
+            structured: composed.structured,
+            markdown: composed.markdown,
+            model: usedModel,
+        }));
+    } catch (err) {
+        settled = true;
+        if (err instanceof ProviderError) {
+            const statusByCode: Record<string, number> = {
+                GUEST_NOT_ALLOWED: 403,
+                MISSING_API_KEY: 400,
+                INVALID_API_KEY: 401,
+                QUOTA_EXCEEDED: 429,
+                INSUFFICIENT_CREDIT: 402,
+                MODEL_NOT_FOUND: 404,
+                INVALID_MODEL_ID: 400,
+                NOT_SUPPORTED: 400,
+                UPSTREAM_ERROR: 502,
+            };
+            res.status(statusByCode[err.code] ?? 502).json({ error: err.message, code: err.code });
+            return;
+        }
+        throw err;
+    }
 }));
 
 export default router;
