@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { persist, createJSONStorage, type StateStorage } from "zustand/middleware";
 import type {
   ChatMessage as SharedChatMessage,
   ChatRole,
@@ -114,7 +115,16 @@ interface AppState {
 
 const STYLE_ORDER: ChatStyle[] = ["default", "concise", "verbose"];
 
-export const useAppStore = create<AppState>((set) => ({
+/** SSR(서버 평가) 시 localStorage 부재로 인한 ReferenceError 방지 — 클라에서만 실제 저장소 사용. */
+const noopStorage: StateStorage = {
+  getItem: () => null,
+  setItem: () => {},
+  removeItem: () => {},
+};
+
+export const useAppStore = create<AppState>()(
+  persist(
+    (set) => ({
   chatHistory: [],
   currentSessionId: null,
   isGenerating: false,
@@ -224,4 +234,14 @@ export const useAppStore = create<AppState>((set) => ({
       style: STYLE_ORDER[(STYLE_ORDER.indexOf(s.style) + 1) % STYLE_ORDER.length],
     })),
   setAuth: (auth) => set({ auth }),
-}));
+    }),
+    {
+      name: "openmake-prefs",
+      storage: createJSONStorage(() =>
+        typeof window !== "undefined" ? window.localStorage : noopStorage,
+      ),
+      // 사용자 환경설정만 영속화 — 채팅/아티팩트 등 휘발성 세션 상태는 제외
+      partialize: (s) => ({ selectedModel: s.selectedModel, style: s.style }),
+    },
+  ),
+);
