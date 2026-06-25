@@ -5,6 +5,7 @@ import Image from "next/image";
 import { MessagesSquare, Telescope, Brain, Sparkles, FileCode2, ChevronRight } from "lucide-react";
 import { useAppStore } from "@/lib/store";
 import { Markdown } from "./markdown";
+import { StructuredAnswer } from "./structured-answer";
 import { cn } from "@/lib/utils";
 
 const ARTIFACT_PLACEHOLDER = /\[\[artifact:([^\]]+)\]\]/g;
@@ -211,7 +212,11 @@ export function MessageList() {
                 </details>
               )}
               <div className="text-sm leading-relaxed text-fg">
-                <AssistantContent content={m.content} streaming={m.streaming} />
+                {m.structured ? (
+                  <StructuredAnswer data={m.structured} />
+                ) : (
+                  <AssistantContent content={m.content} streaming={m.streaming} />
+                )}
                 {m.streaming && (
                   <span className="ml-0.5 inline-block h-4 w-1.5 animate-pulse bg-accent align-text-bottom" />
                 )}

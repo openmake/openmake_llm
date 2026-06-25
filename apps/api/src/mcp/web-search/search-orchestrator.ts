@@ -43,6 +43,48 @@ const logger = createLogger('WebSearch');
  *
  * 변경 이력: 2026-05-19 — Ollama Cloud /api/web_search 폐기로 useOllamaFirst/searchOllamaWebSearch 제거.
  */
+/**
+ * 쿼리 관련성 매칭에서 제외할 지시/불용어 (한국어·영어).
+ * "웹 검색 결과를 바탕으로 한 문장으로 알려줘" 같은 지시문 단어가 매칭을 희석하는 것을 막는다.
+ */
+const QUERY_STOPWORDS = new Set<string>([
+    '웹', '검색', '결과', '바탕', '문장', '알려줘', '알려', '말해줘', '설명', '정리',
+    '지금', '현재', '오늘', '요즘', '누구', '누구야', '누구인지', '무엇', '뭐야', '어디',
+    '언제', '관련', '대해', '대한', '그리고', '하지만', '으로', '한', '좀', '해줘',
+    'the', 'what', 'who', 'is', 'are', 'now', 'today', 'about', 'please', 'tell',
+    'me', 'a', 'an', 'of', 'in', 'on', 'and', 'to', 'search', 'web', 'result', 'results',
+]);
+
+/** 쿼리를 콘텐츠 단어로 토큰화 — 2자 이상, 불용어 제외, 중복 제거. */
+function tokenizeQueryTerms(query: string): string[] {
+    return Array.from(
+        new Set(
+            query
+                .toLowerCase()
+                .split(/[^0-9a-z가-힣]+/)
+                .filter((t) => t.length >= 2 && !QUERY_STOPWORDS.has(t)),
+        ),
+    );
+}
+
+/**
+ * 결과의 제목/스니펫이 쿼리 단어를 얼마나 포함하는지 0.0~1.0 으로 산출.
+ * - 제목 매칭은 강한 신호(1.0), 스니펫만 매칭은 0.5.
+ * - 한국어 조사 내성: 3자 이상 단어는 마지막 글자를 뗀 변형도 매칭(예: '대통령이' → '대통령').
+ */
+function computeTermRelevance(terms: string[], result: SearchResult): number {
+    if (terms.length === 0) return 0;
+    const title = (result.title || '').toLowerCase();
+    const body = `${title} ${(result.snippet || '').toLowerCase()}`;
+    let score = 0;
+    for (const t of terms) {
+        const variants = t.length >= 3 ? [t, t.slice(0, -1)] : [t];
+        if (variants.some((v) => title.includes(v))) score += 1.0;
+        else if (variants.some((v) => body.includes(v))) score += 0.5;
+    }
+    return Math.min(1, score / terms.length);
+}
+
 export async function performWebSearch(query: string, options: { maxResults?: number; globalSearch?: boolean; language?: string; signal?: AbortSignal; preferRecent?: boolean } = {}): Promise<SearchResult[]> {
     const { maxResults = 30, globalSearch = true, language = 'en', signal, preferRecent = false } = options;
 
@@ -98,12 +140,19 @@ export async function performWebSearch(query: string, options: { maxResults?: nu
         ? new Set([...newsResults, ...naverResults].map(r => r.url))
         : null;
 
+    // 쿼리 단어 토큰화 (관련성 매칭용) — 지시/불용어 제거 후 콘텐츠 단어만.
+    const queryTerms = tokenizeQueryTerms(query);
+
     // 신뢰도 스코어링 및 정렬
     const scored = uniqueResults.map((result, index) => {
         const reliability = scoreSearchResult(result);
         result.qualityScore = reliability;
-        // 기존 순서 기반 관련도 (1.0 → 0.0, 상위일수록 높음)
-        const relevance = 1 - (index / Math.max(uniqueResults.length, 1));
+        // 관련도 = 쿼리 단어 매칭(주신호) + 수집 순서(보조) 블렌드.
+        // 기존엔 수집 순서(index)뿐이라 쿼리와 무관한 문서가 상위를 점유했다.
+        const orderRelevance = 1 - (index / Math.max(uniqueResults.length, 1));
+        const termRelevance = computeTermRelevance(queryTerms, result);
+        const w = SEARCH_RELIABILITY.TERM_RELEVANCE_WEIGHT;
+        const relevance = w * termRelevance + (1 - w) * orderRelevance;
         let combinedScore = relevance * SEARCH_RELIABILITY.RELEVANCE_WEIGHT
             + reliability * SEARCH_RELIABILITY.RELIABILITY_WEIGHT;
         // 시점 민감 쿼리: 위키 과거 문서 디랭크 + 최신 뉴스 가산 (현직 인물·직책 정확도 개선)

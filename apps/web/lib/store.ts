@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { persist, createJSONStorage, type StateStorage } from "zustand/middleware";
 import type {
   ChatMessage as SharedChatMessage,
   ChatRole,
@@ -16,6 +17,28 @@ export interface ChatMessage extends Pick<SharedChatMessage, "role" | "content" 
   taskId?: string;
   /** 추론(thinking) 내용 — ws thinking 이벤트로 누적, 화면에 접이식 블록으로 표시 */
   reasoning?: string;
+  /** 구조화 답변 데이터 (structuredMode=true 시 REST /api/chat/structured 응답). 있으면 카드 UI 로 렌더. */
+  structured?: StructuredAnswerData;
+}
+
+/**
+ * 구조화 답변 (백엔드 schemas/structured-answer.schema.ts StructuredAnswer 대응).
+ * structuredMode 에서 POST /api/chat/structured 가 반환. content 에는 동일 내용의 markdown 도 함께 저장된다.
+ */
+export interface StructuredAnswerData {
+  intent: string;
+  title: string;
+  conclusion: string;
+  summary?: string;
+  sections: {
+    heading: string;
+    body: string;
+    bullets?: string[];
+    table?: { headers: string[]; rows: string[][] };
+  }[];
+  risks?: string[];
+  action_items?: string[];
+  confidence: "high" | "medium" | "low";
 }
 
 export type { ChatRole };
@@ -68,6 +91,8 @@ interface AppState {
   agentTaskMode: boolean;
   imageMode: boolean;
   artifactMode: boolean;
+  /** 구조화 답변 모드 — ON 시 메시지를 REST /api/chat/structured 로 보내 카드 UI 로 렌더(비스트리밍). */
+  structuredMode: boolean;
   mcpToolsEnabled: Record<string, boolean>;
 
   // 모델 / 스타일
@@ -105,16 +130,27 @@ interface AppState {
       | "webSearchEnabled"
       | "agentTaskMode"
       | "imageMode"
-      | "artifactMode",
+      | "artifactMode"
+      | "structuredMode",
   ) => void;
   setSelectedModel: (m: string) => void;
   cycleStyle: () => void;
+  setStyle: (m: ChatStyle) => void;
   setAuth: (auth: AppState["auth"]) => void;
 }
 
 const STYLE_ORDER: ChatStyle[] = ["default", "concise", "verbose"];
 
-export const useAppStore = create<AppState>((set) => ({
+/** SSR(서버 평가) 시 localStorage 부재로 인한 ReferenceError 방지 — 클라에서만 실제 저장소 사용. */
+const noopStorage: StateStorage = {
+  getItem: () => null,
+  setItem: () => {},
+  removeItem: () => {},
+};
+
+export const useAppStore = create<AppState>()(
+  persist(
+    (set) => ({
   chatHistory: [],
   currentSessionId: null,
   isGenerating: false,
@@ -133,6 +169,7 @@ export const useAppStore = create<AppState>((set) => ({
   agentTaskMode: false,
   imageMode: false,
   artifactMode: false,
+  structuredMode: false,
   mcpToolsEnabled: {},
 
   selectedModel: "default",
@@ -223,5 +260,16 @@ export const useAppStore = create<AppState>((set) => ({
     set((s) => ({
       style: STYLE_ORDER[(STYLE_ORDER.indexOf(s.style) + 1) % STYLE_ORDER.length],
     })),
+  setStyle: (m) => set({ style: m }),
   setAuth: (auth) => set({ auth }),
-}));
+    }),
+    {
+      name: "openmake-prefs",
+      storage: createJSONStorage(() =>
+        typeof window !== "undefined" ? window.localStorage : noopStorage,
+      ),
+      // 사용자 환경설정만 영속화 — 채팅/아티팩트 등 휘발성 세션 상태는 제외
+      partialize: (s) => ({ selectedModel: s.selectedModel, style: s.style }),
+    },
+  ),
+);

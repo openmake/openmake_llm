@@ -83,14 +83,20 @@ function FieldRow({
   );
 }
 
+type SelectOption = { value: string; label: string };
+type SelectGroup = { label: string; options: SelectOption[] };
+
 function Select({
   value,
   onChange,
   options,
+  groups,
 }: {
   value: string;
   onChange: (v: string) => void;
-  options: { value: string; label: string }[];
+  options?: SelectOption[];
+  /** 제공 시 <optgroup> 으로 분류 렌더 (provider 별 구분 등). options 보다 우선. */
+  groups?: SelectGroup[];
 }) {
   return (
     <select
@@ -98,11 +104,21 @@ function Select({
       onChange={(e) => onChange(e.target.value)}
       className="h-9 w-full rounded-md border border-border-strong bg-surface px-3 text-sm text-fg outline-none transition focus:border-accent"
     >
-      {options.map((o) => (
-        <option key={o.value} value={o.value}>
-          {o.label}
-        </option>
-      ))}
+      {groups
+        ? groups.map((g) => (
+            <optgroup key={g.label} label={g.label}>
+              {g.options.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </optgroup>
+          ))
+        : (options ?? []).map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
     </select>
   );
 }
@@ -144,17 +160,43 @@ export default function SettingsPage() {
   // 일반 / 모델
   const selectedModel = useAppStore((s) => s.selectedModel);
   const setSelectedModel = useAppStore((s) => s.setSelectedModel);
+  // 응답 스타일 — composer 사이클 버튼과 동일한 store.style 을 단일 소스로 사용(영속화됨).
+  const responseStyle = useAppStore((s) => s.style);
+  const setResponseStyle = useAppStore((s) => s.setStyle);
   const { data: modelsData } = useQuery({
     queryKey: ["models"],
     queryFn: fetchModels,
     staleTime: 60_000,
   });
-  const modelOptions = (modelsData?.models ?? []).map((m) => ({
+  // 기본 모델을 provider 별 그룹으로 분류 — 🏠 로컬 vLLM vs 🌐 외부 LLM(OpenRouter 등 BYOK)
+  const allModels = modelsData?.models ?? [];
+  const localModels = allModels.filter((m) => m.provider === "local-llm");
+  const externalModels = allModels.filter((m) => m.provider !== "local-llm");
+  const toOption = (m: (typeof allModels)[number]) => ({
     value: m.modelId,
     label: m.name + (m.isFree ? " · 무료" : ""),
+  });
+  // provider id → 표시 라벨 (현재 openrouter 만 등록 가능, 그 외 provider 도 일반 처리)
+  const externalGroupLabel = (provider: string) =>
+    provider === "openrouter" ? "🌐 OpenRouter" : `🌐 ${provider}`;
+  const externalGroups = Array.from(
+    new Set(externalModels.map((m) => m.provider)),
+  ).map((provider) => ({
+    label: externalGroupLabel(provider),
+    options: externalModels
+      .filter((m) => m.provider === provider)
+      // 무료(:free) 모델을 그룹 상위로 — 안정 정렬이라 그 외는 원래(API) 순서 유지
+      .slice()
+      .sort((a, b) => (b.isFree ? 1 : 0) - (a.isFree ? 1 : 0))
+      .map(toOption),
   }));
-  const [responseStyle, setResponseStyle] =
-    useState<(typeof RESPONSE_STYLES)[number]["value"]>("default");
+  const modelGroups = [
+    { label: "기본", options: [{ value: "default", label: "자동 (서버 기본값)" }] },
+    ...(localModels.length
+      ? [{ label: "🏠 로컬 vLLM", options: localModels.map(toOption) }]
+      : []),
+    ...externalGroups,
+  ];
   const [language, setLanguage] = useState("");
   const [customInstructions, setCustomInstructions] = useState("");
 
@@ -406,17 +448,35 @@ export default function SettingsPage() {
                 <CardContent className="py-0">
                   <FieldRow
                     title="기본 모델"
-                    description="새 대화에 사용할 모델입니다. 로컬 vLLM + 등록한 외부 LLM(API 키 페이지)."
+                    description="새 대화에 사용할 모델입니다. 🏠 로컬 vLLM 과 🌐 외부 LLM(OpenRouter, BYOK) 중 선택합니다."
                   >
-                    <Select
-                      value={selectedModel}
-                      onChange={setSelectedModel}
-                      options={
-                        modelOptions.length
-                          ? modelOptions
-                          : [{ value: "", label: "모델 로딩…" }]
-                      }
-                    />
+                    {allModels.length ? (
+                      <div className="flex flex-col gap-1.5">
+                        <Select
+                          value={selectedModel}
+                          onChange={setSelectedModel}
+                          groups={modelGroups}
+                        />
+                        {externalModels.length === 0 && (
+                          <p className="text-xs text-muted">
+                            외부 LLM(OpenRouter)을 추가하려면{" "}
+                            <a
+                              href="/api-keys"
+                              className="text-accent underline underline-offset-2 hover:opacity-80"
+                            >
+                              API 키 페이지
+                            </a>
+                            에서 키를 등록하세요.
+                          </p>
+                        )}
+                      </div>
+                    ) : (
+                      <Select
+                        value=""
+                        onChange={setSelectedModel}
+                        options={[{ value: "", label: "모델 로딩…" }]}
+                      />
+                    )}
                   </FieldRow>
                   <FieldRow
                     title="이미지 생성"

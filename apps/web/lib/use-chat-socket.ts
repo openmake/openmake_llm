@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { WsChatRequest, WsServerEvent, WsAttachedFile } from "@openmake/shared-types";
-import { useAppStore } from "./store";
+import { useAppStore, type StructuredAnswerData } from "./store";
 import { ApiClient } from "./api-client";
 import { CLIENT_TIMING } from "./config";
 
@@ -26,6 +26,25 @@ function resolveWsUrl(): string {
     return `${proto}//${location.hostname}:52416`;
   }
   return `${proto}//${location.host}`;
+}
+
+/**
+ * 게스트(비로그인) REST 호출용 anon 세션 ID. localStorage 에 영속.
+ * 백엔드 resolveUserContextFromRequest 는 req.user 없고 anonSessionId 도 없으면 401 →
+ * ApiClient 401 핸들러가 로그인 리다이렉트를 트리거하므로, 게스트도 식별자를 보내 게스트 컨텍스트를 받게 한다.
+ */
+function getAnonSessionId(): string {
+  try {
+    const KEY = "omk_anon_session";
+    let id = localStorage.getItem(KEY);
+    if (!id) {
+      id = (crypto?.randomUUID?.() ?? `anon-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+      localStorage.setItem(KEY, id);
+    }
+    return id;
+  } catch {
+    return `anon-${Date.now()}`;
+  }
 }
 
 /** 에이전트 작업 메시지 마크다운 — 상태에 따라 진행바/완료/실패를 렌더. */
@@ -57,6 +76,8 @@ export function useChatSocket() {
   const reconnectRef = useRef(0);
   // 에이전트 작업 taskId → 목표(goal) — agent_task_progress 렌더에 사용
   const agentGoalsRef = useRef<Map<string, string>>(new Map());
+  // 구조화 답변(REST) 진행 중 AbortController — abort() 가 취소할 수 있게 보관
+  const structuredAbortRef = useRef<AbortController | null>(null);
 
   const {
     appendMessage,
@@ -227,6 +248,7 @@ export function useChatSocket() {
         thinkingMode: s.thinkingEnabled,
         imageMode: s.imageMode,
         artifactMode: s.artifactMode,
+        style: s.style,
         enabledTools: s.mcpToolsEnabled,
       };
       wsRef.current?.send(JSON.stringify(payload));
@@ -236,6 +258,8 @@ export function useChatSocket() {
 
   const abort = useCallback(() => {
     wsRef.current?.send(JSON.stringify({ type: "abort" }));
+    // 구조화 답변(REST) 진행 중이면 fetch 도 취소
+    structuredAbortRef.current?.abort();
   }, []);
 
   // 에이전트 토글 ON: 메시지를 목표(goal)로 자율 에이전트 작업을 생성·실행한다.
@@ -271,5 +295,47 @@ export function useChatSocket() {
     [appendMessage],
   );
 
-  return { connected, sendChat, abort, startAgentTask };
+  // 구조화 답변 모드 — WebSocket 스트리밍 대신 REST /api/chat/structured 호출(비스트리밍).
+  // 백엔드가 Answer Planner → JSON Schema → Validator → formatAnswer 파이프라인으로
+  // { intent, structured, markdown } 을 반환. structured 는 카드 UI(StructuredAnswer)로 렌더.
+  const sendStructured = useCallback(
+    async (message: string) => {
+      const msg = message.trim();
+      const s = useAppStore.getState();
+      if (!msg || s.isGenerating) return;
+      appendMessage({ role: "user", content: msg });
+      setStreaming(true);
+      const controller = new AbortController();
+      structuredAbortRef.current = controller;
+      try {
+        const res = await ApiClient.post<{
+          data: { intent: string; structured: StructuredAnswerData; markdown: string };
+        }>(
+          "/api/chat/structured",
+          { message: msg, model: s.selectedModel, anonSessionId: getAnonSessionId() },
+          { signal: controller.signal },
+        );
+        const data = res?.data;
+        appendMessage({
+          role: "assistant",
+          content: data?.markdown ?? "",
+          structured: data?.structured,
+        });
+      } catch (e) {
+        const aborted = e instanceof DOMException && e.name === "AbortError";
+        appendMessage({
+          role: "assistant",
+          content: aborted
+            ? "_(구조화 답변 생성을 중단했습니다.)_"
+            : `구조화 답변을 생성하지 못했습니다: ${e instanceof Error ? e.message : String(e)}`,
+        });
+      } finally {
+        structuredAbortRef.current = null;
+        setStreaming(false);
+      }
+    },
+    [appendMessage, setStreaming],
+  );
+
+  return { connected, sendChat, abort, startAgentTask, sendStructured };
 }

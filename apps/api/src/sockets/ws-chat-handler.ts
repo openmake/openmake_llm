@@ -24,6 +24,7 @@ import { ArtifactStreamParser, type ArtifactInfo } from '../llm/artifact-parser'
 import { buildFileContext, buildUrlContext, getCachedAttachContext, appendCachedAttachContext } from '../services/chat-service/attach-context';
 import { WEB_SEARCH_INJECTION } from '../config/runtime-limits';
 import { formatSearchSources } from '../mcp/web-search/format-sources';
+import { cleanSearchQuery } from '../mcp/web-search/query-cleaner';
 
 /**
  * AI 채팅 메시지를 처리합니다.
@@ -147,9 +148,12 @@ export async function handleChatMessage(
         if (!userExplicitlyDisabledSearch && (userWebSearchEnabled || isCurrentEventsQuery)) {
             try {
                 const { performWebSearch } = await import('../mcp');
+                // 대화체 메시지를 검색 키워드로 정제 — 장황한 지시문("…웹 검색 결과를 바탕으로 한 문장으로
+                // 알려줘")이 쿼리에 섞이면 뉴스 API 가 0건을 반환해 시의성 사실(현직 인물 등)을 놓친다.
+                const searchQuery = cleanSearchQuery(message);
                 // 수집은 넉넉히(maxResults 12 — 랭킹 풀: SearXNG·위키 디랭크 포함)하되, LLM 주입은
                 // WEB_SEARCH_INJECTION 캡(상위 MAX_RESULTS + snippet MAX_SNIPPET_CHARS, 각 0=무제한)으로 제어한다.
-                const searchResults = await performWebSearch(message, { maxResults: 12, language: userLang, preferRecent: isCurrentEventsQuery });
+                const searchResults = await performWebSearch(searchQuery, { maxResults: 12, language: userLang, preferRecent: isCurrentEventsQuery });
                 if (searchResults.length > 0) {
                     const tpl = getLocalizedTemplate(WEB_SEARCH_TEMPLATES, userLang);
                     const body = formatSearchSources(searchResults, {

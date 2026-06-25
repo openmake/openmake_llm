@@ -102,6 +102,8 @@ export interface WsChatRequest {
   imageMode?: boolean;
   /** 아티팩트 모드 — ON 이면 모델이 <artifact> 산출물을 생성하도록 유도 */
   artifactMode?: boolean;
+  /** 응답 스타일 — 백엔드 chat/style.ts 가 system prompt 앞에 style guard 를 prepend (concise=간결, verbose=상세) */
+  style?: "concise" | "default" | "verbose";
   enabledTools?: Record<string, boolean>;
 }
 

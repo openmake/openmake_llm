@@ -73,7 +73,16 @@ async function request<T>(endpoint: string, options: RequestInit = {}, _isRetry 
   }
   const res = await fetch(endpoint, { ...options, credentials: "include", headers });
   const text = await res.text();
-  const json = text ? (JSON.parse(text) as ApiResponse<T> | T) : null;
+  // 비-JSON 본문(예: 프록시/서버 기본 "Internal Server Error" 평문)에도 깨지지 않도록 방어.
+  // 파싱 실패 시 json=null 로 두고, 아래 에러 분기에서 status 기반 메시지로 폴백한다.
+  let json: ApiResponse<T> | T | null = null;
+  if (text) {
+    try {
+      json = JSON.parse(text) as ApiResponse<T> | T;
+    } catch {
+      json = null;
+    }
+  }
   if (!res.ok) {
     // 401 자동 refresh: 재시도 아니고, 건너뛸 endpoint 가 아닌 경우에만 1회 시도.
     if (

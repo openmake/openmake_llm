@@ -24,7 +24,8 @@ import { createRoutingLogEntry } from '../../chat/routing-logger';
 import type { ChatMessageRequest, SystemEventCallback } from '../chat-service-types';
 import { getExecutionPlanBuilder } from '../../chat/execution-plan-builder';
 import type { UnifiedExecutionPlan } from '../../chat/execution-plan-types';
-import { applyStyle } from '../../chat/style';
+import { applyStyle, normalizeStyle } from '../../chat/style';
+import { resolveAnswerFormatProfile, applyAnswerFormat, getAnswerFormatGuard } from '../../chat/answer-format';
 import { normalizeBrandAlias, logAliasHitIfAny } from '../../chat/brand-alias-normalizer';
 import { runProviderGate } from './provider-gate';
 import type { RequestContext } from './request-context';
@@ -399,6 +400,13 @@ export async function runMessagePipeline(svc: ChatService,
             const { getArtifactForceDirective } = await import('../../prompts/artifact-guide');
             extArtifactGuide += getArtifactForceDirective(extLang);
         }
+        // Answer Format 축 (2026-06-26): 외부/로컬(기본 경로) 모두 strategy 경로와 대칭.
+        // promptConfig 는 이 분기에 없으므로 message 로부터 detectPromptType 재사용.
+        const extAnswerFormatProfile = resolveAnswerFormatProfile({
+            style: normalizeStyle(req.style),
+            message: message || '',
+        });
+        const extAnswerFormatBlock = getAnswerFormatGuard(extAnswerFormatProfile, extLang);
         return await svc.streamFromExternalProvider(externalResolved, req, streamToken, {
             agentSystemMessage: agentSysMsgForExternal,
             enhancedMessage: finalEnhancedMessage,
@@ -406,6 +414,8 @@ export async function runMessagePipeline(svc: ChatService,
             memoryBlock: extMemoryBlock,
             customInstructionsBlock: extCustomInstructionsBlock,
             artifactGuideBlock: extArtifactGuide,
+            answerFormatBlock: extAnswerFormatBlock,
+            style: req.style,
         }, reqCtx);
     }
 
@@ -514,6 +524,15 @@ export async function runMessagePipeline(svc: ChatService,
         : promptConfig.systemPrompt;
     // Phase A (2026-05-26): per-session Style 축 적용. default 일 때는 overhead 0.
     const styledBase = applyStyle(baseCombined, unifiedPlan.style, languagePolicy?.resolvedLanguage || 'en');
+    // Answer Format 축 (2026-06-26): 구조적 질문(reasoning/coder/consultant 등)에 결론-우선·
+    // 표·실행항목 분리 형식을 강제. style 과 직교 — concise 거나 일상 질문이면 prose(주입 0).
+    const answerFormatProfile = resolveAnswerFormatProfile({
+        style: unifiedPlan.style,
+        promptType: promptConfig.type,
+    });
+    const formattedBase = applyAnswerFormat(
+        styledBase, answerFormatProfile, languagePolicy?.resolvedLanguage || 'en',
+    );
     // 2026-05-26: thinkingMode 활성 시 system prompt 로 사고 강도 유도.
     // 기존 user-message wrap 방식 (Sequential Thinking) 은 vLLM/Gemini native
     // reasoning 과 중복 + 본문 형식 오염을 일으켜 폐기됨.
@@ -527,7 +546,7 @@ export async function runMessagePipeline(svc: ChatService,
 
     // Cache-aware 조립: 정적 헌법(styledBase·artifactGuide)을 prefix 앞에, 동적(thinking·memory·custom)을
     // DYNAMIC BOUNDARY 뒤에 두어 vLLM/OpenRouter prefix 캐시 hit 을 극대화한다. (external-provider 경로와 동일 정책)
-    const combinedSystemPrompt = [styledBase, artifactGuideBlock, thinkingGuidance, memoryBlock, customInstructionsBlock]
+    const combinedSystemPrompt = [formattedBase, artifactGuideBlock, thinkingGuidance, memoryBlock, customInstructionsBlock]
         .map((s) => s.trim()).filter(Boolean).join('\n\n');
 
     // history assembly + system prompt + budget hint + user message — helper module 위임
