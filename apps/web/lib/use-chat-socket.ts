@@ -227,6 +227,7 @@ export function useChatSocket() {
         thinkingMode: s.thinkingEnabled,
         imageMode: s.imageMode,
         artifactMode: s.artifactMode,
+        style: s.style,
         enabledTools: s.mcpToolsEnabled,
       };
       wsRef.current?.send(JSON.stringify(payload));

@@ -160,6 +160,9 @@ export default function SettingsPage() {
   // 일반 / 모델
   const selectedModel = useAppStore((s) => s.selectedModel);
   const setSelectedModel = useAppStore((s) => s.setSelectedModel);
+  // 응답 스타일 — composer 사이클 버튼과 동일한 store.style 을 단일 소스로 사용(영속화됨).
+  const responseStyle = useAppStore((s) => s.style);
+  const setResponseStyle = useAppStore((s) => s.setStyle);
   const { data: modelsData } = useQuery({
     queryKey: ["models"],
     queryFn: fetchModels,
@@ -194,8 +197,6 @@ export default function SettingsPage() {
       : []),
     ...externalGroups,
   ];
-  const [responseStyle, setResponseStyle] =
-    useState<(typeof RESPONSE_STYLES)[number]["value"]>("default");
   const [language, setLanguage] = useState("");
   const [customInstructions, setCustomInstructions] = useState("");
 

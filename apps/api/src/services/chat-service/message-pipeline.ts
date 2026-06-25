@@ -406,6 +406,7 @@ export async function runMessagePipeline(svc: ChatService,
             memoryBlock: extMemoryBlock,
             customInstructionsBlock: extCustomInstructionsBlock,
             artifactGuideBlock: extArtifactGuide,
+            style: req.style,
         }, reqCtx);
     }
 

@@ -17,6 +17,7 @@ import { EXTERNAL_LLM_TOOL_BLACKLIST, LOOP_DETECTION, AGENT_LOOP_LIMITS, MAX_TOO
 import { getUnifiedMCPClient } from '../../mcp/unified-client';
 import { isPersistableUserId } from '../../utils/user-id-validation';
 import { getExternalProviderSystemGuards } from '../../chat/prompt';
+import { getStyleGuard, normalizeStyle, type Style } from '../../chat/style';
 import type { ChatMessage, ToolDefinition } from '../../llm';
 import type { ChatMessageRequest } from '../chat-service-types';
 import type { UserContext } from '../../mcp/user-sandbox';
@@ -50,6 +51,8 @@ export interface StreamFromExternalContext {
     customInstructionsBlock?: string;
     /** Artifacts guide (디자인시스템·<artifact> 형식 지시). 가드/페르소나 뒤에 append. */
     artifactGuideBlock?: string;
+    /** 응답 스타일 (concise/default/verbose). 정적 prefix 맨 앞에 style guard prepend. default 면 overhead 0. */
+    style?: Style;
 }
 
 /**
@@ -73,6 +76,15 @@ export async function streamFromExternalProvider(
     // Phase 2026-05-26: 외부 provider 도 Identity Guard + Response Discipline 적용.
     // 본 가드 미적용 시 Gemini/GPT 가 "Here's a thinking process", 단계 1-N,
     // 자기 정체 노출 같은 verbose 형식을 그대로 출력 (사용자 보고 사례 해결).
+    // 응답 스타일 가드 (concise/verbose) — 정적 prefix 맨 앞에 prepend. default 면 빈 문자열(overhead 0).
+    // strategy 경로의 applyStyle 과 동일 정책: 외부 provider 도 사용자 선택 스타일을 반영한다.
+    const styleGuard = getStyleGuard(
+        normalizeStyle(ctx.style),
+        ctx.resolvedLanguage || req.userLanguagePreference || 'en',
+    );
+    if (styleGuard) {
+        systemPromptParts.push(styleGuard.trim());
+    }
     const guards = getExternalProviderSystemGuards(ctx.resolvedLanguage || req.userLanguagePreference || 'en');
     if (guards) {
         systemPromptParts.push(guards.trim());

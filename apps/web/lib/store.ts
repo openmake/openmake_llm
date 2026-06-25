@@ -110,6 +110,7 @@ interface AppState {
   ) => void;
   setSelectedModel: (m: string) => void;
   cycleStyle: () => void;
+  setStyle: (m: ChatStyle) => void;
   setAuth: (auth: AppState["auth"]) => void;
 }
 
@@ -233,6 +234,7 @@ export const useAppStore = create<AppState>()(
     set((s) => ({
       style: STYLE_ORDER[(STYLE_ORDER.indexOf(s.style) + 1) % STYLE_ORDER.length],
     })),
+  setStyle: (m) => set({ style: m }),
   setAuth: (auth) => set({ auth }),
     }),
     {
