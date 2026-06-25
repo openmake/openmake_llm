@@ -312,7 +312,15 @@ export function useChatSocket() {
           data: { intent: string; structured: StructuredAnswerData; markdown: string };
         }>(
           "/api/chat/structured",
-          { message: msg, model: s.selectedModel, anonSessionId: getAnonSessionId() },
+          {
+            message: msg,
+            model: s.selectedModel,
+            anonSessionId: getAnonSessionId(),
+            // 웹 기능 토글을 구조화 모드에도 전달 — 백엔드가 시사 질의 시 웹검색 수행.
+            webSearch: s.webSearchEnabled,
+            enabledTools: s.mcpToolsEnabled,
+            userLanguage: navigator?.language?.startsWith("ko") ? "ko" : "en",
+          },
           { signal: controller.signal },
         );
         const data = res?.data;

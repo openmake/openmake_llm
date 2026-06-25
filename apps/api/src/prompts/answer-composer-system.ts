@@ -42,11 +42,24 @@ const INTENT_HINT: Record<'ko' | 'en', string> = {
 };
 
 /**
- * Answer Composer system prompt 빌드. 분류된 intent 를 모델에 힌트로 전달.
+ * 시간 컨텍스트 — 모델이 지식 컷오프(2024-12)를 "현재"로 착각하지 않도록 현재 날짜를 명시.
+ * (일반 파이프라인의 createDynamicMetadata + 지식 기준일 가드 동등. 구조화 경로는 base prompt 를
+ *  거치지 않아 이 가드가 누락되어 "현재가 2024년" 오인식이 발생했음.)
  */
-export function buildAnswerComposerSystemPrompt(intent: AnswerIntent, userLanguage: string): string {
+function temporalContext(lang: 'ko' | 'en', currentDate: string): string {
+    return lang === 'ko'
+        ? `\n\n## ⏱️ 시간 컨텍스트\n- 오늘 날짜는 ${currentDate} 입니다. "현재/올해/최근" 은 이 날짜를 기준으로 판단하세요.\n- 당신의 학습 지식 기준일은 2024년 12월입니다. 그 이후의 사건·인물·통계는 아래 제공된 검색 결과에 근거하고, 검색 결과가 없으면 추측하지 말고 confidence 를 낮추세요.\n- 검색 결과(웹 컨텍스트)가 제공되면 그것을 최신 사실의 근거로 우선하세요.`
+        : `\n\n## ⏱️ Temporal context\n- Today's date is ${currentDate}. Interpret "current/this year/recent" relative to this date.\n- Your training knowledge cutoff is December 2024. For events/people/statistics after that, rely on the search results provided below; if none are provided, do not guess — lower confidence instead.\n- When web context (search results) is provided, prefer it as the source of up-to-date facts.`;
+}
+
+/**
+ * Answer Composer system prompt 빌드. 분류된 intent + 현재 날짜를 모델에 전달.
+ * @param currentDate ISO date (YYYY-MM-DD). 미지정 시 호출 시점 날짜.
+ */
+export function buildAnswerComposerSystemPrompt(intent: AnswerIntent, userLanguage: string, currentDate?: string): string {
     const lang = userLanguage.toLowerCase().startsWith('ko') ? 'ko' : 'en';
-    return `${BODY[lang]}${INTENT_HINT[lang]}${intent}`;
+    const date = currentDate || new Date().toISOString().split('T')[0];
+    return `${BODY[lang]}${temporalContext(lang, date)}${INTENT_HINT[lang]}${intent}`;
 }
 
 /** Validator 실패 시 1회 재시도에 덧붙이는 교정 지시. */

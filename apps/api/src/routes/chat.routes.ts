@@ -35,6 +35,7 @@ import { LocalLLMProvider } from '../providers/local-llm-provider';
 import { ExternalKeysRepository } from '../data/repositories/external-keys-repo';
 import { getPool } from '../data/models/unified-database';
 import { composeStructuredAnswer, type StructuredChatFn } from '../services/answer-composer';
+import { buildWebSearchContext } from '../mcp/web-search/build-search-context';
 import { getConversationDB } from '../data/conversation-db';
 import { createLogger } from '../utils/logger';
 
@@ -301,7 +302,23 @@ router.post('/structured', optionalApiKey, optionalAuth, chatRateLimiter, asyncH
         };
     }
 
-        const composed = await composeStructuredAnswer({ message, userLanguage, chat });
+        // 웹검색 — 일반 채팅(ws-handler)과 동일 정책. 사용자 토글(webSearch) 또는 시사 질의 자동 감지.
+        // (구조화 모드가 웹검색을 건너뛰어 2024 학습지식으로만 답하던 결함 수정.)
+        const { webSearchContext } = await buildWebSearchContext({
+            message,
+            userLang: userLanguage,
+            webSearchEnabled: req.body.webSearch === true,
+            explicitlyDisabled: req.body.enabledTools?.web_search === false,
+            signal: abortController.signal,
+        });
+
+        const composed = await composeStructuredAnswer({
+            message,
+            userLanguage,
+            chat,
+            webContext: webSearchContext || undefined,
+            currentDate: new Date().toISOString().split('T')[0],
+        });
         settled = true;
         res.json(success({
             intent: composed.intent,

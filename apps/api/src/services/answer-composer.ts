@@ -108,14 +108,23 @@ export async function composeStructuredAnswer(opts: {
     message: string;
     userLanguage?: string;
     chat: StructuredChatFn;
+    /** 웹검색 결과 컨텍스트 (있으면 user 메시지에 합류 — 최신 사실 근거). */
+    webContext?: string;
+    /** 현재 날짜(YYYY-MM-DD). 미지정 시 호출 시점. 모델의 2024 컷오프 오인식 방지. */
+    currentDate?: string;
 }): Promise<ComposeResult> {
     const lang = (opts.userLanguage || 'ko').toLowerCase().startsWith('ko') ? 'ko' : 'en';
     const intent = classifyAnswerIntent(opts.message);
-    const system = buildAnswerComposerSystemPrompt(intent, lang);
+    const system = buildAnswerComposerSystemPrompt(intent, lang, opts.currentDate);
+
+    // 웹검색 컨텍스트가 있으면 user 메시지에 합류 (buildContextForLLM 과 동일 정책).
+    const userContent = opts.webContext
+        ? `${opts.message}${opts.webContext}`
+        : opts.message;
 
     const messages: ChatMessage[] = [
         { role: 'system', content: system },
-        { role: 'user', content: opts.message },
+        { role: 'user', content: userContent },
     ];
 
     const attempt = async (msgs: ChatMessage[]): Promise<StructuredAnswer | null> => {
