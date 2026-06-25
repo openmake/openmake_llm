@@ -425,10 +425,14 @@ function parseInjectLimit(raw: string | undefined, def: number): number {
 }
 
 export const WEB_SEARCH_INJECTION = {
-    /** LLM 컨텍스트에 주입할 상위 결과 수 (수집은 더 많이 하되 주입은 캡). 0 = 무제한 */
-    MAX_RESULTS: parseInjectLimit(process.env.WEB_SEARCH_INJECT_MAX_RESULTS, 6),
-    /** 결과당 주입 snippet 최대 글자 수 (초과 절단). 0 = 무제한(절단 안 함) */
-    MAX_SNIPPET_CHARS: parseInjectLimit(process.env.WEB_SEARCH_INJECT_MAX_SNIPPET, 300),
+    /**
+     * LLM 컨텍스트에 주입할 상위 결과 수 (수집은 더 많이 하되 주입은 캡). 0 = 무제한.
+     * 6 → 10: 시사 쿼리에서 정답 포함 결과가 랭킹 하위(예: namu.wiki 현직 인물)로 밀려
+     * top-6 컷오프에 잘리던 그라운딩 누락을 줄인다(수집 풀 12 의 대부분 주입).
+     */
+    MAX_RESULTS: parseInjectLimit(process.env.WEB_SEARCH_INJECT_MAX_RESULTS, 10),
+    /** 결과당 주입 snippet 최대 글자 수 (초과 절단). 0 = 무제한(절단 안 함). 300→500: 결정적 사실이 스니펫 뒤쪽에 있어도 포함되게. */
+    MAX_SNIPPET_CHARS: parseInjectLimit(process.env.WEB_SEARCH_INJECT_MAX_SNIPPET, 500),
 } as const;
 
 /**
@@ -743,6 +747,13 @@ export const SEARCH_RELIABILITY = {
     RELEVANCE_WEIGHT: 0.6,
     /** 신뢰도 가중치 (정렬 시) */
     RELIABILITY_WEIGHT: 0.4,
+    /**
+     * 관련도(relevance) 내에서 쿼리 단어 매칭이 차지하는 비중 (나머지는 수집 순서).
+     * 기존 relevance 는 수집 순서(index)뿐이라 쿼리와 무관한 문서가 상위를 점유했다.
+     * 쿼리 단어가 제목/스니펫에 실제로 등장하는지를 주신호로 삼아 정답 문서를 끌어올린다.
+     * env: SEARCH_TERM_RELEVANCE_WEIGHT. 기본 0.7.
+     */
+    TERM_RELEVANCE_WEIGHT: parseFloat(process.env.SEARCH_TERM_RELEVANCE_WEIGHT || '0.7'),
     /**
      * 시점 민감 쿼리(현직 인물·직책 등)에서 위키피디아 결과에 적용하는 디랭크 페널티.
      * 위키 srsearch 는 과거 인물/사건 문서(예: '윤석열 정부', '10·26 사건')를 상위 반환해
