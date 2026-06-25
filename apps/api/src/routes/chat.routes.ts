@@ -27,6 +27,7 @@ import { validate } from '../middlewares/validation';
 import { chatRequestSchema } from '../schemas';
 import { ChatRequestHandler, ChatRequestError } from '../chat/request-handler';
 import { createClient } from '../llm/client';
+import { AppError } from '../utils/error-handler';
 import { parseFullModelId } from '../providers/i-provider';
 import { ProviderRouter } from '../providers/provider-router';
 import { ProviderError } from '../providers/provider-errors';
@@ -310,6 +311,9 @@ router.post('/structured', optionalApiKey, optionalAuth, chatRateLimiter, asyncH
         }));
     } catch (err) {
         settled = true;
+        // 이 엔드포인트는 항상 JSON 으로 응답한다 — 글로벌 핸들러/Express 기본(비-JSON "Internal Server Error")
+        // 으로 위임하지 않아, 프론트(ApiClient.JSON.parse)가 어떤 실패에도 파싱 가능한 본문을 받게 한다.
+        if (res.headersSent) return; // abort 등으로 이미 응답 시작 — 중복 전송 방지
         if (err instanceof ProviderError) {
             const statusByCode: Record<string, number> = {
                 GUEST_NOT_ALLOWED: 403,
@@ -325,7 +329,10 @@ router.post('/structured', optionalApiKey, optionalAuth, chatRateLimiter, asyncH
             res.status(statusByCode[err.code] ?? 502).json({ error: err.message, code: err.code });
             return;
         }
-        throw err;
+        // AppError(예: 422 스키마 검증 실패) 및 기타 — 직접 JSON 으로 매핑.
+        const status = err instanceof AppError ? err.statusCode : 500;
+        const code = err instanceof AppError && err.code ? err.code : 'STRUCTURED_ERROR';
+        res.status(status).json({ error: err instanceof Error ? err.message : '구조화 답변 생성 실패', code });
     }
 }));
 
