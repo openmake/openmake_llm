@@ -23,6 +23,7 @@ import { WS_LIMITS } from '../config/timeouts';
 import { ArtifactStreamParser, type ArtifactInfo } from '../llm/artifact-parser';
 import { buildFileContext, buildUrlContext, getCachedAttachContext, appendCachedAttachContext } from '../services/chat-service/attach-context';
 import { WEB_SEARCH_INJECTION } from '../config/runtime-limits';
+import { formatSearchSources } from '../mcp/web-search/format-sources';
 
 /**
  * AI 채팅 메시지를 처리합니다.
@@ -146,19 +147,21 @@ export async function handleChatMessage(
         if (!userExplicitlyDisabledSearch && (userWebSearchEnabled || isCurrentEventsQuery)) {
             try {
                 const { performWebSearch } = await import('../mcp');
-                // maxResults 8: 신뢰도 정렬상 Wikipedia 가 상위를 점유해 최신 뉴스가 5개 cut 에서
-                // 누락되던 문제 완화 — 상위 8개로 늘려 News/Naver(최신 시사)가 LLM 컨텍스트에 포함되게 한다.
+                // 수집은 넉넉히(maxResults 12 — 랭킹 풀: SearXNG·위키 디랭크 포함)하되, LLM 주입은
+                // WEB_SEARCH_INJECTION 캡(상위 MAX_RESULTS + snippet MAX_SNIPPET_CHARS, 각 0=무제한)으로 제어한다.
                 const searchResults = await performWebSearch(message, { maxResults: 12, language: userLang, preferRecent: isCurrentEventsQuery });
                 if (searchResults.length > 0) {
                     const tpl = getLocalizedTemplate(WEB_SEARCH_TEMPLATES, userLang);
-                    // TTFT \uAC1C\uC120: \uC218\uC9D1\uC740 \uB109\uB109\uD788(\uB7AD\uD0B9 \uD480), LLM \uC8FC\uC785\uC740 \uC0C1\uC704 N + snippet \uAE38\uC774 \uCEA1.
-                    const injected = searchResults.slice(0, WEB_SEARCH_INJECTION.MAX_RESULTS);
+                    const body = formatSearchSources(searchResults, {
+                        maxResults: WEB_SEARCH_INJECTION.MAX_RESULTS,
+                        maxSnippetChars: WEB_SEARCH_INJECTION.MAX_SNIPPET_CHARS,
+                        labeled: true,
+                        sourceWord: tpl.sourceLabel,
+                        contentWord: tpl.contentLabel,
+                        separator: '\n',
+                    });
                     webSearchContext = `\n\n## \uD83D\uDD0D ${tpl.header} (${new Date().toLocaleDateString(tpl.locale)} )\n` +
-                        `${tpl.instruction}\n\n` +
-                        injected.map((r: { title?: string; url?: string; snippet?: string }, i: number) => {
-                            const snip = (r.snippet || '').slice(0, WEB_SEARCH_INJECTION.MAX_SNIPPET_CHARS);
-                            return `[${tpl.sourceLabel} ${i + 1}] ${r.title}\n   URL: ${r.url}\n${snip ? `   ${tpl.contentLabel}: ${snip}\n` : ''}`;
-                        }).join('\n') + '\n';
+                        `${tpl.instruction}\n\n${body}\n`;
                 }
             } catch (e) {
                 log.error('[Chat] 웹 검색 실패:', e);

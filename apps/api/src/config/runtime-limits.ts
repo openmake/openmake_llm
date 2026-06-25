@@ -415,11 +415,20 @@ export const ATTACH_CACHE_LIMITS = {
  *
  * sockets/ws-chat-handler.ts 에서 참조
  */
+/**
+ * 주입 캡 env 파싱 — 음수·NaN(잘못된 값)은 기본값으로, 0 은 "무제한"(캡 미적용) sentinel.
+ * 가드 없는 parseInt 는 0/NaN 시 snippet 을 전부 비워 grounding 을 무너뜨릴 수 있어 명시 정규화한다.
+ */
+function parseInjectLimit(raw: string | undefined, def: number): number {
+    const n = parseInt(raw ?? '', 10);
+    return Number.isFinite(n) && n >= 0 ? n : def;
+}
+
 export const WEB_SEARCH_INJECTION = {
-    /** LLM 컨텍스트에 주입할 상위 결과 수 (수집은 더 많이 하되 주입은 캡) */
-    MAX_RESULTS: parseInt(process.env.WEB_SEARCH_INJECT_MAX_RESULTS || '6', 10),
-    /** 결과당 주입 snippet 최대 글자 수 (초과 절단) */
-    MAX_SNIPPET_CHARS: parseInt(process.env.WEB_SEARCH_INJECT_MAX_SNIPPET || '300', 10),
+    /** LLM 컨텍스트에 주입할 상위 결과 수 (수집은 더 많이 하되 주입은 캡). 0 = 무제한 */
+    MAX_RESULTS: parseInjectLimit(process.env.WEB_SEARCH_INJECT_MAX_RESULTS, 6),
+    /** 결과당 주입 snippet 최대 글자 수 (초과 절단). 0 = 무제한(절단 안 함) */
+    MAX_SNIPPET_CHARS: parseInjectLimit(process.env.WEB_SEARCH_INJECT_MAX_SNIPPET, 300),
 } as const;
 
 /**

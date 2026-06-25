@@ -20,7 +20,8 @@ import {
     searchSearxng
 } from './providers';
 import { createLogger } from '../../utils/logger';
-import { SEARCH_RELIABILITY } from '../../config/runtime-limits';
+import { SEARCH_RELIABILITY, WEB_SEARCH_INJECTION } from '../../config/runtime-limits';
+import { formatSearchSources } from './format-sources';
 
 const logger = createLogger('WebSearch');
 
@@ -268,9 +269,10 @@ function scoreSearchResult(result: SearchResult): number {
  * @returns 포맷팅된 사실 검증 프롬프트 문자열
  */
 export function createFactCheckPrompt(claim: string, searchResults: SearchResult[]): string {
-    const sources = searchResults.map((r, i) =>
-        `[${i + 1}] ${r.title}\n   ${r.url}\n   ${r.snippet}`
-    ).join('\n\n');
+    const sources = formatSearchSources(searchResults, {
+        maxResults: WEB_SEARCH_INJECTION.MAX_RESULTS,
+        maxSnippetChars: WEB_SEARCH_INJECTION.MAX_SNIPPET_CHARS,
+    });
 
     return `## Web Search Results (${new Date().toLocaleDateString()})
 ${sources || '검색 결과 없음'}
