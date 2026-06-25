@@ -180,7 +180,12 @@ export default function SettingsPage() {
     new Set(externalModels.map((m) => m.provider)),
   ).map((provider) => ({
     label: externalGroupLabel(provider),
-    options: externalModels.filter((m) => m.provider === provider).map(toOption),
+    options: externalModels
+      .filter((m) => m.provider === provider)
+      // 무료(:free) 모델을 그룹 상위로 — 안정 정렬이라 그 외는 원래(API) 순서 유지
+      .slice()
+      .sort((a, b) => (b.isFree ? 1 : 0) - (a.isFree ? 1 : 0))
+      .map(toOption),
   }));
   const modelGroups = [
     { label: "기본", options: [{ value: "default", label: "자동 (서버 기본값)" }] },
