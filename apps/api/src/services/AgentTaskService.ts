@@ -221,8 +221,12 @@ export class AgentTaskService {
                     taskRuntime = null;
                 }
             }
-            // task 도구를 LLM 도구 목록에 합류 (샌드박스 ON 시에만).
-            const tools = taskRuntime ? [...mcpTools, ...taskRuntime.getLLMTools()] : mcpTools;
+            // 샌드박스(Manus) 활성 시: LLM 에 샌드박스 도구만 노출(셸/파이썬/브라우저/파일/플랜).
+            // 전체 MCP 카탈로그(~150 도구)를 함께 넘기면 도구 스키마 union 이 수백 KB 로 부풀어
+            // vLLM guided-decoding 문법 컴파일이 100s+ 로 폭주 → LLM_TIMEOUT 초과(Connection error).
+            // Manus 모델에선 에이전트가 컨테이너 셸/브라우저로 작업하므로 외부 MCP 카탈로그가 불필요.
+            // 샌드박스 OFF(legacy) 경로는 기존대로 전체 MCP 도구 사용.
+            const tools = taskRuntime ? taskRuntime.getLLMTools() : mcpTools;
 
             for (let turn = startTurn; turn < turnCeiling; turn++) {
                 this.assertWithinLimits(signal, startedAt, totalTokens);
