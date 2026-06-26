@@ -29,7 +29,7 @@ import { ApiClient } from "@/lib/api-client";
 
 /* ── 타입 ────────────────────────────────────────────────── */
 type TaskStatus = "running" | "completed" | "pending";
-type ApiTaskStatus = "pending" | "running" | "completed" | "failed" | "cancelled";
+type ApiTaskStatus = "pending" | "running" | "paused" | "completed" | "failed" | "cancelled";
 
 interface ChecklistItem {
   label: string;
@@ -79,7 +79,7 @@ type AgentTaskDetailResponse = ApiSuccess<{ task: ApiAgentTask; steps: ApiTaskSt
 
 /* ── 유틸 ────────────────────────────────────────────────── */
 function mapStatus(s: ApiTaskStatus): TaskStatus {
-  if (s === "running") return "running";
+  if (s === "running" || s === "paused") return "running";
   if (s === "completed" || s === "failed" || s === "cancelled") return "completed";
   return "pending";
 }
@@ -363,6 +363,89 @@ function TaskDetailModal({
 }
 
 /* ── 메인 페이지 ──────────────────────────────────────────── */
+/* ── 승인 대기 패널 (HITL 게이트) ──────────────────────────── */
+interface PendingApproval {
+  approvalId: string;
+  taskId: string;
+  toolName: string;
+  args: Record<string, unknown>;
+}
+type ApprovalsResponse = ApiSuccess<{ pending: PendingApproval[] }>;
+
+function ApprovalsPanel() {
+  const [pending, setPending] = useState<PendingApproval[]>([]);
+  const [busy, setBusy] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    try {
+      const res = await ApiClient.get<ApprovalsResponse>("/api/agent-tasks/approvals/pending");
+      setPending(res?.data?.pending ?? []);
+    } catch {
+      // 401·네트워크: 빈 목록 유지
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+    const id = setInterval(load, 4000);
+    return () => clearInterval(id);
+  }, [load]);
+
+  async function decide(approvalId: string, decision: "approve" | "reject") {
+    setBusy(approvalId);
+    try {
+      await ApiClient.post(`/api/agent-tasks/approvals/${approvalId}/${decision}`, {});
+      await load();
+    } catch (err) {
+      alert("처리 실패: " + (err instanceof Error ? err.message : "오류"));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  if (pending.length === 0) return null;
+
+  return (
+    <Card className="mb-4 p-4">
+      <p className="mb-3 text-sm font-medium text-fg-2">
+        승인 대기 중인 도구 실행 ({pending.length})
+      </p>
+      <div className="space-y-2">
+        {pending.map((p) => (
+          <div
+            key={p.approvalId}
+            className="flex items-center justify-between gap-3 rounded-md border border-line bg-bg-1 p-2"
+          >
+            <div className="min-w-0">
+              <span className="font-mono text-xs text-fg-2">{p.toolName}</span>
+              <span className="ml-2 break-all text-xs text-muted">
+                {JSON.stringify(p.args).slice(0, 100)}
+              </span>
+            </div>
+            <div className="flex shrink-0 gap-1">
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={busy === p.approvalId}
+                onClick={() => decide(p.approvalId, "reject")}
+              >
+                거절
+              </Button>
+              <Button
+                size="sm"
+                disabled={busy === p.approvalId}
+                onClick={() => decide(p.approvalId, "approve")}
+              >
+                승인
+              </Button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
 export default function AgentTasksPage() {
   const [tasks, setTasks] = useState<AgentTask[]>(TASK_FALLBACK);
   const [loading, setLoading] = useState(true);
@@ -452,6 +535,7 @@ export default function AgentTasksPage() {
       />
 
       <div className="min-h-0 flex-1 overflow-y-auto p-6">
+        <ApprovalsPanel />
         {loading ? (
           <div className="grid place-items-center py-24 text-center">
             <Sparkles className="mb-3 h-8 w-8 animate-pulse text-faint" />

@@ -59,6 +59,21 @@ export async function startAllSchedulers(): Promise<void> {
     // 7. 로컬 모델 가용성 polling — startup probe 이후 backend 장애 동적 감지
     startLocalModelProbeScheduler();
 
+    // 8. Task 샌드박스 정리 (플래그 ON 시) — 고아 컨테이너(부팅 1회) + stale workspace(부팅 + 6h 주기).
+    try {
+        const { getTaskSandboxConfig } = await import('../config/task-sandbox');
+        if (getTaskSandboxConfig().enabled) {
+            const { reapOrphanTaskSandboxes, reapStaleWorkspaces } = await import('../services/task-sandbox/sandbox');
+            await reapOrphanTaskSandboxes();
+            await reapStaleWorkspaces(Date.now());
+            const SIX_HOURS = 6 * 60 * 60 * 1000;
+            setInterval(() => { void reapStaleWorkspaces(Date.now()).catch(() => { /* noop */ }); }, SIX_HOURS).unref();
+            logger.debug('TaskSandbox 정리 스케줄 등록 완료');
+        }
+    } catch (err) {
+        logger.warn('TaskSandbox 정리 실패(무시):', err);
+    }
+
     logger.info('모든 백그라운드 스케줄러 시작 완료');
 }
 

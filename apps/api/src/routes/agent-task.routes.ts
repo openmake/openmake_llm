@@ -30,6 +30,9 @@ import { AgentTaskService } from '../services/AgentTaskService';
 import type { ChatMessage } from '../llm/types';
 import { AGENT_TASK_LIMITS } from '../config/runtime-limits';
 import { createAgentTaskSchema } from '../schemas/agent-task.schema';
+import { getApprovalRegistry } from '../services/task-sandbox/approval-gate';
+import { safeResolveWorkspacePath, listWorkspaceFilesAt } from '../services/task-sandbox/sandbox';
+import { basename } from 'path';
 
 const logger = createLogger('AgentTaskRoutes');
 const router = Router();
@@ -238,6 +241,68 @@ router.delete('/:taskId', asyncHandler(async (req: Request, res: Response) => {
     const db = getUnifiedDatabase();
     await db.deleteAgentTask(task.id);
     res.json(success({ message: '작업이 삭제되었습니다.', taskId: task.id }));
+}));
+
+/**
+ * GET /api/agent-tasks/:taskId/files
+ * 완료된 task 의 workspace 산출물 파일 목록 (상대경로). 완료 시 workspace 보존됨.
+ */
+router.get('/:taskId/files', asyncHandler(async (req: Request, res: Response) => {
+    const task = await loadOwnedTask(req, res, req.params.taskId);
+    if (!task) return;
+    const wp = (task as { workspace_path?: string }).workspace_path;
+    if (!wp) return res.json(success({ files: [] }));
+    const files = await listWorkspaceFilesAt(wp);
+    res.json(success({ files }));
+}));
+
+/**
+ * GET /api/agent-tasks/:taskId/files/download?path=relative/path
+ * workspace 내 단일 파일 다운로드. 경로 탈출 가드 + owner 검증.
+ */
+router.get('/:taskId/files/download', asyncHandler(async (req: Request, res: Response) => {
+    const task = await loadOwnedTask(req, res, req.params.taskId);
+    if (!task) return;
+    const wp = (task as { workspace_path?: string }).workspace_path;
+    const rel = String(req.query.path || '');
+    if (!wp || !rel) return res.status(400).json(badRequest('path 가 필요합니다.'));
+    let abs: string;
+    try {
+        abs = safeResolveWorkspacePath(wp, rel);
+    } catch {
+        return res.status(400).json(badRequest('잘못된 경로입니다.'));
+    }
+    res.download(abs, basename(rel), (err) => {
+        if (err && !res.headersSent) res.status(404).json(notFound('파일을 찾을 수 없습니다.'));
+    });
+}));
+
+/**
+ * GET /api/agent-tasks/approvals/pending
+ * 현재 사용자의 승인 대기 도구 호출 목록 (HITL 게이트 — 전부-승인 정책).
+ */
+router.get('/approvals/pending', asyncHandler(async (req: Request, res: Response) => {
+    const pending = getApprovalRegistry().list(String(req.user!.id));
+    res.json(success({ pending }));
+}));
+
+/**
+ * POST /api/agent-tasks/approvals/:approvalId/:decision  (decision = approve | reject)
+ * 대기 중인 도구 호출을 승인/거절 — 해당 approval 의 owner 만 가능.
+ */
+router.post('/approvals/:approvalId/:decision', asyncHandler(async (req: Request, res: Response) => {
+    const { approvalId, decision } = req.params;
+    if (decision !== 'approve' && decision !== 'reject') {
+        return res.status(400).json(badRequest("decision 은 approve | reject 여야 합니다."));
+    }
+    const registry = getApprovalRegistry();
+    const pending = registry.get(approvalId);
+    if (!pending) return res.status(404).json(notFound('대기 중인 승인 요청을 찾을 수 없습니다(만료 가능).'));
+    assertResourceOwnerOrAdmin(pending.userId, String(req.user!.id), req.user!.role || 'user');
+
+    const ok = decision === 'approve' ? registry.approve(approvalId) : registry.reject(approvalId);
+    if (!ok) return res.status(404).json(notFound('대기 중인 승인 요청을 찾을 수 없습니다(만료 가능).'));
+    res.json(success({ approvalId, decision }));
 }));
 
 export { router as agentTaskRouter };

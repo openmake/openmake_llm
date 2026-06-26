@@ -360,6 +360,8 @@ export class UnifiedDatabase {
         result?: string;
         error?: string;
         checkpoint?: unknown;
+        sandboxContainerId?: string;
+        workspacePath?: string;
     }): Promise<void> {
         return this.agentTaskRepository.updateAgentTask(taskId, updates);
     }

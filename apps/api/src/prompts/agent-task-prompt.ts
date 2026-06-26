@@ -58,3 +58,8 @@ export function getAgentTaskSystemPrompt(): string {
 export function getAgentTaskDeliverableNudge(): string {
     return '계획은 확인했습니다. 이제 계획대로 완성된 최종 결과물 전문을 <artifact> 태그로 감싸 작성하세요. 결과물 설명이 아니라 결과물 자체를 작성해야 합니다.';
 }
+
+/** stuck(동일 응답 반복) 감지 시 주입 — 전략 변경 유도(OpenManus handle_stuck_state 패턴). */
+export function getAgentTaskStuckNudge(): string {
+    return '같은 시도를 반복하고 있습니다. 접근 방식을 바꾸세요: 다른 도구나 다른 입력을 시도하거나, 막혔다면 지금까지의 결과로 작업을 마무리(terminate)하거나 사용자에게 도움을 요청(ask_human)하세요.';
+}

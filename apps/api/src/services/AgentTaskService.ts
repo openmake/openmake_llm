@@ -21,13 +21,16 @@ import { getUnifiedMCPClient } from '../mcp/unified-client';
 import { getUnifiedDatabase } from '../data/models/unified-database';
 import { AGENT_TASK_LIMITS, MAX_TOOL_RESULT_CHARS } from '../config/runtime-limits';
 import { emitAgentTaskProgress } from '../utils/event-bus';
-import { getAgentTaskSystemPrompt, getAgentTaskDeliverableNudge } from '../prompts/agent-task-prompt';
+import { getAgentTaskSystemPrompt, getAgentTaskDeliverableNudge, getAgentTaskStuckNudge } from '../prompts/agent-task-prompt';
 import { extractAndStripArtifacts, type ExtractedArtifact } from '../llm/artifact-parser';
 import { getPushService } from './PushService';
 import { createLogger } from '../utils/logger';
 import type { UserContext } from '../mcp/user-sandbox';
 import { getSkillManager } from '../agents/skill-manager';
 import { mergeToolsWithSkills, type ActiveSkillBinding } from './chat-service/tool-merger';
+import { getTaskSandboxConfig } from '../config/task-sandbox';
+import { TaskRuntime } from './task-sandbox/runtime';
+import { TASK_TERMINATE_SENTINEL } from './task-sandbox/tools';
 
 const logger = createLogger('AgentTaskService');
 
@@ -131,6 +134,9 @@ export class AgentTaskService {
         let curStatus = 'pending';
         let curProgress = 0;
         let curTurn = 0;
+        let taskRuntime: TaskRuntime | null = null;
+        const recentSignatures: string[] = [];
+        let stuckNotified = false;
 
         // DB 갱신 + 진행상황 발행(fire-and-forget). ws 계층이 구독해 owner user 에게 relay.
         // ws 를 직접 참조하지 않으므로 소켓 연결 여부와 무관하게 실행은 끝까지 진행된다.
@@ -178,9 +184,28 @@ export class AgentTaskService {
                 skillBindings = skillBindings.filter((b) => allow.has(b.skill_id));
                 logger.debug(`[AgentTask] 스킬 범위 제한: ${before} → ${skillBindings.length} (allowedSkills=${allowedSkills.length})`);
             }
-            const tools = skillBindings.length > 0
+            const mcpTools = skillBindings.length > 0
                 ? mergeToolsWithSkills({ allTools, userToggled: allTools, profileRequired: [], skillBindings })
                 : allTools;
+
+            // 영속 샌드박스(Manus화) — 플래그 ON 일 때만. OFF 면 runtime=null 로 기존 동작 그대로.
+            // 생성 실패는 작업을 죽이지 않고 샌드박스 없이 진행(graceful degrade).
+            if (getTaskSandboxConfig().enabled) {
+                try {
+                    taskRuntime = new TaskRuntime(taskId, userId);
+                    await taskRuntime.create();
+                    await db.updateAgentTask(taskId, {
+                        sandboxContainerId: taskRuntime.containerName,
+                        workspacePath: taskRuntime.workspacePath,
+                    });
+                    logger.info(`[AgentTask] 샌드박스 활성 (${taskId}, ${taskRuntime.containerName})`);
+                } catch (e) {
+                    logger.warn(`[AgentTask] 샌드박스 생성 실패 — 미사용 진행: ${e instanceof Error ? e.message : e}`);
+                    taskRuntime = null;
+                }
+            }
+            // task 도구를 LLM 도구 목록에 합류 (샌드박스 ON 시에만).
+            const tools = taskRuntime ? [...mcpTools, ...taskRuntime.getLLMTools()] : mcpTools;
 
             for (let turn = startTurn; turn < turnCeiling; turn++) {
                 this.assertWithinLimits(signal, startedAt, totalTokens);
@@ -234,6 +259,24 @@ export class AgentTaskService {
                     ...(result.tool_calls && { tool_calls: result.tool_calls }),
                 });
 
+                // stuck 감지 — 동일 응답(내용+도구호출)이 STUCK_THRESHOLD 회 연속되면 전략변경 유도.
+                // (OpenManus BaseAgent.is_stuck → handle_stuck_state 패턴. 무한루프/제자리맴돔 방지.)
+                const sig = JSON.stringify({
+                    c: result.content ?? '',
+                    t: (result.tool_calls ?? []).map((x) => ({ n: x.function.name, a: x.function.arguments })),
+                });
+                recentSignatures.push(sig);
+                if (recentSignatures.length > AGENT_TASK_LIMITS.STUCK_THRESHOLD) recentSignatures.shift();
+                const stuck = recentSignatures.length >= AGENT_TASK_LIMITS.STUCK_THRESHOLD
+                    && recentSignatures.every((s) => s === sig);
+                if (stuck && !stuckNotified) {
+                    conversation.push({ role: 'user', content: getAgentTaskStuckNudge() });
+                    stuckNotified = true;
+                    logger.info(`[AgentTask] stuck 감지 → 전략변경 주입: ${taskId} (turn ${turn + 1})`);
+                } else if (!stuck) {
+                    stuckNotified = false;
+                }
+
                 const hasToolCalls = !!result.tool_calls && result.tool_calls.length > 0;
 
                 // 최종 답변 턴이면 deliverable(<artifact> 태그) 추출 — 스텝/result 는
@@ -271,11 +314,35 @@ export class AgentTaskService {
                 }
 
                 // 도구 실행 + 체크포인트
+                let terminated = false;
+                let terminateSummary = '';
                 for (const tc of result.tool_calls!) {
                     if (signal.aborted) throw new AgentTaskAbort('aborted');
                     const name = tc.function.name;
                     if (isSearchTool(name)) searchCalls++;
-                    const toolResult = await this.runTool(mcp, name, tc.function.arguments ?? {}, userCtx);
+                    const args = (tc.function.arguments ?? {}) as Record<string, unknown>;
+                    let toolResult: string;
+                    if (taskRuntime?.isTaskTool(name)) {
+                        // task 도구 — 승인 게이트 통과 후 영속 샌드박스에서 실행.
+                        toolResult = await taskRuntime.executeTaskTool(name, args, {
+                            signal,
+                            onApprovalPending: (p) => {
+                                void update({ status: 'paused' }).catch(() => { /* noop */ });
+                                void getPushService().sendPush(userId, {
+                                    title: 'OpenMake 에이전트 — 승인 필요',
+                                    body: `도구 실행 승인을 기다립니다: ${p.toolName}`,
+                                    url: '/agent-tasks.html',
+                                }).catch(() => { /* noop */ });
+                            },
+                        });
+                        if (curStatus === 'paused') await update({ status: 'running' }).catch(() => { /* noop */ });
+                        if (toolResult.includes(TASK_TERMINATE_SENTINEL)) {
+                            terminated = true;
+                            terminateSummary = String(args.summary ?? '');
+                        }
+                    } else {
+                        toolResult = await this.runTool(mcp, name, args, userCtx);
+                    }
                     conversation.push({
                         role: 'tool',
                         content: toolResult,
@@ -289,6 +356,19 @@ export class AgentTaskService {
                         toolName: name,
                         content: toolResult,
                     });
+                }
+
+                // terminate 도구 호출 — 깔끔한 완료 시그널(max_turns 소진 아님).
+                if (terminated) {
+                    const ex = extractAndStripArtifacts(result.content ?? '');
+                    stepNumber = await this.persistArtifactSteps(taskId, ex.artifacts, stepNumber);
+                    await update({
+                        status: 'completed',
+                        progress: 100,
+                        result: terminateSummary || ex.cleanedContent || '작업을 완료했습니다.',
+                    });
+                    logger.info(`[AgentTask] terminate 완료: ${taskId} (${turn + 1} 턴)`);
+                    return;
                 }
 
                 // end-of-turn 체크포인트: tool 결과까지 포함된 완전한 conversation + 완료 턴 번호.
@@ -322,6 +402,12 @@ export class AgentTaskService {
             logger.warn(`[AgentTask] ${aborted ? '취소' : '실패'}: ${taskId} — ${kind}: ${msg}`);
         } finally {
             AgentTaskService.running.delete(taskId);
+            if (taskRuntime) {
+                // 완료 시 workspace 보존(산출물 다운로드용), 실패/취소 시 삭제. 컨테이너는 항상 제거.
+                const keepWorkspace = curStatus === 'completed';
+                await taskRuntime.cleanup(!keepWorkspace).catch((e) =>
+                    logger.warn(`[AgentTask] 샌드박스 정리 실패: ${taskId} — ${e}`));
+            }
         }
     }
 
