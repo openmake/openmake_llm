@@ -21,6 +21,22 @@ export interface ChatMessage extends Pick<SharedChatMessage, "role" | "content" 
   structured?: StructuredAnswerData;
   /** 에이전트 작업이 승인 대기(paused)일 때 표시할 대기 중 도구 호출 — 채팅 인라인 승인. */
   approvals?: PendingApproval[];
+  /** 에이전트 작업 구조화 상태 — 채팅 인라인 카드(AgentTaskCard)로 렌더(이모지 대신 벡터 아이콘). */
+  agentTask?: AgentTaskState;
+}
+
+/** 에이전트 작업 인라인 카드 상태. */
+export interface AgentTaskState {
+  goal: string;
+  status: string; // pending | running | paused | completed | failed | cancelled
+  currentTurn: number;
+  progress: number;
+  /** 완료 시 결과 본문(markdown). */
+  result?: string;
+  /** 완료 시 deliverable 아티팩트 id 목록(store 에 등록됨 → 칩 렌더). */
+  artifactIds?: string[];
+  /** 완료 시 workspace 산출물 파일 경로 목록. */
+  files?: string[];
 }
 
 /** 에이전트 작업 도구 호출 승인 대기 (백엔드 approval-gate PendingApproval 대응). */
