@@ -27,6 +27,8 @@ import { getPushService } from './PushService';
 import { createLogger } from '../utils/logger';
 import type { UserContext } from '../mcp/user-sandbox';
 import { getSkillManager } from '../agents/skill-manager';
+import { routeToAgent } from '../agents/keyword-router';
+import { getAgentSystemMessage } from '../agents/system-prompt';
 import { mergeToolsWithSkills, type ActiveSkillBinding } from './chat-service/tool-merger';
 import { getTaskSandboxConfig } from '../config/task-sandbox';
 import { TaskRuntime } from './task-sandbox/runtime';
@@ -192,7 +194,17 @@ export class AgentTaskService {
             // 생성 실패는 작업을 죽이지 않고 샌드박스 없이 진행(graceful degrade).
             if (getTaskSandboxConfig().enabled) {
                 try {
-                    taskRuntime = new TaskRuntime(taskId, userId);
+                    // G4 위임: subgoal 을 적합 산업 전문가 페르소나로 1회 자문(재귀 루프 없음).
+                    const delegateFn = async (subgoal: string, role?: string): Promise<string> => {
+                        const selection = await routeToAgent(role ? `[${role}] ${subgoal}` : subgoal);
+                        const { prompt } = await getAgentSystemMessage(selection, userId);
+                        const r = await this.client.chat(
+                            [{ role: 'system', content: prompt }, { role: 'user', content: subgoal }],
+                            undefined, undefined, { think: false, signal },
+                        );
+                        return r.content ?? '';
+                    };
+                    taskRuntime = new TaskRuntime(taskId, userId, getTaskSandboxConfig(), delegateFn);
                     await taskRuntime.create();
                     await db.updateAgentTask(taskId, {
                         sandboxContainerId: taskRuntime.containerName,
