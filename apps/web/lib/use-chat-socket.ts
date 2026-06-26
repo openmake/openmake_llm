@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { WsChatRequest, WsServerEvent, WsAttachedFile } from "@openmake/shared-types";
-import { useAppStore, type StructuredAnswerData } from "./store";
+import { useAppStore, type StructuredAnswerData, type PendingApproval } from "./store";
 import { ApiClient } from "./api-client";
 import { CLIENT_TIMING } from "./config";
 
@@ -63,6 +63,9 @@ function renderAgentTaskMessage(
     const label = status === "failed" ? "실패" : "취소됨";
     return `${head}\n\n❌ **${label}**${result?.trim() ? `\n\n---\n\n${result.trim()}` : ""}`;
   }
+  if (status === "paused") {
+    return `${head}\n\n⏸️ **승인 대기 중** — 아래에서 도구 실행을 승인/거절하세요. · 턴 ${currentTurn ?? 0}`;
+  }
   // pending / running
   const pct = Math.max(0, Math.min(100, Math.round(progress || 0)));
   const filled = Math.round(pct / 10);
@@ -88,9 +91,11 @@ export function useChatSocket() {
     setCurrentSessionId,
     setActiveAgent,
     setActiveSkills,
+    setResearchProgress,
     startArtifact,
     appendArtifactDelta,
     endArtifact,
+    registerArtifacts,
   } = useAppStore();
 
   const connect = useCallback(() => {
@@ -125,9 +130,11 @@ export function useChatSocket() {
         case "done":
           if (data.sessionId) setCurrentSessionId(data.sessionId);
           setStreaming(false);
+          setResearchProgress(null);
           break;
         case "aborted":
           setStreaming(false);
+          setResearchProgress(null);
           break;
         case "error":
           appendMessage({
@@ -135,7 +142,20 @@ export function useChatSocket() {
             content: `오류: ${data.message ?? "알 수 없는 오류"}`,
           });
           setStreaming(false);
+          setResearchProgress(null);
           break;
+        case "research_progress": {
+          // 딥리서치 진행을 채팅 상태 배너로 라이브 표시(스트리밍 시작 전/중).
+          const p = data.progress ?? {};
+          setResearchProgress({
+            currentStep: p.currentStep ?? "",
+            progress: Math.max(0, Math.min(100, Math.round(p.progress ?? 0))),
+            message: p.message ?? "",
+            currentLoop: p.currentLoop ?? 0,
+            totalLoops: p.totalLoops ?? 0,
+          });
+          break;
+        }
         case "agent_selected":
           setActiveAgent({ name: data.agent.name, emoji: data.agent.emoji });
           break;
@@ -160,28 +180,75 @@ export function useChatSocket() {
           if (terminal) {
             void (async () => {
               let result = "";
+              const chips: string[] = [];
+              const fileLinks: string[] = [];
               try {
-                const r = await ApiClient.get<{ data: { task: { result?: string } } }>(
-                  `/api/agent-tasks/${taskId}`,
-                );
+                const r = await ApiClient.get<{
+                  data: {
+                    task: { result?: string };
+                    steps?: Array<{ step_type: string; content?: string }>;
+                  };
+                }>(`/api/agent-tasks/${taskId}`);
                 result = r?.data?.task?.result ?? "";
+                // deliverable 아티팩트 — store 등록 + [[artifact:id]] 칩 주입(일반 채팅과 동일 인라인).
+                const arts = (r?.data?.steps ?? [])
+                  .filter((s) => s.step_type === "artifact")
+                  .map((s) => { try { return JSON.parse(s.content ?? ""); } catch { return null; } })
+                  .filter((a): a is { id: string; kind: string; title?: string; lang?: string | null; content?: string } => !!a?.id);
+                if (arts.length > 0) {
+                  registerArtifacts(arts.map((a) => ({
+                    id: a.id, kind: a.kind, title: a.title ?? a.id, lang: a.lang ?? null,
+                    content: a.content ?? "", streaming: false,
+                  })));
+                  for (const a of arts) chips.push(`[[artifact:${a.id}]]`);
+                }
               } catch {
                 /* 결과 조회 실패 — 상태만 표시 */
               }
+              // 산출물 파일(완료 시 workspace 보존) 다운로드 링크.
+              try {
+                const f = await ApiClient.get<{ data: { files: string[] } }>(
+                  `/api/agent-tasks/${taskId}/files`,
+                );
+                for (const file of f?.data?.files ?? []) {
+                  fileLinks.push(`[${file}](/api/agent-tasks/${taskId}/files/download?path=${encodeURIComponent(file)})`);
+                }
+              } catch { /* 파일 없음 */ }
+              const extras =
+                (chips.length ? `\n\n${chips.join(" ")}` : "") +
+                (fileLinks.length ? `\n\n**📎 산출물:** ${fileLinks.join(" · ")}` : "");
               setChatHistory((prev) =>
                 prev.map((m) =>
                   m.taskId === taskId
-                    ? { ...m, content: renderAgentTaskMessage(goal, status, currentTurn, progress, result) }
+                    ? { ...m, approvals: undefined, content: renderAgentTaskMessage(goal, status, currentTurn, progress, result) + extras }
                     : m,
                 ),
               );
               agentGoalsRef.current.delete(taskId);
             })();
+          } else if (status === "paused") {
+            // 승인 대기 — 해당 task 의 pending approval 을 조회해 채팅에 인라인 승인 버튼 노출.
+            void (async () => {
+              let mine: PendingApproval[] = [];
+              try {
+                const r = await ApiClient.get<{ data: { pending: PendingApproval[] } }>(
+                  `/api/agent-tasks/approvals/pending`,
+                );
+                mine = (r?.data?.pending ?? []).filter((p) => p.taskId === taskId);
+              } catch { /* 조회 실패 — 상태만 */ }
+              setChatHistory((prev) =>
+                prev.map((m) =>
+                  m.taskId === taskId
+                    ? { ...m, approvals: mine, content: renderAgentTaskMessage(goal, status, currentTurn, progress) }
+                    : m,
+                ),
+              );
+            })();
           } else {
             setChatHistory((prev) =>
               prev.map((m) =>
                 m.taskId === taskId
-                  ? { ...m, content: renderAgentTaskMessage(goal, status, currentTurn, progress) }
+                  ? { ...m, approvals: undefined, content: renderAgentTaskMessage(goal, status, currentTurn, progress) }
                   : m,
               ),
             );
@@ -189,7 +256,7 @@ export function useChatSocket() {
           break;
         }
         default:
-          break; // init / research_progress / token_warning 등은 추후
+          break; // init / token_warning 등은 추후
       }
     };
 

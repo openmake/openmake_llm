@@ -1,14 +1,67 @@
 "use client";
 
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import Image from "next/image";
-import { MessagesSquare, Telescope, Brain, Sparkles, FileCode2, ChevronRight } from "lucide-react";
-import { useAppStore } from "@/lib/store";
+import { MessagesSquare, Telescope, Brain, Sparkles, FileCode2, ChevronRight, LoaderCircle } from "lucide-react";
+import { useAppStore, type PendingApproval } from "@/lib/store";
+import { ApiClient } from "@/lib/api-client";
 import { Markdown } from "./markdown";
 import { StructuredAnswer } from "./structured-answer";
 import { cn } from "@/lib/utils";
 
 const ARTIFACT_PLACEHOLDER = /\[\[artifact:([^\]]+)\]\]/g;
+
+/** 에이전트 작업 승인 대기 — 채팅 인라인 승인/거절 버튼 (paused task). */
+function InlineApprovals({ approvals }: { approvals: PendingApproval[] }) {
+  const setChatHistory = useAppStore((s) => s.setChatHistory);
+  const [busy, setBusy] = useState<string | null>(null);
+  if (approvals.length === 0) return null;
+
+  async function decide(a: PendingApproval, decision: "approve" | "reject") {
+    setBusy(a.approvalId);
+    try {
+      await ApiClient.post(`/api/agent-tasks/approvals/${a.approvalId}/${decision}`, {});
+      // 낙관적 제거 — 해당 approval 을 메시지에서 뺀다(승인 시 agent_task_progress 가 곧 갱신).
+      setChatHistory((prev) =>
+        prev.map((m) =>
+          m.taskId === a.taskId
+            ? { ...m, approvals: (m.approvals ?? []).filter((x) => x.approvalId !== a.approvalId) }
+            : m,
+        ),
+      );
+    } catch (e) {
+      alert("처리 실패: " + (e instanceof Error ? e.message : "오류"));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <div className="mt-2 space-y-2 rounded-lg border border-warning/40 bg-warning-soft/40 p-2.5">
+      <p className="text-xs font-medium text-fg-2">도구 실행 승인 필요</p>
+      {approvals.map((a) => (
+        <div key={a.approvalId} className="flex items-center justify-between gap-2 rounded-md border border-border bg-surface-1 p-2">
+          <div className="min-w-0">
+            <span className="font-mono text-xs text-fg-2">{a.toolName}</span>
+            <span className="ml-2 break-all text-xs text-muted">{JSON.stringify(a.args).slice(0, 90)}</span>
+          </div>
+          <div className="flex shrink-0 gap-1">
+            <button
+              disabled={busy === a.approvalId}
+              onClick={() => decide(a, "reject")}
+              className="rounded-md border border-border px-2.5 py-1 text-xs text-muted hover:bg-surface-2 disabled:opacity-50"
+            >거절</button>
+            <button
+              disabled={busy === a.approvalId}
+              onClick={() => decide(a, "approve")}
+              className="rounded-md bg-accent px-2.5 py-1 text-xs font-medium text-accent-fg hover:opacity-90 disabled:opacity-50"
+            >승인</button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 /** 영속화된 `[[artifact:id]]` placeholder 를 클릭 가능한 아티팩트 칩으로 렌더. */
 function ArtifactChip({ id }: { id: string }) {
@@ -128,12 +181,43 @@ const QUICK_STARTS = [
   { icon: Sparkles, label: "브레인스토밍", prompt: "다음에 대해 브레인스토밍하자:\n\n" },
 ];
 
+/** 딥리서치 진행 배너 — 스트리밍 중 단계/진행/루프를 라이브 표시. */
+function ResearchProgressBanner() {
+  const rp = useAppStore((s) => s.researchProgress);
+  if (!rp) return null;
+  const filled = Math.round(rp.progress / 10);
+  return (
+    <div className="flex gap-3">
+      <div className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-md bg-accent-soft text-accent">
+        <Telescope className="h-4 w-4" />
+      </div>
+      <div className="min-w-0 flex-1 rounded-lg border border-border bg-surface-2/60 p-3">
+        <div className="mb-1 flex items-center gap-2 text-xs font-medium text-fg-2">
+          <LoaderCircle className="h-3.5 w-3.5 animate-spin text-accent" />
+          딥 리서치 진행 중
+          {rp.totalLoops > 0 && (
+            <span className="text-faint">· 루프 {rp.currentLoop}/{rp.totalLoops}</span>
+          )}
+        </div>
+        {rp.message && <p className="mb-1.5 text-xs text-muted">{rp.message}</p>}
+        <div className="flex items-center gap-2">
+          <span className="font-mono text-[11px] text-accent">
+            {"▓".repeat(filled)}{"░".repeat(10 - filled)}
+          </span>
+          <span className="text-[11px] text-faint">{rp.progress}%{rp.currentStep ? ` · ${rp.currentStep}` : ""}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function MessageList() {
   const chatHistory = useAppStore((s) => s.chatHistory);
   const setInputDraft = useAppStore((s) => s.setInputDraft);
   const isGenerating = useAppStore((s) => s.isGenerating);
   const activeAgent = useAppStore((s) => s.activeAgent);
   const activeSkills = useAppStore((s) => s.activeSkills);
+  const researchProgress = useAppStore((s) => s.researchProgress);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   // 응답이 진행 중인데 아직 스트리밍 중인 assistant 메시지가 없으면(첫 토큰 전) "분석 중" 표시
@@ -221,10 +305,14 @@ export function MessageList() {
                   <span className="ml-0.5 inline-block h-4 w-1.5 animate-pulse bg-accent align-text-bottom" />
                 )}
               </div>
+              {m.approvals && m.approvals.length > 0 && (
+                <InlineApprovals approvals={m.approvals} />
+              )}
             </div>
           </div>
         ),
       )}
+      {researchProgress && <ResearchProgressBanner />}
       {showThinking && <ThinkingIndicator agent={activeAgent} skills={activeSkills} />}
       <div ref={bottomRef} className={cn("h-px")} />
     </div>
