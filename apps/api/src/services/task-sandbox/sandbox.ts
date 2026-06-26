@@ -16,7 +16,7 @@
  */
 import { spawn } from 'child_process';
 import { mkdir, rm, writeFile as fsWriteFile, readFile as fsReadFile, readdir } from 'fs/promises';
-import { resolve, sep, join, dirname } from 'path';
+import { resolve, sep, join, dirname, relative } from 'path';
 import { getTaskSandboxConfig, type TaskSandboxConfig } from '../../config/task-sandbox';
 import { createLogger } from '../../utils/logger';
 
@@ -194,6 +194,11 @@ export class TaskSandbox {
         return readdir(abs);
     }
 
+    /** 산출물 회수용 — workspace 전체 파일을 상대경로로 재귀 나열. */
+    async listWorkspaceFiles(): Promise<string[]> {
+        return listWorkspaceFilesAt(this.hostWorkdir);
+    }
+
     /** workspace 내 파일/디렉토리 삭제. 경로 가드 적용. */
     async deleteFile(relPath: string): Promise<void> {
         const abs = safeResolveWorkspacePath(this.hostWorkdir, relPath);
@@ -201,20 +206,46 @@ export class TaskSandbox {
         await rm(abs, { recursive: true, force: true });
     }
 
-    /** 컨테이너 + workspace 정리. 멱등. */
-    async cleanup(): Promise<void> {
+    /**
+     * 컨테이너 정리. 멱등. removeWorkspace=true(기본) 면 workspace 도 삭제,
+     * false 면 산출물 회수(다운로드)를 위해 workspace 를 보존하고 컨테이너만 제거한다.
+     */
+    async cleanup(removeWorkspace = true): Promise<void> {
         await runProcess(this.cfg.dockerPath, ['stop', '-t', '5', this.containerName],
             { timeoutMs: 15_000, outputCap: 4096 });
         await runProcess(this.cfg.dockerPath, ['rm', '-f', this.containerName],
             { timeoutMs: 10_000, outputCap: 4096 });
-        try { await rm(this.hostWorkdir, { recursive: true, force: true }); } catch { /* best-effort */ }
+        if (removeWorkspace) {
+            try { await rm(this.hostWorkdir, { recursive: true, force: true }); } catch { /* best-effort */ }
+        }
         this.created = false;
-        logger.info(`[${this.taskId}] 샌드박스 정리`);
+        logger.info(`[${this.taskId}] 샌드박스 정리 (workspace ${removeWorkspace ? '삭제' : '보존'})`);
     }
 
     private assertCreated(): void {
         if (!this.created) throw new Error(`샌드박스 미생성 (${this.taskId}) — create() 선행 필요`);
     }
+}
+
+/**
+ * 주어진 workspace 디렉토리의 전체 파일을 상대경로로 재귀 나열 (산출물 다운로드 엔드포인트용).
+ * 라이브 TaskSandbox 인스턴스 없이도 동작(task 완료 후 workspace_path 로 호출).
+ */
+export async function listWorkspaceFilesAt(root: string, maxFiles = 1000): Promise<string[]> {
+    const out: string[] = [];
+    async function walk(dir: string): Promise<void> {
+        if (out.length >= maxFiles) return;
+        let entries;
+        try { entries = await readdir(dir, { withFileTypes: true }); } catch { return; }
+        for (const e of entries) {
+            if (out.length >= maxFiles) return;
+            const full = join(dir, e.name);
+            if (e.isDirectory()) await walk(full);
+            else out.push(relative(root, full));
+        }
+    }
+    await walk(resolve(root));
+    return out.sort();
 }
 
 /**

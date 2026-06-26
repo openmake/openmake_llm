@@ -403,7 +403,9 @@ export class AgentTaskService {
         } finally {
             AgentTaskService.running.delete(taskId);
             if (taskRuntime) {
-                await taskRuntime.cleanup().catch((e) =>
+                // 완료 시 workspace 보존(산출물 다운로드용), 실패/취소 시 삭제. 컨테이너는 항상 제거.
+                const keepWorkspace = curStatus === 'completed';
+                await taskRuntime.cleanup(!keepWorkspace).catch((e) =>
                     logger.warn(`[AgentTask] 샌드박스 정리 실패: ${taskId} — ${e}`));
             }
         }

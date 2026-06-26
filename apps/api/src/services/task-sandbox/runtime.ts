@@ -62,7 +62,10 @@ export class TaskRuntime {
     get workspacePath(): string { return this.sandbox.hostWorkdir; }
 
     async create(): Promise<void> { await this.sandbox.create(); }
-    async cleanup(): Promise<void> { await this.sandbox.cleanup(); }
+    /** removeWorkspace=false 면 산출물 다운로드를 위해 workspace 보존(컨테이너만 제거). */
+    async cleanup(removeWorkspace = true): Promise<void> { await this.sandbox.cleanup(removeWorkspace); }
+    /** 산출물 회수용 — workspace 파일 목록(상대경로, 재귀). */
+    async listWorkspace(): Promise<string[]> { return this.sandbox.listWorkspaceFiles(); }
 
     /** task-scoped 도구를 LLM 형식으로. AgentTaskService 가 effectiveTools 에 합류. */
     getLLMTools(): ToolDefinition[] { return this.defs.map(toLLMTool); }
