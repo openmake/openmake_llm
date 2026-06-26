@@ -146,6 +146,19 @@ export type WsServerEvent =
       status: string;
       progress: number;
       currentTurn: number;
+    }
+  // 딥리서치 진행상황 (백엔드 ws-chat-handler onResearchProgress)
+  | {
+      type: "research_progress";
+      progress: {
+        sessionId?: string;
+        status?: string;
+        currentLoop?: number;
+        totalLoops?: number;
+        currentStep?: string;
+        progress?: number;
+        message?: string;
+      };
     };
 
 /* ── 응답 페이로드 헬퍼 타입 ─────────────────────────────────────────── */

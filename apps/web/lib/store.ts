@@ -19,6 +19,25 @@ export interface ChatMessage extends Pick<SharedChatMessage, "role" | "content" 
   reasoning?: string;
   /** 구조화 답변 데이터 (structuredMode=true 시 REST /api/chat/structured 응답). 있으면 카드 UI 로 렌더. */
   structured?: StructuredAnswerData;
+  /** 에이전트 작업이 승인 대기(paused)일 때 표시할 대기 중 도구 호출 — 채팅 인라인 승인. */
+  approvals?: PendingApproval[];
+}
+
+/** 에이전트 작업 도구 호출 승인 대기 (백엔드 approval-gate PendingApproval 대응). */
+export interface PendingApproval {
+  approvalId: string;
+  taskId: string;
+  toolName: string;
+  args: Record<string, unknown>;
+}
+
+/** 딥리서치 진행상황 (백엔드 research_progress 이벤트 — DeepResearch ResearchProgress 대응). */
+export interface ResearchProgressInfo {
+  currentStep: string;
+  progress: number;
+  message: string;
+  currentLoop: number;
+  totalLoops: number;
 }
 
 /**
@@ -77,6 +96,8 @@ interface AppState {
   /** 현재 응답에 선택된 에이전트 + 활성 스킬 (ws agent_selected / skills_activated) */
   activeAgent: { name: string; emoji?: string } | null;
   activeSkills: string[];
+  /** 딥리서치 진행상황 (ws research_progress) — 스트리밍 중 상태 배너로 표시, done 시 clear. */
+  researchProgress: ResearchProgressInfo | null;
 
   // 아티팩트
   artifacts: Artifact[];
@@ -112,6 +133,7 @@ interface AppState {
   setInputDraft: (t: string) => void;
   setActiveAgent: (a: { name: string; emoji?: string } | null) => void;
   setActiveSkills: (s: string[]) => void;
+  setResearchProgress: (p: ResearchProgressInfo | null) => void;
   clearChat: () => void;
 
   // 아티팩트 actions
@@ -121,6 +143,8 @@ interface AppState {
   setActiveArtifact: (id: string | null) => void;
   setArtifactPanelOpen: (v: boolean) => void;
   setArtifacts: (list: Artifact[]) => void;
+  /** 완료된 아티팩트들을 패널 자동 오픈 없이 store 에 등록(dedup by id) — 에이전트 작업 인라인용. */
+  registerArtifacts: (list: Artifact[]) => void;
 
   toggle: (
     key:
@@ -157,6 +181,7 @@ export const useAppStore = create<AppState>()(
   inputDraft: "",
   activeAgent: null,
   activeSkills: [],
+  researchProgress: null,
 
   artifacts: [],
   activeArtifactId: null,
@@ -215,12 +240,14 @@ export const useAppStore = create<AppState>()(
   setInputDraft: (t) => set({ inputDraft: t }),
   setActiveAgent: (a) => set({ activeAgent: a }),
   setActiveSkills: (s) => set({ activeSkills: s }),
+  setResearchProgress: (p) => set({ researchProgress: p }),
   clearChat: () =>
     set({
       chatHistory: [],
       currentSessionId: null,
       activeAgent: null,
       activeSkills: [],
+      researchProgress: null,
       artifacts: [],
       activeArtifactId: null,
       artifactPanelOpen: false,
@@ -253,6 +280,13 @@ export const useAppStore = create<AppState>()(
       artifacts: list,
       activeArtifactId: list.length > 0 ? (s.activeArtifactId ?? list[list.length - 1].id) : null,
     })),
+  registerArtifacts: (list) =>
+    set((s) => {
+      // 패널 자동 오픈 없이 append (dedup by id).
+      const ids = new Set(s.artifacts.map((a) => a.id));
+      const added = list.filter((a) => !ids.has(a.id));
+      return added.length > 0 ? { artifacts: [...s.artifacts, ...added] } : {};
+    }),
 
   toggle: (key) => set((s) => ({ [key]: !s[key] }) as Partial<AppState>),
   setSelectedModel: (m) => set({ selectedModel: m }),
