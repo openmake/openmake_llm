@@ -47,7 +47,13 @@ const results = [];
 let finalUrl = '';
 let browser;
 try {
-    browser = await chromium.launch({ headless: spec.headless !== false });
+    // egress 프록시(BROWSER_PROXY) 가 주입되면 chromium 의 모든 트래픽을 프록시 경유 — 프록시가
+    // 네트워크 레벨 도메인 allowlist 를 강제(page.route 앱-레벨 위의 이중방어).
+    const proxyServer = process.env.BROWSER_PROXY || spec.proxy;
+    browser = await chromium.launch({
+        headless: spec.headless !== false,
+        ...(proxyServer ? { proxy: { server: proxyServer } } : {}),
+    });
     const context = await browser.newContext();
     context.setDefaultTimeout(timeout);
     if (allowlist) {

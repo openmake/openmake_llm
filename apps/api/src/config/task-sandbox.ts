@@ -63,8 +63,24 @@ export interface TaskSandboxConfig {
      * browser 만 별도 일회성 컨테이너(browserNetwork)에서 실행 — bash/python 은 인터넷 미접근.
      */
     browserEnabled: boolean;
-    /** 브라우저 전용 일회성 컨테이너의 네트워크(기본 bridge — 브라우저는 인터넷 필요). egress 프록시 도입 시 교체. */
+    /** 브라우저 전용 일회성 컨테이너의 네트워크(기본 bridge — 브라우저는 인터넷 필요). egress 프록시 ON 시 무시. */
     browserNetwork: string;
+    /**
+     * 브라우저 egress 프록시(네트워크 레벨 도메인 allowlist) 활성 여부(기본 false).
+     * ON 시 브라우저 컨테이너는 internal 망(인터넷 차단)에만 연결되고 프록시 통해서만 allowlist 도메인에 도달.
+     * 외부 출시 전 권장. bash/python 은 network=none 이라 무관.
+     */
+    egressProxyEnabled: boolean;
+    /** egress 프록시 허용 도메인(쉼표/배열). 비면 전부 거부(fail-safe). */
+    egressAllowlist: string[];
+    /** egress 프록시 이미지(infra/egress-proxy). */
+    egressProxyImage: string;
+    /** internal Docker 네트워크 이름(브라우저 컨테이너 인터넷 차단망). */
+    egressNetwork: string;
+    /** egress 프록시 컨테이너 이름. */
+    egressProxyContainer: string;
+    /** egress 프록시 포트. */
+    egressProxyPort: number;
 }
 
 export function getTaskSandboxConfig(): TaskSandboxConfig {
@@ -93,5 +109,12 @@ export function getTaskSandboxConfig(): TaskSandboxConfig {
         workspaceTtlMs: intEnv(process.env.TASK_SANDBOX_WORKSPACE_TTL_MS, 24 * 60 * 60_000),
         browserEnabled: process.env.TASK_SANDBOX_BROWSER_ENABLED !== 'false',
         browserNetwork: process.env.TASK_SANDBOX_BROWSER_NETWORK || 'bridge',
+        egressProxyEnabled: process.env.TASK_SANDBOX_EGRESS_PROXY_ENABLED === 'true',
+        egressAllowlist: (process.env.TASK_SANDBOX_EGRESS_ALLOWLIST || '')
+            .split(',').map((s) => s.trim()).filter(Boolean),
+        egressProxyImage: process.env.TASK_SANDBOX_EGRESS_PROXY_IMAGE || 'openmake-egress-proxy:latest',
+        egressNetwork: process.env.TASK_SANDBOX_EGRESS_NETWORK || 'omk-egress-internal',
+        egressProxyContainer: process.env.TASK_SANDBOX_EGRESS_PROXY_CONTAINER || 'omk-egress-proxy',
+        egressProxyPort: intEnv(process.env.TASK_SANDBOX_EGRESS_PROXY_PORT, 8888),
     };
 }
