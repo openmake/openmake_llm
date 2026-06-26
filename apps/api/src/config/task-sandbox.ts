@@ -10,6 +10,14 @@
 /** 컨테이너 네트워크 정책. C1 은 none 출발, restricted(allowlist) fast-follow. full 미허용. */
 export type TaskSandboxNetwork = 'none' | 'restricted';
 
+/**
+ * 도구 호출 승인 정책 (HITL 게이트).
+ * - all: 모든 도구 호출에 사용자 승인 필요 (가장 안전, 기본값).
+ * - high-risk: 고위험 도구(bash·file 삭제·network egress)만 승인.
+ * - none: 승인 없이 자동 실행 (빠름, 위험↑).
+ */
+export type TaskSandboxApprovalPolicy = 'all' | 'high-risk' | 'none';
+
 function intEnv(raw: string | undefined, def: number): number {
     const n = parseInt(raw ?? '', 10);
     return Number.isFinite(n) && n > 0 ? n : def;
@@ -44,10 +52,17 @@ export interface TaskSandboxConfig {
     outputCap: number;
     /** workspace 디스크 쿼터(byte) — 초과 시 정리/거절. */
     workspaceQuota: number;
+    /** 도구 호출 승인 정책 (기본 all — 전부 승인). */
+    approvalPolicy: TaskSandboxApprovalPolicy;
+    /** 승인 대기 timeout(ms) — 초과 시 자동 거절(작업 일시정지 해제). */
+    approvalTimeoutMs: number;
 }
 
 export function getTaskSandboxConfig(): TaskSandboxConfig {
     const net = process.env.TASK_SANDBOX_NETWORK === 'restricted' ? 'restricted' : 'none';
+    const policyRaw = process.env.TASK_SANDBOX_APPROVAL_POLICY;
+    const approvalPolicy: TaskSandboxApprovalPolicy =
+        policyRaw === 'none' || policyRaw === 'high-risk' ? policyRaw : 'all';
     return {
         enabled: process.env.TASK_SANDBOX_ENABLED === 'true',
         dockerPath: process.env.TASK_SANDBOX_DOCKER_PATH || 'docker',
@@ -64,5 +79,7 @@ export function getTaskSandboxConfig(): TaskSandboxConfig {
         execTimeoutMs: intEnv(process.env.TASK_SANDBOX_EXEC_TIMEOUT_MS, 120_000),
         outputCap: intEnv(process.env.TASK_SANDBOX_OUTPUT_CAP, 256 * 1024),
         workspaceQuota: intEnv(process.env.TASK_SANDBOX_WORKSPACE_QUOTA, 512 * 1024 * 1024),
+        approvalPolicy,
+        approvalTimeoutMs: intEnv(process.env.TASK_SANDBOX_APPROVAL_TIMEOUT_MS, 30 * 60_000),
     };
 }
