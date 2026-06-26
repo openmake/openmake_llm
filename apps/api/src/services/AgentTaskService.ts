@@ -21,7 +21,7 @@ import { getUnifiedMCPClient } from '../mcp/unified-client';
 import { getUnifiedDatabase } from '../data/models/unified-database';
 import { AGENT_TASK_LIMITS, MAX_TOOL_RESULT_CHARS } from '../config/runtime-limits';
 import { emitAgentTaskProgress } from '../utils/event-bus';
-import { getAgentTaskSystemPrompt, getAgentTaskDeliverableNudge } from '../prompts/agent-task-prompt';
+import { getAgentTaskSystemPrompt, getAgentTaskDeliverableNudge, getAgentTaskStuckNudge } from '../prompts/agent-task-prompt';
 import { extractAndStripArtifacts, type ExtractedArtifact } from '../llm/artifact-parser';
 import { getPushService } from './PushService';
 import { createLogger } from '../utils/logger';
@@ -135,6 +135,8 @@ export class AgentTaskService {
         let curProgress = 0;
         let curTurn = 0;
         let taskRuntime: TaskRuntime | null = null;
+        const recentSignatures: string[] = [];
+        let stuckNotified = false;
 
         // DB 갱신 + 진행상황 발행(fire-and-forget). ws 계층이 구독해 owner user 에게 relay.
         // ws 를 직접 참조하지 않으므로 소켓 연결 여부와 무관하게 실행은 끝까지 진행된다.
@@ -256,6 +258,24 @@ export class AgentTaskService {
                     content: result.content,
                     ...(result.tool_calls && { tool_calls: result.tool_calls }),
                 });
+
+                // stuck 감지 — 동일 응답(내용+도구호출)이 STUCK_THRESHOLD 회 연속되면 전략변경 유도.
+                // (OpenManus BaseAgent.is_stuck → handle_stuck_state 패턴. 무한루프/제자리맴돔 방지.)
+                const sig = JSON.stringify({
+                    c: result.content ?? '',
+                    t: (result.tool_calls ?? []).map((x) => ({ n: x.function.name, a: x.function.arguments })),
+                });
+                recentSignatures.push(sig);
+                if (recentSignatures.length > AGENT_TASK_LIMITS.STUCK_THRESHOLD) recentSignatures.shift();
+                const stuck = recentSignatures.length >= AGENT_TASK_LIMITS.STUCK_THRESHOLD
+                    && recentSignatures.every((s) => s === sig);
+                if (stuck && !stuckNotified) {
+                    conversation.push({ role: 'user', content: getAgentTaskStuckNudge() });
+                    stuckNotified = true;
+                    logger.info(`[AgentTask] stuck 감지 → 전략변경 주입: ${taskId} (turn ${turn + 1})`);
+                } else if (!stuck) {
+                    stuckNotified = false;
+                }
 
                 const hasToolCalls = !!result.tool_calls && result.tool_calls.length > 0;
 

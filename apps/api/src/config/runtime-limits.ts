@@ -1129,5 +1129,8 @@ export const AGENT_TASK_LIMITS = {
     MAX_SEARCH_CALLS: parseInt(process.env.AGENT_MAX_SEARCH_CALLS || '5', 10),
     /** 검색/정보수집 도구 식별 키워드 (tool name 에 포함되면 검색류로 카운트) */
     SEARCH_TOOL_KEYWORDS: ['search', 'visit_page', 'research', 'firecrawl', 'scrape', 'crawl', 'fetch'] as readonly string[],
+    /** stuck 감지 — 동일 assistant 응답이 이 횟수만큼 연속되면 전략변경 프롬프트 주입(무한루프 방지).
+     *  OpenManus BaseAgent.is_stuck 패턴. AGENT_STUCK_THRESHOLD 로 오버라이드(기본 3). */
+    STUCK_THRESHOLD: parseInt(process.env.AGENT_STUCK_THRESHOLD || '3', 10),
 } as const;
 
