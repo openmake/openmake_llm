@@ -169,6 +169,46 @@ export function createTaskTools(sandbox: TaskSandbox): MCPToolDefinition[] {
         },
     };
 
+    const browser: MCPToolDefinition = {
+        tool: {
+            name: 'browser',
+            description: '영속 컨테이너 내 chromium 으로 웹 브라우저를 자동화합니다(G2). actions 배열을 순서대로 실행: ' +
+                'goto{url} · click{selector} · fill{selector,text} · press{key} · wait{ms} · waitFor{selector} · ' +
+                'screenshot{path?} · extractText{selector?} · extractHtml{selector?}. 결과를 JSON 으로 반환합니다. ' +
+                '네트워크는 샌드박스 정책(none/restricted)에 따라 제한됩니다.',
+            inputSchema: {
+                type: 'object',
+                properties: {
+                    actions: {
+                        type: 'array',
+                        description: '액션 객체 배열. 예: [{"type":"goto","url":"https://example.com"},{"type":"extractText"}]',
+                    },
+                    allowlist: {
+                        type: 'array',
+                        description: '허용 도메인 목록(예 ["example.com"]). 비허용 호스트 요청은 차단됩니다.',
+                    },
+                },
+                required: ['actions'],
+            },
+        },
+        handler: async (args): Promise<MCPToolResult> => {
+            const actions = args.actions;
+            if (!Array.isArray(actions) || actions.length === 0) {
+                return textResult('actions 배열이 필요합니다.', true);
+            }
+            const spec = {
+                actions,
+                ...(Array.isArray(args.allowlist) ? { allowlist: args.allowlist } : {}),
+            };
+            try {
+                await sandbox.writeFile('.browser-actions.json', JSON.stringify(spec));
+            } catch (e) {
+                return textResult(`액션 파일 쓰기 실패: ${e instanceof Error ? e.message : String(e)}`, true);
+            }
+            return formatExec(await sandbox.exec('node /opt/browser/browser-runner.mjs .browser-actions.json'));
+        },
+    };
+
     // ── B 흡수: 제어 시그널 도구 (sandbox 무관) ──
     const terminate: MCPToolDefinition = {
         tool: {
@@ -201,5 +241,5 @@ export function createTaskTools(sandbox: TaskSandbox): MCPToolDefinition[] {
             textResult(`${TASK_ASK_HUMAN_SENTINEL} ${str(args.question)}`),
     };
 
-    return [bash, pythonExecute, strReplaceEditor, fileOps, terminate, askHuman];
+    return [bash, pythonExecute, strReplaceEditor, fileOps, browser, terminate, askHuman];
 }
