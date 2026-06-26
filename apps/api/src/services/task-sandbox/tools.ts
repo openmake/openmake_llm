@@ -200,6 +200,9 @@ export function createTaskTools(
             },
         },
         handler: async (args): Promise<MCPToolResult> => {
+            if (!sandbox.isBrowserEnabled) {
+                return textResult('브라우저 기능이 비활성화되어 있습니다 (TASK_SANDBOX_BROWSER_ENABLED=false).', true);
+            }
             const actions = args.actions;
             if (!Array.isArray(actions) || actions.length === 0) {
                 return textResult('actions 배열이 필요합니다.', true);
@@ -213,7 +216,8 @@ export function createTaskTools(
             } catch (e) {
                 return textResult(`액션 파일 쓰기 실패: ${e instanceof Error ? e.message : String(e)}`, true);
             }
-            return formatExec(await sandbox.exec('node /opt/browser/browser-runner.mjs .browser-actions.json'));
+            // 메인 샌드박스(network none)가 아닌 별도 일회성 컨테이너에서 실행.
+            return formatExec(await sandbox.runBrowser('.browser-actions.json'));
         },
     };
 

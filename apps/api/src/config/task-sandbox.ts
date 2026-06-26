@@ -58,6 +58,13 @@ export interface TaskSandboxConfig {
     approvalTimeoutMs: number;
     /** 완료 task workspace 보존 TTL(ms) — 초과한 workspace 디렉토리는 정리 스윕이 삭제. */
     workspaceTtlMs: number;
+    /**
+     * 브라우저 도구 활성 여부(기본 true). 메인 샌드박스는 항상 TASK_SANDBOX_NETWORK(기본 none)이고,
+     * browser 만 별도 일회성 컨테이너(browserNetwork)에서 실행 — bash/python 은 인터넷 미접근.
+     */
+    browserEnabled: boolean;
+    /** 브라우저 전용 일회성 컨테이너의 네트워크(기본 bridge — 브라우저는 인터넷 필요). egress 프록시 도입 시 교체. */
+    browserNetwork: string;
 }
 
 export function getTaskSandboxConfig(): TaskSandboxConfig {
@@ -84,5 +91,7 @@ export function getTaskSandboxConfig(): TaskSandboxConfig {
         approvalPolicy,
         approvalTimeoutMs: intEnv(process.env.TASK_SANDBOX_APPROVAL_TIMEOUT_MS, 30 * 60_000),
         workspaceTtlMs: intEnv(process.env.TASK_SANDBOX_WORKSPACE_TTL_MS, 24 * 60 * 60_000),
+        browserEnabled: process.env.TASK_SANDBOX_BROWSER_ENABLED !== 'false',
+        browserNetwork: process.env.TASK_SANDBOX_BROWSER_NETWORK || 'bridge',
     };
 }
