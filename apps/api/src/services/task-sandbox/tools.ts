@@ -15,6 +15,7 @@
  */
 import type { MCPToolDefinition, MCPToolResult } from '../../mcp/types';
 import type { TaskSandbox, ExecResult } from './sandbox';
+import { TaskPlan, type PlanStepStatus } from './planning';
 
 /** 루프가 인식하는 제어 시그널 sentinel (도구 결과 텍스트 prefix). */
 export const TASK_TERMINATE_SENTINEL = '__TASK_TERMINATE__';
@@ -39,7 +40,7 @@ function str(v: unknown): string { return typeof v === 'string' ? v : ''; }
  * task별 도구 세트 생성. AgentTaskService 가 task 시작 시 TaskSandbox 와 함께 호출해
  * effectiveTools 에 합류시킨다.
  */
-export function createTaskTools(sandbox: TaskSandbox): MCPToolDefinition[] {
+export function createTaskTools(sandbox: TaskSandbox, plan: TaskPlan = new TaskPlan()): MCPToolDefinition[] {
     const bash: MCPToolDefinition = {
         tool: {
             name: 'bash',
@@ -209,6 +210,60 @@ export function createTaskTools(sandbox: TaskSandbox): MCPToolDefinition[] {
         },
     };
 
+    // ── G3 플래닝: 실행 계획 + step 상태 추적 ──
+    const VALID_STATUS = new Set(['not_started', 'in_progress', 'completed', 'blocked']);
+    const planCreate: MCPToolDefinition = {
+        tool: {
+            name: 'plan_create',
+            description: '작업을 시작할 때 단계별 실행 계획을 세웁니다. steps 문자열 배열을 받아 추적 가능한 계획을 만듭니다. ' +
+                '복잡한 작업은 먼저 이 도구로 계획하고, 진행하며 plan_update 로 상태를 갱신하세요.',
+            inputSchema: {
+                type: 'object',
+                properties: { steps: { type: 'array', description: '단계 설명 문자열 배열' } },
+                required: ['steps'],
+            },
+        },
+        handler: async (args): Promise<MCPToolResult> => {
+            if (!Array.isArray(args.steps) || args.steps.length === 0) {
+                return textResult('steps 배열이 필요합니다.', true);
+            }
+            plan.create(args.steps.map(String));
+            return textResult(plan.render());
+        },
+    };
+
+    const planUpdate: MCPToolDefinition = {
+        tool: {
+            name: 'plan_update',
+            description: '계획 단계의 상태를 갱신합니다. step(1-based) + status(not_started|in_progress|completed|blocked).',
+            inputSchema: {
+                type: 'object',
+                properties: {
+                    step: { type: 'number', description: '단계 번호(1부터)' },
+                    status: { type: 'string', description: 'not_started | in_progress | completed | blocked' },
+                    note: { type: 'string', description: '메모(선택)' },
+                },
+                required: ['step', 'status'],
+            },
+        },
+        handler: async (args): Promise<MCPToolResult> => {
+            const status = str(args.status);
+            if (!VALID_STATUS.has(status)) return textResult(`status 는 ${[...VALID_STATUS].join('|')} 여야 합니다.`, true);
+            const ok = plan.update(Number(args.step), status as PlanStepStatus, args.note !== undefined ? str(args.note) : undefined);
+            if (!ok) return textResult(`단계 ${args.step} 가 범위를 벗어났습니다(계획 ${plan.length}단계).`, true);
+            return textResult(plan.render());
+        },
+    };
+
+    const planView: MCPToolDefinition = {
+        tool: {
+            name: 'plan_view',
+            description: '현재 실행 계획과 각 단계 상태를 봅니다.',
+            inputSchema: { type: 'object', properties: {} },
+        },
+        handler: async (): Promise<MCPToolResult> => textResult(plan.render()),
+    };
+
     // ── B 흡수: 제어 시그널 도구 (sandbox 무관) ──
     const terminate: MCPToolDefinition = {
         tool: {
@@ -241,5 +296,5 @@ export function createTaskTools(sandbox: TaskSandbox): MCPToolDefinition[] {
             textResult(`${TASK_ASK_HUMAN_SENTINEL} ${str(args.question)}`),
     };
 
-    return [bash, pythonExecute, strReplaceEditor, fileOps, browser, terminate, askHuman];
+    return [bash, pythonExecute, strReplaceEditor, fileOps, browser, planCreate, planUpdate, planView, terminate, askHuman];
 }

@@ -21,7 +21,7 @@ import { getUnifiedMCPClient } from '../mcp/unified-client';
 import { getUnifiedDatabase } from '../data/models/unified-database';
 import { AGENT_TASK_LIMITS, MAX_TOOL_RESULT_CHARS } from '../config/runtime-limits';
 import { emitAgentTaskProgress } from '../utils/event-bus';
-import { getAgentTaskSystemPrompt, getAgentTaskDeliverableNudge, getAgentTaskStuckNudge } from '../prompts/agent-task-prompt';
+import { getAgentTaskSystemPrompt, getAgentTaskDeliverableNudge, getAgentTaskStuckNudge, getTaskSandboxGuidance } from '../prompts/agent-task-prompt';
 import { extractAndStripArtifacts, type ExtractedArtifact } from '../llm/artifact-parser';
 import { getPushService } from './PushService';
 import { createLogger } from '../utils/logger';
@@ -198,6 +198,11 @@ export class AgentTaskService {
                         sandboxContainerId: taskRuntime.containerName,
                         workspacePath: taskRuntime.workspacePath,
                     });
+                    // 새 대화면 system 에 작업환경(셸+FS)+플랜 도구 안내 주입(workspace-aware).
+                    // resume 는 기존 checkpoint system 유지(일관성).
+                    if (!input.resume && conversation[0]?.role === 'system') {
+                        conversation[0].content += getTaskSandboxGuidance();
+                    }
                     logger.info(`[AgentTask] 샌드박스 활성 (${taskId}, ${taskRuntime.containerName})`);
                 } catch (e) {
                     logger.warn(`[AgentTask] 샌드박스 생성 실패 — 미사용 진행: ${e instanceof Error ? e.message : e}`);

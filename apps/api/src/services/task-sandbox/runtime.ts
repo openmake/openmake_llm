@@ -13,6 +13,7 @@ import type { MCPToolDefinition } from '../../mcp/types';
 import { getTaskSandboxConfig, type TaskSandboxConfig } from '../../config/task-sandbox';
 import { TaskSandbox } from './sandbox';
 import { createTaskTools } from './tools';
+import { TaskPlan, type PlanStep } from './planning';
 import { requiresApproval, getApprovalRegistry, type PendingApproval } from './approval-gate';
 import { createLogger } from '../../utils/logger';
 
@@ -46,6 +47,7 @@ export class TaskRuntime {
     readonly userId: string;
     private readonly cfg: TaskSandboxConfig;
     private readonly sandbox: TaskSandbox;
+    private readonly plan = new TaskPlan();
     private readonly handlers = new Map<string, MCPToolDefinition['handler']>();
     private readonly defs: MCPToolDefinition[];
 
@@ -54,9 +56,12 @@ export class TaskRuntime {
         this.userId = userId;
         this.cfg = cfg;
         this.sandbox = new TaskSandbox(taskId, cfg);
-        this.defs = createTaskTools(this.sandbox);
+        this.defs = createTaskTools(this.sandbox, this.plan);
         for (const d of this.defs) this.handlers.set(d.tool.name, d.handler);
     }
+
+    /** 현재 실행 계획 스냅샷 (진행 가시성·영속용). */
+    getPlanSnapshot(): PlanStep[] { return this.plan.snapshot(); }
 
     get containerName(): string { return this.sandbox.containerName; }
     get workspacePath(): string { return this.sandbox.hostWorkdir; }
