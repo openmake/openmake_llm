@@ -426,6 +426,11 @@ function parseInjectLimit(raw: string | undefined, def: number): number {
 
 export const WEB_SEARCH_INJECTION = {
     /**
+     * 검색 수집(랭킹 풀) 결과 수 — SearXNG·위키 디랭크 포함 넉넉히 수집한 뒤 MAX_RESULTS 로 주입 캡.
+     * WS 채팅·구조화(/structured) 경로가 공유한다.
+     */
+    COLLECT_MAX_RESULTS: parseInjectLimit(process.env.WEB_SEARCH_COLLECT_MAX_RESULTS, 12),
+    /**
      * LLM 컨텍스트에 주입할 상위 결과 수 (수집은 더 많이 하되 주입은 캡). 0 = 무제한.
      * 6 → 10: 시사 쿼리에서 정답 포함 결과가 랭킹 하위(예: namu.wiki 현직 인물)로 밀려
      * top-6 컷오프에 잘리던 그라운딩 누락을 줄인다(수집 풀 12 의 대부분 주입).

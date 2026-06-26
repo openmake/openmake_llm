@@ -15,16 +15,13 @@ import { ProviderError } from '../providers/provider-errors';
 import { checkChatRateLimit } from '../middlewares/chat-rate-limiter';
 import { createLogger } from '../utils/logger';
 import { WSMessage, ExtendedWebSocket } from './ws-types';
-import { CURRENT_EVENTS_KEYWORDS, WEB_SEARCH_TEMPLATES, WS_ERROR_MESSAGES, WS_PROVIDER_ERROR_MESSAGES, getLocalizedTemplate } from './ws-chat-locales';
+import { WS_ERROR_MESSAGES, WS_PROVIDER_ERROR_MESSAGES, getLocalizedTemplate } from './ws-chat-locales';
 import { detectLanguage, type SupportedLanguageCode } from '../chat/language-policy';
 import { applySlashCommand } from '../chat/slash-command';
-import { getStaleDataWarning } from '../config/stale-data-warning';
 import { WS_LIMITS } from '../config/timeouts';
 import { ArtifactStreamParser, type ArtifactInfo } from '../llm/artifact-parser';
 import { buildFileContext, buildUrlContext, getCachedAttachContext, appendCachedAttachContext } from '../services/chat-service/attach-context';
-import { WEB_SEARCH_INJECTION } from '../config/runtime-limits';
-import { formatSearchSources } from '../mcp/web-search/format-sources';
-import { cleanSearchQuery } from '../mcp/web-search/query-cleaner';
+import { buildWebSearchContext } from '../mcp/web-search/build-search-context';
 
 /**
  * AI 채팅 메시지를 처리합니다.
@@ -135,50 +132,15 @@ export async function handleChatMessage(
             ? Promise.resolve('')
             : buildUrlContext(message);
 
-        // 웹 검색: 사용자가 명시적으로 활성화했거나, 시사 관련 질문이 감지된 경우 수행
-        const langKeywords = getLocalizedTemplate(CURRENT_EVENTS_KEYWORDS, userLang);
-        const allKeywords = [...langKeywords, ...(CURRENT_EVENTS_KEYWORDS['en'] || [])];
-        const isCurrentEventsQuery = allKeywords.some(keyword => message?.toLowerCase().includes(keyword.toLowerCase()));
-        const userWebSearchEnabled = msg.webSearch === true;
-        let webSearchContext = '';
-
-        // pre-chat 웹 검색 게이트: 사용자가 명시적으로 web_search=false를 송신한 경우만 차단.
-        // 빈 객체 {} 또는 미지정(undefined)은 허용 — 시사 키워드 자동 검색이 기본 동작이어야 함.
-        const userExplicitlyDisabledSearch = msg.enabledTools?.web_search === false;
-        if (!userExplicitlyDisabledSearch && (userWebSearchEnabled || isCurrentEventsQuery)) {
-            try {
-                const { performWebSearch } = await import('../mcp');
-                // 대화체 메시지를 검색 키워드로 정제 — 장황한 지시문("…웹 검색 결과를 바탕으로 한 문장으로
-                // 알려줘")이 쿼리에 섞이면 뉴스 API 가 0건을 반환해 시의성 사실(현직 인물 등)을 놓친다.
-                const searchQuery = cleanSearchQuery(message);
-                // 수집은 넉넉히(maxResults 12 — 랭킹 풀: SearXNG·위키 디랭크 포함)하되, LLM 주입은
-                // WEB_SEARCH_INJECTION 캡(상위 MAX_RESULTS + snippet MAX_SNIPPET_CHARS, 각 0=무제한)으로 제어한다.
-                const searchResults = await performWebSearch(searchQuery, { maxResults: 12, language: userLang, preferRecent: isCurrentEventsQuery });
-                if (searchResults.length > 0) {
-                    const tpl = getLocalizedTemplate(WEB_SEARCH_TEMPLATES, userLang);
-                    const body = formatSearchSources(searchResults, {
-                        maxResults: WEB_SEARCH_INJECTION.MAX_RESULTS,
-                        maxSnippetChars: WEB_SEARCH_INJECTION.MAX_SNIPPET_CHARS,
-                        labeled: true,
-                        sourceWord: tpl.sourceLabel,
-                        contentWord: tpl.contentLabel,
-                        separator: '\n',
-                    });
-                    webSearchContext = `\n\n## \uD83D\uDD0D ${tpl.header} (${new Date().toLocaleDateString(tpl.locale)} )\n` +
-                        `${tpl.instruction}\n\n${body}\n`;
-                }
-            } catch (e) {
-                log.error('[Chat] 웹 검색 실패:', e);
-            }
-        }
-
-        // 시사 질의인데 외부 데이터를 얻지 못한 경우(검색 차단·결과 0건·검색 실패 모두 포함)
-        // 환각 방지 안전망 메시지를 system prompt 채널(webSearchContext)로 주입.
-        if (isCurrentEventsQuery && !webSearchContext) {
-            const warning = getStaleDataWarning(userLang);
-            webSearchContext = `\n\n## ⚠️ ${warning.header}\n${warning.instruction}\n`;
-            log.info(`[Chat] 시사 질의 + 외부 데이터 부재 → 환각 방지 안전망 주입 (lang=${userLang}, explicitlyDisabled=${userExplicitlyDisabledSearch})`);
-        }
+        // 웹 검색: 사용자가 명시적으로 활성화했거나, 시사 관련 질문이 감지된 경우 수행.
+        // 구조화(/structured) 경로와 동일 헬퍼를 공유해 "한 경로만 검색되는" 분기 누락·로직 드리프트를 방지한다.
+        // (WS 는 기존 동작 보존을 위해 signal 미전달 — 중단 시 진행 중 검색은 메인 LLM 루프에서 정리.)
+        const { webSearchContext } = await buildWebSearchContext({
+            message,
+            userLang,
+            webSearchEnabled: msg.webSearch === true,
+            explicitlyDisabled: msg.enabledTools?.web_search === false,
+        });
 
         // URL 사전 분석 결과 합류 (위에서 웹검색과 병렬 시작) — 본문을 fileContext 채널에 합류.
         const urlContext = await urlContextPromise;

@@ -52,8 +52,9 @@ export async function buildWebSearchContext(opts: {
 
     const langKeywords = getLocalizedTemplate(CURRENT_EVENTS_KEYWORDS, userLang);
     const allKeywords = [...langKeywords, ...(CURRENT_EVENTS_KEYWORDS['en'] || [])];
+    const lowerMessage = message?.toLowerCase() ?? '';
     const isCurrentEventsQuery = allKeywords.some(
-        (keyword) => message?.toLowerCase().includes(keyword.toLowerCase()),
+        (keyword) => lowerMessage.includes(keyword.toLowerCase()),
     );
 
     let webSearchContext = '';
@@ -62,7 +63,7 @@ export async function buildWebSearchContext(opts: {
         try {
             const searchQuery = cleanSearchQuery(message);
             const searchResults = await performWebSearch(searchQuery, {
-                maxResults: 12,
+                maxResults: WEB_SEARCH_INJECTION.COLLECT_MAX_RESULTS,
                 language: userLang,
                 preferRecent: isCurrentEventsQuery,
                 signal,
@@ -81,6 +82,9 @@ export async function buildWebSearchContext(opts: {
                     `${tpl.instruction}\n\n${body}\n`;
             }
         } catch (e) {
+            // 클라이언트 중단(abort)은 삼키지 않고 전파 — 이미 끊긴 signal 로 LLM 을 호출해
+            // 헛된 upstream 요청·spurious 500 을 내는 것을 막는다. (호출부가 깔끔히 취소 처리)
+            if (signal?.aborted || (e instanceof Error && e.name === 'AbortError')) throw e;
             logger.error('웹 검색 실패:', e);
         }
     }

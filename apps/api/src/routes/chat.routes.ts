@@ -36,6 +36,8 @@ import { ExternalKeysRepository } from '../data/repositories/external-keys-repo'
 import { getPool } from '../data/models/unified-database';
 import { composeStructuredAnswer, type StructuredChatFn } from '../services/answer-composer';
 import { buildWebSearchContext } from '../mcp/web-search/build-search-context';
+import { detectLanguage } from '../chat/language-policy';
+import { getCurrentDate } from '../utils/datetime';
 import { getConversationDB } from '../data/conversation-db';
 import { createLogger } from '../utils/logger';
 
@@ -247,7 +249,10 @@ router.post('/structured', optionalApiKey, optionalAuth, chatRateLimiter, asyncH
         return;
     }
 
-    const userLanguage: string = req.body.userLanguage || 'ko';
+    // 출력 언어: 명시적 선호(userLanguage) 우선, 없으면 메시지 내용으로 감지.
+    // (WS 채팅 경로와 동일 정책 — 브라우저 로케일에 의존하지 않아 en-* 브라우저의
+    //  한국어 사용자가 영어 답변을 받던 비대칭을 제거.)
+    const userLanguage: string = req.body.userLanguage || detectLanguage(message).language;
 
     // 사용자 중단(abort) — 클라이언트가 fetch 를 취소하면 req 가 close 되어 upstream LLM 호출도 끊는다.
     const abortController = new AbortController();
@@ -317,7 +322,7 @@ router.post('/structured', optionalApiKey, optionalAuth, chatRateLimiter, asyncH
             userLanguage,
             chat,
             webContext: webSearchContext || undefined,
-            currentDate: new Date().toISOString().split('T')[0],
+            currentDate: getCurrentDate(),
         });
         settled = true;
         res.json(success({
@@ -331,6 +336,7 @@ router.post('/structured', optionalApiKey, optionalAuth, chatRateLimiter, asyncH
         // 이 엔드포인트는 항상 JSON 으로 응답한다 — 글로벌 핸들러/Express 기본(비-JSON "Internal Server Error")
         // 으로 위임하지 않아, 프론트(ApiClient.JSON.parse)가 어떤 실패에도 파싱 가능한 본문을 받게 한다.
         if (res.headersSent) return; // abort 등으로 이미 응답 시작 — 중복 전송 방지
+        if (abortController.signal.aborted) return; // 클라이언트 중단 — 끊긴 연결에 에러 응답 불필요(spurious 500 방지)
         if (err instanceof ProviderError) {
             const statusByCode: Record<string, number> = {
                 GUEST_NOT_ALLOWED: 403,
