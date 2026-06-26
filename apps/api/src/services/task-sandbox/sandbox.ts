@@ -62,15 +62,18 @@ export function buildBrowserRunArgs(
     hostWorkdir: string,
     actionsRelPath: string,
     cfg: TaskSandboxConfig,
+    proxyUrl?: string,
 ): string[] {
     const a: string[] = ['run', '--rm', '--init'];
-    a.push('--network', cfg.browserNetwork || 'bridge');
+    // egress 프록시 ON: internal 망(인터넷 직접 차단) + 프록시 env. OFF: browserNetwork(bridge).
+    a.push('--network', proxyUrl ? cfg.egressNetwork : (cfg.browserNetwork || 'bridge'));
     a.push('--cap-drop', 'ALL', '--security-opt', 'no-new-privileges');
     a.push('--pids-limit', String(cfg.pidsLimit), '--memory', cfg.memory, '--cpus', cfg.cpus);
     a.push('--user', cfg.user);
     a.push('--read-only', '--tmpfs', '/tmp:rw,exec', '--tmpfs', '/run:rw');
     a.push('-v', `${hostWorkdir}:${WORKSPACE}:rw`);
     a.push('-w', WORKSPACE);
+    if (proxyUrl) a.push('-e', `BROWSER_PROXY=${proxyUrl}`);
     a.push(cfg.image, 'node', '/opt/browser/browser-runner.mjs', actionsRelPath);
     return a;
 }
@@ -206,7 +209,13 @@ export class TaskSandbox {
      */
     async runBrowser(actionsRelPath: string): Promise<ExecResult> {
         this.assertCreated();
-        const args = buildBrowserRunArgs(this.hostWorkdir, actionsRelPath, this.cfg);
+        // egress 프록시 ON: internal 망 + 프록시 보장 후 그 URL 을 브라우저에 주입.
+        let proxyUrl: string | undefined;
+        if (this.cfg.egressProxyEnabled) {
+            const { ensureEgressProxy } = await import('./egress-proxy');
+            proxyUrl = await ensureEgressProxy(this.cfg);
+        }
+        const args = buildBrowserRunArgs(this.hostWorkdir, actionsRelPath, this.cfg, proxyUrl);
         return runProcess(this.cfg.dockerPath, args, {
             timeoutMs: Math.max(this.cfg.execTimeoutMs, 90_000),
             outputCap: this.cfg.outputCap,
