@@ -15,7 +15,7 @@
  * @module services/task-sandbox/sandbox
  */
 import { spawn } from 'child_process';
-import { mkdir, rm, writeFile as fsWriteFile, readFile as fsReadFile, readdir } from 'fs/promises';
+import { mkdir, rm, writeFile as fsWriteFile, readFile as fsReadFile, readdir, stat } from 'fs/promises';
 import { resolve, sep, join, dirname, relative } from 'path';
 import { getTaskSandboxConfig, type TaskSandboxConfig } from '../../config/task-sandbox';
 import { createLogger } from '../../utils/logger';
@@ -246,6 +246,32 @@ export async function listWorkspaceFilesAt(root: string, maxFiles = 1000): Promi
     }
     await walk(resolve(root));
     return out.sort();
+}
+
+/**
+ * workspace 보존 TTL 스윕 — workspaceRoot 하위에서 mtime 이 TTL 초과한 디렉토리를 삭제.
+ * 완료 task 의 산출물 workspace 가 무한 누적되는 것을 막는다(now 는 호출부가 주입 — 결정성).
+ */
+export async function reapStaleWorkspaces(
+    nowMs: number,
+    cfg: TaskSandboxConfig = getTaskSandboxConfig(),
+): Promise<number> {
+    let removed = 0;
+    let entries;
+    try { entries = await readdir(cfg.workspaceRoot, { withFileTypes: true }); } catch { return 0; }
+    for (const e of entries) {
+        if (!e.isDirectory()) continue;
+        const dir = join(cfg.workspaceRoot, e.name);
+        try {
+            const s = await stat(dir);
+            if (nowMs - s.mtimeMs > cfg.workspaceTtlMs) {
+                await rm(dir, { recursive: true, force: true });
+                removed++;
+            }
+        } catch { /* best-effort */ }
+    }
+    if (removed) logger.info(`stale workspace ${removed}개 정리(TTL ${cfg.workspaceTtlMs}ms)`);
+    return removed;
 }
 
 /**

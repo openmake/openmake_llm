@@ -56,6 +56,8 @@ export interface TaskSandboxConfig {
     approvalPolicy: TaskSandboxApprovalPolicy;
     /** 승인 대기 timeout(ms) — 초과 시 자동 거절(작업 일시정지 해제). */
     approvalTimeoutMs: number;
+    /** 완료 task workspace 보존 TTL(ms) — 초과한 workspace 디렉토리는 정리 스윕이 삭제. */
+    workspaceTtlMs: number;
 }
 
 export function getTaskSandboxConfig(): TaskSandboxConfig {
@@ -81,5 +83,6 @@ export function getTaskSandboxConfig(): TaskSandboxConfig {
         workspaceQuota: intEnv(process.env.TASK_SANDBOX_WORKSPACE_QUOTA, 512 * 1024 * 1024),
         approvalPolicy,
         approvalTimeoutMs: intEnv(process.env.TASK_SANDBOX_APPROVAL_TIMEOUT_MS, 30 * 60_000),
+        workspaceTtlMs: intEnv(process.env.TASK_SANDBOX_WORKSPACE_TTL_MS, 24 * 60 * 60_000),
     };
 }
