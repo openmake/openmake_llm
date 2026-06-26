@@ -59,6 +59,26 @@ export function getAgentTaskDeliverableNudge(): string {
     return '계획은 확인했습니다. 이제 계획대로 완성된 최종 결과물 전문을 <artifact> 태그로 감싸 작성하세요. 결과물 설명이 아니라 결과물 자체를 작성해야 합니다.';
 }
 
+/**
+ * 영속 샌드박스(Manus화) 활성 시 system 에 덧붙이는 안내 — 작업 환경(셸+파일시스템) 인지 +
+ * 구조화 플랜 도구 사용 유도(G3). 샌드박스 비활성 시 미주입.
+ */
+export function getTaskSandboxGuidance(): string {
+    return [
+        '',
+        '## 작업 환경 (영속 샌드박스)',
+        '- 당신에게는 격리된 가상 컴퓨터가 있습니다: 작업 디렉토리 /workspace + 셸(bash) + python + 브라우저.',
+        '- /workspace 의 파일은 단계 간 유지됩니다. 산출물 파일은 여기에 저장하세요.',
+        '- bash/python_execute/str_replace_editor/file_ops 로 파일을 만들고 실행하고 편집하세요.',
+        '- browser 도구로 웹을 탐색·조작할 수 있습니다(네트워크 정책에 따라 제한).',
+        '- 일부 도구는 실행 전 사용자 승인이 필요할 수 있습니다(승인 대기 시 작업이 일시정지됩니다).',
+        '## 계획 추적 (G3)',
+        '- 복잡한 작업은 plan_create 로 단계 계획을 세우고, 진행하며 plan_update 로 각 단계 상태를',
+        '  (in_progress/completed/blocked) 갱신해 진행 상황을 가시화하세요.',
+        '- 막혔거나 더 진행할 수 없으면 terminate(또는 ask_human)로 깔끔히 마무리하세요.',
+    ].join('\n');
+}
+
 /** stuck(동일 응답 반복) 감지 시 주입 — 전략 변경 유도(OpenManus handle_stuck_state 패턴). */
 export function getAgentTaskStuckNudge(): string {
     return '같은 시도를 반복하고 있습니다. 접근 방식을 바꾸세요: 다른 도구나 다른 입력을 시도하거나, 막혔다면 지금까지의 결과로 작업을 마무리(terminate)하거나 사용자에게 도움을 요청(ask_human)하세요.';

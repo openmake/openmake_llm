@@ -21,6 +21,8 @@ const logger = createLogger('TaskApprovalGate');
 
 /** 승인이 필요한 고위험 도구(high-risk 정책 시). browser=네트워크 egress. */
 const HIGH_RISK_TOOLS = new Set(['bash', 'browser']);
+/** 부작용 없는 도구 — 승인 불요(제어 시그널 + 플래닝). */
+const NO_APPROVAL_TOOLS = new Set(['terminate', 'ask_human', 'plan_create', 'plan_update', 'plan_view']);
 /** 고위험으로 보는 file_ops 작업. */
 const HIGH_RISK_FILE_OPS = new Set(['delete']);
 
@@ -31,8 +33,8 @@ export function requiresApproval(
     args: Record<string, unknown>,
 ): boolean {
     if (policy === 'none') return false;
-    // 제어 시그널은 승인 불요(부작용 없음).
-    if (toolName === 'terminate' || toolName === 'ask_human') return false;
+    // 제어 시그널·플래닝은 승인 불요(부작용 없음).
+    if (NO_APPROVAL_TOOLS.has(toolName)) return false;
     if (policy === 'all') return true;
     // high-risk
     if (HIGH_RISK_TOOLS.has(toolName)) return true;
