@@ -39,6 +39,8 @@ export class AgentTaskRepository extends BaseRepository {
         result?: string;
         error?: string;
         checkpoint?: unknown;
+        sandboxContainerId?: string;
+        workspacePath?: string;
     }): Promise<void> {
         const sets: string[] = ['updated_at = NOW()'];
         const params: QueryParam[] = [];
@@ -70,6 +72,14 @@ export class AgentTaskRepository extends BaseRepository {
         if (updates.checkpoint !== undefined) {
             sets.push(`checkpoint = $${paramIdx++}`);
             params.push(JSON.stringify(updates.checkpoint));
+        }
+        if (updates.sandboxContainerId !== undefined) {
+            sets.push(`sandbox_container_id = $${paramIdx++}`);
+            params.push(updates.sandboxContainerId);
+        }
+        if (updates.workspacePath !== undefined) {
+            sets.push(`workspace_path = $${paramIdx++}`);
+            params.push(updates.workspacePath);
         }
 
         params.push(taskId);

@@ -30,6 +30,7 @@ import { AgentTaskService } from '../services/AgentTaskService';
 import type { ChatMessage } from '../llm/types';
 import { AGENT_TASK_LIMITS } from '../config/runtime-limits';
 import { createAgentTaskSchema } from '../schemas/agent-task.schema';
+import { getApprovalRegistry } from '../services/task-sandbox/approval-gate';
 
 const logger = createLogger('AgentTaskRoutes');
 const router = Router();
@@ -238,6 +239,34 @@ router.delete('/:taskId', asyncHandler(async (req: Request, res: Response) => {
     const db = getUnifiedDatabase();
     await db.deleteAgentTask(task.id);
     res.json(success({ message: '작업이 삭제되었습니다.', taskId: task.id }));
+}));
+
+/**
+ * GET /api/agent-tasks/approvals/pending
+ * 현재 사용자의 승인 대기 도구 호출 목록 (HITL 게이트 — 전부-승인 정책).
+ */
+router.get('/approvals/pending', asyncHandler(async (req: Request, res: Response) => {
+    const pending = getApprovalRegistry().list(String(req.user!.id));
+    res.json(success({ pending }));
+}));
+
+/**
+ * POST /api/agent-tasks/approvals/:approvalId/:decision  (decision = approve | reject)
+ * 대기 중인 도구 호출을 승인/거절 — 해당 approval 의 owner 만 가능.
+ */
+router.post('/approvals/:approvalId/:decision', asyncHandler(async (req: Request, res: Response) => {
+    const { approvalId, decision } = req.params;
+    if (decision !== 'approve' && decision !== 'reject') {
+        return res.status(400).json(badRequest("decision 은 approve | reject 여야 합니다."));
+    }
+    const registry = getApprovalRegistry();
+    const pending = registry.get(approvalId);
+    if (!pending) return res.status(404).json(notFound('대기 중인 승인 요청을 찾을 수 없습니다(만료 가능).'));
+    assertResourceOwnerOrAdmin(pending.userId, String(req.user!.id), req.user!.role || 'user');
+
+    const ok = decision === 'approve' ? registry.approve(approvalId) : registry.reject(approvalId);
+    if (!ok) return res.status(404).json(notFound('대기 중인 승인 요청을 찾을 수 없습니다(만료 가능).'));
+    res.json(success({ approvalId, decision }));
 }));
 
 export { router as agentTaskRouter };

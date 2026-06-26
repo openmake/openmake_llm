@@ -59,6 +59,18 @@ export async function startAllSchedulers(): Promise<void> {
     // 7. 로컬 모델 가용성 polling — startup probe 이후 backend 장애 동적 감지
     startLocalModelProbeScheduler();
 
+    // 8. Task 샌드박스 고아 컨테이너 청소 (플래그 ON 시) — 비정상 종료로 남은 omk-task-* 회수.
+    try {
+        const { getTaskSandboxConfig } = await import('../config/task-sandbox');
+        if (getTaskSandboxConfig().enabled) {
+            const { reapOrphanTaskSandboxes } = await import('../services/task-sandbox/sandbox');
+            await reapOrphanTaskSandboxes();
+            logger.debug('TaskSandbox 고아 컨테이너 청소 완료');
+        }
+    } catch (err) {
+        logger.warn('TaskSandbox 고아 청소 실패(무시):', err);
+    }
+
     logger.info('모든 백그라운드 스케줄러 시작 완료');
 }
 
