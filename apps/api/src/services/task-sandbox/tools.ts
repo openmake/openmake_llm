@@ -40,7 +40,14 @@ function str(v: unknown): string { return typeof v === 'string' ? v : ''; }
  * task별 도구 세트 생성. AgentTaskService 가 task 시작 시 TaskSandbox 와 함께 호출해
  * effectiveTools 에 합류시킨다.
  */
-export function createTaskTools(sandbox: TaskSandbox, plan: TaskPlan = new TaskPlan()): MCPToolDefinition[] {
+/** 전문가 자문 콜백 — subgoal 을 적합 산업 전문가(페르소나)에게 1회 위임해 응답을 받는다. */
+export type DelegateFn = (subgoal: string, role?: string) => Promise<string>;
+
+export function createTaskTools(
+    sandbox: TaskSandbox,
+    plan: TaskPlan = new TaskPlan(),
+    delegate?: DelegateFn,
+): MCPToolDefinition[] {
     const bash: MCPToolDefinition = {
         tool: {
             name: 'bash',
@@ -264,6 +271,35 @@ export function createTaskTools(sandbox: TaskSandbox, plan: TaskPlan = new TaskP
         handler: async (): Promise<MCPToolResult> => textResult(plan.render()),
     };
 
+    // ── G4 멀티에이전트: 전문가 위임(자문) ──
+    const delegateTool: MCPToolDefinition = {
+        tool: {
+            name: 'delegate',
+            description: '특정 하위 문제를 적합한 산업 전문가(금융/법률/엔지니어링/의료/과학 등)에게 위임해 ' +
+                '전문 자문을 받습니다. 자문 결과를 참고해 당신이 직접 다음 작업을 수행하세요. ' +
+                '전문 지식·검토·판단이 필요한 단계에서 사용하세요.',
+            inputSchema: {
+                type: 'object',
+                properties: {
+                    subgoal: { type: 'string', description: '전문가에게 위임할 구체적 하위 문제/질문' },
+                    role: { type: 'string', description: '원하는 전문 분야(선택, 예: finance/legal/engineering)' },
+                },
+                required: ['subgoal'],
+            },
+        },
+        handler: async (args): Promise<MCPToolResult> => {
+            const subgoal = str(args.subgoal).trim();
+            if (!subgoal) return textResult('subgoal 이 필요합니다.', true);
+            if (!delegate) return textResult('위임 기능을 사용할 수 없습니다.', true);
+            try {
+                const advice = await delegate(subgoal, str(args.role) || undefined);
+                return textResult(advice);
+            } catch (e) {
+                return textResult(`전문가 위임 실패: ${e instanceof Error ? e.message : String(e)}`, true);
+            }
+        },
+    };
+
     // ── B 흡수: 제어 시그널 도구 (sandbox 무관) ──
     const terminate: MCPToolDefinition = {
         tool: {
@@ -296,5 +332,5 @@ export function createTaskTools(sandbox: TaskSandbox, plan: TaskPlan = new TaskP
             textResult(`${TASK_ASK_HUMAN_SENTINEL} ${str(args.question)}`),
     };
 
-    return [bash, pythonExecute, strReplaceEditor, fileOps, browser, planCreate, planUpdate, planView, terminate, askHuman];
+    return [bash, pythonExecute, strReplaceEditor, fileOps, browser, planCreate, planUpdate, planView, delegateTool, terminate, askHuman];
 }

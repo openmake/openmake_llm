@@ -21,8 +21,8 @@ const logger = createLogger('TaskApprovalGate');
 
 /** 승인이 필요한 고위험 도구(high-risk 정책 시). browser=네트워크 egress. */
 const HIGH_RISK_TOOLS = new Set(['bash', 'browser']);
-/** 부작용 없는 도구 — 승인 불요(제어 시그널 + 플래닝). */
-const NO_APPROVAL_TOOLS = new Set(['terminate', 'ask_human', 'plan_create', 'plan_update', 'plan_view']);
+/** 부작용 없는 도구 — 승인 불요(제어 시그널 + 플래닝 + 전문가 자문). */
+const NO_APPROVAL_TOOLS = new Set(['terminate', 'ask_human', 'plan_create', 'plan_update', 'plan_view', 'delegate']);
 /** 고위험으로 보는 file_ops 작업. */
 const HIGH_RISK_FILE_OPS = new Set(['delete']);
 

@@ -12,7 +12,7 @@ import type { ToolDefinition } from '../../llm/types';
 import type { MCPToolDefinition } from '../../mcp/types';
 import { getTaskSandboxConfig, type TaskSandboxConfig } from '../../config/task-sandbox';
 import { TaskSandbox } from './sandbox';
-import { createTaskTools } from './tools';
+import { createTaskTools, type DelegateFn } from './tools';
 import { TaskPlan, type PlanStep } from './planning';
 import { requiresApproval, getApprovalRegistry, type PendingApproval } from './approval-gate';
 import { createLogger } from '../../utils/logger';
@@ -51,12 +51,17 @@ export class TaskRuntime {
     private readonly handlers = new Map<string, MCPToolDefinition['handler']>();
     private readonly defs: MCPToolDefinition[];
 
-    constructor(taskId: string, userId: string, cfg: TaskSandboxConfig = getTaskSandboxConfig()) {
+    constructor(
+        taskId: string,
+        userId: string,
+        cfg: TaskSandboxConfig = getTaskSandboxConfig(),
+        delegate?: DelegateFn,
+    ) {
         this.taskId = taskId;
         this.userId = userId;
         this.cfg = cfg;
         this.sandbox = new TaskSandbox(taskId, cfg);
-        this.defs = createTaskTools(this.sandbox, this.plan);
+        this.defs = createTaskTools(this.sandbox, this.plan, delegate);
         for (const d of this.defs) this.handlers.set(d.tool.name, d.handler);
     }
 
