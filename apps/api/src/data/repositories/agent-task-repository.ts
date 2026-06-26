@@ -41,6 +41,7 @@ export class AgentTaskRepository extends BaseRepository {
         checkpoint?: unknown;
         sandboxContainerId?: string;
         workspacePath?: string;
+        plan?: unknown;
     }): Promise<void> {
         const sets: string[] = ['updated_at = NOW()'];
         const params: QueryParam[] = [];
@@ -80,6 +81,10 @@ export class AgentTaskRepository extends BaseRepository {
         if (updates.workspacePath !== undefined) {
             sets.push(`workspace_path = $${paramIdx++}`);
             params.push(updates.workspacePath);
+        }
+        if (updates.plan !== undefined) {
+            sets.push(`plan = $${paramIdx++}`);
+            params.push(JSON.stringify(updates.plan));
         }
 
         params.push(taskId);

@@ -362,6 +362,7 @@ export class UnifiedDatabase {
         checkpoint?: unknown;
         sandboxContainerId?: string;
         workspacePath?: string;
+        plan?: unknown;
     }): Promise<void> {
         return this.agentTaskRepository.updateAgentTask(taskId, updates);
     }

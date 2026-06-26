@@ -50,6 +50,13 @@ interface AgentTask {
   resumable?: boolean;
 }
 
+type PlanStepStatus = "not_started" | "in_progress" | "completed" | "blocked";
+interface PlanStep {
+  text: string;
+  status: PlanStepStatus;
+  note?: string;
+}
+
 interface ApiAgentTask {
   id: string;
   goal: string;
@@ -61,7 +68,10 @@ interface ApiAgentTask {
   created_at?: string;
   completed_at?: string;
   resumable?: boolean;
+  plan?: PlanStep[] | null;
 }
+
+type TaskFilesResponse = ApiSuccess<{ files: string[] }>;
 
 interface ApiTaskStep {
   id: string;
@@ -271,6 +281,13 @@ function CreateTaskForm({
 }
 
 /* ── 작업 상세 모달 (스텝 타임라인) ─────────────────────── */
+const PLAN_MARK: Record<PlanStepStatus, string> = {
+  not_started: "○",
+  in_progress: "◐",
+  completed: "●",
+  blocked: "✕",
+};
+
 function TaskDetailModal({
   taskId,
   onClose,
@@ -279,26 +296,45 @@ function TaskDetailModal({
   onClose: () => void;
 }) {
   const [detail, setDetail] = useState<{ task: ApiAgentTask; steps: ApiTaskStep[] } | null>(null);
+  const [files, setFiles] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // 라이브 폴링: 실행 중(running/paused)이면 주기적으로 갱신 — "컴퓨터" 패널 실시간성.
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const load = async () => {
       try {
         const res = await ApiClient.get<AgentTaskDetailResponse>(`/api/agent-tasks/${taskId}`);
-        if (!cancelled) setDetail(res?.data ?? null);
+        if (cancelled) return;
+        setDetail(res?.data ?? null);
+        const st = res?.data?.task?.status;
+        // 완료 task 의 산출물 파일 목록(보존된 workspace).
+        if (st === "completed") {
+          try {
+            const f = await ApiClient.get<TaskFilesResponse>(`/api/agent-tasks/${taskId}/files`);
+            if (!cancelled) setFiles(f?.data?.files ?? []);
+          } catch { /* ignore */ }
+        }
+        // 진행 중이면 계속 폴링.
+        if (!cancelled && (st === "running" || st === "paused" || st === "pending")) {
+          timer = setTimeout(load, 2500);
+        }
       } catch {
-        // 오류 시 detail = null
+        // detail 유지
       } finally {
         if (!cancelled) setLoading(false);
       }
-    })();
-    return () => { cancelled = true; };
+    };
+    load();
+    return () => { cancelled = true; if (timer) clearTimeout(timer); };
   }, [taskId]);
+
+  const plan = detail?.task.plan ?? [];
 
   return (
     <div className="space-y-4">
-      {loading ? (
+      {loading && !detail ? (
         <div className="flex items-center gap-2 py-8 justify-center text-muted text-sm">
           <LoaderCircle className="h-4 w-4 animate-spin" />
           불러오는 중...
@@ -310,49 +346,100 @@ function TaskDetailModal({
           <div className="rounded-md border border-border bg-surface-2 p-4">
             <p className="mb-1 text-xs font-medium text-muted">목표</p>
             <p className="text-sm text-fg">{detail.task.goal}</p>
-            <div className="mt-2 flex gap-3 text-xs text-faint">
-              <span>상태: {detail.task.status}</span>
+            <div className="mt-2 flex items-center gap-3 text-xs text-faint">
+              <span className="flex items-center gap-1">
+                상태: {detail.task.status}
+                {(detail.task.status === "running" || detail.task.status === "paused") && (
+                  <LoaderCircle className="h-3 w-3 animate-spin" />
+                )}
+              </span>
               <span>턴: {detail.task.current_turn ?? 0}/{detail.task.max_turns ?? 0}</span>
             </div>
           </div>
 
+          {/* 계획 패널 (G3 plan + G5 실시간 상태) */}
+          {plan.length > 0 && (
+            <div className="rounded-md border border-border bg-surface-1 p-3">
+              <p className="mb-2 text-xs font-medium text-fg-2">
+                계획 ({plan.filter((s) => s.status === "completed").length}/{plan.length})
+              </p>
+              <ul className="space-y-1">
+                {plan.map((s, i) => (
+                  <li key={i} className="flex items-start gap-2 text-xs">
+                    <span className={cn(
+                      "font-mono",
+                      s.status === "completed" && "text-success",
+                      s.status === "in_progress" && "text-warning",
+                      s.status === "blocked" && "text-danger",
+                      s.status === "not_started" && "text-faint",
+                    )}>{PLAN_MARK[s.status]}</span>
+                    <span className={cn(
+                      "min-w-0 flex-1",
+                      s.status === "completed" ? "text-muted line-through" : "text-fg-2",
+                    )}>
+                      {s.text}{s.note ? <span className="text-faint"> — {s.note}</span> : null}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* 산출물 파일 (완료 시 workspace 보존) */}
+          {files.length > 0 && (
+            <div className="rounded-md border border-border bg-surface-1 p-3">
+              <p className="mb-2 text-xs font-medium text-fg-2">산출물 ({files.length})</p>
+              <ul className="space-y-1">
+                {files.map((f) => (
+                  <li key={f} className="text-xs">
+                    <a
+                      href={`/api/agent-tasks/${taskId}/files/download?path=${encodeURIComponent(f)}`}
+                      className="font-mono text-accent hover:underline"
+                      target="_blank" rel="noopener noreferrer"
+                    >
+                      {f}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* 실행 스텝 — 터미널 스타일(도구 출력 전문) */}
           {detail.steps.length === 0 ? (
             <p className="text-sm text-muted text-center py-4">스텝 기록이 없습니다.</p>
           ) : (
             <div className="space-y-2">
               <p className="text-xs font-medium text-fg-2">실행 스텝 ({detail.steps.length})</p>
-              <div className="max-h-80 overflow-y-auto space-y-2 pr-1">
-                {detail.steps.map((step, i) => (
-                  <div key={step.id} className="flex gap-3">
-                    <div className="flex flex-col items-center">
-                      <div className={cn(
-                        "flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-xs font-mono",
-                        "border-border bg-surface-2 text-faint",
-                      )}>
-                        {i + 1}
+              <div className="max-h-96 overflow-y-auto space-y-2 pr-1">
+                {detail.steps.map((step, i) => {
+                  const body = step.tool_output || step.content || "";
+                  const isTool = step.type === "tool_result" || !!step.tool_name;
+                  return (
+                    <div key={step.id} className="flex gap-3">
+                      <div className="flex flex-col items-center">
+                        <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-border bg-surface-2 text-xs font-mono text-faint">
+                          {i + 1}
+                        </div>
+                        {i < detail.steps.length - 1 && <div className="w-px flex-1 bg-border mt-1" />}
                       </div>
-                      {i < detail.steps.length - 1 && (
-                        <div className="w-px flex-1 bg-border mt-1" />
-                      )}
-                    </div>
-                    <div className="pb-3 min-w-0 flex-1">
-                      <div className="flex items-center gap-2 text-xs text-muted mb-0.5">
-                        <Badge tone="neutral">{step.type ?? "step"}</Badge>
-                        {step.tool_name && <span className="font-mono">{step.tool_name}</span>}
+                      <div className="pb-3 min-w-0 flex-1">
+                        <div className="flex items-center gap-2 text-xs text-muted mb-0.5">
+                          <Badge tone="neutral">{step.type ?? "step"}</Badge>
+                          {step.tool_name && <span className="font-mono">{step.tool_name}</span>}
+                        </div>
+                        {body && (
+                          <pre className={cn(
+                            "mt-1 max-h-40 overflow-auto whitespace-pre-wrap break-words rounded px-2 py-1 text-xs leading-relaxed",
+                            isTool ? "bg-surface-2 font-mono text-muted" : "text-fg-2",
+                          )}>
+                            {body.slice(0, 4000)}
+                          </pre>
+                        )}
                       </div>
-                      {step.content && (
-                        <p className="text-xs text-fg-2 line-clamp-3 leading-relaxed">
-                          {step.content}
-                        </p>
-                      )}
-                      {step.tool_output && (
-                        <p className="mt-1 text-xs text-muted font-mono line-clamp-2 bg-surface-2 rounded px-2 py-1">
-                          {step.tool_output}
-                        </p>
-                      )}
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}

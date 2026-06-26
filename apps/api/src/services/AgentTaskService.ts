@@ -379,7 +379,11 @@ export class AgentTaskService {
                 // end-of-turn 체크포인트: tool 결과까지 포함된 완전한 conversation + 완료 턴 번호.
                 // 이 시점의 conversation 은 tool_call_id 가 매칭된 valid 상태라 그대로 resume 가능.
                 // (현재 모든 도구가 idempotent-read 라 턴 재실행 안전 — write 도구 추가 시 gate 필요)
-                await db.updateAgentTask(taskId, { checkpoint: { conversation, completedTurn: turn } });
+                const planSnapshot = taskRuntime?.getPlanSnapshot();
+                await db.updateAgentTask(taskId, {
+                    checkpoint: { conversation, completedTurn: turn },
+                    ...(planSnapshot && planSnapshot.length > 0 ? { plan: planSnapshot } : {}),
+                });
             }
 
             // 턴 상한 도달 — 마지막 assistant 내용을 결과로 보존 (deliverable 태그가 있으면 추출)
