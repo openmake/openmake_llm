@@ -194,6 +194,13 @@ export class TaskSandbox {
         return readdir(abs);
     }
 
+    /** workspace 내 파일/디렉토리 삭제. 경로 가드 적용. */
+    async deleteFile(relPath: string): Promise<void> {
+        const abs = safeResolveWorkspacePath(this.hostWorkdir, relPath);
+        if (abs === resolve(this.hostWorkdir)) throw new Error('workspace 루트는 삭제할 수 없습니다');
+        await rm(abs, { recursive: true, force: true });
+    }
+
     /** 컨테이너 + workspace 정리. 멱등. */
     async cleanup(): Promise<void> {
         await runProcess(this.cfg.dockerPath, ['stop', '-t', '5', this.containerName],
