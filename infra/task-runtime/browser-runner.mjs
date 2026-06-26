@@ -52,7 +52,8 @@ try {
     context.setDefaultTimeout(timeout);
     if (allowlist) {
         await context.route('**', (route) => {
-            hostAllowed(route.request().url()) ? route.continue() : route.abort();
+            if (hostAllowed(route.request().url())) route.continue();
+            else route.abort();
         });
     }
     const page = await context.newPage();
