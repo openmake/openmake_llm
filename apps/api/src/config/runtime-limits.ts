@@ -1122,8 +1122,10 @@ export const AGENT_TASK_LIMITS = {
     /** 작업 전체 타임아웃 (ms) — AGENT_TASK_TIMEOUT_MS 환경변수로 오버라이드.
      *  기본 10분: HTML/디자인 등 장문 deliverable 생성은 단일 LLM 호출이 수 분 걸릴 수 있음. */
     TOTAL_TIMEOUT_MS: parseInt(process.env.AGENT_TASK_TIMEOUT_MS || '', 10) || 10 * 60 * 1000,
-    /** 누적 토큰 상한 (input + output) — runaway 토큰 폭주 방지. */
-    MAX_TOTAL_TOKENS: 200_000,
+    /** 누적 토큰 상한 (input + output) — runaway 토큰 폭주 방지. AGENT_MAX_TOTAL_TOKENS 로 오버라이드.
+     *  멀티턴 도구 작업은 매 턴 prompt_eval_count(전체 컨텍스트)를 누적 카운트하므로 200k 는
+     *  3턴 만에 소진됐다(샌드박스 도구 작업이 terminate 전에 실패). 기본 1M 으로 상향. */
+    MAX_TOTAL_TOKENS: parseInt(process.env.AGENT_MAX_TOTAL_TOKENS || '', 10) || 1_000_000,
     /** 검색류 도구 호출 횟수 하드 상한 — 초과 시 다음 턴부터 검색 도구를 제거해 강제 종합.
      *  AGENT_MAX_SEARCH_CALLS 환경변수로 오버라이드 가능 (기본 5). */
     MAX_SEARCH_CALLS: parseInt(process.env.AGENT_MAX_SEARCH_CALLS || '5', 10),
