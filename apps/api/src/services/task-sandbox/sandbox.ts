@@ -54,6 +54,28 @@ export function buildRunArgs(
 }
 
 /**
+ * PURE: 브라우저 전용 일회성 컨테이너 `docker run --rm` 인자 (유닛테스트 대상).
+ * 메인 샌드박스(network none)와 분리 — browser 만 browserNetwork(기본 bridge)에서 실행해
+ * bash/python 의 인터넷 미접근을 보장한다. workspace 는 공유(스크린샷·결과 저장).
+ */
+export function buildBrowserRunArgs(
+    hostWorkdir: string,
+    actionsRelPath: string,
+    cfg: TaskSandboxConfig,
+): string[] {
+    const a: string[] = ['run', '--rm', '--init'];
+    a.push('--network', cfg.browserNetwork || 'bridge');
+    a.push('--cap-drop', 'ALL', '--security-opt', 'no-new-privileges');
+    a.push('--pids-limit', String(cfg.pidsLimit), '--memory', cfg.memory, '--cpus', cfg.cpus);
+    a.push('--user', cfg.user);
+    a.push('--read-only', '--tmpfs', '/tmp:rw,exec', '--tmpfs', '/run:rw');
+    a.push('-v', `${hostWorkdir}:${WORKSPACE}:rw`);
+    a.push('-w', WORKSPACE);
+    a.push(cfg.image, 'node', '/opt/browser/browser-runner.mjs', actionsRelPath);
+    return a;
+}
+
+/**
  * PURE: workspace 내부로만 해석되는 안전 경로 반환 (유닛테스트 대상).
  * `..`/절대경로/심링크 표기로 workspace 를 탈출하려는 시도를 차단한다.
  */
@@ -173,6 +195,22 @@ export class TaskSandbox {
             ['exec', this.containerName, 'sh', '-c', command],
             { timeoutMs: this.cfg.execTimeoutMs, outputCap: this.cfg.outputCap },
         );
+    }
+
+    /** 브라우저 도구 활성 여부. */
+    get isBrowserEnabled(): boolean { return this.cfg.browserEnabled; }
+
+    /**
+     * 브라우저 액션을 별도 일회성 컨테이너(browserNetwork)에서 실행 — 메인 컨테이너(network none)와
+     * 분리해 bash/python 인터넷 미접근 보장. workspace 공유(스크린샷 저장). actionsRelPath 는 사전에 쓰여 있어야 함.
+     */
+    async runBrowser(actionsRelPath: string): Promise<ExecResult> {
+        this.assertCreated();
+        const args = buildBrowserRunArgs(this.hostWorkdir, actionsRelPath, this.cfg);
+        return runProcess(this.cfg.dockerPath, args, {
+            timeoutMs: Math.max(this.cfg.execTimeoutMs, 90_000),
+            outputCap: this.cfg.outputCap,
+        });
     }
 
     /** workspace 내 파일 쓰기 (호스트 bind-mount 직접). 경로 가드 적용. */
