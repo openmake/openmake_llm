@@ -2,8 +2,8 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import Image from "next/image";
-import { MessagesSquare, Telescope, Brain, Sparkles, FileCode2, ChevronRight, LoaderCircle } from "lucide-react";
-import { useAppStore, type PendingApproval } from "@/lib/store";
+import { MessagesSquare, Telescope, Brain, Sparkles, FileCode2, ChevronRight, LoaderCircle, Pause, CircleCheck, CircleX, Download, FileText, ShieldCheck } from "lucide-react";
+import { useAppStore, type PendingApproval, type AgentTaskState } from "@/lib/store";
 import { ApiClient } from "@/lib/api-client";
 import { Markdown } from "./markdown";
 import { StructuredAnswer } from "./structured-answer";
@@ -37,8 +37,10 @@ function InlineApprovals({ approvals }: { approvals: PendingApproval[] }) {
   }
 
   return (
-    <div className="mt-2 space-y-2 rounded-lg border border-warning/40 bg-warning-soft/40 p-2.5">
-      <p className="text-xs font-medium text-fg-2">도구 실행 승인 필요</p>
+    <div className="mt-1 space-y-2 rounded-md border border-warning-soft bg-warning-soft/50 p-2.5">
+      <p className="flex items-center gap-1.5 text-xs font-semibold text-fg-2">
+        <ShieldCheck className="h-3.5 w-3.5 text-warning" /> 도구 실행 승인 필요
+      </p>
       {approvals.map((a) => (
         <div key={a.approvalId} className="flex items-center justify-between gap-2 rounded-md border border-border bg-surface-1 p-2">
           <div className="min-w-0">
@@ -181,6 +183,94 @@ const QUICK_STARTS = [
   { icon: Sparkles, label: "브레인스토밍", prompt: "다음에 대해 브레인스토밍하자:\n\n" },
 ];
 
+/** 에이전트 작업 인라인 카드 — 상태별 벡터 아이콘 + 진행바 + 결과/아티팩트/산출물 + 승인 (이모지 없음). */
+type TaskTone = "run" | "pause" | "ok" | "fail";
+const TASK_STATUS: Record<string, { Icon: typeof Pause; spin: boolean; tone: TaskTone; badge: string }> = {
+  pending: { Icon: LoaderCircle, spin: true, tone: "run", badge: "대기" },
+  running: { Icon: LoaderCircle, spin: true, tone: "run", badge: "실행 중" },
+  paused: { Icon: Pause, spin: false, tone: "pause", badge: "승인 대기" },
+  completed: { Icon: CircleCheck, spin: false, tone: "ok", badge: "완료" },
+  failed: { Icon: CircleX, spin: false, tone: "fail", badge: "실패" },
+  cancelled: { Icon: CircleX, spin: false, tone: "fail", badge: "취소됨" },
+};
+const TONE_ICON: Record<TaskTone, string> = {
+  run: "bg-accent-soft text-accent",
+  pause: "bg-warning-soft text-warning",
+  ok: "bg-success-soft text-success",
+  fail: "bg-danger-soft text-danger",
+};
+const TONE_BADGE: Record<TaskTone, string> = {
+  run: "bg-accent-soft text-accent",
+  pause: "bg-warning-soft text-warning",
+  ok: "bg-success-soft text-success",
+  fail: "bg-danger-soft text-danger",
+};
+
+function AgentTaskCard({ task, approvals, taskId }: { task: AgentTaskState; approvals?: PendingApproval[]; taskId?: string }) {
+  const cfg = TASK_STATUS[task.status] ?? TASK_STATUS.running;
+  const pct = Math.max(0, Math.min(100, Math.round(task.progress || 0)));
+  const Icon = cfg.Icon;
+  const showProgress = task.status === "pending" || task.status === "running" || task.status === "paused";
+  return (
+    <div className="overflow-hidden rounded-lg border border-border bg-surface-1">
+      <div className="flex items-center gap-2.5 border-b border-border px-3.5 py-2.5">
+        <span className={cn("grid h-6 w-6 shrink-0 place-items-center rounded-md", TONE_ICON[cfg.tone])}>
+          <Icon className={cn("h-3.5 w-3.5", cfg.spin && "animate-spin")} />
+        </span>
+        <span className="text-[13px] font-semibold tracking-tight text-fg">에이전트 작업</span>
+        <span className={cn("ml-auto rounded-full px-2 py-0.5 font-mono text-[11px] font-semibold tabular-nums", TONE_BADGE[cfg.tone])}>
+          {cfg.badge}{cfg.tone !== "ok" && task.currentTurn > 0 ? ` · 턴 ${task.currentTurn}` : ""}
+        </span>
+      </div>
+      <div className="flex flex-col gap-2.5 px-3.5 py-3">
+        {task.goal && (
+          <p className="text-xs text-muted"><span className="font-semibold text-fg-2">목표</span>&nbsp; {task.goal}</p>
+        )}
+        {showProgress && (
+          <div className="flex items-center gap-2.5">
+            <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-3">
+              <div className="h-full rounded-full bg-accent transition-all" style={{ width: `${pct}%` }} />
+            </div>
+            <span className="shrink-0 font-mono text-[11px] tabular-nums text-faint">{pct}% · 턴 {task.currentTurn ?? 0}</span>
+          </div>
+        )}
+        {task.result && (task.status === "completed" || task.status === "failed") && (
+          <div className="border-t border-border pt-2.5 text-[13px] leading-relaxed text-fg-2">
+            {/* AssistantContent 가 [[artifact:id]] placeholder 를 클릭 칩으로 변환(일반 채팅과 동일). */}
+            <AssistantContent content={task.result} />
+          </div>
+        )}
+        {/* result placeholder 에 없는 잔여 아티팩트만 보강 칩으로(중복 방지). */}
+        {task.artifactIds && task.artifactIds.filter((id) => !(task.result ?? "").includes(`[[artifact:${id}]]`)).length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {task.artifactIds.filter((id) => !(task.result ?? "").includes(`[[artifact:${id}]]`)).map((id) => <ArtifactChip key={id} id={id} />)}
+          </div>
+        )}
+        {task.files && task.files.length > 0 && (
+          <div>
+            <div className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold text-muted">
+              <Download className="h-3 w-3" /> 산출물
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {task.files.map((f) => (
+                <a
+                  key={f}
+                  href={`/api/agent-tasks/${taskId ?? ""}/files/download?path=${encodeURIComponent(f)}`}
+                  target="_blank" rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 rounded-md border border-border bg-surface-2 px-2.5 py-1 text-xs font-medium text-fg-2 hover:bg-surface-3"
+                >
+                  <FileText className="h-3 w-3" /> {f}
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
+        {approvals && approvals.length > 0 && <InlineApprovals approvals={approvals} />}
+      </div>
+    </div>
+  );
+}
+
 /** 딥리서치 진행 배너 — 스트리밍 중 단계/진행/루프를 라이브 표시. */
 function ResearchProgressBanner() {
   const rp = useAppStore((s) => s.researchProgress);
@@ -296,18 +386,17 @@ export function MessageList() {
                 </details>
               )}
               <div className="text-sm leading-relaxed text-fg">
-                {m.structured ? (
+                {m.agentTask ? (
+                  <AgentTaskCard task={m.agentTask} approvals={m.approvals} taskId={m.taskId} />
+                ) : m.structured ? (
                   <StructuredAnswer data={m.structured} />
                 ) : (
                   <AssistantContent content={m.content} streaming={m.streaming} />
                 )}
-                {m.streaming && (
+                {m.streaming && !m.agentTask && (
                   <span className="ml-0.5 inline-block h-4 w-1.5 animate-pulse bg-accent align-text-bottom" />
                 )}
               </div>
-              {m.approvals && m.approvals.length > 0 && (
-                <InlineApprovals approvals={m.approvals} />
-              )}
             </div>
           </div>
         ),

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { WsChatRequest, WsServerEvent, WsAttachedFile } from "@openmake/shared-types";
-import { useAppStore, type StructuredAnswerData, type PendingApproval } from "./store";
+import { useAppStore, type StructuredAnswerData, type PendingApproval, type AgentTaskState } from "./store";
 import { ApiClient } from "./api-client";
 import { CLIENT_TIMING } from "./config";
 
@@ -47,38 +47,11 @@ function getAnonSessionId(): string {
   }
 }
 
-/** 에이전트 작업 메시지 마크다운 — 상태에 따라 진행바/완료/실패를 렌더. */
-function renderAgentTaskMessage(
-  goal: string,
-  status: string,
-  currentTurn: number,
-  progress: number,
-  result?: string,
-): string {
-  const head = `🤖 **에이전트 작업**${goal ? `\n\n**목표:** ${goal}` : ""}`;
-  if (status === "completed") {
-    return `${head}\n\n✅ **완료**\n\n---\n\n${result?.trim() || "_(결과 본문 없음)_"}`;
-  }
-  if (status === "failed" || status === "cancelled") {
-    const label = status === "failed" ? "실패" : "취소됨";
-    return `${head}\n\n❌ **${label}**${result?.trim() ? `\n\n---\n\n${result.trim()}` : ""}`;
-  }
-  if (status === "paused") {
-    return `${head}\n\n⏸️ **승인 대기 중** — 아래에서 도구 실행을 승인/거절하세요. · 턴 ${currentTurn ?? 0}`;
-  }
-  // pending / running
-  const pct = Math.max(0, Math.min(100, Math.round(progress || 0)));
-  const filled = Math.round(pct / 10);
-  const bar = "▓".repeat(filled) + "░".repeat(10 - filled);
-  return `${head}\n\n⏳ \`${bar}\` ${pct}% · 턴 ${currentTurn ?? 0}`;
-}
-
 export function useChatSocket() {
   const wsRef = useRef<WebSocket | null>(null);
   const [connected, setConnected] = useState(false);
   const reconnectRef = useRef(0);
   // 에이전트 작업 taskId → 목표(goal) — agent_task_progress 렌더에 사용
-  const agentGoalsRef = useRef<Map<string, string>>(new Map());
   // 구조화 답변(REST) 진행 중 AbortController — abort() 가 취소할 수 있게 보관
   const structuredAbortRef = useRef<AbortController | null>(null);
 
@@ -172,86 +145,68 @@ export function useChatSocket() {
           endArtifact(data.id);
           break;
         case "agent_task_progress": {
-          // 에이전트 작업 진행상황을 해당 메시지에 라이브 반영. 완료/실패 시 결과 본문 조회.
+          // 에이전트 작업 진행을 구조화 상태(agentTask)로 갱신 → AgentTaskCard 가 벡터 아이콘으로 렌더.
           const { taskId, status, progress, currentTurn } = data;
-          const goal = agentGoalsRef.current.get(taskId) ?? "";
           const terminal =
             status === "completed" || status === "failed" || status === "cancelled";
+          const merge = (extra: Partial<AgentTaskState>, approvals: PendingApproval[] | undefined) =>
+            setChatHistory((prev) =>
+              prev.map((m) =>
+                m.taskId === taskId
+                  ? {
+                      ...m,
+                      approvals,
+                      agentTask: {
+                        goal: m.agentTask?.goal ?? "",
+                        ...(m.agentTask ?? {}),
+                        status, currentTurn, progress,
+                        ...extra,
+                      } as AgentTaskState,
+                    }
+                  : m,
+              ),
+            );
+
           if (terminal) {
             void (async () => {
               let result = "";
-              const chips: string[] = [];
-              const fileLinks: string[] = [];
+              const artifactIds: string[] = [];
+              let files: string[] = [];
               try {
                 const r = await ApiClient.get<{
-                  data: {
-                    task: { result?: string };
-                    steps?: Array<{ step_type: string; content?: string }>;
-                  };
+                  data: { task: { result?: string }; steps?: Array<{ step_type: string; content?: string }> };
                 }>(`/api/agent-tasks/${taskId}`);
                 result = r?.data?.task?.result ?? "";
-                // deliverable 아티팩트 — store 등록 + [[artifact:id]] 칩 주입(일반 채팅과 동일 인라인).
+                // deliverable 아티팩트 — store 등록 후 카드가 칩으로 렌더.
                 const arts = (r?.data?.steps ?? [])
                   .filter((s) => s.step_type === "artifact")
                   .map((s) => { try { return JSON.parse(s.content ?? ""); } catch { return null; } })
                   .filter((a): a is { id: string; kind: string; title?: string; lang?: string | null; content?: string } => !!a?.id);
                 if (arts.length > 0) {
                   registerArtifacts(arts.map((a) => ({
-                    id: a.id, kind: a.kind, title: a.title ?? a.id, lang: a.lang ?? null,
-                    content: a.content ?? "", streaming: false,
+                    id: a.id, kind: a.kind, title: a.title ?? a.id, lang: a.lang ?? null, content: a.content ?? "", streaming: false,
                   })));
-                  for (const a of arts) chips.push(`[[artifact:${a.id}]]`);
+                  for (const a of arts) artifactIds.push(a.id);
                 }
-              } catch {
-                /* 결과 조회 실패 — 상태만 표시 */
-              }
-              // 산출물 파일(완료 시 workspace 보존) 다운로드 링크.
+              } catch { /* 결과 조회 실패 — 상태만 */ }
               try {
-                const f = await ApiClient.get<{ data: { files: string[] } }>(
-                  `/api/agent-tasks/${taskId}/files`,
-                );
-                for (const file of f?.data?.files ?? []) {
-                  fileLinks.push(`[${file}](/api/agent-tasks/${taskId}/files/download?path=${encodeURIComponent(file)})`);
-                }
+                const f = await ApiClient.get<{ data: { files: string[] } }>(`/api/agent-tasks/${taskId}/files`);
+                files = f?.data?.files ?? [];
               } catch { /* 파일 없음 */ }
-              const extras =
-                (chips.length ? `\n\n${chips.join(" ")}` : "") +
-                (fileLinks.length ? `\n\n**📎 산출물:** ${fileLinks.join(" · ")}` : "");
-              setChatHistory((prev) =>
-                prev.map((m) =>
-                  m.taskId === taskId
-                    ? { ...m, approvals: undefined, content: renderAgentTaskMessage(goal, status, currentTurn, progress, result) + extras }
-                    : m,
-                ),
-              );
-              agentGoalsRef.current.delete(taskId);
+              merge({ result, artifactIds, files }, undefined);
             })();
           } else if (status === "paused") {
-            // 승인 대기 — 해당 task 의 pending approval 을 조회해 채팅에 인라인 승인 버튼 노출.
+            // 승인 대기 — 해당 task 의 pending approval 조회 → 카드에 인라인 승인 버튼.
             void (async () => {
               let mine: PendingApproval[] = [];
               try {
-                const r = await ApiClient.get<{ data: { pending: PendingApproval[] } }>(
-                  `/api/agent-tasks/approvals/pending`,
-                );
+                const r = await ApiClient.get<{ data: { pending: PendingApproval[] } }>(`/api/agent-tasks/approvals/pending`);
                 mine = (r?.data?.pending ?? []).filter((p) => p.taskId === taskId);
               } catch { /* 조회 실패 — 상태만 */ }
-              setChatHistory((prev) =>
-                prev.map((m) =>
-                  m.taskId === taskId
-                    ? { ...m, approvals: mine, content: renderAgentTaskMessage(goal, status, currentTurn, progress) }
-                    : m,
-                ),
-              );
+              merge({}, mine);
             })();
           } else {
-            setChatHistory((prev) =>
-              prev.map((m) =>
-                m.taskId === taskId
-                  ? { ...m, approvals: undefined, content: renderAgentTaskMessage(goal, status, currentTurn, progress) }
-                  : m,
-              ),
-            );
+            merge({}, undefined);
           }
           break;
         }
@@ -295,7 +250,7 @@ export function useChatSocket() {
 
       // 첨부만 있고 본문이 비면 파일명을 표시용 본문으로 사용
       const displayContent =
-        message.trim() || (hasFiles ? `📎 ${files!.map((f) => f.name).join(", ")}` : "");
+        message.trim() || (hasFiles ? files!.map((f) => f.name).join(", ") : "");
       appendMessage({ role: "user", content: displayContent, images });
       setActiveAgent(null); // 새 질문 — 이전 에이전트/스킬 표시 초기화
       setActiveSkills([]);
@@ -344,12 +299,12 @@ export function useChatSocket() {
         );
         const taskId = created?.data?.task?.id;
         if (!taskId) throw new Error("작업 생성 응답에 taskId 가 없습니다");
-        // 진행상황 메시지 — agent_task_progress 이벤트로 taskId 로 식별해 라이브 업데이트.
-        agentGoalsRef.current.set(taskId, goal);
+        // 진행상황 카드 — agent_task_progress 이벤트로 taskId 로 식별해 라이브 업데이트.
         appendMessage({
           role: "assistant",
           taskId,
-          content: renderAgentTaskMessage(goal, "pending", 0, 0),
+          content: "",
+          agentTask: { goal, status: "pending", currentTurn: 0, progress: 0 },
         });
         await ApiClient.post(`/api/agent-tasks/${taskId}/execute`);
       } catch (e) {
