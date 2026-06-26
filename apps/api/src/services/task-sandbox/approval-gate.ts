@@ -19,8 +19,8 @@ import { createLogger } from '../../utils/logger';
 
 const logger = createLogger('TaskApprovalGate');
 
-/** 승인이 필요한 고위험 도구(high-risk 정책 시). */
-const HIGH_RISK_TOOLS = new Set(['bash']);
+/** 승인이 필요한 고위험 도구(high-risk 정책 시). browser=네트워크 egress. */
+const HIGH_RISK_TOOLS = new Set(['bash', 'browser']);
 /** 고위험으로 보는 file_ops 작업. */
 const HIGH_RISK_FILE_OPS = new Set(['delete']);
 
