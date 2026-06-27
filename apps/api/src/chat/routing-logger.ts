@@ -16,8 +16,6 @@ export interface RoutingQueryFeatures {
     confidence: number;
     hasImages: boolean;
     queryLength: number;
-    isBrandModel: boolean;
-    brandProfile?: string;
 }
 
 export interface RoutingRouteDecision {
@@ -94,7 +92,6 @@ export function createRoutingLogEntry(partial: Partial<RoutingDecisionLog>): Rou
             confidence: 0,
             hasImages: false,
             queryLength: 0,
-            isBrandModel: false,
         },
         routeDecision: partial.routeDecision ?? {
             strategy: 'direct',

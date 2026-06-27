@@ -11,7 +11,6 @@
 import { createLogger } from '../../utils/logger';
 import type { AgentSelection } from '../../agents';
 import { AGENTS } from '../../agents';
-import type { ExecutionPlan } from '../../chat/profile-resolver';
 import { postResponseCheck, preRequestCheck } from '../../chat/security-hooks';
 import { logRoutingDecision, type RoutingDecisionLog } from '../../chat/routing-logger';
 import { recordChatMetrics } from '../chat-service-metrics';
@@ -39,8 +38,6 @@ export interface MetricsRecordParams {
     selectedAgent: (typeof AGENTS)[string];
     /** 에이전트 선택 결과 */
     agentSelection: AgentSelection;
-    /** Brand Model 실행 계획 */
-    executionPlan: ExecutionPlan | undefined;
     /** 보안 사전 검사 결과 */
     securityPreCheck: ReturnType<typeof preRequestCheck>;
     /** 라우팅 결정 로그 */
@@ -55,7 +52,7 @@ export interface MetricsRecordParams {
 export function recordMetricsAndVerify(params: MetricsRecordParams): void {
     const {
         fullResponse, startTime, message, model, req, selectedAgent,
-        agentSelection, executionPlan, securityPreCheck, routingLog,
+        agentSelection, securityPreCheck, routingLog,
     } = params;
 
     recordChatMetrics({
@@ -66,7 +63,6 @@ export function recordMetricsAndVerify(params: MetricsRecordParams): void {
         apiKeyId: req.apiKeyId,
         selectedAgent,
         agentSelection,
-        executionPlan,
     });
 
     // ── 보안 사후 검사 + 라우팅 로그 완료 ──

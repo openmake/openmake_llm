@@ -57,7 +57,7 @@ AI 채팅 어시스턴트 API 문서
         { name: 'Cluster', description: '클러스터 관리' },
         { name: 'System', description: '시스템 정보 및 상태' },
         { name: 'API Keys', description: 'API Key 관리 (외부 개발자용)' },
-        { name: 'Models', description: 'Brand Model 목록' }
+        { name: 'Models', description: '모델 목록' }
     ],
     paths: {
         ...chatPaths,

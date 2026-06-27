@@ -26,7 +26,6 @@ import { getExecutionPlanBuilder } from '../../chat/execution-plan-builder';
 import type { UnifiedExecutionPlan } from '../../chat/execution-plan-types';
 import { applyStyle, normalizeStyle } from '../../chat/style';
 import { resolveAnswerFormatProfile, applyAnswerFormat, getAnswerFormatGuard } from '../../chat/answer-format';
-import { normalizeBrandAlias, logAliasHitIfAny } from '../../chat/brand-alias-normalizer';
 import { runProviderGate } from './provider-gate';
 import type { RequestContext } from './request-context';
 import { buildChatOptions, assembleHistoryWithSummary } from './options-and-history';
@@ -219,17 +218,9 @@ export async function runMessagePipeline(svc: ChatService,
         req.userLanguagePreference = languagePolicy.resolvedLanguage;
     }
 
-    // Phase D (2026-05-26): brand alias normalization — discussion/thinking 분기 이전.
-    // 외부 OpenAI 호환 클라이언트가 'openmake_llm_pro' 등을 보냈을 때 직교 축 자동 적용.
-    // build() 안에서도 동일 normalize 호출하지만 빠른 모드 분기 (discussion/research) 가
-    // 먼저라서 여기서도 적용. normalize 는 순수 함수라 중복 호출 cost 0.
-    const aliasNorm = normalizeBrandAlias(
-        executionPlan?.requestedModel,
-        (await import('../../config/env')).getConfig().llmDefaultModel,
-    );
-    logAliasHitIfAny(aliasNorm);
-    const effectiveDiscussionMode = discussionMode === true || aliasNorm.discussionMode === true;
-    const effectiveThinkingMode = req.thinkingMode === true || aliasNorm.thinkingMode === true;
+    // 동작은 직교 축(Discussion/Thinking 토글)으로만 제어 — 사용자 명시 토글만 신뢰.
+    const effectiveDiscussionMode = discussionMode === true;
+    const effectiveThinkingMode = req.thinkingMode === true;
 
     // 이미지 생성 모드: 토글 ON 이면 메시지를 프롬프트로 이미지를 직접 생성한다 (결정적 경로 —
     // LLM 의 도구 호출 결정에 의존하지 않아 일부 모델이 이미지를 안 그리는 문제를 회피).
@@ -237,18 +228,13 @@ export async function runMessagePipeline(svc: ChatService,
         return generateImageInline((req.message ?? '').trim(), onToken);
     }
 
-    // 토론 모드: 사용자 명시 토글 또는 alias-derived (Pro alias).
+    // 토론 모드: 사용자 명시 토글.
     if (effectiveDiscussionMode) {
         return svc.processMessageWithDiscussion(req, onToken, onDiscussionProgress);
     }
 
     if (deepResearchMode) {
         return svc.processMessageWithDeepResearch(req, onToken, onResearchProgress);
-    }
-
-    // alias-derived thinking 을 req 에 reflect (downstream 처리)
-    if (effectiveThinkingMode && req.thinkingMode !== true) {
-        req.thinkingMode = true;
     }
 
     const startTime = Date.now();
@@ -260,8 +246,6 @@ export async function runMessagePipeline(svc: ChatService,
             confidence: 0,
             hasImages: (images && images.length > 0) || false,
             queryLength: (message || '').length,
-            isBrandModel: !!executionPlan?.isBrandModel,
-            brandProfile: executionPlan?.requestedModel,
         },
     });
 
@@ -364,8 +348,7 @@ export async function runMessagePipeline(svc: ChatService,
         // 2026-05-26 옵션 B 통합 (외부 provider 경로):
         // Custom Agent (user_agents) 활성 시 산업 agent 라우팅 우회 + allowedSkills 주입.
         // 2026-05-26 cleanup: 전체 build() 대신 loadUserAgent 단독 호출 —
-        // 외부 provider 가 자체 model 처리하므로 modelSelection /
-        // aliasDerived* 등 다른 build 결과는 미사용 (over-fetch 제거).
+        // 외부 provider 가 자체 model 처리하므로 modelSelection 등 다른 build 결과는 미사용 (over-fetch 제거).
         let agentSysMsgForExternal = industryAgentSysMsg;
         if (req.userAgentId && userId && userId !== 'guest') {
             try {
@@ -574,7 +557,7 @@ export async function runMessagePipeline(svc: ChatService,
     // ── Step 6: 메트릭 기록 및 보안 사후 검사 ──
     svc.recordMetricsAndVerify({
         fullResponse, startTime, message: message || '', req, selectedAgent, agentSelection,
-        executionPlan, securityPreCheck, routingLog,
+        securityPreCheck, routingLog,
     });
 
     // ── 응답 품질 검증: 빈 응답 또는 비정상적으로 짧은 응답 감지 ──

@@ -64,7 +64,7 @@ router.post('/web-search', requireAuth, validate(webSearchSchema), asyncHandler(
 
       logger.info(`[WebSearch] ${searchResults.length}개 결과 찾음`);
 
-      // §9 Pipeline Profile: brand model alias → 실제 엔진 모델 해석
+      // §9 Pipeline Profile: 요청 모델 → 실제 엔진 모델 해석
       const wsPlan = buildExecutionPlan(model || '');
       const wsIsAuto = wsPlan.resolvedEngine === '__auto__';
       const wsEngineModel = wsIsAuto ? '' : (wsPlan.resolvedEngine || model);

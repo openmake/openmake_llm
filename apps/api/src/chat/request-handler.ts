@@ -10,7 +10,7 @@
  * @module chat/request-handler
  * @description
  * - resolveUserContext(): Express req 또는 WebSocket 연결에서 사용자 컨텍스트 추출
- * - buildPlan(): brand model alias → ExecutionPlan 변환
+ * - buildPlan(): 요청 모델 → ExecutionPlan 변환
  * - createClient(): 요청별 격리된 LLMClient 생성
  * - ensureSession(): 세션 존재 확인 및 생성
  * - saveUserMessage(): 사용자 메시지 DB 저장

@@ -3,7 +3,7 @@
  * Unified Execution Plan — Phase B Routing Unification
  * ============================================================
  *
- * 기존 layer (brand profile / model-resolver / classifier) 의 출력을 단일
+ * 기존 layer (model-resolver / classifier) 의 출력을 단일
  * 구조체로 통합합니다. `ExecutionPlan` 과 `ModelSelection` 을 포함합니다.
  * (capacity 결정은 LLMClient.chat per-call 에서 처리 — plan 에 포함하지 않음.)
  *
@@ -24,14 +24,6 @@ export interface UnifiedExecutionPlan extends ExecutionPlan {
 
     /** Phase 2 Custom Agent (2026-05-26): 해석된 사용자 agent. 미설정 시 null */
     userAgent: ResolvedUserAgent | null;
-
-    /**
-     * Phase D (2026-05-26): brand alias 가 derive 한 mode toggle.
-     * ChatService 는 req.thinkingMode || aliasDerived.thinkingMode 식으로 OR 합성.
-     * 사용자 명시 toggle 우선.
-     */
-    aliasDerivedThinkingMode: boolean;
-    aliasDerivedDiscussionMode: boolean;
 }
 
 export interface BuildPlanInput {

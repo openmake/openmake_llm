@@ -16,8 +16,6 @@
 import { buildExecutionPlan } from './profile-resolver';
 import { selectOptimalModel } from './model-selector';
 import { normalizeStyle } from './style';
-import { normalizeBrandAlias, logAliasHitIfAny } from './brand-alias-normalizer';
-import { getConfig } from '../config/env';
 import { createLogger } from '../utils/logger';
 import type {
     BuildPlanInput,
@@ -38,20 +36,9 @@ export class ExecutionPlanBuilder {
     async build(input: BuildPlanInput): Promise<UnifiedExecutionPlan> {
         const { message, hasImages, executionPlan, style: rawStyle, userAgentId, userId } = input;
 
-        // Phase D (2026-05-26): brand alias normalization — backward compat.
-        // executionPlan.requestedModel 이 legacy alias 면 직교 축으로 매핑 + style/mode 자동 적용.
-        const cfg = getConfig();
-        const aliasResult = normalizeBrandAlias(
-            executionPlan?.requestedModel,
-            cfg.llmDefaultModel,
-        );
-        logAliasHitIfAny(aliasResult);
-        // alias 가 style/thinking/discussion 을 derive 했으면 input override (사용자 명시 우선)
-        const effectiveStyle = rawStyle ?? aliasResult.style;
-
         const profilePlan = executionPlan ?? buildExecutionPlan('');
         const modelSelection = await selectOptimalModel(message, hasImages);
-        const style = normalizeStyle(effectiveStyle);
+        const style = normalizeStyle(rawStyle);
 
         // Phase 2 Custom Agent (2026-05-26): userAgentId 명시 시 소유권 검증 후 prepend.
         // 조회 실패 시 silent fallback — chat 흐름 차단 금지.
@@ -71,14 +58,12 @@ export class ExecutionPlanBuilder {
             modelSelection,
             style,
             userAgent,
-            aliasDerivedThinkingMode: !!aliasResult.thinkingMode,
-            aliasDerivedDiscussionMode: !!aliasResult.discussionMode,
         };
     }
 
     /**
      * Custom Agent 단독 로딩 — 외부 provider 분기 등 full build() 가 필요 없는
-     * 경로 (modelSelection·aliasDerived 미사용) 에서 user agent
+     * 경로 (modelSelection 미사용) 에서 user agent
      * 정보만 빠르게 얻기 위한 public helper.
      */
     async loadUserAgent(

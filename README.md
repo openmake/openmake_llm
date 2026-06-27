@@ -20,7 +20,7 @@
 
 **OpenMake LLM** is a self-hosted AI assistant you run on your own hardware. It serves a local model through **vLLM** behind a **LiteLLM proxy** (OpenAI-compatible) and routes the *same* abstraction to external providers (Anthropic, OpenAI-compatible) whenever you want them — so your data stays on your machine by default.
 
-Every request flows through a lightweight, deterministic policy layer — **`ExecutionPlanBuilder`** (regex + fast-path classification) — that picks one of **7 model profiles** (Default, Pro, Fast, Think, Code, Vision, Auto) and assembles options *without* an extra LLM round-trip. Beyond chat, it adds autonomous agents, a deep-research pipeline, and an MCP tool system — all behind JWT auth and role-based access control.
+Every request flows through a lightweight, deterministic policy layer — **`ExecutionPlanBuilder`** (regex + fast-path classification) — that routes the single local model and assembles options *without* an extra LLM round-trip. Behavior is controlled by orthogonal axes only — **Model · Style · Mode toggles · Custom Agent** — instead of opaque presets. Beyond chat, it adds autonomous agents, a deep-research pipeline, and an MCP tool system — all behind JWT auth and role-based access control.
 
 > **Single-host design:** the app runs under **PM2**, while stateful dependencies (PostgreSQL/Redis) and sandboxed agent/MCP processes run in **Docker** for isolation.
 
@@ -29,7 +29,7 @@ Every request flows through a lightweight, deterministic policy layer — **`Exe
 ## Features
 
 **▸ Models & routing**
-- 7 model profiles selected per request by the `ExecutionPlanBuilder` policy layer.
+- Single local model routed per request by the `ExecutionPlanBuilder` policy layer; behavior controlled by orthogonal axes (Model · Style · Mode · Custom Agent).
 - Self-hosted vLLM + LiteLLM (default `qwen3.6-35b-a3b`) with a context-fit safety net that protects output tokens and degrades gracefully on overflow.
 - Bring-your-own external keys (Anthropic / OpenAI-compatible), AES-256-GCM encrypted at rest.
 
