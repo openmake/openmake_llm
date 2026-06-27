@@ -85,7 +85,7 @@ export interface TaskSandboxConfig {
      * 샌드박스 활성 시 샌드박스 도구와 함께 LLM 에 노출할 비-샌드박스(내장 MCP) 도구 화이트리스트(이름).
      * 전체 MCP 카탈로그(~150 도구)는 vLLM 문법 컴파일 폭주를 유발하므로 제외하되,
      * 샌드박스로 대체 불가한 소수 고가치 도구(예: generate_image)만 선별 노출.
-     * 비면 샌드박스 도구만 노출(순수 Manus). 기본 generate_image.
+     * 비면 샌드박스 도구만 노출(순수 Manus). 기본 generate_image,web_search.
      * ⚠️ 이 도구들은 task 도구가 아니라 HITL 승인 게이트를 우회해 직접 실행된다 —
      * FS/셸 변경이 없는 생성·조회류(generate_image 등)만 등록할 것. 위험 도구 금지.
      */
@@ -125,7 +125,7 @@ export function getTaskSandboxConfig(): TaskSandboxConfig {
         egressNetwork: process.env.TASK_SANDBOX_EGRESS_NETWORK || 'omk-egress-internal',
         egressProxyContainer: process.env.TASK_SANDBOX_EGRESS_PROXY_CONTAINER || 'omk-egress-proxy',
         egressProxyPort: intEnv(process.env.TASK_SANDBOX_EGRESS_PROXY_PORT, 8888),
-        extraTools: (process.env.TASK_SANDBOX_EXTRA_TOOLS ?? 'generate_image')
+        extraTools: (process.env.TASK_SANDBOX_EXTRA_TOOLS ?? 'generate_image,web_search')
             .split(',').map((s) => s.trim()).filter(Boolean),
     };
 }

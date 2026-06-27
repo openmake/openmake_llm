@@ -228,14 +228,11 @@ export class AgentTaskService {
             // 전체 MCP 카탈로그(~150 도구)를 함께 넘기면 도구 스키마 union 이 수백 KB 로 부풀어
             // vLLM guided-decoding 문법 컴파일이 100s+ 로 폭주 → LLM_TIMEOUT 초과(Connection error).
             // Manus 모델에선 에이전트가 컨테이너 셸/브라우저로 작업하므로 외부 MCP 카탈로그가 불필요.
-            // 단, 샌드박스로 대체 불가한 소수 고가치 내장 도구(extraTools 화이트리스트, 예: generate_image)는
-            // mcpTools 에서 이름으로 선별해 합류 — 도구 수가 적어 문법 컴파일 폭주를 유발하지 않는다.
-            // 샌드박스 OFF(legacy) 경로는 기존대로 전체 MCP 도구 사용.
+            // 단, 샌드박스로 대체 불가한 소수 고가치 내장 도구(extraTools 화이트리스트, 예: generate_image,
+            // web_search)는 mcpTools 에서 이름으로 선별해 합류 — 도구 수가 적어 문법 컴파일 폭주가 없다.
             // extraTools 로 노출된 비-task 도구 이름 집합 — 디스패치에서 호스트 실행 전 승인 게이트 적용에 사용.
             const extraToolNames = new Set<string>();
-            let tools = mcpTools;
-            if (taskRuntime) {
-                const sandboxToolNames = new Set(taskRuntime.getLLMTools().map((t) => t.function.name));
+            const buildExtra = (sandboxToolNames: Set<string>): typeof mcpTools => {
                 const extra: typeof mcpTools = [];
                 for (const name of sandboxCfg.extraTools) {
                     // 샌드박스 도구와 이름 충돌 시 제외(중복 function.name 으로 인한 요청 거부·섀도잉 방지).
@@ -252,7 +249,20 @@ export class AgentTaskService {
                     extra.push(tool);
                     extraToolNames.add(name);
                 }
-                tools = [...extra, ...taskRuntime.getLLMTools()];
+                return extra;
+            };
+            let tools: typeof mcpTools;
+            if (taskRuntime) {
+                const sandboxTools = taskRuntime.getLLMTools();
+                tools = [...buildExtra(new Set(sandboxTools.map((t) => t.function.name))), ...sandboxTools];
+            } else if (sandboxCfg.enabled) {
+                // 샌드박스 ENABLED 인데 생성 실패(degrade): 전체 카탈로그(~150)는 hang 을 유발하므로
+                // 화이트리스트 도구만으로 진행 — 셸 작업은 불가하나 검색·이미지·작성 작업은 계속 가능.
+                tools = buildExtra(new Set<string>());
+                logger.warn(`[AgentTask] 샌드박스 미가용 — extraTools(${extraToolNames.size}개)만으로 진행 (전체 카탈로그 미전달)`);
+            } else {
+                // 샌드박스 OFF(legacy) 경로 — 기존대로 전체 MCP 도구 사용.
+                tools = mcpTools;
             }
 
             for (let turn = startTurn; turn < turnCeiling; turn++) {
@@ -390,9 +400,10 @@ export class AgentTaskService {
                             terminated = true;
                             terminateSummary = String(args.summary ?? '');
                         }
-                    } else if (taskRuntime && extraToolNames.has(name)) {
+                    } else if (extraToolNames.has(name)) {
                         // extra(화이트리스트) 도구 — 샌드박스 밖 호스트에서 실행되지만 HITL 승인은 task 도구와 동일 적용.
                         // (이 도구들은 격리 컨테이너가 아니라 API 프로세스에서 실행되므로 승인 우회를 닫는다.)
+                        // extraToolNames 는 샌드박스 ENABLED(활성·degrade) 일 때만 채워지므로 legacy OFF 경로엔 영향 없음.
                         const decision = requiresApproval(sandboxCfg.approvalPolicy, name, args)
                             ? await getApprovalRegistry().request(
                                 { taskId, userId, toolName: name, args },
