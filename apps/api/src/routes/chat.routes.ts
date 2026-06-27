@@ -101,8 +101,9 @@ router.post('/', optionalApiKey, optionalAuth, chatRateLimiter, validate(chatReq
             onThinking: (thinking: string) => { thinkingTrace += thinking; },
         });
 
-        // §9 디버그 정보 (x-omk-debug 헤더가 있을 때만 노출)
-        const debugRequested = req.headers['x-omk-debug'] === 'true';
+        // §9 디버그 정보 — 인증된 관리자 + x-omk-debug 헤더일 때만 노출.
+        // (게스트 허용 라우트라 내부 라우팅 정보가 미인증 호출자에게 새지 않도록 admin 게이트.)
+        const debugRequested = req.headers['x-omk-debug'] === 'true' && userContext.userRole === 'admin';
         const pipelineInfo = debugRequested ? {
             requestedModel: result.executionPlan.requestedModel,
             engine: result.executionPlan.resolvedEngine,
