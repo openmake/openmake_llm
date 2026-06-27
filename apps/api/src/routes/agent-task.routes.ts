@@ -272,6 +272,10 @@ router.get('/:taskId/files/download', asyncHandler(async (req: Request, res: Res
     } catch {
         return res.status(400).json(badRequest('잘못된 경로입니다.'));
     }
+    // 전역 setupSecurity 가 /api 응답에 Content-Type: application/json 을 미리 박아두므로,
+    // res.download(sendFile)이 확장자 기반 MIME 으로 덮어쓰지 못한다(이미 설정된 헤더는 유지).
+    // 헤더를 제거해 sendFile 의 확장자 자동 감지(.xlsx/.pdf 등)를 복원한다.
+    res.removeHeader('Content-Type');
     res.download(abs, basename(rel), (err) => {
         if (err && !res.headersSent) res.status(404).json(notFound('파일을 찾을 수 없습니다.'));
     });
