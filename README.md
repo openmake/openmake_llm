@@ -1,7 +1,8 @@
 <h1 align="center">OpenMake LLM</h1>
 
 <p align="center">
-  <strong>A self-hosted, multi-model AI assistant platform — vLLM/LiteLLM local inference with autonomous agents, MCP tools, and deep research.</strong>
+  <strong>A self-hosted, multi-model AI assistant platform.</strong><br/>
+  Private vLLM/LiteLLM inference · autonomous agents · MCP tools · deep research.
 </p>
 
 <p align="center">
@@ -15,140 +16,128 @@
 
 ---
 
-## Table of Contents
+## Overview
 
-1. [Introduction](#introduction)
-2. [Features](#features)
-3. [Tech Stack](#tech-stack)
-4. [Installation & Usage](#installation--usage)
-5. [Project Structure](#project-structure)
-6. [Contributing](#contributing)
-7. [License](#license)
+**OpenMake LLM** is a self-hosted AI assistant you run on your own hardware. It serves a local model through **vLLM** behind a **LiteLLM proxy** (OpenAI-compatible) and routes the *same* abstraction to external providers (Anthropic, OpenAI-compatible) whenever you want them — so your data stays on your machine by default.
+
+Every request flows through a lightweight, deterministic policy layer — **`ExecutionPlanBuilder`** (regex + fast-path classification) — that picks one of **7 model profiles** (Default, Pro, Fast, Think, Code, Vision, Auto) and assembles options *without* an extra LLM round-trip. Beyond chat, it adds autonomous agents, a deep-research pipeline, and an MCP tool system — all behind JWT auth and role-based access control.
+
+> **Single-host design:** the app runs under **PM2**, while stateful dependencies (PostgreSQL/Redis) and sandboxed agent/MCP processes run in **Docker** for isolation.
 
 ---
 
-## Introduction
-
-**OpenMake LLM** is a self-hosted AI assistant platform with multi-model orchestration that you run on your own hardware. Instead of relying solely on a third-party API, it serves a local model through **vLLM** behind a **LiteLLM proxy** that exposes an OpenAI-compatible endpoint, and routes the same abstraction to external providers (Anthropic, OpenAI-compatible) when you want them.
-
-A lightweight, deterministic routing layer (**`ExecutionPlanBuilder`** — regex + fast-path classification) maps each query onto one of **7 brand model profiles** (Default, Pro, Fast, Think, Code, Vision, Auto), so the right model and options are selected per request without an extra LLM round-trip.
-
-On top of chat, OpenMake LLM ships autonomous **agent tasks** that run in isolated, persistent Docker sandboxes with human-in-the-loop approval, a **deep research** pipeline, a **Model Context Protocol (MCP)** tool system, and an artifact runtime — all behind JWT auth with Google OAuth and role-based access control.
-
-> Designed to run on a single host: the application is deployed with **PM2**, while stateful dependencies (PostgreSQL/Redis) and sandboxed MCP/agent processes run in **Docker** for isolation.
-
 ## Features
 
-- 🧠 **Multi-model orchestration** — 7 brand profiles routed by an `ExecutionPlanBuilder` policy layer; switch model, response style (Concise/Default/Verbose), and modes from the chat composer.
-- 🏠 **Self-hosted inference** — vLLM + LiteLLM (OpenAI-compatible), default model `qwen3.6-35b-a3b`, with a context-fit safety net that protects output tokens and degrades gracefully on overflow.
-- 🔌 **External providers** — bring your own Anthropic or OpenAI-compatible keys (AES-256-GCM encrypted at rest) through the same provider abstraction.
-- 🤖 **Autonomous agent tasks** — a Manus-style agent works toward a goal across multiple tool-calling turns inside a **persistent Docker sandbox** (shell, Python, browser, file, planning tools) gated by HITL approval. Produces deliverables including **Excel (.xlsx)** and **PDF** (with CJK/Korean font support).
-- 🔭 **Deep research** — multi-step, fan-out web search → source fetch → claim verification → cited synthesis.
-- 🛠️ **MCP tool system** — built-in tools plus sandboxed external MCP servers, isolated per-server with Docker (`--cap-drop ALL`, non-root, network policy, no host mount).
-- 🧩 **Custom agents & skills** — define project-scoped agents (custom system prompts) and a skill library that can be auto-selected per query.
-- 💾 **Cross-conversation memory & custom instructions** — persistent user memory and always-on instructions prepended to the system prompt.
-- 🎨 **Artifacts** — live sandboxed iframe rendering, optional Docker-based code execution, and a separate-origin strict-CSP shared viewer.
-- 🔐 **Security** — JWT access tokens in HttpOnly cookies, Google OAuth 2.0, RBAC, per-route rate limiting, SSRF guard, Helmet headers, and a unified Audit ↔ Alert pipeline.
+**🧠 Models & routing**
+- 7 model profiles selected per request by the `ExecutionPlanBuilder` policy layer.
+- Self-hosted vLLM + LiteLLM (default `qwen3.6-35b-a3b`) with a context-fit safety net that protects output tokens and degrades gracefully on overflow.
+- Bring-your-own external keys (Anthropic / OpenAI-compatible), AES-256-GCM encrypted at rest.
+
+**🤖 Agents & research**
+- **Autonomous agent tasks** — a Manus-style agent pursues a goal across multiple tool-calling turns inside a **persistent Docker sandbox** (shell, Python, browser, file, planning tools) with human-in-the-loop approval. Produces deliverables including **Excel (.xlsx)** and **PDF** (with Korean/CJK fonts).
+- **Deep research** — fan-out web search → source fetch → claim verification → cited synthesis.
+- **Custom agents & skills** — project-scoped agents and an auto-selectable skill library.
+
+**🛠️ Tools & extensibility**
+- **MCP tool system** — built-in tools plus external MCP servers, each isolated in Docker (`--cap-drop ALL`, non-root, network policy, no host mount).
+- **Artifacts** — live sandboxed iframe rendering, optional Docker code execution, and a separate-origin strict-CSP shared viewer.
+- **Memory & instructions** — persistent cross-conversation memory and always-on custom instructions.
+
+**🔐 Security**
+- JWT in HttpOnly cookies, Google OAuth 2.0, RBAC, per-route rate limiting, SSRF guard, Helmet headers, and a unified Audit ↔ Alert pipeline.
+
+---
 
 ## Tech Stack
 
 | Layer | Technologies |
 |---|---|
 | **Backend** | Node.js (≥24), Express 5, TypeScript (strict, CommonJS), Zod, Winston |
-| **Frontend** | Next.js 16, React 19, Zustand 5, Tailwind CSS 4, TypeScript 5 |
-| **Database** | PostgreSQL via `pg` Pool — raw, parameterized SQL (no ORM) |
-| **Realtime** | WebSocket (`ws`) for streaming chat |
-| **LLM backend** | vLLM serve + LiteLLM proxy (OpenAI-compatible); `@anthropic-ai/sdk`, `openai` for external providers |
-| **Tools / Agents** | Model Context Protocol (`@modelcontextprotocol/sdk`), Docker-isolated sandboxes |
-| **Auth / Security** | `jsonwebtoken` (JWT), Google OAuth 2.0, Helmet, AES-256-GCM key encryption |
-| **Infra** | PM2 (app), Docker (PostgreSQL/Redis + MCP/agent sandboxes) |
-| **Testing / CI** | Jest (ts-jest), Playwright (chromium + webkit), ESLint, GitHub Actions |
+| **Frontend** | Next.js 16, React 19, Zustand 5, Tailwind CSS 4 |
+| **Database** | PostgreSQL via `pg` — raw, parameterized SQL (no ORM) |
+| **Realtime** | WebSocket (`ws`) streaming chat |
+| **LLM backend** | vLLM + LiteLLM (OpenAI-compatible); `@anthropic-ai/sdk`, `openai` for external providers |
+| **Agents / Tools** | Model Context Protocol (`@modelcontextprotocol/sdk`), Docker-isolated sandboxes |
+| **Auth / Security** | `jsonwebtoken`, Google OAuth 2.0, Helmet, AES-256-GCM |
+| **Infra** | PM2 (app) + Docker (PostgreSQL/Redis, MCP & agent sandboxes) |
+| **Testing / CI** | Jest (ts-jest), Playwright, ESLint, GitHub Actions |
 
-> **Architecture note:** the chat pipeline is a two-layer (policy ↔ execution) design — `ExecutionPlanBuilder.build` (policy, once per request) → strategy dispatch → `LLMClient.chat` (execution, per call). Treat them like a SQL planner/executor and keep them separate.
+> **Pipeline shape:** `ExecutionPlanBuilder.build` (policy, once per request) → strategy dispatch → `LLMClient.chat` (execution, per call) — a SQL planner/executor split; keep the two layers separate.
 
-## Installation & Usage
+---
+
+## Getting Started
 
 ### Prerequisites
 
 - **Node.js** `>=24 <25`
-- **PostgreSQL** (run via Docker; see below)
-- An OpenAI-compatible LLM endpoint — either a local **vLLM + LiteLLM** stack or an external provider key
+- **PostgreSQL** (run via Docker — see below)
+- An OpenAI-compatible LLM endpoint: a local **vLLM + LiteLLM** stack, or an external provider key
 
-### 1. Clone & install
+### Setup
 
 ```bash
+# 1. Clone & install (npm workspaces)
 git clone https://github.com/openmake/openmake_llm.git
 cd openmake_llm
-npm install            # installs all npm workspaces
-```
+npm install
 
-### 2. Configure environment
+# 2. Configure environment
+cp .env.example .env      # then fill in the values below
 
-```bash
-cp .env.example .env
-```
-
-Key variables (see `.env.example` for the full list):
-
-| Variable | Purpose |
-|---|---|
-| `PORT` | API server port (default `52416`) |
-| `DATABASE_URL` | PostgreSQL connection string |
-| `JWT_SECRET` | JWT signing secret |
-| `TOKEN_ENCRYPTION_KEY` | AES-256-GCM key for external provider credentials |
-| `LLM_BASE_URL` | LiteLLM proxy endpoint (e.g. `http://localhost:4000`) |
-| `LLM_API_KEY` | LiteLLM master key |
-| `LLM_DEFAULT_MODEL` | Default model id (e.g. `qwen3.6-35b-a3b`) |
-| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google OAuth |
-
-### 3. Start PostgreSQL (Docker)
-
-The application schema is auto-generated on first launch — no manual migration step is required to boot.
-
-```bash
+# 3. Start PostgreSQL (schema auto-generates on first launch)
 docker compose up -d postgres
 ```
 
-### 4. Develop
+Minimum `.env` values (see `.env.example` for the full list):
+
+| Variable | Purpose |
+|---|---|
+| `PORT` | API port (default `52416`) |
+| `DATABASE_URL` | PostgreSQL connection string |
+| `JWT_SECRET` | JWT signing secret |
+| `TOKEN_ENCRYPTION_KEY` | AES-256-GCM key for external provider credentials |
+| `LLM_BASE_URL` / `LLM_API_KEY` / `LLM_DEFAULT_MODEL` | LiteLLM proxy endpoint, master key, default model |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google OAuth |
+
+### Run
 
 ```bash
-npm run dev                 # API + frontend concurrently
-# or individually:
-npm run dev:api             # backend (ts-node)
-npm run dev:frontend-next   # frontend (next dev)
-```
+# Development
+npm run dev                 # API + frontend together
+npm run dev:api             # backend only (ts-node)
+npm run dev:frontend-next   # frontend only (next dev)
 
-### 5. Build & run (production)
-
-```bash
+# Production
 npm run build               # backend + frontend
 npm start                   # node apps/api/dist/server.js
 ```
 
-### Testing & linting
+### Test & lint
 
 ```bash
 npm test                    # Jest unit tests (apps/api)
-npx jest path/to/file.test.ts
 npm run test:e2e            # Playwright (chromium + webkit)
 npm run lint                # ESLint
 ```
 
 ### Database migrations
 
-Files in `db/migrations/` are **not** auto-applied on boot — apply them manually with the CLI:
+Files in `db/migrations/` are **not** auto-applied — run them with the CLI:
 
 ```bash
 npx ts-node apps/api/src/data/migrations/cli.ts status    # show pending
 npx ts-node apps/api/src/data/migrations/cli.ts migrate   # apply
 ```
 
+---
+
 ## Project Structure
 
 ```
 openmake_llm/
 ├── apps/
-│   ├── api/          # Express 5 + TypeScript API server (CommonJS, ES2022, strict)
+│   ├── api/          # Express 5 + TypeScript API server (strict, CommonJS)
 │   │   └── src/
 │   │       ├── routes/ controllers/ services/   # REST + business logic
 │   │       ├── chat/                            # ExecutionPlanBuilder, classifiers, prompts
@@ -159,7 +148,7 @@ openmake_llm/
 │   │       ├── auth/ security/ middlewares/     # JWT/OAuth, SSRF guard, rate limiting
 │   │       └── data/                            # PostgreSQL (raw SQL), migrations, repositories
 │   ├── web/          # Next.js + React frontend (the operating UI)
-│   └── legacy-web/   # Static asset host (e.g. /generated images) — legacy SPA retired
+│   └── legacy-web/   # Static asset host (e.g. /generated) — legacy SPA retired
 ├── db/               # init schema + migrations
 ├── packages/         # shared-types, config, api-client (shared workspaces)
 ├── infra/            # Dockerfiles (mcp-runtime, task-runtime, …)
@@ -167,23 +156,28 @@ openmake_llm/
 └── tests/            # Playwright E2E
 ```
 
+---
+
 ## Contributing
 
-Contributions are welcome! Please follow these conventions:
+Contributions are welcome. Please:
 
-- **Commits** — [Conventional Commits](https://www.conventionalcommits.org/): `feat`, `fix`, `refactor`, `docs`, `test`, `chore` (e.g. `feat(chat): add style cycle button`).
-- **Branching** — work on a feature/fix branch and open a PR against `main`.
-- **PR checklist:**
-  - [ ] `npm run lint` passes
-  - [ ] `npm test` (backend unit tests) passes
-  - [ ] DB schema changes include a migration file (no sequence-number conflicts)
-  - [ ] New env vars documented in `.env.example`
-  - [ ] UI changes include screenshots
-  - [ ] Security-relevant changes describe their impact
-- **Code conventions** — TypeScript strict mode; validate input with Zod; log via Winston (`createLogger('Module')`); database access is **raw parameterized SQL only** (no ORM / query builder); externalize configuration (no hardcoded models, magic numbers, or inline prompts).
+- Use [Conventional Commits](https://www.conventionalcommits.org/) — `feat`, `fix`, `refactor`, `docs`, `test`, `chore`.
+- Work on a feature/fix branch and open a PR against `main`.
+- Follow the code conventions: TypeScript strict mode, Zod for input validation, Winston for logging, **raw parameterized SQL only** (no ORM), and externalized configuration (no hardcoded models, magic numbers, or inline prompts).
+
+**Before opening a PR:**
+
+- [ ] `npm run lint` passes
+- [ ] `npm test` passes
+- [ ] DB schema changes include a migration file (no sequence conflicts)
+- [ ] New env vars documented in `.env.example`
+- [ ] UI changes include screenshots; security changes describe their impact
 
 CI runs a single **CI Gate** (Test → Build → Size → Lint) on every push and pull request.
 
+---
+
 ## License
 
-This project is licensed under the **MIT License** — see the [LICENSE](LICENSE) file for details.
+Released under the **MIT License** — see [LICENSE](LICENSE) for details.
