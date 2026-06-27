@@ -17,7 +17,7 @@ ENV PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright
 
 # 실작업 상시 도구 + playwright chromium(+OS 의존성). root 설치 후 비-root 복귀.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends git curl ca-certificates ripgrep \
+    && apt-get install -y --no-install-recommends git curl ca-certificates ripgrep fonts-nanum \
     && mkdir -p /workspace /opt/browser \
     && chown node:node /workspace \
     && cd /opt/browser && npm init -y >/dev/null 2>&1 \
