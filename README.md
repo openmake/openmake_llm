@@ -28,22 +28,22 @@ Every request flows through a lightweight, deterministic policy layer — **`Exe
 
 ## Features
 
-**🧠 Models & routing**
+**▸ Models & routing**
 - 7 model profiles selected per request by the `ExecutionPlanBuilder` policy layer.
 - Self-hosted vLLM + LiteLLM (default `qwen3.6-35b-a3b`) with a context-fit safety net that protects output tokens and degrades gracefully on overflow.
 - Bring-your-own external keys (Anthropic / OpenAI-compatible), AES-256-GCM encrypted at rest.
 
-**🤖 Agents & research**
+**▸ Agents & research**
 - **Autonomous agent tasks** — a Manus-style agent pursues a goal across multiple tool-calling turns inside a **persistent Docker sandbox** (shell, Python, browser, file, planning tools) with human-in-the-loop approval. Produces deliverables including **Excel (.xlsx)** and **PDF** (with Korean/CJK fonts).
 - **Deep research** — fan-out web search → source fetch → claim verification → cited synthesis.
 - **Custom agents & skills** — project-scoped agents and an auto-selectable skill library.
 
-**🛠️ Tools & extensibility**
+**▸ Tools & extensibility**
 - **MCP tool system** — built-in tools plus external MCP servers, each isolated in Docker (`--cap-drop ALL`, non-root, network policy, no host mount).
 - **Artifacts** — live sandboxed iframe rendering, optional Docker code execution, and a separate-origin strict-CSP shared viewer.
 - **Memory & instructions** — persistent cross-conversation memory and always-on custom instructions.
 
-**🔐 Security**
+**▸ Security**
 - JWT in HttpOnly cookies, Google OAuth 2.0, RBAC, per-route rate limiting, SSRF guard, Helmet headers, and a unified Audit ↔ Alert pipeline.
 
 ---
