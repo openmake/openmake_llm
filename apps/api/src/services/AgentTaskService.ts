@@ -21,7 +21,7 @@ import { getUnifiedMCPClient } from '../mcp/unified-client';
 import { getUnifiedDatabase } from '../data/models/unified-database';
 import { AGENT_TASK_LIMITS, MAX_TOOL_RESULT_CHARS } from '../config/runtime-limits';
 import { emitAgentTaskProgress } from '../utils/event-bus';
-import { getAgentTaskSystemPrompt, getAgentTaskDeliverableNudge, getAgentTaskStuckNudge, getTaskSandboxGuidance } from '../prompts/agent-task-prompt';
+import { getAgentTaskSystemPrompt, getAgentTaskDeliverableNudge, getAgentTaskStuckNudge, getAgentTaskBrowserLimitNudge, getTaskSandboxGuidance } from '../prompts/agent-task-prompt';
 import { extractAndStripArtifacts, type ExtractedArtifact } from '../llm/artifact-parser';
 import { getPushService } from './PushService';
 import { createLogger } from '../utils/logger';
@@ -134,6 +134,8 @@ export class AgentTaskService {
         let totalTokens = 0;
         let searchCalls = 0;
         let searchLimitNotified = false;
+        let browserCalls = 0;
+        let browserLimitNotified = false;
         let curStatus = 'pending';
         let curProgress = 0;
         let curTurn = 0;
@@ -273,11 +275,18 @@ export class AgentTaskService {
                     progress: Math.min(95, 5 + Math.round((turn / turnCeiling) * 90)),
                 });
 
-                // 검색류 도구 호출이 한도를 넘으면 검색 도구를 제거해 강제로 종합/작성 단계로 유도.
-                // 프롬프트 지시를 LLM 이 무시하더라도 도구 자체가 사라지므로 검색 폭주가 끊긴다.
+                // 검색류/브라우저 도구 호출이 한도를 넘으면 해당 도구를 제거해 강제로 종합/작성 단계로 유도.
+                // 프롬프트 지시를 LLM 이 무시하더라도 도구 자체가 사라지므로 탐색 폭주가 끊긴다.
+                // browser 는 SEARCH_TOOL_KEYWORDS 에 안 잡혀 검색 throttle 로 제어 불가하므로 별도 cap.
                 const overSearchLimit = searchCalls >= AGENT_TASK_LIMITS.MAX_SEARCH_CALLS;
-                const effectiveTools = overSearchLimit
-                    ? tools.filter((t) => !isSearchTool(t.function.name))
+                const overBrowserLimit = browserCalls >= AGENT_TASK_LIMITS.MAX_BROWSER_CALLS;
+                const effectiveTools = (overSearchLimit || overBrowserLimit)
+                    ? tools.filter((t) => {
+                        const n = t.function.name;
+                        if (overSearchLimit && isSearchTool(n)) return false;
+                        if (overBrowserLimit && n === 'browser') return false;
+                        return true;
+                    })
                     : tools;
                 if (overSearchLimit && !searchLimitNotified) {
                     conversation.push({
@@ -285,6 +294,10 @@ export class AgentTaskService {
                         content: '검색 횟수 한도에 도달했습니다. 더 이상 검색하지 말고, 지금까지 수집한 정보만으로 최종 결과물(예: 블로그 초안)을 완성해 작성하세요.',
                     });
                     searchLimitNotified = true;
+                }
+                if (overBrowserLimit && !browserLimitNotified) {
+                    conversation.push({ role: 'user', content: getAgentTaskBrowserLimitNudge() });
+                    browserLimitNotified = true;
                 }
 
                 // per-call abort: 작업 잔여 예산을 호출에도 바인딩 — 응답이 hang 되면
@@ -387,6 +400,7 @@ export class AgentTaskService {
                     if (signal.aborted) throw new AgentTaskAbort('aborted');
                     const name = tc.function.name;
                     if (isSearchTool(name)) searchCalls++;
+                    if (name === 'browser') browserCalls++;
                     const args = (tc.function.arguments ?? {}) as Record<string, unknown>;
                     let toolResult: string;
                     if (taskRuntime?.isTaskTool(name)) {

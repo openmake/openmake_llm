@@ -1131,6 +1131,11 @@ export const AGENT_TASK_LIMITS = {
     MAX_SEARCH_CALLS: parseInt(process.env.AGENT_MAX_SEARCH_CALLS || '5', 10),
     /** 검색/정보수집 도구 식별 키워드 (tool name 에 포함되면 검색류로 카운트) */
     SEARCH_TOOL_KEYWORDS: ['search', 'visit_page', 'research', 'firecrawl', 'scrape', 'crawl', 'fetch'] as readonly string[],
+    /** 샌드박스 browser 도구 호출 횟수 하드 상한 — browser 는 SEARCH_TOOL_KEYWORDS 에 안 잡혀
+     *  검색 throttle 로 제어되지 않으므로 별도 cap. 초과 시 다음 턴부터 browser 도구를 제거해
+     *  강제 종합. 탐색·추출이 여러 호출로 나뉘므로 검색보다 넉넉히(기본 10).
+     *  AGENT_MAX_BROWSER_CALLS 로 오버라이드. */
+    MAX_BROWSER_CALLS: parseInt(process.env.AGENT_MAX_BROWSER_CALLS || '10', 10),
     /** stuck 감지 — 동일 assistant 응답이 이 횟수만큼 연속되면 전략변경 프롬프트 주입(무한루프 방지).
      *  OpenManus BaseAgent.is_stuck 패턴. AGENT_STUCK_THRESHOLD 로 오버라이드(기본 3). */
     STUCK_THRESHOLD: parseInt(process.env.AGENT_STUCK_THRESHOLD || '3', 10),
