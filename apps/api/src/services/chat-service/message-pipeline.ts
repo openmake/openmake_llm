@@ -218,6 +218,13 @@ export async function runMessagePipeline(svc: ChatService,
         req.userLanguagePreference = languagePolicy.resolvedLanguage;
     }
 
+    // 관측: 구 brand alias(openmake_llm_*) 입력 추적 — 동작 분기 없음(default fallback 됨),
+    // 레거시 외부 클라가 아직 alias 를 보내는지 운영 관측용 1줄 info. (alias 목록 의존 없이 prefix 패턴만.)
+    const reqModel = executionPlan?.requestedModel;
+    if (reqModel && /^openmake[-_]llm[-_]/i.test(reqModel)) {
+        logger.info(`[legacy-model-id] '${reqModel}' → default fallback (구 brand alias). 동작은 직교 축 토글로만 제어.`);
+    }
+
     // 동작은 직교 축(Discussion/Thinking 토글)으로만 제어 — 사용자 명시 토글만 신뢰.
     const effectiveDiscussionMode = discussionMode === true;
     const effectiveThinkingMode = req.thinkingMode === true;
