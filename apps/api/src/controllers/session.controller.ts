@@ -99,7 +99,7 @@ export class SessionController {
                  updatedAt: s.updated_at,
                  metadata: s.metadata,
                  messageCount: s.messages?.length || 0,
-                 // 🆕 첫 번째 메시지에서 모델 정보 추출 (브랜드 모델명으로 표시)
+                 // 🆕 첫 번째 메시지에서 모델 정보 추출 (모델명으로 표시)
                  model: s.messages?.[0]?.model || 'OpenMake LLM Auto'
              }));
 

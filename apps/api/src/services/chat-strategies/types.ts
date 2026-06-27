@@ -182,7 +182,7 @@ export interface AgentLoopStrategyContext extends ChatContext {
     thinkingMode?: boolean;
     /** Thinking 깊이 수준 */
     thinkingLevel?: 'low' | 'medium' | 'high';
-    /** Brand Model 실행 계획 */
+    /** 실행 계획 */
     executionPlan?: ExecutionPlan;
     /** 현재 사용자 컨텍스트 (도구 접근 권한 확인용) */
     currentUserContext: UserContext | null;

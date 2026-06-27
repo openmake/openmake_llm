@@ -4,7 +4,7 @@
  * ============================================================
  *
  * 단일 로컬 모델 환경에서 ExecutionPlan / 채팅 strategy 가 공유하는
- * narrow type alias 만 남았다 (이전의 brand profile 시스템 잔여).
+ * narrow type alias (ExecutionStrategy).
  *
  * @module chat/pipeline-profile
  * @see chat/profile-resolver.ts - ExecutionPlan 정의에서 ExecutionStrategy 사용

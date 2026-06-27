@@ -38,7 +38,7 @@ const logger = createLogger('ProfileResolver');
  * promptStrategy, contextStrategy, timeBudgetMs). 외부 호출처 0 확인 후 삭제.
  */
 export interface ExecutionPlan {
-    /** 원본 요청 모델명 (brand alias 또는 원본 모델) */
+    /** 원본 요청 모델명 */
     requestedModel: string;
 
     /** 해석된 프로파일 (현재 항상 null — 단일 로컬 모델 환경) */
@@ -56,10 +56,7 @@ export interface ExecutionPlan {
     /** 필수 도구 목록 */
     requiredTools: string[];
 
-    /** brand model 여부 (외부 API Key 요청인지 판별) */
-    isBrandModel: boolean;
-
-    /** Auto-Routing에서 분류된 원본 QueryType (Brand Profile 직접 선택 시 undefined) */
+    /** Auto-Routing에서 분류된 원본 QueryType */
     classifiedQueryType?: QueryType;
 
     /** 실행 전략 — 'single' | 'generate-verify' | 'conditional-verify' */
@@ -101,7 +98,6 @@ export function buildExecutionPlan(
         thinkingLevel: 'medium',
         useDiscussion: false,
         requiredTools: [],
-        isBrandModel: false,
         executionStrategy: 'single',
     };
 }

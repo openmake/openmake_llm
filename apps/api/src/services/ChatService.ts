@@ -9,13 +9,13 @@
  * @module services/ChatService
  * @description
  * - 에이전트 자동 라우팅 및 시스템 프롬프트 조립
- * - Brand Model 프로파일 기반 실행 전략 분기 (Direct, GV, Discussion, DeepResearch, AgentLoop)
+ * - 실행 전략 분기 (Direct, GV, Discussion, DeepResearch, AgentLoop)
  * - 문서/이미지/웹검색 컨텍스트 통합
  * - 사용량 추적 및 모니터링 메트릭 기록
  *
  * @requires ../agents - 에이전트 라우팅 및 시스템 메시지
  * @requires ../chat/model-selector - 최적 모델 자동 선택
- * @requires ../chat/profile-resolver - Brand Model → ExecutionPlan 변환
+ * @requires ../chat/profile-resolver - 요청 모델 → ExecutionPlan 변환
  * @requires ../ollama/client - Ollama HTTP 클라이언트
  */
 import { createLogger } from '../utils/logger';
@@ -306,7 +306,7 @@ export class ChatService {
      * 1. 사용자 컨텍스트 설정 및 모드 분기 (Discussion/DeepResearch)
      * 2. 에이전트 라우팅 및 시스템 프롬프트 구성
      * 3. 문서/이미지/웹검색 컨텍스트 통합
-     * 4. 모델 선택 (Brand Model 또는 Auto-Routing)
+     * 4. 모델 선택 (Auto-Routing)
      * 5. GV(Generate-Verify) 전략 실행 → 실패 시 AgentLoop 폴백
      * 6. 사용량 메트릭 기록
      *
@@ -358,7 +358,7 @@ export class ChatService {
                     'chat.query_length': (req.message || '').length,
                     'chat.has_images': (req.images?.length ?? 0) > 0,
                     'chat.history_length': req.history?.length ?? 0,
-                    'chat.brand_profile': executionPlan?.requestedModel || 'none',
+                    'chat.requested_model': executionPlan?.requestedModel || 'none',
                     'chat.discussion_mode': req.discussionMode === true,
                     'chat.deep_research_mode': req.deepResearchMode === true,
                     'chat.thinking_mode': req.thinkingMode === true,
@@ -481,7 +481,6 @@ export class ChatService {
         req: ChatMessageRequest;
         selectedAgent: typeof AGENTS[string];
         agentSelection: AgentSelection;
-        executionPlan: ExecutionPlan | undefined;
         securityPreCheck: ReturnType<typeof preRequestCheck>;
         routingLog: RoutingDecisionLog;
     }): void {

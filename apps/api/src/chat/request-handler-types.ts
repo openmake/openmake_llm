@@ -50,7 +50,7 @@ export interface ExecutionPlanResult {
 export interface ChatRequestParams {
     /** 사용자 메시지 */
     message: string;
-    /** 모델명 (brand alias 또는 모델 ID) */
+    /** 모델명 (모델 ID) */
     model?: string;
     /** 특정 노드 지정 */
     nodeId?: string;

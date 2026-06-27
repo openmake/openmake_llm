@@ -9,7 +9,7 @@
  *
  * @module routes/v1/index
  * @description
- * - GET    /api/v1/models        - 브랜드 모델 목록 조회
+ * - GET    /api/v1/models        - 모델 목록 조회
  * - GET    /api/v1/usage         - API Key 전체 사용량 요약
  * - GET    /api/v1/usage/daily   - API Key 일별 사용량
  * - /api/v1/chat, /agents, /mcp, /usage, /metrics 등 서브 라우터 마운트
@@ -143,7 +143,7 @@ v1Router.use('/external', externalRouter);
 v1Router.use('/push', pushRouter);
 v1Router.use('/api-keys', apiKeysRouter);
 
-// §9 Brand Model 목록 (외부 API Key 사용자용)
+// §9 모델 목록 (외부 API Key 사용자용)
 v1Router.get('/models', asyncHandler(async (_req, res) => {
     const created = Math.floor(Date.now() / 1000);
     const models = listAvailableModels();

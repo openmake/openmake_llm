@@ -10,7 +10,6 @@
  */
 import { createLogger } from '../utils/logger';
 import { getApiUsageTracker } from '../llm';
-import type { ExecutionPlan } from '../chat/profile-resolver';
 import { recordTokenUsage } from '../middlewares/rate-limit-headers';
 
 const logger = createLogger('ChatService');
@@ -28,7 +27,6 @@ const logger = createLogger('ChatService');
  * @param params.model - 사용된 모델 이름
  * @param params.selectedAgent - 선택된 에이전트 정보
  * @param params.agentSelection - 에이전트 라우팅 결과
- * @param params.executionPlan - Brand Model 실행 계획 (선택적)
  */
 export function recordChatMetrics(params: {
     fullResponse: string;
@@ -38,9 +36,8 @@ export function recordChatMetrics(params: {
     apiKeyId?: string;
     selectedAgent: { name: string };
     agentSelection: { primaryAgent: string };
-    executionPlan?: ExecutionPlan;
 }): void {
-    const { fullResponse, startTime, message, model, apiKeyId, selectedAgent, agentSelection, executionPlan } = params;
+    const { fullResponse, startTime, message, model, apiKeyId, selectedAgent, agentSelection } = params;
 
     // 사용량 추적 및 모니터링 메트릭 기록 (실패해도 응답 반환에 영향 없음)
     // 변경 이력 (2026-05-19): getApiKeyManager / currentKey 사용 제거. Ollama 시절 키 풀
@@ -58,7 +55,6 @@ export function recordChatMetrics(params: {
             tokens: tokenCount,
             responseTime,
             model,
-            profileId: executionPlan?.isBrandModel ? executionPlan.requestedModel : undefined,
         });
 
         try {

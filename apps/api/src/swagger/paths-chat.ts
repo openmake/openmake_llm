@@ -428,7 +428,7 @@ export const chatPaths = {
                             type: 'object',
                             required: ['model', 'messages'],
                             properties: {
-                                model: { type: 'string', description: 'Model ID (e.g., openmake_llm, openmake_llm_pro)' },
+                                model: { type: 'string', description: 'Model ID (e.g., openmake_llm)' },
                                 messages: {
                                     type: 'array',
                                     items: {

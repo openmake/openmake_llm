@@ -103,8 +103,8 @@ router.post('/', optionalApiKey, optionalAuth, chatRateLimiter, validate(chatReq
 
         // §9 디버그 정보 (x-omk-debug 헤더가 있을 때만 노출)
         const debugRequested = req.headers['x-omk-debug'] === 'true';
-        const pipelineInfo = debugRequested && result.executionPlan.isBrandModel ? {
-            profile: result.executionPlan.requestedModel,
+        const pipelineInfo = debugRequested ? {
+            requestedModel: result.executionPlan.requestedModel,
             engine: result.executionPlan.resolvedEngine,
             strategy: result.executionPlan.executionStrategy,
             thinking: result.executionPlan.thinkingLevel,

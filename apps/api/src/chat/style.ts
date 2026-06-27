@@ -11,9 +11,9 @@
  *   - Style: 시스템 정의 3개 옵션, per-session toggle
  *   - Custom Instructions: 사용자 자유 작성, 영구 (users.custom_instructions)
  *
- * 도입 배경 (2026-05-26): Phase B Phase 2-A 완료 후 brand profile 7개를
- * 직교 축 (Model · Style · Mode · CI) 로 재구성. brand profile 의 응답 형식
- * 관련 의미 (Concise/Fast 등) 를 본 모듈이 흡수.
+ * 도입 배경 (2026-05-26): Phase B Phase 2-A 완료 후 구 model profile 7개를
+ * 직교 축 (Model · Style · Mode · CI) 로 재구성. 구 profile 의 응답 형식
+ * 관련 의미 (Concise 등) 를 본 모듈이 흡수.
  *
  * @module chat/style
  */
