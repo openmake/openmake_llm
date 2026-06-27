@@ -83,3 +83,8 @@ export function getTaskSandboxGuidance(): string {
 export function getAgentTaskStuckNudge(): string {
     return '같은 시도를 반복하고 있습니다. 접근 방식을 바꾸세요: 다른 도구나 다른 입력을 시도하거나, 막혔다면 지금까지의 결과로 작업을 마무리(terminate)하거나 사용자에게 도움을 요청(ask_human)하세요.';
 }
+
+/** browser 도구 호출 한도 도달 시 주입 — 더 이상 탐색하지 말고 수집한 정보로 종합·작성 유도. */
+export function getAgentTaskBrowserLimitNudge(): string {
+    return '브라우저 탐색 횟수 한도에 도달했습니다. 더 이상 웹을 탐색하지 말고, 지금까지 수집한 정보만으로 최종 결과물을 완성해 작성하세요.';
+}
