@@ -33,6 +33,7 @@ import { mergeToolsWithSkills, type ActiveSkillBinding } from './chat-service/to
 import { getTaskSandboxConfig } from '../config/task-sandbox';
 import { TaskRuntime } from './task-sandbox/runtime';
 import { TASK_TERMINATE_SENTINEL } from './task-sandbox/tools';
+import { requiresApproval, getApprovalRegistry } from './task-sandbox/approval-gate';
 
 const logger = createLogger('AgentTaskService');
 
@@ -192,7 +193,9 @@ export class AgentTaskService {
 
             // 영속 샌드박스(Manus화) — 플래그 ON 일 때만. OFF 면 runtime=null 로 기존 동작 그대로.
             // 생성 실패는 작업을 죽이지 않고 샌드박스 없이 진행(graceful degrade).
-            if (getTaskSandboxConfig().enabled) {
+            // 설정은 한 번만 읽어 enabled 게이트·런타임·extraTools·승인 정책이 동일 스냅샷을 공유.
+            const sandboxCfg = getTaskSandboxConfig();
+            if (sandboxCfg.enabled) {
                 try {
                     // G4 위임: subgoal 을 적합 산업 전문가 페르소나로 1회 자문(재귀 루프 없음).
                     const delegateFn = async (subgoal: string, role?: string): Promise<string> => {
@@ -204,7 +207,7 @@ export class AgentTaskService {
                         );
                         return r.content ?? '';
                     };
-                    taskRuntime = new TaskRuntime(taskId, userId, getTaskSandboxConfig(), delegateFn);
+                    taskRuntime = new TaskRuntime(taskId, userId, sandboxCfg, delegateFn);
                     await taskRuntime.create();
                     await db.updateAgentTask(taskId, {
                         sandboxContainerId: taskRuntime.containerName,
@@ -225,8 +228,32 @@ export class AgentTaskService {
             // 전체 MCP 카탈로그(~150 도구)를 함께 넘기면 도구 스키마 union 이 수백 KB 로 부풀어
             // vLLM guided-decoding 문법 컴파일이 100s+ 로 폭주 → LLM_TIMEOUT 초과(Connection error).
             // Manus 모델에선 에이전트가 컨테이너 셸/브라우저로 작업하므로 외부 MCP 카탈로그가 불필요.
+            // 단, 샌드박스로 대체 불가한 소수 고가치 내장 도구(extraTools 화이트리스트, 예: generate_image)는
+            // mcpTools 에서 이름으로 선별해 합류 — 도구 수가 적어 문법 컴파일 폭주를 유발하지 않는다.
             // 샌드박스 OFF(legacy) 경로는 기존대로 전체 MCP 도구 사용.
-            const tools = taskRuntime ? taskRuntime.getLLMTools() : mcpTools;
+            // extraTools 로 노출된 비-task 도구 이름 집합 — 디스패치에서 호스트 실행 전 승인 게이트 적용에 사용.
+            const extraToolNames = new Set<string>();
+            let tools = mcpTools;
+            if (taskRuntime) {
+                const sandboxToolNames = new Set(taskRuntime.getLLMTools().map((t) => t.function.name));
+                const extra: typeof mcpTools = [];
+                for (const name of sandboxCfg.extraTools) {
+                    // 샌드박스 도구와 이름 충돌 시 제외(중복 function.name 으로 인한 요청 거부·섀도잉 방지).
+                    if (sandboxToolNames.has(name)) {
+                        logger.warn(`[AgentTask] extraTools '${name}' 가 샌드박스 도구와 이름 충돌 — 무시`);
+                        continue;
+                    }
+                    const tool = mcpTools.find((t) => t.function.name === name);
+                    if (!tool) {
+                        // 오타·스킬 거부 등으로 카탈로그에 없으면 조용히 누락되지 않게 경고.
+                        logger.warn(`[AgentTask] extraTools '${name}' 를 도구 카탈로그에서 찾지 못함 — 노출 생략`);
+                        continue;
+                    }
+                    extra.push(tool);
+                    extraToolNames.add(name);
+                }
+                tools = [...extra, ...taskRuntime.getLLMTools()];
+            }
 
             for (let turn = startTurn; turn < turnCeiling; turn++) {
                 this.assertWithinLimits(signal, startedAt, totalTokens);
@@ -337,6 +364,15 @@ export class AgentTaskService {
                 // 도구 실행 + 체크포인트
                 let terminated = false;
                 let terminateSummary = '';
+                // 승인 대기 진입 콜백 — task 도구·extra 도구 공용(status='paused' + web-push).
+                const onApprovalPending = (toolName: string) => {
+                    void update({ status: 'paused' }).catch(() => { /* noop */ });
+                    void getPushService().sendPush(userId, {
+                        title: 'OpenMake 에이전트 — 승인 필요',
+                        body: `도구 실행 승인을 기다립니다: ${toolName}`,
+                        url: '/agent-tasks.html',
+                    }).catch(() => { /* noop */ });
+                };
                 for (const tc of result.tool_calls!) {
                     if (signal.aborted) throw new AgentTaskAbort('aborted');
                     const name = tc.function.name;
@@ -347,20 +383,26 @@ export class AgentTaskService {
                         // task 도구 — 승인 게이트 통과 후 영속 샌드박스에서 실행.
                         toolResult = await taskRuntime.executeTaskTool(name, args, {
                             signal,
-                            onApprovalPending: (p) => {
-                                void update({ status: 'paused' }).catch(() => { /* noop */ });
-                                void getPushService().sendPush(userId, {
-                                    title: 'OpenMake 에이전트 — 승인 필요',
-                                    body: `도구 실행 승인을 기다립니다: ${p.toolName}`,
-                                    url: '/agent-tasks.html',
-                                }).catch(() => { /* noop */ });
-                            },
+                            onApprovalPending: (p) => onApprovalPending(p.toolName),
                         });
                         if (curStatus === 'paused') await update({ status: 'running' }).catch(() => { /* noop */ });
                         if (toolResult.includes(TASK_TERMINATE_SENTINEL)) {
                             terminated = true;
                             terminateSummary = String(args.summary ?? '');
                         }
+                    } else if (taskRuntime && extraToolNames.has(name)) {
+                        // extra(화이트리스트) 도구 — 샌드박스 밖 호스트에서 실행되지만 HITL 승인은 task 도구와 동일 적용.
+                        // (이 도구들은 격리 컨테이너가 아니라 API 프로세스에서 실행되므로 승인 우회를 닫는다.)
+                        const decision = requiresApproval(sandboxCfg.approvalPolicy, name, args)
+                            ? await getApprovalRegistry().request(
+                                { taskId, userId, toolName: name, args },
+                                { timeoutMs: sandboxCfg.approvalTimeoutMs, signal, onPending: (p) => onApprovalPending(p.toolName) },
+                            )
+                            : 'approved';
+                        if (curStatus === 'paused') await update({ status: 'running' }).catch(() => { /* noop */ });
+                        toolResult = decision === 'approved'
+                            ? await this.runTool(mcp, name, args, userCtx)
+                            : `Error: 사용자가 도구 실행을 승인하지 않았습니다 (${name}). 다른 방법을 시도하거나 작업을 종료하세요.`;
                     } else {
                         toolResult = await this.runTool(mcp, name, args, userCtx);
                     }
