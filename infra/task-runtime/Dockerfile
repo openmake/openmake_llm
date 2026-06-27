@@ -30,5 +30,14 @@ RUN apt-get update \
 COPY browser-runner.mjs /opt/browser/browser-runner.mjs
 RUN chmod a+r /opt/browser/browser-runner.mjs
 
+# Excel/PDF 산출물용 파이썬 라이브러리 — 격리 venv 에 빌드타임 베이킹.
+# python_execute 가 실행하는 `python3` 가 이 venv 를 쓰도록 PATH 선두에 배치(코드 변경 0).
+# main 샌드박스는 network=none 이라 런타임 pip 불가 → 이미지에 미리 설치(chromium 과 동일 패턴).
+# 모두 pure-python(시스템 의존성 0): openpyxl=.xlsx, reportlab=구조적 PDF, fpdf2=경량 문서 PDF.
+RUN uv venv /opt/pyenv \
+    && VIRTUAL_ENV=/opt/pyenv uv pip install --no-cache openpyxl reportlab fpdf2 \
+    && chmod -R a+rX /opt/pyenv
+ENV PATH=/opt/pyenv/bin:${PATH}
+
 USER node
 WORKDIR /workspace
