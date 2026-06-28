@@ -1086,6 +1086,18 @@ export const EXTERNAL_LLM_TOOL_BLACKLIST: readonly string[] = [
 ] as const;
 
 /**
+ * 외부 provider 도구 루프 messages 토큰 예산 — external-provider 경로는 LLMClient.chat 의
+ * model-pool context-fit 안전망을 우회(provider.streamChat 직접 호출)하므로, 큰 누적
+ * 컨텍스트가 그대로 provider 로 전달돼 모델이 텍스트 없이 도구만 호출하고 끝나는 빈 응답을
+ * 유발한다. 이 예산을 넘으면 system 보존 + 최근 메시지 우선으로 truncate 한다.
+ * (262K 모델 기준 안전 마진. env 로 조정 가능.)
+ */
+export const EXTERNAL_LLM_INPUT_TOKEN_BUDGET = parseInt(
+    process.env.EXTERNAL_LLM_INPUT_TOKEN_BUDGET || '220000',
+    10,
+);
+
+/**
  * 명시적 아티팩트 생성 요청 턴에서 억제할 always-on 도구.
  *
  * 측정 근거 (2026-06-23 통제실험): "아티팩트로 html5 ... 작성해" 요청에서 qwen3.6 이
