@@ -22,7 +22,12 @@ import type { WsAttachedFile } from "@openmake/shared-types";
 import { useAppStore } from "@/lib/store";
 import { useChatSocket } from "@/lib/use-chat-socket";
 import { fetchModels } from "@/lib/models-api";
+import { fetchSkills, skillSlug, type SkillSummary } from "@/lib/skills-api";
+import { SlashSkillMenu } from "@/components/chat/slash-skill-menu";
 import { cn } from "@/lib/utils";
+
+// 슬래시 스킬 호출: "/" + 공백없는 단일 토큰일 때만 드롭다운 표시.
+const SLASH_PATTERN = /^\/(\S*)$/;
 
 // 클라이언트 첨부 캡 — 백엔드 FILE_ATTACH_LIMITS 기본값과 일치(서버가 재절단하므로 advisory).
 const MAX_FILES = 50;
@@ -86,6 +91,7 @@ export function Composer() {
   const [modeSheetOpen, setModeSheetOpen] = useState(false);
   const taRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
 
   // 선택/드롭한 파일들을 타입별로 분기해 첨부 목록에 추가.
   // 이미지 → base64 vision, 그 외 → 텍스트(캡 적용). 모든 파일 타입 허용.
@@ -167,6 +173,60 @@ export function Composer() {
     setInputDraft,
   } = useAppStore();
 
+  // ── 슬래시(/) 스킬 호출 드롭다운 ──
+  const [slashActiveIndex, setSlashActiveIndex] = useState(0);
+  const [slashDismissed, setSlashDismissed] = useState(false);
+  const slashMatch = SLASH_PATTERN.exec(text);
+  // 후보 조건: "/토큰" 패턴 + Esc/외부클릭으로 닫지 않음 + 생성중 아님
+  const slashCandidate = !!slashMatch && !slashDismissed && !isGenerating;
+  const slashQuery = slashMatch?.[1] ?? "";
+  // 디바운스된 검색어 (입력 폭주 시 과도한 요청 방지)
+  const [slashDebounced, setSlashDebounced] = useState("");
+  useEffect(() => {
+    if (!slashCandidate) return;
+    const t = setTimeout(() => setSlashDebounced(slashQuery), 150);
+    return () => clearTimeout(t);
+  }, [slashQuery, slashCandidate]);
+
+  const { data: slashSkillsData, isLoading: slashLoading } = useQuery({
+    queryKey: ["skills", slashDebounced],
+    queryFn: () => fetchSkills(slashDebounced),
+    enabled: slashCandidate,
+    staleTime: 30_000,
+  });
+  const slashSkills: SkillSummary[] = slashCandidate ? slashSkillsData ?? [] : [];
+  // 메뉴 표시: 후보 상태이며 로딩 중이거나 결과가 있을 때
+  const slashMenuOpen = slashCandidate && (slashLoading || slashSkills.length > 0);
+
+  // 검색 결과가 바뀌면 활성 인덱스 초기화
+  useEffect(() => {
+    setSlashActiveIndex(0);
+  }, [slashDebounced, slashSkillsData]);
+
+  // 외부 클릭 시 닫기
+  useEffect(() => {
+    if (!slashMenuOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
+        setSlashDismissed(true);
+      }
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [slashMenuOpen]);
+
+  // 스킬 선택 → 텍스트를 "/<slug> " 로 채우고 포커스 유지 (이후 메시지 이어쓰기)
+  const selectSlashSkill = (skill: SkillSummary) => {
+    setText(`/${skillSlug(skill.name)} `);
+    setSlashActiveIndex(0);
+    const ta = taRef.current;
+    if (ta) {
+      ta.focus();
+      ta.style.height = "auto";
+      ta.style.height = Math.min(ta.scrollHeight, 200) + "px";
+    }
+  };
+
   // 모델 목록 로드 시 현재 selectedModel 이 목록에 없으면 defaultModel 로 동기화
   useEffect(() => {
     if (!modelsData) return;
@@ -236,6 +296,7 @@ export function Composer() {
   return (
     <div className="mx-auto w-full max-w-3xl px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
       <div
+        ref={rootRef}
         className={cn(
           "relative rounded-xl border bg-surface shadow-2 transition-colors",
           dragging ? "border-accent ring-2 ring-accent/40" : "border-border",
@@ -376,15 +437,58 @@ export function Composer() {
           </div>
         )}
 
+        {slashMenuOpen && (
+          <SlashSkillMenu
+            skills={slashSkills}
+            activeIndex={slashActiveIndex}
+            loading={slashLoading}
+            onSelect={selectSlashSkill}
+            onHover={setSlashActiveIndex}
+          />
+        )}
+
         <textarea
           ref={taRef}
           value={text}
           onChange={(e) => {
             setText(e.target.value);
+            // 사용자가 다시 입력하면 Esc/외부클릭으로 닫았던 메뉴 후보를 재활성화
+            if (slashDismissed) setSlashDismissed(false);
             e.target.style.height = "auto";
             e.target.style.height = Math.min(e.target.scrollHeight, 200) + "px";
           }}
           onKeyDown={(e) => {
+            // 슬래시 메뉴가 열려 있으면 네비게이션/선택 우선 처리
+            if (slashMenuOpen) {
+              if (e.key === "ArrowDown") {
+                e.preventDefault();
+                setSlashActiveIndex((i) =>
+                  slashSkills.length ? (i + 1) % slashSkills.length : 0,
+                );
+                return;
+              }
+              if (e.key === "ArrowUp") {
+                e.preventDefault();
+                setSlashActiveIndex((i) =>
+                  slashSkills.length ? (i - 1 + slashSkills.length) % slashSkills.length : 0,
+                );
+                return;
+              }
+              if (e.key === "Escape") {
+                e.preventDefault();
+                setSlashDismissed(true);
+                return;
+              }
+              // Enter: 선택 가능한 항목이 있으면 스킬 선택, 없으면 아래 submit 으로 fall-through
+              if (e.key === "Enter" && !e.shiftKey) {
+                const sel = slashSkills[slashActiveIndex];
+                if (sel) {
+                  e.preventDefault();
+                  selectSlashSkill(sel);
+                  return;
+                }
+              }
+            }
             if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();
               submit();
