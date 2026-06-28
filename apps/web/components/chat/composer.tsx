@@ -18,11 +18,17 @@ import {
   Paperclip,
   X,
 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import type { WsAttachedFile } from "@openmake/shared-types";
 import { useAppStore } from "@/lib/store";
 import { useChatSocket } from "@/lib/use-chat-socket";
 import { fetchModels } from "@/lib/models-api";
-import { fetchSkills, skillSlug, type SkillSummary } from "@/lib/skills-api";
+import {
+  fetchSkills,
+  groupSkillsByCategory,
+  skillSlug,
+  type SkillSummary,
+} from "@/lib/skills-api";
 import { SlashSkillMenu } from "@/components/chat/slash-skill-menu";
 import { cn } from "@/lib/utils";
 
@@ -81,6 +87,7 @@ function readFileBase64(file: File): Promise<string> {
 
 export function Composer() {
   const { sendChat, abort, startAgentTask, sendStructured } = useChatSocket();
+  const router = useRouter();
   const [text, setText] = useState("");
   const [files, setFiles] = useState<WsAttachedFile[]>([]);
   // 이미지 첨부 — base64 data URL 로 vision 채널 전송. 미리보기/제거를 위해 메타와 함께 보관.
@@ -194,14 +201,28 @@ export function Composer() {
     enabled: slashCandidate,
     staleTime: 30_000,
   });
-  const slashSkills: SkillSummary[] = slashCandidate ? slashSkillsData ?? [] : [];
+  // 검색어 없으면("/") 카테고리 그룹핑(전체), 있으면 평면 검색 목록
+  const slashGrouped = slashDebounced.trim() === "";
+  const rawSlashSkills: SkillSummary[] = slashCandidate ? slashSkillsData ?? [] : [];
+  const slashSkills: SkillSummary[] = slashGrouped
+    ? groupSkillsByCategory(rawSlashSkills)
+    : rawSlashSkills;
   // 메뉴 표시: 후보 상태이며 로딩 중이거나 결과가 있을 때
   const slashMenuOpen = slashCandidate && (slashLoading || slashSkills.length > 0);
+  // 키보드 순회 길이: 스킬 + "전체 보기" 1
+  const slashNavCount = slashSkills.length + 1;
+  const slashViewAllIndex = slashSkills.length;
 
   // 검색 결과가 바뀌면 활성 인덱스 초기화
   useEffect(() => {
     setSlashActiveIndex(0);
   }, [slashDebounced, slashSkillsData]);
+
+  // "전체 보기" → 스킬 라이브러리로 이동하고 메뉴 닫기
+  const goToSkillLibrary = () => {
+    setSlashDismissed(true);
+    router.push("/skill-library");
+  };
 
   // 외부 클릭 시 닫기
   useEffect(() => {
@@ -440,10 +461,12 @@ export function Composer() {
         {slashMenuOpen && (
           <SlashSkillMenu
             skills={slashSkills}
+            grouped={slashGrouped}
             activeIndex={slashActiveIndex}
             loading={slashLoading}
             onSelect={selectSlashSkill}
             onHover={setSlashActiveIndex}
+            onViewAll={goToSkillLibrary}
           />
         )}
 
@@ -458,20 +481,17 @@ export function Composer() {
             e.target.style.height = Math.min(e.target.scrollHeight, 200) + "px";
           }}
           onKeyDown={(e) => {
-            // 슬래시 메뉴가 열려 있으면 네비게이션/선택 우선 처리
+            // 슬래시 메뉴가 열려 있으면 네비게이션/선택 우선 처리.
+            // 활성 인덱스는 스킬(0..n-1) + "전체 보기"(n) 를 순회.
             if (slashMenuOpen) {
               if (e.key === "ArrowDown") {
                 e.preventDefault();
-                setSlashActiveIndex((i) =>
-                  slashSkills.length ? (i + 1) % slashSkills.length : 0,
-                );
+                setSlashActiveIndex((i) => (i + 1) % slashNavCount);
                 return;
               }
               if (e.key === "ArrowUp") {
                 e.preventDefault();
-                setSlashActiveIndex((i) =>
-                  slashSkills.length ? (i - 1 + slashSkills.length) % slashSkills.length : 0,
-                );
+                setSlashActiveIndex((i) => (i - 1 + slashNavCount) % slashNavCount);
                 return;
               }
               if (e.key === "Escape") {
@@ -479,8 +499,14 @@ export function Composer() {
                 setSlashDismissed(true);
                 return;
               }
-              // Enter: 선택 가능한 항목이 있으면 스킬 선택, 없으면 아래 submit 으로 fall-through
               if (e.key === "Enter" && !e.shiftKey) {
+                // "전체 보기" 활성 → 라이브러리 이동
+                if (slashActiveIndex === slashViewAllIndex) {
+                  e.preventDefault();
+                  goToSkillLibrary();
+                  return;
+                }
+                // 스킬 항목 활성 → 선택. 없으면 아래 submit 으로 fall-through
                 const sel = slashSkills[slashActiveIndex];
                 if (sel) {
                   e.preventDefault();
