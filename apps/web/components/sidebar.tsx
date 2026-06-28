@@ -102,7 +102,7 @@ export function Sidebar() {
           <Search className="h-4 w-4 text-faint" />
           <input
             placeholder="검색..."
-            className="w-full bg-transparent text-sm text-fg outline-none placeholder:text-faint"
+            className="w-full bg-transparent text-sm text-fg outline-none placeholder:text-muted"
           />
         </div>
       </div>

@@ -35,9 +35,9 @@ const TRANSPORT_LABEL: Record<TransportType, string> = {
   "streamable-http": "HTTP",
 };
 
-const inputCls = "h-9 w-full rounded-md border border-border bg-surface-2 px-3 text-sm text-fg placeholder:text-faint focus:border-accent focus:outline-none";
+const inputCls = "h-9 w-full rounded-md border border-border bg-surface-2 px-3 text-sm text-fg placeholder:text-muted focus:border-accent focus:outline-none";
 const selectCls = "h-9 w-full rounded-md border border-border bg-surface-2 px-3 text-sm text-fg focus:border-accent focus:outline-none";
-const textareaCls = "w-full rounded-md border border-border bg-surface-2 px-3 py-2 text-sm text-fg placeholder:text-faint focus:border-accent focus:outline-none resize-none";
+const textareaCls = "w-full rounded-md border border-border bg-surface-2 px-3 py-2 text-sm text-fg placeholder:text-muted focus:border-accent focus:outline-none resize-none";
 const labelCls = "block text-xs font-medium text-fg-2 mb-1";
 
 /* ── 모달 공통 래퍼 ─────────────────────────────────────────── */

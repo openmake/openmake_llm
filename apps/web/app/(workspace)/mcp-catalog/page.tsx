@@ -183,7 +183,7 @@ export default function McpCatalogPage() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="이름, 제공자, 설명으로 검색…"
-            className="h-9 w-full rounded-md border border-border bg-surface pl-9 pr-3 text-sm text-fg placeholder:text-faint focus:border-accent focus:outline-none"
+            className="h-9 w-full rounded-md border border-border bg-surface pl-9 pr-3 text-sm text-fg placeholder:text-muted focus:border-accent focus:outline-none"
           />
         </div>
 

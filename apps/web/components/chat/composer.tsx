@@ -522,7 +522,7 @@ export function Composer() {
           }}
           rows={1}
           placeholder="메시지를 입력하거나 / 로 스킬을 호출하세요..."
-          className="block w-full resize-none bg-transparent px-4 pt-2.5 text-sm text-fg outline-none placeholder:text-faint"
+          className="block w-full resize-none bg-transparent px-4 pt-2.5 text-sm text-fg outline-none placeholder:text-muted"
         />
 
         {/* 하단: 스타일 + 전송 (모델 선택은 설정 → 기본 모델에서, 채팅창엔 모델명 비표시) */}

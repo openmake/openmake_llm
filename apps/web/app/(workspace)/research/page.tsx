@@ -371,7 +371,7 @@ export default function ResearchPage() {
                     if (e.key === "Enter") startResearch();
                   }}
                   placeholder="연구하고 싶은 주제를 입력하세요..."
-                  className="h-9 w-full bg-transparent text-sm text-fg outline-none placeholder:text-faint"
+                  className="h-9 w-full bg-transparent text-sm text-fg outline-none placeholder:text-muted"
                 />
               </div>
             </div>
