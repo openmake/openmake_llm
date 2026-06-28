@@ -61,7 +61,9 @@ export function normalizeToFullId(
     requestedModel: string | undefined,
     fallbackModel: string,
 ): string {
-    const raw = (requestedModel ?? fallbackModel ?? '').trim();
+    // requestedModel 이 빈 문자열/공백이어도 fallbackModel 로 대체 (?? 는 '' 를 통과시켜
+    // model 미지정 REST 요청이 INVALID_MODEL_ID 로 떨어지던 문제 방지).
+    const raw = ((requestedModel ?? '').trim() || (fallbackModel ?? '').trim());
     if (!raw) {
         throw new ProviderError('INVALID_MODEL_ID', '모델 ID가 비어있습니다');
     }
