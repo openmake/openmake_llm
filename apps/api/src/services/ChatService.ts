@@ -26,6 +26,7 @@ import type { ExecutionPlan } from '../chat/profile-resolver';
 import type { UserContext } from '../mcp/user-sandbox';
 import { getUnifiedMCPClient } from '../mcp/unified-client';
 import { CHAT_ALWAYS_ON_TOOL_NAMES } from '../mcp/agent-task-tools';
+import { CHAT_USER_MCP_TOOL_CAP } from '../config/runtime-limits';
 import { LOAD_SKILL_TOOL_NAME } from '../mcp/load-skill-tool';
 import { LLMClient } from '../llm';
 import { type ChatMessage, type ToolDefinition, type ModelOptions } from '../llm';
@@ -42,7 +43,7 @@ import { resolveAgent as resolveAgentFn } from './chat-service/agent-resolver';
 import { resolveLanguagePolicy as resolveLanguagePolicyFn } from './chat-service/language-resolver';
 import { recordMetricsAndVerify as recordMetricsAndVerifyFn } from './chat-service/metrics-recorder';
 import { ProviderRouter } from '../providers/provider-router';
-import { mergeToolsWithSkills } from './chat-service/tool-merger';
+import { mergeToolsWithSkills, selectUserMcpAutoOn } from './chat-service/tool-merger';
 import type { RequestContext } from './chat-service/request-context';
 import { runMessagePipeline } from './chat-service/message-pipeline';
 import { getSkillManager } from '../agents/skill-manager';
@@ -209,6 +210,11 @@ export class ChatService {
         // enabledTools가 없으면 레거시 호환: 전체 허용 (API 클라이언트 등). skill binding 적용도 skip.
         if (reqCtx.enabledTools === undefined) return this.applySkillCatalog(allTools, allTools, reqCtx);
 
+        // 설치한 user MCP 서버 도구는 "설치=기본 ON" — 채팅 토글 없이 자동 노출(cap 적용).
+        // global 외부 도구는 자동 노출 대상 아님(opt-in 유지). 끄려면 /mcp-servers 서버 disable.
+        const userPoolNames = userIdStr ? toolRouter.getUserPoolToolNames(userIdStr) : new Set<string>();
+        const userMcpAutoOn = selectUserMcpAutoOn(allTools, userPoolNames, reqCtx.enabledTools, CHAT_USER_MCP_TOOL_CAP);
+
         // 사용자가 명시적으로 활성화한 도구만 추출
         const userToggled = allTools.filter(t => reqCtx.enabledTools![t.function.name] === true);
 
@@ -234,12 +240,11 @@ export class ChatService {
             CHAT_ALWAYS_ON_TOOL_NAMES.includes(t.function.name) &&
             !merged.some(m => m.function.name === t.function.name));
 
-        logger.debug(
-            `MCP 도구 머지: all=${allTools.length}, userToggled=${userToggled.length}, ` +
-            `profileRequired=${profileRequiredNames.length}, skillBindings=${reqCtx.skillBindings.length}, ` +
-            `merged=${merged.length}, alwaysOn=${alwaysOn.length}`,
-        );
-        return this.applySkillCatalog([...merged, ...alwaysOn], allTools, reqCtx);
+        // merged ∪ alwaysOn ∪ userMcpAutoOn(자동 노출 user MCP) — 이름 기준 중복 제거.
+        const seen = new Set([...merged, ...alwaysOn].map(t => t.function.name));
+        const combined = [...merged, ...alwaysOn, ...userMcpAutoOn.filter(t => !seen.has(t.function.name))];
+        logger.debug(`MCP 도구 머지: all=${allTools.length} userToggled=${userToggled.length} merged=${merged.length} alwaysOn=${alwaysOn.length} userMcpAutoOn=${userMcpAutoOn.length}`);
+        return this.applySkillCatalog(combined, allTools, reqCtx);
     }
 
     /**

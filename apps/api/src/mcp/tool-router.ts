@@ -144,6 +144,15 @@ export class ToolRouter {
     }
 
     /**
+     * 사용자 풀(설치한 user MCP 서버) 도구의 네임스페이스 적용 이름 집합.
+     * 채팅에서 "설치=기본 ON" 자동 노출 판별에 사용 (global 외부 도구는 제외).
+     */
+    getUserPoolToolNames(userId: string): Set<string> {
+        if (!this.userPool) return new Set<string>();
+        return new Set(collectUserPoolTools(this.userPool, userId).map(e => e.tool.name));
+    }
+
+    /**
      * 도구 실행 — 내장이면 직접 handler, 외부면 ExternalMCPClient로 라우팅
      * 
      * ⚙️ Phase 3: UserContext 전달 추가 (2026-02-07)

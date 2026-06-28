@@ -1086,6 +1086,19 @@ export const EXTERNAL_LLM_TOOL_BLACKLIST: readonly string[] = [
 ] as const;
 
 /**
+ * 채팅에서 자동 활성화(설치=기본 ON)되는 사용자 MCP 풀 도구 수 상한.
+ *
+ * 사용자가 설치한 MCP 서버 도구는 명시 토글 없이 채팅 LLM 에 노출되나, 다수 서버를
+ * 설치한 사용자의 경우 전체 도구 스키마가 과대해져 vLLM 첫 토큰 컴파일이 지연/hang
+ * 되는 것을 막기 위해(과거 ~150 도구 786KB → 첫토큰 101s 사례) 노출 수를 제한한다.
+ * 초과분은 drop 하고 로그로 알린다. picker 로 끈 도구는 cap 계산 전에 제외된다.
+ */
+export const CHAT_USER_MCP_TOOL_CAP = parseInt(
+    process.env.CHAT_USER_MCP_TOOL_CAP || '12',
+    10,
+);
+
+/**
  * 외부 provider 도구 루프 messages 토큰 예산 — external-provider 경로는 LLMClient.chat 의
  * model-pool context-fit 안전망을 우회(provider.streamChat 직접 호출)하므로, 큰 누적
  * 컨텍스트가 그대로 provider 로 전달돼 모델이 텍스트 없이 도구만 호출하고 끝나는 빈 응답을
