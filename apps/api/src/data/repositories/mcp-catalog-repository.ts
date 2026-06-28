@@ -75,7 +75,7 @@ export class McpCatalogRepository {
     async listUserServers(userId: string): Promise<UserMcpServerRow[]> {
         const result = await this.pool.query<UserMcpServerRow>(
             `SELECT id, user_id, name, transport_type, command, args, env, url,
-                    visibility, catalog_template_id, auto_spawn, enabled,
+                    visibility, catalog_template_id, auto_spawn, enabled, sandbox_network,
                     created_at::text, updated_at::text
              FROM mcp_servers
              WHERE user_id = $1 OR visibility = 'global'
@@ -136,7 +136,7 @@ export class McpCatalogRepository {
     async getServerById(serverId: string): Promise<UserMcpServerRow | null> {
         const result = await this.pool.query<UserMcpServerRow>(
             `SELECT id, user_id, name, transport_type, command, args, env, url,
-                    visibility, catalog_template_id, auto_spawn, enabled,
+                    visibility, catalog_template_id, auto_spawn, enabled, sandbox_network,
                     created_at::text, updated_at::text
              FROM mcp_servers WHERE id = $1`,
             [serverId],
