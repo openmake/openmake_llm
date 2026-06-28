@@ -148,15 +148,17 @@ export class ToolRouter {
      * 채팅에서 "설치=기본 ON" 자동 노출 판별에 사용 (global 외부 도구는 제외).
      */
     /**
-     * 사용자 풀 도구를 서버별로 그룹화한 이름 배열(네임스페이스 적용). 채팅 자동 노출
-     * round-robin(서버별 균등 선정)에 사용 — 무거운 서버가 cap 슬롯을 독점하지 않게 한다.
+     * 사용자 풀 도구를 서버별로 그룹화 — displayName + 네임스페이스 도구이름 배열 + 도구
+     * short name 배열. 채팅 자동 노출 선정(round-robin breadth + 의도 인식 depth)에 사용.
+     * displayName/shortNames 는 사용자 메시지가 특정 서버를 언급했는지 매칭하는 데 쓴다.
      */
-    getUserPoolToolGroups(userId: string): string[][] {
+    getUserPoolToolGroups(userId: string): Array<{ displayName: string; tools: string[]; shortNames: string[] }> {
         if (!this.userPool) return [];
-        const groups = new Map<string, string[]>();
+        const groups = new Map<string, { displayName: string; tools: string[]; shortNames: string[] }>();
         for (const e of collectUserPoolTools(this.userPool, userId)) {
-            const g = groups.get(e.serverId) ?? [];
-            g.push(e.tool.name);
+            const g = groups.get(e.serverId) ?? { displayName: e.displayName, tools: [], shortNames: [] };
+            g.tools.push(e.tool.name);
+            g.shortNames.push(e.originalToolName);
             groups.set(e.serverId, g);
         }
         return [...groups.values()];

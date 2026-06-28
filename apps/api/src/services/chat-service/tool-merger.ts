@@ -11,40 +11,72 @@ import { createLogger } from '../../utils/logger';
 
 const logger = createLogger('ToolMerger');
 
+export interface UserPoolToolGroup {
+    displayName: string;
+    tools: string[];      // 네임스페이스 적용 이름 (displayName::tool)
+    shortNames: string[]; // 원본 도구 이름 (의도 매칭용)
+}
+
 /**
- * 설치한 user MCP 서버 도구의 "설치=기본 ON" 자동 노출 목록 선정 (서버별 round-robin).
+ * 메시지가 특정 서버를 언급했는지 판정 — displayName(mcp- prefix 무시) 또는 도구 short name
+ * 이 메시지에 포함되면 그 서버를 "참조됨"으로 본다. 경량 substring 매칭(regex 철학).
+ */
+function isServerReferenced(group: UserPoolToolGroup, msg: string): boolean {
+    if (!msg) return false;
+    const m = msg.toLowerCase();
+    const dn = group.displayName.toLowerCase();
+    const dnCore = dn.replace(/^mcp[-_]/, ''); // "mcp-memory" → "memory"
+    if (dnCore.length >= 3 && m.includes(dnCore)) return true;
+    return group.shortNames.some(n => n.length >= 4 && m.includes(n.toLowerCase()));
+}
+
+/**
+ * 설치한 user MCP 서버 도구의 "설치=기본 ON" 자동 노출 목록 선정.
  *
- * - toolGroups: 서버별 도구 이름 배열의 배열(네임스페이스 적용)
- * - enabledTools[name]===false 면 제외(명시 차단), 그 외 user 풀 도구는 기본 노출
- * - tool-bloat(로컬 qwen 첫토큰 hang) 방지로 cap 개까지만 노출
- * - round-robin: 각 서버에서 1개씩 돌아가며 채워, 무거운 서버가 cap 슬롯을 독점해
- *   가벼운 서버(예: duckduckgo 2개)가 통째로 잘리는 것을 막는다(각 서버 최소 1개 대표).
+ * 하이브리드 정책 (tool-bloat hang 방지로 cap 개까지):
+ *   1. 의도 인식 depth — 메시지가 언급한 서버는 도구를 전부(cap 한도) 우선 노출.
+ *      → "memory MCP 의 search_nodes 로 ..." 같은 다중 도구 워크플로를 살린다.
+ *   2. round-robin breadth — 남은 슬롯을 비참조 서버에 1개씩 돌아가며 채워, 무거운 서버가
+ *      독점하지 않고 모든 서버가 최소 1개 대표되게 한다.
+ * enabledTools[name]===false 는 제외(명시 차단).
  */
 export function selectUserMcpAutoOn(
     allTools: ToolDefinition[],
-    toolGroups: string[][],
+    toolGroups: UserPoolToolGroup[],
     enabledTools: Record<string, boolean>,
     cap: number,
+    message = '',
 ): ToolDefinition[] {
     const lookup = new Map(allTools.map(t => [t.function.name, t]));
     const groups = toolGroups
-        .map(names => names.filter(n => enabledTools[n] !== false))
-        .filter(g => g.length > 0);
-    const totalEligible = groups.reduce((n, g) => n + g.length, 0);
-    const maxLen = groups.reduce((m, g) => Math.max(m, g.length), 0);
+        .map(g => ({ ...g, tools: g.tools.filter(n => enabledTools[n] !== false) }))
+        .filter(g => g.tools.length > 0);
+    const totalEligible = groups.reduce((n, g) => n + g.tools.length, 0);
 
     const picked: ToolDefinition[] = [];
+    const seen = new Set<string>();
+    const add = (name: string): void => {
+        if (picked.length >= cap || seen.has(name)) return;
+        const t = lookup.get(name);
+        if (t) { picked.push(t); seen.add(name); }
+    };
+
+    // 1. depth: 참조된 서버의 도구 전부 우선
+    const referenced = groups.filter(g => isServerReferenced(g, message));
+    for (const g of referenced) for (const n of g.tools) add(n);
+
+    // 2. breadth: 남은 서버 round-robin (참조 서버는 이미 소진)
+    const rest = groups.filter(g => !referenced.includes(g));
+    const maxLen = rest.reduce((m, g) => Math.max(m, g.tools.length), 0);
     for (let round = 0; round < maxLen && picked.length < cap; round++) {
-        for (const g of groups) {
-            if (round >= g.length || picked.length >= cap) continue;
-            const t = lookup.get(g[round]);
-            if (t) picked.push(t);
-        }
+        for (const g of rest) if (round < g.tools.length) add(g.tools[round]);
     }
+
     if (totalEligible > picked.length) {
+        const mode = referenced.length ? `의도 depth(${referenced.map(g => g.displayName).join(',')}) + round-robin` : 'round-robin';
         logger.warn(
-            `user MCP 자동 노출 cap: ${totalEligible}개 중 ${picked.length}개 노출 ` +
-            `(cap=${cap}, 서버별 round-robin — 각 서버 우선 1개). 더 줄이려면 /mcp-servers 서버 disable.`,
+            `user MCP 자동 노출 cap: ${totalEligible}개 중 ${picked.length}개 노출 (cap=${cap}, ${mode}). ` +
+            `더 줄이려면 /mcp-servers 서버 disable.`,
         );
     }
     return picked;

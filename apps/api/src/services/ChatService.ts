@@ -26,7 +26,8 @@ import type { ExecutionPlan } from '../chat/profile-resolver';
 import type { UserContext } from '../mcp/user-sandbox';
 import { getUnifiedMCPClient } from '../mcp/unified-client';
 import { CHAT_ALWAYS_ON_TOOL_NAMES } from '../mcp/agent-task-tools';
-import { CHAT_USER_MCP_TOOL_CAP } from '../config/runtime-limits';
+import { MCP_META_TOOL_NAMES } from '../mcp/mcp-meta-tools';
+import { CHAT_USER_MCP_TOOL_CAP, MCP_PROGRESSIVE_DISCLOSURE_ENABLED } from '../config/runtime-limits';
 import { LOAD_SKILL_TOOL_NAME } from '../mcp/load-skill-tool';
 import { LLMClient } from '../llm';
 import { type ChatMessage, type ToolDefinition, type ModelOptions } from '../llm';
@@ -213,7 +214,7 @@ export class ChatService {
         // 설치한 user MCP 서버 도구는 "설치=기본 ON" — 채팅 토글 없이 자동 노출(cap 적용).
         // global 외부 도구는 자동 노출 대상 아님(opt-in 유지). 끄려면 /mcp-servers 서버 disable.
         const toolGroups = userIdStr ? toolRouter.getUserPoolToolGroups(userIdStr) : [];
-        const userMcpAutoOn = selectUserMcpAutoOn(allTools, toolGroups, reqCtx.enabledTools, CHAT_USER_MCP_TOOL_CAP);
+        const userMcpAutoOn = selectUserMcpAutoOn(allTools, toolGroups, reqCtx.enabledTools, CHAT_USER_MCP_TOOL_CAP, reqCtx.message);
 
         // 사용자가 명시적으로 활성화한 도구만 추출
         const userToggled = allTools.filter(t => reqCtx.enabledTools![t.function.name] === true);
@@ -234,16 +235,15 @@ export class ChatService {
             skillBindings: reqCtx.skillBindings,
         });
 
-        // 본인 데이터 읽기 전용 도구(에이전트 작업 조회)는 토글 없이 항상 제공 —
-        // "에이전트 작업 결과 보여줘" 같은 요청이 설정과 무관하게 동작해야 한다.
+        // 토글 없이 항상 제공: 에이전트 작업 조회 + (플래그 ON 시) MCP 진행적 공개 메타 도구.
+        const alwaysOnNames: string[] = MCP_PROGRESSIVE_DISCLOSURE_ENABLED
+            ? [...CHAT_ALWAYS_ON_TOOL_NAMES, ...MCP_META_TOOL_NAMES] : CHAT_ALWAYS_ON_TOOL_NAMES;
         const alwaysOn = allTools.filter(t =>
-            CHAT_ALWAYS_ON_TOOL_NAMES.includes(t.function.name) &&
-            !merged.some(m => m.function.name === t.function.name));
-
-        // merged ∪ alwaysOn ∪ userMcpAutoOn(자동 노출 user MCP) — 이름 기준 중복 제거.
+            alwaysOnNames.includes(t.function.name) && !merged.some(m => m.function.name === t.function.name));
+        // merged ∪ alwaysOn ∪ userMcpAutoOn — 이름 기준 중복 제거.
         const seen = new Set([...merged, ...alwaysOn].map(t => t.function.name));
         const combined = [...merged, ...alwaysOn, ...userMcpAutoOn.filter(t => !seen.has(t.function.name))];
-        logger.debug(`MCP 도구 머지: all=${allTools.length} userToggled=${userToggled.length} merged=${merged.length} alwaysOn=${alwaysOn.length} userMcpAutoOn=${userMcpAutoOn.length}`);
+        logger.debug(`MCP 도구 머지: all=${allTools.length} merged=${merged.length} alwaysOn=${alwaysOn.length} userMcpAutoOn=${userMcpAutoOn.length}`);
         return this.applySkillCatalog(combined, allTools, reqCtx);
     }
 

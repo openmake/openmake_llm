@@ -154,16 +154,12 @@ export async function runMessagePipeline(svc: ChatService,
     } = req;
 
     // SSE 연결 종료 시 처리를 조기 중단하기 위한 헬퍼
-    const checkAborted = () => {
-        if (abortSignal?.aborted) {
-            throw new Error('ABORTED');
-        }
-    };
+    const checkAborted = () => { if (abortSignal?.aborted) throw new Error('ABORTED'); };
 
     const reqCtx: RequestContext = {
         userContext: svc.buildUserContext(userId || 'guest', userRole),
-        // API Key 요청에서 enabledTools 미전달 시 내장 MCP 도구 비활성화
-        // 외부 서비스(openmake 등)는 자체 도구 체계를 사용하므로 내장 도구 간섭 방지
+        message: req.message,
+        // API Key 요청에서 enabledTools 미전달 시 내장 MCP 도구 비활성화(외부 서비스는 자체 도구 체계 사용)
         enabledTools: req.apiKeyId && !enabledTools ? {} : enabledTools,
         executionPlan,
         skillBindings: [],

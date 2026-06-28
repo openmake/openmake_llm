@@ -136,6 +136,8 @@ import { createPlanTool } from './plan-tool';
 import { codeReviewTool } from './code-review-tool';
 // 스킬 자동 호출 (LLM self-select) — 카탈로그는 getAllowedTools 가 description 에 주입
 import { loadSkillTool } from './load-skill-tool';
+// MCP 진행적 공개 메타 도구 (B) — 노출은 getAllowedTools 가 플래그로 게이트, 등록은 실행 라우팅용
+import { mcpMetaTools } from './mcp-meta-tools';
 
 /**
  * 전체 내장 도구 배열
@@ -165,4 +167,5 @@ export const builtInTools: MCPToolDefinition[] = [
     createPlanTool,
     codeReviewTool,
     loadSkillTool as MCPToolDefinition,
+    ...mcpMetaTools,
 ];
