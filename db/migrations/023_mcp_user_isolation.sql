@@ -110,7 +110,7 @@ INSERT INTO mcp_server_catalog (id, display_name, description, transport_type, c
      'stdio',
      'npx -y @modelcontextprotocol/server-github',
      '{}'::jsonb,
-     '{"type":"object","properties":{"GITHUB_TOKEN":{"type":"string","title":"GitHub PAT","description":"github.com/settings/tokens 에서 발급","secret":true}},"required":["GITHUB_TOKEN"]}'::jsonb,
+     '{"type":"object","properties":{"GITHUB_PERSONAL_ACCESS_TOKEN":{"type":"string","title":"GitHub PAT","description":"github.com/settings/tokens 에서 발급","secret":true}},"required":["GITHUB_PERSONAL_ACCESS_TOKEN"]}'::jsonb,
      'pro')
 ON CONFLICT (id) DO NOTHING;
 
