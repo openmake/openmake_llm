@@ -89,7 +89,7 @@ function Modal({ onClose, children }: { onClose: () => void; children: React.Rea
   );
 }
 
-const inputCls = "h-9 w-full rounded-md border border-border bg-surface-2 px-3 text-sm text-fg placeholder:text-faint focus:border-accent focus:outline-none";
+const inputCls = "h-9 w-full rounded-md border border-border bg-surface-2 px-3 text-sm text-fg placeholder:text-muted focus:border-accent focus:outline-none";
 const selectCls = "h-9 w-full rounded-md border border-border bg-surface-2 px-3 text-sm text-fg focus:border-accent focus:outline-none";
 const labelCls = "block text-xs font-medium text-fg-2 mb-1";
 

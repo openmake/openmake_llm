@@ -209,7 +209,7 @@ export default function HistoryPage() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="대화 제목 검색..."
-            className="h-9 w-full bg-transparent text-sm text-fg outline-none placeholder:text-faint"
+            className="h-9 w-full bg-transparent text-sm text-fg outline-none placeholder:text-muted"
           />
         </div>
 
