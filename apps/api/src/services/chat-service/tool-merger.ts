@@ -33,18 +33,22 @@ function isServerReferenced(group: UserPoolToolGroup, msg: string): boolean {
 /**
  * 설치한 user MCP 서버 도구의 "설치=기본 ON" 자동 노출 목록 선정.
  *
- * 하이브리드 정책 (tool-bloat hang 방지로 cap 개까지):
+ * 하이브리드 정책 (tool-bloat hang 방지):
  *   1. 의도 인식 depth — 메시지가 언급한 서버는 도구를 전부(cap 한도) 우선 노출.
  *      → "memory MCP 의 search_nodes 로 ..." 같은 다중 도구 워크플로를 살린다.
  *   2. round-robin breadth — 남은 슬롯을 비참조 서버에 1개씩 돌아가며 채워, 무거운 서버가
  *      독점하지 않고 모든 서버가 최소 1개 대표되게 한다.
- * enabledTools[name]===false 는 제외(명시 차단).
+ * 이중 상한: ① 도구 **개수** cap ② 도구 스키마 **바이트** schemaBudget. firecrawl 처럼
+ * 도구 스키마가 거대한 서버는 개수는 적어도 바이트로 로컬 모델 vLLM 도구 컴파일을 압도해
+ * UPSTREAM_ERROR 를 유발하므로, 누적 스키마 바이트가 budget 을 넘으면 추가를 중단한다
+ * (단 최소 1개는 항상 노출). enabledTools[name]===false 는 제외(명시 차단).
  */
 export function selectUserMcpAutoOn(
     allTools: ToolDefinition[],
     toolGroups: UserPoolToolGroup[],
     enabledTools: Record<string, boolean>,
     cap: number,
+    schemaBudget: number,
     message = '',
 ): ToolDefinition[] {
     const lookup = new Map(allTools.map(t => [t.function.name, t]));
@@ -55,10 +59,16 @@ export function selectUserMcpAutoOn(
 
     const picked: ToolDefinition[] = [];
     const seen = new Set<string>();
+    let bytes = 0;
+    let budgetHit = false;
     const add = (name: string): void => {
         if (picked.length >= cap || seen.has(name)) return;
         const t = lookup.get(name);
-        if (t) { picked.push(t); seen.add(name); }
+        if (!t) return;
+        const sz = JSON.stringify(t).length;
+        // 최소 1개는 항상 허용, 그 외엔 누적 스키마 바이트가 budget 초과면 제외.
+        if (picked.length > 0 && bytes + sz > schemaBudget) { budgetHit = true; return; }
+        picked.push(t); seen.add(name); bytes += sz;
     };
 
     // 1. depth: 참조된 서버의 도구 전부 우선
@@ -74,9 +84,10 @@ export function selectUserMcpAutoOn(
 
     if (totalEligible > picked.length) {
         const mode = referenced.length ? `의도 depth(${referenced.map(g => g.displayName).join(',')}) + round-robin` : 'round-robin';
+        const limit = budgetHit ? `스키마 budget(${Math.round(schemaBudget / 1000)}KB)` : `cap=${cap}`;
         logger.warn(
-            `user MCP 자동 노출 cap: ${totalEligible}개 중 ${picked.length}개 노출 (cap=${cap}, ${mode}). ` +
-            `더 줄이려면 /mcp-servers 서버 disable.`,
+            `user MCP 자동 노출: ${totalEligible}개 중 ${picked.length}개(${Math.round(bytes / 1000)}KB) 노출 ` +
+            `(${limit}, ${mode}). 더 줄이려면 /mcp-servers 서버 disable.`,
         );
     }
     return picked;
