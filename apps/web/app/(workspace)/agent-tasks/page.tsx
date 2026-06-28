@@ -1,16 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   Sparkles,
-  Plus,
   Check,
   LoaderCircle,
   Clock,
   Cpu,
   X,
   Trash2,
-  Play,
   RotateCcw,
   ChevronRight,
 } from "lucide-react";
@@ -19,9 +18,6 @@ import {
   Badge,
   PageHeader,
   Card,
-  CardHeader,
-  CardTitle,
-  CardContent,
 } from "@/components/ui/primitives";
 import { cn } from "@/lib/utils";
 import type { ApiSuccess } from "@openmake/shared-types";
@@ -221,65 +217,6 @@ function Modal({
   );
 }
 
-/* ── 작업 생성 폼 ─────────────────────────────────────────── */
-function CreateTaskForm({
-  onClose,
-  onCreated,
-}: {
-  onClose: () => void;
-  onCreated: (taskId: string) => void | Promise<void>;
-}) {
-  const [goal, setGoal] = useState("");
-  const [maxTurns, setMaxTurns] = useState(8);
-  const [saving, setSaving] = useState(false);
-  const [formError, setFormError] = useState<string | null>(null);
-
-  async function handleSubmit() {
-    if (!goal.trim()) { setFormError("목표를 입력하세요."); return; }
-    setSaving(true);
-    setFormError(null);
-    try {
-      const res = await ApiClient.post<ApiSuccess<{ task: ApiAgentTask }>>("/api/agent-tasks", {
-        goal: goal.trim(),
-        maxTurns,
-      });
-      const taskId = res?.data?.task?.id;
-      if (!taskId) throw new Error("taskId가 응답에 없습니다");
-      await onCreated(taskId);
-    } catch (err) {
-      setFormError("생성 실패: " + (err instanceof Error ? err.message : "서버 오류"));
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <form onSubmit={(e) => { e.preventDefault(); void handleSubmit(); }} className="space-y-4">
-      <label className="block">
-        <span className="mb-1 block text-xs font-medium text-fg-2">에이전트 목표 *</span>
-        <textarea value={goal} onChange={(e) => setGoal(e.target.value)}
-          rows={4} autoFocus
-          placeholder="예: 최신 AI 에이전트 동향을 조사해서 요약 보고서를 작성해줘"
-          className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-fg outline-none focus:border-accent resize-none" />
-      </label>
-      <label className="block">
-        <span className="mb-1 block text-xs font-medium text-fg-2">최대 턴 수</span>
-        <input type="number" value={maxTurns} onChange={(e) => setMaxTurns(Number(e.target.value))}
-          min={1} max={50}
-          className="h-9 w-32 rounded-md border border-border bg-surface px-3 text-sm text-fg outline-none focus:border-accent" />
-      </label>
-      {formError && <p className="text-xs text-danger">{formError}</p>}
-      <div className="flex justify-end gap-2 pt-1">
-        <Button type="button" variant="outline" onClick={onClose} disabled={saving}>취소</Button>
-        <Button type="submit" disabled={saving}>
-          {saving ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-          생성 및 실행
-        </Button>
-      </div>
-    </form>
-  );
-}
-
 /* ── 작업 상세 모달 (스텝 타임라인) ─────────────────────── */
 const PLAN_MARK: Record<PlanStepStatus, string> = {
   not_started: "○",
@@ -290,10 +227,8 @@ const PLAN_MARK: Record<PlanStepStatus, string> = {
 
 function TaskDetailModal({
   taskId,
-  onClose,
 }: {
   taskId: string;
-  onClose: () => void;
 }) {
   const [detail, setDetail] = useState<{ task: ApiAgentTask; steps: ApiTaskStep[] } | null>(null);
   const [files, setFiles] = useState<string[]>([]);
@@ -534,9 +469,9 @@ function ApprovalsPanel() {
 }
 
 export default function AgentTasksPage() {
+  const router = useRouter();
   const [tasks, setTasks] = useState<AgentTask[]>(TASK_FALLBACK);
   const [loading, setLoading] = useState(true);
-  const [showCreate, setShowCreate] = useState(false);
   const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null); // taskId being acted on
 
@@ -559,17 +494,6 @@ export default function AgentTasksPage() {
     })();
     return () => { cancelled = true; };
   }, [loadTasks]);
-
-  async function handleCreated(taskId: string) {
-    setShowCreate(false);
-    // 생성 후 즉시 실행
-    try {
-      await ApiClient.post(`/api/agent-tasks/${taskId}/execute`, {});
-    } catch {
-      // execute 실패해도 목록 새로고침
-    }
-    await loadTasks();
-  }
 
   async function handleCancel(task: AgentTask) {
     if (!window.confirm(`"${task.goal.slice(0, 40)}..." 작업을 취소하시겠습니까?`)) return;
@@ -612,16 +536,22 @@ export default function AgentTasksPage() {
   return (
     <>
       <PageHeader
-        title="에이전트 작업"
-        description="자율 에이전트가 목표 달성까지 다단계로 작업을 수행합니다."
-        actions={
-          <Button size="sm" onClick={() => setShowCreate(true)}>
-            <Plus className="h-4 w-4" />새 작업
-          </Button>
-        }
+        title="에이전트 작업 관리"
+        description="작업 목록·진행·승인을 관리합니다. 생성·실행은 채팅의 에이전트 모드에서 진행됩니다."
       />
 
       <div className="min-h-0 flex-1 overflow-y-auto p-6">
+        {/* 실행 안내 배너 — 생성/실행은 채팅 인라인으로 일원화 */}
+        <Card className="mb-4 flex flex-wrap items-center justify-between gap-3 p-4">
+          <p className="text-sm text-muted">
+            에이전트 작업은 채팅 입력창의{" "}
+            <span className="font-medium text-fg-2">에이전트</span> 모드로
+            생성·실행하세요. 이 페이지에서는 작업 목록·진행·승인을 관리합니다.
+          </p>
+          <Button size="sm" variant="outline" onClick={() => router.push("/")}>
+            채팅으로 이동
+          </Button>
+        </Card>
         <ApprovalsPanel />
         {loading ? (
           <div className="grid place-items-center py-24 text-center">
@@ -632,9 +562,9 @@ export default function AgentTasksPage() {
           <div className="grid place-items-center py-24 text-center">
             <Sparkles className="mb-3 h-8 w-8 text-faint" />
             <p className="text-sm font-medium text-fg-2">작업이 없습니다</p>
-            <p className="mt-1 text-sm text-muted">목표를 입력하고 새 작업을 시작하세요.</p>
-            <Button size="sm" className="mt-4" onClick={() => setShowCreate(true)}>
-              <Plus className="h-4 w-4" />새 작업 만들기
+            <p className="mt-1 text-sm text-muted">채팅의 에이전트 모드에서 새 작업을 시작하세요.</p>
+            <Button size="sm" variant="outline" className="mt-4" onClick={() => router.push("/")}>
+              채팅으로 이동
             </Button>
           </div>
         ) : (
@@ -755,15 +685,10 @@ export default function AgentTasksPage() {
         )}
       </div>
 
-      {/* 새 작업 모달 */}
-      <Modal open={showCreate} onClose={() => setShowCreate(false)} title="새 에이전트 작업">
-        <CreateTaskForm onClose={() => setShowCreate(false)} onCreated={handleCreated} />
-      </Modal>
-
       {/* 작업 상세 모달 */}
       {detailTaskId && (
         <Modal open={!!detailTaskId} onClose={() => setDetailTaskId(null)} title="작업 상세">
-          <TaskDetailModal taskId={detailTaskId} onClose={() => setDetailTaskId(null)} />
+          <TaskDetailModal taskId={detailTaskId} />
         </Modal>
       )}
     </>

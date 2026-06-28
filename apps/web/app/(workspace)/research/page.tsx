@@ -1,10 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
-  Telescope,
-  Plus,
-  Search,
   CircleCheck,
   LoaderCircle,
   Circle,
@@ -186,13 +184,6 @@ const STAGE_ICON: Record<StageStatus, typeof Circle> = {
 };
 
 
-/** depth 백엔드 enum(basic/deep/comprehensive) ↔ UI 라벨. */
-const DEPTH_OPTIONS: { value: "basic" | "deep" | "comprehensive"; label: string }[] = [
-  { value: "basic", label: "빠른 검색" },
-  { value: "deep", label: "표준 (심층)" },
-  { value: "comprehensive", label: "종합 (최대)" },
-];
-
 const TERMINAL: ApiResearchStatus[] = ["completed", "failed", "cancelled"];
 
 const STATUS_LABEL: Record<ApiResearchStatus, string> = {
@@ -218,9 +209,7 @@ function fmtDate(iso?: string): string {
 }
 
 export default function ResearchPage() {
-  const [topic, setTopic] = useState("");
-  const [depth, setDepth] = useState<"basic" | "deep" | "comprehensive">("deep");
-  const [busy, setBusy] = useState(false);
+  const router = useRouter();
   const [sourcesOpen, setSourcesOpen] = useState(false);
   // 최신 세션이 있으면 그것으로 진행/소스/메트릭 표시. 없거나 실패 시 목업 폴백.
   const [stages, setStages] = useState<Stage[]>(STAGES);
@@ -302,100 +291,24 @@ export default function ResearchPage() {
 
   const isRunning = status === "running" || status === "pending";
 
-  // 리서치 시작 — 세션 생성 → 비동기 실행 → 폴링.
-  const startResearch = async () => {
-    const t = topic.trim();
-    if (!t || busy || isRunning) return;
-    setBusy(true);
-    try {
-      const created = await ApiClient.post<ApiSuccess<{ session: ApiResearchSession }>>(
-        "/api/research/sessions",
-        { topic: t, depth },
-      );
-      const session = created?.data?.session;
-      const sid = session?.id;
-      if (!sid) throw new Error("세션 생성 실패");
-      await ApiClient.post(`/api/research/sessions/${sid}/execute`, {});
-      if (session) {
-        setSessionList((prev) => [session, ...prev]); // 목록 맨 앞에 추가
-        setActiveSession(session);
-      }
-      setTopic("");
-      setStatus("running");
-      setStages(STAGES.map((s, i) => ({ ...s, status: i === 0 ? "running" : "pending" })));
-      if (pollRef.current) clearTimeout(pollRef.current);
-      poll(sid);
-    } catch {
-      /* 실패 — 상태 유지 */
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  // 새 리서치 — 폼/화면 초기화.
-  const newResearch = () => {
-    if (pollRef.current) clearTimeout(pollRef.current);
-    setTopic("");
-    setStatus(null);
-    setStages(STAGES);
-    setSources(SOURCES);
-    setMetrics(METRICS);
-  };
-
   return (
     <>
       <PageHeader
-        title="딥 리서치"
-        description="자율 다단계 리서치 에이전트가 질문 분해부터 인용 보고서까지 합성합니다."
-        actions={
-          <Button size="sm" onClick={newResearch}>
-            <Plus className="h-4 w-4" />새 리서치
-          </Button>
-        }
+        title="딥 리서치 히스토리"
+        description="지난 리서치 결과를 조회합니다. 실행은 채팅의 딥 리서치 모드에서 진행됩니다."
       />
 
       <div className="min-h-0 flex-1 overflow-y-auto p-6">
-        {/* 새 리서치 입력 */}
-        <Card className="mb-6 p-4">
-          <div className="flex flex-wrap items-end gap-3">
-            <div className="min-w-[240px] flex-[3]">
-              <label className="mb-2 block text-xs font-medium text-fg-2">
-                연구 주제
-              </label>
-              <div className="flex items-center gap-2 rounded-md border border-border-strong bg-surface-2 px-3">
-                <Search className="h-4 w-4 text-faint" />
-                <input
-                  value={topic}
-                  onChange={(e) => setTopic(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") startResearch();
-                  }}
-                  placeholder="연구하고 싶은 주제를 입력하세요..."
-                  className="h-9 w-full bg-transparent text-sm text-fg outline-none placeholder:text-muted"
-                />
-              </div>
-            </div>
-            <div className="min-w-[120px] flex-1">
-              <label className="mb-2 block text-xs font-medium text-fg-2">
-                깊이
-              </label>
-              <select
-                value={depth}
-                onChange={(e) => setDepth(e.target.value as typeof depth)}
-                className="h-9 w-full rounded-md border border-border-strong bg-surface-2 px-3 text-sm text-fg outline-none"
-              >
-                {DEPTH_OPTIONS.map((d) => (
-                  <option key={d.value} value={d.value}>
-                    {d.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <Button size="md" disabled={!topic.trim() || busy || isRunning} onClick={startResearch}>
-              <Telescope className="h-4 w-4" />
-              {busy ? "시작 중…" : isRunning ? "진행 중…" : "리서치 시작"}
-            </Button>
-          </div>
+        {/* 실행 안내 배너 — 생성/실행은 채팅 인라인으로 일원화 */}
+        <Card className="mb-6 flex flex-wrap items-center justify-between gap-3 p-4">
+          <p className="text-sm text-muted">
+            딥 리서치는 채팅 입력창의{" "}
+            <span className="font-medium text-fg-2">딥 리서치</span> 모드로
+            실행하세요. 이 페이지에서는 지난 리서치 결과를 조회합니다.
+          </p>
+          <Button size="sm" variant="outline" onClick={() => router.push("/")}>
+            채팅으로 이동
+          </Button>
         </Card>
 
         {/* 보고서 중심 레이아웃: 좌측 지난 리서치 레일 + 메인(진행 stepper · 메트릭 · 보고서 · 소스) */}
