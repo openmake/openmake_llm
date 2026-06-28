@@ -7,6 +7,34 @@
  *
  */
 import type { ToolDefinition } from '../../llm/types';
+import { createLogger } from '../../utils/logger';
+
+const logger = createLogger('ToolMerger');
+
+/**
+ * 설치한 user MCP 서버 도구의 "설치=기본 ON" 자동 노출 목록 선정.
+ *
+ * - userPoolNames: 사용자 풀(설치 서버) 도구의 네임스페이스 이름 집합
+ * - enabledTools[name]===false 면 제외(명시 차단), 그 외 user 풀 도구는 기본 노출
+ * - tool-bloat(로컬 qwen 첫토큰 hang) 방지로 cap 개까지만 — 초과분 drop + 로그
+ */
+export function selectUserMcpAutoOn(
+    allTools: ToolDefinition[],
+    userPoolNames: Set<string>,
+    enabledTools: Record<string, boolean>,
+    cap: number,
+): ToolDefinition[] {
+    const eligible = allTools.filter(t =>
+        userPoolNames.has(t.function.name) && enabledTools[t.function.name] !== false);
+    const capped = eligible.slice(0, cap);
+    if (eligible.length > capped.length) {
+        logger.warn(
+            `user MCP 자동 노출 cap 적용: ${eligible.length}개 중 ${capped.length}개만 노출 ` +
+            `(cap=${cap}). 도구가 많으면 /mcp-servers 에서 일부 서버를 disable 하세요.`,
+        );
+    }
+    return capped;
+}
 
 export interface ActiveSkillBinding {
     skill_id: string;

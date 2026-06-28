@@ -48,6 +48,7 @@ export interface LifecycleSupervisor {
     onUserLogin(userId: string): Promise<void>;
     onUserLogout(userId: string): Promise<void>;
     onChatStart(userId: string, chatId: string): Promise<void>;
+    ensureUserServers(userId: string, ctx?: string): Promise<void>;
     onChatEnd(userId: string, chatId: string): Promise<void>;
     spawnUserServer(userId: string, serverId: string): Promise<ExternalMCPClient>;
     killUserServer(userId: string, serverId: string): Promise<void>;
@@ -97,16 +98,29 @@ export class MCPLifecycleSupervisor implements LifecycleSupervisor {
 
     async onChatStart(userId: string, chatId: string): Promise<void> {
         this.chatOwners.set(chatId, userId);
+        await this.ensureUserServers(userId, `chat=${chatId}`);
+    }
+
+    /**
+     * 사용자의 auto_spawn(per_chat/per_session) MCP 서버를 풀에 ensure.
+     * per_chat 뿐 아니라 per_session(lifecycle 컬럼 부재 시 기본) 도 포함 — 세션 도중
+     * 카탈로그 설치/프로세스 재시작으로 풀이 비워졌을 때 재로그인 없이 도구를 복구한다.
+     * safeSpawn 멱등 가드로 이미 살아있는 클라이언트는 재spawn 하지 않는다. onChatEnd 는
+     * per_chat 만 kill 하므로 per_session 은 onUserLogout 까지 유지된다.
+     *
+     * onChatStart(채팅 시작) 외에 도구 picker 엔드포인트도 호출 — 목록 표시 전 풀 보장.
+     */
+    async ensureUserServers(userId: string, ctx = ''): Promise<void> {
         const servers = await this.repo.listUserServers(userId);
-        const targets = servers.filter(s =>
-            s.user_id === userId &&
-            (s as ServerWithLifecycle).lifecycle === 'per_chat' &&
-            s.auto_spawn === true &&
-            s.enabled === true,
-        );
-        logger.info(`onChatStart u=${userId} chat=${chatId}: per_chat 후보 ${targets.length}개`);
+        const targets = servers.filter(s => {
+            if (s.user_id !== userId || s.auto_spawn !== true || s.enabled !== true) return false;
+            const lc = (s as ServerWithLifecycle).lifecycle ?? 'per_session';
+            return lc === 'per_chat' || lc === 'per_session';
+        });
+        const perChat = targets.filter(s => ((s as ServerWithLifecycle).lifecycle ?? 'per_session') === 'per_chat').length;
+        logger.info(`ensureUserServers u=${userId} ${ctx}: spawn 후보 ${targets.length}개 (per_chat ${perChat})`);
         await Promise.all(targets.map(s => this.safeSpawn(userId, s.id).catch(e => {
-            logger.warn(`per_chat spawn 실패 s=${s.id}: ${e}`);
+            logger.warn(`ensureUserServers spawn 실패 s=${s.id}: ${e}`);
         })));
     }
 

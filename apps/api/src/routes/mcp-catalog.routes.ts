@@ -59,6 +59,21 @@ mcpCatalogRouter.post(
 
         const created = await repo.createFromCatalog(payload, template, actor.id);
         logger.info(`from-catalog 등록: ${created.id} (template=${template.id}, user=${actor.id})`);
+
+        // 설치 즉시 spawn — auto_spawn 서버를 바로 풀에 연결해 재로그인/다음 채팅을 기다리지 않고
+        // LLM 도구로 사용 가능하게 한다(완전 통합). best-effort: spawn 실패해도 등록은 유지되며
+        // 다음 onChatStart 가 멱등 재시도한다. createFromCatalog 는 enabled=TRUE 고정이라 auto_spawn 만 확인.
+        if (created.auto_spawn) {
+            const supervisor = getLifecycleSupervisor();
+            if (supervisor) {
+                try {
+                    await supervisor.spawnUserServer(actor.id, created.id);
+                    logger.info(`from-catalog 즉시 spawn 성공: ${created.id}`);
+                } catch (e) {
+                    logger.warn(`from-catalog 즉시 spawn 실패(등록 유지): ${created.id}: ${e instanceof Error ? e.message : String(e)}`);
+                }
+            }
+        }
         res.status(201).json(success({ server: created }));
     }),
 );
