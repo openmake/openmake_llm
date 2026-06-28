@@ -1101,11 +1101,11 @@ export const CHAT_USER_MCP_TOOL_CAP = parseInt(
 /**
  * MCP 진행적 공개(progressive disclosure) — mcp_list_tools / mcp_call 메타 도구를 채팅에
  * always-on 노출할지. ON 이면 다(多)서버 사용자가 cap 밖으로 밀린 서버 도구도 on-demand 로
- * 발견·호출 가능(함수 스키마 슬롯 1~2개만 사용). 추가 턴이 들어 로컬 qwen 은 약간 느려질 수
- * 있어 기본 OFF — 운영 활성화는 .env 로 opt-in.
+ * 발견·호출 가능(함수 스키마 슬롯 1~2개만 사용). **기본 ON** — 라이브 E2E 검증 완료로 운영
+ * 기본값 채택. 비활성화하려면 .env 에 `MCP_PROGRESSIVE_DISCLOSURE_ENABLED=false` (opt-out).
  */
 export const MCP_PROGRESSIVE_DISCLOSURE_ENABLED =
-    process.env.MCP_PROGRESSIVE_DISCLOSURE_ENABLED === 'true';
+    process.env.MCP_PROGRESSIVE_DISCLOSURE_ENABLED !== 'false';
 
 /**
  * 외부 provider 도구 루프 messages 토큰 예산 — external-provider 경로는 LLMClient.chat 의
