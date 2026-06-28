@@ -147,9 +147,19 @@ export class ToolRouter {
      * 사용자 풀(설치한 user MCP 서버) 도구의 네임스페이스 적용 이름 집합.
      * 채팅에서 "설치=기본 ON" 자동 노출 판별에 사용 (global 외부 도구는 제외).
      */
-    getUserPoolToolNames(userId: string): Set<string> {
-        if (!this.userPool) return new Set<string>();
-        return new Set(collectUserPoolTools(this.userPool, userId).map(e => e.tool.name));
+    /**
+     * 사용자 풀 도구를 서버별로 그룹화한 이름 배열(네임스페이스 적용). 채팅 자동 노출
+     * round-robin(서버별 균등 선정)에 사용 — 무거운 서버가 cap 슬롯을 독점하지 않게 한다.
+     */
+    getUserPoolToolGroups(userId: string): string[][] {
+        if (!this.userPool) return [];
+        const groups = new Map<string, string[]>();
+        for (const e of collectUserPoolTools(this.userPool, userId)) {
+            const g = groups.get(e.serverId) ?? [];
+            g.push(e.tool.name);
+            groups.set(e.serverId, g);
+        }
+        return [...groups.values()];
     }
 
     /**
@@ -199,23 +209,27 @@ export class ToolRouter {
                 // 1a. 사용자별 풀 우선 검색 (Phase 7 LifecycleSupervisor 가 채운 인스턴스)
                 //     context.userId 가 있으면 user_private/user_shared 서버는 사용자 풀에서만 접근.
                 if (context?.userId) {
-                    const [serverId, toolName] = name.split(MCP_NAMESPACE_SEPARATOR, 2);
-                    if (serverId && toolName) {
-                        const { getUserMCPPool } = await import('./user-pool');
-                        const userClient = getUserMCPPool().get(String(context.userId), serverId);
-                        if (userClient) {
-                            try {
-                                const result = await Promise.race([
-                                    userClient.callTool(toolName, args),
-                                    new Promise<never>((_, reject) =>
-                                        setTimeout(() => reject(new Error(`외부 도구 타임아웃: ${name} (${MCP_EXTERNAL_TOOL_LIMITS.EXECUTION_TIMEOUT_MS}ms 초과)`)), MCP_EXTERNAL_TOOL_LIMITS.EXECUTION_TIMEOUT_MS)
-                                    ),
-                                ]);
-                                return finalize(result);
-                            } catch (e) {
-                                const msg = e instanceof Error ? e.message : String(e);
-                                return fail(`사용자 풀 도구 실행 실패 (${name}): ${msg}`);
-                            }
+                    // 네임스페이스 이름은 `displayName::tool` 인데 풀은 serverId(mcp_*) 로 키된다.
+                    // split[0](displayName) 직접 조회는 항상 실패하므로(서버명 충돌 시 suffix 도
+                    // 붙음), collectUserPoolTools 로 전체 네임스페이스 이름을 매칭해 entry 의
+                    // 실제 serverId + originalToolName 으로 호출한다.
+                    const { getUserMCPPool } = await import('./user-pool');
+                    const pool = getUserMCPPool();
+                    const entry = collectUserPoolTools(pool, String(context.userId))
+                        .find(e => e.tool.name === name);
+                    const userClient = entry ? pool.get(String(context.userId), entry.serverId) : undefined;
+                    if (entry && userClient) {
+                        try {
+                            const result = await Promise.race([
+                                userClient.callTool(entry.originalToolName, args),
+                                new Promise<never>((_, reject) =>
+                                    setTimeout(() => reject(new Error(`외부 도구 타임아웃: ${name} (${MCP_EXTERNAL_TOOL_LIMITS.EXECUTION_TIMEOUT_MS}ms 초과)`)), MCP_EXTERNAL_TOOL_LIMITS.EXECUTION_TIMEOUT_MS)
+                                ),
+                            ]);
+                            return finalize(result);
+                        } catch (e) {
+                            const msg = e instanceof Error ? e.message : String(e);
+                            return fail(`사용자 풀 도구 실행 실패 (${name}): ${msg}`);
                         }
                     }
                 }
