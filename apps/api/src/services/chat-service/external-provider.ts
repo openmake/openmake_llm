@@ -13,7 +13,8 @@
  * @module services/chat-service/external-provider
  */
 import { createLogger } from '../../utils/logger';
-import { EXTERNAL_LLM_TOOL_BLACKLIST, LOOP_DETECTION, AGENT_LOOP_LIMITS, MAX_TOOL_RESULT_CHARS, ARTIFACT_REQUEST_SUPPRESSED_TOOLS, ARTIFACT_INTENT_PATTERNS } from '../../config/runtime-limits';
+import { EXTERNAL_LLM_TOOL_BLACKLIST, LOOP_DETECTION, AGENT_LOOP_LIMITS, MAX_TOOL_RESULT_CHARS, ARTIFACT_REQUEST_SUPPRESSED_TOOLS, ARTIFACT_INTENT_PATTERNS, EXTERNAL_LLM_INPUT_TOKEN_BUDGET } from '../../config/runtime-limits';
+import { estimateMessageTokens, truncateMessagesPreservingSystem } from '../../llm/model-pool';
 import { getUnifiedMCPClient } from '../../mcp/unified-client';
 import { isPersistableUserId } from '../../utils/user-id-validation';
 import { getExternalProviderSystemGuards } from '../../chat/prompt';
@@ -228,9 +229,15 @@ export async function streamFromExternalProvider(
                 });
             }
             const turnTools = suppressTools ? [] : tools;
+            // A. context-fit 안전망: external 경로는 LLMClient.chat 의 model-pool truncate 를
+            // 우회하므로, 도구 루프로 누적된 messages 가 예산을 넘으면 system 보존 + 최근 우선
+            // 으로 절단한다(큰 컨텍스트가 그대로 전달돼 모델이 빈 응답을 내는 회귀의 극단 방어).
+            const fittedMessages = estimateMessageTokens(messages) > EXTERNAL_LLM_INPUT_TOKEN_BUDGET
+                ? truncateMessagesPreservingSystem(messages, EXTERNAL_LLM_INPUT_TOKEN_BUDGET)
+                : messages;
             result = await resolved.provider.streamChat(
                 {
-                    messages,
+                    messages: fittedMessages,
                     modelId: resolved.modelId,
                     thinking: req.thinkingMode === true,
                     ...(turnTools.length > 0 ? { tools: turnTools } : {}),
@@ -251,6 +258,20 @@ export async function streamFromExternalProvider(
             );
 
             if (suppressTools || !result.toolCalls || result.toolCalls.length === 0) {
+                // B. 빈 응답 방어: 도구를 아직 끄지 않았는데 모델이 도구 호출도 텍스트도 없이
+                // 종료하면(큰 컨텍스트에서 관측된 회귀 — 텍스트 스트리밍 0) 도구를 끈 최종 턴으로
+                // 한 번 더 유도해 답변 본문을 강제한다. (재시도는 1회 — suppressTools 진입 후 break)
+                const noText = !(result.content && result.content.trim());
+                const noTools = !result.toolCalls || result.toolCalls.length === 0;
+                if (!suppressTools && noText && noTools) {
+                    logger.warn('⚠️ 외부 LLM 빈 응답(텍스트·도구 모두 없음) — 도구 비활성 최종 턴으로 답변 강제');
+                    suppressTools = true;
+                    messages.push({
+                        role: 'user',
+                        content: '답변 본문이 비어 있습니다. 추가 도구 호출 없이 사용자 요청에 대한 답변(필요 시 <artifact> 산출물 포함)을 반드시 작성하세요.',
+                    });
+                    continue;
+                }
                 break;
             }
 
