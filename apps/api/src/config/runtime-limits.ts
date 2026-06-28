@@ -1099,6 +1099,19 @@ export const CHAT_USER_MCP_TOOL_CAP = parseInt(
 );
 
 /**
+ * 채팅 자동 노출 user MCP 도구의 누적 **스키마 바이트** 상한 (개수 cap 과 별개의 이중 상한).
+ *
+ * cap 은 도구 "개수"만 제한하므로, firecrawl 처럼 도구 1개의 파라미터 스키마가 거대한(수 KB)
+ * 서버는 개수가 적어도 총 바이트로 로컬 qwen 의 vLLM 도구-grammar 컴파일 예산을 초과해
+ * UPSTREAM_ERROR(첫 토큰 타임아웃)를 유발한다. 누적 스키마 바이트가 이 값을 넘으면 추가
+ * 노출을 중단한다(단 최소 1개는 노출). 외부 provider 는 영향 적으므로 로컬 보호용 기본값.
+ */
+export const CHAT_USER_MCP_SCHEMA_BUDGET_BYTES = parseInt(
+    process.env.CHAT_USER_MCP_SCHEMA_BUDGET_BYTES || '16000',
+    10,
+);
+
+/**
  * MCP 진행적 공개(progressive disclosure) — mcp_list_tools / mcp_call 메타 도구를 채팅에
  * always-on 노출할지. ON 이면 다(多)서버 사용자가 cap 밖으로 밀린 서버 도구도 on-demand 로
  * 발견·호출 가능(함수 스키마 슬롯 1~2개만 사용). **기본 ON** — 라이브 E2E 검증 완료로 운영

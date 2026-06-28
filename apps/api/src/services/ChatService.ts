@@ -27,7 +27,7 @@ import type { UserContext } from '../mcp/user-sandbox';
 import { getUnifiedMCPClient } from '../mcp/unified-client';
 import { CHAT_ALWAYS_ON_TOOL_NAMES } from '../mcp/agent-task-tools';
 import { MCP_META_TOOL_NAMES } from '../mcp/mcp-meta-tools';
-import { CHAT_USER_MCP_TOOL_CAP, MCP_PROGRESSIVE_DISCLOSURE_ENABLED } from '../config/runtime-limits';
+import { CHAT_USER_MCP_TOOL_CAP, CHAT_USER_MCP_SCHEMA_BUDGET_BYTES, MCP_PROGRESSIVE_DISCLOSURE_ENABLED } from '../config/runtime-limits';
 import { LOAD_SKILL_TOOL_NAME } from '../mcp/load-skill-tool';
 import { LLMClient } from '../llm';
 import { type ChatMessage, type ToolDefinition, type ModelOptions } from '../llm';
@@ -214,7 +214,7 @@ export class ChatService {
         // 설치한 user MCP 서버 도구는 "설치=기본 ON" — 채팅 토글 없이 자동 노출(cap 적용).
         // global 외부 도구는 자동 노출 대상 아님(opt-in 유지). 끄려면 /mcp-servers 서버 disable.
         const toolGroups = userIdStr ? toolRouter.getUserPoolToolGroups(userIdStr) : [];
-        const userMcpAutoOn = selectUserMcpAutoOn(allTools, toolGroups, reqCtx.enabledTools, CHAT_USER_MCP_TOOL_CAP, reqCtx.message);
+        const userMcpAutoOn = selectUserMcpAutoOn(allTools, toolGroups, reqCtx.enabledTools, CHAT_USER_MCP_TOOL_CAP, CHAT_USER_MCP_SCHEMA_BUDGET_BYTES, reqCtx.message);
 
         // 사용자가 명시적으로 활성화한 도구만 추출
         const userToggled = allTools.filter(t => reqCtx.enabledTools![t.function.name] === true);
