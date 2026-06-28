@@ -212,8 +212,8 @@ export class ChatService {
 
         // 설치한 user MCP 서버 도구는 "설치=기본 ON" — 채팅 토글 없이 자동 노출(cap 적용).
         // global 외부 도구는 자동 노출 대상 아님(opt-in 유지). 끄려면 /mcp-servers 서버 disable.
-        const userPoolNames = userIdStr ? toolRouter.getUserPoolToolNames(userIdStr) : new Set<string>();
-        const userMcpAutoOn = selectUserMcpAutoOn(allTools, userPoolNames, reqCtx.enabledTools, CHAT_USER_MCP_TOOL_CAP);
+        const toolGroups = userIdStr ? toolRouter.getUserPoolToolGroups(userIdStr) : [];
+        const userMcpAutoOn = selectUserMcpAutoOn(allTools, toolGroups, reqCtx.enabledTools, CHAT_USER_MCP_TOOL_CAP);
 
         // 사용자가 명시적으로 활성화한 도구만 추출
         const userToggled = allTools.filter(t => reqCtx.enabledTools![t.function.name] === true);

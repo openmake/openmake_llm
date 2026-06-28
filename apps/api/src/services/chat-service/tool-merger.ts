@@ -12,28 +12,42 @@ import { createLogger } from '../../utils/logger';
 const logger = createLogger('ToolMerger');
 
 /**
- * 설치한 user MCP 서버 도구의 "설치=기본 ON" 자동 노출 목록 선정.
+ * 설치한 user MCP 서버 도구의 "설치=기본 ON" 자동 노출 목록 선정 (서버별 round-robin).
  *
- * - userPoolNames: 사용자 풀(설치 서버) 도구의 네임스페이스 이름 집합
+ * - toolGroups: 서버별 도구 이름 배열의 배열(네임스페이스 적용)
  * - enabledTools[name]===false 면 제외(명시 차단), 그 외 user 풀 도구는 기본 노출
- * - tool-bloat(로컬 qwen 첫토큰 hang) 방지로 cap 개까지만 — 초과분 drop + 로그
+ * - tool-bloat(로컬 qwen 첫토큰 hang) 방지로 cap 개까지만 노출
+ * - round-robin: 각 서버에서 1개씩 돌아가며 채워, 무거운 서버가 cap 슬롯을 독점해
+ *   가벼운 서버(예: duckduckgo 2개)가 통째로 잘리는 것을 막는다(각 서버 최소 1개 대표).
  */
 export function selectUserMcpAutoOn(
     allTools: ToolDefinition[],
-    userPoolNames: Set<string>,
+    toolGroups: string[][],
     enabledTools: Record<string, boolean>,
     cap: number,
 ): ToolDefinition[] {
-    const eligible = allTools.filter(t =>
-        userPoolNames.has(t.function.name) && enabledTools[t.function.name] !== false);
-    const capped = eligible.slice(0, cap);
-    if (eligible.length > capped.length) {
+    const lookup = new Map(allTools.map(t => [t.function.name, t]));
+    const groups = toolGroups
+        .map(names => names.filter(n => enabledTools[n] !== false))
+        .filter(g => g.length > 0);
+    const totalEligible = groups.reduce((n, g) => n + g.length, 0);
+    const maxLen = groups.reduce((m, g) => Math.max(m, g.length), 0);
+
+    const picked: ToolDefinition[] = [];
+    for (let round = 0; round < maxLen && picked.length < cap; round++) {
+        for (const g of groups) {
+            if (round >= g.length || picked.length >= cap) continue;
+            const t = lookup.get(g[round]);
+            if (t) picked.push(t);
+        }
+    }
+    if (totalEligible > picked.length) {
         logger.warn(
-            `user MCP 자동 노출 cap 적용: ${eligible.length}개 중 ${capped.length}개만 노출 ` +
-            `(cap=${cap}). 도구가 많으면 /mcp-servers 에서 일부 서버를 disable 하세요.`,
+            `user MCP 자동 노출 cap: ${totalEligible}개 중 ${picked.length}개 노출 ` +
+            `(cap=${cap}, 서버별 round-robin — 각 서버 우선 1개). 더 줄이려면 /mcp-servers 서버 disable.`,
         );
     }
-    return capped;
+    return picked;
 }
 
 export interface ActiveSkillBinding {

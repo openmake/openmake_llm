@@ -57,7 +57,9 @@ INSERT INTO mcp_server_catalog (
     'PostgreSQL',
     'PostgreSQL DB 읽기 전용 쿼리. 스키마 조회 + SELECT 실행.',
     'stdio',
-    'npx -y @modelcontextprotocol/server-postgres',
+    -- server-postgres 는 DB URL 을 위치 인자로 받음 — {{env.DATABASE_URL}} placeholder 를
+    -- safeSpawn 이 복호화 env 로 치환(051 마이그레이션과 동일). env_schema 로 암호화 저장.
+    'npx -y @modelcontextprotocol/server-postgres {{env.DATABASE_URL}}',
     '{}'::jsonb,
     '{"type": "object", "required": ["DATABASE_URL"], "properties": {"DATABASE_URL": {"type": "string", "title": "PostgreSQL URL", "secret": true, "description": "postgresql://user:pass@host:port/db (read-only 권장)"}}}'::jsonb,
     'pro',
