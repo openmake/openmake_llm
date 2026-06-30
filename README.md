@@ -60,7 +60,7 @@ Every request flows through a lightweight, deterministic policy layer — **`Exe
 | **Agents / Tools** | Model Context Protocol (`@modelcontextprotocol/sdk`), Docker-isolated sandboxes |
 | **Auth / Security** | `jsonwebtoken`, Google OAuth 2.0, Helmet, AES-256-GCM |
 | **Infra** | PM2 (app) + Docker (PostgreSQL/Redis, MCP & agent sandboxes) |
-| **Testing / CI** | Jest (ts-jest), Playwright, ESLint, GitHub Actions |
+| **Testing / CI** | Jest/ts-jest (local), Bun test (CI gate), Playwright, ESLint, GitHub Actions |
 
 > **Pipeline shape:** `ExecutionPlanBuilder.build` (policy, once per request) → strategy dispatch → `LLMClient.chat` (execution, per call) — a SQL planner/executor split; keep the two layers separate.
 
@@ -86,7 +86,7 @@ npm install
 cp .env.example .env      # then fill in the values below
 
 # 3. Start PostgreSQL (schema auto-generates on first launch)
-docker compose up -d postgres
+docker compose -f infra/docker-compose.yml up -d postgres
 ```
 
 Minimum `.env` values (see `.env.example` for the full list):
