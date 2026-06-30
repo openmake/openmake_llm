@@ -152,7 +152,12 @@ export async function streamFromExternalProvider(
     }
 
     for (const h of req.history ?? []) {
-        const role = h.role === 'user' || h.role === 'assistant' || h.role === 'system'
+        // history 에 섞인 system 메시지는 제외한다. external-provider 는 위(151)에서 자체
+        // system 을 맨 앞에 조립하므로, history 의 system 을 그대로 두면 두 번째 system 이
+        // 중간 위치에 들어가 vLLM/qwen 템플릿이 "System message must be at the beginning"
+        // (400 BadRequest) 으로 거부한다.
+        if (h.role === 'system') continue;
+        const role = h.role === 'user' || h.role === 'assistant'
             ? h.role
             : 'user';
         messages.push({
