@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { WsChatRequest, WsServerEvent, WsAttachedFile } from "@openmake/shared-types";
 import { useAppStore, type StructuredAnswerData, type PendingApproval, type AgentTaskState } from "./store";
 import { ApiClient } from "./api-client";
+import { getAnonSessionId } from "./anon-session";
 import { CLIENT_TIMING } from "./config";
 
 /**
@@ -26,25 +27,6 @@ function resolveWsUrl(): string {
     return `${proto}//${location.hostname}:52416`;
   }
   return `${proto}//${location.host}`;
-}
-
-/**
- * 게스트(비로그인) REST 호출용 anon 세션 ID. localStorage 에 영속.
- * 백엔드 resolveUserContextFromRequest 는 req.user 없고 anonSessionId 도 없으면 401 →
- * ApiClient 401 핸들러가 로그인 리다이렉트를 트리거하므로, 게스트도 식별자를 보내 게스트 컨텍스트를 받게 한다.
- */
-function getAnonSessionId(): string {
-  try {
-    const KEY = "omk_anon_session";
-    let id = localStorage.getItem(KEY);
-    if (!id) {
-      id = (crypto?.randomUUID?.() ?? `anon-${Date.now()}-${Math.random().toString(36).slice(2)}`);
-      localStorage.setItem(KEY, id);
-    }
-    return id;
-  } catch {
-    return `anon-${Date.now()}`;
-  }
 }
 
 export function useChatSocket() {
@@ -262,6 +244,7 @@ export function useChatSocket() {
         model: s.selectedModel,
         history: s.chatHistory.map((m) => ({ role: m.role, content: m.content })),
         sessionId: s.currentSessionId,
+        anonSessionId: getAnonSessionId(),
         images: images ?? [],
         files: files ?? [],
         webSearch: s.webSearchEnabled,

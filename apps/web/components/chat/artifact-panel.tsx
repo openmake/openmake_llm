@@ -7,6 +7,7 @@ import type { Artifact } from "@/lib/store";
 import { ApiClient, ApiError } from "@/lib/api-client";
 import type { ApiSuccess } from "@openmake/shared-types";
 import { buildArtifactSrcDoc, previewKindFor } from "@/lib/artifact-render";
+import { appendAnonSessionId } from "@/lib/anon-session";
 import { ArtifactFrame } from "./artifact-frame";
 import { ArtifactShareModal } from "./artifact-share-modal";
 import { downloadArtifact } from "@/lib/artifact-download";
@@ -210,7 +211,8 @@ export function ArtifactPanel() {
     (async () => {
       try {
         const res = await ApiClient.get<{ data?: { artifacts?: PersistedArtifact[] } }>(
-          `/api/sessions/${currentSessionId}/artifacts`,
+          appendAnonSessionId(`/api/sessions/${currentSessionId}/artifacts`),
+          { redirectOnUnauthorized: false },
         );
         if (!alive) return;
         const rows = res.data?.artifacts ?? [];
@@ -246,7 +248,8 @@ export function ArtifactPanel() {
     (async () => {
       try {
         const res = await ApiClient.get<ApiSuccess<{ versions: { version: number }[] }>>(
-          `/api/sessions/${encodeURIComponent(currentSessionId)}/artifacts/${encodeURIComponent(active.id)}/versions`,
+          appendAnonSessionId(`/api/sessions/${encodeURIComponent(currentSessionId)}/artifacts/${encodeURIComponent(active.id)}/versions`),
+          { redirectOnUnauthorized: false },
         );
         if (alive) setVersions(res.data?.versions ?? []);
       } catch {
@@ -264,7 +267,8 @@ export function ArtifactPanel() {
     if (v === latest) { setOverride(null); return; }
     try {
       const res = await ApiClient.get<ApiSuccess<{ kind: string; title: string; language: string | null; content: string; version: number }>>(
-        `/api/sessions/${encodeURIComponent(currentSessionId)}/artifacts/${encodeURIComponent(active.id)}/v/${v}`,
+        appendAnonSessionId(`/api/sessions/${encodeURIComponent(currentSessionId)}/artifacts/${encodeURIComponent(active.id)}/v/${v}`),
+        { redirectOnUnauthorized: false },
       );
       const d = res.data;
       setOverride({ version: v, artifact: { id: active.id, kind: d.kind, title: d.title, lang: d.language, content: d.content } });

@@ -24,7 +24,7 @@ const log = createLogger('ChatRequestPersistence');
  * @param sessionId - 기존 세션 ID (없으면 생성)
  * @param authenticatedUserId - 인증된 사용자 ID (FK 호환)
  * @param message - 세션 제목용 메시지 (앞 30자)
- * @param anonSessionId - 비로그인 세션 ID
+ * @param anonSessionId - 비로그인 브라우저 소유자 ID
  * @returns 유효한 세션 ID
  */
 export async function ensureSession(
@@ -32,14 +32,26 @@ export async function ensureSession(
     authenticatedUserId: string | null,
     message: string,
     anonSessionId?: string,
+    userRole: 'admin' | 'user' | 'guest' = 'guest',
     // 2026-05-26 Phase 3.4 fork: 메시지 편집 분기 시 부모 세션 추적 (metadata 에 저장).
     branchMeta?: { parentSessionId?: string; parentMessageId?: string },
 ): Promise<string> {
+    const conversationDb = getConversationDB();
+
     if (sessionId) {
+        if (userRole === 'admin') {
+            return sessionId;
+        }
+
+        const session = await conversationDb.getSession(sessionId);
+        const ownsAuthenticatedSession = !!authenticatedUserId && session?.userId === authenticatedUserId;
+        const ownsAnonymousSession = !authenticatedUserId && !!anonSessionId && session?.anonSessionId === anonSessionId;
+        if (!session || (!ownsAuthenticatedSession && !ownsAnonymousSession)) {
+            throw new Error('SESSION_ACCESS_DENIED');
+        }
         return sessionId;
     }
 
-    const conversationDb = getConversationDB();
     const metadata: Record<string, unknown> | undefined = branchMeta && branchMeta.parentSessionId
         ? {
             parentSessionId: branchMeta.parentSessionId,

@@ -3,9 +3,8 @@
  * User ID Validation — sentinel 판별 헬퍼
  * ============================================================
  *
- * 코드 전반에서 `userId: authenticatedUserId || anonSessionId || 'guest'` 패턴으로
- * sentinel 문자열을 만들고, DB 저장 경로마다 `userId !== 'guest' && !userId.startsWith('anon-')`
- * 검사를 인라인 반복합니다. 누락 시 users(id) FK 위반 (외부 provider 사용량 적재 등).
+ * 코드 전반에서 인증 사용자 ID와 guest/anonymous 같은 sentinel이 섞일 수 있습니다.
+ * DB 저장 경로마다 이를 인라인 검사하면 누락 시 users(id) FK 위반이 발생합니다.
  *
  * 이 헬퍼는 sentinel 정의를 한 곳에 모으고 TypeScript type guard 로
  * 호출처에서 narrowing 가능하게 합니다.

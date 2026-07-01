@@ -7,6 +7,7 @@ export default [
       "**/build/**",
       "**/.next/**",
       "apps/web/**",
+      "apps/desktop/**",
       "**/node_modules/**",
       "**/.claude/**",
       "**/*.min.js",

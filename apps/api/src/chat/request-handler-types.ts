@@ -27,9 +27,8 @@ export interface ChatUserContext {
     userRole: 'admin' | 'user' | 'guest';
     /**
      * 메모리/추적용 사용자 ID.
-     * 인증 사용자 ID → 익명 세션 ID 순으로 채워지며, 둘 다 없으면 undefined.
-     * 'guest' / 'anon-*' 같은 sentinel 문자열은 폐기 — 호출처는 표시용 fallback 만
-     * (예: `userContext.userId ?? 'guest'`). DB 저장 가드는 `isPersistableUserId` 사용.
+     * 인증 사용자 ID만 채워지며, 익명 식별자는 anonSessionId에만 보관한다.
+     * 호출처는 표시용 fallback만 사용한다(예: `userContext.userId ?? 'guest'`).
      */
     userId?: string;
 }

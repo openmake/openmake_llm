@@ -211,9 +211,14 @@ export function chatRateLimiter(req: Request, res: Response, next: NextFunction)
  */
 export async function checkChatRateLimit(
     userId: string | null,
-    role: string
+    role: string,
+    anonSessionId?: string
 ): Promise<string | null> {
-    const key = userId || 'ws-anonymous';
+    const normalizedAnonSessionId = typeof anonSessionId === 'string' ? anonSessionId.trim() : '';
+    const anonKey = /^[a-zA-Z0-9_-]{8,128}$/.test(normalizedAnonSessionId)
+        ? `anon:${normalizedAnonSessionId}`
+        : 'ws-anonymous';
+    const key = userId || anonKey;
     const limit = getDailyLimit(role);
 
     if (limit === Infinity) return null;

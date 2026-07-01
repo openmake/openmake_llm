@@ -18,7 +18,6 @@ import {
     ConversationSession,
     SessionRow,
     MessageRow,
-    isDuplicateKeyError,
     rowToMessage,
     rowToSession
 } from './conversation-types';
@@ -63,28 +62,18 @@ export async function createSession(
     const now = new Date().toISOString();
     const resolvedTitle = title || '새 대화';
 
-    try {
-        await withRetry(() => pool.query(`
-            INSERT INTO conversation_sessions (id, user_id, anon_session_id, title, created_at, updated_at, metadata)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
-        `, [
-            id,
-            userId || null,
-            anonSessionId || null,
-            resolvedTitle,
-            now,
-            now,
-            metadata ? JSON.stringify(metadata) : null
-        ]), { operation: 'createSession' });
-    } catch (err: unknown) {
-        if (anonSessionId && isDuplicateKeyError(err)) {
-            const existing = await getSessionsByAnonId(anonSessionId, 1);
-            if (existing.length > 0) {
-                return existing[0];
-            }
-        }
-        throw err;
-    }
+    await withRetry(() => pool.query(`
+        INSERT INTO conversation_sessions (id, user_id, anon_session_id, title, created_at, updated_at, metadata)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+    `, [
+        id,
+        userId || null,
+        anonSessionId || null,
+        resolvedTitle,
+        now,
+        now,
+        metadata ? JSON.stringify(metadata) : null
+    ]), { operation: 'createSession' });
 
     await enforceMaxSessions();
 
@@ -231,18 +220,46 @@ export async function claimAnonymousSessions(userId: string, anonSessionId: stri
     const pool = getPool();
     const now = new Date().toISOString();
 
-    const result = await pool.query(
-        `UPDATE conversation_sessions
-         SET user_id = $1, anon_session_id = NULL, updated_at = $2
-         WHERE anon_session_id = $3 AND (user_id IS NULL OR user_id = $1)`,
-        [userId, now, anonSessionId]
-    );
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        const sessions = await client.query<{ id: string }>(
+            `SELECT id
+               FROM conversation_sessions
+              WHERE anon_session_id = $1
+                AND (user_id IS NULL OR user_id = $2)`,
+            [anonSessionId, userId]
+        );
+        const sessionIds = sessions.rows.map((r) => r.id);
 
-    const count = result.rowCount || 0;
-    if (count > 0) {
-        logger.info(`[ConversationSessions] Claimed ${count} anonymous sessions for user ${userId}`);
+        if (sessionIds.length > 0) {
+            await client.query(
+                `UPDATE artifacts
+                    SET user_id = $1
+                  WHERE session_id = ANY($2::text[])
+                    AND user_id IS NULL`,
+                [userId, sessionIds]
+            );
+            await client.query(
+                `UPDATE conversation_sessions
+                    SET user_id = $1, anon_session_id = NULL, updated_at = $2
+                  WHERE id = ANY($3::text[])`,
+                [userId, now, sessionIds]
+            );
+        }
+
+        await client.query('COMMIT');
+        const count = sessionIds.length;
+        if (count > 0) {
+            logger.info(`[ConversationSessions] Claimed ${count} anonymous sessions for user ${userId}`);
+        }
+        return count;
+    } catch (error) {
+        await client.query('ROLLBACK').catch(() => undefined);
+        throw error;
+    } finally {
+        client.release();
     }
-    return count;
 }
 
 /**

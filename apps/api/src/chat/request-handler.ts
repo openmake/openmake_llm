@@ -83,11 +83,12 @@ export class ChatRequestHandler {
         }
 
         const authenticatedUserId = req.user?.id ? String(req.user.id) : null;
+        const effectiveAnonSessionId = authenticatedUserId ? undefined : anonSessionId;
         return {
             authenticatedUserId,
-            anonSessionId,
+            anonSessionId: effectiveAnonSessionId,
             userRole: (req.user as { role?: string } | undefined)?.role as 'admin' | 'user' | 'guest' || 'guest',
-            userId: authenticatedUserId ?? anonSessionId,
+            userId: authenticatedUserId ?? undefined,
         };
     }
 
@@ -97,7 +98,7 @@ export class ChatRequestHandler {
      * @param wsAuthUserId - WebSocket 연결 인증 시 확인된 사용자 ID
      * @param wsAuthUserRole - 인증된 사용자 역할
      * @param msgUserId - 메시지에 포함된 userId (fallback)
-     * @param anonSessionId - 비로그인 세션 ID
+     * @param anonSessionId - 비로그인 브라우저 소유자 ID
      * @returns 사용자 컨텍스트
      */
     static resolveUserContextFromWebSocket(
@@ -106,12 +107,14 @@ export class ChatRequestHandler {
         msgUserId?: string,
         anonSessionId?: string,
     ): ChatUserContext {
-        const authenticatedUserId = wsAuthUserId || msgUserId || null;
+        void msgUserId;
+        const authenticatedUserId = wsAuthUserId || null;
+        const effectiveAnonSessionId = authenticatedUserId ? undefined : anonSessionId;
         return {
             authenticatedUserId,
-            anonSessionId,
+            anonSessionId: effectiveAnonSessionId,
             userRole: wsAuthUserRole,
-            userId: wsAuthUserId ?? msgUserId ?? anonSessionId,
+            userId: authenticatedUserId ?? undefined,
         };
     }
 
@@ -241,13 +244,22 @@ export class ChatRequestHandler {
             // 비인증 사용자 — branch 정보 무시 (anon session 분기는 의미 없음)
             log.warn(`branchFromSessionId 무시 — 비인증 사용자 (anon session)`);
         }
-        const currentSessionId = await ensureSession(
-            sessionId,
-            userContext.authenticatedUserId,
-            message,
-            userContext.anonSessionId,
-            validatedBranchMeta,
-        );
+        let currentSessionId: string;
+        try {
+            currentSessionId = await ensureSession(
+                sessionId,
+                userContext.authenticatedUserId,
+                message,
+                userContext.anonSessionId,
+                userContext.userRole,
+                validatedBranchMeta,
+            );
+        } catch (e) {
+            if (e instanceof Error && e.message === 'SESSION_ACCESS_DENIED') {
+                throw new ChatRequestError('이 세션에 접근할 권한이 없습니다', 403);
+            }
+            throw e;
+        }
 
         // 4. 사용자 메시지 저장
         const maskedModel = client.model;
@@ -383,7 +395,6 @@ export class ChatRequestHandler {
             const { cleanedContent, artifacts } = extractAndStripArtifacts(response);
             if (artifacts.length > 0) {
                 const repo = new ArtifactRepository(getPool());
-                const userIdForDb = typeof userContext.userId === 'string' ? userContext.userId : null;
                 for (const a of artifacts) {
                     // Harness 결정론 검증 게이트: 깨진 산출물을 비차단으로 surface (저장은 계속).
                     if (a.validation && a.validation.checked && !a.validation.valid) {
@@ -393,7 +404,7 @@ export class ChatRequestHandler {
                         const row = await repo.insertArtifact({
                             artifactId: a.id,
                             sessionId: currentSessionId,
-                            userId: userIdForDb,
+                            userId: userContext.authenticatedUserId,
                             kind: a.kind as ArtifactKind,
                             title: a.title,
                             language: a.lang,
