@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import type { ApiSuccess, MePayload } from "@openmake/shared-types";
 import { ApiClient } from "@/lib/api-client";
+import { getAnonSessionId } from "@/lib/anon-session";
 import { useAppStore } from "@/lib/store";
 import { CLIENT_TIMING } from "@/lib/config";
 
@@ -27,6 +28,9 @@ function AuthSync() {
               role: u.role ?? "user",
             },
             isGuestMode: false,
+          });
+          void ApiClient.post("/api/chat/sessions/claim", { anonSessionId: getAnonSessionId() }).catch(() => {
+            /* 익명 세션이 없거나 이미 이관됨 */
           });
         }
       })

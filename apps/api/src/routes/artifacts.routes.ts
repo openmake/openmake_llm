@@ -17,7 +17,7 @@ import {
     type ArtifactPublicationRow,
 } from '../data/repositories/artifact-publication-repository';
 import { getPool } from '../data/models/unified-database';
-import { success, notFound } from '../utils/api-response';
+import { success, notFound, unauthorized, forbidden } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
 import { requireAuth, optionalAuth } from '../auth';
 import { artifactExecLimiter } from '../middlewares/rate-limiters';
@@ -40,6 +40,54 @@ const router = Router();
 function resolveUserId(req: Request): string | undefined {
     if (!req.user) return undefined;
     return 'userId' in req.user ? (req.user as { userId: string }).userId : req.user.id?.toString();
+}
+
+function resolveAnonSessionId(req: Request): string | undefined {
+    const raw = req.query.anonSessionId ?? req.body?.anonSessionId ?? req.get('x-anon-session-id');
+    return typeof raw === 'string' && raw.length > 0 ? raw : undefined;
+}
+
+async function assertSessionAccess(req: Request, sessionId: string): Promise<void> {
+    if (req.user?.role === 'admin') return;
+
+    const pool = getPool();
+    const result = await pool.query<{ user_id: string | null; anon_session_id: string | null }>(
+        'SELECT user_id, anon_session_id FROM conversation_sessions WHERE id = $1',
+        [sessionId]
+    );
+    const session = result.rows[0];
+    if (!session) {
+        throw Object.assign(new Error('SESSION_NOT_FOUND'), { statusCode: 404 });
+    }
+
+    const userId = resolveUserId(req);
+    if (userId && session.user_id === userId) return;
+
+    const anonSessionId = resolveAnonSessionId(req);
+    if (anonSessionId && session.anon_session_id === anonSessionId) return;
+
+    throw Object.assign(new Error(userId || anonSessionId ? 'SESSION_FORBIDDEN' : 'SESSION_UNAUTHORIZED'), {
+        statusCode: userId || anonSessionId ? 403 : 401,
+    });
+}
+
+function sendSessionAccessError(res: Response, error: unknown): boolean {
+    const statusCode = typeof error === 'object' && error !== null && 'statusCode' in error
+        ? Number((error as { statusCode?: unknown }).statusCode)
+        : 0;
+    if (statusCode === 404) {
+        res.status(404).json(notFound('session'));
+        return true;
+    }
+    if (statusCode === 401) {
+        res.status(401).json(unauthorized('인증이 필요합니다'));
+        return true;
+    }
+    if (statusCode === 403) {
+        res.status(403).json(forbidden('권한이 없습니다'));
+        return true;
+    }
+    return false;
 }
 
 const VALID_VISIBILITY: ArtifactVisibility[] = ['private', 'authenticated', 'link'];
@@ -81,39 +129,39 @@ router.get('/sessions/:sid/meta', requireAuth, asyncHandler(async (req: Request,
  * GET /api/sessions/:sid/artifacts
  * 세션의 모든 artifact — id 별 최신 버전만 반환 (패널 초기 로드용).
  *
- * 소유권 검증: 사용자 본인의 세션만 조회. admin 은 모든 세션 접근.
- * 단순화: conversation_sessions.user_id 비교는 ChatRequestHandler 가 INSERT 시점에
- * 이미 user_id 를 함께 저장하므로, artifacts.user_id 일치 여부만으로 본인 검증.
+ * 소유권 검증: admin 은 모든 세션 접근, 인증 사용자는 conversation_sessions.user_id,
+ * 게스트는 conversation_sessions.anon_session_id 와 요청 anonSessionId 일치 시 접근.
  */
-router.get('/sessions/:sid/artifacts', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+router.get('/sessions/:sid/artifacts', optionalAuth, asyncHandler(async (req: Request, res: Response) => {
     const sessionId = req.params.sid;
+    try {
+        await assertSessionAccess(req, sessionId);
+    } catch (error) {
+        if (sendSessionAccessError(res, error)) return;
+        throw error;
+    }
     const repo = new ArtifactRepository(getPool());
     const rows = await repo.listLatestBySession(sessionId);
 
-    // 본인 세션 검증 — admin 이 아니면 자신의 artifact 만 반환
-    const userId = req.user && 'userId' in req.user ? (req.user as { userId: string }).userId : req.user?.id?.toString();
-    const isAdmin = req.user?.role === 'admin';
-    const filtered = isAdmin ? rows : rows.filter(r => r.user_id === userId);
-
-    res.json(success({ artifacts: filtered, total: filtered.length }));
+    res.json(success({ artifacts: rows, total: rows.length }));
 }));
 
 /**
  * GET /api/sessions/:sid/artifacts/:aid/versions
  * 특정 artifact 의 모든 버전 — UI 좌우 화살표 history 탐색용.
  */
-router.get('/sessions/:sid/artifacts/:aid/versions', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+router.get('/sessions/:sid/artifacts/:aid/versions', optionalAuth, asyncHandler(async (req: Request, res: Response) => {
     const { sid, aid } = req.params;
+    try {
+        await assertSessionAccess(req, sid);
+    } catch (error) {
+        if (sendSessionAccessError(res, error)) return;
+        throw error;
+    }
     const repo = new ArtifactRepository(getPool());
     const rows = await repo.listVersionsByArtifactId(sid, aid);
     if (rows.length === 0) {
         res.status(404).json(notFound('artifact'));
-        return;
-    }
-    const userId = req.user && 'userId' in req.user ? (req.user as { userId: string }).userId : req.user?.id?.toString();
-    const isAdmin = req.user?.role === 'admin';
-    if (!isAdmin && rows[0].user_id !== userId) {
-        res.status(403).json({ error: 'FORBIDDEN', detail: 'not owner' });
         return;
     }
     res.json(success({ artifactId: aid, versions: rows }));
@@ -123,8 +171,14 @@ router.get('/sessions/:sid/artifacts/:aid/versions', requireAuth, asyncHandler(a
  * GET /api/sessions/:sid/artifacts/:aid/v/:version
  * 특정 버전 단건 조회.
  */
-router.get('/sessions/:sid/artifacts/:aid/v/:version', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+router.get('/sessions/:sid/artifacts/:aid/v/:version', optionalAuth, asyncHandler(async (req: Request, res: Response) => {
     const { sid, aid, version } = req.params;
+    try {
+        await assertSessionAccess(req, sid);
+    } catch (error) {
+        if (sendSessionAccessError(res, error)) return;
+        throw error;
+    }
     const v = parseInt(version, 10);
     if (!Number.isFinite(v) || v < 1) {
         res.status(400).json({ error: 'INVALID_VERSION' });
@@ -134,12 +188,6 @@ router.get('/sessions/:sid/artifacts/:aid/v/:version', requireAuth, asyncHandler
     const row = await repo.getVersion(sid, aid, v);
     if (!row) {
         res.status(404).json(notFound('artifact version'));
-        return;
-    }
-    const userId = req.user && 'userId' in req.user ? (req.user as { userId: string }).userId : req.user?.id?.toString();
-    const isAdmin = req.user?.role === 'admin';
-    if (!isAdmin && row.user_id !== userId) {
-        res.status(403).json({ error: 'FORBIDDEN', detail: 'not owner' });
         return;
     }
     res.json(success(row));

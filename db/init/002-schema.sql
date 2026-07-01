@@ -411,24 +411,8 @@ CREATE INDEX IF NOT EXISTS idx_api_keys_hash ON user_api_keys(key_hash);
 CREATE INDEX IF NOT EXISTS idx_api_keys_active ON user_api_keys(user_id, is_active);
 
 -- Session & Audit indexes (from unified-database.ts)
--- Remove duplicate anon_session_id rows before creating unique index (keep the most recent row per value)
--- NOTE: id column is TEXT; use updated_at for ordering to avoid lexicographic comparison issues
-DO $$
-BEGIN
-    IF EXISTS (SELECT 1 FROM conversation_sessions WHERE anon_session_id IS NOT NULL GROUP BY anon_session_id HAVING COUNT(*) > 1) THEN
-        DELETE FROM conversation_sessions cs
-        WHERE anon_session_id IS NOT NULL
-          AND ctid NOT IN (
-            SELECT DISTINCT ON (anon_session_id) ctid
-            FROM conversation_sessions
-            WHERE anon_session_id IS NOT NULL
-            ORDER BY anon_session_id, updated_at DESC NULLS LAST
-          );
-        RAISE NOTICE '[schema] 중복 anon_session_id 로우 정리 완료';
-    END IF;
-END $$;
 DROP INDEX IF EXISTS idx_sessions_anon;
-CREATE UNIQUE INDEX IF NOT EXISTS idx_sessions_anon ON conversation_sessions(anon_session_id) WHERE anon_session_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_sessions_anon ON conversation_sessions(anon_session_id) WHERE anon_session_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_audit_user ON audit_logs(user_id);
 
 -- OAuth state index (cleanup query)

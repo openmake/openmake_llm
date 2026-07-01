@@ -89,6 +89,8 @@ export interface WsChatRequest {
   model?: string;
   history?: Array<{ role: ChatRole; content: string }>;
   sessionId?: string | null;
+  /** Browser-scoped anonymous owner id for guest sessions. */
+  anonSessionId?: string;
   images?: string[];
   /** 첨부 텍스트 파일 — 백엔드가 fileContext 채널로 LLM 에 주입 */
   files?: WsAttachedFile[];

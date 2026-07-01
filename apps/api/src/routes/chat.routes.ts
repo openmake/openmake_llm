@@ -17,7 +17,7 @@
 
 import { Router, Request, Response } from 'express';
 import { ClusterManager } from '../cluster/manager';
-import { success, serviceUnavailable, unauthorized } from '../utils/api-response';
+import { success, serviceUnavailable, unauthorized, forbidden } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
 import { optionalAuth } from '../auth';
 import { isPersistableUserId } from '../utils/user-id-validation';
@@ -124,7 +124,9 @@ router.post('/', optionalApiKey, optionalAuth, chatRateLimiter, validate(chatReq
         }));
     } catch (error) {
         if (error instanceof ChatRequestError) {
-            res.status(error.statusCode).json(serviceUnavailable(error.message));
+            res.status(error.statusCode).json(
+                error.statusCode === 403 ? forbidden(error.message) : serviceUnavailable(error.message)
+            );
             return;
         }
         throw error;

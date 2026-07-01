@@ -35,6 +35,10 @@ export class ApiError extends Error {
   }
 }
 
+export type ApiRequestOptions = RequestInit & {
+  redirectOnUnauthorized?: boolean;
+};
+
 const MUTATING = new Set<string>(MUTATING_METHODS);
 
 /** 401 자동 refresh 를 건너뛸 endpoint 목록 (무한루프 방지). */
@@ -60,18 +64,19 @@ function refreshOnce(): Promise<boolean> {
   return refreshInFlight;
 }
 
-async function request<T>(endpoint: string, options: RequestInit = {}, _isRetry = false): Promise<T> {
-  const method = (options.method || "GET").toUpperCase();
+async function request<T>(endpoint: string, options: ApiRequestOptions = {}, _isRetry = false): Promise<T> {
+  const { redirectOnUnauthorized = true, ...fetchOptions } = options;
+  const method = (fetchOptions.method || "GET").toUpperCase();
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
-    ...((options.headers as Record<string, string>) || {}),
+    ...((fetchOptions.headers as Record<string, string>) || {}),
   };
-  if (options.body instanceof FormData) delete headers["Content-Type"];
+  if (fetchOptions.body instanceof FormData) delete headers["Content-Type"];
   if (MUTATING.has(method) && !headers[CSRF.HEADER_NAME]) {
     const token = await ensureCsrf();
     if (token) headers[CSRF.HEADER_NAME] = token;
   }
-  const res = await fetch(endpoint, { ...options, credentials: "include", headers });
+  const res = await fetch(endpoint, { ...fetchOptions, credentials: "include", headers });
   const text = await res.text();
   // 비-JSON 본문(예: 프록시/서버 기본 "Internal Server Error" 평문)에도 깨지지 않도록 방어.
   // 파싱 실패 시 json=null 로 두고, 아래 에러 분기에서 status 기반 메시지로 폴백한다.
@@ -94,7 +99,7 @@ async function request<T>(endpoint: string, options: RequestInit = {}, _isRetry 
       if (refreshed) {
         return request<T>(endpoint, options, true);
       }
-      if (typeof window !== "undefined" && window.location.pathname !== "/login") {
+      if (redirectOnUnauthorized && typeof window !== "undefined" && window.location.pathname !== "/login") {
         window.location.href = "/login";
       }
     }
@@ -105,20 +110,20 @@ async function request<T>(endpoint: string, options: RequestInit = {}, _isRetry 
 }
 
 export const ApiClient = {
-  get: <T>(endpoint: string, options: RequestInit = {}) =>
+  get: <T>(endpoint: string, options: ApiRequestOptions = {}) =>
     request<T>(endpoint, { ...options, method: "GET" }),
-  post: <T>(endpoint: string, body?: unknown, options: RequestInit = {}) =>
+  post: <T>(endpoint: string, body?: unknown, options: ApiRequestOptions = {}) =>
     request<T>(endpoint, {
       ...options,
       method: "POST",
       body: body === undefined ? undefined : JSON.stringify(body),
     }),
-  put: <T>(endpoint: string, body?: unknown, options: RequestInit = {}) =>
+  put: <T>(endpoint: string, body?: unknown, options: ApiRequestOptions = {}) =>
     request<T>(endpoint, {
       ...options,
       method: "PUT",
       body: body === undefined ? undefined : JSON.stringify(body),
     }),
-  del: <T>(endpoint: string, options: RequestInit = {}) =>
+  del: <T>(endpoint: string, options: ApiRequestOptions = {}) =>
     request<T>(endpoint, { ...options, method: "DELETE" }),
 };

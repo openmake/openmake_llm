@@ -90,7 +90,7 @@ const toolChoiceSchema = z.union([
  * @property {string} [model] - 사용할 모델 ID (예: openmake_llm, gpt-4o, claude-sonnet-4-6)
  * @property {string} [nodeId] - 특정 클러스터 노드 ID
  * @property {string} [sessionId] - 기존 대화 세션 ID
- * @property {string} [anonSessionId] - 비로그인 사용자 세션 ID
+ * @property {string} [anonSessionId] - 비로그인 브라우저 소유자 ID
  * @property {string} [docId] - 문서 컨텍스트 ID (문서 Q&A 시)
  * @property {string[]} [images] - Base64 인코딩된 이미지 목록 (Vision 모델용)
  * @property {boolean} [discussionMode] - 다중 모델 토론 모드 활성화

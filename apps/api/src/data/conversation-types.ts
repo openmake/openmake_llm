@@ -17,7 +17,7 @@ export interface ConversationSession {
     id: string;
     /** 소유 사용자 ID (로그인 사용자) */
     userId?: string;
-    /** 비로그인 사용자 세션 식별자 (UUID v4) */
+    /** 비로그인 브라우저 소유자 식별자 (여러 세션이 공유 가능) */
     anonSessionId?: string;
     /** 대화 제목 */
     title: string;

@@ -102,9 +102,10 @@ export async function handleChatMessage(
         const rateLimitError = await checkChatRateLimit(
             extWs._authenticatedUserId,
             userContext.userRole,
+            userContext.anonSessionId,
         );
         if (rateLimitError) {
-            ws.send(JSON.stringify({ type: 'error', error: rateLimitError }));
+            ws.send(JSON.stringify({ type: 'error', message: rateLimitError }));
             return;
         }
 
