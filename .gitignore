@@ -88,6 +88,8 @@ backend/api/.ollama-cluster.json
 !apps/web/app/icon.png
 !screenshot-main.png
 !skill-library-current.png
+# README screenshots/demo assets (personal info masked before commit)
+!assets/**/*.png
 
 # Project Documentation
 openmake_prd.md
