@@ -2,6 +2,7 @@
 
 import { Fragment, useEffect, useRef } from "react";
 import { Sparkles, ArrowRight } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
 import { skillCategoryLabel, skillSlug, type SkillSummary } from "@/lib/skills-api";
 
@@ -41,6 +42,7 @@ export function SlashSkillMenu({
   onHover,
   onViewAll,
 }: SlashSkillMenuProps) {
+  const t = useTranslations("composer");
   const listRef = useRef<HTMLDivElement>(null);
   const viewAllIndex = skills.length;
 
@@ -55,12 +57,12 @@ export function SlashSkillMenu({
   return (
     <div className="absolute bottom-full left-0 right-0 z-40 mb-2 flex flex-col overflow-hidden rounded-xl border border-border bg-surface-2 shadow-lg">
       <p className="shrink-0 border-b border-border px-3 py-1.5 text-[11px] font-medium uppercase tracking-wide text-faint">
-        스킬 호출
+        {t("slashMenu.heading")}
       </p>
 
       {skills.length === 0 ? (
         <p className="px-3 py-3 text-sm text-muted">
-          {loading ? "스킬을 불러오는 중…" : "일치하는 스킬이 없습니다"}
+          {loading ? t("slashMenu.loading") : t("slashMenu.noResults")}
         </p>
       ) : (
         <div ref={listRef} className="max-h-72 overflow-y-auto p-1">
@@ -129,7 +131,7 @@ export function SlashSkillMenu({
           activeIndex === viewAllIndex ? "bg-surface-3 text-fg" : "text-muted hover:bg-surface-3 hover:text-fg",
         )}
       >
-        <span>스킬 라이브러리에서 전체 보기</span>
+        <span>{t("slashMenu.viewAll")}</span>
         <ArrowRight className="h-3.5 w-3.5 shrink-0" />
       </button>
     </div>

@@ -44,7 +44,8 @@
     "guest": "게스트",
     "selfHosted": "자가호스팅",
     "notLoggedIn": "로그인 안 됨",
-    "logout": "로그아웃"
+    "logout": "로그아웃",
+    "themeToggle": "테마 전환"
   },
   "mobileNav": {
     "chat": "채팅",
@@ -57,5 +58,242 @@
   },
   "settings": {
     "languageAuto": "자동 감지"
+  },
+  "composer": {
+    "dropToAttach": "여기에 파일을 놓아 첨부",
+    "modeHeading": "모드",
+    "modeSelect": "모드 선택",
+    "toolsButton": "도구",
+    "toggleOff": "{label} 끄기",
+    "removeAttachment": "{name} 첨부 제거",
+    "attachTruncated": "{name} (길이 초과로 일부만 첨부)",
+    "placeholder": "메시지를 입력하거나 / 로 스킬을 호출하세요...",
+    "attachFile": "파일 첨부 (드래그앤드롭 지원 · 모든 형식)",
+    "attachFileLabel": "파일 첨부",
+    "responseStyle": "응답 스타일",
+    "stop": "중단",
+    "send": "전송",
+    "disclaimer": "OpenMake 는 실수할 수 있습니다. 중요한 정보는 확인하세요.",
+    "toggle": {
+      "discussion": "토론",
+      "thinking": "Thinking",
+      "deepResearch": "딥 리서치",
+      "web": "웹",
+      "agent": "에이전트",
+      "image": "이미지",
+      "artifact": "아티팩트",
+      "structured": "구조화 답변"
+    },
+    "slashMenu": {
+      "heading": "스킬 호출",
+      "loading": "스킬을 불러오는 중…",
+      "noResults": "일치하는 스킬이 없습니다",
+      "viewAll": "스킬 라이브러리에서 전체 보기"
+    }
+  },
+  "chat": {
+    "approvals": {
+      "title": "도구 실행 승인 필요",
+      "approve": "승인",
+      "reject": "거절",
+      "processFailed": "처리 실패: {error}",
+      "errorFallback": "오류"
+    },
+    "artifactFallback": "아티팩트",
+    "artifactBuilding": "아티팩트 생성 중…",
+    "reasoningLabel": "생각 과정",
+    "thinking": {
+      "agentAnalyzing": "{agent}가 분석 중",
+      "skillsApplying": "{skills} 적용 중",
+      "analyzing": "분석 중"
+    },
+    "quickStarts": {
+      "summarize": {
+        "label": "요약하기",
+        "prompt": "다음 내용을 요약해 줘:\n\n"
+      },
+      "research": {
+        "label": "리서치",
+        "prompt": "다음 주제를 깊이 리서치해 줘:\n\n"
+      },
+      "analyze": {
+        "label": "단계별 분석",
+        "prompt": "다음 문제를 단계별로 분석해 줘:\n\n"
+      },
+      "brainstorm": {
+        "label": "브레인스토밍",
+        "prompt": "다음에 대해 브레인스토밍하자:\n\n"
+      }
+    },
+    "status": {
+      "pending": "대기",
+      "running": "실행 중",
+      "paused": "승인 대기",
+      "completed": "완료",
+      "failed": "실패",
+      "cancelled": "취소됨"
+    },
+    "agentTask": {
+      "title": "에이전트 작업",
+      "turn": "턴 {turn}",
+      "goal": "목표",
+      "outputs": "산출물"
+    },
+    "research": {
+      "inProgress": "딥 리서치 진행 중",
+      "loop": "루프 {current}/{total}"
+    },
+    "emptyState": {
+      "title": "무엇을 도와드릴까요?",
+      "description": "멀티모델 오케스트레이션 · MCP 도구 · 딥 리서치 · 자율 에이전트. 아래에 질문을 입력하거나 <slash>/</slash> 로 스킬을 호출하세요."
+    },
+    "structured": {
+      "confidence": {
+        "high": "확신 높음",
+        "medium": "확신 보통",
+        "low": "확신 낮음"
+      },
+      "conclusion": "결론",
+      "risks": "주의할 점",
+      "actionItems": "다음 실행"
+    }
+  },
+  "artifacts": {
+    "exec": {
+      "disabled": "코드 실행 기능이 비활성화되어 있습니다.",
+      "rateLimited": "실행 요청이 너무 많습니다. 잠시 후 다시 시도하세요.",
+      "unsupportedLang": "지원하지 않는 언어입니다.",
+      "tooLarge": "코드가 너무 큽니다.",
+      "failed": "실행에 실패했습니다."
+    },
+    "run": {
+      "running": "실행 중…",
+      "run": "실행",
+      "sandbox": "샌드박스(네트워크 차단) · {lang}"
+    },
+    "output": {
+      "title": "출력",
+      "timedOut": "시간 초과",
+      "truncated": "잘림",
+      "empty": "(출력 없음)"
+    },
+    "generating": "생성 중…",
+    "versionSelect": "버전 선택",
+    "latest": "최신",
+    "viewCode": "코드 보기",
+    "viewPreview": "미리보기",
+    "download": "다운로드",
+    "shareLabel": "공유",
+    "copy": "복사",
+    "closePanel": "패널 닫기",
+    "artifactCount": "아티팩트 {count}",
+    "framePreviewTitle": "아티팩트 미리보기",
+    "share": {
+      "title": "아티팩트 공유",
+      "close": "닫기",
+      "viewerDisabled": "뷰어가 비활성화되어 있습니다(ARTIFACT_VIEWER_ENABLED). 관리자에게 문의하세요.",
+      "publishFailed": "공유에 실패했습니다",
+      "unpublishFailed": "공유 중단에 실패했습니다",
+      "visibility": {
+        "private": {
+          "label": "비공개",
+          "desc": "나만 볼 수 있음"
+        },
+        "authenticated": {
+          "label": "인증 사용자 전체",
+          "desc": "로그인한 모든 사용자에게 공개"
+        },
+        "link": {
+          "label": "링크 공유",
+          "desc": "링크를 가진 누구나 (비로그인 포함)"
+        }
+      },
+      "iconLabel": "아이콘(이모지)",
+      "copyLink": "링크 복사",
+      "unpublish": "공유 중단",
+      "updateSettings": "공유 설정 갱신",
+      "publish": "공유하기"
+    },
+    "page": {
+      "viewerOpenFailed": "뷰어를 열 수 없습니다",
+      "title": "아티팩트",
+      "description": "생성한 산출물을 모아보고, 별도 오리진 뷰어로 공유합니다.",
+      "loading": "불러오는 중...",
+      "emptyTitle": "아티팩트가 없습니다",
+      "emptyDesc": "채팅에서 코드·HTML·차트 등 산출물을 만들면 여기에 모입니다.",
+      "notShared": "미공유",
+      "openViewer": "뷰어 열기",
+      "share": "공유",
+      "vis": {
+        "private": "비공개",
+        "authenticated": "인증 공개",
+        "link": "링크 공개"
+      }
+    }
+  },
+  "history": {
+    "title": "대화 히스토리",
+    "description": "이전 대화를 검색하고 이어서 진행할 수 있습니다.",
+    "searchPlaceholder": "대화 제목 검색...",
+    "deleteAllButton": "전체 삭제",
+    "loading": "불러오는 중...",
+    "untitledConversation": "제목 없는 대화",
+    "messageCount": "메시지 {count}개",
+    "deleteConfirm": "\"{title}\" 대화를 삭제하시겠습니까?\n삭제된 대화는 복구할 수 없습니다.",
+    "deleteError": "대화 삭제에 실패했습니다.",
+    "deleteAllConfirm": "대화 기록 {count}개를 모두 삭제하시겠습니까?\n삭제된 대화는 복구할 수 없습니다.",
+    "deleteAllError": "전체 삭제에 실패했습니다.",
+    "deleteAria": "대화 삭제",
+    "group": {
+      "today": "오늘",
+      "yesterday": "어제",
+      "week": "이번 주",
+      "older": "이전"
+    },
+    "emptyState": {
+      "title": "대화 기록이 없습니다",
+      "noResults": "검색 결과가 없습니다.",
+      "hint": "새 대화를 시작하면 여기에 표시됩니다."
+    },
+    "mock": {
+      "c1": {
+        "title": "Next.js 16 App Router 마이그레이션",
+        "preview": "기존 pages 라우터에서 app 라우터로 옮길 때 주의할 점은...",
+        "time": "오후 2:14"
+      },
+      "c2": {
+        "title": "PostgreSQL 인덱스 튜닝",
+        "preview": "복합 인덱스 순서가 쿼리 플랜에 미치는 영향을 설명해줘",
+        "time": "오전 11:02"
+      },
+      "c3": {
+        "title": "마케팅 캠페인 카피 브레인스토밍",
+        "preview": "20대 타겟의 SNS 광고 카피 5개 변형을 만들어줘",
+        "time": "오후 6:47"
+      },
+      "c4": {
+        "title": "리서치 보고서 구조 잡기",
+        "preview": "엔터프라이즈 LLM 도입 보고서의 목차를 제안해줘",
+        "time": "오후 3:20"
+      },
+      "c5": {
+        "title": "TypeScript 제네릭 타입 가드",
+        "preview": "Discriminated union 을 안전하게 좁히는 방법은?",
+        "time": "월요일"
+      },
+      "c6": {
+        "title": "이미지 분석 프롬프트",
+        "preview": "첨부한 차트에서 주요 트렌드를 읽어줘",
+        "time": "일요일"
+      }
+    }
+  },
+  "chatSocket": {
+    "error": "오류: {message}",
+    "unknownError": "알 수 없는 오류",
+    "taskIdMissing": "작업 생성 응답에 taskId 가 없습니다",
+    "agentTaskStartFailed": "에이전트 작업을 시작하지 못했습니다: {message}",
+    "structuredAborted": "_(구조화 답변 생성을 중단했습니다.)_",
+    "structuredFailed": "구조화 답변을 생성하지 못했습니다: {message}"
   }
 }

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Boxes, Share2, ExternalLink, Lock, Globe, Link2 } from "lucide-react";
+import { useTranslations } from "next-intl";
 import type { ApiSuccess } from "@openmake/shared-types";
 import { PageHeader, Card, Badge } from "@/components/ui/primitives";
 import { ApiClient, ApiError } from "@/lib/api-client";
@@ -21,13 +22,14 @@ interface GalleryItem {
   icon: string | null;
 }
 
-const VIS_META: Record<string, { label: string; icon: typeof Lock }> = {
-  private: { label: "비공개", icon: Lock },
-  authenticated: { label: "인증 공개", icon: Globe },
-  link: { label: "링크 공개", icon: Link2 },
+const VIS_META: Record<string, { labelKey: string; icon: typeof Lock }> = {
+  private: { labelKey: "vis.private", icon: Lock },
+  authenticated: { labelKey: "vis.authenticated", icon: Globe },
+  link: { labelKey: "vis.link", icon: Link2 },
 };
 
 export default function ArtifactsGalleryPage() {
+  const t = useTranslations("artifacts.page");
   const [items, setItems] = useState<GalleryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [share, setShare] = useState<{ sessionId: string; artifactId: string; icon: string | null } | null>(null);
@@ -53,25 +55,25 @@ export default function ArtifactsGalleryPage() {
       const res = await ApiClient.get<ApiSuccess<{ url: string }>>(`/api/artifacts/pub/${it.publicationId}/open`);
       window.open(res.data.url, "_blank", "noopener");
     } catch (e) {
-      alert(e instanceof ApiError ? e.message : "뷰어를 열 수 없습니다");
+      alert(e instanceof ApiError ? e.message : t("viewerOpenFailed"));
     }
   };
 
   return (
     <>
-      <PageHeader title="아티팩트" description="생성한 산출물을 모아보고, 별도 오리진 뷰어로 공유합니다." />
+      <PageHeader title={t("title")} description={t("description")} />
 
       <div className="min-h-0 flex-1 overflow-y-auto p-6">
         {loading ? (
           <div className="grid place-items-center py-24 text-center">
             <Boxes className="mb-3 h-8 w-8 animate-pulse text-faint" />
-            <p className="text-sm text-muted">불러오는 중...</p>
+            <p className="text-sm text-muted">{t("loading")}</p>
           </div>
         ) : items.length === 0 ? (
           <div className="grid place-items-center py-24 text-center">
             <Boxes className="mb-3 h-8 w-8 text-faint" />
-            <p className="text-sm font-medium text-fg-2">아티팩트가 없습니다</p>
-            <p className="mt-1 text-sm text-muted">채팅에서 코드·HTML·차트 등 산출물을 만들면 여기에 모입니다.</p>
+            <p className="text-sm font-medium text-fg-2">{t("emptyTitle")}</p>
+            <p className="mt-1 text-sm text-muted">{t("emptyDesc")}</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -94,17 +96,17 @@ export default function ArtifactsGalleryPage() {
                   <div className="flex items-center justify-between">
                     {it.published && vis && VisIcon ? (
                       <span className="flex items-center gap-1 text-[11px] text-muted">
-                        <VisIcon className="h-3 w-3" /> {vis.label}
+                        <VisIcon className="h-3 w-3" /> {t(vis.labelKey)}
                       </span>
                     ) : (
-                      <span className="text-[11px] text-faint">미공유</span>
+                      <span className="text-[11px] text-faint">{t("notShared")}</span>
                     )}
                     <div className="flex gap-1">
                       {it.published && (
                         <button
                           type="button"
                           onClick={() => open(it)}
-                          aria-label="뷰어 열기"
+                          aria-label={t("openViewer")}
                           className="grid h-7 w-7 place-items-center rounded text-muted transition hover:bg-surface-3 hover:text-fg"
                         >
                           <ExternalLink className="h-4 w-4" />
@@ -113,7 +115,7 @@ export default function ArtifactsGalleryPage() {
                       <button
                         type="button"
                         onClick={() => setShare({ sessionId: it.sessionId, artifactId: it.artifactId, icon: it.icon })}
-                        aria-label="공유"
+                        aria-label={t("share")}
                         className="grid h-7 w-7 place-items-center rounded text-muted transition hover:bg-surface-3 hover:text-fg"
                       >
                         <Share2 className="h-4 w-4" />

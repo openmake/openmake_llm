@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import type { WsChatRequest, WsServerEvent, WsAttachedFile } from "@openmake/shared-types";
 import { useAppStore, type StructuredAnswerData, type PendingApproval, type AgentTaskState } from "./store";
 import { ApiClient } from "./api-client";
@@ -30,6 +31,14 @@ function resolveWsUrl(): string {
 }
 
 export function useChatSocket() {
+  const t = useTranslations("chatSocket");
+  // 콜백들이 stale deps(useCallback([]) 등)로 메모이즈되어 t 가 클로저에 갇히므로
+  // ref 로 최신 t 를 참조한다(렌더 중 ref 쓰기 금지 규칙이라 effect 에서 갱신).
+  const tRef = useRef(t);
+  useEffect(() => {
+    tRef.current = t;
+  });
+
   const wsRef = useRef<WebSocket | null>(null);
   const [connected, setConnected] = useState(false);
   const reconnectRef = useRef(0);
@@ -94,7 +103,9 @@ export function useChatSocket() {
         case "error":
           appendMessage({
             role: "system",
-            content: `오류: ${data.message ?? "알 수 없는 오류"}`,
+            content: tRef.current("error", {
+              message: data.message ?? tRef.current("unknownError"),
+            }),
           });
           setStreaming(false);
           setResearchProgress(null);
@@ -281,7 +292,7 @@ export function useChatSocket() {
           { goal },
         );
         const taskId = created?.data?.task?.id;
-        if (!taskId) throw new Error("작업 생성 응답에 taskId 가 없습니다");
+        if (!taskId) throw new Error(tRef.current("taskIdMissing"));
         // 진행상황 카드 — agent_task_progress 이벤트로 taskId 로 식별해 라이브 업데이트.
         appendMessage({
           role: "assistant",
@@ -293,7 +304,9 @@ export function useChatSocket() {
       } catch (e) {
         appendMessage({
           role: "assistant",
-          content: `에이전트 작업을 시작하지 못했습니다: ${e instanceof Error ? e.message : String(e)}`,
+          content: tRef.current("agentTaskStartFailed", {
+            message: e instanceof Error ? e.message : String(e),
+          }),
         });
       }
     },
@@ -341,8 +354,10 @@ export function useChatSocket() {
         appendMessage({
           role: "assistant",
           content: aborted
-            ? "_(구조화 답변 생성을 중단했습니다.)_"
-            : `구조화 답변을 생성하지 못했습니다: ${e instanceof Error ? e.message : String(e)}`,
+            ? tRef.current("structuredAborted")
+            : tRef.current("structuredFailed", {
+                message: e instanceof Error ? e.message : String(e),
+              }),
         });
       } finally {
         structuredAbortRef.current = null;

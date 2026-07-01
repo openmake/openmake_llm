@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { X, Globe, Lock, Link2, Check, Copy, Loader2 } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { ApiClient, ApiError } from "@/lib/api-client";
 import type { ApiSuccess } from "@openmake/shared-types";
 
@@ -15,10 +16,10 @@ interface PublishResp {
   viewerEnabled: boolean;
 }
 
-const OPTIONS: { value: Visibility; label: string; desc: string; icon: typeof Globe }[] = [
-  { value: "private", label: "비공개", desc: "나만 볼 수 있음", icon: Lock },
-  { value: "authenticated", label: "인증 사용자 전체", desc: "로그인한 모든 사용자에게 공개", icon: Globe },
-  { value: "link", label: "링크 공유", desc: "링크를 가진 누구나 (비로그인 포함)", icon: Link2 },
+const OPTIONS: { value: Visibility; icon: typeof Globe }[] = [
+  { value: "private", icon: Lock },
+  { value: "authenticated", icon: Globe },
+  { value: "link", icon: Link2 },
 ];
 
 /**
@@ -36,6 +37,7 @@ export function ArtifactShareModal({
   defaultIcon?: string | null;
   onCloseAction: () => void;
 }) {
+  const t = useTranslations("artifacts.share");
   const onClose = onCloseAction;
   const [visibility, setVisibility] = useState<Visibility>("link");
   const [icon, setIcon] = useState(defaultIcon ?? "");
@@ -59,7 +61,7 @@ export function ArtifactShareModal({
       const data = res.data;
       setPublished(true);
       if (!data.viewerEnabled) {
-        setErr("뷰어가 비활성화되어 있습니다(ARTIFACT_VIEWER_ENABLED). 관리자에게 문의하세요.");
+        setErr(t("viewerDisabled"));
         return;
       }
       if (data.shareUrl) {
@@ -72,7 +74,7 @@ export function ArtifactShareModal({
         setUrl(open.data.url);
       }
     } catch (e) {
-      setErr(e instanceof ApiError ? e.message : "공유에 실패했습니다");
+      setErr(e instanceof ApiError ? e.message : t("publishFailed"));
     } finally {
       setBusy(false);
     }
@@ -86,7 +88,7 @@ export function ArtifactShareModal({
       setPublished(false);
       setUrl(null);
     } catch (e) {
-      setErr(e instanceof ApiError ? e.message : "공유 중단에 실패했습니다");
+      setErr(e instanceof ApiError ? e.message : t("unpublishFailed"));
     } finally {
       setBusy(false);
     }
@@ -116,8 +118,8 @@ export function ArtifactShareModal({
         aria-modal="true"
       >
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-base font-semibold text-fg">아티팩트 공유</h2>
-          <button type="button" onClick={onClose} aria-label="닫기" className="grid h-7 w-7 place-items-center rounded text-muted hover:bg-surface-3 hover:text-fg">
+          <h2 className="text-base font-semibold text-fg">{t("title")}</h2>
+          <button type="button" onClick={onClose} aria-label={t("close")} className="grid h-7 w-7 place-items-center rounded text-muted hover:bg-surface-3 hover:text-fg">
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -141,8 +143,8 @@ export function ArtifactShareModal({
                 />
                 <Icon className="mt-0.5 h-4 w-4 shrink-0 text-muted" />
                 <span className="min-w-0">
-                  <span className="block text-sm font-medium text-fg">{opt.label}</span>
-                  <span className="block text-xs text-muted">{opt.desc}</span>
+                  <span className="block text-sm font-medium text-fg">{t(`visibility.${opt.value}.label`)}</span>
+                  <span className="block text-xs text-muted">{t(`visibility.${opt.value}.desc`)}</span>
                 </span>
               </label>
             );
@@ -150,7 +152,7 @@ export function ArtifactShareModal({
         </fieldset>
 
         <div className="mt-3 flex items-center gap-2">
-          <label className="text-xs text-muted" htmlFor="art-icon">아이콘(이모지)</label>
+          <label className="text-xs text-muted" htmlFor="art-icon">{t("iconLabel")}</label>
           <input
             id="art-icon"
             value={icon}
@@ -165,7 +167,7 @@ export function ArtifactShareModal({
         {url && (
           <div className="mt-3 flex items-center gap-2 rounded-lg border border-border bg-surface-2 p-2">
             <input readOnly value={url} className="min-w-0 flex-1 bg-transparent text-xs text-fg outline-none" />
-            <button type="button" onClick={copy} className="grid h-7 w-7 shrink-0 place-items-center rounded text-muted hover:bg-surface-3 hover:text-fg" aria-label="링크 복사">
+            <button type="button" onClick={copy} className="grid h-7 w-7 shrink-0 place-items-center rounded text-muted hover:bg-surface-3 hover:text-fg" aria-label={t("copyLink")}>
               {copied ? <Check className="h-4 w-4 text-accent" /> : <Copy className="h-4 w-4" />}
             </button>
           </div>
@@ -174,7 +176,7 @@ export function ArtifactShareModal({
         <div className="mt-5 flex justify-between gap-2">
           {published ? (
             <button type="button" onClick={unpublish} disabled={busy} className="rounded-lg px-3 py-2 text-sm text-danger transition hover:bg-danger/10 disabled:opacity-50">
-              공유 중단
+              {t("unpublish")}
             </button>
           ) : <span />}
           <button
@@ -184,7 +186,7 @@ export function ArtifactShareModal({
             className="flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-accent-fg transition hover:opacity-90 disabled:opacity-50"
           >
             {busy && <Loader2 className="h-4 w-4 animate-spin" />}
-            {published ? "공유 설정 갱신" : "공유하기"}
+            {published ? t("updateSettings") : t("publish")}
           </button>
         </div>
       </div>
