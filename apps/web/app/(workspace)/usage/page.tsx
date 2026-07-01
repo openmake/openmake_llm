@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import { RefreshCw, Loader2 } from "lucide-react";
 import {
   Button,
@@ -100,6 +101,7 @@ interface MonitoringHourly {
 }
 
 function SystemTokenMonitor() {
+  const t = useTranslations("usage");
   const [costs, setCosts] = useState<MonitoringCosts | null>(null);
   const [daily, setDaily] = useState<MonitoringDaily | null>(null);
   const [hourly, setHourly] = useState<MonitoringHourly | null>(null);
@@ -140,26 +142,26 @@ function SystemTokenMonitor() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>시스템 토큰 모니터링</CardTitle>
+        <CardTitle>{t("systemMonitorTitle")}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
         {/* 비용 StatCard 4개 */}
         {costs && (
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
             <StatCard
-              label="오늘 비용"
+              label={t("stat.todayCost")}
               value={fmtCost(costs.today.totalCost)}
             />
             <StatCard
-              label="오늘 토큰"
+              label={t("stat.todayTokens")}
               value={fmtNum(costs.today.totalTokens)}
             />
             <StatCard
-              label="주간 토큰"
+              label={t("stat.weekTokens")}
               value={fmtNum(costs.weekly.totalTokens)}
             />
             <StatCard
-              label="주간 예상 비용"
+              label={t("stat.weekEstCost")}
               value={fmtCost(costs.weekly.estimatedCost)}
             />
           </div>
@@ -168,7 +170,7 @@ function SystemTokenMonitor() {
         {/* 일별 토큰 바 차트 */}
         {daily && daily.labels.length > 0 && (
           <div>
-            <p className="mb-3 text-xs font-medium text-fg-2">일별 토큰 (최근 7일)</p>
+            <p className="mb-3 text-xs font-medium text-fg-2">{t("dailyTokens7d")}</p>
             <div className="flex h-36 items-end gap-1.5">
               {daily.labels.map((label, i) => {
                 const tokens = daily.datasets.tokens[i] ?? 0;
@@ -177,7 +179,7 @@ function SystemTokenMonitor() {
                   <div
                     key={label}
                     className="group flex h-full flex-1 flex-col items-center justify-end gap-1"
-                    title={`${label} · ${fmtNum(tokens)} 토큰`}
+                    title={t("tokenTooltip", { date: label, count: fmtNum(tokens) })}
                   >
                     <span className="text-[10px] text-faint opacity-0 transition group-hover:opacity-100">
                       {fmtNum(tokens)}
@@ -199,7 +201,7 @@ function SystemTokenMonitor() {
         {/* 시간별 토큰 바 차트 */}
         {hourly && hourly.labels.length > 0 && (
           <div>
-            <p className="mb-3 text-xs font-medium text-fg-2">시간별 토큰</p>
+            <p className="mb-3 text-xs font-medium text-fg-2">{t("hourlyTokens")}</p>
             <div className="flex h-28 items-end gap-0.5">
               {hourly.labels.map((label, i) => {
                 const tokens = hourly.datasets.tokens[i] ?? 0;
@@ -208,7 +210,7 @@ function SystemTokenMonitor() {
                   <div
                     key={label}
                     className="group flex h-full flex-1 flex-col items-center justify-end gap-0.5"
-                    title={`${label} · ${fmtNum(tokens)} 토큰`}
+                    title={t("tokenTooltip", { date: label, count: fmtNum(tokens) })}
                   >
                     <div
                       className="w-full rounded-t bg-success-soft transition group-hover:bg-success"
@@ -248,6 +250,7 @@ function mockDaily(): DailyRow[] {
 }
 
 export default function UsagePage() {
+  const t = useTranslations("usage");
   const [summary, setSummary] = useState<UsageSummary | null>(null);
   const [daily, setDaily] = useState<DailyRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -306,16 +309,16 @@ export default function UsagePage() {
   return (
     <>
       <PageHeader
-        title="사용량"
-        description="내 계정 기준 토큰·요청 사용량입니다."
+        title={t("title")}
+        description={t("description")}
         actions={
           <div className="flex items-center gap-3">
             <span className="text-xs text-muted">
-              {usingMock ? "목업 데이터" : `갱신 ${updatedAt}`}
+              {usingMock ? t("mockData") : t("updatedAt", { time: updatedAt })}
             </span>
             <Button variant="outline" size="sm" onClick={() => void load()}>
               <RefreshCw className="h-4 w-4" />
-              새로고침
+              {t("refresh")}
             </Button>
           </div>
         }
@@ -326,25 +329,28 @@ export default function UsagePage() {
           {loading && !summary ? (
             <div className="flex items-center justify-center gap-2 py-16 text-sm text-muted">
               <Loader2 className="h-4 w-4 animate-spin" />
-              불러오는 중...
+              {t("loading")}
             </div>
           ) : (
             <>
               {/* 상단 StatCard 4개 */}
               <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
                 <StatCard
-                  label="이번 달 토큰"
+                  label={t("stat.monthTokens")}
                   value={fmtNum(month?.totalTokens)}
                 />
-                <StatCard label="요청 수" value={fmtNum(month?.totalRequests)} />
                 <StatCard
-                  label="평균 지연"
+                  label={t("stat.requests")}
+                  value={fmtNum(month?.totalRequests)}
+                />
+                <StatCard
+                  label={t("stat.avgLatency")}
                   value={fmtMs(month?.avgResponseTime)}
                 />
                 <StatCard
-                  label="에러"
+                  label={t("stat.errors")}
                   value={fmtNum(month?.totalErrors)}
-                  delta={month?.totalErrors ? "주의" : "정상"}
+                  delta={month?.totalErrors ? t("delta.warning") : t("delta.normal")}
                   deltaTone={month?.totalErrors ? "danger" : "success"}
                 />
               </div>
@@ -352,12 +358,12 @@ export default function UsagePage() {
               {/* 일별 사용량 추이 (CSS 바 차트) */}
               <Card>
                 <CardHeader>
-                  <CardTitle>일별 토큰 사용량 (최근 14일)</CardTitle>
+                  <CardTitle>{t("dailyTitle")}</CardTitle>
                 </CardHeader>
                 <CardContent>
                   {daily.length === 0 ? (
                     <p className="py-8 text-center text-sm text-muted">
-                      데이터가 없습니다.
+                      {t("noData")}
                     </p>
                   ) : (
                     <div className="flex h-44 items-end gap-1.5">
@@ -371,7 +377,7 @@ export default function UsagePage() {
                           <div
                             key={d.date}
                             className="group flex h-full flex-1 flex-col items-center justify-end gap-1"
-                            title={`${d.date} · ${fmtNum(tokens)} 토큰`}
+                            title={t("tokenTooltip", { date: d.date, count: fmtNum(tokens) })}
                           >
                             <span className="text-[10px] text-faint opacity-0 transition group-hover:opacity-100">
                               {fmtNum(tokens)}
@@ -397,21 +403,21 @@ export default function UsagePage() {
               {/* 모델별 사용 비중 */}
               <Card>
                 <CardHeader>
-                  <CardTitle>모델별 사용 비중</CardTitle>
+                  <CardTitle>{t("modelUsageTitle")}</CardTitle>
                 </CardHeader>
                 <CardContent className="px-0 py-0">
                   {modelTotal === 0 ? (
                     <p className="py-8 text-center text-sm text-muted">
-                      모델별 사용 데이터가 없습니다.
+                      {t("noModelData")}
                     </p>
                   ) : (
                     <Table>
                       <thead>
                         <tr>
-                          <Th>모델</Th>
-                          <Th>토큰</Th>
-                          <Th>비중</Th>
-                          <Th className="w-1/3">분포</Th>
+                          <Th>{t("col.model")}</Th>
+                          <Th>{t("col.tokens")}</Th>
+                          <Th>{t("col.share")}</Th>
+                          <Th className="w-1/3">{t("col.distribution")}</Th>
                         </tr>
                       </thead>
                       <tbody>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import { ScrollText, Download } from "lucide-react";
 import {
   PageHeader,
@@ -32,10 +33,10 @@ const SEV_TONE: Record<Severity, "danger" | "warn" | "neutral"> = {
   warn: "warn",
   info: "neutral",
 };
-const SEV_LABEL: Record<Severity, string> = {
-  critical: "심각",
-  warn: "경고",
-  info: "정보",
+const SEV_LABEL_KEY: Record<Severity, string> = {
+  critical: "status.critical",
+  warn: "status.warn",
+  info: "status.info",
 };
 
 // TODO: API 연동 (/api/audit) — 응답 실패 시 폴백 목업
@@ -50,14 +51,20 @@ const MOCK_LOGS: AuditLog[] = [
   { id: "a8", timestamp: "2026-06-20T22:30:55Z", actor: "system", action: "auth.failed_attempt", target: "unknown@spam.io", severity: "warn", ip: "45.33.21.7" },
 ];
 
-const ACTIONS = ["전체", "user.delete", "user.role_change", "apikey.create", "auth.login", "auth.failed_attempt", "mcp.server_register", "llm.context_overflow", "alert.dispatched"];
-const SEVERITIES: { key: "all" | Severity; label: string }[] = [
-  { key: "all", label: "전체 심각도" },
-  { key: "critical", label: "심각" },
-  { key: "warn", label: "경고" },
-  { key: "info", label: "정보" },
+const ALL_ACTIONS = "__all__";
+const ACTIONS = [ALL_ACTIONS, "user.delete", "user.role_change", "apikey.create", "auth.login", "auth.failed_attempt", "mcp.server_register", "llm.context_overflow", "alert.dispatched"];
+const SEVERITIES: { key: "all" | Severity; labelKey: string }[] = [
+  { key: "all", labelKey: "severity.all" },
+  { key: "critical", labelKey: "status.critical" },
+  { key: "warn", labelKey: "status.warn" },
+  { key: "info", labelKey: "status.info" },
 ];
-const PERIODS = ["오늘", "7일", "30일", "전체"];
+const PERIODS: { key: string; labelKey: string }[] = [
+  { key: "today", labelKey: "period.today" },
+  { key: "days7", labelKey: "period.days7" },
+  { key: "days30", labelKey: "period.days30" },
+  { key: "all", labelKey: "period.all" },
+];
 
 function fmt(s: string) {
   return new Date(s).toLocaleString("ko-KR", {
@@ -83,10 +90,11 @@ interface ApiAuditLog {
 }
 
 export default function AdminAuditPage() {
+  const t = useTranslations("adminAudit");
   const [logs, setLogs] = useState<AuditLog[]>(MOCK_LOGS);
-  const [action, setAction] = useState("전체");
+  const [action, setAction] = useState(ALL_ACTIONS);
   const [severity, setSeverity] = useState<"all" | Severity>("all");
-  const [period, setPeriod] = useState("7일");
+  const [period, setPeriod] = useState("days7");
 
   useEffect(() => {
     let alive = true;
@@ -122,7 +130,7 @@ export default function AdminAuditPage() {
     () =>
       logs.filter(
         (l) =>
-          (action === "전체" || l.action === action) &&
+          (action === ALL_ACTIONS || l.action === action) &&
           (severity === "all" || l.severity === severity),
       ),
     [logs, action, severity],
@@ -134,12 +142,12 @@ export default function AdminAuditPage() {
   return (
     <>
       <PageHeader
-        title="감사 로그"
-        description="시스템 전반의 보안·관리 활동 기록입니다."
+        title={t("title")}
+        description={t("description")}
         actions={
           <div className="flex items-center gap-2">
             <Badge tone="neutral">
-              <ScrollText className="h-3.5 w-3.5" /> {filtered.length}건
+              <ScrollText className="h-3.5 w-3.5" /> {t("countBadge", { count: filtered.length })}
             </Badge>
             <Button
               variant="outline"
@@ -147,7 +155,7 @@ export default function AdminAuditPage() {
               onClick={() => { window.location.href = "/api/audit/export"; }}
             >
               <Download className="h-4 w-4" />
-              CSV 내보내기
+              {t("exportCsv")}
             </Button>
           </div>
         }
@@ -158,7 +166,7 @@ export default function AdminAuditPage() {
           <select className={selectCls} value={action} onChange={(e) => setAction(e.target.value)}>
             {ACTIONS.map((a) => (
               <option key={a} value={a}>
-                {a === "전체" ? "전체 액션" : a}
+                {a === ALL_ACTIONS ? t("filter.allActions") : a}
               </option>
             ))}
           </select>
@@ -169,21 +177,21 @@ export default function AdminAuditPage() {
           >
             {SEVERITIES.map((s) => (
               <option key={s.key} value={s.key}>
-                {s.label}
+                {t(s.labelKey)}
               </option>
             ))}
           </select>
           <div className="flex items-center gap-1 rounded-pill border border-border bg-surface-2 p-1">
             {PERIODS.map((p) => (
               <button
-                key={p}
-                onClick={() => setPeriod(p)}
+                key={p.key}
+                onClick={() => setPeriod(p.key)}
                 className={cn(
                   "rounded-pill px-3 py-1 text-xs font-medium transition",
-                  period === p ? "bg-surface text-fg shadow-1" : "text-muted hover:text-fg",
+                  period === p.key ? "bg-surface text-fg shadow-1" : "text-muted hover:text-fg",
                 )}
               >
-                {p}
+                {t(p.labelKey)}
               </button>
             ))}
           </div>
@@ -194,11 +202,11 @@ export default function AdminAuditPage() {
             <Table>
               <thead>
                 <tr>
-                  <Th>시각</Th>
-                  <Th>액터</Th>
-                  <Th>액션</Th>
-                  <Th>대상</Th>
-                  <Th>심각도</Th>
+                  <Th>{t("th.time")}</Th>
+                  <Th>{t("th.actor")}</Th>
+                  <Th>{t("th.action")}</Th>
+                  <Th>{t("th.target")}</Th>
+                  <Th>{t("th.severity")}</Th>
                   <Th>IP</Th>
                 </tr>
               </thead>
@@ -206,7 +214,7 @@ export default function AdminAuditPage() {
                 {filtered.length === 0 ? (
                   <tr>
                     <Td className="py-8 text-center text-muted" colSpan={6}>
-                      조건에 맞는 로그가 없습니다.
+                      {t("empty")}
                     </Td>
                   </tr>
                 ) : (
@@ -217,7 +225,7 @@ export default function AdminAuditPage() {
                       <Td className="font-mono text-xs text-fg-2">{l.action}</Td>
                       <Td className="font-mono text-xs text-muted">{l.target}</Td>
                       <Td>
-                        <Badge tone={SEV_TONE[l.severity]}>{SEV_LABEL[l.severity]}</Badge>
+                        <Badge tone={SEV_TONE[l.severity]}>{t(SEV_LABEL_KEY[l.severity])}</Badge>
                       </Td>
                       <Td className="font-mono text-xs text-muted">{l.ip}</Td>
                     </tr>

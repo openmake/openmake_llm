@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import { Boxes, Plus, Pencil, Trash2, X, Loader2 } from "lucide-react";
 import {
   PageHeader,
@@ -42,6 +43,7 @@ const labelCls = "block text-xs font-medium text-fg-2 mb-1";
 
 /* ── 모달 공통 래퍼 ─────────────────────────────────────────── */
 function Modal({ onClose, children }: { onClose: () => void; children: React.ReactNode }) {
+  const t = useTranslations("adminMcpCatalog");
   return (
     <div
       role="dialog"
@@ -55,7 +57,7 @@ function Modal({ onClose, children }: { onClose: () => void; children: React.Rea
         <button
           onClick={onClose}
           className="absolute right-4 top-4 text-faint hover:text-fg"
-          aria-label="닫기"
+          aria-label={t("close")}
         >
           <X className="h-4 w-4" />
         </button>
@@ -73,6 +75,7 @@ interface TemplateFormProps {
 }
 
 function TemplateFormModal({ initial, onClose, onSaved }: TemplateFormProps) {
+  const t = useTranslations("adminMcpCatalog");
   const isEdit = Boolean(initial);
   const [id, setId] = useState(initial?.id ?? "");
   const [displayName, setDisplayName] = useState(initial?.display_name ?? "");
@@ -105,7 +108,7 @@ function TemplateFormModal({ initial, onClose, onSaved }: TemplateFormProps) {
       onSaved();
       onClose();
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "저장 실패. 다시 시도해 주세요.");
+      setError(e instanceof Error ? e.message : t("saveError"));
     } finally {
       setSubmitting(false);
     }
@@ -114,7 +117,7 @@ function TemplateFormModal({ initial, onClose, onSaved }: TemplateFormProps) {
   return (
     <Modal onClose={onClose}>
       <h2 className="mb-4 text-base font-semibold text-fg">
-        {isEdit ? "템플릿 편집" : "새 템플릿"}
+        {isEdit ? t("editTitle") : t("createTitle")}
       </h2>
       <form onSubmit={handleSubmit} className="space-y-3">
         {!isEdit && (
@@ -130,7 +133,7 @@ function TemplateFormModal({ initial, onClose, onSaved }: TemplateFormProps) {
           </div>
         )}
         <div>
-          <label className={labelCls}>표시 이름 *</label>
+          <label className={labelCls}>{t("displayNameLabel")} *</label>
           <input
             className={inputCls}
             required
@@ -140,17 +143,17 @@ function TemplateFormModal({ initial, onClose, onSaved }: TemplateFormProps) {
           />
         </div>
         <div>
-          <label className={labelCls}>설명</label>
+          <label className={labelCls}>{t("descriptionLabel")}</label>
           <textarea
             className={textareaCls}
             rows={2}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            placeholder="서버에 대한 간략한 설명"
+            placeholder={t("descriptionPlaceholder")}
           />
         </div>
         <div>
-          <label className={labelCls}>유형 *</label>
+          <label className={labelCls}>{t("typeLabel")} *</label>
           <select
             className={selectCls}
             value={transportType}
@@ -163,7 +166,7 @@ function TemplateFormModal({ initial, onClose, onSaved }: TemplateFormProps) {
         </div>
         {transportType === "stdio" && (
           <div>
-            <label className={labelCls}>명령어</label>
+            <label className={labelCls}>{t("commandLabel")}</label>
             <input
               className={inputCls}
               value={command}
@@ -192,14 +195,14 @@ function TemplateFormModal({ initial, onClose, onSaved }: TemplateFormProps) {
             onChange={(e) => setIsEnabled(e.target.checked)}
             className="h-4 w-4 accent-accent"
           />
-          <label htmlFor="is_enabled" className="text-sm text-fg-2">활성화</label>
+          <label htmlFor="is_enabled" className="text-sm text-fg-2">{t("enabledLabel")}</label>
         </div>
         {error && <p className="text-xs text-danger">{error}</p>}
         <div className="flex justify-end gap-2 pt-2">
-          <Button type="button" variant="outline" size="sm" onClick={onClose}>취소</Button>
+          <Button type="button" variant="outline" size="sm" onClick={onClose}>{t("cancel")}</Button>
           <Button type="submit" size="sm" disabled={submitting}>
             {submitting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-            {isEdit ? "저장" : "생성"}
+            {isEdit ? t("save") : t("create")}
           </Button>
         </div>
       </form>
@@ -217,6 +220,7 @@ function DeleteTemplateModal({
   onClose: () => void;
   onDeleted: () => void;
 }) {
+  const t = useTranslations("adminMcpCatalog");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
@@ -228,7 +232,7 @@ function DeleteTemplateModal({
       onDeleted();
       onClose();
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "삭제 실패. 다시 시도해 주세요.");
+      setError(e instanceof Error ? e.message : t("deleteError"));
     } finally {
       setSubmitting(false);
     }
@@ -236,15 +240,15 @@ function DeleteTemplateModal({
 
   return (
     <Modal onClose={onClose}>
-      <h2 className="mb-2 text-base font-semibold text-fg">템플릿 삭제</h2>
-      <p className="mb-1 text-sm text-fg-2">정말 삭제하시겠습니까?</p>
+      <h2 className="mb-2 text-base font-semibold text-fg">{t("deleteTitle")}</h2>
+      <p className="mb-1 text-sm text-fg-2">{t("deleteConfirm")}</p>
       <p className="mb-4 font-mono text-xs text-muted">{template.id}</p>
       {error && <p className="mb-3 text-xs text-danger">{error}</p>}
       <div className="flex justify-end gap-2">
-        <Button variant="outline" size="sm" onClick={onClose} disabled={submitting}>취소</Button>
+        <Button variant="outline" size="sm" onClick={onClose} disabled={submitting}>{t("cancel")}</Button>
         <Button variant="danger" size="sm" onClick={handleDelete} disabled={submitting}>
           {submitting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-          삭제
+          {t("delete")}
         </Button>
       </div>
     </Modal>
@@ -253,6 +257,7 @@ function DeleteTemplateModal({
 
 /* ── 페이지 ─────────────────────────────────────────────────── */
 export default function AdminMcpCatalogPage() {
+  const t = useTranslations("adminMcpCatalog");
   const [templates, setTemplates] = useState<CatalogTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
@@ -279,12 +284,12 @@ export default function AdminMcpCatalogPage() {
   return (
     <>
       <PageHeader
-        title="MCP 카탈로그 관리"
-        description="사용자에게 제공되는 MCP 서버 템플릿을 관리합니다."
+        title={t("pageTitle")}
+        description={t("pageDescription")}
         actions={
           <Button size="sm" onClick={() => setShowCreate(true)}>
             <Plus className="h-4 w-4" />
-            템플릿 추가
+            {t("addTemplate")}
           </Button>
         }
       />
@@ -296,18 +301,18 @@ export default function AdminMcpCatalogPage() {
               <thead>
                 <tr>
                   <Th>ID</Th>
-                  <Th>이름</Th>
-                  <Th>설명</Th>
-                  <Th>유형</Th>
-                  <Th>활성여부</Th>
-                  <Th>액션</Th>
+                  <Th>{t("colName")}</Th>
+                  <Th>{t("colDescription")}</Th>
+                  <Th>{t("colType")}</Th>
+                  <Th>{t("colEnabled")}</Th>
+                  <Th>{t("colActions")}</Th>
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
                   <tr>
                     <Td colSpan={6}>
-                      <div className="py-12 text-center text-muted">로딩 중…</div>
+                      <div className="py-12 text-center text-muted">{t("loading")}</div>
                     </Td>
                   </tr>
                 ) : templates.length === 0 ? (
@@ -315,24 +320,24 @@ export default function AdminMcpCatalogPage() {
                     <Td colSpan={6}>
                       <div className="flex flex-col items-center gap-3 py-12">
                         <Boxes className="h-8 w-8 text-faint" />
-                        <p className="text-sm text-muted">등록된 템플릿이 없습니다.</p>
+                        <p className="text-sm text-muted">{t("emptyState")}</p>
                       </div>
                     </Td>
                   </tr>
                 ) : (
-                  templates.map((t) => (
-                    <tr key={t.id} className="transition hover:bg-surface-2">
-                      <Td className="font-mono text-xs text-muted">{t.id}</Td>
-                      <Td className="font-medium text-fg">{t.display_name}</Td>
-                      <Td className="max-w-xs truncate text-xs text-fg-2">{t.description ?? "-"}</Td>
+                  templates.map((row) => (
+                    <tr key={row.id} className="transition hover:bg-surface-2">
+                      <Td className="font-mono text-xs text-muted">{row.id}</Td>
+                      <Td className="font-medium text-fg">{row.display_name}</Td>
+                      <Td className="max-w-xs truncate text-xs text-fg-2">{row.description ?? "-"}</Td>
                       <Td>
                         <Badge tone="neutral">
-                          <span className="font-mono">{TRANSPORT_LABEL[t.transport_type]}</span>
+                          <span className="font-mono">{TRANSPORT_LABEL[row.transport_type]}</span>
                         </Badge>
                       </Td>
                       <Td>
-                        <Badge tone={t.is_enabled ? "success" : "neutral"}>
-                          {t.is_enabled ? "활성" : "비활성"}
+                        <Badge tone={row.is_enabled ? "success" : "neutral"}>
+                          {row.is_enabled ? t("enabled") : t("disabled")}
                         </Badge>
                       </Td>
                       <Td>
@@ -340,16 +345,16 @@ export default function AdminMcpCatalogPage() {
                           <Button
                             variant="ghost"
                             size="icon"
-                            onClick={() => setEditTemplate(t)}
-                            aria-label="편집"
+                            onClick={() => setEditTemplate(row)}
+                            aria-label={t("editAction")}
                           >
                             <Pencil className="h-3.5 w-3.5" />
                           </Button>
                           <Button
                             variant="ghost"
                             size="icon"
-                            onClick={() => setDeleteTemplate(t)}
-                            aria-label="삭제"
+                            onClick={() => setDeleteTemplate(row)}
+                            aria-label={t("deleteAction")}
                             className="text-danger hover:text-danger"
                           >
                             <Trash2 className="h-3.5 w-3.5" />

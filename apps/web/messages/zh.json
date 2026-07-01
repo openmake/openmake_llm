@@ -838,5 +838,391 @@
       "agreementRequired": "您必须同意服务条款和隐私政策。",
       "registerFailed": "注册失败。"
     }
+  },
+  "admin": {
+    "title": "管理员仪表盘",
+    "description": "在一处管理用户、模型和系统状态。",
+    "adminOnly": "仅限管理员",
+    "addUser": "添加用户",
+    "quickLinksHeading": "快速管理",
+    "recentUsers": "最近注册的用户",
+    "viewAll": "查看全部",
+    "guardianPending": "未成年人同意待审",
+    "approve": "批准",
+    "close": "关闭",
+    "cancel": "取消",
+    "create": "创建",
+    "save": "保存",
+    "delete": "删除",
+    "active": "启用",
+    "inactive": "停用",
+    "statusNormal": "正常",
+    "editUser": "编辑用户",
+    "deleteTitle": "删除用户",
+    "deleteConfirm": "确定要删除吗？",
+    "nameLabel": "姓名（可选）",
+    "namePlaceholder": "张三",
+    "emailRequired": "邮箱 *",
+    "roleRequired": "角色 *",
+    "passwordRequired": "密码 *",
+    "roleField": "角色",
+    "statusField": "状态",
+    "newPasswordLabel": "新密码（可选）",
+    "newPasswordPlaceholder": "如不更改请留空",
+    "createError": "创建失败。请重试。",
+    "updateError": "更新失败。请重试。",
+    "deleteError": "删除失败。请重试。",
+    "roles": {
+      "admin": "管理员",
+      "user": "用户",
+      "guest": "访客"
+    },
+    "quickLinks": {
+      "users": {
+        "title": "用户管理",
+        "desc": "账户创建、权限与状态管理"
+      },
+      "models": {
+        "title": "模型 · MCP 设置",
+        "desc": "模型预设与工具目录"
+      },
+      "system": {
+        "title": "系统状态",
+        "desc": "节点与服务健康监控"
+      }
+    },
+    "stats": {
+      "totalUsers": "总用户数",
+      "totalUsersDelta": "+12（过去 7 天）",
+      "activeSessions": "活跃会话",
+      "todayRequests": "今日请求",
+      "systemStatus": "系统状态",
+      "allNodesNormal": "所有节点正常"
+    },
+    "col": {
+      "id": "ID",
+      "email": "邮箱",
+      "role": "角色",
+      "status": "状态",
+      "joinedAt": "注册日期",
+      "lastLogin": "最后登录",
+      "actions": "操作",
+      "edit": "编辑",
+      "delete": "删除"
+    }
+  },
+  "adminAnalytics": {
+    "title": "分析",
+    "description": "分析对话量、用户和令牌消耗趋势。",
+    "dailyConversations": "每日对话量",
+    "recentDaysCaption": "最近 {days} 天 · 按日",
+    "modelUsageTitle": "模型配置使用占比",
+    "costAnalysis": "成本分析",
+    "dailyCost": "每日成本",
+    "weeklyCost": "每周成本",
+    "projectedMonthlyCost": "预计月度成本",
+    "userBehavior": "用户行为",
+    "avgSessionLength": "平均会话时长",
+    "minutesSuffix": "{value} 分钟",
+    "avgQueriesPerSession": "每会话平均查询",
+    "peakHoursTop3": "高峰时段 Top 3",
+    "peakHourItem": "{hour}时 · {requests} 次请求",
+    "topQueriesTop5": "常见查询 Top 5",
+    "agentPerformance": "智能体性能",
+    "period": {
+      "7d": "7 天",
+      "30d": "30 天",
+      "90d": "90 天"
+    },
+    "stats": {
+      "totalConversations": "总对话数",
+      "activeUsers": "活跃用户",
+      "consumedTokens": "消耗令牌",
+      "avgResponse": "平均响应"
+    },
+    "col": {
+      "model": "模型",
+      "cost": "成本",
+      "share": "占比",
+      "agent": "智能体",
+      "requests": "请求数",
+      "successRate": "成功率",
+      "avgResponse": "平均响应"
+    }
+  },
+  "adminAudit": {
+    "title": "审计日志",
+    "description": "系统范围内的安全与管理活动记录。",
+    "countBadge": "{count}条",
+    "exportCsv": "导出 CSV",
+    "filter": {
+      "allActions": "全部操作"
+    },
+    "severity": {
+      "all": "全部严重级别"
+    },
+    "status": {
+      "critical": "严重",
+      "warn": "警告",
+      "info": "信息"
+    },
+    "period": {
+      "today": "今天",
+      "days7": "7天",
+      "days30": "30天",
+      "all": "全部"
+    },
+    "th": {
+      "time": "时间",
+      "actor": "操作者",
+      "action": "操作",
+      "target": "目标",
+      "severity": "严重级别"
+    },
+    "empty": "没有符合条件的日志。"
+  },
+  "adminMetrics": {
+    "title": "系统指标",
+    "lastUpdated": "最后更新 {time}",
+    "subtitle": "系统状态与资源实时监控",
+    "refresh": "刷新",
+    "stat": {
+      "cpu": "CPU 使用率",
+      "memory": "内存",
+      "requestRate": "请求率",
+      "errorRate": "错误率"
+    },
+    "memoryDelta": "共 {total} GB 中",
+    "requestChartTitle": "请求率（最近 24 小时 · req/min）",
+    "barTooltip": "{hour}时: {value}/min",
+    "nodeStatusTitle": "节点 · 服务状态",
+    "nodeRoleLlm": "LLM 节点",
+    "th": {
+      "node": "节点",
+      "role": "角色",
+      "status": "状态",
+      "latency": "延迟",
+      "load": "负载"
+    },
+    "status": {
+      "online": "正常",
+      "degraded": "降级",
+      "offline": "离线"
+    },
+    "agentMetricsTitle": "智能体指标",
+    "agent": {
+      "totalAgents": "智能体总数",
+      "totalRequests": "请求总数",
+      "avgSuccessRate": "平均成功率",
+      "avgResponseTime": "平均响应时间"
+    },
+    "agentTh": {
+      "id": "智能体 ID",
+      "requests": "请求数",
+      "successRate": "成功率",
+      "avgResponseTime": "平均响应时间"
+    }
+  },
+  "adminAlerts": {
+    "title": "告警",
+    "description": "管理告警规则并查看最近发生的事件。",
+    "addRule": "添加规则",
+    "rulesTitle": "告警规则",
+    "toggleAria": "切换规则启用状态",
+    "enabled": "已启用",
+    "disabled": "已禁用",
+    "recentTitle": "最近告警",
+    "acknowledged": "已确认",
+    "acknowledge": "确认",
+    "status": {
+      "critical": "严重",
+      "warning": "警告",
+      "info": "信息"
+    },
+    "rules": {
+      "cpu": {
+        "name": "CPU 使用率阈值",
+        "condition": "CPU > 85% · 持续 5 分钟"
+      },
+      "contextOverflow": {
+        "name": "LLM 上下文溢出",
+        "condition": "发生 ContextOverflowError"
+      },
+      "errorRate": {
+        "name": "错误率激增",
+        "condition": "5xx 比例 > 2%"
+      },
+      "tokenQuota": {
+        "name": "令牌配额耗尽",
+        "condition": "周配额超过 90%"
+      },
+      "roleChange": {
+        "name": "管理员权限变更",
+        "condition": "user.role_change → admin"
+      }
+    },
+    "events": {
+      "e1": "检测到管理员权限授予 — u_1040（由 devops@partner.co.kr 执行）",
+      "e2": "redis-kv 节点负载 78% — 可能影响限流一致性",
+      "e3": "1 次 LLM 上下文溢出 — 已对 conv_88412 应用截断",
+      "e4": "每日备份完成 — postgres-primary（2.1GB）",
+      "e5": "12 次异常登录尝试 — 已封禁 45.33.21.7"
+    }
+  },
+  "adminMcpCatalog": {
+    "close": "关闭",
+    "editTitle": "编辑模板",
+    "createTitle": "新建模板",
+    "saveError": "保存失败。请重试。",
+    "displayNameLabel": "显示名称",
+    "descriptionLabel": "说明",
+    "descriptionPlaceholder": "服务器的简要说明",
+    "typeLabel": "类型",
+    "commandLabel": "命令",
+    "enabledLabel": "启用",
+    "cancel": "取消",
+    "save": "保存",
+    "create": "创建",
+    "deleteTitle": "删除模板",
+    "deleteConfirm": "确定要删除吗？",
+    "deleteError": "删除失败。请重试。",
+    "delete": "删除",
+    "pageTitle": "MCP 目录管理",
+    "pageDescription": "管理提供给用户的 MCP 服务器模板。",
+    "addTemplate": "添加模板",
+    "colName": "名称",
+    "colDescription": "说明",
+    "colType": "类型",
+    "colEnabled": "启用状态",
+    "colActions": "操作",
+    "loading": "加载中…",
+    "emptyState": "尚未注册模板。",
+    "enabled": "已启用",
+    "disabled": "已禁用",
+    "editAction": "编辑",
+    "deleteAction": "删除"
+  },
+  "apiKeys": {
+    "title": "API 密钥",
+    "description": "注册并管理外部 LLM 提供商(Anthropic / OpenAI 兼容)的密钥。",
+    "addKey": "添加密钥",
+    "close": "关闭",
+    "cancel": "取消",
+    "save": "保存",
+    "registeredKeys": "已注册的提供商密钥",
+    "mockDataShown": "正在显示模拟数据",
+    "loading": "正在加载密钥列表...",
+    "emptyTitle": "尚未注册外部密钥",
+    "emptyDesc": "添加密钥后即可使用该提供商的模型。",
+    "loadError": "无法加载密钥列表。",
+    "deleteConfirm": "确定要删除 {name} 密钥吗?\n使用此密钥的模型调用将中断。",
+    "deleteFailed": "删除失败: {error}",
+    "saveFailed": "保存失败: {error}",
+    "serverError": "服务器错误",
+    "deleteAria": "删除",
+    "validationError": "请输入名称和至少 8 个字符的 API 密钥。",
+    "namePlaceholder": "例如: 生产、开发",
+    "apiKeyLabel": "API 密钥",
+    "baseUrlLabel": "Base URL(可选)",
+    "col": {
+      "provider": "提供商",
+      "name": "名称",
+      "key": "密钥",
+      "createdAt": "创建日期",
+      "status": "状态",
+      "actions": "操作"
+    },
+    "status": {
+      "validationFailed": "验证失败",
+      "active": "已启用",
+      "unverified": "未验证"
+    },
+    "sdkType": {
+      "anthropic": "Anthropic",
+      "openaiCompatible": "OpenAI 兼容"
+    },
+    "mock": {
+      "productionName": "生产"
+    }
+  },
+  "usage": {
+    "title": "使用量",
+    "description": "按账户统计的令牌与请求使用量。",
+    "mockData": "模拟数据",
+    "updatedAt": "更新于 {time}",
+    "refresh": "刷新",
+    "loading": "加载中...",
+    "noData": "暂无数据。",
+    "dailyTitle": "每日令牌使用量(最近 14 天)",
+    "tokenTooltip": "{date} · {count} 令牌",
+    "systemMonitorTitle": "系统令牌监控",
+    "dailyTokens7d": "每日令牌(最近 7 天)",
+    "hourlyTokens": "每小时令牌",
+    "modelUsageTitle": "按模型使用占比",
+    "noModelData": "暂无按模型的使用数据。",
+    "stat": {
+      "monthTokens": "本月令牌",
+      "requests": "请求数",
+      "avgLatency": "平均延迟",
+      "errors": "错误",
+      "todayCost": "今日费用",
+      "todayTokens": "今日令牌",
+      "weekTokens": "每周令牌",
+      "weekEstCost": "每周预估费用"
+    },
+    "delta": {
+      "warning": "注意",
+      "normal": "正常"
+    },
+    "col": {
+      "model": "模型",
+      "tokens": "令牌",
+      "share": "占比",
+      "distribution": "分布"
+    }
+  },
+  "developer": {
+    "pageTitle": "开发者文档",
+    "pageDescription": "集成并自动化 OpenMake LLM API。",
+    "apiInfo": {
+      "title": "API 基本信息",
+      "apiVersionLabel": "API 版本",
+      "versionBlock": "/v1  — OpenAI 兼容端点\n/api — OpenMake 专用端点",
+      "description": "OpenMake LLM API 与 OpenAI Chat Completions API 兼容。只需更改 <code>baseURL</code>，即可直接使用现有的 OpenAI SDK。"
+    },
+    "auth": {
+      "title": "认证方式",
+      "apiKeyTitle": "API Key 认证",
+      "apiKeyDesc": "将在 设置 > API 密钥 页面签发的密钥传入 <code>Authorization</code> 请求头。",
+      "jwtTitle": "JWT 会话认证",
+      "jwtDesc": "浏览器会话会自动使用存储在 HttpOnly Cookie 中的 JWT。直接调用 API 时建议使用 API Key。"
+    },
+    "models": {
+      "title": "模型列表",
+      "description": "使用 <code>GET /api/models</code> 获取可用模型列表，或参考聊天页面的模型选择器。",
+      "brandIdLabel": "品牌模型 ID"
+    },
+    "brandModels": {
+      "default": "默认模型",
+      "pro": "高性能模型",
+      "fast": "快速响应",
+      "think": "推理模式",
+      "code": "代码专用",
+      "vision": "图像支持"
+    },
+    "steps": {
+      "apiKey": {
+        "title": "签发 API 密钥",
+        "description": "在 设置 > API 密钥 页面创建新的 API 密钥。"
+      },
+      "chatCompletion": {
+        "title": "聊天补全请求",
+        "description": "向 OpenAI 兼容的 /v1/chat/completions 端点发送请求。"
+      },
+      "streaming": {
+        "title": "流式响应",
+        "description": "添加 stream: true 即可通过 SSE 流实时接收 token。"
+      }
+    }
   }
 }

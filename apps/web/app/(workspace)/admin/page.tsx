@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { Shield, Users, Boxes, Gauge, ArrowRight, Pencil, Trash2, Plus, X, Loader2 } from "lucide-react";
 import {
@@ -34,10 +35,10 @@ interface GuardianPending {
   created_at: string;
 }
 
-const ROLE_LABEL: Record<string, string> = {
-  admin: "관리자",
-  user: "사용자",
-  guest: "게스트",
+const ROLE_LABEL_KEY: Record<string, string> = {
+  admin: "roles.admin",
+  user: "roles.user",
+  guest: "roles.guest",
 };
 const ROLE_TONE: Record<string, "danger" | "success" | "neutral"> = {
   admin: "danger",
@@ -60,13 +61,14 @@ function fmtDate(s?: string | null) {
 }
 
 const QUICK_LINKS = [
-  { href: "/admin", title: "사용자 관리", desc: "계정 생성·권한·상태 관리", icon: Users },
-  { href: "/mcp-catalog", title: "모델 · MCP 설정", desc: "모델 프리셋과 도구 카탈로그", icon: Boxes },
-  { href: "/admin/metrics", title: "시스템 상태", desc: "노드·서비스 헬스 모니터링", icon: Gauge },
+  { href: "/admin", titleKey: "quickLinks.users.title", descKey: "quickLinks.users.desc", icon: Users },
+  { href: "/mcp-catalog", titleKey: "quickLinks.models.title", descKey: "quickLinks.models.desc", icon: Boxes },
+  { href: "/admin/metrics", titleKey: "quickLinks.system.title", descKey: "quickLinks.system.desc", icon: Gauge },
 ];
 
 /* ── 모달 공통 래퍼 ─────────────────────────────────────────── */
 function Modal({ onClose, children }: { onClose: () => void; children: React.ReactNode }) {
+  const t = useTranslations("admin");
   const backdropRef = useRef<HTMLDivElement>(null);
   return (
     <div
@@ -79,7 +81,7 @@ function Modal({ onClose, children }: { onClose: () => void; children: React.Rea
         <button
           onClick={onClose}
           className="absolute right-4 top-4 text-faint hover:text-fg"
-          aria-label="닫기"
+          aria-label={t("close")}
         >
           <X className="h-4 w-4" />
         </button>
@@ -101,6 +103,7 @@ function CreateUserModal({
   onClose: () => void;
   onCreated: () => void;
 }) {
+  const t = useTranslations("admin");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<"admin" | "user" | "guest">("user");
@@ -117,7 +120,7 @@ function CreateUserModal({
       onCreated();
       onClose();
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "생성 실패. 다시 시도해 주세요.");
+      setError(e instanceof Error ? e.message : t("createError"));
     } finally {
       setSubmitting(false);
     }
@@ -125,34 +128,34 @@ function CreateUserModal({
 
   return (
     <Modal onClose={onClose}>
-      <h2 className="mb-4 text-base font-semibold text-fg">사용자 추가</h2>
+      <h2 className="mb-4 text-base font-semibold text-fg">{t("addUser")}</h2>
       <form onSubmit={handleSubmit} className="space-y-3">
         <div>
-          <label className={labelCls}>이름 (선택)</label>
-          <input className={inputCls} value={name} onChange={(e) => setName(e.target.value)} placeholder="홍길동" />
+          <label className={labelCls}>{t("nameLabel")}</label>
+          <input className={inputCls} value={name} onChange={(e) => setName(e.target.value)} placeholder={t("namePlaceholder")} />
         </div>
         <div>
-          <label className={labelCls}>이메일 *</label>
+          <label className={labelCls}>{t("emailRequired")}</label>
           <input className={inputCls} type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="user@example.com" />
         </div>
         <div>
-          <label className={labelCls}>역할 *</label>
+          <label className={labelCls}>{t("roleRequired")}</label>
           <select className={selectCls} value={role} onChange={(e) => setRole(e.target.value as "admin" | "user" | "guest")}>
-            <option value="user">사용자</option>
-            <option value="admin">관리자</option>
-            <option value="guest">게스트</option>
+            <option value="user">{t("roles.user")}</option>
+            <option value="admin">{t("roles.admin")}</option>
+            <option value="guest">{t("roles.guest")}</option>
           </select>
         </div>
         <div>
-          <label className={labelCls}>비밀번호 *</label>
+          <label className={labelCls}>{t("passwordRequired")}</label>
           <input className={inputCls} type="password" required value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" />
         </div>
         {error && <p className="text-xs text-danger">{error}</p>}
         <div className="flex justify-end gap-2 pt-2">
-          <Button type="button" variant="outline" size="sm" onClick={onClose}>취소</Button>
+          <Button type="button" variant="outline" size="sm" onClick={onClose}>{t("cancel")}</Button>
           <Button type="submit" size="sm" disabled={submitting}>
             {submitting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-            생성
+            {t("create")}
           </Button>
         </div>
       </form>
@@ -170,6 +173,7 @@ function EditUserModal({
   onClose: () => void;
   onUpdated: () => void;
 }) {
+  const t = useTranslations("admin");
   const [role, setRole] = useState<"admin" | "user" | "guest">(user.role);
   const [isActive, setIsActive] = useState(user.is_active);
   const [password, setPassword] = useState("");
@@ -187,7 +191,7 @@ function EditUserModal({
       onUpdated();
       onClose();
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "수정 실패. 다시 시도해 주세요.");
+      setError(e instanceof Error ? e.message : t("updateError"));
     } finally {
       setSubmitting(false);
     }
@@ -195,34 +199,34 @@ function EditUserModal({
 
   return (
     <Modal onClose={onClose}>
-      <h2 className="mb-1 text-base font-semibold text-fg">사용자 편집</h2>
+      <h2 className="mb-1 text-base font-semibold text-fg">{t("editUser")}</h2>
       <p className="mb-4 text-xs text-muted">{user.email}</p>
       <form onSubmit={handleSubmit} className="space-y-3">
         <div>
-          <label className={labelCls}>역할</label>
+          <label className={labelCls}>{t("roleField")}</label>
           <select className={selectCls} value={role} onChange={(e) => setRole(e.target.value as "admin" | "user" | "guest")}>
-            <option value="user">사용자</option>
-            <option value="admin">관리자</option>
-            <option value="guest">게스트</option>
+            <option value="user">{t("roles.user")}</option>
+            <option value="admin">{t("roles.admin")}</option>
+            <option value="guest">{t("roles.guest")}</option>
           </select>
         </div>
         <div>
-          <label className={labelCls}>상태</label>
+          <label className={labelCls}>{t("statusField")}</label>
           <select className={selectCls} value={isActive ? "active" : "inactive"} onChange={(e) => setIsActive(e.target.value === "active")}>
-            <option value="active">활성</option>
-            <option value="inactive">비활성</option>
+            <option value="active">{t("active")}</option>
+            <option value="inactive">{t("inactive")}</option>
           </select>
         </div>
         <div>
-          <label className={labelCls}>새 비밀번호 (선택)</label>
-          <input className={inputCls} type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="변경하지 않으려면 비워두세요" />
+          <label className={labelCls}>{t("newPasswordLabel")}</label>
+          <input className={inputCls} type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder={t("newPasswordPlaceholder")} />
         </div>
         {error && <p className="text-xs text-danger">{error}</p>}
         <div className="flex justify-end gap-2 pt-2">
-          <Button type="button" variant="outline" size="sm" onClick={onClose}>취소</Button>
+          <Button type="button" variant="outline" size="sm" onClick={onClose}>{t("cancel")}</Button>
           <Button type="submit" size="sm" disabled={submitting}>
             {submitting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-            저장
+            {t("save")}
           </Button>
         </div>
       </form>
@@ -240,6 +244,7 @@ function DeleteUserModal({
   onClose: () => void;
   onDeleted: () => void;
 }) {
+  const t = useTranslations("admin");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
@@ -251,7 +256,7 @@ function DeleteUserModal({
       onDeleted();
       onClose();
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "삭제 실패. 다시 시도해 주세요.");
+      setError(e instanceof Error ? e.message : t("deleteError"));
     } finally {
       setSubmitting(false);
     }
@@ -259,15 +264,15 @@ function DeleteUserModal({
 
   return (
     <Modal onClose={onClose}>
-      <h2 className="mb-2 text-base font-semibold text-fg">사용자 삭제</h2>
-      <p className="mb-1 text-sm text-fg-2">정말 삭제하시겠습니까?</p>
+      <h2 className="mb-2 text-base font-semibold text-fg">{t("deleteTitle")}</h2>
+      <p className="mb-1 text-sm text-fg-2">{t("deleteConfirm")}</p>
       <p className="mb-4 text-xs text-muted font-mono">{user.email}</p>
       {error && <p className="mb-3 text-xs text-danger">{error}</p>}
       <div className="flex justify-end gap-2">
-        <Button variant="outline" size="sm" onClick={onClose} disabled={submitting}>취소</Button>
+        <Button variant="outline" size="sm" onClick={onClose} disabled={submitting}>{t("cancel")}</Button>
         <Button variant="danger" size="sm" onClick={handleDelete} disabled={submitting}>
           {submitting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-          삭제
+          {t("delete")}
         </Button>
       </div>
     </Modal>
@@ -275,8 +280,9 @@ function DeleteUserModal({
 }
 
 export default function AdminPage() {
+  const t = useTranslations("admin");
   const [users, setUsers] = useState<AdminUser[]>(MOCK_USERS);
-  const [stats, setStats] = useState({ total: 1042, active: 318, today: 4821, status: "정상" });
+  const [stats, setStats] = useState({ total: 1042, active: 318, today: 4821, status: t("statusNormal") });
   const [guardianPending, setGuardianPending] = useState<GuardianPending[]>([]);
   const [approvingIds, setApprovingIds] = useState<Set<string>>(new Set());
 
@@ -360,16 +366,16 @@ export default function AdminPage() {
   return (
     <>
       <PageHeader
-        title="관리자 대시보드"
-        description="사용자, 모델, 시스템 상태를 한 곳에서 관리합니다."
+        title={t("title")}
+        description={t("description")}
         actions={
           <div className="flex items-center gap-2">
             <Badge tone="danger">
-              <Shield className="h-3.5 w-3.5" /> 관리자 전용
+              <Shield className="h-3.5 w-3.5" /> {t("adminOnly")}
             </Badge>
             <Button size="sm" onClick={() => setShowCreate(true)}>
               <Plus className="h-4 w-4" />
-              사용자 추가
+              {t("addUser")}
             </Button>
           </div>
         }
@@ -377,16 +383,16 @@ export default function AdminPage() {
 
       <div className="min-h-0 flex-1 overflow-y-auto p-6">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <StatCard label="총 사용자" value={stats.total.toLocaleString()} delta="+12 (지난 7일)" />
-          <StatCard label="활성 세션" value={stats.active.toLocaleString()} delta="+5.2%" />
-          <StatCard label="오늘 요청" value={stats.today.toLocaleString()} delta="+18.4%" />
-          <StatCard label="시스템 상태" value={stats.status} delta="모든 노드 정상" />
+          <StatCard label={t("stats.totalUsers")} value={stats.total.toLocaleString()} delta={t("stats.totalUsersDelta")} />
+          <StatCard label={t("stats.activeSessions")} value={stats.active.toLocaleString()} delta="+5.2%" />
+          <StatCard label={t("stats.todayRequests")} value={stats.today.toLocaleString()} delta="+18.4%" />
+          <StatCard label={t("stats.systemStatus")} value={stats.status} delta={t("stats.allNodesNormal")} />
         </div>
 
-        <h2 className="mt-8 mb-3 text-sm font-semibold text-fg-2">빠른 관리</h2>
+        <h2 className="mt-8 mb-3 text-sm font-semibold text-fg-2">{t("quickLinksHeading")}</h2>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {QUICK_LINKS.map((q) => (
-            <Link key={q.title + q.href} href={q.href} className="group">
+            <Link key={q.titleKey + q.href} href={q.href} className="group">
               <Card className="h-full p-5 transition hover:border-border-strong hover:shadow-2">
                 <div className="flex items-start justify-between">
                   <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent-soft text-accent">
@@ -394,8 +400,8 @@ export default function AdminPage() {
                   </span>
                   <ArrowRight className="h-4 w-4 text-faint transition group-hover:translate-x-0.5 group-hover:text-accent" />
                 </div>
-                <p className="mt-4 text-sm font-semibold text-fg">{q.title}</p>
-                <p className="mt-1 text-xs text-muted">{q.desc}</p>
+                <p className="mt-4 text-sm font-semibold text-fg">{t(q.titleKey)}</p>
+                <p className="mt-1 text-xs text-muted">{t(q.descKey)}</p>
               </Card>
             </Link>
           ))}
@@ -403,25 +409,25 @@ export default function AdminPage() {
 
         <Card className="mt-8">
           <CardHeader className="flex items-center justify-between">
-            <CardTitle>최근 가입 사용자</CardTitle>
+            <CardTitle>{t("recentUsers")}</CardTitle>
             <Link
               href="/admin"
               className="inline-flex h-8 items-center rounded-md border border-border-strong bg-surface px-3 text-xs font-medium text-fg hover:bg-surface-2"
             >
-              전체 보기
+              {t("viewAll")}
             </Link>
           </CardHeader>
           <CardContent className="p-0">
             <Table>
               <thead>
                 <tr>
-                  <Th>ID</Th>
-                  <Th>이메일</Th>
-                  <Th>역할</Th>
-                  <Th>상태</Th>
-                  <Th>가입일</Th>
-                  <Th>마지막 로그인</Th>
-                  <Th>액션</Th>
+                  <Th>{t("col.id")}</Th>
+                  <Th>{t("col.email")}</Th>
+                  <Th>{t("col.role")}</Th>
+                  <Th>{t("col.status")}</Th>
+                  <Th>{t("col.joinedAt")}</Th>
+                  <Th>{t("col.lastLogin")}</Th>
+                  <Th>{t("col.actions")}</Th>
                 </tr>
               </thead>
               <tbody>
@@ -430,10 +436,10 @@ export default function AdminPage() {
                     <Td className="font-mono text-xs text-muted">{u.id}</Td>
                     <Td className="text-fg">{u.email}</Td>
                     <Td>
-                      <Badge tone={ROLE_TONE[u.role] ?? "neutral"}>{ROLE_LABEL[u.role] ?? u.role}</Badge>
+                      <Badge tone={ROLE_TONE[u.role] ?? "neutral"}>{ROLE_LABEL_KEY[u.role] ? t(ROLE_LABEL_KEY[u.role]) : u.role}</Badge>
                     </Td>
                     <Td>
-                      <Badge tone={u.is_active ? "success" : "danger"}>{u.is_active ? "활성" : "비활성"}</Badge>
+                      <Badge tone={u.is_active ? "success" : "danger"}>{u.is_active ? t("active") : t("inactive")}</Badge>
                     </Td>
                     <Td>{fmtDate(u.created_at)}</Td>
                     <Td className="text-muted">{u.last_login ? fmtDate(u.last_login) : "-"}</Td>
@@ -443,7 +449,7 @@ export default function AdminPage() {
                           variant="ghost"
                           size="icon"
                           onClick={() => setEditUser(u)}
-                          aria-label="편집"
+                          aria-label={t("col.edit")}
                         >
                           <Pencil className="h-3.5 w-3.5" />
                         </Button>
@@ -451,7 +457,7 @@ export default function AdminPage() {
                           variant="ghost"
                           size="icon"
                           onClick={() => setDeleteUser(u)}
-                          aria-label="삭제"
+                          aria-label={t("col.delete")}
                           className="text-danger hover:text-danger"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
@@ -469,15 +475,15 @@ export default function AdminPage() {
         {guardianPending.length > 0 && (
           <Card className="mt-6">
             <CardHeader>
-              <CardTitle>미성년자 동의 보류</CardTitle>
+              <CardTitle>{t("guardianPending")}</CardTitle>
             </CardHeader>
             <CardContent className="p-0">
               <Table>
                 <thead>
                   <tr>
-                    <Th>이메일</Th>
-                    <Th>가입일</Th>
-                    <Th>액션</Th>
+                    <Th>{t("col.email")}</Th>
+                    <Th>{t("col.joinedAt")}</Th>
+                    <Th>{t("col.actions")}</Th>
                   </tr>
                 </thead>
                 <tbody>
@@ -494,7 +500,7 @@ export default function AdminPage() {
                           {approvingIds.has(u.id) && (
                             <Loader2 className="h-3.5 w-3.5 animate-spin" />
                           )}
-                          승인
+                          {t("approve")}
                         </Button>
                       </Td>
                     </tr>

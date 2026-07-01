@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import {
   KeyRound,
   Plus,
@@ -46,9 +47,10 @@ interface ProviderEntry {
   user_key: UserKey | null;
 }
 
-const SDK_LABEL: Record<SdkType, string> = {
-  anthropic: "Anthropic",
-  "openai-compatible": "OpenAI 호환",
+/** SdkType → 번역 키 (렌더 시 t() 로 해석) */
+const SDK_LABEL_KEY: Record<SdkType, string> = {
+  anthropic: "sdkType.anthropic",
+  "openai-compatible": "sdkType.openaiCompatible",
 };
 
 function formatDate(iso?: string | null) {
@@ -61,6 +63,7 @@ function formatDate(iso?: string | null) {
 }
 
 export default function ApiKeysPage() {
+  const t = useTranslations("apiKeys");
   const [providers, setProviders] = useState<ProviderEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -76,9 +79,7 @@ export default function ApiKeysPage() {
       setProviders(res?.data?.providers ?? []);
     } catch (e) {
       // TODO: API 연동 — 비로그인/오류 시 목업 카탈로그 노출
-      setError(
-        e instanceof Error ? e.message : "키 목록을 불러오지 못했습니다.",
-      );
+      setError(e instanceof Error ? e.message : t("loadError"));
       setProviders([
         {
           provider_id: "anthropic",
@@ -86,7 +87,7 @@ export default function ApiKeysPage() {
           sdk_type: "anthropic",
           default_base_url: "https://api.anthropic.com",
           user_key: {
-            display_name: "프로덕션",
+            display_name: t("mock.productionName"),
             key_prefix: "sk-ant-",
             base_url: null,
             last_validation_ok: true,
@@ -105,25 +106,23 @@ export default function ApiKeysPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+    // locale 변경(t) 시 목업 폴백 라벨 재생성
+  }, [t]);
 
   useEffect(() => {
     queueMicrotask(() => void load());
   }, [load]);
 
   async function handleDelete(providerId: string, displayName: string) {
-    if (
-      !window.confirm(
-        `${displayName} 키를 삭제하시겠습니까?\n이 키를 사용하는 모델 호출이 중단됩니다.`,
-      )
-    )
-      return;
+    if (!window.confirm(t("deleteConfirm", { name: displayName }))) return;
     try {
       await ApiClient.del(`/api/external-keys/${providerId}`);
       await load();
     } catch (e) {
       window.alert(
-        "삭제 실패: " + (e instanceof Error ? e.message : "서버 오류"),
+        t("deleteFailed", {
+          error: e instanceof Error ? e.message : t("serverError"),
+        }),
       );
     }
   }
@@ -133,12 +132,12 @@ export default function ApiKeysPage() {
   return (
     <>
       <PageHeader
-        title="API 키"
-        description="외부 LLM 공급자(Anthropic / OpenAI 호환) 키를 등록하고 관리합니다."
+        title={t("title")}
+        description={t("description")}
         actions={
           <Button onClick={() => setShowForm((v) => !v)}>
             {showForm ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
-            {showForm ? "닫기" : "새 키 추가"}
+            {showForm ? t("close") : t("addKey")}
           </Button>
         }
       />
@@ -158,11 +157,11 @@ export default function ApiKeysPage() {
 
           <Card>
             <CardHeader className="flex items-center justify-between">
-              <CardTitle>등록된 공급자 키</CardTitle>
+              <CardTitle>{t("registeredKeys")}</CardTitle>
               {error && (
                 <span className="inline-flex items-center gap-1 text-xs text-warn">
                   <AlertTriangle className="h-3.5 w-3.5" />
-                  목업 데이터 표시 중
+                  {t("mockDataShown")}
                 </span>
               )}
             </CardHeader>
@@ -170,28 +169,26 @@ export default function ApiKeysPage() {
               {loading ? (
                 <div className="flex items-center justify-center gap-2 py-12 text-sm text-muted">
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  키 목록을 불러오는 중...
+                  {t("loading")}
                 </div>
               ) : registered.length === 0 ? (
                 <div className="flex flex-col items-center gap-2 py-12 text-center">
                   <KeyRound className="h-8 w-8 text-faint" />
                   <p className="text-sm font-medium text-fg">
-                    등록된 외부 키가 없습니다
+                    {t("emptyTitle")}
                   </p>
-                  <p className="text-xs text-muted">
-                    새 키를 추가하면 해당 공급자 모델을 사용할 수 있습니다.
-                  </p>
+                  <p className="text-xs text-muted">{t("emptyDesc")}</p>
                 </div>
               ) : (
                 <Table>
                   <thead>
                     <tr>
-                      <Th>공급자</Th>
-                      <Th>이름</Th>
-                      <Th>키</Th>
-                      <Th>생성일</Th>
-                      <Th>상태</Th>
-                      <Th className="text-right">작업</Th>
+                      <Th>{t("col.provider")}</Th>
+                      <Th>{t("col.name")}</Th>
+                      <Th>{t("col.key")}</Th>
+                      <Th>{t("col.createdAt")}</Th>
+                      <Th>{t("col.status")}</Th>
+                      <Th className="text-right">{t("col.actions")}</Th>
                     </tr>
                   </thead>
                   <tbody>
@@ -203,7 +200,7 @@ export default function ApiKeysPage() {
                           <Td className="text-fg">
                             <div className="font-medium">{p.display_name}</div>
                             <div className="text-xs text-faint">
-                              {SDK_LABEL[p.sdk_type]}
+                              {t(SDK_LABEL_KEY[p.sdk_type])}
                             </div>
                           </Td>
                           <Td>{k.display_name}</Td>
@@ -214,18 +211,22 @@ export default function ApiKeysPage() {
                           <Td>{formatDate(k.created_at)}</Td>
                           <Td>
                             {ok === false ? (
-                              <Badge tone="danger">검증 실패</Badge>
+                              <Badge tone="danger">
+                                {t("status.validationFailed")}
+                              </Badge>
                             ) : ok ? (
-                              <Badge tone="success">활성</Badge>
+                              <Badge tone="success">{t("status.active")}</Badge>
                             ) : (
-                              <Badge tone="neutral">미검증</Badge>
+                              <Badge tone="neutral">
+                                {t("status.unverified")}
+                              </Badge>
                             )}
                           </Td>
                           <Td className="text-right">
                             <Button
                               variant="ghost"
                               size="icon"
-                              aria-label="삭제"
+                              aria-label={t("deleteAria")}
                               onClick={() =>
                                 handleDelete(p.provider_id, p.display_name)
                               }
@@ -257,6 +258,7 @@ function AddKeyForm({
   onClose: () => void;
   onSaved: () => void | Promise<void>;
 }) {
+  const t = useTranslations("apiKeys");
   const [providerId, setProviderId] = useState(
     providers[0]?.provider_id ?? "anthropic",
   );
@@ -270,7 +272,7 @@ function AddKeyForm({
 
   async function handleSubmit() {
     if (!displayName.trim() || apiKey.trim().length < 8) {
-      setFormError("이름과 8자 이상의 API 키를 입력하세요.");
+      setFormError(t("validationError"));
       return;
     }
     setSaving(true);
@@ -285,7 +287,9 @@ function AddKeyForm({
       await onSaved();
     } catch (err) {
       setFormError(
-        "저장 실패: " + (err instanceof Error ? err.message : "서버 오류"),
+        t("saveFailed", {
+          error: err instanceof Error ? err.message : t("serverError"),
+        }),
       );
     } finally {
       setSaving(false);
@@ -295,8 +299,13 @@ function AddKeyForm({
   return (
     <Card>
       <CardHeader className="flex items-center justify-between">
-        <CardTitle>새 키 추가</CardTitle>
-        <Button variant="ghost" size="icon" aria-label="닫기" onClick={onClose}>
+        <CardTitle>{t("addKey")}</CardTitle>
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label={t("close")}
+          onClick={onClose}
+        >
           <X className="h-4 w-4" />
         </Button>
       </CardHeader>
@@ -311,7 +320,7 @@ function AddKeyForm({
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="block">
               <span className="mb-1 block text-xs font-medium text-fg-2">
-                공급자
+                {t("col.provider")}
               </span>
               <select
                 value={providerId}
@@ -320,26 +329,26 @@ function AddKeyForm({
               >
                 {providers.map((p) => (
                   <option key={p.provider_id} value={p.provider_id}>
-                    {p.display_name} ({SDK_LABEL[p.sdk_type]})
+                    {p.display_name} ({t(SDK_LABEL_KEY[p.sdk_type])})
                   </option>
                 ))}
               </select>
             </label>
             <label className="block">
               <span className="mb-1 block text-xs font-medium text-fg-2">
-                이름
+                {t("col.name")}
               </span>
               <input
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
-                placeholder="예: 프로덕션, 개발용"
+                placeholder={t("namePlaceholder")}
                 className="h-9 w-full rounded-md border border-border-strong bg-surface px-3 text-sm text-fg outline-none focus:border-accent"
               />
             </label>
           </div>
           <label className="block">
             <span className="mb-1 block text-xs font-medium text-fg-2">
-              API 키
+              {t("apiKeyLabel")}
             </span>
             <input
               type="password"
@@ -351,7 +360,7 @@ function AddKeyForm({
           </label>
           <label className="block">
             <span className="mb-1 block text-xs font-medium text-fg-2">
-              Base URL (선택)
+              {t("baseUrlLabel")}
             </span>
             <input
               value={baseUrl}
@@ -365,7 +374,7 @@ function AddKeyForm({
 
           <div className="flex justify-end gap-2 pt-1">
             <Button type="button" variant="outline" onClick={onClose}>
-              취소
+              {t("cancel")}
             </Button>
             <Button type="submit" disabled={saving}>
               {saving ? (
@@ -373,7 +382,7 @@ function AddKeyForm({
               ) : (
                 <Save className="h-4 w-4" />
               )}
-              저장
+              {t("save")}
             </Button>
           </div>
         </form>

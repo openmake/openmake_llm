@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import { LineChart } from "lucide-react";
 import {
   PageHeader,
@@ -17,10 +18,10 @@ import { cn } from "@/lib/utils";
 import { ApiClient } from "@/lib/api-client";
 
 type Period = "7d" | "30d" | "90d";
-const PERIODS: { key: Period; label: string }[] = [
-  { key: "7d", label: "7일" },
-  { key: "30d", label: "30일" },
-  { key: "90d", label: "90일" },
+const PERIODS: { key: Period; labelKey: string }[] = [
+  { key: "7d", labelKey: "period.7d" },
+  { key: "30d", labelKey: "period.30d" },
+  { key: "90d", labelKey: "period.90d" },
 ];
 
 // 일별 대화량/모델 비중 실데이터: /api/metrics/analytics/daily-conversations,
@@ -113,6 +114,7 @@ interface AgentRow {
 function fmtCost(n: number) { return `$${n.toFixed(4)}`; }
 
 export default function AdminAnalyticsPage() {
+  const t = useTranslations("adminAnalytics");
   const [period, setPeriod] = useState<Period>("7d");
   // 실데이터 오버레이 (가능한 지표만): null 이면 목업 SUMMARY 사용
   const [liveUsers, setLiveUsers] = useState<string | null>(null);
@@ -234,8 +236,8 @@ export default function AdminAnalyticsPage() {
   return (
     <>
       <PageHeader
-        title="애널리틱스"
-        description="대화량, 사용자, 토큰 소비 추세를 분석합니다."
+        title={t("title")}
+        description={t("description")}
         actions={
           <div className="flex items-center gap-1 rounded-pill border border-border bg-surface-2 p-1">
             {PERIODS.map((p) => (
@@ -249,7 +251,7 @@ export default function AdminAnalyticsPage() {
                     : "text-muted hover:text-fg",
                 )}
               >
-                {p.label}
+                {t(p.labelKey)}
               </button>
             ))}
           </div>
@@ -258,16 +260,16 @@ export default function AdminAnalyticsPage() {
 
       <div className="min-h-0 flex-1 overflow-y-auto p-6">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <StatCard label="총 대화" value={sum.conv} delta="+8.1%" />
-          <StatCard label="활성 사용자" value={liveUsers ?? sum.users} delta="+3.4%" />
-          <StatCard label="소비 토큰" value={liveTokens ?? sum.tokens} delta="+12.7%" />
-          <StatCard label="평균 응답" value={sum.latency} delta="-0.06s" deltaTone="success" />
+          <StatCard label={t("stats.totalConversations")} value={sum.conv} delta="+8.1%" />
+          <StatCard label={t("stats.activeUsers")} value={liveUsers ?? sum.users} delta="+3.4%" />
+          <StatCard label={t("stats.consumedTokens")} value={liveTokens ?? sum.tokens} delta="+12.7%" />
+          <StatCard label={t("stats.avgResponse")} value={sum.latency} delta="-0.06s" deltaTone="success" />
         </div>
 
         <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
           <Card className="lg:col-span-2">
             <CardHeader>
-              <CardTitle>일별 대화량</CardTitle>
+              <CardTitle>{t("dailyConversations")}</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="flex h-56 items-end gap-1.5">
@@ -289,7 +291,7 @@ export default function AdminAnalyticsPage() {
               </div>
               {period !== "7d" && (
                 <p className="mt-3 text-center text-[10px] text-faint">
-                  최근 {period === "30d" ? 30 : 90}일 · 일자별
+                  {t("recentDaysCaption", { days: period === "30d" ? 30 : 90 })}
                 </p>
               )}
             </CardContent>
@@ -298,7 +300,7 @@ export default function AdminAnalyticsPage() {
           <Card>
             <CardHeader className="flex items-center gap-2">
               <LineChart className="h-4 w-4 text-accent" />
-              <CardTitle>모델 프로파일 사용 비중</CardTitle>
+              <CardTitle>{t("modelUsageTitle")}</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-3.5">
@@ -325,21 +327,21 @@ export default function AdminAnalyticsPage() {
         {costData && (
           <Card className="mt-6">
             <CardHeader>
-              <CardTitle>비용 분석</CardTitle>
+              <CardTitle>{t("costAnalysis")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                <StatCard label="일일 비용" value={fmtCost(costData.dailyCost)} />
-                <StatCard label="주간 비용" value={fmtCost(costData.weeklyCost)} />
-                <StatCard label="월간 예상 비용" value={fmtCost(costData.projectedMonthlyCost)} />
+                <StatCard label={t("dailyCost")} value={fmtCost(costData.dailyCost)} />
+                <StatCard label={t("weeklyCost")} value={fmtCost(costData.weeklyCost)} />
+                <StatCard label={t("projectedMonthlyCost")} value={fmtCost(costData.projectedMonthlyCost)} />
               </div>
               {costData.costByModel.length > 0 && (
                 <Table>
                   <thead>
                     <tr>
-                      <Th>모델</Th>
-                      <Th className="text-right">비용</Th>
-                      <Th className="text-right">비중</Th>
+                      <Th>{t("col.model")}</Th>
+                      <Th className="text-right">{t("col.cost")}</Th>
+                      <Th className="text-right">{t("col.share")}</Th>
                     </tr>
                   </thead>
                   <tbody>
@@ -361,29 +363,29 @@ export default function AdminAnalyticsPage() {
         {behaviorData && (
           <Card className="mt-6">
             <CardHeader>
-              <CardTitle>사용자 행동</CardTitle>
+              <CardTitle>{t("userBehavior")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <StatCard
-                  label="평균 세션 길이"
-                  value={`${Math.round(behaviorData.avgSessionLength)}분`}
+                  label={t("avgSessionLength")}
+                  value={t("minutesSuffix", { value: Math.round(behaviorData.avgSessionLength) })}
                 />
                 <StatCard
-                  label="세션당 평균 쿼리"
+                  label={t("avgQueriesPerSession")}
                   value={behaviorData.avgQueriesPerSession.toFixed(1)}
                 />
               </div>
               {behaviorData.peakHours.length > 0 && (
                 <div>
-                  <p className="mb-2 text-xs font-medium text-fg-2">피크 시간대 Top 3</p>
+                  <p className="mb-2 text-xs font-medium text-fg-2">{t("peakHoursTop3")}</p>
                   <div className="flex flex-wrap gap-2">
                     {behaviorData.peakHours.slice(0, 3).map((h) => (
                       <span
                         key={h.hour}
                         className="rounded-md border border-border bg-surface-2 px-2.5 py-1 text-xs text-fg"
                       >
-                        {String(h.hour).padStart(2, "0")}시 · {h.requests.toLocaleString()} 요청
+                        {t("peakHourItem", { hour: String(h.hour).padStart(2, "0"), requests: h.requests.toLocaleString() })}
                       </span>
                     ))}
                   </div>
@@ -391,7 +393,7 @@ export default function AdminAnalyticsPage() {
               )}
               {behaviorData.topQueries.length > 0 && (
                 <div>
-                  <p className="mb-2 text-xs font-medium text-fg-2">자주 묻는 쿼리 Top 5</p>
+                  <p className="mb-2 text-xs font-medium text-fg-2">{t("topQueriesTop5")}</p>
                   <ol className="space-y-1">
                     {behaviorData.topQueries.slice(0, 5).map((q, i) => (
                       <li key={i} className="flex items-center gap-2 text-xs text-fg-2">
@@ -411,16 +413,16 @@ export default function AdminAnalyticsPage() {
         {agentsData && agentsData.length > 0 && (
           <Card className="mt-6">
             <CardHeader>
-              <CardTitle>에이전트 성능</CardTitle>
+              <CardTitle>{t("agentPerformance")}</CardTitle>
             </CardHeader>
             <CardContent className="p-0">
               <Table>
                 <thead>
                   <tr>
-                    <Th>에이전트</Th>
-                    <Th className="text-right">요청 수</Th>
-                    <Th className="text-right">성공률</Th>
-                    <Th className="text-right">평균 응답</Th>
+                    <Th>{t("col.agent")}</Th>
+                    <Th className="text-right">{t("col.requests")}</Th>
+                    <Th className="text-right">{t("col.successRate")}</Th>
+                    <Th className="text-right">{t("col.avgResponse")}</Th>
                   </tr>
                 </thead>
                 <tbody>
