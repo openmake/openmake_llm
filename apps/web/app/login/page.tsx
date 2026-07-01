@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { ArrowRight, LoaderCircle } from "lucide-react";
 import Image from "next/image";
 import { ApiClient, ApiError } from "@/lib/api-client";
+import { syncAuthFromServer } from "@/lib/auth-sync";
 import { Button } from "@/components/ui/primitives";
 
 export default function LoginPage() {
@@ -20,6 +21,9 @@ export default function LoginPage() {
     setError(null);
     try {
       await ApiClient.post("/api/auth/login", { email, password });
+      // router.push 는 remount 가 없어 AuthSync(마운트 1회)가 다시 돌지 않는다 —
+      // 로그인 직후 store 동기화(+익명 세션 이관)를 직접 수행해야 사이드바가 즉시 반영.
+      await syncAuthFromServer();
       router.push("/");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "로그인에 실패했습니다.");
