@@ -57,7 +57,100 @@
     "closeMenu": "Close menu"
   },
   "settings": {
-    "languageAuto": "Auto-detect"
+    "languageAuto": "Auto-detect",
+    "pageTitle": "Settings",
+    "pageDescription": "Configure app preferences and AI model behavior.",
+    "saveButton": "Save settings",
+    "savedAt": "Saved at {time}",
+    "freeSuffix": " · Free",
+    "notConfigured": "Not set",
+    "modelLoading": "Loading models…",
+    "tabs": {
+      "general": "General",
+      "model": "Model & Response",
+      "interface": "Interface",
+      "notifications": "Notifications",
+      "privacy": "Privacy",
+      "security": "Security"
+    },
+    "responseStyles": {
+      "concise": "Concise",
+      "default": "Default",
+      "verbose": "Verbose"
+    },
+    "themes": {
+      "system": "System",
+      "light": "Light",
+      "dark": "Dark"
+    },
+    "modelGroup": {
+      "default": "Default",
+      "auto": "Auto (server default)",
+      "local": "🏠 Local vLLM"
+    },
+    "language": {
+      "title": "Language",
+      "description": "Interface display language. Auto-detect follows your browser language. (AI responses follow the message language.)"
+    },
+    "saveHistory": {
+      "title": "Save conversation content",
+      "descriptionGeneral": "Store conversation content in the server database. When off, only anonymous usage metadata is recorded.",
+      "descriptionPrivacy": "When off, conversation content is not stored on the server."
+    },
+    "defaultModel": {
+      "title": "Default model",
+      "description": "The model used for new conversations. Choose between 🏠 local vLLM and 🌐 external LLMs (OpenRouter, BYOK)."
+    },
+    "externalLlmHint": {
+      "prefix": "To add an external LLM (OpenRouter),",
+      "link": "the API keys page",
+      "suffix": "is where you register your key."
+    },
+    "imageGeneration": {
+      "title": "Image generation",
+      "description": "Used automatically when you request a drawing or image in chat. No separate selection needed."
+    },
+    "responseStyle": {
+      "title": "Response style",
+      "description": "Adjust how detailed responses are."
+    },
+    "customInstructions": {
+      "title": "Custom Instructions",
+      "description": "Additional system prompt instructions applied permanently to every conversation.",
+      "placeholder": "e.g. Do not output extra information the user did not explicitly request.",
+      "charCount": "{count} / {max} chars"
+    },
+    "theme": {
+      "title": "Theme",
+      "description": "Choose the app color theme."
+    },
+    "emailAlerts": {
+      "title": "Email alerts",
+      "description": "Receive agent task completions and security events by email."
+    },
+    "pushAlerts": {
+      "title": "Push notifications",
+      "description": "Receive real-time notifications via browser push."
+    },
+    "pushNotSupported": "This browser does not support push notifications.",
+    "pushSwNotReady": "The service worker is not registered, so push notifications are unavailable.",
+    "memoryLearning": {
+      "title": "Long-term memory learning",
+      "description": "Extract and store facts such as name, occupation, and preferences from conversations."
+    },
+    "passwordChange": {
+      "title": "Change password"
+    },
+    "password": {
+      "current": "Current password",
+      "new": "New password",
+      "newHint": "8 characters or more",
+      "confirm": "Confirm new password",
+      "mismatch": "The new passwords do not match.",
+      "tooShort": "The new password must be at least 8 characters.",
+      "changed": "Password changed.",
+      "changeFailed": "Failed to change password."
+    }
   },
   "composer": {
     "dropToAttach": "Drop files here to attach",
@@ -295,5 +388,305 @@
     "agentTaskStartFailed": "Failed to start the agent task: {message}",
     "structuredAborted": "_(Structured answer generation was stopped.)_",
     "structuredFailed": "Failed to generate a structured answer: {message}"
+  },
+  "skillLibrary": {
+    "cancel": "Cancel",
+    "save": "Save",
+    "create": "Create",
+    "edit": "Edit",
+    "serverError": "Server error",
+    "networkError": "Network error",
+    "genericError": "Error",
+    "requestFailed": "Request failed: {error}",
+    "failedStatus": "Failed ({status}): {error}",
+    "systemBadge": "System",
+    "userBadge": "User",
+    "filterAll": "All",
+    "loading": "Loading...",
+    "emptyTitle": "No skills",
+    "emptyDesc": "Select another category or add a new skill.",
+    "deleteConfirm": "Delete the \"{name}\" skill?",
+    "deleteFailed": "Delete failed: {error}",
+    "assignFailed": "Failed to update assignment: {error}",
+    "pageTitle": "Skill Library",
+    "pageDescription": "Manage reusable manifests and tool bindings.",
+    "uploadButton": "Upload .SKILL",
+    "gitButton": "Import from Git",
+    "autoButton": "AI Generate",
+    "newButton": "New Skill",
+    "categoryGeneral": "General",
+    "categories": {
+      "productivity": "Productivity",
+      "technology": "Technology/IT",
+      "creative": "Creative/Design",
+      "business": "Business",
+      "science": "Science/Research",
+      "communication": "Communication",
+      "finance": "Finance/Investing",
+      "education": "Education/Learning"
+    },
+    "tabs": {
+      "active": "Active Skills",
+      "draft": "Draft Review"
+    },
+    "modal": {
+      "create": "Create New Skill",
+      "edit": "Edit Skill",
+      "upload": "Upload .SKILL File",
+      "autoCreate": "AI Skill Generation",
+      "gitIngest": "Import Skill from Git URL"
+    },
+    "fallback": {
+      "pdfSummary": {
+        "name": "PDF Summary",
+        "description": "Condenses long PDF documents into key points."
+      },
+      "sqlQuery": {
+        "name": "SQL Query Writer",
+        "description": "Converts natural-language requirements into parameterized SQL."
+      },
+      "adCopy": {
+        "name": "Ad Copywriting",
+        "description": "Generates marketing copy tailored to a target segment."
+      },
+      "financialReport": {
+        "name": "Financial Report Analysis",
+        "description": "Interprets key metrics from income statements and balance sheets."
+      }
+    },
+    "form": {
+      "nameRequired": "Enter a skill name.",
+      "contentRequired": "Enter the skill content (Instructions).",
+      "saveFailed": "Save failed: {error}",
+      "nameLabel": "Skill Name *",
+      "namePlaceholder": "e.g. PDF Summary",
+      "categoryLabel": "Category",
+      "publicLabel": "Public skill",
+      "descriptionLabel": "Description",
+      "descriptionPlaceholder": "Briefly describe what this skill does",
+      "instructionsLabel": "Instructions (skill content) *",
+      "instructionsPlaceholder": "Describe in detail what this skill should do..."
+    },
+    "upload": {
+      "fileRequired": "Select a file.",
+      "successDetail": "Upload complete: {id} v{version}",
+      "success": "Upload complete",
+      "failed": "Upload failed: {error}",
+      "hint": "Upload a .SKILL or .md YAML frontmatter file. (max 256KB)",
+      "fileLabel": "Select file",
+      "submit": "Upload"
+    },
+    "auto": {
+      "purposeRequired": "Enter a purpose.",
+      "requesting": "Sending request...",
+      "generating": "Generating with LLM...",
+      "processing": "Processing...",
+      "done": "Generation complete!",
+      "generateFailed": "Generation failed",
+      "hint": "Enter a natural-language purpose and the LLM will auto-generate a skill manifest.",
+      "purposeLabel": "Skill Purpose *",
+      "purposePlaceholder": "e.g. A skill that summarizes uploaded PDF documents into three key lines",
+      "targetLabel": "Target users (optional)",
+      "targetPlaceholder": "e.g. researchers, marketers",
+      "submit": "AI Generate"
+    },
+    "git": {
+      "urlRequired": "Enter a GitHub URL.",
+      "fetching": "Fetching repository...",
+      "validating": "Validating manifest...",
+      "done": "Done!",
+      "importFailed": "Import failed",
+      "hint": "Import a SKILL.md manifest from a GitHub repository and save it as a draft.",
+      "urlLabel": "GitHub URL *",
+      "refLabel": "Branch/tag (optional)",
+      "pathLabel": "File path (optional)",
+      "tokenLabel": "Access Token (private repository)",
+      "submit": "Import"
+    },
+    "card": {
+      "assignTitle": "Add as personal skill",
+      "unassignTitle": "Remove personal skill",
+      "exportTitle": "Export .SKILL.md"
+    },
+    "draft": {
+      "approveFailed": "Approval failed: {error}",
+      "rejectConfirm": "Reject (archive) this draft?",
+      "rejectFailed": "Rejection failed: {error}",
+      "loading": "Loading drafts...",
+      "emptyTitle": "No drafts awaiting approval",
+      "emptyDesc": "Skills created via AI generation or Git import appear here.",
+      "approve": "Approve",
+      "reject": "Reject"
+    }
+  },
+  "agentTasks": {
+    "loading": "Loading...",
+    "error": "Error",
+    "chatCta": "Go to chat",
+    "pageTitle": "Agent task management",
+    "pageDescription": "Manage the task list, progress, and approvals. Creation and execution happen in the chat's agent mode.",
+    "banner": "Create and run agent tasks in the <b>Agent</b> mode of the chat input. This page manages the task list, progress, and approvals.",
+    "emptyTitle": "No tasks",
+    "emptyDescription": "Start a new task in the chat's agent mode.",
+    "status": {
+      "running": "In progress",
+      "completed": "Completed",
+      "pending": "Pending"
+    },
+    "failedTag": "Failed",
+    "cancelledTag": "Cancelled",
+    "turnShort": "Turn {current}/{max}",
+    "progressLabel": "Progress",
+    "detailTitle": "View details",
+    "resumeTitle": "Resume",
+    "cancelTitle": "Cancel",
+    "deleteTitle": "Delete",
+    "modalTitle": "Task details",
+    "detailLoadError": "Failed to load task information.",
+    "goalLabel": "Goal",
+    "stateLabel": "Status:",
+    "turnLabel": "Turn:",
+    "planLabel": "Plan ({completed}/{total})",
+    "outputsLabel": "Outputs ({count})",
+    "noSteps": "No step records.",
+    "stepsLabel": "Steps ({count})",
+    "approvalsTitle": "Tool executions awaiting approval ({count})",
+    "reject": "Reject",
+    "approve": "Approve",
+    "cancelConfirm": "Cancel the task \"{goal}...\"?",
+    "deleteConfirm": "Delete the task \"{goal}...\"?",
+    "processFailed": "Processing failed: {message}",
+    "cancelFailed": "Cancellation failed: {message}",
+    "resumeFailed": "Resume failed: {message}",
+    "deleteFailed": "Deletion failed: {message}"
+  },
+  "customAgents": {
+    "pageTitle": "Custom Agents",
+    "pageDescription": "Define specialized agents with your own system prompts.",
+    "importFromGit": "Import from Git URL",
+    "newAgent": "New Agent",
+    "tabActive": "Active Agents",
+    "tabDraft": "Draft Review",
+    "loading": "Loading...",
+    "emptyTitle": "No custom agents yet",
+    "emptyDescription": "Create one yourself or import from a Git URL to add a specialized agent.",
+    "createNewAgent": "Create New Agent",
+    "systemPromptHeading": "System Prompt",
+    "edit": "Edit",
+    "deleteAria": "Delete",
+    "deleteConfirm": "Delete the \"{name}\" agent?",
+    "deleteFailed": "Delete failed: {error}",
+    "noDescription": "No description.",
+    "genericError": "Error",
+    "createModalTitle": "Create New Agent",
+    "editModalTitle": "Edit Agent",
+    "gitImportModalTitle": "Import Agent from Git URL",
+    "iconLabel": "Icon",
+    "nameLabel": "Agent Name *",
+    "namePlaceholder": "e.g. Technical Writer",
+    "descriptionLabel": "Description",
+    "descriptionPlaceholder": "Briefly describe what this agent does",
+    "systemPromptLabel": "System Prompt *",
+    "systemPromptPlaceholder": "You are a ... expert. ...",
+    "cancel": "Cancel",
+    "save": "Save",
+    "create": "Create",
+    "nameRequired": "Please enter an agent name.",
+    "systemPromptRequired": "Please enter a system prompt.",
+    "saveFailed": "Save failed: {error}",
+    "serverError": "Server error",
+    "gitIngestDescription": "Imports the AGENT.md manifest from a GitHub repository and saves it as a draft.",
+    "gitUrlLabel": "GitHub URL *",
+    "branchTagLabel": "Branch/Tag (optional)",
+    "filePathLabel": "File Path (optional)",
+    "accessTokenLabel": "Access Token (private repository)",
+    "importButton": "Import",
+    "gitUrlRequired": "Please enter a GitHub URL.",
+    "fetchingRepo": "Fetching repository...",
+    "processingManifest": "Processing manifest...",
+    "done": "Done!",
+    "importFailed": "Import failed",
+    "importFailedStatus": "Failed ({status}): {error}",
+    "requestFailed": "Request failed: {error}",
+    "networkError": "Network error",
+    "loadingDrafts": "Loading drafts...",
+    "noDraftsTitle": "No drafts awaiting approval",
+    "noDraftsDescription": "Agents created via Git URL import will appear here.",
+    "approve": "Approve",
+    "reject": "Reject",
+    "approveFailed": "Approval failed: {error}",
+    "rejectFailed": "Rejection failed: {error}",
+    "rejectConfirm": "Reject (archive) this draft agent?",
+    "fallback": {
+      "techWriter": {
+        "name": "Technical Writer",
+        "description": "Writes API references and architecture docs in a consistent tone.",
+        "systemPrompt": "You are a senior technical writer..."
+      },
+      "reviewer": {
+        "name": "Code Reviewer",
+        "description": "Catches bugs and simplification opportunities in changed code.",
+        "systemPrompt": "You are a meticulous code reviewer..."
+      }
+    }
+  },
+  "research": {
+    "pageTitle": "Deep Research History",
+    "pageDescription": "Browse your past research results. Runs are started from Deep Research mode in the chat.",
+    "runBanner": "Run Deep Research from the <mode>Deep Research</mode> mode in the chat input. This page shows your past research results.",
+    "goToChat": "Go to Chat",
+    "pastResearch": "Past Research",
+    "sessionEmpty": "No research yet.",
+    "report": "Report",
+    "keyFindings": "Key Findings",
+    "reportPendingRunning": "Research in progress — the report will appear after synthesis completes.",
+    "reportPending": "The report will appear after synthesis completes.",
+    "collectedSources": "Collected Sources",
+    "sourceCount": "{count, plural, one {# item} other {# items}}",
+    "verified": "Verified",
+    "unverified": "Unverified",
+    "status": {
+      "pending": "Pending",
+      "running": "Running",
+      "completed": "Completed",
+      "failed": "Failed",
+      "cancelled": "Cancelled"
+    },
+    "stages": {
+      "decompose": {
+        "label": "Decompose Question",
+        "desc": "Break the core question into verifiable sub-questions"
+      },
+      "collect": {
+        "label": "Collect Sources",
+        "desc": "Fan out web searches and select sources by credibility"
+      },
+      "verify": {
+        "label": "Cross-Verify",
+        "desc": "Adversarially verify each claim and detect conflicts"
+      },
+      "synthesize": {
+        "label": "Synthesize Report",
+        "desc": "Generate the final report with citations"
+      }
+    },
+    "metrics": {
+      "sources": "Sources Analyzed",
+      "keyFindings": "Key Findings",
+      "progress": "Progress",
+      "depth": "Depth"
+    },
+    "mock": {
+      "verifiedClaims": "Claims Verified",
+      "conflicts": "Conflicts Found",
+      "tokensUsed": "Tokens Used",
+      "elapsed": "Elapsed Time",
+      "elapsedValue": "3m 12s",
+      "source1": "2026 AI Agent Market Trends Report",
+      "source2": "Multi-Agent Orchestration Architecture Analysis",
+      "source3": "Enterprise LLM Adoption Case Study",
+      "source4": "Autonomous Agent Safety Guidelines",
+      "source5": "RAG vs Long-Context Comparison Benchmark"
+    }
   }
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import { Bot, Plus, Pencil, Trash2, GitBranch, X, Loader2, Check } from "lucide-react";
 import {
   Button,
@@ -46,23 +47,27 @@ function mapAgent(a: ApiUserAgent): CustomAgent {
     id: a.id,
     emoji: a.icon || "🤖",
     name: a.name,
-    description: a.description || "설명이 없습니다.",
+    description: a.description || "",
     systemPrompt: a.system_prompt,
     source: "custom",
   };
 }
 
 /* ── 목업 폴백 ─────────────────────────────────────────────── */
-const AGENTS_FALLBACK: CustomAgent[] = [
+const AGENTS_FALLBACK_META: {
+  id: string; emoji: string; nameKey: string; descKey: string; promptKey: string; source: "git" | "custom";
+}[] = [
   {
-    id: "a1", emoji: "📐", name: "기술 문서 작성가",
-    description: "API 레퍼런스와 아키텍처 문서를 일관된 톤으로 작성합니다.",
-    systemPrompt: "당신은 시니어 테크니컬 라이터입니다...", source: "custom",
+    id: "a1", emoji: "📐",
+    nameKey: "fallback.techWriter.name",
+    descKey: "fallback.techWriter.description",
+    promptKey: "fallback.techWriter.systemPrompt", source: "custom",
   },
   {
-    id: "a2", emoji: "🧪", name: "코드 리뷰어",
-    description: "변경된 코드의 버그와 단순화 기회를 집어냅니다.",
-    systemPrompt: "당신은 까다로운 코드 리뷰어입니다...", source: "git",
+    id: "a2", emoji: "🧪",
+    nameKey: "fallback.reviewer.name",
+    descKey: "fallback.reviewer.description",
+    promptKey: "fallback.reviewer.systemPrompt", source: "git",
   },
 ];
 
@@ -115,8 +120,9 @@ function AgentForm({
   onClose: () => void;
   onSaved: () => void | Promise<void>;
 }) {
+  const t = useTranslations("customAgents");
   const [name, setName] = useState(initial?.name ?? "");
-  const [description, setDescription] = useState(initial?.description === "설명이 없습니다." ? "" : (initial?.description ?? ""));
+  const [description, setDescription] = useState(initial?.description ?? "");
   const [systemPrompt, setSystemPrompt] = useState(initial?.systemPrompt ?? "");
   const [icon, setIcon] = useState(initial?.emoji ?? "🤖");
   const [saving, setSaving] = useState(false);
@@ -125,8 +131,8 @@ function AgentForm({
   const isEdit = !!initial;
 
   async function handleSubmit() {
-    if (!name.trim()) { setFormError("에이전트 이름을 입력하세요."); return; }
-    if (!systemPrompt.trim()) { setFormError("시스템 프롬프트를 입력하세요."); return; }
+    if (!name.trim()) { setFormError(t("nameRequired")); return; }
+    if (!systemPrompt.trim()) { setFormError(t("systemPromptRequired")); return; }
     setSaving(true);
     setFormError(null);
     try {
@@ -147,7 +153,7 @@ function AgentForm({
       }
       await onSaved();
     } catch (err) {
-      setFormError("저장 실패: " + (err instanceof Error ? err.message : "서버 오류"));
+      setFormError(t("saveFailed", { error: err instanceof Error ? err.message : t("serverError") }));
     } finally {
       setSaving(false);
     }
@@ -157,37 +163,37 @@ function AgentForm({
     <form onSubmit={(e) => { e.preventDefault(); void handleSubmit(); }} className="space-y-4">
       <div className="grid gap-4 sm:grid-cols-[auto_1fr]">
         <label className="block">
-          <span className="mb-1 block text-xs font-medium text-fg-2">아이콘</span>
+          <span className="mb-1 block text-xs font-medium text-fg-2">{t("iconLabel")}</span>
           <input value={icon} onChange={(e) => setIcon(e.target.value)} maxLength={4}
             className="h-9 w-16 rounded-md border border-border bg-surface px-2 text-center text-lg outline-none focus:border-accent" />
         </label>
         <label className="block">
-          <span className="mb-1 block text-xs font-medium text-fg-2">에이전트 이름 *</span>
+          <span className="mb-1 block text-xs font-medium text-fg-2">{t("nameLabel")}</span>
           <input value={name} onChange={(e) => setName(e.target.value)}
-            placeholder="예: 기술 문서 작성가" autoFocus
+            placeholder={t("namePlaceholder")} autoFocus
             className="h-9 w-full rounded-md border border-border bg-surface px-3 text-sm text-fg outline-none focus:border-accent" />
         </label>
       </div>
       <label className="block">
-        <span className="mb-1 block text-xs font-medium text-fg-2">설명</span>
+        <span className="mb-1 block text-xs font-medium text-fg-2">{t("descriptionLabel")}</span>
         <input value={description} onChange={(e) => setDescription(e.target.value)}
-          placeholder="이 에이전트가 하는 일을 간단히 설명하세요"
+          placeholder={t("descriptionPlaceholder")}
           className="h-9 w-full rounded-md border border-border bg-surface px-3 text-sm text-fg outline-none focus:border-accent" />
       </label>
       <label className="block">
-        <span className="mb-1 block text-xs font-medium text-fg-2">시스템 프롬프트 *</span>
+        <span className="mb-1 block text-xs font-medium text-fg-2">{t("systemPromptLabel")}</span>
         <textarea value={systemPrompt} onChange={(e) => setSystemPrompt(e.target.value)}
           rows={6}
-          placeholder="당신은 ... 전문가입니다. ..."
+          placeholder={t("systemPromptPlaceholder")}
           className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-fg outline-none focus:border-accent resize-none" />
         <span className="text-xs text-faint">{systemPrompt.length}/8000</span>
       </label>
       {formError && <p className="text-xs text-danger">{formError}</p>}
       <div className="flex justify-end gap-2 pt-1">
-        <Button type="button" variant="outline" onClick={onClose} disabled={saving}>취소</Button>
+        <Button type="button" variant="outline" onClick={onClose} disabled={saving}>{t("cancel")}</Button>
         <Button type="submit" disabled={saving}>
           {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-          {isEdit ? "저장" : "생성"}
+          {isEdit ? t("save") : t("create")}
         </Button>
       </div>
     </form>
@@ -202,6 +208,7 @@ function AgentGitIngestForm({
   onClose: () => void;
   onSaved: () => void | Promise<void>;
 }) {
+  const t = useTranslations("customAgents");
   const [gitUrl, setGitUrl] = useState("");
   const [gitRef, setGitRef] = useState("");
   const [gitPath, setGitPath] = useState("");
@@ -211,10 +218,10 @@ function AgentGitIngestForm({
   const [formError, setFormError] = useState<string | null>(null);
 
   async function handleImport() {
-    if (!gitUrl.trim()) { setFormError("GitHub URL을 입력하세요."); return; }
+    if (!gitUrl.trim()) { setFormError(t("gitUrlRequired")); return; }
     setLoading(true);
     setFormError(null);
-    setProgress("저장소 가져오는 중...");
+    setProgress(t("fetchingRepo"));
 
     try {
       const resp = await fetch("/api/agents/custom/import-from-git", {
@@ -230,8 +237,8 @@ function AgentGitIngestForm({
       });
 
       if (!resp.ok || !resp.body) {
-        const errText = await resp.text().catch(() => "서버 오류");
-        setFormError(`실패 (${resp.status}): ${errText}`);
+        const errText = await resp.text().catch(() => t("serverError"));
+        setFormError(t("importFailedStatus", { status: resp.status, error: errText }));
         setLoading(false);
         setProgress(null);
         return;
@@ -258,14 +265,14 @@ function AgentGitIngestForm({
           try {
             const parsed = JSON.parse(data) as Record<string, unknown>;
             if (eventName === "progress") {
-              setProgress("매니페스트 처리 중...");
+              setProgress(t("processingManifest"));
             } else if (eventName === "result") {
-              setProgress("완료!");
+              setProgress(t("done"));
               setLoading(false);
               await onSaved();
               return;
             } else if (eventName === "error") {
-              const errMsg = ((parsed as { error?: { message?: string } }).error?.message) || "가져오기 실패";
+              const errMsg = ((parsed as { error?: { message?: string } }).error?.message) || t("importFailed");
               setFormError(errMsg);
               setLoading(false);
               setProgress(null);
@@ -278,7 +285,7 @@ function AgentGitIngestForm({
       }
       await onSaved();
     } catch (err) {
-      setFormError("요청 실패: " + (err instanceof Error ? err.message : "네트워크 오류"));
+      setFormError(t("requestFailed", { error: err instanceof Error ? err.message : t("networkError") }));
     } finally {
       setLoading(false);
       setProgress(null);
@@ -287,27 +294,27 @@ function AgentGitIngestForm({
 
   return (
     <form onSubmit={(e) => { e.preventDefault(); void handleImport(); }} className="space-y-4">
-      <p className="text-sm text-muted">GitHub 저장소의 AGENT.md 매니페스트를 가져와 draft로 저장합니다.</p>
+      <p className="text-sm text-muted">{t("gitIngestDescription")}</p>
       <label className="block">
-        <span className="mb-1 block text-xs font-medium text-fg-2">GitHub URL *</span>
+        <span className="mb-1 block text-xs font-medium text-fg-2">{t("gitUrlLabel")}</span>
         <input value={gitUrl} onChange={(e) => setGitUrl(e.target.value)} autoFocus
           placeholder="https://github.com/owner/repo"
           className="h-9 w-full rounded-md border border-border bg-surface px-3 text-sm text-fg outline-none focus:border-accent" />
       </label>
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="block">
-          <span className="mb-1 block text-xs font-medium text-fg-2">브랜치/태그 (선택)</span>
+          <span className="mb-1 block text-xs font-medium text-fg-2">{t("branchTagLabel")}</span>
           <input value={gitRef} onChange={(e) => setGitRef(e.target.value)} placeholder="main"
             className="h-9 w-full rounded-md border border-border bg-surface px-3 text-sm text-fg outline-none focus:border-accent" />
         </label>
         <label className="block">
-          <span className="mb-1 block text-xs font-medium text-fg-2">파일 경로 (선택)</span>
+          <span className="mb-1 block text-xs font-medium text-fg-2">{t("filePathLabel")}</span>
           <input value={gitPath} onChange={(e) => setGitPath(e.target.value)} placeholder="AGENT.md"
             className="h-9 w-full rounded-md border border-border bg-surface px-3 text-sm text-fg outline-none focus:border-accent" />
         </label>
       </div>
       <label className="block">
-        <span className="mb-1 block text-xs font-medium text-fg-2">Access Token (비공개 저장소)</span>
+        <span className="mb-1 block text-xs font-medium text-fg-2">{t("accessTokenLabel")}</span>
         <input type="password" value={accessToken} onChange={(e) => setAccessToken(e.target.value)} placeholder="ghp_..."
           className="h-9 w-full rounded-md border border-border bg-surface px-3 font-mono text-sm text-fg outline-none focus:border-accent" />
       </label>
@@ -319,10 +326,10 @@ function AgentGitIngestForm({
       )}
       {formError && <p className="text-xs text-danger">{formError}</p>}
       <div className="flex justify-end gap-2 pt-1">
-        <Button type="button" variant="outline" onClick={onClose} disabled={loading}>취소</Button>
+        <Button type="button" variant="outline" onClick={onClose} disabled={loading}>{t("cancel")}</Button>
         <Button type="submit" disabled={loading}>
           {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <GitBranch className="h-4 w-4" />}
-          가져오기
+          {t("importButton")}
         </Button>
       </div>
     </form>
@@ -331,6 +338,7 @@ function AgentGitIngestForm({
 
 /* ── Draft 탭 (에이전트용) ──────────────────────────────────── */
 function AgentDraftTab({ onRefresh }: { onRefresh: () => void }) {
+  const t = useTranslations("customAgents");
   const [drafts, setDrafts] = useState<ApiCustomAgentDraft[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -354,17 +362,17 @@ function AgentDraftTab({ onRefresh }: { onRefresh: () => void }) {
       await loadDrafts();
       onRefresh();
     } catch (err) {
-      alert("승인 실패: " + (err instanceof Error ? err.message : "오류"));
+      alert(t("approveFailed", { error: err instanceof Error ? err.message : t("genericError") }));
     }
   }
 
   async function handleReject(agentId: string) {
-    if (!window.confirm("이 draft 에이전트를 거부(보관)하시겠습니까?")) return;
+    if (!window.confirm(t("rejectConfirm"))) return;
     try {
       await ApiClient.post(`/api/agents/custom/${agentId}/reject`, {});
       await loadDrafts();
     } catch (err) {
-      alert("거부 실패: " + (err instanceof Error ? err.message : "오류"));
+      alert(t("rejectFailed", { error: err instanceof Error ? err.message : t("genericError") }));
     }
   }
 
@@ -372,7 +380,7 @@ function AgentDraftTab({ onRefresh }: { onRefresh: () => void }) {
     return (
       <div className="grid place-items-center py-16 text-center">
         <Loader2 className="mb-3 h-6 w-6 animate-spin text-faint" />
-        <p className="text-sm text-muted">Draft 불러오는 중...</p>
+        <p className="text-sm text-muted">{t("loadingDrafts")}</p>
       </div>
     );
   }
@@ -381,8 +389,8 @@ function AgentDraftTab({ onRefresh }: { onRefresh: () => void }) {
     return (
       <div className="grid place-items-center py-16 text-center">
         <Bot className="mb-3 h-8 w-8 text-faint" />
-        <p className="text-sm font-medium text-fg-2">승인 대기 중인 Draft가 없습니다</p>
-        <p className="mt-1 text-sm text-muted">Git URL 가져오기로 생성된 에이전트가 여기 나타납니다.</p>
+        <p className="text-sm font-medium text-fg-2">{t("noDraftsTitle")}</p>
+        <p className="mt-1 text-sm text-muted">{t("noDraftsDescription")}</p>
       </div>
     );
   }
@@ -403,10 +411,10 @@ function AgentDraftTab({ onRefresh }: { onRefresh: () => void }) {
             </div>
             <div className="flex gap-2 shrink-0">
               <Button size="sm" onClick={() => void handleApprove(d.id)}>
-                <Check className="h-3.5 w-3.5" />승인
+                <Check className="h-3.5 w-3.5" />{t("approve")}
               </Button>
               <Button variant="outline" size="sm" onClick={() => void handleReject(d.id)}>
-                <X className="h-3.5 w-3.5" />거부
+                <X className="h-3.5 w-3.5" />{t("reject")}
               </Button>
             </div>
           </div>
@@ -418,7 +426,17 @@ function AgentDraftTab({ onRefresh }: { onRefresh: () => void }) {
 
 /* ── 메인 페이지 ──────────────────────────────────────────── */
 export default function CustomAgentsPage() {
-  const [agents, setAgents] = useState<CustomAgent[]>(AGENTS_FALLBACK);
+  const t = useTranslations("customAgents");
+  const [agents, setAgents] = useState<CustomAgent[]>(() =>
+    AGENTS_FALLBACK_META.map((m) => ({
+      id: m.id,
+      emoji: m.emoji,
+      name: t(m.nameKey),
+      description: t(m.descKey),
+      systemPrompt: t(m.promptKey),
+      source: m.source,
+    })),
+  );
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<string>(TAB_ACTIVE);
   const [showCreate, setShowCreate] = useState(false);
@@ -446,12 +464,12 @@ export default function CustomAgentsPage() {
   }, [loadAgents]);
 
   async function handleDelete(agent: CustomAgent) {
-    if (!window.confirm(`"${agent.name}" 에이전트를 삭제하시겠습니까?`)) return;
+    if (!window.confirm(t("deleteConfirm", { name: agent.name }))) return;
     try {
       await ApiClient.del(`/api/users/me/agents/${agent.id}`);
       await loadAgents();
     } catch (err) {
-      alert("삭제 실패: " + (err instanceof Error ? err.message : "오류"));
+      alert(t("deleteFailed", { error: err instanceof Error ? err.message : t("genericError") }));
     }
   }
 
@@ -465,16 +483,16 @@ export default function CustomAgentsPage() {
   return (
     <>
       <PageHeader
-        title="커스텀 에이전트"
-        description="나만의 시스템 프롬프트로 특화된 에이전트를 정의합니다."
+        title={t("pageTitle")}
+        description={t("pageDescription")}
         actions={
           <>
             <Button variant="outline" size="sm" onClick={() => setShowGitIngest(true)}>
               <GitBranch className="h-4 w-4" />
-              Git URL 에서 가져오기
+              {t("importFromGit")}
             </Button>
             <Button size="sm" onClick={() => setShowCreate(true)}>
-              <Plus className="h-4 w-4" />새 에이전트
+              <Plus className="h-4 w-4" />{t("newAgent")}
             </Button>
           </>
         }
@@ -482,10 +500,10 @@ export default function CustomAgentsPage() {
 
       {/* 탭 */}
       <div className="flex gap-4 border-b border-border px-6 pt-3">
-        {[{ id: TAB_ACTIVE, label: "활성 에이전트" }, { id: TAB_DRAFT, label: "Draft 검토" }].map((t) => (
-          <button key={t.id} onClick={() => setTab(t.id)}
-            className={`pb-2 text-sm font-medium transition border-b-2 ${tab === t.id ? "border-accent text-accent" : "border-transparent text-muted hover:text-fg"}`}>
-            {t.label}
+        {[{ id: TAB_ACTIVE, labelKey: "tabActive" }, { id: TAB_DRAFT, labelKey: "tabDraft" }].map((tabItem) => (
+          <button key={tabItem.id} onClick={() => setTab(tabItem.id)}
+            className={`pb-2 text-sm font-medium transition border-b-2 ${tab === tabItem.id ? "border-accent text-accent" : "border-transparent text-muted hover:text-fg"}`}>
+            {t(tabItem.labelKey)}
           </button>
         ))}
       </div>
@@ -496,17 +514,17 @@ export default function CustomAgentsPage() {
         ) : loading ? (
           <div className="grid place-items-center py-24 text-center">
             <Bot className="mb-3 h-8 w-8 animate-pulse text-faint" />
-            <p className="text-sm text-muted">불러오는 중...</p>
+            <p className="text-sm text-muted">{t("loading")}</p>
           </div>
         ) : agents.length === 0 ? (
           <div className="grid place-items-center py-24 text-center">
             <Bot className="mb-3 h-8 w-8 text-faint" />
-            <p className="text-sm font-medium text-fg-2">아직 커스텀 에이전트가 없습니다</p>
+            <p className="text-sm font-medium text-fg-2">{t("emptyTitle")}</p>
             <p className="mt-1 max-w-sm text-sm text-muted">
-              직접 만들거나 Git URL 에서 가져와 특화된 에이전트를 추가하세요.
+              {t("emptyDescription")}
             </p>
             <Button size="sm" className="mt-4" onClick={() => setShowCreate(true)}>
-              <Plus className="h-4 w-4" />새 에이전트 만들기
+              <Plus className="h-4 w-4" />{t("createNewAgent")}
             </Button>
           </div>
         ) : (
@@ -527,12 +545,12 @@ export default function CustomAgentsPage() {
 
                 <h3 className="mb-1 text-sm font-semibold text-fg">{agent.name}</h3>
                 <p className="mb-3 line-clamp-2 text-xs leading-relaxed text-muted">
-                  {agent.description}
+                  {agent.description || t("noDescription")}
                 </p>
 
                 <div className="mb-4 flex-1 rounded-md border border-border bg-surface-2 p-3">
                   <p className="mb-1 font-mono text-[10px] uppercase tracking-wide text-faint">
-                    시스템 프롬프트
+                    {t("systemPromptHeading")}
                   </p>
                   <p className="line-clamp-3 text-xs leading-relaxed text-fg-2">
                     {agent.systemPrompt}
@@ -542,9 +560,9 @@ export default function CustomAgentsPage() {
                 <div className="flex gap-2">
                   <Button variant="outline" size="sm" className="flex-1" onClick={() => setEditingAgent(agent)}>
                     <Pencil className="h-3.5 w-3.5" />
-                    편집
+                    {t("edit")}
                   </Button>
-                  <Button variant="ghost" size="icon" aria-label="삭제" onClick={() => void handleDelete(agent)}>
+                  <Button variant="ghost" size="icon" aria-label={t("deleteAria")} onClick={() => void handleDelete(agent)}>
                     <Trash2 className="h-4 w-4 text-danger" />
                   </Button>
                 </div>
@@ -555,17 +573,17 @@ export default function CustomAgentsPage() {
       </div>
 
       {/* 모달들 */}
-      <Modal open={showCreate} onClose={() => setShowCreate(false)} title="새 에이전트 생성">
+      <Modal open={showCreate} onClose={() => setShowCreate(false)} title={t("createModalTitle")}>
         <AgentForm onClose={() => setShowCreate(false)} onSaved={afterSave} />
       </Modal>
 
-      <Modal open={!!editingAgent} onClose={() => setEditingAgent(null)} title="에이전트 편집">
+      <Modal open={!!editingAgent} onClose={() => setEditingAgent(null)} title={t("editModalTitle")}>
         {editingAgent && (
           <AgentForm initial={editingAgent} onClose={() => setEditingAgent(null)} onSaved={afterSave} />
         )}
       </Modal>
 
-      <Modal open={showGitIngest} onClose={() => setShowGitIngest(false)} title="Git URL에서 에이전트 가져오기">
+      <Modal open={showGitIngest} onClose={() => setShowGitIngest(false)} title={t("gitImportModalTitle")}>
         <AgentGitIngestForm onClose={() => setShowGitIngest(false)} onSaved={afterSave} />
       </Modal>
     </>

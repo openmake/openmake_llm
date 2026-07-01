@@ -57,7 +57,100 @@
     "closeMenu": "メニューを閉じる"
   },
   "settings": {
-    "languageAuto": "自動検出"
+    "languageAuto": "自動検出",
+    "pageTitle": "設定",
+    "pageDescription": "アプリ環境とAIモデルの動作を構成します。",
+    "saveButton": "設定を保存",
+    "savedAt": "{time} に保存しました",
+    "freeSuffix": " · 無料",
+    "notConfigured": "未設定",
+    "modelLoading": "モデルを読み込み中…",
+    "tabs": {
+      "general": "一般",
+      "model": "モデルと応答",
+      "interface": "インターフェース",
+      "notifications": "通知",
+      "privacy": "プライバシー",
+      "security": "セキュリティ"
+    },
+    "responseStyles": {
+      "concise": "簡潔",
+      "default": "標準",
+      "verbose": "詳細"
+    },
+    "themes": {
+      "system": "システム設定",
+      "light": "ライト",
+      "dark": "ダーク"
+    },
+    "modelGroup": {
+      "default": "デフォルト",
+      "auto": "自動（サーバー既定値）",
+      "local": "🏠 ローカル vLLM"
+    },
+    "language": {
+      "title": "言語",
+      "description": "インターフェースの表示言語です。自動検出時はブラウザの言語に従います。（AIの応答はメッセージの言語に従います）"
+    },
+    "saveHistory": {
+      "title": "会話本文の保存",
+      "descriptionGeneral": "会話内容をサーバーのデータベースに保存します。オフにすると匿名の利用メタデータのみが記録されます。",
+      "descriptionPrivacy": "オフにすると会話本文はサーバーに保存されません。"
+    },
+    "defaultModel": {
+      "title": "デフォルトモデル",
+      "description": "新しい会話で使用するモデルです。🏠 ローカル vLLM と 🌐 外部LLM（OpenRouter、BYOK）から選択します。"
+    },
+    "externalLlmHint": {
+      "prefix": "外部LLM（OpenRouter）を追加するには、",
+      "link": "APIキーページ",
+      "suffix": "でキーを登録してください。"
+    },
+    "imageGeneration": {
+      "title": "画像生成",
+      "description": "チャットで絵や画像を要求すると自動的に使用されます。個別の選択は不要です。"
+    },
+    "responseStyle": {
+      "title": "応答スタイル",
+      "description": "応答の詳しさを調整します。"
+    },
+    "customInstructions": {
+      "title": "カスタム指示（Custom Instructions）",
+      "description": "すべての会話に永続的に適用されるシステムプロンプトの追加指示です。",
+      "placeholder": "例: ユーザーが明示的に要求していない付加情報は出力しない。",
+      "charCount": "{count} / {max} 文字"
+    },
+    "theme": {
+      "title": "テーマ",
+      "description": "アプリのカラーテーマを選択します。"
+    },
+    "emailAlerts": {
+      "title": "メール通知",
+      "description": "エージェント作業の完了やセキュリティイベントをメールで受け取ります。"
+    },
+    "pushAlerts": {
+      "title": "プッシュ通知",
+      "description": "ブラウザのプッシュでリアルタイム通知を受け取ります。"
+    },
+    "pushNotSupported": "このブラウザはプッシュ通知に対応していません。",
+    "pushSwNotReady": "サービスワーカーが登録されていないため、プッシュ通知を利用できません。",
+    "memoryLearning": {
+      "title": "長期記憶の学習",
+      "description": "会話から名前・職業・好みなどの事実を抽出して保存します。"
+    },
+    "passwordChange": {
+      "title": "パスワード変更"
+    },
+    "password": {
+      "current": "現在のパスワード",
+      "new": "新しいパスワード",
+      "newHint": "8文字以上",
+      "confirm": "新しいパスワードの確認",
+      "mismatch": "新しいパスワードが一致しません。",
+      "tooShort": "新しいパスワードは8文字以上にしてください。",
+      "changed": "パスワードを変更しました。",
+      "changeFailed": "パスワードの変更に失敗しました。"
+    }
   },
   "composer": {
     "dropToAttach": "ここにファイルをドロップして添付",
@@ -295,5 +388,305 @@
     "agentTaskStartFailed": "エージェントタスクを開始できませんでした: {message}",
     "structuredAborted": "_(構造化回答の生成を中止しました。)_",
     "structuredFailed": "構造化回答を生成できませんでした: {message}"
+  },
+  "skillLibrary": {
+    "cancel": "キャンセル",
+    "save": "保存",
+    "create": "作成",
+    "edit": "編集",
+    "serverError": "サーバーエラー",
+    "networkError": "ネットワークエラー",
+    "genericError": "エラー",
+    "requestFailed": "リクエスト失敗: {error}",
+    "failedStatus": "失敗 ({status}): {error}",
+    "systemBadge": "システム",
+    "userBadge": "ユーザー",
+    "filterAll": "すべて",
+    "loading": "読み込み中...",
+    "emptyTitle": "スキルがありません",
+    "emptyDesc": "別のカテゴリを選択するか、新しいスキルを追加してください。",
+    "deleteConfirm": "「{name}」スキルを削除しますか？",
+    "deleteFailed": "削除失敗: {error}",
+    "assignFailed": "割り当ての変更に失敗しました: {error}",
+    "pageTitle": "スキルライブラリ",
+    "pageDescription": "再利用可能なマニフェストとツールバインディングを管理します。",
+    "uploadButton": ".SKILL アップロード",
+    "gitButton": "Git インポート",
+    "autoButton": "AI 自動生成",
+    "newButton": "新規スキル",
+    "categoryGeneral": "一般",
+    "categories": {
+      "productivity": "生産性",
+      "technology": "技術/IT",
+      "creative": "クリエイティブ/デザイン",
+      "business": "ビジネス",
+      "science": "科学/研究",
+      "communication": "コミュニケーション",
+      "finance": "金融/投資",
+      "education": "教育/学習"
+    },
+    "tabs": {
+      "active": "アクティブスキル",
+      "draft": "Draft レビュー"
+    },
+    "modal": {
+      "create": "新規スキル作成",
+      "edit": "スキル編集",
+      "upload": ".SKILL ファイルのアップロード",
+      "autoCreate": "AI スキル自動生成",
+      "gitIngest": "Git URL からスキルをインポート"
+    },
+    "fallback": {
+      "pdfSummary": {
+        "name": "PDF 要約",
+        "description": "長い PDF 文書を要点に凝縮します。"
+      },
+      "sqlQuery": {
+        "name": "SQL クエリ作成",
+        "description": "自然言語の要件をパラメータ化された SQL に変換します。"
+      },
+      "adCopy": {
+        "name": "広告コピーライティング",
+        "description": "ターゲットセグメントに合わせたマーケティングコピーを生成します。"
+      },
+      "financialReport": {
+        "name": "財務レポート解釈",
+        "description": "損益計算書と貸借対照表の主要指標を解釈します。"
+      }
+    },
+    "form": {
+      "nameRequired": "スキル名を入力してください。",
+      "contentRequired": "スキル内容（Instructions）を入力してください。",
+      "saveFailed": "保存失敗: {error}",
+      "nameLabel": "スキル名 *",
+      "namePlaceholder": "例: PDF 要約",
+      "categoryLabel": "カテゴリ",
+      "publicLabel": "公開スキル",
+      "descriptionLabel": "説明",
+      "descriptionPlaceholder": "このスキルが行うことを簡単に説明してください",
+      "instructionsLabel": "Instructions（スキル内容）*",
+      "instructionsPlaceholder": "このスキルが実行する作業を詳しく記述してください..."
+    },
+    "upload": {
+      "fileRequired": "ファイルを選択してください。",
+      "successDetail": "アップロード完了: {id} v{version}",
+      "success": "アップロード完了",
+      "failed": "アップロード失敗: {error}",
+      "hint": ".SKILL または .md YAML frontmatter ファイルをアップロードします。（最大 256KB）",
+      "fileLabel": "ファイル選択",
+      "submit": "アップロード"
+    },
+    "auto": {
+      "purposeRequired": "目的を入力してください。",
+      "requesting": "リクエスト送信中...",
+      "generating": "LLM 生成中...",
+      "processing": "処理中...",
+      "done": "生成完了！",
+      "generateFailed": "生成失敗",
+      "hint": "自然言語で目的を入力すると、LLM がスキルマニフェストを自動生成します。",
+      "purposeLabel": "スキルの目的 *",
+      "purposePlaceholder": "例: PDF 文書をアップロードすると要点を3行に要約するスキル",
+      "targetLabel": "対象ユーザー（任意）",
+      "targetPlaceholder": "例: 研究者、マーケター",
+      "submit": "AI 生成"
+    },
+    "git": {
+      "urlRequired": "GitHub URL を入力してください。",
+      "fetching": "リポジトリを取得中...",
+      "validating": "マニフェストを検証中...",
+      "done": "完了！",
+      "importFailed": "インポート失敗",
+      "hint": "GitHub リポジトリの SKILL.md マニフェストを取得し、draft として保存します。",
+      "urlLabel": "GitHub URL *",
+      "refLabel": "ブランチ/タグ（任意）",
+      "pathLabel": "ファイルパス（任意）",
+      "tokenLabel": "Access Token（非公開リポジトリ）",
+      "submit": "インポート"
+    },
+    "card": {
+      "assignTitle": "個人スキルに追加",
+      "unassignTitle": "個人スキルを解除",
+      "exportTitle": ".SKILL.md をエクスポート"
+    },
+    "draft": {
+      "approveFailed": "承認失敗: {error}",
+      "rejectConfirm": "この draft を拒否（保管）しますか？",
+      "rejectFailed": "拒否失敗: {error}",
+      "loading": "Draft を読み込み中...",
+      "emptyTitle": "承認待ちの Draft がありません",
+      "emptyDesc": "AI 自動生成または Git インポートで作成されたスキルがここに表示されます。",
+      "approve": "承認",
+      "reject": "拒否"
+    }
+  },
+  "agentTasks": {
+    "loading": "読み込み中...",
+    "error": "エラー",
+    "chatCta": "チャットへ移動",
+    "pageTitle": "エージェントタスク管理",
+    "pageDescription": "タスク一覧・進捗・承認を管理します。作成・実行はチャットのエージェントモードで行います。",
+    "banner": "エージェントタスクはチャット入力欄の<b>エージェント</b>モードで作成・実行してください。このページではタスク一覧・進捗・承認を管理します。",
+    "emptyTitle": "タスクがありません",
+    "emptyDescription": "チャットのエージェントモードで新しいタスクを開始してください。",
+    "status": {
+      "running": "実行中",
+      "completed": "完了",
+      "pending": "待機"
+    },
+    "failedTag": "失敗",
+    "cancelledTag": "キャンセル済み",
+    "turnShort": "ターン {current}/{max}",
+    "progressLabel": "進捗",
+    "detailTitle": "詳細を見る",
+    "resumeTitle": "再開",
+    "cancelTitle": "キャンセル",
+    "deleteTitle": "削除",
+    "modalTitle": "タスク詳細",
+    "detailLoadError": "タスク情報を読み込めませんでした。",
+    "goalLabel": "目標",
+    "stateLabel": "ステータス:",
+    "turnLabel": "ターン:",
+    "planLabel": "計画 ({completed}/{total})",
+    "outputsLabel": "成果物 ({count})",
+    "noSteps": "ステップ記録がありません。",
+    "stepsLabel": "実行ステップ ({count})",
+    "approvalsTitle": "承認待ちのツール実行 ({count})",
+    "reject": "却下",
+    "approve": "承認",
+    "cancelConfirm": "「{goal}...」のタスクをキャンセルしますか？",
+    "deleteConfirm": "「{goal}...」のタスクを削除しますか？",
+    "processFailed": "処理に失敗しました: {message}",
+    "cancelFailed": "キャンセルに失敗しました: {message}",
+    "resumeFailed": "再開に失敗しました: {message}",
+    "deleteFailed": "削除に失敗しました: {message}"
+  },
+  "customAgents": {
+    "pageTitle": "カスタムエージェント",
+    "pageDescription": "独自のシステムプロンプトで特化したエージェントを定義します。",
+    "importFromGit": "Git URL から取り込む",
+    "newAgent": "新規エージェント",
+    "tabActive": "有効なエージェント",
+    "tabDraft": "ドラフト確認",
+    "loading": "読み込み中...",
+    "emptyTitle": "カスタムエージェントはまだありません",
+    "emptyDescription": "自分で作成するか、Git URL から取り込んで特化したエージェントを追加してください。",
+    "createNewAgent": "新規エージェントを作成",
+    "systemPromptHeading": "システムプロンプト",
+    "edit": "編集",
+    "deleteAria": "削除",
+    "deleteConfirm": "「{name}」エージェントを削除しますか？",
+    "deleteFailed": "削除に失敗しました: {error}",
+    "noDescription": "説明はありません。",
+    "genericError": "エラー",
+    "createModalTitle": "新規エージェントの作成",
+    "editModalTitle": "エージェントの編集",
+    "gitImportModalTitle": "Git URL からエージェントを取り込む",
+    "iconLabel": "アイコン",
+    "nameLabel": "エージェント名 *",
+    "namePlaceholder": "例: テクニカルライター",
+    "descriptionLabel": "説明",
+    "descriptionPlaceholder": "このエージェントの役割を簡潔に説明してください",
+    "systemPromptLabel": "システムプロンプト *",
+    "systemPromptPlaceholder": "あなたは ... の専門家です。...",
+    "cancel": "キャンセル",
+    "save": "保存",
+    "create": "作成",
+    "nameRequired": "エージェント名を入力してください。",
+    "systemPromptRequired": "システムプロンプトを入力してください。",
+    "saveFailed": "保存に失敗しました: {error}",
+    "serverError": "サーバーエラー",
+    "gitIngestDescription": "GitHub リポジトリの AGENT.md マニフェストを取り込み、ドラフトとして保存します。",
+    "gitUrlLabel": "GitHub URL *",
+    "branchTagLabel": "ブランチ/タグ (任意)",
+    "filePathLabel": "ファイルパス (任意)",
+    "accessTokenLabel": "Access Token (非公開リポジトリ)",
+    "importButton": "取り込む",
+    "gitUrlRequired": "GitHub URL を入力してください。",
+    "fetchingRepo": "リポジトリを取得中...",
+    "processingManifest": "マニフェストを処理中...",
+    "done": "完了！",
+    "importFailed": "取り込みに失敗しました",
+    "importFailedStatus": "失敗 ({status}): {error}",
+    "requestFailed": "リクエストに失敗しました: {error}",
+    "networkError": "ネットワークエラー",
+    "loadingDrafts": "ドラフトを読み込み中...",
+    "noDraftsTitle": "承認待ちのドラフトはありません",
+    "noDraftsDescription": "Git URL の取り込みで作成されたエージェントがここに表示されます。",
+    "approve": "承認",
+    "reject": "却下",
+    "approveFailed": "承認に失敗しました: {error}",
+    "rejectFailed": "却下に失敗しました: {error}",
+    "rejectConfirm": "このドラフトエージェントを却下(保管)しますか？",
+    "fallback": {
+      "techWriter": {
+        "name": "テクニカルライター",
+        "description": "API リファレンスやアーキテクチャ文書を一貫したトーンで作成します。",
+        "systemPrompt": "あなたはシニアテクニカルライターです..."
+      },
+      "reviewer": {
+        "name": "コードレビュアー",
+        "description": "変更されたコードのバグや簡素化の余地を指摘します。",
+        "systemPrompt": "あなたは厳格なコードレビュアーです..."
+      }
+    }
+  },
+  "research": {
+    "pageTitle": "ディープリサーチ履歴",
+    "pageDescription": "過去のリサーチ結果を確認できます。実行はチャットのディープリサーチモードで行います。",
+    "runBanner": "ディープリサーチはチャット入力欄の<mode>ディープリサーチ</mode>モードで実行してください。このページでは過去のリサーチ結果を確認できます。",
+    "goToChat": "チャットへ移動",
+    "pastResearch": "過去のリサーチ",
+    "sessionEmpty": "まだリサーチがありません。",
+    "report": "レポート",
+    "keyFindings": "主な発見",
+    "reportPendingRunning": "リサーチ実行中 — 合成が完了するとレポートが表示されます。",
+    "reportPending": "レポートは合成完了後に表示されます。",
+    "collectedSources": "収集ソース",
+    "sourceCount": "{count}件",
+    "verified": "検証済み",
+    "unverified": "未検証",
+    "status": {
+      "pending": "待機",
+      "running": "実行中",
+      "completed": "完了",
+      "failed": "失敗",
+      "cancelled": "キャンセル"
+    },
+    "stages": {
+      "decompose": {
+        "label": "質問の分解",
+        "desc": "核心的な質問を検証可能なサブ質問に分解します"
+      },
+      "collect": {
+        "label": "ソース収集",
+        "desc": "ウェブ検索をファンアウトし、信頼度に基づいてソースを選別します"
+      },
+      "verify": {
+        "label": "クロス検証",
+        "desc": "主張ごとに敵対的検証を行い、矛盾を検出します"
+      },
+      "synthesize": {
+        "label": "レポート合成",
+        "desc": "引用を含む最終レポートを生成します"
+      }
+    },
+    "metrics": {
+      "sources": "分析ソース",
+      "keyFindings": "主な発見",
+      "progress": "進捗率",
+      "depth": "深さ"
+    },
+    "mock": {
+      "verifiedClaims": "検証済みの主張",
+      "conflicts": "検出された矛盾",
+      "tokensUsed": "使用トークン",
+      "elapsed": "経過時間",
+      "elapsedValue": "3分12秒",
+      "source1": "2026年AIエージェント市場動向レポート",
+      "source2": "マルチエージェントオーケストレーションアーキテクチャ分析",
+      "source3": "エンタープライズLLM導入事例研究",
+      "source4": "自律エージェント安全性ガイドライン",
+      "source5": "RAG対ロングコンテキスト比較ベンチマーク"
+    }
   }
 }

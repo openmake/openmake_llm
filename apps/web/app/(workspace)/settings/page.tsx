@@ -33,26 +33,26 @@ import { LOCALE_COOKIE, LOCALE_COOKIE_MAX_AGE, isLocale } from "@/i18n/config";
 /* ── 탭 정의 ────────────────────────────────────────────── */
 type TabId = "general" | "model" | "interface" | "notifications" | "privacy" | "security";
 
-const TABS: { id: TabId; label: string; icon: LucideIcon }[] = [
-  { id: "general", label: "일반", icon: Settings },
-  { id: "model", label: "모델 & 응답", icon: Bot },
-  { id: "interface", label: "인터페이스", icon: Palette },
-  { id: "notifications", label: "알림", icon: Bell },
-  { id: "privacy", label: "개인정보", icon: ShieldCheck },
-  { id: "security", label: "보안", icon: ShieldCheck },
+const TABS: { id: TabId; labelKey: string; icon: LucideIcon }[] = [
+  { id: "general", labelKey: "tabs.general", icon: Settings },
+  { id: "model", labelKey: "tabs.model", icon: Bot },
+  { id: "interface", labelKey: "tabs.interface", icon: Palette },
+  { id: "notifications", labelKey: "tabs.notifications", icon: Bell },
+  { id: "privacy", labelKey: "tabs.privacy", icon: ShieldCheck },
+  { id: "security", labelKey: "tabs.security", icon: ShieldCheck },
 ];
 
 
 const RESPONSE_STYLES = [
-  { value: "concise", label: "간결" },
-  { value: "default", label: "기본" },
-  { value: "verbose", label: "상세" },
+  { value: "concise", labelKey: "responseStyles.concise" },
+  { value: "default", labelKey: "responseStyles.default" },
+  { value: "verbose", labelKey: "responseStyles.verbose" },
 ] as const;
 
 const THEMES = [
-  { value: "system", label: "시스템 설정" },
-  { value: "light", label: "라이트" },
-  { value: "dark", label: "다크" },
+  { value: "system", labelKey: "themes.system" },
+  { value: "light", labelKey: "themes.light" },
+  { value: "dark", labelKey: "themes.dark" },
 ];
 
 /** NEXT_LOCALE 쿠키 값 (미설정/미지원 값 = "" → 자동 감지). */
@@ -170,6 +170,7 @@ function Segment<T extends string>({
 
 /* ── 페이지 ─────────────────────────────────────────────── */
 export default function SettingsPage() {
+  const tSettings = useTranslations("settings");
   const [tab, setTab] = useState<TabId>("general");
 
   // 일반 / 모델
@@ -189,7 +190,7 @@ export default function SettingsPage() {
   const externalModels = allModels.filter((m) => m.provider !== "local-llm");
   const toOption = (m: (typeof allModels)[number]) => ({
     value: m.modelId,
-    label: m.name + (m.isFree ? " · 무료" : ""),
+    label: m.name + (m.isFree ? tSettings("freeSuffix") : ""),
   });
   // provider id → 표시 라벨 (현재 openrouter 만 등록 가능, 그 외 provider 도 일반 처리)
   const externalGroupLabel = (provider: string) =>
@@ -206,9 +207,9 @@ export default function SettingsPage() {
       .map(toOption),
   }));
   const modelGroups = [
-    { label: "기본", options: [{ value: "default", label: "자동 (서버 기본값)" }] },
+    { label: tSettings("modelGroup.default"), options: [{ value: "default", label: tSettings("modelGroup.auto") }] },
     ...(localModels.length
-      ? [{ label: "🏠 로컬 vLLM", options: localModels.map(toOption) }]
+      ? [{ label: tSettings("modelGroup.local"), options: localModels.map(toOption) }]
       : []),
     ...externalGroups,
   ];
@@ -220,7 +221,6 @@ export default function SettingsPage() {
     () => "",
   );
   const [customInstructions, setCustomInstructions] = useState("");
-  const tSettings = useTranslations("settings");
   const router = useRouter();
 
   const changeLanguage = (v: string) => {
@@ -374,23 +374,23 @@ export default function SettingsPage() {
 
   async function handlePasswordChange() {
     if (newPassword !== confirmPassword) {
-      setPwMessage({ text: "새 비밀번호가 일치하지 않습니다.", ok: false });
+      setPwMessage({ text: tSettings("password.mismatch"), ok: false });
       return;
     }
     if (newPassword.length < 8) {
-      setPwMessage({ text: "새 비밀번호는 8자 이상이어야 합니다.", ok: false });
+      setPwMessage({ text: tSettings("password.tooShort"), ok: false });
       return;
     }
     setPwSaving(true);
     setPwMessage(null);
     try {
       await ApiClient.put("/api/auth/password", { currentPassword, newPassword });
-      setPwMessage({ text: "비밀번호가 변경되었습니다.", ok: true });
+      setPwMessage({ text: tSettings("password.changed"), ok: true });
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
     } catch (err) {
-      const msg = err instanceof ApiError ? err.message : "비밀번호 변경에 실패했습니다.";
+      const msg = err instanceof ApiError ? err.message : tSettings("password.changeFailed");
       setPwMessage({ text: msg, ok: false });
     } finally {
       setPwSaving(false);
@@ -400,12 +400,12 @@ export default function SettingsPage() {
   return (
     <>
       <PageHeader
-        title="설정"
-        description="앱 환경과 AI 모델 동작을 구성합니다."
+        title={tSettings("pageTitle")}
+        description={tSettings("pageDescription")}
         actions={
           <div className="flex items-center gap-3">
             {savedAt && (
-              <span className="text-xs text-muted">{savedAt} 저장됨</span>
+              <span className="text-xs text-muted">{tSettings("savedAt", { time: savedAt })}</span>
             )}
             <Button onClick={handleSave} disabled={saving || loading}>
               {saving ? (
@@ -413,7 +413,7 @@ export default function SettingsPage() {
               ) : (
                 <Save className="h-4 w-4" />
               )}
-              설정 저장
+              {tSettings("saveButton")}
             </Button>
           </div>
         }
@@ -439,7 +439,7 @@ export default function SettingsPage() {
                   )}
                 >
                   <Icon className="h-4 w-4" />
-                  {t.label}
+                  {tSettings(t.labelKey)}
                 </button>
               );
             })}
@@ -450,12 +450,12 @@ export default function SettingsPage() {
             {tab === "general" && (
               <Card>
                 <CardHeader>
-                  <CardTitle>일반</CardTitle>
+                  <CardTitle>{tSettings("tabs.general")}</CardTitle>
                 </CardHeader>
                 <CardContent className="py-0">
                   <FieldRow
-                    title="언어"
-                    description="인터페이스 표시 언어. 자동 감지 시 브라우저 언어를 따릅니다. (AI 응답은 메시지 언어를 따릅니다)"
+                    title={tSettings("language.title")}
+                    description={tSettings("language.description")}
                   >
                     <Select
                       value={language}
@@ -466,8 +466,8 @@ export default function SettingsPage() {
                     />
                   </FieldRow>
                   <FieldRow
-                    title="대화 본문 저장"
-                    description="대화 내용을 서버 DB에 저장합니다. 끄면 익명 사용량 메타만 기록됩니다."
+                    title={tSettings("saveHistory.title")}
+                    description={tSettings("saveHistory.descriptionGeneral")}
                   >
                     <Toggle checked={saveHistory} onChange={setSaveHistory} />
                   </FieldRow>
@@ -478,12 +478,12 @@ export default function SettingsPage() {
             {tab === "model" && (
               <Card>
                 <CardHeader>
-                  <CardTitle>모델 & 응답</CardTitle>
+                  <CardTitle>{tSettings("tabs.model")}</CardTitle>
                 </CardHeader>
                 <CardContent className="py-0">
                   <FieldRow
-                    title="기본 모델"
-                    description="새 대화에 사용할 모델입니다. 🏠 로컬 vLLM 과 🌐 외부 LLM(OpenRouter, BYOK) 중 선택합니다."
+                    title={tSettings("defaultModel.title")}
+                    description={tSettings("defaultModel.description")}
                   >
                     {allModels.length ? (
                       <div className="flex flex-col gap-1.5">
@@ -494,14 +494,14 @@ export default function SettingsPage() {
                         />
                         {externalModels.length === 0 && (
                           <p className="text-xs text-muted">
-                            외부 LLM(OpenRouter)을 추가하려면{" "}
+                            {tSettings("externalLlmHint.prefix")}{" "}
                             <a
                               href="/api-keys"
                               className="text-accent underline underline-offset-2 hover:opacity-80"
                             >
-                              API 키 페이지
+                              {tSettings("externalLlmHint.link")}
                             </a>
-                            에서 키를 등록하세요.
+                            {tSettings("externalLlmHint.suffix")}
                           </p>
                         )}
                       </div>
@@ -509,38 +509,41 @@ export default function SettingsPage() {
                       <Select
                         value=""
                         onChange={setSelectedModel}
-                        options={[{ value: "", label: "모델 로딩…" }]}
+                        options={[{ value: "", label: tSettings("modelLoading") }]}
                       />
                     )}
                   </FieldRow>
                   <FieldRow
-                    title="이미지 생성"
-                    description="채팅에서 그림/이미지를 요청하면 자동으로 사용됩니다. 별도 선택은 필요 없습니다."
+                    title={tSettings("imageGeneration.title")}
+                    description={tSettings("imageGeneration.description")}
                   >
                     {modelsData?.imageModel ? (
                       <Badge tone="neutral">
                         <span className="font-mono">{modelsData.imageModel}</span>
                       </Badge>
                     ) : (
-                      <span className="text-sm text-muted">미설정</span>
+                      <span className="text-sm text-muted">{tSettings("notConfigured")}</span>
                     )}
                   </FieldRow>
                   <FieldRow
-                    title="응답 스타일"
-                    description="응답의 자세함 정도를 조절합니다."
+                    title={tSettings("responseStyle.title")}
+                    description={tSettings("responseStyle.description")}
                   >
                     <Segment
                       value={responseStyle}
                       onChange={setResponseStyle}
-                      options={RESPONSE_STYLES}
+                      options={RESPONSE_STYLES.map((s) => ({
+                        value: s.value,
+                        label: tSettings(s.labelKey),
+                      }))}
                     />
                   </FieldRow>
                   <div className="py-4">
                     <h4 className="text-sm font-medium text-fg">
-                      사용자 지시문 (Custom Instructions)
+                      {tSettings("customInstructions.title")}
                     </h4>
                     <p className="mt-0.5 text-xs text-muted">
-                      모든 대화에 영구 적용되는 system prompt 추가 지시문입니다.
+                      {tSettings("customInstructions.description")}
                     </p>
                     <textarea
                       value={customInstructions}
@@ -550,11 +553,14 @@ export default function SettingsPage() {
                         )
                       }
                       rows={6}
-                      placeholder="예: 사용자가 명시적으로 요청하지 않은 부가 정보는 출력하지 않는다."
+                      placeholder={tSettings("customInstructions.placeholder")}
                       className="mt-3 w-full resize-y rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-fg outline-none transition focus:border-accent"
                     />
                     <p className="mt-1 text-right text-xs text-faint">
-                      {customInstructions.length} / {CUSTOM_INSTRUCTIONS_MAX} 자
+                      {tSettings("customInstructions.charCount", {
+                        count: customInstructions.length,
+                        max: CUSTOM_INSTRUCTIONS_MAX,
+                      })}
                     </p>
                   </div>
                 </CardContent>
@@ -564,14 +570,21 @@ export default function SettingsPage() {
             {tab === "interface" && (
               <Card>
                 <CardHeader>
-                  <CardTitle>인터페이스</CardTitle>
+                  <CardTitle>{tSettings("tabs.interface")}</CardTitle>
                 </CardHeader>
                 <CardContent className="py-0">
                   <FieldRow
-                    title="테마"
-                    description="앱의 색상 테마를 선택합니다."
+                    title={tSettings("theme.title")}
+                    description={tSettings("theme.description")}
                   >
-                    <Select value={theme} onChange={setTheme} options={THEMES} />
+                    <Select
+                      value={theme}
+                      onChange={setTheme}
+                      options={THEMES.map((th) => ({
+                        value: th.value,
+                        label: tSettings(th.labelKey),
+                      }))}
+                    />
                   </FieldRow>
                 </CardContent>
               </Card>
@@ -580,26 +593,26 @@ export default function SettingsPage() {
             {tab === "notifications" && (
               <Card>
                 <CardHeader>
-                  <CardTitle>알림</CardTitle>
+                  <CardTitle>{tSettings("tabs.notifications")}</CardTitle>
                 </CardHeader>
                 <CardContent className="py-0">
                   <FieldRow
-                    title="이메일 알림"
-                    description="에이전트 작업 완료 및 보안 이벤트를 이메일로 받습니다."
+                    title={tSettings("emailAlerts.title")}
+                    description={tSettings("emailAlerts.description")}
                   >
                     <Toggle checked={emailAlerts} onChange={setEmailAlerts} />
                   </FieldRow>
                   <FieldRow
-                    title="푸시 알림"
-                    description="브라우저 푸시로 실시간 알림을 받습니다."
+                    title={tSettings("pushAlerts.title")}
+                    description={tSettings("pushAlerts.description")}
                   >
                     {pushSupported === false ? (
                       <p className="text-xs text-muted">
-                        이 브라우저는 푸시 알림을 지원하지 않습니다.
+                        {tSettings("pushNotSupported")}
                       </p>
                     ) : pushSupported === true && !pushSwReady ? (
                       <p className="text-xs text-muted">
-                        서비스 워커가 등록되지 않아 푸시 알림을 사용할 수 없습니다.
+                        {tSettings("pushSwNotReady")}
                       </p>
                     ) : (
                       <div className="flex items-center gap-2">
@@ -620,12 +633,12 @@ export default function SettingsPage() {
             {tab === "privacy" && (
               <Card>
                 <CardHeader>
-                  <CardTitle>개인정보</CardTitle>
+                  <CardTitle>{tSettings("tabs.privacy")}</CardTitle>
                 </CardHeader>
                 <CardContent className="py-0">
                   <FieldRow
-                    title="장기 기억 학습"
-                    description="대화에서 이름·직업·선호 같은 사실을 추출하여 저장합니다."
+                    title={tSettings("memoryLearning.title")}
+                    description={tSettings("memoryLearning.description")}
                   >
                     <Toggle
                       checked={memoryLearning}
@@ -633,8 +646,8 @@ export default function SettingsPage() {
                     />
                   </FieldRow>
                   <FieldRow
-                    title="대화 본문 저장"
-                    description="끄면 대화 본문은 서버에 저장되지 않습니다."
+                    title={tSettings("saveHistory.title")}
+                    description={tSettings("saveHistory.descriptionPrivacy")}
                   >
                     <Toggle checked={saveHistory} onChange={setSaveHistory} />
                   </FieldRow>
@@ -645,7 +658,7 @@ export default function SettingsPage() {
             {tab === "security" && (
               <Card>
                 <CardHeader>
-                  <CardTitle>비밀번호 변경</CardTitle>
+                  <CardTitle>{tSettings("passwordChange.title")}</CardTitle>
                 </CardHeader>
                 <CardContent className="py-0">
                   {pwMessage && (
@@ -660,7 +673,7 @@ export default function SettingsPage() {
                       {pwMessage.text}
                     </div>
                   )}
-                  <FieldRow title="현재 비밀번호">
+                  <FieldRow title={tSettings("password.current")}>
                     <input
                       type="password"
                       value={currentPassword}
@@ -669,7 +682,7 @@ export default function SettingsPage() {
                       className="h-9 w-full rounded-md border border-border-strong bg-surface px-3 text-sm text-fg outline-none transition focus:border-accent"
                     />
                   </FieldRow>
-                  <FieldRow title="새 비밀번호" description="8자 이상">
+                  <FieldRow title={tSettings("password.new")} description={tSettings("password.newHint")}>
                     <input
                       type="password"
                       value={newPassword}
@@ -678,7 +691,7 @@ export default function SettingsPage() {
                       className="h-9 w-full rounded-md border border-border-strong bg-surface px-3 text-sm text-fg outline-none transition focus:border-accent"
                     />
                   </FieldRow>
-                  <FieldRow title="새 비밀번호 확인">
+                  <FieldRow title={tSettings("password.confirm")}>
                     <input
                       type="password"
                       value={confirmPassword}
@@ -697,7 +710,7 @@ export default function SettingsPage() {
                       ) : (
                         <Save className="h-4 w-4" />
                       )}
-                      비밀번호 변경
+                      {tSettings("passwordChange.title")}
                     </Button>
                   </div>
                 </CardContent>
