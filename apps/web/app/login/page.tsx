@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { ArrowRight, LoaderCircle } from "lucide-react";
 import Image from "next/image";
 import { ApiClient, ApiError } from "@/lib/api-client";
@@ -10,6 +11,7 @@ import { syncAuthFromServer } from "@/lib/auth-sync";
 import { Button } from "@/components/ui/primitives";
 
 export default function LoginPage() {
+  const t = useTranslations("auth.login");
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -26,7 +28,7 @@ export default function LoginPage() {
       await syncAuthFromServer();
       router.push("/");
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "로그인에 실패했습니다.");
+      setError(err instanceof ApiError ? err.message : t("loginFailed"));
     } finally {
       setLoading(false);
     }
@@ -56,7 +58,7 @@ export default function LoginPage() {
             priority
           />
           <h1 className="mt-4 text-2xl font-bold text-fg">OpenMake.Ai</h1>
-          <p className="mt-1 text-sm text-muted">로그인하고 계속하세요</p>
+          <p className="mt-1 text-sm text-muted">{t("subtitle")}</p>
         </div>
 
         <form
@@ -72,7 +74,7 @@ export default function LoginPage() {
             </div>
           )}
 
-          <label className="block text-xs font-medium text-fg-2">이메일</label>
+          <label className="block text-xs font-medium text-fg-2">{t("emailLabel")}</label>
           <input
             type="email"
             required
@@ -83,7 +85,7 @@ export default function LoginPage() {
           />
 
           <label className="mt-4 block text-xs font-medium text-fg-2">
-            비밀번호
+            {t("passwordLabel")}
           </label>
           <input
             type="password"
@@ -99,14 +101,14 @@ export default function LoginPage() {
               <LoaderCircle className="h-4 w-4 animate-spin" />
             ) : (
               <>
-                로그인 <ArrowRight className="h-4 w-4" />
+                {t("submit")} <ArrowRight className="h-4 w-4" />
               </>
             )}
           </Button>
 
           <div className="my-4 flex items-center gap-3">
             <div className="h-px flex-1 bg-border" />
-            <span className="text-xs text-faint">또는</span>
+            <span className="text-xs text-faint">{t("or")}</span>
             <div className="h-px flex-1 bg-border" />
           </div>
 
@@ -131,13 +133,13 @@ export default function LoginPage() {
             disabled={loading}
             className="mt-3 w-full text-center text-xs text-muted transition hover:text-fg"
           >
-            게스트로 계속하기
+            {t("continueAsGuest")}
           </button>
 
           <p className="mt-4 text-center text-xs text-muted">
-            계정이 없으신가요?{" "}
+            {t("noAccount")}{" "}
             <Link href="/register" className="font-medium text-accent hover:underline">
-              회원가입
+              {t("signUp")}
             </Link>
           </p>
         </form>

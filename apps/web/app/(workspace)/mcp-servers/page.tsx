@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import { Server, Boxes, Plus, Loader2, X } from "lucide-react";
 import {
   Button,
@@ -51,18 +52,20 @@ function mapStatus(s?: string): ConnStatus {
   return "disconnected";
 }
 
-function relativeTime(iso?: string | null): string {
+type Translator = (key: string, values?: Record<string, number>) => string;
+
+function relativeTime(iso: string | null | undefined, t: Translator): string {
   if (!iso) return "—";
-  const t = new Date(iso).getTime();
-  if (Number.isNaN(t)) return "—";
-  const diffSec = Math.round((Date.now() - t) / 1000);
-  if (diffSec < 60) return "방금 전";
-  if (diffSec < 3600) return `${Math.floor(diffSec / 60)}분 전`;
-  if (diffSec < 86400) return `${Math.floor(diffSec / 3600)}시간 전`;
-  return `${Math.floor(diffSec / 86400)}일 전`;
+  const time = new Date(iso).getTime();
+  if (Number.isNaN(time)) return "—";
+  const diffSec = Math.round((Date.now() - time) / 1000);
+  if (diffSec < 60) return t("justNow");
+  if (diffSec < 3600) return t("minutesAgo", { count: Math.floor(diffSec / 60) });
+  if (diffSec < 86400) return t("hoursAgo", { count: Math.floor(diffSec / 3600) });
+  return t("daysAgo", { count: Math.floor(diffSec / 86400) });
 }
 
-function mapServer(s: ApiMcpServer): McpServer {
+function mapServer(s: ApiMcpServer, t: Translator): McpServer {
   return {
     id: s.id,
     name: s.name,
@@ -71,7 +74,7 @@ function mapServer(s: ApiMcpServer): McpServer {
     status: mapStatus(s.connectionStatus),
     // 백엔드는 지연(latency) 수치를 제공하지 않음 — 표시 생략
     latencyMs: null,
-    lastChecked: relativeTime(s.lastPing),
+    lastChecked: relativeTime(s.lastPing, t),
   };
 }
 
@@ -96,6 +99,7 @@ function GitImportModal({
   onClose: () => void;
   onSuccess: () => void;
 }) {
+  const t = useTranslations("mcpServers");
   const [gitUrl, setGitUrl] = useState("");
   const [accessToken, setAccessToken] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -117,7 +121,7 @@ function GitImportModal({
       onClose();
       onSuccess();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "등록에 실패했습니다.");
+      setError(err instanceof Error ? err.message : t("importError"));
     } finally {
       setSubmitting(false);
     }
@@ -127,7 +131,7 @@ function GitImportModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
       <div className="w-full max-w-md rounded-xl border border-border bg-surface p-6 shadow-xl">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-base font-semibold text-fg">Git URL로 MCP 서버 등록</h2>
+          <h2 className="text-base font-semibold text-fg">{t("importTitle")}</h2>
           <button
             type="button"
             onClick={onClose}
@@ -152,7 +156,7 @@ function GitImportModal({
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium text-fg-2">
-              액세스 토큰 (선택)
+              {t("accessTokenLabel")}
             </label>
             <input
               type="password"
@@ -169,11 +173,11 @@ function GitImportModal({
           )}
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" size="sm" onClick={onClose}>
-              취소
+              {t("cancel")}
             </Button>
             <Button type="submit" size="sm" disabled={submitting || !gitUrl}>
               {submitting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-              등록
+              {t("register")}
             </Button>
           </div>
         </form>
@@ -233,11 +237,11 @@ const MOCK_SERVERS: McpServer[] = [
 
 const STATUS_META: Record<
   ConnStatus,
-  { label: string; tone: "success" | "warn" | "danger" }
+  { labelKey: string; tone: "success" | "warn" | "danger" }
 > = {
-  connected: { label: "연결됨", tone: "success" },
-  degraded: { label: "지연", tone: "warn" },
-  disconnected: { label: "연결 끊김", tone: "danger" },
+  connected: { labelKey: "status.connected", tone: "success" },
+  degraded: { labelKey: "status.degraded", tone: "warn" },
+  disconnected: { labelKey: "status.disconnected", tone: "danger" },
 };
 
 const TRANSPORT_TONE: Record<Transport, "accent" | "neutral"> = {
@@ -249,6 +253,7 @@ const TRANSPORT_TONE: Record<Transport, "accent" | "neutral"> = {
 type TabId = "servers" | "drafts";
 
 export default function McpServersPage() {
+  const t = useTranslations("mcpServers");
   const [tab, setTab] = useState<TabId>("servers");
   const [modalOpen, setModalOpen] = useState(false);
   const [servers, setServers] = useState<McpServer[]>(MOCK_SERVERS);
@@ -333,7 +338,7 @@ export default function McpServersPage() {
         );
         if (cancelled) return;
         const list = res?.data?.servers ?? [];
-        setServers(list.map(mapServer));
+        setServers(list.map((s) => mapServer(s, t)));
       } catch {
         // 401·네트워크 실패 등 → 목업 유지 (데모)
       } finally {
@@ -343,6 +348,7 @@ export default function McpServersPage() {
     return () => {
       cancelled = true;
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -363,17 +369,17 @@ export default function McpServersPage() {
         }}
       />
       <PageHeader
-        title="MCP 서버"
-        description="로컬 도구를 LLM 이 사용할 수 있도록 연결합니다."
+        title={t("title")}
+        description={t("description")}
         actions={
           <>
             <Button variant="outline" size="sm">
               <Boxes className="h-4 w-4" />
-              카탈로그
+              {t("catalog")}
             </Button>
             <Button size="sm" onClick={() => setModalOpen(true)}>
               <Plus className="h-4 w-4" />
-              서버 추가
+              {t("addServer")}
             </Button>
           </>
         }
@@ -382,19 +388,19 @@ export default function McpServersPage() {
       <div className="min-h-0 flex-1 overflow-y-auto p-6">
         {/* 탭 */}
         <div className="mb-4 inline-flex rounded-pill border border-border bg-surface-2 p-1">
-          {(["servers", "drafts"] as TabId[]).map((t) => (
+          {(["servers", "drafts"] as TabId[]).map((tabId) => (
             <button
-              key={t}
+              key={tabId}
               type="button"
-              onClick={() => setTab(t)}
+              onClick={() => setTab(tabId)}
               className={cn(
                 "rounded-pill px-4 py-1.5 text-xs font-medium transition",
-                tab === t
+                tab === tabId
                   ? "bg-surface text-fg shadow-1"
                   : "text-muted hover:text-fg",
               )}
             >
-              {t === "servers" ? "서버 목록" : "Draft"}
+              {tabId === "servers" ? t("tabServers") : "Draft"}
             </button>
           ))}
         </div>
@@ -405,27 +411,27 @@ export default function McpServersPage() {
           <Table>
             <thead>
               <tr>
-                <Th>이름</Th>
-                <Th>유형</Th>
-                <Th className="text-right">도구 수</Th>
-                <Th>상태</Th>
-                <Th className="text-right">지연</Th>
-                <Th>마지막 확인</Th>
-                <Th>액션</Th>
+                <Th>{t("colName")}</Th>
+                <Th>{t("colType")}</Th>
+                <Th className="text-right">{t("colToolCount")}</Th>
+                <Th>{t("colStatus")}</Th>
+                <Th className="text-right">{t("colLatency")}</Th>
+                <Th>{t("colLastChecked")}</Th>
+                <Th>{t("colAction")}</Th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
                   <Td colSpan={7}>
-                    <div className="py-12 text-center text-muted">로딩 중…</div>
+                    <div className="py-12 text-center text-muted">{t("loading")}</div>
                   </Td>
                 </tr>
               ) : servers.length === 0 ? (
                 <tr>
                   <Td colSpan={7}>
                     <div className="py-12 text-center text-muted">
-                      연결된 MCP 서버가 없습니다. 카탈로그에서 추가하세요.
+                      {t("emptyServers")}
                     </div>
                   </Td>
                 </tr>
@@ -450,7 +456,7 @@ export default function McpServersPage() {
                         {s.toolCount}
                       </Td>
                       <Td>
-                        <Badge tone={meta.tone}>{meta.label}</Badge>
+                        <Badge tone={meta.tone}>{t(meta.labelKey)}</Badge>
                       </Td>
                       <Td className="text-right font-mono">
                         {s.latencyMs == null ? (
@@ -476,7 +482,7 @@ export default function McpServersPage() {
                               onClick={() => handleDisconnect(s.id)}
                             >
                               {isActing && <Loader2 className="h-3 w-3 animate-spin" />}
-                              연결해제
+                              {t("disconnect")}
                             </Button>
                           ) : s.status === "degraded" ? (
                             <>
@@ -486,7 +492,7 @@ export default function McpServersPage() {
                                 onClick={() => handleConnect(s.id)}
                               >
                                 {isActing && <Loader2 className="h-3 w-3 animate-spin" />}
-                                재연결
+                                {t("reconnect")}
                               </Button>
                               <Button
                                 variant="outline"
@@ -494,7 +500,7 @@ export default function McpServersPage() {
                                 disabled={isActing}
                                 onClick={() => handleDisconnect(s.id)}
                               >
-                                연결해제
+                                {t("disconnect")}
                               </Button>
                             </>
                           ) : (
@@ -504,7 +510,7 @@ export default function McpServersPage() {
                               onClick={() => handleConnect(s.id)}
                             >
                               {isActing && <Loader2 className="h-3 w-3 animate-spin" />}
-                              연결
+                              {t("connect")}
                             </Button>
                           )}
                         </div>
@@ -526,24 +532,24 @@ export default function McpServersPage() {
                 <tr>
                   <Th>ID</Th>
                   <Th>Git URL</Th>
-                  <Th>이름</Th>
-                  <Th>상태</Th>
-                  <Th>위험</Th>
-                  <Th>액션</Th>
+                  <Th>{t("colName")}</Th>
+                  <Th>{t("colStatus")}</Th>
+                  <Th>{t("draftColRisk")}</Th>
+                  <Th>{t("colAction")}</Th>
                 </tr>
               </thead>
               <tbody>
                 {draftsLoading ? (
                   <tr>
                     <Td colSpan={6}>
-                      <div className="py-12 text-center text-muted">로딩 중…</div>
+                      <div className="py-12 text-center text-muted">{t("loading")}</div>
                     </Td>
                   </tr>
                 ) : drafts.length === 0 ? (
                   <tr>
                     <Td colSpan={6}>
                       <div className="py-12 text-center text-muted">
-                        Draft가 없습니다. Git URL로 서버를 등록하세요.
+                        {t("emptyDrafts")}
                       </div>
                     </Td>
                   </tr>
@@ -569,7 +575,7 @@ export default function McpServersPage() {
                         </Td>
                         <Td>
                           {hasError ? (
-                            <span className="text-sm text-danger">⚠️ 위험</span>
+                            <span className="text-sm text-danger">{t("riskWarning")}</span>
                           ) : (
                             <span className="text-faint">—</span>
                           )}
@@ -585,7 +591,7 @@ export default function McpServersPage() {
                                 {isActing && (
                                   <Loader2 className="h-3 w-3 animate-spin" />
                                 )}
-                                승인
+                                {t("approve")}
                               </Button>
                               <Button
                                 variant="outline"
@@ -593,7 +599,7 @@ export default function McpServersPage() {
                                 disabled={isActing}
                                 onClick={() => void handleRejectDraft(d.id)}
                               >
-                                거부
+                                {t("reject")}
                               </Button>
                             </div>
                           )}

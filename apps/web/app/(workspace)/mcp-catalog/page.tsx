@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import { Search, Boxes, Download, Loader2 } from "lucide-react";
 import {
   Button,
@@ -41,68 +42,73 @@ function mapTemplate(t: ApiCatalogTemplate): CatalogEntry {
     // 카탈로그 템플릿은 provider/도구수/skill 구분 필드를 제공하지 않음.
     // provider 는 transport_type, 종류는 항상 server 로 표기.
     provider: t.transport_type,
-    description: t.description || "설명이 없습니다.",
+    description: t.description || "",
     toolCount: 0,
     kind: "server",
   };
 }
 
 /* ── 목업 데이터 — TODO: API 연동 (GET /api/mcp/catalog) ──── */
-const MOCK_CATALOG: CatalogEntry[] = [
-  {
-    id: "mcp-filesystem",
-    name: "Filesystem",
-    provider: "Anthropic",
-    description: "로컬 파일을 안전하게 읽고 쓰는 샌드박스 파일시스템 도구 모음.",
-    toolCount: 8,
-    kind: "server",
-    installed: true,
-  },
-  {
-    id: "mcp-github",
-    name: "GitHub",
-    provider: "GitHub",
-    description: "이슈, PR, 리포지토리, 코드 검색을 다루는 GitHub 연동 서버.",
-    toolCount: 21,
-    kind: "server",
-  },
-  {
-    id: "mcp-postgres",
-    name: "PostgreSQL",
-    provider: "Community",
-    description: "읽기 전용 SQL 쿼리와 스키마 인트로스펙션을 제공하는 DB 도구.",
-    toolCount: 5,
-    kind: "server",
-  },
-  {
-    id: "mcp-slack",
-    name: "Slack",
-    provider: "Slack",
-    description: "채널 읽기, 메시지 전송, 사용자 검색 등 Slack 워크스페이스 연동.",
-    toolCount: 11,
-    kind: "server",
-  },
-  {
-    id: "skill-pdf-extract",
-    name: "PDF 추출 스킬",
-    provider: "OpenMake",
-    description: "PDF 문서에서 텍스트·표·메타데이터를 구조화해 추출하는 스킬.",
-    toolCount: 3,
-    kind: "skill",
-  },
-  {
-    id: "skill-web-research",
-    name: "웹 리서치 스킬",
-    provider: "OpenMake",
-    description: "다중 소스 검색·인용 검증·요약을 수행하는 딥 리서치 스킬.",
-    toolCount: 4,
-    kind: "skill",
-  },
-];
+function buildMockCatalog(t: (key: string) => string): CatalogEntry[] {
+  return [
+    {
+      id: "mcp-filesystem",
+      name: "Filesystem",
+      provider: "Anthropic",
+      description: t("mock.filesystem"),
+      toolCount: 8,
+      kind: "server",
+      installed: true,
+    },
+    {
+      id: "mcp-github",
+      name: "GitHub",
+      provider: "GitHub",
+      description: t("mock.github"),
+      toolCount: 21,
+      kind: "server",
+    },
+    {
+      id: "mcp-postgres",
+      name: "PostgreSQL",
+      provider: "Community",
+      description: t("mock.postgres"),
+      toolCount: 5,
+      kind: "server",
+    },
+    {
+      id: "mcp-slack",
+      name: "Slack",
+      provider: "Slack",
+      description: t("mock.slack"),
+      toolCount: 11,
+      kind: "server",
+    },
+    {
+      id: "skill-pdf-extract",
+      name: t("mock.pdfExtractName"),
+      provider: "OpenMake",
+      description: t("mock.pdfExtract"),
+      toolCount: 3,
+      kind: "skill",
+    },
+    {
+      id: "skill-web-research",
+      name: t("mock.webResearchName"),
+      provider: "OpenMake",
+      description: t("mock.webResearch"),
+      toolCount: 4,
+      kind: "skill",
+    },
+  ];
+}
 
 export default function McpCatalogPage() {
+  const t = useTranslations("mcpCatalog");
   const [query, setQuery] = useState("");
-  const [entries, setEntries] = useState<CatalogEntry[]>(MOCK_CATALOG);
+  const [entries, setEntries] = useState<CatalogEntry[]>(() =>
+    buildMockCatalog(t),
+  );
   const [loading, setLoading] = useState(true);
   // 실데이터는 toolCount 를 제공하지 않으므로 도구 수 배지를 숨긴다.
   const [showToolCount, setShowToolCount] = useState(true);
@@ -150,7 +156,7 @@ export default function McpCatalogPage() {
     } catch {
       setInstallError((prev) => ({
         ...prev,
-        [e.id]: "설치 실패. 다시 시도해 주세요.",
+        [e.id]: t("installError"),
       }));
     } finally {
       setInstalling((prev) => ({ ...prev, [e.id]: false }));
@@ -171,8 +177,8 @@ export default function McpCatalogPage() {
   return (
     <>
       <PageHeader
-        title="MCP 카탈로그"
-        description="설치 가능한 MCP 서버와 스킬을 둘러보고 워크스페이스에 추가하세요."
+        title={t("pageTitle")}
+        description={t("pageDescription")}
       />
 
       <div className="min-h-0 flex-1 overflow-y-auto p-6">
@@ -182,16 +188,16 @@ export default function McpCatalogPage() {
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="이름, 제공자, 설명으로 검색…"
+            placeholder={t("searchPlaceholder")}
             className="h-9 w-full rounded-md border border-border bg-surface pl-9 pr-3 text-sm text-fg placeholder:text-muted focus:border-accent focus:outline-none"
           />
         </div>
 
         {loading ? (
-          <Card className="p-12 text-center text-muted">로딩 중…</Card>
+          <Card className="p-12 text-center text-muted">{t("loading")}</Card>
         ) : filtered.length === 0 ? (
           <Card className="p-12 text-center text-muted">
-            검색 결과가 없습니다.
+            {t("emptyState")}
           </Card>
         ) : (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -211,18 +217,20 @@ export default function McpCatalogPage() {
                       </div>
                     </div>
                     <Badge tone={e.kind === "skill" ? "accent" : "neutral"}>
-                      {e.kind === "skill" ? "스킬" : "서버"}
+                      {e.kind === "skill" ? t("kindSkill") : t("kindServer")}
                     </Badge>
                   </div>
 
                   <p className="flex-1 text-sm leading-relaxed text-fg-2">
-                    {e.description}
+                    {e.description || t("noDescription")}
                   </p>
 
                   <div className="flex flex-col gap-2 border-t border-border pt-3">
                     <div className="flex items-center justify-between">
                       {showToolCount ? (
-                        <Badge tone="neutral">도구 {e.toolCount}개</Badge>
+                        <Badge tone="neutral">
+                          {t("toolCount", { count: e.toolCount })}
+                        </Badge>
                       ) : (
                         <Badge tone="neutral">
                           <span className="font-mono">{e.provider}</span>
@@ -230,7 +238,7 @@ export default function McpCatalogPage() {
                       )}
                       {e.installed ? (
                         <Button variant="outline" size="sm" disabled>
-                          설치됨
+                          {t("installed")}
                         </Button>
                       ) : (
                         <Button
@@ -243,7 +251,7 @@ export default function McpCatalogPage() {
                           ) : (
                             <Download className="h-4 w-4" />
                           )}
-                          설치
+                          {t("install")}
                         </Button>
                       )}
                     </div>

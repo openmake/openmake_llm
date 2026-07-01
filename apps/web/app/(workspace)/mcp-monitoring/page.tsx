@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import { RefreshCw, AlertTriangle } from "lucide-react";
 import { CLIENT_TIMING } from "@/lib/config";
 import {
@@ -165,6 +166,7 @@ async function fetchSummaryView(): Promise<SummaryView | null> {
 }
 
 export default function McpMonitoringPage() {
+  const t = useTranslations("mcpMonitoring");
   const [summary, setSummary] = useState<SummaryView>(SUMMARY);
   const [topCrashed, setTopCrashed] = useState<TopCrashedItem[]>([]);
   const [crashTrend, setCrashTrend] = useState<CrashTrendItem[]>([]);
@@ -210,12 +212,12 @@ export default function McpMonitoringPage() {
   return (
     <>
       <PageHeader
-        title="MCP 모니터링"
-        description="전체 MCP 서버의 호출 추이와 도구 실행 로그를 모니터링합니다."
+        title={t("title")}
+        description={t("description")}
         actions={
           <Button variant="outline" size="sm" onClick={refresh}>
             <RefreshCw className="h-4 w-4" />
-            새로고침
+            {t("refresh")}
           </Button>
         }
       />
@@ -223,19 +225,19 @@ export default function McpMonitoringPage() {
       <div className="min-h-0 flex-1 overflow-y-auto p-6">
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           <StatCard
-            label="활성 서버"
+            label={t("activeServers")}
             value={summary.activeServers}
-            delta="전체 5개 중"
+            delta={t("activeServersDelta")}
           />
           <StatCard
-            label="총 도구 호출"
+            label={t("totalCalls")}
             value={summary.totalCalls}
             delta="+8.2% 24h"
             deltaTone="success"
           />
-          <StatCard label="평균 지연" value={summary.avgLatency} />
+          <StatCard label={t("avgLatency")} value={summary.avgLatency} />
           <StatCard
-            label="에러율"
+            label={t("errorRate")}
             value={summary.errorRate}
             delta="+0.3% 24h"
             deltaTone="danger"
@@ -247,7 +249,7 @@ export default function McpMonitoringPage() {
               백엔드에 per-server 호출/에러율 집계 엔드포인트가 없어 목업 유지. */}
           <Card className="lg:col-span-2">
             <CardHeader>
-              <CardTitle>서버별 호출 분포</CardTitle>
+              <CardTitle>{t("serverDistribution")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               {SERVER_USAGE.map((s) => {
@@ -258,7 +260,7 @@ export default function McpMonitoringPage() {
                     <div className="mb-1 flex items-center justify-between text-xs">
                       <span className="font-mono text-fg-2">{s.name}</span>
                       <span className="text-faint">
-                        {s.calls.toLocaleString("ko-KR")}회 ·{" "}
+                        {t("callCount", { count: s.calls.toLocaleString("ko-KR") })} ·{" "}
                         <span className={highErr ? "text-danger" : "text-muted"}>
                           {(s.errorRate * 100).toFixed(1)}%
                         </span>
@@ -283,17 +285,17 @@ export default function McpMonitoringPage() {
               백엔드에 per-tool 실행 로그 엔드포인트가 없어 목업 유지. */}
           <Card className="lg:col-span-3">
             <CardHeader>
-              <CardTitle>최근 도구 실행 로그</CardTitle>
+              <CardTitle>{t("recentToolLog")}</CardTitle>
             </CardHeader>
             <CardContent className="p-0">
               <Table>
                 <thead>
                   <tr>
-                    <Th>시각</Th>
-                    <Th>서버</Th>
-                    <Th>도구</Th>
-                    <Th className="text-right">소요</Th>
-                    <Th>상태</Th>
+                    <Th>{t("colTime")}</Th>
+                    <Th>{t("colServer")}</Th>
+                    <Th>{t("colTool")}</Th>
+                    <Th className="text-right">{t("colDuration")}</Th>
+                    <Th>{t("colStatus")}</Th>
                   </tr>
                 </thead>
                 <tbody>
@@ -313,7 +315,7 @@ export default function McpMonitoringPage() {
                         <Badge
                           tone={l.status === "success" ? "success" : "danger"}
                         >
-                          {l.status === "success" ? "성공" : "실패"}
+                          {l.status === "success" ? t("statusSuccess") : t("statusError")}
                         </Badge>
                       </Td>
                     </tr>
@@ -328,18 +330,18 @@ export default function McpMonitoringPage() {
         <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
           <Card>
             <CardHeader>
-              <CardTitle>Top 크래시 서버</CardTitle>
+              <CardTitle>{t("topCrashed")}</CardTitle>
             </CardHeader>
             <CardContent className="p-0">
               {topCrashed.length === 0 ? (
-                <p className="px-5 py-8 text-center text-sm text-muted">데이터 없음</p>
+                <p className="px-5 py-8 text-center text-sm text-muted">{t("noData")}</p>
               ) : (
                 <Table>
                   <thead>
                     <tr>
-                      <Th>서버</Th>
-                      <Th className="text-right">크래시</Th>
-                      <Th>마지막 크래시</Th>
+                      <Th>{t("colServer")}</Th>
+                      <Th className="text-right">{t("colCrashCount")}</Th>
+                      <Th>{t("colLastCrash")}</Th>
                     </tr>
                   </thead>
                   <tbody>
@@ -367,11 +369,11 @@ export default function McpMonitoringPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>크래시 추이 (24h)</CardTitle>
+              <CardTitle>{t("crashTrend")}</CardTitle>
             </CardHeader>
             <CardContent>
               {crashTrend.length === 0 ? (
-                <p className="py-8 text-center text-sm text-muted">데이터 없음</p>
+                <p className="py-8 text-center text-sm text-muted">{t("noData")}</p>
               ) : (
                 <div className="space-y-2">
                   {crashTrend.map((item) => {
