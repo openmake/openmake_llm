@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Plus, Search, LogOut } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
+import { Plus, Search, LogOut, Trash2 } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ApiSuccess } from "@openmake/shared-types";
 import { useAppStore } from "@/lib/store";
 import type { ChatRole } from "@/lib/store";
 import { visibleNavGroups } from "@/lib/nav";
 import { ApiClient } from "@/lib/api-client";
+import { appendAnonSessionId } from "@/lib/anon-session";
 import Image from "next/image";
 import { ThemeToggle } from "./theme-toggle";
 import { cn } from "@/lib/utils";
@@ -23,6 +24,7 @@ interface SessionRow {
 export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { clearChat, auth, setAuth, setChatHistory, setCurrentSessionId, setArtifacts } =
     useAppStore();
   const user = auth.currentUser;
@@ -47,6 +49,18 @@ export function Sidebar() {
       /* 조회 실패 — 무시 */
     }
     if (pathname !== "/") router.push("/");
+  };
+
+  // 최근 대화 삭제 — 백엔드 DELETE /api/chat/sessions/:sid (소유자/익명 소유 검증).
+  const deleteSession = async (sid: string, title: string) => {
+    if (!window.confirm(`"${title}" 대화를 삭제하시겠습니까?\n삭제된 대화는 복구할 수 없습니다.`)) return;
+    try {
+      await ApiClient.del(appendAnonSessionId(`/api/chat/sessions/${sid}`));
+      if (sid === currentSessionId) clearChat();
+      void queryClient.invalidateQueries({ queryKey: ["conversations"] });
+    } catch {
+      window.alert("대화 삭제에 실패했습니다.");
+    }
   };
 
   const logout = async () => {
@@ -143,20 +157,31 @@ export function Sidebar() {
               {sessions.slice(0, 20).map((s, i) => {
                 const sid = s.id ?? s.sessionId;
                 const active = !!sid && sid === currentSessionId;
+                const title = s.title ?? s.name ?? "제목 없는 대화";
                 return (
-                  <li key={sid ?? i}>
+                  <li key={sid ?? i} className="group relative">
                     <button
                       type="button"
                       onClick={() => openSession(sid)}
                       className={cn(
-                        "w-full truncate rounded-md px-2.5 py-1.5 text-left text-sm transition",
+                        "w-full truncate rounded-md px-2.5 py-1.5 text-left text-sm transition group-hover:pr-8",
                         active
                           ? "bg-accent-soft font-medium text-accent"
                           : "text-muted hover:bg-surface-3 hover:text-fg",
                       )}
                     >
-                      {s.title ?? s.name ?? "제목 없는 대화"}
+                      {title}
                     </button>
+                    {sid && (
+                      <button
+                        type="button"
+                        aria-label="대화 삭제"
+                        onClick={() => void deleteSession(sid, title)}
+                        className="absolute right-1 top-1/2 grid h-6 w-6 -translate-y-1/2 place-items-center rounded text-faint opacity-0 transition group-hover:opacity-100 hover:bg-surface-3 hover:text-danger"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    )}
                   </li>
                 );
               })}

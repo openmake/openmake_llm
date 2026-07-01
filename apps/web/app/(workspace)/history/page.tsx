@@ -2,10 +2,12 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Clock, Search, MessageSquare } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { Clock, Search, MessageSquare, Trash2 } from "lucide-react";
 import type { ApiSuccess } from "@openmake/shared-types";
 import { Badge, PageHeader, Card } from "@/components/ui/primitives";
 import { ApiClient } from "@/lib/api-client";
+import { appendAnonSessionId } from "@/lib/anon-session";
 import { useAppStore } from "@/lib/store";
 import type { ChatRole } from "@/lib/store";
 
@@ -133,10 +135,38 @@ const GROUP_ORDER: DateGroup[] = ["today", "yesterday", "week", "older"];
 
 export default function HistoryPage() {
   const router = useRouter();
-  const { setChatHistory, setCurrentSessionId, setArtifacts } = useAppStore();
+  const queryClient = useQueryClient();
+  const { setChatHistory, setCurrentSessionId, setArtifacts, clearChat, auth } = useAppStore();
+  const currentSessionId = useAppStore((s) => s.currentSessionId);
   const [sessions, setSessions] = useState<Session[]>(SESSIONS);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
+
+  // 세션 단건 삭제 — 백엔드 DELETE /api/chat/sessions/:sid (소유자/익명 소유 검증).
+  const deleteSession = async (s: Session) => {
+    if (!window.confirm(`"${s.title}" 대화를 삭제하시겠습니까?\n삭제된 대화는 복구할 수 없습니다.`)) return;
+    try {
+      await ApiClient.del(appendAnonSessionId(`/api/chat/sessions/${s.id}`));
+      setSessions((prev) => prev.filter((x) => x.id !== s.id));
+      if (s.id === currentSessionId) clearChat();
+      void queryClient.invalidateQueries({ queryKey: ["conversations"] });
+    } catch {
+      window.alert("대화 삭제에 실패했습니다.");
+    }
+  };
+
+  // 전체 삭제 — 백엔드 DELETE /api/chat/sessions (requireAuth, 로그인 사용자 전용).
+  const deleteAll = async () => {
+    if (!window.confirm(`대화 기록 ${sessions.length}개를 모두 삭제하시겠습니까?\n삭제된 대화는 복구할 수 없습니다.`)) return;
+    try {
+      await ApiClient.del("/api/chat/sessions");
+      setSessions([]);
+      clearChat();
+      void queryClient.invalidateQueries({ queryKey: ["conversations"] });
+    } catch {
+      window.alert("전체 삭제에 실패했습니다.");
+    }
+  };
 
   // 대화 클릭 → 해당 세션 메시지 로드 + 채팅 화면으로 전환 (sidebar openSession 과 동일 패턴).
   const openSession = async (sid: string) => {
@@ -202,15 +232,27 @@ export default function HistoryPage() {
       />
 
       <div className="min-h-0 flex-1 overflow-y-auto p-6">
-        {/* 검색 */}
-        <div className="mb-5 flex items-center gap-2 rounded-md border border-border-strong bg-surface-2 px-3">
-          <Search className="h-4 w-4 text-faint" />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="대화 제목 검색..."
-            className="h-9 w-full bg-transparent text-sm text-fg outline-none placeholder:text-muted"
-          />
+        {/* 검색 + 전체 삭제 */}
+        <div className="mb-5 flex items-center gap-2">
+          <div className="flex flex-1 items-center gap-2 rounded-md border border-border-strong bg-surface-2 px-3">
+            <Search className="h-4 w-4 text-faint" />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="대화 제목 검색..."
+              className="h-9 w-full bg-transparent text-sm text-fg outline-none placeholder:text-muted"
+            />
+          </div>
+          {auth.currentUser && !loading && sessions.length > 0 && (
+            <button
+              type="button"
+              onClick={() => void deleteAll()}
+              className="flex h-9 flex-shrink-0 items-center gap-1.5 rounded-md border border-border-strong bg-surface-2 px-3 text-sm text-muted transition hover:border-danger/40 hover:text-danger"
+            >
+              <Trash2 className="h-4 w-4" />
+              전체 삭제
+            </button>
+          )}
         </div>
 
         {loading ? (
@@ -240,7 +282,7 @@ export default function HistoryPage() {
                     <Card
                       key={s.id}
                       onClick={() => void openSession(s.id)}
-                      className="flex cursor-pointer items-start gap-3 p-4 transition hover:border-border-strong hover:shadow-2"
+                      className="group flex cursor-pointer items-start gap-3 p-4 transition hover:border-border-strong hover:shadow-2"
                     >
                       <div className="mt-0.5 grid h-8 w-8 flex-shrink-0 place-items-center rounded-md bg-surface-2 text-faint">
                         <MessageSquare className="h-4 w-4" />
@@ -263,6 +305,17 @@ export default function HistoryPage() {
                           </Badge>
                         </div>
                       </div>
+                      <button
+                        type="button"
+                        aria-label="대화 삭제"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void deleteSession(s);
+                        }}
+                        className="mt-0.5 grid h-8 w-8 flex-shrink-0 place-items-center rounded-md text-faint opacity-0 transition group-hover:opacity-100 hover:bg-surface-3 hover:text-danger"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
                     </Card>
                   ))}
                 </div>
