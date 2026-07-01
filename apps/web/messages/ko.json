@@ -838,5 +838,391 @@
       "agreementRequired": "서비스 이용약관 및 개인정보 처리방침에 동의해야 합니다.",
       "registerFailed": "회원가입에 실패했습니다."
     }
+  },
+  "admin": {
+    "title": "관리자 대시보드",
+    "description": "사용자, 모델, 시스템 상태를 한 곳에서 관리합니다.",
+    "adminOnly": "관리자 전용",
+    "addUser": "사용자 추가",
+    "quickLinksHeading": "빠른 관리",
+    "recentUsers": "최근 가입 사용자",
+    "viewAll": "전체 보기",
+    "guardianPending": "미성년자 동의 보류",
+    "approve": "승인",
+    "close": "닫기",
+    "cancel": "취소",
+    "create": "생성",
+    "save": "저장",
+    "delete": "삭제",
+    "active": "활성",
+    "inactive": "비활성",
+    "statusNormal": "정상",
+    "editUser": "사용자 편집",
+    "deleteTitle": "사용자 삭제",
+    "deleteConfirm": "정말 삭제하시겠습니까?",
+    "nameLabel": "이름 (선택)",
+    "namePlaceholder": "홍길동",
+    "emailRequired": "이메일 *",
+    "roleRequired": "역할 *",
+    "passwordRequired": "비밀번호 *",
+    "roleField": "역할",
+    "statusField": "상태",
+    "newPasswordLabel": "새 비밀번호 (선택)",
+    "newPasswordPlaceholder": "변경하지 않으려면 비워두세요",
+    "createError": "생성 실패. 다시 시도해 주세요.",
+    "updateError": "수정 실패. 다시 시도해 주세요.",
+    "deleteError": "삭제 실패. 다시 시도해 주세요.",
+    "roles": {
+      "admin": "관리자",
+      "user": "사용자",
+      "guest": "게스트"
+    },
+    "quickLinks": {
+      "users": {
+        "title": "사용자 관리",
+        "desc": "계정 생성·권한·상태 관리"
+      },
+      "models": {
+        "title": "모델 · MCP 설정",
+        "desc": "모델 프리셋과 도구 카탈로그"
+      },
+      "system": {
+        "title": "시스템 상태",
+        "desc": "노드·서비스 헬스 모니터링"
+      }
+    },
+    "stats": {
+      "totalUsers": "총 사용자",
+      "totalUsersDelta": "+12 (지난 7일)",
+      "activeSessions": "활성 세션",
+      "todayRequests": "오늘 요청",
+      "systemStatus": "시스템 상태",
+      "allNodesNormal": "모든 노드 정상"
+    },
+    "col": {
+      "id": "ID",
+      "email": "이메일",
+      "role": "역할",
+      "status": "상태",
+      "joinedAt": "가입일",
+      "lastLogin": "마지막 로그인",
+      "actions": "액션",
+      "edit": "편집",
+      "delete": "삭제"
+    }
+  },
+  "adminAnalytics": {
+    "title": "애널리틱스",
+    "description": "대화량, 사용자, 토큰 소비 추세를 분석합니다.",
+    "dailyConversations": "일별 대화량",
+    "recentDaysCaption": "최근 {days}일 · 일자별",
+    "modelUsageTitle": "모델 프로파일 사용 비중",
+    "costAnalysis": "비용 분석",
+    "dailyCost": "일일 비용",
+    "weeklyCost": "주간 비용",
+    "projectedMonthlyCost": "월간 예상 비용",
+    "userBehavior": "사용자 행동",
+    "avgSessionLength": "평균 세션 길이",
+    "minutesSuffix": "{value}분",
+    "avgQueriesPerSession": "세션당 평균 쿼리",
+    "peakHoursTop3": "피크 시간대 Top 3",
+    "peakHourItem": "{hour}시 · {requests} 요청",
+    "topQueriesTop5": "자주 묻는 쿼리 Top 5",
+    "agentPerformance": "에이전트 성능",
+    "period": {
+      "7d": "7일",
+      "30d": "30일",
+      "90d": "90일"
+    },
+    "stats": {
+      "totalConversations": "총 대화",
+      "activeUsers": "활성 사용자",
+      "consumedTokens": "소비 토큰",
+      "avgResponse": "평균 응답"
+    },
+    "col": {
+      "model": "모델",
+      "cost": "비용",
+      "share": "비중",
+      "agent": "에이전트",
+      "requests": "요청 수",
+      "successRate": "성공률",
+      "avgResponse": "평균 응답"
+    }
+  },
+  "adminAudit": {
+    "title": "감사 로그",
+    "description": "시스템 전반의 보안·관리 활동 기록입니다.",
+    "countBadge": "{count}건",
+    "exportCsv": "CSV 내보내기",
+    "filter": {
+      "allActions": "전체 액션"
+    },
+    "severity": {
+      "all": "전체 심각도"
+    },
+    "status": {
+      "critical": "심각",
+      "warn": "경고",
+      "info": "정보"
+    },
+    "period": {
+      "today": "오늘",
+      "days7": "7일",
+      "days30": "30일",
+      "all": "전체"
+    },
+    "th": {
+      "time": "시각",
+      "actor": "액터",
+      "action": "액션",
+      "target": "대상",
+      "severity": "심각도"
+    },
+    "empty": "조건에 맞는 로그가 없습니다."
+  },
+  "adminMetrics": {
+    "title": "시스템 메트릭",
+    "lastUpdated": "마지막 갱신 {time}",
+    "subtitle": "시스템 상태 및 리소스 실시간 모니터링",
+    "refresh": "새로고침",
+    "stat": {
+      "cpu": "CPU 사용률",
+      "memory": "메모리",
+      "requestRate": "요청률",
+      "errorRate": "에러율"
+    },
+    "memoryDelta": "총 {total} GB 중",
+    "requestChartTitle": "요청률 (최근 24시간 · req/min)",
+    "barTooltip": "{hour}시: {value}/min",
+    "nodeStatusTitle": "노드 · 서비스 상태",
+    "nodeRoleLlm": "LLM 노드",
+    "th": {
+      "node": "노드",
+      "role": "역할",
+      "status": "상태",
+      "latency": "지연",
+      "load": "부하"
+    },
+    "status": {
+      "online": "정상",
+      "degraded": "저하",
+      "offline": "중단"
+    },
+    "agentMetricsTitle": "에이전트 메트릭",
+    "agent": {
+      "totalAgents": "총 에이전트",
+      "totalRequests": "총 요청",
+      "avgSuccessRate": "평균 성공률",
+      "avgResponseTime": "평균 응답시간"
+    },
+    "agentTh": {
+      "id": "에이전트 ID",
+      "requests": "요청 수",
+      "successRate": "성공률",
+      "avgResponseTime": "평균 응답시간"
+    }
+  },
+  "adminAlerts": {
+    "title": "알림",
+    "description": "알림 규칙을 관리하고 최근 발생 이벤트를 확인합니다.",
+    "addRule": "규칙 추가",
+    "rulesTitle": "알림 규칙",
+    "toggleAria": "규칙 활성 토글",
+    "enabled": "활성",
+    "disabled": "비활성",
+    "recentTitle": "최근 발생 알림",
+    "acknowledged": "확인됨",
+    "acknowledge": "확인",
+    "status": {
+      "critical": "심각",
+      "warning": "경고",
+      "info": "정보"
+    },
+    "rules": {
+      "cpu": {
+        "name": "CPU 사용률 임계",
+        "condition": "CPU > 85% · 5분 지속"
+      },
+      "contextOverflow": {
+        "name": "LLM 컨텍스트 오버플로",
+        "condition": "ContextOverflowError 발생"
+      },
+      "errorRate": {
+        "name": "에러율 급증",
+        "condition": "5xx 비율 > 2%"
+      },
+      "tokenQuota": {
+        "name": "토큰 쿼터 소진",
+        "condition": "주간 쿼터 90% 초과"
+      },
+      "roleChange": {
+        "name": "관리자 권한 변경",
+        "condition": "user.role_change → admin"
+      }
+    },
+    "events": {
+      "e1": "관리자 권한 부여 감지 — u_1040 (devops@partner.co.kr 수행)",
+      "e2": "redis-kv 노드 부하 78% — rate-limit 정합 영향 가능",
+      "e3": "LLM 컨텍스트 오버플로 1건 — conv_88412 truncate 적용",
+      "e4": "일일 백업 완료 — postgres-primary (2.1GB)",
+      "e5": "비정상 로그인 시도 12회 — 45.33.21.7 차단됨"
+    }
+  },
+  "adminMcpCatalog": {
+    "close": "닫기",
+    "editTitle": "템플릿 편집",
+    "createTitle": "새 템플릿",
+    "saveError": "저장 실패. 다시 시도해 주세요.",
+    "displayNameLabel": "표시 이름",
+    "descriptionLabel": "설명",
+    "descriptionPlaceholder": "서버에 대한 간략한 설명",
+    "typeLabel": "유형",
+    "commandLabel": "명령어",
+    "enabledLabel": "활성화",
+    "cancel": "취소",
+    "save": "저장",
+    "create": "생성",
+    "deleteTitle": "템플릿 삭제",
+    "deleteConfirm": "정말 삭제하시겠습니까?",
+    "deleteError": "삭제 실패. 다시 시도해 주세요.",
+    "delete": "삭제",
+    "pageTitle": "MCP 카탈로그 관리",
+    "pageDescription": "사용자에게 제공되는 MCP 서버 템플릿을 관리합니다.",
+    "addTemplate": "템플릿 추가",
+    "colName": "이름",
+    "colDescription": "설명",
+    "colType": "유형",
+    "colEnabled": "활성여부",
+    "colActions": "액션",
+    "loading": "로딩 중…",
+    "emptyState": "등록된 템플릿이 없습니다.",
+    "enabled": "활성",
+    "disabled": "비활성",
+    "editAction": "편집",
+    "deleteAction": "삭제"
+  },
+  "apiKeys": {
+    "title": "API 키",
+    "description": "외부 LLM 공급자(Anthropic / OpenAI 호환) 키를 등록하고 관리합니다.",
+    "addKey": "새 키 추가",
+    "close": "닫기",
+    "cancel": "취소",
+    "save": "저장",
+    "registeredKeys": "등록된 공급자 키",
+    "mockDataShown": "목업 데이터 표시 중",
+    "loading": "키 목록을 불러오는 중...",
+    "emptyTitle": "등록된 외부 키가 없습니다",
+    "emptyDesc": "새 키를 추가하면 해당 공급자 모델을 사용할 수 있습니다.",
+    "loadError": "키 목록을 불러오지 못했습니다.",
+    "deleteConfirm": "{name} 키를 삭제하시겠습니까?\n이 키를 사용하는 모델 호출이 중단됩니다.",
+    "deleteFailed": "삭제 실패: {error}",
+    "saveFailed": "저장 실패: {error}",
+    "serverError": "서버 오류",
+    "deleteAria": "삭제",
+    "validationError": "이름과 8자 이상의 API 키를 입력하세요.",
+    "namePlaceholder": "예: 프로덕션, 개발용",
+    "apiKeyLabel": "API 키",
+    "baseUrlLabel": "Base URL (선택)",
+    "col": {
+      "provider": "공급자",
+      "name": "이름",
+      "key": "키",
+      "createdAt": "생성일",
+      "status": "상태",
+      "actions": "작업"
+    },
+    "status": {
+      "validationFailed": "검증 실패",
+      "active": "활성",
+      "unverified": "미검증"
+    },
+    "sdkType": {
+      "anthropic": "Anthropic",
+      "openaiCompatible": "OpenAI 호환"
+    },
+    "mock": {
+      "productionName": "프로덕션"
+    }
+  },
+  "usage": {
+    "title": "사용량",
+    "description": "내 계정 기준 토큰·요청 사용량입니다.",
+    "mockData": "목업 데이터",
+    "updatedAt": "갱신 {time}",
+    "refresh": "새로고침",
+    "loading": "불러오는 중...",
+    "noData": "데이터가 없습니다.",
+    "dailyTitle": "일별 토큰 사용량 (최근 14일)",
+    "tokenTooltip": "{date} · {count} 토큰",
+    "systemMonitorTitle": "시스템 토큰 모니터링",
+    "dailyTokens7d": "일별 토큰 (최근 7일)",
+    "hourlyTokens": "시간별 토큰",
+    "modelUsageTitle": "모델별 사용 비중",
+    "noModelData": "모델별 사용 데이터가 없습니다.",
+    "stat": {
+      "monthTokens": "이번 달 토큰",
+      "requests": "요청 수",
+      "avgLatency": "평균 지연",
+      "errors": "에러",
+      "todayCost": "오늘 비용",
+      "todayTokens": "오늘 토큰",
+      "weekTokens": "주간 토큰",
+      "weekEstCost": "주간 예상 비용"
+    },
+    "delta": {
+      "warning": "주의",
+      "normal": "정상"
+    },
+    "col": {
+      "model": "모델",
+      "tokens": "토큰",
+      "share": "비중",
+      "distribution": "분포"
+    }
+  },
+  "developer": {
+    "pageTitle": "개발자 문서",
+    "pageDescription": "OpenMake LLM API를 통합하고 자동화합니다.",
+    "apiInfo": {
+      "title": "API 기본 정보",
+      "apiVersionLabel": "API 버전",
+      "versionBlock": "/v1  — OpenAI 호환 엔드포인트\n/api — OpenMake 전용 엔드포인트",
+      "description": "OpenMake LLM API는 OpenAI Chat Completions API와 호환됩니다. 기존 OpenAI SDK를 <code>baseURL</code>만 변경하여 바로 사용할 수 있습니다."
+    },
+    "auth": {
+      "title": "인증 방식",
+      "apiKeyTitle": "API Key 인증",
+      "apiKeyDesc": "설정 > API 키 페이지에서 발급한 키를 <code>Authorization</code> 헤더에 전달합니다.",
+      "jwtTitle": "JWT 세션 인증",
+      "jwtDesc": "브라우저 세션은 HttpOnly 쿠키에 저장된 JWT를 자동으로 사용합니다. API 직접 호출 시에는 API Key를 권장합니다."
+    },
+    "models": {
+      "title": "모델 목록",
+      "description": "사용 가능한 모델 목록은 <code>GET /api/models</code>로 조회하거나, 채팅 페이지의 모델 선택기를 참고하세요.",
+      "brandIdLabel": "브랜드 모델 ID"
+    },
+    "brandModels": {
+      "default": "기본 모델",
+      "pro": "고성능 모델",
+      "fast": "빠른 응답",
+      "think": "추론 모드",
+      "code": "코드 특화",
+      "vision": "이미지 지원"
+    },
+    "steps": {
+      "apiKey": {
+        "title": "API 키 발급",
+        "description": "설정 > API 키 페이지에서 새 API 키를 생성합니다."
+      },
+      "chatCompletion": {
+        "title": "채팅 완성 요청",
+        "description": "OpenAI 호환 /v1/chat/completions 엔드포인트에 요청을 보냅니다."
+      },
+      "streaming": {
+        "title": "스트리밍 응답",
+        "description": "stream: true 를 추가하면 SSE 스트림으로 토큰을 실시간 수신합니다."
+      }
+    }
   }
 }

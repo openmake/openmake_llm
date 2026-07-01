@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import { Gauge, RefreshCw } from "lucide-react";
 import {
   PageHeader,
@@ -32,10 +33,10 @@ const STATUS_TONE: Record<NodeStatus, "success" | "warn" | "danger"> = {
   degraded: "warn",
   offline: "danger",
 };
-const STATUS_LABEL: Record<NodeStatus, string> = {
-  online: "정상",
-  degraded: "저하",
-  offline: "중단",
+const STATUS_LABEL_KEY: Record<NodeStatus, string> = {
+  online: "status.online",
+  degraded: "status.degraded",
+  offline: "status.offline",
 };
 
 // 클러스터 노드/CPU/메모리는 /api/metrics·/api/metrics/metrics 실데이터로 오버레이.
@@ -81,6 +82,7 @@ const STATUS_MAP: Record<string, NodeStatus> = {
 };
 
 export default function AdminMetricsPage() {
+  const t = useTranslations("adminMetrics");
   const [updated, setUpdated] = useState<string>("");
   const [nodes, setNodes] = useState<NodeRow[]>(NODES);
   const [cpu, setCpu] = useState<string | null>(null);
@@ -111,7 +113,7 @@ export default function AdminMetricsPage() {
           setNodes(
             list.map((n) => ({
               name: n.name ?? n.id ?? "node",
-              role: "LLM 노드",
+              role: t("nodeRoleLlm"),
               status: STATUS_MAP[String(n.status)] ?? "degraded",
               latency:
                 typeof n.latency === "number" ? `${n.latency}ms` : (n.latency ?? "-"),
@@ -131,7 +133,7 @@ export default function AdminMetricsPage() {
         if (sys.memory?.used != null && sys.memory?.total != null) {
           setMem({
             value: `${(sys.memory.used / 1024).toFixed(1)} GB`,
-            delta: `총 ${(sys.memory.total / 1024).toFixed(1)} GB 중`,
+            delta: t("memoryDelta", { total: (sys.memory.total / 1024).toFixed(1) }),
           });
         }
       }
@@ -152,7 +154,7 @@ export default function AdminMetricsPage() {
     } catch {
       /* 401/실패 시 목업 유지 */
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void load();
@@ -166,42 +168,42 @@ export default function AdminMetricsPage() {
   return (
     <>
       <PageHeader
-        title="시스템 메트릭"
-        description={updated ? `마지막 갱신 ${updated}` : "시스템 상태 및 리소스 실시간 모니터링"}
+        title={t("title")}
+        description={updated ? t("lastUpdated", { time: updated }) : t("subtitle")}
         actions={
           <Button variant="outline" size="sm" onClick={onRefresh}>
-            <RefreshCw className="h-3.5 w-3.5" /> 새로고침
+            <RefreshCw className="h-3.5 w-3.5" /> {t("refresh")}
           </Button>
         }
       />
 
       <div className="min-h-0 flex-1 overflow-y-auto p-6">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <StatCard label="CPU 사용률" value={cpu ?? "47%"} delta="load avg / cores" deltaTone="success" />
-          <StatCard label="메모리" value={mem?.value ?? "6.2 GB"} delta={mem?.delta ?? "총 16 GB 중"} />
-          <StatCard label="요청률" value="612/min" delta="+8.4%" />
-          <StatCard label="에러율" value="0.21%" delta="+0.04%" deltaTone="danger" />
+          <StatCard label={t("stat.cpu")} value={cpu ?? "47%"} delta="load avg / cores" deltaTone="success" />
+          <StatCard label={t("stat.memory")} value={mem?.value ?? "6.2 GB"} delta={mem?.delta ?? t("memoryDelta", { total: "16" })} />
+          <StatCard label={t("stat.requestRate")} value="612/min" delta="+8.4%" />
+          <StatCard label={t("stat.errorRate")} value="0.21%" delta="+0.04%" deltaTone="danger" />
         </div>
 
         <Card className="mt-6">
           <CardHeader className="flex items-center gap-2">
             <Gauge className="h-4 w-4 text-accent" />
-            <CardTitle>요청률 (최근 24시간 · req/min)</CardTitle>
+            <CardTitle>{t("requestChartTitle")}</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex h-48 items-end gap-1">
-              {TIMESERIES.map((t) => (
+              {TIMESERIES.map((bar) => (
                 <div
-                  key={t.hour}
+                  key={bar.hour}
                   className="group flex h-full flex-1 flex-col items-center justify-end gap-1"
-                  title={`${String(t.hour).padStart(2, "0")}시: ${t.value}/min`}
+                  title={t("barTooltip", { hour: String(bar.hour).padStart(2, "0"), value: bar.value })}
                 >
                   <div
                     className="w-full rounded-t bg-accent/70 transition group-hover:bg-accent"
-                    style={{ height: `${Math.max(4, (t.value / maxV) * 100)}%` }}
+                    style={{ height: `${Math.max(4, (bar.value / maxV) * 100)}%` }}
                   />
-                  {t.hour % 3 === 0 && (
-                    <span className="text-[9px] text-faint">{String(t.hour).padStart(2, "0")}</span>
+                  {bar.hour % 3 === 0 && (
+                    <span className="text-[9px] text-faint">{String(bar.hour).padStart(2, "0")}</span>
                   )}
                 </div>
               ))}
@@ -211,17 +213,17 @@ export default function AdminMetricsPage() {
 
         <Card className="mt-6">
           <CardHeader>
-            <CardTitle>노드 · 서비스 상태</CardTitle>
+            <CardTitle>{t("nodeStatusTitle")}</CardTitle>
           </CardHeader>
           <CardContent className="p-0">
             <Table>
               <thead>
                 <tr>
-                  <Th>노드</Th>
-                  <Th>역할</Th>
-                  <Th>상태</Th>
-                  <Th>지연</Th>
-                  <Th>부하</Th>
+                  <Th>{t("th.node")}</Th>
+                  <Th>{t("th.role")}</Th>
+                  <Th>{t("th.status")}</Th>
+                  <Th>{t("th.latency")}</Th>
+                  <Th>{t("th.load")}</Th>
                 </tr>
               </thead>
               <tbody>
@@ -230,7 +232,7 @@ export default function AdminMetricsPage() {
                     <Td className="font-mono text-xs text-fg">{n.name}</Td>
                     <Td className="text-muted">{n.role}</Td>
                     <Td>
-                      <Badge tone={STATUS_TONE[n.status]}>{STATUS_LABEL[n.status]}</Badge>
+                      <Badge tone={STATUS_TONE[n.status]}>{t(STATUS_LABEL_KEY[n.status])}</Badge>
                     </Td>
                     <Td className="font-mono text-xs text-fg-2">{n.latency}</Td>
                     <Td className="font-mono text-xs text-fg-2">{n.load}</Td>
@@ -244,25 +246,25 @@ export default function AdminMetricsPage() {
         {(agentSummary || (agentMetrics && agentMetrics.length > 0)) && (
           <Card className="mt-6">
             <CardHeader>
-              <CardTitle>에이전트 메트릭</CardTitle>
+              <CardTitle>{t("agentMetricsTitle")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               {agentSummary && (
                 <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
                   <StatCard
-                    label="총 에이전트"
+                    label={t("agent.totalAgents")}
                     value={String(agentSummary.totalAgents)}
                   />
                   <StatCard
-                    label="총 요청"
+                    label={t("agent.totalRequests")}
                     value={agentSummary.totalRequests.toLocaleString()}
                   />
                   <StatCard
-                    label="평균 성공률"
+                    label={t("agent.avgSuccessRate")}
                     value={`${(agentSummary.avgSuccessRate * 100).toFixed(1)}%`}
                   />
                   <StatCard
-                    label="평균 응답시간"
+                    label={t("agent.avgResponseTime")}
                     value={`${Math.round(agentSummary.avgResponseTime)}ms`}
                   />
                 </div>
@@ -271,10 +273,10 @@ export default function AdminMetricsPage() {
                 <Table>
                   <thead>
                     <tr>
-                      <Th>에이전트 ID</Th>
-                      <Th className="text-right">요청 수</Th>
-                      <Th className="text-right">성공률</Th>
-                      <Th className="text-right">평균 응답시간</Th>
+                      <Th>{t("agentTh.id")}</Th>
+                      <Th className="text-right">{t("agentTh.requests")}</Th>
+                      <Th className="text-right">{t("agentTh.successRate")}</Th>
+                      <Th className="text-right">{t("agentTh.avgResponseTime")}</Th>
                     </tr>
                   </thead>
                   <tbody>

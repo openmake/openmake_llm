@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import { Bell, Plus, AlertTriangle, AlertCircle, Info, Check } from "lucide-react";
 import {
   PageHeader,
@@ -18,8 +19,8 @@ type Severity = "critical" | "warning" | "info";
 
 interface AlertRule {
   id: string;
-  name: string;
-  condition: string;
+  nameKey: string;
+  conditionKey: string;
   channel: string[];
   enabled: boolean;
 }
@@ -36,10 +37,10 @@ const SEV_TONE: Record<Severity, "danger" | "warn" | "accent"> = {
   warning: "warn",
   info: "accent",
 };
-const SEV_LABEL: Record<Severity, string> = {
-  critical: "심각",
-  warning: "경고",
-  info: "정보",
+const SEV_LABEL_KEY: Record<Severity, string> = {
+  critical: "status.critical",
+  warning: "status.warning",
+  info: "status.info",
 };
 const SEV_ICON: Record<Severity, typeof Info> = {
   critical: AlertTriangle,
@@ -55,19 +56,19 @@ const SEV_ICON_CLR: Record<Severity, string> = {
 // 알림 규칙(rule) CRUD 백엔드 엔드포인트 없음 — AlertSystem 은 코드 내 config 로 규칙을
 // 관리하고 발생 이력만 alert_history 에 영속화. 따라서 규칙 목록은 목업 유지(토글도 로컬 전용).
 const RULES: AlertRule[] = [
-  { id: "r1", name: "CPU 사용률 임계", condition: "CPU > 85% · 5분 지속", channel: ["webhook", "email"], enabled: true },
-  { id: "r2", name: "LLM 컨텍스트 오버플로", condition: "ContextOverflowError 발생", channel: ["webhook"], enabled: true },
-  { id: "r3", name: "에러율 급증", condition: "5xx 비율 > 2%", channel: ["webhook", "slack"], enabled: true },
-  { id: "r4", name: "토큰 쿼터 소진", condition: "주간 쿼터 90% 초과", channel: ["email"], enabled: false },
-  { id: "r5", name: "관리자 권한 변경", condition: "user.role_change → admin", channel: ["webhook", "email"], enabled: true },
+  { id: "r1", nameKey: "rules.cpu.name", conditionKey: "rules.cpu.condition", channel: ["webhook", "email"], enabled: true },
+  { id: "r2", nameKey: "rules.contextOverflow.name", conditionKey: "rules.contextOverflow.condition", channel: ["webhook"], enabled: true },
+  { id: "r3", nameKey: "rules.errorRate.name", conditionKey: "rules.errorRate.condition", channel: ["webhook", "slack"], enabled: true },
+  { id: "r4", nameKey: "rules.tokenQuota.name", conditionKey: "rules.tokenQuota.condition", channel: ["email"], enabled: false },
+  { id: "r5", nameKey: "rules.roleChange.name", conditionKey: "rules.roleChange.condition", channel: ["webhook", "email"], enabled: true },
 ];
 
-const MOCK_EVENTS: AlertEvent[] = [
-  { id: "e1", severity: "critical", message: "관리자 권한 부여 감지 — u_1040 (devops@partner.co.kr 수행)", timestamp: "2026-06-21T03:40:22Z" },
-  { id: "e2", severity: "warning", message: "redis-kv 노드 부하 78% — rate-limit 정합 영향 가능", timestamp: "2026-06-21T03:12:00Z" },
-  { id: "e3", severity: "warning", message: "LLM 컨텍스트 오버플로 1건 — conv_88412 truncate 적용", timestamp: "2026-06-21T03:31:05Z" },
-  { id: "e4", severity: "info", message: "일일 백업 완료 — postgres-primary (2.1GB)", timestamp: "2026-06-21T02:00:00Z" },
-  { id: "e5", severity: "critical", message: "비정상 로그인 시도 12회 — 45.33.21.7 차단됨", timestamp: "2026-06-20T22:31:00Z" },
+const MOCK_EVENTS: { id: string; severity: Severity; messageKey: string; timestamp: string }[] = [
+  { id: "e1", severity: "critical", messageKey: "events.e1", timestamp: "2026-06-21T03:40:22Z" },
+  { id: "e2", severity: "warning", messageKey: "events.e2", timestamp: "2026-06-21T03:12:00Z" },
+  { id: "e3", severity: "warning", messageKey: "events.e3", timestamp: "2026-06-21T03:31:05Z" },
+  { id: "e4", severity: "info", messageKey: "events.e4", timestamp: "2026-06-21T02:00:00Z" },
+  { id: "e5", severity: "critical", messageKey: "events.e5", timestamp: "2026-06-20T22:31:00Z" },
 ];
 
 function fmt(s: string) {
@@ -90,8 +91,16 @@ interface ApiAlert {
 }
 
 export default function AdminAlertsPage() {
+  const t = useTranslations("adminAlerts");
   const [rules, setRules] = useState<AlertRule[]>(RULES);
-  const [events, setEvents] = useState<AlertEvent[]>(MOCK_EVENTS);
+  const [events, setEvents] = useState<AlertEvent[]>(() =>
+    MOCK_EVENTS.map((e) => ({
+      id: e.id,
+      severity: e.severity,
+      message: t(e.messageKey),
+      timestamp: e.timestamp,
+    })),
+  );
   const [acknowledged, setAcknowledged] = useState<Set<string>>(new Set());
   const [ackLoading, setAckLoading] = useState<Set<string>>(new Set());
 
@@ -142,11 +151,11 @@ export default function AdminAlertsPage() {
   return (
     <>
       <PageHeader
-        title="알림"
-        description="알림 규칙을 관리하고 최근 발생 이벤트를 확인합니다."
+        title={t("title")}
+        description={t("description")}
         actions={
           <Button size="sm">
-            <Plus className="h-3.5 w-3.5" /> 규칙 추가
+            <Plus className="h-3.5 w-3.5" /> {t("addRule")}
           </Button>
         }
       />
@@ -156,7 +165,7 @@ export default function AdminAlertsPage() {
           <Card>
             <CardHeader className="flex items-center gap-2">
               <Bell className="h-4 w-4 text-accent" />
-              <CardTitle>알림 규칙</CardTitle>
+              <CardTitle>{t("rulesTitle")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               {rules.map((r) => (
@@ -165,8 +174,8 @@ export default function AdminAlertsPage() {
                   className="flex items-start justify-between gap-3 rounded-lg border border-border bg-surface-2 p-3"
                 >
                   <div className="min-w-0">
-                    <p className="text-sm font-medium text-fg">{r.name}</p>
-                    <p className="mt-0.5 text-xs text-muted">{r.condition}</p>
+                    <p className="text-sm font-medium text-fg">{t(r.nameKey)}</p>
+                    <p className="mt-0.5 text-xs text-muted">{t(r.conditionKey)}</p>
                     <div className="mt-2 flex flex-wrap gap-1">
                       {r.channel.map((c) => (
                         <span
@@ -178,9 +187,9 @@ export default function AdminAlertsPage() {
                       ))}
                     </div>
                   </div>
-                  <button onClick={() => toggle(r.id)} aria-label="규칙 활성 토글">
+                  <button onClick={() => toggle(r.id)} aria-label={t("toggleAria")}>
                     <Badge tone={r.enabled ? "success" : "neutral"}>
-                      {r.enabled ? "활성" : "비활성"}
+                      {r.enabled ? t("enabled") : t("disabled")}
                     </Badge>
                   </button>
                 </div>
@@ -190,7 +199,7 @@ export default function AdminAlertsPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>최근 발생 알림</CardTitle>
+              <CardTitle>{t("recentTitle")}</CardTitle>
             </CardHeader>
             <CardContent>
               <ol className="relative space-y-4 border-l border-border pl-5">
@@ -210,12 +219,12 @@ export default function AdminAlertsPage() {
                       </span>
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2">
-                          <Badge tone={SEV_TONE[e.severity]}>{SEV_LABEL[e.severity]}</Badge>
+                          <Badge tone={SEV_TONE[e.severity]}>{t(SEV_LABEL_KEY[e.severity])}</Badge>
                           <span className="font-mono text-[11px] text-faint">{fmt(e.timestamp)}</span>
                           {isAcked && (
                             <Badge tone="success">
                               <Check className="h-3 w-3" />
-                              확인됨
+                              {t("acknowledged")}
                             </Badge>
                           )}
                         </div>
@@ -226,7 +235,7 @@ export default function AdminAlertsPage() {
                             disabled={isAcking}
                             onClick={() => handleAcknowledge(e.id)}
                           >
-                            확인
+                            {t("acknowledge")}
                           </Button>
                         )}
                       </div>

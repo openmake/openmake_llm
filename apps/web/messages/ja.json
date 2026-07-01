@@ -838,5 +838,391 @@
       "agreementRequired": "利用規約およびプライバシーポリシーに同意する必要があります。",
       "registerFailed": "新規登録に失敗しました。"
     }
+  },
+  "admin": {
+    "title": "管理者ダッシュボード",
+    "description": "ユーザー、モデル、システム状態を一元管理します。",
+    "adminOnly": "管理者専用",
+    "addUser": "ユーザー追加",
+    "quickLinksHeading": "クイック管理",
+    "recentUsers": "最近登録したユーザー",
+    "viewAll": "すべて表示",
+    "guardianPending": "未成年者同意の保留",
+    "approve": "承認",
+    "close": "閉じる",
+    "cancel": "キャンセル",
+    "create": "作成",
+    "save": "保存",
+    "delete": "削除",
+    "active": "有効",
+    "inactive": "無効",
+    "statusNormal": "正常",
+    "editUser": "ユーザー編集",
+    "deleteTitle": "ユーザー削除",
+    "deleteConfirm": "本当に削除しますか？",
+    "nameLabel": "名前（任意）",
+    "namePlaceholder": "山田太郎",
+    "emailRequired": "メール *",
+    "roleRequired": "ロール *",
+    "passwordRequired": "パスワード *",
+    "roleField": "ロール",
+    "statusField": "ステータス",
+    "newPasswordLabel": "新しいパスワード（任意）",
+    "newPasswordPlaceholder": "変更しない場合は空欄のままにしてください",
+    "createError": "作成に失敗しました。もう一度お試しください。",
+    "updateError": "更新に失敗しました。もう一度お試しください。",
+    "deleteError": "削除に失敗しました。もう一度お試しください。",
+    "roles": {
+      "admin": "管理者",
+      "user": "ユーザー",
+      "guest": "ゲスト"
+    },
+    "quickLinks": {
+      "users": {
+        "title": "ユーザー管理",
+        "desc": "アカウント作成・権限・ステータス管理"
+      },
+      "models": {
+        "title": "モデル・MCP 設定",
+        "desc": "モデルプリセットとツールカタログ"
+      },
+      "system": {
+        "title": "システム状態",
+        "desc": "ノード・サービスのヘルス監視"
+      }
+    },
+    "stats": {
+      "totalUsers": "総ユーザー数",
+      "totalUsersDelta": "+12（過去7日間）",
+      "activeSessions": "アクティブセッション",
+      "todayRequests": "本日のリクエスト",
+      "systemStatus": "システム状態",
+      "allNodesNormal": "すべてのノードが正常"
+    },
+    "col": {
+      "id": "ID",
+      "email": "メール",
+      "role": "ロール",
+      "status": "ステータス",
+      "joinedAt": "登録日",
+      "lastLogin": "最終ログイン",
+      "actions": "操作",
+      "edit": "編集",
+      "delete": "削除"
+    }
+  },
+  "adminAnalytics": {
+    "title": "アナリティクス",
+    "description": "会話量、ユーザー、トークン消費の傾向を分析します。",
+    "dailyConversations": "日別会話量",
+    "recentDaysCaption": "直近 {days} 日 · 日別",
+    "modelUsageTitle": "モデルプロファイル利用比率",
+    "costAnalysis": "コスト分析",
+    "dailyCost": "日次コスト",
+    "weeklyCost": "週次コスト",
+    "projectedMonthlyCost": "月間予想コスト",
+    "userBehavior": "ユーザー行動",
+    "avgSessionLength": "平均セッション時間",
+    "minutesSuffix": "{value}分",
+    "avgQueriesPerSession": "セッションあたり平均クエリ",
+    "peakHoursTop3": "ピーク時間帯 Top 3",
+    "peakHourItem": "{hour}時 · {requests} 件",
+    "topQueriesTop5": "よく聞かれるクエリ Top 5",
+    "agentPerformance": "エージェント性能",
+    "period": {
+      "7d": "7日",
+      "30d": "30日",
+      "90d": "90日"
+    },
+    "stats": {
+      "totalConversations": "総会話数",
+      "activeUsers": "アクティブユーザー",
+      "consumedTokens": "消費トークン",
+      "avgResponse": "平均応答"
+    },
+    "col": {
+      "model": "モデル",
+      "cost": "コスト",
+      "share": "比率",
+      "agent": "エージェント",
+      "requests": "リクエスト数",
+      "successRate": "成功率",
+      "avgResponse": "平均応答"
+    }
+  },
+  "adminAudit": {
+    "title": "監査ログ",
+    "description": "システム全体のセキュリティ・管理操作の記録です。",
+    "countBadge": "{count}件",
+    "exportCsv": "CSVエクスポート",
+    "filter": {
+      "allActions": "すべてのアクション"
+    },
+    "severity": {
+      "all": "すべての重大度"
+    },
+    "status": {
+      "critical": "重大",
+      "warn": "警告",
+      "info": "情報"
+    },
+    "period": {
+      "today": "今日",
+      "days7": "7日",
+      "days30": "30日",
+      "all": "すべて"
+    },
+    "th": {
+      "time": "時刻",
+      "actor": "実行者",
+      "action": "アクション",
+      "target": "対象",
+      "severity": "重大度"
+    },
+    "empty": "条件に一致するログはありません。"
+  },
+  "adminMetrics": {
+    "title": "システムメトリクス",
+    "lastUpdated": "最終更新 {time}",
+    "subtitle": "システム状態とリソースのリアルタイム監視",
+    "refresh": "更新",
+    "stat": {
+      "cpu": "CPU使用率",
+      "memory": "メモリ",
+      "requestRate": "リクエスト率",
+      "errorRate": "エラー率"
+    },
+    "memoryDelta": "全{total} GB中",
+    "requestChartTitle": "リクエスト率（過去24時間 · req/min）",
+    "barTooltip": "{hour}時: {value}/min",
+    "nodeStatusTitle": "ノード · サービス状態",
+    "nodeRoleLlm": "LLMノード",
+    "th": {
+      "node": "ノード",
+      "role": "役割",
+      "status": "状態",
+      "latency": "遅延",
+      "load": "負荷"
+    },
+    "status": {
+      "online": "正常",
+      "degraded": "低下",
+      "offline": "停止"
+    },
+    "agentMetricsTitle": "エージェントメトリクス",
+    "agent": {
+      "totalAgents": "総エージェント数",
+      "totalRequests": "総リクエスト数",
+      "avgSuccessRate": "平均成功率",
+      "avgResponseTime": "平均応答時間"
+    },
+    "agentTh": {
+      "id": "エージェントID",
+      "requests": "リクエスト数",
+      "successRate": "成功率",
+      "avgResponseTime": "平均応答時間"
+    }
+  },
+  "adminAlerts": {
+    "title": "アラート",
+    "description": "アラートルールを管理し、最近発生したイベントを確認します。",
+    "addRule": "ルールを追加",
+    "rulesTitle": "アラートルール",
+    "toggleAria": "ルールの有効切り替え",
+    "enabled": "有効",
+    "disabled": "無効",
+    "recentTitle": "最近のアラート",
+    "acknowledged": "確認済み",
+    "acknowledge": "確認",
+    "status": {
+      "critical": "重大",
+      "warning": "警告",
+      "info": "情報"
+    },
+    "rules": {
+      "cpu": {
+        "name": "CPU使用率のしきい値",
+        "condition": "CPU > 85% · 5分間継続"
+      },
+      "contextOverflow": {
+        "name": "LLMコンテキストオーバーフロー",
+        "condition": "ContextOverflowError発生"
+      },
+      "errorRate": {
+        "name": "エラー率の急増",
+        "condition": "5xx率 > 2%"
+      },
+      "tokenQuota": {
+        "name": "トークンクォータの枯渇",
+        "condition": "週間クォータ90%超過"
+      },
+      "roleChange": {
+        "name": "管理者権限の変更",
+        "condition": "user.role_change → admin"
+      }
+    },
+    "events": {
+      "e1": "管理者権限の付与を検知 — u_1040（devops@partner.co.kr が実行）",
+      "e2": "redis-kvノード負荷78% — rate-limit整合性に影響の可能性",
+      "e3": "LLMコンテキストオーバーフロー1件 — conv_88412にtruncate適用",
+      "e4": "日次バックアップ完了 — postgres-primary（2.1GB）",
+      "e5": "異常なログイン試行12回 — 45.33.21.7をブロック"
+    }
+  },
+  "adminMcpCatalog": {
+    "close": "閉じる",
+    "editTitle": "テンプレートを編集",
+    "createTitle": "新規テンプレート",
+    "saveError": "保存に失敗しました。もう一度お試しください。",
+    "displayNameLabel": "表示名",
+    "descriptionLabel": "説明",
+    "descriptionPlaceholder": "サーバーの簡単な説明",
+    "typeLabel": "種類",
+    "commandLabel": "コマンド",
+    "enabledLabel": "有効化",
+    "cancel": "キャンセル",
+    "save": "保存",
+    "create": "作成",
+    "deleteTitle": "テンプレートを削除",
+    "deleteConfirm": "本当に削除しますか？",
+    "deleteError": "削除に失敗しました。もう一度お試しください。",
+    "delete": "削除",
+    "pageTitle": "MCPカタログ管理",
+    "pageDescription": "ユーザーに提供するMCPサーバーテンプレートを管理します。",
+    "addTemplate": "テンプレートを追加",
+    "colName": "名前",
+    "colDescription": "説明",
+    "colType": "種類",
+    "colEnabled": "有効状態",
+    "colActions": "操作",
+    "loading": "読み込み中…",
+    "emptyState": "登録されたテンプレートはありません。",
+    "enabled": "有効",
+    "disabled": "無効",
+    "editAction": "編集",
+    "deleteAction": "削除"
+  },
+  "apiKeys": {
+    "title": "APIキー",
+    "description": "外部LLMプロバイダー(Anthropic / OpenAI互換)のキーを登録・管理します。",
+    "addKey": "新しいキーを追加",
+    "close": "閉じる",
+    "cancel": "キャンセル",
+    "save": "保存",
+    "registeredKeys": "登録済みプロバイダーキー",
+    "mockDataShown": "モックデータを表示中",
+    "loading": "キー一覧を読み込み中...",
+    "emptyTitle": "登録された外部キーがありません",
+    "emptyDesc": "キーを追加すると、そのプロバイダーのモデルを利用できます。",
+    "loadError": "キー一覧を読み込めませんでした。",
+    "deleteConfirm": "{name} キーを削除しますか?\nこのキーを使用するモデル呼び出しが停止します。",
+    "deleteFailed": "削除に失敗しました: {error}",
+    "saveFailed": "保存に失敗しました: {error}",
+    "serverError": "サーバーエラー",
+    "deleteAria": "削除",
+    "validationError": "名前と8文字以上のAPIキーを入力してください。",
+    "namePlaceholder": "例: 本番、開発用",
+    "apiKeyLabel": "APIキー",
+    "baseUrlLabel": "Base URL(任意)",
+    "col": {
+      "provider": "プロバイダー",
+      "name": "名前",
+      "key": "キー",
+      "createdAt": "作成日",
+      "status": "ステータス",
+      "actions": "操作"
+    },
+    "status": {
+      "validationFailed": "検証失敗",
+      "active": "有効",
+      "unverified": "未検証"
+    },
+    "sdkType": {
+      "anthropic": "Anthropic",
+      "openaiCompatible": "OpenAI互換"
+    },
+    "mock": {
+      "productionName": "本番"
+    }
+  },
+  "usage": {
+    "title": "使用量",
+    "description": "アカウント単位のトークン・リクエスト使用量です。",
+    "mockData": "モックデータ",
+    "updatedAt": "更新 {time}",
+    "refresh": "更新",
+    "loading": "読み込み中...",
+    "noData": "データがありません。",
+    "dailyTitle": "日別トークン使用量(直近14日)",
+    "tokenTooltip": "{date} · {count} トークン",
+    "systemMonitorTitle": "システムトークン監視",
+    "dailyTokens7d": "日別トークン(直近7日)",
+    "hourlyTokens": "時間別トークン",
+    "modelUsageTitle": "モデル別使用割合",
+    "noModelData": "モデル別の使用データがありません。",
+    "stat": {
+      "monthTokens": "今月のトークン",
+      "requests": "リクエスト数",
+      "avgLatency": "平均レイテンシ",
+      "errors": "エラー",
+      "todayCost": "本日のコスト",
+      "todayTokens": "本日のトークン",
+      "weekTokens": "週間トークン",
+      "weekEstCost": "週間予想コスト"
+    },
+    "delta": {
+      "warning": "注意",
+      "normal": "正常"
+    },
+    "col": {
+      "model": "モデル",
+      "tokens": "トークン",
+      "share": "割合",
+      "distribution": "分布"
+    }
+  },
+  "developer": {
+    "pageTitle": "開発者ドキュメント",
+    "pageDescription": "OpenMake LLM API を統合し、自動化します。",
+    "apiInfo": {
+      "title": "API 基本情報",
+      "apiVersionLabel": "API バージョン",
+      "versionBlock": "/v1  — OpenAI 互換エンドポイント\n/api — OpenMake 専用エンドポイント",
+      "description": "OpenMake LLM API は OpenAI Chat Completions API と互換性があります。既存の OpenAI SDK は <code>baseURL</code> を変更するだけですぐに利用できます。"
+    },
+    "auth": {
+      "title": "認証方式",
+      "apiKeyTitle": "API キー認証",
+      "apiKeyDesc": "設定 > API キーページで発行したキーを <code>Authorization</code> ヘッダーに渡します。",
+      "jwtTitle": "JWT セッション認証",
+      "jwtDesc": "ブラウザーセッションは HttpOnly クッキーに保存された JWT を自動的に使用します。API を直接呼び出す場合は API キーを推奨します。"
+    },
+    "models": {
+      "title": "モデル一覧",
+      "description": "利用可能なモデル一覧は <code>GET /api/models</code> で取得するか、チャットページのモデルセレクターを参照してください。",
+      "brandIdLabel": "ブランドモデル ID"
+    },
+    "brandModels": {
+      "default": "デフォルトモデル",
+      "pro": "高性能モデル",
+      "fast": "高速応答",
+      "think": "推論モード",
+      "code": "コード特化",
+      "vision": "画像対応"
+    },
+    "steps": {
+      "apiKey": {
+        "title": "API キーの発行",
+        "description": "設定 > API キーページで新しい API キーを作成します。"
+      },
+      "chatCompletion": {
+        "title": "チャット補完リクエスト",
+        "description": "OpenAI 互換の /v1/chat/completions エンドポイントにリクエストを送信します。"
+      },
+      "streaming": {
+        "title": "ストリーミング応答",
+        "description": "stream: true を追加すると、SSE ストリームでトークンをリアルタイムに受信します。"
+      }
+    }
   }
 }
