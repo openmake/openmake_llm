@@ -44,7 +44,8 @@
     "guest": "访客",
     "selfHosted": "自托管",
     "notLoggedIn": "未登录",
-    "logout": "退出登录"
+    "logout": "退出登录",
+    "themeToggle": "切换主题"
   },
   "mobileNav": {
     "chat": "聊天",
@@ -57,5 +58,242 @@
   },
   "settings": {
     "languageAuto": "自动检测"
+  },
+  "composer": {
+    "dropToAttach": "将文件拖放到此处以添加",
+    "modeHeading": "模式",
+    "modeSelect": "选择模式",
+    "toolsButton": "工具",
+    "toggleOff": "关闭{label}",
+    "removeAttachment": "移除{name}",
+    "attachTruncated": "{name}（超出长度，仅部分添加）",
+    "placeholder": "输入消息，或用 / 调用技能...",
+    "attachFile": "添加文件（支持拖放 · 任意格式）",
+    "attachFileLabel": "添加文件",
+    "responseStyle": "回复风格",
+    "stop": "停止",
+    "send": "发送",
+    "disclaimer": "OpenMake 可能会出错，请核实重要信息。",
+    "toggle": {
+      "discussion": "讨论",
+      "thinking": "思考",
+      "deepResearch": "深度研究",
+      "web": "网络",
+      "agent": "智能体",
+      "image": "图像",
+      "artifact": "工件",
+      "structured": "结构化"
+    },
+    "slashMenu": {
+      "heading": "调用技能",
+      "loading": "正在加载技能…",
+      "noResults": "没有匹配的技能",
+      "viewAll": "在技能库中查看全部"
+    }
+  },
+  "chat": {
+    "approvals": {
+      "title": "需要批准工具执行",
+      "approve": "批准",
+      "reject": "拒绝",
+      "processFailed": "处理失败：{error}",
+      "errorFallback": "错误"
+    },
+    "artifactFallback": "工件",
+    "artifactBuilding": "正在生成工件…",
+    "reasoningLabel": "思考过程",
+    "thinking": {
+      "agentAnalyzing": "{agent} 正在分析",
+      "skillsApplying": "正在应用 {skills}",
+      "analyzing": "分析中"
+    },
+    "quickStarts": {
+      "summarize": {
+        "label": "总结",
+        "prompt": "请总结以下内容：\n\n"
+      },
+      "research": {
+        "label": "研究",
+        "prompt": "请深入研究以下主题：\n\n"
+      },
+      "analyze": {
+        "label": "逐步分析",
+        "prompt": "请逐步分析以下问题：\n\n"
+      },
+      "brainstorm": {
+        "label": "头脑风暴",
+        "prompt": "让我们围绕以下内容进行头脑风暴：\n\n"
+      }
+    },
+    "status": {
+      "pending": "等待中",
+      "running": "运行中",
+      "paused": "等待批准",
+      "completed": "已完成",
+      "failed": "失败",
+      "cancelled": "已取消"
+    },
+    "agentTask": {
+      "title": "智能体任务",
+      "turn": "第 {turn} 轮",
+      "goal": "目标",
+      "outputs": "产出"
+    },
+    "research": {
+      "inProgress": "深度研究进行中",
+      "loop": "循环 {current}/{total}"
+    },
+    "emptyState": {
+      "title": "有什么可以帮您的？",
+      "description": "多模型编排 · MCP 工具 · 深度研究 · 自主智能体。在下方输入问题，或按 <slash>/</slash> 调用技能。"
+    },
+    "structured": {
+      "confidence": {
+        "high": "高置信度",
+        "medium": "中等置信度",
+        "low": "低置信度"
+      },
+      "conclusion": "结论",
+      "risks": "注意事项",
+      "actionItems": "后续行动"
+    }
+  },
+  "artifacts": {
+    "exec": {
+      "disabled": "代码执行功能已禁用。",
+      "rateLimited": "执行请求过多，请稍后再试。",
+      "unsupportedLang": "不支持的语言。",
+      "tooLarge": "代码过大。",
+      "failed": "执行失败。"
+    },
+    "run": {
+      "running": "执行中…",
+      "run": "执行",
+      "sandbox": "沙箱（网络已阻断） · {lang}"
+    },
+    "output": {
+      "title": "输出",
+      "timedOut": "超时",
+      "truncated": "已截断",
+      "empty": "（无输出）"
+    },
+    "generating": "生成中…",
+    "versionSelect": "选择版本",
+    "latest": "最新",
+    "viewCode": "查看代码",
+    "viewPreview": "预览",
+    "download": "下载",
+    "shareLabel": "分享",
+    "copy": "复制",
+    "closePanel": "关闭面板",
+    "artifactCount": "工件 {count}",
+    "framePreviewTitle": "工件预览",
+    "share": {
+      "title": "分享工件",
+      "close": "关闭",
+      "viewerDisabled": "查看器已禁用（ARTIFACT_VIEWER_ENABLED）。请联系管理员。",
+      "publishFailed": "分享失败",
+      "unpublishFailed": "停止分享失败",
+      "visibility": {
+        "private": {
+          "label": "私密",
+          "desc": "仅自己可见"
+        },
+        "authenticated": {
+          "label": "所有登录用户",
+          "desc": "对所有登录用户可见"
+        },
+        "link": {
+          "label": "通过链接分享",
+          "desc": "拥有链接的任何人（包括未登录用户）"
+        }
+      },
+      "iconLabel": "图标（表情符号）",
+      "copyLink": "复制链接",
+      "unpublish": "停止分享",
+      "updateSettings": "更新分享设置",
+      "publish": "分享"
+    },
+    "page": {
+      "viewerOpenFailed": "无法打开查看器",
+      "title": "工件",
+      "description": "汇总查看你创建的产出，并通过独立源查看器分享。",
+      "loading": "加载中...",
+      "emptyTitle": "暂无工件",
+      "emptyDesc": "在聊天中创建代码、HTML、图表等产出后，会汇总到这里。",
+      "notShared": "未分享",
+      "openViewer": "打开查看器",
+      "share": "分享",
+      "vis": {
+        "private": "私密",
+        "authenticated": "认证公开",
+        "link": "链接公开"
+      }
+    }
+  },
+  "history": {
+    "title": "对话历史",
+    "description": "搜索过往对话并继续进行。",
+    "searchPlaceholder": "搜索对话标题...",
+    "deleteAllButton": "全部删除",
+    "loading": "加载中...",
+    "untitledConversation": "无标题对话",
+    "messageCount": "{count} 条消息",
+    "deleteConfirm": "确定要删除对话「{title}」吗？\n删除的对话无法恢复。",
+    "deleteError": "删除对话失败。",
+    "deleteAllConfirm": "确定要删除全部 {count} 条对话记录吗？\n删除的对话无法恢复。",
+    "deleteAllError": "全部删除失败。",
+    "deleteAria": "删除对话",
+    "group": {
+      "today": "今天",
+      "yesterday": "昨天",
+      "week": "本周",
+      "older": "更早"
+    },
+    "emptyState": {
+      "title": "暂无对话记录",
+      "noResults": "没有搜索结果。",
+      "hint": "开始新对话后将显示在此处。"
+    },
+    "mock": {
+      "c1": {
+        "title": "Next.js 16 App Router 迁移",
+        "preview": "从现有的 pages 路由迁移到 app 路由时需要注意什么...",
+        "time": "下午2:14"
+      },
+      "c2": {
+        "title": "PostgreSQL 索引调优",
+        "preview": "解释复合索引的顺序对查询计划的影响",
+        "time": "上午11:02"
+      },
+      "c3": {
+        "title": "营销活动文案头脑风暴",
+        "preview": "为面向20多岁人群制作5个社交媒体广告文案变体",
+        "time": "下午6:47"
+      },
+      "c4": {
+        "title": "搭建研究报告结构",
+        "preview": "为企业 LLM 采用报告提议一个目录",
+        "time": "下午3:20"
+      },
+      "c5": {
+        "title": "TypeScript 泛型类型守卫",
+        "preview": "如何安全地收窄可辨识联合类型？",
+        "time": "周一"
+      },
+      "c6": {
+        "title": "图像分析提示词",
+        "preview": "从附加的图表中解读主要趋势",
+        "time": "周日"
+      }
+    }
+  },
+  "chatSocket": {
+    "error": "错误：{message}",
+    "unknownError": "未知错误",
+    "taskIdMissing": "任务创建响应中缺少 taskId",
+    "agentTaskStartFailed": "无法启动智能体任务：{message}",
+    "structuredAborted": "_(已停止生成结构化回答。)_",
+    "structuredFailed": "无法生成结构化回答：{message}"
   }
 }

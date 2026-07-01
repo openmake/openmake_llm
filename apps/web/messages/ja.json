@@ -44,7 +44,8 @@
     "guest": "ゲスト",
     "selfHosted": "セルフホスト",
     "notLoggedIn": "未ログイン",
-    "logout": "ログアウト"
+    "logout": "ログアウト",
+    "themeToggle": "テーマ切替"
   },
   "mobileNav": {
     "chat": "チャット",
@@ -57,5 +58,242 @@
   },
   "settings": {
     "languageAuto": "自動検出"
+  },
+  "composer": {
+    "dropToAttach": "ここにファイルをドロップして添付",
+    "modeHeading": "モード",
+    "modeSelect": "モードを選択",
+    "toolsButton": "ツール",
+    "toggleOff": "{label}をオフにする",
+    "removeAttachment": "{name}を削除",
+    "attachTruncated": "{name}（サイズ超過のため一部のみ添付）",
+    "placeholder": "メッセージを入力するか、/ でスキルを呼び出してください...",
+    "attachFile": "ファイルを添付（ドラッグ＆ドロップ対応・すべての形式）",
+    "attachFileLabel": "ファイルを添付",
+    "responseStyle": "応答スタイル",
+    "stop": "停止",
+    "send": "送信",
+    "disclaimer": "OpenMake は誤ることがあります。重要な情報は確認してください。",
+    "toggle": {
+      "discussion": "ディスカッション",
+      "thinking": "思考",
+      "deepResearch": "ディープリサーチ",
+      "web": "ウェブ",
+      "agent": "エージェント",
+      "image": "画像",
+      "artifact": "アーティファクト",
+      "structured": "構造化"
+    },
+    "slashMenu": {
+      "heading": "スキルを呼び出す",
+      "loading": "スキルを読み込み中…",
+      "noResults": "一致するスキルがありません",
+      "viewAll": "スキルライブラリですべて表示"
+    }
+  },
+  "chat": {
+    "approvals": {
+      "title": "ツール実行の承認が必要です",
+      "approve": "承認",
+      "reject": "拒否",
+      "processFailed": "処理に失敗しました: {error}",
+      "errorFallback": "エラー"
+    },
+    "artifactFallback": "アーティファクト",
+    "artifactBuilding": "アーティファクトを生成中…",
+    "reasoningLabel": "思考プロセス",
+    "thinking": {
+      "agentAnalyzing": "{agent} が分析中",
+      "skillsApplying": "{skills} を適用中",
+      "analyzing": "分析中"
+    },
+    "quickStarts": {
+      "summarize": {
+        "label": "要約",
+        "prompt": "次の内容を要約してください:\n\n"
+      },
+      "research": {
+        "label": "リサーチ",
+        "prompt": "次のトピックを深くリサーチしてください:\n\n"
+      },
+      "analyze": {
+        "label": "段階的分析",
+        "prompt": "次の問題を段階的に分析してください:\n\n"
+      },
+      "brainstorm": {
+        "label": "ブレインストーミング",
+        "prompt": "次についてブレインストーミングしましょう:\n\n"
+      }
+    },
+    "status": {
+      "pending": "待機中",
+      "running": "実行中",
+      "paused": "承認待ち",
+      "completed": "完了",
+      "failed": "失敗",
+      "cancelled": "キャンセル済み"
+    },
+    "agentTask": {
+      "title": "エージェントタスク",
+      "turn": "ターン {turn}",
+      "goal": "目標",
+      "outputs": "成果物"
+    },
+    "research": {
+      "inProgress": "ディープリサーチ実行中",
+      "loop": "ループ {current}/{total}"
+    },
+    "emptyState": {
+      "title": "何かお手伝いしましょうか？",
+      "description": "マルチモデルオーケストレーション · MCP ツール · ディープリサーチ · 自律エージェント。下に質問を入力するか、<slash>/</slash> でスキルを呼び出してください。"
+    },
+    "structured": {
+      "confidence": {
+        "high": "確信度：高",
+        "medium": "確信度：中",
+        "low": "確信度：低"
+      },
+      "conclusion": "結論",
+      "risks": "注意点",
+      "actionItems": "次のアクション"
+    }
+  },
+  "artifacts": {
+    "exec": {
+      "disabled": "コード実行機能は無効になっています。",
+      "rateLimited": "実行リクエストが多すぎます。しばらくしてから再度お試しください。",
+      "unsupportedLang": "サポートされていない言語です。",
+      "tooLarge": "コードが大きすぎます。",
+      "failed": "実行に失敗しました。"
+    },
+    "run": {
+      "running": "実行中…",
+      "run": "実行",
+      "sandbox": "サンドボックス（ネットワーク遮断） · {lang}"
+    },
+    "output": {
+      "title": "出力",
+      "timedOut": "タイムアウト",
+      "truncated": "切り捨て",
+      "empty": "（出力なし）"
+    },
+    "generating": "生成中…",
+    "versionSelect": "バージョンを選択",
+    "latest": "最新",
+    "viewCode": "コードを表示",
+    "viewPreview": "プレビュー",
+    "download": "ダウンロード",
+    "shareLabel": "共有",
+    "copy": "コピー",
+    "closePanel": "パネルを閉じる",
+    "artifactCount": "アーティファクト {count}",
+    "framePreviewTitle": "アーティファクトのプレビュー",
+    "share": {
+      "title": "アーティファクトを共有",
+      "close": "閉じる",
+      "viewerDisabled": "ビューアーが無効になっています（ARTIFACT_VIEWER_ENABLED）。管理者にお問い合わせください。",
+      "publishFailed": "共有に失敗しました",
+      "unpublishFailed": "共有の停止に失敗しました",
+      "visibility": {
+        "private": {
+          "label": "非公開",
+          "desc": "自分のみ閲覧可能"
+        },
+        "authenticated": {
+          "label": "認証済みユーザー全員",
+          "desc": "ログイン済みのすべてのユーザーに公開"
+        },
+        "link": {
+          "label": "リンクで共有",
+          "desc": "リンクを知っている全員（未ログインを含む）"
+        }
+      },
+      "iconLabel": "アイコン（絵文字）",
+      "copyLink": "リンクをコピー",
+      "unpublish": "共有を停止",
+      "updateSettings": "共有設定を更新",
+      "publish": "共有する"
+    },
+    "page": {
+      "viewerOpenFailed": "ビューアーを開けません",
+      "title": "アーティファクト",
+      "description": "作成した成果物をまとめて確認し、別オリジンのビューアーで共有します。",
+      "loading": "読み込み中...",
+      "emptyTitle": "アーティファクトがありません",
+      "emptyDesc": "チャットでコード・HTML・チャートなどの成果物を作成すると、ここにまとまります。",
+      "notShared": "未共有",
+      "openViewer": "ビューアーを開く",
+      "share": "共有",
+      "vis": {
+        "private": "非公開",
+        "authenticated": "認証公開",
+        "link": "リンク公開"
+      }
+    }
+  },
+  "history": {
+    "title": "会話履歴",
+    "description": "過去の会話を検索して続きから進められます。",
+    "searchPlaceholder": "会話タイトルを検索...",
+    "deleteAllButton": "すべて削除",
+    "loading": "読み込み中...",
+    "untitledConversation": "無題の会話",
+    "messageCount": "{count}件のメッセージ",
+    "deleteConfirm": "会話「{title}」を削除しますか？\n削除した会話は復元できません。",
+    "deleteError": "会話の削除に失敗しました。",
+    "deleteAllConfirm": "{count}件の会話履歴をすべて削除しますか？\n削除した会話は復元できません。",
+    "deleteAllError": "すべての削除に失敗しました。",
+    "deleteAria": "会話を削除",
+    "group": {
+      "today": "今日",
+      "yesterday": "昨日",
+      "week": "今週",
+      "older": "それ以前"
+    },
+    "emptyState": {
+      "title": "会話履歴がありません",
+      "noResults": "検索結果がありません。",
+      "hint": "新しい会話を始めるとここに表示されます。"
+    },
+    "mock": {
+      "c1": {
+        "title": "Next.js 16 App Router 移行",
+        "preview": "既存の pages ルーターから app ルーターへ移行する際の注意点は...",
+        "time": "午後2:14"
+      },
+      "c2": {
+        "title": "PostgreSQL インデックスチューニング",
+        "preview": "複合インデックスの順序がクエリプランに与える影響を説明して",
+        "time": "午前11:02"
+      },
+      "c3": {
+        "title": "マーケティングキャンペーンのコピー ブレインストーミング",
+        "preview": "20代向けのSNS広告コピーを5パターン作って",
+        "time": "午後6:47"
+      },
+      "c4": {
+        "title": "リサーチレポートの構成づくり",
+        "preview": "エンタープライズLLM導入レポートの目次を提案して",
+        "time": "午後3:20"
+      },
+      "c5": {
+        "title": "TypeScript ジェネリック型ガード",
+        "preview": "Discriminated union を安全に絞り込む方法は？",
+        "time": "月曜日"
+      },
+      "c6": {
+        "title": "画像分析プロンプト",
+        "preview": "添付したチャートから主要なトレンドを読み取って",
+        "time": "日曜日"
+      }
+    }
+  },
+  "chatSocket": {
+    "error": "エラー: {message}",
+    "unknownError": "不明なエラー",
+    "taskIdMissing": "タスク作成レスポンスに taskId がありません",
+    "agentTaskStartFailed": "エージェントタスクを開始できませんでした: {message}",
+    "structuredAborted": "_(構造化回答の生成を中止しました。)_",
+    "structuredFailed": "構造化回答を生成できませんでした: {message}"
   }
 }

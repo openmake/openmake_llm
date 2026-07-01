@@ -1,14 +1,15 @@
 "use client";
 
 import { AlertTriangle, CheckCircle2, ListChecks } from "lucide-react";
+import { useTranslations } from "next-intl";
 import type { StructuredAnswerData } from "@/lib/store";
 import { Markdown } from "./markdown";
 import { cn } from "@/lib/utils";
 
-const CONFIDENCE_LABEL: Record<StructuredAnswerData["confidence"], string> = {
-  high: "확신 높음",
-  medium: "확신 보통",
-  low: "확신 낮음",
+const CONFIDENCE_KEY: Record<StructuredAnswerData["confidence"], string> = {
+  high: "structured.confidence.high",
+  medium: "structured.confidence.medium",
+  low: "structured.confidence.low",
 };
 
 const CONFIDENCE_STYLE: Record<StructuredAnswerData["confidence"], string> = {
@@ -55,6 +56,7 @@ function StructuredTable({ headers, rows }: { headers: string[]; rows: string[][
  * 결론을 먼저, 그 다음 요약·섹션(+표)·주의할 점·다음 실행 순으로 항상 일정한 구조로 표시한다.
  */
 export function StructuredAnswer({ data }: { data: StructuredAnswerData }) {
+  const t = useTranslations("chat");
   return (
     <div className="space-y-3">
       {/* 제목 + confidence 배지 */}
@@ -66,13 +68,13 @@ export function StructuredAnswer({ data }: { data: StructuredAnswerData }) {
             CONFIDENCE_STYLE[data.confidence],
           )}
         >
-          {CONFIDENCE_LABEL[data.confidence]}
+          {t(CONFIDENCE_KEY[data.confidence])}
         </span>
       </div>
 
       {/* 결론 — 강조 카드 (가장 먼저) */}
       <div className="rounded-lg border border-accent bg-accent-soft px-3.5 py-3">
-        <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-accent">결론</p>
+        <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-accent">{t("structured.conclusion")}</p>
         <div className="text-sm leading-relaxed text-fg">
           <Markdown content={data.conclusion} />
         </div>
@@ -111,7 +113,7 @@ export function StructuredAnswer({ data }: { data: StructuredAnswerData }) {
       {data.risks?.length ? (
         <div className="rounded-lg border border-border bg-surface-2 px-3.5 py-2.5">
           <p className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-fg-2">
-            <AlertTriangle className="h-3.5 w-3.5 text-amber-500" /> 주의할 점
+            <AlertTriangle className="h-3.5 w-3.5 text-amber-500" /> {t("structured.risks")}
           </p>
           <ul className="ml-4 list-disc space-y-0.5 text-sm text-fg-2 marker:text-amber-500">
             {data.risks.map((r, i) => (
@@ -125,7 +127,7 @@ export function StructuredAnswer({ data }: { data: StructuredAnswerData }) {
       {data.action_items?.length ? (
         <div className="rounded-lg border border-border bg-surface-2 px-3.5 py-2.5">
           <p className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-fg-2">
-            <ListChecks className="h-3.5 w-3.5 text-accent" /> 다음 실행
+            <ListChecks className="h-3.5 w-3.5 text-accent" /> {t("structured.actionItems")}
           </p>
           <ul className="space-y-1 text-sm text-fg-2">
             {data.action_items.map((a, i) => (

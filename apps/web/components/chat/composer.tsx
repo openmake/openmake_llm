@@ -19,6 +19,7 @@ import {
   X,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import type { WsAttachedFile } from "@openmake/shared-types";
 import { useAppStore } from "@/lib/store";
 import { useChatSocket } from "@/lib/use-chat-socket";
@@ -86,6 +87,7 @@ function readFileBase64(file: File): Promise<string> {
 }
 
 export function Composer() {
+  const t = useTranslations("composer");
   const { sendChat, abort, startAgentTask, sendStructured } = useChatSocket();
   const router = useRouter();
   const [text, setText] = useState("");
@@ -191,8 +193,8 @@ export function Composer() {
   const [slashDebounced, setSlashDebounced] = useState("");
   useEffect(() => {
     if (!slashCandidate) return;
-    const t = setTimeout(() => setSlashDebounced(slashQuery), 150);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => setSlashDebounced(slashQuery), 150);
+    return () => clearTimeout(timer);
   }, [slashQuery, slashCandidate]);
 
   const { data: slashSkillsData, isLoading: slashLoading } = useQuery({
@@ -303,16 +305,16 @@ export function Composer() {
   }, [modeSheetOpen]);
 
   const TOGGLES = [
-    { key: "discussionMode" as const, on: discussionMode, icon: MessagesSquare, label: "토론" },
-    { key: "thinkingEnabled" as const, on: thinkingEnabled, icon: Brain, label: "Thinking" },
-    { key: "deepResearchMode" as const, on: deepResearchMode, icon: Telescope, label: "딥 리서치" },
-    { key: "webSearchEnabled" as const, on: webSearchEnabled, icon: Globe, label: "웹" },
-    { key: "agentTaskMode" as const, on: agentTaskMode, icon: Sparkles, label: "에이전트" },
-    { key: "imageMode" as const, on: imageMode, icon: ImageIcon, label: "이미지" },
-    { key: "artifactMode" as const, on: artifactMode, icon: FileCode2, label: "아티팩트" },
-    { key: "structuredMode" as const, on: structuredMode, icon: LayoutList, label: "구조화 답변" },
+    { key: "discussionMode" as const, on: discussionMode, icon: MessagesSquare, label: t("toggle.discussion") },
+    { key: "thinkingEnabled" as const, on: thinkingEnabled, icon: Brain, label: t("toggle.thinking") },
+    { key: "deepResearchMode" as const, on: deepResearchMode, icon: Telescope, label: t("toggle.deepResearch") },
+    { key: "webSearchEnabled" as const, on: webSearchEnabled, icon: Globe, label: t("toggle.web") },
+    { key: "agentTaskMode" as const, on: agentTaskMode, icon: Sparkles, label: t("toggle.agent") },
+    { key: "imageMode" as const, on: imageMode, icon: ImageIcon, label: t("toggle.image") },
+    { key: "artifactMode" as const, on: artifactMode, icon: FileCode2, label: t("toggle.artifact") },
+    { key: "structuredMode" as const, on: structuredMode, icon: LayoutList, label: t("toggle.structured") },
   ];
-  const activeModeCount = TOGGLES.filter((t) => t.on).length;
+  const activeModeCount = TOGGLES.filter((m) => m.on).length;
 
   return (
     <div className="mx-auto w-full max-w-3xl px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
@@ -341,7 +343,7 @@ export function Composer() {
           <div className="pointer-events-none absolute inset-0 z-50 grid place-items-center rounded-xl border-2 border-dashed border-accent bg-surface/85 backdrop-blur-sm">
             <div className="flex items-center gap-2 text-sm font-medium text-accent">
               <Paperclip className="h-4 w-4" />
-              여기에 파일을 놓아 첨부
+              {t("dropToAttach")}
             </div>
           </div>
         )}
@@ -357,21 +359,21 @@ export function Composer() {
             <div className="absolute bottom-full left-0 right-0 z-40 mb-2 rounded-xl border border-border bg-surface-2 p-1.5 shadow-lg">
               <div className="mx-auto mb-1.5 h-1 w-9 rounded-full bg-border-strong" aria-hidden />
               <p className="px-2 pb-1 text-[11px] font-medium uppercase tracking-wide text-faint">
-                모드
+                {t("modeHeading")}
               </p>
-              {TOGGLES.map((t) => (
+              {TOGGLES.map((m) => (
                 <button
-                  key={t.key}
+                  key={m.key}
                   type="button"
-                  onClick={() => toggle(t.key)}
+                  onClick={() => toggle(m.key)}
                   className={cn(
                     "flex min-h-[44px] w-full items-center gap-3 rounded-lg px-3 text-sm transition",
-                    t.on ? "text-accent" : "text-fg-2 hover:bg-surface-3",
+                    m.on ? "text-accent" : "text-fg-2 hover:bg-surface-3",
                   )}
                 >
-                  <t.icon className="h-[18px] w-[18px] shrink-0" />
-                  <span className="flex-1 text-left">{t.label}</span>
-                  {t.on && <Check className="h-4 w-4 shrink-0 text-accent" />}
+                  <m.icon className="h-[18px] w-[18px] shrink-0" />
+                  <span className="flex-1 text-left">{m.label}</span>
+                  {m.on && <Check className="h-4 w-4 shrink-0 text-accent" />}
                 </button>
               ))}
             </div>
@@ -384,7 +386,7 @@ export function Composer() {
             type="button"
             onClick={() => setModeSheetOpen((v) => !v)}
             aria-expanded={modeSheetOpen}
-            aria-label="모드 선택"
+            aria-label={t("modeSelect")}
             className={cn(
               "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition",
               activeModeCount > 0
@@ -393,7 +395,7 @@ export function Composer() {
             )}
           >
             <SlidersHorizontal className="h-3.5 w-3.5" />
-            도구
+            {t("toolsButton")}
             {activeModeCount > 0 && (
               <span className="grid h-4 min-w-4 place-items-center rounded-full bg-accent px-1 text-[10px] font-bold text-accent-fg">
                 {activeModeCount}
@@ -401,16 +403,16 @@ export function Composer() {
             )}
           </button>
 
-          {TOGGLES.filter((t) => t.on).map((t) => (
+          {TOGGLES.filter((m) => m.on).map((m) => (
             <button
-              key={t.key}
+              key={m.key}
               type="button"
-              onClick={() => toggle(t.key)}
-              title={`${t.label} 끄기`}
+              onClick={() => toggle(m.key)}
+              title={t("toggleOff", { label: m.label })}
               className="inline-flex shrink-0 items-center gap-1 rounded-full border border-accent bg-accent-soft px-2.5 py-1 text-xs font-medium text-accent transition hover:opacity-80"
             >
-              <t.icon className="h-3.5 w-3.5" />
-              {t.label}
+              <m.icon className="h-3.5 w-3.5" />
+              {m.label}
               <X className="h-3 w-3 opacity-70" />
             </button>
           ))}
@@ -430,7 +432,7 @@ export function Composer() {
                 <img src={img.dataUrl} alt={img.name} className="h-full w-full object-cover" />
                 <button
                   onClick={() => removeImage(img.id)}
-                  aria-label={`${img.name} 첨부 제거`}
+                  aria-label={t("removeAttachment", { name: img.name })}
                   className="absolute right-0 top-0 grid h-4 w-4 place-items-center rounded-bl bg-bg/70 text-muted hover:text-fg"
                 >
                   <X className="h-3 w-3" />
@@ -440,7 +442,7 @@ export function Composer() {
             {files.map((f) => (
               <span
                 key={f.id}
-                title={f.truncated ? `${f.name} (길이 초과로 일부만 첨부)` : f.name}
+                title={f.truncated ? t("attachTruncated", { name: f.name }) : f.name}
                 className="inline-flex max-w-[12rem] items-center gap-1.5 rounded-md border border-border bg-surface-2 px-2 py-1 text-xs text-fg"
               >
                 <Paperclip className="h-3 w-3 shrink-0 text-muted" />
@@ -448,7 +450,7 @@ export function Composer() {
                 {f.truncated && <span className="shrink-0 text-faint">✂</span>}
                 <button
                   onClick={() => removeFile(f.id)}
-                  aria-label={`${f.name} 첨부 제거`}
+                  aria-label={t("removeAttachment", { name: f.name })}
                   className="shrink-0 text-muted hover:text-fg"
                 >
                   <X className="h-3 w-3" />
@@ -521,7 +523,7 @@ export function Composer() {
             }
           }}
           rows={1}
-          placeholder="메시지를 입력하거나 / 로 스킬을 호출하세요..."
+          placeholder={t("placeholder")}
           className="block w-full resize-none bg-transparent px-4 pt-2.5 text-sm text-fg outline-none placeholder:text-muted"
         />
 
@@ -541,8 +543,8 @@ export function Composer() {
           <button
             onClick={() => fileInputRef.current?.click()}
             className="grid h-8 w-8 place-items-center rounded-md text-muted transition hover:bg-surface-2 hover:text-fg disabled:opacity-40"
-            title="파일 첨부 (드래그앤드롭 지원 · 모든 형식)"
-            aria-label="파일 첨부"
+            title={t("attachFile")}
+            aria-label={t("attachFileLabel")}
           >
             <Paperclip className="h-4 w-4" />
           </button>
@@ -550,7 +552,7 @@ export function Composer() {
           <button
             onClick={cycleStyle}
             className="rounded-md px-2 py-1.5 text-xs font-medium capitalize text-muted hover:bg-surface-2 hover:text-fg"
-            title="응답 스타일"
+            title={t("responseStyle")}
           >
             {style}
           </button>
@@ -558,7 +560,7 @@ export function Composer() {
           {isGenerating ? (
             <button
               onClick={abort}
-              aria-label="중단"
+              aria-label={t("stop")}
               className="ml-auto grid h-8 w-8 place-items-center rounded-md bg-surface-3 text-fg transition hover:bg-border-strong"
             >
               <Square className="h-3.5 w-3.5 fill-current" />
@@ -567,7 +569,7 @@ export function Composer() {
             <button
               onClick={submit}
               disabled={!text.trim() && files.length === 0 && images.length === 0}
-              aria-label="전송"
+              aria-label={t("send")}
               className="ml-auto grid h-8 w-8 place-items-center rounded-md bg-accent text-accent-fg transition hover:bg-accent-hover disabled:opacity-40"
             >
               <ArrowUp className="h-4 w-4" />
@@ -576,7 +578,7 @@ export function Composer() {
         </div>
       </div>
       <p className="mt-2 text-center text-[11px] text-faint">
-        OpenMake 는 실수할 수 있습니다. 중요한 정보는 확인하세요.
+        {t("disclaimer")}
       </p>
     </div>
   );

@@ -44,7 +44,8 @@
     "guest": "Guest",
     "selfHosted": "Self-hosted",
     "notLoggedIn": "Not signed in",
-    "logout": "Sign out"
+    "logout": "Sign out",
+    "themeToggle": "Toggle theme"
   },
   "mobileNav": {
     "chat": "Chat",
@@ -57,5 +58,242 @@
   },
   "settings": {
     "languageAuto": "Auto-detect"
+  },
+  "composer": {
+    "dropToAttach": "Drop files here to attach",
+    "modeHeading": "Modes",
+    "modeSelect": "Select mode",
+    "toolsButton": "Tools",
+    "toggleOff": "Turn off {label}",
+    "removeAttachment": "Remove {name}",
+    "attachTruncated": "{name} (partially attached, length exceeded)",
+    "placeholder": "Type a message or invoke a skill with /...",
+    "attachFile": "Attach files (drag & drop supported · any format)",
+    "attachFileLabel": "Attach files",
+    "responseStyle": "Response style",
+    "stop": "Stop",
+    "send": "Send",
+    "disclaimer": "OpenMake can make mistakes. Verify important information.",
+    "toggle": {
+      "discussion": "Discussion",
+      "thinking": "Thinking",
+      "deepResearch": "Deep Research",
+      "web": "Web",
+      "agent": "Agent",
+      "image": "Image",
+      "artifact": "Artifact",
+      "structured": "Structured"
+    },
+    "slashMenu": {
+      "heading": "Invoke skill",
+      "loading": "Loading skills…",
+      "noResults": "No matching skills",
+      "viewAll": "View all in Skill Library"
+    }
+  },
+  "chat": {
+    "approvals": {
+      "title": "Tool execution approval required",
+      "approve": "Approve",
+      "reject": "Reject",
+      "processFailed": "Failed to process: {error}",
+      "errorFallback": "Error"
+    },
+    "artifactFallback": "Artifact",
+    "artifactBuilding": "Building artifact…",
+    "reasoningLabel": "Reasoning",
+    "thinking": {
+      "agentAnalyzing": "{agent} is analyzing",
+      "skillsApplying": "Applying {skills}",
+      "analyzing": "Analyzing"
+    },
+    "quickStarts": {
+      "summarize": {
+        "label": "Summarize",
+        "prompt": "Summarize the following:\n\n"
+      },
+      "research": {
+        "label": "Research",
+        "prompt": "Research the following topic in depth:\n\n"
+      },
+      "analyze": {
+        "label": "Step-by-step analysis",
+        "prompt": "Analyze the following problem step by step:\n\n"
+      },
+      "brainstorm": {
+        "label": "Brainstorm",
+        "prompt": "Let's brainstorm about the following:\n\n"
+      }
+    },
+    "status": {
+      "pending": "Pending",
+      "running": "Running",
+      "paused": "Awaiting approval",
+      "completed": "Completed",
+      "failed": "Failed",
+      "cancelled": "Cancelled"
+    },
+    "agentTask": {
+      "title": "Agent task",
+      "turn": "Turn {turn}",
+      "goal": "Goal",
+      "outputs": "Outputs"
+    },
+    "research": {
+      "inProgress": "Deep research in progress",
+      "loop": "Loop {current}/{total}"
+    },
+    "emptyState": {
+      "title": "How can I help you?",
+      "description": "Multi-model orchestration · MCP tools · deep research · autonomous agents. Type your question below, or press <slash>/</slash> to invoke a skill."
+    },
+    "structured": {
+      "confidence": {
+        "high": "High confidence",
+        "medium": "Medium confidence",
+        "low": "Low confidence"
+      },
+      "conclusion": "Conclusion",
+      "risks": "Points to note",
+      "actionItems": "Next actions"
+    }
+  },
+  "artifacts": {
+    "exec": {
+      "disabled": "Code execution is disabled.",
+      "rateLimited": "Too many execution requests. Please try again shortly.",
+      "unsupportedLang": "Unsupported language.",
+      "tooLarge": "The code is too large.",
+      "failed": "Execution failed."
+    },
+    "run": {
+      "running": "Running…",
+      "run": "Run",
+      "sandbox": "Sandbox (network blocked) · {lang}"
+    },
+    "output": {
+      "title": "Output",
+      "timedOut": "Timed out",
+      "truncated": "Truncated",
+      "empty": "(No output)"
+    },
+    "generating": "Generating…",
+    "versionSelect": "Select version",
+    "latest": "latest",
+    "viewCode": "View code",
+    "viewPreview": "Preview",
+    "download": "Download",
+    "shareLabel": "Share",
+    "copy": "Copy",
+    "closePanel": "Close panel",
+    "artifactCount": "Artifacts {count}",
+    "framePreviewTitle": "Artifact preview",
+    "share": {
+      "title": "Share artifact",
+      "close": "Close",
+      "viewerDisabled": "The viewer is disabled (ARTIFACT_VIEWER_ENABLED). Please contact your administrator.",
+      "publishFailed": "Failed to share",
+      "unpublishFailed": "Failed to stop sharing",
+      "visibility": {
+        "private": {
+          "label": "Private",
+          "desc": "Only you can view it"
+        },
+        "authenticated": {
+          "label": "All signed-in users",
+          "desc": "Visible to all signed-in users"
+        },
+        "link": {
+          "label": "Share via link",
+          "desc": "Anyone with the link (including signed-out users)"
+        }
+      },
+      "iconLabel": "Icon (emoji)",
+      "copyLink": "Copy link",
+      "unpublish": "Stop sharing",
+      "updateSettings": "Update share settings",
+      "publish": "Share"
+    },
+    "page": {
+      "viewerOpenFailed": "Unable to open the viewer",
+      "title": "Artifacts",
+      "description": "Browse the outputs you've created and share them via a separate-origin viewer.",
+      "loading": "Loading...",
+      "emptyTitle": "No artifacts yet",
+      "emptyDesc": "Create outputs like code, HTML, or charts in chat and they'll appear here.",
+      "notShared": "Not shared",
+      "openViewer": "Open viewer",
+      "share": "Share",
+      "vis": {
+        "private": "Private",
+        "authenticated": "Authenticated",
+        "link": "Link"
+      }
+    }
+  },
+  "history": {
+    "title": "Conversation history",
+    "description": "Search past conversations and pick up where you left off.",
+    "searchPlaceholder": "Search conversation titles...",
+    "deleteAllButton": "Delete all",
+    "loading": "Loading...",
+    "untitledConversation": "Untitled conversation",
+    "messageCount": "{count} messages",
+    "deleteConfirm": "Delete the conversation \"{title}\"?\nDeleted conversations cannot be recovered.",
+    "deleteError": "Failed to delete the conversation.",
+    "deleteAllConfirm": "Delete all {count} conversations?\nDeleted conversations cannot be recovered.",
+    "deleteAllError": "Failed to delete all conversations.",
+    "deleteAria": "Delete conversation",
+    "group": {
+      "today": "Today",
+      "yesterday": "Yesterday",
+      "week": "This week",
+      "older": "Older"
+    },
+    "emptyState": {
+      "title": "No conversation history",
+      "noResults": "No results found.",
+      "hint": "Start a new conversation and it will appear here."
+    },
+    "mock": {
+      "c1": {
+        "title": "Next.js 16 App Router migration",
+        "preview": "What should I watch out for when moving from the pages router to the app router...",
+        "time": "2:14 PM"
+      },
+      "c2": {
+        "title": "PostgreSQL index tuning",
+        "preview": "Explain how composite index order affects the query plan",
+        "time": "11:02 AM"
+      },
+      "c3": {
+        "title": "Marketing campaign copy brainstorming",
+        "preview": "Create 5 variations of social media ad copy targeting people in their 20s",
+        "time": "6:47 PM"
+      },
+      "c4": {
+        "title": "Structuring a research report",
+        "preview": "Suggest a table of contents for an enterprise LLM adoption report",
+        "time": "3:20 PM"
+      },
+      "c5": {
+        "title": "TypeScript generic type guards",
+        "preview": "How can I safely narrow a discriminated union?",
+        "time": "Monday"
+      },
+      "c6": {
+        "title": "Image analysis prompt",
+        "preview": "Read the key trends from the attached chart",
+        "time": "Sunday"
+      }
+    }
+  },
+  "chatSocket": {
+    "error": "Error: {message}",
+    "unknownError": "Unknown error",
+    "taskIdMissing": "No taskId in the task creation response",
+    "agentTaskStartFailed": "Failed to start the agent task: {message}",
+    "structuredAborted": "_(Structured answer generation was stopped.)_",
+    "structuredFailed": "Failed to generate a structured answer: {message}"
   }
 }

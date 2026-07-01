@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { X, Code2, Eye, Copy, Check, Play, Loader2, Download, Share2 } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { useAppStore } from "@/lib/store";
 import type { Artifact } from "@/lib/store";
 import { ApiClient, ApiError } from "@/lib/api-client";
@@ -38,6 +39,7 @@ interface ExecResult {
 const RUNNABLE_LANGS = new Set(["python", "py", "python3", "javascript", "js", "node", "nodejs"]);
 
 function CodeArtifactView({ artifact }: { artifact: Artifact }) {
+  const t = useTranslations("artifacts");
   const lang = (artifact.lang ?? "").toLowerCase().trim();
   const runnable = RUNNABLE_LANGS.has(lang);
   const [running, setRunning] = useState(false);
@@ -56,13 +58,13 @@ function CodeArtifactView({ artifact }: { artifact: Artifact }) {
       setResult(res.data);
     } catch (e) {
       if (e instanceof ApiError) {
-        if (e.status === 503) setError("코드 실행 기능이 비활성화되어 있습니다.");
-        else if (e.status === 429) setError("실행 요청이 너무 많습니다. 잠시 후 다시 시도하세요.");
-        else if (e.status === 400) setError("지원하지 않는 언어입니다.");
-        else if (e.status === 413) setError("코드가 너무 큽니다.");
+        if (e.status === 503) setError(t("exec.disabled"));
+        else if (e.status === 429) setError(t("exec.rateLimited"));
+        else if (e.status === 400) setError(t("exec.unsupportedLang"));
+        else if (e.status === 413) setError(t("exec.tooLarge"));
         else setError(e.message);
       } else {
-        setError("실행에 실패했습니다.");
+        setError(t("exec.failed"));
       }
     } finally {
       setRunning(false);
@@ -80,9 +82,9 @@ function CodeArtifactView({ artifact }: { artifact: Artifact }) {
             className="flex items-center gap-1.5 rounded-md bg-accent px-2.5 py-1 text-xs font-medium text-accent-fg transition hover:bg-accent-hover disabled:opacity-60"
           >
             {running ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
-            {running ? "실행 중…" : "실행"}
+            {running ? t("run.running") : t("run.run")}
           </button>
-          <span className="text-[11px] text-faint">샌드박스(네트워크 차단) · {lang}</span>
+          <span className="text-[11px] text-faint">{t("run.sandbox", { lang })}</span>
         </div>
       )}
       <div className="min-h-0 flex-1 overflow-auto px-3">
@@ -95,11 +97,11 @@ function CodeArtifactView({ artifact }: { artifact: Artifact }) {
         {result && (
           <div className="mb-3 rounded-md border border-border bg-surface-2">
             <div className="flex items-center gap-2 border-b border-border px-3 py-1.5 text-[11px] text-muted">
-              <span>출력</span>
+              <span>{t("output.title")}</span>
               <span className="font-mono">exit={result.exitCode ?? "—"}</span>
               <span className="font-mono">{result.durationMs}ms</span>
-              {result.timedOut && <span className="text-danger">시간 초과</span>}
-              {result.truncated && <span className="text-faint">잘림</span>}
+              {result.timedOut && <span className="text-danger">{t("output.timedOut")}</span>}
+              {result.truncated && <span className="text-faint">{t("output.truncated")}</span>}
             </div>
             {result.stdout && (
               <pre className="overflow-x-auto px-3 py-2 text-xs text-fg-2">{result.stdout}</pre>
@@ -110,7 +112,7 @@ function CodeArtifactView({ artifact }: { artifact: Artifact }) {
               </pre>
             )}
             {!result.stdout && !result.stderr && (
-              <p className="px-3 py-2 text-xs text-faint">(출력 없음)</p>
+              <p className="px-3 py-2 text-xs text-faint">{t("output.empty")}</p>
             )}
           </div>
         )}
@@ -188,6 +190,7 @@ function ArtifactBody({ artifact, view }: { artifact: Artifact; view: "preview" 
 }
 
 export function ArtifactPanel() {
+  const t = useTranslations("artifacts");
   const artifacts = useAppStore((s) => s.artifacts);
   const activeArtifactId = useAppStore((s) => s.activeArtifactId);
   const open = useAppStore((s) => s.artifactPanelOpen);
@@ -305,17 +308,17 @@ export function ArtifactPanel() {
           {shown.lang ? `·${shown.lang}` : ""}
         </span>
         <span className="min-w-0 flex-1 truncate text-sm font-medium text-fg">{shown.title}</span>
-        {active.streaming && <span className="text-[11px] text-faint">생성 중…</span>}
+        {active.streaming && <span className="text-[11px] text-faint">{t("generating")}</span>}
         {versions.length > 1 && shownVersion != null && (
           <select
             value={shownVersion}
             onChange={(e) => selectVersion(Number(e.target.value))}
-            aria-label="버전 선택"
+            aria-label={t("versionSelect")}
             className="rounded border border-border bg-surface-2 px-1.5 py-1 text-[11px] text-muted"
           >
             {versions.map((v) => (
               <option key={v.version} value={v.version}>
-                v{v.version}{v.version === latestVersion ? " (최신)" : ""}
+                v{v.version}{v.version === latestVersion ? ` (${t("latest")})` : ""}
               </option>
             ))}
           </select>
@@ -324,7 +327,7 @@ export function ArtifactPanel() {
           <button
             type="button"
             onClick={() => setView((v) => (v === "preview" ? "code" : "preview"))}
-            aria-label={view === "preview" ? "코드 보기" : "미리보기"}
+            aria-label={view === "preview" ? t("viewCode") : t("viewPreview")}
             className="grid h-7 w-7 place-items-center rounded text-muted transition hover:bg-surface-3 hover:text-fg"
           >
             {view === "preview" ? <Code2 className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -333,7 +336,7 @@ export function ArtifactPanel() {
         <button
           type="button"
           onClick={() => downloadArtifact({ title: shown.title, kind: shown.kind, lang: shown.lang, content: shown.content })}
-          aria-label="다운로드"
+          aria-label={t("download")}
           className="grid h-7 w-7 place-items-center rounded text-muted transition hover:bg-surface-3 hover:text-fg"
         >
           <Download className="h-4 w-4" />
@@ -342,7 +345,7 @@ export function ArtifactPanel() {
           <button
             type="button"
             onClick={() => setShareOpen(true)}
-            aria-label="공유"
+            aria-label={t("shareLabel")}
             className="grid h-7 w-7 place-items-center rounded text-muted transition hover:bg-surface-3 hover:text-fg"
           >
             <Share2 className="h-4 w-4" />
@@ -351,7 +354,7 @@ export function ArtifactPanel() {
         <button
           type="button"
           onClick={copy}
-          aria-label="복사"
+          aria-label={t("copy")}
           className="grid h-7 w-7 place-items-center rounded text-muted transition hover:bg-surface-3 hover:text-fg"
         >
           {copied ? <Check className="h-4 w-4 text-accent" /> : <Copy className="h-4 w-4" />}
@@ -359,7 +362,7 @@ export function ArtifactPanel() {
         <button
           type="button"
           onClick={() => setArtifactPanelOpen(false)}
-          aria-label="패널 닫기"
+          aria-label={t("closePanel")}
           className="grid h-7 w-7 place-items-center rounded text-muted transition hover:bg-surface-3 hover:text-fg"
         >
           <X className="h-4 w-4" />

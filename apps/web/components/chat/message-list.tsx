@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import Image from "next/image";
+import { useTranslations } from "next-intl";
 import { MessagesSquare, Telescope, Brain, Sparkles, FileCode2, ChevronRight, LoaderCircle, Pause, CircleCheck, CircleX, Download, FileText, ShieldCheck } from "lucide-react";
 import { useAppStore, type PendingApproval, type AgentTaskState } from "@/lib/store";
 import { ApiClient } from "@/lib/api-client";
@@ -13,6 +14,7 @@ const ARTIFACT_PLACEHOLDER = /\[\[artifact:([^\]]+)\]\]/g;
 
 /** 에이전트 작업 승인 대기 — 채팅 인라인 승인/거절 버튼 (paused task). */
 function InlineApprovals({ approvals }: { approvals: PendingApproval[] }) {
+  const t = useTranslations("chat");
   const setChatHistory = useAppStore((s) => s.setChatHistory);
   const [busy, setBusy] = useState<string | null>(null);
   if (approvals.length === 0) return null;
@@ -30,7 +32,7 @@ function InlineApprovals({ approvals }: { approvals: PendingApproval[] }) {
         ),
       );
     } catch (e) {
-      alert("처리 실패: " + (e instanceof Error ? e.message : "오류"));
+      alert(t("approvals.processFailed", { error: e instanceof Error ? e.message : t("approvals.errorFallback") }));
     } finally {
       setBusy(null);
     }
@@ -39,7 +41,7 @@ function InlineApprovals({ approvals }: { approvals: PendingApproval[] }) {
   return (
     <div className="mt-1 space-y-2 rounded-md border border-warning-soft bg-warning-soft/50 p-2.5">
       <p className="flex items-center gap-1.5 text-xs font-semibold text-fg-2">
-        <ShieldCheck className="h-3.5 w-3.5 text-warning" /> 도구 실행 승인 필요
+        <ShieldCheck className="h-3.5 w-3.5 text-warning" /> {t("approvals.title")}
       </p>
       {approvals.map((a) => (
         <div key={a.approvalId} className="flex items-center justify-between gap-2 rounded-md border border-border bg-surface-1 p-2">
@@ -52,12 +54,12 @@ function InlineApprovals({ approvals }: { approvals: PendingApproval[] }) {
               disabled={busy === a.approvalId}
               onClick={() => decide(a, "reject")}
               className="rounded-md border border-border px-2.5 py-1 text-xs text-muted hover:bg-surface-2 disabled:opacity-50"
-            >거절</button>
+            >{t("approvals.reject")}</button>
             <button
               disabled={busy === a.approvalId}
               onClick={() => decide(a, "approve")}
               className="rounded-md bg-accent px-2.5 py-1 text-xs font-medium text-accent-fg hover:opacity-90 disabled:opacity-50"
-            >승인</button>
+            >{t("approvals.approve")}</button>
           </div>
         </div>
       ))}
@@ -67,10 +69,11 @@ function InlineApprovals({ approvals }: { approvals: PendingApproval[] }) {
 
 /** 영속화된 `[[artifact:id]]` placeholder 를 클릭 가능한 아티팩트 칩으로 렌더. */
 function ArtifactChip({ id }: { id: string }) {
+  const t = useTranslations("chat");
   const artifacts = useAppStore((s) => s.artifacts);
   const setActiveArtifact = useAppStore((s) => s.setActiveArtifact);
   const setArtifactPanelOpen = useAppStore((s) => s.setArtifactPanelOpen);
-  const title = artifacts.find((a) => a.id === id)?.title ?? "아티팩트";
+  const title = artifacts.find((a) => a.id === id)?.title ?? t("artifactFallback");
   return (
     <button
       type="button"
@@ -88,10 +91,11 @@ function ArtifactChip({ id }: { id: string }) {
 
 /** 스트리밍 중 길어지는 미완성 코드 펜스 → "아티팩트 생성 중" 표시 (완료 시 칩/패널로 대체). */
 function ArtifactBuilding() {
+  const t = useTranslations("chat");
   return (
     <span className="my-1 inline-flex items-center gap-1.5 rounded-md border border-border bg-surface-2 px-2.5 py-1.5 text-sm font-medium text-fg-2">
       <FileCode2 className="h-4 w-4 animate-pulse text-accent" />
-      아티팩트 생성 중…
+      {t("artifactBuilding")}
     </span>
   );
 }
@@ -151,11 +155,12 @@ function ThinkingIndicator({
   agent: { name: string; emoji?: string } | null;
   skills: string[];
 }) {
+  const t = useTranslations("chat");
   const label = agent
-    ? `${agent.emoji ? agent.emoji + " " : ""}${agent.name}가 분석 중`
+    ? t("thinking.agentAnalyzing", { agent: `${agent.emoji ? agent.emoji + " " : ""}${agent.name}` })
     : skills.length > 0
-      ? `${skills.join(", ")} 적용 중`
-      : "분석 중";
+      ? t("thinking.skillsApplying", { skills: skills.join(", ") })
+      : t("thinking.analyzing");
   return (
     <div className="flex gap-3">
       <Image src="/logo.png" alt="OpenMake" width={28} height={28} className="mt-0.5 h-7 w-7 shrink-0 rounded-md object-contain" />
@@ -175,21 +180,21 @@ function ThinkingIndicator({
 }
 
 const QUICK_STARTS = [
-  { icon: MessagesSquare, label: "요약하기", prompt: "다음 내용을 요약해 줘:\n\n" },
-  { icon: Telescope, label: "리서치", prompt: "다음 주제를 깊이 리서치해 줘:\n\n" },
-  { icon: Brain, label: "단계별 분석", prompt: "다음 문제를 단계별로 분석해 줘:\n\n" },
-  { icon: Sparkles, label: "브레인스토밍", prompt: "다음에 대해 브레인스토밍하자:\n\n" },
+  { icon: MessagesSquare, labelKey: "quickStarts.summarize.label", promptKey: "quickStarts.summarize.prompt" },
+  { icon: Telescope, labelKey: "quickStarts.research.label", promptKey: "quickStarts.research.prompt" },
+  { icon: Brain, labelKey: "quickStarts.analyze.label", promptKey: "quickStarts.analyze.prompt" },
+  { icon: Sparkles, labelKey: "quickStarts.brainstorm.label", promptKey: "quickStarts.brainstorm.prompt" },
 ];
 
 /** 에이전트 작업 인라인 카드 — 상태별 벡터 아이콘 + 진행바 + 결과/아티팩트/산출물 + 승인 (이모지 없음). */
 type TaskTone = "run" | "pause" | "ok" | "fail";
-const TASK_STATUS: Record<string, { Icon: typeof Pause; spin: boolean; tone: TaskTone; badge: string }> = {
-  pending: { Icon: LoaderCircle, spin: true, tone: "run", badge: "대기" },
-  running: { Icon: LoaderCircle, spin: true, tone: "run", badge: "실행 중" },
-  paused: { Icon: Pause, spin: false, tone: "pause", badge: "승인 대기" },
-  completed: { Icon: CircleCheck, spin: false, tone: "ok", badge: "완료" },
-  failed: { Icon: CircleX, spin: false, tone: "fail", badge: "실패" },
-  cancelled: { Icon: CircleX, spin: false, tone: "fail", badge: "취소됨" },
+const TASK_STATUS: Record<string, { Icon: typeof Pause; spin: boolean; tone: TaskTone; badgeKey: string }> = {
+  pending: { Icon: LoaderCircle, spin: true, tone: "run", badgeKey: "status.pending" },
+  running: { Icon: LoaderCircle, spin: true, tone: "run", badgeKey: "status.running" },
+  paused: { Icon: Pause, spin: false, tone: "pause", badgeKey: "status.paused" },
+  completed: { Icon: CircleCheck, spin: false, tone: "ok", badgeKey: "status.completed" },
+  failed: { Icon: CircleX, spin: false, tone: "fail", badgeKey: "status.failed" },
+  cancelled: { Icon: CircleX, spin: false, tone: "fail", badgeKey: "status.cancelled" },
 };
 const TONE_ICON: Record<TaskTone, string> = {
   run: "bg-accent-soft text-accent",
@@ -205,6 +210,7 @@ const TONE_BADGE: Record<TaskTone, string> = {
 };
 
 function AgentTaskCard({ task, approvals, taskId }: { task: AgentTaskState; approvals?: PendingApproval[]; taskId?: string }) {
+  const t = useTranslations("chat");
   const cfg = TASK_STATUS[task.status] ?? TASK_STATUS.running;
   const pct = Math.max(0, Math.min(100, Math.round(task.progress || 0)));
   const Icon = cfg.Icon;
@@ -215,21 +221,21 @@ function AgentTaskCard({ task, approvals, taskId }: { task: AgentTaskState; appr
         <span className={cn("grid h-6 w-6 shrink-0 place-items-center rounded-md", TONE_ICON[cfg.tone])}>
           <Icon className={cn("h-3.5 w-3.5", cfg.spin && "animate-spin")} />
         </span>
-        <span className="text-[13px] font-semibold tracking-tight text-fg">에이전트 작업</span>
+        <span className="text-[13px] font-semibold tracking-tight text-fg">{t("agentTask.title")}</span>
         <span className={cn("ml-auto rounded-full px-2 py-0.5 font-mono text-[11px] font-semibold tabular-nums", TONE_BADGE[cfg.tone])}>
-          {cfg.badge}{cfg.tone !== "ok" && task.currentTurn > 0 ? ` · 턴 ${task.currentTurn}` : ""}
+          {t(cfg.badgeKey)}{cfg.tone !== "ok" && task.currentTurn > 0 ? ` · ${t("agentTask.turn", { turn: task.currentTurn })}` : ""}
         </span>
       </div>
       <div className="flex flex-col gap-2.5 px-3.5 py-3">
         {task.goal && (
-          <p className="text-xs text-muted"><span className="font-semibold text-fg-2">목표</span>&nbsp; {task.goal}</p>
+          <p className="text-xs text-muted"><span className="font-semibold text-fg-2">{t("agentTask.goal")}</span>&nbsp; {task.goal}</p>
         )}
         {showProgress && (
           <div className="flex items-center gap-2.5">
             <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-3">
               <div className="h-full rounded-full bg-accent transition-all" style={{ width: `${pct}%` }} />
             </div>
-            <span className="shrink-0 font-mono text-[11px] tabular-nums text-faint">{pct}% · 턴 {task.currentTurn ?? 0}</span>
+            <span className="shrink-0 font-mono text-[11px] tabular-nums text-faint">{pct}% · {t("agentTask.turn", { turn: task.currentTurn ?? 0 })}</span>
           </div>
         )}
         {task.result && (task.status === "completed" || task.status === "failed") && (
@@ -247,7 +253,7 @@ function AgentTaskCard({ task, approvals, taskId }: { task: AgentTaskState; appr
         {task.files && task.files.length > 0 && (
           <div>
             <div className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold text-muted">
-              <Download className="h-3 w-3" /> 산출물
+              <Download className="h-3 w-3" /> {t("agentTask.outputs")}
             </div>
             <div className="flex flex-wrap gap-2">
               {task.files.map((f) => (
@@ -271,6 +277,7 @@ function AgentTaskCard({ task, approvals, taskId }: { task: AgentTaskState; appr
 
 /** 딥리서치 진행 배너 — 스트리밍 중 단계/진행/루프를 라이브 표시. */
 function ResearchProgressBanner() {
+  const t = useTranslations("chat");
   const rp = useAppStore((s) => s.researchProgress);
   if (!rp) return null;
   const filled = Math.round(rp.progress / 10);
@@ -282,9 +289,9 @@ function ResearchProgressBanner() {
       <div className="min-w-0 flex-1 rounded-lg border border-border bg-surface-2/60 p-3">
         <div className="mb-1 flex items-center gap-2 text-xs font-medium text-fg-2">
           <LoaderCircle className="h-3.5 w-3.5 animate-spin text-accent" />
-          딥 리서치 진행 중
+          {t("research.inProgress")}
           {rp.totalLoops > 0 && (
-            <span className="text-faint">· 루프 {rp.currentLoop}/{rp.totalLoops}</span>
+            <span className="text-faint">· {t("research.loop", { current: rp.currentLoop, total: rp.totalLoops })}</span>
           )}
         </div>
         {rp.message && <p className="mb-1.5 text-xs text-muted">{rp.message}</p>}
@@ -300,6 +307,7 @@ function ResearchProgressBanner() {
 }
 
 export function MessageList() {
+  const t = useTranslations("chat");
   const chatHistory = useAppStore((s) => s.chatHistory);
   const setInputDraft = useAppStore((s) => s.setInputDraft);
   const isGenerating = useAppStore((s) => s.isGenerating);
@@ -327,21 +335,22 @@ export function MessageList() {
           height={56}
           className="h-14 w-14 rounded-2xl object-contain"
         />
-        <h2 className="mt-5 text-2xl font-bold text-fg">무엇을 도와드릴까요?</h2>
+        <h2 className="mt-5 text-2xl font-bold text-fg">{t("emptyState.title")}</h2>
         <p className="mt-2 max-w-md text-sm text-muted">
-          멀티모델 오케스트레이션 · MCP 도구 · 딥 리서치 · 자율 에이전트.
-          아래에 질문을 입력하거나 <span className="font-mono text-accent">/</span> 로 스킬을 호출하세요.
+          {t.rich("emptyState.description", {
+            slash: (chunks) => <span className="font-mono text-accent">{chunks}</span>,
+          })}
         </p>
 
         <div className="mt-7 grid w-full max-w-md grid-cols-2 gap-2.5">
           {QUICK_STARTS.map((q) => (
             <button
-              key={q.label}
-              onClick={() => setInputDraft(q.prompt)}
+              key={q.labelKey}
+              onClick={() => setInputDraft(t(q.promptKey))}
               className="flex items-center gap-2.5 rounded-xl border border-border bg-surface px-3.5 py-3 text-left text-sm font-medium text-fg transition hover:border-border-strong hover:bg-surface-2"
             >
               <q.icon className="h-4 w-4 shrink-0 text-accent" />
-              <span className="truncate">{q.label}</span>
+              <span className="truncate">{t(q.labelKey)}</span>
             </button>
           ))}
         </div>
@@ -374,7 +383,7 @@ export function MessageList() {
                   <summary className="flex cursor-pointer select-none items-center gap-1.5 px-3 py-1.5 font-medium text-muted list-none [&::-webkit-details-marker]:hidden">
                     <ChevronRight className="h-3.5 w-3.5 shrink-0 transition-transform group-open:rotate-90" />
                     <Brain className="h-3.5 w-3.5 text-accent" />
-                    생각 과정
+                    {t("reasoningLabel")}
                   </summary>
                   <div className="whitespace-pre-wrap px-3 pb-2.5 pt-1 leading-relaxed text-muted">
                     {m.reasoning}
