@@ -1,0 +1,61 @@
+{
+  "metadata": {
+    "description": "AIベースのインテリジェントチャットアシスタント"
+  },
+  "nav": {
+    "groups": {
+      "workspace": "ワークスペース",
+      "integrations": "連携",
+      "account": "アカウント",
+      "admin": "管理者"
+    },
+    "items": {
+      "chat": "チャット",
+      "research": "ディープリサーチ",
+      "agentTasks": "エージェントタスク",
+      "customAgents": "カスタムエージェント",
+      "skillLibrary": "スキルライブラリ",
+      "artifacts": "アーティファクト",
+      "history": "履歴",
+      "mcpServers": "MCPサーバー",
+      "mcpCatalog": "MCPカタログ",
+      "mcpMonitoring": "MCPモニタリング",
+      "agentLearning": "エージェント学習",
+      "settings": "設定",
+      "apiKeys": "APIキー",
+      "usage": "使用量",
+      "developerDocs": "開発者ドキュメント",
+      "admin": "管理者",
+      "analytics": "アナリティクス",
+      "auditLog": "監査ログ",
+      "metrics": "メトリクス",
+      "alerts": "アラート",
+      "mcpCatalogAdmin": "MCPカタログ管理"
+    }
+  },
+  "sidebar": {
+    "newChat": "新しいチャット",
+    "searchPlaceholder": "検索...",
+    "recentChats": "最近のチャット",
+    "untitledChat": "無題のチャット",
+    "deleteChat": "チャットを削除",
+    "deleteConfirm": "「{title}」を削除しますか？\n削除したチャットは復元できません。",
+    "deleteFailed": "チャットの削除に失敗しました。",
+    "guest": "ゲスト",
+    "selfHosted": "セルフホスト",
+    "notLoggedIn": "未ログイン",
+    "logout": "ログアウト"
+  },
+  "mobileNav": {
+    "chat": "チャット",
+    "research": "リサーチ",
+    "agent": "エージェント",
+    "login": "ログイン",
+    "menu": "メニュー",
+    "openMenu": "全メニュー",
+    "closeMenu": "メニューを閉じる"
+  },
+  "settings": {
+    "languageAuto": "自動検出"
+  }
+}

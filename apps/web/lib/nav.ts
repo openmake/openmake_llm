@@ -26,7 +26,8 @@ export type NavRole = "guest" | "user" | "admin";
 export const NAV_ROLE_RANK: Record<NavRole, number> = { guest: 0, user: 1, admin: 2 };
 
 export interface NavItem {
-  label: string;
+  /** messages/*.json 의 nav 네임스페이스 키 (예: 'items.chat') */
+  labelKey: string;
   href: string;
   icon: LucideIcon;
   /** 이 항목을 보려면 필요한 최소 역할. 미지정 시 그룹값, 그것도 없으면 'user'. */
@@ -34,7 +35,8 @@ export interface NavItem {
 }
 
 export interface NavGroup {
-  title: string;
+  /** messages/*.json 의 nav 네임스페이스 키 (예: 'groups.workspace') */
+  titleKey: string;
   items: NavItem[];
   /** 그룹 전체의 최소 역할 (항목별 minRole 이 우선). */
   minRole?: NavRole;
@@ -43,45 +45,45 @@ export interface NavGroup {
 /** 사이드바 네비게이션 — 기존 nav-items.js + pages 모듈에 대응. */
 export const NAV_GROUPS: NavGroup[] = [
   {
-    title: "워크스페이스",
+    titleKey: "groups.workspace",
     items: [
-      { label: "채팅", href: "/", icon: MessageSquare, minRole: "guest" },
-      { label: "딥 리서치", href: "/research", icon: Telescope },
-      { label: "에이전트 작업", href: "/agent-tasks", icon: Sparkles },
-      { label: "커스텀 에이전트", href: "/custom-agents", icon: Bot },
-      { label: "스킬 라이브러리", href: "/skill-library", icon: Library },
-      { label: "아티팩트", href: "/artifacts", icon: LayoutGrid },
-      { label: "히스토리", href: "/history", icon: Clock },
+      { labelKey: "items.chat", href: "/", icon: MessageSquare, minRole: "guest" },
+      { labelKey: "items.research", href: "/research", icon: Telescope },
+      { labelKey: "items.agentTasks", href: "/agent-tasks", icon: Sparkles },
+      { labelKey: "items.customAgents", href: "/custom-agents", icon: Bot },
+      { labelKey: "items.skillLibrary", href: "/skill-library", icon: Library },
+      { labelKey: "items.artifacts", href: "/artifacts", icon: LayoutGrid },
+      { labelKey: "items.history", href: "/history", icon: Clock },
     ],
   },
   {
-    title: "통합",
+    titleKey: "groups.integrations",
     items: [
-      { label: "MCP 서버", href: "/mcp-servers", icon: Server },
-      { label: "MCP 카탈로그", href: "/mcp-catalog", icon: Boxes },
-      { label: "MCP 모니터링", href: "/mcp-monitoring", icon: Activity },
-      { label: "에이전트 학습", href: "/agent-learning", icon: GraduationCap },
+      { labelKey: "items.mcpServers", href: "/mcp-servers", icon: Server },
+      { labelKey: "items.mcpCatalog", href: "/mcp-catalog", icon: Boxes },
+      { labelKey: "items.mcpMonitoring", href: "/mcp-monitoring", icon: Activity },
+      { labelKey: "items.agentLearning", href: "/agent-learning", icon: GraduationCap },
     ],
   },
   {
-    title: "계정",
+    titleKey: "groups.account",
     items: [
-      { label: "설정", href: "/settings", icon: Settings },
-      { label: "API 키", href: "/api-keys", icon: KeyRound },
-      { label: "사용량", href: "/usage", icon: BarChart3 },
-      { label: "개발자 문서", href: "/developer", icon: ScrollText },
+      { labelKey: "items.settings", href: "/settings", icon: Settings },
+      { labelKey: "items.apiKeys", href: "/api-keys", icon: KeyRound },
+      { labelKey: "items.usage", href: "/usage", icon: BarChart3 },
+      { labelKey: "items.developerDocs", href: "/developer", icon: ScrollText },
     ],
   },
   {
-    title: "관리자",
+    titleKey: "groups.admin",
     minRole: "admin",
     items: [
-      { label: "관리자", href: "/admin", icon: Shield },
-      { label: "애널리틱스", href: "/admin/analytics", icon: LineChart },
-      { label: "감사 로그", href: "/admin/audit", icon: ScrollText },
-      { label: "메트릭", href: "/admin/metrics", icon: Gauge },
-      { label: "알림", href: "/admin/alerts", icon: Bell },
-      { label: "MCP 카탈로그 관리", href: "/admin/mcp-catalog", icon: Boxes },
+      { labelKey: "items.admin", href: "/admin", icon: Shield },
+      { labelKey: "items.analytics", href: "/admin/analytics", icon: LineChart },
+      { labelKey: "items.auditLog", href: "/admin/audit", icon: ScrollText },
+      { labelKey: "items.metrics", href: "/admin/metrics", icon: Gauge },
+      { labelKey: "items.alerts", href: "/admin/alerts", icon: Bell },
+      { labelKey: "items.mcpCatalogAdmin", href: "/admin/mcp-catalog", icon: Boxes },
     ],
   },
 ];

@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
+import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import {
   Settings,
   Bot,
@@ -26,6 +28,7 @@ import { ApiClient, ApiError } from "@/lib/api-client";
 import { useAppStore } from "@/lib/store";
 import { fetchModels } from "@/lib/models-api";
 import { cn } from "@/lib/utils";
+import { LOCALE_COOKIE, LOCALE_COOKIE_MAX_AGE, isLocale } from "@/i18n/config";
 
 /* ── 탭 정의 ────────────────────────────────────────────── */
 type TabId = "general" | "model" | "interface" | "notifications" | "privacy" | "security";
@@ -52,8 +55,20 @@ const THEMES = [
   { value: "dark", label: "다크" },
 ];
 
+/** NEXT_LOCALE 쿠키 값 (미설정/미지원 값 = "" → 자동 감지). */
+function readLocaleCookie(): string {
+  const v = document.cookie
+    .split("; ")
+    .find((c) => c.startsWith(`${LOCALE_COOKIE}=`))
+    ?.split("=")[1];
+  return isLocale(v) ? v : "";
+}
+// 쿠키 변경은 changeLanguage → router.refresh() 재렌더로만 발생 — 별도 구독 불필요.
+const emptySubscribe = () => () => {};
+
+/** UI 표시 언어. 언어명은 각 언어의 자기 표기(native name)라 번역하지 않고, "자동 감지"만 t 로 치환. */
 const LANGUAGES = [
-  { value: "", label: "자동 감지" },
+  { value: "", label: "" }, // label 은 렌더 시 t("languageAuto") 로 채움
   { value: "ko", label: "한국어" },
   { value: "en", label: "English" },
   { value: "ja", label: "日本語" },
@@ -197,8 +212,26 @@ export default function SettingsPage() {
       : []),
     ...externalGroups,
   ];
-  const [language, setLanguage] = useState("");
+  // UI 표시 언어 — NEXT_LOCALE 쿠키가 SoT (i18n/request.ts 가 서버 렌더 시 읽음).
+  // 로컬 state 중복 없이 쿠키를 직접 구독: 서버 스냅샷 "" → hydration 후 클라 값으로 갱신.
+  const language = useSyncExternalStore(
+    emptySubscribe,
+    readLocaleCookie,
+    () => "",
+  );
   const [customInstructions, setCustomInstructions] = useState("");
+  const tSettings = useTranslations("settings");
+  const router = useRouter();
+
+  const changeLanguage = (v: string) => {
+    if (isLocale(v)) {
+      document.cookie = `${LOCALE_COOKIE}=${v}; path=/; max-age=${LOCALE_COOKIE_MAX_AGE}; samesite=lax`;
+    } else {
+      // "자동 감지" — 쿠키 제거 → Accept-Language 협상으로 복귀
+      document.cookie = `${LOCALE_COOKIE}=; path=/; max-age=0`;
+    }
+    router.refresh(); // 재렌더 → useSyncExternalStore 가 쿠키를 다시 읽음
+  };
 
   // 인터페이스
   const [theme, setTheme] = useState("system");
@@ -330,7 +363,7 @@ export default function SettingsPage() {
       await ApiClient.put("/api/users/me/custom-instructions", {
         customInstructions: trimmed.length > 0 ? trimmed : null,
       });
-      // TODO: API 연동 — defaultModel/responseStyle/language/theme/알림/개인정보 영속화
+      // TODO: API 연동 — defaultModel/responseStyle/theme/알림/개인정보 영속화 (language 는 NEXT_LOCALE 쿠키로 완료)
       setSavedAt(new Date().toLocaleTimeString("ko-KR"));
     } catch {
       setSavedAt(null);
@@ -422,12 +455,14 @@ export default function SettingsPage() {
                 <CardContent className="py-0">
                   <FieldRow
                     title="언어"
-                    description="AI 응답 언어. 자동 감지 시 사용자 메시지 언어로 응답합니다."
+                    description="인터페이스 표시 언어. 자동 감지 시 브라우저 언어를 따릅니다. (AI 응답은 메시지 언어를 따릅니다)"
                   >
                     <Select
                       value={language}
-                      onChange={setLanguage}
-                      options={LANGUAGES}
+                      onChange={changeLanguage}
+                      options={LANGUAGES.map((o) =>
+                        o.value === "" ? { ...o, label: tSettings("languageAuto") } : o,
+                      )}
                     />
                   </FieldRow>
                   <FieldRow

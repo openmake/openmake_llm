@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "check:i18n": "node scripts/check-i18n-keys.mjs"
   },
   "dependencies": {
     "@openmake/api-client": "1.5.6",
@@ -17,6 +18,7 @@
     "katex": "^0.17.0",
     "lucide-react": "^1.21.0",
     "next": "16.2.9",
+    "next-intl": "^4.13.1",
     "next-themes": "^0.4.6",
     "react": "19.2.4",
     "react-dom": "19.2.4",

@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import createNextIntlPlugin from "next-intl/plugin";
 
 /**
  * 백엔드(Express + WS, 기본 :52416)와의 연동.
@@ -50,4 +51,6 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+// i18n — 요청 설정은 i18n/request.ts (플러그인 기본 경로), locale SoT 는 NEXT_LOCALE 쿠키.
+const withNextIntl = createNextIntlPlugin();
+export default withNextIntl(nextConfig);

@@ -1,0 +1,61 @@
+{
+  "metadata": {
+    "description": "AI-powered intelligent chat assistant"
+  },
+  "nav": {
+    "groups": {
+      "workspace": "Workspace",
+      "integrations": "Integrations",
+      "account": "Account",
+      "admin": "Admin"
+    },
+    "items": {
+      "chat": "Chat",
+      "research": "Deep Research",
+      "agentTasks": "Agent Tasks",
+      "customAgents": "Custom Agents",
+      "skillLibrary": "Skill Library",
+      "artifacts": "Artifacts",
+      "history": "History",
+      "mcpServers": "MCP Servers",
+      "mcpCatalog": "MCP Catalog",
+      "mcpMonitoring": "MCP Monitoring",
+      "agentLearning": "Agent Learning",
+      "settings": "Settings",
+      "apiKeys": "API Keys",
+      "usage": "Usage",
+      "developerDocs": "Developer Docs",
+      "admin": "Admin",
+      "analytics": "Analytics",
+      "auditLog": "Audit Log",
+      "metrics": "Metrics",
+      "alerts": "Alerts",
+      "mcpCatalogAdmin": "MCP Catalog Admin"
+    }
+  },
+  "sidebar": {
+    "newChat": "New chat",
+    "searchPlaceholder": "Search...",
+    "recentChats": "Recent chats",
+    "untitledChat": "Untitled chat",
+    "deleteChat": "Delete chat",
+    "deleteConfirm": "Delete \"{title}\"?\nDeleted chats cannot be recovered.",
+    "deleteFailed": "Failed to delete the chat.",
+    "guest": "Guest",
+    "selfHosted": "Self-hosted",
+    "notLoggedIn": "Not signed in",
+    "logout": "Sign out"
+  },
+  "mobileNav": {
+    "chat": "Chat",
+    "research": "Research",
+    "agent": "Agents",
+    "login": "Sign in",
+    "menu": "Menu",
+    "openMenu": "Full menu",
+    "closeMenu": "Close menu"
+  },
+  "settings": {
+    "languageAuto": "Auto-detect"
+  }
+}

@@ -1,0 +1,61 @@
+{
+  "metadata": {
+    "description": "AI 기반 지능형 채팅 어시스턴트"
+  },
+  "nav": {
+    "groups": {
+      "workspace": "워크스페이스",
+      "integrations": "통합",
+      "account": "계정",
+      "admin": "관리자"
+    },
+    "items": {
+      "chat": "채팅",
+      "research": "딥 리서치",
+      "agentTasks": "에이전트 작업",
+      "customAgents": "커스텀 에이전트",
+      "skillLibrary": "스킬 라이브러리",
+      "artifacts": "아티팩트",
+      "history": "히스토리",
+      "mcpServers": "MCP 서버",
+      "mcpCatalog": "MCP 카탈로그",
+      "mcpMonitoring": "MCP 모니터링",
+      "agentLearning": "에이전트 학습",
+      "settings": "설정",
+      "apiKeys": "API 키",
+      "usage": "사용량",
+      "developerDocs": "개발자 문서",
+      "admin": "관리자",
+      "analytics": "애널리틱스",
+      "auditLog": "감사 로그",
+      "metrics": "메트릭",
+      "alerts": "알림",
+      "mcpCatalogAdmin": "MCP 카탈로그 관리"
+    }
+  },
+  "sidebar": {
+    "newChat": "새 대화",
+    "searchPlaceholder": "검색...",
+    "recentChats": "최근 대화",
+    "untitledChat": "제목 없는 대화",
+    "deleteChat": "대화 삭제",
+    "deleteConfirm": "\"{title}\" 대화를 삭제하시겠습니까?\n삭제된 대화는 복구할 수 없습니다.",
+    "deleteFailed": "대화 삭제에 실패했습니다.",
+    "guest": "게스트",
+    "selfHosted": "자가호스팅",
+    "notLoggedIn": "로그인 안 됨",
+    "logout": "로그아웃"
+  },
+  "mobileNav": {
+    "chat": "채팅",
+    "research": "리서치",
+    "agent": "에이전트",
+    "login": "로그인",
+    "menu": "메뉴",
+    "openMenu": "전체 메뉴",
+    "closeMenu": "메뉴 닫기"
+  },
+  "settings": {
+    "languageAuto": "자동 감지"
+  }
+}
