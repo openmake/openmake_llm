@@ -14,3 +14,15 @@ export const LOCALE_COOKIE_MAX_AGE = 60 * 60 * 24 * 365; // 1년
 export function isLocale(value: string | undefined | null): value is Locale {
   return !!value && (LOCALES as readonly string[]).includes(value);
 }
+
+/** UI locale → 날짜/숫자 포맷용 BCP-47 태그 (백엔드 i18n/search-locale.ts 매핑과 정합). */
+const BCP47: Record<Locale, string> = {
+  ko: "ko-KR",
+  en: "en-US",
+  ja: "ja-JP",
+  zh: "zh-CN",
+};
+
+export function toBcp47(locale: string): string {
+  return isLocale(locale) ? BCP47[locale] : BCP47[DEFAULT_LOCALE];
+}

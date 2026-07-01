@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { ScrollText, Download } from "lucide-react";
 import {
   PageHeader,
@@ -14,6 +14,7 @@ import {
   Td,
 } from "@/components/ui/primitives";
 import { cn } from "@/lib/utils";
+import { toBcp47 } from "@/i18n/config";
 import { ApiClient } from "@/lib/api-client";
 
 type Severity = "critical" | "warn" | "info";
@@ -66,8 +67,8 @@ const PERIODS: { key: string; labelKey: string }[] = [
   { key: "all", labelKey: "period.all" },
 ];
 
-function fmt(s: string) {
-  return new Date(s).toLocaleString("ko-KR", {
+function fmt(s: string, locale: string) {
+  return new Date(s).toLocaleString(locale, {
     month: "2-digit",
     day: "2-digit",
     hour: "2-digit",
@@ -91,6 +92,7 @@ interface ApiAuditLog {
 
 export default function AdminAuditPage() {
   const t = useTranslations("adminAudit");
+  const locale = toBcp47(useLocale());
   const [logs, setLogs] = useState<AuditLog[]>(MOCK_LOGS);
   const [action, setAction] = useState(ALL_ACTIONS);
   const [severity, setSeverity] = useState<"all" | Severity>("all");
@@ -220,7 +222,7 @@ export default function AdminAuditPage() {
                 ) : (
                   filtered.map((l) => (
                     <tr key={l.id}>
-                      <Td className="whitespace-nowrap font-mono text-xs text-muted">{fmt(l.timestamp)}</Td>
+                      <Td className="whitespace-nowrap font-mono text-xs text-muted">{fmt(l.timestamp, locale)}</Td>
                       <Td className="text-fg">{l.actor}</Td>
                       <Td className="font-mono text-xs text-fg-2">{l.action}</Td>
                       <Td className="font-mono text-xs text-muted">{l.target}</Td>

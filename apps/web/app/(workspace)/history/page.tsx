@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { Clock, Search, MessageSquare, Trash2 } from "lucide-react";
 import type { ApiSuccess } from "@openmake/shared-types";
 import { Badge, PageHeader, Card } from "@/components/ui/primitives";
 import { ApiClient } from "@/lib/api-client";
+import { toBcp47 } from "@/i18n/config";
 import { appendAnonSessionId } from "@/lib/anon-session";
 import { useAppStore } from "@/lib/store";
 import type { ChatRole } from "@/lib/store";
@@ -56,20 +57,20 @@ function bucketByDate(iso?: string): DateGroup {
   return "older";
 }
 
-function formatTime(iso?: string): string {
+function formatTime(iso: string | undefined, locale: string): string {
   if (!iso) return "";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleTimeString("ko-KR", { hour: "numeric", minute: "2-digit" });
+  return d.toLocaleTimeString(locale, { hour: "numeric", minute: "2-digit" });
 }
 
-function mapConversation(c: ApiConversation, t: TFn): Session {
+function mapConversation(c: ApiConversation, t: TFn, locale: string): Session {
   const ts = c.updatedAt || c.createdAt;
   return {
     id: c.id,
     title: c.title?.trim() || t("untitledConversation"),
     preview: t("messageCount", { count: c.messageCount ?? 0 }),
-    time: formatTime(ts),
+    time: formatTime(ts, locale),
     model: c.model || "Auto",
     group: bucketByDate(ts),
   };
@@ -89,6 +90,7 @@ const GROUP_ORDER: DateGroup[] = ["today", "yesterday", "week", "older"];
 
 export default function HistoryPage() {
   const t = useTranslations("history");
+  const locale = toBcp47(useLocale());
   const router = useRouter();
   const queryClient = useQueryClient();
   const { setChatHistory, setCurrentSessionId, setArtifacts, clearChat, auth } = useAppStore();
@@ -163,7 +165,7 @@ export default function HistoryPage() {
         if (cancelled) return;
         const list = res?.data?.sessions ?? [];
         // 실제 데이터가 오면 우선 표시 (빈 배열도 실제 상태로 존중)
-        setSessions(list.map((c) => mapConversation(c, t)));
+        setSessions(list.map((c) => mapConversation(c, t, locale)));
       } catch {
         // 401·네트워크 실패: 목업 폴백 유지 (초기 state 그대로)
       } finally {
@@ -173,8 +175,8 @@ export default function HistoryPage() {
     return () => {
       cancelled = true;
     };
-    // locale 변경(t) 시 라벨 재매핑 위해 재조회
-  }, [t]);
+    // locale/t 변경 시 라벨 재매핑 위해 재조회
+  }, [t, locale]);
 
   const grouped = useMemo(() => {
     const q = query.trim().toLowerCase();

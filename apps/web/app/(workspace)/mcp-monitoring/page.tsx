@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
+import { toBcp47 } from "@/i18n/config";
 import { RefreshCw, AlertTriangle } from "lucide-react";
 import { CLIENT_TIMING } from "@/lib/config";
 import {
@@ -143,7 +144,7 @@ const LOGS: ToolLog[] = [
 const maxCalls = Math.max(...SERVER_USAGE.map((s) => s.calls));
 
 /** 요약 통계 조회 — 실패(401/네트워크) 시 null 반환하여 호출측이 목업 유지. */
-async function fetchSummaryView(): Promise<SummaryView | null> {
+async function fetchSummaryView(locale: string): Promise<SummaryView | null> {
   try {
     const res = await ApiClient.get<
       ApiEnvelope<{ summary: ApiMonitoringSummary }>
@@ -153,7 +154,7 @@ async function fetchSummaryView(): Promise<SummaryView | null> {
     return {
       activeServers: String(s.currentRunning),
       // 백엔드엔 "총 도구 호출" 메트릭이 없어 누적 spawn 수로 대체 표시
-      totalCalls: s.totalSpawned.toLocaleString("ko-KR"),
+      totalCalls: s.totalSpawned.toLocaleString(locale),
       // 평균 지연 메트릭 없음 — 목업 값 유지
       avgLatency: SUMMARY.avgLatency,
       errorRate:
@@ -167,6 +168,7 @@ async function fetchSummaryView(): Promise<SummaryView | null> {
 
 export default function McpMonitoringPage() {
   const t = useTranslations("mcpMonitoring");
+  const locale = toBcp47(useLocale());
   const [summary, setSummary] = useState<SummaryView>(SUMMARY);
   const [topCrashed, setTopCrashed] = useState<TopCrashedItem[]>([]);
   const [crashTrend, setCrashTrend] = useState<CrashTrendItem[]>([]);
@@ -189,15 +191,15 @@ export default function McpMonitoringPage() {
   }
 
   const refresh = useCallback(async () => {
-    const view = await fetchSummaryView();
+    const view = await fetchSummaryView(locale);
     if (view) setSummary(view);
     await loadExtraStats();
-  }, []);
+  }, [locale]);
 
   useEffect(() => {
     let cancelled = false;
     const tick = async () => {
-      const view = await fetchSummaryView();
+      const view = await fetchSummaryView(locale);
       if (!cancelled && view) setSummary(view);
     };
     void tick();
@@ -207,7 +209,7 @@ export default function McpMonitoringPage() {
       cancelled = true;
       clearInterval(id);
     };
-  }, []);
+  }, [locale]);
 
   return (
     <>
@@ -260,7 +262,7 @@ export default function McpMonitoringPage() {
                     <div className="mb-1 flex items-center justify-between text-xs">
                       <span className="font-mono text-fg-2">{s.name}</span>
                       <span className="text-faint">
-                        {t("callCount", { count: s.calls.toLocaleString("ko-KR") })} ·{" "}
+                        {t("callCount", { count: s.calls.toLocaleString(locale) })} ·{" "}
                         <span className={highErr ? "text-danger" : "text-muted"}>
                           {(s.errorRate * 100).toFixed(1)}%
                         </span>
@@ -356,7 +358,7 @@ export default function McpMonitoringPage() {
                         <Td className="text-right font-mono text-danger">{item.crash_count}</Td>
                         <Td className="text-xs text-muted">
                           {item.last_crash_at
-                            ? new Date(item.last_crash_at).toLocaleString("ko-KR", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })
+                            ? new Date(item.last_crash_at).toLocaleString(locale, { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })
                             : "—"}
                         </Td>
                       </tr>

@@ -91,7 +91,9 @@ function mapStatus(s: ApiTaskStatus): TaskStatus {
   return "pending";
 }
 
-function formatElapsed(start?: string, end?: string): string {
+type TFn = ReturnType<typeof useTranslations>;
+
+function formatElapsed(t: TFn, start?: string, end?: string): string {
   if (!start) return "—";
   const s = new Date(start).getTime();
   const e = end ? new Date(end).getTime() : Date.now();
@@ -99,10 +101,12 @@ function formatElapsed(start?: string, end?: string): string {
   const sec = Math.round((e - s) / 1000);
   const m = Math.floor(sec / 60);
   const r = sec % 60;
-  return m > 0 ? `${m}분 ${String(r).padStart(2, "0")}초` : `${r}초`;
+  return m > 0
+    ? t("elapsedMinSec", { m, s: String(r).padStart(2, "0") })
+    : t("elapsedSec", { s: r });
 }
 
-function mapTask(t: ApiAgentTask): AgentTask {
+function mapTask(tr: TFn, t: ApiAgentTask): AgentTask {
   const status = mapStatus(t.status);
   const progress =
     typeof t.progress === "number"
@@ -116,7 +120,7 @@ function mapTask(t: ApiAgentTask): AgentTask {
     status,
     rawStatus: t.status,
     model: t.model || "Auto",
-    elapsed: formatElapsed(t.created_at, t.completed_at),
+    elapsed: formatElapsed(tr, t.created_at, t.completed_at),
     currentTurn: t.current_turn ?? 0,
     maxTurns: t.max_turns ?? 0,
     progress,
@@ -126,45 +130,46 @@ function mapTask(t: ApiAgentTask): AgentTask {
 }
 
 /* ── 목업 폴백 ─────────────────────────────────────────────── */
-const TASK_FALLBACK: AgentTask[] = [
+function buildTaskFallback(t: TFn): AgentTask[] {
+  return [
   {
     id: "t1",
-    goal: "최신 AI 에이전트 동향을 조사해서 요약 보고서를 작성",
+    goal: t("mock.t1Goal"),
     status: "running",
     rawStatus: "running",
     model: "Pro",
-    elapsed: "2분 41초",
+    elapsed: t("elapsedMinSec", { m: 2, s: "41" }),
     currentTurn: 3,
     maxTurns: 8,
     progress: 60,
     checklist: [
-      { label: "검색 키워드 도출", done: true },
-      { label: "웹 검색 수행", done: true },
-      { label: "핵심 소스 정리", done: true },
-      { label: "요약 초안 작성", done: false },
-      { label: "최종 검토", done: false },
+      { label: t("mock.t1Step1"), done: true },
+      { label: t("mock.t1Step2"), done: true },
+      { label: t("mock.t1Step3"), done: true },
+      { label: t("mock.t1Step4"), done: false },
+      { label: t("mock.t1Step5"), done: false },
     ],
   },
   {
     id: "t2",
-    goal: "사내 위키 문서를 정리하고 누락된 섹션 목록 생성",
+    goal: t("mock.t2Goal"),
     status: "completed",
     rawStatus: "completed",
     model: "Default",
-    elapsed: "5분 08초",
+    elapsed: t("elapsedMinSec", { m: 5, s: "08" }),
     currentTurn: 6,
     maxTurns: 6,
     progress: 100,
     checklist: [
-      { label: "문서 인덱싱", done: true },
-      { label: "섹션 구조 분석", done: true },
-      { label: "누락 항목 식별", done: true },
-      { label: "리포트 생성", done: true },
+      { label: t("mock.t2Step1"), done: true },
+      { label: t("mock.t2Step2"), done: true },
+      { label: t("mock.t2Step3"), done: true },
+      { label: t("mock.t2Step4"), done: true },
     ],
   },
   {
     id: "t3",
-    goal: "경쟁사 가격 정책을 수집해 비교표로 정리",
+    goal: t("mock.t3Goal"),
     status: "pending",
     rawStatus: "pending",
     model: "Fast",
@@ -174,7 +179,8 @@ const TASK_FALLBACK: AgentTask[] = [
     progress: 0,
     checklist: [],
   },
-];
+  ];
+}
 
 const STATUS_META: Record<TaskStatus, { labelKey: string; tone: "accent" | "success" | "neutral" }> = {
   running: { labelKey: "status.running", tone: "accent" },
@@ -474,7 +480,7 @@ function ApprovalsPanel() {
 export default function AgentTasksPage() {
   const t = useTranslations("agentTasks");
   const router = useRouter();
-  const [tasks, setTasks] = useState<AgentTask[]>(TASK_FALLBACK);
+  const [tasks, setTasks] = useState<AgentTask[]>(() => buildTaskFallback(t));
   const [loading, setLoading] = useState(true);
   const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null); // taskId being acted on
@@ -482,13 +488,13 @@ export default function AgentTasksPage() {
   const loadTasks = useCallback(async () => {
     try {
       const res = await ApiClient.get<AgentTasksResponse>("/api/agent-tasks");
-      setTasks((res?.data?.tasks ?? []).map(mapTask));
+      setTasks((res?.data?.tasks ?? []).map((task) => mapTask(t, task)));
     } catch {
       // 401·네트워크 실패: 목업 폴백 유지
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     let cancelled = false;

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { RefreshCw, Loader2 } from "lucide-react";
 import {
   Button,
@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/primitives";
 import type { ApiSuccess } from "@openmake/shared-types";
 import { ApiClient } from "@/lib/api-client";
+import { toBcp47 } from "@/i18n/config";
 import { cn } from "@/lib/utils";
 
 /* ── 타입 (백엔드 /api/usage 응답) ──────────────────────── */
@@ -61,8 +62,8 @@ function modelBar(name: string): string {
   return MODEL_BAR[key ?? "auto"];
 }
 
-const fmtNum = (n?: number) =>
-  n != null ? Number(n).toLocaleString("ko-KR") : "-";
+const fmtNum = (n: number | undefined, locale: string) =>
+  n != null ? Number(n).toLocaleString(locale) : "-";
 const fmtMs = (n?: number) => (n != null && n > 0 ? `${Math.round(n)}ms` : "-");
 const fmtCost = (n?: number) =>
   n != null ? `$${n.toFixed(4)}` : "-";
@@ -102,6 +103,7 @@ interface MonitoringHourly {
 
 function SystemTokenMonitor() {
   const t = useTranslations("usage");
+  const locale = toBcp47(useLocale());
   const [costs, setCosts] = useState<MonitoringCosts | null>(null);
   const [daily, setDaily] = useState<MonitoringDaily | null>(null);
   const [hourly, setHourly] = useState<MonitoringHourly | null>(null);
@@ -154,11 +156,11 @@ function SystemTokenMonitor() {
             />
             <StatCard
               label={t("stat.todayTokens")}
-              value={fmtNum(costs.today.totalTokens)}
+              value={fmtNum(costs.today.totalTokens, locale)}
             />
             <StatCard
               label={t("stat.weekTokens")}
-              value={fmtNum(costs.weekly.totalTokens)}
+              value={fmtNum(costs.weekly.totalTokens, locale)}
             />
             <StatCard
               label={t("stat.weekEstCost")}
@@ -179,10 +181,10 @@ function SystemTokenMonitor() {
                   <div
                     key={label}
                     className="group flex h-full flex-1 flex-col items-center justify-end gap-1"
-                    title={t("tokenTooltip", { date: label, count: fmtNum(tokens) })}
+                    title={t("tokenTooltip", { date: label, count: fmtNum(tokens, locale) })}
                   >
                     <span className="text-[10px] text-faint opacity-0 transition group-hover:opacity-100">
-                      {fmtNum(tokens)}
+                      {fmtNum(tokens, locale)}
                     </span>
                     <div
                       className="w-full rounded-t bg-accent-soft transition group-hover:bg-accent"
@@ -210,7 +212,7 @@ function SystemTokenMonitor() {
                   <div
                     key={label}
                     className="group flex h-full flex-1 flex-col items-center justify-end gap-0.5"
-                    title={t("tokenTooltip", { date: label, count: fmtNum(tokens) })}
+                    title={t("tokenTooltip", { date: label, count: fmtNum(tokens, locale) })}
                   >
                     <div
                       className="w-full rounded-t bg-success-soft transition group-hover:bg-success"
@@ -251,6 +253,7 @@ function mockDaily(): DailyRow[] {
 
 export default function UsagePage() {
   const t = useTranslations("usage");
+  const locale = toBcp47(useLocale());
   const [summary, setSummary] = useState<UsageSummary | null>(null);
   const [daily, setDaily] = useState<DailyRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -292,10 +295,10 @@ export default function UsagePage() {
       });
       setUsingMock(true);
     } finally {
-      setUpdatedAt(new Date().toLocaleTimeString("ko-KR"));
+      setUpdatedAt(new Date().toLocaleTimeString(locale));
       setLoading(false);
     }
-  }, []);
+  }, [locale]);
 
   useEffect(() => {
     queueMicrotask(() => void load());
@@ -337,11 +340,11 @@ export default function UsagePage() {
               <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
                 <StatCard
                   label={t("stat.monthTokens")}
-                  value={fmtNum(month?.totalTokens)}
+                  value={fmtNum(month?.totalTokens, locale)}
                 />
                 <StatCard
                   label={t("stat.requests")}
-                  value={fmtNum(month?.totalRequests)}
+                  value={fmtNum(month?.totalRequests, locale)}
                 />
                 <StatCard
                   label={t("stat.avgLatency")}
@@ -349,7 +352,7 @@ export default function UsagePage() {
                 />
                 <StatCard
                   label={t("stat.errors")}
-                  value={fmtNum(month?.totalErrors)}
+                  value={fmtNum(month?.totalErrors, locale)}
                   delta={month?.totalErrors ? t("delta.warning") : t("delta.normal")}
                   deltaTone={month?.totalErrors ? "danger" : "success"}
                 />
@@ -377,10 +380,10 @@ export default function UsagePage() {
                           <div
                             key={d.date}
                             className="group flex h-full flex-1 flex-col items-center justify-end gap-1"
-                            title={t("tokenTooltip", { date: d.date, count: fmtNum(tokens) })}
+                            title={t("tokenTooltip", { date: d.date, count: fmtNum(tokens, locale) })}
                           >
                             <span className="text-[10px] text-faint opacity-0 transition group-hover:opacity-100">
-                              {fmtNum(tokens)}
+                              {fmtNum(tokens, locale)}
                             </span>
                             <div
                               className="w-full rounded-t bg-accent-soft transition group-hover:bg-accent"
@@ -428,7 +431,7 @@ export default function UsagePage() {
                             return (
                               <tr key={model}>
                                 <Td className="font-medium text-fg">{model}</Td>
-                                <Td>{fmtNum(tokens)}</Td>
+                                <Td>{fmtNum(tokens, locale)}</Td>
                                 <Td>{pct}%</Td>
                                 <Td>
                                   <div className="h-2 w-full overflow-hidden rounded-pill bg-surface-2">

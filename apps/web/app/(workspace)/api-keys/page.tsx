@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import {
   KeyRound,
   Plus,
@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/primitives";
 import type { ApiSuccess } from "@openmake/shared-types";
 import { ApiClient } from "@/lib/api-client";
+import { toBcp47 } from "@/i18n/config";
 
 /* ── 타입 (백엔드 /api/external-keys 응답) ──────────────── */
 type SdkType = "anthropic" | "openai-compatible";
@@ -53,9 +54,9 @@ const SDK_LABEL_KEY: Record<SdkType, string> = {
   "openai-compatible": "sdkType.openaiCompatible",
 };
 
-function formatDate(iso?: string | null) {
+function formatDate(iso: string | null | undefined, locale: string) {
   if (!iso) return "-";
-  return new Date(iso).toLocaleDateString("ko-KR", {
+  return new Date(iso).toLocaleDateString(locale, {
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -64,6 +65,7 @@ function formatDate(iso?: string | null) {
 
 export default function ApiKeysPage() {
   const t = useTranslations("apiKeys");
+  const locale = toBcp47(useLocale());
   const [providers, setProviders] = useState<ProviderEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -208,7 +210,7 @@ export default function ApiKeysPage() {
                             {k.key_prefix}
                             {"•".repeat(12)}
                           </Td>
-                          <Td>{formatDate(k.created_at)}</Td>
+                          <Td>{formatDate(k.created_at, locale)}</Td>
                           <Td>
                             {ok === false ? (
                               <Badge tone="danger">

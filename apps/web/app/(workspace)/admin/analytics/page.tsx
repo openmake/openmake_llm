@@ -28,13 +28,13 @@ const PERIODS: { key: Period; labelKey: string }[] = [
 // /api/metrics/analytics/model-usage (conversation_messages 집계). 실패 시 아래 목업 유지.
 const DAILY: Record<Period, { label: string; value: number }[]> = {
   "7d": [
-    { label: "월", value: 3120 },
-    { label: "화", value: 4280 },
-    { label: "수", value: 3890 },
-    { label: "목", value: 5210 },
-    { label: "금", value: 4820 },
-    { label: "토", value: 2310 },
-    { label: "일", value: 1980 },
+    { label: "weekday.1", value: 3120 },
+    { label: "weekday.2", value: 4280 },
+    { label: "weekday.3", value: 3890 },
+    { label: "weekday.4", value: 5210 },
+    { label: "weekday.5", value: 4820 },
+    { label: "weekday.6", value: 2310 },
+    { label: "weekday.0", value: 1980 },
   ],
   "30d": Array.from({ length: 30 }, (_, i) => ({
     label: `${i + 1}`,
@@ -86,7 +86,7 @@ function fmtTokens(n: number): string {
 }
 
 const PERIOD_DAYS: Record<Period, number> = { "7d": 7, "30d": 30, "90d": 90 };
-const WEEKDAY = ["일", "월", "화", "수", "목", "금", "토"];
+const WEEKDAY_KEYS = ["weekday.0", "weekday.1", "weekday.2", "weekday.3", "weekday.4", "weekday.5", "weekday.6"];
 
 /* ── 비용/행동/에이전트 섹션 타입 ──────────────────────────── */
 interface CostData {
@@ -127,7 +127,11 @@ export default function AdminAnalyticsPage() {
   const [behaviorData, setBehaviorData] = useState<BehaviorData | null>(null);
   const [agentsData, setAgentsData] = useState<AgentRow[] | null>(null);
 
-  const daily = liveDaily ?? DAILY[period];
+  const daily =
+    liveDaily ??
+    (period === "7d"
+      ? DAILY["7d"].map((d) => ({ ...d, label: t(d.label) }))
+      : DAILY[period]);
   const sum = SUMMARY[period];
   const models = liveModels ?? MODEL_USAGE;
   const maxVal = useMemo(() => Math.max(1, ...daily.map((d) => d.value)), [daily]);
@@ -197,7 +201,7 @@ export default function AdminAnalyticsPage() {
             rows.map((r) => ({
               label:
                 period === "7d"
-                  ? WEEKDAY[new Date(r.date).getDay()]
+                  ? t(WEEKDAY_KEYS[new Date(r.date).getDay()])
                   : r.date.slice(5),
               value: Number(r.messages),
             })),
@@ -231,7 +235,7 @@ export default function AdminAnalyticsPage() {
     return () => {
       alive = false;
     };
-  }, [period]);
+  }, [period, t]);
 
   return (
     <>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { Bell, Plus, AlertTriangle, AlertCircle, Info, Check } from "lucide-react";
 import {
   PageHeader,
@@ -13,6 +13,7 @@ import {
   Button,
 } from "@/components/ui/primitives";
 import { cn } from "@/lib/utils";
+import { toBcp47 } from "@/i18n/config";
 import { ApiClient } from "@/lib/api-client";
 
 type Severity = "critical" | "warning" | "info";
@@ -71,8 +72,8 @@ const MOCK_EVENTS: { id: string; severity: Severity; messageKey: string; timesta
   { id: "e5", severity: "critical", messageKey: "events.e5", timestamp: "2026-06-20T22:31:00Z" },
 ];
 
-function fmt(s: string) {
-  return new Date(s).toLocaleString("ko-KR", {
+function fmt(s: string, locale: string) {
+  return new Date(s).toLocaleString(locale, {
     month: "2-digit",
     day: "2-digit",
     hour: "2-digit",
@@ -92,6 +93,7 @@ interface ApiAlert {
 
 export default function AdminAlertsPage() {
   const t = useTranslations("adminAlerts");
+  const locale = toBcp47(useLocale());
   const [rules, setRules] = useState<AlertRule[]>(RULES);
   const [events, setEvents] = useState<AlertEvent[]>(() =>
     MOCK_EVENTS.map((e) => ({
@@ -220,7 +222,7 @@ export default function AdminAlertsPage() {
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2">
                           <Badge tone={SEV_TONE[e.severity]}>{t(SEV_LABEL_KEY[e.severity])}</Badge>
-                          <span className="font-mono text-[11px] text-faint">{fmt(e.timestamp)}</span>
+                          <span className="font-mono text-[11px] text-faint">{fmt(e.timestamp, locale)}</span>
                           {isAcked && (
                             <Badge tone="success">
                               <Check className="h-3 w-3" />

@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import {
   Settings,
   Bot,
@@ -28,7 +28,7 @@ import { ApiClient, ApiError } from "@/lib/api-client";
 import { useAppStore } from "@/lib/store";
 import { fetchModels } from "@/lib/models-api";
 import { cn } from "@/lib/utils";
-import { LOCALE_COOKIE, LOCALE_COOKIE_MAX_AGE, isLocale } from "@/i18n/config";
+import { LOCALE_COOKIE, LOCALE_COOKIE_MAX_AGE, isLocale, toBcp47 } from "@/i18n/config";
 
 /* ── 탭 정의 ────────────────────────────────────────────── */
 type TabId = "general" | "model" | "interface" | "notifications" | "privacy" | "security";
@@ -171,6 +171,7 @@ function Segment<T extends string>({
 /* ── 페이지 ─────────────────────────────────────────────── */
 export default function SettingsPage() {
   const tSettings = useTranslations("settings");
+  const bcp47 = toBcp47(useLocale());
   const [tab, setTab] = useState<TabId>("general");
 
   // 일반 / 모델
@@ -364,7 +365,7 @@ export default function SettingsPage() {
         customInstructions: trimmed.length > 0 ? trimmed : null,
       });
       // TODO: API 연동 — defaultModel/responseStyle/theme/알림/개인정보 영속화 (language 는 NEXT_LOCALE 쿠키로 완료)
-      setSavedAt(new Date().toLocaleTimeString("ko-KR"));
+      setSavedAt(new Date().toLocaleTimeString(bcp47));
     } catch {
       setSavedAt(null);
     } finally {

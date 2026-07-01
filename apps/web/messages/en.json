@@ -181,7 +181,8 @@
       "heading": "Invoke skill",
       "loading": "Loading skills…",
       "noResults": "No matching skills",
-      "viewAll": "View all in Skill Library"
+      "viewAll": "View all in Skill Library",
+      "categoryEtc": "Other"
     }
   },
   "chat": {
