@@ -57,7 +57,100 @@
     "closeMenu": "메뉴 닫기"
   },
   "settings": {
-    "languageAuto": "자동 감지"
+    "languageAuto": "자동 감지",
+    "pageTitle": "설정",
+    "pageDescription": "앱 환경과 AI 모델 동작을 구성합니다.",
+    "saveButton": "설정 저장",
+    "savedAt": "{time} 저장됨",
+    "freeSuffix": " · 무료",
+    "notConfigured": "미설정",
+    "modelLoading": "모델 로딩…",
+    "tabs": {
+      "general": "일반",
+      "model": "모델 & 응답",
+      "interface": "인터페이스",
+      "notifications": "알림",
+      "privacy": "개인정보",
+      "security": "보안"
+    },
+    "responseStyles": {
+      "concise": "간결",
+      "default": "기본",
+      "verbose": "상세"
+    },
+    "themes": {
+      "system": "시스템 설정",
+      "light": "라이트",
+      "dark": "다크"
+    },
+    "modelGroup": {
+      "default": "기본",
+      "auto": "자동 (서버 기본값)",
+      "local": "🏠 로컬 vLLM"
+    },
+    "language": {
+      "title": "언어",
+      "description": "인터페이스 표시 언어. 자동 감지 시 브라우저 언어를 따릅니다. (AI 응답은 메시지 언어를 따릅니다)"
+    },
+    "saveHistory": {
+      "title": "대화 본문 저장",
+      "descriptionGeneral": "대화 내용을 서버 DB에 저장합니다. 끄면 익명 사용량 메타만 기록됩니다.",
+      "descriptionPrivacy": "끄면 대화 본문은 서버에 저장되지 않습니다."
+    },
+    "defaultModel": {
+      "title": "기본 모델",
+      "description": "새 대화에 사용할 모델입니다. 🏠 로컬 vLLM 과 🌐 외부 LLM(OpenRouter, BYOK) 중 선택합니다."
+    },
+    "externalLlmHint": {
+      "prefix": "외부 LLM(OpenRouter)을 추가하려면",
+      "link": "API 키 페이지",
+      "suffix": "에서 키를 등록하세요."
+    },
+    "imageGeneration": {
+      "title": "이미지 생성",
+      "description": "채팅에서 그림/이미지를 요청하면 자동으로 사용됩니다. 별도 선택은 필요 없습니다."
+    },
+    "responseStyle": {
+      "title": "응답 스타일",
+      "description": "응답의 자세함 정도를 조절합니다."
+    },
+    "customInstructions": {
+      "title": "사용자 지시문 (Custom Instructions)",
+      "description": "모든 대화에 영구 적용되는 system prompt 추가 지시문입니다.",
+      "placeholder": "예: 사용자가 명시적으로 요청하지 않은 부가 정보는 출력하지 않는다.",
+      "charCount": "{count} / {max} 자"
+    },
+    "theme": {
+      "title": "테마",
+      "description": "앱의 색상 테마를 선택합니다."
+    },
+    "emailAlerts": {
+      "title": "이메일 알림",
+      "description": "에이전트 작업 완료 및 보안 이벤트를 이메일로 받습니다."
+    },
+    "pushAlerts": {
+      "title": "푸시 알림",
+      "description": "브라우저 푸시로 실시간 알림을 받습니다."
+    },
+    "pushNotSupported": "이 브라우저는 푸시 알림을 지원하지 않습니다.",
+    "pushSwNotReady": "서비스 워커가 등록되지 않아 푸시 알림을 사용할 수 없습니다.",
+    "memoryLearning": {
+      "title": "장기 기억 학습",
+      "description": "대화에서 이름·직업·선호 같은 사실을 추출하여 저장합니다."
+    },
+    "passwordChange": {
+      "title": "비밀번호 변경"
+    },
+    "password": {
+      "current": "현재 비밀번호",
+      "new": "새 비밀번호",
+      "newHint": "8자 이상",
+      "confirm": "새 비밀번호 확인",
+      "mismatch": "새 비밀번호가 일치하지 않습니다.",
+      "tooShort": "새 비밀번호는 8자 이상이어야 합니다.",
+      "changed": "비밀번호가 변경되었습니다.",
+      "changeFailed": "비밀번호 변경에 실패했습니다."
+    }
   },
   "composer": {
     "dropToAttach": "여기에 파일을 놓아 첨부",
@@ -295,5 +388,305 @@
     "agentTaskStartFailed": "에이전트 작업을 시작하지 못했습니다: {message}",
     "structuredAborted": "_(구조화 답변 생성을 중단했습니다.)_",
     "structuredFailed": "구조화 답변을 생성하지 못했습니다: {message}"
+  },
+  "skillLibrary": {
+    "cancel": "취소",
+    "save": "저장",
+    "create": "생성",
+    "edit": "편집",
+    "serverError": "서버 오류",
+    "networkError": "네트워크 오류",
+    "genericError": "오류",
+    "requestFailed": "요청 실패: {error}",
+    "failedStatus": "실패 ({status}): {error}",
+    "systemBadge": "시스템",
+    "userBadge": "사용자",
+    "filterAll": "전체",
+    "loading": "불러오는 중...",
+    "emptyTitle": "스킬이 없습니다",
+    "emptyDesc": "다른 카테고리를 선택하거나 새 스킬을 추가하세요.",
+    "deleteConfirm": "\"{name}\" 스킬을 삭제하시겠습니까?",
+    "deleteFailed": "삭제 실패: {error}",
+    "assignFailed": "할당 변경 실패: {error}",
+    "pageTitle": "스킬 라이브러리",
+    "pageDescription": "재사용 가능한 매니페스트와 도구 바인딩을 관리합니다.",
+    "uploadButton": ".SKILL 업로드",
+    "gitButton": "Git 가져오기",
+    "autoButton": "AI 자동생성",
+    "newButton": "새 스킬",
+    "categoryGeneral": "일반",
+    "categories": {
+      "productivity": "생산성",
+      "technology": "기술/IT",
+      "creative": "창작/디자인",
+      "business": "비즈니스",
+      "science": "과학/연구",
+      "communication": "커뮤니케이션",
+      "finance": "금융/투자",
+      "education": "교육/학습"
+    },
+    "tabs": {
+      "active": "활성 스킬",
+      "draft": "Draft 검토"
+    },
+    "modal": {
+      "create": "새 스킬 생성",
+      "edit": "스킬 편집",
+      "upload": ".SKILL 파일 업로드",
+      "autoCreate": "AI 스킬 자동 생성",
+      "gitIngest": "Git URL에서 스킬 가져오기"
+    },
+    "fallback": {
+      "pdfSummary": {
+        "name": "PDF 요약",
+        "description": "긴 PDF 문서를 핵심 요점으로 압축합니다."
+      },
+      "sqlQuery": {
+        "name": "SQL 쿼리 작성",
+        "description": "자연어 요구사항을 파라미터화된 SQL 로 변환합니다."
+      },
+      "adCopy": {
+        "name": "광고 카피라이팅",
+        "description": "타겟 세그먼트에 맞춘 마케팅 카피를 생성합니다."
+      },
+      "financialReport": {
+        "name": "재무 보고서 해석",
+        "description": "손익계산서와 대차대조표의 핵심 지표를 해석합니다."
+      }
+    },
+    "form": {
+      "nameRequired": "스킬 이름을 입력하세요.",
+      "contentRequired": "스킬 내용(Instructions)을 입력하세요.",
+      "saveFailed": "저장 실패: {error}",
+      "nameLabel": "스킬 이름 *",
+      "namePlaceholder": "예: PDF 요약",
+      "categoryLabel": "카테고리",
+      "publicLabel": "공개 스킬",
+      "descriptionLabel": "설명",
+      "descriptionPlaceholder": "이 스킬이 하는 일을 간단히 설명하세요",
+      "instructionsLabel": "Instructions (스킬 내용) *",
+      "instructionsPlaceholder": "이 스킬이 수행할 작업을 상세히 기술하세요..."
+    },
+    "upload": {
+      "fileRequired": "파일을 선택하세요.",
+      "successDetail": "업로드 완료: {id} v{version}",
+      "success": "업로드 완료",
+      "failed": "업로드 실패: {error}",
+      "hint": ".SKILL 또는 .md YAML frontmatter 파일을 업로드합니다. (최대 256KB)",
+      "fileLabel": "파일 선택",
+      "submit": "업로드"
+    },
+    "auto": {
+      "purposeRequired": "목적을 입력하세요.",
+      "requesting": "생성 요청 중...",
+      "generating": "LLM 생성 중...",
+      "processing": "처리 중...",
+      "done": "생성 완료!",
+      "generateFailed": "생성 실패",
+      "hint": "자연어 목적을 입력하면 LLM이 스킬 매니페스트를 자동 생성합니다.",
+      "purposeLabel": "스킬 목적 *",
+      "purposePlaceholder": "예: PDF 문서를 업로드하면 핵심 내용을 3줄로 요약하는 스킬",
+      "targetLabel": "대상 사용자 (선택)",
+      "targetPlaceholder": "예: 연구자, 마케터",
+      "submit": "AI 생성"
+    },
+    "git": {
+      "urlRequired": "GitHub URL을 입력하세요.",
+      "fetching": "저장소 가져오는 중...",
+      "validating": "매니페스트 검증 중...",
+      "done": "완료!",
+      "importFailed": "가져오기 실패",
+      "hint": "GitHub 저장소의 SKILL.md 매니페스트를 가져와 draft로 저장합니다.",
+      "urlLabel": "GitHub URL *",
+      "refLabel": "브랜치/태그 (선택)",
+      "pathLabel": "파일 경로 (선택)",
+      "tokenLabel": "Access Token (비공개 저장소)",
+      "submit": "가져오기"
+    },
+    "card": {
+      "assignTitle": "개인 스킬로 추가",
+      "unassignTitle": "개인 스킬 해제",
+      "exportTitle": ".SKILL.md 내보내기"
+    },
+    "draft": {
+      "approveFailed": "승인 실패: {error}",
+      "rejectConfirm": "이 draft를 거부(보관)하시겠습니까?",
+      "rejectFailed": "거부 실패: {error}",
+      "loading": "Draft 불러오는 중...",
+      "emptyTitle": "승인 대기 중인 Draft가 없습니다",
+      "emptyDesc": "AI 자동생성 또는 Git 가져오기로 생성된 스킬이 여기 나타납니다.",
+      "approve": "승인",
+      "reject": "거부"
+    }
+  },
+  "agentTasks": {
+    "loading": "불러오는 중...",
+    "error": "오류",
+    "chatCta": "채팅으로 이동",
+    "pageTitle": "에이전트 작업 관리",
+    "pageDescription": "작업 목록·진행·승인을 관리합니다. 생성·실행은 채팅의 에이전트 모드에서 진행됩니다.",
+    "banner": "에이전트 작업은 채팅 입력창의 <b>에이전트</b> 모드로 생성·실행하세요. 이 페이지에서는 작업 목록·진행·승인을 관리합니다.",
+    "emptyTitle": "작업이 없습니다",
+    "emptyDescription": "채팅의 에이전트 모드에서 새 작업을 시작하세요.",
+    "status": {
+      "running": "진행중",
+      "completed": "완료",
+      "pending": "대기"
+    },
+    "failedTag": "실패",
+    "cancelledTag": "취소됨",
+    "turnShort": "턴 {current}/{max}",
+    "progressLabel": "진행률",
+    "detailTitle": "상세 보기",
+    "resumeTitle": "이어하기",
+    "cancelTitle": "취소",
+    "deleteTitle": "삭제",
+    "modalTitle": "작업 상세",
+    "detailLoadError": "작업 정보를 불러오지 못했습니다.",
+    "goalLabel": "목표",
+    "stateLabel": "상태:",
+    "turnLabel": "턴:",
+    "planLabel": "계획 ({completed}/{total})",
+    "outputsLabel": "산출물 ({count})",
+    "noSteps": "스텝 기록이 없습니다.",
+    "stepsLabel": "실행 스텝 ({count})",
+    "approvalsTitle": "승인 대기 중인 도구 실행 ({count})",
+    "reject": "거절",
+    "approve": "승인",
+    "cancelConfirm": "\"{goal}...\" 작업을 취소하시겠습니까?",
+    "deleteConfirm": "\"{goal}...\" 작업을 삭제하시겠습니까?",
+    "processFailed": "처리 실패: {message}",
+    "cancelFailed": "취소 실패: {message}",
+    "resumeFailed": "이어하기 실패: {message}",
+    "deleteFailed": "삭제 실패: {message}"
+  },
+  "customAgents": {
+    "pageTitle": "커스텀 에이전트",
+    "pageDescription": "나만의 시스템 프롬프트로 특화된 에이전트를 정의합니다.",
+    "importFromGit": "Git URL 에서 가져오기",
+    "newAgent": "새 에이전트",
+    "tabActive": "활성 에이전트",
+    "tabDraft": "Draft 검토",
+    "loading": "불러오는 중...",
+    "emptyTitle": "아직 커스텀 에이전트가 없습니다",
+    "emptyDescription": "직접 만들거나 Git URL 에서 가져와 특화된 에이전트를 추가하세요.",
+    "createNewAgent": "새 에이전트 만들기",
+    "systemPromptHeading": "시스템 프롬프트",
+    "edit": "편집",
+    "deleteAria": "삭제",
+    "deleteConfirm": "\"{name}\" 에이전트를 삭제하시겠습니까?",
+    "deleteFailed": "삭제 실패: {error}",
+    "noDescription": "설명이 없습니다.",
+    "genericError": "오류",
+    "createModalTitle": "새 에이전트 생성",
+    "editModalTitle": "에이전트 편집",
+    "gitImportModalTitle": "Git URL에서 에이전트 가져오기",
+    "iconLabel": "아이콘",
+    "nameLabel": "에이전트 이름 *",
+    "namePlaceholder": "예: 기술 문서 작성가",
+    "descriptionLabel": "설명",
+    "descriptionPlaceholder": "이 에이전트가 하는 일을 간단히 설명하세요",
+    "systemPromptLabel": "시스템 프롬프트 *",
+    "systemPromptPlaceholder": "당신은 ... 전문가입니다. ...",
+    "cancel": "취소",
+    "save": "저장",
+    "create": "생성",
+    "nameRequired": "에이전트 이름을 입력하세요.",
+    "systemPromptRequired": "시스템 프롬프트를 입력하세요.",
+    "saveFailed": "저장 실패: {error}",
+    "serverError": "서버 오류",
+    "gitIngestDescription": "GitHub 저장소의 AGENT.md 매니페스트를 가져와 draft로 저장합니다.",
+    "gitUrlLabel": "GitHub URL *",
+    "branchTagLabel": "브랜치/태그 (선택)",
+    "filePathLabel": "파일 경로 (선택)",
+    "accessTokenLabel": "Access Token (비공개 저장소)",
+    "importButton": "가져오기",
+    "gitUrlRequired": "GitHub URL을 입력하세요.",
+    "fetchingRepo": "저장소 가져오는 중...",
+    "processingManifest": "매니페스트 처리 중...",
+    "done": "완료!",
+    "importFailed": "가져오기 실패",
+    "importFailedStatus": "실패 ({status}): {error}",
+    "requestFailed": "요청 실패: {error}",
+    "networkError": "네트워크 오류",
+    "loadingDrafts": "Draft 불러오는 중...",
+    "noDraftsTitle": "승인 대기 중인 Draft가 없습니다",
+    "noDraftsDescription": "Git URL 가져오기로 생성된 에이전트가 여기 나타납니다.",
+    "approve": "승인",
+    "reject": "거부",
+    "approveFailed": "승인 실패: {error}",
+    "rejectFailed": "거부 실패: {error}",
+    "rejectConfirm": "이 draft 에이전트를 거부(보관)하시겠습니까?",
+    "fallback": {
+      "techWriter": {
+        "name": "기술 문서 작성가",
+        "description": "API 레퍼런스와 아키텍처 문서를 일관된 톤으로 작성합니다.",
+        "systemPrompt": "당신은 시니어 테크니컬 라이터입니다..."
+      },
+      "reviewer": {
+        "name": "코드 리뷰어",
+        "description": "변경된 코드의 버그와 단순화 기회를 집어냅니다.",
+        "systemPrompt": "당신은 까다로운 코드 리뷰어입니다..."
+      }
+    }
+  },
+  "research": {
+    "pageTitle": "딥 리서치 히스토리",
+    "pageDescription": "지난 리서치 결과를 조회합니다. 실행은 채팅의 딥 리서치 모드에서 진행됩니다.",
+    "runBanner": "딥 리서치는 채팅 입력창의 <mode>딥 리서치</mode> 모드로 실행하세요. 이 페이지에서는 지난 리서치 결과를 조회합니다.",
+    "goToChat": "채팅으로 이동",
+    "pastResearch": "지난 리서치",
+    "sessionEmpty": "아직 리서치가 없습니다.",
+    "report": "보고서",
+    "keyFindings": "주요 발견",
+    "reportPendingRunning": "리서치 진행 중 — 합성 완료 후 보고서가 표시됩니다.",
+    "reportPending": "보고서는 합성 완료 후 표시됩니다.",
+    "collectedSources": "수집 소스",
+    "sourceCount": "{count}건",
+    "verified": "검증됨",
+    "unverified": "미검증",
+    "status": {
+      "pending": "대기",
+      "running": "진행중",
+      "completed": "완료",
+      "failed": "실패",
+      "cancelled": "취소"
+    },
+    "stages": {
+      "decompose": {
+        "label": "질문 분해",
+        "desc": "핵심 질문을 검증 가능한 하위 질문으로 분해"
+      },
+      "collect": {
+        "label": "소스 수집",
+        "desc": "웹 검색 fan-out 및 신뢰도 기반 소스 선별"
+      },
+      "verify": {
+        "label": "교차 검증",
+        "desc": "주장별 적대적 검증 및 상충 탐지"
+      },
+      "synthesize": {
+        "label": "보고서 합성",
+        "desc": "인용 포함 최종 보고서 생성"
+      }
+    },
+    "metrics": {
+      "sources": "분석 소스",
+      "keyFindings": "주요 발견",
+      "progress": "진행률",
+      "depth": "깊이"
+    },
+    "mock": {
+      "verifiedClaims": "검증 주장",
+      "conflicts": "상충 발견",
+      "tokensUsed": "사용 토큰",
+      "elapsed": "경과 시간",
+      "elapsedValue": "3분 12초",
+      "source1": "2026 AI 에이전트 시장 동향 보고서",
+      "source2": "멀티 에이전트 오케스트레이션 아키텍처 분석",
+      "source3": "엔터프라이즈 LLM 도입 사례 연구",
+      "source4": "자율 에이전트 안전성 가이드라인",
+      "source5": "RAG vs 장기 컨텍스트 비교 벤치마크"
+    }
   }
 }

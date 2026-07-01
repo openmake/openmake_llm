@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import {
   Sparkles,
   Check,
@@ -175,10 +176,10 @@ const TASK_FALLBACK: AgentTask[] = [
   },
 ];
 
-const STATUS_META: Record<TaskStatus, { label: string; tone: "accent" | "success" | "neutral" }> = {
-  running: { label: "진행중", tone: "accent" },
-  completed: { label: "완료", tone: "success" },
-  pending: { label: "대기", tone: "neutral" },
+const STATUS_META: Record<TaskStatus, { labelKey: string; tone: "accent" | "success" | "neutral" }> = {
+  running: { labelKey: "status.running", tone: "accent" },
+  completed: { labelKey: "status.completed", tone: "success" },
+  pending: { labelKey: "status.pending", tone: "neutral" },
 };
 
 /* ── 오버레이 모달 ────────────────────────────────────────── */
@@ -230,6 +231,7 @@ function TaskDetailModal({
 }: {
   taskId: string;
 }) {
+  const t = useTranslations("agentTasks");
   const [detail, setDetail] = useState<{ task: ApiAgentTask; steps: ApiTaskStep[] } | null>(null);
   const [files, setFiles] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -272,23 +274,23 @@ function TaskDetailModal({
       {loading && !detail ? (
         <div className="flex items-center gap-2 py-8 justify-center text-muted text-sm">
           <LoaderCircle className="h-4 w-4 animate-spin" />
-          불러오는 중...
+          {t("loading")}
         </div>
       ) : !detail ? (
-        <p className="text-sm text-danger py-8 text-center">작업 정보를 불러오지 못했습니다.</p>
+        <p className="text-sm text-danger py-8 text-center">{t("detailLoadError")}</p>
       ) : (
         <>
           <div className="rounded-md border border-border bg-surface-2 p-4">
-            <p className="mb-1 text-xs font-medium text-muted">목표</p>
+            <p className="mb-1 text-xs font-medium text-muted">{t("goalLabel")}</p>
             <p className="text-sm text-fg">{detail.task.goal}</p>
             <div className="mt-2 flex items-center gap-3 text-xs text-faint">
               <span className="flex items-center gap-1">
-                상태: {detail.task.status}
+                {t("stateLabel")} {detail.task.status}
                 {(detail.task.status === "running" || detail.task.status === "paused") && (
                   <LoaderCircle className="h-3 w-3 animate-spin" />
                 )}
               </span>
-              <span>턴: {detail.task.current_turn ?? 0}/{detail.task.max_turns ?? 0}</span>
+              <span>{t("turnLabel")} {detail.task.current_turn ?? 0}/{detail.task.max_turns ?? 0}</span>
             </div>
           </div>
 
@@ -296,7 +298,7 @@ function TaskDetailModal({
           {plan.length > 0 && (
             <div className="rounded-md border border-border bg-surface-1 p-3">
               <p className="mb-2 text-xs font-medium text-fg-2">
-                계획 ({plan.filter((s) => s.status === "completed").length}/{plan.length})
+                {t("planLabel", { completed: plan.filter((s) => s.status === "completed").length, total: plan.length })}
               </p>
               <ul className="space-y-1">
                 {plan.map((s, i) => (
@@ -323,7 +325,7 @@ function TaskDetailModal({
           {/* 산출물 파일 (완료 시 workspace 보존) */}
           {files.length > 0 && (
             <div className="rounded-md border border-border bg-surface-1 p-3">
-              <p className="mb-2 text-xs font-medium text-fg-2">산출물 ({files.length})</p>
+              <p className="mb-2 text-xs font-medium text-fg-2">{t("outputsLabel", { count: files.length })}</p>
               <ul className="space-y-1">
                 {files.map((f) => (
                   <li key={f} className="text-xs">
@@ -342,10 +344,10 @@ function TaskDetailModal({
 
           {/* 실행 스텝 — 터미널 스타일(도구 출력 전문) */}
           {detail.steps.length === 0 ? (
-            <p className="text-sm text-muted text-center py-4">스텝 기록이 없습니다.</p>
+            <p className="text-sm text-muted text-center py-4">{t("noSteps")}</p>
           ) : (
             <div className="space-y-2">
-              <p className="text-xs font-medium text-fg-2">실행 스텝 ({detail.steps.length})</p>
+              <p className="text-xs font-medium text-fg-2">{t("stepsLabel", { count: detail.steps.length })}</p>
               <div className="max-h-96 overflow-y-auto space-y-2 pr-1">
                 {detail.steps.map((step, i) => {
                   const body = step.tool_output || step.content || "";
@@ -395,6 +397,7 @@ interface PendingApproval {
 type ApprovalsResponse = ApiSuccess<{ pending: PendingApproval[] }>;
 
 function ApprovalsPanel() {
+  const t = useTranslations("agentTasks");
   const [pending, setPending] = useState<PendingApproval[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
 
@@ -419,7 +422,7 @@ function ApprovalsPanel() {
       await ApiClient.post(`/api/agent-tasks/approvals/${approvalId}/${decision}`, {});
       await load();
     } catch (err) {
-      alert("처리 실패: " + (err instanceof Error ? err.message : "오류"));
+      alert(t("processFailed", { message: err instanceof Error ? err.message : t("error") }));
     } finally {
       setBusy(null);
     }
@@ -430,7 +433,7 @@ function ApprovalsPanel() {
   return (
     <Card className="mb-4 p-4">
       <p className="mb-3 text-sm font-medium text-fg-2">
-        승인 대기 중인 도구 실행 ({pending.length})
+        {t("approvalsTitle", { count: pending.length })}
       </p>
       <div className="space-y-2">
         {pending.map((p) => (
@@ -451,14 +454,14 @@ function ApprovalsPanel() {
                 disabled={busy === p.approvalId}
                 onClick={() => decide(p.approvalId, "reject")}
               >
-                거절
+                {t("reject")}
               </Button>
               <Button
                 size="sm"
                 disabled={busy === p.approvalId}
                 onClick={() => decide(p.approvalId, "approve")}
               >
-                승인
+                {t("approve")}
               </Button>
             </div>
           </div>
@@ -469,6 +472,7 @@ function ApprovalsPanel() {
 }
 
 export default function AgentTasksPage() {
+  const t = useTranslations("agentTasks");
   const router = useRouter();
   const [tasks, setTasks] = useState<AgentTask[]>(TASK_FALLBACK);
   const [loading, setLoading] = useState(true);
@@ -496,13 +500,13 @@ export default function AgentTasksPage() {
   }, [loadTasks]);
 
   async function handleCancel(task: AgentTask) {
-    if (!window.confirm(`"${task.goal.slice(0, 40)}..." 작업을 취소하시겠습니까?`)) return;
+    if (!window.confirm(t("cancelConfirm", { goal: task.goal.slice(0, 40) }))) return;
     setActionLoading(task.id);
     try {
       await ApiClient.post(`/api/agent-tasks/${task.id}/cancel`, {});
       await loadTasks();
     } catch (err) {
-      alert("취소 실패: " + (err instanceof Error ? err.message : "오류"));
+      alert(t("cancelFailed", { message: err instanceof Error ? err.message : t("error") }));
     } finally {
       setActionLoading(null);
     }
@@ -514,20 +518,20 @@ export default function AgentTasksPage() {
       await ApiClient.post(`/api/agent-tasks/${task.id}/resume`, {});
       await loadTasks();
     } catch (err) {
-      alert("이어하기 실패: " + (err instanceof Error ? err.message : "오류"));
+      alert(t("resumeFailed", { message: err instanceof Error ? err.message : t("error") }));
     } finally {
       setActionLoading(null);
     }
   }
 
   async function handleDelete(task: AgentTask) {
-    if (!window.confirm(`"${task.goal.slice(0, 40)}..." 작업을 삭제하시겠습니까?`)) return;
+    if (!window.confirm(t("deleteConfirm", { goal: task.goal.slice(0, 40) }))) return;
     setActionLoading(task.id);
     try {
       await ApiClient.del(`/api/agent-tasks/${task.id}`);
       await loadTasks();
     } catch (err) {
-      alert("삭제 실패: " + (err instanceof Error ? err.message : "오류"));
+      alert(t("deleteFailed", { message: err instanceof Error ? err.message : t("error") }));
     } finally {
       setActionLoading(null);
     }
@@ -536,35 +540,35 @@ export default function AgentTasksPage() {
   return (
     <>
       <PageHeader
-        title="에이전트 작업 관리"
-        description="작업 목록·진행·승인을 관리합니다. 생성·실행은 채팅의 에이전트 모드에서 진행됩니다."
+        title={t("pageTitle")}
+        description={t("pageDescription")}
       />
 
       <div className="min-h-0 flex-1 overflow-y-auto p-6">
         {/* 실행 안내 배너 — 생성/실행은 채팅 인라인으로 일원화 */}
         <Card className="mb-4 flex flex-wrap items-center justify-between gap-3 p-4">
           <p className="text-sm text-muted">
-            에이전트 작업은 채팅 입력창의{" "}
-            <span className="font-medium text-fg-2">에이전트</span> 모드로
-            생성·실행하세요. 이 페이지에서는 작업 목록·진행·승인을 관리합니다.
+            {t.rich("banner", {
+              b: (chunks) => <span className="font-medium text-fg-2">{chunks}</span>,
+            })}
           </p>
           <Button size="sm" variant="outline" onClick={() => router.push("/")}>
-            채팅으로 이동
+            {t("chatCta")}
           </Button>
         </Card>
         <ApprovalsPanel />
         {loading ? (
           <div className="grid place-items-center py-24 text-center">
             <Sparkles className="mb-3 h-8 w-8 animate-pulse text-faint" />
-            <p className="text-sm text-muted">불러오는 중...</p>
+            <p className="text-sm text-muted">{t("loading")}</p>
           </div>
         ) : tasks.length === 0 ? (
           <div className="grid place-items-center py-24 text-center">
             <Sparkles className="mb-3 h-8 w-8 text-faint" />
-            <p className="text-sm font-medium text-fg-2">작업이 없습니다</p>
-            <p className="mt-1 text-sm text-muted">채팅의 에이전트 모드에서 새 작업을 시작하세요.</p>
+            <p className="text-sm font-medium text-fg-2">{t("emptyTitle")}</p>
+            <p className="mt-1 text-sm text-muted">{t("emptyDescription")}</p>
             <Button size="sm" variant="outline" className="mt-4" onClick={() => router.push("/")}>
-              채팅으로 이동
+              {t("chatCta")}
             </Button>
           </div>
         ) : (
@@ -583,12 +587,12 @@ export default function AgentTasksPage() {
                       {task.status === "running" && (
                         <LoaderCircle className="h-3 w-3 animate-spin" />
                       )}
-                      {meta.label}
-                      {task.rawStatus === "failed" && " (실패)"}
-                      {task.rawStatus === "cancelled" && " (취소됨)"}
+                      {t(meta.labelKey)}
+                      {task.rawStatus === "failed" && ` (${t("failedTag")})`}
+                      {task.rawStatus === "cancelled" && ` (${t("cancelledTag")})`}
                     </Badge>
                     <span className="font-mono text-xs text-faint">
-                      턴 {task.currentTurn}/{task.maxTurns}
+                      {t("turnShort", { current: task.currentTurn, max: task.maxTurns })}
                     </span>
                   </div>
 
@@ -622,7 +626,7 @@ export default function AgentTasksPage() {
                   {/* 진행률 */}
                   <div className="mb-3">
                     <div className="mb-1 flex items-center justify-between text-xs">
-                      <span className="text-faint">진행률</span>
+                      <span className="text-faint">{t("progressLabel")}</span>
                       <span className="font-mono text-fg-2">{pct}%</span>
                     </div>
                     <div className="h-1.5 overflow-hidden rounded-pill bg-surface-3">
@@ -644,7 +648,7 @@ export default function AgentTasksPage() {
                       {/* 상세 보기 */}
                       <button
                         onClick={() => setDetailTaskId(task.id)}
-                        title="상세 보기"
+                        title={t("detailTitle")}
                         className="flex h-7 w-7 items-center justify-center rounded-md text-faint transition hover:bg-surface-2 hover:text-fg">
                         <ChevronRight className="h-3.5 w-3.5" />
                       </button>
@@ -653,7 +657,7 @@ export default function AgentTasksPage() {
                         <button
                           onClick={() => void handleResume(task)}
                           disabled={isActing}
-                          title="이어하기"
+                          title={t("resumeTitle")}
                           className="flex h-7 w-7 items-center justify-center rounded-md text-faint transition hover:bg-accent-soft hover:text-accent disabled:opacity-40">
                           <RotateCcw className="h-3.5 w-3.5" />
                         </button>
@@ -663,7 +667,7 @@ export default function AgentTasksPage() {
                         <button
                           onClick={() => void handleCancel(task)}
                           disabled={isActing}
-                          title="취소"
+                          title={t("cancelTitle")}
                           className="flex h-7 w-7 items-center justify-center rounded-md text-faint transition hover:bg-danger-soft hover:text-danger disabled:opacity-40">
                           <X className="h-3.5 w-3.5" />
                         </button>
@@ -672,7 +676,7 @@ export default function AgentTasksPage() {
                       <button
                         onClick={() => void handleDelete(task)}
                         disabled={isActing}
-                        title="삭제"
+                        title={t("deleteTitle")}
                         className="flex h-7 w-7 items-center justify-center rounded-md text-faint transition hover:bg-danger-soft hover:text-danger disabled:opacity-40">
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>
@@ -687,7 +691,7 @@ export default function AgentTasksPage() {
 
       {/* 작업 상세 모달 */}
       {detailTaskId && (
-        <Modal open={!!detailTaskId} onClose={() => setDetailTaskId(null)} title="작업 상세">
+        <Modal open={!!detailTaskId} onClose={() => setDetailTaskId(null)} title={t("modalTitle")}>
           <TaskDetailModal taskId={detailTaskId} />
         </Modal>
       )}

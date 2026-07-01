@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import {
   CircleCheck,
   LoaderCircle,
@@ -30,21 +31,23 @@ type StageStatus = "done" | "running" | "pending";
 
 interface Stage {
   key: string;
-  label: string;
-  desc: string;
+  labelKey: string;
+  descKey: string;
   status: StageStatus;
 }
 
 interface Source {
   id: string;
   title: string;
+  titleKey?: string;
   domain: string;
   verified: boolean;
 }
 
 interface Metric {
-  label: string;
+  labelKey: string;
   value: string;
+  valueKey?: string;
   tone?: "default" | "warn";
 }
 
@@ -76,10 +79,10 @@ type ResearchSessionsResponse = ApiSuccess<{
 /** progress(0~100) 기준으로 4단계 파이프라인 상태를 파생. completed 면 전부 done. */
 function deriveStages(session: ApiResearchSession): Stage[] {
   const base: Omit<Stage, "status">[] = [
-    { key: "decompose", label: "질문 분해", desc: "핵심 질문을 검증 가능한 하위 질문으로 분해" },
-    { key: "collect", label: "소스 수집", desc: "웹 검색 fan-out 및 신뢰도 기반 소스 선별" },
-    { key: "verify", label: "교차 검증", desc: "주장별 적대적 검증 및 상충 탐지" },
-    { key: "synthesize", label: "보고서 합성", desc: "인용 포함 최종 보고서 생성" },
+    { key: "decompose", labelKey: "stages.decompose.label", descKey: "stages.decompose.desc" },
+    { key: "collect", labelKey: "stages.collect.label", descKey: "stages.collect.desc" },
+    { key: "verify", labelKey: "stages.verify.label", descKey: "stages.verify.desc" },
+    { key: "synthesize", labelKey: "stages.synthesize.label", descKey: "stages.synthesize.desc" },
   ];
   if (session.status === "completed") {
     return base.map((s) => ({ ...s, status: "done" as StageStatus }));
@@ -112,26 +115,26 @@ function urlToSource(raw: string, idx: number): Source {
 const STAGES: Stage[] = [
   {
     key: "decompose",
-    label: "질문 분해",
-    desc: "핵심 질문을 검증 가능한 하위 질문으로 분해",
+    labelKey: "stages.decompose.label",
+    descKey: "stages.decompose.desc",
     status: "done",
   },
   {
     key: "collect",
-    label: "소스 수집",
-    desc: "웹 검색 fan-out 및 신뢰도 기반 소스 선별",
+    labelKey: "stages.collect.label",
+    descKey: "stages.collect.desc",
     status: "done",
   },
   {
     key: "verify",
-    label: "교차 검증",
-    desc: "주장별 적대적 검증 및 상충 탐지",
+    labelKey: "stages.verify.label",
+    descKey: "stages.verify.desc",
     status: "running",
   },
   {
     key: "synthesize",
-    label: "보고서 합성",
-    desc: "인용 포함 최종 보고서 생성",
+    labelKey: "stages.synthesize.label",
+    descKey: "stages.synthesize.desc",
     status: "pending",
   },
 ];
@@ -139,42 +142,47 @@ const STAGES: Stage[] = [
 const SOURCES: Source[] = [
   {
     id: "1",
-    title: "2026 AI 에이전트 시장 동향 보고서",
+    title: "",
+    titleKey: "mock.source1",
     domain: "research.example.com",
     verified: true,
   },
   {
     id: "2",
-    title: "멀티 에이전트 오케스트레이션 아키텍처 분석",
+    title: "",
+    titleKey: "mock.source2",
     domain: "arxiv.org",
     verified: true,
   },
   {
     id: "3",
-    title: "엔터프라이즈 LLM 도입 사례 연구",
+    title: "",
+    titleKey: "mock.source3",
     domain: "techblog.example.io",
     verified: true,
   },
   {
     id: "4",
-    title: "자율 에이전트 안전성 가이드라인",
+    title: "",
+    titleKey: "mock.source4",
     domain: "safety.example.org",
     verified: false,
   },
   {
     id: "5",
-    title: "RAG vs 장기 컨텍스트 비교 벤치마크",
+    title: "",
+    titleKey: "mock.source5",
     domain: "benchmark.example.dev",
     verified: true,
   },
 ];
 
 const METRICS: Metric[] = [
-  { label: "분석 소스", value: "5" },
-  { label: "검증 주장", value: "23" },
-  { label: "상충 발견", value: "2", tone: "warn" },
-  { label: "사용 토큰", value: "48.2K" },
-  { label: "경과 시간", value: "3분 12초" },
+  { labelKey: "metrics.sources", value: "5" },
+  { labelKey: "mock.verifiedClaims", value: "23" },
+  { labelKey: "mock.conflicts", value: "2", tone: "warn" },
+  { labelKey: "mock.tokensUsed", value: "48.2K" },
+  { labelKey: "mock.elapsed", value: "", valueKey: "mock.elapsedValue" },
 ];
 
 const STAGE_ICON: Record<StageStatus, typeof Circle> = {
@@ -186,12 +194,12 @@ const STAGE_ICON: Record<StageStatus, typeof Circle> = {
 
 const TERMINAL: ApiResearchStatus[] = ["completed", "failed", "cancelled"];
 
-const STATUS_LABEL: Record<ApiResearchStatus, string> = {
-  pending: "대기",
-  running: "진행중",
-  completed: "완료",
-  failed: "실패",
-  cancelled: "취소",
+const STATUS_LABEL_KEY: Record<ApiResearchStatus, string> = {
+  pending: "status.pending",
+  running: "status.running",
+  completed: "status.completed",
+  failed: "status.failed",
+  cancelled: "status.cancelled",
 };
 const STATUS_TONE: Record<ApiResearchStatus, "success" | "accent" | "neutral" | "warn"> = {
   pending: "neutral",
@@ -209,6 +217,7 @@ function fmtDate(iso?: string): string {
 }
 
 export default function ResearchPage() {
+  const t = useTranslations("research");
   const router = useRouter();
   const [sourcesOpen, setSourcesOpen] = useState(false);
   // 최신 세션이 있으면 그것으로 진행/소스/메트릭 표시. 없거나 실패 시 목업 폴백.
@@ -230,10 +239,10 @@ export default function ResearchPage() {
     setActiveSession(s);
     setSessionList((prev) => prev.map((p) => (p.id === s.id ? { ...p, ...s } : p)));
     setMetrics([
-      { label: "분석 소스", value: String(srcUrls.length) },
-      { label: "주요 발견", value: String(s.key_findings?.length ?? 0) },
-      { label: "진행률", value: `${Math.round(s.progress)}%` },
-      { label: "깊이", value: s.depth },
+      { labelKey: "metrics.sources", value: String(srcUrls.length) },
+      { labelKey: "metrics.keyFindings", value: String(s.key_findings?.length ?? 0) },
+      { labelKey: "metrics.progress", value: `${Math.round(s.progress)}%` },
+      { labelKey: "metrics.depth", value: s.depth },
     ]);
   };
 
@@ -294,20 +303,22 @@ export default function ResearchPage() {
   return (
     <>
       <PageHeader
-        title="딥 리서치 히스토리"
-        description="지난 리서치 결과를 조회합니다. 실행은 채팅의 딥 리서치 모드에서 진행됩니다."
+        title={t("pageTitle")}
+        description={t("pageDescription")}
       />
 
       <div className="min-h-0 flex-1 overflow-y-auto p-6">
         {/* 실행 안내 배너 — 생성/실행은 채팅 인라인으로 일원화 */}
         <Card className="mb-6 flex flex-wrap items-center justify-between gap-3 p-4">
           <p className="text-sm text-muted">
-            딥 리서치는 채팅 입력창의{" "}
-            <span className="font-medium text-fg-2">딥 리서치</span> 모드로
-            실행하세요. 이 페이지에서는 지난 리서치 결과를 조회합니다.
+            {t.rich("runBanner", {
+              mode: (chunks) => (
+                <span className="font-medium text-fg-2">{chunks}</span>
+              ),
+            })}
           </p>
           <Button size="sm" variant="outline" onClick={() => router.push("/")}>
-            채팅으로 이동
+            {t("goToChat")}
           </Button>
         </Card>
 
@@ -317,12 +328,12 @@ export default function ResearchPage() {
           <div className="min-w-0">
             <Card className="lg:sticky lg:top-0">
               <CardHeader className="flex items-center justify-between">
-                <CardTitle>지난 리서치</CardTitle>
+                <CardTitle>{t("pastResearch")}</CardTitle>
                 <span className="font-mono text-xs text-faint">{sessionList.length}</span>
               </CardHeader>
               <CardContent className="max-h-[60vh] space-y-1.5 overflow-y-auto">
                 {sessionList.length === 0 ? (
-                  <p className="py-4 text-center text-xs text-muted">아직 리서치가 없습니다.</p>
+                  <p className="py-4 text-center text-xs text-muted">{t("sessionEmpty")}</p>
                 ) : (
                   sessionList.map((s) => (
                     <button
@@ -338,7 +349,7 @@ export default function ResearchPage() {
                     >
                       <div className="flex items-center gap-2">
                         <span className="min-w-0 flex-1 truncate text-sm text-fg">{s.topic}</span>
-                        <Badge tone={STATUS_TONE[s.status]}>{STATUS_LABEL[s.status]}</Badge>
+                        <Badge tone={STATUS_TONE[s.status]}>{t(STATUS_LABEL_KEY[s.status])}</Badge>
                       </div>
                       <div className="mt-0.5 flex items-center gap-2 text-[11px] text-faint">
                         <span>{fmtDate(s.created_at)}</span>
@@ -368,10 +379,10 @@ export default function ResearchPage() {
                           stage.status === "running" && "bg-accent-soft text-accent",
                           stage.status === "pending" && "bg-surface-2 text-faint",
                         )}
-                        title={stage.desc}
+                        title={t(stage.descKey)}
                       >
                         <Icon className={cn("h-3.5 w-3.5", stage.status === "running" && "animate-spin")} />
-                        {stage.label}
+                        {t(stage.labelKey)}
                       </span>
                       {i < stages.length - 1 && (
                         <span className="hidden h-px w-5 bg-border sm:block" />
@@ -385,10 +396,10 @@ export default function ResearchPage() {
             {/* 메트릭 — 가로 인라인 stat strip */}
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               {metrics.map((m) => (
-                <Card key={m.label} className="p-3">
+                <Card key={m.labelKey} className="p-3">
                   <p className="flex items-center gap-1 text-[11px] text-muted">
                     {m.tone === "warn" && <TriangleAlert className="h-3 w-3 text-warn" />}
-                    {m.label}
+                    {t(m.labelKey)}
                   </p>
                   <p
                     className={cn(
@@ -396,7 +407,7 @@ export default function ResearchPage() {
                       m.tone === "warn" ? "text-warn" : "text-fg",
                     )}
                   >
-                    {m.value}
+                    {m.valueKey ? t(m.valueKey) : m.value}
                   </p>
                 </Card>
               ))}
@@ -405,10 +416,10 @@ export default function ResearchPage() {
             {/* 보고서 — 메인 산출물, 넓게 */}
             <Card>
               <CardHeader className="flex items-center justify-between">
-                <CardTitle>보고서</CardTitle>
+                <CardTitle>{t("report")}</CardTitle>
                 {activeSession && (
                   <Badge tone={STATUS_TONE[activeSession.status]}>
-                    {STATUS_LABEL[activeSession.status]}
+                    {t(STATUS_LABEL_KEY[activeSession.status])}
                   </Badge>
                 )}
               </CardHeader>
@@ -422,7 +433,7 @@ export default function ResearchPage() {
                     )}
                     {(activeSession?.key_findings?.length ?? 0) > 0 && (
                       <div className="space-y-2 border-t border-border pt-3">
-                        <p className="text-xs font-semibold text-fg-2">주요 발견</p>
+                        <p className="text-xs font-semibold text-fg-2">{t("keyFindings")}</p>
                         <ul className="space-y-1.5">
                           {activeSession!.key_findings!.map((f, i) => (
                             <li key={i} className="flex gap-2 text-sm text-fg-2">
@@ -437,7 +448,7 @@ export default function ResearchPage() {
                 ) : (
                   <div className="flex items-center gap-2 py-6 text-sm text-muted">
                     <FileText className="h-4 w-4 text-faint" />
-                    {isRunning ? "리서치 진행 중 — 합성 완료 후 보고서가 표시됩니다." : "보고서는 합성 완료 후 표시됩니다."}
+                    {isRunning ? t("reportPendingRunning") : t("reportPending")}
                   </div>
                 )}
               </CardContent>
@@ -451,8 +462,10 @@ export default function ResearchPage() {
                 className="flex w-full items-center justify-between px-5 py-4"
               >
                 <span className="flex items-center gap-2 text-sm font-semibold text-fg">
-                  수집 소스
-                  <span className="font-mono text-xs text-faint">{sources.length}건</span>
+                  {t("collectedSources")}
+                  <span className="font-mono text-xs text-faint">
+                    {t("sourceCount", { count: sources.length })}
+                  </span>
                 </span>
                 <ChevronDown
                   className={cn(
@@ -470,13 +483,13 @@ export default function ResearchPage() {
                     >
                       <Link className="mt-0.5 h-4 w-4 flex-shrink-0 text-faint" />
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm text-fg">{s.title}</p>
+                        <p className="truncate text-sm text-fg">{s.titleKey ? t(s.titleKey) : s.title}</p>
                         <p className="truncate font-mono text-xs text-faint">{s.domain}</p>
                       </div>
                       {s.verified ? (
-                        <Badge tone="success">검증됨</Badge>
+                        <Badge tone="success">{t("verified")}</Badge>
                       ) : (
-                        <Badge tone="warn">미검증</Badge>
+                        <Badge tone="warn">{t("unverified")}</Badge>
                       )}
                     </div>
                   ))}
