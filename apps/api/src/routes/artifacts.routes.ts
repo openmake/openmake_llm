@@ -17,8 +17,13 @@ import {
     type ArtifactPublicationRow,
 } from '../data/repositories/artifact-publication-repository';
 import { getPool } from '../data/models/unified-database';
-import { success, notFound, unauthorized, forbidden } from '../utils/api-response';
+import { success, notFound } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
+import {
+    resolveUserId,
+    assertSessionAccess,
+    sendSessionAccessError,
+} from './artifact-session-access';
 import { requireAuth, optionalAuth } from '../auth';
 import { artifactExecLimiter } from '../middlewares/rate-limiters';
 import { executeArtifactCode, ArtifactExecError } from '../services/artifact-exec-service';
@@ -36,59 +41,8 @@ import { getAuditService } from '../services/AuditService';
 
 const router = Router();
 
-/** 요청에서 userId 추출 (JWT userId 또는 id). 미인증이면 undefined. */
-function resolveUserId(req: Request): string | undefined {
-    if (!req.user) return undefined;
-    return 'userId' in req.user ? (req.user as { userId: string }).userId : req.user.id?.toString();
-}
-
-function resolveAnonSessionId(req: Request): string | undefined {
-    const raw = req.query.anonSessionId ?? req.body?.anonSessionId ?? req.get('x-anon-session-id');
-    return typeof raw === 'string' && raw.length > 0 ? raw : undefined;
-}
-
-async function assertSessionAccess(req: Request, sessionId: string): Promise<void> {
-    if (req.user?.role === 'admin') return;
-
-    const pool = getPool();
-    const result = await pool.query<{ user_id: string | null; anon_session_id: string | null }>(
-        'SELECT user_id, anon_session_id FROM conversation_sessions WHERE id = $1',
-        [sessionId]
-    );
-    const session = result.rows[0];
-    if (!session) {
-        throw Object.assign(new Error('SESSION_NOT_FOUND'), { statusCode: 404 });
-    }
-
-    const userId = resolveUserId(req);
-    if (userId && session.user_id === userId) return;
-
-    const anonSessionId = resolveAnonSessionId(req);
-    if (anonSessionId && session.anon_session_id === anonSessionId) return;
-
-    throw Object.assign(new Error(userId || anonSessionId ? 'SESSION_FORBIDDEN' : 'SESSION_UNAUTHORIZED'), {
-        statusCode: userId || anonSessionId ? 403 : 401,
-    });
-}
-
-function sendSessionAccessError(res: Response, error: unknown): boolean {
-    const statusCode = typeof error === 'object' && error !== null && 'statusCode' in error
-        ? Number((error as { statusCode?: unknown }).statusCode)
-        : 0;
-    if (statusCode === 404) {
-        res.status(404).json(notFound('session'));
-        return true;
-    }
-    if (statusCode === 401) {
-        res.status(401).json(unauthorized('인증이 필요합니다'));
-        return true;
-    }
-    if (statusCode === 403) {
-        res.status(403).json(forbidden('권한이 없습니다'));
-        return true;
-    }
-    return false;
-}
+// 세션 접근 검증 헬퍼(resolveUserId / assertSessionAccess / sendSessionAccessError)는
+// routes/artifact-session-access 로 추출 (파일 크기 가드).
 
 const VALID_VISIBILITY: ArtifactVisibility[] = ['private', 'authenticated', 'link'];
 
