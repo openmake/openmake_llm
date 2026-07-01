@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
+import { toBcp47 } from "@/i18n/config";
 import { Gauge, RefreshCw } from "lucide-react";
 import {
   PageHeader,
@@ -83,6 +84,7 @@ const STATUS_MAP: Record<string, NodeStatus> = {
 
 export default function AdminMetricsPage() {
   const t = useTranslations("adminMetrics");
+  const locale = toBcp47(useLocale());
   const [updated, setUpdated] = useState<string>("");
   const [nodes, setNodes] = useState<NodeRow[]>(NODES);
   const [cpu, setCpu] = useState<string | null>(null);
@@ -161,7 +163,7 @@ export default function AdminMetricsPage() {
   }, [load]);
 
   const onRefresh = () => {
-    setUpdated(new Date().toLocaleTimeString("ko-KR"));
+    setUpdated(new Date().toLocaleTimeString(locale));
     void load();
   };
 

@@ -187,7 +187,8 @@ function GitImportModal({
 }
 
 /* ── 목업 데이터 — TODO: API 연동 (GET /api/mcp/servers) ──── */
-const MOCK_SERVERS: McpServer[] = [
+function buildMockServers(t: Translator): McpServer[] {
+  return [
   {
     id: "filesystem",
     name: "filesystem",
@@ -195,7 +196,7 @@ const MOCK_SERVERS: McpServer[] = [
     toolCount: 8,
     status: "connected",
     latencyMs: 12,
-    lastChecked: "방금 전",
+    lastChecked: t("justNow"),
   },
   {
     id: "github",
@@ -204,7 +205,7 @@ const MOCK_SERVERS: McpServer[] = [
     toolCount: 21,
     status: "connected",
     latencyMs: 184,
-    lastChecked: "1분 전",
+    lastChecked: t("minutesAgo", { count: 1 }),
   },
   {
     id: "postgres-prod",
@@ -213,7 +214,7 @@ const MOCK_SERVERS: McpServer[] = [
     toolCount: 5,
     status: "degraded",
     latencyMs: 842,
-    lastChecked: "2분 전",
+    lastChecked: t("minutesAgo", { count: 2 }),
   },
   {
     id: "slack-events",
@@ -222,7 +223,7 @@ const MOCK_SERVERS: McpServer[] = [
     toolCount: 11,
     status: "connected",
     latencyMs: 76,
-    lastChecked: "3분 전",
+    lastChecked: t("minutesAgo", { count: 3 }),
   },
   {
     id: "weather-api",
@@ -231,9 +232,10 @@ const MOCK_SERVERS: McpServer[] = [
     toolCount: 3,
     status: "disconnected",
     latencyMs: null,
-    lastChecked: "12분 전",
+    lastChecked: t("minutesAgo", { count: 12 }),
   },
-];
+  ];
+}
 
 const STATUS_META: Record<
   ConnStatus,
@@ -256,7 +258,7 @@ export default function McpServersPage() {
   const t = useTranslations("mcpServers");
   const [tab, setTab] = useState<TabId>("servers");
   const [modalOpen, setModalOpen] = useState(false);
-  const [servers, setServers] = useState<McpServer[]>(MOCK_SERVERS);
+  const [servers, setServers] = useState<McpServer[]>(() => buildMockServers(t));
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<Record<string, boolean>>({});
   const [drafts, setDrafts] = useState<DraftServer[]>([]);
@@ -355,7 +357,6 @@ export default function McpServersPage() {
     if (tab === "drafts") {
       void loadDrafts();
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab]);
 
   return (

@@ -45,9 +45,9 @@ export async function fetchSkills(search?: string): Promise<SkillSummary[]> {
   return res?.data?.skills ?? [];
 }
 
-/** 카테고리 표시 라벨 — 빈 값은 '기타'로 대체. */
+/** 카테고리 표시 라벨 — 빈 값은 "" 반환 (표시측에서 '기타' 번역 폴백 적용). */
 export function skillCategoryLabel(category: string): string {
-  return category && category.trim() ? category : "기타";
+  return category && category.trim() ? category : "";
 }
 
 /**

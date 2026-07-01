@@ -25,14 +25,14 @@ interface QuickStartData {
 }
 
 const STEP_CODES: Record<number, string> = {
-  1: `# API 키를 HTTP 헤더에 포함
+  1: `# Include your API key in the HTTP header
 Authorization: Bearer <YOUR_API_KEY>`,
   2: `curl -X POST https://your-instance/v1/chat/completions \\
   -H "Authorization: Bearer <YOUR_API_KEY>" \\
   -H "Content-Type: application/json" \\
   -d '{
     "model": "default",
-    "messages": [{"role": "user", "content": "안녕하세요!"}]
+    "messages": [{"role": "user", "content": "Hello!"}]
   }'`,
   3: `curl -X POST https://your-instance/v1/chat/completions \\
   -H "Authorization: Bearer <YOUR_API_KEY>" \\

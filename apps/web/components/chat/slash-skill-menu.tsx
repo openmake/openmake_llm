@@ -67,7 +67,7 @@ export function SlashSkillMenu({
       ) : (
         <div ref={listRef} className="max-h-72 overflow-y-auto p-1">
           {skills.map((skill, i) => {
-            const cat = skillCategoryLabel(skill.category);
+            const cat = skillCategoryLabel(skill.category) || t("slashMenu.categoryEtc");
             const showHeader = grouped && cat !== prevCategory;
             prevCategory = cat;
             return (

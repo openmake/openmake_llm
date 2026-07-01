@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
+import { toBcp47 } from "@/i18n/config";
 import { GraduationCap, ThumbsUp, ThumbsDown, Loader2 } from "lucide-react";
 import {
   Badge,
@@ -204,6 +205,7 @@ function AgentDetailPanel({ agentId }: { agentId: string }) {
 
 export default function AgentLearningPage() {
   const t = useTranslations("agentLearning");
+  const locale = toBcp47(useLocale());
   const [items] = useState<LearningItem[]>(ITEMS_FALLBACK);
   const [collected, setCollected] = useState("1,284");
   const [agents, setAgents] = useState<ApiSystemAgent[]>([]);
@@ -218,7 +220,7 @@ export default function AgentLearningPage() {
         if (cancelled) return;
         const stats = statsRes?.data;
         if (stats && typeof stats.totalFeedbacks === "number") {
-          setCollected(stats.totalFeedbacks.toLocaleString("ko-KR"));
+          setCollected(stats.totalFeedbacks.toLocaleString(locale));
         }
       } catch {
         // 목업 값 유지
@@ -238,7 +240,7 @@ export default function AgentLearningPage() {
       }
     })();
     return () => { cancelled = true; };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [locale]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <>
