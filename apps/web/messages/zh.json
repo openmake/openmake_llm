@@ -1,0 +1,61 @@
+{
+  "metadata": {
+    "description": "基于AI的智能聊天助手"
+  },
+  "nav": {
+    "groups": {
+      "workspace": "工作区",
+      "integrations": "集成",
+      "account": "账户",
+      "admin": "管理员"
+    },
+    "items": {
+      "chat": "聊天",
+      "research": "深度研究",
+      "agentTasks": "智能体任务",
+      "customAgents": "自定义智能体",
+      "skillLibrary": "技能库",
+      "artifacts": "工件",
+      "history": "历史记录",
+      "mcpServers": "MCP服务器",
+      "mcpCatalog": "MCP目录",
+      "mcpMonitoring": "MCP监控",
+      "agentLearning": "智能体学习",
+      "settings": "设置",
+      "apiKeys": "API密钥",
+      "usage": "使用量",
+      "developerDocs": "开发者文档",
+      "admin": "管理员",
+      "analytics": "分析",
+      "auditLog": "审计日志",
+      "metrics": "指标",
+      "alerts": "告警",
+      "mcpCatalogAdmin": "MCP目录管理"
+    }
+  },
+  "sidebar": {
+    "newChat": "新对话",
+    "searchPlaceholder": "搜索...",
+    "recentChats": "最近对话",
+    "untitledChat": "未命名对话",
+    "deleteChat": "删除对话",
+    "deleteConfirm": "确定删除\"{title}\"吗？\n删除后无法恢复。",
+    "deleteFailed": "删除对话失败。",
+    "guest": "访客",
+    "selfHosted": "自托管",
+    "notLoggedIn": "未登录",
+    "logout": "退出登录"
+  },
+  "mobileNav": {
+    "chat": "聊天",
+    "research": "研究",
+    "agent": "智能体",
+    "login": "登录",
+    "menu": "菜单",
+    "openMenu": "全部菜单",
+    "closeMenu": "关闭菜单"
+  },
+  "settings": {
+    "languageAuto": "自动检测"
+  }
+}
