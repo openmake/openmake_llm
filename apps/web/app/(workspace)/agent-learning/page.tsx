@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import { GraduationCap, ThumbsUp, ThumbsDown, Loader2 } from "lucide-react";
 import {
   Badge,
@@ -54,7 +55,7 @@ type LearningStatus = "applied" | "reviewing" | "pending";
 
 interface LearningItem {
   id: number;
-  topic: string;
+  topicKey: string;
   positive: number;
   negative: number;
   status: LearningStatus;
@@ -62,22 +63,23 @@ interface LearningItem {
 
 /* ── 목업 데이터 ──────────────────────────────────────────── */
 const ITEMS_FALLBACK: LearningItem[] = [
-  { id: 1, topic: "코드 리뷰 응답의 근거 인용 강화", positive: 142, negative: 18, status: "applied" },
-  { id: 2, topic: "한국어 존댓말 일관성 유지", positive: 98, negative: 7, status: "applied" },
-  { id: 3, topic: "딥 리서치 출처 신뢰도 표기", positive: 64, negative: 21, status: "reviewing" },
-  { id: 4, topic: "장문 요약 시 핵심 누락 감소", positive: 51, negative: 33, status: "reviewing" },
-  { id: 5, topic: "도구 호출 실패 시 사용자 안내 개선", positive: 29, negative: 44, status: "pending" },
-  { id: 6, topic: "수치 계산 검산 단계 추가", positive: 18, negative: 12, status: "pending" },
+  { id: 1, topicKey: "topics.codeReviewCitation", positive: 142, negative: 18, status: "applied" },
+  { id: 2, topicKey: "topics.koreanHonorific", positive: 98, negative: 7, status: "applied" },
+  { id: 3, topicKey: "topics.researchSourceReliability", positive: 64, negative: 21, status: "reviewing" },
+  { id: 4, topicKey: "topics.longSummaryOmission", positive: 51, negative: 33, status: "reviewing" },
+  { id: 5, topicKey: "topics.toolFailureGuidance", positive: 29, negative: 44, status: "pending" },
+  { id: 6, topicKey: "topics.calcVerification", positive: 18, negative: 12, status: "pending" },
 ];
 
-const STATUS_META: Record<LearningStatus, { label: string; tone: "success" | "warn" | "neutral" }> = {
-  applied: { label: "반영됨", tone: "success" },
-  reviewing: { label: "검토 중", tone: "warn" },
-  pending: { label: "대기", tone: "neutral" },
+const STATUS_META: Record<LearningStatus, { labelKey: string; tone: "success" | "warn" | "neutral" }> = {
+  applied: { labelKey: "status.applied", tone: "success" },
+  reviewing: { labelKey: "status.reviewing", tone: "warn" },
+  pending: { labelKey: "status.pending", tone: "neutral" },
 };
 
 /* ── 에이전트별 품질 패널 ─────────────────────────────────── */
 function AgentDetailPanel({ agentId }: { agentId: string }) {
+  const t = useTranslations("agentLearning");
   const [quality, setQuality] = useState<ApiQualityScore | null>(null);
   const [failures, setFailures] = useState<ApiFailurePattern[]>([]);
   const [improvements, setImprovements] = useState<ApiImprovement[]>([]);
@@ -117,7 +119,7 @@ function AgentDetailPanel({ agentId }: { agentId: string }) {
     return (
       <div className="flex items-center justify-center gap-2 py-8 text-sm text-muted">
         <Loader2 className="h-4 w-4 animate-spin" />
-        에이전트 데이터 불러오는 중...
+        {t("loadingAgent")}
       </div>
     );
   }
@@ -126,7 +128,7 @@ function AgentDetailPanel({ agentId }: { agentId: string }) {
     <div className="grid gap-4 sm:grid-cols-3">
       {/* 품질 점수 */}
       <Card>
-        <CardHeader><CardTitle>품질 점수</CardTitle></CardHeader>
+        <CardHeader><CardTitle>{t("qualityScore")}</CardTitle></CardHeader>
         <CardContent>
           {quality ? (
             <div className="space-y-2">
@@ -137,33 +139,33 @@ function AgentDetailPanel({ agentId }: { agentId: string }) {
                 </div>
               )}
               {typeof quality.totalFeedbacks === "number" && (
-                <p className="text-xs text-muted">총 피드백 {quality.totalFeedbacks}건</p>
+                <p className="text-xs text-muted">{t("totalFeedbackCount", { count: quality.totalFeedbacks })}</p>
               )}
               {typeof quality.avgRating === "number" && (
-                <p className="text-xs text-muted">평균 평점 {quality.avgRating.toFixed(2)}</p>
+                <p className="text-xs text-muted">{t("avgRatingValue", { rating: quality.avgRating.toFixed(2) })}</p>
               )}
               {typeof quality.score !== "number" && typeof quality.totalFeedbacks !== "number" && (
-                <p className="text-xs text-muted">품질 데이터 없음</p>
+                <p className="text-xs text-muted">{t("noQualityData")}</p>
               )}
             </div>
           ) : (
-            <p className="text-xs text-muted">데이터 없음</p>
+            <p className="text-xs text-muted">{t("noData")}</p>
           )}
         </CardContent>
       </Card>
 
       {/* 실패 패턴 */}
       <Card>
-        <CardHeader><CardTitle>실패 패턴</CardTitle></CardHeader>
+        <CardHeader><CardTitle>{t("failurePatterns")}</CardTitle></CardHeader>
         <CardContent>
           {failures.length === 0 ? (
-            <p className="text-xs text-muted">기록된 실패 패턴 없음</p>
+            <p className="text-xs text-muted">{t("noFailurePatterns")}</p>
           ) : (
             <ul className="space-y-2">
               {failures.slice(0, 4).map((f, i) => (
                 <li key={i} className="text-xs text-fg-2">
                   {f.pattern ? (
-                    <span>{f.pattern}{f.count != null && <span className="ml-1 text-faint">({f.count}회)</span>}</span>
+                    <span>{f.pattern}{f.count != null && <span className="ml-1 text-faint">{t("patternCount", { count: f.count })}</span>}</span>
                   ) : (
                     <span className="text-faint font-mono">{JSON.stringify(f)}</span>
                   )}
@@ -176,10 +178,10 @@ function AgentDetailPanel({ agentId }: { agentId: string }) {
 
       {/* 개선 제안 */}
       <Card>
-        <CardHeader><CardTitle>개선 제안</CardTitle></CardHeader>
+        <CardHeader><CardTitle>{t("improvements")}</CardTitle></CardHeader>
         <CardContent>
           {improvements.length === 0 ? (
-            <p className="text-xs text-muted">개선 제안 없음</p>
+            <p className="text-xs text-muted">{t("noImprovements")}</p>
           ) : (
             <ul className="space-y-2">
               {improvements.slice(0, 4).map((item, i) => (
@@ -201,6 +203,7 @@ function AgentDetailPanel({ agentId }: { agentId: string }) {
 }
 
 export default function AgentLearningPage() {
+  const t = useTranslations("agentLearning");
   const [items] = useState<LearningItem[]>(ITEMS_FALLBACK);
   const [collected, setCollected] = useState("1,284");
   const [agents, setAgents] = useState<ApiSystemAgent[]>([]);
@@ -240,23 +243,23 @@ export default function AgentLearningPage() {
   return (
     <>
       <PageHeader
-        title="에이전트 학습"
-        description="사용자 피드백을 기반으로 한 에이전트 개선 현황을 추적합니다."
+        title={t("title")}
+        description={t("description")}
       />
 
       <div className="min-h-0 flex-1 overflow-y-auto p-6">
         {/* 요약 통계 */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <StatCard label="수집 피드백" value={collected} delta="+126 이번 주" deltaTone="success" />
-          <StatCard label="반영 개선" value="37" />
-          <StatCard label="대기" value="12" />
+          <StatCard label={t("collectedFeedback")} value={collected} delta={t("collectedFeedbackDelta")} deltaTone="success" />
+          <StatCard label={t("appliedImprovements")} value="37" />
+          <StatCard label={t("pendingLabel")} value="12" />
         </div>
 
         {/* 에이전트별 품질 패널 */}
         {agents.length > 0 && (
           <div className="mt-6">
             <div className="mb-4 flex items-center gap-3">
-              <h2 className="text-sm font-semibold text-fg">에이전트 상세 분석</h2>
+              <h2 className="text-sm font-semibold text-fg">{t("agentDetailAnalysis")}</h2>
               <select
                 value={selectedAgentId}
                 onChange={(e) => setSelectedAgentId(e.target.value)}
@@ -276,12 +279,12 @@ export default function AgentLearningPage() {
         {/* 학습 항목 리스트 */}
         <Card className="mt-6">
           <CardHeader>
-            <CardTitle>학습 항목</CardTitle>
+            <CardTitle>{t("learningItems")}</CardTitle>
           </CardHeader>
           <CardContent className="divide-y divide-border p-0">
             {items.length === 0 ? (
               <div className="py-12 text-center text-muted">
-                수집된 학습 항목이 없습니다.
+                {t("emptyLearningItems")}
               </div>
             ) : (
               items.map((it) => {
@@ -298,7 +301,7 @@ export default function AgentLearningPage() {
                         <GraduationCap className="h-4 w-4" />
                       </span>
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-medium text-fg">{it.topic}</p>
+                        <p className="truncate text-sm font-medium text-fg">{t(it.topicKey)}</p>
                         <div className="mt-1 flex items-center gap-3 text-xs">
                           <span className="inline-flex items-center gap-1 text-success">
                             <ThumbsUp className="h-3 w-3" />
@@ -319,7 +322,7 @@ export default function AgentLearningPage() {
                           style={{ width: `${positivePct}%` }}
                         />
                       </div>
-                      <Badge tone={meta.tone}>{meta.label}</Badge>
+                      <Badge tone={meta.tone}>{t(meta.labelKey)}</Badge>
                     </div>
                   </div>
                 );
