@@ -26,6 +26,26 @@ Every request flows through a lightweight, deterministic policy layer — **`Exe
 
 ---
 
+## Screenshots
+
+**Chat workspace** — multi-model orchestration, mode toggles (Discussion / Thinking / Deep Research / Web / Agent), and slash-invoked skills:
+
+<p align="center">
+  <img src="assets/screenshot-chat.png" alt="Chat workspace" width="920" />
+</p>
+
+**Multilingual UI (한국어 · English · 日本語 · 简体中文)** — switch the interface language in Settings, or let it follow your browser (`Accept-Language`). AI response language independently follows the message language:
+
+<p align="center">
+  <img src="assets/i18n-demo.gif" alt="Interface language switching demo (ko / en / ja / zh)" width="920" />
+</p>
+
+| Settings — language & privacy | Skill Library — 143 auto-selectable skills |
+|---|---|
+| ![Settings page](assets/screenshot-settings.png) | ![Skill Library page](assets/screenshot-skill-library.png) |
+
+---
+
 ## Features
 
 **▸ Models & routing**
@@ -42,6 +62,7 @@ Every request flows through a lightweight, deterministic policy layer — **`Exe
 - **MCP tool system** — built-in tools plus external MCP servers, each isolated in Docker (`--cap-drop ALL`, non-root, network policy, no host mount).
 - **Artifacts** — live sandboxed iframe rendering, optional Docker code execution, and a separate-origin strict-CSP shared viewer.
 - **Memory & instructions** — persistent cross-conversation memory and always-on custom instructions.
+- **Multilingual UI** — Korean, English, Japanese, and Simplified Chinese via `next-intl` (cookie-based locale, browser auto-detect, locale-aware date/number formatting).
 
 **▸ Security**
 - JWT in HttpOnly cookies, Google OAuth 2.0, RBAC, per-route rate limiting, SSRF guard, Helmet headers, and a unified Audit ↔ Alert pipeline.
