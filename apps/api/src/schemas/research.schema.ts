@@ -14,11 +14,14 @@ import { secureOptionalTextSchema, secureTextSchema } from './security.schema';
 /**
  * 리서치 세션 생성 스키마
  * @property {string} topic - 리서치 주제 (1~500자, 필수)
- * @property {string} [depth] - 리서치 깊이 (basic/deep/comprehensive, 기본값: deep)
+ * @property {string} [depth] - 리서치 깊이 (quick/standard/deep, 기본값: standard)
+ *   ⚠️ enum·기본값은 DB CHECK(002-schema.sql), 루프 맵(RESEARCH_DEPTH_LOOPS),
+ *   MCP 도구(mcp/deep-research.ts)와 동일해야 한다 — 어긋나면 basic/comprehensive
+ *   같은 값이 Zod 를 통과하고 DB CHECK 에서 500 으로 터진다(정합성 버그 이력).
  */
 export const createResearchSessionSchema = z.object({
     topic: secureTextSchema({ minLength: 1, maxLength: 500, fieldName: 'topic', detectMaliciousPatterns: false }),
-    depth: z.enum(['basic', 'deep', 'comprehensive']).optional().default('deep')
+    depth: z.enum(['quick', 'standard', 'deep']).optional().default('standard')
 });
 
 /**
