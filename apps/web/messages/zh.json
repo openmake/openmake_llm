@@ -263,7 +263,8 @@
     "run": {
       "running": "执行中…",
       "run": "执行",
-      "sandbox": "沙箱（网络已阻断） · {lang}"
+      "sandbox": "沙箱（网络已阻断） · {lang}",
+      "restored": "上次运行结果"
     },
     "output": {
       "title": "输出",

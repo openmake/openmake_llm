@@ -38,22 +38,58 @@ interface ExecResult {
 /** 서버 실행 가능 언어 (백엔드 ARTIFACT_EXEC_RUNTIMES 와 정합). */
 const RUNNABLE_LANGS = new Set(["python", "py", "python3", "javascript", "js", "node", "nodejs"]);
 
-function CodeArtifactView({ artifact }: { artifact: Artifact }) {
+function CodeArtifactView({
+  artifact,
+  sessionId,
+  version,
+}: {
+  artifact: Artifact;
+  sessionId?: string | null;
+  version?: number | null;
+}) {
   const t = useTranslations("artifacts");
   const lang = (artifact.lang ?? "").toLowerCase().trim();
   const runnable = RUNNABLE_LANGS.has(lang);
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<ExecResult | null>(null);
+  const [restored, setRestored] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // 재방문 복원 — 이 아티팩트의 마지막 실행 결과를 히스토리에서 불러온다(있으면).
+  // 본인 아티팩트가 아니거나 실행 이력이 없으면 조용히 무시.
+  useEffect(() => {
+    if (!sessionId || !artifact.id || !runnable) return;
+    let alive = true;
+    (async () => {
+      try {
+        const res = await ApiClient.get<{ data: { executions: (ExecResult & { createdAt: string })[] } }>(
+          `/api/sessions/${encodeURIComponent(sessionId)}/artifacts/${encodeURIComponent(artifact.id)}/executions?limit=1`,
+        );
+        const last = res.data?.executions?.[0];
+        if (alive && last) {
+          setResult(last);
+          setRestored(true);
+        }
+      } catch {
+        /* 이력 없음/권한 없음 — 무시 */
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [sessionId, artifact.id, runnable]);
 
   const run = async () => {
     setRunning(true);
     setError(null);
     setResult(null);
+    setRestored(false);
     try {
       const res = await ApiClient.post<{ data: ExecResult }>("/api/artifacts/execute", {
         lang,
         code: artifact.content,
+        // 아티팩트 컨텍스트 — 백엔드가 본인 아티팩트면 결과를 히스토리에 저장(자동).
+        ...(sessionId && version != null ? { sessionId, artifactId: artifact.id, version } : {}),
       });
       setResult(res.data);
     } catch (e) {
@@ -102,6 +138,7 @@ function CodeArtifactView({ artifact }: { artifact: Artifact }) {
               <span className="font-mono">{result.durationMs}ms</span>
               {result.timedOut && <span className="text-danger">{t("output.timedOut")}</span>}
               {result.truncated && <span className="text-faint">{t("output.truncated")}</span>}
+              {restored && <span className="ml-auto text-faint">{t("run.restored")}</span>}
             </div>
             {result.stdout && (
               <pre className="overflow-x-auto px-3 py-2 text-xs text-fg-2">{result.stdout}</pre>
@@ -156,7 +193,17 @@ function CsvTable({ content }: { content: string }) {
   );
 }
 
-function ArtifactBody({ artifact, view }: { artifact: Artifact; view: "preview" | "code" }) {
+function ArtifactBody({
+  artifact,
+  view,
+  sessionId,
+  version,
+}: {
+  artifact: Artifact;
+  view: "preview" | "code";
+  sessionId?: string | null;
+  version?: number | null;
+}) {
   const { kind, lang, content, streaming } = artifact;
 
   // 스트리밍 중이거나 코드 뷰 선택 시 → 원본 표시
@@ -180,7 +227,7 @@ function ArtifactBody({ artifact, view }: { artifact: Artifact; view: "preview" 
   if (previewKind) {
     return <ArtifactFrame srcDoc={buildArtifactSrcDoc(previewKind, content)} title={artifact.title} />;
   }
-  if (kind === "code") return <CodeArtifactView artifact={artifact} />;
+  if (kind === "code") return <CodeArtifactView artifact={artifact} sessionId={sessionId} version={version} />;
   // 미지원 kind → 코드 폴백
   return (
     <div className="h-full overflow-auto px-3">
@@ -396,7 +443,7 @@ export function ArtifactPanel() {
       )}
 
       <div className="min-h-0 flex-1 overflow-hidden">
-        <ArtifactBody artifact={shown} view={canToggle ? view : "preview"} />
+        <ArtifactBody artifact={shown} view={canToggle ? view : "preview"} sessionId={currentSessionId} version={shownVersion} />
       </div>
     </aside>
   );

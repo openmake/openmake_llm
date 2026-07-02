@@ -263,7 +263,8 @@
     "run": {
       "running": "Running…",
       "run": "Run",
-      "sandbox": "Sandbox (network blocked) · {lang}"
+      "sandbox": "Sandbox (network blocked) · {lang}",
+      "restored": "last run"
     },
     "output": {
       "title": "Output",

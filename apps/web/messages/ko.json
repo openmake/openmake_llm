@@ -263,7 +263,8 @@
     "run": {
       "running": "실행 중…",
       "run": "실행",
-      "sandbox": "샌드박스(네트워크 차단) · {lang}"
+      "sandbox": "샌드박스(네트워크 차단) · {lang}",
+      "restored": "이전 실행 결과"
     },
     "output": {
       "title": "출력",

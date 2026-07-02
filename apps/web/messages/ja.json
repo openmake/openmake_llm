@@ -263,7 +263,8 @@
     "run": {
       "running": "実行中…",
       "run": "実行",
-      "sandbox": "サンドボックス（ネットワーク遮断） · {lang}"
+      "sandbox": "サンドボックス（ネットワーク遮断） · {lang}",
+      "restored": "前回の実行結果"
     },
     "output": {
       "title": "出力",
