@@ -31,7 +31,7 @@ import type { ChatMessage } from '../llm/types';
 import { AGENT_TASK_LIMITS } from '../config/runtime-limits';
 import { createAgentTaskSchema } from '../schemas/agent-task.schema';
 import { getApprovalRegistry } from '../services/task-sandbox/approval-gate';
-import { safeResolveWorkspacePath, listWorkspaceFilesAt } from '../services/task-sandbox/sandbox';
+import { safeRealWorkspacePath, listWorkspaceFilesAt } from '../services/task-sandbox/sandbox';
 import { basename } from 'path';
 
 const logger = createLogger('AgentTaskRoutes');
@@ -132,8 +132,9 @@ router.post('/:taskId/execute', asyncHandler(async (req: Request, res: Response)
     const task = await loadOwnedTask(req, res, req.params.taskId);
     if (!task) return;
 
-    if (task.status === 'running') {
-        return res.status(400).json(badRequest('이미 실행 중인 작업입니다.'));
+    // paused = 승인 대기로 일시정지된 채 루프가 살아있는 상태 — 동일 task 이중 실행 차단.
+    if (task.status === 'running' || task.status === 'paused') {
+        return res.status(400).json(badRequest('이미 실행 중(또는 승인 대기 중)인 작업입니다.'));
     }
     if (task.status === 'completed') {
         return res.status(400).json(badRequest('이미 완료된 작업입니다. 새 작업을 생성하세요.'));
@@ -197,8 +198,8 @@ router.post('/:taskId/resume', asyncHandler(async (req: Request, res: Response) 
     const task = await loadOwnedTask(req, res, req.params.taskId);
     if (!task) return;
 
-    if (task.status === 'running') {
-        return res.status(400).json(badRequest('이미 실행 중인 작업입니다.'));
+    if (task.status === 'running' || task.status === 'paused') {
+        return res.status(400).json(badRequest('이미 실행 중(또는 승인 대기 중)인 작업입니다.'));
     }
     const cp = task.checkpoint as { conversation?: unknown[]; completedTurn?: number } | null | undefined;
     if (!cp || !Array.isArray(cp.conversation) || cp.conversation.length === 0) {
@@ -268,7 +269,8 @@ router.get('/:taskId/files/download', asyncHandler(async (req: Request, res: Res
     if (!wp || !rel) return res.status(400).json(badRequest('path 가 필요합니다.'));
     let abs: string;
     try {
-        abs = safeResolveWorkspacePath(wp, rel);
+        // 실경로 검증 — 에이전트가 workspace 안에 만든 심링크를 따라 호스트 파일이 유출되는 것을 차단.
+        abs = await safeRealWorkspacePath(wp, rel);
     } catch {
         return res.status(400).json(badRequest('잘못된 경로입니다.'));
     }

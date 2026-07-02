@@ -94,6 +94,20 @@ export class TaskRuntime {
         const handler = this.handlers.get(name);
         if (!handler) return `Error: 알 수 없는 task 도구 ${name}`;
 
+        // ask_human 은 승인 정책과 무관하게 항상 사용자 응답을 대기한다 — 도구의 목적 자체가
+        // HITL 이므로 승인 레지스트리(pause + push + REST approve/reject)를 응답 채널로 사용.
+        // (자유 텍스트 답변 채널은 미구현 — 승인/거절 이진 응답만 전달된다.)
+        if (name === 'ask_human') {
+            const question = String(args.question ?? '');
+            const decision = await getApprovalRegistry().request(
+                { taskId: this.taskId, userId: this.userId, toolName: name, args },
+                { timeoutMs: this.cfg.approvalTimeoutMs, signal: opts.signal, onPending: opts.onApprovalPending },
+            );
+            return decision === 'approved'
+                ? `사용자가 승인했습니다(계속 진행). 질문: ${question}`
+                : `사용자가 거절했거나 응답 시간이 초과되었습니다(질문: ${question}). 이 방향을 중단하고 대안을 시도하거나 terminate 로 마무리하세요.`;
+        }
+
         if (requiresApproval(this.cfg.approvalPolicy, name, args)) {
             const decision = await getApprovalRegistry().request(
                 { taskId: this.taskId, userId: this.userId, toolName: name, args },

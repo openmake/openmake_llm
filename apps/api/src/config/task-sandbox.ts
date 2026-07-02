@@ -86,7 +86,8 @@ export interface TaskSandboxConfig {
      * 전체 MCP 카탈로그(~150 도구)는 vLLM 문법 컴파일 폭주를 유발하므로 제외하되,
      * 샌드박스로 대체 불가한 소수 고가치 도구(예: generate_image)만 선별 노출.
      * 비면 샌드박스 도구만 노출(순수 Manus). 기본 generate_image,web_search.
-     * ⚠️ 이 도구들은 task 도구가 아니라 HITL 승인 게이트를 우회해 직접 실행된다 —
+     * ⚠️ 이 도구들은 격리 컨테이너가 아닌 호스트(API 프로세스)에서 실행된다 — HITL 승인
+     * 게이트는 task 도구와 동일하게 적용되지만(AgentTaskService 디스패치), 그래도
      * FS/셸 변경이 없는 생성·조회류(generate_image 등)만 등록할 것. 위험 도구 금지.
      */
     extraTools: string[];

@@ -15,8 +15,8 @@
  * @module services/task-sandbox/sandbox
  */
 import { spawn } from 'child_process';
-import { mkdir, rm, writeFile as fsWriteFile, readFile as fsReadFile, readdir, stat } from 'fs/promises';
-import { resolve, sep, join, dirname, relative } from 'path';
+import { mkdir, rm, writeFile as fsWriteFile, readFile as fsReadFile, readdir, stat, realpath } from 'fs/promises';
+import { resolve, sep, join, dirname, basename, relative } from 'path';
 import { getTaskSandboxConfig, type TaskSandboxConfig } from '../../config/task-sandbox';
 import { createLogger } from '../../utils/logger';
 
@@ -39,8 +39,10 @@ export function buildRunArgs(
     hostWorkdir: string,
     cfg: TaskSandboxConfig,
 ): string[] {
-    // restricted 는 egress allowlist(proxy) 미구현 단계에서 호출부가 none 으로 다운그레이드함.
-    const net = cfg.network === 'restricted' ? 'bridge' : 'none';
+    // restricted(allowlist egress)는 메인 샌드박스에 대한 enforcement 가 미구현 —
+    // bridge 로 열면 무제한 egress 가 되므로 구현 전까지 none 으로 fail-safe 매핑한다.
+    // (browser 도구는 별도 일회성 컨테이너 + egress proxy 로 네트워크를 얻는다.)
+    const net = 'none';
     const a: string[] = ['run', '-d', '--init', '--name', containerName];
     a.push('--network', net);
     a.push('--cap-drop', 'ALL', '--security-opt', 'no-new-privileges');
@@ -80,7 +82,8 @@ export function buildBrowserRunArgs(
 
 /**
  * PURE: workspace 내부로만 해석되는 안전 경로 반환 (유닛테스트 대상).
- * `..`/절대경로/심링크 표기로 workspace 를 탈출하려는 시도를 차단한다.
+ * `..`/절대경로 표기 탈출을 차단하는 **어휘적(1차)** 가드 — 심링크는 해석하지 않으므로
+ * 실제 파일 I/O 전에는 반드시 safeRealWorkspacePath 로 실경로까지 검증할 것.
  */
 export function safeResolveWorkspacePath(hostWorkdir: string, userPath: string): string {
     const root = resolve(hostWorkdir);
@@ -89,6 +92,40 @@ export function safeResolveWorkspacePath(hostWorkdir: string, userPath: string):
         throw new Error(`workspace 경로 탈출 차단: ${userPath}`);
     }
     return abs;
+}
+
+/**
+ * workspace 내부로만 해석되는 안전 **실경로** 반환 — 심링크 탈출 차단(2차 가드).
+ *
+ * 컨테이너의 bash 가 bind-mount 안에 호스트 경로를 가리키는 심링크를 만들 수 있고,
+ * 파일 I/O(fs.readFile/writeFile/rm)와 res.download 는 호스트에서 심링크를 따라가므로
+ * 어휘적 검사만으로는 호스트 임의 파일 읽기/쓰기로 탈출한다. 여기서는 대상 경로의
+ * 가장 깊은 실존 조상을 realpath 로 해석해 그 실경로가 workspace 실경로 내부인지
+ * 강제한다(미실존 꼬리 세그먼트는 실존 조상의 실경로에 다시 붙여 반환).
+ */
+export async function safeRealWorkspacePath(hostWorkdir: string, userPath: string): Promise<string> {
+    const abs = safeResolveWorkspacePath(hostWorkdir, userPath);
+    const realRoot = await realpath(resolve(hostWorkdir));
+    let probe = abs;
+    let rest = '';
+    for (;;) {
+        let real: string | null = null;
+        try {
+            real = await realpath(probe);
+        } catch (e) {
+            if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e;
+            const parent = dirname(probe);
+            if (parent === probe) throw e; // 파일시스템 루트까지 미실존 — 비정상
+            rest = rest ? join(basename(probe), rest) : basename(probe);
+            probe = parent;
+            continue;
+        }
+        const mapped = rest ? join(real, rest) : real;
+        if (mapped !== realRoot && !mapped.startsWith(realRoot + sep)) {
+            throw new Error(`workspace 경로 탈출 차단(symlink): ${userPath}`);
+        }
+        return mapped;
+    }
 }
 
 export interface ExecResult {
@@ -174,8 +211,8 @@ export class TaskSandbox {
     /** 영속 컨테이너 생성. workspace 디렉토리 준비 + docker run -d. */
     async create(): Promise<void> {
         if (this.created) return;
-        if (this.cfg.network === 'restricted' && this.cfg.networkAllowlist.length === 0) {
-            logger.warn(`[${this.taskId}] network=restricted 인데 allowlist 미설정 → fail-safe none 다운그레이드`);
+        if (this.cfg.network === 'restricted') {
+            logger.warn(`[${this.taskId}] network=restricted 는 메인 샌드박스 enforcement 미구현 → fail-safe none 으로 실행`);
         }
         await mkdir(this.hostWorkdir, { recursive: true, mode: 0o777 });
         // 동명 잔존 컨테이너 제거(이전 비정상 종료 대비).
@@ -222,22 +259,22 @@ export class TaskSandbox {
         });
     }
 
-    /** workspace 내 파일 쓰기 (호스트 bind-mount 직접). 경로 가드 적용. */
+    /** workspace 내 파일 쓰기 (호스트 bind-mount 직접). 경로 가드(어휘+실경로) 적용. */
     async writeFile(relPath: string, content: string): Promise<void> {
-        const abs = safeResolveWorkspacePath(this.hostWorkdir, relPath);
+        const abs = await safeRealWorkspacePath(this.hostWorkdir, relPath);
         await mkdir(dirname(abs), { recursive: true });
         await fsWriteFile(abs, content, 'utf8');
     }
 
-    /** workspace 내 파일 읽기. 경로 가드 적용. */
+    /** workspace 내 파일 읽기. 경로 가드(어휘+실경로) 적용. */
     async readFile(relPath: string): Promise<string> {
-        const abs = safeResolveWorkspacePath(this.hostWorkdir, relPath);
+        const abs = await safeRealWorkspacePath(this.hostWorkdir, relPath);
         return fsReadFile(abs, 'utf8');
     }
 
-    /** workspace 내 디렉토리 목록. 경로 가드 적용. */
+    /** workspace 내 디렉토리 목록. 경로 가드(어휘+실경로) 적용. */
     async listDir(relPath = '.'): Promise<string[]> {
-        const abs = safeResolveWorkspacePath(this.hostWorkdir, relPath);
+        const abs = await safeRealWorkspacePath(this.hostWorkdir, relPath);
         return readdir(abs);
     }
 
@@ -246,10 +283,10 @@ export class TaskSandbox {
         return listWorkspaceFilesAt(this.hostWorkdir);
     }
 
-    /** workspace 내 파일/디렉토리 삭제. 경로 가드 적용. */
+    /** workspace 내 파일/디렉토리 삭제. 경로 가드(어휘+실경로) 적용. */
     async deleteFile(relPath: string): Promise<void> {
-        const abs = safeResolveWorkspacePath(this.hostWorkdir, relPath);
-        if (abs === resolve(this.hostWorkdir)) throw new Error('workspace 루트는 삭제할 수 없습니다');
+        const abs = await safeRealWorkspacePath(this.hostWorkdir, relPath);
+        if (abs === await realpath(resolve(this.hostWorkdir))) throw new Error('workspace 루트는 삭제할 수 없습니다');
         await rm(abs, { recursive: true, force: true });
     }
 

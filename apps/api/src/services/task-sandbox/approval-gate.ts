@@ -19,9 +19,11 @@ import { createLogger } from '../../utils/logger';
 
 const logger = createLogger('TaskApprovalGate');
 
-/** 승인이 필요한 고위험 도구(high-risk 정책 시). browser=네트워크 egress. */
-const HIGH_RISK_TOOLS = new Set(['bash', 'browser']);
-/** 부작용 없는 도구 — 승인 불요(제어 시그널 + 플래닝 + 전문가 자문). */
+/** 승인이 필요한 고위험 도구(high-risk 정책 시). browser=네트워크 egress.
+ *  python_execute 는 임의 코드 실행이라 bash 와 동급 — 제외하면 정책 우회가 된다. */
+const HIGH_RISK_TOOLS = new Set(['bash', 'browser', 'python_execute']);
+/** 부작용 없는 도구 — 승인 불요(제어 시그널 + 플래닝 + 전문가 자문).
+ *  ask_human 은 이 게이트와 무관하게 TaskRuntime 이 직접 승인 레지스트리로 대기시킨다. */
 const NO_APPROVAL_TOOLS = new Set(['terminate', 'ask_human', 'plan_create', 'plan_update', 'plan_view', 'delegate']);
 /** 고위험으로 보는 file_ops 작업. */
 const HIGH_RISK_FILE_OPS = new Set(['delete']);
@@ -87,7 +89,7 @@ export class ApprovalRegistry {
         opts: { timeoutMs: number; signal?: AbortSignal; onPending?: (p: PendingApproval) => void },
     ): Promise<ApprovalDecision> {
         const approvalId = `apv_${input.taskId}_${this.seq++}`;
-        const pending: PendingApproval = { approvalId, ...input, createdAt: 0 };
+        const pending: PendingApproval = { approvalId, ...input, createdAt: Date.now() };
         return new Promise<ApprovalDecision>((resolvePromise) => {
             const settle = (d: ApprovalDecision) => {
                 const w = this.waiters.get(approvalId);

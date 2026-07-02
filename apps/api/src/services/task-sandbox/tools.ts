@@ -8,8 +8,8 @@
  * factory(createTaskTools) 로 제공한다 — 전역 builtInTools 가 아닌 task-scoped.
  *
  * B 흡수(루프 로버스트니스): terminate(완료 시그널) + ask_human(HITL pause).
- * 두 도구는 sentinel 결과를 반환하고, 실제 루프 해석(종료/일시정지)은 AgentTaskService
- * 배선 증분에서 처리한다(현재 미배선 — 운영 안전).
+ * terminate 는 sentinel 결과를 AgentTaskService 가 해석해 종료하고, ask_human 은
+ * TaskRuntime.executeTaskTool 이 승인 레지스트리로 대기시킨다(둘 다 배선 완료).
  *
  * @module services/task-sandbox/tools
  */
@@ -83,6 +83,11 @@ export function createTaskTools(
             const code = str(args.code);
             if (!code) return textResult('code 가 필요합니다.', true);
             const filename = str(args.filename) || '_exec.py';
+            // 셸 명령(`python3 ${filename}`)에 보간되므로 안전 문자만 허용 —
+            // 메타문자(; | & $ 공백 등) 셸 주입과 `-` 선행(인자 주입: -c ...)을 차단.
+            if (!/^[A-Za-z0-9_][A-Za-z0-9._/-]*$/.test(filename)) {
+                return textResult('filename 은 영숫자로 시작하고 영숫자·._/- 만 포함해야 합니다.', true);
+            }
             try {
                 await sandbox.writeFile(filename, code);
             } catch (e) {
@@ -325,7 +330,8 @@ export function createTaskTools(
     const askHuman: MCPToolDefinition = {
         tool: {
             name: 'ask_human',
-            description: '진행에 사용자 입력/승인이 필요할 때 호출합니다. task 가 일시정지되고 사용자에게 알림이 갑니다.',
+            description: '진행에 사용자 확인이 필요할 때 호출합니다. task 가 일시정지되고 사용자에게 알림이 가며, ' +
+                '사용자는 승인(계속 진행) 또는 거절로만 응답할 수 있습니다 — 예/아니오로 답할 수 있게 질문하세요.',
             inputSchema: {
                 type: 'object',
                 properties: { question: { type: 'string', description: '사용자에게 물을 질문' } },

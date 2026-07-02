@@ -158,7 +158,7 @@ export class AgentTaskService {
                 void getPushService().sendPush(userId, {
                     title: 'OpenMake 에이전트 작업',
                     body: `작업이 ${label}되었습니다: ${shortGoal}`,
-                    url: '/agent-tasks.html',
+                    url: '/agent-tasks',
                 }).catch(() => { /* noop */ });
             }
         };
@@ -393,7 +393,7 @@ export class AgentTaskService {
                     void getPushService().sendPush(userId, {
                         title: 'OpenMake 에이전트 — 승인 필요',
                         body: `도구 실행 승인을 기다립니다: ${toolName}`,
-                        url: '/agent-tasks.html',
+                        url: '/agent-tasks',
                     }).catch(() => { /* noop */ });
                 };
                 for (const tc of result.tool_calls!) {
@@ -565,8 +565,12 @@ export class AgentTaskService {
     ): Promise<string> {
         try {
             const r = await mcp.executeToolWithContext(name, args, userCtx);
-            const text =
-                typeof r.content === 'string' ? r.content : JSON.stringify(r.content).slice(0, MAX_TOOL_RESULT_CHARS);
+            // 문자열/JSON 양쪽 모두 캡 적용 — 대형 결과가 통째로 대화에 들어가면
+            // 컨텍스트·체크포인트가 부풀어 token_limit abort 로 작업이 실패한다.
+            const raw = typeof r.content === 'string' ? r.content : JSON.stringify(r.content);
+            const text = raw.length > MAX_TOOL_RESULT_CHARS
+                ? raw.slice(0, MAX_TOOL_RESULT_CHARS) + '\n...[결과가 길어 잘렸습니다]'
+                : raw;
             return r.isError ? `Error: ${text}` : text;
         } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
