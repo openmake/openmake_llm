@@ -132,7 +132,8 @@ export function buildDockerArgs(input: SandboxInput, cfg: SandboxConfig): string
     const a: string[] = ['run', '--rm', '-i', '--init'];
     a.push('--network', net);
     a.push('--cap-drop', 'ALL', '--security-opt', 'no-new-privileges');
-    a.push('--pids-limit', String(cfg.pidsLimit), '--memory', cfg.memory, '--cpus', cfg.cpus);
+    // --memory-swap = --memory 로 swap 차단(미설정 시 swap 으로 메모리 상한 우회 가능).
+    a.push('--pids-limit', String(cfg.pidsLimit), '--memory', cfg.memory, '--memory-swap', cfg.memory, '--cpus', cfg.cpus);
     a.push('--user', cfg.user);
     if (cfg.readonly) a.push('--read-only', '--tmpfs', '/tmp:rw,exec', '--tmpfs', '/run:rw');
     a.push('-v', `${cacheVol}:/home/node/.cache`);

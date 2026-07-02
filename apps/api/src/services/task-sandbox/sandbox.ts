@@ -46,7 +46,7 @@ export function buildRunArgs(
     const a: string[] = ['run', '-d', '--init', '--name', containerName];
     a.push('--network', net);
     a.push('--cap-drop', 'ALL', '--security-opt', 'no-new-privileges');
-    a.push('--pids-limit', String(cfg.pidsLimit), '--memory', cfg.memory, '--cpus', cfg.cpus);
+    a.push('--pids-limit', String(cfg.pidsLimit), '--memory', cfg.memory, '--memory-swap', cfg.memory, '--cpus', cfg.cpus);
     a.push('--user', cfg.user);
     a.push('--read-only', '--tmpfs', '/tmp:rw,exec', '--tmpfs', '/run:rw');
     a.push('-v', `${hostWorkdir}:${WORKSPACE}:rw`);
@@ -70,7 +70,7 @@ export function buildBrowserRunArgs(
     // egress 프록시 ON: internal 망(인터넷 직접 차단) + 프록시 env. OFF: browserNetwork(bridge).
     a.push('--network', proxyUrl ? cfg.egressNetwork : (cfg.browserNetwork || 'bridge'));
     a.push('--cap-drop', 'ALL', '--security-opt', 'no-new-privileges');
-    a.push('--pids-limit', String(cfg.pidsLimit), '--memory', cfg.memory, '--cpus', cfg.cpus);
+    a.push('--pids-limit', String(cfg.pidsLimit), '--memory', cfg.memory, '--memory-swap', cfg.memory, '--cpus', cfg.cpus);
     a.push('--user', cfg.user);
     a.push('--read-only', '--tmpfs', '/tmp:rw,exec', '--tmpfs', '/run:rw');
     a.push('-v', `${hostWorkdir}:${WORKSPACE}:rw`);

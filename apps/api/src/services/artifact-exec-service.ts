@@ -41,7 +41,9 @@ export function buildExecDockerArgs(runtime: string): string[] {
     '--cap-drop', 'ALL',
     '--security-opt', 'no-new-privileges',
     '--pids-limit', String(c.pidsLimit),
-    '--memory', c.memory,
+    // --memory-swap 을 --memory 와 같게 설정 → swap 차단. 미설정 시 swap 이 memory 의 2배까지
+    // 허용돼 메모리 상한이 무력화된다(600MB 할당이 256m 제한을 통과하던 갭 수정).
+    '--memory', c.memory, '--memory-swap', c.memory,
     '--cpus', c.cpus,
     '--user', c.user,
     '--read-only', '--tmpfs', '/tmp:rw,exec,size=64m',
@@ -119,8 +121,15 @@ function runOnce(dockerPath: string, runtime: string, code: string): Promise<Art
   });
 }
 
+/** 동시 실행 중인 컨테이너 수 — 프로세스 내 세마포어(단일 워커 전제, Agent Task 와 동일 모델). */
+let inFlight = 0;
+
+/** 관측/테스트용 — 현재 동시 실행 수. */
+export function currentInFlight(): number { return inFlight; }
+
 /**
  * 코드 아티팩트를 컨테이너에서 실행. lang 미지원/게이트 off/docker 부재면 throw.
+ * 동시 실행이 maxConcurrent 를 넘으면 429(TOO_MANY_CONCURRENT) — 컨테이너 자원 폭주 방지.
  */
 export async function executeArtifactCode(lang: string, code: string): Promise<ArtifactExecResult> {
   const runtime = resolveRuntime(lang);
@@ -134,7 +143,17 @@ export async function executeArtifactCode(lang: string, code: string): Promise<A
   if (!dockerPath) {
     throw new ArtifactExecError('실행 런타임(docker)을 찾을 수 없습니다', 503, 'DOCKER_NOT_FOUND');
   }
-  return runOnce(dockerPath, runtime, code);
+  // 동시성 게이트 — rate limit(요청/분)과 별개로 동시 컨테이너 수를 상한한다.
+  // 카운터 증가와 runOnce 사이에 await 가 없어 원자적(단일 스레드 이벤트 루프).
+  if (inFlight >= ARTIFACT_EXEC.maxConcurrent) {
+    throw new ArtifactExecError('동시 실행이 많습니다. 잠시 후 다시 시도하세요.', 429, 'TOO_MANY_CONCURRENT');
+  }
+  inFlight++;
+  try {
+    return await runOnce(dockerPath, runtime, code);
+  } finally {
+    inFlight--;
+  }
 }
 
 export class ArtifactExecError extends Error {
