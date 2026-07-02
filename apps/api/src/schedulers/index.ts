@@ -74,6 +74,25 @@ export async function startAllSchedulers(): Promise<void> {
         logger.warn('TaskSandbox 정리 실패(무시):', err);
     }
 
+    // 9. 아티팩트 실행 히스토리 TTL 스윕 — persistTtlMs 초과 실행 결과 삭제(부팅 + 6h 주기).
+    try {
+        const { ARTIFACT_EXEC } = await import('../config/artifact-exec');
+        if (ARTIFACT_EXEC.persistEnabled) {
+            const { ArtifactExecutionRepository } = await import('../data/repositories/artifact-execution-repository');
+            const { getPool } = await import('../data/models/unified-database');
+            const sweep = async () => {
+                const n = await new ArtifactExecutionRepository(getPool()).deleteOlderThan(Date.now() - ARTIFACT_EXEC.persistTtlMs);
+                if (n) logger.info(`아티팩트 실행 히스토리 ${n}건 TTL 정리`);
+            };
+            await sweep().catch(() => { /* noop */ });
+            const SIX_HOURS = 6 * 60 * 60 * 1000;
+            setInterval(() => { void sweep().catch(() => { /* noop */ }); }, SIX_HOURS).unref();
+            logger.debug('아티팩트 실행 히스토리 TTL 스윕 등록 완료');
+        }
+    } catch (err) {
+        logger.warn('아티팩트 실행 히스토리 스윕 등록 실패(무시):', err);
+    }
+
     logger.info('모든 백그라운드 스케줄러 시작 완료');
 }
 

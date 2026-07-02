@@ -38,6 +38,14 @@ export const ARTIFACT_EXEC = {
   rateWindowMs: envNum(process.env.ARTIFACT_EXEC_RATE_WINDOW_MS, 60_000),
   rateUserLimit: envNum(process.env.ARTIFACT_EXEC_RATE_USER, 20),
   rateIpLimit: envNum(process.env.ARTIFACT_EXEC_RATE_IP, 30),
+  /** 실행 결과 영속(히스토리) 게이트 — 인증 사용자가 본인 아티팩트 실행 시 자동 저장. */
+  persistEnabled: process.env.ARTIFACT_EXEC_PERSIST_ENABLED !== 'false',
+  /** 아티팩트별 보존 실행 건수 — 초과분은 저장 시 오래된 것부터 삭제. */
+  persistKeep: envNum(process.env.ARTIFACT_EXEC_PERSIST_KEEP, 10),
+  /** 저장용 stdout/stderr 캡(각) — 실행 반환 캡(outputMaxBytes)보다 작게, DB 비대 방지. */
+  persistOutputMaxBytes: envNum(process.env.ARTIFACT_EXEC_PERSIST_OUTPUT_MAX, 32 * 1024),
+  /** 실행 히스토리 TTL(ms) — 스윕이 초과분 전역 삭제. 기본 30일. */
+  persistTtlMs: envNum(process.env.ARTIFACT_EXEC_PERSIST_TTL_MS, 30 * 24 * 60 * 60_000),
 } as const;
 
 /**

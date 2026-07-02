@@ -11,6 +11,7 @@
 
 import { Router, Request, Response } from 'express';
 import { ArtifactRepository } from '../data/repositories/artifact-repository';
+import { ArtifactExecutionRepository } from '../data/repositories/artifact-execution-repository';
 import {
     ArtifactPublicationRepository,
     type ArtifactVisibility,
@@ -251,9 +252,13 @@ router.delete('/sessions/:sid/artifacts/:aid', requireAuth, asyncHandler(async (
  * 보안: requireAuth + per-user rate limit + network none 컨테이너 + timeout + 자원상한 + audit.
  */
 router.post('/artifacts/execute', requireAuth, artifactExecLimiter, asyncHandler(async (req: Request, res: Response) => {
-    const body = req.body as { lang?: unknown; code?: unknown };
+    const body = req.body as { lang?: unknown; code?: unknown; sessionId?: unknown; artifactId?: unknown; version?: unknown };
     const lang = typeof body.lang === 'string' ? body.lang : '';
     const code = typeof body.code === 'string' ? body.code : '';
+    // 선택적 아티팩트 컨텍스트 — 셋 다 있고 본인 아티팩트면 실행 결과를 히스토리에 영속.
+    const ctxSid = typeof body.sessionId === 'string' ? body.sessionId : '';
+    const ctxAid = typeof body.artifactId === 'string' ? body.artifactId : '';
+    const ctxVersion = Number.isInteger(body.version) ? (body.version as number) : null;
     if (!lang || !code) {
         res.status(400).json({ error: 'INVALID_BODY', detail: 'lang, code (string) 필수' });
         return;
@@ -266,7 +271,7 @@ router.post('/artifacts/execute', requireAuth, artifactExecLimiter, asyncHandler
     const userId = req.user && 'userId' in req.user ? (req.user as { userId: string }).userId : req.user?.id?.toString();
     try {
         const result = await executeArtifactCode(lang, code);
-        // 실행 audit (인증 사용자 — userId FK 안전)
+        // 실행 audit (인증 사용자 — userId FK 안전). 감사 로그는 메타만(본문 미저장) — 그대로 유지.
         void getAuditService().logAudit({
             action: 'artifact_execute',
             userId,
@@ -281,6 +286,8 @@ router.post('/artifacts/execute', requireAuth, artifactExecLimiter, asyncHandler
             },
             actor: { email: req.user?.email, role: req.user?.role },
         });
+        // 실행 히스토리 영속 — 아티팩트 컨텍스트가 있고 본인 아티팩트일 때만(best-effort, 실패는 응답 안 막음).
+        void persistExecution(userId, ctxSid, ctxAid, ctxVersion, result);
         res.json(success(result));
     } catch (e) {
         if (e instanceof ArtifactExecError) {
@@ -289,6 +296,80 @@ router.post('/artifacts/execute', requireAuth, artifactExecLimiter, asyncHandler
         }
         throw e;
     }
+}));
+
+/**
+ * 실행 결과를 히스토리에 영속 (best-effort) — 아티팩트 컨텍스트(session/id/version)가 있고
+ * 실행자가 그 아티팩트 소유자일 때만. 저장 후 아티팩트별 최근 persistKeep 건만 유지.
+ * 실패는 삼킨다(실행 응답을 막지 않음).
+ */
+async function persistExecution(
+    userId: string | undefined,
+    sessionId: string,
+    artifactId: string,
+    version: number | null,
+    result: Awaited<ReturnType<typeof executeArtifactCode>>,
+): Promise<void> {
+    if (!ARTIFACT_EXEC.persistEnabled || !userId || !sessionId || !artifactId || version == null) return;
+    try {
+        const artRepo = new ArtifactRepository(getPool());
+        const versions = await artRepo.listVersionsByArtifactId(sessionId, artifactId);
+        // 존재 + 소유권 확인 (본인 아티팩트만 히스토리 저장)
+        if (versions.length === 0 || versions[0].user_id !== userId) return;
+        const cap = ARTIFACT_EXEC.persistOutputMaxBytes;
+        const execRepo = new ArtifactExecutionRepository(getPool());
+        await execRepo.insertExecution({
+            sessionId, artifactId, version, userId,
+            runtime: result.runtime,
+            stdout: result.stdout.slice(0, cap),
+            stderr: result.stderr.slice(0, cap),
+            exitCode: result.exitCode,
+            durationMs: result.durationMs,
+            timedOut: result.timedOut,
+            truncated: result.truncated,
+        });
+        await execRepo.pruneToRecent(sessionId, artifactId, ARTIFACT_EXEC.persistKeep);
+    } catch {
+        /* best-effort — 히스토리 저장 실패는 실행 결과에 영향 없음 */
+    }
+}
+
+/**
+ * GET /api/sessions/:sid/artifacts/:aid/executions
+ * 특정 아티팩트의 최근 실행 히스토리 (본인 아티팩트만). 갤러리 상세·패널 복원용.
+ */
+router.get('/sessions/:sid/artifacts/:aid/executions', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+    const { sid, aid } = req.params;
+    const userId = resolveUserId(req);
+    const isAdmin = req.user?.role === 'admin';
+    const artRepo = new ArtifactRepository(getPool());
+    const versions = await artRepo.listVersionsByArtifactId(sid, aid);
+    if (versions.length === 0) {
+        res.status(404).json(notFound('artifact'));
+        return;
+    }
+    if (!isAdmin && versions[0].user_id !== userId) {
+        res.status(403).json({ error: 'FORBIDDEN', detail: 'not owner' });
+        return;
+    }
+    const limit = Math.min(Math.max(parseInt(String(req.query.limit ?? ''), 10) || ARTIFACT_EXEC.persistKeep, 1), 50);
+    const execRepo = new ArtifactExecutionRepository(getPool());
+    const rows = await execRepo.listByArtifact(sid, aid, limit);
+    res.json(success({
+        executions: rows.map(r => ({
+            id: r.id,
+            version: r.version,
+            runtime: r.runtime,
+            stdout: r.stdout,
+            stderr: r.stderr,
+            exitCode: r.exit_code,
+            durationMs: r.duration_ms,
+            timedOut: r.timed_out,
+            truncated: r.truncated,
+            createdAt: r.created_at,
+        })),
+        total: rows.length,
+    }));
 }));
 
 // ============================================================
